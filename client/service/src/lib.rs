@@ -42,9 +42,7 @@ use jsonrpsee::{core::Error as JsonRpseeError, RpcModule};
 use log::{debug, error, warn};
 use sc_client_api::{blockchain::HeaderBackend, BlockBackend, BlockchainEvents, ProofProvider};
 use sc_network::PeerId;
-use sc_network_common::{
-	config::MultiaddrWithPeerId, service::NetworkBlock, sync::ChainSyncService,
-};
+use sc_network_common::{config::MultiaddrWithPeerId, service::NetworkBlock};
 use sc_network_sync::SyncingService;
 use sc_rpc_server::WsConfig;
 use sc_utils::mpsc::TracingUnboundedReceiver;

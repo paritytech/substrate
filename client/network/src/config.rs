@@ -56,10 +56,7 @@ use std::{
 use zeroize::Zeroize;
 
 /// Network initialization parameters.
-pub struct Params<B, Client>
-where
-	B: BlockT + 'static,
-{
+pub struct Params<Client> {
 	/// Assigned role for our node (full, light, ...).
 	pub role: Role,
 
@@ -79,10 +76,6 @@ where
 	/// Fork ID to distinguish protocols of different hard forks. Part of the standard protocol
 	/// name on the wire.
 	pub fork_id: Option<String>,
-
-	// TODO(aaro): remove this
-	/// Interface that can be used to delegate syncing-related function calls to `ChainSync`
-	pub sync_service: Arc<sc_network_sync::SyncingService<B>>,
 
 	/// Registry for recording prometheus metrics to.
 	pub metrics_registry: Option<Registry>,

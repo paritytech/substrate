@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{config, ChainSyncInterface, NetworkService, NetworkWorker};
+use crate::{config, NetworkService, NetworkWorker};
 
 use futures::prelude::*;
 use libp2p::Multiaddr;
@@ -33,6 +33,7 @@ use sc_network_sync::{
 	engine::SyncingEngine,
 	service::network::{NetworkServiceHandle, NetworkServiceProvider},
 	state_request_handler::StateRequestHandler,
+	SyncingService,
 };
 use sp_runtime::traits::{Block as BlockT, Header as _};
 use std::{collections::HashSet, sync::Arc};
@@ -91,7 +92,7 @@ struct TestNetworkBuilder {
 	client: Option<Arc<substrate_test_runtime_client::TestClient>>,
 	listen_addresses: Vec<Multiaddr>,
 	set_config: Option<SetConfig>,
-	chain_sync: Option<(Box<dyn ChainSyncT<TestBlock>>, Box<dyn ChainSyncInterface<TestBlock>>)>,
+	chain_sync: Option<(Box<dyn ChainSyncT<TestBlock>>, Box<SyncingService<TestBlock>>)>,
 	chain_sync_network: Option<(NetworkServiceProvider, NetworkServiceHandle)>,
 	config: Option<config::NetworkConfiguration>,
 }
@@ -132,7 +133,7 @@ impl TestNetworkBuilder {
 
 	pub fn with_chain_sync(
 		mut self,
-		chain_sync: (Box<dyn ChainSyncT<TestBlock>>, Box<dyn ChainSyncInterface<TestBlock>>),
+		chain_sync: (Box<dyn ChainSyncT<TestBlock>>, Box<SyncingService<TestBlock>>),
 	) -> Self {
 		self.chain_sync = Some(chain_sync);
 		self
@@ -287,7 +288,6 @@ impl TestNetworkBuilder {
 			chain: client.clone(),
 			protocol_id,
 			fork_id,
-			sync_service: Arc::new(chain_sync_service),
 			metrics_registry: None,
 			request_response_protocol_configs: [
 				block_request_protocol_config,

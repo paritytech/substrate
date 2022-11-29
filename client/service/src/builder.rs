@@ -37,7 +37,7 @@ use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
 use sc_executor::RuntimeVersionOf;
 use sc_keystore::LocalKeystore;
-use sc_network::{config::SyncMode, ChainSyncInterface, NetworkService};
+use sc_network::{config::SyncMode, NetworkService};
 use sc_network_bitswap::BitswapRequestHandler;
 use sc_network_common::{
 	protocol::role::Roles,
@@ -942,7 +942,6 @@ where
 		chain: client.clone(),
 		protocol_id: protocol_id.clone(),
 		fork_id: config.chain_spec.fork_id().map(ToOwned::to_owned),
-		sync_service: sync_service.clone(),
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		block_announce_config,
 		request_response_protocol_configs: request_response_protocol_configs

@@ -272,8 +272,7 @@ pub use sc_network_common::{
 	},
 	sync::{
 		warp::{WarpSyncPhase, WarpSyncProgress},
-		ChainSyncService, ExtendedPeerInfo, StateDownloadProgress, SyncEventStream, SyncState,
-		SyncStatusProvider,
+		ExtendedPeerInfo, StateDownloadProgress, SyncEventStream, SyncState, SyncStatusProvider,
 	},
 };
 pub use service::{
@@ -296,34 +295,3 @@ const MAX_CONNECTIONS_PER_PEER: usize = 2;
 
 /// The maximum number of concurrent established connections that were incoming.
 const MAX_CONNECTIONS_ESTABLISHED_INCOMING: u32 = 10_000;
-
-/// Abstraction over syncing-related services
-pub trait ChainSyncInterface<B: BlockT>:
-	NetworkSyncForkRequest<B::Hash, NumberFor<B>>
-	+ JustificationSyncLink<B>
-	+ Link<B>
-	+ NetworkBlock<B::Hash, NumberFor<B>>
-	+ SyncStatusProvider<B>
-	+ SyncEventStream
-	+ ChainSyncService<B>
-	+ SyncOracle
-	+ Send
-	+ Sync
-	+ 'static
-{
-}
-
-impl<T, B: BlockT> ChainSyncInterface<B> for T where
-	T: NetworkSyncForkRequest<B::Hash, NumberFor<B>>
-		+ JustificationSyncLink<B>
-		+ Link<B>
-		+ NetworkBlock<B::Hash, NumberFor<B>>
-		+ SyncStatusProvider<B>
-		+ SyncEventStream
-		+ ChainSyncService<B>
-		+ SyncOracle
-		+ Send
-		+ Sync
-		+ 'static
-{
-}

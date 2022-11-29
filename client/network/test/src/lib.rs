@@ -50,7 +50,7 @@ use sc_consensus::{
 };
 use sc_network::{
 	config::{NetworkConfiguration, RequestResponseConfig, Role, SyncMode},
-	ChainSyncService, Multiaddr, NetworkService, NetworkWorker,
+	Multiaddr, NetworkService, NetworkWorker,
 };
 use sc_network_common::{
 	config::{
@@ -956,7 +956,6 @@ where
 			chain: client.clone(),
 			protocol_id,
 			fork_id,
-			sync_service: sync_service.clone(),
 			metrics_registry: None,
 			block_announce_config,
 			request_response_protocol_configs: [
@@ -1135,7 +1134,6 @@ where
 				while let Poll::Ready(Some(notification)) =
 					peer.finality_notification_stream.as_mut().poll_next(cx)
 				{
-					use sc_network::ChainSyncService;
 					peer.sync_service.on_block_finalized(notification.hash, notification.header);
 				}
 			}

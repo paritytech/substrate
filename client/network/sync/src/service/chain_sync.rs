@@ -22,10 +22,7 @@ use libp2p::PeerId;
 use sc_consensus::{BlockImportError, BlockImportStatus, JustificationSyncLink, Link};
 use sc_network_common::{
 	service::{NetworkBlock, NetworkSyncForkRequest},
-	sync::{
-		ChainSyncService, ExtendedPeerInfo, SyncEvent, SyncEventStream, SyncStatus,
-		SyncStatusProvider,
-	},
+	sync::{ExtendedPeerInfo, SyncEvent, SyncEventStream, SyncStatus, SyncStatusProvider},
 };
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
@@ -82,6 +79,61 @@ impl<B: BlockT> SyncingService<B> {
 		is_major_syncing: Arc<AtomicBool>,
 	) -> Self {
 		Self { tx, num_connected, is_major_syncing }
+	}
+
+	pub async fn num_active_peers(&self) -> Result<usize, oneshot::Canceled> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self.tx.unbounded_send(ToServiceCommand::NumActivePeers(tx));
+
+		rx.await
+	}
+
+	pub async fn best_seen_block(&self) -> Result<Option<NumberFor<B>>, oneshot::Canceled> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self.tx.unbounded_send(ToServiceCommand::BestSeenBlock(tx));
+
+		rx.await
+	}
+
+	pub async fn num_sync_peers(&self) -> Result<u32, oneshot::Canceled> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self.tx.unbounded_send(ToServiceCommand::NumSyncPeers(tx));
+
+		rx.await
+	}
+
+	pub async fn num_queued_blocks(&self) -> Result<u32, oneshot::Canceled> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self.tx.unbounded_send(ToServiceCommand::NumQueuedBlocks(tx));
+
+		rx.await
+	}
+
+	pub async fn num_downloaded_blocks(&self) -> Result<usize, oneshot::Canceled> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self.tx.unbounded_send(ToServiceCommand::NumDownloadedBlocks(tx));
+
+		rx.await
+	}
+
+	pub async fn num_sync_requests(&self) -> Result<usize, oneshot::Canceled> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self.tx.unbounded_send(ToServiceCommand::NumSyncRequests(tx));
+
+		rx.await
+	}
+
+	pub async fn peers_info(
+		&self,
+	) -> Result<Vec<(PeerId, ExtendedPeerInfo<B>)>, oneshot::Canceled> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self.tx.unbounded_send(ToServiceCommand::PeersInfo(tx));
+
+		rx.await
+	}
+
+	pub fn on_block_finalized(&self, hash: B::Hash, header: B::Header) {
+		let _ = self.tx.unbounded_send(ToServiceCommand::OnBlockFinalized(hash, header));
 	}
 }
 
@@ -171,62 +223,6 @@ impl<B: BlockT> NetworkBlock<B::Hash, NumberFor<B>> for SyncingService<B> {
 
 	fn new_best_block_imported(&self, hash: B::Hash, number: NumberFor<B>) {
 		let _ = self.tx.unbounded_send(ToServiceCommand::NewBestBlockImported(hash, number));
-	}
-}
-
-#[async_trait::async_trait]
-impl<B: BlockT> ChainSyncService<B> for SyncingService<B> {
-	async fn num_active_peers(&self) -> Result<usize, oneshot::Canceled> {
-		let (tx, rx) = oneshot::channel();
-		let _ = self.tx.unbounded_send(ToServiceCommand::NumActivePeers(tx));
-
-		rx.await
-	}
-
-	async fn best_seen_block(&self) -> Result<Option<NumberFor<B>>, oneshot::Canceled> {
-		let (tx, rx) = oneshot::channel();
-		let _ = self.tx.unbounded_send(ToServiceCommand::BestSeenBlock(tx));
-
-		rx.await
-	}
-
-	async fn num_sync_peers(&self) -> Result<u32, oneshot::Canceled> {
-		let (tx, rx) = oneshot::channel();
-		let _ = self.tx.unbounded_send(ToServiceCommand::NumSyncPeers(tx));
-
-		rx.await
-	}
-
-	async fn num_queued_blocks(&self) -> Result<u32, oneshot::Canceled> {
-		let (tx, rx) = oneshot::channel();
-		let _ = self.tx.unbounded_send(ToServiceCommand::NumQueuedBlocks(tx));
-
-		rx.await
-	}
-
-	async fn num_downloaded_blocks(&self) -> Result<usize, oneshot::Canceled> {
-		let (tx, rx) = oneshot::channel();
-		let _ = self.tx.unbounded_send(ToServiceCommand::NumDownloadedBlocks(tx));
-
-		rx.await
-	}
-
-	async fn num_sync_requests(&self) -> Result<usize, oneshot::Canceled> {
-		let (tx, rx) = oneshot::channel();
-		let _ = self.tx.unbounded_send(ToServiceCommand::NumSyncRequests(tx));
-
-		rx.await
-	}
-
-	async fn peers_info(&self) -> Result<Vec<(PeerId, ExtendedPeerInfo<B>)>, oneshot::Canceled> {
-		let (tx, rx) = oneshot::channel();
-		let _ = self.tx.unbounded_send(ToServiceCommand::PeersInfo(tx));
-
-		rx.await
-	}
-
-	fn on_block_finalized(&self, hash: B::Hash, header: B::Header) {
-		let _ = self.tx.unbounded_send(ToServiceCommand::OnBlockFinalized(hash, header));
 	}
 }
 

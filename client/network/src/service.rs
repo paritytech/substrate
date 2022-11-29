@@ -117,9 +117,6 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	peerset: PeersetHandle,
 	/// Channel that sends messages to the actual worker.
 	to_worker: TracingUnboundedSender<ServiceToWorkerMsg>,
-	// TODO(aaro): remove this
-	/// Interface that can be used to delegate calls to `ChainSync`
-	sync_service: Arc<sc_network_sync::SyncingService<B>>,
 	/// For each peer and protocol combination, an object that allows sending notifications to
 	/// that peer. Updated by the [`NetworkWorker`].
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ProtocolName), NotificationsSink>>>,
@@ -129,6 +126,8 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	/// Marker to pin the `H` generic. Serves no purpose except to not break backwards
 	/// compatibility.
 	_marker: PhantomData<H>,
+	/// Marker for block type
+	_block: PhantomData<B>,
 }
 
 impl<B, H, Client> NetworkWorker<B, H, Client>
@@ -148,7 +147,7 @@ where
 	/// Returns a `NetworkWorker` that implements `Future` and must be regularly polled in order
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
-	pub fn new(mut params: Params<B, Client>) -> Result<Self, Error> {
+	pub fn new(mut params: Params<Client>) -> Result<Self, Error> {
 		// Private and public keys configuration.
 		let local_identity = params.network_config.node_key.clone().into_keypair()?;
 		let local_public = local_identity.public();
@@ -434,12 +433,12 @@ where
 			local_peer_id,
 			local_identity,
 			to_worker,
-			sync_service: params.sync_service,
 			peers_notifications_sinks: peers_notifications_sinks.clone(),
 			notifications_sizes_metric: metrics
 				.as_ref()
 				.map(|metrics| metrics.notifications_sizes.clone()),
 			_marker: PhantomData,
+			_block: Default::default(),
 		});
 
 		Ok(NetworkWorker {
@@ -453,6 +452,7 @@ where
 			metrics,
 			boot_node_ids,
 			_marker: Default::default(),
+			_block: Default::default(),
 		})
 	}
 
@@ -1152,6 +1152,8 @@ where
 	/// Marker to pin the `H` generic. Serves no purpose except to not break backwards
 	/// compatibility.
 	_marker: PhantomData<H>,
+	/// Marker for block type
+	_block: PhantomData<B>,
 }
 
 impl<B, H, Client> Future for NetworkWorker<B, H, Client>
