@@ -40,19 +40,25 @@ use futures::{
 	prelude::*,
 };
 use libp2p::{
-	core::{connection::ConnectionId, transport::ListenerId, ConnectedPoint, Multiaddr, PeerId},
+	core::{connection::ConnectionId, Multiaddr, PeerId},
 	request_response::{
 		handler::RequestResponseHandler, ProtocolSupport, RequestResponse, RequestResponseCodec,
 		RequestResponseConfig, RequestResponseEvent, RequestResponseMessage, ResponseChannel,
 	},
 	swarm::{
-		handler::multi::MultiHandler, ConnectionHandler, IntoConnectionHandler, NetworkBehaviour,
-		NetworkBehaviourAction, PollParameters,
+		behaviour::{ConnectionClosed, DialFailure, FromSwarm, ListenFailure},
+		handler::multi::MultiHandler,
+		ConnectionHandler, IntoConnectionHandler, NetworkBehaviour, NetworkBehaviourAction,
+		PollParameters,
 	},
 };
-use sc_network_common::request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig};
+use sc_network_common::{
+	protocol::ProtocolName,
+	request_responses::{
+		IfDisconnected, IncomingRequest, OutgoingResponse, ProtocolConfig, RequestFailure,
+	},
+};
 use std::{
-	borrow::Cow,
 	collections::{hash_map::Entry, HashMap},
 	io, iter,
 	pin::Pin,
@@ -73,7 +79,7 @@ pub enum Event {
 		/// Peer which has emitted the request.
 		peer: PeerId,
 		/// Name of the protocol in question.
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		/// Whether handling the request was successful or unsuccessful.
 		///
 		/// When successful contains the time elapsed between when we received the request and when
@@ -89,7 +95,7 @@ pub enum Event {
 		/// Peer that we send a request to.
 		peer: PeerId,
 		/// Name of the protocol in question.
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		/// Duration the request took.
 		duration: Duration,
 		/// Result of the request.
@@ -108,33 +114,13 @@ pub enum Event {
 /// [`ProtocolRequestId`]s.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct ProtocolRequestId {
-	protocol: Cow<'static, str>,
+	protocol: ProtocolName,
 	request_id: RequestId,
 }
 
-impl From<(Cow<'static, str>, RequestId)> for ProtocolRequestId {
-	fn from((protocol, request_id): (Cow<'static, str>, RequestId)) -> Self {
+impl From<(ProtocolName, RequestId)> for ProtocolRequestId {
+	fn from((protocol, request_id): (ProtocolName, RequestId)) -> Self {
 		Self { protocol, request_id }
-	}
-}
-
-/// When sending a request, what to do on a disconnected recipient.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum IfDisconnected {
-	/// Try to connect to the peer.
-	TryConnect,
-	/// Just fail if the destination is not yet connected.
-	ImmediateError,
-}
-
-/// Convenience functions for `IfDisconnected`.
-impl IfDisconnected {
-	/// Shall we connect to a disconnected peer?
-	pub fn should_connect(self) -> bool {
-		match self {
-			Self::TryConnect => true,
-			Self::ImmediateError => false,
-		}
 	}
 }
 
@@ -144,7 +130,7 @@ pub struct RequestResponsesBehaviour {
 	/// Contains the underlying libp2p `RequestResponse` behaviour, plus an optional
 	/// "response builder" used to build responses for incoming requests.
 	protocols: HashMap<
-		Cow<'static, str>,
+		ProtocolName,
 		(RequestResponse<GenericCodec>, Option<mpsc::Sender<IncomingRequest>>),
 	>,
 
@@ -180,7 +166,7 @@ struct MessageRequest {
 	request_id: RequestId,
 	request: Vec<u8>,
 	channel: ResponseChannel<Result<Vec<u8>, ()>>,
-	protocol: String,
+	protocol: ProtocolName,
 	resp_builder: Option<futures::channel::mpsc::Sender<IncomingRequest>>,
 	// Once we get incoming request we save all params, create an async call to Peerset
 	// to get the reputation of the peer.
@@ -191,7 +177,7 @@ struct MessageRequest {
 struct RequestProcessingOutcome {
 	peer: PeerId,
 	request_id: RequestId,
-	protocol: Cow<'static, str>,
+	protocol: ProtocolName,
 	inner_channel: ResponseChannel<Result<Vec<u8>, ()>>,
 	response: OutgoingResponse,
 }
@@ -220,7 +206,9 @@ impl RequestResponsesBehaviour {
 					max_request_size: protocol.max_request_size,
 					max_response_size: protocol.max_response_size,
 				},
-				iter::once((protocol.name.as_bytes().to_vec(), protocol_support)),
+				iter::once(protocol.name.as_bytes().to_vec())
+					.chain(protocol.fallback_names.iter().map(|name| name.as_bytes().to_vec()))
+					.zip(iter::repeat(protocol_support)),
 				cfg,
 			);
 
@@ -326,120 +314,109 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 		Vec::new()
 	}
 
-	fn inject_connection_established(
-		&mut self,
-		peer_id: &PeerId,
-		conn: &ConnectionId,
-		endpoint: &ConnectedPoint,
-		failed_addresses: Option<&Vec<Multiaddr>>,
-		other_established: usize,
-	) {
-		for (p, _) in self.protocols.values_mut() {
-			NetworkBehaviour::inject_connection_established(
-				p,
+	fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
+		match event {
+			FromSwarm::ConnectionEstablished(e) =>
+				for (p, _) in self.protocols.values_mut() {
+					NetworkBehaviour::on_swarm_event(p, FromSwarm::ConnectionEstablished(e));
+				},
+			FromSwarm::ConnectionClosed(ConnectionClosed {
 				peer_id,
-				conn,
+				connection_id,
 				endpoint,
-				failed_addresses,
-				other_established,
-			)
+				handler,
+				remaining_established,
+			}) =>
+				for (p_name, p_handler) in handler.into_iter() {
+					if let Some((proto, _)) = self.protocols.get_mut(p_name.as_str()) {
+						proto.on_swarm_event(FromSwarm::ConnectionClosed(ConnectionClosed {
+							peer_id,
+							connection_id,
+							endpoint,
+							handler: p_handler,
+							remaining_established,
+						}));
+					} else {
+						log::error!(
+						  target: "sub-libp2p",
+						  "on_swarm_event/connection_closed: no request-response instance registered for protocol {:?}",
+						  p_name,
+						)
+					}
+				},
+			FromSwarm::DialFailure(DialFailure { peer_id, error, .. }) =>
+				for (p, _) in self.protocols.values_mut() {
+					let handler = p.new_handler();
+					NetworkBehaviour::on_swarm_event(
+						p,
+						FromSwarm::DialFailure(DialFailure { peer_id, handler, error }),
+					);
+				},
+			FromSwarm::ListenerClosed(e) =>
+				for (p, _) in self.protocols.values_mut() {
+					NetworkBehaviour::on_swarm_event(p, FromSwarm::ListenerClosed(e));
+				},
+			FromSwarm::ListenFailure(ListenFailure { local_addr, send_back_addr, handler }) =>
+				for (p_name, p_handler) in handler.into_iter() {
+					if let Some((proto, _)) = self.protocols.get_mut(p_name.as_str()) {
+						proto.on_swarm_event(FromSwarm::ListenFailure(ListenFailure {
+							local_addr,
+							send_back_addr,
+							handler: p_handler,
+						}));
+					} else {
+						log::error!(
+						  target: "sub-libp2p",
+						  "on_swarm_event/listen_failure: no request-response instance registered for protocol {:?}",
+						  p_name,
+						)
+					}
+				},
+			FromSwarm::ListenerError(e) =>
+				for (p, _) in self.protocols.values_mut() {
+					NetworkBehaviour::on_swarm_event(p, FromSwarm::ListenerError(e));
+				},
+			FromSwarm::ExpiredExternalAddr(e) =>
+				for (p, _) in self.protocols.values_mut() {
+					NetworkBehaviour::on_swarm_event(p, FromSwarm::ExpiredExternalAddr(e));
+				},
+			FromSwarm::NewListener(e) =>
+				for (p, _) in self.protocols.values_mut() {
+					NetworkBehaviour::on_swarm_event(p, FromSwarm::NewListener(e));
+				},
+			FromSwarm::ExpiredListenAddr(e) =>
+				for (p, _) in self.protocols.values_mut() {
+					NetworkBehaviour::on_swarm_event(p, FromSwarm::ExpiredListenAddr(e));
+				},
+			FromSwarm::NewExternalAddr(e) =>
+				for (p, _) in self.protocols.values_mut() {
+					NetworkBehaviour::on_swarm_event(p, FromSwarm::NewExternalAddr(e));
+				},
+			FromSwarm::AddressChange(e) =>
+				for (p, _) in self.protocols.values_mut() {
+					NetworkBehaviour::on_swarm_event(p, FromSwarm::AddressChange(e));
+				},
+			FromSwarm::NewListenAddr(e) =>
+				for (p, _) in self.protocols.values_mut() {
+					NetworkBehaviour::on_swarm_event(p, FromSwarm::NewListenAddr(e));
+				},
 		}
 	}
 
-	fn inject_connection_closed(
-		&mut self,
-		peer_id: &PeerId,
-		conn: &ConnectionId,
-		endpoint: &ConnectedPoint,
-		handler: <Self::ConnectionHandler as IntoConnectionHandler>::Handler,
-		remaining_established: usize,
-	) {
-		for (p_name, event) in handler.into_iter() {
-			if let Some((proto, _)) = self.protocols.get_mut(p_name.as_str()) {
-				proto.inject_connection_closed(
-					peer_id,
-					conn,
-					endpoint,
-					event,
-					remaining_established,
-				)
-			} else {
-				log::error!(
-					target: "sub-libp2p",
-					"inject_connection_closed: no request-response instance registered for protocol {:?}",
-					p_name,
-				)
-			}
-		}
-	}
-
-	fn inject_event(
+	fn on_connection_handler_event(
 		&mut self,
 		peer_id: PeerId,
-		connection: ConnectionId,
-		(p_name, event): <Self::ConnectionHandler as ConnectionHandler>::OutEvent,
+		connection_id: ConnectionId,
+		(p_name, event): <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as
+      ConnectionHandler>::OutEvent,
 	) {
 		if let Some((proto, _)) = self.protocols.get_mut(&*p_name) {
-			return proto.inject_event(peer_id, connection, event)
+			return proto.on_connection_handler_event(peer_id, connection_id, event)
 		}
 
 		log::warn!(target: "sub-libp2p",
-			"inject_node_event: no request-response instance registered for protocol {:?}",
-			p_name)
-	}
-
-	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
-		for (p, _) in self.protocols.values_mut() {
-			NetworkBehaviour::inject_new_external_addr(p, addr)
-		}
-	}
-
-	fn inject_expired_external_addr(&mut self, addr: &Multiaddr) {
-		for (p, _) in self.protocols.values_mut() {
-			NetworkBehaviour::inject_expired_external_addr(p, addr)
-		}
-	}
-
-	fn inject_expired_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
-		for (p, _) in self.protocols.values_mut() {
-			NetworkBehaviour::inject_expired_listen_addr(p, id, addr)
-		}
-	}
-
-	fn inject_dial_failure(
-		&mut self,
-		peer_id: Option<PeerId>,
-		_: Self::ConnectionHandler,
-		error: &libp2p::swarm::DialError,
-	) {
-		for (p, _) in self.protocols.values_mut() {
-			let handler = p.new_handler();
-			NetworkBehaviour::inject_dial_failure(p, peer_id, handler, error)
-		}
-	}
-
-	fn inject_new_listener(&mut self, id: ListenerId) {
-		for (p, _) in self.protocols.values_mut() {
-			NetworkBehaviour::inject_new_listener(p, id)
-		}
-	}
-
-	fn inject_new_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
-		for (p, _) in self.protocols.values_mut() {
-			NetworkBehaviour::inject_new_listen_addr(p, id, addr)
-		}
-	}
-
-	fn inject_listener_error(&mut self, id: ListenerId, err: &(dyn std::error::Error + 'static)) {
-		for (p, _) in self.protocols.values_mut() {
-			NetworkBehaviour::inject_listener_error(p, id, err)
-		}
-	}
-
-	fn inject_listener_closed(&mut self, id: ListenerId, reason: Result<(), &io::Error>) {
-		for (p, _) in self.protocols.values_mut() {
-			NetworkBehaviour::inject_listener_closed(p, id, reason)
-		}
+      "on_connection_handler_event: no request-response instance registered for protocol {:?}",
+      p_name)
 	}
 
 	fn poll(
@@ -511,7 +488,6 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 							debug_assert!(false, "Received message on outbound-only protocol.");
 						}
 
-						let protocol = Cow::from(protocol);
 						self.pending_responses.push(Box::pin(async move {
 							// The `tx` created above can be dropped if we are not capable of
 							// processing this request, which is reflected as a
@@ -634,7 +610,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 								request_id,
 								request,
 								channel,
-								protocol: protocol.to_string(),
+								protocol: protocol.clone(),
 								resp_builder: resp_builder.clone(),
 								get_peer_reputation,
 							});
@@ -782,24 +758,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 pub enum RegisterError {
 	/// A protocol has been specified multiple times.
 	#[error("{0}")]
-	DuplicateProtocol(Cow<'static, str>),
-}
-
-/// Error in a request.
-#[derive(Debug, thiserror::Error)]
-#[allow(missing_docs)]
-pub enum RequestFailure {
-	#[error("We are not currently connected to the requested peer.")]
-	NotConnected,
-	#[error("Given protocol hasn't been registered.")]
-	UnknownProtocol,
-	#[error("Remote has closed the substream before answering, thereby signaling that it considers the request as valid, but refused to answer it.")]
-	Refused,
-	#[error("The remote replied, but the local node is no longer interested in the response.")]
-	Obsolete,
-	/// Problem on the network.
-	#[error("Problem on the network: {0}")]
-	Network(OutboundFailure),
+	DuplicateProtocol(ProtocolName),
 }
 
 /// Error when processing a request sent by a remote.
@@ -985,7 +944,8 @@ mod tests {
 
 		let behaviour = RequestResponsesBehaviour::new(list, handle).unwrap();
 
-		let mut swarm = Swarm::new(transport, behaviour, keypair.public().to_peer_id());
+		let mut swarm =
+			Swarm::with_threadpool_executor(transport, behaviour, keypair.public().to_peer_id());
 		let listen_addr: Multiaddr = format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
 
 		swarm.listen_on(listen_addr.clone()).unwrap();
@@ -1027,6 +987,7 @@ mod tests {
 
 				let protocol_config = ProtocolConfig {
 					name: From::from(protocol_name),
+					fallback_names: Vec::new(),
 					max_request_size: 1024,
 					max_response_size: 1024 * 1024,
 					request_timeout: Duration::from_secs(30),
@@ -1127,6 +1088,7 @@ mod tests {
 
 				let protocol_config = ProtocolConfig {
 					name: From::from(protocol_name),
+					fallback_names: Vec::new(),
 					max_request_size: 1024,
 					max_response_size: 8, // <-- important for the test
 					request_timeout: Duration::from_secs(30),
@@ -1223,6 +1185,7 @@ mod tests {
 			let protocol_configs = vec![
 				ProtocolConfig {
 					name: From::from(protocol_name_1),
+					fallback_names: Vec::new(),
 					max_request_size: 1024,
 					max_response_size: 1024 * 1024,
 					request_timeout: Duration::from_secs(30),
@@ -1230,6 +1193,7 @@ mod tests {
 				},
 				ProtocolConfig {
 					name: From::from(protocol_name_2),
+					fallback_names: Vec::new(),
 					max_request_size: 1024,
 					max_response_size: 1024 * 1024,
 					request_timeout: Duration::from_secs(30),
@@ -1247,6 +1211,7 @@ mod tests {
 			let protocol_configs = vec![
 				ProtocolConfig {
 					name: From::from(protocol_name_1),
+					fallback_names: Vec::new(),
 					max_request_size: 1024,
 					max_response_size: 1024 * 1024,
 					request_timeout: Duration::from_secs(30),
@@ -1254,6 +1219,7 @@ mod tests {
 				},
 				ProtocolConfig {
 					name: From::from(protocol_name_2),
+					fallback_names: Vec::new(),
 					max_request_size: 1024,
 					max_response_size: 1024 * 1024,
 					request_timeout: Duration::from_secs(30),

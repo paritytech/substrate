@@ -35,14 +35,14 @@ use sp_timestamp::TimestampInherentData;
 use std::{marker::PhantomData, sync::Arc};
 
 /// Consensus data provider for Aura.
-pub struct AuraConsensusDataProvider<B, C> {
+pub struct AuraConsensusDataProvider<B, C, P> {
 	// slot duration
 	slot_duration: SlotDuration,
 	// phantom data for required generics
-	_phantom: PhantomData<(B, C)>,
+	_phantom: PhantomData<(B, C, P)>,
 }
 
-impl<B, C> AuraConsensusDataProvider<B, C>
+impl<B, C, P> AuraConsensusDataProvider<B, C, P>
 where
 	B: BlockT,
 	C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
@@ -58,7 +58,7 @@ where
 	}
 }
 
-impl<B, C> ConsensusDataProvider<B> for AuraConsensusDataProvider<B, C>
+impl<B, C, P> ConsensusDataProvider<B> for AuraConsensusDataProvider<B, C, P>
 where
 	B: BlockT,
 	C: AuxStore
@@ -67,8 +67,10 @@ where
 		+ UsageProvider<B>
 		+ ProvideRuntimeApi<B>,
 	C::Api: AuraApi<B, AuthorityId>,
+	P: Send + Sync,
 {
 	type Transaction = TransactionFor<C, B>;
+	type Proof = P;
 
 	fn create_digest(
 		&self,
@@ -92,6 +94,7 @@ where
 		_parent: &B::Header,
 		_params: &mut BlockImportParams<B, Self::Transaction>,
 		_inherents: &InherentData,
+		_proof: Self::Proof,
 	) -> Result<(), Error> {
 		Ok(())
 	}

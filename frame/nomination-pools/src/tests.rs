@@ -25,7 +25,7 @@ macro_rules! unbonding_pools_with_era {
 	($($k:expr => $v:expr),* $(,)?) => {{
 		use sp_std::iter::{Iterator, IntoIterator};
 		let not_bounded: BTreeMap<_, _> = Iterator::collect(IntoIterator::into_iter([$(($k, $v),)*]));
-		UnbondingPoolsWithEra::try_from(not_bounded).unwrap()
+		BoundedBTreeMap::<EraIndex, UnbondPool<T>, TotalUnbondingPools<T>>::try_from(not_bounded).unwrap()
 	}};
 }
 
@@ -47,6 +47,7 @@ fn test_setup_works() {
 		assert_eq!(SubPoolsStorage::<Runtime>::count(), 0);
 		assert_eq!(PoolMembers::<Runtime>::count(), 1);
 		assert_eq!(StakingMock::bonding_duration(), 3);
+		assert!(Metadata::<T>::contains_key(1));
 
 		let last_pool = LastPoolId::<Runtime>::get();
 		assert_eq!(
@@ -212,31 +213,30 @@ mod bonded_pool {
 
 			// Simulate a 100% slashed pool
 			StakingMock::set_bonded_balance(pool.bonded_account(), 0);
-			assert_noop!(pool.ok_to_join(0), Error::<Runtime>::OverflowRisk);
+			assert_noop!(pool.ok_to_join(), Error::<Runtime>::OverflowRisk);
 
 			// Simulate a slashed pool at `MaxPointsToBalance` + 1 slashed pool
 			StakingMock::set_bonded_balance(
 				pool.bonded_account(),
 				max_points_to_balance.saturating_add(1).into(),
 			);
-			assert_ok!(pool.ok_to_join(0));
+			assert_ok!(pool.ok_to_join());
 
 			// Simulate a slashed pool at `MaxPointsToBalance`
 			StakingMock::set_bonded_balance(pool.bonded_account(), max_points_to_balance);
-			assert_noop!(pool.ok_to_join(0), Error::<Runtime>::OverflowRisk);
+			assert_noop!(pool.ok_to_join(), Error::<Runtime>::OverflowRisk);
 
 			StakingMock::set_bonded_balance(
 				pool.bonded_account(),
 				Balance::MAX / max_points_to_balance,
 			);
-			// New bonded balance would be over threshold of Balance type
-			assert_noop!(pool.ok_to_join(0), Error::<Runtime>::OverflowRisk);
+
 			// and a sanity check
 			StakingMock::set_bonded_balance(
 				pool.bonded_account(),
 				Balance::MAX / max_points_to_balance - 1,
 			);
-			assert_ok!(pool.ok_to_join(0));
+			assert_ok!(pool.ok_to_join());
 		});
 	}
 }
@@ -436,13 +436,13 @@ mod join {
 				roles: DEFAULT_ROLES,
 			},
 		};
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().with_check(0).build_and_execute(|| {
 			// Given
 			Balances::make_free_balance_be(&11, ExistentialDeposit::get() + 2);
 			assert!(!PoolMembers::<Runtime>::contains_key(&11));
 
 			// When
-			assert_ok!(Pools::join(Origin::signed(11), 2, 1));
+			assert_ok!(Pools::join(RuntimeOrigin::signed(11), 2, 1));
 
 			// Then
 
@@ -470,7 +470,7 @@ mod join {
 			assert!(!PoolMembers::<Runtime>::contains_key(&12));
 
 			// When
-			assert_ok!(Pools::join(Origin::signed(12), 12, 1));
+			assert_ok!(Pools::join(RuntimeOrigin::signed(12), 12, 1));
 
 			// Then
 			assert_eq!(
@@ -493,15 +493,21 @@ mod join {
 			assert_eq!(PoolMembers::<Runtime>::get(&10).unwrap().pool_id, 1);
 
 			assert_noop!(
-				Pools::join(Origin::signed(10), 420, 123),
+				Pools::join(RuntimeOrigin::signed(10), 420, 123),
 				Error::<Runtime>::AccountBelongsToOtherPool
 			);
 
-			assert_noop!(Pools::join(Origin::signed(11), 420, 123), Error::<Runtime>::PoolNotFound);
+			assert_noop!(
+				Pools::join(RuntimeOrigin::signed(11), 420, 123),
+				Error::<Runtime>::PoolNotFound
+			);
 
 			// Force the pools bonded balance to 0, simulating a 100% slash
 			StakingMock::set_bonded_balance(Pools::create_bonded_account(1), 0);
-			assert_noop!(Pools::join(Origin::signed(11), 420, 1), Error::<Runtime>::OverflowRisk);
+			assert_noop!(
+				Pools::join(RuntimeOrigin::signed(11), 420, 1),
+				Error::<Runtime>::OverflowRisk
+			);
 
 			// Given a mocked bonded pool
 			BondedPool::<Runtime> {
@@ -526,27 +532,33 @@ mod join {
 				Pools::create_bonded_account(123),
 				max_points_to_balance,
 			);
-			assert_noop!(Pools::join(Origin::signed(11), 420, 123), Error::<Runtime>::OverflowRisk);
+			assert_noop!(
+				Pools::join(RuntimeOrigin::signed(11), 420, 123),
+				Error::<Runtime>::OverflowRisk
+			);
 
 			StakingMock::set_bonded_balance(
 				Pools::create_bonded_account(123),
 				Balance::MAX / max_points_to_balance,
 			);
 			// Balance needs to be gt Balance::MAX / `MaxPointsToBalance`
-			assert_noop!(Pools::join(Origin::signed(11), 5, 123), Error::<Runtime>::OverflowRisk);
+			assert_noop!(
+				Pools::join(RuntimeOrigin::signed(11), 5, 123),
+				pallet_balances::Error::<Runtime>::InsufficientBalance,
+			);
 
 			StakingMock::set_bonded_balance(Pools::create_bonded_account(1), max_points_to_balance);
 
 			// Cannot join a pool that isn't open
 			unsafe_set_state(123, PoolState::Blocked);
 			assert_noop!(
-				Pools::join(Origin::signed(11), max_points_to_balance, 123),
+				Pools::join(RuntimeOrigin::signed(11), max_points_to_balance, 123),
 				Error::<Runtime>::NotOpen
 			);
 
 			unsafe_set_state(123, PoolState::Destroying);
 			assert_noop!(
-				Pools::join(Origin::signed(11), max_points_to_balance, 123),
+				Pools::join(RuntimeOrigin::signed(11), max_points_to_balance, 123),
 				Error::<Runtime>::NotOpen
 			);
 
@@ -555,7 +567,7 @@ mod join {
 
 			// Then
 			assert_noop!(
-				Pools::join(Origin::signed(11), 99, 123),
+				Pools::join(RuntimeOrigin::signed(11), 99, 123),
 				Error::<Runtime>::MinimumBondNotMet
 			);
 		});
@@ -577,7 +589,7 @@ mod join {
 				},
 			}
 			.put();
-			let _ = Pools::join(Origin::signed(11), 420, 123);
+			let _ = Pools::join(RuntimeOrigin::signed(11), 420, 123);
 		});
 	}
 
@@ -590,7 +602,7 @@ mod join {
 				let account = i + 100;
 				Balances::make_free_balance_be(&account, 100 + Balances::minimum_balance());
 
-				assert_ok!(Pools::join(Origin::signed(account), 100, 1));
+				assert_ok!(Pools::join(RuntimeOrigin::signed(account), 100, 1));
 			}
 
 			Balances::make_free_balance_be(&103, 100 + Balances::minimum_balance());
@@ -607,7 +619,7 @@ mod join {
 			);
 
 			assert_noop!(
-				Pools::join(Origin::signed(103), 100, 1),
+				Pools::join(RuntimeOrigin::signed(103), 100, 1),
 				Error::<Runtime>::MaxPoolMembers
 			);
 
@@ -616,7 +628,7 @@ mod join {
 			assert_eq!(MaxPoolMembers::<Runtime>::get(), Some(4));
 
 			Balances::make_free_balance_be(&104, 100 + Balances::minimum_balance());
-			assert_ok!(Pools::create(Origin::signed(104), 100, 104, 104, 104));
+			assert_ok!(Pools::create(RuntimeOrigin::signed(104), 100, 104, 104, 104));
 
 			let pool_account = BondedPools::<Runtime>::iter()
 				.find(|(_, bonded_pool)| bonded_pool.roles.depositor == 104)
@@ -633,7 +645,7 @@ mod join {
 			);
 
 			assert_noop!(
-				Pools::join(Origin::signed(103), 100, pool_account),
+				Pools::join(RuntimeOrigin::signed(103), 100, pool_account),
 				Error::<Runtime>::MaxPoolMembers
 			);
 		});
@@ -691,7 +703,7 @@ mod claim_payout {
 				let _ = pool_events_since_last_call();
 
 				// When
-				assert_ok!(Pools::claim_payout(Origin::signed(10)));
+				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 
 				// Then
 				assert_eq!(
@@ -707,7 +719,7 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 90);
 
 				// When
-				assert_ok!(Pools::claim_payout(Origin::signed(40)));
+				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(40)));
 
 				// Then
 				assert_eq!(
@@ -720,7 +732,7 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 50);
 
 				// When
-				assert_ok!(Pools::claim_payout(Origin::signed(50)));
+				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(50)));
 
 				// Then
 				assert_eq!(
@@ -736,7 +748,7 @@ mod claim_payout {
 				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 50));
 
 				// When
-				assert_ok!(Pools::claim_payout(Origin::signed(10)));
+				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 
 				// Then
 				assert_eq!(
@@ -749,7 +761,7 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 45);
 
 				// When
-				assert_ok!(Pools::claim_payout(Origin::signed(40)));
+				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(40)));
 
 				// Then
 				assert_eq!(
@@ -766,7 +778,7 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 75);
 
 				// When
-				assert_ok!(Pools::claim_payout(Origin::signed(50)));
+				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(50)));
 
 				// Then
 				assert_eq!(
@@ -779,7 +791,7 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 25);
 
 				// When
-				assert_ok!(Pools::claim_payout(Origin::signed(10)));
+				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 
 				// Then
 				assert_eq!(
@@ -796,7 +808,7 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 420);
 
 				// When
-				assert_ok!(Pools::claim_payout(Origin::signed(10)));
+				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 
 				// Then
 				assert_eq!(
@@ -815,7 +827,7 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 400);
 
 				// When
-				assert_ok!(Pools::claim_payout(Origin::signed(10)));
+				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 
 				// Then
 				assert_eq!(
@@ -828,7 +840,7 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 398);
 
 				// When
-				assert_ok!(Pools::claim_payout(Origin::signed(40)));
+				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(40)));
 
 				// Then
 				assert_eq!(
@@ -841,7 +853,7 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 210);
 
 				// When
-				assert_ok!(Pools::claim_payout(Origin::signed(50)));
+				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(50)));
 
 				// Then
 				assert_eq!(
@@ -861,7 +873,10 @@ mod claim_payout {
 			// fully unbond the member.
 			assert_ok!(fully_unbond_permissioned(11));
 
-			assert_noop!(Pools::claim_payout(Origin::signed(11)), Error::<Runtime>::FullyUnbonding);
+			assert_noop!(
+				Pools::claim_payout(RuntimeOrigin::signed(11)),
+				Error::<Runtime>::FullyUnbonding
+			);
 
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -869,7 +884,7 @@ mod claim_payout {
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { member: 11, pool_id: 1, bonded: 11, joined: true },
-					Event::Unbonded { member: 11, pool_id: 1, points: 11, balance: 11 }
+					Event::Unbonded { member: 11, pool_id: 1, points: 11, balance: 11, era: 3 }
 				]
 			);
 		});
@@ -1140,14 +1155,14 @@ mod claim_payout {
 
 			// 20 joins afterwards.
 			Balances::make_free_balance_be(&20, Balances::minimum_balance() + 10);
-			assert_ok!(Pools::join(Origin::signed(20), 10, 1));
+			assert_ok!(Pools::join(RuntimeOrigin::signed(20), 10, 1));
 
 			// reward by another 20
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 20).unwrap();
 
 			// 10 should claim 10 + 10, 20 should claim 20 / 2.
-			assert_ok!(Pools::claim_payout(Origin::signed(10)));
-			assert_ok!(Pools::claim_payout(Origin::signed(20)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
@@ -1162,8 +1177,8 @@ mod claim_payout {
 			// any upcoming rewards are shared equally.
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 20).unwrap();
 
-			assert_ok!(Pools::claim_payout(Origin::signed(10)));
-			assert_ok!(Pools::claim_payout(Origin::signed(20)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
 
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -1183,13 +1198,13 @@ mod claim_payout {
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 3).unwrap();
 
 			Balances::make_free_balance_be(&20, Balances::minimum_balance() + 10);
-			assert_ok!(Pools::join(Origin::signed(20), 10, 1));
+			assert_ok!(Pools::join(RuntimeOrigin::signed(20), 10, 1));
 
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 6).unwrap();
 
 			// 10 should claim 3, 20 should claim 3 + 3.
-			assert_ok!(Pools::claim_payout(Origin::signed(10)));
-			assert_ok!(Pools::claim_payout(Origin::signed(20)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
 
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -1205,8 +1220,8 @@ mod claim_payout {
 			// any upcoming rewards are shared equally.
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 8).unwrap();
 
-			assert_ok!(Pools::claim_payout(Origin::signed(10)));
-			assert_ok!(Pools::claim_payout(Origin::signed(20)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
 
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -1219,8 +1234,8 @@ mod claim_payout {
 			// uneven upcoming rewards are shared equally, rounded down.
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 7).unwrap();
 
-			assert_ok!(Pools::claim_payout(Origin::signed(10)));
-			assert_ok!(Pools::claim_payout(Origin::signed(20)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
 
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -1240,19 +1255,19 @@ mod claim_payout {
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 30).unwrap();
 
 			Balances::make_free_balance_be(&20, ed + 10);
-			assert_ok!(Pools::join(Origin::signed(20), 10, 1));
+			assert_ok!(Pools::join(RuntimeOrigin::signed(20), 10, 1));
 
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 100).unwrap();
 
 			Balances::make_free_balance_be(&30, ed + 10);
-			assert_ok!(Pools::join(Origin::signed(30), 10, 1));
+			assert_ok!(Pools::join(RuntimeOrigin::signed(30), 10, 1));
 
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 60).unwrap();
 
 			// 10 should claim 10, 20 should claim nothing.
-			assert_ok!(Pools::claim_payout(Origin::signed(10)));
-			assert_ok!(Pools::claim_payout(Origin::signed(20)));
-			assert_ok!(Pools::claim_payout(Origin::signed(30)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(30)));
 
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -1270,9 +1285,9 @@ mod claim_payout {
 			// any upcoming rewards are shared equally.
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 30).unwrap();
 
-			assert_ok!(Pools::claim_payout(Origin::signed(10)));
-			assert_ok!(Pools::claim_payout(Origin::signed(20)));
-			assert_ok!(Pools::claim_payout(Origin::signed(30)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(30)));
 
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -1286,21 +1301,74 @@ mod claim_payout {
 	}
 
 	#[test]
+	fn pending_rewards_per_member_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			let ed = Balances::minimum_balance();
+
+			assert_eq!(Pools::pending_rewards(10), Some(0));
+			Balances::mutate_account(&default_reward_account(), |f| f.free += 30).unwrap();
+			assert_eq!(Pools::pending_rewards(10), Some(30));
+			assert_eq!(Pools::pending_rewards(20), None);
+
+			Balances::make_free_balance_be(&20, ed + 10);
+			assert_ok!(Pools::join(RuntimeOrigin::signed(20), 10, 1));
+
+			assert_eq!(Pools::pending_rewards(10), Some(30));
+			assert_eq!(Pools::pending_rewards(20), Some(0));
+
+			Balances::mutate_account(&default_reward_account(), |f| f.free += 100).unwrap();
+
+			assert_eq!(Pools::pending_rewards(10), Some(30 + 50));
+			assert_eq!(Pools::pending_rewards(20), Some(50));
+			assert_eq!(Pools::pending_rewards(30), None);
+
+			Balances::make_free_balance_be(&30, ed + 10);
+			assert_ok!(Pools::join(RuntimeOrigin::signed(30), 10, 1));
+
+			assert_eq!(Pools::pending_rewards(10), Some(30 + 50));
+			assert_eq!(Pools::pending_rewards(20), Some(50));
+			assert_eq!(Pools::pending_rewards(30), Some(0));
+
+			Balances::mutate_account(&default_reward_account(), |f| f.free += 60).unwrap();
+
+			assert_eq!(Pools::pending_rewards(10), Some(30 + 50 + 20));
+			assert_eq!(Pools::pending_rewards(20), Some(50 + 20));
+			assert_eq!(Pools::pending_rewards(30), Some(20));
+
+			// 10 should claim 10, 20 should claim nothing.
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+			assert_eq!(Pools::pending_rewards(10), Some(0));
+			assert_eq!(Pools::pending_rewards(20), Some(50 + 20));
+			assert_eq!(Pools::pending_rewards(30), Some(20));
+
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
+			assert_eq!(Pools::pending_rewards(10), Some(0));
+			assert_eq!(Pools::pending_rewards(20), Some(0));
+			assert_eq!(Pools::pending_rewards(30), Some(20));
+
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(30)));
+			assert_eq!(Pools::pending_rewards(10), Some(0));
+			assert_eq!(Pools::pending_rewards(20), Some(0));
+			assert_eq!(Pools::pending_rewards(30), Some(0));
+		});
+	}
+
+	#[test]
 	fn rewards_distribution_is_fair_bond_extra() {
 		ExtBuilder::default().build_and_execute(|| {
 			let ed = Balances::minimum_balance();
 
 			Balances::make_free_balance_be(&20, ed + 20);
-			assert_ok!(Pools::join(Origin::signed(20), 20, 1));
+			assert_ok!(Pools::join(RuntimeOrigin::signed(20), 20, 1));
 			Balances::make_free_balance_be(&30, ed + 20);
-			assert_ok!(Pools::join(Origin::signed(30), 10, 1));
+			assert_ok!(Pools::join(RuntimeOrigin::signed(30), 10, 1));
 
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 40).unwrap();
 
 			// everyone claims.
-			assert_ok!(Pools::claim_payout(Origin::signed(10)));
-			assert_ok!(Pools::claim_payout(Origin::signed(20)));
-			assert_ok!(Pools::claim_payout(Origin::signed(30)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(30)));
 
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -1316,14 +1384,14 @@ mod claim_payout {
 			);
 
 			// 30 now bumps itself to be like 20.
-			assert_ok!(Pools::bond_extra(Origin::signed(30), BondExtra::FreeBalance(10)));
+			assert_ok!(Pools::bond_extra(RuntimeOrigin::signed(30), BondExtra::FreeBalance(10)));
 
 			// more rewards come in.
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 100).unwrap();
 
-			assert_ok!(Pools::claim_payout(Origin::signed(10)));
-			assert_ok!(Pools::claim_payout(Origin::signed(20)));
-			assert_ok!(Pools::claim_payout(Origin::signed(30)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(30)));
 
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -1343,13 +1411,13 @@ mod claim_payout {
 			let ed = Balances::minimum_balance();
 
 			Balances::make_free_balance_be(&20, ed + 20);
-			assert_ok!(Pools::join(Origin::signed(20), 20, 1));
+			assert_ok!(Pools::join(RuntimeOrigin::signed(20), 20, 1));
 
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 30).unwrap();
 
 			// everyone claims.
-			assert_ok!(Pools::claim_payout(Origin::signed(10)));
-			assert_ok!(Pools::claim_payout(Origin::signed(20)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
 
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -1363,18 +1431,18 @@ mod claim_payout {
 			);
 
 			// 20 unbonds to be equal to 10 (10 points each).
-			assert_ok!(Pools::unbond(Origin::signed(20), 20, 10));
+			assert_ok!(Pools::unbond(RuntimeOrigin::signed(20), 20, 10));
 
 			// more rewards come in.
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 100).unwrap();
 
-			assert_ok!(Pools::claim_payout(Origin::signed(10)));
-			assert_ok!(Pools::claim_payout(Origin::signed(20)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
 
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					Event::Unbonded { member: 20, pool_id: 1, balance: 10, points: 10 },
+					Event::Unbonded { member: 20, pool_id: 1, balance: 10, points: 10, era: 3 },
 					Event::PaidOut { member: 10, pool_id: 1, payout: 50 },
 					Event::PaidOut { member: 20, pool_id: 1, payout: 50 },
 				]
@@ -1388,16 +1456,16 @@ mod claim_payout {
 			let ed = Balances::minimum_balance();
 
 			Balances::make_free_balance_be(&20, ed + 20);
-			assert_ok!(Pools::join(Origin::signed(20), 20, 1));
+			assert_ok!(Pools::join(RuntimeOrigin::signed(20), 20, 1));
 			Balances::make_free_balance_be(&30, ed + 20);
-			assert_ok!(Pools::join(Origin::signed(30), 10, 1));
+			assert_ok!(Pools::join(RuntimeOrigin::signed(30), 10, 1));
 
 			// 10 gets 10, 20 gets 20, 30 gets 10
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 40).unwrap();
 
 			// some claim.
-			assert_ok!(Pools::claim_payout(Origin::signed(10)));
-			assert_ok!(Pools::claim_payout(Origin::signed(20)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
 
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -1415,8 +1483,8 @@ mod claim_payout {
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 80).unwrap();
 
 			// some claim.
-			assert_ok!(Pools::claim_payout(Origin::signed(10)));
-			assert_ok!(Pools::claim_payout(Origin::signed(20)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
 
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -1430,8 +1498,8 @@ mod claim_payout {
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 80).unwrap();
 
 			// some claim.
-			assert_ok!(Pools::claim_payout(Origin::signed(10)));
-			assert_ok!(Pools::claim_payout(Origin::signed(20)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
 
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -1442,7 +1510,7 @@ mod claim_payout {
 			);
 
 			// now 30 claims all at once
-			assert_ok!(Pools::claim_payout(Origin::signed(30)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(30)));
 
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -1457,13 +1525,13 @@ mod claim_payout {
 			let ed = Balances::minimum_balance();
 
 			Balances::make_free_balance_be(&20, ed + 200);
-			assert_ok!(Pools::join(Origin::signed(20), 20, 1));
+			assert_ok!(Pools::join(RuntimeOrigin::signed(20), 20, 1));
 
 			// 10 gets 10, 20 gets 20, 30 gets 10
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 30).unwrap();
 
 			// some claim.
-			assert_ok!(Pools::claim_payout(Origin::signed(10)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -1479,11 +1547,11 @@ mod claim_payout {
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 60).unwrap();
 
 			// and 20 bonds more -- they should not have more share of this reward.
-			assert_ok!(Pools::bond_extra(Origin::signed(20), BondExtra::FreeBalance(10)));
+			assert_ok!(Pools::bond_extra(RuntimeOrigin::signed(20), BondExtra::FreeBalance(10)));
 
 			// everyone claim.
-			assert_ok!(Pools::claim_payout(Origin::signed(10)));
-			assert_ok!(Pools::claim_payout(Origin::signed(20)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
 
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -1499,8 +1567,8 @@ mod claim_payout {
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 60).unwrap();
 
 			// everyone claim.
-			assert_ok!(Pools::claim_payout(Origin::signed(10)));
-			assert_ok!(Pools::claim_payout(Origin::signed(20)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
 
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -1530,7 +1598,7 @@ mod claim_payout {
 
 			// create pool 2
 			Balances::make_free_balance_be(&20, 100);
-			assert_ok!(Pools::create(Origin::signed(20), 10, 20, 20, 20));
+			assert_ok!(Pools::create(RuntimeOrigin::signed(20), 10, 20, 20, 20));
 
 			// has no impact -- initial
 			let (member_20, _, reward_pool_20) = Pools::get_member_with_pools(&20).unwrap();
@@ -1546,7 +1614,7 @@ mod claim_payout {
 
 			// create pool 3
 			Balances::make_free_balance_be(&30, 100);
-			assert_ok!(Pools::create(Origin::signed(30), 10, 30, 30, 30));
+			assert_ok!(Pools::create(RuntimeOrigin::signed(30), 10, 30, 30, 30));
 
 			// reward counter is still the same.
 			let (member_30, _, reward_pool_30) = Pools::get_member_with_pools(&30).unwrap();
@@ -1562,7 +1630,7 @@ mod claim_payout {
 			assert_eq!(member_30.last_recorded_reward_counter, 0.into());
 
 			// and 30 can claim the reward now.
-			assert_ok!(Pools::claim_payout(Origin::signed(30)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(30)));
 
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -1586,7 +1654,7 @@ mod claim_payout {
 			MaxPoolMembersPerPool::<Runtime>::set(None);
 			let join = |x, y| {
 				Balances::make_free_balance_be(&x, y + Balances::minimum_balance());
-				assert_ok!(Pools::join(Origin::signed(x), y, 1));
+				assert_ok!(Pools::join(RuntimeOrigin::signed(x), y, 1));
 			};
 
 			{
@@ -1668,7 +1736,10 @@ mod claim_payout {
 
 			// 10 bonds extra without any rewards.
 			{
-				assert_ok!(Pools::bond_extra(Origin::signed(10), BondExtra::FreeBalance(10)));
+				assert_ok!(Pools::bond_extra(
+					RuntimeOrigin::signed(10),
+					BondExtra::FreeBalance(10)
+				));
 				let (member, _, reward_pool) = Pools::get_member_with_pools(&10).unwrap();
 				assert_eq!(member.last_recorded_reward_counter, 0.into());
 				assert_eq!(reward_pool.last_recorded_total_payouts, 0);
@@ -1680,7 +1751,10 @@ mod claim_payout {
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 30).unwrap();
 
 			{
-				assert_ok!(Pools::bond_extra(Origin::signed(10), BondExtra::FreeBalance(10)));
+				assert_ok!(Pools::bond_extra(
+					RuntimeOrigin::signed(10),
+					BondExtra::FreeBalance(10)
+				));
 				let (member, _, reward_pool) = Pools::get_member_with_pools(&10).unwrap();
 				// explanation: before bond_extra takes place, there is 40 points and 30 balance in
 				// the system, RewardCounter is therefore 7.5
@@ -1694,7 +1768,10 @@ mod claim_payout {
 
 			// 20 bonds extra again, without further rewards.
 			{
-				assert_ok!(Pools::bond_extra(Origin::signed(20), BondExtra::FreeBalance(10)));
+				assert_ok!(Pools::bond_extra(
+					RuntimeOrigin::signed(20),
+					BondExtra::FreeBalance(10)
+				));
 				let (member, _, reward_pool) = Pools::get_member_with_pools(&20).unwrap();
 				assert_eq!(member.last_recorded_reward_counter, RewardCounter::from_float(0.75));
 				assert_eq!(
@@ -1721,6 +1798,54 @@ mod claim_payout {
 	}
 
 	#[test]
+	fn bond_extra_pending_rewards_works() {
+		ExtBuilder::default().add_members(vec![(20, 20)]).build_and_execute(|| {
+			MaxPoolMembers::<Runtime>::set(None);
+			MaxPoolMembersPerPool::<Runtime>::set(None);
+
+			// pool receives some rewards.
+			Balances::mutate_account(&default_reward_account(), |f| f.free += 30).unwrap();
+			System::reset_events();
+
+			// 10 cashes it out, and bonds it.
+			{
+				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+				let (member, _, reward_pool) = Pools::get_member_with_pools(&10).unwrap();
+				// there is 30 points and 30 reward points in the system RC is 1.
+				assert_eq!(member.last_recorded_reward_counter, 1.into());
+				assert_eq!(reward_pool.total_rewards_claimed, 10);
+				// these two are not updated -- only updated when the points change.
+				assert_eq!(reward_pool.last_recorded_total_payouts, 0);
+				assert_eq!(reward_pool.last_recorded_reward_counter, 0.into());
+
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::PaidOut { member: 10, pool_id: 1, payout: 10 }]
+				);
+			}
+
+			// 20 re-bonds it.
+			{
+				assert_ok!(Pools::bond_extra(RuntimeOrigin::signed(20), BondExtra::Rewards));
+				let (member, _, reward_pool) = Pools::get_member_with_pools(&10).unwrap();
+				assert_eq!(member.last_recorded_reward_counter, 1.into());
+				assert_eq!(reward_pool.total_rewards_claimed, 30);
+				// since points change, these two are updated.
+				assert_eq!(reward_pool.last_recorded_total_payouts, 30);
+				assert_eq!(reward_pool.last_recorded_reward_counter, 1.into());
+
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![
+						Event::PaidOut { member: 20, pool_id: 1, payout: 20 },
+						Event::Bonded { member: 20, pool_id: 1, bonded: 20, joined: false }
+					]
+				);
+			}
+		})
+	}
+
+	#[test]
 	fn unbond_updates_recorded_data() {
 		ExtBuilder::default()
 			.add_members(vec![(20, 20), (30, 20)])
@@ -1741,7 +1866,7 @@ mod claim_payout {
 
 				// 20 unbonds without any rewards.
 				{
-					assert_ok!(Pools::unbond(Origin::signed(20), 20, 10));
+					assert_ok!(Pools::unbond(RuntimeOrigin::signed(20), 20, 10));
 					let (member, _, reward_pool) = Pools::get_member_with_pools(&20).unwrap();
 					assert_eq!(member.last_recorded_reward_counter, 0.into());
 					assert_eq!(reward_pool.last_recorded_total_payouts, 0);
@@ -1753,7 +1878,7 @@ mod claim_payout {
 
 				// and 30 also unbonds half.
 				{
-					assert_ok!(Pools::unbond(Origin::signed(30), 30, 10));
+					assert_ok!(Pools::unbond(RuntimeOrigin::signed(30), 30, 10));
 					let (member, _, reward_pool) = Pools::get_member_with_pools(&30).unwrap();
 					// 30 reward in the system, and 40 points before this unbond to collect it,
 					// RewardCounter is 3/4.
@@ -1770,7 +1895,7 @@ mod claim_payout {
 
 				// 30 unbonds again, not change this time.
 				{
-					assert_ok!(Pools::unbond(Origin::signed(30), 30, 5));
+					assert_ok!(Pools::unbond(RuntimeOrigin::signed(30), 30, 5));
 					let (member, _, reward_pool) = Pools::get_member_with_pools(&30).unwrap();
 					assert_eq!(
 						member.last_recorded_reward_counter,
@@ -1785,7 +1910,7 @@ mod claim_payout {
 
 				// 20 unbonds again, not change this time, just collecting their reward.
 				{
-					assert_ok!(Pools::unbond(Origin::signed(20), 20, 5));
+					assert_ok!(Pools::unbond(RuntimeOrigin::signed(20), 20, 5));
 					let (member, _, reward_pool) = Pools::get_member_with_pools(&20).unwrap();
 					assert_eq!(
 						member.last_recorded_reward_counter,
@@ -1799,7 +1924,7 @@ mod claim_payout {
 				}
 
 				// trigger 10's reward as well to see all of the payouts.
-				assert_ok!(Pools::claim_payout(Origin::signed(10)));
+				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 
 				assert_eq!(
 					pool_events_since_last_call(),
@@ -1808,12 +1933,12 @@ mod claim_payout {
 						Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 						Event::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
 						Event::Bonded { member: 30, pool_id: 1, bonded: 20, joined: true },
-						Event::Unbonded { member: 20, pool_id: 1, balance: 10, points: 10 },
+						Event::Unbonded { member: 20, pool_id: 1, balance: 10, points: 10, era: 3 },
 						Event::PaidOut { member: 30, pool_id: 1, payout: 15 },
-						Event::Unbonded { member: 30, pool_id: 1, balance: 10, points: 10 },
-						Event::Unbonded { member: 30, pool_id: 1, balance: 5, points: 5 },
+						Event::Unbonded { member: 30, pool_id: 1, balance: 10, points: 10, era: 3 },
+						Event::Unbonded { member: 30, pool_id: 1, balance: 5, points: 5, era: 3 },
 						Event::PaidOut { member: 20, pool_id: 1, payout: 7 },
-						Event::Unbonded { member: 20, pool_id: 1, balance: 5, points: 5 },
+						Event::Unbonded { member: 20, pool_id: 1, balance: 5, points: 5, era: 3 },
 						Event::PaidOut { member: 10, pool_id: 1, payout: 7 }
 					]
 				);
@@ -1835,8 +1960,8 @@ mod claim_payout {
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 40).unwrap();
 
 			// everyone claims
-			assert_ok!(Pools::claim_payout(Origin::signed(10)));
-			assert_ok!(Pools::claim_payout(Origin::signed(20)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
 
 			// some dust (1) remains in the reward account.
 			assert_eq!(
@@ -1851,30 +1976,31 @@ mod claim_payout {
 			);
 
 			// start dismantling the pool.
-			assert_ok!(Pools::set_state(Origin::signed(902), 1, PoolState::Destroying));
+			assert_ok!(Pools::set_state(RuntimeOrigin::signed(902), 1, PoolState::Destroying));
 			assert_ok!(fully_unbond_permissioned(20));
 
 			CurrentEra::set(3);
-			assert_ok!(Pools::withdraw_unbonded(Origin::signed(20), 20, 0));
+			assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(20), 20, 0));
 			assert_ok!(fully_unbond_permissioned(10));
 
 			CurrentEra::set(6);
-			assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
+			assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(10), 10, 0));
 
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
 					Event::StateChanged { pool_id: 1, new_state: PoolState::Destroying },
-					Event::Unbonded { member: 20, pool_id: 1, balance: 20, points: 20 },
+					Event::Unbonded { member: 20, pool_id: 1, balance: 20, points: 20, era: 3 },
 					Event::Withdrawn { member: 20, pool_id: 1, balance: 20, points: 20 },
 					Event::MemberRemoved { pool_id: 1, member: 20 },
-					Event::Unbonded { member: 10, pool_id: 1, balance: 10, points: 10 },
+					Event::Unbonded { member: 10, pool_id: 1, balance: 10, points: 10, era: 6 },
 					Event::Withdrawn { member: 10, pool_id: 1, balance: 10, points: 10 },
 					Event::MemberRemoved { pool_id: 1, member: 10 },
 					Event::Destroyed { pool_id: 1 }
 				]
 			);
 
+			assert!(!Metadata::<T>::contains_key(1));
 			// original ed + ed put into reward account + reward + bond + dust.
 			assert_eq!(Balances::free_balance(&10), 35 + 5 + 13 + 10 + 1);
 		})
@@ -1897,10 +2023,10 @@ mod claim_payout {
 					.unwrap();
 
 				// everyone claims
-				assert_ok!(Pools::claim_payout(Origin::signed(10)));
-				assert_ok!(Pools::claim_payout(Origin::signed(20)));
-				assert_ok!(Pools::claim_payout(Origin::signed(21)));
-				assert_ok!(Pools::claim_payout(Origin::signed(22)));
+				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
+				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(21)));
+				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(22)));
 
 				assert_eq!(
 					pool_events_since_last_call(),
@@ -1954,18 +2080,18 @@ mod unbond {
 			.add_members(vec![(20, 20)])
 			.build_and_execute(|| {
 				// can unbond to above limit
-				assert_ok!(Pools::unbond(Origin::signed(20), 20, 5));
+				assert_ok!(Pools::unbond(RuntimeOrigin::signed(20), 20, 5));
 				assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().active_points(), 15);
 				assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().unbonding_points(), 5);
 
 				// cannot go to below 10:
 				assert_noop!(
-					Pools::unbond(Origin::signed(20), 20, 10),
+					Pools::unbond(RuntimeOrigin::signed(20), 20, 10),
 					Error::<T>::MinimumBondNotMet
 				);
 
 				// but can go to 0
-				assert_ok!(Pools::unbond(Origin::signed(20), 20, 15));
+				assert_ok!(Pools::unbond(RuntimeOrigin::signed(20), 20, 15));
 				assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().active_points(), 0);
 				assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().unbonding_points(), 20);
 			})
@@ -1986,23 +2112,23 @@ mod unbond {
 
 				// cannot be kicked to above the limit.
 				assert_noop!(
-					Pools::unbond(Origin::signed(kicker), 20, 5),
+					Pools::unbond(RuntimeOrigin::signed(kicker), 20, 5),
 					Error::<T>::PartialUnbondNotAllowedPermissionlessly
 				);
 
 				// cannot go to below 10:
 				assert_noop!(
-					Pools::unbond(Origin::signed(kicker), 20, 15),
+					Pools::unbond(RuntimeOrigin::signed(kicker), 20, 15),
 					Error::<T>::PartialUnbondNotAllowedPermissionlessly
 				);
 
 				// but they themselves can do an unbond
-				assert_ok!(Pools::unbond(Origin::signed(20), 20, 2));
+				assert_ok!(Pools::unbond(RuntimeOrigin::signed(20), 20, 2));
 				assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().active_points(), 18);
 				assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().unbonding_points(), 2);
 
 				// can be kicked to 0.
-				assert_ok!(Pools::unbond(Origin::signed(kicker), 20, 18));
+				assert_ok!(Pools::unbond(RuntimeOrigin::signed(kicker), 20, 18));
 				assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().active_points(), 0);
 				assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().unbonding_points(), 20);
 			})
@@ -2023,23 +2149,23 @@ mod unbond {
 
 				// cannot be kicked to above the limit.
 				assert_noop!(
-					Pools::unbond(Origin::signed(random), 20, 5),
+					Pools::unbond(RuntimeOrigin::signed(random), 20, 5),
 					Error::<T>::PartialUnbondNotAllowedPermissionlessly
 				);
 
 				// cannot go to below 10:
 				assert_noop!(
-					Pools::unbond(Origin::signed(random), 20, 15),
+					Pools::unbond(RuntimeOrigin::signed(random), 20, 15),
 					Error::<T>::PartialUnbondNotAllowedPermissionlessly
 				);
 
 				// but they themselves can do an unbond
-				assert_ok!(Pools::unbond(Origin::signed(20), 20, 2));
+				assert_ok!(Pools::unbond(RuntimeOrigin::signed(20), 20, 2));
 				assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().active_points(), 18);
 				assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().unbonding_points(), 2);
 
 				// but can go to 0
-				assert_ok!(Pools::unbond(Origin::signed(random), 20, 18));
+				assert_ok!(Pools::unbond(RuntimeOrigin::signed(random), 20, 18));
 				assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().active_points(), 0);
 				assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().unbonding_points(), 20);
 			})
@@ -2052,19 +2178,25 @@ mod unbond {
 		//   - depositor cannot unbond to below limit or 0
 		ExtBuilder::default().min_join_bond(10).build_and_execute(|| {
 			// give the depositor some extra funds.
-			assert_ok!(Pools::bond_extra(Origin::signed(10), BondExtra::FreeBalance(10)));
+			assert_ok!(Pools::bond_extra(RuntimeOrigin::signed(10), BondExtra::FreeBalance(10)));
 			assert_eq!(PoolMembers::<T>::get(10).unwrap().points, 20);
 
 			// can unbond to above the limit.
-			assert_ok!(Pools::unbond(Origin::signed(10), 10, 5));
+			assert_ok!(Pools::unbond(RuntimeOrigin::signed(10), 10, 5));
 			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 15);
 			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().unbonding_points(), 5);
 
 			// cannot go to below 10:
-			assert_noop!(Pools::unbond(Origin::signed(10), 10, 10), Error::<T>::MinimumBondNotMet);
+			assert_noop!(
+				Pools::unbond(RuntimeOrigin::signed(10), 10, 10),
+				Error::<T>::MinimumBondNotMet
+			);
 
 			// cannot go to 0 either.
-			assert_noop!(Pools::unbond(Origin::signed(10), 10, 15), Error::<T>::MinimumBondNotMet);
+			assert_noop!(
+				Pools::unbond(RuntimeOrigin::signed(10), 10, 15),
+				Error::<T>::MinimumBondNotMet
+			);
 		})
 	}
 
@@ -2074,7 +2206,7 @@ mod unbond {
 		//   - depositor can never be kicked.
 		ExtBuilder::default().min_join_bond(10).build_and_execute(|| {
 			// give the depositor some extra funds.
-			assert_ok!(Pools::bond_extra(Origin::signed(10), BondExtra::FreeBalance(10)));
+			assert_ok!(Pools::bond_extra(RuntimeOrigin::signed(10), BondExtra::FreeBalance(10)));
 			assert_eq!(PoolMembers::<T>::get(10).unwrap().points, 20);
 
 			// set the stage
@@ -2083,24 +2215,27 @@ mod unbond {
 
 			// cannot be kicked to above limit.
 			assert_noop!(
-				Pools::unbond(Origin::signed(kicker), 10, 5),
+				Pools::unbond(RuntimeOrigin::signed(kicker), 10, 5),
 				Error::<T>::PartialUnbondNotAllowedPermissionlessly
 			);
 
 			// or below the limit
 			assert_noop!(
-				Pools::unbond(Origin::signed(kicker), 10, 15),
+				Pools::unbond(RuntimeOrigin::signed(kicker), 10, 15),
 				Error::<T>::PartialUnbondNotAllowedPermissionlessly
 			);
 
 			// or 0.
 			assert_noop!(
-				Pools::unbond(Origin::signed(kicker), 10, 20),
+				Pools::unbond(RuntimeOrigin::signed(kicker), 10, 20),
 				Error::<T>::DoesNotHavePermission
 			);
 
 			// they themselves cannot do it either
-			assert_noop!(Pools::unbond(Origin::signed(10), 10, 20), Error::<T>::MinimumBondNotMet);
+			assert_noop!(
+				Pools::unbond(RuntimeOrigin::signed(10), 10, 20),
+				Error::<T>::MinimumBondNotMet
+			);
 		})
 	}
 
@@ -2109,7 +2244,7 @@ mod unbond {
 		// depositor can never be permissionlessly unbonded.
 		ExtBuilder::default().min_join_bond(10).build_and_execute(|| {
 			// give the depositor some extra funds.
-			assert_ok!(Pools::bond_extra(Origin::signed(10), BondExtra::FreeBalance(10)));
+			assert_ok!(Pools::bond_extra(RuntimeOrigin::signed(10), BondExtra::FreeBalance(10)));
 			assert_eq!(PoolMembers::<T>::get(10).unwrap().points, 20);
 
 			// set the stage
@@ -2118,24 +2253,24 @@ mod unbond {
 
 			// cannot be kicked to above limit.
 			assert_noop!(
-				Pools::unbond(Origin::signed(random), 10, 5),
+				Pools::unbond(RuntimeOrigin::signed(random), 10, 5),
 				Error::<T>::PartialUnbondNotAllowedPermissionlessly
 			);
 
 			// or below the limit
 			assert_noop!(
-				Pools::unbond(Origin::signed(random), 10, 15),
+				Pools::unbond(RuntimeOrigin::signed(random), 10, 15),
 				Error::<T>::PartialUnbondNotAllowedPermissionlessly
 			);
 
 			// or 0.
 			assert_noop!(
-				Pools::unbond(Origin::signed(random), 10, 20),
+				Pools::unbond(RuntimeOrigin::signed(random), 10, 20),
 				Error::<T>::DoesNotHavePermission
 			);
 
 			// they themselves can do it in this case though.
-			assert_ok!(Pools::unbond(Origin::signed(10), 10, 20));
+			assert_ok!(Pools::unbond(RuntimeOrigin::signed(10), 10, 20));
 		})
 	}
 
@@ -2148,26 +2283,29 @@ mod unbond {
 			.add_members(vec![(20, 20)])
 			.build_and_execute(|| {
 				// give the depositor some extra funds.
-				assert_ok!(Pools::bond_extra(Origin::signed(10), BondExtra::FreeBalance(10)));
+				assert_ok!(Pools::bond_extra(
+					RuntimeOrigin::signed(10),
+					BondExtra::FreeBalance(10)
+				));
 				assert_eq!(PoolMembers::<T>::get(10).unwrap().points, 20);
 
 				// set the stage
 				unsafe_set_state(1, PoolState::Destroying);
 
 				// can go above the limit
-				assert_ok!(Pools::unbond(Origin::signed(10), 10, 5));
+				assert_ok!(Pools::unbond(RuntimeOrigin::signed(10), 10, 5));
 				assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 15);
 				assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().unbonding_points(), 5);
 
 				// but not below the limit
 				assert_noop!(
-					Pools::unbond(Origin::signed(10), 10, 10),
+					Pools::unbond(RuntimeOrigin::signed(10), 10, 10),
 					Error::<T>::MinimumBondNotMet
 				);
 
 				// and certainly not zero
 				assert_noop!(
-					Pools::unbond(Origin::signed(10), 10, 15),
+					Pools::unbond(RuntimeOrigin::signed(10), 10, 15),
 					Error::<T>::MinimumBondNotMet
 				);
 			})
@@ -2181,22 +2319,25 @@ mod unbond {
 		//   - depositor can unbond to 0 if last and destroying.
 		ExtBuilder::default().min_join_bond(10).build_and_execute(|| {
 			// give the depositor some extra funds.
-			assert_ok!(Pools::bond_extra(Origin::signed(10), BondExtra::FreeBalance(10)));
+			assert_ok!(Pools::bond_extra(RuntimeOrigin::signed(10), BondExtra::FreeBalance(10)));
 			assert_eq!(PoolMembers::<T>::get(10).unwrap().points, 20);
 
 			// set the stage
 			unsafe_set_state(1, PoolState::Destroying);
 
 			// can unbond to above the limit.
-			assert_ok!(Pools::unbond(Origin::signed(10), 10, 5));
+			assert_ok!(Pools::unbond(RuntimeOrigin::signed(10), 10, 5));
 			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 15);
 			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().unbonding_points(), 5);
 
 			// still cannot go to below limit
-			assert_noop!(Pools::unbond(Origin::signed(10), 10, 10), Error::<T>::MinimumBondNotMet);
+			assert_noop!(
+				Pools::unbond(RuntimeOrigin::signed(10), 10, 10),
+				Error::<T>::MinimumBondNotMet
+			);
 
 			// can go to 0 too.
-			assert_ok!(Pools::unbond(Origin::signed(10), 10, 15));
+			assert_ok!(Pools::unbond(RuntimeOrigin::signed(10), 10, 15));
 			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 0);
 			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().unbonding_points(), 20);
 		})
@@ -2269,7 +2410,7 @@ mod unbond {
 						Event::Bonded { member: 40, pool_id: 1, bonded: 40, joined: true },
 						Event::Bonded { member: 550, pool_id: 1, bonded: 550, joined: true },
 						Event::PaidOut { member: 40, pool_id: 1, payout: 40 },
-						Event::Unbonded { member: 40, pool_id: 1, points: 6, balance: 6 }
+						Event::Unbonded { member: 40, pool_id: 1, points: 6, balance: 6, era: 3 }
 					]
 				);
 
@@ -2311,14 +2452,20 @@ mod unbond {
 					pool_events_since_last_call(),
 					vec![
 						Event::PaidOut { member: 550, pool_id: 1, payout: 550 },
-						Event::Unbonded { member: 550, pool_id: 1, points: 92, balance: 92 }
+						Event::Unbonded {
+							member: 550,
+							pool_id: 1,
+							points: 92,
+							balance: 92,
+							era: 3
+						}
 					]
 				);
 
 				// When
 				CurrentEra::set(3);
-				assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 40, 0));
-				assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 550, 0));
+				assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(10), 40, 0));
+				assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(10), 550, 0));
 				assert_ok!(fully_unbond_permissioned(10));
 
 				// Then
@@ -2349,7 +2496,7 @@ mod unbond {
 						Event::Withdrawn { member: 550, pool_id: 1, points: 92, balance: 92 },
 						Event::MemberRemoved { pool_id: 1, member: 550 },
 						Event::PaidOut { member: 10, pool_id: 1, payout: 10 },
-						Event::Unbonded { member: 10, pool_id: 1, points: 2, balance: 2 }
+						Event::Unbonded { member: 10, pool_id: 1, points: 2, balance: 2, era: 6 }
 					]
 				);
 			});
@@ -2395,7 +2542,7 @@ mod unbond {
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::Unbonded { member: 10, pool_id: 1, points: 10, balance: 10 }
+					Event::Unbonded { member: 10, pool_id: 1, points: 10, balance: 10, era: 9 }
 				]
 			);
 		});
@@ -2416,12 +2563,12 @@ mod unbond {
 
 				// When the nominator tries to kick, then its a noop
 				assert_noop!(
-					Pools::fully_unbond(Origin::signed(901), 100),
+					Pools::fully_unbond(RuntimeOrigin::signed(901), 100),
 					Error::<Runtime>::NotKickerOrDestroying
 				);
 
 				// When the root kicks then its ok
-				assert_ok!(Pools::fully_unbond(Origin::signed(900), 100));
+				assert_ok!(Pools::fully_unbond(RuntimeOrigin::signed(900), 100));
 
 				assert_eq!(
 					pool_events_since_last_call(),
@@ -2430,16 +2577,28 @@ mod unbond {
 						Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 						Event::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
 						Event::Bonded { member: 200, pool_id: 1, bonded: 200, joined: true },
-						Event::Unbonded { member: 100, pool_id: 1, points: 100, balance: 100 },
+						Event::Unbonded {
+							member: 100,
+							pool_id: 1,
+							points: 100,
+							balance: 100,
+							era: 3
+						},
 					]
 				);
 
 				// When the state toggler kicks then its ok
-				assert_ok!(Pools::fully_unbond(Origin::signed(902), 200));
+				assert_ok!(Pools::fully_unbond(RuntimeOrigin::signed(902), 200));
 
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![Event::Unbonded { member: 200, pool_id: 1, points: 200, balance: 200 }]
+					vec![Event::Unbonded {
+						member: 200,
+						pool_id: 1,
+						points: 200,
+						balance: 200,
+						era: 3
+					}]
 				);
 
 				assert_eq!(
@@ -2480,13 +2639,13 @@ mod unbond {
 
 			// A permissionless unbond attempt errors
 			assert_noop!(
-				Pools::fully_unbond(Origin::signed(420), 100),
+				Pools::fully_unbond(RuntimeOrigin::signed(420), 100),
 				Error::<Runtime>::NotKickerOrDestroying
 			);
 
 			// permissionless unbond must be full
 			assert_noop!(
-				Pools::unbond(Origin::signed(420), 100, 80),
+				Pools::unbond(RuntimeOrigin::signed(420), 100, 80),
 				Error::<Runtime>::PartialUnbondNotAllowedPermissionlessly,
 			);
 
@@ -2495,12 +2654,12 @@ mod unbond {
 
 			// The depositor cannot be fully unbonded until they are the last member
 			assert_noop!(
-				Pools::fully_unbond(Origin::signed(10), 10),
+				Pools::fully_unbond(RuntimeOrigin::signed(10), 10),
 				Error::<Runtime>::MinimumBondNotMet,
 			);
 
 			// Any account can unbond a member that is not the depositor
-			assert_ok!(Pools::fully_unbond(Origin::signed(420), 100));
+			assert_ok!(Pools::fully_unbond(RuntimeOrigin::signed(420), 100));
 
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -2508,13 +2667,13 @@ mod unbond {
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
-					Event::Unbonded { member: 100, pool_id: 1, points: 100, balance: 100 }
+					Event::Unbonded { member: 100, pool_id: 1, points: 100, balance: 100, era: 3 }
 				]
 			);
 
 			// still permissionless unbond must be full
 			assert_noop!(
-				Pools::unbond(Origin::signed(420), 100, 80),
+				Pools::unbond(RuntimeOrigin::signed(420), 100, 80),
 				Error::<Runtime>::PartialUnbondNotAllowedPermissionlessly,
 			);
 
@@ -2523,7 +2682,7 @@ mod unbond {
 
 			// The depositor cannot be unbonded
 			assert_noop!(
-				Pools::fully_unbond(Origin::signed(420), 10),
+				Pools::fully_unbond(RuntimeOrigin::signed(420), 10),
 				Error::<Runtime>::DoesNotHavePermission
 			);
 
@@ -2532,27 +2691,27 @@ mod unbond {
 
 			// The depositor cannot be unbonded yet.
 			assert_noop!(
-				Pools::fully_unbond(Origin::signed(420), 10),
+				Pools::fully_unbond(RuntimeOrigin::signed(420), 10),
 				Error::<Runtime>::DoesNotHavePermission,
 			);
 
 			// but when everyone is unbonded it can..
 			CurrentEra::set(3);
-			assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 100, 0));
+			assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(10), 100, 0));
 
 			// still permissionless unbond must be full.
 			assert_noop!(
-				Pools::unbond(Origin::signed(420), 10, 5),
+				Pools::unbond(RuntimeOrigin::signed(420), 10, 5),
 				Error::<Runtime>::PartialUnbondNotAllowedPermissionlessly,
 			);
 
 			// depositor can never be unbonded permissionlessly .
 			assert_noop!(
-				Pools::fully_unbond(Origin::signed(420), 10),
+				Pools::fully_unbond(RuntimeOrigin::signed(420), 10),
 				Error::<T>::DoesNotHavePermission
 			);
 			// but depositor itself can do it.
-			assert_ok!(Pools::fully_unbond(Origin::signed(10), 10));
+			assert_ok!(Pools::fully_unbond(RuntimeOrigin::signed(10), 10));
 
 			assert_eq!(BondedPools::<Runtime>::get(1).unwrap().points, 0);
 			assert_eq!(
@@ -2575,7 +2734,7 @@ mod unbond {
 	fn unbond_errors_correctly() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_noop!(
-				Pools::fully_unbond(Origin::signed(11), 11),
+				Pools::fully_unbond(RuntimeOrigin::signed(11), 11),
 				Error::<Runtime>::PoolMemberNotFound
 			);
 
@@ -2583,7 +2742,7 @@ mod unbond {
 			let member = PoolMember { pool_id: 2, points: 10, ..Default::default() };
 			PoolMembers::<Runtime>::insert(11, member);
 
-			let _ = Pools::fully_unbond(Origin::signed(11), 11);
+			let _ = Pools::fully_unbond(RuntimeOrigin::signed(11), 11);
 		});
 	}
 
@@ -2605,13 +2764,13 @@ mod unbond {
 			}
 			.put();
 
-			let _ = Pools::fully_unbond(Origin::signed(11), 11);
+			let _ = Pools::fully_unbond(RuntimeOrigin::signed(11), 11);
 		});
 	}
 
 	#[test]
 	fn partial_unbond_era_tracking() {
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().ed(1).build_and_execute(|| {
 			// to make the depositor capable of withdrawing.
 			StakingMinBond::set(1);
 			MinCreateBond::<T>::set(1);
@@ -2635,7 +2794,7 @@ mod unbond {
 			unsafe_set_state(1, PoolState::Destroying);
 
 			// when: casual unbond
-			assert_ok!(Pools::unbond(Origin::signed(10), 10, 1));
+			assert_ok!(Pools::unbond(RuntimeOrigin::signed(10), 10, 1));
 
 			// then
 			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 9);
@@ -2659,12 +2818,12 @@ mod unbond {
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::Unbonded { member: 10, pool_id: 1, points: 1, balance: 1 }
+					Event::Unbonded { member: 10, pool_id: 1, points: 1, balance: 1, era: 3 }
 				]
 			);
 
 			// when: casual further unbond, same era.
-			assert_ok!(Pools::unbond(Origin::signed(10), 10, 5));
+			assert_ok!(Pools::unbond(RuntimeOrigin::signed(10), 10, 5));
 
 			// then
 			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 4);
@@ -2685,12 +2844,12 @@ mod unbond {
 			);
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::Unbonded { member: 10, pool_id: 1, points: 5, balance: 5 }]
+				vec![Event::Unbonded { member: 10, pool_id: 1, points: 5, balance: 5, era: 3 }]
 			);
 
 			// when: casual further unbond, next era.
 			CurrentEra::set(1);
-			assert_ok!(Pools::unbond(Origin::signed(10), 10, 1));
+			assert_ok!(Pools::unbond(RuntimeOrigin::signed(10), 10, 1));
 
 			// then
 			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 3);
@@ -2712,20 +2871,20 @@ mod unbond {
 			);
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::Unbonded { member: 10, pool_id: 1, points: 1, balance: 1 }]
+				vec![Event::Unbonded { member: 10, pool_id: 1, points: 1, balance: 1, era: 4 }]
 			);
 
 			// when: unbonding more than our active: error
 			assert_noop!(
-				frame_support::storage::in_storage_layer(|| Pools::unbond(
-					Origin::signed(10),
+				frame_support::storage::with_storage_layer(|| Pools::unbond(
+					RuntimeOrigin::signed(10),
 					10,
 					5
 				)),
 				Error::<Runtime>::MinimumBondNotMet
 			);
 			// instead:
-			assert_ok!(Pools::unbond(Origin::signed(10), 10, 3));
+			assert_ok!(Pools::unbond(RuntimeOrigin::signed(10), 10, 3));
 
 			// then
 			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 0);
@@ -2747,7 +2906,7 @@ mod unbond {
 			);
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::Unbonded { member: 10, pool_id: 1, points: 3, balance: 3 }]
+				vec![Event::Unbonded { member: 10, pool_id: 1, points: 3, balance: 3, era: 4 }]
 			);
 		});
 	}
@@ -2758,9 +2917,9 @@ mod unbond {
 			MaxUnbonding::set(2);
 
 			// given
-			assert_ok!(Pools::unbond(Origin::signed(20), 20, 2));
+			assert_ok!(Pools::unbond(RuntimeOrigin::signed(20), 20, 2));
 			CurrentEra::set(1);
-			assert_ok!(Pools::unbond(Origin::signed(20), 20, 3));
+			assert_ok!(Pools::unbond(RuntimeOrigin::signed(20), 20, 3));
 			assert_eq!(
 				PoolMembers::<Runtime>::get(20).unwrap().unbonding_eras,
 				member_unbonding_eras!(3 => 2, 4 => 3)
@@ -2769,8 +2928,8 @@ mod unbond {
 			// when
 			CurrentEra::set(2);
 			assert_noop!(
-				frame_support::storage::in_storage_layer(|| Pools::unbond(
-					Origin::signed(20),
+				frame_support::storage::with_storage_layer(|| Pools::unbond(
+					RuntimeOrigin::signed(20),
 					20,
 					4
 				)),
@@ -2779,7 +2938,7 @@ mod unbond {
 
 			// when
 			MaxUnbonding::set(3);
-			assert_ok!(Pools::unbond(Origin::signed(20), 20, 1));
+			assert_ok!(Pools::unbond(RuntimeOrigin::signed(20), 20, 1));
 
 			assert_eq!(
 				PoolMembers::<Runtime>::get(20).unwrap().unbonding_eras,
@@ -2792,9 +2951,9 @@ mod unbond {
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
-					Event::Unbonded { member: 20, pool_id: 1, balance: 2, points: 2 },
-					Event::Unbonded { member: 20, pool_id: 1, balance: 3, points: 3 },
-					Event::Unbonded { member: 20, pool_id: 1, balance: 1, points: 1 }
+					Event::Unbonded { member: 20, pool_id: 1, points: 2, balance: 2, era: 3 },
+					Event::Unbonded { member: 20, pool_id: 1, points: 3, balance: 3, era: 4 },
+					Event::Unbonded { member: 20, pool_id: 1, points: 1, balance: 1, era: 5 }
 				]
 			);
 		})
@@ -2812,13 +2971,13 @@ mod unbond {
 			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().unbonding_points(), 0);
 
 			// can unbond a bit..
-			assert_ok!(Pools::unbond(Origin::signed(10), 10, 3));
+			assert_ok!(Pools::unbond(RuntimeOrigin::signed(10), 10, 3));
 			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 7);
 			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().unbonding_points(), 3);
 
 			// but not less than 2
 			assert_noop!(
-				Pools::unbond(Origin::signed(10), 10, 6),
+				Pools::unbond(RuntimeOrigin::signed(10), 10, 6),
 				Error::<Runtime>::MinimumBondNotMet
 			);
 
@@ -2827,7 +2986,7 @@ mod unbond {
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::Unbonded { member: 10, pool_id: 1, points: 3, balance: 3 }
+					Event::Unbonded { member: 10, pool_id: 1, points: 3, balance: 3, era: 3 }
 				]
 			);
 		});
@@ -2846,7 +3005,7 @@ mod unbond {
 
 			// cannot unbond even 7, because the value of shares is now less.
 			assert_noop!(
-				Pools::unbond(Origin::signed(10), 10, 7),
+				Pools::unbond(RuntimeOrigin::signed(10), 10, 7),
 				Error::<Runtime>::MinimumBondNotMet
 			);
 		});
@@ -2864,7 +3023,7 @@ mod unbond {
 				4 * Balances::minimum_balance(),
 			);
 
-			assert_ok!(Pools::unbond(Origin::signed(20), 20, 2));
+			assert_ok!(Pools::unbond(RuntimeOrigin::signed(20), 20, 2));
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
@@ -2873,7 +3032,7 @@ mod unbond {
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
 					Event::PaidOut { member: 20, pool_id: 1, payout: 10 },
-					Event::Unbonded { member: 20, pool_id: 1, balance: 2, points: 2 }
+					Event::Unbonded { member: 20, pool_id: 1, balance: 2, points: 2, era: 3 }
 				]
 			);
 
@@ -2883,13 +3042,13 @@ mod unbond {
 				4 * Balances::minimum_balance(),
 			);
 
-			assert_ok!(Pools::unbond(Origin::signed(20), 20, 3));
+			assert_ok!(Pools::unbond(RuntimeOrigin::signed(20), 20, 3));
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
 					// 2/3 of ed, which is 20's share.
 					Event::PaidOut { member: 20, pool_id: 1, payout: 6 },
-					Event::Unbonded { member: 20, pool_id: 1, points: 3, balance: 3 }
+					Event::Unbonded { member: 20, pool_id: 1, points: 3, balance: 3, era: 4 }
 				]
 			);
 
@@ -2899,12 +3058,12 @@ mod unbond {
 				4 * Balances::minimum_balance(),
 			);
 
-			assert_ok!(Pools::unbond(Origin::signed(20), 20, 5));
+			assert_ok!(Pools::unbond(RuntimeOrigin::signed(20), 20, 5));
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
 					Event::PaidOut { member: 20, pool_id: 1, payout: 3 },
-					Event::Unbonded { member: 20, pool_id: 1, points: 5, balance: 5 }
+					Event::Unbonded { member: 20, pool_id: 1, points: 5, balance: 5, era: 5 }
 				]
 			);
 
@@ -2923,18 +3082,18 @@ mod pool_withdraw_unbonded {
 	fn pool_withdraw_unbonded_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			// Given 10 unbond'ed directly against the pool account
-			assert_ok!(StakingMock::unbond(default_bonded_account(), 5));
+			assert_ok!(StakingMock::unbond(&default_bonded_account(), 5));
 			// and the pool account only has 10 balance
-			assert_eq!(StakingMock::active_stake(&default_bonded_account()), Some(5));
-			assert_eq!(StakingMock::total_stake(&default_bonded_account()), Some(10));
+			assert_eq!(StakingMock::active_stake(&default_bonded_account()), Ok(5));
+			assert_eq!(StakingMock::total_stake(&default_bonded_account()), Ok(10));
 			assert_eq!(Balances::free_balance(&default_bonded_account()), 10);
 
 			// When
-			assert_ok!(Pools::pool_withdraw_unbonded(Origin::signed(10), 1, 0));
+			assert_ok!(Pools::pool_withdraw_unbonded(RuntimeOrigin::signed(10), 1, 0));
 
 			// Then there unbonding balance is no longer locked
-			assert_eq!(StakingMock::active_stake(&default_bonded_account()), Some(5));
-			assert_eq!(StakingMock::total_stake(&default_bonded_account()), Some(5));
+			assert_eq!(StakingMock::active_stake(&default_bonded_account()), Ok(5));
+			assert_eq!(StakingMock::total_stake(&default_bonded_account()), Ok(5));
 			assert_eq!(Balances::free_balance(&default_bonded_account()), 10);
 		});
 	}
@@ -2954,8 +3113,8 @@ mod withdraw_unbonded {
 
 				// Given
 				assert_eq!(StakingMock::bonding_duration(), 3);
-				assert_ok!(Pools::fully_unbond(Origin::signed(550), 550));
-				assert_ok!(Pools::fully_unbond(Origin::signed(40), 40));
+				assert_ok!(Pools::fully_unbond(RuntimeOrigin::signed(550), 550));
+				assert_ok!(Pools::fully_unbond(RuntimeOrigin::signed(40), 40));
 				assert_eq!(Balances::free_balance(&default_bonded_account()), 600);
 
 				let mut current_era = 1;
@@ -3003,7 +3162,6 @@ mod withdraw_unbonded {
 						with_era: Default::default()
 					}
 				);
-
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
@@ -3011,8 +3169,14 @@ mod withdraw_unbonded {
 						Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 						Event::Bonded { member: 40, pool_id: 1, bonded: 40, joined: true },
 						Event::Bonded { member: 550, pool_id: 1, bonded: 550, joined: true },
-						Event::Unbonded { member: 550, pool_id: 1, points: 550, balance: 550 },
-						Event::Unbonded { member: 40, pool_id: 1, points: 40, balance: 40 },
+						Event::Unbonded {
+							member: 550,
+							pool_id: 1,
+							points: 550,
+							balance: 550,
+							era: 3
+						},
+						Event::Unbonded { member: 40, pool_id: 1, points: 40, balance: 40, era: 3 },
 					]
 				);
 				assert_eq!(
@@ -3025,7 +3189,7 @@ mod withdraw_unbonded {
 				);
 
 				// When
-				assert_ok!(Pools::withdraw_unbonded(Origin::signed(550), 550, 0));
+				assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(550), 550, 0));
 
 				// Then
 				assert_eq!(
@@ -3045,7 +3209,7 @@ mod withdraw_unbonded {
 				);
 
 				// When
-				assert_ok!(Pools::withdraw_unbonded(Origin::signed(40), 40, 0));
+				assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(40), 40, 0));
 
 				// Then
 				assert_eq!(
@@ -3073,16 +3237,17 @@ mod withdraw_unbonded {
 				CurrentEra::set(current_era);
 
 				// when
-				assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
+				assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(10), 10, 0));
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						Event::Unbonded { member: 10, pool_id: 1, balance: 5, points: 5 },
+						Event::Unbonded { member: 10, pool_id: 1, balance: 5, points: 5, era: 9 },
 						Event::Withdrawn { member: 10, pool_id: 1, balance: 5, points: 5 },
 						Event::MemberRemoved { pool_id: 1, member: 10 },
 						Event::Destroyed { pool_id: 1 }
 					]
 				);
+				assert!(!Metadata::<T>::contains_key(1));
 				assert_eq!(
 					balances_events_since_last_call(),
 					vec![
@@ -3104,7 +3269,7 @@ mod withdraw_unbonded {
 				// current bond is 600, we slash it all to 300.
 				StakingMock::set_bonded_balance(default_bonded_account(), 300);
 				Balances::make_free_balance_be(&default_bonded_account(), 300);
-				assert_eq!(StakingMock::total_stake(&default_bonded_account()), Some(300));
+				assert_eq!(StakingMock::total_stake(&default_bonded_account()), Ok(300));
 
 				assert_ok!(fully_unbond_permissioned(40));
 				assert_ok!(fully_unbond_permissioned(550));
@@ -3122,8 +3287,14 @@ mod withdraw_unbonded {
 						Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 						Event::Bonded { member: 40, pool_id: 1, bonded: 40, joined: true },
 						Event::Bonded { member: 550, pool_id: 1, bonded: 550, joined: true },
-						Event::Unbonded { member: 40, pool_id: 1, balance: 20, points: 20 },
-						Event::Unbonded { member: 550, pool_id: 1, balance: 275, points: 275 },
+						Event::Unbonded { member: 40, pool_id: 1, balance: 20, points: 20, era: 3 },
+						Event::Unbonded {
+							member: 550,
+							pool_id: 1,
+							balance: 275,
+							points: 275,
+							era: 3,
+						}
 					]
 				);
 				assert_eq!(
@@ -3138,7 +3309,7 @@ mod withdraw_unbonded {
 				CurrentEra::set(StakingMock::bonding_duration());
 
 				// When
-				assert_ok!(Pools::withdraw_unbonded(Origin::signed(40), 40, 0));
+				assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(40), 40, 0));
 
 				// Then
 				assert_eq!(
@@ -3159,7 +3330,7 @@ mod withdraw_unbonded {
 				);
 
 				// When
-				assert_ok!(Pools::withdraw_unbonded(Origin::signed(550), 550, 0));
+				assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(550), 550, 0));
 
 				// Then
 				assert_eq!(
@@ -3187,8 +3358,12 @@ mod withdraw_unbonded {
 
 				CurrentEra::set(CurrentEra::get() + 3);
 
+				// set metadata to check that it's being removed on dissolve
+				assert_ok!(Pools::set_metadata(RuntimeOrigin::signed(900), 1, vec![1, 1]));
+				assert!(Metadata::<T>::contains_key(1));
+
 				// when
-				assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
+				assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(10), 10, 0));
 
 				// then
 				assert_eq!(Balances::free_balance(&10), 10 + 35);
@@ -3199,12 +3374,13 @@ mod withdraw_unbonded {
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						Event::Unbonded { member: 10, pool_id: 1, points: 5, balance: 5 },
+						Event::Unbonded { member: 10, pool_id: 1, points: 5, balance: 5, era: 6 },
 						Event::Withdrawn { member: 10, pool_id: 1, points: 5, balance: 5 },
 						Event::MemberRemoved { pool_id: 1, member: 10 },
 						Event::Destroyed { pool_id: 1 }
 					]
 				);
+				assert!(!Metadata::<T>::contains_key(1));
 				assert_eq!(
 					balances_events_since_last_call(),
 					vec![
@@ -3223,7 +3399,7 @@ mod withdraw_unbonded {
 			assert_eq!(Balances::free_balance(&10), 35);
 			assert_eq!(Balances::free_balance(&default_bonded_account()), 10);
 			unsafe_set_state(1, PoolState::Destroying);
-			assert_ok!(Pools::fully_unbond(Origin::signed(10), 10));
+			assert_ok!(Pools::fully_unbond(RuntimeOrigin::signed(10), 10));
 
 			// Simulate a slash that is not accounted for in the sub pools.
 			Balances::make_free_balance_be(&default_bonded_account(), 5);
@@ -3236,7 +3412,7 @@ mod withdraw_unbonded {
 			CurrentEra::set(0 + 3);
 
 			// When
-			assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
+			assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(10), 10, 0));
 
 			// Then
 			assert_eq!(Balances::free_balance(10), 10 + 35);
@@ -3255,7 +3431,7 @@ mod withdraw_unbonded {
 			SubPoolsStorage::<Runtime>::insert(1, sub_pools.clone());
 
 			assert_noop!(
-				Pools::withdraw_unbonded(Origin::signed(11), 11, 0),
+				Pools::withdraw_unbonded(RuntimeOrigin::signed(11), 11, 0),
 				Error::<Runtime>::PoolMemberNotFound
 			);
 
@@ -3268,7 +3444,7 @@ mod withdraw_unbonded {
 
 			// We are still in the bonding duration
 			assert_noop!(
-				Pools::withdraw_unbonded(Origin::signed(11), 11, 0),
+				Pools::withdraw_unbonded(RuntimeOrigin::signed(11), 11, 0),
 				Error::<Runtime>::CannotWithdrawAny
 			);
 
@@ -3285,8 +3461,8 @@ mod withdraw_unbonded {
 			.add_members(vec![(100, 100), (200, 200)])
 			.build_and_execute(|| {
 				// Given
-				assert_ok!(Pools::fully_unbond(Origin::signed(100), 100));
-				assert_ok!(Pools::fully_unbond(Origin::signed(200), 200));
+				assert_ok!(Pools::fully_unbond(RuntimeOrigin::signed(100), 100));
+				assert_ok!(Pools::fully_unbond(RuntimeOrigin::signed(200), 200));
 				assert_eq!(
 					BondedPool::<Runtime>::get(1).unwrap(),
 					BondedPool {
@@ -3303,7 +3479,7 @@ mod withdraw_unbonded {
 
 				// Cannot kick when pool is open
 				assert_noop!(
-					Pools::withdraw_unbonded(Origin::signed(902), 100, 0),
+					Pools::withdraw_unbonded(RuntimeOrigin::signed(902), 100, 0),
 					Error::<Runtime>::NotKickerOrDestroying
 				);
 				assert_eq!(
@@ -3313,8 +3489,20 @@ mod withdraw_unbonded {
 						Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 						Event::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
 						Event::Bonded { member: 200, pool_id: 1, bonded: 200, joined: true },
-						Event::Unbonded { member: 100, pool_id: 1, points: 100, balance: 100 },
-						Event::Unbonded { member: 200, pool_id: 1, points: 200, balance: 200 }
+						Event::Unbonded {
+							member: 100,
+							pool_id: 1,
+							points: 100,
+							balance: 100,
+							era: 3
+						},
+						Event::Unbonded {
+							member: 200,
+							pool_id: 1,
+							points: 200,
+							balance: 200,
+							era: 3
+						}
 					]
 				);
 
@@ -3323,15 +3511,15 @@ mod withdraw_unbonded {
 
 				// Cannot kick as a nominator
 				assert_noop!(
-					Pools::withdraw_unbonded(Origin::signed(901), 100, 0),
+					Pools::withdraw_unbonded(RuntimeOrigin::signed(901), 100, 0),
 					Error::<Runtime>::NotKickerOrDestroying
 				);
 
 				// Can kick as root
-				assert_ok!(Pools::withdraw_unbonded(Origin::signed(900), 100, 0));
+				assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(900), 100, 0));
 
 				// Can kick as state toggler
-				assert_ok!(Pools::withdraw_unbonded(Origin::signed(900), 200, 0));
+				assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(900), 200, 0));
 
 				assert_eq!(Balances::free_balance(100), 100 + 100);
 				assert_eq!(Balances::free_balance(200), 200 + 200);
@@ -3354,7 +3542,7 @@ mod withdraw_unbonded {
 	fn withdraw_unbonded_destroying_permissionless() {
 		ExtBuilder::default().add_members(vec![(100, 100)]).build_and_execute(|| {
 			// Given
-			assert_ok!(Pools::fully_unbond(Origin::signed(100), 100));
+			assert_ok!(Pools::fully_unbond(RuntimeOrigin::signed(100), 100));
 			assert_eq!(
 				BondedPool::<Runtime>::get(1).unwrap(),
 				BondedPool {
@@ -3372,7 +3560,7 @@ mod withdraw_unbonded {
 
 			// Cannot permissionlessly withdraw
 			assert_noop!(
-				Pools::fully_unbond(Origin::signed(420), 100),
+				Pools::fully_unbond(RuntimeOrigin::signed(420), 100),
 				Error::<Runtime>::NotKickerOrDestroying
 			);
 
@@ -3380,7 +3568,7 @@ mod withdraw_unbonded {
 			unsafe_set_state(1, PoolState::Destroying);
 
 			// Can permissionlesly withdraw a member that is not the depositor
-			assert_ok!(Pools::withdraw_unbonded(Origin::signed(420), 100, 0));
+			assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(420), 100, 0));
 
 			assert_eq!(SubPoolsStorage::<Runtime>::get(1).unwrap(), Default::default(),);
 			assert_eq!(Balances::free_balance(100), 100 + 100);
@@ -3391,7 +3579,7 @@ mod withdraw_unbonded {
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
-					Event::Unbonded { member: 100, pool_id: 1, points: 100, balance: 100 },
+					Event::Unbonded { member: 100, pool_id: 1, points: 100, balance: 100, era: 3 },
 					Event::Withdrawn { member: 100, pool_id: 1, points: 100, balance: 100 },
 					Event::MemberRemoved { pool_id: 1, member: 100 }
 				]
@@ -3402,13 +3590,13 @@ mod withdraw_unbonded {
 	#[test]
 	fn partial_withdraw_unbonded_depositor() {
 		ExtBuilder::default().ed(1).build_and_execute(|| {
-			assert_ok!(Pools::bond_extra(Origin::signed(10), BondExtra::FreeBalance(10)));
+			assert_ok!(Pools::bond_extra(RuntimeOrigin::signed(10), BondExtra::FreeBalance(10)));
 			unsafe_set_state(1, PoolState::Destroying);
 
 			// given
-			assert_ok!(Pools::unbond(Origin::signed(10), 10, 6));
+			assert_ok!(Pools::unbond(RuntimeOrigin::signed(10), 10, 6));
 			CurrentEra::set(1);
-			assert_ok!(Pools::unbond(Origin::signed(10), 10, 1));
+			assert_ok!(Pools::unbond(RuntimeOrigin::signed(10), 10, 1));
 			assert_eq!(
 				PoolMembers::<Runtime>::get(10).unwrap().unbonding_eras,
 				member_unbonding_eras!(3 => 6, 4 => 1)
@@ -3431,21 +3619,21 @@ mod withdraw_unbonded {
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: false },
-					Event::Unbonded { member: 10, pool_id: 1, points: 6, balance: 6 },
-					Event::Unbonded { member: 10, pool_id: 1, points: 1, balance: 1 }
+					Event::Unbonded { member: 10, pool_id: 1, points: 6, balance: 6, era: 3 },
+					Event::Unbonded { member: 10, pool_id: 1, points: 1, balance: 1, era: 4 }
 				]
 			);
 
 			// when
 			CurrentEra::set(2);
 			assert_noop!(
-				Pools::withdraw_unbonded(Origin::signed(10), 10, 0),
+				Pools::withdraw_unbonded(RuntimeOrigin::signed(10), 10, 0),
 				Error::<Runtime>::CannotWithdrawAny
 			);
 
 			// when
 			CurrentEra::set(3);
-			assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
+			assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(10), 10, 0));
 
 			// then
 			assert_eq!(
@@ -3468,7 +3656,7 @@ mod withdraw_unbonded {
 
 			// when
 			CurrentEra::set(4);
-			assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
+			assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(10), 10, 0));
 
 			// then
 			assert_eq!(
@@ -3483,7 +3671,7 @@ mod withdraw_unbonded {
 
 			// when repeating:
 			assert_noop!(
-				Pools::withdraw_unbonded(Origin::signed(10), 10, 0),
+				Pools::withdraw_unbonded(RuntimeOrigin::signed(10), 10, 0),
 				Error::<Runtime>::CannotWithdrawAny
 			);
 		});
@@ -3493,9 +3681,9 @@ mod withdraw_unbonded {
 	fn partial_withdraw_unbonded_non_depositor() {
 		ExtBuilder::default().add_members(vec![(11, 10)]).build_and_execute(|| {
 			// given
-			assert_ok!(Pools::unbond(Origin::signed(11), 11, 6));
+			assert_ok!(Pools::unbond(RuntimeOrigin::signed(11), 11, 6));
 			CurrentEra::set(1);
-			assert_ok!(Pools::unbond(Origin::signed(11), 11, 1));
+			assert_ok!(Pools::unbond(RuntimeOrigin::signed(11), 11, 1));
 			assert_eq!(
 				PoolMembers::<Runtime>::get(11).unwrap().unbonding_eras,
 				member_unbonding_eras!(3 => 6, 4 => 1)
@@ -3518,21 +3706,21 @@ mod withdraw_unbonded {
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { member: 11, pool_id: 1, bonded: 10, joined: true },
-					Event::Unbonded { member: 11, pool_id: 1, points: 6, balance: 6 },
-					Event::Unbonded { member: 11, pool_id: 1, points: 1, balance: 1 }
+					Event::Unbonded { member: 11, pool_id: 1, points: 6, balance: 6, era: 3 },
+					Event::Unbonded { member: 11, pool_id: 1, points: 1, balance: 1, era: 4 }
 				]
 			);
 
 			// when
 			CurrentEra::set(2);
 			assert_noop!(
-				Pools::withdraw_unbonded(Origin::signed(11), 11, 0),
+				Pools::withdraw_unbonded(RuntimeOrigin::signed(11), 11, 0),
 				Error::<Runtime>::CannotWithdrawAny
 			);
 
 			// when
 			CurrentEra::set(3);
-			assert_ok!(Pools::withdraw_unbonded(Origin::signed(11), 11, 0));
+			assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(11), 11, 0));
 
 			// then
 			assert_eq!(
@@ -3555,7 +3743,7 @@ mod withdraw_unbonded {
 
 			// when
 			CurrentEra::set(4);
-			assert_ok!(Pools::withdraw_unbonded(Origin::signed(11), 11, 0));
+			assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(11), 11, 0));
 
 			// then
 			assert_eq!(
@@ -3570,7 +3758,7 @@ mod withdraw_unbonded {
 
 			// when repeating:
 			assert_noop!(
-				Pools::withdraw_unbonded(Origin::signed(11), 11, 0),
+				Pools::withdraw_unbonded(RuntimeOrigin::signed(11), 11, 0),
 				Error::<Runtime>::CannotWithdrawAny
 			);
 		});
@@ -3580,7 +3768,7 @@ mod withdraw_unbonded {
 	fn full_multi_step_withdrawing_non_depositor() {
 		ExtBuilder::default().add_members(vec![(100, 100)]).build_and_execute(|| {
 			// given
-			assert_ok!(Pools::unbond(Origin::signed(100), 100, 75));
+			assert_ok!(Pools::unbond(RuntimeOrigin::signed(100), 100, 75));
 			assert_eq!(
 				PoolMembers::<Runtime>::get(100).unwrap().unbonding_eras,
 				member_unbonding_eras!(3 => 75)
@@ -3588,28 +3776,28 @@ mod withdraw_unbonded {
 
 			// progress one era and unbond the leftover.
 			CurrentEra::set(1);
-			assert_ok!(Pools::unbond(Origin::signed(100), 100, 25));
+			assert_ok!(Pools::unbond(RuntimeOrigin::signed(100), 100, 25));
 			assert_eq!(
 				PoolMembers::<Runtime>::get(100).unwrap().unbonding_eras,
 				member_unbonding_eras!(3 => 75, 4 => 25)
 			);
 
 			assert_noop!(
-				Pools::withdraw_unbonded(Origin::signed(100), 100, 0),
+				Pools::withdraw_unbonded(RuntimeOrigin::signed(100), 100, 0),
 				Error::<Runtime>::CannotWithdrawAny
 			);
 
 			// now the 75 should be free.
 			CurrentEra::set(3);
-			assert_ok!(Pools::withdraw_unbonded(Origin::signed(100), 100, 0));
+			assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(100), 100, 0));
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
-					Event::Unbonded { member: 100, pool_id: 1, points: 75, balance: 75 },
-					Event::Unbonded { member: 100, pool_id: 1, points: 25, balance: 25 },
+					Event::Unbonded { member: 100, pool_id: 1, points: 75, balance: 75, era: 3 },
+					Event::Unbonded { member: 100, pool_id: 1, points: 25, balance: 25, era: 4 },
 					Event::Withdrawn { member: 100, pool_id: 1, points: 75, balance: 75 },
 				]
 			);
@@ -3620,7 +3808,7 @@ mod withdraw_unbonded {
 
 			// the 25 should be free now, and the member removed.
 			CurrentEra::set(4);
-			assert_ok!(Pools::withdraw_unbonded(Origin::signed(100), 100, 0));
+			assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(100), 100, 0));
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
@@ -3632,18 +3820,182 @@ mod withdraw_unbonded {
 	}
 
 	#[test]
+	fn out_of_sync_unbonding_chunks() {
+		// the unbonding_eras in pool member are always fixed to the era at which they are unlocked,
+		// but the actual unbonding pools get pruned and might get combined in the no_era pool.
+		// Pools are only merged when one unbonds, so we unbond a little bit on every era to
+		// simulate this.
+		ExtBuilder::default()
+			.add_members(vec![(20, 100), (30, 100)])
+			.build_and_execute(|| {
+				System::reset_events();
+
+				// when
+				assert_ok!(Pools::unbond(RuntimeOrigin::signed(20), 20, 5));
+				assert_ok!(Pools::unbond(RuntimeOrigin::signed(30), 30, 5));
+
+				// then member-local unbonding is pretty much in sync with the global pools.
+				assert_eq!(
+					PoolMembers::<Runtime>::get(20).unwrap().unbonding_eras,
+					member_unbonding_eras!(3 => 5)
+				);
+				assert_eq!(
+					PoolMembers::<Runtime>::get(30).unwrap().unbonding_eras,
+					member_unbonding_eras!(3 => 5)
+				);
+				assert_eq!(
+					SubPoolsStorage::<Runtime>::get(1).unwrap(),
+					SubPools {
+						no_era: Default::default(),
+						with_era: unbonding_pools_with_era! {
+							3 => UnbondPool { points: 10, balance: 10 }
+						}
+					}
+				);
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![
+						Event::Unbonded { member: 20, pool_id: 1, points: 5, balance: 5, era: 3 },
+						Event::Unbonded { member: 30, pool_id: 1, points: 5, balance: 5, era: 3 },
+					]
+				);
+
+				// when
+				CurrentEra::set(1);
+				assert_ok!(Pools::unbond(RuntimeOrigin::signed(20), 20, 5));
+
+				// then still member-local unbonding is pretty much in sync with the global pools.
+				assert_eq!(
+					PoolMembers::<Runtime>::get(20).unwrap().unbonding_eras,
+					member_unbonding_eras!(3 => 5, 4 => 5)
+				);
+				assert_eq!(
+					SubPoolsStorage::<Runtime>::get(1).unwrap(),
+					SubPools {
+						no_era: Default::default(),
+						with_era: unbonding_pools_with_era! {
+							3 => UnbondPool { points: 10, balance: 10 },
+							4 => UnbondPool { points: 5, balance: 5 }
+						}
+					}
+				);
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::Unbonded { member: 20, pool_id: 1, points: 5, balance: 5, era: 4 }]
+				);
+
+				// when
+				CurrentEra::set(2);
+				assert_ok!(Pools::unbond(RuntimeOrigin::signed(20), 20, 5));
+
+				// then still member-local unbonding is pretty much in sync with the global pools.
+				assert_eq!(
+					PoolMembers::<Runtime>::get(20).unwrap().unbonding_eras,
+					member_unbonding_eras!(3 => 5, 4 => 5, 5 => 5)
+				);
+				assert_eq!(
+					SubPoolsStorage::<Runtime>::get(1).unwrap(),
+					SubPools {
+						no_era: Default::default(),
+						with_era: unbonding_pools_with_era! {
+							3 => UnbondPool { points: 10, balance: 10 },
+							4 => UnbondPool { points: 5, balance: 5 },
+							5 => UnbondPool { points: 5, balance: 5 }
+						}
+					}
+				);
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::Unbonded { member: 20, pool_id: 1, points: 5, balance: 5, era: 5 }]
+				);
+
+				// when
+				CurrentEra::set(5);
+				assert_ok!(Pools::unbond(RuntimeOrigin::signed(20), 20, 5));
+
+				// then
+				assert_eq!(
+					PoolMembers::<Runtime>::get(20).unwrap().unbonding_eras,
+					member_unbonding_eras!(3 => 5, 4 => 5, 5 => 5, 8 => 5)
+				);
+				assert_eq!(
+					SubPoolsStorage::<Runtime>::get(1).unwrap(),
+					SubPools {
+						// era 3 is merged into no_era.
+						no_era: UnbondPool { points: 10, balance: 10 },
+						with_era: unbonding_pools_with_era! {
+							4 => UnbondPool { points: 5, balance: 5 },
+							5 => UnbondPool { points: 5, balance: 5 },
+							8 => UnbondPool { points: 5, balance: 5 }
+						}
+					}
+				);
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::Unbonded { member: 20, pool_id: 1, points: 5, balance: 5, era: 8 }]
+				);
+
+				// now we start withdrawing unlocked bonds.
+
+				// when
+				assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(20), 20, 0));
+				// then
+				assert_eq!(
+					PoolMembers::<Runtime>::get(20).unwrap().unbonding_eras,
+					member_unbonding_eras!(8 => 5)
+				);
+				assert_eq!(
+					SubPoolsStorage::<Runtime>::get(1).unwrap(),
+					SubPools {
+						// era 3 is merged into no_era.
+						no_era: UnbondPool { points: 5, balance: 5 },
+						with_era: unbonding_pools_with_era! {
+							8 => UnbondPool { points: 5, balance: 5 }
+						}
+					}
+				);
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::Withdrawn { member: 20, pool_id: 1, points: 15, balance: 15 }]
+				);
+
+				// when
+				assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(30), 30, 0));
+				// then
+				assert_eq!(
+					PoolMembers::<Runtime>::get(30).unwrap().unbonding_eras,
+					member_unbonding_eras!()
+				);
+				assert_eq!(
+					SubPoolsStorage::<Runtime>::get(1).unwrap(),
+					SubPools {
+						// era 3 is merged into no_era.
+						no_era: Default::default(),
+						with_era: unbonding_pools_with_era! {
+							8 => UnbondPool { points: 5, balance: 5 }
+						}
+					}
+				);
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::Withdrawn { member: 30, pool_id: 1, points: 5, balance: 5 }]
+				);
+			})
+	}
+
+	#[test]
 	fn full_multi_step_withdrawing_depositor() {
 		ExtBuilder::default().ed(1).build_and_execute(|| {
 			// depositor now has 20, they can unbond to 10.
 			assert_eq!(Pools::depositor_min_bond(), 10);
-			assert_ok!(Pools::bond_extra(Origin::signed(10), BondExtra::FreeBalance(10)));
+			assert_ok!(Pools::bond_extra(RuntimeOrigin::signed(10), BondExtra::FreeBalance(10)));
 
 			// now they can.
-			assert_ok!(Pools::unbond(Origin::signed(10), 10, 7));
+			assert_ok!(Pools::unbond(RuntimeOrigin::signed(10), 10, 7));
 
 			// progress one era and unbond the leftover.
 			CurrentEra::set(1);
-			assert_ok!(Pools::unbond(Origin::signed(10), 10, 3));
+			assert_ok!(Pools::unbond(RuntimeOrigin::signed(10), 10, 3));
 
 			assert_eq!(
 				PoolMembers::<Runtime>::get(10).unwrap().unbonding_eras,
@@ -3652,27 +4004,27 @@ mod withdraw_unbonded {
 
 			// they can't unbond to a value below 10 other than 0..
 			assert_noop!(
-				Pools::unbond(Origin::signed(10), 10, 5),
+				Pools::unbond(RuntimeOrigin::signed(10), 10, 5),
 				Error::<Runtime>::MinimumBondNotMet
 			);
 
 			// but not even full, because they pool is not yet destroying.
 			assert_noop!(
-				Pools::unbond(Origin::signed(10), 10, 10),
+				Pools::unbond(RuntimeOrigin::signed(10), 10, 10),
 				Error::<Runtime>::MinimumBondNotMet
 			);
 
 			// but now they can.
 			unsafe_set_state(1, PoolState::Destroying);
 			assert_noop!(
-				Pools::unbond(Origin::signed(10), 10, 5),
+				Pools::unbond(RuntimeOrigin::signed(10), 10, 5),
 				Error::<Runtime>::MinimumBondNotMet
 			);
-			assert_ok!(Pools::unbond(Origin::signed(10), 10, 10));
+			assert_ok!(Pools::unbond(RuntimeOrigin::signed(10), 10, 10));
 
 			// now the 7 should be free.
 			CurrentEra::set(3);
-			assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
+			assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(10), 10, 0));
 
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -3680,9 +4032,9 @@ mod withdraw_unbonded {
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: false },
-					Event::Unbonded { member: 10, pool_id: 1, balance: 7, points: 7 },
-					Event::Unbonded { member: 10, pool_id: 1, balance: 3, points: 3 },
-					Event::Unbonded { member: 10, pool_id: 1, balance: 10, points: 10 },
+					Event::Unbonded { member: 10, pool_id: 1, balance: 7, points: 7, era: 3 },
+					Event::Unbonded { member: 10, pool_id: 1, balance: 3, points: 3, era: 4 },
+					Event::Unbonded { member: 10, pool_id: 1, balance: 10, points: 10, era: 4 },
 					Event::Withdrawn { member: 10, pool_id: 1, balance: 7, points: 7 }
 				]
 			);
@@ -3693,7 +4045,7 @@ mod withdraw_unbonded {
 
 			// the 13 should be free now, and the member removed.
 			CurrentEra::set(4);
-			assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
+			assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(10), 10, 0));
 
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -3703,6 +4055,7 @@ mod withdraw_unbonded {
 					Event::Destroyed { pool_id: 1 },
 				]
 			);
+			assert!(!Metadata::<T>::contains_key(1));
 		})
 	}
 }
@@ -3720,12 +4073,15 @@ mod create {
 			assert!(!BondedPools::<Runtime>::contains_key(2));
 			assert!(!RewardPools::<Runtime>::contains_key(2));
 			assert!(!PoolMembers::<Runtime>::contains_key(11));
-			assert_eq!(StakingMock::active_stake(&next_pool_stash), None);
+			assert_err!(
+				StakingMock::active_stake(&next_pool_stash),
+				DispatchError::Other("balance not found")
+			);
 
-			Balances::make_free_balance_be(&11, StakingMock::minimum_bond() + ed);
+			Balances::make_free_balance_be(&11, StakingMock::minimum_nominator_bond() + ed);
 			assert_ok!(Pools::create(
-				Origin::signed(11),
-				StakingMock::minimum_bond(),
+				RuntimeOrigin::signed(11),
+				StakingMock::minimum_nominator_bond(),
 				123,
 				456,
 				789
@@ -3736,7 +4092,7 @@ mod create {
 				PoolMembers::<Runtime>::get(11).unwrap(),
 				PoolMember {
 					pool_id: 2,
-					points: StakingMock::minimum_bond(),
+					points: StakingMock::minimum_nominator_bond(),
 					..Default::default()
 				}
 			);
@@ -3745,7 +4101,7 @@ mod create {
 				BondedPool {
 					id: 2,
 					inner: BondedPoolInner {
-						points: StakingMock::minimum_bond(),
+						points: StakingMock::minimum_nominator_bond(),
 						member_counter: 1,
 						state: PoolState::Open,
 						roles: PoolRoles {
@@ -3759,7 +4115,7 @@ mod create {
 			);
 			assert_eq!(
 				StakingMock::active_stake(&next_pool_stash).unwrap(),
-				StakingMock::minimum_bond()
+				StakingMock::minimum_nominator_bond()
 			);
 			assert_eq!(
 				RewardPools::<Runtime>::get(2).unwrap(),
@@ -3782,17 +4138,17 @@ mod create {
 	fn create_errors_correctly() {
 		ExtBuilder::default().with_check(0).build_and_execute(|| {
 			assert_noop!(
-				Pools::create(Origin::signed(10), 420, 123, 456, 789),
+				Pools::create(RuntimeOrigin::signed(10), 420, 123, 456, 789),
 				Error::<Runtime>::AccountBelongsToOtherPool
 			);
 
 			// Given
 			assert_eq!(MinCreateBond::<Runtime>::get(), 2);
-			assert_eq!(StakingMock::minimum_bond(), 10);
+			assert_eq!(StakingMock::minimum_nominator_bond(), 10);
 
 			// Then
 			assert_noop!(
-				Pools::create(Origin::signed(11), 9, 123, 456, 789),
+				Pools::create(RuntimeOrigin::signed(11), 9, 123, 456, 789),
 				Error::<Runtime>::MinimumBondNotMet
 			);
 
@@ -3801,7 +4157,7 @@ mod create {
 
 			// Then
 			assert_noop!(
-				Pools::create(Origin::signed(11), 19, 123, 456, 789),
+				Pools::create(RuntimeOrigin::signed(11), 19, 123, 456, 789),
 				Error::<Runtime>::MinimumBondNotMet
 			);
 
@@ -3821,7 +4177,7 @@ mod create {
 
 			// Then
 			assert_noop!(
-				Pools::create(Origin::signed(11), 20, 123, 456, 789),
+				Pools::create(RuntimeOrigin::signed(11), 20, 123, 456, 789),
 				Error::<Runtime>::MaxPools
 			);
 
@@ -3832,13 +4188,54 @@ mod create {
 			Balances::make_free_balance_be(&11, 5 + 20);
 
 			// Then
-			let create = Call::Pools(crate::Call::<Runtime>::create {
+			let create = RuntimeCall::Pools(crate::Call::<Runtime>::create {
 				amount: 20,
 				root: 11,
 				nominator: 11,
 				state_toggler: 11,
 			});
-			assert_noop!(create.dispatch(Origin::signed(11)), Error::<Runtime>::MaxPoolMembers);
+			assert_noop!(
+				create.dispatch(RuntimeOrigin::signed(11)),
+				Error::<Runtime>::MaxPoolMembers
+			);
+		});
+	}
+
+	#[test]
+	fn create_with_pool_id_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			let ed = Balances::minimum_balance();
+
+			Balances::make_free_balance_be(&11, StakingMock::minimum_nominator_bond() + ed);
+			assert_ok!(Pools::create(
+				RuntimeOrigin::signed(11),
+				StakingMock::minimum_nominator_bond(),
+				123,
+				456,
+				789
+			));
+
+			assert_eq!(Balances::free_balance(&11), 0);
+			// delete the initial pool created, then pool_Id `1` will be free
+
+			assert_noop!(
+				Pools::create_with_pool_id(RuntimeOrigin::signed(12), 20, 234, 654, 783, 1),
+				Error::<Runtime>::PoolIdInUse
+			);
+
+			assert_noop!(
+				Pools::create_with_pool_id(RuntimeOrigin::signed(12), 20, 234, 654, 783, 3),
+				Error::<Runtime>::InvalidPoolId
+			);
+
+			// start dismantling the pool.
+			assert_ok!(Pools::set_state(RuntimeOrigin::signed(902), 1, PoolState::Destroying));
+			assert_ok!(fully_unbond_permissioned(10));
+
+			CurrentEra::set(3);
+			assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(10), 10, 10));
+
+			assert_ok!(Pools::create_with_pool_id(RuntimeOrigin::signed(10), 20, 234, 654, 783, 1));
 		});
 	}
 }
@@ -3851,27 +4248,27 @@ mod nominate {
 		ExtBuilder::default().build_and_execute(|| {
 			// Depositor can't nominate
 			assert_noop!(
-				Pools::nominate(Origin::signed(10), 1, vec![21]),
+				Pools::nominate(RuntimeOrigin::signed(10), 1, vec![21]),
 				Error::<Runtime>::NotNominator
 			);
 
 			// State toggler can't nominate
 			assert_noop!(
-				Pools::nominate(Origin::signed(902), 1, vec![21]),
+				Pools::nominate(RuntimeOrigin::signed(902), 1, vec![21]),
 				Error::<Runtime>::NotNominator
 			);
 
 			// Root can nominate
-			assert_ok!(Pools::nominate(Origin::signed(900), 1, vec![21]));
+			assert_ok!(Pools::nominate(RuntimeOrigin::signed(900), 1, vec![21]));
 			assert_eq!(Nominations::get().unwrap(), vec![21]);
 
 			// Nominator can nominate
-			assert_ok!(Pools::nominate(Origin::signed(901), 1, vec![31]));
+			assert_ok!(Pools::nominate(RuntimeOrigin::signed(901), 1, vec![31]));
 			assert_eq!(Nominations::get().unwrap(), vec![31]);
 
 			// Can't nominate for a pool that doesn't exist
 			assert_noop!(
-				Pools::nominate(Origin::signed(902), 123, vec![21]),
+				Pools::nominate(RuntimeOrigin::signed(902), 123, vec![21]),
 				Error::<Runtime>::PoolNotFound
 			);
 		});
@@ -3885,20 +4282,20 @@ mod set_state {
 	fn set_state_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			// Given
-			assert_ok!(BondedPool::<Runtime>::get(1).unwrap().ok_to_be_open(0));
+			assert_ok!(BondedPool::<Runtime>::get(1).unwrap().ok_to_be_open());
 
 			// Only the root and state toggler can change the state when the pool is ok to be open.
 			assert_noop!(
-				Pools::set_state(Origin::signed(10), 1, PoolState::Blocked),
+				Pools::set_state(RuntimeOrigin::signed(10), 1, PoolState::Blocked),
 				Error::<Runtime>::CanNotChangeState
 			);
 			assert_noop!(
-				Pools::set_state(Origin::signed(901), 1, PoolState::Blocked),
+				Pools::set_state(RuntimeOrigin::signed(901), 1, PoolState::Blocked),
 				Error::<Runtime>::CanNotChangeState
 			);
 
 			// Root can change state
-			assert_ok!(Pools::set_state(Origin::signed(900), 1, PoolState::Blocked));
+			assert_ok!(Pools::set_state(RuntimeOrigin::signed(900), 1, PoolState::Blocked));
 
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -3912,16 +4309,16 @@ mod set_state {
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().state, PoolState::Blocked);
 
 			// State toggler can change state
-			assert_ok!(Pools::set_state(Origin::signed(902), 1, PoolState::Destroying));
+			assert_ok!(Pools::set_state(RuntimeOrigin::signed(902), 1, PoolState::Destroying));
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().state, PoolState::Destroying);
 
 			// If the pool is destroying, then no one can set state
 			assert_noop!(
-				Pools::set_state(Origin::signed(900), 1, PoolState::Blocked),
+				Pools::set_state(RuntimeOrigin::signed(900), 1, PoolState::Blocked),
 				Error::<Runtime>::CanNotChangeState
 			);
 			assert_noop!(
-				Pools::set_state(Origin::signed(902), 1, PoolState::Blocked),
+				Pools::set_state(RuntimeOrigin::signed(902), 1, PoolState::Blocked),
 				Error::<Runtime>::CanNotChangeState
 			);
 
@@ -3933,7 +4330,7 @@ mod set_state {
 			bonded_pool.points = 100;
 			bonded_pool.put();
 			// When
-			assert_ok!(Pools::set_state(Origin::signed(11), 1, PoolState::Destroying));
+			assert_ok!(Pools::set_state(RuntimeOrigin::signed(11), 1, PoolState::Destroying));
 			// Then
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().state, PoolState::Destroying);
 
@@ -3941,15 +4338,15 @@ mod set_state {
 			Balances::make_free_balance_be(&default_bonded_account(), Balance::max_value() / 10);
 			unsafe_set_state(1, PoolState::Open);
 			// When
-			assert_ok!(Pools::set_state(Origin::signed(11), 1, PoolState::Destroying));
+			assert_ok!(Pools::set_state(RuntimeOrigin::signed(11), 1, PoolState::Destroying));
 			// Then
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().state, PoolState::Destroying);
 
-			// If the pool is not ok to be open, it cannot be permissionleslly set to a state that
+			// If the pool is not ok to be open, it cannot be permissionlessly set to a state that
 			// isn't destroying
 			unsafe_set_state(1, PoolState::Open);
 			assert_noop!(
-				Pools::set_state(Origin::signed(11), 1, PoolState::Blocked),
+				Pools::set_state(RuntimeOrigin::signed(11), 1, PoolState::Blocked),
 				Error::<Runtime>::CanNotChangeState
 			);
 
@@ -3972,28 +4369,28 @@ mod set_metadata {
 	fn set_metadata_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			// Root can set metadata
-			assert_ok!(Pools::set_metadata(Origin::signed(900), 1, vec![1, 1]));
+			assert_ok!(Pools::set_metadata(RuntimeOrigin::signed(900), 1, vec![1, 1]));
 			assert_eq!(Metadata::<Runtime>::get(1), vec![1, 1]);
 
 			// State toggler can set metadata
-			assert_ok!(Pools::set_metadata(Origin::signed(902), 1, vec![2, 2]));
+			assert_ok!(Pools::set_metadata(RuntimeOrigin::signed(902), 1, vec![2, 2]));
 			assert_eq!(Metadata::<Runtime>::get(1), vec![2, 2]);
 
 			// Depositor can't set metadata
 			assert_noop!(
-				Pools::set_metadata(Origin::signed(10), 1, vec![3, 3]),
+				Pools::set_metadata(RuntimeOrigin::signed(10), 1, vec![3, 3]),
 				Error::<Runtime>::DoesNotHavePermission
 			);
 
 			// Nominator can't set metadata
 			assert_noop!(
-				Pools::set_metadata(Origin::signed(901), 1, vec![3, 3]),
+				Pools::set_metadata(RuntimeOrigin::signed(901), 1, vec![3, 3]),
 				Error::<Runtime>::DoesNotHavePermission
 			);
 
 			// Metadata cannot be longer than `MaxMetadataLen`
 			assert_noop!(
-				Pools::set_metadata(Origin::signed(900), 1, vec![1, 1, 1]),
+				Pools::set_metadata(RuntimeOrigin::signed(900), 1, vec![1, 1, 1]),
 				Error::<Runtime>::MetadataExceedsMaxLen
 			);
 		});
@@ -4008,7 +4405,7 @@ mod set_configs {
 		ExtBuilder::default().build_and_execute(|| {
 			// Setting works
 			assert_ok!(Pools::set_configs(
-				Origin::root(),
+				RuntimeOrigin::root(),
 				ConfigOp::Set(1 as Balance),
 				ConfigOp::Set(2 as Balance),
 				ConfigOp::Set(3u32),
@@ -4023,7 +4420,7 @@ mod set_configs {
 
 			// Noop does nothing
 			assert_storage_noop!(assert_ok!(Pools::set_configs(
-				Origin::root(),
+				RuntimeOrigin::root(),
 				ConfigOp::Noop,
 				ConfigOp::Noop,
 				ConfigOp::Noop,
@@ -4033,7 +4430,7 @@ mod set_configs {
 
 			// Removing works
 			assert_ok!(Pools::set_configs(
-				Origin::root(),
+				RuntimeOrigin::root(),
 				ConfigOp::Remove,
 				ConfigOp::Remove,
 				ConfigOp::Remove,
@@ -4065,7 +4462,7 @@ mod bond_extra {
 			assert_eq!(Balances::free_balance(10), 100);
 
 			// when
-			assert_ok!(Pools::bond_extra(Origin::signed(10), BondExtra::FreeBalance(10)));
+			assert_ok!(Pools::bond_extra(RuntimeOrigin::signed(10), BondExtra::FreeBalance(10)));
 
 			// then
 			assert_eq!(Balances::free_balance(10), 90);
@@ -4082,7 +4479,7 @@ mod bond_extra {
 			);
 
 			// when
-			assert_ok!(Pools::bond_extra(Origin::signed(10), BondExtra::FreeBalance(20)));
+			assert_ok!(Pools::bond_extra(RuntimeOrigin::signed(10), BondExtra::FreeBalance(20)));
 
 			// then
 			assert_eq!(Balances::free_balance(10), 70);
@@ -4111,7 +4508,7 @@ mod bond_extra {
 			assert_eq!(Balances::free_balance(10), 35);
 
 			// when
-			assert_ok!(Pools::bond_extra(Origin::signed(10), BondExtra::Rewards));
+			assert_ok!(Pools::bond_extra(RuntimeOrigin::signed(10), BondExtra::Rewards));
 
 			// then
 			assert_eq!(Balances::free_balance(10), 35);
@@ -4154,7 +4551,7 @@ mod bond_extra {
 			assert_eq!(Balances::free_balance(20), 20);
 
 			// when
-			assert_ok!(Pools::bond_extra(Origin::signed(10), BondExtra::Rewards));
+			assert_ok!(Pools::bond_extra(RuntimeOrigin::signed(10), BondExtra::Rewards));
 
 			// then
 			assert_eq!(Balances::free_balance(10), 35);
@@ -4163,7 +4560,7 @@ mod bond_extra {
 			assert_eq!(BondedPools::<Runtime>::get(1).unwrap().points, 30 + 1);
 
 			// when
-			assert_ok!(Pools::bond_extra(Origin::signed(20), BondExtra::Rewards));
+			assert_ok!(Pools::bond_extra(RuntimeOrigin::signed(20), BondExtra::Rewards));
 
 			// then
 			assert_eq!(Balances::free_balance(20), 20);
@@ -4207,7 +4604,7 @@ mod update_roles {
 			// non-existent pools
 			assert_noop!(
 				Pools::update_roles(
-					Origin::signed(1),
+					RuntimeOrigin::signed(1),
 					2,
 					ConfigOp::Set(5),
 					ConfigOp::Set(6),
@@ -4219,7 +4616,7 @@ mod update_roles {
 			// depositor cannot change roles.
 			assert_noop!(
 				Pools::update_roles(
-					Origin::signed(1),
+					RuntimeOrigin::signed(1),
 					1,
 					ConfigOp::Set(5),
 					ConfigOp::Set(6),
@@ -4231,7 +4628,7 @@ mod update_roles {
 			// nominator cannot change roles.
 			assert_noop!(
 				Pools::update_roles(
-					Origin::signed(901),
+					RuntimeOrigin::signed(901),
 					1,
 					ConfigOp::Set(5),
 					ConfigOp::Set(6),
@@ -4242,7 +4639,7 @@ mod update_roles {
 			// state-toggler
 			assert_noop!(
 				Pools::update_roles(
-					Origin::signed(902),
+					RuntimeOrigin::signed(902),
 					1,
 					ConfigOp::Set(5),
 					ConfigOp::Set(6),
@@ -4253,7 +4650,7 @@ mod update_roles {
 
 			// but root can
 			assert_ok!(Pools::update_roles(
-				Origin::signed(900),
+				RuntimeOrigin::signed(900),
 				1,
 				ConfigOp::Set(5),
 				ConfigOp::Set(6),
@@ -4284,7 +4681,7 @@ mod update_roles {
 
 			// also root origin can
 			assert_ok!(Pools::update_roles(
-				Origin::root(),
+				RuntimeOrigin::root(),
 				1,
 				ConfigOp::Set(1),
 				ConfigOp::Set(2),
@@ -4311,7 +4708,7 @@ mod update_roles {
 
 			// Noop works
 			assert_ok!(Pools::update_roles(
-				Origin::root(),
+				RuntimeOrigin::root(),
 				1,
 				ConfigOp::Set(11),
 				ConfigOp::Noop,
@@ -4339,7 +4736,7 @@ mod update_roles {
 
 			// Remove works
 			assert_ok!(Pools::update_roles(
-				Origin::root(),
+				RuntimeOrigin::root(),
 				1,
 				ConfigOp::Set(69),
 				ConfigOp::Remove,
@@ -4415,7 +4812,7 @@ mod reward_counter_precision {
 			// tad bit less. cannot be paid out.
 			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free +=
 				expected_smallest_reward - 1));
-			assert_ok!(Pools::claim_payout(Origin::signed(10)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 			assert_eq!(pool_events_since_last_call(), vec![]);
 			// revert it.
 
@@ -4425,10 +4822,45 @@ mod reward_counter_precision {
 			// tad bit more. can be claimed.
 			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free +=
 				expected_smallest_reward + 1));
-			assert_ok!(Pools::claim_payout(Origin::signed(10)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 1173 }]
+			);
+		})
+	}
+
+	#[test]
+	fn massive_reward_in_small_pool() {
+		let tiny_bond = 1000 * DOT;
+		ExtBuilder::default().ed(DOT).min_bond(tiny_bond).build_and_execute(|| {
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10000000000000, joined: true }
+				]
+			);
+
+			Balances::make_free_balance_be(&20, tiny_bond);
+			assert_ok!(Pools::join(RuntimeOrigin::signed(20), tiny_bond / 2, 1));
+
+			// Suddenly, add a shit ton of rewards.
+			assert_ok!(
+				Balances::mutate_account(&default_reward_account(), |a| a.free += inflation(1))
+			);
+
+			// now claim.
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
+
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Bonded { member: 20, pool_id: 1, bonded: 5000000000000, joined: true },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 7333333333333333333 },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 3666666666666666666 }
+				]
 			);
 		})
 	}
@@ -4461,7 +4893,7 @@ mod reward_counter_precision {
 			// some whale now joins with the other half ot the total issuance. This will bloat all
 			// the calculation regarding current reward counter.
 			Balances::make_free_balance_be(&20, pool_bond * 2);
-			assert_ok!(Pools::join(Origin::signed(20), pool_bond, 1));
+			assert_ok!(Pools::join(RuntimeOrigin::signed(20), pool_bond, 1));
 
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -4473,8 +4905,8 @@ mod reward_counter_precision {
 				}]
 			);
 
-			assert_ok!(Pools::claim_payout(Origin::signed(10)));
-			assert_ok!(Pools::claim_payout(Origin::signed(20)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
 
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -4483,12 +4915,12 @@ mod reward_counter_precision {
 
 			// now let a small member join with 10 DOTs.
 			Balances::make_free_balance_be(&30, 20 * DOT);
-			assert_ok!(Pools::join(Origin::signed(30), 10 * DOT, 1));
+			assert_ok!(Pools::join(RuntimeOrigin::signed(30), 10 * DOT, 1));
 
 			// and give a reasonably small reward to the pool.
 			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += DOT));
 
-			assert_ok!(Pools::claim_payout(Origin::signed(30)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(30)));
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
@@ -4526,7 +4958,10 @@ mod reward_counter_precision {
 			// set to zero. In other tests that we want to assert a scenario won't fail, we should
 			// also set the reward counters to some large value.
 			Balances::make_free_balance_be(&20, pool_bond * 2);
-			assert_err!(Pools::join(Origin::signed(20), pool_bond, 1), Error::<T>::OverflowRisk);
+			assert_err!(
+				Pools::join(RuntimeOrigin::signed(20), pool_bond, 1),
+				Error::<T>::OverflowRisk
+			);
 		})
 	}
 
@@ -4552,7 +4987,7 @@ mod reward_counter_precision {
 
 				// and have a tiny fish join the pool as well..
 				Balances::make_free_balance_be(&20, 20 * DOT);
-				assert_ok!(Pools::join(Origin::signed(20), 10 * DOT, 1));
+				assert_ok!(Pools::join(RuntimeOrigin::signed(20), 10 * DOT, 1));
 
 				// earn some small rewards
 				assert_ok!(
@@ -4561,7 +4996,7 @@ mod reward_counter_precision {
 
 				// no point in claiming for 20 (nonetheless, it should be harmless)
 				assert!(pending_rewards(20).unwrap().is_zero());
-				assert_ok!(Pools::claim_payout(Origin::signed(10)));
+				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
@@ -4581,7 +5016,7 @@ mod reward_counter_precision {
 					Balances::mutate_account(&default_reward_account(), |a| a.free += DOT / 1000)
 				);
 				assert!(pending_rewards(20).unwrap().is_zero());
-				assert_ok!(Pools::claim_payout(Origin::signed(10)));
+				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![Event::PaidOut { member: 10, pool_id: 1, payout: 10000000 }]
@@ -4592,8 +5027,8 @@ mod reward_counter_precision {
 					Balances::mutate_account(&default_reward_account(), |a| a.free += DOT / 1000)
 				);
 				assert_eq!(pending_rewards(20).unwrap(), 1);
-				assert_ok!(Pools::claim_payout(Origin::signed(10)));
-				assert_ok!(Pools::claim_payout(Origin::signed(20)));
+				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
@@ -4626,7 +5061,7 @@ mod reward_counter_precision {
 
 				// and have a tiny fish join the pool as well..
 				Balances::make_free_balance_be(&20, 20 * DOT);
-				assert_ok!(Pools::join(Origin::signed(20), 10 * DOT, 1));
+				assert_ok!(Pools::join(RuntimeOrigin::signed(20), 10 * DOT, 1));
 
 				// earn some small rewards
 				assert_ok!(
@@ -4636,8 +5071,8 @@ mod reward_counter_precision {
 				// if 20 claims now, their reward counter should stay the same, so that they have a
 				// chance of claiming this if they let it accumulate. Also see
 				// `if_small_member_waits_long_enough_they_will_earn_rewards`
-				assert_ok!(Pools::claim_payout(Origin::signed(10)));
-				assert_ok!(Pools::claim_payout(Origin::signed(20)));
+				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![

@@ -37,7 +37,7 @@ mod pallet {
 			// when increasing score to the level of non-existent bag
 			assert_eq!(List::<Runtime>::get_score(&42).unwrap(), 20);
 			StakingMock::set_score_of(&42, 2_000);
-			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
+			assert_ok!(BagsList::rebag(RuntimeOrigin::signed(0), 42));
 			assert_eq!(List::<Runtime>::get_score(&42).unwrap(), 2_000);
 
 			// then a new bag is created and the id moves into it
@@ -48,7 +48,7 @@ mod pallet {
 
 			// when decreasing score within the range of the current bag
 			StakingMock::set_score_of(&42, 1_001);
-			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
+			assert_ok!(BagsList::rebag(RuntimeOrigin::signed(0), 42));
 
 			// then the id does not move
 			assert_eq!(
@@ -60,7 +60,7 @@ mod pallet {
 
 			// when reducing score to the level of a non-existent bag
 			StakingMock::set_score_of(&42, 30);
-			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
+			assert_ok!(BagsList::rebag(RuntimeOrigin::signed(0), 42));
 
 			// then a new bag is created and the id moves into it
 			assert_eq!(
@@ -71,7 +71,7 @@ mod pallet {
 
 			// when increasing score to the level of a pre-existing bag
 			StakingMock::set_score_of(&42, 500);
-			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
+			assert_ok!(BagsList::rebag(RuntimeOrigin::signed(0), 42));
 
 			// then the id moves into that bag
 			assert_eq!(
@@ -92,7 +92,7 @@ mod pallet {
 
 			// when
 			StakingMock::set_score_of(&4, 10);
-			assert_ok!(BagsList::rebag(Origin::signed(0), 4));
+			assert_ok!(BagsList::rebag(RuntimeOrigin::signed(0), 4));
 
 			// then
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1, 4]), (1_000, vec![2, 3])]);
@@ -100,7 +100,7 @@ mod pallet {
 
 			// when
 			StakingMock::set_score_of(&3, 10);
-			assert_ok!(BagsList::rebag(Origin::signed(0), 3));
+			assert_ok!(BagsList::rebag(RuntimeOrigin::signed(0), 3));
 
 			// then
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1, 4, 3]), (1_000, vec![2])]);
@@ -111,7 +111,7 @@ mod pallet {
 
 			// when
 			StakingMock::set_score_of(&2, 10);
-			assert_ok!(BagsList::rebag(Origin::signed(0), 2));
+			assert_ok!(BagsList::rebag(RuntimeOrigin::signed(0), 2));
 
 			// then
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1, 4, 3, 2])]);
@@ -126,7 +126,7 @@ mod pallet {
 		ExtBuilder::default().build_and_execute(|| {
 			// when
 			StakingMock::set_score_of(&2, 10);
-			assert_ok!(BagsList::rebag(Origin::signed(0), 2));
+			assert_ok!(BagsList::rebag(RuntimeOrigin::signed(0), 2));
 
 			// then
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1, 2]), (1_000, vec![3, 4])]);
@@ -134,7 +134,7 @@ mod pallet {
 
 			// when
 			StakingMock::set_score_of(&3, 10);
-			assert_ok!(BagsList::rebag(Origin::signed(0), 3));
+			assert_ok!(BagsList::rebag(RuntimeOrigin::signed(0), 3));
 
 			// then
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1, 2, 3]), (1_000, vec![4])]);
@@ -142,7 +142,7 @@ mod pallet {
 
 			// when
 			StakingMock::set_score_of(&4, 10);
-			assert_ok!(BagsList::rebag(Origin::signed(0), 4));
+			assert_ok!(BagsList::rebag(RuntimeOrigin::signed(0), 4));
 
 			// then
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1, 2, 3, 4])]);
@@ -159,12 +159,15 @@ mod pallet {
 			assert!(!node_3.is_misplaced(500));
 
 			// then calling rebag on account 3 with score 500 is a noop
-			assert_storage_noop!(assert_eq!(BagsList::rebag(Origin::signed(0), 3), Ok(())));
+			assert_storage_noop!(assert_eq!(BagsList::rebag(RuntimeOrigin::signed(0), 3), Ok(())));
 
 			// when account 42 is not in the list
 			assert!(!BagsList::contains(&42));
 			// then rebag-ing account 42 is an error
-			assert_storage_noop!(assert!(matches!(BagsList::rebag(Origin::signed(0), 42), Err(_))));
+			assert_storage_noop!(assert!(matches!(
+				BagsList::rebag(RuntimeOrigin::signed(0), 42),
+				Err(_)
+			)));
 		});
 	}
 
@@ -200,7 +203,7 @@ mod pallet {
 			);
 
 			// any rebag is noop.
-			assert_storage_noop!(assert_eq!(BagsList::rebag(Origin::signed(0), 1), Ok(())));
+			assert_storage_noop!(assert_eq!(BagsList::rebag(RuntimeOrigin::signed(0), 1), Ok(())));
 		})
 	}
 
@@ -214,7 +217,7 @@ mod pallet {
 				assert_eq!(List::<Runtime>::get_bags(), vec![(20, vec![10, 11])]);
 
 				// when
-				assert_ok!(BagsList::put_in_front_of(Origin::signed(11), 10));
+				assert_ok!(BagsList::put_in_front_of(RuntimeOrigin::signed(11), 10));
 
 				// then
 				assert_eq!(List::<Runtime>::get_bags(), vec![(20, vec![11, 10])]);
@@ -231,7 +234,7 @@ mod pallet {
 				assert_eq!(List::<Runtime>::get_bags(), vec![(20, vec![11, 10])]);
 
 				// when
-				assert_ok!(BagsList::put_in_front_of(Origin::signed(11), 10));
+				assert_ok!(BagsList::put_in_front_of(RuntimeOrigin::signed(11), 10));
 
 				// then
 				assert_eq!(List::<Runtime>::get_bags(), vec![(20, vec![11, 10])]);
@@ -247,7 +250,7 @@ mod pallet {
 			StakingMock::set_score_of(&3, 999);
 
 			// when
-			assert_ok!(BagsList::put_in_front_of(Origin::signed(4), 3));
+			assert_ok!(BagsList::put_in_front_of(RuntimeOrigin::signed(4), 3));
 
 			// then
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 4, 3, 5])]);
@@ -268,7 +271,7 @@ mod pallet {
 				StakingMock::set_score_of(&5, 999);
 
 				// when
-				assert_ok!(BagsList::put_in_front_of(Origin::signed(3), 5));
+				assert_ok!(BagsList::put_in_front_of(RuntimeOrigin::signed(3), 5));
 
 				// then
 				assert_eq!(
@@ -287,7 +290,7 @@ mod pallet {
 			StakingMock::set_score_of(&2, 999);
 
 			// when
-			assert_ok!(BagsList::put_in_front_of(Origin::signed(3), 2));
+			assert_ok!(BagsList::put_in_front_of(RuntimeOrigin::signed(3), 2));
 
 			// then
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![3, 2, 4])]);
@@ -303,7 +306,7 @@ mod pallet {
 			StakingMock::set_score_of(&3, 999);
 
 			// when
-			assert_ok!(BagsList::put_in_front_of(Origin::signed(4), 3));
+			assert_ok!(BagsList::put_in_front_of(RuntimeOrigin::signed(4), 3));
 
 			// then
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 4, 3])]);
@@ -319,7 +322,7 @@ mod pallet {
 			StakingMock::set_score_of(&2, 999);
 
 			// when
-			assert_ok!(BagsList::put_in_front_of(Origin::signed(5), 2));
+			assert_ok!(BagsList::put_in_front_of(RuntimeOrigin::signed(5), 2));
 
 			// then
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![5, 2, 3, 4])]);
@@ -335,7 +338,7 @@ mod pallet {
 			StakingMock::set_score_of(&4, 999);
 
 			// when
-			BagsList::put_in_front_of(Origin::signed(2), 4).unwrap();
+			BagsList::put_in_front_of(RuntimeOrigin::signed(2), 4).unwrap();
 
 			// then
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![3, 2, 4, 5])]);
@@ -349,7 +352,7 @@ mod pallet {
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4, 5])]);
 
 			// when
-			BagsList::put_in_front_of(Origin::signed(3), 5).unwrap();
+			BagsList::put_in_front_of(RuntimeOrigin::signed(3), 5).unwrap();
 
 			// then
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 4, 3, 5])]);
@@ -365,7 +368,7 @@ mod pallet {
 			StakingMock::set_score_of(&4, 999);
 
 			// when
-			BagsList::put_in_front_of(Origin::signed(2), 4).unwrap();
+			BagsList::put_in_front_of(RuntimeOrigin::signed(2), 4).unwrap();
 
 			// then
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![3, 2, 4])]);
@@ -382,7 +385,7 @@ mod pallet {
 
 			// then
 			assert_noop!(
-				BagsList::put_in_front_of(Origin::signed(3), 2),
+				BagsList::put_in_front_of(RuntimeOrigin::signed(3), 2),
 				crate::pallet::Error::<Runtime>::List(ListError::NotHeavier)
 			);
 		});
@@ -396,7 +399,7 @@ mod pallet {
 
 			// then
 			assert_noop!(
-				BagsList::put_in_front_of(Origin::signed(3), 4),
+				BagsList::put_in_front_of(RuntimeOrigin::signed(3), 4),
 				crate::pallet::Error::<Runtime>::List(ListError::NotHeavier)
 			);
 		});
@@ -413,7 +416,7 @@ mod pallet {
 
 			// then
 			assert_noop!(
-				BagsList::put_in_front_of(Origin::signed(5), 4),
+				BagsList::put_in_front_of(RuntimeOrigin::signed(5), 4),
 				crate::pallet::Error::<Runtime>::List(ListError::NodeNotFound)
 			);
 		});
@@ -427,7 +430,7 @@ mod pallet {
 
 			// then
 			assert_noop!(
-				BagsList::put_in_front_of(Origin::signed(4), 5),
+				BagsList::put_in_front_of(RuntimeOrigin::signed(4), 5),
 				crate::pallet::Error::<Runtime>::List(ListError::NodeNotFound)
 			);
 		});
@@ -441,7 +444,7 @@ mod pallet {
 
 			// then
 			assert_noop!(
-				BagsList::put_in_front_of(Origin::signed(4), 1),
+				BagsList::put_in_front_of(RuntimeOrigin::signed(4), 1),
 				crate::pallet::Error::<Runtime>::List(ListError::NotInSameBag)
 			);
 		});

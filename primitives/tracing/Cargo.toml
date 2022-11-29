@@ -1,6 +1,6 @@
 [package]
 name = "sp-tracing"
-version = "5.0.0"
+version = "6.0.0"
 license = "Apache-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
@@ -18,12 +18,12 @@ features = ["with-tracing"]
 targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 
 [dependencies]
-sp-std = { version = "4.0.0", path = "../std", default-features = false }
+sp-std = { version = "5.0.0", path = "../std", default-features = false }
 codec = { version = "3.0.0", package = "parity-scale-codec", default-features = false, features = [
 	"derive",
 ] }
 tracing = { version = "0.1.29", default-features = false }
-tracing-core = { version = "0.1.26", default-features = false }
+tracing-core = { version = "0.1.28", default-features = false }
 tracing-subscriber = { version = "0.2.25", optional = true, features = [
 	"tracing-log",
 ] }

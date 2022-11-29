@@ -22,20 +22,16 @@ use crate::protocol::notifications::{Notifications, NotificationsOut, ProtocolCo
 
 use futures::prelude::*;
 use libp2p::{
-	core::{
-		connection::ConnectionId,
-		transport::{ListenerId, MemoryTransport},
-		upgrade, ConnectedPoint,
-	},
+	core::{connection::ConnectionId, transport::MemoryTransport, upgrade},
 	identity, noise,
 	swarm::{
-		ConnectionHandler, DialError, IntoConnectionHandler, NetworkBehaviour,
+		behaviour::FromSwarm, ConnectionHandler, IntoConnectionHandler, NetworkBehaviour,
 		NetworkBehaviourAction, PollParameters, Swarm, SwarmEvent,
 	},
 	yamux, Multiaddr, PeerId, Transport,
 };
 use std::{
-	error, io, iter,
+	iter,
 	task::{Context, Poll},
 	time::Duration,
 };
@@ -100,7 +96,11 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 				.collect(),
 		};
 
-		let mut swarm = Swarm::new(transport, behaviour, keypairs[index].public().to_peer_id());
+		let mut swarm = Swarm::with_threadpool_executor(
+			transport,
+			behaviour,
+			keypairs[index].public().to_peer_id(),
+		);
 		swarm.listen_on(addrs[index].clone()).unwrap();
 		out.push(swarm);
 	}
@@ -150,42 +150,18 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 		list
 	}
 
-	fn inject_connection_established(
-		&mut self,
-		peer_id: &PeerId,
-		conn: &ConnectionId,
-		endpoint: &ConnectedPoint,
-		failed_addresses: Option<&Vec<Multiaddr>>,
-		other_established: usize,
-	) {
-		self.inner.inject_connection_established(
-			peer_id,
-			conn,
-			endpoint,
-			failed_addresses,
-			other_established,
-		)
+	fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
+		self.inner.on_swarm_event(event);
 	}
 
-	fn inject_connection_closed(
-		&mut self,
-		peer_id: &PeerId,
-		conn: &ConnectionId,
-		endpoint: &ConnectedPoint,
-		handler: <Self::ConnectionHandler as IntoConnectionHandler>::Handler,
-		remaining_established: usize,
-	) {
-		self.inner
-			.inject_connection_closed(peer_id, conn, endpoint, handler, remaining_established)
-	}
-
-	fn inject_event(
+	fn on_connection_handler_event(
 		&mut self,
 		peer_id: PeerId,
-		connection: ConnectionId,
-		event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as ConnectionHandler>::OutEvent,
+		connection_id: ConnectionId,
+		event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as
+		ConnectionHandler>::OutEvent,
 	) {
-		self.inner.inject_event(peer_id, connection, event)
+		self.inner.on_connection_handler_event(peer_id, connection_id, event);
 	}
 
 	fn poll(
@@ -194,43 +170,6 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 		params: &mut impl PollParameters,
 	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
 		self.inner.poll(cx, params)
-	}
-
-	fn inject_dial_failure(
-		&mut self,
-		peer_id: Option<PeerId>,
-		handler: Self::ConnectionHandler,
-		error: &DialError,
-	) {
-		self.inner.inject_dial_failure(peer_id, handler, error)
-	}
-
-	fn inject_new_listener(&mut self, id: ListenerId) {
-		self.inner.inject_new_listener(id)
-	}
-
-	fn inject_new_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
-		self.inner.inject_new_listen_addr(id, addr)
-	}
-
-	fn inject_expired_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
-		self.inner.inject_expired_listen_addr(id, addr)
-	}
-
-	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
-		self.inner.inject_new_external_addr(addr)
-	}
-
-	fn inject_expired_external_addr(&mut self, addr: &Multiaddr) {
-		self.inner.inject_expired_external_addr(addr)
-	}
-
-	fn inject_listener_error(&mut self, id: ListenerId, err: &(dyn error::Error + 'static)) {
-		self.inner.inject_listener_error(id, err);
-	}
-
-	fn inject_listener_closed(&mut self, id: ListenerId, reason: Result<(), &io::Error>) {
-		self.inner.inject_listener_closed(id, reason);
 	}
 }
 

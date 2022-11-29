@@ -54,10 +54,22 @@ pub trait TestApi {
 	/// # Note
 	///
 	/// We return a `Vec<u32>` because this will use the code path that uses SCALE
-	/// to pass the data between native/wasm. (Vec<u8> is passed without encoding the
+	/// to pass the data between native/wasm. (`Vec<u8>` is passed without encoding the
 	/// data)
 	fn return_16kb() -> Vec<u32> {
 		vec![0; 4 * 1024]
+	}
+
+	fn return_option_vec() -> Option<Vec<u8>> {
+		let mut vec = Vec::new();
+		vec.resize(16 * 1024, 0xAA);
+		Some(vec)
+	}
+
+	fn return_option_bytes() -> Option<bytes::Bytes> {
+		let mut vec = Vec::new();
+		vec.resize(16 * 1024, 0xAA);
+		Some(vec.into())
 	}
 
 	/// Set the storage at key with value.
@@ -299,5 +311,13 @@ wasm_export_functions! {
 		assert_eq!(b, res.1);
 		assert_eq!(c, res.2);
 		assert_eq!(d, res.3);
+	}
+
+	fn test_return_option_vec() {
+		test_api::return_option_vec();
+	}
+
+	fn test_return_option_bytes() {
+		test_api::return_option_bytes();
 	}
 }

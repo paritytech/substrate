@@ -61,7 +61,8 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 	let event_where_clause = &event.where_clause;
 
 	// NOTE: actually event where clause must be a subset of config where clause because of
-	// `type Event: From<Event<Self>>`. But we merge either way for potential better error message
+	// `type RuntimeEvent: From<Event<Self>>`. But we merge either way for potential better error
+	// message
 	let completed_where_clause =
 		super::merge_where_clauses(&[&event.where_clause, &def.config.where_clause]);
 
@@ -98,7 +99,7 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 	if get_doc_literals(&event_item.attrs).is_empty() {
 		event_item.attrs.push(syn::parse_quote!(
 			#[doc = r"
-			The [event](https://docs.substrate.io/v3/runtime/events-and-errors) emitted
+			The [event](https://docs.substrate.io/main-docs/build/events-errors/) emitted
 			by this pallet.
 			"]
 		));
@@ -136,13 +137,13 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 			impl<#type_impl_gen> Pallet<#type_use_gen> #completed_where_clause {
 				#fn_vis fn deposit_event(event: Event<#event_use_gen>) {
 					let event = <
-						<T as Config #trait_use_gen>::Event as
+						<T as Config #trait_use_gen>::RuntimeEvent as
 						From<Event<#event_use_gen>>
 					>::from(event);
 
 					let event = <
-						<T as Config #trait_use_gen>::Event as
-						Into<<T as #frame_system::Config>::Event>
+						<T as Config #trait_use_gen>::RuntimeEvent as
+						Into<<T as #frame_system::Config>::RuntimeEvent>
 					>::into(event);
 
 					<#frame_system::Pallet<T>>::deposit_event(event)

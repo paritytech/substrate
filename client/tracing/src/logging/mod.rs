@@ -133,7 +133,14 @@ where
 		.add_directive(
 			parse_default_directive("cranelift_wasm=warn").expect("provided directive is valid"),
 		)
-		.add_directive(parse_default_directive("hyper=warn").expect("provided directive is valid"));
+		.add_directive(parse_default_directive("hyper=warn").expect("provided directive is valid"))
+		.add_directive(
+			parse_default_directive("trust_dns_proto=off").expect("provided directive is valid"),
+		)
+		.add_directive(
+			parse_default_directive("libp2p_mdns::behaviour::iface=off")
+				.expect("provided directive is valid"),
+		);
 
 	if let Ok(lvl) = std::env::var("RUST_LOG") {
 		if lvl != "" {
@@ -155,10 +162,7 @@ where
 	let max_level_hint = Layer::<FmtSubscriber>::max_level_hint(&env_filter);
 	let max_level = to_log_level_filter(max_level_hint);
 
-	tracing_log::LogTracer::builder()
-		.with_max_level(max_level)
-		.with_interest_cache(tracing_log::InterestCacheConfig::default())
-		.init()?;
+	tracing_log::LogTracer::builder().with_max_level(max_level).init()?;
 
 	// If we're only logging `INFO` entries then we'll use a simplified logging format.
 	let detailed_output = match max_level_hint {

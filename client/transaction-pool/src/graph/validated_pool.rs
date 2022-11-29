@@ -24,7 +24,6 @@ use std::{
 
 use futures::channel::mpsc::{channel, Sender};
 use parking_lot::{Mutex, RwLock};
-use retain_mut::RetainMut;
 use sc_transaction_pool_api::{error, PoolStatus, ReadyTransactions};
 use serde::Serialize;
 use sp_runtime::{
@@ -204,21 +203,20 @@ impl<B: ChainApi> ValidatedPool<B> {
 				let imported = self.pool.write().import(tx)?;
 
 				if let base::Imported::Ready { ref hash, .. } = imported {
-					RetainMut::retain_mut(&mut *self.import_notification_sinks.lock(), |sink| {
-						match sink.try_send(*hash) {
-							Ok(()) => true,
-							Err(e) =>
-								if e.is_full() {
-									log::warn!(
-										target: "txpool",
-										"[{:?}] Trying to notify an import but the channel is full",
-										hash,
-									);
-									true
-								} else {
-									false
-								},
-						}
+					let sinks = &mut self.import_notification_sinks.lock();
+					sinks.retain_mut(|sink| match sink.try_send(*hash) {
+						Ok(()) => true,
+						Err(e) =>
+							if e.is_full() {
+								log::warn!(
+									target: "txpool",
+									"[{:?}] Trying to notify an import but the channel is full",
+									hash,
+								);
+								true
+							} else {
+								false
+							},
 					});
 				}
 

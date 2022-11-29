@@ -10,7 +10,7 @@ error: `Pallet` does not have the std feature enabled, this will cause the `test
 49 | | }
    | |_^
    |
-   = note: this error originates in the macro `test_pallet::__substrate_genesis_config_check::is_std_enabled_for_genesis` (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this error originates in the macro `test_pallet::__substrate_genesis_config_check::is_std_enabled_for_genesis` which comes from the expansion of the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0412]: cannot find type `GenesisConfig` in crate `test_pallet`
   --> tests/construct_runtime_ui/no_std_genesis_config.rs:40:1

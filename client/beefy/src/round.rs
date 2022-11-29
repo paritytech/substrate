@@ -16,27 +16,23 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{
-	collections::{BTreeMap, HashMap},
-	hash::Hash,
-};
-
-use log::{debug, trace};
-
 use beefy_primitives::{
 	crypto::{Public, Signature},
 	ValidatorSet, ValidatorSetId,
 };
+use codec::{Decode, Encode};
+use log::{debug, trace};
 use sp_runtime::traits::{Block, NumberFor};
+use std::{collections::BTreeMap, hash::Hash};
 
 /// Tracks for each round which validators have voted/signed and
 /// whether the local `self` validator has voted/signed.
 ///
 /// Does not do any validation on votes or signatures, layers above need to handle that (gossip).
-#[derive(Default)]
+#[derive(Debug, Decode, Default, Encode, PartialEq)]
 struct RoundTracker {
 	self_vote: bool,
-	votes: HashMap<Public, Signature>,
+	votes: BTreeMap<Public, Signature>,
 }
 
 impl RoundTracker {
@@ -59,7 +55,8 @@ impl RoundTracker {
 	}
 }
 
-fn threshold(authorities: usize) -> usize {
+/// Minimum size of `authorities` subset that produced valid signatures for a block to finalize.
+pub fn threshold(authorities: usize) -> usize {
 	let faulty = authorities.saturating_sub(1) / 3;
 	authorities - faulty
 }
@@ -68,11 +65,13 @@ fn threshold(authorities: usize) -> usize {
 /// Only round numbers > `best_done` are of interest, all others are considered stale.
 ///
 /// Does not do any validation on votes or signatures, layers above need to handle that (gossip).
+#[derive(Debug, Decode, Encode, PartialEq)]
 pub(crate) struct Rounds<Payload, B: Block> {
 	rounds: BTreeMap<(Payload, NumberFor<B>), RoundTracker>,
-	best_done: Option<NumberFor<B>>,
 	session_start: NumberFor<B>,
 	validator_set: ValidatorSet<Public>,
+	mandatory_done: bool,
+	best_done: Option<NumberFor<B>>,
 }
 
 impl<P, B> Rounds<P, B>
@@ -81,15 +80,15 @@ where
 	B: Block,
 {
 	pub(crate) fn new(session_start: NumberFor<B>, validator_set: ValidatorSet<Public>) -> Self {
-		Rounds { rounds: BTreeMap::new(), best_done: None, session_start, validator_set }
+		Rounds {
+			rounds: BTreeMap::new(),
+			session_start,
+			validator_set,
+			mandatory_done: false,
+			best_done: None,
+		}
 	}
-}
 
-impl<P, B> Rounds<P, B>
-where
-	P: Ord + Hash + Clone,
-	B: Block,
-{
 	pub(crate) fn validator_set_id(&self) -> ValidatorSetId {
 		self.validator_set.id()
 	}
@@ -98,12 +97,16 @@ where
 		self.validator_set.validators()
 	}
 
-	pub(crate) fn session_start(&self) -> &NumberFor<B> {
-		&self.session_start
+	pub(crate) fn session_start(&self) -> NumberFor<B> {
+		self.session_start
+	}
+
+	pub(crate) fn mandatory_done(&self) -> bool {
+		self.mandatory_done
 	}
 
 	pub(crate) fn should_self_vote(&self, round: &(P, NumberFor<B>)) -> bool {
-		Some(round.1.clone()) > self.best_done &&
+		Some(round.1) > self.best_done &&
 			self.rounds.get(round).map(|tracker| !tracker.has_self_vote()).unwrap_or(true)
 	}
 
@@ -113,12 +116,9 @@ where
 		vote: (Public, Signature),
 		self_vote: bool,
 	) -> bool {
-		if Some(round.1.clone()) <= self.best_done {
-			debug!(
-				target: "beefy",
-				"🥩 received vote for old stale round {:?}, ignoring",
-				round.1
-			);
+		let num = round.1;
+		if num < self.session_start || Some(num) <= self.best_done {
+			debug!(target: "beefy", "🥩 received vote for old stale round {:?}, ignoring", num);
 			false
 		} else if !self.validators().iter().any(|id| vote.0 == *id) {
 			debug!(
@@ -132,7 +132,7 @@ where
 		}
 	}
 
-	pub(crate) fn try_conclude(
+	pub(crate) fn should_conclude(
 		&mut self,
 		round: &(P, NumberFor<B>),
 	) -> Option<Vec<Option<Signature>>> {
@@ -144,12 +144,7 @@ where
 		trace!(target: "beefy", "🥩 Round #{} done: {}", round.1, done);
 
 		if done {
-			// remove this and older (now stale) rounds
 			let signatures = self.rounds.remove(round)?.votes;
-			self.rounds.retain(|&(_, number), _| number > round.1);
-			self.best_done = self.best_done.max(Some(round.1));
-			debug!(target: "beefy", "🥩 Concluded round #{}", round.1);
-
 			Some(
 				self.validators()
 					.iter()
@@ -160,6 +155,14 @@ where
 			None
 		}
 	}
+
+	pub(crate) fn conclude(&mut self, round_num: NumberFor<B>) {
+		// Remove this and older (now stale) rounds.
+		self.rounds.retain(|&(_, number), _| number > round_num);
+		self.mandatory_done = self.mandatory_done || round_num == self.session_start;
+		self.best_done = self.best_done.max(Some(round_num));
+		debug!(target: "beefy", "🥩 Concluded round #{}", round_num);
+	}
 }
 
 #[cfg(test)]
@@ -169,8 +172,18 @@ mod tests {
 
 	use beefy_primitives::{crypto::Public, ValidatorSet};
 
-	use super::{threshold, RoundTracker, Rounds};
+	use super::{threshold, Block as BlockT, Hash, RoundTracker, Rounds};
 	use crate::keystore::tests::Keyring;
+
+	impl<P, B> Rounds<P, B>
+	where
+		P: Ord + Hash + Clone,
+		B: BlockT,
+	{
+		pub(crate) fn test_set_mandatory_done(&mut self, done: bool) {
+			self.mandatory_done = done;
+		}
+	}
 
 	#[test]
 	fn round_tracker() {
@@ -226,7 +239,7 @@ mod tests {
 		let rounds = Rounds::<H256, Block>::new(session_start, validators);
 
 		assert_eq!(42, rounds.validator_set_id());
-		assert_eq!(1, *rounds.session_start());
+		assert_eq!(1, rounds.session_start());
 		assert_eq!(
 			&vec![Keyring::Alice.public(), Keyring::Bob.public(), Keyring::Charlie.public()],
 			rounds.validators()
@@ -262,7 +275,7 @@ mod tests {
 			true
 		));
 		// round not concluded
-		assert!(rounds.try_conclude(&round).is_none());
+		assert!(rounds.should_conclude(&round).is_none());
 		// self vote already present, should not self vote
 		assert!(!rounds.should_self_vote(&round));
 
@@ -279,7 +292,7 @@ mod tests {
 			(Keyring::Dave.public(), Keyring::Dave.sign(b"I am committed")),
 			false
 		));
-		assert!(rounds.try_conclude(&round).is_none());
+		assert!(rounds.should_conclude(&round).is_none());
 
 		// add 2nd good vote
 		assert!(rounds.add_vote(
@@ -288,7 +301,7 @@ mod tests {
 			false
 		));
 		// round not concluded
-		assert!(rounds.try_conclude(&round).is_none());
+		assert!(rounds.should_conclude(&round).is_none());
 
 		// add 3rd good vote
 		assert!(rounds.add_vote(
@@ -297,7 +310,8 @@ mod tests {
 			false
 		));
 		// round concluded
-		assert!(rounds.try_conclude(&round).is_some());
+		assert!(rounds.should_conclude(&round).is_some());
+		rounds.conclude(round.1);
 
 		// Eve is a validator, but round was concluded, adding vote disallowed
 		assert!(!rounds.add_vote(
@@ -305,6 +319,43 @@ mod tests {
 			(Keyring::Eve.public(), Keyring::Eve.sign(b"I am committed")),
 			false
 		));
+	}
+
+	#[test]
+	fn old_rounds_not_accepted() {
+		sp_tracing::try_init_simple();
+
+		let validators = ValidatorSet::<Public>::new(
+			vec![Keyring::Alice.public(), Keyring::Bob.public(), Keyring::Charlie.public()],
+			42,
+		)
+		.unwrap();
+		let alice = (Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed"));
+
+		let session_start = 10u64.into();
+		let mut rounds = Rounds::<H256, Block>::new(session_start, validators);
+
+		let mut vote = (H256::from_low_u64_le(1), 9);
+		// add vote for previous session, should fail
+		assert!(!rounds.add_vote(&vote, alice.clone(), true));
+		// no votes present
+		assert!(rounds.rounds.is_empty());
+
+		// simulate 11 was concluded
+		rounds.best_done = Some(11);
+		// add votes for current session, but already concluded rounds, should fail
+		vote.1 = 10;
+		assert!(!rounds.add_vote(&vote, alice.clone(), true));
+		vote.1 = 11;
+		assert!(!rounds.add_vote(&vote, alice.clone(), true));
+		// no votes present
+		assert!(rounds.rounds.is_empty());
+
+		// add good vote
+		vote.1 = 12;
+		assert!(rounds.add_vote(&vote, alice, true));
+		// good vote present
+		assert_eq!(rounds.rounds.len(), 1);
 	}
 
 	#[test]
@@ -378,11 +429,12 @@ mod tests {
 		assert_eq!(3, rounds.rounds.len());
 
 		// conclude unknown round
-		assert!(rounds.try_conclude(&(H256::from_low_u64_le(5), 5)).is_none());
+		assert!(rounds.should_conclude(&(H256::from_low_u64_le(5), 5)).is_none());
 		assert_eq!(3, rounds.rounds.len());
 
 		// conclude round 2
-		let signatures = rounds.try_conclude(&(H256::from_low_u64_le(2), 2)).unwrap();
+		let signatures = rounds.should_conclude(&(H256::from_low_u64_le(2), 2)).unwrap();
+		rounds.conclude(2);
 		assert_eq!(1, rounds.rounds.len());
 
 		assert_eq!(

@@ -24,7 +24,7 @@ pub trait Inspect<AccountId>: super::Inspect<AccountId> {
 }
 
 pub trait Mutate<AccountId>: Inspect<AccountId> {
-	// Aprove a delegate account to spend an amount of tokens owned by an owner
+	// Approve a delegate account to spend an amount of tokens owned by an owner
 	fn approve(
 		asset: Self::AssetId,
 		owner: &AccountId,

@@ -26,7 +26,7 @@ use libp2p::{
 		upgrade,
 	},
 	dns, identity, mplex, noise,
-	quic::{Config as QuicConfig, QuicTransport},
+	quic::{self, Config as QuicConfig, GenTransport as QuicTransport},
 	tcp, websocket, PeerId, Transport,
 };
 use std::{net::SocketAddr, sync::Arc, time::Duration};
@@ -39,7 +39,7 @@ pub use self::bandwidth::BandwidthSinks;
 fn build_quic_transport(
 	keypair: &identity::Keypair,
 	quic_socket: Option<SocketAddr>,
-) -> Option<QuicTransport> {
+) -> Option<Boxed<(PeerId, StreamMuxerBox)>> {
 	let quic_socket = quic_socket?;
 
 	let addr = libp2p::Multiaddr::empty()
@@ -47,11 +47,12 @@ fn build_quic_transport(
 		.with(libp2p::multiaddr::Protocol::Udp(quic_socket.port()))
 		.with(libp2p::multiaddr::Protocol::Quic);
 
-	let config = QuicConfig::new(&keypair)
-		.map_err(|e| log::error!("Failed to create QUIC config: {}", e))
-		.ok()?;
+	let config = QuicConfig::new(&keypair);
+	let transport = QuicTransport::<quic::async_std::Provider>::new(config)
+		.map(|(p, c), _| (p, StreamMuxerBox::new(c)))
+		.boxed();
 
-	Some(QuicTransport::new(config))
+	Some(transport)
 }
 
 /// Builds the transport that serves as a common ground for all connections.
@@ -78,17 +79,17 @@ pub fn build_transport(
 ) -> (Boxed<(PeerId, StreamMuxerBox)>, Arc<BandwidthSinks>) {
 	// Build the base layer of the transport.
 	let transport = if !memory_only {
-		let tcp_config = tcp::GenTcpConfig::new().nodelay(true);
-		let desktop_trans = tcp::TcpTransport::new(tcp_config.clone());
+		let tcp_config = tcp::Config::new().nodelay(true);
+		let desktop_trans = tcp::async_io::Transport::new(tcp_config.clone());
 		let desktop_trans = websocket::WsConfig::new(desktop_trans)
-			.or_transport(tcp::TcpTransport::new(tcp_config.clone()));
+			.or_transport(tcp::async_io::Transport::new(tcp_config.clone()));
 		let dns_init = futures::executor::block_on(dns::DnsConfig::system(desktop_trans));
 		EitherTransport::Left(if let Ok(dns) = dns_init {
 			EitherTransport::Left(dns)
 		} else {
-			let desktop_trans = tcp::TcpTransport::new(tcp_config.clone());
+			let desktop_trans = tcp::async_io::Transport::new(tcp_config.clone());
 			let desktop_trans = websocket::WsConfig::new(desktop_trans)
-				.or_transport(tcp::TcpTransport::new(tcp_config));
+				.or_transport(tcp::async_io::Transport::new(tcp_config));
 			EitherTransport::Right(desktop_trans.map_err(dns::DnsErr::Transport))
 		})
 	} else {

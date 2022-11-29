@@ -31,14 +31,14 @@
 
 		;; the chain extension passes through the input and returns it as output
 		(call $seal_call_chain_extension
-			(i32.load (i32.const 4))	;; func_id
+			(i32.load (i32.const 4))	;; id
 			(i32.const 4)				;; input_ptr
 			(i32.load (i32.const 0))	;; input_len
 			(i32.const 16)				;; output_ptr
 			(i32.const 12)				;; output_len_ptr
 		)
 
-		;; the chain extension passes through the func_id
+		;; the chain extension passes through the id
 		(call $assert (i32.eq (i32.load (i32.const 4))))
 
 		(call $seal_return (i32.const 0) (i32.const 16) (i32.load (i32.const 12)))

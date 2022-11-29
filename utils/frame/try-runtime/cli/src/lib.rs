@@ -132,20 +132,20 @@
 //! added, given the right flag:
 //!
 //! ```ignore
+//! 
 //! #[cfg(feature = try-runtime)]
-//! fn pre_upgrade() -> Result<(), &'static str> {}
+//! fn pre_upgrade() -> Result<Vec<u8>, &'static str> {}
 //!
 //! #[cfg(feature = try-runtime)]
-//! fn post_upgrade() -> Result<(), &'static str> {}
+//! fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {}
 //! ```
 //!
 //! (The pallet macro syntax will support this simply as a part of `#[pallet::hooks]`).
 //!
 //! These hooks allow you to execute some code, only within the `on-runtime-upgrade` command, before
-//! and after the migration. If any data needs to be temporarily stored between the pre/post
-//! migration hooks, `OnRuntimeUpgradeHelpersExt` can help with that. Note that you should be
-//! mindful with any mutable storage ops in the pre/post migration checks, as you almost certainly
-//! will not want to mutate any of the storage that is to be migrated.
+//! and after the migration. Moreover, `pre_upgrade` can return a `Vec<u8>` that contains arbitrary
+//! encoded data (usually some pre-upgrade state) which will be passed to `post_upgrade` after
+//! upgrading and used for post checking.
 //!
 //! #### Logging
 //!
@@ -265,6 +265,8 @@
 //!     -s snap \
 //! ```
 
+#![cfg(feature = "try-runtime")]
+
 use parity_scale_codec::Decode;
 use remote_externalities::{
 	Builder, Mode, OfflineConfig, OnlineConfig, SnapshotConfig, TestExternalities,
@@ -293,8 +295,10 @@ use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
 	DeserializeOwned,
 };
-use sp_state_machine::{InMemoryProvingBackend, OverlayedChanges, StateMachine};
+use sp_state_machine::{OverlayedChanges, StateMachine, TrieBackendBuilder};
+use sp_version::StateVersion;
 use std::{fmt::Debug, path::PathBuf, str::FromStr};
+use substrate_rpc_client::{ws_client, StateApi};
 
 mod commands;
 pub(crate) mod parse;
@@ -334,17 +338,18 @@ pub enum Command {
 	///     different state transition function.
 	///
 	/// To make testing slightly more dynamic, you can disable the state root  check by enabling
-	/// `ExecuteBlockCmd::no_check`. If you get signature verification errors, you should
-	/// manually tweak your local runtime's spec version to fix this.
+	/// `ExecuteBlockCmd::no_check`. If you get signature verification errors, you should manually
+	/// tweak your local runtime's spec version to fix this.
 	///
 	/// A subtle detail of execute block is that if you want to execute block 100 of a live chain
 	/// again, you need to scrape the state of block 99. This is already done automatically if you
 	/// use [`State::Live`], and the parent hash of the target block is used to scrape the state.
 	/// If [`State::Snap`] is being used, then this needs to be manually taken into consideration.
 	///
-	/// This executes the same runtime api as normal block import, namely `Core_execute_block`. If
-	/// `ExecuteBlockCmd::no_check` is set, it uses a custom, try-runtime-only runtime
-	/// api called `TryRuntime_execute_block_no_check`.
+	/// This does not execute the same runtime api as normal block import do, namely
+	/// `Core_execute_block`. Instead, it uses `TryRuntime_execute_block`, which can optionally
+	/// skip state-root check (useful for trying a unreleased runtime), and can execute runtime
+	/// sanity checks as well.
 	ExecuteBlock(commands::execute_block::ExecuteBlockCmd),
 
 	/// Executes *the offchain worker hooks* of a given block against some state.
@@ -382,6 +387,7 @@ pub enum Command {
 
 /// Shared parameters of the `try-runtime` commands
 #[derive(Debug, Clone, clap::Parser)]
+#[group(skip)]
 pub struct SharedParams {
 	/// Shared parameters of substrate cli.
 	#[allow(missing_docs)]
@@ -389,38 +395,42 @@ pub struct SharedParams {
 	pub shared_params: sc_cli::SharedParams,
 
 	/// The execution strategy that should be used.
-	#[clap(long, value_name = "STRATEGY", arg_enum, ignore_case = true, default_value = "wasm")]
+	#[arg(long, value_name = "STRATEGY", value_enum, ignore_case = true, default_value_t = ExecutionStrategy::Wasm)]
 	pub execution: ExecutionStrategy,
 
 	/// Type of wasm execution used.
-	#[clap(
+	#[arg(
 		long = "wasm-execution",
 		value_name = "METHOD",
-		possible_values = WasmExecutionMethod::variants(),
+		value_enum,
 		ignore_case = true,
-		default_value = DEFAULT_WASM_EXECUTION_METHOD,
+		default_value_t = DEFAULT_WASM_EXECUTION_METHOD,
 	)]
 	pub wasm_method: WasmExecutionMethod,
 
 	/// The WASM instantiation method to use.
 	///
 	/// Only has an effect when `wasm-execution` is set to `compiled`.
-	#[clap(
+	#[arg(
 		long = "wasm-instantiation-strategy",
 		value_name = "STRATEGY",
 		default_value_t = DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
-		arg_enum,
+		value_enum,
 	)]
 	pub wasmtime_instantiation_strategy: WasmtimeInstantiationStrategy,
 
 	/// The number of 64KB pages to allocate for Wasm execution. Defaults to
 	/// [`sc_service::Configuration.default_heap_pages`].
-	#[clap(long)]
+	#[arg(long)]
 	pub heap_pages: Option<u64>,
 
-	/// When enabled, the spec name check will not panic, and instead only show a warning.
-	#[clap(long)]
-	pub no_spec_name_check: bool,
+	/// When enabled, the spec check will not panic, and instead only show a warning.
+	#[arg(long)]
+	pub no_spec_check_panic: bool,
+
+	/// State version that is used by the chain.
+	#[arg(long, default_value_t = StateVersion::V1, value_parser = parse::state_version)]
+	pub state_version: StateVersion,
 }
 
 /// Our `try-runtime` command.
@@ -431,7 +441,7 @@ pub struct TryRuntimeCmd {
 	#[clap(flatten)]
 	pub shared: SharedParams,
 
-	#[clap(subcommand)]
+	#[command(subcommand)]
 	pub command: Command,
 }
 
@@ -442,17 +452,17 @@ pub enum State {
 	///
 	/// This can be crated by passing a value to [`State::Live::snapshot_path`].
 	Snap {
-		#[clap(short, long)]
+		#[arg(short, long)]
 		snapshot_path: PathBuf,
 	},
 
 	/// Use a live chain as the source of runtime state.
 	Live {
 		/// The url to connect to.
-		#[clap(
+		#[arg(
 			short,
 			long,
-			parse(try_from_str = parse::url),
+			value_parser = parse::url,
 		)]
 		uri: String,
 
@@ -460,21 +470,20 @@ pub enum State {
 		///
 		/// If non provided, then the latest finalized head is used. This is particularly useful
 		/// for [`Command::OnRuntimeUpgrade`].
-		#[clap(
+		#[arg(
 			short,
 			long,
-			multiple_values = false,
-			parse(try_from_str = parse::hash),
+			value_parser = parse::hash,
 		)]
 		at: Option<String>,
 
 		/// An optional state snapshot file to WRITE to. Not written if set to `None`.
-		#[clap(short, long)]
+		#[arg(short, long)]
 		snapshot_path: Option<PathBuf>,
 
 		/// A pallet to scrape. Can be provided multiple times. If empty, entire chain state will
 		/// be scraped.
-		#[clap(short, long, multiple_values = true)]
+		#[arg(short, long, num_args = 1..)]
 		pallet: Vec<String>,
 
 		/// Fetch the child-keys as well.
@@ -482,7 +491,7 @@ pub enum State {
 		/// Default is `false`, if specific `--pallets` are specified, `true` otherwise. In other
 		/// words, if you scrape the whole state the child tree data is included out of the box.
 		/// Otherwise, it must be enabled explicitly using this flag.
-		#[clap(long)]
+		#[arg(long)]
 		child_tree: bool,
 	},
 }
@@ -535,8 +544,8 @@ impl State {
 impl TryRuntimeCmd {
 	pub async fn run<Block, ExecDispatch>(&self, config: Configuration) -> sc_cli::Result<()>
 	where
-		Block: BlockT<Hash = H256> + serde::de::DeserializeOwned,
-		Block::Header: serde::de::DeserializeOwned,
+		Block: BlockT<Hash = H256> + DeserializeOwned,
+		Block::Header: DeserializeOwned,
 		Block::Hash: FromStr,
 		<Block::Hash as FromStr>::Err: Debug,
 		NumberFor<Block>: FromStr,
@@ -620,13 +629,14 @@ where
 ///
 /// If the spec names don't match, if `relaxed`, then it emits a warning, else it panics.
 /// If the spec versions don't match, it only ever emits a warning.
-pub(crate) async fn ensure_matching_spec<Block: BlockT + serde::de::DeserializeOwned>(
+pub(crate) async fn ensure_matching_spec<Block: BlockT + DeserializeOwned>(
 	uri: String,
 	expected_spec_name: String,
 	expected_spec_version: u32,
 	relaxed: bool,
 ) {
-	match remote_externalities::rpc_api::get_runtime_version::<Block, _>(uri.clone(), None)
+	let rpc = ws_client(&uri).await.unwrap();
+	match StateApi::<Block::Hash>::runtime_version(&rpc, None)
 		.await
 		.map(|version| (String::from(version.spec_name.clone()), version.spec_version))
 		.map(|(spec_name, spec_version)| (spec_name.to_lowercase(), spec_version))
@@ -651,21 +661,27 @@ pub(crate) async fn ensure_matching_spec<Block: BlockT + serde::de::DeserializeO
 			if expected_spec_version == version {
 				log::info!(target: LOG_TARGET, "found matching spec version: {:?}", version);
 			} else {
-				log::warn!(
-					target: LOG_TARGET,
+				let msg = format!(
 					"spec version mismatch (local {} != remote {}). This could cause some issues.",
-					expected_spec_version,
-					version
+					expected_spec_version, version
 				);
+				if relaxed {
+					log::warn!(target: LOG_TARGET, "{}", msg);
+				} else {
+					panic!("{}", msg);
+				}
 			}
 		},
 		Err(why) => {
-			log::error!(
-				target: LOG_TARGET,
+			let msg = format!(
 				"failed to fetch runtime version from {}: {:?}. Skipping the check",
-				uri,
-				why
+				uri, why
 			);
+			if relaxed {
+				log::error!(target: LOG_TARGET, "{}", msg);
+			} else {
+				panic!("{}", msg);
+			}
 		},
 	}
 }
@@ -746,9 +762,11 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 
 	let mut changes = Default::default();
 	let backend = ext.backend.clone();
-	let proving_backend = InMemoryProvingBackend::new(&backend);
+	let runtime_code_backend = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
 
-	let runtime_code_backend = sp_state_machine::backend::BackendRuntimeCode::new(&proving_backend);
+	let proving_backend =
+		TrieBackendBuilder::wrap(&backend).with_recorder(Default::default()).build();
+
 	let runtime_code = runtime_code_backend.runtime_code()?;
 
 	let pre_root = *backend.root();
@@ -767,7 +785,9 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 	.map_err(|e| format!("failed to execute {}: {}", method, e))
 	.map_err::<sc_cli::Error, _>(Into::into)?;
 
-	let proof = proving_backend.extract_proof();
+	let proof = proving_backend
+		.extract_proof()
+		.expect("A recorder was set and thus, a storage proof can be extracted; qed");
 	let proof_size = proof.encoded_size();
 	let compact_proof = proof
 		.clone()
@@ -792,15 +812,15 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 			)
 		}
 	};
-	log::info!(
+	log::debug!(
 		target: LOG_TARGET,
 		"proof: {} / {} nodes",
 		HexDisplay::from(&proof_nodes.iter().flatten().cloned().collect::<Vec<_>>()),
 		proof_nodes.len()
 	);
-	log::info!(target: LOG_TARGET, "proof size: {}", humanize(proof_size));
-	log::info!(target: LOG_TARGET, "compact proof size: {}", humanize(compact_proof_size),);
-	log::info!(
+	log::debug!(target: LOG_TARGET, "proof size: {}", humanize(proof_size));
+	log::debug!(target: LOG_TARGET, "compact proof size: {}", humanize(compact_proof_size),);
+	log::debug!(
 		target: LOG_TARGET,
 		"zstd-compressed compact proof {}",
 		humanize(compressed_proof.len()),

@@ -26,7 +26,8 @@ use std::sync::Arc;
 use jsonrpsee::{
 	core::{async_trait, RpcResult},
 	proc_macros::rpc,
-	PendingSubscription,
+	types::SubscriptionResult,
+	SubscriptionSink,
 };
 
 mod error;
@@ -102,7 +103,7 @@ where
 		ReportedRoundStates::from(&self.authority_set, &self.voter_state).map_err(Into::into)
 	}
 
-	fn subscribe_justifications(&self, pending: PendingSubscription) {
+	fn subscribe_justifications(&self, mut sink: SubscriptionSink) -> SubscriptionResult {
 		let stream = self.justification_stream.subscribe().map(
 			|x: sc_finality_grandpa::GrandpaJustification<Block>| {
 				JustificationNotification::from(x)
@@ -110,12 +111,11 @@ where
 		);
 
 		let fut = async move {
-			if let Some(mut sink) = pending.accept() {
-				sink.pipe_from_stream(stream).await;
-			}
+			sink.pipe_from_stream(stream).await;
 		};
 
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
+		Ok(())
 	}
 
 	async fn prove_finality(
@@ -283,9 +283,9 @@ mod tests {
 		let (rpc, _) = setup_io_handler(EmptyVoterState);
 		let expected_response = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"GRANDPA RPC endpoint not ready"},"id":0}"#.to_string();
 		let request = r#"{"jsonrpc":"2.0","method":"grandpa_roundState","params":[],"id":0}"#;
-		let (result, _) = rpc.raw_json_request(&request).await.unwrap();
+		let (response, _) = rpc.raw_json_request(&request).await.unwrap();
 
-		assert_eq!(expected_response, result,);
+		assert_eq!(expected_response, response.result);
 	}
 
 	#[tokio::test]
@@ -306,8 +306,8 @@ mod tests {
 		},\"id\":0}".to_string();
 
 		let request = r#"{"jsonrpc":"2.0","method":"grandpa_roundState","params":[],"id":0}"#;
-		let (result, _) = rpc.raw_json_request(&request).await.unwrap();
-		assert_eq!(expected_response, result);
+		let (response, _) = rpc.raw_json_request(&request).await.unwrap();
+		assert_eq!(expected_response, response.result);
 	}
 
 	#[tokio::test]
@@ -328,7 +328,7 @@ mod tests {
 			.unwrap();
 		let expected = r#"{"jsonrpc":"2.0","result":false,"id":1}"#;
 
-		assert_eq!(response, expected);
+		assert_eq!(response.result, expected);
 	}
 
 	fn create_justification() -> GrandpaJustification<Block> {

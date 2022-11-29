@@ -31,7 +31,7 @@ use sc_service::{
 		NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods,
 		TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
 	},
-	ChainSpec, KeepBlocks, TracingReceiver,
+	BlocksPruning, ChainSpec, TracingReceiver,
 };
 use sc_tracing::logging::LoggerBuilder;
 use std::{net::SocketAddr, path::PathBuf};
@@ -125,7 +125,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	///
 	/// By default this is retrieved from `SharedParams`.
 	fn base_path(&self) -> Result<Option<BasePath>> {
-		Ok(self.shared_params().base_path())
+		self.shared_params().base_path()
 	}
 
 	/// Returns `true` if the node is for development or not
@@ -211,12 +211,8 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		base_path: &PathBuf,
 		cache_size: usize,
 		database: Database,
-		role: &Role,
 	) -> Result<DatabaseSource> {
-		let role_dir = match role {
-			Role::Light => "light",
-			Role::Full | Role::Authority => "full",
-		};
+		let role_dir = "full";
 		let rocksdb_path = base_path.join("db").join(role_dir);
 		let paritydb_path = base_path.join("paritydb").join(role_dir);
 		Ok(match database {
@@ -234,18 +230,12 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		})
 	}
 
-	/// Get the state cache size.
+	/// Get the trie cache maximum size.
 	///
 	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its `0`.
-	fn state_cache_size(&self) -> Result<usize> {
-		Ok(self.import_params().map(|x| x.state_cache_size()).unwrap_or_default())
-	}
-
-	/// Get the state cache child ratio (if any).
-	///
-	/// By default this is `None`.
-	fn state_cache_child_ratio(&self) -> Result<Option<usize>> {
-		Ok(Default::default())
+	/// If `None` is returned the trie cache is disabled.
+	fn trie_cache_maximum_size(&self) -> Result<Option<usize>> {
+		Ok(self.import_params().map(|x| x.trie_cache_maximum_size()).unwrap_or_default())
 	}
 
 	/// Get the state pruning mode.
@@ -261,11 +251,11 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// Get the block pruning mode.
 	///
 	/// By default this is retrieved from `block_pruning` if it is available. Otherwise its
-	/// `KeepBlocks::All`.
-	fn keep_blocks(&self) -> Result<KeepBlocks> {
+	/// `BlocksPruning::KeepFinalized`.
+	fn blocks_pruning(&self) -> Result<BlocksPruning> {
 		self.pruning_params()
-			.map(|x| x.keep_blocks())
-			.unwrap_or_else(|| Ok(KeepBlocks::All))
+			.map(|x| x.blocks_pruning())
+			.unwrap_or_else(|| Ok(BlocksPruning::KeepFinalized))
 	}
 
 	/// Get the chain ID (string).
@@ -536,11 +526,10 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			)?,
 			keystore_remote,
 			keystore,
-			database: self.database_config(&config_dir, database_cache_size, database, &role)?,
-			state_cache_size: self.state_cache_size()?,
-			state_cache_child_ratio: self.state_cache_child_ratio()?,
+			database: self.database_config(&config_dir, database_cache_size, database)?,
+			trie_cache_maximum_size: self.trie_cache_maximum_size()?,
 			state_pruning: self.state_pruning()?,
-			keep_blocks: self.keep_blocks()?,
+			blocks_pruning: self.blocks_pruning()?,
 			wasm_method: self.wasm_method()?,
 			wasm_runtime_overrides: self.wasm_runtime_overrides(),
 			execution_strategies: self.execution_strategies(is_dev, is_validator)?,
@@ -668,17 +657,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 					new_limit, RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT,
 				);
 			}
-		}
-
-		if self.import_params().map_or(false, |p| {
-			#[allow(deprecated)]
-			p.unsafe_pruning
-		}) {
-			// according to https://github.com/substrate/issues/8103;
-			warn!(
-				"WARNING: \"--unsafe-pruning\" CLI-flag is deprecated and has no effect. \
-				In future builds it will be removed, and providing this flag will lead to an error."
-			);
 		}
 
 		Ok(())

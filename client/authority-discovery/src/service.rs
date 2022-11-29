@@ -25,7 +25,7 @@ use futures::{
 	SinkExt,
 };
 
-use sc_network::{Multiaddr, PeerId};
+use libp2p::{Multiaddr, PeerId};
 use sp_authority_discovery::AuthorityId;
 
 /// Service to interact with the [`crate::Worker`].

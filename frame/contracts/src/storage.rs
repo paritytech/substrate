@@ -34,30 +34,50 @@ use scale_info::TypeInfo;
 use sp_core::crypto::UncheckedFrom;
 use sp_io::KillStorageResult;
 use sp_runtime::{
-	traits::{Hash, Zero},
+	traits::{Hash, Saturating, Zero},
 	RuntimeDebug,
 };
 use sp_std::{marker::PhantomData, prelude::*};
 
-pub type ContractInfo<T> = RawContractInfo<CodeHash<T>, BalanceOf<T>>;
-
 /// Information for managing an account and its sub trie abstraction.
 /// This is the required info to cache for an account.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-pub struct RawContractInfo<CodeHash, Balance> {
+#[scale_info(skip_type_params(T))]
+pub struct ContractInfo<T: Config> {
 	/// Unique ID for the subtree encoded as a bytes vector.
 	pub trie_id: TrieId,
 	/// The code associated with a given account.
-	pub code_hash: CodeHash,
-	/// The amount of balance that is currently deposited to pay for consumed storage.
-	pub storage_deposit: Balance,
+	pub code_hash: CodeHash<T>,
+	/// How many bytes of storage are accumulated in this contract's child trie.
+	pub storage_bytes: u32,
+	/// How many items of storage are accumulated in this contract's child trie.
+	pub storage_items: u32,
+	/// This records to how much deposit the accumulated `storage_bytes` amount to.
+	pub storage_byte_deposit: BalanceOf<T>,
+	/// This records to how much deposit the accumulated `storage_items` amount to.
+	pub storage_item_deposit: BalanceOf<T>,
+	/// This records how much deposit is put down in order to pay for the contract itself.
+	///
+	/// We need to store this information separately so it is not used when calculating any refunds
+	/// since the base deposit can only ever be refunded on contract termination.
+	pub storage_base_deposit: BalanceOf<T>,
 }
 
-impl<CodeHash, Balance> RawContractInfo<CodeHash, Balance> {
+impl<T: Config> ContractInfo<T> {
 	/// Associated child trie unique id is built from the hash part of the trie id.
 	#[cfg(test)]
 	pub fn child_trie_info(&self) -> ChildInfo {
 		child_trie_info(&self.trie_id[..])
+	}
+
+	/// The deposit paying for the accumulated storage generated within the contract's child trie.
+	pub fn extra_deposit(&self) -> BalanceOf<T> {
+		self.storage_byte_deposit.saturating_add(self.storage_item_deposit)
+	}
+
+	/// Same as [`Self::extra_deposit`] but including the base deposit.
+	pub fn total_deposit(&self) -> BalanceOf<T> {
+		self.extra_deposit().saturating_add(self.storage_base_deposit)
 	}
 }
 
@@ -178,7 +198,7 @@ where
 				},
 				(None, None) => (),
 			}
-			storage_meter.charge(&diff)?;
+			storage_meter.charge(&diff);
 		}
 
 		match &new_value {
@@ -200,14 +220,21 @@ where
 	pub fn new_contract(
 		account: &AccountIdOf<T>,
 		trie_id: TrieId,
-		ch: CodeHash<T>,
+		code_hash: CodeHash<T>,
 	) -> Result<ContractInfo<T>, DispatchError> {
 		if <ContractInfoOf<T>>::contains_key(account) {
 			return Err(Error::<T>::DuplicateContract.into())
 		}
 
-		let contract =
-			ContractInfo::<T> { code_hash: ch, trie_id, storage_deposit: <BalanceOf<T>>::zero() };
+		let contract = ContractInfo::<T> {
+			code_hash,
+			trie_id,
+			storage_bytes: 0,
+			storage_items: 0,
+			storage_byte_deposit: Zero::zero(),
+			storage_item_deposit: Zero::zero(),
+			storage_base_deposit: Zero::zero(),
+		};
 
 		Ok(contract)
 	}
@@ -227,9 +254,10 @@ where
 		let base_weight = T::WeightInfo::on_process_deletion_queue_batch();
 		let weight_per_queue_item = T::WeightInfo::on_initialize_per_queue_item(1) -
 			T::WeightInfo::on_initialize_per_queue_item(0);
-		let weight_per_key = T::WeightInfo::on_initialize_per_trie_key(1) -
-			T::WeightInfo::on_initialize_per_trie_key(0);
-		let decoding_weight = weight_per_queue_item.saturating_mul(queue_len as Weight);
+		let weight_per_key = (T::WeightInfo::on_initialize_per_trie_key(1) -
+			T::WeightInfo::on_initialize_per_trie_key(0))
+		.ref_time();
+		let decoding_weight = weight_per_queue_item.saturating_mul(queue_len as u64);
 
 		// `weight_per_key` being zero makes no sense and would constitute a failure to
 		// benchmark properly. We opt for not removing any keys at all in this case.
@@ -237,7 +265,8 @@ where
 			.saturating_sub(base_weight)
 			.saturating_sub(decoding_weight)
 			.checked_div(weight_per_key)
-			.unwrap_or(0) as u32;
+			.unwrap_or(Weight::zero())
+			.ref_time() as u32;
 
 		(weight_per_key, key_budget)
 	}
@@ -248,7 +277,7 @@ where
 	pub fn process_deletion_queue_batch(weight_limit: Weight) -> Weight {
 		let queue_len = <DeletionQueue<T>>::decode_len().unwrap_or(0);
 		if queue_len == 0 {
-			return 0
+			return Weight::zero()
 		}
 
 		let (weight_per_key, mut remaining_key_budget) =
@@ -282,7 +311,10 @@ where
 		}
 
 		<DeletionQueue<T>>::put(queue);
-		weight_limit.saturating_sub(weight_per_key.saturating_mul(remaining_key_budget as Weight))
+		let ref_time_weight = weight_limit
+			.ref_time()
+			.saturating_sub(weight_per_key.saturating_mul(u64::from(remaining_key_budget)));
+		Weight::from_ref_time(ref_time_weight)
 	}
 
 	/// Generates a unique trie id by returning  `hash(account_id ++ nonce)`.
@@ -296,7 +328,6 @@ where
 	}
 
 	/// Returns the code hash of the contract specified by `account` ID.
-	#[cfg(test)]
 	pub fn code_hash(account: &AccountIdOf<T>) -> Option<CodeHash<T>> {
 		<ContractInfoOf<T>>::get(account).map(|i| i.code_hash)
 	}
@@ -308,7 +339,7 @@ where
 		let queue: Vec<DeletedContract> = (0..T::DeletionQueueDepth::get())
 			.map(|_| DeletedContract { trie_id: TrieId::default() })
 			.collect();
-		let bounded: BoundedVec<_, _> = queue.try_into().unwrap();
+		let bounded: BoundedVec<_, _> = queue.try_into().map_err(|_| ()).unwrap();
 		<DeletionQueue<T>>::put(bounded);
 	}
 }

@@ -24,14 +24,13 @@ use crate::Error;
 use codec::Encode;
 use sc_client_api::{AuxStore, UsageProvider};
 use sc_consensus_babe::{
-	authorship, find_pre_digest, BabeIntermediate, CompatibleDigestItem, Config, Epoch,
-	INTERMEDIATE_KEY,
+	authorship, find_pre_digest, BabeIntermediate, CompatibleDigestItem, Epoch, INTERMEDIATE_KEY,
 };
 use sc_consensus_epochs::{
 	descendent_query, EpochHeader, SharedEpochChanges, ViableEpochDescriptor,
 };
 use sp_keystore::SyncCryptoStorePtr;
-use std::{borrow::Cow, sync::Arc};
+use std::{marker::PhantomData, sync::Arc};
 
 use sc_consensus::{BlockImportParams, ForkChoiceStrategy, Verifier};
 use sp_api::{ProvideRuntimeApi, TransactionFor};
@@ -40,7 +39,7 @@ use sp_consensus::CacheKeyId;
 use sp_consensus_babe::{
 	digests::{NextEpochDescriptor, PreDigest, SecondaryPlainPreDigest},
 	inherents::BabeInherentData,
-	AuthorityId, BabeApi, BabeAuthorityWeight, ConsensusLog, BABE_ENGINE_ID,
+	AuthorityId, BabeApi, BabeAuthorityWeight, BabeConfiguration, ConsensusLog, BABE_ENGINE_ID,
 };
 use sp_consensus_slots::Slot;
 use sp_inherents::InherentData;
@@ -53,7 +52,7 @@ use sp_timestamp::TimestampInherentData;
 
 /// Provides BABE-compatible predigests and BlockImportParams.
 /// Intended for use with BABE runtimes.
-pub struct BabeConsensusDataProvider<B: BlockT, C> {
+pub struct BabeConsensusDataProvider<B: BlockT, C, P> {
 	/// shared reference to keystore
 	keystore: SyncCryptoStorePtr,
 
@@ -64,10 +63,14 @@ pub struct BabeConsensusDataProvider<B: BlockT, C> {
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 
 	/// BABE config, gotten from the runtime.
-	config: Config,
+	/// NOTE: This is used to fetch `slot_duration` and `epoch_length` in the
+	/// `ConsensusDataProvider` implementation. Correct as far as these values
+	/// are not changed during an epoch change.
+	config: BabeConfiguration,
 
 	/// Authorities to be used for this babe chain.
 	authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
+	_phantom: PhantomData<P>,
 }
 
 /// Verifier to be used for babe chains
@@ -122,16 +125,14 @@ where
 		// drop the lock
 		drop(epoch_changes);
 
-		import_params.intermediates.insert(
-			Cow::from(INTERMEDIATE_KEY),
-			Box::new(BabeIntermediate::<B> { epoch_descriptor }) as Box<_>,
-		);
+		import_params
+			.insert_intermediate(INTERMEDIATE_KEY, BabeIntermediate::<B> { epoch_descriptor });
 
 		Ok((import_params, None))
 	}
 }
 
-impl<B, C> BabeConsensusDataProvider<B, C>
+impl<B, C, P> BabeConsensusDataProvider<B, C, P>
 where
 	B: BlockT,
 	C: AuxStore
@@ -151,9 +152,16 @@ where
 			return Err(Error::StringError("Cannot supply empty authority set!".into()))
 		}
 
-		let config = Config::get(&*client)?;
+		let config = sc_consensus_babe::configuration(&*client)?;
 
-		Ok(Self { config, client, keystore, epoch_changes, authorities })
+		Ok(Self {
+			config,
+			client,
+			keystore,
+			epoch_changes,
+			authorities,
+			_phantom: Default::default(),
+		})
 	}
 
 	fn epoch(&self, parent: &B::Header, slot: Slot) -> Result<Epoch, Error> {
@@ -169,9 +177,7 @@ where
 			.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)?;
 
 		let epoch = epoch_changes
-			.viable_epoch(&epoch_descriptor, |slot| {
-				Epoch::genesis(self.config.genesis_config(), slot)
-			})
+			.viable_epoch(&epoch_descriptor, |slot| Epoch::genesis(&self.config, slot))
 			.ok_or_else(|| {
 				log::info!(target: "babe", "create_digest: no viable_epoch :(");
 				sp_consensus::Error::InvalidAuthoritiesSet
@@ -181,7 +187,7 @@ where
 	}
 }
 
-impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
+impl<B, C, P> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C, P>
 where
 	B: BlockT,
 	C: AuxStore
@@ -190,8 +196,10 @@ where
 		+ UsageProvider<B>
 		+ ProvideRuntimeApi<B>,
 	C::Api: BabeApi<B>,
+	P: Send + Sync,
 {
 	type Transaction = TransactionFor<C, B>;
+	type Proof = P;
 
 	fn create_digest(&self, parent: &B::Header, inherents: &InherentData) -> Result<Digest, Error> {
 		let slot = inherents
@@ -259,6 +267,7 @@ where
 		parent: &B::Header,
 		params: &mut BlockImportParams<B, Self::Transaction>,
 		inherents: &InherentData,
+		_proof: Self::Proof,
 	) -> Result<(), Error> {
 		let slot = inherents
 			.babe_inherent_data()?
@@ -295,7 +304,7 @@ where
 						identifier,
 						EpochHeader {
 							start_slot: slot,
-							end_slot: (*slot * self.config.genesis_config().epoch_length).into(),
+							end_slot: (*slot * self.config.epoch_length).into(),
 						},
 					),
 				_ => unreachable!(
@@ -304,10 +313,7 @@ where
 			};
 		}
 
-		params.intermediates.insert(
-			Cow::from(INTERMEDIATE_KEY),
-			Box::new(BabeIntermediate::<B> { epoch_descriptor }) as Box<_>,
-		);
+		params.insert_intermediate(INTERMEDIATE_KEY, BabeIntermediate::<B> { epoch_descriptor });
 
 		Ok(())
 	}

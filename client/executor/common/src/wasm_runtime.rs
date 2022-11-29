@@ -21,6 +21,8 @@
 use crate::error::Error;
 use sp_wasm_interface::Value;
 
+pub use sc_allocator::AllocationStats;
+
 /// A method to be used to find the entrypoint when calling into the runtime
 ///
 /// Contains variants on how to resolve wasm function that will be invoked.
@@ -78,7 +80,20 @@ pub trait WasmInstance: Send {
 	/// Before execution, instance is reset.
 	///
 	/// Returns the encoded result on success.
-	fn call(&mut self, method: InvokeMethod, data: &[u8]) -> Result<Vec<u8>, Error>;
+	fn call(&mut self, method: InvokeMethod, data: &[u8]) -> Result<Vec<u8>, Error> {
+		self.call_with_allocation_stats(method, data).0
+	}
+
+	/// Call a method on this WASM instance.
+	///
+	/// Before execution, instance is reset.
+	///
+	/// Returns the encoded result on success.
+	fn call_with_allocation_stats(
+		&mut self,
+		method: InvokeMethod,
+		data: &[u8],
+	) -> (Result<Vec<u8>, Error>, Option<AllocationStats>);
 
 	/// Call an exported method on this WASM instance.
 	///
