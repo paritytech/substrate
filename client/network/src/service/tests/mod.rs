@@ -43,8 +43,6 @@ use substrate_test_runtime_client::{
 };
 
 #[cfg(test)]
-mod chain_sync;
-#[cfg(test)]
 mod service;
 
 type TestNetworkWorker = NetworkWorker<TestBlock, TestHash, TestClient>;
@@ -131,7 +129,7 @@ impl TestNetworkBuilder {
 		self
 	}
 
-	pub fn with_chain_sync(
+	pub fn _with_chain_sync(
 		mut self,
 		chain_sync: (Box<dyn ChainSyncT<TestBlock>>, Box<SyncingService<TestBlock>>),
 	) -> Self {
@@ -139,7 +137,7 @@ impl TestNetworkBuilder {
 		self
 	}
 
-	pub fn with_chain_sync_network(
+	pub fn _with_chain_sync_network(
 		mut self,
 		chain_sync_network: (NetworkServiceProvider, NetworkServiceHandle),
 	) -> Self {
@@ -147,7 +145,7 @@ impl TestNetworkBuilder {
 		self
 	}
 
-	pub fn with_import_queue(mut self, import_queue: Box<dyn ImportQueue<TestBlock>>) -> Self {
+	pub fn _with_import_queue(mut self, import_queue: Box<dyn ImportQueue<TestBlock>>) -> Self {
 		self.import_queue = Some(import_queue);
 		self
 	}
