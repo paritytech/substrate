@@ -929,7 +929,7 @@ impl<T: Config> Pallet<T> {
 			num_edges,
 		} = match Self::do_pre_solve_election() {
 			Ok(results) => results,
-			Err(event) => match event {
+			Err(err) => match err {
 				Error::EmptyTerm => {
 					Self::deposit_event(Event::EmptyTerm);
 					return T::DbWeight::get().reads(3)
