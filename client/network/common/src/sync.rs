@@ -23,7 +23,7 @@ pub mod metrics;
 pub mod warp;
 
 use crate::protocol::role::Roles;
-use futures::{channel::oneshot, Stream};
+use futures::Stream;
 
 use libp2p::PeerId;
 

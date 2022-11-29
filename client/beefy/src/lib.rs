@@ -42,7 +42,7 @@ use prometheus::Registry;
 use sc_client_api::{Backend, BlockBackend, BlockchainEvents, FinalityNotifications, Finalizer};
 use sc_consensus::BlockImport;
 use sc_network::ProtocolName;
-use sc_network_common::{service::NetworkRequest, sync::SyncEventStream};
+use sc_network_common::service::NetworkRequest;
 use sc_network_gossip::{GossipEngine, Network as GossipNetwork, Syncing as GossipSyncing};
 use sp_api::{HeaderT, NumberFor, ProvideRuntimeApi};
 use sp_blockchain::{

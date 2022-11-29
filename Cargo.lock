@@ -8221,7 +8221,6 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "substrate-test-runtime",
  "substrate-test-runtime-client",
- "tempfile",
  "thiserror",
  "unsigned-varint",
  "zeroize",
@@ -8257,6 +8256,7 @@ dependencies = [
 name = "sc-network-common"
 version = "0.10.0-dev"
 dependencies = [
+ "array-bytes",
  "async-trait",
  "bitflags",
  "bytes",
@@ -8276,7 +8276,9 @@ dependencies = [
  "sp-finality-grandpa",
  "sp-runtime",
  "substrate-prometheus-endpoint",
+ "tempfile",
  "thiserror",
+ "zeroize",
 ]
 
 [[package]]

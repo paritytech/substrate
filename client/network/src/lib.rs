@@ -257,7 +257,6 @@ pub mod network_state;
 
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
-use sc_consensus::{JustificationSyncLink, Link};
 pub use sc_network_common::{
 	protocol::{
 		event::{DhtEvent, Event},
@@ -279,8 +278,6 @@ pub use service::{
 	DecodingError, Keypair, NetworkService, NetworkWorker, NotificationSender,
 	NotificationSenderReady, OutboundFailure, PublicKey,
 };
-use sp_consensus::SyncOracle;
-use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 pub use sc_peerset::ReputationChange;
 

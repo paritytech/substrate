@@ -67,27 +67,6 @@ pub enum Event {
 		negotiated_fallback: Option<ProtocolName>,
 		/// Role of the remote.
 		role: ObservedRole,
-	},
-
-	/// Opened a substream with the given node with the given notifications protocol.
-	///
-	/// The protocol is always one of the notification protocols that have been registered.
-	///
-	/// Protocol must validate the handshake and close the substream if the handshake is invalid.
-	UncheckedNotificationStreamOpened {
-		/// Node we opened the substream with.
-		remote: PeerId,
-		/// The concerned protocol. Each protocol uses a different substream.
-		/// This is always equal to the value of
-		/// `sc_network::config::NonDefaultSetConfig::notifications_protocol` of one of the
-		/// configured sets.
-		protocol: ProtocolName,
-		/// If the negotiation didn't use the main name of the protocol (the one in
-		/// `notifications_protocol`), then this field contains which name has actually been
-		/// used.
-		/// Always contains a value equal to the value in
-		/// `sc_network::config::NonDefaultSetConfig::fallback_names`.
-		negotiated_fallback: Option<ProtocolName>,
 		/// Received handshake.
 		received_handshake: Vec<u8>,
 	},

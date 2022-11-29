@@ -23,9 +23,8 @@ mod block_import;
 mod sync;
 
 use std::{
-	collections::{HashMap, HashSet},
+	collections::HashMap,
 	marker::PhantomData,
-	num::NonZeroUsize,
 	pin::Pin,
 	sync::Arc,
 	task::{Context as FutureContext, Poll},
@@ -48,13 +47,11 @@ use sc_consensus::{
 	ForkChoiceStrategy, ImportQueue, ImportResult, JustificationImport, JustificationSyncLink,
 	LongestChain, Verifier,
 };
-use sc_network::{
-	config::{NetworkConfiguration, RequestResponseConfig, Role, SyncMode},
-	Multiaddr, NetworkService, NetworkWorker,
-};
+use sc_network::{Multiaddr, NetworkService, NetworkWorker};
 use sc_network_common::{
 	config::{
-		MultiaddrWithPeerId, NonDefaultSetConfig, NonReservedPeerMode, ProtocolId, TransportConfig,
+		MultiaddrWithPeerId, NetworkConfiguration, NonDefaultSetConfig, NonReservedPeerMode,
+		ProtocolId, RequestResponseConfig, Role, SyncMode, TransportConfig,
 	},
 	protocol::{role::Roles, ProtocolName},
 	service::{NetworkBlock, NetworkEventStream, NetworkStateInfo, NetworkSyncForkRequest},
@@ -885,65 +882,16 @@ where
 				Roles::from(if config.is_authority { &Role::Authority } else { &Role::Full }),
 				client.clone(),
 				None,
-				match network_config.sync_mode {
-					SyncMode::Full => sc_network_common::sync::SyncMode::Full,
-					SyncMode::Fast { skip_proofs, storage_chain_mode } =>
-						sc_network_common::sync::SyncMode::LightState {
-							skip_proofs,
-							storage_chain_mode,
-						},
-					SyncMode::Warp => sc_network_common::sync::SyncMode::Warp,
-				},
+				&network_config,
 				protocol_id.clone(),
 				&fork_id,
 				block_announce_validator,
-				network_config.max_parallel_downloads,
 				Some(warp_sync),
 				chain_sync_network_handle,
 				import_queue.service(),
 				block_request_protocol_config.name.clone(),
 				state_request_protocol_config.name.clone(),
 				Some(warp_protocol_config.name.clone()),
-				NonZeroUsize::new(16).unwrap(),
-				{
-					let mut imp_p = HashSet::new();
-					for reserved in &network_config.default_peers_set.reserved_nodes {
-						imp_p.insert(reserved.peer_id);
-					}
-					for reserved in network_config
-						.extra_sets
-						.iter()
-						.flat_map(|s| s.set_config.reserved_nodes.iter())
-					{
-						imp_p.insert(reserved.peer_id);
-					}
-					imp_p.shrink_to_fit();
-					imp_p
-				},
-				{
-					let mut list = HashSet::new();
-					for node in &network_config.boot_nodes {
-						list.insert(node.peer_id);
-					}
-					list.shrink_to_fit();
-					list
-				},
-				{
-					let mut no_slot_p: HashSet<PeerId> = network_config
-						.default_peers_set
-						.reserved_nodes
-						.iter()
-						.map(|reserved| reserved.peer_id)
-						.collect();
-					no_slot_p.shrink_to_fit();
-					no_slot_p
-				},
-				network_config.default_peers_set_num_full as usize,
-				{
-					let total = network_config.default_peers_set.out_peers +
-						network_config.default_peers_set.in_peers;
-					total.saturating_sub(network_config.default_peers_set_num_full) as usize
-				},
 			)
 			.unwrap();
 		let sync_service_import_queue = Box::new(sync_service.clone());

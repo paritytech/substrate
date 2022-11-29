@@ -22,7 +22,7 @@ use crate::{
 	config::{Configuration, KeystoreConfig, PrometheusConfig},
 	error::Error,
 	metrics::MetricsService,
-	start_rpc_servers, PeerId, RpcHandlers, SpawnTaskHandle, TaskManager, TransactionPoolAdapter,
+	start_rpc_servers, RpcHandlers, SpawnTaskHandle, TaskManager, TransactionPoolAdapter,
 };
 use futures::{channel::oneshot, future::ready, FutureExt, StreamExt};
 use jsonrpsee::RpcModule;
@@ -37,9 +37,10 @@ use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
 use sc_executor::RuntimeVersionOf;
 use sc_keystore::LocalKeystore;
-use sc_network::{config::SyncMode, NetworkService};
+use sc_network::NetworkService;
 use sc_network_bitswap::BitswapRequestHandler;
 use sc_network_common::{
+	config::SyncMode,
 	protocol::role::Roles,
 	service::{NetworkEventStream, NetworkStateInfo, NetworkStatusProvider},
 	sync::warp::WarpSyncProvider,
@@ -74,7 +75,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, BlockIdTo, NumberFor, Zero},
 	BuildStorage,
 };
-use std::{collections::HashSet, num::NonZeroUsize, str::FromStr, sync::Arc, time::SystemTime};
+use std::{str::FromStr, sync::Arc, time::SystemTime};
 
 /// Full client type.
 pub type TFullClient<TBl, TRtApi, TExec> =
@@ -850,77 +851,22 @@ where
 		protocol_config
 	};
 
-	// TODO(aaro): expose `config.network` through common crate
 	let (chain_sync_network_provider, chain_sync_network_handle) = NetworkServiceProvider::new();
 	let (engine, sync_service, block_announce_config) = SyncingEngine::new(
 		Roles::from(&config.role),
 		client.clone(),
 		config.prometheus_config.as_ref().map(|config| config.registry.clone()).as_ref(),
-		match config.network.sync_mode {
-			SyncMode::Full => sc_network_common::sync::SyncMode::Full,
-			SyncMode::Fast { skip_proofs, storage_chain_mode } =>
-				sc_network_common::sync::SyncMode::LightState { skip_proofs, storage_chain_mode },
-			SyncMode::Warp => sc_network_common::sync::SyncMode::Warp,
-		},
+		&config.network,
 		protocol_id.clone(),
 		&config.chain_spec.fork_id().map(ToOwned::to_owned),
 		block_announce_validator,
-		config.network.max_parallel_downloads,
 		warp_sync_provider,
 		chain_sync_network_handle,
 		import_queue.service(),
 		block_request_protocol_config.name.clone(),
 		state_request_protocol_config.name.clone(),
 		warp_sync_protocol_config.as_ref().map(|config| config.name.clone()),
-		NonZeroUsize::new(
-			(config.network.default_peers_set.in_peers as usize +
-				config.network.default_peers_set.out_peers as usize)
-				.max(1),
-		)
-		.expect("cache capacity is not zero"),
-		{
-			let mut imp_p = HashSet::new();
-			for reserved in &config.network.default_peers_set.reserved_nodes {
-				imp_p.insert(reserved.peer_id);
-			}
-			for reserved in config
-				.network
-				.extra_sets
-				.iter()
-				.flat_map(|s| s.set_config.reserved_nodes.iter())
-			{
-				imp_p.insert(reserved.peer_id);
-			}
-			imp_p.shrink_to_fit();
-			imp_p
-		},
-		{
-			let mut list = HashSet::new();
-			for node in &config.network.boot_nodes {
-				list.insert(node.peer_id);
-			}
-			list.shrink_to_fit();
-			list
-		},
-		{
-			let mut no_slot_p: HashSet<PeerId> = config
-				.network
-				.default_peers_set
-				.reserved_nodes
-				.iter()
-				.map(|reserved| reserved.peer_id)
-				.collect();
-			no_slot_p.shrink_to_fit();
-			no_slot_p
-		},
-		config.network.default_peers_set_num_full as usize,
-		{
-			let total = config.network.default_peers_set.out_peers +
-				config.network.default_peers_set.in_peers;
-			total.saturating_sub(config.network.default_peers_set_num_full) as usize
-		},
 	)?;
-
 	let sync_service_import_queue = sync_service.clone();
 	let sync_service = Arc::new(sync_service);
 

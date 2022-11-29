@@ -23,7 +23,7 @@ use crate::{
 
 use sc_network_common::{
 	protocol::{event::Event, ProtocolName},
-	sync::{SyncEvent, SyncEventStream},
+	sync::SyncEvent,
 };
 use sc_peerset::ReputationChange;
 
@@ -187,7 +187,6 @@ impl<B: BlockT> Future for GossipEngine<B> {
 		'outer: loop {
 			match &mut this.forwarding_state {
 				ForwardingState::Idle => {
-					// TODO(aaro): can this be refactored?
 					let net_event_stream = this.network_event_stream.poll_next_unpin(cx);
 					let sync_event_stream = this.sync_event_stream.poll_next_unpin(cx);
 
@@ -227,7 +226,7 @@ impl<B: BlockT> Future for GossipEngine<B> {
 
 								this.forwarding_state = ForwardingState::Busy(to_forward.into());
 							},
-							Event::Dht(_) | Event::UncheckedNotificationStreamOpened { .. } => {},
+							Event::Dht(_) => {},
 						},
 						// The network event stream closed. Do the same for [`GossipValidator`].
 						Poll::Ready(None) => {
@@ -237,20 +236,15 @@ impl<B: BlockT> Future for GossipEngine<B> {
 						Poll::Pending => {},
 					}
 
-					// TODO(aaro): this is not correct
 					match sync_event_stream {
 						Poll::Ready(Some(event)) => match event {
-							SyncEvent::PeerConnected(remote) => {
-								println!("bridge: {remote:?} connected");
-								this.network.add_set_reserved(remote, this.protocol.clone());
-							},
-							SyncEvent::PeerDisconnected(remote) => {
-								println!("bridge: {remote:?} disconnected");
+							SyncEvent::PeerConnected(remote) =>
+								this.network.add_set_reserved(remote, this.protocol.clone()),
+							SyncEvent::PeerDisconnected(remote) =>
 								this.network.remove_peers_from_reserved_set(
 									this.protocol.clone(),
 									vec![remote],
-								);
-							},
+								),
 						},
 						// The sync event stream closed. Do the same for [`GossipValidator`].
 						Poll::Ready(None) => {
@@ -354,6 +348,7 @@ mod tests {
 			NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
 			NotificationSender, NotificationSenderError,
 		},
+		sync::SyncEventStream,
 	};
 	use sp_runtime::{
 		testing::H256,
@@ -456,7 +451,7 @@ mod tests {
 
 	impl NetworkNotification for TestNetwork {
 		fn write_notification(&self, _target: PeerId, _protocol: ProtocolName, _message: Vec<u8>) {
-			// TODO(aaro): why this must be disabled
+			unimplemented!();
 		}
 
 		fn notification_sender(
@@ -589,6 +584,7 @@ mod tests {
 				protocol: protocol.clone(),
 				negotiated_fallback: None,
 				role: ObservedRole::Authority,
+				received_handshake: vec![],
 			})
 			.expect("Event stream is unbounded; qed.");
 
@@ -752,6 +748,7 @@ mod tests {
 					protocol: protocol.clone(),
 					negotiated_fallback: None,
 					role: ObservedRole::Authority,
+					received_handshake: vec![],
 				})
 				.expect("Event stream is unbounded; qed.");
 

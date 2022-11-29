@@ -65,7 +65,7 @@ use sc_network_common::{
 	request_responses::{IfDisconnected, RequestFailure},
 	service::{
 		NetworkDHTProvider, NetworkEventStream, NetworkNotification, NetworkPeers, NetworkSigner,
-		NetworkStateInfo, NetworkStatus, NetworkStatusProvider, NetworkSyncForkRequest,
+		NetworkStateInfo, NetworkStatus, NetworkStatusProvider,
 		NotificationSender as NotificationSenderT, NotificationSenderError,
 		NotificationSenderReady as NotificationSenderReadyT, Signature, SigningError,
 	},
@@ -74,7 +74,7 @@ use sc_network_common::{
 use sc_peerset::PeersetHandle;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
-use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
+use sp_runtime::traits::{Block as BlockT, Zero};
 use std::{
 	cmp,
 	collections::{HashMap, HashSet},
@@ -98,7 +98,7 @@ mod out_events;
 mod tests;
 
 pub use libp2p::identity::{error::DecodingError, Keypair, PublicKey};
-use sc_network_common::service::{NetworkBlock, NetworkRequest};
+use sc_network_common::service::NetworkRequest;
 
 /// Substrate network service. Handles network IO and manages connectivity.
 pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
@@ -1426,6 +1426,7 @@ where
 					negotiated_fallback,
 					notifications_sink,
 					role,
+					received_handshake,
 				})) => {
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics
@@ -1444,33 +1445,6 @@ where
 						protocol,
 						negotiated_fallback,
 						role,
-					});
-				},
-				Poll::Ready(SwarmEvent::Behaviour(
-					BehaviourOut::UncheckedNotificationStreamOpened {
-						remote,
-						protocol,
-						negotiated_fallback,
-						notifications_sink,
-						received_handshake,
-					},
-				)) => {
-					if let Some(metrics) = this.metrics.as_ref() {
-						metrics
-							.notifications_streams_opened_total
-							.with_label_values(&[&protocol])
-							.inc();
-					}
-					{
-						let mut peers_notifications_sinks = this.peers_notifications_sinks.lock();
-						let _previous_value = peers_notifications_sinks
-							.insert((remote, protocol.clone()), notifications_sink);
-						debug_assert!(_previous_value.is_none());
-					}
-					this.event_streams.send(Event::UncheckedNotificationStreamOpened {
-						remote,
-						protocol,
-						negotiated_fallback,
 						received_handshake,
 					});
 				},

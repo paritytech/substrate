@@ -403,6 +403,7 @@ fn good_commit_leads_to_relay() {
 						protocol: grandpa_protocol_name::NAME.into(),
 						negotiated_fallback: None,
 						role: ObservedRole::Full,
+						received_handshake: vec![],
 					});
 
 					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
@@ -420,6 +421,7 @@ fn good_commit_leads_to_relay() {
 						protocol: grandpa_protocol_name::NAME.into(),
 						negotiated_fallback: None,
 						role: ObservedRole::Full,
+						received_handshake: vec![],
 					});
 
 					// Announce its local set has being on the current set id through a neighbor
@@ -552,6 +554,7 @@ fn bad_commit_leads_to_report() {
 						protocol: grandpa_protocol_name::NAME.into(),
 						negotiated_fallback: None,
 						role: ObservedRole::Full,
+						received_handshake: vec![],
 					});
 					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
 						remote: sender_id,

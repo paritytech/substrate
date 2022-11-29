@@ -22,7 +22,9 @@ use futures::prelude::*;
 use libp2p::Multiaddr;
 use sc_consensus::{ImportQueue, Link};
 use sc_network_common::{
-	config::{NonDefaultSetConfig, ProtocolId, SetConfig, TransportConfig},
+	config::{
+		NonDefaultSetConfig, ProtocolId, SetConfig, SyncMode as SyncOperationMod, TransportConfig,
+	},
 	protocol::{event::Event, role::Roles},
 	service::NetworkEventStream,
 	sync::ChainSync as ChainSyncT,
@@ -60,14 +62,6 @@ impl TestNetwork {
 		Self { network }
 	}
 
-	pub fn service(&self) -> &Arc<TestNetworkService> {
-		&self.network.service()
-	}
-
-	pub fn network(&mut self) -> &mut TestNetworkWorker {
-		&mut self.network
-	}
-
 	pub fn start_network(
 		self,
 	) -> (Arc<TestNetworkService>, (impl Stream<Item = Event> + std::marker::Unpin)) {
@@ -90,7 +84,6 @@ struct TestNetworkBuilder {
 	client: Option<Arc<substrate_test_runtime_client::TestClient>>,
 	listen_addresses: Vec<Multiaddr>,
 	set_config: Option<SetConfig>,
-	chain_sync: Option<(Box<dyn ChainSyncT<TestBlock>>, Box<SyncingService<TestBlock>>)>,
 	chain_sync_network: Option<(NetworkServiceProvider, NetworkServiceHandle)>,
 	config: Option<config::NetworkConfiguration>,
 }
@@ -103,15 +96,9 @@ impl TestNetworkBuilder {
 			client: None,
 			listen_addresses: Vec::new(),
 			set_config: None,
-			chain_sync: None,
 			chain_sync_network: None,
 			config: None,
 		}
-	}
-
-	pub fn with_client(mut self, client: Arc<substrate_test_runtime_client::TestClient>) -> Self {
-		self.client = Some(client);
-		self
 	}
 
 	pub fn with_config(mut self, config: config::NetworkConfiguration) -> Self {
@@ -126,27 +113,6 @@ impl TestNetworkBuilder {
 
 	pub fn with_set_config(mut self, set_config: SetConfig) -> Self {
 		self.set_config = Some(set_config);
-		self
-	}
-
-	pub fn _with_chain_sync(
-		mut self,
-		chain_sync: (Box<dyn ChainSyncT<TestBlock>>, Box<SyncingService<TestBlock>>),
-	) -> Self {
-		self.chain_sync = Some(chain_sync);
-		self
-	}
-
-	pub fn _with_chain_sync_network(
-		mut self,
-		chain_sync_network: (NetworkServiceProvider, NetworkServiceHandle),
-	) -> Self {
-		self.chain_sync_network = Some(chain_sync_network);
-		self
-	}
-
-	pub fn _with_import_queue(mut self, import_queue: Box<dyn ImportQueue<TestBlock>>) -> Self {
-		self.import_queue = Some(import_queue);
 		self
 	}
 
@@ -245,31 +211,16 @@ impl TestNetworkBuilder {
 			Roles::from(&config::Role::Full),
 			client.clone(),
 			None,
-			match network_config.sync_mode {
-				config::SyncMode::Full => sc_network_common::sync::SyncMode::Full,
-				config::SyncMode::Fast { skip_proofs, storage_chain_mode } =>
-					sc_network_common::sync::SyncMode::LightState {
-						skip_proofs,
-						storage_chain_mode,
-					},
-				config::SyncMode::Warp => sc_network_common::sync::SyncMode::Warp,
-			},
+			&network_config,
 			protocol_id.clone(),
 			&None,
 			Box::new(sp_consensus::block_validation::DefaultBlockAnnounceValidator),
-			network_config.max_parallel_downloads,
 			None,
 			chain_sync_network_handle,
 			import_queue.service(),
 			block_request_protocol_config.name.clone(),
 			state_request_protocol_config.name.clone(),
 			None,
-			std::num::NonZeroUsize::new(16).unwrap(),
-			HashSet::new(),
-			HashSet::new(),
-			HashSet::new(),
-			0usize,
-			0usize,
 		)
 		.unwrap();
 		let mut link = self.link.unwrap_or(Box::new(chain_sync_service.clone()));

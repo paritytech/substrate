@@ -32,7 +32,9 @@ use codec::{Decode, DecodeAll, Encode};
 use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
 use sc_consensus::import_queue::ImportQueueService;
 use sc_network_common::{
-	config::{NonDefaultSetConfig, ProtocolId},
+	config::{
+		NetworkConfiguration, NonDefaultSetConfig, ProtocolId, SyncMode as SyncOperationMode,
+	},
 	protocol::{event::Event, role::Roles, ProtocolName},
 	sync::{
 		message::{
@@ -167,11 +169,10 @@ pub struct Peer<B: BlockT> {
 	pub known_blocks: LruHashSet<B::Hash>,
 }
 
-// TODO(aaro): reorder these properly and remove stuff that is not needed
 pub struct SyncingEngine<B: BlockT, Client> {
 	/// State machine that handles the list of in-progress requests. Only full node peers are
 	/// registered.
-	pub chain_sync: Box<dyn ChainSyncT<B>>,
+	chain_sync: Box<dyn ChainSyncT<B>>,
 
 	/// Blockchain client.
 	client: Arc<Client>,
@@ -201,17 +202,17 @@ pub struct SyncingEngine<B: BlockT, Client> {
 	tick_timeout: Pin<Box<dyn Stream<Item = ()> + Send>>,
 
 	/// All connected peers. Contains both full and light node peers.
-	pub peers: HashMap<PeerId, Peer<B>>,
+	peers: HashMap<PeerId, Peer<B>>,
 
 	/// List of nodes for which we perform additional logging because they are important for the
 	/// user.
-	pub important_peers: HashSet<PeerId>,
+	important_peers: HashSet<PeerId>,
 
 	/// Actual list of connected no-slot nodes.
-	pub default_peers_set_no_slot_connected_peers: HashSet<PeerId>,
+	default_peers_set_no_slot_connected_peers: HashSet<PeerId>,
 
 	/// List of nodes that should never occupy peer slots.
-	pub default_peers_set_no_slot_peers: HashSet<PeerId>,
+	default_peers_set_no_slot_peers: HashSet<PeerId>,
 
 	/// Value that was passed as part of the configuration. Used to cap the number of full
 	/// nodes.
@@ -221,10 +222,10 @@ pub struct SyncingEngine<B: BlockT, Client> {
 	default_peers_set_num_light: usize,
 
 	/// A cache for the data that was associated to a block announcement.
-	pub block_announce_data_cache: LruCache<B::Hash, Vec<u8>>,
+	block_announce_data_cache: LruCache<B::Hash, Vec<u8>>,
 
 	/// The `PeerId`'s of all boot nodes.
-	pub boot_node_ids: HashSet<PeerId>,
+	boot_node_ids: HashSet<PeerId>,
 
 	/// Protocol name used for block announcements
 	block_announce_protocol_name: ProtocolName,
@@ -244,29 +245,74 @@ where
 		+ Sync
 		+ 'static,
 {
-	// TODO(aaro): clean up these parameters
 	pub fn new(
 		roles: Roles,
 		client: Arc<Client>,
 		metrics_registry: Option<&Registry>,
-		mode: SyncMode,
+		network_config: &NetworkConfiguration,
 		protocol_id: ProtocolId,
 		fork_id: &Option<String>,
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
-		max_parallel_downloads: u32,
 		warp_sync_provider: Option<Arc<dyn WarpSyncProvider<B>>>,
 		network_service: service::network::NetworkServiceHandle,
 		import_queue: Box<dyn ImportQueueService<B>>,
 		block_request_protocol_name: ProtocolName,
 		state_request_protocol_name: ProtocolName,
 		warp_sync_protocol_name: Option<ProtocolName>,
-		cache_capacity: NonZeroUsize,
-		important_peers: HashSet<PeerId>,
-		boot_node_ids: HashSet<PeerId>,
-		default_peers_set_no_slot_peers: HashSet<PeerId>,
-		default_peers_set_num_full: usize,
-		default_peers_set_num_light: usize,
 	) -> Result<(Self, SyncingService<B>, NonDefaultSetConfig), ClientError> {
+		let mode = match network_config.sync_mode {
+			SyncOperationMode::Full => SyncMode::Full,
+			SyncOperationMode::Fast { skip_proofs, storage_chain_mode } =>
+				SyncMode::LightState { skip_proofs, storage_chain_mode },
+			SyncOperationMode::Warp => SyncMode::Warp,
+		};
+		let max_parallel_downloads = network_config.max_parallel_downloads;
+		let cache_capacity = NonZeroUsize::new(
+			(network_config.default_peers_set.in_peers as usize +
+				network_config.default_peers_set.out_peers as usize)
+				.max(1),
+		)
+		.expect("cache capacity is not zero");
+		let important_peers = {
+			let mut imp_p = HashSet::new();
+			for reserved in &network_config.default_peers_set.reserved_nodes {
+				imp_p.insert(reserved.peer_id);
+			}
+			for reserved in network_config
+				.extra_sets
+				.iter()
+				.flat_map(|s| s.set_config.reserved_nodes.iter())
+			{
+				imp_p.insert(reserved.peer_id);
+			}
+			imp_p.shrink_to_fit();
+			imp_p
+		};
+		let boot_node_ids = {
+			let mut list = HashSet::new();
+			for node in &network_config.boot_nodes {
+				list.insert(node.peer_id);
+			}
+			list.shrink_to_fit();
+			list
+		};
+		let default_peers_set_no_slot_peers = {
+			let mut no_slot_p: HashSet<PeerId> = network_config
+				.default_peers_set
+				.reserved_nodes
+				.iter()
+				.map(|reserved| reserved.peer_id)
+				.collect();
+			no_slot_p.shrink_to_fit();
+			no_slot_p
+		};
+		let default_peers_set_num_full = network_config.default_peers_set_num_full as usize;
+		let default_peers_set_num_light = {
+			let total = network_config.default_peers_set.out_peers +
+				network_config.default_peers_set.in_peers;
+			total.saturating_sub(network_config.default_peers_set_num_full) as usize
+		};
+
 		let (chain_sync, block_announce_config) = ChainSync::new(
 			mode,
 			client.clone(),
@@ -371,7 +417,6 @@ where
 		}
 	}
 
-	// TODO(aaro): emit peernewbest event?
 	/// Process the result of the block announce validation.
 	pub fn process_block_announce_validation_result(
 		&mut self,
@@ -557,11 +602,8 @@ where
 
 		while let Poll::Ready(Some(event)) = event_stream.poll_next_unpin(cx) {
 			match event {
-				Event::UncheckedNotificationStreamOpened {
-					remote,
-					protocol,
-					received_handshake,
-					..
+				Event::NotificationStreamOpened {
+					remote, protocol, received_handshake, ..
 				} => {
 					if protocol != self.block_announce_protocol_name {
 						continue

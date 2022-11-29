@@ -28,7 +28,6 @@ use futures::prelude::*;
 use log::{debug, info, warn};
 
 use sc_client_api::backend::Backend;
-use sc_network_common::sync::SyncEventStream;
 use sc_telemetry::TelemetryHandle;
 use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_blockchain::HeaderMetadata;
