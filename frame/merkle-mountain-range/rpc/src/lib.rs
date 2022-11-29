@@ -238,7 +238,7 @@ fn mmr_error_into_rpc_error(err: MmrError) -> CallError {
 			MmrError::LeafNotFound => 1,
 			MmrError::GenerateProof => 2,
 			MmrError::Verify => 3,
-			MmrError::BlockNumToLeafIndex => 4,
+			MmrError::InvalidNumericOp => 4,
 			MmrError::InvalidBestKnownBlock => 5,
 			_ => 0,
 		};

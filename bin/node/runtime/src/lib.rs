@@ -2066,6 +2066,10 @@ impl_runtime_apis! {
 			Ok(Mmr::mmr_root())
 		}
 
+		fn mmr_leaf_count() -> Result<mmr::LeafIndex, mmr::Error> {
+			Ok(Mmr::mmr_leaves())
+		}
+
 		fn generate_proof(
 			block_numbers: Vec<BlockNumber>,
 			best_known_block_number: Option<BlockNumber>,
