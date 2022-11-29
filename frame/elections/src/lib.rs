@@ -948,7 +948,7 @@ impl<T: Config> Pallet<T> {
 		let num_voters = voters_and_votes.len() as u32;
 		let num_edges = num_edges;
 
-		let election_result =
+		let election_winners =
 			T::ElectionSolver::solve(num_to_elect, candidate_ids, voters_and_votes)
 				.map(
 					|ElectionResult::<
