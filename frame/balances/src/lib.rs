@@ -1794,7 +1794,7 @@ where
 				account.free.checked_sub(&value).ok_or(Error::<T, I>::InsufficientBalance)?;
 			account.reserved =
 				account.reserved.checked_add(&value).ok_or(ArithmeticError::Overflow)?;
-			Self::ensure_can_withdraw(&who, value, WithdrawReasons::RESERVE, account.free)
+			ensure!(Self::can_reserve(who, value), Error::<T, I>::LiquidityRestrictions);
 		})?;
 
 		Self::deposit_event(Event::Reserved { who: who.clone(), amount: value });
