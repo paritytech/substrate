@@ -1758,16 +1758,23 @@ impl<T: Config<I>, I: 'static> ReservableCurrency<T::AccountId> for Pallet<T, I>
 where
 	T::Balance: MaybeSerializeDeserialize + Debug,
 {
-	/// Check if `who` can reserve `value` from their free balance.
+	/// Check if `who` can reserve `value` from their free balance taking into account the
+	/// `ExistentialDeposit` making sure the account is not going to be destroyed in case of
+	/// overdraft.
 	///
 	/// Always `true` if value to be reserved is zero.
 	fn can_reserve(who: &T::AccountId, value: Self::Balance) -> bool {
 		if value.is_zero() {
 			return true
 		}
-		Self::account(who).free.checked_sub(&value).map_or(false, |new_balance| {
-			Self::ensure_can_withdraw(who, value, WithdrawReasons::RESERVE, new_balance).is_ok()
-		})
+
+		let account = Self::account(who);
+		let min_balance = T::ExistentialDeposit::get().max(account.frozen(Reasons::All));
+
+		Self::account(who)
+			.free
+			.checked_sub(&value)
+			.map_or(false, |new_balance| new_balance >= min_balance)
 	}
 
 	fn reserved_balance(who: &T::AccountId) -> Self::Balance {
