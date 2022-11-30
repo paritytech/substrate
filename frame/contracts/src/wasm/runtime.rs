@@ -73,6 +73,7 @@ pub enum ReturnCode {
 	NotCallable = 8,
 	/// The call to `seal_debug_message` had no effect because debug message
 	/// recording was disabled.
+	#[cfg(feature = "unstable-interface")]
 	LoggingDisabled = 9,
 }
 
@@ -179,6 +180,7 @@ pub enum RuntimeCosts {
 	/// Weight of calling `seal_deposit_event` with the given number of topics and event size.
 	DepositEvent{num_topic: u32, len: u32},
 	/// Weight of calling `seal_debug_message`.
+	#[cfg(feature = "unstable-interface")]
 	DebugMessage,
 	/// Weight of calling `seal_set_rent_allowance`.
 	SetRentAllowance,
@@ -220,8 +222,6 @@ pub enum RuntimeCosts {
 	ChainExtension(u64),
 	/// Weight charged for copying data from the sandbox.
 	CopyIn(u32),
-	/// Weight of calling `seal_rent_params`.
-	RentParams,
 }
 
 impl RuntimeCosts {
@@ -260,6 +260,7 @@ impl RuntimeCosts {
 			DepositEvent{num_topic, len} => s.deposit_event
 				.saturating_add(s.deposit_event_per_topic.saturating_mul(num_topic.into()))
 				.saturating_add(s.deposit_event_per_byte.saturating_mul(len.into())),
+			#[cfg(feature = "unstable-interface")]
 			DebugMessage => s.debug_message,
 			SetRentAllowance => s.set_rent_allowance,
 			SetStorage(len) => s.set_storage
@@ -290,7 +291,6 @@ impl RuntimeCosts {
 				.saturating_add(s.hash_blake2_128_per_byte.saturating_mul(len.into())),
 			ChainExtension(amount) => amount,
 			CopyIn(len) => s.return_per_byte.saturating_mul(len.into()),
-			RentParams => s.rent_params,
 		};
 		RuntimeToken {
 			#[cfg(test)]
@@ -1390,35 +1390,6 @@ define_env!(Env, <E: Ext>,
 		)?)
 	},
 
-	// Emit a custom debug message.
-	//
-	// No newlines are added to the supplied message.
-	// Specifying invalid UTF-8 triggers a trap.
-	//
-	// This is a no-op if debug message recording is disabled which is always the case
-	// when the code is executing on-chain. The message is interpreted as UTF-8 and
-	// appended to the debug buffer which is then supplied to the calling RPC client.
-	//
-	// # Note
-	//
-	// Even though no action is taken when debug message recording is disabled there is still
-	// a non trivial overhead (and weight cost) associated with calling this function. Contract
-	// languages should remove calls to this function (either at runtime or compile time) when
-	// not being executed as an RPC. For example, they could allow users to disable logging
-	// through compile time flags (cargo features) for on-chain deployment. Additionally, the
-	// return value of this function can be cached in order to prevent further calls at runtime.
-	[seal0] seal_debug_message(ctx, str_ptr: u32, str_len: u32) -> ReturnCode => {
-		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
-		if ctx.ext.append_debug_buffer("") {
-			let data = ctx.read_sandbox_memory(str_ptr, str_len)?;
-			let msg = core::str::from_utf8(&data)
-				.map_err(|_| <Error<E::T>>::DebugMessageInvalidUTF8)?;
-			ctx.ext.append_debug_buffer(msg);
-			return Ok(ReturnCode::Success);
-		}
-		Ok(ReturnCode::LoggingDisabled)
-	},
-
 	// Stores the current block number of the current contract into the supplied buffer.
 	//
 	// The value is stored to linear memory at the address pointed to by `out_ptr`.
@@ -1565,6 +1536,35 @@ define_env!(Env, <E: Ext>,
 		}
 	},
 
+	// Emit a custom debug message.
+	//
+	// No newlines are added to the supplied message.
+	// Specifying invalid UTF-8 triggers a trap.
+	//
+	// This is a no-op if debug message recording is disabled which is always the case
+	// when the code is executing on-chain. The message is interpreted as UTF-8 and
+	// appended to the debug buffer which is then supplied to the calling RPC client.
+	//
+	// # Note
+	//
+	// Even though no action is taken when debug message recording is disabled there is still
+	// a non trivial overhead (and weight cost) associated with calling this function. Contract
+	// languages should remove calls to this function (either at runtime or compile time) when
+	// not being executed as an RPC. For example, they could allow users to disable logging
+	// through compile time flags (cargo features) for on-chain deployment. Additionally, the
+	// return value of this function can be cached in order to prevent further calls at runtime.
+	[__unstable__] seal_debug_message(ctx, str_ptr: u32, str_len: u32) -> ReturnCode => {
+		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
+		if ctx.ext.append_debug_buffer("") {
+			let data = ctx.read_sandbox_memory(str_ptr, str_len)?;
+			let msg = core::str::from_utf8(&data)
+				.map_err(|_| <Error<E::T>>::DebugMessageInvalidUTF8)?;
+			ctx.ext.append_debug_buffer(msg);
+			return Ok(ReturnCode::Success);
+		}
+		Ok(ReturnCode::LoggingDisabled)
+	},
+
 	// Stores the rent params into the supplied buffer.
 	//
 	// The value is stored to linear memory at the address pointed to by `out_ptr`.
@@ -1579,10 +1579,38 @@ define_env!(Env, <E: Ext>,
 	// The returned information was collected and cached when the current contract call
 	// started execution. Any change to those values that happens due to actions of the
 	// current call or contracts that are called by this contract are not considered.
-	[seal0] seal_rent_params(ctx, out_ptr: u32, out_len_ptr: u32) => {
-		ctx.charge_gas(RuntimeCosts::RentParams)?;
+	//
+	// # Unstable
+	//
+	// This function is unstable and subject to change (or removal) in the future. Do not
+	// deploy a contract using it to a production chain.
+	[__unstable__] seal_rent_params(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		Ok(ctx.write_sandbox_output(
 			out_ptr, out_len_ptr, &ctx.ext.rent_params().encode(), false, already_charged
+		)?)
+	},
+
+	// Stores the rent status into the supplied buffer.
+	//
+	// The value is stored to linear memory at the address pointed to by `out_ptr`.
+	// `out_len_ptr` must point to a u32 value that describes the available space at
+	// `out_ptr`. This call overwrites it with the size of the value. If the available
+	// space at `out_ptr` is less than the size of the value a trap is triggered.
+	//
+	// The data is encoded as [`crate::rent::RentStatus`].
+	//
+	// # Parameters
+	//
+	// - `at_refcount`: The refcount assumed for the returned `custom_refcount_*` fields
+	//
+	// # Unstable
+	//
+	// This function is unstable and subject to change (or removal) in the future. Do not
+	// deploy a contract using it to a production chain.
+	[__unstable__] seal_rent_status(ctx, at_refcount: u32, out_ptr: u32, out_len_ptr: u32) => {
+		let rent_status = ctx.ext.rent_status(at_refcount).encode();
+		Ok(ctx.write_sandbox_output(
+			out_ptr, out_len_ptr, &rent_status, false, already_charged
 		)?)
 	},
 );

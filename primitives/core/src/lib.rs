@@ -336,7 +336,7 @@ impl From<LogLevel> for log::Level {
 
 /// Log level filter that expresses which log levels should be filtered.
 ///
-/// This enum matches the [`log::LogLevelFilter`] enum.
+/// This enum matches the [`log::LevelFilter`] enum.
 #[derive(Encode, Decode, PassByEnum, Copy, Clone)]
 pub enum LogLevelFilter {
 	/// `Off` log level filter.

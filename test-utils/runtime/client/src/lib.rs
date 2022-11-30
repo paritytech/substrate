@@ -67,6 +67,7 @@ pub type Backend = substrate_test_client::Backend<substrate_test_runtime::Block>
 
 /// Test client executor.
 pub type Executor = client::LocalCallExecutor<
+	substrate_test_runtime::Block,
 	Backend,
 	NativeExecutor<LocalExecutor>,
 >;
@@ -78,6 +79,7 @@ pub type LightBackend = substrate_test_client::LightBackend<substrate_test_runti
 pub type LightExecutor = sc_light::GenesisCallExecutor<
 	LightBackend,
 	client::LocalCallExecutor<
+		substrate_test_runtime::Block,
 		sc_light::Backend<
 			sc_client_db::light::LightStorage<substrate_test_runtime::Block>,
 			HashFor<substrate_test_runtime::Block>
@@ -159,7 +161,11 @@ pub type TestClientBuilder<E, B> = substrate_test_client::TestClientBuilder<
 /// Test client type with `LocalExecutor` and generic Backend.
 pub type Client<B> = client::Client<
 	B,
-	client::LocalCallExecutor<B, sc_executor::NativeExecutor<LocalExecutor>>,
+	client::LocalCallExecutor<
+		substrate_test_runtime::Block,
+		B,
+		sc_executor::NativeExecutor<LocalExecutor>
+	>,
 	substrate_test_runtime::Block,
 	substrate_test_runtime::RuntimeApi,
 >;
@@ -245,7 +251,11 @@ pub trait TestClientBuilderExt<B>: Sized {
 }
 
 impl<B> TestClientBuilderExt<B> for TestClientBuilder<
-	client::LocalCallExecutor<B, sc_executor::NativeExecutor<LocalExecutor>>,
+	client::LocalCallExecutor<
+		substrate_test_runtime::Block,
+		B,
+		sc_executor::NativeExecutor<LocalExecutor>
+	>,
 	B
 > where
 	B: sc_client_api::backend::Backend<substrate_test_runtime::Block> + 'static,

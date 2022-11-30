@@ -532,9 +532,6 @@ pub mod pallet {
 		SubIdentityRevoked(T::AccountId, T::AccountId, BalanceOf<T>),
 	}
 
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
-
 	#[pallet::call]
 	/// Identity pallet declaration.
 	impl<T: Config> Pallet<T> {

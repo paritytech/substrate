@@ -45,7 +45,7 @@ pub fn new_light<B, S, RA, E>(
 			Backend<S, HashFor<B>>,
 			GenesisCallExecutor<
 				Backend<S, HashFor<B>>,
-				LocalCallExecutor<Backend<S, HashFor<B>>, E>
+				LocalCallExecutor<B, Backend<S, HashFor<B>>, E>
 			>,
 			B,
 			RA

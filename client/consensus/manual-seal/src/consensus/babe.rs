@@ -22,7 +22,7 @@ use super::ConsensusDataProvider;
 use crate::Error;
 use codec::Encode;
 use std::{borrow::Cow, sync::{Arc, atomic}, time::SystemTime};
-use sc_client_api::AuxStore;
+use sc_client_api::{AuxStore, UsageProvider};
 use sc_consensus_babe::{
 	Config, Epoch, authorship, CompatibleDigestItem, BabeIntermediate, INTERMEDIATE_KEY,
 	find_pre_digest,
@@ -67,7 +67,11 @@ pub struct BabeConsensusDataProvider<B: BlockT, C> {
 impl<B, C> BabeConsensusDataProvider<B, C>
 	where
 		B: BlockT,
-		C: AuxStore + HeaderBackend<B> + ProvideRuntimeApi<B> + HeaderMetadata<B, Error = sp_blockchain::Error>,
+		C: AuxStore
+			+ HeaderBackend<B>
+			+ ProvideRuntimeApi<B>
+			+ HeaderMetadata<B, Error = sp_blockchain::Error>
+			+ UsageProvider<B>,
 		C::Api: BabeApi<B>,
 {
 	pub fn new(
@@ -120,7 +124,11 @@ impl<B, C> BabeConsensusDataProvider<B, C>
 impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 	where
 		B: BlockT,
-		C: AuxStore + HeaderBackend<B> + HeaderMetadata<B, Error = sp_blockchain::Error> + ProvideRuntimeApi<B>,
+		C: AuxStore
+			+ HeaderBackend<B>
+			+ HeaderMetadata<B, Error = sp_blockchain::Error>
+			+ UsageProvider<B>
+			+ ProvideRuntimeApi<B>,
 		C::Api: BabeApi<B>,
 {
 	type Transaction = TransactionFor<C, B>;
@@ -252,7 +260,7 @@ impl SlotTimestampProvider {
 	pub fn new<B, C>(client: Arc<C>) -> Result<Self, Error>
 		where
 			B: BlockT,
-			C: AuxStore + HeaderBackend<B> + ProvideRuntimeApi<B>,
+			C: AuxStore + HeaderBackend<B> + ProvideRuntimeApi<B> + UsageProvider<B>,
 			C::Api: BabeApi<B>,
 	{
 		let slot_duration = Config::get_or_compute(&*client)?.slot_duration;

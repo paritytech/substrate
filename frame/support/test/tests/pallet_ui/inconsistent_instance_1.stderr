@@ -1,4 +1,10 @@
 error: Invalid generic declaration, trait is defined with instance but generic use none
+  --> $DIR/inconsistent_instance_1.rs:10:20
+   |
+10 |     pub struct Pallet<T>(core::marker::PhantomData<T>);
+   |                       ^
+
+error: Invalid generic declaration, trait is defined with instance but generic use none
   --> $DIR/inconsistent_instance_1.rs:16:7
    |
 16 |     impl<T: Config> Pallet<T> {}
@@ -9,12 +15,6 @@ error: Invalid generic declaration, trait is defined with instance but generic u
    |
 16 |     impl<T: Config> Pallet<T> {}
    |                     ^^^^^^
-
-error: Invalid generic declaration, trait is defined with instance but generic use none
-  --> $DIR/inconsistent_instance_1.rs:10:20
-   |
-10 |     pub struct Pallet<T>(core::marker::PhantomData<T>);
-   |                       ^
 
 error: Invalid generic declaration, trait is defined with instance but generic use none
   --> $DIR/inconsistent_instance_1.rs:13:47

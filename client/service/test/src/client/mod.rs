@@ -1822,7 +1822,7 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 
 	type TestClient = Client<
 		in_mem::Backend<Block>,
-		LocalCallExecutor<in_mem::Backend<Block>, sc_executor::NativeExecutor<LocalExecutor>>,
+		LocalCallExecutor<Block, in_mem::Backend<Block>, sc_executor::NativeExecutor<LocalExecutor>>,
 		substrate_test_runtime_client::runtime::Block,
 		substrate_test_runtime_client::runtime::RuntimeApi,
 	>;

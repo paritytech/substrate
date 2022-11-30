@@ -425,7 +425,7 @@ fn multisig_2_of_3_cannot_reissue_same_call() {
 		assert_ok!(Multisig::as_multi(Origin::signed(3), 2, vec![1, 2], Some(now()), data.clone(), false, call_weight));
 
 		let err = DispatchError::from(BalancesError::<Test, _>::InsufficientBalance).stripped();
-		System::assert_last_event(RawEvent::MultisigExecuted(3, now(), multi, hash, Err(err)).into());
+		System::assert_last_event(pallet_multisig::Event::MultisigExecuted(3, now(), multi, hash, Err(err)).into());
 	});
 }
 
