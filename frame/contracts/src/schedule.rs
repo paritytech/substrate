@@ -18,7 +18,7 @@
 //! This module contains the cost schedule and supporting code that constructs a
 //! sane default schedule from a `WeightInfo` implementation.
 
-use crate::{weights::WeightInfo, Config};
+use crate::{wasm::Determinism, weights::WeightInfo, Config};
 
 use codec::{Decode, Encode};
 use frame_support::DefaultNoBound;
@@ -193,6 +193,13 @@ pub struct InstructionWeights<T: Config> {
 	/// Changes to other parts of the schedule should not increment the version in
 	/// order to avoid unnecessary re-instrumentations.
 	pub version: u32,
+	/// Weight to be used for instructions which don't have benchmarks assigned.
+	///
+	/// This weight is used whenever a code is uploaded with [`Determinism::AllowIndeterminism`]
+	/// and an instruction (usually a float instruction) is encountered. This weight is **not**
+	/// used if a contract is uploaded with [`Determinism::Deterministic`]. If this field is set to
+	/// `0` (the default) only deterministic codes are allowed to be uploaded.
+	pub fallback: u32,
 	pub i64const: u32,
 	pub i64load: u32,
 	pub i64store: u32,
@@ -416,6 +423,12 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_ecdsa_to_eth_address`.
 	pub ecdsa_to_eth_address: u64,
 
+	/// Weight of calling `seal_reentrance_count`.
+	pub reentrance_count: u64,
+
+	/// Weight of calling `seal_account_reentrance_count`.
+	pub account_reentrance_count: u64,
+
 	/// The type parameter is used in the default implementation.
 	#[codec(skip)]
 	pub _phantom: PhantomData<T>,
@@ -525,7 +538,8 @@ impl<T: Config> Default for InstructionWeights<T> {
 	fn default() -> Self {
 		let max_pages = Limits::default().memory_pages;
 		Self {
-			version: 3,
+			version: 4,
+			fallback: 0,
 			i64const: cost_instr!(instr_i64const, 1),
 			i64load: cost_instr!(instr_i64load, 2),
 			i64store: cost_instr!(instr_i64store, 2),
@@ -651,6 +665,8 @@ impl<T: Config> Default for HostFnWeights<T> {
 			hash_blake2_128_per_byte: cost_byte_batched!(seal_hash_blake2_128_per_kb),
 			ecdsa_recover: cost_batched!(seal_ecdsa_recover),
 			ecdsa_to_eth_address: cost_batched!(seal_ecdsa_to_eth_address),
+			reentrance_count: cost_batched!(seal_reentrance_count),
+			account_reentrance_count: cost_batched!(seal_account_reentrance_count),
 			_phantom: PhantomData,
 		}
 	}
@@ -659,10 +675,15 @@ impl<T: Config> Default for HostFnWeights<T> {
 struct ScheduleRules<'a, T: Config> {
 	schedule: &'a Schedule<T>,
 	params: Vec<u32>,
+	determinism: Determinism,
 }
 
 impl<T: Config> Schedule<T> {
-	pub(crate) fn rules(&self, module: &elements::Module) -> impl gas_metering::Rules + '_ {
+	pub(crate) fn rules(
+		&self,
+		module: &elements::Module,
+		determinism: Determinism,
+	) -> impl gas_metering::Rules + '_ {
 		ScheduleRules {
 			schedule: self,
 			params: module
@@ -674,6 +695,7 @@ impl<T: Config> Schedule<T> {
 					func.params().len() as u32
 				})
 				.collect(),
+			determinism,
 		}
 	}
 }
@@ -756,7 +778,10 @@ impl<'a, T: Config> gas_metering::Rules for ScheduleRules<'a, T> {
 			I32Rotr | I64Rotr => w.i64rotr,
 
 			// Returning None makes the gas instrumentation fail which we intend for
-			// unsupported or unknown instructions.
+			// unsupported or unknown instructions. Offchain we might allow indeterminism and hence
+			// use the fallback weight for those instructions.
+			_ if matches!(self.determinism, Determinism::AllowIndeterminism) && w.fallback > 0 =>
+				w.fallback,
 			_ => return None,
 		};
 		Some(weight)

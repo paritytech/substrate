@@ -43,18 +43,18 @@ use crate::{
 };
 
 #[derive(Debug, Parser)]
-#[clap(name = "node-bench", about = "Node integration benchmarks")]
+#[command(name = "node-bench", about = "Node integration benchmarks")]
 struct Opt {
 	/// Show list of all available benchmarks.
 	///
 	/// Will output ("name", "path"). Benchmarks can then be filtered by path.
-	#[clap(short, long)]
+	#[arg(short, long)]
 	list: bool,
 
 	/// Machine readable json output.
 	///
 	/// This also suppresses all regular output (except to stderr)
-	#[clap(short, long)]
+	#[arg(short, long)]
 	json: bool,
 
 	/// Filter benchmarks.
@@ -63,7 +63,7 @@ struct Opt {
 	filter: Option<String>,
 
 	/// Number of transactions for block import with `custom` size.
-	#[clap(long)]
+	#[arg(long)]
 	transactions: Option<usize>,
 
 	/// Mode
@@ -72,7 +72,7 @@ struct Opt {
 	///
 	/// "profile" mode adds pauses between measurable runs,
 	/// so that actual interval can be selected in the profiler of choice.
-	#[clap(short, long, default_value = "regular")]
+	#[arg(short, long, default_value = "regular")]
 	mode: BenchmarkMode,
 }
 

@@ -621,14 +621,23 @@ pub use frame_support_procedural::DebugNoBound;
 /// # use frame_support::DefaultNoBound;
 /// # use core::default::Default;
 /// trait Config {
-/// 		type C: Default;
+/// 	type C: Default;
 /// }
 ///
 /// // Foo implements [`Default`] because `C` bounds [`Default`].
 /// // Otherwise compilation will fail with an output telling `c` doesn't implement [`Default`].
 /// #[derive(DefaultNoBound)]
 /// struct Foo<T: Config> {
-/// 		c: T::C,
+/// 	c: T::C,
+/// }
+///
+/// // Also works with enums, by specifying the default with #[default]:
+/// #[derive(DefaultNoBound)]
+/// enum Bar<T: Config> {
+/// 	// Bar will implement Default as long as all of the types within Baz also implement default.
+/// 	#[default]
+/// 	Baz(T::C),
+/// 	Quxx,
 /// }
 /// ```
 pub use frame_support_procedural::DefaultNoBound;
@@ -1486,6 +1495,36 @@ pub mod pallet_prelude {
 /// Also note that in this document, pallet attributes are explained using the syntax of
 /// non-instantiable pallets. For an example of an instantiable pallet, see [this
 /// example](#example-of-an-instantiable-pallet).
+///
+/// # Dev Mode (`#[pallet(dev_mode)]`)
+///
+/// Specifying the argument `dev_mode` on the `#[pallet]` or `#[frame_support::pallet]`
+/// attribute attached to your pallet module will allow you to enable dev mode for a pallet.
+/// The aim of dev mode is to loosen some of the restrictions and requirements placed on
+/// production pallets for easy tinkering and development. Dev mode pallets should not be used
+/// in production. Enabling dev mode has the following effects:
+///
+/// * Weights no longer need to be specified on every `#[pallet::call]` declaration. By
+///   default, dev mode pallets will assume a weight of zero (`0`) if a weight is not
+///   specified. This is equivalent to specifying `#[weight(0)]` on all calls that do not
+///   specify a weight.
+/// * All storages are marked as unbounded, meaning you do not need to implement
+///   `MaxEncodedLen` on storage types. This is equivalent to specifying `#[pallet::unbounded]`
+///   on all storage type definitions.
+///
+/// Note that the `dev_mode` argument can only be supplied to the `#[pallet]` or
+/// `#[frame_support::pallet]` attribute macro that encloses your pallet module. This argument
+/// cannot be specified anywhere else, including but not limited to the `#[pallet::pallet]`
+/// attribute macro.
+///
+/// <div class="example-wrap" style="display:inline-block"><pre class="compile_fail"
+/// style="white-space:normal;font:inherit;">
+/// <strong>WARNING</strong>:
+/// You should not deploy or use dev mode pallets in production. Doing so can break your chain
+/// and therefore should never be done. Once you are done tinkering, you should remove the
+/// 'dev_mode' argument from your #[pallet] declaration and fix any compile errors before
+/// attempting to use your pallet in a production scenario.
+/// </pre></div>
 ///
 /// # Pallet struct placeholder: `#[pallet::pallet]` (mandatory)
 ///

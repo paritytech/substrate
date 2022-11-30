@@ -18,49 +18,8 @@
 
 //! Tests and test helpers for BEEFY.
 
-use futures::{future, stream::FuturesUnordered, Future, StreamExt};
-use parking_lot::Mutex;
-use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, marker::PhantomData, sync::Arc, task::Poll};
-use tokio::{runtime::Runtime, time::Duration};
-
-use sc_client_api::HeaderBackend;
-use sc_consensus::{
-	BlockImport, BlockImportParams, BoxJustificationImport, ForkChoiceStrategy, ImportResult,
-	ImportedAux,
-};
-use sc_keystore::LocalKeystore;
-use sc_network_test::{
-	Block, BlockImportAdapter, FullPeerConfig, PassThroughVerifier, Peer, PeersClient,
-	PeersFullClient, TestNetFactory,
-};
-use sc_utils::notification::NotificationReceiver;
-
-use beefy_primitives::{
-	crypto::{AuthorityId, Signature},
-	mmr::MmrRootProvider,
-	BeefyApi, ConsensusLog, MmrRootHash, ValidatorSet, VersionedFinalityProof, BEEFY_ENGINE_ID,
-	KEY_TYPE as BeefyKeyType,
-};
-use sc_network::{config::RequestResponseConfig, ProtocolName};
-use sp_mmr_primitives::{
-	BatchProof, EncodableOpaqueLeaf, Error as MmrError, LeafIndex, MmrApi, Proof,
-};
-
-use sp_api::{ApiRef, ProvideRuntimeApi};
-use sp_consensus::BlockOrigin;
-use sp_core::H256;
-use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
-use sp_runtime::{
-	codec::Encode,
-	generic::BlockId,
-	traits::{Header as HeaderT, NumberFor},
-	BuildStorage, DigestItem, Justifications, Storage,
-};
-
-use substrate_test_runtime_client::{runtime::Header, ClientExt};
-
 use crate::{
+	aux_schema::{load_persistent, tests::verify_persisted_version},
 	beefy_block_import_and_links,
 	communication::request_response::{
 		on_demand_justifications_protocol_config, BeefyJustifsRequestHandler,
@@ -68,8 +27,44 @@ use crate::{
 	gossip_protocol_name,
 	justification::*,
 	keystore::tests::Keyring as BeefyKeyring,
-	BeefyRPCLinks, BeefyVoterLinks,
+	load_or_init_voter_state, wait_for_runtime_pallet, BeefyRPCLinks, BeefyVoterLinks, KnownPeers,
+	PersistedState,
 };
+use beefy_primitives::{
+	crypto::{AuthorityId, Signature},
+	known_payloads,
+	mmr::MmrRootProvider,
+	BeefyApi, Commitment, ConsensusLog, MmrRootHash, Payload, SignedCommitment, ValidatorSet,
+	VersionedFinalityProof, BEEFY_ENGINE_ID, KEY_TYPE as BeefyKeyType,
+};
+use futures::{future, stream::FuturesUnordered, Future, StreamExt};
+use parking_lot::Mutex;
+use sc_client_api::{Backend as BackendT, BlockchainEvents, FinalityNotifications, HeaderBackend};
+use sc_consensus::{
+	BlockImport, BlockImportParams, BoxJustificationImport, ForkChoiceStrategy, ImportResult,
+	ImportedAux,
+};
+use sc_network::{config::RequestResponseConfig, ProtocolName};
+use sc_network_test::{
+	Block, BlockImportAdapter, FullPeerConfig, PassThroughVerifier, Peer, PeersClient,
+	PeersFullClient, TestNetFactory,
+};
+use sc_utils::notification::NotificationReceiver;
+use serde::{Deserialize, Serialize};
+use sp_api::{ApiRef, ProvideRuntimeApi};
+use sp_consensus::BlockOrigin;
+use sp_core::H256;
+use sp_keystore::{testing::KeyStore as TestKeystore, SyncCryptoStore, SyncCryptoStorePtr};
+use sp_mmr_primitives::{EncodableOpaqueLeaf, Error as MmrError, MmrApi, Proof};
+use sp_runtime::{
+	codec::Encode,
+	generic::BlockId,
+	traits::{Header as HeaderT, NumberFor},
+	BuildStorage, DigestItem, Justifications, Storage,
+};
+use std::{collections::HashMap, marker::PhantomData, sync::Arc, task::Poll};
+use substrate_test_runtime_client::{runtime::Header, ClientExt};
+use tokio::{runtime::Runtime, time::Duration};
 
 const GENESIS_HASH: H256 = H256::zero();
 fn beefy_gossip_proto_name() -> ProtocolName {
@@ -247,48 +242,26 @@ macro_rules! create_test_api {
 					}
 				}
 
-				impl MmrApi<Block, MmrRootHash> for RuntimeApi {
-					fn generate_proof(_leaf_index: LeafIndex)
-						-> Result<(EncodableOpaqueLeaf, Proof<MmrRootHash>), MmrError> {
+				impl MmrApi<Block, MmrRootHash, NumberFor<Block>> for RuntimeApi {
+					fn mmr_root() -> Result<MmrRootHash, MmrError> {
+						Ok($mmr_root)
+					}
+
+					fn generate_proof(
+						_block_numbers: Vec<u64>,
+						_best_known_block_number: Option<u64>
+					) -> Result<(Vec<EncodableOpaqueLeaf>, Proof<MmrRootHash>), MmrError> {
 						unimplemented!()
 					}
 
-					fn verify_proof(_leaf: EncodableOpaqueLeaf, _proof: Proof<MmrRootHash>)
-						-> Result<(), MmrError> {
+					fn verify_proof(_leaves: Vec<EncodableOpaqueLeaf>, _proof: Proof<MmrRootHash>) -> Result<(), MmrError> {
 						unimplemented!()
 					}
 
 					fn verify_proof_stateless(
 						_root: MmrRootHash,
-						_leaf: EncodableOpaqueLeaf,
-						_proof: Proof<MmrRootHash>
-					) -> Result<(), MmrError> {
-						unimplemented!()
-					}
-
-					fn mmr_root() -> Result<MmrRootHash, MmrError> {
-						Ok($mmr_root)
-					}
-
-					fn generate_batch_proof(_leaf_indices: Vec<LeafIndex>) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<MmrRootHash>), MmrError> {
-						unimplemented!()
-					}
-
-					fn generate_historical_batch_proof(
-						_leaf_indices: Vec<LeafIndex>,
-						_leaves_count: LeafIndex
-					) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<MmrRootHash>), MmrError> {
-						unimplemented!()
-					}
-
-					fn verify_batch_proof(_leaves: Vec<EncodableOpaqueLeaf>, _proof: BatchProof<MmrRootHash>) -> Result<(), MmrError> {
-						unimplemented!()
-					}
-
-					fn verify_batch_proof_stateless(
-						_root: MmrRootHash,
 						_leaves: Vec<EncodableOpaqueLeaf>,
-						_proof: BatchProof<MmrRootHash>
+						_proof: Proof<MmrRootHash>
 					) -> Result<(), MmrError> {
 						unimplemented!()
 					}
@@ -335,10 +308,31 @@ pub(crate) fn make_beefy_ids(keys: &[BeefyKeyring]) -> Vec<AuthorityId> {
 }
 
 pub(crate) fn create_beefy_keystore(authority: BeefyKeyring) -> SyncCryptoStorePtr {
-	let keystore = Arc::new(LocalKeystore::in_memory());
+	let keystore = Arc::new(TestKeystore::new());
 	SyncCryptoStore::ecdsa_generate_new(&*keystore, BeefyKeyType, Some(&authority.to_seed()))
 		.expect("Creates authority key");
 	keystore
+}
+
+fn voter_init_setup(
+	net: &mut BeefyTestNet,
+	finality: &mut futures::stream::Fuse<FinalityNotifications<Block>>,
+) -> sp_blockchain::Result<PersistedState<Block>> {
+	let backend = net.peer(0).client().as_backend();
+	let api = Arc::new(crate::tests::two_validators::TestApi {});
+	let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
+	let gossip_validator =
+		Arc::new(crate::communication::gossip::GossipValidator::new(known_peers));
+	let mut gossip_engine = sc_network_gossip::GossipEngine::new(
+		net.peer(0).network_service().clone(),
+		"/beefy/whatever",
+		gossip_validator,
+		None,
+	);
+	let best_grandpa =
+		futures::executor::block_on(wait_for_runtime_pallet(&*api, &mut gossip_engine, finality))
+			.unwrap();
+	load_or_init_voter_state(&*backend, &*api, best_grandpa, 1)
 }
 
 // Spawns beefy voters. Returns a future to spawn on the runtime.
@@ -349,7 +343,7 @@ fn initialize_beefy<API>(
 ) -> impl Future<Output = ()>
 where
 	API: ProvideRuntimeApi<Block> + Default + Sync + Send,
-	API::Api: BeefyApi<Block> + MmrApi<Block, MmrRootHash>,
+	API::Api: BeefyApi<Block> + MmrApi<Block, MmrRootHash, NumberFor<Block>>,
 {
 	let tasks = FuturesUnordered::new();
 
@@ -511,14 +505,10 @@ fn finalize_block_and_wait_for_beefy(
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
 
 	for block in finalize_targets {
-		let finalize = BlockId::number(*block);
 		peers.clone().for_each(|(index, _)| {
-			net.lock()
-				.peer(index)
-				.client()
-				.as_client()
-				.finalize_block(finalize, None)
-				.unwrap();
+			let client = net.lock().peer(index).client().as_client();
+			let finalize = client.expect_block_hash_from_id(&BlockId::number(*block)).unwrap();
+			client.finalize_block(finalize, None).unwrap();
 		})
 	}
 
@@ -559,7 +549,7 @@ fn beefy_finalizing_blocks() {
 
 	let peers = peers.into_iter().enumerate();
 	// finalize block #5 -> BEEFY should finalize #1 (mandatory) and #5 from diff-power-of-two rule.
-	finalize_block_and_wait_for_beefy(&net, peers.clone(), &mut runtime, &[5], &[1, 5]);
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &mut runtime, &[1, 5], &[1, 5]);
 
 	// GRANDPA finalize #10 -> BEEFY finalize #10 (mandatory)
 	finalize_block_and_wait_for_beefy(&net, peers.clone(), &mut runtime, &[10], &[10]);
@@ -601,12 +591,18 @@ fn lagging_validators() {
 		&net,
 		peers.clone(),
 		&mut runtime,
-		&[15],
+		&[1, 15],
 		&[1, 9, 13, 14, 15],
 	);
 
 	// Alice finalizes #25, Bob lags behind
-	let finalize = BlockId::number(25);
+	let finalize = net
+		.lock()
+		.peer(0)
+		.client()
+		.as_client()
+		.expect_block_hash_from_id(&BlockId::number(25))
+		.unwrap();
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
 	net.lock().peer(0).client().as_client().finalize_block(finalize, None).unwrap();
 	// verify nothing gets finalized by BEEFY
@@ -630,7 +626,13 @@ fn lagging_validators() {
 
 	// Alice finalizes session-boundary mandatory block #60, Bob lags behind
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
-	let finalize = BlockId::number(60);
+	let finalize = net
+		.lock()
+		.peer(0)
+		.client()
+		.as_client()
+		.expect_block_hash_from_id(&BlockId::number(60))
+		.unwrap();
 	net.lock().peer(0).client().as_client().finalize_block(finalize, None).unwrap();
 	// verify nothing gets finalized by BEEFY
 	let timeout = Some(Duration::from_millis(250));
@@ -677,30 +679,22 @@ fn correct_beefy_payload() {
 	let net = Arc::new(Mutex::new(net));
 	let peers = peers.into_iter().enumerate();
 	// with 3 good voters and 1 bad one, consensus should happen and best blocks produced.
-	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[10], &[1, 9]);
+	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[1, 10], &[1, 9]);
 
 	let (best_blocks, versioned_finality_proof) =
 		get_beefy_streams(&mut net.lock(), [(0, BeefyKeyring::Alice)].into_iter());
 
 	// now 2 good validators and 1 bad one are voting
-	net.lock()
+	let hashof11 = net
+		.lock()
 		.peer(0)
 		.client()
 		.as_client()
-		.finalize_block(BlockId::number(11), None)
+		.expect_block_hash_from_id(&BlockId::number(11))
 		.unwrap();
-	net.lock()
-		.peer(1)
-		.client()
-		.as_client()
-		.finalize_block(BlockId::number(11), None)
-		.unwrap();
-	net.lock()
-		.peer(3)
-		.client()
-		.as_client()
-		.finalize_block(BlockId::number(11), None)
-		.unwrap();
+	net.lock().peer(0).client().as_client().finalize_block(hashof11, None).unwrap();
+	net.lock().peer(1).client().as_client().finalize_block(hashof11, None).unwrap();
+	net.lock().peer(3).client().as_client().finalize_block(hashof11, None).unwrap();
 
 	// verify consensus is _not_ reached
 	let timeout = Some(Duration::from_millis(250));
@@ -710,12 +704,7 @@ fn correct_beefy_payload() {
 	// 3rd good validator catches up and votes as well
 	let (best_blocks, versioned_finality_proof) =
 		get_beefy_streams(&mut net.lock(), [(0, BeefyKeyring::Alice)].into_iter());
-	net.lock()
-		.peer(2)
-		.client()
-		.as_client()
-		.finalize_block(BlockId::number(11), None)
-		.unwrap();
+	net.lock().peer(2).client().as_client().finalize_block(hashof11, None).unwrap();
 
 	// verify consensus is reached
 	wait_for_best_beefy_blocks(best_blocks, &net, &mut runtime, &[11]);
@@ -748,9 +737,9 @@ fn beefy_importing_blocks() {
 
 	let full_client = client.as_client();
 	let parent_id = BlockId::Number(0);
-	let block_id = BlockId::Number(1);
 	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
 	let block = builder.build().unwrap().block;
+	let hashof1 = block.header.hash();
 
 	// Import without justifications.
 	let mut justif_recv = justif_stream.subscribe();
@@ -762,10 +751,16 @@ fn beefy_importing_blocks() {
 		block_on(block_import.import_block(params(block, None), HashMap::new())).unwrap(),
 		ImportResult::AlreadyInChain
 	);
-	// Verify no justifications present:
+	// Verify no BEEFY justifications present:
 	{
 		// none in backend,
-		assert!(full_client.justifications(&block_id).unwrap().is_none());
+		assert_eq!(
+			full_client
+				.justifications(hashof1)
+				.unwrap()
+				.and_then(|j| j.get(BEEFY_ENGINE_ID).cloned()),
+			None
+		);
 		// and none sent to BEEFY worker.
 		block_on(poll_fn(move |cx| {
 			assert_eq!(justif_recv.poll_next_unpin(cx), Poll::Pending);
@@ -785,6 +780,7 @@ fn beefy_importing_blocks() {
 
 	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
 	let block = builder.build().unwrap().block;
+	let hashof2 = block.header.hash();
 	let mut justif_recv = justif_stream.subscribe();
 	assert_eq!(
 		block_on(block_import.import_block(params(block, justif), HashMap::new())).unwrap(),
@@ -794,11 +790,18 @@ fn beefy_importing_blocks() {
 			..Default::default()
 		}),
 	);
-	// Verify justification successfully imported:
+	// Verify BEEFY justification successfully imported:
 	{
-		// available in backend,
-		assert!(full_client.justifications(&BlockId::Number(block_num)).unwrap().is_some());
-		// and also sent to BEEFY worker.
+		// still not in backend (worker is responsible for appending to backend),
+		assert_eq!(
+			full_client
+				.justifications(hashof2)
+				.unwrap()
+				.and_then(|j| j.get(BEEFY_ENGINE_ID).cloned()),
+			None
+		);
+		// but sent to BEEFY worker
+		// (worker will append it to backend when all previous mandatory justifs are there as well).
 		block_on(poll_fn(move |cx| {
 			match justif_recv.poll_next_unpin(cx) {
 				Poll::Ready(Some(_justification)) => (),
@@ -820,6 +823,7 @@ fn beefy_importing_blocks() {
 
 	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
 	let block = builder.build().unwrap().block;
+	let hashof3 = block.header.hash();
 	let mut justif_recv = justif_stream.subscribe();
 	assert_eq!(
 		block_on(block_import.import_block(params(block, justif), HashMap::new())).unwrap(),
@@ -830,10 +834,16 @@ fn beefy_importing_blocks() {
 			..Default::default()
 		}),
 	);
-	// Verify bad justifications was not imported:
+	// Verify bad BEEFY justifications was not imported:
 	{
 		// none in backend,
-		assert!(full_client.justifications(&block_id).unwrap().is_none());
+		assert_eq!(
+			full_client
+				.justifications(hashof3)
+				.unwrap()
+				.and_then(|j| j.get(BEEFY_ENGINE_ID).cloned()),
+			None
+		);
 		// and none sent to BEEFY worker.
 		block_on(poll_fn(move |cx| {
 			assert_eq!(justif_recv.poll_next_unpin(cx), Poll::Pending);
@@ -925,12 +935,9 @@ fn on_demand_beefy_justification_sync() {
 
 	let (dave_best_blocks, _) =
 		get_beefy_streams(&mut net.lock(), [(dave_index, BeefyKeyring::Dave)].into_iter());
-	net.lock()
-		.peer(dave_index)
-		.client()
-		.as_client()
-		.finalize_block(BlockId::number(1), None)
-		.unwrap();
+	let client = net.lock().peer(dave_index).client().as_client();
+	let hashof1 = client.expect_block_hash_from_id(&BlockId::number(1)).unwrap();
+	client.finalize_block(hashof1, None).unwrap();
 	// Give Dave task some cpu cycles to process the finality notification,
 	run_for(Duration::from_millis(100), &net, &mut runtime);
 	// freshly spun up Dave now needs to listen for gossip to figure out the state of his peers.
@@ -955,4 +962,167 @@ fn on_demand_beefy_justification_sync() {
 	let all_peers = all_peers.into_iter().enumerate();
 	// Now that Dave has caught up, sanity check voting works for all of them.
 	finalize_block_and_wait_for_beefy(&net, all_peers, &mut runtime, &[30], &[30]);
+}
+
+#[test]
+fn should_initialize_voter_at_genesis() {
+	let keys = &[BeefyKeyring::Alice];
+	let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
+	let mut net = BeefyTestNet::new(1);
+	let backend = net.peer(0).client().as_backend();
+
+	// push 15 blocks with `AuthorityChange` digests every 10 blocks
+	net.generate_blocks_and_sync(15, 10, &validator_set, false);
+
+	let mut finality = net.peer(0).client().as_client().finality_notification_stream().fuse();
+
+	// finalize 13 without justifications
+	let hashof13 = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(13)).unwrap();
+	net.peer(0).client().as_client().finalize_block(hashof13, None).unwrap();
+
+	// load persistent state - nothing in DB, should init at session boundary
+	let persisted_state = voter_init_setup(&mut net, &mut finality).unwrap();
+
+	// Test initialization at session boundary.
+	// verify voter initialized with two sessions starting at blocks 1 and 10
+	let sessions = persisted_state.voting_oracle().sessions();
+	assert_eq!(sessions.len(), 2);
+	assert_eq!(sessions[0].session_start(), 1);
+	assert_eq!(sessions[1].session_start(), 10);
+	let rounds = persisted_state.active_round().unwrap();
+	assert_eq!(rounds.session_start(), 1);
+	assert_eq!(rounds.validator_set_id(), validator_set.id());
+
+	// verify next vote target is mandatory block 1
+	assert_eq!(persisted_state.best_beefy_block(), 0);
+	assert_eq!(persisted_state.best_grandpa_block(), 13);
+	assert_eq!(
+		persisted_state
+			.voting_oracle()
+			.voting_target(persisted_state.best_beefy_block(), 13),
+		Some(1)
+	);
+
+	// verify state also saved to db
+	assert!(verify_persisted_version(&*backend));
+	let state = load_persistent(&*backend).unwrap().unwrap();
+	assert_eq!(state, persisted_state);
+}
+
+#[test]
+fn should_initialize_voter_when_last_final_is_session_boundary() {
+	let keys = &[BeefyKeyring::Alice];
+	let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
+	let mut net = BeefyTestNet::new(1);
+	let backend = net.peer(0).client().as_backend();
+
+	// push 15 blocks with `AuthorityChange` digests every 10 blocks
+	net.generate_blocks_and_sync(15, 10, &validator_set, false);
+
+	let mut finality = net.peer(0).client().as_client().finality_notification_stream().fuse();
+
+	// finalize 13 without justifications
+	let hashof13 = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(13)).unwrap();
+	net.peer(0).client().as_client().finalize_block(hashof13, None).unwrap();
+
+	// import/append BEEFY justification for session boundary block 10
+	let commitment = Commitment {
+		payload: Payload::from_single_entry(known_payloads::MMR_ROOT_ID, vec![]),
+		block_number: 10,
+		validator_set_id: validator_set.id(),
+	};
+	let justif = VersionedFinalityProof::<_, Signature>::V1(SignedCommitment {
+		commitment,
+		signatures: vec![None],
+	});
+	let hashof10 = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(10)).unwrap();
+	backend
+		.append_justification(hashof10, (BEEFY_ENGINE_ID, justif.encode()))
+		.unwrap();
+
+	// Test corner-case where session boundary == last beefy finalized,
+	// expect rounds initialized at last beefy finalized 10.
+
+	// load persistent state - nothing in DB, should init at session boundary
+	let persisted_state = voter_init_setup(&mut net, &mut finality).unwrap();
+
+	// verify voter initialized with single session starting at block 10
+	assert_eq!(persisted_state.voting_oracle().sessions().len(), 1);
+	let rounds = persisted_state.active_round().unwrap();
+	assert_eq!(rounds.session_start(), 10);
+	assert_eq!(rounds.validator_set_id(), validator_set.id());
+
+	// verify block 10 is correctly marked as finalized
+	assert_eq!(persisted_state.best_beefy_block(), 10);
+	assert_eq!(persisted_state.best_grandpa_block(), 13);
+	// verify next vote target is diff-power-of-two block 12
+	assert_eq!(
+		persisted_state
+			.voting_oracle()
+			.voting_target(persisted_state.best_beefy_block(), 13),
+		Some(12)
+	);
+
+	// verify state also saved to db
+	assert!(verify_persisted_version(&*backend));
+	let state = load_persistent(&*backend).unwrap().unwrap();
+	assert_eq!(state, persisted_state);
+}
+
+#[test]
+fn should_initialize_voter_at_latest_finalized() {
+	let keys = &[BeefyKeyring::Alice];
+	let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
+	let mut net = BeefyTestNet::new(1);
+	let backend = net.peer(0).client().as_backend();
+
+	// push 15 blocks with `AuthorityChange` digests every 10 blocks
+	net.generate_blocks_and_sync(15, 10, &validator_set, false);
+
+	let mut finality = net.peer(0).client().as_client().finality_notification_stream().fuse();
+
+	// finalize 13 without justifications
+	let hashof13 = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(13)).unwrap();
+	net.peer(0).client().as_client().finalize_block(hashof13, None).unwrap();
+
+	// import/append BEEFY justification for block 12
+	let commitment = Commitment {
+		payload: Payload::from_single_entry(known_payloads::MMR_ROOT_ID, vec![]),
+		block_number: 12,
+		validator_set_id: validator_set.id(),
+	};
+	let justif = VersionedFinalityProof::<_, Signature>::V1(SignedCommitment {
+		commitment,
+		signatures: vec![None],
+	});
+	let hashof12 = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(12)).unwrap();
+	backend
+		.append_justification(hashof12, (BEEFY_ENGINE_ID, justif.encode()))
+		.unwrap();
+
+	// Test initialization at last BEEFY finalized.
+
+	// load persistent state - nothing in DB, should init at last BEEFY finalized
+	let persisted_state = voter_init_setup(&mut net, &mut finality).unwrap();
+
+	// verify voter initialized with single session starting at block 12
+	assert_eq!(persisted_state.voting_oracle().sessions().len(), 1);
+	let rounds = persisted_state.active_round().unwrap();
+	assert_eq!(rounds.session_start(), 12);
+	assert_eq!(rounds.validator_set_id(), validator_set.id());
+
+	// verify next vote target is 13
+	assert_eq!(persisted_state.best_beefy_block(), 12);
+	assert_eq!(persisted_state.best_grandpa_block(), 13);
+	assert_eq!(
+		persisted_state
+			.voting_oracle()
+			.voting_target(persisted_state.best_beefy_block(), 13),
+		Some(13)
+	);
+
+	// verify state also saved to db
+	assert!(verify_persisted_version(&*backend));
+	let state = load_persistent(&*backend).unwrap().unwrap();
+	assert_eq!(state, persisted_state);
 }
