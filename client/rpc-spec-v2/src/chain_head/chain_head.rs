@@ -207,6 +207,11 @@ fn parse_hex_param(
 	sink: &mut SubscriptionSink,
 	param: String,
 ) -> Result<Vec<u8>, SubscriptionEmptyError> {
+	// Methods can accept empty parameters.
+	if param.is_empty() {
+		return Ok(Default::default())
+	}
+
 	match array_bytes::hex2bytes(&param) {
 		Ok(bytes) => Ok(bytes),
 		Err(_) => {
