@@ -1274,7 +1274,7 @@ mod tests {
 	}
 
 	parameter_types! {
-		pub const ElectionsPhragmenPalletId: LockIdentifier = *b"phrelect";
+		pub const ElectionsPhragmenPalletId: fungible::LockIdentifier = *b"phrelect";
 		pub const PhragmenMaxVoters: u32 = 1000;
 		pub const PhragmenMaxCandidates: u32 = 100;
 	}
