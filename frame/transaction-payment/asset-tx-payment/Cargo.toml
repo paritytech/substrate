@@ -22,6 +22,7 @@ sp-std = { version = "5.0.0", default-features = false, path = "../../../primiti
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
 pallet-transaction-payment = { version = "4.0.0-dev", default-features = false, path = ".." }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../benchmarking", optional = true }
 
 # Other dependencies
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
@@ -51,5 +52,12 @@ std = [
 	"sp-io/std",
 	"sp-core/std",
 	"pallet-transaction-payment/std",
+	"frame-benchmarking?/std",
+]
+runtime-benchmarks = [
+	"frame-benchmarking/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+	"pallet-assets/runtime-benchmarks",
 ]
 try-runtime = ["frame-support/try-runtime"]

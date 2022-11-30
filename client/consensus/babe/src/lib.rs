@@ -111,7 +111,8 @@ use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_application_crypto::AppKey;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::{
-	Backend as _, Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult,
+	Backend as _, Error as ClientError, ForkBackend, HeaderBackend, HeaderMetadata,
+	Result as ClientResult,
 };
 use sp_consensus::{
 	BlockOrigin, CacheKeyId, Environment, Error as ConsensusError, Proposer, SelectChain,
@@ -123,7 +124,7 @@ use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvid
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId},
-	traits::{Block as BlockT, Header, NumberFor, SaturatedConversion, Saturating, Zero},
+	traits::{Block as BlockT, Header, NumberFor, SaturatedConversion, Zero},
 	DigestItem,
 };
 
@@ -515,12 +516,12 @@ fn aux_storage_cleanup<C: HeaderMetadata<Block> + HeaderBackend<Block>, Block: B
 	client: &C,
 	notification: &FinalityNotification<Block>,
 ) -> AuxDataOperations {
-	let mut aux_keys = HashSet::new();
+	let mut hashes = HashSet::new();
 
 	let first = notification.tree_route.first().unwrap_or(&notification.hash);
 	match client.header_metadata(*first) {
 		Ok(meta) => {
-			aux_keys.insert(aux_schema::block_weight_key(meta.parent));
+			hashes.insert(meta.parent);
 		},
 		Err(err) => warn!(
 			target: "babe",
@@ -531,53 +532,29 @@ fn aux_storage_cleanup<C: HeaderMetadata<Block> + HeaderBackend<Block>, Block: B
 	}
 
 	// Cleans data for finalized block's ancestors
-	aux_keys.extend(
+	hashes.extend(
 		notification
 			.tree_route
 			.iter()
 			// Ensure we don't prune latest finalized block.
 			// This should not happen, but better be safe than sorry!
-			.filter(|h| **h != notification.hash)
-			.map(aux_schema::block_weight_key),
+			.filter(|h| **h != notification.hash),
 	);
 
-	// Cleans data for stale branches.
+	// Cleans data for stale forks.
+	let stale_forks = match client.expand_forks(&notification.stale_heads) {
+		Ok(stale_forks) => stale_forks,
+		Err((stale_forks, e)) => {
+			warn!(target: "babe", "{:?}", e,);
+			stale_forks
+		},
+	};
+	hashes.extend(stale_forks.iter());
 
-	for head in notification.stale_heads.iter() {
-		let mut hash = *head;
-		// Insert stale blocks hashes until canonical chain is reached.
-		// If we reach a block that is already part of the `aux_keys` we can stop the processing the
-		// head.
-		while aux_keys.insert(aux_schema::block_weight_key(hash)) {
-			match client.header_metadata(hash) {
-				Ok(meta) => {
-					hash = meta.parent;
-
-					// If the parent is part of the canonical chain or there doesn't exist a block
-					// hash for the parent number (bug?!), we can abort adding blocks.
-					if client
-						.hash(meta.number.saturating_sub(1u32.into()))
-						.ok()
-						.flatten()
-						.map_or(true, |h| h == hash)
-					{
-						break
-					}
-				},
-				Err(err) => {
-					warn!(
-						target: "babe",
-						"Header lookup fail while cleaning data for block {:?}: {}",
-						hash,
-						err,
-					);
-					break
-				},
-			}
-		}
-	}
-
-	aux_keys.into_iter().map(|val| (val, None)).collect()
+	hashes
+		.into_iter()
+		.map(|val| (aux_schema::block_weight_key(val), None))
+		.collect()
 }
 
 async fn answer_requests<B: BlockT, C>(
