@@ -195,11 +195,16 @@ pub mod pallet {
 		#[pallet::constant]
 		type UndecidingTimeout: Get<Self::BlockNumber>;
 
-		/// Quantization level for the referendum wakeup scheduler. A higher number will result in
-		/// fewer storage reads/writes needed for smaller voters, but also result in delays to the
-		/// automatic referendum status changes. Explicit servicing instructions are unaffected.
+		/// Quantization level for the referendum wakeup scheduler during the decision stage. A
+		/// higher number will result in fewer storage reads/writes needed for smaller voters, but
+		/// also result in delays to the automatic referendum status changes.
 		#[pallet::constant]
 		type AlarmInterval: Get<Self::BlockNumber>;
+
+		/// Minimum alarm period for the referendum wakeup scheduler during the decision stage.
+		/// Prevents wake up calls from being too frequent as a result of the quantization.
+		#[pallet::constant]
+		type MinAlarmPeriod: Get<Self::BlockNumber>;
 
 		// The other stuff.
 		/// Information concerning the different referendum tracks.
@@ -754,9 +759,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		call: BoundedCallOf<T, I>,
 		when: T::BlockNumber,
 	) -> Option<(T::BlockNumber, ScheduleAddressOf<T, I>)> {
-		let alarm_interval = T::AlarmInterval::get().max(One::one());
-		let when = when.saturating_add(alarm_interval).saturating_sub(One::one()) /
-			(alarm_interval.saturating_mul(alarm_interval)).max(One::one());
 		let maybe_result = T::Scheduler::schedule(
 			DispatchTime::At(when),
 			None,
@@ -802,19 +804,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			proposal: status.proposal.clone(),
 			track: status.track,
 		});
-		let confirming = if is_passing {
+		if is_passing {
 			Self::deposit_event(Event::<T, I>::ConfirmStarted { index });
-			Some(now.saturating_add(track.confirm_period))
+			let confirming = Some(now.saturating_add(track.confirm_period.max(One::one())));
+			status.deciding = Some(DecidingStatus { since: now, confirming });
+			(confirming, BeginDecidingBranch::Passing)
 		} else {
-			None
-		};
-		let deciding_status = DecidingStatus { since: now, confirming };
-		let alarm = Self::decision_time(&deciding_status, &status.tally, status.track, track)
-			.max(now.saturating_add(One::one()));
-		status.deciding = Some(deciding_status);
-		let branch =
-			if is_passing { BeginDecidingBranch::Passing } else { BeginDecidingBranch::Failing };
-		(Some(alarm), branch)
+			status.deciding = Some(DecidingStatus { since: now, confirming: None });
+			(
+				Some(Self::decision_alarm(now, now, &status.tally, status.track, track)),
+				BeginDecidingBranch::Failing,
+			)
+		}
 	}
 
 	/// If it returns `Some`, deciding has begun and it needs waking at the given block number. The
@@ -861,10 +862,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// overall more efficient), however the weights become rather less easy to measure.
 	fn note_one_fewer_deciding(track: TrackIdOf<T, I>) {
 		// Set an alarm call for the next block to nudge the track along.
+		let min_alarm_period = T::MinAlarmPeriod::get().max(One::one());
 		let now = frame_system::Pallet::<T>::block_number();
-		let next_block = now + One::one();
-		let alarm_interval = T::AlarmInterval::get().max(One::one());
-		let when = (next_block + alarm_interval - One::one()) / alarm_interval * alarm_interval;
+		let when = now.saturating_add(min_alarm_period);
 
 		let call = match T::Preimages::bound(CallOf::<T, I>::from(Call::one_fewer_deciding {
 			track,
@@ -1081,7 +1081,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						ServiceBranch::ContinueNotConfirming
 					}
 				};
-				alarm = Self::decision_time(deciding, &status.tally, status.track, track);
+				alarm = deciding.confirming.unwrap_or_else(|| {
+					Self::decision_alarm(now, deciding.since, &status.tally, status.track, track)
+				});
 			},
 		}
 
@@ -1089,23 +1091,37 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		(ReferendumInfo::Ongoing(status), dirty_alarm || dirty, branch)
 	}
 
-	/// Determine the point at which a referendum will be accepted, move into confirmation with the
-	/// given `tally` or end with rejection (whichever happens sooner).
-	fn decision_time(
-		deciding: &DecidingStatusOf<T>,
+	/// Determine the block of the next alarm for a decision check based on the current voting,
+	/// total decision period and the alarm interval.
+	fn decision_alarm(
+		now: T::BlockNumber,
+		deciding_since: T::BlockNumber,
 		tally: &T::Tally,
 		track_id: TrackIdOf<T, I>,
 		track: &TrackInfoOf<T, I>,
 	) -> T::BlockNumber {
-		deciding.confirming.unwrap_or_else(|| {
-			// Set alarm to the point where the current voting would make it pass.
-			let approval = tally.approval(track_id);
-			let support = tally.support(track_id);
-			let until_approval = track.min_approval.delay(approval);
-			let until_support = track.min_support.delay(support);
-			let offset = until_support.max(until_approval);
-			deciding.since.saturating_add(offset * track.decision_period)
-		})
+		// find a period offset where the current voting would make it pass.
+		let approval = tally.approval(track_id);
+		let support = tally.support(track_id);
+		let until_approval = track.min_approval.delay(approval);
+		let until_support = track.min_support.delay(support);
+		// if never passing the offset is 1.
+		let offset = until_support.max(until_approval);
+		deciding_since
+			.saturating_add(now.saturating_sub(deciding_since))
+			.saturating_add(Self::decision_interval(
+				offset * track.decision_period.saturating_sub(now.saturating_sub(deciding_since)),
+			))
+	}
+
+	/// Determine the decision period interval based on the total period and the alarm interval.
+	fn decision_interval(decision_period: T::BlockNumber) -> T::BlockNumber {
+		let min_alarm_period = T::MinAlarmPeriod::get().max(One::one());
+		let alarm_interval = T::AlarmInterval::get().max(One::one());
+		let decision_period =
+			decision_period.saturating_add(alarm_interval).saturating_sub(One::one()) /
+				(alarm_interval.saturating_mul(alarm_interval)).max(One::one());
+		decision_period.max(min_alarm_period)
 	}
 
 	/// Cancel the alarm in `status`, if one exists.

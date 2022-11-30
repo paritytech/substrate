@@ -124,7 +124,8 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 }
 parameter_types! {
-	pub static AlarmInterval: u64 = 2;
+	pub static AlarmInterval: u64 = 1;
+	pub static MinAlarmInterval: u64 = 1;
 }
 ord_parameter_types! {
 	pub const One: u64 = 1;
@@ -226,6 +227,7 @@ impl Config for Test {
 	type MaxQueued = ConstU32<3>;
 	type UndecidingTimeout = ConstU64<20>;
 	type AlarmInterval = AlarmInterval;
+	type MinAlarmPeriod = MinAlarmInterval;
 	type Tracks = TestTracksInfo;
 	type Preimages = Preimage;
 }
