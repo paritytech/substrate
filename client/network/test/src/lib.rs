@@ -428,8 +428,9 @@ where
 		at: BlockId<Block>,
 		count: usize,
 		with_tx: bool,
+		announce_block: bool,
 	) -> H256 {
-		self.generate_tx_blocks_at(at, count, with_tx, false, false, true)
+		self.generate_tx_blocks_at(at, count, with_tx, false, false, announce_block)
 	}
 
 	/// Push blocks to the peer (simplified: with or without a TX) starting from
