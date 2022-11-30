@@ -773,6 +773,7 @@ impl From<sp_version::RuntimeVersion> for LastRuntimeUpgradeInfo {
 	}
 }
 
+/// Ensure the origin is Root.
 pub struct EnsureRoot<AccountId>(sp_std::marker::PhantomData<AccountId>);
 impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, AccountId>
 	EnsureOrigin<O> for EnsureRoot<AccountId>
@@ -791,6 +792,7 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 	}
 }
 
+/// Ensure the origin is Root and return the provided `Success` value.
 pub struct EnsureRootWithSuccess<AccountId, Success>(
 	sp_std::marker::PhantomData<(AccountId, Success)>,
 );
@@ -814,6 +816,31 @@ impl<
 	}
 }
 
+/// Ensure the origin is provided `Ensure` origin and return the provided `Success` value.
+pub struct EnsureWithSuccess<Ensure, AccountId, Success>(
+	sp_std::marker::PhantomData<(Ensure, AccountId, Success)>,
+);
+
+impl<
+		O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
+		Ensure: EnsureOrigin<O>,
+		AccountId,
+		Success: TypedGet,
+	> EnsureOrigin<O> for EnsureWithSuccess<Ensure, AccountId, Success>
+{
+	type Success = Success::Type;
+
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		Ensure::try_origin(o).map(|_| Success::get())
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn try_successful_origin() -> Result<O, ()> {
+		Ensure::try_successful_origin()
+	}
+}
+
+/// Ensure the origin is any `Signed` origin.
 pub struct EnsureSigned<AccountId>(sp_std::marker::PhantomData<AccountId>);
 impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, AccountId: Decode>
 	EnsureOrigin<O> for EnsureSigned<AccountId>
@@ -834,6 +861,7 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 	}
 }
 
+/// Ensure the origin is `Signed` origin from the given `AccountId`.
 pub struct EnsureSignedBy<Who, AccountId>(sp_std::marker::PhantomData<(Who, AccountId)>);
 impl<
 		O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
@@ -862,6 +890,7 @@ impl<
 	}
 }
 
+/// Ensure the origin is `None`. i.e. unsigned transaction.
 pub struct EnsureNone<AccountId>(sp_std::marker::PhantomData<AccountId>);
 impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, AccountId>
 	EnsureOrigin<O> for EnsureNone<AccountId>
@@ -880,6 +909,7 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 	}
 }
 
+/// Always fail.
 pub struct EnsureNever<T>(sp_std::marker::PhantomData<T>);
 impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
 	type Success = T;
