@@ -21,14 +21,14 @@
 //!
 //! # Design Goals
 //!
-//! - Minimal assumptions about `Message`s and `MessageOrigin`s. Both should be MEL bounded blobs.
+//! 1. Minimal assumptions about `Message`s and `MessageOrigin`s. Both should be MEL bounded blobs.
 //!  This ensures the generality and reusability of the pallet.
-//! - Well known and tightly limited pre-dispatch PoV weights, especially for message execution.
+//! 2. Well known and tightly limited pre-dispatch PoV weights, especially for message execution.
 //!  This is paramount for the success of the pallet since message execution is done in
 //!  `on_initialize` which must _never_ under-estimate its PoV weight. It also needs a frugal PoV
-//!  footprint since PoV is scare and this is (possibly) done in every block. This must also hold in
-//!  the presence of unpredictable message size distributions.
-//! - Usable as XCMP, DMP and UMP message/dispatch queue - possibly through adapter types.
+//!  footprint since PoV is scarce and this is (possibly) done in every block. This must also hold
+//! in  the presence of unpredictable message size distributions.
+//! 3. Usable as XCMP, DMP and UMP message/dispatch queue - possibly through adapter types.
 //!
 //! # Design
 //!
@@ -47,7 +47,7 @@
 //!
 //! **Message Execution**
 //!
-//! Executing a message is offloaded the [`Config::MessageProcessor`] which contains the actual
+//! Executing a message is offloaded to the [`Config::MessageProcessor`] which contains the actual
 //! logic of how to handle the message since they are blobs. A message can be temporarily or
 //! permanently overweight. The pallet will perpetually try to execute a temporarily overweight
 //! message. A permanently overweight message is skipped and must be executed manually.
@@ -62,10 +62,8 @@
 //! maximum allowed length. This would result in most messages having a pre-dispatch PoV size which
 //! is much larger than their post-dispatch PoV size, possibly by a factor of thousand. Disregarding
 //! this observation would cripple the processing power of the pallet since it cannot straighten out
-//! this discrepancy at runtime. The implemented solution tightly packs multiple messages into a
-//! page, which allows for a post-dispatch PoV size which is much closer to the worst case
-//! pre-dispatch PoV size. To be more formal; the ratio between *Actual Encode Length* and *Max
-//! Encoded Length* per message: `AEL / MEL` is much closer to one than without the optimization.
+//! this discrepancy at runtime. Conceptually, the implementation is packing as many messages into a
+//! single bounded vec, as actually fit into the bounds. This reduces the wasted PoV.
 //!
 //! NOTE: The enqueuing and storing of messages are only a means to implement the processing and are
 //! not goals per se.
@@ -111,7 +109,7 @@
 //! message is marked as *processed* if the [`Config::MessageProcessor`] return Ok. An event
 //! [`Event::Processed`] is emitted afterwards. It is possible that the weight limit of the pallet
 //! will never allow a specific message to be executed. In this case it remains as unprocessed and
-//! is skipped. This process stops if either there are no more messages in the queue of the
+//! is skipped. This process stops if either there are no more messages in the queue or the
 //! remaining weight became insufficient to service this queue. If there is enough weight it tries
 //! to advance to the next *ready* queue and service it. This continues until there are no more
 //! queues on which it can make progress or not enough weight to check that.
