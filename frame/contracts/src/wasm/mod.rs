@@ -652,16 +652,16 @@ mod tests {
 	}
 
 	fn execute<E: BorrowMut<MockExt>>(wat: &str, input_data: Vec<u8>, ext: E) -> ExecResult {
-		execute_internal(wat, input_data, ext, false)
+		execute_internal(wat, input_data, ext, true)
 	}
 
 	#[cfg(not(feature = "runtime-benchmarks"))]
-	fn execute_with_unstable<E: BorrowMut<MockExt>>(
+	fn execute_no_unstable<E: BorrowMut<MockExt>>(
 		wat: &str,
 		input_data: Vec<u8>,
 		ext: E,
 	) -> ExecResult {
-		execute_internal(wat, input_data, ext, true)
+		execute_internal(wat, input_data, ext, false)
 	}
 
 	const CODE_TRANSFER: &str = r#"
@@ -3006,7 +3006,7 @@ mod tests {
 	#[cfg(not(feature = "runtime-benchmarks"))]
 	#[test]
 	fn cannot_deploy_unstable() {
-		const CANNT_DEPLOY_UNSTABLE: &str = r#"
+		const CANNOT_DEPLOY_UNSTABLE: &str = r#"
 (module
 	(import "seal0" "reentrance_count" (func $reentrance_count (result i32)))
 	(func (export "call"))
@@ -3014,9 +3014,9 @@ mod tests {
 )
 "#;
 		assert_err!(
-			execute(CANNT_DEPLOY_UNSTABLE, vec![], MockExt::default()),
+			execute_no_unstable(CANNOT_DEPLOY_UNSTABLE, vec![], MockExt::default()),
 			<Error<Test>>::CodeRejected,
 		);
-		assert_ok!(execute_with_unstable(CANNT_DEPLOY_UNSTABLE, vec![], MockExt::default()));
+		assert_ok!(execute(CANNOT_DEPLOY_UNSTABLE, vec![], MockExt::default()));
 	}
 }
