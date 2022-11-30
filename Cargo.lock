@@ -364,9 +364,9 @@ checksum = "e91831deabf0d6d7ec49552e489aed63b7456a7a3c46cff62adad428110b0af0"
 
 [[package]]
 name = "async-trait"
-version = "0.1.47"
+version = "0.1.48"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e098e9c493fdf92832223594d9a164f96bdf17ba81a42aff86f85c76768726a"
+checksum = "36ea56748e10732c49404c153638a15ec3d6211ec5ff35d9bb20e13b93576adf"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1891,7 +1891,6 @@ dependencies = [
  "rustversion",
  "serde",
  "sp-core",
- "sp-inherents",
  "sp-io",
  "sp-runtime",
  "sp-state-machine",
@@ -4150,6 +4149,7 @@ dependencies = [
  "sc-consensus-babe",
  "sc-consensus-epochs",
  "sc-consensus-slots",
+ "sc-consensus-uncles",
  "sc-finality-grandpa",
  "sc-finality-grandpa-warp-sync",
  "sc-keystore",
@@ -4165,6 +4165,7 @@ dependencies = [
  "serde_json 1.0.64",
  "soketto",
  "sp-authority-discovery",
+ "sp-authorship",
  "sp-consensus",
  "sp-consensus-babe",
  "sp-core",
@@ -4639,7 +4640,6 @@ dependencies = [
  "serde",
  "sp-authorship",
  "sp-core",
- "sp-inherents",
  "sp-io",
  "sp-runtime",
  "sp-std",
@@ -4777,6 +4777,7 @@ dependencies = [
  "rand 0.8.3",
  "rand_pcg 0.3.0",
  "serde",
+ "smallvec 1.6.1",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -7297,7 +7298,6 @@ dependencies = [
  "sp-core",
  "sp-inherents",
  "sp-runtime",
- "sp-timestamp",
  "substrate-prometheus-endpoint",
 ]
 
@@ -7308,6 +7308,7 @@ dependencies = [
  "async-trait",
  "futures 0.3.13",
  "futures-timer 3.0.2",
+ "impl-trait-for-tuples",
  "log",
  "parity-scale-codec",
  "sc-client-api",
@@ -7332,13 +7333,10 @@ dependencies = [
 name = "sc-consensus-uncles"
 version = "0.9.0"
 dependencies = [
- "log",
  "sc-client-api",
  "sp-authorship",
- "sp-consensus",
- "sp-core",
- "sp-inherents",
  "sp-runtime",
+ "thiserror",
 ]
 
 [[package]]
@@ -7790,6 +7788,7 @@ dependencies = [
  "sp-runtime",
  "sp-session",
  "sp-state-machine",
+ "sp-tracing",
  "sp-transaction-pool",
  "sp-utils",
  "sp-version",
@@ -7816,6 +7815,7 @@ dependencies = [
  "sp-core",
  "sp-rpc",
  "sp-runtime",
+ "sp-tracing",
  "sp-transaction-pool",
  "sp-version",
 ]
@@ -8022,16 +8022,26 @@ dependencies = [
  "parking_lot 0.11.1",
  "regex",
  "rustc-hash",
+ "sc-client-api",
+ "sc-rpc-server",
+ "sc-telemetry",
  "sc-tracing-proc-macro",
  "serde",
  "serde_json 1.0.64",
+ "sp-api",
+ "sp-block-builder",
+ "sp-blockchain",
+ "sp-core",
+ "sp-rpc",
+ "sp-runtime",
+ "sp-storage",
  "sp-tracing",
  "thiserror",
  "tracing",
- "tracing-core",
  "tracing-log",
  "tracing-subscriber",
  "wasm-bindgen",
+ "wasm-timer",
  "web-sys",
 ]
 
@@ -8432,6 +8442,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c111b5bd5695e56cffe5129854aa230b39c93a305372fdbb2668ca2394eea9f8"
 
 [[package]]
+name = "slog"
+version = "2.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8347046d4ebd943127157b94d63abb990fcf729dc4e9978927fdf4ac3c998d06"
+dependencies = [
+ "erased-serde",
+]
+
+[[package]]
 name = "smallvec"
 version = "0.6.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8627,6 +8646,7 @@ dependencies = [
 name = "sp-authorship"
 version = "3.0.0"
 dependencies = [
+ "async-trait",
  "parity-scale-codec",
  "sp-inherents",
  "sp-runtime",
@@ -8700,6 +8720,7 @@ dependencies = [
 name = "sp-consensus-aura"
 version = "0.9.0"
 dependencies = [
+ "async-trait",
  "parity-scale-codec",
  "sp-api",
  "sp-application-crypto",
@@ -8715,6 +8736,7 @@ dependencies = [
 name = "sp-consensus-babe"
 version = "0.9.0"
 dependencies = [
+ "async-trait",
  "merlin",
  "parity-scale-codec",
  "serde",
@@ -8858,9 +8880,12 @@ dependencies = [
 name = "sp-inherents"
 version = "3.0.0"
 dependencies = [
+ "async-trait",
+ "futures 0.3.13",
+ "impl-trait-for-tuples",
  "parity-scale-codec",
- "parking_lot 0.11.1",
  "sp-core",
+ "sp-runtime",
  "sp-std",
  "thiserror",
 ]
@@ -8988,9 +9013,11 @@ dependencies = [
 name = "sp-rpc"
 version = "3.0.0"
 dependencies = [
+ "rustc-hash",
  "serde",
  "serde_json 1.0.64",
  "sp-core",
+ "tracing-core",
 ]
 
 [[package]]
@@ -9152,6 +9179,7 @@ dependencies = [
  "sp-std",
  "sp-trie",
  "thiserror",
+ "tracing",
  "trie-db",
  "trie-root",
 ]
@@ -9201,11 +9229,15 @@ dependencies = [
 name = "sp-timestamp"
 version = "3.0.0"
 dependencies = [
+ "async-trait",
+ "futures-timer 3.0.2",
+ "log",
  "parity-scale-codec",
  "sp-api",
  "sp-inherents",
  "sp-runtime",
  "sp-std",
+ "thiserror",
  "wasm-timer",
 ]
 
@@ -9213,8 +9245,13 @@ dependencies = [
 name = "sp-tracing"
 version = "3.0.0"
 dependencies = [
+ "erased-serde",
  "log",
  "parity-scale-codec",
+ "parking_lot 0.10.2",
+ "serde",
+ "serde_json 1.0.64",
+ "slog",
  "sp-std",
  "tracing",
  "tracing-core",
@@ -9385,7 +9422,7 @@ dependencies = [
 
 [[package]]
 name = "subkey"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "sc-cli",
  "structopt",
@@ -9821,6 +9858,7 @@ dependencies = [
  "sp-keyring",
  "sp-keystore",
  "sp-runtime",
+ "sp-timestamp",
  "test-runner",
 ]
 
@@ -10240,9 +10278,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-attributes"
-version = "0.1.13"
+version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8a9bd1db7706f2373a190b0d067146caa39350c486f3d455b0e33b431f94c07"
+checksum = "c42e6fa53307c8a17e4ccd4dc81cf5ec38db9209f59b222210375b54ee40d1e2"
 dependencies = [
  "proc-macro2",
  "quote",

@@ -15,21 +15,149 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Provides types and traits for creating and checking inherents.
+//! Substrate inherent extrinsics
 //!
-//! Each inherent is added to a produced block. Each runtime decides on which inherents it
-//! wants to attach to its blocks. All data that is required for the runtime to create the inherents
-//! is stored in the `InherentData`. This `InherentData` is constructed by the node and given to
-//! the runtime.
+//! Inherent extrinsics are extrinsics that are inherently added to each block. However, it is up to
+//! runtime implementation to require an inherent for each block or to make it optional. Inherents
+//! are mainly used to pass data from the block producer to the runtime. So, inherents require some
+//! part that is running on the client side and some part that is running on the runtime side. Any
+//! data that is required by an inherent is passed as [`InherentData`] from the client to the runtime
+//! when the inherents are constructed.
 //!
-//! Types that provide data for inherents, should implement `InherentDataProvider` and need to be
-//! registered at `InherentDataProviders`.
+//! The process of constructing and applying inherents is the following:
 //!
-//! In the runtime, modules need to implement `ProvideInherent` when they can create and/or check
-//! inherents. By implementing `ProvideInherent`, a module is not enforced to create an inherent.
-//! A module can also just check given inherents. For using a module as inherent provider, it needs
-//! to be registered by the `construct_runtime!` macro. The macro documentation gives more
-//! information on how that is done.
+//! 1. The block producer first creates the [`InherentData`] by using the inherent data providers
+//! that are created by [`CreateInherentDataProviders`].
+//!
+//! 2. The [`InherentData`] is passed to the `inherent_extrinsics` function of the `BlockBuilder`
+//! runtime api. This will call the runtime which will create all the inherents that should be
+//! applied to the block.
+//!
+//! 3. Apply each inherent to the block like any normal extrinsic.
+//!
+//! On block import the inherents in the block are checked by calling the `check_inherents` runtime
+//! API. This will also pass an instance of [`InherentData`] which the runtime can use to validate
+//! all inherents. If some inherent data isn't required for validating an inherent, it can be
+//! omitted when providing the inherent data providers for block import.
+//!
+//! # Providing inherent data
+//!
+//! To provide inherent data from the client side, [`InherentDataProvider`] should be implemented.
+//!
+//! ```
+//! use codec::Decode;
+//! use sp_inherents::{InherentIdentifier, InherentData};
+//!
+//! // This needs to be unique for the runtime.
+//! const INHERENT_IDENTIFIER: InherentIdentifier = *b"testinh0";
+//!
+//! /// Some custom inherent data provider
+//! struct InherentDataProvider;
+//!
+//! #[async_trait::async_trait]
+//! impl sp_inherents::InherentDataProvider for InherentDataProvider {
+//! 	fn provide_inherent_data(
+//! 		&self,
+//! 		inherent_data: &mut InherentData,
+//! 	) -> Result<(), sp_inherents::Error> {
+//! 		// We can insert any data that implements [`codec::Encode`].
+//! 		inherent_data.put_data(INHERENT_IDENTIFIER, &"hello")
+//! 	}
+//!
+//! 	/// When validating the inherents, the runtime implementation can throw errors. We support
+//! 	/// two error modes, fatal and non-fatal errors. A fatal error means that the block is invalid
+//! 	/// and this function here should return `Err(_)` to not import the block. Non-fatal errors
+//! 	/// are allowed to be handled here in this function and the function should return `Ok(())`
+//! 	/// if it could be handled. A non-fatal error is for example that a block is in the future
+//! 	/// from the point of view of the local node. In such a case the block import for example
+//! 	/// should be delayed until the block is valid.
+//! 	///
+//! 	/// If this functions returns `None`, it means that it is not responsible for this error or
+//! 	/// that the error could not be interpreted.
+//! 	async fn try_handle_error(
+//! 		&self,
+//! 		identifier: &InherentIdentifier,
+//! 		mut error: &[u8],
+//! 	) -> Option<Result<(), sp_inherents::Error>> {
+//! 		// Check if this error belongs to us.
+//! 		if *identifier != INHERENT_IDENTIFIER {
+//! 			return None;
+//! 		}
+//!
+//! 		// For demonstration purposes we are using a `String` as error type. In real
+//! 		// implementations it is advised to not use `String`.
+//! 		Some(Err(
+//! 			sp_inherents::Error::Application(Box::from(String::decode(&mut error).ok()?))
+//! 		))
+//! 	}
+//! }
+//! ```
+//!
+//! In the service the relevant inherent data providers need to be passed the block production and
+//! the block import. As already highlighted above, the providers can be different between import
+//! and production.
+//!
+//! ```
+//! # use sp_runtime::testing::ExtrinsicWrapper;
+//! # use sp_inherents::{InherentIdentifier, InherentData};
+//! # use futures::FutureExt;
+//! # type Block = sp_runtime::testing::Block<ExtrinsicWrapper<()>>;
+//! # const INHERENT_IDENTIFIER: InherentIdentifier = *b"testinh0";
+//! # struct InherentDataProvider;
+//! # #[async_trait::async_trait]
+//! # impl sp_inherents::InherentDataProvider for InherentDataProvider {
+//! # 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), sp_inherents::Error> {
+//! # 		inherent_data.put_data(INHERENT_IDENTIFIER, &"hello")
+//! # 	}
+//! # 	async fn try_handle_error(
+//! # 		&self,
+//! # 		_: &InherentIdentifier,
+//! # 		_: &[u8],
+//! # 	) -> Option<Result<(), sp_inherents::Error>> {
+//! # 		None
+//! # 	}
+//! # }
+//!
+//! async fn cool_consensus_block_production(
+//! 	// The second parameter to the trait are parameters that depend on what the caller
+//! 	// can provide on extra data.
+//! 	_: impl sp_inherents::CreateInherentDataProviders<Block, ()>,
+//! ) {
+//! 	// do cool stuff
+//! }
+//!
+//! async fn cool_consensus_block_import(
+//! 	_: impl sp_inherents::CreateInherentDataProviders<Block, ()>,
+//! ) {
+//! 	// do cool stuff
+//! }
+//!
+//! async fn build_service(is_validator: bool) {
+//! 	// For block import we don't pass any inherent data provider, because our runtime
+//! 	// does not need any inherent data to validate the inherents.
+//! 	let block_import = cool_consensus_block_import(|_parent, ()| async { Ok(()) });
+//!
+//! 	let block_production = if is_validator {
+//! 		// For block production we want to provide our inherent data provider
+//! 		cool_consensus_block_production(|_parent, ()| async {
+//!			Ok(InherentDataProvider)
+//! 		}).boxed()
+//! 	} else {
+//! 		futures::future::pending().boxed()
+//! 	};
+//!
+//! 	futures::pin_mut!(block_import);
+//!
+//! 	futures::future::select(block_import, block_production).await;
+//! }
+//! ```
+//!
+//! # Creating the inherent
+//!
+//! As the inherents are created by the runtime, it depends on the runtime implementation on how
+//! to create the inherents. As already described above the client side passes the [`InherentData`]
+//! and expects the runtime to construct the inherents out of it. When validating the inherents,
+//! [`CheckInherentsResult`] is used to communicate the result client side.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
@@ -39,42 +167,34 @@ use codec::{Encode, Decode};
 use sp_std::{collections::btree_map::{BTreeMap, IntoIter, Entry}, vec::Vec};
 
 #[cfg(feature = "std")]
-use parking_lot::RwLock;
+mod client_side;
 
 #[cfg(feature = "std")]
-use std::{sync::Arc, format};
+pub use client_side::*;
 
-/// An error that can occur within the inherent data system.
-#[cfg(feature = "std")]
-#[derive(Debug, Encode, Decode, thiserror::Error)]
-#[error("Inherents: {0}")]
-pub struct Error(String);
-
-#[cfg(feature = "std")]
-impl<T: Into<String>> From<T> for Error {
-	fn from(data: T) -> Error {
-		Self(data.into())
-	}
-}
-
-#[cfg(feature = "std")]
-impl Error {
-	/// Convert this error into a `String`.
-	pub fn into_string(self) -> String {
-		self.0
-	}
-}
-
-/// An error that can occur within the inherent data system.
-#[derive(Encode, sp_core::RuntimeDebug)]
-#[cfg(not(feature = "std"))]
-pub struct Error(&'static str);
-
-#[cfg(not(feature = "std"))]
-impl From<&'static str> for Error {
-	fn from(data: &'static str) -> Error {
-		Self(data)
-	}
+/// Errors that occur in context of inherents.
+#[derive(Debug)]
+#[cfg_attr(feature = "std", derive(thiserror::Error))]
+#[allow(missing_docs)]
+pub enum Error {
+	#[cfg_attr(
+		feature = "std",
+		error("Inherent data already exists for identifier: {}", "String::from_utf8_lossy(_0)")
+	)]
+	InherentDataExists(InherentIdentifier),
+	#[cfg_attr(
+		feature = "std",
+		error("Failed to decode inherent data for identifier: {}", "String::from_utf8_lossy(_1)")
+	)]
+	DecodingFailed(#[cfg_attr(feature = "std", source)] codec::Error, InherentIdentifier),
+	#[cfg_attr(
+		feature = "std",
+		error("There was already a fatal error reported and no other errors are allowed")
+	)]
+	FatalErrorReported,
+	#[cfg(feature = "std")]
+	#[error(transparent)]
+	Application(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 /// An identifier for an inherent.
@@ -112,7 +232,7 @@ impl InherentData {
 				Ok(())
 			},
 			Entry::Occupied(_) => {
-				Err("Inherent with same identifier already exists!".into())
+				Err(Error::InherentDataExists(identifier))
 			}
 		}
 	}
@@ -142,9 +262,7 @@ impl InherentData {
 		match self.data.get(identifier) {
 			Some(inherent) =>
 				I::decode(&mut &inherent[..])
-					.map_err(|_| {
-						"Could not decode requested inherent type!".into()
-					})
+					.map_err(|e| Error::DecodingFailed(e, *identifier))
 					.map(Some),
 			None => Ok(None)
 		}
@@ -203,7 +321,7 @@ impl CheckInherentsResult {
 	) -> Result<(), Error> {
 		// Don't accept any other error
 		if self.fatal_error {
-			return Err("No other errors are accepted after an hard error!".into())
+			return Err(Error::FatalErrorReported)
 		}
 
 		if error.is_fatal_error() {
@@ -257,118 +375,6 @@ impl PartialEq for CheckInherentsResult {
 	}
 }
 
-/// All `InherentData` providers.
-#[cfg(feature = "std")]
-#[derive(Clone, Default)]
-pub struct InherentDataProviders {
-	providers: Arc<RwLock<Vec<Box<dyn ProvideInherentData + Send + Sync>>>>,
-}
-
-#[cfg(feature = "std")]
-impl InherentDataProviders {
-	/// Create a new instance.
-	pub fn new() -> Self {
-		Self::default()
-	}
-
-	/// Register an `InherentData` provider.
-	///
-	/// The registration order is preserved and this order will also be used when creating the
-	/// inherent data.
-	///
-	/// # Result
-	///
-	/// Will return an error, if a provider with the same identifier already exists.
-	pub fn register_provider<P: ProvideInherentData + Send + Sync +'static>(
-		&self,
-		provider: P,
-	) -> Result<(), Error> {
-		if self.has_provider(&provider.inherent_identifier()) {
-			Err(
-				format!(
-					"Inherent data provider with identifier {:?} already exists!",
-					&provider.inherent_identifier()
-				).into()
-			)
-		} else {
-			provider.on_register(self)?;
-			self.providers.write().push(Box::new(provider));
-			Ok(())
-		}
-	}
-
-	/// Returns if a provider for the given identifier exists.
-	pub fn has_provider(&self, identifier: &InherentIdentifier) -> bool {
-		self.providers.read().iter().any(|p| p.inherent_identifier() == identifier)
-	}
-
-	/// Create inherent data.
-	pub fn create_inherent_data(&self) -> Result<InherentData, Error> {
-		let mut data = InherentData::new();
-		self.providers.read().iter().try_for_each(|p| {
-			p.provide_inherent_data(&mut data)
-				.map_err(|e| format!("Error for `{:?}`: {:?}", p.inherent_identifier(), e))
-		})?;
-		Ok(data)
-	}
-
-	/// Converts a given encoded error into a `String`.
-	///
-	/// Useful if the implementation encounters an error for an identifier it does not know.
-	pub fn error_to_string(&self, identifier: &InherentIdentifier, error: &[u8]) -> String {
-		let res = self.providers.read().iter().filter_map(|p|
-			if p.inherent_identifier() == identifier {
-				Some(
-					p.error_to_string(error)
-						.unwrap_or_else(|| error_to_string_fallback(identifier))
-				)
-			} else {
-				None
-			}
-		).next();
-
-		match res {
-			Some(res) => res,
-			None => format!(
-				"Error while checking inherent of type \"{}\", but this inherent type is unknown.",
-				String::from_utf8_lossy(identifier)
-			)
-		}
-	}
-}
-
-/// Something that provides inherent data.
-#[cfg(feature = "std")]
-pub trait ProvideInherentData {
-	/// Is called when this inherent data provider is registered at the given
-	/// `InherentDataProviders`.
-	fn on_register(&self, _: &InherentDataProviders) -> Result<(), Error> {
-		Ok(())
-	}
-
-	/// The identifier of the inherent for that data will be provided.
-	fn inherent_identifier(&self) -> &'static InherentIdentifier;
-
-	/// Provide inherent data that should be included in a block.
-	///
-	/// The data should be stored in the given `InherentData` structure.
-	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error>;
-
-	/// Convert the given encoded error to a string.
-	///
-	/// If the given error could not be decoded, `None` should be returned.
-	fn error_to_string(&self, error: &[u8]) -> Option<String>;
-}
-
-/// A fallback function, if the decoding of an error fails.
-#[cfg(feature = "std")]
-fn error_to_string_fallback(identifier: &InherentIdentifier) -> String {
-	format!(
-		"Error while checking inherent of type \"{}\", but error could not be decoded.",
-		String::from_utf8_lossy(identifier)
-	)
-}
-
 /// Did we encounter a fatal error while checking an inherent?
 ///
 /// A fatal error is everything that fails while checking an inherent error, e.g. the inherent
@@ -382,9 +388,9 @@ pub trait IsFatalError {
 	fn is_fatal_error(&self) -> bool;
 }
 
-/// Auxiliary to make any given error resolve to `is_fatal_error() == true`.
-#[derive(Encode)]
-pub struct MakeFatalError<E: codec::Encode>(E);
+/// Auxiliary to make any given error resolve to `is_fatal_error() == true` for [`IsFatalError`].
+#[derive(codec::Encode)]
+pub struct MakeFatalError<E>(E);
 
 impl<E: codec::Encode> From<E> for MakeFatalError<E> {
 	fn from(err: E) -> Self {
@@ -396,63 +402,6 @@ impl<E: codec::Encode> IsFatalError for MakeFatalError<E> {
 	fn is_fatal_error(&self) -> bool {
 		true
 	}
-}
-
-/// A pallet that provides or verifies an inherent extrinsic.
-///
-/// The pallet may provide the inherent, verify an inherent, or both provide and verify.
-pub trait ProvideInherent {
-	/// The call type of the pallet.
-	type Call;
-	/// The error returned by `check_inherent`.
-	type Error: codec::Encode + IsFatalError;
-	/// The inherent identifier used by this inherent.
-	const INHERENT_IDENTIFIER: self::InherentIdentifier;
-
-	/// Create an inherent out of the given `InherentData`.
-	fn create_inherent(data: &InherentData) -> Option<Self::Call>;
-
-	/// Determines whether this inherent is required in this block.
-	///
-	/// - `Ok(None)` indicates that this inherent is not required in this block. The default
-	/// implementation returns this.
-	///
-	/// - `Ok(Some(e))` indicates that this inherent is required in this block. The
-	/// `impl_outer_inherent!`, will call this function from its `check_extrinsics`.
-	/// If the inherent is not present, it will return `e`.
-	///
-	/// - `Err(_)` indicates that this function failed and further operations should be aborted.
-	///
-	/// NOTE: If inherent is required then the runtime asserts that the block contains at least
-	/// one inherent for which:
-	/// * type is [`Self::Call`],
-	/// * [`Self::is_inherent`] returns true.
-	fn is_inherent_required(_: &InherentData) -> Result<Option<Self::Error>, Self::Error> { Ok(None) }
-
-	/// Check whether the given inherent is valid. Checking the inherent is optional and can be
-	/// omitted by using the default implementation.
-	///
-	/// When checking an inherent, the first parameter represents the inherent that is actually
-	/// included in the block by its author. Whereas the second parameter represents the inherent
-	/// data that the verifying node calculates.
-	///
-	/// NOTE: A block can contains multiple inherent.
-	fn check_inherent(_: &Self::Call, _: &InherentData) -> Result<(), Self::Error> {
-		Ok(())
-	}
-
-	/// Return whether the call is an inherent call.
-	///
-	/// NOTE: Signed extrinsics are not inherent, but signed extrinsic with the given call variant
-	/// can be dispatched.
-	///
-	/// # Warning
-	///
-	/// In FRAME, inherent are enforced to be before other extrinsics, for this reason,
-	/// pallets with unsigned transactions **must ensure** that no unsigned transaction call
-	/// is an inherent call, when implementing `ValidateUnsigned::validate_unsigned`.
-	/// Otherwise block producer can produce invalid blocks by including them after non inherent.
-	fn is_inherent(call: &Self::Call) -> bool;
 }
 
 #[cfg(test)]
@@ -496,93 +445,34 @@ mod tests {
 	}
 
 	#[derive(Clone)]
-	struct TestInherentDataProvider {
-		registered: Arc<RwLock<bool>>,
-	}
-
-	impl TestInherentDataProvider {
-		fn new() -> Self {
-			let inst = Self {
-				registered: Default::default(),
-			};
-
-			// just make sure
-			assert!(!inst.is_registered());
-
-			inst
-		}
-
-		fn is_registered(&self) -> bool {
-			*self.registered.read()
-		}
-	}
+	struct TestInherentDataProvider;
 
 	const ERROR_TO_STRING: &str = "Found error!";
 
-	impl ProvideInherentData for TestInherentDataProvider {
-		fn on_register(&self, _: &InherentDataProviders) -> Result<(), Error> {
-			*self.registered.write() = true;
-			Ok(())
-		}
-
-		fn inherent_identifier(&self) -> &'static InherentIdentifier {
-			&TEST_INHERENT_0
-		}
-
+	#[async_trait::async_trait]
+	impl InherentDataProvider for TestInherentDataProvider {
 		fn provide_inherent_data(&self, data: &mut InherentData) -> Result<(), Error> {
 			data.put_data(TEST_INHERENT_0, &42)
 		}
 
-		fn error_to_string(&self, _: &[u8]) -> Option<String> {
-			Some(ERROR_TO_STRING.into())
+		async fn try_handle_error(
+			&self,
+			_: &InherentIdentifier,
+			_: &[u8],
+		) -> Option<Result<(), Error>> {
+			Some(Err(Error::Application(Box::from(ERROR_TO_STRING))))
 		}
 	}
 
 	#[test]
-	fn registering_inherent_provider() {
-		let provider = TestInherentDataProvider::new();
-		let providers = InherentDataProviders::new();
+	fn create_inherent_data() {
+		let provider = TestInherentDataProvider;
 
-		providers.register_provider(provider.clone()).unwrap();
-		assert!(provider.is_registered());
-		assert!(providers.has_provider(provider.inherent_identifier()));
-
-		// Second time should fail
-		assert!(providers.register_provider(provider.clone()).is_err());
-	}
-
-	#[test]
-	fn create_inherent_data_from_all_providers() {
-		let provider = TestInherentDataProvider::new();
-		let providers = InherentDataProviders::new();
-
-		providers.register_provider(provider.clone()).unwrap();
-		assert!(provider.is_registered());
-
-		let inherent_data = providers.create_inherent_data().unwrap();
+		let inherent_data = provider.create_inherent_data().unwrap();
 
 		assert_eq!(
-			inherent_data.get_data::<u32>(provider.inherent_identifier()).unwrap().unwrap(),
-			42u32
-		);
-	}
-
-	#[test]
-	fn encoded_error_to_string() {
-		let provider = TestInherentDataProvider::new();
-		let providers = InherentDataProviders::new();
-
-		providers.register_provider(provider.clone()).unwrap();
-		assert!(provider.is_registered());
-
-		assert_eq!(
-			&providers.error_to_string(&TEST_INHERENT_0, &[1, 2]), ERROR_TO_STRING
-		);
-
-		assert!(
-			providers
-				.error_to_string(&TEST_INHERENT_1, &[1, 2])
-				.contains("inherent type is unknown")
+			inherent_data.get_data::<u32>(&TEST_INHERENT_0).unwrap().unwrap(),
+			42u32,
 		);
 	}
 

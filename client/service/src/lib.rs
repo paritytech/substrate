@@ -176,8 +176,6 @@ pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, Transact
 	pub import_queue: ImportQueue,
 	/// A shared transaction pool.
 	pub transaction_pool: Arc<TransactionPool>,
-	/// A registry of all providers of `InherentData`.
-	pub inherent_data_providers: sp_inherents::InherentDataProviders,
 	/// Everything else that needs to be passed into the main build function.
 	pub other: Other,
 }
@@ -301,6 +299,14 @@ async fn build_network_future<
 								e.to_string(),
 							))),
 						};
+					}
+					sc_rpc::system::Request::NetworkReservedPeers(sender) => {
+						let reserved_peers = network.reserved_peers();
+						let reserved_peers = reserved_peers
+							.map(|peer_id| peer_id.to_base58())
+							.collect();
+
+						let _ = sender.send(reserved_peers);
 					}
 					sc_rpc::system::Request::NodeRoles(sender) => {
 						use sc_rpc::system::NodeRole;

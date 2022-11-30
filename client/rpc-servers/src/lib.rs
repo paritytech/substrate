@@ -28,7 +28,7 @@ use log::error;
 use pubsub::PubSubMetadata;
 
 /// Maximal payload accepted by RPC servers.
-const MAX_PAYLOAD: usize = 15 * 1024 * 1024;
+pub const MAX_PAYLOAD: usize = 15 * 1024 * 1024;
 
 /// Default maximum number of connections for WS RPC servers.
 const WS_MAX_CONNECTIONS: usize = 100;

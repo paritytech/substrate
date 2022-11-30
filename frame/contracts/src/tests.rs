@@ -23,7 +23,7 @@ use crate::{
 		Result as ExtensionResult, Environment, ChainExtension, Ext, SysConfig, RetVal,
 		UncheckedFrom, InitState, ReturnFlags,
 	},
-	exec::{AccountIdOf, Executable}, wasm::PrefabWasmModule,
+	exec::{AccountIdOf, Executable, Frame}, wasm::PrefabWasmModule,
 	weights::WeightInfo,
 	wasm::ReturnCode as RuntimeReturnCode,
 	storage::RawAliveContractInfo,
@@ -69,27 +69,37 @@ frame_support::construct_runtime!(
 
 #[macro_use]
 pub mod test_utils {
-	use super::{Test, Balances};
+	use super::{Test, Balances, System};
 	use crate::{
 		ContractInfoOf, CodeHash,
-		storage::Storage,
+		storage::{Storage, ContractInfo},
 		exec::{StorageKey, AccountIdOf},
 		Pallet as Contracts,
+		TrieId, AccountCounter,
 	};
 	use frame_support::traits::Currency;
 
 	pub fn set_storage(addr: &AccountIdOf<Test>, key: &StorageKey, value: Option<Vec<u8>>) {
-		let contract_info = <ContractInfoOf::<Test>>::get(&addr).unwrap().get_alive().unwrap();
-		Storage::<Test>::write(addr, &contract_info.trie_id, key, value).unwrap();
+		let mut contract_info = <ContractInfoOf::<Test>>::get(&addr).unwrap().get_alive().unwrap();
+		let block_number = System::block_number();
+		Storage::<Test>::write(block_number, &mut contract_info, key, value).unwrap();
 	}
 	pub fn get_storage(addr: &AccountIdOf<Test>, key: &StorageKey) -> Option<Vec<u8>> {
 		let contract_info = <ContractInfoOf::<Test>>::get(&addr).unwrap().get_alive().unwrap();
 		Storage::<Test>::read(&contract_info.trie_id, key)
 	}
+	pub fn generate_trie_id(address: &AccountIdOf<Test>) -> TrieId {
+		let seed = <AccountCounter<Test>>::mutate(|counter| {
+			*counter += 1;
+			*counter
+		});
+		Storage::<Test>::generate_trie_id(address, seed)
+	}
 	pub fn place_contract(address: &AccountIdOf<Test>, code_hash: CodeHash<Test>) {
-		let trie_id = Storage::<Test>::generate_trie_id(address);
+		let trie_id = generate_trie_id(address);
 		set_balance(address, Contracts::<Test>::subsistence_threshold() * 10);
-		Storage::<Test>::place_contract(&address, trie_id, code_hash).unwrap();
+		let contract = Storage::<Test>::new_contract(&address, trie_id, code_hash).unwrap();
+		<ContractInfoOf<Test>>::insert(address, ContractInfo::Alive(contract));
 	}
 	pub fn set_balance(who: &AccountIdOf<Test>, amount: u64) {
 		let imbalance = Balances::deposit_creating(who, amount);
@@ -251,7 +261,6 @@ parameter_types! {
 	pub const DepositPerStorageItem: u64 = 10_000;
 	pub RentFraction: Perbill = Perbill::from_rational(4u32, 10_000u32);
 	pub const SurchargeReward: u64 = 500_000;
-	pub const MaxDepth: u32 = 100;
 	pub const MaxValueSize: u32 = 16_384;
 	pub const DeletionQueueDepth: u32 = 1024;
 	pub const DeletionWeightLimit: Weight = 500_000_000_000;
@@ -281,7 +290,7 @@ impl Config for Test {
 	type DepositPerStorageItem = DepositPerStorageItem;
 	type RentFraction = RentFraction;
 	type SurchargeReward = SurchargeReward;
-	type MaxDepth = MaxDepth;
+	type CallStack = [Frame<Self>; 31];
 	type MaxValueSize = MaxValueSize;
 	type WeightPrice = Self;
 	type WeightInfo = ();
@@ -379,8 +388,8 @@ fn account_removal_does_not_remove_storage() {
 	use self::test_utils::{set_storage, get_storage};
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
-		let trie_id1 = Storage::<Test>::generate_trie_id(&ALICE);
-		let trie_id2 = Storage::<Test>::generate_trie_id(&BOB);
+		let trie_id1 = test_utils::generate_trie_id(&ALICE);
+		let trie_id2 = test_utils::generate_trie_id(&BOB);
 		let key1 = &[1; 32];
 		let key2 = &[2; 32];
 
@@ -1835,7 +1844,7 @@ fn cannot_self_destruct_in_constructor() {
 					vec![],
 					vec![],
 				),
-				Error::<Test>::NotCallable,
+				Error::<Test>::TerminatedInConstructor,
 			);
 		});
 }
@@ -2326,18 +2335,18 @@ fn lazy_removal_partial_remove_works() {
 		);
 
 		let addr = Contracts::contract_address(&ALICE, &hash, &[]);
-		let info = <ContractInfoOf::<Test>>::get(&addr).unwrap().get_alive().unwrap();
-		let trie = &info.child_trie_info();
+		let mut info = <ContractInfoOf::<Test>>::get(&addr).unwrap().get_alive().unwrap();
 
 		// Put value into the contracts child trie
 		for val in &vals {
 			Storage::<Test>::write(
-				&addr,
-				&info.trie_id,
+				System::block_number(),
+				&mut info,
 				&val.0,
 				Some(val.2.clone()),
 			).unwrap();
 		}
+		<ContractInfoOf<Test>>::insert(&addr, ContractInfo::Alive(info.clone()));
 
 		// Terminate the contract
 		assert_ok!(Contracts::call(
@@ -2351,9 +2360,11 @@ fn lazy_removal_partial_remove_works() {
 		// Contract info should be gone
 		assert!(!<ContractInfoOf::<Test>>::contains_key(&addr));
 
+		let trie = info.child_trie_info();
+
 		// But value should be still there as the lazy removal did not run, yet.
 		for val in &vals {
-			assert_eq!(child::get::<u32>(trie, &blake2_256(&val.0)), Some(val.1));
+			assert_eq!(child::get::<u32>(&trie, &blake2_256(&val.0)), Some(val.1));
 		}
 
 		trie.clone()
@@ -2407,8 +2418,7 @@ fn lazy_removal_does_no_run_on_full_block() {
 		);
 
 		let addr = Contracts::contract_address(&ALICE, &hash, &[]);
-		let info = <ContractInfoOf::<Test>>::get(&addr).unwrap().get_alive().unwrap();
-		let trie = &info.child_trie_info();
+		let mut info = <ContractInfoOf::<Test>>::get(&addr).unwrap().get_alive().unwrap();
 		let max_keys = 30;
 
 		// Create some storage items for the contract.
@@ -2420,12 +2430,13 @@ fn lazy_removal_does_no_run_on_full_block() {
 		// Put value into the contracts child trie
 		for val in &vals {
 			Storage::<Test>::write(
-				&addr,
-				&info.trie_id,
+				System::block_number(),
+				&mut info,
 				&val.0,
 				Some(val.2.clone()),
 			).unwrap();
 		}
+		<ContractInfoOf<Test>>::insert(&addr, ContractInfo::Alive(info.clone()));
 
 		// Terminate the contract
 		assert_ok!(Contracts::call(
@@ -2439,9 +2450,11 @@ fn lazy_removal_does_no_run_on_full_block() {
 		// Contract info should be gone
 		assert!(!<ContractInfoOf::<Test>>::contains_key(&addr));
 
+		let trie = info.child_trie_info();
+
 		// But value should be still there as the lazy removal did not run, yet.
 		for val in &vals {
-			assert_eq!(child::get::<u32>(trie, &blake2_256(&val.0)), Some(val.1));
+			assert_eq!(child::get::<u32>(&trie, &blake2_256(&val.0)), Some(val.1));
 		}
 
 		// Fill up the block which should prevent the lazy storage removal from running.
@@ -2458,7 +2471,7 @@ fn lazy_removal_does_no_run_on_full_block() {
 
 		// All the keys are still in place
 		for val in &vals {
-			assert_eq!(child::get::<u32>(trie, &blake2_256(&val.0)), Some(val.1));
+			assert_eq!(child::get::<u32>(&trie, &blake2_256(&val.0)), Some(val.1));
 		}
 
 		// Run the lazy removal directly which disregards the block limits
@@ -2466,7 +2479,7 @@ fn lazy_removal_does_no_run_on_full_block() {
 
 		// Now the keys should be gone
 		for val in &vals {
-			assert_eq!(child::get::<u32>(trie, &blake2_256(&val.0)), None);
+			assert_eq!(child::get::<u32>(&trie, &blake2_256(&val.0)), None);
 		}
 	});
 }
@@ -2491,8 +2504,7 @@ fn lazy_removal_does_not_use_all_weight() {
 		);
 
 		let addr = Contracts::contract_address(&ALICE, &hash, &[]);
-		let info = <ContractInfoOf::<Test>>::get(&addr).unwrap().get_alive().unwrap();
-		let trie = &info.child_trie_info();
+		let mut info = <ContractInfoOf::<Test>>::get(&addr).unwrap().get_alive().unwrap();
 		let weight_limit = 5_000_000_000;
 		let (weight_per_key, max_keys) = Storage::<Test>::deletion_budget(1, weight_limit);
 
@@ -2505,12 +2517,13 @@ fn lazy_removal_does_not_use_all_weight() {
 		// Put value into the contracts child trie
 		for val in &vals {
 			Storage::<Test>::write(
-				&addr,
-				&info.trie_id,
+				System::block_number(),
+				&mut info,
 				&val.0,
 				Some(val.2.clone()),
 			).unwrap();
 		}
+		<ContractInfoOf<Test>>::insert(&addr, ContractInfo::Alive(info.clone()));
 
 		// Terminate the contract
 		assert_ok!(Contracts::call(
@@ -2524,9 +2537,11 @@ fn lazy_removal_does_not_use_all_weight() {
 		// Contract info should be gone
 		assert!(!<ContractInfoOf::<Test>>::contains_key(&addr));
 
+		let trie = info.child_trie_info();
+
 		// But value should be still there as the lazy removal did not run, yet.
 		for val in &vals {
-			assert_eq!(child::get::<u32>(trie, &blake2_256(&val.0)), Some(val.1));
+			assert_eq!(child::get::<u32>(&trie, &blake2_256(&val.0)), Some(val.1));
 		}
 
 		// Run the lazy removal
@@ -2537,7 +2552,7 @@ fn lazy_removal_does_not_use_all_weight() {
 
 		// All the keys are removed
 		for val in vals {
-			assert_eq!(child::get::<u32>(trie, &blake2_256(&val.0)), None);
+			assert_eq!(child::get::<u32>(&trie, &blake2_256(&val.0)), None);
 		}
 	});
 }

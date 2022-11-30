@@ -29,7 +29,7 @@ use sp_runtime::traits::{ValidateUnsigned, Zero};
 use sp_runtime::transaction_validity::TransactionSource;
 use frame_support::traits::UnfilteredDispatchable;
 
-use crate::Module as ImOnline;
+use crate::Pallet as ImOnline;
 
 const MAX_KEYS: u32 = 1000;
 const MAX_EXTERNAL_ADDRESSES: u32 = 100;

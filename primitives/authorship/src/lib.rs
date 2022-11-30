@@ -23,7 +23,7 @@ use sp_std::{result::Result, prelude::*};
 
 use codec::{Encode, Decode};
 use sp_inherents::{Error, InherentIdentifier, InherentData, IsFatalError};
-use sp_runtime::RuntimeString;
+use sp_runtime::{RuntimeString, traits::Header as HeaderT};
 
 /// The identifier for the `uncles` inherent.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"uncles00";
@@ -44,12 +44,12 @@ impl IsFatalError for InherentError {
 }
 
 /// Auxiliary trait to extract uncles inherent data.
-pub trait UnclesInherentData<H: Decode> {
+pub trait UnclesInherentData<H> {
 	/// Get uncles.
 	fn uncles(&self) -> Result<Vec<H>, Error>;
 }
 
-impl<H: Decode> UnclesInherentData<H> for InherentData {
+impl<H: HeaderT> UnclesInherentData<H> for InherentData {
 	fn uncles(&self) -> Result<Vec<H>, Error> {
 		Ok(self.get_data(&INHERENT_IDENTIFIER)?.unwrap_or_default())
 	}
@@ -57,36 +57,43 @@ impl<H: Decode> UnclesInherentData<H> for InherentData {
 
 /// Provider for inherent data.
 #[cfg(feature = "std")]
-pub struct InherentDataProvider<F, H> {
-	inner: F,
-	_marker: std::marker::PhantomData<H>,
+pub struct InherentDataProvider<H> {
+	uncles: Vec<H>,
 }
 
 #[cfg(feature = "std")]
-impl<F, H> InherentDataProvider<F, H> {
-	pub fn new(uncles_oracle: F) -> Self {
-		InherentDataProvider { inner: uncles_oracle, _marker: Default::default() }
+impl<H> InherentDataProvider<H> {
+	/// Create a new inherent data provider with the given `uncles`.
+	pub fn new(uncles: Vec<H>) -> Self {
+		InherentDataProvider { uncles }
+	}
+
+	/// Create a new instance that is usable for checking inherents.
+	///
+	/// This will always return an empty vec of uncles.
+	pub fn check_inherents() -> Self {
+		Self { uncles: Vec::new() }
 	}
 }
 
 #[cfg(feature = "std")]
-impl<F, H: Encode + std::fmt::Debug> sp_inherents::ProvideInherentData for InherentDataProvider<F, H>
-where F: Fn() -> Vec<H>
-{
-	fn inherent_identifier(&self) -> &'static InherentIdentifier {
-		&INHERENT_IDENTIFIER
-	}
-
+#[async_trait::async_trait]
+impl<H: HeaderT> sp_inherents::InherentDataProvider for InherentDataProvider<H> {
 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error> {
-		let uncles = (self.inner)();
-		if !uncles.is_empty() {
-			inherent_data.put_data(INHERENT_IDENTIFIER, &uncles)
-		} else {
-			Ok(())
-		}
+		inherent_data.put_data(INHERENT_IDENTIFIER, &self.uncles)
 	}
 
-	fn error_to_string(&self, _error: &[u8]) -> Option<String> {
-		Some(format!("no further information"))
+	async fn try_handle_error(
+		&self,
+		identifier: &InherentIdentifier,
+		error: &[u8],
+	) -> Option<Result<(), Error>> {
+		if *identifier != INHERENT_IDENTIFIER {
+			return None
+		}
+
+		let error = InherentError::decode(&mut &error[..]).ok()?;
+
+		Some(Err(Error::Application(Box::from(format!("{:?}", error)))))
 	}
 }

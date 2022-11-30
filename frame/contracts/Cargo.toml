@@ -18,6 +18,7 @@ log = { version = "0.4", default-features = false }
 parity-wasm = { version = "0.42", default-features = false }
 pwasm-utils = { version = "0.17", default-features = false }
 serde = { version = "1", optional = true, features = ["derive"] }
+smallvec = { version = "1", default-features = false, features = ["const_generics"] }
 wasmi-validation = { version = "0.4", default-features = false }
 
 # Only used in benchmarking to generate random contract code

@@ -19,11 +19,13 @@
 
 use crate::{
 	balancing, helpers::*, is_score_better, mock::*, seq_phragmen, seq_phragmen_core, setup_inputs,
-	to_support_map, to_supports, Assignment, ElectionResult, ExtendedBalance, StakedAssignment,
-	Support, Voter, EvaluateSupport,
+	to_support_map, to_supports, Assignment, CompactSolution, ElectionResult, ExtendedBalance,
+	IndexAssignment, StakedAssignment, Support, Voter, EvaluateSupport,
 };
+use rand::{self, SeedableRng};
 use sp_arithmetic::{PerU16, Perbill, Percent, Permill};
 use substrate_test_utils::assert_eq_uvec;
+use std::convert::TryInto;
 
 #[test]
 fn float_phragmen_poc_works() {
@@ -423,10 +425,10 @@ fn phragmen_poc_2_works() {
 		(4, 500),
 	]);
 
-	run_and_compare::<Perbill>(candidates.clone(), voters.clone(), &stake_of, 2);
-	run_and_compare::<Permill>(candidates.clone(), voters.clone(), &stake_of, 2);
-	run_and_compare::<Percent>(candidates.clone(), voters.clone(), &stake_of, 2);
-	run_and_compare::<PerU16>(candidates, voters, &stake_of, 2);
+	run_and_compare::<Perbill, _>(candidates.clone(), voters.clone(), &stake_of, 2);
+	run_and_compare::<Permill, _>(candidates.clone(), voters.clone(), &stake_of, 2);
+	run_and_compare::<Percent, _>(candidates.clone(), voters.clone(), &stake_of, 2);
+	run_and_compare::<PerU16, _>(candidates, voters, &stake_of, 2);
 }
 
 #[test]
@@ -444,10 +446,10 @@ fn phragmen_poc_3_works() {
 		(4, 1000),
 	]);
 
-	run_and_compare::<Perbill>(candidates.clone(), voters.clone(), &stake_of, 2);
-	run_and_compare::<Permill>(candidates.clone(), voters.clone(), &stake_of, 2);
-	run_and_compare::<Percent>(candidates.clone(), voters.clone(), &stake_of, 2);
-	run_and_compare::<PerU16>(candidates, voters, &stake_of, 2);
+	run_and_compare::<Perbill, _>(candidates.clone(), voters.clone(), &stake_of, 2);
+	run_and_compare::<Permill, _>(candidates.clone(), voters.clone(), &stake_of, 2);
+	run_and_compare::<Percent, _>(candidates.clone(), voters.clone(), &stake_of, 2);
+	run_and_compare::<PerU16, _>(candidates, voters, &stake_of, 2);
 }
 
 #[test]
@@ -475,7 +477,7 @@ fn phragmen_accuracy_on_large_scale_only_candidates() {
 
 	assert_eq_uvec!(winners, vec![(1, 18446744073709551614u128), (5, 18446744073709551613u128)]);
 	assert_eq!(assignments.len(), 2);
-	check_assignments_sum(assignments);
+	check_assignments_sum(&assignments);
 }
 
 #[test]
@@ -527,7 +529,7 @@ fn phragmen_accuracy_on_large_scale_voters_and_candidates() {
 		]
 	);
 
-	check_assignments_sum(assignments);
+	check_assignments_sum(&assignments);
 }
 
 #[test]
@@ -549,7 +551,7 @@ fn phragmen_accuracy_on_small_scale_self_vote() {
 	).unwrap();
 
 	assert_eq_uvec!(winners, vec![(20, 2), (10, 1), (30, 1)]);
-	check_assignments_sum(assignments);
+	check_assignments_sum(&assignments);
 }
 
 #[test]
@@ -580,7 +582,7 @@ fn phragmen_accuracy_on_small_scale_no_self_vote() {
 	).unwrap();
 
 	assert_eq_uvec!(winners, vec![(20, 2), (10, 1), (30, 1)]);
-	check_assignments_sum(assignments);
+	check_assignments_sum(&assignments);
 
 }
 
@@ -615,7 +617,7 @@ fn phragmen_large_scale_test() {
 	).unwrap();
 
 	assert_eq_uvec!(to_without_backing(winners.clone()), vec![24, 22]);
-	check_assignments_sum(assignments);
+	check_assignments_sum(&assignments);
 }
 
 #[test]
@@ -663,7 +665,7 @@ fn phragmen_large_scale_test_2() {
 		],
 	);
 
-	check_assignments_sum(assignments);
+	check_assignments_sum(&assignments);
 }
 
 #[test]
@@ -696,7 +698,7 @@ fn phragmen_linear_equalize() {
 		(130, 1000),
 	]);
 
-	run_and_compare::<Perbill>(candidates, voters, &stake_of, 2);
+	run_and_compare::<Perbill, _>(candidates, voters, &stake_of, 2);
 }
 
 #[test]
@@ -1355,7 +1357,7 @@ mod solution_type {
 		};
 
 		let compacted = TestSolutionCompact::from_assignment(
-			assignments.clone(),
+			&assignments,
 			voter_index,
 			target_index,
 		).unwrap();
@@ -1518,7 +1520,7 @@ mod solution_type {
 		];
 
 		let compacted = TestSolutionCompact::from_assignment(
-			assignments.clone(),
+			&assignments,
 			voter_index,
 			target_index,
 		);
@@ -1549,7 +1551,7 @@ mod solution_type {
 		};
 
 		let compacted = TestSolutionCompact::from_assignment(
-			assignments.clone(),
+			&assignments,
 			voter_index,
 			target_index,
 		).unwrap();
@@ -1563,4 +1565,25 @@ mod solution_type {
 			}
 		);
 	}
+}
+
+#[test]
+fn index_assignments_generate_same_compact_as_plain_assignments() {
+	let rng = rand::rngs::SmallRng::seed_from_u64(0);
+
+	let (voters, assignments, candidates) = generate_random_votes(1000, 2500, rng);
+	let voter_index = make_voter_fn(&voters);
+	let target_index = make_target_fn(&candidates);
+
+	let compact = Compact::from_assignment(&assignments, &voter_index, &target_index).unwrap();
+
+	let index_assignments = assignments
+		.into_iter()
+		.map(|assignment| IndexAssignment::new(&assignment, &voter_index, &target_index))
+		.collect::<Result<Vec<_>, _>>()
+		.unwrap();
+
+	let index_compact = index_assignments.as_slice().try_into().unwrap();
+
+	assert_eq!(compact, index_compact);
 }

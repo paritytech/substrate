@@ -42,10 +42,6 @@ impl AddrCache {
 	/// Inserts the given [`AuthorityId`] and [`Vec<Multiaddr>`] pair for future lookups by
 	/// [`AuthorityId`] or [`PeerId`].
 	pub fn insert(&mut self, authority_id: AuthorityId, mut addresses: Vec<Multiaddr>) {
-		if addresses.is_empty() {
-			return;
-		}
-
 		addresses.sort_unstable_by(|a, b| a.as_ref().cmp(b.as_ref()));
 
 		// Insert into `self.peer_id_to_authority_id`.
@@ -80,8 +76,7 @@ impl AddrCache {
 			};
 
 			if !peer_ids.clone().any(|p| p == peer_id) {
-				let _old_auth = self.peer_id_to_authority_id.remove(&peer_id);
-				debug_assert!(_old_auth.is_some());
+				self.peer_id_to_authority_id.remove(&peer_id);
 			}
 		}
 	}

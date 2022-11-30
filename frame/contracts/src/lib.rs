@@ -103,10 +103,10 @@ pub mod weights;
 #[cfg(test)]
 mod tests;
 
-pub use crate::{pallet::*, schedule::Schedule};
+pub use crate::{pallet::*, schedule::Schedule, exec::Frame};
 use crate::{
 	gas::GasMeter,
-	exec::{ExecutionContext, Executable},
+	exec::{Stack as ExecStack, Executable},
 	rent::Rent,
 	storage::{Storage, DeletedContract, ContractInfo, AliveContractInfo, TombstoneContractInfo},
 	weights::WeightInfo,
@@ -210,9 +210,12 @@ pub mod pallet {
 		#[pallet::constant]
 		type SurchargeReward: Get<BalanceOf<Self>>;
 
-		/// The maximum nesting level of a call/instantiate stack.
-		#[pallet::constant]
-		type MaxDepth: Get<u32>;
+		/// The type of the call stack determines the maximum nesting depth of contract calls.
+		///
+		/// The allowed depth is `CallStack::size() + 1`.
+		/// Therefore a size of `0` means that a contract cannot use call or instantiate.
+		/// In other words only the origin called "root contract" is allowed to execute then.
+		type CallStack: smallvec::Array<Item=Frame<Self>>;
 
 		/// The maximum size of a storage value and event payload in bytes.
 		#[pallet::constant]
@@ -313,8 +316,9 @@ pub mod pallet {
 			let dest = T::Lookup::lookup(dest)?;
 			let mut gas_meter = GasMeter::new(gas_limit);
 			let schedule = <CurrentSchedule<T>>::get();
-			let mut ctx = ExecutionContext::<T, PrefabWasmModule<T>>::top_level(origin, &schedule);
-			let (result, code_len) = match ctx.call(dest, value, &mut gas_meter, data) {
+			let (result, code_len) = match ExecStack::<T, PrefabWasmModule<T>>::run_call(
+				origin, dest, &mut gas_meter, &schedule, value, data
+			) {
 				Ok((output, len)) => (Ok(output), len),
 				Err((err, len)) => (Err(err), len),
 			};
@@ -365,9 +369,9 @@ pub mod pallet {
 			let executable = PrefabWasmModule::from_code(code, &schedule)?;
 			let code_len = executable.code_len();
 			ensure!(code_len <= T::MaxCodeSize::get(), Error::<T>::CodeTooLarge);
-			let mut ctx = ExecutionContext::<T, PrefabWasmModule<T>>::top_level(origin, &schedule);
-			let result = ctx.instantiate(endowment, &mut gas_meter, executable, data, &salt)
-				.map(|(_address, output)| output);
+			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
+				origin, executable, &mut gas_meter, &schedule, endowment, data, &salt,
+			).map(|(_address, output)| output);
 			gas_meter.into_dispatch_result(
 				result,
 				T::WeightInfo::instantiate_with_code(code_len / 1024, salt.len() as u32 / 1024)
@@ -395,10 +399,10 @@ pub mod pallet {
 			let mut gas_meter = GasMeter::new(gas_limit);
 			let schedule = <CurrentSchedule<T>>::get();
 			let executable = PrefabWasmModule::from_storage(code_hash, &schedule, &mut gas_meter)?;
-			let mut ctx = ExecutionContext::<T, PrefabWasmModule<T>>::top_level(origin, &schedule);
 			let code_len = executable.code_len();
-			let result = ctx.instantiate(endowment, &mut gas_meter, executable, data, &salt)
-				.map(|(_address, output)| output);
+			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
+				origin, executable, &mut gas_meter, &schedule, endowment, data, &salt,
+			).map(|(_address, output)| output);
 			gas_meter.into_dispatch_result(
 				result,
 				T::WeightInfo::instantiate(code_len / 1024, salt.len() as u32 / 1024),
@@ -606,6 +610,10 @@ pub mod pallet {
 		StorageExhausted,
 		/// A contract with the same AccountId already exists.
 		DuplicateContract,
+		/// A contract self destructed in its constructor.
+		///
+		/// This can be triggered by a call to `seal_terminate` or `seal_restore_to`.
+		TerminatedInConstructor,
 	}
 
 	/// Current cost schedule for contracts.
@@ -680,8 +688,9 @@ where
 	) -> ContractExecResult {
 		let mut gas_meter = GasMeter::new(gas_limit);
 		let schedule = <CurrentSchedule<T>>::get();
-		let mut ctx = ExecutionContext::<T, PrefabWasmModule<T>>::top_level(origin, &schedule);
-		let result = ctx.call(dest, value, &mut gas_meter, input_data);
+		let result = ExecStack::<T, PrefabWasmModule<T>>::run_call(
+			origin, dest, &mut gas_meter, &schedule, value, input_data,
+		);
 		let gas_consumed = gas_meter.gas_spent();
 		ContractExecResult {
 			result: result.map(|r| r.0).map_err(|r| r.0.error),
@@ -711,7 +720,6 @@ where
 	) -> ContractInstantiateResult<T::AccountId, T::BlockNumber> {
 		let mut gas_meter = GasMeter::new(gas_limit);
 		let schedule = <CurrentSchedule<T>>::get();
-		let mut ctx = ExecutionContext::<T, PrefabWasmModule<T>>::top_level(origin, &schedule);
 		let executable = match code {
 			Code::Upload(Bytes(binary)) => PrefabWasmModule::from_code(binary, &schedule),
 			Code::Existing(hash) => PrefabWasmModule::from_storage(hash, &schedule, &mut gas_meter),
@@ -724,20 +732,21 @@ where
 				debug_message: Bytes(Vec::new()),
 			}
 		};
-		let result = ctx.instantiate(endowment, &mut gas_meter, executable, data, &salt)
-			.and_then(|(account_id, result)| {
-				let rent_projection = if compute_projection {
-					Some(Rent::<T, PrefabWasmModule<T>>::compute_projection(&account_id)
-						.map_err(|_| <Error<T>>::NewContractNotFunded)?)
-				} else {
-					None
-				};
+		let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
+			origin, executable, &mut gas_meter, &schedule, endowment, data, &salt,
+		).and_then(|(account_id, result)| {
+			let rent_projection = if compute_projection {
+				Some(Rent::<T, PrefabWasmModule<T>>::compute_projection(&account_id)
+					.map_err(|_| <Error<T>>::NewContractNotFunded)?)
+			} else {
+				None
+			};
 
-				Ok(InstantiateReturnValue {
-					result,
-					account_id,
-					rent_projection,
-				})
+			Ok(InstantiateReturnValue {
+				result,
+				account_id,
+				rent_projection,
+			})
 		});
 		ContractInstantiateResult {
 			result: result.map_err(|e| e.error),

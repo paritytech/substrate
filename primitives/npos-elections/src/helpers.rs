@@ -72,10 +72,9 @@ pub fn assignment_staked_to_ratio_normalized<A: IdentifierT, P: PerThing128>(
 	staked: Vec<StakedAssignment<A>>,
 ) -> Result<Vec<Assignment<A, P>>, Error> {
 	let mut ratio = staked.into_iter().map(|a| a.into_assignment()).collect::<Vec<_>>();
-	ratio
-		.iter_mut()
-		.map(|a| a.try_normalize().map_err(|err| Error::ArithmeticError(err)))
-		.collect::<Result<_, _>>()?;
+	for assignment in ratio.iter_mut() {
+		assignment.try_normalize().map_err(|err| Error::ArithmeticError(err))?;
+	}
 	Ok(ratio)
 }
 

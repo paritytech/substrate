@@ -206,10 +206,10 @@ where
 	/// Execute all `OnRuntimeUpgrade` of this runtime, and return the aggregate weight.
 	pub fn execute_on_runtime_upgrade() -> frame_support::weights::Weight {
 		let mut weight = 0;
+		weight = weight.saturating_add(COnRuntimeUpgrade::on_runtime_upgrade());
 		weight = weight.saturating_add(
 			<frame_system::Pallet<System> as OnRuntimeUpgrade>::on_runtime_upgrade(),
 		);
-		weight = weight.saturating_add(COnRuntimeUpgrade::on_runtime_upgrade());
 		weight = weight.saturating_add(<AllPallets as OnRuntimeUpgrade>::on_runtime_upgrade());
 
 		weight
@@ -619,7 +619,7 @@ mod tests {
 			}
 		}
 
-		impl<T: Config> sp_inherents::ProvideInherent for Module<T> {
+		impl<T: Config> frame_support::inherent::ProvideInherent for Module<T> {
 			type Call = Call<T>;
 			type Error = sp_inherents::MakeFatalError<()>;
 			const INHERENT_IDENTIFIER: [u8; 8] = *b"test1234";

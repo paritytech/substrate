@@ -475,6 +475,12 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 		revert_finalized: bool,
 	) -> sp_blockchain::Result<(NumberFor<Block>, HashSet<Block::Hash>)>;
 
+	/// Discard non-best, unfinalized leaf block.
+	fn remove_leaf_block(
+		&self,
+		hash: &Block::Hash,
+	) -> sp_blockchain::Result<()>;
+
 	/// Insert auxiliary data into key-value store.
 	fn insert_aux<
 		'a,

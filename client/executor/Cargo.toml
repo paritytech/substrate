@@ -34,7 +34,6 @@ sp-maybe-compressed-blob = { version = "3.0.0", path = "../../primitives/maybe-c
 sc-executor-common = { version = "0.9.0", path = "common" }
 sc-executor-wasmi = { version = "0.9.0", path = "wasmi" }
 sc-executor-wasmtime = { version = "0.9.0", path = "wasmtime", optional = true }
-sc-tracing = { version = "3.0.0", path = "../tracing" }
 parking_lot = "0.11.1"
 log = "0.4.8"
 libsecp256k1 = "0.3.4"

@@ -35,7 +35,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use structopt::StructOpt;
 
 /// The `run` command used to run a node.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, StructOpt, Clone)]
 pub struct RunCmd {
 	/// Enable validator mode.
 	///

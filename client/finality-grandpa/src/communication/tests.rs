@@ -295,6 +295,7 @@ fn good_commit_leads_to_relay() {
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
 						remote: sender_id.clone(),
 						protocol: GRANDPA_PROTOCOL_NAME.into(),
+						negotiated_fallback: None,
 						role: ObservedRole::Full,
 					});
 
@@ -308,6 +309,7 @@ fn good_commit_leads_to_relay() {
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
 						remote: receiver_id.clone(),
 						protocol: GRANDPA_PROTOCOL_NAME.into(),
+						negotiated_fallback: None,
 						role: ObservedRole::Full,
 					});
 
@@ -442,6 +444,7 @@ fn bad_commit_leads_to_report() {
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
 						remote: sender_id.clone(),
 						protocol: GRANDPA_PROTOCOL_NAME.into(),
+						negotiated_fallback: None,
 						role: ObservedRole::Full,
 					});
 					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {

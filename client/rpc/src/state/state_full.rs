@@ -27,9 +27,10 @@ use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionMan
 use rpc::{Result as RpcResult, futures::{stream, Future, Sink, Stream, future::result}};
 
 use sc_rpc_api::state::ReadProof;
-use sc_client_api::backend::Backend;
-use sp_blockchain::{Result as ClientResult, Error as ClientError, HeaderMetadata, CachedHeaderMetadata, HeaderBackend};
-use sc_client_api::BlockchainEvents;
+use sp_blockchain::{
+	Result as ClientResult, Error as ClientError, HeaderMetadata, CachedHeaderMetadata,
+	HeaderBackend
+};
 use sp_core::{
 	Bytes, storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet,
 	ChildInfo, ChildType, PrefixedStorageKey},
@@ -43,7 +44,10 @@ use sp_api::{Metadata, ProvideRuntimeApi, CallApiAt};
 
 use super::{StateBackend, ChildStateBackend, error::{FutureResult, Error, Result}, client_err};
 use std::marker::PhantomData;
-use sc_client_api::{CallExecutor, StorageProvider, ExecutorProvider, ProofProvider};
+use sc_client_api::{
+	Backend, BlockBackend, BlockchainEvents, CallExecutor, StorageProvider, ExecutorProvider,
+	ProofProvider
+};
 
 /// Ranges to query in state_queryStorage.
 struct QueryStorageRange<Block: BlockT> {
@@ -69,7 +73,7 @@ pub struct FullState<BE, Block: BlockT, Client> {
 impl<BE, Block: BlockT, Client> FullState<BE, Block, Client>
 	where
 		BE: Backend<Block>,
-		Client: StorageProvider<Block, BE> + HeaderBackend<Block>
+		Client: StorageProvider<Block, BE> + HeaderBackend<Block> + BlockBackend<Block>
 			+ HeaderMetadata<Block, Error = sp_blockchain::Error>,
 		Block: BlockT + 'static,
 {
@@ -221,9 +225,11 @@ impl<BE, Block: BlockT, Client> FullState<BE, Block, Client>
 impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Client> where
 	Block: BlockT + 'static,
 	BE: Backend<Block> + 'static,
-	Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + ProofProvider<Block> + HeaderBackend<Block>
+	Client: ExecutorProvider<Block> + StorageProvider<Block, BE>
+		+ ProofProvider<Block> + HeaderBackend<Block>
 		+ HeaderMetadata<Block, Error = sp_blockchain::Error> + BlockchainEvents<Block>
 		+ CallApiAt<Block> + ProvideRuntimeApi<Block>
+		+ BlockBackend<Block>
 		+ Send + Sync + 'static,
 	Client::Api: Metadata<Block>,
 {
@@ -527,12 +533,26 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 	) -> RpcResult<bool> {
 		Ok(self.subscriptions.cancel(id))
 	}
+
+	fn trace_block(
+		&self,
+		block: Block::Hash,
+		targets: Option<String>,
+		storage_keys: Option<String>,
+	) -> FutureResult<sp_rpc::tracing::TraceBlockResponse> {
+		Box::new(result(
+			sc_tracing::block::BlockExecutor::new(self.client.clone(), block, targets, storage_keys)
+				.trace_block()
+				.map_err(|e| invalid_block::<Block>(block, None, e.to_string()))
+		))
+	}
 }
 
 impl<BE, Block, Client> ChildStateBackend<Block, Client> for FullState<BE, Block, Client> where
 	Block: BlockT + 'static,
 	BE: Backend<Block> + 'static,
-	Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + HeaderBackend<Block>
+	Client: ExecutorProvider<Block> + StorageProvider<Block, BE>
+		+ HeaderBackend<Block> + BlockBackend<Block>
 		+ HeaderMetadata<Block, Error = sp_blockchain::Error> + BlockchainEvents<Block>
 		+ CallApiAt<Block> + ProvideRuntimeApi<Block>
 		+ Send + Sync + 'static,

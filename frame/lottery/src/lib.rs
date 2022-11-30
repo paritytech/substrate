@@ -56,7 +56,7 @@ pub mod weights;
 
 use sp_std::prelude::*;
 use sp_runtime::{
-	DispatchError,
+	DispatchError, ArithmeticError,
 	traits::{AccountIdConversion, Saturating, Zero},
 };
 use frame_support::{
@@ -188,8 +188,6 @@ decl_event!(
 
 decl_error! {
 	pub enum Error for Module<T: Config> {
-		/// An overflow has occurred.
-		Overflow,
 		/// A lottery has not been configured.
 		NotConfigured,
 		/// A lottery is already in progress.
@@ -278,7 +276,7 @@ decl_module! {
 			Lottery::<T>::try_mutate(|lottery| -> DispatchResult {
 				ensure!(lottery.is_none(), Error::<T>::InProgress);
 				let index = LotteryIndex::get();
-				let new_index = index.checked_add(1).ok_or(Error::<T>::Overflow)?;
+				let new_index = index.checked_add(1).ok_or(ArithmeticError::Overflow)?;
 				let start = frame_system::Pallet::<T>::block_number();
 				// Use new_index to more easily track everything with the current state.
 				*lottery = Some(LotteryConfig {
@@ -400,7 +398,7 @@ impl<T: Config> Module<T> {
 		ensure!(T::ValidateCall::validate_call(call), Error::<T>::InvalidCall);
 		let call_index = Self::call_to_index(call)?;
 		let ticket_count = TicketsCount::get();
-		let new_ticket_count = ticket_count.checked_add(1).ok_or(Error::<T>::Overflow)?;
+		let new_ticket_count = ticket_count.checked_add(1).ok_or(ArithmeticError::Overflow)?;
 		// Try to update the participant status
 		Participants::<T>::try_mutate(&caller, |(lottery_index, participating_calls)| -> DispatchResult {
 			let index = LotteryIndex::get();

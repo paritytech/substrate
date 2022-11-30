@@ -21,7 +21,7 @@ use structopt::StructOpt;
 use sc_service::TransactionStorageMode;
 
 /// Parameters for block import.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, StructOpt, Clone)]
 pub struct DatabaseParams {
 	/// Select database backend to use.
 	#[structopt(

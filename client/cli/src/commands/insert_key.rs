@@ -29,7 +29,7 @@ use sc_keystore::LocalKeystore;
 use sc_service::config::{KeystoreConfig, BasePath};
 
 /// The `insert` command
-#[derive(Debug, StructOpt)]
+#[derive(Debug, StructOpt, Clone)]
 #[structopt(
 	name = "insert",
 	about = "Insert a key to the keystore of a node."

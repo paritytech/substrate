@@ -159,6 +159,7 @@ fn build_nodes_one_proto()
 		extra_sets: vec![
 			config::NonDefaultSetConfig {
 				notifications_protocol: PROTOCOL_NAME,
+				fallback_names: Vec::new(),
 				max_notification_size: 1024 * 1024,
 				set_config: Default::default()
 			}
@@ -172,6 +173,7 @@ fn build_nodes_one_proto()
 		extra_sets: vec![
 			config::NonDefaultSetConfig {
 				notifications_protocol: PROTOCOL_NAME,
+				fallback_names: Vec::new(),
 				max_notification_size: 1024 * 1024,
 				set_config: config::SetConfig {
 					reserved_nodes: vec![config::MultiaddrWithPeerId {
@@ -328,6 +330,7 @@ fn lots_of_incoming_peers_works() {
 		extra_sets: vec![
 			config::NonDefaultSetConfig {
 				notifications_protocol: PROTOCOL_NAME,
+				fallback_names: Vec::new(),
 				max_notification_size: 1024 * 1024,
 				set_config: config::SetConfig {
 					in_peers: u32::max_value(),
@@ -353,6 +356,7 @@ fn lots_of_incoming_peers_works() {
 			extra_sets: vec![
 				config::NonDefaultSetConfig {
 					notifications_protocol: PROTOCOL_NAME,
+					fallback_names: Vec::new(),
 					max_notification_size: 1024 * 1024,
 					set_config: config::SetConfig {
 						reserved_nodes: vec![config::MultiaddrWithPeerId {
@@ -450,6 +454,81 @@ fn notifications_back_pressure() {
 		for num in 0..TOTAL_NOTIFS {
 			let notif = node1.notification_sender(node2_id.clone(), PROTOCOL_NAME).unwrap();
 			notif.ready().await.unwrap().send(format!("hello #{}", num)).unwrap();
+		}
+
+		receiver.await;
+	});
+}
+
+#[test]
+fn fallback_name_working() {
+	// Node 1 supports the protocols "new" and "old". Node 2 only supports "old". Checks whether
+	// they can connect.
+
+	const NEW_PROTOCOL_NAME: Cow<'static, str> =
+		Cow::Borrowed("/new-shiny-protocol-that-isnt-PROTOCOL_NAME");
+
+	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
+
+	let (node1, mut events_stream1) = build_test_full_node(config::NetworkConfiguration {
+		extra_sets: vec![
+			config::NonDefaultSetConfig {
+				notifications_protocol: NEW_PROTOCOL_NAME.clone(),
+				fallback_names: vec![PROTOCOL_NAME],
+				max_notification_size: 1024 * 1024,
+				set_config: Default::default()
+			}
+		],
+		listen_addresses: vec![listen_addr.clone()],
+		transport: config::TransportConfig::MemoryOnly,
+		.. config::NetworkConfiguration::new_local()
+	});
+
+	let (_, mut events_stream2) = build_test_full_node(config::NetworkConfiguration {
+		extra_sets: vec![
+			config::NonDefaultSetConfig {
+				notifications_protocol: PROTOCOL_NAME,
+				fallback_names: Vec::new(),
+				max_notification_size: 1024 * 1024,
+				set_config: config::SetConfig {
+					reserved_nodes: vec![config::MultiaddrWithPeerId {
+						multiaddr: listen_addr,
+						peer_id: node1.local_peer_id().clone(),
+					}],
+					.. Default::default()
+				}
+			}
+		],
+		listen_addresses: vec![],
+		transport: config::TransportConfig::MemoryOnly,
+		.. config::NetworkConfiguration::new_local()
+	});
+
+	let receiver = async_std::task::spawn(async move {
+		// Wait for the `NotificationStreamOpened`.
+		loop {
+			match events_stream2.next().await.unwrap() {
+				Event::NotificationStreamOpened { protocol, negotiated_fallback, .. } => {
+					assert_eq!(protocol, PROTOCOL_NAME);
+					assert_eq!(negotiated_fallback, None);
+					break
+				},
+				_ => {}
+			};
+		}
+	});
+
+	async_std::task::block_on(async move {
+		// Wait for the `NotificationStreamOpened`.
+		loop {
+			match events_stream1.next().await.unwrap() {
+				Event::NotificationStreamOpened { protocol, negotiated_fallback, .. } => {
+					assert_eq!(protocol, NEW_PROTOCOL_NAME);
+					assert_eq!(negotiated_fallback, Some(PROTOCOL_NAME));
+					break
+				},
+				_ => {}
+			};
 		}
 
 		receiver.await;

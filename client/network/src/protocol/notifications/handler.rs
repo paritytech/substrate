@@ -110,7 +110,7 @@ const INITIAL_KEEPALIVE_TIME: Duration = Duration::from_secs(5);
 pub struct NotifsHandlerProto {
 	/// Name of protocols, prototypes for upgrades for inbound substreams, and the message we
 	/// send or respond with in the handshake.
-	protocols: Vec<(Cow<'static, str>, NotificationsIn, Arc<RwLock<Vec<u8>>>, u64)>,
+	protocols: Vec<ProtocolConfig>,
 }
 
 /// The actual handler once the connection has been established.
@@ -135,19 +135,26 @@ pub struct NotifsHandler {
 	>,
 }
 
+/// Configuration for a notifications protocol.
+#[derive(Debug, Clone)]
+pub struct ProtocolConfig {
+	/// Name of the protocol.
+	pub name: Cow<'static, str>,
+	/// Names of the protocol to use if the main one isn't available.
+	pub fallback_names: Vec<Cow<'static, str>>,
+	/// Handshake of the protocol. The `RwLock` is locked every time a new substream is opened.
+	pub handshake: Arc<RwLock<Vec<u8>>>,
+	/// Maximum allowed size for a notification.
+	pub max_notification_size: u64,
+}
+
 /// Fields specific for each individual protocol.
 struct Protocol {
-	/// Name of the protocol.
-	name: Cow<'static, str>,
+	/// Other fields.
+	config: ProtocolConfig,
 
 	/// Prototype for the inbound upgrade.
 	in_upgrade: NotificationsIn,
-
-	/// Handshake to send when opening a substream or receiving an open request.
-	handshake: Arc<RwLock<Vec<u8>>>,
-
-	/// Maximum allowed size of individual notifications.
-	max_notification_size: u64,
 
 	/// Current state of the substreams for this protocol.
 	state: State,
@@ -214,21 +221,25 @@ impl IntoProtocolsHandler for NotifsHandlerProto {
 
 	fn inbound_protocol(&self) -> UpgradeCollec<NotificationsIn> {
 		self.protocols.iter()
-			.map(|(_, p, _, _)| p.clone())
+			.map(|cfg| NotificationsIn::new(cfg.name.clone(), cfg.fallback_names.clone(), cfg.max_notification_size))
 			.collect::<UpgradeCollec<_>>()
 	}
 
 	fn into_handler(self, peer_id: &PeerId, connected_point: &ConnectedPoint) -> Self::Handler {
 		NotifsHandler {
-			protocols: self.protocols.into_iter().map(|(name, in_upgrade, handshake, max_size)| {
+			protocols: self.protocols.into_iter().map(|config| {
+				let in_upgrade = NotificationsIn::new(
+					config.name.clone(),
+					config.fallback_names.clone(),
+					config.max_notification_size
+				);
+
 				Protocol {
-					name,
+					config,
 					in_upgrade,
-					handshake,
 					state: State::Closed {
 						pending_opening: false,
 					},
-					max_notification_size: max_size,
 				}
 			}).collect(),
 			peer_id: peer_id.clone(),
@@ -271,6 +282,8 @@ pub enum NotifsHandlerOut {
 	OpenResultOk {
 		/// Index of the protocol in the list of protocols passed at initialization.
 		protocol_index: usize,
+		/// Name of the protocol that was actually negotiated, if the default one wasn't available.
+		negotiated_fallback: Option<Cow<'static, str>>,
 		/// The endpoint of the connection that is open for custom protocols.
 		endpoint: ConnectedPoint,
 		/// Handshake that was sent to us.
@@ -445,18 +458,10 @@ impl NotifsHandlerProto {
 	/// is always the same whether we open a substream ourselves or respond to handshake from
 	/// the remote.
 	pub fn new(
-		list: impl Into<Vec<(Cow<'static, str>, Arc<RwLock<Vec<u8>>>, u64)>>,
+		list: impl Into<Vec<ProtocolConfig>>,
 	) -> Self {
-		let protocols =	list
-			.into()
-			.into_iter()
-			.map(|(proto_name, msg, max_notif_size)| {
-				(proto_name.clone(), NotificationsIn::new(proto_name, max_notif_size), msg, max_notif_size)
-			})
-			.collect();
-
 		NotifsHandlerProto {
-			protocols,
+			protocols: list.into(),
 		}
 	}
 }
@@ -481,7 +486,7 @@ impl ProtocolsHandler for NotifsHandler {
 
 	fn inject_fully_negotiated_inbound(
 		&mut self,
-		((_remote_handshake, mut new_substream), protocol_index):
+		(mut in_substream_open, protocol_index):
 			<Self::InboundProtocol as InboundUpgrade<NegotiatedSubstream>>::Output,
 		(): ()
 	) {
@@ -495,7 +500,7 @@ impl ProtocolsHandler for NotifsHandler {
 				));
 
 				protocol_info.state = State::OpenDesiredByRemote {
-					in_substream: new_substream,
+					in_substream: in_substream_open.substream,
 					pending_opening,
 				};
 			},
@@ -518,16 +523,16 @@ impl ProtocolsHandler for NotifsHandler {
 
 				// Create `handshake_message` on a separate line to be sure that the
 				// lock is released as soon as possible.
-				let handshake_message = protocol_info.handshake.read().clone();
-				new_substream.send_handshake(handshake_message);
-				*in_substream = Some(new_substream);
+				let handshake_message = protocol_info.config.handshake.read().clone();
+				in_substream_open.substream.send_handshake(handshake_message);
+				*in_substream = Some(in_substream_open.substream);
 			},
 		}
 	}
 
 	fn inject_fully_negotiated_outbound(
 		&mut self,
-		(handshake, substream): <Self::OutboundProtocol as OutboundUpgrade<NegotiatedSubstream>>::Output,
+		new_open: <Self::OutboundProtocol as OutboundUpgrade<NegotiatedSubstream>>::Output,
 		protocol_index: Self::OutboundOpenInfo
 	) {
 		match self.protocols[protocol_index].state {
@@ -553,15 +558,16 @@ impl ProtocolsHandler for NotifsHandler {
 
 				self.protocols[protocol_index].state = State::Open {
 					notifications_sink_rx: stream::select(async_rx.fuse(), sync_rx.fuse()).peekable(),
-					out_substream: Some(substream),
+					out_substream: Some(new_open.substream),
 					in_substream: in_substream.take(),
 				};
 
 				self.events_queue.push_back(ProtocolsHandlerEvent::Custom(
 					NotifsHandlerOut::OpenResultOk {
 						protocol_index,
+						negotiated_fallback: new_open.negotiated_fallback,
 						endpoint: self.endpoint.clone(),
-						received_handshake: handshake,
+						received_handshake: new_open.handshake,
 						notifications_sink
 					}
 				));
@@ -577,9 +583,10 @@ impl ProtocolsHandler for NotifsHandler {
 					State::Closed { pending_opening } => {
 						if !*pending_opening {
 							let proto = NotificationsOut::new(
-								protocol_info.name.clone(),
-								protocol_info.handshake.read().clone(),
-								protocol_info.max_notification_size
+								protocol_info.config.name.clone(),
+								protocol_info.config.fallback_names.clone(),
+								protocol_info.config.handshake.read().clone(),
+								protocol_info.config.max_notification_size
 							);
 
 							self.events_queue.push_back(ProtocolsHandlerEvent::OutboundSubstreamRequest {
@@ -593,13 +600,14 @@ impl ProtocolsHandler for NotifsHandler {
 						};
 					},
 					State::OpenDesiredByRemote { pending_opening, in_substream } => {
-						let handshake_message = protocol_info.handshake.read().clone();
+						let handshake_message = protocol_info.config.handshake.read().clone();
 
 						if !*pending_opening {
 							let proto = NotificationsOut::new(
-								protocol_info.name.clone(),
+								protocol_info.config.name.clone(),
+								protocol_info.config.fallback_names.clone(),
 								handshake_message.clone(),
-								protocol_info.max_notification_size,
+								protocol_info.config.max_notification_size,
 							);
 
 							self.events_queue.push_back(ProtocolsHandlerEvent::OutboundSubstreamRequest {

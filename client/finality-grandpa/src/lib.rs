@@ -690,6 +690,7 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 pub fn grandpa_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
 	sc_network::config::NonDefaultSetConfig {
 		notifications_protocol: communication::GRANDPA_PROTOCOL_NAME.into(),
+		fallback_names: Vec::new(),
 		// Notifications reach ~256kiB in size at the time of writing on Kusama and Polkadot.
 		max_notification_size: 1024 * 1024,
 		set_config: sc_network::config::SetConfig {
@@ -1134,12 +1135,12 @@ fn local_authority_id(
 	voters: &VoterSet<AuthorityId>,
 	keystore: Option<&SyncCryptoStorePtr>,
 ) -> Option<AuthorityId> {
-	keystore.and_then(|keystore| { 
+	keystore.and_then(|keystore| {
 		voters
 		.iter()
 		.find(|(p, _)| {
 			SyncCryptoStore::has_keys(&**keystore, &[(p.to_raw_vec(), AuthorityId::ID)])
 		})
-		.map(|(p, _)| p.clone()) 
+		.map(|(p, _)| p.clone())
 	})
 }

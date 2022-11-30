@@ -655,7 +655,7 @@ pub mod pallet {
 	}
 }
 
-mod migrations {
+pub mod migrations {
 	use super::*;
 
 	#[allow(dead_code)]

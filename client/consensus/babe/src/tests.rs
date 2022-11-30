@@ -28,7 +28,10 @@ use sp_keystore::{
 	SyncCryptoStore,
 	vrf::make_transcript as transcript_from_data,
 };
-use sp_consensus_babe::{AuthorityPair, Slot, AllowedSlots, make_transcript, make_transcript_data};
+use sp_consensus_babe::{
+	AuthorityPair, Slot, AllowedSlots, make_transcript, make_transcript_data,
+	inherents::InherentDataProvider,
+};
 use sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging;
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sp_consensus::{
@@ -48,6 +51,7 @@ use rand_chacha::{
 use sc_keystore::LocalKeystore;
 use sp_application_crypto::key_types::BABE;
 use futures::executor::block_on;
+use sp_timestamp::InherentDataProvider as TimestampInherentDataProvider;
 
 type Item = DigestItem<Hash>;
 
@@ -235,7 +239,17 @@ type TestSelectChain = substrate_test_runtime_client::LongestChain<
 >;
 
 pub struct TestVerifier {
-	inner: BabeVerifier<TestBlock, PeersFullClient, TestSelectChain, AlwaysCanAuthor>,
+	inner: BabeVerifier<
+		TestBlock,
+		PeersFullClient,
+		TestSelectChain,
+		AlwaysCanAuthor,
+		Box<dyn CreateInherentDataProviders<
+			TestBlock,
+			(),
+			InherentDataProviders = (TimestampInherentDataProvider, InherentDataProvider)
+		>>
+	>,
 	mutator: Mutator,
 }
 
@@ -253,13 +267,12 @@ impl Verifier<TestBlock> for TestVerifier {
 	) -> Result<(BlockImportParams<TestBlock, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		// apply post-sealing mutations (i.e. stripping seal, if desired).
 		(self.mutator)(&mut header, Stage::PostSeal);
-		self.inner.verify(dbg!(origin), header, justifications, body).await
+		self.inner.verify(origin, header, justifications, body).await
 	}
 }
 
 pub struct PeerData {
 	link: BabeLink<TestBlock>,
-	inherent_data_providers: InherentDataProviders,
 	block_import: Mutex<
 		Option<BoxBlockImport<TestBlock, TransactionFor<substrate_test_runtime_client::Backend, TestBlock>>>
 	>,
@@ -286,7 +299,6 @@ impl TestNetFactory for BabeTestNet {
 		)
 	{
 		let client = client.as_full().expect("only full clients are tested");
-		let inherent_data_providers = InherentDataProviders::new();
 
 		let config = Config::get_or_compute(&*client).expect("config available");
 		let (block_import, link) = crate::block_import(
@@ -303,7 +315,7 @@ impl TestNetFactory for BabeTestNet {
 		(
 			BlockImportAdapter::new(block_import),
 			None,
-			Some(PeerData { link, inherent_data_providers, block_import: data_block_import }),
+			Some(PeerData { link, block_import: data_block_import }),
 		)
 	}
 
@@ -329,10 +341,17 @@ impl TestNetFactory for BabeTestNet {
 			inner: BabeVerifier {
 				client: client.clone(),
 				select_chain: longest_chain,
-				inherent_data_providers: data.inherent_data_providers.clone(),
+				create_inherent_data_providers: Box::new(|_, _| async {
+					let timestamp = TimestampInherentDataProvider::from_system_time();
+					let slot = InherentDataProvider::from_timestamp_and_duration(
+						*timestamp,
+						Duration::from_secs(6),
+					);
+
+					Ok((timestamp, slot))
+				}),
 				config: data.link.config.clone(),
 				epoch_changes: data.link.epoch_changes.clone(),
-				time_source: data.link.time_source.clone(),
 				can_author_with: AlwaysCanAuthor,
 				telemetry: None,
 			},
@@ -440,7 +459,15 @@ fn run_one_test(
 			client,
 			env: environ,
 			sync_oracle: DummyOracle,
-			inherent_data_providers: data.inherent_data_providers.clone(),
+			create_inherent_data_providers: Box::new(|_, _| async {
+				let timestamp = TimestampInherentDataProvider::from_system_time();
+				let slot = InherentDataProvider::from_timestamp_and_duration(
+					*timestamp,
+					Duration::from_secs(6),
+				);
+
+				Ok((timestamp, slot))
+			}),
 			force_authoring: false,
 			backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
 			babe_link: data.link.clone(),

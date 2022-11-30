@@ -23,7 +23,7 @@ use sp_core::{Public, crypto::Ss58Codec};
 use structopt::StructOpt;
 
 /// The `verify` command
-#[derive(Debug, StructOpt)]
+#[derive(Debug, StructOpt, Clone)]
 #[structopt(
 	name = "verify",
 	about = "Verify a signature for a message, provided on STDIN, with a given (public or secret) key"

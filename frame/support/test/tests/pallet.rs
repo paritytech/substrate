@@ -299,13 +299,13 @@ pub mod pallet {
 	pub enum InherentError {
 	}
 
-	impl sp_inherents::IsFatalError for InherentError {
+	impl frame_support::inherent::IsFatalError for InherentError {
 		fn is_fatal_error(&self) -> bool {
 			unimplemented!();
 		}
 	}
 
-	pub const INHERENT_IDENTIFIER: sp_inherents::InherentIdentifier = *b"testpall";
+	pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"testpall";
 }
 
 // Test that a pallet with non generic event and generic genesis_config is correctly handled
@@ -507,6 +507,15 @@ fn error_expand() {
 fn instance_expand() {
 	// Assert same type.
 	let _: pallet::__InherentHiddenInstance = ();
+}
+
+#[test]
+fn trait_store_expand() {
+	TestExternalities::default().execute_with(|| {
+		<pallet::Pallet<Runtime> as pallet::Store>::Value::get();
+		<pallet::Pallet<Runtime> as pallet::Store>::Map::get(1);
+		<pallet::Pallet<Runtime> as pallet::Store>::DoubleMap::get(1, 2);
+	})
 }
 
 #[test]

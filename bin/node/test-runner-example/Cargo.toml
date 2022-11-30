@@ -32,6 +32,7 @@ sc-consensus = { version = "0.9.0", path = "../../../client/consensus/common" }
 
 sp-runtime = { path = "../../../primitives/runtime", version = "3.0.0" }
 sp-keyring = { version = "3.0.0", path = "../../../primitives/keyring" }
+sp-timestamp = { version = "3.0.0", path = "../../../primitives/timestamp" }
 sp-api = { version = "3.0.0",  path = "../../../primitives/api" }
 sp-inherents = { version = "3.0.0", path = "../../../primitives/inherents" }
 sp-keystore = { version = "0.9.0", path = "../../../primitives/keystore" }

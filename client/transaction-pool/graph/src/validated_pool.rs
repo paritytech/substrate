@@ -610,6 +610,13 @@ impl<B: ChainApi> ValidatedPool<B> {
 		self.pool.read().ready()
 	}
 
+	/// Returns a Vec of hashes and extrinsics in the future pool.
+	pub fn futures(&self) -> Vec<(ExtrinsicHash<B>, ExtrinsicFor<B>)> {
+		self.pool.read().futures()
+			.map(|tx| (tx.hash.clone(), tx.data.clone()))
+			.collect()
+	}
+
 	/// Returns pool status.
 	pub fn status(&self) -> PoolStatus {
 		self.pool.read().status()

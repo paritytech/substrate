@@ -22,7 +22,7 @@ use structopt::StructOpt;
 use sp_core::crypto::SecretString;
 
 /// The `sign` command
-#[derive(Debug, StructOpt)]
+#[derive(Debug, StructOpt, Clone)]
 #[structopt(
 	name = "sign",
 	about = "Sign a message, with a given (secret) key"

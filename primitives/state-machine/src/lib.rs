@@ -46,7 +46,9 @@ pub use std_reexport::*;
 #[cfg(feature = "std")]
 pub use execution::*;
 #[cfg(feature = "std")]
-pub use log::{debug, warn, trace, error as log_error};
+pub use log::{debug, warn, error as log_error};
+#[cfg(feature = "std")]
+pub use tracing::trace;
 
 /// In no_std we skip logs for state_machine, this macro
 /// is a noops.

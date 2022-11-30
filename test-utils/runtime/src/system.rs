@@ -107,11 +107,11 @@ pub fn polish_block(block: &mut Block) {
 	execute_block_with_state_root_handler(block, Mode::Overwrite);
 }
 
-pub fn execute_block(mut block: Block) {
-	execute_block_with_state_root_handler(&mut block, Mode::Verify);
+pub fn execute_block(mut block: Block) -> Header {
+	execute_block_with_state_root_handler(&mut block, Mode::Verify)
 }
 
-fn execute_block_with_state_root_handler(block: &mut Block, mode: Mode) {
+fn execute_block_with_state_root_handler(block: &mut Block, mode: Mode) -> Header {
 	let header = &mut block.header;
 
 	initialize_block(header);
@@ -142,6 +142,8 @@ fn execute_block_with_state_root_handler(block: &mut Block, mode: Mode) {
 			"Transaction trie root must be valid.",
 		);
 	}
+
+	new_header
 }
 
 /// The block executor.

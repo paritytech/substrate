@@ -28,14 +28,36 @@
 //! Additionally, we have a const: `WASM_TRACE_IDENTIFIER`, which holds a span name used
 //! to signal that the 'actual' span name and target should be retrieved instead from
 //! the associated Fields mentioned above.
+//!
+//! Note: The `tracing` crate requires trace metadata to be static. This does not work
+//! for wasm code in substrate, as it is regularly updated with new code from on-chain
+//! events. The workaround for this is for the wasm tracing wrappers to put the
+//! `name` and `target` data in the `values` map (normally they would be in the static
+//! metadata assembled at compile time).
 
 #![cfg_attr(not(feature = "std"), no_std)]
+
+#[cfg(feature = "std")]
+use tracing;
+pub use tracing::{
+    debug, debug_span, error, error_span, event, info, info_span, Level, span, Span,
+    trace, trace_span, warn, warn_span,
+};
+
+pub use crate::types::{
+    WasmEntryAttributes, WasmFieldName, WasmFields, WasmLevel, WasmMetadata, WasmValue,
+	WasmValuesSet
+};
+#[cfg(feature = "std")]
+pub use crate::types::{
+    WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER
+};
 
 /// Tracing facilities and helpers.
 ///
 /// This is modeled after the `tracing`/`tracing-core` interface and uses that more or
 /// less directly for the native side. Because of certain optimisations the these crates
-/// have done, the wasm implementation diverges slightly and is optimised for thtat use
+/// have done, the wasm implementation diverges slightly and is optimised for that use
 /// case (like being able to cross the wasm/native boundary via scale codecs).
 ///
 /// One of said optimisations is that all macros will yield to a `noop` in non-std unless
@@ -86,22 +108,8 @@
 /// and call `set_tracing_subscriber` at the very beginning of your execution –
 /// the default subscriber is doing nothing, so any spans or events happening before
 /// will not be recorded!
-///
 
 mod types;
-
-#[cfg(feature = "std")]
-use tracing;
-
-pub use tracing::{
-	debug, debug_span, error, error_span, info, info_span, trace, trace_span, warn, warn_span,
-	span, event, Level, Span,
-};
-
-pub use crate::types::{
-	WasmMetadata, WasmEntryAttributes, WasmValuesSet, WasmValue, WasmFields, WasmLevel, WasmFieldName
-};
-
 
 /// Try to init a simple tracing subscriber with log compatibility layer.
 /// Ignores any error. Useful for testing.
@@ -111,12 +119,6 @@ pub fn try_init_simple() {
 		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
 		.with_writer(std::io::stderr).try_init();
 }
-
-#[cfg(feature = "std")]
-pub use crate::types::{
-	WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER
-};
-
 
 /// Runs given code within a tracing span, measuring it's execution time.
 ///
