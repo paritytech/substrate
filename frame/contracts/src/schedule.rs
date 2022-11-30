@@ -84,9 +84,6 @@ pub struct Schedule<T: Config> {
 
 	/// The weights for each imported function a contract is allowed to call.
 	pub host_fn_weights: HostFnWeights<T>,
-
-	/// The additional weight for calling a function per local of that function.
-	pub call_per_local_cost: u32,
 }
 
 /// Describes the upper limits on various metrics.
@@ -221,6 +218,7 @@ pub struct InstructionWeights<T: Config> {
 	pub call: u32,
 	pub call_indirect: u32,
 	pub call_indirect_per_param: u32,
+	pub call_per_local: u32,
 	pub local_get: u32,
 	pub local_set: u32,
 	pub local_tee: u32,
@@ -562,6 +560,7 @@ impl<T: Config> Default for InstructionWeights<T> {
 			call: cost_instr!(instr_call, 2),
 			call_indirect: cost_instr!(instr_call_indirect, 3),
 			call_indirect_per_param: cost_instr!(instr_call_indirect_per_param, 1),
+			call_per_local: cost_instr!(call_per_local, 1),
 			local_get: cost_instr!(instr_local_get, 1),
 			local_set: cost_instr!(instr_local_set, 1),
 			local_tee: cost_instr!(instr_local_tee, 2),
@@ -804,7 +803,7 @@ impl<'a, T: Config> gas_metering::Rules for ScheduleRules<'a, T> {
 	}
 
 	fn call_per_local_cost(&self) -> u32 {
-		self.schedule.call_per_local_cost
+		self.schedule.instruction_weights.call_per_local
 	}
 }
 

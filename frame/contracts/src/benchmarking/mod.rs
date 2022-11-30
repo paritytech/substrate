@@ -2429,6 +2429,21 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	// w_per_local = w_bench
+	call_per_local {
+		let l in 0 .. T::Schedule::get().limits.locals;
+		let mut call_body = body::plain(vec![
+				Instruction::End,
+		]);
+		body::inject_locals(&mut call_body, l);
+		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
+			call_body: Some(call_body),
+			.. Default::default()
+		}));
+	}: {
+		sbox.invoke();
+	}
+
 	// w_local_get = w_bench - 1 * w_param
 	instr_local_get {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
@@ -2473,21 +2488,6 @@ benchmarks! {
 			Regular(Instruction::Drop),
 		]);
 		body::inject_locals(&mut call_body, max_locals);
-		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
-			call_body: Some(call_body),
-			.. Default::default()
-		}));
-	}: {
-		sbox.invoke();
-	}
-
-	// w_per_local = w_bench
-	call_per_local {
-		let l in 0 .. T::Schedule::get().limits.locals;
-		let mut call_body = body::plain(vec![
-				Instruction::End,
-		]);
-		body::inject_locals(&mut call_body, l);
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
 			call_body: Some(call_body),
 			.. Default::default()
