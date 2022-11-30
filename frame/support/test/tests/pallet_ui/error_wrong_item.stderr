@@ -1,0 +1,5 @@
+error: Invalid pallet::error, expected item enum
+  --> $DIR/error_wrong_item.rs:19:2
+   |
+19 |     pub struct Foo;
+   |     ^^^

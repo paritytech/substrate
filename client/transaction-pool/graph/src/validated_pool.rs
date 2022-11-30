@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -90,9 +90,25 @@ pub type ValidatedTransactionFor<B> = ValidatedTransaction<
 	<B as ChainApi>::Error,
 >;
 
+/// A closure that returns true if the local node is a validator that can author blocks.
+pub struct IsValidator(Box<dyn Fn() -> bool + Send + Sync>);
+
+impl From<bool> for IsValidator {
+	fn from(is_validator: bool) -> Self {
+		IsValidator(Box::new(move || is_validator))
+	}
+}
+
+impl From<Box<dyn Fn() -> bool + Send + Sync>> for IsValidator {
+	fn from(is_validator: Box<dyn Fn() -> bool + Send + Sync>) -> Self {
+		IsValidator(is_validator)
+	}
+}
+
 /// Pool that deals with validated transactions.
 pub struct ValidatedPool<B: ChainApi> {
 	api: Arc<B>,
+	is_validator: IsValidator,
 	options: Options,
 	listener: RwLock<Listener<ExtrinsicHash<B>, B>>,
 	pool: RwLock<base::BasePool<
@@ -116,9 +132,10 @@ where
 
 impl<B: ChainApi> ValidatedPool<B> {
 	/// Create a new transaction pool.
-	pub fn new(options: Options, api: Arc<B>) -> Self {
+	pub fn new(options: Options, is_validator: IsValidator, api: Arc<B>) -> Self {
 		let base_pool = base::BasePool::new(options.reject_future_transactions);
 		ValidatedPool {
+			is_validator,
 			options,
 			listener: Default::default(),
 			api,
@@ -183,6 +200,10 @@ impl<B: ChainApi> ValidatedPool<B> {
 	fn submit_one(&self, tx: ValidatedTransactionFor<B>) -> Result<ExtrinsicHash<B>, B::Error> {
 		match tx {
 			ValidatedTransaction::Valid(tx) => {
+				if !tx.propagate && !(self.is_validator.0)() {
+					return Err(error::Error::Unactionable.into());
+				}
+
 				let imported = self.pool.write().import(tx)?;
 
 				if let base::Imported::Ready { ref hash, .. } = imported {
@@ -286,7 +307,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 	/// Transactions that are missing from the pool are not submitted.
 	pub fn resubmit(&self, mut updated_transactions: HashMap<ExtrinsicHash<B>, ValidatedTransactionFor<B>>) {
 		#[derive(Debug, Clone, Copy, PartialEq)]
-		enum Status { Future, Ready, Failed, Dropped };
+		enum Status { Future, Ready, Failed, Dropped }
 
 		let (mut initial_statuses, final_statuses) = {
 			let mut pool = self.pool.write();

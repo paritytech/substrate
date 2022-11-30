@@ -1,18 +1,20 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Polite gossiping.
 //!
@@ -38,6 +40,11 @@
 //! - Use the methods of the `GossipEngine` in order to send out messages and receive incoming
 //!   messages.
 //!
+//! The `GossipEngine` will automatically use `Network::add_set_reserved` and
+//! `Network::remove_set_reserved` to maintain a set of peers equal to the set of peers the
+//! node is syncing from. See the documentation of `sc-network` for more explanations about the
+//! concepts of peer sets.
+//!
 //! # What is a validator?
 //!
 //! The primary role of a `Validator` is to process incoming messages from peers, and decide
@@ -59,9 +66,9 @@ pub use self::state_machine::TopicNotification;
 pub use self::validator::{DiscardAll, MessageIntent, Validator, ValidatorContext, ValidationResult};
 
 use futures::prelude::*;
-use sc_network::{Event, ExHashT, NetworkService, PeerId, ReputationChange};
+use sc_network::{multiaddr, Event, ExHashT, NetworkService, PeerId, ReputationChange};
 use sp_runtime::{traits::Block as BlockT};
-use std::{borrow::Cow, pin::Pin, sync::Arc};
+use std::{borrow::Cow, iter, pin::Pin, sync::Arc};
 
 mod bridge;
 mod state_machine;
@@ -75,8 +82,14 @@ pub trait Network<B: BlockT> {
 	/// Adjust the reputation of a node.
 	fn report_peer(&self, peer_id: PeerId, reputation: ReputationChange);
 
+	/// Adds the peer to the set of peers to be connected to with this protocol.
+	fn add_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>);
+
+	/// Removes the peer from the set of peers to be connected to with this protocol.
+	fn remove_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>);
+
 	/// Force-disconnect a peer.
-	fn disconnect_peer(&self, who: PeerId);
+	fn disconnect_peer(&self, who: PeerId, protocol: Cow<'static, str>);
 
 	/// Send a notification to a peer.
 	fn write_notification(&self, who: PeerId, protocol: Cow<'static, str>, message: Vec<u8>);
@@ -85,7 +98,7 @@ pub trait Network<B: BlockT> {
 	///
 	/// Note: this method isn't strictly related to gossiping and should eventually be moved
 	/// somewhere else.
-	fn announce(&self, block: B::Hash, associated_data: Vec<u8>);
+	fn announce(&self, block: B::Hash, associated_data: Option<Vec<u8>>);
 }
 
 impl<B: BlockT, H: ExHashT> Network<B> for Arc<NetworkService<B, H>> {
@@ -97,15 +110,33 @@ impl<B: BlockT, H: ExHashT> Network<B> for Arc<NetworkService<B, H>> {
 		NetworkService::report_peer(self, peer_id, reputation);
 	}
 
-	fn disconnect_peer(&self, who: PeerId) {
-		NetworkService::disconnect_peer(self, who)
+	fn add_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>) {
+		let addr = iter::once(multiaddr::Protocol::P2p(who.into()))
+			.collect::<multiaddr::Multiaddr>();
+		let result = NetworkService::add_peers_to_reserved_set(self, protocol, iter::once(addr).collect());
+		if let Err(err) = result {
+			log::error!(target: "gossip", "add_set_reserved failed: {}", err);
+		}
+	}
+
+	fn remove_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>) {
+		let addr = iter::once(multiaddr::Protocol::P2p(who.into()))
+			.collect::<multiaddr::Multiaddr>();
+		let result = NetworkService::remove_peers_from_reserved_set(self, protocol, iter::once(addr).collect());
+		if let Err(err) = result {
+			log::error!(target: "gossip", "remove_set_reserved failed: {}", err);
+		}
+	}
+
+	fn disconnect_peer(&self, who: PeerId, protocol: Cow<'static, str>) {
+		NetworkService::disconnect_peer(self, who, protocol)
 	}
 
 	fn write_notification(&self, who: PeerId, protocol: Cow<'static, str>, message: Vec<u8>) {
 		NetworkService::write_notification(self, who, protocol, message)
 	}
 
-	fn announce(&self, block: B::Hash, associated_data: Vec<u8>) {
+	fn announce(&self, block: B::Hash, associated_data: Option<Vec<u8>>) {
 		NetworkService::announce_block(self, block, associated_data)
 	}
 }

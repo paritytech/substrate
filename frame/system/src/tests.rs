@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,8 +18,11 @@
 use crate::*;
 use mock::{*, Origin};
 use sp_core::H256;
-use sp_runtime::DispatchError;
-use frame_support::weights::WithPostDispatchInfo;
+use sp_runtime::{DispatchError, DispatchErrorWithPostInfo, traits::{Header, BlakeTwo256}};
+use frame_support::{
+	weights::WithPostDispatchInfo,
+	dispatch::PostDispatchInfo,
+};
 
 #[test]
 fn origin_works() {
@@ -31,20 +34,22 @@ fn origin_works() {
 #[test]
 fn stored_map_works() {
 	new_test_ext().execute_with(|| {
-		System::insert(&0, 42);
-		assert!(System::allow_death(&0));
+		assert!(System::insert(&0, 42).is_ok());
+		assert!(!System::is_provider_required(&0));
 
-		System::inc_ref(&0);
-		assert!(!System::allow_death(&0));
+		assert_eq!(Account::<Test>::get(0), AccountInfo { nonce: 0, providers: 1, consumers: 0, data: 42 });
 
-		System::insert(&0, 69);
-		assert!(!System::allow_death(&0));
+		assert!(System::inc_consumers(&0).is_ok());
+		assert!(System::is_provider_required(&0));
 
-		System::dec_ref(&0);
-		assert!(System::allow_death(&0));
+		assert!(System::insert(&0, 69).is_ok());
+		assert!(System::is_provider_required(&0));
+
+		System::dec_consumers(&0);
+		assert!(!System::is_provider_required(&0));
 
 		assert!(KILLED.with(|r| r.borrow().is_empty()));
-		System::kill_account(&0);
+		assert!(System::remove(&0).is_ok());
 		assert_eq!(KILLED.with(|r| r.borrow().clone()), vec![0u64]);
 	});
 }
@@ -54,7 +59,6 @@ fn deposit_event_should_work() {
 	new_test_ext().execute_with(|| {
 		System::initialize(
 			&1,
-			&[0u8; 32].into(),
 			&[0u8; 32].into(),
 			&Default::default(),
 			InitKind::Full,
@@ -75,7 +79,6 @@ fn deposit_event_should_work() {
 
 		System::initialize(
 			&2,
-			&[0u8; 32].into(),
 			&[0u8; 32].into(),
 			&Default::default(),
 			InitKind::Full,
@@ -132,7 +135,6 @@ fn deposit_event_uses_actual_weight() {
 	new_test_ext().execute_with(|| {
 		System::initialize(
 			&1,
-			&[0u8; 32].into(),
 			&[0u8; 32].into(),
 			&Default::default(),
 			InitKind::Full,
@@ -218,7 +220,6 @@ fn deposit_event_topics() {
 		System::initialize(
 			&BLOCK_NUMBER,
 			&[0u8; 32].into(),
-			&[0u8; 32].into(),
 			&Default::default(),
 			InitKind::Full,
 		);
@@ -284,7 +285,6 @@ fn prunes_block_hash_mappings() {
 			System::initialize(
 				&n,
 				&[n as u8 - 1; 32].into(),
-				&[0u8; 32].into(),
 				&Default::default(),
 				InitKind::Full,
 			);
@@ -332,7 +332,7 @@ fn set_code_checks_works() {
 		("test", 1, 2, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 		("test", 1, 1, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 		("test2", 1, 1, Err(Error::<Test>::InvalidSpecName)),
-		("test", 2, 1, Ok(())),
+		("test", 2, 1, Ok(PostDispatchInfo::default())),
 		("test", 0, 1, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 		("test", 1, 0, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 	];
@@ -354,7 +354,7 @@ fn set_code_checks_works() {
 				vec![1, 2, 3, 4],
 			);
 
-			assert_eq!(expected.map_err(DispatchError::from), res);
+			assert_eq!(expected.map_err(DispatchErrorWithPostInfo::from), res);
 		});
 	}
 }
@@ -403,11 +403,12 @@ fn events_not_emitted_during_genesis() {
 	new_test_ext().execute_with(|| {
 		// Block Number is zero at genesis
 		assert!(System::block_number().is_zero());
-		System::on_created_account(Default::default());
+		let mut account_data = AccountInfo { nonce: 0, consumers: 0, providers: 0, data: 0 };
+		System::on_created_account(Default::default(), &mut account_data);
 		assert!(System::events().is_empty());
 		// Events will be emitted starting on block 1
 		System::set_block_number(1);
-		System::on_created_account(Default::default());
+		System::on_created_account(Default::default(), &mut account_data);
 		assert!(System::events().len() == 1);
 	});
 }
@@ -421,4 +422,29 @@ fn ensure_one_of_works() {
 	assert_eq!(ensure_root_or_signed(RawOrigin::Root).unwrap(), Either::Left(()));
 	assert_eq!(ensure_root_or_signed(RawOrigin::Signed(0)).unwrap(), Either::Right(0));
 	assert!(ensure_root_or_signed(RawOrigin::None).is_err())
+}
+
+#[test]
+fn extrinsics_root_is_calculated_correctly() {
+	new_test_ext().execute_with(|| {
+		System::initialize(
+			&1,
+			&[0u8; 32].into(),
+			&Default::default(),
+			InitKind::Full,
+		);
+		System::note_finished_initialize();
+		System::note_extrinsic(vec![1]);
+		System::note_applied_extrinsic(&Ok(().into()), Default::default());
+		System::note_extrinsic(vec![2]);
+		System::note_applied_extrinsic(
+			&Err(DispatchError::BadOrigin.into()),
+			Default::default()
+		);
+		System::note_finished_extrinsics();
+		let header = System::finalize();
+
+		let ext_root = extrinsics_data_root::<BlakeTwo256>(vec![vec![1], vec![2]]);
+		assert_eq!(ext_root, *header.extrinsics_root());
+	});
 }

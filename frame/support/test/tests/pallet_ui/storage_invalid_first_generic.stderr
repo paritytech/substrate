@@ -1,0 +1,11 @@
+error: Invalid use of `#[pallet::storage]`, the type first generic argument must be `_`, the final argument is automatically set by macro.
+  --> $DIR/storage_invalid_first_generic.rs:19:29
+   |
+19 |     type Foo<T> = StorageValue<u8, u8>;
+   |                                ^^
+
+error: expected `_`
+  --> $DIR/storage_invalid_first_generic.rs:19:29
+   |
+19 |     type Foo<T> = StorageValue<u8, u8>;
+   |                                ^^

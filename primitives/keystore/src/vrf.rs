@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -70,7 +70,6 @@ pub fn make_transcript(data: VRFTranscriptData) -> Transcript {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::vrf::VRFTranscriptValue;
 	use rand::RngCore;
 	use rand_chacha::{
 		rand_core::SeedableRng,

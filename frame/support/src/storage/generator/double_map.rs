@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -151,6 +151,13 @@ impl<K1, K2, V, G> storage::StorageDoubleMap<K1, K2, V> for G where
 		KArg2: EncodeLike<K2>,
 	{
 		G::from_optional_value_to_query(unhashed::get(&Self::storage_double_map_final_key(k1, k2)))
+	}
+
+	fn try_get<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Result<V, ()>
+	where
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2> {
+		unhashed::get(&Self::storage_double_map_final_key(k1, k2)).ok_or(())
 	}
 
 	fn take<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Self::Query where

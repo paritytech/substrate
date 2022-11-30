@@ -1,0 +1,5 @@
+error: Invalid pallet::type_value, expected return type
+  --> $DIR/type_value_no_return.rs:18:24
+   |
+18 |     #[pallet::type_value] fn Foo() {}
+   |                           ^^

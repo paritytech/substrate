@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,10 +19,24 @@
 //!
 //! This module provides the basic logic needed to pay the absolute minimum amount needed for a
 //! transaction to be included. This includes:
+//!   - _base fee_: This is the minimum amount a user pays for a transaction. It is declared
+//! 	as a base _weight_ in the runtime and converted to a fee using `WeightToFee`.
 //!   - _weight fee_: A fee proportional to amount of weight a transaction consumes.
 //!   - _length fee_: A fee proportional to the encoded length of the transaction.
 //!   - _tip_: An optional tip. Tip increases the priority of the transaction, giving it a higher
 //!     chance to be included by the transaction queue.
+//!
+//! The base fee and adjusted weight and length fees constitute the _inclusion fee_, which is
+//! the minimum fee for a transaction to be included in a block.
+//!
+//! The formula of final fee:
+//!   ```ignore
+//!   inclusion_fee = base_fee + length_fee + [targeted_fee_adjustment * weight_fee];
+//!   final_fee = inclusion_fee + tip;
+//!   ```
+//!
+//!   - `targeted_fee_adjustment`: This is a multiplier that can tune the final fee based on
+//! 	the congestion of the network.
 //!
 //! Additionally, this module allows one to configure:
 //!   - The mapping between one unit of weight to one unit of fee via [`Config::WeightToFee`].
@@ -54,10 +68,12 @@ use sp_runtime::{
 		DispatchInfoOf, PostDispatchInfoOf,
 	},
 };
-use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 
 mod payment;
+mod types;
+
 pub use payment::*;
+pub use types::{InclusionFee, FeeDetails, RuntimeDispatchInfo};
 
 /// Fee multiplier.
 pub type Multiplier = FixedU128;
@@ -109,7 +125,7 @@ type BalanceOf<T> =
 /// Meaning that fees can change by around ~23% per day, given extreme congestion.
 ///
 /// More info can be found at:
-/// https://w3f-research.readthedocs.io/en/latest/polkadot/Token%20Economics.html
+/// <https://w3f-research.readthedocs.io/en/latest/polkadot/Token%20Economics.html>
 pub struct TargetedFeeAdjustment<T, S, V, M>(sp_std::marker::PhantomData<(T, S, V, M)>);
 
 /// Something that can convert the current multiplier to the next one.
@@ -314,8 +330,6 @@ impl<T: Config> Module<T> where
 		len: u32,
 	) -> RuntimeDispatchInfo<BalanceOf<T>>
 	where
-		T: Send + Sync,
-		BalanceOf<T>: Send + Sync,
 		T::Call: Dispatchable<Info=DispatchInfo>,
 	{
 		// NOTE: we can actually make it understand `ChargeTransactionPayment`, but would be some
@@ -331,27 +345,19 @@ impl<T: Config> Module<T> where
 		RuntimeDispatchInfo { weight, class, partial_fee }
 	}
 
+	/// Query the detailed fee of a given `call`.
+	pub fn query_fee_details<Extrinsic: GetDispatchInfo>(
+		unchecked_extrinsic: Extrinsic,
+		len: u32,
+	) -> FeeDetails<BalanceOf<T>>
+	where
+		T::Call: Dispatchable<Info=DispatchInfo>,
+	{
+		let dispatch_info = <Extrinsic as GetDispatchInfo>::get_dispatch_info(&unchecked_extrinsic);
+		Self::compute_fee_details(len, &dispatch_info, 0u32.into())
+	}
+
 	/// Compute the final fee value for a particular transaction.
-	///
-	/// The final fee is composed of:
-	///   - `base_fee`: This is the minimum amount a user pays for a transaction. It is declared
-	///     as a base _weight_ in the runtime and converted to a fee using `WeightToFee`.
-	///   - `len_fee`: The length fee, the amount paid for the encoded length (in bytes) of the
-	///     transaction.
-	///   - `weight_fee`: This amount is computed based on the weight of the transaction. Weight
-	///     accounts for the execution time of a transaction.
-	///   - `targeted_fee_adjustment`: This is a multiplier that can tune the final fee based on
-	///     the congestion of the network.
-	///   - (Optional) `tip`: If included in the transaction, the tip will be added on top. Only
-	///     signed transactions can have a tip.
-	///
-	/// The base fee and adjusted weight and length fees constitute the _inclusion fee,_ which is
-	/// the minimum fee for a transaction to be included in a block.
-	///
-	/// ```ignore
-	/// inclusion_fee = base_fee + len_fee + [targeted_fee_adjustment * weight_fee];
-	/// final_fee = inclusion_fee + tip;
-	/// ```
 	pub fn compute_fee(
 		len: u32,
 		info: &DispatchInfoOf<T::Call>,
@@ -359,13 +365,18 @@ impl<T: Config> Module<T> where
 	) -> BalanceOf<T> where
 		T::Call: Dispatchable<Info=DispatchInfo>,
 	{
-		Self::compute_fee_raw(
-			len,
-			info.weight,
-			tip,
-			info.pays_fee,
-			info.class,
-		)
+		Self::compute_fee_details(len, info, tip).final_fee()
+	}
+
+	/// Compute the fee details for a particular transaction.
+	pub fn compute_fee_details(
+		len: u32,
+		info: &DispatchInfoOf<T::Call>,
+		tip: BalanceOf<T>,
+	) -> FeeDetails<BalanceOf<T>> where
+		T::Call: Dispatchable<Info=DispatchInfo>,
+	{
+		Self::compute_fee_raw(len, info.weight, tip, info.pays_fee, info.class)
 	}
 
 	/// Compute the actual post dispatch fee for a particular transaction.
@@ -378,6 +389,18 @@ impl<T: Config> Module<T> where
 		post_info: &PostDispatchInfoOf<T::Call>,
 		tip: BalanceOf<T>,
 	) -> BalanceOf<T> where
+		T::Call: Dispatchable<Info=DispatchInfo,PostInfo=PostDispatchInfo>,
+	{
+		Self::compute_actual_fee_details(len, info, post_info, tip).final_fee()
+	}
+
+	/// Compute the actual post dispatch fee details for a particular transaction.
+	pub fn compute_actual_fee_details(
+		len: u32,
+		info: &DispatchInfoOf<T::Call>,
+		post_info: &PostDispatchInfoOf<T::Call>,
+		tip: BalanceOf<T>,
+	) -> FeeDetails<BalanceOf<T>> where
 		T::Call: Dispatchable<Info=DispatchInfo,PostInfo=PostDispatchInfo>,
 	{
 		Self::compute_fee_raw(
@@ -395,7 +418,7 @@ impl<T: Config> Module<T> where
 		tip: BalanceOf<T>,
 		pays_fee: Pays,
 		class: DispatchClass,
-	) -> BalanceOf<T> {
+	) -> FeeDetails<BalanceOf<T>> {
 		if pays_fee == Pays::Yes {
 			let len = <BalanceOf<T>>::from(len);
 			let per_byte = T::TransactionByteFee::get();
@@ -410,12 +433,19 @@ impl<T: Config> Module<T> where
 			let adjusted_weight_fee = multiplier.saturating_mul_int(unadjusted_weight_fee);
 
 			let base_fee = Self::weight_to_fee(T::BlockWeights::get().get(class).base_extrinsic);
-			base_fee
-				.saturating_add(fixed_len_fee)
-				.saturating_add(adjusted_weight_fee)
-				.saturating_add(tip)
+			FeeDetails {
+				inclusion_fee: Some(InclusionFee {
+					base_fee,
+					len_fee: fixed_len_fee,
+					adjusted_weight_fee
+				}),
+				tip
+			}
 		} else {
-			tip
+			FeeDetails {
+				inclusion_fee: None,
+				tip
+			}
 		}
 	}
 
@@ -444,9 +474,9 @@ impl<T> Convert<Weight, BalanceOf<T>> for Module<T> where
 /// Require the transactor pay for themselves and maybe include a tip to gain additional priority
 /// in the queue.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct ChargeTransactionPayment<T: Config + Send + Sync>(#[codec(compact)] BalanceOf<T>);
+pub struct ChargeTransactionPayment<T: Config>(#[codec(compact)] BalanceOf<T>);
 
-impl<T: Config + Send + Sync> ChargeTransactionPayment<T> where
+impl<T: Config> ChargeTransactionPayment<T> where
 	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>,
 	BalanceOf<T>: Send + Sync + FixedPointOperand,
 {
@@ -494,7 +524,7 @@ impl<T: Config + Send + Sync> ChargeTransactionPayment<T> where
 	}
 }
 
-impl<T: Config + Send + Sync> sp_std::fmt::Debug for ChargeTransactionPayment<T> {
+impl<T: Config> sp_std::fmt::Debug for ChargeTransactionPayment<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "ChargeTransactionPayment<{:?}>", self.0)
@@ -505,7 +535,7 @@ impl<T: Config + Send + Sync> sp_std::fmt::Debug for ChargeTransactionPayment<T>
 	}
 }
 
-impl<T: Config + Send + Sync> SignedExtension for ChargeTransactionPayment<T> where
+impl<T: Config> SignedExtension for ChargeTransactionPayment<T> where
 	BalanceOf<T>: Send + Sync + From<u64> + FixedPointOperand,
 	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>,
 {
@@ -570,9 +600,11 @@ impl<T: Config + Send + Sync> SignedExtension for ChargeTransactionPayment<T> wh
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate as pallet_transaction_payment;
+	use frame_system as system;
 	use codec::Encode;
 	use frame_support::{
-		impl_outer_dispatch, impl_outer_origin, impl_outer_event, parameter_types,
+		parameter_types,
 		weights::{
 			DispatchClass, DispatchInfo, PostDispatchInfo, GetDispatchInfo, Weight,
 			WeightToFeePolynomial, WeightToFeeCoefficients, WeightToFeeCoefficient,
@@ -580,7 +612,6 @@ mod tests {
 		traits::Currency,
 	};
 	use pallet_balances::Call as BalancesCall;
-	use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 	use sp_core::H256;
 	use sp_runtime::{
 		testing::{Header, TestXt},
@@ -590,30 +621,23 @@ mod tests {
 	use std::cell::RefCell;
 	use smallvec::smallvec;
 
+	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
+	type Block = frame_system::mocking::MockBlock<Runtime>;
+
+	frame_support::construct_runtime!(
+		pub enum Runtime where
+			Block = Block,
+			NodeBlock = Block,
+			UncheckedExtrinsic = UncheckedExtrinsic,
+		{
+			System: system::{Module, Call, Config, Storage, Event<T>},
+			Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
+			TransactionPayment: pallet_transaction_payment::{Module, Storage},
+		}
+	);
+
 	const CALL: &<Runtime as frame_system::Config>::Call =
 		&Call::Balances(BalancesCall::transfer(2, 69));
-
-	impl_outer_dispatch! {
-		pub enum Call for Runtime where origin: Origin {
-			pallet_balances::Balances,
-			frame_system::System,
-		}
-	}
-
-	impl_outer_event! {
-		pub enum Event for Runtime {
-			system<T>,
-			pallet_balances<T>,
-		}
-	}
-
-	#[derive(Clone, PartialEq, Eq, Debug)]
-	pub struct Runtime;
-
-	use frame_system as system;
-	impl_outer_origin!{
-		pub enum Origin for Runtime {}
-	}
 
 	thread_local! {
 		static EXTRINSIC_BASE_WEIGHT: RefCell<u64> = RefCell::new(0);
@@ -662,6 +686,7 @@ mod tests {
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
+		type SS58Prefix = ();
 	}
 
 	parameter_types! {
@@ -697,10 +722,6 @@ mod tests {
 		type WeightToFee = WeightToFee;
 		type FeeMultiplierUpdate = ();
 	}
-
-	type Balances = pallet_balances::Module<Runtime>;
-	type System = frame_system::Module<Runtime>;
-	type TransactionPayment = Module<Runtime>;
 
 	pub struct ExtBuilder {
 		balance_factor: u64,
@@ -1139,7 +1160,7 @@ mod tests {
 			}));
 			// Killed Event
 			assert!(System::events().iter().any(|event| {
-				event.event == Event::system(system::RawEvent::KilledAccount(2))
+				event.event == Event::system(system::Event::KilledAccount(2))
 			}));
 		});
 	}

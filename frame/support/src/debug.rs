@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -134,7 +134,7 @@ macro_rules! runtime_print {
 			use core::fmt::Write;
 			let mut w = $crate::sp_std::Writer::default();
 			let _ = core::write!(&mut w, $($arg)+);
-			sp_io::misc::print_utf8(&w.inner())
+			$crate::sp_io::misc::print_utf8(&w.inner())
 		}
 	}
 }

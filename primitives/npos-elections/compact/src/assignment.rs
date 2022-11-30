@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +21,7 @@ use crate::field_name_for;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 
-fn from_impl(count: usize) -> TokenStream2 {
+pub(crate) fn from_impl(count: usize) -> TokenStream2 {
 	let from_impl_single = {
 		let name = field_name_for(1);
 		quote!(1 => compact.#name.push(
@@ -73,7 +73,7 @@ fn from_impl(count: usize) -> TokenStream2 {
 	)
 }
 
-fn into_impl(count: usize, per_thing: syn::Type) -> TokenStream2 {
+pub(crate) fn into_impl(count: usize, per_thing: syn::Type) -> TokenStream2 {
 	let into_impl_single = {
 		let name = field_name_for(1);
 		quote!(
@@ -151,55 +151,5 @@ fn into_impl(count: usize, per_thing: syn::Type) -> TokenStream2 {
 		#into_impl_single
 		#into_impl_double
 		#into_impl_rest
-	)
-}
-
-pub(crate) fn assignment(
-	ident: syn::Ident,
-	voter_type: syn::Type,
-	target_type: syn::Type,
-	weight_type: syn::Type,
-	count: usize,
-) -> TokenStream2 {
-	let from_impl = from_impl(count);
-	let into_impl = into_impl(count, weight_type.clone());
-
-	quote!(
-		use _npos::__OrInvalidIndex;
-		impl #ident {
-			pub fn from_assignment<FV, FT, A>(
-				assignments: Vec<_npos::Assignment<A, #weight_type>>,
-				index_of_voter: FV,
-				index_of_target: FT,
-			) -> Result<Self, _npos::Error>
-				where
-					A: _npos::IdentifierT,
-					for<'r> FV: Fn(&'r A) -> Option<#voter_type>,
-					for<'r> FT: Fn(&'r A) -> Option<#target_type>,
-			{
-				let mut compact: #ident = Default::default();
-
-				for _npos::Assignment { who, distribution } in assignments {
-					match distribution.len() {
-						0 => continue,
-						#from_impl
-						_ => {
-							return Err(_npos::Error::CompactTargetOverflow);
-						}
-					}
-				};
-				Ok(compact)
-			}
-
-			pub fn into_assignment<A: _npos::IdentifierT>(
-				self,
-				voter_at: impl Fn(#voter_type) -> Option<A>,
-				target_at: impl Fn(#target_type) -> Option<A>,
-			) -> Result<Vec<_npos::Assignment<A, #weight_type>>, _npos::Error> {
-				let mut assignments: Vec<_npos::Assignment<A, #weight_type>> = Default::default();
-				#into_impl
-				Ok(assignments)
-			}
-		}
 	)
 }

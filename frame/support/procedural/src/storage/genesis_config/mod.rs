@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,8 +21,8 @@
 use proc_macro2::{TokenStream, Span};
 use quote::quote;
 use super::DeclStorageDefExt;
-use genesis_config_def::GenesisConfigDef;
-use builder_def::BuilderDef;
+pub use genesis_config_def::GenesisConfigDef;
+pub use builder_def::BuilderDef;
 
 mod genesis_config_def;
 mod builder_def;

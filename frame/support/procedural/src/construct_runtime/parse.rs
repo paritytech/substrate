@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -333,7 +333,7 @@ impl Parse for ModulePart {
 
 impl ModulePart {
 	pub fn format_names(names: &[&'static str]) -> String {
-		let res: Vec<_> = names.into_iter().map(|s| format!("`{}`", s)).collect();
+		let res: Vec<_> = names.iter().map(|s| format!("`{}`", s)).collect();
 		res.join(", ")
 	}
 

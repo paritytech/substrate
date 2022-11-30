@@ -106,6 +106,7 @@ impl frame_system::Config for Test {
     type OnNewAccount = ();
     type OnKilledAccount = ();
     type SystemWeightInfo = ();
+    type SS58Prefix = ();
 }
 
 impl pallet_balances::Config for Test {
@@ -162,14 +163,18 @@ impl contracts::Config for Test {
     type RentPayment = ();
     type SignedClaimHandicap = SignedClaimHandicap;
     type TombstoneDeposit = TombstoneDeposit;
-    type StorageSizeOffset = StorageSizeOffset;
-    type RentByteFee = RentByteFee;
-    type RentDepositOffset = RentDepositOffset;
+    type DepositPerContract = ();
+    type DepositPerStorageByte = ();
+    type DepositPerStorageItem = ();
+    type RentFraction = ();
     type SurchargeReward = SurchargeReward;
     type MaxDepth = MaxDepth;
     type MaxValueSize = MaxValueSize;
     type WeightPrice = Self; //pallet_transaction_payment::Module<Self>;
     type WeightInfo = ();
+    type ChainExtension = ();
+    type DeletionQueueDepth = ();
+    type DeletionWeightLimit = ();
 }
 
 parameter_types! {

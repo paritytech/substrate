@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -62,7 +62,6 @@ impl BenchmarkCmd {
 
 		let genesis_storage = spec.build_storage()?;
 		let mut changes = Default::default();
-		let mut offchain_changes = Default::default();
 		let cache_size = Some(self.database_cache_size as usize);
 		let state = BenchmarkingState::<BB>::new(genesis_storage, cache_size)?;
 		let executor = NativeExecutor::<ExecDispatch>::new(
@@ -80,7 +79,6 @@ impl BenchmarkCmd {
 			&state,
 			None,
 			&mut changes,
-			&mut offchain_changes,
 			&executor,
 			"Benchmark_dispatch_benchmark",
 			&(
@@ -174,7 +172,7 @@ impl BenchmarkCmd {
 					}
 				}
 			},
-			Err(error) => eprintln!("Error: {:?}", error),
+			Err(error) => eprintln!("Error: {}", error),
 		}
 
 		Ok(())

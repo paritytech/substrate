@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -746,6 +746,14 @@ impl TransactionPoolExt {
 	}
 }
 
+/// Change to be applied to the offchain worker db in regards to a key.
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub enum OffchainOverlayedChange {
+	/// Remove the data associated with the key
+	Remove,
+	/// Overwrite the value of an associated key
+	SetValue(Vec<u8>),
+}
 
 #[cfg(test)]
 mod tests {

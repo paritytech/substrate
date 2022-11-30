@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -21,7 +21,7 @@
 use crate::arg_enums::Database;
 use crate::error::Result;
 use crate::{
-	init_logger, DatabaseParams, ImportParams, KeystoreParams, NetworkParams, NodeKeyParams,
+	DatabaseParams, ImportParams, KeystoreParams, NetworkParams, NodeKeyParams,
 	OffchainWorkerParams, PruningParams, SharedParams, SubstrateCli,
 };
 use log::warn;
@@ -32,7 +32,9 @@ use sc_service::config::{
 	NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods,
 	TaskExecutor, TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
 };
-use sc_service::{ChainSpec, TracingReceiver};
+use sc_service::{ChainSpec, TracingReceiver, KeepBlocks, TransactionStorageMode};
+use sc_telemetry::TelemetryHandle;
+use sc_tracing::logging::GlobalLoggerBuilder;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
@@ -47,7 +49,7 @@ const RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT: u64 = 10_000;
 
 /// Default configuration values used by Substrate
 ///
-/// These values will be used by [`CliConfiguritation`] to set
+/// These values will be used by [`CliConfiguration`] to set
 /// default values for e.g. the listen port or the RPC port.
 pub trait DefaultConfigurationValues {
 	/// The port Substrate should listen on for p2p connections.
@@ -186,11 +188,11 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 
 	/// Get the keystore configuration.
 	///
-	/// Bu default this is retrieved from `KeystoreParams` if it is available. Otherwise it uses
+	/// By default this is retrieved from `KeystoreParams` if it is available. Otherwise it uses
 	/// `KeystoreConfig::InMemory`.
-	fn keystore_config(&self, base_path: &PathBuf) -> Result<(Option<String>, KeystoreConfig)> {
+	fn keystore_config(&self, config_dir: &PathBuf) -> Result<(Option<String>, KeystoreConfig)> {
 		self.keystore_params()
-			.map(|x| x.keystore_config(base_path))
+			.map(|x| x.keystore_config(config_dir))
 			.unwrap_or_else(|| Ok((None, KeystoreConfig::InMemory)))
 	}
 
@@ -201,6 +203,13 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(self.database_params()
 			.map(|x| x.database_cache_size())
 			.unwrap_or_default())
+	}
+
+	/// Get the database transaction storage scheme.
+	fn database_transaction_storage(&self) -> Result<TransactionStorageMode> {
+		Ok(self.database_params()
+			.map(|x| x.transaction_storage())
+			.unwrap_or(TransactionStorageMode::BlockBody))
 	}
 
 	/// Get the database backend variant.
@@ -244,14 +253,24 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(Default::default())
 	}
 
-	/// Get the pruning mode.
+	/// Get the state pruning mode.
 	///
 	/// By default this is retrieved from `PruningMode` if it is available. Otherwise its
 	/// `PruningMode::default()`.
-	fn pruning(&self, unsafe_pruning: bool, role: &Role) -> Result<PruningMode> {
+	fn state_pruning(&self, unsafe_pruning: bool, role: &Role) -> Result<PruningMode> {
 		self.pruning_params()
-			.map(|x| x.pruning(unsafe_pruning, role))
+			.map(|x| x.state_pruning(unsafe_pruning, role))
 			.unwrap_or_else(|| Ok(Default::default()))
+	}
+
+	/// Get the block pruning mode.
+	///
+	/// By default this is retrieved from `block_pruning` if it is available. Otherwise its
+	/// `KeepBlocks::All`.
+	fn keep_blocks(&self) -> Result<KeepBlocks> {
+		self.pruning_params()
+			.map(|x| x.keep_blocks())
+			.unwrap_or_else(|| Ok(KeepBlocks::All))
 	}
 
 	/// Get the chain ID (string).
@@ -451,18 +470,15 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		&self,
 		cli: &C,
 		task_executor: TaskExecutor,
+		telemetry_handle: Option<TelemetryHandle>,
 	) -> Result<Configuration> {
 		let is_dev = self.is_dev()?;
 		let chain_id = self.chain_id(is_dev)?;
-		let chain_spec = cli.load_spec(chain_id.as_str())?;
+		let chain_spec = cli.load_spec(&chain_id)?;
 		let base_path = self
 			.base_path()?
 			.unwrap_or_else(|| BasePath::from_project("", "", &C::executable_name()));
-		let config_dir = base_path
-			.path()
-			.to_path_buf()
-			.join("chains")
-			.join(chain_spec.id());
+		let config_dir = base_path.config_dir(chain_spec.id());
 		let net_config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
 		let client_id = C::client_id();
 		let database_cache_size = self.database_cache_size()?.unwrap_or(128);
@@ -497,7 +513,9 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			database: self.database_config(&config_dir, database_cache_size, database)?,
 			state_cache_size: self.state_cache_size()?,
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
-			pruning: self.pruning(unsafe_pruning, &role)?,
+			state_pruning: self.state_pruning(unsafe_pruning, &role)?,
+			keep_blocks: self.keep_blocks()?,
+			transaction_storage: self.database_transaction_storage()?,
 			wasm_method: self.wasm_method()?,
 			wasm_runtime_overrides: self.wasm_runtime_overrides(),
 			execution_strategies: self.execution_strategies(is_dev, is_validator)?,
@@ -524,6 +542,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			role,
 			base_path: Some(base_path),
 			informant_output_format: Default::default(),
+			telemetry_handle,
 		})
 	}
 
@@ -542,6 +561,11 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(self.shared_params().is_log_filter_reloading_disabled())
 	}
 
+	/// Should the log color output be disabled?
+	fn disable_log_color(&self) -> Result<bool> {
+		Ok(self.shared_params().disable_log_color())
+	}
+
 	/// Initialize substrate. This must be done only once per process.
 	///
 	/// This method:
@@ -549,32 +573,38 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// 1. Sets the panic handler
 	/// 2. Initializes the logger
 	/// 3. Raises the FD limit
-	fn init<C: SubstrateCli>(&self) -> Result<()> {
-		let logger_pattern = self.log_filters()?;
-		let tracing_receiver = self.tracing_receiver()?;
-		let tracing_targets = self.tracing_targets()?;
-		let disable_log_reloading = self.is_log_filter_reloading_disabled()?;
-
+	fn init<C: SubstrateCli>(&self) -> Result<sc_telemetry::TelemetryWorker> {
 		sp_panic_handler::set(&C::support_url(), &C::impl_version());
 
-		init_logger(
-			&logger_pattern,
-			tracing_receiver,
-			tracing_targets,
-			disable_log_reloading,
-		)?;
+		let mut logger = GlobalLoggerBuilder::new(self.log_filters()?);
+		logger.with_log_reloading(!self.is_log_filter_reloading_disabled()?);
+
+		if let Some(transport) = self.telemetry_external_transport()? {
+			logger.with_transport(transport);
+		}
+
+		if let Some(tracing_targets) = self.tracing_targets()? {
+			let tracing_receiver = self.tracing_receiver()?;
+			logger.with_profiling(tracing_receiver, tracing_targets);
+		}
+
+		if self.disable_log_color()? {
+			logger.with_colors(false);
+		}
+
+		let telemetry_worker = logger.init()?;
 
 		if let Some(new_limit) = fdlimit::raise_fd_limit() {
 			if new_limit < RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT {
 				warn!(
 					"Low open file descriptor limit configured for the process. \
-					 Current value: {:?}, recommended value: {:?}.",
+					Current value: {:?}, recommended value: {:?}.",
 					new_limit, RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT,
 				);
 			}
 		}
 
-		Ok(())
+		Ok(telemetry_worker)
 	}
 }
 

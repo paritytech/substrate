@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -30,7 +30,7 @@ pub enum Error {
 	VoterStateReportsUnreasonablyLargeNumbers,
 	/// GRANDPA prove finality failed.
 	#[display(fmt = "GRANDPA prove finality rpc failed: {}", _0)]
-	ProveFinalityFailed(sp_blockchain::Error),
+	ProveFinalityFailed(sc_finality_grandpa::FinalityProofError),
 }
 
 /// The error codes returned by jsonrpc.

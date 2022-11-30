@@ -1,18 +1,20 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{error::{Error, Result}, interval::ExpIncInterval, ServicetoWorkerMsg};
 
@@ -55,10 +57,6 @@ pub mod tests;
 
 const LOG_TARGET: &'static str = "sub-authority-discovery";
 
-/// Name of the Substrate peerset priority group for authorities discovered through the authority
-/// discovery module.
-const AUTHORITIES_PRIORITY_GROUP_NAME: &'static str = "authorities";
-
 /// Maximum number of addresses cached per authority. Additional addresses are discarded.
 const MAX_ADDRESSES_PER_AUTHORITY: usize = 10;
 
@@ -100,7 +98,7 @@ pub enum Role {
 ///
 ///    5. Allow querying of the collected addresses via the [`crate::Service`].
 pub struct Worker<Client, Network, Block, DhtEventStream> {
-	/// Channel receiver for messages send by a [`Service`].
+	/// Channel receiver for messages send by a [`crate::Service`].
 	from_service: Fuse<mpsc::Receiver<ServicetoWorkerMsg>>,
 
 	client: Arc<Client>,
@@ -113,9 +111,6 @@ pub struct Worker<Client, Network, Block, DhtEventStream> {
 	publish_interval: ExpIncInterval,
 	/// Interval at which to request addresses of authorities, refilling the pending lookups queue.
 	query_interval: ExpIncInterval,
-	/// Interval on which to set the peerset priority group to a new random
-	/// set of addresses.
-	priority_group_set_interval: ExpIncInterval,
 
 	/// Queue of throttled lookups pending to be passed to the network.
 	pending_lookups: Vec<AuthorityId>,
@@ -164,13 +159,6 @@ where
 			Duration::from_secs(2),
 			config.max_query_interval,
 		);
-		let priority_group_set_interval = ExpIncInterval::new(
-			Duration::from_secs(2),
-			// Trade-off between node connection churn and connectivity. Using half of
-			// [`crate::WorkerConfig::max_query_interval`] to update priority group once at the
-			// beginning and once in the middle of each query interval.
-			config.max_query_interval / 2,
-		);
 
 		let addr_cache = AddrCache::new();
 
@@ -194,7 +182,6 @@ where
 			dht_event_rx,
 			publish_interval,
 			query_interval,
-			priority_group_set_interval,
 			pending_lookups: Vec::new(),
 			in_flight_lookups: HashMap::new(),
 			addr_cache,
@@ -223,15 +210,6 @@ where
 				// Handle messages from [`Service`]. Ignore if sender side is closed.
 				msg = self.from_service.select_next_some() => {
 					self.process_message_from_service(msg);
-				},
-				// Set peerset priority group to a new random set of addresses.
-				_ = self.priority_group_set_interval.next().fuse() => {
-					if let Err(e) = self.set_priority_group().await {
-						error!(
-							target: LOG_TARGET,
-							"Failed to set priority group: {:?}", e,
-						);
-					}
 				},
 				// Publish own addresses.
 				_ = self.publish_interval.next().fuse() => {
@@ -580,52 +558,13 @@ where
 
 		Ok(intersection)
 	}
-
-	/// Set the peer set 'authority' priority group to a new random set of
-	/// [`Multiaddr`]s.
-	async fn set_priority_group(&self) -> Result<()> {
-		let addresses = self.addr_cache.get_random_subset();
-
-		if addresses.is_empty() {
-			debug!(
-				target: LOG_TARGET,
-				"Got no addresses in cache for peerset priority group.",
-			);
-			return Ok(());
-		}
-
-		if let Some(metrics) = &self.metrics {
-			metrics.priority_group_size.set(addresses.len().try_into().unwrap_or(std::u64::MAX));
-		}
-
-		debug!(
-			target: LOG_TARGET,
-			"Applying priority group {:?} to peerset.", addresses,
-		);
-
-		self.network
-			.set_priority_group(
-				AUTHORITIES_PRIORITY_GROUP_NAME.to_string(),
-				addresses.into_iter().collect(),
-			).await
-			.map_err(Error::SettingPeersetPriorityGroup)?;
-
-		Ok(())
-	}
 }
 
 /// NetworkProvider provides [`Worker`] with all necessary hooks into the
-/// underlying Substrate networking. Using this trait abstraction instead of [`NetworkService`]
-/// directly is necessary to unit test [`Worker`].
+/// underlying Substrate networking. Using this trait abstraction instead of
+/// [`sc_network::NetworkService`] directly is necessary to unit test [`Worker`].
 #[async_trait]
 pub trait NetworkProvider: NetworkStateInfo {
-	/// Modify a peerset priority group.
-	async fn set_priority_group(
-		&self,
-		group_id: String,
-		peers: HashSet<libp2p::Multiaddr>,
-	) -> std::result::Result<(), String>;
-
 	/// Start putting a value in the Dht.
 	fn put_value(&self, key: libp2p::kad::record::Key, value: Vec<u8>);
 
@@ -639,13 +578,6 @@ where
 	B: BlockT + 'static,
 	H: ExHashT,
 {
-	async fn set_priority_group(
-		&self,
-		group_id: String,
-		peers: HashSet<libp2p::Multiaddr>,
-	) -> std::result::Result<(), String> {
-		self.set_priority_group(group_id, peers).await
-	}
 	fn put_value(&self, key: libp2p::kad::record::Key, value: Vec<u8>) {
 		self.put_value(key, value)
 	}
@@ -668,7 +600,6 @@ pub(crate) struct Metrics {
 	dht_event_received: CounterVec<U64>,
 	handle_value_found_event_failure: Counter<U64>,
 	known_authorities_count: Gauge<U64>,
-	priority_group_size: Gauge<U64>,
 }
 
 impl Metrics {
@@ -725,13 +656,6 @@ impl Metrics {
 				Gauge::new(
 					"authority_discovery_known_authorities_count",
 					"Number of authorities known by authority discovery."
-				)?,
-				registry,
-			)?,
-			priority_group_size: register(
-				Gauge::new(
-					"authority_discovery_priority_group_size",
-					"Number of addresses passed to the peer set as a priority group."
 				)?,
 				registry,
 			)?,

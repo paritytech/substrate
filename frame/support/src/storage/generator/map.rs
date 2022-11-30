@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -224,6 +224,10 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 
 	fn get<KeyArg: EncodeLike<K>>(key: KeyArg) -> Self::Query {
 		G::from_optional_value_to_query(unhashed::get(Self::storage_map_final_key(key).as_ref()))
+	}
+
+	fn try_get<KeyArg: EncodeLike<K>>(key: KeyArg) -> Result<V, ()> {
+		unhashed::get(Self::storage_map_final_key(key).as_ref()).ok_or(())
 	}
 
 	fn insert<KeyArg: EncodeLike<K>, ValArg: EncodeLike<V>>(key: KeyArg, val: ValArg) {

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -33,8 +33,6 @@ const ED_MULTIPLIER: u32 = 10;
 
 
 benchmarks! {
-	_ { }
-
 	// Benchmark `transfer` extrinsic with the worst possible conditions:
 	// * Transfer will kill the sender account.
 	// * Transfer will create the recipient account.

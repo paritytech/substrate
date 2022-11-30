@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -494,24 +494,40 @@ ss58_address_format!(
 		(24, "zero", "ZERO mainnet, standard account (*25519).")
 	AlphavilleAccount =>
 		(25, "alphaville", "ZERO testnet, standard account (*25519).")
+	JupiterAccount =>
+		(26, "jupiter", "Jupiter testnet, standard account (*25519).")
+	PatractAccount =>
+		(27, "patract", "Patract mainnet, standard account (*25519).")
 	SubsocialAccount =>
 		(28, "subsocial", "Subsocial network, standard account (*25519).")
+	DhiwayAccount =>
+		(29, "cord", "Dhiway CORD network, standard account (*25519).")	
 	PhalaAccount =>
 		(30, "phala", "Phala Network, standard account (*25519).")
+	LitentryAccount =>
+		(31, "litentry", "Litentry Network, standard account (*25519).")
 	RobonomicsAccount =>
 		(32, "robonomics", "Any Robonomics network standard account (*25519).")
 	DataHighwayAccount =>
 		(33, "datahighway", "DataHighway mainnet, standard account (*25519).")
+	ValiuAccount =>
+		(35, "vln", "Valiu Liquidity Network mainnet, standard account (*25519).")
 	CentrifugeAccount =>
 		(36, "centrifuge", "Centrifuge Chain mainnet, standard account (*25519).")
 	NodleAccount =>
 		(37, "nodle", "Nodle Chain mainnet, standard account (*25519).")
+	KiltAccount =>
+		(38, "kilt", "KILT Chain mainnet, standard account (*25519).")
+	PolimecAccount =>
+		(41, "poli", "Polimec Chain mainnet, standard account (*25519).")
 	SubstrateAccount =>
 		(42, "substrate", "Any Substrate network, standard account (*25519).")
 	Reserved43 =>
 		(43, "reserved43", "Reserved for future use (43).")
 	ChainXAccount =>
 		(44, "chainx", "ChainX mainnet, standard account (*25519).")
+	UniartsAccount =>
+		(45, "uniarts", "UniArts Chain mainnet, standard account (*25519).")
 	Reserved46 =>
 		(46, "reserved46", "Reserved for future use (46).")
 	Reserved47 =>
@@ -1046,6 +1062,7 @@ impl From<KeyTypeId> for u32 {
 
 impl<'a> TryFrom<&'a str> for KeyTypeId {
 	type Error = ();
+
 	fn try_from(x: &'a str) -> Result<Self, ()> {
 		let b = x.as_bytes();
 		if b.len() != 4 {

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -256,7 +256,7 @@ where
 	) -> Option<Self::Claim> {
 		let expected_author = slot_author::<P>(slot_number, epoch_data);
 		expected_author.and_then(|p| {
-			 if SyncCryptoStore::has_keys(
+			if SyncCryptoStore::has_keys(
 				 &*self.keystore,
 				 &[(p.to_raw_vec(), sp_application_crypto::key_types::AURA)],
 			) {

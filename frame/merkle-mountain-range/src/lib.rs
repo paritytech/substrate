@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +20,7 @@
 //! ## Overview
 //!
 //! Details on Merkle Mountain Ranges (MMRs) can be found here:
-//! https://github.com/mimblewimble/grin/blob/master/doc/mmr.md
+//! <https://github.com/mimblewimble/grin/blob/master/doc/mmr.md>
 //!
 //! The MMR pallet constructs a MMR from leaf data obtained on every block from
 //! `LeafDataProvider`. MMR nodes are stored both in:
@@ -41,7 +41,7 @@
 //! ## What for?
 //!
 //!	Primary use case for this pallet is to generate MMR root hashes, that can latter on be used by
-//!	BEEFY protocol (see https://github.com/paritytech/grandpa-bridge-gadget).
+//!	BEEFY protocol (see <https://github.com/paritytech/grandpa-bridge-gadget>).
 //!	MMR root hashes along with BEEFY will make it possible to build Super Light Clients (SLC) of
 //!	Substrate-based chains. The SLC will be able to follow finality and can be shown proofs of more
 //!	details that happened on the source chain.
@@ -88,7 +88,7 @@ pub trait Config<I = DefaultInstance>: frame_system::Config {
 	/// and some of the inner mmr nodes might be pruned from on-chain storage.
 	/// The later will contain all the entries in their full form.
 	///
-	/// Each node is stored in the Off-chain DB under key derived from the [INDEXING_PREFIX] and
+	/// Each node is stored in the Off-chain DB under key derived from the [`Self::INDEXING_PREFIX`] and
 	/// it's in-tree index (MMR position).
 	const INDEXING_PREFIX: &'static [u8];
 

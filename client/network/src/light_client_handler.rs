@@ -1,18 +1,20 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
-//
-// Substrate is free software: you can redistribute it and/or modify
+
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-//
-// Substrate is distributed in the hope that it will be useful,
+
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
-//
+
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! [`NetworkBehaviour`] implementation which handles light client requests.
 //!
@@ -27,7 +29,6 @@
 use bytes::Bytes;
 use codec::{self, Encode, Decode};
 use crate::{
-	block_requests::build_protobuf_block_request,
 	chain::Client,
 	config::ProtocolId,
 	protocol::message::{BlockAttributes, Direction, FromBlock},
@@ -1064,13 +1065,16 @@ fn retries<B: Block>(request: &Request<B>) -> usize {
 fn serialize_request<B: Block>(request: &Request<B>) -> Result<Vec<u8>, prost::EncodeError> {
 	let request = match request {
 		Request::Body { request, .. } => {
-			let rq = build_protobuf_block_request::<_, NumberFor<B>>(
-				BlockAttributes::BODY,
-				FromBlock::Hash(request.header.hash()),
-				None,
-				Direction::Ascending,
-				Some(1),
-			);
+			let rq = schema::v1::BlockRequest {
+				fields: BlockAttributes::BODY.to_be_u32(),
+				from_block: Some(schema::v1::block_request::FromBlock::Hash(
+					request.header.hash().encode(),
+				)),
+				to_block: Default::default(),
+				direction: schema::v1::Direction::Ascending as i32,
+				max_blocks: 1,
+			};
+
 			let mut buf = Vec::with_capacity(rq.encoded_len());
 			rq.encode(&mut buf)?;
 			return Ok(buf);
@@ -1484,14 +1488,14 @@ mod tests {
 	}
 
 	fn peerset() -> (sc_peerset::Peerset, sc_peerset::PeersetHandle) {
-		let cfg = sc_peerset::PeersetConfig {
+		let cfg = sc_peerset::SetConfig {
 			in_peers: 128,
 			out_peers: 128,
-			bootnodes: Vec::new(),
+			bootnodes: Default::default(),
 			reserved_only: false,
-			priority_groups: Vec::new(),
+			reserved_nodes: Default::default(),
 		};
-		sc_peerset::Peerset::from_config(cfg)
+		sc_peerset::Peerset::from_config(sc_peerset::PeersetConfig{ sets: vec![cfg] })
 	}
 
 	fn make_behaviour

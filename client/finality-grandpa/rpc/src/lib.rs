@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -37,9 +37,9 @@ mod notification;
 mod report;
 
 use sc_finality_grandpa::GrandpaJustificationStream;
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 
-use finality::{EncodedFinalityProofs, RpcFinalityProofProvider};
+use finality::{EncodedFinalityProof, RpcFinalityProofProvider};
 use report::{ReportAuthoritySet, ReportVoterState, ReportedRoundStates};
 use notification::JustificationNotification;
 
@@ -48,7 +48,7 @@ type FutureResult<T> =
 
 /// Provides RPC methods for interacting with GRANDPA.
 #[rpc]
-pub trait GrandpaApi<Notification, Hash> {
+pub trait GrandpaApi<Notification, Hash, Number> {
 	/// RPC Metadata
 	type Metadata;
 
@@ -82,15 +82,13 @@ pub trait GrandpaApi<Notification, Hash> {
 		id: SubscriptionId
 	) -> jsonrpc_core::Result<bool>;
 
-	/// Prove finality for the range (begin; end] hash. Returns None if there are no finalized blocks
-	/// unknown in the range. If no authorities set is provided, the current one will be attempted.
+	/// Prove finality for the given block number by returning the Justification for the last block
+	/// in the set and all the intermediary headers to link them together.
 	#[rpc(name = "grandpa_proveFinality")]
 	fn prove_finality(
 		&self,
-		begin: Hash,
-		end: Hash,
-		authorities_set_id: Option<u64>,
-	) -> FutureResult<Option<EncodedFinalityProofs>>;
+		block: Number,
+	) -> FutureResult<Option<EncodedFinalityProof>>;
 }
 
 /// Implements the GrandpaApi RPC trait for interacting with GRANDPA.
@@ -127,7 +125,8 @@ impl<AuthoritySet, VoterState, Block: BlockT, ProofProvider>
 	}
 }
 
-impl<AuthoritySet, VoterState, Block, ProofProvider> GrandpaApi<JustificationNotification, Block::Hash>
+impl<AuthoritySet, VoterState, Block, ProofProvider>
+	GrandpaApi<JustificationNotification, Block::Hash, NumberFor<Block>>
 	for GrandpaRpcHandler<AuthoritySet, VoterState, Block, ProofProvider>
 where
 	VoterState: ReportVoterState + Send + Sync + 'static,
@@ -171,16 +170,9 @@ where
 
 	fn prove_finality(
 		&self,
-		begin: Block::Hash,
-		end: Block::Hash,
-		authorities_set_id: Option<u64>,
-	) -> FutureResult<Option<EncodedFinalityProofs>> {
-		// If we are not provided a set_id, try with the current one.
-		let authorities_set_id = authorities_set_id
-			.unwrap_or_else(|| self.authority_set.get().0);
-		let result = self
-			.finality_proof_provider
-			.rpc_prove_finality(begin, end, authorities_set_id);
+		block: NumberFor<Block>,
+	) -> FutureResult<Option<EncodedFinalityProof>> {
+		let result = self.finality_proof_provider.rpc_prove_finality(block);
 		let future = async move { result }.boxed();
 		Box::new(
 			future
@@ -204,7 +196,7 @@ mod tests {
 	use sc_block_builder::BlockBuilder;
 	use sc_finality_grandpa::{
 		report, AuthorityId, GrandpaJustificationSender, GrandpaJustification,
-		FinalityProofFragment,
+		FinalityProof,
 	};
 	use sp_blockchain::HeaderBackend;
 	use sp_consensus::RecordProof;
@@ -223,7 +215,7 @@ mod tests {
 	struct EmptyVoterState;
 
 	struct TestFinalityProofProvider {
-		finality_proofs: Vec<FinalityProofFragment<Header>>,
+		finality_proof: Option<FinalityProof<Header>>,
 	}
 
 	fn voters() -> HashSet<AuthorityId> {
@@ -262,11 +254,15 @@ mod tests {
 	impl<Block: BlockT> RpcFinalityProofProvider<Block> for TestFinalityProofProvider {
 		fn rpc_prove_finality(
 			&self,
-			_begin: Block::Hash,
-			_end: Block::Hash,
-			_authoritites_set_id: u64,
-		) -> Result<Option<EncodedFinalityProofs>, sp_blockchain::Error> {
-			Ok(Some(EncodedFinalityProofs(self.finality_proofs.encode().into())))
+			_block: NumberFor<Block>
+		) -> Result<Option<EncodedFinalityProof>, sc_finality_grandpa::FinalityProofError> {
+			Ok(Some(EncodedFinalityProof(
+				self.finality_proof
+					.as_ref()
+					.expect("Don't call rpc_prove_finality without setting the FinalityProof")
+					.encode()
+					.into()
+			)))
 		}
 	}
 
@@ -308,12 +304,12 @@ mod tests {
 	) where
 		VoterState: ReportVoterState + Send + Sync + 'static,
 	{
-		setup_io_handler_with_finality_proofs(voter_state, Default::default())
+		setup_io_handler_with_finality_proofs(voter_state, None)
 	}
 
 	fn setup_io_handler_with_finality_proofs<VoterState>(
 		voter_state: VoterState,
-		finality_proofs: Vec<FinalityProofFragment<Header>>,
+		finality_proof: Option<FinalityProof<Header>>,
 	) -> (
 		jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>,
 		GrandpaJustificationSender<Block>,
@@ -321,7 +317,7 @@ mod tests {
 		VoterState: ReportVoterState + Send + Sync + 'static,
 	{
 		let (justification_sender, justification_stream) = GrandpaJustificationStream::channel();
-		let finality_proof_provider = Arc::new(TestFinalityProofProvider { finality_proofs });
+		let finality_proof_provider = Arc::new(TestFinalityProofProvider { finality_proof });
 
 		let handler = GrandpaRpcHandler::new(
 			TestAuthoritySet,
@@ -520,29 +516,24 @@ mod tests {
 
 	#[test]
 	fn prove_finality_with_test_finality_proof_provider() {
-		let finality_proofs = vec![FinalityProofFragment {
+		let finality_proof = FinalityProof {
 			block: header(42).hash(),
 			justification: create_justification().encode(),
 			unknown_headers: vec![header(2)],
-			authorities_proof: None,
-		}];
+		};
 		let (io,  _) = setup_io_handler_with_finality_proofs(
 			TestVoterState,
-			finality_proofs.clone(),
+			Some(finality_proof.clone()),
 		);
 
-		let request = "{\"jsonrpc\":\"2.0\",\"method\":\"grandpa_proveFinality\",\"params\":[\
-			\"0x0000000000000000000000000000000000000000000000000000000000000000\",\
-			\"0x0000000000000000000000000000000000000000000000000000000000000001\",\
-			42\
-		],\"id\":1}";
+		let request =
+			"{\"jsonrpc\":\"2.0\",\"method\":\"grandpa_proveFinality\",\"params\":[42],\"id\":1}";
 
 		let meta = sc_rpc::Metadata::default();
 		let resp = io.handle_request_sync(request, meta);
 		let mut resp: serde_json::Value = serde_json::from_str(&resp.unwrap()).unwrap();
 		let result: sp_core::Bytes = serde_json::from_value(resp["result"].take()).unwrap();
-		let fragments: Vec<FinalityProofFragment<Header>> =
-			Decode::decode(&mut &result[..]).unwrap();
-		assert_eq!(fragments, finality_proofs);
+		let finality_proof_rpc: FinalityProof<Header> = Decode::decode(&mut &result[..]).unwrap();
+		assert_eq!(finality_proof_rpc, finality_proof);
 	}
 }

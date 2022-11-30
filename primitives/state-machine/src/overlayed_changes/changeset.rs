@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,6 +25,7 @@ use std::collections::HashSet as Set;
 use sp_std::collections::btree_set::BTreeSet as Set;
 
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
+use sp_std::hash::Hash;
 use smallvec::SmallVec;
 use crate::warn;
 
@@ -32,8 +33,8 @@ const PROOF_OVERLAY_NON_EMPTY: &str = "\
 	An OverlayValue is always created with at least one transaction and dropped as soon
 	as the last transaction is removed; qed";
 
-type DirtyKeysSets = SmallVec<[Set<StorageKey>; 5]>;
-type Transactions = SmallVec<[InnerValue; 5]>;
+type DirtyKeysSets<K> = SmallVec<[Set<K>; 5]>;
+type Transactions<V> = SmallVec<[InnerValue<V>; 5]>;
 
 /// Error returned when trying to commit or rollback while no transaction is open or
 /// when the runtime is trying to close a transaction started by the client.
@@ -62,32 +63,46 @@ pub enum ExecutionMode {
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(test, derive(PartialEq))]
-struct InnerValue {
+struct InnerValue<V> {
 	/// Current value. None if value has been deleted.
-	value: Option<StorageValue>,
+	value: V,
 	/// The set of extrinsic indices where the values has been changed.
 	/// Is filled only if runtime has announced changes trie support.
 	extrinsics: Extrinsics,
 }
 
 /// An overlay that contains all versions of a value for a specific key.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 #[cfg_attr(test, derive(PartialEq))]
-pub struct OverlayedValue {
+pub struct OverlayedEntry<V> {
 	/// The individual versions of that value.
 	/// One entry per transactions during that the value was actually written.
-	transactions: Transactions,
+	transactions: Transactions<V>,
 }
 
+impl<V> Default for OverlayedEntry<V> {
+	fn default() -> Self {
+		Self {
+			transactions: SmallVec::new(),
+		}
+	}
+}
+
+/// History of value, with removal support.
+pub type OverlayedValue = OverlayedEntry<Option<StorageValue>>;
+
+/// Change set for basic key value with extrinsics index recording and removal support.
+pub type OverlayedChangeSet = OverlayedMap<StorageKey, Option<StorageValue>>;
+
 /// Holds a set of changes with the ability modify them using nested transactions.
-#[derive(Debug, Default, Clone)]
-pub struct OverlayedChangeSet {
+#[derive(Debug, Clone)]
+pub struct OverlayedMap<K: Ord + Hash, V> {
 	/// Stores the changes that this overlay constitutes.
-	changes: BTreeMap<StorageKey, OverlayedValue>,
+	changes: BTreeMap<K, OverlayedEntry<V>>,
 	/// Stores which keys are dirty per transaction. Needed in order to determine which
 	/// values to merge into the parent transaction on commit. The length of this vector
 	/// therefore determines how many nested transactions are currently open (depth).
-	dirty_keys: DirtyKeysSets,
+	dirty_keys: DirtyKeysSets<K>,
 	/// The number of how many transactions beginning from the first transactions are started
 	/// by the client. Those transactions are protected against close (commit, rollback)
 	/// when in runtime mode.
@@ -96,16 +111,32 @@ pub struct OverlayedChangeSet {
 	execution_mode: ExecutionMode,
 }
 
+impl<K: Ord + Hash, V> Default for OverlayedMap<K, V> {
+	fn default() -> Self {
+		Self {
+			changes: BTreeMap::new(),
+			dirty_keys: SmallVec::new(),
+			num_client_transactions: Default::default(),
+			execution_mode: Default::default(),
+		}
+	}
+}
+
 impl Default for ExecutionMode {
 	fn default() -> Self {
 		Self::Client
 	}
 }
 
-impl OverlayedValue {
+impl<V> OverlayedEntry<V> {
 	/// The value as seen by the current transaction.
-	pub fn value(&self) -> Option<&StorageValue> {
-		self.transactions.last().expect(PROOF_OVERLAY_NON_EMPTY).value.as_ref()
+	pub fn value_ref(&self) -> &V {
+		&self.transactions.last().expect(PROOF_OVERLAY_NON_EMPTY).value
+	}
+
+	/// The value as seen by the current transaction.
+	pub fn into_value(mut self) -> V {
+		self.transactions.pop().expect(PROOF_OVERLAY_NON_EMPTY).value
 	}
 
 	/// Unique list of extrinsic indices which modified the value.
@@ -116,12 +147,12 @@ impl OverlayedValue {
 	}
 
 	/// Mutable reference to the most recent version.
-	fn value_mut(&mut self) -> &mut Option<StorageValue> {
+	fn value_mut(&mut self) -> &mut V {
 		&mut self.transactions.last_mut().expect(PROOF_OVERLAY_NON_EMPTY).value
 	}
 
 	/// Remove the last version and return it.
-	fn pop_transaction(&mut self) -> InnerValue {
+	fn pop_transaction(&mut self) -> InnerValue<V> {
 		self.transactions.pop().expect(PROOF_OVERLAY_NON_EMPTY)
 	}
 
@@ -136,14 +167,14 @@ impl OverlayedValue {
 	/// rolled back when required.
 	fn set(
 		&mut self,
-		value: Option<StorageValue>,
+		value: V,
 		first_write_in_tx: bool,
 		at_extrinsic: Option<u32>,
 	) {
 		if first_write_in_tx || self.transactions.is_empty() {
 			self.transactions.push(InnerValue {
 				value,
-				.. Default::default()
+				extrinsics: Default::default(),
 			});
 		} else {
 			*self.value_mut() = value;
@@ -155,15 +186,22 @@ impl OverlayedValue {
 	}
 }
 
+impl OverlayedEntry<Option<StorageValue>> {
+	/// The value as seen by the current transaction.
+	pub fn value(&self) -> Option<&StorageValue> {
+		self.value_ref().as_ref()
+	}
+}
+
 /// Inserts a key into the dirty set.
 ///
 /// Returns true iff we are currently have at least one open transaction and if this
 /// is the first write to the given key that transaction.
-fn insert_dirty(set: &mut DirtyKeysSets, key: StorageKey) -> bool {
+fn insert_dirty<K: Ord + Hash>(set: &mut DirtyKeysSets<K>, key: K) -> bool {
 	set.last_mut().map(|dk| dk.insert(key)).unwrap_or_default()
 }
 
-impl OverlayedChangeSet {
+impl<K: Ord + Hash + Clone, V> OverlayedMap<K, V> {
 	/// Create a new changeset at the same transaction state but without any contents.
 	///
 	/// This changeset might be created when there are already open transactions.
@@ -171,10 +209,10 @@ impl OverlayedChangeSet {
 	pub fn spawn_child(&self) -> Self {
 		use sp_std::iter::repeat;
 		Self {
+			changes: Default::default(),
 			dirty_keys: repeat(Set::new()).take(self.transaction_depth()).collect(),
 			num_client_transactions: self.num_client_transactions,
 			execution_mode: self.execution_mode,
-			.. Default::default()
 		}
 	}
 
@@ -184,7 +222,11 @@ impl OverlayedChangeSet {
 	}
 
 	/// Get an optional reference to the value stored for the specified key.
-	pub fn get(&self, key: &[u8]) -> Option<&OverlayedValue> {
+	pub fn get<Q>(&self, key: &Q) -> Option<&OverlayedEntry<V>>
+		where
+			K: sp_std::borrow::Borrow<Q>,
+			Q: Ord + ?Sized, 
+	{
 		self.changes.get(key)
 	}
 
@@ -193,72 +235,30 @@ impl OverlayedChangeSet {
 	/// Can be rolled back or committed when called inside a transaction.
 	pub fn set(
 		&mut self,
-		key: StorageKey,
-		value: Option<StorageValue>,
+		key: K,
+		value: V,
 		at_extrinsic: Option<u32>,
 	) {
 		let overlayed = self.changes.entry(key.clone()).or_default();
 		overlayed.set(value, insert_dirty(&mut self.dirty_keys, key), at_extrinsic);
 	}
 
-	/// Get a mutable reference for a value.
-	///
-	/// Can be rolled back or committed when called inside a transaction.
-	#[must_use = "A change was registered, so this value MUST be modified."]
-	pub fn modify(
-		&mut self,
-		key: StorageKey,
-		init: impl Fn() -> StorageValue,
-		at_extrinsic: Option<u32>,
-	) -> &mut Option<StorageValue> {
-		let overlayed = self.changes.entry(key.clone()).or_default();
-		let first_write_in_tx = insert_dirty(&mut self.dirty_keys, key);
-		let clone_into_new_tx = if let Some(tx) = overlayed.transactions.last() {
-			if first_write_in_tx {
-				Some(tx.value.clone())
-			} else {
-				None
-			}
-		} else {
-			Some(Some(init()))
-		};
-
-		if let Some(cloned) = clone_into_new_tx {
-			overlayed.set(cloned, first_write_in_tx, at_extrinsic);
-		}
-		overlayed.value_mut()
-	}
-
-	/// Set all values to deleted which are matched by the predicate.
-	///
-	/// Can be rolled back or committed when called inside a transaction.
-	pub fn clear_where(
-		&mut self,
-		predicate: impl Fn(&[u8], &OverlayedValue) -> bool,
-		at_extrinsic: Option<u32>,
-	) {
-		for (key, val) in self.changes.iter_mut().filter(|(k, v)| predicate(k, v)) {
-			val.set(None, insert_dirty(&mut self.dirty_keys, key.clone()), at_extrinsic);
-		}
-	}
-
 	/// Get a list of all changes as seen by current transaction.
-	pub fn changes(&self) -> impl Iterator<Item=(&StorageKey, &OverlayedValue)> {
+	pub fn changes(&self) -> impl Iterator<Item=(&K, &OverlayedEntry<V>)> {
 		self.changes.iter()
 	}
 
-	/// Get the change that is next to the supplied key.
-	pub fn next_change(&self, key: &[u8]) -> Option<(&[u8], &OverlayedValue)> {
-		use sp_std::ops::Bound;
-		let range = (Bound::Excluded(key), Bound::Unbounded);
-		self.changes.range::<[u8], _>(range).next().map(|(k, v)| (&k[..], v))
+	/// Get a list of all changes as seen by current transaction, consumes
+	/// the overlay.
+	pub fn into_changes(self) -> impl Iterator<Item=(K, OverlayedEntry<V>)> {
+		self.changes.into_iter()
 	}
 
 	/// Consume this changeset and return all committed changes.
 	///
 	/// Panics:
 	/// Panics if there are open transactions: `transaction_depth() > 0`
-	pub fn drain_commited(self) -> impl Iterator<Item=(StorageKey, Option<StorageValue>)> {
+	pub fn drain_commited(self) -> impl Iterator<Item=(K, V)> {
 		assert!(self.transaction_depth() == 0, "Drain is not allowed with open transactions.");
 		self.changes.into_iter().map(|(k, mut v)| (k, v.pop_transaction().value))
 	}
@@ -381,6 +381,56 @@ impl OverlayedChangeSet {
 
 	fn has_open_runtime_transactions(&self) -> bool {
 		self.transaction_depth() > self.num_client_transactions
+	}
+}
+
+impl OverlayedChangeSet {
+	/// Get a mutable reference for a value.
+	///
+	/// Can be rolled back or committed when called inside a transaction.
+	#[must_use = "A change was registered, so this value MUST be modified."]
+	pub fn modify(
+		&mut self,
+		key: StorageKey,
+		init: impl Fn() -> StorageValue,
+		at_extrinsic: Option<u32>,
+	) -> &mut Option<StorageValue> {
+		let overlayed = self.changes.entry(key.clone()).or_default();
+		let first_write_in_tx = insert_dirty(&mut self.dirty_keys, key);
+		let clone_into_new_tx = if let Some(tx) = overlayed.transactions.last() {
+			if first_write_in_tx {
+				Some(tx.value.clone())
+			} else {
+				None
+			}
+		} else {
+			Some(Some(init()))
+		};
+
+		if let Some(cloned) = clone_into_new_tx {
+			overlayed.set(cloned, first_write_in_tx, at_extrinsic);
+		}
+		overlayed.value_mut()
+	}
+
+	/// Set all values to deleted which are matched by the predicate.
+	///
+	/// Can be rolled back or committed when called inside a transaction.
+	pub fn clear_where(
+		&mut self,
+		predicate: impl Fn(&[u8], &OverlayedValue) -> bool,
+		at_extrinsic: Option<u32>,
+	) {
+		for (key, val) in self.changes.iter_mut().filter(|(k, v)| predicate(k, v)) {
+			val.set(None, insert_dirty(&mut self.dirty_keys, key.clone()), at_extrinsic);
+		}
+	}
+
+	/// Get the change that is next to the supplied key.
+	pub fn next_change(&self, key: &[u8]) -> Option<(&[u8], &OverlayedValue)> {
+		use sp_std::ops::Bound;
+		let range = (Bound::Excluded(key), Bound::Unbounded);
+		self.changes.range::<[u8], _>(range).next().map(|(k, v)| (&k[..], v))
 	}
 }
 

@@ -43,8 +43,8 @@ pr_body="$(curl -H "${github_header}" -s ${github_api_substrate_pull_url}/${CI_C
 
 # get companion if explicitly specified
 pr_companion="$(echo "${pr_body}" | sed -n -r \
-    -e 's;^.*polkadot companion: paritytech/polkadot#([0-9]+).*$;\1;p' \
-    -e 's;^.*polkadot companion: https://github.com/paritytech/polkadot/pull/([0-9]+).*$;\1;p' \
+    -e 's;^.*[Cc]ompanion.*paritytech/polkadot#([0-9]+).*$;\1;p' \
+    -e 's;^.*[Cc]ompanion.*https://github.com/paritytech/polkadot/pull/([0-9]+).*$;\1;p' \
   | tail -n 1)"
 
 if [ -z "${pr_companion}" ]

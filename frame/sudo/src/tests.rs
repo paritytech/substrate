@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +19,8 @@
 
 use super::*;
 use mock::{
-	Sudo, SudoCall, Origin, Call, Test, new_test_ext, LoggerCall, Logger, System, TestEvent,
+	Sudo, SudoCall, Origin, Call, Test, new_test_ext, LoggerCall, Logger, System,
+	Event as TestEvent,
 };
 use frame_support::{assert_ok, assert_noop};
 

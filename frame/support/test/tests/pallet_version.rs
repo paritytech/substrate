@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,14 +20,12 @@
 #![recursion_limit="128"]
 
 use codec::{Decode, Encode};
-use sp_runtime::{generic, traits::{BlakeTwo256, Block as _, Verify}, BuildStorage};
+use sp_runtime::{generic, traits::{BlakeTwo256, Verify}, BuildStorage};
 use frame_support::{
 	traits::{PALLET_VERSION_STORAGE_KEY_POSTFIX, PalletVersion, OnRuntimeUpgrade, GetPalletVersion},
 	crate_to_pallet_version, weights::Weight,
 };
 use sp_core::{H256, sr25519};
-
-mod system;
 
 /// A version that we will check for in the tests
 const SOME_TEST_VERSION: PalletVersion = PalletVersion { major: 3000, minor: 30, patch: 13 };
@@ -35,14 +33,11 @@ const SOME_TEST_VERSION: PalletVersion = PalletVersion { major: 3000, minor: 30,
 /// Checks that `on_runtime_upgrade` sets the latest pallet version when being called without
 /// being provided by the user.
 mod module1 {
-	use super::*;
-
-	pub trait Config: system::Config {}
+	pub trait Config: frame_system::Config {}
 
 	frame_support::decl_module! {
 		pub struct Module<T: Config> for enum Call where
-			origin: <T as system::Config>::Origin,
-			system = system,
+			origin: <T as frame_system::Config>::Origin,
 		{}
 	}
 }
@@ -52,12 +47,11 @@ mod module1 {
 mod module2 {
 	use super::*;
 
-	pub trait Config<I=DefaultInstance>: system::Config {}
+	pub trait Config<I=DefaultInstance>: frame_system::Config {}
 
 	frame_support::decl_module! {
 		pub struct Module<T: Config<I>, I: Instance=DefaultInstance> for enum Call where
-			origin: <T as system::Config>::Origin,
-			system = system
+			origin: <T as frame_system::Config>::Origin,
 		{
 			fn on_runtime_upgrade() -> Weight {
 				assert_eq!(crate_to_pallet_version!(), Self::current_version());
@@ -82,26 +76,96 @@ mod module2 {
 	}
 }
 
+#[frame_support::pallet]
+mod pallet3 {
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
+
+	#[pallet::config]
+	pub trait Config: frame_system::Config {
+	}
+
+	#[pallet::pallet]
+	pub struct Pallet<T>(PhantomData<T>);
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_runtime_upgrade() -> Weight {
+			return 3;
+		}
+	}
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
+	}
+}
+
+#[frame_support::pallet]
+mod pallet4 {
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
+
+	#[pallet::config]
+	pub trait Config<I: 'static = ()>: frame_system::Config {
+	}
+
+	#[pallet::pallet]
+	pub struct Pallet<T, I=()>(PhantomData<(T, I)>);
+
+	#[pallet::hooks]
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
+		fn on_runtime_upgrade() -> Weight {
+			return 3;
+		}
+	}
+
+	#[pallet::call]
+	impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	}
+}
+
 impl module1::Config for Runtime {}
 impl module2::Config for Runtime {}
 impl module2::Config<module2::Instance1> for Runtime {}
 impl module2::Config<module2::Instance2> for Runtime {}
+
+impl pallet3::Config for Runtime {}
+impl pallet4::Config for Runtime {}
+impl pallet4::Config<pallet4::Instance1> for Runtime {}
+impl pallet4::Config<pallet4::Instance2> for Runtime {}
 
 pub type Signature = sr25519::Signature;
 pub type AccountId = <Signature as Verify>::Signer;
 pub type BlockNumber = u64;
 pub type Index = u64;
 
-impl system::Config for Runtime {
-	type BaseCallFilter= ();
-	type Hash = H256;
+frame_support::parameter_types!(
+	pub const BlockHashCount: u32 = 250;
+);
+
+impl frame_system::Config for Runtime {
+	type BaseCallFilter = ();
 	type Origin = Origin;
+	type Index = u64;
 	type BlockNumber = BlockNumber;
-	type AccountId = AccountId;
-	type Event = Event;
-	type PalletInfo = PalletInfo;
 	type Call = Call;
+	type Hash = H256;
+	type Hashing = sp_runtime::traits::BlakeTwo256;
+	type AccountId = AccountId;
+	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
+	type Header = Header;
+	type Event = Event;
+	type BlockHashCount = BlockHashCount;
+	type BlockWeights = ();
+	type BlockLength = ();
 	type DbWeight = ();
+	type Version = ();
+	type PalletInfo = PalletInfo;
+	type AccountData = ();
+	type OnNewAccount = ();
+	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
+	type SS58Prefix = ();
 }
 
 frame_support::construct_runtime!(
@@ -110,11 +174,15 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: system::{Module, Call, Event<T>},
+		System: frame_system::{Module, Call, Event<T>},
 		Module1: module1::{Module, Call},
 		Module2: module2::{Module, Call},
 		Module2_1: module2::<Instance1>::{Module, Call},
 		Module2_2: module2::<Instance2>::{Module, Call},
+		Pallet3: pallet3::{Module, Call},
+		Pallet4: pallet4::{Module, Call},
+		Pallet4_1: pallet4::<Instance1>::{Module, Call},
+		Pallet4_2: pallet4::<Instance2>::{Module, Call},
 	}
 );
 
@@ -156,6 +224,10 @@ fn on_runtime_upgrade_sets_the_pallet_versions_in_storage() {
 		check_pallet_version("Module2");
 		check_pallet_version("Module2_1");
 		check_pallet_version("Module2_2");
+		check_pallet_version("Pallet3");
+		check_pallet_version("Pallet4");
+		check_pallet_version("Pallet4_1");
+		check_pallet_version("Pallet4_2");
 	});
 }
 
@@ -171,6 +243,10 @@ fn on_runtime_upgrade_overwrites_old_version() {
 		check_pallet_version("Module2");
 		check_pallet_version("Module2_1");
 		check_pallet_version("Module2_2");
+		check_pallet_version("Pallet3");
+		check_pallet_version("Pallet4");
+		check_pallet_version("Pallet4_1");
+		check_pallet_version("Pallet4_2");
 	});
 }
 
@@ -183,6 +259,10 @@ fn genesis_init_puts_pallet_version_into_storage() {
 		check_pallet_version("Module2");
 		check_pallet_version("Module2_1");
 		check_pallet_version("Module2_2");
+		check_pallet_version("Pallet3");
+		check_pallet_version("Pallet4");
+		check_pallet_version("Pallet4_1");
+		check_pallet_version("Pallet4_2");
 
 		let system_version = System::storage_version().expect("System version should be set");
 		assert_eq!(System::current_version(), system_version);

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -88,7 +88,6 @@ mod tests {
 	use crate as pallet_test;
 
 	use frame_support::parameter_types;
-	use sp_runtime::traits::Block;
 
 	type SignedExtra = (
 		frame_system::CheckEra<Runtime>,
@@ -141,6 +140,7 @@ mod tests {
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
+		type SS58Prefix = ();
 	}
 
 	impl pallet_test::Config for Runtime {

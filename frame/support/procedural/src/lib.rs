@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,12 +21,14 @@
 
 mod storage;
 mod construct_runtime;
+mod pallet;
 mod pallet_version;
 mod transactional;
 mod debug_no_bound;
 mod clone_no_bound;
 mod partial_eq_no_bound;
 
+pub(crate) use storage::INHERENT_INSTANCE_NAME;
 use proc_macro::TokenStream;
 
 /// Declares strongly-typed wrappers around codec-compatible types in storage.
@@ -300,9 +302,20 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 /// The population of the genesis storage depends on the order of modules. So, if one of your
 /// modules depends on another module, the module that is depended upon needs to come before
 /// the module depending on it.
+///
+/// # Type definitions
+///
+/// * The macro generates a type alias for each pallet to their `Module` (or `Pallet`).
+///   E.g. `type System = frame_system::Module<Runtime>`
 #[proc_macro]
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	construct_runtime::construct_runtime(input)
+}
+
+/// Macro to define a pallet. Docs are at `frame_support::pallet`.
+#[proc_macro_attribute]
+pub fn pallet(attr: TokenStream, item: TokenStream) -> TokenStream {
+	pallet::pallet(attr, item)
 }
 
 /// Execute the annotated function in a new storage transaction.

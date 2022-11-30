@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -45,7 +45,6 @@ fn new_block() -> u64 {
 	frame_system::Module::<Test>::initialize(
 		&number,
 		&hash,
-		&Default::default(),
 		&Default::default(),
 		frame_system::InitKind::Full,
 	);

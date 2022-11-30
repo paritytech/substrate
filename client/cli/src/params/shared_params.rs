@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -45,6 +45,10 @@ pub struct SharedParams {
 	/// By default, all targets log `info`. The global log level can be set with -l<level>.
 	#[structopt(short = "l", long, value_name = "LOG_PATTERN")]
 	pub log: Vec<String>,
+
+	/// Disable log color output.
+	#[structopt(long)]
+	pub disable_log_color: bool,
 
 	/// Disable feature to dynamically update and reload the log filter.
 	///
@@ -97,6 +101,11 @@ impl SharedParams {
 	/// Get the filters for the logging
 	pub fn log_filters(&self) -> &[String] {
 		&self.log
+	}
+
+	/// Should the log color output be disabled?
+	pub fn disable_log_color(&self) -> bool {
+		self.disable_log_color
 	}
 
 	/// Is log reloading disabled

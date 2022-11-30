@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -32,25 +32,20 @@ use tokio::runtime::{Runtime, Handle};
 use sp_keyring::Ed25519Keyring;
 use sc_client_api::backend::TransactionFor;
 use sp_blockchain::Result;
-use sp_api::{ApiRef, StorageProof, ProvideRuntimeApi};
+use sp_api::{ApiRef, ProvideRuntimeApi};
 use substrate_test_runtime_client::runtime::BlockNumber;
 use sp_consensus::{
 	BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, ImportResult, BlockImport,
 	import_queue::BoxJustificationImport,
 };
 use std::{collections::{HashMap, HashSet}, pin::Pin};
-use parity_scale_codec::Decode;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, HashFor};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_runtime::generic::{BlockId, DigestItem};
 use sp_core::H256;
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, EquivocationProof, GrandpaApi, OpaqueKeyOwnershipProof};
-use sp_state_machine::{InMemoryBackend, prove_read, read_proof_check};
 
 use authorities::AuthoritySet;
-use finality_proof::{
-	AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker,
-};
 use sc_block_builder::BlockBuilderProvider;
 use sc_consensus::LongestChain;
 use sc_keystore::LocalKeystore;
@@ -204,43 +199,6 @@ sp_api::mock_impl_runtime_apis! {
 impl GenesisAuthoritySetProvider<Block> for TestApi {
 	fn get(&self) -> Result<AuthorityList> {
 		Ok(self.genesis_authorities.clone())
-	}
-}
-
-impl AuthoritySetForFinalityProver<Block> for TestApi {
-	fn authorities(&self, _block: &BlockId<Block>) -> Result<AuthorityList> {
-		Ok(self.genesis_authorities.clone())
-	}
-
-	fn prove_authorities(&self, block: &BlockId<Block>) -> Result<StorageProof> {
-		let authorities = self.authorities(block)?;
-		let backend = <InMemoryBackend<HashFor<Block>>>::from(vec![
-			(None, vec![(b"authorities".to_vec(), Some(authorities.encode()))])
-		]);
-		let proof = prove_read(backend, vec![b"authorities"])
-			.expect("failure proving read from in-memory storage backend");
-		Ok(proof)
-	}
-}
-
-impl AuthoritySetForFinalityChecker<Block> for TestApi {
-	fn check_authorities_proof(
-		&self,
-		_hash: <Block as BlockT>::Hash,
-		header: <Block as BlockT>::Header,
-		proof: StorageProof,
-	) -> Result<AuthorityList> {
-		let results = read_proof_check::<HashFor<Block>, _>(
-			*header.state_root(), proof, vec![b"authorities"]
-		)
-			.expect("failure checking read proof for authorities");
-		let encoded = results.get(&b"authorities"[..])
-			.expect("returned map must contain all proof keys")
-			.as_ref()
-			.expect("authorities in proof is None");
-		let authorities = Decode::decode(&mut &encoded[..])
-			.expect("failure decoding authorities read from proof");
-		Ok(authorities)
 	}
 }
 
@@ -1068,7 +1026,7 @@ fn voter_persists_its_votes() {
 				drop(_block_import);
 				r
 			})
-	};
+	}
 
 	runtime.spawn(alice_voter1);
 
@@ -1110,7 +1068,7 @@ fn voter_persists_its_votes() {
 			let runtime_handle = runtime_handle.clone();
 
 			async move {
-				if state.compare_and_swap(0, 1, Ordering::SeqCst) == 0 {
+				if state.compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst).unwrap() == 0 {
 					// the first message we receive should be a prevote from alice.
 					let prevote = match signed.message {
 						finality_grandpa::Message::Prevote(prevote) => prevote,
@@ -1156,7 +1114,7 @@ fn voter_persists_its_votes() {
 					// we send in a loop including a delay until items are received, this can be
 					// ignored for the sake of reduced complexity.
 					Pin::new(&mut *round_tx.lock()).start_send(finality_grandpa::Message::Prevote(prevote)).unwrap();
-				} else if state.compare_and_swap(1, 2, Ordering::SeqCst) == 1 {
+				} else if state.compare_exchange(1, 2, Ordering::SeqCst, Ordering::SeqCst).unwrap() == 1 {
 					// the next message we receive should be our own prevote
 					let prevote = match signed.message {
 						finality_grandpa::Message::Prevote(prevote) => prevote,
@@ -1170,7 +1128,7 @@ fn voter_persists_its_votes() {
 					// therefore we won't ever receive it again since it will be a
 					// known message on the gossip layer
 
-				} else if state.compare_and_swap(2, 3, Ordering::SeqCst) == 2 {
+				} else if state.compare_exchange(2, 3, Ordering::SeqCst, Ordering::SeqCst).unwrap() == 2 {
 					// we then receive a precommit from alice for block 15
 					// even though we casted a prevote for block 30
 					let precommit = match signed.message {

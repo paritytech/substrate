@@ -6,7 +6,7 @@ edition = "2018"
 license = "Unlicense"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
-description = "FRAME example pallet"
+description = ""
 readme = "README.md"
 
 [package.metadata.docs.rs]

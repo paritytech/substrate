@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 derive_more = "0.99.2"
-codec = { package = "parity-scale-codec", version = "1.3.4" }
+codec = { package = "parity-scale-codec", version = "1.3.6" }
 sp-io = { version = "2.0.0", path = "../../primitives/io" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
 sp-tasks = { version = "2.0.0", path = "../../primitives/tasks" }
@@ -33,7 +33,7 @@ sp-externalities = { version = "0.8.0", path = "../../primitives/externalities" 
 sc-executor-common = { version = "0.8.0", path = "common" }
 sc-executor-wasmi = { version = "0.8.0", path = "wasmi" }
 sc-executor-wasmtime = { version = "0.8.0", path = "wasmtime", optional = true }
-parking_lot = "0.10.0"
+parking_lot = "0.11.1"
 log = "0.4.8"
 libsecp256k1 = "0.3.4"
 
@@ -50,6 +50,7 @@ sp-tracing = { version = "2.0.0", path = "../../primitives/tracing" }
 sc-tracing = { version = "2.0.0", path = "../tracing" }
 tracing = "0.1.22"
 tracing-subscriber = "0.2.15"
+paste = "0.1.6"
 
 [features]
 default = [ "std" ]

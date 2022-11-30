@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,6 +24,9 @@ mod getters;
 mod metadata;
 mod instance_trait;
 mod genesis_config;
+mod print_pallet_upgrade;
+
+pub(crate) use instance_trait::INHERENT_INSTANCE_NAME;
 
 use quote::quote;
 use frame_support_procedural_tools::{
@@ -396,6 +399,8 @@ impl HasherKind {
 pub fn decl_storage_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let def = syn::parse_macro_input!(input as DeclStorageDef);
 	let def_ext = DeclStorageDefExt::from(def);
+
+	print_pallet_upgrade::maybe_print_pallet_upgrade(&def_ext);
 
 	let hidden_crate_name = def_ext.hidden_crate.as_ref().map(|i| i.to_string())
 		.unwrap_or_else(|| "decl_storage".to_string());

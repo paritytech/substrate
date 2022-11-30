@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -80,12 +80,8 @@ fn add_announcements<T: Config>(
 }
 
 benchmarks! {
-	_ {
-		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
-	}
-
 	proxy {
-		let p in ...;
+		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("target", p - 1, SEED);
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
@@ -99,7 +95,7 @@ benchmarks! {
 
 	proxy_announced {
 		let a in 0 .. T::MaxPending::get() - 1;
-		let p in ...;
+		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("anonymous", 0, SEED);
 		let delegate: T::AccountId = account("target", p - 1, SEED);
@@ -120,7 +116,7 @@ benchmarks! {
 
 	remove_announcement {
 		let a in 0 .. T::MaxPending::get() - 1;
-		let p in ...;
+		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("target", p - 1, SEED);
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
@@ -141,7 +137,7 @@ benchmarks! {
 
 	reject_announcement {
 		let a in 0 .. T::MaxPending::get() - 1;
-		let p in ...;
+		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("target", p - 1, SEED);
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
@@ -162,7 +158,7 @@ benchmarks! {
 
 	announce {
 		let a in 0 .. T::MaxPending::get() - 1;
-		let p in ...;
+		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("target", p - 1, SEED);
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
@@ -177,7 +173,7 @@ benchmarks! {
 	}
 
 	add_proxy {
-		let p in ...;
+		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
 		let caller: T::AccountId = whitelisted_caller();
 	}: _(
 		RawOrigin::Signed(caller.clone()),
@@ -191,7 +187,7 @@ benchmarks! {
 	}
 
 	remove_proxy {
-		let p in ...;
+		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
 		let caller: T::AccountId = whitelisted_caller();
 	}: _(
 		RawOrigin::Signed(caller.clone()),
@@ -205,7 +201,7 @@ benchmarks! {
 	}
 
 	remove_proxies {
-		let p in ...;
+		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
 		let caller: T::AccountId = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller.clone()))
 	verify {
@@ -214,7 +210,7 @@ benchmarks! {
 	}
 
 	anonymous {
-		let p in ...;
+		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
 		let caller: T::AccountId = whitelisted_caller();
 	}: _(
 		RawOrigin::Signed(caller.clone()),

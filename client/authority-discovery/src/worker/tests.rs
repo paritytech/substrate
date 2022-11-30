@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,7 +18,7 @@
 
 use crate::worker::schema;
 
-use std::{iter::FromIterator, sync::{Arc, Mutex}, task::Poll};
+use std::{sync::{Arc, Mutex}, task::Poll};
 
 use async_trait::async_trait;
 use futures::channel::mpsc::{self, channel};
@@ -112,10 +112,6 @@ sp_api::mock_impl_runtime_apis! {
 pub enum TestNetworkEvent {
 	GetCalled(kad::record::Key),
 	PutCalled(kad::record::Key, Vec<u8>),
-	SetPriorityGroupCalled {
-		group_id: String,
-		peers: HashSet<Multiaddr>
-	},
 }
 
 pub struct TestNetwork {
@@ -125,7 +121,6 @@ pub struct TestNetwork {
 	// vectors below.
 	pub put_value_call: Arc<Mutex<Vec<(kad::record::Key, Vec<u8>)>>>,
 	pub get_value_call: Arc<Mutex<Vec<kad::record::Key>>>,
-	pub set_priority_group_call: Arc<Mutex<Vec<(String, HashSet<Multiaddr>)>>>,
 	event_sender: mpsc::UnboundedSender<TestNetworkEvent>,
 	event_receiver: Option<mpsc::UnboundedReceiver<TestNetworkEvent>>,
 }
@@ -147,7 +142,6 @@ impl Default for TestNetwork {
 			],
 			put_value_call: Default::default(),
 			get_value_call: Default::default(),
-			set_priority_group_call: Default::default(),
 			event_sender: tx,
 			event_receiver: Some(rx),
 		}
@@ -156,21 +150,6 @@ impl Default for TestNetwork {
 
 #[async_trait]
 impl NetworkProvider for TestNetwork {
-	async fn set_priority_group(
-		&self,
-		group_id: String,
-		peers: HashSet<Multiaddr>,
-	) -> std::result::Result<(), String> {
-		self.set_priority_group_call
-			.lock()
-			.unwrap()
-			.push((group_id.clone(), peers.clone()));
-		self.event_sender.clone().unbounded_send(TestNetworkEvent::SetPriorityGroupCalled {
-			group_id,
-			peers,
-		}).unwrap();
-		Ok(())
-	}
 	fn put_value(&self, key: kad::record::Key, value: Vec<u8>) {
 		self.put_value_call.lock().unwrap().push((key.clone(), value.clone()));
 		self.event_sender.clone().unbounded_send(TestNetworkEvent::PutCalled(key, value)).unwrap();
@@ -296,14 +275,6 @@ fn publish_discover_cycle() {
 	let (_dht_event_tx, dht_event_rx) = channel(1000);
 
 	let network: Arc<TestNetwork> = Arc::new(Default::default());
-	let node_a_multiaddr = {
-		let peer_id = network.local_peer_id();
-		let address = network.external_addresses().pop().unwrap();
-
-		address.with(multiaddr::Protocol::P2p(
-			peer_id.into(),
-		))
-	};
 
 	let key_store = KeyStore::new();
 
@@ -365,19 +336,6 @@ fn publish_discover_cycle() {
 
 		// Make authority discovery handle the event.
 		worker.handle_dht_event(dht_event).await;
-
-		worker.set_priority_group().await.unwrap();
-
-		// Expect authority discovery to set the priority set.
-		assert_eq!(network.set_priority_group_call.lock().unwrap().len(), 1);
-
-		assert_eq!(
-			network.set_priority_group_call.lock().unwrap()[0],
-			(
-				"authorities".to_string(),
-				HashSet::from_iter(vec![node_a_multiaddr.clone()].into_iter())
-			)
-		);
 	}.boxed_local().into());
 
 	pool.run();

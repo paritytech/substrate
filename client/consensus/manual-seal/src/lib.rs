@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -293,7 +293,7 @@ mod tests {
 		let inherent_data_providers = InherentDataProviders::new();
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool = Arc::new(BasicPool::with_revalidation_type(
-			Options::default(), api(), None, RevalidationType::Full, spawner.clone(),
+			Options::default(), true.into(), api(), None, RevalidationType::Full, spawner.clone(),
 		));
 		let env = ProposerFactory::new(
 			spawner.clone(),
@@ -364,7 +364,7 @@ mod tests {
 		let inherent_data_providers = InherentDataProviders::new();
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool = Arc::new(BasicPool::with_revalidation_type(
-			Options::default(), api(), None, RevalidationType::Full, spawner.clone(),
+			Options::default(), true.into(), api(), None, RevalidationType::Full, spawner.clone(),
 		));
 		let env = ProposerFactory::new(
 			spawner.clone(),
@@ -439,7 +439,7 @@ mod tests {
 		let pool_api = api();
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool = Arc::new(BasicPool::with_revalidation_type(
-			Options::default(), pool_api.clone(), None, RevalidationType::Full, spawner.clone(),
+			Options::default(), true.into(), pool_api.clone(), None, RevalidationType::Full, spawner.clone(),
 		));
 		let env = ProposerFactory::new(
 			spawner.clone(),

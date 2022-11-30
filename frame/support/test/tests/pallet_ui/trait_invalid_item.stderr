@@ -1,0 +1,5 @@
+error: Invalid pallet::constant in pallet::config, expected type trait item
+ --> $DIR/trait_invalid_item.rs:9:3
+  |
+9 |         const U: u8 = 3;
+  |         ^^^^^

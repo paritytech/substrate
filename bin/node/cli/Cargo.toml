@@ -34,15 +34,14 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 # third-party dependencies
-codec = { package = "parity-scale-codec", version = "1.3.4" }
+codec = { package = "parity-scale-codec", version = "1.3.6" }
 serde = { version = "1.0.102", features = ["derive"] }
-futures = { version = "0.3.1", features = ["compat"] }
+futures = { version = "0.3.9", features = ["compat"] }
 hex-literal = "0.3.1"
 log = "0.4.8"
 rand = "0.7.2"
 structopt = { version = "0.3.8", optional = true }
-tracing = "0.1.22"
-parking_lot = "0.10.0"
+parking_lot = "0.11.1"
 
 # primitives
 sp-authority-discovery = { version = "2.0.0",  path = "../../../primitives/authority-discovery" }
@@ -75,6 +74,7 @@ sc-service = { version = "0.8.0", default-features = false, path = "../../../cli
 sc-tracing = { version = "2.0.0", path = "../../../client/tracing" }
 sc-telemetry = { version = "2.0.0", path = "../../../client/telemetry" }
 sc-authority-discovery = { version = "0.8.0",  path = "../../../client/authority-discovery" }
+sc-finality-grandpa-warp-sync = { version = "0.8.0", path = "../../../client/finality-grandpa-warp-sync", optional = true }
 
 # frame dependencies
 pallet-indices = { version = "2.0.0", path = "../../../frame/indices" }
@@ -117,7 +117,7 @@ sc-consensus = { version = "0.8.0", path = "../../../client/consensus/common" }
 sc-consensus-babe = { version = "0.8.0", features = ["test-helpers"], path = "../../../client/consensus/babe" }
 sc-consensus-epochs = { version = "0.8.0", path = "../../../client/consensus/epochs" }
 sc-service-test = { version = "2.0.0", path = "../../../client/service/test" }
-futures = "0.3.4"
+futures = "0.3.9"
 tempfile = "3.1.0"
 assert_cmd = "1.0"
 nix = "0.17"
@@ -152,6 +152,7 @@ cli = [
 	"frame-benchmarking-cli",
 	"substrate-frame-cli",
 	"sc-service/db",
+	"sc-finality-grandpa-warp-sync",
 	"structopt",
 	"substrate-build-script-utils",
 ]
