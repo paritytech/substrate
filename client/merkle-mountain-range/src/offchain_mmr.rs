@@ -21,12 +21,12 @@
 
 #![warn(missing_docs)]
 
-use crate::LOG_TARGET;
-use log::{debug, error, warn};
-use sc_client_api::FinalityNotification;
+use crate::{aux_schema, LOG_TARGET};
+use log::{debug, error, info, warn};
+use sc_client_api::{AuxStore, Backend, FinalityNotification};
 use sc_offchain::OffchainDb;
 use sp_blockchain::{CachedHeaderMetadata, ForkBackend, HeaderBackend, HeaderMetadata};
-use sp_core::offchain::{DbExternalities, OffchainStorage, StorageKind};
+use sp_core::offchain::{DbExternalities, StorageKind};
 use sp_mmr_primitives::{utils, utils::NodesUtils, NodeIndex};
 use sp_runtime::{
 	traits::{Block, NumberFor, One},
@@ -34,19 +34,45 @@ use sp_runtime::{
 };
 use std::{collections::VecDeque, sync::Arc};
 
+pub(crate) fn load_or_init_best_canonicalized<B, BE>(
+	backend: &BE,
+	first_mmr_block: NumberFor<B>,
+) -> sp_blockchain::Result<NumberFor<B>>
+where
+	BE: AuxStore,
+	B: Block,
+{
+	// Initialize gadget best_canon from AUX DB or from pallet genesis.
+	if let Some(best) = aux_schema::load_persistent::<B, BE>(backend)? {
+		info!(target: LOG_TARGET, "🥩 Loading MMR best canonicalized state from db: {:?}.", best);
+		Ok(best)
+	} else {
+		let best = first_mmr_block.saturating_sub(One::one());
+		info!(
+			target: LOG_TARGET,
+			"🥩 Loading MMR from pallet genesis on what appears to be the first startup: {:?}.",
+			best
+		);
+		aux_schema::write_current_version(backend)?;
+		aux_schema::write_gadget_state::<B, BE>(backend, &best)?;
+		Ok(best)
+	}
+}
+
 /// `OffchainMMR` exposes MMR offchain canonicalization and pruning logic.
-pub struct OffchainMMR<C, B: Block, S> {
+pub struct OffchainMMR<C, BE: Backend<B>, B: Block> {
+	pub backend: Arc<BE>,
 	pub client: Arc<C>,
-	pub offchain_db: OffchainDb<S>,
+	pub offchain_db: OffchainDb<BE::OffchainStorage>,
 	pub indexing_prefix: Vec<u8>,
 	pub first_mmr_block: NumberFor<B>,
 	pub best_canonicalized: NumberFor<B>,
 }
 
-impl<C, S, B> OffchainMMR<C, B, S>
+impl<C, BE, B> OffchainMMR<C, BE, B>
 where
 	C: HeaderBackend<B> + HeaderMetadata<B>,
-	S: OffchainStorage,
+	BE: Backend<B>,
 	B: Block,
 {
 	fn node_temp_offchain_key(&self, pos: NodeIndex, parent_hash: B::Hash) -> Vec<u8> {
@@ -206,6 +232,11 @@ where
 			for hash in to_canon.drain(..) {
 				self.canonicalize_branch(hash);
 			}
+			if let Err(e) =
+				aux_schema::write_gadget_state::<B, BE>(&*self.backend, &self.best_canonicalized)
+			{
+				debug!(target: LOG_TARGET, "error saving state: {:?}", e);
+			}
 		}
 	}
 
@@ -216,6 +247,11 @@ where
 		// Move offchain MMR nodes for finalized blocks to canonical keys.
 		for hash in notification.tree_route.iter().chain(std::iter::once(&notification.hash)) {
 			self.canonicalize_branch(*hash);
+		}
+		if let Err(e) =
+			aux_schema::write_gadget_state::<B, BE>(&*self.backend, &self.best_canonicalized)
+		{
+			debug!(target: LOG_TARGET, "error saving state: {:?}", e);
 		}
 
 		// Remove offchain MMR nodes for stale forks.

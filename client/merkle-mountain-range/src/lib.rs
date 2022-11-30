@@ -37,15 +37,15 @@
 
 #![warn(missing_docs)]
 
+mod aux_schema;
 mod offchain_mmr;
 #[cfg(test)]
 pub mod test_utils;
 
-use std::{marker::PhantomData, sync::Arc};
-
+use crate::offchain_mmr::OffchainMMR;
+use beefy_primitives::MmrRootHash;
 use futures::StreamExt;
 use log::{error, trace, warn};
-
 use sc_client_api::{Backend, BlockchainEvents, FinalityNotifications};
 use sc_offchain::OffchainDb;
 use sp_api::ProvideRuntimeApi;
@@ -53,45 +53,55 @@ use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_mmr_primitives::{utils, LeafIndex, MmrApi};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block, Header, NumberFor, One},
-	Saturating,
+	traits::{Block, Header, NumberFor},
 };
-
-use crate::offchain_mmr::OffchainMMR;
-use beefy_primitives::MmrRootHash;
-use sp_core::offchain::OffchainStorage;
+use std::{marker::PhantomData, sync::Arc};
 
 /// Logging target for the mmr gadget.
 pub const LOG_TARGET: &str = "mmr";
 
-struct OffchainMmrBuilder<B: Block, C, S> {
+struct OffchainMmrBuilder<B: Block, BE: Backend<B>, C> {
+	backend: Arc<BE>,
 	client: Arc<C>,
-	offchain_db: OffchainDb<S>,
+	offchain_db: OffchainDb<BE::OffchainStorage>,
 	indexing_prefix: Vec<u8>,
 
 	_phantom: PhantomData<B>,
 }
 
-impl<B, C, S> OffchainMmrBuilder<B, C, S>
+impl<B, BE, C> OffchainMmrBuilder<B, BE, C>
 where
 	B: Block,
+	BE: Backend<B>,
 	C: ProvideRuntimeApi<B> + HeaderBackend<B> + HeaderMetadata<B>,
 	C::Api: MmrApi<B, MmrRootHash, NumberFor<B>>,
-	S: OffchainStorage,
 {
 	async fn try_build(
 		self,
 		finality_notifications: &mut FinalityNotifications<B>,
-	) -> Option<OffchainMMR<C, B, S>> {
+	) -> Option<OffchainMMR<C, BE, B>> {
 		while let Some(notification) = finality_notifications.next().await {
 			let best_block = *notification.header.number();
 			match self.client.runtime_api().mmr_leaf_count(&BlockId::number(best_block)) {
 				Ok(Ok(mmr_leaf_count)) => {
 					match utils::first_mmr_block_num::<B::Header>(best_block, mmr_leaf_count) {
 						Ok(first_mmr_block) => {
-							// TODO: persist this in aux-db across runs.
-							let best_canonicalized = first_mmr_block.saturating_sub(One::one());
+							let best_canonicalized =
+								match offchain_mmr::load_or_init_best_canonicalized::<B, BE>(
+									&*self.backend,
+									first_mmr_block,
+								) {
+									Ok(best) => best,
+									Err(e) => {
+										error!(
+											target: LOG_TARGET,
+											"Error loading state from aux db: {:?}", e
+										);
+										return None
+									},
+								};
 							let mut offchain_mmr = OffchainMMR {
+								backend: self.backend,
 								client: self.client,
 								offchain_db: self.offchain_db,
 								indexing_prefix: self.indexing_prefix,
@@ -148,7 +158,7 @@ where
 	C: BlockchainEvents<B> + HeaderBackend<B> + HeaderMetadata<B> + ProvideRuntimeApi<B>,
 	C::Api: MmrApi<B, MmrRootHash, NumberFor<B>>,
 {
-	async fn run(mut self, builder: OffchainMmrBuilder<B, C, BE::OffchainStorage>) {
+	async fn run(mut self, builder: OffchainMmrBuilder<B, BE, C>) {
 		let mut offchain_mmr = match builder.try_build(&mut self.finality_notifications).await {
 			Some(offchain_mmr) => offchain_mmr,
 			None => return,
@@ -179,6 +189,7 @@ where
 		};
 		mmr_gadget
 			.run(OffchainMmrBuilder {
+				backend,
 				client,
 				offchain_db,
 				indexing_prefix,
