@@ -62,6 +62,7 @@ mod benchmarking;
 #[cfg(test)]
 mod tests;
 pub mod weights;
+pub mod migration;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
@@ -138,6 +139,7 @@ pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+use sp_runtime::traits::CheckedSub;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -228,6 +230,11 @@ pub mod pallet {
 	#[pallet::getter(fn approvals)]
 	pub type Approvals<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BoundedVec<ProposalIndex, T::MaxApprovals>, ValueQuery>;
+
+	/// The amount which has been reported as inactive to Currency.
+	#[pallet::storage]
+	pub type Deactivated<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, BalanceOf<T>, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig;
@@ -321,6 +328,14 @@ pub mod pallet {
 				Self::spend_funds()
 			} else {
 				Weight::zero()
+			}
+			let pot = Self::pot();
+			let deactivated = Deactivated::<T>::get();
+			if let Some(v) = pot.checked_sub(&deactivated) {
+				T::Currency::deactivate(v)
+			}
+			else if let Some(v) = deactivated.checked_sub(&pot) {
+				T::Currency::reactivate(v)
 			}
 		}
 	}
