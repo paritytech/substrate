@@ -138,7 +138,7 @@ benchmarks_instance_pallet! {
 	}
 
 	cleanup_poll {
-		let n in 1 .. 100;
+		let n in 0 .. 100;
 
 		// Create a poll
 		let class = T::Polls::classes().into_iter().next().unwrap();

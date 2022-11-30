@@ -24,10 +24,10 @@ use frame_benchmarking::{account, benchmarks_instance_pallet, whitelist_account}
 use frame_support::{
 	assert_ok,
 	dispatch::UnfilteredDispatchable,
-	traits::{Currency, EnsureOrigin},
+	traits::{Bounded, Currency, EnsureOrigin},
 };
 use frame_system::RawOrigin;
-use sp_runtime::traits::{Bounded, Hash};
+use sp_runtime::traits::Bounded as ArithBounded;
 
 const SEED: u32 = 0;
 
@@ -42,6 +42,12 @@ fn funded_account<T: Config<I>, I: 'static>(name: &'static str, index: u32) -> T
 	caller
 }
 
+fn dummy_call<T: Config<I>, I: 'static>() -> Bounded<<T as Config<I>>::RuntimeCall> {
+	let inner = frame_system::Call::remark { remark: vec![] };
+	let call = <T as Config<I>>::RuntimeCall::from(inner);
+	T::Preimages::bound(call).unwrap()
+}
+
 fn create_referendum<T: Config<I>, I: 'static>() -> (T::RuntimeOrigin, ReferendumIndex) {
 	let origin: T::RuntimeOrigin = T::SubmitOrigin::successful_origin();
 	if let Ok(caller) = frame_system::ensure_signed(origin.clone()) {
@@ -50,9 +56,9 @@ fn create_referendum<T: Config<I>, I: 'static>() -> (T::RuntimeOrigin, Referendu
 	}
 
 	let proposal_origin = Box::new(RawOrigin::Root.into());
-	let proposal_hash = T::Hashing::hash_of(&0);
+	let proposal = dummy_call::<T, I>();
 	let enactment_moment = DispatchTime::After(0u32.into());
-	let call = Call::<T, I>::submit { proposal_origin, proposal_hash, enactment_moment };
+	let call = crate::Call::<T, I>::submit { proposal_origin, proposal, enactment_moment };
 	assert_ok!(call.dispatch_bypass_filter(origin.clone()));
 	let index = ReferendumCount::<T, I>::get() - 1;
 	(origin, index)
@@ -196,7 +202,7 @@ benchmarks_instance_pallet! {
 	}: _<T::RuntimeOrigin>(
 		origin,
 		Box::new(RawOrigin::Root.into()),
-		T::Hashing::hash_of(&0),
+		dummy_call::<T, I>(),
 		DispatchTime::After(0u32.into())
 	) verify {
 		let index = ReferendumCount::<T, I>::get().checked_sub(1).unwrap();

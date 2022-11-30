@@ -97,10 +97,6 @@ impl ProposalProvider<AccountId, Hash, RuntimeCall> for AllianceProposalProvider
 		AllianceMotion::do_vote(who, proposal, index, approve)
 	}
 
-	fn veto_proposal(proposal_hash: Hash) -> u32 {
-		AllianceMotion::do_disapprove_proposal(proposal_hash)
-	}
-
 	fn close_proposal(
 		proposal_hash: Hash,
 		proposal_index: ProposalIndex,
@@ -126,8 +122,8 @@ mod multiplier_tests {
 
 	use crate::{
 		constants::{currency::*, time::*},
-		AdjustmentVariable, MinimumMultiplier, Runtime, RuntimeBlockWeights as BlockWeights,
-		System, TargetBlockFullness, TransactionPayment,
+		AdjustmentVariable, MaximumMultiplier, MinimumMultiplier, Runtime,
+		RuntimeBlockWeights as BlockWeights, System, TargetBlockFullness, TransactionPayment,
 	};
 	use frame_support::{
 		dispatch::DispatchClass,
@@ -156,6 +152,7 @@ mod multiplier_tests {
 			TargetBlockFullness,
 			AdjustmentVariable,
 			MinimumMultiplier,
+			MaximumMultiplier,
 		>::convert(fm)
 	}
 

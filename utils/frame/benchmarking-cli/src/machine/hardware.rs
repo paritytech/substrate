@@ -18,8 +18,40 @@
 //! Contains types to define hardware requirements.
 
 use lazy_static::lazy_static;
-use serde::{Deserialize, Serialize};
-use std::fmt;
+use sc_sysinfo::Throughput;
+use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
+use sp_std::{fmt, fmt::Formatter};
+
+/// Serializes throughput into MiBs and represents it as `f64`.
+fn serialize_throughput_as_f64<S>(throughput: &Throughput, serializer: S) -> Result<S::Ok, S::Error>
+where
+	S: Serializer,
+{
+	serializer.serialize_f64(throughput.as_mibs())
+}
+
+struct ThroughputVisitor;
+impl<'de> Visitor<'de> for ThroughputVisitor {
+	type Value = Throughput;
+
+	fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+		formatter.write_str("A value that is a f64.")
+	}
+
+	fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E>
+	where
+		E: serde::de::Error,
+	{
+		Ok(Throughput::from_mibs(value))
+	}
+}
+
+fn deserialize_throughput<'de, D>(deserializer: D) -> Result<Throughput, D::Error>
+where
+	D: Deserializer<'de>,
+{
+	Ok(deserializer.deserialize_f64(ThroughputVisitor))?
+}
 
 lazy_static! {
 	/// The hardware requirements as measured on reference hardware.
@@ -45,6 +77,10 @@ pub struct Requirement {
 	/// The metric to measure.
 	pub metric: Metric,
 	/// The minimal throughput that needs to be archived for this requirement.
+	#[serde(
+		serialize_with = "serialize_throughput_as_f64",
+		deserialize_with = "deserialize_throughput"
+	)]
 	pub minimum: Throughput,
 }
 
@@ -63,17 +99,6 @@ pub enum Metric {
 	DiskSeqWrite,
 	/// Disk random write.
 	DiskRndWrite,
-}
-
-/// Throughput as measured in bytes per second.
-#[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq)]
-pub enum Throughput {
-	/// KiB/s
-	KiBs(f64),
-	/// MiB/s
-	MiBs(f64),
-	/// GiB/s
-	GiBs(f64),
 }
 
 impl Metric {
@@ -98,70 +123,9 @@ impl Metric {
 	}
 }
 
-const KIBIBYTE: f64 = 1024.0;
-
-impl Throughput {
-	/// The unit of the metric.
-	pub fn unit(&self) -> &'static str {
-		match self {
-			Self::KiBs(_) => "KiB/s",
-			Self::MiBs(_) => "MiB/s",
-			Self::GiBs(_) => "GiB/s",
-		}
-	}
-
-	/// [`Self`] as number of byte/s.
-	pub fn to_bs(&self) -> f64 {
-		self.to_kibs() * KIBIBYTE
-	}
-
-	/// [`Self`] as number of kibibyte/s.
-	pub fn to_kibs(&self) -> f64 {
-		self.to_mibs() * KIBIBYTE
-	}
-
-	/// [`Self`] as number of mebibyte/s.
-	pub fn to_mibs(&self) -> f64 {
-		self.to_gibs() * KIBIBYTE
-	}
-
-	/// [`Self`] as number of gibibyte/s.
-	pub fn to_gibs(&self) -> f64 {
-		match self {
-			Self::KiBs(k) => *k / (KIBIBYTE * KIBIBYTE),
-			Self::MiBs(m) => *m / KIBIBYTE,
-			Self::GiBs(g) => *g,
-		}
-	}
-
-	/// Normalizes [`Self`] to use the larges unit possible.
-	pub fn normalize(&self) -> Self {
-		let bs = self.to_bs();
-
-		if bs >= KIBIBYTE * KIBIBYTE * KIBIBYTE {
-			Self::GiBs(self.to_gibs())
-		} else if bs >= KIBIBYTE * KIBIBYTE {
-			Self::MiBs(self.to_mibs())
-		} else {
-			Self::KiBs(self.to_kibs())
-		}
-	}
-}
-
-impl fmt::Display for Throughput {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let normalized = self.normalize();
-		match normalized {
-			Self::KiBs(s) | Self::MiBs(s) | Self::GiBs(s) =>
-				write!(f, "{:.2?} {}", s, normalized.unit()),
-		}
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_runtime::assert_eq_error_rate_float;
 
 	/// `SUBSTRATE_REFERENCE_HARDWARE` can be en- and decoded.
 	#[test]
@@ -170,22 +134,5 @@ mod tests {
 		let decoded: Requirements = serde_json::from_str(&raw).unwrap();
 
 		assert_eq!(decoded, SUBSTRATE_REFERENCE_HARDWARE.clone());
-	}
-
-	/// Test the [`Throughput`].
-	#[test]
-	fn throughput_works() {
-		/// Float precision.
-		const EPS: f64 = 0.1;
-		let gib = Throughput::GiBs(14.324);
-
-		assert_eq_error_rate_float!(14.324, gib.to_gibs(), EPS);
-		assert_eq_error_rate_float!(14667.776, gib.to_mibs(), EPS);
-		assert_eq_error_rate_float!(14667.776 * 1024.0, gib.to_kibs(), EPS);
-		assert_eq!("14.32 GiB/s", gib.to_string());
-		assert_eq!("14.32 GiB/s", gib.normalize().to_string());
-
-		let mib = Throughput::MiBs(1029.0);
-		assert_eq!("1.00 GiB/s", mib.to_string());
 	}
 }

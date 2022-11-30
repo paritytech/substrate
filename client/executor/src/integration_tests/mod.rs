@@ -52,7 +52,6 @@ macro_rules! test_wasm_execution {
 			}
 
 			#[test]
-			#[cfg(feature = "wasmtime")]
 			fn [<$method_name _compiled_recreate_instance_cow>]() {
 				$method_name(WasmExecutionMethod::Compiled {
 					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::RecreateInstanceCopyOnWrite
@@ -60,7 +59,6 @@ macro_rules! test_wasm_execution {
 			}
 
 			#[test]
-			#[cfg(feature = "wasmtime")]
 			fn [<$method_name _compiled_recreate_instance_vanilla>]() {
 				$method_name(WasmExecutionMethod::Compiled {
 					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::RecreateInstance
@@ -68,7 +66,6 @@ macro_rules! test_wasm_execution {
 			}
 
 			#[test]
-			#[cfg(feature = "wasmtime")]
 			fn [<$method_name _compiled_pooling_cow>]() {
 				$method_name(WasmExecutionMethod::Compiled {
 					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::PoolingCopyOnWrite
@@ -76,7 +73,6 @@ macro_rules! test_wasm_execution {
 			}
 
 			#[test]
-			#[cfg(feature = "wasmtime")]
 			fn [<$method_name _compiled_pooling_vanilla>]() {
 				$method_name(WasmExecutionMethod::Compiled {
 					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::Pooling
@@ -84,7 +80,6 @@ macro_rules! test_wasm_execution {
 			}
 
 			#[test]
-			#[cfg(feature = "wasmtime")]
 			fn [<$method_name _compiled_legacy_instance_reuse>]() {
 				$method_name(WasmExecutionMethod::Compiled {
 					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::LegacyInstanceReuse
@@ -120,7 +115,6 @@ macro_rules! test_wasm_execution_sandbox {
 			}
 
 			#[test]
-			#[cfg(feature = "wasmtime")]
 			fn [<$method_name _compiled_pooling_cow_host_executor>]() {
 				$method_name(WasmExecutionMethod::Compiled {
 					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::PoolingCopyOnWrite
@@ -128,7 +122,6 @@ macro_rules! test_wasm_execution_sandbox {
 			}
 
 			#[test]
-			#[cfg(feature = "wasmtime")]
 			fn [<$method_name _compiled_pooling_cow_embedded_executor>]() {
 				$method_name(WasmExecutionMethod::Compiled {
 					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::PoolingCopyOnWrite
@@ -136,7 +129,6 @@ macro_rules! test_wasm_execution_sandbox {
 			}
 
 			#[test]
-			#[cfg(feature = "wasmtime")]
 			fn [<$method_name _compiled_pooling_vanilla_host_executor>]() {
 				$method_name(WasmExecutionMethod::Compiled {
 					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::Pooling
@@ -144,7 +136,6 @@ macro_rules! test_wasm_execution_sandbox {
 			}
 
 			#[test]
-			#[cfg(feature = "wasmtime")]
 			fn [<$method_name _compiled_pooling_vanilla_embedded_executor>]() {
 				$method_name(WasmExecutionMethod::Compiled {
 					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::Pooling
@@ -152,7 +143,6 @@ macro_rules! test_wasm_execution_sandbox {
 			}
 
 			#[test]
-			#[cfg(feature = "wasmtime")]
 			fn [<$method_name _compiled_recreate_instance_cow_host_executor>]() {
 				$method_name(WasmExecutionMethod::Compiled {
 					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::RecreateInstanceCopyOnWrite
@@ -160,7 +150,6 @@ macro_rules! test_wasm_execution_sandbox {
 			}
 
 			#[test]
-			#[cfg(feature = "wasmtime")]
 			fn [<$method_name _compiled_recreate_instance_cow_embedded_executor>]() {
 				$method_name(WasmExecutionMethod::Compiled {
 					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::RecreateInstanceCopyOnWrite
@@ -168,7 +157,6 @@ macro_rules! test_wasm_execution_sandbox {
 			}
 
 			#[test]
-			#[cfg(feature = "wasmtime")]
 			fn [<$method_name _compiled_recreate_instance_vanilla_host_executor>]() {
 				$method_name(WasmExecutionMethod::Compiled {
 					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::RecreateInstance
@@ -176,7 +164,6 @@ macro_rules! test_wasm_execution_sandbox {
 			}
 
 			#[test]
-			#[cfg(feature = "wasmtime")]
 			fn [<$method_name _compiled_recreate_instance_vanilla_embedded_executor>]() {
 				$method_name(WasmExecutionMethod::Compiled {
 					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::RecreateInstance
@@ -184,7 +171,6 @@ macro_rules! test_wasm_execution_sandbox {
 			}
 
 			#[test]
-			#[cfg(feature = "wasmtime")]
 			fn [<$method_name _compiled_legacy_instance_reuse_host_executor>]() {
 				$method_name(WasmExecutionMethod::Compiled {
 					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::LegacyInstanceReuse
@@ -192,7 +178,6 @@ macro_rules! test_wasm_execution_sandbox {
 			}
 
 			#[test]
-			#[cfg(feature = "wasmtime")]
 			fn [<$method_name _compiled_legacy_instance_reuse_embedded_executor>]() {
 				$method_name(WasmExecutionMethod::Compiled {
 					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::LegacyInstanceReuse
@@ -253,7 +238,6 @@ fn call_not_existing_function(wasm_method: WasmExecutionMethod) {
 		Error::AbortedDueToTrap(error) => {
 			let expected = match wasm_method {
 				WasmExecutionMethod::Interpreted => "Other: Function `missing_external` is only a stub. Calling a stub is not allowed.",
-				#[cfg(feature = "wasmtime")]
 				WasmExecutionMethod::Compiled { .. } => "call to a missing function env:missing_external"
 			};
 			assert_eq!(error.message, expected);
@@ -273,7 +257,6 @@ fn call_yet_another_not_existing_function(wasm_method: WasmExecutionMethod) {
 		Error::AbortedDueToTrap(error) => {
 			let expected = match wasm_method {
 				WasmExecutionMethod::Interpreted => "Other: Function `yet_another_missing_external` is only a stub. Calling a stub is not allowed.",
-				#[cfg(feature = "wasmtime")]
 				WasmExecutionMethod::Compiled { .. } => "call to a missing function env:yet_another_missing_external"
 			};
 			assert_eq!(error.message, expected);
@@ -577,7 +560,6 @@ fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 		.unwrap_err();
 
 	match err {
-		#[cfg(feature = "wasmtime")]
 		Error::AbortedDueToTrap(error)
 			if matches!(wasm_method, WasmExecutionMethod::Compiled { .. }) =>
 		{
@@ -770,33 +752,6 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 	assert_eq!(len, 2);
 }
 
-test_wasm_execution!(spawning_runtime_instance_should_work);
-fn spawning_runtime_instance_should_work(wasm_method: WasmExecutionMethod) {
-	let mut ext = TestExternalities::default();
-	let mut ext = ext.ext();
-
-	call_in_wasm("test_spawn", &[], wasm_method, &mut ext).unwrap();
-}
-
-test_wasm_execution!(spawning_runtime_instance_nested_should_work);
-fn spawning_runtime_instance_nested_should_work(wasm_method: WasmExecutionMethod) {
-	let mut ext = TestExternalities::default();
-	let mut ext = ext.ext();
-
-	call_in_wasm("test_nested_spawn", &[], wasm_method, &mut ext).unwrap();
-}
-
-test_wasm_execution!(panic_in_spawned_instance_panics_on_joining_its_result);
-fn panic_in_spawned_instance_panics_on_joining_its_result(wasm_method: WasmExecutionMethod) {
-	let mut ext = TestExternalities::default();
-	let mut ext = ext.ext();
-
-	let error_result =
-		call_in_wasm("test_panic_in_spawned", &[], wasm_method, &mut ext).unwrap_err();
-
-	assert!(error_result.to_string().contains("Spawned task"));
-}
-
 test_wasm_execution!(memory_is_cleared_between_invocations);
 fn memory_is_cleared_between_invocations(wasm_method: WasmExecutionMethod) {
 	// This is based on the code generated by compiling a runtime *without*
@@ -913,8 +868,8 @@ fn unreachable_intrinsic(wasm_method: WasmExecutionMethod) {
 		Error::AbortedDueToTrap(error) => {
 			let expected = match wasm_method {
 				WasmExecutionMethod::Interpreted => "unreachable",
-				#[cfg(feature = "wasmtime")]
-				WasmExecutionMethod::Compiled { .. } => "wasm trap: wasm `unreachable` instruction executed",
+				WasmExecutionMethod::Compiled { .. } =>
+					"wasm trap: wasm `unreachable` instruction executed",
 			};
 			assert_eq!(error.message, expected);
 		},

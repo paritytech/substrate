@@ -15,20 +15,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! A MMR storage implementations.
+//! An MMR storage implementation.
 
 use codec::Encode;
-use frame_support::traits::Get;
-use mmr_lib::helper;
+use frame_support::log::{debug, trace};
 use sp_core::offchain::StorageKind;
-use sp_io::{offchain, offchain_index};
-use sp_runtime::traits::UniqueSaturatedInto;
+use sp_io::offchain_index;
+use sp_mmr_primitives::{mmr_lib, mmr_lib::helper, utils::NodesUtils};
 use sp_std::iter::Peekable;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::*;
 
 use crate::{
-	mmr::{utils::NodesUtils, Node, NodeOf},
+	mmr::{Node, NodeOf},
 	primitives::{self, NodeIndex},
 	Config, Nodes, NumberOfLeaves, Pallet,
 };
@@ -49,51 +48,6 @@ pub struct RuntimeStorage;
 /// DOES NOT support adding new items to the MMR.
 pub struct OffchainStorage;
 
-/// Suffix of key for the 'pruning_map'.
-///
-/// Nodes and leaves are initially saved under fork-specific keys in offchain db,
-/// eventually they are "canonicalized" and this map is used to prune non-canon entries.
-const OFFCHAIN_PRUNING_MAP_KEY_SUFFIX: &str = "pruning_map";
-
-/// Used to store offchain mappings of `BlockNumber -> Vec[Hash]` to track all forks.
-/// Size of this offchain map is at most `frame_system::BlockHashCount`, its entries are pruned
-/// as part of the mechanism that prunes the forks this map tracks.
-pub(crate) struct PruningMap<T, I>(sp_std::marker::PhantomData<(T, I)>);
-impl<T, I> PruningMap<T, I>
-where
-	T: Config<I>,
-	I: 'static,
-{
-	pub(crate) fn pruning_map_offchain_key(block: T::BlockNumber) -> sp_std::prelude::Vec<u8> {
-		(T::INDEXING_PREFIX, block, OFFCHAIN_PRUNING_MAP_KEY_SUFFIX).encode()
-	}
-
-	/// Append `hash` to the list of parent hashes for `block` in offchain db.
-	pub fn append(block: T::BlockNumber, hash: <T as frame_system::Config>::Hash) {
-		let map_key = Self::pruning_map_offchain_key(block);
-		offchain::local_storage_get(StorageKind::PERSISTENT, &map_key)
-			.and_then(|v| codec::Decode::decode(&mut &*v).ok())
-			.or_else(|| Some(Vec::<<T as frame_system::Config>::Hash>::new()))
-			.map(|mut parents| {
-				parents.push(hash);
-				offchain::local_storage_set(
-					StorageKind::PERSISTENT,
-					&map_key,
-					&Encode::encode(&parents),
-				);
-			});
-	}
-
-	/// Remove list of parent hashes for `block` from offchain db and return it.
-	pub fn remove(block: T::BlockNumber) -> Option<Vec<<T as frame_system::Config>::Hash>> {
-		let map_key = Self::pruning_map_offchain_key(block);
-		offchain::local_storage_get(StorageKind::PERSISTENT, &map_key).and_then(|v| {
-			offchain::local_storage_clear(StorageKind::PERSISTENT, &map_key);
-			codec::Decode::decode(&mut &*v).ok()
-		})
-	}
-}
-
 /// A storage layer for MMR.
 ///
 /// There are two different implementations depending on the use case.
@@ -112,101 +66,6 @@ where
 	I: 'static,
 	L: primitives::FullLeaf,
 {
-	/// Move nodes and leaves added by block `N` in offchain db from _fork-aware key_ to
-	/// _canonical key_,
-	/// where `N` is `frame_system::BlockHashCount` blocks behind current block number.
-	///
-	/// This "canonicalization" process is required because the _fork-aware key_ value depends
-	/// on `frame_system::block_hash(block_num)` map which only holds the last
-	/// `frame_system::BlockHashCount` blocks.
-	///
-	/// For the canonicalized block, prune all nodes pertaining to other forks from offchain db.
-	///
-	/// Should only be called from offchain context, because it requires both read and write
-	/// access to offchain db.
-	pub(crate) fn canonicalize_and_prune(block: T::BlockNumber) {
-		// Add "block_num -> hash" mapping to offchain db,
-		// with all forks pushing hashes to same entry (same block number).
-		let parent_hash = <frame_system::Pallet<T>>::parent_hash();
-		PruningMap::<T, I>::append(block, parent_hash);
-
-		// Effectively move a rolling window of fork-unique leaves. Once out of the window, leaves
-		// are "canonicalized" in offchain by moving them under `Pallet::node_canon_offchain_key`.
-		let leaves = NumberOfLeaves::<T, I>::get();
-		let window_size =
-			<T as frame_system::Config>::BlockHashCount::get().unique_saturated_into();
-		if leaves >= window_size {
-			// Move the rolling window towards the end of `block_num->hash` mappings available
-			// in the runtime: we "canonicalize" the leaf at the end,
-			let to_canon_leaf = leaves.saturating_sub(window_size);
-			// and all the nodes added by that leaf.
-			let to_canon_nodes = NodesUtils::right_branch_ending_in_leaf(to_canon_leaf);
-			frame_support::log::debug!(
-				target: "runtime::mmr::offchain", "Nodes to canon for leaf {}: {:?}",
-				to_canon_leaf, to_canon_nodes
-			);
-			// For this block number there may be node entries saved from multiple forks.
-			let to_canon_block_num =
-				Pallet::<T, I>::leaf_index_to_parent_block_num(to_canon_leaf, leaves);
-			// Only entries under this hash (retrieved from state on current canon fork) are to be
-			// persisted. All other entries added by same block number will be cleared.
-			let to_canon_hash = <frame_system::Pallet<T>>::block_hash(to_canon_block_num);
-
-			Self::canonicalize_nodes_for_hash(&to_canon_nodes, to_canon_hash);
-			// Get all the forks to prune, also remove them from the offchain pruning_map.
-			PruningMap::<T, I>::remove(to_canon_block_num)
-				.map(|forks| {
-					Self::prune_nodes_for_forks(&to_canon_nodes, forks);
-				})
-				.unwrap_or_else(|| {
-					frame_support::log::error!(
-						target: "runtime::mmr::offchain",
-						"Offchain: could not prune: no entry in pruning map for block {:?}",
-						to_canon_block_num
-					);
-				})
-		}
-	}
-
-	fn prune_nodes_for_forks(nodes: &[NodeIndex], forks: Vec<<T as frame_system::Config>::Hash>) {
-		for hash in forks {
-			for pos in nodes {
-				let key = Pallet::<T, I>::node_offchain_key(hash, *pos);
-				frame_support::log::debug!(
-					target: "runtime::mmr::offchain",
-					"Clear elem at pos {} with key {:?}",
-					pos, key
-				);
-				offchain::local_storage_clear(StorageKind::PERSISTENT, &key);
-			}
-		}
-	}
-
-	fn canonicalize_nodes_for_hash(
-		to_canon_nodes: &[NodeIndex],
-		to_canon_hash: <T as frame_system::Config>::Hash,
-	) {
-		for pos in to_canon_nodes {
-			let key = Pallet::<T, I>::node_offchain_key(to_canon_hash, *pos);
-			// Retrieve the element from Off-chain DB under fork-aware key.
-			if let Some(elem) = offchain::local_storage_get(StorageKind::PERSISTENT, &key) {
-				let canon_key = Pallet::<T, I>::node_canon_offchain_key(*pos);
-				// Add under new canon key.
-				offchain::local_storage_set(StorageKind::PERSISTENT, &canon_key, &elem);
-				frame_support::log::debug!(
-					target: "runtime::mmr::offchain",
-					"Moved elem at pos {} from key {:?} to canon key {:?}",
-					pos, key, canon_key
-				);
-			} else {
-				frame_support::log::error!(
-					target: "runtime::mmr::offchain",
-					"Could not canonicalize elem at pos {} using key {:?}",
-					pos, key
-				);
-			}
-		}
-	}
 }
 
 impl<T, I, L> mmr_lib::MMRStore<NodeOf<T, I, L>> for Storage<OffchainStorage, T, I, L>
@@ -220,45 +79,31 @@ where
 		// Find out which leaf added node `pos` in the MMR.
 		let ancestor_leaf_idx = NodesUtils::leaf_index_that_added_node(pos);
 
-		let window_size =
-			<T as frame_system::Config>::BlockHashCount::get().unique_saturated_into();
-		// Leaves older than this window should have been canonicalized.
-		if leaves.saturating_sub(ancestor_leaf_idx) > window_size {
-			let key = Pallet::<T, I>::node_canon_offchain_key(pos);
-			frame_support::log::debug!(
-				target: "runtime::mmr::offchain", "offchain db get {}: leaf idx {:?}, key {:?}",
-				pos, ancestor_leaf_idx, key
-			);
-			// Just for safety, to easily handle runtime upgrades where any of the window params
-			// change and maybe we mess up storage migration,
-			// return _if and only if_ node is found (in normal conditions it's always found),
-			if let Some(elem) =
-				sp_io::offchain::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
-			{
-				return Ok(codec::Decode::decode(&mut &*elem).ok())
-			}
-			// BUT if we DID MESS UP, fall through to searching node using fork-specific key.
+		// We should only get here when trying to generate proofs. The client requests
+		// for proofs for finalized blocks, which should usually be already canonicalized,
+		// unless the MMR client gadget has a delay.
+		let key = Pallet::<T, I>::node_canon_offchain_key(pos);
+		debug!(
+			target: "runtime::mmr::offchain", "offchain db get {}: leaf idx {:?}, canon key {:?}",
+			pos, ancestor_leaf_idx, key
+		);
+		// Try to retrieve the element from Off-chain DB.
+		if let Some(elem) = sp_io::offchain::local_storage_get(StorageKind::PERSISTENT, &key) {
+			return Ok(codec::Decode::decode(&mut &*elem).ok())
 		}
 
-		// Leaves still within the window will be found in offchain db under fork-aware keys.
+		// Fall through to searching node using fork-specific key.
 		let ancestor_parent_block_num =
 			Pallet::<T, I>::leaf_index_to_parent_block_num(ancestor_leaf_idx, leaves);
 		let ancestor_parent_hash = <frame_system::Pallet<T>>::block_hash(ancestor_parent_block_num);
-		let key = Pallet::<T, I>::node_offchain_key(ancestor_parent_hash, pos);
-		frame_support::log::debug!(
-			target: "runtime::mmr::offchain", "offchain db get {}: leaf idx {:?}, hash {:?}, key {:?}",
-			pos, ancestor_leaf_idx, ancestor_parent_hash, key
+		let temp_key = Pallet::<T, I>::node_temp_offchain_key(pos, ancestor_parent_hash);
+		debug!(
+			target: "runtime::mmr::offchain",
+			"offchain db get {}: leaf idx {:?}, hash {:?}, temp key {:?}",
+			pos, ancestor_leaf_idx, ancestor_parent_hash, temp_key
 		);
 		// Retrieve the element from Off-chain DB.
-		Ok(sp_io::offchain::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
-			.or_else(|| {
-				// Again, this is just us being extra paranoid.
-				// We get here only if we mess up a storage migration for a runtime upgrades where
-				// say the window is increased, and for a little while following the upgrade there's
-				// leaves inside new 'window' that had been already canonicalized before upgrade.
-				let key = Pallet::<T, I>::node_canon_offchain_key(pos);
-				sp_io::offchain::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
-			})
+		Ok(sp_io::offchain::local_storage_get(StorageKind::PERSISTENT, &temp_key)
 			.and_then(|v| codec::Decode::decode(&mut &*v).ok()))
 	}
 
@@ -282,9 +127,8 @@ where
 			return Ok(())
 		}
 
-		frame_support::log::trace!(
-			target: "runtime::mmr",
-			"elems: {:?}",
+		trace!(
+			target: "runtime::mmr", "elems: {:?}",
 			elems.iter().map(|elem| elem.hash()).collect::<Vec<_>>()
 		);
 
@@ -309,25 +153,12 @@ where
 		// in offchain DB to avoid DB collisions and overwrites in case of forks.
 		let parent_hash = <frame_system::Pallet<T>>::parent_hash();
 		for elem in elems {
-			// For now we store this leaf offchain keyed by `(parent_hash, node_index)`
-			// to make it fork-resistant.
-			// Offchain worker task will "canonicalize" it `frame_system::BlockHashCount` blocks
-			// later when we are not worried about forks anymore (highly unlikely to have a fork
-			// in the chain that deep).
-			// "Canonicalization" in this case means moving this leaf under a new key based
-			// only on the leaf's `node_index`.
-			let key = Pallet::<T, I>::node_offchain_key(parent_hash, node_index);
-			frame_support::log::debug!(
-				target: "runtime::mmr::offchain", "offchain db set: pos {} parent_hash {:?} key {:?}",
-				node_index, parent_hash, key
-			);
-			// Indexing API is used to store the full node content (both leaf and inner).
-			elem.using_encoded(|elem| offchain_index::set(&key, elem));
-
 			// On-chain we are going to only store new peaks.
 			if peaks_to_store.next_if_eq(&node_index).is_some() {
 				<Nodes<T, I>>::insert(node_index, elem.hash());
 			}
+			// We are storing full node off-chain (using indexing API).
+			Self::store_to_offchain(node_index, parent_hash, &elem);
 
 			// Increase the indices.
 			if let Node::Data(..) = elem {
@@ -348,6 +179,31 @@ where
 	}
 }
 
+impl<T, I, L> Storage<RuntimeStorage, T, I, L>
+where
+	T: Config<I>,
+	I: 'static,
+	L: primitives::FullLeaf,
+{
+	fn store_to_offchain(
+		pos: NodeIndex,
+		parent_hash: <T as frame_system::Config>::Hash,
+		node: &NodeOf<T, I, L>,
+	) {
+		let encoded_node = node.encode();
+		// We store this leaf offchain keyed by `(parent_hash, node_index)` to make it
+		// fork-resistant. The MMR client gadget task will "canonicalize" it on the first
+		// finality notification that follows, when we are not worried about forks anymore.
+		let temp_key = Pallet::<T, I>::node_temp_offchain_key(pos, parent_hash);
+		debug!(
+			target: "runtime::mmr::offchain", "offchain db set: pos {} parent_hash {:?} key {:?}",
+			pos, parent_hash, temp_key
+		);
+		// Indexing API is used to store the full node content.
+		offchain_index::set(&temp_key, &encoded_node);
+	}
+}
+
 fn peaks_to_prune_and_store(
 	old_size: NodeIndex,
 	new_size: NodeIndex,
@@ -356,8 +212,8 @@ fn peaks_to_prune_and_store(
 	// both collections may share a common prefix.
 	let peaks_before = if old_size == 0 { vec![] } else { helper::get_peaks(old_size) };
 	let peaks_after = helper::get_peaks(new_size);
-	frame_support::log::trace!(target: "runtime::mmr", "peaks_before: {:?}", peaks_before);
-	frame_support::log::trace!(target: "runtime::mmr", "peaks_after: {:?}", peaks_after);
+	trace!(target: "runtime::mmr", "peaks_before: {:?}", peaks_before);
+	trace!(target: "runtime::mmr", "peaks_after: {:?}", peaks_after);
 	let mut peaks_before = peaks_before.into_iter().peekable();
 	let mut peaks_after = peaks_after.into_iter().peekable();
 

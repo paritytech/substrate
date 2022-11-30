@@ -192,7 +192,10 @@ where
 pub fn reinstrument<T: Config>(
 	prefab_module: &mut PrefabWasmModule<T>,
 	schedule: &Schedule<T>,
-) -> Result<u32, DispatchError> {
+) -> Result<u32, DispatchError>
+where
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+{
 	let original_code =
 		<PristineCode<T>>::get(&prefab_module.code_hash).ok_or(Error::<T>::CodeNotFound)?;
 	let original_code_len = original_code.len();
@@ -201,9 +204,12 @@ pub fn reinstrument<T: Config>(
 	// as the contract is already deployed and every change in size would be the result
 	// of changes in the instrumentation algorithm controlled by the chain authors.
 	prefab_module.code = WeakBoundedVec::force_from(
-		prepare::reinstrument_contract::<T>(&original_code, schedule)
-			.map_err(|_| <Error<T>>::CodeRejected)?,
-		Some("Contract exceeds limit after re-instrumentation."),
+		prepare::reinstrument::<super::runtime::Env, T>(
+			&original_code,
+			schedule,
+			prefab_module.determinism,
+		)?,
+		Some("Contract exceeds size limit after re-instrumentation."),
 	);
 	prefab_module.instruction_weights_version = schedule.instruction_weights.version;
 	<CodeStorage<T>>::insert(&prefab_module.code_hash, &*prefab_module);
@@ -228,16 +234,11 @@ impl<T: Config> Token<T> for CodeToken {
 		// contract code. This is why we subtract `T::*::(0)`. We need to do this at this
 		// point because when charging the general weight for calling the contract we not know the
 		// size of the contract.
-		let ref_time_weight = match *self {
+		match *self {
 			Reinstrument(len) => T::WeightInfo::reinstrument(len),
-			Load(len) => {
-				let computation = T::WeightInfo::call_with_code_per_byte(len)
-					.saturating_sub(T::WeightInfo::call_with_code_per_byte(0));
-				let bandwidth = T::ContractAccessWeight::get().saturating_mul(len as u64);
-				computation.max(bandwidth)
-			},
-		};
-
-		ref_time_weight
+			Load(len) => T::WeightInfo::call_with_code_per_byte(len)
+				.saturating_sub(T::WeightInfo::call_with_code_per_byte(0))
+				.set_proof_size(len.into()),
+		}
 	}
 }

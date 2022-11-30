@@ -328,7 +328,6 @@ where
 	}
 
 	/// Returns the code hash of the contract specified by `account` ID.
-	#[cfg(test)]
 	pub fn code_hash(account: &AccountIdOf<T>) -> Option<CodeHash<T>> {
 		<ContractInfoOf<T>>::get(account).map(|i| i.code_hash)
 	}
@@ -340,7 +339,7 @@ where
 		let queue: Vec<DeletedContract> = (0..T::DeletionQueueDepth::get())
 			.map(|_| DeletedContract { trie_id: TrieId::default() })
 			.collect();
-		let bounded: BoundedVec<_, _> = queue.try_into().unwrap();
+		let bounded: BoundedVec<_, _> = queue.try_into().map_err(|_| ()).unwrap();
 		<DeletionQueue<T>>::put(bounded);
 	}
 }
