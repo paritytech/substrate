@@ -27,8 +27,8 @@ use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::HeaderBackend;
 use sc_consensus::JustificationSyncLink;
 use sc_network_common::{
-	config::{MultiaddrWithPeerId, SetConfig},
-	protocol::event::Event,
+	config::{MultiaddrWithPeerId, ProtocolId, SetConfig},
+	protocol::{event::Event, role::Roles, ProtocolName},
 	service::NetworkSyncForkRequest,
 	sync::{SyncState, SyncStatus},
 };
@@ -39,7 +39,6 @@ use sp_runtime::{
 	traits::{Block as BlockT, Header as _},
 };
 use std::{
-	iter,
 	sync::{Arc, RwLock},
 	task::Poll,
 	time::Duration,
@@ -49,10 +48,6 @@ use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt as _
 fn set_default_expecations_no_peers(
 	chain_sync: &mut MockChainSync<substrate_test_runtime_client::runtime::Block>,
 ) {
-	chain_sync.expect_block_requests().returning(|| Box::new(iter::empty()));
-	chain_sync.expect_state_request().returning(|| None);
-	chain_sync.expect_justification_requests().returning(|| Box::new(iter::empty()));
-	chain_sync.expect_warp_sync_request().returning(|| None);
 	chain_sync.expect_poll().returning(|_| Poll::Pending);
 	chain_sync.expect_status().returning(|| SyncStatus {
 		state: SyncState::Idle,
@@ -342,13 +337,19 @@ async fn disconnect_peer_using_chain_sync_handle() {
 		sc_network_sync::service::network::NetworkServiceProvider::new();
 	let handle_clone = chain_sync_network_handle.clone();
 
-	let (chain_sync, chain_sync_service) = ChainSync::new(
+	let (chain_sync, chain_sync_service, _) = ChainSync::new(
 		sc_network_common::sync::SyncMode::Full,
 		client.clone(),
+		ProtocolId::from("test-protocol-name"),
+		&Some(String::from("test-fork-id")),
+		Roles::from(&config::Role::Full),
 		Box::new(sp_consensus::block_validation::DefaultBlockAnnounceValidator),
 		1u32,
 		None,
 		chain_sync_network_handle.clone(),
+		ProtocolName::from("block-request"),
+		ProtocolName::from("state-request"),
+		None,
 	)
 	.unwrap();
 
