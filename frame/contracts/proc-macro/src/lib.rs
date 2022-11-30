@@ -478,7 +478,7 @@ fn expand_functions(
 		};
 
 		quote! {
-			// We need to allow those functions when runtime benchmarks are performed because
+			// We need to allow unstable functions when runtime benchmarks are performed because
 			// we generate the weights even when those interfaces are not enabled.
 			if ::core::cfg!(feature = "runtime-benchmarks") || #is_stable || allow_unstable {
 				#allow_unused
