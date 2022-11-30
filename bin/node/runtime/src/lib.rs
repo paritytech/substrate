@@ -808,7 +808,7 @@ impl pallet_conviction_voting::Config for Runtime {
 
 parameter_types! {
 	pub const AlarmInterval: BlockNumber = 1;
-	pub const MinAlarmInterval: BlockNumber = 1;
+	pub const MinAlarmPeriod: BlockNumber = 1;
 	pub const SubmissionDeposit: Balance = 100 * DOLLARS;
 	pub const UndecidingTimeout: BlockNumber = 28 * DAYS;
 }
@@ -871,7 +871,7 @@ impl pallet_referenda::Config for Runtime {
 	type MaxQueued = ConstU32<100>;
 	type UndecidingTimeout = UndecidingTimeout;
 	type AlarmInterval = AlarmInterval;
-	type MinAlarmInterval = MinAlarmInterval;
+	type MinAlarmPeriod = MinAlarmPeriod;
 	type Tracks = TracksInfo;
 	type Preimages = Preimage;
 }
@@ -892,6 +892,7 @@ impl pallet_referenda::Config<pallet_referenda::Instance2> for Runtime {
 	type MaxQueued = ConstU32<100>;
 	type UndecidingTimeout = UndecidingTimeout;
 	type AlarmInterval = AlarmInterval;
+	type MinAlarmPeriod = MinAlarmPeriod;
 	type Tracks = TracksInfo;
 	type Preimages = Preimage;
 }
