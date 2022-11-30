@@ -86,7 +86,7 @@ impl<BE, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 		genesis_hash: GenesisHash,
 		max_pinned_blocks: usize,
 	) -> Self {
-		let genesis_hash = format!("0x{}", hex::encode(genesis_hash));
+		let genesis_hash = format!("0x{:?}", HexDisplay::from(&genesis_hash.as_ref()));
 
 		Self {
 			client,
@@ -580,7 +580,7 @@ where
 			let event = match client.block(&BlockId::Hash(hash)) {
 				Ok(Some(signed_block)) => {
 					let extrinsics = signed_block.block.extrinsics();
-					let result = format!("0x{}", HexDisplay::from(&extrinsics.encode()));
+					let result = format!("0x{:?}", HexDisplay::from(&extrinsics.encode()));
 					ChainHeadEvent::Done(ChainHeadResult { result })
 				},
 				Ok(None) => {
@@ -615,7 +615,7 @@ where
 
 		self.client
 			.header(BlockId::Hash(hash))
-			.map(|opt_header| opt_header.map(|h| format!("0x{}", HexDisplay::from(&h.encode()))))
+			.map(|opt_header| opt_header.map(|h| format!("0x{:?}", HexDisplay::from(&h.encode()))))
 			.map_err(ChainHeadRpcError::FetchBlockHeader)
 			.map_err(Into::into)
 	}
@@ -672,7 +672,7 @@ where
 					.child_storage(hash, &child_key, &key)
 					.map(|result| {
 						let result =
-							result.map(|storage| format!("0x{}", HexDisplay::from(&storage.0)));
+							result.map(|storage| format!("0x{:?}", HexDisplay::from(&storage.0)));
 						ChainHeadEvent::Done(ChainHeadResult { result })
 					})
 					.unwrap_or_else(|error| {
@@ -697,7 +697,7 @@ where
 				.storage(hash, &key)
 				.map(|result| {
 					let result =
-						result.map(|storage| format!("0x{}", HexDisplay::from(&storage.0)));
+						result.map(|storage| format!("0x{:?}", HexDisplay::from(&storage.0)));
 					ChainHeadEvent::Done(ChainHeadResult { result })
 				})
 				.unwrap_or_else(|error| {
@@ -755,7 +755,7 @@ where
 					None,
 				)
 				.map(|result| {
-					let result = format!("0x{}", HexDisplay::from(&result));
+					let result = format!("0x{:?}", HexDisplay::from(&result));
 					ChainHeadEvent::Done(ChainHeadResult { result })
 				})
 				.unwrap_or_else(|error| {
