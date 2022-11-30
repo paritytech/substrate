@@ -207,6 +207,15 @@ impl Header {
 #[derive(PartialEq, Eq, Clone, Debug, Encode, Decode)]
 pub struct ExtrinsicWrapper<Xt>(Xt);
 
+impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt> {
+	type Call = ();
+	type SignaturePayload = ();
+
+	fn is_signed(&self) -> Option<bool> {
+		None
+	}
+}
+
 impl<Xt: Encode> serde::Serialize for ExtrinsicWrapper<Xt> {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error>
 	where
