@@ -45,7 +45,7 @@ pub mod weights;
 
 use codec::{Decode, Encode};
 use frame_support::traits::{
-	tokens::{AttributeNamespace, Locker},
+	tokens::{currency::MultiCurrency, AttributeNamespace, Locker},
 	BalanceStatus::Reserved,
 	Currency, EnsureOriginWithArg, ReservableCurrency,
 };
@@ -102,6 +102,9 @@ pub mod pallet {
 
 		/// The currency mechanism, used for paying for reserves.
 		type Currency: ReservableCurrency<Self::AccountId>;
+
+		/// The multi currency that supports transferring custom tokens in addition to the native.
+		type MultiCurrency: MultiCurrency<Self::AccountId>;
 
 		/// The origin which may forcibly create or destroy an item or otherwise alter privileged
 		/// attributes.

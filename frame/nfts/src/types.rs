@@ -45,20 +45,69 @@ pub(super) type AttributeDepositOf<T, I> =
 	AttributeDeposit<DepositBalanceOf<T, I>, <T as SystemConfig>::AccountId>;
 pub(super) type ItemDetailsFor<T, I> =
 	ItemDetails<<T as SystemConfig>::AccountId, ItemDepositOf<T, I>, ApprovalsOf<T, I>>;
-pub(super) type BalanceOf<T, I = ()> =
+pub(super) type NativeBalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
-pub(super) type ItemPrice<T, I = ()> = BalanceOf<T, I>;
+pub(super) type CurrencyIdOf<T, I = ()> =
+	<<T as Config<I>>::MultiCurrency as MultiCurrency<<T as SystemConfig>::AccountId>>::CurrencyId;
+pub(super) type MultiCurrencyAmountOf<T, I = ()> =
+	<<T as Config<I>>::MultiCurrency as MultiCurrency<<T as SystemConfig>::AccountId>>::Balance;
+pub(super) type ItemPrice<T, I = ()> = (CurrencyIdOf<T, I>, Option<MultiCurrencyAmountOf<T, I>>);
 pub(super) type ItemTipOf<T, I = ()> = ItemTip<
 	<T as Config<I>>::CollectionId,
 	<T as Config<I>>::ItemId,
 	<T as SystemConfig>::AccountId,
-	BalanceOf<T, I>,
+	NativeBalanceOf<T, I>,
 >;
 pub(super) type CollectionConfigFor<T, I = ()> = CollectionConfig<
-	BalanceOf<T, I>,
+	ItemPrice<T, I>,
 	<T as SystemConfig>::BlockNumber,
 	<T as Config<I>>::CollectionId,
 >;
+
+pub struct MultiCurrencyAdapter<T, Currency, Amount>(marker::PhantomData<(T, Currency, Amount)>);
+
+impl<T, AccountId, Currency, Amount> MultiCurrency<AccountId>
+for MultiCurrencyAdapter<T, Currency, Amount>
+	where
+		Currency: PalletCurrency<AccountId>,
+		T: Config,
+{
+	type Balance = PalletBalanceOf<AccountId, Currency>;
+
+	fn transfer(
+		currency_id: Option<Self::CurrencyId>,
+		source: &AccountId,
+		dest: &AccountId,
+		value: Self::Balance,
+	) -> DispatchResult {
+		if let Some(currency_id) {
+			//
+		} else {
+			Currency::transfer(source, dest, value, ExistenceRequirement::AllowDeath)
+		}
+	}
+}
+
+/*#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub enum MultiCurrency<NativeBalance, AssetId, AssetBalance> {
+	Native(NativeBalance),
+	Asset(AssetId, AssetBalance),
+}
+
+impl<NativeBalance, AssetId, AssetBalance> MultiCurrency<NativeBalance, AssetId, AssetBalance>
+where
+	AssetId: core::cmp::PartialEq,
+{
+	pub fn is_same_currency(&self, other: &Self) -> bool {
+		use MultiCurrency::*;
+		match (self, other) {
+			(Native(_), Native(_)) => true,
+			(Asset(id1, _), Asset(id2, _)) => id1 == id2,
+			_ => false,
+		}
+	}
+	// TODO: impl transfer
+}*/
 
 pub trait Incrementable {
 	fn increment(&self) -> Self;

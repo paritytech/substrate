@@ -33,6 +33,8 @@ mod reservable;
 pub use reservable::{NamedReservableCurrency, ReservableCurrency};
 mod lockable;
 pub use lockable::{LockIdentifier, LockableCurrency, VestingSchedule};
+mod multicurrency;
+pub use multicurrency::MultiCurrency;
 
 /// Abstraction over a fungible assets system.
 pub trait Currency<AccountId> {
