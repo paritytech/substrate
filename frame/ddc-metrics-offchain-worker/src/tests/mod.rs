@@ -1,4 +1,4 @@
-use frame_support::traits::{Currency, OffchainWorker, GenesisBuild};
+use frame_support::traits::{Currency, OffchainWorker};
 use frame_system::Config as FSC;
 use pallet_contracts::{self as contracts, Config as CC};
 use sp_core::{
@@ -180,12 +180,6 @@ fn build_ext_for_contracts() -> sp_io::TestExternalities {
     pallet_balances::GenesisConfig::<Test> { balances: vec![] }
         .assimilate_storage(&mut t)
         .unwrap();
-    contracts::GenesisConfig::<Test> {
-        current_schedule: pallet_contracts::Schedule::default()
-            .enable_println(true),
-    }
-    .assimilate_storage(&mut t)
-    .unwrap();
     let mut ext = sp_io::TestExternalities::new(t);
     ext.execute_with(|| {
         System::set_block_number(1);
@@ -333,6 +327,7 @@ fn should_run_contract() {
             0,
             100_000_000_000,
             call_data,
+            false,
         );
         match &contract_exec_result.result {
             Ok(res) => {

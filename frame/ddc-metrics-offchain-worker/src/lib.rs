@@ -326,6 +326,7 @@ impl<T: Config> Module<T> where <T as frame_system::Config>::AccountId: AsRef<[u
             0u32.into(),
             100_000_000_000,
             call_data,
+            false,
         );
 
         let mut data = match &contract_exec_result.result {
@@ -564,6 +565,7 @@ impl<T: Config> Module<T> where <T as frame_system::Config>::AccountId: AsRef<[u
             0u32.into(),
             100_000_000_000,
             call_data,
+            false
         );
 
         let mut data = match &contract_exec_result.result {

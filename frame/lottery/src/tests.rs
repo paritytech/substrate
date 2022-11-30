@@ -32,7 +32,7 @@ fn initial_state() {
 		assert_eq!(Balances::free_balance(Lottery::account_id()), 0);
 		assert!(crate::Lottery::<Test>::get().is_none());
 		assert_eq!(Participants::<Test>::get(&1), (0, vec![]));
-		assert_eq!(TicketsCount::get(), 0);
+		assert_eq!(TicketsCount::<Test>::get(), 0);
 		assert!(Tickets::<Test>::get(0).is_none());
 	});
 }
@@ -61,7 +61,7 @@ fn basic_end_to_end_works() {
 		// 20 from the transfer, 10 from buying a ticket
 		assert_eq!(Balances::free_balance(&1), 100 - 20 - 10);
 		assert_eq!(Participants::<Test>::get(&1).1.len(), 1);
-		assert_eq!(TicketsCount::get(), 1);
+		assert_eq!(TicketsCount::<Test>::get(), 1);
 		// 1 owns the 0 ticket
 		assert_eq!(Tickets::<Test>::get(0), Some(1));
 
@@ -69,21 +69,21 @@ fn basic_end_to_end_works() {
 		assert_ok!(Lottery::buy_ticket(Origin::signed(2), call.clone()));
 		assert_ok!(Lottery::buy_ticket(Origin::signed(3), call.clone()));
 		assert_ok!(Lottery::buy_ticket(Origin::signed(4), call.clone()));
-		assert_eq!(TicketsCount::get(), 4);
+		assert_eq!(TicketsCount::<Test>::get(), 4);
 
 		// Go to end
 		run_to_block(20);
 		assert_ok!(Lottery::buy_ticket(Origin::signed(5), call.clone()));
 		// Ticket isn't bought
-		assert_eq!(TicketsCount::get(), 4);
+		assert_eq!(TicketsCount::<Test>::get(), 4);
 
 		// Go to payout
 		run_to_block(25);
 		// User 1 wins
 		assert_eq!(Balances::free_balance(&1), 70 + 40);
 		// Lottery is reset and restarted
-		assert_eq!(TicketsCount::get(), 0);
-		assert_eq!(LotteryIndex::get(), 2);
+		assert_eq!(TicketsCount::<Test>::get(), 0);
+		assert_eq!(LotteryIndex::<Test>::get(), 2);
 		assert_eq!(
 			crate::Lottery::<Test>::get().unwrap(),
 			LotteryConfig {
@@ -100,7 +100,7 @@ fn basic_end_to_end_works() {
 #[test]
 fn set_calls_works() {
 	new_test_ext().execute_with(|| {
-		assert!(!CallIndices::exists());
+		assert!(!CallIndices::<Test>::exists());
 
 		let calls = vec![
 			Call::Balances(BalancesCall::force_transfer(0, 0, 0)),
@@ -108,7 +108,7 @@ fn set_calls_works() {
 		];
 
 		assert_ok!(Lottery::set_calls(Origin::root(), calls));
-		assert!(CallIndices::exists());
+		assert!(CallIndices::<Test>::exists());
 
 		let too_many_calls = vec![
 			Call::Balances(BalancesCall::force_transfer(0, 0, 0)),
@@ -123,7 +123,7 @@ fn set_calls_works() {
 
 		// Clear calls
 		assert_ok!(Lottery::set_calls(Origin::root(), vec![]));
-		assert!(CallIndices::get().is_empty());
+		assert!(CallIndices::<Test>::get().is_empty());
 	});
 }
 
@@ -161,7 +161,7 @@ fn buy_ticket_works_as_simple_passthrough() {
 		// This is just a basic transfer then
 		assert_ok!(Lottery::buy_ticket(Origin::signed(1), call.clone()));
 		assert_eq!(Balances::free_balance(&1), 100 - 20);
-		assert_eq!(TicketsCount::get(), 0);
+		assert_eq!(TicketsCount::<Test>::get(), 0);
 
 		// Lottery is set up, but too expensive to enter, so `do_buy_ticket` fails.
 		let calls = vec![
@@ -174,7 +174,7 @@ fn buy_ticket_works_as_simple_passthrough() {
 		assert_ok!(Lottery::start_lottery(Origin::root(), 60, 10, 5, false));
 		assert_ok!(Lottery::buy_ticket(Origin::signed(1), call.clone()));
 		assert_eq!(Balances::free_balance(&1), 100 - 20 - 20);
-		assert_eq!(TicketsCount::get(), 0);
+		assert_eq!(TicketsCount::<Test>::get(), 0);
 
 		// If call would fail, the whole thing still fails the same
 		let fail_call = Box::new(Call::Balances(BalancesCall::transfer(2, 1000)));
@@ -192,11 +192,11 @@ fn buy_ticket_works_as_simple_passthrough() {
 		// User can call other txs, but doesn't get a ticket
 		let remark_call = Box::new(Call::System(SystemCall::remark(b"hello, world!".to_vec())));
 		assert_ok!(Lottery::buy_ticket(Origin::signed(2), remark_call));
-		assert_eq!(TicketsCount::get(), 0);
+		assert_eq!(TicketsCount::<Test>::get(), 0);
 
 		let successful_call = Box::new(Call::Balances(BalancesCall::transfer(2, 1)));
 		assert_ok!(Lottery::buy_ticket(Origin::signed(2), successful_call));
-		assert_eq!(TicketsCount::get(), 1);
+		assert_eq!(TicketsCount::<Test>::get(), 1);
 	});
 }
 
@@ -214,7 +214,7 @@ fn buy_ticket_works() {
 		// Can't buy ticket before start
 		let call = Box::new(Call::Balances(BalancesCall::transfer(2, 1)));
 		assert_ok!(Lottery::buy_ticket(Origin::signed(1), call.clone()));
-		assert_eq!(TicketsCount::get(), 0);
+		assert_eq!(TicketsCount::<Test>::get(), 0);
 
 		// Start lottery
 		assert_ok!(Lottery::start_lottery(Origin::root(), 1, 20, 5, false));
@@ -222,28 +222,28 @@ fn buy_ticket_works() {
 		// Go to start, buy ticket for transfer
 		run_to_block(5);
 		assert_ok!(Lottery::buy_ticket(Origin::signed(1), call));
-		assert_eq!(TicketsCount::get(), 1);
+		assert_eq!(TicketsCount::<Test>::get(), 1);
 
 		// Can't buy another of the same ticket (even if call is slightly changed)
 		let call = Box::new(Call::Balances(BalancesCall::transfer(3, 30)));
 		assert_ok!(Lottery::buy_ticket(Origin::signed(1), call));
-		assert_eq!(TicketsCount::get(), 1);
+		assert_eq!(TicketsCount::<Test>::get(), 1);
 
 		// Buy ticket for remark
 		let call = Box::new(Call::System(SystemCall::remark(b"hello, world!".to_vec())));
 		assert_ok!(Lottery::buy_ticket(Origin::signed(1), call.clone()));
-		assert_eq!(TicketsCount::get(), 2);
+		assert_eq!(TicketsCount::<Test>::get(), 2);
 
 		// Go to end, can't buy tickets anymore
 		run_to_block(20);
 		assert_ok!(Lottery::buy_ticket(Origin::signed(2), call.clone()));
-		assert_eq!(TicketsCount::get(), 2);
+		assert_eq!(TicketsCount::<Test>::get(), 2);
 
 		// Go to payout, can't buy tickets when there is no lottery open
 		run_to_block(25);
 		assert_ok!(Lottery::buy_ticket(Origin::signed(2), call.clone()));
-		assert_eq!(TicketsCount::get(), 0);
-		assert_eq!(LotteryIndex::get(), 1);
+		assert_eq!(TicketsCount::<Test>::get(), 0);
+		assert_eq!(LotteryIndex::<Test>::get(), 1);
 	});
 }
 

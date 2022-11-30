@@ -552,12 +552,39 @@ impl<BE, Block, Client> ChildStateBackend<Block, Client> for FullState<BE, Block
 	Block: BlockT + 'static,
 	BE: Backend<Block> + 'static,
 	Client: ExecutorProvider<Block> + StorageProvider<Block, BE>
+		+ ProofProvider<Block>
 		+ HeaderBackend<Block> + BlockBackend<Block>
 		+ HeaderMetadata<Block, Error = sp_blockchain::Error> + BlockchainEvents<Block>
 		+ CallApiAt<Block> + ProvideRuntimeApi<Block>
 		+ Send + Sync + 'static,
 	Client::Api: Metadata<Block>,
 {
+	fn read_child_proof(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: PrefixedStorageKey,
+		keys: Vec<StorageKey>,
+	) -> FutureResult<ReadProof<Block::Hash>> {
+		Box::new(result(
+			self.block_or_best(block)
+				.and_then(|block| {
+					let child_info = match ChildType::from_prefixed_key(&storage_key) {
+						Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
+						None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
+					};
+					self.client
+						.read_child_proof(
+							&BlockId::Hash(block),
+							&child_info,
+							&mut keys.iter().map(|key| key.0.as_ref()),
+						)
+						.map(|proof| proof.iter_nodes().map(|node| node.into()).collect())
+						.map(|proof| ReadProof { at: block, proof })
+				})
+				.map_err(client_err),
+		))
+	}
+
 	fn storage_keys(
 		&self,
 		block: Option<Block::Hash>,

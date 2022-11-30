@@ -25,7 +25,7 @@ use frame_support::{
 	traits::{Currency, Get, EnsureOrigin, OnInitialize, UnfilteredDispatchable,
         schedule::DispatchTime},
 };
-use frame_system::{RawOrigin, Pallet as System, self, EventRecord};
+use frame_system::{RawOrigin, Pallet as System, self};
 use sp_runtime::traits::{Bounded, One};
 
 use crate::Pallet as Democracy;
@@ -36,11 +36,7 @@ const MAX_SECONDERS: u32 = 100;
 const MAX_BYTES: u32 = 16_384;
 
 fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
-	let events = System::<T>::events();
-	let system_event: <T as frame_system::Config>::Event = generic_event.into();
-	// compare to the last event record
-	let EventRecord { event, .. } = &events[events.len() - 1];
-	assert_eq!(event, &system_event);
+	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
 fn funded_account<T: Config>(name: &'static str, index: u32) -> T::AccountId {

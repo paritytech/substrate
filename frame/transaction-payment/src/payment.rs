@@ -50,9 +50,15 @@ pub trait OnChargeTransaction<T: Config> {
 /// Implements the transaction payment for a module implementing the `Currency`
 /// trait (eg. the pallet_balances) using an unbalance handler (implementing
 /// `OnUnbalanced`).
+///
+/// The unbalance handler is given 2 unbalanceds in [`OnUnbalanced::on_unbalanceds`]: fee and
+/// then tip.
 pub struct CurrencyAdapter<C, OU>(PhantomData<(C, OU)>);
 
 /// Default implementation for a Currency and an OnUnbalanced handler.
+///
+/// The unbalance handler is given 2 unbalanceds in [`OnUnbalanced::on_unbalanceds`]: fee and
+/// then tip.
 impl<T, C, OU> OnChargeTransaction<T> for CurrencyAdapter<C, OU>
 where
 	T: Config,
@@ -97,7 +103,7 @@ where
 	/// Since the predicted fee might have been too high, parts of the fee may
 	/// be refunded.
 	///
-	/// Note: The `fee` already includes the `tip`.
+	/// Note: The `corrected_fee` already includes the `tip`.
 	fn correct_and_deposit_fee(
 		who: &T::AccountId,
 		_dispatch_info: &DispatchInfoOf<T::Call>,
@@ -120,8 +126,8 @@ where
 				.same()
 				.map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Payment))?;
 			// Call someone else to handle the imbalance (fee and tip separately)
-			let imbalances = adjusted_paid.split(tip);
-			OU::on_unbalanceds(Some(imbalances.0).into_iter().chain(Some(imbalances.1)));
+			let (tip, fee) = adjusted_paid.split(tip);
+			OU::on_unbalanceds(Some(fee).into_iter().chain(Some(tip)));
 		}
 		Ok(())
 	}

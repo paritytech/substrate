@@ -22,6 +22,7 @@ use sp_core::{
 	crypto::{Pair, Public, CryptoTypePublicPair},
 	ed25519, sr25519, ecdsa,
 };
+
 use crate::{
 	{CryptoStore, SyncCryptoStorePtr, Error, SyncCryptoStore},
 	vrf::{VRFTranscriptData, VRFSignature, make_transcript},
@@ -143,6 +144,15 @@ impl CryptoStore for KeyStore {
 		transcript_data: VRFTranscriptData,
 	) -> Result<Option<VRFSignature>, Error> {
 		SyncCryptoStore::sr25519_vrf_sign(self, key_type, public, transcript_data)
+	}
+
+	async fn ecdsa_sign_prehashed(
+		&self,
+		id: KeyTypeId,
+		public: &ecdsa::Public,
+		msg: &[u8; 32],
+	) -> Result<Option<ecdsa::Signature>, Error> {
+		SyncCryptoStore::ecdsa_sign_prehashed(self, id, public, msg)
 	}
 }
 
@@ -325,6 +335,16 @@ impl SyncCryptoStore for KeyStore {
 			proof,
 		}))
 	}
+
+	fn ecdsa_sign_prehashed(
+		&self,
+		id: KeyTypeId,
+		public: &ecdsa::Public,
+		msg: &[u8; 32],
+	) -> Result<Option<ecdsa::Signature>, Error> {
+		let pair = self.ecdsa_key_pair(id, public);
+		pair.map(|k| k.sign_prehashed(msg)).map(Ok).transpose()
+	}
 }
 
 impl Into<SyncCryptoStorePtr> for KeyStore {
@@ -342,7 +362,7 @@ impl Into<Arc<dyn CryptoStore>> for KeyStore {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_core::{sr25519, testing::{ED25519, SR25519}};
+	use sp_core::{sr25519, testing::{ED25519, SR25519, ECDSA}};
 	use crate::{SyncCryptoStore, vrf::VRFTranscriptValue};
 
 	#[test]
@@ -415,5 +435,26 @@ mod tests {
 		);
 
 		assert!(result.unwrap().is_some());
+	}
+
+	#[test]
+	fn ecdsa_sign_prehashed_works() {
+		let store = KeyStore::new();
+
+		let suri = "//Alice";
+		let pair = ecdsa::Pair::from_string(suri, None).unwrap();
+
+		let msg = sp_core::keccak_256(b"this should be a hashed message");
+		
+		// no key in key store
+		let res = SyncCryptoStore::ecdsa_sign_prehashed(&store, ECDSA, &pair.public(), &msg).unwrap();
+		assert!(res.is_none());
+
+		// insert key, sign again
+		let res = SyncCryptoStore::insert_unknown(&store, ECDSA, suri, pair.public().as_ref()).unwrap();
+		assert_eq!((), res);
+
+		let res = SyncCryptoStore::ecdsa_sign_prehashed(&store, ECDSA, &pair.public(), &msg).unwrap();
+		assert!(res.is_some());		
 	}
 }

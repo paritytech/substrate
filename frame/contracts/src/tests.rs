@@ -40,7 +40,7 @@ use sp_io::hashing::blake2_256;
 use frame_support::{
 	assert_ok, assert_err, assert_err_ignore_postinfo,
 	parameter_types, assert_storage_noop,
-	traits::{Currency, ReservableCurrency, OnInitialize, GenesisBuild},
+	traits::{Currency, ReservableCurrency, OnInitialize},
 	weights::{Weight, PostDispatchInfo, DispatchClass, constants::WEIGHT_PER_SECOND},
 	dispatch::DispatchErrorWithPostInfo,
 	storage::child,
@@ -63,7 +63,7 @@ frame_support::construct_runtime!(
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		Randomness: pallet_randomness_collective_flip::{Pallet, Call, Storage},
-		Contracts: pallet_contracts::{Pallet, Call, Config<T>, Storage, Event<T>},
+		Contracts: pallet_contracts::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -265,6 +265,7 @@ parameter_types! {
 	pub const DeletionQueueDepth: u32 = 1024;
 	pub const DeletionWeightLimit: Weight = 500_000_000_000;
 	pub const MaxCodeSize: u32 = 2 * 1024;
+	pub MySchedule: Schedule<Test> = <Schedule<Test>>::default();
 }
 
 parameter_types! {
@@ -291,13 +292,12 @@ impl Config for Test {
 	type RentFraction = RentFraction;
 	type SurchargeReward = SurchargeReward;
 	type CallStack = [Frame<Self>; 31];
-	type MaxValueSize = MaxValueSize;
 	type WeightPrice = Self;
 	type WeightInfo = ();
 	type ChainExtension = TestExtension;
 	type DeletionQueueDepth = DeletionQueueDepth;
 	type DeletionWeightLimit = DeletionWeightLimit;
-	type MaxCodeSize = MaxCodeSize;
+	type Schedule = MySchedule;
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);
@@ -330,12 +330,6 @@ impl ExtBuilder {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		pallet_balances::GenesisConfig::<Test> {
 			balances: vec![],
-		}.assimilate_storage(&mut t).unwrap();
-		pallet_contracts::GenesisConfig {
-			current_schedule: Schedule::<Test> {
-				enable_println: true,
-				..Default::default()
-			},
 		}.assimilate_storage(&mut t).unwrap();
 		let mut ext = sp_io::TestExternalities::new(t);
 		ext.execute_with(|| System::set_block_number(1));
@@ -564,7 +558,7 @@ fn deposit_event_max_value_limit() {
 				addr.clone(),
 				0,
 				GAS_LIMIT * 2, // we are copying a huge buffer,
-				<Test as Config>::MaxValueSize::get().encode(),
+				<Test as Config>::Schedule::get().limits.payload_len.encode(),
 			));
 
 			// Call contract with too large a storage value.
@@ -574,7 +568,7 @@ fn deposit_event_max_value_limit() {
 					addr,
 					0,
 					GAS_LIMIT,
-					(<Test as Config>::MaxValueSize::get() + 1).encode(),
+					(<Test as Config>::Schedule::get().limits.payload_len + 1).encode(),
 				),
 				Error::<Test>::ValueTooLarge,
 			);
@@ -1544,7 +1538,7 @@ fn storage_max_value_limit() {
 				addr.clone(),
 				0,
 				GAS_LIMIT * 2, // we are copying a huge buffer
-				<Test as Config>::MaxValueSize::get().encode(),
+				<Test as Config>::Schedule::get().limits.payload_len.encode(),
 			));
 
 			// Call contract with too large a storage value.
@@ -1554,7 +1548,7 @@ fn storage_max_value_limit() {
 					addr,
 					0,
 					GAS_LIMIT,
-					(<Test as Config>::MaxValueSize::get() + 1).encode(),
+					(<Test as Config>::Schedule::get().limits.payload_len + 1).encode(),
 				),
 				Error::<Test>::ValueTooLarge,
 			);
@@ -1896,6 +1890,7 @@ fn crypto_hashes() {
 					0,
 					GAS_LIMIT,
 					params,
+					false,
 				).result.unwrap();
 				assert!(result.is_success());
 				let expected = hash_fn(input.as_ref());
@@ -1931,6 +1926,7 @@ fn transfer_return_code() {
 			0,
 			GAS_LIMIT,
 			vec![],
+			false,
 		).result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::BelowSubsistenceThreshold);
 
@@ -1945,6 +1941,7 @@ fn transfer_return_code() {
 			0,
 			GAS_LIMIT,
 			vec![],
+			false,
 		).result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
 	});
@@ -1979,6 +1976,7 @@ fn call_return_code() {
 			0,
 			GAS_LIMIT,
 			AsRef::<[u8]>::as_ref(&DJANGO).to_vec(),
+			false,
 		).result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::NotCallable);
 
@@ -2002,6 +2000,7 @@ fn call_return_code() {
 			0,
 			GAS_LIMIT,
 			AsRef::<[u8]>::as_ref(&addr_django).iter().chain(&0u32.to_le_bytes()).cloned().collect(),
+			false,
 		).result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::BelowSubsistenceThreshold);
 
@@ -2016,6 +2015,7 @@ fn call_return_code() {
 			0,
 			GAS_LIMIT,
 			AsRef::<[u8]>::as_ref(&addr_django).iter().chain(&0u32.to_le_bytes()).cloned().collect(),
+			false,
 		).result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
 
@@ -2027,6 +2027,7 @@ fn call_return_code() {
 			0,
 			GAS_LIMIT,
 			AsRef::<[u8]>::as_ref(&addr_django).iter().chain(&1u32.to_le_bytes()).cloned().collect(),
+			false,
 		).result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::CalleeReverted);
 
@@ -2037,6 +2038,7 @@ fn call_return_code() {
 			0,
 			GAS_LIMIT,
 			AsRef::<[u8]>::as_ref(&addr_django).iter().chain(&2u32.to_le_bytes()).cloned().collect(),
+			false,
 		).result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::CalleeTrapped);
 
@@ -2084,6 +2086,7 @@ fn instantiate_return_code() {
 			0,
 			GAS_LIMIT,
 			callee_hash.clone(),
+			false,
 		).result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::BelowSubsistenceThreshold);
 
@@ -2098,6 +2101,7 @@ fn instantiate_return_code() {
 			0,
 			GAS_LIMIT,
 			callee_hash.clone(),
+			false,
 		).result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
 
@@ -2109,6 +2113,7 @@ fn instantiate_return_code() {
 			0,
 			GAS_LIMIT,
 			vec![0; 33],
+			false,
 		).result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::CodeNotFound);
 
@@ -2119,6 +2124,7 @@ fn instantiate_return_code() {
 			0,
 			GAS_LIMIT,
 			callee_hash.iter().chain(&1u32.to_le_bytes()).cloned().collect(),
+			false,
 		).result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::CalleeReverted);
 
@@ -2129,6 +2135,7 @@ fn instantiate_return_code() {
 			0,
 			GAS_LIMIT,
 			callee_hash.iter().chain(&2u32.to_le_bytes()).cloned().collect(),
+			false,
 		).result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::CalleeTrapped);
 
@@ -2216,6 +2223,7 @@ fn chain_extension_works() {
 			0,
 			GAS_LIMIT,
 			vec![0, 99],
+			false,
 		);
 		let gas_consumed = result.gas_consumed;
 		assert_eq!(TestExtension::last_seen_buffer(), vec![0, 99]);
@@ -2228,6 +2236,7 @@ fn chain_extension_works() {
 			0,
 			GAS_LIMIT,
 			vec![1],
+			false,
 		).result.unwrap();
 		// those values passed in the fixture
 		assert_eq!(TestExtension::last_seen_inputs(), (4, 1, 16, 12));
@@ -2239,6 +2248,7 @@ fn chain_extension_works() {
 			0,
 			GAS_LIMIT,
 			vec![2, 42],
+			false,
 		);
 		assert_ok!(result.result);
 		assert_eq!(result.gas_consumed, gas_consumed + 42);
@@ -2250,6 +2260,7 @@ fn chain_extension_works() {
 			0,
 			GAS_LIMIT,
 			vec![3],
+			false,
 		).result.unwrap();
 		assert_eq!(result.flags, ReturnFlags::REVERT);
 		assert_eq!(result.data, Bytes(vec![42, 99]));
@@ -2782,6 +2793,7 @@ fn reinstrument_does_charge() {
 			0,
 			GAS_LIMIT,
 			zero.clone(),
+			false,
 		);
 		assert!(result0.result.unwrap().is_success());
 
@@ -2791,15 +2803,17 @@ fn reinstrument_does_charge() {
 			0,
 			GAS_LIMIT,
 			zero.clone(),
+			false,
 		);
 		assert!(result1.result.unwrap().is_success());
 
 		// They should match because both where called with the same schedule.
 		assert_eq!(result0.gas_consumed, result1.gas_consumed);
 
-		// Update the schedule version but keep the rest the same
-		crate::CurrentSchedule::mutate(|old: &mut Schedule<Test>| {
-			old.version += 1;
+		// We cannot change the schedule. Instead, we decrease the version of the deployed
+		// contract below the current schedule's version.
+		crate::CodeStorage::mutate(&code_hash, |code: &mut Option<PrefabWasmModule<Test>>| {
+			code.as_mut().unwrap().decrement_version();
 		});
 
 		// This call should trigger reinstrumentation
@@ -2809,6 +2823,7 @@ fn reinstrument_does_charge() {
 			0,
 			GAS_LIMIT,
 			zero.clone(),
+			false,
 		);
 		assert!(result2.result.unwrap().is_success());
 		assert!(result2.gas_consumed > result1.gas_consumed);
@@ -2816,5 +2831,104 @@ fn reinstrument_does_charge() {
 			result2.gas_consumed,
 			result1.gas_consumed + <Test as Config>::WeightInfo::instrument(code_len / 1024),
 		);
+	});
+}
+
+#[test]
+fn debug_message_works() {
+	let (wasm, code_hash) = compile_module::<Test>("debug_message_works").unwrap();
+
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		assert_ok!(
+			Contracts::instantiate_with_code(
+				Origin::signed(ALICE),
+				30_000,
+				GAS_LIMIT,
+				wasm,
+				vec![],
+				vec![],
+			),
+		);
+		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+		let result = Contracts::bare_call(
+			ALICE,
+			addr,
+			0,
+			GAS_LIMIT,
+			vec![],
+			true,
+		);
+
+		assert_matches!(result.result, Ok(_));
+		assert_eq!(std::str::from_utf8(&result.debug_message).unwrap(), "Hello World!");
+	});
+}
+
+#[test]
+fn debug_message_logging_disabled() {
+	let (wasm, code_hash) = compile_module::<Test>("debug_message_logging_disabled").unwrap();
+
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		assert_ok!(
+			Contracts::instantiate_with_code(
+				Origin::signed(ALICE),
+				30_000,
+				GAS_LIMIT,
+				wasm,
+				vec![],
+				vec![],
+			),
+		);
+		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+		// disable logging by passing `false`
+		let result = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			vec![],
+			false,
+		);
+		assert_matches!(result.result, Ok(_));
+		// the dispatchables always run without debugging
+		assert_ok!(Contracts::call(
+			Origin::signed(ALICE),
+			addr,
+			0,
+			GAS_LIMIT,
+			vec![],
+		));
+		assert!(result.debug_message.is_empty());
+	});
+}
+
+#[test]
+fn debug_message_invalid_utf8() {
+	let (wasm, code_hash) = compile_module::<Test>("debug_message_invalid_utf8").unwrap();
+
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		assert_ok!(
+			Contracts::instantiate_with_code(
+				Origin::signed(ALICE),
+				30_000,
+				GAS_LIMIT,
+				wasm,
+				vec![],
+				vec![],
+			),
+		);
+		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+		let result = Contracts::bare_call(
+			ALICE,
+			addr,
+			0,
+			GAS_LIMIT,
+			vec![],
+			true,
+		);
+		assert_err!(result.result, <Error<Test>>::DebugMessageInvalidUTF8);
 	});
 }

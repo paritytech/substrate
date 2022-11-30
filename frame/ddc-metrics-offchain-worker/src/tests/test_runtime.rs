@@ -53,7 +53,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-	    Contracts: contracts::{Pallet, Call, Config<T>, Storage, Event<T>},
+	    Contracts: contracts::{Pallet, Call, Storage, Event<T>},
         Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
         Randomness: pallet_randomness_collective_flip::{Pallet, Call, Storage},
         DdcMetricsOffchainWorker: pallet_ddc_metrics_offchain_worker::{Pallet, Call, Event<T>},
@@ -134,7 +134,7 @@ parameter_types! {
     pub const SurchargeReward: Balance = 150;
     pub const MaxDepth: u32 = 100;
     pub const MaxValueSize: u32 = 16_384;
-    pub MaxCodeSize: u32 = 160 * 1024;
+    pub Schedule: pallet_contracts::Schedule<Test> = Default::default();
 }
 
 // Contracts for Test Runtime.
@@ -156,13 +156,12 @@ impl contracts::Config for Test {
     type RentFraction = ();
     type SurchargeReward = SurchargeReward;
     type CallStack = [pallet_contracts::Frame<Self>; 31];
-    type MaxValueSize = MaxValueSize;
     type WeightPrice = Self; //pallet_transaction_payment::Module<Self>;
     type WeightInfo = ();
     type ChainExtension = ();
     type DeletionQueueDepth = ();
     type DeletionWeightLimit = ();
-    type MaxCodeSize = MaxCodeSize;
+    type Schedule = Schedule;
 }
 
 parameter_types! {

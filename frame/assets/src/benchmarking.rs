@@ -120,19 +120,11 @@ fn add_approvals<T: Config<I>, I: 'static>(minter: T::AccountId, n: u32) {
 }
 
 fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::Event) {
-	let events = frame_system::Pallet::<T>::events();
-	let system_event: <T as frame_system::Config>::Event = generic_event.into();
-	// compare to the last event record
-	let frame_system::EventRecord { event, .. } = &events[events.len() - 1];
-	assert_eq!(event, &system_event);
+	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
 fn assert_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::Event) {
-	let system_event: <T as frame_system::Config>::Event = generic_event.into();
-	let events = frame_system::Pallet::<T>::events();
-	assert!(events.iter().any(|event_record| {
-		matches!(&event_record, frame_system::EventRecord { event, .. } if &system_event == event)
-	}));
+	frame_system::Pallet::<T>::assert_has_event(generic_event.into());
 }
 
 benchmarks_instance_pallet! {

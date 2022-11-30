@@ -285,15 +285,15 @@ pub trait TypeId {
 #[derive(Encode, Decode, PassByEnum, Copy, Clone)]
 pub enum LogLevel {
 	/// `Error` log level.
-	Error = 1,
+	Error = 1_isize,
 	/// `Warn` log level.
-	Warn = 2,
+	Warn = 2_isize,
 	/// `Info` log level.
-	Info = 3,
+	Info = 3_isize,
 	/// `Debug` log level.
-	Debug = 4,
+	Debug = 4_isize,
 	/// `Trace` log level.
-	Trace = 5,
+	Trace = 5_isize,
 }
 
 impl From<u32> for LogLevel {
@@ -340,17 +340,17 @@ impl From<LogLevel> for log::Level {
 #[derive(Encode, Decode, PassByEnum, Copy, Clone)]
 pub enum LogLevelFilter {
 	/// `Off` log level filter.
-	Off = 0,
+	Off = 0_isize,
 	/// `Error` log level filter.
-	Error = 1,
+	Error = 1_isize,
 	/// `Warn` log level filter.
-	Warn = 2,
+	Warn = 2_isize,
 	/// `Info` log level filter.
-	Info = 3,
+	Info = 3_isize,
 	/// `Debug` log level filter.
-	Debug = 4,
+	Debug = 4_isize,
 	/// `Trace` log level filter.
-	Trace = 5,
+	Trace = 5_isize,
 }
 
 impl From<LogLevelFilter> for log::LevelFilter {

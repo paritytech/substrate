@@ -37,18 +37,22 @@ use serde::{Serialize, Deserialize};
 pub struct ContractResult<T> {
 	/// How much gas was consumed during execution.
 	pub gas_consumed: u64,
-	/// An optional debug message. This message is only non-empty when explicitly requested
-	/// by the code that calls into the contract.
+	/// An optional debug message. This message is only filled when explicitly requested
+	/// by the code that calls into the contract. Otherwise it is empty.
 	///
 	/// The contained bytes are valid UTF-8. This is not declared as `String` because
-	/// this type is not allowed within the runtime. A client should decode them in order
-	/// to present the message to its users.
+	/// this type is not allowed within the runtime.
+	///
+	/// Clients should not make any assumptions about the format of the buffer.
+	/// They should just display it as-is. It is **not** only a collection of log lines
+	/// provided by a contract but a formatted buffer with different sections.
 	///
 	/// # Note
 	///
 	/// The debug message is never generated during on-chain execution. It is reserved for
 	/// RPC calls.
-	pub debug_message: Bytes,
+	#[cfg_attr(feature = "std", serde(with = "as_string"))]
+	pub debug_message: Vec<u8>,
 	/// The execution result of the wasm code.
 	pub result: T,
 }
@@ -145,4 +149,20 @@ pub enum Code<Hash> {
 	Upload(Bytes),
 	/// The code hash of an on-chain wasm blob.
 	Existing(Hash),
+}
+
+#[cfg(feature = "std")]
+mod as_string {
+	use super::*;
+	use serde::{Serializer, Deserializer, ser::Error};
+
+	pub fn serialize<S: Serializer>(bytes: &Vec<u8>, serializer: S) -> Result<S::Ok, S::Error> {
+		std::str::from_utf8(bytes)
+			.map_err(|e| S::Error::custom(format!("Debug buffer contains invalid UTF8: {}", e)))?
+			.serialize(serializer)
+	}
+
+	pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<u8>, D::Error> {
+		Ok(String::deserialize(deserializer)?.into_bytes())
+	}
 }

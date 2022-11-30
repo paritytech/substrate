@@ -22,6 +22,7 @@ frame-system = { version = "3.0.0", default-features = false, path = "../system"
 
 sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
+sp-core = { version = "3.0.0", default-features = false, path = "../../primitives/core" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-npos-elections = { version = "3.0.0", default-features = false, path = "../../primitives/npos-elections" }
 sp-arithmetic = { version = "3.0.0", default-features = false, path = "../../primitives/arithmetic" }
@@ -56,6 +57,7 @@ std = [
 
 	"sp-io/std",
 	"sp-std/std",
+	"sp-core/std",
 	"sp-runtime/std",
 	"sp-npos-elections/std",
 	"sp-arithmetic/std",

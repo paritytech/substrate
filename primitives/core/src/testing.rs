@@ -144,6 +144,13 @@ impl TaskExecutor {
 }
 
 #[cfg(feature = "std")]
+impl Default for TaskExecutor {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
+#[cfg(feature = "std")]
 impl crate::traits::SpawnNamed for TaskExecutor {
 	fn spawn_blocking(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
 		self.0.spawn_ok(future);

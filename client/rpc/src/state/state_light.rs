@@ -491,6 +491,15 @@ impl<Block, F, Client> ChildStateBackend<Block, Client> for LightState<Block, F,
 		Client: BlockchainEvents<Block> + HeaderBackend<Block> + Send + Sync + 'static,
 		F: Fetcher<Block> + 'static
 {
+	fn read_child_proof(
+		&self,
+		_block: Option<Block::Hash>,
+		_storage_key: PrefixedStorageKey,
+		_keys: Vec<StorageKey>,
+	) -> FutureResult<ReadProof<Block::Hash>> {
+		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
+	}
+
 	fn storage_keys(
 		&self,
 		_block: Option<Block::Hash>,

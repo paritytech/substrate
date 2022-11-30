@@ -17,6 +17,7 @@
 
 //! Miscellaneous types.
 
+use sp_std::fmt::Debug;
 use codec::{Encode, Decode, FullCodec};
 use sp_core::RuntimeDebug;
 use sp_arithmetic::traits::{Zero, AtLeast32BitUnsigned};
@@ -160,9 +161,9 @@ impl WithdrawReasons {
 }
 
 /// Simple amalgamation trait to collect together properties for an AssetId under one roof.
-pub trait AssetId: FullCodec + Copy + Default + Eq + PartialEq {}
-impl<T: FullCodec + Copy + Default + Eq + PartialEq> AssetId for T {}
+pub trait AssetId: FullCodec + Copy + Default + Eq + PartialEq + Debug {}
+impl<T: FullCodec + Copy + Default + Eq + PartialEq + Debug> AssetId for T {}
 
 /// Simple amalgamation trait to collect together properties for a Balance under one roof.
-pub trait Balance: AtLeast32BitUnsigned + FullCodec + Copy + Default {}
-impl<T: AtLeast32BitUnsigned + FullCodec + Copy + Default> Balance for T {}
+pub trait Balance: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug {}
+impl<T: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug> Balance for T {}

@@ -34,7 +34,7 @@ impl InMemOffchainStorage {
 	}
 
 	/// Iterate over all key value pairs by reference.
-	pub fn iter<'a>(&'a self) -> impl Iterator<Item=(&'a Vec<u8>,&'a Vec<u8>)> {
+	pub fn iter(&self) -> impl Iterator<Item=(&Vec<u8>,&Vec<u8>)> {
 		self.storage.iter()
 	}
 

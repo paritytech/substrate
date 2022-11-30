@@ -335,10 +335,7 @@ impl DatabaseSettingsSrc {
 	}
 	/// Check if database supports internal ref counting for state data.
 	pub fn supports_ref_counting(&self) -> bool {
-		match self {
-			DatabaseSettingsSrc::ParityDb { .. } => true,
-			_ => false,
-		}
+		matches!(self, DatabaseSettingsSrc::ParityDb { .. })
 	}
 }
 

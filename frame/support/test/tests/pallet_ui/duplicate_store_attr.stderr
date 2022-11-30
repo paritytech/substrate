@@ -1,5 +1,5 @@
-error: Invalid pallet::pallet, multiple argument pallet::generate_store found
-  --> $DIR/duplicate_store_attr.rs:12:33
+error: Unexpected duplicated attribute
+  --> $DIR/duplicate_store_attr.rs:12:12
    |
 12 |     #[pallet::generate_store(trait Store)]
-   |                                    ^^^^^
+   |               ^^^^^^^^^^^^^^

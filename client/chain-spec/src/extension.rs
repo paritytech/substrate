@@ -233,7 +233,7 @@ impl<B, E> Extension for Forks<B, E> where
 
 	fn get<T: 'static>(&self) -> Option<&T> {
 		match TypeId::of::<T>() {
-			x if x == TypeId::of::<E>() => Any::downcast_ref(&self.base),
+			x if x == TypeId::of::<E>() => <dyn Any>::downcast_ref(&self.base),
 			_ => self.base.get(),
 		}
 	}
@@ -252,7 +252,7 @@ impl<B, E> Extension for Forks<B, E> where
 		<<Self::Forks as IsForks>::Extension as Group>::Fork: Extension,
 	{
 		if TypeId::of::<BlockNumber>() == TypeId::of::<B>() {
-			Any::downcast_ref(&self.for_type::<T>()?).cloned()
+			<dyn Any>::downcast_ref(&self.for_type::<T>()?).cloned()
 		} else {
 			self.get::<Forks<BlockNumber, <Self::Forks as IsForks>::Extension>>()?
 				.for_type()
@@ -275,7 +275,7 @@ impl <E: Extension> GetExtension for E {
 /// Helper function that queries an extension by type from `GetExtension`
 /// trait object.
 pub fn get_extension<T: 'static>(e: &dyn GetExtension) -> Option<&T> {
-	Any::downcast_ref(GetExtension::get_any(e, TypeId::of::<T>()))
+	<dyn Any>::downcast_ref(GetExtension::get_any(e, TypeId::of::<T>()))
 }
 
 #[cfg(test)]

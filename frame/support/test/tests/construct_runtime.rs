@@ -505,7 +505,7 @@ fn test_metadata() {
 			signed_extensions: vec![DecodeDifferent::Encode("UnitSignedExtension")],
 		},
 	};
-	pretty_assertions::assert_eq!(Runtime::metadata().1, RuntimeMetadata::V12(expected_metadata));
+	pretty_assertions::assert_eq!(Runtime::metadata().1, RuntimeMetadata::V13(expected_metadata));
 }
 
 #[test]

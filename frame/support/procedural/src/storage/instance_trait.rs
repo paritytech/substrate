@@ -34,7 +34,8 @@ struct InstanceDef {
 	index: u8,
 }
 
-pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStream {
+pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
+	let scrate = &def.hidden_crate;
 	let mut impls = TokenStream::new();
 
 	impls.extend(reexport_instance_trait(scrate, def));

@@ -177,10 +177,8 @@ fn impl_build_storage(
 	}
 }
 
-pub fn genesis_config_and_build_storage(
-	scrate: &TokenStream,
-	def: &DeclStorageDefExt,
-) -> TokenStream {
+pub fn genesis_config_and_build_storage(def: &DeclStorageDefExt) -> TokenStream {
+	let scrate = &def.hidden_crate;
 	let builders = BuilderDef::from_def(scrate, def);
 	if !builders.blocks.is_empty() {
 		let genesis_config = match GenesisConfigDef::from_def(def) {
