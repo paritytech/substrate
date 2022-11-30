@@ -344,13 +344,21 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 						)
 					}
 				},
-			FromSwarm::DialFailure(DialFailure { peer_id, error, .. }) =>
-				for (p, _) in self.protocols.values_mut() {
-					let handler = p.new_handler();
-					NetworkBehaviour::on_swarm_event(
-						p,
-						FromSwarm::DialFailure(DialFailure { peer_id, handler, error }),
-					);
+			FromSwarm::DialFailure(DialFailure { peer_id, error, handler }) =>
+				for (p_name, p_handler) in handler.into_iter() {
+					if let Some((proto, _)) = self.protocols.get_mut(p_name.as_str()) {
+						proto.on_swarm_event(FromSwarm::DialFailure(DialFailure {
+							peer_id,
+							handler: p_handler,
+							error,
+						}));
+					} else {
+						log::error!(
+						  target: "sub-libp2p",
+						  "on_swarm_event/dial_failure: no request-response instance registered for protocol {:?}",
+						  p_name,
+						)
+					}
 				},
 			FromSwarm::ListenerClosed(e) =>
 				for (p, _) in self.protocols.values_mut() {
