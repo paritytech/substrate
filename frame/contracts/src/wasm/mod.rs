@@ -2277,7 +2277,7 @@ mod tests {
 	#[cfg(feature = "unstable-interface")]
 	const CODE_CALL_RUNTIME: &str = r#"
 (module
-	(import "__unstable__" "call_runtime" (func $call_runtime (param i32 i32) (result i32)))
+	(import "seal0" "call_runtime" (func $call_runtime (param i32 i32) (result i32)))
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
@@ -2592,7 +2592,7 @@ mod tests {
 (module
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
-	(import "__unstable__" "take_storage" (func $take_storage (param i32 i32 i32 i32) (result i32)))
+	(import "seal0" "take_storage" (func $take_storage (param i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0, 4) size of input buffer (160 bytes as we copy the key+len here)
@@ -2898,7 +2898,7 @@ mod tests {
 	fn reentrance_count_works() {
 		const CODE: &str = r#"
 (module
-	(import "__unstable__" "reentrance_count" (func $reentrance_count (result i32)))
+	(import "seal0" "reentrance_count" (func $reentrance_count (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func $assert (param i32)
 		(block $ok
@@ -2931,7 +2931,7 @@ mod tests {
 	fn account_reentrance_count_works() {
 		const CODE: &str = r#"
 (module
-	(import "__unstable__" "account_reentrance_count" (func $account_reentrance_count (param i32) (result i32)))
+	(import "seal0" "account_reentrance_count" (func $account_reentrance_count (param i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func $assert (param i32)
 		(block $ok
