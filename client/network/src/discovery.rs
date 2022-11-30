@@ -544,8 +544,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			FromSwarm::ListenerClosed(e) => {
 				self.kademlia.on_swarm_event(FromSwarm::ListenerClosed(e));
 			},
-			FromSwarm::ListenFailure(_) => {
-				// NetworkBehaviour::inject_listen_failure on Kademlia<MemoryStore> does nothing.
+			FromSwarm::ListenFailure(e) => {
+				self.kademlia.on_swarm_event(FromSwarm::ListenFailure(e));
 			},
 			FromSwarm::ListenerError(e) => {
 				self.kademlia.on_swarm_event(FromSwarm::ListenerError(e));
