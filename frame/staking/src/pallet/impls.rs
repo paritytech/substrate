@@ -25,8 +25,9 @@ use frame_support::{
 	dispatch::WithPostDispatchInfo,
 	pallet_prelude::*,
 	traits::{
-		Currency, CurrencyToVote, Defensive, DefensiveResult, EstimateNextNewSession, Get,
-		Imbalance, Lockable, OnUnbalanced, TryCollect, UnixTime, WithdrawReasons,
+		fungible::Lockable, Currency, CurrencyToVote, Defensive, DefensiveResult,
+		EstimateNextNewSession, Get, Imbalance, OnUnbalanced, TryCollect, UnixTime,
+		WithdrawReasons,
 	},
 	weights::Weight,
 };

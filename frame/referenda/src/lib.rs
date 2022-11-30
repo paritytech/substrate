@@ -68,11 +68,12 @@ use codec::{Codec, Encode};
 use frame_support::{
 	ensure,
 	traits::{
+		fungible,
 		schedule::{
 			v3::{Anon as ScheduleAnon, Named as ScheduleNamed},
 			DispatchTime,
 		},
-		Currency, LockIdentifier, OnUnbalanced, OriginTrait, PollStatus, Polling, QueryPreimage,
+		Currency, OnUnbalanced, OriginTrait, PollStatus, Polling, QueryPreimage,
 		ReservableCurrency, StorePreimage, VoteTally,
 	},
 	BoundedVec,
@@ -132,7 +133,7 @@ macro_rules! impl_tracksinfo_get {
 	};
 }
 
-const ASSEMBLY_ID: LockIdentifier = *b"assembly";
+const ASSEMBLY_ID: fungible::LockIdentifier = *b"assembly";
 
 #[frame_support::pallet]
 pub mod pallet {

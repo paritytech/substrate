@@ -18,7 +18,7 @@
 //! The lockable currency trait and some associated types.
 
 use super::{super::misc::WithdrawReasons, currency::Currency};
-use crate::{dispatch::DispatchResult, traits::misc::Get};
+use crate::traits::misc::Get;
 
 /// An identifier for a lock. Used for disambiguating different locks so that
 /// they can be individually replaced or removed.

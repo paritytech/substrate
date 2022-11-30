@@ -608,8 +608,7 @@ mod tests {
 	use frame_support::{
 		assert_err, parameter_types,
 		traits::{
-			ConstU32, ConstU64, ConstU8, Currency, LockIdentifier, Lockable,
-			WithdrawReasons,
+			ConstU32, ConstU64, ConstU8, Currency, LockIdentifier, Lockable, WithdrawReasons,
 		},
 		weights::{ConstantMultiplier, IdentityFee, RuntimeDbWeight, Weight, WeightToFee},
 	};

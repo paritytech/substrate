@@ -173,8 +173,8 @@ use frame_support::{
 		tokens::{fungible, BalanceStatus as Status, DepositConsequence, WithdrawConsequence},
 		Currency, DefensiveSaturating, ExistenceRequirement,
 		ExistenceRequirement::{AllowDeath, KeepAlive},
-		Get, Imbalance, LockIdentifier, Lockable, NamedReservableCurrency, OnUnbalanced,
-		ReservableCurrency, SignedImbalance, StoredMap, TryDrop, WithdrawReasons,
+		Get, Imbalance, NamedReservableCurrency, OnUnbalanced, ReservableCurrency, SignedImbalance,
+		StoredMap, TryDrop, WithdrawReasons,
 	},
 	WeakBoundedVec,
 };
@@ -658,7 +658,7 @@ impl BitOr for Reasons {
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 pub struct BalanceLock<Balance> {
 	/// An identifier for this lock. Only one lock may be in existence for each identifier.
-	pub id: LockIdentifier,
+	pub id: fungible::LockIdentifier,
 	/// The amount which the free balance may not drop below when this lock is in effect.
 	pub amount: Balance,
 	/// If true, then the lock remains in effect even for payment of transaction fees.
@@ -2119,7 +2119,7 @@ where
 	}
 }
 
-impl<T: Config<I>, I: 'static> Lockable<T::AccountId> for Pallet<T, I>
+impl<T: Config<I>, I: 'static> fungible::Lockable<T::AccountId> for Pallet<T, I>
 where
 	T::Balance: MaybeSerializeDeserialize + Debug,
 {
@@ -2130,7 +2130,7 @@ where
 	// Set a lock on the balance of `who`.
 	// Is a no-op if lock amount is zero or `reasons` `is_none()`.
 	fn set_lock(
-		id: LockIdentifier,
+		id: fungible::LockIdentifier,
 		who: &T::AccountId,
 		amount: T::Balance,
 		reasons: WithdrawReasons,
@@ -2152,7 +2152,7 @@ where
 	// Extend a lock on the balance of `who`.
 	// Is a no-op if lock amount is zero or `reasons` `is_none()`.
 	fn extend_lock(
-		id: LockIdentifier,
+		id: fungible::LockIdentifier,
 		who: &T::AccountId,
 		amount: T::Balance,
 		reasons: WithdrawReasons,
@@ -2181,7 +2181,7 @@ where
 		Self::update_locks(who, &locks[..]);
 	}
 
-	fn remove_lock(id: LockIdentifier, who: &T::AccountId) {
+	fn remove_lock(id: fungible::LockIdentifier, who: &T::AccountId) {
 		let mut locks = Self::locks(who);
 		locks.retain(|l| l.id != id);
 		Self::update_locks(who, &locks[..]);
