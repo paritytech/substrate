@@ -124,7 +124,7 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 }
 parameter_types! {
-	pub static AlarmInterval: u64 = 1;
+	pub static AlarmInterval: u64 = 2;
 }
 ord_parameter_types! {
 	pub const One: u64 = 1;
