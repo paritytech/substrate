@@ -53,7 +53,8 @@ use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_mmr_primitives::{utils, LeafIndex, MmrApi};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block, Header, NumberFor},
+	traits::{Block, Header, NumberFor, One},
+	Saturating,
 };
 
 use crate::offchain_mmr::OffchainMMR;
@@ -88,17 +89,21 @@ where
 				Ok(Ok(mmr_leaf_count)) => {
 					match utils::first_mmr_block_num::<B::Header>(best_block, mmr_leaf_count) {
 						Ok(first_mmr_block) => {
+							// TODO: persist this in aux-db across runs.
+							let best_canonicalized = first_mmr_block.saturating_sub(One::one());
 							let mut offchain_mmr = OffchainMMR {
 								client: self.client,
 								offchain_db: self.offchain_db,
 								indexing_prefix: self.indexing_prefix,
 								first_mmr_block,
-
-								_phantom: Default::default(),
+								best_canonicalized,
 							};
+							// We need to make sure all blocks leading up to current notification
+							// have also been canonicalized.
+							offchain_mmr.canonicalize_catch_up(&notification);
 							// We have to canonicalize and prune the blocks in the finality
 							// notification that lead to building the offchain-mmr as well.
-							offchain_mmr.canonicalize_and_prune(&notification);
+							offchain_mmr.canonicalize_and_prune(notification);
 							return Some(offchain_mmr)
 						},
 						Err(e) => {
@@ -150,7 +155,7 @@ where
 		};
 
 		while let Some(notification) = self.finality_notifications.next().await {
-			offchain_mmr.canonicalize_and_prune(&notification);
+			offchain_mmr.canonicalize_and_prune(notification);
 		}
 	}
 

@@ -21,27 +21,26 @@
 
 #![warn(missing_docs)]
 
-use std::{marker::PhantomData, sync::Arc};
-
+use crate::LOG_TARGET;
 use log::{debug, error, warn};
-
 use sc_client_api::FinalityNotification;
 use sc_offchain::OffchainDb;
 use sp_blockchain::{CachedHeaderMetadata, ForkBackend, HeaderBackend, HeaderMetadata};
 use sp_core::offchain::{DbExternalities, OffchainStorage, StorageKind};
 use sp_mmr_primitives::{utils, utils::NodesUtils, NodeIndex};
-use sp_runtime::traits::{Block, Header};
-
-use crate::LOG_TARGET;
+use sp_runtime::{
+	traits::{Block, NumberFor, One},
+	Saturating,
+};
+use std::{collections::VecDeque, sync::Arc};
 
 /// `OffchainMMR` exposes MMR offchain canonicalization and pruning logic.
 pub struct OffchainMMR<C, B: Block, S> {
 	pub client: Arc<C>,
 	pub offchain_db: OffchainDb<S>,
 	pub indexing_prefix: Vec<u8>,
-	pub first_mmr_block: <B::Header as Header>::Number,
-
-	pub _phantom: PhantomData<B>,
+	pub first_mmr_block: NumberFor<B>,
+	pub best_canonicalized: NumberFor<B>,
 }
 
 impl<C, S, B> OffchainMMR<C, B, S>
@@ -77,7 +76,7 @@ where
 
 	fn right_branch_ending_in_block_or_log(
 		&self,
-		block_num: <B::Header as Header>::Number,
+		block_num: NumberFor<B>,
 		action: &str,
 	) -> Option<Vec<NodeIndex>> {
 		match utils::block_num_to_leaf_index::<B::Header>(block_num, self.first_mmr_block) {
@@ -128,9 +127,9 @@ where
 		}
 	}
 
-	fn canonicalize_branch(&mut self, block_hash: &B::Hash) {
+	fn canonicalize_branch(&mut self, block_hash: B::Hash) {
 		let action = "canonicalize";
-		let header = match self.header_metadata_or_log(*block_hash, action) {
+		let header = match self.header_metadata_or_log(block_hash, action) {
 			Some(header) => header,
 			_ => return,
 		};
@@ -148,6 +147,7 @@ where
 			None => {
 				// If we can't convert the block number to a leaf index, the chain state is probably
 				// corrupted. We only log the error, hoping that the chain state will be fixed.
+				self.best_canonicalized = header.number;
 				return
 			},
 		};
@@ -174,16 +174,48 @@ where
 				);
 			}
 		}
+		if self.best_canonicalized != header.number.saturating_sub(One::one()) {
+			warn!(
+				target: LOG_TARGET,
+				"Detected canonicalization skip: best {:?} current {:?}.",
+				self.best_canonicalized,
+				header.number,
+			);
+		}
+		self.best_canonicalized = header.number;
+	}
+
+	/// In case of missed finality notifications (node restarts for example),
+	/// make sure to also canon everything leading up to `notification.tree_route`.
+	pub fn canonicalize_catch_up(&mut self, notification: &FinalityNotification<B>) {
+		let first = notification.tree_route.first().unwrap_or(&notification.hash);
+		if let Some(mut header) = self.header_metadata_or_log(*first, "canonicalize") {
+			let mut to_canon = VecDeque::<<B as Block>::Hash>::new();
+			// Walk up the chain adding all blocks newer than `self.best_canonicalized`.
+			loop {
+				header = match self.header_metadata_or_log(header.parent, "canonicalize") {
+					Some(header) => header,
+					_ => break,
+				};
+				if header.number <= self.best_canonicalized {
+					break
+				}
+				to_canon.push_front(header.hash);
+			}
+			// Canonicalize all blocks leading up to current finality notification.
+			for hash in to_canon.drain(..) {
+				self.canonicalize_branch(hash);
+			}
+		}
 	}
 
 	/// Move leafs and nodes added by finalized blocks in offchain db from _fork-aware key_ to
 	/// _canonical key_.
 	/// Prune leafs and nodes added by stale blocks in offchain db from _fork-aware key_.
-	pub fn canonicalize_and_prune(&mut self, notification: &FinalityNotification<B>) {
+	pub fn canonicalize_and_prune(&mut self, notification: FinalityNotification<B>) {
 		// Move offchain MMR nodes for finalized blocks to canonical keys.
-		for block_hash in notification.tree_route.iter().chain(std::iter::once(&notification.hash))
-		{
-			self.canonicalize_branch(block_hash);
+		for hash in notification.tree_route.iter().chain(std::iter::once(&notification.hash)) {
+			self.canonicalize_branch(*hash);
 		}
 
 		// Remove offchain MMR nodes for stale forks.
