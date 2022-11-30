@@ -55,8 +55,9 @@ pub const MANUAL_SEAL_ENGINE_ID: ConsensusEngineId = [b'm', b'a', b'n', b'l'];
 /// The verifier for the manual seal engine; instantly finalizes.
 struct ManualSealVerifier;
 
+#[async_trait::async_trait]
 impl<B: BlockT> Verifier<B> for ManualSealVerifier {
-	fn verify(
+	async fn verify(
 		&mut self,
 		origin: BlockOrigin,
 		header: B::Header,

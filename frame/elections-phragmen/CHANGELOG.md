@@ -4,7 +4,18 @@ All notable changes to this crate will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.0.0] - UNRELEASED
+## [4.0.0] - UNRELEASED
+
+### Added
+
+### Changed
+\[**Needs Migration**\] [migrate pallet-elections-phragmen to attribute macros](https://github.com/paritytech/substrate/pull/8044)
+
+### Fixed
+
+### Security
+
+## [3.0.0]
 
 ### Added
 [Add slashing events to elections-phragmen](https://github.com/paritytech/substrate/pull/7543)

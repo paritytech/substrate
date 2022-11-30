@@ -29,6 +29,10 @@ message BlockRequest {
 	Direction direction = 5;
 	// Maximum number of blocks to return. An implementation defined maximum is used when unspecified.
 	uint32 max_blocks = 6; // optional
+	// Indicate to the receiver that we support multiple justifications. If the responder also
+	// supports this it will populate the multiple justifications field in `BlockData` instead of
+	// the single justification field.
+	bool support_multiple_justifications = 7; // optional
 }
 
 // Response to `BlockRequest`
@@ -56,5 +60,11 @@ message BlockData {
 	// doesn't make in possible to differentiate between a lack of justification and an empty
 	// justification.
 	bool is_empty_justification = 7; // optional, false if absent
+	// Justifications if requested.
+	// Unlike the field for a single justification, this field does not required an associated
+	// boolean to differentiate between the lack of justifications and empty justification(s). This
+	// is because empty justifications, like all justifications, are paired with a non-empty
+	// consensus engine ID.
+	bytes justifications = 8; // optional
 }
 

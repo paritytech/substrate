@@ -23,7 +23,7 @@ use super::*;
 
 use frame_system::RawOrigin;
 use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
-use sp_runtime::{traits::{Saturating}};
+use sp_runtime::traits::Saturating;
 
 use crate::Module as TipsMod;
 

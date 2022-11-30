@@ -167,6 +167,7 @@ where
 		display_level: !simple,
 		display_thread_name: !simple,
 		enable_color,
+		dup_to_stdout: !atty::is(atty::Stream::Stderr) && atty::is(atty::Stream::Stdout),
 	};
 	let builder = FmtSubscriber::builder().with_env_filter(env_filter);
 

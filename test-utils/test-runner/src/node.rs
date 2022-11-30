@@ -24,12 +24,10 @@ use manual_seal::{run_manual_seal, EngineCommand, ManualSealParams};
 use sc_cli::build_runtime;
 use sc_client_api::{
 	backend::{self, Backend}, CallExecutor, ExecutorProvider,
-	execution_extensions::ExecutionStrategies,
 };
 use sc_service::{
-	build_network, spawn_tasks, BuildNetworkParams, SpawnTasksParams, TFullBackend,
-	TFullCallExecutor, TFullClient, TaskManager, TaskType, ChainSpec, BasePath,
-	Configuration, DatabaseConfig, KeepBlocks, TransactionStorageMode, config::KeystoreConfig,
+	build_network, spawn_tasks, BuildNetworkParams, SpawnTasksParams,
+	TFullBackend, TFullCallExecutor, TFullClient, TaskManager, TaskType,
 };
 use sc_transaction_pool::BasicPool;
 use sp_api::{ApiExt, ConstructRuntimeApi, Core, Metadata, OverlayedChanges, StorageTransactionCache};
@@ -45,13 +43,8 @@ use sp_state_machine::Ext;
 use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
 use sp_transaction_pool::TransactionPool;
 
-pub use crate::utils::{logger, base_path};
-use crate::ChainInfo;
+use crate::{ChainInfo, utils::logger};
 use log::LevelFilter;
-use sp_keyring::sr25519::Keyring::Alice;
-use sc_network::{multiaddr, config::{NetworkConfiguration, TransportConfig, Role}};
-use sc_informant::OutputFormat;
-use sc_executor::WasmExecutionMethod;
 
 /// This holds a reference to a running node on another thread,
 /// the node process is dropped when this struct is dropped
@@ -91,12 +84,6 @@ pub struct Node<T: ChainInfo> {
 pub struct NodeConfig {
 	/// A set of log targets you'd like to enable/disbale
 	pub log_targets: Vec<(&'static str, LevelFilter)>,
-
-	/// ChainSpec for the runtime
-	pub chain_spec: Box<dyn ChainSpec>,
-
-	/// wasm execution strategies.
-	pub execution_strategies: ExecutionStrategies,
 }
 
 type EventRecord<T> = frame_system::EventRecord<<T as frame_system::Config>::Event, <T as frame_system::Config>::Hash>;
@@ -114,100 +101,20 @@ impl<T: ChainInfo> Node<T> {
 				+ BlockBuilder<T::Block>
 				+ ApiExt<T::Block, StateBackend = <TFullBackend<T::Block> as Backend<T::Block>>::State>,
 	{
-		let NodeConfig { log_targets, mut chain_spec, execution_strategies } = node_config;
+		let NodeConfig { log_targets, } = node_config;
 		let tokio_runtime = build_runtime().unwrap();
-
-		// unbounded logs, should be fine, test is shortlived.
-		let (log_sink, log_stream) = mpsc::unbounded();
-
-		logger(log_targets, tokio_runtime.handle().clone(), log_sink);
 		let runtime_handle = tokio_runtime.handle().clone();
-
 		let task_executor = move |fut, task_type| match task_type {
 			TaskType::Async => runtime_handle.spawn(fut).map(drop),
 			TaskType::Blocking => runtime_handle
 				.spawn_blocking(move || futures::executor::block_on(fut))
 				.map(drop),
 		};
+		// unbounded logs, should be fine, test is shortlived.
+		let (log_sink, log_stream) = mpsc::unbounded();
 
-		let base_path = if let Some(base) = base_path() {
-			BasePath::new(base)
-		} else {
-			BasePath::new_temp_dir().expect("couldn't create a temp dir")
-		};
-		let root_path = base_path.path().to_path_buf().join("chains").join(chain_spec.id());
-
-		let key_seed = Alice.to_seed();
-		let storage = chain_spec
-			.as_storage_builder()
-			.build_storage()
-			.expect("could not build storage");
-
-		chain_spec.set_storage(storage);
-
-		let mut network_config = NetworkConfiguration::new(
-			format!("Test Node for: {}", key_seed),
-			"network/test/0.1",
-			Default::default(),
-			None,
-		);
-		let informant_output_format = OutputFormat { enable_color: false };
-
-		network_config.allow_non_globals_in_dht = true;
-
-		network_config
-			.listen_addresses
-			.push(multiaddr::Protocol::Memory(rand::random()).into());
-
-		network_config.transport = TransportConfig::MemoryOnly;
-
-		let config = Configuration {
-			impl_name: "test-node".to_string(),
-			impl_version: "0.1".to_string(),
-			role: Role::Authority,
-			task_executor: task_executor.into(),
-			transaction_pool: Default::default(),
-			network: network_config,
-			keystore: KeystoreConfig::Path {
-				path: root_path.join("key"),
-				password: None,
-			},
-			database: DatabaseConfig::RocksDb {
-				path: root_path.join("db"),
-				cache_size: 128,
-			},
-			state_cache_size: 16777216,
-			state_cache_child_ratio: None,
-			chain_spec,
-			wasm_method: WasmExecutionMethod::Interpreted,
-			execution_strategies,
-			rpc_http: None,
-			rpc_ws: None,
-			rpc_ipc: None,
-			rpc_ws_max_connections: None,
-			rpc_cors: None,
-			rpc_methods: Default::default(),
-			prometheus_config: None,
-			telemetry_endpoints: None,
-			telemetry_external_transport: None,
-			default_heap_pages: None,
-			offchain_worker: Default::default(),
-			force_authoring: false,
-			disable_grandpa: false,
-			dev_key_seed: Some(key_seed),
-			tracing_targets: None,
-			tracing_receiver: Default::default(),
-			max_runtime_instances: 8,
-			announce_block: true,
-			base_path: Some(base_path),
-			wasm_runtime_overrides: None,
-			informant_output_format,
-			disable_log_reloading: false,
-			keystore_remote: None,
-			keep_blocks: KeepBlocks::All,
-			state_pruning: Default::default(),
-			transaction_storage: TransactionStorageMode::BlockBody,
-		};
+		logger(log_targets, tokio_runtime.handle().clone(), log_sink);
+		let config = T::config(task_executor.into());
 
 		let (
 			client,
@@ -448,7 +355,7 @@ impl<T: ChainInfo> Node<T> {
 	/// Revert all blocks added since creation of the node.
 	pub fn clean(&self) {
 		// if a db path was specified, revert all blocks we've added
-		if let Some(_) = base_path() {
+		if let Some(_) = std::env::var("DB_BASE_PATH").ok() {
 			let diff = self.client.info().best_number - self.initial_block_number;
 			self.revert_blocks(diff);
 		}

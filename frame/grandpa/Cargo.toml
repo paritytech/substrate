@@ -13,7 +13,6 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-serde = { version = "1.0.101", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 sp-application-crypto = { version = "3.0.0", default-features = false, path = "../../primitives/application-crypto" }
 sp-core = { version = "3.0.0", default-features = false, path = "../../primitives/core" }
@@ -44,7 +43,6 @@ frame-election-provider-support = { version = "3.0.0", path = "../election-provi
 [features]
 default = ["std"]
 std = [
-	"serde",
 	"codec/std",
 	"frame-benchmarking/std",
 	"sp-application-crypto/std",

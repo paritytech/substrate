@@ -167,7 +167,7 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 		let (revalidation_queue, background_task, notifier) =
 			revalidation::RevalidationQueue::new_test(pool_api.clone(), pool.clone());
 		(
-			BasicPool {
+			Self {
 				api: pool_api,
 				pool,
 				revalidation_queue: Arc::new(revalidation_queue),
@@ -203,7 +203,7 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 			spawner.spawn("txpool-background", background_task);
 		}
 
-		BasicPool {
+		Self {
 			api: pool_api,
 			pool,
 			revalidation_queue: Arc::new(revalidation_queue),

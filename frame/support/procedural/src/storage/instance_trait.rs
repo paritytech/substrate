@@ -21,8 +21,8 @@
 use proc_macro2::{TokenStream, Span};
 use quote::quote;
 use super::DeclStorageDefExt;
+use crate::NUMBER_OF_INSTANCE;
 
-const NUMBER_OF_INSTANCE: usize = 16;
 pub(crate) const INHERENT_INSTANCE_NAME: &str = "__InherentHiddenInstance";
 
 // Used to generate an instance implementation.
@@ -30,6 +30,8 @@ struct InstanceDef {
 	prefix: String,
 	instance_struct: syn::Ident,
 	doc: TokenStream,
+	// Index is same as instance number. Default is 0.
+	index: u8,
 }
 
 pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStream {
@@ -39,13 +41,14 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 
 	// Implementation of instances.
 	if let Some(module_instance) = &def.module_instance {
-		let instance_defs = (0..NUMBER_OF_INSTANCE)
+		let instance_defs = (1..=NUMBER_OF_INSTANCE)
 			.map(|i| {
 				let name = format!("Instance{}", i);
 				InstanceDef {
 					instance_struct: syn::Ident::new(&name, proc_macro2::Span::call_site()),
 					prefix: name,
 					doc: quote!(#[doc=r"Module instance"]),
+					index: i,
 				}
 			})
 			.chain(
@@ -53,6 +56,7 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 					prefix: String::new(),
 					instance_struct: ident.clone(),
 					doc: quote!(#[doc=r"Default module instance"]),
+					index: 0,
 				})
 			);
 
@@ -83,6 +87,8 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 				/// instance.
 				#[doc(hidden)]
 			),
+			// This is just to make the type system happy. Not actually used.
+			index: 0,
 		};
 		impls.extend(create_and_impl_instance_struct(scrate, &instance_def, def));
 	}
@@ -116,6 +122,7 @@ fn create_and_impl_instance_struct(
 	let instance_struct = &instance_def.instance_struct;
 	let prefix = format!("{}{}", instance_def.prefix, def.crate_name.to_string());
 	let doc = &instance_def.doc;
+	let index = instance_def.index;
 
 	quote! {
 		// Those trait are derived because of wrong bounds for generics
@@ -129,6 +136,7 @@ fn create_and_impl_instance_struct(
 		pub struct #instance_struct;
 		impl #instance_trait for #instance_struct {
 			const PREFIX: &'static str = #prefix;
+			const INDEX: u8 = #index;
 		}
 	}
 }

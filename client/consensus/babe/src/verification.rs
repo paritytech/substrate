@@ -71,10 +71,8 @@ pub(super) fn check_header<B: BlockT + Sized>(
 	let pre_digest = pre_digest.map(Ok).unwrap_or_else(|| find_pre_digest::<B>(&header))?;
 
 	trace!(target: "babe", "Checking header");
-	let seal = match header.digest_mut().pop() {
-		Some(x) => x,
-		None => return Err(babe_err(Error::HeaderUnsealed(header.hash()))),
-	};
+	let seal = header.digest_mut().pop()
+		.ok_or_else(|| babe_err(Error::HeaderUnsealed(header.hash())))?;
 
 	let sig = seal.as_babe_seal().ok_or_else(|| {
 		babe_err(Error::HeaderBadSeal(header.hash()))

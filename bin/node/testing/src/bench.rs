@@ -691,7 +691,7 @@ impl BenchContext {
 		assert_eq!(self.client.chain_info().best_number, 0);
 
 		assert_eq!(
-			self.client.import_block(import_params, Default::default())
+			futures::executor::block_on(self.client.import_block(import_params, Default::default()))
 				.expect("Failed to import block"),
 			ImportResult::Imported(
 				ImportedAux {

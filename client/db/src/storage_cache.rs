@@ -178,6 +178,7 @@ impl<B: BlockT> Cache<B> {
 					for a in &m.storage {
 						trace!("Reverting enacted key {:?}", HexDisplay::from(a));
 						self.lru_storage.remove(a);
+						self.lru_hashes.remove(a);
 					}
 					for a in &m.child_storage {
 						trace!("Reverting enacted child key {:?}", a);
@@ -198,6 +199,7 @@ impl<B: BlockT> Cache<B> {
 					for a in &m.storage {
 						trace!("Retracted key {:?}", HexDisplay::from(a));
 						self.lru_storage.remove(a);
+						self.lru_hashes.remove(a);
 					}
 					for a in &m.child_storage {
 						trace!("Retracted child key {:?}", a);
@@ -1183,6 +1185,47 @@ mod tests {
 			Some(h3a),
 		);
 		assert_eq!(s.storage(&key).unwrap().unwrap(), vec![2]);
+	}
+
+	#[test]
+	fn reverts_storage_hash() {
+		let root_parent = H256::random();
+		let key = H256::random()[..].to_vec();
+		let h1a = H256::random();
+		let h1b = H256::random();
+
+		let shared = new_shared_cache::<Block>(256*1024, (0,1));
+		let mut backend = InMemoryBackend::<BlakeTwo256>::default();
+		backend.insert(std::iter::once((None, vec![(key.clone(), Some(vec![1]))])));
+
+		let mut s = CachingState::new(
+			backend.clone(),
+			shared.clone(),
+			Some(root_parent),
+		);
+		s.cache.sync_cache(
+			&[],
+			&[],
+			vec![(key.clone(), Some(vec![2]))],
+			vec![],
+			Some(h1a),
+			Some(1),
+			true,
+		);
+
+		let mut s = CachingState::new(
+			backend.clone(),
+			shared.clone(),
+			Some(root_parent),
+		);
+		s.cache.sync_cache(&[], &[h1a], vec![], vec![], Some(h1b), Some(1), true);
+
+		let s = CachingState::new(
+			backend.clone(),
+			shared.clone(),
+			Some(h1b),
+		);
+		assert_eq!(s.storage_hash(&key).unwrap().unwrap(), BlakeTwo256::hash(&vec![1]));
 	}
 
 	#[test]

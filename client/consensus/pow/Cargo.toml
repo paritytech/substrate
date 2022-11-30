@@ -30,3 +30,4 @@ parking_lot = "0.11.1"
 sp-timestamp = { version = "3.0.0", path = "../../../primitives/timestamp" }
 derive_more = "0.99.2"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.9.0"}
+async-trait = "0.1.42"

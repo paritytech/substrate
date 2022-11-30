@@ -23,6 +23,7 @@ use crate::pallet::{Def, parse::helper::get_doc_literals};
 /// * Implement ModuleErrorMetadata on Pallet
 /// * declare Module type alias for construct_runtime
 /// * replace the first field type of `struct Pallet` with `PhantomData` if it is `_`
+/// * implementation of `PalletInfoAccess` information
 pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 	let frame_support = &def.frame_support;
 	let frame_system = &def.frame_system;
@@ -132,6 +133,28 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 			fn on_genesis() {
 				#frame_support::crate_to_pallet_version!()
 					.put_into_storage::<<T as #frame_system::Config>::PalletInfo, Self>();
+			}
+		}
+
+		// Implement `PalletInfoAccess` for `Pallet`
+		impl<#type_impl_gen> #frame_support::traits::PalletInfoAccess
+			for #pallet_ident<#type_use_gen>
+			#config_where_clause
+		{
+			fn index() -> usize {
+				<
+					<T as #frame_system::Config>::PalletInfo as #frame_support::traits::PalletInfo
+				>::index::<Self>()
+					.expect("Pallet is part of the runtime because pallet `Config` trait is \
+						implemented by the runtime")
+			}
+
+			fn name() -> &'static str {
+				<
+					<T as #frame_system::Config>::PalletInfo as #frame_support::traits::PalletInfo
+				>::name::<Self>()
+					.expect("Pallet is part of the runtime because pallet `Config` trait is \
+						implemented by the runtime")
 			}
 		}
 	)

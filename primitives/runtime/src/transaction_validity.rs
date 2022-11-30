@@ -81,18 +81,12 @@ pub enum InvalidTransaction {
 impl InvalidTransaction {
 	/// Returns if the reason for the invalidity was block resource exhaustion.
 	pub fn exhausted_resources(&self) -> bool {
-		match self {
-			Self::ExhaustsResources => true,
-			_ => false,
-		}
+		matches!(self, Self::ExhaustsResources)
 	}
 
 	/// Returns if the reason for the invalidity was a mandatory call failing.
 	pub fn was_mandatory(&self) -> bool {
-		match self {
-			Self::BadMandatory => true,
-			_ => false,
-		}
+		matches!(self, Self::BadMandatory)
 	}
 }
 
@@ -209,15 +203,15 @@ impl std::fmt::Display for TransactionValidityError {
 /// Information on a transaction's validity and, if valid, on how it relates to other transactions.
 pub type TransactionValidity = Result<ValidTransaction, TransactionValidityError>;
 
-impl Into<TransactionValidity> for InvalidTransaction {
-	fn into(self) -> TransactionValidity {
-		Err(self.into())
+impl From<InvalidTransaction> for TransactionValidity {
+	fn from(invalid_transaction: InvalidTransaction) -> Self {
+		Err(TransactionValidityError::Invalid(invalid_transaction))
 	}
 }
 
-impl Into<TransactionValidity> for UnknownTransaction {
-	fn into(self) -> TransactionValidity {
-		Err(self.into())
+impl From<UnknownTransaction> for TransactionValidity {
+	fn from(unknown_transaction: UnknownTransaction) -> Self {
+		Err(TransactionValidityError::Unknown(unknown_transaction))
 	}
 }
 
@@ -285,7 +279,7 @@ pub struct ValidTransaction {
 
 impl Default for ValidTransaction {
 	fn default() -> Self {
-		ValidTransaction {
+		Self {
 			priority: 0,
 			requires: vec![],
 			provides: vec![],
@@ -311,7 +305,7 @@ impl ValidTransaction {
 	/// `provides` and `requires` tags, it will sum the priorities, take the minimum longevity and
 	/// the logic *And* of the propagate flags.
 	pub fn combine_with(mut self, mut other: ValidTransaction) -> Self {
-		ValidTransaction {
+		Self {
 			priority: self.priority.saturating_add(other.priority),
 			requires: { self.requires.append(&mut other.requires); self.requires },
 			provides: { self.provides.append(&mut other.provides); self.provides },

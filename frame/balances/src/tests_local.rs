@@ -77,6 +77,7 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 parameter_types! {
 	pub const TransactionByteFee: u64 = 1;
@@ -174,12 +175,14 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 				]
 			);
 
-			let _ = Balances::slash(&1, 98);
+			let res = Balances::slash(&1, 98);
+			assert_eq!(res, (NegativeImbalance::new(98), 0));
 
 			// no events
 			assert_eq!(events(), []);
 
-			let _ = Balances::slash(&1, 1);
+			let res = Balances::slash(&1, 1);
+			assert_eq!(res, (NegativeImbalance::new(1), 0));
 
 			assert_eq!(
 				events(),

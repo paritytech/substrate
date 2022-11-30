@@ -722,6 +722,7 @@ impl<B: Block> Request<B> {
 					to_block: Default::default(),
 					direction: schema::v1::Direction::Ascending as i32,
 					max_blocks: 1,
+					support_multiple_justifications: true,
 				};
 
 				let mut buf = Vec::with_capacity(rq.encoded_len());

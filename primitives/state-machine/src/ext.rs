@@ -712,6 +712,10 @@ where
 	fn set_whitelist(&mut self, new: Vec<TrackedStorageKey>) {
 		self.backend.set_whitelist(new)
 	}
+
+	fn proof_size(&self) -> Option<u32> {
+		self.backend.proof_size()
+	}
 }
 
 /// Implement `Encode` by forwarding the stored raw vec.

@@ -20,11 +20,13 @@
 use std::{
 	collections::HashMap, hash, fmt::Debug,
 };
+
 use linked_hash_map::LinkedHashMap;
 use serde::Serialize;
-use crate::{watcher, ChainApi, ExtrinsicHash, BlockHash};
 use log::{debug, trace, warn};
 use sp_runtime::traits;
+
+use crate::{watcher, ChainApi, ExtrinsicHash, BlockHash};
 
 /// Extrinsic pool default listener.
 pub struct Listener<H: hash::Hash + Eq, C: ChainApi> {
@@ -37,7 +39,7 @@ const MAX_FINALITY_WATCHERS: usize = 512;
 
 impl<H: hash::Hash + Eq + Debug, C: ChainApi> Default for Listener<H, C> {
 	fn default() -> Self {
-		Listener {
+		Self {
 			watchers: Default::default(),
 			finality_watchers: Default::default(),
 		}
@@ -115,7 +117,7 @@ impl<H: hash::Hash + traits::Member + Serialize, C: ChainApi> Listener<H, C> {
 		while self.finality_watchers.len() > MAX_FINALITY_WATCHERS {
 			if let Some((hash, txs)) = self.finality_watchers.pop_front() {
 				for tx in txs {
-					self.fire(&tx, |s| s.finality_timeout(hash.clone()));
+					self.fire(&tx, |s| s.finality_timeout(hash));
 				}
 			}
 		}

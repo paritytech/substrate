@@ -46,7 +46,7 @@ frame_support::decl_module! {
 		const Foo: u32 = u32::max_value();
 
 		#[weight = 0]
-		fn accumulate_dummy(origin, increase_by: T::Balance) {
+		fn accumulate_dummy(_origin, _increase_by: T::Balance) {
 			unimplemented!();
 		}
 
@@ -79,6 +79,10 @@ impl<T: Config> sp_inherents::ProvideInherent for Module<T> {
 	}
 
 	fn check_inherent(_: &Self::Call, _: &sp_inherents::InherentData) -> std::result::Result<(), Self::Error> {
+		unimplemented!();
+	}
+
+	fn is_inherent(_call: &Self::Call) -> bool {
 		unimplemented!();
 	}
 }
@@ -141,6 +145,7 @@ mod tests {
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
+		type OnSetCode = ();
 	}
 
 	impl pallet_test::Config for Runtime {

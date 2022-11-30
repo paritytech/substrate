@@ -362,7 +362,7 @@ pub use sp_api_proc_macro::mock_impl_runtime_apis;
 
 /// A type that records all accessed trie nodes and generates a proof out of it.
 #[cfg(feature = "std")]
-pub type ProofRecorder<B> = sp_state_machine::ProofRecorder<HashFor<B>>;
+pub type ProofRecorder<B> = sp_state_machine::ProofRecorder<<B as BlockT>::Hash>;
 
 /// A type that is used as cache for the storage transactions.
 #[cfg(feature = "std")]
@@ -470,6 +470,9 @@ pub trait ApiExt<Block: BlockT> {
 	///
 	/// If `record_proof` was not called before, this will return `None`.
 	fn extract_proof(&mut self) -> Option<StorageProof>;
+
+	/// Returns the current active proof recorder.
+	fn proof_recorder(&self) -> Option<ProofRecorder<Block>>;
 
 	/// Convert the api object into the storage changes that were done while executing runtime
 	/// api functions.

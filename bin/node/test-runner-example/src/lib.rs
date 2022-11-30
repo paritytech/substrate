@@ -18,9 +18,9 @@
 
 //! Basic example of end to end runtime tests.
 
-use test_runner::{Node, ChainInfo, SignatureVerificationOverride};
+use test_runner::{Node, ChainInfo, SignatureVerificationOverride, default_config};
 use grandpa::GrandpaBlockImport;
-use sc_service::{TFullBackend, TFullClient, Configuration, TaskManager, new_full_parts};
+use sc_service::{TFullBackend, TFullClient, Configuration, TaskManager, new_full_parts, TaskExecutor};
 use std::sync::Arc;
 use sp_inherents::InherentDataProviders;
 use sc_consensus_babe::BabeBlockImport;
@@ -29,6 +29,7 @@ use sp_keyring::sr25519::Keyring::Alice;
 use sp_consensus_babe::AuthorityId;
 use sc_consensus_manual_seal::{ConsensusDataProvider, consensus::babe::BabeConsensusDataProvider};
 use sp_runtime::{traits::IdentifyAccount, MultiSigner, generic::Era};
+use node_cli::chain_spec::development_config;
 
 type BlockImport<B, BE, C, SC> = BabeBlockImport<B, C, GrandpaBlockImport<BE, B, C, SC>>;
 
@@ -69,6 +70,10 @@ impl ChainInfo for NodeTemplateChainInfo {
 			frame_system::CheckWeight::<Self::Runtime>::new(),
 			pallet_transaction_payment::ChargeTransactionPayment::<Self::Runtime>::from(0),
 		)
+	}
+
+	fn config(task_executor: TaskExecutor) -> Configuration {
+		default_config(task_executor, Box::new(development_config()))
 	}
 
 	fn create_client_parts(
@@ -151,20 +156,10 @@ mod tests {
 	use super::*;
 	use test_runner::NodeConfig;
 	use log::LevelFilter;
-	use sc_client_api::execution_extensions::ExecutionStrategies;
-	use node_cli::chain_spec::development_config;
 
 	#[test]
 	fn test_runner() {
 		let config = NodeConfig {
-			execution_strategies: ExecutionStrategies {
-				syncing: sc_client_api::ExecutionStrategy::AlwaysWasm,
-				importing: sc_client_api::ExecutionStrategy::AlwaysWasm,
-				block_construction: sc_client_api::ExecutionStrategy::AlwaysWasm,
-				offchain_worker: sc_client_api::ExecutionStrategy::AlwaysWasm,
-				other: sc_client_api::ExecutionStrategy::AlwaysWasm,
-			},
-			chain_spec: Box::new(development_config()),
 			log_targets: vec![
 				("yamux", LevelFilter::Off),
 				("multistream_select", LevelFilter::Off),

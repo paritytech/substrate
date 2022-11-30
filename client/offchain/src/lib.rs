@@ -240,6 +240,7 @@ mod tests {
 	use sp_consensus::BlockOrigin;
 	use sc_client_api::Backend as _;
 	use sc_block_builder::BlockBuilderProvider as _;
+	use futures::executor::block_on;
 
 	struct TestNetwork();
 
@@ -331,7 +332,7 @@ mod tests {
 		).unwrap();
 
 		let block = block_builder.build().unwrap().block;
-		client.import(BlockOrigin::Own, block).unwrap();
+		block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
 		assert_eq!(value, &offchain_db.get(sp_offchain::STORAGE_PREFIX, &key).unwrap());
 
@@ -341,7 +342,7 @@ mod tests {
 		).unwrap();
 
 		let block = block_builder.build().unwrap().block;
-		client.import(BlockOrigin::Own, block).unwrap();
+		block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
 		assert!(offchain_db.get(sp_offchain::STORAGE_PREFIX, &key).is_none());
 	}

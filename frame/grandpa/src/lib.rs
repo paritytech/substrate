@@ -518,21 +518,13 @@ impl<T: Config> Module<T> {
 			None
 		} else {
 			let session_index =
-				if let Some(session_id) = Self::session_for_set(set_id - 1) {
-					session_id
-				} else {
-					return Err(Error::<T>::InvalidEquivocationProof.into());
-				};
+				Self::session_for_set(set_id - 1).ok_or_else(|| Error::<T>::InvalidEquivocationProof)?;
 
 			Some(session_index)
 		};
 
 		let set_id_session_index =
-			if let Some(session_id) = Self::session_for_set(set_id) {
-				session_id
-			} else {
-				return Err(Error::<T>::InvalidEquivocationProof.into());
-			};
+			Self::session_for_set(set_id).ok_or_else(|| Error::<T>::InvalidEquivocationProof)?;
 
 		// check that the session id for the membership proof is within the
 		// bounds of the set id reported in the equivocation.

@@ -226,10 +226,8 @@ impl<Block: BlockT> Blockchain<Block> {
 
 	/// Set an existing block as head.
 	pub fn set_head(&self, id: BlockId<Block>) -> sp_blockchain::Result<()> {
-		let header = match self.header(id)? {
-			Some(h) => h,
-			None => return Err(sp_blockchain::Error::UnknownBlock(format!("{}", id))),
-		};
+		let header = self.header(id)?
+			.ok_or_else(|| sp_blockchain::Error::UnknownBlock(format!("{}", id)))?;
 
 		self.apply_head(&header)
 	}
@@ -760,10 +758,8 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 			_ => {},
 		}
 
-		match self.blockchain.id(block).and_then(|id| self.states.read().get(&id).cloned()) {
-			Some(state) => Ok(state),
-			None => Err(sp_blockchain::Error::UnknownBlock(format!("{}", block))),
-		}
+		self.blockchain.id(block).and_then(|id| self.states.read().get(&id).cloned())
+			.ok_or_else(|| sp_blockchain::Error::UnknownBlock(format!("{}", block)))
 	}
 
 	fn revert(

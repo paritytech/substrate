@@ -585,10 +585,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&dyn PrunableStateChangesTrieStorage<Block>,
 		Vec<(NumberFor<Block>, Option<(NumberFor<Block>, Block::Hash)>, ChangesTrieConfiguration)>,
 	)> {
-		let storage = match self.backend.changes_trie_storage() {
-			Some(storage) => storage,
-			None => return Err(sp_blockchain::Error::ChangesTriesNotSupported),
-		};
+		let storage = self.backend.changes_trie_storage()
+			.ok_or_else(|| sp_blockchain::Error::ChangesTriesNotSupported)?;
 
 		let mut configs = Vec::with_capacity(1);
 		let mut current = last;
@@ -1153,10 +1151,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// Gets the uncles of the block with `target_hash` going back `max_generation` ancestors.
 	pub fn uncles(&self, target_hash: Block::Hash, max_generation: NumberFor<Block>) -> sp_blockchain::Result<Vec<Block::Hash>> {
 		let load_header = |id: Block::Hash| -> sp_blockchain::Result<Block::Header> {
-			match self.backend.blockchain().header(BlockId::Hash(id))? {
-				Some(hdr) => Ok(hdr),
-				None => Err(Error::UnknownBlock(format!("{:?}", id))),
-			}
+			self.backend.blockchain().header(BlockId::Hash(id))?
+				.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id)))
 		};
 
 		let genesis_hash = self.backend.blockchain().info().genesis_hash;
@@ -1698,6 +1694,7 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 /// NOTE: only use this implementation when you are sure there are NO consensus-level BlockImport
 /// objects. Otherwise, importing blocks directly into the client would be bypassing
 /// important verification work.
+#[async_trait::async_trait]
 impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, RA> where
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block> + Send + Sync,
@@ -1705,6 +1702,8 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 	Client<B, E, Block, RA>: ProvideRuntimeApi<Block>,
 	<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api: CoreApi<Block> +
 		ApiExt<Block, StateBackend = B::State>,
+	RA: Sync + Send,
+	backend::TransactionFor<B, Block>: Send + 'static,
 {
 	type Error = ConsensusError;
 	type Transaction = backend::TransactionFor<B, Block>;
@@ -1718,7 +1717,7 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 	///
 	/// If you are not sure that there are no BlockImport objects provided by the consensus
 	/// algorithm, don't use this function.
-	fn import_block(
+	async fn import_block(
 		&mut self,
 		mut import_block: BlockImportParams<Block, backend::TransactionFor<B, Block>>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
@@ -1742,7 +1741,7 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 	}
 
 	/// Check block preconditions.
-	fn check_block(
+	async fn check_block(
 		&mut self,
 		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
@@ -1798,6 +1797,7 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 	}
 }
 
+#[async_trait::async_trait]
 impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block> + Send + Sync,
@@ -1805,23 +1805,25 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for Client<B, E, Block, R
 	Self: ProvideRuntimeApi<Block>,
 	<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block> +
 		ApiExt<Block, StateBackend = B::State>,
+	RA: Sync + Send,
+	backend::TransactionFor<B, Block>: Send + 'static,
 {
 	type Error = ConsensusError;
 	type Transaction = backend::TransactionFor<B, Block>;
 
-	fn import_block(
+	async fn import_block(
 		&mut self,
 		import_block: BlockImportParams<Block, Self::Transaction>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		(&*self).import_block(import_block, new_cache)
+		(&*self).import_block(import_block, new_cache).await
 	}
 
-	fn check_block(
+	async fn check_block(
 		&mut self,
 		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
-		(&*self).check_block(block)
+		(&*self).check_block(block).await
 	}
 }
 

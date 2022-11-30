@@ -40,7 +40,7 @@ impl<'a> PiecewiseLinear<'a> {
 	{
 		let n = n.min(d.clone());
 
-		if self.points.len() == 0 {
+		if self.points.is_empty() {
 			return N::zero()
 		}
 

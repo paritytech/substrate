@@ -217,7 +217,7 @@ fn epoch_data<B, C, SC>(
 		SC: SelectChain<B>,
 {
 	let parent = select_chain.best_chain()?;
-	epoch_changes.lock().epoch_data_for_child_of(
+	epoch_changes.shared_data().epoch_data_for_child_of(
 		descendent_query(&**client),
 		&parent.hash(),
 		parent.number().clone(),

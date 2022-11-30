@@ -77,9 +77,12 @@ macro_rules! impl_outer_config {
 
 		$crate::paste::item! {
 			#[cfg(any(feature = "std", test))]
+			use $crate::serde as __genesis_config_serde_import__;
+			#[cfg(any(feature = "std", test))]
 			#[derive($crate::serde::Serialize, $crate::serde::Deserialize, Default)]
 			#[serde(rename_all = "camelCase")]
 			#[serde(deny_unknown_fields)]
+			#[serde(crate = "__genesis_config_serde_import__")]
 			pub struct $main {
 				$(
 					pub [< $snake $(_ $instance )? >]: $config,

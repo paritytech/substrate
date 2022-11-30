@@ -66,6 +66,7 @@ parameter_types! {
     pub const MaximumBlockLength: u32 = 2 * 1024;
     pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
+
 impl frame_system::Config for Test {
     type BaseCallFilter = ();
     type BlockWeights = ();
@@ -90,6 +91,7 @@ impl frame_system::Config for Test {
     type OnKilledAccount = ();
     type SystemWeightInfo = ();
     type SS58Prefix = ();
+    type OnSetCode = ();
 }
 
 impl pallet_balances::Config for Test {

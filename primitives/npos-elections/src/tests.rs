@@ -1148,7 +1148,11 @@ mod solution_type {
 
 	type TestAccuracy = Percent;
 
-	generate_solution_type!(pub struct TestSolutionCompact::<u32, u8, TestAccuracy>(16));
+	generate_solution_type!(pub struct TestSolutionCompact::<
+		VoterIndex = u32,
+		TargetIndex = u8,
+		Accuracy = TestAccuracy,
+	>(16));
 
 	#[allow(dead_code)]
 	mod __private {
@@ -1158,7 +1162,7 @@ mod solution_type {
 		use sp_arithmetic::Percent;
 		generate_solution_type!(
 			#[compact]
-			struct InnerTestSolutionCompact::<u32, u8, Percent>(12)
+			struct InnerTestSolutionCompact::<VoterIndex = u32, TargetIndex = u8, Accuracy = Percent>(12)
 		);
 	}
 
@@ -1166,7 +1170,11 @@ mod solution_type {
 	fn solution_struct_works_with_and_without_compact() {
 		// we use u32 size to make sure compact is smaller.
 		let without_compact = {
-			generate_solution_type!(pub struct InnerTestSolution::<u32, u32, Percent>(16));
+			generate_solution_type!(pub struct InnerTestSolution::<
+				VoterIndex = u32,
+				TargetIndex = u32,
+				Accuracy = Percent,
+			>(16));
 			let compact = InnerTestSolution {
 				votes1: vec![(2, 20), (4, 40)],
 				votes2: vec![
@@ -1180,7 +1188,11 @@ mod solution_type {
 		};
 
 		let with_compact = {
-			generate_solution_type!(#[compact] pub struct InnerTestSolutionCompact::<u32, u32, Percent>(16));
+			generate_solution_type!(#[compact] pub struct InnerTestSolutionCompact::<
+				VoterIndex = u32,
+				TargetIndex = u32,
+				Accuracy = Percent,
+			>(16));
 			let compact = InnerTestSolutionCompact {
 				votes1: vec![(2, 20), (4, 40)],
 				votes2: vec![

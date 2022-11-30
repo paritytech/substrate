@@ -303,6 +303,14 @@ impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra>
 	}
 }
 
+impl<Call, Extra> traits::ExtrinsicMetadata for TestXt<Call, Extra> where
+	Call: Codec + Sync + Send,
+	Extra: SignedExtension<AccountId=u64, Call=Call>,
+{
+	type SignedExtensions = Extra;
+	const VERSION: u8 = 0u8;
+}
+
 impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 	Call: 'static + Sized + Send + Sync + Clone + Eq + Codec + Debug + Dispatchable<Origin=Origin>,
 	Extra: SignedExtension<AccountId=u64, Call=Call>,

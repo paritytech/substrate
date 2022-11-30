@@ -170,6 +170,10 @@ pub mod pallet {
 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
 			unimplemented!();
 		}
+
+		fn is_inherent(_call: &Self::Call) -> bool {
+			unimplemented!();
+		}
 	}
 
 	#[derive(codec::Encode, sp_runtime::RuntimeDebug)]
@@ -260,6 +264,7 @@ impl frame_system::Config for Runtime {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 impl pallet::Config for Runtime {
 	type Event = Event;
@@ -706,4 +711,19 @@ fn metadata() {
 
 	pretty_assertions::assert_eq!(pallet_metadata, expected_pallet_metadata);
 	pretty_assertions::assert_eq!(pallet_instance1_metadata, expected_pallet_instance1_metadata);
+}
+
+#[test]
+fn test_pallet_info_access() {
+	assert_eq!(<System as frame_support::traits::PalletInfoAccess>::name(), "System");
+	assert_eq!(<Example as frame_support::traits::PalletInfoAccess>::name(), "Example");
+	assert_eq!(<Instance1Example as frame_support::traits::PalletInfoAccess>::name(), "Instance1Example");
+	assert_eq!(<Example2 as frame_support::traits::PalletInfoAccess>::name(), "Example2");
+	assert_eq!(<Instance1Example2 as frame_support::traits::PalletInfoAccess>::name(), "Instance1Example2");
+
+	assert_eq!(<System as frame_support::traits::PalletInfoAccess>::index(), 0);
+	assert_eq!(<Example as frame_support::traits::PalletInfoAccess>::index(), 1);
+	assert_eq!(<Instance1Example as frame_support::traits::PalletInfoAccess>::index(), 2);
+	assert_eq!(<Example2 as frame_support::traits::PalletInfoAccess>::index(), 3);
+	assert_eq!(<Instance1Example2 as frame_support::traits::PalletInfoAccess>::index(), 4);
 }

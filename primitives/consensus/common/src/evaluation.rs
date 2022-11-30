@@ -39,9 +39,6 @@ pub enum Error {
 	/// Proposal had wrong number.
 	#[error("Proposal had wrong number. Expected {expected:?}, got {got:?}")]
 	WrongNumber { expected: BlockNumber, got: BlockNumber },
-	/// Proposal exceeded the maximum size.
-	#[error("Proposal size {block_size} exceeds maximum allowed size of {max_block_size}.")]
-	ProposalTooLarge { block_size: usize, max_block_size: usize },
 }
 
 /// Attempt to evaluate a substrate block as a node block, returning error
@@ -50,16 +47,11 @@ pub fn evaluate_initial<Block: BlockT>(
 	proposal: &Block,
 	parent_hash: &<Block as BlockT>::Hash,
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
-	max_block_size: usize,
 ) -> Result<()> {
 
 	let encoded = Encode::encode(proposal);
 	let proposal = Block::decode(&mut &encoded[..])
 		.map_err(|e| Error::BadProposalFormat(e))?;
-
-	if encoded.len() > max_block_size {
-		return Err(Error::ProposalTooLarge { max_block_size, block_size: encoded.len() })
-	}
 
 	if *parent_hash != *proposal.header().parent_hash() {
 		return Err(Error::WrongParentHash {

@@ -22,9 +22,10 @@ use codec::{FullCodec, Decode, EncodeLike, Encode};
 use crate::{
 	storage::{
 		StorageAppend, StorageDecodeLength,
+		bounded_vec::{BoundedVec, BoundedVecValue},
 		types::{OptionQuery, QueryKindTrait, OnEmptyGetter},
 	},
-	traits::{GetDefault, StorageInstance},
+	traits::{GetDefault, StorageInstance, Get},
 };
 use frame_metadata::{DefaultByteGetter, StorageEntryModifier};
 use sp_std::prelude::*;
@@ -88,6 +89,34 @@ where
 	}
 	fn storage_prefix() -> &'static [u8] {
 		<Self as crate::storage::generator::StorageMap<Key, Value>>::storage_prefix()
+	}
+}
+
+impl<Prefix, Hasher, Key, QueryKind, OnEmpty, VecValue, VecBound>
+	StorageMap<Prefix, Hasher, Key, BoundedVec<VecValue, VecBound>, QueryKind, OnEmpty>
+where
+	Prefix: StorageInstance,
+	Hasher: crate::hash::StorageHasher,
+	Key: FullCodec,
+	QueryKind: QueryKindTrait<BoundedVec<VecValue, VecBound>, OnEmpty>,
+	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
+	VecValue: BoundedVecValue,
+	VecBound: Get<u32>,
+{
+	/// Try and append the given item to the map in the storage.
+	///
+	/// Is only available if `Value` of the map is [`BoundedVec`].
+	pub fn try_append<EncodeLikeItem, EncodeLikeKey>(
+		key: EncodeLikeKey,
+		item: EncodeLikeItem,
+	) -> Result<(), ()>
+	where
+		EncodeLikeKey: EncodeLike<Key> + Clone,
+		EncodeLikeItem: EncodeLike<VecValue>,
+	{
+		<Self as crate::storage::bounded_vec::TryAppendMap<Key, VecValue, VecBound>>::try_append(
+			key, item,
+		)
 	}
 }
 

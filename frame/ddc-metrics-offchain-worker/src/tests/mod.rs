@@ -334,7 +334,7 @@ fn should_run_contract() {
             100_000_000_000,
             call_data,
         );
-        match &contract_exec_result.exec_result {
+        match &contract_exec_result.result {
             Ok(res) => {
                 //println!("XXX Contract returned {:?}", res.data);
                 assert_eq!(res.data.len(), 8); // size of u64

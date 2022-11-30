@@ -152,8 +152,8 @@ impl<'a, T: Config> ContractModule<'a, T> {
 			for wasm_type in type_section.types() {
 				match wasm_type {
 					Type::Function(func_type) => {
-						let return_type = func_type.return_type();
-						for value_type in func_type.params().iter().chain(return_type.iter()) {
+						let return_type = func_type.results().get(0);
+						for value_type in func_type.params().iter().chain(return_type) {
 							match value_type {
 								ValueType::F32 | ValueType::F64 =>
 									return Err("use of floating point type in function types is forbidden"),
@@ -273,15 +273,17 @@ impl<'a, T: Config> ContractModule<'a, T> {
 
 			// Then check the signature.
 			// Both "call" and "deploy" has a () -> () function type.
+			// We still support () -> (i32) for backwards compatibility.
 			let func_ty_idx = func_entries.get(fn_idx as usize)
 				.ok_or_else(|| "export refers to non-existent function")?
 				.type_ref();
 			let Type::Function(ref func_ty) = types
 				.get(func_ty_idx as usize)
 				.ok_or_else(|| "function has a non-existent type")?;
-			if !func_ty.params().is_empty() ||
-				!(func_ty.return_type().is_none() ||
-					func_ty.return_type() == Some(ValueType::I32)) {
+			if !(
+				func_ty.params().is_empty() &&
+				(func_ty.results().is_empty() || func_ty.results() == [ValueType::I32])
+			) {
 				return Err("entry point has wrong signature");
 			}
 		}

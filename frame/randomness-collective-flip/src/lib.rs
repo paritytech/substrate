@@ -193,6 +193,7 @@ mod tests {
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
+		type OnSetCode = ();
 	}
 
 	fn new_test_ext() -> sp_io::TestExternalities {

@@ -36,7 +36,7 @@ pub trait Config: 'static + Eq + Clone {
 frame_support::decl_module! {
 	pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {
 		#[weight = 0]
-		fn noop(origin) {}
+		fn noop(_origin) {}
 	}
 }
 

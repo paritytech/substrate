@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{pin::Pin, time::Duration, collections::HashMap, any::Any, borrow::Cow};
+use std::{pin::Pin, time::Duration, collections::HashMap, borrow::Cow};
 use sc_client_api::ImportNotifications;
 use sp_runtime::{DigestItem, traits::Block as BlockT, generic::BlockId};
 use sp_consensus::{Proposal, BlockOrigin, BlockImportParams, import_queue::BoxBlockImport};
@@ -68,7 +68,8 @@ impl<Block, Algorithm, C, Proof> MiningWorker<Block, Algorithm, C, Proof> where
 	Block: BlockT,
 	C: sp_api::ProvideRuntimeApi<Block>,
 	Algorithm: PowAlgorithm<Block>,
-	Algorithm::Difficulty: 'static,
+	Algorithm::Difficulty: 'static + Send,
+	sp_api::TransactionFor<C, Block>: Send + 'static,
 {
 	/// Get the current best hash. `None` if the worker has just started or the client is doing
 	/// major syncing.
@@ -94,7 +95,7 @@ impl<Block, Algorithm, C, Proof> MiningWorker<Block, Algorithm, C, Proof> where
 
 	/// Submit a mined seal. The seal will be validated again. Returns true if the submission is
 	/// successful.
-	pub fn submit(&mut self, seal: Seal) -> bool {
+	pub async fn submit(&mut self, seal: Seal) -> bool {
 		if let Some(build) = self.build.take() {
 			match self.algorithm.verify(
 				&BlockId::Hash(build.metadata.best_hash),
@@ -135,10 +136,10 @@ impl<Block, Algorithm, C, Proof> MiningWorker<Block, Algorithm, C, Proof> where
 
 			import_block.intermediates.insert(
 				Cow::from(INTERMEDIATE_KEY),
-				Box::new(intermediate) as Box<dyn Any>
+				Box::new(intermediate) as Box<_>,
 			);
 
-			match self.block_import.import_block(import_block, HashMap::default()) {
+			match self.block_import.import_block(import_block, HashMap::default()).await {
 				Ok(_) => {
 					info!(
 						target: "pow",

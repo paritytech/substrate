@@ -169,13 +169,13 @@ macro_rules! decl_tests {
 						&info_from_weight(1),
 						1,
 					).is_err());
-					assert!(<ChargeTransactionPayment<$test> as SignedExtension>::pre_dispatch(
+					assert_ok!(<ChargeTransactionPayment<$test> as SignedExtension>::pre_dispatch(
 						ChargeTransactionPayment::from(0),
 						&1,
 						CALL,
 						&info_from_weight(1),
 						1,
-					).is_ok());
+					));
 
 					Balances::set_lock(ID_1, &1, 10, WithdrawReasons::TRANSACTION_PAYMENT);
 					assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
@@ -394,7 +394,7 @@ macro_rules! decl_tests {
 		fn refunding_balance_should_work() {
 			<$ext_builder>::default().build().execute_with(|| {
 				let _ = Balances::deposit_creating(&1, 42);
-				assert!(Balances::mutate_account(&1, |a| a.reserved = 69).is_ok());
+				assert_ok!(Balances::mutate_account(&1, |a| a.reserved = 69));
 				Balances::unreserve(&1, 69);
 				assert_eq!(Balances::free_balance(1), 111);
 				assert_eq!(Balances::reserved_balance(1), 0);
@@ -669,7 +669,9 @@ macro_rules! decl_tests {
 					assert_eq!(Balances::reserved_balance(1), 50);
 
 					// Reserve some free balance
-					let _ = Balances::slash(&1, 1);
+					let res = Balances::slash(&1, 1);
+					assert_eq!(res, (NegativeImbalance::new(1), 0));
+
 					// The account should be dead.
 					assert_eq!(Balances::free_balance(1), 0);
 					assert_eq!(Balances::reserved_balance(1), 0);
@@ -727,7 +729,8 @@ macro_rules! decl_tests {
 						]
 					);
 
-					let _ = Balances::slash(&1, 1);
+					let res = Balances::slash(&1, 1);
+					assert_eq!(res, (NegativeImbalance::new(1), 0));
 
 					assert_eq!(
 						events(),
@@ -756,7 +759,8 @@ macro_rules! decl_tests {
 						]
 					);
 
-					let _ = Balances::slash(&1, 100);
+					let res = Balances::slash(&1, 100);
+					assert_eq!(res, (NegativeImbalance::new(100), 0));
 
 					assert_eq!(
 						events(),

@@ -195,7 +195,7 @@ pub fn extract_all_signature_types(items: &[ImplItem]) -> Vec<Type> {
 			ImplItem::Method(method) => Some(&method.sig),
 			_ => None,
 		})
-		.map(|sig| {
+		.flat_map(|sig| {
 			let ret_ty = match &sig.output {
 				ReturnType::Default => None,
 				ReturnType::Type(_, ty) => Some((**ty).clone()),
@@ -209,7 +209,6 @@ pub fn extract_all_signature_types(items: &[ImplItem]) -> Vec<Type> {
 				_ => (**ty).clone(),
 			}).chain(ret_ty)
 		})
-		.flatten()
 		.collect()
 }
 

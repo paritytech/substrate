@@ -16,7 +16,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 sp-application-crypto = { version = "3.0.0", default-features = false, path = "../../primitives/application-crypto" }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
-serde = { version = "1.0.101", optional = true }
 pallet-session = { version = "3.0.0", default-features = false, path = "../session" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
 frame-support = { version = "3.0.0", default-features = false, path = "../support" }
@@ -36,7 +35,6 @@ std = [
 	"sp-application-crypto/std",
 	"codec/std",
 	"sp-std/std",
-	"serde",
 	"sp-runtime/std",
 	"frame-support/std",
 	"sp-consensus-aura/std",
