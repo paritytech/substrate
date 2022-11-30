@@ -429,7 +429,7 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `account_reentrance_count`.
 	pub account_reentrance_count: u64,
 
-	/// Weight of calling `instantiation_count`.
+	/// Weight of calling `instantiation_nonce`.
 	pub instantiation_nonce: u64,
 
 	/// The type parameter is used in the default implementation.
