@@ -20,13 +20,10 @@
 //! Maintains trees of block overlays and allows discarding trees/roots
 //! The overlays are added in `insert` and removed in `canonicalize`.
 
-use super::{
-	to_meta_key, ChangeSet, CommitSet, DBValue, Error, Hash, MetaDb,
-	StateDbError,
-};
+use super::{to_meta_key, ChangeSet, CommitSet, DBValue, Error, Hash, MetaDb, StateDbError};
 use codec::{Decode, Encode};
 use log::trace;
-use std::{collections::{hash_map::Entry, HashMap, VecDeque}};
+use std::collections::{hash_map::Entry, HashMap, VecDeque};
 
 const NON_CANONICAL_JOURNAL: &[u8] = b"noncanonical_journal";
 pub(crate) const LAST_CANONICAL: &[u8] = b"last_canonical";

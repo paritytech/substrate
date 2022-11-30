@@ -51,11 +51,8 @@ impl Default for OutputFormat {
 }
 
 /// Builds the informant and returns a `Future` that drives the informant.
-pub async fn build<B: BlockT, C, N>(
-	client: Arc<C>,
-	network: N,
-	format: OutputFormat,
-) where
+pub async fn build<B: BlockT, C, N>(client: Arc<C>, network: N, format: OutputFormat)
+where
 	N: NetworkStatusProvider<B>,
 	C: UsageProvider<B> + HeaderMetadata<B> + BlockchainEvents<B>,
 	<C as HeaderMetadata<B>>::Error: Display,

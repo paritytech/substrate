@@ -290,9 +290,7 @@ pub struct StateDbSync<BlockHash: Hash, Key: Hash, D: MetaDb> {
 	ref_counting: bool,
 }
 
-impl<BlockHash: Hash, Key: Hash, D: MetaDb>
-	StateDbSync<BlockHash, Key, D>
-{
+impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDbSync<BlockHash, Key, D> {
 	fn new(
 		mode: PruningMode,
 		ref_counting: bool,
@@ -495,9 +493,7 @@ pub struct StateDb<BlockHash: Hash, Key: Hash, D: MetaDb> {
 	db: RwLock<StateDbSync<BlockHash, Key, D>>,
 }
 
-impl<BlockHash: Hash, Key: Hash, D: MetaDb>
-	StateDb<BlockHash, Key, D>
-{
+impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDb<BlockHash, Key, D> {
 	/// Create an instance of [`StateDb`].
 	pub fn open(
 		db: D,
