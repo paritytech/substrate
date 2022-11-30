@@ -2483,12 +2483,11 @@ benchmarks! {
 
 	// w_per_local = w_bench
 	call_per_local {
-		let r in 0 .. INSTR_BENCHMARK_BATCHES;
-		let max_locals = T::Schedule::get().limits.locals;
+		let l in 0 .. T::Schedule::get().limits.locals;
 		let mut call_body = body::plain(vec![
 				Instruction::End,
 		]);
-		body::inject_locals(&mut call_body, max_locals);
+		body::inject_locals(&mut call_body, l);
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
 			call_body: Some(call_body),
 			.. Default::default()
