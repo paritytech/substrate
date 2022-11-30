@@ -157,6 +157,7 @@ struct HostFn {
 	module: String,
 	name: String,
 	returns: HostFnReturn,
+	is_stable: bool,
 }
 
 enum HostFnReturn {
@@ -191,27 +192,34 @@ impl HostFn {
 		};
 
 		// process attributes
-		let msg = "only #[version(<u8>)] or #[unstable] attribute is allowed.";
+		let msg =
+			"only #[version(<u8>)], #[unstable] and #[prefixed_alias] attributes are allowed.";
 		let span = item.span();
 		let mut attrs = item.attrs.clone();
 		attrs.retain(|a| !(a.path.is_ident("doc") || a.path.is_ident("prefixed_alias")));
 		let name = item.sig.ident.to_string();
-		let module = match attrs.len() {
-			0 => Ok("seal0".to_string()),
-			1 => {
-				let attr = &attrs[0];
-				let ident = attr.path.get_ident().ok_or(err(span, msg))?.to_string();
-				match ident.as_str() {
-					"version" => {
-						let ver: syn::LitInt = attr.parse_args()?;
-						Ok(format!("seal{}", ver.base10_parse::<u8>().map_err(|_| err(span, msg))?))
-					},
-					"unstable" => Ok("__unstable__".to_string()),
-					_ => Err(err(span, msg)),
-				}
-			},
-			_ => Err(err(span, msg)),
-		}?;
+		let mut maybe_module = None;
+		let mut is_stable = true;
+		while let Some(attr) = attrs.pop() {
+			let ident = attr.path.get_ident().ok_or(err(span, msg))?.to_string();
+			match ident.as_str() {
+				"version" => {
+					if maybe_module.is_some() {
+						return Err(err(span, "#[version] can only be specified once"))
+					}
+					let ver: u8 =
+						attr.parse_args::<syn::LitInt>().and_then(|lit| lit.base10_parse())?;
+					maybe_module = Some(format!("seal{}", ver));
+				},
+				"unstable" => {
+					if !is_stable {
+						return Err(err(span, "#[unstable] can only be specified once"))
+					}
+					is_stable = false;
+				},
+				_ => return Err(err(span, msg)),
+			}
+		}
 
 		// process arguments: The first and second arg are treated differently (ctx, memory)
 		// they must exist and be `ctx: _` and `memory: _`.
@@ -299,7 +307,13 @@ impl HostFn {
 							_ => Err(err(arg1.span(), &msg)),
 						}?;
 
-						Ok(Self { item, module, name, returns })
+						Ok(Self {
+							item,
+							module: maybe_module.unwrap_or_else(|| "seal0".to_string()),
+							name,
+							returns,
+							is_stable,
+						})
 					},
 					_ => Err(err(span, &msg)),
 				}
@@ -392,7 +406,7 @@ fn expand_impls(def: &mut EnvDef) -> TokenStream2 {
 			<E::T as ::frame_system::Config>::AccountId:
 				::sp_core::crypto::UncheckedFrom<<E::T as ::frame_system::Config>::Hash> + ::core::convert::AsRef<[::core::primitive::u8]>,
 		{
-			fn define(store: &mut ::wasmi::Store<crate::wasm::Runtime<E>>, linker: &mut ::wasmi::Linker<crate::wasm::Runtime<E>>) -> Result<(), ::wasmi::errors::LinkerError> {
+			fn define(store: &mut ::wasmi::Store<crate::wasm::Runtime<E>>, linker: &mut ::wasmi::Linker<crate::wasm::Runtime<E>>, allow_unstable: bool) -> Result<(), ::wasmi::errors::LinkerError> {
 				#impls
 				Ok(())
 			}
@@ -400,7 +414,7 @@ fn expand_impls(def: &mut EnvDef) -> TokenStream2 {
 
 		impl crate::wasm::Environment<()> for Env
 		{
-			fn define(store: &mut ::wasmi::Store<()>, linker: &mut ::wasmi::Linker<()>) -> Result<(), ::wasmi::errors::LinkerError> {
+			fn define(store: &mut ::wasmi::Store<()>, linker: &mut ::wasmi::Linker<()>, allow_unstable: bool) -> Result<(), ::wasmi::errors::LinkerError> {
 				#dummy_impls
 				Ok(())
 			}
@@ -423,10 +437,7 @@ fn expand_functions(
 			f.returns.to_wasm_sig(),
 			&f.item.sig.output
 		);
-		let unstable_feat = match module.as_str() {
-			"__unstable__" => quote! { #[cfg(feature = "unstable-interface")] },
-			_ => quote! {},
-		};
+		let is_stable = f.is_stable;
 
 		// If we don't expand blocks (implementing for `()`) we change a few things:
 		// - We replace any code by unreachable!
@@ -466,16 +477,18 @@ fn expand_functions(
 			quote! { #[allow(unused_variables)] }
 		};
 
-
 		quote! {
-			#unstable_feat
-			#allow_unused
-			linker.define(#module, #name, ::wasmi::Func::wrap(&mut*store, |mut __caller__: ::wasmi::Caller<#host_state>, #( #params, )*| -> #wasm_output {
-				let mut func = #inner;
-				func()
-					.map_err(#map_err)
-					.map(::core::convert::Into::into)
-			}))?;
+			// We need to allow unstable functions when runtime benchmarks are performed because
+			// we generate the weights even when those interfaces are not enabled.
+			if ::core::cfg!(feature = "runtime-benchmarks") || #is_stable || allow_unstable {
+				#allow_unused
+				linker.define(#module, #name, ::wasmi::Func::wrap(&mut*store, |mut __caller__: ::wasmi::Caller<#host_state>, #( #params, )*| -> #wasm_output {
+					let mut func = #inner;
+					func()
+						.map_err(#map_err)
+						.map(::core::convert::Into::into)
+				}))?;
+			}
 		}
 	});
 	quote! {
@@ -496,13 +509,15 @@ fn expand_functions(
 /// ```nocompile
 /// #[define_env]
 /// pub mod some_env {
-/// 	fn some_host_fn(ctx: _, memory: _, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<(), TrapReason> {
+/// 	fn foo(ctx: _, memory: _, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<(), TrapReason> {
 /// 		ctx.some_host_fn(KeyType::Fix, key_ptr, value_ptr, value_len).map(|_| ())
 /// 	}
 /// }
 /// ```
-/// This example will expand to the `some_host_fn()` defined in the wasm module named `seal0`.
-/// To define a host function in `seal1` and `__unstable__` modules, it should be annotated with the
+/// This example will expand to the `foo()` defined in the wasm module named `seal0`. This is
+/// because the module `seal0` is the default when no module is specified.
+///
+/// To define a host function in `seal2` and `seal3` modules, it should be annotated with the
 /// appropriate attribute as follows:
 ///
 /// ## Example
@@ -510,17 +525,20 @@ fn expand_functions(
 /// ```nocompile
 /// #[define_env]
 /// pub mod some_env {
-/// 	#[version(1)]
-/// 	fn some_host_fn(ctx: _, memory: _, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<ReturnCode, TrapReason> {
+/// 	#[version(2)]
+/// 	fn foo(ctx: _, memory: _, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<ReturnCode, TrapReason> {
 /// 		ctx.some_host_fn(KeyType::Fix, key_ptr, value_ptr, value_len).map(|_| ())
 /// 	}
 ///
+/// 	#[version(3)]
 /// 	#[unstable]
-/// 	fn some_host_fn(ctx: _, memory: _, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<u32, TrapReason> {
+/// 	fn bar(ctx: _, memory: _, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<u32, TrapReason> {
 /// 		ctx.some_host_fn(KeyType::Fix, key_ptr, value_ptr, value_len).map(|_| ())
 /// 	}
 /// }
 /// ```
+/// The function `bar` is additionally annotated with `unstable` which removes it from the stable
+/// interface. Check out the README to learn about unstable functions.
 ///
 /// In legacy versions of pallet_contracts, it was a naming convention that all host functions had
 /// to be named with the `seal_` prefix. For the sake of backwards compatibility, each host function
@@ -534,21 +552,21 @@ fn expand_functions(
 /// pub mod some_env {
 /// 	#[version(1)]
 /// 	#[prefixed_alias]
-/// 	fn some_host_fn(ctx: _, memory: _, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<ReturnCode, TrapReason> {
+/// 	fn foo(ctx: _, memory: _, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<ReturnCode, TrapReason> {
 /// 		ctx.some_host_fn(KeyType::Fix, key_ptr, value_ptr, value_len).map(|_| ())
 /// 	}
 ///
-/// 	#[unstable]
-/// 	fn some_host_fn(ctx: _, memory: _, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<u32, TrapReason> {
+/// 	#[version(42)]
+/// 	fn bar(ctx: _, memory: _, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<u32, TrapReason> {
 /// 		ctx.some_host_fn(KeyType::Fix, key_ptr, value_ptr, value_len).map(|_| ())
 /// 	}
 /// }
 /// ```
 ///
 /// In this example, the following host functions will be generated by the macro:
-/// - `some_host_fn()` in module `seal1`,
-/// - `seal_some_host_fn()` in module `seal1`,
-/// - `some_host_fn()` in module `__unstable__`.
+/// - `foo()` in module `seal1`,
+/// - `seal_foo()` in module `seal1`,
+/// - `bar()` in module `seal42`.
 ///
 /// Only following return types are allowed for the host functions defined with the macro:
 /// - `Result<(), TrapReason>`,
