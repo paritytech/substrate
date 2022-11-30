@@ -746,10 +746,8 @@ mod tests {
 
 	#[test]
 	fn block_record_unavailable() {
-		let (mut db, state_db) = make_test_db(PruningMode::Constrained(Constraints {
-			max_blocks: Some(1),
-			max_mem: None,
-		}));
+		let (mut db, state_db) =
+			make_test_db(PruningMode::Constrained(Constraints { max_blocks: Some(1) }));
 		// import 2 blocks
 		for i in &[5, 6] {
 			db.commit(
@@ -783,19 +781,13 @@ mod tests {
 
 	#[test]
 	fn prune_window_0() {
-		let (db, _) = make_test_db(PruningMode::Constrained(Constraints {
-			max_blocks: Some(0),
-			max_mem: None,
-		}));
+		let (db, _) = make_test_db(PruningMode::Constrained(Constraints { max_blocks: Some(0) }));
 		assert!(db.data_eq(&make_db(&[21, 3, 922, 94])));
 	}
 
 	#[test]
 	fn prune_window_1() {
-		let (db, sdb) = make_test_db(PruningMode::Constrained(Constraints {
-			max_blocks: Some(1),
-			max_mem: None,
-		}));
+		let (db, sdb) = make_test_db(PruningMode::Constrained(Constraints { max_blocks: Some(1) }));
 		assert_eq!(sdb.is_pruned(&H256::from_low_u64_be(0), 0), IsPruned::Pruned);
 		assert_eq!(sdb.is_pruned(&H256::from_low_u64_be(1), 1), IsPruned::Pruned);
 		assert_eq!(sdb.is_pruned(&H256::from_low_u64_be(21), 2), IsPruned::Pruned);
@@ -805,10 +797,7 @@ mod tests {
 
 	#[test]
 	fn prune_window_2() {
-		let (db, sdb) = make_test_db(PruningMode::Constrained(Constraints {
-			max_blocks: Some(2),
-			max_mem: None,
-		}));
+		let (db, sdb) = make_test_db(PruningMode::Constrained(Constraints { max_blocks: Some(2) }));
 		assert_eq!(sdb.is_pruned(&H256::from_low_u64_be(0), 0), IsPruned::Pruned);
 		assert_eq!(sdb.is_pruned(&H256::from_low_u64_be(1), 1), IsPruned::Pruned);
 		assert_eq!(sdb.is_pruned(&H256::from_low_u64_be(21), 2), IsPruned::NotPruned);
@@ -832,7 +821,7 @@ mod tests {
 				)
 				.unwrap(),
 		);
-		let new_mode = PruningMode::Constrained(Constraints { max_blocks: Some(2), max_mem: None });
+		let new_mode = PruningMode::Constrained(Constraints { max_blocks: Some(2) });
 		let state_db_open_result: Result<(_, StateDb<H256, H256, TestDb>), _> =
 			StateDb::open(db.clone(), Some(new_mode), false, false);
 		assert!(state_db_open_result.is_err());
