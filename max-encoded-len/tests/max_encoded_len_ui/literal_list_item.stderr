@@ -1,0 +1,18 @@
+error: expected a path item, not a literal
+ --> $DIR/literal_list_item.rs:5:25
+  |
+5 | #[max_encoded_len_crate("frame_support::max_encoded_len")]
+  |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no function or associated item named `max_encoded_len` found for struct `Example` in the current scope
+ --> $DIR/literal_list_item.rs:9:19
+  |
+6 | struct Example;
+  | --------------- function or associated item `max_encoded_len` not found for this
+...
+9 |     let _ = Example::max_encoded_len();
+  |                      ^^^^^^^^^^^^^^^ function or associated item not found in `Example`
+  |
+  = help: items from traits can only be used if the trait is implemented and in scope
+  = note: the following trait defines an item `max_encoded_len`, perhaps you need to implement it:
+          candidate #1: `MaxEncodedLen`

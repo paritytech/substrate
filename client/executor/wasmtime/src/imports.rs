@@ -118,7 +118,12 @@ fn resolve_memory_import(
 	}
 
 	let memory_ty = MemoryType::new(Limits::new(initial, requested_memory_ty.limits().max()));
-	let memory = Memory::new(store, memory_ty);
+	let memory = Memory::new(store, memory_ty).map_err(|e| {
+		WasmError::Other(format!(
+			"failed to create a memory during resolving of memory import: {}",
+			e,
+		))
+	})?;
 	Ok(Extern::Memory(memory))
 }
 

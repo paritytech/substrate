@@ -272,7 +272,7 @@ where
 
 	/// Iter over all value of the storage.
 	///
-	/// NOTE: If a value failed to decode becaues storage is corrupted then it is skipped.
+	/// NOTE: If a value failed to decode because storage is corrupted then it is skipped.
 	pub fn iter_values() -> crate::storage::PrefixIterator<Value> {
 		<Self as crate::storage::StoragePrefixedMap<Value>>::iter_values()
 	}

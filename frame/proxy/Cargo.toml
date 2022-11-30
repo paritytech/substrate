@@ -20,6 +20,7 @@ sp-core = { version = "3.0.0", default-features = false, path = "../../primitive
 sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
+max-encoded-len = { version = "3.0.0", default-features = false, path = "../../max-encoded-len", features = [ "derive" ] }
 
 frame-benchmarking = { version = "3.1.0", default-features = false, path = "../benchmarking", optional = true }
 
@@ -36,7 +37,8 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"sp-std/std",
-	"sp-io/std"
+	"sp-io/std",
+	"max-encoded-len/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",

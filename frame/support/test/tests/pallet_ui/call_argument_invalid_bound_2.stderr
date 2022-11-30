@@ -4,7 +4,7 @@ error[E0277]: the trait bound `<T as pallet::Config>::Bar: WrapperTypeDecode` is
 20  |         fn foo(origin: OriginFor<T>, bar: T::Bar) -> DispatchResultWithPostInfo {
     |                                           ^ the trait `WrapperTypeDecode` is not implemented for `<T as pallet::Config>::Bar`
     |
-   ::: /usr/local/cargo/registry/src/github.com-1ecc6299db9ec823/parity-scale-codec-2.1.0/src/codec.rs:277:18
+   ::: /usr/local/cargo/registry/src/github.com-1ecc6299db9ec823/parity-scale-codec-2.1.1/src/codec.rs:277:18
     |
 277 |     fn decode<I: Input>(input: &mut I) -> Result<Self, Error>;
     |                  ----- required by this bound in `pallet::_::_parity_scale_codec::Decode::decode`
@@ -17,7 +17,7 @@ error[E0277]: the trait bound `<T as pallet::Config>::Bar: WrapperTypeEncode` is
 20  |         fn foo(origin: OriginFor<T>, bar: T::Bar) -> DispatchResultWithPostInfo {
     |                                           ^ the trait `WrapperTypeEncode` is not implemented for `<T as pallet::Config>::Bar`
     |
-   ::: /usr/local/cargo/registry/src/github.com-1ecc6299db9ec823/parity-scale-codec-2.1.0/src/codec.rs:216:21
+   ::: /usr/local/cargo/registry/src/github.com-1ecc6299db9ec823/parity-scale-codec-2.1.1/src/codec.rs:216:21
     |
 216 |     fn encode_to<T: Output + ?Sized>(&self, dest: &mut T) {
     |                     ------ required by this bound in `encode_to`

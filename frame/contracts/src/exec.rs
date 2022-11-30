@@ -686,8 +686,11 @@ where
 					contract
 				} else {
 					<ContractInfoOf<T>>::get(&dest)
-						.and_then(|contract| contract.get_alive())
-						.ok_or((Error::<T>::NotCallable.into(), 0))?
+						.ok_or((<Error<T>>::ContractNotFound.into(), 0))
+						.and_then(|contract|
+							contract.get_alive()
+								.ok_or((<Error<T>>::ContractIsTombstone.into(), 0))
+						)?
 				};
 
 				let executable = E::from_storage(contract.code_hash, schedule, gas_meter)
@@ -701,7 +704,7 @@ where
 				let contract = Rent::<T, E>
 					::charge(&dest, contract, executable.occupied_storage())
 					.map_err(|e| (e.into(), executable.code_len()))?
-					.ok_or((Error::<T>::NotCallable.into(), executable.code_len()))?;
+					.ok_or((Error::<T>::RentNotPaid.into(), executable.code_len()))?;
 				(dest, contract, executable, ExportedFunction::Call)
 			}
 			FrameArgs::Instantiate{sender, trie_seed, executable, salt} => {
@@ -791,7 +794,7 @@ where
 			let code_len = executable.code_len();
 
 			// Every call or instantiate also optionally transferres balance.
-			self.initial_transfer().map_err(|e| (ExecError::from(e), 0))?;
+			self.initial_transfer().map_err(|e| (ExecError::from(e), code_len))?;
 
 			// Call into the wasm blob.
 			let output = executable.execute(
@@ -954,12 +957,23 @@ where
 
 	// The transfer as performed by a call or instantiate.
 	fn initial_transfer(&self) -> DispatchResult {
+		let frame = self.top_frame();
+		let value = frame.value_transferred;
+		let subsistence_threshold = <Contracts<T>>::subsistence_threshold();
+
+		// If the value transferred to a new contract is less than the subsistence threshold
+		// we can error out early. This avoids executing the constructor in cases where
+		// we already know that the contract has too little balance.
+		if frame.entry_point == ExportedFunction::Constructor && value < subsistence_threshold {
+			return Err(<Error<T>>::NewContractNotFunded.into());
+		}
+
 		Self::transfer(
 			self.caller_is_origin(),
 			false,
 			self.caller(),
-			&self.top_frame().account_id,
-			self.top_frame().value_transferred,
+			&frame.account_id,
+			value,
 		)
 	}
 
@@ -2005,7 +2019,7 @@ mod tests {
 					ctx.ext.instantiate(
 						0,
 						dummy_ch,
-						15u64,
+						Contracts::<Test>::subsistence_threshold(),
 						vec![],
 						&[],
 					),
@@ -2286,7 +2300,7 @@ mod tests {
 		let code = MockLoader::insert(Constructor, |ctx, _| {
 			assert_matches!(
 				ctx.ext.call(0, ctx.ext.address().clone(), 0, vec![]),
-				Err((ExecError{error, ..}, _)) if error == <Error<Test>>::NotCallable.into()
+				Err((ExecError{error, ..}, _)) if error == <Error<Test>>::ContractNotFound.into()
 			);
 			exec_success()
 		});

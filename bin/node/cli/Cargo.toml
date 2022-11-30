@@ -89,7 +89,7 @@ frame-support = { version = "3.0.0", default-features = false, path = "../../../
 pallet-im-online = { version = "3.0.0", default-features = false, path = "../../../frame/im-online" }
 pallet-authority-discovery = { version = "3.0.0", path = "../../../frame/authority-discovery" }
 pallet-staking = { version = "3.0.0", path = "../../../frame/staking" }
-pallet-grandpa = { version = "3.0.0", path = "../../../frame/grandpa" }
+pallet-grandpa = { version = "3.1.0", path = "../../../frame/grandpa" }
 
 # node-specific dependencies
 node-runtime = { version = "2.0.0", path = "../runtime" }

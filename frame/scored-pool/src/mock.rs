@@ -21,7 +21,7 @@ use super::*;
 use crate as pallet_scored_pool;
 
 use std::cell::RefCell;
-use frame_support::{parameter_types, ord_parameter_types};
+use frame_support::{parameter_types, ord_parameter_types, traits::GenesisBuild};
 use sp_core::H256;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup}, testing::Header,
@@ -160,7 +160,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 /// Fetch an entity from the pool, if existent.
 pub fn fetch_from_pool(who: u64) -> Option<(u64, Option<u64>)> {
-	<Module<Test>>::pool()
+	<Pallet<Test>>::pool()
 		.into_iter()
 		.find(|item| item.0 == who)
 }
@@ -168,7 +168,7 @@ pub fn fetch_from_pool(who: u64) -> Option<(u64, Option<u64>)> {
 /// Find an entity in the pool.
 /// Returns its position in the `Pool` vec, if existent.
 pub fn find_in_pool(who: u64) -> Option<usize> {
-	<Module<Test>>::pool()
+	<Pallet<Test>>::pool()
 		.into_iter()
 		.position(|item| item.0 == who)
 }

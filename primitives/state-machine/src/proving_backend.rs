@@ -328,7 +328,7 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		self.0.child_storage_root(child_info, delta)
 	}
 
-	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats) { }
+	fn register_overlay_stats(&self, _stats: &crate::stats::StateMachineStats) { }
 
 	fn usage_info(&self) -> crate::stats::UsageInfo {
 		self.0.usage_info()

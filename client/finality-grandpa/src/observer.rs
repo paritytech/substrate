@@ -156,7 +156,6 @@ where
 /// already been instantiated with `block_import`.
 /// NOTE: this is currently not part of the crate's public API since we don't consider
 /// it stable enough to use on a live network.
-#[allow(unused)]
 pub fn run_grandpa_observer<BE, Block: BlockT, Client, N, SC>(
 	config: Config,
 	link: LinkHalf<Block, Client, SC>,

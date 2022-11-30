@@ -820,8 +820,8 @@ mod tests {
 		};
 	}
 
-	// Todo: Enable this test when polkadot-v0.9.3 is merged
-	// https://github.com/paritytech/substrate/tree/polkadot-v0.9.3
+	// This test is flaky: https://github.com/paritytech/substrate/issues/5380
+	// It should be fixed in 0.9.3 but it doesn't: https://github.com/paritytech/substrate/pull/6038
 	#[ignore]
 	#[test]
 	fn request_write_body_invalid_call() {

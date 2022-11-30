@@ -54,7 +54,7 @@ use sp_staking::{
 	SessionIndex,
 };
 
-use super::{Call, Module, Config};
+use super::{Call, Pallet, Config};
 
 /// A trait with utility methods for handling equivocation reports in GRANDPA.
 /// The offence type is generic, and the trait provides , reporting an offence
@@ -203,7 +203,7 @@ pub struct GrandpaTimeSlot {
 /// A `ValidateUnsigned` implementation that restricts calls to `report_equivocation_unsigned`
 /// to local calls (i.e. extrinsics generated on this node) or that already in a block. This
 /// guarantees that only block authors can include unsigned equivocation reports.
-impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
+impl<T: Config> frame_support::unsigned::ValidateUnsigned for Pallet<T> {
 	type Call = Call<T>;
 	fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 		if let Call::report_equivocation_unsigned(equivocation_proof, key_owner_proof) = call {

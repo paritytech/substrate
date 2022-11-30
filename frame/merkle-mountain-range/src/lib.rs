@@ -154,7 +154,7 @@ decl_storage! {
 decl_module! {
 	/// A public part of the pallet.
 	pub struct Module<T: Config<I>, I: Instance = DefaultInstance> for enum Call where origin: T::Origin {
-		fn on_initialize(n: T::BlockNumber) -> Weight {
+		fn on_initialize(_n: T::BlockNumber) -> Weight {
 			use primitives::LeafDataProvider;
 			let leaves = Self::mmr_leaves();
 			let peaks_before = mmr::utils::NodesUtils::new(leaves).number_of_peaks();

@@ -123,10 +123,11 @@ mod voting_rule;
 
 pub use authorities::{AuthoritySet, AuthoritySetChanges, SharedAuthoritySet};
 pub use aux_schema::best_justification;
-pub use finality_proof::{FinalityProof, FinalityProofProvider, FinalityProofError};
-pub use notification::{GrandpaJustificationSender, GrandpaJustificationStream};
-pub use import::{find_scheduled_change, find_forced_change, GrandpaBlockImport};
+pub use finality_proof::{FinalityProof, FinalityProofError, FinalityProofProvider};
+pub use import::{find_forced_change, find_scheduled_change, GrandpaBlockImport};
 pub use justification::GrandpaJustification;
+pub use notification::{GrandpaJustificationSender, GrandpaJustificationStream};
+pub use observer::run_grandpa_observer;
 pub use voting_rule::{
 	BeforeBestBlockBy, ThreeQuartersOfTheUnfinalizedChain, VotingRule, VotingRuleResult,
 	VotingRulesBuilder,
@@ -134,9 +135,9 @@ pub use voting_rule::{
 pub use finality_grandpa::voter::report;
 
 use aux_schema::PersistentData;
+use communication::{Network as NetworkT, NetworkBridge};
 use environment::{Environment, VoterSetState};
 use until_imported::UntilGlobalMessageBlocksImported;
-use communication::{NetworkBridge, Network as NetworkT};
 use sp_finality_grandpa::{AuthorityList, AuthoritySignature, SetId};
 
 // Re-export these two because it's just so damn convenient.
@@ -265,8 +266,8 @@ pub struct Config {
 	/// protocol (we will only issue catch-up requests to authorities when the
 	/// observer protocol is enabled).
 	pub observer_enabled: bool,
-	/// Whether the node is running as an authority (i.e. running the full GRANDPA protocol).
-	pub is_authority: bool,
+	/// The role of the local node (i.e. authority, full-node or light).
+	pub local_role: sc_network::config::Role,
 	/// Some local identifier of the voter.
 	pub name: Option<String>,
 	/// The keystore that manages the keys of this node.

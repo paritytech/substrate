@@ -1,13 +1,14 @@
 #!/bin/bash
 
 set -eu
+
 # API trigger another project's pipeline
 echo "Triggering Simnet pipeline."
 
 curl --silent \
     -X POST \
     -F "token=${CI_JOB_TOKEN}" \
-    -F "ref=master" \
+    -F "ref=v3" `# trigger the pinned version of simnet CI config` \
     -F "variables[TRGR_PROJECT]=${TRGR_PROJECT}" \
     -F "variables[TRGR_REF]=${TRGR_REF}" \
     -F "variables[IMAGE_NAME]=${IMAGE_NAME}" \
@@ -38,9 +39,9 @@ for i in $(seq 1 360); do
     STATUS=$(get_status);
     echo "Triggered pipeline status is ${STATUS}";
     if [[ ${STATUS} =~ ^(pending|running|created)$ ]]; then
-        echo "${STATUS}"...";
+        echo;
     elif [[ ${STATUS} =~ ^(failed|canceled|skipped|manual)$ ]]; then
-        echo "Oh noes! Something's broken in: ${PIPELINE_URL}"; exit 1;
+        echo "Something's broken in: ${PIPELINE_URL}"; exit 1;
     elif [[ ${STATUS} =~ ^(success)$ ]]; then
         echo "Look how green it is: ${PIPELINE_URL}"; exit 0;
     else

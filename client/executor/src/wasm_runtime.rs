@@ -321,7 +321,7 @@ pub fn create_wasm_runtime_with_code(
 		#[cfg(feature = "wasmtime")]
 		WasmExecutionMethod::Compiled => {
 			sc_executor_wasmtime::create_runtime(
-				sc_executor_wasmtime::CodeSupplyMode::Verbatim { blob },
+				blob,
 				sc_executor_wasmtime::Config {
 					heap_pages: heap_pages as u32,
 					allow_missing_func_imports,
@@ -492,7 +492,7 @@ mod tests {
 			authoring_version: 1,
 			spec_version: 1,
 			impl_version: 1,
-			apis: sp_api::create_apis_vec!([(Core::<Block>::ID, 1)]),
+			apis: sp_api::create_apis_vec!([(<dyn Core::<Block>>::ID, 1)]),
 		};
 
 		let version = decode_version(&old_runtime_version.encode()).unwrap();
@@ -507,7 +507,7 @@ mod tests {
 			authoring_version: 1,
 			spec_version: 1,
 			impl_version: 1,
-			apis: sp_api::create_apis_vec!([(Core::<Block>::ID, 3)]),
+			apis: sp_api::create_apis_vec!([(<dyn Core::<Block>>::ID, 3)]),
 		};
 
 		decode_version(&old_runtime_version.encode()).unwrap_err();
@@ -521,7 +521,7 @@ mod tests {
 			authoring_version: 1,
 			spec_version: 1,
 			impl_version: 1,
-			apis: sp_api::create_apis_vec!([(Core::<Block>::ID, 3)]),
+			apis: sp_api::create_apis_vec!([(<dyn Core::<Block>>::ID, 3)]),
 			transaction_version: 3,
 		};
 

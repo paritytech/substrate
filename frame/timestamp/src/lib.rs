@@ -116,7 +116,7 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		/// Type used for expressing timestamp.
 		type Moment: Parameter + Default + AtLeast32Bit
-			+ Scale<Self::BlockNumber, Output = Self::Moment> + Copy;
+			+ Scale<Self::BlockNumber, Output = Self::Moment> + Copy + MaxEncodedLen;
 
 		/// Something which can be notified when the timestamp is set. Set this to `()` if not needed.
 		type OnTimestampSet: OnTimestampSet<Self::Moment>;
@@ -134,6 +134,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	/// Current time for the current block.

@@ -204,7 +204,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	/// Register stats from overlay of state machine.
 	///
 	/// By default nothing is registered.
-	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats);
+	fn register_overlay_stats(&self, _stats: &crate::stats::StateMachineStats);
 
 	/// Query backend usage statistics (i/o, memory)
 	///
@@ -249,86 +249,6 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	/// Estimate proof size
 	fn proof_size(&self) -> Option<u32> {
 		unimplemented!()
-	}
-}
-
-impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
-	type Error = T::Error;
-	type Transaction = T::Transaction;
-	type TrieBackendStorage = T::TrieBackendStorage;
-
-	fn storage(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
-		(*self).storage(key)
-	}
-
-	fn child_storage(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Result<Option<StorageKey>, Self::Error> {
-		(*self).child_storage(child_info, key)
-	}
-
-	fn apply_to_child_keys_while<F: FnMut(&[u8]) -> bool>(
-		&self,
-		child_info: &ChildInfo,
-		f: F,
-	) {
-		(*self).apply_to_child_keys_while(child_info, f)
-	}
-
-	fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
-		(*self).next_storage_key(key)
-	}
-
-	fn next_child_storage_key(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Result<Option<StorageKey>, Self::Error> {
-		(*self).next_child_storage_key(child_info, key)
-	}
-
-	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
-		(*self).for_keys_with_prefix(prefix, f)
-	}
-
-	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
-		&self,
-		child_info: &ChildInfo,
-		prefix: &[u8],
-		f: F,
-	) {
-		(*self).for_child_keys_with_prefix(child_info, prefix, f)
-	}
-
-	fn storage_root<'b>(
-		&self,
-		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
-	) -> (H::Out, Self::Transaction) where H::Out: Ord {
-		(*self).storage_root(delta)
-	}
-
-	fn child_storage_root<'b>(
-		&self,
-		child_info: &ChildInfo,
-		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
-	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord {
-		(*self).child_storage_root(child_info, delta)
-	}
-
-	fn pairs(&self) -> Vec<(StorageKey, StorageValue)> {
-		(*self).pairs()
-	}
-
-	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
-		(*self).for_key_values_with_prefix(prefix, f);
-	}
-
-	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats) {	}
-
-	fn usage_info(&self) -> UsageInfo {
-		(*self).usage_info()
 	}
 }
 

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,9 +15,38 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! `trait MaxEncodedLen` bounds the max encoded length of items.
+
+#![cfg_attr(not(feature = "std"), no_std)]
+
 use codec::{Compact, Encode};
 use impl_trait_for_tuples::impl_for_tuples;
-use sp_std::{mem, marker::PhantomData};
+use core::{mem, marker::PhantomData};
+use primitive_types::{H160, H256, H512};
+
+/// Derive macro for `MaxEncodedLen`.
+///
+/// ```
+/// # use max_encoded_len::MaxEncodedLen;
+/// # use codec::Encode;
+/// #[derive(Encode, MaxEncodedLen)]
+/// struct Example;
+/// ```
+///
+/// Sometimes the `MaxEncodedLen` trait and macro are accessed without explicitly importing its
+/// crate, notably via the `frame_support::max_encoded_len` re-binding. In these circumstances,
+/// the derive macro needs some help to understand where its crate should be:
+///
+/// ```
+/// # use codec::Encode;
+/// use frame_support::max_encoded_len::MaxEncodedLen;
+///
+/// #[derive(Encode, MaxEncodedLen)]
+/// #[max_encoded_len_crate(frame_support::max_encoded_len)]
+/// struct Example;
+/// ```
+#[cfg(feature = "derive")]
+pub use max_encoded_len_derive::MaxEncodedLen;
 
 /// Items implementing `MaxEncodedLen` have a statically known maximum encoded size.
 ///
@@ -42,7 +71,7 @@ macro_rules! impl_primitives {
 	};
 }
 
-impl_primitives!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, bool);
+impl_primitives!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, bool, H160, H256, H512);
 
 macro_rules! impl_compact {
 	($( $t:ty => $e:expr; )*) => {
@@ -57,15 +86,15 @@ macro_rules! impl_compact {
 }
 
 impl_compact!(
-	// https://github.com/paritytech/parity-scale-codec/blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/src/compact.rs#L261
+	// github.com/paritytech/parity-scale-codec/blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/src/compact.rs#L261
 	u8 => 2;
-	// https://github.com/paritytech/parity-scale-codec/blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/src/compact.rs#L291
+	// github.com/paritytech/parity-scale-codec/blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/src/compact.rs#L291
 	u16 => 4;
-	// https://github.com/paritytech/parity-scale-codec/blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/src/compact.rs#L326
+	// github.com/paritytech/parity-scale-codec/blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/src/compact.rs#L326
 	u32 => 5;
-	// https://github.com/paritytech/parity-scale-codec/blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/src/compact.rs#L369
+	// github.com/paritytech/parity-scale-codec/blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/src/compact.rs#L369
 	u64 => 9;
-	// https://github.com/paritytech/parity-scale-codec/blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/src/compact.rs#L413
+	// github.com/paritytech/parity-scale-codec/blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/src/compact.rs#L413
 	u128 => 17;
 );
 

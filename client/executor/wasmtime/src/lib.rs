@@ -24,4 +24,6 @@ mod runtime;
 mod state_holder;
 mod util;
 
-pub use runtime::{create_runtime, prepare_runtime_artifact, CodeSupplyMode, Config, Semantics};
+pub use runtime::{
+	create_runtime, create_runtime_from_artifact, prepare_runtime_artifact, Config, Semantics,
+};

@@ -89,6 +89,8 @@ pallet-erc721 = { version = "2.0.0", default-features = false, path = "../../../
 pallet-erc20 = { version = "2.0.0", default-features = false, path = "../../../frame/erc20" }
 pallet-ddc-metrics-offchain-worker = { version = "2.0.0", default-features = false, path = "../../../frame/ddc-metrics-offchain-worker" }
 
+max-encoded-len = { version = "3.0.0", default-features = false, path = "../../../max-encoded-len", features = [ "derive" ] }
+
 [build-dependencies]
 substrate-wasm-builder = { version = "4.0.0", path = "../../../utils/wasm-builder" }
 
@@ -159,6 +161,7 @@ std = [
 	"log/std",
 	"frame-try-runtime/std",
 	"sp-npos-elections/std",
+	"max-encoded-len/std",
 	"pallet-ddc-metrics-offchain-worker/std",
 ]
 runtime-benchmarks = [

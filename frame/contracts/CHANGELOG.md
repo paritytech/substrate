@@ -49,7 +49,7 @@ This version constitutes the first release that brings any stability guarantees 
 [#8014](https://github.com/paritytech/substrate/pull/8014)
 
 - Charge rent for code stored on the chain in addition to the already existing
-rent that is payed for data storage.
+rent that is paid for data storage.
 [#7935](https://github.com/paritytech/substrate/pull/7935)
 
 - Allow the runtime to configure per storage item costs in addition

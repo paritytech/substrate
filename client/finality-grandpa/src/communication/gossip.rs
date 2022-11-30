@@ -100,7 +100,8 @@ use crate::{environment, CatchUp, CompactCommit, SignedMessage};
 use super::{cost, benefit, Round, SetId};
 
 use std::collections::{HashMap, VecDeque, HashSet};
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use wasm_timer::Instant;
 
 const REBROADCAST_AFTER: Duration = Duration::from_secs(60 * 5);
 const CATCH_UP_REQUEST_TIMEOUT: Duration = Duration::from_secs(45);
@@ -494,10 +495,10 @@ impl<N: Ord> Peers<N> {
 		match role {
 			ObservedRole::Authority if self.lucky_authorities.len() < MIN_LUCKY => {
 				self.lucky_authorities.insert(who.clone());
-			},
-			ObservedRole::Full | ObservedRole::Light if self.lucky_peers.len() < MIN_LUCKY => {
+			}
+			ObservedRole::Full if self.lucky_peers.len() < MIN_LUCKY => {
 				self.lucky_peers.insert(who.clone());
-			},
+			}
 			_ => {}
 		}
 		self.inner.insert(who, PeerInfo::new(role));
@@ -562,27 +563,43 @@ impl<N: Ord> Peers<N> {
 		self.inner.get(who)
 	}
 
-	fn authorities(&self) -> usize {
-		self.inner.iter().filter(|(_, info)| matches!(info.roles, ObservedRole::Authority)).count()
-	}
-
-	fn non_authorities(&self) -> usize {
+	fn connected_authorities(&self) -> usize {
 		self.inner
 			.iter()
-			.filter(|(_, info)| matches!(info.roles, ObservedRole::Full | ObservedRole::Light))
+			.filter(|(_, info)| matches!(info.roles, ObservedRole::Authority))
+			.count()
+	}
+
+	fn connected_full(&self) -> usize {
+		self.inner
+			.iter()
+			.filter(|(_, info)| matches!(info.roles, ObservedRole::Full))
 			.count()
 	}
 
 	fn reshuffle(&mut self) {
-		let mut lucky_peers: Vec<_> = self.inner
+		let mut lucky_peers: Vec<_> = self
+			.inner
 			.iter()
-			.filter_map(|(id, info)|
-				if matches!(info.roles, ObservedRole::Full | ObservedRole::Light) { Some(id.clone()) } else { None })
+			.filter_map(|(id, info)| {
+				if matches!(info.roles, ObservedRole::Full) {
+					Some(id.clone())
+				} else {
+					None
+				}
+			})
 			.collect();
-		let mut lucky_authorities: Vec<_> = self.inner
+
+		let mut lucky_authorities: Vec<_> = self
+			.inner
 			.iter()
-			.filter_map(|(id, info)|
-				if matches!(info.roles, ObservedRole::Authority) { Some(id.clone()) } else { None })
+			.filter_map(|(id, info)| {
+				if matches!(info.roles, ObservedRole::Authority) {
+					Some(id.clone())
+				} else {
+					None
+				}
+			})
 			.collect();
 
 		let num_non_authorities = ((lucky_peers.len() as f32).sqrt() as usize)
@@ -662,10 +679,14 @@ impl CatchUpConfig {
 	fn request_allowed<N>(&self, peer: &PeerInfo<N>) -> bool {
 		match self {
 			CatchUpConfig::Disabled => false,
-			CatchUpConfig::Enabled { only_from_authorities, .. } => match peer.roles {
+			CatchUpConfig::Enabled {
+				only_from_authorities,
+				..
+			} => match peer.roles {
 				ObservedRole::Authority => true,
-				_ => !only_from_authorities
-			}
+				ObservedRole::Light => false,
+				ObservedRole::Full => !only_from_authorities,
+			},
 		}
 	}
 }
@@ -685,8 +706,12 @@ type MaybeMessage<Block> = Option<(Vec<PeerId>, NeighborPacket<NumberFor<Block>>
 
 impl<Block: BlockT> Inner<Block> {
 	fn new(config: crate::Config) -> Self {
-		let catch_up_config = if config.observer_enabled {
-			if config.is_authority {
+		let catch_up_config = if config.local_role.is_light() {
+			// if we are a light client we shouldn't be issuing any catch-up requests
+			// as we don't participate in the full GRANDPA protocol
+			CatchUpConfig::disabled()
+		} else if config.observer_enabled {
+			if config.local_role.is_authority() {
 				// since the observer protocol is enabled, we will only issue
 				// catch-up requests if we are an authority (and only to other
 				// authorities).
@@ -697,8 +722,8 @@ impl<Block: BlockT> Inner<Block> {
 				CatchUpConfig::disabled()
 			}
 		} else {
-			// if the observer protocol isn't enabled, then any full node should
-			// be able to answer catch-up requests.
+			// if the observer protocol isn't enabled and we're not a light client, then any full
+			// node should be able to answer catch-up requests.
 			CatchUpConfig::enabled(false)
 		};
 
@@ -1103,7 +1128,22 @@ impl<Block: BlockT> Inner<Block> {
 				commit_finalized_height: *local_view.last_commit_height().unwrap_or(&Zero::zero()),
 			};
 
-			let peers = self.peers.inner.keys().cloned().collect();
+			let peers = self
+				.peers
+				.inner
+				.iter()
+				.filter_map(|(id, info)| {
+					// light clients don't participate in the full GRANDPA voter protocol
+					// and therefore don't need to be informed about view updates
+					if info.roles.is_light() {
+						None
+					} else {
+						Some(id)
+					}
+				})
+				.cloned()
+				.collect();
+
 			(peers, packet)
 		})
 	}
@@ -1157,7 +1197,7 @@ impl<Block: BlockT> Inner<Block> {
 			None => return false,
 		};
 
-		if !self.config.is_authority
+		if !self.config.local_role.is_authority()
 			&& round_elapsed < round_duration * PROPAGATION_ALL
 		{
 			// non-authority nodes don't gossip any messages right away. we
@@ -1169,7 +1209,7 @@ impl<Block: BlockT> Inner<Block> {
 
 		match peer.roles {
 			ObservedRole::Authority => {
-				let authorities = self.peers.authorities();
+				let authorities = self.peers.connected_authorities();
 
 				// the target node is an authority, on the first round duration we start by
 				// sending the message to only `sqrt(authorities)` (if we're
@@ -1184,8 +1224,8 @@ impl<Block: BlockT> Inner<Block> {
 					// authorities for whom it is polite to do so
 					true
 				}
-			},
-			ObservedRole::Full | ObservedRole::Light => {
+			}
+			ObservedRole::Full => {
 				// the node is not an authority so we apply stricter filters
 				if round_elapsed >= round_duration * PROPAGATION_ALL {
 					// if we waited for 3 (or more) rounds
@@ -1197,7 +1237,12 @@ impl<Block: BlockT> Inner<Block> {
 				} else {
 					false
 				}
-			},
+			}
+			ObservedRole::Light => {
+				// we never gossip round messages to light clients as they don't
+				// participate in the full grandpa protocol
+				false
+			}
 		}
 	}
 
@@ -1224,7 +1269,7 @@ impl<Block: BlockT> Inner<Block> {
 
 		match peer.roles {
 			ObservedRole::Authority => {
-				let authorities = self.peers.authorities();
+				let authorities = self.peers.connected_authorities();
 
 				// the target node is an authority, on the first round duration we start by
 				// sending the message to only `sqrt(authorities)` (if we're
@@ -1239,9 +1284,9 @@ impl<Block: BlockT> Inner<Block> {
 					// authorities for whom it is polite to do so
 					true
 				}
-			},
+			}
 			ObservedRole::Full | ObservedRole::Light => {
-				let non_authorities = self.peers.non_authorities();
+				let non_authorities = self.peers.connected_full();
 
 				// the target node is not an authority, on the first and second
 				// round duration we start by sending the message to only
@@ -1638,6 +1683,7 @@ pub(super) struct PeerReport {
 mod tests {
 	use super::*;
 	use super::environment::SharedVoterSetState;
+	use sc_network::config::Role;
 	use sc_network_gossip::Validator as GossipValidatorT;
 	use sc_network_test::Block;
 	use sp_core::{crypto::Public, H256};
@@ -1649,7 +1695,7 @@ mod tests {
 			justification_period: 256,
 			keystore: None,
 			name: None,
-			is_authority: true,
+			local_role: Role::Authority,
 			observer_enabled: true,
 			telemetry: None,
 		}
@@ -2174,7 +2220,7 @@ mod tests {
 
 			// if the observer protocol is enabled and we are not an authority,
 			// then we don't issue any catch-up requests.
-			c.is_authority = false;
+			c.local_role = Role::Full;
 			c.observer_enabled = true;
 
 			c
@@ -2468,15 +2514,10 @@ mod tests {
 	fn non_authorities_never_gossip_messages_on_first_round_duration() {
 		let mut config = config();
 		config.gossip_duration = Duration::from_secs(300); // Set to high value to prevent test race
-		config.is_authority = false;
+		config.local_role = Role::Full;
 		let round_duration = config.gossip_duration * ROUND_DURATION;
 
-		let (val, _) = GossipValidator::<Block>::new(
-			config,
-			voter_set_state(),
-			None,
-			None,
-		);
+		let (val, _) = GossipValidator::<Block>::new(config, voter_set_state(), None, None);
 
 		// the validator start at set id 0
 		val.note_set(SetId(0), Vec::new(), |_, _| {});

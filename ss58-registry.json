@@ -477,8 +477,8 @@
 			"decimals": [0,9,9,9,9,9,9,9],
 			"standardAccount": "*25519",
 			"website": "https://equilibrium.io"
-    },
-    {
+		},
+		{
 			"prefix": 69,
 			"network": "sora",
 			"displayName": "SORA Network",
@@ -488,6 +488,24 @@
 			"website": "https://sora.org"
 		},
 		{
+			"prefix": 77,
+			"network": "manta",
+			"displayName": "Manta network",
+			"symbols": ["MA"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://manta.network"
+		},
+		{
+			"prefix": 78,
+			"network": "calamari",
+			"displayName": "Calamari: Manta Canary Network",
+			"symbols": ["KMA"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://manta.network"
+		},
+		{
 			"prefix": 252,
 			"network": "social-network",
 			"displayName": "Social Network",
@@ -495,6 +513,15 @@
 			"decimals": [18],
 			"standardAccount": "*25519",
 			"website": "https://social.network"
+		},
+		{
+			"prefix": 10041,
+			"network": "basilisk",
+			"displayName": "Basilisk",
+			"symbols": ["BSX"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://bsx.fi"
 		}
 	]
 }

@@ -199,7 +199,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Mine a new solution as a call. Performs all checks.
-	fn mine_checked_call() -> Result<Call<T>, MinerError> {
+	pub fn mine_checked_call() -> Result<Call<T>, MinerError> {
 		let iters = Self::get_balancing_iters();
 		// get the solution, with a load of checks to ensure if submitted, IT IS ABSOLUTELY VALID.
 		let (raw_solution, witness) = Self::mine_and_check(iters)?;
@@ -227,7 +227,7 @@ impl<T: Config> Pallet<T> {
 	// perform basic checks of a solution's validity
 	//
 	// Performance: note that it internally clones the provided solution.
-	fn basic_checks(
+	pub fn basic_checks(
 		raw_solution: &RawSolution<CompactOf<T>>,
 		solution_type: &str,
 	) -> Result<(), MinerError> {
@@ -404,7 +404,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Indeed, the score must be computed **after** this step. If this step reduces the score too
 	/// much or remove a winner, then the solution must be discarded **after** this step.
-	fn trim_assignments_weight(
+	pub fn trim_assignments_weight(
 		desired_targets: u32,
 		size: SolutionOrSnapshotSize,
 		max_weight: Weight,
@@ -438,7 +438,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// The score must be computed **after** this step. If this step reduces the score too much,
 	/// then the solution must be discarded.
-	pub(crate) fn trim_assignments_length(
+	pub fn trim_assignments_length(
 		max_allowed_length: u32,
 		assignments: &mut Vec<IndexAssignmentOf<T>>,
 		encoded_size_of: impl Fn(&[IndexAssignmentOf<T>]) -> Result<usize, sp_npos_elections::Error>,
@@ -579,7 +579,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Returns `Ok(())` if offchain worker limit is respected, `Err(reason)` otherwise. If `Ok()`
 	/// is returned, `now` is written in storage and will be used in further calls as the baseline.
-	pub(crate) fn ensure_offchain_repeat_frequency(now: T::BlockNumber) -> Result<(), MinerError> {
+	pub fn ensure_offchain_repeat_frequency(now: T::BlockNumber) -> Result<(), MinerError> {
 		let threshold = T::OffchainRepeat::get();
 		let last_block = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
 
@@ -619,7 +619,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// NOTE: Ideally, these tests should move more and more outside of this and more to the miner's
 	/// code, so that we do less and less storage reads here.
-	pub(crate) fn unsigned_pre_dispatch_checks(
+	pub fn unsigned_pre_dispatch_checks(
 		solution: &RawSolution<CompactOf<T>>,
 	) -> DispatchResult {
 		// ensure solution is timely. Don't panic yet. This is a cheap check.

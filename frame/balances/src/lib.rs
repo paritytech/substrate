@@ -159,9 +159,9 @@ use sp_std::prelude::*;
 use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr};
 use codec::{Codec, Encode, Decode};
 use frame_support::{
-	ensure,
+	ensure, WeakBoundedVec,
 	traits::{
-		Currency, OnUnbalanced, TryDrop, StoredMap,
+		Currency, OnUnbalanced, TryDrop, StoredMap, MaxEncodedLen,
 		WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive,
 		ExistenceRequirement::AllowDeath,
@@ -193,7 +193,7 @@ pub mod pallet {
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The balance of an account.
 		type Balance: Parameter + Member + AtLeast32BitUnsigned + Codec + Default + Copy +
-			MaybeSerializeDeserialize + Debug;
+			MaybeSerializeDeserialize + Debug + MaxEncodedLen;
 
 		/// Handler for the unbalanced reduction when removing a dust account.
 		type DustRemoval: OnUnbalanced<NegativeImbalance<Self, I>>;
@@ -218,6 +218,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T, I=()>(PhantomData<(T, I)>);
 
 	#[pallet::call]
@@ -424,7 +425,9 @@ pub mod pallet {
 		Blake2_128Concat,
 		T::AccountId,
 		AccountData<T::Balance>,
-		ValueQuery
+		ValueQuery,
+		GetDefault,
+		ConstU32<300_000>,
 	>;
 
 	/// Any liquidity locks on some account balances.
@@ -435,8 +438,10 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		Vec<BalanceLock<T::Balance>>,
-		ValueQuery
+		WeakBoundedVec<BalanceLock<T::Balance>, T::MaxLocks>,
+		ValueQuery,
+		GetDefault,
+		ConstU32<300_000>,
 	>;
 
 	/// Storage version of the pallet.
@@ -513,7 +518,7 @@ impl<T: Config<I>, I: 'static> GenesisConfig<T, I> {
 }
 
 /// Simplified reasons for withdrawing balance.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, MaxEncodedLen)]
 pub enum Reasons {
 	/// Paying system transaction fees.
 	Fee = 0,
@@ -545,7 +550,7 @@ impl BitOr for Reasons {
 
 /// A single lock on a balance. There can be many of these on an account and they "overlap", so the
 /// same balance is frozen by multiple locks.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen)]
 pub struct BalanceLock<Balance> {
 	/// An identifier for this lock. Only one lock may be in existence for each identifier.
 	pub id: LockIdentifier,
@@ -556,7 +561,7 @@ pub struct BalanceLock<Balance> {
 }
 
 /// All balance information for an account.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, Default, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, Default, RuntimeDebug, MaxEncodedLen)]
 pub struct AccountData<Balance> {
 	/// Non-reserved part of the balance. There may still be restrictions on this, but it is the
 	/// total pool what may in principle be transferred, reserved and used for tipping.
@@ -602,7 +607,7 @@ impl<Balance: Saturating + Copy + Ord> AccountData<Balance> {
 // A value placed in storage that represents the current version of the Balances storage.
 // This value is used by the `on_runtime_upgrade` logic to determine whether we run
 // storage migration logic. This should match directly with the semantic versions of the Rust crate.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, MaxEncodedLen)]
 enum Releases {
 	V1_0_0,
 	V2_0_0,
@@ -822,6 +827,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Update the account entry for `who`, given the locks.
 	fn update_locks(who: &T::AccountId, locks: &[BalanceLock<T::Balance>]) {
+		let bounded_locks = WeakBoundedVec::<_, T::MaxLocks>::force_from(
+			locks.to_vec(),
+			Some("Balances Update Locks"),
+		);
+
 		if locks.len() as u32 > T::MaxLocks::get() {
 			log::warn!(
 				target: "runtime::balances",
@@ -853,7 +863,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				system::Pallet::<T>::dec_consumers(who);
 			}
 		} else {
-			Locks::<T, I>::insert(who, locks);
+			Locks::<T, I>::insert(who, bounded_locks);
 			if !existed {
 				if system::Pallet::<T>::inc_consumers(who).is_err() {
 					// No providers for the locks. This is impossible under normal circumstances

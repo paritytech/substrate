@@ -18,7 +18,7 @@ parity-scale-codec = { version = "2.0.0" }
 
 sc-service = { version = "0.9.0", default-features = false, path = "../../../../client/service" }
 sc-cli = { version = "0.9.0", path = "../../../../client/cli" }
-sc-executor = { path = "../../../../client/executor" }
+sc-executor = { version = "0.9.0", path = "../../../../client/executor" }
 sc-client-api = { version = "3.0.0", path = "../../../../client/api" }
 structopt = "0.3.8"
 sp-state-machine = { version = "0.9.0", path = "../../../../primitives/state-machine" }
@@ -29,4 +29,4 @@ sp-externalities = { version = "0.9.0", path = "../../../../primitives/externali
 sp-core = { version = "3.0.0", path = "../../../../primitives/core" }
 frame-try-runtime = { version = "0.9.0", path = "../../../../frame/try-runtime" }
 
-remote-externalities = { path = "../../remote-externalities" }
+remote-externalities = { version = "0.9.0", path = "../../remote-externalities" }
