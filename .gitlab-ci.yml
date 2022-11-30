@@ -24,7 +24,6 @@ stages:
   - check
   - test
   - build
-  - post-build-test
   - chaos-env
   - chaos
   - publish
@@ -197,7 +196,7 @@ cargo-check-benches:
   <<:                              *docker-env
   <<:                              *test-refs
   script:
-    - BUILD_DUMMY_WASM_BINARY=1 time cargo +nightly check --benches --all
+    - SKIP_WASM_BUILD=1 time cargo +nightly check --benches --all
     - cargo run --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small
     - cargo run --release -p node-bench -- ::trie::read::small
     - sccache -s
@@ -208,7 +207,7 @@ cargo-check-subkey:
   <<:                              *test-refs
   script:
     - cd ./bin/utils/subkey
-    - BUILD_DUMMY_WASM_BINARY=1 time cargo check --release
+    - SKIP_WASM_BUILD=1 time cargo check --release
     - sccache -s
 
 test-deterministic-wasm:
@@ -222,7 +221,7 @@ test-deterministic-wasm:
     # build runtime
     - cargo build --verbose --release -p node-runtime
     # make checksum
-    - sha256sum target/release/wbuild/target/wasm32-unknown-unknown/release/node_runtime.wasm > checksum.sha256
+    - sha256sum target/release/wbuild/node-runtime/target/wasm32-unknown-unknown/release/node_runtime.wasm > checksum.sha256
     # clean up – FIXME: can we reuse some of the artifacts?
     - cargo clean
     # build again
@@ -343,7 +342,7 @@ cargo-check-macos:
   <<:                              *docker-env
   <<:                              *test-refs
   script:
-    - BUILD_DUMMY_WASM_BINARY=1 time cargo check --release
+    - SKIP_WASM_BUILD=1 time cargo check --release
     - sccache -s
   tags:
     - osx
@@ -451,7 +450,7 @@ build-linux-subkey:                &build-subkey
     - mkdir -p ./artifacts/subkey
   script:
     - cd ./bin/utils/subkey
-    - BUILD_DUMMY_WASM_BINARY=1 time cargo build --release --verbose
+    - SKIP_WASM_BUILD=1 time cargo build --release --verbose
     - cd -
     - mv ./target/release/subkey ./artifacts/subkey/.
     - echo -n "Subkey version = "
@@ -471,7 +470,9 @@ build-rust-doc:
   stage:                           build
   <<:                              *docker-env
   <<:                              *test-refs
-  allow_failure:                   true
+  needs:
+    - job:                         test-linux-stable
+      artifacts:                   false
   variables:
     <<:                            *default-vars
     RUSTFLAGS:                     -Dwarnings
@@ -483,29 +484,11 @@ build-rust-doc:
     - ./crate-docs/
   script:
     - rm -f ./crate-docs/index.html # use it as an indicator if the job succeeds
-    - BUILD_DUMMY_WASM_BINARY=1 RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html"
+    - SKIP_WASM_BUILD=1 RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html"
         time cargo +nightly doc --no-deps --workspace --all-features --verbose
     - mv ./target/doc ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=sc_service/index.html>" > ./crate-docs/index.html
     - sccache -s
-
-#### stage:                        post-build-test
-
-trigger-contracts-ci:
-  stage:                           post-build-test
-  needs:
-    - job:                         build-linux-substrate
-      artifacts:                   false
-    - job:                         test-linux-stable
-      artifacts:                   false
-  trigger:
-    project:                       parity/srml-contracts-waterfall
-    branch:                        master
-    strategy:                      depend
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "web"
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-    - if: $CI_COMMIT_REF_NAME == "master"
 
 #### stage:                        chaos-env
 
@@ -531,7 +514,7 @@ build-chaos-docker:
     DOCKERFILE:                    $PRODUCT.Dockerfile
     CONTAINER_IMAGE:               paritypr/$PRODUCT
   environment:
-    name:                          parity-chaosnet
+    name:                          parity-simnet
   services:
     - docker:dind
   before_script:
@@ -568,7 +551,7 @@ chaos-test-singlenodeheight:
   needs:
     - job:                         build-chaos-docker
   tags:
-    - parity-chaos
+    - parity-simnet
   variables:
     <<:                            *default-vars
     PRODUCT:                       substrate
@@ -579,7 +562,7 @@ chaos-test-singlenodeheight:
     VERSION:                       "ci-${CI_COMMIT_SHORT_SHA}"
   interruptible: true
   environment:
-    name:                          parity-chaosnet
+    name:                          parity-simnet
   script:
     - simnet spawn dev -i $CONTAINER_IMAGE:$VERSION
     - simnet singlenodeheight -h 30
@@ -677,6 +660,8 @@ publish-s3-doc:
   needs:
     - job:                         build-rust-doc
       artifacts:                   true
+    - job:                         build-linux-substrate
+      artifacts:                   false
   <<:                              *build-refs
   <<:                              *kubernetes-build
   variables:

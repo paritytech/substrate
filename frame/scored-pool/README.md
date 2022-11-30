@@ -41,10 +41,10 @@ use frame_support::{decl_module, dispatch};
 use frame_system::ensure_signed;
 use pallet_scored_pool::{self as scored_pool};
 
-pub trait Trait: scored_pool::Trait {}
+pub trait Config: scored_pool::Config {}
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		#[weight = 0]
 		pub fn candidate(origin) -> dispatch::DispatchResult {
 			let who = ensure_signed(origin)?;

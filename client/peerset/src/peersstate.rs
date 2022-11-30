@@ -42,8 +42,8 @@ pub struct PeersState {
 	/// List of nodes that we know about.
 	///
 	/// > **Note**: This list should really be ordered by decreasing reputation, so that we can
-	/// 			easily select the best node to connect to. As a first draft, however, we don't
-	/// 			sort, to make the logic easier.
+	///           easily select the best node to connect to. As a first draft, however, we don't
+	///           sort, to make the logic easier.
 	nodes: HashMap<PeerId, Node>,
 
 	/// Number of slot-occupying nodes for which the `ConnectionState` is `In`.
@@ -130,7 +130,7 @@ impl PeersState {
 	/// Returns an object that grants access to the state of a peer.
 	pub fn peer<'a>(&'a mut self, peer_id: &'a PeerId) -> Peer<'a> {
 		match self.nodes.get_mut(peer_id) {
-			None => return Peer::Unknown(UnknownPeer {
+			None => Peer::Unknown(UnknownPeer {
 				parent: self,
 				peer_id: Cow::Borrowed(peer_id),
 			}),
@@ -585,7 +585,7 @@ mod tests {
 		peers_state.peer(&id2).into_connected().unwrap().disconnect();
 		assert_eq!(peers_state.highest_not_connected_peer().map(|p| p.into_peer_id()), Some(id1.clone()));
 		peers_state.peer(&id1).into_not_connected().unwrap().set_reputation(-100);
-		assert_eq!(peers_state.highest_not_connected_peer().map(|p| p.into_peer_id()), Some(id2.clone()));
+		assert_eq!(peers_state.highest_not_connected_peer().map(|p| p.into_peer_id()), Some(id2));
 	}
 
 	#[test]

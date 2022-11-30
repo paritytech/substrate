@@ -20,7 +20,7 @@ use frame_system::offchain::{
 
 use hex_literal::hex;
 use pallet_contracts;
-use sp_core::crypto::KeyTypeId;
+use sp_core::crypto::{KeyTypeId, UncheckedFrom};
 use sp_runtime::{
     offchain::{http, storage::StorageValueRef, Duration},
     traits::StaticLookup,
@@ -127,7 +127,10 @@ const MS_PER_DAY: u64 = 24 * 3600 * 1000;
 
 decl_module! {
     /// A public part of the pallet.
-    pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+    pub struct Module<T: Config> for enum Call where 
+        origin: T::Origin,
+        <T as frame_system::Config>::AccountId: AsRef<[u8]>,
+        <T as frame_system::Config>::AccountId: UncheckedFrom<T::Hash> {
         //fn deposit_event() = default;
 
         /// Offchain Worker entry point.
@@ -152,11 +155,11 @@ decl_module! {
 }
 
 decl_storage! {
-    trait Store for Module<T: Trait> as DdcMetricsOffchainWorker {
+    trait Store for Module<T: Config> as DdcMetricsOffchainWorker where <T as frame_system::Config>::AccountId: AsRef<[u8]> + UncheckedFrom<T::Hash> {
     }
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> where <T as frame_system::Config>::AccountId: AsRef<[u8]> + UncheckedFrom<T::Hash> {
     fn offchain_worker_main(block_number: T::BlockNumber) -> ResultStr<()> {
         let signer = match Self::get_signer() {
             Err(e) => {
@@ -235,7 +238,7 @@ impl<T: Trait> Module<T> {
         Ok(())
     }
 
-    fn get_contract_id() -> Option<<T::CT as frame_system::Trait>::AccountId> {
+    fn get_contract_id() -> Option<<T as frame_system::Config>::AccountId> {
         let value = StorageValueRef::persistent(b"ddc-metrics-offchain-worker::sc_address").get();
 
         match value {
@@ -283,7 +286,7 @@ impl<T: Trait> Module<T> {
 					let block_interval_configured = Self::get_block_interval();
 					let mut block_interval = T::BlockInterval::get();
 					if block_interval_configured.is_some() {
-						block_interval = <T as frame_system::Trait>::BlockNumber::from(block_interval_configured.unwrap());
+						block_interval = <T as frame_system::Config>::BlockNumber::from(block_interval_configured.unwrap());
 					}
 
                     // set new value
@@ -305,7 +308,7 @@ impl<T: Trait> Module<T> {
         day_start_ms
     }
 
-    fn get_signer() -> ResultStr<Signer<T::CST, T::AuthorityId>> {
+    fn get_signer() -> ResultStr<Signer<T, T::AuthorityId>> {
         let signer = Signer::<_, _>::any_account();
         if !signer.can_sign() {
             return Err("[OCW] No local accounts available. Consider adding one via `author_insertKey` RPC.");
@@ -314,10 +317,10 @@ impl<T: Trait> Module<T> {
     }
 
     fn sc_get_current_period_ms(
-        contract_id: <T::CT as frame_system::Trait>::AccountId,
+        contract_id: <T as frame_system::Config>::AccountId,
     ) -> ResultStr<u64> {
         let call_data = Self::encode_get_current_period_ms();
-        let (exec_result, _gas_consumed) = pallet_contracts::Module::<T::CT>::bare_call(
+        let contract_exec_result = pallet_contracts::Module::<T>::bare_call(
             Default::default(),
             contract_id,
             0u32.into(),
@@ -325,7 +328,7 @@ impl<T: Trait> Module<T> {
             call_data,
         );
 
-        let mut data = match &exec_result {
+        let mut data = match &contract_exec_result.exec_result {
             Ok(v) => &v.data[..],
             Err(exec_error) => {
                 // Return default value in case of error
@@ -346,12 +349,12 @@ impl<T: Trait> Module<T> {
     }
 
     fn finalize_metric_period(
-        contract_id: <T::CT as frame_system::Trait>::AccountId,
-        signer: &Signer<T::CST, T::AuthorityId>,
+        contract_id: <T as frame_system::Config>::AccountId,
+        signer: &Signer<T, T::AuthorityId>,
         in_day_start_ms: u64,
     ) -> ResultStr<()> {
         let contract_id_unl =
-            <<T::CT as frame_system::Trait>::Lookup as StaticLookup>::unlookup(contract_id);
+            <<T as frame_system::Config>::Lookup as StaticLookup>::unlookup(contract_id);
 
         let call_data = Self::encode_finalize_metric_period(in_day_start_ms);
 
@@ -375,8 +378,8 @@ impl<T: Trait> Module<T> {
     }
 
     fn send_metrics_to_sc(
-        contract_id: <T::CT as frame_system::Trait>::AccountId,
-        signer: &Signer<T::CST, T::AuthorityId>,
+        contract_id: <T as frame_system::Config>::AccountId,
+        signer: &Signer<T, T::AuthorityId>,
         day_start_ms: u64,
         metrics: Vec<Metric>,
     ) -> ResultStr<()> {
@@ -410,7 +413,7 @@ impl<T: Trait> Module<T> {
                 );
 
                 let contract_id_unl =
-                    <<T::CT as frame_system::Trait>::Lookup as StaticLookup>::unlookup(
+                    <<T as frame_system::Config>::Lookup as StaticLookup>::unlookup(
                         contract_id.clone(),
                     );
 
@@ -432,8 +435,8 @@ impl<T: Trait> Module<T> {
     }
 
     fn send_metrics_ddn_to_sc(
-        contract_id: <T::CT as frame_system::Trait>::AccountId,
-        signer: &Signer<T::CST, T::AuthorityId>,
+        contract_id: <T as frame_system::Config>::AccountId,
+        signer: &Signer<T, T::AuthorityId>,
         day_start_ms: u64,
         metrics: Vec<MetricDDN>,
     ) -> ResultStr<()> {
@@ -460,7 +463,7 @@ impl<T: Trait> Module<T> {
                 );
 
                 let contract_id_unl =
-                    <<T::CT as frame_system::Trait>::Lookup as StaticLookup>::unlookup(
+                    <<T as frame_system::Config>::Lookup as StaticLookup>::unlookup(
                         contract_id.clone(),
                     );
 
@@ -482,8 +485,8 @@ impl<T: Trait> Module<T> {
     }
 
     fn report_ddn_status_to_sc(
-        contract_id: <T::CT as frame_system::Trait>::AccountId,
-        signer: &Signer<T::CST, T::AuthorityId>,
+        contract_id: <T as frame_system::Config>::AccountId,
+        signer: &Signer<T, T::AuthorityId>,
         p2p_id: &String,
         is_online: bool,
     ) -> ResultStr<()> {
@@ -498,7 +501,7 @@ impl<T: Trait> Module<T> {
             let call_data = Self::encode_report_ddn_status(&p2p_id, is_online);
 
             let contract_id_unl =
-                <<T::CT as frame_system::Trait>::Lookup as StaticLookup>::unlookup(
+                <<T as frame_system::Config>::Lookup as StaticLookup>::unlookup(
                     contract_id.clone(),
                 );
 
@@ -514,7 +517,7 @@ impl<T: Trait> Module<T> {
     }
 
     fn fetch_all_metrics(
-        contract_id: <T::CT as frame_system::Trait>::AccountId,
+        contract_id: <T as frame_system::Config>::AccountId,
         day_start_ms: u64,
     ) -> ResultStr<(Vec<Metric>, Vec<MetricDDN>, Vec<DDCNode>)> {
         let a_moment_ago_ms = sp_io::offchain::timestamp()
@@ -552,10 +555,10 @@ impl<T: Trait> Module<T> {
     }
 
     fn fetch_nodes(
-        contract_id: <T::CT as frame_system::Trait>::AccountId,
+        contract_id: <T as frame_system::Config>::AccountId,
     ) -> ResultStr<Vec<DDCNode>> {
         let call_data = Self::encode_get_all_ddc_nodes();
-        let (exec_result, _gas_consumed) = pallet_contracts::Module::<T::CT>::bare_call(
+        let contract_exec_result = pallet_contracts::Module::<T>::bare_call(
             Default::default(),
             contract_id,
             0u32.into(),
@@ -563,7 +566,7 @@ impl<T: Trait> Module<T> {
             call_data,
         );
 
-        let mut data = match &exec_result {
+        let mut data = match &contract_exec_result.exec_result {
             Ok(v) => &v.data[..],
             Err(exec_error) => {
                 warn!(
@@ -799,25 +802,23 @@ decl_event!(
     /// Events generated by the module.
     pub enum Event<T>
     where
-        AccountId = <T as frame_system::Trait>::AccountId,
+        AccountId = <T as frame_system::Config>::AccountId,
     {
         NewDdcMetric(AccountId, Vec<u8>),
     }
 );
 
-pub trait Trait: frame_system::Trait {
-    type CT: pallet_contracts::Trait;
-    type CST: CreateSignedTransaction<pallet_contracts::Call<Self::CT>>;
+pub trait Config: frame_system::Config + pallet_contracts::Config + CreateSignedTransaction<pallet_contracts::Call<Self>> where <Self as frame_system::Config>::AccountId: AsRef<[u8]> + UncheckedFrom<Self::Hash>{
 
     /// The identifier type for an offchain worker.
     type AuthorityId: AppCrypto<
-        <Self::CST as SigningTypes>::Public,
-        <Self::CST as SigningTypes>::Signature,
+        <Self as SigningTypes>::Public,
+        <Self as SigningTypes>::Signature,
     >;
 
     // TODO: remove, or use Event and Call.
     /// The overarching event type.
-    type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+    type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
     /// The overarching dispatch call type.
     type Call: From<Call<Self>>;
 

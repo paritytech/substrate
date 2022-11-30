@@ -15,7 +15,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 # third-party dependencies
 codec = { package = "parity-scale-codec", version = "1.3.4", default-features = false, features = ["derive"] }
-integer-sqrt = { version = "0.1.2" }
 serde = { version = "1.0.102", optional = true }
 static_assertions = "1.1.0"
 hex-literal = { version = "0.3.1", optional = true }
@@ -79,7 +78,7 @@ pallet-utility = { version = "2.0.0", default-features = false, path = "../../..
 pallet-transaction-payment = { version = "2.0.0", default-features = false, path = "../../../frame/transaction-payment" }
 pallet-transaction-payment-rpc-runtime-api = { version = "2.0.0", default-features = false, path = "../../../frame/transaction-payment/rpc/runtime-api/" }
 pallet-vesting = { version = "2.0.0", default-features = false, path = "../../../frame/vesting" }
-pallet-cere-ddc = { version = "2.0.0", default-features = false, path = "../../../frame/ddc-pallet" }
+pallet-cere-ddc = { version = "3.0.0", default-features = false, path = "../../../frame/ddc-pallet" }
 pallet-chainbridge = { version = "2.0.0", default-features = false, path = "../../../frame/chainbridge" }
 pallet-erc721 = { version = "2.0.0", default-features = false, path = "../../../frame/erc721" }
 pallet-erc20 = { version = "2.0.0", default-features = false, path = "../../../frame/erc20" }
@@ -87,7 +86,7 @@ pallet-erc20 = { version = "2.0.0", default-features = false, path = "../../../f
 pallet-ddc-metrics-offchain-worker = { path = "../../../frame/ddc-metrics-offchain-worker", default-features = false }
 
 [build-dependencies]
-wasm-builder-runner = { version = "2.0.0", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
+substrate-wasm-builder = { version = "3.0.0", path = "../../../utils/wasm-builder" }
 
 [features]
 default = ["std"]

@@ -304,8 +304,8 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 						handler,
 						event: EitherOutput::First(event)
 					}),
-				Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
-					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
+				Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }) =>
+					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }),
 			}
 		}
 
@@ -334,8 +334,8 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 						handler,
 						event: EitherOutput::Second(event)
 					}),
-				Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
-					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
+				Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }) =>
+					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }),
 			}
 		}
 

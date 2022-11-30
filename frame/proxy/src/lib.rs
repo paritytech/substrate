@@ -23,7 +23,7 @@
 //! wish to execute some duration prior to execution happens. In this case, the target account may
 //! reject the announcement and in doing so, veto the execution.
 //!
-//! - [`proxy::Trait`](./trait.Trait.html)
+//! - [`proxy::Config`](./trait.Config.html)
 //! - [`Call`](./enum.Call.html)
 //!
 //! ## Overview
@@ -33,10 +33,14 @@
 //! ### Dispatchable Functions
 //!
 //! [`Call`]: ./enum.Call.html
-//! [`Trait`]: ./trait.Trait.html
+//! [`Config`]: ./trait.Config.html
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
+
+mod tests;
+mod benchmarking;
+pub mod weights;
 
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
@@ -49,35 +53,19 @@ use frame_support::{
 };
 use frame_system::{self as system, ensure_signed};
 use frame_support::dispatch::DispatchError;
+pub use weights::WeightInfo;
 
-mod tests;
-mod benchmarking;
-mod default_weight;
-
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-
-pub trait WeightInfo {
-	fn proxy_announced(a: u32, p: u32, ) -> Weight;
-	fn remove_announcement(a: u32, p: u32, ) -> Weight;
-	fn reject_announcement(a: u32, p: u32, ) -> Weight;
-	fn announce(a: u32, p: u32, ) -> Weight;
-	fn proxy(p: u32, ) -> Weight;
-	fn add_proxy(p: u32, ) -> Weight;
-	fn remove_proxy(p: u32, ) -> Weight;
-	fn remove_proxies(p: u32, ) -> Weight;
-	fn anonymous(p: u32, ) -> Weight;
-	fn kill_anonymous(p: u32, ) -> Weight;
-}
+type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 /// Configuration trait.
-pub trait Trait: frame_system::Trait {
+pub trait Config: frame_system::Config {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// The overarching call type.
 	type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo>
 		+ GetDispatchInfo + From<frame_system::Call<Self>> + IsSubType<Call<Self>>
-		+ IsType<<Self as frame_system::Trait>::Call>;
+		+ IsType<<Self as frame_system::Config>::Call>;
 
 	/// The currency mechanism.
 	type Currency: ReservableCurrency<Self::AccountId>;
@@ -86,7 +74,7 @@ pub trait Trait: frame_system::Trait {
 	/// The instance filter determines whether a given call may be proxied under this type.
 	///
 	/// IMPORTANT: `Default` must be provided and MUST BE the the *most permissive* value.
-	type ProxyType: Parameter + Member + Ord + PartialOrd + InstanceFilter<<Self as Trait>::Call>
+	type ProxyType: Parameter + Member + Ord + PartialOrd + InstanceFilter<<Self as Config>::Call>
 		+ Default;
 
 	/// The base amount of currency needed to reserve for creating a proxy.
@@ -149,10 +137,10 @@ pub struct Announcement<AccountId, Hash, BlockNumber> {
 	height: BlockNumber,
 }
 
-type CallHashOf<T> = <<T as Trait>::CallHasher as Hash>::Output;
+type CallHashOf<T> = <<T as Config>::CallHasher as Hash>::Output;
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Proxy {
+	trait Store for Module<T: Config> as Proxy {
 		/// The set of account proxies. Maps the account which has delegated to the accounts
 		/// which are being delegated to, together with the amount held on deposit.
 		pub Proxies get(fn proxies): map hasher(twox_64_concat) T::AccountId
@@ -165,7 +153,7 @@ decl_storage! {
 }
 
 decl_error! {
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		/// There are too many proxies registered or too many announcements pending.
 		TooMany,
 		/// Proxy registration not found.
@@ -186,8 +174,8 @@ decl_error! {
 decl_event! {
 	/// Events type.
 	pub enum Event<T> where
-		AccountId = <T as frame_system::Trait>::AccountId,
-		ProxyType = <T as Trait>::ProxyType,
+		AccountId = <T as frame_system::Config>::AccountId,
+		ProxyType = <T as Config>::ProxyType,
 		Hash = CallHashOf<T>,
 	{
 		/// A proxy was executed correctly, with the given \[result\].
@@ -201,7 +189,7 @@ decl_event! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
 		/// Deposit one of this module's events by using the default implementation.
@@ -251,7 +239,7 @@ decl_module! {
 		fn proxy(origin,
 			real: T::AccountId,
 			force_proxy_type: Option<T::ProxyType>,
-			call: Box<<T as Trait>::Call>,
+			call: Box<<T as Config>::Call>,
 		) {
 			let who = ensure_signed(origin)?;
 			let def = Self::find_proxy(&real, &who, force_proxy_type)?;
@@ -521,7 +509,7 @@ decl_module! {
 			delegate: T::AccountId,
 			real: T::AccountId,
 			force_proxy_type: Option<T::ProxyType>,
-			call: Box<<T as Trait>::Call>,
+			call: Box<<T as Config>::Call>,
 		) {
 			ensure_signed(origin)?;
 			let def = Self::find_proxy(&real, &delegate, force_proxy_type)?;
@@ -537,7 +525,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 
 	/// Calculate the address of an anonymous account.
 	///
@@ -692,12 +680,12 @@ impl<T: Trait> Module<T> {
 	fn do_proxy(
 		def: ProxyDefinition<T::AccountId, T::ProxyType, T::BlockNumber>,
 		real: T::AccountId,
-		call: <T as Trait>::Call,
+		call: <T as Config>::Call,
 	) {
 		// This is a freshly authenticated new account, the origin restrictions doesn't apply.
 		let mut origin: T::Origin = frame_system::RawOrigin::Signed(real).into();
-		origin.add_filter(move |c: &<T as frame_system::Trait>::Call| {
-			let c = <T as Trait>::Call::from_ref(c);
+		origin.add_filter(move |c: &<T as frame_system::Config>::Call| {
+			let c = <T as Config>::Call::from_ref(c);
 			// We make sure the proxy call does access this pallet to change modify proxies.
 			match c.is_sub_type() {
 				// Proxy call cannot add or remove a proxy with more permissions than it already has.
@@ -726,7 +714,7 @@ pub mod migration {
 	/// `ProxyDefinition` which additionally included a `BlockNumber` delay value. This function,
 	/// simply takes any existing proxies using the old tuple format, and migrates it to the new
 	/// struct by setting the delay to zero.
-	pub fn migrate_to_time_delayed_proxies<T: Trait>() -> Weight {
+	pub fn migrate_to_time_delayed_proxies<T: Config>() -> Weight {
 		Proxies::<T>::translate::<(Vec<(T::AccountId, T::ProxyType)>, BalanceOf<T>), _>(
 			|_, (targets, deposit)| Some((
 				targets.into_iter()
@@ -739,6 +727,6 @@ pub mod migration {
 				deposit,
 			))
 		);
-		T::MaximumBlockWeight::get()
+		T::BlockWeights::get().max_block
 	}
 }

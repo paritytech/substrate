@@ -77,7 +77,7 @@
 //!
 //! ### Module Information
 //!
-//! - [`election_sp_phragmen::Trait`](./trait.Trait.html)
+//! - [`election_sp_phragmen::Config`](./trait.Config.html)
 //! - [`Call`](./enum.Call.html)
 //! - [`Module`](./struct.Module.html)
 
@@ -92,7 +92,7 @@ use frame_support::{
 	traits::{
 		BalanceStatus, ChangeMembers, Contains, ContainsLengthBound, Currency, CurrencyToVote, Get,
 		InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced, ReservableCurrency,
-		WithdrawReason, WithdrawReasons,
+		WithdrawReasons,
 	},
 	weights::Weight,
 };
@@ -105,15 +105,16 @@ use sp_runtime::{
 use sp_std::prelude::*;
 
 mod benchmarking;
-mod default_weights;
+pub mod weights;
+pub use weights::WeightInfo;
 
 /// The maximum votes allowed per voter.
 pub const MAXIMUM_VOTE: usize = 16;
 
 type BalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
 /// An indication that the renouncing account currently has which of the below roles.
 #[derive(Encode, Decode, Clone, PartialEq, RuntimeDebug)]
@@ -139,23 +140,9 @@ pub struct DefunctVoter<AccountId> {
 	pub candidate_count: u32
 }
 
-pub trait WeightInfo {
-	fn vote(v: u32, ) -> Weight;
-	fn vote_update(v: u32, ) -> Weight;
-	fn remove_voter() -> Weight;
-	fn report_defunct_voter_correct(c: u32, v: u32, ) -> Weight;
-	fn report_defunct_voter_incorrect(c: u32, v: u32, ) -> Weight;
-	fn submit_candidacy(c: u32, ) -> Weight;
-	fn renounce_candidacy_candidate(c: u32, ) -> Weight;
-	fn renounce_candidacy_members() -> Weight;
-	fn renounce_candidacy_runners_up() -> Weight;
-	fn remove_member_with_replacement() -> Weight;
-	fn remove_member_wrong_refund() -> Weight;
-}
-
-pub trait Trait: frame_system::Trait {
+pub trait Config: frame_system::Config {
 	/// The overarching event type.c
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// Identifier for the elections-phragmen pallet's lock
 	type ModuleId: Get<LockIdentifier>;
@@ -206,7 +193,7 @@ pub trait Trait: frame_system::Trait {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as PhragmenElection {
+	trait Store for Module<T: Config> as PhragmenElection {
 		// ---- State
 		/// The current elected membership. Sorted based on account id.
 		pub Members get(fn members): Vec<(T::AccountId, BalanceOf<T>)>;
@@ -264,7 +251,7 @@ decl_storage! {
 }
 
 decl_error! {
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		/// Cannot vote when no candidates or members exist.
 		UnableToVote,
 		/// Must vote for at least one candidate.
@@ -303,7 +290,7 @@ decl_error! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
@@ -378,7 +365,7 @@ decl_module! {
 				T::ModuleId::get(),
 				&who,
 				locked_balance,
-				WithdrawReasons::except(WithdrawReason::TransactionPayment),
+				WithdrawReasons::except(WithdrawReasons::TRANSACTION_PAYMENT),
 			);
 
 			Voting::<T>::insert(&who, (locked_balance, votes));
@@ -634,7 +621,7 @@ decl_module! {
 		#[weight = if *has_replacement {
 			T::WeightInfo::remove_member_with_replacement()
 		} else {
-			T::MaximumBlockWeight::get()
+			T::BlockWeights::get().max_block
 		}]
 		fn remove_member(
 			origin,
@@ -680,7 +667,7 @@ decl_module! {
 decl_event!(
 	pub enum Event<T> where
 		Balance = BalanceOf<T>,
-		<T as frame_system::Trait>::AccountId,
+		<T as frame_system::Config>::AccountId,
 	{
 		/// A new term with \[new_members\]. This indicates that enough candidates existed to run the
 		/// election, not that enough have has been elected. The inner value must be examined for
@@ -695,6 +682,10 @@ decl_event!(
 		/// A \[member\] has been removed. This should always be followed by either `NewTerm` or
 		/// `EmptyTerm`.
 		MemberKicked(AccountId),
+		/// A candidate was slashed due to failing to obtain a seat as member or runner-up
+		CandidateSlashed(AccountId, Balance),
+		/// A seat holder (member or runner-up) was slashed due to failing to retaining their position.
+		SeatHolderSlashed(AccountId, Balance),
 		/// A \[member\] has renounced their candidacy.
 		MemberRenounced(AccountId),
 		/// A voter was reported with the the report being successful or not.
@@ -703,7 +694,7 @@ decl_event!(
 	}
 );
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	/// Attempts to remove a member `who`. If a runner-up exists, it is used as the replacement and
 	/// Ok(true). is returned.
 	///
@@ -838,7 +829,7 @@ impl<T: Trait> Module<T> {
 		if !Self::term_duration().is_zero() {
 			if (block_number % Self::term_duration()).is_zero() {
 				Self::do_phragmen();
-				return T::MaximumBlockWeight::get()
+				return T::BlockWeights::get().max_block;
 			}
 		}
 		0
@@ -1008,6 +999,7 @@ impl<T: Trait> Module<T> {
 					new_runners_up_ids_sorted.binary_search(&c).is_err()
 				{
 					let (imbalance, _) = T::Currency::slash_reserved(&c, T::CandidacyBond::get());
+					Self::deposit_event(RawEvent::CandidateSlashed(c, T::CandidacyBond::get()));
 					T::LoserCandidate::on_unbalanced(imbalance);
 				}
 			});
@@ -1015,6 +1007,7 @@ impl<T: Trait> Module<T> {
 			// Burn outgoing bonds
 			to_burn_bond.into_iter().for_each(|x| {
 				let (imbalance, _) = T::Currency::slash_reserved(&x, T::CandidacyBond::get());
+				Self::deposit_event(RawEvent::SeatHolderSlashed(x, T::CandidacyBond::get()));
 				T::LoserCandidate::on_unbalanced(imbalance);
 			});
 
@@ -1034,7 +1027,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> Contains<T::AccountId> for Module<T> {
+impl<T: Config> Contains<T::AccountId> for Module<T> {
 	fn contains(who: &T::AccountId) -> bool {
 		Self::is_member(who)
 	}
@@ -1053,7 +1046,7 @@ impl<T: Trait> Contains<T::AccountId> for Module<T> {
 	}
 }
 
-impl<T: Trait> ContainsLengthBound for Module<T> {
+impl<T: Config> ContainsLengthBound for Module<T> {
 	fn min_len() -> usize { 0 }
 
 	/// Implementation uses a parameter type so calling is cost-free.
@@ -1065,27 +1058,26 @@ impl<T: Trait> ContainsLengthBound for Module<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::cell::RefCell;
-	use frame_support::{assert_ok, assert_noop, assert_err_with_weight, parameter_types,
-		weights::Weight,
-	};
+	use frame_support::{assert_ok, assert_noop, assert_err_with_weight, parameter_types};
 	use substrate_test_utils::assert_eq_uvec;
 	use sp_core::H256;
 	use sp_runtime::{
-		Perbill, testing::Header, BuildStorage, DispatchResult,
+		testing::Header, BuildStorage, DispatchResult,
 		traits::{BlakeTwo256, IdentityLookup, Block as BlockT},
 	};
 	use crate as elections_phragmen;
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: Weight = 1024;
-		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: Perbill = Perbill::one();
+		pub BlockWeights: frame_system::limits::BlockWeights =
+			frame_system::limits::BlockWeights::simple_max(1024);
 	}
 
-	impl frame_system::Trait for Test {
+	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
+		type BlockWeights = ();
+		type BlockLength = ();
+		type DbWeight = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -1097,13 +1089,6 @@ mod tests {
 		type Header = Header;
 		type Event = Event;
 		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type DbWeight = ();
-		type BlockExecutionWeight = ();
-		type ExtrinsicBaseWeight = ();
-		type MaximumExtrinsicWeight = MaximumBlockWeight;
-		type MaximumBlockLength = MaximumBlockLength;
-		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type PalletInfo = ();
 		type AccountData = pallet_balances::AccountData<u64>;
@@ -1116,7 +1101,7 @@ mod tests {
 		pub const ExistentialDeposit: u64 = 1;
 	}
 
-	impl pallet_balances::Trait for Test {
+	impl pallet_balances::Config for Test {
 		type Balance = u64;
 		type Event = Event;
 		type DustRemoval = ();
@@ -1130,36 +1115,13 @@ mod tests {
 		pub const CandidacyBond: u64 = 3;
 	}
 
-	thread_local! {
-		static VOTING_BOND: RefCell<u64> = RefCell::new(2);
-		static DESIRED_MEMBERS: RefCell<u32> = RefCell::new(2);
-		static DESIRED_RUNNERS_UP: RefCell<u32> = RefCell::new(2);
-		static TERM_DURATION: RefCell<u64> = RefCell::new(5);
-	}
-
-	pub struct VotingBond;
-	impl Get<u64> for VotingBond {
-		fn get() -> u64 { VOTING_BOND.with(|v| *v.borrow()) }
-	}
-
-	pub struct DesiredMembers;
-	impl Get<u32> for DesiredMembers {
-		fn get() -> u32 { DESIRED_MEMBERS.with(|v| *v.borrow()) }
-	}
-
-	pub struct DesiredRunnersUp;
-	impl Get<u32> for DesiredRunnersUp {
-		fn get() -> u32 { DESIRED_RUNNERS_UP.with(|v| *v.borrow()) }
-	}
-
-	pub struct TermDuration;
-	impl Get<u64> for TermDuration {
-		fn get() -> u64 { TERM_DURATION.with(|v| *v.borrow()) }
-	}
-
-	thread_local! {
-		pub static MEMBERS: RefCell<Vec<u64>> = RefCell::new(vec![]);
-		pub static PRIME: RefCell<Option<u64>> = RefCell::new(None);
+	frame_support::parameter_types! {
+		pub static VotingBond: u64 = 2;
+		pub static DesiredMembers: u32 = 2;
+		pub static DesiredRunnersUp: u32 = 2;
+		pub static TermDuration: u64 = 5;
+		pub static Members: Vec<u64> = vec![];
+		pub static Prime: Option<u64> = None;
 	}
 
 	pub struct TestChangeMembers;
@@ -1206,7 +1168,7 @@ mod tests {
 		pub const ElectionsPhragmenModuleId: LockIdentifier = *b"phrelect";
 	}
 
-	impl Trait for Test {
+	impl Config for Test {
 		type ModuleId = ElectionsPhragmenModuleId;
 		type Event = Event;
 		type Currency = Balances;
@@ -2443,7 +2405,7 @@ mod tests {
 			assert_err_with_weight!(
 				Elections::remove_member(Origin::root(), 4, true),
 				Error::<Test>::InvalidReplacement,
-				Some(33777000), // only thing that matters for now is that it is NOT the full block.
+				Some(33489000), // only thing that matters for now is that it is NOT the full block.
 			);
 		});
 
@@ -2465,7 +2427,7 @@ mod tests {
 			assert_err_with_weight!(
 				Elections::remove_member(Origin::root(), 4, false),
 				Error::<Test>::InvalidReplacement,
-				Some(33777000) // only thing that matters for now is that it is NOT the full block.
+				Some(33489000) // only thing that matters for now is that it is NOT the full block.
 			);
 		});
 	}

@@ -115,8 +115,8 @@ fn test_once() {
 				4 => if let Some(id) = known_nodes.iter()
 					.filter(|n| incoming_nodes.values().all(|m| m != *n) && !connected_nodes.contains(*n))
 					.choose(&mut rng) {
-					peerset.incoming(id.clone(), next_incoming_id.clone());
-					incoming_nodes.insert(next_incoming_id.clone(), id.clone());
+					peerset.incoming(id.clone(), next_incoming_id);
+					incoming_nodes.insert(next_incoming_id, id.clone());
 					next_incoming_id.0 += 1;
 				}
 

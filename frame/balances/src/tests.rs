@@ -23,7 +23,7 @@
 pub struct CallWithDispatchInfo;
 impl sp_runtime::traits::Dispatchable for CallWithDispatchInfo {
 	type Origin = ();
-	type Trait = ();
+	type Config = ();
 	type Info = frame_support::weights::DispatchInfo;
 	type PostInfo = frame_support::weights::PostDispatchInfo;
 
@@ -42,7 +42,7 @@ macro_rules! decl_tests {
 		use frame_support::{
 			assert_noop, assert_ok, assert_err,
 			traits::{
-				LockableCurrency, LockIdentifier, WithdrawReason, WithdrawReasons,
+				LockableCurrency, LockIdentifier, WithdrawReasons,
 				Currency, ReservableCurrency, ExistenceRequirement::AllowDeath, StoredMap
 			}
 		};
@@ -55,7 +55,7 @@ macro_rules! decl_tests {
 		pub type System = frame_system::Module<$test>;
 		pub type Balances = Module<$test>;
 
-		pub const CALL: &<$test as frame_system::Trait>::Call = &$crate::tests::CallWithDispatchInfo;
+		pub const CALL: &<$test as frame_system::Config>::Call = &$crate::tests::CallWithDispatchInfo;
 
 		/// create a transaction info struct from weight. Handy to avoid building the whole struct.
 		pub fn info_from_weight(w: Weight) -> DispatchInfo {
@@ -91,7 +91,7 @@ macro_rules! decl_tests {
 			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
 				assert_eq!(Balances::free_balance(1), 10);
 				assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 10, AllowDeath));
-				assert!(!<<Test as Trait>::AccountStore as StoredMap<u64, AccountData<u64>>>::is_explicit(&1));
+				assert!(!<<Test as Config>::AccountStore as StoredMap<u64, AccountData<u64>>>::is_explicit(&1));
 			});
 		}
 
@@ -133,7 +133,7 @@ macro_rules! decl_tests {
 		#[test]
 		fn combination_locking_should_work() {
 			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
-				Balances::set_lock(ID_1, &1, u64::max_value(), WithdrawReasons::none());
+				Balances::set_lock(ID_1, &1, u64::max_value(), WithdrawReasons::empty());
 				Balances::set_lock(ID_2, &1, 0, WithdrawReasons::all());
 				assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 			});
@@ -168,7 +168,7 @@ macro_rules! decl_tests {
 				.build()
 				.execute_with(|| {
 					pallet_transaction_payment::NextFeeMultiplier::put(Multiplier::saturating_from_integer(1));
-					Balances::set_lock(ID_1, &1, 10, WithdrawReason::Reserve.into());
+					Balances::set_lock(ID_1, &1, 10, WithdrawReasons::RESERVE);
 					assert_noop!(
 						<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath),
 						Error::<$test, _>::LiquidityRestrictions
@@ -192,7 +192,7 @@ macro_rules! decl_tests {
 						1,
 					).is_ok());
 
-					Balances::set_lock(ID_1, &1, 10, WithdrawReason::TransactionPayment.into());
+					Balances::set_lock(ID_1, &1, 10, WithdrawReasons::TRANSACTION_PAYMENT);
 					assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 					assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));
 					assert!(<ChargeTransactionPayment<$test> as SignedExtension>::pre_dispatch(
@@ -237,17 +237,17 @@ macro_rules! decl_tests {
 		#[test]
 		fn lock_reasons_extension_should_work() {
 			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
-				Balances::set_lock(ID_1, &1, 10, WithdrawReason::Transfer.into());
+				Balances::set_lock(ID_1, &1, 10, WithdrawReasons::TRANSFER);
 				assert_noop!(
 					<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
 					Error::<$test, _>::LiquidityRestrictions
 				);
-				Balances::extend_lock(ID_1, &1, 10, WithdrawReasons::none());
+				Balances::extend_lock(ID_1, &1, 10, WithdrawReasons::empty());
 				assert_noop!(
 					<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
 					Error::<$test, _>::LiquidityRestrictions
 				);
-				Balances::extend_lock(ID_1, &1, 10, WithdrawReason::Reserve.into());
+				Balances::extend_lock(ID_1, &1, 10, WithdrawReasons::RESERVE);
 				assert_noop!(
 					<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
 					Error::<$test, _>::LiquidityRestrictions
@@ -630,7 +630,7 @@ macro_rules! decl_tests {
 		}
 
 		#[test]
-		#[should_panic = "the balance of any account should always be more than existential deposit."]
+		#[should_panic = "the balance of any account should always be at least the existential deposit."]
 		fn cannot_set_genesis_value_below_ed() {
 			($existential_deposit).with(|v| *v.borrow_mut() = 11);
 			let mut t = frame_system::GenesisConfig::default().build_storage::<$test>().unwrap();

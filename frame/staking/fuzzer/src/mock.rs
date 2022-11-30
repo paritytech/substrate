@@ -43,13 +43,12 @@ impl_outer_dispatch! {
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Test;
 
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = ();
-	type Origin = Origin;
+	type BlockWeights = ();
+	type BlockLength = ();
 	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = ();
+	type Origin = Origin;
 	type Index = AccountIndex;
 	type BlockNumber = BlockNumber;
 	type Call = Call;
@@ -60,9 +59,6 @@ impl frame_system::Trait for Test {
 	type Header = sp_runtime::testing::Header;
 	type Event = ();
 	type BlockHashCount = ();
-	type MaximumBlockWeight = ();
-	type AvailableBlockRatio = ();
-	type MaximumBlockLength = ();
 	type Version = ();
 	type PalletInfo = ();
 	type AccountData = pallet_balances::AccountData<u64>;
@@ -73,7 +69,7 @@ impl frame_system::Trait for Test {
 parameter_types! {
 	pub const ExistentialDeposit: Balance = 10;
 }
-impl pallet_balances::Trait for Test {
+impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type Balance = Balance;
 	type Event = ();
@@ -82,7 +78,7 @@ impl pallet_balances::Trait for Test {
 	type AccountStore = System;
 	type WeightInfo = ();
 }
-impl pallet_indices::Trait for Test {
+impl pallet_indices::Config for Test {
 	type AccountIndex = AccountIndex;
 	type Event = ();
 	type Currency = Balances;
@@ -92,13 +88,13 @@ impl pallet_indices::Trait for Test {
 parameter_types! {
 	pub const MinimumPeriod: u64 = 5;
 }
-impl pallet_timestamp::Trait for Test {
+impl pallet_timestamp::Config for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
 	type WeightInfo = ();
 }
-impl pallet_session::historical::Trait for Test {
+impl pallet_session::historical::Config for Test {
 	type FullIdentification = pallet_staking::Exposure<AccountId, Balance>;
 	type FullIdentificationOf = pallet_staking::ExposureOf<Test>;
 }
@@ -124,7 +120,7 @@ impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
 	fn on_disabled(_: usize) {}
 }
 
-impl pallet_session::Trait for Test {
+impl pallet_session::Config for Test {
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Test, Staking>;
 	type Keys = SessionKeys;
 	type ShouldEndSession = pallet_session::PeriodicSessions<(), ()>;
@@ -161,7 +157,7 @@ impl<C> frame_system::offchain::SendTransactionTypes<C> for Test where
 	type Extrinsic = Extrinsic;
 }
 
-impl pallet_staking::Trait for Test {
+impl pallet_staking::Config for Test {
 	type Currency = Balances;
 	type UnixTime = pallet_timestamp::Module<Self>;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;

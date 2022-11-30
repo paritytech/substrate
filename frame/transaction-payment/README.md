@@ -8,9 +8,9 @@ transaction to be included. This includes:
     chance to be included by the transaction queue.
 
 Additionally, this module allows one to configure:
-  - The mapping between one unit of weight to one unit of fee via [`Trait::WeightToFee`].
+  - The mapping between one unit of weight to one unit of fee via [`Config::WeightToFee`].
   - A means of updating the fee for the next block, via defining a multiplier, based on the
     final state of the chain at the end of the previous block. This can be configured via
-    [`Trait::FeeMultiplierUpdate`]
+    [`Config::FeeMultiplierUpdate`]
 
 License: Apache-2.0

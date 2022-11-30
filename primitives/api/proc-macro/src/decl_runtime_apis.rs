@@ -708,13 +708,7 @@ impl<'a> ToClientSideDecl<'a> {
 							},
 							#crate_::NativeOrEncoded::Encoded(r) => {
 								<#ret_type as #crate_::Decode>::decode(&mut &r[..])
-									.map_err(|err|
-										format!(
-											"Failed to decode result of `{}`: {}",
-											#function_name,
-											err.what(),
-										).into()
-									)
+									.map_err(|err| { #crate_::ApiError::new(#function_name, err).into() })
 							}
 						}
 					)

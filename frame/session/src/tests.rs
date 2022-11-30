@@ -25,6 +25,7 @@ use mock::{
 	SESSION_CHANGED, TEST_SESSION_CHANGED, authorities, force_new_session,
 	set_next_validators, set_session_length, session_changed, Origin, System, Session,
 	reset_before_session_end_called, before_session_end_called, new_test_ext,
+	PreUpgradeMockSessionKeys,
 };
 
 fn initialize_block(block: u64) {
@@ -285,7 +286,7 @@ fn session_keys_generate_output_works_as_set_keys_input() {
 		assert_ok!(
 			Session::set_keys(
 				Origin::signed(2),
-				<mock::Test as Trait>::Keys::decode(&mut &new_keys[..]).expect("Decode keys"),
+				<mock::Test as Config>::Keys::decode(&mut &new_keys[..]).expect("Decode keys"),
 				vec![],
 			)
 		);
@@ -307,4 +308,98 @@ fn return_true_if_more_than_third_is_disabled() {
 		assert_eq!(Session::disable_index(2), true);
 		assert_eq!(Session::disable_index(3), true);
 	});
+}
+
+#[test]
+fn upgrade_keys() {
+	use frame_support::storage;
+	use mock::Test;
+	use sp_core::crypto::key_types::DUMMY;
+
+	// This test assumes certain mocks.
+	assert_eq!(mock::NEXT_VALIDATORS.with(|l| l.borrow().clone()), vec![1, 2, 3]);
+	assert_eq!(mock::VALIDATORS.with(|l| l.borrow().clone()), vec![1, 2, 3]);
+
+	new_test_ext().execute_with(|| {
+		let pre_one = PreUpgradeMockSessionKeys {
+			a: [1u8; 32],
+			b: [1u8; 64],
+		};
+
+		let pre_two = PreUpgradeMockSessionKeys {
+			a: [2u8; 32],
+			b: [2u8; 64],
+		};
+
+		let pre_three = PreUpgradeMockSessionKeys {
+			a: [3u8; 32],
+			b: [3u8; 64],
+		};
+
+		let val_keys = vec![
+			(1u64, pre_one),
+			(2u64, pre_two),
+			(3u64, pre_three),
+		];
+
+		// Set `QueuedKeys`.
+		{
+			let storage_key = <super::QueuedKeys<Test>>::hashed_key();
+			assert!(storage::unhashed::exists(&storage_key));
+			storage::unhashed::put(&storage_key, &val_keys);
+		}
+
+		// Set `NextKeys`.
+		{
+			for &(i, ref keys) in val_keys.iter() {
+				let storage_key = <super::NextKeys<Test>>::hashed_key_for(i);
+				assert!(storage::unhashed::exists(&storage_key));
+				storage::unhashed::put(&storage_key, keys);
+			}
+		}
+
+		// Set `KeyOwner`.
+		{
+			for &(i, ref keys) in val_keys.iter() {
+				// clear key owner for `UintAuthorityId` keys set in genesis.
+				let presumed = UintAuthorityId(i);
+				let raw_prev = presumed.as_ref();
+
+				assert_eq!(Session::key_owner(DUMMY, raw_prev), Some(i));
+				Session::clear_key_owner(DUMMY, raw_prev);
+
+				Session::put_key_owner(mock::KEY_ID_A, keys.get_raw(mock::KEY_ID_A), &i);
+				Session::put_key_owner(mock::KEY_ID_B, keys.get_raw(mock::KEY_ID_B), &i);
+			}
+		}
+
+		// Do the upgrade and check sanity.
+		let mock_keys_for = |val| mock::MockSessionKeys { dummy: UintAuthorityId(val) };
+		Session::upgrade_keys::<PreUpgradeMockSessionKeys, _>(
+			|val, _old_keys| mock_keys_for(val),
+		);
+
+		// Check key ownership.
+		for (i, ref keys) in val_keys.iter() {
+			assert!(Session::key_owner(mock::KEY_ID_A, keys.get_raw(mock::KEY_ID_A)).is_none());
+			assert!(Session::key_owner(mock::KEY_ID_B, keys.get_raw(mock::KEY_ID_B)).is_none());
+
+			let migrated_key = UintAuthorityId(*i);
+			assert_eq!(Session::key_owner(DUMMY, migrated_key.as_ref()), Some(*i));
+		}
+
+		// Check queued keys.
+		assert_eq!(
+			Session::queued_keys(),
+			vec![
+				(1, mock_keys_for(1)),
+				(2, mock_keys_for(2)),
+				(3, mock_keys_for(3)),
+			],
+		);
+
+		for i in 1u64..4 {
+			assert_eq!(<super::NextKeys<Test>>::get(&i), Some(mock_keys_for(i)));
+		}
+	})
 }

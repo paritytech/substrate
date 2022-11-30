@@ -758,9 +758,10 @@ mod tests {
 		authorities.add_pending_change(change_d.clone(), &static_is_descendent_of(false)).unwrap();
 		authorities.add_pending_change(change_e.clone(), &static_is_descendent_of(false)).unwrap();
 
+		// ordered by subtree depth
 		assert_eq!(
 			authorities.pending_changes().collect::<Vec<_>>(),
-			vec![&change_b, &change_a, &change_c, &change_e, &change_d],
+			vec![&change_a, &change_c, &change_b, &change_e, &change_d],
 		);
 	}
 
@@ -798,7 +799,7 @@ mod tests {
 
 		assert_eq!(
 			authorities.pending_changes().collect::<Vec<_>>(),
-			vec![&change_b, &change_a],
+			vec![&change_a, &change_b],
 		);
 
 		// finalizing "hash_c" won't enact the change signaled at "hash_a" but it will prune out "hash_b"

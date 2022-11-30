@@ -22,10 +22,10 @@ the system trait.
 ```rust
 use frame_support::{decl_module, dispatch, traits::Randomness};
 
-pub trait Trait: frame_system::Trait {}
+pub trait Config: frame_system::Config {}
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		#[weight = 0]
 		pub fn random_module_example(origin) -> dispatch::DispatchResult {
 			let _random_value = <pallet_randomness_collective_flip::Module<T>>::random(&b"my context"[..]);

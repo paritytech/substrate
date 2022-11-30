@@ -438,11 +438,11 @@ pub trait BlockNumberProvider {
 	///
 	/// In case of using crate `sp_runtime` without the crate `frame`
 	/// system, it is already implemented for
-	/// `frame_system::Module<T: Trait>` as:
+	/// `frame_system::Module<T: Config>` as:
 	///
 	/// ```ignore
 	/// fn current_block_number() -> Self {
-	///     frame_system::Module<Trait>::block_number()
+	///     frame_system::Module<Config>::block_number()
 	/// }
 	/// ```
 	/// .
@@ -452,7 +452,7 @@ pub trait BlockNumberProvider {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_core::offchain::{testing, OffchainExt, OffchainStorage};
+	use sp_core::offchain::{testing, OffchainExt};
 	use sp_io::TestExternalities;
 
 	const VAL_1: u32 = 0u32;
@@ -485,7 +485,7 @@ mod tests {
 			}
 		});
 		// lock must have been cleared at this point
-		assert_eq!(state.read().persistent_storage.get(b"", b"lock_1"), None);
+		assert_eq!(state.read().persistent_storage.get(b"lock_1"), None);
 	}
 
 	#[test]
@@ -508,7 +508,7 @@ mod tests {
 			guard.forget();
 		});
 		// lock must have been cleared at this point
-		let opt = state.read().persistent_storage.get(b"", b"lock_2");
+		let opt = state.read().persistent_storage.get(b"lock_2");
 		assert!(opt.is_some());
 	}
 
@@ -540,7 +540,7 @@ mod tests {
 		});
 
 		// lock must have been cleared at this point
-		let opt = state.read().persistent_storage.get(b"", b"lock_3");
+		let opt = state.read().persistent_storage.get(b"lock_3");
 		assert!(opt.is_some());
 	}
 
@@ -587,7 +587,7 @@ mod tests {
 		});
 
 		// lock must have been cleared at this point
-		let opt = state.read().persistent_storage.get(b"", b"lock_4");
+		let opt = state.read().persistent_storage.get(b"lock_4");
 		assert_eq!(opt.unwrap(), vec![132_u8, 3u8, 0, 0, 0, 0, 0, 0]); // 132 + 256 * 3 = 900
 	}
 }

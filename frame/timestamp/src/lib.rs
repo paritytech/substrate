@@ -19,7 +19,7 @@
 //!
 //! The Timestamp module provides functionality to get and set the on-chain time.
 //!
-//! - [`timestamp::Trait`](./trait.Trait.html)
+//! - [`timestamp::Config`](./trait.Config.html)
 //! - [`Call`](./enum.Call.html)
 //! - [`Module`](./struct.Module.html)
 //!
@@ -46,7 +46,7 @@
 //! * `get` - Gets the current time for the current block. If this function is called prior to
 //! setting the timestamp, it will return the timestamp of the previous block.
 //!
-//! ### Trait Getters
+//! ### Config Getters
 //!
 //! * `MinimumPeriod` - Gets the minimum (and advised) period between blocks for the chain.
 //!
@@ -66,10 +66,10 @@
 //! # use pallet_timestamp as timestamp;
 //! use frame_system::ensure_signed;
 //!
-//! pub trait Trait: timestamp::Trait {}
+//! pub trait Config: timestamp::Config {}
 //!
 //! decl_module! {
-//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 //! 		#[weight = 0]
 //! 		pub fn get_time(origin) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
@@ -93,7 +93,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod benchmarking;
-mod default_weights;
+pub mod weights;
 
 use sp_std::{result, cmp};
 use sp_inherents::{ProvideInherent, InherentData, InherentIdentifier};
@@ -115,14 +115,10 @@ use sp_timestamp::{
 	InherentError, INHERENT_IDENTIFIER, InherentType,
 	OnTimestampSet,
 };
-
-pub trait WeightInfo {
-	fn set() -> Weight;
-	fn on_finalize() -> Weight;
-}
+pub use weights::WeightInfo;
 
 /// The module configuration trait
-pub trait Trait: frame_system::Trait {
+pub trait Config: frame_system::Config {
 	/// Type used for expressing timestamp.
 	type Moment: Parameter + Default + AtLeast32Bit
 		+ Scale<Self::BlockNumber, Output = Self::Moment> + Copy;
@@ -141,7 +137,7 @@ pub trait Trait: frame_system::Trait {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		/// The minimum period between blocks. Beware that this is different to the *expected* period
 		/// that the block production apparatus provides. Your chosen consensus system will generally
 		/// work with this to determine a sensible block time. e.g. For Aura, it will be double this
@@ -198,7 +194,7 @@ decl_module! {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Timestamp {
+	trait Store for Module<T: Config> as Timestamp {
 		/// Current time for the current block.
 		pub Now get(fn now): T::Moment;
 
@@ -207,7 +203,7 @@ decl_storage! {
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	/// Get the current time for the current block.
 	///
 	/// NOTE: if this function is called prior to setting the timestamp,
@@ -229,7 +225,7 @@ fn extract_inherent_data(data: &InherentData) -> Result<InherentType, RuntimeStr
 		.ok_or_else(|| "Timestamp inherent data is not provided.".into())
 }
 
-impl<T: Trait> ProvideInherent for Module<T> {
+impl<T: Config> ProvideInherent for Module<T> {
 	type Call = Call<T>;
 	type Error = InherentError;
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
@@ -264,7 +260,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 	}
 }
 
-impl<T: Trait> Time for Module<T> {
+impl<T: Config> Time for Module<T> {
 	type Moment = T::Moment;
 
 	/// Before the first set of now with inherent the value returned is zero.
@@ -276,7 +272,7 @@ impl<T: Trait> Time for Module<T> {
 /// Before the timestamp inherent is applied, it returns the time of previous block.
 ///
 /// On genesis the time returned is not valid.
-impl<T: Trait> UnixTime for Module<T> {
+impl<T: Config> UnixTime for Module<T> {
 	fn now() -> core::time::Duration {
 		// now is duration since unix epoch in millisecond as documented in
 		// `sp_timestamp::InherentDataProvider`.
@@ -296,10 +292,10 @@ impl<T: Trait> UnixTime for Module<T> {
 mod tests {
 	use super::*;
 
-	use frame_support::{impl_outer_origin, assert_ok, parameter_types, weights::Weight};
+	use frame_support::{impl_outer_origin, assert_ok, parameter_types};
 	use sp_io::TestExternalities;
 	use sp_core::H256;
-	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 	pub fn new_test_ext() -> TestExternalities {
 		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
@@ -314,12 +310,14 @@ mod tests {
 	pub struct Test;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: Weight = 1024;
-		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: Perbill = Perbill::one();
+		pub BlockWeights: frame_system::limits::BlockWeights =
+			frame_system::limits::BlockWeights::simple_max(1024);
 	}
-	impl frame_system::Trait for Test {
+	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
+		type BlockWeights = ();
+		type BlockLength = ();
+		type DbWeight = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -331,13 +329,6 @@ mod tests {
 		type Header = Header;
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type DbWeight = ();
-		type BlockExecutionWeight = ();
-		type ExtrinsicBaseWeight = ();
-		type MaximumExtrinsicWeight = MaximumBlockWeight;
-		type AvailableBlockRatio = AvailableBlockRatio;
-		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
 		type PalletInfo = ();
 		type AccountData = ();
@@ -348,7 +339,7 @@ mod tests {
 	parameter_types! {
 		pub const MinimumPeriod: u64 = 5;
 	}
-	impl Trait for Test {
+	impl Config for Test {
 		type Moment = u64;
 		type OnTimestampSet = ();
 		type MinimumPeriod = MinimumPeriod;

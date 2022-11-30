@@ -63,7 +63,7 @@ pub enum Subkey {
 /// Run the subkey command, given the apropriate runtime.
 pub fn run<R>() -> Result<(), Error>
 	where
-		R: frame_system::Trait,
+		R: frame_system::Config,
 		R::AccountId: Ss58Codec
 {
 	match Subkey::from_args() {

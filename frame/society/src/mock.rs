@@ -25,7 +25,6 @@ use frame_support::{
 };
 use sp_core::H256;
 use sp_runtime::{
-	Perbill,
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
@@ -45,14 +44,11 @@ parameter_types! {
 	pub const PeriodSpend: u64 = 1000;
 	pub const MaxLockDuration: u64 = 100;
 	pub const ChallengePeriod: u64 = 8;
-
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: u32 = 1024;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
-	pub const AvailableBlockRatio: Perbill = Perbill::one();
-
 	pub const ExistentialDeposit: u64 = 1;
 	pub const SocietyModuleId: ModuleId = ModuleId(*b"py/socie");
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::simple_max(1024);
 }
 
 ord_parameter_types! {
@@ -60,8 +56,11 @@ ord_parameter_types! {
 	pub const SuspensionJudgementSetAccount: u128 = 2;
 }
 
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = ();
+	type BlockWeights = ();
+	type BlockLength = ();
+	type DbWeight = ();
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -73,13 +72,6 @@ impl frame_system::Trait for Test {
 	type Header = Header;
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type PalletInfo = ();
 	type OnNewAccount = ();
@@ -88,7 +80,7 @@ impl frame_system::Trait for Test {
 	type SystemWeightInfo = ();
 }
 
-impl pallet_balances::Trait for Test {
+impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type Balance = u64;
 	type Event = ();
@@ -98,7 +90,7 @@ impl pallet_balances::Trait for Test {
 	type WeightInfo = ();
 }
 
-impl Trait for Test {
+impl Config for Test {
 	type Event = ();
 	type Currency = pallet_balances::Module<Self>;
 	type Randomness = TestRandomness;

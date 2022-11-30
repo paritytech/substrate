@@ -24,7 +24,7 @@ use std::path::PathBuf;
 use serde::Serialize;
 
 use crate::BenchmarkCmd;
-use frame_benchmarking::{BenchmarkBatch, BenchmarkSelector, Analysis};
+use frame_benchmarking::{BenchmarkBatch, BenchmarkSelector, Analysis, RegressionModel};
 use sp_runtime::traits::Zero;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
@@ -84,6 +84,8 @@ struct ComponentSlope {
 	name: String,
 	#[serde(serialize_with = "string_serialize")]
 	slope: u128,
+	#[serde(serialize_with = "string_serialize")]
+	error: u128,
 }
 
 // Small helper to create an `io::Error` from a string.
@@ -132,6 +134,17 @@ fn map_results(batches: &[BenchmarkBatch]) -> Result<HashMap<String, Vec<Benchma
 	Ok(all_benchmarks)
 }
 
+// Get an iterator of errors from a model. If the model is `None` all errors are zero.
+fn extract_errors(model: &Option<RegressionModel>) -> impl Iterator<Item=u128> + '_ {
+	let mut errors = model.as_ref().map(|m| m.se.regressor_values.iter());
+	std::iter::from_fn(move || {
+		match &mut errors {
+			Some(model) => model.next().map(|val| *val as u128),
+			_ => Some(0),
+		}
+	})
+}
+
 // Analyze and return the relevant results for a given benchmark.
 fn get_benchmark_data(batch: &BenchmarkBatch) -> BenchmarkData {
 	// Analyze benchmarks to get the linear regression.
@@ -145,27 +158,45 @@ fn get_benchmark_data(batch: &BenchmarkBatch) -> BenchmarkData {
 	let mut used_reads = Vec::new();
 	let mut used_writes = Vec::new();
 
-	extrinsic_time.slopes.into_iter().zip(extrinsic_time.names.iter()).for_each(|(slope, name)| {
-		if !slope.is_zero() {
-			if !used_components.contains(&name) { used_components.push(name); }
-			used_extrinsic_time.push(ComponentSlope {
-				name: name.clone(),
-				slope: slope.saturating_mul(1000),
-			});
-		}
-	});
-	reads.slopes.into_iter().zip(reads.names.iter()).for_each(|(slope, name)| {
-		if !slope.is_zero() {
-			if !used_components.contains(&name) { used_components.push(name); }
-			used_reads.push(ComponentSlope { name: name.clone(), slope });
-		}
-	});
-	writes.slopes.into_iter().zip(writes.names.iter()).for_each(|(slope, name)| {
-		if !slope.is_zero() {
-			if !used_components.contains(&name) { used_components.push(name); }
-			used_writes.push(ComponentSlope { name: name.clone(), slope });
-		}
-	});
+	extrinsic_time.slopes.into_iter()
+		.zip(extrinsic_time.names.iter())
+		.zip(extract_errors(&extrinsic_time.model))
+		.for_each(|((slope, name), error)| {
+			if !slope.is_zero() {
+				if !used_components.contains(&name) { used_components.push(name); }
+				used_extrinsic_time.push(ComponentSlope {
+					name: name.clone(),
+					slope: slope.saturating_mul(1000),
+					error: error.saturating_mul(1000),
+				});
+			}
+		});
+	reads.slopes.into_iter()
+		.zip(reads.names.iter())
+		.zip(extract_errors(&reads.model))
+		.for_each(|((slope, name), error)| {
+			if !slope.is_zero() {
+				if !used_components.contains(&name) { used_components.push(name); }
+				used_reads.push(ComponentSlope {
+					name: name.clone(),
+					slope,
+					error,
+				});
+			}
+		});
+	writes.slopes.into_iter()
+		.zip(writes.names.iter())
+		.zip(extract_errors(&writes.model))
+		.for_each(|((slope, name), error)| {
+			if !slope.is_zero() {
+				if !used_components.contains(&name) { used_components.push(name); }
+				used_writes.push(ComponentSlope {
+					name: name.clone(),
+					slope,
+					error,
+				});
+			}
+		});
 
 	// This puts a marker on any component which is entirely unused in the weight formula.
 	let components = batch.results[0].components
@@ -379,18 +410,30 @@ mod test {
 		assert_eq!(benchmark.base_weight, base * 1_000);
 		assert_eq!(
 			benchmark.component_weight,
-			vec![ComponentSlope { name: component.to_string(), slope: slope * 1_000 }]
+			vec![ComponentSlope {
+				name: component.to_string(),
+				slope: slope * 1_000,
+				error: 0,
+			}]
 		);
 		// DB Reads/Writes are untouched
 		assert_eq!(benchmark.base_reads, base);
 		assert_eq!(
 			benchmark.component_reads,
-			vec![ComponentSlope { name: component.to_string(), slope: slope }]
+			vec![ComponentSlope {
+				name: component.to_string(),
+				slope,
+				error: 0,
+			}]
 		);
 		assert_eq!(benchmark.base_writes, base);
 		assert_eq!(
 			benchmark.component_writes,
-			vec![ComponentSlope { name: component.to_string(), slope: slope }]
+			vec![ComponentSlope {
+				name: component.to_string(),
+				slope,
+				error: 0,
+			}]
 		);
 	}
 

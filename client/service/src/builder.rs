@@ -41,7 +41,7 @@ use futures::{
 };
 use sc_keystore::LocalKeystore;
 use log::{info, warn};
-use sc_network::config::{Role, FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
+use sc_network::config::{Role, OnDemand};
 use sc_network::NetworkService;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
@@ -59,7 +59,7 @@ use sp_core::traits::{
 	CodeExecutor,
 	SpawnNamed,
 };
-use sp_keystore::{CryptoStore, SyncCryptoStorePtr};
+use sp_keystore::{CryptoStore, SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::BuildStorage;
 use sc_client_api::{
 	BlockBackend, BlockchainEvents,
@@ -205,10 +205,24 @@ pub type TLightClientWithBackend<TBl, TRtApi, TExecDisp, TBackend> = Client<
 	TRtApi,
 >;
 
+trait AsCryptoStoreRef {
+    fn keystore_ref(&self) -> Arc<dyn CryptoStore>;
+    fn sync_keystore_ref(&self) -> Arc<dyn SyncCryptoStore>;
+}
+
+impl<T> AsCryptoStoreRef for Arc<T> where T: CryptoStore + SyncCryptoStore + 'static {
+    fn keystore_ref(&self) -> Arc<dyn CryptoStore> {
+        self.clone()
+    }
+    fn sync_keystore_ref(&self) -> Arc<dyn SyncCryptoStore> {
+        self.clone()
+    }
+}
+
 /// Construct and hold different layers of Keystore wrappers
 pub struct KeystoreContainer {
-	keystore: Arc<dyn CryptoStore>,
-	sync_keystore: SyncCryptoStorePtr,
+	remote: Option<Box<dyn AsCryptoStoreRef>>,
+	local: Arc<LocalKeystore>,
 }
 
 impl KeystoreContainer {
@@ -221,22 +235,49 @@ impl KeystoreContainer {
 			)?,
 			KeystoreConfig::InMemory => LocalKeystore::in_memory(),
 		});
-		let sync_keystore = keystore.clone() as SyncCryptoStorePtr;
 
-		Ok(Self {
-			keystore,
-			sync_keystore,
-		})
+		Ok(Self{remote: Default::default(), local: keystore})
+	}
+
+	/// Set the remote keystore.
+	/// Should be called right away at startup and not at runtime:
+	/// even though this overrides any previously set remote store, it
+	/// does not reset any references previously handed out - they will
+	/// stick araound.
+	pub fn set_remote_keystore<T>(&mut self, remote: Arc<T>)
+		where T: CryptoStore + SyncCryptoStore + 'static
+	{
+		self.remote = Some(Box::new(remote))
 	}
 
 	/// Returns an adapter to the asynchronous keystore that implements `CryptoStore`
 	pub fn keystore(&self) -> Arc<dyn CryptoStore> {
-		self.keystore.clone()
+		if let Some(c) = self.remote.as_ref() {
+			c.keystore_ref()
+		} else {
+			self.local.clone()
+		}
 	}
 
 	/// Returns the synchrnous keystore wrapper
 	pub fn sync_keystore(&self) -> SyncCryptoStorePtr {
-		self.sync_keystore.clone()
+		if let Some(c) = self.remote.as_ref() {
+			c.sync_keystore_ref()
+		} else {
+			self.local.clone() as SyncCryptoStorePtr
+		}
+	}
+
+	/// Returns the local keystore if available
+	///
+	/// The function will return None if the available keystore is not a local keystore.
+	///
+	/// # Note
+	///
+	/// Using the [`LocalKeystore`] will result in loosing the ability to use any other keystore implementation, like
+	/// a remote keystore for example. Only use this if you a certain that you require it!
+	pub fn local_keystore(&self) -> Option<Arc<LocalKeystore>> {
+		Some(self.local.clone())
 	}
 }
 
@@ -588,12 +629,12 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		on_demand.clone(), remote_blockchain.clone(), &*rpc_extensions_builder,
 		backend.offchain_storage(), system_rpc_tx.clone()
 	);
-	let rpc_metrics = sc_rpc_server::RpcMetrics::new(config.prometheus_registry()).ok();
-	let rpc = start_rpc_servers(&config, gen_handler, rpc_metrics.as_ref())?;
+	let rpc_metrics = sc_rpc_server::RpcMetrics::new(config.prometheus_registry())?;
+	let rpc = start_rpc_servers(&config, gen_handler, rpc_metrics.clone())?;
 	// This is used internally, so don't restrict access to unsafe RPC
 	let rpc_handlers = RpcHandlers(Arc::new(gen_handler(
 		sc_rpc::DenyUnsafe::No,
-		sc_rpc_server::RpcMiddleware::new(rpc_metrics.as_ref().cloned(), "inbrowser")
+		sc_rpc_server::RpcMiddleware::new(rpc_metrics, "inbrowser")
 	).into()));
 
 	// Telemetry
@@ -815,10 +856,6 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	pub block_announce_validator_builder: Option<Box<
 		dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send
 	>>,
-	/// An optional finality proof request builder.
-	pub finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<TBl>>,
-	/// An optional, shared finality proof request provider.
-	pub finality_proof_provider: Option<Arc<dyn FinalityProofProvider<TBl>>>,
 }
 
 /// Build the network service, the network status sinks and an RPC sender.
@@ -843,7 +880,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 {
 	let BuildNetworkParams {
 		config, client, transaction_pool, spawn_handle, import_queue, on_demand,
-		block_announce_validator_builder, finality_proof_request_builder, finality_proof_provider,
+		block_announce_validator_builder,
 	} = params;
 
 	let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
@@ -881,8 +918,6 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		},
 		network_config: config.network.clone(),
 		chain: client.clone(),
-		finality_proof_provider,
-		finality_proof_request_builder,
 		on_demand: on_demand,
 		transaction_pool: transaction_pool_adapter as _,
 		import_queue: Box::new(import_queue),

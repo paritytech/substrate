@@ -4,8 +4,8 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+/// Wasm binary unwrapped. If built with `SKIP_WASM_BUILD`, the function panics.
 #[cfg(feature = "std")]
-/// Wasm binary unwrapped. If built with `BUILD_DUMMY_WASM_BINARY`, the function panics.
 pub fn wasm_binary_unwrap() -> &'static [u8] {
 	WASM_BINARY.expect("Development wasm binary is not available. Testing is only \
 						supported with the flag disabled.")
@@ -259,6 +259,17 @@ sp_core::wasm_export_functions! {
 
 	fn test_exit_span(span_id: u64) {
 		wasm_tracing::exit(span_id)
+	}
+
+	fn test_nested_spans() {
+		sp_io::init_tracing();
+		let span_id = wasm_tracing::enter_span(Default::default());
+		{
+			sp_io::init_tracing();
+			let span_id = wasm_tracing::enter_span(Default::default());
+			wasm_tracing::exit(span_id);
+		}
+		wasm_tracing::exit(span_id);
 	}
 
 	fn returns_mutable_static() -> u64 {

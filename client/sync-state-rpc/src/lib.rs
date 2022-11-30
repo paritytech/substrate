@@ -17,6 +17,8 @@
 //! A RPC handler to create sync states for light clients.
 //! Currently only usable with BABE + GRANDPA.
 
+#![deny(unused_crate_dependencies)]
+
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use sp_blockchain::HeaderBackend;
 use std::sync::Arc;
@@ -28,12 +30,27 @@ type SharedAuthoritySet<TBl> =
 	sc_finality_grandpa::SharedAuthoritySet<<TBl as BlockT>::Hash, NumberFor<TBl>>;
 type SharedEpochChanges<TBl> = sc_consensus_epochs::SharedEpochChanges<TBl, sc_consensus_babe::Epoch>;
 
-struct Error(sp_blockchain::Error);
+#[derive(Debug, thiserror::Error)]
+#[allow(missing_docs)]
+enum Error<Block: BlockT> {
+	#[error(transparent)]
+	Blockchain(#[from] sp_blockchain::Error),
+	
+	#[error("Failed to load the block weight for block {0:?}")]
+	LoadingBlockWeightFailed(<Block as BlockT>::Hash),
 
-impl From<Error> for jsonrpc_core::Error {
-	fn from(error: Error) -> Self {
+	#[error("JsonRpc error: {0}")]
+	JsonRpc(String),
+}
+
+impl<Block: BlockT> From<Error<Block>> for jsonrpc_core::Error {
+	fn from(error: Error<Block>) -> Self {
+		let message = match error {
+			Error::JsonRpc(s) => s,
+			_ => error.to_string(),
+		};
 		jsonrpc_core::Error {
-			message: error.0.to_string(),
+			message,
 			code:  jsonrpc_core::ErrorCode::ServerError(1),
 			data: None,
 		}
@@ -76,20 +93,16 @@ impl<TBl, TCl> SyncStateRpcHandler<TBl, TCl>
 		}
 	}
 	
-	fn build_sync_state(&self) -> Result<sc_chain_spec::LightSyncState<TBl>, sp_blockchain::Error> {
+	fn build_sync_state(&self) -> Result<sc_chain_spec::LightSyncState<TBl>, Error<TBl>> {
 		let finalized_hash = self.client.info().finalized_hash;
 		let finalized_header = self.client.header(BlockId::Hash(finalized_hash))?
-			.ok_or_else(|| sp_blockchain::Error::Msg(
-				format!("Failed to get the header for block {:?}", finalized_hash)
-			))?;
+			.ok_or_else(|| sp_blockchain::Error::MissingHeader(finalized_hash.to_string()))?;
 
 		let finalized_block_weight = sc_consensus_babe::aux_schema::load_block_weight(
-			&*self.client,
-			finalized_hash,
-		)?
-			.ok_or_else(|| sp_blockchain::Error::Msg(
-				format!("Failed to load the block weight for block {:?}", finalized_hash)
-			))?;
+				&*self.client,
+				finalized_hash,
+			)?
+			.ok_or_else(|| Error::LoadingBlockWeightFailed(finalized_hash))?;
 
 		Ok(sc_chain_spec::LightSyncState {
 			finalized_block_header: finalized_header,
@@ -114,15 +127,16 @@ impl<TBl, TCl> SyncStateRpcApi for SyncStateRpcHandler<TBl, TCl>
 
 		let mut chain_spec = self.chain_spec.cloned_box();
 
-		let sync_state = self.build_sync_state().map_err(Error)?;
+		let sync_state = self.build_sync_state()
+			.map_err(map_error::<TBl,Error<TBl>>)?;
 
 		chain_spec.set_light_sync_state(sync_state.to_serializable());
-		let string = chain_spec.as_json(raw).map_err(map_error)?;
+		let string = chain_spec.as_json(raw).map_err(map_error::<TBl,_>)?;
 
-		serde_json::from_str(&string).map_err(|err| map_error(err.to_string()))
+		serde_json::from_str(&string).map_err(|err| map_error::<TBl,_>(err))
 	}
 }
 
-fn map_error(error: String) -> jsonrpc_core::Error {
-	Error(sp_blockchain::Error::Msg(error)).into()
+fn map_error<Block: BlockT, S: ToString>(error: S) -> jsonrpc_core::Error {
+	Error::<Block>::JsonRpc(error.to_string()).into()
 }

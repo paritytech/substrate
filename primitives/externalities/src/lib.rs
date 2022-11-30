@@ -137,7 +137,17 @@ pub trait Externalities: ExtensionStore {
 	) -> Option<Vec<u8>>;
 
 	/// Clear an entire child storage.
-	fn kill_child_storage(&mut self, child_info: &ChildInfo);
+	///
+	/// Deletes all keys from the overlay and up to `limit` keys from the backend. No
+	/// limit is applied if `limit` is `None`. Returns `true` if the child trie was
+	/// removed completely and `false` if there are remaining keys after the function
+	/// returns.
+	///
+	/// # Note
+	///
+	/// An implementation is free to delete more keys than the specified limit as long as
+	/// it is able to do that in constant time.
+	fn kill_child_storage(&mut self, child_info: &ChildInfo, limit: Option<u32>) -> bool;
 
 	/// Clear storage entries which keys are start with the given prefix.
 	fn clear_prefix(&mut self, prefix: &[u8]);

@@ -34,15 +34,15 @@ use sp_std::vec::Vec;
 #[cfg(test)]
 mod tests;
 
-pub trait Trait: frame_system::Trait {
+pub trait Config: frame_system::Config {
 	/// The overarching event type.
-	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event> + Into<<Self as frame_system::Config>::Event>;
 	/// The overarching dispatch call type.
 	type Call: From<Call<Self>>;
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as ExampleOffchainWorker {
+	trait Store for Module<T: Config> as ExampleOffchainWorker {
 		/// A vector of current participants
 		///
 		/// To enlist someone to participate, signed payload should be
@@ -87,7 +87,7 @@ impl EnlistedParticipant {
 
 decl_module! {
 	/// A public part of the pallet.
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 
 		/// Get the new event running.

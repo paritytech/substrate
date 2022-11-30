@@ -63,7 +63,7 @@ mod inner {
 	/// `UNBOUNDED_CHANNELS_COUNTER`
 	pub fn tracing_unbounded<T>(key: &'static str) ->(TracingUnboundedSender<T>, TracingUnboundedReceiver<T>) {
 		let (s, r) = mpsc::unbounded();
-		(TracingUnboundedSender(key.clone(), s), TracingUnboundedReceiver(key,r))
+		(TracingUnboundedSender(key, s), TracingUnboundedReceiver(key,r))
 	}
 
 	impl<T> TracingUnboundedSender<T> {

@@ -22,10 +22,10 @@ use frame_support::{
 use sp_io::TestExternalities;
 use sp_std::result;
 
-pub trait Trait: frame_support_test::Trait {}
+pub trait Config: frame_support_test::Config {}
 
 frame_support::decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=frame_support_test {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin, system=frame_support_test {
 		#[weight = 0]
 		#[transactional]
 		fn value_commits(_origin, v: u32) {
@@ -42,7 +42,7 @@ frame_support::decl_module! {
 }
 
 frame_support::decl_storage!{
-	trait Store for Module<T: Trait> as StorageTransactions {
+	trait Store for Module<T: Config> as StorageTransactions {
 		pub Value: u32;
 		pub Map: map hasher(twox_64_concat) String => u32;
 	}
@@ -50,14 +50,14 @@ frame_support::decl_storage!{
 
 struct Runtime;
 
-impl frame_support_test::Trait for Runtime {
+impl frame_support_test::Config for Runtime {
 	type Origin = u32;
 	type BlockNumber = u32;
 	type PalletInfo = ();
 	type DbWeight = ();
 }
 
-impl Trait for Runtime {}
+impl Config for Runtime {}
 
 #[test]
 fn storage_transaction_basic_commit() {

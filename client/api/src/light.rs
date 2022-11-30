@@ -312,13 +312,21 @@ pub mod tests {
 	use sp_test_primitives::{Block, Header, Extrinsic};
 	use super::*;
 
+	#[derive(Debug, thiserror::Error)]
+	#[error("Not implemented on test node")]
+	struct MockError;
+
+	impl Into<ClientError> for MockError {
+		fn into(self) -> ClientError {
+			ClientError::Application(Box::new(self))
+		}
+	}	
+	
 	pub type OkCallFetcher = Mutex<Vec<u8>>;
 
-	fn not_implemented_in_tests<T, E>() -> Ready<Result<T, E>>
-	where
-		E: std::convert::From<&'static str>,
+	fn not_implemented_in_tests<T>() -> Ready<Result<T, ClientError>>
 	{
-		futures::future::ready(Err("Not implemented on test node".into()))
+		futures::future::ready(Err(MockError.into()))
 	}
 
 	impl Fetcher<Block> for OkCallFetcher {

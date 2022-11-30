@@ -37,66 +37,6 @@ use substrate_test_runtime_client::runtime::Block;
 
 use super::*;
 
-#[test]
-fn interval_at_with_start_now() {
-	let start = Instant::now();
-
-	let mut interval = interval_at(
-		std::time::Instant::now(),
-		std::time::Duration::from_secs(10),
-	);
-
-	futures::executor::block_on(async {
-		interval.next().await;
-	});
-
-	assert!(
-		Instant::now().saturating_duration_since(start) < Duration::from_secs(1),
-		"Expected low resolution instant interval to fire within less than a second.",
-	);
-}
-
-#[test]
-fn interval_at_is_queuing_ticks() {
-	let start = Instant::now();
-
-	let interval = interval_at(start, std::time::Duration::from_millis(100));
-
-	// Let's wait for 200ms, thus 3 elements should be queued up (1st at 0ms, 2nd at 100ms, 3rd
-	// at 200ms).
-	std::thread::sleep(Duration::from_millis(200));
-
-	futures::executor::block_on(async {
-		interval.take(3).collect::<Vec<()>>().await;
-	});
-
-	// Make sure we did not wait for more than 300 ms, which would imply that `at_interval` is
-	// not queuing ticks.
-	assert!(
-		Instant::now().saturating_duration_since(start) < Duration::from_millis(300),
-		"Expect interval to /queue/ events when not polled for a while.",
-	);
-}
-
-#[test]
-fn interval_at_with_initial_delay() {
-	let start = Instant::now();
-
-	let mut interval = interval_at(
-		std::time::Instant::now() + Duration::from_millis(100),
-		std::time::Duration::from_secs(10),
-	);
-
-	futures::executor::block_on(async {
-		interval.next().await;
-	});
-
-	assert!(
-		Instant::now().saturating_duration_since(start) > Duration::from_millis(100),
-		"Expected interval with initial delay not to fire right away.",
-	);
-}
-
 #[derive(Clone)]
 pub(crate) struct TestApi {
 	pub(crate) authorities: Vec<AuthorityId>,
@@ -306,6 +246,7 @@ fn new_registers_metrics() {
 		Box::pin(dht_event_rx),
 		Role::PublishAndDiscover(key_store.into()),
 		Some(registry.clone()),
+		Default::default(),
 	);
 
 	assert!(registry.gather().len() > 0);
@@ -334,6 +275,7 @@ fn triggers_dht_get_query() {
 		Box::pin(dht_event_rx),
 		Role::PublishAndDiscover(key_store.into()),
 		None,
+		Default::default(),
 	);
 
 	futures::executor::block_on(async {
@@ -382,6 +324,7 @@ fn publish_discover_cycle() {
 			Box::pin(dht_event_rx),
 			Role::PublishAndDiscover(key_store.into()),
 			None,
+			Default::default(),
 		);
 
 		worker.publish_ext_addresses().await.unwrap();
@@ -412,6 +355,7 @@ fn publish_discover_cycle() {
 			Box::pin(dht_event_rx),
 			Role::PublishAndDiscover(key_store.into()),
 			None,
+			Default::default(),
 		);
 
 		dht_event_tx.try_send(dht_event.clone()).unwrap();
@@ -458,6 +402,7 @@ fn terminate_when_event_stream_terminates() {
 		Box::pin(dht_event_rx),
 		Role::PublishAndDiscover(key_store.into()),
 		None,
+		Default::default(),
 	).run();
 	futures::pin_mut!(worker);
 
@@ -520,6 +465,7 @@ fn dont_stop_polling_dht_event_stream_after_bogus_event() {
 		Box::pin(dht_event_rx),
 		Role::PublishAndDiscover(Arc::new(key_store)),
 		None,
+		Default::default(),
 	);
 
 	// Spawn the authority discovery to make sure it is polled independently.
@@ -596,6 +542,7 @@ fn limit_number_of_addresses_added_to_cache_per_authority() {
 		Box::pin(dht_event_rx),
 		Role::Discover,
 		None,
+		Default::default(),
 	);
 
 	block_on(worker.refill_pending_lookups_queue()).unwrap();
@@ -648,6 +595,7 @@ fn do_not_cache_addresses_without_peer_id() {
 		Box::pin(dht_event_rx),
 		Role::PublishAndDiscover(Arc::new(local_key_store)),
 		None,
+		Default::default(),
 	);
 
 	block_on(local_worker.refill_pending_lookups_queue()).unwrap();
@@ -682,6 +630,7 @@ fn addresses_to_publish_adds_p2p() {
 		Box::pin(dht_event_rx),
 		Role::PublishAndDiscover(Arc::new(KeyStore::new())),
 		Some(prometheus_endpoint::Registry::new()),
+		Default::default(),
 	);
 
 	assert!(
@@ -716,6 +665,7 @@ fn addresses_to_publish_respects_existing_p2p_protocol() {
 		Box::pin(dht_event_rx),
 		Role::PublishAndDiscover(Arc::new(KeyStore::new())),
 		Some(prometheus_endpoint::Registry::new()),
+		Default::default(),
 	);
 
 	assert_eq!(
@@ -757,6 +707,7 @@ fn lookup_throttling() {
 		dht_event_rx.boxed(),
 		Role::Discover,
 		Some(default_registry().clone()),
+		Default::default(),
 	);
 
 	let mut pool = LocalPool::new();

@@ -20,7 +20,7 @@
 //! The Session module allows validators to manage their session keys, provides a function for changing
 //! the session length, and handles session rotation.
 //!
-//! - [`session::Trait`](./trait.Trait.html)
+//! - [`session::Config`](./trait.Config.html)
 //! - [`Call`](./enum.Call.html)
 //! - [`Module`](./struct.Module.html)
 //!
@@ -88,7 +88,7 @@
 //! ```
 //! use pallet_session as session;
 //!
-//! fn validators<T: pallet_session::Trait>() -> Vec<<T as pallet_session::Trait>::ValidatorId> {
+//! fn validators<T: pallet_session::Config>() -> Vec<<T as pallet_session::Config>::ValidatorId> {
 //!	<pallet_session::Module<T>>::validators()
 //! }
 //! # fn main(){}
@@ -99,6 +99,14 @@
 //! - [Staking](../pallet_staking/index.html)
 
 #![cfg_attr(not(feature = "std"), no_std)]
+
+#[cfg(test)]
+mod mock;
+#[cfg(test)]
+mod tests;
+#[cfg(feature = "historical")]
+pub mod historical;
+pub mod weights;
 
 use sp_std::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use codec::Decode;
@@ -114,16 +122,7 @@ use frame_support::{
 	weights::Weight,
 };
 use frame_system::ensure_signed;
-
-#[cfg(test)]
-mod mock;
-#[cfg(test)]
-mod tests;
-
-#[cfg(feature = "historical")]
-pub mod historical;
-
-mod default_weights;
+pub use weights::WeightInfo;
 
 /// Decides whether the session should be ended.
 pub trait ShouldEndSession<BlockNumber> {
@@ -347,20 +346,15 @@ impl<AId> SessionHandler<AId> for TestSessionHandler {
 	fn on_disabled(_: usize) {}
 }
 
-impl<T: Trait> ValidatorRegistration<T::ValidatorId> for Module<T> {
+impl<T: Config> ValidatorRegistration<T::ValidatorId> for Module<T> {
 	fn is_registered(id: &T::ValidatorId) -> bool {
 		Self::load_keys(id).is_some()
 	}
 }
 
-pub trait WeightInfo {
-	fn set_keys() -> Weight;
-	fn purge_keys() -> Weight;
-}
-
-pub trait Trait: frame_system::Trait {
+pub trait Config: frame_system::Config {
 	/// The overarching event type.
-	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event> + Into<<Self as frame_system::Config>::Event>;
 
 	/// A stable ID for a validator.
 	type ValidatorId: Member + Parameter;
@@ -398,7 +392,7 @@ pub trait Trait: frame_system::Trait {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Session {
+	trait Store for Module<T: Config> as Session {
 		/// The current set of validators.
 		Validators get(fn validators): Vec<T::ValidatorId>;
 
@@ -489,7 +483,7 @@ decl_event!(
 
 decl_error! {
 	/// Error for the session module.
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		/// Invalid ownership proof.
 		InvalidProof,
 		/// No associated validator ID for account.
@@ -502,7 +496,7 @@ decl_error! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
@@ -555,7 +549,7 @@ decl_module! {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			if T::ShouldEndSession::should_end_session(n) {
 				Self::rotate_session();
-				T::MaximumBlockWeight::get()
+				T::BlockWeights::get().max_block
 			} else {
 				// NOTE: the non-database part of the weight for `should_end_session(n)` is
 				// included as weight for empty block, the database part is expected to be in
@@ -566,7 +560,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	/// Move on to next session. Register new validator set and session keys. Changes
 	/// to the validator set have a session of delay to take effect. This allows for
 	/// equivocation punishment after a fork.
@@ -689,6 +683,55 @@ impl<T: Trait> Module<T> {
 		Self::validators().iter().position(|i| i == c).map(Self::disable_index).ok_or(())
 	}
 
+	/// Upgrade the key type from some old type to a new type. Supports adding
+	/// and removing key types.
+	///
+	/// This function should be used with extreme care and only during an
+	/// `on_runtime_upgrade` block. Misuse of this function can put your blockchain
+	/// into an unrecoverable state.
+	///
+	/// Care should be taken that the raw versions of the
+	/// added keys are unique for every `ValidatorId, KeyTypeId` combination.
+	/// This is an invariant that the session module typically maintains internally.
+	///
+	/// As the actual values of the keys are typically not known at runtime upgrade,
+	/// it's recommended to initialize the keys to a (unique) dummy value with the expectation
+	/// that all validators should invoke `set_keys` before those keys are actually
+	/// required.
+	pub fn upgrade_keys<Old, F>(upgrade: F) where
+		Old: OpaqueKeys + Member + Decode,
+		F: Fn(T::ValidatorId, Old) -> T::Keys,
+	{
+		let old_ids = Old::key_ids();
+		let new_ids = T::Keys::key_ids();
+
+		// Translate NextKeys, and key ownership relations at the same time.
+		<NextKeys<T>>::translate::<Old, _>(|val, old_keys| {
+			// Clear all key ownership relations. Typically the overlap should
+			// stay the same, but no guarantees by the upgrade function.
+			for i in old_ids.iter() {
+				Self::clear_key_owner(*i, old_keys.get_raw(*i));
+			}
+
+			let new_keys = upgrade(val.clone(), old_keys);
+
+			// And now set the new ones.
+			for i in new_ids.iter() {
+				Self::put_key_owner(*i, new_keys.get_raw(*i), &val);
+			}
+
+			Some(new_keys)
+		});
+
+		let _ = <QueuedKeys<T>>::translate::<Vec<(T::ValidatorId, Old)>, _>(
+			|k| {
+				k.map(|k| k.into_iter()
+					.map(|(val, old_keys)| (val.clone(), upgrade(val, old_keys)))
+					.collect::<Vec<_>>())
+			}
+		);
+	}
+
 	/// Perform the set_key operation, checking for duplicates. Does not set `Changed`.
 	///
 	/// This ensures that the reference counter in system is incremented appropriately and as such
@@ -782,7 +825,7 @@ impl<T: Trait> Module<T> {
 /// registering account-ID of that session key index.
 pub struct FindAccountFromAuthorIndex<T, Inner>(sp_std::marker::PhantomData<(T, Inner)>);
 
-impl<T: Trait, Inner: FindAuthor<u32>> FindAuthor<T::ValidatorId>
+impl<T: Config, Inner: FindAuthor<u32>> FindAuthor<T::ValidatorId>
 	for FindAccountFromAuthorIndex<T, Inner>
 {
 	fn find_author<'a, I>(digests: I) -> Option<T::ValidatorId>
@@ -795,7 +838,7 @@ impl<T: Trait, Inner: FindAuthor<u32>> FindAuthor<T::ValidatorId>
 	}
 }
 
-impl<T: Trait> EstimateNextNewSession<T::BlockNumber> for Module<T> {
+impl<T: Config> EstimateNextNewSession<T::BlockNumber> for Module<T> {
 	/// This session module always calls new_session and next_session at the same time, hence we
 	/// do a simple proxy and pass the function to next rotation.
 	fn estimate_next_new_session(now: T::BlockNumber) -> Option<T::BlockNumber> {

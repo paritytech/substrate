@@ -73,6 +73,46 @@ fn float_phragmen_poc_works() {
 }
 
 #[test]
+fn phragmen_core_test_without_edges() {
+	let candidates = vec![1, 2, 3];
+	let voters = vec![
+		(10, 10, vec![]),
+		(20, 20, vec![]),
+		(30, 30, vec![]),
+	];
+
+	let (candidates, voters) = setup_inputs(candidates, voters);
+
+	assert_eq!(
+		voters
+			.iter()
+			.map(|v| (
+				v.who,
+				v.budget,
+				(v.edges.iter().map(|e| (e.who, e.weight)).collect::<Vec<_>>()),
+			))
+			.collect::<Vec<_>>(),
+		vec![]
+	);
+
+	assert_eq!(
+		candidates
+			.iter()
+			.map(|c_ptr| (
+				c_ptr.borrow().who,
+				c_ptr.borrow().elected,
+				c_ptr.borrow().round,
+				c_ptr.borrow().backed_stake,
+			)).collect::<Vec<_>>(),
+		vec![
+			(1, false, 0, 0),
+			(2, false, 0, 0),
+			(3, false, 0, 0),
+		]
+	);
+}
+
+#[test]
 fn phragmen_core_poc_works() {
 	let candidates = vec![1, 2, 3];
 	let voters = vec![
