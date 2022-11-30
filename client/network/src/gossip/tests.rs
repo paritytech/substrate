@@ -17,6 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::block_request_handler::BlockRequestHandler;
+use crate::light_client_requests::handler::LightClientRequestHandler;
 use crate::gossip::QueuedSender;
 use crate::{config,  Event, NetworkService, NetworkWorker};
 
@@ -96,7 +97,16 @@ fn build_test_full_node(network_config: config::NetworkConfiguration)
 
 	let block_request_protocol_config = {
 		let (handler, protocol_config) = BlockRequestHandler::new(
-			protocol_id.clone(),
+			&protocol_id,
+			client.clone(),
+		);
+		async_std::task::spawn(handler.run().boxed());
+		protocol_config
+	};
+
+	let light_client_request_protocol_config = {
+		let (handler, protocol_config) = LightClientRequestHandler::new(
+			&protocol_id,
 			client.clone(),
 		);
 		async_std::task::spawn(handler.run().boxed());
@@ -106,6 +116,7 @@ fn build_test_full_node(network_config: config::NetworkConfiguration)
 	let worker = NetworkWorker::new(config::Params {
 		role: config::Role::Full,
 		executor: None,
+		transactions_handler_executor: Box::new(|task| { async_std::task::spawn(task); }),
 		network_config,
 		chain: client.clone(),
 		on_demand: None,
@@ -117,6 +128,7 @@ fn build_test_full_node(network_config: config::NetworkConfiguration)
 		),
 		metrics_registry: None,
 		block_request_protocol_config,
+		light_client_request_protocol_config,
 	})
 	.unwrap();
 

@@ -60,9 +60,9 @@ impl LocalKeystore {
 
 	/// Get a key pair for the given public key.
 	///
-	/// This function is only available for a local keystore. If your application plans to work with
-	/// remote keystores, you do not want to depend on it.
-	pub fn key_pair<Pair: AppPair>(&self, public: &<Pair as AppKey>::Public) -> Result<Pair> {
+	/// Returns `Ok(None)` if the key doesn't exist, `Ok(Some(_))` if the key exists and
+	/// `Err(_)` when something failed.
+	pub fn key_pair<Pair: AppPair>(&self, public: &<Pair as AppKey>::Public) -> Result<Option<Pair>> {
 		self.0.read().key_pair::<Pair>(public)
 	}
 }
@@ -130,7 +130,7 @@ impl CryptoStore for LocalKeystore {
 		id: KeyTypeId,
 		key: &CryptoTypePublicPair,
 		msg: &[u8],
-	) -> std::result::Result<Vec<u8>, TraitError> {
+	) -> std::result::Result<Option<Vec<u8>>, TraitError> {
 		SyncCryptoStore::sign_with(self, id, key, msg)
 	}
 
@@ -139,7 +139,7 @@ impl CryptoStore for LocalKeystore {
 		key_type: KeyTypeId,
 		public: &sr25519::Public,
 		transcript_data: VRFTranscriptData,
-	) -> std::result::Result<VRFSignature, TraitError> {
+	) -> std::result::Result<Option<VRFSignature>, TraitError> {
 		SyncCryptoStore::sr25519_vrf_sign(self, key_type, public, transcript_data)
 	}
 }
@@ -175,28 +175,28 @@ impl SyncCryptoStore for LocalKeystore {
 		id: KeyTypeId,
 		key: &CryptoTypePublicPair,
 		msg: &[u8],
-	) -> std::result::Result<Vec<u8>, TraitError> {
+	) -> std::result::Result<Option<Vec<u8>>, TraitError> {
 		match key.0 {
 			ed25519::CRYPTO_ID => {
 				let pub_key = ed25519::Public::from_slice(key.1.as_slice());
-				let key_pair: ed25519::Pair = self.0.read()
+				let key_pair = self.0.read()
 					.key_pair_by_type::<ed25519::Pair>(&pub_key, id)
 					.map_err(|e| TraitError::from(e))?;
-				Ok(key_pair.sign(msg).encode())
+				key_pair.map(|k| k.sign(msg).encode()).map(Ok).transpose()
 			}
 			sr25519::CRYPTO_ID => {
 				let pub_key = sr25519::Public::from_slice(key.1.as_slice());
-				let key_pair: sr25519::Pair = self.0.read()
+				let key_pair = self.0.read()
 					.key_pair_by_type::<sr25519::Pair>(&pub_key, id)
 					.map_err(|e| TraitError::from(e))?;
-				Ok(key_pair.sign(msg).encode())
+				key_pair.map(|k| k.sign(msg).encode()).map(Ok).transpose()
 			},
 			ecdsa::CRYPTO_ID => {
 				let pub_key = ecdsa::Public::from_slice(key.1.as_slice());
-				let key_pair: ecdsa::Pair = self.0.read()
+				let key_pair = self.0.read()
 					.key_pair_by_type::<ecdsa::Pair>(&pub_key, id)
 					.map_err(|e| TraitError::from(e))?;
-				Ok(key_pair.sign(msg).encode())
+				key_pair.map(|k| k.sign(msg).encode()).map(Ok).transpose()
 			}
 			_ => Err(TraitError::KeyNotSupported(id))
 		}
@@ -232,7 +232,7 @@ impl SyncCryptoStore for LocalKeystore {
 				 .map(|k| ed25519::Public::from_slice(k.as_slice()))
 				 .collect()
 			})
-    		.unwrap_or_default()
+			.unwrap_or_default()
 	}
 
 	fn ed25519_generate_new(
@@ -278,7 +278,8 @@ impl SyncCryptoStore for LocalKeystore {
 	}
 
 	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
-		public_keys.iter().all(|(p, t)| self.0.read().key_phrase_by_type(&p, *t).is_ok())
+		public_keys.iter()
+			.all(|(p, t)| self.0.read().key_phrase_by_type(&p, *t).ok().flatten().is_some())
 	}
 
 	fn sr25519_vrf_sign(
@@ -286,16 +287,19 @@ impl SyncCryptoStore for LocalKeystore {
 		key_type: KeyTypeId,
 		public: &Sr25519Public,
 		transcript_data: VRFTranscriptData,
-	) -> std::result::Result<VRFSignature, TraitError> {
+	) -> std::result::Result<Option<VRFSignature>, TraitError> {
 		let transcript = make_transcript(transcript_data);
-		let pair = self.0.read().key_pair_by_type::<Sr25519Pair>(public, key_type)
-			.map_err(|e| TraitError::PairNotFound(e.to_string()))?;
+		let pair = self.0.read().key_pair_by_type::<Sr25519Pair>(public, key_type)?;
 
-		let (inout, proof, _) = pair.as_ref().vrf_sign(transcript);
-		Ok(VRFSignature {
-			output: inout.to_output(),
-			proof,
-		})
+		if let Some(pair) = pair {
+			let (inout, proof, _) = pair.as_ref().vrf_sign(transcript);
+			Ok(Some(VRFSignature {
+				output: inout.to_output(),
+				proof,
+			}))
+		} else {
+			Ok(None)
+		}
 	}
 }
 
@@ -411,36 +415,53 @@ impl KeystoreInner {
 	}
 
 	/// Get the key phrase for a given public key and key type.
-	fn key_phrase_by_type(&self, public: &[u8], key_type: KeyTypeId) -> Result<String> {
+	fn key_phrase_by_type(&self, public: &[u8], key_type: KeyTypeId) -> Result<Option<String>> {
 		if let Some(phrase) = self.get_additional_pair(public, key_type) {
-			return Ok(phrase.clone())
+			return Ok(Some(phrase.clone()))
 		}
 
-		let path = self.key_file_path(public, key_type).ok_or_else(|| Error::Unavailable)?;
-		let file = File::open(path)?;
+		let path = if let Some(path) = self.key_file_path(public, key_type) {
+			path
+		} else {
+			return Ok(None);
+		};
 
-		serde_json::from_reader(&file).map_err(Into::into)
+		if path.exists() {
+			let file = File::open(path)?;
+
+			serde_json::from_reader(&file).map_err(Into::into).map(Some)
+		} else {
+			Ok(None)
+		}
 	}
 
 	/// Get a key pair for the given public key and key type.
-	fn key_pair_by_type<Pair: PairT>(&self,
+	fn key_pair_by_type<Pair: PairT>(
+		&self,
 		public: &Pair::Public,
 		key_type: KeyTypeId,
-	) -> Result<Pair> {
-		let phrase = self.key_phrase_by_type(public.as_slice(), key_type)?;
+	) -> Result<Option<Pair>> {
+		let phrase = if let Some(p) = self.key_phrase_by_type(public.as_slice(), key_type)? {
+			p
+		} else {
+			return Ok(None)
+		};
+
 		let pair = Pair::from_string(
 			&phrase,
 			self.password(),
 		).map_err(|_| Error::InvalidPhrase)?;
 
 		if &pair.public() == public {
-			Ok(pair)
+			Ok(Some(pair))
 		} else {
 			Err(Error::InvalidPassword)
 		}
 	}
 
-	/// Returns the file path for the given public key and key type.
+	/// Get the file path for the given public key and key type.
+	///
+	/// Returns `None` if the keystore only exists in-memory and there isn't any path to provide.
 	fn key_file_path(&self, public: &[u8], key_type: KeyTypeId) -> Option<PathBuf> {
 		let mut buf = self.path.as_ref()?.clone();
 		let key_type = hex::encode(key_type.0);
@@ -481,8 +502,12 @@ impl KeystoreInner {
 	}
 
 	/// Get a key pair for the given public key.
-	pub fn key_pair<Pair: AppPair>(&self, public: &<Pair as AppKey>::Public) -> Result<Pair> {
-		self.key_pair_by_type::<Pair::Generic>(IsWrappedBy::from_ref(public), Pair::ID).map(Into::into)
+	///
+	/// Returns `Ok(None)` if the key doesn't exist, `Ok(Some(_))` if the key exists or `Err(_)` when
+	/// something failed.
+	pub fn key_pair<Pair: AppPair>(&self, public: &<Pair as AppKey>::Public) -> Result<Option<Pair>> {
+		self.key_pair_by_type::<Pair::Generic>(IsWrappedBy::from_ref(public), Pair::ID)
+			.map(|v| v.map(Into::into))
 	}
 }
 
@@ -531,11 +556,38 @@ mod tests {
 		assert!(store.public_keys::<ed25519::AppPublic>().unwrap().is_empty());
 
 		let key: ed25519::AppPair = store.generate().unwrap();
-		let key2: ed25519::AppPair = store.key_pair(&key.public()).unwrap();
+		let key2: ed25519::AppPair = store.key_pair(&key.public()).unwrap().unwrap();
 
 		assert_eq!(key.public(), key2.public());
 
 		assert_eq!(store.public_keys::<ed25519::AppPublic>().unwrap()[0], key.public());
+	}
+
+	#[test]
+	fn has_keys_works() {
+		let temp_dir = TempDir::new().unwrap();
+		let store = LocalKeystore::open(temp_dir.path(), None).unwrap();
+
+		let key: ed25519::AppPair = store.0.write().generate().unwrap();
+		let key2 = ed25519::Pair::generate().0;
+
+		assert!(
+			!SyncCryptoStore::has_keys(&store, &[(key2.public().to_vec(), ed25519::AppPublic::ID)])
+		);
+
+		assert!(
+			!SyncCryptoStore::has_keys(
+				&store,
+				&[
+					(key2.public().to_vec(), ed25519::AppPublic::ID),
+					(key.public().to_raw_vec(), ed25519::AppPublic::ID),
+				],
+			)
+		);
+
+		assert!(
+			SyncCryptoStore::has_keys(&store, &[(key.public().to_raw_vec(), ed25519::AppPublic::ID)])
+		);
 	}
 
 	#[test]
@@ -554,7 +606,7 @@ mod tests {
 		drop(store);
 		let store = KeystoreInner::open(temp_dir.path(), None).unwrap();
 		// Keys generated from seed should not be persisted!
-		assert!(store.key_pair::<ed25519::AppPair>(&pair.public()).is_err());
+		assert!(store.key_pair::<ed25519::AppPair>(&pair.public()).unwrap().is_none());
 	}
 
 	#[test]
@@ -569,7 +621,7 @@ mod tests {
 		let pair: ed25519::AppPair = store.generate().unwrap();
 		assert_eq!(
 			pair.public(),
-			store.key_pair::<ed25519::AppPair>(&pair.public()).unwrap().public(),
+			store.key_pair::<ed25519::AppPair>(&pair.public()).unwrap().unwrap().public(),
 		);
 
 		// Without the password the key should not be retrievable
@@ -582,7 +634,7 @@ mod tests {
 		).unwrap();
 		assert_eq!(
 			pair.public(),
-			store.key_pair::<ed25519::AppPair>(&pair.public()).unwrap().public(),
+			store.key_pair::<ed25519::AppPair>(&pair.public()).unwrap().unwrap().public(),
 		);
 	}
 
@@ -626,7 +678,7 @@ mod tests {
 		let store_key_pair = store.key_pair_by_type::<sr25519::AppPair>(
 			&key_pair.public(),
 			SR25519,
-		).expect("Gets key pair from keystore");
+		).expect("Gets key pair from keystore").unwrap();
 
 		assert_eq!(key_pair.public(), store_key_pair.public());
 	}

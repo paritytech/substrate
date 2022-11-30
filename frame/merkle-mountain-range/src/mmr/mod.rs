@@ -22,7 +22,7 @@ mod mmr;
 use crate::primitives::FullLeaf;
 use sp_runtime::traits;
 
-pub use self::mmr::{Mmr, Error};
+pub use self::mmr::{Mmr, verify_leaf_proof};
 
 /// Node type for runtime `T`.
 pub type NodeOf<T, I, L> = Node<<T as crate::Config<I>>::Hashing, L>;

@@ -247,7 +247,7 @@ impl<'a, Xt> Deserialize<'a> for Block<Xt> where Block<Xt>: Decode {
 	fn deserialize<D: Deserializer<'a>>(de: D) -> Result<Self, D::Error> {
 		let r = <Vec<u8>>::deserialize(de)?;
 		Decode::decode(&mut &r[..])
-			.map_err(|e| DeError::custom(format!("Invalid value passed into decode: {}", e.what())))
+			.map_err(|e| DeError::custom(format!("Invalid value passed into decode: {}", e)))
 	}
 }
 

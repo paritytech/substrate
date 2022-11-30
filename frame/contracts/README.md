@@ -42,23 +42,19 @@ fails, A can decide how to handle that failure, either proceeding or reverting A
 
 ### Dispatchable functions
 
-* `put_code` - Stores the given binary Wasm code into the chain's storage and returns its `code_hash`.
-* `instantiate` - Deploys a new contract from the given `code_hash`, optionally transferring some balance.
-This instantiates a new smart contract account and calls its contract deploy handler to
-initialize the contract.
-* `call` - Makes a call to an account, optionally transferring some balance.
+Those are documented in the reference documentation of the `Module`.
 
 ## Usage
 
 The Contract module is a work in progress. The following examples show how this Contract module
 can be used to instantiate and call contracts.
 
-* [`ink`](https://github.com/paritytech/ink) is
+- [`ink`](https://github.com/paritytech/ink) is
 an [`eDSL`](https://wiki.haskell.org/Embedded_domain_specific_language) that enables writing
 WebAssembly based smart contracts in the Rust programming language. This is a work in progress.
 
 ## Related Modules
 
-* [Balances](https://docs.rs/pallet-balances/latest/pallet_balances/)
+- [Balances](https://docs.rs/pallet-balances/latest/pallet_balances/)
 
 License: Apache-2.0

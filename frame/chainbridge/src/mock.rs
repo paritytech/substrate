@@ -40,7 +40,7 @@ impl frame_system::Config for Test {
     type DbWeight = ();
     type Version = ();
     // type ModuleToIndex = ();
-    type PalletInfo = ();
+    type PalletInfo = PalletInfo;
     // type MaxLocks = MaxLocks;
     type AccountData = pallet_balances::AccountData<u64>;
     type OnNewAccount = ();
@@ -80,8 +80,8 @@ impl Config for Test {
     type ProposalLifetime = ProposalLifetime;
 }
 
-pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
     pub enum Test where

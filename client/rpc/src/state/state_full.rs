@@ -223,9 +223,9 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 	BE: Backend<Block> + 'static,
 	Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + ProofProvider<Block> + HeaderBackend<Block>
 		+ HeaderMetadata<Block, Error = sp_blockchain::Error> + BlockchainEvents<Block>
-		+ CallApiAt<Block, Error = sp_blockchain::Error> + ProvideRuntimeApi<Block>
+		+ CallApiAt<Block> + ProvideRuntimeApi<Block>
 		+ Send + Sync + 'static,
-	Client::Api: Metadata<Block, Error = sp_blockchain::Error>,
+	Client::Api: Metadata<Block>,
 {
 	fn call(
 		&self,
@@ -344,17 +344,23 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 	fn metadata(&self, block: Option<Block::Hash>) -> FutureResult<Bytes> {
 		Box::new(result(
 			self.block_or_best(block)
+				.map_err(client_err)
 				.and_then(|block|
-					self.client.runtime_api().metadata(&BlockId::Hash(block)).map(Into::into)
-				)
-				.map_err(client_err)))
+					self.client.runtime_api().metadata(&BlockId::Hash(block))
+						.map(Into::into)
+						.map_err(|e| Error::Client(Box::new(e))))
+		))
 	}
 
 	fn runtime_version(&self, block: Option<Block::Hash>) -> FutureResult<RuntimeVersion> {
 		Box::new(result(
 			self.block_or_best(block)
-				.and_then(|block| self.client.runtime_version_at(&BlockId::Hash(block)))
-				.map_err(client_err)))
+				.map_err(client_err)
+				.and_then(|block|
+					self.client.runtime_version_at(&BlockId::Hash(block))
+						.map_err(|e| Error::Client(Box::new(e)))
+				)
+		))
 	}
 
 	fn query_storage(
@@ -432,7 +438,7 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 					let info = client.info();
 					let version = client
 						.runtime_version_at(&BlockId::hash(info.best_hash))
-						.map_err(client_err)
+						.map_err(|e| Error::Client(Box::new(e)))
 						.map_err(Into::into);
 					if previous_version != version {
 						previous_version = version.clone();
@@ -528,9 +534,9 @@ impl<BE, Block, Client> ChildStateBackend<Block, Client> for FullState<BE, Block
 	BE: Backend<Block> + 'static,
 	Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + HeaderBackend<Block>
 		+ HeaderMetadata<Block, Error = sp_blockchain::Error> + BlockchainEvents<Block>
-		+ CallApiAt<Block, Error = sp_blockchain::Error> + ProvideRuntimeApi<Block>
+		+ CallApiAt<Block> + ProvideRuntimeApi<Block>
 		+ Send + Sync + 'static,
-	Client::Api: Metadata<Block, Error = sp_blockchain::Error>,
+	Client::Api: Metadata<Block>,
 {
 	fn storage_keys(
 		&self,

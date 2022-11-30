@@ -68,6 +68,9 @@ pub struct Params<B: BlockT, H: ExHashT> {
 	/// default.
 	pub executor: Option<Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>>,
 
+	/// How to spawn the background task dedicated to the transactions handler.
+	pub transactions_handler_executor: Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>,
+
 	/// Network layer configuration.
 	pub network_config: NetworkConfiguration,
 
@@ -111,6 +114,14 @@ pub struct Params<B: BlockT, H: ExHashT> {
 	/// [`block_request_handler::BlockRequestHandler::new`] allowing both outgoing and incoming
 	/// requests.
 	pub block_request_protocol_config: RequestResponseConfig,
+
+	/// Request response configuration for the light client request protocol.
+	///
+	/// Can be constructed either via [`light_client_requests::generate_protocol_config`] allowing
+	/// outgoing but not incoming requests, or constructed via
+	/// [`light_client_requests::handler::LightClientRequestHandler::new`] allowing both outgoing
+	/// and incoming requests.
+	pub light_client_request_protocol_config: RequestResponseConfig,
 }
 
 /// Role of the local node.
@@ -120,30 +131,14 @@ pub enum Role {
 	Full,
 	/// Regular light node.
 	Light,
-	/// Sentry node that guards an authority. Will be reported as "authority" on the wire protocol.
-	Sentry {
-		/// Address and identity of the validator nodes that we're guarding.
-		///
-		/// The nodes will be granted some priviledged status.
-		validators: Vec<MultiaddrWithPeerId>,
-	},
 	/// Actual authority.
-	Authority {
-		/// List of public addresses and identities of our sentry nodes.
-		sentry_nodes: Vec<MultiaddrWithPeerId>,
-	}
+	Authority,
 }
 
 impl Role {
 	/// True for `Role::Authority`
 	pub fn is_authority(&self) -> bool {
 		matches!(self, Role::Authority { .. })
-	}
-
-	/// True for `Role::Authority` and `Role::Sentry` since they're both
-	/// announced as having the authority role to the network.
-	pub fn is_network_authority(&self) -> bool {
-		matches!(self, Role::Authority { .. } | Role::Sentry { .. })
 	}
 }
 
@@ -152,7 +147,6 @@ impl fmt::Display for Role {
 		match self {
 			Role::Full => write!(f, "FULL"),
 			Role::Light => write!(f, "LIGHT"),
-			Role::Sentry { .. } => write!(f, "SENTRY"),
 			Role::Authority { .. } => write!(f, "AUTHORITY"),
 		}
 	}
@@ -400,11 +394,20 @@ pub struct NetworkConfiguration {
 	pub transport: TransportConfig,
 	/// Maximum number of peers to ask the same blocks in parallel.
 	pub max_parallel_downloads: u32,
+
+	/// True if Kademlia random discovery should be enabled.
+	///
+	/// If true, the node will automatically randomly walk the DHT in order to find new peers.
+	pub enable_dht_random_walk: bool,
+
 	/// Should we insert non-global addresses into the DHT?
 	pub allow_non_globals_in_dht: bool,
-	/// Require iterative Kademlia DHT queries to use disjoint paths for increased resiliency in the
-	/// presence of potentially adversarial nodes.
+
+	/// Require iterative Kademlia DHT queries to use disjoint paths for increased resiliency in
+	/// the presence of potentially adversarial nodes.
 	pub kademlia_disjoint_query_paths: bool,
+	/// Enable serving block data over IPFS bitswap.
+	pub ipfs_server: bool,
 
 	/// Size of Yamux receive window of all substreams. `None` for the default (256kiB).
 	/// Any value less than 256kiB is invalid.
@@ -453,9 +456,11 @@ impl NetworkConfiguration {
 				wasm_external_transport: None,
 			},
 			max_parallel_downloads: 5,
+			enable_dht_random_walk: true,
 			allow_non_globals_in_dht: false,
 			kademlia_disjoint_query_paths: false,
 			yamux_window_size: None,
+			ipfs_server: false,
 		}
 	}
 

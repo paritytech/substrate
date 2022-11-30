@@ -95,6 +95,17 @@ pub trait BlockBackend<Block: BlockT> {
 
 	/// Get block hash by number.
 	fn block_hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<Block::Hash>>;
+
+	/// Get single extrinsic by hash.
+	fn extrinsic(
+		&self,
+		hash: &Block::Hash,
+	) -> sp_blockchain::Result<Option<<Block as BlockT>::Extrinsic>>;
+
+	/// Check if extrinsic exists.
+	fn have_extrinsic(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+		Ok(self.extrinsic(hash)?.is_some())
+	}
 }
 
 /// Provide a list of potential uncle headers for a given block.

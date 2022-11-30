@@ -10,8 +10,8 @@
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
-	;; [0, 8) 100 balance
-	(data (i32.const 0) "\64\00\00\00\00\00\00\00")
+	;; [0, 8) 10_000 balance
+	(data (i32.const 0) "\10\27\00\00\00\00\00\00")
 
 	;; [8, 12) here we store the return code of the transfer
 

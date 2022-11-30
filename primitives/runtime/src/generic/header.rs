@@ -106,12 +106,12 @@ impl<Number, Hash> Encode for Header<Number, Hash> where
 	Hash: HashT,
 	Hash::Output: Encode,
 {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		dest.push(&self.parent_hash);
-		dest.push(&<<<Number as HasCompact>::Type as EncodeAsRef<_>>::RefType>::from(&self.number));
-		dest.push(&self.state_root);
-		dest.push(&self.extrinsics_root);
-		dest.push(&self.digest);
+	fn encode_to<T: Output + ?Sized>(&self, dest: &mut T) {
+		self.parent_hash.encode_to(dest);
+		<<<Number as HasCompact>::Type as EncodeAsRef<_>>::RefType>::from(&self.number).encode_to(dest);
+		self.state_root.encode_to(dest);
+		self.extrinsics_root.encode_to(dest);
+		self.digest.encode_to(dest);
 	}
 }
 

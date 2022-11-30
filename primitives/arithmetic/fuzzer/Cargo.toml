@@ -14,9 +14,9 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-arithmetic = { version = "2.0.0", path = ".." }
+sp-arithmetic = { version = "3.0.0", path = ".." }
 honggfuzz = "0.5.49"
-primitive-types = "0.8.0"
+primitive-types = "0.9.0"
 num-bigint = "0.2"
 num-traits = "0.2"
 

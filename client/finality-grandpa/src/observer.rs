@@ -57,11 +57,6 @@ impl<'a, Block, Client> finality_grandpa::Chain<Block::Hash, NumberFor<Block>>
 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
 		environment::ancestry(&self.client, base, block)
 	}
-
-	fn best_chain_containing(&self, _block: Block::Hash) -> Option<(Block::Hash, NumberFor<Block>)> {
-		// only used by voter
-		None
-	}
 }
 
 fn grandpa_observer<BE, Block: BlockT, Client, S, F>(

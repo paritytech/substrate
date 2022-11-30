@@ -13,9 +13,9 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-core = { version = "2.0.0", default-features = false, path = "../../core" }
-sp-keystore = { version = "0.8.0", path = "../../keystore", default-features = false }
+sp-core = { version = "3.0.0", default-features = false, path = "../../core" }
+sp-keystore = { version = "0.9.0", path = "../../keystore", default-features = false }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
-sp-runtime = { version = "2.0.0", path = "../../runtime" }
-sp-api = { version = "2.0.0", path = "../../api" }
-sp-application-crypto = { version = "2.0.0", path = "../" }
+sp-runtime = { version = "3.0.0", path = "../../runtime" }
+sp-api = { version = "3.0.0", path = "../../api" }
+sp-application-crypto = { version = "3.0.0", path = "../" }

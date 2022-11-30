@@ -18,6 +18,7 @@
 // Tests for the Session Pallet
 
 use super::*;
+use codec::Decode;
 use frame_support::{traits::OnInitialize, assert_ok};
 use sp_core::crypto::key_types::DUMMY;
 use sp_runtime::testing::UintAuthorityId;
@@ -274,7 +275,7 @@ fn periodic_session_works() {
 	}
 
 	assert!(P::should_end_session(13u64));
-	assert_eq!(P::estimate_next_session_rotation(13u64).unwrap(), 13);
+	assert_eq!(P::estimate_next_session_rotation(13u64).unwrap(), 23);
 
 	assert!(!P::should_end_session(14u64));
 	assert_eq!(P::estimate_next_session_rotation(14u64).unwrap(), 23);

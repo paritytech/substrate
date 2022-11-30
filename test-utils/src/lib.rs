@@ -72,7 +72,7 @@ macro_rules! assert_eq_uvec {
 macro_rules! __assert_eq_uvec {
 	( $x:expr, $y:expr ) => {
 		$x.iter().for_each(|e| {
-			if !$y.contains(e) { panic!(format!("vectors not equal: {:?} != {:?}", $x, $y)); }
+			if !$y.contains(e) { panic!("vectors not equal: {:?} != {:?}", $x, $y); }
 		});
 	}
 }

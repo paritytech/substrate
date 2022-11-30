@@ -38,7 +38,7 @@ pub(crate) enum NodeKind {
 }
 
 impl Encode for NodeHeader {
-	fn encode_to<T: Output>(&self, output: &mut T) {
+	fn encode_to<T: Output + ?Sized>(&self, output: &mut T) {
 		match self {
 			NodeHeader::Null => output.push_byte(trie_constants::EMPTY_TRIE),
 			NodeHeader::Branch(true, nibble_count)	=>
@@ -99,7 +99,7 @@ pub(crate) fn size_and_prefix_iterator(size: usize, prefix: u8) -> impl Iterator
 }
 
 /// Encodes size and prefix to a stream output.
-fn encode_size_and_prefix(size: usize, prefix: u8, out: &mut impl Output) {
+fn encode_size_and_prefix<W: Output + ?Sized>(size: usize, prefix: u8, out: &mut W) {
 	for b in size_and_prefix_iterator(size, prefix) {
 		out.push_byte(b)
 	}

@@ -210,7 +210,7 @@ pub enum PublicError {
 	BadBase58,
 	/// Bad length.
 	BadLength,
-	/// Unknown version.
+	/// Unknown identifier for the encoding.
 	UnknownVersion,
 	/// Invalid checksum.
 	InvalidChecksum,
@@ -218,11 +218,22 @@ pub enum PublicError {
 	InvalidFormat,
 	/// Invalid derivation path.
 	InvalidPath,
+	/// Disallowed SS58 Address Format for this datatype.
+	FormatNotAllowed,
 }
 
 /// Key that can be encoded to/from SS58.
+///
+/// See <https://github.com/paritytech/substrate/wiki/External-Address-Format-(SS58)#address-type>
+/// for information on the codec.
 #[cfg(feature = "full_crypto")]
 pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
+	/// A format filterer, can be used to ensure that `from_ss58check` family only decode for
+	/// allowed identifiers. By default just refuses the two reserved identifiers.
+	fn format_is_allowed(f: Ss58AddressFormat) -> bool {
+		!matches!(f, Ss58AddressFormat::Reserved46 | Ss58AddressFormat::Reserved47)
+	}
+
 	/// Some if the string is a properly encoded SS58Check address.
 	#[cfg(feature = "std")]
 	fn from_ss58check(s: &str) -> Result<Self, PublicError> {
@@ -233,25 +244,46 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 				_ => Err(PublicError::UnknownVersion),
 			})
 	}
+
 	/// Some if the string is a properly encoded SS58Check address.
 	#[cfg(feature = "std")]
 	fn from_ss58check_with_version(s: &str) -> Result<(Self, Ss58AddressFormat), PublicError> {
+		const CHECKSUM_LEN: usize = 2;
 		let mut res = Self::default();
-		let len = res.as_mut().len();
-		let d = s.from_base58().map_err(|_| PublicError::BadBase58)?; // failure here would be invalid encoding.
-		if d.len() != len + 3 {
-			// Invalid length.
-			return Err(PublicError::BadLength);
-		}
-		let ver = d[0].try_into().map_err(|_: ()| PublicError::UnknownVersion)?;
 
-		if d[len + 1..len + 3] != ss58hash(&d[0..len + 1]).as_bytes()[0..2] {
+		// Must decode to our type.
+		let body_len = res.as_mut().len();
+
+		let data = s.from_base58().map_err(|_| PublicError::BadBase58)?;
+		if data.len() < 2 { return Err(PublicError::BadLength); }
+		let (prefix_len, ident) = match data[0] {
+			0..=63 => (1, data[0] as u16),
+			64..=127 => {
+				// weird bit manipulation owing to the combination of LE encoding and missing two bits
+				// from the left.
+				// d[0] d[1] are: 01aaaaaa bbcccccc
+				// they make the LE-encoded 16-bit value: aaaaaabb 00cccccc
+				// so the lower byte is formed of aaaaaabb and the higher byte is 00cccccc
+				let lower = (data[0] << 2) | (data[1] >> 6);
+				let upper = data[1] & 0b00111111;
+				(2, (lower as u16) | ((upper as u16) << 8))
+			}
+			_ => Err(PublicError::UnknownVersion)?,
+		};
+		if data.len() != prefix_len + body_len + CHECKSUM_LEN { return Err(PublicError::BadLength) }
+		let format = ident.try_into().map_err(|_: ()| PublicError::UnknownVersion)?;
+		if !Self::format_is_allowed(format) { return Err(PublicError::FormatNotAllowed) }
+
+		let hash = ss58hash(&data[0..body_len + prefix_len]);
+		let checksum = &hash.as_bytes()[0..CHECKSUM_LEN];
+		if data[body_len + prefix_len..body_len + prefix_len + CHECKSUM_LEN] != *checksum {
 			// Invalid checksum.
 			return Err(PublicError::InvalidChecksum);
 		}
-		res.as_mut().copy_from_slice(&d[1..len + 1]);
-		Ok((res, ver))
+		res.as_mut().copy_from_slice(&data[prefix_len..body_len + prefix_len]);
+		Ok((res, format))
 	}
+
 	/// Some if the string is a properly encoded SS58Check address, optionally with
 	/// a derivation path following.
 	#[cfg(feature = "std")]
@@ -267,7 +299,20 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	/// Return the ss58-check string for this key.
 	#[cfg(feature = "std")]
 	fn to_ss58check_with_version(&self, version: Ss58AddressFormat) -> String {
-		let mut v = vec![version.into()];
+		// We mask out the upper two bits of the ident - SS58 Prefix currently only supports 14-bits
+		let ident: u16 = u16::from(version) & 0b00111111_11111111;
+		let mut v = match ident {
+			0..=63 => vec![ident as u8],
+			64..=16_383 => {
+				// upper six bits of the lower byte(!)
+				let first = ((ident & 0b00000000_11111100) as u8) >> 2;
+				// lower two bits of the lower byte in the high pos,
+				// lower bits of the upper byte in the low pos
+				let second = ((ident >> 8) as u8) | ((ident & 0b00000000_00000011) as u8) << 6;
+				vec![first | 0b01000000, second]
+			}
+			_ => unreachable!("masked out the upper two bits; qed"),
+		};
 		v.extend(self.as_ref());
 		let r = ss58hash(&v);
 		v.extend(&r.as_bytes()[0..2]);
@@ -321,8 +366,8 @@ macro_rules! ss58_address_format {
 		#[derive(Copy, Clone, PartialEq, Eq, crate::RuntimeDebug)]
 		pub enum Ss58AddressFormat {
 			$(#[doc = $desc] $identifier),*,
-			/// Use a manually provided numeric value.
-			Custom(u8),
+			/// Use a manually provided numeric value as a standard identifier
+			Custom(u16),
 		}
 
 		#[cfg(feature = "std")]
@@ -363,8 +408,16 @@ macro_rules! ss58_address_format {
 			}
 		}
 
-		impl From<Ss58AddressFormat> for u8 {
-			fn from(x: Ss58AddressFormat) -> u8 {
+		impl TryFrom<u8> for Ss58AddressFormat {
+			type Error = ();
+
+			fn try_from(x: u8) -> Result<Ss58AddressFormat, ()> {
+				Ss58AddressFormat::try_from(x as u16)
+			}
+		}
+
+		impl From<Ss58AddressFormat> for u16 {
+			fn from(x: Ss58AddressFormat) -> u16 {
 				match x {
 					$(Ss58AddressFormat::$identifier => $number),*,
 					Ss58AddressFormat::Custom(n) => n,
@@ -372,22 +425,13 @@ macro_rules! ss58_address_format {
 			}
 		}
 
-		impl TryFrom<u8> for Ss58AddressFormat {
+		impl TryFrom<u16> for Ss58AddressFormat {
 			type Error = ();
 
-			fn try_from(x: u8) -> Result<Ss58AddressFormat, ()> {
+			fn try_from(x: u16) -> Result<Ss58AddressFormat, ()> {
 				match x {
 					$($number => Ok(Ss58AddressFormat::$identifier)),*,
-					_ => {
-						#[cfg(feature = "std")]
-						match Ss58AddressFormat::default() {
-							Ss58AddressFormat::Custom(n) if n == x => Ok(Ss58AddressFormat::Custom(x)),
-							_ => Err(()),
-						}
-
-						#[cfg(not(feature = "std"))]
-						Err(())
-					},
+					_ => Ok(Ss58AddressFormat::Custom(x)),
 				}
 			}
 		}
@@ -403,7 +447,7 @@ macro_rules! ss58_address_format {
 			fn try_from(x: &'a str) -> Result<Ss58AddressFormat, Self::Error> {
 				match x {
 					$($name => Ok(Ss58AddressFormat::$identifier)),*,
-					a => a.parse::<u8>().map(Ss58AddressFormat::Custom).map_err(|_| ParseError),
+					a => a.parse::<u16>().map(Ss58AddressFormat::Custom).map_err(|_| ParseError),
 				}
 			}
 		}
@@ -444,12 +488,12 @@ macro_rules! ss58_address_format {
 ss58_address_format!(
 	PolkadotAccount =>
 		(0, "polkadot", "Polkadot Relay-chain, standard account (*25519).")
-	Reserved1 =>
-		(1, "reserved1", "Reserved for future use (1).")
+	BareSr25519 =>
+		(1, "sr25519", "Bare 32-bit Schnorr/Ristretto 25519 (S/R 25519) key.")
 	KusamaAccount =>
 		(2, "kusama", "Kusama Relay-chain, standard account (*25519).")
-	Reserved3 =>
-		(3, "reserved3", "Reserved for future use (3).")
+	BareEd25519 =>
+		(3, "ed25519", "Bare 32-bit Edwards Ed25519 key.")
 	KatalChainAccount =>
 		(4, "katalchain", "Katal Chain, standard account (*25519).")
 	PlasmAccount =>
@@ -501,7 +545,7 @@ ss58_address_format!(
 	SubsocialAccount =>
 		(28, "subsocial", "Subsocial network, standard account (*25519).")
 	DhiwayAccount =>
-		(29, "cord", "Dhiway CORD network, standard account (*25519).")	
+		(29, "cord", "Dhiway CORD network, standard account (*25519).")
 	PhalaAccount =>
 		(30, "phala", "Phala Network, standard account (*25519).")
 	LitentryAccount =>
@@ -510,6 +554,8 @@ ss58_address_format!(
 		(32, "robonomics", "Any Robonomics network standard account (*25519).")
 	DataHighwayAccount =>
 		(33, "datahighway", "DataHighway mainnet, standard account (*25519).")
+	AresAccount =>
+		(34, "ares", "Ares Protocol, standard account (*25519).")
 	ValiuAccount =>
 		(35, "vln", "Valiu Liquidity Network mainnet, standard account (*25519).")
 	CentrifugeAccount =>
@@ -522,8 +568,8 @@ ss58_address_format!(
 		(41, "poli", "Polimec Chain mainnet, standard account (*25519).")
 	SubstrateAccount =>
 		(42, "substrate", "Any Substrate network, standard account (*25519).")
-	Reserved43 =>
-		(43, "reserved43", "Reserved for future use (43).")
+	BareSecp256k1 =>
+		(43, "secp256k1", "Bare ECDSA SECP256k1 key.")
 	ChainXAccount =>
 		(44, "chainx", "ChainX mainnet, standard account (*25519).")
 	UniartsAccount =>
@@ -532,7 +578,13 @@ ss58_address_format!(
 		(46, "reserved46", "Reserved for future use (46).")
 	Reserved47 =>
 		(47, "reserved47", "Reserved for future use (47).")
-	// Note: 48 and above are reserved.
+	NeatcoinAccount =>
+		(48, "neatcoin", "Neatcoin mainnet, standard account (*25519).")
+	AventusAccount =>
+		(65, "aventus", "Aventus Chain mainnet, standard account (*25519).")
+	CrustAccount =>
+		(66, "crust", "Crust Network, standard account (*25519).")
+	// Note: 16384 and above are reserved.
 );
 
 /// Set the default "version" (actually, this is a bit of a misnomer and the version byte is
@@ -546,13 +598,19 @@ pub fn set_default_ss58_version(version: Ss58AddressFormat) {
 }
 
 #[cfg(feature = "std")]
+lazy_static::lazy_static! {
+	static ref SS58_REGEX: Regex = Regex::new(r"^(?P<ss58>[\w\d ]+)?(?P<path>(//?[^/]+)*)$")
+		.expect("constructed from known-good static value; qed");
+	static ref SECRET_PHRASE_REGEX: Regex = Regex::new(r"^(?P<phrase>[\d\w ]+)?(?P<path>(//?[^/]+)*)(///(?P<password>.*))?$")
+		.expect("constructed from known-good static value; qed");
+	static ref JUNCTION_REGEX: Regex = Regex::new(r"/(/?[^/]+)")
+		.expect("constructed from known-good static value; qed");
+}
+
+#[cfg(feature = "std")]
 impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 	fn from_string(s: &str) -> Result<Self, PublicError> {
-		let re = Regex::new(r"^(?P<ss58>[\w\d ]+)?(?P<path>(//?[^/]+)*)$")
-			.expect("constructed from known-good static value; qed");
-		let cap = re.captures(s).ok_or(PublicError::InvalidFormat)?;
-		let re_junction = Regex::new(r"/(/?[^/]+)")
-			.expect("constructed from known-good static value; qed");
+		let cap = SS58_REGEX.captures(s).ok_or(PublicError::InvalidFormat)?;
 		let s = cap.name("ss58")
 			.map(|r| r.as_str())
 			.unwrap_or(DEV_ADDRESS);
@@ -571,7 +629,7 @@ impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 		if cap["path"].is_empty() {
 			Ok(addr)
 		} else {
-			let path = re_junction.captures_iter(&cap["path"])
+			let path = JUNCTION_REGEX.captures_iter(&cap["path"])
 				.map(|f| DeriveJunction::from(&f[1]));
 			addr.derive(path)
 				.ok_or(PublicError::InvalidPath)
@@ -579,11 +637,7 @@ impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 	}
 
 	fn from_string_with_version(s: &str) -> Result<(Self, Ss58AddressFormat), PublicError> {
-		let re = Regex::new(r"^(?P<ss58>[\w\d ]+)?(?P<path>(//?[^/]+)*)$")
-			.expect("constructed from known-good static value; qed");
-		let cap = re.captures(s).ok_or(PublicError::InvalidFormat)?;
-		let re_junction = Regex::new(r"/(/?[^/]+)")
-			.expect("constructed from known-good static value; qed");
+		let cap = SS58_REGEX.captures(s).ok_or(PublicError::InvalidFormat)?;
 		let (addr, v) = Self::from_ss58check_with_version(
 			cap.name("ss58")
 				.map(|r| r.as_str())
@@ -592,7 +646,7 @@ impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 		if cap["path"].is_empty() {
 			Ok((addr, v))
 		} else {
-			let path = re_junction.captures_iter(&cap["path"])
+			let path = JUNCTION_REGEX.captures_iter(&cap["path"])
 				.map(|f| DeriveJunction::from(&f[1]));
 			addr.derive(path)
 				.ok_or(PublicError::InvalidPath)
@@ -949,13 +1003,9 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	fn from_string_with_seed(s: &str, password_override: Option<&str>)
 		-> Result<(Self, Option<Self::Seed>), SecretStringError>
 	{
-		let re = Regex::new(r"^(?P<phrase>[\d\w ]+)?(?P<path>(//?[^/]+)*)(///(?P<password>.*))?$")
-			.expect("constructed from known-good static value; qed");
-		let cap = re.captures(s).ok_or(SecretStringError::InvalidFormat)?;
+		let cap = SECRET_PHRASE_REGEX.captures(s).ok_or(SecretStringError::InvalidFormat)?;
 
-		let re_junction = Regex::new(r"/(/?[^/]+)")
-			.expect("constructed from known-good static value; qed");
-		let path = re_junction.captures_iter(&cap["path"])
+		let path = JUNCTION_REGEX.captures_iter(&cap["path"])
 			.map(|f| DeriveJunction::from(&f[1]));
 
 		let phrase = cap.name("phrase").map(|r| r.as_str()).unwrap_or(DEV_PHRASE);

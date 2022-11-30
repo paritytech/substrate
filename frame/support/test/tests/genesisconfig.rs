@@ -32,7 +32,7 @@ struct Test;
 impl frame_support_test::Config for Test {
 	type BlockNumber = u32;
 	type Origin = ();
-	type PalletInfo = ();
+	type PalletInfo = frame_support_test::PanicPalletInfo;
 	type DbWeight = ();
 }
 

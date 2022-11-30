@@ -20,35 +20,23 @@
 #![cfg(test)]
 
 use sp_runtime::traits::IdentityLookup;
-use frame_support::{
-	impl_outer_origin,
-	dispatch::{Dispatchable, DispatchInfo, PostDispatchInfo},
-};
 
 type AccountId = u64;
 type AccountIndex = u32;
 type BlockNumber = u64;
 
-impl_outer_origin! {
-	pub enum Origin for Test where system = frame_system {}
-}
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
 
-#[derive(Debug, codec::Encode, codec::Decode)]
-pub struct Call;
-
-impl Dispatchable for Call {
-	type Origin = ();
-	type Config = ();
-	type Info = DispatchInfo;
-	type PostInfo = PostDispatchInfo;
-	fn dispatch(self, _origin: Self::Origin)
-		-> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
-			panic!("Do not use dummy implementation for dispatch.");
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 	}
-}
-
-#[derive(Clone, Eq, PartialEq, Debug)]
-pub struct Test;
+);
 
 impl frame_system::Config for Test {
 	type BaseCallFilter = ();
@@ -64,10 +52,10 @@ impl frame_system::Config for Test {
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = sp_runtime::testing::Header;
-	type Event = ();
+	type Event = Event;
 	type BlockHashCount = ();
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();

@@ -1,6 +1,6 @@
 [package]
 name = "substrate-test-utils-derive"
-version = "0.8.1"
+version = "0.9.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"

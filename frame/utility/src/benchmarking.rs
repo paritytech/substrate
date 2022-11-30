@@ -21,7 +21,7 @@
 
 use super::*;
 use frame_system::{RawOrigin, EventRecord};
-use frame_benchmarking::{benchmarks, account, whitelisted_caller};
+use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
 
 const SEED: u32 = 0;
 
@@ -69,18 +69,8 @@ benchmarks! {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::tests::{new_test_ext, Test};
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_batch::<Test>());
-			assert_ok!(test_benchmark_as_derivative::<Test>());
-			assert_ok!(test_benchmark_batch_all::<Test>());
-		});
-	}
-}
+impl_benchmark_test_suite!(
+	Module,
+	crate::tests::new_test_ext(),
+	crate::tests::Test,
+);

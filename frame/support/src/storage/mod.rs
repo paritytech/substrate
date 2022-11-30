@@ -315,7 +315,7 @@ pub trait IterableStorageMap<K: FullEncode, V: FullCodec>: StorageMap<K, V> {
 	/// By returning `None` from `f` for an element, you'll remove it from the map.
 	///
 	/// NOTE: If a value fail to decode because storage is corrupted then it is skipped.
-	fn translate<O: Decode, F: Fn(K, O) -> Option<V>>(f: F);
+	fn translate<O: Decode, F: FnMut(K, O) -> Option<V>>(f: F);
 }
 
 /// A strongly-typed double map in storage whose secondary keys and values can be iterated over.
@@ -352,7 +352,7 @@ pub trait IterableStorageDoubleMap<
 	/// By returning `None` from `f` for an element, you'll remove it from the map.
 	///
 	/// NOTE: If a value fail to decode because storage is corrupted then it is skipped.
-	fn translate<O: Decode, F: Fn(K1, K2, O) -> Option<V>>(f: F);
+	fn translate<O: Decode, F: FnMut(K1, K2, O) -> Option<V>>(f: F);
 }
 
 /// An implementation of a map with a two keys.
@@ -614,7 +614,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 	/// # Usage
 	///
 	/// This would typically be called inside the module implementation of on_runtime_upgrade.
-	fn translate_values<OldValue: Decode, F: Fn(OldValue) -> Option<Value>>(f: F) {
+	fn translate_values<OldValue: Decode, F: FnMut(OldValue) -> Option<Value>>(mut f: F) {
 		let prefix = Self::final_prefix();
 		let mut previous_key = prefix.clone().to_vec();
 		while let Some(next) = sp_io::storage::next_key(&previous_key)

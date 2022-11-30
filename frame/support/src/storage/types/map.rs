@@ -249,7 +249,7 @@ where
 	/// # Usage
 	///
 	/// This would typically be called inside the module implementation of on_runtime_upgrade.
-	pub fn translate_values<OldValue: Decode, F: Fn(OldValue) -> Option<Value>>(f: F) {
+	pub fn translate_values<OldValue: Decode, F: FnMut(OldValue) -> Option<Value>>(f: F) {
 		<Self as crate::storage::StoragePrefixedMap<Value>>::translate_values(f)
 	}
 }
@@ -283,7 +283,7 @@ where
 	/// By returning `None` from `f` for an element, you'll remove it from the map.
 	///
 	/// NOTE: If a value fail to decode because storage is corrupted then it is skipped.
-	pub fn translate<O: Decode, F: Fn(Key, O) -> Option<Value>>(f: F) {
+	pub fn translate<O: Decode, F: FnMut(Key, O) -> Option<Value>>(f: F) {
 		<Self as crate::storage::IterableStorageMap<Key, Value>>::translate(f)
 	}
 }

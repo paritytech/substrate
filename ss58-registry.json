@@ -21,8 +21,8 @@
 		},
 		{
 			"prefix": 1,
-			"network": "reserved1",
-			"displayName": "This prefix is reserved.",
+			"network": null,
+			"displayName": "Bare 32-bit Schnorr/Ristretto (S/R 25519) public key.",
 			"symbols": null,
 			"decimals": null,
 			"standardAccount": null,
@@ -39,8 +39,8 @@
 		},
 		{
 			"prefix": 3,
-			"network": "reserved3",
-			"displayName": "This prefix is reserved.",
+			"network": null,
+			"displayName": "Bare 32-bit Ed25519 public key.",
 			"symbols": null,
 			"decimals": null,
 			"standardAccount": null,
@@ -317,6 +317,15 @@
 			"website": null
 		},
 		{
+			"prefix": 34,
+			"network": "ares",
+			"displayName": "Ares Protocol",
+			"symbols": ["ARES"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://www.aresprotocol.com/"
+		},
+		{
 			"prefix": 35,
 			"network": "vln",
 			"displayName": "Valiu Liquidity Network",
@@ -390,8 +399,8 @@
 		},
 		{
 			"prefix": 43,
-			"network": "reserved43",
-			"displayName": "This prefix is reserved.",
+			"network": null,
+			"displayName": "Bare 32-bit ECDSA SECP-256k1 public key.",
 			"symbols": null,
 			"decimals": null,
 			"standardAccount": null,
@@ -435,12 +444,30 @@
 		},
 		{
 			"prefix": 48,
-			"network": "reserved48",
-			"displayName": "All prefixes 48 and higher are reserved and cannot be allocated.",
-			"symbols": null,
-			"decimals": null,
-			"standardAccount": null,
-			"website": null
+			"network": "neatcoin",
+			"displayName": "Neatcoin Mainnet",
+			"symbols": ["NEAT"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://neatcoin.org"
+		},
+		{
+			"prefix": 65,
+			"network": "aventus",
+			"displayName": "AvN Mainnet",
+			"symbols": ["AVT"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://aventus.io"
+		},
+		{
+			"prefix": 66,
+			"network": "crust",
+			"displayName": "Crust Network",
+			"symbols": ["CRU"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://crust.network"
 		}
 	]
 }

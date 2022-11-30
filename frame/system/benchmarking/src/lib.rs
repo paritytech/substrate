@@ -24,7 +24,7 @@ use sp_std::vec;
 use sp_std::prelude::*;
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use sp_runtime::traits::Hash;
-use frame_benchmarking::{benchmarks, whitelisted_caller};
+use frame_benchmarking::{benchmarks, whitelisted_caller, impl_benchmark_test_suite};
 use frame_support::{
 	storage,
 	traits::Get,
@@ -138,22 +138,8 @@ benchmarks! {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::mock::{new_test_ext, Test};
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_remark::<Test>());
-			assert_ok!(test_benchmark_set_heap_pages::<Test>());
-			assert_ok!(test_benchmark_set_code_without_checks::<Test>());
-			assert_ok!(test_benchmark_set_changes_trie_config::<Test>());
-			assert_ok!(test_benchmark_set_storage::<Test>());
-			assert_ok!(test_benchmark_kill_storage::<Test>());
-			assert_ok!(test_benchmark_kill_prefix::<Test>());
-		});
-	}
-}
+impl_benchmark_test_suite!(
+	Module,
+	crate::mock::new_test_ext(),
+	crate::mock::Test,
+);

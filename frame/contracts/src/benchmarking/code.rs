@@ -27,12 +27,14 @@
 use crate::Config;
 use crate::Module as Contracts;
 
-use parity_wasm::elements::{Instruction, Instructions, FuncBody, ValueType, BlockType};
+use parity_wasm::elements::{
+	Instruction, Instructions, FuncBody, ValueType, BlockType, Section, CustomSection,
+};
 use pwasm_utils::stack_height::inject_limiter;
 use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::Hash;
 use sp_sandbox::{EnvironmentDefinitionBuilder, Memory};
-use sp_std::{prelude::*, convert::TryFrom};
+use sp_std::{prelude::*, convert::TryFrom, borrow::ToOwned};
 
 /// Pass to `create_code` in order to create a compiled `WasmModule`.
 ///
@@ -66,6 +68,10 @@ pub struct ModuleDefinition {
 	pub inject_stack_metering: bool,
 	/// Create a table containing function pointers.
 	pub table: Option<TableSegment>,
+	/// Create a section named "dummy" of the specified size. This is useful in order to
+	/// benchmark the overhead of loading and storing codes of specified sizes. The dummy
+	/// section only contributes to the size of the contract but does not affect execution.
+	pub dummy_section: u32,
 }
 
 pub struct TableSegment {
@@ -103,7 +109,7 @@ pub struct ImportedFunction {
 	pub return_type: Option<ValueType>,
 }
 
-/// A wasm module ready to be put on chain with `put_code`.
+/// A wasm module ready to be put on chain.
 #[derive(Clone)]
 pub struct WasmModule<T:Config> {
 	pub code: Vec<u8>,
@@ -204,6 +210,15 @@ where
 				.build();
 		}
 
+		// Add the dummy section
+		if def.dummy_section > 0 {
+			contract = contract.with_section(
+				Section::Custom(
+					CustomSection::new("dummy".to_owned(), vec![42; def.dummy_section as usize])
+				)
+			);
+		}
+
 		let mut code = contract.build();
 
 		// Inject stack height metering
@@ -235,26 +250,27 @@ where
 		ModuleDefinition::default().into()
 	}
 
-	/// Same as `dummy` but with maximum sized linear memory.
-	pub fn dummy_with_mem() -> Self {
+	/// Same as `dummy` but with maximum sized linear memory and a dummy section of specified size.
+	pub fn dummy_with_bytes(dummy_bytes: u32) -> Self {
 		ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
+			dummy_section: dummy_bytes,
 			.. Default::default()
 		}
 		.into()
 	}
 
 	/// Creates a wasm module of `target_bytes` size. Used to benchmark the performance of
-	/// `put_code` for different sizes of wasm modules. The generated module maximizes
+	/// `instantiate_with_code` for different sizes of wasm modules. The generated module maximizes
 	/// instrumentation runtime by nesting blocks as deeply as possible given the byte budget.
 	pub fn sized(target_bytes: u32) -> Self {
 		use parity_wasm::elements::Instruction::{If, I32Const, Return, End};
-		// Base size of a contract is 47 bytes and each expansion adds 6 bytes.
+		// Base size of a contract is 63 bytes and each expansion adds 6 bytes.
 		// We do one expansion less to account for the code section and function body
 		// size fields inside the binary wasm module representation which are leb128 encoded
 		// and therefore grow in size when the contract grows. We are not allowed to overshoot
-		// because of the maximum code size that is enforced by `put_code`.
-		let expansions = (target_bytes.saturating_sub(47) / 6).saturating_sub(1);
+		// because of the maximum code size that is enforced by `instantiate_with_code`.
+		let expansions = (target_bytes.saturating_sub(63) / 6).saturating_sub(1);
 		const EXPANSION: [Instruction; 4] = [
 			I32Const(0),
 			If(BlockType::NoResult),
@@ -263,6 +279,7 @@ where
 		];
 		ModuleDefinition {
 			call_body: Some(body::repeated(expansions, &EXPANSION)),
+			memory: Some(ImportedMemory::max::<T>()),
 			.. Default::default()
 		}
 		.into()

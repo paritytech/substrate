@@ -1471,50 +1471,46 @@ mod qc {
 	}
 
 	impl Arbitrary for Action {
-		fn arbitrary<G: quickcheck::Gen>(gen: &mut G) -> Self {
-			let path = gen.next_u32() as u8;
-			let mut buf = [0u8; 32];
+		fn arbitrary(gen: &mut quickcheck::Gen) -> Self {
+			let path = u8::arbitrary(gen);
+			let buf = (0..32).map(|_| u8::arbitrary(gen)).collect::<Vec<_>>();
 
 			match path {
 				0..=175 => {
-					gen.fill_bytes(&mut buf[..]);
 					Action::Next {
-						hash: H256::from(&buf),
+						hash: H256::from_slice(&buf[..]),
 						changes: {
 							let mut set = Vec::new();
-							for _ in 0..gen.next_u32()/(64*256*256*256) {
-								set.push((vec![gen.next_u32() as u8], Some(vec![gen.next_u32() as u8])));
+							for _ in 0..<u32>::arbitrary(gen)/(64*256*256*256) {
+								set.push((vec![u8::arbitrary(gen)], Some(vec![u8::arbitrary(gen)])));
 							}
 							set
 						}
 					}
 				},
 				176..=220 => {
-					gen.fill_bytes(&mut buf[..]);
 					Action::Fork {
-						hash: H256::from(&buf),
-						depth: ((gen.next_u32() as u8) / 32) as usize,
+						hash: H256::from_slice(&buf[..]),
+						depth: ((u8::arbitrary(gen)) / 32) as usize,
 						changes: {
 							let mut set = Vec::new();
-							for _ in 0..gen.next_u32()/(64*256*256*256) {
-								set.push((vec![gen.next_u32() as u8], Some(vec![gen.next_u32() as u8])));
+							for _ in 0..<u32>::arbitrary(gen)/(64*256*256*256) {
+								set.push((vec![u8::arbitrary(gen)], Some(vec![u8::arbitrary(gen)])));
 							}
 							set
 						}
 					}
 				},
 				221..=240 => {
-					gen.fill_bytes(&mut buf[..]);
 					Action::ReorgWithImport {
-						hash: H256::from(&buf),
-						depth: ((gen.next_u32() as u8) / 32) as usize, // 0-7
+						hash: H256::from_slice(&buf[..]),
+						depth: ((u8::arbitrary(gen)) / 32) as usize, // 0-7
 					}
 				},
 				_ => {
-					gen.fill_bytes(&mut buf[..]);
 					Action::FinalizationReorg {
-						fork_depth: ((gen.next_u32() as u8) / 32) as usize, // 0-7
-						depth: ((gen.next_u32() as u8) / 64) as usize, // 0-3
+						fork_depth: ((u8::arbitrary(gen)) / 32) as usize, // 0-7
+						depth: ((u8::arbitrary(gen)) / 64) as usize, // 0-3
 					}
 				},
 			}

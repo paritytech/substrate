@@ -139,15 +139,16 @@ pub trait Externalities: ExtensionStore {
 	/// Clear an entire child storage.
 	///
 	/// Deletes all keys from the overlay and up to `limit` keys from the backend. No
-	/// limit is applied if `limit` is `None`. Returns `true` if the child trie was
+	/// limit is applied if `limit` is `None`. Returned boolean is `true` if the child trie was
 	/// removed completely and `false` if there are remaining keys after the function
-	/// returns.
+	/// returns. Returned `u32` is the number of keys that was removed at the end of the
+	/// operation.
 	///
 	/// # Note
 	///
 	/// An implementation is free to delete more keys than the specified limit as long as
 	/// it is able to do that in constant time.
-	fn kill_child_storage(&mut self, child_info: &ChildInfo, limit: Option<u32>) -> bool;
+	fn kill_child_storage(&mut self, child_info: &ChildInfo, limit: Option<u32>) -> (bool, u32);
 
 	/// Clear storage entries which keys are start with the given prefix.
 	fn clear_prefix(&mut self, prefix: &[u8]);

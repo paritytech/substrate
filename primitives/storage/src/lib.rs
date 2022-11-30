@@ -31,9 +31,14 @@ use codec::{Encode, Decode};
 #[derive(PartialEq, Eq, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord, Clone))]
 pub struct StorageKey(
-	#[cfg_attr(feature = "std", serde(with="impl_serde::serialize"))]
-	pub Vec<u8>,
+	#[cfg_attr(feature = "std", serde(with = "impl_serde::serialize"))] pub Vec<u8>,
 );
+
+impl AsRef<[u8]> for StorageKey {
+	fn as_ref(&self) -> &[u8] {
+		self.0.as_ref()
+	}
+}
 
 /// Storage key with read/write tracking information.
 #[derive(PartialEq, Eq, RuntimeDebug, Clone, Encode, Decode)]

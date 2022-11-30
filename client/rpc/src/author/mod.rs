@@ -24,12 +24,9 @@ mod tests;
 use std::{sync::Arc, convert::TryInto};
 use log::warn;
 
-use sp_blockchain::{Error as ClientError, HeaderBackend};
+use sp_blockchain::HeaderBackend;
 
-use rpc::futures::{
-	Sink, Future,
-	future::result,
-};
+use rpc::futures::{Sink, Future, future::result};
 use futures::{StreamExt as _, compat::Compat};
 use futures::future::{ready, FutureExt, TryFutureExt};
 use sc_rpc_api::DenyUnsafe;
@@ -93,7 +90,7 @@ impl<P, Client> AuthorApi<TxHash<P>, BlockHash<P>> for Author<P, Client>
 	where
 		P: TransactionPool + Sync + Send + 'static,
 		Client: HeaderBackend<P::Block> + ProvideRuntimeApi<P::Block> + Send + Sync + 'static,
-		Client::Api: SessionKeys<P::Block, Error = ClientError>,
+		Client::Api: SessionKeys<P::Block>,
 {
 	type Metadata = crate::Metadata;
 

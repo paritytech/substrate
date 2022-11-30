@@ -44,15 +44,17 @@ pub fn resolve_imports(
 	let mut externs = vec![];
 	let mut memory_import_index = None;
 	for import_ty in module.imports() {
+		let name = import_name(&import_ty)?;
+
 		if import_ty.module() != "env" {
 			return Err(WasmError::Other(format!(
 				"host doesn't provide any imports from non-env module: {}:{}",
 				import_ty.module(),
-				import_ty.name()
+				name,
 			)));
 		}
 
-		let resolved = match import_ty.name() {
+		let resolved = match name {
 			"memory" => {
 				memory_import_index = Some(externs.len());
 				resolve_memory_import(store, &import_ty, heap_pages)?
@@ -72,6 +74,16 @@ pub fn resolve_imports(
 	})
 }
 
+/// When the module linking proposal is supported the import's name can be `None`.
+/// Because we are not using this proposal we could safely unwrap the name.
+/// However, we opt for an error in order to avoid panics at all costs.
+fn import_name<'a, 'b: 'a>(import: &'a ImportType<'b>) -> Result<&'a str, WasmError> {
+	let name = import.name().ok_or_else(||
+		WasmError::Other("The module linking proposal is not supported.".to_owned())
+	)?;
+	Ok(name)
+}
+
 fn resolve_memory_import(
 	store: &Store,
 	import_ty: &ImportType,
@@ -83,7 +95,7 @@ fn resolve_memory_import(
 			return Err(WasmError::Other(format!(
 				"this import must be of memory type: {}:{}",
 				import_ty.module(),
-				import_ty.name()
+				import_name(&import_ty)?,
 			)))
 		}
 	};
@@ -116,47 +128,44 @@ fn resolve_func_import(
 	host_functions: &[&'static dyn Function],
 	allow_missing_func_imports: bool,
 ) -> Result<Extern, WasmError> {
+	let name = import_name(&import_ty)?;
+
 	let func_ty = match import_ty.ty() {
 		ExternType::Func(func_ty) => func_ty,
 		_ => {
 			return Err(WasmError::Other(format!(
 				"host doesn't provide any non function imports besides 'memory': {}:{}",
 				import_ty.module(),
-				import_ty.name()
+				name,
 			)));
 		}
 	};
 
 	let host_func = match host_functions
 		.iter()
-		.find(|host_func| host_func.name() == import_ty.name())
+		.find(|host_func| host_func.name() == name)
 	{
 		Some(host_func) => host_func,
 		None if allow_missing_func_imports => {
-			return Ok(MissingHostFuncHandler::new(import_ty).into_extern(store, &func_ty));
+			return Ok(MissingHostFuncHandler::new(import_ty)?.into_extern(store, &func_ty));
 		}
 		None => {
 			return Err(WasmError::Other(format!(
 				"host doesn't provide such function: {}:{}",
 				import_ty.module(),
-				import_ty.name()
+				name,
 			)));
 		}
 	};
-	if !signature_matches(&func_ty, &wasmtime_func_sig(*host_func)) {
+	if &func_ty != &wasmtime_func_sig(*host_func) {
 		return Err(WasmError::Other(format!(
 			"signature mismatch for: {}:{}",
 			import_ty.module(),
-			import_ty.name()
+			name,
 		)));
 	}
 
 	Ok(HostFuncHandler::new(*host_func).into_extern(store))
-}
-
-/// Returns `true` if `lhs` and `rhs` represent the same signature.
-fn signature_matches(lhs: &wasmtime::FuncType, rhs: &wasmtime::FuncType) -> bool {
-	lhs.params() == rhs.params() && lhs.results() == rhs.results()
 }
 
 /// This structure implements `Callable` and acts as a bridge between wasmtime and
@@ -243,11 +252,11 @@ struct MissingHostFuncHandler {
 }
 
 impl MissingHostFuncHandler {
-	fn new(import_ty: &ImportType) -> Self {
-		Self {
+	fn new(import_ty: &ImportType) -> Result<Self, WasmError> {
+		Ok(Self {
 			module: import_ty.module().to_string(),
-			name: import_ty.name().to_string(),
-		}
+			name: import_name(import_ty)?.to_string(),
+		})
 	}
 
 	fn into_extern(self, store: &Store, func_ty: &FuncType) -> Extern {
@@ -263,22 +272,17 @@ impl MissingHostFuncHandler {
 }
 
 fn wasmtime_func_sig(func: &dyn Function) -> wasmtime::FuncType {
-	let params = func
-		.signature()
+	let signature = func.signature();
+	let params = signature
 		.args
 		.iter()
 		.cloned()
-		.map(into_wasmtime_val_type)
-		.collect::<Vec<_>>()
-		.into_boxed_slice();
-	let results = func
-		.signature()
+		.map(into_wasmtime_val_type);
+	let results = signature
 		.return_value
 		.iter()
 		.cloned()
-		.map(into_wasmtime_val_type)
-		.collect::<Vec<_>>()
-		.into_boxed_slice();
+		.map(into_wasmtime_val_type);
 	wasmtime::FuncType::new(params, results)
 }
 

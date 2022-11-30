@@ -128,6 +128,13 @@ impl<S, Block> BlockchainBackend<Block> for Blockchain<S> where Block: BlockT, S
 	fn children(&self, _parent_hash: Block::Hash) -> ClientResult<Vec<Block::Hash>> {
 		Err(ClientError::NotAvailableOnLightClient)
 	}
+
+	fn extrinsic(
+		&self,
+		_hash: &Block::Hash,
+	) -> ClientResult<Option<<Block as BlockT>::Extrinsic>> {
+		Err(ClientError::NotAvailableOnLightClient)
+	}
 }
 
 impl<S: Storage<Block>, Block: BlockT> ProvideCache<Block> for Blockchain<S> {

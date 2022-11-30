@@ -2,7 +2,7 @@
 //
 // Inspired from pos-network-node/frame/contracts/src/tests.rs
 
-use crate::*;
+use crate::{*, self as pallet_ddc_metrics_offchain_worker};
 
 use codec::{Decode, Encode};
 use frame_support::{
@@ -41,42 +41,24 @@ mod example_offchain_worker {
     pub use frame_support::impl_outer_event;
 }
 
-// Macro hack: Give names to the modules.
-pub type Balances = balances::Module<Test>;
-pub type Timestamp = pallet_timestamp::Module<Test>;
-pub type Contracts = contracts::Module<Test>;
-pub type System = frame_system::Module<Test>;
-pub type Randomness = pallet_randomness_collective_flip::Module<Test>;
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
 
-pub type DdcMetricsOffchainWorker = Module<Test>;
-
-// Macros based on the names above. Not Rust syntax.
-impl_outer_event! {
-    pub enum MetaEvent for Test {
-        system<T>,
-        balances<T>,
-        contracts<T>,
-        example_offchain_worker<T>,
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
+	    Contracts: contracts::{Module, Call, Config<T>, Storage, Event<T>},
+        Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
+        Randomness: pallet_randomness_collective_flip::{Module, Call, Storage},
+        DdcMetricsOffchainWorker: pallet_ddc_metrics_offchain_worker::{Module, Call, Event<T>},
     }
-}
+);
 
-impl_outer_origin! {
-    pub enum Origin for Test where system = frame_system {}
-}
-
-impl_outer_dispatch! {
-    pub enum MetaCall for Test where origin: Origin {
-        balances::Balances,
-        contracts::Contracts,
-        example_offchain_worker::DdcMetricsOffchainWorker,
-    }
-}
-
-// For testing the module, we construct most of a mock runtime. This means
-// first constructing a configuration type (`Test`) which `impl`s each of the
-// configuration traits of modules we want to use.
-#[derive(Clone, Eq, PartialEq, Encode, Decode)]
-pub struct Test;
 parameter_types! {
     pub const BlockHashCount: BlockNumber = 250;
     pub const MaximumBlockWeight: Weight = 1024;
@@ -91,17 +73,17 @@ impl frame_system::Config for Test {
     type Index = u64;
     type BlockNumber = BlockNumber;
     type Hash = H256;
-    type Call = MetaCall;
+    type Call = Call;
     type Hashing = BlakeTwo256;
     type AccountId = AccountId;
     // u64; // sp_core::sr25519::Public;
     type Lookup = IdentityLookup<Self::AccountId>;
     type Header = generic::Header<BlockNumber, BlakeTwo256>;
-    type Event = MetaEvent;
+    type Event = Event;
     type BlockHashCount = BlockHashCount;
     type DbWeight = ();
     type Version = ();
-    type PalletInfo = ();
+    type PalletInfo = PalletInfo;
     type AccountData = pallet_balances::AccountData<Balance>;
     type OnNewAccount = ();
     type OnKilledAccount = ();
@@ -112,7 +94,7 @@ impl frame_system::Config for Test {
 impl pallet_balances::Config for Test {
     type Balance = Balance;
     type DustRemoval = ();
-    type Event = MetaEvent;
+    type Event = Event;
     type ExistentialDeposit = ExistentialDeposit;
     type AccountStore = System;
     type WeightInfo = ();
@@ -149,6 +131,7 @@ parameter_types! {
     pub const SurchargeReward: Balance = 150;
     pub const MaxDepth: u32 = 100;
     pub const MaxValueSize: u32 = 16_384;
+    pub MaxCodeSize: u32 = 160 * 1024;
 }
 
 // Contracts for Test Runtime.
@@ -159,7 +142,7 @@ impl contracts::Config for Test {
     type Time = Timestamp;
     type Randomness = Randomness;
     type Currency = Balances;
-    type Event = MetaEvent;
+    type Event = Event;
     type RentPayment = ();
     type SignedClaimHandicap = SignedClaimHandicap;
     type TombstoneDeposit = TombstoneDeposit;
@@ -175,6 +158,7 @@ impl contracts::Config for Test {
     type ChainExtension = ();
     type DeletionQueueDepth = ();
     type DeletionWeightLimit = ();
+    type MaxCodeSize = MaxCodeSize;
 }
 
 parameter_types! {
@@ -193,7 +177,7 @@ use frame_system::offchain::{
     AppCrypto, CreateSignedTransaction, SendTransactionTypes, SigningTypes,
 };
 
-pub type Extrinsic = TestXt<MetaCall, ()>;
+pub type Extrinsic = TestXt<Call, ()>;
 
 impl SigningTypes for Test {
     type Public = <Signature as Verify>::Signer;
@@ -202,22 +186,22 @@ impl SigningTypes for Test {
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Test
 where
-    MetaCall: From<LocalCall>,
+    Call: From<LocalCall>,
 {
-    type OverarchingCall = MetaCall;
+    type OverarchingCall = Call;
     type Extrinsic = Extrinsic;
 }
 
 impl<LocalCall> CreateSignedTransaction<LocalCall> for Test
 where
-    MetaCall: From<LocalCall>,
+    Call: From<LocalCall>,
 {
     fn create_transaction<C: AppCrypto<Self::Public, Self::Signature>>(
-        call: MetaCall,
+        call: Call,
         _public: <Signature as Verify>::Signer,
         _account: AccountId,
         nonce: u64,
-    ) -> Option<(MetaCall, <Extrinsic as ExtrinsicT>::SignaturePayload)> {
+    ) -> Option<(Call, <Extrinsic as ExtrinsicT>::SignaturePayload)> {
         Some((call, (nonce, ())))
     }
 }
@@ -231,6 +215,6 @@ impl Config for Test {
 
     type AuthorityId = crypto::TestAuthId;
 
-    type Event = MetaEvent;
-    type Call = MetaCall;
+    type Event = Event;
+    type Call = Call;
 }

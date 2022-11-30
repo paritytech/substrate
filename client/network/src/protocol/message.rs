@@ -95,7 +95,7 @@ impl BlockAttributes {
 }
 
 impl Encode for BlockAttributes {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
+	fn encode_to<T: Output + ?Sized>(&self, dest: &mut T) {
 		dest.push_byte(self.bits())
 	}
 }
@@ -191,14 +191,13 @@ pub mod generic {
 			match roles {
 				crate::config::Role::Full => Roles::FULL,
 				crate::config::Role::Light => Roles::LIGHT,
-				crate::config::Role::Sentry { .. } => Roles::AUTHORITY,
 				crate::config::Role::Authority { .. } => Roles::AUTHORITY,
 			}
 		}
 	}
 
 	impl codec::Encode for Roles {
-		fn encode_to<T: codec::Output>(&self, dest: &mut T) {
+		fn encode_to<T: codec::Output + ?Sized>(&self, dest: &mut T) {
 			dest.push_byte(self.bits())
 		}
 	}
@@ -282,7 +281,7 @@ pub mod generic {
 		/// Batch of consensus protocol messages.
 		// NOTE: index is incremented by 2 due to finality proof related
 		// messages that were removed.
-		#[codec(index = "17")]
+		#[codec(index = 17)]
 		ConsensusBatch(Vec<ConsensusMessage>),
 	}
 
@@ -402,7 +401,7 @@ pub mod generic {
 	// This assumes that the packet contains nothing but the announcement message.
 	// TODO: Get rid of it once protocol v4 is common.
 	impl<H: Encode> Encode for BlockAnnounce<H> {
-		fn encode_to<T: Output>(&self, dest: &mut T) {
+		fn encode_to<T: Output + ?Sized>(&self, dest: &mut T) {
 			self.header.encode_to(dest);
 			if let Some(state) = &self.state {
 				state.encode_to(dest);

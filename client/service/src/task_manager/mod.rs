@@ -34,7 +34,6 @@ use prometheus_endpoint::{
 use sp_utils::mpsc::{TracingUnboundedSender, TracingUnboundedReceiver, tracing_unbounded};
 use tracing_futures::Instrument;
 use crate::{config::{TaskExecutor, TaskType, JoinFuture}, Error};
-use sc_telemetry::TelemetrySpan;
 
 mod prometheus_future;
 #[cfg(test)]
@@ -47,7 +46,6 @@ pub struct SpawnTaskHandle {
 	executor: TaskExecutor,
 	metrics: Option<Metrics>,
 	task_notifier: TracingUnboundedSender<JoinFuture>,
-	telemetry_span: Option<TelemetrySpan>,
 }
 
 impl SpawnTaskHandle {
@@ -91,10 +89,7 @@ impl SpawnTaskHandle {
 			metrics.tasks_ended.with_label_values(&[name, "finished"]).inc_by(0);
 		}
 
-		let telemetry_span = self.telemetry_span.clone();
 		let future = async move {
-			let _telemetry_entered = telemetry_span.as_ref().map(|x| x.enter());
-
 			if let Some(metrics) = metrics {
 				// Add some wrappers around `task`.
 				let task = {
@@ -127,7 +122,8 @@ impl SpawnTaskHandle {
 			}
 		};
 
-		let join_handle = self.executor.spawn(Box::pin(future.in_current_span()), task_type);
+		let join_handle = self.executor.spawn(future.in_current_span().boxed(), task_type);
+
 		let mut task_notifier = self.task_notifier.clone();
 		self.executor.spawn(
 			Box::pin(async move {
@@ -154,6 +150,7 @@ impl sp_core::traits::SpawnNamed for SpawnTaskHandle {
 /// task spawned through it fails. The service should be on the receiver side
 /// and will shut itself down whenever it receives any message, i.e. an
 /// essential task has failed.
+#[derive(Clone)]
 pub struct SpawnEssentialTaskHandle {
 	essential_failed_tx: TracingUnboundedSender<()>,
 	inner: SpawnTaskHandle,
@@ -207,6 +204,16 @@ impl SpawnEssentialTaskHandle {
 	}
 }
 
+impl sp_core::traits::SpawnEssentialNamed for SpawnEssentialTaskHandle {
+	fn spawn_essential_blocking(&self, name: &'static str, future: BoxFuture<'static, ()>) {
+		self.spawn_blocking(name, future);
+	}
+
+	fn spawn_essential(&self, name: &'static str, future: BoxFuture<'static, ()>) {
+		self.spawn(name, future);
+	}
+}
+
 /// Helper struct to manage background/async tasks in Service.
 pub struct TaskManager {
 	/// A future that resolves when the service has exited, this is useful to
@@ -233,17 +240,14 @@ pub struct TaskManager {
 	/// terminates and gracefully shutdown. Also ends the parent `future()` if a child's essential
 	/// task fails.
 	children: Vec<TaskManager>,
-	/// A telemetry handle used to enter the telemetry span when a task is spawned.
-	telemetry_span: Option<TelemetrySpan>,
 }
 
 impl TaskManager {
 	/// If a Prometheus registry is passed, it will be used to report statistics about the
 	/// service tasks.
-	pub(super) fn new(
+	pub fn new(
 		executor: TaskExecutor,
 		prometheus_registry: Option<&Registry>,
-		telemetry_span: Option<TelemetrySpan>,
 	) -> Result<Self, PrometheusError> {
 		let (signal, on_exit) = exit_future::signal();
 
@@ -272,7 +276,6 @@ impl TaskManager {
 			task_notifier,
 			completion_future,
 			children: Vec::new(),
-			telemetry_span,
 		})
 	}
 
@@ -283,7 +286,6 @@ impl TaskManager {
 			executor: self.executor.clone(),
 			metrics: self.metrics.clone(),
 			task_notifier: self.task_notifier.clone(),
-			telemetry_span: self.telemetry_span.clone(),
 		}
 	}
 

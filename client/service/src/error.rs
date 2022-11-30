@@ -33,13 +33,13 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
 	#[error(transparent)]
 	Client(#[from] sp_blockchain::Error),
-	
+
 	#[error(transparent)]
 	Io(#[from] std::io::Error),
-	
+
 	#[error(transparent)]
 	Consensus(#[from] sp_consensus::Error),
-	
+
 	#[error(transparent)]
 	Network(#[from] sc_network::error::Error),
 

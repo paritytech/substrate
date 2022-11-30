@@ -43,7 +43,7 @@ pub trait BlockBuilderExt {
 
 impl<'a, A, B> BlockBuilderExt for sc_block_builder::BlockBuilder<'a, substrate_test_runtime::Block, A, B> where
 	A: ProvideRuntimeApi<substrate_test_runtime::Block> + 'a,
-	A::Api: BlockBuilderApi<substrate_test_runtime::Block, Error = sp_blockchain::Error> +
+	A::Api: BlockBuilderApi<substrate_test_runtime::Block> +
 		ApiExt<
 			substrate_test_runtime::Block,
 			StateBackend = backend::StateBackendFor<B, substrate_test_runtime::Block>

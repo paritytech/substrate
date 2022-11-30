@@ -34,7 +34,7 @@ use sc_service::config::{
 };
 use sc_service::{ChainSpec, TracingReceiver, KeepBlocks, TransactionStorageMode};
 use sc_telemetry::TelemetryHandle;
-use sc_tracing::logging::GlobalLoggerBuilder;
+use sc_tracing::logging::LoggerBuilder;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
@@ -486,8 +486,14 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let node_key = self.node_key(&net_config_dir)?;
 		let role = self.role(is_dev)?;
 		let max_runtime_instances = self.max_runtime_instances()?.unwrap_or(8);
-		let is_validator = role.is_network_authority();
+		let is_validator = role.is_authority();
 		let (keystore_remote, keystore) = self.keystore_config(&config_dir)?;
+		let telemetry_endpoints = telemetry_handle
+			.as_ref()
+			.and_then(|_| self.telemetry_endpoints(&chain_spec).transpose())
+			.transpose()?
+			// Don't initialise telemetry if `telemetry_endpoints` == Some([])
+			.filter(|x| !x.is_empty());
 
 		let unsafe_pruning = self
 			.import_params()
@@ -526,7 +532,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			rpc_ws_max_connections: self.rpc_ws_max_connections()?,
 			rpc_cors: self.rpc_cors(is_dev)?,
 			prometheus_config: self.prometheus_config(DCV::prometheus_listen_port())?,
-			telemetry_endpoints: self.telemetry_endpoints(&chain_spec)?,
+			telemetry_endpoints,
 			telemetry_external_transport: self.telemetry_external_transport()?,
 			default_heap_pages: self.default_heap_pages()?,
 			offchain_worker: self.offchain_worker(&role)?,
@@ -576,7 +582,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	fn init<C: SubstrateCli>(&self) -> Result<sc_telemetry::TelemetryWorker> {
 		sp_panic_handler::set(&C::support_url(), &C::impl_version());
 
-		let mut logger = GlobalLoggerBuilder::new(self.log_filters()?);
+		let mut logger = LoggerBuilder::new(self.log_filters()?);
 		logger.with_log_reloading(!self.is_log_filter_reloading_disabled()?);
 
 		if let Some(transport) = self.telemetry_external_transport()? {

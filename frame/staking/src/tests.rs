@@ -1833,6 +1833,7 @@ fn bond_with_duplicate_vote_should_be_ignored_by_npos_election() {
 			}
 
 			assert_ok!(Staking::bond(Origin::signed(1), 2, 1000, RewardDestination::Controller));
+			// 11 should not be elected. All of these count as ONE vote.
 			assert_ok!(Staking::nominate(Origin::signed(2), vec![11, 11, 11, 21, 31,]));
 
 			assert_ok!(Staking::bond(Origin::signed(3), 4, 1000, RewardDestination::Controller));
@@ -1886,7 +1887,6 @@ fn bond_with_duplicate_vote_should_be_ignored_by_npos_election_elected() {
 			assert_ok!(Staking::nominate(Origin::signed(4), vec![21, 31]));
 
 			// winners should be 21 and 31. Otherwise this election is taking duplicates into account.
-
 			let sp_npos_elections::ElectionResult {
 				winners,
 				assignments,
@@ -2029,7 +2029,7 @@ fn reward_from_authorship_event_handler_works() {
 fn add_reward_points_fns_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		// Not mandatory but must be coherent with rewards
-		assert_eq!(Session::validators(), vec![21, 11]);
+		assert_eq_uvec!(Session::validators(), vec![21, 11]);
 
 		<Module<Test>>::reward_by_ids(vec![
 			(21, 1),
@@ -3048,7 +3048,7 @@ mod offchain_election {
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(37));
 
 				run_to_block(40);
-				assert_session_era!(4, 0);
+				assert_session_era!(4, 1);
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
 				assert!(Staking::snapshot_nominators().is_none());
 				assert!(Staking::snapshot_validators().is_none());
@@ -3066,7 +3066,7 @@ mod offchain_election {
 				assert!(Staking::snapshot_validators().is_some());
 
 				run_to_block(90);
-				assert_session_era!(9, 1);
+				assert_session_era!(9, 2);
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
 				assert!(Staking::snapshot_nominators().is_none());
 				assert!(Staking::snapshot_validators().is_none());
@@ -4977,4 +4977,130 @@ fn cannot_bond_extra_to_lower_than_ed() {
 				Error::<Test>::InsufficientValue,
 			);
 		})
+}
+
+#[test]
+fn do_not_die_when_active_is_ed() {
+	let ed = 10;
+	ExtBuilder::default()
+		.existential_deposit(ed)
+		.build_and_execute(|| {
+			// initial stuff.
+			assert_eq!(
+				Staking::ledger(&20).unwrap(),
+				StakingLedger {
+					stash: 21,
+					total: 1000,
+					active: 1000,
+					unlocking: vec![],
+					claimed_rewards: vec![]
+				}
+			);
+
+			// unbond all of it except ed.
+			assert_ok!(Staking::unbond(Origin::signed(20), 1000 - ed));
+			start_active_era(3);
+			assert_ok!(Staking::withdraw_unbonded(Origin::signed(20), 100));
+
+			// initial stuff.
+			assert_eq!(
+				Staking::ledger(&20).unwrap(),
+				StakingLedger {
+					stash: 21,
+					total: ed,
+					active: ed,
+					unlocking: vec![],
+					claimed_rewards: vec![]
+				}
+			);
+		})
+}
+
+mod election_data_provider {
+	use super::*;
+	use sp_election_providers::ElectionDataProvider;
+
+	#[test]
+	fn voters_include_self_vote() {
+		ExtBuilder::default().nominate(false).build().execute_with(|| {
+			assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| Staking::voters()
+				.into_iter()
+				.find(|(w, _, t)| { v == *w && t[0] == *w })
+				.is_some()))
+		})
+	}
+
+	#[test]
+	fn voters_exclude_slashed() {
+		ExtBuilder::default().build().execute_with(|| {
+			assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
+			assert_eq!(
+				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters()
+					.iter()
+					.find(|x| x.0 == 101)
+					.unwrap()
+					.2,
+				vec![11, 21]
+			);
+
+			start_active_era(1);
+			add_slash(&11);
+
+			// 11 is gone.
+			start_active_era(2);
+			assert_eq!(
+				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters()
+					.iter()
+					.find(|x| x.0 == 101)
+					.unwrap()
+					.2,
+				vec![21]
+			);
+
+			// resubmit and it is back
+			assert_ok!(Staking::nominate(Origin::signed(100), vec![11, 21]));
+			assert_eq!(
+				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters()
+					.iter()
+					.find(|x| x.0 == 101)
+					.unwrap()
+					.2,
+				vec![11, 21]
+			);
+		})
+	}
+
+	#[test]
+	fn estimate_next_election_works() {
+		ExtBuilder::default().session_per_era(5).period(5).build().execute_with(|| {
+			// first session is always length 0.
+			for b in 1..20 {
+				run_to_block(b);
+				assert_eq!(Staking::next_election_prediction(System::block_number()), 20);
+			}
+
+			// election
+			run_to_block(20);
+			assert_eq!(Staking::next_election_prediction(System::block_number()), 45);
+			assert_eq!(staking_events().len(), 1);
+			assert_eq!(
+				*staking_events().last().unwrap(),
+				RawEvent::StakingElection(ElectionCompute::OnChain)
+			);
+
+			for b in 21..45 {
+				run_to_block(b);
+				assert_eq!(Staking::next_election_prediction(System::block_number()), 45);
+			}
+
+			// election
+			run_to_block(45);
+			assert_eq!(Staking::next_election_prediction(System::block_number()), 70);
+			assert_eq!(staking_events().len(), 3);
+			assert_eq!(
+				*staking_events().last().unwrap(),
+				RawEvent::StakingElection(ElectionCompute::OnChain)
+			);
+		})
+	}
 }

@@ -34,7 +34,7 @@ pub trait CodeExecutor: Sized + Send + Sync + CallInWasm + Clone + 'static {
 	/// or an execution error) together with a `bool`, which is true if native execution was used.
 	fn call<
 		R: codec::Codec + PartialEq,
-		NC: FnOnce() -> Result<R, String> + UnwindSafe,
+		NC: FnOnce() -> Result<R, Box<dyn std::error::Error + Send + Sync>> + UnwindSafe,
 	>(
 		&self,
 		ext: &mut dyn Externalities,
@@ -205,7 +205,7 @@ sp_externalities::decl_extension! {
 	pub struct RuntimeSpawnExt(Box<dyn RuntimeSpawn>);
 }
 
-/// Something that can spawn futures (blocking and non-blocking) with an assigned name.
+/// Something that can spawn tasks (blocking and non-blocking) with an assigned name.
 #[dyn_clonable::clonable]
 pub trait SpawnNamed: Clone + Send + Sync {
 	/// Spawn the given blocking future.
@@ -225,5 +225,30 @@ impl SpawnNamed for Box<dyn SpawnNamed> {
 
 	fn spawn(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
 		(**self).spawn(name, future)
+	}
+}
+
+/// Something that can spawn essential tasks (blocking and non-blocking) with an assigned name.
+///
+/// Essential tasks are special tasks that should take down the node when they end.
+#[dyn_clonable::clonable]
+pub trait SpawnEssentialNamed: Clone + Send + Sync {
+	/// Spawn the given blocking future.
+	///
+	/// The given `name` is used to identify the future in tracing.
+	fn spawn_essential_blocking(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>);
+	/// Spawn the given non-blocking future.
+	///
+	/// The given `name` is used to identify the future in tracing.
+	fn spawn_essential(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>);
+}
+
+impl SpawnEssentialNamed for Box<dyn SpawnEssentialNamed> {
+	fn spawn_essential_blocking(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+		(**self).spawn_essential_blocking(name, future)
+	}
+
+	fn spawn_essential(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+		(**self).spawn_essential(name, future)
 	}
 }

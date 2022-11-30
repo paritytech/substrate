@@ -132,10 +132,10 @@ impl<Client, Storage, Block> OffchainWorkers<
 	) -> impl Future<Output = ()> {
 		let runtime = self.client.runtime_api();
 		let at = BlockId::hash(header.hash());
-		let has_api_v1 = runtime.has_api_with::<dyn OffchainWorkerApi<Block, Error = ()>, _>(
+		let has_api_v1 = runtime.has_api_with::<dyn OffchainWorkerApi<Block>, _>(
 			&at, |v| v == 1
 		);
-		let has_api_v2 = runtime.has_api_with::<dyn OffchainWorkerApi<Block, Error = ()>, _>(
+		let has_api_v2 = runtime.has_api_with::<dyn OffchainWorkerApi<Block>, _>(
 			&at, |v| v == 2
 		);
 		let version = match (has_api_v1, has_api_v2) {

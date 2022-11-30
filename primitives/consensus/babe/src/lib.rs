@@ -76,8 +76,7 @@ pub const MEDIAN_ALGORITHM_CARDINALITY: usize = 1200; // arbitrary suggestion by
 /// The index of an authority.
 pub type AuthorityIndex = u32;
 
-/// A slot number.
-pub use sp_consensus_slots::SlotNumber;
+pub use sp_consensus_slots::Slot;
 
 /// An equivocation proof for multiple block authorships on the same slot (i.e. double vote).
 pub type EquivocationProof<H> = sp_consensus_slots::EquivocationProof<H, AuthorityId>;
@@ -93,11 +92,11 @@ pub type BabeBlockWeight = u32;
 /// Make a VRF transcript from given randomness, slot number and epoch.
 pub fn make_transcript(
 	randomness: &Randomness,
-	slot_number: u64,
+	slot: Slot,
 	epoch: u64,
 ) -> Transcript {
 	let mut transcript = Transcript::new(&BABE_ENGINE_ID);
-	transcript.append_u64(b"slot number", slot_number);
+	transcript.append_u64(b"slot number", *slot);
 	transcript.append_u64(b"current epoch", epoch);
 	transcript.append_message(b"chain randomness", &randomness[..]);
 	transcript
@@ -107,13 +106,13 @@ pub fn make_transcript(
 #[cfg(feature = "std")]
 pub fn make_transcript_data(
 	randomness: &Randomness,
-	slot_number: u64,
+	slot: Slot,
 	epoch: u64,
 ) -> VRFTranscriptData {
 	VRFTranscriptData {
 		label: &BABE_ENGINE_ID,
 		items: vec![
-			("slot number", VRFTranscriptValue::U64(slot_number)),
+			("slot number", VRFTranscriptValue::U64(*slot)),
 			("current epoch", VRFTranscriptValue::U64(epoch)),
 			("chain randomness", VRFTranscriptValue::Bytes(randomness.to_vec())),
 		]
@@ -126,14 +125,14 @@ pub enum ConsensusLog {
 	/// The epoch has changed. This provides information about the _next_
 	/// epoch - information about the _current_ epoch (i.e. the one we've just
 	/// entered) should already be available earlier in the chain.
-	#[codec(index = "1")]
+	#[codec(index = 1)]
 	NextEpochData(NextEpochDescriptor),
 	/// Disable the authority with given index.
-	#[codec(index = "2")]
+	#[codec(index = 2)]
 	OnDisabled(AuthorityIndex),
 	/// The epoch has changed, and the epoch after the current one will
 	/// enact different epoch configurations.
-	#[codec(index = "3")]
+	#[codec(index = 3)]
 	NextConfigData(NextConfigDescriptor),
 }
 
@@ -147,7 +146,7 @@ pub struct BabeGenesisConfigurationV1 {
 	pub slot_duration: u64,
 
 	/// The duration of epochs in slots.
-	pub epoch_length: SlotNumber,
+	pub epoch_length: u64,
 
 	/// A constant value that is used in the threshold calculation formula.
 	/// Expressed as a rational where the first member of the tuple is the
@@ -195,7 +194,7 @@ pub struct BabeGenesisConfiguration {
 	pub slot_duration: u64,
 
 	/// The duration of epochs in slots.
-	pub epoch_length: SlotNumber,
+	pub epoch_length: u64,
 
 	/// A constant value that is used in the threshold calculation formula.
 	/// Expressed as a rational where the first member of the tuple is the
@@ -303,8 +302,8 @@ where
 
 		// both headers must be targetting the same slot and it must
 		// be the same as the one in the proof.
-		if proof.slot_number != first_pre_digest.slot_number() ||
-			first_pre_digest.slot_number() != second_pre_digest.slot_number()
+		if proof.slot != first_pre_digest.slot() ||
+			first_pre_digest.slot() != second_pre_digest.slot()
 		{
 			return None;
 		}
@@ -356,9 +355,9 @@ pub struct Epoch {
 	/// The epoch index.
 	pub epoch_index: u64,
 	/// The starting slot of the epoch.
-	pub start_slot: SlotNumber,
+	pub start_slot: Slot,
 	/// The duration of this epoch.
-	pub duration: SlotNumber,
+	pub duration: u64,
 	/// The authorities and their weights.
 	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 	/// Randomness for this epoch.
@@ -376,8 +375,8 @@ sp_api::decl_runtime_apis! {
 		#[changed_in(2)]
 		fn configuration() -> BabeGenesisConfigurationV1;
 
-		/// Returns the slot number that started the current epoch.
-		fn current_epoch_start() -> SlotNumber;
+		/// Returns the slot that started the current epoch.
+		fn current_epoch_start() -> Slot;
 
 		/// Returns information regarding the current epoch.
 		fn current_epoch() -> Epoch;
@@ -391,14 +390,14 @@ sp_api::decl_runtime_apis! {
 		/// session historical module to prove that a given authority key is
 		/// tied to a given staking identity during a specific session. Proofs
 		/// of key ownership are necessary for submitting equivocation reports.
-		/// NOTE: even though the API takes a `slot_number` as parameter the current
+		/// NOTE: even though the API takes a `slot` as parameter the current
 		/// implementations ignores this parameter and instead relies on this
 		/// method being called at the correct block height, i.e. any point at
 		/// which the epoch for the given slot is live on-chain. Future
 		/// implementations will instead use indexed data through an offchain
 		/// worker, not requiring older states to be available.
 		fn generate_key_ownership_proof(
-			slot_number: SlotNumber,
+			slot: Slot,
 			authority_id: AuthorityId,
 		) -> Option<OpaqueKeyOwnershipProof>;
 

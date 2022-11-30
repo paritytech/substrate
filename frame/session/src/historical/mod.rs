@@ -31,8 +31,10 @@ use codec::{Encode, Decode};
 use sp_runtime::KeyTypeId;
 use sp_runtime::traits::{Convert, OpaqueKeys};
 use sp_session::{MembershipProof, ValidatorCount};
-use frame_support::{decl_module, decl_storage};
-use frame_support::{Parameter, print};
+use frame_support::{
+	decl_module, decl_storage, Parameter, print,
+	traits::{ValidatorSet, ValidatorSetWithIdentification},
+};
 use sp_trie::{MemoryDB, Trie, TrieMut, Recorder, EMPTY_PREFIX};
 use sp_trie::trie_types::{TrieDBMut, TrieDB};
 use super::{SessionIndex, Module as SessionModule};
@@ -100,6 +102,24 @@ impl<T: Config> Module<T> {
 			}
 		})
 	}
+}
+
+impl<T: Config> ValidatorSet<T::AccountId> for Module<T> {
+	type ValidatorId = T::ValidatorId;
+	type ValidatorIdOf = T::ValidatorIdOf;
+
+	fn session_index() -> sp_staking::SessionIndex {
+		super::Module::<T>::current_index()
+	}
+
+	fn validators() -> Vec<Self::ValidatorId> {
+		super::Module::<T>::validators()
+	}
+}
+
+impl<T: Config> ValidatorSetWithIdentification<T::AccountId> for Module<T> {
+	type Identification = T::FullIdentification;
+	type IdentificationOf = T::FullIdentificationOf;
 }
 
 /// Specialization of the crate-level `SessionManager` which returns the set of full identification

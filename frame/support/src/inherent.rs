@@ -218,6 +218,10 @@ mod tests {
 		fn create_inherent(_: &InherentData) -> Option<Self::Call> {
 			Some(CallTest2::Something)
 		}
+
+		fn is_inherent_required(_: &InherentData) -> Result<Option<Self::Error>, Self::Error> { 
+			Ok(Some(().into()))
+		}
 	}
 
 	type Block = testing::Block<Extrinsic>;
@@ -260,14 +264,30 @@ mod tests {
 	fn check_inherents_works() {
 		let block = Block::new(
 			Header::new_from_number(1),
-			vec![Extrinsic { function: Call::Test(CallTest::Something) }],
+			vec![
+				Extrinsic { function: Call::Test2(CallTest2::Something) },
+				Extrinsic { function: Call::Test(CallTest::Something) },
+			],
 		);
 
 		assert!(InherentData::new().check_extrinsics(&block).ok());
 
 		let block = Block::new(
 			Header::new_from_number(1),
-			vec![Extrinsic { function: Call::Test(CallTest::SomethingElse) }],
+			vec![
+				Extrinsic { function: Call::Test2(CallTest2::Something) },
+				Extrinsic { function: Call::Test(CallTest::SomethingElse) },
+			],
+		);
+
+		assert!(InherentData::new().check_extrinsics(&block).fatal_error());
+	}
+
+	#[test]
+	fn required_inherents_enforced() {
+		let block = Block::new(
+			Header::new_from_number(1),
+			vec![Extrinsic { function: Call::Test(CallTest::Something) }],
 		);
 
 		assert!(InherentData::new().check_extrinsics(&block).fatal_error());

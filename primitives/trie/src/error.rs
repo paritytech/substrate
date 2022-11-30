@@ -49,7 +49,7 @@ impl StdError for Error {
 impl fmt::Display for Error {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			Error::Decode(e) => write!(f, "Decode error: {}", e.what()),
+			Error::Decode(e) => write!(f, "Decode error: {}", e),
 			Error::BadFormat => write!(f, "Bad format"),
 		}
 	}

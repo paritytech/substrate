@@ -25,7 +25,7 @@ use sc_service::{
 	KeepBlocks, TransactionStorageMode,
 };
 use sc_telemetry::TelemetryHandle;
-use sc_tracing::logging::GlobalLoggerBuilder;
+use sc_tracing::logging::LoggerBuilder;
 use wasm_bindgen::prelude::*;
 use futures::{
 	prelude::*, channel::{oneshot, mpsc}, compat::*, future::{ready, ok, select}
@@ -41,7 +41,7 @@ pub fn init_logging_and_telemetry(
 	pattern: &str,
 ) -> Result<sc_telemetry::TelemetryWorker, sc_tracing::logging::Error> {
 	let transport = ExtTransport::new(ffi::websocket_transport());
-	let mut logger = GlobalLoggerBuilder::new(pattern);
+	let mut logger = LoggerBuilder::new(pattern);
 	logger.with_transport(transport);
 	logger.init()
 }

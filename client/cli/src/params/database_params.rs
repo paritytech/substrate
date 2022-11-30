@@ -29,6 +29,7 @@ pub struct DatabaseParams {
 		alias = "db",
 		value_name = "DB",
 		case_insensitive = true,
+		possible_values = &Database::variants(),
 	)]
 	pub database: Option<Database>,
 
@@ -38,7 +39,7 @@ pub struct DatabaseParams {
 
 	/// Enable storage chain mode
 	///
-	/// This changes the storage format for blocks bodys. 
+	/// This changes the storage format for blocks bodies.
 	/// If this is enabled, each transaction is stored separately in the
 	/// transaction database column and is only referenced by hash
 	/// in the block body column.

@@ -20,13 +20,11 @@
 //!
 //! Most likely you should use `define_env` macro.
 
-#[macro_export]
 macro_rules! convert_args {
 	() => (vec![]);
 	( $( $t:ty ),* ) => ( vec![ $( { use $crate::wasm::env_def::ConvertibleToWasm; <$t>::VALUE_TYPE }, )* ] );
 }
 
-#[macro_export]
 macro_rules! gen_signature {
 	( ( $( $params: ty ),* ) ) => (
 		{
@@ -43,7 +41,6 @@ macro_rules! gen_signature {
 	);
 }
 
-#[macro_export]
 macro_rules! gen_signature_dispatch {
 	(
 		$needle_name:ident,
@@ -102,7 +99,6 @@ where
 	f
 }
 
-#[macro_export]
 macro_rules! unmarshall_then_body_then_marshall {
 	( $args_iter:ident, $ctx:ident, ( $( $names:ident : $params:ty ),* ) -> $returns:ty => $body:tt ) => ({
 		let body = $crate::wasm::env_def::macros::constrain_closure::<
@@ -128,7 +124,6 @@ macro_rules! unmarshall_then_body_then_marshall {
 	})
 }
 
-#[macro_export]
 macro_rules! define_func {
 	( < E: $seal_ty:tt > $name:ident ( $ctx: ident $(, $names:ident : $params:ty)*) $(-> $returns:ty)* => $body:tt ) => {
 		fn $name< E: $seal_ty >(
@@ -152,7 +147,6 @@ macro_rules! define_func {
 	};
 }
 
-#[macro_export]
 macro_rules! register_func {
 	( $reg_cb:ident, < E: $seal_ty:tt > ; ) => {};
 
@@ -215,9 +209,9 @@ mod tests {
 	use sp_runtime::traits::Zero;
 	use sp_sandbox::{ReturnValue, Value};
 	use crate::{
+		Weight,
 		wasm::{Runtime, runtime::TrapReason, tests::MockExt},
 		exec::Ext,
-		gas::Gas,
 	};
 
 	struct TestRuntime {
@@ -282,7 +276,7 @@ mod tests {
 	#[test]
 	fn macro_define_func() {
 		define_func!( <E: Ext> seal_gas (_ctx, amount: u32) => {
-			let amount = Gas::from(amount);
+			let amount = Weight::from(amount);
 			if !amount.is_zero() {
 				Ok(())
 			} else {
@@ -334,7 +328,7 @@ mod tests {
 
 		define_env!(Env, <E: Ext>,
 			seal_gas( _ctx, amount: u32 ) => {
-				let amount = Gas::from(amount);
+				let amount = Weight::from(amount);
 				if !amount.is_zero() {
 					Ok(())
 				} else {

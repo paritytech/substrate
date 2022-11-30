@@ -160,7 +160,7 @@ decl_error! {
 		/// A timepoint was given, yet no multisig operation is underway.
 		UnexpectedTimepoint,
 		/// The maximum weight information provided was too low.
-		WeightTooLow,
+		MaxWeightTooLow,
 		/// The data to be stored is already stored.
 		AlreadyStored,
 	}
@@ -503,7 +503,7 @@ impl<T: Config> Module<T> {
 
 			if let Some((call, call_len)) = maybe_approved_call {
 				// verify weight
-				ensure!(call.get_dispatch_info().weight <= max_weight, Error::<T>::WeightTooLow);
+				ensure!(call.get_dispatch_info().weight <= max_weight, Error::<T>::MaxWeightTooLow);
 
 				// Clean up storage before executing call to avoid an possibility of reentrancy
 				// attack.

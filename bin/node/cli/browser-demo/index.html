@@ -27,8 +27,8 @@ async function start() {
 
 	setInterval(() => {
 		client
-			.rpcSend('{"method":"system_networkState","params":[],"id":1,"jsonrpc":"2.0"}')
-			.then((r) => log("Network state: " + r));
+			.rpcSend('{"method":"system_localPeerId","params":[],"id":1,"jsonrpc":"2.0"}')
+			.then((r) => log("Local PeerId: " + r));
 	}, 20000);
 }
 

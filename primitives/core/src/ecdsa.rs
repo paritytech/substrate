@@ -554,6 +554,7 @@ mod test {
 	use hex_literal::hex;
 	use crate::crypto::{DEV_PHRASE, set_default_ss58_version};
 	use serde_json;
+	use crate::crypto::PublicError;
 
 	#[test]
 	fn default_phrase_should_be_used() {
@@ -677,6 +678,34 @@ mod test {
 	}
 
 	#[test]
+	fn ss58check_format_check_works() {
+		use crate::crypto::Ss58AddressFormat;
+		let pair = Pair::from_seed(b"12345678901234567890123456789012");
+		let public = pair.public();
+		let format = Ss58AddressFormat::Reserved46;
+		let s = public.to_ss58check_with_version(format);
+		assert_eq!(Public::from_ss58check_with_version(&s), Err(PublicError::FormatNotAllowed));
+	}
+
+	#[test]
+	fn ss58check_full_roundtrip_works() {
+		use crate::crypto::Ss58AddressFormat;
+		let pair = Pair::from_seed(b"12345678901234567890123456789012");
+		let public = pair.public();
+		let format = Ss58AddressFormat::PolkadotAccount;
+		let s = public.to_ss58check_with_version(format);
+		let (k, f) = Public::from_ss58check_with_version(&s).unwrap();
+		assert_eq!(k, public);
+		assert_eq!(f, format);
+
+		let format = Ss58AddressFormat::Custom(64);
+		let s = public.to_ss58check_with_version(format);
+		let (k, f) = Public::from_ss58check_with_version(&s).unwrap();
+		assert_eq!(k, public);
+		assert_eq!(f, format);
+	}
+
+	#[test]
 	fn ss58check_custom_format_works() {
 		// We need to run this test in its own process to not interfere with other tests running in
 		// parallel and also relying on the ss58 version.
@@ -685,10 +714,12 @@ mod test {
 			// temp save default format version
 			let default_format = Ss58AddressFormat::default();
 			// set current ss58 version is custom "200" `Ss58AddressFormat::Custom(200)`
+
 			set_default_ss58_version(Ss58AddressFormat::Custom(200));
 			// custom addr encoded by version 200
-			let addr = "2X64kMNEWAW5KLZMSKcGKEc96MyuaRsRUku7vomuYxKgqjVCRj";
+			let addr = "4pbsSkWcBaYoFHrKJZp5fDVUKbqSYD9dhZZGvpp3vQ5ysVs5ybV";
 			Public::from_ss58check(&addr).unwrap();
+
 			set_default_ss58_version(default_format);
 			// set current ss58 version to default version
 			let addr = "KWAfgC2aRG5UVD6CpbPQXCx4YZZUhvWqqAJE6qcYc9Rtr6g5C";

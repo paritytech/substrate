@@ -22,7 +22,7 @@
 use super::*;
 
 use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks, account, whitelisted_caller};
+use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
 use sp_runtime::{traits::{Saturating}};
 
 use crate::Module as TipsMod;
@@ -193,21 +193,8 @@ benchmarks! {
 	}: _(RawOrigin::Root, hash)
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::tests::{new_test_ext, Test};
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_report_awesome::<Test>());
-			assert_ok!(test_benchmark_retract_tip::<Test>());
-			assert_ok!(test_benchmark_tip_new::<Test>());
-			assert_ok!(test_benchmark_tip::<Test>());
-			assert_ok!(test_benchmark_close_tip::<Test>());
-			assert_ok!(test_benchmark_slash_tip::<Test>());
-		});
-	}
-}
+impl_benchmark_test_suite!(
+	TipsMod,
+	crate::tests::new_test_ext(),
+	crate::tests::Test,
+);

@@ -22,7 +22,7 @@
 use super::*;
 
 use frame_system::{RawOrigin, Module as System};
-use frame_benchmarking::{benchmarks, account, whitelisted_caller};
+use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
 use sp_runtime::traits::Bounded;
 
 use crate::Module as Vesting;
@@ -224,21 +224,8 @@ benchmarks! {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::tests::{ExtBuilder, Test};
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		ExtBuilder::default().existential_deposit(256).build().execute_with(|| {
-			assert_ok!(test_benchmark_vest_locked::<Test>());
-			assert_ok!(test_benchmark_vest_unlocked::<Test>());
-			assert_ok!(test_benchmark_vest_other_locked::<Test>());
-			assert_ok!(test_benchmark_vest_other_unlocked::<Test>());
-			assert_ok!(test_benchmark_vested_transfer::<Test>());
-			assert_ok!(test_benchmark_force_vested_transfer::<Test>());
-		});
-	}
-}
+impl_benchmark_test_suite!(
+	Vesting,
+	crate::tests::ExtBuilder::default().existential_deposit(256).build(),
+	crate::tests::Test,
+);

@@ -17,7 +17,7 @@
 
 use criterion::{Criterion, criterion_group, criterion_main, black_box};
 use frame_system as system;
-use frame_support::{decl_module, decl_event, impl_outer_origin, impl_outer_event};
+use frame_support::{decl_module, decl_event};
 use sp_core::H256;
 use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
@@ -41,16 +41,19 @@ mod module {
 	);
 }
 
-impl_outer_origin!{
-	pub enum Origin for Runtime {}
-}
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
+type Block = frame_system::mocking::MockBlock<Runtime>;
 
-impl_outer_event! {
-	pub enum Event for Runtime {
-		system<T>,
-		module,
+frame_support::construct_runtime!(
+	pub enum Runtime where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Module: module::{Module, Call, Event},
 	}
-}
+);
 
 frame_support::parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -63,8 +66,6 @@ frame_support::parameter_types! {
 			4 * 1024 * 1024, Perbill::from_percent(75),
 		);
 }
-#[derive(Clone, Eq, PartialEq)]
-pub struct Runtime;
 impl system::Config for Runtime {
 	type BaseCallFilter = ();
 	type BlockWeights = ();
@@ -73,7 +74,7 @@ impl system::Config for Runtime {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = ();
+	type Call = Call;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
@@ -82,7 +83,7 @@ impl system::Config for Runtime {
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();

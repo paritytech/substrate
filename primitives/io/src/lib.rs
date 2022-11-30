@@ -57,7 +57,7 @@ use sp_core::{
 use sp_trie::{TrieConfiguration, trie_types::Layout};
 
 use sp_runtime_interface::{runtime_interface, Pointer};
-use sp_runtime_interface::pass_by::PassBy;
+use sp_runtime_interface::pass_by::{PassBy, PassByCodec};
 
 use codec::{Encode, Decode};
 
@@ -79,6 +79,16 @@ pub enum EcdsaVerifyError {
 	BadV,
 	/// Invalid signature
 	BadSignature,
+}
+
+/// The outcome of calling [`kill_storage`]. Returned value is the number of storage items
+/// removed from the trie from making the `kill_storage` call.
+#[derive(PassByCodec, Encode, Decode)]
+pub enum KillChildStorageResult {
+	/// No key remains in the child trie.
+	AllRemoved(u32),
+	/// At least one key still resides in the child trie due to the supplied limit.
+	SomeRemaining(u32),
 }
 
 /// Interface for accessing the storage from within the runtime.
@@ -290,7 +300,7 @@ pub trait DefaultChildStorage {
 	/// The limit can be used to partially delete a child trie in case it is too large
 	/// to delete in one go (block).
 	///
-	/// It returns false iff some keys are remaining in
+	/// It returns a boolean false iff some keys are remaining in
 	/// the child trie after the functions returns.
 	///
 	/// # Note
@@ -307,7 +317,41 @@ pub trait DefaultChildStorage {
 	#[version(2)]
 	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> bool {
 		let child_info = ChildInfo::new_default(storage_key);
-		self.kill_child_storage(&child_info, limit)
+		let (all_removed, _num_removed) = self.kill_child_storage(&child_info, limit);
+		all_removed
+	}
+
+	/// Clear a child storage key.
+	///
+	/// Deletes all keys from the overlay and up to `limit` keys from the backend if
+	/// it is set to `Some`. No limit is applied when `limit` is set to `None`.
+	///
+	/// The limit can be used to partially delete a child trie in case it is too large
+	/// to delete in one go (block).
+	///
+	/// It returns a boolean false iff some keys are remaining in
+	/// the child trie after the functions returns. Also returns a `u32` with
+	/// the number of keys removed from the process.
+	///
+	/// # Note
+	///
+	/// Please note that keys that are residing in the overlay for that child trie when
+	/// issuing this call are all deleted without counting towards the `limit`. Only keys
+	/// written during the current block are part of the overlay. Deleting with a `limit`
+	/// mostly makes sense with an empty overlay for that child trie.
+	///
+	/// Calling this function multiple times per block for the same `storage_key` does
+	/// not make much sense because it is not cumulative when called inside the same block.
+	/// Use this function to distribute the deletion of a single child trie across multiple
+	/// blocks.
+	#[version(3)]
+	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> KillChildStorageResult {
+		let child_info = ChildInfo::new_default(storage_key);
+		let (all_removed, num_removed) = self.kill_child_storage(&child_info, limit);
+		match all_removed {
+			true => KillChildStorageResult::AllRemoved(num_removed),
+			false => KillChildStorageResult::SomeRemaining(num_removed),
+		}
 	}
 
 	/// Check a child storage key.
@@ -474,8 +518,9 @@ pub trait Crypto {
 		let keystore = &***self.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!");
 		SyncCryptoStore::sign_with(keystore, id, &pub_key.into(), msg)
-			.map(|sig| ed25519::Signature::from_slice(sig.as_slice()))
 			.ok()
+			.flatten()
+			.map(|sig| ed25519::Signature::from_slice(sig.as_slice()))
 	}
 
 	/// Verify `ed25519` signature.
@@ -600,8 +645,9 @@ pub trait Crypto {
 		let keystore = &***self.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!");
 		SyncCryptoStore::sign_with(keystore, id, &pub_key.into(), msg)
-			.map(|sig| sr25519::Signature::from_slice(sig.as_slice()))
 			.ok()
+			.flatten()
+			.map(|sig| sr25519::Signature::from_slice(sig.as_slice()))
 	}
 
 	/// Verify an `sr25519` signature.
@@ -646,8 +692,9 @@ pub trait Crypto {
 		let keystore = &***self.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!");
 		SyncCryptoStore::sign_with(keystore, id, &pub_key.into(), msg)
-			.map(|sig| ecdsa::Signature::from_slice(sig.as_slice()))
 			.ok()
+			.flatten()
+			.map(|sig| ecdsa::Signature::from_slice(sig.as_slice()))
 	}
 
 	/// Verify `ecdsa` signature.
