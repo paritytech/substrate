@@ -23,13 +23,13 @@ use sp_std::{prelude::*, result, marker::PhantomData, ops::Div, fmt::Debug};
 use codec::{FullCodec, Codec, Encode, Decode, EncodeLike};
 use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
-	RuntimeAppPublic, RuntimeDebug, BoundToRuntimeAppPublic,
-	ConsensusEngineId, DispatchResult, DispatchError,
 	traits::{
-	MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero,
-	BadOrigin, AtLeast32BitUnsigned, Convert, UniqueSaturatedFrom, UniqueSaturatedInto,
-	SaturatedConversion, StoredMapError,
+		AtLeast32Bit, AtLeast32BitUnsigned, Block as BlockT, BadOrigin, Convert,
+		MaybeSerializeDeserialize, SaturatedConversion, Saturating, StoredMapError,
+		UniqueSaturatedFrom, UniqueSaturatedInto, Zero,
 	},
+	BoundToRuntimeAppPublic, ConsensusEngineId, DispatchError, DispatchResult, Percent,
+	RuntimeAppPublic, RuntimeDebug,
 };
 use sp_staking::SessionIndex;
 use crate::dispatch::Parameter;
@@ -490,42 +490,56 @@ impl<
 	}
 }
 
-/// Something that can estimate at which block the next session rotation will happen.
+/// Something that can estimate at which block the next session rotation will happen (i.e. a new
+/// session starts).
+///
+/// The accuracy of the estimates is dependent on the specific implementation, but in order to get
+/// the best estimate possible these methods should be called throughout the duration of the session
+/// (rather than calling once and storing the result).
 ///
 /// This should be the same logical unit that dictates `ShouldEndSession` to the session module. No
-/// Assumptions are made about the scheduling of the sessions.
+/// assumptions are made about the scheduling of the sessions.
 pub trait EstimateNextSessionRotation<BlockNumber> {
 	/// Return the average length of a session.
 	///
 	/// This may or may not be accurate.
 	fn average_session_length() -> BlockNumber;
 
+	/// Return an estimate of the current session progress.
+	///
+	/// None should be returned if the estimation fails to come to an answer.
+	fn estimate_current_session_progress(now: BlockNumber) -> (Option<Percent>, Weight);
+
 	/// Return the block number at which the next session rotation is estimated to happen.
 	///
-	/// None should be returned if the estimation fails to come to an answer
-	fn estimate_next_session_rotation(now: BlockNumber) -> Option<BlockNumber>;
-
-	/// Return the weight of calling `estimate_next_session_rotation`
-	fn weight(now: BlockNumber) -> Weight;
+	/// None should be returned if the estimation fails to come to an answer.
+	fn estimate_next_session_rotation(now: BlockNumber) -> (Option<BlockNumber>, Weight);
 }
 
-impl<BlockNumber: Bounded + Default> EstimateNextSessionRotation<BlockNumber> for () {
+impl<BlockNumber: Zero> EstimateNextSessionRotation<BlockNumber> for () {
 	fn average_session_length() -> BlockNumber {
-		Default::default()
+		Zero::zero()
 	}
 
-	fn estimate_next_session_rotation(_: BlockNumber) -> Option<BlockNumber> {
-		Default::default()
+	fn estimate_current_session_progress(_: BlockNumber) -> (Option<Percent>, Weight) {
+		(None, Zero::zero())
 	}
 
-	fn weight(_: BlockNumber) -> Weight {
-		0
+	fn estimate_next_session_rotation(_: BlockNumber) -> (Option<BlockNumber>, Weight) {
+		(None, Zero::zero())
 	}
 }
 
-/// Something that can estimate at which block the next `new_session` will be triggered.
+/// Something that can estimate at which block scheduling of the next session will happen (i.e when
+/// we will try to fetch new validators).
 ///
-/// This must always be implemented by the session module.
+/// This only refers to the point when we fetch the next session details and not when we enact them
+/// (for enactment there's `EstimateNextSessionRotation`). With `pallet-session` this should be
+/// triggered whenever `SessionManager::new_session` is called.
+///
+/// For example, if we are using a staking module this would be the block when the session module
+/// would ask staking what the next validator set will be, as such this must always be implemented
+/// by the session module.
 pub trait EstimateNextNewSession<BlockNumber> {
 	/// Return the average length of a session.
 	///
@@ -533,23 +547,18 @@ pub trait EstimateNextNewSession<BlockNumber> {
 	fn average_session_length() -> BlockNumber;
 
 	/// Return the block number at which the next new session is estimated to happen.
-	fn estimate_next_new_session(now: BlockNumber) -> Option<BlockNumber>;
-
-	/// Return the weight of calling `estimate_next_new_session`
-	fn weight(now: BlockNumber) -> Weight;
+	///
+	/// None should be returned if the estimation fails to come to an answer.
+	fn estimate_next_new_session(_: BlockNumber) -> (Option<BlockNumber>, Weight);
 }
 
-impl<BlockNumber: Bounded + Default> EstimateNextNewSession<BlockNumber> for () {
+impl<BlockNumber: Zero> EstimateNextNewSession<BlockNumber> for () {
 	fn average_session_length() -> BlockNumber {
-		Default::default()
+		Zero::zero()
 	}
 
-	fn estimate_next_new_session(_: BlockNumber) -> Option<BlockNumber> {
-		Default::default()
-	}
-
-	fn weight(_: BlockNumber) -> Weight {
-		0
+	fn estimate_next_new_session(_: BlockNumber) -> (Option<BlockNumber>, Weight) {
+		(None, Zero::zero())
 	}
 }
 
@@ -1119,6 +1128,22 @@ pub trait Currency<AccountId> {
 	) -> SignedImbalance<Self::Balance, Self::PositiveImbalance>;
 }
 
+/// Trait for providing an ERC-20 style set of named fungible assets.
+pub trait Fungibles<AccountId> {
+	/// Means of identifying one asset class from another.
+	type AssetId: FullCodec + Copy + Default;
+	/// Scalar type for storing balance of an account.
+	type Balance: AtLeast32BitUnsigned + FullCodec + Copy + Default;
+	/// Get the `asset` balance of `who`.
+	fn balance(asset: Self::AssetId, who: &AccountId) -> Self::Balance;
+	/// Returns `true` if the `asset` balance of `who` may be increased by `amount`.
+	fn can_deposit(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> bool;
+	/// Increase the `asset` balance of `who` by `amount`.
+	fn deposit(asset: Self::AssetId, who: AccountId, amount: Self::Balance) -> DispatchResult;
+	/// Attempt to reduce the `asset` balance of `who` by `amount`.
+	fn withdraw(asset: Self::AssetId, who: AccountId, amount: Self::Balance) -> DispatchResult;
+}
+
 /// Status of funds.
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 pub enum BalanceStatus {
@@ -1413,35 +1438,39 @@ impl<T> InitializeMembers<T> for () {
 	fn initialize_members(_: &[T]) {}
 }
 
-// A trait that is able to provide randomness.
-pub trait Randomness<Output> {
-	/// Get a "random" value
+/// A trait that is able to provide randomness.
+///
+/// Being a deterministic blockchain, real randomness is difficult to come by, different
+/// implementations of this trait will provide different security guarantees. At best,
+/// this will be randomness which was hard to predict a long time ago, but that has become
+/// easy to predict recently.
+pub trait Randomness<Output, BlockNumber> {
+	/// Get the most recently determined random seed, along with the time in the past
+	/// since when it was determinable by chain observers.
 	///
-	/// Being a deterministic blockchain, real randomness is difficult to come by. This gives you
-	/// something that approximates it. At best, this will be randomness which was
-	/// hard to predict a long time ago, but that has become easy to predict recently.
+	/// `subject` is a context identifier and allows you to get a different result to
+	/// other callers of this function; use it like `random(&b"my context"[..])`.
 	///
-	/// `subject` is a context identifier and allows you to get a
-	/// different result to other callers of this function; use it like
-	/// `random(&b"my context"[..])`.
-	fn random(subject: &[u8]) -> Output;
+	/// NOTE: The returned seed should only be used to distinguish commitments made before
+	/// the returned block number. If the block number is too early (i.e. commitments were
+	/// made afterwards), then ensure no further commitments may be made and repeatedly
+	/// call this on later blocks until the block number returned is later than the latest
+	/// commitment.
+	fn random(subject: &[u8]) -> (Output, BlockNumber);
 
 	/// Get the basic random seed.
 	///
-	/// In general you won't want to use this, but rather `Self::random` which allows you to give a
-	/// subject for the random result and whose value will be independently low-influence random
-	/// from any other such seeds.
-	fn random_seed() -> Output {
+	/// In general you won't want to use this, but rather `Self::random` which allows
+	/// you to give a subject for the random result and whose value will be
+	/// independently low-influence random from any other such seeds.
+	///
+	/// NOTE: The returned seed should only be used to distinguish commitments made before
+	/// the returned block number. If the block number is too early (i.e. commitments were
+	/// made afterwards), then ensure no further commitments may be made and repeatedly
+	/// call this on later blocks until the block number returned is later than the latest
+	/// commitment.
+	fn random_seed() -> (Output, BlockNumber) {
 		Self::random(&[][..])
-	}
-}
-
-/// Provides an implementation of [`Randomness`] that should only be used in tests!
-pub struct TestRandomness;
-
-impl<Output: Decode + Default> Randomness<Output> for TestRandomness {
-	fn random(subject: &[u8]) -> Output {
-		Output::decode(&mut TrailingZeroInput::new(subject)).unwrap_or_default()
 	}
 }
 
@@ -1518,6 +1547,38 @@ pub trait OnFinalize<BlockNumber> {
 	fn on_finalize(_n: BlockNumber) {}
 }
 
+/// The block's on idle trait.
+///
+/// Implementing this lets you express what should happen for your pallet before
+/// block finalization (see `on_finalize` hook) in case any remaining weight is left.
+pub trait OnIdle<BlockNumber> {
+	/// The block is being finalized.
+	/// Implement to have something happen in case there is leftover weight.
+	/// Check the passed `remaining_weight` to make sure it is high enough to allow for
+	/// your pallet's extra computation.
+	///
+	/// NOTE: This function is called AFTER ALL extrinsics - including inherent extrinsics -
+	/// in a block are applied but before `on_finalize` is executed.
+	fn on_idle(
+		_n: BlockNumber,
+		_remaining_weight: crate::weights::Weight
+	) -> crate::weights::Weight {
+		0
+	}
+}
+
+#[impl_for_tuples(30)]
+impl<BlockNumber: Clone> OnIdle<BlockNumber> for Tuple {
+	fn on_idle(n: BlockNumber,  remaining_weight: crate::weights::Weight) -> crate::weights::Weight {
+		let mut weight = 0;
+		for_tuples!( #(
+			let adjusted_remaining_weight = remaining_weight.saturating_sub(weight);
+			weight = weight.saturating_add(Tuple::on_idle(n.clone(),  adjusted_remaining_weight));
+		)* );
+		weight
+	}
+}
+
 /// The block initialization trait.
 ///
 /// Implementing this lets you express what should happen for your pallet when the block is
@@ -1535,9 +1596,9 @@ pub trait OnInitialize<BlockNumber> {
 
 #[impl_for_tuples(30)]
 impl<BlockNumber: Clone> OnInitialize<BlockNumber> for Tuple {
-	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight {
+	fn on_initialize(n: BlockNumber) -> crate::weights::Weight {
 		let mut weight = 0;
-		for_tuples!( #( weight = weight.saturating_add(Tuple::on_initialize(_n.clone())); )* );
+		for_tuples!( #( weight = weight.saturating_add(Tuple::on_initialize(n.clone())); )* );
 		weight
 	}
 }
@@ -1552,6 +1613,54 @@ pub trait OnGenesis {
 	/// Something that should happen at genesis.
 	fn on_genesis() {}
 }
+
+/// Prefix to be used (optionally) for implementing [`OnRuntimeUpgradeHelpersExt::storage_key`].
+#[cfg(feature = "try-runtime")]
+pub const ON_RUNTIME_UPGRADE_PREFIX: &[u8] = b"__ON_RUNTIME_UPGRADE__";
+
+/// Some helper functions for [`OnRuntimeUpgrade`] during `try-runtime` testing.
+#[cfg(feature = "try-runtime")]
+pub trait OnRuntimeUpgradeHelpersExt {
+	/// Generate a storage key unique to this runtime upgrade.
+	///
+	/// This can be used to communicate data from pre-upgrade to post-upgrade state and check
+	/// them. See [`Self::set_temp_storage`] and [`Self::get_temp_storage`].
+	#[cfg(feature = "try-runtime")]
+	fn storage_key(ident: &str) -> [u8; 32] {
+		let prefix = sp_io::hashing::twox_128(ON_RUNTIME_UPGRADE_PREFIX);
+		let ident = sp_io::hashing::twox_128(ident.as_bytes());
+
+		let mut final_key = [0u8; 32];
+		final_key[..16].copy_from_slice(&prefix);
+		final_key[16..].copy_from_slice(&ident);
+
+		final_key
+	}
+
+	/// Get temporary storage data written by [`Self::set_temp_storage`].
+	///
+	/// Returns `None` if either the data is unavailable or un-decodable.
+	///
+	/// A `at` storage identifier must be provided to indicate where the storage is being read from.
+	#[cfg(feature = "try-runtime")]
+	fn get_temp_storage<T: Decode>(at: &str) -> Option<T> {
+		sp_io::storage::get(&Self::storage_key(at))
+			.and_then(|bytes| Decode::decode(&mut &*bytes).ok())
+	}
+
+	/// Write some temporary data to a specific storage that can be read (potentially in
+	/// post-upgrade hook) via [`Self::get_temp_storage`].
+	///
+	/// A `at` storage identifier must be provided to indicate where the storage is being written
+	/// to.
+	#[cfg(feature = "try-runtime")]
+	fn set_temp_storage<T: Encode>(data: T, at: &str) {
+		sp_io::storage::set(&Self::storage_key(at), &data.encode());
+	}
+}
+
+#[cfg(feature = "try-runtime")]
+impl<U: OnRuntimeUpgrade> OnRuntimeUpgradeHelpersExt for U {}
 
 /// The runtime upgrade trait.
 ///
@@ -1575,17 +1684,13 @@ pub trait OnRuntimeUpgrade {
 	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<(), &'static str> {
-		Ok(())
-	}
+	fn pre_upgrade() -> Result<(), &'static str> { Ok(()) }
 
 	/// Execute some post-checks after a runtime upgrade.
 	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade() -> Result<(), &'static str> {
-		Ok(())
-	}
+	fn post_upgrade() -> Result<(), &'static str> { Ok(()) }
 }
 
 #[impl_for_tuples(30)]
@@ -1991,6 +2096,18 @@ pub trait Hooks<BlockNumber> {
 	/// The block is being finalized. Implement to have something happen.
 	fn on_finalize(_n: BlockNumber) {}
 
+	/// This will be run when the block is being finalized (before `on_finalize`).
+	/// Implement to have something happen using the remaining weight.
+	/// Will not fire if the remaining weight is 0.
+	/// Return the weight used, the hook will subtract it from current weight used
+	/// and pass the result to the next `on_idle` hook if it exists.
+	fn on_idle(
+		_n: BlockNumber,
+		_remaining_weight: crate::weights::Weight
+	) -> crate::weights::Weight {
+		0
+	}
+
 	/// The block is being initialized. Implement to have something happen.
 	///
 	/// Return the non-negotiable weight consumed in the block.
@@ -2011,6 +2128,22 @@ pub trait Hooks<BlockNumber> {
 	///
 	/// Return the non-negotiable weight consumed for runtime upgrade.
 	fn on_runtime_upgrade() -> crate::weights::Weight { 0 }
+
+	/// Execute some pre-checks prior to a runtime upgrade.
+	///
+	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<(), &'static str> {
+		Ok(())
+	}
+
+	/// Execute some post-checks after a runtime upgrade.
+	///
+	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade() -> Result<(), &'static str> {
+		Ok(())
+	}
 
 	/// Implementing this function on a module allows you to perform long-running tasks
 	/// that make (by default) validators generate transactions that feed results
@@ -2166,6 +2299,28 @@ pub trait GetPalletVersion {
 	/// If there was no previous version of the pallet stored in the state,
 	/// this function returns `None`.
 	fn storage_version() -> Option<PalletVersion>;
+}
+
+/// Something that can execute a given block.
+///
+/// Executing a block means that all extrinsics in a given block will be executed and the resulting
+/// header will be checked against the header of the given block.
+pub trait ExecuteBlock<Block: BlockT> {
+	/// Execute the given `block`.
+	///
+	/// This will execute all extrinsics in the block and check that the resulting header is correct.
+	///
+	/// # Panic
+	///
+	/// Panics when an extrinsics panics or the resulting header doesn't match the expected header.
+	fn execute_block(block: Block);
+}
+
+/// A trait which is called when the timestamp is set in the runtime.
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+pub trait OnTimestampSet<Moment> {
+	/// Called when the timestamp is set.
+	fn on_timestamp_set(moment: Moment);
 }
 
 #[cfg(test)]

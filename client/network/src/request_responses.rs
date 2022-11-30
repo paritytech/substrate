@@ -197,6 +197,7 @@ impl From<(Cow<'static, str>, RequestId)> for ProtocolRequestId {
 }
 
 /// When sending a request, what to do on a disconnected recipient.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum IfDisconnected {
 	/// Try to connect to the peer.
 	TryConnect,

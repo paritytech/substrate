@@ -25,7 +25,7 @@ use sp_runtime::traits::AtLeast32Bit;
 use codec::{Encode, Decode};
 use sp_blockchain::{Error, Result};
 
-type DbHash = [u8; 32];
+type DbHash = sp_core::H256;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct LeafSetItem<H, N> {
@@ -54,6 +54,11 @@ impl<H, N: Ord> FinalizationDisplaced<H, N> {
 		// if these are actually produced correctly via the leaf-set within
 		// one transaction, then there will be no overlap in the keys.
 		self.leaves.append(&mut other.leaves);
+	}
+
+	/// Iterate over all displaced leaves.
+	pub fn leaves(&self) -> impl IntoIterator<Item=&H> {
+		self.leaves.values().flatten()
 	}
 }
 

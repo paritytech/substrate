@@ -60,7 +60,7 @@ pub struct LightClientRequestHandler<B: Block> {
 }
 
 impl<B: Block> LightClientRequestHandler<B> {
-	/// Create a new [`BlockRequestHandler`].
+	/// Create a new [`crate::block_request_handler::BlockRequestHandler`].
 	pub fn new(
 		protocol_id: &ProtocolId,
 		client: Arc<dyn Client<B>>,

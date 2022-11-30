@@ -37,3 +37,4 @@ std = [
 	"sp-io/std",
 	"sp-core/std",
 ]
+try-runtime = ["frame-support/try-runtime"]

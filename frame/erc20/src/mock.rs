@@ -110,11 +110,11 @@ frame_support::construct_runtime!(
         NodeBlock = Block,
         UncheckedExtrinsic = UncheckedExtrinsic
     {
-        System: system::{Module, Call, Event<T>},
-        Balances: balances::{Module, Call, Storage, Config<T>, Event<T>},
-        Bridge: bridge::{Module, Call, Storage, Event<T>},
-        Erc721: erc721::{Module, Call, Storage, Event<T>},
-        Example: example::{Module, Call, Event<T>}
+        System: system::{Pallet, Call, Event<T>},
+        Balances: balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+        Bridge: bridge::{Pallet, Call, Storage, Event<T>},
+        Erc721: erc721::{Pallet, Call, Storage, Event<T>},
+        Example: example::{Pallet, Call, Event<T>}
     }
 );
 

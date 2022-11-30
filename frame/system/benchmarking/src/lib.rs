@@ -30,15 +30,21 @@ use frame_support::{
 	traits::Get,
 	weights::DispatchClass,
 };
-use frame_system::{Module as System, Call, RawOrigin, DigestItemOf};
+use frame_system::{Pallet as System, Call, RawOrigin, DigestItemOf};
 
 mod mock;
 
-pub struct Module<T: Config>(System<T>);
+pub struct Pallet<T: Config>(System<T>);
 pub trait Config: frame_system::Config {}
 
 benchmarks! {
 	remark {
+		let b in 0 .. *T::BlockLength::get().max.get(DispatchClass::Normal) as u32;
+		let remark_message = vec![1; b as usize];
+		let caller = whitelisted_caller();
+	}: _(RawOrigin::Signed(caller), remark_message)
+
+	remark_with_event {
 		let b in 0 .. *T::BlockLength::get().max.get(DispatchClass::Normal) as u32;
 		let remark_message = vec![1; b as usize];
 		let caller = whitelisted_caller();
@@ -139,7 +145,7 @@ benchmarks! {
 }
 
 impl_benchmark_test_suite!(
-	Module,
+	Pallet,
 	crate::mock::new_test_ext(),
 	crate::mock::Test,
 );

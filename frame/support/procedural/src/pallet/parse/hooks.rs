@@ -28,6 +28,8 @@ pub struct HooksDef {
 	pub where_clause: Option<syn::WhereClause>,
 	/// The span of the pallet::hooks attribute.
 	pub attr_span: proc_macro2::Span,
+	/// Boolean flag, set to true if the `on_runtime_upgrade` method of hooks was implemented.
+	pub has_runtime_upgrade: bool,
 }
 
 impl HooksDef {
@@ -66,10 +68,16 @@ impl HooksDef {
 			return Err(syn::Error::new(item_trait.span(), msg));
 		}
 
+		let has_runtime_upgrade = item.items.iter().any(|i| match i {
+			syn::ImplItem::Method(method) => method.sig.ident == "on_runtime_upgrade",
+			_ => false,
+		});
+
 		Ok(Self {
 			attr_span,
 			index,
 			instances,
+			has_runtime_upgrade,
 			where_clause: item.generics.where_clause.clone(),
 		})
 	}

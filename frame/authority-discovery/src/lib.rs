@@ -136,9 +136,9 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
-			System: frame_system::{Module, Call, Config, Storage, Event<T>},
-			Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
-			AuthorityDiscovery: pallet_authority_discovery::{Module, Call, Config},
+			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
+			AuthorityDiscovery: pallet_authority_discovery::{Pallet, Call, Config},
 		}
 	);
 

@@ -26,7 +26,7 @@ use quote::quote;
 
 use std::env;
 
-use proc_macro_crate::crate_name;
+use proc_macro_crate::{crate_name, FoundCrate};
 
 fn generate_hidden_includes_mod_name(unique_id: &'static str) -> Ident {
 	Ident::new(&format!("sp_api_hidden_includes_{}", unique_id), Span::call_site())
@@ -34,27 +34,23 @@ fn generate_hidden_includes_mod_name(unique_id: &'static str) -> Ident {
 
 /// Generates the hidden includes that are required to make the macro independent from its scope.
 pub fn generate_hidden_includes(unique_id: &'static str) -> TokenStream {
-	if env::var("CARGO_PKG_NAME").unwrap() == "sp-api" {
-		TokenStream::new()
-	} else {
-		let mod_name = generate_hidden_includes_mod_name(unique_id);
-		match crate_name("sp-api") {
-			Ok(client_name) => {
-				let client_name = Ident::new(&client_name, Span::call_site());
-				quote!(
-					#[doc(hidden)]
-					mod #mod_name {
-						pub extern crate #client_name as sp_api;
-					}
-				)
-			},
-			Err(e) => {
-				let err = Error::new(Span::call_site(), &e).to_compile_error();
-				quote!( #err )
-			}
+	let mod_name = generate_hidden_includes_mod_name(unique_id);
+	match crate_name("sp-api") {
+		Ok(FoundCrate::Itself) => quote!(),
+		Ok(FoundCrate::Name(client_name)) => {
+			let client_name = Ident::new(&client_name, Span::call_site());
+			quote!(
+				#[doc(hidden)]
+				mod #mod_name {
+					pub extern crate #client_name as sp_api;
+				}
+			)
+		},
+		Err(e) => {
+			let err = Error::new(Span::call_site(), e).to_compile_error();
+			quote!( #err )
 		}
-
-	}.into()
+	}
 }
 
 /// Generates the access to the `sc_client` crate.

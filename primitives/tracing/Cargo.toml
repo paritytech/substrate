@@ -20,7 +20,7 @@ targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 [dependencies]
 sp-std = { version = "3.0.0", path = "../std", default-features = false}
 codec = { version = "2.0.0", package = "parity-scale-codec", default-features = false, features = ["derive"]}
-tracing = { version = "0.1.22", default-features = false }
+tracing = { version = "0.1.25", default-features = false }
 tracing-core = { version = "0.1.17", default-features = false }
 log = { version = "0.4.8", optional = true }
 tracing-subscriber = { version = "0.2.15", optional = true, features = ["tracing-log"] }

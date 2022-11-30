@@ -326,7 +326,7 @@ impl BigUint {
 		// PROOF: 0 <= normalizer_bits < SHIFT 0 <= normalizer < B. all conversions are
 		// safe.
 		let normalizer_bits = other.msb().leading_zeros() as Single;
-		let normalizer = (2 as Single).pow(normalizer_bits as u32) as Single;
+		let normalizer = 2_u32.pow(normalizer_bits as u32) as Single;
 
 		// step D1.
 		let mut self_norm = self.mul(&Self::from(normalizer));

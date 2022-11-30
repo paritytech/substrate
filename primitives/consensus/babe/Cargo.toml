@@ -26,6 +26,7 @@ sp-inherents = { version = "3.0.0", default-features = false, path = "../../inhe
 sp-keystore = { version = "0.9.0", default-features = false, path = "../../keystore", optional = true }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../runtime" }
 sp-timestamp = { version = "3.0.0", default-features = false, path = "../../timestamp" }
+serde = { version = "1.0.123", features = ["derive"], optional = true }
 
 [features]
 default = ["std"]
@@ -43,4 +44,5 @@ std = [
 	"sp-keystore",
 	"sp-runtime/std",
 	"sp-timestamp/std",
+	"serde",
 ]

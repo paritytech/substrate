@@ -18,6 +18,7 @@
 mod constants;
 mod pallet_struct;
 mod call;
+mod config;
 mod error;
 mod event;
 mod storage;
@@ -28,7 +29,7 @@ mod genesis_build;
 mod genesis_config;
 mod type_value;
 
-use crate::pallet::Def;
+use crate::pallet::{Def, parse::helper::get_doc_literals};
 use quote::ToTokens;
 
 /// Merge where clause together, `where` token span is taken from the first not none one.
@@ -48,6 +49,7 @@ pub fn merge_where_clauses(clauses: &[&Option<syn::WhereClause>]) -> Option<syn:
 pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
 	let constants = constants::expand_constants(&mut def);
 	let pallet_struct = pallet_struct::expand_pallet_struct(&mut def);
+	let config = config::expand_config(&mut def);
 	let call = call::expand_call(&mut def);
 	let error = error::expand_error(&mut def);
 	let event = event::expand_event(&mut def);
@@ -59,9 +61,21 @@ pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
 	let genesis_config = genesis_config::expand_genesis_config(&mut def);
 	let type_values = type_value::expand_type_values(&mut def);
 
+	if get_doc_literals(&def.item.attrs).is_empty() {
+		def.item.attrs.push(syn::parse_quote!(
+			#[doc = r"
+			The module that hosts all the
+			[FRAME](https://substrate.dev/docs/en/knowledgebase/runtime/frame)
+			types needed to add this pallet to a
+			[runtime](https://substrate.dev/docs/en/knowledgebase/runtime/).
+			"]
+		));
+	}
+
 	let new_items = quote::quote!(
 		#constants
 		#pallet_struct
+		#config
 		#call
 		#error
 		#event

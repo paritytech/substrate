@@ -39,29 +39,46 @@ pub const API_BENCHMARK_BATCH_SIZE: u32 = 100;
 /// as for `API_BENCHMARK_BATCH_SIZE`.
 pub const INSTR_BENCHMARK_BATCH_SIZE: u32 = 1_000;
 
-/// Definition of the cost schedule and other parameterizations for wasm vm.
+/// Definition of the cost schedule and other parameterizations for the wasm vm.
+///
+/// Its fields are private to the crate in order to allow addition of new contract
+/// callable functions without bumping to a new major version. A genesis config should
+/// rely on public functions of this type.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(bound(serialize = "", deserialize = "")))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq, ScheduleDebug)]
 pub struct Schedule<T: Config> {
 	/// Version of the schedule.
-	pub version: u32,
+	///
+	/// # Note
+	///
+	/// Must be incremented whenever the [`self.instruction_weights`] are changed. The
+	/// reason is that changes to instruction weights require a re-instrumentation
+	/// of all contracts which are triggered by a version comparison on call.
+	/// Changes to other parts of the schedule should not increment the version in
+	/// order to avoid unnecessary re-instrumentations.
+	pub(crate) version: u32,
 
 	/// Whether the `seal_println` function is allowed to be used contracts.
 	/// MUST only be enabled for `dev` chains, NOT for production chains
-	pub enable_println: bool,
+	pub(crate) enable_println: bool,
 
 	/// Describes the upper limits on various metrics.
-	pub limits: Limits,
+	pub(crate) limits: Limits,
 
 	/// The weights for individual wasm instructions.
-	pub instruction_weights: InstructionWeights<T>,
+	pub(crate) instruction_weights: InstructionWeights<T>,
 
 	/// The weights for each imported function a contract is allowed to call.
-	pub host_fn_weights: HostFnWeights<T>,
+	pub(crate) host_fn_weights: HostFnWeights<T>,
 }
 
 /// Describes the upper limits on various metrics.
+///
+/// # Note
+///
+/// The values in this struct should only ever be increased for a deployed chain. The reason
+/// is that decreasing those values will break existing contracts which are above the new limits.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug)]
 pub struct Limits {
@@ -188,6 +205,7 @@ pub struct InstructionWeights<T: Config> {
 	pub i64rotl: u32,
 	pub i64rotr: u32,
 	/// The type parameter is used in the default implementation.
+	#[codec(skip)]
 	pub _phantom: PhantomData<T>,
 }
 
@@ -348,7 +366,11 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight per byte hashed by `seal_hash_blake2_128`.
 	pub hash_blake2_128_per_byte: Weight,
 
+	/// Weight of calling `seal_rent_params`.
+	pub rent_params: Weight,
+
 	/// The type parameter is used in the default implementation.
+	#[codec(skip)]
 	pub _phantom: PhantomData<T>
 }
 
@@ -572,6 +594,7 @@ impl<T: Config> Default for HostFnWeights<T> {
 			hash_blake2_256_per_byte: cost_byte_batched!(seal_hash_blake2_256_per_kb),
 			hash_blake2_128: cost_batched!(seal_hash_blake2_128),
 			hash_blake2_128_per_byte: cost_byte_batched!(seal_hash_blake2_128_per_kb),
+			rent_params: cost_batched!(seal_rent_params),
 			_phantom: PhantomData,
 		}
 	}
@@ -583,7 +606,21 @@ struct ScheduleRules<'a, T: Config> {
 }
 
 impl<T: Config> Schedule<T> {
-	pub fn rules(&self, module: &elements::Module) -> impl rules::Rules + '_ {
+	/// Allow contracts to call `seal_println` in order to print messages to the console.
+	///
+	/// This should only ever be activated in development chains. The printed messages
+	/// can be observed on the console by setting the environment variable
+	/// `RUST_LOG=runtime=debug` when running the node.
+	///
+	/// # Note
+	///
+	/// Is set to `false` by default.
+	pub fn enable_println(mut self, enable: bool) -> Self {
+		self.enable_println = enable;
+		self
+	}
+
+	pub(crate) fn rules(&self, module: &elements::Module) -> impl rules::Rules + '_ {
 		ScheduleRules {
 			schedule: &self,
 			params: module

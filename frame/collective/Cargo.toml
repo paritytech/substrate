@@ -19,9 +19,10 @@ sp-core = { version = "3.0.0", default-features = false, path = "../../primitive
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
-frame-benchmarking = { version = "3.0.0", default-features = false, path = "../benchmarking", optional = true }
+frame-benchmarking = { version = "3.1.0", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "3.0.0", default-features = false, path = "../support" }
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
+log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
 hex-literal = "0.3.1"
@@ -38,9 +39,11 @@ std = [
 	"frame-support/std",
 	"sp-runtime/std",
 	"frame-system/std",
+	"log/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",
 	"sp-runtime/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
 ]
+try-runtime = ["frame-support/try-runtime"]

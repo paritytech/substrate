@@ -48,7 +48,7 @@ use sp_transaction_pool::{
 	TransactionStatusStreamFor,
 	TxHash,
 };
-use sp_consensus::{Environment, Proposer, RecordProof};
+use sp_consensus::{Environment, Proposer};
 
 use crate::{
 	common::SizeType,
@@ -151,6 +151,7 @@ impl core::Benchmark for ConstructionBenchmark {
 			context.client.clone(),
 			self.transactions.clone().into(),
 			None,
+			None,
 		);
 		let inherent_data_providers = sp_inherents::InherentDataProviders::new();
 		inherent_data_providers
@@ -170,7 +171,6 @@ impl core::Benchmark for ConstructionBenchmark {
 				inherent_data_providers.create_inherent_data().expect("Create inherent data failed"),
 				Default::default(),
 				std::time::Duration::from_secs(20),
-				RecordProof::Yes,
 			),
 		).map(|r| r.block).expect("Proposing failed");
 

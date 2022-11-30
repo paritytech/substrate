@@ -227,6 +227,11 @@ impl<Block, B> VotingRule<Block, B> for VotingRules<Block, B> where
 				if let Some(header) = rule
 					.restrict_vote(backend.clone(), &base, &best_target, &restricted_target)
 					.await
+					.filter(|(_, restricted_number)| {
+						// NOTE: we can only restrict votes within the interval [base, target)
+						restricted_number >= base.number()
+							&& restricted_number < restricted_target.number()
+					})
 					.and_then(|(hash, _)| backend.header(BlockId::Hash(hash)).ok())
 					.and_then(std::convert::identity)
 				{
@@ -311,5 +316,99 @@ impl<Block, B> VotingRule<Block, B> for Box<dyn VotingRule<Block, B>> where
 		current_target: &Block::Header,
 	) -> VotingRuleResult<Block> {
 		(**self).restrict_vote(backend, base, best_target, current_target)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use sc_block_builder::BlockBuilderProvider;
+	use sp_consensus::BlockOrigin;
+	use sp_runtime::traits::Header as _;
+
+	use substrate_test_runtime_client::{
+		runtime::{Block, Header},
+		Backend, Client, ClientBlockImportExt, DefaultTestClientBuilderExt, TestClientBuilder,
+		TestClientBuilderExt,
+	};
+
+	/// A mock voting rule that subtracts a static number of block from the `current_target`.
+	#[derive(Clone)]
+	struct Subtract(u64);
+	impl VotingRule<Block, Client<Backend>> for Subtract {
+		fn restrict_vote(
+			&self,
+			backend: Arc<Client<Backend>>,
+			_base: &Header,
+			_best_target: &Header,
+			current_target: &Header,
+		) -> VotingRuleResult<Block> {
+			let target_number = current_target.number() - self.0;
+			let res = backend
+				.hash(target_number)
+				.unwrap()
+				.map(|target_hash| (target_hash, target_number));
+
+			Box::pin(std::future::ready(res))
+		}
+	}
+
+	#[test]
+	fn multiple_voting_rules_cannot_restrict_past_base() {
+		// setup an aggregate voting rule composed of two voting rules
+		// where each subtracts 50 blocks from the current target
+		let rule = VotingRulesBuilder::new()
+			.add(Subtract(50))
+			.add(Subtract(50))
+			.build();
+
+		let mut client = Arc::new(TestClientBuilder::new().build());
+
+		for _ in 0..200 {
+			let block = client
+				.new_block(Default::default())
+				.unwrap()
+				.build()
+				.unwrap()
+				.block;
+
+			client.import(BlockOrigin::Own, block).unwrap();
+		}
+
+		let genesis = client
+			.header(&BlockId::Number(0u32.into()))
+			.unwrap()
+			.unwrap();
+
+		let best = client
+			.header(&BlockId::Hash(client.info().best_hash))
+			.unwrap()
+			.unwrap();
+
+		let (_, number) =
+			futures::executor::block_on(rule.restrict_vote(client.clone(), &genesis, &best, &best))
+				.unwrap();
+
+		// we apply both rules which should subtract 100 blocks from best block (#200)
+		// which means that we should be voting for block #100
+		assert_eq!(number, 100);
+
+		let block110 = client
+			.header(&BlockId::Number(110u32.into()))
+			.unwrap()
+			.unwrap();
+
+		let (_, number) = futures::executor::block_on(rule.restrict_vote(
+			client.clone(),
+			&block110,
+			&best,
+			&best,
+		))
+		.unwrap();
+
+		// base block is #110 while best block is #200, applying both rules would make
+		// would make the target block (#100) be lower than the base block, therefore
+		// only one of the rules is applied.
+		assert_eq!(number, 150);
 	}
 }

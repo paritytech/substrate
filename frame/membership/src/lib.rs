@@ -293,8 +293,8 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
-			System: frame_system::{Module, Call, Config, Storage, Event<T>},
-			Membership: pallet_membership::{Module, Call, Storage, Config<T>, Event<T>},
+			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			Membership: pallet_membership::{Pallet, Call, Storage, Config<T>, Event<T>},
 		}
 	);
 

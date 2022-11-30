@@ -20,6 +20,7 @@ sp-api = { version = "3.0.0", default-features = false, path = "../../../primiti
 sp-core = { version = "3.0.0", default-features = false, path = "../../../primitives/core" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-std = { version = "3.0.0", default-features = false, path = "../../../primitives/std" }
+log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
 hex-literal = "0.3"
@@ -35,4 +36,5 @@ std = [
 	"sp-core/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"log/std",
 ]

@@ -174,15 +174,15 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Module, Call, Event<T>},
-		Module1: module1::{Module, Call},
-		Module2: module2::{Module, Call},
-		Module2_1: module2::<Instance1>::{Module, Call},
-		Module2_2: module2::<Instance2>::{Module, Call},
-		Pallet3: pallet3::{Module, Call},
-		Pallet4: pallet4::{Module, Call},
-		Pallet4_1: pallet4::<Instance1>::{Module, Call},
-		Pallet4_2: pallet4::<Instance2>::{Module, Call},
+		System: frame_system::{Pallet, Call, Event<T>},
+		Module1: module1::{Pallet, Call},
+		Module2: module2::{Pallet, Call},
+		Module2_1: module2::<Instance1>::{Pallet, Call},
+		Module2_2: module2::<Instance2>::{Pallet, Call},
+		Pallet3: pallet3::{Pallet, Call},
+		Pallet4: pallet4::{Pallet, Call},
+		Pallet4_1: pallet4::<Instance1>::{Pallet, Call},
+		Pallet4_2: pallet4::<Instance2>::{Pallet, Call},
 	}
 );
 
@@ -218,7 +218,7 @@ fn check_pallet_version(pallet: &str) {
 #[test]
 fn on_runtime_upgrade_sets_the_pallet_versions_in_storage() {
 	sp_io::TestExternalities::new_empty().execute_with(|| {
-		AllModules::on_runtime_upgrade();
+		AllPallets::on_runtime_upgrade();
 
 		check_pallet_version("Module1");
 		check_pallet_version("Module2");
@@ -237,7 +237,7 @@ fn on_runtime_upgrade_overwrites_old_version() {
 		let key = get_pallet_version_storage_key_for_pallet("Module2");
 		sp_io::storage::set(&key, &SOME_TEST_VERSION.encode());
 
-		AllModules::on_runtime_upgrade();
+		AllPallets::on_runtime_upgrade();
 
 		check_pallet_version("Module1");
 		check_pallet_version("Module2");

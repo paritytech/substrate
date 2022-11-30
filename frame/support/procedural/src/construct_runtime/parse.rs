@@ -28,7 +28,7 @@ mod keyword {
 	syn::custom_keyword!(Block);
 	syn::custom_keyword!(NodeBlock);
 	syn::custom_keyword!(UncheckedExtrinsic);
-	syn::custom_keyword!(Module);
+	syn::custom_keyword!(Pallet);
 	syn::custom_keyword!(Call);
 	syn::custom_keyword!(Storage);
 	syn::custom_keyword!(Event);
@@ -44,7 +44,7 @@ pub struct RuntimeDefinition {
 	pub enum_token: Token![enum],
 	pub name: Ident,
 	pub where_section: WhereSection,
-	pub modules: ext::Braces<ext::Punctuated<ModuleDeclaration, Token![,]>>,
+	pub pallets: ext::Braces<ext::Punctuated<PalletDeclaration, Token![,]>>,
 }
 
 impl Parse for RuntimeDefinition {
@@ -54,7 +54,7 @@ impl Parse for RuntimeDefinition {
 			enum_token: input.parse()?,
 			name: input.parse()?,
 			where_section: input.parse()?,
-			modules: input.parse()?,
+			pallets: input.parse()?,
 		})
 	}
 }
@@ -150,20 +150,20 @@ impl Parse for WhereDefinition {
 }
 
 #[derive(Debug, Clone)]
-pub struct ModuleDeclaration {
+pub struct PalletDeclaration {
 	pub name: Ident,
 	/// Optional fixed index (e.g. `MyPallet ...  = 3,`)
 	pub index: Option<u8>,
-	pub module: Ident,
+	pub pallet: Ident,
 	pub instance: Option<Ident>,
-	pub module_parts: Vec<ModulePart>,
+	pub pallet_parts: Vec<PalletPart>,
 }
 
-impl Parse for ModuleDeclaration {
+impl Parse for PalletDeclaration {
 	fn parse(input: ParseStream) -> Result<Self> {
 		let name = input.parse()?;
 		let _: Token![:] = input.parse()?;
-		let module = input.parse()?;
+		let pallet = input.parse()?;
 		let instance = if input.peek(Token![::]) && input.peek3(Token![<]) {
 			let _: Token![::] = input.parse()?;
 			let _: Token![<] = input.parse()?;
@@ -175,7 +175,7 @@ impl Parse for ModuleDeclaration {
 		};
 
 		let _: Token![::] = input.parse()?;
-		let module_parts = parse_module_parts(input)?;
+		let pallet_parts = parse_pallet_parts(input)?;
 
 		let index = if input.peek(Token![=]) {
 			input.parse::<Token![=]>()?;
@@ -188,9 +188,9 @@ impl Parse for ModuleDeclaration {
 
 		let parsed = Self {
 			name,
-			module,
+			pallet,
 			instance,
-			module_parts,
+			pallet_parts,
 			index,
 		};
 
@@ -198,14 +198,14 @@ impl Parse for ModuleDeclaration {
 	}
 }
 
-/// Parse [`ModulePart`]'s from a braces enclosed list that is split by commas, e.g.
+/// Parse [`PalletPart`]'s from a braces enclosed list that is split by commas, e.g.
 ///
 /// `{ Call, Event }`
-fn parse_module_parts(input: ParseStream) -> Result<Vec<ModulePart>> {
-	let module_parts :ext::Braces<ext::Punctuated<ModulePart, Token![,]>> = input.parse()?;
+fn parse_pallet_parts(input: ParseStream) -> Result<Vec<PalletPart>> {
+	let pallet_parts :ext::Braces<ext::Punctuated<PalletPart, Token![,]>> = input.parse()?;
 
 	let mut resolved = HashSet::new();
-	for part in module_parts.content.inner.iter() {
+	for part in pallet_parts.content.inner.iter() {
 		if !resolved.insert(part.name()) {
 			let msg = format!(
 				"`{}` was already declared before. Please remove the duplicate declaration",
@@ -215,12 +215,12 @@ fn parse_module_parts(input: ParseStream) -> Result<Vec<ModulePart>> {
 		}
 	}
 
-	Ok(module_parts.content.inner.into_iter().collect())
+	Ok(pallet_parts.content.inner.into_iter().collect())
 }
 
 #[derive(Debug, Clone)]
-pub enum ModulePartKeyword {
-	Module(keyword::Module),
+pub enum PalletPartKeyword {
+	Pallet(keyword::Pallet),
 	Call(keyword::Call),
 	Storage(keyword::Storage),
 	Event(keyword::Event),
@@ -230,12 +230,12 @@ pub enum ModulePartKeyword {
 	ValidateUnsigned(keyword::ValidateUnsigned),
 }
 
-impl Parse for ModulePartKeyword {
+impl Parse for PalletPartKeyword {
 	fn parse(input: ParseStream) -> Result<Self> {
 		let lookahead = input.lookahead1();
 
-		if lookahead.peek(keyword::Module) {
-			Ok(Self::Module(input.parse()?))
+		if lookahead.peek(keyword::Pallet) {
+			Ok(Self::Pallet(input.parse()?))
 		} else if lookahead.peek(keyword::Call) {
 			Ok(Self::Call(input.parse()?))
 		} else if lookahead.peek(keyword::Storage) {
@@ -256,11 +256,11 @@ impl Parse for ModulePartKeyword {
 	}
 }
 
-impl ModulePartKeyword {
+impl PalletPartKeyword {
 	/// Returns the name of `Self`.
 	fn name(&self) -> &'static str {
 		match self {
-			Self::Module(_) => "Module",
+			Self::Pallet(_) => "Pallet",
 			Self::Call(_) => "Call",
 			Self::Storage(_) => "Storage",
 			Self::Event(_) => "Event",
@@ -276,21 +276,21 @@ impl ModulePartKeyword {
 		Ident::new(self.name(), self.span())
 	}
 
-	/// Returns `true` if this module part is allowed to have generic arguments.
+	/// Returns `true` if this pallet part is allowed to have generic arguments.
 	fn allows_generic(&self) -> bool {
 		Self::all_generic_arg().iter().any(|n| *n == self.name())
 	}
 
-	/// Returns the names of all module parts that allow to have a generic argument.
+	/// Returns the names of all pallet parts that allow to have a generic argument.
 	fn all_generic_arg() -> &'static [&'static str] {
 		&["Event", "Origin", "Config"]
 	}
 }
 
-impl Spanned for ModulePartKeyword {
+impl Spanned for PalletPartKeyword {
 	fn span(&self) -> Span {
 		match self {
-			Self::Module(inner) => inner.span(),
+			Self::Pallet(inner) => inner.span(),
 			Self::Call(inner) => inner.span(),
 			Self::Storage(inner) => inner.span(),
 			Self::Event(inner) => inner.span(),
@@ -303,21 +303,21 @@ impl Spanned for ModulePartKeyword {
 }
 
 #[derive(Debug, Clone)]
-pub struct ModulePart {
-	pub keyword: ModulePartKeyword,
+pub struct PalletPart {
+	pub keyword: PalletPartKeyword,
 	pub generics: syn::Generics,
 }
 
-impl Parse for ModulePart {
+impl Parse for PalletPart {
 	fn parse(input: ParseStream) -> Result<Self> {
-		let keyword: ModulePartKeyword = input.parse()?;
+		let keyword: PalletPartKeyword = input.parse()?;
 
 		let generics: syn::Generics = input.parse()?;
 		if !generics.params.is_empty() && !keyword.allows_generic() {
-			let valid_generics = ModulePart::format_names(ModulePartKeyword::all_generic_arg());
+			let valid_generics = PalletPart::format_names(PalletPartKeyword::all_generic_arg());
 			let msg = format!(
 				"`{}` is not allowed to have generics. \
-				 Only the following modules are allowed to have generics: {}.",
+				 Only the following pallets are allowed to have generics: {}.",
 				keyword.name(),
 				valid_generics,
 			);
@@ -331,18 +331,18 @@ impl Parse for ModulePart {
 	}
 }
 
-impl ModulePart {
+impl PalletPart {
 	pub fn format_names(names: &[&'static str]) -> String {
 		let res: Vec<_> = names.iter().map(|s| format!("`{}`", s)).collect();
 		res.join(", ")
 	}
 
-	/// The name of this module part.
+	/// The name of this pallet part.
 	pub fn name(&self) -> &'static str {
 		self.keyword.name()
 	}
 
-	/// The name of this module part as `Ident`.
+	/// The name of this pallet part as `Ident`.
 	pub fn ident(&self) -> Ident {
 		self.keyword.ident()
 	}

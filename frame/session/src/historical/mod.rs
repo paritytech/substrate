@@ -358,7 +358,7 @@ pub(crate) mod tests {
 		);
 		BasicExternalities::execute_with_storage(&mut t, || {
 			for (ref k, ..) in &keys {
-				frame_system::Module::<Test>::inc_providers(k);
+				frame_system::Pallet::<Test>::inc_providers(k);
 			}
 		});
 		crate::GenesisConfig::<Test> { keys }.assimilate_storage(&mut t).unwrap();

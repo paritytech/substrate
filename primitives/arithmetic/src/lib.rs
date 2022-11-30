@@ -203,7 +203,7 @@ pub fn normalize<T>(input: &[T], targeted_sum: T) -> Result<Vec<T>, &'static str
 					.expect("Proof provided in the module doc; qed.");
 				if output_with_idx[min_index].1 >= threshold {
 					min_index += 1;
-					min_index = min_index % count;
+					min_index %= count;
 				}
 			}
 		}
@@ -215,7 +215,7 @@ pub fn normalize<T>(input: &[T], targeted_sum: T) -> Result<Vec<T>, &'static str
 				.expect("Proof provided in the module doc; qed.");
 			if output_with_idx[min_index].1 >= threshold {
 				min_index += 1;
-				min_index = min_index % count;
+				min_index %= count;
 			}
 			leftover -= One::one()
 		}
@@ -494,7 +494,7 @@ mod threshold_compare_tests {
 	fn peru16_rational_does_not_overflow() {
 		// A historical example that will panic only for per_thing type that are created with
 		// maximum capacity of their type, e.g. PerU16.
-		let _ = PerU16::from_rational_approximation(17424870u32, 17424870);
+		let _ = PerU16::from_rational(17424870u32, 17424870);
 	}
 
 	#[test]

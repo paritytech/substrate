@@ -40,7 +40,11 @@ pub fn get<T: Decode + Sized>(
 			).and_then(|v| {
 				Decode::decode(&mut &v[..]).map(Some).unwrap_or_else(|_| {
 					// TODO #3700: error should be handleable.
-					runtime_print!("ERROR: Corrupted state in child trie at {:?}/{:?}", storage_key, key);
+					crate::runtime_print!(
+						"ERROR: Corrupted state in child trie at {:?}/{:?}",
+						storage_key,
+						key,
+					);
 					None
 				})
 			})

@@ -35,13 +35,13 @@ fn prepare_good_block() -> (TestClient, Hash, u64, PeerId, IncomingBlock<Block>)
 
 	let (hash, number) = (client.block_hash(1).unwrap().unwrap(), 1);
 	let header = client.header(&BlockId::Number(1)).unwrap();
-	let justification = client.justification(&BlockId::Number(1)).unwrap();
+	let justifications = client.justifications(&BlockId::Number(1)).unwrap();
 	let peer_id = PeerId::random();
 	(client, hash, number, peer_id.clone(), IncomingBlock {
 		hash,
 		header,
 		body: Some(Vec::new()),
-		justification,
+		justifications,
 		origin: Some(peer_id.clone()),
 		allow_missing_state: false,
 		import_existing: false,

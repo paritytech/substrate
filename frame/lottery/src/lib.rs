@@ -85,7 +85,7 @@ pub trait Config: frame_system::Config {
 	type Currency: ReservableCurrency<Self::AccountId>;
 
 	/// Something that provides randomness in the runtime.
-	type Randomness: Randomness<Self::Hash>;
+	type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
@@ -277,7 +277,7 @@ decl_module! {
 				ensure!(lottery.is_none(), Error::<T>::InProgress);
 				let index = LotteryIndex::get();
 				let new_index = index.checked_add(1).ok_or(Error::<T>::Overflow)?;
-				let start = frame_system::Module::<T>::block_number();
+				let start = frame_system::Pallet::<T>::block_number();
 				// Use new_index to more easily track everything with the current state.
 				*lottery = Some(LotteryConfig {
 					price,
@@ -324,7 +324,8 @@ decl_module! {
 						let winning_number = Self::choose_winner(ticket_count);
 						let winner = Tickets::<T>::get(winning_number).unwrap_or(lottery_account);
 						// Not much we can do if this fails...
-						let _ = T::Currency::transfer(&Self::account_id(), &winner, lottery_balance, KeepAlive);
+						let res = T::Currency::transfer(&Self::account_id(), &winner, lottery_balance, KeepAlive);
+						debug_assert!(res.is_ok());
 
 						Self::deposit_event(RawEvent::Winner(winner, lottery_balance));
 
@@ -392,7 +393,7 @@ impl<T: Config> Module<T> {
 	fn do_buy_ticket(caller: &T::AccountId, call: &<T as Config>::Call) -> DispatchResult {
 		// Check the call is valid lottery
 		let config = Lottery::<T>::get().ok_or(Error::<T>::NotConfigured)?;
-		let block_number = frame_system::Module::<T>::block_number();
+		let block_number = frame_system::Pallet::<T>::block_number();
 		ensure!(block_number < config.start.saturating_add(config.length), Error::<T>::AlreadyEnded);
 		ensure!(T::ValidateCall::validate_call(call), Error::<T>::InvalidCall);
 		let call_index = Self::call_to_index(call)?;
@@ -443,8 +444,10 @@ impl<T: Config> Module<T> {
 	// Note that there is potential bias introduced by using modulus operator.
 	// You should call this function with different seed values until the random
 	// number lies within `u32::MAX - u32::MAX % n`.
+	// TODO: deal with randomness freshness
+	// https://github.com/paritytech/substrate/issues/8311
 	fn generate_random_number(seed: u32) -> u32 {
-		let random_seed = T::Randomness::random(&(T::ModuleId::get(), seed).encode());
+		let (random_seed, _) = T::Randomness::random(&(T::ModuleId::get(), seed).encode());
 		let random_number = <u32>::decode(&mut random_seed.as_ref())
 			.expect("secure hashes should always be bigger than u32; qed");
 		random_number

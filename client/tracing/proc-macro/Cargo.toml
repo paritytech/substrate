@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 proc-macro = true
 
 [dependencies]
-proc-macro-crate = "0.1.4"
+proc-macro-crate = "1.0.0"
 proc-macro2 = "1.0.6"
 quote = { version = "1.0.3", features = ["proc-macro"] }
 syn = { version = "1.0.58", features = ["proc-macro", "full", "extra-traits", "parsing"] }

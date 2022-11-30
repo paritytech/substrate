@@ -22,7 +22,7 @@
 use super::*;
 
 use frame_support::{
-	assert_ok, assert_noop, parameter_types, assert_err_ignore_postinfo,
+	assert_ok, assert_noop, parameter_types, assert_err_ignore_postinfo, decl_module,
 	weights::{Weight, Pays},
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, Dispatchable},
 	traits::Filter,
@@ -35,7 +35,8 @@ use crate as utility;
 // example module to test behaviors.
 pub mod example {
 	use super::*;
-	use frame_support::dispatch::WithPostDispatchInfo;
+	use frame_system::ensure_signed;
+	use frame_support::dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo};
 	pub trait Config: frame_system::Config { }
 
 	decl_module! {
@@ -75,10 +76,10 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-		Utility: utility::{Module, Call, Event},
-		Example: example::{Module, Call},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Utility: utility::{Pallet, Call, Event},
+		Example: example::{Pallet, Call},
 	}
 );
 
@@ -170,7 +171,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 fn last_event() -> Event {
-	frame_system::Module::<Test>::events().pop().map(|e| e.event).expect("Event expected")
+	frame_system::Pallet::<Test>::events().pop().map(|e| e.event).expect("Event expected")
 }
 
 fn expect_event<E: Into<Event>>(e: E) {

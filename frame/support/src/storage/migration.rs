@@ -19,8 +19,10 @@
 
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
-use crate::{StorageHasher, Twox128};
+use crate::{StorageHasher, Twox128, storage::unhashed};
 use crate::hash::ReversibleStorageHasher;
+
+use super::PrefixIterator;
 
 /// Utility to iterate through raw items in storage.
 pub struct StorageIterator<T> {
@@ -194,4 +196,194 @@ pub fn take_storage_item<K: Encode + Sized, T: Decode + Sized, H: StorageHasher>
 	key: K,
 ) -> Option<T> {
 	take_storage_value(module, item, key.using_encoded(H::hash).as_ref())
+}
+
+/// Move a storage from a pallet prefix to another pallet prefix.
+///
+/// Keys used in pallet storages always start with:
+/// `concat(twox_128(pallet_name), towx_128(storage_name))`.
+///
+/// This function will remove all value for which the key start with
+/// `concat(twox_128(old_pallet_name), towx_128(storage_name))` and insert them at the key with
+/// the start replaced by `concat(twox_128(new_pallet_name), towx_128(storage_name))`.
+///
+/// # Example
+///
+/// If a pallet named "my_example" has 2 storages named "Foo" and "Bar" and the pallet is renamed
+/// "my_new_example_name", a migration can be:
+/// ```
+/// # use frame_support::storage::migration::move_storage_from_pallet;
+/// # sp_io::TestExternalities::new_empty().execute_with(|| {
+/// move_storage_from_pallet(b"Foo", b"my_example", b"my_new_example_name");
+/// move_storage_from_pallet(b"Bar", b"my_example", b"my_new_example_name");
+/// # })
+/// ```
+pub fn move_storage_from_pallet(
+	storage_name: &[u8],
+	old_pallet_name: &[u8],
+	new_pallet_name: &[u8]
+) {
+	let mut new_prefix = Vec::new();
+	new_prefix.extend_from_slice(&Twox128::hash(new_pallet_name));
+	new_prefix.extend_from_slice(&Twox128::hash(storage_name));
+
+	let mut old_prefix = Vec::new();
+	old_prefix.extend_from_slice(&Twox128::hash(old_pallet_name));
+	old_prefix.extend_from_slice(&Twox128::hash(storage_name));
+
+	move_prefix(&old_prefix, &new_prefix);
+
+	if let Some(value) = unhashed::get_raw(&old_prefix) {
+		unhashed::put_raw(&new_prefix, &value);
+		unhashed::kill(&old_prefix);
+	}
+}
+
+/// Move all storages from a pallet prefix to another pallet prefix.
+///
+/// Keys used in pallet storages always start with:
+/// `concat(twox_128(pallet_name), towx_128(storage_name))`.
+///
+/// This function will remove all value for which the key start with `twox_128(old_pallet_name)`
+/// and insert them at the key with the start replaced by `twox_128(new_pallet_name)`.
+///
+/// NOTE: The value at the key `twox_128(old_pallet_name)` is not moved.
+///
+/// # Example
+///
+/// If a pallet named "my_example" has some storages and the pallet is renamed
+/// "my_new_example_name", a migration can be:
+/// ```
+/// # use frame_support::storage::migration::move_pallet;
+/// # sp_io::TestExternalities::new_empty().execute_with(|| {
+/// move_pallet(b"my_example", b"my_new_example_name");
+/// # })
+/// ```
+pub fn move_pallet(old_pallet_name: &[u8], new_pallet_name: &[u8]) {
+	move_prefix(&Twox128::hash(old_pallet_name), &Twox128::hash(new_pallet_name))
+}
+
+/// Move all `(key, value)` after some prefix to the another prefix
+///
+/// This function will remove all value for which the key start with `from_prefix`
+/// and insert them at the key with the start replaced by `to_prefix`.
+///
+/// NOTE: The value at the key `from_prefix` is not moved.
+pub fn move_prefix(from_prefix: &[u8], to_prefix: &[u8]) {
+	if from_prefix == to_prefix {
+		return
+	}
+
+	let iter = PrefixIterator {
+		prefix: from_prefix.to_vec(),
+		previous_key: from_prefix.to_vec(),
+		drain: true,
+		closure: |key, value| Ok((key.to_vec(), value.to_vec())),
+	};
+
+	for (key, value) in iter {
+		let full_key = [to_prefix, &key].concat();
+		unhashed::put_raw(&full_key, &value);
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use crate::{
+		pallet_prelude::{StorageValue, StorageMap, Twox64Concat, Twox128},
+		hash::StorageHasher,
+	};
+	use sp_io::TestExternalities;
+	use super::{move_prefix, move_pallet, move_storage_from_pallet};
+
+	struct OldPalletStorageValuePrefix;
+	impl frame_support::traits::StorageInstance for OldPalletStorageValuePrefix {
+		const STORAGE_PREFIX: &'static str = "foo_value";
+		fn pallet_prefix() -> &'static str {
+			"my_old_pallet"
+		}
+	}
+	type OldStorageValue = StorageValue<OldPalletStorageValuePrefix, u32>;
+
+	struct OldPalletStorageMapPrefix;
+	impl frame_support::traits::StorageInstance for OldPalletStorageMapPrefix {
+		const STORAGE_PREFIX: &'static str = "foo_map";
+		fn pallet_prefix() -> &'static str {
+			"my_old_pallet"
+		}
+	}
+	type OldStorageMap = StorageMap<OldPalletStorageMapPrefix, Twox64Concat, u32, u32>;
+
+	struct NewPalletStorageValuePrefix;
+	impl frame_support::traits::StorageInstance for NewPalletStorageValuePrefix {
+		const STORAGE_PREFIX: &'static str = "foo_value";
+		fn pallet_prefix() -> &'static str {
+			"my_new_pallet"
+		}
+	}
+	type NewStorageValue = StorageValue<NewPalletStorageValuePrefix, u32>;
+
+	struct NewPalletStorageMapPrefix;
+	impl frame_support::traits::StorageInstance for NewPalletStorageMapPrefix {
+		const STORAGE_PREFIX: &'static str = "foo_map";
+		fn pallet_prefix() -> &'static str {
+			"my_new_pallet"
+		}
+	}
+	type NewStorageMap = StorageMap<NewPalletStorageMapPrefix, Twox64Concat, u32, u32>;
+
+	#[test]
+	fn test_move_prefix() {
+		TestExternalities::new_empty().execute_with(|| {
+			OldStorageValue::put(3);
+			OldStorageMap::insert(1, 2);
+			OldStorageMap::insert(3, 4);
+
+			move_prefix(&Twox128::hash(b"my_old_pallet"), &Twox128::hash(b"my_new_pallet"));
+
+			assert_eq!(OldStorageValue::get(), None);
+			assert_eq!(OldStorageMap::iter().collect::<Vec<_>>(), vec![]);
+			assert_eq!(NewStorageValue::get(), Some(3));
+			assert_eq!(NewStorageMap::iter().collect::<Vec<_>>(), vec![(1, 2), (3, 4)]);
+		})
+	}
+
+	#[test]
+	fn test_move_storage() {
+		TestExternalities::new_empty().execute_with(|| {
+			OldStorageValue::put(3);
+			OldStorageMap::insert(1, 2);
+			OldStorageMap::insert(3, 4);
+
+			move_storage_from_pallet(b"foo_map", b"my_old_pallet", b"my_new_pallet");
+
+			assert_eq!(OldStorageValue::get(), Some(3));
+			assert_eq!(OldStorageMap::iter().collect::<Vec<_>>(), vec![]);
+			assert_eq!(NewStorageValue::get(), None);
+			assert_eq!(NewStorageMap::iter().collect::<Vec<_>>(), vec![(1, 2), (3, 4)]);
+
+			move_storage_from_pallet(b"foo_value", b"my_old_pallet", b"my_new_pallet");
+
+			assert_eq!(OldStorageValue::get(), None);
+			assert_eq!(OldStorageMap::iter().collect::<Vec<_>>(), vec![]);
+			assert_eq!(NewStorageValue::get(), Some(3));
+			assert_eq!(NewStorageMap::iter().collect::<Vec<_>>(), vec![(1, 2), (3, 4)]);
+		})
+	}
+
+	#[test]
+	fn test_move_pallet() {
+		TestExternalities::new_empty().execute_with(|| {
+			OldStorageValue::put(3);
+			OldStorageMap::insert(1, 2);
+			OldStorageMap::insert(3, 4);
+
+			move_pallet(b"my_old_pallet", b"my_new_pallet");
+
+			assert_eq!(OldStorageValue::get(), None);
+			assert_eq!(OldStorageMap::iter().collect::<Vec<_>>(), vec![]);
+			assert_eq!(NewStorageValue::get(), Some(3));
+			assert_eq!(NewStorageMap::iter().collect::<Vec<_>>(), vec![(1, 2), (3, 4)]);
+		})
+	}
 }

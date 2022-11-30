@@ -78,7 +78,7 @@ impl PalletStructDef {
 			return Err(syn::Error::new(item.span(), msg));
 		};
 
-		let mut event_attrs: Vec<PalletStructAttr> = helper::take_item_attrs(&mut item.attrs)?;
+		let mut event_attrs: Vec<PalletStructAttr> = helper::take_item_pallet_attrs(&mut item.attrs)?;
 		if event_attrs.len() > 1 {
 			let msg = "Invalid pallet::pallet, multiple argument pallet::generate_store found";
 			return Err(syn::Error::new(event_attrs[1].keyword.span(), msg));

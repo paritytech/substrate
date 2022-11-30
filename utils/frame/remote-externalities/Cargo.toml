@@ -13,22 +13,22 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-jsonrpc-core-client = { version = "15.1.0", features = ["http"] }
-sc-rpc-api = { version = "0.9.0", path = "../../../client/rpc-api" }
-sc-rpc = { version = "3.0.0", path = "../../../client/rpc" }
-futures = "0.1.29"
+jsonrpsee-http-client = { version = "0.2.0-alpha", default-features = false, features = ["tokio02"] }
+# Needed by jsonrpsee-proc-macros: https://github.com/paritytech/jsonrpsee/issues/214
+jsonrpsee-types = "0.2.0-alpha.2"
+jsonrpsee-proc-macros = "0.2.0-alpha.2"
 
 hex-literal = "0.3.1"
 env_logger = "0.8.2"
 log = "0.4.11"
-bincode = "1.3.1"
-tokio = "0.1.22"
+codec = { package = "parity-scale-codec", version = "2.0.0" }
 
 sp-io = { version = "3.0.0", path = "../../../primitives/io" }
 sp-core = { version = "3.0.0", path = "../../../primitives/core" }
+sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
-async-std = { version = "1.6.5", features = ["attributes"] }
+tokio = { version = "0.2", features = ["macros"] }
 
 [features]
 remote-test = []

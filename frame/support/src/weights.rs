@@ -130,11 +130,8 @@
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use codec::{Encode, Decode};
-use sp_runtime::{
-	RuntimeDebug,
-	traits::SignedExtension,
-	generic::{CheckedExtrinsic, UncheckedExtrinsic},
-};
+use sp_runtime::{RuntimeDebug, traits::SignedExtension};
+use sp_runtime::generic::{CheckedExtrinsic, UncheckedExtrinsic};
 use crate::dispatch::{DispatchErrorWithPostInfo, DispatchResultWithPostInfo, DispatchError};
 use sp_runtime::traits::SaturatedConversion;
 use sp_arithmetic::{Perbill, traits::{BaseArithmetic, Saturating, Unsigned}};
@@ -964,13 +961,13 @@ mod tests {
 			smallvec![
 				WeightToFeeCoefficient {
 					coeff_integer: 0,
-					coeff_frac: Perbill::from_fraction(0.5),
+					coeff_frac: Perbill::from_float(0.5),
 					negative: false,
 					degree: 3
 				},
 				WeightToFeeCoefficient {
 					coeff_integer: 2,
-					coeff_frac: Perbill::from_rational_approximation(1u32, 3u32),
+					coeff_frac: Perbill::from_rational(1u32, 3u32),
 					negative: false,
 					degree: 2
 				},

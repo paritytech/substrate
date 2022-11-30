@@ -18,7 +18,7 @@
 
 use proc_macro::TokenStream;
 use proc_macro2::Span;
-use proc_macro_crate::crate_name;
+use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
 use syn::{Error, Expr, Ident, ItemFn};
 
@@ -118,18 +118,10 @@ pub fn prefix_logs_with(arg: TokenStream, item: TokenStream) -> TokenStream {
 
 	let name = syn::parse_macro_input!(arg as Expr);
 
-	let crate_name = if std::env::var("CARGO_PKG_NAME")
-		.expect("cargo env var always there when compiling; qed")
-		== "sc-tracing"
-	{
-		Ident::from(Ident::new("sc_tracing", Span::call_site()))
-	} else {
-		let crate_name = match crate_name("sc-tracing") {
-			Ok(x) => x,
-			Err(err) => return Error::new(Span::call_site(), err).to_compile_error().into(),
-		};
-
-		Ident::new(&crate_name, Span::call_site())
+	let crate_name = match crate_name("sc-tracing") {
+		Ok(FoundCrate::Itself) => Ident::from(Ident::new("sc_tracing", Span::call_site())),
+		Ok(FoundCrate::Name(crate_name)) => Ident::new(&crate_name, Span::call_site()),
+		Err(e) => return Error::new(Span::call_site(), e).to_compile_error().into(),
 	};
 
 	let ItemFn {

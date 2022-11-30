@@ -29,7 +29,7 @@
 
 use crate::{
 	CodeHash, CodeStorage, PristineCode, Schedule, Config, Error, Weight,
-	wasm::{prepare, PrefabWasmModule}, Module as Contracts, Event,
+	wasm::{prepare, PrefabWasmModule}, Pallet as Contracts, Event,
 	gas::{GasMeter, Token},
 	weights::WeightInfo,
 };

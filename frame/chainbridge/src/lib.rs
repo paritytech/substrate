@@ -445,7 +445,7 @@ impl<T: Config> Module<T> {
         prop: Box<T::Proposal>,
         in_favour: bool,
     ) -> DispatchResult {
-        let now = <frame_system::Module<T>>::block_number();
+        let now = <frame_system::Pallet<T>>::block_number();
         let mut votes = match <Votes<T>>::get(src_id, (nonce, prop.clone())) {
             Some(v) => v,
             None => {
@@ -480,7 +480,7 @@ impl<T: Config> Module<T> {
         prop: Box<T::Proposal>,
     ) -> DispatchResult {
         if let Some(mut votes) = <Votes<T>>::get(src_id, (nonce, prop.clone())) {
-            let now = <frame_system::Module<T>>::block_number();
+            let now = <frame_system::Pallet<T>>::block_number();
             ensure!(!votes.is_complete(), Error::<T>::ProposalAlreadyComplete);
             ensure!(!votes.is_expired(now), Error::<T>::ProposalExpired);
 

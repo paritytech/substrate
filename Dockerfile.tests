@@ -21,5 +21,5 @@ RUN apt-get update && \
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y && \
 	export PATH=$PATH:$HOME/.cargo/bin && \
 	scripts/init.sh && \
-	TRYBUILD=overwrite cargo +nightly-2021-02-11 test --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path bin/node/cli/Cargo.toml && \
-	WASM_BUILD_NO_COLOR=1 SUBSTRATE_TEST_TIMEOUT=1 cargo +nightly-2021-02-11 test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
+	TRYBUILD=overwrite cargo +nightly-2021-03-14 test --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path bin/node/cli/Cargo.toml && \
+	WASM_BUILD_NO_COLOR=1 SUBSTRATE_TEST_TIMEOUT=1 cargo +nightly-2021-03-14 test -p substrate-test-utils --release --verbose --locked -- --ignored timeout

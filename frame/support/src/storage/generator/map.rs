@@ -172,7 +172,7 @@ impl<
 			let value = match unhashed::get::<O>(&previous_key) {
 				Some(value) => value,
 				None => {
-					crate::debug::error!("Invalid translate: fail to decode old value");
+					log::error!("Invalid translate: fail to decode old value");
 					continue
 				},
 			};
@@ -181,7 +181,7 @@ impl<
 			let key = match K::decode(&mut key_material) {
 				Ok(key) => key,
 				Err(_) => {
-					crate::debug::error!("Invalid translate: fail to decode key");
+					log::error!("Invalid translate: fail to decode key");
 					continue
 				},
 			};

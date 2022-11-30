@@ -17,9 +17,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use proc_macro::{Span, TokenStream};
-use proc_macro_crate::crate_name;
+use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
-use std::env;
 
 #[proc_macro_attribute]
 pub fn test(args: TokenStream, item: TokenStream) -> TokenStream {
@@ -55,13 +54,10 @@ fn parse_knobs(
 		}
 	};
 
-	let crate_name = if env::var("CARGO_PKG_NAME").unwrap() == "substrate-test-utils" {
-		syn::Ident::new("substrate_test_utils", Span::call_site().into())
-	} else {
-		let crate_name = crate_name("substrate-test-utils")
-			.map_err(|e| syn::Error::new_spanned(&sig, e))?;
-
-		syn::Ident::new(&crate_name, Span::call_site().into())
+	let crate_name = match crate_name("substrate-test-utils") {
+		Ok(FoundCrate::Itself) => syn::Ident::new("substrate_test_utils", Span::call_site().into()),
+		Ok(FoundCrate::Name(crate_name)) => syn::Ident::new(&crate_name, Span::call_site().into()),
+		Err(e) => return Err(syn::Error::new_spanned(&sig, e)),
 	};
 
 	let header = {

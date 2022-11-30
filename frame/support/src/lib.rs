@@ -44,9 +44,9 @@ pub use sp_state_machine::BasicExternalities;
 pub use sp_io::{storage::root as storage_root, self};
 #[doc(hidden)]
 pub use sp_runtime::RuntimeDebug;
+#[doc(hidden)]
+pub use log;
 
-#[macro_use]
-pub mod debug;
 #[macro_use]
 mod origin;
 #[macro_use]
@@ -79,6 +79,9 @@ pub use self::storage::{
 };
 pub use self::dispatch::{Parameter, Callable};
 pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
+
+/// A unified log target for support operations.
+pub const LOG_TARGET: &'static str = "runtime::frame-support";
 
 /// A type that cannot be instantiated.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -335,6 +338,30 @@ macro_rules! ord_parameter_types {
 			fn add(_: &$type) {}
 		}
 	}
+}
+
+/// Print out a formatted message.
+///
+/// # Example
+///
+/// ```
+/// frame_support::runtime_print!("my value is {}", 3);
+/// ```
+#[macro_export]
+macro_rules! runtime_print {
+	($($arg:tt)+) => {
+		{
+			use core::fmt::Write;
+			let mut w = $crate::sp_std::Writer::default();
+			let _ = core::write!(&mut w, $($arg)+);
+			$crate::sp_io::misc::print_utf8(&w.inner())
+		}
+	}
+}
+
+/// Print out the debuggable type.
+pub fn debug(data: &impl sp_std::fmt::Debug) {
+	runtime_print!("{:?}", data);
 }
 
 #[doc(inline)]
@@ -1048,10 +1075,10 @@ pub mod pallet_prelude {
 	pub use frame_support::traits::GenesisBuild;
 	pub use frame_support::{
 		EqNoBound, PartialEqNoBound, RuntimeDebugNoBound, DebugNoBound, CloneNoBound, Twox256,
-		Twox128, Blake2_256, Blake2_128, Identity, Twox64Concat, Blake2_128Concat, debug, ensure,
+		Twox128, Blake2_256, Blake2_128, Identity, Twox64Concat, Blake2_128Concat, ensure,
 		RuntimeDebug, storage,
 		traits::{Get, Hooks, IsType, GetPalletVersion, EnsureOrigin},
-		dispatch::{DispatchResultWithPostInfo, Parameter, DispatchError},
+		dispatch::{DispatchResultWithPostInfo, Parameter, DispatchError, DispatchResult},
 		weights::{DispatchClass, Pays, Weight},
 		storage::types::{StorageValue, StorageMap, StorageDoubleMap, ValueQuery, OptionQuery},
 	};
@@ -1196,11 +1223,14 @@ pub mod pallet_prelude {
 ///
 /// ### Macro expansion:
 ///
-/// The macro implements the traits `OnInitialize`, `OnFinalize`, `OnRuntimeUpgrade`,
+/// The macro implements the traits `OnInitialize`, `OnIdle`, `OnFinalize`, `OnRuntimeUpgrade`,
 /// `OffchainWorker`, `IntegrityTest` using `Hooks` implementation.
 ///
 /// NOTE: OnRuntimeUpgrade is implemented with `Hooks::on_runtime_upgrade` and some additional
 /// logic. E.g. logic to write pallet version into storage.
+///
+/// NOTE: The macro also adds some tracing logic when implementing the above traits. The following
+///  hooks emit traces: `on_initialize`, `on_finalize` and `on_runtime_upgrade`.
 ///
 /// # Call: `#[pallet::call]` mandatory
 ///
@@ -1217,7 +1247,7 @@ pub mod pallet_prelude {
 /// 		$some_arg: $some_type,
 /// 		// or with compact attribute: #[pallet::compact] $some_arg: $some_type,
 /// 		...
-/// 	) -> DispatchResultWithPostInfo {
+/// 	) -> DispatchResultWithPostInfo { // or `-> DispatchResult`
 /// 		...
 /// 	}
 /// 	...
@@ -1228,7 +1258,8 @@ pub mod pallet_prelude {
 ///
 /// Each dispatchable needs to define a weight with `#[pallet::weight($expr)]` attribute,
 /// the first argument must be `origin: OriginFor<T>`, compact encoding for argument can be used
-/// using `#[pallet::compact]`, function must return DispatchResultWithPostInfo.
+/// using `#[pallet::compact]`, function must return `DispatchResultWithPostInfo` or
+/// `DispatchResult`.
 ///
 /// All arguments must implement `Debug`, `PartialEq`, `Eq`, `Decode`, `Encode`, `Clone`. For ease
 /// of use, bound the trait `Member` available in frame_support::pallet_prelude.
@@ -1389,6 +1420,18 @@ pub mod pallet_prelude {
 /// #[pallet::getter(fn my_storage)]
 /// pub(super) type MyStorage<T> = StorageMap<_, Blake2_128Concat, u32, u32>;
 /// ```
+///
+/// The optional attributes `#[cfg(..)]` allow conditional compilation for the storage.
+///
+/// E.g:
+/// ```ignore
+/// #[cfg(feature = "my-feature")]
+/// #[pallet::storage]
+/// pub(super) type MyStorage<T> = StorageValue<_, u32>;
+/// ```
+///
+/// All the `cfg` attributes are automatically copied to the items generated for the storage, i.e. the
+/// getter, storage prefix, and the metadata element etc.
 ///
 /// NOTE: If the `QueryKind` generic parameter is still generic at this stage or is using some type
 /// alias then the generation of the getter might fail. In this case the getter can be implemented

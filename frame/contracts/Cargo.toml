@@ -1,6 +1,6 @@
 [package]
 name = "pallet-contracts"
-version = "2.0.1"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -9,19 +9,16 @@ repository = "https://github.com/paritytech/substrate/"
 description = "FRAME pallet for WASM contracts"
 readme = "README.md"
 
-# Prevent publish until we are ready to release 3.0.0
-publish = false
-
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-frame-benchmarking = { version = "3.0.0", default-features = false, path = "../benchmarking", optional = true }
+frame-benchmarking = { version = "3.1.0", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "3.0.0", default-features = false, path = "../support" }
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
-pallet-contracts-primitives = { version = "2.0.0", default-features = false, path = "common" }
-pallet-contracts-proc-macro = { version = "0.1.0", path = "proc-macro" }
+pallet-contracts-primitives = { version = "3.0.0", default-features = false, path = "common" }
+pallet-contracts-proc-macro = { version = "3.0.0", path = "proc-macro" }
 parity-wasm = { version = "0.41.0", default-features = false }
 pwasm-utils = { version = "0.16", default-features = false }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
@@ -31,6 +28,7 @@ sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
 sp-sandbox = { version = "0.9.0", default-features = false, path = "../../primitives/sandbox" }
 wasmi-validation = { version = "0.3.0", default-features = false }
+log = { version = "0.4.14", default-features = false }
 
 # Only used in benchmarking to generate random contract code
 rand = { version = "0.7.0", optional = true, default-features = false }
@@ -63,9 +61,11 @@ std = [
 	"wasmi-validation/std",
 	"pallet-contracts-primitives/std",
 	"pallet-contracts-proc-macro/full",
+	"log/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",
 	"rand",
 	"rand_pcg",
 ]
+try-runtime = ["frame-support/try-runtime"]
