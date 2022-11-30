@@ -414,9 +414,11 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 			return proto.on_connection_handler_event(peer_id, connection_id, event)
 		}
 
-		log::warn!(target: "sub-libp2p",
-      "on_connection_handler_event: no request-response instance registered for protocol {:?}",
-      p_name)
+		log::warn!(
+			target: "sub-libp2p",
+			"on_connection_handler_event: no request-response instance registered for protocol {:?}",
+			p_name
+		);
 	}
 
 	fn poll(
