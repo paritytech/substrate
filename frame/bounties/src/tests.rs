@@ -106,8 +106,8 @@ parameter_types! {
 	pub static Burn: Permill = Permill::from_percent(50);
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 	pub const TreasuryPalletId2: PalletId = PalletId(*b"py/trsr2");
-	pub static SpendLimit: Balance = 50;
-	pub static SpendLimit1: Balance = 10;
+	pub static SpendLimit: Balance = u64::MAX;
+	pub static SpendLimit1: Balance = u64::MAX;
 }
 
 impl pallet_treasury::Config for Test {
@@ -1240,6 +1240,7 @@ fn approve_bounty_insufficient_spend_limit_errors() {
 
 		assert_ok!(Bounties::propose_bounty(RuntimeOrigin::signed(0), 51, b"123".to_vec()));
 		// 51 will not work since the limit is 50.
+		SpendLimit::set(50);
 		assert_noop!(
 			Bounties::approve_bounty(RuntimeOrigin::root(), 0),
 			TreasuryError::InsufficientPermission
@@ -1257,6 +1258,7 @@ fn approve_bounty_instance1_insufficient_spend_limit_errors() {
 
 		assert_ok!(Bounties1::propose_bounty(RuntimeOrigin::signed(0), 51, b"123".to_vec()));
 		// 51 will not work since the limit is 50.
+		SpendLimit1::set(50);
 		assert_noop!(
 			Bounties1::approve_bounty(RuntimeOrigin::root(), 0),
 			TreasuryError1::InsufficientPermission
