@@ -16,13 +16,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use crate::MmrGadget;
 use futures::{executor::LocalPool, task::LocalSpawn, FutureExt};
-use std::{
-	future::Future,
-	sync::{Arc, Mutex},
-	time::Duration,
-};
-
+use parking_lot::Mutex;
 use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::{
 	Backend as BackendT, BlockchainEvents, FinalityNotifications, ImportNotifications,
@@ -42,13 +38,12 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header as HeaderT},
 };
+use std::{future::Future, sync::Arc, time::Duration};
 use substrate_test_runtime_client::{
 	runtime::{Block, BlockNumber, Hash, Header},
 	Backend, BlockBuilderExt, Client, ClientBlockImportExt, ClientExt, DefaultTestClientBuilderExt,
 	TestClientBuilder, TestClientBuilderExt,
 };
-
-use crate::MmrGadget;
 
 type MmrHash = H256;
 
@@ -65,6 +60,7 @@ impl MockRuntimeApi {
 	pub const INDEXING_PREFIX: &'static [u8] = b"mmr_test";
 }
 
+#[derive(Clone, Debug)]
 pub struct MmrBlock {
 	block: Block,
 	leaf_idx: Option<LeafIndex>,
@@ -126,7 +122,7 @@ impl MockClient {
 		name: &[u8],
 		maybe_leaf_idx: Option<LeafIndex>,
 	) -> MmrBlock {
-		let mut client = self.client.lock().unwrap();
+		let mut client = self.client.lock();
 
 		let mut block_builder = client.new_block_at(at, Default::default(), false).unwrap();
 		// Make sure the block has a different hash than its siblings
@@ -158,9 +154,9 @@ impl MockClient {
 	}
 
 	pub fn finalize_block(&self, hash: Hash, maybe_num_mmr_blocks: Option<BlockNumber>) {
-		let client = self.client.lock().unwrap();
+		let client = self.client.lock();
 		if let Some(num_mmr_blocks) = maybe_num_mmr_blocks {
-			self.runtime_api_params.lock().unwrap().num_blocks = num_mmr_blocks;
+			self.runtime_api_params.lock().num_blocks = num_mmr_blocks;
 		}
 
 		client.finalize_block(hash, None).unwrap();
@@ -217,7 +213,7 @@ impl HeaderMetadata<Block> for MockClient {
 	type Error = <Client<Backend> as HeaderMetadata<Block>>::Error;
 
 	fn header_metadata(&self, hash: Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
-		self.client.lock().unwrap().header_metadata(hash)
+		self.client.lock().header_metadata(hash)
 	}
 
 	fn insert_header_metadata(&self, _hash: Hash, _header_metadata: CachedHeaderMetadata<Block>) {
@@ -231,23 +227,23 @@ impl HeaderMetadata<Block> for MockClient {
 
 impl HeaderBackend<Block> for MockClient {
 	fn header(&self, id: BlockId<Block>) -> sc_client_api::blockchain::Result<Option<Header>> {
-		self.client.lock().unwrap().header(&id)
+		self.client.lock().header(&id)
 	}
 
 	fn info(&self) -> Info<Block> {
-		self.client.lock().unwrap().info()
+		self.client.lock().info()
 	}
 
 	fn status(&self, id: BlockId<Block>) -> sc_client_api::blockchain::Result<BlockStatus> {
-		self.client.lock().unwrap().status(id)
+		self.client.lock().status(id)
 	}
 
 	fn number(&self, hash: Hash) -> sc_client_api::blockchain::Result<Option<BlockNumber>> {
-		self.client.lock().unwrap().number(hash)
+		self.client.lock().number(hash)
 	}
 
 	fn hash(&self, number: BlockNumber) -> sc_client_api::blockchain::Result<Option<Hash>> {
-		self.client.lock().unwrap().hash(number)
+		self.client.lock().hash(number)
 	}
 }
 
@@ -257,7 +253,7 @@ impl BlockchainEvents<Block> for MockClient {
 	}
 
 	fn finality_notification_stream(&self) -> FinalityNotifications<Block> {
-		self.client.lock().unwrap().finality_notification_stream()
+		self.client.lock().finality_notification_stream()
 	}
 
 	fn storage_changes_notification_stream(
@@ -284,7 +280,7 @@ sp_api::mock_impl_runtime_apis! {
 		}
 
 		fn mmr_leaf_count(&self) -> Result<LeafIndex, mmr::Error> {
-			Ok(self.data.lock().unwrap().num_blocks)
+			Ok(self.data.lock().num_blocks)
 		}
 
 		fn generate_proof(
@@ -311,13 +307,18 @@ sp_api::mock_impl_runtime_apis! {
 	}
 }
 
-pub fn run_test_with_mmr_gadget<F, Fut>(f: F)
+pub fn run_test_with_mmr_gadget<F, G, RetF, RetG>(pre_gadget: F, post_gadget: G)
 where
-	F: FnOnce(Arc<MockClient>) -> Fut + 'static,
-	Fut: Future<Output = ()>,
+	F: FnOnce(Arc<MockClient>) -> RetF + 'static,
+	G: FnOnce(Arc<MockClient>) -> RetG + 'static,
+	RetF: Future<Output = ()>,
+	RetG: Future<Output = ()>,
 {
 	let mut pool = LocalPool::new();
 	let client = Arc::new(MockClient::new());
+
+	let client_clone = client.clone();
+	pool.run_until(async move { pre_gadget(client_clone).await });
 
 	let client_clone = client.clone();
 	pool.spawner()
@@ -339,6 +340,6 @@ where
 	pool.run_until(async move {
 		async_std::task::sleep(Duration::from_millis(200)).await;
 
-		f(client).await
+		post_gadget(client).await
 	});
 }

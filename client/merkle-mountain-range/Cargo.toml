@@ -26,7 +26,8 @@ sc-offchain = { version = "4.0.0-dev", path = "../offchain" }
 sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
 
 [dev-dependencies]
-tokio = "1.17.0"
+async-std = { version = "1.11.0", default-features = false }
+parking_lot = "0.12.1"
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
-async-std = { version = "1.11.0", default-features = false }
+tokio = "1.17.0"

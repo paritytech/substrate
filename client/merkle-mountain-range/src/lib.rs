@@ -197,57 +197,66 @@ mod tests {
 	#[test]
 	fn mmr_first_block_is_computed_correctly() {
 		// Check the case where the first block is also the first block with MMR.
-		run_test_with_mmr_gadget(|client| async move {
-			// G -> A1 -> A2
-			//      |
-			//      | -> first mmr block
+		run_test_with_mmr_gadget(
+			|_| async {},
+			|client| async move {
+				// G -> A1 -> A2
+				//      |
+				//      | -> first mmr block
 
-			let a1 = client.import_block(&BlockId::Number(0), b"a1", Some(0)).await;
-			let a2 = client.import_block(&BlockId::Hash(a1.hash()), b"a2", Some(1)).await;
+				let a1 = client.import_block(&BlockId::Number(0), b"a1", Some(0)).await;
+				let a2 = client.import_block(&BlockId::Hash(a1.hash()), b"a2", Some(1)).await;
 
-			client.finalize_block(a1.hash(), Some(1));
-			async_std::task::sleep(Duration::from_millis(200)).await;
-			// expected finalized heads: a1
-			client.assert_canonicalized(&[&a1]);
-			client.assert_not_pruned(&[&a2]);
-		});
+				client.finalize_block(a1.hash(), Some(1));
+				async_std::task::sleep(Duration::from_millis(200)).await;
+				// expected finalized heads: a1
+				client.assert_canonicalized(&[&a1]);
+				client.assert_not_pruned(&[&a2]);
+			},
+		);
 
 		// Check the case where the first block with MMR comes later.
-		run_test_with_mmr_gadget(|client| async move {
-			// G -> A1 -> A2 -> A3 -> A4 -> A5 -> A6
-			//                        |
-			//                        | -> first mmr block
+		run_test_with_mmr_gadget(
+			|_| async {},
+			|client| async move {
+				// G -> A1 -> A2 -> A3 -> A4 -> A5 -> A6
+				//                        |
+				//                        | -> first mmr block
 
-			let a1 = client.import_block(&BlockId::Number(0), b"a1", None).await;
-			let a2 = client.import_block(&BlockId::Hash(a1.hash()), b"a2", None).await;
-			let a3 = client.import_block(&BlockId::Hash(a2.hash()), b"a3", None).await;
-			let a4 = client.import_block(&BlockId::Hash(a3.hash()), b"a4", Some(0)).await;
-			let a5 = client.import_block(&BlockId::Hash(a4.hash()), b"a5", Some(1)).await;
-			let a6 = client.import_block(&BlockId::Hash(a5.hash()), b"a6", Some(2)).await;
+				let a1 = client.import_block(&BlockId::Number(0), b"a1", None).await;
+				let a2 = client.import_block(&BlockId::Hash(a1.hash()), b"a2", None).await;
+				let a3 = client.import_block(&BlockId::Hash(a2.hash()), b"a3", None).await;
+				let a4 = client.import_block(&BlockId::Hash(a3.hash()), b"a4", Some(0)).await;
+				let a5 = client.import_block(&BlockId::Hash(a4.hash()), b"a5", Some(1)).await;
+				let a6 = client.import_block(&BlockId::Hash(a5.hash()), b"a6", Some(2)).await;
 
-			client.finalize_block(a5.hash(), Some(2));
-			async_std::task::sleep(Duration::from_millis(200)).await;
-			// expected finalized heads: a4, a5
-			client.assert_canonicalized(&[&a4, &a5]);
-			client.assert_not_pruned(&[&a6]);
-		});
+				client.finalize_block(a5.hash(), Some(2));
+				async_std::task::sleep(Duration::from_millis(200)).await;
+				// expected finalized heads: a4, a5
+				client.assert_canonicalized(&[&a4, &a5]);
+				client.assert_not_pruned(&[&a6]);
+			},
+		);
 	}
 
 	#[test]
 	fn does_not_panic_on_invalid_num_mmr_blocks() {
-		run_test_with_mmr_gadget(|client| async move {
-			// G -> A1
-			//      |
-			//      | -> first mmr block
+		run_test_with_mmr_gadget(
+			|_| async {},
+			|client| async move {
+				// G -> A1
+				//      |
+				//      | -> first mmr block
 
-			let a1 = client.import_block(&BlockId::Number(0), b"a1", Some(0)).await;
+				let a1 = client.import_block(&BlockId::Number(0), b"a1", Some(0)).await;
 
-			// Simulate the case where the runtime says that there are 2 mmr_blocks when in fact
-			// there is only 1.
-			client.finalize_block(a1.hash(), Some(2));
-			async_std::task::sleep(Duration::from_millis(200)).await;
-			// expected finalized heads: -
-			client.assert_not_canonicalized(&[&a1]);
-		});
+				// Simulate the case where the runtime says that there are 2 mmr_blocks when in fact
+				// there is only 1.
+				client.finalize_block(a1.hash(), Some(2));
+				async_std::task::sleep(Duration::from_millis(200)).await;
+				// expected finalized heads: -
+				client.assert_not_canonicalized(&[&a1]);
+			},
+		);
 	}
 }
