@@ -560,7 +560,7 @@ impl<T: Config> Default for InstructionWeights<T> {
 			call: cost_instr!(instr_call, 2),
 			call_indirect: cost_instr!(instr_call_indirect, 3),
 			call_indirect_per_param: cost_instr!(instr_call_indirect_per_param, 1),
-			call_per_local: cost_instr!(call_per_local, 1),
+			call_per_local: cost_instr!(instr_call_per_local, 1),
 			local_get: cost_instr!(instr_local_get, 1),
 			local_set: cost_instr!(instr_local_set, 1),
 			local_tee: cost_instr!(instr_local_tee, 2),
