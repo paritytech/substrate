@@ -37,6 +37,7 @@ use futures::{channel::mpsc, prelude::*, ready, stream::FusedStream};
 use parking_lot::Mutex;
 use prometheus_endpoint::{register, CounterVec, GaugeVec, Opts, PrometheusError, Registry, U64};
 use std::{
+	cell::RefCell,
 	convert::TryFrom as _,
 	fmt,
 	pin::Pin,
@@ -187,6 +188,23 @@ struct Metrics {
 	num_channels: GaugeVec<U64>,
 }
 
+thread_local! {
+	static LABEL_BUFFER: RefCell<String> = RefCell::new(String::new());
+}
+
+fn format_label(prefix: &str, protocol: &str, callback: impl FnOnce(&str)) {
+	LABEL_BUFFER.with(|label_buffer| {
+		let mut label_buffer = label_buffer.borrow_mut();
+		label_buffer.clear();
+		label_buffer.reserve(prefix.len() + protocol.len() + 2);
+		label_buffer.push_str(prefix);
+		label_buffer.push_str("\"");
+		label_buffer.push_str(protocol);
+		label_buffer.push_str("\"");
+		callback(&label_buffer);
+	});
+}
+
 impl Metrics {
 	fn register(registry: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
@@ -232,20 +250,26 @@ impl Metrics {
 					.inc_by(num);
 			},
 			Event::NotificationStreamOpened { protocol, .. } => {
-				self.events_total
-					.with_label_values(&[&format!("notif-open-{:?}", protocol), "sent", name])
-					.inc_by(num);
+				format_label("notif-open-", &protocol, |protocol_label| {
+					self.events_total
+						.with_label_values(&[protocol_label, "sent", name])
+						.inc_by(num);
+				});
 			},
 			Event::NotificationStreamClosed { protocol, .. } => {
-				self.events_total
-					.with_label_values(&[&format!("notif-closed-{:?}", protocol), "sent", name])
-					.inc_by(num);
+				format_label("notif-closed-", &protocol, |protocol_label| {
+					self.events_total
+						.with_label_values(&[protocol_label, "sent", name])
+						.inc_by(num);
+				});
 			},
 			Event::NotificationsReceived { messages, .. } =>
 				for (protocol, message) in messages {
-					self.events_total
-						.with_label_values(&[&format!("notif-{:?}", protocol), "sent", name])
-						.inc_by(num);
+					format_label("notif-", &protocol, |protocol_label| {
+						self.events_total
+							.with_label_values(&[protocol_label, "sent", name])
+							.inc_by(num);
+					});
 					self.notifications_sizes.with_label_values(&[protocol, "sent", name]).inc_by(
 						num.saturating_mul(u64::try_from(message.len()).unwrap_or(u64::MAX)),
 					);
@@ -267,20 +291,22 @@ impl Metrics {
 					.inc();
 			},
 			Event::NotificationStreamOpened { protocol, .. } => {
-				self.events_total
-					.with_label_values(&[&format!("notif-open-{:?}", protocol), "received", name])
-					.inc();
+				format_label("notif-open-", &protocol, |protocol_label| {
+					self.events_total.with_label_values(&[protocol_label, "received", name]).inc();
+				});
 			},
 			Event::NotificationStreamClosed { protocol, .. } => {
-				self.events_total
-					.with_label_values(&[&format!("notif-closed-{:?}", protocol), "received", name])
-					.inc();
+				format_label("notif-closed-", &protocol, |protocol_label| {
+					self.events_total.with_label_values(&[protocol_label, "received", name]).inc();
+				});
 			},
 			Event::NotificationsReceived { messages, .. } =>
 				for (protocol, message) in messages {
-					self.events_total
-						.with_label_values(&[&format!("notif-{:?}", protocol), "received", name])
-						.inc();
+					format_label("notif-", &protocol, |protocol_label| {
+						self.events_total
+							.with_label_values(&[protocol_label, "received", name])
+							.inc();
+					});
 					self.notifications_sizes
 						.with_label_values(&[&protocol, "received", name])
 						.inc_by(u64::try_from(message.len()).unwrap_or(u64::MAX));

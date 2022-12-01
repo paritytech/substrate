@@ -43,12 +43,13 @@ use frame_system::{self as system, EventRecord, Phase};
 use pretty_assertions::assert_eq;
 use sp_core::Bytes;
 use sp_io::hashing::blake2_256;
+use sp_keystore::{testing::KeyStore, KeystoreExt};
 use sp_runtime::{
 	testing::{Header, H256},
 	traits::{BlakeTwo256, Convert, Hash, IdentityLookup},
 	AccountId32,
 };
-use std::cell::RefCell;
+use std::{cell::RefCell, sync::Arc};
 
 use crate as pallet_contracts;
 
@@ -239,7 +240,13 @@ parameter_types! {
 	pub const MaxValueSize: u32 = 16_384;
 	pub const DeletionWeightLimit: Weight = 500_000_000_000;
 	pub const MaxCodeSize: u32 = 2 * 1024;
-	pub MySchedule: Schedule<Test> = <Schedule<Test>>::default();
+	pub MySchedule: Schedule<Test> = {
+		let mut schedule = <Schedule<Test>>::default();
+		// We want stack height to be always enabled for tests so that this
+		// instrumentation path is always tested implicitly.
+		schedule.limits.stack_height = Some(512);
+		schedule
+	};
 	pub const TransactionByteFee: u64 = 0;
 	pub static DepositPerByte: BalanceOf<Test> = 1;
 	pub const DepositPerItem: BalanceOf<Test> = 2;
@@ -322,6 +329,7 @@ impl ExtBuilder {
 			.assimilate_storage(&mut t)
 			.unwrap();
 		let mut ext = sp_io::TestExternalities::new(t);
+		ext.register_extension(KeystoreExt(Arc::new(KeyStore::new())));
 		ext.execute_with(|| System::set_block_number(1));
 		ext
 	}
@@ -1998,7 +2006,7 @@ fn reinstrument_does_charge() {
 		assert!(result2.gas_consumed > result1.gas_consumed);
 		assert_eq!(
 			result2.gas_consumed,
-			result1.gas_consumed + <Test as Config>::WeightInfo::reinstrument(code_len / 1024),
+			result1.gas_consumed + <Test as Config>::WeightInfo::reinstrument(code_len),
 		);
 	});
 }
@@ -3020,6 +3028,67 @@ fn code_rejected_error_works() {
 		assert_eq!(
 			std::str::from_utf8(&result.debug_message).unwrap(),
 			"module imports a non-existent function"
+		);
+	});
+}
+
+#[test]
+#[cfg(feature = "unstable-interface")]
+fn set_code_hash() {
+	let (wasm, code_hash) = compile_module::<Test>("set_code_hash").unwrap();
+	let (new_wasm, new_code_hash) = compile_module::<Test>("new_set_code_hash_contract").unwrap();
+
+	let contract_addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+
+	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		// Instantiate the 'caller'
+		assert_ok!(Contracts::instantiate_with_code(
+			Origin::signed(ALICE),
+			300_000,
+			GAS_LIMIT,
+			None,
+			wasm,
+			vec![],
+			vec![],
+		));
+		// upload new code
+		assert_ok!(Contracts::upload_code(Origin::signed(ALICE), new_wasm.clone(), None));
+
+		// First call sets new code_hash and returns 1
+		let result = Contracts::bare_call(
+			ALICE,
+			contract_addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			new_code_hash.as_ref().to_vec(),
+			true,
+		)
+		.result
+		.unwrap();
+		assert_return_code!(result, 1);
+
+		// Second calls new contract code that returns 2
+		let result =
+			Contracts::bare_call(ALICE, contract_addr.clone(), 0, GAS_LIMIT, None, vec![], true)
+				.result
+				.unwrap();
+		assert_return_code!(result, 2);
+
+		// Checking for the last event only
+		assert_eq!(
+			System::events().pop().unwrap(),
+			EventRecord {
+				phase: Phase::Initialization,
+				event: Event::Contracts(crate::Event::ContractCodeUpdated {
+					contract: contract_addr.clone(),
+					new_code_hash: new_code_hash.clone(),
+					old_code_hash: code_hash.clone(),
+				}),
+				topics: vec![],
+			},
 		);
 	});
 }

@@ -171,9 +171,8 @@ pub mod pallet {
 
 	#[pallet::extra_constants]
 	impl<T: Config> Pallet<T> {
-		// TODO: rename to snake case after https://github.com/paritytech/substrate/issues/8826 fixed.
-		#[allow(non_snake_case)]
-		fn MaxVestingSchedules() -> u32 {
+		#[pallet::constant_name(MaxVestingSchedules)]
+		fn max_vesting_schedules() -> u32 {
 			T::MAX_VESTING_SCHEDULES
 		}
 	}

@@ -14,11 +14,11 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 
 # third-party dependencies
-codec = { package = "parity-scale-codec", version = "2.2.0", default-features = false, features = [
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
 	"derive",
 	"max-encoded-len",
 ] }
-scale-info = { version = "1.0", default-features = false, features = ["derive"] }
+scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
 static_assertions = "1.1.0"
 hex-literal = { version = "0.3.4", optional = true }
 log = { version = "0.4.14", default-features = false }
@@ -30,17 +30,16 @@ sp-block-builder = { path = "../../../primitives/block-builder", default-feature
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/inherents" }
 node-primitives = { version = "2.0.0", default-features = false, path = "../primitives" }
 sp-offchain = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/offchain" }
-sp-core = { version = "5.0.0", default-features = false, path = "../../../primitives/core" }
+sp-core = { version = "6.0.0", default-features = false, path = "../../../primitives/core" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/api" }
-sp-runtime = { version = "5.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/staking" }
-sp-keyring = { version = "5.0.0", optional = true, path = "../../../primitives/keyring" }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/session" }
 sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/transaction-pool" }
-sp-version = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/version" }
+sp-version = { version = "5.0.0", default-features = false, path = "../../../primitives/version" }
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/npos-elections" }
-sp-io = { version = "5.0.0", default-features = false, path = "../../../primitives/io" }
+sp-io = { version = "6.0.0", default-features = false, path = "../../../primitives/io" }
 
 # frame dependencies
 frame-executive = { version = "4.0.0-dev", default-features = false, path = "../../../frame/executive" }
@@ -60,7 +59,7 @@ pallet-bounties = { version = "4.0.0-dev", default-features = false, path = "../
 pallet-child-bounties = { version = "4.0.0-dev", default-features = false, path = "../../../frame/child-bounties" }
 pallet-collective = { version = "4.0.0-dev", default-features = false, path = "../../../frame/collective" }
 pallet-contracts = { version = "4.0.0-dev", default-features = false, path = "../../../frame/contracts" }
-pallet-contracts-primitives = { version = "5.0.0", default-features = false, path = "../../../frame/contracts/common/" }
+pallet-contracts-primitives = { version = "6.0.0", default-features = false, path = "../../../frame/contracts/common/" }
 pallet-contracts-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/contracts/rpc/runtime-api/" }
 pallet-democracy = { version = "4.0.0-dev", default-features = false, path = "../../../frame/democracy" }
 pallet-election-provider-multi-phase = { version = "4.0.0-dev", default-features = false, path = "../../../frame/election-provider-multi-phase" }
@@ -93,7 +92,7 @@ pallet-transaction-storage = { version = "4.0.0-dev", default-features = false, 
 pallet-uniques = { version = "4.0.0-dev", default-features = false, path = "../../../frame/uniques" }
 pallet-vesting = { version = "4.0.0-dev", default-features = false, path = "../../../frame/vesting" }
 pallet-chainbridge = { version = "2.0.0", default-features = false, path = "../../../frame/chainbridge" }
-pallet-cere-ddc = { version = "7.1.0", default-features = false, path = "../../../frame/ddc-pallet" }
+pallet-cere-ddc = { version = "7.2.0", default-features = false, path = "../../../frame/ddc-pallet" }
 pallet-erc721 = { version = "2.0.0", default-features = false, path = "../../../frame/erc721" }
 pallet-erc20 = { version = "2.0.0", default-features = false, path = "../../../frame/erc20" }
 pallet-ddc-metrics-offchain-worker = { version = "2.0.0", default-features = false, path = "../../../frame/ddc-metrics-offchain-worker" }
@@ -147,7 +146,6 @@ std = [
 	"sp-runtime/std",
 	"sp-staking/std",
 	"pallet-staking/std",
-	"sp-keyring",
 	"sp-session/std",
 	"pallet-sudo/std",
 	"frame-support/std",
@@ -170,8 +168,8 @@ std = [
 	"frame-try-runtime/std",
 	"sp-npos-elections/std",
   	"sp-io/std",
-	"pallet-ddc-metrics-offchain-worker/std",
 	"pallet-child-bounties/std",
+	"pallet-ddc-metrics-offchain-worker/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",

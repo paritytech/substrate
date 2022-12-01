@@ -1272,6 +1272,40 @@ impl<T: Config> Pallet<T> {
 	/// Remove temporary "environment" entries in storage, compute the storage root and return the
 	/// resulting header for this block.
 	pub fn finalize() -> T::Header {
+		log::debug!(
+			target: "runtime::system",
+			"[{:?}] length: {} (normal {}%, op: {}%, mandatory {}%) / normal weight: {} ({}%) \
+			/ op weight {} ({}%) / mandatory weight {} ({}%)",
+			Self::block_number(),
+			Self::all_extrinsics_len(),
+			sp_runtime::Percent::from_rational(
+				Self::all_extrinsics_len(),
+				*T::BlockLength::get().max.get(DispatchClass::Normal)
+			).deconstruct(),
+			sp_runtime::Percent::from_rational(
+				Self::all_extrinsics_len(),
+				*T::BlockLength::get().max.get(DispatchClass::Operational)
+			).deconstruct(),
+			sp_runtime::Percent::from_rational(
+				Self::all_extrinsics_len(),
+				*T::BlockLength::get().max.get(DispatchClass::Mandatory)
+			).deconstruct(),
+			Self::block_weight().get(DispatchClass::Normal),
+			sp_runtime::Percent::from_rational(
+				*Self::block_weight().get(DispatchClass::Normal),
+				T::BlockWeights::get().get(DispatchClass::Normal).max_total.unwrap_or(Bounded::max_value())
+			).deconstruct(),
+			Self::block_weight().get(DispatchClass::Operational),
+			sp_runtime::Percent::from_rational(
+				*Self::block_weight().get(DispatchClass::Operational),
+				T::BlockWeights::get().get(DispatchClass::Operational).max_total.unwrap_or(Bounded::max_value())
+			).deconstruct(),
+			Self::block_weight().get(DispatchClass::Mandatory),
+			sp_runtime::Percent::from_rational(
+				*Self::block_weight().get(DispatchClass::Mandatory),
+				T::BlockWeights::get().get(DispatchClass::Mandatory).max_total.unwrap_or(Bounded::max_value())
+			).deconstruct(),
+		);
 		ExecutionPhase::<T>::kill();
 		AllExtrinsicsLen::<T>::kill();
 

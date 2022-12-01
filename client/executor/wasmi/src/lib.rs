@@ -102,10 +102,7 @@ impl<'a> sandbox::SandboxContext for SandboxContext<'a> {
 		match result {
 			Ok(Some(RuntimeValue::I64(val))) => Ok(val),
 			Ok(_) => return Err("Supervisor function returned unexpected result!".into()),
-			Err(err) => Err(Error::AbortedDueToTrap(MessageWithBacktrace {
-				message: err.to_string(),
-				backtrace: None,
-			})),
+			Err(err) => Err(Error::Sandbox(err.to_string())),
 		}
 	}
 
@@ -222,7 +219,6 @@ impl Sandbox for FunctionExecutor {
 		let args = Vec::<sp_wasm_interface::Value>::decode(&mut args)
 			.map_err(|_| "Can't decode serialized arguments for the invocation")?
 			.into_iter()
-			.map(Into::into)
 			.collect::<Vec<_>>();
 
 		let instance =

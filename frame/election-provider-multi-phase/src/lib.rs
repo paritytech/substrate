@@ -103,7 +103,7 @@
 //!
 //! Validators will only submit solutions if the one that they have computed is sufficiently better
 //! than the best queued one (see [`pallet::Config::SolutionImprovementThreshold`]) and will limit
-//! the weigh of the solution to [`pallet::Config::MinerMaxWeight`].
+//! the weight of the solution to [`pallet::Config::MinerMaxWeight`].
 //!
 //! The unsigned phase can be made passive depending on how the previous signed phase went, by
 //! setting the first inner value of [`Phase`] to `false`. For now, the signed phase is always
@@ -147,13 +147,13 @@
 //! which is capable of connecting to a live network, and generating appropriate `supports` using a
 //! standard algorithm, and outputting the `supports` in hex format, ready for submission. Note that
 //! while this binary lives in the Polkadot repository, this particular subcommand of it can work
-//! against any substrate based-chain.
+//! against any substrate-based chain.
 //!
 //! See the `staking-miner` documentation in the Polkadot repository for more information.
 //!
 //! ## Feasible Solution (correct solution)
 //!
-//! All submissions must undergo a feasibility check. Signed solutions are checked on by one at the
+//! All submissions must undergo a feasibility check. Signed solutions are checked one by one at the
 //! end of the signed phase, and the unsigned solutions are checked on the spot. A feasible solution
 //! is as follows:
 //!
@@ -944,8 +944,11 @@ pub mod pallet {
 			// Note: we don't `rotate_round` at this point; the next call to
 			// `ElectionProvider::elect` will succeed and take care of that.
 
-			let solution =
-				ReadySolution { supports, score: [0, 0, 0], compute: ElectionCompute::Emergency };
+			let solution = ReadySolution {
+				supports,
+				score: Default::default(),
+				compute: ElectionCompute::Emergency,
+			};
 
 			<QueuedSolution<T>>::put(solution);
 			Ok(())
@@ -960,24 +963,12 @@ pub mod pallet {
 		///
 		/// A deposit is reserved and recorded for the solution. Based on the outcome, the solution
 		/// might be rewarded, slashed, or get all or a part of the deposit back.
-		///
-		/// # <weight>
-		/// Queue size must be provided as witness data.
-		/// # </weight>
-		#[pallet::weight(T::WeightInfo::submit(*num_signed_submissions))]
+		#[pallet::weight(T::WeightInfo::submit())]
 		pub fn submit(
 			origin: OriginFor<T>,
 			raw_solution: Box<RawSolution<SolutionOf<T>>>,
-			num_signed_submissions: u32,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-
-			// ensure witness data is correct.
-			ensure!(
-				num_signed_submissions >=
-					<SignedSubmissions<T>>::decode_len().unwrap_or_default() as u32,
-				Error::<T>::SignedInvalidWitness,
-			);
 
 			// ensure solution is timely.
 			ensure!(Self::current_phase().is_signed(), Error::<T>::PreDispatchEarlySubmission);
@@ -997,8 +988,7 @@ pub mod pallet {
 			// create the submission
 			let deposit = Self::deposit_for(&raw_solution, size);
 			let reward = {
-				let call =
-					Call::submit { raw_solution: raw_solution.clone(), num_signed_submissions };
+				let call = Call::submit { raw_solution: raw_solution.clone() };
 				let call_fee = T::EstimateCallFee::estimate_call_fee(&call, None.into());
 				T::SignedRewardBase::get().saturating_add(call_fee)
 			};
@@ -1059,8 +1049,11 @@ pub mod pallet {
 					},
 				)?;
 
-			let solution =
-				ReadySolution { supports, score: [0, 0, 0], compute: ElectionCompute::Fallback };
+			let solution = ReadySolution {
+				supports,
+				score: Default::default(),
+				compute: ElectionCompute::Fallback,
+			};
 
 			<QueuedSolution<T>>::put(solution);
 			Ok(())
@@ -1138,10 +1131,10 @@ pub mod pallet {
 					.map_err(dispatch_error_to_invalid)?;
 
 				ValidTransaction::with_tag_prefix("OffchainElection")
-					// The higher the score[0], the better a solution is.
+					// The higher the score.minimal_stake, the better a solution is.
 					.priority(
 						T::MinerTxPriority::get()
-							.saturating_add(raw_solution.score[0].saturated_into()),
+							.saturating_add(raw_solution.score.minimal_stake.saturated_into()),
 					)
 					// Used to deduplicate unsigned solutions: each validator should produce one
 					// solution per round at most, and solutions are not propagate.
@@ -1227,7 +1220,7 @@ pub mod pallet {
 	/// capacity, it will simply saturate. We can't just iterate over `SignedSubmissionsMap`,
 	/// because iteration is slow. Instead, we store the value here.
 	#[pallet::storage]
-	pub(crate) type SignedSubmissionNextIndex<T: Config> = StorageValue<_, u32, ValueQuery>;
+	pub type SignedSubmissionNextIndex<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	/// A sorted, bounded set of `(score, index)`, where each `index` points to a value in
 	/// `SignedSubmissions`.
@@ -1236,7 +1229,7 @@ pub mod pallet {
 	/// can be quite large, so we're willing to pay the cost of multiple database accesses to access
 	/// them one at a time instead of reading and decoding all of them at once.
 	#[pallet::storage]
-	pub(crate) type SignedSubmissionIndices<T: Config> =
+	pub type SignedSubmissionIndices<T: Config> =
 		StorageValue<_, SubmissionIndicesOf<T>, ValueQuery>;
 
 	/// Unchecked, signed solutions.
@@ -1247,7 +1240,7 @@ pub mod pallet {
 	/// Twox note: the key of the map is an auto-incrementing index which users cannot inspect or
 	/// affect; we shouldn't need a cryptographically secure hasher.
 	#[pallet::storage]
-	pub(crate) type SignedSubmissionsMap<T: Config> =
+	pub type SignedSubmissionsMap<T: Config> =
 		StorageMap<_, Twox64Concat, u32, SignedSubmissionOf<T>, OptionQuery>;
 
 	// `SignedSubmissions` items end here.
@@ -1430,7 +1423,7 @@ impl<T: Config> Pallet<T> {
 		let submitted_score = raw_solution.score.clone();
 		ensure!(
 			Self::minimum_untrusted_score().map_or(true, |min_score| {
-				sp_npos_elections::is_score_better(submitted_score, min_score, Perbill::zero())
+				submitted_score.strict_threshold_better(min_score, Perbill::zero())
 			}),
 			FeasibilityError::UntrustedScoreTooLow
 		);
@@ -1750,7 +1743,7 @@ mod feasibility_check {
 			assert_eq!(MultiPhase::snapshot().unwrap().voters.len(), 8);
 
 			// Simply faff with the score.
-			solution.score[0] += 1;
+			solution.score.minimal_stake += 1;
 
 			assert_noop!(
 				MultiPhase::feasibility_check(solution, COMPUTE),
@@ -1960,12 +1953,11 @@ mod tests {
 
 			// fill the queue with signed submissions
 			for s in 0..SignedMaxSubmissions::get() {
-				let solution = RawSolution { score: [(5 + s).into(), 0, 0], ..Default::default() };
-				assert_ok!(MultiPhase::submit(
-					crate::mock::Origin::signed(99),
-					Box::new(solution),
-					MultiPhase::signed_submissions().len() as u32
-				));
+				let solution = RawSolution {
+					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
+					..Default::default()
+				};
+				assert_ok!(MultiPhase::submit(crate::mock::Origin::signed(99), Box::new(solution)));
 			}
 
 			// an unexpected call to elect.
@@ -2087,13 +2079,19 @@ mod tests {
 			crate::mock::Balancing::set(Some((2, 0)));
 
 			let (solution, _) = MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
-			// Default solution has a score of [50, 100, 5000].
-			assert_eq!(solution.score, [50, 100, 5000]);
+			// Default solution's score.
+			assert!(matches!(solution.score, ElectionScore { minimal_stake: 50, .. }));
 
-			<MinimumUntrustedScore<Runtime>>::put([49, 0, 0]);
+			<MinimumUntrustedScore<Runtime>>::put(ElectionScore {
+				minimal_stake: 49,
+				..Default::default()
+			});
 			assert_ok!(MultiPhase::feasibility_check(solution.clone(), ElectionCompute::Signed));
 
-			<MinimumUntrustedScore<Runtime>>::put([51, 0, 0]);
+			<MinimumUntrustedScore<Runtime>>::put(ElectionScore {
+				minimal_stake: 51,
+				..Default::default()
+			});
 			assert_noop!(
 				MultiPhase::feasibility_check(solution, ElectionCompute::Signed),
 				FeasibilityError::UntrustedScoreTooLow,

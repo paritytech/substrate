@@ -295,7 +295,7 @@ pub fn parse_addr(mut addr: Multiaddr) -> Result<(PeerId, Multiaddr), ParseErr> 
 /// assert_eq!(addr.peer_id.to_base58(), "QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV");
 /// assert_eq!(addr.multiaddr.to_string(), "/ip4/198.51.100.19/tcp/30333");
 /// ```
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 #[serde(try_from = "String", into = "String")]
 pub struct MultiaddrWithPeerId {
 	/// Address of the node.

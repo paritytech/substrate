@@ -436,7 +436,7 @@ where
 // A Handlebars helper to add an underscore after every 3rd character,
 // i.e. a separator for large numbers.
 #[derive(Clone, Copy)]
-struct UnderscoreHelper;
+pub(crate) struct UnderscoreHelper;
 impl handlebars::HelperDef for UnderscoreHelper {
 	fn call<'reg: 'rc, 'rc>(
 		&self,

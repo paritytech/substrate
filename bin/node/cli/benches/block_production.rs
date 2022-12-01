@@ -29,7 +29,7 @@ use sc_consensus::{
 use sc_service::{
 	config::{
 		DatabaseSource, KeepBlocks, KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig,
-		PruningMode, TransactionStorageMode, WasmExecutionMethod,
+		PruningMode, WasmExecutionMethod,
 	},
 	BasePath, Configuration, Role,
 };
@@ -76,7 +76,6 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		state_cache_child_ratio: None,
 		state_pruning: PruningMode::ArchiveAll,
 		keep_blocks: KeepBlocks::All,
-		transaction_storage: TransactionStorageMode::BlockBody,
 		chain_spec: spec,
 		wasm_method: WasmExecutionMethod::Compiled,
 		execution_strategies: ExecutionStrategies {

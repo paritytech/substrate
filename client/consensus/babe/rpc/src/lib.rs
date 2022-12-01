@@ -207,7 +207,7 @@ where
 			&parent.hash(),
 			parent.number().clone(),
 			slot.into(),
-			|slot| Epoch::genesis(&babe_config, slot),
+			|slot| Epoch::genesis(babe_config.genesis_config(), slot),
 		)
 		.map_err(|e| Error::Consensus(ConsensusError::ChainLookup(e.to_string())))?
 		.ok_or(Error::Consensus(ConsensusError::InvalidAuthoritiesSet))

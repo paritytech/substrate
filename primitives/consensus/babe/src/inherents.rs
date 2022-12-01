@@ -18,7 +18,6 @@
 //! Inherents for BABE
 
 use sp_inherents::{Error, InherentData, InherentIdentifier};
-
 use sp_std::result::Result;
 
 /// The BABE inherent identifier.
@@ -60,12 +59,11 @@ impl InherentDataProvider {
 
 	/// Creates the inherent data provider by calculating the slot from the given
 	/// `timestamp` and `duration`.
-	pub fn from_timestamp_and_duration(
+	pub fn from_timestamp_and_slot_duration(
 		timestamp: sp_timestamp::Timestamp,
-		duration: std::time::Duration,
+		slot_duration: sp_consensus_slots::SlotDuration,
 	) -> Self {
-		let slot =
-			InherentType::from((timestamp.as_duration().as_millis() / duration.as_millis()) as u64);
+		let slot = InherentType::from_timestamp(timestamp, slot_duration);
 
 		Self { slot }
 	}

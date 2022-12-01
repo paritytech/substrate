@@ -25,7 +25,7 @@ use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{
 	config::{
 		DatabaseSource, KeepBlocks, KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig,
-		PruningMode, TransactionPoolOptions, TransactionStorageMode, WasmExecutionMethod,
+		PruningMode, TransactionPoolOptions, WasmExecutionMethod,
 	},
 	BasePath, Configuration, Role,
 };
@@ -67,7 +67,6 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		state_cache_child_ratio: None,
 		state_pruning: PruningMode::ArchiveAll,
 		keep_blocks: KeepBlocks::All,
-		transaction_storage: TransactionStorageMode::BlockBody,
 		chain_spec: spec,
 		wasm_method: WasmExecutionMethod::Interpreted,
 		// NOTE: we enforce the use of the native runtime to make the errors more debuggable

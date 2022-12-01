@@ -23,8 +23,8 @@ use std::{
 };
 
 use crate::{
-	backend::Backend, ext::Ext, InMemoryBackend, InMemoryProvingBackend, OverlayedChanges,
-	StorageKey, StorageTransactionCache, StorageValue,
+	backend::Backend, ext::Ext, InMemoryBackend, OverlayedChanges, StorageKey,
+	StorageTransactionCache, StorageValue,
 };
 
 use hash_db::Hasher;
@@ -100,7 +100,6 @@ where
 		state_version: StateVersion,
 	) -> Self {
 		assert!(storage.top.keys().all(|key| !is_child_storage_key(key)));
-		assert!(storage.children_default.keys().all(|key| is_child_storage_key(key)));
 
 		storage.top.insert(CODE.to_vec(), code.to_vec());
 
@@ -204,7 +203,7 @@ where
 	/// This implementation will wipe the proof recorded in between calls. Consecutive calls will
 	/// get their own proof from scratch.
 	pub fn execute_and_prove<R>(&mut self, execute: impl FnOnce() -> R) -> (R, StorageProof) {
-		let proving_backend = InMemoryProvingBackend::new(&self.backend);
+		let proving_backend = crate::InMemoryProvingBackend::new(&self.backend);
 		let mut proving_ext = Ext::new(
 			&mut self.overlay,
 			&mut self.storage_transaction_cache,

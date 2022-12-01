@@ -120,17 +120,25 @@ impl FrozenBalance<u32, u64, u64> for TestFreezer {
 
 	fn died(asset: u32, who: &u64) {
 		HOOKS.with(|h| h.borrow_mut().push(Hook::Died(asset, who.clone())));
+		// Sanity check: dead accounts have no balance.
+		assert!(Assets::balance(asset, *who).is_zero());
 	}
 }
 
 pub(crate) fn set_frozen_balance(asset: u32, who: u64, amount: u64) {
 	FROZEN.with(|f| f.borrow_mut().insert((asset, who), amount));
 }
+
 pub(crate) fn clear_frozen_balance(asset: u32, who: u64) {
 	FROZEN.with(|f| f.borrow_mut().remove(&(asset, who)));
 }
+
 pub(crate) fn hooks() -> Vec<Hook> {
 	HOOKS.with(|h| h.borrow().clone())
+}
+
+pub(crate) fn take_hooks() -> Vec<Hook> {
+	HOOKS.with(|h| h.take())
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
@@ -154,6 +162,8 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	config.assimilate_storage(&mut storage).unwrap();
 
 	let mut ext: sp_io::TestExternalities = storage.into();
+	// Clear thread local vars for https://github.com/paritytech/substrate/issues/10479.
+	ext.execute_with(|| take_hooks());
 	ext.execute_with(|| System::set_block_number(1));
 	ext
 }

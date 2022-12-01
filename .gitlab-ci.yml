@@ -756,7 +756,8 @@ publish-rustdoc:
     # Save README and docs
     - cp -r ./crate-docs/ /tmp/doc/
     - cp README.md /tmp/doc/
-    - git checkout gh-pages
+    # we don't need to commit changes because we copy docs to /tmp
+    - git checkout gh-pages --force
     # Install `index-tpl-crud` and generate index.html based on RUSTDOCS_DEPLOY_REFS
     - which index-tpl-crud &> /dev/null || yarn global add @substrate/index-tpl-crud
     - index-tpl-crud upsert ./index.html ${CI_COMMIT_REF_NAME}

@@ -15,8 +15,8 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
-// NOTE: we allow missing docs here because arg_enum! creates the function variants without doc
-#![allow(missing_docs)]
+
+//! Definitions of [`ArgEnum`] types.
 
 use clap::ArgEnum;
 
@@ -86,10 +86,19 @@ impl Into<sc_service::config::WasmExecutionMethod> for WasmExecutionMethod {
 	}
 }
 
+/// The default [`WasmExecutionMethod`].
+#[cfg(feature = "wasmtime")]
+pub const DEFAULT_WASM_EXECUTION_METHOD: &str = "Compiled";
+
+/// The default [`WasmExecutionMethod`].
+#[cfg(not(feature = "wasmtime"))]
+pub const DEFAULT_WASM_EXECUTION_METHOD: &str = "interpreted-i-know-what-i-do";
+
 #[allow(missing_docs)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
 #[clap(rename_all = "PascalCase")]
 pub enum TracingReceiver {
+	/// Output the tracing records using the log.
 	Log,
 }
 
@@ -101,25 +110,33 @@ impl Into<sc_tracing::TracingReceiver> for TracingReceiver {
 	}
 }
 
-#[allow(missing_docs)]
+/// The type of the node key.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
 #[clap(rename_all = "PascalCase")]
 pub enum NodeKeyType {
+	/// Use ed25519.
 	Ed25519,
 }
 
+/// The crypto scheme to use.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
 #[clap(rename_all = "PascalCase")]
 pub enum CryptoScheme {
+	/// Use ed25519.
 	Ed25519,
+	/// Use sr25519.
 	Sr25519,
+	/// Use
 	Ecdsa,
 }
 
+/// The type of the output format.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
 #[clap(rename_all = "PascalCase")]
 pub enum OutputType {
+	/// Output as json.
 	Json,
+	/// Output as text.
 	Text,
 }
 
@@ -127,13 +144,13 @@ pub enum OutputType {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
 #[clap(rename_all = "PascalCase")]
 pub enum ExecutionStrategy {
-	// Execute with native build (if available, WebAssembly otherwise).
+	/// Execute with native build (if available, WebAssembly otherwise).
 	Native,
-	// Only execute with the WebAssembly build.
+	/// Only execute with the WebAssembly build.
 	Wasm,
-	// Execute with both native (where available) and WebAssembly builds.
+	/// Execute with both native (where available) and WebAssembly builds.
 	Both,
-	// Execute with the native build if possible; if it fails, then execute with WebAssembly.
+	/// Execute with the native build if possible; if it fails, then execute with WebAssembly.
 	NativeElseWasm,
 }
 
@@ -165,12 +182,12 @@ impl ExecutionStrategy {
 #[derive(Debug, Copy, Clone, PartialEq, ArgEnum)]
 #[clap(rename_all = "PascalCase")]
 pub enum RpcMethods {
-	// Expose every RPC method only when RPC is listening on `localhost`,
-	// otherwise serve only safe RPC methods.
+	/// Expose every RPC method only when RPC is listening on `localhost`,
+	/// otherwise serve only safe RPC methods.
 	Auto,
-	// Allow only a safe subset of RPC methods.
+	/// Allow only a safe subset of RPC methods.
 	Safe,
-	// Expose every RPC method (even potentially unsafe ones).
+	/// Expose every RPC method (even potentially unsafe ones).
 	Unsafe,
 }
 
@@ -185,15 +202,17 @@ impl Into<sc_service::config::RpcMethods> for RpcMethods {
 }
 
 /// Database backend
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, PartialEq, Copy)]
 pub enum Database {
 	/// Facebooks RocksDB
 	RocksDb,
 	/// ParityDb. <https://github.com/paritytech/parity-db/>
 	ParityDb,
 	/// Detect whether there is an existing database. Use it, if there is, if not, create new
-	/// instance of paritydb
+	/// instance of ParityDb
 	Auto,
+	/// ParityDb. <https://github.com/paritytech/parity-db/>
+	ParityDbDeprecated,
 }
 
 impl std::str::FromStr for Database {
@@ -203,6 +222,8 @@ impl std::str::FromStr for Database {
 		if s.eq_ignore_ascii_case("rocksdb") {
 			Ok(Self::RocksDb)
 		} else if s.eq_ignore_ascii_case("paritydb-experimental") {
+			Ok(Self::ParityDbDeprecated)
+		} else if s.eq_ignore_ascii_case("paritydb") {
 			Ok(Self::ParityDb)
 		} else if s.eq_ignore_ascii_case("auto") {
 			Ok(Self::Auto)
@@ -215,7 +236,7 @@ impl std::str::FromStr for Database {
 impl Database {
 	/// Returns all the variants of this enum to be shown in the cli.
 	pub fn variants() -> &'static [&'static str] {
-		&["rocksdb", "paritydb-experimental", "auto"]
+		&["rocksdb", "paritydb", "paritydb-experimental", "auto"]
 	}
 }
 
@@ -224,22 +245,25 @@ impl Database {
 #[derive(Debug, Clone, ArgEnum)]
 #[clap(rename_all = "PascalCase")]
 pub enum OffchainWorkerEnabled {
+	/// Always have offchain worker enabled.
 	Always,
+	/// Never enable the offchain worker.
 	Never,
+	/// Only enable the offchain worker when running as validator.
 	WhenValidating,
 }
 
 /// Syncing mode.
-#[derive(Debug, Clone, Copy, ArgEnum)]
+#[derive(Debug, Clone, Copy, ArgEnum, PartialEq)]
 #[clap(rename_all = "PascalCase")]
 pub enum SyncMode {
-	// Full sync. Donwnload end verify all blocks.
+	/// Full sync. Download end verify all blocks.
 	Full,
-	// Download blocks without executing them. Download latest state with proofs.
+	/// Download blocks without executing them. Download latest state with proofs.
 	Fast,
-	// Download blocks without executing them. Download latest state without proofs.
+	/// Download blocks without executing them. Download latest state without proofs.
 	FastUnsafe,
-	// Prove finality and download the latest state.
+	/// Prove finality and download the latest state.
 	Warp,
 }
 

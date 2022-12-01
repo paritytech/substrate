@@ -327,9 +327,3 @@ impl<Block: BlockT> CanAuthorWith<Block> for NeverCanAuthor {
 		Err("Authoring is always disabled.".to_string())
 	}
 }
-
-/// A type from which a slot duration can be obtained.
-pub trait SlotData {
-	/// Gets the slot duration.
-	fn slot_duration(&self) -> sp_std::time::Duration;
-}

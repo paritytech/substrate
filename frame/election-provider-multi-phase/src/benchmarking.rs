@@ -148,7 +148,10 @@ fn solution_with_size<T: Config>(
 	let score = solution.clone().score(stake_of, voter_at, target_at).unwrap();
 	let round = <MultiPhase<T>>::round();
 
-	assert!(score[0] > 0, "score is zero, this probably means that the stakes are not set.");
+	assert!(
+		score.minimal_stake > 0,
+		"score is zero, this probably means that the stakes are not set."
+	);
 	Ok(RawSolution { solution, score, round })
 }
 
@@ -307,12 +310,11 @@ frame_benchmarking::benchmarks! {
 	}
 
 	submit {
-		let c in 1 .. (T::SignedMaxSubmissions::get() - 1);
 
 		// the solution will be worse than all of them meaning the score need to be checked against
 		// ~ log2(c)
 		let solution = RawSolution {
-			score: [(10_000_000u128 - 1).into(), 0, 0],
+			score: ElectionScore { minimal_stake: 10_000_000u128 - 1, ..Default::default() },
 			..Default::default()
 		};
 
@@ -321,9 +323,12 @@ frame_benchmarking::benchmarks! {
 		<Round<T>>::put(1);
 
 		let mut signed_submissions = SignedSubmissions::<T>::get();
-		for i in 0..c {
+
+		// Insert `max - 1` submissions because the call to `submit` will insert another
+		// submission and the score is worse then the previous scores.
+		for i in 0..(T::SignedMaxSubmissions::get() - 1) {
 			let raw_solution = RawSolution {
-				score: [(10_000_000 + i).into(), 0, 0],
+				score: ElectionScore { minimal_stake: 10_000_000u128 + (i as u128), ..Default::default() },
 				..Default::default()
 			};
 			let signed_submission = SignedSubmission {
@@ -339,9 +344,9 @@ frame_benchmarking::benchmarks! {
 		let caller = frame_benchmarking::whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller,  T::Currency::minimum_balance() * 10u32.into());
 
-	}: _(RawOrigin::Signed(caller), Box::new(solution), c)
+	}: _(RawOrigin::Signed(caller), Box::new(solution))
 	verify {
-		assert!(<MultiPhase<T>>::signed_submissions().len() as u32 == c + 1);
+		assert!(<MultiPhase<T>>::signed_submissions().len() as u32 == T::SignedMaxSubmissions::get());
 	}
 
 	submit_unsigned {

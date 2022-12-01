@@ -84,23 +84,23 @@
 //!
 //! We only send polite messages to peers,
 
-use parity_scale_codec::{Decode, Encode};
-use sc_network::{ObservedRole, PeerId, ReputationChange};
-use sc_network_gossip::{MessageIntent, ValidatorContext};
-use sp_finality_grandpa::AuthorityId;
-use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
-
+use ahash::{AHashMap, AHashSet};
 use log::{debug, trace};
+use parity_scale_codec::{Decode, Encode};
 use prometheus_endpoint::{register, CounterVec, Opts, PrometheusError, Registry, U64};
 use rand::seq::SliceRandom;
+use sc_network::{ObservedRole, PeerId, ReputationChange};
+use sc_network_gossip::{MessageIntent, ValidatorContext};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+use sp_finality_grandpa::AuthorityId;
+use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
 
 use super::{benefit, cost, Round, SetId};
 use crate::{environment, CatchUp, CompactCommit, SignedMessage};
 
 use std::{
-	collections::{HashMap, HashSet, VecDeque},
+	collections::{HashSet, VecDeque},
 	time::{Duration, Instant},
 };
 
@@ -260,7 +260,7 @@ const KEEP_RECENT_ROUNDS: usize = 3;
 struct KeepTopics<B: BlockT> {
 	current_set: SetId,
 	rounds: VecDeque<(Round, SetId)>,
-	reverse_map: HashMap<B::Hash, (Option<Round>, SetId)>,
+	reverse_map: AHashMap<B::Hash, (Option<Round>, SetId)>,
 }
 
 impl<B: BlockT> KeepTopics<B> {
@@ -268,7 +268,7 @@ impl<B: BlockT> KeepTopics<B> {
 		KeepTopics {
 			current_set: SetId(0),
 			rounds: VecDeque::with_capacity(KEEP_RECENT_ROUNDS + 2),
-			reverse_map: HashMap::new(),
+			reverse_map: Default::default(),
 		}
 	}
 
@@ -290,7 +290,7 @@ impl<B: BlockT> KeepTopics<B> {
 			let _ = self.rounds.pop_front();
 		}
 
-		let mut map = HashMap::with_capacity(KEEP_RECENT_ROUNDS + 3);
+		let mut map = AHashMap::with_capacity(KEEP_RECENT_ROUNDS + 3);
 		map.insert(super::global_topic::<B>(self.current_set.0), (None, self.current_set));
 
 		for &(round, set) in &self.rounds {
@@ -477,10 +477,10 @@ impl<N> PeerInfo<N> {
 
 /// The peers we're connected to in gossip.
 struct Peers<N> {
-	inner: HashMap<PeerId, PeerInfo<N>>,
+	inner: AHashMap<PeerId, PeerInfo<N>>,
 	/// The randomly picked set of `LUCKY_PEERS` we'll gossip to in the first stage of round
 	/// gossiping.
-	first_stage_peers: HashSet<PeerId>,
+	first_stage_peers: AHashSet<PeerId>,
 	/// The randomly picked set of peers we'll gossip to in the second stage of gossiping if the
 	/// first stage didn't allow us to spread the voting data enough to conclude the round. This
 	/// set should have size `sqrt(connected_peers)`.
@@ -492,10 +492,10 @@ struct Peers<N> {
 impl<N> Default for Peers<N> {
 	fn default() -> Self {
 		Peers {
-			inner: HashMap::new(),
-			first_stage_peers: HashSet::new(),
-			second_stage_peers: HashSet::new(),
-			lucky_light_peers: HashSet::new(),
+			inner: Default::default(),
+			first_stage_peers: Default::default(),
+			second_stage_peers: Default::default(),
+			lucky_light_peers: Default::default(),
 		}
 	}
 }
@@ -608,7 +608,7 @@ impl<N: Ord> Peers<N> {
 			}
 		});
 
-		let mut first_stage_peers = HashSet::new();
+		let mut first_stage_peers = AHashSet::new();
 		let mut second_stage_peers = HashSet::new();
 
 		// we start by allocating authorities to the first stage set and when the minimum of

@@ -75,6 +75,8 @@ pub struct ImportSummary<Block: BlockT> {
 /// Contains information about the block that just got finalized,
 /// including tree heads that became stale at the moment of finalization.
 pub struct FinalizeSummary<Block: BlockT> {
+	/// Last finalized block header.
+	pub header: Block::Header,
 	/// Blocks that were finalized.
 	/// The last entry is the one that has been explicitly finalized.
 	pub finalized: Vec<Block::Hash>,

@@ -133,6 +133,7 @@ members = [
 	"frame/uniques",
 	"frame/utility",
 	"frame/vesting",
+	"frame/whitelist",
 	"primitives/api",
 	"primitives/api/proc-macro",
 	"primitives/api/test",
@@ -245,6 +246,7 @@ hash-db = { opt-level = 3 }
 hmac = { opt-level = 3 }
 httparse = { opt-level = 3 }
 integer-sqrt = { opt-level = 3 }
+k256 = { opt-level = 3 }
 keccak = { opt-level = 3 }
 libm = { opt-level = 3 }
 librocksdb-sys = { opt-level = 3 }
@@ -259,6 +261,7 @@ percent-encoding = { opt-level = 3 }
 primitive-types = { opt-level = 3 }
 ring = { opt-level = 3 }
 rustls = { opt-level = 3 }
+secp256k1 = { opt-level = 3 }
 sha2 = { opt-level = 3 }
 sha3 = { opt-level = 3 }
 smallvec = { opt-level = 3 }

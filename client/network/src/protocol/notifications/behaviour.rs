@@ -251,16 +251,6 @@ impl PeerState {
 			_ => None,
 		}
 	}
-
-	/// True if that node has been requested by the PSM.
-	fn is_requested(&self) -> bool {
-		matches!(
-			self,
-			Self::PendingRequest { .. } |
-				Self::Requested | Self::DisabledPendingEnable { .. } |
-				Self::Enabled { .. }
-		)
-	}
 }
 
 /// State of the handler of a single connection visible from this state machine.
@@ -558,17 +548,6 @@ impl Notifications {
 				error!(target: "sub-libp2p", "State of {:?} is poisoned", peer_id)
 			},
 		}
-	}
-
-	/// Returns the list of all the peers that the peerset currently requests us to be connected to.
-	pub fn requested_peers<'a>(
-		&'a self,
-		set_id: sc_peerset::SetId,
-	) -> impl Iterator<Item = &'a PeerId> + 'a {
-		self.peers
-			.iter()
-			.filter(move |((_, set), state)| *set == set_id && state.is_requested())
-			.map(|((id, _), _)| id)
 	}
 
 	/// Returns the list of reserved peers.

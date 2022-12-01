@@ -14,7 +14,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-core = { version = "5.0.0", path = "../../primitives/core" }
-sp-wasm-interface = { version = "5.0.0", path = "../../primitives/wasm-interface" }
+sp-core = { version = "6.0.0", path = "../../primitives/core" }
+sp-wasm-interface = { version = "6.0.0", path = "../../primitives/wasm-interface" }
 log = "0.4.11"
 thiserror = "1.0.30"

@@ -14,6 +14,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 sc-client-api = { version = "4.0.0-dev", path = "../../api" }
-sp-runtime = { version = "5.0.0", path = "../../../primitives/runtime" }
+sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
 sp-authorship = { version = "4.0.0-dev", path = "../../../primitives/authorship" }
 thiserror = "1.0.30"

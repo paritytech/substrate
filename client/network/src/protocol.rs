@@ -465,12 +465,6 @@ impl<B: BlockT> Protocol<B> {
 		self.behaviour.open_peers()
 	}
 
-	/// Returns the list of all the peers that the peerset currently requests us to be connected
-	/// to on the default set.
-	pub fn requested_peers(&self) -> impl Iterator<Item = &PeerId> {
-		self.behaviour.requested_peers(HARDCODED_PEERSETS_SYNC)
-	}
-
 	/// Returns the number of discovered nodes that we keep in memory.
 	pub fn num_discovered_peers(&self) -> usize {
 		self.behaviour.num_discovered_peers()
@@ -496,7 +490,7 @@ impl<B: BlockT> Protocol<B> {
 
 	/// Returns the number of peers we're connected to.
 	pub fn num_connected_peers(&self) -> usize {
-		self.peers.values().count()
+		self.peers.len()
 	}
 
 	/// Returns the number of peers we're connected to and that are being queried.
@@ -1672,7 +1666,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 					}
 				} else {
 					match (
-						message::Roles::decode_all(&received_handshake[..]),
+						message::Roles::decode_all(&mut &received_handshake[..]),
 						self.peers.get(&peer_id),
 					) {
 						(Ok(roles), _) => CustomMessageOutcome::NotificationStreamOpened {

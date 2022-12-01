@@ -134,7 +134,6 @@ pub struct SyncStateRpcHandler<Block: BlockT, Backend> {
 	client: Arc<Backend>,
 	shared_authority_set: SharedAuthoritySet<Block>,
 	shared_epoch_changes: SharedEpochChanges<Block>,
-	deny_unsafe: sc_rpc_api::DenyUnsafe,
 }
 
 impl<Block, Backend> SyncStateRpcHandler<Block, Backend>
@@ -148,12 +147,11 @@ where
 		client: Arc<Backend>,
 		shared_authority_set: SharedAuthoritySet<Block>,
 		shared_epoch_changes: SharedEpochChanges<Block>,
-		deny_unsafe: sc_rpc_api::DenyUnsafe,
 	) -> Result<Self, Error<Block>> {
 		if sc_chain_spec::get_extension::<LightSyncStateExtension>(chain_spec.extensions())
 			.is_some()
 		{
-			Ok(Self { chain_spec, client, shared_authority_set, shared_epoch_changes, deny_unsafe })
+			Ok(Self { chain_spec, client, shared_authority_set, shared_epoch_changes })
 		} else {
 			Err(Error::<Block>::LightSyncStateExtensionNotFound)
 		}
@@ -185,10 +183,6 @@ where
 	Backend: HeaderBackend<Block> + sc_client_api::AuxStore + 'static,
 {
 	fn system_gen_sync_spec(&self, raw: bool) -> jsonrpc_core::Result<jsonrpc_core::Value> {
-		if let Err(err) = self.deny_unsafe.check_if_safe() {
-			return Err(err.into())
-		}
-
 		let mut chain_spec = self.chain_spec.cloned_box();
 
 		let sync_state = self.build_sync_state().map_err(map_error::<Block, Error<Block>>)?;

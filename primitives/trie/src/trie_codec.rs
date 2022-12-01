@@ -20,77 +20,31 @@
 //! This uses compact proof from trie crate and extends
 //! it to substrate specific layout and child trie system.
 
-use crate::{
-	CompactProof, HashDBT, StorageProof, TrieConfiguration, TrieError, TrieHash, EMPTY_PREFIX,
-};
+use crate::{CompactProof, HashDBT, StorageProof, TrieConfiguration, TrieHash, EMPTY_PREFIX};
 use sp_std::{boxed::Box, vec::Vec};
-#[cfg(feature = "std")]
-use std::error::Error as StdError;
-#[cfg(feature = "std")]
-use std::fmt;
-use trie_db::Trie;
+use trie_db::{CError, Trie};
 
 /// Error for trie node decoding.
-pub enum Error<L: TrieConfiguration> {
-	/// Verification failed due to root mismatch.
-	RootMismatch(TrieHash<L>, TrieHash<L>),
-	/// Missing nodes in proof.
+#[derive(Debug)]
+#[cfg_attr(feature = "std", derive(thiserror::Error))]
+pub enum Error<H, CodecError> {
+	#[cfg_attr(feature = "std", error("Invalid root {0:x?}, expected {1:x?}"))]
+	RootMismatch(H, H),
+	#[cfg_attr(feature = "std", error("Missing nodes in the proof"))]
 	IncompleteProof,
-	/// Compact node is not needed.
+	#[cfg_attr(feature = "std", error("Child node content with no root in proof"))]
 	ExtraneousChildNode,
-	/// Child content with root not in proof.
-	ExtraneousChildProof(TrieHash<L>),
-	/// Bad child trie root.
+	#[cfg_attr(feature = "std", error("Proof of child trie {0:x?} not in parent proof"))]
+	ExtraneousChildProof(H),
+	#[cfg_attr(feature = "std", error("Invalid root {0:x?}, expected {1:x?}"))]
 	InvalidChildRoot(Vec<u8>, Vec<u8>),
-	/// Errors from trie crate.
-	TrieError(Box<TrieError<L>>),
+	#[cfg_attr(feature = "std", error("Trie error: {0:?}"))]
+	TrieError(Box<trie_db::TrieError<H, CodecError>>),
 }
 
-impl<L: TrieConfiguration> From<Box<TrieError<L>>> for Error<L> {
-	fn from(error: Box<TrieError<L>>) -> Self {
+impl<H, CodecError> From<Box<trie_db::TrieError<H, CodecError>>> for Error<H, CodecError> {
+	fn from(error: Box<trie_db::TrieError<H, CodecError>>) -> Self {
 		Error::TrieError(error)
-	}
-}
-
-#[cfg(feature = "std")]
-impl<L: TrieConfiguration> StdError for Error<L> {
-	fn description(&self) -> &str {
-		match self {
-			Error::InvalidChildRoot(..) => "Invalid child root error",
-			Error::TrieError(..) => "Trie db error",
-			Error::RootMismatch(..) => "Trie db error",
-			Error::IncompleteProof => "Incomplete proof",
-			Error::ExtraneousChildNode => "Extraneous child node",
-			Error::ExtraneousChildProof(..) => "Extraneous child proof",
-		}
-	}
-}
-
-#[cfg(feature = "std")]
-impl<L: TrieConfiguration> fmt::Debug for Error<L> {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		<Self as fmt::Display>::fmt(&self, f)
-	}
-}
-
-#[cfg(feature = "std")]
-impl<L: TrieConfiguration> fmt::Display for Error<L> {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match self {
-			Error::InvalidChildRoot(k, v) => write!(f, "InvalidChildRoot at {:x?}: {:x?}", k, v),
-			Error::TrieError(e) => write!(f, "Trie error: {}", e),
-			Error::IncompleteProof => write!(f, "Incomplete proof"),
-			Error::ExtraneousChildNode => write!(f, "Child node content with no root in proof"),
-			Error::ExtraneousChildProof(root) => {
-				write!(f, "Proof of child trie {:x?} not in parent proof", root.as_ref())
-			},
-			Error::RootMismatch(root, expected) => write!(
-				f,
-				"Verification error, root is {:x?}, expected: {:x?}",
-				root.as_ref(),
-				expected.as_ref(),
-			),
-		}
 	}
 }
 
@@ -105,7 +59,7 @@ pub fn decode_compact<'a, L, DB, I>(
 	db: &mut DB,
 	encoded: I,
 	expected_root: Option<&TrieHash<L>>,
-) -> Result<TrieHash<L>, Error<L>>
+) -> Result<TrieHash<L>, Error<TrieHash<L>, CError<L>>>
 where
 	L: TrieConfiguration,
 	DB: HashDBT<L::Hash, trie_db::DBValue> + hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
@@ -195,7 +149,10 @@ where
 /// Then parse all child trie root and compress main trie content first
 /// then all child trie contents.
 /// Child trie are ordered by the order of their roots in the top trie.
-pub fn encode_compact<L>(proof: StorageProof, root: TrieHash<L>) -> Result<CompactProof, Error<L>>
+pub fn encode_compact<L>(
+	proof: StorageProof,
+	root: TrieHash<L>,
+) -> Result<CompactProof, Error<TrieHash<L>, CError<L>>>
 where
 	L: TrieConfiguration,
 {
