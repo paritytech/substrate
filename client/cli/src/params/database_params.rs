@@ -17,24 +17,24 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::arg_enums::Database;
+use clap::Args;
 use sc_service::TransactionStorageMode;
-use structopt::StructOpt;
 
 /// Parameters for block import.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, Clone, Args)]
 pub struct DatabaseParams {
 	/// Select database backend to use.
-	#[structopt(
+	#[clap(
 		long,
 		alias = "db",
 		value_name = "DB",
-		case_insensitive = true,
-		possible_values = &Database::variants(),
+		ignore_case = true,
+		possible_values = Database::variants(),
 	)]
 	pub database: Option<Database>,
 
 	/// Limit the memory the database cache can use.
-	#[structopt(long = "db-cache", value_name = "MiB")]
+	#[clap(long = "db-cache", value_name = "MiB")]
 	pub database_cache_size: Option<usize>,
 
 	/// Enable storage chain mode
@@ -43,7 +43,7 @@ pub struct DatabaseParams {
 	/// If this is enabled, each transaction is stored separately in the
 	/// transaction database column and is only referenced by hash
 	/// in the block body column.
-	#[structopt(long)]
+	#[clap(long)]
 	pub storage_chain: bool,
 }
 

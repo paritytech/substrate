@@ -18,34 +18,34 @@
 
 //! Implementation of the `sign` subcommand
 use crate::{error, utils, with_crypto_scheme, CryptoSchemeFlag, KeystoreParams};
+use clap::Parser;
 use sp_core::crypto::SecretString;
-use structopt::StructOpt;
 
 /// The `sign` command
-#[derive(Debug, StructOpt, Clone)]
-#[structopt(name = "sign", about = "Sign a message, with a given (secret) key")]
+#[derive(Debug, Clone, Parser)]
+#[clap(name = "sign", about = "Sign a message, with a given (secret) key")]
 pub struct SignCmd {
 	/// The secret key URI.
 	/// If the value is a file, the file content is used as URI.
 	/// If not given, you will be prompted for the URI.
-	#[structopt(long)]
+	#[clap(long)]
 	suri: Option<String>,
 
 	/// Message to sign, if not provided you will be prompted to
 	/// pass the message via STDIN
-	#[structopt(long)]
+	#[clap(long)]
 	message: Option<String>,
 
 	/// The message on STDIN is hex-encoded data
-	#[structopt(long)]
+	#[clap(long)]
 	hex: bool,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub keystore_params: KeystoreParams,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub crypto_scheme: CryptoSchemeFlag,
 }
 
@@ -75,14 +75,13 @@ fn sign<P: sp_core::Pair>(
 
 #[cfg(test)]
 mod test {
-	use super::SignCmd;
-	use structopt::StructOpt;
+	use super::*;
 
 	#[test]
 	fn sign() {
 		let seed = "0xad1fb77243b536b90cfe5f0d351ab1b1ac40e3890b41dc64f766ee56340cfca5";
 
-		let sign = SignCmd::from_iter(&[
+		let sign = SignCmd::parse_from(&[
 			"sign",
 			"--suri",
 			seed,

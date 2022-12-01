@@ -665,7 +665,7 @@ impl<B: BlockT> ChainSync<B> {
 		// There is nothing sync can get from the node that has no blockchain data.
 		match self.block_status(&best_hash) {
 			Err(e) => {
-				debug!(target:"sync", "Error reading blockchain: {:?}", e);
+				debug!(target:"sync", "Error reading blockchain: {}", e);
 				Err(BadPeer(who, rep::BLOCKCHAIN_READ_ERROR))
 			},
 			Ok(BlockStatus::KnownBad) => {
@@ -1192,7 +1192,7 @@ impl<B: BlockT> ChainSync<B> {
 							(_, Err(e)) => {
 								info!(
 									target: "sync",
-									"❌ Error answering legitimate blockchain query: {:?}",
+									"❌ Error answering legitimate blockchain query: {}",
 									e,
 								);
 								return Err(BadPeer(*who, rep::BLOCKCHAIN_READ_ERROR))
@@ -1629,7 +1629,7 @@ impl<B: BlockT> ChainSync<B> {
 					trace!(target: "sync", "Obsolete block {:?}", hash);
 				},
 				e @ Err(BlockImportError::UnknownParent) | e @ Err(BlockImportError::Other(_)) => {
-					warn!(target: "sync", "💔 Error importing block {:?}: {:?}", hash, e);
+					warn!(target: "sync", "💔 Error importing block {:?}: {}", hash, e.unwrap_err());
 					self.state_sync = None;
 					self.warp_sync = None;
 					output.extend(self.restart());
@@ -1683,7 +1683,7 @@ impl<B: BlockT> ChainSync<B> {
 		if let Err(err) = r {
 			warn!(
 				target: "sync",
-				"💔 Error cleaning up pending extra justification data requests: {:?}",
+				"💔 Error cleaning up pending extra justification data requests: {}",
 				err,
 			);
 		}
@@ -2081,7 +2081,7 @@ impl<B: BlockT> ChainSync<B> {
 	) -> impl Iterator<Item = Result<(PeerId, BlockRequest<B>), BadPeer>> + 'a {
 		self.blocks.clear();
 		if let Err(e) = self.reset_sync_start_point() {
-			warn!(target: "sync", "💔  Unable to restart sync. :{:?}", e);
+			warn!(target: "sync", "💔  Unable to restart sync: {}", e);
 		}
 		self.pending_requests.set_all();
 		debug!(target:"sync", "Restarted with {} ({})", self.best_queued_number, self.best_queued_hash);

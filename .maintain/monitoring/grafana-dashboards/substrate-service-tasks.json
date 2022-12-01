@@ -4,7 +4,7 @@
       "name": "VAR_METRIC_NAMESPACE",
       "type": "constant",
       "label": "Prefix of the metrics",
-      "value": "polkadot",
+      "value": "substrate",
       "description": ""
     }
   ],

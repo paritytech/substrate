@@ -28,7 +28,7 @@ mod tempdb;
 mod trie;
 mod txpool;
 
-use structopt::StructOpt;
+use clap::Parser;
 
 use node_testing::bench::{BlockType, DatabaseType as BenchDataBaseType, KeyTypes, Profile};
 
@@ -42,19 +42,19 @@ use crate::{
 	txpool::PoolBenchmarkDescription,
 };
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "node-bench", about = "Node integration benchmarks")]
+#[derive(Debug, Parser)]
+#[clap(name = "node-bench", about = "Node integration benchmarks")]
 struct Opt {
 	/// Show list of all available benchmarks.
 	///
 	/// Will output ("name", "path"). Benchmarks can then be filtered by path.
-	#[structopt(short, long)]
+	#[clap(short, long)]
 	list: bool,
 
 	/// Machine readable json output.
 	///
 	/// This also suppresses all regular output (except to stderr)
-	#[structopt(short, long)]
+	#[clap(short, long)]
 	json: bool,
 
 	/// Filter benchmarks.
@@ -63,7 +63,7 @@ struct Opt {
 	filter: Option<String>,
 
 	/// Number of transactions for block import with `custom` size.
-	#[structopt(long)]
+	#[clap(long)]
 	transactions: Option<usize>,
 
 	/// Mode
@@ -72,12 +72,12 @@ struct Opt {
 	///
 	/// "profile" mode adds pauses between measurable runs,
 	/// so that actual interval can be selected in the profiler of choice.
-	#[structopt(short, long, default_value = "regular")]
+	#[clap(short, long, default_value = "regular")]
 	mode: BenchmarkMode,
 }
 
 fn main() {
-	let opt = Opt::from_args();
+	let opt = Opt::parse();
 
 	if !opt.json {
 		sp_tracing::try_init_simple();

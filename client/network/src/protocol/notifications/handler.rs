@@ -457,9 +457,9 @@ impl<'a> Ready<'a> {
 }
 
 /// Error specific to the collection of protocols.
-#[derive(Debug, derive_more::Display, derive_more::Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum NotifsHandlerError {
-	/// Channel of synchronous notifications is full.
+	#[error("Channel of synchronous notifications is full.")]
 	SyncNotificationsClogged,
 }
 

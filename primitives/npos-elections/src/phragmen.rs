@@ -70,7 +70,7 @@ const DEN: ExtendedBalance = ExtendedBalance::max_value();
 pub fn seq_phragmen<AccountId: IdentifierT, P: PerThing128>(
 	to_elect: usize,
 	candidates: Vec<AccountId>,
-	voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+	voters: Vec<(AccountId, VoteWeight, impl IntoIterator<Item = AccountId>)>,
 	balancing: Option<(usize, ExtendedBalance)>,
 ) -> Result<ElectionResult<AccountId, P>, crate::Error> {
 	let (candidates, voters) = setup_inputs(candidates, voters);

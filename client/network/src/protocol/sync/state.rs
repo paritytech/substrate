@@ -99,7 +99,7 @@ impl<B: BlockT> StateSync<B> {
 				Err(e) => {
 					debug!(
 						target: "sync",
-						"StateResponse failed proof verification: {:?}",
+						"StateResponse failed proof verification: {}",
 						e,
 					);
 					return ImportResult::BadResponse

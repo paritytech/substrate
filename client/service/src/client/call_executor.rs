@@ -285,7 +285,7 @@ where
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
 		self.executor
 			.runtime_version(&mut ext, &runtime_code)
-			.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)).into())
+			.map_err(|e| sp_blockchain::Error::VersionInvalid(e.to_string()).into())
 	}
 
 	fn prove_execution(
@@ -340,7 +340,7 @@ where
 	Block: BlockT,
 {
 	fn runtime_version(&self, at: &BlockId<Block>) -> Result<sp_version::RuntimeVersion, String> {
-		CallExecutor::runtime_version(self, at).map_err(|e| format!("{:?}", e))
+		CallExecutor::runtime_version(self, at).map_err(|e| e.to_string())
 	}
 }
 

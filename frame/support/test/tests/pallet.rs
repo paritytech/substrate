@@ -29,7 +29,7 @@ use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
 	TestExternalities,
 };
-use sp_runtime::DispatchError;
+use sp_runtime::{DispatchError, ModuleError};
 
 pub struct SomeType1;
 impl From<SomeType1> for u64 {
@@ -432,7 +432,7 @@ pub mod pallet {
 }
 
 // Test that a pallet with non generic event and generic genesis_config is correctly handled
-// and that a pallet without the attribute generate_storage_info is correctly handled.
+// and that a pallet with the attribute without_storage_info is correctly handled.
 #[frame_support::pallet]
 pub mod pallet2 {
 	use super::{SomeAssociation1, SomeType1};
@@ -654,7 +654,11 @@ fn error_expand() {
 	);
 	assert_eq!(
 		DispatchError::from(pallet::Error::<Runtime>::InsufficientProposersBalance),
-		DispatchError::Module { index: 1, error: 0, message: Some("InsufficientProposersBalance") },
+		DispatchError::Module(ModuleError {
+			index: 1,
+			error: 0,
+			message: Some("InsufficientProposersBalance")
+		}),
 	);
 }
 

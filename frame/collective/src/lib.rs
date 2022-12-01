@@ -990,8 +990,8 @@ where
 pub struct EnsureMember<AccountId, I: 'static>(PhantomData<(AccountId, I)>);
 impl<
 		O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>,
-		AccountId: Default,
 		I,
+		AccountId: Decode,
 	> EnsureOrigin<O> for EnsureMember<AccountId, I>
 {
 	type Success = AccountId;
@@ -1004,7 +1004,10 @@ impl<
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> O {
-		O::from(RawOrigin::Member(Default::default()))
+		let zero_account_id =
+			AccountId::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes())
+				.expect("infinite length input; no invalid inputs for type; qed");
+		O::from(RawOrigin::Member(zero_account_id))
 	}
 }
 

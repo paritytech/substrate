@@ -132,17 +132,18 @@ pub struct FinalityProof<Header: HeaderT> {
 }
 
 /// Errors occurring when trying to prove finality
-#[derive(Debug, derive_more::Display, derive_more::From)]
+#[derive(Debug, thiserror::Error)]
 pub enum FinalityProofError {
 	/// The requested block has not yet been finalized.
-	#[display(fmt = "Block not yet finalized")]
+	#[error("Block not yet finalized")]
 	BlockNotYetFinalized,
 	/// The requested block is not covered by authority set changes. Likely this means the block is
 	/// in the latest authority set, and the subscription API is more appropriate.
-	#[display(fmt = "Block not covered by authority set changes")]
+	#[error("Block not covered by authority set changes")]
 	BlockNotInAuthoritySetChanges,
 	/// Errors originating from the client.
-	Client(sp_blockchain::Error),
+	#[error(transparent)]
+	Client(#[from] sp_blockchain::Error),
 }
 
 fn prove_finality<Block, B>(

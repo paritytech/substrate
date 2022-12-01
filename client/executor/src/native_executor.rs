@@ -220,7 +220,7 @@ where
 		allow_missing_host_functions: bool,
 		export_name: &str,
 		call_data: &[u8],
-	) -> std::result::Result<Vec<u8>, String> {
+	) -> std::result::Result<Vec<u8>, Error> {
 		let module = crate::wasm_runtime::create_wasm_runtime_with_code::<H>(
 			self.method,
 			self.default_heap_pages,
@@ -228,11 +228,10 @@ where
 			allow_missing_host_functions,
 			self.cache_path.as_deref(),
 		)
-		.map_err(|e| format!("Failed to create module: {:?}", e))?;
+		.map_err(|e| format!("Failed to create module: {}", e))?;
 
-		let instance = module
-			.new_instance()
-			.map_err(|e| format!("Failed to create instance: {:?}", e))?;
+		let instance =
+			module.new_instance().map_err(|e| format!("Failed to create instance: {}", e))?;
 
 		let mut instance = AssertUnwindSafe(instance);
 		let mut ext = AssertUnwindSafe(ext);
@@ -243,7 +242,6 @@ where
 			instance.call_export(export_name, call_data)
 		})
 		.and_then(|r| r)
-		.map_err(|e| e.to_string())
 	}
 }
 
@@ -281,6 +279,7 @@ where
 			"Core_version",
 			&[],
 		)
+		.map_err(|e| e.to_string())
 	}
 }
 
@@ -456,12 +455,18 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 					// pool of instances should be used.
 					//
 					// https://github.com/paritytech/substrate/issues/7354
-					let mut instance =
-						module.new_instance().expect("Failed to create new instance from module");
+					let mut instance = match module.new_instance() {
+						Ok(instance) => instance,
+						Err(error) =>
+							panic!("failed to create new instance from module: {}", error),
+					};
 
-					instance
+					match instance
 						.call(InvokeMethod::TableWithWrapper { dispatcher_ref, func }, &data[..])
-						.expect("Failed to invoke instance.")
+					{
+						Ok(result) => result,
+						Err(error) => panic!("failed to invoke instance: {}", error),
+					}
 				});
 
 				match result {
@@ -471,7 +476,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 					Err(error) => {
 						// If execution is panicked, the `join` in the original runtime code will
 						// panic as well, since the sender is dropped without sending anything.
-						log::error!("Call error in spawned task: {:?}", error);
+						log::error!("Call error in spawned task: {}", error);
 					},
 				}
 			}),

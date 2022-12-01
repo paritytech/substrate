@@ -187,7 +187,7 @@ where
 			Some(registry) => match Metrics::register(&registry) {
 				Ok(metrics) => Some(metrics),
 				Err(e) => {
-					error!(target: LOG_TARGET, "Failed to register metrics: {:?}", e);
+					error!(target: LOG_TARGET, "Failed to register metrics: {}", e);
 					None
 				},
 			},
@@ -242,7 +242,7 @@ where
 					if let Err(e) = self.publish_ext_addresses(only_if_changed).await {
 						error!(
 							target: LOG_TARGET,
-							"Failed to publish external addresses: {:?}", e,
+							"Failed to publish external addresses: {}", e,
 						);
 					}
 				},
@@ -251,7 +251,7 @@ where
 					if let Err(e) = self.refill_pending_lookups_queue().await {
 						error!(
 							target: LOG_TARGET,
-							"Failed to request addresses of authorities: {:?}", e,
+							"Failed to request addresses of authorities: {}", e,
 						);
 					}
 				},
@@ -426,7 +426,7 @@ where
 						metrics.handle_value_found_event_failure.inc();
 					}
 
-					debug!(target: LOG_TARGET, "Failed to handle Dht value found event: {:?}", e);
+					debug!(target: LOG_TARGET, "Failed to handle Dht value found event: {}", e);
 				}
 			},
 			DhtEvent::ValueNotFound(hash) => {

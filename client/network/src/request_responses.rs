@@ -884,34 +884,35 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 }
 
 /// Error when registering a protocol.
-#[derive(Debug, derive_more::Display, derive_more::Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum RegisterError {
 	/// A protocol has been specified multiple times.
-	DuplicateProtocol(#[error(ignore)] Cow<'static, str>),
+	#[error("{0}")]
+	DuplicateProtocol(Cow<'static, str>),
 }
 
 /// Error in a request.
-#[derive(Debug, derive_more::Display, derive_more::Error)]
+#[derive(Debug, thiserror::Error)]
+#[allow(missing_docs)]
 pub enum RequestFailure {
-	/// We are not currently connected to the requested peer.
+	#[error("We are not currently connected to the requested peer.")]
 	NotConnected,
-	/// Given protocol hasn't been registered.
+	#[error("Given protocol hasn't been registered.")]
 	UnknownProtocol,
-	/// Remote has closed the substream before answering, thereby signaling that it considers the
-	/// request as valid, but refused to answer it.
+	#[error("Remote has closed the substream before answering, thereby signaling that it considers the request as valid, but refused to answer it.")]
 	Refused,
-	/// The remote replied, but the local node is no longer interested in the response.
+	#[error("The remote replied, but the local node is no longer interested in the response.")]
 	Obsolete,
 	/// Problem on the network.
-	#[display(fmt = "Problem on the network: {}", _0)]
+	#[error("Problem on the network: {0}")]
 	Network(OutboundFailure),
 }
 
 /// Error when processing a request sent by a remote.
-#[derive(Debug, derive_more::Display, derive_more::Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum ResponseFailure {
 	/// Problem on the network.
-	#[display(fmt = "Problem on the network: {}", _0)]
+	#[error("Problem on the network: {0}")]
 	Network(InboundFailure),
 }
 

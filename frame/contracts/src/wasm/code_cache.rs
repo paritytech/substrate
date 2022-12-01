@@ -38,7 +38,6 @@ use crate::{
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
 	ensure,
-	storage::StorageMap,
 	traits::ReservableCurrency,
 };
 use sp_core::crypto::UncheckedFrom;
@@ -149,52 +148,38 @@ pub fn load<T: Config>(
 where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
-	gas_meter.charge(CodeToken::Load(estimate_code_size::<T, CodeStorage<T>, _>(&code_hash)?))?;
+	let charged = gas_meter.charge(CodeToken::Load(schedule.limits.code_len))?;
 
 	let mut prefab_module =
 		<CodeStorage<T>>::get(code_hash).ok_or_else(|| Error::<T>::CodeNotFound)?;
+	gas_meter.adjust_gas(charged, CodeToken::Load(prefab_module.code.len() as u32));
 	prefab_module.code_hash = code_hash;
 
 	if prefab_module.instruction_weights_version < schedule.instruction_weights.version {
 		// The instruction weights have changed.
 		// We need to re-instrument the code with the new instruction weights.
-		gas_meter.charge(CodeToken::Reinstrument(estimate_code_size::<T, PristineCode<T>, _>(
-			&code_hash,
-		)?))?;
-		reinstrument(&mut prefab_module, schedule)?;
+		let charged = gas_meter.charge(CodeToken::Reinstrument(schedule.limits.code_len))?;
+		let code_size = reinstrument(&mut prefab_module, schedule)?;
+		gas_meter.adjust_gas(charged, CodeToken::Reinstrument(code_size));
 	}
 
 	Ok(prefab_module)
 }
 
 /// Instruments the passed prefab wasm module with the supplied schedule.
+///
+/// Returns the size in bytes of the uninstrumented code.
 pub fn reinstrument<T: Config>(
 	prefab_module: &mut PrefabWasmModule<T>,
 	schedule: &Schedule<T>,
-) -> Result<(), DispatchError> {
+) -> Result<u32, DispatchError> {
 	let original_code =
 		<PristineCode<T>>::get(&prefab_module.code_hash).ok_or_else(|| Error::<T>::CodeNotFound)?;
+	let original_code_len = original_code.len();
 	prefab_module.code = prepare::reinstrument_contract::<T>(original_code, schedule)?;
 	prefab_module.instruction_weights_version = schedule.instruction_weights.version;
 	<CodeStorage<T>>::insert(&prefab_module.code_hash, &*prefab_module);
-	Ok(())
-}
-
-/// Get the size of the code stored at `code_hash` without loading it.
-///
-/// The returned value is slightly too large when using it for the [`PrefabWasmModule`]
-/// because it has other fields in addition to the code itself. However, those are negligible
-/// when compared to the code size. Additionally, charging too much weight is completely safe.
-fn estimate_code_size<T, M, V>(code_hash: &CodeHash<T>) -> Result<u32, DispatchError>
-where
-	T: Config,
-	M: StorageMap<CodeHash<T>, V>,
-	V: codec::FullCodec,
-{
-	let key = M::hashed_key_for(code_hash);
-	let mut data = [0u8; 0];
-	let len = sp_io::storage::read(&key, &mut data, 0).ok_or_else(|| Error::<T>::CodeNotFound)?;
-	Ok(len)
+	Ok(original_code_len as u32)
 }
 
 /// Costs for operations that are related to code handling.

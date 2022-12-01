@@ -305,6 +305,29 @@ pub trait FunctionContext {
 	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> Result<()>;
 	/// Provides access to the sandbox.
 	fn sandbox(&mut self) -> &mut dyn Sandbox;
+
+	/// Registers a panic error message within the executor.
+	///
+	/// This is meant to be used in situations where the runtime
+	/// encounters an unrecoverable error and intends to panic.
+	///
+	/// Panicking in WASM is done through the [`unreachable`](https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-control)
+	/// instruction which causes an unconditional trap and immediately aborts
+	/// the execution. It does not however allow for any diagnostics to be
+	/// passed through to the host, so while we do know that *something* went
+	/// wrong we don't have any direct indication of what *exactly* went wrong.
+	///
+	/// As a workaround we use this method right before the execution is
+	/// actually aborted to pass an error message to the host so that it
+	/// can associate it with the next trap, and return that to the caller.
+	///
+	/// A WASM trap should be triggered immediately after calling this method;
+	/// otherwise the error message might be associated with a completely
+	/// unrelated trap.
+	///
+	/// It should only be called once, however calling it more than once
+	/// is harmless and will overwrite the previously set error message.
+	fn register_panic_error_message(&mut self, message: &str);
 }
 
 /// Sandbox memory identifier.

@@ -150,7 +150,7 @@ where
 				Err(e) => {
 					log::warn!(
 						target: "slots",
-						"Unable to author block in slot. No best block header: {:?}",
+						"Unable to author block in slot. No best block header: {}",
 						e,
 					);
 					// Let's try at the next slot..

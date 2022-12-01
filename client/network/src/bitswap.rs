@@ -313,21 +313,29 @@ impl<B: BlockT> NetworkBehaviour for Bitswap<B> {
 }
 
 /// Bitswap protocol error.
-#[derive(derive_more::Display, derive_more::From)]
+#[derive(Debug, thiserror::Error)]
 pub enum BitswapError {
 	/// Protobuf decoding error.
-	#[display(fmt = "Failed to decode request: {}.", _0)]
-	DecodeProto(prost::DecodeError),
+	#[error("Failed to decode request: {0}.")]
+	DecodeProto(#[from] prost::DecodeError),
+
 	/// Protobuf encoding error.
-	#[display(fmt = "Failed to encode response: {}.", _0)]
-	EncodeProto(prost::EncodeError),
+	#[error("Failed to encode response: {0}.")]
+	EncodeProto(#[from] prost::EncodeError),
+
 	/// Client backend error.
-	Client(sp_blockchain::Error),
+	#[error(transparent)]
+	Client(#[from] sp_blockchain::Error),
+
 	/// Error parsing CID
-	BadCid(cid::Error),
+	#[error(transparent)]
+	BadCid(#[from] cid::Error),
+
 	/// Packet read error.
-	Read(io::Error),
+	#[error(transparent)]
+	Read(#[from] io::Error),
+
 	/// Error sending response.
-	#[display(fmt = "Failed to send response.")]
+	#[error("Failed to send response.")]
 	SendResponse,
 }

@@ -28,7 +28,7 @@ use sp_std::{prelude::*, vec};
 use frame_benchmarking::benchmarks;
 use frame_support::{
 	codec::Decode,
-	traits::{KeyOwnerProofSystem, OnInitialize},
+	traits::{Get, KeyOwnerProofSystem, OnInitialize},
 };
 use frame_system::RawOrigin;
 use pallet_session::{historical::Pallet as Historical, Pallet as Session, *};
@@ -53,10 +53,10 @@ impl<T: Config> OnInitialize<T::BlockNumber> for Pallet<T> {
 
 benchmarks! {
 	set_keys {
-		let n = <T as pallet_staking::Config>::MAX_NOMINATIONS;
+		let n = <T as pallet_staking::Config>::MaxNominations::get();
 		let (v_stash, _) = create_validator_with_nominators::<T>(
 			n,
-			<T as pallet_staking::Config>::MAX_NOMINATIONS,
+			<T as pallet_staking::Config>::MaxNominations::get(),
 			false,
 			RewardDestination::Staked,
 		)?;
@@ -70,10 +70,10 @@ benchmarks! {
 	}: _(RawOrigin::Signed(v_controller), keys, proof)
 
 	purge_keys {
-		let n = <T as pallet_staking::Config>::MAX_NOMINATIONS;
+		let n = <T as pallet_staking::Config>::MaxNominations::get();
 		let (v_stash, _) = create_validator_with_nominators::<T>(
 			n,
-			<T as pallet_staking::Config>::MAX_NOMINATIONS,
+			<T as pallet_staking::Config>::MaxNominations::get(),
 			false,
 			RewardDestination::Staked
 		)?;

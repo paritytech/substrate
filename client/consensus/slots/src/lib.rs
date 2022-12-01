@@ -214,7 +214,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			Err(err) => {
 				warn!(
 					target: logging_target,
-					"Unable to fetch epoch data at block {:?}: {:?}",
+					"Unable to fetch epoch data at block {:?}: {}",
 					slot_info.chain_head.hash(),
 					err,
 				);
@@ -274,10 +274,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let proposer = match self.proposer(&slot_info.chain_head).await {
 			Ok(p) => p,
 			Err(err) => {
-				warn!(
-					target: logging_target,
-					"Unable to author block in slot {:?}: {:?}", slot, err,
-				);
+				warn!(target: logging_target, "Unable to author block in slot {:?}: {}", slot, err,);
 
 				telemetry!(
 					telemetry;
@@ -303,12 +300,12 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				proposing_remaining_duration.mul_f32(0.98),
 				None,
 			)
-			.map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)));
+			.map_err(|e| sp_consensus::Error::ClientImport(e.to_string()));
 
 		let proposal = match futures::future::select(proposing, proposing_remaining).await {
 			Either::Left((Ok(p), _)) => p,
 			Either::Left((Err(err), _)) => {
-				warn!(target: logging_target, "Proposing failed: {:?}", err);
+				warn!(target: logging_target, "Proposing failed: {}", err);
 
 				return None
 			},
@@ -353,7 +350,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		{
 			Ok(bi) => bi,
 			Err(err) => {
-				warn!(target: logging_target, "Failed to create block import params: {:?}", err);
+				warn!(target: logging_target, "Failed to create block import params: {}", err);
 
 				return None
 			},
@@ -388,7 +385,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			Err(err) => {
 				warn!(
 					target: logging_target,
-					"Error with block built on {:?}: {:?}", parent_hash, err,
+					"Error with block built on {:?}: {}", parent_hash, err,
 				);
 
 				telemetry!(
@@ -488,7 +485,7 @@ pub async fn start_slot_worker<B, C, W, T, SO, CIDP, CAW, Proof>(
 		let slot_info = match slots.next_slot().await {
 			Ok(r) => r,
 			Err(e) => {
-				warn!(target: "slots", "Error while polling for next slot: {:?}", e);
+				warn!(target: "slots", "Error while polling for next slot: {}", e);
 				return
 			},
 		};

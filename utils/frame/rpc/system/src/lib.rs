@@ -106,7 +106,7 @@ where
 			let nonce = api.account_nonce(&at, account.clone()).map_err(|e| RpcError {
 				code: ErrorCode::ServerError(Error::RuntimeError.into()),
 				message: "Unable to query nonce.".into(),
-				data: Some(format!("{:?}", e).into()),
+				data: Some(e.to_string().into()),
 			})?;
 
 			Ok(adjust_nonce(&*self.pool, account, nonce))
@@ -141,7 +141,7 @@ where
 			let result = api.apply_extrinsic(&at, uxt).map_err(|e| RpcError {
 				code: ErrorCode::ServerError(Error::RuntimeError.into()),
 				message: "Unable to dry run extrinsic.".into(),
-				data: Some(format!("{:?}", e).into()),
+				data: Some(e.to_string().into()),
 			})?;
 
 			Ok(Encode::encode(&result).into())

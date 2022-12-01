@@ -45,6 +45,7 @@ unsafe impl Send for SandboxStore {}
 pub struct HostState {
 	sandbox_store: SandboxStore,
 	allocator: FreeingBumpHeapAllocator,
+	panic_message: Option<String>,
 }
 
 impl HostState {
@@ -55,7 +56,13 @@ impl HostState {
 				sandbox::SandboxBackend::TryWasmer,
 			)))),
 			allocator,
+			panic_message: None,
 		}
+	}
+
+	/// Takes the error message out of the host state, leaving a `None` in its place.
+	pub fn take_panic_message(&mut self) -> Option<String> {
+		self.panic_message.take()
 	}
 }
 
@@ -133,6 +140,14 @@ impl<'a> sp_wasm_interface::FunctionContext for HostContext<'a> {
 
 	fn sandbox(&mut self) -> &mut dyn Sandbox {
 		self
+	}
+
+	fn register_panic_error_message(&mut self, message: &str) {
+		self.caller
+			.data_mut()
+			.host_state_mut()
+			.expect("host state is not empty when calling a function in wasm; qed")
+			.panic_message = Some(message.to_owned());
 	}
 }
 

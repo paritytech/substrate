@@ -302,11 +302,11 @@ where
 }
 
 /// Converts a runtime trap into an RPC error.
-fn runtime_error_into_rpc_err(err: impl std::fmt::Debug) -> Error {
+fn runtime_error_into_rpc_err(err: impl std::fmt::Display) -> Error {
 	Error {
 		code: ErrorCode::ServerError(RUNTIME_ERROR),
 		message: "Runtime error".into(),
-		data: Some(format!("{:?}", err).into()),
+		data: Some(err.to_string().into()),
 	}
 }
 

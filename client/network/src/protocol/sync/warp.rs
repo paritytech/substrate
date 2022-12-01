@@ -88,7 +88,7 @@ impl<B: BlockT> WarpSync<B> {
 			Phase::WarpProof { set_id, authorities, last_hash } => {
 				match self.warp_sync_provider.verify(&response, *set_id, authorities.clone()) {
 					Err(e) => {
-						log::debug!(target: "sync", "Bad warp proof response: {:?}", e);
+						log::debug!(target: "sync", "Bad warp proof response: {}", e);
 						return WarpProofImportResult::BadResponse
 					},
 					Ok(VerificationResult::Partial(new_set_id, new_authorities, new_last_hash)) => {

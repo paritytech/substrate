@@ -19,12 +19,12 @@
 //! implementation of the `verify` subcommand
 
 use crate::{error, utils, with_crypto_scheme, CryptoSchemeFlag};
+use clap::Parser;
 use sp_core::crypto::{ByteArray, Ss58Codec};
-use structopt::StructOpt;
 
 /// The `verify` command
-#[derive(Debug, StructOpt, Clone)]
-#[structopt(
+#[derive(Debug, Clone, Parser)]
+#[clap(
 	name = "verify",
 	about = "Verify a signature for a message, provided on STDIN, with a given (public or secret) key"
 )]
@@ -39,15 +39,15 @@ pub struct VerifyCmd {
 
 	/// Message to verify, if not provided you will be prompted to
 	/// pass the message via STDIN
-	#[structopt(long)]
+	#[clap(long)]
 	message: Option<String>,
 
 	/// The message on STDIN is hex-encoded data
-	#[structopt(long)]
+	#[clap(long)]
 	hex: bool,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub crypto_scheme: CryptoSchemeFlag,
 }
 

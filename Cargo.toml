@@ -64,6 +64,9 @@ members = [
 	"frame/authority-discovery",
 	"frame/authorship",
 	"frame/babe",
+	"frame/bags-list",
+	"frame/bags-list/fuzzer",
+	"frame/bags-list/remote-tests",
 	"frame/balances",
 	"frame/beefy",
 	"frame/beefy-mmr",
@@ -75,11 +78,13 @@ members = [
 	"frame/contracts",
 	"frame/contracts/rpc",
 	"frame/contracts/rpc/runtime-api",
+	"frame/conviction-voting",
 	"frame/democracy",
 	"frame/try-runtime",
 	"frame/election-provider-multi-phase",
 	"frame/election-provider-support",
 	"frame/ddc-metrics-offchain-worker",
+	"frame/ddc-pallet",
 	"frame/executive",
 	"frame/gilt",
 	"frame/grandpa",
@@ -99,6 +104,7 @@ members = [
 	"frame/proxy",
 	"frame/randomness-collective-flip",
 	"frame/recovery",
+	"frame/referenda",
 	"frame/scheduler",
 	"frame/scored-pool",
 	"frame/session",
@@ -127,10 +133,6 @@ members = [
 	"frame/uniques",
 	"frame/utility",
 	"frame/vesting",
-	"frame/bags-list",
-	"frame/bags-list/remote-tests",
-	"frame/bags-list/fuzzer",
-	"frame/ddc-pallet",
 	"primitives/api",
 	"primitives/api/proc-macro",
 	"primitives/api/test",
@@ -267,6 +269,17 @@ wasmi = { opt-level = 3 }
 x25519-dalek = { opt-level = 3 }
 yamux = { opt-level = 3 }
 zeroize = { opt-level = 3 }
+
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+
+[profile.production]
+inherits = "release"
+
+# Sacrifice compile speed for execution speed by using optimization flags:
+
+# https://doc.rust-lang.org/rustc/linker-plugin-lto.html
+lto = "fat"
+# https://doc.rust-lang.org/rustc/codegen-options/index.html#codegen-units
+codegen-units = 1
