@@ -201,12 +201,12 @@ benchmarks_instance_pallet! {
 		// Give some multiple of the existential deposit
 		let existential_deposit = T::ExistentialDeposit::get();
 		let balance = existential_deposit.saturating_mul(ED_MULTIPLIER.into());
-		let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&user, balance);
+		let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&user, balance + existential_deposit);
 
 		// Reserve the balance
 		<Balances<T, I> as ReservableCurrency<_>>::reserve(&user, balance)?;
 		assert_eq!(Balances::<T, I>::reserved_balance(&user), balance);
-		assert!(Balances::<T, I>::free_balance(&user).is_zero());
+		assert_eq!(Balances::<T, I>::free_balance(&user), existential_deposit);
 
 	}: _(RawOrigin::Root, user_lookup, balance)
 	verify {

@@ -1796,7 +1796,7 @@ where
 				account.reserved.checked_add(&value).ok_or(ArithmeticError::Overflow)?;
 			Self::can_reserve(who, value)
 				.then(|| Ok::<(), sp_runtime::DispatchError>(()))
-				.ok_or(Error::<T, I>::LiquidityRestrictions)?
+				.ok_or(Error::<T, I>::InsufficientBalance)?
 		})?;
 
 		Self::deposit_event(Event::Reserved { who: who.clone(), amount: value });

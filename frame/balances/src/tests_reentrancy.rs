@@ -29,10 +29,7 @@ use sp_io;
 use sp_runtime::{testing::Header, traits::IdentityLookup};
 
 use crate::*;
-use frame_support::{
-	assert_ok,
-	traits::{Currency, ReservableCurrency},
-};
+use frame_support::{assert_ok, traits::Currency};
 use frame_system::RawOrigin;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -207,56 +204,6 @@ fn transfer_dust_removal_tst2_should_work() {
 			amount: 50,
 		}));
 		System::assert_has_event(RuntimeEvent::Balances(crate::Event::Deposit {
-			who: 1,
-			amount: 50,
-		}));
-	});
-}
-
-#[test]
-fn repatriating_reserved_balance_dust_removal_should_work() {
-	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
-		// Verification of reentrancy in dust removal
-		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 1000, 0));
-		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 2, 500, 0));
-
-		// Reserve a value on account 2,
-		// Such that free balance is lower than
-		// Exestintial deposit.
-		assert_ok!(Balances::reserve(&2, 450));
-
-		// Transfer of reserved fund from slashed account 2 to
-		// beneficiary account 1
-		assert_ok!(Balances::repatriate_reserved(&2, &1, 450, Status::Free), 0);
-
-		// Since free balance of account 2 is lower than
-		// existential deposit, dust amount is
-		// removed from the account 2
-		assert_eq!(Balances::reserved_balance(2), 0);
-		assert_eq!(Balances::free_balance(2), 0);
-
-		// account 1 is credited with reserved amount
-		// together with dust balance during dust
-		// removal.
-		assert_eq!(Balances::reserved_balance(1), 0);
-		assert_eq!(Balances::free_balance(1), 1500);
-
-		// Verify the events
-		assert_eq!(System::events().len(), 11);
-
-		System::assert_has_event(RuntimeEvent::Balances(crate::Event::ReserveRepatriated {
-			from: 2,
-			to: 1,
-			amount: 450,
-			destination_status: Status::Free,
-		}));
-
-		System::assert_has_event(RuntimeEvent::Balances(crate::Event::DustLost {
-			account: 2,
-			amount: 50,
-		}));
-
-		System::assert_last_event(RuntimeEvent::Balances(crate::Event::Deposit {
 			who: 1,
 			amount: 50,
 		}));

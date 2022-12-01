@@ -183,7 +183,7 @@ macro_rules! decl_tests {
 					);
 					assert_noop!(
 						<Balances as ReservableCurrency<_>>::reserve(&1, 1),
-						Error::<$test, _>::LiquidityRestrictions,
+						Error::<$test, _>::InsufficientBalance,
 					);
 					assert!(<ChargeTransactionPayment<$test> as SignedExtension>::pre_dispatch(
 						ChargeTransactionPayment::from(1),
@@ -202,7 +202,9 @@ macro_rules! decl_tests {
 
 					Balances::set_lock(ID_1, &1, 10, WithdrawReasons::TRANSACTION_PAYMENT);
 					assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
-					assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));
+					assert_noop!(<Balances as ReservableCurrency<_>>::reserve(&1, 1),
+					             Error::<$test, _>::InsufficientBalance,
+					);
 					assert!(<ChargeTransactionPayment<$test> as SignedExtension>::pre_dispatch(
 						ChargeTransactionPayment::from(1),
 						&1,
@@ -290,16 +292,17 @@ macro_rules! decl_tests {
 					System::inc_account_nonce(&2);
 					assert_eq!(Balances::total_balance(&2), 256 * 20);
 
-					assert_ok!(Balances::reserve(&2, 256 * 19 + 1)); // account 2 becomes mostly reserved
+					assert_ok!(Balances::reserve(&2, 256 * 19)); // account 2 becomes mostly reserved
+					assert_ok!(Balances::transfer(Some(2).into(), 12, 1)); // account 2 free balance below ED
 					assert_eq!(Balances::free_balance(2), 255); // "free" account deleted."
-					assert_eq!(Balances::total_balance(&2), 256 * 20); // reserve still exists.
+					assert_eq!(Balances::total_balance(&2), 256 * 20-1); // reserve still exists.
 					assert_eq!(System::account_nonce(&2), 1);
 
 					// account 4 tries to take index 1 for account 5.
 					assert_ok!(Balances::transfer(Some(4).into(), 5, 256 * 1 + 0x69));
 					assert_eq!(Balances::total_balance(&5), 256 * 1 + 0x69);
 
-					assert!(Balances::slash(&2, 256 * 19 + 2).1.is_zero()); // account 2 gets slashed
+					assert!(Balances::slash(&2, 256 * 19 + 1).1.is_zero()); // account 2 gets slashed
 					// "reserve" account reduced to 255 (below ED) so account deleted
 					assert_eq!(Balances::total_balance(&2), 0);
 					assert_eq!(System::account_nonce(&2), 0);    // nonce zero
@@ -519,22 +522,30 @@ macro_rules! decl_tests {
 		#[test]
 		fn unreserving_balance_should_work() {
 			<$ext_builder>::default().build().execute_with(|| {
-				let _ = Balances::deposit_creating(&1, 111);
+				let _ = Balances::deposit_creating(&1, 112);
 				assert_ok!(Balances::reserve(&1, 111));
 				Balances::unreserve(&1, 42);
 				assert_eq!(Balances::reserved_balance(1), 69);
-				assert_eq!(Balances::free_balance(1), 42);
+				assert_eq!(Balances::free_balance(1), 43);
+			});
+		}
+
+		#[test]
+		fn hold_should_respect_ed() {
+			<$ext_builder>::default().build().execute_with(|| {
+				let _ = <Balances as fungible::Mutate<_>>::mint_into(&1, 111);
+				assert_err!(Balances::hold(&1, 111), Error::<$test, _>::InsufficientBalance);
 			});
 		}
 
 		#[test]
 		fn releasing_fungible_should_work() {
 			<$ext_builder>::default().build().execute_with(|| {
-				let _ = <Balances as fungible::Mutate<_>>::mint_into(&1, 111);
+				let _ = <Balances as fungible::Mutate<_>>::mint_into(&1, 112);
 				assert_ok!(Balances::hold(&1, 111));
 				assert_eq!(Balances::release(&1, 42, false), Ok(42));
 				assert_eq!(Balances::balance_on_hold(&1), 69);
-				assert_eq!(Balances::reducible_balance(&1, false), 42);
+				assert_eq!(Balances::reducible_balance(&1, false), 43);
 			});
 		}
 
@@ -542,10 +553,10 @@ macro_rules! decl_tests {
 		fn slashing_reserved_balance_should_work() {
 			<$ext_builder>::default().build().execute_with(|| {
 				let _ = Balances::deposit_creating(&1, 111);
-				assert_ok!(Balances::reserve(&1, 111));
+				assert_ok!(Balances::reserve(&1, 110));
 				assert_eq!(Balances::slash_reserved(&1, 42).1, 0);
-				assert_eq!(Balances::reserved_balance(1), 69);
-				assert_eq!(Balances::free_balance(1), 0);
+				assert_eq!(Balances::reserved_balance(1), 68);
+				assert_eq!(Balances::free_balance(1), 1);
 				assert_eq!(<TotalIssuance<$test>>::get(), 69);
 			});
 		}
@@ -554,10 +565,10 @@ macro_rules! decl_tests {
 		fn slashing_held_fungible_should_work() {
 			<$ext_builder>::default().build().execute_with(|| {
 				let _ = <Balances as fungible::Mutate<_>>::mint_into(&1, 111);
-				assert_ok!(Balances::hold(&1, 111));
+				assert_ok!(Balances::hold(&1, 110));
 				assert_eq!(Balances::slash_held(&1, 42).1, 0);
-				assert_eq!(Balances::balance_on_hold(&1), 69);
-				assert_eq!(Balances::reducible_balance(&1, false), 0);
+				assert_eq!(Balances::balance_on_hold(&1), 68);
+				assert_eq!(Balances::reducible_balance(&1, false), 1);
 				assert_eq!(Balances::total_issuance(), 69);
 			});
 		}
@@ -589,7 +600,7 @@ macro_rules! decl_tests {
 		#[test]
 		fn repatriating_reserved_balance_should_work() {
 			<$ext_builder>::default().build().execute_with(|| {
-				let _ = Balances::deposit_creating(&1, 110);
+				let _ = Balances::deposit_creating(&1, 111);
 				let _ = Balances::deposit_creating(&2, 1);
 				assert_ok!(Balances::reserve(&1, 110));
 				assert_ok!(Balances::repatriate_reserved(&1, &2, 41, Status::Free), 0);
@@ -597,7 +608,7 @@ macro_rules! decl_tests {
 					RuntimeEvent::Balances(crate::Event::ReserveRepatriated { from: 1, to: 2, amount: 41, destination_status: Status::Free })
 				);
 				assert_eq!(Balances::reserved_balance(1), 69);
-				assert_eq!(Balances::free_balance(1), 0);
+				assert_eq!(Balances::free_balance(1), 1);
 				assert_eq!(Balances::reserved_balance(2), 0);
 				assert_eq!(Balances::free_balance(2), 42);
 			});
@@ -608,10 +619,10 @@ macro_rules! decl_tests {
 			<$ext_builder>::default().build().execute_with(|| {
 				let _ = Balances::deposit_creating(&1, 110);
 				let _ = Balances::deposit_creating(&2, 1);
-				assert_ok!(Balances::reserve(&1, 110));
+				assert_ok!(Balances::reserve(&1, 109));
 				assert_ok!(Balances::repatriate_reserved(&1, &2, 41, Status::Reserved), 0);
-				assert_eq!(Balances::reserved_balance(1), 69);
-				assert_eq!(Balances::free_balance(1), 0);
+				assert_eq!(Balances::reserved_balance(1), 68);
+				assert_eq!(Balances::free_balance(1), 1);
 				assert_eq!(Balances::reserved_balance(2), 41);
 				assert_eq!(Balances::free_balance(2), 1);
 			});
@@ -622,10 +633,10 @@ macro_rules! decl_tests {
 			<$ext_builder>::default().build().execute_with(|| {
 				let _ = <Balances as fungible::Mutate<_>>::mint_into(&1, 110);
 				let _ = <Balances as fungible::Mutate<_>>::mint_into(&2, 1);
-				assert_ok!(Balances::hold(&1, 110));
+				assert_ok!(Balances::hold(&1, 109));
 				assert_ok!(Balances::transfer_held(&1, &2, 41, false, true), 41);
-				assert_eq!(Balances::balance_on_hold(&1), 69);
-				assert_eq!(Balances::reducible_balance(&1, false), 0);
+				assert_eq!(Balances::balance_on_hold(&1), 68);
+				assert_eq!(Balances::reducible_balance(&1, false), 1);
 				assert_eq!(Balances::balance_on_hold(&2), 41);
 				assert_eq!(Balances::reducible_balance(&2, false), 1);
 			});
@@ -667,7 +678,7 @@ macro_rules! decl_tests {
 		fn transferring_reserved_balance_to_nonexistent_should_fail() {
 			<$ext_builder>::default().build().execute_with(|| {
 				let _ = Balances::deposit_creating(&1, 111);
-				assert_ok!(Balances::reserve(&1, 111));
+				assert_ok!(Balances::reserve(&1, 110));
 				assert_noop!(Balances::repatriate_reserved(&1, &2, 42, Status::Free), Error::<$test, _>::DeadAccount);
 			});
 		}
@@ -676,7 +687,7 @@ macro_rules! decl_tests {
 		fn transferring_held_fungible_to_nonexistent_should_fail() {
 			<$ext_builder>::default().build().execute_with(|| {
 				let _ = <Balances as fungible::Mutate<_>>::mint_into(&1, 111);
-				assert_ok!(Balances::hold(&1, 111));
+				assert_ok!(Balances::hold(&1, 110));
 				assert_noop!(Balances::transfer_held(&1, &2, 42, false, false), Error::<$test, _>::DeadAccount);
 			});
 		}
@@ -819,34 +830,19 @@ macro_rules! decl_tests {
 		}
 
 		#[test]
-		fn dust_moves_between_free_and_reserved() {
+		fn reserve_should_respect_ed() {
 			<$ext_builder>::default()
-				.existential_deposit(100)
 				.build()
 				.execute_with(|| {
-					// Set balance to free and reserved at the existential deposit
+					// Set balance to ED
 					assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 100, 0));
 					// Check balance
 					assert_eq!(Balances::free_balance(1), 100);
-					assert_eq!(Balances::reserved_balance(1), 0);
-
-					// Reserve some free balance
-					assert_ok!(Balances::reserve(&1, 50));
-					// Check balance, the account should be ok.
-					assert_eq!(Balances::free_balance(1), 50);
-					assert_eq!(Balances::reserved_balance(1), 50);
-
-					// Reserve the rest of the free balance
-					assert_ok!(Balances::reserve(&1, 50));
-					// Check balance, the account should be ok.
-					assert_eq!(Balances::free_balance(1), 0);
-					assert_eq!(Balances::reserved_balance(1), 100);
-
-					// Unreserve everything
-					Balances::unreserve(&1, 100);
-					// Check balance, all 100 should move to free_balance
-					assert_eq!(Balances::free_balance(1), 100);
-					assert_eq!(Balances::reserved_balance(1), 0);
+					// Reserve over ED
+					assert_noop!(
+						Balances::reserve(&1, 100),
+						Error::<$test, _>::InsufficientBalance
+					);
 				});
 		}
 
