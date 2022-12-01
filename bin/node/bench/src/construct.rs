@@ -150,8 +150,10 @@ impl core::Benchmark for ConstructionBenchmark {
 		)
 		.expect("Proposer initialization failed");
 
+		let inherent_data = futures::executor::block_on(timestamp_provider.create_inherent_data())
+			.expect("Create inherent data failed");
 		let _block = futures::executor::block_on(proposer.propose(
-			timestamp_provider.create_inherent_data().expect("Create inherent data failed"),
+			inherent_data,
 			Default::default(),
 			std::time::Duration::from_secs(20),
 			None,
