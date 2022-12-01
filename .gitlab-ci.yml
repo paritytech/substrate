@@ -108,6 +108,9 @@ default:
   before_script:
     # TODO: remove unset invocation when we'll be free from 'ENV RUSTC_WRAPPER=sccache' & sccache itself in all images
     - unset RUSTC_WRAPPER
+    # $WASM_BUILD_WORKSPACE_HINT enables wasm-builder to find the Cargo.lock from within generated
+    # packages
+    - export WASM_BUILD_WORKSPACE_HINT="$PWD"
     - !reference [.rust-info-script, script]
     - !reference [.rusty-cachier, before_script]
     - !reference [.pipeline-stopper-vars, script]
