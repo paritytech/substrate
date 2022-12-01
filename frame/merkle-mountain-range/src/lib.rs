@@ -57,9 +57,16 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::{log, weights::Weight};
+use sp_mmr_primitives::utils;
 use sp_runtime::{
 	traits::{self, One, Saturating},
 	SaturatedConversion,
+};
+use sp_std::prelude::*;
+
+pub use pallet::*;
+pub use sp_mmr_primitives::{
+	self as primitives, utils::NodesUtils, Error, LeafDataProvider, LeafIndex, NodeIndex,
 };
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -70,13 +77,6 @@ mod mmr;
 mod mock;
 #[cfg(test)]
 mod tests;
-
-pub use pallet::*;
-use sp_mmr_primitives::utils;
-pub use sp_mmr_primitives::{
-	self as primitives, utils::NodesUtils, Error, LeafDataProvider, LeafIndex, NodeIndex,
-};
-use sp_std::prelude::*;
 
 /// The most common use case for MMRs is to store historical block hashes,
 /// so that any point in time in the future we can receive a proof about some past
