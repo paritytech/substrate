@@ -179,12 +179,12 @@ where
 	}
 }
 
-/// A `ValidateUnsigned` implementation that restricts calls to `report_equivocation_unsigned`
-/// to local calls (i.e. extrinsics generated on this node) or that already in a block. This
-/// guarantees that only block authors can include unsigned equivocation reports.
-impl<T: Config> frame_support::unsigned::ValidateUnsigned for Pallet<T> {
-	type Call = Call<T>;
-	fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+/// Methods for the `ValidateUnsigned` implementation:
+/// It restricts calls to `report_equivocation_unsigned` to local calls (i.e. extrinsics generated
+/// on this node) or that already in a block. This guarantees that only block authors can include
+/// unsigned equivocation reports.
+impl<T: Config> Pallet<T> {
+	pub fn validate_unsigned(source: TransactionSource, call: &Call<T>) -> TransactionValidity {
 		if let Call::report_equivocation_unsigned(equivocation_proof, key_owner_proof) = call {
 			// discard equivocation report not coming from the local node
 			match source {
@@ -221,7 +221,7 @@ impl<T: Config> frame_support::unsigned::ValidateUnsigned for Pallet<T> {
 		}
 	}
 
-	fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
+	pub fn pre_dispatch(call: &Call<T>) -> Result<(), TransactionValidityError> {
 		if let Call::report_equivocation_unsigned(equivocation_proof, key_owner_proof) = call {
 			is_known_offence::<T>(equivocation_proof, key_owner_proof)
 		} else {

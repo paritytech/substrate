@@ -1,24 +1,24 @@
 error[E0369]: binary operation `==` cannot be applied to type `&Bar`
-  --> $DIR/call_argument_invalid_bound_3.rs:22:37
+  --> $DIR/call_argument_invalid_bound_3.rs:22:41
    |
-22 |         fn foo(origin: OriginFor<T>, bar: Bar) -> DispatchResultWithPostInfo {
-   |                                           ^^^
+22 |         pub fn foo(origin: OriginFor<T>, bar: Bar) -> DispatchResultWithPostInfo {
+   |                                               ^^^
    |
    = note: an implementation of `std::cmp::PartialEq` might be missing for `&Bar`
 
 error[E0277]: the trait bound `Bar: Clone` is not satisfied
-  --> $DIR/call_argument_invalid_bound_3.rs:22:37
+  --> $DIR/call_argument_invalid_bound_3.rs:22:41
    |
-22 |         fn foo(origin: OriginFor<T>, bar: Bar) -> DispatchResultWithPostInfo {
-   |                                           ^^^ the trait `Clone` is not implemented for `Bar`
+22 |         pub fn foo(origin: OriginFor<T>, bar: Bar) -> DispatchResultWithPostInfo {
+   |                                               ^^^ the trait `Clone` is not implemented for `Bar`
    |
    = note: required by `clone`
 
 error[E0277]: `Bar` doesn't implement `std::fmt::Debug`
-  --> $DIR/call_argument_invalid_bound_3.rs:22:37
+  --> $DIR/call_argument_invalid_bound_3.rs:22:41
    |
-22 |         fn foo(origin: OriginFor<T>, bar: Bar) -> DispatchResultWithPostInfo {
-   |                                           ^^^ `Bar` cannot be formatted using `{:?}`
+22 |         pub fn foo(origin: OriginFor<T>, bar: Bar) -> DispatchResultWithPostInfo {
+   |                                               ^^^ `Bar` cannot be formatted using `{:?}`
    |
    = help: the trait `std::fmt::Debug` is not implemented for `Bar`
    = note: add `#[derive(Debug)]` or manually implement `std::fmt::Debug`

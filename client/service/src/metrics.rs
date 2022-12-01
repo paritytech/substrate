@@ -27,7 +27,7 @@ use sp_runtime::traits::{NumberFor, Block, SaturatedConversion, UniqueSaturatedI
 use sp_transaction_pool::{PoolStatus, MaintainedTransactionPool};
 use sp_utils::metrics::register_globals;
 use sc_client_api::{ClientInfo, UsageProvider};
-use sc_network::{config::Role, NetworkStatus, NetworkService, network_state::NetworkState};
+use sc_network::{config::Role, NetworkStatus, NetworkService};
 use std::sync::Arc;
 use std::time::Duration;
 use wasm_timer::Instant;
@@ -171,30 +171,18 @@ impl MetricsService {
 		let mut timer = Delay::new(Duration::from_secs(0));
 		let timer_interval = Duration::from_secs(5);
 
-		let net_state_duration = Duration::from_secs(30);
-		let mut last_net_state = Instant::now();
-
 		loop {
 			// Wait for the next tick of the timer.
 			(&mut timer).await;
-			let now = Instant::now();
-			let from_net_state = now.duration_since(last_net_state);
 
 			// Try to get the latest network information.
 			let net_status = network.status().await.ok();
-			let net_state = if from_net_state >= net_state_duration {
-				last_net_state = now;
-				network.network_state().await.ok()
-			} else {
-				None
-			};
 
 			// Update / Send the metrics.
 			self.update(
 				&client.usage_info(),
 				&transactions.status(),
 				net_status,
-				net_state,
 			);
 
 			// Schedule next tick.
@@ -207,7 +195,6 @@ impl MetricsService {
 		info: &ClientInfo<T>,
 		txpool_status: &PoolStatus,
 		net_status: Option<NetworkStatus<T>>,
-		net_state: Option<NetworkState>,
 	) {
 		let now = Instant::now();
 		let elapsed = (now - self.last_update).as_secs();
@@ -299,16 +286,6 @@ impl MetricsService {
 					metrics.block_height.with_label_values(&["sync_target"]).set(best_seen_block);
 				}
 			}
-		}
-
-		// Send network state information, if any.
-		if let Some(net_state) = net_state {
-			telemetry!(
-				self.telemetry;
-				SUBSTRATE_INFO;
-				"system.network_state";
-				"state" => net_state,
-			);
 		}
 	}
 }

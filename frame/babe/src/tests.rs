@@ -236,10 +236,10 @@ fn can_estimate_current_epoch_progress() {
 			if Babe::estimate_next_session_rotation(i).0.unwrap() - 1 == i {
 				assert_eq!(
 					Babe::estimate_current_session_progress(i).0.unwrap(),
-					Percent::from_percent(100)
+					Permill::from_percent(100)
 				);
 			} else {
-				assert!(Babe::estimate_current_session_progress(i).0.unwrap() < Percent::from_percent(100));
+				assert!(Babe::estimate_current_session_progress(i).0.unwrap() < Permill::from_percent(100));
 			}
 		}
 
@@ -247,7 +247,7 @@ fn can_estimate_current_epoch_progress() {
 		progress_to_block(4);
 		assert_eq!(
 			Babe::estimate_current_session_progress(4).0.unwrap(),
-			Percent::from_percent(33),
+			Permill::from_float(1.0 / 3.0),
 		);
 	})
 }

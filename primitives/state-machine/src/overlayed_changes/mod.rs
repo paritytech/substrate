@@ -118,8 +118,10 @@ pub enum IndexOperation {
 	Insert {
 		/// Extrinsic index in the current block.
 		extrinsic: u32,
-		/// Data offset in the extrinsic.
-		offset: u32,
+		/// Data content hash.
+		hash: Vec<u8>,
+		/// Indexed data size.
+		size: u32,
 	},
 	/// Renew existing transaction storage.
 	Renew {
@@ -127,8 +129,6 @@ pub enum IndexOperation {
 		extrinsic: u32,
 		/// Referenced index hash.
 		hash: Vec<u8>,
-		/// Expected data size.
-		size: u32,
 	}
 }
 
@@ -518,6 +518,11 @@ impl OverlayedChanges {
 	pub fn child_changes(&self, key: &[u8])
 		-> Option<(impl Iterator<Item=(&StorageKey, &OverlayedValue)>, &ChildInfo)> {
 		self.children.get(key).map(|(overlay, info)| (overlay.changes(), info))
+	}
+
+	/// Get an list of all index operations.
+	pub fn transaction_index_ops(&self) -> &[IndexOperation] {
+		&self.transaction_index_ops
 	}
 
 	/// Convert this instance with all changes into a [`StorageChanges`] instance.

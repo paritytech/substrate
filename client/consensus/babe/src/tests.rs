@@ -390,9 +390,7 @@ fn rejects_empty_block() {
 	})
 }
 
-fn run_one_test(
-	mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static,
-) {
+fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static) {
 	sp_tracing::try_init_simple();
 	let mutator = Arc::new(mutator) as Mutator;
 
@@ -473,6 +471,7 @@ fn run_one_test(
 			babe_link: data.link.clone(),
 			keystore,
 			can_author_with: sp_consensus::AlwaysCanAuthor,
+			justification_sync_link: (),
 			block_proposal_slot_portion: SlotProportion::new(0.5),
 			telemetry: None,
 		}).expect("Starts babe"));

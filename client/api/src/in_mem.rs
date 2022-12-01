@@ -419,6 +419,13 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 	) -> sp_blockchain::Result<Option<Vec<u8>>> {
 		unimplemented!("Not supported by the in-mem backend.")
 	}
+
+	fn block_indexed_body(
+		&self,
+		_id: BlockId<Block>
+	) -> sp_blockchain::Result<Option<Vec<Vec<u8>>>> {
+		unimplemented!("Not supported by the in-mem backend.")
+	}
 }
 
 impl<Block: BlockT> blockchain::ProvideCache<Block> for Blockchain<Block> {

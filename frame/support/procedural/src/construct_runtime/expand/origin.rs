@@ -15,9 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License
 
-use crate::construct_runtime::{parse::PalletPath, Pallet, SYSTEM_PALLET_NAME};
+use crate::construct_runtime::{Pallet, SYSTEM_PALLET_NAME};
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use quote::quote;
 use syn::{token, Ident, Generics};
 
 pub fn expand_outer_origin(
@@ -39,7 +39,6 @@ pub fn expand_outer_origin(
 
 	for pallet_decl in pallets.iter().filter(|pallet| pallet.name != SYSTEM_PALLET_NAME) {
 		if let Some(pallet_entry) = pallet_decl.find_part("Origin") {
-			let path = &pallet_decl.pallet;
 			let instance = pallet_decl.instance.as_ref();
 			let index = pallet_decl.index;
 			let generics = &pallet_entry.generics;
@@ -54,15 +53,15 @@ pub fn expand_outer_origin(
 			}
 
 			caller_variants.extend(
-				expand_origin_caller_variant(runtime, path, index, instance, generics),
+				expand_origin_caller_variant(runtime, pallet_decl, index, instance, generics),
 			);
 			pallet_conversions.extend(
-				expand_origin_pallet_conversions(scrate, runtime, path, instance, generics),
+				expand_origin_pallet_conversions(scrate, runtime, pallet_decl, instance, generics),
 			);
 		}
 	}
 
-	let system_path = &system_pallet.pallet;
+	let system_path = &system_pallet.path;
 	let system_index = system_pallet.index;
 
 	Ok(quote!{
@@ -251,28 +250,27 @@ pub fn expand_outer_origin(
 
 fn expand_origin_caller_variant(
 	runtime: &Ident,
-	path: &PalletPath,
+	pallet: &Pallet,
 	index: u8,
 	instance: Option<&Ident>,
 	generics: &Generics,
 ) -> TokenStream {
 	let part_is_generic = !generics.params.is_empty();
-	let mod_name = &path.mod_name();
+	let variant_name = &pallet.name;
+	let path = &pallet.path;
 
-	match (instance, part_is_generic) {
-		(Some(inst), true) => {
-			let variant = format_ident!("{}_{}", mod_name, inst);
-			quote!(#[codec(index = #index)] #variant(#path::Origin<#runtime, #path::#inst>),)
+	match instance {
+		Some(inst) if part_is_generic => {
+			quote!(#[codec(index = #index)] #variant_name(#path::Origin<#runtime, #path::#inst>),)
 		}
-		(Some(inst), false) => {
-			let variant = format_ident!("{}_{}", mod_name, inst);
-			quote!(#[codec(index = #index)] #variant(#path::Origin<#path::#inst>),)
+		Some(inst) => {
+			quote!(#[codec(index = #index)] #variant_name(#path::Origin<#path::#inst>),)
 		}
-		(None, true) => {
-			quote!(#[codec(index = #index)] #mod_name(#path::Origin<#runtime>),)
+		None if part_is_generic => {
+			quote!(#[codec(index = #index)] #variant_name(#path::Origin<#runtime>),)
 		}
-		(None, false) => {
-			quote!(#[codec(index = #index)] #mod_name(#path::Origin),)
+		None => {
+			quote!(#[codec(index = #index)] #variant_name(#path::Origin),)
 		}
 	}
 }
@@ -280,29 +278,25 @@ fn expand_origin_caller_variant(
 fn expand_origin_pallet_conversions(
 	scrate: &TokenStream,
 	runtime: &Ident,
-	path: &PalletPath,
+	pallet: &Pallet,
 	instance: Option<&Ident>,
 	generics: &Generics,
 ) -> TokenStream {
-	let mod_name = path.mod_name();
-	let variant = if let Some(inst) = instance {
-		format_ident!("{}_{}", mod_name, inst)
-	} else {
-		mod_name
-	};
+	let path = &pallet.path;
+	let variant_name = &pallet.name;
 
 	let part_is_generic = !generics.params.is_empty();
-	let pallet_origin = match (instance, part_is_generic) {
-		(Some(inst), true) => quote!(#path::Origin<#runtime, #path::#inst>),
-		(Some(inst), false) => quote!(#path::Origin<#path::#inst>),
-		(None, true) => quote!(#path::Origin<#runtime>),
-		(None, false) => quote!(#path::Origin),
+	let pallet_origin = match instance {
+		Some(inst) if part_is_generic => quote!(#path::Origin<#runtime, #path::#inst>),
+		Some(inst) => quote!(#path::Origin<#path::#inst>),
+		None if part_is_generic => quote!(#path::Origin<#runtime>),
+		None => quote!(#path::Origin),
 	};
 
 	quote!{
 		impl From<#pallet_origin> for OriginCaller {
 			fn from(x: #pallet_origin) -> Self {
-				OriginCaller::#variant(x)
+				OriginCaller::#variant_name(x)
 			}
 		}
 
@@ -317,7 +311,7 @@ fn expand_origin_pallet_conversions(
 		impl From<Origin> for #scrate::sp_std::result::Result<#pallet_origin, Origin> {
 			/// NOTE: converting to pallet origin loses the origin filter information.
 			fn from(val: Origin) -> Self {
-				if let OriginCaller::#variant(l) = val.caller {
+				if let OriginCaller::#variant_name(l) = val.caller {
 					Ok(l)
 				} else {
 					Err(val)
@@ -330,7 +324,7 @@ fn expand_origin_pallet_conversions(
 			fn try_from(
 				x: OriginCaller,
 			) -> #scrate::sp_std::result::Result<#pallet_origin, OriginCaller> {
-				if let OriginCaller::#variant(l) = x {
+				if let OriginCaller::#variant_name(l) = x {
 					Ok(l)
 				} else {
 					Err(x)

@@ -24,6 +24,7 @@ use crate::{
 	wasm::env_def::ConvertibleToWasm,
 	schedule::HostFnWeights,
 };
+use bitflags::bitflags;
 use pwasm_utils::parity_wasm::elements::ValueType;
 use frame_support::{dispatch::DispatchError, ensure, traits::Get, weights::Weight};
 use sp_std::prelude::*;
@@ -318,6 +319,47 @@ where
 	}
 }
 
+bitflags! {
+	/// Flags used to change the behaviour of `seal_call`.
+	struct CallFlags: u32 {
+		/// Forward the input of current function to the callee.
+		///
+		/// Supplied input pointers are ignored when set.
+		///
+		/// # Note
+		///
+		/// A forwarding call will consume the current contracts input. Any attempt to
+		/// access the input after this call returns will lead to [`Error::InputForwarded`].
+		/// It does not matter if this is due to calling `seal_input` or trying another
+		/// forwarding call. Consider using [`Self::CLONE_INPUT`] in order to preserve
+		/// the input.
+		const FORWARD_INPUT = 0b0000_0001;
+		/// Identical to [`Self::FORWARD_INPUT`] but without consuming the input.
+		///
+		/// This adds some additional weight costs to the call.
+		///
+		/// # Note
+		///
+		/// This implies [`Self::FORWARD_INPUT`] and takes precedence when both are set.
+		const CLONE_INPUT = 0b0000_0010;
+		/// Do not return from the call but rather return the result of the callee to the
+		/// callers caller.
+		///
+		/// # Note
+		///
+		/// This makes the current contract completely transparent to its caller by replacing
+		/// this contracts potential output by the callee ones. Any code after `seal_call`
+		/// can be safely considered unreachable.
+		const TAIL_CALL = 0b0000_0100;
+		/// Allow the callee to reenter into the current contract.
+		///
+		/// Without this flag any reentrancy into the current contract that originates from
+		/// the callee (or any of its callees) is denied. This includes the first callee:
+		/// You cannot call into yourself with this flag set.
+		const ALLOW_REENTRY = 0b0000_1000;
+	}
+}
+
 /// This is only appropriate when writing out data of constant size that does not depend on user
 /// input. In this case the costs for this copy was already charged as part of the token at
 /// the beginning of the API entry point.
@@ -402,8 +444,7 @@ where
 			//
 			// Because panics are really undesirable in the runtime code, we treat this as
 			// a trap for now. Eventually, we might want to revisit this.
-			Err(sp_sandbox::Error::Module) =>
-				Err("validation error")?,
+			Err(sp_sandbox::Error::Module) => Err("validation error")?,
 			// Any other kind of a trap should result in a failure.
 			Err(sp_sandbox::Error::Execution) | Err(sp_sandbox::Error::OutOfBounds) =>
 				Err(Error::<E::T>::ContractTrapped)?
@@ -629,6 +670,65 @@ where
 			(err, _) => Self::err_into_return_code(err)
 		}
 	}
+
+	fn call(
+		&mut self,
+		flags: CallFlags,
+		callee_ptr: u32,
+		callee_len: u32,
+		gas: u64,
+		value_ptr: u32,
+		value_len: u32,
+		input_data_ptr: u32,
+		input_data_len: u32,
+		output_ptr: u32,
+		output_len_ptr: u32
+	) -> Result<ReturnCode, TrapReason> {
+		self.charge_gas(RuntimeCosts::CallBase(input_data_len))?;
+		let callee: <<E as Ext>::T as frame_system::Config>::AccountId =
+			self.read_sandbox_memory_as(callee_ptr, callee_len)?;
+		let value: BalanceOf<<E as Ext>::T> = self.read_sandbox_memory_as(value_ptr, value_len)?;
+		let input_data = if flags.contains(CallFlags::CLONE_INPUT) {
+			self.input_data.as_ref().ok_or_else(|| Error::<E::T>::InputForwarded)?.clone()
+		} else if flags.contains(CallFlags::FORWARD_INPUT) {
+			self.input_data.take().ok_or_else(|| Error::<E::T>::InputForwarded)?
+		} else {
+			self.read_sandbox_memory(input_data_ptr, input_data_len)?
+		};
+		if value > 0u32.into() {
+			self.charge_gas(RuntimeCosts::CallSurchargeTransfer)?;
+		}
+		let charged = self.charge_gas(
+			RuntimeCosts::CallSurchargeCodeSize(<E::T as Config>::Schedule::get().limits.code_len)
+		)?;
+		let ext = &mut self.ext;
+		let call_outcome = ext.call(
+			gas, callee, value, input_data, flags.contains(CallFlags::ALLOW_REENTRY),
+		);
+		let code_len = match &call_outcome {
+			Ok((_, len)) => len,
+			Err((_, len)) => len,
+		};
+		self.adjust_gas(charged, RuntimeCosts::CallSurchargeCodeSize(*code_len));
+
+		// `TAIL_CALL` only matters on an `OK` result. Otherwise the call stack comes to
+		// a halt anyways without anymore code being executed.
+		if flags.contains(CallFlags::TAIL_CALL) {
+			if let Ok((return_value, _)) = call_outcome {
+				return Err(TrapReason::Return(ReturnData {
+					flags: return_value.flags.bits(),
+					data: return_value.data.0,
+				}));
+			}
+		}
+
+		if let Ok((output, _)) = &call_outcome {
+			self.write_sandbox_output(output_ptr, output_len_ptr, &output.data, true, |len| {
+				Some(RuntimeCosts::CallCopyOut(len))
+			})?;
+		}
+		Ok(Runtime::<E>::exec_into_return_code(call_outcome.map(|r| r.0).map_err(|r| r.0))?)
+	}
 }
 
 // ***********************************************************
@@ -760,12 +860,43 @@ define_env!(Env, <E: Ext>,
 
 	// Make a call to another contract.
 	//
+	// This is equivalent to calling the newer version of this function with
+	// `flags` set to `ALLOW_REENTRY`. See the newer version for documentation.
+	[seal0] seal_call(
+		ctx,
+		callee_ptr: u32,
+		callee_len: u32,
+		gas: u64,
+		value_ptr: u32,
+		value_len: u32,
+		input_data_ptr: u32,
+		input_data_len: u32,
+		output_ptr: u32,
+		output_len_ptr: u32
+	) -> ReturnCode => {
+		ctx.call(
+			CallFlags::ALLOW_REENTRY,
+			callee_ptr,
+			callee_len,
+			gas,
+			value_ptr,
+			value_len,
+			input_data_ptr,
+			input_data_len,
+			output_ptr,
+			output_len_ptr,
+		)
+	},
+
+	// Make a call to another contract.
+	//
 	// The callees output buffer is copied to `output_ptr` and its length to `output_len_ptr`.
 	// The copy of the output buffer can be skipped by supplying the sentinel value
 	// of `u32::max_value()` to `output_ptr`.
 	//
 	// # Parameters
 	//
+	// - flags: See [`CallFlags`] for a documenation of the supported flags.
 	// - callee_ptr: a pointer to the address of the callee contract.
 	//   Should be decodable as an `T::AccountId`. Traps otherwise.
 	// - callee_len: length of the address buffer.
@@ -789,8 +920,9 @@ define_env!(Env, <E: Ext>,
 	// `ReturnCode::BelowSubsistenceThreshold`
 	// `ReturnCode::TransferFailed`
 	// `ReturnCode::NotCallable`
-	[seal0] seal_call(
+	[__unstable__] seal_call(
 		ctx,
+		flags: u32,
 		callee_ptr: u32,
 		callee_len: u32,
 		gas: u64,
@@ -801,30 +933,18 @@ define_env!(Env, <E: Ext>,
 		output_ptr: u32,
 		output_len_ptr: u32
 	) -> ReturnCode => {
-		ctx.charge_gas(RuntimeCosts::CallBase(input_data_len))?;
-		let callee: <<E as Ext>::T as frame_system::Config>::AccountId =
-			ctx.read_sandbox_memory_as(callee_ptr, callee_len)?;
-		let value: BalanceOf<<E as Ext>::T> = ctx.read_sandbox_memory_as(value_ptr, value_len)?;
-		let input_data = ctx.read_sandbox_memory(input_data_ptr, input_data_len)?;
-		if value > 0u32.into() {
-			ctx.charge_gas(RuntimeCosts::CallSurchargeTransfer)?;
-		}
-		let charged = ctx.charge_gas(
-			RuntimeCosts::CallSurchargeCodeSize(<E::T as Config>::Schedule::get().limits.code_len)
-		)?;
-		let ext = &mut ctx.ext;
-		let call_outcome = ext.call(gas, callee, value, input_data);
-		let code_len = match &call_outcome {
-			Ok((_, len)) => len,
-			Err((_, len)) => len,
-		};
-		ctx.adjust_gas(charged, RuntimeCosts::CallSurchargeCodeSize(*code_len));
-		if let Ok((output, _)) = &call_outcome {
-			ctx.write_sandbox_output(output_ptr, output_len_ptr, &output.data, true, |len| {
-				Some(RuntimeCosts::CallCopyOut(len))
-			})?;
-		}
-		Ok(Runtime::<E>::exec_into_return_code(call_outcome.map(|r| r.0).map_err(|r| r.0))?)
+		ctx.call(
+			CallFlags::from_bits(flags).ok_or_else(|| "used rerved bit in CallFlags")?,
+			callee_ptr,
+			callee_len,
+			gas,
+			value_ptr,
+			value_len,
+			input_data_ptr,
+			input_data_len,
+			output_ptr,
+			output_len_ptr,
+		)
 	},
 
 	// Instantiate a contract with the specified code hash.
@@ -945,7 +1065,6 @@ define_env!(Env, <E: Ext>,
 		ctx.charge_gas(RuntimeCosts::Terminate)?;
 		let beneficiary: <<E as Ext>::T as frame_system::Config>::AccountId =
 			ctx.read_sandbox_memory_as(beneficiary_ptr, beneficiary_len)?;
-
 		let charged = ctx.charge_gas(
 			RuntimeCosts::TerminateSurchargeCodeSize(
 				<E::T as Config>::Schedule::get().limits.code_len
@@ -969,16 +1088,17 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Note
 	//
-	// This function can only be called once. Calling it multiple times will trigger a trap.
+	// This function traps if the input was previously forwarded by a `seal_call`.
 	[seal0] seal_input(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeCosts::InputBase)?;
 		if let Some(input) = ctx.input_data.take() {
 			ctx.write_sandbox_output(out_ptr, out_len_ptr, &input, false, |len| {
 				Some(RuntimeCosts::InputCopyOut(len))
 			})?;
+			ctx.input_data = Some(input);
 			Ok(())
 		} else {
-			Err(Error::<E::T>::InputAlreadyRead.into())
+			Err(Error::<E::T>::InputForwarded.into())
 		}
 	},
 

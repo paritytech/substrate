@@ -36,7 +36,7 @@
 //!
 //! For implementing freeing we maintain a linked lists for each order. The maximum supported
 //! allocation size is capped, therefore the number of orders and thus the linked lists is as well
-//! limited. Currently, the maximum size of an allocation is 16 MiB.
+//! limited. Currently, the maximum size of an allocation is 32 MiB.
 //!
 //! When the allocator serves an allocation request it first checks the linked list for the respective
 //! order. If it doesn't have any free chunks, the allocator requests memory from the bump allocator.
@@ -44,6 +44,24 @@
 //!
 //! Upon deallocation we get the order of the allocation from its header and then add that
 //! allocation to the linked list for the respective order.
+//!
+//! # Caveats
+//!
+//! This is a fast allocator but it is also dumb. There are specifically two main shortcomings
+//! that the user should keep in mind:
+//!
+//! - Once the bump allocator space is exhausted, there is no way to reclaim the memory. This means
+//!   that it's possible to end up in a situation where there are no live allocations yet a new
+//!   allocation will fail.
+//!
+//!   Let's look into an example. Given a heap of 32 MiB. The user makes a 32 MiB allocation that we
+//!   call `X` . Now the heap is full. Then user deallocates `X`. Since all the space in the bump
+//!   allocator was consumed by the 32 MiB allocation, allocations of all sizes except 32 MiB will
+//!   fail.
+//!
+//! - Sizes of allocations are rounded up to the nearest order. That is, an allocation of 2,00001 MiB
+//!   will be put into the bucket of 4 MiB. Therefore, typically more than half of the space in allocation
+//!   will be wasted. This is more pronounced with larger allocation sizes.
 
 use crate::Error;
 use sp_std::{mem, convert::{TryFrom, TryInto}, ops::{Range, Index, IndexMut}};
@@ -78,15 +96,15 @@ macro_rules! trace {
 // The minimum possible allocation size is chosen to be 8 bytes because in that case we would have
 // easier time to provide the guaranteed alignment of 8.
 //
-// The maximum possible allocation size was chosen rather arbitrary. 16 MiB should be enough for
+// The maximum possible allocation size was chosen rather arbitrary. 32 MiB should be enough for
 // everybody.
 //
 // N_ORDERS - represents the number of orders supported.
 //
 // This number corresponds to the number of powers between the minimum possible allocation and
-// maximum possible allocation, or: 2^3...2^24 (both ends inclusive, hence 22).
-const N_ORDERS: usize = 22;
-const MAX_POSSIBLE_ALLOCATION: u32 = 16777216; // 2^24 bytes, 16 MiB
+// maximum possible allocation, or: 2^3...2^25 (both ends inclusive, hence 23).
+const N_ORDERS: usize = 23;
+const MAX_POSSIBLE_ALLOCATION: u32 = 33554432; // 2^25 bytes, 32 MiB
 const MIN_POSSIBLE_ALLOCATION: u32 = 8; // 2^3 bytes, 8 bytes
 
 /// The exponent for the power of two sized block adjusted to the minimum size.
@@ -100,6 +118,7 @@ const MIN_POSSIBLE_ALLOCATION: u32 = 8; // 2^3 bytes, 8 bytes
 /// 64                | 3
 /// ...
 /// 16777216          | 21
+/// 33554432          | 22
 ///
 /// and so on.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -329,7 +348,7 @@ impl FreeingBumpHeapAllocator {
 	}
 
 	/// Gets requested number of bytes to allocate and returns a pointer.
-	/// The maximum size which can be allocated at once is 16 MiB.
+	/// The maximum size which can be allocated at once is 32 MiB.
 	/// There is no minimum size, but whatever size is passed into
 	/// this function is rounded to the next power of two. If the requested
 	/// size is below 8 bytes it will be rounded up to 8 bytes.
@@ -813,7 +832,7 @@ mod tests {
 	#[test]
 	fn should_get_max_item_size_from_index() {
 		// given
-		let raw_order = 21;
+		let raw_order = 22;
 
 		// when
 		let item_size = Order::from_raw(raw_order).unwrap().size();

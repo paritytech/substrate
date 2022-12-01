@@ -83,6 +83,8 @@ parameter_types! {
 }
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
 	type Balance = u64;
 	type DustRemoval = ();
 	type Event = Event;
@@ -105,9 +107,9 @@ impl Config for Test {
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let t = GenesisConfig {
 		// We use default for brevity, but you can configure as desired if needed.
-		frame_system: Default::default(),
-		pallet_balances: Default::default(),
-		pallet_example: pallet_example::GenesisConfig {
+		system: Default::default(),
+		balances: Default::default(),
+		example: pallet_example::GenesisConfig {
 			dummy: 42,
 			// we configure the map with (key, value) pairs.
 			bar: vec![(1, 2), (2, 3)],

@@ -101,7 +101,6 @@ std = [
 	"rand",
 	"sha2/std",
 	"schnorrkel/std",
-	"schnorrkel/serde",
 	"regex",
 	"num-traits/std",
 	"tiny-keccak",

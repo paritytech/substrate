@@ -67,7 +67,8 @@ struct QueryStorageRange<Block: BlockT> {
 pub struct FullState<BE, Block: BlockT, Client> {
 	client: Arc<Client>,
 	subscriptions: SubscriptionManager,
-	_phantom: PhantomData<(BE, Block)>
+	_phantom: PhantomData<(BE, Block)>,
+	rpc_max_payload: Option<usize>,
 }
 
 impl<BE, Block: BlockT, Client> FullState<BE, Block, Client>
@@ -78,8 +79,12 @@ impl<BE, Block: BlockT, Client> FullState<BE, Block, Client>
 		Block: BlockT + 'static,
 {
 	/// Create new state API backend for full nodes.
-	pub fn new(client: Arc<Client>, subscriptions: SubscriptionManager) -> Self {
-		Self { client, subscriptions, _phantom: PhantomData }
+	pub fn new(
+		client: Arc<Client>,
+		subscriptions: SubscriptionManager,
+		rpc_max_payload: Option<usize>,
+	) -> Self {
+		Self { client, subscriptions, _phantom: PhantomData, rpc_max_payload }
 	}
 
 	/// Returns given block hash or best block hash if None is passed.
@@ -540,9 +545,15 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 		targets: Option<String>,
 		storage_keys: Option<String>,
 	) -> FutureResult<sp_rpc::tracing::TraceBlockResponse> {
+		let block_executor = sc_tracing::block::BlockExecutor::new(
+			self.client.clone(),
+			block,
+			targets,
+			storage_keys,
+			self.rpc_max_payload,
+		);
 		Box::new(result(
-			sc_tracing::block::BlockExecutor::new(self.client.clone(), block, targets, storage_keys)
-				.trace_block()
+			block_executor.trace_block()
 				.map_err(|e| invalid_block::<Block>(block, None, e.to_string()))
 		))
 	}

@@ -1,5 +1,5 @@
 error: expected `DispatchResultWithPostInfo` or `DispatchResult`
-  --> $DIR/call_invalid_return.rs:17:35
+  --> $DIR/call_invalid_return.rs:17:39
    |
-17 |         fn foo(origin: OriginFor<T>) -> ::DispatchResult { todo!() }
-   |                                         ^^
+17 |         pub fn foo(origin: OriginFor<T>) -> ::DispatchResult { todo!() }
+   |                                             ^^

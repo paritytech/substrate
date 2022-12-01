@@ -133,11 +133,11 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T>
-	where T::AccountId: From<SomeType1> + From<SomeType3> + SomeAssociation1
+		where T::AccountId: From<SomeType1> + From<SomeType3> + SomeAssociation1
 	{
 		/// Doc comment put in metadata
 		#[pallet::weight(Weight::from(*_foo))]
-		fn foo(
+		pub fn foo(
 			origin: OriginFor<T>,
 			#[pallet::compact] _foo: u32,
 			_bar: u32,
@@ -152,7 +152,7 @@ pub mod pallet {
 		/// Doc comment put in metadata
 		#[pallet::weight(1)]
 		#[frame_support::transactional]
-		fn foo_transactional(
+		pub fn foo_transactional(
 			_origin: OriginFor<T>,
 			#[pallet::compact] foo: u32,
 		) -> DispatchResultWithPostInfo {
@@ -166,7 +166,7 @@ pub mod pallet {
 
 		// Test for DispatchResult return type
 		#[pallet::weight(1)]
-		fn foo_no_post_info(
+		pub fn foo_no_post_info(
 			_origin: OriginFor<T>,
 		) -> DispatchResult {
 			Ok(())
@@ -197,6 +197,10 @@ pub mod pallet {
 
 	#[pallet::storage]
 	pub type Value<T> = StorageValue<Value = u32>;
+
+	#[pallet::storage]
+	#[pallet::storage_prefix = "Value2"]
+	pub type RenamedValue<T> = StorageValue<Value = u64>;
 
 	#[pallet::type_value]
 	pub fn MyDefault<T: Config>() -> u16
@@ -485,7 +489,7 @@ fn transactional_works() {
 		pallet::Call::<Runtime>::foo_transactional(1).dispatch_bypass_filter(None.into()).unwrap();
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events().iter().map(|e| &e.event).collect::<Vec<_>>(),
-			vec![&Event::pallet(pallet::Event::Something(0))],
+			vec![&Event::Example(pallet::Event::Something(0))],
 		);
 	})
 }
@@ -550,7 +554,7 @@ fn pallet_expand_deposit_event() {
 		pallet::Call::<Runtime>::foo(3, 0).dispatch_bypass_filter(None.into()).unwrap();
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			Event::pallet(pallet::Event::Something(3)),
+			Event::Example(pallet::Event::Something(3)),
 		);
 	})
 }
@@ -576,6 +580,10 @@ fn storage_expand() {
 		pallet::Value::<Runtime>::put(1);
 		let k = [twox_128(b"Example"), twox_128(b"Value")].concat();
 		assert_eq!(unhashed::get::<u32>(&k), Some(1u32));
+
+		pallet::RenamedValue::<Runtime>::put(2);
+		let k = [twox_128(b"Example"), twox_128(b"Value2")].concat();
+		assert_eq!(unhashed::get::<u64>(&k), Some(2));
 
 		pallet::Map::<Runtime>::insert(1, 2);
 		let mut k = [twox_128(b"Example"), twox_128(b"Map")].concat();
@@ -643,15 +651,15 @@ fn pallet_hooks_expand() {
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			Event::pallet(pallet::Event::Something(10)),
+			Event::Example(pallet::Event::Something(10)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[1].event,
-			Event::pallet(pallet::Event::Something(20)),
+			Event::Example(pallet::Event::Something(20)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[2].event,
-			Event::pallet(pallet::Event::Something(30)),
+			Event::Example(pallet::Event::Something(30)),
 		);
 	})
 }
@@ -694,6 +702,13 @@ fn metadata() {
 					name: DecodeDifferent::Decoded("Value".to_string()),
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Plain(DecodeDifferent::Decoded("u32".to_string())),
+					default: DecodeDifferent::Decoded(vec![0]),
+					documentation: DecodeDifferent::Decoded(vec![]),
+				},
+				StorageEntryMetadata {
+					name: DecodeDifferent::Decoded("Value2".to_string()),
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::Plain(DecodeDifferent::Decoded("u64".to_string())),
 					default: DecodeDifferent::Decoded(vec![0]),
 					documentation: DecodeDifferent::Decoded(vec![]),
 				},
@@ -992,6 +1007,11 @@ fn test_storage_info() {
 				prefix: prefix(b"Example", b"Value"),
 				max_values: Some(1),
 				max_size: Some(4),
+			},
+			StorageInfo {
+				prefix: prefix(b"Example", b"Value2"),
+				max_values: Some(1),
+				max_size: Some(8),
 			},
 			StorageInfo {
 				prefix: prefix(b"Example", b"Map"),

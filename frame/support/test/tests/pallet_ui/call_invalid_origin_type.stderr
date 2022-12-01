@@ -1,11 +1,11 @@
 error: Invalid type: expected `OriginFor<T>`
-  --> $DIR/call_invalid_origin_type.rs:17:18
+  --> $DIR/call_invalid_origin_type.rs:17:22
    |
-17 |         fn foo(origin: u8) {}
-   |                        ^^
+17 |         pub fn foo(origin: u8) {}
+   |                            ^^
 
 error: expected `OriginFor`
-  --> $DIR/call_invalid_origin_type.rs:17:18
+  --> $DIR/call_invalid_origin_type.rs:17:22
    |
-17 |         fn foo(origin: u8) {}
-   |                        ^^
+17 |         pub fn foo(origin: u8) {}
+   |                            ^^

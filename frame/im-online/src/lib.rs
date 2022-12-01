@@ -81,8 +81,8 @@ use sp_std::prelude::*;
 use sp_std::convert::TryInto;
 use sp_runtime::{
 	offchain::storage::StorageValueRef,
-	traits::{AtLeast32BitUnsigned, Convert, Saturating},
-	Perbill, Percent, RuntimeDebug,
+	traits::{AtLeast32BitUnsigned, Convert, Saturating, TrailingZeroInput},
+	Perbill, Permill, PerThing, RuntimeDebug, SaturatedConversion,
 };
 use sp_staking::{
 	SessionIndex,
@@ -571,23 +571,46 @@ impl<T: Config> Pallet<T> {
 	pub(crate) fn send_heartbeats(
 		block_number: T::BlockNumber,
 	) -> OffchainResult<T, impl Iterator<Item = OffchainResult<T, ()>>> {
-		const HALF_SESSION: Percent = Percent::from_percent(50);
+		const START_HEARTBEAT_RANDOM_PERIOD: Permill = Permill::from_percent(10);
+		const START_HEARTBEAT_FINAL_PERIOD: Permill = Permill::from_percent(80);
 
-		let too_early = if let (Some(progress), _) =
+		// this should give us a residual probability of 1/SESSION_LENGTH of sending an heartbeat,
+		// i.e. all heartbeats spread uniformly, over most of the session. as the session progresses
+		// the probability of sending an heartbeat starts to increase exponentially.
+		let random_choice = |progress: Permill| {
+			// given session progress `p` and session length `l`
+			// the threshold formula is: p^6 + 1/l
+			let session_length = T::NextSessionRotation::average_session_length();
+			let residual = Permill::from_rational(1u32, session_length.saturated_into());
+			let threshold: Permill = progress.saturating_pow(6).saturating_add(residual);
+
+			let seed = sp_io::offchain::random_seed();
+			let random = <u32>::decode(&mut TrailingZeroInput::new(seed.as_ref()))
+				.expect("input is padded with zeroes; qed");
+			let random = Permill::from_parts(random % Permill::ACCURACY);
+
+			random <= threshold
+		};
+
+		let should_heartbeat = if let (Some(progress), _) =
 			T::NextSessionRotation::estimate_current_session_progress(block_number)
 		{
-			// we try to get an estimate of the current session progress first since it
-			// should provide more accurate results and send the heartbeat if we're halfway
-			// through the session.
-			progress < HALF_SESSION
+			// we try to get an estimate of the current session progress first since it should
+			// provide more accurate results. we will start an early heartbeat period where we'll
+			// randomly pick whether to heartbeat. after 80% of the session has elapsed, if we
+			// haven't sent an heartbeat yet we'll send one unconditionally. the idea is to prevent
+			// all nodes from sending the heartbeats at the same block and causing a temporary (but
+			// deterministic) spike in transactions.
+			progress >= START_HEARTBEAT_FINAL_PERIOD
+				|| progress >= START_HEARTBEAT_RANDOM_PERIOD && random_choice(progress)
 		} else {
 			// otherwise we fallback to using the block number calculated at the beginning
 			// of the session that should roughly correspond to the middle of the session
 			let heartbeat_after = <HeartbeatAfter<T>>::get();
-			block_number < heartbeat_after
+			block_number >= heartbeat_after
 		};
 
-		if too_early {
+		if !should_heartbeat {
 			return Err(OffchainErr::TooEarly);
 		}
 
@@ -606,7 +629,6 @@ impl<T: Config> Pallet<T> {
 			}),
 		)
 	}
-
 
 	fn send_single_heartbeat(
 		authority_index: u32,

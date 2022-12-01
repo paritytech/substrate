@@ -281,15 +281,10 @@ impl<T: Config, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
 	fn insert(&mut self, time_slot: &O::TimeSlot, report_id: ReportIdOf<T>) {
 		// Insert the report id into the list while maintaining the ordering by the time
 		// slot.
-		let pos = match self
+		let pos = self
 			.same_kind_reports
-			.binary_search_by_key(&time_slot, |&(ref when, _)| when)
-		{
-			Ok(pos) => pos,
-			Err(pos) => pos,
-		};
-		self.same_kind_reports
-			.insert(pos, (time_slot.clone(), report_id));
+			.partition_point(|&(ref when, _)| when <= time_slot);
+		self.same_kind_reports.insert(pos, (time_slot.clone(), report_id));
 
 		// Update the list of concurrent reports.
 		self.concurrent_reports.push(report_id);

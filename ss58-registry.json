@@ -515,6 +515,24 @@
 			"website": "https://social.network"
 		},
 		{
+			"prefix": 1284,
+			"network": "moonbeam",
+			"displayName": "Moonbeam",
+			"symbols": ["GLMR"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://moonbeam.network"
+		},
+		{
+			"prefix": 1285,
+			"network": "moonriver",
+			"displayName": "Moonriver",
+			"symbols": ["MOVR"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://moonbeam.network"
+		},
+		{
 			"prefix": 10041,
 			"network": "basilisk",
 			"displayName": "Basilisk",

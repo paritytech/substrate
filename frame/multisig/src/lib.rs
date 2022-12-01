@@ -245,7 +245,7 @@ pub mod pallet{
 				dispatch_info.class,
 			)
 		})]
-		pub(super) fn as_multi_threshold_1(
+		pub fn as_multi_threshold_1(
 			origin: OriginFor<T>,
 			other_signatories: Vec<T::AccountId>,
 			call: Box<<T as Config>::Call>,
@@ -335,7 +335,7 @@ pub mod pallet{
 			.max(T::WeightInfo::as_multi_complete(s, z))
 			.saturating_add(*max_weight)
 		})]
-		pub(super) fn as_multi(
+		pub fn as_multi(
 			origin: OriginFor<T>,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
@@ -392,7 +392,7 @@ pub mod pallet{
 			.max(T::WeightInfo::approve_as_multi_complete(s))
 			.saturating_add(*max_weight)
 		})]
-		pub(super) fn approve_as_multi(
+		pub fn approve_as_multi(
 			origin: OriginFor<T>,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
@@ -431,7 +431,7 @@ pub mod pallet{
 		///     - Write: Multisig Storage, [Caller Account], Refund Account, Calls
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::cancel_as_multi(other_signatories.len() as u32))]
-		pub(super) fn cancel_as_multi(
+		pub fn cancel_as_multi(
 			origin: OriginFor<T>,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
