@@ -13,8 +13,8 @@ mod benchmarking;
 
 pub use scale_info::Type;
 
-pub type ItemId = <Type as pallet_uniques::Config>::ItemId;
-pub type CollectionId = <Type as pallet_uniques::Config>::CollectionId;
+pub type ItemId = <Type as pallet_nfts::Config>::ItemId;
+pub type CollectionId = <Type as pallet_nfts::Config>::CollectionId;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -24,17 +24,23 @@ pub mod pallet {
 	use frame_support::{
 		dispatch::DispatchResult,
 		sp_runtime::traits::{
-			AccountIdConversion, AtLeast32BitUnsigned, IntegerSquareRoot, StaticLookup, Zero,
+			AccountIdConversion, AtLeast32BitUnsigned, IntegerSquareRoot, Saturating, StaticLookup,
+			Zero,
 		},
 		traits::{
 			fungibles::{
 				metadata::Mutate as MutateMetadata, Create, Inspect, InspectEnumerable, Mutate,
 				Transfer,
 			},
+			tokens::nonfungibles_v2::{
+				Inspect as NonFungiblesInspect, Transfer as NonFungiblesTransfer,
+			},
 			Currency,
 		},
 		PalletId,
 	};
+
+	pub use pallet_nfts::Incrementable;
 
 	pub type BalanceOf<T> =
 		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -50,15 +56,16 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config + pallet_uniques::Config //+ pallet_assets::Config
-	{
+	pub trait Config: frame_system::Config {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		type Currency: Currency<Self::AccountId>;
 
-		type CollectionId;
+		/// Identifier for the collection of item.
+		type CollectionId: Member + Parameter + MaxEncodedLen + Copy + Incrementable;
 
-		type ItemId;
+		/// The type used to identify a unique item within a collection.
+		type ItemId: Member + Parameter + MaxEncodedLen + Copy;
 
 		type AssetBalance: AtLeast32BitUnsigned
 			+ codec::FullCodec
@@ -90,6 +97,12 @@ pub mod pallet {
 			+ MutateMetadata<Self::AccountId>
 			+ Transfer<Self::AccountId>;
 
+		type Items: NonFungiblesInspect<
+				Self::AccountId,
+				ItemId = Self::ItemId,
+				CollectionId = Self::CollectionId,
+			> + NonFungiblesTransfer<Self::AccountId>;
+
 		#[pallet::constant]
 		type PalletId: Get<PalletId>;
 	}
@@ -99,15 +112,13 @@ pub mod pallet {
 	// TODO: query amount minted from pallet assets instead of storing it locally.
 	// Add a public getter function to pallet assets.
 	pub type AssetsMinted<T: Config> =
-		StorageMap<_, Twox64Concat, AssetIdOf<T>, BalanceOf<T>, OptionQuery>;
+		StorageMap<_, Twox64Concat, AssetIdOf<T>, AssetBalanceOf<T>, OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		NFTLocked(
-			<T as pallet_uniques::Config>::CollectionId,
-			<T as pallet_uniques::Config>::ItemId,
-		),
+		PalletIdCreated(T::AccountId),
+		NFTLocked(T::CollectionId, T::ItemId),
 		AssetCreated(AssetIdOf<T>),
 		AssetMinted(AssetIdOf<T>, AssetBalanceOf<T>),
 	}
@@ -122,8 +133,8 @@ pub mod pallet {
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(2).ref_time())]
 		pub fn lock_nft_create_asset(
 			origin: OriginFor<T>,
-			collection_id: <T as pallet_uniques::Config>::CollectionId,
-			item_id: <T as pallet_uniques::Config>::ItemId,
+			collection_id: T::CollectionId,
+			item_id: T::ItemId,
 			asset_id: AssetIdOf<T>,
 			beneficiary: T::AccountId,
 			min_balance: AssetBalanceOf<T>,
@@ -131,29 +142,32 @@ pub mod pallet {
 		) -> DispatchResult {
 			let _who = ensure_signed(origin.clone())?;
 			let admin_account_id = Self::pallet_account_id();
-			let admin = T::Lookup::unlookup(admin_account_id.clone());
 
-			match Self::do_lock_nft(origin.clone(), collection_id, item_id) {
-				Err(e) => return Err(e),
-				//Ok(()) => match Self::do_create_asset(origin.clone(), asset_id, admin, min_balance)
-				Ok(()) => match Self::do_create_asset(asset_id, admin_account_id, min_balance) {
-					Err(e) => return Err(e),
-					Ok(()) => match Self::do_mint_asset(
-						// Minting the asset is only possible from the pallet's origin.
-						// TODO: should the minting be possible from the owner's account?
-						asset_id,
-						&beneficiary,
-						amount,
-					) {
-						Err(e) => return Err(e),
-						Ok(()) => {
-							Self::deposit_event(Event::NFTLocked(collection_id, item_id));
-							Self::deposit_event(Event::AssetCreated(asset_id));
-							Self::deposit_event(Event::AssetMinted(asset_id, amount));
+			Self::do_lock_nft(collection_id, item_id)?;
+			Self::do_create_asset(asset_id, admin_account_id, min_balance)?;
+			Self::do_mint_asset(
+				// Minting the asset is only possible from the pallet's origin.
+				// TODO: should the minting be possible from the owner's account?
+				asset_id,
+				&beneficiary,
+				amount,
+			)?;
+
+			<AssetsMinted<T>>::try_mutate(
+				asset_id,
+				|assets_minted| -> Result<(), DispatchError> {
+					match assets_minted.is_some() {
+						true => {
+							*assets_minted = Some(assets_minted.unwrap().saturating_add(amount))
 						},
-					},
+						false => *assets_minted = Some(amount),
+					}
+
+					Ok(())
 				},
-			};
+			)?;
+
+			Self::deposit_event(Event::NFTLocked(collection_id, item_id));
 
 			Ok(())
 		}
@@ -168,12 +182,11 @@ pub mod pallet {
 		}
 
 		fn do_lock_nft(
-			who: OriginFor<T>,
-			collection_id: <T as pallet_uniques::Config>::CollectionId,
-			item_id: <T as pallet_uniques::Config>::ItemId,
+			collection_id: T::CollectionId,
+			item_id: T::ItemId,
 		) -> DispatchResult {
-			let pallet_id = T::Lookup::unlookup(Self::pallet_account_id());
-			<pallet_uniques::Pallet<T>>::transfer(who, collection_id, item_id, pallet_id)
+			let admin_account_id = Self::pallet_account_id();
+			T::Items::transfer(&collection_id, &item_id, &admin_account_id)
 		}
 
 		fn do_create_asset(
@@ -190,6 +203,13 @@ pub mod pallet {
 			amount: AssetBalanceOf<T>,
 		) -> DispatchResult {
 			T::Assets::mint_into(asset_id, beneficiary, amount)
+		}
+
+		fn check_total_ownership(asset_id: AssetIdOf<T>, account: &T::AccountId) -> () {
+			assert_eq!(
+				Some(T::Assets::balance(asset_id, account)),
+				<AssetsMinted<T>>::get(asset_id)
+			);
 		}
 	}
 }

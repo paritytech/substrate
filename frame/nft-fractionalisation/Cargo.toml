@@ -18,7 +18,7 @@ frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-assets = { version = "4.0.0-dev", default-features = false, path = "../assets" }
-pallet-uniques = { version = "4.0.0-dev", default-features = false, path = "../uniques" }
+pallet-nfts = { version = "4.0.0-dev", default-features = false, path = "../nfts" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 
@@ -37,7 +37,7 @@ std = [
 	"frame-system/std",
 	"log/std",
 	"pallet-assets/std",
-	"pallet-uniques/std",
+	"pallet-nfts/std",
 	"scale-info/std",
 	"sp-runtime/std",
 	"sp-std/std",

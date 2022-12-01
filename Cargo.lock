@@ -5698,7 +5698,7 @@ dependencies = [
  "log",
  "pallet-assets",
  "pallet-balances",
- "pallet-uniques",
+ "pallet-nfts",
  "parity-scale-codec",
  "scale-info",
  "sp-core",

@@ -1555,10 +1555,11 @@ impl pallet_nft_fractionalisation::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type PalletId = NftFractionsPalletId;
 	type Currency = Balances;
-	type CollectionId = Uniques;
-	type ItemId = Uniques;
+	type CollectionId = <Self as pallet_nfts::Config>::CollectionId;
+	type ItemId = <Self as pallet_nfts::Config>::ItemId;
 	type AssetBalance = <Self as pallet_balances::Config>::Balance;
 	type Assets = Assets;
+	type Items = Nfts;
 	type AssetId = <Self as pallet_assets::Config>::AssetId;
 }
 
