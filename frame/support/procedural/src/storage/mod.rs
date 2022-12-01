@@ -32,6 +32,7 @@ pub(crate) use instance_trait::INHERENT_INSTANCE_NAME;
 use frame_support_procedural_tools::{
 	generate_crate_access, generate_hidden_includes, syn_ext as ext,
 };
+
 use quote::quote;
 
 /// All information contained in input of decl_storage

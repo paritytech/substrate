@@ -18,11 +18,6 @@
 
 //! Tests that are only relevant for Linux.
 
-// Constrain this only to wasmtime for the time being. Without this rustc will complain on unused
-// imports and items. The alternative is to plop `cfg(feature = wasmtime)` everywhere which seems
-// borthersome.
-#![cfg(feature = "wasmtime")]
-
 use super::mk_test_runtime;
 use crate::WasmExecutionMethod;
 use codec::Encode as _;

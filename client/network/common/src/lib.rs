@@ -19,8 +19,16 @@
 //! Common data structures of the networking layer.
 
 pub mod config;
+pub mod error;
 pub mod message;
 pub mod protocol;
 pub mod request_responses;
 pub mod service;
 pub mod sync;
+pub mod utils;
+
+/// Minimum Requirements for a Hash within Networking
+pub trait ExHashT: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static {}
+
+impl<T> ExHashT for T where T: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static
+{}

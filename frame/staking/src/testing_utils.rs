@@ -78,8 +78,7 @@ pub fn create_stash_controller<T: Config>(
 ) -> Result<(T::AccountId, T::AccountId), &'static str> {
 	let stash = create_funded_user::<T>("stash", n, balance_factor);
 	let controller = create_funded_user::<T>("controller", n, balance_factor);
-	let controller_lookup: <T::Lookup as StaticLookup>::Source =
-		T::Lookup::unlookup(controller.clone());
+	let controller_lookup = T::Lookup::unlookup(controller.clone());
 	let amount = T::Currency::minimum_balance() * (balance_factor / 10).max(1).into();
 	Staking::<T>::bond(
 		RawOrigin::Signed(stash.clone()).into(),
@@ -98,8 +97,7 @@ pub fn create_stash_controller_with_balance<T: Config>(
 ) -> Result<(T::AccountId, T::AccountId), &'static str> {
 	let stash = create_funded_user_with_balance::<T>("stash", n, balance);
 	let controller = create_funded_user_with_balance::<T>("controller", n, balance);
-	let controller_lookup: <T::Lookup as StaticLookup>::Source =
-		T::Lookup::unlookup(controller.clone());
+	let controller_lookup = T::Lookup::unlookup(controller.clone());
 
 	Staking::<T>::bond(
 		RawOrigin::Signed(stash.clone()).into(),
@@ -120,8 +118,7 @@ pub fn create_stash_and_dead_controller<T: Config>(
 	let stash = create_funded_user::<T>("stash", n, balance_factor);
 	// controller has no funds
 	let controller = create_funded_user::<T>("controller", n, 0);
-	let controller_lookup: <T::Lookup as StaticLookup>::Source =
-		T::Lookup::unlookup(controller.clone());
+	let controller_lookup = T::Lookup::unlookup(controller.clone());
 	let amount = T::Currency::minimum_balance() * (balance_factor / 10).max(1).into();
 	Staking::<T>::bond(
 		RawOrigin::Signed(stash.clone()).into(),
@@ -136,7 +133,7 @@ pub fn create_stash_and_dead_controller<T: Config>(
 pub fn create_validators<T: Config>(
 	max: u32,
 	balance_factor: u32,
-) -> Result<Vec<<T::Lookup as StaticLookup>::Source>, &'static str> {
+) -> Result<Vec<AccountIdLookupOf<T>>, &'static str> {
 	create_validators_with_seed::<T>(max, balance_factor, 0)
 }
 
@@ -145,15 +142,15 @@ pub fn create_validators_with_seed<T: Config>(
 	max: u32,
 	balance_factor: u32,
 	seed: u32,
-) -> Result<Vec<<T::Lookup as StaticLookup>::Source>, &'static str> {
-	let mut validators: Vec<<T::Lookup as StaticLookup>::Source> = Vec::with_capacity(max as usize);
+) -> Result<Vec<AccountIdLookupOf<T>>, &'static str> {
+	let mut validators: Vec<AccountIdLookupOf<T>> = Vec::with_capacity(max as usize);
 	for i in 0..max {
 		let (stash, controller) =
 			create_stash_controller::<T>(i + seed, balance_factor, RewardDestination::Staked)?;
 		let validator_prefs =
 			ValidatorPrefs { commission: Perbill::from_percent(50), ..Default::default() };
 		Staking::<T>::validate(RawOrigin::Signed(controller).into(), validator_prefs)?;
-		let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(stash);
+		let stash_lookup = T::Lookup::unlookup(stash);
 		validators.push(stash_lookup);
 	}
 	Ok(validators)
@@ -180,11 +177,10 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 	edge_per_nominator: usize,
 	randomize_stake: bool,
 	to_nominate: Option<u32>,
-) -> Result<Vec<<T::Lookup as StaticLookup>::Source>, &'static str> {
+) -> Result<Vec<AccountIdLookupOf<T>>, &'static str> {
 	clear_validators_and_nominators::<T>();
 
-	let mut validators_stash: Vec<<T::Lookup as StaticLookup>::Source> =
-		Vec::with_capacity(validators as usize);
+	let mut validators_stash: Vec<AccountIdLookupOf<T>> = Vec::with_capacity(validators as usize);
 	let mut rng = ChaChaRng::from_seed(SEED.using_encoded(blake2_256));
 
 	// Create validators
@@ -195,8 +191,7 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 		let validator_prefs =
 			ValidatorPrefs { commission: Perbill::from_percent(50), ..Default::default() };
 		Staking::<T>::validate(RawOrigin::Signed(v_controller.clone()).into(), validator_prefs)?;
-		let stash_lookup: <T::Lookup as StaticLookup>::Source =
-			T::Lookup::unlookup(v_stash.clone());
+		let stash_lookup = T::Lookup::unlookup(v_stash.clone());
 		validators_stash.push(stash_lookup.clone());
 	}
 
@@ -211,7 +206,7 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 
 		// Have them randomly validate
 		let mut available_validators = validator_chosen.clone();
-		let mut selected_validators: Vec<<T::Lookup as StaticLookup>::Source> =
+		let mut selected_validators: Vec<AccountIdLookupOf<T>> =
 			Vec::with_capacity(edge_per_nominator);
 
 		for _ in 0..validators.min(edge_per_nominator as u32) {

@@ -40,7 +40,7 @@ async fn should_return_header() {
 		Header {
 			parent_hash: H256::from_low_u64_be(0),
 			number: 0,
-			state_root: res.state_root.clone(),
+			state_root: res.state_root,
 			extrinsics_root: "03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
 				.parse()
 				.unwrap(),
@@ -54,7 +54,7 @@ async fn should_return_header() {
 		Header {
 			parent_hash: H256::from_low_u64_be(0),
 			number: 0,
-			state_root: res.state_root.clone(),
+			state_root: res.state_root,
 			extrinsics_root: "03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
 				.parse()
 				.unwrap(),
@@ -93,7 +93,7 @@ async fn should_return_a_block() {
 			header: Header {
 				parent_hash: client.genesis_hash(),
 				number: 1,
-				state_root: res.block.header.state_root.clone(),
+				state_root: res.block.header.state_root,
 				extrinsics_root: "03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
 					.parse()
 					.unwrap(),
@@ -110,7 +110,7 @@ async fn should_return_a_block() {
 			header: Header {
 				parent_hash: client.genesis_hash(),
 				number: 1,
-				state_root: res.block.header.state_root.clone(),
+				state_root: res.block.header.state_root,
 				extrinsics_root: "03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
 					.parse()
 					.unwrap(),
@@ -198,6 +198,7 @@ async fn should_return_finalized_hash() {
 
 	// import new block
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	let block_hash = block.hash();
 	client.import(BlockOrigin::Own, block).await.unwrap();
 
 	// no finalization yet
@@ -205,9 +206,9 @@ async fn should_return_finalized_hash() {
 	assert_eq!(res, client.genesis_hash());
 
 	// finalize
-	client.finalize_block(BlockId::number(1), None).unwrap();
+	client.finalize_block(block_hash, None).unwrap();
 	let res: H256 = api.call("chain_getFinalizedHead", EmptyParams::new()).await.unwrap();
-	assert_eq!(res, client.block_hash(1).unwrap().unwrap());
+	assert_eq!(res, block_hash);
 }
 
 #[tokio::test]
@@ -232,8 +233,9 @@ async fn test_head_subscription(method: &str) {
 		let api = new_full(client.clone(), test_executor()).into_rpc();
 		let sub = api.subscribe(method, EmptyParams::new()).await.unwrap();
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+		let block_hash = block.hash();
 		client.import(BlockOrigin::Own, block).await.unwrap();
-		client.finalize_block(BlockId::number(1), None).unwrap();
+		client.finalize_block(block_hash, None).unwrap();
 		sub
 	};
 

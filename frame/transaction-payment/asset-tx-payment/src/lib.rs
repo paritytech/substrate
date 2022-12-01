@@ -39,7 +39,7 @@ use sp_std::prelude::*;
 
 use codec::{Decode, Encode};
 use frame_support::{
-	dispatch::DispatchResult,
+	dispatch::{DispatchInfo, DispatchResult, PostDispatchInfo},
 	traits::{
 		tokens::{
 			fungibles::{Balanced, CreditOf, Inspect},
@@ -47,7 +47,6 @@ use frame_support::{
 		},
 		IsType,
 	},
-	weights::{DispatchInfo, PostDispatchInfo},
 	DefaultNoBound,
 };
 use pallet_transaction_payment::OnChargeTransaction;
@@ -98,6 +97,7 @@ pub(crate) type ChargeAssetLiquidityOf<T> =
 #[derive(Encode, Decode, DefaultNoBound, TypeInfo)]
 pub enum InitialPayment<T: Config> {
 	/// No initial fee was payed.
+	#[default]
 	Nothing,
 	/// The initial fee was payed in the native currency.
 	Native(LiquidityInfoOf<T>),
@@ -114,7 +114,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config + pallet_transaction_payment::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// The fungibles instance used to pay for transactions in assets.
 		type Fungibles: Balanced<Self::AccountId>;
 		/// The actual transaction charging logic that charges the fees.
@@ -154,7 +154,7 @@ pub struct ChargeAssetTxPayment<T: Config> {
 
 impl<T: Config> ChargeAssetTxPayment<T>
 where
-	T::Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
+	T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 	AssetBalanceOf<T>: Send + Sync + FixedPointOperand,
 	BalanceOf<T>: Send + Sync + FixedPointOperand + IsType<ChargeAssetBalanceOf<T>>,
 	ChargeAssetIdOf<T>: Send + Sync,
@@ -170,8 +170,8 @@ where
 	fn withdraw_fee(
 		&self,
 		who: &T::AccountId,
-		call: &T::Call,
-		info: &DispatchInfoOf<T::Call>,
+		call: &T::RuntimeCall,
+		info: &DispatchInfoOf<T::RuntimeCall>,
 		len: usize,
 	) -> Result<(BalanceOf<T>, InitialPayment<T>), TransactionValidityError> {
 		let fee = pallet_transaction_payment::Pallet::<T>::compute_fee(len as u32, info, self.tip);
@@ -211,7 +211,7 @@ impl<T: Config> sp_std::fmt::Debug for ChargeAssetTxPayment<T> {
 
 impl<T: Config> SignedExtension for ChargeAssetTxPayment<T>
 where
-	T::Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
+	T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 	AssetBalanceOf<T>: Send + Sync + FixedPointOperand,
 	BalanceOf<T>: Send + Sync + From<u64> + FixedPointOperand + IsType<ChargeAssetBalanceOf<T>>,
 	ChargeAssetIdOf<T>: Send + Sync,
@@ -219,7 +219,7 @@ where
 {
 	const IDENTIFIER: &'static str = "ChargeAssetTxPayment";
 	type AccountId = T::AccountId;
-	type Call = T::Call;
+	type Call = T::RuntimeCall;
 	type AdditionalSigned = ();
 	type Pre = (
 		// tip

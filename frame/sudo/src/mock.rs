@@ -22,6 +22,7 @@ use crate as sudo;
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64, Contains, GenesisBuild},
+	weights::Weight,
 };
 use frame_system::limits;
 use sp_core::H256;
@@ -39,7 +40,7 @@ pub mod logger {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
 	#[pallet::pallet]
@@ -109,12 +110,12 @@ frame_support::construct_runtime!(
 );
 
 parameter_types! {
-	pub BlockWeights: limits::BlockWeights = limits::BlockWeights::simple_max(1024);
+	pub BlockWeights: limits::BlockWeights = limits::BlockWeights::simple_max(Weight::from_ref_time(1024));
 }
 
 pub struct BlockEverything;
-impl Contains<Call> for BlockEverything {
-	fn contains(_: &Call) -> bool {
+impl Contains<RuntimeCall> for BlockEverything {
+	fn contains(_: &RuntimeCall) -> bool {
 		false
 	}
 }
@@ -124,8 +125,8 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
-	type Call = Call;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -133,7 +134,7 @@ impl frame_system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -148,13 +149,13 @@ impl frame_system::Config for Test {
 
 // Implement the logger module's `Config` on the Test runtime.
 impl logger::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 }
 
 // Implement the sudo module's `Config` on the Test runtime.
 impl Config for Test {
-	type Event = Event;
-	type Call = Call;
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
 }
 
 // New types for dispatchable functions.

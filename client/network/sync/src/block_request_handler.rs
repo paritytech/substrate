@@ -41,6 +41,7 @@ use sp_runtime::{
 use std::{
 	cmp::min,
 	hash::{Hash, Hasher},
+	num::NonZeroUsize,
 	sync::Arc,
 	time::Duration,
 };
@@ -80,10 +81,11 @@ pub fn generate_protocol_config<Hash: AsRef<[u8]>>(
 
 /// Generate the block protocol name from the genesis hash and fork id.
 fn generate_protocol_name<Hash: AsRef<[u8]>>(genesis_hash: Hash, fork_id: Option<&str>) -> String {
+	let genesis_hash = genesis_hash.as_ref();
 	if let Some(fork_id) = fork_id {
-		format!("/{}/{}/sync/2", hex::encode(genesis_hash), fork_id)
+		format!("/{}/{}/sync/2", array_bytes::bytes2hex("", genesis_hash), fork_id)
 	} else {
-		format!("/{}/sync/2", hex::encode(genesis_hash))
+		format!("/{}/sync/2", array_bytes::bytes2hex("", genesis_hash))
 	}
 }
 
@@ -163,7 +165,9 @@ where
 		);
 		protocol_config.inbound_queue = Some(tx);
 
-		let seen_requests = LruCache::new(num_peer_hint * 2);
+		let capacity =
+			NonZeroUsize::new(num_peer_hint.max(1) * 2).expect("cache capacity is not zero");
+		let seen_requests = LruCache::new(capacity);
 
 		(Self { client, request_receiver, seen_requests }, protocol_config)
 	}
@@ -330,11 +334,8 @@ where
 			let number = *header.number();
 			let hash = header.hash();
 			let parent_hash = *header.parent_hash();
-			let justifications = if get_justification {
-				self.client.justifications(&BlockId::Hash(hash))?
-			} else {
-				None
-			};
+			let justifications =
+				if get_justification { self.client.justifications(hash)? } else { None };
 
 			let (justifications, justification, is_empty_justification) =
 				if support_multiple_justifications {
@@ -363,7 +364,7 @@ where
 				};
 
 			let body = if get_body {
-				match self.client.block_body(&BlockId::Hash(hash))? {
+				match self.client.block_body(hash)? {
 					Some(mut extrinsics) =>
 						extrinsics.iter_mut().map(|extrinsic| extrinsic.encode()).collect(),
 					None => {
@@ -376,7 +377,7 @@ where
 			};
 
 			let indexed_body = if get_indexed_body {
-				match self.client.block_indexed_body(&BlockId::Hash(hash))? {
+				match self.client.block_indexed_body(hash)? {
 					Some(transactions) => transactions,
 					None => {
 						log::trace!(
@@ -405,11 +406,20 @@ where
 				indexed_body,
 			};
 
-			total_size += block_data.body.iter().map(|ex| ex.len()).sum::<usize>();
-			total_size += block_data.indexed_body.iter().map(|ex| ex.len()).sum::<usize>();
+			let new_total_size = total_size +
+				block_data.body.iter().map(|ex| ex.len()).sum::<usize>() +
+				block_data.indexed_body.iter().map(|ex| ex.len()).sum::<usize>();
+
+			// Send at least one block, but make sure to not exceed the limit.
+			if !blocks.is_empty() && new_total_size > MAX_BODY_BYTES {
+				break
+			}
+
+			total_size = new_total_size;
+
 			blocks.push(block_data);
 
-			if blocks.len() >= max_blocks as usize || total_size > MAX_BODY_BYTES {
+			if blocks.len() >= max_blocks as usize {
 				break
 			}
 

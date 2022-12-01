@@ -18,19 +18,20 @@
 
 //! Collection of generic data structures for request-response protocols.
 
+use crate::protocol::ProtocolName;
 use futures::channel::{mpsc, oneshot};
 use libp2p::{request_response::OutboundFailure, PeerId};
 use sc_peerset::ReputationChange;
-use std::{borrow::Cow, time::Duration};
+use std::time::Duration;
 
 /// Configuration for a single request-response protocol.
 #[derive(Debug, Clone)]
 pub struct ProtocolConfig {
 	/// Name of the protocol on the wire. Should be something like `/foo/bar`.
-	pub name: Cow<'static, str>,
+	pub name: ProtocolName,
 
 	/// Fallback on the wire protocol names to support.
-	pub fallback_names: Vec<Cow<'static, str>>,
+	pub fallback_names: Vec<ProtocolName>,
 
 	/// Maximum allowed size, in bytes, of a request.
 	///

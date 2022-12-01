@@ -16,8 +16,8 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../../system" }
-sp-core = { version = "6.0.0", default-features = false, path = "../../../../primitives/core" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../../../primitives/runtime" }
+sp-core = { version = "7.0.0", default-features = false, path = "../../../../primitives/core" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../../../primitives/runtime" }
 sp-version = { version = "5.0.0", default-features = false, path = "../../../../primitives/version" }
 
 [features]

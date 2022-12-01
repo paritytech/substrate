@@ -40,7 +40,7 @@ use sp_core::{
 	hexdisplay::HexDisplay,
 	offchain::{OffchainDbExt, OffchainWorkerExt, TransactionPoolExt},
 	storage::ChildInfo,
-	traits::{RuntimeSpawnExt, TaskExecutorExt},
+	traits::TaskExecutorExt,
 };
 #[cfg(feature = "std")]
 use sp_keystore::{KeystoreExt, SyncCryptoStore};
@@ -698,6 +698,34 @@ pub trait Misc {
 	}
 }
 
+#[cfg(feature = "std")]
+sp_externalities::decl_extension! {
+	/// Extension to signal to [`crypt::ed25519_verify`] to use the dalek crate.
+	///
+	/// The switch from `ed25519-dalek` to `ed25519-zebra` was a breaking change.
+	/// `ed25519-zebra` is more permissive when it comes to the verification of signatures.
+	/// This means that some chains may fail to sync from genesis when using `ed25519-zebra`.
+	/// So, this extension can be registered to the runtime execution environment to signal
+	/// that `ed25519-dalek` should be used for verification. The extension can be registered
+	/// in the following way:
+	///
+	/// ```nocompile
+	/// client.execution_extensions().set_extensions_factory(
+	/// 	// Let the `UseDalekExt` extension being registered for each runtime invocation
+	/// 	// until the execution happens in the context of block `1000`.
+	/// 	sc_client_api::execution_extensions::ExtensionBeforeBlock::<Block, UseDalekExt>::new(1000)
+	/// );
+	/// ```
+	pub struct UseDalekExt;
+}
+
+#[cfg(feature = "std")]
+impl Default for UseDalekExt {
+	fn default() -> Self {
+		Self
+	}
+}
+
 /// Interfaces for working with crypto related types from within the runtime.
 #[runtime_interface]
 pub trait Crypto {
@@ -747,13 +775,32 @@ pub trait Crypto {
 	///
 	/// Returns `true` when the verification was successful.
 	fn ed25519_verify(sig: &ed25519::Signature, msg: &[u8], pub_key: &ed25519::Public) -> bool {
-		ed25519::Pair::verify(sig, msg, pub_key)
+		// We don't want to force everyone needing to call the function in an externalities context.
+		// So, we assume that we should not use dalek when we are not in externalities context.
+		// Otherwise, we check if the extension is present.
+		if sp_externalities::with_externalities(|mut e| e.extension::<UseDalekExt>().is_some())
+			.unwrap_or_default()
+		{
+			use ed25519_dalek::Verifier;
+
+			let public_key = if let Ok(vk) = ed25519_dalek::PublicKey::from_bytes(&pub_key.0) {
+				vk
+			} else {
+				return false
+			};
+
+			let sig = ed25519_dalek::Signature::from(sig.0);
+
+			public_key.verify(msg, &sig).is_ok()
+		} else {
+			ed25519::Pair::verify(sig, msg, pub_key)
+		}
 	}
 
 	/// Register a `ed25519` signature for batch verification.
 	///
 	/// Batch verification must be enabled by calling [`start_batch_verify`].
-	/// If batch verification is not enabled, the signature will be verified immediatley.
+	/// If batch verification is not enabled, the signature will be verified immediately.
 	/// To get the result of the batch verification, [`finish_batch_verify`]
 	/// needs to be called.
 	///
@@ -780,7 +827,7 @@ pub trait Crypto {
 	/// Register a `sr25519` signature for batch verification.
 	///
 	/// Batch verification must be enabled by calling [`start_batch_verify`].
-	/// If batch verification is not enabled, the signature will be verified immediatley.
+	/// If batch verification is not enabled, the signature will be verified immediately.
 	/// To get the result of the batch verification, [`finish_batch_verify`]
 	/// needs to be called.
 	///
@@ -1657,38 +1704,6 @@ pub trait Sandbox {
 	}
 }
 
-/// Wasm host functions for managing tasks.
-///
-/// This should not be used directly. Use `sp_tasks` for running parallel tasks instead.
-#[runtime_interface(wasm_only)]
-pub trait RuntimeTasks {
-	/// Wasm host function for spawning task.
-	///
-	/// This should not be used directly. Use `sp_tasks::spawn` instead.
-	fn spawn(dispatcher_ref: u32, entry: u32, payload: Vec<u8>) -> u64 {
-		sp_externalities::with_externalities(|mut ext| {
-			let runtime_spawn = ext
-				.extension::<RuntimeSpawnExt>()
-				.expect("Cannot spawn without dynamic runtime dispatcher (RuntimeSpawnExt)");
-			runtime_spawn.spawn_call(dispatcher_ref, entry, payload)
-		})
-		.expect("`RuntimeTasks::spawn`: called outside of externalities context")
-	}
-
-	/// Wasm host function for joining a task.
-	///
-	/// This should not be used directly. Use `join` of `sp_tasks::spawn` result instead.
-	fn join(handle: u64) -> Vec<u8> {
-		sp_externalities::with_externalities(|mut ext| {
-			let runtime_spawn = ext
-				.extension::<RuntimeSpawnExt>()
-				.expect("Cannot join without dynamic runtime dispatcher (RuntimeSpawnExt)");
-			runtime_spawn.join(handle)
-		})
-		.expect("`RuntimeTasks::join`: called outside of externalities context")
-	}
-}
-
 /// Allocator used by Substrate when executing the Wasm runtime.
 #[cfg(all(target_arch = "wasm32", not(feature = "std")))]
 struct WasmAllocator;
@@ -1767,7 +1782,6 @@ pub type SubstrateHostFunctions = (
 	sandbox::HostFunctions,
 	crate::trie::HostFunctions,
 	offchain_index::HostFunctions,
-	runtime_tasks::HostFunctions,
 	transaction_index::HostFunctions,
 );
 
@@ -1895,6 +1909,7 @@ mod tests {
 		ext.register_extension(TaskExecutorExt::new(TaskExecutor::new()));
 		ext.execute_with(|| {
 			let pair = sr25519::Pair::generate_with_phrase(None).0;
+			let pair_unused = sr25519::Pair::generate_with_phrase(None).0;
 			crypto::start_batch_verify();
 			for it in 0..70 {
 				let msg = format!("Schnorrkel {}!", it);
@@ -1902,8 +1917,10 @@ mod tests {
 				crypto::sr25519_batch_verify(&signature, msg.as_bytes(), &pair.public());
 			}
 
-			// push invlaid
-			crypto::sr25519_batch_verify(&zero_sr_sig(), &Vec::new(), &zero_sr_pub());
+			// push invalid
+			let msg = b"asdf!";
+			let signature = pair.sign(msg);
+			crypto::sr25519_batch_verify(&signature, msg, &pair_unused.public());
 			assert!(!crypto::finish_batch_verify());
 
 			crypto::start_batch_verify();
@@ -1938,10 +1955,10 @@ mod tests {
 		ext.register_extension(TaskExecutorExt::new(TaskExecutor::new()));
 
 		ext.execute_with(|| {
-			// invalid ed25519 signature
+			// valid ed25519 signature
 			crypto::start_batch_verify();
 			crypto::ed25519_batch_verify(&zero_ed_sig(), &Vec::new(), &zero_ed_pub());
-			assert!(!crypto::finish_batch_verify());
+			assert!(crypto::finish_batch_verify());
 
 			// 2 valid ed25519 signatures
 			crypto::start_batch_verify();
@@ -1961,12 +1978,14 @@ mod tests {
 			// 1 valid, 1 invalid ed25519 signature
 			crypto::start_batch_verify();
 
-			let pair = ed25519::Pair::generate_with_phrase(None).0;
+			let pair1 = ed25519::Pair::generate_with_phrase(None).0;
+			let pair2 = ed25519::Pair::generate_with_phrase(None).0;
 			let msg = b"Important message";
-			let signature = pair.sign(msg);
-			crypto::ed25519_batch_verify(&signature, msg, &pair.public());
+			let signature = pair1.sign(msg);
 
 			crypto::ed25519_batch_verify(&zero_ed_sig(), &Vec::new(), &zero_ed_pub());
+			crypto::ed25519_batch_verify(&signature, msg, &pair1.public());
+			crypto::ed25519_batch_verify(&signature, msg, &pair2.public());
 
 			assert!(!crypto::finish_batch_verify());
 
@@ -1993,14 +2012,32 @@ mod tests {
 			// 1 valid sr25519, 1 invalid sr25519
 			crypto::start_batch_verify();
 
-			let pair = sr25519::Pair::generate_with_phrase(None).0;
+			let pair1 = sr25519::Pair::generate_with_phrase(None).0;
+			let pair2 = sr25519::Pair::generate_with_phrase(None).0;
 			let msg = b"Schnorrkcel!";
-			let signature = pair.sign(msg);
-			crypto::sr25519_batch_verify(&signature, msg, &pair.public());
+			let signature = pair1.sign(msg);
 
+			crypto::sr25519_batch_verify(&signature, msg, &pair1.public());
+			crypto::sr25519_batch_verify(&signature, msg, &pair2.public());
 			crypto::sr25519_batch_verify(&zero_sr_sig(), &Vec::new(), &zero_sr_pub());
 
 			assert!(!crypto::finish_batch_verify());
 		});
+	}
+
+	#[test]
+	fn use_dalek_ext_works() {
+		let mut ext = BasicExternalities::default();
+		ext.register_extension(UseDalekExt::default());
+
+		// With dalek the zero signature should fail to verify.
+		ext.execute_with(|| {
+			assert!(!crypto::ed25519_verify(&zero_ed_sig(), &Vec::new(), &zero_ed_pub()));
+		});
+
+		// But with zebra it should work.
+		BasicExternalities::default().execute_with(|| {
+			assert!(crypto::ed25519_verify(&zero_ed_sig(), &Vec::new(), &zero_ed_pub()));
+		})
 	}
 }

@@ -13,7 +13,7 @@ publish = false
 [dependencies]
 honggfuzz = "0.5"
 rand = { version = "0.8", features = ["std", "small_rng"] }
-frame-election-provider-support = { version = "4.0.0-dev", features = ["runtime-benchmarks"], path = "../../election-provider-support" }
+frame-election-provider-support = { version = "4.0.0-dev", features = ["fuzz"], path = "../../election-provider-support" }
 pallet-bags-list = { version = "4.0.0-dev", features = ["fuzz"], path = ".." }
 
 [[bin]]

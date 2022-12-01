@@ -446,13 +446,13 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// Origin that can control the configurations of this pallet.
-		type ControlOrigin: frame_support::traits::EnsureOrigin<Self::Origin>;
+		type ControlOrigin: frame_support::traits::EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Filter on which origin that trigger the manual migrations.
-		type SignedFilter: EnsureOrigin<Self::Origin, Success = Self::AccountId>;
+		type SignedFilter: EnsureOrigin<Self::RuntimeOrigin, Success = Self::AccountId>;
 
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The currency provider type.
 		type Currency: Currency<Self::AccountId>;
@@ -839,9 +839,10 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// The real weight of a migration of the given number of `items` with total `size`.
 		fn dynamic_weight(items: u32, size: u32) -> frame_support::pallet_prelude::Weight {
-			let items = items as Weight;
-			items
-				.saturating_mul(<T as frame_system::Config>::DbWeight::get().reads_writes(1, 1))
+			let items = items as u64;
+			<T as frame_system::Config>::DbWeight::get()
+				.reads_writes(1, 1)
+				.saturating_mul(items)
 				// we assume that the read/write per-byte weight is the same for child and top tree.
 				.saturating_add(T::WeightInfo::process_top_key(size))
 		}
@@ -963,7 +964,7 @@ mod benchmarks {
 			);
 
 			frame_system::Pallet::<T>::assert_last_event(
-				<T as Config>::Event::from(crate::Event::Slashed {
+				<T as Config>::RuntimeEvent::from(crate::Event::Slashed {
 					who: caller.clone(),
 					amount: T::SignedDepositBase::get()
 						.saturating_add(T::SignedDepositPerItem::get().saturating_mul(1u32.into())),
@@ -1083,8 +1084,8 @@ mod mock {
 		type BaseCallFilter = frame_support::traits::Everything;
 		type BlockWeights = ();
 		type BlockLength = ();
-		type Origin = Origin;
-		type Call = Call;
+		type RuntimeOrigin = RuntimeOrigin;
+		type RuntimeCall = RuntimeCall;
 		type Index = u64;
 		type BlockNumber = u32;
 		type Hash = H256;
@@ -1092,7 +1093,7 @@ mod mock {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = sp_runtime::generic::Header<Self::BlockNumber, BlakeTwo256>;
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ConstU32<250>;
 		type DbWeight = ();
 		type Version = ();
@@ -1114,7 +1115,7 @@ mod mock {
 
 	impl pallet_balances::Config for Test {
 		type Balance = u64;
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type DustRemoval = ();
 		type ExistentialDeposit = ConstU64<1>;
 		type AccountStore = System;
@@ -1129,30 +1130,30 @@ mod mock {
 
 	impl WeightInfo for StateMigrationTestWeight {
 		fn process_top_key(_: u32) -> Weight {
-			1000000
+			Weight::from_ref_time(1000000)
 		}
 		fn continue_migrate() -> Weight {
-			1000000
+			Weight::from_ref_time(1000000)
 		}
 		fn continue_migrate_wrong_witness() -> Weight {
-			1000000
+			Weight::from_ref_time(1000000)
 		}
 		fn migrate_custom_top_fail() -> Weight {
-			1000000
+			Weight::from_ref_time(1000000)
 		}
 		fn migrate_custom_top_success() -> Weight {
-			1000000
+			Weight::from_ref_time(1000000)
 		}
 		fn migrate_custom_child_fail() -> Weight {
-			1000000
+			Weight::from_ref_time(1000000)
 		}
 		fn migrate_custom_child_success() -> Weight {
-			1000000
+			Weight::from_ref_time(1000000)
 		}
 	}
 
 	impl pallet_state_trie_migration::Config for Test {
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type ControlOrigin = EnsureRoot<u64>;
 		type Currency = Balances;
 		type MaxKeyLen = MigrationMaxKeyLen;
@@ -1243,9 +1244,9 @@ mod mock {
 		(custom_storage, version).into()
 	}
 
-	pub(crate) fn run_to_block(n: u32) -> (H256, u64) {
+	pub(crate) fn run_to_block(n: u32) -> (H256, Weight) {
 		let mut root = Default::default();
-		let mut weight_sum = 0;
+		let mut weight_sum = Weight::zero();
 		log::trace!(target: LOG_TARGET, "running from {:?} to {:?}", System::block_number(), n);
 		while System::block_number() < n {
 			System::set_block_number(System::block_number() + 1);
@@ -1253,7 +1254,7 @@ mod mock {
 
 			weight_sum += StateTrieMigration::on_initialize(System::block_number());
 
-			root = System::finalize().state_root().clone();
+			root = *System::finalize().state_root();
 			System::on_finalize(System::block_number());
 		}
 		(root, weight_sum)
@@ -1292,7 +1293,7 @@ mod test {
 
 			// fails if the top key is too long.
 			frame_support::assert_ok!(StateTrieMigration::continue_migrate(
-				Origin::signed(1),
+				RuntimeOrigin::signed(1),
 				MigrationLimits { item: 50, size: 1 << 20 },
 				Bounded::max_value(),
 				MigrationProcess::<Test>::get()
@@ -1327,7 +1328,7 @@ mod test {
 
 			// fails if the top key is too long.
 			frame_support::assert_ok!(StateTrieMigration::continue_migrate(
-				Origin::signed(1),
+				RuntimeOrigin::signed(1),
 				MigrationLimits { item: 50, size: 1 << 20 },
 				Bounded::max_value(),
 				MigrationProcess::<Test>::get()
@@ -1456,7 +1457,7 @@ mod test {
 			// can't submit if limit is too high.
 			frame_support::assert_err!(
 				StateTrieMigration::continue_migrate(
-					Origin::signed(1),
+					RuntimeOrigin::signed(1),
 					MigrationLimits { item: 5, size: sp_runtime::traits::Bounded::max_value() },
 					Bounded::max_value(),
 					MigrationProcess::<Test>::get()
@@ -1467,7 +1468,7 @@ mod test {
 			// can't submit if poor.
 			frame_support::assert_err!(
 				StateTrieMigration::continue_migrate(
-					Origin::signed(2),
+					RuntimeOrigin::signed(2),
 					MigrationLimits { item: 5, size: 100 },
 					100,
 					MigrationProcess::<Test>::get()
@@ -1478,7 +1479,7 @@ mod test {
 			// can't submit with bad witness.
 			frame_support::assert_err_ignore_postinfo!(
 				StateTrieMigration::continue_migrate(
-					Origin::signed(1),
+					RuntimeOrigin::signed(1),
 					MigrationLimits { item: 5, size: 100 },
 					100,
 					MigrationTask {
@@ -1499,7 +1500,7 @@ mod test {
 				assert!(result.is_ok());
 
 				frame_support::assert_ok!(StateTrieMigration::continue_migrate(
-					Origin::signed(1),
+					RuntimeOrigin::signed(1),
 					StateTrieMigration::signed_migration_max_limits().unwrap(),
 					task.dyn_size,
 					MigrationProcess::<Test>::get()
@@ -1522,7 +1523,7 @@ mod test {
 		let correct_witness = 3 + sp_core::storage::TRIE_VALUE_NODE_THRESHOLD * 3 + 1 + 2 + 3;
 		new_test_ext(StateVersion::V0, true, None, None).execute_with(|| {
 			frame_support::assert_ok!(StateTrieMigration::migrate_custom_top(
-				Origin::signed(1),
+				RuntimeOrigin::signed(1),
 				vec![b"key1".to_vec(), b"key2".to_vec(), b"key3".to_vec()],
 				correct_witness,
 			));
@@ -1535,7 +1536,7 @@ mod test {
 		new_test_ext(StateVersion::V0, true, None, None).execute_with(|| {
 			// works if the witness is an overestimate
 			frame_support::assert_ok!(StateTrieMigration::migrate_custom_top(
-				Origin::signed(1),
+				RuntimeOrigin::signed(1),
 				vec![b"key1".to_vec(), b"key2".to_vec(), b"key3".to_vec()],
 				correct_witness + 99,
 			));
@@ -1550,7 +1551,7 @@ mod test {
 
 			// note that we don't expect this to be a noop -- we do slash.
 			frame_support::assert_ok!(StateTrieMigration::migrate_custom_top(
-				Origin::signed(1),
+				RuntimeOrigin::signed(1),
 				vec![b"key1".to_vec(), b"key2".to_vec(), b"key3".to_vec()],
 				correct_witness - 1,
 			),);
@@ -1568,7 +1569,7 @@ mod test {
 	fn custom_migrate_child_works() {
 		new_test_ext(StateVersion::V0, true, None, None).execute_with(|| {
 			frame_support::assert_ok!(StateTrieMigration::migrate_custom_child(
-				Origin::signed(1),
+				RuntimeOrigin::signed(1),
 				StateTrieMigration::childify("chk1"),
 				vec![b"key1".to_vec(), b"key2".to_vec()],
 				55 + 66,
@@ -1584,7 +1585,7 @@ mod test {
 
 			// note that we don't expect this to be a noop -- we do slash.
 			frame_support::assert_ok!(StateTrieMigration::migrate_custom_child(
-				Origin::signed(1),
+				RuntimeOrigin::signed(1),
 				StateTrieMigration::childify("chk1"),
 				vec![b"key1".to_vec(), b"key2".to_vec()],
 				999999, // wrong witness
@@ -1605,20 +1606,22 @@ mod test {
 pub(crate) mod remote_tests {
 	use crate::{AutoLimits, MigrationLimits, Pallet as StateTrieMigration, LOG_TARGET};
 	use codec::Encode;
-	use frame_benchmarking::Zero;
-	use frame_support::traits::{Get, Hooks};
+	use frame_support::{
+		traits::{Get, Hooks},
+		weights::Weight,
+	};
 	use frame_system::Pallet as System;
 	use remote_externalities::Mode;
 	use sp_core::H256;
-	use sp_runtime::traits::{Block as BlockT, HashFor, Header as _, One};
+	use sp_runtime::traits::{Block as BlockT, HashFor, Header as _, One, Zero};
 	use thousands::Separable;
 
 	#[allow(dead_code)]
 	fn run_to_block<Runtime: crate::Config<Hash = H256>>(
 		n: <Runtime as frame_system::Config>::BlockNumber,
-	) -> (H256, u64) {
+	) -> (H256, Weight) {
 		let mut root = Default::default();
-		let mut weight_sum = 0;
+		let mut weight_sum = Weight::zero();
 		while System::<Runtime>::block_number() < n {
 			System::<Runtime>::set_block_number(System::<Runtime>::block_number() + One::one());
 			System::<Runtime>::on_initialize(System::<Runtime>::block_number());
@@ -1636,13 +1639,12 @@ pub(crate) mod remote_tests {
 	///
 	/// This will print some very useful statistics, make sure [`crate::LOG_TARGET`] is enabled.
 	#[allow(dead_code)]
-	pub(crate) async fn run_with_limits<
+	pub(crate) async fn run_with_limits<Runtime, Block>(limits: MigrationLimits, mode: Mode<Block>)
+	where
 		Runtime: crate::Config<Hash = H256>,
-		Block: BlockT<Hash = H256> + serde::de::DeserializeOwned,
-	>(
-		limits: MigrationLimits,
-		mode: Mode<Block>,
-	) {
+		Block: BlockT<Hash = H256>,
+		Block::Header: serde::de::DeserializeOwned,
+	{
 		let mut ext = remote_externalities::Builder::<Block>::new()
 			.mode(mode)
 			.state_version(sp_core::storage::StateVersion::V0)
@@ -1660,18 +1662,20 @@ pub(crate) mod remote_tests {
 		// set the version to 1, as if the upgrade happened.
 		ext.state_version = sp_core::storage::StateVersion::V1;
 
-		let (top_left, child_left) =
+		let status =
 			substrate_state_trie_migration_rpc::migration_status(&ext.as_backend()).unwrap();
 		assert!(
-			top_left > 0,
+			status.top_remaining_to_migrate > 0,
 			"no node needs migrating, this probably means that state was initialized with `StateVersion::V1`",
 		);
 
 		log::info!(
 			target: LOG_TARGET,
-			"initial check: top_left: {}, child_left: {}",
-			top_left.separate_with_commas(),
-			child_left.separate_with_commas(),
+			"initial check: top_left: {}, child_left: {}, total_top {}, total_child {}",
+			status.top_remaining_to_migrate.separate_with_commas(),
+			status.child_remaining_to_migrate.separate_with_commas(),
+			status.total_top.separate_with_commas(),
+			status.total_child.separate_with_commas(),
 		);
 
 		loop {
@@ -1719,17 +1723,17 @@ pub(crate) mod remote_tests {
 			)
 		});
 
-		let (top_left, child_left) =
+		let status =
 			substrate_state_trie_migration_rpc::migration_status(&ext.as_backend()).unwrap();
-		assert_eq!(top_left, 0);
-		assert_eq!(child_left, 0);
+		assert_eq!(status.top_remaining_to_migrate, 0);
+		assert_eq!(status.child_remaining_to_migrate, 0);
 	}
 }
 
 #[cfg(all(test, feature = "remote-test"))]
 mod remote_tests_local {
 	use super::{
-		mock::{Call as MockCall, *},
+		mock::{RuntimeCall as MockCall, *},
 		remote_tests::run_with_limits,
 		*,
 	};
