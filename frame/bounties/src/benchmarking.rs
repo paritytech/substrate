@@ -97,7 +97,7 @@ benchmarks_instance_pallet! {
 		let (caller, curator, fee, value, reason) = setup_bounty::<T, I>(0, T::MaximumReasonLength::get());
 		Bounties::<T, I>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 		let bounty_id = BountyCount::<T, I>::get() - 1;
-		let approve_origin = T::ApproveOrigin::successful_origin();
+		let approve_origin = T::SpendOrigin::successful_origin();
 	}: _<T::RuntimeOrigin>(approve_origin, bounty_id)
 
 	propose_curator {
@@ -106,10 +106,10 @@ benchmarks_instance_pallet! {
 		let curator_lookup = T::Lookup::unlookup(curator);
 		Bounties::<T, I>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 		let bounty_id = BountyCount::<T, I>::get() - 1;
-		let approve_origin = T::ApproveOrigin::successful_origin();
+		let approve_origin = T::SpendOrigin::successful_origin();
 		Bounties::<T, I>::approve_bounty(approve_origin, bounty_id)?;
 		Treasury::<T, I>::on_initialize(T::BlockNumber::zero());
-		let approve_origin = T::ApproveOrigin::successful_origin();
+		let approve_origin = T::SpendOrigin::successful_origin();
 	}: _<T::RuntimeOrigin>(approve_origin, bounty_id, curator_lookup, fee)
 
 	// Worst case when curator is inactive and any sender unassigns the curator.
@@ -128,7 +128,7 @@ benchmarks_instance_pallet! {
 		let curator_lookup = T::Lookup::unlookup(curator.clone());
 		Bounties::<T, I>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 		let bounty_id = BountyCount::<T, I>::get() - 1;
-		let approve_origin = T::ApproveOrigin::successful_origin();
+		let approve_origin = T::SpendOrigin::successful_origin();
 		Bounties::<T, I>::approve_bounty(approve_origin.clone(), bounty_id)?;
 		Treasury::<T, I>::on_initialize(T::BlockNumber::zero());
 		Bounties::<T, I>::propose_curator(approve_origin, bounty_id, curator_lookup, fee)?;
