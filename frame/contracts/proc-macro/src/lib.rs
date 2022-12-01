@@ -157,7 +157,7 @@ struct HostFn {
 	module: String,
 	name: String,
 	returns: HostFnReturn,
-	is_unstable: bool,
+	is_stable: bool,
 }
 
 enum HostFnReturn {
@@ -199,7 +199,7 @@ impl HostFn {
 		attrs.retain(|a| !(a.path.is_ident("doc") || a.path.is_ident("prefixed_alias")));
 		let name = item.sig.ident.to_string();
 		let mut maybe_module = None;
-		let mut is_unstable = false;
+		let mut is_stable = true;
 		while let Some(attr) = attrs.pop() {
 			let ident = attr.path.get_ident().ok_or(err(span, msg))?.to_string();
 			match ident.as_str() {
@@ -212,10 +212,10 @@ impl HostFn {
 					maybe_module = Some(format!("seal{}", ver));
 				},
 				"unstable" => {
-					if is_unstable {
+					if !is_stable {
 						return Err(err(span, "#[unstable] can only be specified once"))
 					}
-					is_unstable = true;
+					is_stable = false;
 				},
 				_ => return Err(err(span, msg)),
 			}
@@ -312,7 +312,7 @@ impl HostFn {
 							module: maybe_module.unwrap_or_else(|| "seal0".to_string()),
 							name,
 							returns,
-							is_unstable,
+							is_stable,
 						})
 					},
 					_ => Err(err(span, &msg)),
@@ -406,7 +406,7 @@ fn expand_impls(def: &mut EnvDef) -> TokenStream2 {
 			<E::T as ::frame_system::Config>::AccountId:
 				::sp_core::crypto::UncheckedFrom<<E::T as ::frame_system::Config>::Hash> + ::core::convert::AsRef<[::core::primitive::u8]>,
 		{
-			fn define(store: &mut ::wasmi::Store<crate::wasm::Runtime<E>>, linker: &mut ::wasmi::Linker<crate::wasm::Runtime<E>>) -> Result<(), ::wasmi::errors::LinkerError> {
+			fn define(store: &mut ::wasmi::Store<crate::wasm::Runtime<E>>, linker: &mut ::wasmi::Linker<crate::wasm::Runtime<E>>, allow_unstable: bool) -> Result<(), ::wasmi::errors::LinkerError> {
 				#impls
 				Ok(())
 			}
@@ -414,7 +414,7 @@ fn expand_impls(def: &mut EnvDef) -> TokenStream2 {
 
 		impl crate::wasm::Environment<()> for Env
 		{
-			fn define(store: &mut ::wasmi::Store<()>, linker: &mut ::wasmi::Linker<()>) -> Result<(), ::wasmi::errors::LinkerError> {
+			fn define(store: &mut ::wasmi::Store<()>, linker: &mut ::wasmi::Linker<()>, allow_unstable: bool) -> Result<(), ::wasmi::errors::LinkerError> {
 				#dummy_impls
 				Ok(())
 			}
@@ -437,10 +437,7 @@ fn expand_functions(
 			f.returns.to_wasm_sig(),
 			&f.item.sig.output
 		);
-		let unstable_feat = match f.is_unstable {
-			true => quote! { #[cfg(feature = "unstable-interface")] },
-			false => quote! {},
-		};
+		let is_stable = f.is_stable;
 
 		// If we don't expand blocks (implementing for `()`) we change a few things:
 		// - We replace any code by unreachable!
@@ -480,16 +477,18 @@ fn expand_functions(
 			quote! { #[allow(unused_variables)] }
 		};
 
-
 		quote! {
-			#unstable_feat
-			#allow_unused
-			linker.define(#module, #name, ::wasmi::Func::wrap(&mut*store, |mut __caller__: ::wasmi::Caller<#host_state>, #( #params, )*| -> #wasm_output {
-				let mut func = #inner;
-				func()
-					.map_err(#map_err)
-					.map(::core::convert::Into::into)
-			}))?;
+			// We need to allow unstable functions when runtime benchmarks are performed because
+			// we generate the weights even when those interfaces are not enabled.
+			if ::core::cfg!(feature = "runtime-benchmarks") || #is_stable || allow_unstable {
+				#allow_unused
+				linker.define(#module, #name, ::wasmi::Func::wrap(&mut*store, |mut __caller__: ::wasmi::Caller<#host_state>, #( #params, )*| -> #wasm_output {
+					let mut func = #inner;
+					func()
+						.map_err(#map_err)
+						.map(::core::convert::Into::into)
+				}))?;
+			}
 		}
 	});
 	quote! {

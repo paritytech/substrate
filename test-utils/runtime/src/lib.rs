@@ -612,7 +612,7 @@ impl From<frame_system::Call<Runtime>> for Extrinsic {
 	}
 }
 
-impl frame_system::Config for Runtime {
+impl frame_system::pallet::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
@@ -974,13 +974,13 @@ cfg_if! {
 				}
 			}
 
-			impl beefy_primitives::BeefyApi<Block> for RuntimeApi {
+			impl beefy_primitives::BeefyApi<Block> for Runtime {
 				fn validator_set() -> Option<beefy_primitives::ValidatorSet<beefy_primitives::crypto::AuthorityId>> {
 					None
 				}
 			}
 
-			impl beefy_merkle_tree::BeefyMmrApi<Block, beefy_primitives::MmrRootHash> for RuntimeApi {
+			impl beefy_merkle_tree::BeefyMmrApi<Block, beefy_primitives::MmrRootHash> for Runtime {
 				fn authority_set_proof() -> beefy_primitives::mmr::BeefyAuthoritySet<beefy_primitives::MmrRootHash> {
 					Default::default()
 				}
