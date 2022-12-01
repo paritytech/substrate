@@ -211,7 +211,7 @@ benchmarks_instance_pallet! {
 	}: _(RawOrigin::Root, user_lookup, balance)
 	verify {
 		assert!(Balances::<T, I>::reserved_balance(&user).is_zero());
-		assert_eq!(Balances::<T, I>::free_balance(&user), balance);
+		assert_eq!(Balances::<T, I>::free_balance(&user), balance + existential_deposit);
 	}
 
 	impl_benchmark_test_suite!(
