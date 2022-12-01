@@ -22,7 +22,6 @@ use fnv::{FnvHashMap, FnvHashSet};
 use futures::Stream;
 use parking_lot::Mutex;
 use prometheus_endpoint::{register, CounterVec, Opts, Registry as PrometheusRegistry, U64};
-use sp_api::BlockId;
 use sp_core::storage::{StorageData, StorageKey};
 use sp_runtime::traits::Block as BlockT;
 use sp_storage::StorageChangeSet;
@@ -73,8 +72,7 @@ impl<Hash> StorageNotification<Hash> {
 		Block: BlockT<Hash = Hash>,
 		Hash: Clone,
 	{
-		let block = BlockId::Hash(self.block_hash.clone());
-		self.get_impl(|key| client.storage(&block, key).ok().flatten())
+		self.get_impl(|key| client.storage(self.block_hash.clone(), key).ok().flatten())
 	}
 
 	fn get_impl(
