@@ -105,6 +105,7 @@ fn add_sufficients<T: Config<I>, I: 'static>(minter: T::AccountId, n: u32) {
 
 fn add_approvals<T: Config<I>, I: 'static>(minter: T::AccountId, n: u32) {
 	let asset_id = default_asset_id::<T, I>();
+	// taking into account the ED requirement enforced by `Balances::reserve` we do (n + 1).
 	T::Currency::deposit_creating(&minter, T::ApprovalDeposit::get() * (n + 1).into());
 	let minter_lookup = T::Lookup::unlookup(minter.clone());
 	let origin = SystemOrigin::Signed(minter);
