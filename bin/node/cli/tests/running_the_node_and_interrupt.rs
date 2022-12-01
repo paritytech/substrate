@@ -25,8 +25,13 @@ pub mod common;
 #[test]
 #[cfg(unix)]
 fn running_the_node_works_and_can_be_interrupted() {
-	use nix::sys::signal::{kill, Signal::{self, SIGINT, SIGTERM}};
-	use nix::unistd::Pid;
+	use nix::{
+		sys::signal::{
+			kill,
+			Signal::{self, SIGINT, SIGTERM},
+		},
+		unistd::Pid,
+	};
 
 	fn run_command_and_kill(signal: Signal) {
 		let base_path = tempdir().expect("could not create a temp dir");

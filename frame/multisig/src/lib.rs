@@ -46,25 +46,33 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-mod tests;
 mod benchmarking;
+mod tests;
 pub mod weights;
 
-use sp_std::prelude::*;
-use codec::{Encode, Decode};
-use sp_io::hashing::blake2_256;
-use frame_support::{ensure, RuntimeDebug};
-use frame_support::{traits::{Get, ReservableCurrency, Currency},
-	weights::{Weight, GetDispatchInfo},
-	dispatch::{DispatchResultWithPostInfo, DispatchResult, DispatchErrorWithPostInfo, PostDispatchInfo},
+use codec::{Decode, Encode};
+use frame_support::{
+	dispatch::{
+		DispatchErrorWithPostInfo, DispatchResult, DispatchResultWithPostInfo, PostDispatchInfo,
+	},
+	ensure,
+	traits::{Currency, Get, ReservableCurrency},
+	weights::{GetDispatchInfo, Weight},
+	RuntimeDebug,
 };
 use frame_system::{self as system, RawOrigin};
-use sp_runtime::{DispatchError, traits::{Dispatchable, Zero}};
+use sp_io::hashing::blake2_256;
+use sp_runtime::{
+	traits::{Dispatchable, Zero},
+	DispatchError,
+};
+use sp_std::prelude::*;
 pub use weights::WeightInfo;
 
 pub use pallet::*;
 
-type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type BalanceOf<T> =
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 /// Just a bunch of bytes, but they should decode to a valid `Call`.
 pub type OpaqueCall = Vec<u8>;
 
@@ -100,10 +108,10 @@ enum CallOrHash {
 }
 
 #[frame_support::pallet]
-pub mod pallet{
+pub mod pallet {
+	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use super::*;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -111,8 +119,10 @@ pub mod pallet{
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// The overarching call type.
-		type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo>
-			+ GetDispatchInfo + From<frame_system::Call<Self>>;
+		type Call: Parameter
+			+ Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
+			+ GetDispatchInfo
+			+ From<frame_system::Call<Self>>;
 
 		/// The currency mechanism.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -156,12 +166,8 @@ pub mod pallet{
 	>;
 
 	#[pallet::storage]
-	pub type Calls<T: Config> = StorageMap<
-		_,
-		Identity,
-		[u8; 32],
-		(OpaqueCall, T::AccountId, BalanceOf<T>),
-	>;
+	pub type Calls<T: Config> =
+		StorageMap<_, Identity, [u8; 32], (OpaqueCall, T::AccountId, BalanceOf<T>)>;
 
 	#[pallet::error]
 	pub enum Error<T> {
@@ -209,9 +215,15 @@ pub mod pallet{
 		/// \[approving, timepoint, multisig, call_hash\]
 		MultisigApproval(T::AccountId, Timepoint<T::BlockNumber>, T::AccountId, CallHash),
 		/// A multisig operation has been executed. \[approving, timepoint, multisig, call_hash\]
-		MultisigExecuted(T::AccountId, Timepoint<T::BlockNumber>, T::AccountId, CallHash, DispatchResult),
+		MultisigExecuted(
+			T::AccountId,
+			Timepoint<T::BlockNumber>,
+			T::AccountId,
+			CallHash,
+			DispatchResult,
+		),
 		/// A multisig operation has been cancelled. \[cancelling, timepoint, multisig, call_hash\]
-		MultisigCancelled(T::AccountId, Timepoint<T::BlockNumber>, T::AccountId, CallHash)
+		MultisigCancelled(T::AccountId, Timepoint<T::BlockNumber>, T::AccountId, CallHash),
 	}
 
 	#[pallet::hooks]
@@ -262,21 +274,26 @@ pub mod pallet{
 			let call_len = call.using_encoded(|c| c.len());
 			let result = call.dispatch(RawOrigin::Signed(id).into());
 
-			result.map(|post_dispatch_info| post_dispatch_info.actual_weight
-				.map(|actual_weight|
-					T::WeightInfo::as_multi_threshold_1(call_len as u32)
-						.saturating_add(actual_weight)
-				).into()
-			).map_err(|err| match err.post_info.actual_weight {
-				Some(actual_weight) => {
-					let weight_used = T::WeightInfo::as_multi_threshold_1(call_len as u32)
-						.saturating_add(actual_weight);
-					let post_info = Some(weight_used).into();
-					let error = err.error.into();
-					DispatchErrorWithPostInfo { post_info, error }
-				},
-				None => err,
-			})
+			result
+				.map(|post_dispatch_info| {
+					post_dispatch_info
+						.actual_weight
+						.map(|actual_weight| {
+							T::WeightInfo::as_multi_threshold_1(call_len as u32)
+								.saturating_add(actual_weight)
+						})
+						.into()
+				})
+				.map_err(|err| match err.post_info.actual_weight {
+					Some(actual_weight) => {
+						let weight_used = T::WeightInfo::as_multi_threshold_1(call_len as u32)
+							.saturating_add(actual_weight);
+						let post_info = Some(weight_used).into();
+						let error = err.error.into();
+						DispatchErrorWithPostInfo { post_info, error }
+					},
+					None => err,
+				})
 		}
 
 		/// Register approval for a dispatch to be made from a deterministic composite account if
@@ -345,7 +362,14 @@ pub mod pallet{
 			max_weight: Weight,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			Self::operate(who, threshold, other_signatories, maybe_timepoint, CallOrHash::Call(call, store_call), max_weight)
+			Self::operate(
+				who,
+				threshold,
+				other_signatories,
+				maybe_timepoint,
+				CallOrHash::Call(call, store_call),
+				max_weight,
+			)
 		}
 
 		/// Register approval for a dispatch to be made from a deterministic composite account if
@@ -401,7 +425,14 @@ pub mod pallet{
 			max_weight: Weight,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			Self::operate(who, threshold, other_signatories, maybe_timepoint, CallOrHash::Hash(call_hash), max_weight)
+			Self::operate(
+				who,
+				threshold,
+				other_signatories,
+				maybe_timepoint,
+				CallOrHash::Hash(call_hash),
+				max_weight,
+			)
 		}
 
 		/// Cancel a pre-existing, on-going multisig transaction. Any deposit reserved previously
@@ -447,8 +478,7 @@ pub mod pallet{
 
 			let id = Self::multi_account_id(&signatories, threshold);
 
-			let m = <Multisigs<T>>::get(&id, call_hash)
-				.ok_or(Error::<T>::NotFound)?;
+			let m = <Multisigs<T>>::get(&id, call_hash).ok_or(Error::<T>::NotFound)?;
 			ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
 			ensure!(m.depositor == who, Error::<T>::NotOwner);
 
@@ -496,7 +526,7 @@ impl<T: Config> Pallet<T> {
 				let call_hash = blake2_256(&call);
 				let call_len = call.len();
 				(call_hash, call_len, Some(call), should_store)
-			}
+			},
 			CallOrHash::Hash(h) => (h, 0, None, false),
 		};
 
@@ -511,12 +541,16 @@ impl<T: Config> Pallet<T> {
 			// We only bother with the approval if we're below threshold.
 			let maybe_pos = m.approvals.binary_search(&who).err().filter(|_| approvals < threshold);
 			// Bump approvals if not yet voted and the vote is needed.
-			if maybe_pos.is_some() { approvals += 1; }
+			if maybe_pos.is_some() {
+				approvals += 1;
+			}
 
 			// We only bother fetching/decoding call if we know that we're ready to execute.
 			let maybe_approved_call = if approvals >= threshold {
 				Self::get_call(&call_hash, maybe_call.as_ref().map(|c| c.as_ref()))
-			} else { None };
+			} else {
+				None
+			};
 
 			if let Some((call, call_len)) = maybe_approved_call {
 				// verify weight
@@ -530,21 +564,33 @@ impl<T: Config> Pallet<T> {
 
 				let result = call.dispatch(RawOrigin::Signed(id.clone()).into());
 				Self::deposit_event(Event::MultisigExecuted(
-					who, timepoint, id, call_hash, result.map(|_| ()).map_err(|e| e.error)
+					who,
+					timepoint,
+					id,
+					call_hash,
+					result.map(|_| ()).map_err(|e| e.error),
 				));
-				Ok(get_result_weight(result).map(|actual_weight|
-					T::WeightInfo::as_multi_complete(
-						other_signatories_len as u32,
-						call_len as u32
-					).saturating_add(actual_weight)
-				).into())
+				Ok(get_result_weight(result)
+					.map(|actual_weight| {
+						T::WeightInfo::as_multi_complete(
+							other_signatories_len as u32,
+							call_len as u32,
+						)
+						.saturating_add(actual_weight)
+					})
+					.into())
 			} else {
 				// We cannot dispatch the call now; either it isn't available, or it is, but we
 				// don't have threshold approvals even with our signature.
 
 				// Store the call if desired.
 				let stored = if let Some(data) = maybe_call.filter(|_| store) {
-					Self::store_call_and_reserve(who.clone(), &call_hash, data, BalanceOf::<T>::zero())?;
+					Self::store_call_and_reserve(
+						who.clone(),
+						&call_hash,
+						data,
+						BalanceOf::<T>::zero(),
+					)?;
 					true
 				} else {
 					false
@@ -567,10 +613,7 @@ impl<T: Config> Pallet<T> {
 						call_len as u32,
 					)
 				} else {
-					T::WeightInfo::as_multi_approve(
-						other_signatories_len as u32,
-						call_len as u32,
-					)
+					T::WeightInfo::as_multi_approve(other_signatories_len as u32, call_len as u32)
 				};
 				// Call is not made, so the actual weight does not include call
 				Ok(Some(final_weight).into())
@@ -591,24 +634,22 @@ impl<T: Config> Pallet<T> {
 				false
 			};
 
-			<Multisigs<T>>::insert(&id, call_hash, Multisig {
-				when: Self::timepoint(),
-				deposit,
-				depositor: who.clone(),
-				approvals: vec![who.clone()],
-			});
+			<Multisigs<T>>::insert(
+				&id,
+				call_hash,
+				Multisig {
+					when: Self::timepoint(),
+					deposit,
+					depositor: who.clone(),
+					approvals: vec![who.clone()],
+				},
+			);
 			Self::deposit_event(Event::NewMultisig(who, id, call_hash));
 
 			let final_weight = if stored {
-				T::WeightInfo::as_multi_create_store(
-					other_signatories_len as u32,
-					call_len as u32,
-				)
+				T::WeightInfo::as_multi_create_store(other_signatories_len as u32, call_len as u32)
 			} else {
-				T::WeightInfo::as_multi_create(
-					other_signatories_len as u32,
-					call_len as u32,
-				)
+				T::WeightInfo::as_multi_create(other_signatories_len as u32, call_len as u32)
 			};
 			// Call is not made, so the actual weight does not include call
 			Ok(Some(final_weight).into())
@@ -627,22 +668,27 @@ impl<T: Config> Pallet<T> {
 		other_deposit: BalanceOf<T>,
 	) -> DispatchResult {
 		ensure!(!Calls::<T>::contains_key(hash), Error::<T>::AlreadyStored);
-		let deposit = other_deposit + T::DepositBase::get()
-			+ T::DepositFactor::get() * BalanceOf::<T>::from(((data.len() + 31) / 32) as u32);
+		let deposit = other_deposit +
+			T::DepositBase::get() +
+			T::DepositFactor::get() * BalanceOf::<T>::from(((data.len() + 31) / 32) as u32);
 		T::Currency::reserve(&who, deposit)?;
 		Calls::<T>::insert(&hash, (data, who, deposit));
 		Ok(())
 	}
 
 	/// Attempt to decode and return the call, provided by the user or from storage.
-	fn get_call(hash: &[u8; 32], maybe_known: Option<&[u8]>) -> Option<(<T as Config>::Call, usize)> {
-		maybe_known.map_or_else(|| {
-			Calls::<T>::get(hash).and_then(|(data, ..)| {
-				Decode::decode(&mut &data[..]).ok().map(|d| (d, data.len()))
-			})
-		}, |data| {
-			Decode::decode(&mut &data[..]).ok().map(|d| (d, data.len()))
-		})
+	fn get_call(
+		hash: &[u8; 32],
+		maybe_known: Option<&[u8]>,
+	) -> Option<(<T as Config>::Call, usize)> {
+		maybe_known.map_or_else(
+			|| {
+				Calls::<T>::get(hash).and_then(|(data, ..)| {
+					Decode::decode(&mut &data[..]).ok().map(|d| (d, data.len()))
+				})
+			},
+			|data| Decode::decode(&mut &data[..]).ok().map(|d| (d, data.len())),
+		)
 	}
 
 	/// Attempt to remove a call from storage, returning any deposit on it to the owner.
@@ -661,9 +707,10 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Check that signatories is sorted and doesn't contain sender, then insert sender.
-	fn ensure_sorted_and_insert(other_signatories: Vec<T::AccountId>, who: T::AccountId)
-		-> Result<Vec<T::AccountId>, DispatchError>
-	{
+	fn ensure_sorted_and_insert(
+		other_signatories: Vec<T::AccountId>,
+		who: T::AccountId,
+	) -> Result<Vec<T::AccountId>, DispatchError> {
 		let mut signatories = other_signatories;
 		let mut maybe_last = None;
 		let mut index = 0;

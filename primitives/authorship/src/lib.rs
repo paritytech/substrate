@@ -19,11 +19,13 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::{result::Result, prelude::*};
+use sp_std::{prelude::*, result::Result};
 
-use codec::{Encode, Decode};
-use sp_inherents::{Error, InherentIdentifier, InherentData, IsFatalError};
-use sp_runtime::{RuntimeString, traits::Header as HeaderT};
+#[cfg(feature = "std")]
+use codec::Decode;
+use codec::Encode;
+use sp_inherents::{Error, InherentData, InherentIdentifier, IsFatalError};
+use sp_runtime::{traits::Header as HeaderT, RuntimeString};
 
 /// The identifier for the `uncles` inherent.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"uncles00";

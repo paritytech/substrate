@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{InherentData, Error, InherentIdentifier};
+use crate::{Error, InherentData, InherentIdentifier};
 use sp_runtime::traits::Block as BlockT;
 
 /// Something that can create inherent data providers.
@@ -44,7 +44,9 @@ impl<F, Block, IDP, ExtraArgs, Fut> CreateInherentDataProviders<Block, ExtraArgs
 where
 	Block: BlockT,
 	F: Fn(Block::Hash, ExtraArgs) -> Fut + Sync + Send,
-	Fut: std::future::Future<Output = Result<IDP, Box<dyn std::error::Error + Send + Sync>>> + Send + 'static,
+	Fut: std::future::Future<Output = Result<IDP, Box<dyn std::error::Error + Send + Sync>>>
+		+ Send
+		+ 'static,
 	IDP: InherentDataProvider + 'static,
 	ExtraArgs: Send + 'static,
 {

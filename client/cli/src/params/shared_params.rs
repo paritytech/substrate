@@ -16,10 +16,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use crate::arg_enums::TracingReceiver;
 use sc_service::config::BasePath;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use crate::arg_enums::TracingReceiver;
 
 /// Shared parameters used by all `CoreParams`.
 #[derive(Debug, StructOpt, Clone)]
@@ -88,13 +88,12 @@ impl SharedParams {
 	pub fn chain_id(&self, is_dev: bool) -> String {
 		match self.chain {
 			Some(ref chain) => chain.clone(),
-			None => {
+			None =>
 				if is_dev {
 					"dev".into()
 				} else {
 					"".into()
-				}
-			}
+				},
 		}
 	}
 

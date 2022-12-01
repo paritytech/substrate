@@ -17,14 +17,14 @@
 
 //! Convenience type for managing an imbalance whose sign is unknown.
 
-use codec::FullCodec;
-use sp_std::fmt::Debug;
-use sp_runtime::traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize};
-use crate::traits::misc::SameOrOther;
 use super::super::imbalance::Imbalance;
+use crate::traits::misc::SameOrOther;
+use codec::FullCodec;
+use sp_runtime::traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize};
+use sp_std::fmt::Debug;
 
 /// Either a positive or a negative imbalance.
-pub enum SignedImbalance<B, PositiveImbalance: Imbalance<B>>{
+pub enum SignedImbalance<B, PositiveImbalance: Imbalance<B>> {
 	/// A positive imbalance (funds have been created but none destroyed).
 	Positive(PositiveImbalance),
 	/// A negative imbalance (funds have been destroyed but none created).
@@ -32,10 +32,11 @@ pub enum SignedImbalance<B, PositiveImbalance: Imbalance<B>>{
 }
 
 impl<
-	P: Imbalance<B, Opposite=N>,
-	N: Imbalance<B, Opposite=P>,
-	B: AtLeast32BitUnsigned + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default,
-> SignedImbalance<B, P> {
+		P: Imbalance<B, Opposite = N>,
+		N: Imbalance<B, Opposite = P>,
+		B: AtLeast32BitUnsigned + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default,
+	> SignedImbalance<B, P>
+{
 	/// Create a `Positive` instance of `Self` whose value is zero.
 	pub fn zero() -> Self {
 		SignedImbalance::Positive(P::zero())

@@ -17,15 +17,18 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use libp2p::{
-	PeerId, Transport,
+	bandwidth,
 	core::{
-		self, either::EitherTransport, muxing::StreamMuxerBox,
-		transport::{Boxed, OptionalTransport}, upgrade
+		self,
+		either::EitherTransport,
+		muxing::StreamMuxerBox,
+		transport::{Boxed, OptionalTransport},
+		upgrade,
 	},
-	mplex, identity, bandwidth, wasm_ext, noise
+	identity, mplex, noise, wasm_ext, PeerId, Transport,
 };
 #[cfg(not(target_os = "unknown"))]
-use libp2p::{tcp, dns, websocket};
+use libp2p::{dns, tcp, websocket};
 use std::{sync::Arc, time::Duration};
 
 pub use self::bandwidth::BandwidthSinks;
@@ -61,8 +64,8 @@ pub fn build_transport(
 	#[cfg(not(target_os = "unknown"))]
 	let transport = transport.or_transport(if !memory_only {
 		let desktop_trans = tcp::TcpConfig::new().nodelay(true);
-		let desktop_trans = websocket::WsConfig::new(desktop_trans.clone())
-			.or_transport(desktop_trans);
+		let desktop_trans =
+			websocket::WsConfig::new(desktop_trans.clone()).or_transport(desktop_trans);
 		let dns_init = futures::executor::block_on(dns::DnsConfig::system(desktop_trans.clone()));
 		OptionalTransport::some(if let Ok(dns) = dns_init {
 			EitherTransport::Left(dns)
@@ -81,23 +84,24 @@ pub fn build_transport(
 
 	let (transport, bandwidth) = bandwidth::BandwidthLogging::new(transport);
 
-	let authentication_config = {
-		// For more information about these two panics, see in "On the Importance of
-		// Checking Cryptographic Protocols for Faults" by Dan Boneh, Richard A. DeMillo,
-		// and Richard J. Lipton.
-		let noise_keypair = noise::Keypair::<noise::X25519Spec>::new().into_authentic(&keypair)
+	let authentication_config =
+		{
+			// For more information about these two panics, see in "On the Importance of
+			// Checking Cryptographic Protocols for Faults" by Dan Boneh, Richard A. DeMillo,
+			// and Richard J. Lipton.
+			let noise_keypair = noise::Keypair::<noise::X25519Spec>::new().into_authentic(&keypair)
 			.expect("can only fail in case of a hardware bug; since this signing is performed only \
 				once and at initialization, we're taking the bet that the inconvenience of a very \
 				rare panic here is basically zero");
 
-		// Legacy noise configurations for backward compatibility.
-		let mut noise_legacy = noise::LegacyConfig::default();
-		noise_legacy.recv_legacy_handshake = true;
+			// Legacy noise configurations for backward compatibility.
+			let mut noise_legacy = noise::LegacyConfig::default();
+			noise_legacy.recv_legacy_handshake = true;
 
-		let mut xx_config = noise::NoiseConfig::xx(noise_keypair);
-		xx_config.set_legacy_config(noise_legacy.clone());
-		xx_config.into_authenticated()
-	};
+			let mut xx_config = noise::NoiseConfig::xx(noise_keypair);
+			xx_config.set_legacy_config(noise_legacy.clone());
+			xx_config.into_authenticated()
+		};
 
 	let multiplexing_config = {
 		let mut mplex_config = mplex::MplexConfig::new();
@@ -117,7 +121,8 @@ pub fn build_transport(
 		core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
 	};
 
-	let transport = transport.upgrade(upgrade::Version::V1Lazy)
+	let transport = transport
+		.upgrade(upgrade::Version::V1Lazy)
 		.authenticate(authentication_config)
 		.multiplex(multiplexing_config)
 		.timeout(Duration::from_secs(20))

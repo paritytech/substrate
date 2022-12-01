@@ -28,7 +28,10 @@ frame_support::decl_storage! {
 }
 
 frame_support::decl_event!(
-	pub enum Event<T> where B = <T as Config>::Balance {
+	pub enum Event<T>
+	where
+		B = <T as Config>::Balance,
+	{
 		Dummy(B),
 	}
 );
@@ -126,7 +129,7 @@ mod tests {
 	}
 
 	impl frame_system::Config for Runtime {
-		type BaseCallFilter = ();
+		type BaseCallFilter = frame_support::traits::Everything;
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;

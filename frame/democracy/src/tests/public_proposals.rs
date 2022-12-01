@@ -89,10 +89,7 @@ fn poor_seconder_should_not_work() {
 fn invalid_seconds_upper_bound_should_not_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(propose_set_balance_and_note(1, 2, 5));
-		assert_noop!(
-			Democracy::second(Origin::signed(2), 0, 0),
-			Error::<Test>::WrongUpperBound
-		);
+		assert_noop!(Democracy::second(Origin::signed(2), 0, 0), Error::<Test>::WrongUpperBound);
 	});
 }
 

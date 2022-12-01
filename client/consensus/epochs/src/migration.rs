@@ -18,11 +18,11 @@
 
 //! Migration types for epoch changes.
 
-use std::collections::BTreeMap;
-use codec::{Encode, Decode};
+use crate::{Epoch, EpochChanges, PersistedEpoch, PersistedEpochHeader};
+use codec::{Decode, Encode};
 use fork_tree::ForkTree;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
-use crate::{Epoch, EpochChanges, PersistedEpoch, PersistedEpochHeader};
+use std::collections::BTreeMap;
 
 /// Legacy definition of epoch changes.
 #[derive(Clone, Encode, Decode)]
@@ -31,9 +31,11 @@ pub struct EpochChangesV0<Hash, Number, E: Epoch> {
 }
 
 /// Type alias for legacy definition of epoch changes.
-pub type EpochChangesForV0<Block, Epoch> = EpochChangesV0<<Block as BlockT>::Hash, NumberFor<Block>, Epoch>;
+pub type EpochChangesForV0<Block, Epoch> =
+	EpochChangesV0<<Block as BlockT>::Hash, NumberFor<Block>, Epoch>;
 
-impl<Hash, Number, E: Epoch> EpochChangesV0<Hash, Number, E> where
+impl<Hash, Number, E: Epoch> EpochChangesV0<Hash, Number, E>
+where
 	Hash: PartialEq + Ord + Copy,
 	Number: Ord + Copy,
 {

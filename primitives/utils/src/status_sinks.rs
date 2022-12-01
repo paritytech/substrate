@@ -16,9 +16,13 @@
 // limitations under the License.
 
 use crate::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
-use futures::{prelude::*, lock::Mutex};
+use futures::{lock::Mutex, prelude::*};
 use futures_timer::Delay;
-use std::{pin::Pin, task::{Poll, Context}, time::Duration};
+use std::{
+	pin::Pin,
+	task::{Context, Poll},
+	time::Duration,
+};
 
 /// Holds a list of `UnboundedSender`s, each associated with a certain time period. Every time the
 /// period elapses, we push an element on the sender.
@@ -44,7 +48,7 @@ struct YieldAfter<T> {
 	sender: Option<TracingUnboundedSender<T>>,
 }
 
-impl <T> Default for StatusSinks<T> {
+impl<T> Default for StatusSinks<T> {
 	fn default() -> Self {
 		Self::new()
 	}
@@ -56,10 +60,7 @@ impl<T> StatusSinks<T> {
 		let (entries_tx, entries_rx) = tracing_unbounded("status-sinks-entries");
 
 		StatusSinks {
-			inner: Mutex::new(Inner {
-				entries: stream::FuturesUnordered::new(),
-				entries_rx,
-			}),
+			inner: Mutex::new(Inner { entries: stream::FuturesUnordered::new(), entries_rx }),
 			entries_tx,
 		}
 	}
@@ -100,7 +101,7 @@ impl<T> StatusSinks<T> {
 				}
 			};
 
-			futures::select!{
+			futures::select! {
 				new_entry = inner.entries_rx.next() => {
 					if let Some(new_entry) = new_entry {
 						inner.entries.push(new_entry);
@@ -149,7 +150,7 @@ impl<'a, T> Drop for ReadySinkEvent<'a, T> {
 	fn drop(&mut self) {
 		if let Some(sender) = self.sender.take() {
 			if sender.is_closed() {
-				return;
+				return
 			}
 
 			let _ = self.sinks.entries_tx.unbounded_send(YieldAfter {
@@ -170,18 +171,20 @@ impl<T> futures::Future for YieldAfter<T> {
 		match Pin::new(&mut this.delay).poll(cx) {
 			Poll::Pending => Poll::Pending,
 			Poll::Ready(()) => {
-				let sender = this.sender.take()
+				let sender = this
+					.sender
+					.take()
 					.expect("sender is always Some unless the future is finished; qed");
 				Poll::Ready((sender, this.interval))
-			}
+			},
 		}
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use crate::mpsc::tracing_unbounded;
 	use super::StatusSinks;
+	use crate::mpsc::tracing_unbounded;
 	use futures::prelude::*;
 	use std::time::Duration;
 
@@ -208,7 +211,7 @@ mod tests {
 			Box::pin(async {
 				let items: Vec<i32> = rx.take(3).collect().await;
 				assert_eq!(items, [6, 7, 8]);
-			})
+			}),
 		));
 	}
 }

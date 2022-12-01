@@ -1,6 +1,6 @@
 [package]
 name = "pallet-scored-pool"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -14,15 +14,15 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
-frame-support = { version = "3.0.0", default-features = false, path = "../support" }
-frame-system = { version = "3.0.0", default-features = false, path = "../system" }
+sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 
 [dev-dependencies]
-pallet-balances = { version = "3.0.0", path = "../balances" }
-sp-core = { version = "3.0.0", path = "../../primitives/core" }
+pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 
 [features]
 default = ["std"]

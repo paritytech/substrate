@@ -75,11 +75,7 @@ pub fn seq_phragmen<AccountId: IdentifierT, P: PerThing128>(
 ) -> Result<ElectionResult<AccountId, P>, crate::Error> {
 	let (candidates, voters) = setup_inputs(initial_candidates, initial_voters);
 
-	let (candidates, mut voters) = seq_phragmen_core::<AccountId>(
-		rounds,
-		candidates,
-		voters,
-	)?;
+	let (candidates, mut voters) = seq_phragmen_core::<AccountId>(rounds, candidates, voters)?;
 
 	if let Some((iterations, tolerance)) = balance {
 		// NOTE: might create zero-edges, but we will strip them again when we convert voter into
@@ -152,7 +148,8 @@ pub fn seq_phragmen_core<AccountId: IdentifierT>(
 						voter.load.n(),
 						voter.budget,
 						candidate.approval_stake,
-					).unwrap_or(Bounded::max_value());
+					)
+					.unwrap_or(Bounded::max_value());
 					let temp_d = voter.load.d();
 					let temp = Rational128::from(temp_n, temp_d);
 					candidate.score = candidate.score.lazy_saturating_add(temp);
@@ -188,13 +185,9 @@ pub fn seq_phragmen_core<AccountId: IdentifierT>(
 		for edge in &mut voter.edges {
 			if edge.candidate.borrow().elected {
 				// update internal state.
-				edge.weight = multiply_by_rational(
-					voter.budget,
-					edge.load.n(),
-					voter.load.n(),
-				)
-				// If result cannot fit in u128. Not much we can do about it.
-				.unwrap_or(Bounded::max_value());
+				edge.weight = multiply_by_rational(voter.budget, edge.load.n(), voter.load.n())
+					// If result cannot fit in u128. Not much we can do about it.
+					.unwrap_or(Bounded::max_value());
 			} else {
 				edge.weight = 0
 			}

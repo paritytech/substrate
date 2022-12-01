@@ -55,11 +55,7 @@ impl<A: fmt::Debug> sp_std::fmt::Debug for NodeId<A> {
 			f,
 			"Node({:?}, {:?})",
 			self.who,
-			if self.role == NodeRole::Voter {
-				"V"
-			} else {
-				"T"
-			}
+			if self.role == NodeRole::Voter { "V" } else { "T" }
 		)
 	}
 }
@@ -84,12 +80,7 @@ impl<A: PartialEq> Eq for Node<A> {}
 #[cfg(feature = "std")]
 impl<A: fmt::Debug + Clone> fmt::Debug for Node<A> {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(
-			f,
-			"({:?} --> {:?})",
-			self.id,
-			self.parent.as_ref().map(|p| p.borrow().id.clone())
-		)
+		write!(f, "({:?} --> {:?})", self.id, self.parent.as_ref().map(|p| p.borrow().id.clone()))
 	}
 }
 
@@ -102,7 +93,7 @@ impl<A: PartialEq + Eq + Clone + fmt::Debug> Node<A> {
 	/// Returns true if `other` is the parent of `who`.
 	pub fn is_parent_of(who: &NodeRef<A>, other: &NodeRef<A>) -> bool {
 		if who.borrow().parent.is_none() {
-			return false;
+			return false
 		}
 		who.borrow().parent.as_ref() == Some(other)
 	}
@@ -136,7 +127,7 @@ impl<A: PartialEq + Eq + Clone + fmt::Debug> Node<A> {
 
 		while let Some(ref next_parent) = current.clone().borrow().parent {
 			if visited.contains(next_parent) {
-				break;
+				break
 			}
 			parent_path.push(next_parent.clone());
 			current = next_parent.clone();
@@ -164,16 +155,7 @@ mod tests {
 	#[test]
 	fn basic_create_works() {
 		let node = Node::new(id(10));
-		assert_eq!(
-			node,
-			Node {
-				id: NodeId {
-					who: 10,
-					role: NodeRole::Target
-				},
-				parent: None
-			}
-		);
+		assert_eq!(node, Node { id: NodeId { who: 10, role: NodeRole::Target }, parent: None });
 	}
 
 	#[test]
@@ -194,9 +176,9 @@ mod tests {
 
 	#[test]
 	fn get_root_works() {
-		//	D <-- A <-- B <-- C
-		//			\
-		//			 <-- E
+		// 	D <-- A <-- B <-- C
+		// 			\
+		// 			 <-- E
 		let a = Node::new(id(1)).into_ref();
 		let b = Node::new(id(2)).into_ref();
 		let c = Node::new(id(3)).into_ref();
@@ -209,29 +191,20 @@ mod tests {
 		Node::set_parent_of(&e, &a);
 		Node::set_parent_of(&a, &d);
 
-		assert_eq!(
-			Node::root(&e),
-			(d.clone(), vec![e.clone(), a.clone(), d.clone()]),
-		);
+		assert_eq!(Node::root(&e), (d.clone(), vec![e.clone(), a.clone(), d.clone()]));
 
-		assert_eq!(Node::root(&a), (d.clone(), vec![a.clone(), d.clone()]),);
+		assert_eq!(Node::root(&a), (d.clone(), vec![a.clone(), d.clone()]));
 
-		assert_eq!(
-			Node::root(&c),
-			(d.clone(), vec![c.clone(), b.clone(), a.clone(), d.clone()]),
-		);
+		assert_eq!(Node::root(&c), (d.clone(), vec![c.clone(), b.clone(), a.clone(), d.clone()]));
 
-		//	D 	    A <-- B <-- C
-		//	F <-- /	\
-		//			 <-- E
+		// 	D 	    A <-- B <-- C
+		// 	F <-- /	\
+		// 			 <-- E
 		Node::set_parent_of(&a, &f);
 
-		assert_eq!(Node::root(&a), (f.clone(), vec![a.clone(), f.clone()]),);
+		assert_eq!(Node::root(&a), (f.clone(), vec![a.clone(), f.clone()]));
 
-		assert_eq!(
-			Node::root(&c),
-			(f.clone(), vec![c.clone(), b.clone(), a.clone(), f.clone()]),
-		);
+		assert_eq!(Node::root(&c), (f.clone(), vec![c.clone(), b.clone(), a.clone(), f.clone()]));
 	}
 
 	#[test]

@@ -80,39 +80,42 @@ fn decode_impl(
 		}
 	};
 
-	let decode_impl_rest = (3..=count).map(|c| {
-		let name = field_name_for(c);
+	let decode_impl_rest = (3..=count)
+		.map(|c| {
+			let name = field_name_for(c);
 
-		let inner_impl = (0..c-1).map(|i|
-			quote! { ( (inner[#i].0).0, (inner[#i].1).0 ), }
-		).collect::<TokenStream2>();
+			let inner_impl = (0..c - 1)
+				.map(|i| quote! { ( (inner[#i].0).0, (inner[#i].1).0 ), })
+				.collect::<TokenStream2>();
 
-		quote! {
-			let #name =
-			<
-				_npos::sp_std::prelude::Vec<(
-					_npos::codec::Compact<#voter_type>,
-					[(_npos::codec::Compact<#target_type>, _npos::codec::Compact<#weight_type>); #c-1],
-					_npos::codec::Compact<#target_type>,
-				)>
-				as _npos::codec::Decode
-			>::decode(value)?;
-			let #name = #name
-				.into_iter()
-				.map(|(v, inner, t_last)| (
-					v.0,
-					[ #inner_impl ],
-					t_last.0,
-				))
-				.collect::<_npos::sp_std::prelude::Vec<_>>();
-		}
-	}).collect::<TokenStream2>();
+			quote! {
+				let #name =
+				<
+					_npos::sp_std::prelude::Vec<(
+						_npos::codec::Compact<#voter_type>,
+						[(_npos::codec::Compact<#target_type>, _npos::codec::Compact<#weight_type>); #c-1],
+						_npos::codec::Compact<#target_type>,
+					)>
+					as _npos::codec::Decode
+				>::decode(value)?;
+				let #name = #name
+					.into_iter()
+					.map(|(v, inner, t_last)| (
+						v.0,
+						[ #inner_impl ],
+						t_last.0,
+					))
+					.collect::<_npos::sp_std::prelude::Vec<_>>();
+			}
+		})
+		.collect::<TokenStream2>();
 
-
-	let all_field_names = (1..=count).map(|c| {
-		let name = field_name_for(c);
-		quote! { #name, }
-	}).collect::<TokenStream2>();
+	let all_field_names = (1..=count)
+		.map(|c| {
+			let name = field_name_for(c);
+			quote! { #name, }
+		})
+		.collect::<TokenStream2>();
 
 	quote!(
 		impl _npos::codec::Decode for #ident {
@@ -165,29 +168,33 @@ fn encode_impl(ident: syn::Ident, count: usize) -> TokenStream2 {
 		}
 	};
 
-	let encode_impl_rest = (3..=count).map(|c| {
-		let name = field_name_for(c);
+	let encode_impl_rest = (3..=count)
+		.map(|c| {
+			let name = field_name_for(c);
 
-		// we use the knowledge of the length to avoid copy_from_slice.
-		let inners_compact_array = (0..c-1).map(|i|
-			quote!{(
-				_npos::codec::Compact(inner[#i].0.clone()),
-				_npos::codec::Compact(inner[#i].1.clone()),
-			),}
-		).collect::<TokenStream2>();
+			// we use the knowledge of the length to avoid copy_from_slice.
+			let inners_compact_array = (0..c - 1)
+				.map(|i| {
+					quote! {(
+						_npos::codec::Compact(inner[#i].0.clone()),
+						_npos::codec::Compact(inner[#i].1.clone()),
+					),}
+				})
+				.collect::<TokenStream2>();
 
-		quote! {
-			let #name = self.#name
-				.iter()
-				.map(|(v, inner, t_last)| (
-					_npos::codec::Compact(v.clone()),
-					[ #inners_compact_array ],
-					_npos::codec::Compact(t_last.clone()),
-				))
-				.collect::<_npos::sp_std::prelude::Vec<_>>();
-			#name.encode_to(&mut r);
-		}
-	}).collect::<TokenStream2>();
+			quote! {
+				let #name = self.#name
+					.iter()
+					.map(|(v, inner, t_last)| (
+						_npos::codec::Compact(v.clone()),
+						[ #inners_compact_array ],
+						_npos::codec::Compact(t_last.clone()),
+					))
+					.collect::<_npos::sp_std::prelude::Vec<_>>();
+				#name.encode_to(&mut r);
+			}
+		})
+		.collect::<TokenStream2>();
 
 	quote!(
 		impl _npos::codec::Encode for #ident {

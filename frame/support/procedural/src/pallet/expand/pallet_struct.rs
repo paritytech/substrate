@@ -15,10 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::{Def, expand::merge_where_clauses, parse::helper::get_doc_literals};
+use crate::pallet::{expand::merge_where_clauses, parse::helper::get_doc_literals, Def};
 
 /// * Add derive trait on Pallet
-/// * Implement GetPalletVersion on Pallet
+/// * Implement GetStorageVersion on Pallet
 /// * Implement OnGenesis on Pallet
 /// * Implement ModuleErrorMetadata on Pallet
 /// * declare Module type alias for construct_runtime
@@ -102,39 +102,59 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 		)
 	};
 
-	let storage_info = if let Some(storage_info_span) = def.pallet_struct.generate_storage_info {
-		let storage_names = &def.storages.iter().map(|storage| &storage.ident).collect::<Vec<_>>();
-		let storage_cfg_attrs = &def.storages.iter()
-			.map(|storage| &storage.cfg_attrs)
-			.collect::<Vec<_>>();
+	// Depending on the flag `generate_storage_info` we use partial or full storage info from
+	// storage.
+	let (storage_info_span, storage_info_trait, storage_info_method) =
+		if let Some(span) = def.pallet_struct.generate_storage_info {
+			(
+				span,
+				quote::quote_spanned!(span => StorageInfoTrait),
+				quote::quote_spanned!(span => storage_info),
+			)
+		} else {
+			let span = def.pallet_struct.attr_span;
+			(
+				span,
+				quote::quote_spanned!(span => PartialStorageInfoTrait),
+				quote::quote_spanned!(span => partial_storage_info),
+			)
+		};
 
-		quote::quote_spanned!(storage_info_span =>
-			impl<#type_impl_gen> #frame_support::traits::StorageInfoTrait
-				for #pallet_ident<#type_use_gen>
-				#storages_where_clauses
+	let storage_names = &def.storages.iter().map(|storage| &storage.ident).collect::<Vec<_>>();
+	let storage_cfg_attrs =
+		&def.storages.iter().map(|storage| &storage.cfg_attrs).collect::<Vec<_>>();
+
+	let storage_info = quote::quote_spanned!(storage_info_span =>
+		impl<#type_impl_gen> #frame_support::traits::StorageInfoTrait
+			for #pallet_ident<#type_use_gen>
+			#storages_where_clauses
+		{
+			fn storage_info()
+				-> #frame_support::sp_std::vec::Vec<#frame_support::traits::StorageInfo>
 			{
-				fn storage_info()
-					-> #frame_support::sp_std::vec::Vec<#frame_support::traits::StorageInfo>
-				{
-					let mut res = #frame_support::sp_std::vec![];
+				#[allow(unused_mut)]
+				let mut res = #frame_support::sp_std::vec![];
 
-					#(
-						#(#storage_cfg_attrs)*
-						{
-							let mut storage_info = <
-								#storage_names<#type_use_gen>
-								as #frame_support::traits::StorageInfoTrait
-							>::storage_info();
-							res.append(&mut storage_info);
-						}
-					)*
+				#(
+					#(#storage_cfg_attrs)*
+					{
+						let mut storage_info = <
+							#storage_names<#type_use_gen>
+							as #frame_support::traits::#storage_info_trait
+						>::#storage_info_method();
+						res.append(&mut storage_info);
+					}
+				)*
 
-					res
-				}
+				res
 			}
-		)
+		}
+	);
+
+	let storage_version = if let Some(v) = def.pallet_struct.storage_version.as_ref() {
+		quote::quote! { #v }
 	} else {
-		Default::default()
+		quote::quote! { #frame_support::traits::StorageVersion::default() }
 	};
 
 	quote::quote_spanned!(def.pallet_struct.attr_span =>
@@ -147,21 +167,17 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 		#[allow(dead_code)]
 		pub type Module<#type_decl_gen> = #pallet_ident<#type_use_gen>;
 
-		// Implement `GetPalletVersion` for `Pallet`
-		impl<#type_impl_gen> #frame_support::traits::GetPalletVersion
+		// Implement `GetStorageVersion` for `Pallet`
+		impl<#type_impl_gen> #frame_support::traits::GetStorageVersion
 			for #pallet_ident<#type_use_gen>
 			#config_where_clause
 		{
-			fn current_version() -> #frame_support::traits::PalletVersion {
-				#frame_support::crate_to_pallet_version!()
+			fn current_storage_version() -> #frame_support::traits::StorageVersion {
+				#storage_version
 			}
 
-			fn storage_version() -> Option<#frame_support::traits::PalletVersion> {
-				let key = #frame_support::traits::PalletVersion::storage_key::<
-						<T as #frame_system::Config>::PalletInfo, Self
-					>().expect("Every active pallet has a name in the runtime; qed");
-
-				#frame_support::storage::unhashed::get(&key)
+			fn on_chain_storage_version() -> #frame_support::traits::StorageVersion {
+				#frame_support::traits::StorageVersion::get::<Self>()
 			}
 		}
 
@@ -171,8 +187,8 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 			#config_where_clause
 		{
 			fn on_genesis() {
-				#frame_support::crate_to_pallet_version!()
-					.put_into_storage::<<T as #frame_system::Config>::PalletInfo, Self>();
+				let storage_version = #storage_version;
+				storage_version.put::<Self>();
 			}
 		}
 

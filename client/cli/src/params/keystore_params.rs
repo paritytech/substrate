@@ -16,12 +16,14 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::error::Result;
+use crate::{error, error::Result};
 use sc_service::config::KeystoreConfig;
-use std::{fs, path::{PathBuf, Path}};
-use structopt::StructOpt;
-use crate::error;
 use sp_core::crypto::SecretString;
+use std::{
+	fs,
+	path::{Path, PathBuf},
+};
+use structopt::StructOpt;
 
 /// default sub directory for the key store
 const DEFAULT_KEYSTORE_CONFIG_PATH: &'static str = "keystore";
@@ -81,8 +83,7 @@ impl KeystoreParams {
 			#[cfg(target_os = "unknown")]
 			None
 		} else if let Some(ref file) = self.password_filename {
-			let password = fs::read_to_string(file)
-				.map_err(|e| format!("{}", e))?;
+			let password = fs::read_to_string(file).map_err(|e| format!("{}", e))?;
 			Some(SecretString::new(password))
 		} else {
 			self.password.clone()

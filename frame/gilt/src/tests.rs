@@ -18,10 +18,10 @@
 //! Tests for Gilt pallet.
 
 use super::*;
-use crate::{Error, mock::*};
-use frame_support::{assert_ok, assert_noop, dispatch::DispatchError, traits::Currency};
-use sp_arithmetic::Perquintill;
+use crate::{mock::*, Error};
+use frame_support::{assert_noop, assert_ok, dispatch::DispatchError, traits::Currency};
 use pallet_balances::Error as BalancesError;
+use sp_arithmetic::Perquintill;
 
 #[test]
 fn basic_setup_works() {
@@ -31,12 +31,15 @@ fn basic_setup_works() {
 		for q in 0..3 {
 			assert!(Queues::<Test>::get(q).is_empty());
 		}
-		assert_eq!(ActiveTotal::<Test>::get(), ActiveGiltsTotal {
-			frozen: 0,
-			proportion: Perquintill::zero(),
-			index: 0,
-			target: Perquintill::zero(),
-		});
+		assert_eq!(
+			ActiveTotal::<Test>::get(),
+			ActiveGiltsTotal {
+				frozen: 0,
+				proportion: Perquintill::zero(),
+				index: 0,
+				target: Perquintill::zero(),
+			}
+		);
 		assert_eq!(QueueTotals::<Test>::get(), vec![(0, 0); 3]);
 	});
 }
@@ -49,12 +52,15 @@ fn set_target_works() {
 		assert_noop!(Gilt::set_target(Origin::signed(2), Perquintill::from_percent(50)), e);
 		assert_ok!(Gilt::set_target(Origin::signed(1), Perquintill::from_percent(50)));
 
-		assert_eq!(ActiveTotal::<Test>::get(), ActiveGiltsTotal {
-			frozen: 0,
-			proportion: Perquintill::zero(),
-			index: 0,
-			target: Perquintill::from_percent(50),
-		});
+		assert_eq!(
+			ActiveTotal::<Test>::get(),
+			ActiveGiltsTotal {
+				frozen: 0,
+				proportion: Perquintill::zero(),
+				index: 0,
+				target: Perquintill::from_percent(50),
+			}
+		);
 	});
 }
 
@@ -63,7 +69,10 @@ fn place_bid_works() {
 	new_test_ext().execute_with(|| {
 		run_to_block(1);
 		assert_noop!(Gilt::place_bid(Origin::signed(1), 1, 2), Error::<Test>::AmountTooSmall);
-		assert_noop!(Gilt::place_bid(Origin::signed(1), 101, 2), BalancesError::<Test>::InsufficientBalance);
+		assert_noop!(
+			Gilt::place_bid(Origin::signed(1), 101, 2),
+			BalancesError::<Test>::InsufficientBalance
+		);
 		assert_noop!(Gilt::place_bid(Origin::signed(1), 10, 4), Error::<Test>::DurationTooBig);
 		assert_ok!(Gilt::place_bid(Origin::signed(1), 10, 2));
 		assert_eq!(Balances::reserved_balance(1), 10);
@@ -86,11 +95,14 @@ fn place_bid_queuing_works() {
 		assert_ok!(Gilt::place_bid(Origin::signed(1), 25, 2));
 		assert_eq!(Balances::reserved_balance(1), 60);
 		assert_noop!(Gilt::place_bid(Origin::signed(1), 10, 2), Error::<Test>::BidTooLow);
-		assert_eq!(Queues::<Test>::get(2), vec![
-			GiltBid { amount: 15, who: 1 },
-			GiltBid { amount: 25, who: 1 },
-			GiltBid { amount: 20, who: 1 },
-		]);
+		assert_eq!(
+			Queues::<Test>::get(2),
+			vec![
+				GiltBid { amount: 15, who: 1 },
+				GiltBid { amount: 25, who: 1 },
+				GiltBid { amount: 20, who: 1 },
+			]
+		);
 		assert_eq!(QueueTotals::<Test>::get(), vec![(0, 0), (3, 60), (0, 0)]);
 	});
 }
@@ -119,17 +131,16 @@ fn multiple_place_bids_works() {
 
 		assert_eq!(Balances::reserved_balance(1), 40);
 		assert_eq!(Balances::reserved_balance(2), 10);
-		assert_eq!(Queues::<Test>::get(1), vec![
-			GiltBid { amount: 10, who: 1 },
-		]);
-		assert_eq!(Queues::<Test>::get(2), vec![
-			GiltBid { amount: 10, who: 2 },
-			GiltBid { amount: 10, who: 1 },
-			GiltBid { amount: 10, who: 1 },
-		]);
-		assert_eq!(Queues::<Test>::get(3), vec![
-			GiltBid { amount: 10, who: 1 },
-		]);
+		assert_eq!(Queues::<Test>::get(1), vec![GiltBid { amount: 10, who: 1 },]);
+		assert_eq!(
+			Queues::<Test>::get(2),
+			vec![
+				GiltBid { amount: 10, who: 2 },
+				GiltBid { amount: 10, who: 1 },
+				GiltBid { amount: 10, who: 1 },
+			]
+		);
+		assert_eq!(Queues::<Test>::get(3), vec![GiltBid { amount: 10, who: 1 },]);
 		assert_eq!(QueueTotals::<Test>::get(), vec![(1, 10), (3, 30), (1, 10)]);
 	});
 }
@@ -144,7 +155,7 @@ fn retract_single_item_queue_works() {
 
 		assert_eq!(Balances::reserved_balance(1), 10);
 		assert_eq!(Queues::<Test>::get(1), vec![]);
-		assert_eq!(Queues::<Test>::get(2), vec![ GiltBid { amount: 10, who: 1 } ]);
+		assert_eq!(Queues::<Test>::get(2), vec![GiltBid { amount: 10, who: 1 }]);
 		assert_eq!(QueueTotals::<Test>::get(), vec![(0, 0), (1, 10), (0, 0)]);
 	});
 }
@@ -161,13 +172,11 @@ fn retract_with_other_and_duplicate_works() {
 		assert_ok!(Gilt::retract_bid(Origin::signed(1), 10, 2));
 		assert_eq!(Balances::reserved_balance(1), 20);
 		assert_eq!(Balances::reserved_balance(2), 10);
-		assert_eq!(Queues::<Test>::get(1), vec![
-			GiltBid { amount: 10, who: 1 },
-		]);
-		assert_eq!(Queues::<Test>::get(2), vec![
-			GiltBid { amount: 10, who: 2 },
-			GiltBid { amount: 10, who: 1 },
-		]);
+		assert_eq!(Queues::<Test>::get(1), vec![GiltBid { amount: 10, who: 1 },]);
+		assert_eq!(
+			Queues::<Test>::get(2),
+			vec![GiltBid { amount: 10, who: 2 }, GiltBid { amount: 10, who: 1 },]
+		);
 		assert_eq!(QueueTotals::<Test>::get(), vec![(1, 10), (2, 20), (0, 0)]);
 	});
 }
@@ -195,22 +204,23 @@ fn basic_enlarge_works() {
 		// Takes 2/2, then stopped because it reaches its max amount
 		assert_eq!(Balances::reserved_balance(1), 40);
 		assert_eq!(Balances::reserved_balance(2), 40);
-		assert_eq!(Queues::<Test>::get(1), vec![ GiltBid { amount: 40, who: 1 } ]);
+		assert_eq!(Queues::<Test>::get(1), vec![GiltBid { amount: 40, who: 1 }]);
 		assert_eq!(Queues::<Test>::get(2), vec![]);
 		assert_eq!(QueueTotals::<Test>::get(), vec![(1, 40), (0, 0), (0, 0)]);
 
-		assert_eq!(ActiveTotal::<Test>::get(), ActiveGiltsTotal {
-			frozen: 40,
-			proportion: Perquintill::from_percent(10),
-			index: 1,
-			target: Perquintill::zero(),
-		});
-		assert_eq!(Active::<Test>::get(0).unwrap(), ActiveGilt {
-			proportion: Perquintill::from_percent(10),
-			amount: 40,
-			who: 2,
-			expiry: 7,
-		});
+		assert_eq!(
+			ActiveTotal::<Test>::get(),
+			ActiveGiltsTotal {
+				frozen: 40,
+				proportion: Perquintill::from_percent(10),
+				index: 1,
+				target: Perquintill::zero(),
+			}
+		);
+		assert_eq!(
+			Active::<Test>::get(0).unwrap(),
+			ActiveGilt { proportion: Perquintill::from_percent(10), amount: 40, who: 2, expiry: 7 }
+		);
 	});
 }
 
@@ -225,29 +235,33 @@ fn enlarge_respects_bids_limit() {
 		Gilt::enlarge(100, 2);
 
 		// Should have taken 4/3 and 2/2, then stopped because it's only allowed 2.
-		assert_eq!(Queues::<Test>::get(1), vec![ GiltBid { amount: 40, who: 1 } ]);
-		assert_eq!(Queues::<Test>::get(2), vec![ GiltBid { amount: 40, who: 3 } ]);
+		assert_eq!(Queues::<Test>::get(1), vec![GiltBid { amount: 40, who: 1 }]);
+		assert_eq!(Queues::<Test>::get(2), vec![GiltBid { amount: 40, who: 3 }]);
 		assert_eq!(Queues::<Test>::get(3), vec![]);
 		assert_eq!(QueueTotals::<Test>::get(), vec![(1, 40), (1, 40), (0, 0)]);
 
-		assert_eq!(Active::<Test>::get(0).unwrap(), ActiveGilt {
-			proportion: Perquintill::from_percent(10),
-			amount: 40,
-			who: 4,
-			expiry: 10,
-		});
-		assert_eq!(Active::<Test>::get(1).unwrap(), ActiveGilt {
-			proportion: Perquintill::from_percent(10),
-			amount: 40,
-			who: 2,
-			expiry: 7,
-		});
-		assert_eq!(ActiveTotal::<Test>::get(), ActiveGiltsTotal {
-			frozen: 80,
-			proportion: Perquintill::from_percent(20),
-			index: 2,
-			target: Perquintill::zero(),
-		});
+		assert_eq!(
+			Active::<Test>::get(0).unwrap(),
+			ActiveGilt {
+				proportion: Perquintill::from_percent(10),
+				amount: 40,
+				who: 4,
+				expiry: 10,
+			}
+		);
+		assert_eq!(
+			Active::<Test>::get(1).unwrap(),
+			ActiveGilt { proportion: Perquintill::from_percent(10), amount: 40, who: 2, expiry: 7 }
+		);
+		assert_eq!(
+			ActiveTotal::<Test>::get(),
+			ActiveGiltsTotal {
+				frozen: 80,
+				proportion: Perquintill::from_percent(20),
+				index: 2,
+				target: Perquintill::zero(),
+			}
+		);
 	});
 }
 
@@ -259,21 +273,22 @@ fn enlarge_respects_amount_limit_and_will_split() {
 		Gilt::enlarge(40, 2);
 
 		// Takes 2/2, then stopped because it reaches its max amount
-		assert_eq!(Queues::<Test>::get(1), vec![ GiltBid { amount: 40, who: 1 } ]);
+		assert_eq!(Queues::<Test>::get(1), vec![GiltBid { amount: 40, who: 1 }]);
 		assert_eq!(QueueTotals::<Test>::get(), vec![(1, 40), (0, 0), (0, 0)]);
 
-		assert_eq!(Active::<Test>::get(0).unwrap(), ActiveGilt {
-			proportion: Perquintill::from_percent(10),
-			amount: 40,
-			who: 1,
-			expiry: 4,
-		});
-		assert_eq!(ActiveTotal::<Test>::get(), ActiveGiltsTotal {
-			frozen: 40,
-			proportion: Perquintill::from_percent(10),
-			index: 1,
-			target: Perquintill::zero(),
-		});
+		assert_eq!(
+			Active::<Test>::get(0).unwrap(),
+			ActiveGilt { proportion: Perquintill::from_percent(10), amount: 40, who: 1, expiry: 4 }
+		);
+		assert_eq!(
+			ActiveTotal::<Test>::get(),
+			ActiveGiltsTotal {
+				frozen: 40,
+				proportion: Perquintill::from_percent(10),
+				index: 1,
+				target: Perquintill::zero(),
+			}
+		);
 	});
 }
 
@@ -290,12 +305,15 @@ fn basic_thaw_works() {
 		assert_noop!(Gilt::thaw(Origin::signed(2), 0), Error::<Test>::NotOwner);
 		assert_ok!(Gilt::thaw(Origin::signed(1), 0));
 
-		assert_eq!(ActiveTotal::<Test>::get(), ActiveGiltsTotal {
-			frozen: 0,
-			proportion: Perquintill::zero(),
-			index: 1,
-			target: Perquintill::zero(),
-		});
+		assert_eq!(
+			ActiveTotal::<Test>::get(),
+			ActiveGiltsTotal {
+				frozen: 0,
+				proportion: Perquintill::zero(),
+				index: 1,
+				target: Perquintill::zero(),
+			}
+		);
 		assert_eq!(Active::<Test>::get(0), None);
 		assert_eq!(Balances::free_balance(1), 100);
 		assert_eq!(Balances::reserved_balance(1), 0);
@@ -426,98 +444,124 @@ fn enlargement_to_target_works() {
 		assert_ok!(Gilt::set_target(Origin::signed(1), Perquintill::from_percent(40)));
 
 		run_to_block(3);
-		assert_eq!(Queues::<Test>::get(1), vec![
-			GiltBid { amount: 40, who: 1 },
-		]);
-		assert_eq!(Queues::<Test>::get(2), vec![
-			GiltBid { amount: 40, who: 2 },
-			GiltBid { amount: 40, who: 1 },
-		]);
-		assert_eq!(Queues::<Test>::get(3), vec![
-			GiltBid { amount: 40, who: 3 },
-			GiltBid { amount: 40, who: 2 },
-		]);
+		assert_eq!(Queues::<Test>::get(1), vec![GiltBid { amount: 40, who: 1 },]);
+		assert_eq!(
+			Queues::<Test>::get(2),
+			vec![GiltBid { amount: 40, who: 2 }, GiltBid { amount: 40, who: 1 },]
+		);
+		assert_eq!(
+			Queues::<Test>::get(3),
+			vec![GiltBid { amount: 40, who: 3 }, GiltBid { amount: 40, who: 2 },]
+		);
 		assert_eq!(QueueTotals::<Test>::get(), vec![(1, 40), (2, 80), (2, 80)]);
 
 		run_to_block(4);
 		// Two new gilts should have been issued to 2 & 3 for 40 each & duration of 3.
-		assert_eq!(Active::<Test>::get(0).unwrap(), ActiveGilt {
-			proportion: Perquintill::from_percent(10),
-			amount: 40,
-			who: 2,
-			expiry: 13,
-		});
-		assert_eq!(Active::<Test>::get(1).unwrap(), ActiveGilt {
-			proportion: Perquintill::from_percent(10),
-			amount: 40,
-			who: 3,
-			expiry: 13,
-
-		});
-		assert_eq!(ActiveTotal::<Test>::get(), ActiveGiltsTotal {
-			frozen: 80,
-			proportion: Perquintill::from_percent(20),
-			index: 2,
-			target: Perquintill::from_percent(40),
-		});
+		assert_eq!(
+			Active::<Test>::get(0).unwrap(),
+			ActiveGilt {
+				proportion: Perquintill::from_percent(10),
+				amount: 40,
+				who: 2,
+				expiry: 13,
+			}
+		);
+		assert_eq!(
+			Active::<Test>::get(1).unwrap(),
+			ActiveGilt {
+				proportion: Perquintill::from_percent(10),
+				amount: 40,
+				who: 3,
+				expiry: 13,
+			}
+		);
+		assert_eq!(
+			ActiveTotal::<Test>::get(),
+			ActiveGiltsTotal {
+				frozen: 80,
+				proportion: Perquintill::from_percent(20),
+				index: 2,
+				target: Perquintill::from_percent(40),
+			}
+		);
 
 		run_to_block(5);
 		// No change
-		assert_eq!(ActiveTotal::<Test>::get(), ActiveGiltsTotal {
-			frozen: 80,
-			proportion: Perquintill::from_percent(20),
-			index: 2,
-			target: Perquintill::from_percent(40),
-		});
+		assert_eq!(
+			ActiveTotal::<Test>::get(),
+			ActiveGiltsTotal {
+				frozen: 80,
+				proportion: Perquintill::from_percent(20),
+				index: 2,
+				target: Perquintill::from_percent(40),
+			}
+		);
 
 		run_to_block(6);
 		// Two new gilts should have been issued to 1 & 2 for 40 each & duration of 2.
-		assert_eq!(Active::<Test>::get(2).unwrap(), ActiveGilt {
-			proportion: Perquintill::from_percent(10),
-			amount: 40,
-			who: 1,
-			expiry: 12,
-		});
-		assert_eq!(Active::<Test>::get(3).unwrap(), ActiveGilt {
-			proportion: Perquintill::from_percent(10),
-			amount: 40,
-			who: 2,
-			expiry: 12,
-
-		});
-		assert_eq!(ActiveTotal::<Test>::get(), ActiveGiltsTotal {
-			frozen: 160,
-			proportion: Perquintill::from_percent(40),
-			index: 4,
-			target: Perquintill::from_percent(40),
-		});
+		assert_eq!(
+			Active::<Test>::get(2).unwrap(),
+			ActiveGilt {
+				proportion: Perquintill::from_percent(10),
+				amount: 40,
+				who: 1,
+				expiry: 12,
+			}
+		);
+		assert_eq!(
+			Active::<Test>::get(3).unwrap(),
+			ActiveGilt {
+				proportion: Perquintill::from_percent(10),
+				amount: 40,
+				who: 2,
+				expiry: 12,
+			}
+		);
+		assert_eq!(
+			ActiveTotal::<Test>::get(),
+			ActiveGiltsTotal {
+				frozen: 160,
+				proportion: Perquintill::from_percent(40),
+				index: 4,
+				target: Perquintill::from_percent(40),
+			}
+		);
 
 		run_to_block(8);
 		// No change now.
-		assert_eq!(ActiveTotal::<Test>::get(), ActiveGiltsTotal {
-			frozen: 160,
-			proportion: Perquintill::from_percent(40),
-			index: 4,
-			target: Perquintill::from_percent(40),
-		});
+		assert_eq!(
+			ActiveTotal::<Test>::get(),
+			ActiveGiltsTotal {
+				frozen: 160,
+				proportion: Perquintill::from_percent(40),
+				index: 4,
+				target: Perquintill::from_percent(40),
+			}
+		);
 
 		// Set target a bit higher to use up the remaining bid.
 		assert_ok!(Gilt::set_target(Origin::signed(1), Perquintill::from_percent(60)));
 		run_to_block(10);
 
 		// Two new gilts should have been issued to 1 & 2 for 40 each & duration of 2.
-		assert_eq!(Active::<Test>::get(4).unwrap(), ActiveGilt {
-			proportion: Perquintill::from_percent(10),
-			amount: 40,
-			who: 1,
-			expiry: 13,
-		});
+		assert_eq!(
+			Active::<Test>::get(4).unwrap(),
+			ActiveGilt {
+				proportion: Perquintill::from_percent(10),
+				amount: 40,
+				who: 1,
+				expiry: 13,
+			}
+		);
 
-		assert_eq!(ActiveTotal::<Test>::get(), ActiveGiltsTotal {
-			frozen: 200,
-			proportion: Perquintill::from_percent(50),
-			index: 5,
-			target: Perquintill::from_percent(60),
-		});
+		assert_eq!(
+			ActiveTotal::<Test>::get(),
+			ActiveGiltsTotal {
+				frozen: 200,
+				proportion: Perquintill::from_percent(50),
+				index: 5,
+				target: Perquintill::from_percent(60),
+			}
+		);
 	});
 }

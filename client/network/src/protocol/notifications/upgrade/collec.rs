@@ -18,7 +18,12 @@
 
 use futures::prelude::*;
 use libp2p::core::upgrade::{InboundUpgrade, ProtocolName, UpgradeInfo};
-use std::{iter::FromIterator, pin::Pin, task::{Context, Poll}, vec};
+use std::{
+	iter::FromIterator,
+	pin::Pin,
+	task::{Context, Poll},
+	vec,
+};
 
 // TODO: move this to libp2p => https://github.com/libp2p/rust-libp2p/issues/1445
 
@@ -44,9 +49,10 @@ impl<T: UpgradeInfo> UpgradeInfo for UpgradeCollec<T> {
 	type InfoIter = vec::IntoIter<Self::Info>;
 
 	fn protocol_info(&self) -> Self::InfoIter {
-		self.0.iter().enumerate()
-			.flat_map(|(n, p)|
-				p.protocol_info().into_iter().map(move |i| ProtoNameWithUsize(i, n)))
+		self.0
+			.iter()
+			.enumerate()
+			.flat_map(|(n, p)| p.protocol_info().into_iter().map(move |i| ProtoNameWithUsize(i, n)))
 			.collect::<Vec<_>>()
 			.into_iter()
 	}

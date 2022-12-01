@@ -151,14 +151,15 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use codec::{Decode, Encode};
+use sp_runtime::traits::{CheckedAdd, CheckedMul, Dispatchable, SaturatedConversion};
 use sp_std::prelude::*;
-use sp_runtime::traits::{Dispatchable, SaturatedConversion, CheckedAdd, CheckedMul};
-use codec::{Encode, Decode};
 
 use frame_support::{
-	RuntimeDebug, weights::GetDispatchInfo,
-	traits::{Currency, ReservableCurrency, BalanceStatus},
 	dispatch::PostDispatchInfo,
+	traits::{BalanceStatus, Currency, ReservableCurrency},
+	weights::GetDispatchInfo,
+	RuntimeDebug,
 };
 
 pub use pallet::*;
@@ -200,10 +201,10 @@ pub struct RecoveryConfig<BlockNumber, Balance, AccountId> {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::{ensure, Parameter, pallet_prelude::*, traits::Get};
-	use frame_system::{pallet_prelude::*, ensure_signed, ensure_root};
-	use sp_runtime::ArithmeticError;
 	use super::*;
+	use frame_support::{ensure, pallet_prelude::*, traits::Get, Parameter};
+	use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
+	use sp_runtime::ArithmeticError;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -216,7 +217,9 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// The overarching call type.
-		type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo> + GetDispatchInfo;
+		type Call: Parameter
+			+ Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
+			+ GetDispatchInfo;
 
 		/// The currency mechanism.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -313,7 +316,8 @@ pub mod pallet {
 	#[pallet::getter(fn recovery_config)]
 	pub type Recoverable<T: Config> = StorageMap<
 		_,
-		Twox64Concat, T::AccountId,
+		Twox64Concat,
+		T::AccountId,
 		RecoveryConfig<T::BlockNumber, BalanceOf<T>, T::AccountId>,
 	>;
 
@@ -323,10 +327,12 @@ pub mod pallet {
 	/// is the user trying to recover the account.
 	#[pallet::storage]
 	#[pallet::getter(fn active_recovery)]
-	pub type ActiveRecoveries<T: Config>= StorageDoubleMap<
+	pub type ActiveRecoveries<T: Config> = StorageDoubleMap<
 		_,
-		Twox64Concat, T::AccountId,
-		Twox64Concat, T::AccountId,
+		Twox64Concat,
+		T::AccountId,
+		Twox64Concat,
+		T::AccountId,
 		ActiveRecovery<T::BlockNumber, BalanceOf<T>, T::AccountId>,
 	>;
 
@@ -365,14 +371,15 @@ pub mod pallet {
 		pub fn as_recovered(
 			origin: OriginFor<T>,
 			account: T::AccountId,
-			call: Box<<T as Config>::Call>
+			call: Box<<T as Config>::Call>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// Check `who` is allowed to make a call on behalf of `account`
 			let target = Self::proxy(&who).ok_or(Error::<T>::NotAllowed)?;
 			ensure!(&target == &account, Error::<T>::NotAllowed);
 			call.dispatch(frame_system::RawOrigin::Signed(account).into())
-				.map(|_| ()).map_err(|e| e.error)
+				.map(|_| ())
+				.map_err(|e| e.error)
 		}
 
 		/// Allow ROOT to bypass the recovery process and set an a rescuer account
@@ -433,7 +440,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			friends: Vec<T::AccountId>,
 			threshold: u16,
-			delay_period: T::BlockNumber
+			delay_period: T::BlockNumber,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// Check account is not already set up for recovery
@@ -455,12 +462,8 @@ pub mod pallet {
 			// Reserve the deposit
 			T::Currency::reserve(&who, total_deposit)?;
 			// Create the recovery configuration
-			let recovery_config = RecoveryConfig {
-				delay_period,
-				deposit: total_deposit,
-				friends,
-				threshold,
-			};
+			let recovery_config =
+				RecoveryConfig { delay_period, deposit: total_deposit, friends, threshold };
 			// Create the recovery configuration storage item
 			<Recoverable<T>>::insert(&who, recovery_config);
 
@@ -496,7 +499,10 @@ pub mod pallet {
 			// Check that the account is recoverable
 			ensure!(<Recoverable<T>>::contains_key(&account), Error::<T>::NotRecoverable);
 			// Check that the recovery process has not already been started
-			ensure!(!<ActiveRecoveries<T>>::contains_key(&account, &who), Error::<T>::AlreadyStarted);
+			ensure!(
+				!<ActiveRecoveries<T>>::contains_key(&account, &who),
+				Error::<T>::AlreadyStarted
+			);
 			// Take recovery deposit
 			let recovery_deposit = T::RecoveryDeposit::get();
 			T::Currency::reserve(&who, recovery_deposit)?;
@@ -541,13 +547,14 @@ pub mod pallet {
 		pub fn vouch_recovery(
 			origin: OriginFor<T>,
 			lost: T::AccountId,
-			rescuer: T::AccountId
+			rescuer: T::AccountId,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// Get the recovery configuration for the lost account.
 			let recovery_config = Self::recovery_config(&lost).ok_or(Error::<T>::NotRecoverable)?;
 			// Get the active recovery process for the rescuer.
-			let mut active_recovery = Self::active_recovery(&lost, &rescuer).ok_or(Error::<T>::NotStarted)?;
+			let mut active_recovery =
+				Self::active_recovery(&lost, &rescuer).ok_or(Error::<T>::NotStarted)?;
 			// Make sure the voter is a friend
 			ensure!(Self::is_friend(&recovery_config.friends, &who), Error::<T>::NotFriend);
 			// Either insert the vouch, or return an error that the user already vouched.
@@ -585,13 +592,16 @@ pub mod pallet {
 		pub fn claim_recovery(origin: OriginFor<T>, account: T::AccountId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// Get the recovery configuration for the lost account
-			let recovery_config = Self::recovery_config(&account).ok_or(Error::<T>::NotRecoverable)?;
+			let recovery_config =
+				Self::recovery_config(&account).ok_or(Error::<T>::NotRecoverable)?;
 			// Get the active recovery process for the rescuer
-			let active_recovery = Self::active_recovery(&account, &who).ok_or(Error::<T>::NotStarted)?;
+			let active_recovery =
+				Self::active_recovery(&account, &who).ok_or(Error::<T>::NotStarted)?;
 			ensure!(!Proxy::<T>::contains_key(&who), Error::<T>::AlreadyProxy);
 			// Make sure the delay period has passed
 			let current_block_number = <frame_system::Pallet<T>>::block_number();
-			let recoverable_block_number = active_recovery.created
+			let recoverable_block_number = active_recovery
+				.created
 				.checked_add(&recovery_config.delay_period)
 				.ok_or(ArithmeticError::Overflow)?;
 			ensure!(recoverable_block_number <= current_block_number, Error::<T>::DelayPeriod);
@@ -631,10 +641,16 @@ pub mod pallet {
 		pub fn close_recovery(origin: OriginFor<T>, rescuer: T::AccountId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// Take the active recovery process started by the rescuer for this account.
-			let active_recovery = <ActiveRecoveries<T>>::take(&who, &rescuer).ok_or(Error::<T>::NotStarted)?;
+			let active_recovery =
+				<ActiveRecoveries<T>>::take(&who, &rescuer).ok_or(Error::<T>::NotStarted)?;
 			// Move the reserved funds from the rescuer to the rescued account.
 			// Acts like a slashing mechanism for those who try to maliciously recover accounts.
-			let res = T::Currency::repatriate_reserved(&rescuer, &who, active_recovery.deposit, BalanceStatus::Free);
+			let res = T::Currency::repatriate_reserved(
+				&rescuer,
+				&who,
+				active_recovery.deposit,
+				BalanceStatus::Free,
+			);
 			debug_assert!(res.is_ok());
 			Self::deposit_event(Event::<T>::RecoveryClosed(who, rescuer));
 			Ok(())

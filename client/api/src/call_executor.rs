@@ -18,20 +18,16 @@
 
 //! A method call executor interface.
 
-use std::{panic::UnwindSafe, result, cell::RefCell};
-use codec::{Encode, Decode};
-use sp_runtime::{
-	generic::BlockId, traits::{Block as BlockT, HashFor},
-};
-use sp_state_machine::{
-	OverlayedChanges, ExecutionManager, ExecutionStrategy, StorageProof,
-};
-use sc_executor::{RuntimeVersion, NativeVersion};
-use sp_externalities::Extensions;
+use codec::{Decode, Encode};
+use sc_executor::{NativeVersion, RuntimeVersion};
 use sp_core::NativeOrEncoded;
+use sp_externalities::Extensions;
+use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+use sp_state_machine::{ExecutionManager, ExecutionStrategy, OverlayedChanges, StorageProof};
+use std::{cell::RefCell, panic::UnwindSafe, result};
 
-use sp_api::{ProofRecorder, StorageTransactionCache};
 use crate::execution_extensions::ExecutionExtensions;
+use sp_api::{ProofRecorder, StorageTransactionCache};
 
 /// Executor Provider
 pub trait ExecutorProvider<Block: BlockT> {
@@ -73,7 +69,7 @@ pub trait CallExecutor<B: BlockT> {
 	fn contextual_call<
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
-			Result<NativeOrEncoded<R>, Self::Error>
+			Result<NativeOrEncoded<R>, Self::Error>,
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
 		NC: FnOnce() -> result::Result<R, sp_api::ApiError> + UnwindSafe,
@@ -83,46 +79,32 @@ pub trait CallExecutor<B: BlockT> {
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
-		storage_transaction_cache: Option<&RefCell<
-			StorageTransactionCache<B, <Self::Backend as crate::backend::Backend<B>>::State>,
-		>>,
+		storage_transaction_cache: Option<
+			&RefCell<
+				StorageTransactionCache<B, <Self::Backend as crate::backend::Backend<B>>::State>,
+			>,
+		>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
 		proof_recorder: &Option<ProofRecorder<B>>,
 		extensions: Option<Extensions>,
-	) -> sp_blockchain::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
+	) -> sp_blockchain::Result<NativeOrEncoded<R>>
+	where
+		ExecutionManager<EM>: Clone;
 
 	/// Extract RuntimeVersion of given block
 	///
 	/// No changes are made.
 	fn runtime_version(&self, id: &BlockId<B>) -> Result<RuntimeVersion, sp_blockchain::Error>;
 
-	/// Execute a call to a contract on top of given state, gathering execution proof.
+	/// Prove the execution of the given `method`.
 	///
 	/// No changes are made.
-	fn prove_at_state<S: sp_state_machine::Backend<HashFor<B>>>(
+	fn prove_execution(
 		&self,
-		mut state: S,
-		overlay: &mut OverlayedChanges,
+		at: &BlockId<B>,
 		method: &str,
-		call_data: &[u8]
-	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error> {
-		let trie_state = state.as_trie_backend()
-			.ok_or_else(||
-				sp_blockchain::Error::from_state(Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof) as Box<_>)
-			)?;
-		self.prove_at_trie_state(trie_state, overlay, method, call_data)
-	}
-
-	/// Execute a call to a contract on top of given trie state, gathering execution proof.
-	///
-	/// No changes are made.
-	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HashFor<B>>>(
-		&self,
-		trie_state: &sp_state_machine::TrieBackend<S, HashFor<B>>,
-		overlay: &mut OverlayedChanges,
-		method: &str,
-		call_data: &[u8]
+		call_data: &[u8],
 	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error>;
 
 	/// Get runtime version if supported.

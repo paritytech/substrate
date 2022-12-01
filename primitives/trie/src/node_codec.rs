@@ -17,17 +17,16 @@
 
 //! `NodeCodec` implementation for Substrate's trie format.
 
-use sp_std::marker::PhantomData;
-use sp_std::ops::Range;
-use sp_std::vec::Vec;
-use sp_std::borrow::Borrow;
-use codec::{Encode, Decode, Input, Compact};
+use super::node_header::{NodeHeader, NodeKind};
+use crate::{error::Error, trie_constants};
+use codec::{Compact, Decode, Encode, Input};
 use hash_db::Hasher;
-use trie_db::{self, node::{NibbleSlicePlan, NodePlan, NodeHandlePlan}, ChildReference,
-	nibble_ops, Partial, NodeCodec as NodeCodecT};
-use crate::error::Error;
-use crate::trie_constants;
-use super::{node_header::{NodeHeader, NodeKind}};
+use sp_std::{borrow::Borrow, marker::PhantomData, ops::Range, vec::Vec};
+use trie_db::{
+	self, nibble_ops,
+	node::{NibbleSlicePlan, NodeHandlePlan, NodePlan},
+	ChildReference, NodeCodec as NodeCodecT, Partial,
+};
 
 /// Helper struct for trie node decoder. This implements `codec::Input` on a byte slice, while
 /// tracking the absolute position. This is similar to `std::io::Cursor` but does not implement
@@ -39,15 +38,12 @@ struct ByteSliceInput<'a> {
 
 impl<'a> ByteSliceInput<'a> {
 	fn new(data: &'a [u8]) -> Self {
-		ByteSliceInput {
-			data,
-			offset: 0,
-		}
+		ByteSliceInput { data, offset: 0 }
 	}
 
 	fn take(&mut self, count: usize) -> Result<Range<usize>, codec::Error> {
 		if self.offset + count > self.data.len() {
-			return Err("out of data".into());
+			return Err("out of data".into())
 		}
 
 		let range = self.offset..(self.offset + count);
@@ -58,11 +54,8 @@ impl<'a> ByteSliceInput<'a> {
 
 impl<'a> Input for ByteSliceInput<'a> {
 	fn remaining_len(&mut self) -> Result<Option<usize>, codec::Error> {
-		let remaining = if self.offset <= self.data.len() {
-			Some(self.data.len() - self.offset)
-		} else {
-			None
-		};
+		let remaining =
+			if self.offset <= self.data.len() { Some(self.data.len() - self.offset) } else { None };
 		Ok(remaining)
 	}
 
@@ -74,7 +67,7 @@ impl<'a> Input for ByteSliceInput<'a> {
 
 	fn read_byte(&mut self) -> Result<u8, codec::Error> {
 		if self.offset + 1 > self.data.len() {
-			return Err("out of data".into());
+			return Err("out of data".into())
 		}
 
 		let byte = self.data[self.offset];
@@ -103,10 +96,11 @@ impl<H: Hasher> NodeCodecT for NodeCodec<H> {
 				let padding = nibble_count % nibble_ops::NIBBLE_PER_BYTE != 0;
 				// check that the padding is valid (if any)
 				if padding && nibble_ops::pad_left(data[input.offset]) != 0 {
-					return Err(Error::BadFormat);
+					return Err(Error::BadFormat)
 				}
 				let partial = input.take(
-					(nibble_count + (nibble_ops::NIBBLE_PER_BYTE - 1)) / nibble_ops::NIBBLE_PER_BYTE,
+					(nibble_count + (nibble_ops::NIBBLE_PER_BYTE - 1)) /
+						nibble_ops::NIBBLE_PER_BYTE,
 				)?;
 				let partial_padding = nibble_ops::number_padding(nibble_count);
 				let bitmap_range = input.take(BITMAP_LENGTH)?;
@@ -118,8 +112,8 @@ impl<H: Hasher> NodeCodecT for NodeCodec<H> {
 					None
 				};
 				let mut children = [
-					None, None, None, None, None, None, None, None,
-					None, None, None, None, None, None, None, None,
+					None, None, None, None, None, None, None, None, None, None, None, None, None,
+					None, None, None,
 				];
 				for i in 0..nibble_ops::NIBBLE_LENGTH {
 					if bitmap.value_at(i) {
@@ -137,15 +131,16 @@ impl<H: Hasher> NodeCodecT for NodeCodec<H> {
 					value,
 					children,
 				})
-			}
+			},
 			NodeHeader::Leaf(nibble_count) => {
 				let padding = nibble_count % nibble_ops::NIBBLE_PER_BYTE != 0;
 				// check that the padding is valid (if any)
 				if padding && nibble_ops::pad_left(data[input.offset]) != 0 {
-					return Err(Error::BadFormat);
+					return Err(Error::BadFormat)
 				}
 				let partial = input.take(
-					(nibble_count + (nibble_ops::NIBBLE_PER_BYTE - 1)) / nibble_ops::NIBBLE_PER_BYTE,
+					(nibble_count + (nibble_ops::NIBBLE_PER_BYTE - 1)) /
+						nibble_ops::NIBBLE_PER_BYTE,
 				)?;
 				let partial_padding = nibble_ops::number_padding(nibble_count);
 				let count = <Compact<u32>>::decode(&mut input)?.0 as usize;
@@ -153,7 +148,7 @@ impl<H: Hasher> NodeCodecT for NodeCodec<H> {
 					partial: NibbleSlicePlan::new(partial, partial_padding),
 					value: input.take(count)?,
 				})
-			}
+			},
 		}
 	}
 
@@ -199,26 +194,28 @@ impl<H: Hasher> NodeCodecT for NodeCodec<H> {
 		};
 		let bitmap_index = output.len();
 		let mut bitmap: [u8; BITMAP_LENGTH] = [0; BITMAP_LENGTH];
-		(0..BITMAP_LENGTH).for_each(|_|output.push(0));
+		(0..BITMAP_LENGTH).for_each(|_| output.push(0));
 		if let Some(value) = maybe_value {
 			value.encode_to(&mut output);
 		};
-		Bitmap::encode(children.map(|maybe_child| match maybe_child.borrow() {
-			Some(ChildReference::Hash(h)) => {
-				h.as_ref().encode_to(&mut output);
-				true
-			}
-			&Some(ChildReference::Inline(inline_data, len)) => {
-				inline_data.as_ref()[..len].encode_to(&mut output);
-				true
-			}
-			None => false,
-		}), bitmap.as_mut());
+		Bitmap::encode(
+			children.map(|maybe_child| match maybe_child.borrow() {
+				Some(ChildReference::Hash(h)) => {
+					h.as_ref().encode_to(&mut output);
+					true
+				},
+				&Some(ChildReference::Inline(inline_data, len)) => {
+					inline_data.as_ref()[..len].encode_to(&mut output);
+					true
+				},
+				None => false,
+			}),
+			bitmap.as_mut(),
+		);
 		output[bitmap_index..bitmap_index + BITMAP_LENGTH]
 			.copy_from_slice(&bitmap[..BITMAP_LENGTH]);
 		output
 	}
-
 }
 
 // utils
@@ -280,11 +277,13 @@ impl Bitmap {
 		self.0 & (1u16 << i) != 0
 	}
 
-	pub fn encode<I: Iterator<Item = bool>>(has_children: I , dest: &mut [u8]) {
+	pub fn encode<I: Iterator<Item = bool>>(has_children: I, dest: &mut [u8]) {
 		let mut bitmap: u16 = 0;
 		let mut cursor: u16 = 1;
 		for v in has_children {
-			if v { bitmap |= cursor }
+			if v {
+				bitmap |= cursor
+			}
 			cursor <<= 1;
 		}
 		dest[0] = (bitmap % 256) as u8;

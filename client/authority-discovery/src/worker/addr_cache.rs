@@ -19,8 +19,8 @@
 use libp2p::core::multiaddr::{Multiaddr, Protocol};
 use std::collections::HashMap;
 
-use sp_authority_discovery::AuthorityId;
 use sc_network::PeerId;
+use sp_authority_discovery::AuthorityId;
 
 /// Cache for [`AuthorityId`] -> [`Vec<Multiaddr>`] and [`PeerId`] -> [`AuthorityId`] mappings.
 pub(super) struct AddrCache {
@@ -45,27 +45,34 @@ impl AddrCache {
 		addresses.sort_unstable_by(|a, b| a.as_ref().cmp(b.as_ref()));
 
 		// Insert into `self.peer_id_to_authority_id`.
-		let peer_ids = addresses.iter()
+		let peer_ids = addresses
+			.iter()
 			.map(|a| peer_id_from_multiaddr(a))
 			.filter_map(|peer_id| peer_id);
 		for peer_id in peer_ids.clone() {
-			let former_auth = match self.peer_id_to_authority_id.insert(peer_id, authority_id.clone()) {
-				Some(a) if a != authority_id => a,
-				_ => continue,
-			};
+			let former_auth =
+				match self.peer_id_to_authority_id.insert(peer_id, authority_id.clone()) {
+					Some(a) if a != authority_id => a,
+					_ => continue,
+				};
 
 			// PeerId was associated to a different authority id before.
 			// Remove corresponding authority from `self.authority_id_to_addresses`.
 			let former_auth_addrs = match self.authority_id_to_addresses.get_mut(&former_auth) {
 				Some(a) => a,
-				None => { debug_assert!(false); continue }
+				None => {
+					debug_assert!(false);
+					continue
+				},
 			};
 			former_auth_addrs.retain(|a| peer_id_from_multiaddr(a).map_or(true, |p| p != peer_id));
 		}
 
 		// Insert into `self.authority_id_to_addresses`.
-		for former_addr in
-			self.authority_id_to_addresses.insert(authority_id.clone(), addresses.clone()).unwrap_or_default()
+		for former_addr in self
+			.authority_id_to_addresses
+			.insert(authority_id.clone(), addresses.clone())
+			.unwrap_or_default()
 		{
 			// Must remove from `self.peer_id_to_authority_id` any PeerId formerly associated
 			// to that authority but that can't be found in its new addresses.
@@ -87,7 +94,10 @@ impl AddrCache {
 	}
 
 	/// Returns the addresses for the given [`AuthorityId`].
-	pub fn get_addresses_by_authority_id(&self, authority_id: &AuthorityId) -> Option<&Vec<Multiaddr>> {
+	pub fn get_addresses_by_authority_id(
+		&self,
+		authority_id: &AuthorityId,
+	) -> Option<&Vec<Multiaddr>> {
 		self.authority_id_to_addresses.get(&authority_id)
 	}
 
@@ -100,7 +110,9 @@ impl AddrCache {
 	/// [`AuthorityId`]s.
 	pub fn retain_ids(&mut self, authority_ids: &Vec<AuthorityId>) {
 		// The below logic could be replaced by `BtreeMap::drain_filter` once it stabilized.
-		let authority_ids_to_remove = self.authority_id_to_addresses.iter()
+		let authority_ids_to_remove = self
+			.authority_id_to_addresses
+			.iter()
 			.filter(|(id, _addresses)| !authority_ids.contains(id))
 			.map(|entry| entry.0)
 			.cloned()
@@ -111,7 +123,8 @@ impl AddrCache {
 			let addresses = self.authority_id_to_addresses.remove(&authority_id_to_remove);
 
 			// Remove other entries from `self.peer_id_to_authority_id`.
-			let peer_ids = addresses.iter()
+			let peer_ids = addresses
+				.iter()
 				.flatten()
 				.map(|a| peer_id_from_multiaddr(a))
 				.filter_map(|peer_id| peer_id);
@@ -125,10 +138,12 @@ impl AddrCache {
 }
 
 fn peer_id_from_multiaddr(addr: &Multiaddr) -> Option<PeerId> {
-	addr.iter().last().and_then(|protocol| if let Protocol::P2p(multihash) = protocol {
-		PeerId::from_multihash(multihash).ok()
-	} else {
-		None
+	addr.iter().last().and_then(|protocol| {
+		if let Protocol::P2p(multihash) = protocol {
+			PeerId::from_multihash(multihash).ok()
+		} else {
+			None
+		}
 	})
 }
 
@@ -159,9 +174,11 @@ mod tests {
 		fn arbitrary(g: &mut Gen) -> Self {
 			let seed = (0..32).map(|_| u8::arbitrary(g)).collect::<Vec<_>>();
 			let peer_id = PeerId::from_multihash(
-				Multihash::wrap(multihash::Code::Sha2_256.into(), &seed).unwrap()
-			).unwrap();
-			let multiaddr = "/ip6/2001:db8:0:0:0:0:0:2/tcp/30333".parse::<Multiaddr>()
+				Multihash::wrap(multihash::Code::Sha2_256.into(), &seed).unwrap(),
+			)
+			.unwrap();
+			let multiaddr = "/ip6/2001:db8:0:0:0:0:0:2/tcp/30333"
+				.parse::<Multiaddr>()
 				.unwrap()
 				.with(Protocol::P2p(peer_id.into()));
 
@@ -176,12 +193,15 @@ mod tests {
 		fn arbitrary(g: &mut Gen) -> Self {
 			let seed = (0..32).map(|_| u8::arbitrary(g)).collect::<Vec<_>>();
 			let peer_id = PeerId::from_multihash(
-				Multihash::wrap(multihash::Code::Sha2_256.into(), &seed).unwrap()
-			).unwrap();
-			let multiaddr1 = "/ip6/2001:db8:0:0:0:0:0:2/tcp/30333".parse::<Multiaddr>()
+				Multihash::wrap(multihash::Code::Sha2_256.into(), &seed).unwrap(),
+			)
+			.unwrap();
+			let multiaddr1 = "/ip6/2001:db8:0:0:0:0:0:2/tcp/30333"
+				.parse::<Multiaddr>()
 				.unwrap()
 				.with(Protocol::P2p(peer_id.clone().into()));
-			let multiaddr2 = "/ip6/2002:db8:0:0:0:0:0:2/tcp/30133".parse::<Multiaddr>()
+			let multiaddr2 = "/ip6/2002:db8:0:0:0:0:0:2/tcp/30133"
+				.parse::<Multiaddr>()
 				.unwrap()
 				.with(Protocol::P2p(peer_id.into()));
 			TestMultiaddrsSamePeerCombo(multiaddr1, multiaddr2)
@@ -219,11 +239,13 @@ mod tests {
 			cache.retain_ids(&vec![first.0, second.0]);
 
 			assert_eq!(
-				None, cache.get_addresses_by_authority_id(&third.0),
+				None,
+				cache.get_addresses_by_authority_id(&third.0),
 				"Expect `get_addresses_by_authority_id` to not return `None` for third authority."
 			);
 			assert_eq!(
-				None, cache.get_authority_id_by_peer_id(&peer_id_from_multiaddr(&third.1).unwrap()),
+				None,
+				cache.get_authority_id_by_peer_id(&peer_id_from_multiaddr(&third.1).unwrap()),
 				"Expect `get_authority_id_by_peer_id` to return `None` for third authority."
 			);
 
@@ -253,7 +275,10 @@ mod tests {
 			let mut cache = AddrCache::new();
 
 			cache.insert(authority1.clone(), vec![multiaddr1.clone()]);
-			cache.insert(authority1.clone(), vec![multiaddr2.clone(), multiaddr3.clone(), multiaddr4.clone()]);
+			cache.insert(
+				authority1.clone(),
+				vec![multiaddr2.clone(), multiaddr3.clone(), multiaddr4.clone()],
+			);
 
 			assert_eq!(
 				None,

@@ -42,12 +42,12 @@ where
 					"newly created span with ID {:?} did not exist in the registry; this is a bug!",
 					id
 				);
-				return;
-			}
+				return
+			},
 		};
 
 		if span.name() != PREFIX_LOG_SPAN {
-			return;
+			return
 		}
 
 		let mut extensions = span.extensions_mut();

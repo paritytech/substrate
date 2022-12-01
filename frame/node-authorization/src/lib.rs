@@ -44,22 +44,15 @@ mod tests;
 
 pub mod weights;
 
-use sp_core::OpaquePeerId as PeerId;
-use sp_std::{
-	collections::btree_set::BTreeSet,
-	iter::FromIterator,
-	prelude::*,
-};
 pub use pallet::*;
+use sp_core::OpaquePeerId as PeerId;
+use sp_std::{collections::btree_set::BTreeSet, iter::FromIterator, prelude::*};
 pub use weights::WeightInfo;
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{
-		dispatch::DispatchResult,
-		pallet_prelude::*,
-	};
+	use frame_support::{dispatch::DispatchResult, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -104,23 +97,13 @@ pub mod pallet {
 	/// A map that maintains the ownership of each node.
 	#[pallet::storage]
 	#[pallet::getter(fn owners)]
-	pub type Owners<T: Config> = StorageMap<
-		_,
-		Blake2_128Concat,
-		PeerId,
-		T::AccountId,
-	>;
+	pub type Owners<T: Config> = StorageMap<_, Blake2_128Concat, PeerId, T::AccountId>;
 
 	/// The additional adapative connections of each node.
 	#[pallet::storage]
 	#[pallet::getter(fn additional_connection)]
-	pub type AdditionalConnections<T> = StorageMap<
-		_,
-		Blake2_128Concat,
-		PeerId,
-		BTreeSet<PeerId>,
-		ValueQuery,
-	>;
+	pub type AdditionalConnections<T> =
+		StorageMap<_, Blake2_128Concat, PeerId, BTreeSet<PeerId>, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -208,10 +191,10 @@ pub mod pallet {
 						),
 						Ok(node) => sp_io::offchain::set_authorized_nodes(
 							Self::get_authorized_nodes(&PeerId(node)),
-							true
-						)
+							true,
+						),
 					}
-				}
+				},
 			}
 		}
 	}
@@ -228,7 +211,7 @@ pub mod pallet {
 		pub fn add_well_known_node(
 			origin: OriginFor<T>,
 			node: PeerId,
-			owner: T::AccountId
+			owner: T::AccountId,
 		) -> DispatchResult {
 			T::AddOrigin::ensure_origin(origin)?;
 			ensure!(node.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
@@ -281,16 +264,15 @@ pub mod pallet {
 		pub fn swap_well_known_node(
 			origin: OriginFor<T>,
 			remove: PeerId,
-			add: PeerId
+			add: PeerId,
 		) -> DispatchResult {
 			T::SwapOrigin::ensure_origin(origin)?;
-			ensure!(
-				remove.0.len() < T::MaxPeerIdLength::get() as usize,
-				Error::<T>::PeerIdTooLong
-			);
+			ensure!(remove.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
 			ensure!(add.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
 
-			if remove == add { return Ok(()) }
+			if remove == add {
+				return Ok(())
+			}
 
 			let mut nodes = WellKnownNodes::<T>::get();
 			ensure!(nodes.contains(&remove), Error::<T>::NotExist);
@@ -317,7 +299,7 @@ pub mod pallet {
 		#[pallet::weight((T::WeightInfo::reset_well_known_nodes(), DispatchClass::Operational))]
 		pub fn reset_well_known_nodes(
 			origin: OriginFor<T>,
-			nodes: Vec<(PeerId, T::AccountId)>
+			nodes: Vec<(PeerId, T::AccountId)>,
 		) -> DispatchResult {
 			T::ResetOrigin::ensure_origin(origin)?;
 			ensure!(nodes.len() < T::MaxWellKnownNodes::get() as usize, Error::<T>::TooManyNodes);
@@ -337,7 +319,7 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 
 			ensure!(node.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
-			ensure!(!Owners::<T>::contains_key(&node),Error::<T>::AlreadyClaimed);
+			ensure!(!Owners::<T>::contains_key(&node), Error::<T>::AlreadyClaimed);
 
 			Owners::<T>::insert(&node, &sender);
 			Self::deposit_event(Event::NodeClaimed(node, sender));
@@ -373,7 +355,7 @@ pub mod pallet {
 		pub fn transfer_node(
 			origin: OriginFor<T>,
 			node: PeerId,
-			owner: T::AccountId
+			owner: T::AccountId,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
@@ -395,7 +377,7 @@ pub mod pallet {
 		pub fn add_connections(
 			origin: OriginFor<T>,
 			node: PeerId,
-			connections: Vec<PeerId>
+			connections: Vec<PeerId>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
@@ -407,7 +389,7 @@ pub mod pallet {
 
 			for add_node in connections.iter() {
 				if *add_node == node {
-					continue;
+					continue
 				}
 				nodes.insert(add_node.clone());
 			}
@@ -426,7 +408,7 @@ pub mod pallet {
 		pub fn remove_connections(
 			origin: OriginFor<T>,
 			node: PeerId,
-			connections: Vec<PeerId>
+			connections: Vec<PeerId>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
@@ -450,9 +432,7 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	fn initialize_nodes(nodes: &Vec<(PeerId, T::AccountId)>) {
-		let peer_ids = nodes.iter()
-			.map(|item| item.0.clone())
-			.collect::<BTreeSet<PeerId>>();
+		let peer_ids = nodes.iter().map(|item| item.0.clone()).collect::<BTreeSet<PeerId>>();
 		WellKnownNodes::<T>::put(&peer_ids);
 
 		for (node, who) in nodes.iter() {

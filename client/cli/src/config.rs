@@ -18,24 +18,24 @@
 
 //! Configuration trait for a CLI based on substrate
 
-use crate::arg_enums::Database;
-use crate::error::Result;
 use crate::{
-	DatabaseParams, ImportParams, KeystoreParams, NetworkParams, NodeKeyParams,
-	OffchainWorkerParams, PruningParams, SharedParams, SubstrateCli,
+	arg_enums::Database, error::Result, DatabaseParams, ImportParams, KeystoreParams,
+	NetworkParams, NodeKeyParams, OffchainWorkerParams, PruningParams, SharedParams, SubstrateCli,
 };
 use log::warn;
 use names::{Generator, Name};
 use sc_client_api::execution_extensions::ExecutionStrategies;
-use sc_service::config::{
-	BasePath, Configuration, DatabaseConfig, ExtTransport, KeystoreConfig, NetworkConfiguration,
-	NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods,
-	TaskExecutor, TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
+use sc_service::{
+	config::{
+		BasePath, Configuration, DatabaseConfig, ExtTransport, KeystoreConfig,
+		NetworkConfiguration, NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode,
+		Role, RpcMethods, TaskExecutor, TelemetryEndpoints, TransactionPoolOptions,
+		WasmExecutionMethod,
+	},
+	ChainSpec, KeepBlocks, TracingReceiver, TransactionStorageMode,
 };
-use sc_service::{ChainSpec, TracingReceiver, KeepBlocks, TransactionStorageMode};
 use sc_tracing::logging::LoggerBuilder;
-use std::net::SocketAddr;
-use std::path::PathBuf;
+use std::{net::SocketAddr, path::PathBuf};
 
 /// The maximum number of characters for a node name.
 pub(crate) const NODE_NAME_MAX_LENGTH: usize = 64;
@@ -178,12 +178,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 				default_listen_port,
 			)
 		} else {
-			NetworkConfiguration::new(
-				node_name,
-				client_id,
-				node_key,
-				Some(net_config_dir),
-			)
+			NetworkConfiguration::new(node_name, client_id, node_key, Some(net_config_dir))
 		})
 	}
 
@@ -201,14 +196,13 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	///
 	/// By default this is retrieved from `DatabaseParams` if it is available. Otherwise its `None`.
 	fn database_cache_size(&self) -> Result<Option<usize>> {
-		Ok(self.database_params()
-			.map(|x| x.database_cache_size())
-			.unwrap_or_default())
+		Ok(self.database_params().map(|x| x.database_cache_size()).unwrap_or_default())
 	}
 
 	/// Get the database transaction storage scheme.
 	fn database_transaction_storage(&self) -> Result<TransactionStorageMode> {
-		Ok(self.database_params()
+		Ok(self
+			.database_params()
 			.map(|x| x.transaction_storage())
 			.unwrap_or(TransactionStorageMode::BlockBody))
 	}
@@ -228,13 +222,8 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		database: Database,
 	) -> Result<DatabaseConfig> {
 		Ok(match database {
-			Database::RocksDb => DatabaseConfig::RocksDb {
-				path: base_path.join("db"),
-				cache_size,
-			},
-			Database::ParityDb => DatabaseConfig::ParityDb {
-				path: base_path.join("paritydb"),
-			},
+			Database::RocksDb => DatabaseConfig::RocksDb { path: base_path.join("db"), cache_size },
+			Database::ParityDb => DatabaseConfig::ParityDb { path: base_path.join("paritydb") },
 		})
 	}
 
@@ -242,9 +231,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	///
 	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its `0`.
 	fn state_cache_size(&self) -> Result<usize> {
-		Ok(self.import_params()
-			.map(|x| x.state_cache_size())
-			.unwrap_or_default())
+		Ok(self.import_params().map(|x| x.state_cache_size()).unwrap_or_default())
 	}
 
 	/// Get the state cache child ratio (if any).
@@ -293,18 +280,14 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its
 	/// `WasmExecutionMethod::default()`.
 	fn wasm_method(&self) -> Result<WasmExecutionMethod> {
-		Ok(self.import_params()
-			.map(|x| x.wasm_method())
-			.unwrap_or_default())
+		Ok(self.import_params().map(|x| x.wasm_method()).unwrap_or_default())
 	}
 
 	/// Get the path where WASM overrides live.
 	///
 	/// By default this is `None`.
 	fn wasm_runtime_overrides(&self) -> Option<PathBuf> {
-		self.import_params()
-			.map(|x| x.wasm_runtime_overrides())
-			.unwrap_or_default()
+		self.import_params().map(|x| x.wasm_runtime_overrides()).unwrap_or_default()
 	}
 
 	/// Get the execution strategies.
@@ -502,10 +485,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let (keystore_remote, keystore) = self.keystore_config(&config_dir)?;
 		let telemetry_endpoints = self.telemetry_endpoints(&chain_spec)?;
 
-		let unsafe_pruning = self
-			.import_params()
-			.map(|p| p.unsafe_pruning)
-			.unwrap_or(false);
+		let unsafe_pruning = self.import_params().map(|p| p.unsafe_pruning).unwrap_or(false);
 
 		Ok(Configuration {
 			impl_name: C::impl_name(),
@@ -628,7 +608,7 @@ pub fn generate_node_name() -> String {
 		let count = node_name.chars().count();
 
 		if count < NODE_NAME_MAX_LENGTH {
-			return node_name;
+			return node_name
 		}
 	}
 }

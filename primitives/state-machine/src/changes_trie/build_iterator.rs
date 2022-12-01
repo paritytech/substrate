@@ -18,8 +18,8 @@
 //! Structures and functions to return blocks whose changes are to be included
 //! in given block's changes trie.
 
+use crate::changes_trie::{BlockNumber, ConfigurationRange};
 use num_traits::Zero;
-use crate::changes_trie::{ConfigurationRange, BlockNumber};
 
 /// Returns iterator of OTHER blocks that are required for inclusion into
 /// changes trie of given block. Blocks are guaranteed to be returned in
@@ -31,13 +31,19 @@ pub fn digest_build_iterator<'a, Number: BlockNumber>(
 	block: Number,
 ) -> DigestBuildIterator<Number> {
 	// prepare digest build parameters
-	let (_, _, digest_step) = match config.config.digest_level_at_block(config.zero, block.clone()) {
+	let (_, _, digest_step) = match config.config.digest_level_at_block(config.zero, block.clone())
+	{
 		Some((current_level, digest_interval, digest_step)) =>
 			(current_level, digest_interval, digest_step),
 		None => return DigestBuildIterator::empty(),
 	};
 
-	DigestBuildIterator::new(block.clone(), config.end.unwrap_or(block), config.config.digest_interval, digest_step)
+	DigestBuildIterator::new(
+		block.clone(),
+		config.end.unwrap_or(block),
+		config.config.digest_interval,
+		digest_step,
+	)
 }
 
 /// Changes trie build iterator that returns numbers of OTHER blocks that are
@@ -56,7 +62,6 @@ pub struct DigestBuildIterator<Number: BlockNumber> {
 	max_step: u32,
 
 	// Mutable data below:
-
 	/// Step of current blocks range.
 	current_step: u32,
 	/// Reverse step of current blocks range.
@@ -98,7 +103,7 @@ impl<Number: BlockNumber> Iterator for DigestBuildIterator<Number> {
 			if let Some(next) = self.current_range.as_mut().and_then(|iter| iter.next()) {
 				if next < self.end {
 					self.last_block = Some(next.clone());
-					return Some(next);
+					return Some(next)
 				}
 			}
 
@@ -112,14 +117,16 @@ impl<Number: BlockNumber> Iterator for DigestBuildIterator<Number> {
 				self.current_step_reverse * self.digest_interval
 			};
 			if next_step_reverse > self.max_step {
-				return None;
+				return None
 			}
 
 			self.current_step_reverse = next_step_reverse;
 			self.current_range = Some(BlocksRange::new(
 				match self.last_block.clone() {
 					Some(last_block) => last_block + self.current_step.into(),
-					None => self.block.clone() - (self.current_step * self.digest_interval - self.current_step).into(),
+					None =>
+						self.block.clone() -
+							(self.current_step * self.digest_interval - self.current_step).into(),
 				},
 				self.block.clone(),
 				self.current_step.into(),
@@ -143,11 +150,7 @@ struct BlocksRange<Number: BlockNumber> {
 
 impl<Number: BlockNumber> BlocksRange<Number> {
 	pub fn new(begin: Number, end: Number, step: Number) -> Self {
-		BlocksRange {
-			current: begin,
-			end,
-			step,
-		}
+		BlocksRange { current: begin, end, step }
 	}
 }
 
@@ -156,7 +159,7 @@ impl<Number: BlockNumber> Iterator for BlocksRange<Number> {
 
 	fn next(&mut self) -> Option<Self::Item> {
 		if self.current >= self.end {
-			return None;
+			return None
 		}
 
 		let current = Some(self.current.clone());
@@ -167,8 +170,8 @@ impl<Number: BlockNumber> Iterator for BlocksRange<Number> {
 
 #[cfg(test)]
 mod tests {
-	use crate::changes_trie::Configuration;
 	use super::*;
+	use crate::changes_trie::Configuration;
 
 	fn digest_build_iterator(
 		digest_interval: u32,
@@ -179,10 +182,7 @@ mod tests {
 	) -> DigestBuildIterator<u64> {
 		super::digest_build_iterator(
 			ConfigurationRange {
-				config: &Configuration {
-					digest_interval,
-					digest_levels,
-				},
+				config: &Configuration { digest_interval, digest_levels },
 				zero,
 				end,
 			},
@@ -215,9 +215,21 @@ mod tests {
 		fn test_with_zero(zero: u64) {
 			let empty = (0, 0, 0);
 			assert_eq!(digest_build_iterator_basic(4, 16, zero, zero + 0), empty, "block is 0");
-			assert_eq!(digest_build_iterator_basic(0, 16, zero, zero + 64), empty, "digest_interval is 0");
-			assert_eq!(digest_build_iterator_basic(1, 16, zero, zero + 64), empty, "digest_interval is 1");
-			assert_eq!(digest_build_iterator_basic(4, 0, zero, zero + 64), empty, "digest_levels is 0");
+			assert_eq!(
+				digest_build_iterator_basic(0, 16, zero, zero + 64),
+				empty,
+				"digest_interval is 0"
+			);
+			assert_eq!(
+				digest_build_iterator_basic(1, 16, zero, zero + 64),
+				empty,
+				"digest_interval is 1"
+			);
+			assert_eq!(
+				digest_build_iterator_basic(4, 0, zero, zero + 64),
+				empty,
+				"digest_levels is 0"
+			);
 			assert_eq!(
 				digest_build_iterator_basic(4, 16, zero, zero + 1),
 				empty,
@@ -238,12 +250,11 @@ mod tests {
 				empty,
 				"digest is not required for this block",
 			);
-			assert_eq!(digest_build_iterator_basic(
-				::std::u32::MAX / 2 + 1,
-				16,
-				zero,
-				::std::u64::MAX,
-			), empty, "digest_interval * 2 is greater than u64::MAX");
+			assert_eq!(
+				digest_build_iterator_basic(::std::u32::MAX / 2 + 1, 16, zero, ::std::u64::MAX,),
+				empty,
+				"digest_interval * 2 is greater than u64::MAX"
+			);
 		}
 
 		test_with_zero(0);
@@ -326,18 +337,37 @@ mod tests {
 	#[test]
 	fn digest_iterator_returns_level1_blocks() {
 		fn test_with_zero(zero: u64) {
-			assert_eq!(digest_build_iterator_blocks(16, 1, zero, zero + 16, None),
+			assert_eq!(
+				digest_build_iterator_blocks(16, 1, zero, zero + 16, None),
 				[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
-					.iter().map(|item| zero + item).collect::<Vec<_>>());
-			assert_eq!(digest_build_iterator_blocks(16, 1, zero, zero + 256, None),
+					.iter()
+					.map(|item| zero + item)
+					.collect::<Vec<_>>()
+			);
+			assert_eq!(
+				digest_build_iterator_blocks(16, 1, zero, zero + 256, None),
 				[241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255]
-					.iter().map(|item| zero + item).collect::<Vec<_>>());
-			assert_eq!(digest_build_iterator_blocks(16, 2, zero, zero + 32, None),
+					.iter()
+					.map(|item| zero + item)
+					.collect::<Vec<_>>()
+			);
+			assert_eq!(
+				digest_build_iterator_blocks(16, 2, zero, zero + 32, None),
 				[17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
-					.iter().map(|item| zero + item).collect::<Vec<_>>());
-			assert_eq!(digest_build_iterator_blocks(16, 3, zero, zero + 4080, None),
-				[4065, 4066, 4067, 4068, 4069, 4070, 4071, 4072, 4073, 4074, 4075, 4076, 4077, 4078, 4079]
-					.iter().map(|item| zero + item).collect::<Vec<_>>());
+					.iter()
+					.map(|item| zero + item)
+					.collect::<Vec<_>>()
+			);
+			assert_eq!(
+				digest_build_iterator_blocks(16, 3, zero, zero + 4080, None),
+				[
+					4065, 4066, 4067, 4068, 4069, 4070, 4071, 4072, 4073, 4074, 4075, 4076, 4077,
+					4078, 4079
+				]
+				.iter()
+				.map(|item| zero + item)
+				.collect::<Vec<_>>()
+			);
 		}
 
 		test_with_zero(0);
@@ -348,21 +378,30 @@ mod tests {
 	#[test]
 	fn digest_iterator_returns_level1_and_level2_blocks() {
 		fn test_with_zero(zero: u64) {
-			assert_eq!(digest_build_iterator_blocks(16, 2, zero, zero + 256, None),
+			assert_eq!(
+				digest_build_iterator_blocks(16, 2, zero, zero + 256, None),
 				[
 					// level2 points to previous 16-1 level1 digests:
 					16, 32, 48, 64, 80, 96, 112, 128, 144, 160, 176, 192, 208, 224, 240,
 					// level2 is a level1 digest of 16-1 previous blocks:
 					241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255,
-				].iter().map(|item| zero + item).collect::<Vec<_>>(),
+				]
+				.iter()
+				.map(|item| zero + item)
+				.collect::<Vec<_>>(),
 			);
-			assert_eq!(digest_build_iterator_blocks(16, 2, zero, zero + 4096, None),
+			assert_eq!(
+				digest_build_iterator_blocks(16, 2, zero, zero + 4096, None),
 				[
 					// level2 points to previous 16-1 level1 digests:
-					3856, 3872, 3888, 3904, 3920, 3936, 3952, 3968, 3984, 4000, 4016, 4032, 4048, 4064, 4080,
-					// level2 is a level1 digest of 16-1 previous blocks:
-					4081, 4082, 4083, 4084, 4085, 4086, 4087, 4088, 4089, 4090, 4091, 4092, 4093, 4094, 4095,
-				].iter().map(|item| zero + item).collect::<Vec<_>>(),
+					3856, 3872, 3888, 3904, 3920, 3936, 3952, 3968, 3984, 4000, 4016, 4032, 4048,
+					4064, 4080, // level2 is a level1 digest of 16-1 previous blocks:
+					4081, 4082, 4083, 4084, 4085, 4086, 4087, 4088, 4089, 4090, 4091, 4092, 4093,
+					4094, 4095,
+				]
+				.iter()
+				.map(|item| zero + item)
+				.collect::<Vec<_>>(),
 			);
 		}
 
@@ -374,15 +413,20 @@ mod tests {
 	#[test]
 	fn digest_iterator_returns_level1_and_level2_and_level3_blocks() {
 		fn test_with_zero(zero: u64) {
-			assert_eq!(digest_build_iterator_blocks(16, 3, zero, zero + 4096, None),
+			assert_eq!(
+				digest_build_iterator_blocks(16, 3, zero, zero + 4096, None),
 				[
 					// level3 points to previous 16-1 level2 digests:
-					256, 512, 768, 1024, 1280, 1536, 1792, 2048, 2304, 2560, 2816, 3072, 3328, 3584, 3840,
-					// level3 points to previous 16-1 level1 digests:
-					3856, 3872, 3888, 3904, 3920, 3936, 3952, 3968, 3984, 4000, 4016, 4032, 4048, 4064, 4080,
-					// level3 is a level1 digest of 16-1 previous blocks:
-					4081, 4082, 4083, 4084, 4085, 4086, 4087, 4088, 4089, 4090, 4091, 4092, 4093, 4094, 4095,
-				].iter().map(|item| zero + item).collect::<Vec<_>>(),
+					256, 512, 768, 1024, 1280, 1536, 1792, 2048, 2304, 2560, 2816, 3072, 3328, 3584,
+					3840, // level3 points to previous 16-1 level1 digests:
+					3856, 3872, 3888, 3904, 3920, 3936, 3952, 3968, 3984, 4000, 4016, 4032, 4048,
+					4064, 4080, // level3 is a level1 digest of 16-1 previous blocks:
+					4081, 4082, 4083, 4084, 4085, 4086, 4087, 4088, 4089, 4090, 4091, 4092, 4093,
+					4094, 4095,
+				]
+				.iter()
+				.map(|item| zero + item)
+				.collect::<Vec<_>>(),
 			);
 		}
 
@@ -394,7 +438,8 @@ mod tests {
 	#[test]
 	fn digest_iterator_returns_skewed_digest_blocks() {
 		fn test_with_zero(zero: u64) {
-			assert_eq!(digest_build_iterator_blocks(16, 3, zero, zero + 4096, Some(zero + 1338)),
+			assert_eq!(
+				digest_build_iterator_blocks(16, 3, zero, zero + 4096, Some(zero + 1338)),
 				[
 					// level3 MUST point to previous 16-1 level2 digests, BUT there are only 5:
 					256, 512, 768, 1024, 1280,
@@ -402,7 +447,10 @@ mod tests {
 					1296, 1312, 1328,
 					// level3 MUST be a level1 digest of 16-1 previous blocks, BUT there are only 9:
 					1329, 1330, 1331, 1332, 1333, 1334, 1335, 1336, 1337,
-				].iter().map(|item| zero + item).collect::<Vec<_>>(),
+				]
+				.iter()
+				.map(|item| zero + item)
+				.collect::<Vec<_>>(),
 			);
 		}
 
@@ -414,14 +462,18 @@ mod tests {
 	#[test]
 	fn digest_iterator_returns_skewed_digest_blocks_skipping_level() {
 		fn test_with_zero(zero: u64) {
-			assert_eq!(digest_build_iterator_blocks(16, 3, zero, zero + 4096, Some(zero + 1284)),
+			assert_eq!(
+				digest_build_iterator_blocks(16, 3, zero, zero + 4096, Some(zero + 1284)),
 				[
 					// level3 MUST point to previous 16-1 level2 digests, BUT there are only 5:
 					256, 512, 768, 1024, 1280,
 					// level3 MUST point to previous 16-1 level1 digests, BUT there are NO ANY L1-digests:
 					// level3 MUST be a level1 digest of 16-1 previous blocks, BUT there are only 3:
 					1281, 1282, 1283,
-				].iter().map(|item| zero + item).collect::<Vec<_>>(),
+				]
+				.iter()
+				.map(|item| zero + item)
+				.collect::<Vec<_>>(),
 			);
 		}
 

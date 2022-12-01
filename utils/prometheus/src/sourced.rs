@@ -17,8 +17,10 @@
 
 //! Metrics that are collected from existing sources.
 
-use prometheus::core::{Collector, Desc, Describer, Number, Opts};
-use prometheus::proto;
+use prometheus::{
+	core::{Collector, Desc, Describer, Number, Opts},
+	proto,
+};
 use std::{cmp::Ordering, marker::PhantomData};
 
 /// A counter whose values are obtained from an existing source.
@@ -80,15 +82,15 @@ impl<T: SourcedType, S: MetricSource> Collector for SourcedMetric<T, S> {
 					let mut c = proto::Counter::default();
 					c.set_value(value.into_f64());
 					m.set_counter(c);
-				}
+				},
 				proto::MetricType::GAUGE => {
 					let mut g = proto::Gauge::default();
 					g.set_value(value.into_f64());
 					m.set_gauge(g);
-				}
+				},
 				t => {
 					log::error!("Unsupported sourced metric type: {:?}", t);
-				}
+				},
 			}
 
 			debug_assert_eq!(self.desc.variable_labels.len(), label_values.len());
@@ -97,18 +99,23 @@ impl<T: SourcedType, S: MetricSource> Collector for SourcedMetric<T, S> {
 					log::warn!("Missing label values for sourced metric {}", self.desc.fq_name),
 				Ordering::Less =>
 					log::warn!("Too many label values for sourced metric {}", self.desc.fq_name),
-				Ordering::Equal => {}
+				Ordering::Equal => {},
 			}
 
-			m.set_label(self.desc.variable_labels.iter().zip(label_values)
-				.map(|(l_name, l_value)| {
-					let mut l = proto::LabelPair::default();
-					l.set_name(l_name.to_string());
-					l.set_value(l_value.to_string());
-					l
-				})
-				.chain(self.desc.const_label_pairs.iter().cloned())
-				.collect::<Vec<_>>());
+			m.set_label(
+				self.desc
+					.variable_labels
+					.iter()
+					.zip(label_values)
+					.map(|(l_name, l_value)| {
+						let mut l = proto::LabelPair::default();
+						l.set_name(l_name.to_string());
+						l.set_value(l_value.to_string());
+						l
+					})
+					.chain(self.desc.const_label_pairs.iter().cloned())
+					.collect::<Vec<_>>(),
+			);
 
 			counters.push(m);
 		});
@@ -130,11 +137,15 @@ pub trait SourcedType: private::Sealed + Sync + Send {
 }
 
 impl SourcedType for Counter {
-	fn proto() -> proto::MetricType { proto::MetricType::COUNTER }
+	fn proto() -> proto::MetricType {
+		proto::MetricType::COUNTER
+	}
 }
 
 impl SourcedType for Gauge {
-	fn proto() -> proto::MetricType { proto::MetricType::GAUGE }
+	fn proto() -> proto::MetricType {
+		proto::MetricType::GAUGE
+	}
 }
 
 mod private {

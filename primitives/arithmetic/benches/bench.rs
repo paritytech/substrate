@@ -15,9 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use criterion::{Criterion, Throughput, BenchmarkId, criterion_group, criterion_main};
-use sp_arithmetic::biguint::{BigUint, Single};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use rand::Rng;
+use sp_arithmetic::biguint::{BigUint, Single};
 
 fn random_big_uint(size: usize) -> BigUint {
 	let mut rng = rand::thread_rng();
@@ -73,7 +73,7 @@ fn bench_division(c: &mut Criterion) {
 	}
 }
 
-criterion_group!{
+criterion_group! {
 	name = benches;
 	config = Criterion::default();
 	targets = bench_addition, bench_subtraction, bench_multiplication, bench_division

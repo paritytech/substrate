@@ -20,6 +20,9 @@ In other words: Upgrading this pallet will not break pre-existing contracts.
 
 ### Added
 
+- Allow contracts to dispatch calls into the runtime (**unstable**)
+[#9276](https://github.com/paritytech/substrate/pull/9276)
+
 - New **unstable** version of `seal_call` that offers more features.
 [#8909](https://github.com/paritytech/substrate/pull/8909)
 

@@ -18,8 +18,12 @@
 
 //! Contains the same API as the `http` module, except that everything returns an error.
 
-use sp_core::offchain::{HttpRequestId, Timestamp, HttpRequestStatus, HttpError};
-use std::{future::Future, pin::Pin, task::Context, task::Poll};
+use sp_core::offchain::{HttpError, HttpRequestId, HttpRequestStatus, Timestamp};
+use std::{
+	future::Future,
+	pin::Pin,
+	task::{Context, Poll},
+};
 
 /// Wrapper struct (wrapping nothing in case of http_dummy) used for keeping the hyper_rustls client running.
 #[derive(Clone)]
@@ -46,24 +50,17 @@ pub struct HttpWorker;
 
 impl HttpApi {
 	/// Mimics the corresponding method in the offchain API.
-	pub fn request_start(
-		&mut self,
-		_: &str,
-		_: &str
-	) -> Result<HttpRequestId, ()> {
+	pub fn request_start(&mut self, _: &str, _: &str) -> Result<HttpRequestId, ()> {
 		/// Because this always returns an error, none of the other methods should ever be called.
 		Err(())
 	}
 
 	/// Mimics the corresponding method in the offchain API.
-	pub fn request_add_header(
-		&mut self,
-		_: HttpRequestId,
-		_: &str,
-		_: &str
-	) -> Result<(), ()> {
-		unreachable!("Creating a request always fails, thus this function will \
-			never be called; qed")
+	pub fn request_add_header(&mut self, _: HttpRequestId, _: &str, _: &str) -> Result<(), ()> {
+		unreachable!(
+			"Creating a request always fails, thus this function will \
+			never be called; qed"
+		)
 	}
 
 	/// Mimics the corresponding method in the offchain API.
@@ -71,33 +68,36 @@ impl HttpApi {
 		&mut self,
 		_: HttpRequestId,
 		_: &[u8],
-		_: Option<Timestamp>
+		_: Option<Timestamp>,
 	) -> Result<(), HttpError> {
-		unreachable!("Creating a request always fails, thus this function will \
-			never be called; qed")
+		unreachable!(
+			"Creating a request always fails, thus this function will \
+			never be called; qed"
+		)
 	}
 
 	/// Mimics the corresponding method in the offchain API.
 	pub fn response_wait(
 		&mut self,
 		requests: &[HttpRequestId],
-		_: Option<Timestamp>
+		_: Option<Timestamp>,
 	) -> Vec<HttpRequestStatus> {
 		if requests.is_empty() {
 			Vec::new()
 		} else {
-			unreachable!("Creating a request always fails, thus the list of requests should \
-				always be empty; qed")
+			unreachable!(
+				"Creating a request always fails, thus the list of requests should \
+				always be empty; qed"
+			)
 		}
 	}
 
 	/// Mimics the corresponding method in the offchain API.
-	pub fn response_headers(
-		&mut self,
-		_: HttpRequestId
-	) -> Vec<(Vec<u8>, Vec<u8>)> {
-		unreachable!("Creating a request always fails, thus this function will \
-			never be called; qed")
+	pub fn response_headers(&mut self, _: HttpRequestId) -> Vec<(Vec<u8>, Vec<u8>)> {
+		unreachable!(
+			"Creating a request always fails, thus this function will \
+			never be called; qed"
+		)
 	}
 
 	/// Mimics the corresponding method in the offchain API.
@@ -105,10 +105,12 @@ impl HttpApi {
 		&mut self,
 		_: HttpRequestId,
 		_: &mut [u8],
-		_: Option<Timestamp>
+		_: Option<Timestamp>,
 	) -> Result<usize, HttpError> {
-		unreachable!("Creating a request always fails, thus this function will \
-			never be called; qed")
+		unreachable!(
+			"Creating a request always fails, thus this function will \
+			never be called; qed"
+		)
 	}
 }
 

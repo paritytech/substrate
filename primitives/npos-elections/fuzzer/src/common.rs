@@ -62,11 +62,7 @@ pub fn generate_random_npos_inputs(
 	candidate_count: usize,
 	voter_count: usize,
 	mut rng: impl Rng,
-) -> (
-	usize,
-	Vec<AccountId>,
-	Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
-) {
+) -> (usize, Vec<AccountId>, Vec<(AccountId, VoteWeight, Vec<AccountId>)>) {
 	// cache for fast generation of unique candidate and voter ids
 	let mut used_ids = HashSet::with_capacity(candidate_count + voter_count);
 

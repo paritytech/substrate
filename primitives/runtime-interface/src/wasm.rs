@@ -108,7 +108,7 @@ impl<T: Copy> ExchangeableFunction<T> {
 	/// # Returns
 	///
 	/// Returns the original implementation wrapped in [`RestoreImplementation`].
-	pub fn replace_implementation(&'static self, new_impl: T)  -> RestoreImplementation<T> {
+	pub fn replace_implementation(&'static self, new_impl: T) -> RestoreImplementation<T> {
 		if let ExchangeableFunctionState::Replaced = self.0.get().1 {
 			panic!("Trying to replace an already replaced implementation!")
 		}
@@ -139,6 +139,7 @@ pub struct RestoreImplementation<T: 'static + Copy>(&'static ExchangeableFunctio
 
 impl<T: Copy> Drop for RestoreImplementation<T> {
 	fn drop(&mut self) {
-		self.0.restore_orig_implementation(self.1.take().expect("Value is only taken on drop; qed"));
+		self.0
+			.restore_orig_implementation(self.1.take().expect("Value is only taken on drop; qed"));
 	}
 }

@@ -88,14 +88,14 @@ pub struct VestingInfo<Balance, BlockNumber> {
 	pub starting_block: BlockNumber,
 }
 
-impl<
-	Balance: AtLeast32BitUnsigned + Copy,
-	BlockNumber: AtLeast32BitUnsigned + Copy,
-> VestingInfo<Balance, BlockNumber> {
+impl<Balance: AtLeast32BitUnsigned + Copy, BlockNumber: AtLeast32BitUnsigned + Copy>
+	VestingInfo<Balance, BlockNumber>
+{
 	/// Amount locked at block `n`.
-	pub fn locked_at<
-		BlockNumberToBalance: Convert<BlockNumber, Balance>
-	>(&self, n: BlockNumber) -> Balance {
+	pub fn locked_at<BlockNumberToBalance: Convert<BlockNumber, Balance>>(
+		&self,
+		n: BlockNumber,
+	) -> Balance {
 		// Number of blocks that count toward vesting
 		// Saturating to 0 when n < starting_block
 		let vested_block_count = n.saturating_sub(self.starting_block);
@@ -136,12 +136,8 @@ pub mod pallet {
 	/// Information regarding the vesting of a given account.
 	#[pallet::storage]
 	#[pallet::getter(fn vesting)]
-	pub type Vesting<T: Config> = StorageMap<
-		_,
-		Blake2_128Concat,
-		T::AccountId,
-		VestingInfo<BalanceOf<T>, T::BlockNumber>,
-	>;
+	pub type Vesting<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, VestingInfo<BalanceOf<T>, T::BlockNumber>>;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -155,9 +151,7 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			GenesisConfig {
-				vesting: Default::default(),
-			}
+			GenesisConfig { vesting: Default::default() }
 		}
 	}
 
@@ -179,11 +173,7 @@ pub mod pallet {
 				let length_as_balance = T::BlockNumberToBalance::convert(length);
 				let per_block = locked / length_as_balance.max(sp_runtime::traits::One::one());
 
-				Vesting::<T>::insert(who, VestingInfo {
-					locked: locked,
-					per_block: per_block,
-					starting_block: begin
-				});
+				Vesting::<T>::insert(who, VestingInfo { locked, per_block, starting_block: begin });
 				let reasons = WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE;
 				T::Currency::set_lock(VESTING_ID, who, locked, reasons);
 			}
@@ -254,7 +244,10 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::vest_other_locked(MaxLocksOf::<T>::get())
 			.max(T::WeightInfo::vest_other_unlocked(MaxLocksOf::<T>::get()))
 		)]
-		pub fn vest_other(origin: OriginFor<T>, target: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
+		pub fn vest_other(
+			origin: OriginFor<T>,
+			target: <T::Lookup as StaticLookup>::Source,
+		) -> DispatchResult {
 			ensure_signed(origin)?;
 			Self::update_lock(T::Lookup::lookup(target)?)
 		}
@@ -287,10 +280,20 @@ pub mod pallet {
 			let who = T::Lookup::lookup(target)?;
 			ensure!(!Vesting::<T>::contains_key(&who), Error::<T>::ExistingVestingSchedule);
 
-			T::Currency::transfer(&transactor, &who, schedule.locked, ExistenceRequirement::AllowDeath)?;
+			T::Currency::transfer(
+				&transactor,
+				&who,
+				schedule.locked,
+				ExistenceRequirement::AllowDeath,
+			)?;
 
-			Self::add_vesting_schedule(&who, schedule.locked, schedule.per_block, schedule.starting_block)
-				.expect("user does not have an existing vesting schedule; q.e.d.");
+			Self::add_vesting_schedule(
+				&who,
+				schedule.locked,
+				schedule.per_block,
+				schedule.starting_block,
+			)
+			.expect("user does not have an existing vesting schedule; q.e.d.");
 
 			Ok(())
 		}
@@ -326,10 +329,20 @@ pub mod pallet {
 			let source = T::Lookup::lookup(source)?;
 			ensure!(!Vesting::<T>::contains_key(&target), Error::<T>::ExistingVestingSchedule);
 
-			T::Currency::transfer(&source, &target, schedule.locked, ExistenceRequirement::AllowDeath)?;
+			T::Currency::transfer(
+				&source,
+				&target,
+				schedule.locked,
+				ExistenceRequirement::AllowDeath,
+			)?;
 
-			Self::add_vesting_schedule(&target, schedule.locked, schedule.per_block, schedule.starting_block)
-				.expect("user does not have an existing vesting schedule; q.e.d.");
+			Self::add_vesting_schedule(
+				&target,
+				schedule.locked,
+				schedule.per_block,
+				schedule.starting_block,
+			)
+			.expect("user does not have an existing vesting schedule; q.e.d.");
 
 			Ok(())
 		}
@@ -357,8 +370,9 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> VestingSchedule<T::AccountId> for Pallet<T> where
-	BalanceOf<T>: MaybeSerializeDeserialize + Debug
+impl<T: Config> VestingSchedule<T::AccountId> for Pallet<T>
+where
+	BalanceOf<T>: MaybeSerializeDeserialize + Debug,
 {
 	type Moment = T::BlockNumber;
 	type Currency = T::Currency;
@@ -388,17 +402,15 @@ impl<T: Config> VestingSchedule<T::AccountId> for Pallet<T> where
 		who: &T::AccountId,
 		locked: BalanceOf<T>,
 		per_block: BalanceOf<T>,
-		starting_block: T::BlockNumber
+		starting_block: T::BlockNumber,
 	) -> DispatchResult {
-		if locked.is_zero() { return Ok(()) }
+		if locked.is_zero() {
+			return Ok(())
+		}
 		if Vesting::<T>::contains_key(who) {
 			Err(Error::<T>::ExistingVestingSchedule)?
 		}
-		let vesting_schedule = VestingInfo {
-			locked,
-			per_block,
-			starting_block
-		};
+		let vesting_schedule = VestingInfo { locked, per_block, starting_block };
 		Vesting::<T>::insert(who, vesting_schedule);
 		// it can't fail, but even if somehow it did, we don't really care.
 		let res = Self::update_lock(who.clone());

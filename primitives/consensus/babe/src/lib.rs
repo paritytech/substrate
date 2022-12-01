@@ -30,7 +30,7 @@ pub use sp_consensus_vrf::schnorrkel::{
 
 use codec::{Decode, Encode};
 #[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 #[cfg(feature = "std")]
 use sp_keystore::vrf::{VRFTranscriptData, VRFTranscriptValue};
 use sp_runtime::{traits::Header, ConsensusEngineId, RuntimeDebug};
@@ -96,11 +96,7 @@ pub type BabeAuthorityWeight = u64;
 pub type BabeBlockWeight = u32;
 
 /// Make a VRF transcript from given randomness, slot number and epoch.
-pub fn make_transcript(
-	randomness: &Randomness,
-	slot: Slot,
-	epoch: u64,
-) -> Transcript {
+pub fn make_transcript(randomness: &Randomness, slot: Slot, epoch: u64) -> Transcript {
 	let mut transcript = Transcript::new(&BABE_ENGINE_ID);
 	transcript.append_u64(b"slot number", *slot);
 	transcript.append_u64(b"current epoch", epoch);
@@ -110,18 +106,14 @@ pub fn make_transcript(
 
 /// Make a VRF transcript data container
 #[cfg(feature = "std")]
-pub fn make_transcript_data(
-	randomness: &Randomness,
-	slot: Slot,
-	epoch: u64,
-) -> VRFTranscriptData {
+pub fn make_transcript_data(randomness: &Randomness, slot: Slot, epoch: u64) -> VRFTranscriptData {
 	VRFTranscriptData {
 		label: &BABE_ENGINE_ID,
 		items: vec![
 			("slot number", VRFTranscriptValue::U64(*slot)),
 			("current epoch", VRFTranscriptValue::U64(epoch)),
 			("chain randomness", VRFTranscriptValue::Bytes(randomness.to_vec())),
-		]
+		],
 	}
 }
 
@@ -280,20 +272,15 @@ where
 	use digests::*;
 	use sp_application_crypto::RuntimeAppPublic;
 
-	let find_pre_digest = |header: &H| {
-		header
-			.digest()
-			.logs()
-			.iter()
-			.find_map(|log| log.as_babe_pre_digest())
-	};
+	let find_pre_digest =
+		|header: &H| header.digest().logs().iter().find_map(|log| log.as_babe_pre_digest());
 
 	let verify_seal_signature = |mut header: H, offender: &AuthorityId| {
 		let seal = header.digest_mut().pop()?.as_babe_seal()?;
 		let pre_hash = header.hash();
 
 		if !offender.verify(&pre_hash.as_ref(), &seal) {
-			return None;
+			return None
 		}
 
 		Some(())
@@ -302,7 +289,7 @@ where
 	let verify_proof = || {
 		// we must have different headers for the equivocation to be valid
 		if proof.first_header.hash() == proof.second_header.hash() {
-			return None;
+			return None
 		}
 
 		let first_pre_digest = find_pre_digest(&proof.first_header)?;
@@ -313,12 +300,12 @@ where
 		if proof.slot != first_pre_digest.slot() ||
 			first_pre_digest.slot() != second_pre_digest.slot()
 		{
-			return None;
+			return None
 		}
 
 		// both headers must have been authored by the same authority
 		if first_pre_digest.authority_index() != second_pre_digest.authority_index() {
-			return None;
+			return None
 		}
 
 		// we finally verify that the expected authority has signed both headers and

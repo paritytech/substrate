@@ -24,10 +24,10 @@
 //! the death list.
 //! The changes are journaled in the DB.
 
-use std::collections::{HashMap, HashSet, VecDeque};
-use codec::{Encode, Decode};
-use crate::{CommitSet, Error, MetaDb, to_meta_key, Hash};
+use crate::{to_meta_key, CommitSet, Error, Hash, MetaDb};
+use codec::{Decode, Encode};
 use log::{trace, warn};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 const LAST_PRUNED: &[u8] = b"last_pruned";
 const PRUNING_JOURNAL: &[u8] = b"pruning_journal";
@@ -72,9 +72,11 @@ fn to_journal_key(block: u64) -> Vec<u8> {
 }
 
 impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
-	pub fn new<D: MetaDb>(db: &D, count_insertions: bool) -> Result<RefWindow<BlockHash, Key>, Error<D::Error>> {
-		let last_pruned = db.get_meta(&to_meta_key(LAST_PRUNED, &()))
-			.map_err(|e| Error::Db(e))?;
+	pub fn new<D: MetaDb>(
+		db: &D,
+		count_insertions: bool,
+	) -> Result<RefWindow<BlockHash, Key>, Error<D::Error>> {
+		let last_pruned = db.get_meta(&to_meta_key(LAST_PRUNED, &())).map_err(|e| Error::Db(e))?;
 		let pending_number: u64 = match last_pruned {
 			Some(buffer) => u64::decode(&mut buffer.as_slice())? + 1,
 			None => 0,
@@ -83,7 +85,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		let mut pruning = RefWindow {
 			death_rows: Default::default(),
 			death_index: Default::default(),
-			pending_number: pending_number,
+			pending_number,
 			pending_canonicalizations: 0,
 			pending_prunings: 0,
 			count_insertions,
@@ -94,9 +96,15 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 			let journal_key = to_journal_key(block);
 			match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
 				Some(record) => {
-					let record: JournalRecord<BlockHash, Key> = Decode::decode(&mut record.as_slice())?;
+					let record: JournalRecord<BlockHash, Key> =
+						Decode::decode(&mut record.as_slice())?;
 					trace!(target: "state-db", "Pruning journal entry {} ({} inserted, {} deleted)", block, record.inserted.len(), record.deleted.len());
-					pruning.import(&record.hash, journal_key, record.inserted.into_iter(), record.deleted);
+					pruning.import(
+						&record.hash,
+						journal_key,
+						record.inserted.into_iter(),
+						record.deleted,
+					);
 				},
 				None => break,
 			}
@@ -105,7 +113,13 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		Ok(pruning)
 	}
 
-	fn import<I: IntoIterator<Item=Key>>(&mut self, hash: &BlockHash, journal_key: Vec<u8>, inserted: I, deleted: Vec<Key>) {
+	fn import<I: IntoIterator<Item = Key>>(
+		&mut self,
+		hash: &BlockHash,
+		journal_key: Vec<u8>,
+		inserted: I,
+		deleted: Vec<Key>,
+	) {
 		if self.count_insertions {
 			// remove all re-inserted keys from death rows
 			for k in inserted {
@@ -120,13 +134,11 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 				self.death_index.insert(k.clone(), imported_block);
 			}
 		}
-		self.death_rows.push_back(
-			DeathRow {
-				hash: hash.clone(),
-				deleted: deleted.into_iter().collect(),
-				journal_key: journal_key,
-			}
-		);
+		self.death_rows.push_back(DeathRow {
+			hash: hash.clone(),
+			deleted: deleted.into_iter().collect(),
+			journal_key,
+		});
 	}
 
 	pub fn window_size(&self) -> u64 {
@@ -172,23 +184,27 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 			Default::default()
 		};
 		let deleted = ::std::mem::take(&mut commit.data.deleted);
-		let journal_record = JournalRecord {
-			hash: hash.clone(),
-			inserted,
-			deleted,
-		};
+		let journal_record = JournalRecord { hash: hash.clone(), inserted, deleted };
 		let block = self.pending_number + self.death_rows.len() as u64;
 		let journal_key = to_journal_key(block);
 		commit.meta.inserted.push((journal_key.clone(), journal_record.encode()));
-		self.import(&journal_record.hash, journal_key, journal_record.inserted.into_iter(), journal_record.deleted);
+		self.import(
+			&journal_record.hash,
+			journal_key,
+			journal_record.inserted.into_iter(),
+			journal_record.deleted,
+		);
 		self.pending_canonicalizations += 1;
 	}
 
 	/// Apply all pending changes
 	pub fn apply_pending(&mut self) {
 		self.pending_canonicalizations = 0;
-		for _ in 0 .. self.pending_prunings {
-			let pruned = self.death_rows.pop_front().expect("pending_prunings is always < death_rows.len()");
+		for _ in 0..self.pending_prunings {
+			let pruned = self
+				.death_rows
+				.pop_front()
+				.expect("pending_prunings is always < death_rows.len()");
 			trace!(target: "state-db", "Applying pruning {:?} ({} deleted)", pruned.hash, pruned.deleted.len());
 			if self.count_insertions {
 				for k in pruned.deleted.iter() {
@@ -219,9 +235,11 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 #[cfg(test)]
 mod tests {
 	use super::RefWindow;
+	use crate::{
+		test::{make_commit, make_db, TestDb},
+		CommitSet,
+	};
 	use sp_core::H256;
-	use crate::CommitSet;
-	use crate::test::{make_db, make_commit, TestDb};
 
 	fn check_journal(pruning: &RefWindow<H256, H256>, db: &TestDb) {
 		let restored: RefWindow<H256, H256> = RefWindow::new(db, pruning.count_insertions).unwrap();
@@ -419,5 +437,4 @@ mod tests {
 		assert!(db.data_eq(&make_db(&[1, 3])));
 		assert!(pruning.death_index.is_empty());
 	}
-
 }

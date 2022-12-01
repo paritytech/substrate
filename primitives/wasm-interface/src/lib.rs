@@ -19,10 +19,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::{
-	vec,
-	borrow::Cow, marker::PhantomData, mem, iter::Iterator, result, vec::Vec,
-};
+use sp_std::{borrow::Cow, iter::Iterator, marker::PhantomData, mem, result, vec, vec::Vec};
 
 #[cfg(feature = "std")]
 mod wasmi_impl;
@@ -141,10 +138,7 @@ pub struct Pointer<T: PointerType> {
 impl<T: PointerType> Pointer<T> {
 	/// Create a new instance of `Self`.
 	pub fn new(ptr: u32) -> Self {
-		Self {
-			ptr,
-			_marker: Default::default(),
-		}
+		Self { ptr, _marker: Default::default() }
 	}
 
 	/// Calculate the offset from this pointer.
@@ -153,12 +147,10 @@ impl<T: PointerType> Pointer<T> {
 	///
 	/// Returns an `Option` to respect that the pointer could probably overflow.
 	pub fn offset(self, offset: u32) -> Option<Self> {
-		offset.checked_mul(T::SIZE).and_then(|o| self.ptr.checked_add(o)).map(|ptr| {
-			Self {
-				ptr,
-				_marker: Default::default(),
-			}
-		})
+		offset
+			.checked_mul(T::SIZE)
+			.and_then(|o| self.ptr.checked_add(o))
+			.map(|ptr| Self { ptr, _marker: Default::default() })
 	}
 
 	/// Create a null pointer.
@@ -198,7 +190,9 @@ impl<T: PointerType> From<Pointer<T>> for usize {
 
 impl<T: PointerType> IntoValue for Pointer<T> {
 	const VALUE_TYPE: ValueType = ValueType::I32;
-	fn into_value(self) -> Value { Value::I32(self.ptr as _) }
+	fn into_value(self) -> Value {
+		Value::I32(self.ptr as _)
+	}
 }
 
 impl<T: PointerType> TryFromValue for Pointer<T> {
@@ -224,19 +218,16 @@ pub struct Signature {
 
 impl Signature {
 	/// Create a new instance of `Signature`.
-	pub fn new<T: Into<Cow<'static, [ValueType]>>>(args: T, return_value: Option<ValueType>) -> Self {
-		Self {
-			args: args.into(),
-			return_value,
-		}
+	pub fn new<T: Into<Cow<'static, [ValueType]>>>(
+		args: T,
+		return_value: Option<ValueType>,
+	) -> Self {
+		Self { args: args.into(), return_value }
 	}
 
 	/// Create a new instance of `Signature` with the given `args` and without any return value.
 	pub fn new_with_args<T: Into<Cow<'static, [ValueType]>>>(args: T) -> Self {
-		Self {
-			args: args.into(),
-			return_value: None,
-		}
+		Self { args: args.into(), return_value: None }
 	}
 }
 
@@ -499,7 +490,6 @@ mod tests {
 		assert_eq!(ptr.offset(10).unwrap(), Pointer::new(80));
 		assert_eq!(ptr.offset(32).unwrap(), Pointer::new(256));
 	}
-
 
 	#[test]
 	fn return_value_encoded_max_size() {

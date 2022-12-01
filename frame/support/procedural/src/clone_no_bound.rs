@@ -30,56 +30,61 @@ pub fn derive_clone_no_bound(input: proc_macro::TokenStream) -> proc_macro::Toke
 	let impl_ = match input.data {
 		syn::Data::Struct(struct_) => match struct_.fields {
 			syn::Fields::Named(named) => {
-				let fields = named.named.iter()
-					.map(|i| &i.ident)
-					.map(|i| quote::quote_spanned!(i.span() =>
+				let fields = named.named.iter().map(|i| &i.ident).map(|i| {
+					quote::quote_spanned!(i.span() =>
 						#i: core::clone::Clone::clone(&self.#i)
-					));
+					)
+				});
 
 				quote::quote!( Self { #( #fields, )* } )
 			},
 			syn::Fields::Unnamed(unnamed) => {
-				let fields = unnamed.unnamed.iter().enumerate()
-					.map(|(i, _)| syn::Index::from(i))
-					.map(|i| quote::quote_spanned!(i.span() =>
-						core::clone::Clone::clone(&self.#i)
-					));
+				let fields =
+					unnamed.unnamed.iter().enumerate().map(|(i, _)| syn::Index::from(i)).map(|i| {
+						quote::quote_spanned!(i.span() =>
+							core::clone::Clone::clone(&self.#i)
+						)
+					});
 
 				quote::quote!( Self ( #( #fields, )* ) )
 			},
 			syn::Fields::Unit => {
-				quote::quote!( Self )
-			}
+				quote::quote!(Self)
+			},
 		},
 		syn::Data::Enum(enum_) => {
-			let variants = enum_.variants.iter()
-				.map(|variant| {
-					let ident = &variant.ident;
-					match &variant.fields {
-						syn::Fields::Named(named) => {
-							let captured = named.named.iter().map(|i| &i.ident);
-							let cloned = captured.clone()
-								.map(|i| quote::quote_spanned!(i.span() =>
-									#i: core::clone::Clone::clone(#i)
-								));
-							quote::quote!(
-								Self::#ident { #( ref #captured, )* } => Self::#ident { #( #cloned, )*}
+			let variants = enum_.variants.iter().map(|variant| {
+				let ident = &variant.ident;
+				match &variant.fields {
+					syn::Fields::Named(named) => {
+						let captured = named.named.iter().map(|i| &i.ident);
+						let cloned = captured.clone().map(|i| {
+							quote::quote_spanned!(i.span() =>
+								#i: core::clone::Clone::clone(#i)
 							)
-						},
-						syn::Fields::Unnamed(unnamed) => {
-							let captured = unnamed.unnamed.iter().enumerate()
-								.map(|(i, f)| syn::Ident::new(&format!("_{}", i), f.span()));
-							let cloned = captured.clone()
-								.map(|i| quote::quote_spanned!(i.span() =>
-									core::clone::Clone::clone(#i)
-								));
-							quote::quote!(
-								Self::#ident ( #( ref #captured, )* ) => Self::#ident ( #( #cloned, )*)
+						});
+						quote::quote!(
+							Self::#ident { #( ref #captured, )* } => Self::#ident { #( #cloned, )*}
+						)
+					},
+					syn::Fields::Unnamed(unnamed) => {
+						let captured = unnamed
+							.unnamed
+							.iter()
+							.enumerate()
+							.map(|(i, f)| syn::Ident::new(&format!("_{}", i), f.span()));
+						let cloned = captured.clone().map(|i| {
+							quote::quote_spanned!(i.span() =>
+								core::clone::Clone::clone(#i)
 							)
-						},
-						syn::Fields::Unit => quote::quote!( Self::#ident => Self::#ident ),
-					}
-				});
+						});
+						quote::quote!(
+							Self::#ident ( #( ref #captured, )* ) => Self::#ident ( #( #cloned, )*)
+						)
+					},
+					syn::Fields::Unit => quote::quote!( Self::#ident => Self::#ident ),
+				}
+			});
 
 			quote::quote!(match self {
 				#( #variants, )*
@@ -99,5 +104,6 @@ pub fn derive_clone_no_bound(input: proc_macro::TokenStream) -> proc_macro::Toke
 				}
 			}
 		};
-	).into()
+	)
+	.into()
 }

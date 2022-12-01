@@ -22,7 +22,11 @@
 
 use crate::biguint;
 use num_traits::Zero;
-use sp_std::{cmp::{min, max}, convert::TryInto, mem};
+use sp_std::{
+	cmp::{max, min},
+	convert::TryInto,
+	mem,
+};
 
 /// Helper gcd function used in Rational128 implementation.
 pub fn gcd(a: u128, b: u128) -> u128 {
@@ -63,7 +67,9 @@ pub fn to_big_uint(x: u128) -> biguint::BigUint {
 ///
 /// Invariant: c must be greater than or equal to 1.
 pub fn multiply_by_rational(mut a: u128, mut b: u128, mut c: u128) -> Result<u128, &'static str> {
-	if a.is_zero() || b.is_zero() { return Ok(Zero::zero()); }
+	if a.is_zero() || b.is_zero() {
+		return Ok(Zero::zero())
+	}
 	c = c.max(1);
 
 	// a and b are interchangeable by definition in this function. It always helps to assume the
@@ -102,9 +108,10 @@ pub fn multiply_by_rational(mut a: u128, mut b: u128, mut c: u128) -> Result<u12
 			// bigger than c. In this case, returning zero is defensive-only and div should
 			// always return Some.
 			let (mut q, r) = ab.div(&c_num, true).unwrap_or((Zero::zero(), Zero::zero()));
-			let r: u128 = r.try_into()
-				.expect("reminder of div by c is always less than c; qed");
-			if r > (c / 2) { q = q.add(&to_big_uint(1)); }
+			let r: u128 = r.try_into().expect("reminder of div by c is always less than c; qed");
+			if r > (c / 2) {
+				q = q.add(&to_big_uint(1));
+			}
 			q
 		};
 		q.lstrip();

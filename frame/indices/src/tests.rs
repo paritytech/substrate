@@ -19,15 +19,17 @@
 
 #![cfg(test)]
 
-use super::*;
-use super::mock::*;
-use frame_support::{assert_ok, assert_noop};
+use super::{mock::*, *};
+use frame_support::{assert_noop, assert_ok};
 use pallet_balances::Error as BalancesError;
 
 #[test]
 fn claiming_should_work() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(Indices::claim(Some(0).into(), 0), BalancesError::<Test, _>::InsufficientBalance);
+		assert_noop!(
+			Indices::claim(Some(0).into(), 0),
+			BalancesError::<Test, _>::InsufficientBalance
+		);
 		assert_ok!(Indices::claim(Some(1).into(), 0));
 		assert_noop!(Indices::claim(Some(2).into(), 0), Error::<Test>::InUse);
 		assert_eq!(Balances::reserved_balance(1), 1);

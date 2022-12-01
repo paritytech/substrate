@@ -23,12 +23,12 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::prelude::*;
 use frame_support::{
-	decl_module, decl_storage, decl_event, decl_error,
-	traits::{ChangeMembers, InitializeMembers, EnsureOrigin, Contains, SortedMembers, Get},
+	decl_error, decl_event, decl_module, decl_storage,
+	traits::{ChangeMembers, Contains, EnsureOrigin, Get, InitializeMembers, SortedMembers},
 };
 use frame_system::ensure_signed;
+use sp_std::prelude::*;
 
 pub mod weights;
 pub use weights::WeightInfo;
@@ -84,6 +84,11 @@ decl_storage! {
 		config(phantom): sp_std::marker::PhantomData<I>;
 		build(|config: &Self| {
 			let mut members = config.members.clone();
+
+			use sp_std::collections::btree_set::BTreeSet;
+			let members_set: BTreeSet<_> = config.members.iter().collect();
+			assert!(members_set.len() == config.members.len(), "Members cannot contain duplicate accounts.");
+
 			members.sort();
 			T::MembershipInitialized::initialize_members(&members);
 			<Members<T, I>>::put(members);
@@ -316,10 +321,10 @@ impl<T: Config<I>, I: Instance> SortedMembers<T::AccountId> for Module<T, I> {
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmark {
-	use super::{*, Module as Membership};
+	use super::{Module as Membership, *};
+	use frame_benchmarking::{account, benchmarks_instance, impl_benchmark_test_suite, whitelist};
+	use frame_support::{assert_ok, traits::EnsureOrigin};
 	use frame_system::RawOrigin;
-	use frame_support::{traits::EnsureOrigin, assert_ok};
-	use frame_benchmarking::{benchmarks_instance, whitelist, account, impl_benchmark_test_suite};
 
 	const SEED: u32 = 0;
 
@@ -454,7 +459,7 @@ mod benchmark {
 		}
 	}
 
-	impl_benchmark_test_suite!(Membership, crate::tests::new_bench_ext(), crate::tests::Test,);
+	impl_benchmark_test_suite!(Membership, crate::tests::new_bench_ext(), crate::tests::Test);
 }
 
 #[cfg(test)]
@@ -462,10 +467,13 @@ mod tests {
 	use super::*;
 	use crate as pallet_membership;
 
-	use frame_support::{assert_ok, assert_noop, parameter_types, ord_parameter_types};
-	use sp_core::H256;
-	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup, BadOrigin}, testing::Header};
+	use frame_support::{assert_noop, assert_ok, ord_parameter_types, parameter_types};
 	use frame_system::EnsureSignedBy;
+	use sp_core::H256;
+	use sp_runtime::{
+		testing::Header,
+		traits::{BadOrigin, BlakeTwo256, IdentityLookup},
+	};
 
 	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 	type Block = frame_system::mocking::MockBlock<Test>;
@@ -491,7 +499,7 @@ mod tests {
 	}
 
 	impl frame_system::Config for Test {
-		type BaseCallFilter = ();
+		type BaseCallFilter = frame_support::traits::Everything;
 		type BlockWeights = ();
 		type BlockLength = ();
 		type DbWeight = ();
@@ -567,10 +575,12 @@ mod tests {
 	pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
-		pallet_membership::GenesisConfig::<Test>{
+		pallet_membership::GenesisConfig::<Test> {
 			members: vec![10, 20, 30],
-			.. Default::default()
-		}.assimilate_storage(&mut t).unwrap();
+			..Default::default()
+		}
+		.assimilate_storage(&mut t)
+		.unwrap();
 		t.into()
 	}
 
@@ -612,7 +622,10 @@ mod tests {
 	fn add_member_works() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(Membership::add_member(Origin::signed(5), 15), BadOrigin);
-			assert_noop!(Membership::add_member(Origin::signed(1), 10), Error::<Test, _>::AlreadyMember);
+			assert_noop!(
+				Membership::add_member(Origin::signed(1), 10),
+				Error::<Test, _>::AlreadyMember
+			);
 			assert_ok!(Membership::add_member(Origin::signed(1), 15));
 			assert_eq!(Membership::members(), vec![10, 15, 20, 30]);
 			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members());
@@ -623,7 +636,10 @@ mod tests {
 	fn remove_member_works() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(Membership::remove_member(Origin::signed(5), 20), BadOrigin);
-			assert_noop!(Membership::remove_member(Origin::signed(2), 15), Error::<Test, _>::NotMember);
+			assert_noop!(
+				Membership::remove_member(Origin::signed(2), 15),
+				Error::<Test, _>::NotMember
+			);
 			assert_ok!(Membership::set_prime(Origin::signed(5), 20));
 			assert_ok!(Membership::remove_member(Origin::signed(2), 20));
 			assert_eq!(Membership::members(), vec![10, 30]);
@@ -637,8 +653,14 @@ mod tests {
 	fn swap_member_works() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(Membership::swap_member(Origin::signed(5), 10, 25), BadOrigin);
-			assert_noop!(Membership::swap_member(Origin::signed(3), 15, 25), Error::<Test, _>::NotMember);
-			assert_noop!(Membership::swap_member(Origin::signed(3), 10, 30), Error::<Test, _>::AlreadyMember);
+			assert_noop!(
+				Membership::swap_member(Origin::signed(3), 15, 25),
+				Error::<Test, _>::NotMember
+			);
+			assert_noop!(
+				Membership::swap_member(Origin::signed(3), 10, 30),
+				Error::<Test, _>::AlreadyMember
+			);
 
 			assert_ok!(Membership::set_prime(Origin::signed(5), 20));
 			assert_ok!(Membership::swap_member(Origin::signed(3), 20, 20));
@@ -668,8 +690,14 @@ mod tests {
 	fn change_key_works() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Membership::set_prime(Origin::signed(5), 10));
-			assert_noop!(Membership::change_key(Origin::signed(3), 25), Error::<Test, _>::NotMember);
-			assert_noop!(Membership::change_key(Origin::signed(10), 20), Error::<Test, _>::AlreadyMember);
+			assert_noop!(
+				Membership::change_key(Origin::signed(3), 25),
+				Error::<Test, _>::NotMember
+			);
+			assert_noop!(
+				Membership::change_key(Origin::signed(10), 20),
+				Error::<Test, _>::AlreadyMember
+			);
 			assert_ok!(Membership::change_key(Origin::signed(10), 40));
 			assert_eq!(Membership::members(), vec![20, 30, 40]);
 			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members());
@@ -705,5 +733,16 @@ mod tests {
 			assert_eq!(Membership::prime(), None);
 			assert_eq!(PRIME.with(|m| *m.borrow()), Membership::prime());
 		});
+	}
+
+	#[test]
+	#[should_panic(expected = "Members cannot contain duplicate accounts.")]
+	fn genesis_build_panics_with_duplicate_members() {
+		pallet_membership::GenesisConfig::<Test> {
+			members: vec![1, 2, 3, 1],
+			phantom: Default::default(),
+		}
+		.build_storage()
+		.unwrap();
 	}
 }

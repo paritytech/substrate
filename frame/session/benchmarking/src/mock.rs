@@ -19,9 +19,9 @@
 
 #![cfg(test)]
 
-use sp_runtime::traits::IdentityLookup;
 use frame_election_provider_support::onchain;
 use frame_support::parameter_types;
+use sp_runtime::traits::IdentityLookup;
 
 type AccountId = u64;
 type AccountIndex = u32;
@@ -45,7 +45,7 @@ frame_support::construct_runtime!(
 );
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -114,7 +114,8 @@ impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
 		_: bool,
 		_: &[(AccountId, Ks)],
 		_: &[(AccountId, Ks)],
-	) {}
+	) {
+	}
 
 	fn on_disabled(_: usize) {}
 }

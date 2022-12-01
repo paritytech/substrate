@@ -15,9 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::Def;
+use crate::{pallet::Def, COUNTER};
 use frame_support_procedural_tools::clean_type_string;
-use crate::COUNTER;
 use syn::spanned::Spanned;
 
 /// * Generate enum call and implement various trait on it.
@@ -31,7 +30,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			let docs = call.docs.clone();
 
 			(span, where_clause, methods, docs)
-		}
+		},
 		None => (def.item.span(), None, Vec::new(), Vec::new()),
 	};
 	let frame_support = &def.frame_support;
@@ -48,16 +47,20 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 
 	let fn_doc = methods.iter().map(|method| &method.docs).collect::<Vec<_>>();
 
-	let args_name = methods.iter()
+	let args_name = methods
+		.iter()
 		.map(|method| method.args.iter().map(|(_, name, _)| name.clone()).collect::<Vec<_>>())
 		.collect::<Vec<_>>();
 
-	let args_type = methods.iter()
+	let args_type = methods
+		.iter()
 		.map(|method| method.args.iter().map(|(_, _, type_)| type_.clone()).collect::<Vec<_>>())
 		.collect::<Vec<_>>();
 
 	let args_compact_attr = methods.iter().map(|method| {
-		method.args.iter()
+		method
+			.args
+			.iter()
 			.map(|(is_compact, _, type_)| {
 				if *is_compact {
 					quote::quote_spanned!(type_.span() => #[codec(compact)] )
@@ -69,7 +72,9 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 	});
 
 	let args_metadata_type = methods.iter().map(|method| {
-		method.args.iter()
+		method
+			.args
+			.iter()
 			.map(|(is_compact, _, type_)| {
 				let final_type = if *is_compact {
 					quote::quote_spanned!(type_.span() => Compact<#type_>)
@@ -84,14 +89,10 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 	let default_docs = [syn::parse_quote!(
 		r"Contains one variant per dispatchable that can be called by an extrinsic."
 	)];
-	let docs = if docs.is_empty() {
-		&default_docs[..]
-	} else {
-		&docs[..]
-	};
+	let docs = if docs.is_empty() { &default_docs[..] } else { &docs[..] };
 
 	let maybe_compile_error = if def.call.is_none() {
-		quote::quote!{
+		quote::quote! {
 			compile_error!(concat!(
 				"`",
 				stringify!($pallet_name),

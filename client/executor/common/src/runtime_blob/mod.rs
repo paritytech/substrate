@@ -53,5 +53,5 @@ mod globals_snapshot;
 mod runtime_blob;
 
 pub use data_segments_snapshot::DataSegmentsSnapshot;
-pub use globals_snapshot::{GlobalsSnapshot, ExposedMutableGlobalsSet, InstanceGlobals};
+pub use globals_snapshot::{ExposedMutableGlobalsSet, GlobalsSnapshot, InstanceGlobals};
 pub use runtime_blob::RuntimeBlob;

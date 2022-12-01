@@ -16,10 +16,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use serde::{Serialize, Deserialize};
 use parity_scale_codec::Encode;
-use sp_runtime::traits::Block as BlockT;
 use sc_finality_grandpa::GrandpaJustification;
+use serde::{Deserialize, Serialize};
+use sp_runtime::traits::Block as BlockT;
 
 /// An encoded justification proving that the given header has been finalized
 #[derive(Clone, Serialize, Deserialize)]

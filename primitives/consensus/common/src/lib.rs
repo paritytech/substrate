@@ -21,41 +21,27 @@
 //! change. Implementors of traits should not rely on the interfaces to remain
 //! the same.
 
-// This provides "unused" building blocks to other crates
-#![allow(dead_code)]
+use std::{sync::Arc, time::Duration};
 
-// our error-chain could potentially blow up otherwise
-#![recursion_limit="128"]
-
-#[macro_use] extern crate log;
-
-use std::sync::Arc;
-use std::time::Duration;
-
-use sp_runtime::{
-	generic::BlockId, traits::{Block as BlockT, DigestFor, NumberFor, HashFor},
-};
 use futures::prelude::*;
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, DigestFor, HashFor, NumberFor},
+};
 use sp_state_machine::StorageProof;
 
 pub mod block_validation;
 pub mod error;
-pub mod block_import;
-mod select_chain;
-pub mod import_queue;
 pub mod evaluation;
-mod metrics;
+mod select_chain;
 
 pub use self::error::Error;
-pub use block_import::{
-	BlockCheckParams, BlockImport, BlockImportParams, BlockOrigin, ForkChoiceStrategy,
-	ImportResult, ImportedAux, ImportedState, JustificationImport, JustificationSyncLink,
-	StateAction, StorageChanges,
-};
 pub use select_chain::SelectChain;
-pub use sp_state_machine::Backend as StateBackend;
-pub use import_queue::DefaultImportQueue;
 pub use sp_inherents::InherentData;
+pub use sp_state_machine::Backend as StateBackend;
+
+/// Type of keys in the blockchain cache that consensus module could use for its needs.
+pub type CacheKeyId = [u8; 4];
 
 /// Block status.
 #[derive(Debug, PartialEq, Eq)]
@@ -72,6 +58,33 @@ pub enum BlockStatus {
 	Unknown,
 }
 
+/// Block data origin.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum BlockOrigin {
+	/// Genesis block built into the client.
+	Genesis,
+	/// Block is part of the initial sync with the network.
+	NetworkInitialSync,
+	/// Block was broadcasted on the network.
+	NetworkBroadcast,
+	/// Block that was received from the network and validated in the consensus process.
+	ConsensusBroadcast,
+	/// Block that was collated by this node.
+	Own,
+	/// Block was imported from a file.
+	File,
+}
+
+impl From<BlockOrigin> for sp_core::ExecutionContext {
+	fn from(origin: BlockOrigin) -> Self {
+		if origin == BlockOrigin::NetworkInitialSync {
+			sp_core::ExecutionContext::Syncing
+		} else {
+			sp_core::ExecutionContext::Importing
+		}
+	}
+}
+
 /// Environment for a Consensus instance.
 ///
 /// Creates proposer instance.
@@ -80,7 +93,9 @@ pub trait Environment<B: BlockT> {
 	type Proposer: Proposer<B> + Send + 'static;
 	/// A future that resolves to the proposer.
 	type CreateProposer: Future<Output = Result<Self::Proposer, Self::Error>>
-		+ Send + Unpin + 'static;
+		+ Send
+		+ Unpin
+		+ 'static;
 	/// Error which can occur upon creation.
 	type Error: From<Error> + std::fmt::Debug + 'static;
 
@@ -96,7 +111,8 @@ pub struct Proposal<Block: BlockT, Transaction, Proof> {
 	/// Proof that was recorded while building the block.
 	pub proof: Proof,
 	/// The storage changes while building this block.
-	pub storage_changes: sp_state_machine::StorageChanges<Transaction, HashFor<Block>, NumberFor<Block>>,
+	pub storage_changes:
+		sp_state_machine::StorageChanges<Transaction, HashFor<Block>, NumberFor<Block>>,
 }
 
 /// Error that is returned when [`ProofRecording`] requested to record a proof,
@@ -179,8 +195,7 @@ pub trait Proposer<B: BlockT> {
 	/// The transaction type used by the backend.
 	type Transaction: Default + Send + 'static;
 	/// Future that resolves to a committed proposal with an optional proof.
-	type Proposal:
-		Future<Output = Result<Proposal<B, Self::Transaction, Self::Proof>, Self::Error>>
+	type Proposal: Future<Output = Result<Proposal<B, Self::Transaction, Self::Proof>, Self::Error>>
 		+ Send
 		+ Unpin
 		+ 'static;
@@ -233,11 +248,19 @@ pub trait SyncOracle {
 pub struct NoNetwork;
 
 impl SyncOracle for NoNetwork {
-	fn is_major_syncing(&mut self) -> bool { false }
-	fn is_offline(&mut self) -> bool { false }
+	fn is_major_syncing(&mut self) -> bool {
+		false
+	}
+	fn is_offline(&mut self) -> bool {
+		false
+	}
 }
 
-impl<T> SyncOracle for Arc<T> where T: ?Sized, for<'r> &'r T: SyncOracle {
+impl<T> SyncOracle for Arc<T>
+where
+	T: ?Sized,
+	for<'r> &'r T: SyncOracle,
+{
 	fn is_major_syncing(&mut self) -> bool {
 		<&T>::is_major_syncing(&mut &**self)
 	}
@@ -277,13 +300,10 @@ impl<T: sp_version::GetRuntimeVersion<Block>, Block: BlockT> CanAuthorWith<Block
 	fn can_author_with(&self, at: &BlockId<Block>) -> Result<(), String> {
 		match self.0.runtime_version(at) {
 			Ok(version) => self.0.native_version().can_author_with(&version),
-			Err(e) => {
-				Err(format!(
-					"Failed to get runtime version at `{}` and will disable authoring. Error: {}",
-					at,
-					e,
-				))
-			}
+			Err(e) => Err(format!(
+				"Failed to get runtime version at `{}` and will disable authoring. Error: {}",
+				at, e,
+			)),
 		}
 	}
 }

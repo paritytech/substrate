@@ -19,8 +19,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Encode, Decode};
-use sp_inherents::{InherentIdentifier, IsFatalError, InherentData};
+use codec::{Decode, Encode};
+use sp_inherents::{InherentData, InherentIdentifier, IsFatalError};
 use sp_std::time::Duration;
 
 /// The identifier for the `timestamp` inherent.
@@ -190,10 +190,7 @@ impl InherentDataProvider {
 
 	/// Create `Self` using the given `timestamp`.
 	pub fn new(timestamp: InherentType) -> Self {
-		Self {
-			max_drift: std::time::Duration::from_secs(60).into(),
-			timestamp,
-		}
+		Self { max_drift: std::time::Duration::from_secs(60).into(), timestamp }
 	}
 
 	/// With the given maximum drift.
@@ -249,9 +246,9 @@ impl sp_inherents::InherentDataProvider for InherentDataProvider {
 				// halt import until timestamp is valid.
 				// reject when too far ahead.
 				if valid > timestamp + max_drift {
-					return Some(Err(
-						sp_inherents::Error::Application(Box::from(InherentError::TooFarInFuture))
-					))
+					return Some(Err(sp_inherents::Error::Application(Box::from(
+						InherentError::TooFarInFuture,
+					))))
 				}
 
 				let diff = valid.checked_sub(timestamp).unwrap_or_default();
@@ -269,4 +266,3 @@ impl sp_inherents::InherentDataProvider for InherentDataProvider {
 		}
 	}
 }
-

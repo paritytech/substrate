@@ -16,8 +16,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{fmt, borrow::{Cow, ToOwned}};
 use serde::Serialize;
+use std::{
+	borrow::{Cow, ToOwned},
+	fmt,
+};
 
 pub struct Path(Vec<String>);
 
@@ -33,7 +36,11 @@ impl Path {
 	}
 
 	pub fn full(&self) -> String {
-		self.0.iter().fold(String::new(), |mut val, next| { val.push_str("::"); val.push_str(next); val })
+		self.0.iter().fold(String::new(), |mut val, next| {
+			val.push_str("::");
+			val.push_str(next);
+			val
+		})
 	}
 
 	pub fn has(&self, path: &str) -> bool {
@@ -115,10 +122,7 @@ impl fmt::Display for BenchmarkOutput {
 	}
 }
 
-pub fn run_benchmark(
-	benchmark: Box<dyn BenchmarkDescription>,
-	mode: Mode,
-) -> BenchmarkOutput {
+pub fn run_benchmark(benchmark: Box<dyn BenchmarkDescription>, mode: Mode) -> BenchmarkOutput {
 	let name = benchmark.name().to_owned();
 	let mut benchmark = benchmark.setup();
 
@@ -133,11 +137,7 @@ pub fn run_benchmark(
 	let raw_average = (durations.iter().sum::<u128>() / (durations.len() as u128)) as u64;
 	let average = (durations.iter().skip(10).take(30).sum::<u128>() / 30) as u64;
 
-	BenchmarkOutput {
-		name: name.into(),
-		raw_average,
-		average,
-	}
+	BenchmarkOutput { name: name.into(), raw_average, average }
 }
 
 macro_rules! matrix(

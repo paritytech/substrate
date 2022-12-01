@@ -19,11 +19,15 @@
 //! Extension to syn types, mainly for parsing
 // end::description[]
 
-use syn::{visit::{Visit, self}, parse::{Parse, ParseStream, Result}, Ident};
+use frame_support_procedural_tools_derive::{Parse, ToTokens};
 use proc_macro2::{TokenStream, TokenTree};
 use quote::ToTokens;
 use std::iter::once;
-use frame_support_procedural_tools_derive::{ToTokens, Parse};
+use syn::{
+	parse::{Parse, ParseStream, Result},
+	visit::{self, Visit},
+	Ident,
+};
 
 /// stop parsing here getting remaining token as content
 /// Warn duplicate stream (part of)
@@ -35,7 +39,6 @@ pub struct StopParse {
 // inner macro really dependant on syn naming convention, do not export
 macro_rules! groups_impl {
 	($name:ident, $tok:ident, $deli:ident, $parse:ident) => {
-
 		#[derive(Debug)]
 		pub struct $name<P> {
 			pub token: syn::token::$tok,
@@ -46,7 +49,7 @@ macro_rules! groups_impl {
 			fn parse(input: ParseStream) -> Result<Self> {
 				let syn::group::$name { token, content } = syn::group::$parse(input)?;
 				let content = content.parse()?;
-				Ok($name { token, content, })
+				Ok($name { token, content })
 			}
 		}
 
@@ -60,12 +63,12 @@ macro_rules! groups_impl {
 			}
 		}
 
-		impl <P: Clone> Clone for $name<P> {
+		impl<P: Clone> Clone for $name<P> {
 			fn clone(&self) -> Self {
 				Self { token: self.token.clone(), content: self.content.clone() }
 			}
 		}
-	}
+	};
 }
 
 groups_impl!(Braces, Brace, Brace, parse_braces);
@@ -73,23 +76,22 @@ groups_impl!(Brackets, Bracket, Bracket, parse_brackets);
 groups_impl!(Parens, Paren, Parenthesis, parse_parens);
 
 #[derive(Debug)]
-pub struct PunctuatedInner<P,T,V> {
-	pub inner: syn::punctuated::Punctuated<P,T>,
+pub struct PunctuatedInner<P, T, V> {
+	pub inner: syn::punctuated::Punctuated<P, T>,
 	pub variant: V,
 }
 
 #[derive(Debug, Clone)]
 pub struct NoTrailing;
 
-
 #[derive(Debug, Clone)]
 pub struct Trailing;
 
-pub type Punctuated<P,T> = PunctuatedInner<P,T,NoTrailing>;
+pub type Punctuated<P, T> = PunctuatedInner<P, T, NoTrailing>;
 
-pub type PunctuatedTrailing<P,T> = PunctuatedInner<P,T,Trailing>;
+pub type PunctuatedTrailing<P, T> = PunctuatedInner<P, T, Trailing>;
 
-impl<P: Parse, T: Parse + syn::token::Token> Parse for PunctuatedInner<P,T,Trailing> {
+impl<P: Parse, T: Parse + syn::token::Token> Parse for PunctuatedInner<P, T, Trailing> {
 	fn parse(input: ParseStream) -> Result<Self> {
 		Ok(PunctuatedInner {
 			inner: syn::punctuated::Punctuated::parse_separated_nonempty(input)?,
@@ -98,7 +100,7 @@ impl<P: Parse, T: Parse + syn::token::Token> Parse for PunctuatedInner<P,T,Trail
 	}
 }
 
-impl<P: Parse, T: Parse> Parse for PunctuatedInner<P,T,NoTrailing> {
+impl<P: Parse, T: Parse> Parse for PunctuatedInner<P, T, NoTrailing> {
 	fn parse(input: ParseStream) -> Result<Self> {
 		Ok(PunctuatedInner {
 			inner: syn::punctuated::Punctuated::parse_terminated(input)?,
@@ -107,13 +109,13 @@ impl<P: Parse, T: Parse> Parse for PunctuatedInner<P,T,NoTrailing> {
 	}
 }
 
-impl<P: ToTokens, T: ToTokens, V> ToTokens for PunctuatedInner<P,T,V> {
+impl<P: ToTokens, T: ToTokens, V> ToTokens for PunctuatedInner<P, T, V> {
 	fn to_tokens(&self, tokens: &mut TokenStream) {
 		self.inner.to_tokens(tokens)
 	}
 }
 
-impl <P: Clone, T: Clone, V: Clone> Clone for PunctuatedInner<P, T, V> {
+impl<P: Clone, T: Clone, V: Clone> Clone for PunctuatedInner<P, T, V> {
 	fn clone(&self) -> Self {
 		Self { inner: self.inner.clone(), variant: self.variant.clone() }
 	}
@@ -127,9 +129,7 @@ pub struct Meta {
 
 impl Parse for Meta {
 	fn parse(input: ParseStream) -> Result<Self> {
-		Ok(Meta {
-			inner: syn::Meta::parse(input)?,
-		})
+		Ok(Meta { inner: syn::Meta::parse(input)? })
 	}
 }
 
@@ -151,9 +151,7 @@ pub struct OuterAttributes {
 impl Parse for OuterAttributes {
 	fn parse(input: ParseStream) -> Result<Self> {
 		let inner = syn::Attribute::parse_outer(input)?;
-		Ok(OuterAttributes {
-			inner,
-		})
+		Ok(OuterAttributes { inner })
 	}
 }
 
@@ -189,13 +187,11 @@ struct ContainsIdent<'a> {
 
 impl<'ast> ContainsIdent<'ast> {
 	fn visit_tokenstream(&mut self, stream: TokenStream) {
-		stream.into_iter().for_each(|tt|
-			match tt {
-				TokenTree::Ident(id) => self.visit_ident(&id),
-				TokenTree::Group(ref group) => self.visit_tokenstream(group.stream()),
-				_ => {}
-			}
-		)
+		stream.into_iter().for_each(|tt| match tt {
+			TokenTree::Ident(id) => self.visit_ident(&id),
+			TokenTree::Group(ref group) => self.visit_tokenstream(group.stream()),
+			_ => {},
+		})
 	}
 
 	fn visit_ident(&mut self, ident: &Ident) {
@@ -218,10 +214,7 @@ impl<'ast> Visit<'ast> for ContainsIdent<'ast> {
 
 /// Check if a `Type` contains the given `Ident`.
 pub fn type_contains_ident(typ: &syn::Type, ident: &Ident) -> bool {
-	let mut visit = ContainsIdent {
-		result: false,
-		ident,
-	};
+	let mut visit = ContainsIdent { result: false, ident };
 
 	visit::visit_type(&mut visit, typ);
 	visit.result
@@ -229,10 +222,7 @@ pub fn type_contains_ident(typ: &syn::Type, ident: &Ident) -> bool {
 
 /// Check if a `Expr` contains the given `Ident`.
 pub fn expr_contains_ident(expr: &syn::Expr, ident: &Ident) -> bool {
-	let mut visit = ContainsIdent {
-		result: false,
-		ident,
-	};
+	let mut visit = ContainsIdent { result: false, ident };
 
 	visit::visit_expr(&mut visit, expr);
 	visit.result

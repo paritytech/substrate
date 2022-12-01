@@ -25,7 +25,8 @@ environmental::environmental!(ext: trait Externalities);
 /// while executing the given closure [`with_externalities`] grants access to them. The externalities
 /// are only set for the same thread this function was called from.
 pub fn set_and_run_with_externalities<F, R>(ext: &mut dyn Externalities, f: F) -> R
-	where F: FnOnce() -> R
+where
+	F: FnOnce() -> R,
 {
 	ext::using(ext, f)
 }

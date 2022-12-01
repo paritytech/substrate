@@ -251,25 +251,37 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use rand_chacha::{rand_core::{RngCore, SeedableRng}, ChaChaRng};
-use sp_std::prelude::*;
-use codec::{Encode, Decode};
-use sp_runtime::{Percent, RuntimeDebug,
+use codec::{Decode, Encode};
+use frame_support::{
+	decl_error, decl_event, decl_module, decl_storage,
+	dispatch::DispatchResult,
+	ensure,
 	traits::{
-		StaticLookup, AccountIdConversion, Saturating, Zero, IntegerSquareRoot, Hash,
-		TrailingZeroInput, CheckedSub
-	}
+		BalanceStatus, ChangeMembers, Currency, EnsureOrigin, ExistenceRequirement::AllowDeath,
+		Get, Imbalance, OnUnbalanced, Randomness, ReservableCurrency,
+	},
+	weights::Weight,
+	PalletId,
 };
-use frame_support::{decl_error, decl_module, decl_storage, decl_event, ensure, dispatch::DispatchResult, PalletId};
-use frame_support::weights::Weight;
-use frame_support::traits::{
-	Currency, ReservableCurrency, Randomness, Get, ChangeMembers, BalanceStatus,
-	ExistenceRequirement::AllowDeath, EnsureOrigin, OnUnbalanced, Imbalance
+use frame_system::{self as system, ensure_root, ensure_signed};
+use rand_chacha::{
+	rand_core::{RngCore, SeedableRng},
+	ChaChaRng,
 };
-use frame_system::{self as system, ensure_signed, ensure_root};
+use sp_runtime::{
+	traits::{
+		AccountIdConversion, CheckedSub, Hash, IntegerSquareRoot, Saturating, StaticLookup,
+		TrailingZeroInput, Zero,
+	},
+	Percent, RuntimeDebug,
+};
+use sp_std::prelude::*;
 
-type BalanceOf<T, I> = <<T as Config<I>>::Currency as Currency<<T as system::Config>::AccountId>>::Balance;
-type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
+type BalanceOf<T, I> =
+	<<T as Config<I>>::Currency as Currency<<T as system::Config>::AccountId>>::Balance;
+type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
+	<T as frame_system::Config>::AccountId,
+>>::NegativeImbalance;
 
 /// The module's configuration trait.
 pub trait Config<I = DefaultInstance>: system::Config {
@@ -370,7 +382,7 @@ pub enum VouchingStatus {
 pub type StrikeCount = u32;
 
 /// A bid for entry into society.
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug,)]
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct Bid<AccountId, Balance> {
 	/// The bidder/candidate trying to enter society
 	who: AccountId,
@@ -1187,7 +1199,6 @@ fn pick_item<'a, R: RngCore, T>(rng: &mut R, items: &'a [T]) -> Option<&'a T> {
 
 /// Pick a new PRN, in the range [0, `max`] (inclusive).
 fn pick_usize<'a, R: RngCore>(rng: &mut R, max: usize) -> usize {
-
 	(rng.next_u32() % (max as u32 + 1)) as usize
 }
 
@@ -1198,7 +1209,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		mut bids: Vec<Bid<T::AccountId, BalanceOf<T, I>>>,
 		who: &T::AccountId,
 		value: BalanceOf<T, I>,
-		bid_kind: BidKind<T::AccountId, BalanceOf<T, I>>
+		bid_kind: BidKind<T::AccountId, BalanceOf<T, I>>,
 	) {
 		const MAX_BID_COUNT: usize = 1000;
 
@@ -1206,7 +1217,8 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 			// Insert new elements after the existing ones. This ensures new bids
 			// with the same bid value are further down the list than existing ones.
 			Ok(pos) => {
-				let different_bid = bids.iter()
+				let different_bid = bids
+					.iter()
 					// Easily extract the index we are on
 					.enumerate()
 					// Skip ahead to the suggested position
@@ -1218,25 +1230,13 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 				// If the element is not at the end of the list, insert the new element
 				// in the spot.
 				if let Some((p, _)) = different_bid {
-					bids.insert(p, Bid {
-						value,
-						who: who.clone(),
-						kind: bid_kind,
-					});
+					bids.insert(p, Bid { value, who: who.clone(), kind: bid_kind });
 				// If the element is at the end of the list, push the element on the end.
 				} else {
-					bids.push(Bid {
-						value,
-						who: who.clone(),
-						kind: bid_kind,
-					});
+					bids.push(Bid { value, who: who.clone(), kind: bid_kind });
 				}
 			},
-			Err(pos) => bids.insert(pos, Bid {
-				value,
-				who: who.clone(),
-				kind: bid_kind,
-			}),
+			Err(pos) => bids.insert(pos, Bid { value, who: who.clone(), kind: bid_kind }),
 		}
 		// Keep it reasonably small.
 		if bids.len() > MAX_BID_COUNT {
@@ -1245,10 +1245,10 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 				BidKind::Deposit(deposit) => {
 					let err_amount = T::Currency::unreserve(&popped, deposit);
 					debug_assert!(err_amount.is_zero());
-				}
+				},
 				BidKind::Vouch(voucher, _) => {
 					<Vouching<T, I>>::remove(&voucher);
-				}
+				},
 			}
 			Self::deposit_event(RawEvent::AutoUnbid(popped));
 		}
@@ -1263,7 +1263,10 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 	}
 
 	/// Check a user is a candidate.
-	fn is_candidate(candidates: &Vec<Bid<T::AccountId, BalanceOf<T, I>>>, who: &T::AccountId) -> bool {
+	fn is_candidate(
+		candidates: &Vec<Bid<T::AccountId, BalanceOf<T, I>>>,
+		who: &T::AccountId,
+	) -> bool {
 		// Looking up a candidate is the same as looking up a bid
 		Self::is_bid(candidates, who)
 	}
@@ -1307,7 +1310,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 				T::MembershipChanged::change_members_sorted(&[], &[m.clone()], &members[..]);
 				<Members<T, I>>::put(members);
 				Ok(())
-			}
+			},
 		}
 	}
 
@@ -1333,73 +1336,87 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 			// critical issues or side-effects. This is auto-correcting as members fall out of society.
 			members.reserve(candidates.len());
 
-			let maturity = <system::Pallet<T>>::block_number()
-				+ Self::lock_duration(members.len() as u32);
+			let maturity =
+				<system::Pallet<T>>::block_number() + Self::lock_duration(members.len() as u32);
 
 			let mut rewardees = Vec::new();
 			let mut total_approvals = 0;
 			let mut total_slash = <BalanceOf<T, I>>::zero();
 			let mut total_payouts = <BalanceOf<T, I>>::zero();
 
-			let accepted = candidates.into_iter().filter_map(|Bid {value, who: candidate, kind }| {
-				let mut approval_count = 0;
+			let accepted = candidates
+				.into_iter()
+				.filter_map(|Bid { value, who: candidate, kind }| {
+					let mut approval_count = 0;
 
-				// Creates a vector of (vote, member) for the given candidate
-				// and tallies total number of approve votes for that candidate.
-				let votes = members.iter()
-					.filter_map(|m| <Votes<T, I>>::take(&candidate, m).map(|v| (v, m)))
-					.inspect(|&(v, _)| if v == Vote::Approve { approval_count += 1 })
-					.collect::<Vec<_>>();
+					// Creates a vector of (vote, member) for the given candidate
+					// and tallies total number of approve votes for that candidate.
+					let votes = members
+						.iter()
+						.filter_map(|m| <Votes<T, I>>::take(&candidate, m).map(|v| (v, m)))
+						.inspect(|&(v, _)| {
+							if v == Vote::Approve {
+								approval_count += 1
+							}
+						})
+						.collect::<Vec<_>>();
 
-				// Select one of the votes at random.
-				// Note that `Vote::Skeptical` and `Vote::Reject` both reject the candidate.
-				let is_accepted = pick_item(&mut rng, &votes).map(|x| x.0) == Some(Vote::Approve);
+					// Select one of the votes at random.
+					// Note that `Vote::Skeptical` and `Vote::Reject` both reject the candidate.
+					let is_accepted =
+						pick_item(&mut rng, &votes).map(|x| x.0) == Some(Vote::Approve);
 
-				let matching_vote = if is_accepted { Vote::Approve } else { Vote::Reject };
+					let matching_vote = if is_accepted { Vote::Approve } else { Vote::Reject };
 
-				let bad_vote = |m: &T::AccountId| {
-					// Voter voted wrong way (or was just a lazy skeptic) then reduce their payout
-					// and increase their strikes. after MaxStrikes then they go into suspension.
-					let amount = Self::slash_payout(m, T::WrongSideDeduction::get());
+					let bad_vote = |m: &T::AccountId| {
+						// Voter voted wrong way (or was just a lazy skeptic) then reduce their payout
+						// and increase their strikes. after MaxStrikes then they go into suspension.
+						let amount = Self::slash_payout(m, T::WrongSideDeduction::get());
 
-					let strikes = <Strikes<T, I>>::mutate(m, |s| {
-						*s += 1;
-						*s
-					});
-					if strikes >= T::MaxStrikes::get() {
-						Self::suspend_member(m);
-					}
-					amount
-				};
-
-				// Collect the voters who had a matching vote.
-				rewardees.extend(votes.into_iter()
-					.filter_map(|(v, m)|
-						if v == matching_vote { Some(m) } else {
-							total_slash += bad_vote(m);
-							None
+						let strikes = <Strikes<T, I>>::mutate(m, |s| {
+							*s += 1;
+							*s
+						});
+						if strikes >= T::MaxStrikes::get() {
+							Self::suspend_member(m);
 						}
-					).cloned()
-				);
+						amount
+					};
 
-				if is_accepted {
-					total_approvals += approval_count;
-					total_payouts += value;
-					members.push(candidate.clone());
+					// Collect the voters who had a matching vote.
+					rewardees.extend(
+						votes
+							.into_iter()
+							.filter_map(|(v, m)| {
+								if v == matching_vote {
+									Some(m)
+								} else {
+									total_slash += bad_vote(m);
+									None
+								}
+							})
+							.cloned(),
+					);
 
-					Self::pay_accepted_candidate(&candidate, value, kind, maturity);
+					if is_accepted {
+						total_approvals += approval_count;
+						total_payouts += value;
+						members.push(candidate.clone());
 
-					// We track here the total_approvals so that every candidate has a unique range
-					// of numbers from 0 to `total_approvals` with length `approval_count` so each
-					// candidate is proportionally represented when selecting a "primary" below.
-					Some((candidate, total_approvals, value))
-				} else {
-					// Suspend Candidate
-					<SuspendedCandidates<T, I>>::insert(&candidate, (value, kind));
-					Self::deposit_event(RawEvent::CandidateSuspended(candidate));
-					None
-				}
-			}).collect::<Vec<_>>();
+						Self::pay_accepted_candidate(&candidate, value, kind, maturity);
+
+						// We track here the total_approvals so that every candidate has a unique range
+						// of numbers from 0 to `total_approvals` with length `approval_count` so each
+						// candidate is proportionally represented when selecting a "primary" below.
+						Some((candidate, total_approvals, value))
+					} else {
+						// Suspend Candidate
+						<SuspendedCandidates<T, I>>::insert(&candidate, (value, kind));
+						Self::deposit_event(RawEvent::CandidateSuspended(candidate));
+						None
+					}
+				})
+				.collect::<Vec<_>>();
 
 			// Clean up all votes.
 			<Votes<T, I>>::remove_all(None);
@@ -1411,7 +1428,12 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 					Self::bump_payout(winner, maturity, total_slash);
 				} else {
 					// Move the slashed amount back from payouts account to local treasury.
-					let res = T::Currency::transfer(&Self::payouts(), &Self::account_id(), total_slash, AllowDeath);
+					let res = T::Currency::transfer(
+						&Self::payouts(),
+						&Self::account_id(),
+						total_slash,
+						AllowDeath,
+					);
 					debug_assert!(res.is_ok());
 				}
 			}
@@ -1423,7 +1445,12 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 
 				// this should never fail since we ensure we can afford the payouts in a previous
 				// block, but there's not much we can do to recover if it fails anyway.
-				let res = T::Currency::transfer(&Self::account_id(), &Self::payouts(), total_payouts, AllowDeath);
+				let res = T::Currency::transfer(
+					&Self::account_id(),
+					&Self::payouts(),
+					total_payouts,
+					AllowDeath,
+				);
 				debug_assert!(res.is_ok());
 			}
 
@@ -1433,10 +1460,15 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 				// Choose a random number between 0 and `total_approvals`
 				let primary_point = pick_usize(&mut rng, total_approvals - 1);
 				// Find the zero bid or the user who falls on that point
-				let primary = accepted.iter().find(|e| e.2.is_zero() || e.1 > primary_point)
-					.expect("e.1 of final item == total_approvals; \
-						worst case find will always return that item; qed")
-					.0.clone();
+				let primary = accepted
+					.iter()
+					.find(|e| e.2.is_zero() || e.1 > primary_point)
+					.expect(
+						"e.1 of final item == total_approvals; \
+						worst case find will always return that item; qed",
+					)
+					.0
+					.clone();
 
 				let accounts = accepted.into_iter().map(|x| x.0).collect::<Vec<_>>();
 
@@ -1464,9 +1496,10 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		<Candidates<T, I>>::put(&candidates);
 
 		// Select sqrt(n) random members from the society and make them skeptics.
-		let pick_member = |_| pick_item(&mut rng, &members[..]).expect("exited if members empty; qed");
+		let pick_member =
+			|_| pick_item(&mut rng, &members[..]).expect("exited if members empty; qed");
 		for skeptic in (0..members.len().integer_sqrt()).map(pick_member) {
-			for Bid{ who: c, .. } in candidates.iter() {
+			for Bid { who: c, .. } in candidates.iter() {
 				<Votes<T, I>>::insert(c, skeptic, Vote::Skeptic);
 			}
 		}
@@ -1487,7 +1520,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 					// whole slash is accounted for.
 					*amount -= rest;
 					rest = Zero::zero();
-					break;
+					break
 				}
 			}
 			<Payouts<T, I>>::insert(who, &payouts[dropped..]);
@@ -1497,10 +1530,12 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 
 	/// Bump the payout amount of `who`, to be unlocked at the given block number.
 	fn bump_payout(who: &T::AccountId, when: T::BlockNumber, value: BalanceOf<T, I>) {
-		if !value.is_zero(){
-			<Payouts<T, I>>::mutate(who, |payouts| match payouts.binary_search_by_key(&when, |x| x.0) {
-				Ok(index) => payouts[index].1 += value,
-				Err(index) => payouts.insert(index, (when, value)),
+		if !value.is_zero() {
+			<Payouts<T, I>>::mutate(who, |payouts| {
+				match payouts.binary_search_by_key(&when, |x| x.0) {
+					Ok(index) => payouts[index].1 += value,
+					Err(index) => payouts.insert(index, (when, value)),
+				}
 			});
 		}
 	}
@@ -1528,7 +1563,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 				let err_amount = T::Currency::unreserve(candidate, deposit);
 				debug_assert!(err_amount.is_zero());
 				value
-			}
+			},
 			BidKind::Vouch(voucher, tip) => {
 				// Check that the voucher is still vouching, else some other logic may have removed their status.
 				if <Vouching<T, I>>::take(&voucher) == Some(VouchingStatus::Vouching) {
@@ -1539,7 +1574,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 				} else {
 					value
 				}
-			}
+			},
 		};
 
 		Self::bump_payout(candidate, maturity, value);
@@ -1554,14 +1589,12 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 				let mut approval_count = 0;
 				let mut rejection_count = 0;
 				// Tallies total number of approve and reject votes for the defender.
-				members.iter()
-					.filter_map(|m| <DefenderVotes<T, I>>::take(m))
-					.for_each(|v| {
-						match v {
-							Vote::Approve => approval_count += 1,
-							_ => rejection_count += 1,
-						}
-					});
+				members.iter().filter_map(|m| <DefenderVotes<T, I>>::take(m)).for_each(
+					|v| match v {
+						Vote::Approve => approval_count += 1,
+						_ => rejection_count += 1,
+					},
+				);
 
 				if approval_count <= rejection_count {
 					// User has failed the challenge

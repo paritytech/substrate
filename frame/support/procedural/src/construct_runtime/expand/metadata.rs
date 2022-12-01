@@ -15,10 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License
 
-use proc_macro2::TokenStream;
 use crate::construct_runtime::Pallet;
-use syn::{Ident, TypePath};
+use proc_macro2::TokenStream;
 use quote::quote;
+use syn::{Ident, TypePath};
 
 pub fn expand_runtime_metadata(
 	runtime: &Ident,
@@ -48,7 +48,7 @@ pub fn expand_runtime_metadata(
 			let constants = expand_pallet_metadata_constants(runtime, scrate, decl);
 			let errors = expand_pallet_metadata_errors(runtime, scrate, decl);
 
-			quote!{
+			quote! {
 				#scrate::metadata::ModuleMetadata {
 					name: #scrate::metadata::DecodeDifferent::Encode(stringify!(#name)),
 					index: #index,
@@ -62,7 +62,7 @@ pub fn expand_runtime_metadata(
 		})
 		.collect::<Vec<_>>();
 
-	quote!{
+	quote! {
 		impl #runtime {
 			pub fn metadata() -> #scrate::metadata::RuntimeMetadataPrefixed {
 				#scrate::metadata::RuntimeMetadataLastVersion {
@@ -94,7 +94,7 @@ fn expand_pallet_metadata_storage(
 		let instance = decl.instance.as_ref().into_iter();
 		let path = &decl.path;
 
-		quote!{
+		quote! {
 			Some(#scrate::metadata::DecodeDifferent::Encode(
 				#scrate::metadata::FnEncode(
 					#path::Pallet::<#runtime #(, #path::#instance)*>::storage_metadata
@@ -116,7 +116,7 @@ fn expand_pallet_metadata_calls(
 		let instance = decl.instance.as_ref().into_iter();
 		let path = &decl.path;
 
-		quote!{
+		quote! {
 			Some(#scrate::metadata::DecodeDifferent::Encode(
 				#scrate::metadata::FnEncode(
 					#path::Pallet::<#runtime #(, #path::#instance)*>::call_functions
@@ -136,8 +136,12 @@ fn expand_pallet_metadata_events(
 ) -> TokenStream {
 	if filtered_names.contains(&"Event") {
 		let path = &decl.path;
-		let part_is_generic =
-			!decl.find_part("Event").expect("Event part exists; qed").generics.params.is_empty();
+		let part_is_generic = !decl
+			.find_part("Event")
+			.expect("Event part exists; qed")
+			.generics
+			.params
+			.is_empty();
 		let pallet_event = match (decl.instance.as_ref(), part_is_generic) {
 			(Some(inst), true) => quote!(#path::Event::<#runtime, #path::#inst>),
 			(Some(inst), false) => quote!(#path::Event::<#path::#inst>),
@@ -145,7 +149,7 @@ fn expand_pallet_metadata_events(
 			(None, false) => quote!(#path::Event),
 		};
 
-		quote!{
+		quote! {
 			Some(#scrate::metadata::DecodeDifferent::Encode(
 				#scrate::metadata::FnEncode(#pallet_event::metadata)
 			))
@@ -163,7 +167,7 @@ fn expand_pallet_metadata_constants(
 	let path = &decl.path;
 	let instance = decl.instance.as_ref().into_iter();
 
-	quote!{
+	quote! {
 		#scrate::metadata::DecodeDifferent::Encode(
 			#scrate::metadata::FnEncode(
 				#path::Pallet::<#runtime #(, #path::#instance)*>::module_constants_metadata
@@ -180,7 +184,7 @@ fn expand_pallet_metadata_errors(
 	let path = &decl.path;
 	let instance = decl.instance.as_ref().into_iter();
 
-	quote!{
+	quote! {
 		#scrate::metadata::DecodeDifferent::Encode(
 			#scrate::metadata::FnEncode(
 				<#path::Pallet::<#runtime #(, #path::#instance)*> as #scrate::metadata::ModuleErrorMetadata>::metadata

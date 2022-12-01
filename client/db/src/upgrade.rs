@@ -18,14 +18,16 @@
 
 //! Database upgrade logic.
 
-use std::fs;
-use std::io::{Read, Write, ErrorKind};
-use std::path::{Path, PathBuf};
+use std::{
+	fs,
+	io::{ErrorKind, Read, Write},
+	path::{Path, PathBuf},
+};
 
-use sp_runtime::traits::Block as BlockT;
 use crate::{columns, utils::DatabaseType};
-use kvdb_rocksdb::{Database, DatabaseConfig};
 use codec::{Decode, Encode};
+use kvdb_rocksdb::{Database, DatabaseConfig};
+use sp_runtime::traits::Block as BlockT;
 
 /// Version file name.
 const VERSION_FILE_NAME: &'static str = "db_version";
@@ -38,19 +40,28 @@ const V1_NUM_COLUMNS: u32 = 11;
 const V2_NUM_COLUMNS: u32 = 12;
 
 /// Upgrade database to current version.
-pub fn upgrade_db<Block: BlockT>(db_path: &Path, db_type: DatabaseType) -> sp_blockchain::Result<()> {
+pub fn upgrade_db<Block: BlockT>(
+	db_path: &Path,
+	db_type: DatabaseType,
+) -> sp_blockchain::Result<()> {
 	let is_empty = db_path.read_dir().map_or(true, |mut d| d.next().is_none());
 	if !is_empty {
 		let db_version = current_version(db_path)?;
 		match db_version {
-			0 => Err(sp_blockchain::Error::Backend(format!("Unsupported database version: {}", db_version)))?,
+			0 => Err(sp_blockchain::Error::Backend(format!(
+				"Unsupported database version: {}",
+				db_version
+			)))?,
 			1 => {
 				migrate_1_to_2::<Block>(db_path, db_type)?;
 				migrate_2_to_3::<Block>(db_path, db_type)?
 			},
 			2 => migrate_2_to_3::<Block>(db_path, db_type)?,
 			CURRENT_VERSION => (),
-			_ => Err(sp_blockchain::Error::Backend(format!("Future database version: {}", db_version)))?,
+			_ => Err(sp_blockchain::Error::Backend(format!(
+				"Future database version: {}",
+				db_version
+			)))?,
 		}
 	}
 
@@ -60,8 +71,12 @@ pub fn upgrade_db<Block: BlockT>(db_path: &Path, db_type: DatabaseType) -> sp_bl
 /// Migration from version1 to version2:
 /// 1) the number of columns has changed from 11 to 12;
 /// 2) transactions column is added;
-fn migrate_1_to_2<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> sp_blockchain::Result<()> {
-	let db_path = db_path.to_str()
+fn migrate_1_to_2<Block: BlockT>(
+	db_path: &Path,
+	_db_type: DatabaseType,
+) -> sp_blockchain::Result<()> {
+	let db_path = db_path
+		.to_str()
 		.ok_or_else(|| sp_blockchain::Error::Backend("Invalid database path".into()))?;
 	let db_cfg = DatabaseConfig::with_columns(V1_NUM_COLUMNS);
 	let db = Database::open(&db_cfg, db_path).map_err(db_err)?;
@@ -70,8 +85,12 @@ fn migrate_1_to_2<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> sp_b
 
 /// Migration from version2 to version3:
 /// - The format of the stored Justification changed to support multiple Justifications.
-fn migrate_2_to_3<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> sp_blockchain::Result<()> {
-	let db_path = db_path.to_str()
+fn migrate_2_to_3<Block: BlockT>(
+	db_path: &Path,
+	_db_type: DatabaseType,
+) -> sp_blockchain::Result<()> {
+	let db_path = db_path
+		.to_str()
 		.ok_or_else(|| sp_blockchain::Error::Backend("Invalid database path".into()))?;
 	let db_cfg = DatabaseConfig::with_columns(V2_NUM_COLUMNS);
 	let db = Database::open(&db_cfg, db_path).map_err(db_err)?;
@@ -137,10 +156,11 @@ fn version_file_path(path: &Path) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-	use sc_state_db::PruningMode;
-	use crate::{DatabaseSettings, DatabaseSettingsSrc, KeepBlocks, TransactionStorageMode};
-	use crate::tests::Block;
 	use super::*;
+	use crate::{
+		tests::Block, DatabaseSettings, DatabaseSettingsSrc, KeepBlocks, TransactionStorageMode,
+	};
+	use sc_state_db::PruningMode;
 
 	fn create_db(db_path: &Path, version: Option<u32>) {
 		if let Some(version) = version {
@@ -151,14 +171,18 @@ mod tests {
 	}
 
 	fn open_database(db_path: &Path) -> sp_blockchain::Result<()> {
-		crate::utils::open_database::<Block>(&DatabaseSettings {
-			state_cache_size: 0,
-			state_cache_child_ratio: None,
-			state_pruning: PruningMode::ArchiveAll,
-			source: DatabaseSettingsSrc::RocksDb { path: db_path.to_owned(), cache_size: 128 },
-			keep_blocks: KeepBlocks::All,
-			transaction_storage: TransactionStorageMode::BlockBody,
-		}, DatabaseType::Full).map(|_| ())
+		crate::utils::open_database::<Block>(
+			&DatabaseSettings {
+				state_cache_size: 0,
+				state_cache_child_ratio: None,
+				state_pruning: PruningMode::ArchiveAll,
+				source: DatabaseSettingsSrc::RocksDb { path: db_path.to_owned(), cache_size: 128 },
+				keep_blocks: KeepBlocks::All,
+				transaction_storage: TransactionStorageMode::BlockBody,
+			},
+			DatabaseType::Full,
+		)
+		.map(|_| ())
 	}
 
 	#[test]

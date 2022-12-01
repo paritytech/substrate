@@ -21,8 +21,10 @@
 
 use super::*;
 
+use frame_benchmarking::{
+	account, benchmarks_instance_pallet, impl_benchmark_test_suite, whitelisted_caller,
+};
 use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks_instance_pallet, account, whitelisted_caller, impl_benchmark_test_suite};
 use sp_runtime::traits::Bounded;
 
 use crate::Pallet as Balances;
@@ -30,7 +32,6 @@ use crate::Pallet as Balances;
 const SEED: u32 = 0;
 // existential deposit multiplier
 const ED_MULTIPLIER: u32 = 10;
-
 
 benchmarks_instance_pallet! {
 	// Benchmark `transfer` extrinsic with the worst possible conditions:

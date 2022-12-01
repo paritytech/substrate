@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use sp_core::offchain::{OffchainStorage, storage::InMemOffchainStorage};
+use sp_core::offchain::{storage::InMemOffchainStorage, OffchainStorage};
 use std::sync::Arc;
 
 type TestBackend = sc_client_api::in_mem::Backend<substrate_test_runtime::Block>;
@@ -32,12 +32,13 @@ fn test_leaves_with_complex_block_tree() {
 fn test_blockchain_query_by_number_gets_canonical() {
 	let backend = Arc::new(TestBackend::new());
 
-	substrate_test_runtime_client::trait_tests::test_blockchain_query_by_number_gets_canonical(backend);
+	substrate_test_runtime_client::trait_tests::test_blockchain_query_by_number_gets_canonical(
+		backend,
+	);
 }
 
 #[test]
 fn in_memory_offchain_storage() {
-
 	let mut storage = InMemOffchainStorage::default();
 	assert_eq!(storage.get(b"A", b"B"), None);
 	assert_eq!(storage.get(b"B", b"A"), None);

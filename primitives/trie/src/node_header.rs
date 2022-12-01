@@ -18,12 +18,11 @@
 //! The node header.
 
 use crate::trie_constants;
-use codec::{Encode, Decode, Input, Output};
+use codec::{Decode, Encode, Input, Output};
 use sp_std::iter::once;
 
 /// A node header
-#[derive(Copy, Clone, PartialEq, Eq)]
-#[derive(sp_core::RuntimeDebug)]
+#[derive(Copy, Clone, PartialEq, Eq, sp_core::RuntimeDebug)]
 pub(crate) enum NodeHeader {
 	Null,
 	Branch(bool, usize),
@@ -41,7 +40,7 @@ impl Encode for NodeHeader {
 	fn encode_to<T: Output + ?Sized>(&self, output: &mut T) {
 		match self {
 			NodeHeader::Null => output.push_byte(trie_constants::EMPTY_TRIE),
-			NodeHeader::Branch(true, nibble_count)	=>
+			NodeHeader::Branch(true, nibble_count) =>
 				encode_size_and_prefix(*nibble_count, trie_constants::BRANCH_WITH_MASK, output),
 			NodeHeader::Branch(false, nibble_count) =>
 				encode_size_and_prefix(*nibble_count, trie_constants::BRANCH_WITHOUT_MASK, output),
@@ -57,12 +56,14 @@ impl Decode for NodeHeader {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
 		let i = input.read_byte()?;
 		if i == trie_constants::EMPTY_TRIE {
-			return Ok(NodeHeader::Null);
+			return Ok(NodeHeader::Null)
 		}
 		match i & (0b11 << 6) {
 			trie_constants::LEAF_PREFIX_MASK => Ok(NodeHeader::Leaf(decode_size(i, input)?)),
-			trie_constants::BRANCH_WITHOUT_MASK => Ok(NodeHeader::Branch(false, decode_size(i, input)?)),
-			trie_constants::BRANCH_WITH_MASK => Ok(NodeHeader::Branch(true, decode_size(i, input)?)),
+			trie_constants::BRANCH_WITHOUT_MASK =>
+				Ok(NodeHeader::Branch(false, decode_size(i, input)?)),
+			trie_constants::BRANCH_WITH_MASK =>
+				Ok(NodeHeader::Branch(true, decode_size(i, input)?)),
 			// do not allow any special encoding
 			_ => Err("Unallowed encoding".into()),
 		}
@@ -76,11 +77,8 @@ pub(crate) fn size_and_prefix_iterator(size: usize, prefix: u8) -> impl Iterator
 	let size = sp_std::cmp::min(trie_constants::NIBBLE_SIZE_BOUND, size);
 
 	let l1 = sp_std::cmp::min(62, size);
-	let (first_byte, mut rem) = if size == l1 {
-		(once(prefix + l1 as u8), 0)
-	} else {
-		(once(prefix + 63), size - l1)
-	};
+	let (first_byte, mut rem) =
+		if size == l1 { (once(prefix + l1 as u8), 0) } else { (once(prefix + 63), size - l1) };
 	let next_bytes = move || {
 		if rem > 0 {
 			if rem < 256 {
@@ -109,13 +107,13 @@ fn encode_size_and_prefix<W: Output + ?Sized>(size: usize, prefix: u8, out: &mut
 fn decode_size(first: u8, input: &mut impl Input) -> Result<usize, codec::Error> {
 	let mut result = (first & 255u8 >> 2) as usize;
 	if result < 63 {
-		return Ok(result);
+		return Ok(result)
 	}
 	result -= 1;
 	while result <= trie_constants::NIBBLE_SIZE_BOUND {
 		let n = input.read_byte()? as usize;
 		if n < 255 {
-			return Ok(result + n + 1);
+			return Ok(result + n + 1)
 		}
 		result += 255;
 	}

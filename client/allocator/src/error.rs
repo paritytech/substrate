@@ -16,8 +16,7 @@
 // limitations under the License.
 
 /// The error type used by the allocators.
-#[derive(sp_core::RuntimeDebug)]
-#[derive(thiserror::Error)]
+#[derive(thiserror::Error, Debug)]
 pub enum Error {
 	/// Someone tried to allocate more memory than the allowed maximum per allocation.
 	#[error("Requested allocation size is too large")]
@@ -25,7 +24,10 @@ pub enum Error {
 	/// Allocator run out of space.
 	#[error("Allocator ran out of space")]
 	AllocatorOutOfSpace,
+	/// The client passed a memory instance which is smaller than previously observed.
+	#[error("Shrinking of the underlying memory is observed")]
+	MemoryShrinked,
 	/// Some other error occurred.
 	#[error("Other: {0}")]
-	Other(&'static str)
+	Other(&'static str),
 }

@@ -18,8 +18,7 @@
 //! Handling of blobs that may be compressed, based on an 8-byte magic identifier
 //! at the head.
 
-use std::borrow::Cow;
-use std::io::Read;
+use std::{borrow::Cow, io::Read};
 
 // An arbitrary prefix, that indicates a blob beginning with should be decompressed with
 // Zstd compression.
@@ -52,7 +51,7 @@ impl std::fmt::Display for Error {
 	}
 }
 
-impl std::error::Error for Error { }
+impl std::error::Error for Error {}
 
 fn read_from_decoder(
 	decoder: impl Read,
@@ -81,8 +80,8 @@ fn decompress_zstd(blob: &[u8], bomb_limit: usize) -> Result<Vec<u8>, Error> {
 #[cfg(target_os = "unknown")]
 fn decompress_zstd(mut blob: &[u8], bomb_limit: usize) -> Result<Vec<u8>, Error> {
 	let blob_len = blob.len();
-	let decoder = ruzstd::streaming_decoder::StreamingDecoder::new(&mut blob)
-		.map_err(|_| Error::Invalid)?;
+	let decoder =
+		ruzstd::streaming_decoder::StreamingDecoder::new(&mut blob).map_err(|_| Error::Invalid)?;
 
 	read_from_decoder(decoder, blob_len, bomb_limit)
 }
@@ -105,7 +104,7 @@ pub fn compress(blob: &[u8], bomb_limit: usize) -> Option<Vec<u8>> {
 	use std::io::Write;
 
 	if blob.len() > bomb_limit {
-		return None;
+		return None
 	}
 
 	let mut buf = ZSTD_PREFIX.to_vec();

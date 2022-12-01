@@ -15,18 +15,18 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 serde = { version = "1.0.101", optional = true }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
-frame-support = { version = "3.0.0", default-features = false, path = "../support" }
-frame-system = { version = "3.0.0", default-features = false, path = "../system" }
-pallet-balances = { version = "3.0.0", default-features = false, path = "../balances" }
-sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
-sp-core = { version = "3.0.0", path = "../../primitives/core", default-features = false }
-sp-arithmetic = { version = "3.0.0", path = "../../primitives/arithmetic", default-features = false }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../balances" }
+sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
+sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
+sp-core = { version = "4.0.0-dev", path = "../../primitives/core", default-features = false }
+sp-arithmetic = { version = "4.0.0-dev", path = "../../primitives/arithmetic", default-features = false }
 pallet-chainbridge = { version = "2.0.0", default-features = false, path = "../chainbridge" }
 pallet-erc721 = { version = "2.0.0", default-features = false, path = "../erc721" }
 
-frame-benchmarking = { version = "3.0.0", default-features = false, path = "../benchmarking", optional = true }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 
 [features]
 default = ["std"]

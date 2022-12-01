@@ -21,27 +21,25 @@
 
 use std::sync::Arc;
 
-use sp_runtime::{Justifications, generic::BlockId};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
-
-use sp_blockchain::{
-	HeaderMetadata, CachedHeaderMetadata, Error as ClientError, Result as ClientResult,
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero},
+	Justifications,
 };
+
+use crate::fetcher::RemoteHeaderRequest;
 pub use sc_client_api::{
-	backend::{
-		AuxStore, NewBlockState, ProvideChtRoots,
-	},
+	backend::{AuxStore, NewBlockState, ProvideChtRoots},
 	blockchain::{
-		Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
+		well_known_cache_keys, Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
 		HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo, ProvideCache,
-		well_known_cache_keys,
-	},
-	light::{
-		RemoteBlockchain, LocalOrRemote, Storage
 	},
 	cht,
+	light::{LocalOrRemote, RemoteBlockchain, Storage},
 };
-use crate::fetcher::RemoteHeaderRequest;
+use sp_blockchain::{
+	CachedHeaderMetadata, Error as ClientError, HeaderMetadata, Result as ClientResult,
+};
 
 /// Light client blockchain.
 pub struct Blockchain<S> {
@@ -51,9 +49,7 @@ pub struct Blockchain<S> {
 impl<S> Blockchain<S> {
 	/// Create new light blockchain backed with given storage.
 	pub fn new(storage: S) -> Self {
-		Self {
-			storage,
-		}
+		Self { storage }
 	}
 
 	/// Get storage reference.
@@ -62,7 +58,11 @@ impl<S> Blockchain<S> {
 	}
 }
 
-impl<S, Block> BlockchainHeaderBackend<Block> for Blockchain<S> where Block: BlockT, S: Storage<Block> {
+impl<S, Block> BlockchainHeaderBackend<Block> for Blockchain<S>
+where
+	Block: BlockT,
+	S: Storage<Block>,
+{
 	fn header(&self, id: BlockId<Block>) -> ClientResult<Option<Block::Header>> {
 		match RemoteBlockchain::header(self, id)? {
 			LocalOrRemote::Local(header) => Ok(Some(header)),
@@ -83,15 +83,25 @@ impl<S, Block> BlockchainHeaderBackend<Block> for Blockchain<S> where Block: Blo
 		self.storage.number(hash)
 	}
 
-	fn hash(&self, number: <<Block as BlockT>::Header as HeaderT>::Number) -> ClientResult<Option<Block::Hash>> {
+	fn hash(
+		&self,
+		number: <<Block as BlockT>::Header as HeaderT>::Number,
+	) -> ClientResult<Option<Block::Hash>> {
 		self.storage.hash(number)
 	}
 }
 
-impl<S, Block> HeaderMetadata<Block> for Blockchain<S> where Block: BlockT, S: Storage<Block> {
+impl<S, Block> HeaderMetadata<Block> for Blockchain<S>
+where
+	Block: BlockT,
+	S: Storage<Block>,
+{
 	type Error = ClientError;
 
-	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
+	fn header_metadata(
+		&self,
+		hash: Block::Hash,
+	) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
 		self.storage.header_metadata(hash)
 	}
 
@@ -104,7 +114,11 @@ impl<S, Block> HeaderMetadata<Block> for Blockchain<S> where Block: BlockT, S: S
 	}
 }
 
-impl<S, Block> BlockchainBackend<Block> for Blockchain<S> where Block: BlockT, S: Storage<Block> {
+impl<S, Block> BlockchainBackend<Block> for Blockchain<S>
+where
+	Block: BlockT,
+	S: Storage<Block>,
+{
 	fn body(&self, _id: BlockId<Block>) -> ClientResult<Option<Vec<Block::Extrinsic>>> {
 		Err(ClientError::NotAvailableOnLightClient)
 	}
@@ -129,16 +143,13 @@ impl<S, Block> BlockchainBackend<Block> for Blockchain<S> where Block: BlockT, S
 		Err(ClientError::NotAvailableOnLightClient)
 	}
 
-	fn indexed_transaction(
-		&self,
-		_hash: &Block::Hash,
-	) -> ClientResult<Option<Vec<u8>>> {
+	fn indexed_transaction(&self, _hash: &Block::Hash) -> ClientResult<Option<Vec<u8>>> {
 		Err(ClientError::NotAvailableOnLightClient)
 	}
 
 	fn block_indexed_body(
 		&self,
-		_id: BlockId<Block>
+		_id: BlockId<Block>,
 	) -> sp_blockchain::Result<Option<Vec<Vec<u8>>>> {
 		Err(ClientError::NotAvailableOnLightClient)
 	}
@@ -151,16 +162,16 @@ impl<S: Storage<Block>, Block: BlockT> ProvideCache<Block> for Blockchain<S> {
 }
 
 impl<S, Block: BlockT> RemoteBlockchain<Block> for Blockchain<S>
-	where
-		S: Storage<Block>,
+where
+	S: Storage<Block>,
 {
-	fn header(&self, id: BlockId<Block>) -> ClientResult<LocalOrRemote<
-		Block::Header,
-		RemoteHeaderRequest<Block::Header>,
-	>> {
+	fn header(
+		&self,
+		id: BlockId<Block>,
+	) -> ClientResult<LocalOrRemote<Block::Header, RemoteHeaderRequest<Block::Header>>> {
 		// first, try to read header from local storage
 		if let Some(local_header) = self.storage.header(id)? {
-			return Ok(LocalOrRemote::Local(local_header));
+			return Ok(LocalOrRemote::Local(local_header))
 		}
 
 		// we need to know block number to check if it's a part of CHT
@@ -173,8 +184,9 @@ impl<S, Block: BlockT> RemoteBlockchain<Block> for Blockchain<S>
 		};
 
 		// if the header is genesis (never pruned), non-canonical, or from future => return
-		if number.is_zero() || self.storage.status(BlockId::Number(number))? == BlockStatus::Unknown {
-			return Ok(LocalOrRemote::Unknown);
+		if number.is_zero() || self.storage.status(BlockId::Number(number))? == BlockStatus::Unknown
+		{
+			return Ok(LocalOrRemote::Unknown)
 		}
 
 		Ok(LocalOrRemote::Remote(RemoteHeaderRequest {

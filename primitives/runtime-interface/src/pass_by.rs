@@ -20,7 +20,10 @@
 //!
 //! [`Codec`], [`Inner`] and [`Enum`] are the provided strategy implementations.
 
-use crate::{RIType, util::{unpack_ptr_and_len, pack_ptr_and_len}};
+use crate::{
+	util::{pack_ptr_and_len, unpack_ptr_and_len},
+	RIType,
+};
 
 #[cfg(feature = "std")]
 use crate::host::*;
@@ -30,7 +33,7 @@ use crate::wasm::*;
 #[cfg(feature = "std")]
 use sp_wasm_interface::{FunctionContext, Pointer, Result};
 
-use sp_std::{marker::PhantomData, convert::TryFrom};
+use sp_std::{convert::TryFrom, marker::PhantomData};
 
 #[cfg(not(feature = "std"))]
 use sp_std::vec::Vec;
@@ -119,18 +122,12 @@ pub trait PassByImpl<T>: RIType {
 	/// Convert the given instance to the ffi value.
 	///
 	/// For more information see: [`crate::host::IntoFFIValue::into_ffi_value`]
-	fn into_ffi_value(
-		instance: T,
-		context: &mut dyn FunctionContext,
-	) -> Result<Self::FFIType>;
+	fn into_ffi_value(instance: T, context: &mut dyn FunctionContext) -> Result<Self::FFIType>;
 
 	/// Create `T` from the given ffi value.
 	///
 	/// For more information see: [`crate::host::FromFFIValue::from_ffi_value`]
-	fn from_ffi_value(
-		context: &mut dyn FunctionContext,
-		arg: Self::FFIType,
-	) -> Result<T>;
+	fn from_ffi_value(context: &mut dyn FunctionContext, arg: Self::FFIType) -> Result<T>;
 }
 
 /// Something that provides a strategy for passing a type between wasm and the host.
@@ -220,10 +217,7 @@ pub struct Codec<T: codec::Codec>(PhantomData<T>);
 
 #[cfg(feature = "std")]
 impl<T: codec::Codec> PassByImpl<T> for Codec<T> {
-	fn into_ffi_value(
-		instance: T,
-		context: &mut dyn FunctionContext,
-	) -> Result<Self::FFIType> {
+	fn into_ffi_value(instance: T, context: &mut dyn FunctionContext) -> Result<Self::FFIType> {
 		let vec = instance.encode();
 		let ptr = context.allocate_memory(vec.len() as u32)?;
 		context.write_memory(ptr, &vec)?;
@@ -231,14 +225,10 @@ impl<T: codec::Codec> PassByImpl<T> for Codec<T> {
 		Ok(pack_ptr_and_len(ptr.into(), vec.len() as u32))
 	}
 
-	fn from_ffi_value(
-		context: &mut dyn FunctionContext,
-		arg: Self::FFIType,
-	) -> Result<T> {
+	fn from_ffi_value(context: &mut dyn FunctionContext, arg: Self::FFIType) -> Result<T> {
 		let (ptr, len) = unpack_ptr_and_len(arg);
 		let vec = context.read_memory(Pointer::new(ptr), len)?;
-		T::decode(&mut &vec[..])
-			.map_err(|e| format!("Could not decode value from wasm: {}", e))
+		T::decode(&mut &vec[..]).map_err(|e| format!("Could not decode value from wasm: {}", e))
 	}
 }
 
@@ -330,35 +320,31 @@ pub struct Inner<T: PassByInner<Inner = I>, I: RIType>(PhantomData<(T, I)>);
 
 #[cfg(feature = "std")]
 impl<T: PassByInner<Inner = I>, I: RIType> PassByImpl<T> for Inner<T, I>
-	where I: IntoFFIValue + FromFFIValue<SelfInstance=I>
+where
+	I: IntoFFIValue + FromFFIValue<SelfInstance = I>,
 {
-	fn into_ffi_value(
-		instance: T,
-		context: &mut dyn FunctionContext,
-	) -> Result<Self::FFIType> {
+	fn into_ffi_value(instance: T, context: &mut dyn FunctionContext) -> Result<Self::FFIType> {
 		instance.into_inner().into_ffi_value(context)
 	}
 
-	fn from_ffi_value(
-		context: &mut dyn FunctionContext,
-		arg: Self::FFIType,
-	) -> Result<T> {
+	fn from_ffi_value(context: &mut dyn FunctionContext, arg: Self::FFIType) -> Result<T> {
 		I::from_ffi_value(context, arg).map(T::from_inner)
 	}
 }
 
 #[cfg(not(feature = "std"))]
 impl<T: PassByInner<Inner = I>, I: RIType> PassByImpl<T> for Inner<T, I>
-	where I: IntoFFIValue + FromFFIValue
+where
+	I: IntoFFIValue + FromFFIValue,
 {
 	type Owned = I::Owned;
 
 	fn into_ffi_value(instance: &T) -> WrappedFFIValue<Self::FFIType, Self::Owned> {
- 		instance.inner().into_ffi_value()
+		instance.inner().into_ffi_value()
 	}
 
 	fn from_ffi_value(arg: Self::FFIType) -> T {
- 		T::from_inner(I::from_ffi_value(arg))
+		T::from_inner(I::from_ffi_value(arg))
 	}
 }
 
@@ -415,17 +401,11 @@ pub struct Enum<T: Copy + Into<u8> + TryFrom<u8>>(PhantomData<T>);
 
 #[cfg(feature = "std")]
 impl<T: Copy + Into<u8> + TryFrom<u8>> PassByImpl<T> for Enum<T> {
-	fn into_ffi_value(
-		instance: T,
-		_: &mut dyn FunctionContext,
-	) -> Result<Self::FFIType> {
+	fn into_ffi_value(instance: T, _: &mut dyn FunctionContext) -> Result<Self::FFIType> {
 		Ok(instance.into())
 	}
 
-	fn from_ffi_value(
-		_: &mut dyn FunctionContext,
-		arg: Self::FFIType,
-	) -> Result<T> {
+	fn from_ffi_value(_: &mut dyn FunctionContext, arg: Self::FFIType) -> Result<T> {
 		T::try_from(arg).map_err(|_| format!("Invalid enum discriminant: {}", arg))
 	}
 }

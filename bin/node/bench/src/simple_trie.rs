@@ -18,10 +18,10 @@
 
 use std::{collections::HashMap, sync::Arc};
 
+use hash_db::{AsHashDB, HashDB, Hasher as _, Prefix};
 use kvdb::KeyValueDB;
 use node_primitives::Hash;
 use sp_trie::DBValue;
-use hash_db::{HashDB, AsHashDB, Prefix, Hasher as _};
 
 pub type Hasher = sp_core::Blake2Hasher;
 
@@ -32,7 +32,9 @@ pub struct SimpleTrie<'a> {
 }
 
 impl<'a> AsHashDB<Hasher, DBValue> for SimpleTrie<'a> {
-	fn as_hash_db(&self) -> &dyn hash_db::HashDB<Hasher, DBValue> { &*self }
+	fn as_hash_db(&self) -> &dyn hash_db::HashDB<Hasher, DBValue> {
+		&*self
+	}
 
 	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn HashDB<Hasher, DBValue> + 'b) {
 		&mut *self
@@ -43,7 +45,7 @@ impl<'a> HashDB<Hasher, DBValue> for SimpleTrie<'a> {
 	fn get(&self, key: &Hash, prefix: Prefix) -> Option<DBValue> {
 		let key = sp_trie::prefixed_key::<Hasher>(key, prefix);
 		if let Some(value) = self.overlay.get(&key) {
-			return value.clone();
+			return value.clone()
 		}
 		self.db.get(0, &key).expect("Database backend error")
 	}

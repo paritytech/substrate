@@ -19,16 +19,17 @@
 //! This module defines `HostState` and `HostContext` structs which provide logic and state
 //! required for execution of host.
 
-use crate::instance_wrapper::InstanceWrapper;
-use crate::util;
-use std::{cell::RefCell, rc::Rc};
+use crate::{instance_wrapper::InstanceWrapper, util};
+use codec::{Decode, Encode};
 use log::trace;
-use codec::{Encode, Decode};
 use sc_allocator::FreeingBumpHeapAllocator;
-use sc_executor_common::error::Result;
-use sc_executor_common::sandbox::{self, SandboxCapabilities, SupervisorFuncIndex};
+use sc_executor_common::{
+	error::Result,
+	sandbox::{self, SandboxCapabilities, SupervisorFuncIndex},
+};
 use sp_core::sandbox as sandbox_primitives;
 use sp_wasm_interface::{FunctionContext, MemoryId, Pointer, Sandbox, WordSize};
+use std::{cell::RefCell, rc::Rc};
 use wasmtime::{Func, Val};
 
 /// Wrapper type for pointer to a Wasm table entry.
@@ -108,7 +109,7 @@ impl<'a> SandboxCapabilities for HostContext<'a> {
 						"Supervisor function returned {} results, expected 1",
 						ret_vals.len()
 					)
-					.into());
+					.into())
 				} else {
 					&ret_vals[0]
 				};
@@ -116,9 +117,9 @@ impl<'a> SandboxCapabilities for HostContext<'a> {
 				if let Some(ret_val) = ret_val.i64() {
 					Ok(ret_val)
 				} else {
-					return Err("Supervisor function returned unexpected result!".into());
+					return Err("Supervisor function returned unexpected result!".into())
 				}
-			}
+			},
 			Err(err) => Err(err.to_string().into()),
 		}
 	}
@@ -130,15 +131,11 @@ impl<'a> sp_wasm_interface::FunctionContext for HostContext<'a> {
 		address: Pointer<u8>,
 		dest: &mut [u8],
 	) -> sp_wasm_interface::Result<()> {
-		self.instance
-			.read_memory_into(address, dest)
-			.map_err(|e| e.to_string())
+		self.instance.read_memory_into(address, dest).map_err(|e| e.to_string())
 	}
 
 	fn write_memory(&mut self, address: Pointer<u8>, data: &[u8]) -> sp_wasm_interface::Result<()> {
-		self.instance
-			.write_memory_from(address, data)
-			.map_err(|e| e.to_string())
+		self.instance.write_memory_from(address, data).map_err(|e| e.to_string())
 	}
 
 	fn allocate_memory(&mut self, size: WordSize) -> sp_wasm_interface::Result<Pointer<u8>> {
@@ -166,11 +163,8 @@ impl<'a> Sandbox for HostContext<'a> {
 		buf_ptr: Pointer<u8>,
 		buf_len: WordSize,
 	) -> sp_wasm_interface::Result<u32> {
-		let sandboxed_memory = self
-			.sandbox_store
-			.borrow()
-			.memory(memory_id)
-			.map_err(|e| e.to_string())?;
+		let sandboxed_memory =
+			self.sandbox_store.borrow().memory(memory_id).map_err(|e| e.to_string())?;
 		sandboxed_memory.with_direct_access(|sandboxed_memory| {
 			let len = buf_len as usize;
 			let src_range = match util::checked_range(offset as usize, len, sandboxed_memory.len())
@@ -200,11 +194,8 @@ impl<'a> Sandbox for HostContext<'a> {
 		val_ptr: Pointer<u8>,
 		val_len: WordSize,
 	) -> sp_wasm_interface::Result<u32> {
-		let sandboxed_memory = self
-			.sandbox_store
-			.borrow()
-			.memory(memory_id)
-			.map_err(|e| e.to_string())?;
+		let sandboxed_memory =
+			self.sandbox_store.borrow().memory(memory_id).map_err(|e| e.to_string())?;
 		sandboxed_memory.with_direct_access_mut(|sandboxed_memory| {
 			let len = val_len as usize;
 			let supervisor_mem_size = self.instance.memory_size() as usize;
@@ -259,11 +250,8 @@ impl<'a> Sandbox for HostContext<'a> {
 			.map(Into::into)
 			.collect::<Vec<_>>();
 
-		let instance = self
-			.sandbox_store
-			.borrow()
-			.instance(instance_id)
-			.map_err(|e| e.to_string())?;
+		let instance =
+			self.sandbox_store.borrow().instance(instance_id).map_err(|e| e.to_string())?;
 		let result = instance.invoke(export_name, &args, self, state);
 
 		match result {
@@ -278,7 +266,7 @@ impl<'a> Sandbox for HostContext<'a> {
 						.map_err(|_| "can't write return value")?;
 					Ok(sandbox_primitives::ERR_OK)
 				})
-			}
+			},
 			Err(_) => Ok(sandbox_primitives::ERR_EXECUTION),
 		}
 	}

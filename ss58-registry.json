@@ -486,6 +486,15 @@
 			"decimals": [18],
 			"standardAccount": "*25519",
 			"website": "https://sora.org"
+    },
+    {
+      "prefix": 73,
+			"network": "zeitgeist",
+			"displayName": "Zeitgeist",
+			"symbols": ["ZTG"],
+			"decimals": [10],
+			"standardAccount": "*25519",
+			"website": "https://zeitgeist.pm"
 		},
 		{
 			"prefix": 77,
@@ -533,6 +542,15 @@
 			"website": "https://origintrail.io"
 		},
 		{
+			"prefix": 110,
+			"network": "heiko",
+			"displayName": "Heiko",
+			"symbols": ["HKO"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://parallel.fi/"
+		},
+		{
 			"prefix": 136,
 			"network": "altair",
 			"displayName": "Altair",
@@ -540,6 +558,15 @@
 			"decimals": [18],
 			"standardAccount": "*25519",
 			"website": "https://centrifuge.io/"
+		},
+		{
+			"prefix": 172,
+			"network": "parallel",
+			"displayName": "Parallel",
+			"symbols": ["PARA"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://parallel.fi/"
 		},
 		{
 			"prefix": 252,
@@ -556,7 +583,7 @@
 			"displayName": "Moonbeam",
 			"symbols": ["GLMR"],
 			"decimals": [18],
-			"standardAccount": "*25519",
+			"standardAccount": "secp256k1",
 			"website": "https://moonbeam.network"
 		},
 		{
@@ -565,7 +592,7 @@
 			"displayName": "Moonriver",
 			"symbols": ["MOVR"],
 			"decimals": [18],
-			"standardAccount": "*25519",
+			"standardAccount": "secp256k1",
 			"website": "https://moonbeam.network"
 		},
 		{

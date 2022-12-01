@@ -70,13 +70,7 @@
 extern crate self as sp_api;
 
 #[doc(hidden)]
-#[cfg(feature = "std")]
-pub use sp_state_machine::{
-	OverlayedChanges, StorageProof, Backend as StateBackend, ChangesTrieState, InMemoryBackend,
-};
-#[doc(hidden)]
-#[cfg(feature = "std")]
-pub use sp_core::NativeOrEncoded;
+pub use codec::{self, Decode, DecodeLimit, Encode};
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use hash_db::Hasher;
@@ -84,27 +78,34 @@ pub use hash_db::Hasher;
 #[cfg(not(feature = "std"))]
 pub use sp_core::to_substrate_wasm_fn_return_value;
 #[doc(hidden)]
-pub use sp_runtime::{
-	traits::{
-		Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, HashFor, NumberFor,
-		Header as HeaderT, Hash as HashT,
-	},
-	generic::BlockId, transaction_validity::TransactionValidity, RuntimeString, TransactionOutcome,
-};
+#[cfg(feature = "std")]
+pub use sp_core::NativeOrEncoded;
+use sp_core::OpaqueMetadata;
 #[doc(hidden)]
 pub use sp_core::{offchain, ExecutionContext};
 #[doc(hidden)]
-pub use sp_version::{ApiId, RuntimeVersion, ApisVec, create_apis_vec};
+pub use sp_runtime::{
+	generic::BlockId,
+	traits::{
+		Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, Hash as HashT, HashFor,
+		Header as HeaderT, NumberFor,
+	},
+	transaction_validity::TransactionValidity,
+	RuntimeString, TransactionOutcome,
+};
 #[doc(hidden)]
-pub use sp_std::{slice, mem};
+#[cfg(feature = "std")]
+pub use sp_state_machine::{
+	Backend as StateBackend, ChangesTrieState, InMemoryBackend, OverlayedChanges, StorageProof,
+};
 #[cfg(feature = "std")]
 use sp_std::result;
 #[doc(hidden)]
-pub use codec::{Encode, Decode, DecodeLimit, self};
-use sp_core::OpaqueMetadata;
+pub use sp_std::{mem, slice};
+#[doc(hidden)]
+pub use sp_version::{create_apis_vec, ApiId, ApisVec, RuntimeVersion};
 #[cfg(feature = "std")]
-use std::{panic::UnwindSafe, cell::RefCell};
-
+use std::{cell::RefCell, panic::UnwindSafe};
 
 /// Maximum nesting level for extrinsics.
 pub const MAX_EXTRINSIC_DEPTH: u32 = 256;
@@ -386,18 +387,18 @@ pub type ProofRecorder<B> = sp_state_machine::ProofRecorder<<B as BlockT>::Hash>
 
 /// A type that is used as cache for the storage transactions.
 #[cfg(feature = "std")]
-pub type StorageTransactionCache<Block, Backend> =
-	sp_state_machine::StorageTransactionCache<
-		<Backend as StateBackend<HashFor<Block>>>::Transaction, HashFor<Block>, NumberFor<Block>
-	>;
+pub type StorageTransactionCache<Block, Backend> = sp_state_machine::StorageTransactionCache<
+	<Backend as StateBackend<HashFor<Block>>>::Transaction,
+	HashFor<Block>,
+	NumberFor<Block>,
+>;
 
 #[cfg(feature = "std")]
-pub type StorageChanges<SBackend, Block> =
-	sp_state_machine::StorageChanges<
-		<SBackend as StateBackend<HashFor<Block>>>::Transaction,
-		HashFor<Block>,
-		NumberFor<Block>
-	>;
+pub type StorageChanges<SBackend, Block> = sp_state_machine::StorageChanges<
+	<SBackend as StateBackend<HashFor<Block>>>::Transaction,
+	HashFor<Block>,
+	NumberFor<Block>,
+>;
 
 /// Extract the state backend type for a type that implements `ProvideRuntimeApi`.
 #[cfg(feature = "std")]
@@ -463,29 +464,31 @@ pub trait ApiExt<Block: BlockT> {
 	/// Depending on the outcome of the closure, the transaction is committed or rolled-back.
 	///
 	/// The internal result of the closure is returned afterwards.
-	fn execute_in_transaction<F: FnOnce(&Self) -> TransactionOutcome<R>, R>(
-		&self,
-		call: F,
-	) -> R where Self: Sized;
+	fn execute_in_transaction<F: FnOnce(&Self) -> TransactionOutcome<R>, R>(&self, call: F) -> R
+	where
+		Self: Sized;
 
 	/// Checks if the given api is implemented and versions match.
-	fn has_api<A: RuntimeApiInfo + ?Sized>(
-		&self,
-		at: &BlockId<Block>,
-	) -> Result<bool, ApiError> where Self: Sized;
+	fn has_api<A: RuntimeApiInfo + ?Sized>(&self, at: &BlockId<Block>) -> Result<bool, ApiError>
+	where
+		Self: Sized;
 
 	/// Check if the given api is implemented and the version passes a predicate.
 	fn has_api_with<A: RuntimeApiInfo + ?Sized, P: Fn(u32) -> bool>(
 		&self,
 		at: &BlockId<Block>,
 		pred: P,
-	) -> Result<bool, ApiError> where Self: Sized;
+	) -> Result<bool, ApiError>
+	where
+		Self: Sized;
 
 	/// Returns the version of the given api.
 	fn api_version<A: RuntimeApiInfo + ?Sized>(
 		&self,
 		at: &BlockId<Block>,
-	) -> Result<Option<u32>, ApiError> where Self: Sized;
+	) -> Result<Option<u32>, ApiError>
+	where
+		Self: Sized;
 
 	/// Start recording all accessed trie nodes for generating proofs.
 	fn record_proof(&mut self);
@@ -509,10 +512,9 @@ pub trait ApiExt<Block: BlockT> {
 		backend: &Self::StateBackend,
 		changes_trie_state: Option<&ChangesTrieState<HashFor<Block>, NumberFor<Block>>>,
 		parent_hash: Block::Hash,
-	) -> Result<
-		StorageChanges<Self::StateBackend, Block>,
-		String
-	> where Self: Sized;
+	) -> Result<StorageChanges<Self::StateBackend, Block>, String>
+	where
+		Self: Sized;
 }
 
 /// Parameters for [`CallApiAt::call_api_at`].
@@ -557,10 +559,7 @@ pub trait CallApiAt<Block: BlockT> {
 	) -> Result<NativeOrEncoded<R>, ApiError>;
 
 	/// Returns the runtime version at the given block.
-	fn runtime_version_at(
-		&self,
-		at: &BlockId<Block>,
-	) -> Result<RuntimeVersion, ApiError>;
+	fn runtime_version_at(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, ApiError>;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.

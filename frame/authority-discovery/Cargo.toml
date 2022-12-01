@@ -1,6 +1,6 @@
 [package]
 name = "pallet-authority-discovery"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -13,19 +13,19 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-authority-discovery = { version = "3.0.0", default-features = false, path = "../../primitives/authority-discovery" }
-sp-application-crypto = { version = "3.0.0", default-features = false, path = "../../primitives/application-crypto" }
+sp-authority-discovery = { version = "4.0.0-dev", default-features = false, path = "../../primitives/authority-discovery" }
+sp-application-crypto = { version = "4.0.0-dev", default-features = false, path = "../../primitives/application-crypto" }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
-pallet-session = { version = "3.0.0", features = ["historical" ], path = "../session", default-features = false }
-sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
-frame-support = { version = "3.0.0", default-features = false, path = "../support" }
-frame-system = { version = "3.0.0", default-features = false, path = "../system" }
+sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
+pallet-session = { version = "4.0.0-dev", features = ["historical" ], path = "../session", default-features = false }
+sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 
 [dev-dependencies]
-sp-core = { version = "3.0.0", path = "../../primitives/core" }
-sp-io = { version = "3.0.0", path = "../../primitives/io" }
-sp-staking = { version = "3.0.0", default-features = false, path = "../../primitives/staking" }
+sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
+sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 
 [features]
 default = ["std"]

@@ -48,10 +48,10 @@ impl From<Error> for rpc::Error {
 				data: serde_json::to_value(h).ok(),
 			},
 			Error::MalformattedPeerArg(ref e) => rpc::Error {
-				code :rpc::ErrorCode::ServerError(BASE_ERROR + 2),
+				code: rpc::ErrorCode::ServerError(BASE_ERROR + 2),
 				message: e.clone(),
 				data: None,
-			}
+			},
 		}
 	}
 }

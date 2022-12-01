@@ -15,14 +15,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::{
+	hash::{ReversibleStorageHasher, StorageHasher, Twox128},
+	storage::{self, unhashed, KeyPrefixIterator, PrefixIterator, StorageAppend},
+	Never,
+};
+use codec::{Decode, Encode, EncodeLike, FullCodec, FullEncode};
+use sp_std::borrow::Borrow;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::*;
-use sp_std::borrow::Borrow;
-use codec::{FullCodec, FullEncode, Decode, Encode, EncodeLike};
-use crate::{
-	storage::{self, unhashed, StorageAppend, PrefixIterator},
-	Never, hash::{StorageHasher, Twox128, ReversibleStorageHasher},
-};
 
 /// Generator for `StorageMap` used by `decl_storage`.
 ///
@@ -54,9 +55,8 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 		let module_prefix_hashed = Twox128::hash(Self::module_prefix());
 		let storage_prefix_hashed = Twox128::hash(Self::storage_prefix());
 
-		let mut result = Vec::with_capacity(
-			module_prefix_hashed.len() + storage_prefix_hashed.len()
-		);
+		let mut result =
+			Vec::with_capacity(module_prefix_hashed.len() + storage_prefix_hashed.len());
 
 		result.extend_from_slice(&module_prefix_hashed[..]);
 		result.extend_from_slice(&storage_prefix_hashed[..]);
@@ -71,7 +71,8 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	fn from_query_to_optional_value(v: Self::Query) -> Option<V>;
 
 	/// Generate the full key used in top storage.
-	fn storage_map_final_key<KeyArg>(key: KeyArg) -> Vec<u8> where
+	fn storage_map_final_key<KeyArg>(key: KeyArg) -> Vec<u8>
+	where
 		KeyArg: EncodeLike<K>,
 	{
 		let module_prefix_hashed = Twox128::hash(Self::module_prefix());
@@ -79,7 +80,7 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 		let key_hashed = key.borrow().using_encoded(Self::Hasher::hash);
 
 		let mut final_key = Vec::with_capacity(
-			module_prefix_hashed.len() + storage_prefix_hashed.len() + key_hashed.as_ref().len()
+			module_prefix_hashed.len() + storage_prefix_hashed.len() + key_hashed.as_ref().len(),
 		);
 
 		final_key.extend_from_slice(&module_prefix_hashed[..]);
@@ -98,11 +99,9 @@ pub struct StorageMapIterator<K, V, Hasher> {
 	_phantom: ::sp_std::marker::PhantomData<(K, V, Hasher)>,
 }
 
-impl<
-	K: Decode + Sized,
-	V: Decode + Sized,
-	Hasher: ReversibleStorageHasher
-> Iterator for StorageMapIterator<K, V, Hasher> {
+impl<K: Decode + Sized, V: Decode + Sized, Hasher: ReversibleStorageHasher> Iterator
+	for StorageMapIterator<K, V, Hasher>
+{
 	type Item = (K, V);
 
 	fn next(&mut self) -> Option<(K, V)> {
@@ -117,29 +116,28 @@ impl<
 							if self.drain {
 								unhashed::kill(&self.previous_key)
 							}
-							let mut key_material = Hasher::reverse(&self.previous_key[self.prefix.len()..]);
+							let mut key_material =
+								Hasher::reverse(&self.previous_key[self.prefix.len()..]);
 							match K::decode(&mut key_material) {
 								Ok(key) => Some((key, value)),
 								Err(_) => continue,
 							}
-						}
+						},
 						None => continue,
 					}
-				}
+				},
 				None => None,
 			}
 		}
 	}
 }
 
-impl<
-	K: FullCodec,
-	V: FullCodec,
-	G: StorageMap<K, V>,
-> storage::IterableStorageMap<K, V> for G where
-	G::Hasher: ReversibleStorageHasher
+impl<K: FullCodec, V: FullCodec, G: StorageMap<K, V>> storage::IterableStorageMap<K, V> for G
+where
+	G::Hasher: ReversibleStorageHasher,
 {
 	type Iterator = PrefixIterator<(K, V)>;
+	type KeyIterator = KeyPrefixIterator<K>;
 
 	/// Enumerate all elements in the map.
 	fn iter() -> Self::Iterator {
@@ -155,6 +153,34 @@ impl<
 		}
 	}
 
+	/// Enumerate all elements in the map after a given key.
+	fn iter_from(starting_raw_key: Vec<u8>) -> Self::Iterator {
+		let mut iter = Self::iter();
+		iter.set_last_raw_key(starting_raw_key);
+		iter
+	}
+
+	/// Enumerate all keys in the map.
+	fn iter_keys() -> Self::KeyIterator {
+		let prefix = G::prefix_hash();
+		KeyPrefixIterator {
+			prefix: prefix.clone(),
+			previous_key: prefix,
+			drain: false,
+			closure: |raw_key_without_prefix| {
+				let mut key_material = G::Hasher::reverse(raw_key_without_prefix);
+				K::decode(&mut key_material)
+			},
+		}
+	}
+
+	/// Enumerate all keys in the map after a given key.
+	fn iter_keys_from(starting_raw_key: Vec<u8>) -> Self::KeyIterator {
+		let mut iter = Self::iter_keys();
+		iter.set_last_raw_key(starting_raw_key);
+		iter
+	}
+
 	/// Enumerate all elements in the map.
 	fn drain() -> Self::Iterator {
 		let mut iterator = Self::iter();
@@ -165,8 +191,8 @@ impl<
 	fn translate<O: Decode, F: FnMut(K, O) -> Option<V>>(mut f: F) {
 		let prefix = G::prefix_hash();
 		let mut previous_key = prefix.clone();
-		while let Some(next) = sp_io::storage::next_key(&previous_key)
-			.filter(|n| n.starts_with(&prefix))
+		while let Some(next) =
+			sp_io::storage::next_key(&previous_key).filter(|n| n.starts_with(&prefix))
 		{
 			previous_key = next;
 			let value = match unhashed::get::<O>(&previous_key) {
@@ -239,16 +265,21 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 	}
 
 	fn mutate<KeyArg: EncodeLike<K>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R {
-		Self::try_mutate(key, |v| Ok::<R, Never>(f(v))).expect("`Never` can not be constructed; qed")
+		Self::try_mutate(key, |v| Ok::<R, Never>(f(v)))
+			.expect("`Never` can not be constructed; qed")
 	}
 
-	fn mutate_exists<KeyArg: EncodeLike<K>, R, F: FnOnce(&mut Option<V>) -> R>(key: KeyArg, f: F) -> R {
-		Self::try_mutate_exists(key, |v| Ok::<R, Never>(f(v))).expect("`Never` can not be constructed; qed")
+	fn mutate_exists<KeyArg: EncodeLike<K>, R, F: FnOnce(&mut Option<V>) -> R>(
+		key: KeyArg,
+		f: F,
+	) -> R {
+		Self::try_mutate_exists(key, |v| Ok::<R, Never>(f(v)))
+			.expect("`Never` can not be constructed; qed")
 	}
 
 	fn try_mutate<KeyArg: EncodeLike<K>, R, E, F: FnOnce(&mut Self::Query) -> Result<R, E>>(
 		key: KeyArg,
-		f: F
+		f: F,
 	) -> Result<R, E> {
 		let final_key = Self::storage_map_final_key(key);
 		let mut val = G::from_optional_value_to_query(unhashed::get(final_key.as_ref()));
@@ -265,7 +296,7 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 
 	fn try_mutate_exists<KeyArg: EncodeLike<K>, R, E, F: FnOnce(&mut Option<V>) -> Result<R, E>>(
 		key: KeyArg,
-		f: F
+		f: F,
 	) -> Result<R, E> {
 		let final_key = Self::storage_map_final_key(key);
 		let mut val = unhashed::get(final_key.as_ref());
@@ -304,7 +335,9 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 			let key_hashed = key.borrow().using_encoded(OldHasher::hash);
 
 			let mut final_key = Vec::with_capacity(
-				module_prefix_hashed.len() + storage_prefix_hashed.len() + key_hashed.as_ref().len()
+				module_prefix_hashed.len() +
+					storage_prefix_hashed.len() +
+					key_hashed.as_ref().len(),
 			);
 
 			final_key.extend_from_slice(&module_prefix_hashed[..]);
@@ -323,11 +356,11 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 /// Test iterators for StorageMap
 #[cfg(test)]
 mod test_iterators {
-	use codec::{Encode, Decode};
 	use crate::{
 		hash::StorageHasher,
-		storage::{generator::StorageMap, IterableStorageMap, unhashed},
+		storage::{generator::StorageMap, unhashed, IterableStorageMap},
 	};
+	use codec::{Decode, Encode};
 
 	pub trait Config: 'static {
 		type Origin;
@@ -364,6 +397,28 @@ mod test_iterators {
 	}
 
 	#[test]
+	fn map_iter_from() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			use crate::hash::Identity;
+			crate::generate_storage_alias!(MyModule, MyMap => Map<(u64, Identity), u64>);
+
+			MyMap::insert(1, 10);
+			MyMap::insert(2, 20);
+			MyMap::insert(3, 30);
+			MyMap::insert(4, 40);
+			MyMap::insert(5, 50);
+
+			let starting_raw_key = MyMap::storage_map_final_key(3);
+			let iter = MyMap::iter_from(starting_raw_key);
+			assert_eq!(iter.collect::<Vec<_>>(), vec![(4, 40), (5, 50)]);
+
+			let starting_raw_key = MyMap::storage_map_final_key(2);
+			let iter = MyMap::iter_keys_from(starting_raw_key);
+			assert_eq!(iter.collect::<Vec<_>>(), vec![3, 4, 5]);
+		});
+	}
+
+	#[test]
 	fn map_reversible_reversible_iteration() {
 		sp_io::TestExternalities::default().execute_with(|| {
 			// All map iterator
@@ -377,6 +432,8 @@ mod test_iterators {
 			}
 
 			assert_eq!(Map::iter().collect::<Vec<_>>(), vec![(3, 3), (0, 0), (2, 2), (1, 1)]);
+
+			assert_eq!(Map::iter_keys().collect::<Vec<_>>(), vec![3, 0, 2, 1]);
 
 			assert_eq!(Map::iter_values().collect::<Vec<_>>(), vec![3, 0, 2, 1]);
 
@@ -404,7 +461,7 @@ mod test_iterators {
 				&vec![1],
 			);
 
-			Map::translate(|_k1, v: u64| Some(v*2));
+			Map::translate(|_k1, v: u64| Some(v * 2));
 			assert_eq!(Map::iter().collect::<Vec<_>>(), vec![(3, 6), (0, 0), (2, 4), (1, 2)]);
 		})
 	}

@@ -19,22 +19,18 @@
 
 #![cfg(feature = "runtime-benchmarks")]
 
-use super::*;
+use super::{Pallet as Treasury, *};
 
+use frame_benchmarking::{account, benchmarks_instance_pallet, impl_benchmark_test_suite};
+use frame_support::{ensure, traits::OnInitialize};
 use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks_instance, account, impl_benchmark_test_suite};
-use frame_support::traits::OnInitialize;
-
-use crate::Module as Treasury;
 
 const SEED: u32 = 0;
 
 // Create the pre-requisite information needed to create a treasury `propose_spend`.
-fn setup_proposal<T: Config<I>, I: Instance>(u: u32) -> (
-	T::AccountId,
-	BalanceOf<T, I>,
-	<T::Lookup as StaticLookup>::Source,
-) {
+fn setup_proposal<T: Config<I>, I: 'static>(
+	u: u32,
+) -> (T::AccountId, BalanceOf<T, I>, <T::Lookup as StaticLookup>::Source) {
 	let caller = account("caller", u, SEED);
 	let value: BalanceOf<T, I> = T::ProposalBondMinimum::get().saturating_mul(100u32.into());
 	let _ = T::Currency::make_free_balance_be(&caller, value);
@@ -44,29 +40,24 @@ fn setup_proposal<T: Config<I>, I: Instance>(u: u32) -> (
 }
 
 // Create proposals that are approved for use in `on_initialize`.
-fn create_approved_proposals<T: Config<I>, I: Instance>(n: u32) -> Result<(), &'static str> {
-	for i in 0 .. n {
+fn create_approved_proposals<T: Config<I>, I: 'static>(n: u32) -> Result<(), &'static str> {
+	for i in 0..n {
 		let (caller, value, lookup) = setup_proposal::<T, I>(i);
-		Treasury::<T, I>::propose_spend(
-			RawOrigin::Signed(caller).into(),
-			value,
-			lookup
-		)?;
-		let proposal_id = <ProposalCount<I>>::get() - 1;
+		Treasury::<T, I>::propose_spend(RawOrigin::Signed(caller).into(), value, lookup)?;
+		let proposal_id = <ProposalCount<T, I>>::get() - 1;
 		Treasury::<T, I>::approve_proposal(RawOrigin::Root.into(), proposal_id)?;
 	}
 	ensure!(<Approvals<T, I>>::get().len() == n as usize, "Not all approved");
 	Ok(())
 }
 
-fn setup_pot_account<T: Config<I>, I: Instance>() {
+fn setup_pot_account<T: Config<I>, I: 'static>() {
 	let pot_account = Treasury::<T, I>::account_id();
 	let value = T::Currency::minimum_balance().saturating_mul(1_000_000_000u32.into());
 	let _ = T::Currency::make_free_balance_be(&pot_account, value);
 }
 
-benchmarks_instance! {
-
+benchmarks_instance_pallet! {
 	propose_spend {
 		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
 		// Whitelist caller account from further DB operations.
@@ -105,8 +96,4 @@ benchmarks_instance! {
 	}
 }
 
-impl_benchmark_test_suite!(
-	Treasury,
-	crate::tests::new_test_ext(),
-	crate::tests::Test,
-);
+impl_benchmark_test_suite!(Treasury, crate::tests::new_test_ext(), crate::tests::Test);

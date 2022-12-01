@@ -21,16 +21,17 @@
 pub mod error;
 pub mod helpers;
 
+use self::error::FutureResult;
 use jsonrpc_core::Result as RpcResult;
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
-use sp_core::Bytes;
-use sp_core::storage::{StorageKey, StorageData, StorageChangeSet};
+use sp_core::{
+	storage::{StorageChangeSet, StorageData, StorageKey},
+	Bytes,
+};
 use sp_version::RuntimeVersion;
-use self::error::FutureResult;
 
-pub use self::gen_client::Client as StateClient;
-pub use self::helpers::ReadProof;
+pub use self::{gen_client::Client as StateClient, helpers::ReadProof};
 
 /// Substrate state API
 #[rpc]
@@ -45,11 +46,16 @@ pub trait StateApi<Hash> {
 	/// DEPRECATED: Please use `state_getKeysPaged` with proper paging support.
 	/// Returns the keys with prefix, leave empty to get all the keys.
 	#[rpc(name = "state_getKeys")]
-	fn storage_keys(&self, prefix: StorageKey, hash: Option<Hash>) -> FutureResult<Vec<StorageKey>>;
+	fn storage_keys(&self, prefix: StorageKey, hash: Option<Hash>)
+		-> FutureResult<Vec<StorageKey>>;
 
 	/// Returns the keys with prefix, leave empty to get all the keys
 	#[rpc(name = "state_getPairs")]
-	fn storage_pairs(&self, prefix: StorageKey, hash: Option<Hash>) -> FutureResult<Vec<(StorageKey, StorageData)>>;
+	fn storage_pairs(
+		&self,
+		prefix: StorageKey,
+		hash: Option<Hash>,
+	) -> FutureResult<Vec<(StorageKey, StorageData)>>;
 
 	/// Returns the keys with prefix with pagination support.
 	/// Up to `count` keys will be returned.
@@ -92,7 +98,7 @@ pub trait StateApi<Hash> {
 		&self,
 		keys: Vec<StorageKey>,
 		block: Hash,
-		hash: Option<Hash>
+		hash: Option<Hash>,
 	) -> FutureResult<Vec<StorageChangeSet<Hash>>>;
 
 	/// Query storage entries (by key) starting at block hash given as the second parameter.
@@ -105,7 +111,11 @@ pub trait StateApi<Hash> {
 
 	/// Returns proof of storage entries at a specific block's state.
 	#[rpc(name = "state_getReadProof")]
-	fn read_proof(&self, keys: Vec<StorageKey>, hash: Option<Hash>) -> FutureResult<ReadProof<Hash>>;
+	fn read_proof(
+		&self,
+		keys: Vec<StorageKey>,
+		hash: Option<Hash>,
+	) -> FutureResult<ReadProof<Hash>>;
 
 	/// New runtime version subscription
 	#[pubsub(
@@ -114,7 +124,11 @@ pub trait StateApi<Hash> {
 		name = "state_subscribeRuntimeVersion",
 		alias("chain_subscribeRuntimeVersion")
 	)]
-	fn subscribe_runtime_version(&self, metadata: Self::Metadata, subscriber: Subscriber<RuntimeVersion>);
+	fn subscribe_runtime_version(
+		&self,
+		metadata: Self::Metadata,
+		subscriber: Subscriber<RuntimeVersion>,
+	);
 
 	/// Unsubscribe from runtime version subscription
 	#[pubsub(
@@ -123,18 +137,27 @@ pub trait StateApi<Hash> {
 		name = "state_unsubscribeRuntimeVersion",
 		alias("chain_unsubscribeRuntimeVersion")
 	)]
-	fn unsubscribe_runtime_version(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool>;
+	fn unsubscribe_runtime_version(
+		&self,
+		metadata: Option<Self::Metadata>,
+		id: SubscriptionId,
+	) -> RpcResult<bool>;
 
 	/// New storage subscription
 	#[pubsub(subscription = "state_storage", subscribe, name = "state_subscribeStorage")]
 	fn subscribe_storage(
-		&self, metadata: Self::Metadata, subscriber: Subscriber<StorageChangeSet<Hash>>, keys: Option<Vec<StorageKey>>
+		&self,
+		metadata: Self::Metadata,
+		subscriber: Subscriber<StorageChangeSet<Hash>>,
+		keys: Option<Vec<StorageKey>>,
 	);
 
 	/// Unsubscribe from storage subscription
 	#[pubsub(subscription = "state_storage", unsubscribe, name = "state_unsubscribeStorage")]
 	fn unsubscribe_storage(
-		&self, metadata: Option<Self::Metadata>, id: SubscriptionId
+		&self,
+		metadata: Option<Self::Metadata>,
+		id: SubscriptionId,
 	) -> RpcResult<bool>;
 
 	/// The `state_traceBlock` RPC provides a way to trace the re-execution of a single
@@ -174,7 +197,7 @@ pub trait StateApi<Hash> {
 	/// renamed/modified however you like, as long as it retains the `.wasm` extension.
 	/// - Run the node with the wasm blob overrides by placing them in a folder with all your runtimes,
 	/// and passing the path of this folder to your chain, e.g.:
-	/// 	- `./target/release/polkadot --wasm-runtime-overrides /home/user/my-custom-wasm-runtimes`
+	/// - `./target/release/polkadot --wasm-runtime-overrides /home/user/my-custom-wasm-runtimes`
 	///
 	/// You can also find some pre-built tracing enabled wasm runtimes in [substrate-archive][2]
 	///
@@ -199,7 +222,7 @@ pub trait StateApi<Hash> {
 	/// curl \
 	/// 	-H "Content-Type: application/json" \
 	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "state_traceBlock", \
-	///		"params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264"]}' \
+	/// 		"params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264"]}' \
 	/// 	http://localhost:9933/
 	/// ```
 	///
@@ -207,33 +230,34 @@ pub trait StateApi<Hash> {
 	///
 	/// - `block_hash` (param index 0): Hash of the block to trace.
 	/// - `targets` (param index 1): String of comma separated (no spaces) targets. Specified
-	/// 	targets match with trace targets by prefix (i.e if a target is in the beginning
-	/// 	of a trace target it is considered a match). If an empty string is specified no
-	/// 	targets will be filtered out. The majority of targets correspond to Rust module names,
-	/// 	and the ones that do not are typically "hardcoded" into span or event location
-	/// 	somewhere in the Substrate source code. ("Non-hardcoded" targets typically come from frame
-	/// 	support macros.)
+	/// targets match with trace targets by prefix (i.e if a target is in the beginning
+	/// of a trace target it is considered a match). If an empty string is specified no
+	/// targets will be filtered out. The majority of targets correspond to Rust module names,
+	/// and the ones that do not are typically "hardcoded" into span or event location
+	/// somewhere in the Substrate source code. ("Non-hardcoded" targets typically come from frame
+	/// support macros.)
 	/// - `storage_keys` (param index 2): String of comma separated (no spaces) hex encoded
-	/// 	(no `0x` prefix) storage keys. If an empty string is specified no events will
-	/// 	be filtered out. If anything other than an empty string is specified, events
-	/// 	will be filtered by storage key (so non-storage events will **not** show up).
-	/// 	You can specify any length of a storage key prefix (i.e. if a specified storage
-	/// 	key is in the beginning of an events storage key it is considered a match).
-	/// 	Example: for balance tracking on Polkadot & Kusama you would likely want
-	///		to track changes to account balances with the frame_system::Account storage item,
-	///		which is a map from `AccountId` to `AccountInfo`. The key filter for this would be
-	///		the storage prefix for the map:
-	///		`26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9`
-	/// 	Additionally you would want to track the extrinsic index, which is under the
-	///		`:extrinsic_index` key. The key for this would be the aforementioned string as bytes
-	///		in hex: `3a65787472696e7369635f696e646578`.
-	///		The following are some resources to learn more about storage keys in substrate:
-	///		[substrate storage][1], [transparent keys in substrate][2],
-	///		[querying substrate storage via rpc][3].
+	/// (no `0x` prefix) storage keys. If an empty string is specified no events will
+	/// be filtered out. If anything other than an empty string is specified, events
+	/// will be filtered by storage key (so non-storage events will **not** show up).
+	/// You can specify any length of a storage key prefix (i.e. if a specified storage
+	/// key is in the beginning of an events storage key it is considered a match).
+	/// Example: for balance tracking on Polkadot & Kusama you would likely want
+	/// to track changes to account balances with the frame_system::Account storage item,
+	/// which is a map from `AccountId` to `AccountInfo`. The key filter for this would be
+	/// the storage prefix for the map:
+	/// `26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9`
 	///
-	///		[1]: https://substrate.dev/docs/en/knowledgebase/advanced/storage#storage-map-key
-	///		[2]: https://www.shawntabrizi.com/substrate/transparent-keys-in-substrate/
-	///		[3]: https://www.shawntabrizi.com/substrate/querying-substrate-storage-via-rpc/
+	/// Additionally you would want to track the extrinsic index, which is under the
+	/// `:extrinsic_index` key. The key for this would be the aforementioned string as bytes
+	/// in hex: `3a65787472696e7369635f696e646578`.
+	/// The following are some resources to learn more about storage keys in substrate:
+	/// [substrate storage][1], [transparent keys in substrate][2],
+	/// [querying substrate storage via rpc][3].
+	///
+	/// [1]: https://substrate.dev/docs/en/knowledgebase/advanced/storage#storage-map-key
+	/// [2]: https://www.shawntabrizi.com/substrate/transparent-keys-in-substrate/
+	/// [3]: https://www.shawntabrizi.com/substrate/querying-substrate-storage-via-rpc/
 	///
 	/// ### Maximum payload size
 	///

@@ -19,15 +19,14 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 
-#[cfg(feature = "std")]
-use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 #[cfg(feature = "std")]
 use sp_api::ProvideRuntimeApi;
+#[cfg(feature = "std")]
+use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 
-use sp_core::RuntimeDebug;
-use sp_core::crypto::KeyTypeId;
+use sp_core::{crypto::KeyTypeId, RuntimeDebug};
 use sp_staking::SessionIndex;
 use sp_std::vec::Vec;
 

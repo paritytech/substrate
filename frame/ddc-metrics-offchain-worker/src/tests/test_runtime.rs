@@ -5,11 +5,8 @@
 use crate::{*, self as pallet_ddc_metrics_offchain_worker};
 
 use codec::{Decode, Encode};
-use frame_support::{
-    impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types, traits::Get,
-    weights::Weight,
-};
-use frame_support::traits::Currency;
+use frame_support::{ parameter_types, traits::Get, weights::Weight };
+use frame_support::traits::{Currency, Nothing};
 use sp_core::H256;
 use sp_runtime::{
     generic,
@@ -33,14 +30,6 @@ pub type Moment = u64;
 use frame_system as system;
 use pallet_balances as balances;
 use pallet_contracts as contracts;
-
-mod example_offchain_worker {
-    // Re-export contents of the root. This basically
-    // needs to give a name for the current crate.
-    // This hack is required for `impl_outer_event!`.
-    pub use crate::*;
-    pub use frame_support::impl_outer_event;
-}
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -164,6 +153,8 @@ impl contracts::Config for Test {
     type DeletionQueueDepth = ();
     type DeletionWeightLimit = ();
     type Schedule = Schedule;
+    type Call = Call;
+    type CallFilter = Nothing;
 }
 
 parameter_types! {

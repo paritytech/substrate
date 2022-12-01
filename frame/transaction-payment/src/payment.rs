@@ -1,10 +1,12 @@
-///! Traits and default implementation for paying transaction fees.
-
+/// ! Traits and default implementation for paying transaction fees.
 use crate::Config;
 
 use codec::FullCodec;
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, DispatchInfoOf, MaybeSerializeDeserialize, PostDispatchInfoOf, Saturating, Zero},
+	traits::{
+		AtLeast32BitUnsigned, DispatchInfoOf, MaybeSerializeDeserialize, PostDispatchInfoOf,
+		Saturating, Zero,
+	},
 	transaction_validity::InvalidTransaction,
 };
 use sp_std::{fmt::Debug, marker::PhantomData};
@@ -20,7 +22,12 @@ type NegativeImbalanceOf<C, T> =
 /// Handle withdrawing, refunding and depositing of transaction fees.
 pub trait OnChargeTransaction<T: Config> {
 	/// The underlying integer type in which fees are calculated.
-	type Balance: AtLeast32BitUnsigned + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default;
+	type Balance: AtLeast32BitUnsigned
+		+ FullCodec
+		+ Copy
+		+ MaybeSerializeDeserialize
+		+ Debug
+		+ Default;
 	type LiquidityInfo: Default;
 
 	/// Before the transaction is executed the payment of the transaction fees
@@ -67,10 +74,14 @@ where
 	T: Config,
 	T::TransactionByteFee: Get<<C as Currency<<T as frame_system::Config>::AccountId>>::Balance>,
 	C: Currency<<T as frame_system::Config>::AccountId>,
-	C::PositiveImbalance:
-		Imbalance<<C as Currency<<T as frame_system::Config>::AccountId>>::Balance, Opposite = C::NegativeImbalance>,
-	C::NegativeImbalance:
-		Imbalance<<C as Currency<<T as frame_system::Config>::AccountId>>::Balance, Opposite = C::PositiveImbalance>,
+	C::PositiveImbalance: Imbalance<
+		<C as Currency<<T as frame_system::Config>::AccountId>>::Balance,
+		Opposite = C::NegativeImbalance,
+	>,
+	C::NegativeImbalance: Imbalance<
+		<C as Currency<<T as frame_system::Config>::AccountId>>::Balance,
+		Opposite = C::PositiveImbalance,
+	>,
 	OU: OnUnbalanced<NegativeImbalanceOf<C, T>>,
 {
 	type LiquidityInfo = Option<NegativeImbalanceOf<C, T>>;
@@ -87,7 +98,7 @@ where
 		tip: Self::Balance,
 	) -> Result<Self::LiquidityInfo, TransactionValidityError> {
 		if fee.is_zero() {
-			return Ok(None);
+			return Ok(None)
 		}
 
 		let withdraw_reason = if tip.is_zero() {
@@ -121,8 +132,8 @@ where
 			// refund to the the account that paid the fees. If this fails, the
 			// account might have dropped below the existential balance. In
 			// that case we don't refund anything.
-			let refund_imbalance =
-				C::deposit_into_existing(&who, refund_amount).unwrap_or_else(|_| C::PositiveImbalance::zero());
+			let refund_imbalance = C::deposit_into_existing(&who, refund_amount)
+				.unwrap_or_else(|_| C::PositiveImbalance::zero());
 			// merge the imbalance caused by paying the fees and refunding parts of it again.
 			let adjusted_paid = paid
 				.offset(refund_imbalance)

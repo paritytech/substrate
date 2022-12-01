@@ -27,10 +27,10 @@
 //! Implementations of these traits may be converted to implementations of corresponding
 //! `nonfungible` traits by using the `nonfungible::ItemOf` type adapter.
 
-use sp_std::prelude::*;
-use codec::{Encode, Decode};
-use sp_runtime::TokenError;
 use crate::dispatch::DispatchResult;
+use codec::{Decode, Encode};
+use sp_runtime::TokenError;
+use sp_std::prelude::*;
 
 /// Trait for providing an interface to many read-only NFT-like sets of asset instances.
 pub trait Inspect<AccountId> {
@@ -48,14 +48,18 @@ pub trait Inspect<AccountId> {
 	/// Returns the owner of the asset `class`, if there is one. For many NFTs this may not make
 	/// any sense, so users of this API should not be surprised to find an asset class results in
 	/// `None` here.
-	fn class_owner(_class: &Self::ClassId) -> Option<AccountId> { None }
+	fn class_owner(_class: &Self::ClassId) -> Option<AccountId> {
+		None
+	}
 
 	/// Returns the attribute value of `instance` of `class` corresponding to `key`.
 	///
 	/// By default this is `None`; no attributes are defined.
-	fn attribute(_class: &Self::ClassId, _instance: &Self::InstanceId, _key: &[u8])
-		-> Option<Vec<u8>>
-	{
+	fn attribute(
+		_class: &Self::ClassId,
+		_instance: &Self::InstanceId,
+		_key: &[u8],
+	) -> Option<Vec<u8>> {
 		None
 	}
 
@@ -74,15 +78,14 @@ pub trait Inspect<AccountId> {
 	/// Returns the attribute value of `class` corresponding to `key`.
 	///
 	/// By default this is `None`; no attributes are defined.
-	fn class_attribute(_class: &Self::ClassId, _key: &[u8]) -> Option<Vec<u8>> { None }
+	fn class_attribute(_class: &Self::ClassId, _key: &[u8]) -> Option<Vec<u8>> {
+		None
+	}
 
 	/// Returns the strongly-typed attribute value of `class` corresponding to `key`.
 	///
 	/// By default this just attempts to use `class_attribute`.
-	fn typed_class_attribute<K: Encode, V: Decode>(
-		class: &Self::ClassId,
-		key: &K,
-	) -> Option<V> {
+	fn typed_class_attribute<K: Encode, V: Decode>(class: &Self::ClassId, key: &K) -> Option<V> {
 		key.using_encoded(|d| Self::class_attribute(class, d))
 			.and_then(|v| V::decode(&mut &v[..]).ok())
 	}
@@ -90,25 +93,34 @@ pub trait Inspect<AccountId> {
 	/// Returns `true` if the asset `instance` of `class` may be transferred.
 	///
 	/// Default implementation is that all assets are transferable.
-	fn can_transfer(_class: &Self::ClassId, _instance: &Self::InstanceId) -> bool { true }
+	fn can_transfer(_class: &Self::ClassId, _instance: &Self::InstanceId) -> bool {
+		true
+	}
 }
 
 /// Interface for enumerating assets in existence or owned by a given account over many collections
 /// of NFTs.
-///
-/// WARNING: These may be a heavy operations. Do not use when execution time is limited.
 pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
-	/// Returns the asset classes in existence.
-	fn classes() -> Vec<Self::ClassId>;
+	/// Returns an iterator of the asset classes in existence.
+	fn classes() -> Box<dyn Iterator<Item = Self::ClassId>>;
 
-	/// Returns the instances of an asset `class` in existence.
-	fn instances(class: &Self::ClassId) -> Vec<Self::InstanceId>;
+	/// Returns an iterator of the instances of an asset `class` in existence.
+	fn instances(class: &Self::ClassId) -> Box<dyn Iterator<Item = Self::InstanceId>>;
 
-	/// Returns the asset instances of all classes owned by `who`.
-	fn owned(who: &AccountId) -> Vec<(Self::ClassId, Self::InstanceId)>;
+	/// Returns an iterator of the asset instances of all classes owned by `who`.
+	fn owned(who: &AccountId) -> Box<dyn Iterator<Item = (Self::ClassId, Self::InstanceId)>>;
 
-	/// Returns the asset instances of `class` owned by `who`.
-	fn owned_in_class(class: &Self::ClassId, who: &AccountId) -> Vec<Self::InstanceId>;
+	/// Returns an iterator of the asset instances of `class` owned by `who`.
+	fn owned_in_class(
+		class: &Self::ClassId,
+		who: &AccountId,
+	) -> Box<dyn Iterator<Item = Self::InstanceId>>;
+}
+
+/// Trait for providing the ability to create classes of nonfungible assets.
+pub trait Create<AccountId>: Inspect<AccountId> {
+	/// Create a `class` of nonfungible assets to be owned by `who` and managed by `admin`.
+	fn create_class(class: &Self::ClassId, who: &AccountId, admin: &AccountId) -> DispatchResult;
 }
 
 /// Trait for providing an interface for multiple classes of NFT-like assets which may be minted,
@@ -153,19 +165,13 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 		key: &K,
 		value: &V,
 	) -> DispatchResult {
-		key.using_encoded(|k| value.using_encoded(|v|
-			Self::set_attribute(class, instance, k, v)
-		))
+		key.using_encoded(|k| value.using_encoded(|v| Self::set_attribute(class, instance, k, v)))
 	}
 
 	/// Set attribute `value` of asset `class`'s `key`.
 	///
 	/// By default, this is not a supported operation.
-	fn set_class_attribute(
-		_class: &Self::ClassId,
-		_key: &[u8],
-		_value: &[u8],
-	) -> DispatchResult {
+	fn set_class_attribute(_class: &Self::ClassId, _key: &[u8], _value: &[u8]) -> DispatchResult {
 		Err(TokenError::Unsupported.into())
 	}
 
@@ -177,9 +183,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 		key: &K,
 		value: &V,
 	) -> DispatchResult {
-		key.using_encoded(|k| value.using_encoded(|v|
-			Self::set_class_attribute(class, k, v)
-		))
+		key.using_encoded(|k| value.using_encoded(|v| Self::set_class_attribute(class, k, v)))
 	}
 }
 

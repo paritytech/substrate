@@ -51,7 +51,7 @@ Please refer to the [`Call`](https://docs.rs/pallet-assets/latest/pallet_assets/
 * `balance` - Get the asset `id` balance of `who`.
 * `total_supply` - Get the total supply of an asset `id`.
 
-Please refer to the [`Module`](https://docs.rs/pallet-assets/latest/pallet_assets/struct.Module.html) struct for details on publicly available functions.
+Please refer to the [`Pallet`](https://docs.rs/pallet-assets/latest/pallet_assets/pallet/struct.Pallet.html) struct for details on publicly available functions.
 
 ## Usage
 

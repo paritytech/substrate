@@ -16,8 +16,8 @@
 // limitations under the License.
 
 use super::helper;
-use syn::spanned::Spanned;
 use quote::ToTokens;
+use syn::spanned::Spanned;
 
 /// List of additional token to be used for parsing.
 mod keyword {
@@ -48,11 +48,11 @@ impl ErrorDef {
 		let item = if let syn::Item::Enum(item) = item {
 			item
 		} else {
-			return Err(syn::Error::new(item.span(), "Invalid pallet::error, expected item enum"));
+			return Err(syn::Error::new(item.span(), "Invalid pallet::error, expected item enum"))
 		};
 		if !matches!(item.vis, syn::Visibility::Public(_)) {
 			let msg = "Invalid pallet::error, `Error` must be public";
-			return Err(syn::Error::new(item.span(), msg));
+			return Err(syn::Error::new(item.span(), msg))
 		}
 
 		let mut instances = vec![];
@@ -60,34 +60,30 @@ impl ErrorDef {
 
 		if item.generics.where_clause.is_some() {
 			let msg = "Invalid pallet::error, where clause is not allowed on pallet error item";
-			return Err(syn::Error::new(item.generics.where_clause.as_ref().unwrap().span(), msg));
+			return Err(syn::Error::new(item.generics.where_clause.as_ref().unwrap().span(), msg))
 		}
 
 		let error = syn::parse2::<keyword::Error>(item.ident.to_token_stream())?;
 
-		let variants = item.variants.iter()
+		let variants = item
+			.variants
+			.iter()
 			.map(|variant| {
 				if !matches!(variant.fields, syn::Fields::Unit) {
 					let msg = "Invalid pallet::error, unexpected fields, must be `Unit`";
-					return Err(syn::Error::new(variant.fields.span(), msg));
+					return Err(syn::Error::new(variant.fields.span(), msg))
 				}
 				if variant.discriminant.is_some() {
 					let msg = "Invalid pallet::error, unexpected discriminant, discriminant \
 						are not supported";
 					let span = variant.discriminant.as_ref().unwrap().0.span();
-					return Err(syn::Error::new(span, msg));
+					return Err(syn::Error::new(span, msg))
 				}
 
 				Ok((variant.ident.clone(), helper::get_doc_literals(&variant.attrs)))
 			})
 			.collect::<Result<_, _>>()?;
 
-		Ok(ErrorDef {
-			attr_span,
-			index,
-			variants,
-			instances,
-			error,
-		})
+		Ok(ErrorDef { attr_span, index, variants, instances, error })
 	}
 }

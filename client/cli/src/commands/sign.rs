@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -18,15 +18,12 @@
 
 //! Implementation of the `sign` subcommand
 use crate::{error, utils, with_crypto_scheme, CryptoSchemeFlag, KeystoreParams};
-use structopt::StructOpt;
 use sp_core::crypto::SecretString;
+use structopt::StructOpt;
 
 /// The `sign` command
 #[derive(Debug, StructOpt, Clone)]
-#[structopt(
-	name = "sign",
-	about = "Sign a message, with a given (secret) key"
-)]
+#[structopt(name = "sign", about = "Sign a message, with a given (secret) key")]
 pub struct SignCmd {
 	/// The secret key URI.
 	/// If the value is a file, the file content is used as URI.
@@ -52,7 +49,6 @@ pub struct SignCmd {
 	pub crypto_scheme: CryptoSchemeFlag,
 }
 
-
 impl SignCmd {
 	/// Run the command
 	pub fn run(&self) -> error::Result<()> {
@@ -60,17 +56,19 @@ impl SignCmd {
 		let suri = utils::read_uri(self.suri.as_ref())?;
 		let password = self.keystore_params.read_password()?;
 
-		let signature = with_crypto_scheme!(
-			self.crypto_scheme.scheme,
-			sign(&suri, password, message)
-		)?;
+		let signature =
+			with_crypto_scheme!(self.crypto_scheme.scheme, sign(&suri, password, message))?;
 
 		println!("{}", signature);
 		Ok(())
 	}
 }
 
-fn sign<P: sp_core::Pair>(suri: &str, password: Option<SecretString>, message: Vec<u8>) ->  error::Result<String> {
+fn sign<P: sp_core::Pair>(
+	suri: &str,
+	password: Option<SecretString>,
+	message: Vec<u8>,
+) -> error::Result<String> {
 	let pair = utils::pair_from_suri::<P>(suri, password)?;
 	Ok(format!("{}", hex::encode(pair.sign(&message))))
 }
@@ -91,7 +89,7 @@ mod test {
 			"--message",
 			&seed[2..],
 			"--password",
-			"12345"
+			"12345",
 		]);
 		assert!(sign.run().is_ok());
 	}

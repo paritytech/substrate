@@ -19,7 +19,7 @@
 //! Substrate network possible errors.
 
 use crate::config::TransportConfig;
-use libp2p::{PeerId, Multiaddr};
+use libp2p::{Multiaddr, PeerId};
 
 use std::{borrow::Cow, fmt};
 
@@ -38,7 +38,7 @@ pub enum Error {
 		fmt = "The same bootnode (`{}`) is registered with two different peer ids: `{}` and `{}`",
 		address,
 		first_id,
-		second_id,
+		second_id
 	)]
 	DuplicateBootnode {
 		/// The address of the bootnode.
@@ -53,7 +53,7 @@ pub enum Error {
 	/// The network addresses are invalid because they don't match the transport.
 	#[display(
 		fmt = "The following addresses are invalid because they don't match the transport: {:?}",
-		addresses,
+		addresses
 	)]
 	AddressesForAnotherTransport {
 		/// Transport used.

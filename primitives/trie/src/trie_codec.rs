@@ -21,17 +21,14 @@
 //! it to substrate specific layout and child trie system.
 
 use crate::{
-	EMPTY_PREFIX, HashDBT, TrieHash, TrieError, TrieConfiguration,
-	CompactProof, StorageProof,
+	CompactProof, HashDBT, StorageProof, TrieConfiguration, TrieError, TrieHash, EMPTY_PREFIX,
 };
-use sp_std::boxed::Box;
-use sp_std::vec::Vec;
-use trie_db::Trie;
-#[cfg(feature="std")]
-use std::fmt;
-#[cfg(feature="std")]
+use sp_std::{boxed::Box, vec::Vec};
+#[cfg(feature = "std")]
 use std::error::Error as StdError;
-
+#[cfg(feature = "std")]
+use std::fmt;
+use trie_db::Trie;
 
 /// Error for trie node decoding.
 pub enum Error<L: TrieConfiguration> {
@@ -55,7 +52,7 @@ impl<L: TrieConfiguration> From<Box<TrieError<L>>> for Error<L> {
 	}
 }
 
-#[cfg(feature="std")]
+#[cfg(feature = "std")]
 impl<L: TrieConfiguration> StdError for Error<L> {
 	fn description(&self) -> &str {
 		match self {
@@ -69,14 +66,14 @@ impl<L: TrieConfiguration> StdError for Error<L> {
 	}
 }
 
-#[cfg(feature="std")]
+#[cfg(feature = "std")]
 impl<L: TrieConfiguration> fmt::Debug for Error<L> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		<Self as fmt::Display>::fmt(&self, f)
 	}
 }
 
-#[cfg(feature="std")]
+#[cfg(feature = "std")]
 impl<L: TrieConfiguration> fmt::Display for Error<L> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
@@ -84,7 +81,8 @@ impl<L: TrieConfiguration> fmt::Display for Error<L> {
 			Error::TrieError(e) => write!(f, "Trie error: {}", e),
 			Error::IncompleteProof => write!(f, "Incomplete proof"),
 			Error::ExtraneousChildNode => write!(f, "Child node content with no root in proof"),
-			Error::ExtraneousChildProof(root) => write!(f, "Proof of child trie {:x?} not in parent proof", root.as_ref()),
+			Error::ExtraneousChildProof(root) =>
+				write!(f, "Proof of child trie {:x?} not in parent proof", root.as_ref()),
 			Error::RootMismatch(root, expected) => write!(
 				f,
 				"Verification error, root is {:x?}, expected: {:x?}",
@@ -107,21 +105,19 @@ pub fn decode_compact<'a, L, DB, I>(
 	encoded: I,
 	expected_root: Option<&TrieHash<L>>,
 ) -> Result<TrieHash<L>, Error<L>>
-	where
-		L: TrieConfiguration,
-		DB: HashDBT<L::Hash, trie_db::DBValue> + hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
-		I: IntoIterator<Item = &'a [u8]>,
+where
+	L: TrieConfiguration,
+	DB: HashDBT<L::Hash, trie_db::DBValue> + hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
+	I: IntoIterator<Item = &'a [u8]>,
 {
 	let mut nodes_iter = encoded.into_iter();
-	let (top_root, _nb_used) = trie_db::decode_compact_from_iter::<L, _, _, _>(
-		db,
-		&mut nodes_iter,
-	)?;
+	let (top_root, _nb_used) =
+		trie_db::decode_compact_from_iter::<L, _, _, _>(db, &mut nodes_iter)?;
 
 	// Only check root if expected root is passed as argument.
 	if let Some(expected_root) = expected_root {
 		if expected_root != &top_root {
-			return Err(Error::RootMismatch(top_root.clone(), expected_root.clone()));
+			return Err(Error::RootMismatch(top_root.clone(), expected_root.clone()))
 		}
 	}
 
@@ -142,7 +138,7 @@ pub fn decode_compact<'a, L, DB, I>(
 						let mut root = TrieHash::<L>::default();
 						// still in a proof so prevent panic
 						if root.as_mut().len() != value.as_slice().len() {
-							return Err(Error::InvalidChildRoot(key, value));
+							return Err(Error::InvalidChildRoot(key, value))
 						}
 						root.as_mut().copy_from_slice(value.as_ref());
 						child_tries.push(root);
@@ -160,16 +156,14 @@ pub fn decode_compact<'a, L, DB, I>(
 	}
 
 	if !HashDBT::<L::Hash, _>::contains(db, &top_root, EMPTY_PREFIX) {
-		return Err(Error::IncompleteProof);
+		return Err(Error::IncompleteProof)
 	}
 
 	let mut previous_extracted_child_trie = None;
 	for child_root in child_tries.into_iter() {
 		if previous_extracted_child_trie.is_none() {
-			let (top_root, _) = trie_db::decode_compact_from_iter::<L, _, _, _>(
-				db,
-				&mut nodes_iter,
-			)?;
+			let (top_root, _) =
+				trie_db::decode_compact_from_iter::<L, _, _, _>(db, &mut nodes_iter)?;
 			previous_extracted_child_trie = Some(top_root);
 		}
 
@@ -184,11 +178,11 @@ pub fn decode_compact<'a, L, DB, I>(
 	if let Some(child_root) = previous_extracted_child_trie {
 		// A child root was read from proof but is not present
 		// in top trie.
-		return Err(Error::ExtraneousChildProof(child_root));
+		return Err(Error::ExtraneousChildProof(child_root))
 	}
 
 	if nodes_iter.next().is_some() {
-		return Err(Error::ExtraneousChildNode);
+		return Err(Error::ExtraneousChildNode)
 	}
 
 	Ok(top_root)
@@ -201,12 +195,9 @@ pub fn decode_compact<'a, L, DB, I>(
 /// Then parse all child trie root and compress main trie content first
 /// then all child trie contents.
 /// Child trie are ordered by the order of their roots in the top trie.
-pub fn encode_compact<L>(
-	proof: StorageProof,
-	root: TrieHash<L>,
-) -> Result<CompactProof, Error<L>>
-	where
-		L: TrieConfiguration,
+pub fn encode_compact<L>(proof: StorageProof, root: TrieHash<L>) -> Result<CompactProof, Error<L>>
+where
+	L: TrieConfiguration,
 {
 	let mut child_tries = Vec::new();
 	let partial_db = proof.into_memory_db();
@@ -223,7 +214,7 @@ pub fn encode_compact<L>(
 						let mut root = TrieHash::<L>::default();
 						if root.as_mut().len() != value.as_slice().len() {
 							// some child trie root in top trie are not an encoded hash.
-							return Err(Error::InvalidChildRoot(key.to_vec(), value.to_vec()));
+							return Err(Error::InvalidChildRoot(key.to_vec(), value.to_vec()))
 						}
 						root.as_mut().copy_from_slice(value.as_ref());
 						child_tries.push(root);
@@ -246,7 +237,7 @@ pub fn encode_compact<L>(
 		if !HashDBT::<L::Hash, _>::contains(&partial_db, &child_root, EMPTY_PREFIX) {
 			// child proof are allowed to be missing (unused root can be included
 			// due to trie structure modification).
-			continue;
+			continue
 		}
 
 		let trie = crate::TrieDB::<L>::new(&partial_db, &child_root)?;

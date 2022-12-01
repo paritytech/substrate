@@ -22,7 +22,7 @@ pub use primitive_types::{U256, U512};
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use codec::{Encode, Decode};
+	use codec::{Decode, Encode};
 	use sp_serializer as ser;
 
 	macro_rules! test {
@@ -55,34 +55,27 @@ mod tests {
 				assert!(ser::from_str::<$name>("\"10\"").unwrap_err().is_data());
 				assert!(ser::from_str::<$name>("\"0\"").unwrap_err().is_data());
 			}
-		}
+		};
 	}
 
 	test!(U256, test_u256);
 
 	#[test]
 	fn test_u256_codec() {
-		let res1 = vec![120, 0, 0, 0, 0, 0, 0, 0,
-						0, 0, 0, 0, 0, 0, 0, 0,
-						0, 0, 0, 0, 0, 0, 0, 0,
-						0, 0, 0, 0, 0, 0, 0, 0];
-		let res2 = vec![0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-						0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-						0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-						0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff];
+		let res1 = vec![
+			120, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+			0, 0, 0, 0,
+		];
+		let res2 = vec![
+			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+			0xff, 0xff, 0xff, 0xff,
+		];
 
-		assert_eq!(
-			U256::from(120).encode(),
-			res1);
-		assert_eq!(
-			U256::max_value().encode(),
-			res2);
-		assert_eq!(
-			U256::decode(&mut &res1[..]),
-			Ok(U256::from(120)));
-		assert_eq!(
-			U256::decode(&mut &res2[..]),
-			Ok(U256::max_value()));
+		assert_eq!(U256::from(120).encode(), res1);
+		assert_eq!(U256::max_value().encode(), res2);
+		assert_eq!(U256::decode(&mut &res1[..]), Ok(U256::from(120)));
+		assert_eq!(U256::decode(&mut &res2[..]), Ok(U256::max_value()));
 	}
 
 	#[test]
@@ -91,10 +84,10 @@ mod tests {
 			ser::to_string_pretty(&!U256::zero()),
 			"\"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\""
 		);
-		assert!(
-			ser::from_str::<U256>("\"0x1ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"")
-			.unwrap_err()
-			.is_data()
-		);
+		assert!(ser::from_str::<U256>(
+			"\"0x1ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\""
+		)
+		.unwrap_err()
+		.is_data());
 	}
 }

@@ -23,14 +23,14 @@
 
 use proc_macro::TokenStream;
 use proc_macro2::Span;
-use syn::parse_macro_input;
 use quote::quote;
+use syn::parse_macro_input;
 
 pub(crate) fn fields_idents(
 	fields: impl Iterator<Item = syn::Field>,
 ) -> impl Iterator<Item = proc_macro2::TokenStream> {
 	fields.enumerate().map(|(ix, field)| {
-		field.ident.map(|i| quote!{#i}).unwrap_or_else(|| {
+		field.ident.map(|i| quote! {#i}).unwrap_or_else(|| {
 			let f_ix: syn::Ident = syn::Ident::new(&format!("f_{}", ix), Span::call_site());
 			quote!( #f_ix )
 		})
@@ -42,10 +42,7 @@ pub(crate) fn fields_access(
 ) -> impl Iterator<Item = proc_macro2::TokenStream> {
 	fields.enumerate().map(|(ix, field)| {
 		field.ident.map(|i| quote!( #i )).unwrap_or_else(|| {
-			let f_ix: syn::Index = syn::Index {
-				index: ix as u32,
-				span: Span::call_site(),
-			};
+			let f_ix: syn::Index = syn::Index { index: ix as u32, span: Span::call_site() };
 			quote!( #f_ix )
 		})
 	})
@@ -64,15 +61,10 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
 }
 
 fn derive_parse_struct(input: syn::ItemStruct) -> TokenStream {
-	let syn::ItemStruct {
-		ident,
-		generics,
-		fields,
-		..
-	} = input;
+	let syn::ItemStruct { ident, generics, fields, .. } = input;
 	let field_names = {
 		let name = fields_idents(fields.iter().map(Clone::clone));
-		quote!{
+		quote! {
 			#(
 				#name,
 			)*
@@ -110,12 +102,7 @@ pub fn derive_totokens(input: TokenStream) -> TokenStream {
 }
 
 fn derive_totokens_struct(input: syn::ItemStruct) -> TokenStream {
- let syn::ItemStruct {
-		ident,
-		generics,
-		fields,
-		..
-	} = input;
+	let syn::ItemStruct { ident, generics, fields, .. } = input;
 
 	let fields = fields_access(fields.iter().map(Clone::clone));
 	let tokens = quote! {
@@ -133,12 +120,7 @@ fn derive_totokens_struct(input: syn::ItemStruct) -> TokenStream {
 }
 
 fn derive_totokens_enum(input: syn::ItemEnum) -> TokenStream {
-	let syn::ItemEnum {
-		ident,
-		generics,
-		variants,
-		..
-	} = input;
+	let syn::ItemEnum { ident, generics, variants, .. } = input;
 	let variants = variants.iter().map(|v| {
 		let v_ident = v.ident.clone();
 		let fields_build = if v.fields.iter().count() > 0 {

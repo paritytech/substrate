@@ -16,8 +16,8 @@
 // limitations under the License.
 
 //! Error types in Consensus
-use sp_version::RuntimeVersion;
 use sp_core::ed25519::Public;
+use sp_version::RuntimeVersion;
 use std::error;
 
 /// Result type alias.
@@ -58,8 +58,10 @@ pub enum Error {
 	#[error("Message sender {0:?} is not a valid authority")]
 	InvalidAuthority(Public),
 	/// Authoring interface does not match the runtime.
-	#[error("Authoring for current \
-				runtime is not supported. Native ({native}) cannot author for on-chain ({on_chain}).")]
+	#[error(
+		"Authoring for current \
+				runtime is not supported. Native ({native}) cannot author for on-chain ({on_chain})."
+	)]
 	IncompatibleAuthoringRuntime { native: RuntimeVersion, on_chain: RuntimeVersion },
 	/// Authoring interface does not match the runtime.
 	#[error("Authoring for current runtime is not supported since it has no version.")]
@@ -81,7 +83,7 @@ pub enum Error {
 	ChainLookup(String),
 	/// Signing failed
 	#[error("Failed to sign using key: {0:?}. Reason: {1}")]
-	CannotSign(Vec<u8>, String)
+	CannotSign(Vec<u8>, String),
 }
 
 impl core::convert::From<Public> for Error {

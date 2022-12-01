@@ -21,15 +21,15 @@
 #[cfg(test)]
 mod tests;
 
+use self::error::{Error, Result};
+use parking_lot::RwLock;
 /// Re-export the API for backward compatibility.
 pub use sc_rpc_api::offchain::*;
 use sc_rpc_api::DenyUnsafe;
-use self::error::{Error, Result};
 use sp_core::{
-	Bytes,
 	offchain::{OffchainStorage, StorageKind},
+	Bytes,
 };
-use parking_lot::RwLock;
 use std::sync::Arc;
 
 /// Offchain API
@@ -43,10 +43,7 @@ pub struct Offchain<T: OffchainStorage> {
 impl<T: OffchainStorage> Offchain<T> {
 	/// Create new instance of Offchain API.
 	pub fn new(storage: T, deny_unsafe: DenyUnsafe) -> Self {
-		Offchain {
-			storage: Arc::new(RwLock::new(storage)),
-			deny_unsafe,
-		}
+		Offchain { storage: Arc::new(RwLock::new(storage)), deny_unsafe }
 	}
 }
 

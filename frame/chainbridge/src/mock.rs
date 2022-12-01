@@ -2,7 +2,10 @@
 
 use super::*;
 
-use frame_support::{assert_ok, ord_parameter_types, parameter_types, weights::Weight, PalletId};
+use frame_support::{
+    assert_ok, ord_parameter_types, parameter_types, weights::Weight, PalletId,
+    traits::{Everything}
+};
 use frame_system::{self as system};
 use sp_core::H256;
 use sp_runtime::{
@@ -23,7 +26,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for Test {
-    type BaseCallFilter = ();
+    type BaseCallFilter = Everything;
     type BlockWeights = ();
     type BlockLength = ();
     type Origin = Origin;

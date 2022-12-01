@@ -1,6 +1,6 @@
 [package]
 name = "pallet-staking-reward-fn"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -14,7 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [lib]
 
 [dependencies]
-sp-arithmetic = { version = "3.0.0", default-features = false, path = "../../../primitives/arithmetic" }
+sp-arithmetic = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/arithmetic" }
 log = { version = "0.4.14", default-features = false }
 
 [features]

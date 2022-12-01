@@ -17,10 +17,13 @@
 
 //! The vote datatype.
 
-use sp_std::{prelude::*, result::Result, convert::TryFrom};
-use codec::{Encode, EncodeLike, Decode, Output, Input};
-use sp_runtime::{RuntimeDebug, traits::{Saturating, Zero}};
-use crate::{Conviction, ReferendumIndex, Delegations};
+use crate::{Conviction, Delegations, ReferendumIndex};
+use codec::{Decode, Encode, EncodeLike, Input, Output};
+use sp_runtime::{
+	traits::{Saturating, Zero},
+	RuntimeDebug,
+};
+use sp_std::{convert::TryFrom, prelude::*, result::Result};
 
 /// A number of lock periods, plus a vote, one way or the other.
 #[derive(Copy, Clone, Eq, PartialEq, Default, RuntimeDebug)]
@@ -136,7 +139,9 @@ pub enum Voting<Balance, AccountId, BlockNumber> {
 	},
 }
 
-impl<Balance: Default, AccountId, BlockNumber: Zero> Default for Voting<Balance, AccountId, BlockNumber> {
+impl<Balance: Default, AccountId, BlockNumber: Zero> Default
+	for Voting<Balance, AccountId, BlockNumber>
+{
 	fn default() -> Self {
 		Voting::Direct {
 			votes: Vec::new(),
@@ -146,31 +151,30 @@ impl<Balance: Default, AccountId, BlockNumber: Zero> Default for Voting<Balance,
 	}
 }
 
-impl<
-	Balance: Saturating + Ord + Zero + Copy,
-	BlockNumber: Ord + Copy + Zero,
-	AccountId,
-> Voting<Balance, AccountId, BlockNumber> {
+impl<Balance: Saturating + Ord + Zero + Copy, BlockNumber: Ord + Copy + Zero, AccountId>
+	Voting<Balance, AccountId, BlockNumber>
+{
 	pub fn rejig(&mut self, now: BlockNumber) {
 		match self {
 			Voting::Direct { prior, .. } => prior,
 			Voting::Delegating { prior, .. } => prior,
-		}.rejig(now);
+		}
+		.rejig(now);
 	}
 
 	/// The amount of this account's balance that much currently be locked due to voting.
 	pub fn locked_balance(&self) -> Balance {
 		match self {
-			Voting::Direct { votes, prior, .. } => votes.iter()
-				.map(|i| i.1.balance())
-				.fold(prior.locked(), |a, i| a.max(i)),
+			Voting::Direct { votes, prior, .. } =>
+				votes.iter().map(|i| i.1.balance()).fold(prior.locked(), |a, i| a.max(i)),
 			Voting::Delegating { balance, .. } => *balance,
 		}
 	}
 
-	pub fn set_common(&mut self,
+	pub fn set_common(
+		&mut self,
 		delegations: Delegations<Balance>,
-		prior: PriorLock<BlockNumber, Balance>
+		prior: PriorLock<BlockNumber, Balance>,
 	) {
 		let (d, p) = match self {
 			Voting::Direct { ref mut delegations, ref mut prior, .. } => (delegations, prior),

@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use sc_finality_grandpa::FinalityProofProvider;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
@@ -44,7 +44,6 @@ where
 		&self,
 		block: NumberFor<Block>,
 	) -> Result<Option<EncodedFinalityProof>, sc_finality_grandpa::FinalityProofError> {
-		self.prove_finality(block)
-			.map(|x| x.map(|y| EncodedFinalityProof(y.into())))
+		self.prove_finality(block).map(|x| x.map(|y| EncodedFinalityProof(y.into())))
 	}
 }

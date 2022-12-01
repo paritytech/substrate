@@ -22,11 +22,11 @@
 
 use crate::utils::{generate_crate_access, generate_runtime_interface_include};
 
-use syn::{DeriveInput, Result, Generics, parse_quote, Type, Data, Error, Fields, Ident};
+use syn::{parse_quote, Data, DeriveInput, Error, Fields, Generics, Ident, Result, Type};
 
 use quote::quote;
 
-use proc_macro2::{TokenStream, Span};
+use proc_macro2::{Span, TokenStream};
 
 /// The derive implementation for `PassBy` with `Inner` and `PassByInner`.
 pub fn derive_impl(mut input: DeriveInput) -> Result<TokenStream> {
@@ -80,7 +80,8 @@ pub fn derive_impl(mut input: DeriveInput) -> Result<TokenStream> {
 fn add_trait_bounds(generics: &mut Generics) {
 	let crate_ = generate_crate_access();
 
-	generics.type_params_mut()
+	generics
+		.type_params_mut()
 		.for_each(|type_param| type_param.bounds.push(parse_quote!(#crate_::RIType)));
 }
 
@@ -97,15 +98,13 @@ fn extract_inner_ty_and_name(data: &Data) -> Result<(Type, Option<Ident>)> {
 			Fields::Unnamed(ref unnamed) if unnamed.unnamed.len() == 1 => {
 				let field = &unnamed.unnamed[0];
 				return Ok((field.ty.clone(), field.ident.clone()))
-			}
+			},
 			_ => {},
 		}
 	}
 
-	Err(
-		Error::new(
-			Span::call_site(),
-			"Only newtype/one field structs are supported by `PassByInner`!",
-		)
-	)
+	Err(Error::new(
+		Span::call_site(),
+		"Only newtype/one field structs are supported by `PassByInner`!",
+	))
 }

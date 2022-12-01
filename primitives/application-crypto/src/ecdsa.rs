@@ -17,7 +17,7 @@
 
 //! Ecdsa crypto types.
 
-use crate::{RuntimePublic, KeyTypeId};
+use crate::{KeyTypeId, RuntimePublic};
 
 use sp_std::vec::Vec;
 
@@ -33,9 +33,9 @@ mod app {
 	}
 }
 
-pub use app::{Public as AppPublic, Signature as AppSignature};
 #[cfg(feature = "full_crypto")]
 pub use app::Pair as AppPair;
+pub use app::{Public as AppPublic, Signature as AppSignature};
 
 impl RuntimePublic for Public {
 	type Signature = Signature;

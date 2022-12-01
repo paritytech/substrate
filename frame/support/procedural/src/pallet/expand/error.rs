@@ -15,16 +15,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::{Def, parse::helper::get_doc_literals};
+use crate::pallet::{parse::helper::get_doc_literals, Def};
 
 /// * impl various trait on Error
 /// * impl ModuleErrorMetadata for Error
 pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
-	let error = if let Some(error) = &def.error {
-		error
-	} else {
-		return Default::default()
-	};
+	let error = if let Some(error) = &def.error { error } else { return Default::default() };
 
 	let error_ident = &error.error;
 	let frame_support = &def.frame_support;
@@ -41,27 +37,24 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 		)
 	);
 
-	let as_u8_matches = error.variants.iter().enumerate()
-		.map(|(i, (variant, _))| {
-			quote::quote_spanned!(error.attr_span => Self::#variant => #i as u8,)
-		});
+	let as_u8_matches = error.variants.iter().enumerate().map(
+		|(i, (variant, _))| quote::quote_spanned!(error.attr_span => Self::#variant => #i as u8,),
+	);
 
-	let as_str_matches = error.variants.iter()
-		.map(|(variant, _)| {
-			let variant_str = format!("{}", variant);
-			quote::quote_spanned!(error.attr_span => Self::#variant => #variant_str,)
-		});
+	let as_str_matches = error.variants.iter().map(|(variant, _)| {
+		let variant_str = format!("{}", variant);
+		quote::quote_spanned!(error.attr_span => Self::#variant => #variant_str,)
+	});
 
-	let metadata = error.variants.iter()
-		.map(|(variant, doc)| {
-			let variant_str = format!("{}", variant);
-			quote::quote_spanned!(error.attr_span =>
-				#frame_support::error::ErrorMetadata {
-					name: #frame_support::error::DecodeDifferent::Encode(#variant_str),
-					documentation: #frame_support::error::DecodeDifferent::Encode(&[ #( #doc, )* ]),
-				},
-			)
-		});
+	let metadata = error.variants.iter().map(|(variant, doc)| {
+		let variant_str = format!("{}", variant);
+		quote::quote_spanned!(error.attr_span =>
+			#frame_support::error::ErrorMetadata {
+				name: #frame_support::error::DecodeDifferent::Encode(#variant_str),
+				documentation: #frame_support::error::DecodeDifferent::Encode(&[ #( #doc, )* ]),
+			},
+		)
+	});
 
 	let error_item = {
 		let item = &mut def.item.content.as_mut().expect("Checked by def parser").1[error.index];

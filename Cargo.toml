@@ -37,7 +37,6 @@ members = [
 	"client/executor/wasmi",
 	"client/executor/wasmtime",
 	"client/finality-grandpa",
-	"client/finality-grandpa-warp-sync",
 	"client/informant",
 	"client/keystore",
 	"client/light",
@@ -59,7 +58,7 @@ members = [
 	"client/tracing",
 	"client/tracing/proc-macro",
 	"client/transaction-pool",
-	"client/transaction-pool/graph",
+	"client/transaction-pool/api",
 	"frame/assets",
 	"frame/atomic-swap",
 	"frame/aura",
@@ -202,9 +201,6 @@ members = [
 	"utils/frame/rpc/system",
 	"utils/prometheus",
 	"utils/wasm-builder",
-	# temp deps
-	"max-encoded-len",
-	"max-encoded-len/derive",
 ]
 
 # The list of dependencies below (which can be both direct and indirect dependencies) are crates

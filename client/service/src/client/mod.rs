@@ -45,11 +45,11 @@
 //! the ways in which the runtime can interface with the outside. Any code that builds a `Client`
 //! is responsible for putting the right marker.
 
-pub mod genesis;
-pub mod light;
+mod block_rules;
 mod call_executor;
 mod client;
-mod block_rules;
+pub mod genesis;
+pub mod light;
 mod wasm_override;
 mod wasm_substitutes;
 
@@ -58,5 +58,5 @@ pub use self::{
 	client::{Client, ClientConfig},
 };
 
-#[cfg(feature="test-helpers")]
-pub use self::client::{new_with_backend, new_in_mem};
+#[cfg(feature = "test-helpers")]
+pub use self::client::{new_in_mem, new_with_backend};

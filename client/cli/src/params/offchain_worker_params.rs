@@ -27,8 +27,7 @@ use sc_network::config::Role;
 use sc_service::config::OffchainWorkerConfig;
 use structopt::StructOpt;
 
-use crate::error;
-use crate::OffchainWorkerEnabled;
+use crate::{error, OffchainWorkerEnabled};
 
 /// Offchain worker related parameters.
 #[derive(Debug, StructOpt, Clone)]
@@ -49,10 +48,7 @@ pub struct OffchainWorkerParams {
 	///
 	/// Enables a runtime to write directly to a offchain workers
 	/// DB during block import.
-	#[structopt(
-		long = "enable-offchain-indexing",
-		value_name = "ENABLE_OFFCHAIN_INDEXING"
-	)]
+	#[structopt(long = "enable-offchain-indexing", value_name = "ENABLE_OFFCHAIN_INDEXING")]
 	pub indexing_enabled: bool,
 }
 
@@ -67,9 +63,6 @@ impl OffchainWorkerParams {
 		};
 
 		let indexing_enabled = self.indexing_enabled;
-		Ok(OffchainWorkerConfig {
-			enabled,
-			indexing_enabled,
-		})
+		Ok(OffchainWorkerConfig { enabled, indexing_enabled })
 	}
 }

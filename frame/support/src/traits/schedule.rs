@@ -17,9 +17,9 @@
 
 //! Traits and associated utilities for scheduling dispatchables in FRAME.
 
-use sp_std::{prelude::*, fmt::Debug};
-use codec::{Encode, Decode, Codec, EncodeLike};
-use sp_runtime::{RuntimeDebug, DispatchError};
+use codec::{Codec, Decode, Encode, EncodeLike};
+use sp_runtime::{DispatchError, RuntimeDebug};
+use sp_std::{fmt::Debug, prelude::*};
 
 /// Information relating to the period of a scheduled task. First item is the length of the
 /// period and the second is the number of times it should be executed in total before the task
@@ -61,7 +61,7 @@ pub trait Anon<BlockNumber, Call, Origin> {
 		maybe_periodic: Option<Period<BlockNumber>>,
 		priority: Priority,
 		origin: Origin,
-		call: Call
+		call: Call,
 	) -> Result<Self::Address, DispatchError>;
 
 	/// Cancel a scheduled task. If periodic, then it will cancel all further instances of that,
@@ -107,7 +107,7 @@ pub trait Named<BlockNumber, Call, Origin> {
 		maybe_periodic: Option<Period<BlockNumber>>,
 		priority: Priority,
 		origin: Origin,
-		call: Call
+		call: Call,
 	) -> Result<Self::Address, ()>;
 
 	/// Cancel a scheduled, named task. If periodic, then it will cancel all further instances

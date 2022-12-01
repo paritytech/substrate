@@ -18,34 +18,33 @@
 
 //! Methods that light client could use to execute runtime calls.
 
-use std::{
-	sync::Arc, panic::UnwindSafe, result, cell::RefCell,
-};
+use std::{cell::RefCell, panic::UnwindSafe, result, sync::Arc};
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
+use hash_db::Hasher;
 use sp_core::{
-	convert_hash, NativeOrEncoded, traits::{CodeExecutor, SpawnNamed},
-};
-use sp_runtime::{
-	generic::BlockId, traits::{Block as BlockT, Header as HeaderT, HashFor},
+	convert_hash,
+	traits::{CodeExecutor, SpawnNamed},
+	NativeOrEncoded,
 };
 use sp_externalities::Extensions;
-use sp_state_machine::{
-	self, Backend as StateBackend, OverlayedChanges, ExecutionStrategy, create_proof_check_backend,
-	execution_proof_check_on_trie_backend, ExecutionManager, StorageProof,
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, Header as HeaderT},
 };
-use hash_db::Hasher;
+use sp_state_machine::{
+	create_proof_check_backend, execution_proof_check_on_trie_backend, ExecutionManager,
+	ExecutionStrategy, OverlayedChanges, StorageProof,
+};
 
 use sp_api::{ProofRecorder, StorageTransactionCache};
 
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 
 use sc_client_api::{
-	backend::RemoteBackend,
-	light::RemoteCallRequest,
-	call_executor::CallExecutor,
+	backend::RemoteBackend, call_executor::CallExecutor, light::RemoteCallRequest,
 };
-use sc_executor::{RuntimeVersion, NativeVersion};
+use sc_executor::{NativeVersion, RuntimeVersion};
 
 /// Call executor that is able to execute calls only on genesis state.
 ///
@@ -64,19 +63,15 @@ impl<B, L> GenesisCallExecutor<B, L> {
 
 impl<B, L: Clone> Clone for GenesisCallExecutor<B, L> {
 	fn clone(&self) -> Self {
-		GenesisCallExecutor {
-			backend: self.backend.clone(),
-			local: self.local.clone(),
-		}
+		GenesisCallExecutor { backend: self.backend.clone(), local: self.local.clone() }
 	}
 }
 
-impl<Block, B, Local> CallExecutor<Block> for
-	GenesisCallExecutor<B, Local>
-	where
-		Block: BlockT,
-		B: RemoteBackend<Block>,
-		Local: CallExecutor<Block>,
+impl<Block, B, Local> CallExecutor<Block> for GenesisCallExecutor<B, Local>
+where
+	Block: BlockT,
+	B: RemoteBackend<Block>,
+	Local: CallExecutor<Block>,
 {
 	type Error = ClientError;
 
@@ -90,16 +85,17 @@ impl<Block, B, Local> CallExecutor<Block> for
 		strategy: ExecutionStrategy,
 		extensions: Option<Extensions>,
 	) -> ClientResult<Vec<u8>> {
-		match self.backend.is_local_state_available(id) {
-			true => self.local.call(id, method, call_data, strategy, extensions),
-			false => Err(ClientError::NotAvailableOnLightClient),
+		if self.backend.is_local_state_available(id) {
+			self.local.call(id, method, call_data, strategy, extensions)
+		} else {
+			Err(ClientError::NotAvailableOnLightClient)
 		}
 	}
 
 	fn contextual_call<
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
-			Result<NativeOrEncoded<R>, Self::Error>
+			Result<NativeOrEncoded<R>, Self::Error>,
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
 		NC: FnOnce() -> result::Result<R, sp_api::ApiError> + UnwindSafe,
@@ -114,18 +110,21 @@ impl<Block, B, Local> CallExecutor<Block> for
 		native_call: Option<NC>,
 		recorder: &Option<ProofRecorder<Block>>,
 		extensions: Option<Extensions>,
-	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
+	) -> ClientResult<NativeOrEncoded<R>>
+	where
+		ExecutionManager<EM>: Clone,
+	{
 		// there's no actual way/need to specify native/wasm execution strategy on light node
 		// => we can safely ignore passed values
 
-		match self.backend.is_local_state_available(at) {
-			true => CallExecutor::contextual_call::<
+		if self.backend.is_local_state_available(at) {
+			CallExecutor::contextual_call::<
 				fn(
 					Result<NativeOrEncoded<R>, Local::Error>,
 					Result<NativeOrEncoded<R>, Local::Error>,
 				) -> Result<NativeOrEncoded<R>, Local::Error>,
 				_,
-				NC
+				NC,
 			>(
 				&self.local,
 				at,
@@ -137,63 +136,36 @@ impl<Block, B, Local> CallExecutor<Block> for
 				native_call,
 				recorder,
 				extensions,
-			).map_err(|e| ClientError::Execution(Box::new(e.to_string()))),
-			false => Err(ClientError::NotAvailableOnLightClient),
+			)
+		} else {
+			Err(ClientError::NotAvailableOnLightClient)
+		}
+	}
+
+	fn prove_execution(
+		&self,
+		at: &BlockId<Block>,
+		method: &str,
+		call_data: &[u8],
+	) -> ClientResult<(Vec<u8>, StorageProof)> {
+		if self.backend.is_local_state_available(at) {
+			self.local.prove_execution(at, method, call_data)
+		} else {
+			Err(ClientError::NotAvailableOnLightClient)
 		}
 	}
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> ClientResult<RuntimeVersion> {
-		match self.backend.is_local_state_available(id) {
-			true => self.local.runtime_version(id),
-			false => Err(ClientError::NotAvailableOnLightClient),
+		if self.backend.is_local_state_available(id) {
+			self.local.runtime_version(id)
+		} else {
+			Err(ClientError::NotAvailableOnLightClient)
 		}
-	}
-
-	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HashFor<Block>>>(
-		&self,
-		_state: &sp_state_machine::TrieBackend<S, HashFor<Block>>,
-		_changes: &mut OverlayedChanges,
-		_method: &str,
-		_call_data: &[u8],
-	) -> ClientResult<(Vec<u8>, StorageProof)> {
-		Err(ClientError::NotAvailableOnLightClient)
 	}
 
 	fn native_runtime_version(&self) -> Option<&NativeVersion> {
 		None
 	}
-}
-
-/// Prove contextual execution using given block header in environment.
-///
-/// Method is executed using passed header as environment' current block.
-/// Proof includes both environment preparation proof and method execution proof.
-pub fn prove_execution<Block, S, E>(
-	mut state: S,
-	executor: &E,
-	method: &str,
-	call_data: &[u8],
-) -> ClientResult<(Vec<u8>, StorageProof)>
-	where
-		Block: BlockT,
-		S: StateBackend<HashFor<Block>>,
-		E: CallExecutor<Block>,
-{
-	let trie_state = state.as_trie_backend()
-		.ok_or_else(||
-			Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof) as
-				Box<dyn sp_state_machine::Error>
-		)?;
-
-	// execute method + record execution proof
-	let (result, exec_proof) = executor.prove_at_trie_state(
-		&trie_state,
-		&mut Default::default(),
-		method,
-		call_data,
-	)?;
-
-	Ok((result, exec_proof))
 }
 
 /// Check remote contextual execution proof using given backend.
@@ -205,11 +177,11 @@ pub fn check_execution_proof<Header, E, H>(
 	request: &RemoteCallRequest<Header>,
 	remote_proof: StorageProof,
 ) -> ClientResult<Vec<u8>>
-	where
-		Header: HeaderT,
-		E: CodeExecutor + Clone + 'static,
-		H: Hasher,
-		H::Out: Ord + codec::Codec + 'static,
+where
+	Header: HeaderT<Hash = H::Out>,
+	E: CodeExecutor + Clone + 'static,
+	H: Hasher,
+	H::Out: Ord + codec::Codec + 'static,
 {
 	let local_state_root = request.header.state_root();
 	let root: H::Out = convert_hash(&local_state_root);
@@ -220,7 +192,8 @@ pub fn check_execution_proof<Header, E, H>(
 
 	// TODO: Remove when solved: https://github.com/paritytech/substrate/issues/5047
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&trie_backend);
-	let runtime_code = backend_runtime_code.runtime_code()
+	let runtime_code = backend_runtime_code
+		.runtime_code()
 		.map_err(|_e| ClientError::RuntimeCodeMissing)?;
 
 	// execute method

@@ -1,6 +1,6 @@
 [package]
 name = "pallet-contracts-rpc-runtime-api"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -16,10 +16,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "2", default-features = false, features = ["derive"] }
 
 # Substrate Dependencies
-pallet-contracts-primitives = { version = "3.0.0", default-features = false, path = "../../common" }
-sp-api = { version = "3.0.0", default-features = false, path = "../../../../primitives/api" }
-sp-runtime = { version = "3.0.0", default-features = false, path = "../../../../primitives/runtime" }
-sp-std = { version = "3.0.0", default-features = false, path = "../../../../primitives/std" }
+pallet-contracts-primitives = { version = "4.0.0-dev", default-features = false, path = "../../common" }
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../../primitives/api" }
+sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../../primitives/runtime" }
+sp-std = { version = "4.0.0-dev", default-features = false, path = "../../../../primitives/std" }
 
 [features]
 default = ["std"]

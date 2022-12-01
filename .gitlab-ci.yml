@@ -40,7 +40,7 @@ variables:                         &default-vars
   ARCH:                            "x86_64"
   CI_IMAGE:                        "paritytech/ci-linux:production"
   # FIXME set to release
-  CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.11"
+  CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.12"
   CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example pallet-example-* subkey chain-spec-builder"
 
 default:
@@ -55,9 +55,15 @@ default:
       - artifacts/
 
 .kubernetes-env:                   &kubernetes-env
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - unknown_failure
+      - api_failure
+  interruptible:                   true
   tags:
     - kubernetes-parity-build
-  interruptible:                   true
 
 .rust-info-script:                 &rust-info-script
   - rustup show
@@ -97,6 +103,7 @@ default:
     - if: $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+    - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
 
 .test-refs-no-trigger-prs-only:   &test-refs-no-trigger-prs-only
   rules:
@@ -233,6 +240,14 @@ cargo-deny:
   # FIXME: Temorarily allow to fail.
   allow_failure:                   true
 
+cargo-fmt:
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *test-refs
+  script:
+    - cargo +nightly fmt --all -- --check
+  allow_failure:                   true
+
 cargo-check-benches:
   stage:                           test
   <<:                              *docker-env
@@ -265,7 +280,7 @@ node-bench-regression-guard:
     CI_IMAGE:                      "paritytech/node-bench-regression-guard:latest"
   before_script: [""]
   script:
-    - 'node-bench-regression-guard --reference artifacts/benches/master-* 
+    - 'node-bench-regression-guard --reference artifacts/benches/master-*
        --compare-with artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA'
 
 cargo-check-subkey:
@@ -326,14 +341,17 @@ test-linux-stable:                 &test-linux
 unleash-check:
   stage:                           test
   <<:                              *docker-env
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "pipeline"
-      when: never
-    - if: $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+  <<:                              *test-refs-no-trigger
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
+    - cargo unleash de-dev-deps
+    # Reuse build artifacts when running checks (cuts down check time by 3x)
+    # TODO: Implement this optimization in cargo-unleash rather than here
+    - mkdir -p target/unleash
+    - export CARGO_TARGET_DIR=target/unleash
     - cargo unleash check ${CARGO_UNLEASH_PKG_DEF}
+  # FIXME: this job must not fail, or unleash-to-crates-io will publish broken stuff
+  allow_failure:                   true
 
 test-frame-examples-compile-to-wasm:
   # into one job
@@ -530,6 +548,7 @@ build-rust-doc:
   script:
     - RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html"
         time cargo +nightly doc --no-deps --workspace --all-features --verbose
+    - rm -f ./target/doc/.lock
     - mv ./target/doc ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=sc_service/index.html>" > ./crate-docs/index.html
     - sccache -s
@@ -568,7 +587,7 @@ build-rust-doc:
     - buildah push --format=v2s2 "$IMAGE_NAME:latest"
   after_script:
     - buildah logout "$IMAGE_NAME"
-    # pass artifacts to the trigger-simnet job 
+    # pass artifacts to the trigger-simnet job
     - echo "IMAGE_NAME=${IMAGE_NAME}" | tee -a ./artifacts/$PRODUCT/build.env
     - IMAGE_TAG="$(cat ./artifacts/$PRODUCT/VERSION)"
     - echo "IMAGE_TAG=${IMAGE_TAG}"   | tee -a ./artifacts/$PRODUCT/build.env
@@ -642,6 +661,7 @@ publish-s3-doc:
         echo "./crate-docs/index.html not present, build:rust:doc:release job not complete";
         exit 1
       )
+    - ls -lah crate-docs
     - aws s3 sync --delete --size-only --only-show-errors
         ./crate-docs/ s3://${BUCKET}/${PREFIX}/
   after_script:
@@ -658,12 +678,14 @@ publish-draft-release:
     - ./.maintain/gitlab/publish_draft_release.sh
   allow_failure:                   true
 
-publish-to-crates-io:
+unleash-to-crates-io:
   stage:                           publish
   <<:                              *docker-env
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
-    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+    # FIXME: wait until https://github.com/paritytech/cargo-unleash/issues/50 is fixed, also
+    # remove allow_failure: true on the check job
+    # - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
     - cargo unleash em-dragons --no-check --owner github:paritytech:core-devs ${CARGO_UNLEASH_PKG_DEF}
@@ -702,13 +724,13 @@ trigger-simnet:
     - if: $CI_COMMIT_REF_NAME == "master"
   needs:
     - job:                         publish-docker-substrate
-  # `build.env` brings here `$IMAGE_NAME` and `$IMAGE_TAG` (`$VERSION` here, 
+  # `build.env` brings here `$IMAGE_NAME` and `$IMAGE_TAG` (`$VERSION` here,
   # i.e. `2643-0.8.29-5f689e0a-6b24dc54`).
   variables:
     TRGR_PROJECT:                  ${CI_PROJECT_NAME}
     TRGR_REF:                      ${CI_COMMIT_REF_NAME}
-    # simnet project ID
+    # Simnet project ID
     DWNSTRM_ID:                    332
   script:
-    # API trigger for a simnet job
+    # API trigger for a Simnet job
     - .maintain/gitlab/trigger_pipeline.sh --simnet-version=${SIMNET_REF}
