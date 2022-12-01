@@ -5,55 +5,55 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.32.0]
+## [2.33.0]
 ### Changed
 - Updated Substrate to polkadot-v0.9.19
 
-## [2.31.0]
+## [2.32.0]
 ### Changed
 - Updated Substrate to polkadot-v0.9.18
 
-## [2.30.0]
+## [2.31.0]
 ### Changed
 - Updated Substrate to polkadot-v0.9.17
 
-## [2.29.0]
+## [2.30.0]
 ### Changed
 - Updated Substrate to polkadot-v0.9.16
 
-## [2.28.0]
+## [2.29.0]
 ### Changed
 - Updated Substrate to polkadot-v0.9.15
 
-## [2.27.0]
+## [2.28.0]
 ### Changed
 - Updated Substrate to polkadot-v0.9.13
 
-## [2.26.0]
+## [2.27.0]
 ### Changed
 - Updated Substrate to polkadot-v0.9.12
 
-## [2.25.0]
+## [2.26.0]
 ### Changed
 - Updated Substrate to polkadot-v0.9.11
 
-## [2.24.0]
+## [2.25.0]
 ### Changed
 - Updated Substrate to polkadot-v0.9.10
 
-## [2.23.0]
+## [2.24.0]
 ### Changed
 - Updated Substrate to polkadot-v0.9.9
 
-## [2.22.0]
+## [2.23.0]
 ### Changed
 - Updated Substrate to polkadot-v0.9.8
 
-## [2.21.0]
+## [2.22.0]
 ### Changed
 - Updated Substrate to polkadot-v0.9.5
 
-## [2.20.0]
+## [2.21.0]
 ### Changed
 - Updated Substrate to polkadot-v0.9.4
 
