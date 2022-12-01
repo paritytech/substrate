@@ -7,7 +7,7 @@ edition = "2018"
 readme = "README.md"
 repository = "https://github.com/paritytech/substrate/"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

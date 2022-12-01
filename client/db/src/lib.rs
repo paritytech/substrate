@@ -502,6 +502,11 @@ impl<Block: BlockT> BlockchainDb<Block> {
 		}
 	}
 
+	fn update_block_gap(&self, gap: Option<(NumberFor<Block>, NumberFor<Block>)>) {
+		let mut meta = self.meta.write();
+		meta.block_gap = gap;
+	}
+
 	// Get block changes trie root, if available.
 	fn changes_trie_root(&self, block: BlockId<Block>) -> ClientResult<Option<Block::Hash>> {
 		self.header(block).map(|header| {
@@ -538,6 +543,7 @@ impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for Blockcha
 			finalized_number: meta.finalized_number,
 			finalized_state: meta.finalized_state.clone(),
 			number_leaves: self.leaves.read().count(),
+			block_gap: meta.block_gap,
 		}
 	}
 
@@ -1388,9 +1394,10 @@ impl<Block: BlockT> Backend<Block> {
 		operation.apply_offchain(&mut transaction);
 
 		let mut meta_updates = Vec::with_capacity(operation.finalized_blocks.len());
-		let mut last_finalized_hash = self.blockchain.meta.read().finalized_hash;
-		let mut last_finalized_num = self.blockchain.meta.read().finalized_number;
-		let best_num = self.blockchain.meta.read().best_number;
+		let (best_num, mut last_finalized_hash, mut last_finalized_num, mut block_gap) = {
+			let meta = self.blockchain.meta.read();
+			(meta.best_number, meta.finalized_hash, meta.finalized_number, meta.block_gap.clone())
+		};
 
 		let mut changes_trie_cache_ops = None;
 		for (block, justification) in operation.finalized_blocks {
@@ -1639,6 +1646,41 @@ impl<Block: BlockT> Backend<Block> {
 						children,
 					);
 				}
+
+				if let Some((mut start, end)) = block_gap {
+					if number == start {
+						start += One::one();
+						utils::insert_number_to_key_mapping(
+							&mut transaction,
+							columns::KEY_LOOKUP,
+							number,
+							hash,
+						)?;
+					}
+					if start > end {
+						transaction.remove(columns::META, meta_keys::BLOCK_GAP);
+						block_gap = None;
+						debug!(target: "db", "Removed block gap.");
+					} else {
+						block_gap = Some((start, end));
+						debug!(target: "db", "Update block gap. {:?}", block_gap);
+						transaction.set(
+							columns::META,
+							meta_keys::BLOCK_GAP,
+							&(start, end).encode(),
+						);
+					}
+				} else if number > best_num + One::one() &&
+					number > One::one() && self
+					.blockchain
+					.header(BlockId::hash(parent_hash))?
+					.is_none()
+				{
+					let gap = (best_num + One::one(), number - One::one());
+					transaction.set(columns::META, meta_keys::BLOCK_GAP, &gap.encode());
+					block_gap = Some(gap);
+					debug!(target: "db", "Detected block gap {:?}", block_gap);
+				}
 			}
 
 			meta_updates.push(MetaUpdate {
@@ -1716,6 +1758,7 @@ impl<Block: BlockT> Backend<Block> {
 		for m in meta_updates {
 			self.blockchain.update_meta(m);
 		}
+		self.blockchain.update_block_gap(block_gap);
 
 		Ok(())
 	}

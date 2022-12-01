@@ -21,7 +21,7 @@
 
 use super::*;
 
-use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_system::RawOrigin;
 use sp_runtime::traits::Bounded;
 
@@ -209,6 +209,6 @@ benchmarks! {
 		ensure!(missed_any == false, "Missed some");
 		assert_last_event::<T>(Event::BountyBecameActive(b - 1).into())
 	}
-}
 
-impl_benchmark_test_suite!(Bounties, crate::tests::new_test_ext(), crate::tests::Test);
+	impl_benchmark_test_suite!(Bounties, crate::tests::new_test_ext(), crate::tests::Test)
+}

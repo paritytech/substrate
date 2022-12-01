@@ -30,8 +30,8 @@ use std::{borrow::Cow, collections::HashMap, pin::Pin, sync::Arc};
 use node_primitives::Block;
 use node_testing::bench::{BenchDb, BlockType, DatabaseType, KeyTypes, Profile};
 use sc_transaction_pool_api::{
-	ImportNotificationStream, PoolFuture, PoolStatus, TransactionFor, TransactionSource,
-	TransactionStatusStreamFor, TxHash,
+	ImportNotificationStream, PoolFuture, PoolStatus, ReadyTransactions, TransactionFor,
+	TransactionSource, TransactionStatusStreamFor, TxHash,
 };
 use sp_consensus::{Environment, Proposer};
 use sp_inherents::InherentDataProvider;
@@ -216,6 +216,19 @@ impl sc_transaction_pool_api::InPoolTransaction for PoolTransaction {
 
 #[derive(Clone, Debug)]
 pub struct Transactions(Vec<Arc<PoolTransaction>>);
+pub struct TransactionsIterator(std::vec::IntoIter<Arc<PoolTransaction>>);
+
+impl Iterator for TransactionsIterator {
+	type Item = Arc<PoolTransaction>;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		self.0.next()
+	}
+}
+
+impl ReadyTransactions for TransactionsIterator {
+	fn report_invalid(&mut self, _tx: &Self::Item) {}
+}
 
 impl sc_transaction_pool_api::TransactionPool for Transactions {
 	type Block = Block;
@@ -257,16 +270,17 @@ impl sc_transaction_pool_api::TransactionPool for Transactions {
 		_at: NumberFor<Self::Block>,
 	) -> Pin<
 		Box<
-			dyn Future<Output = Box<dyn Iterator<Item = Arc<Self::InPoolTransaction>> + Send>>
-				+ Send,
+			dyn Future<
+					Output = Box<dyn ReadyTransactions<Item = Arc<Self::InPoolTransaction>> + Send>,
+				> + Send,
 		>,
 	> {
-		let iter: Box<dyn Iterator<Item = Arc<PoolTransaction>> + Send> =
-			Box::new(self.0.clone().into_iter());
+		let iter: Box<dyn ReadyTransactions<Item = Arc<PoolTransaction>> + Send> =
+			Box::new(TransactionsIterator(self.0.clone().into_iter()));
 		Box::pin(futures::future::ready(iter))
 	}
 
-	fn ready(&self) -> Box<dyn Iterator<Item = Arc<Self::InPoolTransaction>> + Send> {
+	fn ready(&self) -> Box<dyn ReadyTransactions<Item = Arc<Self::InPoolTransaction>> + Send> {
 		unimplemented!()
 	}
 

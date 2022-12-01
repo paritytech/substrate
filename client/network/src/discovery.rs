@@ -512,14 +512,10 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			list_to_filter.extend(self.mdns.addresses_of_peer(peer_id));
 
 			if !self.allow_private_ipv4 {
-				list_to_filter.retain(|addr| {
-					if let Some(Protocol::Ip4(addr)) = addr.iter().next() {
-						if addr.is_private() {
-							return false
-						}
-					}
-
-					true
+				list_to_filter.retain(|addr| match addr.iter().next() {
+					Some(Protocol::Ip4(addr)) if !IpNetwork::from(addr).is_global() => false,
+					Some(Protocol::Ip6(addr)) if !IpNetwork::from(addr).is_global() => false,
+					_ => true,
 				});
 			}
 

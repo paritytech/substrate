@@ -173,11 +173,11 @@ mod benchmarks {
 		} verify {
 			ensure!(m[0] == 0, "You forgot to sort!")
 		}
-	}
 
-	crate::impl_benchmark_test_suite!(
-		Pallet,
-		crate::tests_instance::new_test_ext(),
-		crate::tests_instance::Test
-	);
+		impl_benchmark_test_suite!(
+			Pallet,
+			crate::tests_instance::new_test_ext(),
+			crate::tests_instance::Test
+		)
+	}
 }

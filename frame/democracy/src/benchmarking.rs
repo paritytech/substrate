@@ -19,7 +19,7 @@
 
 use super::*;
 
-use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelist_account};
+use frame_benchmarking::{account, benchmarks, whitelist_account};
 use frame_support::{
 	assert_noop, assert_ok,
 	codec::Decode,
@@ -70,7 +70,7 @@ fn add_referendum<T: Config>(n: u32) -> Result<ReferendumIndex, &'static str> {
 	let referendum_index: ReferendumIndex = ReferendumCount::<T>::get() - 1;
 	T::Scheduler::schedule_named(
 		(DEMOCRACY_ID, referendum_index).encode(),
-		DispatchTime::At(1u32.into()),
+		DispatchTime::At(2u32.into()),
 		None,
 		63,
 		frame_system::RawOrigin::Root.into(),
@@ -802,6 +802,10 @@ benchmarks! {
 			Err(Error::<T>::PreimageInvalid.into())
 		);
 	}
-}
 
-impl_benchmark_test_suite!(Democracy, crate::tests::new_test_ext(), crate::tests::Test);
+	impl_benchmark_test_suite!(
+		Democracy,
+		crate::tests::new_test_ext(),
+		crate::tests::Test
+	);
+}

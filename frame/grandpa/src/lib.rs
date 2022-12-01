@@ -674,7 +674,7 @@ where
 		SetIdSession::<T>::insert(current_set_id, &session_index);
 	}
 
-	fn on_disabled(i: usize) {
+	fn on_disabled(i: u32) {
 		Self::deposit_log(ConsensusLog::OnDisabled(i as u64))
 	}
 }

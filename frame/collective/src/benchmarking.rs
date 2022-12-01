@@ -23,9 +23,7 @@ use crate::Pallet as Collective;
 use sp_runtime::traits::Bounded;
 use sp_std::mem::size_of;
 
-use frame_benchmarking::{
-	account, benchmarks_instance_pallet, impl_benchmark_test_suite, whitelisted_caller,
-};
+use frame_benchmarking::{account, benchmarks_instance_pallet, whitelisted_caller};
 use frame_system::{Call as SystemCall, Pallet as System, RawOrigin as SystemOrigin};
 
 const SEED: u32 = 0;
@@ -638,6 +636,6 @@ benchmarks_instance_pallet! {
 		assert_eq!(Collective::<T, I>::proposals().len(), (p - 1) as usize);
 		assert_last_event::<T, I>(Event::Disapproved(last_hash).into());
 	}
-}
 
-impl_benchmark_test_suite!(Collective, crate::tests::new_test_ext(), crate::tests::Test);
+	impl_benchmark_test_suite!(Collective, crate::tests::new_test_ext(), crate::tests::Test);
+}

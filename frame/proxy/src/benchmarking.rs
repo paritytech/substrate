@@ -21,7 +21,7 @@
 
 use super::*;
 use crate::Pallet as Proxy;
-use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_system::RawOrigin;
 use sp_runtime::traits::Bounded;
 
@@ -245,6 +245,6 @@ benchmarks! {
 	verify {
 		assert!(!Proxies::<T>::contains_key(&anon));
 	}
-}
 
-impl_benchmark_test_suite!(Proxy, crate::tests::new_test_ext(), crate::tests::Test);
+	impl_benchmark_test_suite!(Proxy, crate::tests::new_test_ext(), crate::tests::Test);
+}

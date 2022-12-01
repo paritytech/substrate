@@ -21,7 +21,7 @@
 
 use super::*;
 
-use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
+use frame_benchmarking::benchmarks;
 use frame_support::{traits::UnfilteredDispatchable, WeakBoundedVec};
 use frame_system::RawOrigin;
 use sp_core::{offchain::OpaqueMultiaddr, OpaquePeerId};
@@ -100,6 +100,6 @@ benchmarks! {
 			.expect("call is encoded above, encoding must be correct")
 			.dispatch_bypass_filter(RawOrigin::None.into())?;
 	}
-}
 
-impl_benchmark_test_suite!(ImOnline, crate::mock::new_test_ext(), crate::mock::Runtime);
+	impl_benchmark_test_suite!(ImOnline, crate::mock::new_test_ext(), crate::mock::Runtime);
+}

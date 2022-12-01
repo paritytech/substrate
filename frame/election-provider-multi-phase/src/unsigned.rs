@@ -1241,35 +1241,62 @@ mod tests {
 	}
 
 	#[test]
-	fn ocw_clears_cache_after_election() {
-		let (mut ext, _pool) = ExtBuilder::default().build_offchainify(0);
+	fn ocw_clears_cache_on_unsigned_phase_open() {
+		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
 		ext.execute_with(|| {
-			roll_to(25);
-			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
+			const BLOCK: u64 = 25;
+			let block_plus = |delta: u64| BLOCK + delta;
+			let offchain_repeat = <Runtime as Config>::OffchainRepeat::get();
 
-			// we must clear the offchain storage to ensure the offchain execution check doesn't get
-			// in the way.
-			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
-			storage.clear();
+			roll_to(BLOCK);
+			// we are on the first block of the unsigned phase
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, BLOCK)));
 
 			assert!(
 				!ocw_solution_exists::<Runtime>(),
 				"no solution should be present before we mine one",
 			);
 
-			// creates and cache a solution
-			MultiPhase::offchain_worker(25);
+			// create and cache a solution on the first block of the unsigned phase
+			MultiPhase::offchain_worker(BLOCK);
 			assert!(
 				ocw_solution_exists::<Runtime>(),
 				"a solution must be cached after running the worker",
 			);
 
-			// after an election, the solution must be cleared
+			// record the submitted tx,
+			let tx_cache_1 = pool.read().transactions[0].clone();
+			// and assume it has been processed.
+			pool.try_write().unwrap().transactions.clear();
+
+			// after an election, the solution is not cleared
 			// we don't actually care about the result of the election
-			roll_to(26);
 			let _ = MultiPhase::do_elect();
-			MultiPhase::offchain_worker(26);
-			assert!(!ocw_solution_exists::<Runtime>(), "elections must clear the ocw cache");
+			MultiPhase::offchain_worker(block_plus(1));
+			assert!(ocw_solution_exists::<Runtime>(), "elections does not clear the ocw cache");
+
+			// submit a solution with the offchain worker after the repeat interval
+			MultiPhase::offchain_worker(block_plus(offchain_repeat + 1));
+
+			// record the submitted tx,
+			let tx_cache_2 = pool.read().transactions[0].clone();
+			// and assume it has been processed.
+			pool.try_write().unwrap().transactions.clear();
+
+			// the OCW submitted the same solution twice since the cache was not cleared.
+			assert_eq!(tx_cache_1, tx_cache_2);
+
+			let current_block = block_plus(offchain_repeat * 2 + 2);
+			// force the unsigned phase to start on the current block.
+			CurrentPhase::<Runtime>::set(Phase::Unsigned((true, current_block)));
+
+			// clear the cache and create a solution since we are on the first block of the unsigned
+			// phase.
+			MultiPhase::offchain_worker(current_block);
+			let tx_cache_3 = pool.read().transactions[0].clone();
+
+			// the submitted solution changes because the cache was cleared.
+			assert_eq!(tx_cache_1, tx_cache_3);
 		})
 	}
 

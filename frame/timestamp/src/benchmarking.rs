@@ -20,7 +20,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_benchmarking::{benchmarks, impl_benchmark_test_suite, TrackedStorageKey};
+use frame_benchmarking::{benchmarks, TrackedStorageKey};
 use frame_support::{ensure, traits::OnFinalize};
 use frame_system::RawOrigin;
 
@@ -55,6 +55,6 @@ benchmarks! {
 	verify {
 		ensure!(!DidUpdate::<T>::exists(), "Time was not removed.");
 	}
-}
 
-impl_benchmark_test_suite!(Timestamp, crate::tests::new_test_ext(), crate::tests::Test);
+	impl_benchmark_test_suite!(Timestamp, crate::tests::new_test_ext(), crate::tests::Test);
+}

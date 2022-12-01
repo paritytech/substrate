@@ -89,7 +89,7 @@
 //!
 //! * [Democracy](../pallet_democracy/index.html)
 //!
-//! [`Origin`]: https://docs.substrate.dev/docs/substrate-types
+//! [`Origin`]: https://docs.substrate.io/v3/runtime/origins
 
 #![cfg_attr(not(feature = "std"), no_std)]
 

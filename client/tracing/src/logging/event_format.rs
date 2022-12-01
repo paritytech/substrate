@@ -16,6 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use crate::logging::fast_local_time::FastLocalTime;
 use ansi_term::Colour;
 use regex::Regex;
 use std::fmt::{self, Write};
@@ -23,16 +24,13 @@ use tracing::{Event, Level, Subscriber};
 use tracing_log::NormalizeEvent;
 use tracing_subscriber::{
 	field::RecordFields,
-	fmt::{
-		time::{FormatTime, SystemTime},
-		FmtContext, FormatEvent, FormatFields,
-	},
+	fmt::{time::FormatTime, FmtContext, FormatEvent, FormatFields},
 	layer::Context,
 	registry::{LookupSpan, SpanRef},
 };
 
 /// A pre-configured event formatter.
-pub struct EventFormat<T = SystemTime> {
+pub struct EventFormat<T = FastLocalTime> {
 	/// Use the given timer for log message timestamps.
 	pub timer: T,
 	/// Sets whether or not an event's target is displayed.

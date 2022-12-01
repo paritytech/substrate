@@ -19,7 +19,7 @@
 use crate::error::Error;
 use codec::Encode;
 use futures::{future, prelude::*};
-use sc_client_api::{BlockBackend, UsageProvider};
+use sc_client_api::{BlockBackend, HeaderBackend};
 use sc_consensus::import_queue::ImportQueue;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 
@@ -33,7 +33,7 @@ pub fn check_block<B, IQ, C>(
 	block_id: BlockId<B>,
 ) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>
 where
-	C: BlockBackend<B> + UsageProvider<B> + Send + Sync + 'static,
+	C: BlockBackend<B> + HeaderBackend<B> + Send + Sync + 'static,
 	B: BlockT + for<'de> serde::Deserialize<'de>,
 	IQ: ImportQueue<B> + 'static,
 {

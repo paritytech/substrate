@@ -6,7 +6,7 @@ edition = "2018"
 description = "Integration tests for application-crypto"
 license = "Apache-2.0"
 publish = false
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 
 [package.metadata.docs.rs]

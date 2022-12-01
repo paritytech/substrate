@@ -92,7 +92,7 @@ struct Metrics {
 
 impl Metrics {
 	fn register(r: &Registry) -> Result<Self, PrometheusError> {
-		Ok(Metrics {
+		Ok(Self {
 			propagated_transactions: register(
 				Counter::new(
 					"sync_propagated_transactions",
@@ -133,7 +133,7 @@ pub struct TransactionsHandlerPrototype {
 impl TransactionsHandlerPrototype {
 	/// Create a new instance.
 	pub fn new(protocol_id: ProtocolId) -> Self {
-		TransactionsHandlerPrototype {
+		Self {
 			protocol_name: Cow::from({
 				let mut proto = String::new();
 				proto.push_str("/");
@@ -317,15 +317,10 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 				}
 			},
 			Event::SyncDisconnected { remote } => {
-				let addr = iter::once(multiaddr::Protocol::P2p(remote.into()))
-					.collect::<multiaddr::Multiaddr>();
-				let result = self.service.remove_peers_from_reserved_set(
+				self.service.remove_peers_from_reserved_set(
 					self.protocol_name.clone(),
-					iter::once(addr).collect(),
+					iter::once(remote).collect(),
 				);
-				if let Err(err) = result {
-					log::error!(target: "sync", "Removing reserved peer failed: {}", err);
-				}
 			},
 
 			Event::NotificationStreamOpened { remote, protocol, role, .. }
@@ -401,7 +396,7 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 				let hash = self.transaction_pool.hash_of(&t);
 				peer.known_transactions.insert(hash.clone());
 
-				self.service.report_peer(who.clone(), rep::ANY_TRANSACTION);
+				self.service.report_peer(who, rep::ANY_TRANSACTION);
 
 				match self.pending_transactions_peers.entry(hash.clone()) {
 					Entry::Vacant(entry) => {
@@ -409,10 +404,10 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 							validation: self.transaction_pool.import(t),
 							tx_hash: hash,
 						});
-						entry.insert(vec![who.clone()]);
+						entry.insert(vec![who]);
 					},
 					Entry::Occupied(mut entry) => {
-						entry.get_mut().push(who.clone());
+						entry.get_mut().push(who);
 					},
 				}
 			}
@@ -468,11 +463,8 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 					propagated_to.entry(hash).or_default().push(who.to_base58());
 				}
 				trace!(target: "sync", "Sending {} transactions to {}", to_send.len(), who);
-				self.service.write_notification(
-					who.clone(),
-					self.protocol_name.clone(),
-					to_send.encode(),
-				);
+				self.service
+					.write_notification(*who, self.protocol_name.clone(), to_send.encode());
 			}
 		}
 

@@ -23,14 +23,17 @@ use log::info;
 
 use crate::{migration::EpochV0, Epoch};
 use sc_client_api::backend::AuxStore;
-use sc_consensus_epochs::{migration::EpochChangesForV0, EpochChangesFor, SharedEpochChanges};
+use sc_consensus_epochs::{
+	migration::{EpochChangesV0For, EpochChangesV1For},
+	EpochChangesFor, SharedEpochChanges,
+};
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sp_consensus_babe::{BabeBlockWeight, BabeGenesisConfiguration};
 use sp_runtime::traits::Block as BlockT;
 
 const BABE_EPOCH_CHANGES_VERSION: &[u8] = b"babe_epoch_changes_version";
 const BABE_EPOCH_CHANGES_KEY: &[u8] = b"babe_epoch_changes";
-const BABE_EPOCH_CHANGES_CURRENT_VERSION: u32 = 2;
+const BABE_EPOCH_CHANGES_CURRENT_VERSION: u32 = 3;
 
 /// The aux storage key used to store the block weight of the given block hash.
 pub fn block_weight_key<H: Encode>(block_hash: H) -> Vec<u8> {
@@ -60,11 +63,16 @@ pub fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 
 	let maybe_epoch_changes = match version {
 		None =>
-			load_decode::<_, EpochChangesForV0<Block, EpochV0>>(backend, BABE_EPOCH_CHANGES_KEY)?
+			load_decode::<_, EpochChangesV0For<Block, EpochV0>>(backend, BABE_EPOCH_CHANGES_KEY)?
 				.map(|v0| v0.migrate().map(|_, _, epoch| epoch.migrate(config))),
 		Some(1) =>
-			load_decode::<_, EpochChangesFor<Block, EpochV0>>(backend, BABE_EPOCH_CHANGES_KEY)?
-				.map(|v1| v1.map(|_, _, epoch| epoch.migrate(config))),
+			load_decode::<_, EpochChangesV1For<Block, EpochV0>>(backend, BABE_EPOCH_CHANGES_KEY)?
+				.map(|v1| v1.migrate().map(|_, _, epoch| epoch.migrate(config))),
+		Some(2) => {
+			// v2 still uses `EpochChanges` v1 format but with a different `Epoch` type.
+			load_decode::<_, EpochChangesV1For<Block, Epoch>>(backend, BABE_EPOCH_CHANGES_KEY)?
+				.map(|v2| v2.migrate())
+		},
 		Some(BABE_EPOCH_CHANGES_CURRENT_VERSION) =>
 			load_decode::<_, EpochChangesFor<Block, Epoch>>(backend, BABE_EPOCH_CHANGES_KEY)?,
 		Some(other) =>
@@ -164,7 +172,7 @@ mod test {
 			.insert_aux(
 				&[(
 					BABE_EPOCH_CHANGES_KEY,
-					&EpochChangesForV0::<TestBlock, EpochV0>::from_raw(v0_tree).encode()[..],
+					&EpochChangesV0For::<TestBlock, EpochV0>::from_raw(v0_tree).encode()[..],
 				)],
 				&[],
 			)
@@ -202,6 +210,6 @@ mod test {
 			client.insert_aux(values, &[]).unwrap();
 		});
 
-		assert_eq!(load_decode::<_, u32>(&client, BABE_EPOCH_CHANGES_VERSION).unwrap(), Some(2));
+		assert_eq!(load_decode::<_, u32>(&client, BABE_EPOCH_CHANGES_VERSION).unwrap(), Some(3));
 	}
 }

@@ -112,8 +112,10 @@ where
 				..Default::default()
 			}));
 
-			let new_ext =
-				builder.inject_key_value(&[(code_key.clone(), code.clone())]).build().await?;
+			let new_ext = builder
+				.inject_hashed_key_value(&[(code_key.clone(), code.clone())])
+				.build()
+				.await?;
 			log::info!(
 				target: LOG_TARGET,
 				"initialized state externalities at {:?}, storage root {:?}",
