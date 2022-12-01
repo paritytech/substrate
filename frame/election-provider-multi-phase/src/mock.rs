@@ -31,7 +31,7 @@ use sp_core::{
 };
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, to_without_backing,
-	CompactSolution, ElectionResult, EvaluateSupport,
+	ElectionResult, EvaluateSupport, NposSolution,
 };
 use sp_runtime::{
 	testing::Header,
@@ -63,7 +63,7 @@ pub(crate) type TargetIndex = u16;
 
 sp_npos_elections::generate_solution_type!(
 	#[compact]
-	pub struct TestCompact::<VoterIndex = VoterIndex, TargetIndex = TargetIndex, Accuracy = PerU16>(16)
+	pub struct TestNposSolution::<VoterIndex = VoterIndex, TargetIndex = TargetIndex, Accuracy = PerU16>(16)
 );
 
 /// All events of this pallet.
@@ -101,7 +101,7 @@ pub struct TrimHelpers {
 	pub voter_index: Box<
 		dyn Fn(
 			&<Runtime as frame_system::Config>::AccountId,
-		) -> Option<CompactVoterIndexOf<Runtime>>,
+		) -> Option<SolutionVoterIndexOf<Runtime>>,
 	>,
 }
 
@@ -113,11 +113,11 @@ pub fn trim_helpers() -> TrimHelpers {
 	let stakes: std::collections::HashMap<_, _> =
 		voters.iter().map(|(id, stake, _)| (*id, *stake)).collect();
 
-	// Compute the size of a compact solution comprised of the selected arguments.
+	// Compute the size of a solution comprised of the selected arguments.
 	//
 	// This function completes in `O(edges)`; it's expensive, but linear.
 	let encoded_size_of = Box::new(|assignments: &[IndexAssignmentOf<Runtime>]| {
-		CompactOf::<Runtime>::try_from(assignments).map(|compact| compact.encoded_size())
+		SolutionOf::<Runtime>::try_from(assignments).map(|s| s.encoded_size())
 	});
 	let cache = helpers::generate_voter_cache::<Runtime>(&voters);
 	let voter_index = helpers::voter_index_fn_owned::<Runtime>(cache);
@@ -125,7 +125,7 @@ pub fn trim_helpers() -> TrimHelpers {
 
 	let desired_targets = MultiPhase::desired_targets().unwrap();
 
-	let ElectionResult { mut assignments, .. } = seq_phragmen::<_, CompactAccuracyOf<Runtime>>(
+	let ElectionResult { mut assignments, .. } = seq_phragmen::<_, SolutionAccuracyOf<Runtime>>(
 		desired_targets as usize,
 		targets.clone(),
 		voters.clone(),
@@ -153,11 +153,11 @@ pub fn trim_helpers() -> TrimHelpers {
 /// Spit out a verifiable raw solution.
 ///
 /// This is a good example of what an offchain miner would do.
-pub fn raw_solution() -> RawSolution<CompactOf<Runtime>> {
+pub fn raw_solution() -> RawSolution<SolutionOf<Runtime>> {
 	let RoundSnapshot { voters, targets } = MultiPhase::snapshot().unwrap();
 	let desired_targets = MultiPhase::desired_targets().unwrap();
 
-	let ElectionResult { winners, assignments } = seq_phragmen::<_, CompactAccuracyOf<Runtime>>(
+	let ElectionResult { winners, assignments } = seq_phragmen::<_, SolutionAccuracyOf<Runtime>>(
 		desired_targets as usize,
 		targets.clone(),
 		voters.clone(),
@@ -177,11 +177,11 @@ pub fn raw_solution() -> RawSolution<CompactOf<Runtime>> {
 		let staked = assignment_ratio_to_staked_normalized(assignments.clone(), &stake_of).unwrap();
 		to_supports(&winners, &staked).unwrap().evaluate()
 	};
-	let compact =
-		<CompactOf<Runtime>>::from_assignment(&assignments, &voter_index, &target_index).unwrap();
+	let solution =
+		<SolutionOf<Runtime>>::from_assignment(&assignments, &voter_index, &target_index).unwrap();
 
 	let round = MultiPhase::round();
-	RawSolution { compact, score, round }
+	RawSolution { solution, score, round }
 }
 
 pub fn witness() -> SolutionOrSnapshotSize {
@@ -378,7 +378,7 @@ impl crate::Config for Runtime {
 	type OnChainAccuracy = Perbill;
 	type Fallback = Fallback;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
-	type CompactSolution = TestCompact;
+	type Solution = TestNposSolution;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime
@@ -396,7 +396,7 @@ pub struct ExtBuilder {}
 
 pub struct StakingMock;
 impl ElectionDataProvider<AccountId, u64> for StakingMock {
-	const MAXIMUM_VOTES_PER_VOTER: u32 = <TestCompact as CompactSolution>::LIMIT as u32;
+	const MAXIMUM_VOTES_PER_VOTER: u32 = <TestNposSolution as NposSolution>::LIMIT as u32;
 	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<AccountId>, Weight)> {
 		let targets = Targets::get();
 

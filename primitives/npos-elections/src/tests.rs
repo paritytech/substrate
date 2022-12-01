@@ -19,8 +19,8 @@
 
 use crate::{
 	balancing, helpers::*, is_score_better, mock::*, seq_phragmen, seq_phragmen_core, setup_inputs,
-	to_support_map, to_supports, Assignment, CompactSolution, ElectionResult, EvaluateSupport,
-	ExtendedBalance, IndexAssignment, StakedAssignment, Support, Voter,
+	to_support_map, to_supports, Assignment, ElectionResult, EvaluateSupport, ExtendedBalance,
+	IndexAssignment, NposSolution, StakedAssignment, Support, Voter,
 };
 use rand::{self, SeedableRng};
 use sp_arithmetic::{PerU16, Perbill, Percent, Permill};
@@ -917,30 +917,20 @@ mod score {
 }
 
 mod solution_type {
-	use super::AccountId;
+	use super::*;
 	use codec::{Decode, Encode};
 	// these need to come from the same dev-dependency `sp-npos-elections`, not from the crate.
-	use crate::{generate_solution_type, Assignment, CompactSolution, Error as PhragmenError};
-	use sp_arithmetic::Percent;
+	use crate::{generate_solution_type, Assignment, Error as NposError, NposSolution};
 	use sp_std::{convert::TryInto, fmt::Debug};
-
-	type TestAccuracy = Percent;
-
-	generate_solution_type!(pub struct TestSolutionCompact::<
-		VoterIndex = u32,
-		TargetIndex = u8,
-		Accuracy = TestAccuracy,
-	>(16));
 
 	#[allow(dead_code)]
 	mod __private {
-		// This is just to make sure that that the compact can be generated in a scope without any
+		// This is just to make sure that the solution can be generated in a scope without any
 		// imports.
 		use crate::generate_solution_type;
-		use sp_arithmetic::Percent;
 		generate_solution_type!(
 			#[compact]
-			struct InnerTestSolutionCompact::<VoterIndex = u32, TargetIndex = u8, Accuracy = Percent>(12)
+			struct InnerTestSolutionIsolated::<VoterIndex = u32, TargetIndex = u8, Accuracy = sp_runtime::Percent>(12)
 		);
 	}
 
@@ -948,35 +938,34 @@ mod solution_type {
 	fn solution_struct_works_with_and_without_compact() {
 		// we use u32 size to make sure compact is smaller.
 		let without_compact = {
-			generate_solution_type!(pub struct InnerTestSolution::<
-				VoterIndex = u32,
-				TargetIndex = u32,
-				Accuracy = Percent,
-			>(16));
-			let compact = InnerTestSolution {
+			generate_solution_type!(
+				pub struct InnerTestSolution::<
+					VoterIndex = u32,
+					TargetIndex = u32,
+					Accuracy = TestAccuracy,
+				>(16)
+			);
+			let solution = InnerTestSolution {
 				votes1: vec![(2, 20), (4, 40)],
-				votes2: vec![
-					(1, (10, TestAccuracy::from_percent(80)), 11),
-					(5, (50, TestAccuracy::from_percent(85)), 51),
-				],
+				votes2: vec![(1, [(10, p(80))], 11), (5, [(50, p(85))], 51)],
 				..Default::default()
 			};
 
-			compact.encode().len()
+			solution.encode().len()
 		};
 
 		let with_compact = {
-			generate_solution_type!(#[compact] pub struct InnerTestSolutionCompact::<
-				VoterIndex = u32,
-				TargetIndex = u32,
-				Accuracy = Percent,
-			>(16));
+			generate_solution_type!(
+				#[compact]
+				pub struct InnerTestSolutionCompact::<
+					VoterIndex = u32,
+					TargetIndex = u32,
+					Accuracy = TestAccuracy,
+				>(16)
+			);
 			let compact = InnerTestSolutionCompact {
 				votes1: vec![(2, 20), (4, 40)],
-				votes2: vec![
-					(1, (10, TestAccuracy::from_percent(80)), 11),
-					(5, (50, TestAccuracy::from_percent(85)), 51),
-				],
+				votes2: vec![(1, [(10, p(80))], 11), (5, [(50, p(85))], 51)],
 				..Default::default()
 			};
 
@@ -988,78 +977,64 @@ mod solution_type {
 
 	#[test]
 	fn solution_struct_is_codec() {
-		let compact = TestSolutionCompact {
+		let solution = TestSolution {
 			votes1: vec![(2, 20), (4, 40)],
-			votes2: vec![
-				(1, (10, TestAccuracy::from_percent(80)), 11),
-				(5, (50, TestAccuracy::from_percent(85)), 51),
-			],
+			votes2: vec![(1, [(10, p(80))], 11), (5, [(50, p(85))], 51)],
 			..Default::default()
 		};
 
-		let encoded = compact.encode();
+		let encoded = solution.encode();
 
-		assert_eq!(compact, Decode::decode(&mut &encoded[..]).unwrap());
-		assert_eq!(compact.voter_count(), 4);
-		assert_eq!(compact.edge_count(), 2 + 4);
-		assert_eq!(compact.unique_targets(), vec![10, 11, 20, 40, 50, 51]);
+		assert_eq!(solution, Decode::decode(&mut &encoded[..]).unwrap());
+		assert_eq!(solution.voter_count(), 4);
+		assert_eq!(solution.edge_count(), 2 + 4);
+		assert_eq!(solution.unique_targets(), vec![10, 11, 20, 40, 50, 51]);
 	}
 
 	#[test]
 	fn remove_voter_works() {
-		let mut compact = TestSolutionCompact {
+		let mut solution = TestSolution {
 			votes1: vec![(0, 2), (1, 6)],
-			votes2: vec![
-				(2, (0, TestAccuracy::from_percent(80)), 1),
-				(3, (7, TestAccuracy::from_percent(85)), 8),
-			],
-			votes3: vec![(
-				4,
-				[(3, TestAccuracy::from_percent(50)), (4, TestAccuracy::from_percent(25))],
-				5,
-			)],
+			votes2: vec![(2, [(0, p(80))], 1), (3, [(7, p(85))], 8)],
+			votes3: vec![(4, [(3, p(50)), (4, p(25))], 5)],
 			..Default::default()
 		};
 
-		assert!(!compact.remove_voter(11));
-		assert!(compact.remove_voter(2));
+		assert!(!solution.remove_voter(11));
+		assert!(solution.remove_voter(2));
 		assert_eq!(
-			compact,
-			TestSolutionCompact {
+			solution,
+			TestSolution {
 				votes1: vec![(0, 2), (1, 6)],
-				votes2: vec![(3, (7, TestAccuracy::from_percent(85)), 8),],
-				votes3: vec![(
-					4,
-					[(3, TestAccuracy::from_percent(50)), (4, TestAccuracy::from_percent(25))],
-					5,
-				),],
+				votes2: vec![(3, [(7, p(85))], 8)],
+				votes3: vec![(4, [(3, p(50)), (4, p(25))], 5,)],
 				..Default::default()
 			},
 		);
 
-		assert!(compact.remove_voter(4));
+		assert!(solution.remove_voter(4));
 		assert_eq!(
-			compact,
-			TestSolutionCompact {
+			solution,
+			TestSolution {
 				votes1: vec![(0, 2), (1, 6)],
-				votes2: vec![(3, (7, TestAccuracy::from_percent(85)), 8),],
+				votes2: vec![(3, [(7, p(85))], 8)],
 				..Default::default()
 			},
 		);
 
-		assert!(compact.remove_voter(1));
+		assert!(solution.remove_voter(1));
 		assert_eq!(
-			compact,
-			TestSolutionCompact {
+			solution,
+			TestSolution {
 				votes1: vec![(0, 2)],
-				votes2: vec![(3, (7, TestAccuracy::from_percent(85)), 8),],
+				votes2: vec![(3, [(7, p(85))], 8),],
 				..Default::default()
 			},
 		);
 	}
 
 	#[test]
-	fn basic_from_and_into_compact_works_assignments() {
+	fn from_and_into_assignment_works() {
 		let voters = vec![2 as AccountId, 4, 1, 5, 3];
 		let targets = vec![
 			10 as AccountId,
@@ -1074,182 +1049,144 @@ mod solution_type {
 		];
 
 		let assignments = vec![
-			Assignment {
-				who: 2 as AccountId,
-				distribution: vec![(20u64, TestAccuracy::from_percent(100))],
-			},
-			Assignment { who: 4, distribution: vec![(40, TestAccuracy::from_percent(100))] },
-			Assignment {
-				who: 1,
-				distribution: vec![
-					(10, TestAccuracy::from_percent(80)),
-					(11, TestAccuracy::from_percent(20)),
-				],
-			},
-			Assignment {
-				who: 5,
-				distribution: vec![
-					(50, TestAccuracy::from_percent(85)),
-					(51, TestAccuracy::from_percent(15)),
-				],
-			},
-			Assignment {
-				who: 3,
-				distribution: vec![
-					(30, TestAccuracy::from_percent(50)),
-					(31, TestAccuracy::from_percent(25)),
-					(32, TestAccuracy::from_percent(25)),
-				],
-			},
+			Assignment { who: 2 as AccountId, distribution: vec![(20u64, p(100))] },
+			Assignment { who: 4, distribution: vec![(40, p(100))] },
+			Assignment { who: 1, distribution: vec![(10, p(80)), (11, p(20))] },
+			Assignment { who: 5, distribution: vec![(50, p(85)), (51, p(15))] },
+			Assignment { who: 3, distribution: vec![(30, p(50)), (31, p(25)), (32, p(25))] },
 		];
 
 		let voter_index = |a: &AccountId| -> Option<u32> {
 			voters.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
 		};
-		let target_index = |a: &AccountId| -> Option<u8> {
+		let target_index = |a: &AccountId| -> Option<u16> {
 			targets.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
 		};
 
-		let compacted =
-			TestSolutionCompact::from_assignment(&assignments, voter_index, target_index).unwrap();
+		let solution =
+			TestSolution::from_assignment(&assignments, voter_index, target_index).unwrap();
 
 		// basically number of assignments that it is encoding.
-		assert_eq!(compacted.voter_count(), assignments.len());
+		assert_eq!(solution.voter_count(), assignments.len());
 		assert_eq!(
-			compacted.edge_count(),
+			solution.edge_count(),
 			assignments.iter().fold(0, |a, b| a + b.distribution.len()),
 		);
 
 		assert_eq!(
-			compacted,
-			TestSolutionCompact {
+			solution,
+			TestSolution {
 				votes1: vec![(0, 2), (1, 6)],
-				votes2: vec![
-					(2, (0, TestAccuracy::from_percent(80)), 1),
-					(3, (7, TestAccuracy::from_percent(85)), 8),
-				],
-				votes3: vec![(
-					4,
-					[(3, TestAccuracy::from_percent(50)), (4, TestAccuracy::from_percent(25))],
-					5,
-				),],
+				votes2: vec![(2, [(0, p(80))], 1), (3, [(7, p(85))], 8)],
+				votes3: vec![(4, [(3, p(50)), (4, p(25))], 5)],
 				..Default::default()
 			}
 		);
 
-		assert_eq!(compacted.unique_targets(), vec![0, 1, 2, 3, 4, 5, 6, 7, 8]);
+		assert_eq!(solution.unique_targets(), vec![0, 1, 2, 3, 4, 5, 6, 7, 8]);
 
 		let voter_at = |a: u32| -> Option<AccountId> {
 			voters.get(<u32 as TryInto<usize>>::try_into(a).unwrap()).cloned()
 		};
-		let target_at = |a: u8| -> Option<AccountId> {
-			targets.get(<u8 as TryInto<usize>>::try_into(a).unwrap()).cloned()
+		let target_at = |a: u16| -> Option<AccountId> {
+			targets.get(<u16 as TryInto<usize>>::try_into(a).unwrap()).cloned()
 		};
 
-		assert_eq!(compacted.into_assignment(voter_at, target_at).unwrap(), assignments);
+		assert_eq!(solution.into_assignment(voter_at, target_at).unwrap(), assignments);
 	}
 
 	#[test]
 	fn unique_targets_len_edge_count_works() {
-		const ACC: TestAccuracy = TestAccuracy::from_percent(10);
-
 		// we don't really care about voters here so all duplicates. This is not invalid per se.
-		let compact = TestSolutionCompact {
+		let solution = TestSolution {
 			votes1: vec![(99, 1), (99, 2)],
-			votes2: vec![(99, (3, ACC.clone()), 7), (99, (4, ACC.clone()), 8)],
-			votes3: vec![(99, [(11, ACC.clone()), (12, ACC.clone())], 13)],
+			votes2: vec![(99, [(3, p(10))], 7), (99, [(4, p(10))], 8)],
+			votes3: vec![(99, [(11, p(10)), (12, p(10))], 13)],
 			// ensure the last one is also counted.
 			votes16: vec![(
 				99,
 				[
-					(66, ACC.clone()),
-					(66, ACC.clone()),
-					(66, ACC.clone()),
-					(66, ACC.clone()),
-					(66, ACC.clone()),
-					(66, ACC.clone()),
-					(66, ACC.clone()),
-					(66, ACC.clone()),
-					(66, ACC.clone()),
-					(66, ACC.clone()),
-					(66, ACC.clone()),
-					(66, ACC.clone()),
-					(66, ACC.clone()),
-					(66, ACC.clone()),
-					(66, ACC.clone()),
+					(66, p(10)),
+					(66, p(10)),
+					(66, p(10)),
+					(66, p(10)),
+					(66, p(10)),
+					(66, p(10)),
+					(66, p(10)),
+					(66, p(10)),
+					(66, p(10)),
+					(66, p(10)),
+					(66, p(10)),
+					(66, p(10)),
+					(66, p(10)),
+					(66, p(10)),
+					(66, p(10)),
 				],
 				67,
 			)],
 			..Default::default()
 		};
 
-		assert_eq!(compact.unique_targets(), vec![1, 2, 3, 4, 7, 8, 11, 12, 13, 66, 67]);
-		assert_eq!(compact.edge_count(), 2 + (2 * 2) + 3 + 16);
-		assert_eq!(compact.voter_count(), 6);
+		assert_eq!(solution.unique_targets(), vec![1, 2, 3, 4, 7, 8, 11, 12, 13, 66, 67]);
+		assert_eq!(solution.edge_count(), 2 + (2 * 2) + 3 + 16);
+		assert_eq!(solution.voter_count(), 6);
 
 		// this one has some duplicates.
-		let compact = TestSolutionCompact {
+		let solution = TestSolution {
 			votes1: vec![(99, 1), (99, 1)],
-			votes2: vec![(99, (3, ACC.clone()), 7), (99, (4, ACC.clone()), 8)],
-			votes3: vec![(99, [(11, ACC.clone()), (11, ACC.clone())], 13)],
+			votes2: vec![(99, [(3, p(10))], 7), (99, [(4, p(10))], 8)],
+			votes3: vec![(99, [(11, p(10)), (11, p(10))], 13)],
 			..Default::default()
 		};
 
-		assert_eq!(compact.unique_targets(), vec![1, 3, 4, 7, 8, 11, 13]);
-		assert_eq!(compact.edge_count(), 2 + (2 * 2) + 3);
-		assert_eq!(compact.voter_count(), 5);
+		assert_eq!(solution.unique_targets(), vec![1, 3, 4, 7, 8, 11, 13]);
+		assert_eq!(solution.edge_count(), 2 + (2 * 2) + 3);
+		assert_eq!(solution.voter_count(), 5);
 	}
 
 	#[test]
-	fn compact_into_assignment_must_report_overflow() {
+	fn solution_into_assignment_must_report_overflow() {
 		// in votes2
-		let compact = TestSolutionCompact {
+		let solution = TestSolution {
 			votes1: Default::default(),
-			votes2: vec![(0, (1, TestAccuracy::from_percent(100)), 2)],
+			votes2: vec![(0, [(1, p(100))], 2)],
 			..Default::default()
 		};
 
 		let voter_at = |a: u32| -> Option<AccountId> { Some(a as AccountId) };
-		let target_at = |a: u8| -> Option<AccountId> { Some(a as AccountId) };
+		let target_at = |a: u16| -> Option<AccountId> { Some(a as AccountId) };
 
 		assert_eq!(
-			compact.into_assignment(&voter_at, &target_at).unwrap_err(),
-			PhragmenError::CompactStakeOverflow,
+			solution.into_assignment(&voter_at, &target_at).unwrap_err(),
+			NposError::SolutionWeightOverflow,
 		);
 
 		// in votes3 onwards
-		let compact = TestSolutionCompact {
+		let solution = TestSolution {
 			votes1: Default::default(),
 			votes2: Default::default(),
-			votes3: vec![(
-				0,
-				[(1, TestAccuracy::from_percent(70)), (2, TestAccuracy::from_percent(80))],
-				3,
-			)],
+			votes3: vec![(0, [(1, p(70)), (2, p(80))], 3)],
 			..Default::default()
 		};
 
 		assert_eq!(
-			compact.into_assignment(&voter_at, &target_at).unwrap_err(),
-			PhragmenError::CompactStakeOverflow,
+			solution.into_assignment(&voter_at, &target_at).unwrap_err(),
+			NposError::SolutionWeightOverflow,
 		);
 	}
 
 	#[test]
 	fn target_count_overflow_is_detected() {
 		let voter_index = |a: &AccountId| -> Option<u32> { Some(*a as u32) };
-		let target_index = |a: &AccountId| -> Option<u8> { Some(*a as u8) };
+		let target_index = |a: &AccountId| -> Option<u16> { Some(*a as u16) };
 
 		let assignments = vec![Assignment {
 			who: 1 as AccountId,
-			distribution: (10..27)
-				.map(|i| (i as AccountId, Percent::from_parts(i as u8)))
-				.collect::<Vec<_>>(),
+			distribution: (10..27).map(|i| (i as AccountId, p(i as u8))).collect::<Vec<_>>(),
 		}];
 
-		let compacted =
-			TestSolutionCompact::from_assignment(&assignments, voter_index, target_index);
-		assert_eq!(compacted.unwrap_err(), PhragmenError::CompactTargetOverflow);
+		let solution = TestSolution::from_assignment(&assignments, voter_index, target_index);
+		assert_eq!(solution.unwrap_err(), NposError::SolutionTargetOverflow);
 	}
 
 	#[test]
@@ -1258,31 +1195,25 @@ mod solution_type {
 		let targets = vec![10 as AccountId, 11];
 
 		let assignments = vec![
-			Assignment {
-				who: 1 as AccountId,
-				distribution: vec![
-					(10, Percent::from_percent(50)),
-					(11, Percent::from_percent(50)),
-				],
-			},
+			Assignment { who: 1 as AccountId, distribution: vec![(10, p(50)), (11, p(50))] },
 			Assignment { who: 2, distribution: vec![] },
 		];
 
 		let voter_index = |a: &AccountId| -> Option<u32> {
 			voters.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
 		};
-		let target_index = |a: &AccountId| -> Option<u8> {
+		let target_index = |a: &AccountId| -> Option<u16> {
 			targets.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
 		};
 
-		let compacted =
-			TestSolutionCompact::from_assignment(&assignments, voter_index, target_index).unwrap();
+		let solution =
+			TestSolution::from_assignment(&assignments, voter_index, target_index).unwrap();
 
 		assert_eq!(
-			compacted,
-			TestSolutionCompact {
+			solution,
+			TestSolution {
 				votes1: Default::default(),
-				votes2: vec![(0, (0, Percent::from_percent(50)), 1)],
+				votes2: vec![(0, [(0, p(50))], 1)],
 				..Default::default()
 			}
 		);
@@ -1290,14 +1221,15 @@ mod solution_type {
 }
 
 #[test]
-fn index_assignments_generate_same_compact_as_plain_assignments() {
+fn index_assignments_generate_same_solution_as_plain_assignments() {
 	let rng = rand::rngs::SmallRng::seed_from_u64(0);
 
 	let (voters, assignments, candidates) = generate_random_votes(1000, 2500, rng);
 	let voter_index = make_voter_fn(&voters);
 	let target_index = make_target_fn(&candidates);
 
-	let compact = Compact::from_assignment(&assignments, &voter_index, &target_index).unwrap();
+	let solution =
+		TestSolution::from_assignment(&assignments, &voter_index, &target_index).unwrap();
 
 	let index_assignments = assignments
 		.into_iter()
@@ -1307,5 +1239,5 @@ fn index_assignments_generate_same_compact_as_plain_assignments() {
 
 	let index_compact = index_assignments.as_slice().try_into().unwrap();
 
-	assert_eq!(compact, index_compact);
+	assert_eq!(solution, index_compact);
 }

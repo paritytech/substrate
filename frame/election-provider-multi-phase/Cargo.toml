@@ -40,7 +40,7 @@ hex-literal = "0.3.1"
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
-sp-npos-elections = { version = "4.0.0-dev", default-features = false, features = [ "mocks" ], path = "../../primitives/npos-elections" }
+sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
 sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
 frame-election-provider-support = { version = "4.0.0-dev", features = ["runtime-benchmarks"], path = "../election-provider-support" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
@@ -67,6 +67,5 @@ std = [
 runtime-benchmarks = [
 	"frame-benchmarking",
 	"rand",
-	"sp-npos-elections/mocks",
 ]
 try-runtime = ["frame-support/try-runtime"]

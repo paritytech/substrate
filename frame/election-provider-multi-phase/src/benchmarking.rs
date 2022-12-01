@@ -40,15 +40,15 @@ fn solution_with_size<T: Config>(
 	size: SolutionOrSnapshotSize,
 	active_voters_count: u32,
 	desired_targets: u32,
-) -> Result<RawSolution<CompactOf<T>>, &'static str> {
+) -> Result<RawSolution<SolutionOf<T>>, &'static str> {
 	ensure!(size.targets >= desired_targets, "must have enough targets");
 	ensure!(
-		size.targets >= (<CompactOf<T>>::LIMIT * 2) as u32,
+		size.targets >= (<SolutionOf<T>>::LIMIT * 2) as u32,
 		"must have enough targets for unique votes."
 	);
 	ensure!(size.voters >= active_voters_count, "must have enough voters");
 	ensure!(
-		(<CompactOf<T>>::LIMIT as u32) < desired_targets,
+		(<SolutionOf<T>>::LIMIT as u32) < desired_targets,
 		"must have enough winners to give them votes."
 	);
 
@@ -75,7 +75,7 @@ fn solution_with_size<T: Config>(
 			// chose a random subset of winners.
 			let winner_votes = winners
 				.as_slice()
-				.choose_multiple(&mut rng, <CompactOf<T>>::LIMIT)
+				.choose_multiple(&mut rng, <SolutionOf<T>>::LIMIT)
 				.cloned()
 				.collect::<Vec<_>>();
 			let voter = frame_benchmarking::account::<T::AccountId>("Voter", i, SEED);
@@ -92,7 +92,7 @@ fn solution_with_size<T: Config>(
 	let rest_voters = (active_voters_count..size.voters)
 		.map(|i| {
 			let votes = (&non_winners)
-				.choose_multiple(&mut rng, <CompactOf<T>>::LIMIT)
+				.choose_multiple(&mut rng, <SolutionOf<T>>::LIMIT)
 				.cloned()
 				.collect::<Vec<T::AccountId>>();
 			let voter = frame_benchmarking::account::<T::AccountId>("Voter", i, SEED);
@@ -129,25 +129,25 @@ fn solution_with_size<T: Config>(
 	let assignments = active_voters
 		.iter()
 		.map(|(voter, _stake, votes)| {
-			let percent_per_edge: InnerOf<CompactAccuracyOf<T>> =
+			let percent_per_edge: InnerOf<SolutionAccuracyOf<T>> =
 				(100 / votes.len()).try_into().unwrap_or_else(|_| panic!("failed to convert"));
 			crate::unsigned::Assignment::<T> {
 				who: voter.clone(),
 				distribution: votes
 					.iter()
-					.map(|t| (t.clone(), <CompactAccuracyOf<T>>::from_percent(percent_per_edge)))
+					.map(|t| (t.clone(), <SolutionAccuracyOf<T>>::from_percent(percent_per_edge)))
 					.collect::<Vec<_>>(),
 			}
 		})
 		.collect::<Vec<_>>();
 
-	let compact =
-		<CompactOf<T>>::from_assignment(&assignments, &voter_index, &target_index).unwrap();
-	let score = compact.clone().score(&winners, stake_of, voter_at, target_at).unwrap();
+	let solution =
+		<SolutionOf<T>>::from_assignment(&assignments, &voter_index, &target_index).unwrap();
+	let score = solution.clone().score(&winners, stake_of, voter_at, target_at).unwrap();
 	let round = <MultiPhase<T>>::round();
 
 	assert!(score[0] > 0, "score is zero, this probably means that the stakes are not set.");
-	Ok(RawSolution { compact, score, round })
+	Ok(RawSolution { solution, score, round })
 }
 
 fn set_up_data_provider<T: Config>(v: u32, t: u32) {
@@ -265,7 +265,7 @@ frame_benchmarking::benchmarks! {
 		let v in (T::BenchmarkingConfig::VOTERS[0]) .. T::BenchmarkingConfig::VOTERS[1];
 		// number of targets in snapshot.
 		let t in (T::BenchmarkingConfig::TARGETS[0]) .. T::BenchmarkingConfig::TARGETS[1];
-		// number of assignments, i.e. compact.len(). This means the active nominators, thus must be
+		// number of assignments, i.e. solution.len(). This means the active nominators, thus must be
 		// a subset of `v` component.
 		let a in (T::BenchmarkingConfig::ACTIVE_VOTERS[0]) .. T::BenchmarkingConfig::ACTIVE_VOTERS[1];
 		// number of desired targets. Must be a subset of `t` component.
@@ -308,11 +308,11 @@ frame_benchmarking::benchmarks! {
 
 		let mut signed_submissions = SignedSubmissions::<T>::get();
 		for i in 0..c {
-			let solution = RawSolution {
+			let raw_solution = RawSolution {
 				score: [(10_000_000 + i).into(), 0, 0],
 				..Default::default()
 			};
-			let signed_submission = SignedSubmission { solution, ..Default::default() };
+			let signed_submission = SignedSubmission { raw_solution, ..Default::default() };
 			signed_submissions.insert(signed_submission);
 		}
 		signed_submissions.put();
@@ -330,7 +330,7 @@ frame_benchmarking::benchmarks! {
 		let v in (T::BenchmarkingConfig::VOTERS[0]) .. T::BenchmarkingConfig::VOTERS[1];
 		// number of targets in snapshot.
 		let t in (T::BenchmarkingConfig::TARGETS[0]) .. T::BenchmarkingConfig::TARGETS[1];
-		// number of assignments, i.e. compact.len(). This means the active nominators, thus must be
+		// number of assignments, i.e. solution.len(). This means the active nominators, thus must be
 		// a subset of `v` component.
 		let a in
 			(T::BenchmarkingConfig::ACTIVE_VOTERS[0]) .. T::BenchmarkingConfig::ACTIVE_VOTERS[1];
@@ -369,7 +369,7 @@ frame_benchmarking::benchmarks! {
 		let v in (T::BenchmarkingConfig::VOTERS[0]) .. T::BenchmarkingConfig::VOTERS[1];
 		// number of targets in snapshot.
 		let t in (T::BenchmarkingConfig::TARGETS[0]) .. T::BenchmarkingConfig::TARGETS[1];
-		// number of assignments, i.e. compact.len(). This means the active nominators, thus must be
+		// number of assignments, i.e. solution.len(). This means the active nominators, thus must be
 		// a subset of `v` component.
 		let a in (T::BenchmarkingConfig::ACTIVE_VOTERS[0]) .. T::BenchmarkingConfig::ACTIVE_VOTERS[1];
 		// number of desired targets. Must be a subset of `t` component.
@@ -378,8 +378,8 @@ frame_benchmarking::benchmarks! {
 		let size = SolutionOrSnapshotSize { voters: v, targets: t };
 		let raw_solution = solution_with_size::<T>(size, a, d)?;
 
-		assert_eq!(raw_solution.compact.voter_count() as u32, a);
-		assert_eq!(raw_solution.compact.unique_targets().len() as u32, d);
+		assert_eq!(raw_solution.solution.voter_count() as u32, a);
+		assert_eq!(raw_solution.solution.unique_targets().len() as u32, d);
 
 		// encode the most significant storage item that needs to be decoded in the dispatch.
 		let encoded_snapshot = <MultiPhase<T>>::snapshot().unwrap().encode();
@@ -447,7 +447,7 @@ frame_benchmarking::benchmarks! {
 		let v in (T::BenchmarkingConfig::VOTERS[0]) .. T::BenchmarkingConfig::VOTERS[1];
 		// number of targets in snapshot.
 		let t in (T::BenchmarkingConfig::TARGETS[0]) .. T::BenchmarkingConfig::TARGETS[1];
-		// number of assignments, i.e. compact.len(). This means the active nominators, thus must be
+		// number of assignments, i.e. solution.len(). This means the active nominators, thus must be
 		// a subset of `v` component.
 		let a in
 			(T::BenchmarkingConfig::ACTIVE_VOTERS[0]) .. T::BenchmarkingConfig::ACTIVE_VOTERS[1];
@@ -461,11 +461,11 @@ frame_benchmarking::benchmarks! {
 		// Compute a random solution, then work backwards to get the lists of voters, targets, and
 		// assignments
 		let witness = SolutionOrSnapshotSize { voters: v, targets: t };
-		let RawSolution { compact, .. } = solution_with_size::<T>(witness, a, d)?;
+		let RawSolution { solution, .. } = solution_with_size::<T>(witness, a, d)?;
 		let RoundSnapshot { voters, targets } = MultiPhase::<T>::snapshot().unwrap();
 		let voter_at = helpers::voter_at_fn::<T>(&voters);
 		let target_at = helpers::target_at_fn::<T>(&targets);
-		let mut assignments = compact.into_assignment(voter_at, target_at).unwrap();
+		let mut assignments = solution.into_assignment(voter_at, target_at).unwrap();
 
 		// make a voter cache and some helper functions for access
 		let cache = helpers::generate_voter_cache::<T>(&voters);
@@ -488,7 +488,7 @@ frame_benchmarking::benchmarks! {
 			.unwrap();
 
 		let encoded_size_of = |assignments: &[IndexAssignmentOf<T>]| {
-			CompactOf::<T>::try_from(assignments).map(|compact| compact.encoded_size())
+			SolutionOf::<T>::try_from(assignments).map(|solution| solution.encoded_size())
 		};
 
 		let desired_size = Percent::from_percent(100 - f.saturated_into::<u8>())
@@ -501,8 +501,8 @@ frame_benchmarking::benchmarks! {
 			&encoded_size_of,
 		).unwrap();
 	} verify {
-		let compact = CompactOf::<T>::try_from(index_assignments.as_slice()).unwrap();
-		let encoding = compact.encode();
+		let solution = SolutionOf::<T>::try_from(index_assignments.as_slice()).unwrap();
+		let encoding = solution.encode();
 		log!(
 			trace,
 			"encoded size prediction = {}",

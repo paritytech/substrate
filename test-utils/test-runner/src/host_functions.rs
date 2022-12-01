@@ -77,6 +77,8 @@ impl sp_wasm_interface::HostFunctions for SignatureVerificationOverride {
 		override_host_functions!(
 			"ext_crypto_ecdsa_verify_version_1",
 			EcdsaVerify,
+			"ext_crypto_ecdsa_verify_version_2",
+			EcdsaVerifyV2,
 			"ext_crypto_ed25519_verify_version_1",
 			Ed25519Verify,
 			"ext_crypto_sr25519_verify_version_1",

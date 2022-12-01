@@ -167,11 +167,11 @@ impl<AccountId> StakedAssignment<AccountId> {
 	}
 }
 /// The [`IndexAssignment`] type is an intermediate between the assignments list
-/// ([`&[Assignment<T>]`][Assignment]) and `CompactOf<T>`.
+/// ([`&[Assignment<T>]`][Assignment]) and `SolutionOf<T>`.
 ///
 /// The voter and target identifiers have already been replaced with appropriate indices,
-/// making it fast to repeatedly encode into a `CompactOf<T>`. This property turns out
-/// to be important when trimming for compact length.
+/// making it fast to repeatedly encode into a `SolutionOf<T>`. This property turns out
+/// to be important when trimming for solution length.
 #[derive(RuntimeDebug, Clone, Default)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
 pub struct IndexAssignment<VoterIndex, TargetIndex, P: PerThing> {
@@ -201,9 +201,9 @@ impl<VoterIndex, TargetIndex, P: PerThing> IndexAssignment<VoterIndex, TargetInd
 	}
 }
 
-/// A type alias for [`IndexAssignment`] made from [`crate::CompactSolution`].
+/// A type alias for [`IndexAssignment`] made from [`crate::Solution`].
 pub type IndexAssignmentOf<C> = IndexAssignment<
-	<C as crate::CompactSolution>::Voter,
-	<C as crate::CompactSolution>::Target,
-	<C as crate::CompactSolution>::Accuracy,
+	<C as crate::NposSolution>::VoterIndex,
+	<C as crate::NposSolution>::TargetIndex,
+	<C as crate::NposSolution>::Accuracy,
 >;
