@@ -144,7 +144,6 @@ mod impl_stored_map;
 mod types;
 pub use types::*;
 
-use codec::HasCompact;
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{
@@ -186,6 +185,17 @@ pub mod pallet {
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T, I = ()>(_);
 
+	#[cfg(feature = "runtime-benchmarks")]
+	pub trait BenchmarkHelper<AssetIdParameter> {
+		fn create_asset_id_parameter(id: u32) -> AssetIdParameter;
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	impl<AssetIdParameter: From<u32>> BenchmarkHelper<AssetIdParameter> for () {
+		fn create_asset_id_parameter(id: u32) -> AssetIdParameter {
+			id.into()
+		}
+	}
+
 	#[pallet::config]
 	/// The module configuration trait.
 	pub trait Config<I: 'static = ()>: frame_system::Config {
@@ -210,14 +220,20 @@ pub mod pallet {
 		type RemoveItemsLimit: Get<u32>;
 
 		/// Identifier for the class of asset.
-		type AssetId: Member
-			+ Parameter
-			+ Default
+		type AssetId: Member + Parameter + Copy + MaybeSerializeDeserialize + MaxEncodedLen;
+
+		/// Wrapper around `Self::AssetId` to use in dispatchable call signatures. Allows the use
+		/// of compact encoding in instances of the pallet, which will prevent breaking changes
+		/// resulting from the removal of `HasCompact` from `Self::AssetId`.
+		///
+		/// This type includes the `From<Self::AssetId>` bound, since tightly coupled pallets may
+		/// want to convert an `AssetId` into a parameter for calling dispatchable functions
+		/// directly.
+		type AssetIdParameter: Parameter
 			+ Copy
-			+ HasCompact
-			+ MaybeSerializeDeserialize
-			+ MaxEncodedLen
-			+ TypeInfo;
+			+ From<Self::AssetId>
+			+ Into<Self::AssetId>
+			+ MaxEncodedLen;
 
 		/// The currency mechanism.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -269,6 +285,10 @@ pub mod pallet {
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
+
+		/// Helper trait for benchmarks.
+		#[cfg(feature = "runtime-benchmarks")]
+		type BenchmarkHelper: BenchmarkHelper<Self::AssetIdParameter>;
 	}
 
 	#[pallet::storage]
@@ -546,10 +566,11 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::create())]
 		pub fn create(
 			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
+			id: T::AssetIdParameter,
 			admin: AccountIdLookupOf<T>,
 			min_balance: T::Balance,
 		) -> DispatchResult {
+			let id: T::AssetId = id.into();
 			let owner = T::CreateOrigin::ensure_origin(origin, &id)?;
 			let admin = T::Lookup::lookup(admin)?;
 
@@ -602,84 +623,86 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::force_create())]
 		pub fn force_create(
 			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
+			id: T::AssetIdParameter,
 			owner: AccountIdLookupOf<T>,
 			is_sufficient: bool,
 			#[pallet::compact] min_balance: T::Balance,
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
+			let id: T::AssetId = id.into();
 			Self::do_force_create(id, owner, is_sufficient, min_balance)
 		}
 
-		/// Start the process of destroying a class of fungible asset
-		/// start_destroy is the first in a series of extrinsics that should be called, to allow
-		/// destroying an asset.
+		/// Start the process of destroying a fungible asset class.
 		///
-		/// The origin must conform to `ForceOrigin` or must be Signed and the sender must be the
-		/// owner of the asset `id`.
+		/// `start_destroy` is the first in a series of extrinsics that should be called, to allow
+		/// destruction of an asset class.
+		///
+		/// The origin must conform to `ForceOrigin` or must be `Signed` by the asset's `owner`.
 		///
 		/// - `id`: The identifier of the asset to be destroyed. This must identify an existing
 		///   asset.
 		///
-		/// Assets must be freezed before calling start_destroy.
+		/// The asset class must be frozen before calling `start_destroy`.
 		#[pallet::weight(T::WeightInfo::start_destroy())]
-		pub fn start_destroy(
-			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
-		) -> DispatchResult {
+		pub fn start_destroy(origin: OriginFor<T>, id: T::AssetIdParameter) -> DispatchResult {
 			let maybe_check_owner = match T::ForceOrigin::try_origin(origin) {
 				Ok(_) => None,
 				Err(origin) => Some(ensure_signed(origin)?),
 			};
+			let id: T::AssetId = id.into();
 			Self::do_start_destroy(id, maybe_check_owner)
 		}
 
 		/// Destroy all accounts associated with a given asset.
-		/// `destroy_accounts` should only be called after `start_destroy` has been called, and the
-		/// asset is in a `Destroying` state
 		///
-		/// Due to weight restrictions, this function may need to be called multiple
-		/// times to fully destroy all accounts. It will destroy `RemoveItemsLimit` accounts at a
-		/// time.
+		/// `destroy_accounts` should only be called after `start_destroy` has been called, and the
+		/// asset is in a `Destroying` state.
+		///
+		/// Due to weight restrictions, this function may need to be called multiple times to fully
+		/// destroy all accounts. It will destroy `RemoveItemsLimit` accounts at a time.
 		///
 		/// - `id`: The identifier of the asset to be destroyed. This must identify an existing
 		///   asset.
 		///
-		/// Each call Emits the `Event::DestroyedAccounts` event.
+		/// Each call emits the `Event::DestroyedAccounts` event.
 		#[pallet::weight(T::WeightInfo::destroy_accounts(T::RemoveItemsLimit::get()))]
 		pub fn destroy_accounts(
 			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
+			id: T::AssetIdParameter,
 		) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
+			let id: T::AssetId = id.into();
 			let removed_accounts = Self::do_destroy_accounts(id, T::RemoveItemsLimit::get())?;
 			Ok(Some(T::WeightInfo::destroy_accounts(removed_accounts)).into())
 		}
 
-		/// Destroy all approvals associated with a given asset up to the max (T::RemoveItemsLimit),
-		/// `destroy_approvals` should only be called after `start_destroy` has been called, and the
-		/// asset is in a `Destroying` state
+		/// Destroy all approvals associated with a given asset up to the max (T::RemoveItemsLimit).
 		///
-		/// Due to weight restrictions, this function may need to be called multiple
-		/// times to fully destroy all approvals. It will destroy `RemoveItemsLimit` approvals at a
-		/// time.
+		/// `destroy_approvals` should only be called after `start_destroy` has been called, and the
+		/// asset is in a `Destroying` state.
+		///
+		/// Due to weight restrictions, this function may need to be called multiple times to fully
+		/// destroy all approvals. It will destroy `RemoveItemsLimit` approvals at a time.
 		///
 		/// - `id`: The identifier of the asset to be destroyed. This must identify an existing
 		///   asset.
 		///
-		/// Each call Emits the `Event::DestroyedApprovals` event.
+		/// Each call emits the `Event::DestroyedApprovals` event.
 		#[pallet::weight(T::WeightInfo::destroy_approvals(T::RemoveItemsLimit::get()))]
 		pub fn destroy_approvals(
 			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
+			id: T::AssetIdParameter,
 		) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
+			let id: T::AssetId = id.into();
 			let removed_approvals = Self::do_destroy_approvals(id, T::RemoveItemsLimit::get())?;
 			Ok(Some(T::WeightInfo::destroy_approvals(removed_approvals)).into())
 		}
 
 		/// Complete destroying asset and unreserve currency.
+		///
 		/// `finish_destroy` should only be called after `start_destroy` has been called, and the
 		/// asset is in a `Destroying` state. All accounts or approvals should be destroyed before
 		/// hand.
@@ -687,13 +710,11 @@ pub mod pallet {
 		/// - `id`: The identifier of the asset to be destroyed. This must identify an existing
 		///   asset.
 		///
-		/// Each successful call Emits the `Event::Destroyed` event.
+		/// Each successful call emits the `Event::Destroyed` event.
 		#[pallet::weight(T::WeightInfo::finish_destroy())]
-		pub fn finish_destroy(
-			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
-		) -> DispatchResult {
+		pub fn finish_destroy(origin: OriginFor<T>, id: T::AssetIdParameter) -> DispatchResult {
 			let _ = ensure_signed(origin)?;
+			let id: T::AssetId = id.into();
 			Self::do_finish_destroy(id)
 		}
 
@@ -712,12 +733,13 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::mint())]
 		pub fn mint(
 			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
+			id: T::AssetIdParameter,
 			beneficiary: AccountIdLookupOf<T>,
 			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
+			let id: T::AssetId = id.into();
 			Self::do_mint(id, &beneficiary, amount, Some(origin))?;
 			Ok(())
 		}
@@ -740,12 +762,13 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::burn())]
 		pub fn burn(
 			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
+			id: T::AssetIdParameter,
 			who: AccountIdLookupOf<T>,
 			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let who = T::Lookup::lookup(who)?;
+			let id: T::AssetId = id.into();
 
 			let f = DebitFlags { keep_alive: false, best_effort: true };
 			let _ = Self::do_burn(id, &who, amount, Some(origin), f)?;
@@ -773,12 +796,13 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::transfer())]
 		pub fn transfer(
 			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
+			id: T::AssetIdParameter,
 			target: AccountIdLookupOf<T>,
 			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(target)?;
+			let id: T::AssetId = id.into();
 
 			let f = TransferFlags { keep_alive: false, best_effort: false, burn_dust: false };
 			Self::do_transfer(id, &origin, &dest, amount, None, f).map(|_| ())
@@ -805,12 +829,13 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::transfer_keep_alive())]
 		pub fn transfer_keep_alive(
 			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
+			id: T::AssetIdParameter,
 			target: AccountIdLookupOf<T>,
 			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(target)?;
+			let id: T::AssetId = id.into();
 
 			let f = TransferFlags { keep_alive: true, best_effort: false, burn_dust: false };
 			Self::do_transfer(id, &source, &dest, amount, None, f).map(|_| ())
@@ -838,7 +863,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::force_transfer())]
 		pub fn force_transfer(
 			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
+			id: T::AssetIdParameter,
 			source: AccountIdLookupOf<T>,
 			dest: AccountIdLookupOf<T>,
 			#[pallet::compact] amount: T::Balance,
@@ -846,6 +871,7 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let source = T::Lookup::lookup(source)?;
 			let dest = T::Lookup::lookup(dest)?;
+			let id: T::AssetId = id.into();
 
 			let f = TransferFlags { keep_alive: false, best_effort: false, burn_dust: false };
 			Self::do_transfer(id, &source, &dest, amount, Some(origin), f).map(|_| ())
@@ -864,10 +890,11 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::freeze())]
 		pub fn freeze(
 			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
+			id: T::AssetIdParameter,
 			who: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
+			let id: T::AssetId = id.into();
 
 			let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 			ensure!(
@@ -899,10 +926,11 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::thaw())]
 		pub fn thaw(
 			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
+			id: T::AssetIdParameter,
 			who: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
+			let id: T::AssetId = id.into();
 
 			let details = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 			ensure!(
@@ -931,11 +959,9 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::freeze_asset())]
-		pub fn freeze_asset(
-			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
-		) -> DispatchResult {
+		pub fn freeze_asset(origin: OriginFor<T>, id: T::AssetIdParameter) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
+			let id: T::AssetId = id.into();
 
 			Asset::<T, I>::try_mutate(id, |maybe_details| {
 				let d = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
@@ -959,11 +985,9 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::thaw_asset())]
-		pub fn thaw_asset(
-			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
-		) -> DispatchResult {
+		pub fn thaw_asset(origin: OriginFor<T>, id: T::AssetIdParameter) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
+			let id: T::AssetId = id.into();
 
 			Asset::<T, I>::try_mutate(id, |maybe_details| {
 				let d = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
@@ -990,11 +1014,12 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::transfer_ownership())]
 		pub fn transfer_ownership(
 			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
+			id: T::AssetIdParameter,
 			owner: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
+			let id: T::AssetId = id.into();
 
 			Asset::<T, I>::try_mutate(id, |maybe_details| {
 				let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
@@ -1032,7 +1057,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_team())]
 		pub fn set_team(
 			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
+			id: T::AssetIdParameter,
 			issuer: AccountIdLookupOf<T>,
 			admin: AccountIdLookupOf<T>,
 			freezer: AccountIdLookupOf<T>,
@@ -1041,6 +1066,7 @@ pub mod pallet {
 			let issuer = T::Lookup::lookup(issuer)?;
 			let admin = T::Lookup::lookup(admin)?;
 			let freezer = T::Lookup::lookup(freezer)?;
+			let id: T::AssetId = id.into();
 
 			Asset::<T, I>::try_mutate(id, |maybe_details| {
 				let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
@@ -1075,12 +1101,13 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_metadata(name.len() as u32, symbol.len() as u32))]
 		pub fn set_metadata(
 			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
+			id: T::AssetIdParameter,
 			name: Vec<u8>,
 			symbol: Vec<u8>,
 			decimals: u8,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
+			let id: T::AssetId = id.into();
 			Self::do_set_metadata(id, &origin, name, symbol, decimals)
 		}
 
@@ -1096,11 +1123,9 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::clear_metadata())]
-		pub fn clear_metadata(
-			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
-		) -> DispatchResult {
+		pub fn clear_metadata(origin: OriginFor<T>, id: T::AssetIdParameter) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
+			let id: T::AssetId = id.into();
 
 			let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 			ensure!(d.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
@@ -1131,13 +1156,14 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::force_set_metadata(name.len() as u32, symbol.len() as u32))]
 		pub fn force_set_metadata(
 			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
+			id: T::AssetIdParameter,
 			name: Vec<u8>,
 			symbol: Vec<u8>,
 			decimals: u8,
 			is_frozen: bool,
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
+			let id: T::AssetId = id.into();
 
 			let bounded_name: BoundedVec<u8, T::StringLimit> =
 				name.clone().try_into().map_err(|_| Error::<T, I>::BadMetadata)?;
@@ -1181,9 +1207,10 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::force_clear_metadata())]
 		pub fn force_clear_metadata(
 			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
+			id: T::AssetIdParameter,
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
+			let id: T::AssetId = id.into();
 
 			let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 			Metadata::<T, I>::try_mutate_exists(id, |metadata| {
@@ -1219,7 +1246,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::force_asset_status())]
 		pub fn force_asset_status(
 			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
+			id: T::AssetIdParameter,
 			owner: AccountIdLookupOf<T>,
 			issuer: AccountIdLookupOf<T>,
 			admin: AccountIdLookupOf<T>,
@@ -1229,6 +1256,7 @@ pub mod pallet {
 			is_frozen: bool,
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
+			let id: T::AssetId = id.into();
 
 			Asset::<T, I>::try_mutate(id, |maybe_asset| {
 				let mut asset = maybe_asset.take().ok_or(Error::<T, I>::Unknown)?;
@@ -1274,12 +1302,13 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::approve_transfer())]
 		pub fn approve_transfer(
 			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
+			id: T::AssetIdParameter,
 			delegate: AccountIdLookupOf<T>,
 			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResult {
 			let owner = ensure_signed(origin)?;
 			let delegate = T::Lookup::lookup(delegate)?;
+			let id: T::AssetId = id.into();
 			Self::do_approve_transfer(id, &owner, &delegate, amount)
 		}
 
@@ -1299,13 +1328,15 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::cancel_approval())]
 		pub fn cancel_approval(
 			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
+			id: T::AssetIdParameter,
 			delegate: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let owner = ensure_signed(origin)?;
 			let delegate = T::Lookup::lookup(delegate)?;
+			let id: T::AssetId = id.into();
 			let mut d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 			ensure!(d.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
+
 			let approval =
 				Approvals::<T, I>::take((id, &owner, &delegate)).ok_or(Error::<T, I>::Unknown)?;
 			T::Currency::unreserve(&owner, approval.deposit);
@@ -1333,10 +1364,11 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::force_cancel_approval())]
 		pub fn force_cancel_approval(
 			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
+			id: T::AssetIdParameter,
 			owner: AccountIdLookupOf<T>,
 			delegate: AccountIdLookupOf<T>,
 		) -> DispatchResult {
+			let id: T::AssetId = id.into();
 			let mut d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 			ensure!(d.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 			T::ForceOrigin::try_origin(origin)
@@ -1381,7 +1413,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::transfer_approved())]
 		pub fn transfer_approved(
 			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
+			id: T::AssetIdParameter,
 			owner: AccountIdLookupOf<T>,
 			destination: AccountIdLookupOf<T>,
 			#[pallet::compact] amount: T::Balance,
@@ -1389,6 +1421,7 @@ pub mod pallet {
 			let delegate = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
 			let destination = T::Lookup::lookup(destination)?;
+			let id: T::AssetId = id.into();
 			Self::do_transfer_approved(id, &owner, &delegate, &destination, amount)
 		}
 
@@ -1402,7 +1435,8 @@ pub mod pallet {
 		///
 		/// Emits `Touched` event when successful.
 		#[pallet::weight(T::WeightInfo::mint())]
-		pub fn touch(origin: OriginFor<T>, #[pallet::compact] id: T::AssetId) -> DispatchResult {
+		pub fn touch(origin: OriginFor<T>, id: T::AssetIdParameter) -> DispatchResult {
+			let id: T::AssetId = id.into();
 			Self::do_touch(id, ensure_signed(origin)?)
 		}
 
@@ -1417,9 +1451,10 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::mint())]
 		pub fn refund(
 			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
+			id: T::AssetIdParameter,
 			allow_burn: bool,
 		) -> DispatchResult {
+			let id: T::AssetId = id.into();
 			Self::do_refund(id, ensure_signed(origin)?, allow_burn)
 		}
 	}

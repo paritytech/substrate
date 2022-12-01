@@ -299,7 +299,7 @@ pub trait Ext: sealing::Sealed {
 
 	/// Returns the number of times the currently executing contract exists on the call stack in
 	/// addition to the calling instance. A value of 0 means no reentrancy.
-	fn reentrant_count(&self) -> u32;
+	fn reentrance_count(&self) -> u32;
 
 	/// Returns the number of times the specified contract exists on the call stack. Delegated calls
 	/// are not calculated as separate entrance.
@@ -1384,7 +1384,7 @@ where
 		Ok(())
 	}
 
-	fn reentrant_count(&self) -> u32 {
+	fn reentrance_count(&self) -> u32 {
 		let id: &AccountIdOf<Self::T> = &self.top_frame().account_id;
 		self.account_reentrance_count(id).saturating_sub(1)
 	}
