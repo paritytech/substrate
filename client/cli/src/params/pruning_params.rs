@@ -23,21 +23,30 @@ use sc_service::{BlocksPruning, PruningMode};
 /// Parameters to define the pruning mode
 #[derive(Debug, Clone, PartialEq, Args)]
 pub struct PruningParams {
-	/// Specify the state pruning mode, a number of blocks to keep or 'archive'.
+	/// Specify the state pruning mode.
 	///
-	/// Default is to keep only the last 256 blocks,
-	/// otherwise, the state can be kept for all of the blocks (i.e 'archive'),
-	/// or for all of the canonical blocks (i.e 'archive-canonical').
+	/// This mode specifies when the block's state (ie, storage)
+	/// should be pruned (ie, removed) from the database.
+	///
+	/// Options available:
+	///   'archive'            Keep the state of all blocks.
+	///   'archive-canonical'  Keep only the state of finalized (canonical) blocks.
+	///   [number]             Keep the state of the last number of finalized (canonical) blocks.
+	///
+	/// The default option is to keep the last 256 blocks (number == 256).
 	#[arg(alias = "pruning", long, value_name = "PRUNING_MODE")]
 	pub state_pruning: Option<String>,
-	/// Specify the blocks pruning mode, a number of blocks to keep or 'archive'.
+	/// Specify the blocks pruning mode.
 	///
-	/// Default is to keep all finalized blocks.
-	/// otherwise, all blocks can be kept (i.e 'archive'),
-	/// or for all canonical blocks (i.e 'archive-canonical'),
-	/// or for the last N blocks (i.e a number).
+	/// This mode specifies when the block's body (including justifications)
+	/// should be pruned (ie, removed) from the database.
 	///
-	/// NOTE: only finalized blocks are subject for removal!
+	/// Options available:
+	///   'archive'            Keep all blocks.
+	///   'archive-canonical'  Keep only finalized (canonical) blocks.
+	///   [number]             Keep the last number of finalized (canonical) blocks.
+	///
+	/// The default option is 'archive-canonical'.
 	#[arg(alias = "keep-blocks", long, value_name = "COUNT")]
 	pub blocks_pruning: Option<String>,
 }
