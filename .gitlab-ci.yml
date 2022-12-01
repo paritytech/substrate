@@ -200,6 +200,19 @@ default:
     # this job runs only on nightly pipeline with the mentioned variable, against `master` branch
     - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "nightly"
 
+.crates-publishing-template: &crates-publishing-template
+  stage:                           test
+  extends:
+    - .docker-env
+    - .collect-artifacts
+  variables:
+    CRATESIO_CRATES_OWNER: parity-crate-owner
+    REPO_OWNER: paritytech
+    REPO: substrate
+    GH_API: https://api.github.com
+    CRATESIO_API: https://crates.io/api
+    SPUB_TMP: artifacts
+
 #### stage:                       .pre
 
 skip-if-draft:

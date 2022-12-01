@@ -161,3 +161,32 @@ update-node-template:
       --template-path "bin/node-template"
       --github-api-token "$GITHUB_TOKEN"
       --polkadot-branch "$CI_COMMIT_REF_NAME"
+
+.publish-crates-template: &publish-crates-template
+  stage:                           publish
+  extends:                         .crates-publishing-template
+  variables:
+    # crates.io rate limits crates publishing by 1 per minute, so a delay needs to be inserted
+    # slightly higher than that after publishing each crate. The value is specified in seconds.
+    SPUB_AFTER_PUBLISH_DELAY: 64
+  script:
+    - rusty-cachier snapshot create
+    - git clone
+        --depth 1
+        --branch "$RELENG_SCRIPTS_BRANCH"
+        https://github.com/paritytech/releng-scripts.git
+    - CRATESIO_TARGET_INSTANCE=default ./releng-scripts/publish-crates
+    - rusty-cachier cache upload
+
+publish-crates:
+  extends:                         .publish-crates-template
+  needs:
+    - job:                         publish-crates-locally
+      artifacts:                   false
+  rules:
+    - if: $CI_COMMIT_REF_NAME == "master"
+
+publish-crates-manual:
+  extends:                         .publish-crates-template
+  when:                            manual
+  allow_failure:                   true
