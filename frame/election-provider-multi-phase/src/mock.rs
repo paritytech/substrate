@@ -377,6 +377,19 @@ parameter_types! {
 	pub static Balancing: Option<(usize, ExtendedBalance)> = Some((0, 0));
 }
 
+pub struct TestBenchmarkingConfig;
+impl BenchmarkingConfig for TestBenchmarkingConfig {
+	const VOTERS: [u32; 2] = [400, 600];
+	const ACTIVE_VOTERS: [u32; 2] = [100, 300];
+	const TARGETS: [u32; 2] = [200, 400];
+	const DESIRED_TARGETS: [u32; 2] = [100, 180];
+
+	const SNAPSHOT_MAXIMUM_VOTERS: u32 = 1000;
+	const MINER_MAXIMUM_VOTERS: u32 = 1000;
+
+	const MAXIMUM_TARGETS: u32 = 200;
+}
+
 impl crate::Config for Runtime {
 	type Event = Event;
 	type Currency = Balances;
@@ -398,7 +411,7 @@ impl crate::Config for Runtime {
 	type RewardHandler = ();
 	type DataProvider = StakingMock;
 	type WeightInfo = DualMockWeightInfo;
-	type BenchmarkingConfig = ();
+	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type Fallback = MockFallback;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type Solution = TestNposSolution;

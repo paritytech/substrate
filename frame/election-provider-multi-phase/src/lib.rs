@@ -309,16 +309,6 @@ pub trait BenchmarkingConfig {
 	const MAXIMUM_TARGETS: u32;
 }
 
-impl BenchmarkingConfig for () {
-	const VOTERS: [u32; 2] = [4000, 6000];
-	const TARGETS: [u32; 2] = [1000, 1600];
-	const ACTIVE_VOTERS: [u32; 2] = [1000, 3000];
-	const DESIRED_TARGETS: [u32; 2] = [400, 800];
-	const SNAPSHOT_MAXIMUM_VOTERS: u32 = 10_000;
-	const MINER_MAXIMUM_VOTERS: u32 = 10_000;
-	const MAXIMUM_TARGETS: u32 = 2_000;
-}
-
 /// A fallback implementation that transitions the pallet to the emergency phase.
 pub struct NoFallback<T>(sp_std::marker::PhantomData<T>);
 
