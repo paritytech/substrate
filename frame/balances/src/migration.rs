@@ -15,12 +15,13 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::*;
-use frame_support::{storage_alias, Twox64Concat, traits::OnRuntimeUpgrade, weights::Weight};
-use frame_support::pallet_prelude::*;
+use frame_support::{pallet_prelude::*, traits::OnRuntimeUpgrade, weights::Weight};
 
 // NOTE: This must be used alongside any accounts whose balances are expected to be inactive.
 // Generally this will be used for the XCM teleport checking account.
-pub struct MigrateToTrackInactive<T: Config, A: Get<T::AccountId>>(sp_std::marker::PhantomData<(T, A)>);
+pub struct MigrateToTrackInactive<T: Config, A: Get<T::AccountId>>(
+	sp_std::marker::PhantomData<(T, A)>,
+);
 impl<T: Config, A: Get<T::AccountId>> OnRuntimeUpgrade for MigrateToTrackInactive<T, A> {
 	fn on_runtime_upgrade() -> Weight {
 		let current_version = Pallet::<T>::current_storage_version();

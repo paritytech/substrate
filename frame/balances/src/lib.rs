@@ -156,12 +156,12 @@
 #[macro_use]
 mod tests;
 mod benchmarking;
+pub mod migration;
 mod tests_composite;
 mod tests_local;
 #[cfg(test)]
 mod tests_reentrancy;
 pub mod weights;
-pub mod migration;
 
 pub use self::imbalances::{NegativeImbalance, PositiveImbalance};
 use codec::{Codec, Decode, Encode, MaxEncodedLen};
@@ -502,7 +502,8 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn inactive_issuance)]
 	#[pallet::whitelist_storage]
-	pub type InactiveIssuance<T: Config<I>, I: 'static = ()> = StorageValue<_, T::Balance, ValueQuery>;
+	pub type InactiveIssuance<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, T::Balance, ValueQuery>;
 
 	/// The Balances pallet example of storing the balance of an account.
 	///

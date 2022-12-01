@@ -138,7 +138,7 @@ pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-use sp_runtime::traits::CheckedSub;
+	use sp_runtime::traits::CheckedSub;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -224,16 +224,15 @@ use sp_runtime::traits::CheckedSub;
 		OptionQuery,
 	>;
 
+	/// The amount which has been reported as inactive to Currency.
+	#[pallet::storage]
+	pub type Inactive<T: Config<I>, I: 'static = ()> = StorageValue<_, BalanceOf<T, I>, ValueQuery>;
+
 	/// Proposal indices that have been approved but not yet awarded.
 	#[pallet::storage]
 	#[pallet::getter(fn approvals)]
 	pub type Approvals<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BoundedVec<ProposalIndex, T::MaxApprovals>, ValueQuery>;
-
-	/// The amount which has been reported as inactive to Currency.
-	#[pallet::storage]
-	pub type Deactivated<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, BalanceOf<T>, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig;
@@ -322,19 +321,21 @@ use sp_runtime::traits::CheckedSub;
 		/// - The weight is overestimated if some approvals got missed.
 		/// # </weight>
 		fn on_initialize(n: T::BlockNumber) -> Weight {
+			let pot = Self::pot();
+			let deactivated = Inactive::<T, I>::get();
+			match pot.checked_sub(&deactivated) {
+				Some(x) if !x.is_zero() => T::Currency::deactivate(x),
+				_ => match deactivated.checked_sub(&pot) {
+					Some(x) if !x.is_zero() => T::Currency::reactivate(x),
+					_ => {},
+				},
+			}
+
 			// Check to see if we should spend some funds!
 			if (n % T::SpendPeriod::get()).is_zero() {
 				Self::spend_funds()
 			} else {
 				Weight::zero()
-			}
-			let pot = Self::pot();
-			let deactivated = Deactivated::<T>::get();
-			if let Some(v) = pot.checked_sub(&deactivated) {
-				T::Currency::deactivate(v)
-			}
-			else if let Some(v) = deactivated.checked_sub(&pot) {
-				T::Currency::reactivate(v)
 			}
 		}
 	}

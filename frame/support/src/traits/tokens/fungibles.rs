@@ -48,7 +48,9 @@ pub trait Inspect<AccountId> {
 
 	/// The total amount of issuance in the system excluding those which are controlled by the
 	/// system.
-	fn active_issuance(asset: Self::AssetId) -> Self::Balance { Self::total_issuance(asset) }
+	fn active_issuance(asset: Self::AssetId) -> Self::Balance {
+		Self::total_issuance(asset)
+	}
 
 	/// The minimum balance any single account may have.
 	fn minimum_balance(asset: Self::AssetId) -> Self::Balance;
