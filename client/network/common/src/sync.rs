@@ -368,16 +368,6 @@ pub trait ChainSync<Block: BlockT>: Send {
 		cx: &mut std::task::Context<'a>,
 	) -> Poll<PollBlockAnnounceValidation<Block::Header>>;
 
-	/// Poll warp sync target block
-	///
-	/// This should be polled until it returns [`target_block`].
-	///
-	/// If [`target_block`] is returned, then `WarpSync::new` is called with a target header
-	fn poll_warp_sync_target_block<'a>(
-		&mut self,
-		cx: &mut std::task::Context<'a>,
-	) -> Poll<Block::Header>;
-
 	/// Call when a peer has disconnected.
 	/// Canceled obsolete block request may result in some blocks being ready for
 	/// import, so this functions checks for such blocks and returns them.
