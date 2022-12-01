@@ -203,6 +203,7 @@ where
 
 		let mut inherent_data = create_inherent_data_providers
 			.create_inherent_data()
+			.await
 			.map_err(Error::<B>::Inherent)?;
 
 		let slot_now = create_inherent_data_providers.slot();

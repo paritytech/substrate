@@ -216,7 +216,7 @@ where
 	PF::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	SO: SyncOracle + Send + Sync + Clone,
 	L: sc_consensus::JustificationSyncLink<B>,
-	CIDP: CreateInherentDataProviders<B, ()> + Send,
+	CIDP: CreateInherentDataProviders<B, ()> + Send + 'static,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
@@ -960,7 +960,7 @@ mod tests {
 		let res = executor::block_on(worker.on_slot(SlotInfo {
 			slot: 0.into(),
 			ends_at: Instant::now() + Duration::from_secs(100),
-			inherent_data: InherentData::new(),
+			create_inherent_data: Box::new(()),
 			duration: Duration::from_millis(1000),
 			chain_head: head,
 			block_size_limit: None,
