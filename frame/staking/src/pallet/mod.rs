@@ -19,7 +19,7 @@
 
 use frame_election_provider_support::{SortedListProvider, VoteWeight};
 use frame_support::{
-	dispatch::Codec,
+	dispatch::{Codec, PostDispatchInfo},
 	pallet_prelude::*,
 	traits::{
 		Currency, CurrencyToVote, Defensive, DefensiveResult, DefensiveSaturating, EnsureOrigin,
@@ -966,8 +966,8 @@ pub mod pallet {
 				}
 			};
 
-            // we need to fetch the ledger again because it may have been mutated in the call
-            // to `Self::do_withdraw_unbonded` above.
+			// we need to fetch the ledger again because it may have been mutated in the call
+			// to `Self::do_withdraw_unbonded` above.
 			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let mut value = value.min(ledger.active);
 
@@ -1024,14 +1024,13 @@ pub mod pallet {
 				Self::deposit_event(Event::<T>::Unbonded { stash: ledger.stash, amount: value });
 			}
 
-			if let Some(weight) = maybe_withdraw_weight {
-				Ok(frame_support::dispatch::PostDispatchInfo {
-					actual_weight: Some(weight.saturating_add(T::WeightInfo::unbond())),
-					pays_fee: Pays::Yes,
-				})
+			let actual_weight = if let Some(withdraw_weight) = maybe_withdraw_weight {
+				Some(T::WeightInfo::unbond().saturating_add(withdraw_weight))
 			} else {
-				Ok(().into())
-			}
+				Some(T::WeightInfo::unbond())
+			};
+
+			Ok(PostDispatchInfo { actual_weight, pays_fee: Pays::Yes })
 		}
 
 		/// Remove any unlocked chunks from the `unlocking` queue from our management.

@@ -102,7 +102,7 @@ impl<T: Config> Pallet<T> {
 			ledger = ledger.consolidate_unlocked(current_era)
 		}
 
-		let post_info_weight =
+		let post_info =
 			if ledger.unlocking.is_empty() && ledger.active < T::Currency::minimum_balance() {
 				// This account must have called `unbond()` with some value that caused the active
 				// portion to fall below existential deposit + will have no more unlocking chunks
@@ -110,8 +110,8 @@ impl<T: Config> Pallet<T> {
 				Self::kill_stash(&stash, num_slashing_spans)?;
 				// Remove the lock.
 				T::Currency::remove_lock(STAKING_ID, &stash);
-				// This is worst case scenario, so we use the full weight and return None
-				None
+
+				Some(T::WeightInfo::withdraw_unbonded_kill(num_slashing_spans))
 			} else {
 				// This was the consequence of a partial unbond. just update the ledger and move on.
 				Self::update_ledger(&controller, &ledger);
@@ -128,7 +128,7 @@ impl<T: Config> Pallet<T> {
 			Self::deposit_event(Event::<T>::Withdrawn { stash, amount: value });
 		}
 
-		Ok(post_info_weight.into())
+		Ok(post_info.into())
 	}
 
 	pub(super) fn do_payout_stakers(
