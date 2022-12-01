@@ -1440,15 +1440,15 @@ where
 	}
 
 	fn active_issuance() -> Self::Balance {
-		<Self as fungibles::Inspect>::active_issuance()
+		<Self as fungible::Inspect<T::AccountId>>::active_issuance()
 	}
 
 	fn deactivate(amount: Self::Balance) {
-		<Self as fungibles::Transfer>::deactivate(amount);
+		<Self as fungible::Transfer<T::AccountId>>::deactivate(amount);
 	}
 
 	fn reactivate(amount: Self::Balance) {
-		<Self as fungibles::Transfer>::reactivate(amount);
+		<Self as fungible::Transfer<T::AccountId>>::reactivate(amount);
 	}
 
 	fn minimum_balance() -> Self::Balance {
