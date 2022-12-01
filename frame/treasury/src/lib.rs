@@ -62,7 +62,6 @@ mod benchmarking;
 #[cfg(test)]
 mod tests;
 pub mod weights;
-pub mod migration;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
