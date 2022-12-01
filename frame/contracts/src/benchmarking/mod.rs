@@ -2430,7 +2430,7 @@ benchmarks! {
 	}
 
 	// w_per_local = w_bench
-	call_per_local {
+	instr_call_per_local {
 		let l in 0 .. T::Schedule::get().limits.locals;
 		let mut call_body = body::plain(vec![
 				Instruction::End,
