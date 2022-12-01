@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -52,7 +52,7 @@ pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool, tracing: bool) -> Res
 	let runtime_interface = get_runtime_interface(trait_def)?;
 
 	// latest version dispatch
-	let token_stream: Result<TokenStream> = runtime_interface.latest_versions().try_fold(
+	let token_stream: Result<TokenStream> = runtime_interface.latest_versions_to_call().try_fold(
 		TokenStream::new(),
 		|mut t, (latest_version, method)| {
 			t.extend(function_for_method(method, latest_version, is_wasm_only)?);

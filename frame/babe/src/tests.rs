@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -67,7 +67,8 @@ fn first_block_epoch_zero_start() {
 		let pre_digest = make_primary_pre_digest(0, genesis_slot, first_vrf.clone(), vrf_proof);
 
 		assert_eq!(Babe::genesis_slot(), Slot::from(0));
-		System::initialize(&1, &Default::default(), &pre_digest, Default::default());
+		System::reset_events();
+		System::initialize(&1, &Default::default(), &pre_digest);
 
 		// see implementation of the function for details why: we issue an
 		// epoch-change digest but don't do it via the normal session mechanism.
@@ -112,7 +113,8 @@ fn author_vrf_output_for_primary() {
 		let (vrf_output, vrf_proof, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
 		let primary_pre_digest = make_primary_pre_digest(0, genesis_slot, vrf_output, vrf_proof);
 
-		System::initialize(&1, &Default::default(), &primary_pre_digest, Default::default());
+		System::reset_events();
+		System::initialize(&1, &Default::default(), &primary_pre_digest);
 
 		Babe::do_initialize(1);
 		assert_eq!(Babe::author_vrf_randomness(), Some(vrf_randomness));
@@ -133,7 +135,8 @@ fn author_vrf_output_for_secondary_vrf() {
 		let secondary_vrf_pre_digest =
 			make_secondary_vrf_pre_digest(0, genesis_slot, vrf_output, vrf_proof);
 
-		System::initialize(&1, &Default::default(), &secondary_vrf_pre_digest, Default::default());
+		System::reset_events();
+		System::initialize(&1, &Default::default(), &secondary_vrf_pre_digest);
 
 		Babe::do_initialize(1);
 		assert_eq!(Babe::author_vrf_randomness(), Some(vrf_randomness));
@@ -150,12 +153,8 @@ fn no_author_vrf_output_for_secondary_plain() {
 		let genesis_slot = Slot::from(10);
 		let secondary_plain_pre_digest = make_secondary_plain_pre_digest(0, genesis_slot);
 
-		System::initialize(
-			&1,
-			&Default::default(),
-			&secondary_plain_pre_digest,
-			Default::default(),
-		);
+		System::reset_events();
+		System::initialize(&1, &Default::default(), &secondary_plain_pre_digest);
 		assert_eq!(Babe::author_vrf_randomness(), None);
 
 		Babe::do_initialize(1);

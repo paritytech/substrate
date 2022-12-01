@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +21,7 @@ use lazy_static::lazy_static;
 pub use sp_core::ed25519;
 use sp_core::{
 	ed25519::{Pair, Public, Signature},
-	Pair as PairT, Public as PublicT, H256,
+	ByteArray, Pair as PairT, H256,
 };
 use sp_runtime::AccountId32;
 use std::{collections::HashMap, ops::Deref};

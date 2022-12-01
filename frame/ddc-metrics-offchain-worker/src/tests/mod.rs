@@ -317,6 +317,7 @@ fn should_run_contract() {
             contract_id.clone(),
             0,
             100_000_000_000,
+            None,
             call_data.clone(),
         )
         .unwrap();
@@ -326,6 +327,7 @@ fn should_run_contract() {
             contract_id,
             0,
             100_000_000_000,
+            None,
             call_data,
             false,
         );
@@ -368,6 +370,7 @@ fn deploy_contract() -> AccountId {
         Origin::signed(alice.clone()),
         ENDOWMENT,
         GAS_LIMIT,
+        None,
         wasm.to_vec(),
         contract_args.clone(),
         vec![]
@@ -401,6 +404,7 @@ fn deploy_contract() -> AccountId {
             contract_id.clone(),
             0,
             1_000_000_000_000,
+            None,
             call_data,
         );
         results.unwrap();

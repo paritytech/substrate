@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -364,7 +364,7 @@ mod tests {
 	use crate::{
 		codec::{Decode, Encode},
 		testing::TestSignature as TestSig,
-		traits::{IdentityLookup, SignedExtension},
+		traits::{DispatchInfoOf, IdentityLookup, SignedExtension},
 	};
 	use sp_io::hashing::blake2_256;
 
@@ -386,6 +386,16 @@ mod tests {
 
 		fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> {
 			Ok(())
+		}
+
+		fn pre_dispatch(
+			self,
+			who: &Self::AccountId,
+			call: &Self::Call,
+			info: &DispatchInfoOf<Self::Call>,
+			len: usize,
+		) -> Result<Self::Pre, TransactionValidityError> {
+			self.validate(who, call, info, len).map(|_| ())
 		}
 	}
 

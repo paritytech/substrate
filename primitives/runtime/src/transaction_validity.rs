@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -79,6 +79,8 @@ pub enum InvalidTransaction {
 	/// A transaction with a mandatory dispatch. This is invalid; only inherent extrinsics are
 	/// allowed to have mandatory dispatches.
 	MandatoryDispatch,
+	/// The sending address is disabled or known to be invalid.
+	BadSigner,
 }
 
 impl InvalidTransaction {
@@ -109,6 +111,7 @@ impl From<InvalidTransaction> for &'static str {
 			InvalidTransaction::MandatoryDispatch =>
 				"Transaction dispatch is mandatory; transactions may not have mandatory dispatches.",
 			InvalidTransaction::Custom(_) => "InvalidTransaction custom error",
+			InvalidTransaction::BadSigner => "Invalid signing address",
 		}
 	}
 }

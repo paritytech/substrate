@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -79,8 +79,8 @@ impl FromStr for BlockNumberOrHash {
 	type Err = String;
 
 	fn from_str(block_number: &str) -> Result<Self, Self::Err> {
-		if block_number.starts_with("0x") {
-			if let Some(pos) = &block_number[2..].chars().position(|c| !c.is_ascii_hexdigit()) {
+		if let Some(rest) = block_number.strip_prefix("0x") {
+			if let Some(pos) = rest.chars().position(|c| !c.is_ascii_hexdigit()) {
 				Err(format!(
 					"Expected block hash, found illegal hex character at position: {}",
 					2 + pos,

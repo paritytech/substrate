@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,6 +29,17 @@ use sp_transaction_storage_proof::TransactionStorageProof;
 
 use crate::Pallet as TransactionStorage;
 
+// Proof generated from max size storage:
+// ```
+// let mut transactions = Vec::new();
+// let tx_size = DEFAULT_MAX_TRANSACTION_SIZE;
+// for _ in 0..DEFAULT_MAX_BLOCK_TRANSACTIONS {
+//   transactions.push(vec![0; tx_size]);
+// }
+// let hash = vec![0; 32];
+// build_proof(hash.as_slice(), transactions).unwrap().encode()
+// ```
+// while hardforcing target chunk key in `build_proof` to [22, 21, 1, 0].
 const PROOF: &[u8] = &hex_literal::hex!(
 	"
 	0104000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -109,7 +120,7 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller.clone()), vec![0u8; l as usize])
 	verify {
 		assert!(!BlockTransactions::<T>::get().is_empty());
-		assert_last_event::<T>(Event::Stored(0).into());
+		assert_last_event::<T>(Event::Stored { index: 0 }.into());
 	}
 
 	renew {
@@ -122,7 +133,7 @@ benchmarks! {
 		run_to_block::<T>(1u32.into());
 	}: _(RawOrigin::Signed(caller.clone()), T::BlockNumber::zero(), 0)
 	verify {
-		assert_last_event::<T>(Event::Renewed(0).into());
+		assert_last_event::<T>(Event::Renewed { index: 0 }.into());
 	}
 
 	check_proof_max {
@@ -136,7 +147,6 @@ benchmarks! {
 			)?;
 		}
 		run_to_block::<T>(StoragePeriod::<T>::get() + T::BlockNumber::one());
-		let random_hash = [0u8];
 		let mut encoded_proof = PROOF;
 		let proof = TransactionStorageProof::decode(&mut encoded_proof).unwrap();
 	}: check_proof(RawOrigin::None, proof)

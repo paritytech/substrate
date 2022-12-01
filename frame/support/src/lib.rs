@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -46,7 +46,7 @@ pub use sp_core_hashing_proc_macro;
 #[doc(hidden)]
 pub use sp_io::{self, storage::root as storage_root};
 #[doc(hidden)]
-pub use sp_runtime::RuntimeDebug;
+pub use sp_runtime::{RuntimeDebug, StateVersion};
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use sp_state_machine::BasicExternalities;
@@ -1967,7 +1967,7 @@ pub mod pallet_prelude {
 /// 	pub trait Config: frame_system::Config {
 /// 		#[pallet::constant] // put the constant in metadata
 /// 		type MyGetParam: Get<u32>;
-/// 		type Balance: Parameter + From<u8>;
+/// 		type Balance: Parameter + MaxEncodedLen + From<u8>;
 /// 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 /// 	}
 ///
@@ -2156,7 +2156,7 @@ pub mod pallet_prelude {
 /// 	pub trait Config<I: 'static = ()>: frame_system::Config {
 /// 		#[pallet::constant]
 /// 		type MyGetParam: Get<u32>;
-/// 		type Balance: Parameter + From<u8>;
+/// 		type Balance: Parameter + MaxEncodedLen + From<u8>;
 /// 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 /// 	}
 ///

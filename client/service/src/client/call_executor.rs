@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -38,7 +38,7 @@ use std::{cell::RefCell, panic::UnwindSafe, result, sync::Arc};
 pub struct LocalCallExecutor<Block: BlockT, B, E> {
 	backend: Arc<B>,
 	executor: E,
-	wasm_override: Option<WasmOverride>,
+	wasm_override: Arc<Option<WasmOverride>>,
 	wasm_substitutes: WasmSubstitutes<Block, E, B>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	client_config: ClientConfig<Block>,
@@ -71,7 +71,7 @@ where
 		Ok(LocalCallExecutor {
 			backend,
 			executor,
-			wasm_override,
+			wasm_override: Arc::new(wasm_override),
 			spawn_handle,
 			client_config,
 			wasm_substitutes,
@@ -90,16 +90,19 @@ where
 		Block: BlockT,
 		B: backend::Backend<Block>,
 	{
-		let spec = self.runtime_version(id)?.spec_version;
+		let spec = CallExecutor::runtime_version(self, id)?;
 		let code = if let Some(d) = self
 			.wasm_override
 			.as_ref()
-			.map(|o| o.get(&spec, onchain_code.heap_pages))
+			.as_ref()
+			.map(|o| o.get(&spec.spec_version, onchain_code.heap_pages, &spec.spec_name))
 			.flatten()
 		{
 			log::debug!(target: "wasm_overrides", "using WASM override for block {}", id);
 			d
-		} else if let Some(s) = self.wasm_substitutes.get(spec, onchain_code.heap_pages, id) {
+		} else if let Some(s) =
+			self.wasm_substitutes.get(spec.spec_version, onchain_code.heap_pages, id)
+		{
 			log::debug!(target: "wasm_substitutes", "Using WASM substitute for block {:?}", id);
 			s
 		} else {
@@ -243,8 +246,8 @@ where
 					&runtime_code,
 					self.spawn_handle.clone(),
 				)
+				.with_storage_transaction_cache(storage_transaction_cache.as_deref_mut())
 				.set_parent_hash(at_hash);
-				// TODO: https://github.com/paritytech/substrate/issues/4455
 				state_machine.execute_using_consensus_failure_handler(
 					execution_manager,
 					native_call.map(|n| || (n)().map_err(|e| Box::new(e) as Box<_>)),
@@ -261,9 +264,7 @@ where
 					&runtime_code,
 					self.spawn_handle.clone(),
 				)
-				.with_storage_transaction_cache(
-					storage_transaction_cache.as_mut().map(|c| &mut **c),
-				)
+				.with_storage_transaction_cache(storage_transaction_cache.as_deref_mut())
 				.set_parent_hash(at_hash);
 				state_machine.execute_using_consensus_failure_handler(
 					execution_manager,
@@ -318,6 +319,20 @@ where
 	}
 }
 
+impl<B, E, Block> RuntimeVersionOf for LocalCallExecutor<Block, B, E>
+where
+	E: RuntimeVersionOf,
+	Block: BlockT,
+{
+	fn runtime_version(
+		&self,
+		ext: &mut dyn sp_externalities::Externalities,
+		runtime_code: &sp_core::traits::RuntimeCode,
+	) -> Result<sp_version::RuntimeVersion, sc_executor::error::Error> {
+		RuntimeVersionOf::runtime_version(&self.executor, ext, runtime_code)
+	}
+}
+
 impl<Block, B, E> sp_version::GetRuntimeVersionAt<Block> for LocalCallExecutor<Block, B, E>
 where
 	B: backend::Backend<Block>,
@@ -357,6 +372,7 @@ mod tests {
 			WasmExecutionMethod::Interpreted,
 			Some(128),
 			1,
+			2,
 		);
 
 		let overrides = crate::client::wasm_override::dummy_overrides();
@@ -395,7 +411,7 @@ mod tests {
 		let call_executor = LocalCallExecutor {
 			backend: backend.clone(),
 			executor: executor.clone(),
-			wasm_override: Some(overrides),
+			wasm_override: Arc::new(Some(overrides)),
 			spawn_handle: Box::new(TaskExecutor::new()),
 			client_config,
 			wasm_substitutes: WasmSubstitutes::new(

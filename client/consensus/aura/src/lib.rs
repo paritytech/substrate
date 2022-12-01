@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -57,7 +57,7 @@ use sp_consensus::{
 	BlockOrigin, CanAuthorWith, Environment, Error as ConsensusError, Proposer, SelectChain,
 };
 use sp_consensus_slots::Slot;
-use sp_core::crypto::{Pair, Public};
+use sp_core::crypto::{ByteArray, Pair, Public};
 use sp_inherents::CreateInherentDataProviders;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
@@ -85,7 +85,7 @@ type AuthorityId<P> = <P as Pair>::Public;
 /// Slot duration type for Aura.
 pub type SlotDuration = sc_consensus_slots::SlotDuration<sp_consensus_aura::SlotDuration>;
 
-/// Get type of `SlotDuration` for Aura.
+/// Get the slot duration for Aura.
 pub fn slot_duration<A, B, C>(client: &C) -> CResult<SlotDuration>
 where
 	A: Codec,
@@ -93,7 +93,10 @@ where
 	C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
 	C::Api: AuraApi<B, A>,
 {
-	SlotDuration::get_or_compute(client, |a, b| a.slot_duration(b).map_err(Into::into))
+	let best_block_id = BlockId::Hash(client.usage_info().chain.best_hash);
+	let slot_duration = client.runtime_api().slot_duration(&best_block_id)?;
+
+	Ok(SlotDuration::new(slot_duration))
 }
 
 /// Get slot author for given block along with authorities.
@@ -382,58 +385,51 @@ where
 		vec![<DigestItem as CompatibleDigestItem<P::Signature>>::aura_pre_digest(slot)]
 	}
 
-	fn block_import_params(
+	async fn block_import_params(
 		&self,
-	) -> Box<
-		dyn Fn(
-				B::Header,
-				&B::Hash,
-				Vec<B::Extrinsic>,
-				StorageChanges<sp_api::TransactionFor<C, B>, B>,
-				Self::Claim,
-				Self::EpochData,
-			) -> Result<
-				sc_consensus::BlockImportParams<B, sp_api::TransactionFor<C, B>>,
-				sp_consensus::Error,
-			> + Send
-			+ 'static,
+		header: B::Header,
+		header_hash: &B::Hash,
+		body: Vec<B::Extrinsic>,
+		storage_changes: StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
+		public: Self::Claim,
+		_epoch: Self::EpochData,
+	) -> Result<
+		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
+		sp_consensus::Error,
 	> {
-		let keystore = self.keystore.clone();
-		Box::new(move |header, header_hash, body, storage_changes, public, _epoch| {
-			// sign the pre-sealed hash of the block and then
-			// add it to a digest item.
-			let public_type_pair = public.to_public_crypto_pair();
-			let public = public.to_raw_vec();
-			let signature = SyncCryptoStore::sign_with(
-				&*keystore,
-				<AuthorityId<P> as AppKey>::ID,
-				&public_type_pair,
-				header_hash.as_ref(),
+		// sign the pre-sealed hash of the block and then
+		// add it to a digest item.
+		let public_type_pair = public.to_public_crypto_pair();
+		let public = public.to_raw_vec();
+		let signature = SyncCryptoStore::sign_with(
+			&*self.keystore,
+			<AuthorityId<P> as AppKey>::ID,
+			&public_type_pair,
+			header_hash.as_ref(),
+		)
+		.map_err(|e| sp_consensus::Error::CannotSign(public.clone(), e.to_string()))?
+		.ok_or_else(|| {
+			sp_consensus::Error::CannotSign(
+				public.clone(),
+				"Could not find key in keystore.".into(),
 			)
-			.map_err(|e| sp_consensus::Error::CannotSign(public.clone(), e.to_string()))?
-			.ok_or_else(|| {
-				sp_consensus::Error::CannotSign(
-					public.clone(),
-					"Could not find key in keystore.".into(),
-				)
-			})?;
-			let signature = signature
-				.clone()
-				.try_into()
-				.map_err(|_| sp_consensus::Error::InvalidSignature(signature, public))?;
+		})?;
+		let signature = signature
+			.clone()
+			.try_into()
+			.map_err(|_| sp_consensus::Error::InvalidSignature(signature, public))?;
 
-			let signature_digest_item =
-				<DigestItem as CompatibleDigestItem<P::Signature>>::aura_seal(signature);
+		let signature_digest_item =
+			<DigestItem as CompatibleDigestItem<P::Signature>>::aura_seal(signature);
 
-			let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
-			import_block.post_digests.push(signature_digest_item);
-			import_block.body = Some(body);
-			import_block.state_action =
-				StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(storage_changes));
-			import_block.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+		let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
+		import_block.post_digests.push(signature_digest_item);
+		import_block.body = Some(body);
+		import_block.state_action =
+			StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(storage_changes));
+		import_block.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
-			Ok(import_block)
-		})
+		Ok(import_block)
 	}
 
 	fn force_authoring(&self) -> bool {
@@ -494,24 +490,34 @@ fn aura_err<B: BlockT>(error: Error<B>) -> Error<B> {
 	error
 }
 
+/// Aura Errors
 #[derive(derive_more::Display, Debug)]
-enum Error<B: BlockT> {
+pub enum Error<B: BlockT> {
+	/// Multiple Aura pre-runtime headers
 	#[display(fmt = "Multiple Aura pre-runtime headers")]
 	MultipleHeaders,
+	/// No Aura pre-runtime digest found
 	#[display(fmt = "No Aura pre-runtime digest found")]
 	NoDigestFound,
+	/// Header is unsealed
 	#[display(fmt = "Header {:?} is unsealed", _0)]
 	HeaderUnsealed(B::Hash),
+	/// Header has a bad seal
 	#[display(fmt = "Header {:?} has a bad seal", _0)]
 	HeaderBadSeal(B::Hash),
+	/// Slot Author not found
 	#[display(fmt = "Slot Author not found")]
 	SlotAuthorNotFound,
+	/// Bad signature
 	#[display(fmt = "Bad signature on {:?}", _0)]
 	BadSignature(B::Hash),
+	/// Client Error
 	Client(sp_blockchain::Error),
+	/// Unknown inherent error for identifier
 	#[display(fmt = "Unknown inherent error for identifier: {}", "String::from_utf8_lossy(_0)")]
 	UnknownInherentError(sp_inherents::InherentIdentifier),
 	#[display(fmt = "Inherent error: {}", _0)]
+	/// Inherents Error
 	Inherent(sp_inherents::Error),
 }
 
@@ -521,7 +527,8 @@ impl<B: BlockT> std::convert::From<Error<B>> for String {
 	}
 }
 
-fn find_pre_digest<B: BlockT, Signature: Codec>(header: &B::Header) -> Result<Slot, Error<B>> {
+/// Get pre-digests from the header
+pub fn find_pre_digest<B: BlockT, Signature: Codec>(header: &B::Header) -> Result<Slot, Error<B>> {
 	if header.number().is_zero() {
 		return Ok(0.into())
 	}

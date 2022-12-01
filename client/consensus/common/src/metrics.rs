@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -41,28 +41,34 @@ impl Metrics {
 		Ok(Self {
 			import_queue_processed: register(
 				CounterVec::new(
-					Opts::new("import_queue_processed_total", "Blocks processed by import queue"),
+					Opts::new(
+						"substrate_import_queue_processed_total",
+						"Blocks processed by import queue",
+					),
 					&["result"], // 'success or failure
 				)?,
 				registry,
 			)?,
 			block_verification_time: register(
 				HistogramVec::new(
-					HistogramOpts::new("block_verification_time", "Time taken to verify blocks"),
+					HistogramOpts::new(
+						"substrate_block_verification_time",
+						"Time taken to verify blocks",
+					),
 					&["result"],
 				)?,
 				registry,
 			)?,
 			block_verification_and_import_time: register(
 				Histogram::with_opts(HistogramOpts::new(
-					"block_verification_and_import_time",
+					"substrate_block_verification_and_import_time",
 					"Time taken to verify and import blocks",
 				))?,
 				registry,
 			)?,
 			justification_import_time: register(
 				Histogram::with_opts(HistogramOpts::new(
-					"justification_import_time",
+					"substrate_justification_import_time",
 					"Time taken to import justifications",
 				))?,
 				registry,

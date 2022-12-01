@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -67,23 +67,22 @@ mod tests {
 	use sc_executor_common::runtime_blob::RuntimeBlob;
 	use sc_runtime_test::wasm_binary_unwrap;
 	use sp_io::TestExternalities;
-	use sp_wasm_interface::HostFunctions;
 
 	#[test]
 	fn call_in_interpreted_wasm_works() {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
 
-		let executor = WasmExecutor::new(
+		let executor = WasmExecutor::<sp_io::SubstrateHostFunctions>::new(
 			WasmExecutionMethod::Interpreted,
 			Some(8),
-			sp_io::SubstrateHostFunctions::host_functions(),
 			8,
 			None,
+			2,
 		);
 		let res = executor
 			.uncached_call(
-				RuntimeBlob::uncompress_if_needed(&wasm_binary_unwrap()[..]).unwrap(),
+				RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap()).unwrap(),
 				&mut ext,
 				true,
 				"test_empty_return",

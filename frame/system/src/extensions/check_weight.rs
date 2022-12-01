@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -223,7 +223,7 @@ where
 	}
 
 	fn post_dispatch(
-		_pre: Self::Pre,
+		_pre: Option<Self::Pre>,
 		info: &DispatchInfoOf<Self::Call>,
 		post_info: &PostDispatchInfoOf<Self::Call>,
 		_len: usize,
@@ -563,7 +563,13 @@ mod tests {
 			let pre = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &info, len).unwrap();
 			assert_eq!(BlockWeight::<Test>::get().total(), info.weight + 256);
 
-			assert_ok!(CheckWeight::<Test>::post_dispatch(pre, &info, &post_info, len, &Ok(())));
+			assert_ok!(CheckWeight::<Test>::post_dispatch(
+				Some(pre),
+				&info,
+				&post_info,
+				len,
+				&Ok(())
+			));
 			assert_eq!(BlockWeight::<Test>::get().total(), post_info.actual_weight.unwrap() + 256);
 		})
 	}
@@ -587,7 +593,13 @@ mod tests {
 				info.weight + 128 + block_weights().get(DispatchClass::Normal).base_extrinsic,
 			);
 
-			assert_ok!(CheckWeight::<Test>::post_dispatch(pre, &info, &post_info, len, &Ok(())));
+			assert_ok!(CheckWeight::<Test>::post_dispatch(
+				Some(pre),
+				&info,
+				&post_info,
+				len,
+				&Ok(())
+			));
 			assert_eq!(
 				BlockWeight::<Test>::get().total(),
 				info.weight + 128 + block_weights().get(DispatchClass::Normal).base_extrinsic,

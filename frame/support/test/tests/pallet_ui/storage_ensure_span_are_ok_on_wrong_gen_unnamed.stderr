@@ -1,97 +1,97 @@
 error[E0277]: the trait bound `Bar: WrapperTypeDecode` is not satisfied
-  --> $DIR/storage_ensure_span_are_ok_on_wrong_gen_unnamed.rs:9:12
+  --> tests/pallet_ui/storage_ensure_span_are_ok_on_wrong_gen_unnamed.rs:10:12
    |
-9  |     #[pallet::pallet]
-   |               ^^^^^^ the trait `WrapperTypeDecode` is not implemented for `Bar`
+10 |     #[pallet::without_storage_info]
+   |               ^^^^^^^^^^^^^^^^^^^^ the trait `WrapperTypeDecode` is not implemented for `Bar`
    |
    = note: required because of the requirements on the impl of `Decode` for `Bar`
    = note: required because of the requirements on the impl of `FullCodec` for `Bar`
    = note: required because of the requirements on the impl of `PartialStorageInfoTrait` for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar>`
 note: required by `partial_storage_info`
-  --> $DIR/storage.rs:88:2
+  --> $WORKSPACE/frame/support/src/traits/storage.rs
    |
-88 |     fn partial_storage_info() -> Vec<StorageInfo>;
+   |     fn partial_storage_info() -> Vec<StorageInfo>;
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error[E0277]: the trait bound `Bar: EncodeLike` is not satisfied
-  --> $DIR/storage_ensure_span_are_ok_on_wrong_gen_unnamed.rs:9:12
+  --> tests/pallet_ui/storage_ensure_span_are_ok_on_wrong_gen_unnamed.rs:10:12
    |
-9  |     #[pallet::pallet]
-   |               ^^^^^^ the trait `EncodeLike` is not implemented for `Bar`
+10 |     #[pallet::without_storage_info]
+   |               ^^^^^^^^^^^^^^^^^^^^ the trait `EncodeLike` is not implemented for `Bar`
    |
    = note: required because of the requirements on the impl of `FullEncode` for `Bar`
    = note: required because of the requirements on the impl of `FullCodec` for `Bar`
    = note: required because of the requirements on the impl of `PartialStorageInfoTrait` for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar>`
 note: required by `partial_storage_info`
-  --> $DIR/storage.rs:88:2
+  --> $WORKSPACE/frame/support/src/traits/storage.rs
    |
-88 |     fn partial_storage_info() -> Vec<StorageInfo>;
+   |     fn partial_storage_info() -> Vec<StorageInfo>;
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error[E0277]: the trait bound `Bar: WrapperTypeEncode` is not satisfied
-  --> $DIR/storage_ensure_span_are_ok_on_wrong_gen_unnamed.rs:9:12
+  --> tests/pallet_ui/storage_ensure_span_are_ok_on_wrong_gen_unnamed.rs:10:12
    |
-9  |     #[pallet::pallet]
-   |               ^^^^^^ the trait `WrapperTypeEncode` is not implemented for `Bar`
+10 |     #[pallet::without_storage_info]
+   |               ^^^^^^^^^^^^^^^^^^^^ the trait `WrapperTypeEncode` is not implemented for `Bar`
    |
    = note: required because of the requirements on the impl of `Encode` for `Bar`
    = note: required because of the requirements on the impl of `FullEncode` for `Bar`
    = note: required because of the requirements on the impl of `FullCodec` for `Bar`
    = note: required because of the requirements on the impl of `PartialStorageInfoTrait` for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar>`
 note: required by `partial_storage_info`
-  --> $DIR/storage.rs:88:2
+  --> $WORKSPACE/frame/support/src/traits/storage.rs
    |
-88 |     fn partial_storage_info() -> Vec<StorageInfo>;
+   |     fn partial_storage_info() -> Vec<StorageInfo>;
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error[E0277]: the trait bound `Bar: TypeInfo` is not satisfied
-   --> $DIR/storage_ensure_span_are_ok_on_wrong_gen_unnamed.rs:20:12
+   --> tests/pallet_ui/storage_ensure_span_are_ok_on_wrong_gen_unnamed.rs:21:12
     |
-20  |     #[pallet::storage]
+21  |     #[pallet::storage]
     |               ^^^^^^^ the trait `TypeInfo` is not implemented for `Bar`
     |
     = note: required because of the requirements on the impl of `StaticTypeInfo` for `Bar`
     = note: required because of the requirements on the impl of `StorageEntryMetadataBuilder` for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar>`
 note: required by `build_metadata`
-   --> $DIR/mod.rs:113:2
+   --> $WORKSPACE/frame/support/src/storage/types/mod.rs
     |
-113 |     fn build_metadata(doc: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>);
+    |     fn build_metadata(doc: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>);
     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error[E0277]: the trait bound `Bar: WrapperTypeDecode` is not satisfied
-   --> $DIR/storage_ensure_span_are_ok_on_wrong_gen_unnamed.rs:20:12
+   --> tests/pallet_ui/storage_ensure_span_are_ok_on_wrong_gen_unnamed.rs:21:12
     |
-20  |     #[pallet::storage]
+21  |     #[pallet::storage]
     |               ^^^^^^^ the trait `WrapperTypeDecode` is not implemented for `Bar`
     |
     = note: required because of the requirements on the impl of `Decode` for `Bar`
     = note: required because of the requirements on the impl of `FullCodec` for `Bar`
     = note: required because of the requirements on the impl of `StorageEntryMetadataBuilder` for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar>`
 note: required by `build_metadata`
-   --> $DIR/mod.rs:113:2
+   --> $WORKSPACE/frame/support/src/storage/types/mod.rs
     |
-113 |     fn build_metadata(doc: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>);
+    |     fn build_metadata(doc: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>);
     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error[E0277]: the trait bound `Bar: EncodeLike` is not satisfied
-   --> $DIR/storage_ensure_span_are_ok_on_wrong_gen_unnamed.rs:20:12
+   --> tests/pallet_ui/storage_ensure_span_are_ok_on_wrong_gen_unnamed.rs:21:12
     |
-20  |     #[pallet::storage]
+21  |     #[pallet::storage]
     |               ^^^^^^^ the trait `EncodeLike` is not implemented for `Bar`
     |
     = note: required because of the requirements on the impl of `FullEncode` for `Bar`
     = note: required because of the requirements on the impl of `FullCodec` for `Bar`
     = note: required because of the requirements on the impl of `StorageEntryMetadataBuilder` for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar>`
 note: required by `build_metadata`
-   --> $DIR/mod.rs:113:2
+   --> $WORKSPACE/frame/support/src/storage/types/mod.rs
     |
-113 |     fn build_metadata(doc: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>);
+    |     fn build_metadata(doc: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>);
     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error[E0277]: the trait bound `Bar: WrapperTypeEncode` is not satisfied
-   --> $DIR/storage_ensure_span_are_ok_on_wrong_gen_unnamed.rs:20:12
+   --> tests/pallet_ui/storage_ensure_span_are_ok_on_wrong_gen_unnamed.rs:21:12
     |
-20  |     #[pallet::storage]
+21  |     #[pallet::storage]
     |               ^^^^^^^ the trait `WrapperTypeEncode` is not implemented for `Bar`
     |
     = note: required because of the requirements on the impl of `Encode` for `Bar`
@@ -99,7 +99,7 @@ error[E0277]: the trait bound `Bar: WrapperTypeEncode` is not satisfied
     = note: required because of the requirements on the impl of `FullCodec` for `Bar`
     = note: required because of the requirements on the impl of `StorageEntryMetadataBuilder` for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar>`
 note: required by `build_metadata`
-   --> $DIR/mod.rs:113:2
+   --> $WORKSPACE/frame/support/src/storage/types/mod.rs
     |
-113 |     fn build_metadata(doc: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>);
+    |     fn build_metadata(doc: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>);
     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

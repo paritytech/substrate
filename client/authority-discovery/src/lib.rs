@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -78,6 +78,11 @@ pub struct WorkerConfig {
 	///
 	/// Defaults to `true` to avoid the surprise factor.
 	pub publish_non_global_ips: bool,
+
+	/// Reject authority discovery records that are not signed by their network identity (PeerId)
+	///
+	/// Defaults to `false` to provide compatibility with old versions
+	pub strict_record_validation: bool,
 }
 
 impl Default for WorkerConfig {
@@ -98,6 +103,7 @@ impl Default for WorkerConfig {
 			// `authority_discovery_dht_event_received`.
 			max_query_interval: Duration::from_secs(10 * 60),
 			publish_non_global_ips: true,
+			strict_record_validation: false,
 		}
 	}
 }

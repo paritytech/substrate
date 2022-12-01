@@ -267,7 +267,7 @@ where
 			.lock()
 			.drain()
 			// Patch wasm identifiers
-			.filter_map(|(_, s)| patch_and_filter(SpanDatum::from(s), targets))
+			.filter_map(|(_, s)| patch_and_filter(s, targets))
 			.collect();
 		let events: Vec<_> = block_subscriber
 			.events
@@ -315,7 +315,7 @@ fn event_values_filter(event: &TraceEvent, filter_kind: &str, values: &str) -> b
 		.values
 		.string_values
 		.get(filter_kind)
-		.and_then(|value| Some(check_target(values, value, &event.level)))
+		.map(|value| check_target(values, value, &event.level))
 		.unwrap_or(false)
 }
 

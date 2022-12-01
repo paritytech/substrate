@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -43,11 +43,10 @@ pub use pallet::*;
 use sp_runtime::traits::{StaticLookup, Zero};
 use sp_std::prelude::*;
 
-type BalanceOf<T> =
-	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
-	<T as frame_system::Config>::AccountId,
->>::NegativeImbalance;
+type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
+type BalanceOf<T> = <<T as Config>::Currency as Currency<AccountIdOf<T>>>::Balance;
+type NegativeImbalanceOf<T> =
+	<<T as Config>::Currency as Currency<AccountIdOf<T>>>::NegativeImbalance;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -115,6 +114,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::call]
@@ -245,7 +245,10 @@ mod tests {
 	use super::*;
 	use crate as pallet_nicks;
 
-	use frame_support::{assert_noop, assert_ok, ord_parameter_types, parameter_types};
+	use frame_support::{
+		assert_noop, assert_ok, ord_parameter_types, parameter_types,
+		traits::{ConstU32, ConstU64},
+	};
 	use frame_system::EnsureSignedBy;
 	use sp_core::H256;
 	use sp_runtime::{
@@ -262,14 +265,13 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
-			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-			Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-			Nicks: pallet_nicks::{Pallet, Call, Storage, Event<T>},
+			System: frame_system,
+			Balances: pallet_balances,
+			Nicks: pallet_nicks,
 		}
 	);
 
 	parameter_types! {
-		pub const BlockHashCount: u64 = 250;
 		pub BlockWeights: frame_system::limits::BlockWeights =
 			frame_system::limits::BlockWeights::simple_max(1024);
 	}
@@ -288,7 +290,7 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = Event;
-		type BlockHashCount = BlockHashCount;
+		type BlockHashCount = ConstU64<250>;
 		type Version = ();
 		type PalletInfo = PalletInfo;
 		type AccountData = pallet_balances::AccountData<u64>;
@@ -297,10 +299,9 @@ mod tests {
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
 		type OnSetCode = ();
+		type MaxConsumers = ConstU32<16>;
 	}
-	parameter_types! {
-		pub const ExistentialDeposit: u64 = 1;
-	}
+
 	impl pallet_balances::Config for Test {
 		type MaxLocks = ();
 		type MaxReserves = ();
@@ -308,26 +309,22 @@ mod tests {
 		type Balance = u64;
 		type Event = Event;
 		type DustRemoval = ();
-		type ExistentialDeposit = ExistentialDeposit;
+		type ExistentialDeposit = ConstU64<1>;
 		type AccountStore = System;
 		type WeightInfo = ();
 	}
-	parameter_types! {
-		pub const ReservationFee: u64 = 2;
-		pub const MinLength: u32 = 3;
-		pub const MaxLength: u32 = 16;
-	}
+
 	ord_parameter_types! {
 		pub const One: u64 = 1;
 	}
 	impl Config for Test {
 		type Event = Event;
 		type Currency = Balances;
-		type ReservationFee = ReservationFee;
+		type ReservationFee = ConstU64<2>;
 		type Slashed = ();
 		type ForceOrigin = EnsureSignedBy<One, u64>;
-		type MinLength = MinLength;
-		type MaxLength = MaxLength;
+		type MinLength = ConstU32<3>;
+		type MaxLength = ConstU32<16>;
 	}
 
 	fn new_test_ext() -> sp_io::TestExternalities {

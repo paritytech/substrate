@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -99,7 +99,7 @@ fn to_vec<P: sp_core::Pair>(uri: &str, pass: Option<SecretString>) -> Result<Vec
 mod tests {
 	use super::*;
 	use sc_service::{ChainSpec, ChainType, GenericChainSpec, NoExtension};
-	use sp_core::{sr25519::Pair, Pair as _, Public};
+	use sp_core::{sr25519::Pair, ByteArray, Pair as _};
 	use structopt::StructOpt;
 	use tempfile::TempDir;
 
@@ -141,6 +141,7 @@ mod tests {
 				ChainType::Development,
 				|| unimplemented!("Not required in tests"),
 				Vec::new(),
+				None,
 				None,
 				None,
 				None,

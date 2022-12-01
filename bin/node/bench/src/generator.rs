@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -20,7 +20,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use kvdb::KeyValueDB;
 use node_primitives::Hash;
-use sp_trie::{trie_types::TrieDBMut, TrieMut};
+use sp_trie::{trie_types::TrieDBMutV1, TrieMut};
 
 use crate::simple_trie::SimpleTrie;
 
@@ -43,8 +43,7 @@ pub fn generate_trie(
 		);
 		let mut trie = SimpleTrie { db, overlay: &mut overlay };
 		{
-			let mut trie_db = TrieDBMut::new(&mut trie, &mut root);
-
+			let mut trie_db = TrieDBMutV1::<crate::simple_trie::Hasher>::new(&mut trie, &mut root);
 			for (key, value) in key_values {
 				trie_db.insert(&key, &value).expect("trie insertion failed");
 			}

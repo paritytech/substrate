@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -51,11 +51,13 @@ use sp_core::{
 	offchain::{
 		HttpError, HttpRequestId, HttpRequestStatus, OpaqueNetworkState, StorageKind, Timestamp,
 	},
-	sr25519, LogLevel, LogLevelFilter, OpaquePeerId, H256,
+	sr25519,
+	storage::StateVersion,
+	LogLevel, LogLevelFilter, OpaquePeerId, H256,
 };
 
 #[cfg(feature = "std")]
-use sp_trie::{trie_types::Layout, TrieConfiguration};
+use sp_trie::{LayoutV0, LayoutV1, TrieConfiguration};
 
 use sp_runtime_interface::{
 	pass_by::{PassBy, PassByCodec},
@@ -88,12 +90,12 @@ pub enum EcdsaVerifyError {
 }
 
 /// The outcome of calling `storage_kill`. Returned value is the number of storage items
-/// removed from the trie from making the `storage_kill` call.
+/// removed from the backend from making the `storage_kill` call.
 #[derive(PassByCodec, Encode, Decode)]
 pub enum KillStorageResult {
-	/// No key remains in the child trie.
+	/// All key to remove were removed, return number of key removed from backend.
 	AllRemoved(u32),
-	/// At least one key still resides in the child trie due to the supplied limit.
+	/// Not all key to remove were removed, return number of key removed from backend.
 	SomeRemaining(u32),
 }
 
@@ -192,7 +194,17 @@ pub trait Storage {
 	///
 	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
 	fn root(&mut self) -> Vec<u8> {
-		self.storage_root()
+		self.storage_root(StateVersion::V0)
+	}
+
+	/// "Commit" all existing operations and compute the resulting storage root.
+	///
+	/// The hashing algorithm is defined by the `Block`.
+	///
+	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
+	#[version(2, register_only)]
+	fn root(&mut self, version: StateVersion) -> Vec<u8> {
+		self.storage_root(version)
 	}
 
 	/// Always returns `None`. This function exists for compatibility reasons.
@@ -373,7 +385,19 @@ pub trait DefaultChildStorage {
 	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
 	fn root(&mut self, storage_key: &[u8]) -> Vec<u8> {
 		let child_info = ChildInfo::new_default(storage_key);
-		self.child_storage_root(&child_info)
+		self.child_storage_root(&child_info, StateVersion::V0)
+	}
+
+	/// Default child root calculation.
+	///
+	/// "Commit" all existing operations and compute the resulting child storage root.
+	/// The hashing algorithm is defined by the `Block`.
+	///
+	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
+	#[version(2, register_only)]
+	fn root(&mut self, storage_key: &[u8], version: StateVersion) -> Vec<u8> {
+		let child_info = ChildInfo::new_default(storage_key);
+		self.child_storage_root(&child_info, version)
 	}
 
 	/// Child storage key iteration.
@@ -390,27 +414,63 @@ pub trait DefaultChildStorage {
 pub trait Trie {
 	/// A trie root formed from the iterated items.
 	fn blake2_256_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
-		Layout::<sp_core::Blake2Hasher>::trie_root(input)
+		LayoutV0::<sp_core::Blake2Hasher>::trie_root(input)
+	}
+
+	/// A trie root formed from the iterated items.
+	#[version(2, register_only)]
+	fn blake2_256_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> H256 {
+		match version {
+			StateVersion::V0 => LayoutV0::<sp_core::Blake2Hasher>::trie_root(input),
+			StateVersion::V1 => LayoutV1::<sp_core::Blake2Hasher>::trie_root(input),
+		}
 	}
 
 	/// A trie root formed from the enumerated items.
 	fn blake2_256_ordered_root(input: Vec<Vec<u8>>) -> H256 {
-		Layout::<sp_core::Blake2Hasher>::ordered_trie_root(input)
+		LayoutV0::<sp_core::Blake2Hasher>::ordered_trie_root(input)
+	}
+
+	/// A trie root formed from the enumerated items.
+	#[version(2, register_only)]
+	fn blake2_256_ordered_root(input: Vec<Vec<u8>>, version: StateVersion) -> H256 {
+		match version {
+			StateVersion::V0 => LayoutV0::<sp_core::Blake2Hasher>::ordered_trie_root(input),
+			StateVersion::V1 => LayoutV1::<sp_core::Blake2Hasher>::ordered_trie_root(input),
+		}
 	}
 
 	/// A trie root formed from the iterated items.
 	fn keccak_256_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
-		Layout::<sp_core::KeccakHasher>::trie_root(input)
+		LayoutV0::<sp_core::KeccakHasher>::trie_root(input)
+	}
+
+	/// A trie root formed from the iterated items.
+	#[version(2, register_only)]
+	fn keccak_256_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> H256 {
+		match version {
+			StateVersion::V0 => LayoutV0::<sp_core::KeccakHasher>::trie_root(input),
+			StateVersion::V1 => LayoutV1::<sp_core::KeccakHasher>::trie_root(input),
+		}
 	}
 
 	/// A trie root formed from the enumerated items.
 	fn keccak_256_ordered_root(input: Vec<Vec<u8>>) -> H256 {
-		Layout::<sp_core::KeccakHasher>::ordered_trie_root(input)
+		LayoutV0::<sp_core::KeccakHasher>::ordered_trie_root(input)
+	}
+
+	/// A trie root formed from the enumerated items.
+	#[version(2, register_only)]
+	fn keccak_256_ordered_root(input: Vec<Vec<u8>>, version: StateVersion) -> H256 {
+		match version {
+			StateVersion::V0 => LayoutV0::<sp_core::KeccakHasher>::ordered_trie_root(input),
+			StateVersion::V1 => LayoutV1::<sp_core::KeccakHasher>::ordered_trie_root(input),
+		}
 	}
 
 	/// Verify trie proof
 	fn blake2_256_verify_proof(root: H256, proof: &[Vec<u8>], key: &[u8], value: &[u8]) -> bool {
-		sp_trie::verify_trie_proof::<Layout<sp_core::Blake2Hasher>, _, _, _>(
+		sp_trie::verify_trie_proof::<LayoutV0<sp_core::Blake2Hasher>, _, _, _>(
 			&root,
 			proof,
 			&[(key, Some(value))],
@@ -419,13 +479,67 @@ pub trait Trie {
 	}
 
 	/// Verify trie proof
+	#[version(2, register_only)]
+	fn blake2_256_verify_proof(
+		root: H256,
+		proof: &[Vec<u8>],
+		key: &[u8],
+		value: &[u8],
+		version: StateVersion,
+	) -> bool {
+		match version {
+			StateVersion::V0 => sp_trie::verify_trie_proof::<
+				LayoutV0<sp_core::Blake2Hasher>,
+				_,
+				_,
+				_,
+			>(&root, proof, &[(key, Some(value))])
+			.is_ok(),
+			StateVersion::V1 => sp_trie::verify_trie_proof::<
+				LayoutV1<sp_core::Blake2Hasher>,
+				_,
+				_,
+				_,
+			>(&root, proof, &[(key, Some(value))])
+			.is_ok(),
+		}
+	}
+
+	/// Verify trie proof
 	fn keccak_256_verify_proof(root: H256, proof: &[Vec<u8>], key: &[u8], value: &[u8]) -> bool {
-		sp_trie::verify_trie_proof::<Layout<sp_core::KeccakHasher>, _, _, _>(
+		sp_trie::verify_trie_proof::<LayoutV0<sp_core::KeccakHasher>, _, _, _>(
 			&root,
 			proof,
 			&[(key, Some(value))],
 		)
 		.is_ok()
+	}
+
+	/// Verify trie proof
+	#[version(2, register_only)]
+	fn keccak_256_verify_proof(
+		root: H256,
+		proof: &[Vec<u8>],
+		key: &[u8],
+		value: &[u8],
+		version: StateVersion,
+	) -> bool {
+		match version {
+			StateVersion::V0 => sp_trie::verify_trie_proof::<
+				LayoutV0<sp_core::KeccakHasher>,
+				_,
+				_,
+				_,
+			>(&root, proof, &[(key, Some(value))])
+			.is_ok(),
+			StateVersion::V1 => sp_trie::verify_trie_proof::<
+				LayoutV1<sp_core::KeccakHasher>,
+				_,
+				_,
+				_,
+			>(&root, proof, &[(key, Some(value))])
+			.is_ok(),
+		}
 	}
 }
 
@@ -709,6 +823,22 @@ pub trait Crypto {
 			.map(|sig| ecdsa::Signature::from_slice(sig.as_slice()))
 	}
 
+	/// Sign the given a pre-hashed `msg` with the `ecdsa` key that corresponds to the given public
+	/// key and key type in the keystore.
+	///
+	/// Returns the signature.
+	fn ecdsa_sign_prehashed(
+		&mut self,
+		id: KeyTypeId,
+		pub_key: &ecdsa::Public,
+		msg: &[u8; 32],
+	) -> Option<ecdsa::Signature> {
+		let keystore = &***self
+			.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!");
+		SyncCryptoStore::ecdsa_sign_prehashed(keystore, id, pub_key, msg).ok().flatten()
+	}
+
 	/// Verify `ecdsa` signature.
 	///
 	/// Returns `true` when the verification was successful.
@@ -721,7 +851,18 @@ pub trait Crypto {
 	/// Returns `true` when the verification was successful.
 	#[version(2)]
 	fn ecdsa_verify(sig: &ecdsa::Signature, msg: &[u8], pub_key: &ecdsa::Public) -> bool {
-		ecdsa::Pair::verify_deprecated(sig, msg, pub_key)
+		ecdsa::Pair::verify(sig, msg, pub_key)
+	}
+
+	/// Verify `ecdsa` signature with pre-hashed `msg`.
+	///
+	/// Returns `true` when the verification was successful.
+	fn ecdsa_verify_prehashed(
+		sig: &ecdsa::Signature,
+		msg: &[u8; 32],
+		pub_key: &ecdsa::Public,
+	) -> bool {
+		ecdsa::Pair::verify_prehashed(sig, msg, pub_key)
 	}
 
 	/// Register a `ecdsa` signature for batch verification.
@@ -1485,7 +1626,7 @@ pub fn panic(info: &core::panic::PanicInfo) -> ! {
 #[alloc_error_handler]
 pub fn oom(_: core::alloc::Layout) -> ! {
 	logging::log(LogLevel::Error, "runtime", b"Runtime memory exhausted. Aborting");
-	unsafe { core::arch::wasm32::unreachable() };
+	core::arch::wasm32::unreachable();
 }
 
 /// Type alias for Externalities implementation used in tests.
@@ -1516,7 +1657,10 @@ pub type SubstrateHostFunctions = (
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_core::{map, storage::Storage, testing::TaskExecutor, traits::TaskExecutorExt};
+	use sp_core::{
+		crypto::UncheckedInto, map, storage::Storage, testing::TaskExecutor,
+		traits::TaskExecutorExt,
+	};
 	use sp_state_machine::BasicExternalities;
 	use std::any::TypeId;
 
@@ -1539,6 +1683,16 @@ mod tests {
 		t.execute_with(|| {
 			assert_eq!(storage::get(b"hello"), None);
 			assert_eq!(storage::get(b"foo"), Some(b"bar".to_vec()));
+		});
+
+		let value = vec![7u8; 35];
+		let storage =
+			Storage { top: map![b"foo00".to_vec() => value.clone()], children_default: map![] };
+		t = BasicExternalities::new(storage);
+
+		t.execute_with(|| {
+			assert_eq!(storage::get(b"hello"), None);
+			assert_eq!(storage::get(b"foo00"), Some(value.clone()));
 		});
 	}
 
@@ -1617,7 +1771,7 @@ mod tests {
 			}
 
 			// push invlaid
-			crypto::sr25519_batch_verify(&Default::default(), &Vec::new(), &Default::default());
+			crypto::sr25519_batch_verify(&zero_sr_sig(), &Vec::new(), &zero_sr_pub());
 			assert!(!crypto::finish_batch_verify());
 
 			crypto::start_batch_verify();
@@ -1630,14 +1784,31 @@ mod tests {
 		});
 	}
 
+	fn zero_ed_pub() -> ed25519::Public {
+		[0u8; 32].unchecked_into()
+	}
+
+	fn zero_ed_sig() -> ed25519::Signature {
+		ed25519::Signature::from_raw([0u8; 64])
+	}
+
+	fn zero_sr_pub() -> sr25519::Public {
+		[0u8; 32].unchecked_into()
+	}
+
+	fn zero_sr_sig() -> sr25519::Signature {
+		sr25519::Signature::from_raw([0u8; 64])
+	}
+
 	#[test]
 	fn batching_works() {
 		let mut ext = BasicExternalities::default();
 		ext.register_extension(TaskExecutorExt::new(TaskExecutor::new()));
+
 		ext.execute_with(|| {
 			// invalid ed25519 signature
 			crypto::start_batch_verify();
-			crypto::ed25519_batch_verify(&Default::default(), &Vec::new(), &Default::default());
+			crypto::ed25519_batch_verify(&zero_ed_sig(), &Vec::new(), &zero_ed_pub());
 			assert!(!crypto::finish_batch_verify());
 
 			// 2 valid ed25519 signatures
@@ -1663,7 +1834,7 @@ mod tests {
 			let signature = pair.sign(msg);
 			crypto::ed25519_batch_verify(&signature, msg, &pair.public());
 
-			crypto::ed25519_batch_verify(&Default::default(), &Vec::new(), &Default::default());
+			crypto::ed25519_batch_verify(&zero_ed_sig(), &Vec::new(), &zero_ed_pub());
 
 			assert!(!crypto::finish_batch_verify());
 
@@ -1695,7 +1866,7 @@ mod tests {
 			let signature = pair.sign(msg);
 			crypto::sr25519_batch_verify(&signature, msg, &pair.public());
 
-			crypto::sr25519_batch_verify(&Default::default(), &Vec::new(), &Default::default());
+			crypto::sr25519_batch_verify(&zero_sr_sig(), &Vec::new(), &zero_sr_pub());
 
 			assert!(!crypto::finish_batch_verify());
 		});

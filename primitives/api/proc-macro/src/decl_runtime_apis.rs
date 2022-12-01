@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -235,9 +235,7 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 		// compatible. To ensure that we forward it by ref/value, we use the value given by the
 		// the user. Otherwise if it is not using the block, we don't need to add anything.
 		let input_borrows =
-			params
-				.iter()
-				.map(|v| if type_is_using_block(&v.1) { v.2.clone() } else { None });
+			params.iter().map(|v| if type_is_using_block(&v.1) { v.2 } else { None });
 
 		// Replace all `Block` with `NodeBlock`, add `'a` lifetime to references and collect
 		// all the function inputs.

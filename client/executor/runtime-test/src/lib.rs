@@ -180,6 +180,7 @@ sp_core::wasm_export_functions! {
 			   b"one"[..].into(),
 			   b"two"[..].into(),
 		   ],
+				sp_core::storage::StateVersion::V1,
 	   ).as_ref().to_vec()
    }
 
@@ -332,6 +333,14 @@ sp_core::wasm_export_functions! {
    fn test_panic_in_spawned() {
 	   sp_tasks::spawn(tasks::panicker, vec![]).join();
    }
+
+	fn test_return_i8() -> i8 {
+		-66
+	}
+
+	fn test_take_i8(value: i8) {
+		assert_eq!(value, -66);
+	}
 }
 
 #[cfg(not(feature = "std"))]

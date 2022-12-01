@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -648,6 +648,11 @@ impl<B: BlockT> ChainSync<B> {
 		self.downloaded_blocks
 	}
 
+	/// Returns the current number of peers stored within this state machine.
+	pub fn num_peers(&self) -> usize {
+		self.peers.len()
+	}
+
 	/// Handle a new connected peer.
 	///
 	/// Call this method whenever we connect to a new peer.
@@ -1095,15 +1100,17 @@ impl<B: BlockT> ChainSync<B> {
 						}
 						self.drain_blocks()
 					},
-					PeerSyncState::DownloadingGap(start_block) => {
-						let start_block = *start_block;
+					PeerSyncState::DownloadingGap(_) => {
 						peer.state = PeerSyncState::Available;
 						if let Some(gap_sync) = &mut self.gap_sync {
 							gap_sync.blocks.clear_peer_download(who);
-							validate_blocks::<B>(&blocks, who, Some(request))?;
-							gap_sync.blocks.insert(start_block, blocks, who.clone());
+							if let Some(start_block) =
+								validate_blocks::<B>(&blocks, who, Some(request))?
+							{
+								gap_sync.blocks.insert(start_block, blocks, who.clone());
+							}
 							gap = true;
-							gap_sync
+							let blocks: Vec<_> = gap_sync
 								.blocks
 								.drain(gap_sync.best_queued_number + One::one())
 								.into_iter()
@@ -1126,7 +1133,9 @@ impl<B: BlockT> ChainSync<B> {
 										state: None,
 									}
 								})
-								.collect()
+								.collect();
+							debug!(target: "sync", "Drained {} gap blocks from {}", blocks.len(), gap_sync.best_queued_number);
+							blocks
 						} else {
 							debug!(target: "sync", "Unexpected gap block response from {}", who);
 							return Err(BadPeer(who.clone(), rep::NO_BLOCK))
@@ -2409,7 +2418,11 @@ fn fork_sync_request<B: BlockT>(
 		if !r.peers.contains(id) {
 			continue
 		}
-		if r.number <= best_num {
+		// Download the fork only if it is behind or not too far ahead our tip of the chain
+		// Otherwise it should be downloaded in full sync mode.
+		if r.number <= best_num ||
+			(r.number - best_num).saturated_into::<u32>() < MAX_BLOCKS_TO_REQUEST as u32
+		{
 			let parent_status = r.parent_hash.as_ref().map_or(BlockStatus::Unknown, check_block);
 			let count = if parent_status == BlockStatus::Unknown {
 				(r.number - finalized).saturated_into::<u32>() // up to the last finalized block
@@ -2429,6 +2442,8 @@ fn fork_sync_request<B: BlockT>(
 					max: Some(count),
 				},
 			))
+		} else {
+			trace!(target: "sync", "Fork too far in the future: {:?} (#{})", hash, r.number);
 		}
 	}
 	None
@@ -2539,8 +2554,10 @@ fn validate_blocks<Block: BlockT>(
 		}
 		if let (Some(header), Some(body)) = (&b.header, &b.body) {
 			let expected = *header.extrinsics_root();
-			let got =
-				HashFor::<Block>::ordered_trie_root(body.iter().map(Encode::encode).collect());
+			let got = HashFor::<Block>::ordered_trie_root(
+				body.iter().map(Encode::encode).collect(),
+				sp_runtime::StateVersion::V0,
+			);
 			if expected != got {
 				debug!(
 					target:"sync",
@@ -3166,5 +3183,45 @@ mod test {
 
 		sync.peer_disconnected(&peer_id1);
 		assert!(sync.fork_targets.len() == 0);
+	}
+
+	#[test]
+	fn can_import_response_with_missing_blocks() {
+		sp_tracing::try_init_simple();
+		let mut client2 = Arc::new(TestClientBuilder::new().build());
+		let blocks = (0..4).map(|_| build_block(&mut client2, None, false)).collect::<Vec<_>>();
+
+		let empty_client = Arc::new(TestClientBuilder::new().build());
+
+		let mut sync = ChainSync::new(
+			SyncMode::Full,
+			empty_client.clone(),
+			Box::new(DefaultBlockAnnounceValidator),
+			1,
+			None,
+		)
+		.unwrap();
+
+		let peer_id1 = PeerId::random();
+		let best_block = blocks[3].clone();
+		sync.new_peer(peer_id1.clone(), best_block.hash(), *best_block.header().number())
+			.unwrap();
+
+		sync.peers.get_mut(&peer_id1).unwrap().state = PeerSyncState::Available;
+		sync.peers.get_mut(&peer_id1).unwrap().common_number = 0;
+
+		// Request all missing blocks and respond only with some.
+		let request =
+			get_block_request(&mut sync, FromBlock::Hash(best_block.hash()), 4, &peer_id1);
+		let response =
+			create_block_response(vec![blocks[3].clone(), blocks[2].clone(), blocks[1].clone()]);
+		sync.on_block_data(&peer_id1, Some(request.clone()), response).unwrap();
+		assert_eq!(sync.best_queued_number, 0);
+
+		// Request should only contain the missing block.
+		let request = get_block_request(&mut sync, FromBlock::Number(1), 1, &peer_id1);
+		let response = create_block_response(vec![blocks[0].clone()]);
+		sync.on_block_data(&peer_id1, Some(request), response).unwrap();
+		assert_eq!(sync.best_queued_number, 4);
 	}
 }

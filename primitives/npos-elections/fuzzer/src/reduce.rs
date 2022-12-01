@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -90,7 +90,7 @@ fn generate_random_phragmen_assignment(
 			.map(|_| {
 				let target =
 					targets_to_chose_from.remove(rng.gen_range(0, targets_to_chose_from.len()));
-				if winners.iter().find(|w| **w == target).is_none() {
+				if winners.iter().all(|w| *w != target) {
 					winners.push(target.clone());
 				}
 				(target, rng.gen_range(1 * KSM, 100 * KSM))

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,98 +16,41 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
+use sc_utils::notification::{NotificationSender, NotificationStream, TracingKeyStr};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 
-use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
-use sp_runtime::traits::{Block, NumberFor};
+/// A commitment with matching BEEFY authorities' signatures.
+pub type BeefySignedCommitment<Block> =
+	beefy_primitives::SignedCommitment<NumberFor<Block>, beefy_primitives::crypto::Signature>;
 
-use parking_lot::Mutex;
+/// The sending half of the notifications channel(s) used to send
+/// notifications about best BEEFY block from the gadget side.
+pub type BeefyBestBlockSender<Block> = NotificationSender<<Block as BlockT>::Hash>;
 
-/// Stream of signed commitments returned when subscribing.
-pub type SignedCommitment<Block> =
-	beefy_primitives::SignedCommitment<NumberFor<Block>, beefy_primitives::MmrRootHash>;
+/// The receiving half of a notifications channel used to receive
+/// notifications about best BEEFY blocks determined on the gadget side.
+pub type BeefyBestBlockStream<Block> =
+	NotificationStream<<Block as BlockT>::Hash, BeefyBestBlockTracingKey>;
 
-/// Stream of signed commitments returned when subscribing.
-type SignedCommitmentStream<Block> = TracingUnboundedReceiver<SignedCommitment<Block>>;
+/// The sending half of the notifications channel(s) used to send notifications
+/// about signed commitments generated at the end of a BEEFY round.
+pub type BeefySignedCommitmentSender<Block> = NotificationSender<BeefySignedCommitment<Block>>;
 
-/// Sending endpoint for notifying about signed commitments.
-type SignedCommitmentSender<Block> = TracingUnboundedSender<SignedCommitment<Block>>;
+/// The receiving half of a notifications channel used to receive notifications
+/// about signed commitments generated at the end of a BEEFY round.
+pub type BeefySignedCommitmentStream<Block> =
+	NotificationStream<BeefySignedCommitment<Block>, BeefySignedCommitmentTracingKey>;
 
-/// Collection of channel sending endpoints shared with the receiver side so they can register
-/// themselves.
-type SharedSignedCommitmentSenders<Block> = Arc<Mutex<Vec<SignedCommitmentSender<Block>>>>;
-
-/// The sending half of the signed commitment channel(s).
-///
-/// Used to send notifications about signed commitments generated at the end of a BEEFY round.
+/// Provides tracing key for BEEFY best block stream.
 #[derive(Clone)]
-pub struct BeefySignedCommitmentSender<B>
-where
-	B: Block,
-{
-	subscribers: SharedSignedCommitmentSenders<B>,
+pub struct BeefyBestBlockTracingKey;
+impl TracingKeyStr for BeefyBestBlockTracingKey {
+	const TRACING_KEY: &'static str = "mpsc_beefy_best_block_notification_stream";
 }
 
-impl<B> BeefySignedCommitmentSender<B>
-where
-	B: Block,
-{
-	/// The `subscribers` should be shared with a corresponding `SignedCommitmentSender`.
-	fn new(subscribers: SharedSignedCommitmentSenders<B>) -> Self {
-		Self { subscribers }
-	}
-
-	/// Send out a notification to all subscribers that a new signed commitment is available for a
-	/// block.
-	pub fn notify(&self, signed_commitment: SignedCommitment<B>) {
-		let mut subscribers = self.subscribers.lock();
-
-		// do an initial prune on closed subscriptions
-		subscribers.retain(|n| !n.is_closed());
-
-		if !subscribers.is_empty() {
-			subscribers.retain(|n| n.unbounded_send(signed_commitment.clone()).is_ok());
-		}
-	}
-}
-
-/// The receiving half of the signed commitments channel.
-///
-/// Used to receive notifications about signed commitments generated at the end of a BEEFY round.
-/// The `BeefySignedCommitmentStream` entity stores the `SharedSignedCommitmentSenders` so it can be
-/// used to add more subscriptions.
+/// Provides tracing key for BEEFY signed commitments stream.
 #[derive(Clone)]
-pub struct BeefySignedCommitmentStream<B>
-where
-	B: Block,
-{
-	subscribers: SharedSignedCommitmentSenders<B>,
-}
-
-impl<B> BeefySignedCommitmentStream<B>
-where
-	B: Block,
-{
-	/// Creates a new pair of receiver and sender of signed commitment notifications.
-	pub fn channel() -> (BeefySignedCommitmentSender<B>, Self) {
-		let subscribers = Arc::new(Mutex::new(vec![]));
-		let receiver = BeefySignedCommitmentStream::new(subscribers.clone());
-		let sender = BeefySignedCommitmentSender::new(subscribers);
-		(sender, receiver)
-	}
-
-	/// Create a new receiver of signed commitment notifications.
-	///
-	/// The `subscribers` should be shared with a corresponding `BeefySignedCommitmentSender`.
-	fn new(subscribers: SharedSignedCommitmentSenders<B>) -> Self {
-		Self { subscribers }
-	}
-
-	/// Subscribe to a channel through which signed commitments are sent at the end of each BEEFY
-	/// voting round.
-	pub fn subscribe(&self) -> SignedCommitmentStream<B> {
-		let (sender, receiver) = tracing_unbounded("mpsc_signed_commitments_notification_stream");
-		self.subscribers.lock().push(sender);
-		receiver
-	}
+pub struct BeefySignedCommitmentTracingKey;
+impl TracingKeyStr for BeefySignedCommitmentTracingKey {
+	const TRACING_KEY: &'static str = "mpsc_beefy_signed_commitments_notification_stream";
 }
