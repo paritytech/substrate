@@ -33,7 +33,6 @@ pub fn generate_cargo_keys() {
 			},
 			Ok(o) => {
 				println!("cargo:warning=Git command failed with status: {}", o.status);
-				println!("cargo:warning=Git command failed with status: {}", o.status);
 				Cow::from("unknown")
 			},
 			Err(err) => {
