@@ -755,8 +755,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		when: T::BlockNumber,
 	) -> Option<(T::BlockNumber, ScheduleAddressOf<T, I>)> {
 		let alarm_interval = T::AlarmInterval::get().max(One::one());
-		let when = when.saturating_add(alarm_interval).saturating_sub(One::one()) /
-			(alarm_interval.saturating_mul(alarm_interval)).max(One::one());
+		// Alarm must go off no earlier than `when`.
+		// This rounds `when` upwards to the next multiple of `alarm_interval`.
+		let when = (when.saturating_add(alarm_interval.saturating_sub(One::one())) / alarm_interval)
+			.saturating_mul(alarm_interval);
 		let maybe_result = T::Scheduler::schedule(
 			DispatchTime::At(when),
 			None,
