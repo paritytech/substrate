@@ -31,7 +31,7 @@ pub struct PruningParams {
 	/// Options available:
 	///   'archive'            Keep the state of all blocks.
 	///   'archive-canonical'  Keep only the state of finalized blocks.
-	///   [number]             Keep the state of the last number of finalized blocks.
+	///   number               Keep the state of the last number of finalized blocks.
 	///
 	/// The default option is to keep the last 256 blocks (number == 256).
 	#[arg(alias = "pruning", long, value_name = "PRUNING_MODE")]
@@ -44,7 +44,7 @@ pub struct PruningParams {
 	/// Options available:
 	///   'archive'            Keep all blocks.
 	///   'archive-canonical'  Keep only finalized blocks.
-	///   [number]             Keep the last number of finalized blocks.
+	///   number               Keep the last number of finalized blocks.
 	///
 	/// The default option is 'archive-canonical'.
 	#[arg(alias = "keep-blocks", long, value_name = "COUNT")]
