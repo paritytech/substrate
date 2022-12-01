@@ -176,13 +176,15 @@ impl TransactionsHandlerPrototype {
 
 		let handler = TransactionsHandler {
 			protocol_name: self.protocol_name,
-			propagate_timeout: Box::pin(interval(PROPAGATE_TIMEOUT)),
+			propagate_timeout: (Box::pin(interval(PROPAGATE_TIMEOUT))
+				as Pin<Box<dyn Stream<Item = ()> + Send>>)
+				.fuse(),
 			pending_transactions: FuturesUnordered::new(),
 			pending_transactions_peers: HashMap::new(),
 			network,
 			sync,
-			net_event_stream,
-			sync_event_stream,
+			net_event_stream: net_event_stream.fuse(),
+			sync_event_stream: sync_event_stream.fuse(),
 			peers: HashMap::new(),
 			transaction_pool,
 			from_controller,
@@ -236,7 +238,7 @@ pub struct TransactionsHandler<
 > {
 	protocol_name: ProtocolName,
 	/// Interval at which we call `propagate_transactions`.
-	propagate_timeout: Pin<Box<dyn Stream<Item = ()> + Send>>,
+	propagate_timeout: stream::Fuse<Pin<Box<dyn Stream<Item = ()> + Send>>>,
 	/// Pending transactions verification tasks.
 	pending_transactions: FuturesUnordered<PendingTransaction<H>>,
 	/// As multiple peers can send us the same transaction, we group
@@ -249,9 +251,9 @@ pub struct TransactionsHandler<
 	/// Syncing service.
 	sync: S,
 	/// Stream of networking events.
-	net_event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
+	net_event_stream: stream::Fuse<Pin<Box<dyn Stream<Item = Event> + Send>>>,
 	/// Receiver for syncing-related events.
-	sync_event_stream: Pin<Box<dyn Stream<Item = SyncEvent> + Send>>,
+	sync_event_stream: stream::Fuse<Pin<Box<dyn Stream<Item = SyncEvent> + Send>>>,
 	// All connected peers
 	peers: HashMap<PeerId, Peer<H>>,
 	transaction_pool: Arc<dyn TransactionPool<H, B>>,
@@ -280,7 +282,7 @@ where
 	pub async fn run(mut self) {
 		loop {
 			futures::select! {
-				_ = self.propagate_timeout.next().fuse() => {
+				_ = self.propagate_timeout.next() => {
 					self.propagate_transactions();
 				},
 				(tx_hash, result) = self.pending_transactions.select_next_some() => {
@@ -290,7 +292,7 @@ where
 						warn!(target: "sub-libp2p", "Inconsistent state, no peers for pending transaction!");
 					}
 				},
-				network_event = self.net_event_stream.next().fuse() => {
+				network_event = self.net_event_stream.next() => {
 					if let Some(network_event) = network_event {
 						self.handle_network_event(network_event).await;
 					} else {
@@ -298,7 +300,7 @@ where
 						return;
 					}
 				},
-				sync_event = self.sync_event_stream.next().fuse() => {
+				sync_event = self.sync_event_stream.next() => {
 					if let Some(sync_event) = sync_event {
 						self.handle_sync_event(sync_event);
 					} else {
@@ -306,7 +308,7 @@ where
 						return;
 					}
 				}
-				message = self.from_controller.select_next_some().fuse() => {
+				message = self.from_controller.select_next_some() => {
 					match message {
 						ToHandler::PropagateTransaction(hash) => self.propagate_transaction(&hash),
 						ToHandler::PropagateTransactions => self.propagate_transactions(),
