@@ -163,7 +163,7 @@ fn approval_lifecycle_works() {
 		// so we create it :)
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
-		Balances::make_free_balance_be(&1, 1);
+		Balances::make_free_balance_be(&1, 2);
 		assert_ok!(Assets::approve_transfer(RuntimeOrigin::signed(1), 0, 2, 50));
 		assert_eq!(Asset::<Test>::get(0).unwrap().approvals, 1);
 		assert_eq!(Balances::reserved_balance(&1), 1);
@@ -189,7 +189,7 @@ fn transfer_approved_all_funds() {
 		// so we create it :)
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
-		Balances::make_free_balance_be(&1, 1);
+		Balances::make_free_balance_be(&1, 2);
 		assert_ok!(Assets::approve_transfer(RuntimeOrigin::signed(1), 0, 2, 50));
 		assert_eq!(Asset::<Test>::get(0).unwrap().approvals, 1);
 		assert_eq!(Balances::reserved_balance(&1), 1);
@@ -211,7 +211,7 @@ fn approval_deposits_work() {
 		let e = BalancesError::<Test>::InsufficientBalance;
 		assert_noop!(Assets::approve_transfer(RuntimeOrigin::signed(1), 0, 2, 50), e);
 
-		Balances::make_free_balance_be(&1, 1);
+		Balances::make_free_balance_be(&1, 2);
 		assert_ok!(Assets::approve_transfer(RuntimeOrigin::signed(1), 0, 2, 50));
 		assert_eq!(Balances::reserved_balance(&1), 1);
 
@@ -229,7 +229,7 @@ fn cannot_transfer_more_than_approved() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
-		Balances::make_free_balance_be(&1, 1);
+		Balances::make_free_balance_be(&1, 2);
 		assert_ok!(Assets::approve_transfer(RuntimeOrigin::signed(1), 0, 2, 50));
 		let e = Error::<Test>::Unapproved;
 		assert_noop!(Assets::transfer_approved(RuntimeOrigin::signed(2), 0, 1, 3, 51), e);
@@ -241,7 +241,7 @@ fn cannot_transfer_more_than_exists() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
-		Balances::make_free_balance_be(&1, 1);
+		Balances::make_free_balance_be(&1, 2);
 		assert_ok!(Assets::approve_transfer(RuntimeOrigin::signed(1), 0, 2, 101));
 		let e = Error::<Test>::BalanceLow;
 		assert_noop!(Assets::transfer_approved(RuntimeOrigin::signed(2), 0, 1, 3, 101), e);
@@ -253,7 +253,7 @@ fn cancel_approval_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
-		Balances::make_free_balance_be(&1, 1);
+		Balances::make_free_balance_be(&1, 2);
 		assert_ok!(Assets::approve_transfer(RuntimeOrigin::signed(1), 0, 2, 50));
 		assert_eq!(Asset::<Test>::get(0).unwrap().approvals, 1);
 		assert_noop!(
@@ -283,7 +283,7 @@ fn force_cancel_approval_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
-		Balances::make_free_balance_be(&1, 1);
+		Balances::make_free_balance_be(&1, 2);
 		assert_ok!(Assets::approve_transfer(RuntimeOrigin::signed(1), 0, 2, 50));
 		assert_eq!(Asset::<Test>::get(0).unwrap().approvals, 1);
 		let e = Error::<Test>::NoPermission;
@@ -508,13 +508,6 @@ fn min_balance_should_work() {
 		assert_ok!(Assets::burn(RuntimeOrigin::signed(1), 0, 1, 91));
 		assert!(Assets::maybe_balance(0, 1).is_none());
 		assert_eq!(Asset::<Test>::get(0).unwrap().accounts, 0);
-		assert_eq!(take_hooks(), vec![Hook::Died(0, 1)]);
-
-		// Death by `transfer_approved`.
-		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
-		Balances::make_free_balance_be(&1, 1);
-		assert_ok!(Assets::approve_transfer(RuntimeOrigin::signed(1), 0, 2, 100));
-		assert_ok!(Assets::transfer_approved(RuntimeOrigin::signed(2), 0, 1, 3, 91));
 		assert_eq!(take_hooks(), vec![Hook::Died(0, 1)]);
 	});
 }
@@ -1154,7 +1147,7 @@ fn querying_allowance_should_work() {
 		use frame_support::traits::tokens::fungibles::approvals::{Inspect, Mutate};
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
-		Balances::make_free_balance_be(&1, 1);
+		Balances::make_free_balance_be(&1, 2);
 		assert_ok!(Assets::approve(0, &1, &2, 50));
 		assert_eq!(Assets::allowance(0, &1, &2), 50);
 		// Transfer asset 0, from owner 1 and delegate 2 to destination 3
