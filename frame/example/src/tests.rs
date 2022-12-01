@@ -166,7 +166,7 @@ fn signed_ext_watch_dummy_works() {
 			WatchDummy::<Test>(PhantomData).validate(&1, &call, &info, 150)
 				.unwrap()
 				.priority,
-			u64::max_value(),
+			u64::MAX,
 		);
 		assert_eq!(
 			WatchDummy::<Test>(PhantomData).validate(&1, &call, &info, 250),

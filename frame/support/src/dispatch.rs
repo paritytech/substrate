@@ -2159,6 +2159,8 @@ macro_rules! decl_module {
 				<$error_type as $crate::dispatch::ModuleErrorMetadata>::metadata()
 			}
 		}
+
+		$crate::__generate_dummy_part_checker!();
 	}
 }
 

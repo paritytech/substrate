@@ -66,9 +66,9 @@ pub fn prune<H: Hasher, Number: BlockNumber, F: FnMut(H::Out)>(
 			);
 			let child_prefix = ChildIndex::key_neutral_prefix(block.clone());
 			let mut children_roots = Vec::new();
-			trie_storage.for_key_values_with_prefix(&child_prefix, |key, value| {
-				if let Ok(InputKey::ChildIndex::<Number>(_trie_key)) = Decode::decode(&mut &key[..]) {
-					if let Ok(value) = <Vec<u8>>::decode(&mut &value[..]) {
+			trie_storage.for_key_values_with_prefix(&child_prefix, |mut key, mut value| {
+				if let Ok(InputKey::ChildIndex::<Number>(_trie_key)) = Decode::decode(&mut key) {
+					if let Ok(value) = <Vec<u8>>::decode(&mut value) {
 						let mut trie_root = <H as Hasher>::Out::default();
 						trie_root.as_mut().copy_from_slice(&value[..]);
 						children_roots.push(trie_root);

@@ -341,7 +341,10 @@ where
 		mut block: BlockImportParams<B, Self::Transaction>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		let best_header = self.select_chain.best_chain()
+		let best_header = self
+			.select_chain
+			.best_chain()
+			.await
 			.map_err(|e| format!("Fetch best chain failed via select chain: {:?}", e))?;
 		let best_hash = best_header.hash();
 
@@ -543,7 +546,8 @@ pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, L, CIDP, CAW>(
 ) -> (
 	Arc<Mutex<MiningWorker<Block, Algorithm, C, L, <E::Proposer as Proposer<Block>>::Proof>>>,
 	impl Future<Output = ()>,
-) where
+)
+where
 	Block: BlockT,
 	C: ProvideRuntimeApi<Block> + BlockchainEvents<Block> + 'static,
 	S: SelectChain<Block> + 'static,
@@ -578,7 +582,7 @@ pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, L, CIDP, CAW>(
 				return;
 			}
 
-			let best_header = match select_chain.best_chain() {
+			let best_header = match select_chain.best_chain().await {
 				Ok(x) => x,
 				Err(err) => {
 					warn!(
@@ -588,7 +592,7 @@ pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, L, CIDP, CAW>(
 						err
 					);
 					return;
-				},
+				}
 			};
 			let best_hash = best_header.hash();
 

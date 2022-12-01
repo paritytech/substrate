@@ -179,7 +179,14 @@ where
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
 {
 	fn execute_block(block: Block) {
-		Executive::<System, Block, Context, UnsignedValidator, AllPallets>::execute_block(block);
+		Executive::<
+			System,
+			Block,
+			Context,
+			UnsignedValidator,
+			AllPallets,
+			COnRuntimeUpgrade,
+		>::execute_block(block);
 	}
 }
 
@@ -474,9 +481,17 @@ where
 	pub fn validate_transaction(
 		source: TransactionSource,
 		uxt: Block::Extrinsic,
+		block_hash: Block::Hash,
 	) -> TransactionValidity {
 		sp_io::init_tracing();
 		use sp_tracing::{enter_span, within_span};
+
+		<frame_system::Pallet<System>>::initialize(
+			&(frame_system::Pallet::<System>::block_number() + One::one()),
+			&block_hash,
+			&Default::default(),
+			frame_system::InitKind::Inspection,
+		);
 
 		enter_span!{ sp_tracing::Level::TRACE, "validate_transaction" };
 
@@ -667,6 +682,7 @@ mod tests {
 		{
 			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 			Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+			TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
 			Custom: custom::{Pallet, Call, ValidateUnsigned, Inherent},
 		}
 	);
@@ -835,7 +851,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("ec6bb58b0e4bc7fdf0151a0f601eb825f529fbf90b5be5b2024deba30c5cbbcb").into(),
+					state_root: hex!("1039e1a4bd0cf5deefe65f313577e70169c41c7773d6acf31ca8d671397559f5").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -1005,11 +1021,19 @@ mod tests {
 		default_with_prio_3.priority = 3;
 		t.execute_with(|| {
 			assert_eq!(
-				Executive::validate_transaction(TransactionSource::InBlock, valid.clone()),
+				Executive::validate_transaction(
+					TransactionSource::InBlock,
+					valid.clone(),
+					Default::default(),
+				),
 				Ok(default_with_prio_3),
 			);
 			assert_eq!(
-				Executive::validate_transaction(TransactionSource::InBlock, invalid.clone()),
+				Executive::validate_transaction(
+					TransactionSource::InBlock,
+					invalid.clone(),
+					Default::default(),
+				),
 				Err(TransactionValidityError::Unknown(UnknownTransaction::NoUnsignedValidator)),
 			);
 			assert_eq!(Executive::apply_extrinsic(valid), Ok(Err(DispatchError::BadOrigin)));
@@ -1170,6 +1194,53 @@ mod tests {
 				[69u8; 32].into(),
 				Digest::default(),
 			));
+
+			assert_eq!(&sp_io::storage::get(TEST_KEY).unwrap()[..], *b"module");
+			assert_eq!(sp_io::storage::get(CUSTOM_ON_RUNTIME_KEY).unwrap(), true.encode());
+		});
+	}
+
+	/// Regression test that ensures that the custom on runtime upgrade is called when executive is
+	/// used through the `ExecuteBlock` trait.
+	#[test]
+	fn custom_runtime_upgrade_is_called_when_using_execute_block_trait() {
+		let xt = TestXt::new(Call::Balances(BalancesCall::transfer(33, 0)), sign_extra(1, 0, 0));
+
+		let header = new_test_ext(1).execute_with(|| {
+			// Make sure `on_runtime_upgrade` is called.
+			RUNTIME_VERSION.with(|v| *v.borrow_mut() = sp_version::RuntimeVersion {
+				spec_version: 1,
+				..Default::default()
+			});
+
+			// Let's build some fake block.
+			Executive::initialize_block(&Header::new(
+				1,
+				H256::default(),
+				H256::default(),
+				[69u8; 32].into(),
+				Digest::default(),
+			));
+
+			Executive::apply_extrinsic(xt.clone()).unwrap().unwrap();
+
+			Executive::finalize_block()
+		});
+
+		// Reset to get the correct new genesis below.
+		RUNTIME_VERSION.with(|v| *v.borrow_mut() = sp_version::RuntimeVersion {
+			spec_version: 0,
+			..Default::default()
+		});
+
+		new_test_ext(1).execute_with(|| {
+			// Make sure `on_runtime_upgrade` is called.
+			RUNTIME_VERSION.with(|v| *v.borrow_mut() = sp_version::RuntimeVersion {
+				spec_version: 1,
+				..Default::default()
+			});
+
+			<Executive as ExecuteBlock<Block<TestXt>>>::execute_block(Block::new(header, vec![xt]));
 
 			assert_eq!(&sp_io::storage::get(TEST_KEY).unwrap()[..], *b"module");
 			assert_eq!(sp_io::storage::get(CUSTOM_ON_RUNTIME_KEY).unwrap(), true.encode());

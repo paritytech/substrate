@@ -200,8 +200,8 @@ mod tests {
 
 		assert_eq!(serialize(0), "\"0x0\"".to_owned());
 		assert_eq!(serialize(1), "\"0x1\"".to_owned());
-		assert_eq!(serialize(u64::max_value() as u128), "\"0xffffffffffffffff\"".to_owned());
-		assert_eq!(serialize(u64::max_value() as u128 + 1), "\"0x10000000000000000\"".to_owned());
+		assert_eq!(serialize(u64::MAX as u128), "\"0xffffffffffffffff\"".to_owned());
+		assert_eq!(serialize(u64::MAX as u128 + 1), "\"0x10000000000000000\"".to_owned());
 	}
 
 	#[test]
@@ -213,7 +213,7 @@ mod tests {
 
 		assert_eq!(deserialize("\"0x0\""), 0);
 		assert_eq!(deserialize("\"0x1\""), 1);
-		assert_eq!(deserialize("\"0xffffffffffffffff\""), u64::max_value() as u128);
-		assert_eq!(deserialize("\"0x10000000000000000\""), u64::max_value() as u128 + 1);
+		assert_eq!(deserialize("\"0xffffffffffffffff\""), u64::MAX as u128);
+		assert_eq!(deserialize("\"0x10000000000000000\""), u64::MAX as u128 + 1);
 	}
 }

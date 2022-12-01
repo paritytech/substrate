@@ -25,10 +25,10 @@ use sp_runtime::{
 	generic::BlockId,
 };
 use futures::prelude::*;
-use sc_transaction_pool::txpool;
+use sc_transaction_pool::{ChainApi, Pool};
 use sp_consensus::{
 	self, BlockImport, Environment, Proposer, ForkChoiceStrategy,
-	BlockImportParams, BlockOrigin, ImportResult, SelectChain,
+	BlockImportParams, BlockOrigin, ImportResult, SelectChain, StateAction,
 };
 use sp_blockchain::HeaderBackend;
 use std::collections::HashMap;
@@ -40,7 +40,7 @@ use sp_api::{ProvideRuntimeApi, TransactionFor};
 pub const MAX_PROPOSAL_DURATION: u64 = 10;
 
 /// params for sealing a new block
-pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, P: txpool::ChainApi, CIDP> {
+pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, P: ChainApi, CIDP> {
 	/// if true, empty blocks(without extrinsics) will be created.
 	/// otherwise, will return Error::EmptyTransactionPool.
 	pub create_empty: bool,
@@ -51,7 +51,7 @@ pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, P:
 	/// sender to report errors/success to the rpc.
 	pub sender: rpc::Sender<CreatedBlock<<B as BlockT>::Hash>>,
 	/// transaction pool
-	pub pool: Arc<txpool::Pool<P>>,
+	pub pool: Arc<Pool<P>>,
 	/// header backend
 	pub client: Arc<C>,
 	/// Environment trait object for creating a proposer
@@ -80,45 +80,47 @@ pub async fn seal_block<B, BI, SC, C, E, P, CIDP>(
 		create_inherent_data_providers,
 		consensus_data_provider: digest_provider,
 		mut sender,
-	}: SealBlockParams<'_, B, BI, SC, C, E, P, CIDP>
-)
-	where
-		B: BlockT,
-		BI: BlockImport<B, Error = sp_consensus::Error, Transaction = sp_api::TransactionFor<C, B>>
-			+ Send + Sync + 'static,
-		C: HeaderBackend<B> + ProvideRuntimeApi<B>,
-		E: Environment<B>,
-		E::Proposer: Proposer<B, Transaction = TransactionFor<C, B>>,
-		P: txpool::ChainApi<Block=B>,
-		SC: SelectChain<B>,
-		TransactionFor<C, B>: 'static,
-		CIDP: CreateInherentDataProviders<B, ()>,
+	}: SealBlockParams<'_, B, BI, SC, C, E, P, CIDP>,
+) where
+	B: BlockT,
+	BI: BlockImport<B, Error = sp_consensus::Error, Transaction = sp_api::TransactionFor<C, B>>
+		+ Send
+		+ Sync
+		+ 'static,
+	C: HeaderBackend<B> + ProvideRuntimeApi<B>,
+	E: Environment<B>,
+	E::Proposer: Proposer<B, Transaction = TransactionFor<C, B>>,
+	P: ChainApi<Block = B>,
+	SC: SelectChain<B>,
+	TransactionFor<C, B>: 'static,
+	CIDP: CreateInherentDataProviders<B, ()>,
 {
 	let future = async {
 		if pool.validated_pool().status().ready == 0 && !create_empty {
-			return Err(Error::EmptyTransactionPool)
+			return Err(Error::EmptyTransactionPool);
 		}
 
 		// get the header to build this new block on.
 		// use the parent_hash supplied via `EngineCommand`
 		// or fetch the best_block.
 		let parent = match parent_hash {
-			Some(hash) => {
-				client.header(BlockId::Hash(hash))?.ok_or_else(|| Error::BlockNotFound(format!("{}", hash)))?
-			}
-			None => select_chain.best_chain()?
+			Some(hash) => client
+				.header(BlockId::Hash(hash))?
+				.ok_or_else(|| Error::BlockNotFound(format!("{}", hash)))?,
+			None => select_chain.best_chain().await?,
 		};
 
-		let inherent_data_providers =
-			create_inherent_data_providers
-				.create_inherent_data_providers(parent.hash(), ())
-				.await
-				.map_err(|e| Error::Other(e))?;
+		let inherent_data_providers = create_inherent_data_providers
+			.create_inherent_data_providers(parent.hash(), ())
+			.await
+			.map_err(|e| Error::Other(e))?;
 
 		let inherent_data = inherent_data_providers.create_inherent_data()?;
 
-		let proposer = env.init(&parent)
-			.map_err(|err| Error::StringError(format!("{:?}", err))).await?;
+		let proposer = env
+			.init(&parent)
+			.map_err(|err| Error::StringError(format!("{:?}", err)))
+			.await?;
 		let inherents_len = inherent_data.len();
 
 		let digest = if let Some(digest_provider) = digest_provider {
@@ -143,7 +145,9 @@ pub async fn seal_block<B, BI, SC, C, E, P, CIDP>(
 		params.body = Some(body);
 		params.finalized = finalize;
 		params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
-		params.storage_changes = Some(proposal.storage_changes);
+		params.state_action = StateAction::ApplyChanges(
+			sp_consensus::StorageChanges::Changes(proposal.storage_changes)
+		);
 
 		if let Some(digest_provider) = digest_provider {
 			digest_provider.append_block_import(&parent, &mut params, &inherent_data)?;

@@ -34,7 +34,7 @@ use crate::{
 	error::Error as ConsensusError,
 	block_import::{
 		BlockImport, BlockOrigin, BlockImportParams, ImportedAux, JustificationImport, ImportResult,
-		BlockCheckParams,
+		BlockCheckParams, ImportedState, StateAction,
 	},
 	metrics::Metrics,
 };
@@ -74,8 +74,12 @@ pub struct IncomingBlock<B: BlockT> {
 	pub origin: Option<Origin>,
 	/// Allow importing the block skipping state verification if parent state is missing.
 	pub allow_missing_state: bool,
+	/// Skip block exection and state verification.
+	pub skip_execution: bool,
 	/// Re-validate existing block.
 	pub import_existing: bool,
+	/// Do not compute new state, but rather set it to the given set.
+	pub state: Option<ImportedState<B>>,
 }
 
 /// Type of keys in the blockchain cache that consensus module could use for its needs.
@@ -264,9 +268,17 @@ pub(crate) async fn import_single_block_metered<B: BlockT, V: Verifier<B>, Trans
 	if let Some(keys) = maybe_keys {
 		cache.extend(keys.into_iter());
 	}
-	import_block.allow_missing_state = block.allow_missing_state;
+	import_block.import_existing = block.import_existing;
+	let mut import_block = import_block.clear_storage_changes_and_mutate();
+	if let Some(state) = block.state {
+		import_block.state_action = StateAction::ApplyChanges(crate::StorageChanges::Import(state));
+	} else if block.skip_execution {
+		import_block.state_action = StateAction::Skip;
+	} else if block.allow_missing_state {
+		import_block.state_action = StateAction::ExecuteIfPossible;
+	}
 
-	let imported = import_handle.import_block(import_block.convert_transaction(), cache).await;
+	let imported = import_handle.import_block(import_block, cache).await;
 	if let Some(metrics) = metrics.as_ref() {
 		metrics.report_verification_and_import(started.elapsed());
 	}

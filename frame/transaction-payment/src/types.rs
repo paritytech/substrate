@@ -17,12 +17,14 @@
 
 //! Types for transaction-payment RPC.
 
-use sp_std::prelude::*;
-use frame_support::weights::{Weight, DispatchClass};
 use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
+
 use sp_runtime::traits::{AtLeast32BitUnsigned, Zero};
+use sp_std::prelude::*;
+
+use frame_support::weights::{Weight, DispatchClass};
 
 /// The base fee and adjusted weight and length fees constitute the _inclusion fee_.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]

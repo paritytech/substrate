@@ -181,7 +181,7 @@ pub(crate) fn apply_elected<AccountId: IdentifierT>(
 ) {
 	let elected_who = elected_ptr.borrow().who.clone();
 	let cutoff = elected_ptr.borrow().score.to_den(1)
-		.expect("(n / d) < u128::max() and (n' / 1) == (n / d), thus n' < u128::max()'; qed.")
+		.expect("(n / d) < u128::MAX and (n' / 1) == (n / d), thus n' < u128::MAX'; qed.")
 		.n();
 
 	let mut elected_backed_stake = elected_ptr.borrow().backed_stake;
@@ -386,10 +386,10 @@ mod tests {
 	#[test]
 	fn large_balance_wont_overflow() {
 		let candidates = vec![1u32, 2, 3];
-		let mut voters = (0..1000).map(|i| (10 + i, u64::max_value(), vec![1, 2, 3])).collect::<Vec<_>>();
+		let mut voters = (0..1000).map(|i| (10 + i, u64::MAX, vec![1, 2, 3])).collect::<Vec<_>>();
 
 		// give a bit more to 1 and 3.
-		voters.push((2, u64::max_value(), vec![1, 3]));
+		voters.push((2, u64::MAX, vec![1, 3]));
 
 		let ElectionResult { winners, assignments: _ } = phragmms::<_, Perbill>(2, candidates, voters, Some((2, 0))).unwrap();
 		assert_eq!(winners.into_iter().map(|(w, _)| w).collect::<Vec<_>>(), vec![1u32, 3]);

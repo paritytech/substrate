@@ -42,6 +42,11 @@ output to an RPC client.
 - Make storage and fields of `Schedule` private to the crate.
 [#8359](https://github.com/paritytech/substrate/pull/8359)
 
+### Fixed
+
+- Remove pre-charging which caused wrongly estimated weights
+[#8976](https://github.com/paritytech/substrate/pull/8976)
+
 ## [v3.0.0] 2021-02-25
 
 This version constitutes the first release that brings any stability guarantees (see above).

@@ -275,9 +275,7 @@ pub mod pallet {
 		/// * If the account is a regular account, any value will be transferred.
 		/// * If no account exists and the call value is not less than `existential_deposit`,
 		/// a regular account will be created and any value will be transferred.
-		#[pallet::weight(T::WeightInfo::call(T::Schedule::get().limits.code_len / 1024)
-			.saturating_add(*gas_limit)
-		)]
+		#[pallet::weight(T::WeightInfo::call().saturating_add(*gas_limit))]
 		pub fn call(
 			origin: OriginFor<T>,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -289,13 +287,10 @@ pub mod pallet {
 			let dest = T::Lookup::lookup(dest)?;
 			let mut gas_meter = GasMeter::new(gas_limit);
 			let schedule = T::Schedule::get();
-			let (result, code_len) = match ExecStack::<T, PrefabWasmModule<T>>::run_call(
+			let result = ExecStack::<T, PrefabWasmModule<T>>::run_call(
 				origin, dest, &mut gas_meter, &schedule, value, data, None,
-			) {
-				Ok((output, len)) => (Ok(output), len),
-				Err((err, len)) => (Err(err), len),
-			};
-			gas_meter.into_dispatch_result(result, T::WeightInfo::call(code_len / 1024))
+			);
+			gas_meter.into_dispatch_result(result, T::WeightInfo::call())
 		}
 
 		/// Instantiates a new contract from the supplied `code` optionally transferring
@@ -357,10 +352,7 @@ pub mod pallet {
 		/// code deployment step. Instead, the `code_hash` of an on-chain deployed wasm binary
 		/// must be supplied.
 		#[pallet::weight(
-			T::WeightInfo::instantiate(
-				T::Schedule::get().limits.code_len / 1024, salt.len() as u32 / 1024
-			)
-			.saturating_add(*gas_limit)
+			T::WeightInfo::instantiate(salt.len() as u32 / 1024).saturating_add(*gas_limit)
 		)]
 		pub fn instantiate(
 			origin: OriginFor<T>,
@@ -374,13 +366,12 @@ pub mod pallet {
 			let mut gas_meter = GasMeter::new(gas_limit);
 			let schedule = T::Schedule::get();
 			let executable = PrefabWasmModule::from_storage(code_hash, &schedule, &mut gas_meter)?;
-			let code_len = executable.code_len();
 			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
 				origin, executable, &mut gas_meter, &schedule, endowment, data, &salt, None,
 			).map(|(_address, output)| output);
 			gas_meter.into_dispatch_result(
 				result,
-				T::WeightInfo::instantiate(code_len / 1024, salt.len() as u32 / 1024),
+				T::WeightInfo::instantiate(salt.len() as u32 / 1024),
 			)
 		}
 
@@ -666,7 +657,7 @@ where
 			origin, dest, &mut gas_meter, &schedule, value, input_data, debug_message.as_mut(),
 		);
 		ContractExecResult {
-			result: result.map(|r| r.0).map_err(|r| r.0.error),
+			result: result.map_err(|r| r.error),
 			gas_consumed: gas_meter.gas_spent(),
 			debug_message: debug_message.unwrap_or_default(),
 		}

@@ -260,8 +260,13 @@ parameter_types! {
 	pub static DesiredTargets: u32 = 2;
 	pub static SignedPhase: u64 = 10;
 	pub static UnsignedPhase: u64 = 5;
-	pub static MaxSignedSubmissions: u32 = 5;
-
+	pub static SignedMaxSubmissions: u32 = 5;
+	pub static SignedDepositBase: Balance = 5;
+	pub static SignedDepositByte: Balance = 0;
+	pub static SignedDepositWeight: Balance = 0;
+	pub static SignedRewardBase: Balance = 7;
+	pub static SignedRewardMax: Balance = 10;
+	pub static SignedMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static MinerMaxIterations: u32 = 5;
 	pub static MinerTxPriority: u64 = 100;
 	pub static SolutionImprovementThreshold: Perbill = Perbill::zero();
@@ -304,6 +309,27 @@ impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
 			<() as multi_phase::weights::WeightInfo>::on_initialize_open_unsigned_without_snapshot()
 		}
 	}
+	fn finalize_signed_phase_accept_solution() -> Weight {
+		if MockWeightInfo::get() {
+			Zero::zero()
+		} else {
+			<() as multi_phase::weights::WeightInfo>::finalize_signed_phase_accept_solution()
+		}
+	}
+	fn finalize_signed_phase_reject_solution() -> Weight {
+		if MockWeightInfo::get() {
+			Zero::zero()
+		} else {
+			<() as multi_phase::weights::WeightInfo>::finalize_signed_phase_reject_solution()
+		}
+	}
+	fn submit(c: u32) -> Weight {
+		if MockWeightInfo::get() {
+			Zero::zero()
+		} else {
+			<() as multi_phase::weights::WeightInfo>::submit(c)
+		}
+	}
 	fn elect_queued() -> Weight {
 		if MockWeightInfo::get() {
 			Zero::zero()
@@ -342,6 +368,14 @@ impl crate::Config for Runtime {
 	type MinerMaxWeight = MinerMaxWeight;
 	type MinerMaxLength = MinerMaxLength;
 	type MinerTxPriority = MinerTxPriority;
+	type SignedRewardBase = SignedRewardBase;
+	type SignedDepositBase = SignedDepositBase;
+	type SignedDepositByte = ();
+	type SignedDepositWeight = ();
+	type SignedMaxWeight = SignedMaxWeight;
+	type SignedMaxSubmissions = SignedMaxSubmissions;
+	type SlashHandler = ();
+	type RewardHandler = ();
 	type DataProvider = StakingMock;
 	type WeightInfo = DualMockWeightInfo;
 	type BenchmarkingConfig = ();
@@ -440,6 +474,20 @@ impl ExtBuilder {
 		VOTERS.with(|v| v.borrow_mut().push((who, stake, targets)));
 		self
 	}
+	pub fn signed_max_submission(self, count: u32) -> Self {
+		<SignedMaxSubmissions>::set(count);
+		self
+	}
+	pub fn signed_deposit(self, base: u64, byte: u64, weight: u64) -> Self {
+		<SignedDepositBase>::set(base);
+		<SignedDepositByte>::set(byte);
+		<SignedDepositWeight>::set(weight);
+		self
+	}
+	pub fn signed_weight(self, weight: Weight) -> Self {
+		<SignedMaxWeight>::set(weight);
+		self
+	}
 	pub fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let mut storage =
@@ -480,4 +528,8 @@ impl ExtBuilder {
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		self.build().execute_with(test)
 	}
+}
+
+pub(crate) fn balances(who: &u64) -> (u64, u64) {
+	(Balances::free_balance(who), Balances::reserved_balance(who))
 }

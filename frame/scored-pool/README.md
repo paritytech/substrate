@@ -20,7 +20,7 @@ time. If an entity is currently a member, this results in removal
 from the `Pool` and `Members`; the entity is immediately replaced
 by the next highest scoring candidate in the pool, if available.
 
-- [`scored_pool::Trait`](https://docs.rs/pallet-scored-pool/latest/pallet_scored_pool/trait.Trait.html)
+- [`scored_pool::Trait`](https://docs.rs/pallet-scored-pool/latest/pallet_scored_pool/trait.Config.html)
 - [`Call`](https://docs.rs/pallet-scored-pool/latest/pallet_scored_pool/enum.Call.html)
 - [`Module`](https://docs.rs/pallet-scored-pool/latest/pallet_scored_pool/struct.Module.html)
 

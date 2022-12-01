@@ -122,9 +122,9 @@ fn generate_impl_calls(
 
 				impl_calls.push((
 					impl_trait_ident.clone(),
-					 method.sig.ident.clone(),
-					 impl_call,
-					 filter_cfg_attrs(&impl_.attrs),
+					method.sig.ident.clone(),
+					impl_call,
+					filter_cfg_attrs(&impl_.attrs),
 				));
 			}
 		}
@@ -186,7 +186,7 @@ fn generate_wasm_interface(impls: &[ItemImpl]) -> Result<TokenStream> {
 
 					#c::init_runtime_logger();
 
-					let output = { #impl_ };
+					let output = (move || { #impl_ })();
 					#c::to_substrate_wasm_fn_return_value(&output)
 				}
 			)
@@ -205,7 +205,6 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 		pub struct RuntimeApiImpl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block> + 'static> {
 			call: &'static C,
 			commit_on_success: std::cell::RefCell<bool>,
-			initialized_block: std::cell::RefCell<Option<#crate_::BlockId<Block>>>,
 			changes: std::cell::RefCell<#crate_::OverlayedChanges>,
 			storage_transaction_cache: std::cell::RefCell<
 				#crate_::StorageTransactionCache<Block, C::StateBackend>
@@ -265,6 +264,15 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					.map(|v| v.has_api_with(&A::ID, pred))
 			}
 
+			fn api_version<A: #crate_::RuntimeApiInfo + ?Sized>(
+				&self,
+				at: &#crate_::BlockId<Block>,
+			) -> std::result::Result<Option<u32>, #crate_::ApiError> where Self: Sized {
+				self.call
+					.runtime_version_at(at)
+					.map(|v| v.api_version(&A::ID))
+			}
+
 			fn record_proof(&mut self) {
 				self.recorder = Some(Default::default());
 			}
@@ -291,7 +299,6 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				#crate_::StorageChanges<C::StateBackend, Block>,
 				String
 			> where Self: Sized {
-				self.initialized_block.borrow_mut().take();
 				self.changes.replace(Default::default()).into_storage_changes(
 					backend,
 					changes_trie_state,
@@ -315,7 +322,6 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				RuntimeApiImpl {
 					call: unsafe { std::mem::transmute(call) },
 					commit_on_success: true.into(),
-					initialized_block: None.into(),
 					changes: Default::default(),
 					recorder: Default::default(),
 					storage_transaction_cache: Default::default(),
@@ -329,10 +335,8 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				R: #crate_::Encode + #crate_::Decode + PartialEq,
 				F: FnOnce(
 					&C,
-					&Self,
 					&std::cell::RefCell<#crate_::OverlayedChanges>,
 					&std::cell::RefCell<#crate_::StorageTransactionCache<Block, C::StateBackend>>,
-					&std::cell::RefCell<Option<#crate_::BlockId<Block>>>,
 					&Option<#crate_::ProofRecorder<Block>>,
 				) -> std::result::Result<#crate_::NativeOrEncoded<R>, E>,
 				E,
@@ -345,10 +349,8 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				}
 				let res = call_api_at(
 					&self.call,
-					self,
 					&self.changes,
 					&self.storage_transaction_cache,
-					&self.initialized_block,
 					&self.recorder,
 				);
 
@@ -501,20 +503,16 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 					self.call_api_at(
 						|
 							call_runtime_at,
-							core_api,
 							changes,
 							storage_transaction_cache,
-							initialized_block,
 							recorder
 						| {
 							#runtime_mod_path #call_api_at_call(
 								call_runtime_at,
-								core_api,
 								at,
 								params_encoded,
 								changes,
 								storage_transaction_cache,
-								initialized_block,
 								params.map(|p| {
 									#runtime_mod_path #native_call_generator_ident ::
 										<#runtime, __SR_API_BLOCK__ #(, #trait_generic_arguments )*> (

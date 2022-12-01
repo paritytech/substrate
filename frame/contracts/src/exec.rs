@@ -168,7 +168,7 @@ pub trait Ext: sealing::Sealed {
 		value: BalanceOf<Self::T>,
 		input_data: Vec<u8>,
 		allows_reentry: bool,
-	) -> Result<(ExecReturnValue, u32), (ExecError, u32)>;
+	) -> Result<ExecReturnValue, ExecError>;
 
 	/// Instantiate a contract from the given code.
 	///
@@ -186,24 +186,16 @@ pub trait Ext: sealing::Sealed {
 		value: BalanceOf<Self::T>,
 		input_data: Vec<u8>,
 		salt: &[u8],
-	) -> Result<(AccountIdOf<Self::T>, ExecReturnValue, u32), (ExecError, u32)>;
+	) -> Result<(AccountIdOf<Self::T>, ExecReturnValue ), ExecError>;
 
 	/// Transfer all funds to `beneficiary` and delete the contract.
 	///
-	/// Returns the original code size of the terminated contract.
 	/// Since this function removes the self contract eagerly, if succeeded, no further actions should
 	/// be performed on this `Ext` instance.
 	///
 	/// This function will fail if the same contract is present on the contract
 	/// call stack.
-	///
-	/// # Return Value
-	///
-	/// Result<CodeSize, (DispatchError, CodeSize)>
-	fn terminate(
-		&mut self,
-		beneficiary: &AccountIdOf<Self::T>,
-	) -> Result<u32, (DispatchError, u32)>;
+	fn terminate(&mut self, beneficiary: &AccountIdOf<Self::T>) -> Result<(), DispatchError>;
 
 	/// Restores the given destination contract sacrificing the current one.
 	///
@@ -222,7 +214,7 @@ pub trait Ext: sealing::Sealed {
 		code_hash: CodeHash<Self::T>,
 		rent_allowance: BalanceOf<Self::T>,
 		delta: Vec<StorageKey>,
-	) -> Result<(u32, u32), (DispatchError, u32, u32)>;
+	) -> Result<(), DispatchError>;
 
 	/// Transfer some amount of funds into the specified account.
 	fn transfer(
@@ -325,6 +317,9 @@ pub enum ExportedFunction {
 /// order to be able to mock the wasm logic for testing.
 pub trait Executable<T: Config>: Sized {
 	/// Load the executable from storage.
+	///
+	/// # Note
+	/// Charges size base load and instrumentation weight from the gas meter.
 	fn from_storage(
 		code_hash: CodeHash<T>,
 		schedule: &Schedule<T>,
@@ -336,6 +331,10 @@ pub trait Executable<T: Config>: Sized {
 	/// A code module is re-instrumented on-load when it was originally instrumented with
 	/// an older schedule. This skips this step for cases where the code storage is
 	/// queried for purposes other than execution.
+	///
+	/// # Note
+	///
+	/// Does not charge from the gas meter. Do not call in contexts where this is important.
 	fn from_storage_noinstr(code_hash: CodeHash<T>) -> Result<Self, DispatchError>;
 
 	/// Decrements the refcount by one and deletes the code if it drops to zero.
@@ -344,12 +343,22 @@ pub trait Executable<T: Config>: Sized {
 	/// Increment the refcount by one. Fails if the code does not exist on-chain.
 	///
 	/// Returns the size of the original code.
-	fn add_user(code_hash: CodeHash<T>) -> Result<u32, DispatchError>;
+	///
+	/// # Note
+	///
+	/// Charges weight proportional to the code size from the gas meter.
+	fn add_user(code_hash: CodeHash<T>, gas_meter: &mut GasMeter<T>)
+		-> Result<(), DispatchError>;
 
 	/// Decrement the refcount by one and remove the code when it drops to zero.
 	///
 	/// Returns the size of the original code.
-	fn remove_user(code_hash: CodeHash<T>) -> u32;
+	///
+	/// # Note
+	///
+	/// Charges weight proportional to the code size from the gas meter
+	fn remove_user(code_hash: CodeHash<T>, gas_meter: &mut GasMeter<T>)
+		-> Result<(), DispatchError>;
 
 	/// Execute the specified exported function and return the result.
 	///
@@ -595,7 +604,7 @@ where
 		value: BalanceOf<T>,
 		input_data: Vec<u8>,
 		debug_message: Option<&'a mut Vec<u8>>,
-	) -> Result<(ExecReturnValue, u32), (ExecError, u32)> {
+	) -> Result<ExecReturnValue, ExecError> {
 		let (mut stack, executable) = Self::new(
 			FrameArgs::Call{dest, cached_info: None},
 			origin,
@@ -639,11 +648,9 @@ where
 			schedule,
 			value,
 			debug_message,
-		).map_err(|(e, _code_len)| e)?;
+		)?;
 		let account_id = stack.top_frame().account_id.clone();
-		stack.run(executable, input_data)
-			.map(|(ret, _code_len)| (account_id, ret))
-			.map_err(|(err, _code_len)| err)
+		stack.run(executable, input_data).map(|ret| (account_id, ret))
 	}
 
 	/// Create a new call stack.
@@ -654,7 +661,7 @@ where
 		schedule: &'a Schedule<T>,
 		value: BalanceOf<T>,
 		debug_message: Option<&'a mut Vec<u8>>,
-	) -> Result<(Self, E), (ExecError, u32)> {
+	) -> Result<(Self, E), ExecError> {
 		let (first_frame, executable) = Self::new_frame(args, value, gas_meter, 0, &schedule)?;
 		let stack = Self {
 			origin,
@@ -682,22 +689,20 @@ where
 		gas_meter: &mut GasMeter<T>,
 		gas_limit: Weight,
 		schedule: &Schedule<T>
-	) -> Result<(Frame<T>, E), (ExecError, u32)> {
+	) -> Result<(Frame<T>, E), ExecError> {
 		let (account_id, contract_info, executable, entry_point) = match frame_args {
 			FrameArgs::Call{dest, cached_info} => {
 				let contract = if let Some(contract) = cached_info {
 					contract
 				} else {
 					<ContractInfoOf<T>>::get(&dest)
-						.ok_or((<Error<T>>::ContractNotFound.into(), 0))
+						.ok_or(<Error<T>>::ContractNotFound.into())
 						.and_then(|contract|
-							contract.get_alive()
-								.ok_or((<Error<T>>::ContractIsTombstone.into(), 0))
+							contract.get_alive().ok_or(<Error<T>>::ContractIsTombstone)
 						)?
 				};
 
-				let executable = E::from_storage(contract.code_hash, schedule, gas_meter)
-					.map_err(|e| (e.into(), 0))?;
+				let executable = E::from_storage(contract.code_hash, schedule, gas_meter)?;
 
 				// This charges the rent and denies access to a contract that is in need of
 				// eviction by returning `None`. We cannot evict eagerly here because those
@@ -705,9 +710,8 @@ where
 				// contract.
 				// See: https://github.com/paritytech/substrate/issues/6439#issuecomment-648754324
 				let contract = Rent::<T, E>
-					::charge(&dest, contract, executable.occupied_storage())
-					.map_err(|e| (e.into(), executable.code_len()))?
-					.ok_or((Error::<T>::RentNotPaid.into(), executable.code_len()))?;
+					::charge(&dest, contract, executable.occupied_storage())?
+					.ok_or(Error::<T>::RentNotPaid)?;
 				(dest, contract, executable, ExportedFunction::Call)
 			}
 			FrameArgs::Instantiate{sender, trie_seed, executable, salt} => {
@@ -719,7 +723,7 @@ where
 					&account_id,
 					trie_id,
 					executable.code_hash().clone(),
-				).map_err(|e| (e.into(), executable.code_len()))?;
+				)?;
 				(account_id, contract, executable, ExportedFunction::Constructor)
 			}
 		};
@@ -732,8 +736,7 @@ where
 			contract_info: CachedContract::Cached(contract_info),
 			account_id,
 			entry_point,
-			nested_meter: gas_meter.nested(gas_limit)
-				.map_err(|e| (e.into(), executable.code_len()))?,
+			nested_meter: gas_meter.nested(gas_limit)?,
 			allows_reentry: true,
 		};
 
@@ -746,9 +749,9 @@ where
 		frame_args: FrameArgs<T, E>,
 		value_transferred: BalanceOf<T>,
 		gas_limit: Weight,
-	) -> Result<E, (ExecError, u32)> {
+	) -> Result<E, ExecError> {
 		if self.frames.len() == T::CallStack::size() {
-			return Err((Error::<T>::MaxCallDepthReached.into(), 0));
+			return Err(Error::<T>::MaxCallDepthReached.into());
 		}
 
 		// We need to make sure that changes made to the contract info are not discarded.
@@ -787,7 +790,7 @@ where
 		&mut self,
 		executable: E,
 		input_data: Vec<u8>
-	) -> Result<(ExecReturnValue, u32), (ExecError, u32)> {
+	) -> Result<ExecReturnValue, ExecError> {
 		let entry_point = self.top_frame().entry_point;
 		let do_transaction = || {
 			// Cache the value before calling into the constructor because that
@@ -795,17 +798,16 @@ where
 			// the same code hash we still charge the "1 block rent" as if they weren't
 			// spawned. This is OK as overcharging is always safe.
 			let occupied_storage = executable.occupied_storage();
-			let code_len = executable.code_len();
 
 			// Every call or instantiate also optionally transferres balance.
-			self.initial_transfer().map_err(|e| (ExecError::from(e), code_len))?;
+			self.initial_transfer()?;
 
 			// Call into the wasm blob.
 			let output = executable.execute(
 				self,
 				&entry_point,
 				input_data,
-			).map_err(|e| (ExecError { error: e.error, origin: ErrorOrigin::Callee }, code_len))?;
+			).map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
 
 			// Additional work needs to be performed in case of an instantiation.
 			if output.is_success() && entry_point == ExportedFunction::Constructor {
@@ -814,7 +816,7 @@ where
 
 				// It is not allowed to terminate a contract inside its constructor.
 				if let CachedContract::Terminated = frame.contract_info {
-					return Err((Error::<T>::TerminatedInConstructor.into(), code_len));
+					return Err(Error::<T>::TerminatedInConstructor.into());
 				}
 
 				// Collect the rent for the first block to prevent the creation of very large
@@ -823,9 +825,8 @@ where
 				// in order to keep up the guarantuee that we always leave a tombstone behind
 				// with the exception of a contract that called `seal_terminate`.
 				let contract = Rent::<T, E>
-					::charge(&account_id, frame.invalidate(), occupied_storage)
-					.map_err(|e| (e.into(), code_len))?
-					.ok_or((Error::<T>::NewContractNotFunded.into(), code_len))?;
+					::charge(&account_id, frame.invalidate(), occupied_storage)?
+					.ok_or(Error::<T>::NewContractNotFunded)?;
 				frame.contract_info = CachedContract::Cached(contract);
 
 				// Deposit an instantiation event.
@@ -835,7 +836,7 @@ where
 				));
 			}
 
-			Ok((output, code_len))
+			Ok(output)
 		};
 
 		// All changes performed by the contract are executed under a storage transaction.
@@ -843,8 +844,8 @@ where
 		// comitted or rolled back when popping the frame.
 		let (success, output) = with_transaction(|| {
 			let output = do_transaction();
-			match output {
-				Ok((ref result, _)) if result.is_success() => {
+			match &output {
+				Ok(result) if result.is_success() => {
 					TransactionOutcome::Commit((true, output))
 				},
 				_ => TransactionOutcome::Rollback((false, output)),
@@ -1055,7 +1056,7 @@ where
 		value: BalanceOf<T>,
 		input_data: Vec<u8>,
 		allows_reentry: bool,
-	) -> Result<(ExecReturnValue, u32), (ExecError, u32)> {
+	) -> Result<ExecReturnValue, ExecError> {
 		// Before pushing the new frame: Protect the caller contract against reentrancy attacks.
 		// It is important to do this before calling `allows_reentry` so that a direct recursion
 		// is caught by it.
@@ -1063,7 +1064,7 @@ where
 
 		let try_call = || {
 			if !self.allows_reentry(&to) {
-				return Err((<Error<T>>::ReentranceDenied.into(), 0));
+				return Err(<Error<T>>::ReentranceDenied.into());
 			}
 			// We ignore instantiate frames in our search for a cached contract.
 			// Otherwise it would be possible to recursively call a contract from its own
@@ -1101,9 +1102,8 @@ where
 		endowment: BalanceOf<T>,
 		input_data: Vec<u8>,
 		salt: &[u8],
-	) -> Result<(AccountIdOf<T>, ExecReturnValue, u32), (ExecError, u32)> {
-		let executable = E::from_storage(code_hash, &self.schedule, self.gas_meter())
-			.map_err(|e| (e.into(), 0))?;
+	) -> Result<(AccountIdOf<T>, ExecReturnValue), ExecError> {
+		let executable = E::from_storage(code_hash, &self.schedule, self.gas_meter())?;
 		let trie_seed = self.next_trie_seed();
 		let executable = self.push_frame(
 			FrameArgs::Instantiate {
@@ -1116,33 +1116,29 @@ where
 			gas_limit,
 		)?;
 		let account_id = self.top_frame().account_id.clone();
-		self.run(executable, input_data)
-			.map(|(ret, code_len)| (account_id, ret, code_len))
+		self.run(executable, input_data).map(|ret| (account_id, ret))
 	}
 
-	fn terminate(
-		&mut self,
-		beneficiary: &AccountIdOf<Self::T>,
-	) -> Result<u32, (DispatchError, u32)> {
+	fn terminate(&mut self, beneficiary: &AccountIdOf<Self::T>) -> Result<(), DispatchError> {
 		if self.is_recursive() {
-			return Err((Error::<T>::TerminatedWhileReentrant.into(), 0));
+			return Err(Error::<T>::TerminatedWhileReentrant.into());
 		}
 		let frame = self.top_frame_mut();
 		let info = frame.terminate();
-		Storage::<T>::queue_trie_for_deletion(&info).map_err(|e| (e, 0))?;
+		Storage::<T>::queue_trie_for_deletion(&info)?;
 		<Stack<'a, T, E>>::transfer(
 			true,
 			true,
 			&frame.account_id,
 			beneficiary,
 			T::Currency::free_balance(&frame.account_id),
-		).map_err(|e| (e, 0))?;
+		)?;
 		ContractInfoOf::<T>::remove(&frame.account_id);
-		let code_len = E::remove_user(info.code_hash);
+		E::remove_user(info.code_hash, &mut frame.nested_meter)?;
 		Contracts::<T>::deposit_event(
 			Event::Terminated(frame.account_id.clone(), beneficiary.clone()),
 		);
-		Ok(code_len)
+		Ok(())
 	}
 
 	fn restore_to(
@@ -1151,30 +1147,33 @@ where
 		code_hash: CodeHash<Self::T>,
 		rent_allowance: BalanceOf<Self::T>,
 		delta: Vec<StorageKey>,
-	) -> Result<(u32, u32), (DispatchError, u32, u32)> {
+	) -> Result<(), DispatchError> {
 		if self.is_recursive() {
-			return Err((Error::<T>::TerminatedWhileReentrant.into(), 0, 0));
+			return Err(Error::<T>::TerminatedWhileReentrant.into());
 		}
-		let origin_contract = self.top_frame_mut().contract_info().clone();
+		let frame = self.top_frame_mut();
+		let origin_contract = frame.contract_info().clone();
+		let account_id = frame.account_id.clone();
 		let result = Rent::<T, E>::restore_to(
-			&self.top_frame().account_id,
+			&account_id,
 			origin_contract,
 			dest.clone(),
 			code_hash.clone(),
 			rent_allowance,
 			delta,
+			&mut frame.nested_meter,
 		);
 		if let Ok(_) = result {
 			deposit_event::<Self::T>(
 				vec![],
 				Event::Restored(
-					self.top_frame().account_id.clone(),
+					account_id,
 					dest,
 					code_hash,
 					rent_allowance,
 				),
 			);
-			self.top_frame_mut().terminate();
+			frame.terminate();
 		}
 		result
 	}
@@ -1463,14 +1462,18 @@ mod tests {
 			MockLoader::decrement_refcount(self.code_hash);
 		}
 
-		fn add_user(code_hash: CodeHash<Test>) -> Result<u32, DispatchError> {
+		fn add_user(code_hash: CodeHash<Test>, _: &mut GasMeter<Test>)
+			-> Result<(), DispatchError>
+		{
 			MockLoader::increment_refcount(code_hash);
-			Ok(0)
+			Ok(())
 		}
 
-		fn remove_user(code_hash: CodeHash<Test>) -> u32 {
+		fn remove_user(code_hash: CodeHash<Test>, _: &mut GasMeter<Test>)
+			-> Result<(), DispatchError>
+		{
 			MockLoader::decrement_refcount(code_hash);
-			0
+			Ok(())
 		}
 
 		fn execute<E: Ext<T = Test>>(
@@ -1597,7 +1600,7 @@ mod tests {
 				None,
 			).unwrap();
 
-			assert!(!output.0.is_success());
+			assert!(!output.is_success());
 			assert_eq!(get_balance(&origin), 100);
 
 			// the rent is still charged
@@ -1658,8 +1661,8 @@ mod tests {
 			);
 
 			let output = result.unwrap();
-			assert!(output.0.is_success());
-			assert_eq!(output.0.data, Bytes(vec![1, 2, 3, 4]));
+			assert!(output.is_success());
+			assert_eq!(output.data, Bytes(vec![1, 2, 3, 4]));
 		});
 	}
 
@@ -1689,8 +1692,8 @@ mod tests {
 			);
 
 			let output = result.unwrap();
-			assert!(!output.0.is_success());
-			assert_eq!(output.0.data, Bytes(vec![1, 2, 3, 4]));
+			assert!(!output.is_success());
+			assert_eq!(output.data, Bytes(vec![1, 2, 3, 4]));
 		});
 	}
 
@@ -1770,7 +1773,7 @@ mod tests {
 					// Verify that we've got proper error and set `reached_bottom`.
 					assert_eq!(
 						r,
-						Err((Error::<Test>::MaxCallDepthReached.into(), 0))
+						Err(Error::<Test>::MaxCallDepthReached.into())
 					);
 					*reached_bottom = true;
 				} else {
@@ -2000,7 +2003,7 @@ mod tests {
 			let instantiated_contract_address = Rc::clone(&instantiated_contract_address);
 			move |ctx, _| {
 				// Instantiate a contract and save it's address in `instantiated_contract_address`.
-				let (address, output, _) = ctx.ext.instantiate(
+				let (address, output) = ctx.ext.instantiate(
 					0,
 					dummy_ch,
 					Contracts::<Test>::subsistence_threshold() * 3,
@@ -2053,10 +2056,10 @@ mod tests {
 						vec![],
 						&[],
 					),
-					Err((ExecError {
+					Err(ExecError {
 						error: DispatchError::Other("It's a trap!"),
 						origin: ErrorOrigin::Callee,
-					}, 0))
+					})
 				);
 
 				exec_success()
@@ -2293,7 +2296,7 @@ mod tests {
 				assert_ne!(original_allowance, changed_allowance);
 				ctx.ext.set_rent_allowance(changed_allowance);
 				assert_eq!(
-					ctx.ext.call(0, CHARLIE, 0, vec![], true).map(|v| v.0).map_err(|e| e.0),
+					ctx.ext.call(0, CHARLIE, 0, vec![], true),
 					exec_trapped()
 				);
 				assert_eq!(ctx.ext.rent_allowance(), changed_allowance);
@@ -2330,7 +2333,7 @@ mod tests {
 		let code = MockLoader::insert(Constructor, |ctx, _| {
 			assert_matches!(
 				ctx.ext.call(0, ctx.ext.address().clone(), 0, vec![], true),
-				Err((ExecError{error, ..}, _)) if error == <Error<Test>>::ContractNotFound.into()
+				Err(ExecError{error, ..}) if error == <Error<Test>>::ContractNotFound.into()
 			);
 			exec_success()
 		});
@@ -2426,7 +2429,7 @@ mod tests {
 		// call the contract passed as input with disabled reentry
 		let code_bob = MockLoader::insert(Call, |ctx, _| {
 			let dest = Decode::decode(&mut ctx.input_data.as_ref()).unwrap();
-			ctx.ext.call(0, dest, 0, vec![], false).map(|v| v.0).map_err(|e| e.0)
+			ctx.ext.call(0, dest, 0, vec![], false)
 		});
 
 		let code_charlie = MockLoader::insert(Call, |_, _| {
@@ -2459,7 +2462,7 @@ mod tests {
 					0,
 					BOB.encode(),
 					None,
-				).map_err(|e| e.0.error),
+				).map_err(|e| e.error),
 				<Error<Test>>::ReentranceDenied,
 			);
 		});
@@ -2469,7 +2472,7 @@ mod tests {
 	fn call_deny_reentry() {
 		let code_bob = MockLoader::insert(Call, |ctx, _| {
 			if ctx.input_data[0] == 0 {
-				ctx.ext.call(0, CHARLIE, 0, vec![], false).map(|v| v.0).map_err(|e| e.0)
+				ctx.ext.call(0, CHARLIE, 0, vec![], false)
 			} else {
 				exec_success()
 			}
@@ -2477,7 +2480,7 @@ mod tests {
 
 		// call BOB with input set to '1'
 		let code_charlie = MockLoader::insert(Call, |ctx, _| {
-			ctx.ext.call(0, BOB, 0, vec![1], true).map(|v| v.0).map_err(|e| e.0)
+			ctx.ext.call(0, BOB, 0, vec![1], true)
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
@@ -2495,7 +2498,7 @@ mod tests {
 					0,
 					vec![0],
 					None,
-				).map_err(|e| e.0.error),
+				).map_err(|e| e.error),
 				<Error<Test>>::ReentranceDenied,
 			);
 		});

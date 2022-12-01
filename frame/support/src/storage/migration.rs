@@ -244,7 +244,7 @@ pub fn remove_storage_prefix(module: &[u8], item: &[u8], hash: &[u8]) {
 	key[0..16].copy_from_slice(&Twox128::hash(module));
 	key[16..32].copy_from_slice(&Twox128::hash(item));
 	key[32..].copy_from_slice(hash);
-	frame_support::storage::unhashed::kill_prefix(&key)
+	frame_support::storage::unhashed::kill_prefix(&key, None);
 }
 
 /// Get a particular value in storage by the `module`, the map's `item` name and the key `hash`.

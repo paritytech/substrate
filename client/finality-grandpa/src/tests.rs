@@ -1013,7 +1013,7 @@ fn voter_persists_its_votes() {
 	fn alice_voter2(
 		peers: &[Ed25519Keyring],
 		net: Arc<Mutex<GrandpaTestNet>>,
-	) -> impl Future<Output = ()> + Unpin + Send + 'static {
+	) -> impl Future<Output = ()> + Send {
 		let (keystore, _) = create_keystore(peers[0]);
 		let mut net = net.lock();
 

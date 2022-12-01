@@ -19,7 +19,6 @@
 use crate::*;
 use sp_transaction_pool::TransactionStatus;
 use futures::executor::{block_on, block_on_stream};
-use txpool::{self, Pool};
 use sp_runtime::{
 	generic::BlockId,
 	transaction_validity::{ValidTransaction, TransactionSource, InvalidTransaction},

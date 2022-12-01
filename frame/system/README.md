@@ -3,7 +3,7 @@
 The System module provides low-level access to core types and cross-cutting utilities.
 It acts as the base layer for other pallets to interact with the Substrate framework components.
 
-- [`system::Trait`](https://docs.rs/frame-system/latest/frame_system/trait.Trait.html)
+- [`system::Config`](https://docs.rs/frame-system/latest/frame_system/pallet/trait.Config.html)
 
 ## Overview
 

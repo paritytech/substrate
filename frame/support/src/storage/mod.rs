@@ -464,7 +464,8 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		KArg2: EncodeLike<K2>;
 
 	/// Remove all values under the first key.
-	fn remove_prefix<KArg1>(k1: KArg1) where KArg1: ?Sized + EncodeLike<K1>;
+	fn remove_prefix<KArg1>(k1: KArg1, limit: Option<u32>) -> sp_io::KillStorageResult
+		where KArg1: ?Sized + EncodeLike<K1>;
 
 	/// Iterate over values that share the first key.
 	fn iter_prefix_values<KArg1>(k1: KArg1) -> PrefixIterator<V>
@@ -589,7 +590,8 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 	fn remove<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg);
 
 	/// Remove all values under the partial prefix key.
-	fn remove_prefix<KP>(partial_key: KP) where K: HasKeyPrefix<KP>;
+	fn remove_prefix<KP>(partial_key: KP, limit: Option<u32>) -> sp_io::KillStorageResult
+		where K: HasKeyPrefix<KP>;
 
 	/// Iterate over values that share the partial prefix key.
 	fn iter_prefix_values<KP>(partial_key: KP) -> PrefixIterator<V> where K: HasKeyPrefix<KP>;
@@ -880,8 +882,8 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 	}
 
 	/// Remove all value of the storage.
-	fn remove_all() {
-		sp_io::storage::clear_prefix(&Self::final_prefix())
+	fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
+		sp_io::storage::clear_prefix(&Self::final_prefix(), limit)
 	}
 
 	/// Iter over all value of the storage.
@@ -1184,7 +1186,7 @@ mod test {
 			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![1, 2, 3, 4]);
 
 			// test removal
-			MyStorage::remove_all();
+			MyStorage::remove_all(None);
 			assert!(MyStorage::iter_values().collect::<Vec<_>>().is_empty());
 
 			// test migration
@@ -1194,7 +1196,7 @@ mod test {
 			assert!(MyStorage::iter_values().collect::<Vec<_>>().is_empty());
 			MyStorage::translate_values(|v: u32| Some(v as u64));
 			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![1, 2]);
-			MyStorage::remove_all();
+			MyStorage::remove_all(None);
 
 			// test migration 2
 			unhashed::put(&[&k[..], &vec![1][..]].concat(), &1u128);
@@ -1206,7 +1208,7 @@ mod test {
 			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![1, 2, 3]);
 			MyStorage::translate_values(|v: u128| Some(v as u64));
 			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![1, 2, 3]);
-			MyStorage::remove_all();
+			MyStorage::remove_all(None);
 
 			// test that other values are not modified.
 			assert_eq!(unhashed::get(&key_before[..]), Some(32u64));

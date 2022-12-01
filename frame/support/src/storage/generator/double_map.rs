@@ -212,8 +212,9 @@ impl<K1, K2, V, G> storage::StorageDoubleMap<K1, K2, V> for G where
 		unhashed::kill(&Self::storage_double_map_final_key(k1, k2))
 	}
 
-	fn remove_prefix<KArg1>(k1: KArg1) where KArg1: EncodeLike<K1> {
-		unhashed::kill_prefix(Self::storage_double_map_final_key1(k1).as_ref())
+	fn remove_prefix<KArg1>(k1: KArg1, limit: Option<u32>) -> sp_io::KillStorageResult
+		where KArg1: EncodeLike<K1> {
+		unhashed::kill_prefix(Self::storage_double_map_final_key1(k1).as_ref(), limit)
 	}
 
 	fn iter_prefix_values<KArg1>(k1: KArg1) -> storage::PrefixIterator<V> where

@@ -1,9 +1,9 @@
 (module
 	(import "seal0" "seal_set_storage" (func $seal_set_storage (param i32 i32 i32)))
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
-	(import "seal0" "seal_restore_to"
+	(import "seal1" "seal_restore_to"
 		(func $seal_restore_to
-			(param i32 i32 i32 i32 i32 i32 i32 i32)
+			(param i32 i32 i32 i32 i32)
 		)
 	)
 	(import "env" "memory" (memory 1 1))
@@ -27,15 +27,12 @@
 			)
 		)
 		(call $seal_restore_to
-			;; Pointer and length of the encoded dest buffer.
+			;; Pointer to the encoded dest buffer.
 			(i32.const 340)
-			(i32.const 32)
-			;; Pointer and length of the encoded code hash buffer
+			;; Pointer to the encoded code hash buffer
 			(i32.const 308)
-			(i32.const 32)
-			;; Pointer and length of the encoded rent_allowance buffer
+			;; Pointer to the encoded rent_allowance buffer
 			(i32.const 296)
-			(i32.const 8)
 			;; Pointer and number of items in the delta buffer.
 			;; This buffer specifies multiple keys for removal before restoration.
 			(i32.const 100)

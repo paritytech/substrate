@@ -115,13 +115,37 @@ pub use chain_spec::{
 };
 pub use extension::{Group, Fork, Forks, Extension, GetExtension, get_extension};
 pub use sc_chain_spec_derive::{ChainSpecExtension, ChainSpecGroup};
-pub use sp_chain_spec::{Properties, ChainType};
 
 use serde::{Serialize, de::DeserializeOwned};
 use sp_runtime::BuildStorage;
 use sc_network::config::MultiaddrWithPeerId;
 use sc_telemetry::TelemetryEndpoints;
 use sp_core::storage::Storage;
+
+/// The type of a chain.
+///
+/// This can be used by tools to determine the type of a chain for displaying
+/// additional information or enabling additional features.
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
+pub enum ChainType {
+	/// A development chain that runs mainly on one node.
+	Development,
+	/// A local chain that runs locally on multiple nodes for testing purposes.
+	Local,
+	/// A live chain.
+	Live,
+	/// Some custom chain type.
+	Custom(String),
+}
+
+impl Default for ChainType {
+	fn default() -> Self {
+		Self::Live
+	}
+}
+
+/// Arbitrary properties defined in chain spec as a JSON object
+pub type Properties = serde_json::map::Map<String, serde_json::Value>;
 
 /// A set of traits for the runtime genesis config.
 pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}

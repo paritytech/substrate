@@ -1,6 +1,6 @@
 # Sudo Module
 
-- [`sudo::Trait`](https://docs.rs/pallet-sudo/latest/pallet_sudo/trait.Trait.html)
+- [`sudo::Config`](https://docs.rs/pallet-sudo/latest/pallet_sudo/trait.Config.html)
 - [`Call`](https://docs.rs/pallet-sudo/latest/pallet_sudo/enum.Call.html)
 
 ## Overview

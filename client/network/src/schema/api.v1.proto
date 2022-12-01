@@ -68,3 +68,28 @@ message BlockData {
 	bytes justifications = 8; // optional
 }
 
+// Request storage data from a peer.
+message StateRequest {
+	// Block header hash.
+	bytes block = 1;
+	// Start from this key. Equivalent to <empty bytes> if omitted.
+	bytes start = 2; // optional
+	// if 'true' indicates that response should contain raw key-values, rather than proof.
+	bool no_proof = 3;
+}
+
+message StateResponse {
+	// A collection of keys-values. Only populated if `no_proof` is `true`
+	repeated StateEntry entries = 1;
+	// If `no_proof` is false in request, this contains proof nodes.
+	bytes proof = 2;
+	// Set to true when there are no more keys to return.
+	bool complete = 3;
+}
+
+// A key-value pair
+message StateEntry {
+	bytes key = 1;
+	bytes value = 2;
+}
+

@@ -45,7 +45,7 @@ use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnbounded
 pub use libp2p::PeerId;
 
 /// We don't accept nodes whose reputation is under this value.
-const BANNED_THRESHOLD: i32 = 82 * (i32::min_value() / 100);
+const BANNED_THRESHOLD: i32 = 82 * (i32::MIN / 100);
 /// Reputation change for a node when we get disconnected from it.
 const DISCONNECT_REPUTATION_CHANGE: i32 = -256;
 /// Amount of time between the moment we disconnect from a node and the moment we remove it from
@@ -107,7 +107,7 @@ impl ReputationChange {
 
 	/// New reputation change that forces minimum possible reputation.
 	pub const fn new_fatal(reason: &'static str) -> ReputationChange {
-		ReputationChange { value: i32::min_value(), reason }
+		ReputationChange { value: i32::MIN, reason }
 	}
 }
 

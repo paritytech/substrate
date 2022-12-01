@@ -60,7 +60,7 @@ being re-elected at the end of each round.
 
 ### Module Information
 
-- [`election_sp_phragmen::Trait`](https://docs.rs/pallet-elections-phragmen/latest/pallet_elections_phragmen/trait.Trait.html)
+- [`election_sp_phragmen::Config`](https://docs.rs/pallet-elections-phragmen/latest/pallet_elections_phragmen/trait.Config.html)
 - [`Call`](https://docs.rs/pallet-elections-phragmen/latest/pallet_elections_phragmen/enum.Call.html)
 - [`Module`](https://docs.rs/pallet-elections-phragmen/latest/pallet_elections_phragmen/struct.Module.html)
 

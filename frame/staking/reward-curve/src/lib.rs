@@ -275,7 +275,7 @@ impl INPoS {
 	// See web3 docs for the details
 	fn compute_opposite_after_x_ideal(&self, y: u32) -> u32 {
 		if y == self.i_0 {
-			return u32::max_value();
+			return u32::MAX;
 		}
 		// Note: the log term calculated here represents a per_million value
 		let log = log2(self.i_ideal_times_x_ideal - self.i_0, y - self.i_0);
@@ -408,7 +408,7 @@ fn generate_test_module(input: &INposInput) -> TokenStream2 {
 
 			#[test]
 			fn reward_curve_precision() {
-				for &base in [MILLION, u32::max_value()].iter() {
+				for &base in [MILLION, u32::MAX].iter() {
 					let number_of_check = 100_000.min(base);
 					for check_index in 0..=number_of_check {
 						let i = (check_index as u64 * base as u64 / number_of_check as u64) as u32;

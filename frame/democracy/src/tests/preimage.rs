@@ -81,11 +81,11 @@ fn preimage_deposit_should_be_reapable_earlier_by_owner() {
 
 		next_block();
 		assert_noop!(
-			Democracy::reap_preimage(Origin::signed(6), set_balance_proposal_hash(2), u32::max_value()),
+			Democracy::reap_preimage(Origin::signed(6), set_balance_proposal_hash(2), u32::MAX),
 			Error::<Test>::TooEarly
 		);
 		next_block();
-		assert_ok!(Democracy::reap_preimage(Origin::signed(6), set_balance_proposal_hash(2), u32::max_value()));
+		assert_ok!(Democracy::reap_preimage(Origin::signed(6), set_balance_proposal_hash(2), u32::MAX));
 
 		assert_eq!(Balances::free_balance(6), 60);
 		assert_eq!(Balances::reserved_balance(6), 0);
@@ -96,7 +96,7 @@ fn preimage_deposit_should_be_reapable_earlier_by_owner() {
 fn preimage_deposit_should_be_reapable() {
 	new_test_ext_execute_with_cond(|operational| {
 		assert_noop!(
-				Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2), u32::max_value()),
+				Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2), u32::MAX),
 				Error::<Test>::PreimageMissing
 			);
 
@@ -111,12 +111,12 @@ fn preimage_deposit_should_be_reapable() {
 		next_block();
 		next_block();
 		assert_noop!(
-				Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2), u32::max_value()),
+				Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2), u32::MAX),
 				Error::<Test>::TooEarly
 			);
 
 		next_block();
-		assert_ok!(Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2), u32::max_value()));
+		assert_ok!(Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2), u32::MAX));
 		assert_eq!(Balances::reserved_balance(6), 0);
 		assert_eq!(Balances::free_balance(6), 48);
 		assert_eq!(Balances::free_balance(5), 62);
@@ -161,7 +161,7 @@ fn reaping_imminent_preimage_should_fail() {
 		assert_ok!(Democracy::vote(Origin::signed(1), r, aye(1)));
 		next_block();
 		next_block();
-		assert_noop!(Democracy::reap_preimage(Origin::signed(6), h, u32::max_value()), Error::<Test>::Imminent);
+		assert_noop!(Democracy::reap_preimage(Origin::signed(6), h, u32::MAX), Error::<Test>::Imminent);
 	});
 }
 

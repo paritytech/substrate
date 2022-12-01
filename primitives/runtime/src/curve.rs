@@ -112,17 +112,17 @@ fn test_multiply_by_rational_saturating() {
 	for value in 0..=div {
 		for p in 0..=div {
 			for q in 1..=div {
-				let value: u64 = (value as u128 * u64::max_value() as u128 / div as u128)
+				let value: u64 = (value as u128 * u64::MAX as u128 / div as u128)
 					.try_into().unwrap();
-				let p = (p as u64 * u32::max_value() as u64 / div as u64)
+				let p = (p as u64 * u32::MAX as u64 / div as u64)
 					.try_into().unwrap();
-				let q = (q as u64 * u32::max_value() as u64 / div as u64)
+				let q = (q as u64 * u32::MAX as u64 / div as u64)
 					.try_into().unwrap();
 
 				assert_eq!(
 					multiply_by_rational_saturating(value, p, q),
 					(value as u128 * p as u128 / q as u128)
-						.try_into().unwrap_or(u64::max_value())
+						.try_into().unwrap_or(u64::MAX)
 				);
 			}
 		}
@@ -153,9 +153,9 @@ fn test_calculate_for_fraction_times_denominator() {
 	let div = 100u32;
 	for d in 0..=div {
 		for n in 0..=d {
-			let d: u64 = (d as u128 * u64::max_value() as u128 / div as u128)
+			let d: u64 = (d as u128 * u64::MAX as u128 / div as u128)
 				.try_into().unwrap();
-			let n: u64 = (n as u128 * u64::max_value() as u128 / div as u128)
+			let n: u64 = (n as u128 * u64::MAX as u128 / div as u128)
 				.try_into().unwrap();
 
 			let res = curve.calculate_for_fraction_times_denominator(n, d);

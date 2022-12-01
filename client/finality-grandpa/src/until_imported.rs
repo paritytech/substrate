@@ -136,12 +136,14 @@ impl Drop for Metrics {
 	fn drop(&mut self) {
 		// Reduce the global counter by the amount of messages that were still left in the dropped
 		// queue.
-		self.global_waiting_messages.sub(self.local_waiting_messages)
+		self.global_waiting_messages
+			.sub(self.local_waiting_messages)
 	}
 }
 
 /// Buffering incoming messages until blocks with given hashes are imported.
-pub(crate) struct UntilImported<Block, BlockStatus, BlockSyncRequester, I, M> where
+pub(crate) struct UntilImported<Block, BlockStatus, BlockSyncRequester, I, M>
+where
 	Block: BlockT,
 	I: Stream<Item = M::Blocked> + Unpin,
 	M: BlockUntilImported<Block>,
@@ -152,7 +154,7 @@ pub(crate) struct UntilImported<Block, BlockStatus, BlockSyncRequester, I, M> wh
 	incoming_messages: Fuse<I>,
 	ready: VecDeque<M::Blocked>,
 	/// Interval at which to check status of each awaited block.
-	check_pending: Pin<Box<dyn Stream<Item = Result<(), std::io::Error>> + Send + Sync>>,
+	check_pending: Pin<Box<dyn Stream<Item = Result<(), std::io::Error>> + Send>>,
 	/// Mapping block hashes to their block number, the point in time it was
 	/// first encountered (Instant) and a list of GRANDPA messages referencing
 	/// the block hash.
@@ -164,13 +166,18 @@ pub(crate) struct UntilImported<Block, BlockStatus, BlockSyncRequester, I, M> wh
 	metrics: Option<Metrics>,
 }
 
-impl<Block, BlockStatus, BlockSyncRequester, I, M> Unpin for UntilImported<Block, BlockStatus, BlockSyncRequester, I, M > where
+impl<Block, BlockStatus, BlockSyncRequester, I, M> Unpin
+	for UntilImported<Block, BlockStatus, BlockSyncRequester, I, M>
+where
 	Block: BlockT,
 	I: Stream<Item = M::Blocked> + Unpin,
 	M: BlockUntilImported<Block>,
-{}
+{
+}
 
-impl<Block, BlockStatus, BlockSyncRequester, I, M> UntilImported<Block, BlockStatus, BlockSyncRequester, I, M> where
+impl<Block, BlockStatus, BlockSyncRequester, I, M>
+	UntilImported<Block, BlockStatus, BlockSyncRequester, I, M>
+where
 	Block: BlockT,
 	BlockStatus: BlockStatusT<Block>,
 	BlockSyncRequester: BlockSyncRequesterT<Block>,

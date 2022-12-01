@@ -27,7 +27,7 @@ use sp_core::{
 	convert_hash, NativeOrEncoded, traits::{CodeExecutor, SpawnNamed},
 };
 use sp_runtime::{
-	generic::BlockId, traits::{One, Block as BlockT, Header as HeaderT, HashFor},
+	generic::BlockId, traits::{Block as BlockT, Header as HeaderT, HashFor},
 };
 use sp_externalities::Extensions;
 use sp_state_machine::{
@@ -36,7 +36,7 @@ use sp_state_machine::{
 };
 use hash_db::Hasher;
 
-use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
+use sp_api::{ProofRecorder, StorageTransactionCache};
 
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 
@@ -97,8 +97,6 @@ impl<Block, B, Local> CallExecutor<Block> for
 	}
 
 	fn contextual_call<
-		'a,
-		IB: Fn() -> ClientResult<()>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
 			Result<NativeOrEncoded<R>, Self::Error>
@@ -107,13 +105,11 @@ impl<Block, B, Local> CallExecutor<Block> for
 		NC: FnOnce() -> result::Result<R, sp_api::ApiError> + UnwindSafe,
 	>(
 		&self,
-		initialize_block_fn: IB,
 		at: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
 		_: Option<&RefCell<StorageTransactionCache<Block, B::State>>>,
-		initialize_block: InitializeBlock<'a, Block>,
 		_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
 		recorder: &Option<ProofRecorder<Block>>,
@@ -124,7 +120,6 @@ impl<Block, B, Local> CallExecutor<Block> for
 
 		match self.backend.is_local_state_available(at) {
 			true => CallExecutor::contextual_call::<
-				_,
 				fn(
 					Result<NativeOrEncoded<R>, Local::Error>,
 					Result<NativeOrEncoded<R>, Local::Error>,
@@ -133,13 +128,11 @@ impl<Block, B, Local> CallExecutor<Block> for
 				NC
 			>(
 				&self.local,
-				initialize_block_fn,
 				at,
 				method,
 				call_data,
 				changes,
 				None,
-				initialize_block,
 				ExecutionManager::NativeWhenPossible,
 				native_call,
 				recorder,
@@ -177,7 +170,6 @@ impl<Block, B, Local> CallExecutor<Block> for
 /// Proof includes both environment preparation proof and method execution proof.
 pub fn prove_execution<Block, S, E>(
 	mut state: S,
-	header: Block::Header,
 	executor: &E,
 	method: &str,
 	call_data: &[u8],
@@ -193,31 +185,20 @@ pub fn prove_execution<Block, S, E>(
 				Box<dyn sp_state_machine::Error>
 		)?;
 
-	// prepare execution environment + record preparation proof
-	let mut changes = Default::default();
-	let (_, init_proof) = executor.prove_at_trie_state(
-		trie_state,
-		&mut changes,
-		"Core_initialize_block",
-		&header.encode(),
-	)?;
-
 	// execute method + record execution proof
 	let (result, exec_proof) = executor.prove_at_trie_state(
 		&trie_state,
-		&mut changes,
+		&mut Default::default(),
 		method,
 		call_data,
 	)?;
-	let total_proof = StorageProof::merge(vec![init_proof, exec_proof]);
 
-	Ok((result, total_proof))
+	Ok((result, exec_proof))
 }
 
 /// Check remote contextual execution proof using given backend.
 ///
-/// Method is executed using passed header as environment' current block.
-/// Proof should include both environment preparation proof and method execution proof.
+/// Proof should include the method execution proof.
 pub fn check_execution_proof<Header, E, H>(
 	executor: &E,
 	spawn_handle: Box<dyn SpawnNamed>,
@@ -230,61 +211,17 @@ pub fn check_execution_proof<Header, E, H>(
 		H: Hasher,
 		H::Out: Ord + codec::Codec + 'static,
 {
-	check_execution_proof_with_make_header::<Header, E, H, _>(
-		executor,
-		spawn_handle,
-		request,
-		remote_proof,
-		|header| <Header as HeaderT>::new(
-			*header.number() + One::one(),
-			Default::default(),
-			Default::default(),
-			header.hash(),
-			Default::default(),
-		),
-	)
-}
-
-/// Check remote contextual execution proof using given backend and header factory.
-///
-/// Method is executed using passed header as environment' current block.
-/// Proof should include both environment preparation proof and method execution proof.
-pub fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader>(
-	executor: &E,
-	spawn_handle: Box<dyn SpawnNamed>,
-	request: &RemoteCallRequest<Header>,
-	remote_proof: StorageProof,
-	make_next_header: MakeNextHeader,
-) -> ClientResult<Vec<u8>>
-	where
-		E: CodeExecutor + Clone + 'static,
-		H: Hasher,
-		Header: HeaderT,
-		H::Out: Ord + codec::Codec + 'static,
-		MakeNextHeader: Fn(&Header) -> Header,
-{
 	let local_state_root = request.header.state_root();
 	let root: H::Out = convert_hash(&local_state_root);
 
-	// prepare execution environment + check preparation proof
+	// prepare execution environment
 	let mut changes = OverlayedChanges::default();
 	let trie_backend = create_proof_check_backend(root, remote_proof)?;
-	let next_header = make_next_header(&request.header);
 
 	// TODO: Remove when solved: https://github.com/paritytech/substrate/issues/5047
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&trie_backend);
 	let runtime_code = backend_runtime_code.runtime_code()
 		.map_err(|_e| ClientError::RuntimeCodeMissing)?;
-
-	execution_proof_check_on_trie_backend::<H, Header::Number, _, _>(
-		&trie_backend,
-		&mut changes,
-		executor,
-		spawn_handle.clone(),
-		"Core_initialize_block",
-		&next_header.encode(),
-		&runtime_code,
-	)?;
 
 	// execute method
 	execution_proof_check_on_trie_backend::<H, Header::Number, _, _>(

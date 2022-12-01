@@ -463,7 +463,7 @@ pub mod pallet {
 			_subkeys: u32,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			storage::unhashed::kill_prefix(&prefix);
+			storage::unhashed::kill_prefix(&prefix, None);
 			Ok(().into())
 		}
 
@@ -581,7 +581,7 @@ pub mod pallet {
 	/// Events deposited for the current block.
 	#[pallet::storage]
 	#[pallet::getter(fn events)]
-	pub(super) type Events<T: Config> =
+	pub type Events<T: Config> =
 		StorageValue<_, Vec<EventRecord<T::Event, T::Hash>>, ValueQuery>;
 
 	/// The number of events in the `Events<T>` list.
@@ -778,7 +778,7 @@ fn hash69<T: AsMut<[u8]> + Default>() -> T {
 /// This type alias represents an index of an event.
 ///
 /// We use `u32` here because this index is used as index for `Events<T>`
-/// which can't contain more than `u32::max_value()` items.
+/// which can't contain more than `u32::MAX` items.
 type EventIndex = u32;
 
 /// Type used to encode the number of references an account has.
@@ -1334,7 +1334,7 @@ impl<T: Config> Pallet<T> {
 		if let InitKind::Full = kind {
 			<Events<T>>::kill();
 			EventCount::<T>::kill();
-			<EventTopics<T>>::remove_all();
+			<EventTopics<T>>::remove_all(None);
 		}
 	}
 
@@ -1447,7 +1447,7 @@ impl<T: Config> Pallet<T> {
 	pub fn reset_events() {
 		<Events<T>>::kill();
 		EventCount::<T>::kill();
-		<EventTopics<T>>::remove_all();
+		<EventTopics<T>>::remove_all(None);
 	}
 
 	/// Assert the given `event` exists.

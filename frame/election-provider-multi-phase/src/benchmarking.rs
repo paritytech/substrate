@@ -19,7 +19,7 @@
 
 use super::*;
 use crate::{Pallet as MultiPhase, unsigned::IndexAssignmentOf};
-use frame_benchmarking::impl_benchmark_test_suite;
+use frame_benchmarking::{account, impl_benchmark_test_suite};
 use frame_support::{assert_ok, traits::OnInitialize};
 use frame_system::RawOrigin;
 use rand::{prelude::SliceRandom, rngs::SmallRng, SeedableRng};
@@ -57,7 +57,7 @@ fn solution_with_size<T: Config>(
 	let targets: Vec<T::AccountId> =
 		(0..size.targets).map(|i| frame_benchmarking::account("Targets", i, SEED)).collect();
 
-	let mut rng = SmallRng::seed_from_u64(SEED as u64);
+	let mut rng = SmallRng::seed_from_u64(SEED.into());
 
 	// decide who are the winners.
 	let winners = targets
@@ -176,6 +176,39 @@ frame_benchmarking::benchmarks! {
 		assert!(<MultiPhase<T>>::current_phase().is_unsigned());
 	}
 
+	finalize_signed_phase_accept_solution {
+		let receiver = account("receiver", 0, SEED);
+		let initial_balance = T::Currency::minimum_balance() * 10u32.into();
+		T::Currency::make_free_balance_be(&receiver, initial_balance);
+		let ready: ReadySolution<T::AccountId> = Default::default();
+		let deposit: BalanceOf<T> = 10u32.into();
+		let reward: BalanceOf<T> = 20u32.into();
+
+		assert_ok!(T::Currency::reserve(&receiver, deposit));
+		assert_eq!(T::Currency::free_balance(&receiver), initial_balance - 10u32.into());
+	}: {
+		<MultiPhase<T>>::finalize_signed_phase_accept_solution(ready, &receiver, deposit, reward)
+	} verify {
+		assert_eq!(T::Currency::free_balance(&receiver), initial_balance + 20u32.into());
+		assert_eq!(T::Currency::reserved_balance(&receiver), 0u32.into());
+	}
+
+	finalize_signed_phase_reject_solution {
+		let receiver = account("receiver", 0, SEED);
+		let initial_balance = T::Currency::minimum_balance().max(One::one()) * 10u32.into();
+		let deposit: BalanceOf<T> = 10u32.into();
+		T::Currency::make_free_balance_be(&receiver, initial_balance);
+		assert_ok!(T::Currency::reserve(&receiver, deposit));
+
+		assert_eq!(T::Currency::free_balance(&receiver), initial_balance - 10u32.into());
+		assert_eq!(T::Currency::reserved_balance(&receiver), 10u32.into());
+	}: {
+		<MultiPhase<T>>::finalize_signed_phase_reject_solution(&receiver, deposit)
+	} verify {
+		assert_eq!(T::Currency::free_balance(&receiver), initial_balance - 10u32.into());
+		assert_eq!(T::Currency::reserved_balance(&receiver), 0u32.into());
+	}
+
 	on_initialize_open_unsigned_without_snapshot {
 		// need to assume signed phase was open before
 		<MultiPhase<T>>::on_initialize_open_signed().unwrap();
@@ -227,6 +260,38 @@ frame_benchmarking::benchmarks! {
 		assert!(<MultiPhase<T>>::snapshot().is_some());
 	}
 
+	submit {
+		let c in 1 .. (T::SignedMaxSubmissions::get() - 1);
+
+		// the solution will be worse than all of them meaning the score need to be checked against
+		// ~ log2(c)
+		let solution = RawSolution {
+			score: [(10_000_000u128 - 1).into(), 0, 0],
+			..Default::default()
+		};
+
+		MultiPhase::<T>::on_initialize_open_signed().expect("should be ok to start signed phase");
+		<Round<T>>::put(1);
+
+		let mut signed_submissions = SignedSubmissions::<T>::get();
+		for i in 0..c {
+			let solution = RawSolution {
+				score: [(10_000_000 + i).into(), 0, 0],
+				..Default::default()
+			};
+			let signed_submission = SignedSubmission { solution, ..Default::default() };
+			signed_submissions.insert(signed_submission);
+		}
+		signed_submissions.put();
+
+		let caller = frame_benchmarking::whitelisted_caller();
+		T::Currency::make_free_balance_be(&caller,  T::Currency::minimum_balance() * 10u32.into());
+
+	}: _(RawOrigin::Signed(caller), solution, c)
+	verify {
+		assert!(<MultiPhase<T>>::signed_submissions().len() as u32 == c + 1);
+	}
+
 	submit_unsigned {
 		// number of votes in snapshot.
 		let v in (T::BenchmarkingConfig::VOTERS[0]) .. T::BenchmarkingConfig::VOTERS[1];
@@ -234,9 +299,12 @@ frame_benchmarking::benchmarks! {
 		let t in (T::BenchmarkingConfig::TARGETS[0]) .. T::BenchmarkingConfig::TARGETS[1];
 		// number of assignments, i.e. compact.len(). This means the active nominators, thus must be
 		// a subset of `v` component.
-		let a in (T::BenchmarkingConfig::ACTIVE_VOTERS[0]) .. T::BenchmarkingConfig::ACTIVE_VOTERS[1];
+		let a in
+			(T::BenchmarkingConfig::ACTIVE_VOTERS[0]) .. T::BenchmarkingConfig::ACTIVE_VOTERS[1];
 		// number of desired targets. Must be a subset of `t` component.
-		let d in (T::BenchmarkingConfig::DESIRED_TARGETS[0]) .. T::BenchmarkingConfig::DESIRED_TARGETS[1];
+		let d in
+			(T::BenchmarkingConfig::DESIRED_TARGETS[0]) ..
+			T::BenchmarkingConfig::DESIRED_TARGETS[1];
 
 		let witness = SolutionOrSnapshotSize { voters: v, targets: t };
 		let raw_solution = solution_with_size::<T>(witness, a, d);
@@ -249,7 +317,8 @@ frame_benchmarking::benchmarks! {
 		let encoded_call = <Call<T>>::submit_unsigned(raw_solution.clone(), witness).encode();
 	}: {
 		assert_ok!(<MultiPhase<T>>::submit_unsigned(RawOrigin::None.into(), raw_solution, witness));
-		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot).unwrap();
+		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot)
+			.unwrap();
 		let _decoded_call = <Call<T> as Decode>::decode(&mut &*encoded_call).unwrap();
 	} verify {
 		assert!(<MultiPhase<T>>::queued_solution().is_some());
@@ -263,13 +332,17 @@ frame_benchmarking::benchmarks! {
 		let t in (T::BenchmarkingConfig::TARGETS[0]) .. T::BenchmarkingConfig::TARGETS[1];
 		// number of assignments, i.e. compact.len(). This means the active nominators, thus must be
 		// a subset of `v` component.
-		let a in (T::BenchmarkingConfig::ACTIVE_VOTERS[0]) .. T::BenchmarkingConfig::ACTIVE_VOTERS[1];
+		let a in
+			(T::BenchmarkingConfig::ACTIVE_VOTERS[0]) .. T::BenchmarkingConfig::ACTIVE_VOTERS[1];
 		// number of desired targets. Must be a subset of `t` component.
-		let d in (T::BenchmarkingConfig::DESIRED_TARGETS[0]) .. T::BenchmarkingConfig::DESIRED_TARGETS[1];
+		let d in
+			(T::BenchmarkingConfig::DESIRED_TARGETS[0]) ..
+			T::BenchmarkingConfig::DESIRED_TARGETS[1];
 		// Subtract this percentage from the actual encoded size
 		let f in 0 .. 95;
 
-		// Compute a random solution, then work backwards to get the lists of voters, targets, and assignments
+		// Compute a random solution, then work backwards to get the lists of voters, targets, and
+		// assignments
 		let witness = SolutionOrSnapshotSize { voters: v, targets: t };
 		let RawSolution { compact, .. } = solution_with_size::<T>(witness, a, d);
 		let RoundSnapshot { voters, targets } = MultiPhase::<T>::snapshot().unwrap();
@@ -313,7 +386,11 @@ frame_benchmarking::benchmarks! {
 	} verify {
 		let compact = CompactOf::<T>::try_from(index_assignments.as_slice()).unwrap();
 		let encoding = compact.encode();
-		log!(trace, "encoded size prediction = {}", encoded_size_of(index_assignments.as_slice()).unwrap());
+		log!(
+			trace,
+			"encoded size prediction = {}",
+			encoded_size_of(index_assignments.as_slice()).unwrap(),
+		);
 		log!(trace, "actual encoded size = {}", encoding.len());
 		assert!(encoding.len() <= desired_size);
 	}
@@ -326,9 +403,12 @@ frame_benchmarking::benchmarks! {
 		let t in (T::BenchmarkingConfig::TARGETS[0]) .. T::BenchmarkingConfig::TARGETS[1];
 		// number of assignments, i.e. compact.len(). This means the active nominators, thus must be
 		// a subset of `v` component.
-		let a in (T::BenchmarkingConfig::ACTIVE_VOTERS[0]) .. T::BenchmarkingConfig::ACTIVE_VOTERS[1];
+		let a in
+			(T::BenchmarkingConfig::ACTIVE_VOTERS[0]) .. T::BenchmarkingConfig::ACTIVE_VOTERS[1];
 		// number of desired targets. Must be a subset of `t` component.
-		let d in (T::BenchmarkingConfig::DESIRED_TARGETS[0]) .. T::BenchmarkingConfig::DESIRED_TARGETS[1];
+		let d in
+			(T::BenchmarkingConfig::DESIRED_TARGETS[0]) ..
+			T::BenchmarkingConfig::DESIRED_TARGETS[1];
 
 		let size = SolutionOrSnapshotSize { voters: v, targets: t };
 		let raw_solution = solution_with_size::<T>(size, a, d);
@@ -340,7 +420,8 @@ frame_benchmarking::benchmarks! {
 		let encoded_snapshot = <MultiPhase<T>>::snapshot().unwrap().encode();
 	}: {
 		assert_ok!(<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Unsigned));
-		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot).unwrap();
+		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot)
+			.unwrap();
 	}
 }
 

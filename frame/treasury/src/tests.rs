@@ -367,8 +367,8 @@ fn genesis_funding_works() {
 #[test]
 fn max_approvals_limited() {
 	new_test_ext().execute_with(|| {
-		Balances::make_free_balance_be(&Treasury::account_id(), u64::max_value());
-		Balances::make_free_balance_be(&0, u64::max_value());
+		Balances::make_free_balance_be(&Treasury::account_id(), u64::MAX);
+		Balances::make_free_balance_be(&0, u64::MAX);
 
 		for _ in 0 .. MaxApprovals::get() {
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));

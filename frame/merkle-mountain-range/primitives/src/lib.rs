@@ -406,7 +406,6 @@ sp_api::decl_runtime_apis! {
 	/// API to interact with MMR pallet.
 	pub trait MmrApi<Hash: codec::Codec> {
 		/// Generate MMR proof for a leaf under given index.
-		#[skip_initialize_block]
 		fn generate_proof(leaf_index: u64) -> Result<(EncodableOpaqueLeaf, Proof<Hash>), Error>;
 
 		/// Verify MMR proof against on-chain MMR.
@@ -414,7 +413,6 @@ sp_api::decl_runtime_apis! {
 		/// Note this function will use on-chain MMR root hash and check if the proof
 		/// matches the hash.
 		/// See [Self::verify_proof_stateless] for a stateless verifier.
-		#[skip_initialize_block]
 		fn verify_proof(leaf: EncodableOpaqueLeaf, proof: Proof<Hash>) -> Result<(), Error>;
 
 		/// Verify MMR proof against given root hash.
@@ -423,7 +421,6 @@ sp_api::decl_runtime_apis! {
 		/// proof is verified against given MMR root hash.
 		///
 		/// The leaf data is expected to be encoded in it's compact form.
-		#[skip_initialize_block]
 		fn verify_proof_stateless(root: Hash, leaf: EncodableOpaqueLeaf, proof: Proof<Hash>)
 			-> Result<(), Error>;
 	}

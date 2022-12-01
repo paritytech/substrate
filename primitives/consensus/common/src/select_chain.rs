@@ -33,23 +33,24 @@ use sp_runtime::traits::{Block as BlockT, NumberFor};
 /// some implementations.
 ///
 /// Non-deterministically finalizing chains may only use the `_authoring` functions.
+#[async_trait::async_trait]
 pub trait SelectChain<Block: BlockT>: Sync + Send + Clone {
-
-	/// Get all leaves of the chain: block hashes that have no children currently.
+	/// Get all leaves of the chain, i.e. block hashes that have no children currently.
 	/// Leaves that can never be finalized will not be returned.
-	fn leaves(&self) -> Result<Vec<<Block as BlockT>::Hash>, Error>;
+	async fn leaves(&self) -> Result<Vec<<Block as BlockT>::Hash>, Error>;
 
 	/// Among those `leaves` deterministically pick one chain as the generally
-	/// best chain to author new blocks upon and probably finalize.
-	fn best_chain(&self) -> Result<<Block as BlockT>::Header, Error>;
+	/// best chain to author new blocks upon and probably (but not necessarily)
+	/// finalize.
+	async fn best_chain(&self) -> Result<<Block as BlockT>::Header, Error>;
 
 	/// Get the best descendent of `target_hash` that we should attempt to
 	/// finalize next, if any. It is valid to return the given `target_hash`
 	/// itself if no better descendent exists.
-	fn finality_target(
+	async fn finality_target(
 		&self,
 		target_hash: <Block as BlockT>::Hash,
-		_maybe_max_number: Option<NumberFor<Block>>
+		_maybe_max_number: Option<NumberFor<Block>>,
 	) -> Result<Option<<Block as BlockT>::Hash>, Error> {
 		Ok(Some(target_hash))
 	}

@@ -23,42 +23,41 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
+use finality_grandpa::{
+	round::State as RoundState, voter, voter_set::VoterSet, BlockNumberOps, Error as GrandpaError,
+};
 use futures::prelude::*;
 use futures_timer::Delay;
 use log::{debug, warn};
 use parity_scale_codec::{Decode, Encode};
 use parking_lot::RwLock;
+use prometheus_endpoint::{register, Counter, Gauge, PrometheusError, U64};
 
-use sc_client_api::{backend::{Backend, apply_aux}, utils::is_descendent_of};
-use finality_grandpa::{
-	BlockNumberOps, Error as GrandpaError, round::State as RoundState,
-	voter, voter_set::VoterSet,
-};
-use sp_blockchain::HeaderMetadata;
-use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{
-	Block as BlockT, Header as HeaderT, NumberFor, Zero,
+use sc_client_api::{
+	backend::{apply_aux, Backend as BackendT},
+	utils::is_descendent_of,
 };
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
+use sp_blockchain::HeaderMetadata;
+use sp_consensus::SelectChain as SelectChainT;
+use sp_finality_grandpa::{
+	AuthorityId, AuthoritySignature, Equivocation, EquivocationProof, GrandpaApi, RoundNumber,
+	SetId, GRANDPA_ENGINE_ID,
+};
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 
 use crate::{
-	local_authority_id, CommandOrError, Commit, Config, Error, NewAuthoritySet, Precommit, Prevote,
+	authorities::{AuthoritySet, SharedAuthoritySet},
+	communication::Network as NetworkT,
+	justification::GrandpaJustification,
+	local_authority_id,
+	notification::GrandpaJustificationSender,
+	until_imported::UntilVoteTargetImported,
+	voting_rule::VotingRule as VotingRuleT,
+	ClientForGrandpa, CommandOrError, Commit, Config, Error, NewAuthoritySet, Precommit, Prevote,
 	PrimaryPropose, SignedMessage, VoterCommand,
 };
-
-use sp_consensus::SelectChain;
-
-use crate::authorities::{AuthoritySet, SharedAuthoritySet};
-use crate::communication::Network as NetworkT;
-use crate::notification::GrandpaJustificationSender;
-use crate::justification::GrandpaJustification;
-use crate::until_imported::UntilVoteTargetImported;
-use crate::voting_rule::VotingRule;
-use sp_finality_grandpa::{
-	AuthorityId, AuthoritySignature, Equivocation, EquivocationProof, GRANDPA_ENGINE_ID,
-	GrandpaApi, RoundNumber, SetId,
-};
-use prometheus_endpoint::{register, Counter, Gauge, PrometheusError, U64};
 
 type HistoricalVotes<Block> = finality_grandpa::HistoricalVotes<
 	<Block as BlockT>::Hash,
@@ -479,11 +478,11 @@ impl<BE, Block: BlockT, C, N: NetworkT<Block>, SC, VR> Environment<BE, Block, C,
 impl<BE, Block, C, N, SC, VR> Environment<BE, Block, C, N, SC, VR>
 where
 	Block: BlockT,
-	BE: Backend<Block>,
-	C: crate::ClientForGrandpa<Block, BE>,
+	BE: BackendT<Block>,
+	C: ClientForGrandpa<Block, BE>,
 	C::Api: GrandpaApi<Block>,
 	N: NetworkT<Block>,
-	SC: SelectChain<Block> + 'static,
+	SC: SelectChainT<Block>,
 {
 	/// Report the given equivocation to the GRANDPA runtime module. This method
 	/// generates a session membership proof of the offender and then submits an
@@ -504,16 +503,19 @@ where
 
 		let is_descendent_of = is_descendent_of(&*self.client, None);
 
-		let best_header = self.select_chain
-			.best_chain()
-			.map_err(|e| Error::Blockchain(e.to_string()))?;
+		let (best_block_hash, best_block_number) = {
+			// TODO [#9158]: Use SelectChain::best_chain() to get a potentially
+			// more accurate best block
+			let info = self.client.info();
+			(info.best_hash, info.best_number)
+		};
 
 		let authority_set = self.authority_set.inner();
 
 		// block hash and number of the next pending authority set change in the
 		// given best chain.
 		let next_change = authority_set
-			.next_change(&best_header.hash(), &is_descendent_of)
+			.next_change(&best_block_hash, &is_descendent_of)
 			.map_err(|e| Error::Safety(e.to_string()))?;
 
 		// find the hash of the latest block in the current set
@@ -526,7 +528,7 @@ where
 			// the next set starts at `n` so the current one lasts until `n - 1`. if
 			// `n` is later than the best block, then the current set is still live
 			// at best block.
-			Some((_, n)) if n > *best_header.number() => best_header.hash(),
+			Some((_, n)) if n > best_block_number => best_block_hash,
 			Some((h, _)) => {
 				// this is the header at which the new set will start
 				let header = self.client.header(BlockId::Hash(h))?.expect(
@@ -539,7 +541,7 @@ where
 			}
 			// there is no pending change, the latest block for the current set is
 			// the best block.
-			None => best_header.hash(),
+			None => best_block_hash,
 		};
 
 		// generate key ownership proof at that block
@@ -568,7 +570,7 @@ where
 		self.client
 			.runtime_api()
 			.submit_report_equivocation_unsigned_extrinsic(
-				&BlockId::Hash(best_header.hash()),
+				&BlockId::Hash(best_block_hash),
 				equivocation_proof,
 				key_owner_proof,
 			)
@@ -578,23 +580,25 @@ where
 	}
 }
 
-impl<BE, Block: BlockT, C, N, SC, VR>
-	finality_grandpa::Chain<Block::Hash, NumberFor<Block>>
-for Environment<BE, Block, C, N, SC, VR>
+impl<BE, Block, C, N, SC, VR> finality_grandpa::Chain<Block::Hash, NumberFor<Block>>
+	for Environment<BE, Block, C, N, SC, VR>
 where
-	Block: 'static,
-	BE: Backend<Block>,
-	C: crate::ClientForGrandpa<Block, BE>,
-	N: NetworkT<Block> + 'static + Send,
-	SC: SelectChain<Block> + 'static,
-	VR: VotingRule<Block, C>,
+	Block: BlockT,
+	BE: BackendT<Block>,
+	C: ClientForGrandpa<Block, BE>,
+	N: NetworkT<Block>,
+	SC: SelectChainT<Block>,
+	VR: VotingRuleT<Block, C>,
 	NumberFor<Block>: BlockNumberOps,
 {
-	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
+	fn ancestry(
+		&self,
+		base: Block::Hash,
+		block: Block::Hash,
+	) -> Result<Vec<Block::Hash>, GrandpaError> {
 		ancestry(&self.client, base, block)
 	}
 }
-
 
 pub(crate) fn ancestry<Block: BlockT, Client>(
 	client: &Arc<Client>,
@@ -624,27 +628,31 @@ where
 
 	// skip one because our ancestry is meant to start from the parent of `block`,
 	// and `tree_route` includes it.
-	Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
+	Ok(tree_route
+		.retracted()
+		.iter()
+		.skip(1)
+		.map(|e| e.hash)
+		.collect())
 }
 
-impl<B, Block: BlockT, C, N, SC, VR> voter::Environment<Block::Hash, NumberFor<Block>>
+impl<B, Block, C, N, SC, VR> voter::Environment<Block::Hash, NumberFor<Block>>
 	for Environment<B, Block, C, N, SC, VR>
 where
-	Block: 'static,
-	B: Backend<Block>,
-	C: crate::ClientForGrandpa<Block, B> + 'static,
+	Block: BlockT,
+	B: BackendT<Block>,
+	C: ClientForGrandpa<Block, B> + 'static,
 	C::Api: GrandpaApi<Block>,
-	N: NetworkT<Block> + 'static + Send + Sync,
-	SC: SelectChain<Block> + 'static,
-	VR: VotingRule<Block, C>,
+	N: NetworkT<Block>,
+	SC: SelectChainT<Block> + 'static,
+	VR: VotingRuleT<Block, C> + Clone + 'static,
 	NumberFor<Block>: BlockNumberOps,
 {
-	type Timer = Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + Sync>>;
+	type Timer = Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send>>;
 	type BestChain = Pin<
 		Box<
 			dyn Future<Output = Result<Option<(Block::Hash, NumberFor<Block>)>, Self::Error>>
-				+ Send
-				+ Sync
+				+ Send,
 		>,
 	>;
 
@@ -652,127 +660,52 @@ where
 	type Signature = AuthoritySignature;
 
 	// regular round message streams
-	type In = Pin<Box<dyn Stream<
-		Item = Result<::finality_grandpa::SignedMessage<Block::Hash, NumberFor<Block>, Self::Signature, Self::Id>, Self::Error>
-	> + Send + Sync>>;
-	type Out = Pin<Box<dyn Sink<
-		::finality_grandpa::Message<Block::Hash, NumberFor<Block>>,
-		Error = Self::Error,
-	> + Send + Sync>>;
+	type In = Pin<
+		Box<
+			dyn Stream<
+					Item = Result<
+						::finality_grandpa::SignedMessage<
+							Block::Hash,
+							NumberFor<Block>,
+							Self::Signature,
+							Self::Id,
+						>,
+						Self::Error,
+					>,
+				> + Send,
+		>,
+	>;
+	type Out = Pin<
+		Box<
+			dyn Sink<
+					::finality_grandpa::Message<Block::Hash, NumberFor<Block>>,
+					Error = Self::Error,
+				> + Send,
+		>,
+	>;
 
 	type Error = CommandOrError<Block::Hash, NumberFor<Block>>;
 
 	fn best_chain_containing(&self, block: Block::Hash) -> Self::BestChain {
-		let find_best_chain = || {
+		let client = self.client.clone();
+		let authority_set = self.authority_set.clone();
+		let select_chain = self.select_chain.clone();
+		let voting_rule = self.voting_rule.clone();
+		let set_id = self.set_id;
+
+		Box::pin(async move {
 			// NOTE: when we finalize an authority set change through the sync protocol the voter is
 			//       signaled asynchronously. therefore the voter could still vote in the next round
-			//       before activating the new set. the `authority_set` is updated immediately thus we
-			//       restrict the voter based on that.
-			if self.set_id != self.authority_set.set_id() {
-				return None;
+			//       before activating the new set. the `authority_set` is updated immediately thus
+			//       we restrict the voter based on that.
+			if set_id != authority_set.set_id() {
+				return Ok(None);
 			}
 
-			let base_header = match self.client.header(BlockId::Hash(block)).ok()? {
-				Some(h) => h,
-				None => {
-					debug!(target: "afg", "Encountered error finding best chain containing {:?}: couldn't find base block", block);
-					return None;
-				}
-			};
-
-			// we refuse to vote beyond the current limit number where transitions are scheduled to
-			// occur.
-			// once blocks are finalized that make that transition irrelevant or activate it,
-			// we will proceed onwards. most of the time there will be no pending transition.
-			// the limit, if any, is guaranteed to be higher than or equal to the given base number.
-			let limit = self.authority_set.current_limit(*base_header.number());
-			debug!(target: "afg", "Finding best chain containing block {:?} with number limit {:?}", block, limit);
-
-			match self.select_chain.finality_target(block, None) {
-				Ok(Some(best_hash)) => {
-					let best_header = self
-						.client
-						.header(BlockId::Hash(best_hash))
-						.ok()?
-						.expect("Header known to exist after `finality_target` call; qed");
-
-					// check if our vote is currently being limited due to a pending change
-					let limit = limit.filter(|limit| limit < best_header.number());
-
-					if let Some(target_number) = limit {
-						let mut target_header = best_header.clone();
-
-						// walk backwards until we find the target block
-						loop {
-							if *target_header.number() < target_number {
-								unreachable!(
-									"we are traversing backwards from a known block; \
-									 blocks are stored contiguously; \
-									 qed"
-								);
-							}
-
-							if *target_header.number() == target_number {
-								break;
-							}
-
-							target_header = self
-								.client
-								.header(BlockId::Hash(*target_header.parent_hash()))
-								.ok()?
-								.expect("Header known to exist after `finality_target` call; qed");
-						}
-
-						Some((base_header, best_header, target_header))
-					} else {
-						// otherwise just use the given best as the target
-						Some((base_header, best_header.clone(), best_header))
-					}
-				}
-				Ok(None) => {
-					debug!(target: "afg", "Encountered error finding best chain containing {:?}: couldn't find target block", block);
-					None
-				}
-				Err(e) => {
-					debug!(target: "afg", "Encountered error finding best chain containing {:?}: {:?}", block, e);
-					None
-				}
-			}
-		};
-
-		if let Some((base_header, best_header, target_header)) = find_best_chain() {
-			// restrict vote according to the given voting rule, if the
-			// voting rule doesn't restrict the vote then we keep the
-			// previous target.
-			//
-			// note that we pass the original `best_header`, i.e. before the
-			// authority set limit filter, which can be considered a
-			// mandatory/implicit voting rule.
-			//
-			// we also make sure that the restricted vote is higher than the
-			// round base (i.e. last finalized), otherwise the value
-			// returned by the given voting rule is ignored and the original
-			// target is used instead.
-			let rule_fut = self.voting_rule.restrict_vote(
-				self.client.clone(),
-				&base_header,
-				&best_header,
-				&target_header,
-			);
-
-			Box::pin(async move {
-				Ok(rule_fut
-					.await
-					.filter(|(_, restricted_number)| {
-						// we can only restrict votes within the interval [base, target]
-						restricted_number >= base_header.number()
-							&& restricted_number < target_header.number()
-					})
-					.or_else(|| Some((target_header.hash(), *target_header.number()))))
-			})
-		} else {
-			Box::pin(future::ok(None))
-		}
+			best_chain_containing(block, client, authority_set, select_chain, voting_rule)
+				.await
+				.map_err(|e| e.into())
+		})
 	}
 
 	fn round_data(
@@ -1160,8 +1093,9 @@ where
 	fn round_commit_timer(&self) -> Self::Timer {
 		use rand::{thread_rng, Rng};
 
-		//random between 0-1 seconds.
-		let delay: u64 = thread_rng().gen_range(0, 1000);
+		// random between `[0, 2 * gossip_duration]` seconds.
+		let delay: u64 =
+			thread_rng().gen_range(0, 2 * self.config.gossip_duration.as_millis() as u64);
 		Box::pin(Delay::new(Duration::from_millis(delay)).map(Ok))
 	}
 
@@ -1205,6 +1139,111 @@ impl<Block: BlockT> From<GrandpaJustification<Block>> for JustificationOrCommit<
 	}
 }
 
+async fn best_chain_containing<Block, Backend, Client, SelectChain, VotingRule>(
+	block: Block::Hash,
+	client: Arc<Client>,
+	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
+	select_chain: SelectChain,
+	voting_rule: VotingRule,
+) -> Result<Option<(Block::Hash, NumberFor<Block>)>, Error>
+where
+	Backend: BackendT<Block>,
+	Block: BlockT,
+	Client: ClientForGrandpa<Block, Backend>,
+	SelectChain: SelectChainT<Block> + 'static,
+	VotingRule: VotingRuleT<Block, Client>,
+{
+	let base_header = match client.header(BlockId::Hash(block))? {
+		Some(h) => h,
+		None => {
+			debug!(target: "afg",
+				"Encountered error finding best chain containing {:?}: couldn't find base block",
+				block,
+			);
+
+			return Ok(None);
+		}
+	};
+
+	// we refuse to vote beyond the current limit number where transitions are scheduled to occur.
+	// once blocks are finalized that make that transition irrelevant or activate it, we will
+	// proceed onwards. most of the time there will be no pending transition.  the limit, if any, is
+	// guaranteed to be higher than or equal to the given base number.
+	let limit = authority_set.current_limit(*base_header.number());
+	debug!(target: "afg", "Finding best chain containing block {:?} with number limit {:?}", block, limit);
+
+	let result = match select_chain.finality_target(block, None).await {
+		Ok(Some(best_hash)) => {
+			let best_header = client
+				.header(BlockId::Hash(best_hash))?
+				.expect("Header known to exist after `finality_target` call; qed");
+
+			// check if our vote is currently being limited due to a pending change
+			let limit = limit.filter(|limit| limit < best_header.number());
+
+			let (base_header, best_header, target_header) = if let Some(target_number) = limit {
+				let mut target_header = best_header.clone();
+
+				// walk backwards until we find the target block
+				loop {
+					if *target_header.number() < target_number {
+						unreachable!(
+							"we are traversing backwards from a known block; \
+							 blocks are stored contiguously; \
+							 qed"
+						);
+					}
+
+					if *target_header.number() == target_number {
+						break;
+					}
+
+					target_header = client
+						.header(BlockId::Hash(*target_header.parent_hash()))?
+						.expect("Header known to exist after `finality_target` call; qed");
+				}
+
+				(base_header, best_header, target_header)
+			} else {
+				// otherwise just use the given best as the target
+				(base_header, best_header.clone(), best_header)
+			};
+
+			// restrict vote according to the given voting rule, if the
+			// voting rule doesn't restrict the vote then we keep the
+			// previous target.
+			//
+			// note that we pass the original `best_header`, i.e. before the
+			// authority set limit filter, which can be considered a
+			// mandatory/implicit voting rule.
+			//
+			// we also make sure that the restricted vote is higher than the
+			// round base (i.e. last finalized), otherwise the value
+			// returned by the given voting rule is ignored and the original
+			// target is used instead.
+			voting_rule
+				.restrict_vote(client.clone(), &base_header, &best_header, &target_header)
+				.await
+				.filter(|(_, restricted_number)| {
+					// we can only restrict votes within the interval [base, target]
+					restricted_number >= base_header.number() &&
+						restricted_number < target_header.number()
+				})
+				.or_else(|| Some((target_header.hash(), *target_header.number())))
+		}
+		Ok(None) => {
+			debug!(target: "afg", "Encountered error finding best chain containing {:?}: couldn't find target block", block);
+			None
+		}
+		Err(e) => {
+			debug!(target: "afg", "Encountered error finding best chain containing {:?}: {:?}", block, e);
+			None
+		}
+	};
+
+	Ok(result)
+}
+
 /// Finalize the given block and apply any authority set changes. If an
 /// authority set change is enacted then a justification is created (if not
 /// given) and stored with the block when finalizing it.
@@ -1222,8 +1261,8 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 ) -> Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>
 where
 	Block: BlockT,
-	BE: Backend<Block>,
-	Client: crate::ClientForGrandpa<Block, BE>,
+	BE: BackendT<Block>,
+	Client: ClientForGrandpa<Block, BE>,
 {
 	// NOTE: lock must be held through writing to DB to avoid race. this lock
 	//       also implicitly synchronizes the check for last finalized number
