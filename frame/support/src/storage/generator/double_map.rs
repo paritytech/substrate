@@ -527,7 +527,7 @@ mod test_iterators {
 			use crate::hash::Identity;
 			crate::generate_storage_alias!(
 				MyModule,
-				MyDoubleMap => DoubleMap<(u64, Identity), (u64, Identity), u64>
+				MyDoubleMap => DoubleMap<(Identity, u64), (Identity, u64), u64>
 			);
 
 			MyDoubleMap::insert(1, 10, 100);

@@ -16,37 +16,24 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{
-	host::HostContext,
-	runtime::{Store, StoreData},
-};
+use crate::{host::HostContext, runtime::StoreData};
 use sc_executor_common::error::WasmError;
 use sp_wasm_interface::{FunctionContext, HostFunctions};
-use std::{collections::HashMap, convert::TryInto};
-use wasmtime::{Extern, ExternType, Func, FuncType, ImportType, Memory, MemoryType, Module, Trap};
+use std::collections::HashMap;
+use wasmtime::{ExternType, FuncType, ImportType, Linker, Module, Trap};
 
-pub struct Imports {
-	/// Contains the index into `externs` where the memory import is stored if any. `None` if there
-	/// is none.
-	pub memory_import_index: Option<usize>,
-	pub externs: Vec<Extern>,
-}
-
-/// Goes over all imports of a module and prepares a vector of `Extern`s that can be used for
-/// instantiation of the module. Returns an error if there are imports that cannot be satisfied.
-pub(crate) fn resolve_imports<H>(
-	store: &mut Store,
+/// Goes over all imports of a module and prepares the given linker for instantiation of the module.
+/// Returns an error if there are imports that cannot be satisfied.
+pub(crate) fn prepare_imports<H>(
+	linker: &mut Linker<StoreData>,
 	module: &Module,
-	heap_pages: u64,
 	allow_missing_func_imports: bool,
-) -> Result<Imports, WasmError>
+) -> Result<(), WasmError>
 where
 	H: HostFunctions,
 {
-	let mut externs = vec![];
-	let mut memory_import_index = None;
 	let mut pending_func_imports = HashMap::new();
-	for (index, import_ty) in module.imports().enumerate() {
+	for import_ty in module.imports() {
 		let name = import_name(&import_ty)?;
 
 		if import_ty.module() != "env" {
@@ -57,41 +44,36 @@ where
 			)))
 		}
 
-		if name == "memory" {
-			memory_import_index = Some(index);
-			externs.push((index, resolve_memory_import(store, &import_ty, heap_pages)?));
-			continue
-		}
-
 		match import_ty.ty() {
 			ExternType::Func(func_ty) => {
-				pending_func_imports.insert(name.to_owned(), (index, import_ty, func_ty));
+				pending_func_imports.insert(name.to_owned(), (import_ty, func_ty));
 			},
 			_ =>
 				return Err(WasmError::Other(format!(
-					"host doesn't provide any non function imports besides 'memory': {}:{}",
+					"host doesn't provide any non function imports: {}:{}",
 					import_ty.module(),
 					name,
 				))),
 		};
 	}
 
-	let mut registry = Registry { store, externs, pending_func_imports };
-
+	let mut registry = Registry { linker, pending_func_imports };
 	H::register_static(&mut registry)?;
-	let mut externs = registry.externs;
 
 	if !registry.pending_func_imports.is_empty() {
 		if allow_missing_func_imports {
-			for (_, (index, import_ty, func_ty)) in registry.pending_func_imports {
-				externs.push((
-					index,
-					MissingHostFuncHandler::new(&import_ty)?.into_extern(store, &func_ty),
-				));
+			for (name, (import_ty, func_ty)) in registry.pending_func_imports {
+				let error = format!("call to a missing function {}:{}", import_ty.module(), name);
+				log::debug!("Missing import: '{}' {:?}", name, func_ty);
+				linker
+					.func_new("env", &name, func_ty.clone(), move |_, _, _| {
+						Err(Trap::new(error.clone()))
+					})
+					.expect("adding a missing import stub can only fail when the item already exists, and it is missing here; qed");
 			}
 		} else {
 			let mut names = Vec::new();
-			for (name, (_, import_ty, _)) in registry.pending_func_imports {
+			for (name, (import_ty, _)) in registry.pending_func_imports {
 				names.push(format!("'{}:{}'", import_ty.module(), name));
 			}
 			let names = names.join(", ");
@@ -102,16 +84,12 @@ where
 		}
 	}
 
-	externs.sort_unstable_by_key(|&(index, _)| index);
-	let externs = externs.into_iter().map(|(_, ext)| ext).collect();
-
-	Ok(Imports { memory_import_index, externs })
+	Ok(())
 }
 
 struct Registry<'a, 'b> {
-	store: &'a mut Store,
-	externs: Vec<(usize, Extern)>,
-	pending_func_imports: HashMap<String, (usize, ImportType<'b>, FuncType)>,
+	linker: &'a mut Linker<StoreData>,
+	pending_func_imports: HashMap<String, (ImportType<'b>, FuncType)>,
 }
 
 impl<'a, 'b> sp_wasm_interface::HostFunctionRegistry for Registry<'a, 'b> {
@@ -131,9 +109,13 @@ impl<'a, 'b> sp_wasm_interface::HostFunctionRegistry for Registry<'a, 'b> {
 		fn_name: &str,
 		func: impl wasmtime::IntoFunc<Self::State, Params, Results>,
 	) -> Result<(), Self::Error> {
-		if let Some((index, _, _)) = self.pending_func_imports.remove(fn_name) {
-			let func = Func::wrap(&mut *self.store, func);
-			self.externs.push((index, Extern::Func(func)));
+		if self.pending_func_imports.remove(fn_name).is_some() {
+			self.linker.func_wrap("env", fn_name, func).map_err(|error| {
+				WasmError::Other(format!(
+					"failed to register host function '{}' with the WASM linker: {}",
+					fn_name, error
+				))
+			})?;
 		}
 
 		Ok(())
@@ -148,86 +130,4 @@ fn import_name<'a, 'b: 'a>(import: &'a ImportType<'b>) -> Result<&'a str, WasmEr
 		WasmError::Other("The module linking proposal is not supported.".to_owned())
 	})?;
 	Ok(name)
-}
-
-fn resolve_memory_import(
-	store: &mut Store,
-	import_ty: &ImportType,
-	heap_pages: u64,
-) -> Result<Extern, WasmError> {
-	let requested_memory_ty = match import_ty.ty() {
-		ExternType::Memory(memory_ty) => memory_ty,
-		_ =>
-			return Err(WasmError::Other(format!(
-				"this import must be of memory type: {}:{}",
-				import_ty.module(),
-				import_name(&import_ty)?,
-			))),
-	};
-
-	// Increment the min (a.k.a initial) number of pages by `heap_pages` and check if it exceeds the
-	// maximum specified by the import.
-	let initial = requested_memory_ty.minimum().saturating_add(heap_pages);
-	if let Some(max) = requested_memory_ty.maximum() {
-		if initial > max {
-			return Err(WasmError::Other(format!(
-				"incremented number of pages by heap_pages (total={}) is more than maximum requested\
-				by the runtime wasm module {}",
-				initial,
-				max,
-			)))
-		}
-	}
-
-	// Note that the return value of `maximum` and `minimum`, while a u64,
-	// will always fit into a u32 for 32-bit memories.
-	// 64-bit memories are part of the memory64 proposal for WebAssembly which is not standardized
-	// yet.
-	let minimum: u32 = initial.try_into().map_err(|_| {
-		WasmError::Other(format!(
-			"minimum number of memory pages ({}) doesn't fit into u32",
-			initial
-		))
-	})?;
-	let maximum: Option<u32> = match requested_memory_ty.maximum() {
-		Some(max) => Some(max.try_into().map_err(|_| {
-			WasmError::Other(format!(
-				"maximum number of memory pages ({}) doesn't fit into u32",
-				max
-			))
-		})?),
-		None => None,
-	};
-
-	let memory_ty = MemoryType::new(minimum, maximum);
-	let memory = Memory::new(store, memory_ty).map_err(|e| {
-		WasmError::Other(format!(
-			"failed to create a memory during resolving of memory import: {}",
-			e,
-		))
-	})?;
-	Ok(Extern::Memory(memory))
-}
-
-/// A `Callable` handler for missing functions.
-struct MissingHostFuncHandler {
-	module: String,
-	name: String,
-}
-
-impl MissingHostFuncHandler {
-	fn new(import_ty: &ImportType) -> Result<Self, WasmError> {
-		Ok(Self {
-			module: import_ty.module().to_string(),
-			name: import_name(import_ty)?.to_string(),
-		})
-	}
-
-	fn into_extern(self, store: &mut Store, func_ty: &FuncType) -> Extern {
-		let Self { module, name } = self;
-		let func = Func::new(store, func_ty.clone(), move |_, _, _| {
-			Err(Trap::new(format!("call to a missing function {}:{}", module, name)))
-		});
-		Extern::Func(func)
-	}
 }

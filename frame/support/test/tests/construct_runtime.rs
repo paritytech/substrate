@@ -271,139 +271,95 @@ pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
 
-mod origin_test {
-	use super::{module3, nested, system, Block, UncheckedExtrinsic};
-	use frame_support::traits::{Contains, OriginTrait};
-
-	impl nested::module3::Config for RuntimeOriginTest {}
-	impl module3::Config for RuntimeOriginTest {}
-
-	pub struct BaseCallFilter;
-	impl Contains<Call> for BaseCallFilter {
-		fn contains(c: &Call) -> bool {
-			match c {
-				Call::NestedModule3(_) => true,
-				_ => false,
-			}
-		}
-	}
-
-	impl system::Config for RuntimeOriginTest {
-		type BaseCallFilter = BaseCallFilter;
-		type Hash = super::H256;
-		type Origin = Origin;
-		type BlockNumber = super::BlockNumber;
-		type AccountId = u32;
-		type Event = Event;
-		type PalletInfo = PalletInfo;
-		type Call = Call;
-		type DbWeight = ();
-	}
-
-	frame_support::construct_runtime!(
-		pub enum RuntimeOriginTest where
-			Block = Block,
-			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic
-		{
-			System: system::{Pallet, Event<T>, Origin<T>},
-			NestedModule3: nested::module3::{Pallet, Origin, Call},
-			Module3: module3::{Pallet, Origin<T>, Call},
-		}
-	);
-
-	#[test]
-	fn origin_default_filter() {
-		let accepted_call = nested::module3::Call::fail {}.into();
-		let rejected_call = module3::Call::fail {}.into();
-
-		assert_eq!(Origin::root().filter_call(&accepted_call), true);
-		assert_eq!(Origin::root().filter_call(&rejected_call), true);
-		assert_eq!(Origin::none().filter_call(&accepted_call), true);
-		assert_eq!(Origin::none().filter_call(&rejected_call), false);
-		assert_eq!(Origin::signed(0).filter_call(&accepted_call), true);
-		assert_eq!(Origin::signed(0).filter_call(&rejected_call), false);
-		assert_eq!(Origin::from(Some(0)).filter_call(&accepted_call), true);
-		assert_eq!(Origin::from(Some(0)).filter_call(&rejected_call), false);
-		assert_eq!(Origin::from(None).filter_call(&accepted_call), true);
-		assert_eq!(Origin::from(None).filter_call(&rejected_call), false);
-		assert_eq!(Origin::from(super::nested::module3::Origin).filter_call(&accepted_call), true);
-		assert_eq!(Origin::from(super::nested::module3::Origin).filter_call(&rejected_call), false);
-
-		let mut origin = Origin::from(Some(0));
-		origin.add_filter(|c| matches!(c, Call::Module3(_)));
-		assert_eq!(origin.filter_call(&accepted_call), false);
-		assert_eq!(origin.filter_call(&rejected_call), false);
-
-		// Now test for root origin and filters:
-		let mut origin = Origin::from(Some(0));
-		origin.set_caller_from(Origin::root());
-		assert!(matches!(origin.caller, OriginCaller::system(super::system::RawOrigin::Root)));
-
-		// Root origin bypass all filter.
-		assert_eq!(origin.filter_call(&accepted_call), true);
-		assert_eq!(origin.filter_call(&rejected_call), true);
-
-		origin.set_caller_from(Origin::from(Some(0)));
-
-		// Back to another signed origin, the filtered are now effective again
-		assert_eq!(origin.filter_call(&accepted_call), true);
-		assert_eq!(origin.filter_call(&rejected_call), false);
-
-		origin.set_caller_from(Origin::root());
-		origin.reset_filter();
-
-		// Root origin bypass all filter, even when they are reset.
-		assert_eq!(origin.filter_call(&accepted_call), true);
-		assert_eq!(origin.filter_call(&rejected_call), true);
-	}
-}
-
 #[test]
 fn check_modules_error_type() {
 	assert_eq!(
 		Module1_1::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module(ModuleError { index: 31, error: 0, message: Some("Something") })),
+		Err(DispatchError::Module(ModuleError {
+			index: 31,
+			error: [0; 4],
+			message: Some("Something")
+		})),
 	);
 	assert_eq!(
 		Module2::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module(ModuleError { index: 32, error: 0, message: Some("Something") })),
+		Err(DispatchError::Module(ModuleError {
+			index: 32,
+			error: [0; 4],
+			message: Some("Something")
+		})),
 	);
 	assert_eq!(
 		Module1_2::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module(ModuleError { index: 33, error: 0, message: Some("Something") })),
+		Err(DispatchError::Module(ModuleError {
+			index: 33,
+			error: [0; 4],
+			message: Some("Something")
+		})),
 	);
 	assert_eq!(
 		NestedModule3::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module(ModuleError { index: 34, error: 0, message: Some("Something") })),
+		Err(DispatchError::Module(ModuleError {
+			index: 34,
+			error: [0; 4],
+			message: Some("Something")
+		})),
 	);
 	assert_eq!(
 		Module1_3::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module(ModuleError { index: 6, error: 0, message: Some("Something") })),
+		Err(DispatchError::Module(ModuleError {
+			index: 6,
+			error: [0; 4],
+			message: Some("Something")
+		})),
 	);
 	assert_eq!(
 		Module1_4::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module(ModuleError { index: 3, error: 0, message: Some("Something") })),
+		Err(DispatchError::Module(ModuleError {
+			index: 3,
+			error: [0; 4],
+			message: Some("Something")
+		})),
 	);
 	assert_eq!(
 		Module1_5::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module(ModuleError { index: 4, error: 0, message: Some("Something") })),
+		Err(DispatchError::Module(ModuleError {
+			index: 4,
+			error: [0; 4],
+			message: Some("Something")
+		})),
 	);
 	assert_eq!(
 		Module1_6::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module(ModuleError { index: 1, error: 0, message: Some("Something") })),
+		Err(DispatchError::Module(ModuleError {
+			index: 1,
+			error: [0; 4],
+			message: Some("Something")
+		})),
 	);
 	assert_eq!(
 		Module1_7::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module(ModuleError { index: 2, error: 0, message: Some("Something") })),
+		Err(DispatchError::Module(ModuleError {
+			index: 2,
+			error: [0; 4],
+			message: Some("Something")
+		})),
 	);
 	assert_eq!(
 		Module1_8::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module(ModuleError { index: 12, error: 0, message: Some("Something") })),
+		Err(DispatchError::Module(ModuleError {
+			index: 12,
+			error: [0; 4],
+			message: Some("Something")
+		})),
 	);
 	assert_eq!(
 		Module1_9::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module(ModuleError { index: 13, error: 0, message: Some("Something") })),
+		Err(DispatchError::Module(ModuleError {
+			index: 13,
+			error: [0; 4],
+			message: Some("Something")
+		})),
 	);
 }
 

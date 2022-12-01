@@ -66,7 +66,7 @@ impl VerifyCmd {
 fn verify<Pair>(sig_data: Vec<u8>, message: Vec<u8>, uri: &str) -> error::Result<()>
 where
 	Pair: sp_core::Pair,
-	Pair::Signature: for<'a> std::convert::TryFrom<&'a [u8]>,
+	Pair::Signature: for<'a> TryFrom<&'a [u8]>,
 {
 	let signature =
 		Pair::Signature::try_from(&sig_data).map_err(|_| error::Error::SignatureFormatInvalid)?;

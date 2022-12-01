@@ -66,7 +66,7 @@ use frame_support::traits::{
 
 use sp_runtime::{
 	traits::{AccountIdConversion, BadOrigin, CheckedSub, Saturating, StaticLookup, Zero},
-	DispatchResult, Permill, RuntimeDebug,
+	DispatchResult, RuntimeDebug,
 };
 
 use frame_support::pallet_prelude::*;
@@ -143,11 +143,6 @@ pub mod pallet {
 		/// Minimum value for a child-bounty.
 		#[pallet::constant]
 		type ChildBountyValueMinimum: Get<BalanceOf<Self>>;
-
-		/// Percentage of child-bounty value to be reserved as curator deposit
-		/// when curator fee is zero.
-		#[pallet::constant]
-		type ChildBountyCuratorDepositBase: Get<Permill>;
 
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
@@ -392,7 +387,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 
-			let _ = Self::ensure_bounty_active(parent_bounty_id)?;
+			let (parent_curator, _) = Self::ensure_bounty_active(parent_bounty_id)?;
 			// Mutate child-bounty.
 			ChildBounties::<T>::try_mutate_exists(
 				parent_bounty_id,
@@ -406,11 +401,13 @@ pub mod pallet {
 					{
 						ensure!(signer == *curator, BountiesError::<T>::RequireCurator);
 
-						// Reserve child-bounty curator deposit. Curator deposit
-						// is reserved based on a percentage of child-bounty
-						// value instead of fee, to avoid no deposit in case the
-						// fee is set as zero.
-						let deposit = T::ChildBountyCuratorDepositBase::get() * child_bounty.value;
+						// Reserve child-bounty curator deposit.
+						let deposit = Self::calculate_curator_deposit(
+							&parent_curator,
+							curator,
+							&child_bounty.fee,
+						);
+
 						T::Currency::reserve(curator, deposit)?;
 						child_bounty.curator_deposit = deposit;
 
@@ -770,6 +767,20 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	// This function will calculate the deposit of a curator.
+	fn calculate_curator_deposit(
+		parent_curator: &T::AccountId,
+		child_curator: &T::AccountId,
+		bounty_fee: &BalanceOf<T>,
+	) -> BalanceOf<T> {
+		if parent_curator == child_curator {
+			return Zero::zero()
+		}
+
+		// We just use the same logic from the parent bounties pallet.
+		pallet_bounties::Pallet::<T>::calculate_curator_deposit(bounty_fee)
+	}
+
 	/// The account ID of a child-bounty account.
 	pub fn child_bounty_account_id(id: BountyIndex) -> T::AccountId {
 		// This function is taken from the parent (bounties) pallet, but the

@@ -21,7 +21,7 @@ use nix::{
 	sys::signal::{kill, Signal::SIGINT},
 	unistd::Pid,
 };
-use std::{convert::TryInto, process};
+use std::process;
 
 pub mod common;
 pub mod websocket_server;

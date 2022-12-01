@@ -35,6 +35,7 @@ pub use policy::{DenyUnsafe, UnsafeRpcError};
 pub mod author;
 pub mod chain;
 pub mod child_state;
+pub mod dev;
 pub mod offchain;
 pub mod state;
 pub mod system;

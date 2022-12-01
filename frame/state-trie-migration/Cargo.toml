@@ -21,6 +21,7 @@ sp-std = { default-features = false, path = "../../primitives/std" }
 sp-io = { default-features = false, path = "../../primitives/io" }
 sp-core = { default-features = false, path = "../../primitives/core" }
 sp-runtime = { default-features = false, path = "../../primitives/runtime" }
+substrate-state-trie-migration-rpc = { optional = true, path = "../../utils/frame/rpc/state-trie-migration-rpc" }
 
 frame-support = { default-features = false, path = "../support" }
 frame-system = { default-features = false, path = "../system" }
@@ -49,9 +50,9 @@ std = [
 	"sp-core/std",
 	"sp-io/std",
 	"sp-runtime/std",
-	"sp-std/std"
+	"sp-std/std",
 ]
 runtime-benchmarks = ["frame-benchmarking"]
 try-runtime = ["frame-support/try-runtime"]
 
-remote-test = [ "std", "zstd", "serde", "thousands", "remote-externalities" ]
+remote-test = [ "std", "zstd", "serde", "thousands", "remote-externalities", "substrate-state-trie-migration-rpc" ]

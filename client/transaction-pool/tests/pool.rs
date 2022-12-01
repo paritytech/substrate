@@ -36,7 +36,7 @@ use sp_runtime::{
 	traits::Block as _,
 	transaction_validity::{InvalidTransaction, TransactionSource, ValidTransaction},
 };
-use std::{collections::BTreeSet, convert::TryInto, sync::Arc};
+use std::{collections::BTreeSet, sync::Arc};
 use substrate_test_runtime_client::{
 	runtime::{Block, Extrinsic, Hash, Header, Index, Transfer},
 	AccountKeyring::*,
@@ -864,8 +864,6 @@ fn ready_set_should_eventually_resolve_when_block_update_arrives() {
 
 #[test]
 fn should_not_accept_old_signatures() {
-	use std::convert::TryFrom;
-
 	let client = Arc::new(substrate_test_runtime_client::new());
 
 	let pool = Arc::new(

@@ -72,13 +72,9 @@ impl ImportBlocksCmd {
 		B: BlockT + for<'de> serde::Deserialize<'de>,
 		IQ: sc_service::ImportQueue<B> + 'static,
 	{
-		let file: Box<dyn ReadPlusSeek + Send> = match &self.input {
+		let file: Box<dyn Read + Send> = match &self.input {
 			Some(filename) => Box::new(fs::File::open(filename)?),
-			None => {
-				let mut buffer = Vec::new();
-				io::stdin().read_to_end(&mut buffer)?;
-				Box::new(io::Cursor::new(buffer))
-			},
+			None => Box::new(io::stdin()),
 		};
 
 		import_blocks(client, import_queue, file, false, self.binary)

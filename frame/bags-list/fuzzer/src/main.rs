@@ -30,7 +30,6 @@
 use frame_election_provider_support::{SortedListProvider, VoteWeight};
 use honggfuzz::fuzz;
 use pallet_bags_list::mock::{AccountId, BagsList, ExtBuilder};
-use std::convert::From;
 
 const ID_RANGE: AccountId = 25_000;
 

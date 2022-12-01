@@ -37,7 +37,7 @@ crate-type = ["cdylib", "rlib"]
 clap = { version = "3.1.6", features = ["derive"], optional = true }
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 serde = { version = "1.0.136", features = ["derive"] }
-futures = "0.3.19"
+futures = "0.3.21"
 hex-literal = "0.3.4"
 log = "0.4.8"
 rand = "0.8"
@@ -115,18 +115,17 @@ sc-service-test = { version = "2.0.0", path = "../../../client/service/test" }
 sc-block-builder = { version = "0.10.0-dev", path = "../../../client/block-builder" }
 sp-tracing = { version = "5.0.0", path = "../../../primitives/tracing" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-futures = "0.3.19"
+futures = "0.3.21"
 tempfile = "3.1.0"
 assert_cmd = "2.0.2"
 nix = "0.23"
 serde_json = "1.0"
-regex = "1"
+regex = "1.5.5"
 platforms = "2.0"
 async-std = { version = "1.10.0", features = ["attributes"] }
 soketto = "0.4.2"
 criterion = { version = "0.3.5", features = ["async_tokio"] }
-tokio = { version = "1.15", features = ["macros", "time", "parking_lot"] }
-jsonrpsee-ws-client = "0.4.1"
+tokio = { version = "1.17.0", features = ["macros", "time", "parking_lot"] }
 wait-timeout = "0.2"
 remote-externalities = { path = "../../../utils/frame/remote-externalities" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../../frame/timestamp" }

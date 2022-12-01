@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{convert::TryFrom, time::SystemTime};
+use std::time::SystemTime;
 
 use crate::config::Configuration;
 use futures_timer::Delay;

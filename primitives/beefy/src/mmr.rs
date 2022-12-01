@@ -26,12 +26,26 @@
 //! but we imagine they will be useful for other chains that either want to bridge with Polkadot
 //! or are completely standalone, but heavily inspired by Polkadot.
 
+use crate::Vec;
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
+/// A provider for extra data that gets added to the Mmr leaf
+pub trait BeefyDataProvider<ExtraData> {
+	/// Return a vector of bytes, ideally should be a merkle root hash
+	fn extra_data() -> ExtraData;
+}
+
+/// A default implementation for runtimes.
+impl BeefyDataProvider<Vec<u8>> for () {
+	fn extra_data() -> Vec<u8> {
+		Vec::new()
+	}
+}
+
 /// A standard leaf that gets added every block to the MMR constructed by Substrate's `pallet_mmr`.
 #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
-pub struct MmrLeaf<BlockNumber, Hash, MerkleRoot> {
+pub struct MmrLeaf<BlockNumber, Hash, MerkleRoot, ExtraData> {
 	/// Version of the leaf format.
 	///
 	/// Can be used to enable future format migrations and compatibility.
@@ -41,8 +55,9 @@ pub struct MmrLeaf<BlockNumber, Hash, MerkleRoot> {
 	pub parent_number_and_hash: (BlockNumber, Hash),
 	/// A merkle root of the next BEEFY authority set.
 	pub beefy_next_authority_set: BeefyNextAuthoritySet<MerkleRoot>,
-	/// A merkle root of all registered parachain heads.
-	pub parachain_heads: MerkleRoot,
+	/// Arbitrary extra leaf data to be used by downstream pallets to include custom data in the
+	/// [`MmrLeaf`]
+	pub leaf_extra: ExtraData,
 }
 
 /// A MMR leaf versioning scheme.

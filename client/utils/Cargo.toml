@@ -10,7 +10,7 @@ description = "I/O for Substrate runtimes"
 readme = "README.md"
 
 [dependencies]
-futures = "0.3.19"
+futures = "0.3.21"
 lazy_static = "1.4.0"
 parking_lot = "0.12.0"
 prometheus = { version = "0.13.0", default-features = false }

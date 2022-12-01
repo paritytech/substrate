@@ -107,7 +107,8 @@ pub type DbState<B> =
 	sp_state_machine::TrieBackend<Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>>;
 
 /// Length of a [`DbHash`].
-pub const DB_HASH_LEN: usize = 32;
+const DB_HASH_LEN: usize = 32;
+
 /// Hash type that this backend uses for the database.
 pub type DbHash = sp_core::H256;
 
@@ -1351,10 +1352,7 @@ impl<Block: BlockT> Backend<Block> {
 				let mut removal: u64 = 0;
 				let mut bytes_removal: u64 = 0;
 				for (mut key, (val, rc)) in operation.db_updates.drain() {
-					if !self.storage.prefix_keys {
-						// Strip prefix
-						key.drain(0..key.len() - DB_HASH_LEN);
-					};
+					self.storage.db.sanitize_key(&mut key);
 					if rc > 0 {
 						ops += 1;
 						bytes += key.len() as u64 + val.len() as u64;

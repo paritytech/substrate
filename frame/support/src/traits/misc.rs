@@ -510,7 +510,7 @@ pub trait HandleLifetime<T> {
 impl<T> HandleLifetime<T> for () {}
 
 pub trait Time {
-	type Moment: sp_arithmetic::traits::AtLeast32Bit + Parameter + Default + Copy;
+	type Moment: sp_arithmetic::traits::AtLeast32Bit + Parameter + Default + Copy + MaxEncodedLen;
 
 	fn now() -> Self::Moment;
 }

@@ -41,7 +41,7 @@ use libp2p::core::{upgrade, InboundUpgrade, OutboundUpgrade, UpgradeInfo};
 use log::{error, warn};
 use std::{
 	borrow::Cow,
-	convert::{Infallible, TryFrom as _},
+	convert::Infallible,
 	io, mem,
 	pin::Pin,
 	task::{Context, Poll},

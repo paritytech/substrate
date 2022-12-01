@@ -28,7 +28,6 @@ use frame_support::{
 use frame_system::RawOrigin;
 use rand::{prelude::SliceRandom, rngs::SmallRng, SeedableRng};
 use sp_arithmetic::{per_things::Percent, traits::One};
-use sp_npos_elections::IndexAssignment;
 use sp_runtime::InnerOf;
 
 const SEED: u32 = 999;
@@ -261,8 +260,8 @@ frame_benchmarking::benchmarks! {
 
 		// we don't directly need the data-provider to be populated, but it is just easy to use it.
 		set_up_data_provider::<T>(v, t);
-		let targets = T::DataProvider::targets(None)?;
-		let voters = T::DataProvider::voters(None)?;
+		let targets = T::DataProvider::electable_targets(None)?;
+		let voters = T::DataProvider::electing_voters(None)?;
 		let desired_targets = T::DataProvider::desired_targets()?;
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 	}: {
@@ -310,7 +309,6 @@ frame_benchmarking::benchmarks! {
 	}
 
 	submit {
-
 		// the solution will be worse than all of them meaning the score need to be checked against
 		// ~ log2(c)
 		let solution = RawSolution {
@@ -342,7 +340,11 @@ frame_benchmarking::benchmarks! {
 		signed_submissions.put();
 
 		let caller = frame_benchmarking::whitelisted_caller();
-		T::Currency::make_free_balance_be(&caller,  T::Currency::minimum_balance() * 10u32.into());
+		let deposit = MultiPhase::<T>::deposit_for(
+			&solution,
+			MultiPhase::<T>::snapshot_metadata().unwrap_or_default(),
+		);
+		T::Currency::make_free_balance_be(&caller,  T::Currency::minimum_balance() * 1000u32.into() + deposit);
 
 	}: _(RawOrigin::Signed(caller), Box::new(solution))
 	verify {
@@ -461,6 +463,7 @@ frame_benchmarking::benchmarks! {
 			T::BenchmarkingConfig::DESIRED_TARGETS[1];
 		// Subtract this percentage from the actual encoded size
 		let f in 0 .. 95;
+		use frame_election_provider_support::IndexAssignment;
 
 		// Compute a random solution, then work backwards to get the lists of voters, targets, and
 		// assignments

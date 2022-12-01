@@ -39,7 +39,9 @@ type Lookup<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 /// grab new account with infinite balance.
 fn endowed_account<T: Config>(name: &'static str, index: u32) -> T::AccountId {
 	let account: T::AccountId = account(name, index, 0);
-	let amount = default_stake::<T>(BALANCE_FACTOR);
+	// Fund each account with at-least his stake but still a sane amount as to not mess up
+	// the vote calculation.
+	let amount = default_stake::<T>(MAX_VOTERS) * BalanceOf::<T>::from(BALANCE_FACTOR);
 	let _ = T::Currency::make_free_balance_be(&account, amount);
 	// important to increase the total issuance since T::CurrencyToVote will need it to be sane for
 	// phragmen to work.
@@ -54,9 +56,9 @@ fn as_lookup<T: Config>(account: T::AccountId) -> Lookup<T> {
 }
 
 /// Get a reasonable amount of stake based on the execution trait's configuration
-fn default_stake<T: Config>(factor: u32) -> BalanceOf<T> {
-	let factor = BalanceOf::<T>::from(factor);
-	T::Currency::minimum_balance() * factor
+fn default_stake<T: Config>(num_votes: u32) -> BalanceOf<T> {
+	let min = T::Currency::minimum_balance();
+	Elections::<T>::deposit_of(num_votes as usize).max(min)
 }
 
 /// Get the current number of candidates.
@@ -88,7 +90,7 @@ fn submit_candidates_with_self_vote<T: Config>(
 	prefix: &'static str,
 ) -> Result<Vec<T::AccountId>, &'static str> {
 	let candidates = submit_candidates::<T>(c, prefix)?;
-	let stake = default_stake::<T>(BALANCE_FACTOR);
+	let stake = default_stake::<T>(c);
 	let _ = candidates
 		.iter()
 		.map(|c| submit_voter::<T>(c.clone(), vec![c.clone()], stake).map(|_| ()))
@@ -112,7 +114,7 @@ fn distribute_voters<T: Config>(
 	num_voters: u32,
 	votes: usize,
 ) -> Result<(), &'static str> {
-	let stake = default_stake::<T>(BALANCE_FACTOR);
+	let stake = default_stake::<T>(num_voters);
 	for i in 0..num_voters {
 		// to ensure that votes are different
 		all_candidates.rotate_left(1);
@@ -160,7 +162,7 @@ benchmarks! {
 		let all_candidates = submit_candidates::<T>(v, "candidates")?;
 
 		let caller = endowed_account::<T>("caller", 0);
-		let stake = default_stake::<T>(BALANCE_FACTOR);
+		let stake = default_stake::<T>(v);
 
 		// original votes.
 		let mut votes = all_candidates;
@@ -173,14 +175,15 @@ benchmarks! {
 	}: vote(RawOrigin::Signed(caller), votes, stake)
 
 	vote_more {
-		let v in 2 .. (MAXIMUM_VOTE  as u32);
+		let v in 2 .. (MAXIMUM_VOTE as u32);
 		clean::<T>();
 
 		// create a bunch of candidates.
 		let all_candidates = submit_candidates::<T>(v, "candidates")?;
 
 		let caller = endowed_account::<T>("caller", 0);
-		let stake = default_stake::<T>(BALANCE_FACTOR);
+		// Multiply the stake with 10 since we want to be able to divide it by 10 again.
+		let stake = default_stake::<T>(v) * BalanceOf::<T>::from(10u32);
 
 		// original votes.
 		let mut votes = all_candidates.iter().skip(1).cloned().collect::<Vec<_>>();
@@ -194,14 +197,14 @@ benchmarks! {
 	}: vote(RawOrigin::Signed(caller), votes, stake / <BalanceOf<T>>::from(10u32))
 
 	vote_less {
-		let v in 2 .. (MAXIMUM_VOTE  as u32);
+		let v in 2 .. (MAXIMUM_VOTE as u32);
 		clean::<T>();
 
 		// create a bunch of candidates.
 		let all_candidates = submit_candidates::<T>(v, "candidates")?;
 
 		let caller = endowed_account::<T>("caller", 0);
-		let stake = default_stake::<T>(BALANCE_FACTOR);
+		let stake = default_stake::<T>(v);
 
 		// original votes.
 		let mut votes = all_candidates;
@@ -224,7 +227,7 @@ benchmarks! {
 
 		let caller = endowed_account::<T>("caller", 0);
 
-		let stake = default_stake::<T>(BALANCE_FACTOR);
+		let stake = default_stake::<T>(v);
 		submit_voter::<T>(caller.clone(), all_candidates, stake)?;
 
 		whitelist!(caller);
@@ -238,7 +241,7 @@ benchmarks! {
 		let m = T::DesiredMembers::get() + T::DesiredRunnersUp::get();
 
 		clean::<T>();
-		let stake = default_stake::<T>(BALANCE_FACTOR);
+		let stake = default_stake::<T>(c);
 
 		// create m members and runners combined.
 		let _ = fill_seats_up_to::<T>(m)?;

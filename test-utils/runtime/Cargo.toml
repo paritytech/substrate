@@ -13,6 +13,7 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+beefy-primitives = { version = "4.0.0-dev", default-features = false, path = "../../primitives/beefy" }
 sp-application-crypto = { version = "6.0.0", default-features = false, path = "../../primitives/application-crypto" }
 sp-consensus-aura = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/aura" }
 sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/babe" }
@@ -55,7 +56,7 @@ sc-block-builder = { version = "0.10.0-dev", path = "../../client/block-builder"
 sc-executor = { version = "0.10.0-dev", path = "../../client/executor" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 substrate-test-runtime-client = { version = "2.0.0", path = "./client" }
-futures = "0.3.19"
+futures = "0.3.21"
 
 [build-dependencies]
 substrate-wasm-builder = { version = "5.0.0-dev", path = "../../utils/wasm-builder" }
@@ -65,6 +66,7 @@ default = [
 	"std",
 ]
 std = [
+	"beefy-primitives/std",
 	"sp-application-crypto/std",
 	"sp-consensus-aura/std",
 	"sp-consensus-babe/std",

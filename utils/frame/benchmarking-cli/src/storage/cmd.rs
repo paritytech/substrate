@@ -20,6 +20,7 @@ use sc_client_api::{Backend as ClientBackend, StorageProvider, UsageProvider};
 use sc_client_db::DbHash;
 use sc_service::Configuration;
 use sp_blockchain::HeaderBackend;
+use sp_core::storage::StorageKey;
 use sp_database::{ColumnId, Database};
 use sp_runtime::traits::{Block as BlockT, HashFor};
 use sp_state_machine::Storage;
@@ -29,11 +30,13 @@ use clap::{Args, Parser};
 use log::info;
 use rand::prelude::*;
 use serde::Serialize;
-use std::{fmt::Debug, sync::Arc};
+use sp_runtime::generic::BlockId;
+use std::{fmt::Debug, path::PathBuf, sync::Arc};
 
-use super::{record::StatSelect, template::TemplateData};
+use super::template::TemplateData;
+use crate::shared::WeightParams;
 
-/// Benchmark the storage of a Substrate node with a live chain snapshot.
+/// Benchmark the storage speed of a chain snapshot.
 #[derive(Debug, Parser)]
 pub struct StorageCmd {
 	#[allow(missing_docs)]
@@ -56,24 +59,9 @@ pub struct StorageCmd {
 /// Parameters for modifying the benchmark behaviour and the post processing of the results.
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
 pub struct StorageParams {
-	/// Path to write the *weight* file to. Can be a file or directory.
-	/// For substrate this should be `frame/support/src/weights`.
-	#[clap(long, default_value = ".")]
-	pub weight_path: String,
-
-	/// Select a specific metric to calculate the final weight output.
-	#[clap(long = "metric", default_value = "average")]
-	pub weight_metric: StatSelect,
-
-	/// Multiply the resulting weight with the given factor. Must be positive.
-	/// Is calculated before `weight_add`.
-	#[clap(long = "mul", default_value = "1")]
-	pub weight_mul: f64,
-
-	/// Add the given offset to the resulting weight.
-	/// Is calculated after `weight_mul`.
-	#[clap(long = "add", default_value = "0")]
-	pub weight_add: u64,
+	#[allow(missing_docs)]
+	#[clap(flatten)]
+	pub weight_params: WeightParams,
 
 	/// Skip the `read` benchmark.
 	#[clap(long)]
@@ -83,8 +71,19 @@ pub struct StorageParams {
 	#[clap(long)]
 	pub skip_write: bool,
 
+	/// Specify the Handlebars template to use for outputting benchmark results.
+	#[clap(long)]
+	pub template_path: Option<PathBuf>,
+
+	/// Path to write the raw 'read' results in JSON format to. Can be a file or directory.
+	#[clap(long)]
+	pub json_read_path: Option<PathBuf>,
+
+	/// Path to write the raw 'write' results in JSON format to. Can be a file or directory.
+	#[clap(long)]
+	pub json_write_path: Option<PathBuf>,
+
 	/// Rounds of warmups before measuring.
-	/// Only supported for `read` benchmarks.
 	#[clap(long, default_value = "1")]
 	pub warmups: u32,
 
@@ -101,7 +100,7 @@ pub struct StorageParams {
 impl StorageCmd {
 	/// Calls into the Read and Write benchmarking functions.
 	/// Processes the output and writes it into files and stdout.
-	pub async fn run<Block, BA, C>(
+	pub fn run<Block, BA, C>(
 		&self,
 		cfg: Configuration,
 		client: Arc<C>,
@@ -115,23 +114,32 @@ impl StorageCmd {
 	{
 		let mut template = TemplateData::new(&cfg, &self.params);
 
+		let block_id = BlockId::<Block>::Number(client.usage_info().chain.best_number);
+		template.set_block_number(block_id.to_string());
+
 		if !self.params.skip_read {
+			self.bench_warmup(&client)?;
 			let record = self.bench_read(client.clone())?;
-			record.save_json(&cfg, "read")?;
+			if let Some(path) = &self.params.json_read_path {
+				record.save_json(&cfg, path, "read")?;
+			}
 			let stats = record.calculate_stats()?;
 			info!("Time summary [ns]:\n{:?}\nValue size summary:\n{:?}", stats.0, stats.1);
 			template.set_stats(Some(stats), None)?;
 		}
 
 		if !self.params.skip_write {
+			self.bench_warmup(&client)?;
 			let record = self.bench_write(client, db, storage)?;
-			record.save_json(&cfg, "write")?;
+			if let Some(path) = &self.params.json_write_path {
+				record.save_json(&cfg, path, "write")?;
+			}
 			let stats = record.calculate_stats()?;
 			info!("Time summary [ns]:\n{:?}\nValue size summary:\n{:?}", stats.0, stats.1);
 			template.set_stats(None, Some(stats))?;
 		}
 
-		template.write(&self.params.weight_path)
+		template.write(&self.params.weight_params.weight_path, &self.params.template_path)
 	}
 
 	/// Returns the specified state version.
@@ -148,6 +156,33 @@ impl StorageCmd {
 		let seed = rand::thread_rng().gen::<u64>();
 		info!("Using seed {}", seed);
 		StdRng::seed_from_u64(seed)
+	}
+
+	/// Run some rounds of the (read) benchmark as warmup.
+	/// See `frame_benchmarking_cli::storage::read::bench_read` for detailed comments.
+	fn bench_warmup<B, BA, C>(&self, client: &Arc<C>) -> Result<()>
+	where
+		C: UsageProvider<B> + StorageProvider<B, BA>,
+		B: BlockT + Debug,
+		BA: ClientBackend<B>,
+	{
+		let block = BlockId::Number(client.usage_info().chain.best_number);
+		let empty_prefix = StorageKey(Vec::new());
+		let mut keys = client.storage_keys(&block, &empty_prefix)?;
+		let mut rng = Self::setup_rng();
+		keys.shuffle(&mut rng);
+
+		for i in 0..self.params.warmups {
+			info!("Warmup round {}/{}", i + 1, self.params.warmups);
+			for key in keys.clone() {
+				let _ = client
+					.storage(&block, &key)
+					.expect("Checked above to exist")
+					.ok_or("Value unexpectedly empty");
+			}
+		}
+
+		Ok(())
 	}
 }
 

@@ -21,7 +21,7 @@ sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/comm
 sc-executor = { version = "0.10.0-dev", path = "../executor" }
 sp-externalities = { version = "0.12.0", path = "../../primitives/externalities" }
 fnv = "1.0.6"
-futures = "0.3.19"
+futures = "0.3.21"
 hash-db = { version = "0.15.2", default-features = false }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 log = "0.4.8"

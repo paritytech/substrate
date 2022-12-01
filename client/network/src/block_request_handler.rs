@@ -54,6 +54,10 @@ mod rep {
 
 	/// Reputation change when a peer sent us the same request multiple times.
 	pub const SAME_REQUEST: Rep = Rep::new_fatal("Same block request multiple times");
+
+	/// Reputation change when a peer sent us the same "small" request multiple times.
+	pub const SAME_SMALL_REQUEST: Rep =
+		Rep::new(-(1 << 10), "same small block request multiple times");
 }
 
 /// Generates a [`ProtocolConfig`] for the block request protocol, refusing incoming requests.
@@ -200,8 +204,16 @@ impl<B: BlockT> BlockRequestHandler<B> {
 			Some(SeenRequestsValue::Fulfilled(ref mut requests)) => {
 				*requests = requests.saturating_add(1);
 
+				let small_request = attributes
+					.difference(BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION)
+					.is_empty();
+
 				if *requests > MAX_NUMBER_OF_SAME_REQUESTS_PER_PEER {
-					reputation_change = Some(rep::SAME_REQUEST);
+					reputation_change = Some(if small_request {
+						rep::SAME_SMALL_REQUEST
+					} else {
+						rep::SAME_REQUEST
+					});
 				}
 			},
 			None => {

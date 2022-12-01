@@ -56,10 +56,10 @@ note: required by a bound in `encode_to`
     = note: this error originates in the derive macro `frame_support::codec::Encode` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `<T as pallet::Config>::Bar: WrapperTypeDecode` is not satisfied
-   --> tests/pallet_ui/call_argument_invalid_bound_2.rs:20:36
+   --> tests/pallet_ui/call_argument_invalid_bound_2.rs:17:12
     |
-20  |         pub fn foo(origin: OriginFor<T>, bar: T::Bar) -> DispatchResultWithPostInfo {
-    |                                          ^^^ the trait `WrapperTypeDecode` is not implemented for `<T as pallet::Config>::Bar`
+17  |     #[pallet::call]
+    |               ^^^^ the trait `WrapperTypeDecode` is not implemented for `<T as pallet::Config>::Bar`
     |
     = note: required because of the requirements on the impl of `Decode` for `<T as pallet::Config>::Bar`
 note: required by a bound in `parity_scale_codec::Decode::decode`

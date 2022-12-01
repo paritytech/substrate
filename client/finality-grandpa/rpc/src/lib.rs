@@ -171,7 +171,7 @@ where
 mod tests {
 	use super::*;
 	use jsonrpc_core::{types::Params, Notification, Output};
-	use std::{collections::HashSet, convert::TryInto, sync::Arc};
+	use std::{collections::HashSet, sync::Arc};
 
 	use parity_scale_codec::{Decode, Encode};
 	use sc_block_builder::{BlockBuilder, RecordProof};

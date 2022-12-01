@@ -20,7 +20,7 @@ prost-build = "0.9"
 async-trait = "0.1"
 codec = { package = "parity-scale-codec", default-features = false, version = "3.0.0" }
 thiserror = "1.0"
-futures = "0.3.19"
+futures = "0.3.21"
 futures-timer = "3.0.1"
 ip_network = "0.4.1"
 libp2p = { version = "0.40.0", default-features = false, features = ["kad"] }
