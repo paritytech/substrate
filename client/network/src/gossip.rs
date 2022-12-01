@@ -108,7 +108,7 @@ impl<M> QueuedSender<M> {
 			messages_encode
 		);
 
-		let sender = QueuedSender {
+		let sender = Self {
 			shared_message_queue,
 			notify_background_future,
 			queue_size_limit,

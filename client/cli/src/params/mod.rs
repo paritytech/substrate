@@ -40,7 +40,8 @@ pub use crate::params::{
 	transaction_pool_params::*,
 };
 
-/// Wrapper type of `String` that holds an unsigned integer of arbitrary size, formatted as a decimal.
+/// Wrapper type of `String` that holds an unsigned integer of arbitrary size, formatted as a
+/// decimal.
 #[derive(Debug, Clone)]
 pub struct GenericNumber(String);
 

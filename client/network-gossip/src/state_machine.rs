@@ -29,8 +29,8 @@ use std::{
 	iter,
 	sync::Arc,
 	time,
+	time::Instant,
 };
-use wasm_timer::Instant;
 
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
 // NOTE: The current value is adjusted based on largest production network deployment (Kusama) and
@@ -127,14 +127,15 @@ where
 					} else {
 						MessageIntent::Broadcast
 					},
-				MessageIntent::PeriodicRebroadcast =>
+				MessageIntent::PeriodicRebroadcast => {
 					if peer.known_messages.contains(&message_hash) {
 						MessageIntent::PeriodicRebroadcast
 					} else {
 						// peer doesn't know message, so the logic should treat it as an
 						// initial broadcast.
 						MessageIntent::Broadcast
-					},
+					}
+				},
 				other => other,
 			};
 
@@ -695,10 +696,10 @@ mod tests {
 		let mut network = NoOpNetwork::default();
 
 		let peer_id = PeerId::random();
-		consensus.new_peer(&mut network, peer_id.clone(), ObservedRole::Full);
+		consensus.new_peer(&mut network, peer_id, ObservedRole::Full);
 		assert!(consensus.peers.contains_key(&peer_id));
 
-		consensus.peer_disconnected(&mut network, peer_id.clone());
+		consensus.peer_disconnected(&mut network, peer_id);
 		assert!(!consensus.peers.contains_key(&peer_id));
 	}
 

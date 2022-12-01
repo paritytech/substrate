@@ -9,10 +9,7 @@ publish = false
 test-runner = { path = "../../../test-utils/test-runner" }
 
 frame-system = { path = "../../../frame/system" }
-frame-support = { path = "../../../frame/support" }
 frame-benchmarking = { path = "../../../frame/benchmarking" }
-pallet-balances = { path = "../../../frame/balances" }
-pallet-sudo = { path = "../../../frame/sudo" }
 pallet-transaction-payment = { path = "../../../frame/transaction-payment" }
 
 node-runtime = { path = "../runtime" }
@@ -25,16 +22,7 @@ sc-consensus-babe = { path = "../../../client/consensus/babe" }
 sc-consensus-manual-seal = { path = "../../../client/consensus/manual-seal" }
 sc-service = { default-features = false, path = "../../../client/service" }
 sc-executor = { path = "../../../client/executor" }
-sc-client-api = { path = "../../../client/api" }
-sc-network = { path = "../../../client/network" }
-sc-informant = { path = "../../../client/informant" }
 sc-consensus = { path = "../../../client/consensus/common" }
 
 sp-runtime = { path = "../../../primitives/runtime" }
 sp-keyring = { path = "../../../primitives/keyring" }
-sp-timestamp = { path = "../../../primitives/timestamp" }
-sp-api = {  path = "../../../primitives/api" }
-sp-inherents = { path = "../../../primitives/inherents" }
-sp-keystore = { path = "../../../primitives/keystore" }
-
-log = "0.4.14"

@@ -110,6 +110,8 @@ pub use traits::{IdentifierT, NposSolution, PerThing128, __OrInvalidIndex};
 #[doc(hidden)]
 pub use codec;
 #[doc(hidden)]
+pub use scale_info;
+#[doc(hidden)]
 pub use sp_arithmetic;
 #[doc(hidden)]
 pub use sp_std;
@@ -145,9 +147,6 @@ pub type ExtendedBalance = u128;
 /// The score of an assignment. This can be computed from the support map via
 /// [`EvaluateSupport::evaluate`].
 pub type ElectionScore = [ExtendedBalance; 3];
-
-/// A winner, with their respective approval stake.
-pub type WithApprovalOf<A> = (A, ExtendedBalance);
 
 /// A pointer to a candidate struct with interior mutability.
 pub type CandidatePtr<A> = Rc<RefCell<Candidate<A>>>;
@@ -327,7 +326,7 @@ impl<AccountId: IdentifierT> Voter<AccountId> {
 pub struct ElectionResult<AccountId, P: PerThing> {
 	/// Just winners zipped with their approval stake. Note that the approval stake is merely the
 	/// sub of their received stake and could be used for very basic sorting and approval voting.
-	pub winners: Vec<WithApprovalOf<AccountId>>,
+	pub winners: Vec<(AccountId, ExtendedBalance)>,
 	/// Individual assignments. for each tuple, the first elements is a voter and the second is the
 	/// list of candidates that it supports.
 	pub assignments: Vec<Assignment<AccountId, P>>,
@@ -340,7 +339,7 @@ pub struct ElectionResult<AccountId, P: PerThing> {
 ///
 /// This, at the current version, resembles the `Exposure` defined in the Staking pallet, yet they
 /// do not necessarily have to be the same.
-#[derive(Default, RuntimeDebug, Encode, Decode, Clone, Eq, PartialEq)]
+#[derive(Default, RuntimeDebug, Encode, Decode, Clone, Eq, PartialEq, scale_info::TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct Support<AccountId> {
 	/// Total support.
@@ -361,107 +360,50 @@ pub type Supports<A> = Vec<(A, Support<A>)>;
 /// This is more helpful than a normal [`Supports`] as it allows faster error checking.
 pub type SupportMap<A> = BTreeMap<A, Support<A>>;
 
-/// Helper trait to convert from a support map to a flat support vector.
-pub trait FlattenSupportMap<A> {
-	/// Flatten the support.
-	fn flatten(self) -> Supports<A>;
-}
-
-impl<A> FlattenSupportMap<A> for SupportMap<A> {
-	fn flatten(self) -> Supports<A> {
-		self.into_iter().collect::<Vec<_>>()
-	}
-}
-
-/// Build the support map from the winners and assignments.
-///
-/// The list of winners is basically a redundancy for error checking only; It ensures that all the
-/// targets pointed to by the [`Assignment`] are present in the `winners`.
+/// Build the support map from the assignments.
 pub fn to_support_map<AccountId: IdentifierT>(
-	winners: &[AccountId],
 	assignments: &[StakedAssignment<AccountId>],
-) -> Result<SupportMap<AccountId>, Error> {
-	// Initialize the support of each candidate.
-	let mut supports = <SupportMap<AccountId>>::new();
-	winners.iter().for_each(|e| {
-		supports.insert(e.clone(), Default::default());
-	});
+) -> SupportMap<AccountId> {
+	let mut supports = <BTreeMap<AccountId, Support<AccountId>>>::new();
 
 	// build support struct.
-	for StakedAssignment { who, distribution } in assignments.iter() {
-		for (c, weight_extended) in distribution.iter() {
-			if let Some(support) = supports.get_mut(c) {
-				support.total = support.total.saturating_add(*weight_extended);
-				support.voters.push((who.clone(), *weight_extended));
-			} else {
-				return Err(Error::InvalidSupportEdge)
-			}
+	for StakedAssignment { who, distribution } in assignments.into_iter() {
+		for (c, weight_extended) in distribution.into_iter() {
+			let mut support = supports.entry(c.clone()).or_default();
+			support.total = support.total.saturating_add(*weight_extended);
+			support.voters.push((who.clone(), *weight_extended));
 		}
 	}
-	Ok(supports)
+
+	supports
 }
 
-/// Same as [`to_support_map`] except it calls `FlattenSupportMap` on top of the result to return a
+/// Same as [`to_support_map`] except it returns a
 /// flat vector.
-///
-/// Similar to [`to_support_map`], `winners` is used for error checking.
 pub fn to_supports<AccountId: IdentifierT>(
-	winners: &[AccountId],
 	assignments: &[StakedAssignment<AccountId>],
-) -> Result<Supports<AccountId>, Error> {
-	to_support_map(winners, assignments).map(FlattenSupportMap::flatten)
+) -> Supports<AccountId> {
+	to_support_map(assignments).into_iter().collect()
 }
 
 /// Extension trait for evaluating a support map or vector.
-pub trait EvaluateSupport<K> {
+pub trait EvaluateSupport {
 	/// Evaluate a support map. The returned tuple contains:
 	///
 	/// - Minimum support. This value must be **maximized**.
 	/// - Sum of all supports. This value must be **maximized**.
 	/// - Sum of all supports squared. This value must be **minimized**.
-	fn evaluate(self) -> ElectionScore;
+	fn evaluate(&self) -> ElectionScore;
 }
 
-/// A common wrapper trait for both (&A, &B) and &(A, B).
-///
-/// This allows us to implemented something for both `Vec<_>` and `BTreeMap<_>`, such as
-/// [`EvaluateSupport`].
-pub trait TupleRef<K, V> {
-	fn extract(&self) -> (&K, &V);
-}
-
-impl<K, V> TupleRef<K, V> for &(K, V) {
-	fn extract(&self) -> (&K, &V) {
-		(&self.0, &self.1)
-	}
-}
-
-impl<K, V> TupleRef<K, V> for (K, V) {
-	fn extract(&self) -> (&K, &V) {
-		(&self.0, &self.1)
-	}
-}
-
-impl<K, V> TupleRef<K, V> for (&K, &V) {
-	fn extract(&self) -> (&K, &V) {
-		(self.0, self.1)
-	}
-}
-
-impl<A, C, I> EvaluateSupport<A> for C
-where
-	C: IntoIterator<Item = I>,
-	I: TupleRef<A, Support<A>>,
-	A: IdentifierT,
-{
-	fn evaluate(self) -> ElectionScore {
+impl<AccountId: IdentifierT> EvaluateSupport for Supports<AccountId> {
+	fn evaluate(&self) -> ElectionScore {
 		let mut min_support = ExtendedBalance::max_value();
 		let mut sum: ExtendedBalance = Zero::zero();
 		// NOTE: The third element might saturate but fine for now since this will run on-chain and
 		// need to be fast.
 		let mut sum_squared: ExtendedBalance = Zero::zero();
-		for item in self {
-			let (_, support) = item.extract();
+		for (_, support) in self {
 			sum = sum.saturating_add(support.total);
 			let squared = support.total.saturating_mul(support.total);
 			sum_squared = sum_squared.saturating_add(squared);

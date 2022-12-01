@@ -35,9 +35,9 @@ type Threshold = ExtendedBalance;
 
 /// Compute the threshold corresponding to the standard PJR property
 ///
-/// `t-PJR` checks can check PJR according to an arbitrary threshold. The threshold can be any value,
-/// but the property gets stronger as the threshold gets smaller. The strongest possible `t-PJR` property
-/// corresponds to `t == 0`.
+/// `t-PJR` checks can check PJR according to an arbitrary threshold. The threshold can be any
+/// value, but the property gets stronger as the threshold gets smaller. The strongest possible
+/// `t-PJR` property corresponds to `t == 0`.
 ///
 /// However, standard PJR is less stringent than that. This function returns the threshold whose
 /// strength corresponds to the standard PJR property.
@@ -74,13 +74,13 @@ pub fn pjr_check<AccountId: IdentifierT>(
 ///
 /// ### Semantics
 ///
-/// The t-PJR property is defined in the paper ["Validator Election in Nominated Proof-of-Stake"][NPoS],
-/// section 5, definition 1.
+/// The t-PJR property is defined in the paper ["Validator Election in Nominated
+/// Proof-of-Stake"][NPoS], section 5, definition 1.
 ///
 /// In plain language, the t-PJR condition is: if there is a group of `N` voters
 /// who have `r` common candidates and can afford to support each of them with backing stake `t`
-/// (i.e `sum(stake(v) for v in voters) == r * t`), then this committee needs to be represented by at
-/// least `r` elected candidates.
+/// (i.e `sum(stake(v) for v in voters) == r * t`), then this committee needs to be represented by
+/// at least `r` elected candidates.
 ///
 /// Section 5 of the NPoS paper shows that this property can be tested by: for a feasible solution,
 /// if `Max {score(c)} < t` where c is every unelected candidate, then this solution is t-PJR. There
@@ -120,8 +120,8 @@ pub fn t_pjr_check<AccountId: IdentifierT>(
 ///
 /// [`pjr_check`] or [`t_pjr_check`] are typically easier to work with.
 ///
-/// This function returns an `AccountId` in the `Err` case. This is the counter_example: the ID of the
-/// unelected candidate with the highest prescore, such that `pre_score(counter_example) >= t`.
+/// This function returns an `AccountId` in the `Err` case. This is the counter_example: the ID of
+/// the unelected candidate with the highest prescore, such that `pre_score(counter_example) >= t`.
 pub fn pjr_check_core<AccountId: IdentifierT>(
 	candidates: &[CandidatePtr<AccountId>],
 	voters: &[Voter<AccountId>],
@@ -141,8 +141,8 @@ pub fn pjr_check_core<AccountId: IdentifierT>(
 /// Validate a challenge to an election result.
 ///
 /// A challenge to an election result is valid if there exists some counter_example for which
-/// `pre_score(counter_example) >= threshold`. Validating an existing counter_example is computationally
-/// cheaper than re-running the PJR check.
+/// `pre_score(counter_example) >= threshold`. Validating an existing counter_example is
+/// computationally cheaper than re-running the PJR check.
 ///
 /// This function uses the standard threshold.
 ///
@@ -164,8 +164,8 @@ pub fn validate_pjr_challenge<AccountId: IdentifierT>(
 /// Validate a challenge to an election result.
 ///
 /// A challenge to an election result is valid if there exists some counter_example for which
-/// `pre_score(counter_example) >= threshold`. Validating an existing counter_example is computationally
-/// cheaper than re-running the PJR check.
+/// `pre_score(counter_example) >= threshold`. Validating an existing counter_example is
+/// computationally cheaper than re-running the PJR check.
 ///
 /// This function uses a supplied threshold.
 ///
@@ -185,8 +185,8 @@ pub fn validate_t_pjr_challenge<AccountId: IdentifierT>(
 /// Validate a challenge to an election result.
 ///
 /// A challenge to an election result is valid if there exists some counter_example for which
-/// `pre_score(counter_example) >= threshold`. Validating an existing counter_example is computationally
-/// cheaper than re-running the PJR check.
+/// `pre_score(counter_example) >= threshold`. Validating an existing counter_example is
+/// computationally cheaper than re-running the PJR check.
 ///
 /// Returns `true` if the challenge is valid: the proposed solution does not satisfy PJR.
 /// Returns `false` if the challenge is invalid: the proposed solution does in fact satisfy PJR.
@@ -222,8 +222,8 @@ fn validate_pjr_challenge_core<AccountId: IdentifierT>(
 ///
 /// The ultimate goal, in any case, is to convert the election data into [`Candidate`] and [`Voter`]
 /// types defined by this crate, whilst setting correct value for some of their fields, namely:
-/// 1. Candidate [`backing_stake`](Candidate::backing_stake) and [`elected`](Candidate::elected) if they are a winner.
-/// 2. Voter edge [`weight`](Edge::weight) if they are backing a winner.
+/// 1. Candidate [`backing_stake`](Candidate::backing_stake) and [`elected`](Candidate::elected) if
+/// they are a winner. 2. Voter edge [`weight`](Edge::weight) if they are backing a winner.
 /// 3. Voter [`budget`](Voter::budget).
 ///
 /// None of the `load` or `score` values are used and can be ignored. This is similar to
@@ -487,9 +487,9 @@ mod tests {
 		assert_core_failure(&candidates, &voters, 20);
 	}
 
-	// These next tests ensure that the threshold phase change property holds for us, but that's not their real purpose.
-	// They were written to help develop an intuition about what the threshold value actually means
-	// in layman's terms.
+	// These next tests ensure that the threshold phase change property holds for us, but that's not
+	// their real purpose. They were written to help develop an intuition about what the threshold
+	// value actually means in layman's terms.
 	//
 	// The results tend to support the intuition that the threshold is the voting power at and below
 	// which a voter's preferences can simply be ignored.

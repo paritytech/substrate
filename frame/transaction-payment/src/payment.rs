@@ -27,7 +27,8 @@ pub trait OnChargeTransaction<T: Config> {
 		+ Copy
 		+ MaybeSerializeDeserialize
 		+ Debug
-		+ Default;
+		+ Default
+		+ scale_info::TypeInfo;
 	type LiquidityInfo: Default;
 
 	/// Before the transaction is executed the payment of the transaction fees

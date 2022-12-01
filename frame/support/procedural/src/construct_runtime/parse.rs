@@ -188,6 +188,18 @@ pub struct PalletPath {
 	pub inner: Path,
 }
 
+impl PalletPath {
+	pub fn module_name(&self) -> String {
+		self.inner.segments.iter().fold(String::new(), |mut acc, segment| {
+			if !acc.is_empty() {
+				acc.push_str("::");
+			}
+			acc.push_str(&segment.ident.to_string());
+			acc
+		})
+	}
+}
+
 impl Parse for PalletPath {
 	fn parse(input: ParseStream) -> Result<Self> {
 		let mut lookahead = input.lookahead1();

@@ -36,7 +36,8 @@ fn generate_protocol_name(protocol_id: &ProtocolId) -> String {
 	s
 }
 
-/// Generates a [`ProtocolConfig`] for the light client request protocol, refusing incoming requests.
+/// Generates a [`ProtocolConfig`] for the light client request protocol, refusing incoming
+/// requests.
 pub fn generate_protocol_config(protocol_id: &ProtocolId) -> ProtocolConfig {
 	ProtocolConfig {
 		name: generate_protocol_name(protocol_id).into(),

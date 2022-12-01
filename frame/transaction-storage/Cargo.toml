@@ -16,6 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 serde = { version = "1.0.126", optional = true }
 hex-literal = { version = "0.3.1", optional = true }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../balances" }
@@ -27,19 +28,16 @@ sp-transaction-storage-proof = { version = "4.0.0-dev", default-features = false
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 
 [dev-dependencies]
-frame-support-test = { version = "3.0.0", path = "../support/test" }
 sp-transaction-storage-proof = { version = "4.0.0-dev", default-features = true, path = "../../primitives/transaction-storage-proof" }
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core", default-features = false }
 
 [features]
 default = ["std"]
-runtime-benchmarks = [
-	"frame-benchmarking",
-	"hex-literal",
-]
+runtime-benchmarks = ["frame-benchmarking", "hex-literal"]
 std = [
 	"serde",
 	"codec/std",
+	"scale-info/std",
 	"sp-runtime/std",
 	"frame-support/std",
 	"frame-system/std",

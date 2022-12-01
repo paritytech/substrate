@@ -29,8 +29,8 @@ pub fn pack_ptr_and_len(ptr: u32, len: u32) -> u64 {
 /// Unpacks an `u64` into the pointer and length.
 ///
 /// Runtime API functions return a 64-bit value which encodes a pointer in the least-significant
-/// 32-bits and a length in the most-significant 32 bits. This interprets the returned value as a pointer,
-/// length tuple.
+/// 32-bits and a length in the most-significant 32 bits. This interprets the returned value as a
+/// pointer, length tuple.
 pub fn unpack_ptr_and_len(val: u64) -> (u32, u32) {
 	// The static assertions from above are changed into a runtime check.
 	#[cfg(all(not(feature = "std"), feature = "disable_target_static_assertions"))]

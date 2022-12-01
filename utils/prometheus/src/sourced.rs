@@ -95,10 +95,12 @@ impl<T: SourcedType, S: MetricSource> Collector for SourcedMetric<T, S> {
 
 			debug_assert_eq!(self.desc.variable_labels.len(), label_values.len());
 			match self.desc.variable_labels.len().cmp(&label_values.len()) {
-				Ordering::Greater =>
-					log::warn!("Missing label values for sourced metric {}", self.desc.fq_name),
-				Ordering::Less =>
-					log::warn!("Too many label values for sourced metric {}", self.desc.fq_name),
+				Ordering::Greater => {
+					log::warn!("Missing label values for sourced metric {}", self.desc.fq_name)
+				},
+				Ordering::Less => {
+					log::warn!("Too many label values for sourced metric {}", self.desc.fq_name)
+				},
 				Ordering::Equal => {},
 			}
 

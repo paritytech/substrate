@@ -159,9 +159,6 @@ where
 }
 
 impl onchain::Config for Test {
-	type AccountId = AccountId;
-	type BlockNumber = BlockNumber;
-	type BlockWeights = ();
 	type Accuracy = sp_runtime::Perbill;
 	type DataProvider = Staking;
 }
@@ -185,6 +182,7 @@ impl pallet_staking::Config for Test {
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
+	type SortedListProvider = pallet_staking::UseNominatorsMap<Self>;
 	type WeightInfo = ();
 }
 

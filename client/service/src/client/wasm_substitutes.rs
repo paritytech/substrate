@@ -20,7 +20,7 @@
 
 use parking_lot::RwLock;
 use sc_client_api::backend;
-use sc_executor::RuntimeInfo;
+use sc_executor::RuntimeVersionOf;
 use sp_blockchain::{HeaderBackend, Result};
 use sp_core::traits::{FetchRuntimeCode, RuntimeCode};
 use sp_runtime::{
@@ -139,7 +139,7 @@ impl<Block: BlockT, Executor: Clone, Backend> Clone for WasmSubstitutes<Block, E
 
 impl<Executor, Backend, Block> WasmSubstitutes<Block, Executor, Backend>
 where
-	Executor: RuntimeInfo + Clone + 'static,
+	Executor: RuntimeVersionOf + Clone + 'static,
 	Backend: backend::Backend<Block>,
 	Block: BlockT,
 {

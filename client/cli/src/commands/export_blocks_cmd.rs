@@ -23,7 +23,7 @@ use crate::{
 };
 use log::info;
 use sc_client_api::{BlockBackend, UsageProvider};
-use sc_service::{chain_ops::export_blocks, config::DatabaseConfig};
+use sc_service::{chain_ops::export_blocks, config::DatabaseSource};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::{fmt::Debug, fs, io, path::PathBuf, str::FromStr, sync::Arc};
 use structopt::StructOpt;
@@ -69,14 +69,14 @@ impl ExportBlocksCmd {
 	pub async fn run<B, C>(
 		&self,
 		client: Arc<C>,
-		database_config: DatabaseConfig,
+		database_config: DatabaseSource,
 	) -> error::Result<()>
 	where
 		B: BlockT,
 		C: BlockBackend<B> + UsageProvider<B> + 'static,
 		<<B::Header as HeaderT>::Number as FromStr>::Err: Debug,
 	{
-		if let DatabaseConfig::RocksDb { ref path, .. } = database_config {
+		if let DatabaseSource::RocksDb { ref path, .. } = database_config {
 			info!("DB path: {}", path.display());
 		}
 

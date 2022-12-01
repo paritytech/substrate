@@ -87,8 +87,8 @@ impl Default for WorkerConfig {
 			max_publish_interval: Duration::from_secs(1 * 60 * 60),
 			keystore_refresh_interval: Duration::from_secs(60),
 			// External addresses of remote authorities can change at any given point in time. The
-			// interval on which to trigger new queries for the current and next authorities is a trade
-			// off between efficiency and performance.
+			// interval on which to trigger new queries for the current and next authorities is a
+			// trade off between efficiency and performance.
 			//
 			// Querying 700 [`AuthorityId`]s takes ~8m on the Kusama DHT (16th Nov 2020) when
 			// comparing `authority_discovery_authority_addresses_requested_total` and

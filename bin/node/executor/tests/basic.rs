@@ -50,7 +50,8 @@ pub fn bloaty_code_unwrap() -> &'static [u8] {
 	)
 }
 
-/// Default transfer fee. This will use the same logic that is implemented in transaction-payment module.
+/// Default transfer fee. This will use the same logic that is implemented in transaction-payment
+/// module.
 ///
 /// Note that reads the multiplier from storage directly, hence to get the fee of `extrinsic`
 /// at block `n`, it must be called prior to executing block `n` to do the calculation with the
@@ -83,14 +84,14 @@ fn changes_trie_block() -> (Vec<u8>, Hash) {
 		vec![
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set(time)),
+				function: Call::Timestamp(pallet_timestamp::Call::set { now: time }),
 			},
 			CheckedExtrinsic {
 				signed: Some((alice(), signed_extra(0, 0))),
-				function: Call::Balances(pallet_balances::Call::transfer(
-					bob().into(),
-					69 * DOLLARS,
-				)),
+				function: Call::Balances(pallet_balances::Call::transfer {
+					dest: bob().into(),
+					value: 69 * DOLLARS,
+				}),
 			},
 		],
 		(time / SLOT_DURATION).into(),
@@ -110,14 +111,14 @@ fn blocks() -> ((Vec<u8>, Hash), (Vec<u8>, Hash)) {
 		vec![
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set(time1)),
+				function: Call::Timestamp(pallet_timestamp::Call::set { now: time1 }),
 			},
 			CheckedExtrinsic {
 				signed: Some((alice(), signed_extra(0, 0))),
-				function: Call::Balances(pallet_balances::Call::transfer(
-					bob().into(),
-					69 * DOLLARS,
-				)),
+				function: Call::Balances(pallet_balances::Call::transfer {
+					dest: bob().into(),
+					value: 69 * DOLLARS,
+				}),
 			},
 		],
 		(time1 / SLOT_DURATION).into(),
@@ -130,21 +131,21 @@ fn blocks() -> ((Vec<u8>, Hash), (Vec<u8>, Hash)) {
 		vec![
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set(time2)),
+				function: Call::Timestamp(pallet_timestamp::Call::set { now: time2 }),
 			},
 			CheckedExtrinsic {
 				signed: Some((bob(), signed_extra(0, 0))),
-				function: Call::Balances(pallet_balances::Call::transfer(
-					alice().into(),
-					5 * DOLLARS,
-				)),
+				function: Call::Balances(pallet_balances::Call::transfer {
+					dest: alice().into(),
+					value: 5 * DOLLARS,
+				}),
 			},
 			CheckedExtrinsic {
 				signed: Some((alice(), signed_extra(1, 0))),
-				function: Call::Balances(pallet_balances::Call::transfer(
-					bob().into(),
-					15 * DOLLARS,
-				)),
+				function: Call::Balances(pallet_balances::Call::transfer {
+					dest: bob().into(),
+					value: 15 * DOLLARS,
+				}),
 			},
 		],
 		(time2 / SLOT_DURATION).into(),
@@ -165,11 +166,11 @@ fn block_with_size(time: u64, nonce: u32, size: usize) -> (Vec<u8>, Hash) {
 		vec![
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set(time * 1000)),
+				function: Call::Timestamp(pallet_timestamp::Call::set { now: time * 1000 }),
 			},
 			CheckedExtrinsic {
 				signed: Some((alice(), signed_extra(nonce, 0))),
-				function: Call::System(frame_system::Call::remark(vec![0; size])),
+				function: Call::System(frame_system::Call::remark { remark: vec![0; size] }),
 			},
 		],
 		(time * 1000 / SLOT_DURATION).into(),
@@ -356,7 +357,7 @@ fn full_native_block_import_works() {
 	let mut fees = t.execute_with(|| transfer_fee(&xt()));
 
 	let transfer_weight = default_transfer_call().get_dispatch_info().weight;
-	let timestamp_weight = pallet_timestamp::Call::set::<Runtime>(Default::default())
+	let timestamp_weight = pallet_timestamp::Call::set::<Runtime> { now: Default::default() }
 		.get_dispatch_info()
 		.weight;
 
@@ -645,28 +646,28 @@ fn deploying_wasm_contract_should_work() {
 		vec![
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set(time)),
+				function: Call::Timestamp(pallet_timestamp::Call::set { now: time }),
 			},
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(0, 0))),
 				function: Call::Contracts(
-					pallet_contracts::Call::instantiate_with_code::<Runtime>(
-						1000 * DOLLARS + subsistence,
-						500_000_000,
-						transfer_code,
-						Vec::new(),
-						Vec::new(),
-					),
+					pallet_contracts::Call::instantiate_with_code::<Runtime> {
+						endowment: 1000 * DOLLARS + subsistence,
+						gas_limit: 500_000_000,
+						code: transfer_code,
+						data: Vec::new(),
+						salt: Vec::new(),
+					},
 				),
 			},
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(1, 0))),
-				function: Call::Contracts(pallet_contracts::Call::call::<Runtime>(
-					sp_runtime::MultiAddress::Id(addr.clone()),
-					10,
-					500_000_000,
-					vec![0x00, 0x01, 0x02, 0x03],
-				)),
+				function: Call::Contracts(pallet_contracts::Call::call::<Runtime> {
+					dest: sp_runtime::MultiAddress::Id(addr.clone()),
+					value: 10,
+					gas_limit: 500_000_000,
+					data: vec![0x00, 0x01, 0x02, 0x03],
+				}),
 			},
 		],
 		(time / SLOT_DURATION).into(),
@@ -721,7 +722,8 @@ fn native_big_block_import_succeeds() {
 fn native_big_block_import_fails_on_fallback() {
 	let mut t = new_test_ext(compact_code_unwrap(), false);
 
-	// We set the heap pages to 8 because we know that should give an OOM in WASM with the given block.
+	// We set the heap pages to 8 because we know that should give an OOM in WASM with the given
+	// block.
 	set_heap_pages(&mut t.ext(), 8);
 
 	assert!(executor_call::<NeverNativeValue, fn() -> _>(

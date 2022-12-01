@@ -63,6 +63,7 @@ mod tests;
 pub mod weights;
 
 use codec::{Decode, Encode, MaxEncodedLen};
+use scale_info::TypeInfo;
 
 use sp_runtime::{
 	traits::{AccountIdConversion, Saturating, StaticLookup, Zero},
@@ -95,15 +96,14 @@ pub type NegativeImbalanceOf<T, I = ()> = <<T as Config<I>>::Currency as Currenc
 /// A trait to allow the Treasury Pallet to spend it's funds for other purposes.
 /// There is an expectation that the implementer of this trait will correctly manage
 /// the mutable variables passed to it:
-/// * `budget_remaining`: How much available funds that can be spent by the treasury.
-///    As funds are spent, you must correctly deduct from this value.
-/// * `imbalance`: Any imbalances that you create should be subsumed in here to
-///    maximize efficiency of updating the total issuance. (i.e. `deposit_creating`)
-/// * `total_weight`: Track any weight that your `spend_fund` implementation uses by
-///    updating this value.
-/// * `missed_any`: If there were items that you want to spend on, but there were
-///    not enough funds, mark this value as `true`. This will prevent the treasury
-///    from burning the excess funds.
+/// * `budget_remaining`: How much available funds that can be spent by the treasury. As funds are
+///   spent, you must correctly deduct from this value.
+/// * `imbalance`: Any imbalances that you create should be subsumed in here to maximize efficiency
+///   of updating the total issuance. (i.e. `deposit_creating`)
+/// * `total_weight`: Track any weight that your `spend_fund` implementation uses by updating this
+///   value.
+/// * `missed_any`: If there were items that you want to spend on, but there were not enough funds,
+///   mark this value as `true`. This will prevent the treasury from burning the excess funds.
 #[impl_trait_for_tuples::impl_for_tuples(30)]
 pub trait SpendFunds<T: Config<I>, I: 'static = ()> {
 	fn spend_funds(
@@ -119,7 +119,7 @@ pub type ProposalIndex = u32;
 
 /// A spending proposal.
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub struct Proposal<AccountId, Balance> {
 	/// The account proposing it.
 	proposer: AccountId,
@@ -254,7 +254,6 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(T::AccountId = "AccountId", BalanceOf<T, I> = "Balance")]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// New proposal. \[proposal_index\]
 		Proposed(ProposalIndex),
@@ -293,8 +292,8 @@ pub mod pallet {
 		/// # <weight>
 		/// - Complexity: `O(A)` where `A` is the number of approvals
 		/// - Db reads and writes: `Approvals`, `pot account data`
-		/// - Db reads and writes per approval:
-		///   `Proposals`, `proposer account data`, `beneficiary account data`
+		/// - Db reads and writes per approval: `Proposals`, `proposer account data`, `beneficiary
+		///   account data`
 		/// - The weight is overestimated if some approvals got missed.
 		/// # </weight>
 		fn on_initialize(n: T::BlockNumber) -> Weight {

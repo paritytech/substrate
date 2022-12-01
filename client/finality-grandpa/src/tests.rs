@@ -1244,7 +1244,7 @@ fn finalize_3_voters_1_light_observer() {
 #[test]
 fn voter_catches_up_to_latest_round_when_behind() {
 	sp_tracing::try_init_simple();
-	let mut runtime = Runtime::new().unwrap();
+	let runtime = Runtime::new().unwrap();
 
 	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob];
 	let voters = make_ids(peers);

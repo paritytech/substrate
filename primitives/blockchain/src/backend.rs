@@ -69,14 +69,16 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 			.ok_or_else(|| Error::UnknownBlock(format!("Expect header: {}", id)))
 	}
 
-	/// Convert an arbitrary block ID into a block number. Returns `UnknownBlock` error if block is not found.
+	/// Convert an arbitrary block ID into a block number. Returns `UnknownBlock` error if block is
+	/// not found.
 	fn expect_block_number_from_id(&self, id: &BlockId<Block>) -> Result<NumberFor<Block>> {
 		self.block_number_from_id(id).and_then(|n| {
 			n.ok_or_else(|| Error::UnknownBlock(format!("Expect block number from id: {}", id)))
 		})
 	}
 
-	/// Convert an arbitrary block ID into a block hash. Returns `UnknownBlock` error if block is not found.
+	/// Convert an arbitrary block ID into a block hash. Returns `UnknownBlock` error if block is
+	/// not found.
 	fn expect_block_hash_from_id(&self, id: &BlockId<Block>) -> Result<Block::Hash> {
 		self.block_hash_from_id(id).and_then(|n| {
 			n.ok_or_else(|| Error::UnknownBlock(format!("Expect block hash from id: {}", id)))

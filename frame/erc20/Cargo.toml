@@ -25,6 +25,7 @@ sp-core = { version = "4.0.0-dev", path = "../../primitives/core", default-featu
 sp-arithmetic = { version = "4.0.0-dev", path = "../../primitives/arithmetic", default-features = false }
 pallet-chainbridge = { version = "2.0.0", default-features = false, path = "../chainbridge" }
 pallet-erc721 = { version = "2.0.0", default-features = false, path = "../erc721" }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 

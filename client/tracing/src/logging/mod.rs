@@ -177,25 +177,15 @@ where
 	};
 	let builder = FmtSubscriber::builder().with_env_filter(env_filter);
 
-	#[cfg(not(target_os = "unknown"))]
 	let builder = builder.with_span_events(format::FmtSpan::NONE);
 
-	#[cfg(not(target_os = "unknown"))]
 	let builder = builder.with_writer(std::io::stderr as _);
 
-	#[cfg(target_os = "unknown")]
-	let builder = builder.with_writer(std::io::sink);
-
-	#[cfg(not(target_os = "unknown"))]
 	let builder = builder.event_format(event_format);
 
-	#[cfg(not(target_os = "unknown"))]
 	let builder = builder_hook(builder);
 
 	let subscriber = builder.finish().with(PrefixLayer);
-
-	#[cfg(target_os = "unknown")]
-	let subscriber = subscriber.with(ConsoleLogLayer::new(event_format));
 
 	Ok(subscriber)
 }

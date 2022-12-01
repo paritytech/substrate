@@ -279,7 +279,8 @@ where
 				if let Some(blocks) = blocks? {
 					if let Ok(blocks) = <DigestIndexValue<Number>>::decode(&mut &blocks[..]) {
 						// filter level0 blocks here because we tend to use digest blocks,
-						// AND digest block changes could also include changes for out-of-range blocks
+						// AND digest block changes could also include changes for out-of-range
+						// blocks
 						let begin = self.begin.clone();
 						let end = self.end.number.clone();
 						let config = self.config.clone();

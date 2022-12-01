@@ -19,6 +19,7 @@
 
 use crate::{OpaquePeerId, RuntimeDebug};
 use codec::{Decode, Encode};
+use scale_info::TypeInfo;
 use sp_runtime_interface::pass_by::{PassByCodec, PassByEnum, PassByInner};
 use sp_std::{
 	convert::TryFrom,
@@ -186,7 +187,7 @@ impl TryFrom<u32> for HttpRequestStatus {
 
 /// A blob to hold information about the local node's network state
 /// without committing to its format.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByCodec)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByCodec, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Default))]
 pub struct OpaqueNetworkState {
 	/// PeerId of the local node in SCALE encoded.
@@ -196,7 +197,7 @@ pub struct OpaqueNetworkState {
 }
 
 /// Simple blob to hold a `Multiaddr` without committing to its format.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByInner)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByInner, TypeInfo)]
 pub struct OpaqueMultiaddr(pub Vec<u8>);
 
 impl OpaqueMultiaddr {
@@ -344,8 +345,8 @@ pub trait Externalities: Send {
 
 	/// Initiates a http request given HTTP verb and the URL.
 	///
-	/// Meta is a future-reserved field containing additional, parity-scale-codec encoded parameters.
-	/// Returns the id of newly started request.
+	/// Meta is a future-reserved field containing additional, parity-scale-codec encoded
+	/// parameters. Returns the id of newly started request.
 	///
 	/// Returns an error if:
 	/// - No new request identifier could be allocated.
@@ -388,8 +389,8 @@ pub trait Externalities: Send {
 	/// - The request identifier is invalid.
 	/// - `http_response_wait` has already been called on this request.
 	/// - The deadline is reached.
-	/// - An I/O error has happened, for example the remote has closed our
-	///   request. The request is then considered invalid.
+	/// - An I/O error has happened, for example the remote has closed our request. The request is
+	///   then considered invalid.
 	fn http_request_write_body(
 		&mut self,
 		request_id: HttpRequestId,
@@ -440,8 +441,8 @@ pub trait Externalities: Send {
 	/// Returns an error if:
 	/// - The request identifier is invalid.
 	/// - The deadline is reached.
-	/// - An I/O error has happened, for example the remote has closed our
-	///   request. The request is then considered invalid.
+	/// - An I/O error has happened, for example the remote has closed our request. The request is
+	///   then considered invalid.
 	fn http_response_read_body(
 		&mut self,
 		request_id: HttpRequestId,

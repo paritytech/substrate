@@ -24,7 +24,7 @@ use crate::{
 use core::ops::Sub;
 
 /// Piecewise Linear function in [0, 1] -> [0, 1].
-#[derive(PartialEq, Eq, sp_core::RuntimeDebug)]
+#[derive(PartialEq, Eq, sp_core::RuntimeDebug, scale_info::TypeInfo)]
 pub struct PiecewiseLinear<'a> {
 	/// Array of points. Must be in order from the lowest abscissas to the highest.
 	pub points: &'a [(Perbill, Perbill)],

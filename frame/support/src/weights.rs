@@ -129,6 +129,7 @@
 
 use crate::dispatch::{DispatchError, DispatchErrorWithPostInfo, DispatchResultWithPostInfo};
 use codec::{Decode, Encode};
+use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use smallvec::{smallvec, SmallVec};
@@ -201,7 +202,7 @@ pub trait PaysFee<T> {
 }
 
 /// Explicit enum to denote if a transaction pays fee or not.
-#[derive(Clone, Copy, Eq, PartialEq, RuntimeDebug, Encode, Decode)]
+#[derive(Clone, Copy, Eq, PartialEq, RuntimeDebug, Encode, Decode, TypeInfo)]
 pub enum Pays {
 	/// Transactor will pay related fees.
 	Yes,
@@ -221,7 +222,7 @@ impl Default for Pays {
 /// [DispatchClass::all] and [DispatchClass::non_mandatory] helper functions.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub enum DispatchClass {
 	/// A normal dispatch.
 	Normal,
@@ -229,8 +230,9 @@ pub enum DispatchClass {
 	Operational,
 	/// A mandatory dispatch. These kinds of dispatch are always included regardless of their
 	/// weight, therefore it is critical that they are separately validated to ensure that a
-	/// malicious validator cannot craft a valid but impossibly heavy block. Usually this just means
-	/// ensuring that the extrinsic can only be included once and that it is always very light.
+	/// malicious validator cannot craft a valid but impossibly heavy block. Usually this just
+	/// means ensuring that the extrinsic can only be included once and that it is always very
+	/// light.
 	///
 	/// Do *NOT* use it for extrinsics that can be heavy.
 	///
@@ -285,32 +287,8 @@ impl<'a> OneOrMany<DispatchClass> for &'a [DispatchClass] {
 	}
 }
 
-/// Primitives related to priority management of Frame.
-pub mod priority {
-	/// The starting point of all Operational transactions. 3/4 of u64::MAX.
-	pub const LIMIT: u64 = 13_835_058_055_282_163_711_u64;
-
-	/// Wrapper for priority of different dispatch classes.
-	///
-	/// This only makes sure that any value created for the operational dispatch class is
-	/// incremented by [`LIMIT`].
-	pub enum FrameTransactionPriority {
-		Normal(u64),
-		Operational(u64),
-	}
-
-	impl From<FrameTransactionPriority> for u64 {
-		fn from(priority: FrameTransactionPriority) -> Self {
-			match priority {
-				FrameTransactionPriority::Normal(inner) => inner,
-				FrameTransactionPriority::Operational(inner) => inner.saturating_add(LIMIT),
-			}
-		}
-	}
-}
-
 /// A bundle of static information collected from the `#[weight = $x]` attributes.
-#[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
+#[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo)]
 pub struct DispatchInfo {
 	/// Weight of this transaction.
 	pub weight: Weight,
@@ -337,7 +315,7 @@ impl GetDispatchInfo for () {
 
 /// Weight information that is only available post dispatch.
 /// NOTE: This can only be used to reduce the weight or fee, not increase it.
-#[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
+#[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo)]
 pub struct PostDispatchInfo {
 	/// Actual weight consumed by a call or `None` which stands for the worst case static weight.
 	pub actual_weight: Option<Weight>,
@@ -528,12 +506,12 @@ impl<T> PaysFee<T> for (Weight, Pays) {
 /// A struct to represent a weight which is a function of the input arguments. The given items have
 /// the following types:
 ///
-/// - `WD`: a raw `Weight` value or a closure that returns a `Weight` with the same
+/// - `WD`: a raw `Weight` value or a closure that returns a `Weight` with the same argument list as
+///   the dispatched, wrapped in a tuple.
+/// - `CD`: a raw `DispatchClass` value or a closure that returns a `DispatchClass` with the same
 ///   argument list as the dispatched, wrapped in a tuple.
-/// - `CD`: a raw `DispatchClass` value or a closure that returns a `DispatchClass`
-///   with the same argument list as the dispatched, wrapped in a tuple.
-/// - `PF`: a `Pays` variant for whether this dispatch pays fee or not or a closure that
-///   returns a `Pays` variant with the same argument list as the dispatched, wrapped in a tuple.
+/// - `PF`: a `Pays` variant for whether this dispatch pays fee or not or a closure that returns a
+///   `Pays` variant with the same argument list as the dispatched, wrapped in a tuple.
 #[deprecated = "Function arguments are available directly inside the annotation now."]
 pub struct FunctionOf<WD, CD, PF>(pub WD, pub CD, pub PF);
 
@@ -626,7 +604,7 @@ impl<Call: Encode, Extra: Encode> GetDispatchInfo for sp_runtime::testing::TestX
 }
 
 /// The weight of database operations that the runtime can invoke.
-#[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
+#[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo)]
 pub struct RuntimeDbWeight {
 	pub read: Weight,
 	pub write: Weight,
@@ -658,7 +636,7 @@ impl RuntimeDbWeight {
 ///
 /// The `negative` value encodes whether the term is added or substracted from the
 /// overall polynomial result.
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Encode, Decode, TypeInfo)]
 pub struct WeightToFeeCoefficient<Balance> {
 	/// The integral part of the coefficient.
 	pub coeff_integer: Balance,
@@ -736,7 +714,7 @@ where
 }
 
 /// A struct holding value for each `DispatchClass`.
-#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
+#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo)]
 pub struct PerDispatchClass<T> {
 	/// Value for `Normal` extrinsics.
 	normal: T,
@@ -881,49 +859,49 @@ mod tests {
 	#[test]
 	fn weights_are_correct() {
 		// #[weight = 1000]
-		let info = Call::<TraitImpl>::f00().get_dispatch_info();
+		let info = Call::<TraitImpl>::f00 {}.get_dispatch_info();
 		assert_eq!(info.weight, 1000);
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = (1000, DispatchClass::Mandatory)]
-		let info = Call::<TraitImpl>::f01().get_dispatch_info();
+		let info = Call::<TraitImpl>::f01 {}.get_dispatch_info();
 		assert_eq!(info.weight, 1000);
 		assert_eq!(info.class, DispatchClass::Mandatory);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = (1000, Pays::No)]
-		let info = Call::<TraitImpl>::f02().get_dispatch_info();
+		let info = Call::<TraitImpl>::f02 {}.get_dispatch_info();
 		assert_eq!(info.weight, 1000);
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::No);
 
 		// #[weight = (1000, DispatchClass::Operational, Pays::No)]
-		let info = Call::<TraitImpl>::f03().get_dispatch_info();
+		let info = Call::<TraitImpl>::f03 {}.get_dispatch_info();
 		assert_eq!(info.weight, 1000);
 		assert_eq!(info.class, DispatchClass::Operational);
 		assert_eq!(info.pays_fee, Pays::No);
 
 		// #[weight = ((_a * 10 + _eb * 1) as Weight, DispatchClass::Normal, Pays::Yes)]
-		let info = Call::<TraitImpl>::f11(13, 20).get_dispatch_info();
+		let info = Call::<TraitImpl>::f11 { _a: 13, _eb: 20 }.get_dispatch_info();
 		assert_eq!(info.weight, 150); // 13*10 + 20
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = (0, DispatchClass::Operational, Pays::Yes)]
-		let info = Call::<TraitImpl>::f12(10, 20).get_dispatch_info();
+		let info = Call::<TraitImpl>::f12 { _a: 10, _eb: 20 }.get_dispatch_info();
 		assert_eq!(info.weight, 0);
 		assert_eq!(info.class, DispatchClass::Operational);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + 10_000]
-		let info = Call::<TraitImpl>::f20().get_dispatch_info();
+		let info = Call::<TraitImpl>::f20 {}.get_dispatch_info();
 		assert_eq!(info.weight, 12300); // 100*3 + 1000*2 + 10_1000
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = T::DbWeight::get().reads_writes(6, 5) + 40_000]
-		let info = Call::<TraitImpl>::f21().get_dispatch_info();
+		let info = Call::<TraitImpl>::f21 {}.get_dispatch_info();
 		assert_eq!(info.weight, 45600); // 100*6 + 1000*5 + 40_1000
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);

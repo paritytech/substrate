@@ -1,0 +1,56 @@
+[package]
+name = "pallet-beefy-mmr"
+version = "4.0.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "Apache-2.0"
+description = "BEEFY + MMR runtime utilities"
+
+[dependencies]
+hex = { version = "0.4", optional = true }
+codec = { version = "2.2.0", package = "parity-scale-codec", default-features = false, features = ["derive"] }
+libsecp256k1 = { version = "0.7.0", default-features = false }
+log = { version = "0.4.13", default-features = false }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
+serde = { version = "1.0.130", optional = true }
+
+frame-support = { version = "4.0.0-dev", path = "../support", default-features = false }
+frame-system = { version = "4.0.0-dev", path = "../system", default-features = false }
+pallet-mmr = { version = "4.0.0-dev", path = "../merkle-mountain-range", default-features = false }
+pallet-mmr-primitives = { version = "4.0.0-dev", path = "../merkle-mountain-range/primitives", default-features = false }
+pallet-session = { version = "4.0.0-dev", path = "../session", default-features = false }
+
+sp-core = { version = "4.0.0-dev", path = "../../primitives/core", default-features = false }
+sp-io = { version = "4.0.0-dev", path = "../../primitives/io", default-features = false }
+sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime", default-features = false }
+sp-std = { version = "4.0.0-dev", path = "../../primitives/std", default-features = false }
+
+beefy-merkle-tree = { version = "4.0.0-dev", path = "./primitives", default-features = false }
+beefy-primitives = { version = "4.0.0-dev", path = "../../primitives/beefy", default-features = false }
+pallet-beefy = { version = "4.0.0-dev", path = "../beefy", default-features = false }
+
+[dev-dependencies]
+sp-staking = { version = "4.0.0-dev", path = "../../primitives/staking" }
+hex-literal = "0.3"
+
+[features]
+default = ["std"]
+std = [
+    "beefy-merkle-tree/std",
+    "beefy-primitives/std",
+    "codec/std",
+    "frame-support/std",
+    "frame-system/std",
+    "hex",
+    "libsecp256k1/std",
+    "log/std",
+    "pallet-beefy/std",
+    "pallet-mmr-primitives/std",
+    "pallet-mmr/std",
+    "pallet-session/std",
+    "serde",
+    "sp-core/std",
+    "sp-io/std",
+    "sp-runtime/std",
+    "sp-std/std",
+]

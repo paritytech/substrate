@@ -23,6 +23,7 @@ sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primit
 sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core", default-features = false }
 pallet-chainbridge = { version = "2.0.0", default-features = false, path = "../chainbridge" }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 

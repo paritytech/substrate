@@ -91,7 +91,8 @@ pub enum Role {
 ///
 ///    4. Put addresses and signature as a record with the authority id as a key on a Kademlia DHT.
 ///
-/// When constructed with either [`Role::PublishAndDiscover`] or [`Role::Discover`] a [`Worker`] will
+/// When constructed with either [`Role::PublishAndDiscover`] or [`Role::Discover`] a [`Worker`]
+/// will
 ///
 ///    1. Retrieve the current and next set of authorities.
 ///
@@ -288,7 +289,7 @@ where
 				if a.iter().any(|p| matches!(p, multiaddr::Protocol::P2p(_))) {
 					a
 				} else {
-					a.with(multiaddr::Protocol::P2p(peer_id.clone()))
+					a.with(multiaddr::Protocol::P2p(peer_id))
 				}
 			})
 	}

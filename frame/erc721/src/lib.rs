@@ -27,7 +27,7 @@ mod tests;
 
 type TokenId = U256;
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, scale_info::TypeInfo)]
 pub struct Erc721Token {
     pub id: TokenId,
     pub metadata: Vec<u8>,

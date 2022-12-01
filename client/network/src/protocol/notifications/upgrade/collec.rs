@@ -34,13 +34,13 @@ pub struct UpgradeCollec<T>(pub Vec<T>);
 
 impl<T> From<Vec<T>> for UpgradeCollec<T> {
 	fn from(list: Vec<T>) -> Self {
-		UpgradeCollec(list)
+		Self(list)
 	}
 }
 
 impl<T> FromIterator<T> for UpgradeCollec<T> {
 	fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
-		UpgradeCollec(iter.into_iter().collect())
+		Self(iter.into_iter().collect())
 	}
 }
 

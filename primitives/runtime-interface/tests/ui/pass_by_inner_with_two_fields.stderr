@@ -4,4 +4,4 @@ error: Only newtype/one field structs are supported by `PassByInner`!
 3 | #[derive(PassByInner)]
   |          ^^^^^^^^^^^
   |
-  = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
+  = note: this error originates in the derive macro `PassByInner` (in Nightly builds, run with -Z macro-backtrace for more info)

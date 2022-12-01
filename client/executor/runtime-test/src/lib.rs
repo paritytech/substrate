@@ -91,7 +91,7 @@ sp_core::wasm_export_functions! {
 	   // This function dirties the **host** pages. I.e. we dirty 4KiB at a time and it will take
 	   // 16 writes to process a single wasm page.
 
-	   let mut heap_ptr = heap_base as usize;
+	   let heap_ptr = heap_base as usize;
 
 	   // Find the next wasm page boundary.
 	   let heap_ptr = round_up_to(heap_ptr, 65536);
@@ -234,7 +234,7 @@ sp_core::wasm_export_functions! {
 	   match instance.get_global_val("test_global") {
 		   Some(sp_sandbox::Value::I64(val)) => val,
 		   None => 30,
-		   val => 40,
+		   _ => 40,
 	   }
    }
 
@@ -362,7 +362,7 @@ sp_core::wasm_export_functions! {
    // It is expected that the given pointer is not allocated.
    fn check_and_set_in_heap(heap_base: u32, offset: u32) {
 	   let test_message = b"Hello invalid heap memory";
-	   let ptr = unsafe { (heap_base + offset) as *mut u8 };
+	   let ptr = (heap_base + offset) as *mut u8;
 
 	   let message_slice = unsafe { sp_std::slice::from_raw_parts_mut(ptr, test_message.len()) };
 

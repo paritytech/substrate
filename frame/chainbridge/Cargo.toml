@@ -23,6 +23,7 @@ sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primit
 lite-json = { version = "0.2.0", default-features = false }
 sp-keystore = { version = "0.10.0-dev", path = "../../primitives/keystore", optional = true }
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../balances" }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 

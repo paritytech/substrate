@@ -163,7 +163,7 @@ fn set_dummy_works() {
 #[test]
 fn signed_ext_watch_dummy_works() {
 	new_test_ext().execute_with(|| {
-		let call = <pallet_example::Call<Test>>::set_dummy(10).into();
+		let call = pallet_example::Call::set_dummy { new_value: 10 }.into();
 		let info = DispatchInfo::default();
 
 		assert_eq!(
@@ -181,16 +181,25 @@ fn signed_ext_watch_dummy_works() {
 }
 
 #[test]
+fn counted_map_works() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(CountedMap::<Test>::count(), 0);
+		CountedMap::<Test>::insert(3, 3);
+		assert_eq!(CountedMap::<Test>::count(), 1);
+	})
+}
+
+#[test]
 fn weights_work() {
 	// must have a defined weight.
-	let default_call = <pallet_example::Call<Test>>::accumulate_dummy(10);
+	let default_call = pallet_example::Call::<Test>::accumulate_dummy { increase_by: 10 };
 	let info1 = default_call.get_dispatch_info();
 	// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
 	assert!(info1.weight > 0);
 
 	// `set_dummy` is simpler than `accumulate_dummy`, and the weight
 	//   should be less.
-	let custom_call = <pallet_example::Call<Test>>::set_dummy(20);
+	let custom_call = pallet_example::Call::<Test>::set_dummy { new_value: 20 };
 	let info2 = custom_call.get_dispatch_info();
 	assert!(info1.weight > info2.weight);
 }

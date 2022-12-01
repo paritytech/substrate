@@ -364,12 +364,12 @@ impl<T: Config> Module<T> where <T as frame_system::Config>::AccountId: AsRef<[u
         let call_data = Self::encode_finalize_metric_period(in_day_start_ms);
 
         let results = signer.send_signed_transaction(|_account| {
-            pallet_contracts::Call::call(
-                contract_id_unl.clone(),
-                0u32.into(),
-                100_000_000_000,
-                call_data.clone(),
-            )
+            pallet_contracts::Call::call {
+                dest: contract_id_unl.clone(),
+                value: 0u32.into(),
+                gas_limit: 100_000_000_000,
+                data: call_data.clone(),
+            }
         });
 
         match &results {
@@ -422,12 +422,12 @@ impl<T: Config> Module<T> where <T as frame_system::Config>::AccountId: AsRef<[u
                         contract_id.clone(),
                     );
 
-                pallet_contracts::Call::call(
-                    contract_id_unl,
-                    0u32.into(),
-                    100_000_000_000,
-                    call_data,
-                )
+                pallet_contracts::Call::call {
+                    dest: contract_id_unl,
+                    value: 0u32.into(),
+                    gas_limit: 100_000_000_000,
+                    data: call_data,
+                }
             });
 
             match &results {
@@ -471,13 +471,12 @@ impl<T: Config> Module<T> where <T as frame_system::Config>::AccountId: AsRef<[u
                     <<T as frame_system::Config>::Lookup as StaticLookup>::unlookup(
                         contract_id.clone(),
                     );
-
-                pallet_contracts::Call::call(
-                    contract_id_unl,
-                    0u32.into(),
-                    100_000_000_000,
-                    call_data,
-                )
+                pallet_contracts::Call::call {
+                    dest: contract_id_unl,
+                    value: 0u32.into(),
+                    gas_limit: 100_000_000_000,
+                    data: call_data,
+                }
             });
 
             match &results {
@@ -510,7 +509,12 @@ impl<T: Config> Module<T> where <T as frame_system::Config>::AccountId: AsRef<[u
                     contract_id.clone(),
                 );
 
-            pallet_contracts::Call::call(contract_id_unl, 0u32.into(), 100_000_000_000, call_data)
+            pallet_contracts::Call::call {
+                dest: contract_id_unl,
+                value: 0u32.into(),
+                gas_limit: 100_000_000_000,
+                data: call_data,
+            }
         });
 
         match &results {

@@ -30,14 +30,7 @@ impl<T: GetStorageVersion + PalletInfoAccess> PalletVersionToStorageVersionHelpe
 		const PALLET_VERSION_STORAGE_KEY_POSTFIX: &[u8] = b":__PALLET_VERSION__:";
 
 		fn pallet_version_key(name: &str) -> [u8; 32] {
-			let pallet_name = sp_io::hashing::twox_128(name.as_bytes());
-			let postfix = sp_io::hashing::twox_128(PALLET_VERSION_STORAGE_KEY_POSTFIX);
-
-			let mut final_key = [0u8; 32];
-			final_key[..16].copy_from_slice(&pallet_name);
-			final_key[16..].copy_from_slice(&postfix);
-
-			final_key
+			crate::storage::storage_prefix(name.as_bytes(), PALLET_VERSION_STORAGE_KEY_POSTFIX)
 		}
 
 		sp_io::storage::clear(&pallet_version_key(<T as PalletInfoAccess>::name()));

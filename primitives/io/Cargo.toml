@@ -24,7 +24,6 @@ libsecp256k1 = { version = "0.6", optional = true }
 sp-state-machine = { version = "0.10.0-dev", optional = true, path = "../state-machine" }
 sp-wasm-interface = { version = "4.0.0-dev", path = "../wasm-interface", default-features = false }
 sp-runtime-interface = { version = "4.0.0-dev", default-features = false, path = "../runtime-interface" }
-sp-maybe-compressed-blob = { version = "4.0.0-dev", optional = true, path = "../maybe-compressed-blob" }
 sp-trie = { version = "4.0.0-dev", optional = true, path = "../trie" }
 sp-externalities = { version = "0.10.0-dev", optional = true, path = "../externalities" }
 sp-tracing = { version = "4.0.0-dev", default-features = false, path = "../tracing" }
@@ -48,7 +47,6 @@ std = [
 	"sp-runtime-interface/std",
 	"sp-externalities",
 	"sp-wasm-interface/std",
-	"sp-maybe-compressed-blob",
 	"sp-tracing/std",
 	"tracing/std",
 	"tracing-core/std",

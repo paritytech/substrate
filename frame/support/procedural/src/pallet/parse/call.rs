@@ -16,6 +16,7 @@
 // limitations under the License.
 
 use super::helper;
+use frame_support_procedural_tools::get_doc_literals;
 use quote::ToTokens;
 use syn::spanned::Spanned;
 
@@ -219,7 +220,7 @@ impl CallDef {
 					args.push((!arg_attrs.is_empty(), arg_ident, arg.ty.clone()));
 				}
 
-				let docs = helper::get_doc_literals(&method.attrs);
+				let docs = get_doc_literals(&method.attrs);
 
 				methods.push(CallVariantDef { name: method.sig.ident.clone(), weight, args, docs });
 			} else {
@@ -234,7 +235,7 @@ impl CallDef {
 			instances,
 			methods,
 			where_clause: item.generics.where_clause.clone(),
-			docs: helper::get_doc_literals(&item.attrs),
+			docs: get_doc_literals(&item.attrs),
 		})
 	}
 }

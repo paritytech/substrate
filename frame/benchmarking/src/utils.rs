@@ -16,9 +16,12 @@
 // limitations under the License.
 
 //! Interfaces, types and utils for benchmarking a FRAME runtime.
-
 use codec::{Decode, Encode};
-use frame_support::traits::StorageInfo;
+use frame_support::{
+	dispatch::{DispatchError, DispatchErrorWithPostInfo},
+	pallet_prelude::*,
+	traits::StorageInfo,
+};
 use sp_io::hashing::blake2_256;
 use sp_std::{prelude::Box, vec::Vec};
 use sp_storage::TrackedStorageKey;
@@ -73,7 +76,7 @@ pub struct BenchmarkBatch {
 	/// The extrinsic (or benchmark name) of this benchmark.
 	pub benchmark: Vec<u8>,
 	/// The results from this benchmark.
-	pub results: Vec<BenchmarkResults>,
+	pub results: Vec<BenchmarkResult>,
 }
 
 // TODO: could probably make API cleaner here.
@@ -87,16 +90,16 @@ pub struct BenchmarkBatchSplitResults {
 	/// The extrinsic (or benchmark name) of this benchmark.
 	pub benchmark: Vec<u8>,
 	/// The extrinsic timing results from this benchmark.
-	pub time_results: Vec<BenchmarkResults>,
+	pub time_results: Vec<BenchmarkResult>,
 	/// The db tracking results from this benchmark.
-	pub db_results: Vec<BenchmarkResults>,
+	pub db_results: Vec<BenchmarkResult>,
 }
 
-/// Results from running benchmarks on a FRAME pallet.
+/// Result from running benchmarks on a FRAME pallet.
 /// Contains duration of the function call in nanoseconds along with the benchmark parameters
 /// used for that benchmark result.
 #[derive(Encode, Decode, Default, Clone, PartialEq, Debug)]
-pub struct BenchmarkResults {
+pub struct BenchmarkResult {
 	pub components: Vec<(BenchmarkParameter, u32)>,
 	pub extrinsic_time: u128,
 	pub storage_root_time: u128,
@@ -106,6 +109,53 @@ pub struct BenchmarkResults {
 	pub repeat_writes: u32,
 	pub proof_size: u32,
 	pub keys: Vec<(Vec<u8>, u32, u32, bool)>,
+}
+
+impl BenchmarkResult {
+	pub fn from_weight(w: Weight) -> Self {
+		Self { extrinsic_time: (w as u128) / 1_000, ..Default::default() }
+	}
+}
+
+/// Possible errors returned from the benchmarking pipeline.
+#[derive(Clone, PartialEq, Debug)]
+pub enum BenchmarkError {
+	/// The benchmarking pipeline should stop and return the inner string.
+	Stop(&'static str),
+	/// The benchmarking pipeline is allowed to fail here, and we should use the
+	/// included weight instead.
+	Override(BenchmarkResult),
+	/// The benchmarking pipeline is allowed to fail here, and we should simply
+	/// skip processing these results.
+	Skip,
+}
+
+impl From<BenchmarkError> for &'static str {
+	fn from(e: BenchmarkError) -> Self {
+		match e {
+			BenchmarkError::Stop(s) => s,
+			BenchmarkError::Override(_) => "benchmark override",
+			BenchmarkError::Skip => "benchmark skip",
+		}
+	}
+}
+
+impl From<&'static str> for BenchmarkError {
+	fn from(s: &'static str) -> Self {
+		Self::Stop(s)
+	}
+}
+
+impl From<DispatchErrorWithPostInfo> for BenchmarkError {
+	fn from(e: DispatchErrorWithPostInfo) -> Self {
+		Self::Stop(e.into())
+	}
+}
+
+impl From<DispatchError> for BenchmarkError {
+	fn from(e: DispatchError) -> Self {
+		Self::Stop(e.into())
+	}
 }
 
 /// Configuration used to setup and run runtime benchmarks.
@@ -202,7 +252,8 @@ pub trait Benchmarking {
 	fn add_to_whitelist(&mut self, add: TrackedStorageKey) {
 		let mut whitelist = self.get_whitelist();
 		match whitelist.iter_mut().find(|x| x.key == add.key) {
-			// If we already have this key in the whitelist, update to be the most constrained value.
+			// If we already have this key in the whitelist, update to be the most constrained
+			// value.
 			Some(item) => {
 				item.reads += add.reads;
 				item.writes += add.writes;
@@ -234,13 +285,13 @@ pub trait Benchmarking {
 }
 
 /// The pallet benchmarking trait.
-pub trait Benchmarking<T> {
+pub trait Benchmarking {
 	/// Get the benchmarks available for this pallet. Generally there is one benchmark per
 	/// extrinsic, so these are sometimes just called "extrinsics".
 	///
 	/// Parameters
-	/// - `extra`: Also return benchmarks marked "extra" which would otherwise not be
-	///            needed for weight calculation.
+	/// - `extra`: Also return benchmarks marked "extra" which would otherwise not be needed for
+	///   weight calculation.
 	fn benchmarks(extra: bool) -> Vec<BenchmarkMetadata>;
 
 	/// Run the benchmarks for this pallet.
@@ -250,7 +301,7 @@ pub trait Benchmarking<T> {
 		whitelist: &[TrackedStorageKey],
 		verify: bool,
 		internal_repeats: u32,
-	) -> Result<Vec<T>, &'static str>;
+	) -> Result<Vec<BenchmarkResult>, BenchmarkError>;
 }
 
 /// The required setup for creating a benchmark.
@@ -266,7 +317,7 @@ pub trait BenchmarkingSetup<T, I = ()> {
 		&self,
 		components: &[(BenchmarkParameter, u32)],
 		verify: bool,
-	) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
+	) -> Result<Box<dyn FnOnce() -> Result<(), BenchmarkError>>, BenchmarkError>;
 }
 
 /// Grab an account, seeded by a name and index.

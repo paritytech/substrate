@@ -1,6 +1,7 @@
 #![cfg(test)]
 
 use frame_support::{ord_parameter_types, parameter_types, weights::Weight};
+use frame_support::traits::Everything;
 use frame_system::{self as system};
 use sp_core::hashing::blake2_128;
 use sp_core::H256;
@@ -22,7 +23,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for Test {
-    type BaseCallFilter = ();
+    type BaseCallFilter = Everything;
     type BlockWeights = ();
     type BlockLength = ();
     type Origin = Origin;

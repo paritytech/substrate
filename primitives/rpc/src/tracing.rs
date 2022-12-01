@@ -35,6 +35,9 @@ pub struct BlockTrace {
 	/// Storage key targets used to filter out events that do not have one of the storage keys.
 	/// Empty string means do not filter out any events.
 	pub storage_keys: String,
+	/// Method targets used to filter out events that do not have one of the event method.
+	/// Empty string means do not filter out any events.
+	pub methods: String,
 	/// Vec of tracing spans
 	pub spans: Vec<Span>,
 	/// Vec of tracing events

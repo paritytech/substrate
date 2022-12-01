@@ -18,15 +18,15 @@
 //! Storage value type. Implements StorageValue trait and its method directly.
 
 use crate::{
+	metadata::{StorageEntryMetadata, StorageEntryType},
 	storage::{
 		generator::StorageValue as StorageValueT,
-		types::{OnEmptyGetter, OptionQuery, QueryKindTrait},
+		types::{OptionQuery, QueryKindTrait, StorageEntryMetadataBuilder},
 		StorageAppend, StorageDecodeLength, StorageTryAppend,
 	},
 	traits::{GetDefault, StorageInfo, StorageInstance},
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
-use frame_metadata::{DefaultByteGetter, StorageEntryModifier};
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_std::prelude::*;
 
@@ -201,25 +201,25 @@ where
 	}
 }
 
-/// Part of storage metadata for storage value.
-pub trait StorageValueMetadata {
-	const MODIFIER: StorageEntryModifier;
-	const NAME: &'static str;
-	const DEFAULT: DefaultByteGetter;
-}
-
-impl<Prefix, Value, QueryKind, OnEmpty> StorageValueMetadata
+impl<Prefix, Value, QueryKind, OnEmpty> StorageEntryMetadataBuilder
 	for StorageValue<Prefix, Value, QueryKind, OnEmpty>
 where
 	Prefix: StorageInstance,
-	Value: FullCodec,
+	Value: FullCodec + scale_info::StaticTypeInfo,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
 {
-	const MODIFIER: StorageEntryModifier = QueryKind::METADATA;
-	const NAME: &'static str = Prefix::STORAGE_PREFIX;
-	const DEFAULT: DefaultByteGetter =
-		DefaultByteGetter(&OnEmptyGetter::<QueryKind::Query, OnEmpty>(core::marker::PhantomData));
+	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>) {
+		let entry = StorageEntryMetadata {
+			name: Prefix::STORAGE_PREFIX,
+			modifier: QueryKind::METADATA,
+			ty: StorageEntryType::Plain(scale_info::meta_type::<Value>()),
+			default: OnEmpty::get().encode(),
+			docs,
+		};
+
+		entries.push(entry);
+	}
 }
 
 impl<Prefix, Value, QueryKind, OnEmpty> crate::traits::StorageInfoTrait
@@ -264,8 +264,7 @@ where
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::storage::types::ValueQuery;
-	use frame_metadata::StorageEntryModifier;
+	use crate::{metadata::StorageEntryModifier, storage::types::ValueQuery};
 	use sp_io::{hashing::twox_128, TestExternalities};
 
 	struct Prefix;
@@ -344,11 +343,28 @@ mod test {
 			A::kill();
 			assert_eq!(A::try_get(), Err(()));
 
-			assert_eq!(A::MODIFIER, StorageEntryModifier::Optional);
-			assert_eq!(AValueQueryWithAnOnEmpty::MODIFIER, StorageEntryModifier::Default);
-			assert_eq!(A::NAME, "foo");
-			assert_eq!(A::DEFAULT.0.default_byte(), Option::<u32>::None.encode());
-			assert_eq!(AValueQueryWithAnOnEmpty::DEFAULT.0.default_byte(), 97u32.encode());
+			let mut entries = vec![];
+			A::build_metadata(vec![], &mut entries);
+			AValueQueryWithAnOnEmpty::build_metadata(vec![], &mut entries);
+			assert_eq!(
+				entries,
+				vec![
+					StorageEntryMetadata {
+						name: "foo",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+						default: Option::<u32>::None.encode(),
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "foo",
+						modifier: StorageEntryModifier::Default,
+						ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+						default: 97u32.encode(),
+						docs: vec![],
+					}
+				]
+			);
 
 			WithLen::kill();
 			assert_eq!(WithLen::decode_len(), None);

@@ -60,7 +60,8 @@ pub enum InvalidTransaction {
 	/// # Possible causes
 	///
 	/// For `FRAME`-based runtimes this would be caused by `current block number
-	/// - Era::birth block number > BlockHashCount`. (e.g. in Polkadot `BlockHashCount` = 2400, so a
+	/// - Era::birth block number > BlockHashCount`. (e.g. in Polkadot `BlockHashCount` = 2400, so
+	///   a
 	/// transaction with birth block number 1337 would be valid up until block number 1337 + 2400,
 	/// after which point the transaction would be considered to have an ancient birth block.)
 	AncientBirthBlock,
@@ -72,8 +73,8 @@ pub enum InvalidTransaction {
 	/// Any other custom invalid validity that is not covered by this enum.
 	Custom(u8),
 	/// An extrinsic with a Mandatory dispatch resulted in Error. This is indicative of either a
-	/// malicious validator or a buggy `provide_inherent`. In any case, it can result in dangerously
-	/// overweight blocks and therefore if found, invalidates the block.
+	/// malicious validator or a buggy `provide_inherent`. In any case, it can result in
+	/// dangerously overweight blocks and therefore if found, invalidates the block.
 	BadMandatory,
 	/// A transaction with a mandatory dispatch. This is invalid; only inherent extrinsics are
 	/// allowed to have mandatory dispatches.

@@ -17,8 +17,6 @@
 
 //! Benchmarks for the GRANDPA pallet.
 
-#![cfg_attr(not(feature = "std"), no_std)]
-
 use super::{Pallet as Grandpa, *};
 use frame_benchmarking::benchmarks;
 use frame_system::RawOrigin;

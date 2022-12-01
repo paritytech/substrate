@@ -569,9 +569,9 @@ where
 		sp_state_machine::UsageInfo::empty()
 	}
 
-	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
+	fn as_trie_backend(&self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
 		match self {
-			GenesisOrUnavailableState::Genesis(ref mut state) => state.as_trie_backend(),
+			GenesisOrUnavailableState::Genesis(ref state) => state.as_trie_backend(),
 			GenesisOrUnavailableState::Unavailable => None,
 		}
 	}

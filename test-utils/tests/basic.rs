@@ -16,39 +16,30 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use sc_service::{TaskExecutor, TaskType};
-
 #[substrate_test_utils::test]
-async fn basic_test(_: TaskExecutor) {
+async fn basic_test() {
 	assert!(true);
 }
 
 #[substrate_test_utils::test]
 #[should_panic(expected = "boo!")]
-async fn panicking_test(_: TaskExecutor) {
+async fn panicking_test() {
 	panic!("boo!");
 }
 
-#[substrate_test_utils::test(max_threads = 2)]
-async fn basic_test_with_args(_: TaskExecutor) {
+#[substrate_test_utils::test(flavor = "multi_thread", worker_threads = 1)]
+async fn basic_test_with_args() {
 	assert!(true);
 }
 
-#[substrate_test_utils::test]
-async fn rename_argument(ex: TaskExecutor) {
-	let ex2 = ex.clone();
-	ex2.spawn(Box::pin(async { () }), TaskType::Blocking);
-	assert!(true);
-}
-
-#[substrate_test_utils::test]
-#[should_panic(expected = "test took too long")]
 // NOTE: enable this test only after setting SUBSTRATE_TEST_TIMEOUT to a smaller value
 //
 // SUBSTRATE_TEST_TIMEOUT=1 cargo test -- --ignored timeout
+#[substrate_test_utils::test]
+#[should_panic(expected = "test took too long")]
 #[ignore]
-async fn timeout(_: TaskExecutor) {
-	tokio::time::delay_for(std::time::Duration::from_secs(
+async fn timeout() {
+	tokio::time::sleep(std::time::Duration::from_secs(
 		std::env::var("SUBSTRATE_TEST_TIMEOUT")
 			.expect("env var SUBSTRATE_TEST_TIMEOUT has been provided by the user")
 			.parse::<u64>()

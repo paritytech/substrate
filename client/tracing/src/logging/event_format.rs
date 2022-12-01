@@ -93,8 +93,7 @@ where
 
 		// Custom code to display node name
 		if let Some(span) = ctx.lookup_current() {
-			let parents = span.parents();
-			for span in std::iter::once(span).chain(parents) {
+			for span in span.scope() {
 				let exts = span.extensions();
 				if let Some(prefix) = exts.get::<super::layers::Prefix>() {
 					write!(writer, "{}", prefix.as_str())?;

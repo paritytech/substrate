@@ -454,12 +454,6 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 			.map_or(Default::default(), |s| s.child_keys(child_info, prefix))
 	}
 
-	fn as_trie_backend(
-		&mut self,
-	) -> Option<&sp_state_machine::TrieBackend<Self::TrieBackendStorage, HashFor<B>>> {
-		None
-	}
-
 	fn commit(
 		&self,
 		storage_root: <HashFor<B> as Hasher>::Out,

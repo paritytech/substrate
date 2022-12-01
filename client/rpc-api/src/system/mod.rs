@@ -22,7 +22,7 @@ pub mod error;
 pub mod helpers;
 
 use crate::helpers::Receiver;
-use futures::{compat::Compat, future::BoxFuture};
+use jsonrpc_core::BoxFuture;
 use jsonrpc_derive::rpc;
 
 use self::error::Result as SystemResult;
@@ -76,9 +76,7 @@ pub trait SystemApi<Hash, Number> {
 
 	/// Returns currently connected peers
 	#[rpc(name = "system_peers", returns = "Vec<PeerInfo<Hash, Number>>")]
-	fn system_peers(
-		&self,
-	) -> Compat<BoxFuture<'static, jsonrpc_core::Result<Vec<PeerInfo<Hash, Number>>>>>;
+	fn system_peers(&self) -> BoxFuture<jsonrpc_core::Result<Vec<PeerInfo<Hash, Number>>>>;
 
 	/// Returns current state of the network.
 	///
@@ -87,9 +85,7 @@ pub trait SystemApi<Hash, Number> {
 	// TODO: the future of this call is uncertain: https://github.com/paritytech/substrate/issues/1890
 	// https://github.com/paritytech/substrate/issues/5541
 	#[rpc(name = "system_unstable_networkState", returns = "jsonrpc_core::Value")]
-	fn system_network_state(
-		&self,
-	) -> Compat<BoxFuture<'static, jsonrpc_core::Result<jsonrpc_core::Value>>>;
+	fn system_network_state(&self) -> BoxFuture<jsonrpc_core::Result<jsonrpc_core::Value>>;
 
 	/// Adds a reserved peer. Returns the empty string or an error. The string
 	/// parameter should encode a `p2p` multiaddr.
@@ -97,10 +93,7 @@ pub trait SystemApi<Hash, Number> {
 	/// `/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV`
 	/// is an example of a valid, passing multiaddr with PeerId attached.
 	#[rpc(name = "system_addReservedPeer", returns = "()")]
-	fn system_add_reserved_peer(
-		&self,
-		peer: String,
-	) -> Compat<BoxFuture<'static, Result<(), jsonrpc_core::Error>>>;
+	fn system_add_reserved_peer(&self, peer: String) -> BoxFuture<Result<(), jsonrpc_core::Error>>;
 
 	/// Remove a reserved peer. Returns the empty string or an error. The string
 	/// should encode only the PeerId e.g. `QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV`.
@@ -108,7 +101,7 @@ pub trait SystemApi<Hash, Number> {
 	fn system_remove_reserved_peer(
 		&self,
 		peer_id: String,
-	) -> Compat<BoxFuture<'static, Result<(), jsonrpc_core::Error>>>;
+	) -> BoxFuture<Result<(), jsonrpc_core::Error>>;
 
 	/// Returns the list of reserved peers
 	#[rpc(name = "system_reservedPeers", returns = "Vec<String>")]

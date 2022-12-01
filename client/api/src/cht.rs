@@ -47,7 +47,8 @@ pub fn size<N: From<u32>>() -> N {
 	SIZE.into()
 }
 
-/// Returns Some(cht_number) if CHT is need to be built when the block with given number is canonized.
+/// Returns Some(cht_number) if CHT is need to be built when the block with given number is
+/// canonized.
 pub fn is_build_required<N>(cht_size: N, block_num: N) -> Option<N>
 where
 	N: Clone + AtLeast32Bit,
@@ -116,7 +117,7 @@ where
 		.into_iter()
 		.map(|(k, v)| (k, Some(v)))
 		.collect::<Vec<_>>();
-	let mut storage = InMemoryBackend::<Hasher>::default().update(vec![(None, transaction)]);
+	let storage = InMemoryBackend::<Hasher>::default().update(vec![(None, transaction)]);
 	let trie_storage = storage
 		.as_trie_backend()
 		.expect("InMemoryState::as_trie_backend always returns Some; qed");

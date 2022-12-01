@@ -17,6 +17,7 @@
 
 use crate::pallet::Def;
 
+///
 /// * implement the trait `sp_runtime::BuildModuleGenesisStorage`
 /// * add #[cfg(features = "std")] to GenesisBuild implementation.
 pub fn expand_genesis_build(def: &mut Def) -> proc_macro2::TokenStream {

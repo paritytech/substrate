@@ -209,8 +209,9 @@ where
 		{
 			vec![<DigestItemFor<B> as CompatibleDigestItem>::babe_pre_digest(predigest)]
 		} else {
-			// well we couldn't claim a slot because this is an existing chain and we're not in the authorities.
-			// we need to tell BabeBlockImport that the epoch has changed, and we put ourselves in the authorities.
+			// well we couldn't claim a slot because this is an existing chain and we're not in the
+			// authorities. we need to tell BabeBlockImport that the epoch has changed, and we put
+			// ourselves in the authorities.
 			let predigest =
 				PreDigest::SecondaryPlain(SecondaryPlainPreDigest { slot, authority_index: 0_u32 });
 

@@ -350,8 +350,9 @@ impl GenericKind {
 		match self {
 			GenericKind::None => quote::quote!(),
 			GenericKind::Config => quote::quote_spanned!(span => T: Config),
-			GenericKind::ConfigAndInstance =>
-				quote::quote_spanned!(span => T: Config<I>, I: 'static),
+			GenericKind::ConfigAndInstance => {
+				quote::quote_spanned!(span => T: Config<I>, I: 'static)
+			},
 		}
 	}
 

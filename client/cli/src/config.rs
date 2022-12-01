@@ -27,10 +27,9 @@ use names::{Generator, Name};
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{
 	config::{
-		BasePath, Configuration, DatabaseConfig, ExtTransport, KeystoreConfig,
-		NetworkConfiguration, NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode,
-		Role, RpcMethods, TaskExecutor, TelemetryEndpoints, TransactionPoolOptions,
-		WasmExecutionMethod,
+		BasePath, Configuration, DatabaseSource, KeystoreConfig, NetworkConfiguration,
+		NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods,
+		TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
 	},
 	ChainSpec, KeepBlocks, TracingReceiver, TransactionStorageMode,
 };
@@ -220,10 +219,18 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		base_path: &PathBuf,
 		cache_size: usize,
 		database: Database,
-	) -> Result<DatabaseConfig> {
+		role: &Role,
+	) -> Result<DatabaseSource> {
+		let role_dir = match role {
+			Role::Light => "light",
+			Role::Full | Role::Authority => "full",
+		};
+		let rocksdb_path = base_path.join("db").join(role_dir);
+		let paritydb_path = base_path.join("paritydb").join(role_dir);
 		Ok(match database {
-			Database::RocksDb => DatabaseConfig::RocksDb { path: base_path.join("db"), cache_size },
-			Database::ParityDb => DatabaseConfig::ParityDb { path: base_path.join("paritydb") },
+			Database::RocksDb => DatabaseSource::RocksDb { path: rocksdb_path, cache_size },
+			Database::ParityDb => DatabaseSource::ParityDb { path: paritydb_path },
+			Database::Auto => DatabaseSource::Auto { paritydb_path, rocksdb_path, cache_size },
 		})
 	}
 
@@ -341,13 +348,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(None)
 	}
 
-	/// Get the RPC HTTP thread pool size (`None` for a default 4-thread pool config).
-	///
-	/// By default this is `None`.
-	fn rpc_http_threads(&self) -> Result<Option<usize>> {
-		Ok(None)
-	}
-
 	/// Get the RPC cors (`None` if disabled)
 	///
 	/// By default this is `Some(Vec::new())`.
@@ -375,13 +375,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		chain_spec: &Box<dyn ChainSpec>,
 	) -> Result<Option<TelemetryEndpoints>> {
 		Ok(chain_spec.telemetry_endpoints().clone())
-	}
-
-	/// Get the telemetry external transport
-	///
-	/// By default this is `None`.
-	fn telemetry_external_transport(&self) -> Result<Option<ExtTransport>> {
-		Ok(None)
 	}
 
 	/// Get the default value for heap pages
@@ -465,7 +458,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	fn create_configuration<C: SubstrateCli>(
 		&self,
 		cli: &C,
-		task_executor: TaskExecutor,
+		tokio_handle: tokio::runtime::Handle,
 	) -> Result<Configuration> {
 		let is_dev = self.is_dev()?;
 		let chain_id = self.chain_id(is_dev)?;
@@ -490,7 +483,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(Configuration {
 			impl_name: C::impl_name(),
 			impl_version: C::impl_version(),
-			task_executor,
+			tokio_handle,
 			transaction_pool: self.transaction_pool()?,
 			network: self.network_config(
 				&chain_spec,
@@ -504,7 +497,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			)?,
 			keystore_remote,
 			keystore,
-			database: self.database_config(&config_dir, database_cache_size, database)?,
+			database: self.database_config(&config_dir, database_cache_size, database, &role)?,
 			state_cache_size: self.state_cache_size()?,
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
 			state_pruning: self.state_pruning(unsafe_pruning, &role)?,
@@ -518,12 +511,10 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			rpc_ipc: self.rpc_ipc()?,
 			rpc_methods: self.rpc_methods()?,
 			rpc_ws_max_connections: self.rpc_ws_max_connections()?,
-			rpc_http_threads: self.rpc_http_threads()?,
 			rpc_cors: self.rpc_cors(is_dev)?,
 			rpc_max_payload: self.rpc_max_payload()?,
 			prometheus_config: self.prometheus_config(DCV::prometheus_listen_port())?,
 			telemetry_endpoints,
-			telemetry_external_transport: self.telemetry_external_transport()?,
 			default_heap_pages: self.default_heap_pages()?,
 			offchain_worker: self.offchain_worker(&role)?,
 			force_authoring: self.force_authoring()?,

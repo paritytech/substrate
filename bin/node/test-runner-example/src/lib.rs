@@ -22,35 +22,43 @@
 use grandpa::GrandpaBlockImport;
 use sc_consensus_babe::BabeBlockImport;
 use sc_consensus_manual_seal::consensus::babe::SlotTimestampProvider;
+use sc_executor::NativeElseWasmExecutor;
 use sc_service::{TFullBackend, TFullClient};
 use sp_runtime::generic::Era;
 use test_runner::{ChainInfo, SignatureVerificationOverride};
 
 type BlockImport<B, BE, C, SC> = BabeBlockImport<B, C, GrandpaBlockImport<BE, B, C, SC>>;
 
-sc_executor::native_executor_instance!(
-	pub Executor,
-	node_runtime::api::dispatch,
-	node_runtime::native_version,
-	(
-		frame_benchmarking::benchmarking::HostFunctions,
-		SignatureVerificationOverride,
-	)
-);
+/// A unit struct which implements `NativeExecutionDispatch` feeding in the
+/// hard-coded runtime.
+pub struct ExecutorDispatch;
+
+impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
+	type ExtendHostFunctions =
+		(frame_benchmarking::benchmarking::HostFunctions, SignatureVerificationOverride);
+
+	fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
+		node_runtime::api::dispatch(method, data)
+	}
+
+	fn native_version() -> sc_executor::NativeVersion {
+		node_runtime::native_version()
+	}
+}
 
 /// ChainInfo implementation.
 struct NodeTemplateChainInfo;
 
 impl ChainInfo for NodeTemplateChainInfo {
 	type Block = node_primitives::Block;
-	type Executor = Executor;
+	type ExecutorDispatch = ExecutorDispatch;
 	type Runtime = node_runtime::Runtime;
 	type RuntimeApi = node_runtime::RuntimeApi;
 	type SelectChain = sc_consensus::LongestChain<TFullBackend<Self::Block>, Self::Block>;
 	type BlockImport = BlockImport<
 		Self::Block,
 		TFullBackend<Self::Block>,
-		TFullClient<Self::Block, Self::RuntimeApi, Self::Executor>,
+		TFullClient<Self::Block, Self::RuntimeApi, NativeElseWasmExecutor<Self::ExecutorDispatch>>,
 		Self::SelectChain,
 	>;
 	type SignedExtras = node_runtime::SignedExtra;
@@ -80,18 +88,17 @@ mod tests {
 	use node_cli::chain_spec::development_config;
 	use sp_keyring::sr25519::Keyring::Alice;
 	use sp_runtime::{traits::IdentifyAccount, MultiSigner};
-	use test_runner::{build_runtime, client_parts, task_executor, ConfigOrChainSpec, Node};
+	use test_runner::{build_runtime, client_parts, ConfigOrChainSpec, Node};
 
 	#[test]
 	fn test_runner() {
-		let mut tokio_runtime = build_runtime().unwrap();
-		let task_executor = task_executor(tokio_runtime.handle().clone());
-		let (rpc, task_manager, client, pool, command_sink, backend) = client_parts::<
-			NodeTemplateChainInfo,
-		>(
-			ConfigOrChainSpec::ChainSpec(Box::new(development_config()), task_executor),
-		)
-		.unwrap();
+		let tokio_runtime = build_runtime().unwrap();
+		let (rpc, task_manager, client, pool, command_sink, backend) =
+			client_parts::<NodeTemplateChainInfo>(ConfigOrChainSpec::ChainSpec(
+				Box::new(development_config()),
+				tokio_runtime.handle().clone(),
+			))
+			.unwrap();
 		let node = Node::<NodeTemplateChainInfo>::new(
 			rpc,
 			task_manager,
@@ -108,7 +115,7 @@ mod tests {
 			let alice = MultiSigner::from(Alice.public()).into_account();
 			let _hash = node
 				.submit_extrinsic(
-					frame_system::Call::remark((b"hello world").to_vec()),
+					frame_system::Call::remark { remark: (b"hello world").to_vec() },
 					Some(alice),
 				)
 				.await

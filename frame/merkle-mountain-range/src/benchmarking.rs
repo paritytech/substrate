@@ -17,8 +17,6 @@
 
 //! Benchmarks for the MMR pallet.
 
-#![cfg_attr(not(feature = "std"), no_std)]
-
 use crate::*;
 use frame_benchmarking::{benchmarks_instance_pallet, impl_benchmark_test_suite};
 use frame_support::traits::OnInitialize;

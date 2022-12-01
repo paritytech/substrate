@@ -1,7 +1,11 @@
 error[E0277]: the trait bound `<T as Config>::C: std::default::Default` is not satisfied
- --> $DIR/default.rs:7:2
-  |
-7 |     c: T::C,
-  |     ^ the trait `std::default::Default` is not implemented for `<T as Config>::C`
-  |
-  = note: required by `std::default::Default::default`
+   --> $DIR/default.rs:7:2
+    |
+7   |     c: T::C,
+    |     ^ the trait `std::default::Default` is not implemented for `<T as Config>::C`
+    |
+note: required by `std::default::Default::default`
+   --> $DIR/default.rs:116:5
+    |
+116 |     fn default() -> Self;
+    |     ^^^^^^^^^^^^^^^^^^^^^

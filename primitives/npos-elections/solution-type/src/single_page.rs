@@ -64,7 +64,7 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 
 	let derives_and_maybe_compact_encoding = if compact_encoding {
 		// custom compact encoding.
-		let compact_impl = crate::codec::codec_impl(
+		let compact_impl = crate::codec::codec_and_info_impl(
 			ident.clone(),
 			voter_type.clone(),
 			target_type.clone(),
@@ -77,7 +77,16 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 		}
 	} else {
 		// automatically derived.
-		quote!(#[derive(Default, PartialEq, Eq, Clone, Debug, _npos::codec::Encode, _npos::codec::Decode)])
+		quote!(#[derive(
+			Default,
+			PartialEq,
+			Eq,
+			Clone,
+			Debug,
+			_npos::codec::Encode,
+			_npos::codec::Decode,
+			_npos::scale_info::TypeInfo,
+		)])
 	};
 
 	let struct_name = syn::Ident::new("solution", proc_macro2::Span::call_site());

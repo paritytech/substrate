@@ -16,8 +16,6 @@ codec = { package = "parity-scale-codec", version = "2.0.0" }
 derive_more = "0.99.11"
 futures = "0.3.8"
 log = "0.4.11"
-num-traits = "0.2.14"
-parking_lot = "0.11.1"
 prost = "0.8"
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sc-finality-grandpa = { version = "0.10.0-dev", path = "../finality-grandpa" }
@@ -28,7 +26,7 @@ sp-finality-grandpa = { version = "4.0.0-dev", path = "../../primitives/finality
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 
 [dev-dependencies]
-finality-grandpa = { version = "0.14.1" }
+finality-grandpa = { version = "0.14.4" }
 rand = "0.8"
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }

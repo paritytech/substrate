@@ -63,9 +63,11 @@ pub type ChildIndexValue = Vec<u8>;
 pub enum InputPair<Number: BlockNumber> {
 	/// Element of { key => set of extrinsics where key has been changed } element mapping.
 	ExtrinsicIndex(ExtrinsicIndex<Number>, ExtrinsicIndexValue),
-	/// Element of { key => set of blocks/digest blocks where key has been changed } element mapping.
+	/// Element of { key => set of blocks/digest blocks where key has been changed } element
+	/// mapping.
 	DigestIndex(DigestIndex<Number>, DigestIndexValue<Number>),
-	/// Element of { childtrie key => Childchange trie } where key has been changed } element mapping.
+	/// Element of { childtrie key => Childchange trie } where key has been changed } element
+	/// mapping.
 	ChildIndex(ChildIndex<Number>, ChildIndexValue),
 }
 

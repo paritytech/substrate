@@ -4,4 +4,4 @@ error: `PassByEnum` only supports unit variants.
 3 | #[derive(PassByEnum)]
   |          ^^^^^^^^^^
   |
-  = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
+  = note: this error originates in the derive macro `PassByEnum` (in Nightly builds, run with -Z macro-backtrace for more info)

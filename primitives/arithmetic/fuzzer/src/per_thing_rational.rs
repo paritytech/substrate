@@ -16,8 +16,8 @@
 // limitations under the License.
 
 //! # Running
-//! Running this fuzzer can be done with `cargo hfuzz run per_thing_rational`. `honggfuzz` CLI options can
-//! be used by setting `HFUZZ_RUN_ARGS`, such as `-n 4` to use 4 threads.
+//! Running this fuzzer can be done with `cargo hfuzz run per_thing_rational`. `honggfuzz` CLI
+//! options can be used by setting `HFUZZ_RUN_ARGS`, such as `-n 4` to use 4 threads.
 //!
 //! # Debugging a panic
 //! Once a panic is found, it can be debugged with

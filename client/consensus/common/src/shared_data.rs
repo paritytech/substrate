@@ -54,10 +54,11 @@ impl<T> Drop for SharedDataLockedUpgradable<T> {
 /// Created by [`SharedData::shared_data_locked`].
 ///
 /// As long as this object isn't dropped, the shared data is held in a mutex guard and the shared
-/// data is tagged as locked. Access to the shared data is provided through [`Deref`](std::ops::Deref) and
-/// [`DerefMut`](std::ops::DerefMut). The trick is to use [`Self::release_mutex`] to release the mutex, but still keep
-/// the shared data locked. This means every other thread trying to access the shared data in this
-/// time will need to wait until this lock is freed.
+/// data is tagged as locked. Access to the shared data is provided through
+/// [`Deref`](std::ops::Deref) and [`DerefMut`](std::ops::DerefMut). The trick is to use
+/// [`Self::release_mutex`] to release the mutex, but still keep the shared data locked. This means
+/// every other thread trying to access the shared data in this time will need to wait until this
+/// lock is freed.
 ///
 /// If this object is dropped without calling [`Self::release_mutex`], the lock will be dropped
 /// immediately.
@@ -210,8 +211,8 @@ impl<T> SharedData<T> {
 	///
 	/// This will give mutable access to the shared data. The returned [`SharedDataLocked`]
 	/// provides the function [`SharedDataLocked::release_mutex`] to release the mutex, but
-	/// keeping the data locked. This is useful in async contexts for example where the data needs to
-	/// be locked, but a mutex guard can not be held.
+	/// keeping the data locked. This is useful in async contexts for example where the data needs
+	/// to be locked, but a mutex guard can not be held.
 	///
 	/// For an example see [`SharedData`].
 	pub fn shared_data_locked(&self) -> SharedDataLocked<T> {

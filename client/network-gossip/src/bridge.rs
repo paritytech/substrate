@@ -64,8 +64,8 @@ enum ForwardingState<B: BlockT> {
 	/// more messages to forward.
 	Idle,
 	/// The gossip engine is in the progress of forwarding messages and thus will not poll the
-	/// network for more messages until it has send all current messages into the subscribed message
-	/// sinks.
+	/// network for more messages until it has send all current messages into the subscribed
+	/// message sinks.
 	Busy(VecDeque<(B::Hash, TopicNotification)>),
 }
 
@@ -263,8 +263,9 @@ impl<B: BlockT> Future for GossipEngine<B> {
 					for sink in sinks {
 						match sink.start_send(notification.clone()) {
 							Ok(()) => {},
-							Err(e) if e.is_full() =>
-								unreachable!("Previously ensured that all sinks are ready; qed."),
+							Err(e) if e.is_full() => {
+								unreachable!("Previously ensured that all sinks are ready; qed.")
+							},
 							// Receiver got dropped. Will be removed in next iteration (See (1)).
 							Err(_) => {},
 						}
@@ -623,8 +624,9 @@ mod tests {
 									.and_modify(|e| *e += 1)
 									.or_insert(1);
 							},
-							Poll::Ready(None) =>
-								unreachable!("Sender side of channel is never dropped"),
+							Poll::Ready(None) => {
+								unreachable!("Sender side of channel is never dropped")
+							},
 							Poll::Pending => {},
 						}
 					}

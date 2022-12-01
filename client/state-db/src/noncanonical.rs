@@ -241,7 +241,8 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		})
 	}
 
-	/// Insert a new block into the overlay. If inserted on the second level or lover expects parent to be present in the window.
+	/// Insert a new block into the overlay. If inserted on the second level or lover expects parent
+	/// to be present in the window.
 	pub fn insert<E: fmt::Debug>(
 		&mut self,
 		hash: &BlockHash,
@@ -501,7 +502,8 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			!self.pending_canonicalizations.contains(hash)
 	}
 
-	/// Revert a single level. Returns commit set that deletes the journal or `None` if not possible.
+	/// Revert a single level. Returns commit set that deletes the journal or `None` if not
+	/// possible.
 	pub fn revert_one(&mut self) -> Option<CommitSet<Key>> {
 		self.levels.pop_back().map(|level| {
 			let mut commit = CommitSet::default();
@@ -514,7 +516,8 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		})
 	}
 
-	/// Revert a single block. Returns commit set that deletes the journal or `None` if not possible.
+	/// Revert a single block. Returns commit set that deletes the journal or `None` if not
+	/// possible.
 	pub fn remove(&mut self, hash: &BlockHash) -> Option<CommitSet<Key>> {
 		let mut commit = CommitSet::default();
 		let level_count = self.levels.len();
@@ -548,7 +551,8 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		self.pending_insertions.reverse();
 		for hash in self.pending_insertions.drain(..) {
 			self.parents.remove(&hash);
-			// find a level. When iterating insertions backwards the hash is always last in the level.
+			// find a level. When iterating insertions backwards the hash is always last in the
+			// level.
 			let level_index = self
 				.levels
 				.iter()
@@ -870,6 +874,7 @@ mod tests {
 	fn complex_tree() {
 		let mut db = make_db(&[]);
 
+		#[rustfmt::skip]
 		// - 1 - 1_1 - 1_1_1
 		//     \ 1_2 - 1_2_1
 		//           \ 1_2_2
@@ -1027,6 +1032,7 @@ mod tests {
 	fn keeps_pinned() {
 		let mut db = make_db(&[]);
 
+		#[rustfmt::skip]
 		// - 0 - 1_1
 		//     \ 1_2
 
@@ -1053,6 +1059,7 @@ mod tests {
 	fn keeps_pinned_ref_count() {
 		let mut db = make_db(&[]);
 
+		#[rustfmt::skip]
 		// - 0 - 1_1
 		//     \ 1_2
 		//     \ 1_3
@@ -1084,6 +1091,7 @@ mod tests {
 	fn pin_keeps_parent() {
 		let mut db = make_db(&[]);
 
+		#[rustfmt::skip]
 		// - 0 - 1_1 - 2_1
 		//     \ 1_2
 
@@ -1178,7 +1186,8 @@ mod tests {
 		db.commit(&commit);
 		overlay.apply_pending();
 
-		// add another block at top level. It should reuse journal index 0 of previously discarded block
+		// add another block at top level. It should reuse journal index 0 of previously discarded
+		// block
 		let h22 = H256::random();
 		db.commit(&overlay.insert::<io::Error>(&h22, 12, &h2, make_changeset(&[22], &[])).unwrap());
 		assert_eq!(overlay.levels[0].blocks[0].journal_index, 1);

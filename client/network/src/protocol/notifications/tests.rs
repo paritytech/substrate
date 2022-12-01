@@ -240,6 +240,11 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 	}
 }
 
+// This test is flaky.
+// https://github.com/paritytech/substrate/issues/5574
+// https://github.com/paritytech/substrate/pull/11679
+// Todo: enable it when v0.9.25 is merged
+#[ignore]
 #[test]
 fn reconnect_after_disconnect() {
 	// We connect two nodes together, then force a disconnect (through the API of the `Service`),

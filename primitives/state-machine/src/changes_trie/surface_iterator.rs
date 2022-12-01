@@ -15,11 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! The best way to understand how this iterator works is to imagine some 2D terrain that have some mountains
-//! (digest changes tries) and valleys (changes tries for regular blocks). There are gems (blocks) beneath the
-//! terrain. Given the request to find all gems in the range [X1; X2] this iterator will return **minimal set**
-//! of points at the terrain (mountains and valleys) inside this range that have to be drilled down to
-//! search for gems.
+//! The best way to understand how this iterator works is to imagine some 2D terrain that have some
+//! mountains (digest changes tries) and valleys (changes tries for regular blocks). There are gems
+//! (blocks) beneath the terrain. Given the request to find all gems in the range [X1; X2] this
+//! iterator will return **minimal set** of points at the terrain (mountains and valleys) inside
+//! this range that have to be drilled down to search for gems.
 
 use crate::changes_trie::{BlockNumber, ConfigurationRange};
 use num_traits::One;
@@ -50,9 +50,9 @@ pub fn surface_iterator<'a, Number: BlockNumber>(
 /// Surface iterator - only traverses top-level digests from given range and tries to find
 /// all valid digest changes.
 ///
-/// Iterator item is the tuple of (last block of the current point + digest level of the current point).
-/// Digest level is Some(0) when it is regular block, is Some(non-zero) when it is digest block and None
-/// if it is skewed digest block.
+/// Iterator item is the tuple of (last block of the current point + digest level of the current
+/// point). Digest level is Some(0) when it is regular block, is Some(non-zero) when it is digest
+/// block and None if it is skewed digest block.
 pub struct SurfaceIterator<'a, Number: BlockNumber> {
 	config: ConfigurationRange<'a, Number>,
 	begin: Number,

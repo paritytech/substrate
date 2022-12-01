@@ -29,7 +29,7 @@ use futures::{
 	channel::{mpsc, oneshot},
 	stream::StreamExt,
 };
-use log::debug;
+use log::{debug, trace};
 use lru::LruCache;
 use prost::Message;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
@@ -166,7 +166,7 @@ impl<B: BlockT> StateRequestHandler<B> {
 			},
 		}
 
-		log::trace!(
+		trace!(
 			target: LOG_TARGET,
 			"Handling state request from {}: Block {:?}, Starting at {:?}, no_proof={}",
 			peer,
@@ -201,7 +201,7 @@ impl<B: BlockT> StateRequestHandler<B> {
 				}
 			}
 
-			log::trace!(
+			trace!(
 				target: LOG_TARGET,
 				"StateResponse contains {} keys, {}, proof nodes, complete={}, from {:?} to {:?}",
 				response.entries.len(),

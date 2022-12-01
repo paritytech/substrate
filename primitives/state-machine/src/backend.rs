@@ -21,9 +21,9 @@ use crate::{
 	trie_backend::TrieBackend, trie_backend_essence::TrieBackendStorage, ChildStorageCollection,
 	StorageCollection, StorageKey, StorageValue, UsageInfo,
 };
-use codec::{Decode, Encode};
+use codec::Encode;
 use hash_db::Hasher;
-use sp_core::storage::{well_known_keys, ChildInfo, TrackedStorageKey};
+use sp_core::storage::{ChildInfo, TrackedStorageKey};
 #[cfg(feature = "std")]
 use sp_core::traits::RuntimeCode;
 use sp_std::vec::Vec;
@@ -173,7 +173,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	}
 
 	/// Try convert into trie backend.
-	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
+	fn as_trie_backend(&self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
 		None
 	}
 
@@ -330,7 +330,11 @@ impl<'a, B: Backend<H>, H: Hasher> sp_core::traits::FetchRuntimeCode
 	for BackendRuntimeCode<'a, B, H>
 {
 	fn fetch_runtime_code<'b>(&'b self) -> Option<std::borrow::Cow<'b, [u8]>> {
-		self.backend.storage(well_known_keys::CODE).ok().flatten().map(Into::into)
+		self.backend
+			.storage(sp_core::storage::well_known_keys::CODE)
+			.ok()
+			.flatten()
+			.map(Into::into)
 	}
 }
 
@@ -348,17 +352,17 @@ where
 	pub fn runtime_code(&self) -> Result<RuntimeCode, &'static str> {
 		let hash = self
 			.backend
-			.storage_hash(well_known_keys::CODE)
+			.storage_hash(sp_core::storage::well_known_keys::CODE)
 			.ok()
 			.flatten()
 			.ok_or("`:code` hash not found")?
 			.encode();
 		let heap_pages = self
 			.backend
-			.storage(well_known_keys::HEAP_PAGES)
+			.storage(sp_core::storage::well_known_keys::HEAP_PAGES)
 			.ok()
 			.flatten()
-			.and_then(|d| Decode::decode(&mut &d[..]).ok());
+			.and_then(|d| codec::Decode::decode(&mut &d[..]).ok());
 
 		Ok(RuntimeCode { code_fetcher: self, hash, heap_pages })
 	}

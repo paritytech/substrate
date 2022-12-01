@@ -27,7 +27,7 @@ use sp_runtime::{
 		TransactionSource, TransactionTag as Tag, TransactionValidity, TransactionValidityError,
 	},
 };
-use wasm_timer::Instant;
+use std::time::Instant;
 
 use super::{
 	base_pool as base,
@@ -133,7 +133,6 @@ pub struct Pool<B: ChainApi> {
 	validated_pool: Arc<ValidatedPool<B>>,
 }
 
-#[cfg(not(target_os = "unknown"))]
 impl<B: ChainApi> parity_util_mem::MallocSizeOf for Pool<B>
 where
 	ExtrinsicFor<B>: parity_util_mem::MallocSizeOf,
@@ -262,7 +261,8 @@ impl<B: ChainApi> Pool<B> {
 			extrinsics.iter().map(|extrinsic| self.hash_of(extrinsic)).collect::<Vec<_>>();
 		let in_pool_tags = self.validated_pool.extrinsics_tags(&in_pool_hashes);
 
-		// Zip the ones from the pool with the full list (we get pairs `(Extrinsic, Option<Vec<Tag>>)`)
+		// Zip the ones from the pool with the full list (we get pairs `(Extrinsic,
+		// Option<Vec<Tag>>)`)
 		let all = extrinsics.iter().zip(in_pool_tags.into_iter());
 
 		let mut future_tags = Vec::new();
@@ -453,9 +453,11 @@ mod tests {
 		traits::Hash,
 		transaction_validity::{InvalidTransaction, TransactionSource, ValidTransaction},
 	};
-	use std::collections::{HashMap, HashSet};
+	use std::{
+		collections::{HashMap, HashSet},
+		time::Instant,
+	};
 	use substrate_test_runtime::{AccountId, Block, Extrinsic, Hashing, Transfer, H256};
-	use wasm_timer::Instant;
 
 	const INVALID_NONCE: u64 = 254;
 	const SOURCE: TransactionSource = TransactionSource::External;
@@ -1112,13 +1114,14 @@ mod tests {
 			block_on(pool.submit_one(&BlockId::Number(0), SOURCE, xt)).unwrap();
 			assert_eq!(pool.validated_pool().status().ready, 1);
 
-			// Now block import happens before the second transaction is able to finish verification.
+			// Now block import happens before the second transaction is able to finish
+			// verification.
 			block_on(pool.prune_tags(&BlockId::Number(1), vec![provides], vec![])).unwrap();
 			assert_eq!(pool.validated_pool().status().ready, 0);
 
 			// so when we release the verification of the previous one it will have
-			// something in `requires`, but should go to ready directly, since the previous transaction was imported
-			// correctly.
+			// something in `requires`, but should go to ready directly, since the previous
+			// transaction was imported correctly.
 			tx.send(()).unwrap();
 
 			// then

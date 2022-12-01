@@ -22,8 +22,9 @@ sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 sp-block-builder = { version = "4.0.0-dev", path = "../../primitives/block-builder" }
 sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
-codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "2.0.0", features = [
+    "derive",
+] }
 
 [dev-dependencies]
 substrate-test-runtime-client = { path = "../../test-utils/runtime/client" }
-sp-trie = { version = "4.0.0-dev", path = "../../primitives/trie" }

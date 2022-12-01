@@ -5,4 +5,8 @@ error[E0277]: the trait bound `Bar: MaxEncodedLen` is not satisfied
    |               ^^^^^^^^^^^^^^^^^^^^^ the trait `MaxEncodedLen` is not implemented for `Bar`
    |
    = note: required because of the requirements on the impl of `StorageInfoTrait` for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar>`
-   = note: required by `storage_info`
+note: required by `storage_info`
+  --> $DIR/storage.rs:71:2
+   |
+71 |     fn storage_info() -> Vec<StorageInfo>;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

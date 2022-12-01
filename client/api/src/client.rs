@@ -29,8 +29,8 @@ use std::{collections::HashSet, convert::TryFrom, fmt, sync::Arc};
 
 use crate::{blockchain::Info, notifications::StorageEventStream};
 use sc_transaction_pool_api::ChainEvent;
+use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_blockchain;
-use sp_utils::mpsc::TracingUnboundedReceiver;
 
 /// Type that implements `futures::Stream` of block import events.
 pub type ImportNotifications<Block> = TracingUnboundedReceiver<BlockImportNotification<Block>>;

@@ -21,8 +21,8 @@
 //! runtime implementation to require an inherent for each block or to make it optional. Inherents
 //! are mainly used to pass data from the block producer to the runtime. So, inherents require some
 //! part that is running on the client side and some part that is running on the runtime side. Any
-//! data that is required by an inherent is passed as [`InherentData`] from the client to the runtime
-//! when the inherents are constructed.
+//! data that is required by an inherent is passed as [`InherentData`] from the client to the
+//! runtime when the inherents are constructed.
 //!
 //! The process of constructing and applying inherents is the following:
 //!

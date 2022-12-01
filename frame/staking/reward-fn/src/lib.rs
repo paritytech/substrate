@@ -45,19 +45,13 @@ use sp_arithmetic::{
 /// [here](https://research.web3.foundation/en/latest/polkadot/economics/1-token-economics.html#inflation-model-with-parachains))
 ///
 /// Arguments are:
-/// * `stake`:
-///   The fraction of total issued tokens that actively staked behind
-///   validators. Known as `x` in the literature.
-///   Must be between 0 and 1.
-/// * `ideal_stake`:
-///   The fraction of total issued tokens that should be actively staked behind
-///   validators. Known as `x_ideal` in the literature.
-///   Must be between 0 and 1.
-/// * `falloff`:
-///   Known as `decay_rate` in the literature. A co-efficient dictating the strength of
+/// * `stake`: The fraction of total issued tokens that actively staked behind validators. Known as
+///   `x` in the literature. Must be between 0 and 1.
+/// * `ideal_stake`: The fraction of total issued tokens that should be actively staked behind
+///   validators. Known as `x_ideal` in the literature. Must be between 0 and 1.
+/// * `falloff`: Known as `decay_rate` in the literature. A co-efficient dictating the strength of
 ///   the global incentivization to get the `ideal_stake`. A higher number results in less typical
-///   inflation at the cost of greater volatility for validators.
-///   Must be more than 0.01.
+///   inflation at the cost of greater volatility for validators. Must be more than 0.01.
 pub fn compute_inflation<P: PerThing>(stake: P, ideal_stake: P, falloff: P) -> P {
 	if stake < ideal_stake {
 		// ideal_stake is more than 0 because it is strictly more than stake

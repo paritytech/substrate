@@ -6,7 +6,7 @@ use crate::{*, self as pallet_ddc_metrics_offchain_worker};
 
 use codec::{Decode, Encode};
 use frame_support::{ parameter_types, traits::Get, weights::Weight };
-use frame_support::traits::{Currency, Nothing};
+use frame_support::traits::{Currency, Everything, Nothing};
 use sp_core::H256;
 use sp_runtime::{
     generic,
@@ -57,7 +57,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for Test {
-    type BaseCallFilter = ();
+    type BaseCallFilter = Everything;
     type BlockWeights = ();
     type BlockLength = ();
     type Origin = Origin;
@@ -138,14 +138,6 @@ impl contracts::Config for Test {
     type Randomness = Randomness;
     type Currency = Balances;
     type Event = Event;
-    type RentPayment = ();
-    type SignedClaimHandicap = SignedClaimHandicap;
-    type TombstoneDeposit = TombstoneDeposit;
-    type DepositPerContract = ();
-    type DepositPerStorageByte = ();
-    type DepositPerStorageItem = ();
-    type RentFraction = ();
-    type SurchargeReward = SurchargeReward;
     type CallStack = [pallet_contracts::Frame<Self>; 31];
     type WeightPrice = Self; //pallet_transaction_payment::Module<Self>;
     type WeightInfo = ();
@@ -155,6 +147,7 @@ impl contracts::Config for Test {
     type Schedule = Schedule;
     type Call = Call;
     type CallFilter = Nothing;
+    type ContractDeposit = ();
 }
 
 parameter_types! {

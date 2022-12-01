@@ -21,8 +21,13 @@
 
 use super::*;
 
-use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelist};
-use frame_support::{dispatch::DispatchResultWithPostInfo, traits::OnInitialize};
+use frame_benchmarking::{
+	account, benchmarks, impl_benchmark_test_suite, whitelist, BenchmarkError, BenchmarkResult,
+};
+use frame_support::{
+	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
+	traits::OnInitialize,
+};
 use frame_system::RawOrigin;
 
 use crate::Pallet as Elections;
@@ -332,9 +337,16 @@ benchmarks! {
 		}
 	}
 
+	// We use the max block weight for this extrinsic for now. See below.
+	remove_member_without_replacement {}: {
+		Err(BenchmarkError::Override(
+			BenchmarkResult::from_weight(T::BlockWeights::get().max_block)
+		))?;
+	}
+
 	// -- Root ones
 	#[extra] // this calls into phragmen and consumes a full block for now.
-	remove_member_without_replacement {
+	remove_member_without_replacement_extra {
 		// worse case is when we remove a member and we have no runner as a replacement. This
 		// triggers phragmen again. The only parameter is how many candidates will compete for the
 		// new slot.
@@ -392,15 +404,23 @@ benchmarks! {
 
 		let _ = fill_seats_up_to::<T>(m)?;
 		let removing = as_lookup::<T>(<Elections<T>>::members_ids()[0].clone());
+		let who = T::Lookup::lookup(removing.clone()).expect("member was added above");
+		let call = Call::<T>::remove_member { who: removing, has_replacement: false }.encode();
 	}: {
 		assert_eq!(
-			<Elections<T>>::remove_member(RawOrigin::Root.into(), removing, false).unwrap_err().error,
+			<Call<T> as Decode>::decode(&mut &*call)
+				.expect("call is encoded above, encoding must be correct")
+				.dispatch_bypass_filter(RawOrigin::Root.into())
+				.unwrap_err()
+				.error,
 			Error::<T>::InvalidReplacement.into(),
 		);
 	}
 	verify {
 		// must still have enough members.
 		assert_eq!(<Elections<T>>::members().len() as u32, T::DesiredMembers::get());
+		// on fail, `who` must still be a member
+		assert!(<Elections<T>>::members_ids().contains(&who));
 		#[cfg(test)]
 		{
 			// reset members in between benchmark tests.

@@ -58,12 +58,13 @@ impl<
 				SignedImbalance::Positive(one.merge(other)),
 			(SignedImbalance::Negative(one), SignedImbalance::Negative(other)) =>
 				SignedImbalance::Negative(one.merge(other)),
-			(SignedImbalance::Positive(one), SignedImbalance::Negative(other)) =>
+			(SignedImbalance::Positive(one), SignedImbalance::Negative(other)) => {
 				match one.offset(other) {
 					SameOrOther::Same(positive) => SignedImbalance::Positive(positive),
 					SameOrOther::Other(negative) => SignedImbalance::Negative(negative),
 					SameOrOther::None => SignedImbalance::Positive(P::zero()),
-				},
+				}
+			},
 			(one, other) => other.merge(one),
 		}
 	}

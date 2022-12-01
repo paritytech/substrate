@@ -39,7 +39,7 @@ macro_rules! decl_tests {
 		const ID_2: LockIdentifier = *b"2       ";
 
 		pub const CALL: &<$test as frame_system::Config>::Call =
-			&Call::Balances(pallet_balances::Call::transfer(0, 0));
+			&Call::Balances(pallet_balances::Call::transfer { dest: 0, value: 0 });
 
 		/// create a transaction info struct from weight. Handy to avoid building the whole struct.
 		pub fn info_from_weight(w: Weight) -> DispatchInfo {

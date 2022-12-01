@@ -30,9 +30,8 @@
 //! be compromised.
 
 use crate::{
-	hash::{StorageHasher, Twox128},
 	storage::{
-		self,
+		self, storage_prefix,
 		types::{
 			EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, KeyGenerator,
 			ReversibleKeyGenerator, TupleToEncodedIter,
@@ -71,16 +70,8 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 	/// The full prefix; just the hash of `module_prefix` concatenated to the hash of
 	/// `storage_prefix`.
 	fn prefix_hash() -> Vec<u8> {
-		let module_prefix_hashed = Twox128::hash(Self::module_prefix());
-		let storage_prefix_hashed = Twox128::hash(Self::storage_prefix());
-
-		let mut result =
-			Vec::with_capacity(module_prefix_hashed.len() + storage_prefix_hashed.len());
-
-		result.extend_from_slice(&module_prefix_hashed[..]);
-		result.extend_from_slice(&storage_prefix_hashed[..]);
-
-		result
+		let result = storage_prefix(Self::module_prefix(), Self::storage_prefix());
+		result.to_vec()
 	}
 
 	/// Convert an optional value retrieved from storage to the type queried.
@@ -94,16 +85,12 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 	where
 		K: HasKeyPrefix<KP>,
 	{
-		let module_prefix_hashed = Twox128::hash(Self::module_prefix());
-		let storage_prefix_hashed = Twox128::hash(Self::storage_prefix());
+		let storage_prefix = storage_prefix(Self::module_prefix(), Self::storage_prefix());
 		let key_hashed = <K as HasKeyPrefix<KP>>::partial_key(key);
 
-		let mut final_key = Vec::with_capacity(
-			module_prefix_hashed.len() + storage_prefix_hashed.len() + key_hashed.len(),
-		);
+		let mut final_key = Vec::with_capacity(storage_prefix.len() + key_hashed.len());
 
-		final_key.extend_from_slice(&module_prefix_hashed[..]);
-		final_key.extend_from_slice(&storage_prefix_hashed[..]);
+		final_key.extend_from_slice(&storage_prefix);
 		final_key.extend_from_slice(key_hashed.as_ref());
 
 		final_key
@@ -115,16 +102,12 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 		KG: KeyGenerator,
 		KArg: EncodeLikeTuple<KG::KArg> + TupleToEncodedIter,
 	{
-		let module_prefix_hashed = Twox128::hash(Self::module_prefix());
-		let storage_prefix_hashed = Twox128::hash(Self::storage_prefix());
+		let storage_prefix = storage_prefix(Self::module_prefix(), Self::storage_prefix());
 		let key_hashed = KG::final_key(key);
 
-		let mut final_key = Vec::with_capacity(
-			module_prefix_hashed.len() + storage_prefix_hashed.len() + key_hashed.len(),
-		);
+		let mut final_key = Vec::with_capacity(storage_prefix.len() + key_hashed.len());
 
-		final_key.extend_from_slice(&module_prefix_hashed[..]);
-		final_key.extend_from_slice(&storage_prefix_hashed[..]);
+		final_key.extend_from_slice(&storage_prefix);
 		final_key.extend_from_slice(key_hashed.as_ref());
 
 		final_key
@@ -213,6 +196,7 @@ where
 			previous_key: prefix,
 			drain: false,
 			closure: |_raw_key, mut raw_value| V::decode(&mut raw_value),
+			phantom: Default::default(),
 		}
 	}
 
@@ -286,16 +270,12 @@ where
 		KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter,
 	{
 		let old_key = {
-			let module_prefix_hashed = Twox128::hash(Self::module_prefix());
-			let storage_prefix_hashed = Twox128::hash(Self::storage_prefix());
+			let storage_prefix = storage_prefix(Self::module_prefix(), Self::storage_prefix());
 			let key_hashed = K::migrate_key(&key, hash_fns);
 
-			let mut final_key = Vec::with_capacity(
-				module_prefix_hashed.len() + storage_prefix_hashed.len() + key_hashed.len(),
-			);
+			let mut final_key = Vec::with_capacity(storage_prefix.len() + key_hashed.len());
 
-			final_key.extend_from_slice(&module_prefix_hashed[..]);
-			final_key.extend_from_slice(&storage_prefix_hashed[..]);
+			final_key.extend_from_slice(&storage_prefix);
 			final_key.extend_from_slice(key_hashed.as_ref());
 
 			final_key
@@ -326,6 +306,7 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 				let partial_key = K::decode_partial_key(raw_key_without_prefix)?;
 				Ok((partial_key, V::decode(&mut raw_value)?))
 			},
+			phantom: Default::default(),
 		}
 	}
 
@@ -389,6 +370,7 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 				let (final_key, _) = K::decode_final_key(raw_key_without_prefix)?;
 				Ok((final_key, V::decode(&mut raw_value)?))
 			},
+			phantom: Default::default(),
 		}
 	}
 

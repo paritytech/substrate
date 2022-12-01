@@ -197,6 +197,9 @@ pub enum Database {
 	RocksDb,
 	/// ParityDb. <https://github.com/paritytech/parity-db/>
 	ParityDb,
+	/// Detect whether there is an existing database. Use it, if there is, if not, create new
+	/// instance of paritydb
+	Auto,
 }
 
 impl std::str::FromStr for Database {
@@ -207,6 +210,8 @@ impl std::str::FromStr for Database {
 			Ok(Self::RocksDb)
 		} else if s.eq_ignore_ascii_case("paritydb-experimental") {
 			Ok(Self::ParityDb)
+		} else if s.eq_ignore_ascii_case("auto") {
+			Ok(Self::Auto)
 		} else {
 			Err(format!("Unknown variant `{}`, known variants: {:?}", s, Self::variants()))
 		}
@@ -216,7 +221,7 @@ impl std::str::FromStr for Database {
 impl Database {
 	/// Returns all the variants of this enum to be shown in the cli.
 	pub fn variants() -> &'static [&'static str] {
-		&["rocksdb", "paritydb-experimental"]
+		&["rocksdb", "paritydb-experimental", "auto"]
 	}
 }
 

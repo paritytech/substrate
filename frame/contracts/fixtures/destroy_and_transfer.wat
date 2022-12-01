@@ -145,7 +145,7 @@
 
 		;; Calling the destination address with non-empty input data should now work since the
 		;; contract has been removed. Also transfer a balance to the address so we can ensure this
-		;; does not keep the contract alive.
+		;; does not hinder the contract from being removed.
 		(call $assert
 			(i32.eq
 				(call $seal_transfer

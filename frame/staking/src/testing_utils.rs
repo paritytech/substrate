@@ -27,6 +27,7 @@ use rand_chacha::{
 };
 use sp_io::hashing::blake2_256;
 
+use frame_election_provider_support::SortedListProvider;
 use frame_support::{pallet_prelude::*, traits::Currency};
 use sp_runtime::{traits::StaticLookup, Perbill};
 use sp_std::prelude::*;
@@ -37,8 +38,11 @@ const SEED: u32 = 0;
 pub fn clear_validators_and_nominators<T: Config>() {
 	Validators::<T>::remove_all(None);
 	CounterForValidators::<T>::kill();
+
+	// whenever we touch nominators counter we should update `T::SortedListProvider` as well.
 	Nominators::<T>::remove_all(None);
 	CounterForNominators::<T>::kill();
+	let _ = T::SortedListProvider::clear(None);
 }
 
 /// Grab a funded user.
@@ -49,9 +53,18 @@ pub fn create_funded_user<T: Config>(
 ) -> T::AccountId {
 	let user = account(string, n, SEED);
 	let balance = T::Currency::minimum_balance() * balance_factor.into();
-	T::Currency::make_free_balance_be(&user, balance);
-	// ensure T::CurrencyToVote will work correctly.
-	T::Currency::issue(balance);
+	let _ = T::Currency::make_free_balance_be(&user, balance);
+	user
+}
+
+/// Grab a funded user with max Balance.
+pub fn create_funded_user_with_balance<T: Config>(
+	string: &'static str,
+	n: u32,
+	balance: BalanceOf<T>,
+) -> T::AccountId {
+	let user = account(string, n, SEED);
+	let _ = T::Currency::make_free_balance_be(&user, balance);
 	user
 }
 
@@ -73,6 +86,26 @@ pub fn create_stash_controller<T: Config>(
 		destination,
 	)?;
 	return Ok((stash, controller))
+}
+
+/// Create a stash and controller pair with fixed balance.
+pub fn create_stash_controller_with_balance<T: Config>(
+	n: u32,
+	balance: crate::BalanceOf<T>,
+	destination: RewardDestination<T::AccountId>,
+) -> Result<(T::AccountId, T::AccountId), &'static str> {
+	let stash = create_funded_user_with_balance::<T>("stash", n, balance);
+	let controller = create_funded_user_with_balance::<T>("controller", n, balance);
+	let controller_lookup: <T::Lookup as StaticLookup>::Source =
+		T::Lookup::unlookup(controller.clone());
+
+	Staking::<T>::bond(
+		RawOrigin::Signed(stash.clone()).into(),
+		controller_lookup,
+		balance,
+		destination,
+	)?;
+	Ok((stash, controller))
 }
 
 /// Create a stash and controller pair, where the controller is dead, and payouts go to controller.
@@ -102,10 +135,19 @@ pub fn create_validators<T: Config>(
 	max: u32,
 	balance_factor: u32,
 ) -> Result<Vec<<T::Lookup as StaticLookup>::Source>, &'static str> {
+	create_validators_with_seed::<T>(max, balance_factor, 0)
+}
+
+/// create `max` validators, with a seed to help unintentional prevent account collisions.
+pub fn create_validators_with_seed<T: Config>(
+	max: u32,
+	balance_factor: u32,
+	seed: u32,
+) -> Result<Vec<<T::Lookup as StaticLookup>::Source>, &'static str> {
 	let mut validators: Vec<<T::Lookup as StaticLookup>::Source> = Vec::with_capacity(max as usize);
 	for i in 0..max {
 		let (stash, controller) =
-			create_stash_controller::<T>(i, balance_factor, RewardDestination::Staked)?;
+			create_stash_controller::<T>(i + seed, balance_factor, RewardDestination::Staked)?;
 		let validator_prefs =
 			ValidatorPrefs { commission: Perbill::from_percent(50), ..Default::default() };
 		Staking::<T>::validate(RawOrigin::Signed(controller).into(), validator_prefs)?;

@@ -521,8 +521,8 @@ impl KeystoreInner {
 
 	/// Get a key pair for the given public key.
 	///
-	/// Returns `Ok(None)` if the key doesn't exist, `Ok(Some(_))` if the key exists or `Err(_)` when
-	/// something failed.
+	/// Returns `Ok(None)` if the key doesn't exist, `Ok(Some(_))` if the key exists or `Err(_)`
+	/// when something failed.
 	pub fn key_pair<Pair: AppPair>(
 		&self,
 		public: &<Pair as AppKey>::Public,

@@ -85,7 +85,7 @@ fn lock_voting_should_work() {
 		assert_eq!(Balances::locks(5), vec![]);
 		assert_eq!(Balances::free_balance(42), 2);
 
-		fast_forward_to(5);
+		fast_forward_to(7);
 		// No change yet...
 		assert_noop!(
 			Democracy::remove_other_vote(Origin::signed(1), 4, r),
@@ -93,29 +93,29 @@ fn lock_voting_should_work() {
 		);
 		assert_ok!(Democracy::unlock(Origin::signed(1), 4));
 		assert_eq!(Balances::locks(4), vec![the_lock(40)]);
-		fast_forward_to(6);
+		fast_forward_to(8);
 		// 4 should now be able to reap and unlock
 		assert_ok!(Democracy::remove_other_vote(Origin::signed(1), 4, r));
 		assert_ok!(Democracy::unlock(Origin::signed(1), 4));
 		assert_eq!(Balances::locks(4), vec![]);
 
-		fast_forward_to(9);
+		fast_forward_to(13);
 		assert_noop!(
 			Democracy::remove_other_vote(Origin::signed(1), 3, r),
 			Error::<Test>::NoPermission
 		);
 		assert_ok!(Democracy::unlock(Origin::signed(1), 3));
 		assert_eq!(Balances::locks(3), vec![the_lock(30)]);
-		fast_forward_to(10);
+		fast_forward_to(14);
 		assert_ok!(Democracy::remove_other_vote(Origin::signed(1), 3, r));
 		assert_ok!(Democracy::unlock(Origin::signed(1), 3));
 		assert_eq!(Balances::locks(3), vec![]);
 
 		// 2 doesn't need to reap_vote here because it was already done before.
-		fast_forward_to(17);
+		fast_forward_to(25);
 		assert_ok!(Democracy::unlock(Origin::signed(1), 2));
 		assert_eq!(Balances::locks(2), vec![the_lock(20)]);
-		fast_forward_to(18);
+		fast_forward_to(26);
 		assert_ok!(Democracy::unlock(Origin::signed(1), 2));
 		assert_eq!(Balances::locks(2), vec![]);
 	});
@@ -201,40 +201,40 @@ fn setup_three_referenda() -> (u32, u32, u32) {
 fn prior_lockvotes_should_be_enforced() {
 	new_test_ext().execute_with(|| {
 		let r = setup_three_referenda();
-		// r.0 locked 10 until #18.
-		// r.1 locked 20 until #10.
-		// r.2 locked 50 until #6.
+		// r.0 locked 10 until 2 + 8 * 3 = #26
+		// r.1 locked 20 until 2 + 4 * 3 = #14
+		// r.2 locked 50 until 2 + 2 * 3 = #8
 
-		fast_forward_to(5);
+		fast_forward_to(7);
 		assert_noop!(
 			Democracy::remove_other_vote(Origin::signed(1), 5, r.2),
 			Error::<Test>::NoPermission
 		);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
 		assert_eq!(Balances::locks(5), vec![the_lock(50)]);
-		fast_forward_to(6);
+		fast_forward_to(8);
 		assert_ok!(Democracy::remove_other_vote(Origin::signed(1), 5, r.2));
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
 		assert_eq!(Balances::locks(5), vec![the_lock(20)]);
-		fast_forward_to(9);
+		fast_forward_to(13);
 		assert_noop!(
 			Democracy::remove_other_vote(Origin::signed(1), 5, r.1),
 			Error::<Test>::NoPermission
 		);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
 		assert_eq!(Balances::locks(5), vec![the_lock(20)]);
-		fast_forward_to(10);
+		fast_forward_to(14);
 		assert_ok!(Democracy::remove_other_vote(Origin::signed(1), 5, r.1));
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
 		assert_eq!(Balances::locks(5), vec![the_lock(10)]);
-		fast_forward_to(17);
+		fast_forward_to(25);
 		assert_noop!(
 			Democracy::remove_other_vote(Origin::signed(1), 5, r.0),
 			Error::<Test>::NoPermission
 		);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
 		assert_eq!(Balances::locks(5), vec![the_lock(10)]);
-		fast_forward_to(18);
+		fast_forward_to(26);
 		assert_ok!(Democracy::remove_other_vote(Origin::signed(1), 5, r.0));
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
 		assert_eq!(Balances::locks(5), vec![]);
@@ -245,31 +245,31 @@ fn prior_lockvotes_should_be_enforced() {
 fn single_consolidation_of_lockvotes_should_work_as_before() {
 	new_test_ext().execute_with(|| {
 		let r = setup_three_referenda();
-		// r.0 locked 10 until #18.
-		// r.1 locked 20 until #10.
-		// r.2 locked 50 until #6.
+		// r.0 locked 10 until 2 + 8 * 3 = #26
+		// r.1 locked 20 until 2 + 4 * 3 = #14
+		// r.2 locked 50 until 2 + 2 * 3 = #8
 
-		fast_forward_to(5);
+		fast_forward_to(7);
 		assert_ok!(Democracy::remove_vote(Origin::signed(5), r.2));
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
 		assert_eq!(Balances::locks(5), vec![the_lock(50)]);
-		fast_forward_to(6);
+		fast_forward_to(8);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
 		assert_eq!(Balances::locks(5), vec![the_lock(20)]);
 
-		fast_forward_to(9);
+		fast_forward_to(13);
 		assert_ok!(Democracy::remove_vote(Origin::signed(5), r.1));
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
 		assert_eq!(Balances::locks(5), vec![the_lock(20)]);
-		fast_forward_to(10);
+		fast_forward_to(14);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
 		assert_eq!(Balances::locks(5), vec![the_lock(10)]);
 
-		fast_forward_to(17);
+		fast_forward_to(25);
 		assert_ok!(Democracy::remove_vote(Origin::signed(5), r.0));
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
 		assert_eq!(Balances::locks(5), vec![the_lock(10)]);
-		fast_forward_to(18);
+		fast_forward_to(26);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
 		assert_eq!(Balances::locks(5), vec![]);
 	});
@@ -279,23 +279,23 @@ fn single_consolidation_of_lockvotes_should_work_as_before() {
 fn multi_consolidation_of_lockvotes_should_be_conservative() {
 	new_test_ext().execute_with(|| {
 		let r = setup_three_referenda();
-		// r.0 locked 10 until #18.
-		// r.1 locked 20 until #10.
-		// r.2 locked 50 until #6.
+		// r.0 locked 10 until 2 + 8 * 3 = #26
+		// r.1 locked 20 until 2 + 4 * 3 = #14
+		// r.2 locked 50 until 2 + 2 * 3 = #8
 
 		assert_ok!(Democracy::remove_vote(Origin::signed(5), r.2));
 		assert_ok!(Democracy::remove_vote(Origin::signed(5), r.1));
 		assert_ok!(Democracy::remove_vote(Origin::signed(5), r.0));
 
-		fast_forward_to(6);
+		fast_forward_to(8);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
 		assert!(Balances::locks(5)[0].amount >= 20);
 
-		fast_forward_to(10);
+		fast_forward_to(14);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
 		assert!(Balances::locks(5)[0].amount >= 10);
 
-		fast_forward_to(18);
+		fast_forward_to(26);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
 		assert_eq!(Balances::locks(5), vec![]);
 	});
@@ -314,28 +314,28 @@ fn locks_should_persist_from_voting_to_delegation() {
 		assert_ok!(Democracy::vote(Origin::signed(5), r, aye(4, 10)));
 		fast_forward_to(2);
 		assert_ok!(Democracy::remove_vote(Origin::signed(5), r));
-		// locked 10 until #18.
+		// locked 10 until #26.
 
 		assert_ok!(Democracy::delegate(Origin::signed(5), 1, Conviction::Locked3x, 20));
 		// locked 20.
 		assert!(Balances::locks(5)[0].amount == 20);
 
 		assert_ok!(Democracy::undelegate(Origin::signed(5)));
-		// locked 20 until #10
+		// locked 20 until #14
 
-		fast_forward_to(9);
+		fast_forward_to(13);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
 		assert!(Balances::locks(5)[0].amount == 20);
 
-		fast_forward_to(10);
+		fast_forward_to(14);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
 		assert!(Balances::locks(5)[0].amount >= 10);
 
-		fast_forward_to(17);
+		fast_forward_to(25);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
 		assert!(Balances::locks(5)[0].amount >= 10);
 
-		fast_forward_to(18);
+		fast_forward_to(26);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
 		assert_eq!(Balances::locks(5), vec![]);
 	});
@@ -347,30 +347,30 @@ fn locks_should_persist_from_delegation_to_voting() {
 		System::set_block_number(0);
 		assert_ok!(Democracy::delegate(Origin::signed(5), 1, Conviction::Locked5x, 5));
 		assert_ok!(Democracy::undelegate(Origin::signed(5)));
-		// locked 5 until #32
+		// locked 5 until 16 * 3 = #48
 
 		let r = setup_three_referenda();
-		// r.0 locked 10 until #18.
-		// r.1 locked 20 until #10.
-		// r.2 locked 50 until #6.
+		// r.0 locked 10 until 2 + 8 * 3 = #26
+		// r.1 locked 20 until 2 + 4 * 3 = #14
+		// r.2 locked 50 until 2 + 2 * 3 = #8
 
 		assert_ok!(Democracy::remove_vote(Origin::signed(5), r.2));
 		assert_ok!(Democracy::remove_vote(Origin::signed(5), r.1));
 		assert_ok!(Democracy::remove_vote(Origin::signed(5), r.0));
 
-		fast_forward_to(6);
+		fast_forward_to(8);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
 		assert!(Balances::locks(5)[0].amount >= 20);
 
-		fast_forward_to(10);
+		fast_forward_to(14);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
 		assert!(Balances::locks(5)[0].amount >= 10);
 
-		fast_forward_to(18);
+		fast_forward_to(26);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
 		assert!(Balances::locks(5)[0].amount >= 5);
 
-		fast_forward_to(32);
+		fast_forward_to(48);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
 		assert_eq!(Balances::locks(5), vec![]);
 	});

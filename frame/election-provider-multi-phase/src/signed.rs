@@ -26,7 +26,6 @@ use codec::{Decode, Encode, HasCompact};
 use frame_support::{
 	storage::bounded_btree_map::BoundedBTreeMap,
 	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
-	DebugNoBound,
 };
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_npos_elections::{is_score_better, ElectionScore, NposSolution};
@@ -43,7 +42,7 @@ use sp_std::{
 /// A raw, unchecked signed submission.
 ///
 /// This is just a wrapper around [`RawSolution`] and some additional info.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default, scale_info::TypeInfo)]
 pub struct SignedSubmission<AccountId, Balance: HasCompact, Solution> {
 	/// Who submitted this solution.
 	pub who: AccountId,
@@ -113,7 +112,7 @@ pub enum InsertResult<T: Config> {
 /// Mask type which pretends to be a set of `SignedSubmissionOf<T>`, while in fact delegating to the
 /// actual implementations in `SignedSubmissionIndices<T>`, `SignedSubmissionsMap<T>`, and
 /// `SignedSubmissionNextIndex<T>`.
-#[cfg_attr(feature = "std", derive(DebugNoBound))]
+#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound))]
 pub struct SignedSubmissions<T: Config> {
 	indices: SubmissionIndicesOf<T>,
 	next_idx: u32,
@@ -343,7 +342,17 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This drains the [`SignedSubmissions`], potentially storing the best valid one in
 	/// [`QueuedSolution`].
-	pub fn finalize_signed_phase() -> (bool, Weight) {
+	///
+	/// This is a *self-weighing* function, it automatically registers its weight internally when
+	/// being called.
+	pub fn finalize_signed_phase() -> bool {
+		let (weight, found_solution) = Self::finalize_signed_phase_internal();
+		Self::register_weight(weight);
+		found_solution
+	}
+
+	/// The guts of [`finalized_signed_phase`], that does everything except registering its weight.
+	pub(crate) fn finalize_signed_phase_internal() -> (Weight, bool) {
 		let mut all_submissions = Self::signed_submissions();
 		let mut found_solution = false;
 		let mut weight = T::DbWeight::get().reads(1);
@@ -402,9 +411,9 @@ impl<T: Config> Pallet<T> {
 			found_solution,
 			discarded
 		);
-		(found_solution, weight)
-	}
 
+		(weight, found_solution)
+	}
 	/// Helper function for the case where a solution is accepted in the signed phase.
 	///
 	/// Extracted to facilitate with weight calculation.
@@ -568,7 +577,7 @@ mod tests {
 			assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			assert_eq!(balances(&99), (95, 5));
 
-			assert!(MultiPhase::finalize_signed_phase().0);
+			assert!(MultiPhase::finalize_signed_phase());
 			assert_eq!(balances(&99), (100 + 7 + 8, 0));
 		})
 	}
@@ -589,7 +598,7 @@ mod tests {
 			assert_eq!(balances(&99), (95, 5));
 
 			// no good solution was stored.
-			assert!(!MultiPhase::finalize_signed_phase().0);
+			assert!(!MultiPhase::finalize_signed_phase());
 			// and the bond is gone.
 			assert_eq!(balances(&99), (95, 0));
 		})
@@ -615,7 +624,7 @@ mod tests {
 			assert_eq!(balances(&999), (95, 5));
 
 			// _some_ good solution was stored.
-			assert!(MultiPhase::finalize_signed_phase().0);
+			assert!(MultiPhase::finalize_signed_phase());
 
 			// 99 is rewarded.
 			assert_eq!(balances(&99), (100 + 7 + 8, 0));
@@ -806,7 +815,7 @@ mod tests {
 			);
 
 			// _some_ good solution was stored.
-			assert!(MultiPhase::finalize_signed_phase().0);
+			assert!(MultiPhase::finalize_signed_phase());
 
 			// 99 is rewarded.
 			assert_eq!(balances(&99), (100 + 7 + 8, 0));
@@ -826,7 +835,8 @@ mod tests {
 				roll_to(15);
 				assert!(MultiPhase::current_phase().is_signed());
 
-				let (raw, witness) = MultiPhase::mine_solution(2).unwrap();
+				let (raw, witness) =
+					MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
 				let solution_weight = <Runtime as Config>::WeightInfo::feasibility_check(
 					witness.voters,
 					witness.targets,
@@ -906,7 +916,7 @@ mod tests {
 				roll_to(block_number);
 
 				assert_eq!(SignedSubmissions::<Runtime>::decode_len().unwrap_or_default(), 0);
-				assert_storage_noop!(MultiPhase::finalize_signed_phase());
+				assert_storage_noop!(MultiPhase::finalize_signed_phase_internal());
 			}
 		})
 	}
@@ -923,7 +933,7 @@ mod tests {
 			assert_ok!(submit_with_witness(Origin::signed(99), solution.clone()));
 
 			// _some_ good solution was stored.
-			assert!(MultiPhase::finalize_signed_phase().0);
+			assert!(MultiPhase::finalize_signed_phase());
 
 			// calling it again doesn't change anything
 			assert_storage_noop!(MultiPhase::finalize_signed_phase());

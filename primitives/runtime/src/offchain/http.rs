@@ -288,7 +288,8 @@ impl PendingRequest {
 
 	/// Attempt to wait for all provided requests, but up to given deadline.
 	///
-	/// Requests that are complete will resolve to an `Ok` others will return a `DeadlineReached` error.
+	/// Requests that are complete will resolve to an `Ok` others will return a `DeadlineReached`
+	/// error.
 	pub fn try_wait_all(
 		requests: Vec<PendingRequest>,
 		deadline: impl Into<Option<Timestamp>>,

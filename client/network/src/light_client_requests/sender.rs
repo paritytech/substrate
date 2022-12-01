@@ -26,8 +26,9 @@
 //! 2. Forward the request to [`crate::request_responses::RequestResponsesBehaviour`] via
 //! [`OutEvent::SendRequest`](sender::OutEvent::SendRequest).
 //!
-//! 3. Wait for the response and forward the response via the [`futures::channel::oneshot::Sender`] provided earlier
-//! with [`LightClientRequestSender::request`](sender::LightClientRequestSender::request).
+//! 3. Wait for the response and forward the response via the [`futures::channel::oneshot::Sender`]
+//! provided earlier with [`LightClientRequestSender::request`](sender::LightClientRequestSender::
+//! request).
 
 use crate::{
 	config::ProtocolId,
@@ -71,7 +72,7 @@ struct Config {
 impl Config {
 	/// Create a new [`LightClientRequestSender`] configuration.
 	pub fn new(id: &ProtocolId) -> Self {
-		Config {
+		Self {
 			max_pending_requests: 128,
 			light_protocol: super::generate_protocol_name(id),
 			block_protocol: crate::block_request_handler::generate_protocol_name(id),
@@ -111,7 +112,7 @@ struct PendingRequest<B: Block> {
 
 impl<B: Block> PendingRequest<B> {
 	fn new(req: Request<B>) -> Self {
-		PendingRequest {
+		Self {
 			// Number of retries + one for the initial attempt.
 			attempts_left: req.retries() + 1,
 			request: req,
@@ -152,7 +153,7 @@ where
 		checker: Arc<dyn light::FetchChecker<B>>,
 		peerset: sc_peerset::PeersetHandle,
 	) -> Self {
-		LightClientRequestSender {
+		Self {
 			config: Config::new(id),
 			checker,
 			peers: Default::default(),
@@ -212,14 +213,15 @@ where
 	) -> Result<Reply<B>, Error> {
 		use schema::v1::light::response::Response;
 		match response.response {
-			Some(Response::RemoteCallResponse(response)) =>
+			Some(Response::RemoteCallResponse(response)) => {
 				if let Request::Call { request, .. } = request {
 					let proof = Decode::decode(&mut response.proof.as_ref())?;
 					let reply = self.checker.check_execution_proof(request, proof)?;
 					Ok(Reply::VecU8(reply))
 				} else {
 					Err(Error::UnexpectedResponse)
-				},
+				}
+			},
 			Some(Response::RemoteReadResponse(response)) => match request {
 				Request::Read { request, .. } => {
 					let proof = Decode::decode(&mut response.proof.as_ref())?;
@@ -233,7 +235,7 @@ where
 				},
 				_ => Err(Error::UnexpectedResponse),
 			},
-			Some(Response::RemoteChangesResponse(response)) =>
+			Some(Response::RemoteChangesResponse(response)) => {
 				if let Request::Changes { request, .. } = request {
 					let max_block = Decode::decode(&mut response.max.as_ref())?;
 					let roots_proof = Decode::decode(&mut response.roots_proof.as_ref())?;
@@ -258,8 +260,9 @@ where
 					Ok(Reply::VecNumberU32(reply))
 				} else {
 					Err(Error::UnexpectedResponse)
-				},
-			Some(Response::RemoteHeaderResponse(response)) =>
+				}
+			},
+			Some(Response::RemoteHeaderResponse(response)) => {
 				if let Request::Header { request, .. } = request {
 					let header = if response.header.is_empty() {
 						None
@@ -271,7 +274,8 @@ where
 					Ok(Reply::Header(reply))
 				} else {
 					Err(Error::UnexpectedResponse)
-				},
+				}
+			},
 			None => Err(Error::UnexpectedResponse),
 		}
 	}
@@ -778,8 +782,9 @@ impl<B: Block> Request<B> {
 			Request::Header { request, sender } => match result {
 				Err(e) => send(Err(e), sender),
 				Ok(Reply::Header(x)) => send(Ok(x), sender),
-				reply =>
-					log::error!("invalid reply for header request: {:?}, {:?}", reply, request),
+				reply => {
+					log::error!("invalid reply for header request: {:?}, {:?}", reply, request)
+				},
 			},
 			Request::Read { request, sender } => match result {
 				Err(e) => send(Err(e), sender),
@@ -789,8 +794,9 @@ impl<B: Block> Request<B> {
 			Request::ReadChild { request, sender } => match result {
 				Err(e) => send(Err(e), sender),
 				Ok(Reply::MapVecU8OptVecU8(x)) => send(Ok(x), sender),
-				reply =>
-					log::error!("invalid reply for read child request: {:?}, {:?}", reply, request),
+				reply => {
+					log::error!("invalid reply for read child request: {:?}, {:?}", reply, request)
+				},
 			},
 			Request::Call { request, sender } => match result {
 				Err(e) => send(Err(e), sender),
@@ -800,8 +806,9 @@ impl<B: Block> Request<B> {
 			Request::Changes { request, sender } => match result {
 				Err(e) => send(Err(e), sender),
 				Ok(Reply::VecNumberU32(x)) => send(Ok(x), sender),
-				reply =>
-					log::error!("invalid reply for changes request: {:?}, {:?}", reply, request),
+				reply => {
+					log::error!("invalid reply for changes request: {:?}, {:?}", reply, request)
+				},
 			},
 		}
 	}

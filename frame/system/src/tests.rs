@@ -390,9 +390,22 @@ fn set_code_checks_works() {
 		ext.execute_with(|| {
 			let res = System::set_code(RawOrigin::Root.into(), vec![1, 2, 3, 4]);
 
+			assert_runtime_updated_digest(if res.is_ok() { 1 } else { 0 });
 			assert_eq!(expected.map_err(DispatchErrorWithPostInfo::from), res);
 		});
 	}
+}
+
+fn assert_runtime_updated_digest(num: usize) {
+	assert_eq!(
+		System::digest()
+			.logs
+			.into_iter()
+			.filter(|item| *item == generic::DigestItem::RuntimeEnvironmentUpdated)
+			.count(),
+		num,
+		"Incorrect number of Runtime Updated digest items",
+	);
 }
 
 #[test]
@@ -476,5 +489,14 @@ fn extrinsics_root_is_calculated_correctly() {
 
 		let ext_root = extrinsics_data_root::<BlakeTwo256>(vec![vec![1], vec![2]]);
 		assert_eq!(ext_root, *header.extrinsics_root());
+	});
+}
+
+#[test]
+fn runtime_updated_digest_emitted_when_heap_pages_changed() {
+	new_test_ext().execute_with(|| {
+		System::initialize(&1, &[0u8; 32].into(), &Default::default(), InitKind::Full);
+		System::set_heap_pages(RawOrigin::Root.into(), 5).unwrap();
+		assert_runtime_updated_digest(1);
 	});
 }

@@ -465,9 +465,9 @@ mod std_features {
 
 	// Implementation Note:
 	// the original `tracing` crate generates these static metadata entries at every `span!` and
-	// `event!` location to allow for highly optimised filtering. For us to allow level-based emitting
-	// of wasm events we need these static metadata entries to inject into that system. We then provide
-	// generic `From`-implementations picking the right metadata to refer to.
+	// `event!` location to allow for highly optimised filtering. For us to allow level-based
+	// emitting of wasm events we need these static metadata entries to inject into that system. We
+	// then provide generic `From`-implementations picking the right metadata to refer to.
 
 	static SPAN_ERROR_METADATA: tracing_core::Metadata<'static> = tracing::Metadata::new(
 		WASM_TRACE_IDENTIFIER,

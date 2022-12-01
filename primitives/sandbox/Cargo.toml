@@ -12,6 +12,12 @@ readme = "README.md"
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasmi = { version = "0.9.0", default-features = false, features = ["core"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+wasmi = "0.9.0"
+
 [dependencies]
 wasmi = { version = "0.9.0", optional = true }
 sp-core = { version = "4.0.0-dev", default-features = false, path = "../core" }
@@ -19,6 +25,7 @@ sp-std = { version = "4.0.0-dev", default-features = false, path = "../std" }
 sp-io = { version = "4.0.0-dev", default-features = false, path = "../io" }
 sp-wasm-interface = { version = "4.0.0-dev", default-features = false, path = "../wasm-interface" }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
+log = { version = "0.4", default-features = false }
 
 [dev-dependencies]
 wat = "1.0"
@@ -33,5 +40,7 @@ std = [
 	"codec/std",
 	"sp-io/std",
 	"sp-wasm-interface/std",
+	"log/std",
 ]
 strict = []
+wasmer-sandbox = []
