@@ -2432,12 +2432,15 @@ benchmarks! {
 	// w_per_local = w_bench
 	instr_call_per_local {
 		let l in 0 .. T::Schedule::get().limits.locals;
-		let mut call_body = body::plain(vec![
-				Instruction::End,
+		let mut aux_body = body::plain(vec![
+			Instruction::End,
 		]);
-		body::inject_locals(&mut call_body, l);
+		body::inject_locals(&mut aux_body, l);
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
-			call_body: Some(call_body),
+			aux_body: Some(aux_body),
+			call_body: Some(body::repeated(INSTR_BENCHMARK_BATCH_SIZE, &[
+				Instruction::Call(2), // call aux
+			])),
 			.. Default::default()
 		}));
 	}: {
