@@ -26,6 +26,9 @@ mod directives;
 mod event_format;
 mod fast_local_time;
 mod layers;
+mod stderr_writer;
+
+pub(crate) type DefaultLogger = stderr_writer::MakeStderrWriter;
 
 pub use directives::*;
 pub use sc_tracing_proc_macro::*;
@@ -46,6 +49,8 @@ use tracing_subscriber::{
 pub use event_format::*;
 pub use fast_local_time::FastLocalTime;
 pub use layers::*;
+
+use stderr_writer::MakeStderrWriter;
 
 /// Logging Result typedef.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -90,8 +95,9 @@ fn prepare_subscriber<N, E, F, W>(
 	directives: &str,
 	profiling_targets: Option<&str>,
 	force_colors: Option<bool>,
+	detailed_output: bool,
 	builder_hook: impl Fn(
-		SubscriberBuilder<format::DefaultFields, EventFormat, EnvFilter, fn() -> std::io::Stderr>,
+		SubscriberBuilder<format::DefaultFields, EventFormat, EnvFilter, DefaultLogger>,
 	) -> SubscriberBuilder<N, E, F, W>,
 ) -> Result<impl Subscriber + for<'a> LookupSpan<'a>>
 where
@@ -152,19 +158,19 @@ where
 	tracing_log::LogTracer::builder().with_max_level(max_level).init()?;
 
 	// If we're only logging `INFO` entries then we'll use a simplified logging format.
-	let simple = match max_level_hint {
-		Some(level) if level <= tracing_subscriber::filter::LevelFilter::INFO => true,
-		_ => false,
-	};
+	let detailed_output = match max_level_hint {
+		Some(level) if level <= tracing_subscriber::filter::LevelFilter::INFO => false,
+		_ => true,
+	} || detailed_output;
 
 	let enable_color = force_colors.unwrap_or_else(|| atty::is(atty::Stream::Stderr));
-	let timer = fast_local_time::FastLocalTime { with_fractional: !simple };
+	let timer = fast_local_time::FastLocalTime { with_fractional: detailed_output };
 
 	let event_format = EventFormat {
 		timer,
-		display_target: !simple,
-		display_level: !simple,
-		display_thread_name: !simple,
+		display_target: detailed_output,
+		display_level: detailed_output,
+		display_thread_name: detailed_output,
 		enable_color,
 		dup_to_stdout: !atty::is(atty::Stream::Stderr) && atty::is(atty::Stream::Stdout),
 	};
@@ -172,7 +178,7 @@ where
 
 	let builder = builder.with_span_events(format::FmtSpan::NONE);
 
-	let builder = builder.with_writer(std::io::stderr as _);
+	let builder = builder.with_writer(MakeStderrWriter::default());
 
 	let builder = builder.event_format(event_format);
 
@@ -189,6 +195,7 @@ pub struct LoggerBuilder {
 	profiling: Option<(crate::TracingReceiver, String)>,
 	log_reloading: bool,
 	force_colors: Option<bool>,
+	detailed_output: bool,
 }
 
 impl LoggerBuilder {
@@ -199,6 +206,7 @@ impl LoggerBuilder {
 			profiling: None,
 			log_reloading: false,
 			force_colors: None,
+			detailed_output: false,
 		}
 	}
 
@@ -218,6 +226,17 @@ impl LoggerBuilder {
 		self
 	}
 
+	/// Whether detailed log output should be enabled.
+	///
+	/// This includes showing the log target, log level and thread name.
+	///
+	/// This will be automatically enabled when there is a log level enabled that is higher than
+	/// `info`.
+	pub fn with_detailed_output(&mut self, detailed: bool) -> &mut Self {
+		self.detailed_output = detailed;
+		self
+	}
+
 	/// Force enable/disable colors.
 	pub fn with_colors(&mut self, enable: bool) -> &mut Self {
 		self.force_colors = Some(enable);
@@ -234,6 +253,7 @@ impl LoggerBuilder {
 					&self.directives,
 					Some(&profiling_targets),
 					self.force_colors,
+					self.detailed_output,
 					|builder| enable_log_reloading!(builder),
 				)?;
 				let profiling = crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
@@ -246,6 +266,7 @@ impl LoggerBuilder {
 					&self.directives,
 					Some(&profiling_targets),
 					self.force_colors,
+					self.detailed_output,
 					|builder| builder,
 				)?;
 				let profiling = crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
@@ -256,19 +277,25 @@ impl LoggerBuilder {
 			}
 		} else {
 			if self.log_reloading {
-				let subscriber =
-					prepare_subscriber(&self.directives, None, self.force_colors, |builder| {
-						enable_log_reloading!(builder)
-					})?;
+				let subscriber = prepare_subscriber(
+					&self.directives,
+					None,
+					self.force_colors,
+					self.detailed_output,
+					|builder| enable_log_reloading!(builder),
+				)?;
 
 				tracing::subscriber::set_global_default(subscriber)?;
 
 				Ok(())
 			} else {
-				let subscriber =
-					prepare_subscriber(&self.directives, None, self.force_colors, |builder| {
-						builder
-					})?;
+				let subscriber = prepare_subscriber(
+					&self.directives,
+					None,
+					self.force_colors,
+					self.detailed_output,
+					|builder| builder,
+				)?;
 
 				tracing::subscriber::set_global_default(subscriber)?;
 
@@ -282,7 +309,16 @@ impl LoggerBuilder {
 mod tests {
 	use super::*;
 	use crate as sc_tracing;
-	use std::{env, process::Command};
+	use log::info;
+	use std::{
+		collections::BTreeMap,
+		env,
+		process::Command,
+		sync::{
+			atomic::{AtomicBool, AtomicUsize, Ordering},
+			Arc,
+		},
+	};
 	use tracing::{metadata::Kind, subscriber::Interest, Callsite, Level, Metadata};
 
 	const EXPECTED_LOG_MESSAGE: &'static str = "yeah logging works as expected";
@@ -292,9 +328,28 @@ mod tests {
 		let _ = LoggerBuilder::new(directives).init().unwrap();
 	}
 
+	fn run_test_in_another_process(
+		test_name: &str,
+		test_body: impl FnOnce(),
+	) -> Option<std::process::Output> {
+		if env::var("RUN_FORKED_TEST").is_ok() {
+			test_body();
+			None
+		} else {
+			let output = Command::new(env::current_exe().unwrap())
+				.arg(test_name)
+				.env("RUN_FORKED_TEST", "1")
+				.output()
+				.unwrap();
+
+			assert!(output.status.success());
+			Some(output)
+		}
+	}
+
 	#[test]
 	fn test_logger_filters() {
-		if env::var("RUN_TEST_LOGGER_FILTERS").is_ok() {
+		run_test_in_another_process("test_logger_filters", || {
 			let test_directives =
 				"afg=debug,sync=trace,client=warn,telemetry,something-with-dash=error";
 			init_logger(&test_directives);
@@ -331,15 +386,7 @@ mod tests {
 				assert!(test_filter("telemetry", Level::TRACE));
 				assert!(test_filter("something-with-dash", Level::ERROR));
 			});
-		} else {
-			let status = Command::new(env::current_exe().unwrap())
-				.arg("test_logger_filters")
-				.env("RUN_TEST_LOGGER_FILTERS", "1")
-				.output()
-				.unwrap()
-				.status;
-			assert!(status.success());
-		}
+		});
 	}
 
 	/// This test ensures that using dash (`-`) in the target name in logs and directives actually
@@ -472,6 +519,134 @@ mod tests {
 			assert_eq!("MAX_LOG_LEVEL=Trace", run_test(Some("test=trace".into()), None));
 			assert_eq!("MAX_LOG_LEVEL=Debug", run_test(Some("test=debug".into()), None));
 			assert_eq!("MAX_LOG_LEVEL=Trace", run_test(None, Some("test=info".into())));
+		}
+	}
+
+	// This creates a bunch of threads and makes sure they start executing
+	// a given callback almost exactly at the same time.
+	fn run_on_many_threads(thread_count: usize, callback: impl Fn(usize) + 'static + Send + Clone) {
+		let started_count = Arc::new(AtomicUsize::new(0));
+		let barrier = Arc::new(AtomicBool::new(false));
+		let threads: Vec<_> = (0..thread_count)
+			.map(|nth_thread| {
+				let started_count = started_count.clone();
+				let barrier = barrier.clone();
+				let callback = callback.clone();
+
+				std::thread::spawn(move || {
+					started_count.fetch_add(1, Ordering::SeqCst);
+					while !barrier.load(Ordering::SeqCst) {
+						std::thread::yield_now();
+					}
+
+					callback(nth_thread);
+				})
+			})
+			.collect();
+
+		while started_count.load(Ordering::SeqCst) != thread_count {
+			std::thread::yield_now();
+		}
+		barrier.store(true, Ordering::SeqCst);
+
+		for thread in threads {
+			if let Err(error) = thread.join() {
+				println!("error: failed to join thread: {:?}", error);
+				unsafe { libc::abort() }
+			}
+		}
+	}
+
+	#[test]
+	fn parallel_logs_from_multiple_threads_are_properly_gathered() {
+		const THREAD_COUNT: usize = 128;
+		const LOGS_PER_THREAD: usize = 1024;
+
+		let output = run_test_in_another_process(
+			"parallel_logs_from_multiple_threads_are_properly_gathered",
+			|| {
+				let builder = LoggerBuilder::new("");
+				builder.init().unwrap();
+
+				run_on_many_threads(THREAD_COUNT, |nth_thread| {
+					for _ in 0..LOGS_PER_THREAD {
+						info!("Thread <<{}>>", nth_thread);
+					}
+				});
+			},
+		);
+
+		if let Some(output) = output {
+			let stderr = String::from_utf8(output.stderr).unwrap();
+			let mut count_per_thread = BTreeMap::new();
+			for line in stderr.split("\n") {
+				if let Some(index_s) = line.find("Thread <<") {
+					let index_s = index_s + "Thread <<".len();
+					let index_e = line.find(">>").unwrap();
+					let nth_thread: usize = line[index_s..index_e].parse().unwrap();
+					*count_per_thread.entry(nth_thread).or_insert(0) += 1;
+				}
+			}
+
+			assert_eq!(count_per_thread.len(), THREAD_COUNT);
+			for (_, count) in count_per_thread {
+				assert_eq!(count, LOGS_PER_THREAD);
+			}
+		}
+	}
+
+	#[test]
+	fn huge_single_line_log_is_properly_printed_out() {
+		let mut line = String::new();
+		line.push_str("$$START$$");
+		for n in 0..16 * 1024 * 1024 {
+			let ch = b'a' + (n as u8 % (b'z' - b'a'));
+			line.push(char::from(ch));
+		}
+		line.push_str("$$END$$");
+
+		let output =
+			run_test_in_another_process("huge_single_line_log_is_properly_printed_out", || {
+				let builder = LoggerBuilder::new("");
+				builder.init().unwrap();
+				info!("{}", line);
+			});
+
+		if let Some(output) = output {
+			let stderr = String::from_utf8(output.stderr).unwrap();
+			assert!(stderr.contains(&line));
+		}
+	}
+
+	#[test]
+	fn control_characters_are_always_stripped_out_from_the_log_messages() {
+		const RAW_LINE: &str = "$$START$$\x1B[1;32mIn\u{202a}\u{202e}\u{2066}\u{2069}ner\n\r\x7ftext!\u{80}\u{9f}\x1B[0m$$END$$";
+		const SANITIZED_LINE: &str = "$$START$$Inner\ntext!$$END$$";
+
+		let output = run_test_in_another_process(
+			"control_characters_are_always_stripped_out_from_the_log_messages",
+			|| {
+				std::env::set_var("RUST_LOG", "trace");
+				let mut builder = LoggerBuilder::new("");
+				builder.with_colors(true);
+				builder.init().unwrap();
+				log::error!("{}", RAW_LINE);
+			},
+		);
+
+		if let Some(output) = output {
+			let stderr = String::from_utf8(output.stderr).unwrap();
+			// The log messages should always be sanitized.
+			assert!(!stderr.contains(RAW_LINE));
+			assert!(stderr.contains(SANITIZED_LINE));
+
+			// The part where the timestamp, the logging level, etc. is printed out doesn't
+			// always have to be sanitized unless it's necessary, and here it shouldn't be.
+			assert!(stderr.contains("\x1B[31mERROR\x1B[0m"));
+
+			// Make sure the logs aren't being duplicated.
+			assert_eq!(stderr.find("ERROR"), stderr.rfind("ERROR"));
+			assert_eq!(stderr.find(SANITIZED_LINE), stderr.rfind(SANITIZED_LINE));
 		}
 	}
 }

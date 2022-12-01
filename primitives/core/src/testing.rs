@@ -152,10 +152,20 @@ impl Default for TaskExecutor {
 
 #[cfg(feature = "std")]
 impl crate::traits::SpawnNamed for TaskExecutor {
-	fn spawn_blocking(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+	fn spawn_blocking(
+		&self,
+		_name: &'static str,
+		_group: Option<&'static str>,
+		future: futures::future::BoxFuture<'static, ()>,
+	) {
 		self.0.spawn_ok(future);
 	}
-	fn spawn(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+	fn spawn(
+		&self,
+		_name: &'static str,
+		_group: Option<&'static str>,
+		future: futures::future::BoxFuture<'static, ()>,
+	) {
 		self.0.spawn_ok(future);
 	}
 }
@@ -165,11 +175,17 @@ impl crate::traits::SpawnEssentialNamed for TaskExecutor {
 	fn spawn_essential_blocking(
 		&self,
 		_: &'static str,
+		_: Option<&'static str>,
 		future: futures::future::BoxFuture<'static, ()>,
 	) {
 		self.0.spawn_ok(future);
 	}
-	fn spawn_essential(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+	fn spawn_essential(
+		&self,
+		_: &'static str,
+		_: Option<&'static str>,
+		future: futures::future::BoxFuture<'static, ()>,
+	) {
 		self.0.spawn_ok(future);
 	}
 }

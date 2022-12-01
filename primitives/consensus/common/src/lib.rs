@@ -26,7 +26,8 @@ use std::{sync::Arc, time::Duration};
 use futures::prelude::*;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, DigestFor, HashFor, NumberFor},
+	traits::{Block as BlockT, HashFor},
+	Digest,
 };
 use sp_state_machine::StorageProof;
 
@@ -111,8 +112,7 @@ pub struct Proposal<Block: BlockT, Transaction, Proof> {
 	/// Proof that was recorded while building the block.
 	pub proof: Proof,
 	/// The storage changes while building this block.
-	pub storage_changes:
-		sp_state_machine::StorageChanges<Transaction, HashFor<Block>, NumberFor<Block>>,
+	pub storage_changes: sp_state_machine::StorageChanges<Transaction, HashFor<Block>>,
 }
 
 /// Error that is returned when [`ProofRecording`] requested to record a proof,
@@ -224,7 +224,7 @@ pub trait Proposer<B: BlockT> {
 	fn propose(
 		self,
 		inherent_data: InherentData,
-		inherent_digests: DigestFor<B>,
+		inherent_digests: Digest,
 		max_duration: Duration,
 		block_size_limit: Option<usize>,
 	) -> Self::Proposal;

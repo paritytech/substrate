@@ -211,7 +211,7 @@ fn record_proof_works() {
 		None,
 		8,
 	);
-	execution_proof_check_on_trie_backend::<_, u64, _, _>(
+	execution_proof_check_on_trie_backend(
 		&backend,
 		&mut overlay,
 		&executor,

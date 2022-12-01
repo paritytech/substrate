@@ -19,7 +19,7 @@
 
 use crate::{
 	codec::{Codec, Decode, Encode, MaxEncodedLen},
-	generic::{Digest, DigestItem},
+	generic::Digest,
 	scale_info::{MetaType, StaticTypeInfo, TypeInfo},
 	transaction_validity::{
 		TransactionSource, TransactionValidity, TransactionValidityError, UnknownTransaction,
@@ -548,10 +548,7 @@ impl CheckEqual for sp_core::H256 {
 	}
 }
 
-impl<H: PartialEq + Eq + Debug> CheckEqual for super::generic::DigestItem<H>
-where
-	H: Encode,
-{
+impl CheckEqual for super::generic::DigestItem {
 	#[cfg(feature = "std")]
 	fn check_equal(&self, other: &Self) {
 		if self != other {
@@ -642,7 +639,7 @@ pub trait Header:
 		extrinsics_root: Self::Hash,
 		state_root: Self::Hash,
 		parent_hash: Self::Hash,
-		digest: Digest<Self::Hash>,
+		digest: Digest,
 	) -> Self;
 
 	/// Returns a reference to the header number.
@@ -666,9 +663,9 @@ pub trait Header:
 	fn set_parent_hash(&mut self, hash: Self::Hash);
 
 	/// Returns a reference to the digest.
-	fn digest(&self) -> &Digest<Self::Hash>;
+	fn digest(&self) -> &Digest;
 	/// Get a mutable reference to the digest.
-	fn digest_mut(&mut self) -> &mut Digest<Self::Hash>;
+	fn digest_mut(&mut self) -> &mut Digest;
 
 	/// Returns the hash of the header.
 	fn hash(&self) -> Self::Hash {
@@ -763,9 +760,6 @@ pub type HashFor<B> = <<B as Block>::Header as Header>::Hashing;
 /// Extract the number type for a block.
 pub type NumberFor<B> = <<B as Block>::Header as Header>::Number;
 /// Extract the digest type for a block.
-pub type DigestFor<B> = Digest<<<B as Block>::Header as Header>::Hash>;
-/// Extract the digest item type for a block.
-pub type DigestItemFor<B> = DigestItem<<<B as Block>::Header as Header>::Hash>;
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.

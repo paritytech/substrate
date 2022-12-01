@@ -42,6 +42,8 @@ pub use scale_info;
 pub use serde;
 pub use sp_core::Void;
 #[doc(hidden)]
+pub use sp_core_hashing_proc_macro;
+#[doc(hidden)]
 pub use sp_io::{self, storage::root as storage_root};
 #[doc(hidden)]
 pub use sp_runtime::RuntimeDebug;
@@ -50,6 +52,8 @@ pub use sp_runtime::RuntimeDebug;
 pub use sp_state_machine::BasicExternalities;
 #[doc(hidden)]
 pub use sp_std;
+#[doc(hidden)]
+pub use tt_call::*;
 
 #[macro_use]
 pub mod dispatch;
@@ -425,9 +429,7 @@ macro_rules! parameter_types {
 			/// Returns the key for this parameter type.
 			#[allow(unused)]
 			pub fn key() -> [u8; 16] {
-				$crate::sp_io::hashing::twox_128(
-					concat!(":", stringify!($name), ":").as_bytes()
-				)
+				$crate::sp_core_hashing_proc_macro::twox_128!(b":", $name, b":")
 			}
 
 			/// Set the value of this parameter type in the storage.
@@ -573,7 +575,7 @@ pub fn debug(data: &impl sp_std::fmt::Debug) {
 
 #[doc(inline)]
 pub use frame_support_procedural::{
-	construct_runtime, decl_storage, transactional, RuntimeDebugNoBound,
+	construct_runtime, decl_storage, match_and_insert, transactional, RuntimeDebugNoBound,
 };
 
 #[doc(hidden)]
@@ -1328,6 +1330,7 @@ pub mod pallet_prelude {
 		PartialEqNoBound, RuntimeDebug, RuntimeDebugNoBound, Twox128, Twox256, Twox64Concat,
 	};
 	pub use codec::{Decode, Encode, MaxEncodedLen};
+	pub use scale_info::TypeInfo;
 	pub use sp_runtime::{
 		traits::{MaybeSerializeDeserialize, Member, ValidateUnsigned},
 		transaction_validity::{
@@ -1476,11 +1479,11 @@ pub mod pallet_prelude {
 /// * [`traits::OnGenesis`]: contains some logic to write pallet version into storage.
 /// * `PalletErrorTypeInfo`: provides the type information for the pallet error, if defined.
 ///
-/// It declare `type Module` type alias for `Pallet`, used by [`construct_runtime`].
+/// It declares `type Module` type alias for `Pallet`, used by [`construct_runtime`].
 ///
 /// It implements [`traits::PalletInfoAccess`] on `Pallet` to ease access to pallet
 /// informations given by [`frame_support::traits::PalletInfo`].
-/// (The implementation use the associated type `frame_system::Config::PalletInfo`).
+/// (The implementation uses the associated type `frame_system::Config::PalletInfo`).
 ///
 /// It implements [`traits::StorageInfoTrait`] on `Pallet` which give information about all
 /// storages.
@@ -1746,7 +1749,7 @@ pub mod pallet_prelude {
 /// ```
 ///
 /// The optional attribute `#[pallet::unbounded]` allows to declare the storage as unbounded.
-/// When implementating the storage info (when #[pallet::generate_storage_info]` is specified
+/// When implementating the storage info (when `#[pallet::generate_storage_info]` is specified
 /// on the pallet struct placeholder), the size of the storage will be declared as unbounded.
 /// This can be useful for storage which can never go into PoV (Proof of Validity).
 ///

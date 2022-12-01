@@ -43,10 +43,10 @@ use std::{
 };
 
 /// Number of blocks we will add to the queue before waiting for the queue to catch up.
-const MAX_PENDING_BLOCKS: u64 = 1_024;
+const MAX_PENDING_BLOCKS: u64 = 10_000;
 
 /// Number of milliseconds to wait until next poll.
-const DELAY_TIME: u64 = 2_000;
+const DELAY_TIME: u64 = 200;
 
 /// Number of milliseconds that must have passed between two updates.
 const TIME_BETWEEN_UPDATES: u64 = 3_000;

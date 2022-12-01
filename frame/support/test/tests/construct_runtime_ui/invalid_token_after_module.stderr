@@ -1,4 +1,4 @@
-error: expected `::`
+error: Unexpected tokens, expected one of `::$ident` `::{`, `exclude_parts`, `use_parts`, `=`, `,`
  --> $DIR/invalid_token_after_module.rs:9:18
   |
 9 |         system: System ?

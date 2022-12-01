@@ -267,7 +267,7 @@ fn close_tip_works() {
 
 		let h = tip_hash();
 
-		assert_eq!(last_event(), TipEvent::NewTip(h));
+		assert_eq!(last_event(), TipEvent::NewTip { tip_hash: h });
 
 		assert_ok!(Tips::tip(Origin::signed(11), h.clone(), 10));
 
@@ -275,7 +275,7 @@ fn close_tip_works() {
 
 		assert_ok!(Tips::tip(Origin::signed(12), h.clone(), 10));
 
-		assert_eq!(last_event(), TipEvent::TipClosing(h));
+		assert_eq!(last_event(), TipEvent::TipClosing { tip_hash: h });
 
 		assert_noop!(Tips::close_tip(Origin::signed(0), h.into()), Error::<Test>::Premature);
 
@@ -284,7 +284,7 @@ fn close_tip_works() {
 		assert_ok!(Tips::close_tip(Origin::signed(0), h.into()));
 		assert_eq!(Balances::free_balance(3), 10);
 
-		assert_eq!(last_event(), TipEvent::TipClosed(h, 3, 10));
+		assert_eq!(last_event(), TipEvent::TipClosed { tip_hash: h, who: 3, payout: 10 });
 
 		assert_noop!(Tips::close_tip(Origin::signed(100), h.into()), Error::<Test>::UnknownTip);
 	});
@@ -306,14 +306,14 @@ fn slash_tip_works() {
 		assert_eq!(Balances::free_balance(0), 88);
 
 		let h = tip_hash();
-		assert_eq!(last_event(), TipEvent::NewTip(h));
+		assert_eq!(last_event(), TipEvent::NewTip { tip_hash: h });
 
 		// can't remove from any origin
 		assert_noop!(Tips::slash_tip(Origin::signed(0), h.clone()), BadOrigin);
 
 		// can remove from root.
 		assert_ok!(Tips::slash_tip(Origin::root(), h.clone()));
-		assert_eq!(last_event(), TipEvent::TipSlashed(h, 0, 12));
+		assert_eq!(last_event(), TipEvent::TipSlashed { tip_hash: h, finder: 0, deposit: 12 });
 
 		// tipper slashed
 		assert_eq!(Balances::reserved_balance(0), 0);

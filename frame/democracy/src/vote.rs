@@ -24,7 +24,7 @@ use sp_runtime::{
 	traits::{Saturating, Zero},
 	RuntimeDebug,
 };
-use sp_std::{convert::TryFrom, prelude::*, result::Result};
+use sp_std::prelude::*;
 
 /// A number of lock periods, plus a vote, one way or the other.
 #[derive(Copy, Clone, Eq, PartialEq, Default, RuntimeDebug)]
@@ -183,7 +183,7 @@ impl<Balance: Saturating + Ord + Zero + Copy, BlockNumber: Ord + Copy + Zero, Ac
 		match self {
 			Voting::Direct { votes, prior, .. } =>
 				votes.iter().map(|i| i.1.balance()).fold(prior.locked(), |a, i| a.max(i)),
-			Voting::Delegating { balance, .. } => *balance,
+			Voting::Delegating { balance, prior, .. } => *balance.max(&prior.locked()),
 		}
 	}
 

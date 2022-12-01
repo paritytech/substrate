@@ -20,7 +20,10 @@
 /// ! environment that provides the seal interface as imported functions.
 use super::{code::WasmModule, Config};
 use sp_core::crypto::UncheckedFrom;
-use sp_sandbox::{EnvironmentDefinitionBuilder, Instance, Memory};
+use sp_sandbox::{
+	default_executor::{EnvironmentDefinitionBuilder, Instance, Memory},
+	SandboxEnvironmentBuilder, SandboxInstance,
+};
 
 /// Minimal execution environment without any exported functions.
 pub struct Sandbox {

@@ -64,18 +64,26 @@
 //! ### Get current timestamp
 //!
 //! ```
-//! use frame_support::{decl_module, dispatch};
-//! # use pallet_timestamp as timestamp;
-//! use frame_system::ensure_signed;
+//! use pallet_timestamp::{self as timestamp};
 //!
-//! pub trait Config: timestamp::Config {}
+//! #[frame_support::pallet]
+//! pub mod pallet {
+//! 	use super::*;
+//! 	use frame_support::pallet_prelude::*;
+//! 	use frame_system::pallet_prelude::*;
 //!
-//! decl_module! {
-//! 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
-//! 		#[weight = 0]
-//! 		pub fn get_time(origin) -> dispatch::DispatchResult {
+//! 	#[pallet::pallet]
+//! 	pub struct Pallet<T>(_);
+//!
+//! 	#[pallet::config]
+//! 	pub trait Config: frame_system::Config + timestamp::Config {}
+//!
+//! 	#[pallet::call]
+//! 	impl<T: Config> Pallet<T> {
+//! 		#[pallet::weight(0)]
+//! 		pub fn get_time(origin: OriginFor<T>) -> DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
-//! 			let _now = <timestamp::Module<T>>::get();
+//! 			let _now = <timestamp::Pallet<T>>::get();
 //! 			Ok(())
 //! 		}
 //! 	}

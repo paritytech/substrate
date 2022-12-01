@@ -30,8 +30,6 @@ use frame_support::{
 use sp_authority_discovery::AuthorityId;
 use sp_std::prelude::*;
 
-use core::convert::TryFrom;
-
 pub use pallet::*;
 
 #[frame_support::pallet]

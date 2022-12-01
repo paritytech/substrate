@@ -63,7 +63,9 @@ frame_support::decl_error! {
 		TestError,
 		/// Error documentation
 		/// with multiple lines
-		AnotherError
+		AnotherError,
+		// Required by construct_runtime
+		CallFiltered,
 	}
 }
 

@@ -255,7 +255,6 @@ impl<B: BlockT> ExtraRequests<B> {
 
 	/// Get some key metrics.
 	pub(crate) fn metrics(&self) -> Metrics {
-		use std::convert::TryInto;
 		Metrics {
 			pending_requests: self.pending_requests.len().try_into().unwrap_or(std::u32::MAX),
 			active_requests: self.active_requests.len().try_into().unwrap_or(std::u32::MAX),

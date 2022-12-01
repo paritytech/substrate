@@ -2,7 +2,7 @@
 name = "sc-client-api"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
@@ -36,9 +36,9 @@ sp-state-machine = { version = "0.10.0-dev", path = "../../primitives/state-mach
 sp-trie = { version = "4.0.0-dev", path = "../../primitives/trie" }
 sp-storage = { version = "4.0.0-dev", path = "../../primitives/storage" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.9.0", path = "../../utils/prometheus" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../utils/prometheus" }
 
 [dev-dependencies]
 sp-test-primitives = { version = "2.0.0", path = "../../primitives/test-primitives" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
-thiserror = "1.0.21"
+thiserror = "1.0.30"

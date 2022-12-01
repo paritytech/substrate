@@ -33,11 +33,9 @@ use crate::{
 	config::{parse_str_addr, Params, TransportConfig},
 	discovery::DiscoveryConfig,
 	error::Error,
-	light_client_requests,
 	network_state::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
-	on_demand_layer::AlwaysBadChecker,
 	protocol::{
 		self,
 		event::Event,
@@ -58,10 +56,10 @@ use libp2p::{
 	},
 	kad::record,
 	multiaddr,
-	ping::handler::PingFailure,
+	ping::Failure as PingFailure,
 	swarm::{
-		protocols_handler::NodeHandlerWrapperError, AddressScore, NetworkBehaviour, SwarmBuilder,
-		SwarmEvent,
+		protocols_handler::NodeHandlerWrapperError, AddressScore, DialError, NetworkBehaviour,
+		SwarmBuilder, SwarmEvent,
 	},
 	Multiaddr, PeerId,
 };
@@ -178,7 +176,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		// Private and public keys configuration.
 		let local_identity = params.network_config.node_key.clone().into_keypair()?;
 		let local_public = local_identity.public();
-		let local_peer_id = local_public.clone().into_peer_id();
+		let local_peer_id = local_public.clone().to_peer_id();
 		info!(
 			target: "sub-libp2p",
 			"🏷 Local node identity is: {}",
@@ -238,12 +236,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			}
 		})?;
 
-		let checker = params
-			.on_demand
-			.as_ref()
-			.map(|od| od.checker().clone())
-			.unwrap_or_else(|| Arc::new(AlwaysBadChecker));
-
 		let num_connected = Arc::new(AtomicUsize::new(0));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 
@@ -254,14 +246,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				"{} ({})",
 				params.network_config.client_version, params.network_config.node_name
 			);
-
-			let light_client_request_sender = {
-				light_client_requests::sender::LightClientRequestSender::new(
-					&params.protocol_id,
-					checker,
-					peerset_handle.clone(),
-				)
-			};
 
 			let discovery_config = {
 				let mut config = DiscoveryConfig::new(local_public.clone());
@@ -347,7 +331,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					protocol,
 					user_agent,
 					local_public,
-					light_client_request_sender,
 					discovery_config,
 					params.block_request_protocol_config,
 					params.state_request_protocol_config,
@@ -447,7 +430,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			service,
 			import_queue: params.import_queue,
 			from_service,
-			light_client_rqs: params.on_demand.and_then(|od| od.extract_receiver()),
 			event_streams: out_events::OutChannels::new(params.metrics_registry.as_ref())?,
 			peers_notifications_sinks,
 			tx_handler_controller,
@@ -1097,6 +1079,15 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`. It can also
 	/// consist of only `/p2p/<peerid>`.
 	///
+	/// The node will start establishing/accepting connections and substreams to/from peers in this
+	/// set, if it doesn't have any substream open with them yet.
+	///
+	/// Note however, if a call to this function results in less peers on the reserved set, they
+	/// will not necessarily get disconnected (depending on available free slots in the peer set).
+	/// If you want to also disconnect those removed peers, you will have to call
+	/// `remove_from_peers_set` on those in addition to updating the reserved set. You can omit
+	/// this step if the peer set is in reserved only mode.
+	///
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
 	/// invalid peer ID (which includes the local peer ID).
 	pub fn set_reserved_peers(
@@ -1455,8 +1446,6 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	import_queue: Box<dyn ImportQueue<B>>,
 	/// Messages from the [`NetworkService`] that must be processed.
 	from_service: TracingUnboundedReceiver<ServiceToWorkerMsg<B, H>>,
-	/// Receiver for queries from the light client that must be processed.
-	light_client_rqs: Option<TracingUnboundedReceiver<light_client_requests::sender::Request<B>>>,
 	/// Senders for events that happen on the network.
 	event_streams: out_events::OutChannels,
 	/// Prometheus network metrics.
@@ -1479,23 +1468,6 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 		// Poll the import queue for actions to perform.
 		this.import_queue
 			.poll_actions(cx, &mut NetworkLink { protocol: &mut this.network_service });
-
-		// Check for new incoming light client requests.
-		if let Some(light_client_rqs) = this.light_client_rqs.as_mut() {
-			while let Poll::Ready(Some(rq)) = light_client_rqs.poll_next_unpin(cx) {
-				let result = this.network_service.behaviour_mut().light_client_request(rq);
-				match result {
-					Ok(()) => {},
-					Err(light_client_requests::sender::SendRequestError::TooManyRequests) => {
-						warn!("Couldn't start light client request: too many pending requests");
-					},
-				}
-
-				if let Some(metrics) = this.metrics.as_ref() {
-					metrics.issued_light_requests.inc();
-				}
-			}
-		}
 
 		// At the time of writing of this comment, due to a high volume of messages, the network
 		// worker sometimes takes a long time to process the loop below. When that happens, the
@@ -1873,8 +1845,13 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					peer_id,
 					endpoint,
 					num_established,
+					concurrent_dial_errors,
 				}) => {
-					debug!(target: "sub-libp2p", "Libp2p => Connected({:?})", peer_id);
+					if let Some(errors) = concurrent_dial_errors {
+						debug!(target: "sub-libp2p", "Libp2p => Connected({:?}) with errors: {:?}", peer_id, errors);
+					} else {
+						debug!(target: "sub-libp2p", "Libp2p => Connected({:?})", peer_id);
+					}
 
 					if let Some(metrics) = this.metrics.as_ref() {
 						let direction = match endpoint {
@@ -1942,37 +1919,41 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						metrics.listeners_local_addresses.dec();
 					}
 				},
-				Poll::Ready(SwarmEvent::UnreachableAddr { peer_id, address, error, .. }) => {
-					trace!(
-						target: "sub-libp2p",
-						"Libp2p => Failed to reach {:?} through {:?}: {}",
-						peer_id, address, error,
-					);
+				Poll::Ready(SwarmEvent::OutgoingConnectionError { peer_id, error }) => {
+					if let Some(peer_id) = peer_id {
+						trace!(
+							target: "sub-libp2p",
+							"Libp2p => Failed to reach {:?}: {}",
+							peer_id, error,
+						);
 
-					if this.boot_node_ids.contains(&peer_id) {
-						if let PendingConnectionError::InvalidPeerId = error {
-							error!(
-								"💔 The bootnode you want to connect to at `{}` provided a different peer ID than the one you expect: `{}`.",
-								address, peer_id,
-							);
+						if this.boot_node_ids.contains(&peer_id) {
+							if let DialError::InvalidPeerId = error {
+								error!(
+									"💔 The bootnode you want to connect provided a different peer ID than the one you expect: `{}`.",
+									peer_id,
+								);
+							}
 						}
 					}
 
 					if let Some(metrics) = this.metrics.as_ref() {
-						match error {
-							PendingConnectionError::ConnectionLimit(_) => metrics
+						let reason = match error {
+							DialError::ConnectionLimit(_) => Some("limit-reached"),
+							DialError::InvalidPeerId => Some("invalid-peer-id"),
+							DialError::Transport(_) | DialError::ConnectionIo(_) =>
+								Some("transport-error"),
+							DialError::Banned |
+							DialError::LocalPeerId |
+							DialError::NoAddresses |
+							DialError::DialPeerConditionFalse(_) |
+							DialError::Aborted => None, // ignore them
+						};
+						if let Some(reason) = reason {
+							metrics
 								.pending_connections_errors_total
-								.with_label_values(&["limit-reached"])
-								.inc(),
-							PendingConnectionError::InvalidPeerId => metrics
-								.pending_connections_errors_total
-								.with_label_values(&["invalid-peer-id"])
-								.inc(),
-							PendingConnectionError::Transport(_) |
-							PendingConnectionError::IO(_) => metrics
-								.pending_connections_errors_total
-								.with_label_values(&["transport-error"])
-								.inc(),
+								.with_label_values(&[reason])
+								.inc();
 						}
 					}
 				},
@@ -1998,16 +1979,19 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					);
 					if let Some(metrics) = this.metrics.as_ref() {
 						let reason = match error {
-							PendingConnectionError::ConnectionLimit(_) => "limit-reached",
-							PendingConnectionError::InvalidPeerId => "invalid-peer-id",
+							PendingConnectionError::ConnectionLimit(_) => Some("limit-reached"),
+							PendingConnectionError::InvalidPeerId => Some("invalid-peer-id"),
 							PendingConnectionError::Transport(_) |
-							PendingConnectionError::IO(_) => "transport-error",
+							PendingConnectionError::IO(_) => Some("transport-error"),
+							PendingConnectionError::Aborted => None, // ignore it
 						};
 
-						metrics
-							.incoming_connections_errors_total
-							.with_label_values(&[reason])
-							.inc();
+						if let Some(reason) = reason {
+							metrics
+								.incoming_connections_errors_total
+								.with_label_values(&[reason])
+								.inc();
+						}
 					}
 				},
 				Poll::Ready(SwarmEvent::BannedPeer { peer_id, endpoint }) => {
@@ -2022,9 +2006,6 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							.with_label_values(&["banned"])
 							.inc();
 					}
-				},
-				Poll::Ready(SwarmEvent::UnknownPeerUnreachableAddr { address, error }) => {
-					trace!(target: "sub-libp2p", "Libp2p => UnknownPeerUnreachableAddr({}): {}", address, error)
 				},
 				Poll::Ready(SwarmEvent::ListenerClosed { reason, addresses, .. }) => {
 					if let Some(metrics) = this.metrics.as_ref() {

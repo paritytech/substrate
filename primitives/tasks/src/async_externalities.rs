@@ -134,10 +134,6 @@ impl Externalities for AsyncExternalities {
 		panic!("`child_storage_root`: should not be used in async externalities!")
 	}
 
-	fn storage_changes_root(&mut self, _parent: &[u8]) -> Result<Option<Vec<u8>>, ()> {
-		panic!("`storage_changes_root`: should not be used in async externalities!")
-	}
-
 	fn storage_start_transaction(&mut self) {
 		unimplemented!("Transactions are not supported by AsyncExternalities");
 	}

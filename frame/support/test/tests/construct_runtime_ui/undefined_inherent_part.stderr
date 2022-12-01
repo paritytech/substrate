@@ -66,8 +66,11 @@ help: consider importing one of these items
 error[E0277]: the trait bound `Runtime: frame_system::Config` is not satisfied
   --> $DIR/undefined_inherent_part.rs:20:6
    |
-8  |     pub trait Config: frame_system::Config {}
-   |                       -------------------- required by this bound in `pallet::Config`
-...
 20 | impl pallet::Config for Runtime {}
    |      ^^^^^^^^^^^^^^ the trait `frame_system::Config` is not implemented for `Runtime`
+   |
+note: required by a bound in `pallet::Config`
+  --> $DIR/undefined_inherent_part.rs:8:20
+   |
+8  |     pub trait Config: frame_system::Config {}
+   |                       ^^^^^^^^^^^^^^^^^^^^ required by this bound in `pallet::Config`

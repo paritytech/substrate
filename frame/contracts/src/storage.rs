@@ -182,7 +182,7 @@ where
 			let outcome =
 				child::kill_storage(&child_trie_info(&trie.trie_id), Some(remaining_key_budget));
 			let keys_removed = match outcome {
-				// This should not happen as our budget was large enough to remove all keys.
+				// This happens when our budget wasn't large enough to remove all keys.
 				KillStorageResult::SomeRemaining(count) => count,
 				KillStorageResult::AllRemoved(count) => {
 					// We do not care to preserve order. The contract is deleted already and

@@ -62,11 +62,7 @@ use sp_runtime::{
 	app_crypto::RuntimeAppPublic,
 	traits::{Extrinsic as ExtrinsicT, IdentifyAccount, One},
 };
-use sp_std::{
-	collections::btree_set::BTreeSet,
-	convert::{TryFrom, TryInto},
-	prelude::{Box, Vec},
-};
+use sp_std::{collections::btree_set::BTreeSet, prelude::*};
 
 /// Marker struct used to flag using all supported keys to sign a payload.
 pub struct ForAll {}

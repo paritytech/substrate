@@ -18,7 +18,6 @@
 //! The tests for functionality concerning locking and lock-voting.
 
 use super::*;
-use std::convert::TryFrom;
 
 fn aye(x: u8, balance: u64) -> AccountVote<u64> {
 	AccountVote::Standard {

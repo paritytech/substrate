@@ -40,7 +40,7 @@ fn init_block(block: u64) {
 	BeefyMmr::on_initialize(block);
 }
 
-pub fn beefy_log(log: ConsensusLog<BeefyId>) -> DigestItem<H256> {
+pub fn beefy_log(log: ConsensusLog<BeefyId>) -> DigestItem {
 	DigestItem::Consensus(BEEFY_ENGINE_ID, log.encode())
 }
 

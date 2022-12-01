@@ -2172,7 +2172,6 @@ impl<B: BlockT> ChainSync<B> {
 
 	/// Return some key metrics.
 	pub(crate) fn metrics(&self) -> Metrics {
-		use std::convert::TryInto;
 		Metrics {
 			queued_blocks: self.queue_blocks.len().try_into().unwrap_or(std::u32::MAX),
 			fork_targets: self.fork_targets.len().try_into().unwrap_or(std::u32::MAX),

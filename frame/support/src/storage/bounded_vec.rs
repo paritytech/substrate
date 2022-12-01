@@ -28,7 +28,7 @@ use core::{
 	ops::{Deref, Index, IndexMut},
 	slice::SliceIndex,
 };
-use sp_std::{convert::TryFrom, marker::PhantomData, prelude::*};
+use sp_std::{marker::PhantomData, prelude::*};
 
 /// A bounded vector.
 ///
@@ -130,7 +130,7 @@ impl<T, S> BoundedVec<T, S> {
 		self.0.retain(f)
 	}
 
-	/// Exactly the same semantics as [`Vec::get_mut`].
+	/// Exactly the same semantics as [`slice::get_mut`].
 	pub fn get_mut<I: SliceIndex<[T]>>(
 		&mut self,
 		index: I,
@@ -349,7 +349,6 @@ pub mod test {
 	use super::*;
 	use crate::Twox128;
 	use sp_io::TestExternalities;
-	use sp_std::convert::TryInto;
 
 	crate::parameter_types! {
 		pub const Seven: u32 = 7;

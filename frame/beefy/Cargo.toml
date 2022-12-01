@@ -2,8 +2,10 @@
 name = "pallet-beefy"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
+repository = "https://github.com/paritytech/substrate"
+description = "BEEFY FRAME pallet"
 
 [dependencies]
 codec = { version = "2.2.0", package = "parity-scale-codec", default-features = false, features = ["derive"] }

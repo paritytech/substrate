@@ -389,7 +389,6 @@ where
 {
 	use sp_application_crypto::AppKey;
 	use sp_core::crypto::Public;
-	use sp_std::convert::TryInto;
 
 	let encoded = localized_payload(round, set_id, &message);
 	let signature = SyncCryptoStore::sign_with(

@@ -35,15 +35,22 @@ Learn more about privileged functions and `Root` origin in the [`Origin`] type d
 This is an example of a module that exposes a privileged function:
 
 ```rust
-use frame_support::{decl_module, dispatch};
-use frame_system::ensure_root;
+#[frame_support::pallet]
+pub mod pallet {
+    use super::*;
+    use frame_support::pallet_prelude::*;
+    use frame_system::pallet_prelude::*;
 
-pub trait Config: frame_system::Config {}
+    #[pallet::pallet]
+    pub struct Pallet<T>(_);
 
-decl_module! {
-    pub struct Module<T: Config> for enum Call where origin: T::Origin {
-		#[weight = 0]
-        pub fn privileged_function(origin) -> dispatch::DispatchResult {
+    #[pallet::config]
+    pub trait Config: frame_system::Config {}
+
+    #[pallet::call]
+    impl<T: Config> Pallet<T> {
+        #[pallet::weight(0)]
+        pub fn privileged_function(origin: OriginFor<T>) -> DispatchResult {
             ensure_root(origin)?;
 
             // do something...

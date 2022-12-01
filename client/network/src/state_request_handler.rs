@@ -21,7 +21,7 @@ use crate::{
 	chain::Client,
 	config::ProtocolId,
 	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
-	schema::v1::{StateEntry, StateRequest, StateResponse},
+	schema::v1::{KeyValueStateEntry, StateEntry, StateRequest, StateResponse},
 	PeerId, ReputationChange,
 };
 use codec::{Decode, Encode};
@@ -66,7 +66,7 @@ fn generate_protocol_name(protocol_id: &ProtocolId) -> String {
 	let mut s = String::new();
 	s.push_str("/");
 	s.push_str(protocol_id.as_ref());
-	s.push_str("/state/1");
+	s.push_str("/state/2");
 	s
 }
 
@@ -75,7 +75,7 @@ fn generate_protocol_name(protocol_id: &ProtocolId) -> String {
 struct SeenRequestsKey<B: BlockT> {
 	peer: PeerId,
 	block: B::Hash,
-	start: Vec<u8>,
+	start: Vec<Vec<u8>>,
 }
 
 #[allow(clippy::derive_hash_xor_eq)]
@@ -169,10 +169,10 @@ impl<B: BlockT> StateRequestHandler<B> {
 
 		trace!(
 			target: LOG_TARGET,
-			"Handling state request from {}: Block {:?}, Starting at {:?}, no_proof={}",
+			"Handling state request from {}: Block {:?}, Starting at {:x?}, no_proof={}",
 			peer,
 			request.block,
-			sp_core::hexdisplay::HexDisplay::from(&request.start),
+			&request.start,
 			request.no_proof,
 		);
 
@@ -180,36 +180,45 @@ impl<B: BlockT> StateRequestHandler<B> {
 			let mut response = StateResponse::default();
 
 			if !request.no_proof {
-				let (proof, count) = self.client.read_proof_collection(
+				let (proof, _count) = self.client.read_proof_collection(
 					&BlockId::hash(block),
-					&request.start,
+					request.start.as_slice(),
 					MAX_RESPONSE_BYTES,
 				)?;
 				response.proof = proof.encode();
-				if count == 0 {
-					response.complete = true;
-				}
 			} else {
 				let entries = self.client.storage_collection(
 					&BlockId::hash(block),
-					&request.start,
+					request.start.as_slice(),
 					MAX_RESPONSE_BYTES,
 				)?;
-				response.entries =
-					entries.into_iter().map(|(key, value)| StateEntry { key, value }).collect();
-				if response.entries.is_empty() {
-					response.complete = true;
-				}
+				response.entries = entries
+					.into_iter()
+					.map(|(state, complete)| KeyValueStateEntry {
+						state_root: state.state_root,
+						entries: state
+							.key_values
+							.into_iter()
+							.map(|(key, value)| StateEntry { key, value })
+							.collect(),
+						complete,
+					})
+					.collect();
 			}
 
 			trace!(
 				target: LOG_TARGET,
-				"StateResponse contains {} keys, {}, proof nodes, complete={}, from {:?} to {:?}",
+				"StateResponse contains {} keys, {}, proof nodes, from {:?} to {:?}",
 				response.entries.len(),
 				response.proof.len(),
-				response.complete,
-				response.entries.first().map(|e| sp_core::hexdisplay::HexDisplay::from(&e.key)),
-				response.entries.last().map(|e| sp_core::hexdisplay::HexDisplay::from(&e.key)),
+				response.entries.get(0).and_then(|top| top
+					.entries
+					.first()
+					.map(|e| sp_core::hexdisplay::HexDisplay::from(&e.key))),
+				response.entries.get(0).and_then(|top| top
+					.entries
+					.last()
+					.map(|e| sp_core::hexdisplay::HexDisplay::from(&e.key))),
 			);
 			if let Some(value) = self.seen_requests.get_mut(&key) {
 				// If this is the first time we have processed this request, we need to change

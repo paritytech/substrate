@@ -44,7 +44,7 @@ use sp_runtime::{
 	traits::{Bounded, Hash},
 	Perbill,
 };
-use sp_std::{convert::TryInto, default::Default, vec, vec::Vec};
+use sp_std::prelude::*;
 
 /// How many batches we do per API benchmark.
 const API_BENCHMARK_BATCHES: u32 = 20;

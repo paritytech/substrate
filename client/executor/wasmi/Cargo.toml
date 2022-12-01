@@ -2,7 +2,7 @@
 name = "sc-executor-wasmi"
 version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
@@ -15,10 +15,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 log = "0.4.8"
-wasmi = "0.9.0"
+wasmi = "0.9.1"
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 sc-executor-common = { version = "0.10.0-dev", path = "../common" }
-sc-allocator = { version = "4.0.0-dev", path = "../../allocator" }
+sc-allocator = { version = "4.1.0-dev", path = "../../allocator" }
 sp-wasm-interface = { version = "4.0.0-dev", path = "../../../primitives/wasm-interface" }
 sp-runtime-interface = { version = "4.0.0-dev", path = "../../../primitives/runtime-interface" }
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }

@@ -2,7 +2,7 @@
 name = "sp-runtime-interface-proc-macro"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
@@ -16,8 +16,8 @@ targets = ["x86_64-unknown-linux-gnu"]
 proc-macro = true
 
 [dependencies]
-syn = { version = "1.0.80", features = ["full", "visit", "fold", "extra-traits"] }
+syn = { version = "1.0.81", features = ["full", "visit", "fold", "extra-traits"] }
 quote = "1.0.10"
 proc-macro2 = "1.0.29"
 Inflector = "0.11.4"
-proc-macro-crate = "1.0.0"
+proc-macro-crate = "1.1.0"

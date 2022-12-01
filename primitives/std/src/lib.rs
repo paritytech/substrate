@@ -98,6 +98,8 @@ pub mod prelude {
 		boxed::Box,
 		clone::Clone,
 		cmp::{Eq, PartialEq, Reverse},
+		convert::{TryFrom, TryInto},
+		iter::IntoIterator,
 		vec::Vec,
 	};
 

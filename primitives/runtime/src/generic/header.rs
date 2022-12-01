@@ -51,7 +51,7 @@ pub struct Header<Number: Copy + Into<U256> + TryFrom<U256>, Hash: HashT> {
 	/// The merkle root of the extrinsics.
 	pub extrinsics_root: Hash::Output,
 	/// A chain-specific digest of data useful for light clients or referencing auxiliary data.
-	pub digest: Digest<Hash::Output>,
+	pub digest: Digest,
 }
 
 #[cfg(feature = "std")]
@@ -150,11 +150,11 @@ where
 		self.parent_hash = hash
 	}
 
-	fn digest(&self) -> &Digest<Self::Hash> {
+	fn digest(&self) -> &Digest {
 		&self.digest
 	}
 
-	fn digest_mut(&mut self) -> &mut Digest<Self::Hash> {
+	fn digest_mut(&mut self) -> &mut Digest {
 		#[cfg(feature = "std")]
 		log::debug!(target: "header", "Retrieving mutable reference to digest");
 		&mut self.digest
@@ -165,7 +165,7 @@ where
 		extrinsics_root: Self::Hash,
 		state_root: Self::Hash,
 		parent_hash: Self::Hash,
-		digest: Digest<Self::Hash>,
+		digest: Digest,
 	) -> Self {
 		Self { number, extrinsics_root, state_root, parent_hash, digest }
 	}
@@ -235,10 +235,7 @@ mod tests {
 			state_root: BlakeTwo256::hash(b"3"),
 			extrinsics_root: BlakeTwo256::hash(b"4"),
 			digest: crate::generic::Digest {
-				logs: vec![
-					crate::generic::DigestItem::ChangesTrieRoot(BlakeTwo256::hash(b"5")),
-					crate::generic::DigestItem::Other(b"6".to_vec()),
-				],
+				logs: vec![crate::generic::DigestItem::Other(b"6".to_vec())],
 			},
 		};
 
@@ -251,9 +248,7 @@ mod tests {
 				72, 51, 123, 15, 62, 20, 134, 32, 23, 61, 170, 165, 249, 77, 0, 216, 129, 112, 93,
 				203, 240, 170, 131, 239, 218, 186, 97, 210, 237, 225, 235, 134, 73, 33, 73, 151,
 				87, 78, 32, 196, 100, 56, 138, 23, 36, 32, 210, 84, 3, 104, 43, 187, 184, 12, 73,
-				104, 49, 200, 204, 31, 143, 13, 8, 2, 112, 178, 1, 53, 47, 36, 191, 28, 151, 112,
-				185, 159, 143, 113, 32, 24, 33, 65, 28, 244, 20, 55, 124, 155, 140, 45, 188, 238,
-				97, 219, 135, 214, 0, 4, 54
+				104, 49, 200, 204, 31, 143, 13, 4, 0, 4, 54
 			],
 		);
 		assert_eq!(header, Header::<u32, BlakeTwo256>::decode(&mut &header_encoded[..]).unwrap());
@@ -264,10 +259,7 @@ mod tests {
 			state_root: BlakeTwo256::hash(b"3000"),
 			extrinsics_root: BlakeTwo256::hash(b"4000"),
 			digest: crate::generic::Digest {
-				logs: vec![
-					crate::generic::DigestItem::Other(b"5000".to_vec()),
-					crate::generic::DigestItem::ChangesTrieRoot(BlakeTwo256::hash(b"6000")),
-				],
+				logs: vec![crate::generic::DigestItem::Other(b"5000".to_vec())],
 			},
 		};
 
@@ -280,9 +272,7 @@ mod tests {
 				47, 12, 107, 88, 153, 146, 55, 21, 226, 186, 110, 48, 167, 187, 67, 183, 228, 232,
 				118, 136, 30, 254, 11, 87, 48, 112, 7, 97, 31, 82, 146, 110, 96, 87, 152, 68, 98,
 				162, 227, 222, 78, 14, 244, 194, 120, 154, 112, 97, 222, 144, 174, 101, 220, 44,
-				111, 126, 54, 34, 155, 220, 253, 124, 8, 0, 16, 53, 48, 48, 48, 2, 42, 105, 109,
-				150, 206, 223, 24, 44, 164, 77, 27, 137, 177, 220, 25, 170, 140, 35, 156, 246, 233,
-				112, 26, 23, 192, 61, 226, 14, 84, 219, 144, 252
+				111, 126, 54, 34, 155, 220, 253, 124, 4, 0, 16, 53, 48, 48, 48
 			],
 		);
 		assert_eq!(header, Header::<u32, BlakeTwo256>::decode(&mut &header_encoded[..]).unwrap());

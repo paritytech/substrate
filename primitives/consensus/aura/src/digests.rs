@@ -25,7 +25,6 @@ use crate::AURA_ENGINE_ID;
 use codec::{Codec, Encode};
 use sp_consensus_slots::Slot;
 use sp_runtime::generic::DigestItem;
-use sp_std::fmt::Debug;
 
 /// A digest item which is usable with aura consensus.
 pub trait CompatibleDigestItem<Signature>: Sized {
@@ -42,10 +41,9 @@ pub trait CompatibleDigestItem<Signature>: Sized {
 	fn as_aura_pre_digest(&self) -> Option<Slot>;
 }
 
-impl<Signature, Hash> CompatibleDigestItem<Signature> for DigestItem<Hash>
+impl<Signature> CompatibleDigestItem<Signature> for DigestItem
 where
 	Signature: Codec,
-	Hash: Debug + Send + Sync + Eq + Clone + Codec + 'static,
 {
 	fn aura_seal(signature: Signature) -> Self {
 		DigestItem::Seal(AURA_ENGINE_ID, signature.encode())

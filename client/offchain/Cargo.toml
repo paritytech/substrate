@@ -4,7 +4,7 @@ name = "sc-offchain"
 version = "4.0.0-dev"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 readme = "README.md"
@@ -17,9 +17,8 @@ bytes = "1.0"
 codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
 hex = "0.4"
 fnv = "1.0.6"
-futures = "0.3.9"
-futures-timer = "3.0.1"
-log = "0.4.8"
+futures = "0.3.16"
+futures-timer = "3.0.2"
 num_cpus = "1.10"
 parking_lot = "0.11.1"
 rand = "0.7.2"
@@ -31,8 +30,10 @@ sp-offchain = { version = "4.0.0-dev", path = "../../primitives/offchain" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 threadpool = "1.7"
-hyper = "0.14.11"
+hyper = { version = "0.14.14", features = ["stream", "http2"] }
 hyper-rustls = "0.22.1"
+once_cell = "1.8"
+tracing = "0.1.29"
 
 [dev-dependencies]
 sc-client-db = { version = "0.10.0-dev", default-features = true, path = "../db" }
@@ -42,7 +43,7 @@ sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/a
 sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
-tokio = "1.10"
+tokio = "1.13"
 lazy_static = "1.4.0"
 
 [features]

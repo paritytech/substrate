@@ -173,13 +173,6 @@ pub trait Externalities: ExtensionStore {
 	/// operation.
 	fn storage_append(&mut self, key: Vec<u8>, value: Vec<u8>);
 
-	/// Get the changes trie root of the current storage overlay at a block with given `parent`.
-	///
-	/// `parent` expects a SCALE encoded hash.
-	///
-	/// The returned hash is defined by the `Block` and is SCALE encoded.
-	fn storage_changes_root(&mut self, parent: &[u8]) -> Result<Option<Vec<u8>>, ()>;
-
 	/// Start a new nested transaction.
 	///
 	/// This allows to either commit or roll back all changes made after this call to the

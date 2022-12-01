@@ -59,7 +59,10 @@ pub fn expand_type_values(def: &mut Def) -> proc_macro2::TokenStream {
 			(Default::default(), Default::default())
 		};
 
+		let docs = &type_value.docs;
+
 		expand.extend(quote::quote_spanned!(type_value.attr_span =>
+			#( #[doc = #docs] )*
 			#vis struct #ident<#struct_use_gen>(core::marker::PhantomData<((), #struct_use_gen)>);
 			impl<#struct_impl_gen> #frame_support::traits::Get<#type_> for #ident<#struct_use_gen>
 			#where_clause

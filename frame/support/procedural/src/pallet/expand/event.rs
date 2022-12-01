@@ -134,12 +134,12 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 			impl<#type_impl_gen> Pallet<#type_use_gen> #completed_where_clause {
 				#fn_vis fn deposit_event(event: Event<#event_use_gen>) {
 					let event = <
-						<T as Config#trait_use_gen>::Event as
+						<T as Config #trait_use_gen>::Event as
 						From<Event<#event_use_gen>>
 					>::from(event);
 
 					let event = <
-						<T as Config#trait_use_gen>::Event as
+						<T as Config #trait_use_gen>::Event as
 						Into<<T as #frame_system::Config>::Event>
 					>::into(event);
 

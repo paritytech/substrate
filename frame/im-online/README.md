@@ -26,21 +26,29 @@ It is submitted as an Unsigned Transaction via off-chain workers.
 ## Usage
 
 ```rust
-use frame_support::{decl_module, dispatch};
-use frame_system::ensure_signed;
 use pallet_im_online::{self as im_online};
 
-pub trait Config: im_online::Config {}
+#[frame_support::pallet]
+pub mod pallet {
+    use super::*;
+    use frame_support::pallet_prelude::*;
+    use frame_system::pallet_prelude::*;
 
-decl_module! {
-	pub struct Module<T: Config> for enum Call where origin: T::Origin {
-		#[weight = 0]
-		pub fn is_online(origin, authority_index: u32) -> dispatch::DispatchResult {
-			let _sender = ensure_signed(origin)?;
-			let _is_online = <im_online::Module<T>>::is_online(authority_index);
-			Ok(())
-		}
-	}
+    #[pallet::pallet]
+    pub struct Pallet<T>(_);
+
+    #[pallet::config]
+    pub trait Config: frame_system::Config + im_online::Config {}
+
+    #[pallet::call]
+    impl<T: Config> Pallet<T> {
+        #[pallet::weight(0)]
+        pub fn is_online(origin: OriginFor<T>, authority_index: u32) -> DispatchResult {
+            let _sender = ensure_signed(origin)?;
+            let _is_online = <im_online::Pallet<T>>::is_online(authority_index);
+            Ok(())
+        }
+    }
 }
 ```
 

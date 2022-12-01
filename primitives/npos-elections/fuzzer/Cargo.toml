@@ -2,7 +2,7 @@
 name = "sp-npos-elections-fuzzer"
 version = "2.0.0-alpha.5"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
@@ -20,7 +20,7 @@ honggfuzz = "0.5"
 rand = { version = "0.7.3", features = ["std", "small_rng"] }
 sp-npos-elections = { version = "4.0.0-dev", path = ".." }
 sp-runtime = { version = "4.0.0-dev", path = "../../runtime" }
-structopt = "0.3.21"
+structopt = "0.3.25"
 
 [[bin]]
 name = "reduce"

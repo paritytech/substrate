@@ -87,8 +87,6 @@ impl RoundState {
 		round_state: &report::RoundState<AuthorityId>,
 		voters: &HashSet<AuthorityId>,
 	) -> Result<Self, Error> {
-		use std::convert::TryInto;
-
 		let prevotes = &round_state.prevote_ids;
 		let missing_prevotes = voters.difference(&prevotes).cloned().collect();
 
@@ -130,8 +128,6 @@ impl ReportedRoundStates {
 		AuthoritySet: ReportAuthoritySet,
 		VoterState: ReportVoterState,
 	{
-		use std::convert::TryFrom;
-
 		let voter_state = voter_state.get().ok_or(Error::EndpointNotReady)?;
 
 		let (set_id, current_voters) = authority_set.get();

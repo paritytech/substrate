@@ -40,13 +40,12 @@ variables:                         &default-vars
   ARCH:                            "x86_64"
   CI_IMAGE:                        "paritytech/ci-linux:production"
   # FIXME set to release
-  CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.12"
-  CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example pallet-example-* subkey chain-spec-builder"
+  CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.13"
+  CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example-* subkey chain-spec-builder"
   VAULT_SERVER_URL:                "https://vault.parity-mgmt-vault.parity.io"
   VAULT_AUTH_PATH:                 "gitlab-parity-io-jwt"
   VAULT_AUTH_ROLE:                 "cicd_gitlab_parity_${CI_PROJECT_NAME}"
   SIMNET_FEATURES_PATH:            "simnet_tests/tests"
-  PIPELINE_SCRIPTS_TAG:            "v0.1"
 
 default:
   cache:                           {}
@@ -178,6 +177,21 @@ default:
     | tee artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::trie::read::small.json'
   - sccache -s
 
+.build-linux-substrate-script:     &build-linux-substrate-script
+  - WASM_BUILD_NO_COLOR=1 time cargo build --release --verbose
+  - mv ./target/release/substrate ./artifacts/substrate/.
+  - echo -n "Substrate version = "
+  - if [ "${CI_COMMIT_TAG}" ]; then
+      echo "${CI_COMMIT_TAG}" | tee ./artifacts/substrate/VERSION;
+    else
+      ./artifacts/substrate/substrate --version |
+        sed -n -E 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
+          tee ./artifacts/substrate/VERSION;
+    fi
+  - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
+  - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
+  - sccache -s
+
 #### Vault secrets
 .vault-secrets:                    &vault-secrets
   secrets:
@@ -189,6 +203,9 @@ default:
       file:                        false
     GITHUB_PR_TOKEN:
       vault:                       cicd/gitlab/parity/GITHUB_PR_TOKEN@kv
+      file:                        false
+    GITHUB_TOKEN:
+      vault:                       cicd/gitlab/parity/GITHUB_TOKEN@kv
       file:                        false
     AWS_ACCESS_KEY_ID:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/AWS_ACCESS_KEY_ID@kv
@@ -214,8 +231,8 @@ default:
     GITHUB_RELEASE_TOKEN:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_RELEASE_TOKEN@kv
       file:                        false
-    GITHUB_TOKEN:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_TOKEN@kv
+    GITHUB_SSH_PRIV_KEY:
+      vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_SSH_PRIV_KEY@kv
       file:                        false
     GITHUB_USER:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_USER@kv
@@ -349,6 +366,8 @@ cargo-check-benches:
     - *rust-info-script
   script:
     - *cargo-check-benches-script
+  tags:
+    - linux-docker-benches
 
 node-bench-regression-guard:
   # it's not belong to `build` semantically, but dag jobs can't depend on each other
@@ -370,6 +389,9 @@ node-bench-regression-guard:
     CI_IMAGE:                      "paritytech/node-bench-regression-guard:latest"
   before_script: [""]
   script:
+    - echo "------- IMPORTANT -------"
+    - echo "node-bench-regression-guard depends on the results of a cargo-check-benches job"
+    - echo "In case of this job failure, check your pipeline's cargo-check-benches"
     - 'node-bench-regression-guard --reference artifacts/benches/master-*
        --compare-with artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA'
 
@@ -436,20 +458,20 @@ test-linux-stable:                 &test-linux
     - SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
     - sccache -s
 
-#unleash-check:
-  #stage:                           test
-  #<<:                              *docker-env
-  #<<:                              *test-refs-no-trigger
-  #script:
-    #- cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
-    #- cargo unleash de-dev-deps
+unleash-check:
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *test-refs-no-trigger
+  script:
+    - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
+    - cargo unleash de-dev-deps
     # Reuse build artifacts when running checks (cuts down check time by 3x)
     # TODO: Implement this optimization in cargo-unleash rather than here
-    #- mkdir -p target/unleash
-    #- export CARGO_TARGET_DIR=target/unleash
-    #- cargo unleash check ${CARGO_UNLEASH_PKG_DEF}
+    - mkdir -p target/unleash
+    - export CARGO_TARGET_DIR=target/unleash
+    - cargo unleash check ${CARGO_UNLEASH_PKG_DEF}
   # FIXME: this job must not fail, or unleash-to-crates-io will publish broken stuff
-  #allow_failure:                   true
+  allow_failure:                   true
 
 test-frame-examples-compile-to-wasm:
   # into one job
@@ -463,9 +485,9 @@ test-frame-examples-compile-to-wasm:
     RUSTFLAGS:                     "-Cdebug-assertions=y"
     RUST_BACKTRACE: 1
   script:
-    - cd frame/example-offchain-worker/
+    - cd frame/examples/offchain-worker/
     - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
-    - cd ../example
+    - cd ../basic
     - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
     - sccache -s
 
@@ -516,6 +538,35 @@ test-full-crypto-feature:
     - time cargo +nightly build --verbose --no-default-features --features full_crypto
     - sccache -s
 
+
+# Mostly same as the job above, additional instrumentation was added to push test run times
+# to the time series database.
+# This is temporary and will be eventually removed.
+bench-test-full-crypto-feature:
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *build-refs
+  variables:
+    <<:                            *default-vars
+    RUSTFLAGS:                     "-Cdebug-assertions=y"
+    RUST_BACKTRACE: 1
+  before_script: [""]
+  script:
+    # disable sccache for the bench purposes
+    - unset RUSTC_WRAPPER
+    - START_TIME=`date '+%s'`
+    - cd primitives/core/
+    - time cargo +nightly build --verbose --no-default-features --features full_crypto
+    - cd ../application-crypto
+    - time cargo +nightly build --verbose --no-default-features --features full_crypto
+    - END_TIME=`date '+%s'`
+    - TOTAL_TIME=`expr $END_TIME - $START_TIME`
+    # send the job time measuring to the prometheus endpoint
+    - curl -d "parity_gitlab_job_time{project=\"$CI_PROJECT_PATH\",job=\"$CI_JOB_NAME\",runner=\"gitlab\"} $TOTAL_TIME" -X POST $VM_LONGTERM_URI/api/v1/import/prometheus
+  tags:
+    - linux-docker-compare
+
+
 test-wasmer-sandbox:
   stage:                           test
   <<:                              *docker-env
@@ -555,7 +606,6 @@ cargo-check-macos:
         --substrate
         "$DEPENDENT_REPO"
         "$GITHUB_PR_TOKEN"
-    - cd "$DEPENDENT_REPO" && git rev-parse --abbrev-ref HEAD
 
 # Individual jobs are set up for each dependent project so that they can be ran in parallel.
 # Arguably we could generate a job for each companion in the PR's description using Gitlab's
@@ -571,7 +621,8 @@ check-dependent-cumulus:
   variables:
     DEPENDENT_REPO: cumulus
 
-build-linux-substrate:             &build-binary
+
+build-linux-substrate:
   stage:                           build
   <<:                              *collect-artifacts
   <<:                              *docker-env
@@ -582,27 +633,21 @@ build-linux-substrate:             &build-binary
   before_script:
     - mkdir -p ./artifacts/substrate/
   script:
-    - WASM_BUILD_NO_COLOR=1 time cargo build --release --verbose
-    - mv ./target/release/substrate ./artifacts/substrate/.
-    - echo -n "Substrate version = "
-    - if [ "${CI_COMMIT_TAG}" ]; then
-        echo "${CI_COMMIT_TAG}" | tee ./artifacts/substrate/VERSION;
-      else
-        ./artifacts/substrate/substrate --version |
-          sed -n -E 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
-            tee ./artifacts/substrate/VERSION;
-      fi
-    - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
+    - *build-linux-substrate-script
     - printf '\n# building node-template\n\n'
     - ./.maintain/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
-    - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
-    - sccache -s
+
 
 #Build binary for simnet quick tests.
 build-linux-substrate-simnet:
-  <<:                              *build-binary
+  stage:                           build
   <<:                              *collect-artifacts-short
+  <<:                              *docker-env
   <<:                              *test-refs-no-trigger-prs-only
+  before_script:
+    - mkdir -p ./artifacts/substrate/
+  script:
+    - *build-linux-substrate-script
 
 build-linux-subkey:                &build-subkey
   stage:                           build
@@ -648,8 +693,7 @@ build-rustdoc:
     - ./crate-docs/
   script:
     # FIXME: it fails with `RUSTDOCFLAGS="-Dwarnings"`
-    - RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html"
-        time cargo +nightly doc --no-deps --workspace --all-features --verbose
+    - time cargo +nightly doc --workspace --all-features --verbose
     - rm -f ./target/doc/.lock
     - mv ./target/doc ./crate-docs
     # FIXME: remove me after CI image gets nonroot
@@ -797,12 +841,17 @@ publish-rustdoc:
     # Putting spaces at the front and back to ensure we are not matching just any substring, but the
     # whole space-separated value.
     - '[[ " ${RUSTDOCS_DEPLOY_REFS} " =~ " ${CI_COMMIT_REF_NAME} " ]] || exit 0'
-    - rm -rf /tmp/*
+    # setup ssh
+    # FIXME: add ssh to docker image
+    - apt-get update && apt-get install -y ssh
+    - eval $(ssh-agent)
+    - ssh-add - <<< ${GITHUB_SSH_PRIV_KEY}
+    - mkdir ~/.ssh && touch ~/.ssh/known_hosts
+    - ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
     # Set git config
-    - rm -rf .git/config
     - git config user.email "devops-team@parity.io"
     - git config user.name "${GITHUB_USER}"
-    - git config remote.origin.url "https://${GITHUB_TOKEN}@github.com/paritytech/${CI_PROJECT_NAME}.git"
+    - git config remote.origin.url "git@github.com:/paritytech/${CI_PROJECT_NAME}.git"
     - git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
     - git fetch origin gh-pages
     # Install `ejs` and generate index.html based on RUSTDOCS_DEPLOY_REFS
@@ -860,9 +909,7 @@ unleash-to-crates-io:
   <<:                              *vault-secrets
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
-    # FIXME: wait until https://github.com/paritytech/cargo-unleash/issues/50 is fixed, also
-    # remove allow_failure: true on the check job
-    # - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
     - cargo unleash em-dragons --no-check --owner github:paritytech:core-devs ${CARGO_UNLEASH_PKG_DEF}
@@ -899,7 +946,6 @@ simnet-tests:
   stage:                           deploy
   image:                           docker.io/paritytech/simnet:${SIMNET_REF}
   <<:                              *kubernetes-env
-  <<:                              *vault-secrets
   rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
@@ -929,7 +975,6 @@ simnet-tests-quick:
   stage:                           deploy
   image:                           docker.io/paritytech/simnet:${SIMNET_REF}
   <<:                              *kubernetes-env
-  <<:                              *vault-secrets
   <<:                              *test-refs-no-trigger-prs-only
   variables:
     SIMNET_FEATURES:               "${SIMNET_FEATURES_PATH}/quick"

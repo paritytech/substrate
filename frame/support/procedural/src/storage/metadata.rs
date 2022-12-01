@@ -207,7 +207,7 @@ pub fn impl_metadata(def: &DeclStorageDefExt) -> TokenStream {
 	quote!(
 		#default_byte_getter_struct_defs
 
-		impl#module_impl #module_struct #where_clause {
+		impl #module_impl #module_struct #where_clause {
 			#[doc(hidden)]
 			pub fn storage_metadata() -> #scrate::metadata::PalletStorageMetadata {
 				#store_metadata

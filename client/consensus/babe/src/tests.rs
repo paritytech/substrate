@@ -43,13 +43,13 @@ use sp_consensus_babe::{
 use sp_core::crypto::Pair;
 use sp_keystore::{vrf::make_transcript as transcript_from_data, SyncCryptoStore};
 use sp_runtime::{
-	generic::DigestItem,
-	traits::{Block as BlockT, DigestFor},
+	generic::{Digest, DigestItem},
+	traits::Block as BlockT,
 };
 use sp_timestamp::InherentDataProvider as TimestampInherentDataProvider;
 use std::{cell::RefCell, task::Poll, time::Duration};
 
-type Item = DigestItem<Hash>;
+type Item = DigestItem;
 
 type Error = sp_blockchain::Error;
 
@@ -108,7 +108,7 @@ impl Environment<TestBlock> for DummyFactory {
 impl DummyProposer {
 	fn propose_with(
 		&mut self,
-		pre_digests: DigestFor<TestBlock>,
+		pre_digests: Digest,
 	) -> future::Ready<
 		Result<
 			Proposal<
@@ -181,7 +181,7 @@ impl Proposer<TestBlock> for DummyProposer {
 	fn propose(
 		mut self,
 		_: InherentData,
-		pre_digests: DigestFor<TestBlock>,
+		pre_digests: Digest,
 		_: Duration,
 		_: Option<usize>,
 	) -> Self::Proposal {
@@ -295,7 +295,7 @@ impl TestNetFactory for BabeTestNet {
 		Option<BoxJustificationImport<Block>>,
 		Option<PeerData>,
 	) {
-		let client = client.as_full().expect("only full clients are tested");
+		let client = client.as_client();
 
 		let config = Config::get_or_compute(&*client).expect("config available");
 		let (block_import, link) = crate::block_import(config, client.clone(), client.clone())
@@ -320,7 +320,7 @@ impl TestNetFactory for BabeTestNet {
 	) -> Self::Verifier {
 		use substrate_test_runtime_client::DefaultTestClientBuilderExt;
 
-		let client = client.as_full().expect("only full clients are used in test");
+		let client = client.as_client();
 		trace!(target: "babe", "Creating a verifier");
 
 		// ensure block import and verifier are linked correctly.
@@ -395,7 +395,7 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 	for (peer_id, seed) in peers {
 		let mut net = net.lock();
 		let peer = net.peer(*peer_id);
-		let client = peer.client().as_full().expect("Only full clients are used in tests").clone();
+		let client = peer.client().as_client();
 		let select_chain = peer.select_chain().expect("Full client has select_chain");
 
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
@@ -679,7 +679,7 @@ fn importing_block_one_sets_genesis_epoch() {
 
 	let peer = net.peer(0);
 	let data = peer.data.as_ref().expect("babe link set up during initialization");
-	let client = peer.client().as_full().expect("Only full clients are used in tests").clone();
+	let client = peer.client().as_client();
 
 	let mut proposer_factory = DummyFactory {
 		client: client.clone(),
@@ -721,7 +721,7 @@ fn importing_epoch_change_block_prunes_tree() {
 	let peer = net.peer(0);
 	let data = peer.data.as_ref().expect("babe link set up during initialization");
 
-	let client = peer.client().as_full().expect("Only full clients are used in tests").clone();
+	let client = peer.client().as_client();
 	let mut block_import = data.block_import.lock().take().expect("import set up during init");
 	let epoch_changes = data.link.epoch_changes.clone();
 
@@ -836,7 +836,7 @@ fn verify_slots_are_strictly_increasing() {
 	let peer = net.peer(0);
 	let data = peer.data.as_ref().expect("babe link set up during initialization");
 
-	let client = peer.client().as_full().expect("Only full clients are used in tests").clone();
+	let client = peer.client().as_client();
 	let mut block_import = data.block_import.lock().take().expect("import set up during init");
 
 	let mut proposer_factory = DummyFactory {

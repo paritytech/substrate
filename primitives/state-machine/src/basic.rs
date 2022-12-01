@@ -309,10 +309,6 @@ impl Externalities for BasicExternalities {
 		.encode()
 	}
 
-	fn storage_changes_root(&mut self, _parent: &[u8]) -> Result<Option<Vec<u8>>, ()> {
-		Ok(None)
-	}
-
 	fn storage_start_transaction(&mut self) {
 		unimplemented!("Transactions are not supported by BasicExternalities");
 	}

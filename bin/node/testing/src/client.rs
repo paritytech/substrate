@@ -42,13 +42,11 @@ pub type Transaction = sc_client_api::backend::TransactionFor<Backend, node_prim
 
 /// Genesis configuration parameters for `TestClient`.
 #[derive(Default)]
-pub struct GenesisParameters {
-	support_changes_trie: bool,
-}
+pub struct GenesisParameters;
 
 impl substrate_test_client::GenesisInit for GenesisParameters {
 	fn genesis_storage(&self) -> Storage {
-		crate::genesis::config(self.support_changes_trie, None).build_storage().unwrap()
+		crate::genesis::config(None).build_storage().unwrap()
 	}
 }
 

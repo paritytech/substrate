@@ -17,8 +17,8 @@
 
 //! Implementation of a "bags list": a semi-sorted list where ordering granularity is dictated by
 //! configurable thresholds that delineate the boundaries of bags. It uses a pattern of composite
-//! data structures, where multiple storage items are masked by one outer API. See [`ListNodes`],
-//! [`CounterForListNodes`] and [`ListBags`] for more information.
+//! data structures, where multiple storage items are masked by one outer API. See
+//! [`crate::ListNodes`], [`crate::ListBags`] for more information.
 //!
 //! The outer API of this module is the [`List`] struct. It wraps all acceptable operations on top
 //! of the aggregate linked list. All operations with the bags list should happen through this
@@ -53,7 +53,7 @@ mod tests;
 ///
 /// Note that even if the thresholds list does not have `VoteWeight::MAX` as its final member, this
 /// function behaves as if it does.
-pub(crate) fn notional_bag_for<T: Config>(weight: VoteWeight) -> VoteWeight {
+pub fn notional_bag_for<T: Config>(weight: VoteWeight) -> VoteWeight {
 	let thresholds = T::BagThresholds::get();
 	let idx = thresholds.partition_point(|&threshold| weight > threshold);
 	thresholds.get(idx).copied().unwrap_or(VoteWeight::MAX)
@@ -77,17 +77,18 @@ pub struct List<T: Config>(PhantomData<T>);
 
 impl<T: Config> List<T> {
 	/// Remove all data associated with the list from storage. Parameter `items` is the number of
-	/// items to clear from the list. WARNING: `None` will clear all items and should generally not
-	/// be used in production as it could lead to an infinite number of storage accesses.
+	/// items to clear from the list.
+	///
+	/// ## WARNING
+	///
+	/// `None` will clear all items and should generally not be used in production as it could lead
+	/// to a very large number of storage accesses.
 	pub(crate) fn clear(maybe_count: Option<u32>) -> u32 {
 		crate::ListBags::<T>::remove_all(maybe_count);
+		let pre = crate::ListNodes::<T>::count();
 		crate::ListNodes::<T>::remove_all(maybe_count);
-		if let Some(count) = maybe_count {
-			crate::CounterForListNodes::<T>::mutate(|items| *items - count);
-			count
-		} else {
-			crate::CounterForListNodes::<T>::take()
-		}
+		let post = crate::ListNodes::<T>::count();
+		pre.saturating_sub(post)
 	}
 
 	/// Regenerate all of the data from the given ids.
@@ -274,17 +275,13 @@ impl<T: Config> List<T> {
 		// new inserts are always the tail, so we must write the bag.
 		bag.put();
 
-		crate::CounterForListNodes::<T>::mutate(|prev_count| {
-			*prev_count = prev_count.saturating_add(1)
-		});
-
 		crate::log!(
 			debug,
 			"inserted {:?} with weight {} into bag {:?}, new count is {}",
 			id,
 			weight,
 			bag_weight,
-			crate::CounterForListNodes::<T>::get(),
+			crate::ListNodes::<T>::count(),
 		);
 
 		Ok(())
@@ -330,10 +327,6 @@ impl<T: Config> List<T> {
 		for (_, bag) in bags {
 			bag.put();
 		}
-
-		crate::CounterForListNodes::<T>::mutate(|prev_count| {
-			*prev_count = prev_count.saturating_sub(count)
-		});
 
 		count
 	}
@@ -390,9 +383,9 @@ impl<T: Config> List<T> {
 	/// is being used, after all other staking data (such as counter) has been updated. It checks:
 	///
 	/// * there are no duplicate ids,
-	/// * length of this list is in sync with `CounterForListNodes`,
-	/// * and sanity-checks all bags. This will cascade down all the checks and makes sure all bags
-	///   are checked per *any* update to `List`.
+	/// * length of this list is in sync with `ListNodes::count()`,
+	/// * and sanity-checks all bags and nodes. This will cascade down all the checks and makes sure
+	/// all bags and nodes are checked per *any* update to `List`.
 	#[cfg(feature = "std")]
 	pub(crate) fn sanity_check() -> Result<(), &'static str> {
 		use frame_support::ensure;
@@ -403,7 +396,7 @@ impl<T: Config> List<T> {
 		);
 
 		let iter_count = Self::iter().count() as u32;
-		let stored_count = crate::CounterForListNodes::<T>::get();
+		let stored_count = crate::ListNodes::<T>::count();
 		let nodes_count = crate::ListNodes::<T>::iter().count() as u32;
 		ensure!(iter_count == stored_count, "iter_count != stored_count");
 		ensure!(stored_count == nodes_count, "stored_count != nodes_count");
@@ -414,7 +407,6 @@ impl<T: Config> List<T> {
 			let thresholds = T::BagThresholds::get().iter().copied();
 			let thresholds: Vec<u64> = if thresholds.clone().last() == Some(VoteWeight::MAX) {
 				// in the event that they included it, we don't need to make any changes
-				// Box::new(thresholds.collect()
 				thresholds.collect()
 			} else {
 				// otherwise, insert it here.
@@ -468,7 +460,7 @@ impl<T: Config> List<T> {
 	}
 }
 
-/// A Bag is a doubly-linked list of ids, where each id is mapped to a [`ListNode`].
+/// A Bag is a doubly-linked list of ids, where each id is mapped to a [`Node`].
 ///
 /// Note that we maintain both head and tail pointers. While it would be possible to get away with
 /// maintaining only a head pointer and cons-ing elements onto the front of the list, it's more
@@ -691,7 +683,7 @@ pub struct Node<T: Config> {
 
 impl<T: Config> Node<T> {
 	/// Get a node by id.
-	pub(crate) fn get(id: &T::AccountId) -> Option<Node<T>> {
+	pub fn get(id: &T::AccountId) -> Option<Node<T>> {
 		crate::ListNodes::<T>::try_get(id).ok()
 	}
 
@@ -735,7 +727,7 @@ impl<T: Config> Node<T> {
 	}
 
 	/// `true` when this voter is in the wrong bag.
-	pub(crate) fn is_misplaced(&self, current_weight: VoteWeight) -> bool {
+	pub fn is_misplaced(&self, current_weight: VoteWeight) -> bool {
 		notional_bag_for::<T>(current_weight) != self.bag_upper
 	}
 
@@ -774,10 +766,13 @@ impl<T: Config> Node<T> {
 			"node does not exist in the expected bag"
 		);
 
+		let non_terminal_check = !self.is_terminal() &&
+			expected_bag.head.as_ref() != Some(id) &&
+			expected_bag.tail.as_ref() != Some(id);
+		let terminal_check =
+			expected_bag.head.as_ref() == Some(id) || expected_bag.tail.as_ref() == Some(id);
 		frame_support::ensure!(
-			!self.is_terminal() ||
-				expected_bag.head.as_ref() == Some(id) ||
-				expected_bag.tail.as_ref() == Some(id),
+			non_terminal_check || terminal_check,
 			"a terminal node is neither its bag head or tail"
 		);
 

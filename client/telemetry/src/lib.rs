@@ -440,7 +440,7 @@ enum Register {
 
 /// Report a telemetry.
 ///
-/// Translates to [`tracing::info`], but contains an additional verbosity parameter which the log
+/// Translates to `tracing::info`, but contains an additional verbosity parameter which the log
 /// record is tagged with. Additionally the verbosity parameter is added to the record as a
 /// key-value pair.
 ///

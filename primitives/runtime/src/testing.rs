@@ -182,10 +182,10 @@ impl traits::Verify for TestSignature {
 }
 
 /// Digest item
-pub type DigestItem = generic::DigestItem<H256>;
+pub type DigestItem = generic::DigestItem;
 
 /// Header Digest
-pub type Digest = generic::Digest<H256>;
+pub type Digest = generic::Digest;
 
 /// Block Header
 pub type Header = generic::Header<u64, BlakeTwo256>;

@@ -19,7 +19,6 @@
 //! Substrate blockchain API.
 
 mod chain_full;
-mod chain_light;
 
 #[cfg(test)]
 mod tests;
@@ -33,10 +32,7 @@ use rpc::{
 use std::sync::Arc;
 
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
-use sc_client_api::{
-	light::{Fetcher, RemoteBlockchain},
-	BlockchainEvents,
-};
+use sc_client_api::BlockchainEvents;
 use sp_rpc::{list::ListOrValue, number::NumberOrHex};
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
@@ -83,8 +79,6 @@ where
 		match number {
 			None => Ok(Some(self.client().info().best_hash)),
 			Some(num_or_hex) => {
-				use std::convert::TryInto;
-
 				// FIXME <2329>: Database seems to limit the block number to u32 for no reason
 				let block_num: u32 = num_or_hex.try_into().map_err(|_| {
 					Error::Other(format!(
@@ -204,29 +198,6 @@ where
 	Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
 	Chain { backend: Box::new(self::chain_full::FullChain::new(client, subscriptions)) }
-}
-
-/// Create new state API that works on light node.
-pub fn new_light<Block: BlockT, Client, F: Fetcher<Block>>(
-	client: Arc<Client>,
-	subscriptions: SubscriptionManager,
-	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
-	fetcher: Arc<F>,
-) -> Chain<Block, Client>
-where
-	Block: BlockT + 'static,
-	Block::Header: Unpin,
-	Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
-	F: Send + Sync + 'static,
-{
-	Chain {
-		backend: Box::new(self::chain_light::LightChain::new(
-			client,
-			subscriptions,
-			remote_blockchain,
-			fetcher,
-		)),
-	}
 }
 
 /// Chain API with subscriptions support.

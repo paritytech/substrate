@@ -202,7 +202,7 @@ pub mod pallet {
 		type Schedule: Get<Schedule<Self>>;
 
 		/// The deposit that must be placed into the contract's account to instantiate it.
-		/// This is in **addition** to the [`pallet_balances::Pallet::ExistenialDeposit`].
+		/// This is in **addition** to the [`Currency::minimum_balance`].
 		/// The minimum balance for a contract's account can be queried using
 		/// [`Pallet::subsistence_threshold`].
 		#[pallet::constant]
