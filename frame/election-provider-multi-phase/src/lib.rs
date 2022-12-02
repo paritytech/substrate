@@ -1410,7 +1410,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		let desired_targets =
-			<T as ElectionProviderBase>::desired_targets_checked().map_err(|e| ElectionError::DataProvider(e))?;
+			<Pallet<T> as ElectionProviderBase>::desired_targets_checked().map_err(|e| ElectionError::DataProvider(e))?;
 
 		Ok((targets, voters, desired_targets))
 	}

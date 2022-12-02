@@ -269,7 +269,7 @@ frame_benchmarking::benchmarks! {
 		set_up_data_provider::<T>(v, t);
 		let targets = T::DataProvider::electable_targets(None)?;
 		let voters = T::DataProvider::electing_voters(None)?;
-		let desired_targets = <T as ElectionProviderBase>::desired_targets_checked()?;
+		let desired_targets = T::DataProvider::desired_targets()?;
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 	}: {
 		<MultiPhase::<T>>::create_snapshot_internal(targets, voters, desired_targets)
