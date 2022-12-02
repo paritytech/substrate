@@ -1409,8 +1409,8 @@ impl<T: Config> Pallet<T> {
 			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
 		}
 
-		let desired_targets =
-			<Pallet<T> as ElectionProviderBase>::desired_targets_checked().map_err(|e| ElectionError::DataProvider(e))?;
+		let desired_targets = <Pallet<T> as ElectionProviderBase>::desired_targets_checked()
+			.map_err(|e| ElectionError::DataProvider(e))?;
 
 		Ok((targets, voters, desired_targets))
 	}
