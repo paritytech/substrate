@@ -959,8 +959,7 @@ pub mod pallet {
 			let maybe_withdraw_weight = {
 				if unlocking == T::MaxUnlockingChunks::get() as usize {
 					let real_num_slashing_spans = Self::slashing_spans(&controller).iter().count();
-					Self::do_withdraw_unbonded(&controller, real_num_slashing_spans as u32)?
-						.actual_weight
+					Some(Self::do_withdraw_unbonded(&controller, real_num_slashing_spans as u32)?)
 				} else {
 					None
 				}
@@ -1054,7 +1053,13 @@ pub mod pallet {
 			num_slashing_spans: u32,
 		) -> DispatchResultWithPostInfo {
 			let controller = ensure_signed(origin)?;
+
 			Self::do_withdraw_unbonded(&controller, num_slashing_spans)
+				.map(|weight| frame_support::dispatch::PostDispatchInfo {
+					actual_weight: Some(weight),
+					pays_fee: Pays::Yes,
+				})
+				.map_err(|e| e.into())
 		}
 
 		/// Declare the desire to validate for the origin controller.

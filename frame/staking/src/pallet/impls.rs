@@ -95,14 +95,14 @@ impl<T: Config> Pallet<T> {
 	pub(super) fn do_withdraw_unbonded(
 		controller: &T::AccountId,
 		num_slashing_spans: u32,
-	) -> DispatchResultWithPostInfo {
+	) -> Result<Weight, DispatchError> {
 		let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 		let (stash, old_total) = (ledger.stash.clone(), ledger.total);
 		if let Some(current_era) = Self::current_era() {
 			ledger = ledger.consolidate_unlocked(current_era)
 		}
 
-		let post_info =
+		let used_weight =
 			if ledger.unlocking.is_empty() && ledger.active < T::Currency::minimum_balance() {
 				// This account must have called `unbond()` with some value that caused the active
 				// portion to fall below existential deposit + will have no more unlocking chunks
@@ -111,13 +111,13 @@ impl<T: Config> Pallet<T> {
 				// Remove the lock.
 				T::Currency::remove_lock(STAKING_ID, &stash);
 
-				Some(T::WeightInfo::withdraw_unbonded_kill(num_slashing_spans))
+				T::WeightInfo::withdraw_unbonded_kill(num_slashing_spans)
 			} else {
 				// This was the consequence of a partial unbond. just update the ledger and move on.
 				Self::update_ledger(&controller, &ledger);
 
 				// This is only an update, so we use less overall weight.
-				Some(T::WeightInfo::withdraw_unbonded_update(num_slashing_spans))
+				T::WeightInfo::withdraw_unbonded_update(num_slashing_spans)
 			};
 
 		// `old_total` should never be less than the new total because
@@ -128,7 +128,7 @@ impl<T: Config> Pallet<T> {
 			Self::deposit_event(Event::<T>::Withdrawn { stash, amount: value });
 		}
 
-		Ok(post_info.into())
+		Ok(used_weight)
 	}
 
 	pub(super) fn do_payout_stakers(
