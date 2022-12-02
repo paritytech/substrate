@@ -881,6 +881,13 @@ macro_rules! impl_bench_name_tests {
 										"WARNING: benchmark error skipped - {}",
 										stringify!($name),
 									);
+								},
+								$crate::BenchmarkError::Weightless => {
+									// This is considered a success condition.
+									$crate::log::error!(
+										"WARNING: benchmark weightless skipped - {}",
+										stringify!($name),
+									);
 								}
 							}
 						},
@@ -1640,6 +1647,14 @@ macro_rules! impl_test_function {
 												.expect("benchmark name is always a valid string!"),
 										);
 									}
+									$crate::BenchmarkError::Weightless => {
+										// This is considered a success condition.
+										$crate::log::error!(
+											"WARNING: benchmark weightless skipped - {}",
+											$crate::str::from_utf8(benchmark_name)
+												.expect("benchmark name is always a valid string!"),
+										);
+									}
 								}
 							},
 							Ok(Ok(())) => (),
@@ -1792,6 +1807,17 @@ macro_rules! add_benchmark {
 							.expect("benchmark name is always a valid string!")
 					);
 					None
+				},
+				Err($crate::BenchmarkError::Weightless) => {
+					$crate::log::error!(
+						"WARNING: benchmark weightless skipped - {}",
+						$crate::str::from_utf8(benchmark)
+							.expect("benchmark name is always a valid string!")
+					);
+					Some(vec![$crate::BenchmarkResult {
+						components: selected_components.clone(),
+						.. Default::default()
+					}])
 				}
 			};
 
