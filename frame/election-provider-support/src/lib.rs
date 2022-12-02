@@ -391,7 +391,7 @@ pub trait ElectionProviderBase {
 				if desired_targets <= Self::MaxWinners::get() {
 					Ok(desired_targets)
 				} else {
-					Err("desired_targets should not be greater than MaxWinners")
+					Err("desired_targets must not be greater than MaxWinners.")
 				},
 			Err(e) => Err(e),
 		}

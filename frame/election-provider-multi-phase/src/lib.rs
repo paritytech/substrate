@@ -1409,8 +1409,21 @@ impl<T: Config> Pallet<T> {
 			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
 		}
 
-		let desired_targets = <Pallet<T> as ElectionProviderBase>::desired_targets_checked()
+		let mut desired_targets = <Pallet<T> as ElectionProviderBase>::desired_targets_checked()
 			.map_err(|e| ElectionError::DataProvider(e))?;
+
+		// If `desired_targets` > `targets.len()`, cap `desired_targets` to that level and emit a
+		// warning
+		let max_desired_targets: u32 = targets.len() as u32;
+		if desired_targets > max_desired_targets {
+			log!(
+				warn,
+				"desired_targets: {} > targets.len(): {}, capping desired_targets",
+				desired_targets,
+				max_desired_targets
+			);
+			desired_targets = max_desired_targets;
+		}
 
 		Ok((targets, voters, desired_targets))
 	}
