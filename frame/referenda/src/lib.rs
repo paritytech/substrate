@@ -1,5 +1,3 @@
-// This file is part of Substrate.
-
 // Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -68,7 +66,7 @@ use codec::{Codec, Encode};
 use frame_support::{
 	ensure,
 	traits::{
-		fungible,
+		fungibles,
 		schedule::{
 			v3::{Anon as ScheduleAnon, Named as ScheduleNamed},
 			DispatchTime,
@@ -133,7 +131,7 @@ macro_rules! impl_tracksinfo_get {
 	};
 }
 
-const ASSEMBLY_ID: fungible::LockIdentifier = *b"assembly";
+const ASSEMBLY_ID: fungibles::LockIdentifier = *b"assembly";
 
 #[frame_support::pallet]
 pub mod pallet {
