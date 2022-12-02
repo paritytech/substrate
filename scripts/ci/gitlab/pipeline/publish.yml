@@ -165,6 +165,10 @@ update-node-template:
 .publish-crates-template:          &publish-crates-template
   stage:                           publish
   extends:                         .crates-publishing-template
+  # We don't want multiple jobs racing to publish crates as it's redundant and they might overwrite
+  # the releases of one another. Use resource_group to ensure that at most one instance of this job
+  # is running at any given time.
+  resource_group:                  crates-publishing
   variables:
     # crates.io rate limits crates publishing by 1 per minute, so a delay needs to be inserted
     # slightly higher than that after publishing each crate. The value is specified in seconds.
