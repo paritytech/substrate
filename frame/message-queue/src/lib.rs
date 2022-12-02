@@ -590,17 +590,19 @@ pub mod pallet {
 		/// Benchmark complexity considerations: O(index + weight_limit).
 		#[pallet::weight(
 			T::WeightInfo::execute_overweight_page_updated().max(
-			T::WeightInfo::execute_overweight_page_removed()))]
+			T::WeightInfo::execute_overweight_page_removed()).saturating_add(*weight_limit)
+		)]
 		pub fn execute_overweight(
 			origin: OriginFor<T>,
 			message_origin: MessageOriginOf<T>,
 			page: PageIndex,
 			index: T::Size,
 			weight_limit: Weight,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
-			Self::do_execute_overweight(message_origin, page, index, weight_limit)?;
-			Ok(())
+			let actual_weight =
+				Self::do_execute_overweight(message_origin, page, index, weight_limit)?;
+			Ok(Some(actual_weight).into())
 		}
 	}
 }
