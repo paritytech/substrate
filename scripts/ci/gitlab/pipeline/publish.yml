@@ -162,7 +162,7 @@ update-node-template:
       --github-api-token "$GITHUB_TOKEN"
       --polkadot-branch "$CI_COMMIT_REF_NAME"
 
-.publish-crates-template: &publish-crates-template
+.publish-crates-template:          &publish-crates-template
   stage:                           publish
   extends:                         .crates-publishing-template
   variables:
