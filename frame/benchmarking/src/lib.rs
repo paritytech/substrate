@@ -1814,9 +1814,12 @@ macro_rules! add_benchmark {
 						$crate::str::from_utf8(benchmark)
 							.expect("benchmark name is always a valid string!")
 					);
-					let mut dummy = $crate::BenchmarkResult::default();
-					dummy.components = selected_components.clone();
-					Some(vec![dummy.clone(), dummy.clone()])
+					let dummy = $crate::BenchmarkResult {
+						components: selected_components.clone(),
+						.. Default::default()
+					};
+					// The linear regression logic needs at least two values.
+					Some(vec![dummy])
 				}
 			};
 
