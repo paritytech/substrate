@@ -47,24 +47,24 @@ use substrate_test_runtime_client::{
 
 type MmrHash = H256;
 
-struct MockRuntimeApiData {
-	num_blocks: BlockNumber,
+pub(crate) struct MockRuntimeApiData {
+	pub(crate) num_blocks: BlockNumber,
 }
 
 #[derive(Clone)]
-pub struct MockRuntimeApi {
-	data: Arc<Mutex<MockRuntimeApiData>>,
+pub(crate) struct MockRuntimeApi {
+	pub(crate) data: Arc<Mutex<MockRuntimeApiData>>,
 }
 
 impl MockRuntimeApi {
-	pub const INDEXING_PREFIX: &'static [u8] = b"mmr_test";
+	pub(crate) const INDEXING_PREFIX: &'static [u8] = b"mmr_test";
 }
 
 #[derive(Clone, Debug)]
-pub struct MmrBlock {
-	block: Block,
-	leaf_idx: Option<LeafIndex>,
-	leaf_data: Vec<u8>,
+pub(crate) struct MmrBlock {
+	pub(crate) block: Block,
+	pub(crate) leaf_idx: Option<LeafIndex>,
+	pub(crate) leaf_data: Vec<u8>,
 }
 
 #[derive(Clone, Copy)]
@@ -87,7 +87,7 @@ impl MmrBlock {
 			OffchainKeyType::Temp => NodesUtils::node_temp_offchain_key::<Header>(
 				MockRuntimeApi::INDEXING_PREFIX,
 				node,
-				*self.block.header.parent_hash(),
+				self.parent_hash(),
 			),
 			OffchainKeyType::Canon =>
 				NodesUtils::node_canon_offchain_key(MockRuntimeApi::INDEXING_PREFIX, node),
@@ -95,14 +95,14 @@ impl MmrBlock {
 	}
 }
 
-pub struct MockClient {
-	client: Mutex<Client<Backend>>,
-	backend: Arc<Backend>,
-	runtime_api_params: Arc<Mutex<MockRuntimeApiData>>,
+pub(crate) struct MockClient {
+	pub(crate) client: Mutex<Client<Backend>>,
+	pub(crate) backend: Arc<Backend>,
+	pub(crate) runtime_api_params: Arc<Mutex<MockRuntimeApiData>>,
 }
 
 impl MockClient {
-	fn new() -> Self {
+	pub(crate) fn new() -> Self {
 		let client_builder = TestClientBuilder::new().enable_offchain_indexing_api();
 		let (client, backend) = client_builder.build_with_backend();
 		MockClient {
@@ -112,7 +112,7 @@ impl MockClient {
 		}
 	}
 
-	fn offchain_db(&self) -> OffchainDb<<Backend as BackendT<Block>>::OffchainStorage> {
+	pub(crate) fn offchain_db(&self) -> OffchainDb<<Backend as BackendT<Block>>::OffchainStorage> {
 		OffchainDb::new(self.backend.offchain_storage().unwrap())
 	}
 
@@ -307,15 +307,36 @@ sp_api::mock_impl_runtime_apis! {
 	}
 }
 
-pub fn run_test_with_mmr_gadget<F, G, RetF, RetG>(pre_gadget: F, post_gadget: G)
+pub(crate) fn run_test_with_mmr_gadget<F, Fut>(post_gadget: F)
+where
+	F: FnOnce(Arc<MockClient>) -> Fut + 'static,
+	Fut: Future<Output = ()>,
+{
+	run_test_with_mmr_gadget_pre_post(|_| async {}, post_gadget);
+}
+
+pub(crate) fn run_test_with_mmr_gadget_pre_post<F, G, RetF, RetG>(pre_gadget: F, post_gadget: G)
 where
 	F: FnOnce(Arc<MockClient>) -> RetF + 'static,
 	G: FnOnce(Arc<MockClient>) -> RetG + 'static,
 	RetF: Future<Output = ()>,
 	RetG: Future<Output = ()>,
 {
-	let mut pool = LocalPool::new();
 	let client = Arc::new(MockClient::new());
+	run_test_with_mmr_gadget_pre_post_using_client(client, pre_gadget, post_gadget)
+}
+
+pub(crate) fn run_test_with_mmr_gadget_pre_post_using_client<F, G, RetF, RetG>(
+	client: Arc<MockClient>,
+	pre_gadget: F,
+	post_gadget: G,
+) where
+	F: FnOnce(Arc<MockClient>) -> RetF + 'static,
+	G: FnOnce(Arc<MockClient>) -> RetG + 'static,
+	RetF: Future<Output = ()>,
+	RetG: Future<Output = ()>,
+{
+	let mut pool = LocalPool::new();
 
 	let client_clone = client.clone();
 	pool.run_until(async move { pre_gadget(client_clone).await });

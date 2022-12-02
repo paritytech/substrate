@@ -4250,6 +4250,7 @@ dependencies = [
  "sp-io",
  "sp-mmr-primitives",
  "sp-runtime",
+ "sp-tracing",
  "substrate-test-runtime-client",
  "tokio",
 ]

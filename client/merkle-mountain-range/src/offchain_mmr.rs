@@ -269,58 +269,55 @@ where
 
 #[cfg(test)]
 mod tests {
-	use crate::test_utils::run_test_with_mmr_gadget;
+	use crate::test_utils::{run_test_with_mmr_gadget, run_test_with_mmr_gadget_pre_post};
 	use parking_lot::Mutex;
 	use sp_runtime::generic::BlockId;
 	use std::{sync::Arc, time::Duration};
 
 	#[test]
 	fn canonicalize_and_prune_works_correctly() {
-		run_test_with_mmr_gadget(
-			|_| async {},
-			|client| async move {
-				//                     -> D4 -> D5
-				// G -> A1 -> A2 -> A3 -> A4
-				//   -> B1 -> B2 -> B3
-				//   -> C1
+		run_test_with_mmr_gadget(|client| async move {
+			//                     -> D4 -> D5
+			// G -> A1 -> A2 -> A3 -> A4
+			//   -> B1 -> B2 -> B3
+			//   -> C1
 
-				let a1 = client.import_block(&BlockId::Number(0), b"a1", Some(0)).await;
-				let a2 = client.import_block(&BlockId::Hash(a1.hash()), b"a2", Some(1)).await;
-				let a3 = client.import_block(&BlockId::Hash(a2.hash()), b"a3", Some(2)).await;
-				let a4 = client.import_block(&BlockId::Hash(a3.hash()), b"a4", Some(3)).await;
+			let a1 = client.import_block(&BlockId::Number(0), b"a1", Some(0)).await;
+			let a2 = client.import_block(&BlockId::Hash(a1.hash()), b"a2", Some(1)).await;
+			let a3 = client.import_block(&BlockId::Hash(a2.hash()), b"a3", Some(2)).await;
+			let a4 = client.import_block(&BlockId::Hash(a3.hash()), b"a4", Some(3)).await;
 
-				let b1 = client.import_block(&BlockId::Number(0), b"b1", Some(0)).await;
-				let b2 = client.import_block(&BlockId::Hash(b1.hash()), b"b2", Some(1)).await;
-				let b3 = client.import_block(&BlockId::Hash(b2.hash()), b"b3", Some(2)).await;
+			let b1 = client.import_block(&BlockId::Number(0), b"b1", Some(0)).await;
+			let b2 = client.import_block(&BlockId::Hash(b1.hash()), b"b2", Some(1)).await;
+			let b3 = client.import_block(&BlockId::Hash(b2.hash()), b"b3", Some(2)).await;
 
-				let c1 = client.import_block(&BlockId::Number(0), b"c1", Some(0)).await;
+			let c1 = client.import_block(&BlockId::Number(0), b"c1", Some(0)).await;
 
-				let d4 = client.import_block(&BlockId::Hash(a3.hash()), b"d4", Some(3)).await;
-				let d5 = client.import_block(&BlockId::Hash(d4.hash()), b"d5", Some(4)).await;
+			let d4 = client.import_block(&BlockId::Hash(a3.hash()), b"d4", Some(3)).await;
+			let d5 = client.import_block(&BlockId::Hash(d4.hash()), b"d5", Some(4)).await;
 
-				client.finalize_block(a3.hash(), Some(3));
-				async_std::task::sleep(Duration::from_millis(200)).await;
-				// expected finalized heads: a1, a2, a3
-				client.assert_canonicalized(&[&a1, &a2, &a3]);
-				// expected stale heads: c1
-				// expected pruned heads because of temp key collision: b1
-				client.assert_pruned(&[&c1, &b1]);
+			client.finalize_block(a3.hash(), Some(3));
+			async_std::task::sleep(Duration::from_millis(200)).await;
+			// expected finalized heads: a1, a2, a3
+			client.assert_canonicalized(&[&a1, &a2, &a3]);
+			// expected stale heads: c1
+			// expected pruned heads because of temp key collision: b1
+			client.assert_pruned(&[&c1, &b1]);
 
-				client.finalize_block(d5.hash(), None);
-				async_std::task::sleep(Duration::from_millis(200)).await;
-				// expected finalized heads: d4, d5,
-				client.assert_canonicalized(&[&d4, &d5]);
-				// expected stale heads: b1, b2, b3, a4
-				client.assert_pruned(&[&b1, &b2, &b3, &a4]);
-			},
-		)
+			client.finalize_block(d5.hash(), None);
+			async_std::task::sleep(Duration::from_millis(200)).await;
+			// expected finalized heads: d4, d5,
+			client.assert_canonicalized(&[&d4, &d5]);
+			// expected stale heads: b1, b2, b3, a4
+			client.assert_pruned(&[&b1, &b2, &b3, &a4]);
+		})
 	}
 
 	#[test]
 	fn canonicalize_catchup_works_correctly() {
 		let mmr_blocks = Arc::new(Mutex::new(vec![]));
 		let mmr_blocks_ref = mmr_blocks.clone();
-		run_test_with_mmr_gadget(
+		run_test_with_mmr_gadget_pre_post(
 			|client| async move {
 				// G -> A1 -> A2
 				//      |     |
