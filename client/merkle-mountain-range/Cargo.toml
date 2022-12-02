@@ -26,7 +26,6 @@ sc-offchain = { version = "4.0.0-dev", path = "../offchain" }
 sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
 
 [dev-dependencies]
-async-std = { version = "1.11.0", default-features = false }
 parking_lot = "0.12.1"
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
 sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }

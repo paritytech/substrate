@@ -297,7 +297,7 @@ mod tests {
 			let d5 = client.import_block(&BlockId::Hash(d4.hash()), b"d5", Some(4)).await;
 
 			client.finalize_block(a3.hash(), Some(3));
-			async_std::task::sleep(Duration::from_millis(200)).await;
+			tokio::time::sleep(Duration::from_millis(200)).await;
 			// expected finalized heads: a1, a2, a3
 			client.assert_canonicalized(&[&a1, &a2, &a3]);
 			// expected stale heads: c1
@@ -305,7 +305,7 @@ mod tests {
 			client.assert_pruned(&[&c1, &b1]);
 
 			client.finalize_block(d5.hash(), None);
-			async_std::task::sleep(Duration::from_millis(200)).await;
+			tokio::time::sleep(Duration::from_millis(200)).await;
 			// expected finalized heads: d4, d5,
 			client.assert_canonicalized(&[&d4, &d5]);
 			// expected stale heads: b1, b2, b3, a4
@@ -353,7 +353,7 @@ mod tests {
 				let a4 = client.import_block(&BlockId::Hash(a3.hash()), b"a4", Some(3)).await;
 
 				client.finalize_block(a4.hash(), Some(4));
-				async_std::task::sleep(Duration::from_millis(200)).await;
+				tokio::time::sleep(Duration::from_millis(200)).await;
 				// expected finalized heads: a1, a2 _and_ a3, a4.
 				client.assert_canonicalized(&[&a1, &a2, &a3, &a4]);
 			},

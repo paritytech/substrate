@@ -123,7 +123,7 @@ pub(crate) mod tests {
 				let a2 = client.import_block(&BlockId::Number(1), b"a2", Some(1)).await;
 				let a3 = client.import_block(&BlockId::Number(2), b"a3", Some(2)).await;
 				client.finalize_block(a3.hash(), Some(3));
-				async_std::task::sleep(Duration::from_millis(200)).await;
+				tokio::time::sleep(Duration::from_millis(200)).await;
 				// a1, a2, a3 were canonicalized
 				client.assert_canonicalized(&[&a1, &a2, &a3]);
 			},
@@ -143,7 +143,7 @@ pub(crate) mod tests {
 				let a5 = client.import_block(&BlockId::Number(4), b"a5", Some(4)).await;
 				let a6 = client.import_block(&BlockId::Number(5), b"a6", Some(5)).await;
 				client.finalize_block(a6.hash(), Some(6));
-				async_std::task::sleep(Duration::from_millis(200)).await;
+				tokio::time::sleep(Duration::from_millis(200)).await;
 
 				// a4, a5, a6 were canonicalized
 				client.assert_canonicalized(&[&a4, &a5, &a6]);
@@ -171,7 +171,7 @@ pub(crate) mod tests {
 				blocks.push(client.import_block(&BlockId::Number(1), b"a2", Some(1)).await);
 				blocks.push(client.import_block(&BlockId::Number(2), b"a3", Some(2)).await);
 				client.finalize_block(blocks.last().unwrap().hash(), Some(3));
-				async_std::task::sleep(Duration::from_millis(200)).await;
+				tokio::time::sleep(Duration::from_millis(200)).await;
 				// a1, a2, a3 were canonicalized
 				let slice: Vec<&MmrBlock> = blocks.iter().collect();
 				client.assert_canonicalized(&slice);
@@ -212,7 +212,7 @@ pub(crate) mod tests {
 				let a5 = client.import_block(&BlockId::Number(4), b"a5", Some(4)).await;
 				let a6 = client.import_block(&BlockId::Number(5), b"a6", Some(5)).await;
 				client.finalize_block(a6.hash(), Some(6));
-				async_std::task::sleep(Duration::from_millis(200)).await;
+				tokio::time::sleep(Duration::from_millis(200)).await;
 
 				let block_1_to_3 = blocks.lock();
 				let slice: Vec<&MmrBlock> = block_1_to_3.iter().collect();

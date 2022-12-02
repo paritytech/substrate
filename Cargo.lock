@@ -4234,7 +4234,6 @@ dependencies = [
 name = "mmr-gadget"
 version = "4.0.0-dev"
 dependencies = [
- "async-std",
  "beefy-primitives",
  "futures",
  "log",

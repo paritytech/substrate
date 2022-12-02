@@ -17,7 +17,6 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::MmrGadget;
-use futures::{executor::LocalPool, task::LocalSpawn, FutureExt};
 use parking_lot::Mutex;
 use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::{
@@ -44,6 +43,7 @@ use substrate_test_runtime_client::{
 	Backend, BlockBuilderExt, Client, ClientBlockImportExt, ClientExt, DefaultTestClientBuilderExt,
 	TestClientBuilder, TestClientBuilderExt,
 };
+use tokio::runtime::Runtime;
 
 type MmrHash = H256;
 
@@ -336,30 +336,26 @@ pub(crate) fn run_test_with_mmr_gadget_pre_post_using_client<F, G, RetF, RetG>(
 	RetF: Future<Output = ()>,
 	RetG: Future<Output = ()>,
 {
-	let mut pool = LocalPool::new();
+	let client_clone = client.clone();
+	let runtime = Runtime::new().unwrap();
+	runtime.block_on(async move { pre_gadget(client_clone).await });
 
 	let client_clone = client.clone();
-	pool.run_until(async move { pre_gadget(client_clone).await });
+	runtime.spawn(
+		async move {
+			let backend = client_clone.backend.clone();
+			MmrGadget::start(
+				client_clone.clone(),
+				backend,
+				MockRuntimeApi::INDEXING_PREFIX.to_vec(),
+			)
+			.await
+		}, /* .boxed_local()
+		    * .into(), */
+	);
 
-	let client_clone = client.clone();
-	pool.spawner()
-		.spawn_local_obj(
-			async move {
-				let backend = client_clone.backend.clone();
-				MmrGadget::start(
-					client_clone.clone(),
-					backend,
-					MockRuntimeApi::INDEXING_PREFIX.to_vec(),
-				)
-				.await
-			}
-			.boxed_local()
-			.into(),
-		)
-		.unwrap();
-
-	pool.run_until(async move {
-		async_std::task::sleep(Duration::from_millis(200)).await;
+	runtime.block_on(async move {
+		tokio::time::sleep(Duration::from_millis(200)).await;
 
 		post_gadget(client).await
 	});
