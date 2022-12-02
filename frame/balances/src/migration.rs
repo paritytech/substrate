@@ -17,7 +17,7 @@
 use super::*;
 use frame_support::{pallet_prelude::*, traits::OnRuntimeUpgrade, weights::Weight};
 
-// NOTE: This must be used alongside any accounts whose balances are expected to be inactive.
+// NOTE: This must be used alongside the account whose balance is expected to be inactive.
 // Generally this will be used for the XCM teleport checking account.
 pub struct MigrateToTrackInactive<T: Config, A: Get<T::AccountId>>(
 	sp_std::marker::PhantomData<(T, A)>,
@@ -35,7 +35,7 @@ impl<T: Config, A: Get<T::AccountId>> OnRuntimeUpgrade for MigrateToTrackInactiv
 			T::DbWeight::get().reads_writes(3, 3)
 		} else {
 			log::info!(target: "runtime::balances",  "Migration did not execute. This probably should be removed");
-			T::DbWeight::get().reads(1)
+			T::DbWeight::get().reads(2)
 		}
 	}
 

@@ -323,12 +323,12 @@ pub mod pallet {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			let pot = Self::pot();
 			let deactivated = Inactive::<T, I>::get();
-			match pot.checked_sub(&deactivated) {
-				Some(x) if !x.is_zero() => T::Currency::deactivate(x),
-				_ => match deactivated.checked_sub(&pot) {
-					Some(x) if !x.is_zero() => T::Currency::reactivate(x),
-					_ => {},
-				},
+			if pot != deactivated {
+				match (pot > deactivated, pot.max(deactivated) - pot.min(deactivated)) {
+					(true, delta) => T::Currency::deactivate(delta),
+					(false, delta) => T::Currency::reactivate(delta),
+				}
+				Inactive::<T, I>::put(&pot);
 			}
 
 			// Check to see if we should spend some funds!
