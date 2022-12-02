@@ -7286,6 +7286,7 @@ version = "0.10.0-dev"
 dependencies = [
  "env_logger",
  "frame-support",
+ "futures",
  "log",
  "pallet-elections-phragmen",
  "parity-scale-codec",

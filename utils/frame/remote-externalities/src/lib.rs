@@ -40,7 +40,7 @@ use std::{
 	sync::Arc,
 	thread,
 };
-
+use futures::StreamExt;
 use substrate_rpc_client::{rpc_params, ws_client, ChainApi, ClientT, StateApi, WsClient};
 
 type KeyValue = (StorageKey, StorageData);
@@ -373,109 +373,52 @@ where
 			thread_chunk_size,
 		);
 
-		let mut handles = Vec::new();
 		let keys_chunked: Vec<Vec<StorageKey>> =
 			keys.chunks(thread_chunk_size).map(|s| s.into()).collect::<Vec<_>>();
 
-		enum Message {
-			Terminated,
-			Batch(Vec<(Vec<u8>, Vec<u8>)>),
-		}
-		let (tx, rx) = std::sync::mpsc::channel::<Message>();
+		let mut futs = futures::stream::FuturesUnordered::new();
 
 		for thread_keys in keys_chunked {
-			let thread_client = client.clone();
-			let thread_sender = tx.clone();
-			let handle = std::thread::spawn(move || {
-				let rt = tokio::runtime::Runtime::new().unwrap();
-				let mut thread_key_values = Vec::with_capacity(thread_keys.len());
-				for chunk_keys in thread_keys.chunks(DEFAULT_VALUE_DOWNLOAD_BATCH) {
+
+			for chunk_keys in thread_keys.chunks(DEFAULT_VALUE_DOWNLOAD_BATCH) {
 					let batch = chunk_keys
 						.iter()
 						.cloned()
 						.map(|key| ("state_getStorage", rpc_params![key, at]))
 						.collect::<Vec<_>>();
 
-					let values = rt
-						.block_on(thread_client.batch_request::<Option<StorageData>>(batch))
-						.map_err(|e| {
-							log::error!(
-								target: LOG_TARGET,
-								"failed to execute batch of {} values. Error: {:?}",
-								chunk_keys.len(),
-								e
-							);
-							"batch failed."
-						})
-						.unwrap();
+					let keys = chunk_keys.to_vec();
+					let thread_client = client.clone();
+					let fut = async move {
+						let batch_rp =
+							thread_client.batch_request::<Option<StorageData>>(batch).await.unwrap();
+						(keys, batch_rp)
+					};
 
-					let batch_kv = chunk_keys
-						.into_iter()
-						.enumerate()
-						.map(|(idx, key)| {
-							let maybe_value = values[idx].clone();
-							let value = maybe_value.unwrap_or_else(|| {
-								log::warn!(
-									target: LOG_TARGET,
-									"key {:?} had none corresponding value.",
-									&key
-								);
-								StorageData(vec![])
-							});
-							thread_key_values.push((key.clone(), value.clone()));
-							if thread_key_values.len() % (thread_keys.len() / 10).max(1) == 0 {
-								let ratio: f64 =
-									thread_key_values.len() as f64 / thread_keys.len() as f64;
-								log::debug!(
-									target: LOG_TARGET,
-									"[thread = {:?}] progress = {:.2} [{} / {}]",
-									std::thread::current().id(),
-									ratio,
-									thread_key_values.len(),
-									thread_keys.len(),
-								);
-							}
-							(key.clone().0, value.0)
-						})
-						.collect::<Vec<_>>();
-
-					// send this batch to the main thread to start inserting.
-					thread_sender.send(Message::Batch(batch_kv)).unwrap();
-				}
-
-				thread_sender.send(Message::Terminated).unwrap();
-				thread_key_values
-			});
-
-			handles.push(handle);
-		}
-
-		// first, wait until all threads send a `Terminated` message, in the meantime populate
-		// `pending_ext`.
-		let mut terminated = 0usize;
-		loop {
-			match rx.recv().unwrap() {
-				Message::Batch(kv) =>
-					for (k, v) in kv {
-						// skip writing the child root data.
-						if is_default_child_storage_key(k.as_ref()) {
-							continue
-						}
-						pending_ext.insert(k, v);
-					},
-				Message::Terminated => {
-					terminated += 1;
-					if terminated == handles.len() {
-						break
-					}
-				},
+					futs.push(fut);
 			}
 		}
 
-		let keys_and_values =
-			handles.into_iter().map(|h| h.join().unwrap()).flatten().collect::<Vec<_>>();
 
-		Ok(keys_and_values)
+		let mut res = Vec::new();
+
+		while let Some((keys, values)) = futs.next().await {
+			for (key, maybe_value) in keys.into_iter().zip(values) {
+				if let Some(val) = maybe_value {
+					// skip writing the child root data.
+					pending_ext.insert(key.0.clone(), val.0.clone());
+					res.push((key, val));
+				} else {
+					log::warn!(
+						target: LOG_TARGET,
+						"key {:?} had none corresponding value.",
+						&key);
+					res.push((key, StorageData(vec![])));
+				}
+			}
+		}
+
+		Ok(res)
 	}
 
 	/// Get the values corresponding to `child_keys` at the given `prefixed_top_key`.
@@ -1094,6 +1037,7 @@ mod remote_tests {
 
 	#[tokio::test(flavor = "multi_thread")]
 	async fn single_multi_thread_result_is_same() {
+		init_logger();
 		let c = |threads| OnlineConfig {
 			pallets: vec!["Proxy".to_owned(), "Crowdloan".to_owned()],
 			hashed_keys: vec![well_known_keys::CODE.to_vec()],
