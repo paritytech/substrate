@@ -32,7 +32,7 @@ use crate::{
 #[derive(Debug, Clone, clap::Parser)]
 pub struct OnRuntimeUpgradeCmd {
 	/// The state type to use.
-	#[clap(subcommand)]
+	#[command(subcommand)]
 	pub state: State,
 }
 
@@ -45,6 +45,7 @@ where
 	Block: BlockT + serde::de::DeserializeOwned,
 	Block::Hash: FromStr,
 	<Block::Hash as FromStr>::Err: Debug,
+	Block::Header: serde::de::DeserializeOwned,
 	NumberFor<Block>: FromStr,
 	<NumberFor<Block> as FromStr>::Err: Debug,
 	ExecDispatch: NativeExecutionDispatch + 'static,

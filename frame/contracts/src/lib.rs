@@ -102,7 +102,7 @@ use crate::{
 	exec::{AccountIdOf, ExecError, Executable, Stack as ExecStack},
 	gas::GasMeter,
 	storage::{meter::Meter as StorageMeter, ContractInfo, DeletedContract, Storage},
-	wasm::{OwnerInfo, PrefabWasmModule},
+	wasm::{OwnerInfo, PrefabWasmModule, TryInstantiate},
 	weights::WeightInfo,
 };
 use codec::{Codec, Encode, HasCompact};
@@ -132,6 +132,7 @@ pub use crate::{
 	migration::Migration,
 	pallet::*,
 	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
+	wasm::Determinism,
 };
 
 type CodeHash<T> = <T as frame_system::Config>::Hash;
@@ -206,7 +207,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	/// The current storage version.
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(8);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(9);
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
@@ -325,10 +326,24 @@ pub mod pallet {
 		/// The maximum length of a contract code in bytes. This limit applies to the instrumented
 		/// version of the code. Therefore `instantiate_with_code` can fail even when supplying
 		/// a wasm binary below this maximum size.
+		#[pallet::constant]
 		type MaxCodeLen: Get<u32>;
 
 		/// The maximum allowable length in bytes for storage keys.
+		#[pallet::constant]
 		type MaxStorageKeyLen: Get<u32>;
+
+		/// Make contract callable functions marked as `#[unstable]` available.
+		///
+		/// Contracts that use `#[unstable]` functions won't be able to be uploaded unless
+		/// this is set to `true`. This is only meant for testnets and dev nodes in order to
+		/// experiment with new features.
+		///
+		/// # Warning
+		///
+		/// Do **not** set to `true` on productions chains.
+		#[pallet::constant]
+		type UnsafeUnstableInterface: Get<bool>;
 	}
 
 	#[pallet::hooks]
@@ -456,6 +471,10 @@ pub mod pallet {
 		/// the in storage version to the current
 		/// [`InstructionWeights::version`](InstructionWeights).
 		///
+		/// - `determinism`: If this is set to any other value but [`Determinism::Deterministic`]
+		///   then the only way to use this code is to delegate call into it from an offchain
+		///   execution. Set to [`Determinism::Deterministic`] if in doubt.
+		///
 		/// # Note
 		///
 		/// Anyone can instantiate a contract from any uploaded code and thus prevent its removal.
@@ -467,9 +486,11 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			code: Vec<u8>,
 			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
+			determinism: Determinism,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			Self::bare_upload_code(origin, code, storage_deposit_limit.map(Into::into)).map(|_| ())
+			Self::bare_upload_code(origin, code, storage_deposit_limit.map(Into::into), determinism)
+				.map(|_| ())
 		}
 
 		/// Remove the code stored under `code_hash` and refund the deposit to its owner.
@@ -562,6 +583,7 @@ pub mod pallet {
 				storage_deposit_limit.map(Into::into),
 				data,
 				None,
+				Determinism::Deterministic,
 			);
 			if let Ok(retval) = &output.result {
 				if retval.did_revert() {
@@ -822,9 +844,16 @@ pub mod pallet {
 		/// to determine whether a reversion has taken place.
 		ContractReverted,
 		/// The contract's code was found to be invalid during validation or instrumentation.
+		///
+		/// The most likely cause of this is that an API was used which is not supported by the
+		/// node. This hapens if an older node is used with a new version of ink!. Try updating
+		/// your node to the newest available version.
+		///
 		/// A more detailed error can be found on the node console if debug messages are enabled
-		/// or in the debug buffer which is returned to RPC clients.
+		/// by supplying `-lruntime::contracts=debug`.
 		CodeRejected,
+		/// An indetermistic code was used in a context where this is not permitted.
+		Indeterministic,
 	}
 
 	/// A mapping from an original code hash to the original code, untouched by instrumentation.
@@ -921,6 +950,7 @@ where
 		storage_deposit_limit: Option<BalanceOf<T>>,
 		data: Vec<u8>,
 		debug: bool,
+		determinism: Determinism,
 	) -> ContractExecResult<BalanceOf<T>> {
 		let mut debug_message = if debug { Some(Vec::new()) } else { None };
 		let output = Self::internal_call(
@@ -931,6 +961,7 @@ where
 			storage_deposit_limit,
 			data,
 			debug_message.as_mut(),
+			determinism,
 		);
 		ContractExecResult {
 			result: output.result.map_err(|r| r.error),
@@ -994,10 +1025,17 @@ where
 		origin: T::AccountId,
 		code: Vec<u8>,
 		storage_deposit_limit: Option<BalanceOf<T>>,
+		determinism: Determinism,
 	) -> CodeUploadResult<CodeHash<T>, BalanceOf<T>> {
 		let schedule = T::Schedule::get();
-		let module =
-			PrefabWasmModule::from_code(code, &schedule, origin).map_err(|(err, _)| err)?;
+		let module = PrefabWasmModule::from_code(
+			code,
+			&schedule,
+			origin,
+			determinism,
+			TryInstantiate::Instantiate,
+		)
+		.map_err(|(err, _)| err)?;
 		let deposit = module.open_deposit();
 		if let Some(storage_deposit_limit) = storage_deposit_limit {
 			ensure!(storage_deposit_limit >= deposit, <Error<T>>::StorageDepositLimitExhausted);
@@ -1031,6 +1069,11 @@ where
 		T::AddressGenerator::generate_address(deploying_address, code_hash, salt)
 	}
 
+	/// Returns the code hash of the contract specified by `account` ID.
+	pub fn code_hash(account: &AccountIdOf<T>) -> Option<CodeHash<T>> {
+		Storage::<T>::code_hash(account)
+	}
+
 	/// Store code for benchmarks which does not check nor instrument the code.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn store_code_raw(
@@ -1062,6 +1105,7 @@ where
 		storage_deposit_limit: Option<BalanceOf<T>>,
 		data: Vec<u8>,
 		debug_message: Option<&mut Vec<u8>>,
+		determinism: Determinism,
 	) -> InternalCallOutput<T> {
 		let mut gas_meter = GasMeter::new(gas_limit);
 		let mut storage_meter = match StorageMeter::new(&origin, storage_deposit_limit, value) {
@@ -1083,6 +1127,7 @@ where
 			value,
 			data,
 			debug_message,
+			determinism,
 		);
 		InternalCallOutput {
 			result,
@@ -1110,11 +1155,17 @@ where
 			let schedule = T::Schedule::get();
 			let (extra_deposit, executable) = match code {
 				Code::Upload(binary) => {
-					let executable = PrefabWasmModule::from_code(binary, &schedule, origin.clone())
-						.map_err(|(err, msg)| {
-							debug_message.as_mut().map(|buffer| buffer.extend(msg.as_bytes()));
-							err
-						})?;
+					let executable = PrefabWasmModule::from_code(
+						binary,
+						&schedule,
+						origin.clone(),
+						Determinism::Deterministic,
+						TryInstantiate::Skip,
+					)
+					.map_err(|(err, msg)| {
+						debug_message.as_mut().map(|buffer| buffer.extend(msg.as_bytes()));
+						err
+					})?;
 					// The open deposit will be charged during execution when the
 					// uploaded module does not already exist. This deposit is not part of the
 					// storage meter because it is not transferred to the contract but
@@ -1174,6 +1225,7 @@ where
 
 sp_api::decl_runtime_apis! {
 	/// The API used to dry-run contract interactions.
+	#[api_version(2)]
 	pub trait ContractsApi<AccountId, Balance, BlockNumber, Hash> where
 		AccountId: Codec,
 		Balance: Codec,
@@ -1213,6 +1265,7 @@ sp_api::decl_runtime_apis! {
 			origin: AccountId,
 			code: Vec<u8>,
 			storage_deposit_limit: Option<Balance>,
+			determinism: Determinism,
 		) -> CodeUploadResult<Hash, Balance>;
 
 		/// Query a given storage key in a given contract.

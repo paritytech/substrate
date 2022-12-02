@@ -54,8 +54,7 @@ fn branch_node_bit_mask(has_children: impl Iterator<Item = bool>) -> (u8, u8) {
 
 /// Create a leaf/branch node, encoding a number of nibbles.
 fn fuse_nibbles_node(nibbles: &[u8], kind: NodeKind) -> impl Iterator<Item = u8> + '_ {
-	let size = sp_std::cmp::min(trie_constants::NIBBLE_SIZE_BOUND, nibbles.len());
-
+	let size = nibbles.len();
 	let iter_start = match kind {
 		NodeKind::Leaf => size_and_prefix_iterator(size, trie_constants::LEAF_PREFIX_MASK, 2),
 		NodeKind::BranchNoValue =>

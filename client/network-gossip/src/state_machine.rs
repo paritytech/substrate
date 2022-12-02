@@ -24,7 +24,7 @@ use lru::LruCache;
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use sc_network_common::protocol::{role::ObservedRole, ProtocolName};
 use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
-use std::{collections::HashMap, iter, sync::Arc, time, time::Instant};
+use std::{collections::HashMap, iter, num::NonZeroUsize, sync::Arc, time, time::Instant};
 
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
 // NOTE: The current value is adjusted based on largest production network deployment (Kusama) and
@@ -180,7 +180,11 @@ impl<B: BlockT> ConsensusGossip<B> {
 		ConsensusGossip {
 			peers: HashMap::new(),
 			messages: Default::default(),
-			known_messages: LruCache::new(KNOWN_MESSAGES_CACHE_SIZE),
+			known_messages: {
+				let cap = NonZeroUsize::new(KNOWN_MESSAGES_CACHE_SIZE)
+					.expect("cache capacity is not zero");
+				LruCache::new(cap)
+			},
 			protocol,
 			validator,
 			next_broadcast: Instant::now() + REBROADCAST_INTERVAL,

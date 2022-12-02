@@ -33,6 +33,7 @@ pub use sc_network_common::{
 
 pub use libp2p::{build_multiaddr, core::PublicKey, identity};
 
+use crate::ChainSyncInterface;
 use core::{fmt, iter};
 use libp2p::{
 	identity::{ed25519, Keypair},
@@ -91,44 +92,14 @@ where
 	/// Instance of chain sync implementation.
 	pub chain_sync: Box<dyn ChainSync<B>>,
 
+	/// Interface that can be used to delegate syncing-related function calls to `ChainSync`
+	pub chain_sync_service: Box<dyn ChainSyncInterface<B>>,
+
 	/// Registry for recording prometheus metrics to.
 	pub metrics_registry: Option<Registry>,
 
 	/// Block announce protocol configuration
 	pub block_announce_config: NonDefaultSetConfig,
-
-	/// Request response configuration for the block request protocol.
-	///
-	/// [`RequestResponseConfig::name`] is used to tag outgoing block requests with the correct
-	/// protocol name. In addition all of [`RequestResponseConfig`] is used to handle incoming
-	/// block requests, if enabled.
-	///
-	/// Can be constructed either via
-	/// `sc_network_sync::block_request_handler::generate_protocol_config` allowing outgoing but
-	/// not incoming requests, or constructed via `sc_network_sync::block_request_handler::
-	/// BlockRequestHandler::new` allowing both outgoing and incoming requests.
-	pub block_request_protocol_config: RequestResponseConfig,
-
-	/// Request response configuration for the light client request protocol.
-	///
-	/// Can be constructed either via
-	/// `sc_network_light::light_client_requests::generate_protocol_config` allowing outgoing but
-	/// not incoming requests, or constructed via
-	/// `sc_network_light::light_client_requests::handler::LightClientRequestHandler::new`
-	/// allowing both outgoing and incoming requests.
-	pub light_client_request_protocol_config: RequestResponseConfig,
-
-	/// Request response configuration for the state request protocol.
-	///
-	/// Can be constructed either via
-	/// `sc_network_sync::state_request_handler::generate_protocol_config` allowing outgoing but
-	/// not incoming requests, or constructed via
-	/// `sc_network_sync::state_request_handler::StateRequestHandler::new` allowing
-	/// both outgoing and incoming requests.
-	pub state_request_protocol_config: RequestResponseConfig,
-
-	/// Optional warp sync protocol config.
-	pub warp_sync_protocol_config: Option<RequestResponseConfig>,
 
 	/// Request response protocol configurations
 	pub request_response_protocol_configs: Vec<RequestResponseConfig>,
@@ -451,11 +422,8 @@ mod tests {
 	}
 
 	fn secret_bytes(kp: &Keypair) -> Vec<u8> {
-		match kp {
-			Keypair::Ed25519(p) => p.secret().as_ref().iter().cloned().collect(),
-			Keypair::Secp256k1(p) => p.secret().to_bytes().to_vec(),
-			_ => panic!("Unexpected keypair."),
-		}
+		let Keypair::Ed25519(p) = kp;
+		p.secret().as_ref().iter().cloned().collect()
 	}
 
 	#[test]

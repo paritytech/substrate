@@ -73,6 +73,8 @@ struct BenchmarkData {
 	worst_case_proof_size: u32,
 	component_ranges: Vec<ComponentRange>,
 	comments: Vec<String>,
+	#[serde(serialize_with = "string_serialize")]
+	min_execution_time: u128,
 }
 
 // This forwards some specific metadata from the `PalletCmd`
@@ -294,6 +296,7 @@ fn get_benchmark_data(
 		worst_case_proof_size,
 		component_ranges,
 		comments,
+		min_execution_time: extrinsic_time.minimum,
 	}
 }
 
