@@ -38,7 +38,6 @@ use codec::{Codec, Decode, Encode};
 use futures::{stream::Fuse, FutureExt, StreamExt};
 use log::{debug, error, info, log_enabled, trace, warn};
 use sc_client_api::{Backend, FinalityNotification, FinalityNotifications, HeaderBackend};
-use sc_network_common::service::{NetworkEventStream, NetworkRequest};
 use sc_network_gossip::GossipEngine;
 use sc_utils::notification::NotificationReceiver;
 use sp_api::BlockId;
@@ -819,21 +818,6 @@ where
 		);
 
 		loop {
-			// Don't bother voting or requesting justifications during major sync.
-			if !self.sync.is_major_syncing() {
-				// If the current target is a mandatory block,
-				// make sure there's also an on-demand justification request out for it.
-				if let Some((block, active)) = self.voting_oracle().mandatory_pending() {
-					// This only starts new request if there isn't already an active one.
-					self.on_demand_justifications.request(block, active);
-				}
-				// There were external events, 'state' is changed, author a vote if needed/possible.
-				if let Err(err) = self.try_to_vote() {
-					debug!(target: "beefy", "🥩 {}", err);
-				}
-			} else {
-				debug!(target: "beefy", "🥩 Skipping voting while major syncing.");
-			}
 			// Act on changed 'state'.
 			self.process_new_state();
 
@@ -889,11 +873,6 @@ where
 						return;
 					}
 				},
-			}
-
-			// Handle pending justifications and/or votes for now GRANDPA finalized blocks.
-			if let Err(err) = self.try_pending_justif_and_votes() {
-				debug!(target: "beefy", "🥩 {}", err);
 			}
 		}
 	}
@@ -976,7 +955,7 @@ pub(crate) mod tests {
 	use sp_blockchain::Backend as BlockchainBackendT;
 	use sp_runtime::traits::{One, Zero};
 	use substrate_test_runtime_client::{
-		runtime::{Block, Digest, DigestItem, Header, H256},
+		runtime::{Block, Digest, DigestItem, Header},
 		Backend,
 	};
 
@@ -1009,18 +988,7 @@ pub(crate) mod tests {
 		key: &Keyring,
 		min_block_delta: u32,
 		genesis_validator_set: ValidatorSet<AuthorityId>,
-	) -> BeefyWorker<
-		Block,
-		Backend,
-		MmrRootProvider<Block, TestApi>,
-		Arc<SyncingService<Block>>,
-		// ||||||| 7a76b40dc6
-		// 		TestApi,
-		// 		Arc<NetworkService<Block, H256>>,
-		// =======
-		// 		Arc<NetworkService<Block, H256>>,
-		// >>>>>>> import-queue-refactoring
-	> {
+	) -> BeefyWorker<Block, Backend, MmrRootProvider<Block, TestApi>, Arc<SyncingService<Block>>> {
 		let keystore = create_beefy_keystore(*key);
 
 		let (to_rpc_justif_sender, from_voter_justif_stream) =

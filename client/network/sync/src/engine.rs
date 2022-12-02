@@ -794,7 +794,6 @@ where
 		}
 	}
 
-	// TODO: peernewbest
 	/// Called on the first connection between two peers on the default set, after their exchange
 	/// of handshake.
 	///
@@ -923,10 +922,8 @@ where
 			self.chain_sync.send_block_request(who, req);
 		}
 
-		self.event_streams.retain(|stream| {
-			println!("sync: {who:?} connected");
-			stream.unbounded_send(SyncEvent::PeerConnected(who)).is_ok()
-		});
+		self.event_streams
+			.retain(|stream| stream.unbounded_send(SyncEvent::PeerConnected(who)).is_ok());
 
 		Ok(())
 	}

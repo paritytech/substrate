@@ -739,7 +739,6 @@ mod tests {
 			}
 
 			let mut event_sender = network.inner.lock().unwrap().event_senders.pop().unwrap();
-			let mut _syncevent_sender = sync.inner.lock().unwrap().event_senders.pop().unwrap();
 
 			// Register the remote peer.
 			event_sender

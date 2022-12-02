@@ -36,8 +36,6 @@ mod schema;
 pub mod service;
 pub mod state;
 pub mod state_request_handler;
-#[cfg(test)]
-mod tests;
 pub mod warp;
 pub mod warp_request_handler;
 

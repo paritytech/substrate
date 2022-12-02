@@ -22,12 +22,9 @@ use futures::prelude::*;
 use libp2p::Multiaddr;
 use sc_consensus::{ImportQueue, Link};
 use sc_network_common::{
-	config::{
-		NonDefaultSetConfig, ProtocolId, SetConfig, SyncMode as SyncOperationMod, TransportConfig,
-	},
+	config::{NonDefaultSetConfig, ProtocolId, SetConfig, TransportConfig},
 	protocol::{event::Event, role::Roles},
 	service::NetworkEventStream,
-	sync::ChainSync as ChainSyncT,
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
@@ -35,10 +32,9 @@ use sc_network_sync::{
 	engine::SyncingEngine,
 	service::network::{NetworkServiceHandle, NetworkServiceProvider},
 	state_request_handler::StateRequestHandler,
-	SyncingService,
 };
 use sp_runtime::traits::{Block as BlockT, Header as _};
-use std::{collections::HashSet, sync::Arc};
+use std::sync::Arc;
 use substrate_test_runtime_client::{
 	runtime::{Block as TestBlock, Hash as TestHash},
 	TestClient, TestClientBuilder, TestClientBuilderExt as _,
@@ -50,7 +46,6 @@ mod service;
 type TestNetworkWorker = NetworkWorker<TestBlock, TestHash, TestClient>;
 type TestNetworkService = NetworkService<TestBlock, TestHash>;
 
-const BLOCK_ANNOUNCE_PROTO_NAME: &str = "/block-announces";
 const PROTOCOL_NAME: &str = "/foo";
 
 struct TestNetwork {

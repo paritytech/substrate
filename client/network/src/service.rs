@@ -54,7 +54,6 @@ use libp2p::{
 use log::{debug, error, info, trace, warn};
 use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
-use sc_client_api::{BlockBackend, ProofProvider};
 use sc_network_common::{
 	config::{MultiaddrWithPeerId, TransportConfig},
 	error::Error,
@@ -73,7 +72,7 @@ use sc_network_common::{
 };
 use sc_peerset::PeersetHandle;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
-use sp_blockchain::{HeaderBackend, HeaderMetadata};
+use sp_blockchain::HeaderBackend;
 use sp_runtime::traits::{Block as BlockT, Zero};
 use std::{
 	cmp,
@@ -134,13 +133,7 @@ impl<B, H, Client> NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	/// Creates the network service.
 	///
@@ -1122,13 +1115,7 @@ pub struct NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
@@ -1160,13 +1147,7 @@ impl<B, H, Client> Future for NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	type Output = ();
 
@@ -1732,7 +1713,7 @@ where
 			};
 		}
 
-		// // Update the variables shared with the `NetworkService`.
+		// Update the variables shared with the `NetworkService`.
 		let num_connected_peers =
 			this.network_service.behaviour_mut().user_protocol_mut().num_connected_peers();
 		this.num_connected.store(num_connected_peers, Ordering::Relaxed);
@@ -1780,13 +1761,7 @@ impl<B, H, Client> Unpin for NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 }
 

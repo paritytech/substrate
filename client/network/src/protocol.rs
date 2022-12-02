@@ -31,14 +31,13 @@ use libp2p::{
 use log::{debug, error, warn};
 use message::{generic::Message as GenericMessage, Message};
 use notifications::{Notifications, NotificationsOut};
-use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
+use sc_client_api::HeaderBackend;
 use sc_network_common::{
 	config::NonReservedPeerMode,
 	error,
 	protocol::{role::Roles, ProtocolName},
 	sync::message::BlockAnnouncesHandshake,
 };
-use sp_blockchain::HeaderMetadata;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{
 	collections::{HashMap, HashSet, VecDeque},
@@ -92,13 +91,7 @@ pub struct Protocol<B: BlockT, Client> {
 impl<B, Client> Protocol<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	/// Create a new instance.
 	pub fn new(
@@ -377,13 +370,7 @@ pub enum CustomMessageOutcome<B: BlockT> {
 impl<B, Client> NetworkBehaviour for Protocol<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	type ConnectionHandler = <Notifications as NetworkBehaviour>::ConnectionHandler;
 	type OutEvent = CustomMessageOutcome<B>;

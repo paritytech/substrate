@@ -204,7 +204,7 @@ impl SyncEventStream for TestSync {
 }
 
 impl NetworkBlock<Hash, NumberFor<Block>> for TestSync {
-	fn announce_block(&self, hash: Hash, _data: Option<Vec<u8>>) {
+	fn announce_block(&self, _hash: Hash, _data: Option<Vec<u8>>) {
 		todo!();
 	}
 
