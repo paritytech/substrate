@@ -341,18 +341,11 @@ pub(crate) fn run_test_with_mmr_gadget_pre_post_using_client<F, G, RetF, RetG>(
 	runtime.block_on(async move { pre_gadget(client_clone).await });
 
 	let client_clone = client.clone();
-	runtime.spawn(
-		async move {
-			let backend = client_clone.backend.clone();
-			MmrGadget::start(
-				client_clone.clone(),
-				backend,
-				MockRuntimeApi::INDEXING_PREFIX.to_vec(),
-			)
+	runtime.spawn(async move {
+		let backend = client_clone.backend.clone();
+		MmrGadget::start(client_clone.clone(), backend, MockRuntimeApi::INDEXING_PREFIX.to_vec())
 			.await
-		}, /* .boxed_local()
-		    * .into(), */
-	);
+	});
 
 	runtime.block_on(async move {
 		tokio::time::sleep(Duration::from_millis(200)).await;
