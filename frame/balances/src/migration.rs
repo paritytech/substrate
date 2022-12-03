@@ -19,9 +19,7 @@ use frame_support::{pallet_prelude::*, traits::OnRuntimeUpgrade, weights::Weight
 
 // NOTE: This must be used alongside the account whose balance is expected to be inactive.
 // Generally this will be used for the XCM teleport checking account.
-pub struct MigrateToTrackInactive<T: Config, A: Get<T::AccountId>>(
-	sp_std::marker::PhantomData<(T, A)>,
-);
+pub struct MigrateToTrackInactive<T, A>(PhantomData<(T, A)>);
 impl<T: Config, A: Get<T::AccountId>> OnRuntimeUpgrade for MigrateToTrackInactive<T, A> {
 	fn on_runtime_upgrade() -> Weight {
 		let current_version = Pallet::<T>::current_storage_version();
@@ -32,20 +30,35 @@ impl<T: Config, A: Get<T::AccountId>> OnRuntimeUpgrade for MigrateToTrackInactiv
 			Pallet::<T>::deactivate(b);
 			current_version.put::<Pallet<T>>();
 			log::info!(target: "runtime::balances", "Storage to version {:?}", current_version);
-			T::DbWeight::get().reads_writes(3, 3)
+			T::DbWeight::get().reads_writes(4, 3)
 		} else {
 			log::info!(target: "runtime::balances",  "Migration did not execute. This probably should be removed");
 			T::DbWeight::get().reads(2)
 		}
 	}
+}
 
-	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-		Ok(vec![])
-	}
+// NOTE: This must be used alongside the account whose balance is expected to be inactive.
+// Generally this will be used for the XCM teleport checking account.
+pub struct MigrateManyToTrackInactive<T, A>(PhantomData<(T, A)>);
+impl<T: Config, A: Get<Vec<T::AccountId>>> OnRuntimeUpgrade for MigrateManyToTrackInactive<T, A> {
+	fn on_runtime_upgrade() -> Weight {
+		let current_version = Pallet::<T>::current_storage_version();
+		let onchain_version = Pallet::<T>::on_chain_storage_version();
 
-	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(total: Vec<u8>) -> Result<(), &'static str> {
-		Ok(())
+		if onchain_version == 0 && current_version == 1 {
+			let accounts = A::get();
+			let total = accounts
+				.iter()
+				.map(|a| Pallet::<T>::total_balance(a))
+				.fold(T::Balance::zero(), |a, e| a.saturating_add(e));
+			Pallet::<T>::deactivate(total);
+			current_version.put::<Pallet<T>>();
+			log::info!(target: "runtime::balances", "Storage to version {:?}", current_version);
+			T::DbWeight::get().reads_writes(3 + accounts.len() as u64, 3)
+		} else {
+			log::info!(target: "runtime::balances",  "Migration did not execute. This probably should be removed");
+			T::DbWeight::get().reads(2)
+		}
 	}
 }
