@@ -36,16 +36,6 @@ impl<T: Config, A: Get<T::AccountId>> OnRuntimeUpgrade for MigrateToTrackInactiv
 			T::DbWeight::get().reads(2)
 		}
 	}
-
-	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-		Ok(vec![])
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(total: Vec<u8>) -> Result<(), &'static str> {
-		Ok(())
-	}
 }
 
 // NOTE: This must be used alongside the account whose balance is expected to be inactive.
@@ -70,15 +60,5 @@ impl<T: Config, A: Get<Vec<T::AccountId>>> OnRuntimeUpgrade for MigrateManyToTra
 			log::info!(target: "runtime::balances",  "Migration did not execute. This probably should be removed");
 			T::DbWeight::get().reads(2)
 		}
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-		Ok(vec![])
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(total: Vec<u8>) -> Result<(), &'static str> {
-		Ok(())
 	}
 }
