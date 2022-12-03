@@ -58,7 +58,10 @@ impl<T: Config, A: Get<Vec<T::AccountId>>> OnRuntimeUpgrade for MigrateManyToTra
 
 		if onchain_version == 0 && current_version == 1 {
 			let accounts = A::get();
-			let total = accounts.iter().map(|a| Pallet::<T>::total_balance(a)).fold(T::Balance::zero(), |a, e| a.saturating_add(e));
+			let total = accounts
+				.iter()
+				.map(|a| Pallet::<T>::total_balance(a))
+				.fold(T::Balance::zero(), |a, e| a.saturating_add(e));
 			Pallet::<T>::deactivate(total);
 			current_version.put::<Pallet<T>>();
 			log::info!(target: "runtime::balances", "Storage to version {:?}", current_version);
