@@ -223,6 +223,10 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// The amount which has been reported as inactive to Currency.
+	#[pallet::storage]
+	pub type Inactive<T: Config<I>, I: 'static = ()> = StorageValue<_, BalanceOf<T, I>, ValueQuery>;
+
 	/// Proposal indices that have been approved but not yet awarded.
 	#[pallet::storage]
 	#[pallet::getter(fn approvals)]
@@ -316,6 +320,16 @@ pub mod pallet {
 		/// - The weight is overestimated if some approvals got missed.
 		/// # </weight>
 		fn on_initialize(n: T::BlockNumber) -> Weight {
+			let pot = Self::pot();
+			let deactivated = Inactive::<T, I>::get();
+			if pot != deactivated {
+				match (pot > deactivated, pot.max(deactivated) - pot.min(deactivated)) {
+					(true, delta) => T::Currency::deactivate(delta),
+					(false, delta) => T::Currency::reactivate(delta),
+				}
+				Inactive::<T, I>::put(&pot);
+			}
+
 			// Check to see if we should spend some funds!
 			if (n % T::SpendPeriod::get()).is_zero() {
 				Self::spend_funds()
