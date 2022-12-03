@@ -416,8 +416,8 @@ enum AccountType {
 pub enum BondExtraSource {
 	// Action to be taken by the bonded member of a pool
 	Origin,
-	// Action to be taken by the pool operator on the member's behalf
-	Operator,
+	// Action to be taken by anyone on the member's behalf
+	Open,
 }
 
 impl Default for BondExtraSource {
@@ -1490,8 +1490,6 @@ pub mod pallet {
 		PoolIdInUse,
 		/// Pool id provided is not correct/usable.
 		InvalidPoolId,
-		/// The caller is not the operator for this pool.
-		NotRoot,
 	}
 
 	#[derive(Encode, Decode, PartialEq, TypeInfo, frame_support::PalletError, RuntimeDebug)]
@@ -1625,19 +1623,18 @@ pub mod pallet {
 			T::WeightInfo::bond_extra_transfer()
 			.max(T::WeightInfo::bond_extra_reward())
 		)]
-		pub fn root_bond_extra(
+		pub fn bond_extra_other(
 			origin: OriginFor<T>, 
 			member_account: AccountIdLookupOf<T>,
 		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
+			ensure_signed(origin)?;
 			let member_account = T::Lookup::lookup(member_account)?;
 			let (mut member, mut bonded_pool, mut reward_pool) =
 				Self::get_member_with_pools(&member_account)?;
 
-			ensure!(bonded_pool.is_root(&who), Error::<T>::NotRoot);
-			ensure!(ClaimableAction::<T>::get(&member_account) == BondExtraSource::Operator, Error::<T>::DoesNotHavePermission);
+			ensure!(ClaimableAction::<T>::get(&member_account) == BondExtraSource::Open, Error::<T>::DoesNotHavePermission);
 
-			// IMPORTANT: reward pool records must be updated with the old points. why?
+			// IMPORTANT: reward pool records must be updated with the old points.
 			reward_pool.update_records(bonded_pool.id, bonded_pool.points)?;
 
 		    // A member who has no skin in the game anymore cannot claim any rewards.

@@ -268,7 +268,7 @@ frame_benchmarking::benchmarks! {
 		);
 	}
 
-	root_bond_extra {
+	bond_extra_other {
 		let origin_weight = Pools::<T>::depositor_min_bond() * 2u32.into();
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		let scenario_creator1_lookup = T::Lookup::unlookup(scenario.creator1.clone());

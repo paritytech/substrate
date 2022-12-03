@@ -4262,11 +4262,11 @@ fn set_claimable_actor_works() {
 
 		// Give pool operator permission.
 		assert_eq!(ClaimableAction::<Runtime>::get(11), BondExtraSource::Origin);
-		assert_noop!(Pools::set_claimable_actor(RuntimeOrigin::signed(12), BondExtraSource::Operator), Error::<T>::PoolMemberNotFound);
-		assert_ok!(Pools::set_claimable_actor(RuntimeOrigin::signed(11), BondExtraSource::Operator));
+		assert_noop!(Pools::set_claimable_actor(RuntimeOrigin::signed(12), BondExtraSource::Open), Error::<T>::PoolMemberNotFound);
+		assert_ok!(Pools::set_claimable_actor(RuntimeOrigin::signed(11), BondExtraSource::Open));
 
 		// then
-		assert_eq!(ClaimableAction::<Runtime>::get(11), BondExtraSource::Operator);
+		assert_eq!(ClaimableAction::<Runtime>::get(11), BondExtraSource::Open);
 	});
 }
 
@@ -4616,7 +4616,7 @@ mod bond_extra {
 	}
 
 	#[test]
-	fn root_bond_extra_from_rewards() {
+	fn other_bond_extra_from_rewards() {
 		ExtBuilder::default().add_members(vec![(20, 20)]).build_and_execute(|| {
 			Balances::make_free_balance_be(&default_reward_account(), 8);
 			// ... if which only 3 is claimable to make sure the reward account does not die.
@@ -4631,9 +4631,9 @@ mod bond_extra {
 			assert_eq!(Balances::free_balance(10), 35);
 			assert_eq!(Balances::free_balance(20), 20);
 
-			assert_noop!(Pools::root_bond_extra(RuntimeOrigin::signed(900), 10), Error::<Runtime>::DoesNotHavePermission);
-			assert_ok!(Pools::set_claimable_actor(RuntimeOrigin::signed(10), BondExtraSource::Operator));
-			assert_ok!(Pools::root_bond_extra(RuntimeOrigin::signed(900), 10));
+			assert_noop!(Pools::bond_extra_other(RuntimeOrigin::signed(80), 10), Error::<Runtime>::DoesNotHavePermission);
+			assert_ok!(Pools::set_claimable_actor(RuntimeOrigin::signed(10), BondExtraSource::Open));
+			assert_ok!(Pools::bond_extra_other(RuntimeOrigin::signed(50), 10));
 			assert_eq!(Balances::free_balance(&default_reward_account()), 7);
 
 			// then
@@ -4642,9 +4642,9 @@ mod bond_extra {
 			assert_eq!(BondedPools::<Runtime>::get(1).unwrap().points, 30 + 1);
 
 			// when
-			assert_noop!(Pools::root_bond_extra(RuntimeOrigin::signed(900), 20), Error::<Runtime>::DoesNotHavePermission);
-			assert_ok!(Pools::set_claimable_actor(RuntimeOrigin::signed(20), BondExtraSource::Operator));
-			assert_ok!(Pools::root_bond_extra(RuntimeOrigin::signed(900), 20));
+			assert_noop!(Pools::bond_extra_other(RuntimeOrigin::signed(40), 20), Error::<Runtime>::DoesNotHavePermission);
+			assert_ok!(Pools::set_claimable_actor(RuntimeOrigin::signed(20), BondExtraSource::Open));
+			assert_ok!(Pools::bond_extra_other(RuntimeOrigin::signed(20), 20));
 
 			// then
 			assert_eq!(Balances::free_balance(20), 20);
