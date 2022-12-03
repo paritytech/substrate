@@ -46,6 +46,12 @@ pub trait Inspect<AccountId> {
 	/// The total amount of issuance in the system.
 	fn total_issuance(asset: Self::AssetId) -> Self::Balance;
 
+	/// The total amount of issuance in the system excluding those which are controlled by the
+	/// system.
+	fn active_issuance(asset: Self::AssetId) -> Self::Balance {
+		Self::total_issuance(asset)
+	}
+
 	/// The minimum balance any single account may have.
 	fn minimum_balance(asset: Self::AssetId) -> Self::Balance;
 
@@ -177,6 +183,12 @@ pub trait Transfer<AccountId>: Inspect<AccountId> {
 		amount: Self::Balance,
 		keep_alive: bool,
 	) -> Result<Self::Balance, DispatchError>;
+
+	/// Reduce the active issuance by some amount.
+	fn deactivate(_: Self::AssetId, _: Self::Balance) {}
+
+	/// Increase the active issuance by some amount, up to the outstanding amount reduced.
+	fn reactivate(_: Self::AssetId, _: Self::Balance) {}
 }
 
 /// Trait for inspecting a set of named fungible assets which can be placed on hold.

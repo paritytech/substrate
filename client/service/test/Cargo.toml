@@ -40,5 +40,6 @@ sp-state-machine = { version = "0.13.0", path = "../../../primitives/state-machi
 sp-storage = { version = "7.0.0", path = "../../../primitives/storage" }
 sp-tracing = { version = "6.0.0", path = "../../../primitives/tracing" }
 sp-trie = { version = "7.0.0", path = "../../../primitives/trie" }
+sp-io = { version = "7.0.0", path = "../../../primitives/io" }
 substrate-test-runtime = { version = "2.0.0", path = "../../../test-utils/runtime" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }

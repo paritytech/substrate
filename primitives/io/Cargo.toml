@@ -34,6 +34,7 @@ parking_lot = { version = "0.12.1", optional = true }
 secp256k1 = { version = "0.24.0", features = ["recovery", "global-context"], optional = true }
 tracing = { version = "0.1.29", default-features = false }
 tracing-core = { version = "0.1.28", default-features = false}
+ed25519-dalek = { version = "1.0.1", default-features = false, optional = true }
 
 [features]
 default = ["std"]
@@ -57,6 +58,7 @@ std = [
 	"log",
 	"futures",
 	"parking_lot",
+	"ed25519-dalek",
 ]
 
 with-tracing = [

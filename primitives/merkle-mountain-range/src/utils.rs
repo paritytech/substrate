@@ -17,8 +17,47 @@
 
 //! Merkle Mountain Range utilities.
 
-use crate::primitives::{LeafIndex, NodeIndex};
+use codec::Encode;
 use mmr_lib::helper;
+
+use sp_runtime::traits::{CheckedAdd, CheckedSub, Header, One};
+#[cfg(not(feature = "std"))]
+use sp_std::prelude::Vec;
+
+use crate::{Error, LeafIndex, NodeIndex};
+
+/// Get the first block with MMR.
+pub fn first_mmr_block_num<H: Header>(
+	best_block_num: H::Number,
+	mmr_leaf_count: LeafIndex,
+) -> Result<H::Number, Error> {
+	let mmr_blocks_count = mmr_leaf_count.try_into().map_err(|_| {
+		Error::InvalidNumericOp
+			.log_debug("The number of leaves couldn't be converted to a block number.")
+	})?;
+	best_block_num
+		.checked_sub(&mmr_blocks_count)
+		.and_then(|last_non_mmr_block| last_non_mmr_block.checked_add(&One::one()))
+		.ok_or_else(|| {
+			Error::InvalidNumericOp
+				.log_debug("The best block should be greater than the number of mmr blocks.")
+		})
+}
+
+/// Convert a block number into a leaf index.
+pub fn block_num_to_leaf_index<H: Header>(
+	block_num: H::Number,
+	first_mmr_block_num: H::Number,
+) -> Result<LeafIndex, Error> {
+	let leaf_idx = block_num.checked_sub(&first_mmr_block_num).ok_or_else(|| {
+		Error::InvalidNumericOp
+			.log_debug("The provided block should be greater than the first mmr block.")
+	})?;
+
+	leaf_idx.try_into().map_err(|_| {
+		Error::InvalidNumericOp.log_debug("Couldn't convert the leaf index to `LeafIndex`.")
+	})
+}
 
 /// MMR nodes & size -related utilities.
 pub struct NodesUtils {
@@ -70,10 +109,30 @@ impl NodesUtils {
 	/// Starting from any leaf index, get the sequence of positions of the nodes added
 	/// to the mmr when this leaf was added (inclusive of the leaf's position itself).
 	/// That is, all of these nodes are right children of their respective parents.
-	pub fn right_branch_ending_in_leaf(leaf_index: LeafIndex) -> crate::Vec<NodeIndex> {
+	pub fn right_branch_ending_in_leaf(leaf_index: LeafIndex) -> Vec<NodeIndex> {
 		let pos = helper::leaf_index_to_pos(leaf_index);
 		let num_parents = leaf_index.trailing_ones() as u64;
 		return (pos..=pos + num_parents).collect()
+	}
+
+	/// Build offchain key from `parent_hash` of block that originally added node `pos` to MMR.
+	///
+	/// This combination makes the offchain (key,value) entry resilient to chain forks.
+	pub fn node_temp_offchain_key<H: Header>(
+		prefix: &[u8],
+		pos: NodeIndex,
+		parent_hash: H::Hash,
+	) -> Vec<u8> {
+		(prefix, pos, parent_hash).encode()
+	}
+
+	/// Build canonical offchain key for node `pos` in MMR.
+	///
+	/// Used for nodes added by now finalized blocks.
+	/// Never read keys using `node_canon_offchain_key` unless you sure that
+	/// there's no `node_offchain_key` key in the storage.
+	pub fn node_canon_offchain_key(prefix: &[u8], pos: NodeIndex) -> sp_std::prelude::Vec<u8> {
+		(prefix, pos).encode()
 	}
 }
 
@@ -142,8 +201,6 @@ mod tests {
 
 	#[test]
 	fn should_calculate_the_size_correctly() {
-		let _ = env_logger::try_init();
-
 		let leaves = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 21];
 		let sizes = vec![0, 1, 3, 4, 7, 8, 10, 11, 15, 16, 18, 19, 22, 23, 25, 26, 39];
 		assert_eq!(
@@ -154,23 +211,5 @@ mod tests {
 				.collect::<Vec<_>>(),
 			sizes.clone()
 		);
-
-		// size cross-check
-		let mut actual_sizes = vec![];
-		for s in &leaves[1..] {
-			crate::tests::new_test_ext().execute_with(|| {
-				let mut mmr = crate::mmr::Mmr::<
-					crate::mmr::storage::RuntimeStorage,
-					crate::mock::Test,
-					_,
-					_,
-				>::new(0);
-				for i in 0..*s {
-					mmr.push(i);
-				}
-				actual_sizes.push(mmr.size());
-			})
-		}
-		assert_eq!(sizes[1..], actual_sizes[..]);
 	}
 }
