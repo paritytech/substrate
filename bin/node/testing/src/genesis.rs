@@ -86,7 +86,7 @@ pub fn config_endowed(code: Option<&[u8]>, extra_endowed: Vec<AccountId>) -> Gen
 		elections: Default::default(),
 		sudo: Default::default(),
 		treasury: Default::default(),
-		society: SocietyConfig { members: vec![alice(), bob()], pot: 0, max_members: 999 },
+		society: SocietyConfig { pot: 0 },
 		vesting: Default::default(),
 		assets: Default::default(),
 		gilt: Default::default(),

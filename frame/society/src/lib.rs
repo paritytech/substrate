@@ -250,10 +250,16 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
+pub mod weights;
+
 pub mod migrations;
 
 use frame_support::{
 	pallet_prelude::*,
+	storage::KeyLenOf,
 	traits::{
 		Currency, EnsureOrigin, ExistenceRequirement::AllowDeath,
 		Imbalance, OnUnbalanced, Randomness, ReservableCurrency, BalanceStatus,
@@ -274,6 +280,8 @@ use sp_runtime::{
 	ArithmeticError::Overflow, Percent, RuntimeDebug,
 };
 use sp_std::prelude::*;
+
+pub use weights::WeightInfo;
 
 pub use pallet::*;
 
@@ -527,6 +535,9 @@ pub mod pallet {
 		/// The maximum number of bids at once.
 		#[pallet::constant]
 		type MaxBids: Get<u32>;
+
+		/// Weight information for extrinsics in this pallet.
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::error]
@@ -723,10 +734,10 @@ pub mod pallet {
 
 	/// Clear-cursor for Vote, map from Candidate -> (Maybe) Cursor.
 	#[pallet::storage]
-	pub type VoteClearCursor<T: Config<I>, I: 'static = ()> = StorageMap<_,
+	pub(super) type VoteClearCursor<T: Config<I>, I: 'static = ()> = StorageMap<_,
 		Twox64Concat,
 		T::AccountId,
-		BoundedVec<u8, KeyLenOf::<Votes>>,
+		BoundedVec<u8, KeyLenOf<Votes<T, I>>>
 	>;
 
 	/// At the end of the claim period, this contains the most recently approved members (along with
@@ -821,7 +832,7 @@ pub mod pallet {
 		///
 		/// Key: B (len of bids), C (len of candidates), M (len of members), X (balance reserve)
 		/// Total Complexity: O(M + B + C + logM + logB + X)
-		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
+		#[pallet::weight(T::WeightInfo::bid())]
 		pub fn bid(origin: OriginFor<T>, value: BalanceOf<T, I>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
@@ -852,7 +863,7 @@ pub mod pallet {
 		///
 		/// Key: B (len of bids), X (balance unreserve)
 		/// Total Complexity: O(B + X)
-		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
+		#[pallet::weight(T::WeightInfo::unbid())]
 		pub fn unbid(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
@@ -884,7 +895,7 @@ pub mod pallet {
 		///
 		/// Key: B (len of bids), C (len of candidates), M (len of members)
 		/// Total Complexity: O(M + B + C + logM + logB + X)
-		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
+		#[pallet::weight(T::WeightInfo::vouch())]
 		pub fn vouch(
 			origin: OriginFor<T>,
 			who: T::AccountId,
@@ -932,7 +943,7 @@ pub mod pallet {
 		///
 		/// Key: B (len of bids)
 		/// Total Complexity: O(B)
-		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
+		#[pallet::weight(T::WeightInfo::unvouch())]
 		pub fn unvouch(origin: OriginFor<T>) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
 
@@ -958,7 +969,7 @@ pub mod pallet {
 		///
 		/// Key: C (len of candidates), M (len of members)
 		/// Total Complexity: O(M + logM + C)
-		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
+		#[pallet::weight(T::WeightInfo::vote())]
 		pub fn vote(
 			origin: OriginFor<T>,
 			candidate: <T::Lookup as StaticLookup>::Source,
@@ -992,7 +1003,7 @@ pub mod pallet {
 		/// Key: M (len of members)
 		/// Total Complexity: O(M + logM)
 		/// # </weight>
-		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
+		#[pallet::weight(T::WeightInfo::defender_vote())]
 		pub fn defender_vote(origin: OriginFor<T>, approve: bool) -> DispatchResultWithPostInfo {
 			let voter = ensure_signed(origin)?;
 
@@ -1024,7 +1035,7 @@ pub mod pallet {
 		///
 		/// Key: M (len of members), P (number of payouts for a particular member)
 		/// Total Complexity: O(M + logM + P + X)
-		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
+		#[pallet::weight(T::WeightInfo::payout())]
 		pub fn payout(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(Members::<T, I>::get(&who).ok_or(Error::<T, I>::NotMember)?.rank == 0, Error::<T, I>::NoPayout);
@@ -1044,7 +1055,7 @@ pub mod pallet {
 
 		/// Repay the payment previously given to the member with the signed origin, remove any
 		/// pending payments, and elevate them from rank 0 to rank 1.
-		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
+		#[pallet::weight(T::WeightInfo::waive_repay())]
 		pub fn waive_repay(origin: OriginFor<T>, amount: BalanceOf<T, I>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let mut record = Members::<T, I>::get(&who).ok_or(Error::<T, I>::NotMember)?;
@@ -1080,7 +1091,7 @@ pub mod pallet {
 		/// - `rules` - The rules of this society concerning membership.
 		///
 		/// Complexity: O(1)
-		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
+		#[pallet::weight(T::WeightInfo::found_society())]
 		pub fn found_society(
 			origin: OriginFor<T>,
 			founder: T::AccountId,
@@ -1111,26 +1122,32 @@ pub mod pallet {
 		/// member.
 		///
 		/// Total Complexity: O(1)
-		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
+		#[pallet::weight(T::WeightInfo::dissolve())]
 		pub fn dissolve(origin: OriginFor<T>) -> DispatchResult {
 			let founder = ensure_signed(origin)?;
 			ensure!(Founder::<T, I>::get().as_ref() == Some(&founder), Error::<T, I>::NotFounder);
 			ensure!(MemberCount::<T, I>::get() == 1, Error::<T, I>::NotHead);
 
-			#[allow(deprecated)]
-			Members::<T, I>::remove_all(None);
+			let _ = Members::<T, I>::clear(u32::MAX, None);
 			MemberCount::<T, I>::kill();
-			#[allow(deprecated)]
-			MemberByIndex::<T, I>::remove_all(None);
-			#[allow(deprecated)]
-			Members::<T, I>::remove_all(None);
-			#[allow(deprecated)]
-			Votes::<T, I>::remove_all(None);
+			let _ = MemberByIndex::<T, I>::clear(u32::MAX, None);
+			let _ = SuspendedMembers::<T, I>::clear(u32::MAX, None);
+			let _ = Payouts::<T, I>::clear(u32::MAX, None);
+			let _ = Votes::<T, I>::clear(u32::MAX, None);
+			let _ = VoteClearCursor::<T, I>::clear(u32::MAX, None);
 			Head::<T, I>::kill();
+			NextHead::<T, I>::kill();
 			Founder::<T, I>::kill();
 			Rules::<T, I>::kill();
-			#[allow(deprecated)]
-			Candidates::<T, I>::remove_all(None);
+			Parameters::<T, I>::kill();
+			Pot::<T, I>::kill();
+			RoundCount::<T, I>::kill();
+			Bids::<T, I>::kill();
+			Skeptic::<T, I>::kill();
+			ChallengeRoundCount::<T, I>::kill();
+			Defending::<T, I>::kill();
+			let _ = DefenderVotes::<T, I>::clear(u32::MAX, None);
+			let _ = Candidates::<T, I>::clear(u32::MAX, None);
 			Self::deposit_event(Event::<T, I>::Unfounded { founder });
 			Ok(())
 		}
@@ -1152,17 +1169,14 @@ pub mod pallet {
 		///
 		/// Key: B (len of bids), M (len of members)
 		/// Total Complexity: O(M + logM + B)
-		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
+		#[pallet::weight(T::WeightInfo::judge_suspended_member())]
 		pub fn judge_suspended_member(
 			origin: OriginFor<T>,
 			who: T::AccountId,
 			forgive: bool,
 		) -> DispatchResultWithPostInfo {
-			let founder = ensure_signed(origin)?;
-			ensure!(Founder::<T, I>::get() == Some(founder.clone()), Error::<T, I>::NotFounder);
-
+			ensure!(Some(ensure_signed(origin)?) == Founder::<T, I>::get(), Error::<T, I>::NotFounder);
 			let record = SuspendedMembers::<T, I>::get(&who).ok_or(Error::<T, I>::NotSuspended)?;
-
 			if forgive {
 				// Try to add member back to society. Can fail with `MaxMembers` limit.
 				Self::reinstate_member(&who, record.rank)?;
@@ -1172,7 +1186,6 @@ pub mod pallet {
 					.map(|x| x.1).fold(Zero::zero(), |acc: BalanceOf<T, I>, x| acc.saturating_add(x));
 				Self::unreserve_payout(total);
 			}
-
 			SuspendedMembers::<T, I>::remove(&who);
 			Self::deposit_event(Event::<T, I>::SuspendedMemberJudgement { who, judged: forgive });
 			Ok(Pays::No.into())
@@ -1192,7 +1205,7 @@ pub mod pallet {
 		/// - `candidate_deposit`: The deposit required to make a bid for membership of the group.
 		///
 		/// Total Complexity: O(1)
-		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
+		#[pallet::weight(T::WeightInfo::set_parameters())]
 		pub fn set_parameters(
 			origin: OriginFor<T>,
 			max_members: u32,
@@ -1210,7 +1223,7 @@ pub mod pallet {
 
 		/// Punish the skeptic with a strike if they did not vote on a candidate. Callable by the
 		/// candidate.
-		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
+		#[pallet::weight(T::WeightInfo::punish_skeptic())]
 		pub fn punish_skeptic(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let candidate = ensure_signed(origin)?;
 			let mut candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
@@ -1223,7 +1236,7 @@ pub mod pallet {
 
 		/// Transform an approved candidate into a member. Callable only by the
 		/// the candidate, and only after the period for voting has ended.
-		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
+		#[pallet::weight(T::WeightInfo::claim_membership())]
 		pub fn claim_membership(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let candidate = ensure_signed(origin)?;
 			let candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
@@ -1236,10 +1249,9 @@ pub mod pallet {
 		/// Transform an approved candidate into a member. Callable only by the Signed origin of the
 		/// Founder, only after the period for voting has ended and only when the candidate is not
 		/// clearly rejected.
-		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
+		#[pallet::weight(T::WeightInfo::bestow_membership())]
 		pub fn bestow_membership(origin: OriginFor<T>, candidate: T::AccountId) -> DispatchResultWithPostInfo {
-			let founder = ensure_signed(origin)?;
-			ensure!(Founder::<T, I>::get() == Some(founder.clone()), Error::<T, I>::NotFounder);
+			ensure!(Some(ensure_signed(origin)?) == Founder::<T, I>::get(), Error::<T, I>::NotFounder);
 			let candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
 			ensure!(!candidacy.tally.clear_rejection(), Error::<T, I>::Rejected);
 			ensure!(!Self::in_progress(candidacy.round), Error::<T, I>::InProgress);
@@ -1252,10 +1264,9 @@ pub mod pallet {
 		/// have a clear approval.
 		///
 		/// Any bid deposit is lost and voucher is banned.
-		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
+		#[pallet::weight(T::WeightInfo::kick_candidate())]
 		pub fn kick_candidate(origin: OriginFor<T>, candidate: T::AccountId) -> DispatchResultWithPostInfo {
-			let founder = ensure_signed(origin)?;
-			ensure!(Founder::<T, I>::get() == Some(founder.clone()), Error::<T, I>::NotFounder);
+			ensure!(Some(ensure_signed(origin)?) == Founder::<T, I>::get(), Error::<T, I>::NotFounder);
 			let mut candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
 			ensure!(!Self::in_progress(candidacy.round), Error::<T, I>::InProgress);
 			ensure!(!candidacy.tally.clear_approval(), Error::<T, I>::Approved);
@@ -1268,7 +1279,7 @@ pub mod pallet {
 		/// Remove the candidate's application from the society. Callable only by the candidate.
 		///
 		/// Any bid deposit is lost and voucher is banned.
-		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
+		#[pallet::weight(T::WeightInfo::resign_candidacy())]
 		pub fn resign_candidacy(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let candidate = ensure_signed(origin)?;
 			let mut candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
@@ -1285,7 +1296,7 @@ pub mod pallet {
 		/// a candidate with more rejections than approvals.
 		///
 		/// The bid deposit is lost and the voucher is banned.
-		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
+		#[pallet::weight(T::WeightInfo::drop_candidate())]
 		pub fn drop_candidate(origin: OriginFor<T>, candidate: T::AccountId) -> DispatchResultWithPostInfo {
 			ensure_signed(origin)?;
 			let candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
@@ -1299,20 +1310,22 @@ pub mod pallet {
 		/// Remove up to `max` stale votes for the given `candidate`.
 		///
 		/// May be called by any Signed origin, but only after the candidate's candidacy is ended.
-		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
+		#[pallet::weight(T::WeightInfo::cleanup_candidacy())]
 		pub fn cleanup_candidacy(origin: OriginFor<T>, candidate: T::AccountId, max: u32) -> DispatchResultWithPostInfo {
 			ensure_signed(origin)?;
 			ensure!(!Candidates::<T, I>::contains_key(&candidate), Error::<T, I>::InProgress);
 			let maybe_cursor = VoteClearCursor::<T, I>::get(&candidate);
-			let r = Votes::<T, I>::clear_prefix(&candidate, Some(max), maybe_cursor.as_ref().map(|x| &x[..]));
-			VoteClearCursor::<T, I>::set(&candidate, r.maybe_cursor.map(BoundedVec::truncate_from));
+			let r = Votes::<T, I>::clear_prefix(&candidate, max, maybe_cursor.as_ref().map(|x| &x[..]));
+			if let Some(cursor) = r.maybe_cursor {
+				VoteClearCursor::<T, I>::insert(&candidate, BoundedVec::truncate_from(cursor));
+			}
 			Ok(if r.loops == 0 { Pays::Yes } else { Pays::No }.into())
 		}
 
 		/// Remove up to `max` stale votes for the defender in the given `challenge_round`.
 		///
 		/// May be called by any Signed origin, but only after the challenge round is ended.
-		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
+		#[pallet::weight(T::WeightInfo::cleanup_challenge())]
 		pub fn cleanup_challenge(
 			origin: OriginFor<T>,
 			challenge_round: RoundIndex,
@@ -1320,10 +1333,11 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			ensure_signed(origin)?;
 			ensure!(challenge_round < ChallengeRoundCount::<T, I>::get(), Error::<T, I>::InProgress);
-			match DefenderVotes::<T, I>::remove_prefix(challenge_round, Some(max)) {
-				KillStorageResult::AllRemoved(0) => Err(Error::<T, I>::NoVotes.into()),
-				_ => Ok(Pays::No.into()),
-			}
+			let _ = DefenderVotes::<T, I>::clear_prefix(challenge_round, max, None);
+			// clear_prefix() v2 is always returning backend = 0, ignoring it till v3.
+			// let (_, backend, _, _) = r.deconstruct();
+			// if backend == 0 { return Err(Error::<T, I>::NoVotes.into()); };
+			Ok(Pays::No.into())
 		}
 	}
 }
@@ -1370,7 +1384,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let voting_period = T::VotingPeriod::get();
 		let rotation_period = voting_period + claim_period;
 		let now = frame_system::Pallet::<T>::block_number();
-		let phase = now % rotation_period;
+		let phase = now % rotation_period.clone();
 		if phase < voting_period {
 			Period::Voting { elapsed: phase, more: voting_period - phase }
 		} else {
@@ -1664,7 +1678,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> DispatchResult {
 		Self::add_new_member(&candidate, rank)?;
 		Self::check_skeptic(&candidate, &mut candidacy);
-		
+
 		let next_head = NextHead::<T, I>::get()
 			.filter(|old| {
 				old.round > candidacy.round

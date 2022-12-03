@@ -1129,3 +1129,71 @@ fn bids_ordered_correctly() {
 		assert_eq!(Bids::<Test>::get(), final_list);
 	});
 }
+
+#[test]
+fn waive_repay_works() {
+	EnvBuilder::new().execute(|| {
+		place_members([20, 30]);
+		Society::bump_payout(&20, 5, 100);
+		assert_eq!(
+			Payouts::<Test>::get(20),
+			PayoutRecord { paid: 0, payouts: vec![(5, 100)].try_into().unwrap() }
+		);
+		assert_eq!(Members::<Test>::get(20).unwrap().rank, 0);
+		assert_ok!(Society::waive_repay(Origin::signed(20), 100));
+		assert_eq!(
+			Payouts::<Test>::get(20),
+			PayoutRecord { paid: 0, payouts: vec![].try_into().unwrap() }
+		);
+		assert_eq!(Members::<Test>::get(10).unwrap().rank, 1);
+		assert_eq!(Balances::free_balance(20), 50);
+	});
+}
+
+#[test]
+fn punish_skeptic_works() {
+	EnvBuilder::new().execute(|| {
+		place_members([20]);
+		assert_ok!(Society::bid(Origin::signed(30), 0));
+		next_intake();
+		// Force 20 to be Skeptic so it gets a strike.
+		Skeptic::<Test>::put(20);
+		next_voting();
+		// 30 decides to punish the skeptic (20).
+		assert_ok!(Society::punish_skeptic(Origin::signed(30)));
+		// 20 gets 1 strike.
+		assert_eq!(Members::<Test>::get(20).unwrap().strikes, 1);
+		let candidacy = Candidates::<Test>::get(&30).unwrap();
+		// 30 candidacy has changed.
+		assert_eq!(candidacy.skeptic_struck, true);
+	});
+}
+
+#[test]
+fn resign_candidacy_works() {
+	EnvBuilder::new().execute(|| {
+		assert_ok!(Society::bid(Origin::signed(30), 45));
+		next_intake();
+		assert_eq!(candidates(), vec![30]);
+		assert_ok!(Society::resign_candidacy(Origin::signed(30)));
+		// 30 candidacy has gone.
+		assert_eq!(candidates(), vec![]);
+	});
+}
+
+#[test]
+fn drop_candidate_works() {
+	EnvBuilder::new().execute(|| {
+		place_members([20, 30]);
+		assert_ok!(Society::bid(Origin::signed(40), 45));
+		next_intake();
+		assert_eq!(candidates(), vec![40]);
+		assert_ok!(Society::vote(Origin::signed(10), 40, false));
+		assert_ok!(Society::vote(Origin::signed(20), 40, false));
+		assert_ok!(Society::vote(Origin::signed(30), 40, false));
+		run_to_block(12);
+		assert_ok!(Society::drop_candidate(Origin::signed(50), 40));
+		// 40 candidacy has gone.
+		assert_eq!(candidates(), vec![]);
+	});
+}
