@@ -18,6 +18,7 @@
 use crate::construct_runtime::Pallet;
 use proc_macro2::TokenStream;
 use quote::quote;
+use std::str::FromStr;
 use syn::{Ident, TypePath};
 
 pub fn expand_outer_inherent(
@@ -28,14 +29,24 @@ pub fn expand_outer_inherent(
 	scrate: &TokenStream,
 ) -> TokenStream {
 	let mut pallet_names = Vec::new();
+	let mut pallet_attrs = Vec::new();
 	let mut query_inherent_part_macros = Vec::new();
 
 	for pallet_decl in pallet_decls {
 		if pallet_decl.exists_part("Inherent") {
 			let name = &pallet_decl.name;
 			let path = &pallet_decl.path;
+			let attr = pallet_decl.cfg_pattern.iter().fold(TokenStream::new(), |acc, pattern| {
+				let attr = TokenStream::from_str(&format!("#[cfg({})]", pattern.original()))
+					.expect("was successfully parsed before; qed");
+				quote! {
+					#acc
+					#attr
+				}
+			});
 
 			pallet_names.push(name);
+			pallet_attrs.push(attr);
 			query_inherent_part_macros.push(quote! {
 				#path::__substrate_inherent_check::is_inherent_part_defined!(#name);
 			});
@@ -60,6 +71,7 @@ pub fn expand_outer_inherent(
 				let mut inherents = Vec::new();
 
 				#(
+					#pallet_attrs
 					if let Some(inherent) = #pallet_names::create_inherent(self) {
 						let inherent = <#unchecked_extrinsic as #scrate::inherent::Extrinsic>::new(
 							inherent.into(),
@@ -90,22 +102,25 @@ pub fn expand_outer_inherent(
 
 					let mut is_inherent = false;
 
-					#({
-						let call = <#unchecked_extrinsic as ExtrinsicCall>::call(xt);
-						if let Some(call) = IsSubType::<_>::is_sub_type(call) {
-							if #pallet_names::is_inherent(call) {
-								is_inherent = true;
-								if let Err(e) = #pallet_names::check_inherent(call, self) {
-									result.put_error(
-										#pallet_names::INHERENT_IDENTIFIER, &e
-									).expect("There is only one fatal error; qed");
-									if e.is_fatal_error() {
-										return result;
+					#(
+						#pallet_attrs
+						{
+							let call = <#unchecked_extrinsic as ExtrinsicCall>::call(xt);
+							if let Some(call) = IsSubType::<_>::is_sub_type(call) {
+								if #pallet_names::is_inherent(call) {
+									is_inherent = true;
+									if let Err(e) = #pallet_names::check_inherent(call, self) {
+										result.put_error(
+											#pallet_names::INHERENT_IDENTIFIER, &e
+										).expect("There is only one fatal error; qed");
+										if e.is_fatal_error() {
+											return result;
+										}
 									}
 								}
 							}
 						}
-					})*
+					)*
 
 					// Inherents are before any other extrinsics.
 					// No module marked it as inherent thus it is not.
@@ -115,6 +130,7 @@ pub fn expand_outer_inherent(
 				}
 
 				#(
+					#pallet_attrs
 					match #pallet_names::is_inherent_required(self) {
 						Ok(Some(e)) => {
 							let found = block.extrinsics().iter().any(|xt| {
@@ -177,14 +193,17 @@ pub fn expand_outer_inherent(
 						false
 					} else {
 						let mut is_inherent = false;
-						#({
-							let call = <#unchecked_extrinsic as ExtrinsicCall>::call(xt);
-							if let Some(call) = IsSubType::<_>::is_sub_type(call) {
-								if #pallet_names::is_inherent(&call) {
-									is_inherent = true;
+						#(
+							#pallet_attrs
+							{
+								let call = <#unchecked_extrinsic as ExtrinsicCall>::call(xt);
+								if let Some(call) = IsSubType::<_>::is_sub_type(call) {
+									if #pallet_names::is_inherent(&call) {
+										is_inherent = true;
+									}
 								}
 							}
-						})*
+						)*
 						is_inherent
 					};
 

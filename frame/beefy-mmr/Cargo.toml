@@ -9,8 +9,8 @@ repository = "https://github.com/paritytech/substrate"
 homepage = "https://substrate.io"
 
 [dependencies]
+array-bytes = { version = "4.1", optional = true }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
-hex = { version = "0.4", optional = true }
 log = { version = "0.4.17", default-features = false }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 serde = { version = "1.0.136", optional = true }
@@ -21,24 +21,24 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../sys
 pallet-beefy = { version = "4.0.0-dev", default-features = false, path = "../beefy" }
 pallet-mmr = { version = "4.0.0-dev", default-features = false, path = "../merkle-mountain-range" }
 pallet-session = { version = "4.0.0-dev", default-features = false, path = "../session" }
-sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
-sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
+sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
+sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
-hex-literal = "0.3"
+array-bytes = "4.1"
 sp-staking = { version = "4.0.0-dev", path = "../../primitives/staking" }
 
 [features]
 default = ["std"]
 std = [
+	"array-bytes",
 	"beefy-merkle-tree/std",
 	"beefy-primitives/std",
 	"codec/std",
 	"frame-support/std",
 	"frame-system/std",
-	"hex",
 	"log/std",
 	"pallet-beefy/std",
 	"pallet-mmr/std",
@@ -50,3 +50,4 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 ]
+try-runtime = ["frame-support/try-runtime"]

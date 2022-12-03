@@ -27,7 +27,7 @@ use serde::Serialize;
 use std::{env, fs, path::PathBuf};
 
 use crate::{
-	overhead::{bench::BenchmarkType, cmd::OverheadParams},
+	overhead::cmd::{BenchmarkType, OverheadParams},
 	shared::{Stats, UnderscoreHelper},
 };
 
@@ -47,6 +47,12 @@ pub(crate) struct TemplateData {
 	version: String,
 	/// Date that the template was filled out.
 	date: String,
+	/// Hostname of the machine that executed the benchmarks.
+	hostname: String,
+	/// CPU name of the machine that executed the benchmarks.
+	cpuname: String,
+	/// Header for the generated file.
+	header: String,
 	/// Command line arguments that were passed to the CLI.
 	args: Vec<String>,
 	/// Params of the executed command.
@@ -66,6 +72,12 @@ impl TemplateData {
 		stats: &Stats,
 	) -> Result<Self> {
 		let weight = params.weight.calc_weight(stats)?;
+		let header = params
+			.header
+			.as_ref()
+			.map(|p| std::fs::read_to_string(p))
+			.transpose()?
+			.unwrap_or_default();
 
 		Ok(TemplateData {
 			short_name: t.short_name().into(),
@@ -73,6 +85,9 @@ impl TemplateData {
 			runtime_name: cfg.chain_spec.name().into(),
 			version: VERSION.into(),
 			date: chrono::Utc::now().format("%Y-%m-%d (Y/M/D)").to_string(),
+			hostname: params.hostinfo.hostname(),
+			cpuname: params.hostinfo.cpuname(),
+			header,
 			args: env::args().collect::<Vec<String>>(),
 			params: params.clone(),
 			stats: stats.clone(),

@@ -245,6 +245,13 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 		unhashed::get(Self::storage_map_final_key(key).as_ref()).ok_or(())
 	}
 
+	fn set<KeyArg: EncodeLike<K>>(key: KeyArg, q: Self::Query) {
+		match G::from_query_to_optional_value(q) {
+			Some(v) => Self::insert(key, v),
+			None => Self::remove(key),
+		}
+	}
+
 	fn insert<KeyArg: EncodeLike<K>, ValArg: EncodeLike<V>>(key: KeyArg, val: ValArg) {
 		unhashed::put(Self::storage_map_final_key(key).as_ref(), &val)
 	}
@@ -347,14 +354,14 @@ mod test_iterators {
 	use codec::{Decode, Encode};
 
 	pub trait Config: 'static {
-		type Origin;
+		type RuntimeOrigin;
 		type BlockNumber;
 		type PalletInfo: crate::traits::PalletInfo;
 		type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
 	}
 
 	crate::decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {}
+		pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=self {}
 	}
 
 	#[derive(PartialEq, Eq, Clone, Encode, Decode)]

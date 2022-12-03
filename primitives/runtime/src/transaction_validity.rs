@@ -21,6 +21,7 @@ use crate::{
 	codec::{Decode, Encode},
 	RuntimeDebug,
 };
+use scale_info::TypeInfo;
 use sp_std::prelude::*;
 
 /// Priority for a transaction. Additive. Higher is better.
@@ -34,7 +35,7 @@ pub type TransactionLongevity = u64;
 pub type TransactionTag = Vec<u8>;
 
 /// An invalid transaction validity.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum InvalidTransaction {
 	/// The call of the transaction is not expected.
@@ -117,7 +118,7 @@ impl From<InvalidTransaction> for &'static str {
 }
 
 /// An unknown transaction validity.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum UnknownTransaction {
 	/// Could not lookup some information that is required to validate the transaction.
@@ -141,7 +142,7 @@ impl From<UnknownTransaction> for &'static str {
 }
 
 /// Errors that can occur while checking the validity of a transaction.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum TransactionValidityError {
 	/// The transaction is invalid.
@@ -225,9 +226,8 @@ impl From<UnknownTransaction> for TransactionValidity {
 /// Depending on the source we might apply different validation schemes.
 /// For instance we can disallow specific kinds of transactions if they were not produced
 /// by our local node (for instance off-chain workers).
-#[derive(
-	Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, parity_util_mem::MallocSizeOf,
-)]
+#[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(parity_util_mem::MallocSizeOf))]
 pub enum TransactionSource {
 	/// Transaction is already included in block.
 	///

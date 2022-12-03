@@ -29,6 +29,7 @@ use sc_cli::{
 use sc_client_db::BenchmarkingState;
 use sc_executor::NativeElseWasmExecutor;
 use sc_service::{Configuration, NativeExecutionDispatch};
+use serde::Serialize;
 use sp_core::offchain::{
 	testing::{TestOffchainExt, TestTransactionPoolExt},
 	OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
@@ -37,7 +38,21 @@ use sp_externalities::Extensions;
 use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStorePtr};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_state_machine::StateMachine;
-use std::{fmt::Debug, fs, sync::Arc, time};
+use std::{collections::HashMap, fmt::Debug, fs, sync::Arc, time};
+
+/// Logging target
+const LOG_TARGET: &'static str = "frame::benchmark::pallet";
+
+/// The inclusive range of a component.
+#[derive(Serialize, Debug, Clone, Eq, PartialEq)]
+pub(crate) struct ComponentRange {
+	/// Name of the component.
+	name: String,
+	/// Minimal valid value of the component.
+	min: u32,
+	/// Maximal valid value of the component.
+	max: u32,
+}
 
 // This takes multiple benchmark batches and combines all the results where the pallet, instance,
 // and benchmark are the same.
@@ -120,6 +135,20 @@ impl PalletCmd {
 			if !handlebars_template_file.is_file() {
 				return Err("Handlebars template file is invalid!".into())
 			};
+		}
+
+		if let Some(json_input) = &self.json_input {
+			let raw_data = match std::fs::read(json_input) {
+				Ok(raw_data) => raw_data,
+				Err(error) =>
+					return Err(format!("Failed to read {:?}: {}", json_input, error).into()),
+			};
+			let batches: Vec<BenchmarkBatchSplitResults> = match serde_json::from_slice(&raw_data) {
+				Ok(batches) => batches,
+				Err(error) =>
+					return Err(format!("Failed to deserialize {:?}: {}", json_input, error).into()),
+			};
+			return self.output_from_results(&batches)
 		}
 
 		let spec = config.chain_spec;
@@ -212,7 +241,16 @@ impl PalletCmd {
 		let mut batches = Vec::new();
 		let mut batches_db = Vec::new();
 		let mut timer = time::SystemTime::now();
+		// Maps (pallet, extrinsic) to its component ranges.
+		let mut component_ranges = HashMap::<(Vec<u8>, Vec<u8>), Vec<ComponentRange>>::new();
+
 		for (pallet, extrinsic, components) in benchmarks_to_run {
+			log::info!(
+				target: LOG_TARGET,
+				"Starting benchmark: {}::{}",
+				String::from_utf8(pallet.clone()).expect("Encoded from String; qed"),
+				String::from_utf8(extrinsic.clone()).expect("Encoded from String; qed"),
+			);
 			let all_components = if components.is_empty() {
 				vec![Default::default()]
 			} else {
@@ -221,14 +259,21 @@ impl PalletCmd {
 					let lowest = self.lowest_range_values.get(idx).cloned().unwrap_or(*low);
 					let highest = self.highest_range_values.get(idx).cloned().unwrap_or(*high);
 
-					let diff = highest - lowest;
+					let diff =
+						highest.checked_sub(lowest).ok_or("`low` cannot be higher than `high`")?;
 
-					// Create up to `STEPS` steps for that component between high and low.
-					let step_size = (diff / self.steps).max(1);
-					let num_of_steps = diff / step_size + 1;
-					for s in 0..num_of_steps {
+					// The slope logic needs at least two points
+					// to compute a slope.
+					if self.steps < 2 {
+						return Err("`steps` must be at least 2.".into())
+					}
+
+					let step_size = (diff as f32 / (self.steps - 1) as f32).max(0.0);
+
+					for s in 0..self.steps {
 						// This is the value we will be testing for component `name`
-						let component_value = lowest + step_size * s;
+						let component_value =
+							((lowest as f32 + step_size * s as f32) as u32).clamp(lowest, highest);
 
 						// Select the max value for all the other components.
 						let c: Vec<(BenchmarkParameter, u32)> = components
@@ -244,22 +289,26 @@ impl PalletCmd {
 							.collect();
 						all_components.push(c);
 					}
+
+					component_ranges
+						.entry((pallet.clone(), extrinsic.clone()))
+						.or_default()
+						.push(ComponentRange { name: name.to_string(), min: lowest, max: highest });
 				}
 				all_components
 			};
 			for (s, selected_components) in all_components.iter().enumerate() {
 				// First we run a verification
 				if !self.no_verify {
-					// Dont use these results since verification code will add overhead
 					let state = &state_without_tracking;
-					let _results = StateMachine::new(
+					let result = StateMachine::new(
 						state,
 						&mut changes,
 						&executor,
 						"Benchmark_dispatch_benchmark",
 						&(
-							&pallet.clone(),
-							&extrinsic.clone(),
+							&pallet,
+							&extrinsic,
 							&selected_components.clone(),
 							true, // run verification code
 							1,    // no need to do internal repeats
@@ -274,6 +323,20 @@ impl PalletCmd {
 					.map_err(|e| {
 						format!("Error executing and verifying runtime benchmark: {}", e)
 					})?;
+					// Dont use these results since verification code will add overhead.
+					let _batch =
+						<std::result::Result<Vec<BenchmarkBatch>, String> as Decode>::decode(
+							&mut &result[..],
+						)
+						.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))?
+						.map_err(|e| {
+							format!(
+								"Benchmark {}::{} failed: {}",
+								String::from_utf8_lossy(&pallet),
+								String::from_utf8_lossy(&extrinsic),
+								e
+							)
+						})?;
 				}
 				// Do one loop of DB tracking.
 				{
@@ -343,14 +406,17 @@ impl PalletCmd {
 					if let Ok(elapsed) = timer.elapsed() {
 						if elapsed >= time::Duration::from_secs(5) {
 							timer = time::SystemTime::now();
+
 							log::info!(
-								"Running Benchmark: {}.{} {}/{} {}/{}",
+								target: LOG_TARGET,
+								"Running Benchmark: {}.{}({} args) {}/{} {}/{}",
 								String::from_utf8(pallet.clone())
 									.expect("Encoded from String; qed"),
 								String::from_utf8(extrinsic.clone())
 									.expect("Encoded from String; qed"),
-								s + 1, // s starts at 0. todo show step
-								self.steps,
+								components.len(),
+								s + 1, // s starts at 0.
+								all_components.len(),
 								r + 1,
 								self.external_repeat,
 							);
@@ -362,25 +428,69 @@ impl PalletCmd {
 
 		// Combine all of the benchmark results, so that benchmarks of the same pallet/function
 		// are together.
-		let batches: Vec<BenchmarkBatchSplitResults> = combine_batches(batches, batches_db);
+		let batches = combine_batches(batches, batches_db);
+		self.output(&batches, &storage_info, &component_ranges)
+	}
 
-		// Create the weights.rs file.
-		if let Some(output_path) = &self.output {
-			writer::write_results(&batches, &storage_info, output_path, self)?;
-		}
-
+	fn output(
+		&self,
+		batches: &[BenchmarkBatchSplitResults],
+		storage_info: &[StorageInfo],
+		component_ranges: &HashMap<(Vec<u8>, Vec<u8>), Vec<ComponentRange>>,
+	) -> Result<()> {
 		// Jsonify the result and write it to a file or stdout if desired.
 		if !self.jsonify(&batches)? {
 			// Print the summary only if `jsonify` did not write to stdout.
 			self.print_summary(&batches, &storage_info)
 		}
+
+		// Create the weights.rs file.
+		if let Some(output_path) = &self.output {
+			writer::write_results(&batches, &storage_info, &component_ranges, output_path, self)?;
+		}
+
 		Ok(())
+	}
+
+	fn output_from_results(&self, batches: &[BenchmarkBatchSplitResults]) -> Result<()> {
+		let mut component_ranges =
+			HashMap::<(Vec<u8>, Vec<u8>), HashMap<String, (u32, u32)>>::new();
+		for batch in batches {
+			let range = component_ranges
+				.entry((batch.pallet.clone(), batch.benchmark.clone()))
+				.or_default();
+			for result in &batch.time_results {
+				for (param, value) in &result.components {
+					let name = param.to_string();
+					let (ref mut min, ref mut max) = range.entry(name).or_insert((*value, *value));
+					if *value < *min {
+						*min = *value;
+					}
+					if *value > *max {
+						*max = *value;
+					}
+				}
+			}
+		}
+
+		let component_ranges: HashMap<_, _> = component_ranges
+			.into_iter()
+			.map(|(key, ranges)| {
+				let ranges = ranges
+					.into_iter()
+					.map(|(name, (min, max))| ComponentRange { name, min, max })
+					.collect();
+				(key, ranges)
+			})
+			.collect();
+
+		self.output(batches, &[], &component_ranges)
 	}
 
 	/// Jsonifies the passed batches and writes them to stdout or into a file.
 	/// Can be configured via `--json` and `--json-file`.
 	/// Returns whether it wrote to stdout.
-	fn jsonify(&self, batches: &Vec<BenchmarkBatchSplitResults>) -> Result<bool> {
+	fn jsonify(&self, batches: &[BenchmarkBatchSplitResults]) -> Result<bool> {
 		if self.json_output || self.json_file.is_some() {
 			let json = serde_json::to_string_pretty(&batches)
 				.map_err(|e| format!("Serializing into JSON: {:?}", e))?;
@@ -388,7 +498,7 @@ impl PalletCmd {
 			if let Some(path) = &self.json_file {
 				fs::write(path, json)?;
 			} else {
-				println!("{}", json);
+				print!("{json}");
 				return Ok(true)
 			}
 		}
@@ -397,11 +507,7 @@ impl PalletCmd {
 	}
 
 	/// Prints the results as human-readable summary without raw timing data.
-	fn print_summary(
-		&self,
-		batches: &Vec<BenchmarkBatchSplitResults>,
-		storage_info: &Vec<StorageInfo>,
-	) {
+	fn print_summary(&self, batches: &[BenchmarkBatchSplitResults], storage_info: &[StorageInfo]) {
 		for batch in batches.iter() {
 			// Print benchmark metadata
 			println!(

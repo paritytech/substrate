@@ -183,7 +183,9 @@ where
 			}
 		},
 		AuthoritySetChangeId::Set(_, last_block_for_set) => {
-			let last_block_for_set_id = BlockId::Number(last_block_for_set);
+			let last_block_for_set_id = backend
+				.blockchain()
+				.expect_block_hash_from_id(&BlockId::Number(last_block_for_set))?;
 			let justification = if let Some(grandpa_justification) = backend
 				.blockchain()
 				.justifications(last_block_for_set_id)?
@@ -237,7 +239,7 @@ where
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
+mod tests {
 	use super::*;
 	use crate::{authorities::AuthoritySetChanges, BlockNumberOps, ClientError, SetId};
 	use futures::executor::block_on;
@@ -271,6 +273,7 @@ pub(crate) mod tests {
 		let justification: GrandpaJustification<Block> =
 			Decode::decode(&mut &proof.justification[..])
 				.map_err(|_| ClientError::JustificationDecode)?;
+
 		justification.verify(current_set_id, &current_authorities)?;
 
 		Ok(proof)
@@ -308,7 +311,8 @@ pub(crate) mod tests {
 		}
 
 		for block in to_finalize {
-			client.finalize_block(BlockId::Number(*block), None).unwrap();
+			let hash = blocks[*block as usize - 1].hash();
+			client.finalize_block(hash, None).unwrap();
 		}
 		(client, backend, blocks)
 	}
@@ -370,7 +374,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn finality_proof_check_fails_with_incomplete_justification() {
-		let (client, _, blocks) = test_blockchain(8, &[4, 5, 8]);
+		let (_, _, blocks) = test_blockchain(8, &[4, 5, 8]);
 
 		// Create a commit without precommits
 		let commit = finality_grandpa::Commit {
@@ -378,7 +382,14 @@ pub(crate) mod tests {
 			target_number: *blocks[7].header().number(),
 			precommits: Vec::new(),
 		};
-		let grandpa_just = GrandpaJustification::from_commit(&client, 8, commit).unwrap();
+
+		let grandpa_just: GrandpaJustification<Block> =
+			sp_finality_grandpa::GrandpaJustification::<Header> {
+				round: 8,
+				votes_ancestries: Vec::new(),
+				commit,
+			}
+			.into();
 
 		let finality_proof = FinalityProof {
 			block: header(2).hash(),
@@ -481,7 +492,7 @@ pub(crate) mod tests {
 		let grandpa_just8 = GrandpaJustification::from_commit(&client, round, commit).unwrap();
 
 		client
-			.finalize_block(BlockId::Number(8), Some((ID, grandpa_just8.encode().clone())))
+			.finalize_block(block8.hash(), Some((ID, grandpa_just8.encode().clone())))
 			.unwrap();
 
 		// Authority set change at block 8, so the justification stored there will be used in the

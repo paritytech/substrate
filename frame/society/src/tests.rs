@@ -185,7 +185,7 @@ fn basic_new_member_works() {
 	EnvBuilder::new().execute(|| {
 		assert_eq!(Balances::free_balance(20), 50);
 		// Bid causes Candidate Deposit to be reserved.
-		assert_ok!(Society::bid(Origin::signed(20), 0));
+		assert_ok!(Society::bid(RuntimeOrigin::signed(20), 0));
 		assert_eq!(Balances::free_balance(20), 25);
 		assert_eq!(Balances::reserved_balance(20), 25);
 		// Rotate period every 4 blocks
@@ -209,10 +209,10 @@ fn basic_new_member_works() {
 fn bidding_works() {
 	EnvBuilder::new().execute(|| {
 		// Users make bids of various amounts
-		assert_ok!(Society::bid(Origin::signed(60), 1900));
-		assert_ok!(Society::bid(Origin::signed(50), 500));
-		assert_ok!(Society::bid(Origin::signed(40), 400));
-		assert_ok!(Society::bid(Origin::signed(30), 300));
+		assert_ok!(Society::bid(RuntimeOrigin::signed(60), 1900));
+		assert_ok!(Society::bid(RuntimeOrigin::signed(50), 500));
+		assert_ok!(Society::bid(RuntimeOrigin::signed(40), 400));
+		assert_ok!(Society::bid(RuntimeOrigin::signed(30), 300));
 		// Rotate period
 		next_intake();
 		// Pot is 1000 after "PeriodSpend"
@@ -276,8 +276,8 @@ fn bidding_works() {
 fn unbidding_works() {
 	EnvBuilder::new().execute(|| {
 		// 20 and 30 make bids
-		assert_ok!(Society::bid(Origin::signed(20), 1000));
-		assert_ok!(Society::bid(Origin::signed(30), 0));
+		assert_ok!(Society::bid(RuntimeOrigin::signed(20), 1000));
+		assert_ok!(Society::bid(RuntimeOrigin::signed(30), 0));
 		// Balances are reserved
 		assert_eq!(Balances::free_balance(30), 25);
 		assert_eq!(Balances::reserved_balance(30), 25);
@@ -306,7 +306,7 @@ fn payout_works() {
 		assert_noop!(Society::payout(Origin::signed(20)), Error::<Test>::NoPayout);
 		next_intake();
 		// payout should be here
-		assert_ok!(Society::payout(Origin::signed(20)));
+		assert_ok!(Society::payout(RuntimeOrigin::signed(20)));
 		assert_eq!(Balances::free_balance(20), 1050);
 	});
 }
@@ -349,7 +349,7 @@ fn basic_new_member_reject_works() {
 		// Starting Balance
 		assert_eq!(Balances::free_balance(20), 50);
 		// 20 makes a bid
-		assert_ok!(Society::bid(Origin::signed(20), 0));
+		assert_ok!(Society::bid(RuntimeOrigin::signed(20), 0));
 		assert_eq!(Balances::free_balance(20), 25);
 		assert_eq!(Balances::reserved_balance(20), 25);
 		// Rotation Period
@@ -383,7 +383,7 @@ fn slash_payout_works() {
 		assert_eq!(Payouts::<Test>::get(20), PayoutRecord { paid: 0, payouts: vec![(8, 500)].try_into().unwrap() });
 		run_to_block(8);
 		// payout should be here, but 500 less
-		assert_ok!(Society::payout(Origin::signed(20)));
+		assert_ok!(Society::payout(RuntimeOrigin::signed(20)));
 		assert_eq!(Balances::free_balance(20), 550);
 		assert_eq!(Payouts::<Test>::get(20), PayoutRecord { paid: 500, payouts: Default::default() });
 	});
@@ -552,7 +552,7 @@ fn unpaid_vouch_works() {
 		next_intake();
 		assert_eq!(candidacies(), vec![(20, candidacy(1, 1000, Vouch(10, 100), 0, 0))]);
 		// Vote yes
-		assert_ok!(Society::vote(Origin::signed(10), 20, true));
+		assert_ok!(Society::vote(RuntimeOrigin::signed(10), 20, true));
 		// Vouched user can win
 		conclude_intake(true, None);
 		assert_eq!(members(), vec![10, 20]);
@@ -617,7 +617,7 @@ fn unvouch_works() {
 		// 10 is the only member
 		assert_eq!(members(), vec![10]);
 		// 10 vouches for 20
-		assert_ok!(Society::vouch(Origin::signed(10), 20, 100, 0));
+		assert_ok!(Society::vouch(RuntimeOrigin::signed(10), 20, 100, 0));
 		// 20 has a bid
 		assert_eq!(Bids::<Test>::get().into_inner(), vec![bid(20, Vouch(10, 0), 100)]);
 		// 10 is vouched
@@ -667,7 +667,7 @@ fn unbid_vouch_works() {
 		// 10 is the only member
 		assert_eq!(members(), vec![10]);
 		// 10 vouches for 20
-		assert_ok!(Society::vouch(Origin::signed(10), 20, 100, 0));
+		assert_ok!(Society::vouch(RuntimeOrigin::signed(10), 20, 100, 0));
 		// 20 has a bid
 		assert_eq!(Bids::<Test>::get().into_inner(), vec![bid(20, Vouch(10, 0), 100)]);
 		// 10 is vouched
@@ -894,7 +894,7 @@ fn vouching_handles_removed_member_with_bid() {
 		// Add a member
 		place_members([20]);
 		// Have that member vouch for a user
-		assert_ok!(Society::vouch(Origin::signed(20), 30, 1000, 100));
+		assert_ok!(Society::vouch(RuntimeOrigin::signed(20), 30, 1000, 100));
 		// That user is now a bid and the member is vouching
 		assert_eq!(Bids::<Test>::get().into_inner(), vec![bid(30, Vouch(20, 100), 1000)]);
 		assert_eq!(Members::<Test>::get(20).unwrap().vouching, Some(VouchingStatus::Vouching));
@@ -914,7 +914,7 @@ fn vouching_handles_removed_member_with_candidate() {
 		// Add a member
 		place_members([20]);
 		// Have that member vouch for a user
-		assert_ok!(Society::vouch(Origin::signed(20), 30, 1000, 100));
+		assert_ok!(Society::vouch(RuntimeOrigin::signed(20), 30, 1000, 100));
 		// That user is now a bid and the member is vouching
 		assert_eq!(Bids::<Test>::get().into_inner(), vec![bid(30, Vouch(20, 100), 1000)]);
 		assert_eq!(Members::<Test>::get(20).unwrap().vouching, Some(VouchingStatus::Vouching));
@@ -944,9 +944,9 @@ fn votes_are_working() {
 	EnvBuilder::new().execute(|| {
 		place_members([20]);
 		// Users make bids of various amounts
-		assert_ok!(Society::bid(Origin::signed(50), 500));
-		assert_ok!(Society::bid(Origin::signed(40), 400));
-		assert_ok!(Society::bid(Origin::signed(30), 300));
+		assert_ok!(Society::bid(RuntimeOrigin::signed(50), 500));
+		assert_ok!(Society::bid(RuntimeOrigin::signed(40), 400));
+		assert_ok!(Society::bid(RuntimeOrigin::signed(30), 300));
 		// Rotate period
 		next_intake();
 		// A member votes for these candidates to join the society
@@ -1063,11 +1063,11 @@ fn zero_bid_works() {
 	// * That zero bid is placed as head when accepted.
 	EnvBuilder::new().execute(|| {
 		// Users make bids of various amounts
-		assert_ok!(Society::bid(Origin::signed(60), 400));
-		assert_ok!(Society::bid(Origin::signed(50), 300));
-		assert_ok!(Society::bid(Origin::signed(30), 0));
-		assert_ok!(Society::bid(Origin::signed(20), 0));
-		assert_ok!(Society::bid(Origin::signed(40), 0));
+		assert_ok!(Society::bid(RuntimeOrigin::signed(60), 400));
+		assert_ok!(Society::bid(RuntimeOrigin::signed(50), 300));
+		assert_ok!(Society::bid(RuntimeOrigin::signed(30), 0));
+		assert_ok!(Society::bid(RuntimeOrigin::signed(20), 0));
+		assert_ok!(Society::bid(RuntimeOrigin::signed(40), 0));
 
 		// Rotate period
 		next_intake();

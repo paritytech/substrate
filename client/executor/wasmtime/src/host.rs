@@ -23,7 +23,7 @@ use log::trace;
 use wasmtime::{Caller, Func, Val};
 
 use codec::{Decode, Encode};
-use sc_allocator::FreeingBumpHeapAllocator;
+use sc_allocator::{AllocationStats, FreeingBumpHeapAllocator};
 use sc_executor_common::{
 	error::Result,
 	sandbox::{self, SupervisorFuncIndex},
@@ -65,6 +65,10 @@ impl HostState {
 	/// Takes the error message out of the host state, leaving a `None` in its place.
 	pub fn take_panic_message(&mut self) -> Option<String> {
 		self.panic_message.take()
+	}
+
+	pub(crate) fn allocation_stats(&self) -> AllocationStats {
+		self.allocator.stats()
 	}
 }
 
@@ -145,11 +149,7 @@ impl<'a> sp_wasm_interface::FunctionContext for HostContext<'a> {
 	}
 
 	fn register_panic_error_message(&mut self, message: &str) {
-		self.caller
-			.data_mut()
-			.host_state_mut()
-			.expect("host state is not empty when calling a function in wasm; qed")
-			.panic_message = Some(message.to_owned());
+		self.host_state_mut().panic_message = Some(message.to_owned());
 	}
 }
 
@@ -276,12 +276,11 @@ impl<'a> Sandbox for HostContext<'a> {
 				.ok_or("Runtime doesn't have a table; sandbox is unavailable")?;
 			let table_item = table.get(&mut self.caller, dispatch_thunk_id);
 
-			table_item
+			*table_item
 				.ok_or("dispatch_thunk_id is out of bounds")?
 				.funcref()
 				.ok_or("dispatch_thunk_idx should be a funcref")?
 				.ok_or("dispatch_thunk_idx should point to actual func")?
-				.clone()
 		};
 
 		let guest_env = match sandbox::GuestEnvironment::decode(self.sandbox_store(), raw_env_def) {

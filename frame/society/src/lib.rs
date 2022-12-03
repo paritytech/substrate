@@ -290,6 +290,7 @@ type BalanceOf<T, I> =
 type NegativeImbalanceOf<T, I> = <<T as Config<I>>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct Vote {
@@ -487,7 +488,8 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The societies's pallet id
 		#[pallet::constant]
@@ -522,7 +524,7 @@ pub mod pallet {
 		type MaxLockDuration: Get<Self::BlockNumber>;
 
 		/// The origin that is allowed to call `found`.
-		type FounderSetOrigin: EnsureOrigin<Self::Origin>;
+		type FounderSetOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The number of blocks between membership challenges.
 		#[pallet::constant]
@@ -898,7 +900,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::vouch())]
 		pub fn vouch(
 			origin: OriginFor<T>,
-			who: T::AccountId,
+			who: AccountIdLookupOf<T>,
 			value: BalanceOf<T, I>,
 			tip: BalanceOf<T, I>,
 		) -> DispatchResult {
@@ -972,7 +974,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::vote())]
 		pub fn vote(
 			origin: OriginFor<T>,
-			candidate: <T::Lookup as StaticLookup>::Source,
+			candidate: AccountIdLookupOf<T>,
 			approve: bool,
 		) -> DispatchResultWithPostInfo {
 			let voter = ensure_signed(origin)?;
@@ -1094,7 +1096,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::found_society())]
 		pub fn found_society(
 			origin: OriginFor<T>,
-			founder: T::AccountId,
+			founder: AccountIdLookupOf<T>,
 			max_members: u32,
 			max_intake: u32,
 			max_strikes: u32,
@@ -1172,7 +1174,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::judge_suspended_member())]
 		pub fn judge_suspended_member(
 			origin: OriginFor<T>,
-			who: T::AccountId,
+			who: AccountIdLookupOf<T>,
 			forgive: bool,
 		) -> DispatchResultWithPostInfo {
 			ensure!(Some(ensure_signed(origin)?) == Founder::<T, I>::get(), Error::<T, I>::NotFounder);
@@ -1346,17 +1348,17 @@ pub mod pallet {
 pub struct EnsureFounder<T>(sp_std::marker::PhantomData<T>);
 impl<T: Config> EnsureOrigin<<T as frame_system::Config>::Origin> for EnsureFounder<T> {
 	type Success = T::AccountId;
-	fn try_origin(o: T::Origin) -> Result<Self::Success, T::Origin> {
+	fn try_origin(o: T::RuntimeOrigin) -> Result<Self::Success, T::RuntimeOrigin> {
 		o.into().and_then(|o| match (o, Founder::<T>::get()) {
 			(frame_system::RawOrigin::Signed(ref who), Some(ref f)) if who == f => Ok(who.clone()),
-			(r, _) => Err(T::Origin::from(r)),
+			(r, _) => Err(T::RuntimeOrigin::from(r)),
 		})
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn try_successful_origin() -> Result<T::Origin, ()> {
+	fn try_successful_origin() -> Result<T::RuntimeOrigin, ()> {
 		let founder = Founder::<T>::get().ok_or(())?;
-		Ok(T::Origin::from(frame_system::RawOrigin::Signed(founder)))
+		Ok(T::RuntimeOrigin::from(frame_system::RawOrigin::Signed(founder)))
 	}
 }
 

@@ -62,7 +62,7 @@
 //!
 //! The `Assignment` field of the election result is voter-major, i.e. it is from the perspective of
 //! the voter. The struct that represents the opposite is called a `Support`. This struct is usually
-//! accessed in a map-like manner, i.e. keyed by voters, therefor it is stored as a mapping called
+//! accessed in a map-like manner, i.e. keyed by voters, therefore it is stored as a mapping called
 //! `SupportMap`.
 //!
 //! Moreover, the support is built from absolute backing values, not ratios like the example above.
@@ -74,16 +74,15 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
 use sp_arithmetic::{traits::Zero, Normalizable, PerThing, Rational128, ThresholdOrd};
-use sp_core::RuntimeDebug;
+use sp_core::{bounded::BoundedVec, RuntimeDebug};
 use sp_std::{
 	cell::RefCell, cmp::Ordering, collections::btree_map::BTreeMap, prelude::*, rc::Rc, vec,
 };
-
-use codec::{Decode, Encode, MaxEncodedLen};
-#[cfg(feature = "std")]
-use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 mod mock;
@@ -217,6 +216,13 @@ impl sp_std::cmp::PartialOrd for ElectionScore {
 	}
 }
 
+/// Utility struct to group parameters for the balancing algorithm.
+#[derive(Clone, Copy)]
+pub struct BalancingConfig {
+	pub iterations: usize,
+	pub tolerance: ExtendedBalance,
+}
+
 /// A pointer to a candidate struct with interior mutability.
 pub type CandidatePtr<A> = Rc<RefCell<Candidate<A>>>;
 
@@ -320,7 +326,7 @@ impl<AccountId: IdentifierT> Voter<AccountId> {
 	///
 	/// Note that this might create _un-normalized_ assignments, due to accuracy loss of `P`. Call
 	/// site might compensate by calling `normalize()` on the returned `Assignment` as a
-	/// post-precessing.
+	/// post-processing.
 	pub fn into_assignment<P: PerThing>(self) -> Option<Assignment<AccountId, P>> {
 		let who = self.who;
 		let budget = self.budget;
@@ -443,6 +449,11 @@ impl<AccountId> Default for Support<AccountId> {
 ///
 /// The main advantage of this is that it is encodable.
 pub type Supports<A> = Vec<(A, Support<A>)>;
+
+/// Same as `Supports` but bounded by `B`.
+///
+/// To note, the inner `Support` is still unbounded.
+pub type BoundedSupports<A, B> = BoundedVec<(A, Support<A>), B>;
 
 /// Linkage from a winner to their [`Support`].
 ///

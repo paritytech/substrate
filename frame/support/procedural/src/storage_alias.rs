@@ -512,6 +512,10 @@ fn generate_storage_instance(
 	prefix_generics: Option<&TypeGenerics>,
 	visibility: &Visibility,
 ) -> Result<StorageInstance> {
+	if let Some(ident) = prefix.get_ident().filter(|i| *i == "_") {
+		return Err(Error::new(ident.span(), "`_` is not allowed as prefix by `storage_alias`."))
+	}
+
 	let (pallet_prefix, impl_generics, type_generics) =
 		if let Some((prefix_generics, storage_generics)) =
 			prefix_generics.and_then(|p| storage_generics.map(|s| (p, s)))

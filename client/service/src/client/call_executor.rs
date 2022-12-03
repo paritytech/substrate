@@ -17,21 +17,17 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use super::{client::ClientConfig, wasm_override::WasmOverride, wasm_substitutes::WasmSubstitutes};
-use codec::{Decode, Encode};
-use sc_client_api::{backend, call_executor::CallExecutor, HeaderBackend};
-use sc_executor::{RuntimeVersion, RuntimeVersionOf};
-use sp_api::{ProofRecorder, StorageTransactionCache};
-use sp_core::{
-	traits::{CodeExecutor, RuntimeCode, SpawnNamed},
-	NativeOrEncoded, NeverNativeValue,
+use sc_client_api::{
+	backend, call_executor::CallExecutor, execution_extensions::ExecutionExtensions, HeaderBackend,
 };
-use sp_externalities::Extensions;
+use sc_executor::{RuntimeVersion, RuntimeVersionOf};
+use sp_api::{ExecutionContext, ProofRecorder, StorageTransactionCache};
+use sp_core::traits::{CodeExecutor, RuntimeCode, SpawnNamed};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_state_machine::{
-	self, backend::Backend as _, ExecutionManager, ExecutionStrategy, Ext, OverlayedChanges,
-	StateMachine, StorageProof,
+	backend::AsTrieBackend, ExecutionStrategy, Ext, OverlayedChanges, StateMachine, StorageProof,
 };
-use std::{cell::RefCell, panic::UnwindSafe, result, sync::Arc};
+use std::{cell::RefCell, sync::Arc};
 
 /// Call executor that executes methods locally, querying all required
 /// data from local backend.
@@ -42,6 +38,7 @@ pub struct LocalCallExecutor<Block: BlockT, B, E> {
 	wasm_substitutes: WasmSubstitutes<Block, E, B>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	client_config: ClientConfig<Block>,
+	execution_extensions: Arc<ExecutionExtensions<Block>>,
 }
 
 impl<Block: BlockT, B, E> LocalCallExecutor<Block, B, E>
@@ -55,6 +52,7 @@ where
 		executor: E,
 		spawn_handle: Box<dyn SpawnNamed>,
 		client_config: ClientConfig<Block>,
+		execution_extensions: ExecutionExtensions<Block>,
 	) -> sp_blockchain::Result<Self> {
 		let wasm_override = client_config
 			.wasm_runtime_overrides
@@ -75,6 +73,7 @@ where
 			spawn_handle,
 			client_config,
 			wasm_substitutes,
+			execution_extensions: Arc::new(execution_extensions),
 		})
 	}
 
@@ -128,6 +127,7 @@ where
 			spawn_handle: self.spawn_handle.clone(),
 			client_config: self.client_config.clone(),
 			wasm_substitutes: self.wasm_substitutes.clone(),
+			execution_extensions: self.execution_extensions.clone(),
 		}
 	}
 }
@@ -142,76 +142,70 @@ where
 
 	type Backend = B;
 
+	fn execution_extensions(&self) -> &ExecutionExtensions<Block> {
+		&self.execution_extensions
+	}
+
 	fn call(
 		&self,
 		at: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
-		extensions: Option<Extensions>,
 	) -> sp_blockchain::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
-		let state = self.backend.state_at(*at)?;
+		let at_hash = self.backend.blockchain().expect_block_hash_from_id(at)?;
+		let at_number = self.backend.blockchain().expect_block_number_from_id(at)?;
+		let state = self.backend.state_at(at_hash)?;
+
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
 		let runtime_code =
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
 
 		let runtime_code = self.check_override(runtime_code, at)?;
 
-		let at_hash = self.backend.blockchain().block_hash_from_id(at)?.ok_or_else(|| {
-			sp_blockchain::Error::UnknownBlock(format!("Could not find block hash for {:?}", at))
-		})?;
+		let extensions = self.execution_extensions.extensions(
+			at_hash,
+			at_number,
+			ExecutionContext::OffchainCall(None),
+		);
 
-		let return_data = StateMachine::new(
+		let mut sm = StateMachine::new(
 			&state,
 			&mut changes,
 			&self.executor,
 			method,
 			call_data,
-			extensions.unwrap_or_default(),
+			extensions,
 			&runtime_code,
 			self.spawn_handle.clone(),
 		)
-		.set_parent_hash(at_hash)
-		.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
-			strategy.get_manager(),
-			None,
-		)?;
+		.set_parent_hash(at_hash);
 
-		Ok(return_data.into_encoded())
+		sm.execute_using_consensus_failure_handler(strategy.get_manager())
+			.map_err(Into::into)
 	}
 
-	fn contextual_call<
-		EM: Fn(
-			Result<NativeOrEncoded<R>, Self::Error>,
-			Result<NativeOrEncoded<R>, Self::Error>,
-		) -> Result<NativeOrEncoded<R>, Self::Error>,
-		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, sp_api::ApiError> + UnwindSafe,
-	>(
+	fn contextual_call(
 		&self,
 		at: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
 		storage_transaction_cache: Option<&RefCell<StorageTransactionCache<Block, B::State>>>,
-		execution_manager: ExecutionManager<EM>,
-		native_call: Option<NC>,
 		recorder: &Option<ProofRecorder<Block>>,
-		extensions: Option<Extensions>,
-	) -> Result<NativeOrEncoded<R>, sp_blockchain::Error>
-	where
-		ExecutionManager<EM>: Clone,
-	{
+		context: ExecutionContext,
+	) -> Result<Vec<u8>, sp_blockchain::Error> {
 		let mut storage_transaction_cache = storage_transaction_cache.map(|c| c.borrow_mut());
 
-		let state = self.backend.state_at(*at)?;
+		let at_hash = self.backend.blockchain().expect_block_hash_from_id(at)?;
+		let at_number = self.backend.blockchain().expect_block_number_from_id(at)?;
+		let state = self.backend.state_at(at_hash)?;
+
+		let (execution_manager, extensions) =
+			self.execution_extensions.manager_and_extensions(at_hash, at_number, context);
 
 		let changes = &mut *changes.borrow_mut();
-
-		let at_hash = self.backend.blockchain().block_hash_from_id(at)?.ok_or_else(|| {
-			sp_blockchain::Error::UnknownBlock(format!("Could not find block hash for {:?}", at))
-		})?;
 
 		// It is important to extract the runtime code here before we create the proof
 		// recorder to not record it. We also need to fetch the runtime code from `state` to
@@ -224,15 +218,11 @@ where
 
 		match recorder {
 			Some(recorder) => {
-				let trie_state = state.as_trie_backend().ok_or_else(|| {
-					Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof)
-						as Box<dyn sp_state_machine::Error>
-				})?;
+				let trie_state = state.as_trie_backend();
 
-				let backend = sp_state_machine::ProvingBackend::new_with_recorder(
-					trie_state,
-					recorder.clone(),
-				);
+				let backend = sp_state_machine::TrieBackendBuilder::wrap(&trie_state)
+					.with_recorder(recorder.clone())
+					.build();
 
 				let mut state_machine = StateMachine::new(
 					&backend,
@@ -240,16 +230,13 @@ where
 					&self.executor,
 					method,
 					call_data,
-					extensions.unwrap_or_default(),
+					extensions,
 					&runtime_code,
 					self.spawn_handle.clone(),
 				)
 				.with_storage_transaction_cache(storage_transaction_cache.as_deref_mut())
 				.set_parent_hash(at_hash);
-				state_machine.execute_using_consensus_failure_handler(
-					execution_manager,
-					native_call.map(|n| || (n)().map_err(|e| Box::new(e) as Box<_>)),
-				)
+				state_machine.execute_using_consensus_failure_handler(execution_manager)
 			},
 			None => {
 				let mut state_machine = StateMachine::new(
@@ -258,16 +245,13 @@ where
 					&self.executor,
 					method,
 					call_data,
-					extensions.unwrap_or_default(),
+					extensions,
 					&runtime_code,
 					self.spawn_handle.clone(),
 				)
 				.with_storage_transaction_cache(storage_transaction_cache.as_deref_mut())
 				.set_parent_hash(at_hash);
-				state_machine.execute_using_consensus_failure_handler(
-					execution_manager,
-					native_call.map(|n| || (n)().map_err(|e| Box::new(e) as Box<_>)),
-				)
+				state_machine.execute_using_consensus_failure_handler(execution_manager)
 			},
 		}
 		.map_err(Into::into)
@@ -275,7 +259,9 @@ where
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
-		let state = self.backend.state_at(*id)?;
+
+		let at_hash = self.backend.blockchain().expect_block_hash_from_id(id)?;
+		let state = self.backend.state_at(at_hash)?;
 		let mut cache = StorageTransactionCache::<Block, B::State>::default();
 		let mut ext = Ext::new(&mut overlay, &mut cache, &state, None);
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
@@ -292,12 +278,11 @@ where
 		method: &str,
 		call_data: &[u8],
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
-		let state = self.backend.state_at(*at)?;
+		let at_hash = self.backend.blockchain().expect_block_hash_from_id(at)?;
+		let at_number = self.backend.blockchain().expect_block_number_from_id(at)?;
+		let state = self.backend.state_at(at_hash)?;
 
-		let trie_backend = state.as_trie_backend().ok_or_else(|| {
-			Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof)
-				as Box<dyn sp_state_machine::Error>
-		})?;
+		let trie_backend = state.as_trie_backend();
 
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(trie_backend);
 		let runtime_code =
@@ -312,6 +297,11 @@ where
 			method,
 			call_data,
 			&runtime_code,
+			self.execution_extensions.extensions(
+				at_hash,
+				at_number,
+				ExecutionContext::OffchainCall(None),
+			),
 		)
 		.map_err(Into::into)
 	}
@@ -418,6 +408,11 @@ mod tests {
 				backend.clone(),
 			)
 			.unwrap(),
+			execution_extensions: Arc::new(ExecutionExtensions::new(
+				Default::default(),
+				None,
+				None,
+			)),
 		};
 
 		let check = call_executor

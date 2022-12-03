@@ -18,16 +18,13 @@
 
 //! A method call executor interface.
 
-use codec::{Decode, Encode};
 use sc_executor::{RuntimeVersion, RuntimeVersionOf};
-use sp_core::NativeOrEncoded;
-use sp_externalities::Extensions;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
-use sp_state_machine::{ExecutionManager, ExecutionStrategy, OverlayedChanges, StorageProof};
-use std::{cell::RefCell, panic::UnwindSafe, result};
+use sp_state_machine::{ExecutionStrategy, OverlayedChanges, StorageProof};
+use std::cell::RefCell;
 
 use crate::execution_extensions::ExecutionExtensions;
-use sp_api::{ProofRecorder, StorageTransactionCache};
+use sp_api::{ExecutionContext, ProofRecorder, StorageTransactionCache};
 
 /// Executor Provider
 pub trait ExecutorProvider<Block: BlockT> {
@@ -49,6 +46,9 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 	/// The backend used by the node.
 	type Backend: crate::backend::Backend<B>;
 
+	/// Returns the [`ExecutionExtensions`].
+	fn execution_extensions(&self) -> &ExecutionExtensions<B>;
+
 	/// Execute a call to a contract on top of state in a block of given hash.
 	///
 	/// No changes are made.
@@ -58,7 +58,6 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 		method: &str,
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
-		extensions: Option<Extensions>,
 	) -> Result<Vec<u8>, sp_blockchain::Error>;
 
 	/// Execute a contextual call on top of state in a block of a given hash.
@@ -66,14 +65,7 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 	/// No changes are made.
 	/// Before executing the method, passed header is installed as the current header
 	/// of the execution context.
-	fn contextual_call<
-		EM: Fn(
-			Result<NativeOrEncoded<R>, Self::Error>,
-			Result<NativeOrEncoded<R>, Self::Error>,
-		) -> Result<NativeOrEncoded<R>, Self::Error>,
-		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, sp_api::ApiError> + UnwindSafe,
-	>(
+	fn contextual_call(
 		&self,
 		at: &BlockId<B>,
 		method: &str,
@@ -84,13 +76,9 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 				StorageTransactionCache<B, <Self::Backend as crate::backend::Backend<B>>::State>,
 			>,
 		>,
-		execution_manager: ExecutionManager<EM>,
-		native_call: Option<NC>,
 		proof_recorder: &Option<ProofRecorder<B>>,
-		extensions: Option<Extensions>,
-	) -> sp_blockchain::Result<NativeOrEncoded<R>>
-	where
-		ExecutionManager<EM>: Clone;
+		context: ExecutionContext,
+	) -> sp_blockchain::Result<Vec<u8>>;
 
 	/// Extract RuntimeVersion of given block
 	///

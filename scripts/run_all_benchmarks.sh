@@ -119,8 +119,10 @@ for PALLET in "${PALLETS[@]}"; do
     --extrinsic="*" \
     --execution=wasm \
     --wasm-execution=compiled \
-    --template=./.maintain/frame-weight-template.hbs \
-    --output="$WEIGHT_FILE" 2>&1
+    --heap-pages=4096 \
+    --output="$WEIGHT_FILE" \
+    --header="./HEADER-APACHE2" \
+    --template=./.maintain/frame-weight-template.hbs 2>&1
   )
   if [ $? -ne 0 ]; then
     echo "$OUTPUT" >> "$ERR_FILE"
@@ -136,6 +138,7 @@ OUTPUT=$(
   --execution=wasm \
   --wasm-execution=compiled \
   --weight-path="./frame/support/src/weights/" \
+  --header="./HEADER-APACHE2" \
   --warmup=10 \
   --repeat=100 2>&1
 )

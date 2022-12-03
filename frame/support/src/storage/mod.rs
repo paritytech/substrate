@@ -27,7 +27,7 @@ use crate::{
 use codec::{Decode, Encode, EncodeLike, FullCodec, FullEncode};
 use sp_core::storage::ChildInfo;
 use sp_runtime::generic::{Digest, DigestItem};
-use sp_std::{marker::PhantomData, prelude::*};
+use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData, prelude::*};
 
 pub use self::{
 	transactional::{
@@ -46,6 +46,7 @@ pub mod child;
 pub mod generator;
 pub mod hashed;
 pub mod migration;
+pub mod storage_noop_guard;
 pub mod transactional;
 pub mod types;
 pub mod unhashed;
@@ -166,6 +167,9 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 
 	/// Load the value associated with the given key from the map.
 	fn get<KeyArg: EncodeLike<K>>(key: KeyArg) -> Self::Query;
+
+	/// Store or remove the value to be associated with `key` so that `get` returns the `query`.
+	fn set<KeyArg: EncodeLike<K>>(key: KeyArg, query: Self::Query);
 
 	/// Try to get the value for the given key from the map.
 	///
@@ -494,6 +498,9 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>;
 
+	/// Store or remove the value to be associated with `key` so that `get` returns the `query`.
+	fn set<KArg1: EncodeLike<K1>, KArg2: EncodeLike<K2>>(k1: KArg1, k2: KArg2, query: Self::Query);
+
 	/// Take a value from storage, removing it afterwards.
 	fn take<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Self::Query
 	where
@@ -669,6 +676,9 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 	///
 	/// Returns `Ok` if it exists, `Err` if not.
 	fn try_get<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg) -> Result<V, ()>;
+
+	/// Store or remove the value to be associated with `key` so that `get` returns the `query`.
+	fn set<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg, query: Self::Query);
 
 	/// Swap the values of two keys.
 	fn swap<KOther, KArg1, KArg2>(key1: KArg1, key2: KArg2)
@@ -1271,7 +1281,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 pub trait StorageAppend<Item: Encode>: private::Sealed {}
 
 /// Marker trait that will be implemented for types that support to decode their length in an
-/// effificent way. It is expected that the length is at the beginning of the encoded object
+/// efficient way. It is expected that the length is at the beginning of the encoded object
 /// and that the length is a `Compact<u32>`.
 ///
 /// This trait is sealed.
@@ -1306,6 +1316,7 @@ mod private {
 	impl<T, S> Sealed for WeakBoundedVec<T, S> {}
 	impl<K, V, S> Sealed for bounded_btree_map::BoundedBTreeMap<K, V, S> {}
 	impl<T, S> Sealed for bounded_btree_set::BoundedBTreeSet<T, S> {}
+	impl<T: Encode> Sealed for BTreeSet<T> {}
 
 	macro_rules! impl_sealed_for_tuple {
 		($($elem:ident),+) => {
@@ -1337,6 +1348,9 @@ mod private {
 
 impl<T: Encode> StorageAppend<T> for Vec<T> {}
 impl<T: Encode> StorageDecodeLength for Vec<T> {}
+
+impl<T: Encode> StorageAppend<T> for BTreeSet<T> {}
+impl<T: Encode> StorageDecodeLength for BTreeSet<T> {}
 
 /// We abuse the fact that SCALE does not put any marker into the encoding, i.e. we only encode the
 /// internal vec and we can append to this vec. We have a test that ensures that if the `Digest`
@@ -1833,6 +1847,24 @@ mod test {
 				FooDoubleMap::get(2, 1).unwrap(),
 				BoundedVec::<u32, ConstU32<7>>::try_from(vec![4, 5]).unwrap(),
 			);
+		});
+	}
+
+	#[crate::storage_alias]
+	type FooSet = StorageValue<Prefix, BTreeSet<u32>>;
+
+	#[test]
+	fn btree_set_append_and_decode_len_works() {
+		TestExternalities::default().execute_with(|| {
+			let btree = BTreeSet::from([1, 2, 3]);
+			FooSet::put(btree);
+
+			FooSet::append(4);
+			FooSet::append(5);
+			FooSet::append(6);
+			FooSet::append(7);
+
+			assert_eq!(FooSet::decode_len().unwrap(), 7);
 		});
 	}
 }

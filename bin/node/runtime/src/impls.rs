@@ -17,12 +17,20 @@
 
 //! Some configurable implementations as associated type for the substrate runtime.
 
-use crate::{AccountId, Assets, Authorship, Balances, NegativeImbalance, Runtime};
-use frame_support::traits::{
-	fungibles::{Balanced, CreditOf},
-	Currency, OnUnbalanced,
+use crate::{
+	AccountId, AllianceMotion, Assets, Authorship, Balances, Hash, NegativeImbalance, Runtime,
+	RuntimeCall,
 };
+use frame_support::{
+	pallet_prelude::*,
+	traits::{
+		fungibles::{Balanced, CreditOf},
+		Currency, OnUnbalanced,
+	},
+};
+use pallet_alliance::{IdentityVerifier, ProposalIndex, ProposalProvider};
 use pallet_asset_tx_payment::HandleCredit;
+use sp_std::prelude::*;
 
 pub struct Author;
 impl OnUnbalanced<NegativeImbalance> for Author {
@@ -45,6 +53,64 @@ impl HandleCredit<AccountId, Assets> for CreditToBlockAuthor {
 	}
 }
 
+pub struct AllianceIdentityVerifier;
+impl IdentityVerifier<AccountId> for AllianceIdentityVerifier {
+	fn has_identity(who: &AccountId, fields: u64) -> bool {
+		crate::Identity::has_identity(who, fields)
+	}
+
+	fn has_good_judgement(who: &AccountId) -> bool {
+		use pallet_identity::Judgement;
+		if let Some(judgements) =
+			crate::Identity::identity(who).map(|registration| registration.judgements)
+		{
+			judgements
+				.iter()
+				.any(|(_, j)| matches!(j, Judgement::KnownGood | Judgement::Reasonable))
+		} else {
+			false
+		}
+	}
+
+	fn super_account_id(who: &AccountId) -> Option<AccountId> {
+		crate::Identity::super_of(who).map(|parent| parent.0)
+	}
+}
+
+pub struct AllianceProposalProvider;
+impl ProposalProvider<AccountId, Hash, RuntimeCall> for AllianceProposalProvider {
+	fn propose_proposal(
+		who: AccountId,
+		threshold: u32,
+		proposal: Box<RuntimeCall>,
+		length_bound: u32,
+	) -> Result<(u32, u32), DispatchError> {
+		AllianceMotion::do_propose_proposed(who, threshold, proposal, length_bound)
+	}
+
+	fn vote_proposal(
+		who: AccountId,
+		proposal: Hash,
+		index: ProposalIndex,
+		approve: bool,
+	) -> Result<bool, DispatchError> {
+		AllianceMotion::do_vote(who, proposal, index, approve)
+	}
+
+	fn close_proposal(
+		proposal_hash: Hash,
+		proposal_index: ProposalIndex,
+		proposal_weight_bound: Weight,
+		length_bound: u32,
+	) -> DispatchResultWithPostInfo {
+		AllianceMotion::do_close(proposal_hash, proposal_index, proposal_weight_bound, length_bound)
+	}
+
+	fn proposal_of(proposal_hash: Hash) -> Option<RuntimeCall> {
+		AllianceMotion::proposal_of(proposal_hash)
+	}
+}
+
 #[cfg(test)]
 mod multiplier_tests {
 	use pallet_transaction_payment::{Multiplier, TargetedFeeAdjustment};
@@ -56,10 +122,13 @@ mod multiplier_tests {
 
 	use crate::{
 		constants::{currency::*, time::*},
-		AdjustmentVariable, MinimumMultiplier, Runtime, RuntimeBlockWeights as BlockWeights,
-		System, TargetBlockFullness, TransactionPayment,
+		AdjustmentVariable, MaximumMultiplier, MinimumMultiplier, Runtime,
+		RuntimeBlockWeights as BlockWeights, System, TargetBlockFullness, TransactionPayment,
 	};
-	use frame_support::weights::{DispatchClass, Weight, WeightToFee};
+	use frame_support::{
+		dispatch::DispatchClass,
+		weights::{Weight, WeightToFee},
+	};
 
 	fn max_normal() -> Weight {
 		BlockWeights::get()
@@ -83,6 +152,7 @@ mod multiplier_tests {
 			TargetBlockFullness,
 			AdjustmentVariable,
 			MinimumMultiplier,
+			MaximumMultiplier,
 		>::convert(fm)
 	}
 
@@ -94,13 +164,13 @@ mod multiplier_tests {
 		let previous_float = previous_float.max(min_multiplier().into_inner() as f64 / accuracy);
 
 		// maximum tx weight
-		let m = max_normal() as f64;
+		let m = max_normal().ref_time() as f64;
 		// block weight always truncated to max weight
-		let block_weight = (block_weight as f64).min(m);
+		let block_weight = (block_weight.ref_time() as f64).min(m);
 		let v: f64 = AdjustmentVariable::get().to_float();
 
 		// Ideal saturation in terms of weight
-		let ss = target() as f64;
+		let ss = target().ref_time() as f64;
 		// Current saturation in terms of weight
 		let s = block_weight;
 
@@ -128,12 +198,12 @@ mod multiplier_tests {
 	fn truth_value_update_poc_works() {
 		let fm = Multiplier::saturating_from_rational(1, 2);
 		let test_set = vec![
-			(0, fm.clone()),
-			(100, fm.clone()),
-			(1000, fm.clone()),
-			(target(), fm.clone()),
-			(max_normal() / 2, fm.clone()),
-			(max_normal(), fm.clone()),
+			(Weight::zero(), fm),
+			(Weight::from_ref_time(100), fm),
+			(Weight::from_ref_time(1000), fm),
+			(target(), fm),
+			(max_normal() / 2, fm),
+			(max_normal(), fm),
 		];
 		test_set.into_iter().for_each(|(w, fm)| {
 			run_with_system_weight(w, || {
@@ -151,7 +221,7 @@ mod multiplier_tests {
 	fn multiplier_can_grow_from_zero() {
 		// if the min is too small, then this will not change, and we are doomed forever.
 		// the weight is 1/100th bigger than target.
-		run_with_system_weight(target() * 101 / 100, || {
+		run_with_system_weight(target().set_ref_time(target().ref_time() * 101 / 100), || {
 			let next = runtime_multiplier_update(min_multiplier());
 			assert!(next > min_multiplier(), "{:?} !>= {:?}", next, min_multiplier());
 		})
@@ -160,7 +230,7 @@ mod multiplier_tests {
 	#[test]
 	fn multiplier_cannot_go_below_limit() {
 		// will not go any further below even if block is empty.
-		run_with_system_weight(0, || {
+		run_with_system_weight(Weight::zero(), || {
 			let next = runtime_multiplier_update(min_multiplier());
 			assert_eq!(next, min_multiplier());
 		})
@@ -178,7 +248,7 @@ mod multiplier_tests {
 		// 1 < 0.00001 * k * 0.1875
 		// 10^9 / 1875 < k
 		// k > 533_333 ~ 18,5 days.
-		run_with_system_weight(0, || {
+		run_with_system_weight(Weight::zero(), || {
 			// start from 1, the default.
 			let mut fm = Multiplier::one();
 			let mut iterations: u64 = 0;
@@ -214,7 +284,8 @@ mod multiplier_tests {
 		// `cargo test congested_chain_simulation -- --nocapture` to get some insight.
 
 		// almost full. The entire quota of normal transactions is taken.
-		let block_weight = BlockWeights::get().get(DispatchClass::Normal).max_total.unwrap() - 100;
+		let block_weight = BlockWeights::get().get(DispatchClass::Normal).max_total.unwrap() -
+			Weight::from_ref_time(100);
 
 		// Default substrate weight.
 		let tx_weight = frame_support::weights::constants::ExtrinsicBaseWeight::get();
@@ -338,27 +409,27 @@ mod multiplier_tests {
 
 	#[test]
 	fn weight_to_fee_should_not_overflow_on_large_weights() {
-		let kb = 1024 as Weight;
-		let mb = kb * kb;
+		let kb = Weight::from_ref_time(1024);
+		let mb = 1024u64 * kb;
 		let max_fm = Multiplier::saturating_from_integer(i128::MAX);
 
 		// check that for all values it can compute, correctly.
 		vec![
-			0,
-			1,
-			10,
-			1000,
+			Weight::zero(),
+			Weight::from_ref_time(1),
+			Weight::from_ref_time(10),
+			Weight::from_ref_time(1000),
 			kb,
-			10 * kb,
-			100 * kb,
+			10u64 * kb,
+			100u64 * kb,
 			mb,
-			10 * mb,
-			2147483647,
-			4294967295,
+			10u64 * mb,
+			Weight::from_ref_time(2147483647),
+			Weight::from_ref_time(4294967295),
 			BlockWeights::get().max_block / 2,
 			BlockWeights::get().max_block,
-			Weight::max_value() / 2,
-			Weight::max_value(),
+			Weight::MAX / 2,
+			Weight::MAX,
 		]
 		.into_iter()
 		.for_each(|i| {
@@ -371,7 +442,7 @@ mod multiplier_tests {
 
 		// Some values that are all above the target and will cause an increase.
 		let t = target();
-		vec![t + 100, t * 2, t * 4].into_iter().for_each(|i| {
+		vec![t + Weight::from_ref_time(100), t * 2, t * 4].into_iter().for_each(|i| {
 			run_with_system_weight(i, || {
 				let fm = runtime_multiplier_update(max_fm);
 				// won't grow. The convert saturates everything.

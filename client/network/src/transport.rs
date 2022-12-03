@@ -54,13 +54,17 @@ pub fn build_transport(
 ) -> (Boxed<(PeerId, StreamMuxerBox)>, Arc<BandwidthSinks>) {
 	// Build the base layer of the transport.
 	let transport = if !memory_only {
-		let desktop_trans = tcp::TcpConfig::new().nodelay(true);
-		let desktop_trans =
-			websocket::WsConfig::new(desktop_trans.clone()).or_transport(desktop_trans);
-		let dns_init = futures::executor::block_on(dns::DnsConfig::system(desktop_trans.clone()));
+		let tcp_config = tcp::GenTcpConfig::new().nodelay(true);
+		let desktop_trans = tcp::TcpTransport::new(tcp_config.clone());
+		let desktop_trans = websocket::WsConfig::new(desktop_trans)
+			.or_transport(tcp::TcpTransport::new(tcp_config.clone()));
+		let dns_init = futures::executor::block_on(dns::DnsConfig::system(desktop_trans));
 		EitherTransport::Left(if let Ok(dns) = dns_init {
 			EitherTransport::Left(dns)
 		} else {
+			let desktop_trans = tcp::TcpTransport::new(tcp_config.clone());
+			let desktop_trans = websocket::WsConfig::new(desktop_trans)
+				.or_transport(tcp::TcpTransport::new(tcp_config));
 			EitherTransport::Right(desktop_trans.map_err(dns::DnsErr::Transport))
 		})
 	} else {

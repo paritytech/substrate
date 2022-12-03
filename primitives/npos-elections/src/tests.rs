@@ -19,7 +19,7 @@
 
 use crate::{
 	balancing, helpers::*, mock::*, seq_phragmen, seq_phragmen_core, setup_inputs, to_support_map,
-	Assignment, ElectionResult, ExtendedBalance, StakedAssignment, Support, Voter,
+	Assignment, BalancingConfig, ElectionResult, ExtendedBalance, StakedAssignment, Support, Voter,
 };
 use sp_arithmetic::{PerU16, Perbill, Percent, Permill};
 use substrate_test_utils::assert_eq_uvec;
@@ -142,7 +142,8 @@ fn balancing_core_works() {
 
 	let (candidates, voters) = setup_inputs(candidates, voters);
 	let (candidates, mut voters) = seq_phragmen_core(4, candidates, voters).unwrap();
-	let iters = balancing::balance::<AccountId>(&mut voters, 4, 0);
+	let config = BalancingConfig { iterations: 4, tolerance: 0 };
+	let iters = balancing::balance::<AccountId>(&mut voters, &config);
 
 	assert!(iters > 0);
 
@@ -232,7 +233,7 @@ fn phragmen_poc_works() {
 		candidates,
 		voters
 			.iter()
-			.map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone()))
+			.map(|(ref v, ref vs)| (*v, stake_of(v), vs.clone()))
 			.collect::<Vec<_>>(),
 		None,
 	)
@@ -282,14 +283,15 @@ fn phragmen_poc_works_with_balancing() {
 	let voters = vec![(10, vec![1, 2]), (20, vec![1, 3]), (30, vec![2, 3])];
 
 	let stake_of = create_stake_of(&[(10, 10), (20, 20), (30, 30)]);
+	let config = BalancingConfig { iterations: 4, tolerance: 0 };
 	let ElectionResult::<_, Perbill> { winners, assignments } = seq_phragmen(
 		2,
 		candidates,
 		voters
 			.iter()
-			.map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone()))
+			.map(|(ref v, ref vs)| (*v, stake_of(v), vs.clone()))
 			.collect::<Vec<_>>(),
-		Some((4, 0)),
+		Some(config),
 	)
 	.unwrap();
 
@@ -374,7 +376,7 @@ fn phragmen_accuracy_on_large_scale_only_candidates() {
 		candidates.clone(),
 		auto_generate_self_voters(&candidates)
 			.iter()
-			.map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone()))
+			.map(|(ref v, ref vs)| (*v, stake_of(v), vs.clone()))
 			.collect::<Vec<_>>(),
 		None,
 	)
@@ -405,7 +407,7 @@ fn phragmen_accuracy_on_large_scale_voters_and_candidates() {
 		candidates,
 		voters
 			.iter()
-			.map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone()))
+			.map(|(ref v, ref vs)| (*v, stake_of(v), vs.clone()))
 			.collect::<Vec<_>>(),
 		None,
 	)
@@ -437,7 +439,7 @@ fn phragmen_accuracy_on_small_scale_self_vote() {
 		candidates,
 		voters
 			.iter()
-			.map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone()))
+			.map(|(ref v, ref vs)| (*v, stake_of(v), vs.clone()))
 			.collect::<Vec<_>>(),
 		None,
 	)
@@ -467,7 +469,7 @@ fn phragmen_accuracy_on_small_scale_no_self_vote() {
 		candidates,
 		voters
 			.iter()
-			.map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone()))
+			.map(|(ref v, ref vs)| (*v, stake_of(v), vs.clone()))
 			.collect::<Vec<_>>(),
 		None,
 	)
@@ -503,7 +505,7 @@ fn phragmen_large_scale_test() {
 		candidates,
 		voters
 			.iter()
-			.map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone()))
+			.map(|(ref v, ref vs)| (*v, stake_of(v), vs.clone()))
 			.collect::<Vec<_>>(),
 		None,
 	)
@@ -530,7 +532,7 @@ fn phragmen_large_scale_test_2() {
 		candidates,
 		voters
 			.iter()
-			.map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone()))
+			.map(|(ref v, ref vs)| (*v, stake_of(v), vs.clone()))
 			.collect::<Vec<_>>(),
 		None,
 	)
@@ -599,7 +601,7 @@ fn elect_has_no_entry_barrier() {
 		candidates,
 		voters
 			.iter()
-			.map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone()))
+			.map(|(ref v, ref vs)| (*v, stake_of(v), vs.clone()))
 			.collect::<Vec<_>>(),
 		None,
 	)
@@ -620,7 +622,7 @@ fn phragmen_self_votes_should_be_kept() {
 		candidates,
 		voters
 			.iter()
-			.map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone()))
+			.map(|(ref v, ref vs)| (*v, stake_of(v), vs.clone()))
 			.collect::<Vec<_>>(),
 		None,
 	)
@@ -870,30 +872,15 @@ mod score {
 		let claim =
 			[12488167277027543u128, 5559266368032409496, 118700736389524721358337889258988054];
 
-		assert_eq!(
-			is_score_better(claim.clone(), initial.clone(), Perbill::from_rational(1u32, 10_000),),
-			true,
-		);
+		assert_eq!(is_score_better(claim, initial, Perbill::from_rational(1u32, 10_000),), true,);
 
-		assert_eq!(
-			is_score_better(claim.clone(), initial.clone(), Perbill::from_rational(2u32, 10_000),),
-			true,
-		);
+		assert_eq!(is_score_better(claim, initial, Perbill::from_rational(2u32, 10_000),), true,);
 
-		assert_eq!(
-			is_score_better(claim.clone(), initial.clone(), Perbill::from_rational(3u32, 10_000),),
-			true,
-		);
+		assert_eq!(is_score_better(claim, initial, Perbill::from_rational(3u32, 10_000),), true,);
 
-		assert_eq!(
-			is_score_better(claim.clone(), initial.clone(), Perbill::from_rational(4u32, 10_000),),
-			true,
-		);
+		assert_eq!(is_score_better(claim, initial, Perbill::from_rational(4u32, 10_000),), true,);
 
-		assert_eq!(
-			is_score_better(claim.clone(), initial.clone(), Perbill::from_rational(5u32, 10_000),),
-			false,
-		);
+		assert_eq!(is_score_better(claim, initial, Perbill::from_rational(5u32, 10_000),), false,);
 	}
 
 	#[test]

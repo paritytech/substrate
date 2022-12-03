@@ -18,14 +18,12 @@
 //! Traits for dealing with dispatching calls and the origin from which they are dispatched.
 
 use crate::dispatch::{DispatchResultWithPostInfo, Parameter, RawOrigin};
-use sp_arithmetic::traits::{CheckedSub, Zero};
+use codec::MaxEncodedLen;
 use sp_runtime::{
 	traits::{BadOrigin, Member, Morph, TryMorph},
 	Either,
 };
 use sp_std::marker::PhantomData;
-
-use super::TypedGet;
 
 /// Some sort of check on the origin is performed by this object.
 pub trait EnsureOrigin<OuterOrigin> {
@@ -226,63 +224,37 @@ impl<
 	}
 }
 
-/// Mutator which reduces a scalar by a particular amount.
-pub struct ReduceBy<N>(PhantomData<N>);
-impl<N: TypedGet> TryMorph<N::Type> for ReduceBy<N>
-where
-	N::Type: CheckedSub,
-{
-	type Outcome = N::Type;
-	fn try_morph(r: N::Type) -> Result<N::Type, ()> {
-		r.checked_sub(&N::get()).ok_or(())
-	}
-}
-impl<N: TypedGet> Morph<N::Type> for ReduceBy<N>
-where
-	N::Type: CheckedSub + Zero,
-{
-	type Outcome = N::Type;
-	fn morph(r: N::Type) -> N::Type {
-		r.checked_sub(&N::get()).unwrap_or(Zero::zero())
-	}
-}
-
 /// Type that can be dispatched with an origin but without checking the origin filter.
 ///
 /// Implemented for pallet dispatchable type by `decl_module` and for runtime dispatchable by
 /// `construct_runtime`.
 pub trait UnfilteredDispatchable {
-	/// The origin type of the runtime, (i.e. `frame_system::Config::Origin`).
-	type Origin;
+	/// The origin type of the runtime, (i.e. `frame_system::Config::RuntimeOrigin`).
+	type RuntimeOrigin;
 
 	/// Dispatch this call but do not check the filter in origin.
-	fn dispatch_bypass_filter(self, origin: Self::Origin) -> DispatchResultWithPostInfo;
+	fn dispatch_bypass_filter(self, origin: Self::RuntimeOrigin) -> DispatchResultWithPostInfo;
 }
 
-/// Type that can be dispatched with an additional storage layer which is used to execute the call.
-pub trait DispatchableWithStorageLayer {
-	/// The origin type of the runtime, (i.e. `frame_system::Config::Origin`).
-	type Origin;
+/// The trait implemented by the overarching enumeration of the different pallets' origins.
+/// Unlike `OriginTrait` impls, this does not include any kind of dispatch/call filter. Also, this
+/// trait is more flexible in terms of how it can be used: it is a `Parameter` and `Member`, so it
+/// can be used as dispatchable parameters as well as in storage items.
+pub trait CallerTrait<AccountId>: Parameter + Member + From<RawOrigin<AccountId>> {
+	/// Extract the signer from the message if it is a `Signed` origin.
+	fn into_system(self) -> Option<RawOrigin<AccountId>>;
 
-	/// Same as `dispatch` from the [`frame_support::dispatch::Dispatchable`] trait, but
-	/// specifically spawns a new storage layer to execute the call inside of.
-	fn dispatch_with_storage_layer(self, origin: Self::Origin) -> DispatchResultWithPostInfo;
-
-	/// Same as `dispatch_bypass_filter` from the [`UnfilteredDispatchable`] trait, but specifically
-	/// spawns a new storage layer to execute the call inside of.
-	fn dispatch_bypass_filter_with_storage_layer(
-		self,
-		origin: Self::Origin,
-	) -> DispatchResultWithPostInfo;
+	/// Extract a reference to the system-level `RawOrigin` if it is that.
+	fn as_system_ref(&self) -> Option<&RawOrigin<AccountId>>;
 }
 
-/// Methods available on `frame_system::Config::Origin`.
+/// Methods available on `frame_system::Config::RuntimeOrigin`.
 pub trait OriginTrait: Sized {
 	/// Runtime call type, as in `frame_system::Config::Call`
 	type Call;
 
 	/// The caller origin, overarching type of all pallets origins.
-	type PalletsOrigin: Parameter + Member + Into<Self> + From<RawOrigin<Self::AccountId>>;
+	type PalletsOrigin: Into<Self> + CallerTrait<Self::AccountId> + MaxEncodedLen;
 
 	/// The AccountId used across the system.
 	type AccountId;
@@ -302,8 +274,11 @@ pub trait OriginTrait: Sized {
 	/// For root origin caller, the filters are bypassed and true is returned.
 	fn filter_call(&self, call: &Self::Call) -> bool;
 
-	/// Get the caller.
+	/// Get a reference to the caller (`CallerTrait` impl).
 	fn caller(&self) -> &Self::PalletsOrigin;
+
+	/// Consume `self` and return the caller.
+	fn into_caller(self) -> Self::PalletsOrigin;
 
 	/// Do something with the caller, consuming self but returning it if the caller was unused.
 	fn try_with_caller<R>(
@@ -321,7 +296,20 @@ pub trait OriginTrait: Sized {
 	fn signed(by: Self::AccountId) -> Self;
 
 	/// Extract the signer from the message if it is a `Signed` origin.
-	fn as_signed(self) -> Option<Self::AccountId>;
+	fn as_signed(self) -> Option<Self::AccountId> {
+		self.into_caller().into_system().and_then(|s| {
+			if let RawOrigin::Signed(who) = s {
+				Some(who)
+			} else {
+				None
+			}
+		})
+	}
+
+	/// Extract a reference to the sytsem origin, if that's what the caller is.
+	fn as_system_ref(&self) -> Option<&RawOrigin<Self::AccountId>> {
+		self.caller().as_system_ref()
+	}
 }
 
 #[cfg(test)]

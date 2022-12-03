@@ -273,6 +273,7 @@ impl fmt::Display for RuntimeVersion {
 	}
 }
 
+#[cfg(feature = "std")]
 fn has_api_with<P: Fn(u32) -> bool>(apis: &ApisVec, id: &ApiId, predicate: P) -> bool {
 	apis.iter().any(|(s, v)| s == id && predicate(*v))
 }

@@ -18,9 +18,10 @@
 //! Supporting types for try-runtime, testing and dry-running commands.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg(feature = "try-runtime")]
 
+pub use frame_support::traits::TryStateSelect;
 use frame_support::weights::Weight;
-use sp_std::prelude::*;
 
 sp_api::decl_runtime_apis! {
 	/// Runtime api for testing the execution of a runtime upgrade.
@@ -38,6 +39,6 @@ sp_api::decl_runtime_apis! {
 		///
 		/// This is only sensible where the incoming block is from a different network, yet it has
 		/// the same block format as the runtime implementing this API.
-		fn execute_block_no_check(block: Block) -> Weight;
+		fn execute_block(block: Block, state_root_check: bool, try_state: TryStateSelect) -> Weight;
 	}
 }

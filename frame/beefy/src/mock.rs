@@ -52,7 +52,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Beefy: pallet_beefy::{Pallet, Call, Config<T>, Storage},
+		Beefy: pallet_beefy::{Pallet, Config<T>, Storage},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 	}
 );
@@ -62,16 +62,16 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -86,6 +86,8 @@ impl frame_system::Config for Test {
 
 impl pallet_beefy::Config for Test {
 	type BeefyId = BeefyId;
+	type MaxAuthorities = ConstU32<100>;
+	type OnNewValidatorSet = ();
 }
 
 parameter_types! {
@@ -93,7 +95,7 @@ parameter_types! {
 }
 
 impl pallet_session::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type ValidatorId = u64;
 	type ValidatorIdOf = ConvertInto;
 	type ShouldEndSession = pallet_session::PeriodicSessions<ConstU64<1>, ConstU64<0>>;

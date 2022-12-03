@@ -29,6 +29,19 @@ pub(super) type DepositBalanceOf<T, I = ()> =
 pub(super) type AssetAccountOf<T, I> =
 	AssetAccount<<T as Config<I>>::Balance, DepositBalanceOf<T, I>, <T as Config<I>>::Extra>;
 
+/// AssetStatus holds the current state of the asset. It could either be Live and available for use,
+/// or in a Destroying state.
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
+pub(super) enum AssetStatus {
+	/// The asset is active and able to be used.
+	Live,
+	/// Whether the asset is frozen for non-admin transfers.
+	Frozen,
+	/// The asset is currently being destroyed, and all actions are no longer permitted on the
+	/// asset. Once set to `Destroying`, the asset can never transition back to a `Live` state.
+	Destroying,
+}
+
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 pub struct AssetDetails<Balance, AccountId, DepositBalance> {
 	/// Can change `owner`, `issuer`, `freezer` and `admin` accounts.
@@ -54,18 +67,8 @@ pub struct AssetDetails<Balance, AccountId, DepositBalance> {
 	pub(super) sufficients: u32,
 	/// The total number of approvals.
 	pub(super) approvals: u32,
-	/// Whether the asset is frozen for non-admin transfers.
-	pub(super) is_frozen: bool,
-}
-
-impl<Balance, AccountId, DepositBalance> AssetDetails<Balance, AccountId, DepositBalance> {
-	pub fn destroy_witness(&self) -> DestroyWitness {
-		DestroyWitness {
-			accounts: self.accounts,
-			sufficients: self.sufficients,
-			approvals: self.approvals,
-		}
-	}
+	/// The status of the asset
+	pub(super) status: AssetStatus,
 }
 
 /// Data concerning an approval.
@@ -139,20 +142,6 @@ pub struct AssetMetadata<DepositBalance, BoundedString> {
 	pub(super) is_frozen: bool,
 }
 
-/// Witness data for the destroy transactions.
-#[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
-pub struct DestroyWitness {
-	/// The number of accounts holding the asset.
-	#[codec(compact)]
-	pub(super) accounts: u32,
-	/// The number of accounts holding the asset with a self-sufficient reference.
-	#[codec(compact)]
-	pub(super) sufficients: u32,
-	/// The number of transfer-approvals of the asset.
-	#[codec(compact)]
-	pub(super) approvals: u32,
-}
-
 /// Trait for allowing a minimum balance on the account to be specified, beyond the
 /// `minimum_balance` of the asset. This is additive - the `minimum_balance` of the asset must be
 /// met *and then* anything here in addition.
@@ -165,7 +154,7 @@ pub trait FrozenBalance<AssetId, AccountId, Balance> {
 	///
 	/// Under normal behaviour, the account balance should not go below the sum of this (if `Some`)
 	/// and the asset's minimum balance. However, the account balance may reasonably begin below
-	/// this sum (e.g. if less than the sum had ever been transfered into the account).
+	/// this sum (e.g. if less than the sum had ever been transferred into the account).
 	///
 	/// In special cases (privileged intervention) the account balance may also go below the sum.
 	///

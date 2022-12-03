@@ -92,7 +92,7 @@ where
 		.into_iter()
 		.enumerate()
 		.map(|(idx, who)| {
-			c_idx_cache.insert(who.clone(), idx);
+			c_idx_cache.insert(who, idx);
 			_Candidate { who, ..Default::default() }
 		})
 		.collect::<Vec<_Candidate<A>>>();
@@ -103,7 +103,7 @@ where
 		for v in votes {
 			if let Some(idx) = c_idx_cache.get(&v) {
 				candidates[*idx].approval_stake = candidates[*idx].approval_stake + voter_stake;
-				edges.push(_Edge { who: v.clone(), candidate_index: *idx, ..Default::default() });
+				edges.push(_Edge { who: v, candidate_index: *idx, ..Default::default() });
 			}
 		}
 		_Voter { who, edges, budget: voter_stake, load: 0f64 }
@@ -143,21 +143,21 @@ where
 				}
 			}
 
-			elected_candidates.push((winner.who.clone(), winner.approval_stake as ExtendedBalance));
+			elected_candidates.push((winner.who, winner.approval_stake as ExtendedBalance));
 		} else {
 			break
 		}
 	}
 
 	for n in &mut voters {
-		let mut assignment = (n.who.clone(), vec![]);
+		let mut assignment = (n.who, vec![]);
 		for e in &mut n.edges {
 			if let Some(c) =
 				elected_candidates.iter().cloned().map(|(c, _)| c).find(|c| *c == e.who)
 			{
 				if c != n.who {
 					let ratio = e.load / n.load;
-					assignment.1.push((e.who.clone(), ratio));
+					assignment.1.push((e.who, ratio));
 				}
 			}
 		}
@@ -321,7 +321,7 @@ pub(crate) fn run_and_compare<Output: PerThing128, FS>(
 		candidates.clone(),
 		voters
 			.iter()
-			.map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone()))
+			.map(|(ref v, ref vs)| (*v, stake_of(v), vs.clone()))
 			.collect::<Vec<_>>(),
 		None,
 	)
@@ -368,7 +368,7 @@ pub(crate) fn build_support_map_float(
 	let mut supports = <_SupportMap<AccountId>>::new();
 	result.winners.iter().map(|(e, _)| (e, stake_of(e) as f64)).for_each(|(e, s)| {
 		let item = _Support { own: s, total: s, ..Default::default() };
-		supports.insert(e.clone(), item);
+		supports.insert(*e, item);
 	});
 
 	for (n, assignment) in result.assignments.iter_mut() {
@@ -377,7 +377,7 @@ pub(crate) fn build_support_map_float(
 			let other_stake = nominator_stake * *r;
 			if let Some(support) = supports.get_mut(c) {
 				support.total = support.total + other_stake;
-				support.others.push((n.clone(), other_stake));
+				support.others.push((*n, other_stake));
 			}
 			*r = other_stake;
 		}

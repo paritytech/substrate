@@ -18,6 +18,7 @@
 use crate::construct_runtime::Pallet;
 use proc_macro2::TokenStream;
 use quote::quote;
+use std::str::FromStr;
 use syn::Ident;
 
 pub fn expand_outer_dispatch(
@@ -30,6 +31,7 @@ pub fn expand_outer_dispatch(
 	let mut variant_patterns = Vec::new();
 	let mut query_call_part_macros = Vec::new();
 	let mut pallet_names = Vec::new();
+	let mut pallet_attrs = Vec::new();
 	let system_path = &system_pallet.path;
 
 	let pallets_with_call = pallet_decls.iter().filter(|decl| decl.exists_part("Call"));
@@ -38,12 +40,24 @@ pub fn expand_outer_dispatch(
 		let name = &pallet_declaration.name;
 		let path = &pallet_declaration.path;
 		let index = pallet_declaration.index;
+		let attr =
+			pallet_declaration.cfg_pattern.iter().fold(TokenStream::new(), |acc, pattern| {
+				let attr = TokenStream::from_str(&format!("#[cfg({})]", pattern.original()))
+					.expect("was successfully parsed before; qed");
+				quote! {
+					#acc
+					#attr
+				}
+			});
 
-		variant_defs.extend(
-			quote!(#[codec(index = #index)] #name( #scrate::dispatch::CallableCallFor<#name, #runtime> ),),
-		);
-		variant_patterns.push(quote!(Call::#name(call)));
+		variant_defs.extend(quote! {
+			#attr
+			#[codec(index = #index)]
+			#name( #scrate::dispatch::CallableCallFor<#name, #runtime> ),
+		});
+		variant_patterns.push(quote!(RuntimeCall::#name(call)));
 		pallet_names.push(name);
+		pallet_attrs.push(attr);
 		query_call_part_macros.push(quote! {
 			#path::__substrate_call_check::is_call_part_defined!(#name);
 		});
@@ -59,21 +73,65 @@ pub fn expand_outer_dispatch(
 			#scrate::scale_info::TypeInfo,
 			#scrate::RuntimeDebug,
 		)]
-		pub enum Call {
+		pub enum RuntimeCall {
 			#variant_defs
 		}
-		impl #scrate::dispatch::GetDispatchInfo for Call {
-			fn get_dispatch_info(&self) -> #scrate::dispatch::DispatchInfo {
-				match self {
-					#( #variant_patterns => call.get_dispatch_info(), )*
+		#[cfg(test)]
+		impl RuntimeCall {
+			/// Return a list of the module names together with their size in memory.
+			pub const fn sizes() -> &'static [( &'static str, usize )] {
+				use #scrate::dispatch::Callable;
+				use core::mem::size_of;
+				&[#(
+					#pallet_attrs
+					(
+						stringify!(#pallet_names),
+						size_of::< <#pallet_names as Callable<#runtime>>::RuntimeCall >(),
+					),
+				)*]
+			}
+
+			/// Panics with diagnostic information if the size is greater than the given `limit`.
+			pub fn assert_size_under(limit: usize) {
+				let size = core::mem::size_of::<Self>();
+				let call_oversize = size > limit;
+				if call_oversize {
+					println!("Size of `Call` is {} bytes (provided limit is {} bytes)", size, limit);
+					let mut sizes = Self::sizes().to_vec();
+					sizes.sort_by_key(|x| -(x.1 as isize));
+					for (i, &(name, size)) in sizes.iter().enumerate().take(5) {
+						println!("Offender #{}: {} at {} bytes", i + 1, name, size);
+					}
+					if let Some((_, next_size)) = sizes.get(5) {
+						println!("{} others of size {} bytes or less", sizes.len() - 5, next_size);
+					}
+					panic!(
+						"Size of `Call` is more than limit; use `Box` on complex parameter types to reduce the
+						size of `Call`.
+						If the limit is too strong, maybe consider providing a higher limit."
+					);
 				}
 			}
 		}
-		impl #scrate::dispatch::GetCallMetadata for Call {
+		impl #scrate::dispatch::GetDispatchInfo for RuntimeCall {
+			fn get_dispatch_info(&self) -> #scrate::dispatch::DispatchInfo {
+				match self {
+					#(
+						#pallet_attrs
+						#variant_patterns => call.get_dispatch_info(),
+					)*
+				}
+			}
+		}
+		// Deprecated, but will warn when used
+		#[allow(deprecated)]
+		impl #scrate::weights::GetDispatchInfo for RuntimeCall {}
+		impl #scrate::dispatch::GetCallMetadata for RuntimeCall {
 			fn get_call_metadata(&self) -> #scrate::dispatch::CallMetadata {
 				use #scrate::dispatch::GetCallName;
 				match self {
 					#(
+						#pallet_attrs
 						#variant_patterns => {
 							let function_name = call.get_call_name();
 							let pallet_name = stringify!(#pallet_names);
@@ -85,6 +143,7 @@ pub fn expand_outer_dispatch(
 
 			fn get_module_names() -> &'static [&'static str] {
 				&[#(
+					#pallet_attrs
 					stringify!(#pallet_names),
 				)*]
 			}
@@ -93,21 +152,22 @@ pub fn expand_outer_dispatch(
 				use #scrate::dispatch::{Callable, GetCallName};
 				match module {
 					#(
+						#pallet_attrs
 						stringify!(#pallet_names) =>
-							<<#pallet_names as Callable<#runtime>>::Call
+							<<#pallet_names as Callable<#runtime>>::RuntimeCall
 								as GetCallName>::get_call_names(),
 					)*
 					_ => unreachable!(),
 				}
 			}
 		}
-		impl #scrate::dispatch::Dispatchable for Call {
-			type Origin = Origin;
-			type Config = Call;
-			type Info = #scrate::weights::DispatchInfo;
-			type PostInfo = #scrate::weights::PostDispatchInfo;
-			fn dispatch(self, origin: Origin) -> #scrate::dispatch::DispatchResultWithPostInfo {
-				if !<Self::Origin as #scrate::traits::OriginTrait>::filter_call(&origin, &self) {
+		impl #scrate::dispatch::Dispatchable for RuntimeCall {
+			type RuntimeOrigin = RuntimeOrigin;
+			type Config = RuntimeCall;
+			type Info = #scrate::dispatch::DispatchInfo;
+			type PostInfo = #scrate::dispatch::PostDispatchInfo;
+			fn dispatch(self, origin: RuntimeOrigin) -> #scrate::dispatch::DispatchResultWithPostInfo {
+				if !<Self::RuntimeOrigin as #scrate::traits::OriginTrait>::filter_call(&origin, &self) {
 					return #scrate::sp_std::result::Result::Err(
 						#system_path::Error::<#runtime>::CallFiltered.into()
 					);
@@ -116,33 +176,22 @@ pub fn expand_outer_dispatch(
 				#scrate::traits::UnfilteredDispatchable::dispatch_bypass_filter(self, origin)
 			}
 		}
-		impl #scrate::traits::UnfilteredDispatchable for Call {
-			type Origin = Origin;
-			fn dispatch_bypass_filter(self, origin: Origin) -> #scrate::dispatch::DispatchResultWithPostInfo {
+		impl #scrate::traits::UnfilteredDispatchable for RuntimeCall {
+			type RuntimeOrigin = RuntimeOrigin;
+			fn dispatch_bypass_filter(self, origin: RuntimeOrigin) -> #scrate::dispatch::DispatchResultWithPostInfo {
 				match self {
 					#(
+						#pallet_attrs
 						#variant_patterns =>
 							#scrate::traits::UnfilteredDispatchable::dispatch_bypass_filter(call, origin),
 					)*
 				}
 			}
 		}
-		impl #scrate::traits::DispatchableWithStorageLayer for Call {
-			type Origin = Origin;
-			fn dispatch_with_storage_layer(self, origin: Origin) -> #scrate::dispatch::DispatchResultWithPostInfo {
-				#scrate::storage::with_storage_layer(|| {
-					#scrate::dispatch::Dispatchable::dispatch(self, origin)
-				})
-			}
-			fn dispatch_bypass_filter_with_storage_layer(self, origin: Origin) -> #scrate::dispatch::DispatchResultWithPostInfo {
-				#scrate::storage::with_storage_layer(|| {
-					#scrate::traits::UnfilteredDispatchable::dispatch_bypass_filter(self, origin)
-				})
-			}
-		}
 
 		#(
-			impl #scrate::traits::IsSubType<#scrate::dispatch::CallableCallFor<#pallet_names, #runtime>> for Call {
+			#pallet_attrs
+			impl #scrate::traits::IsSubType<#scrate::dispatch::CallableCallFor<#pallet_names, #runtime>> for RuntimeCall {
 				#[allow(unreachable_patterns)]
 				fn is_sub_type(&self) -> Option<&#scrate::dispatch::CallableCallFor<#pallet_names, #runtime>> {
 					match self {
@@ -153,7 +202,8 @@ pub fn expand_outer_dispatch(
 				}
 			}
 
-			impl From<#scrate::dispatch::CallableCallFor<#pallet_names, #runtime>> for Call {
+			#pallet_attrs
+			impl From<#scrate::dispatch::CallableCallFor<#pallet_names, #runtime>> for RuntimeCall {
 				fn from(call: #scrate::dispatch::CallableCallFor<#pallet_names, #runtime>) -> Self {
 					#variant_patterns
 				}

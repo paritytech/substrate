@@ -22,7 +22,7 @@
 
 use super::{InherentDataProviderExt, Slot};
 use sp_consensus::{Error, SelectChain};
-use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
+use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
 use futures_timer::Delay;
@@ -50,12 +50,10 @@ pub fn time_until_next_slot(slot_duration: Duration) -> Duration {
 pub struct SlotInfo<B: BlockT> {
 	/// The slot number as found in the inherent data.
 	pub slot: Slot,
-	/// Current timestamp as found in the inherent data.
-	pub timestamp: sp_timestamp::Timestamp,
 	/// The instant at which the slot ends.
 	pub ends_at: Instant,
-	/// The inherent data.
-	pub inherent_data: InherentData,
+	/// The inherent data provider.
+	pub create_inherent_data: Box<dyn InherentDataProvider>,
 	/// Slot duration.
 	pub duration: Duration,
 	/// The chain header this slot is based on.
@@ -72,16 +70,14 @@ impl<B: BlockT> SlotInfo<B> {
 	/// `ends_at` is calculated using `timestamp` and `duration`.
 	pub fn new(
 		slot: Slot,
-		timestamp: sp_timestamp::Timestamp,
-		inherent_data: InherentData,
+		create_inherent_data: Box<dyn InherentDataProvider>,
 		duration: Duration,
 		chain_head: B::Header,
 		block_size_limit: Option<usize>,
 	) -> Self {
 		Self {
 			slot,
-			timestamp,
-			inherent_data,
+			create_inherent_data,
 			duration,
 			chain_head,
 			block_size_limit,
@@ -122,7 +118,7 @@ impl<Block, SC, IDP> Slots<Block, SC, IDP>
 where
 	Block: BlockT,
 	SC: SelectChain<Block>,
-	IDP: CreateInherentDataProviders<Block, ()>,
+	IDP: CreateInherentDataProviders<Block, ()> + 'static,
 	IDP::InherentDataProviders: crate::InherentDataProviderExt,
 {
 	/// Returns a future that fires when the next slot starts.
@@ -146,9 +142,6 @@ where
 
 			// reschedule delay for next slot.
 			self.inner_delay = Some(Delay::new(ends_in));
-
-			let ends_at = Instant::now() + ends_in;
-
 			let chain_head = match self.select_chain.best_chain().await {
 				Ok(x) => x,
 				Err(e) => {
@@ -168,16 +161,7 @@ where
 				.create_inherent_data_providers(chain_head.hash(), ())
 				.await?;
 
-			if Instant::now() > ends_at {
-				log::warn!(
-					target: "slots",
-					"Creating inherent data providers took more time than we had left for the slot.",
-				);
-			}
-
-			let timestamp = inherent_data_providers.timestamp();
 			let slot = inherent_data_providers.slot();
-			let inherent_data = inherent_data_providers.create_inherent_data()?;
 
 			// never yield the same slot twice.
 			if slot > self.last_slot {
@@ -185,8 +169,7 @@ where
 
 				break Ok(SlotInfo::new(
 					slot,
-					timestamp,
-					inherent_data,
+					Box::new(inherent_data_providers),
 					self.slot_duration,
 					chain_head,
 					None,

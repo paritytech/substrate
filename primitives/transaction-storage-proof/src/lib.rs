@@ -87,7 +87,7 @@ impl InherentDataProvider {
 #[cfg(feature = "std")]
 #[async_trait::async_trait]
 impl sp_inherents::InherentDataProvider for InherentDataProvider {
-	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error> {
+	async fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error> {
 		if let Some(proof) = &self.proof {
 			inherent_data.put_data(INHERENT_IDENTIFIER, proof)
 		} else {
@@ -200,7 +200,8 @@ pub mod registration {
 			let mut transaction_root = sp_trie::empty_trie_root::<TrieLayout>();
 			{
 				let mut trie =
-					sp_trie::TrieDBMut::<TrieLayout>::new(&mut db, &mut transaction_root);
+					sp_trie::TrieDBMutBuilder::<TrieLayout>::new(&mut db, &mut transaction_root)
+						.build();
 				let chunks = transaction.chunks(CHUNK_SIZE).map(|c| c.to_vec());
 				for (index, chunk) in chunks.enumerate() {
 					let index = encode_index(index as u32);

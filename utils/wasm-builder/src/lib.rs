@@ -87,10 +87,12 @@
 //!   required as we walk up from the target directory until we find a `Cargo.toml`. If the target
 //!   directory is changed for the build, this environment variable can be used to point to the
 //!   actual workspace.
+//! - `CARGO_NET_OFFLINE` - If `true`, `--offline` will be passed to all processes launched to
+//!   prevent network access. Useful in offline environments.
 //!
 //! Each project can be skipped individually by using the environment variable
 //! `SKIP_PROJECT_NAME_WASM_BUILD`. Where `PROJECT_NAME` needs to be replaced by the name of the
-//! cargo project, e.g. `node-runtime` will be `NODE_RUNTIME`.
+//! cargo project, e.g. `kitchensink-runtime` will be `NODE_RUNTIME`.
 //!
 //! ## Prerequisites:
 //!
@@ -118,6 +120,9 @@ pub use builder::{WasmBuilder, WasmBuilderSelectProject};
 
 /// Environment variable that tells us to skip building the wasm binary.
 const SKIP_BUILD_ENV: &str = "SKIP_WASM_BUILD";
+
+/// Environment variable that tells us whether we should avoid network requests
+const OFFLINE: &str = "CARGO_NET_OFFLINE";
 
 /// Environment variable to force a certain build type when building the wasm binary.
 /// Expects "debug", "release" or "production" as value.

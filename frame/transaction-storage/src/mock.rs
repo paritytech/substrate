@@ -17,8 +17,10 @@
 
 //! Test environment for transaction-storage pallet.
 
-use crate as pallet_transaction_storage;
-use crate::TransactionStorageProof;
+use crate::{
+	self as pallet_transaction_storage, TransactionStorageProof, DEFAULT_MAX_BLOCK_TRANSACTIONS,
+	DEFAULT_MAX_TRANSACTION_SIZE,
+};
 use frame_support::traits::{ConstU16, ConstU32, ConstU64, OnFinalize, OnInitialize};
 use sp_core::H256;
 use sp_runtime::{
@@ -49,8 +51,8 @@ impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
-	type Origin = Origin;
-	type Call = Call;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -58,7 +60,7 @@ impl frame_system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type DbWeight = ();
 	type Version = ();
@@ -75,7 +77,7 @@ impl frame_system::Config for Test {
 impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type DustRemoval = ();
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
@@ -85,11 +87,13 @@ impl pallet_balances::Config for Test {
 }
 
 impl pallet_transaction_storage::Config for Test {
-	type Event = Event;
-	type Call = Call;
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
 	type Currency = Balances;
 	type FeeDestination = ();
 	type WeightInfo = ();
+	type MaxBlockTransactions = ConstU32<{ DEFAULT_MAX_BLOCK_TRANSACTIONS }>;
+	type MaxTransactionSize = ConstU32<{ DEFAULT_MAX_TRANSACTION_SIZE }>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -102,8 +106,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			storage_period: 10,
 			byte_fee: 2,
 			entry_fee: 200,
-			max_block_transactions: crate::DEFAULT_MAX_BLOCK_TRANSACTIONS,
-			max_transaction_size: crate::DEFAULT_MAX_TRANSACTION_SIZE,
 		},
 	}
 	.build_storage()
@@ -114,7 +116,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 pub fn run_to_block(n: u64, f: impl Fn() -> Option<TransactionStorageProof>) {
 	while System::block_number() < n {
 		if let Some(proof) = f() {
-			TransactionStorage::check_proof(Origin::none(), proof).unwrap();
+			TransactionStorage::check_proof(RuntimeOrigin::none(), proof).unwrap();
 		}
 		TransactionStorage::on_finalize(System::block_number());
 		System::on_finalize(System::block_number());

@@ -21,13 +21,13 @@
 //! to the Maximin problem.
 
 use crate::{
-	balancing, setup_inputs, CandidatePtr, ElectionResult, ExtendedBalance, IdentifierT,
-	PerThing128, VoteWeight, Voter,
+	balancing, setup_inputs, BalancingConfig, CandidatePtr, ElectionResult, ExtendedBalance,
+	IdentifierT, PerThing128, VoteWeight, Voter,
 };
 use sp_arithmetic::{
-	helpers_128bit::multiply_by_rational,
+	helpers_128bit::multiply_by_rational_with_rounding,
 	traits::{Bounded, Zero},
-	Rational128,
+	Rational128, Rounding,
 };
 use sp_std::prelude::*;
 
@@ -71,16 +71,16 @@ pub fn seq_phragmen<AccountId: IdentifierT, P: PerThing128>(
 	to_elect: usize,
 	candidates: Vec<AccountId>,
 	voters: Vec<(AccountId, VoteWeight, impl IntoIterator<Item = AccountId>)>,
-	balancing: Option<(usize, ExtendedBalance)>,
+	balancing: Option<BalancingConfig>,
 ) -> Result<ElectionResult<AccountId, P>, crate::Error> {
 	let (candidates, voters) = setup_inputs(candidates, voters);
 
 	let (candidates, mut voters) = seq_phragmen_core::<AccountId>(to_elect, candidates, voters)?;
 
-	if let Some((iterations, tolerance)) = balancing {
+	if let Some(ref config) = balancing {
 		// NOTE: might create zero-edges, but we will strip them again when we convert voter into
 		// assignment.
-		let _iters = balancing::balance::<AccountId>(&mut voters, iterations, tolerance);
+		let _iters = balancing::balance::<AccountId>(&mut voters, config);
 	}
 
 	let mut winners = candidates
@@ -143,10 +143,11 @@ pub fn seq_phragmen_core<AccountId: IdentifierT>(
 			for edge in &voter.edges {
 				let mut candidate = edge.candidate.borrow_mut();
 				if !candidate.elected && !candidate.approval_stake.is_zero() {
-					let temp_n = multiply_by_rational(
+					let temp_n = multiply_by_rational_with_rounding(
 						voter.load.n(),
 						voter.budget,
 						candidate.approval_stake,
+						Rounding::Down,
 					)
 					.unwrap_or(Bounded::max_value());
 					let temp_d = voter.load.d();
@@ -184,9 +185,14 @@ pub fn seq_phragmen_core<AccountId: IdentifierT>(
 		for edge in &mut voter.edges {
 			if edge.candidate.borrow().elected {
 				// update internal state.
-				edge.weight = multiply_by_rational(voter.budget, edge.load.n(), voter.load.n())
-					// If result cannot fit in u128. Not much we can do about it.
-					.unwrap_or(Bounded::max_value());
+				edge.weight = multiply_by_rational_with_rounding(
+					voter.budget,
+					edge.load.n(),
+					voter.load.n(),
+					Rounding::Down,
+				)
+				// If result cannot fit in u128. Not much we can do about it.
+				.unwrap_or(Bounded::max_value());
 			} else {
 				edge.weight = 0
 			}

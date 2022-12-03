@@ -138,6 +138,13 @@ where
 		unhashed::get(&Self::storage_n_map_final_key::<K, _>(key)).ok_or(())
 	}
 
+	fn set<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg, q: Self::Query) {
+		match G::from_query_to_optional_value(q) {
+			Some(v) => Self::insert(key, v),
+			None => Self::remove(key),
+		}
+	}
+
 	fn take<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg) -> Self::Query {
 		let final_key = Self::storage_n_map_final_key::<K, _>(key);
 
@@ -453,14 +460,14 @@ mod test_iterators {
 	use codec::{Decode, Encode};
 
 	pub trait Config: 'static {
-		type Origin;
+		type RuntimeOrigin;
 		type BlockNumber;
 		type PalletInfo: crate::traits::PalletInfo;
 		type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
 	}
 
 	crate::decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {}
+		pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=self {}
 	}
 
 	#[derive(PartialEq, Eq, Clone, Encode, Decode)]

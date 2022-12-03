@@ -23,15 +23,15 @@ use sc_cli::{
 };
 
 #[derive(Debug, Parser)]
-#[clap(
+#[command(
 	name = "subkey",
 	author = "Parity Team <admin@parity.io>",
 	about = "Utility for generating and restoring with Substrate keys",
 	version
 )]
 pub enum Subkey {
-	/// Generate a random node libp2p key, save it to file or print it to stdout
-	/// and print its peer ID to stderr.
+	/// Generate a random node key, write it to a file or stdout and write the
+	/// corresponding peer-id to stderr
 	GenerateNodeKey(GenerateNodeKeyCmd),
 
 	/// Generate a random account
@@ -40,7 +40,7 @@ pub enum Subkey {
 	/// Gets a public key and a SS58 address from the provided Secret URI
 	Inspect(InspectKeyCmd),
 
-	/// Print the peer ID corresponding to the node key in the given file
+	/// Load a node key from a file or stdin and print the corresponding peer-id
 	InspectNodeKey(InspectNodeKeyCmd),
 
 	/// Sign a message, with a given (secret) key.

@@ -137,7 +137,7 @@ pub enum ConsensusLog {
 
 /// Configuration data used by the BABE consensus engine.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
-pub struct BabeGenesisConfigurationV1 {
+pub struct BabeConfigurationV1 {
 	/// The slot duration in milliseconds for BABE. Currently, only
 	/// the value provided by this type at genesis will be used.
 	///
@@ -156,7 +156,7 @@ pub struct BabeGenesisConfigurationV1 {
 	pub c: (u64, u64),
 
 	/// The authorities for the genesis epoch.
-	pub genesis_authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
+	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 
 	/// The randomness for the genesis epoch.
 	pub randomness: Randomness,
@@ -166,13 +166,13 @@ pub struct BabeGenesisConfigurationV1 {
 	pub secondary_slots: bool,
 }
 
-impl From<BabeGenesisConfigurationV1> for BabeGenesisConfiguration {
-	fn from(v1: BabeGenesisConfigurationV1) -> Self {
+impl From<BabeConfigurationV1> for BabeConfiguration {
+	fn from(v1: BabeConfigurationV1) -> Self {
 		Self {
 			slot_duration: v1.slot_duration,
 			epoch_length: v1.epoch_length,
 			c: v1.c,
-			genesis_authorities: v1.genesis_authorities,
+			authorities: v1.authorities,
 			randomness: v1.randomness,
 			allowed_slots: if v1.secondary_slots {
 				AllowedSlots::PrimaryAndSecondaryPlainSlots
@@ -185,7 +185,7 @@ impl From<BabeGenesisConfigurationV1> for BabeGenesisConfiguration {
 
 /// Configuration data used by the BABE consensus engine.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
-pub struct BabeGenesisConfiguration {
+pub struct BabeConfiguration {
 	/// The slot duration in milliseconds for BABE. Currently, only
 	/// the value provided by this type at genesis will be used.
 	///
@@ -203,14 +203,21 @@ pub struct BabeGenesisConfiguration {
 	/// of a slot being empty.
 	pub c: (u64, u64),
 
-	/// The authorities for the genesis epoch.
-	pub genesis_authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
+	/// The authorities
+	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 
-	/// The randomness for the genesis epoch.
+	/// The randomness
 	pub randomness: Randomness,
 
 	/// Type of allowed slots.
 	pub allowed_slots: AllowedSlots,
+}
+
+impl BabeConfiguration {
+	/// Convenience method to get the slot duration as a `SlotDuration` value.
+	pub fn slot_duration(&self) -> SlotDuration {
+		SlotDuration::from_millis(self.slot_duration)
+	}
 }
 
 /// Types of allowed slots.
@@ -237,7 +244,7 @@ impl AllowedSlots {
 	}
 }
 
-/// Configuration data used by the BABE consensus engine.
+/// Configuration data used by the BABE consensus engine that may change with epochs.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BabeEpochConfiguration {
@@ -357,12 +364,12 @@ sp_api::decl_runtime_apis! {
 	/// API necessary for block authorship with BABE.
 	#[api_version(2)]
 	pub trait BabeApi {
-		/// Return the genesis configuration for BABE. The configuration is only read on genesis.
-		fn configuration() -> BabeGenesisConfiguration;
+		/// Return the configuration for BABE.
+		fn configuration() -> BabeConfiguration;
 
 		/// Return the configuration for BABE. Version 1.
 		#[changed_in(2)]
-		fn configuration() -> BabeGenesisConfigurationV1;
+		fn configuration() -> BabeConfigurationV1;
 
 		/// Returns the slot that started the current epoch.
 		fn current_epoch_start() -> Slot;

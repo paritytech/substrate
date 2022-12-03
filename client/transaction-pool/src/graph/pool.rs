@@ -16,10 +16,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use futures::{channel::mpsc::Receiver, Future};
 use sc_transaction_pool_api::error;
+use sp_blockchain::TreeRoute;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{self, Block as BlockT, SaturatedConversion},
@@ -89,14 +90,21 @@ pub trait ChainApi: Send + Sync {
 	/// Returns hash and encoding length of the extrinsic.
 	fn hash_and_length(&self, uxt: &ExtrinsicFor<Self>) -> (ExtrinsicHash<Self>, usize);
 
-	/// Returns a block body given the block id.
-	fn block_body(&self, at: &BlockId<Self::Block>) -> Self::BodyFuture;
+	/// Returns a block body given the block.
+	fn block_body(&self, at: <Self::Block as BlockT>::Hash) -> Self::BodyFuture;
 
 	/// Returns a block header given the block id.
 	fn block_header(
 		&self,
 		at: &BlockId<Self::Block>,
 	) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error>;
+
+	/// Compute a tree-route between two blocks. See [`TreeRoute`] for more details.
+	fn tree_route(
+		&self,
+		from: <Self::Block as BlockT>::Hash,
+		to: <Self::Block as BlockT>::Hash,
+	) -> Result<TreeRoute<Self::Block>, Self::Error>;
 }
 
 /// Pool configuration options.
@@ -108,6 +116,8 @@ pub struct Options {
 	pub future: base::Limit,
 	/// Reject future transactions.
 	pub reject_future_transactions: bool,
+	/// How long the extrinsic is banned for.
+	pub ban_time: Duration,
 }
 
 impl Default for Options {
@@ -116,6 +126,7 @@ impl Default for Options {
 			ready: base::Limit { count: 8192, total_bytes: 20 * 1024 * 1024 },
 			future: base::Limit { count: 512, total_bytes: 1 * 1024 * 1024 },
 			reject_future_transactions: false,
+			ban_time: Duration::from_secs(60 * 30),
 		}
 	}
 }
@@ -157,7 +168,7 @@ impl<B: ChainApi> Pool<B> {
 	) -> Result<Vec<Result<ExtrinsicHash<B>, B::Error>>, B::Error> {
 		let xts = xts.into_iter().map(|xt| (source, xt));
 		let validated_transactions = self.verify(at, xts, CheckBannedBeforeVerify::Yes).await?;
-		Ok(self.validated_pool.submit(validated_transactions.into_iter().map(|(_, tx)| tx)))
+		Ok(self.validated_pool.submit(validated_transactions.into_values()))
 	}
 
 	/// Resubmit the given extrinsics to the pool.
@@ -171,7 +182,7 @@ impl<B: ChainApi> Pool<B> {
 	) -> Result<Vec<Result<ExtrinsicHash<B>, B::Error>>, B::Error> {
 		let xts = xts.into_iter().map(|xt| (source, xt));
 		let validated_transactions = self.verify(at, xts, CheckBannedBeforeVerify::No).await?;
-		Ok(self.validated_pool.submit(validated_transactions.into_iter().map(|(_, tx)| tx)))
+		Ok(self.validated_pool.submit(validated_transactions.into_values()))
 	}
 
 	/// Imports one unverified extrinsic to the pool
@@ -338,7 +349,7 @@ impl<B: ChainApi> Pool<B> {
 			at,
 			known_imported_hashes,
 			pruned_hashes,
-			reverified_transactions.into_iter().map(|(_, xt)| xt).collect(),
+			reverified_transactions.into_values().collect(),
 		)
 	}
 
@@ -638,7 +649,7 @@ mod tests {
 		.unwrap();
 
 		// when
-		block_on(pool.prune_tags(&BlockId::Number(1), vec![vec![0]], vec![hash1.clone()])).unwrap();
+		block_on(pool.prune_tags(&BlockId::Number(1), vec![vec![0]], vec![hash1])).unwrap();
 
 		// then
 		assert!(pool.validated_pool.is_banned(&hash1));
@@ -767,7 +778,7 @@ mod tests {
 			assert_eq!(stream.next(), Some(TransactionStatus::Ready));
 			assert_eq!(
 				stream.next(),
-				Some(TransactionStatus::InBlock(H256::from_low_u64_be(2).into())),
+				Some(TransactionStatus::InBlock((H256::from_low_u64_be(2).into(), 0))),
 			);
 		}
 
@@ -790,12 +801,8 @@ mod tests {
 			assert_eq!(pool.validated_pool().status().future, 0);
 
 			// when
-			block_on(pool.prune_tags(
-				&BlockId::Number(2),
-				vec![vec![0u8]],
-				vec![watcher.hash().clone()],
-			))
-			.unwrap();
+			block_on(pool.prune_tags(&BlockId::Number(2), vec![vec![0u8]], vec![*watcher.hash()]))
+				.unwrap();
 			assert_eq!(pool.validated_pool().status().ready, 0);
 			assert_eq!(pool.validated_pool().status().future, 0);
 
@@ -804,7 +811,7 @@ mod tests {
 			assert_eq!(stream.next(), Some(TransactionStatus::Ready));
 			assert_eq!(
 				stream.next(),
-				Some(TransactionStatus::InBlock(H256::from_low_u64_be(2).into())),
+				Some(TransactionStatus::InBlock((H256::from_low_u64_be(2).into(), 0))),
 			);
 		}
 

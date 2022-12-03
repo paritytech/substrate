@@ -26,8 +26,8 @@ use crate::{Error, SubstrateCli};
 /// Key utilities for the cli.
 #[derive(Debug, clap::Subcommand)]
 pub enum KeySubcommand {
-	/// Generate a random node libp2p key, save it to file or print it to stdout
-	/// and print its peer ID to stderr.
+	/// Generate a random node key, write it to a file or stdout and write the
+	/// corresponding peer-id to stderr
 	GenerateNodeKey(GenerateNodeKeyCmd),
 
 	/// Generate a random account
@@ -36,7 +36,7 @@ pub enum KeySubcommand {
 	/// Gets a public key and a SS58 address from the provided Secret URI
 	Inspect(InspectKeyCmd),
 
-	/// Print the peer ID corresponding to the node key in the given file
+	/// Load a node key from a file or stdin and print the corresponding peer-id
 	InspectNodeKey(InspectNodeKeyCmd),
 
 	/// Insert a key to the keystore of a node.

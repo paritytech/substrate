@@ -93,6 +93,7 @@ pub type PositiveImbalanceOf<T, I = ()> = <<T as Config<I>>::Currency as Currenc
 pub type NegativeImbalanceOf<T, I = ()> = <<T as Config<I>>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 /// A trait to allow the Treasury Pallet to spend it's funds for other purposes.
 /// There is an expectation that the implementer of this trait will correctly manage
@@ -148,13 +149,14 @@ pub mod pallet {
 		type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
 
 		/// Origin from which approvals must come.
-		type ApproveOrigin: EnsureOrigin<Self::Origin>;
+		type ApproveOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Origin from which rejections must come.
-		type RejectOrigin: EnsureOrigin<Self::Origin>;
+		type RejectOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The overarching event type.
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Handler for the unbalanced decrease when slashing for a rejected proposal or bounty.
 		type OnSlash: OnUnbalanced<NegativeImbalanceOf<Self, I>>;
@@ -202,7 +204,7 @@ pub mod pallet {
 		/// The origin required for approving spends from the treasury outside of the proposal
 		/// process. The `Success` value is the maximum amount that this origin is allowed to
 		/// spend at a time.
-		type SpendOrigin: EnsureOrigin<Self::Origin, Success = BalanceOf<Self, I>>;
+		type SpendOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = BalanceOf<Self, I>>;
 	}
 
 	/// Number of proposals that have been made.
@@ -220,6 +222,10 @@ pub mod pallet {
 		Proposal<T::AccountId, BalanceOf<T, I>>,
 		OptionQuery,
 	>;
+
+	/// The amount which has been reported as inactive to Currency.
+	#[pallet::storage]
+	pub type Inactive<T: Config<I>, I: 'static = ()> = StorageValue<_, BalanceOf<T, I>, ValueQuery>;
 
 	/// Proposal indices that have been approved but not yet awarded.
 	#[pallet::storage]
@@ -314,11 +320,21 @@ pub mod pallet {
 		/// - The weight is overestimated if some approvals got missed.
 		/// # </weight>
 		fn on_initialize(n: T::BlockNumber) -> Weight {
+			let pot = Self::pot();
+			let deactivated = Inactive::<T, I>::get();
+			if pot != deactivated {
+				match (pot > deactivated, pot.max(deactivated) - pot.min(deactivated)) {
+					(true, delta) => T::Currency::deactivate(delta),
+					(false, delta) => T::Currency::reactivate(delta),
+				}
+				Inactive::<T, I>::put(&pot);
+			}
+
 			// Check to see if we should spend some funds!
 			if (n % T::SpendPeriod::get()).is_zero() {
 				Self::spend_funds()
 			} else {
-				0
+				Weight::zero()
 			}
 		}
 	}
@@ -338,7 +354,7 @@ pub mod pallet {
 		pub fn propose_spend(
 			origin: OriginFor<T>,
 			#[pallet::compact] value: BalanceOf<T, I>,
-			beneficiary: <T::Lookup as StaticLookup>::Source,
+			beneficiary: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let proposer = ensure_signed(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
@@ -419,7 +435,7 @@ pub mod pallet {
 		pub fn spend(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T, I>,
-			beneficiary: <T::Lookup as StaticLookup>::Source,
+			beneficiary: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let max_amount = T::SpendOrigin::ensure_origin(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
@@ -499,7 +515,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Spend some money! returns number of approvals before spend.
 	pub fn spend_funds() -> Weight {
-		let mut total_weight: Weight = Zero::zero();
+		let mut total_weight = Weight::zero();
 
 		let mut budget_remaining = Self::pot();
 		Self::deposit_event(Event::Spending { budget_remaining });
