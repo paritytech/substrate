@@ -31,8 +31,8 @@ use crate::{
 };
 use beefy_primitives::{
 	crypto::{AuthorityId, Signature},
-	BeefyApi, Commitment, ConsensusLog, MmrRootHash, Payload, PayloadProvider, SignedCommitment,
-	ValidatorSet, VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
+	Commitment, ConsensusLog, Payload, PayloadProvider, SignedCommitment, ValidatorSet,
+	VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
 };
 use codec::{Codec, Decode, Encode};
 use futures::{stream::Fuse, FutureExt, StreamExt};
@@ -41,10 +41,9 @@ use sc_client_api::{Backend, FinalityNotification, FinalityNotifications, Header
 use sc_network_common::service::{NetworkEventStream, NetworkRequest};
 use sc_network_gossip::GossipEngine;
 use sc_utils::notification::NotificationReceiver;
-use sp_api::{BlockId, ProvideRuntimeApi};
+use sp_api::BlockId;
 use sp_arithmetic::traits::{AtLeast32Bit, Saturating};
 use sp_consensus::SyncOracle;
-use sp_mmr_primitives::MmrApi;
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
 	traits::{Block, Header, NumberFor, Zero},
@@ -166,13 +165,13 @@ impl<B: Block> VoterOracle<B> {
 		Ok(())
 	}
 
-	/// Return current pending mandatory block, if any.
-	pub fn mandatory_pending(&self) -> Option<NumberFor<B>> {
+	/// Return current pending mandatory block, if any, plus its active validator set.
+	pub fn mandatory_pending(&self) -> Option<(NumberFor<B>, ValidatorSet<AuthorityId>)> {
 		self.sessions.front().and_then(|round| {
 			if round.mandatory_done() {
 				None
 			} else {
-				Some(round.session_start())
+				Some((round.session_start(), round.validator_set().clone()))
 			}
 		})
 	}
@@ -239,14 +238,14 @@ impl<B: Block> VoterOracle<B> {
 	}
 }
 
-pub(crate) struct WorkerParams<B: Block, BE, P, R, N> {
+pub(crate) struct WorkerParams<B: Block, BE, P, N> {
 	pub backend: Arc<BE>,
 	pub payload_provider: P,
 	pub network: N,
 	pub key_store: BeefyKeystore,
 	pub gossip_engine: GossipEngine<B>,
 	pub gossip_validator: Arc<GossipValidator<B>>,
-	pub on_demand_justifications: OnDemandJustificationsEngine<B, R>,
+	pub on_demand_justifications: OnDemandJustificationsEngine<B>,
 	pub links: BeefyVoterLinks<B>,
 	pub metrics: Option<Metrics>,
 	pub persisted_state: PersistedState<B>,
@@ -287,7 +286,7 @@ impl<B: Block> PersistedState<B> {
 }
 
 /// A BEEFY worker plays the BEEFY protocol
-pub(crate) struct BeefyWorker<B: Block, BE, P, R, N> {
+pub(crate) struct BeefyWorker<B: Block, BE, P, N> {
 	// utilities
 	backend: Arc<BE>,
 	payload_provider: P,
@@ -297,7 +296,7 @@ pub(crate) struct BeefyWorker<B: Block, BE, P, R, N> {
 	// communication
 	gossip_engine: GossipEngine<B>,
 	gossip_validator: Arc<GossipValidator<B>>,
-	on_demand_justifications: OnDemandJustificationsEngine<B, R>,
+	on_demand_justifications: OnDemandJustificationsEngine<B>,
 
 	// channels
 	/// Links between the block importer, the background voter and the RPC layer.
@@ -314,13 +313,11 @@ pub(crate) struct BeefyWorker<B: Block, BE, P, R, N> {
 	persisted_state: PersistedState<B>,
 }
 
-impl<B, BE, P, R, N> BeefyWorker<B, BE, P, R, N>
+impl<B, BE, P, N> BeefyWorker<B, BE, P, N>
 where
 	B: Block + Codec,
 	BE: Backend<B>,
 	P: PayloadProvider<B>,
-	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash, NumberFor<B>>,
 	N: NetworkEventStream + NetworkRequest + SyncOracle + Send + Sync + Clone + 'static,
 {
 	/// Return a new BEEFY worker instance.
@@ -329,7 +326,7 @@ where
 	/// BEEFY pallet has been deployed on-chain.
 	///
 	/// The BEEFY pallet is needed in order to keep track of the BEEFY authority set.
-	pub(crate) fn new(worker_params: WorkerParams<B, BE, P, R, N>) -> Self {
+	pub(crate) fn new(worker_params: WorkerParams<B, BE, P, N>) -> Self {
 		let WorkerParams {
 			backend,
 			payload_provider,
@@ -551,10 +548,15 @@ where
 				// New state is persisted after finalization.
 				self.finalize(finality_proof)?;
 			} else {
-				if self_vote || self.voting_oracle().mandatory_pending() == Some(round.1) {
-					// Persist state after handling self vote to avoid double voting in case
-					// of voter restarts.
-					// Also persist state after handling mandatory block vote.
+				let mandatory_round = self
+					.voting_oracle()
+					.mandatory_pending()
+					.map(|p| p.0 == round.1)
+					.unwrap_or(false);
+				// Persist state after handling self vote to avoid double voting in case
+				// of voter restarts.
+				// Also persist state after handling mandatory block vote.
+				if self_vote || mandatory_round {
 					crate::aux_schema::write_voter_state(&*self.backend, &self.persisted_state)
 						.map_err(|e| Error::Backend(e.to_string()))?;
 				}
@@ -784,12 +786,10 @@ where
 			}
 			// If the current target is a mandatory block,
 			// make sure there's also an on-demand justification request out for it.
-			if let Some(block) = self.voting_oracle().mandatory_pending() {
+			if let Some((block, active)) = self.voting_oracle().mandatory_pending() {
 				// This only starts new request if there isn't already an active one.
-				self.on_demand_justifications.request(block);
+				self.on_demand_justifications.request(block, active);
 			}
-		} else {
-			debug!(target: "beefy", "🥩 Skipping voting while major syncing.");
 		}
 	}
 
@@ -993,7 +993,6 @@ pub(crate) mod tests {
 		Block,
 		Backend,
 		MmrRootProvider<Block, TestApi>,
-		TestApi,
 		Arc<NetworkService<Block, H256>>,
 	> {
 		let keystore = create_beefy_keystore(*key);
@@ -1024,7 +1023,6 @@ pub(crate) mod tests {
 			GossipEngine::new(network.clone(), "/beefy/1", gossip_validator.clone(), None);
 		let on_demand_justifications = OnDemandJustificationsEngine::new(
 			network.clone(),
-			api.clone(),
 			"/beefy/justifs/1".into(),
 			known_peers,
 		);
@@ -1050,7 +1048,7 @@ pub(crate) mod tests {
 			on_demand_justifications,
 			persisted_state,
 		};
-		BeefyWorker::<_, _, _, _, _>::new(worker_params)
+		BeefyWorker::<_, _, _, _>::new(worker_params)
 	}
 
 	#[test]

@@ -162,6 +162,11 @@ pub enum BenchmarkError {
 	/// The benchmarking pipeline is allowed to fail here, and we should simply
 	/// skip processing these results.
 	Skip,
+	/// No weight can be determined; set the weight of this call to zero.
+	///
+	/// You can also use `Override` instead, but this is easier to use since `Override` expects the
+	/// correct components to be present.
+	Weightless,
 }
 
 impl From<BenchmarkError> for &'static str {
@@ -170,6 +175,7 @@ impl From<BenchmarkError> for &'static str {
 			BenchmarkError::Stop(s) => s,
 			BenchmarkError::Override(_) => "benchmark override",
 			BenchmarkError::Skip => "benchmark skip",
+			BenchmarkError::Weightless => "benchmark weightless",
 		}
 	}
 }
