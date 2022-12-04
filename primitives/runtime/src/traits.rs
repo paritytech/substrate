@@ -991,8 +991,15 @@ pub trait Checkable<Context>: Sized {
 	fn check(self, c: &Context) -> Result<Self::Checked, TransactionValidityError>;
 
 	/// Blindly check self.
+	///
+	/// ## WARNING
+	///
+	/// DO NOT USE IN PRODUCTION. This is only meant to be used in testing environments. A runtime
+	/// compiled with `try-runtime` should never be in production. Moreover, the name of this
+	/// function is deliberately chosen to prevent developers from ever calling it in consensus
+	/// code-paths.
 	#[cfg(feature = "try-runtime")]
-	fn unchecked_into_checked(self, c: &Context)
+	fn unchecked_into_checked_i_know_what_i_am_doing(self, c: &Context)
 		-> Result<Self::Checked, TransactionValidityError>;
 }
 
@@ -1017,7 +1024,7 @@ impl<T: BlindCheckable, Context> Checkable<Context> for T {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn unchecked_into_checked(
+	fn unchecked_into_checked_i_know_what_i_am_doing(
 		self,
 		_: &Context,
 	) -> Result<Self::Checked, TransactionValidityError> {

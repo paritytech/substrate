@@ -334,7 +334,7 @@ impl<Call: Codec + Sync + Send, Context, Extra> Checkable<Context> for TestXt<Ca
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn unchecked_into_checked(
+	fn unchecked_into_checked_i_know_what_i_am_doing(
 		self,
 		_: &Context,
 	) -> Result<Self::Checked, TransactionValidityError> {
