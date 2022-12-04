@@ -19,12 +19,15 @@ use crate::{BalanceOf, Config, Pallet, SeatHolder, Weight, MAXIMUM_VOTE};
 use codec::{Decode, Encode};
 use frame_support::{
 	pallet_prelude::StorageVersion,
-	traits::{ConstU32, GetStorageVersion, OnRuntimeUpgrade},
+	traits::{ConstU32, OnRuntimeUpgrade},
 	BoundedVec, RuntimeDebug,
 };
 use sp_core::Get;
 use sp_runtime::Saturating;
 use sp_std::prelude::*;
+
+#[cfg(feature = "try-runtime")]
+use frame_support::traits::GetStorageVersion;
 
 #[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq)]
 struct DeprecatedVoter<AccountId, Balance> {
