@@ -44,7 +44,7 @@ pub mod test_utils;
 use std::{marker::PhantomData, sync::Arc};
 
 use futures::StreamExt;
-use log::{debug, error, trace, warn};
+use log::{error, trace, warn};
 
 use sc_client_api::{Backend, BlockchainEvents, FinalityNotifications};
 use sc_offchain::OffchainDb;
@@ -110,13 +110,16 @@ where
 					}
 				},
 				_ => {
-					trace!(target: LOG_TARGET, "Finality notification: {:?}", notification);
-					debug!(target: LOG_TARGET, "Waiting for MMR pallet to become available ...");
+					trace!(
+						target: LOG_TARGET,
+						"Waiting for MMR pallet to become available... (best finalized {:?})",
+						notification.header.number()
+					);
 				},
 			}
 		}
 
-		warn!(
+		error!(
 			target: LOG_TARGET,
 			"Finality notifications stream closed unexpectedly. \
 			Couldn't build the canonicalization engine",
