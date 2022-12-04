@@ -1329,7 +1329,7 @@ pub mod pallet {
 	pub type ReversePoolIdLookup<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, PoolId, OptionQuery>;
 
-	/// ?
+	/// Reward claim Permissions
 	#[pallet::storage]
 	pub type ClaimableAction<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, RewardClaim, ValueQuery>;
@@ -2179,7 +2179,7 @@ pub mod pallet {
 		/// # Account
 		///
 		/// `Origin`
-		/// `Permisionless`
+		/// `Permissionless`
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn set_reward_claim(origin: OriginFor<T>, actor: RewardClaim) -> DispatchResult {
 			let who = ensure_signed(origin)?;
