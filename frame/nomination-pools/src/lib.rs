@@ -411,16 +411,16 @@ enum AccountType {
 	Reward,
 }
 
-// Account to increse the bond of a member
+// Account to bond pending reward of a member
 #[derive(Encode, Decode, MaxEncodedLen, Clone, Copy, Debug, PartialEq, Eq, TypeInfo)]
-pub enum BondExtraSource {
-	// Action to be taken by the bonded member of a pool
+pub enum RewardClaim {
+	/// Only `origin` i.e. the pool member themself can claim their reward.
 	Origin,
-	// Action to be taken by anyone on the member's behalf
-	Open,
+	/// Anyone can claim the reward of this member.
+	Permissionless,
 }
 
-impl Default for BondExtraSource {
+impl Default for RewardClaim {
 	fn default() -> Self {
 		Self::Origin
 	}
@@ -1331,7 +1331,8 @@ pub mod pallet {
 
 	/// ?
 	#[pallet::storage]
-	pub type ClaimableAction<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, BondExtraSource, ValueQuery>;
+	pub type ClaimableAction<T: Config> =
+		StorageMap<_, Twox64Concat, T::AccountId, RewardClaim, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -1618,13 +1619,15 @@ pub mod pallet {
 			Ok(())
 		}
 
-		// TODO: Update Weight info
+		/// Bond pending rewards of `member_account` from any AccountId
+		/// into the pool they already belong.
+		/// member_account must `set_reward_claim` to `RewardClaim::Permissionless`.
 		#[pallet::weight(
 			T::WeightInfo::bond_extra_transfer()
 			.max(T::WeightInfo::bond_extra_reward())
 		)]
-		pub fn bond_extra_other(
-			origin: OriginFor<T>, 
+		pub fn bond_extra_pending_rewards_other(
+			origin: OriginFor<T>,
 			member_account: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			ensure_signed(origin)?;
@@ -1632,17 +1635,17 @@ pub mod pallet {
 			let (mut member, mut bonded_pool, mut reward_pool) =
 				Self::get_member_with_pools(&member_account)?;
 
-			ensure!(ClaimableAction::<T>::get(&member_account) == BondExtraSource::Open, Error::<T>::DoesNotHavePermission);
+			ensure!(
+				ClaimableAction::<T>::get(&member_account) == RewardClaim::Permissionless,
+				Error::<T>::DoesNotHavePermission
+			);
 
-			// IMPORTANT: reward pool records must be updated with the old points.
 			reward_pool.update_records(bonded_pool.id, bonded_pool.points)?;
+			ensure!(!member.active_points().is_zero(), Error::<T>::FullyUnbonding);
 
-		    // A member who has no skin in the game anymore cannot claim any rewards.
-		    ensure!(!member.active_points().is_zero(), Error::<T>::FullyUnbonding);
-
-		    let current_reward_counter = 
+			let current_reward_counter =
 				reward_pool.current_reward_counter(bonded_pool.id, bonded_pool.points)?;
-		    let pending_rewards = member.pending_rewards(current_reward_counter)?;
+			let pending_rewards = member.pending_rewards(current_reward_counter)?;
 
 			if !pending_rewards.is_zero() {
 				member.last_recorded_reward_counter = current_reward_counter;
@@ -1650,12 +1653,12 @@ pub mod pallet {
 			}
 
 			let points_issued = bonded_pool.try_bond_funds(
-				&bonded_pool.reward_account(), 
-				pending_rewards, 
-				BondType::Later
+				&bonded_pool.reward_account(),
+				pending_rewards,
+				BondType::Later,
 			)?;
 
-		    bonded_pool.ok_to_be_open()?;
+			bonded_pool.ok_to_be_open()?;
 			member.points = member.points.saturating_add(points_issued);
 
 			Self::deposit_event(Event::<T>::Bonded {
@@ -1780,6 +1783,7 @@ pub mod pallet {
 			// Now that we know everything has worked write the items to storage.
 			SubPoolsStorage::insert(&member.pool_id, sub_pools);
 			Self::put_member_with_pools(&member_account, member, bonded_pool, reward_pool);
+			<ClaimableAction<T>>::remove(member_account);
 
 			Ok(())
 		}
@@ -2170,14 +2174,19 @@ pub mod pallet {
 			T::Staking::chill(&bonded_pool.bonded_account())
 		}
 
-		// TODO: Update weight info
+		/// Pool Member set reward claim permission
+		///
+		/// # Account
+		///
+		/// `Origin`
+		/// `Permisionless`
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
-		pub fn set_claimable_actor(origin: OriginFor<T>, actor: BondExtraSource) -> DispatchResult {
+		pub fn set_reward_claim(origin: OriginFor<T>, actor: RewardClaim) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			ensure!(PoolMembers::<T>::contains_key(&who), Error::<T>::PoolMemberNotFound);
-			<ClaimableAction::<T>>::mutate(who, |source| {
-				*source = actor;	
+			<ClaimableAction<T>>::mutate(who, |source| {
+				*source = actor;
 			});
 			Ok(())
 		}
