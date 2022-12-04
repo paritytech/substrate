@@ -17,7 +17,7 @@ parking_lot = "0.12.1"
 serde = { version = "1.0.136", features = ["derive"] }
 thiserror = "1.0"
 beefy-gadget = { version = "4.0.0-dev", path = "../." }
-beefy-primitives = { version = "4.0.0-dev", path = "../../../primitives/beefy" }
+beefy-primitives = { version = "4.0.0-dev", path = "../../../primitives/beefy", package = "sp-beefy" }
 sc-rpc = { version = "4.0.0-dev", path = "../../rpc" }
 sc-utils = { version = "4.0.0-dev", path = "../../utils" }
 sp-core = { version = "7.0.0", path = "../../../primitives/core" }

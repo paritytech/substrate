@@ -445,7 +445,6 @@ version = "4.0.0-dev"
 dependencies = [
  "array-bytes",
  "async-trait",
- "beefy-primitives",
  "fnv",
  "futures",
  "futures-timer",
@@ -467,6 +466,7 @@ dependencies = [
  "sp-api",
  "sp-application-crypto",
  "sp-arithmetic",
+ "sp-beefy",
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
@@ -490,7 +490,6 @@ name = "beefy-gadget-rpc"
 version = "4.0.0-dev"
 dependencies = [
  "beefy-gadget",
- "beefy-primitives",
  "futures",
  "jsonrpsee",
  "log",
@@ -500,6 +499,7 @@ dependencies = [
  "sc-utils",
  "serde",
  "serde_json",
+ "sp-beefy",
  "sp-core",
  "sp-runtime",
  "substrate-test-runtime-client",
@@ -512,29 +512,11 @@ name = "beefy-merkle-tree"
 version = "4.0.0-dev"
 dependencies = [
  "array-bytes",
- "beefy-primitives",
  "env_logger",
  "log",
  "sp-api",
+ "sp-beefy",
  "sp-runtime",
-]
-
-[[package]]
-name = "beefy-primitives"
-version = "4.0.0-dev"
-dependencies = [
- "array-bytes",
- "parity-scale-codec",
- "scale-info",
- "serde",
- "sp-api",
- "sp-application-crypto",
- "sp-core",
- "sp-io",
- "sp-keystore",
- "sp-mmr-primitives",
- "sp-runtime",
- "sp-std",
 ]
 
 [[package]]
@@ -4235,7 +4217,6 @@ name = "mmr-gadget"
 version = "4.0.0-dev"
 dependencies = [
  "async-std",
- "beefy-primitives",
  "futures",
  "log",
  "parity-scale-codec",
@@ -4243,6 +4224,7 @@ dependencies = [
  "sc-client-api",
  "sc-offchain",
  "sp-api",
+ "sp-beefy",
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
@@ -5214,7 +5196,7 @@ dependencies = [
  "log",
  "pallet-bags-list",
  "pallet-staking",
- "remote-externalities",
+ "remote-ext",
  "sp-core",
  "sp-runtime",
  "sp-std",
@@ -5243,13 +5225,13 @@ dependencies = [
 name = "pallet-beefy"
 version = "4.0.0-dev"
 dependencies = [
- "beefy-primitives",
  "frame-support",
  "frame-system",
  "pallet-session",
  "parity-scale-codec",
  "scale-info",
  "serde",
+ "sp-beefy",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -5263,7 +5245,6 @@ version = "4.0.0-dev"
 dependencies = [
  "array-bytes",
  "beefy-merkle-tree",
- "beefy-primitives",
  "frame-support",
  "frame-system",
  "log",
@@ -5273,6 +5254,7 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
+ "sp-beefy",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -6187,7 +6169,7 @@ dependencies = [
  "pallet-balances",
  "parity-scale-codec",
  "parking_lot 0.12.1",
- "remote-externalities",
+ "remote-ext",
  "scale-info",
  "serde",
  "sp-core",
@@ -7284,7 +7266,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "remote-externalities"
+name = "remote-ext"
 version = "0.10.0-dev"
 dependencies = [
  "env_logger",
@@ -9430,6 +9412,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-beefy"
+version = "4.0.0-dev"
+dependencies = [
+ "array-bytes",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-api",
+ "sp-application-crypto",
+ "sp-core",
+ "sp-io",
+ "sp-keystore",
+ "sp-mmr-primitives",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "sp-block-builder"
 version = "4.0.0-dev"
 dependencies = [
@@ -10425,7 +10425,6 @@ name = "substrate-test-runtime"
 version = "2.0.0"
 dependencies = [
  "beefy-merkle-tree",
- "beefy-primitives",
  "cfg-if",
  "frame-support",
  "frame-system",
@@ -10444,6 +10443,7 @@ dependencies = [
  "serde",
  "sp-api",
  "sp-application-crypto",
+ "sp-beefy",
  "sp-block-builder",
  "sp-consensus",
  "sp-consensus-aura",
@@ -11055,7 +11055,7 @@ dependencies = [
  "frame-try-runtime",
  "log",
  "parity-scale-codec",
- "remote-externalities",
+ "remote-ext",
  "sc-chain-spec",
  "sc-cli",
  "sc-executor",
