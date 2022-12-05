@@ -13,7 +13,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 futures = "0.3.16"
-tokio = { version = "1.17.0", features = ["macros", "time"] }
+tokio = { version = "1.22.0", features = ["macros", "time"] }
 substrate-test-utils-derive = { version = "0.10.0-dev", path = "./derive" }
 
 [dev-dependencies]

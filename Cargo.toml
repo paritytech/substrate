@@ -101,7 +101,7 @@ members = [
 	"frame/examples/basic",
 	"frame/examples/offchain-worker",
 	"frame/executive",
-	"frame/gilt",
+	"frame/nis",
 	"frame/grandpa",
 	"frame/identity",
 	"frame/im-online",
