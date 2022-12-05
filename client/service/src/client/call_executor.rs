@@ -37,7 +37,6 @@ pub struct LocalCallExecutor<Block: BlockT, B, E> {
 	wasm_override: Arc<Option<WasmOverride>>,
 	wasm_substitutes: WasmSubstitutes<Block, E, B>,
 	spawn_handle: Box<dyn SpawnNamed>,
-	client_config: ClientConfig<Block>,
 	execution_extensions: Arc<ExecutionExtensions<Block>>,
 }
 
@@ -61,7 +60,7 @@ where
 			.transpose()?;
 
 		let wasm_substitutes = WasmSubstitutes::new(
-			client_config.wasm_runtime_substitutes.clone(),
+			client_config.wasm_runtime_substitutes,
 			executor.clone(),
 			backend.clone(),
 		)?;
@@ -71,7 +70,6 @@ where
 			executor,
 			wasm_override: Arc::new(wasm_override),
 			spawn_handle,
-			client_config,
 			wasm_substitutes,
 			execution_extensions: Arc::new(execution_extensions),
 		})
@@ -125,7 +123,6 @@ where
 			executor: self.executor.clone(),
 			wasm_override: self.wasm_override.clone(),
 			spawn_handle: self.spawn_handle.clone(),
-			client_config: self.client_config.clone(),
 			wasm_substitutes: self.wasm_substitutes.clone(),
 			execution_extensions: self.execution_extensions.clone(),
 		}
@@ -353,6 +350,7 @@ mod tests {
 		traits::{FetchRuntimeCode, WrappedRuntimeCode},
 	};
 	use substrate_test_runtime_client::{runtime, GenesisInit, LocalExecutorDispatch};
+	use std::collections::HashMap;
 
 	#[test]
 	fn should_get_override_if_exists() {
@@ -372,10 +370,6 @@ mod tests {
 		};
 
 		let backend = Arc::new(in_mem::Backend::<runtime::Block>::new());
-
-		// wasm_runtime_overrides is `None` here because we construct the
-		// LocalCallExecutor directly later on
-		let client_config = ClientConfig::default();
 
 		// client is used for the convenience of creating and inserting the genesis block.
 		let _client = substrate_test_runtime_client::client::new_with_backend::<
@@ -401,7 +395,6 @@ mod tests {
 			executor: executor.clone(),
 			wasm_override: Arc::new(Some(overrides)),
 			spawn_handle: Box::new(TaskExecutor::new()),
-			client_config,
 			wasm_substitutes: WasmSubstitutes::new(
 				Default::default(),
 				executor.clone(),
@@ -420,5 +413,57 @@ mod tests {
 			.expect("RuntimeCode override");
 
 		assert_eq!(Some(vec![2, 2, 2, 2, 2, 2, 2, 2]), check.fetch_runtime_code().map(Into::into));
+	}
+
+	#[test]
+	fn returns_runtime_version_from_substitute() {
+		const SUBSTITUTE_SPEC_NAME: &str = "substitute-spec-name-cool";
+
+		let executor = NativeElseWasmExecutor::<LocalExecutorDispatch>::new(
+			WasmExecutionMethod::Interpreted,
+			Some(128),
+			1,
+			2,
+		);
+
+		let backend = Arc::new(in_mem::Backend::<runtime::Block>::new());
+
+		// Let's only override the `spec_name` for our testing purposes.
+		let substitute = sp_version::embed::embed_runtime_version(
+			&substrate_test_runtime::WASM_BINARY_BLOATY.unwrap(),
+			sp_version::RuntimeVersion {
+				spec_name: SUBSTITUTE_SPEC_NAME.into(),
+				..substrate_test_runtime::VERSION
+			},
+		)
+		.unwrap();
+
+		let client_config = substrate_test_runtime_client::client::ClientConfig {
+			wasm_runtime_substitutes:vec![(0, substitute)].into_iter().collect::<HashMap<_, _>>(),
+			..Default::default()
+		};
+
+		// client is used for the convenience of creating and inserting the genesis block.
+		let client = substrate_test_runtime_client::client::new_with_backend::<
+			_,
+			_,
+			runtime::Block,
+			_,
+			runtime::RuntimeApi,
+		>(
+			backend.clone(),
+			executor.clone(),
+			&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
+			None,
+			Box::new(TaskExecutor::new()),
+			None,
+			None,
+			client_config,
+		)
+		.expect("Creates a client");
+
+		let version = client.runtime_version_at(&BlockId::Number(0)).unwrap();
+
+		assert_eq!(SUBSTITUTE_SPEC_NAME, &*version.spec_name);
 	}
 }
