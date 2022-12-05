@@ -31,7 +31,6 @@ use std::{
 	time::Duration,
 };
 
-use async_std::future::timeout;
 use futures::{future::BoxFuture, prelude::*};
 use libp2p::{build_multiaddr, PeerId};
 use log::trace;
@@ -85,6 +84,7 @@ pub use substrate_test_runtime_client::{
 	runtime::{Block, Extrinsic, Hash, Transfer},
 	TestClient, TestClientBuilder, TestClientBuilderExt,
 };
+use tokio::time::timeout;
 
 type AuthorityId = sp_consensus_babe::AuthorityId;
 
@@ -708,7 +708,16 @@ pub struct FullPeerConfig {
 	pub storage_chain: bool,
 }
 
-pub trait TestNetFactory: Default + Sized
+/// Trait for text fixtures with tokio runtime.
+pub trait WithRuntime {
+	/// Construct with runtime handle.
+	fn with_runtime(rt_handle: tokio::runtime::Handle) -> Self;
+	/// Get runtime handle.
+	fn rt_handle(&self) -> &tokio::runtime::Handle;
+}
+
+#[async_trait::async_trait]
+pub trait TestNetFactory: WithRuntime + Sized
 where
 	<Self::BlockImport as BlockImport<Block>>::Transaction: Send,
 {
@@ -738,9 +747,9 @@ where
 	);
 
 	/// Create new test network with this many peers.
-	fn new(n: usize) -> Self {
+	fn new(rt_handle: tokio::runtime::Handle, n: usize) -> Self {
 		trace!(target: "test_network", "Creating test network");
-		let mut net = Self::default();
+		let mut net = Self::with_runtime(rt_handle);
 
 		for i in 0..n {
 			trace!(target: "test_network", "Adding peer {}", i);
@@ -894,9 +903,14 @@ where
 		)
 		.unwrap();
 
+		let handle = self.rt_handle().clone();
+		let executor = move |f| {
+			handle.spawn(f);
+		};
+
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: if config.is_authority { Role::Authority } else { Role::Full },
-			executor: None,
+			executor: Box::new(executor),
 			network_config,
 			chain: client.clone(),
 			protocol_id,
@@ -919,7 +933,7 @@ where
 		trace!(target: "test_network", "Peer identifier: {}", network.service().local_peer_id());
 
 		let service = network.service().clone();
-		async_std::task::spawn(async move {
+		self.rt_handle().spawn(async move {
 			chain_sync_network_provider.run(service).await;
 		});
 
@@ -950,7 +964,7 @@ where
 
 	/// Used to spawn background tasks, e.g. the block request protocol handler.
 	fn spawn_task(&self, f: BoxFuture<'static, ()>) {
-		async_std::task::spawn(f);
+		self.rt_handle().spawn(f);
 	}
 
 	/// Polls the testnet until all nodes are in sync.
@@ -1009,34 +1023,31 @@ where
 		Poll::Pending
 	}
 
-	/// Blocks the current thread until we are sync'ed.
+	/// Wait until we are sync'ed.
 	///
 	/// Calls `poll_until_sync` repeatedly.
 	/// (If we've not synced within 10 mins then panic rather than hang.)
-	fn block_until_sync(&mut self) {
-		futures::executor::block_on(timeout(
+	async fn wait_until_sync(&mut self) {
+		timeout(
 			Duration::from_secs(10 * 60),
 			futures::future::poll_fn::<(), _>(|cx| self.poll_until_sync(cx)),
-		))
+		)
+		.await
 		.expect("sync didn't happen within 10 mins");
 	}
 
-	/// Blocks the current thread until there are no pending packets.
+	/// Wait until there are no pending packets.
 	///
 	/// Calls `poll_until_idle` repeatedly with the runtime passed as parameter.
-	fn block_until_idle(&mut self) {
-		futures::executor::block_on(futures::future::poll_fn::<(), _>(|cx| {
-			self.poll_until_idle(cx)
-		}));
+	async fn wait_until_idle(&mut self) {
+		futures::future::poll_fn::<(), _>(|cx| self.poll_until_idle(cx)).await;
 	}
 
-	/// Blocks the current thread until all peers are connected to each other.
+	/// Wait until all peers are connected to each other.
 	///
 	/// Calls `poll_until_connected` repeatedly with the runtime passed as parameter.
-	fn block_until_connected(&mut self) {
-		futures::executor::block_on(futures::future::poll_fn::<(), _>(|cx| {
-			self.poll_until_connected(cx)
-		}));
+	async fn wait_until_connected(&mut self) {
+		futures::future::poll_fn::<(), _>(|cx| self.poll_until_connected(cx)).await;
 	}
 
 	/// Polls the testnet. Processes all the pending actions.
@@ -1067,9 +1078,18 @@ where
 	}
 }
 
-#[derive(Default)]
 pub struct TestNet {
+	rt_handle: tokio::runtime::Handle,
 	peers: Vec<Peer<(), PeersClient>>,
+}
+
+impl WithRuntime for TestNet {
+	fn with_runtime(rt_handle: tokio::runtime::Handle) -> Self {
+		TestNet { rt_handle, peers: Vec::new() }
+	}
+	fn rt_handle(&self) -> &tokio::runtime::Handle {
+		&self.rt_handle
+	}
 }
 
 impl TestNetFactory for TestNet {
@@ -1126,9 +1146,16 @@ impl JustificationImport<Block> for ForceFinalized {
 			.map_err(|_| ConsensusError::InvalidJustification)
 	}
 }
-
-#[derive(Default)]
 pub struct JustificationTestNet(TestNet);
+
+impl WithRuntime for JustificationTestNet {
+	fn with_runtime(rt_handle: tokio::runtime::Handle) -> Self {
+		JustificationTestNet(TestNet::with_runtime(rt_handle))
+	}
+	fn rt_handle(&self) -> &tokio::runtime::Handle {
+		&self.0.rt_handle()
+	}
+}
 
 impl TestNetFactory for JustificationTestNet {
 	type Verifier = PassThroughVerifier;
