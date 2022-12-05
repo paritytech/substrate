@@ -343,14 +343,14 @@ impl TestNetworkBuilder {
 		self.rt_handle.spawn(async move {
 			let _ = chain_sync_network_provider.run(service).await;
 		});
-		async_std::task::spawn(async move {
+		self.rt_handle.spawn(async move {
 			loop {
 				futures::future::poll_fn(|cx| {
 					import_queue.poll_actions(cx, &mut *link);
 					std::task::Poll::Ready(())
 				})
 				.await;
-				async_std::task::sleep(std::time::Duration::from_millis(250)).await;
+				tokio::time::sleep(std::time::Duration::from_millis(250)).await;
 			}
 		});
 

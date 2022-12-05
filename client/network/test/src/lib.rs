@@ -937,7 +937,7 @@ where
 		self.rt_handle().spawn(async move {
 			chain_sync_network_provider.run(service).await;
 		});
-		async_std::task::spawn(async move {
+		self.rt_handle().spawn(async move {
 			import_queue.run(Box::new(chain_sync_service)).await;
 		});
 
