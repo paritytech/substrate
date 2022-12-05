@@ -205,51 +205,51 @@ default:
 
 #### stage:                       .pre
 
-skip-if-draft:
-  extends:                         .kubernetes-env
-  variables:
-    CI_IMAGE:                      "paritytech/tools:latest"
-  stage:                           .pre
-  rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
-  script:
-     - echo "Commit message is ${CI_COMMIT_MESSAGE}"
-     - echo "Ref is ${CI_COMMIT_REF_NAME}"
-     - echo "pipeline source is ${CI_PIPELINE_SOURCE}"
-     - ./scripts/ci/gitlab/skip_if_draft.sh
-  allow_failure:                   true
+#skip-if-draft:
+#  extends:                         .kubernetes-env
+#  variables:
+#    CI_IMAGE:                      "paritytech/tools:latest"
+#  stage:                           .pre
+#  rules:
+#    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+#  script:
+#     - echo "Commit message is ${CI_COMMIT_MESSAGE}"
+#     - echo "Ref is ${CI_COMMIT_REF_NAME}"
+#     - echo "pipeline source is ${CI_PIPELINE_SOURCE}"
+#     - ./scripts/ci/gitlab/skip_if_draft.sh
+#  allow_failure:                   true
 
 include:
   # check jobs
-  - scripts/ci/gitlab/pipeline/check.yml
+  #- scripts/ci/gitlab/pipeline/check.yml
   # tests jobs
-  - scripts/ci/gitlab/pipeline/test.yml
+  #- scripts/ci/gitlab/pipeline/test.yml
   # build jobs
   - scripts/ci/gitlab/pipeline/build.yml
   # publish jobs
-  - scripts/ci/gitlab/pipeline/publish.yml
+  #- scripts/ci/gitlab/pipeline/publish.yml
 
 #### stage:                        deploy
 
-deploy-prometheus-alerting-rules:
-  stage:                           deploy
-  needs:
-    - job:                         test-prometheus-alerting-rules
-      artifacts:                   false
-  allow_failure:                   true
-  trigger:
-    project:  parity/infrastructure/cloud-infra
-  variables:
-    SUBSTRATE_CI_COMMIT_NAME:       "${CI_COMMIT_REF_NAME}"
-    SUBSTRATE_CI_COMMIT_REF:        "${CI_COMMIT_SHORT_SHA}"
-    UPSTREAM_TRIGGER_PROJECT:       "${CI_PROJECT_PATH}"
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "pipeline"
-      when: never
-    - if: $CI_COMMIT_REF_NAME == "master"
-      changes:
-        - .gitlab-ci.yml
-        - ./scripts/ci/monitoring/**/*
+#deploy-prometheus-alerting-rules:
+#  stage:                           deploy
+#  needs:
+#    - job:                         test-prometheus-alerting-rules
+#      artifacts:                   false
+#  allow_failure:                   true
+#  trigger:
+#    project:  parity/infrastructure/cloud-infra
+#  variables:
+#    SUBSTRATE_CI_COMMIT_NAME:       "${CI_COMMIT_REF_NAME}"
+#    SUBSTRATE_CI_COMMIT_REF:        "${CI_COMMIT_SHORT_SHA}"
+#    UPSTREAM_TRIGGER_PROJECT:       "${CI_PROJECT_PATH}"
+#  rules:
+#    - if: $CI_PIPELINE_SOURCE == "pipeline"
+#      when: never
+#    - if: $CI_COMMIT_REF_NAME == "master"
+#      changes:
+#        - .gitlab-ci.yml
+#        - ./scripts/ci/monitoring/**/*
 
 #### stage:                        notify
 
@@ -305,52 +305,52 @@ remove-cancel-pipeline-message:
 
 # need to copy jobs this way because otherwise gitlab will wait
 # for all 3 jobs to finish instead of cancelling if one fails
-cancel-pipeline-test-linux-stable1:
-  extends:                         .cancel-pipeline-template
-  needs:
-    - job:                         "test-linux-stable 1/3"
-
-cancel-pipeline-test-linux-stable2:
-  extends:                         .cancel-pipeline-template
-  needs:
-    - job:                         "test-linux-stable 2/3"
-
-cancel-pipeline-test-linux-stable3:
-  extends:                         .cancel-pipeline-template
-  needs:
-    - job:                         "test-linux-stable 3/3"
-
-cancel-pipeline-cargo-check-benches1:
-  extends:                         .cancel-pipeline-template
-  needs:
-    - job:                         "cargo-check-benches 1/2"
-
-cancel-pipeline-cargo-check-benches2:
-  extends:                         .cancel-pipeline-template
-  needs:
-    - job:                         "cargo-check-benches 2/2"
-
-cancel-pipeline-test-linux-stable-int:
-  extends:                         .cancel-pipeline-template
-  needs:
-    - job:                         test-linux-stable-int
-
-cancel-pipeline-cargo-check-each-crate-1:
-  extends:                         .cancel-pipeline-template
-  needs:
-    - job:                         "cargo-check-each-crate 1/2"
-
-cancel-pipeline-cargo-check-each-crate-2:
-  extends:                         .cancel-pipeline-template
-  needs:
-    - job:                         "cargo-check-each-crate 2/2"
-
-cancel-pipeline-cargo-check-each-crate-macos:
-  extends:                         .cancel-pipeline-template
-  needs:
-    - job:                         cargo-check-each-crate-macos
-
-cancel-pipeline-check-tracing:
-  extends:                         .cancel-pipeline-template
-  needs:
-    - job:                         check-tracing
+#cancel-pipeline-test-linux-stable1:
+#  extends:                         .cancel-pipeline-template
+#  needs:
+#    - job:                         "test-linux-stable 1/3"
+#
+#cancel-pipeline-test-linux-stable2:
+#  extends:                         .cancel-pipeline-template
+#  needs:
+#    - job:                         "test-linux-stable 2/3"
+#
+#cancel-pipeline-test-linux-stable3:
+#  extends:                         .cancel-pipeline-template
+#  needs:
+#    - job:                         "test-linux-stable 3/3"
+#
+#cancel-pipeline-cargo-check-benches1:
+#  extends:                         .cancel-pipeline-template
+#  needs:
+#    - job:                         "cargo-check-benches 1/2"
+#
+#cancel-pipeline-cargo-check-benches2:
+#  extends:                         .cancel-pipeline-template
+#  needs:
+#    - job:                         "cargo-check-benches 2/2"
+#
+#cancel-pipeline-test-linux-stable-int:
+#  extends:                         .cancel-pipeline-template
+#  needs:
+#    - job:                         test-linux-stable-int
+#
+#cancel-pipeline-cargo-check-each-crate-1:
+#  extends:                         .cancel-pipeline-template
+#  needs:
+#    - job:                         "cargo-check-each-crate 1/2"
+#
+#cancel-pipeline-cargo-check-each-crate-2:
+#  extends:                         .cancel-pipeline-template
+#  needs:
+#    - job:                         "cargo-check-each-crate 2/2"
+#
+#cancel-pipeline-cargo-check-each-crate-macos:
+#  extends:                         .cancel-pipeline-template
+#  needs:
+#    - job:                         cargo-check-each-crate-macos
+#
+#cancel-pipeline-check-tracing:
+#  extends:                         .cancel-pipeline-template
+#  needs:
+#    - job:                         check-tracing
