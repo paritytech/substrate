@@ -409,7 +409,7 @@ impl Curve {
 	}
 
 	/// Determine the `y` value for the given `x` value.
-	pub(crate) fn threshold(&self, x: Perbill) -> Perbill {
+	pub fn threshold(&self, x: Perbill) -> Perbill {
 		match self {
 			Self::LinearDecreasing { length, floor, ceil } =>
 				*ceil - (x.min(*length).saturating_div(*length, Down) * (*ceil - *floor)),

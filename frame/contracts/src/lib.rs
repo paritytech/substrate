@@ -326,10 +326,24 @@ pub mod pallet {
 		/// The maximum length of a contract code in bytes. This limit applies to the instrumented
 		/// version of the code. Therefore `instantiate_with_code` can fail even when supplying
 		/// a wasm binary below this maximum size.
+		#[pallet::constant]
 		type MaxCodeLen: Get<u32>;
 
 		/// The maximum allowable length in bytes for storage keys.
+		#[pallet::constant]
 		type MaxStorageKeyLen: Get<u32>;
+
+		/// Make contract callable functions marked as `#[unstable]` available.
+		///
+		/// Contracts that use `#[unstable]` functions won't be able to be uploaded unless
+		/// this is set to `true`. This is only meant for testnets and dev nodes in order to
+		/// experiment with new features.
+		///
+		/// # Warning
+		///
+		/// Do **not** set to `true` on productions chains.
+		#[pallet::constant]
+		type UnsafeUnstableInterface: Get<bool>;
 	}
 
 	#[pallet::hooks]

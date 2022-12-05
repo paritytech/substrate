@@ -755,8 +755,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		when: T::BlockNumber,
 	) -> Option<(T::BlockNumber, ScheduleAddressOf<T, I>)> {
 		let alarm_interval = T::AlarmInterval::get().max(One::one());
-		let when = when.saturating_add(alarm_interval).saturating_sub(One::one()) /
-			(alarm_interval.saturating_mul(alarm_interval)).max(One::one());
+		// Alarm must go off no earlier than `when`.
+		// This rounds `when` upwards to the next multiple of `alarm_interval`.
+		let when = (when.saturating_add(alarm_interval.saturating_sub(One::one())) /
+			alarm_interval)
+			.saturating_mul(alarm_interval);
 		let maybe_result = T::Scheduler::schedule(
 			DispatchTime::At(when),
 			None,
@@ -863,9 +866,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// Set an alarm call for the next block to nudge the track along.
 		let now = frame_system::Pallet::<T>::block_number();
 		let next_block = now + One::one();
-		let alarm_interval = T::AlarmInterval::get().max(One::one());
-		let when = (next_block + alarm_interval - One::one()) / alarm_interval * alarm_interval;
-
 		let call = match T::Preimages::bound(CallOf::<T, I>::from(Call::one_fewer_deciding {
 			track,
 		})) {
@@ -875,19 +875,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				return
 			},
 		};
-		let maybe_result = T::Scheduler::schedule(
-			DispatchTime::At(when),
-			None,
-			128u8,
-			frame_system::RawOrigin::Root.into(),
-			call,
-		);
-		debug_assert!(
-			maybe_result.is_ok(),
-			"Unable to schedule a new alarm at #{:?} (now: #{:?})?!",
-			when,
-			now
-		);
+		Self::set_alarm(call, next_block);
 	}
 
 	/// Ensure that a `service_referendum` alarm happens for the referendum `index` at `alarm`.

@@ -64,7 +64,7 @@ where
 struct EmptyEnv;
 
 impl Environment<()> for EmptyEnv {
-	fn define(_store: &mut Store<()>, _linker: &mut Linker<()>) -> Result<(), LinkerError> {
+	fn define(_: &mut Store<()>, _: &mut Linker<()>, _: bool) -> Result<(), LinkerError> {
 		Ok(())
 	}
 }
