@@ -66,9 +66,8 @@ where
 	/// Assigned role for our node (full, light, ...).
 	pub role: Role,
 
-	/// How to spawn background tasks. If you pass `None`, then a threads pool will be used by
-	/// default.
-	pub executor: Option<Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>>,
+	/// How to spawn background tasks.
+	pub executor: Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>,
 
 	/// Network layer configuration.
 	pub network_config: NetworkConfiguration,

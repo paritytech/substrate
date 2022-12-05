@@ -357,10 +357,13 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] bounty_id: BountyIndex,
 		) -> DispatchResult {
-			T::ApproveOrigin::ensure_origin(origin)?;
-
+			let max_amount = T::SpendOrigin::ensure_origin(origin)?;
 			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
+				ensure!(
+					bounty.value <= max_amount,
+					pallet_treasury::Error::<T, I>::InsufficientPermission
+				);
 				ensure!(bounty.status == BountyStatus::Proposed, Error::<T, I>::UnexpectedStatus);
 
 				bounty.status = BountyStatus::Approved;
@@ -387,11 +390,15 @@ pub mod pallet {
 			curator: AccountIdLookupOf<T>,
 			#[pallet::compact] fee: BalanceOf<T, I>,
 		) -> DispatchResult {
-			T::ApproveOrigin::ensure_origin(origin)?;
+			let max_amount = T::SpendOrigin::ensure_origin(origin)?;
 
 			let curator = T::Lookup::lookup(curator)?;
 			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
+				ensure!(
+					bounty.value <= max_amount,
+					pallet_treasury::Error::<T, I>::InsufficientPermission
+				);
 				match bounty.status {
 					BountyStatus::Funded => {},
 					_ => return Err(Error::<T, I>::UnexpectedStatus.into()),

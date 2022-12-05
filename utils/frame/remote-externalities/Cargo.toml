@@ -26,7 +26,7 @@ sp-version = { version = "5.0.0", path = "../../../primitives/version" }
 substrate-rpc-client = { path = "../rpc/client" }
 
 [dev-dependencies]
-tokio = { version = "1.17.0", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.22.0", features = ["macros", "rt-multi-thread"] }
 frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
 pallet-elections-phragmen = { version = "5.0.0-dev", path = "../../../frame/elections-phragmen" }
 

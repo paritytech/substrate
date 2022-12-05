@@ -947,7 +947,7 @@ pub(crate) mod tests {
 		BeefyRPCLinks, KnownPeers,
 	};
 	use beefy_primitives::{known_payloads, mmr::MmrRootProvider};
-	use futures::{executor::block_on, future::poll_fn, task::Poll};
+	use futures::{future::poll_fn, task::Poll};
 	use parking_lot::Mutex;
 	use sc_client_api::{Backend as BackendT, HeaderBackend};
 	use sc_network::NetworkService;
@@ -959,6 +959,7 @@ pub(crate) mod tests {
 		runtime::{Block, Digest, DigestItem, Header, H256},
 		Backend,
 	};
+	use tokio::runtime::Runtime;
 
 	impl<B: super::Block> PersistedState<B> {
 		pub fn voting_oracle(&self) -> &VoterOracle<B> {
@@ -1274,7 +1275,8 @@ pub(crate) mod tests {
 	fn keystore_vs_validator_set() {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-		let mut net = BeefyTestNet::new(1);
+		let runtime = Runtime::new().unwrap();
+		let mut net = BeefyTestNet::new(runtime.handle().clone(), 1);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
 
 		// keystore doesn't contain other keys than validators'
@@ -1297,7 +1299,8 @@ pub(crate) mod tests {
 	fn should_finalize_correctly() {
 		let keys = [Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(&keys), 0).unwrap();
-		let mut net = BeefyTestNet::new(1);
+		let runtime = Runtime::new().unwrap();
+		let mut net = BeefyTestNet::new(runtime.handle().clone(), 1);
 		let backend = net.peer(0).client().as_backend();
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
 		// remove default session, will manually add custom one.
@@ -1320,7 +1323,7 @@ pub(crate) mod tests {
 
 		// no 'best beefy block' or finality proofs
 		assert_eq!(worker.best_beefy_block(), 0);
-		block_on(poll_fn(move |cx| {
+		runtime.block_on(poll_fn(move |cx| {
 			assert_eq!(best_block_stream.poll_next_unpin(cx), Poll::Pending);
 			assert_eq!(finality_proof.poll_next_unpin(cx), Poll::Pending);
 			Poll::Ready(())
@@ -1341,7 +1344,7 @@ pub(crate) mod tests {
 		worker.finalize(justif.clone()).unwrap();
 		// verify block finalized
 		assert_eq!(worker.best_beefy_block(), 1);
-		block_on(poll_fn(move |cx| {
+		runtime.block_on(poll_fn(move |cx| {
 			// unknown hash -> nothing streamed
 			assert_eq!(best_block_stream.poll_next_unpin(cx), Poll::Pending);
 			// commitment streamed
@@ -1373,7 +1376,7 @@ pub(crate) mod tests {
 		assert_eq!(worker.active_rounds().unwrap().session_start(), 2);
 		// verify block finalized
 		assert_eq!(worker.best_beefy_block(), 2);
-		block_on(poll_fn(move |cx| {
+		runtime.block_on(poll_fn(move |cx| {
 			match best_block_stream.poll_next_unpin(cx) {
 				// expect Some(hash-of-block-2)
 				Poll::Ready(Some(hash)) => {
@@ -1394,7 +1397,8 @@ pub(crate) mod tests {
 	fn should_init_session() {
 		let keys = &[Keyring::Alice, Keyring::Bob];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-		let mut net = BeefyTestNet::new(1);
+		let runtime = Runtime::new().unwrap();
+		let mut net = BeefyTestNet::new(runtime.handle().clone(), 1);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
 
 		let worker_rounds = worker.active_rounds().unwrap();
@@ -1425,7 +1429,8 @@ pub(crate) mod tests {
 	fn should_triage_votes_and_process_later() {
 		let keys = &[Keyring::Alice, Keyring::Bob];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-		let mut net = BeefyTestNet::new(1);
+		let runtime = Runtime::new().unwrap();
+		let mut net = BeefyTestNet::new(runtime.handle().clone(), 1);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
 		// remove default session, will manually add custom one.
 		worker.persisted_state.voting_oracle.sessions.clear();

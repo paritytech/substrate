@@ -343,8 +343,7 @@ pub(crate) fn run_test_with_mmr_gadget_pre_post_using_client<F, G, RetF, RetG>(
 	let client_clone = client.clone();
 	runtime.spawn(async move {
 		let backend = client_clone.backend.clone();
-		MmrGadget::start(client_clone.clone(), backend, MockRuntimeApi::INDEXING_PREFIX.to_vec())
-			.await
+		MmrGadget::start(client_clone, backend, MockRuntimeApi::INDEXING_PREFIX.to_vec()).await
 	});
 
 	runtime.block_on(async move {
