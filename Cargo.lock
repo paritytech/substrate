@@ -2280,6 +2280,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "frame-remote-externalities"
+version = "0.10.0-dev"
+dependencies = [
+ "env_logger",
+ "frame-support",
+ "log",
+ "pallet-elections-phragmen",
+ "parity-scale-codec",
+ "serde",
+ "serde_json",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-version",
+ "substrate-rpc-client",
+ "tokio",
+]
+
+[[package]]
 name = "frame-support"
 version = "4.0.0-dev"
 dependencies = [
@@ -5191,12 +5210,12 @@ name = "pallet-bags-list-remote-tests"
 version = "4.0.0-dev"
 dependencies = [
  "frame-election-provider-support",
+ "frame-remote-externalities",
  "frame-support",
  "frame-system",
  "log",
  "pallet-bags-list",
  "pallet-staking",
- "remote-ext",
  "sp-core",
  "sp-runtime",
  "sp-std",
@@ -6163,13 +6182,13 @@ name = "pallet-state-trie-migration"
 version = "4.0.0-dev"
 dependencies = [
  "frame-benchmarking",
+ "frame-remote-externalities",
  "frame-support",
  "frame-system",
  "log",
  "pallet-balances",
  "parity-scale-codec",
  "parking_lot 0.12.1",
- "remote-ext",
  "scale-info",
  "serde",
  "sp-core",
@@ -7263,25 +7282,6 @@ dependencies = [
  "libc",
  "mach",
  "winapi",
-]
-
-[[package]]
-name = "remote-ext"
-version = "0.10.0-dev"
-dependencies = [
- "env_logger",
- "frame-support",
- "log",
- "pallet-elections-phragmen",
- "parity-scale-codec",
- "serde",
- "serde_json",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-version",
- "substrate-rpc-client",
- "tokio",
 ]
 
 [[package]]
@@ -11052,10 +11052,10 @@ name = "try-runtime-cli"
 version = "0.10.0-dev"
 dependencies = [
  "clap 4.0.11",
+ "frame-remote-externalities",
  "frame-try-runtime",
  "log",
  "parity-scale-codec",
- "remote-ext",
  "sc-chain-spec",
  "sc-cli",
  "sc-executor",
