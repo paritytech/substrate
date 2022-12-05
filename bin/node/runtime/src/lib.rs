@@ -32,9 +32,10 @@ use frame_support::{
 	pallet_prelude::Get,
 	parameter_types,
 	traits::{
-		fungibles, fungible::ItemOf, AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32, Currency, EitherOfDiverse,
-		EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter, KeyOwnerProofSystem,
-		Nothing, OnUnbalanced, U128CurrencyToVote, WithdrawReasons,
+		fungible::ItemOf, fungibles, AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16,
+		ConstU32, Currency, EitherOfDiverse, EqualPrivilegeOnly, Everything, Imbalance,
+		InstanceFilter, KeyOwnerProofSystem, Nothing, OnUnbalanced, U128CurrencyToVote,
+		WithdrawReasons,
 	},
 	weights::{
 		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
