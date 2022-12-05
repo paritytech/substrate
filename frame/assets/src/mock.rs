@@ -92,11 +92,11 @@ impl pallet_balances::Config for Test {
 pub struct AssetsCallbackHandle;
 impl AssetsCallback<AssetId, AccountId> for AssetsCallbackHandle {
 	fn created(_id: &AssetId, _owner: &AccountId) {
-		storage::set(b"asset_created", &true.encode());
+		storage::set(b"asset_created", &().encode());
 	}
 
 	fn destroyed(_id: &AssetId) {
-		storage::set(b"asset_destroyed", &true.encode());
+		storage::set(b"asset_destroyed", &().encode());
 	}
 }
 

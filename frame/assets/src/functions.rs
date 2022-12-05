@@ -750,12 +750,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						break
 					}
 				}
-				T::CallbackHandle::destroyed(&id);
 				Self::deposit_event(Event::ApprovalsDestroyed {
 					asset_id: id,
 					approvals_destroyed: removed_approvals as u32,
 					approvals_remaining: details.approvals as u32,
 				});
+				T::CallbackHandle::destroyed(&id);
 				Ok(())
 			})?;
 		Ok(removed_approvals)
