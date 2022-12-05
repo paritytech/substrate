@@ -35,7 +35,7 @@ use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt as _
 
 // verify that the fork target map is empty, then submit a new sync fork request,
 // poll `ChainSync` and verify that a new sync fork request has been registered
-#[async_std::test]
+#[tokio::test]
 async fn delegate_to_chainsync() {
 	let import_queue = Box::new(sc_consensus::import_queue::mock::MockImportQueueHandle::new());
 	let (_chain_sync_network_provider, chain_sync_network_handle) = NetworkServiceProvider::new();

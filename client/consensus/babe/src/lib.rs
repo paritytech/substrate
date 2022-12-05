@@ -1215,6 +1215,7 @@ where
 						// timestamp in the inherents actually matches the slot set in the seal.
 						let mut inherent_data = create_inherent_data_providers
 							.create_inherent_data()
+							.await
 							.map_err(Error::<Block>::CreateInherents)?;
 						inherent_data.babe_replace_inherent_data(slot);
 

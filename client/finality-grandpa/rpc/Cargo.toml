@@ -34,4 +34,4 @@ sp-core = { version = "7.0.0", path = "../../../primitives/core" }
 sp-finality-grandpa = { version = "4.0.0-dev", path = "../../../primitives/finality-grandpa" }
 sp-keyring = { version = "7.0.0", path = "../../../primitives/keyring" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
-tokio = { version = "1.17.0", features = ["macros"] }
+tokio = { version = "1.22.0", features = ["macros"] }
