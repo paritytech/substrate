@@ -119,6 +119,7 @@
 use codec::{Codec, Encode};
 use frame_support::{
 	dispatch::{DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo},
+	pallet_prelude::InvalidTransaction,
 	traits::{
 		EnsureInherentsAreFirst, ExecuteBlock, OffchainWorker, OnFinalize, OnIdle, OnInitialize,
 		OnRuntimeUpgrade,
@@ -497,6 +498,14 @@ where
 		let dispatch_info = xt.get_dispatch_info();
 		let r = Applyable::apply::<UnsignedValidator>(xt, &dispatch_info, encoded_len)?;
 
+		// Mandatory(inherents) are not allowed to fail.
+		//
+		// The entire block should be discarded if an inherent fails to apply. Otherwise
+		// it may open an attack vector.
+		if r.is_err() && dispatch_info.class == DispatchClass::Mandatory {
+			return Err(InvalidTransaction::BadMandatory.into())
+		}
+
 		<frame_system::Pallet<System>>::note_applied_extrinsic(&r, dispatch_info);
 
 		Ok(r.map(|_| ()).map_err(|e| e.error))
@@ -562,6 +571,10 @@ where
 		let dispatch_info = within_span! { sp_tracing::Level::TRACE, "dispatch_info";
 			xt.get_dispatch_info()
 		};
+
+		if dispatch_info.class == DispatchClass::Mandatory {
+			return Err(InvalidTransaction::MandatoryValidation.into())
+		}
 
 		within_span! {
 			sp_tracing::Level::TRACE, "validate";
@@ -692,9 +705,9 @@ mod tests {
 				Ok(())
 			}
 
-			#[pallet::weight(0)]
+			#[pallet::weight((0, DispatchClass::Mandatory))]
 			pub fn inherent_call(origin: OriginFor<T>) -> DispatchResult {
-				let _ = frame_system::ensure_none(origin)?;
+				frame_system::ensure_none(origin)?;
 				Ok(())
 			}
 
@@ -1532,5 +1545,39 @@ mod tests {
 		new_test_ext(1).execute_with(|| {
 			Executive::execute_block(Block::new(header, vec![xt1, xt2]));
 		});
+	}
+
+	#[test]
+	#[should_panic(expected = "A call was labelled as mandatory, but resulted in an Error.")]
+	fn invalid_inherents_fail_block_execution() {
+		let xt1 =
+			TestXt::new(RuntimeCall::Custom(custom::Call::inherent_call {}), sign_extra(1, 0, 0));
+
+		new_test_ext(1).execute_with(|| {
+			Executive::execute_block(Block::new(
+				Header::new(
+					1,
+					H256::default(),
+					H256::default(),
+					[69u8; 32].into(),
+					Digest::default(),
+				),
+				vec![xt1],
+			));
+		});
+	}
+
+	// Inherents are created by the runtime and don't need to be validated.
+	#[test]
+	fn inherents_fail_validate_block() {
+		let xt1 = TestXt::new(RuntimeCall::Custom(custom::Call::inherent_call {}), None);
+
+		new_test_ext(1).execute_with(|| {
+			assert_eq!(
+				Executive::validate_transaction(TransactionSource::External, xt1, H256::random())
+					.unwrap_err(),
+				InvalidTransaction::MandatoryValidation.into()
+			);
+		})
 	}
 }

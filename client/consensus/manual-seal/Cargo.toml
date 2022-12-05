@@ -42,7 +42,7 @@ sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
 sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
 
 [dev-dependencies]
-tokio = { version = "1.17.0", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1.22.0", features = ["rt-multi-thread", "macros"] }
 sc-basic-authorship = { version = "0.10.0-dev", path = "../../basic-authorship" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
 substrate-test-runtime-transaction-pool = { version = "2.0.0", path = "../../../test-utils/runtime/transaction-pool" }
