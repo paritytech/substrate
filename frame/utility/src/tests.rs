@@ -909,10 +909,18 @@ fn with_weight_works() {
 			Box::new(RuntimeCall::System(frame_system::Call::set_code_without_checks {
 				code: vec![],
 			}));
+		// Weight before is max.
+		assert_eq!(upgrade_code_call.get_dispatch_info().weight, Weight::MAX);
+		assert_eq!(
+			upgrade_code_call.get_dispatch_info().class,
+			frame_support::dispatch::DispatchClass::Operational
+		);
+
 		let with_weight_call = Call::<Test>::with_weight {
 			call: upgrade_code_call,
 			weight: Weight::from_parts(123, 456),
 		};
+		// Weight after is set by Root.
 		assert_eq!(with_weight_call.get_dispatch_info().weight, Weight::from_parts(123, 456));
 		assert_eq!(
 			with_weight_call.get_dispatch_info().class,
