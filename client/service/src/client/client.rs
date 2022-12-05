@@ -73,7 +73,7 @@ use sp_runtime::{
 	BuildStorage, Digest, Justification, Justifications, StateVersion,
 };
 use sp_state_machine::{
-	prove_child_read, prove_range_read_with_child_with_size, prove_read,
+	prove_child_read, prove_range_read_with_child_with_size, prove_read, prove_read_v2,
 	read_range_proof_check_with_child_on_proving_backend, Backend as StateBackend,
 	ChildStorageCollection, KeyValueStates, KeyValueStorageLevel, StorageCollection,
 	MAX_NESTED_TRIE_DEPTH,
@@ -1170,6 +1170,16 @@ where
 	) -> sp_blockchain::Result<StorageProof> {
 		self.state_at(hash)
 			.and_then(|state| prove_child_read(state, child_info, keys).map_err(Into::into))
+	}
+
+	fn read_child_proof_v2(
+		&self,
+		hash: Block::Hash,
+		child_info: Option<&ChildInfo>,
+		keys: &mut dyn Iterator<Item = (&[u8], bool)>,
+	) -> sp_blockchain::Result<StorageProof> {
+		self.state_at(hash)
+			.and_then(|state| prove_read_v2(state, child_info, keys).map_err(Into::into))
 	}
 
 	fn execution_proof(

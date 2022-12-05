@@ -11,6 +11,7 @@ message Request {
 		RemoteReadRequest remote_read_request = 2;
 		RemoteReadChildRequest remote_read_child_request = 4;
 		// Note: ids 3 and 5 were used in the past. It would be preferable to not re-use them.
+		RemoteReadRequestV2 remote_read_request_v2 = 6;
 	}
 }
 
@@ -48,6 +49,22 @@ message RemoteReadRequest {
 	repeated bytes keys = 3;
 }
 
+message RemoteReadRequestV2 {
+  required bytes block = 2;
+  optional ChildTrieInfo child_trie_info = 3;  // Read from the main trie if missing.
+  repeated Key keys = 6;
+}
+
+message ChildTrieInfo {
+  enum ChildTrieNamespace {
+    DEFAULT = 1;
+  }
+
+  // child trie identifier.
+  required ChildTrieNamespace namespace = 1;
+  required bytes name = 2;
+}
+
 // Remote read response.
 message RemoteReadResponse {
 	// Read proof. If missing, indicates that the remote couldn't answer, for example because
@@ -64,4 +81,9 @@ message RemoteReadChildRequest {
 	required bytes storage_key = 3;
 	// Storage keys.
 	repeated bytes keys = 6;
+}
+
+message Key {
+  required bytes key = 1;
+  optional bool skipValue = 2; // Defaults to `false` if missing
 }

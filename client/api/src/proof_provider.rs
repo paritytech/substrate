@@ -40,6 +40,16 @@ pub trait ProofProvider<Block: BlockT> {
 		keys: &mut dyn Iterator<Item = &[u8]>,
 	) -> sp_blockchain::Result<StorageProof>;
 
+	/// Reads storage values at a given block + storage_key + key, returning
+	/// read proof.
+	/// For each keys, if boolean is true, then we only access value hash.
+	fn read_child_proof_v2(
+		&self,
+		hash: Block::Hash,
+		child_info: Option<&ChildInfo>,
+		keys: &mut dyn Iterator<Item = (&[u8], bool)>,
+	) -> sp_blockchain::Result<StorageProof>;
+
 	/// Execute a call to a contract on top of state in a block of given hash
 	/// AND returning execution proof.
 	///
