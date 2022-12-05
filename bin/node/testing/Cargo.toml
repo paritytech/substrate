@@ -22,6 +22,7 @@ frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
 node-executor = { version = "3.0.0-dev", path = "../executor" }
 node-primitives = { version = "2.0.0", path = "../primitives" }
 kitchensink-runtime = { version = "3.0.0-dev", path = "../runtime" }
+pallet-assets = { version = "4.0.0-dev", path = "../../../frame/assets" }
 pallet-asset-tx-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment/asset-tx-payment" }
 pallet-transaction-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment" }
 sc-block-builder = { version = "0.10.0-dev", path = "../../../client/block-builder" }

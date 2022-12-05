@@ -21,5 +21,5 @@ sp-runtime = { version = "7.0.0", path = "../../../../primitives/runtime" }
 log = "0.4"
 
 [dev-dependencies]
-tokio = { version = "1.17.0", features = ["macros", "rt-multi-thread", "sync"] }
+tokio = { version = "1.22.0", features = ["macros", "rt-multi-thread", "sync"] }
 sp-core = { path = "../../../../primitives/core" }

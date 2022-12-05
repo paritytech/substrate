@@ -29,4 +29,4 @@ sc-rpc = { version = "4.0.0-dev", features = [
 	"test-helpers",
 ], path = "../../rpc" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
-tokio = { version = "1.17.0", features = ["macros"] }
+tokio = { version = "1.22.0", features = ["macros"] }
