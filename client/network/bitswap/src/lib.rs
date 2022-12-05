@@ -198,6 +198,15 @@ impl<B: BlockT> BitswapRequestHandler<B> {
 				cid.hash().size() != 32
 			{
 				debug!(target: LOG_TARGET, "Ignoring unsupported CID {}: {}", peer, cid);
+
+				// we need to do this if remote wants it or we break sending things we have
+				if entry.send_dont_have {
+					response.block_presences.push(BlockPresence {
+						r#type: BlockPresenceType::DontHave as i32,
+						cid: cid.to_bytes(),
+					});
+				}
+
 				continue
 			}
 
