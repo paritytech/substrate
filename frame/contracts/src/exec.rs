@@ -24,6 +24,7 @@ use crate::{
 use frame_support::{
 	crypto::ecdsa::ECDSAExt,
 	dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable},
+	ensure,
 	storage::{with_transaction, TransactionOutcome},
 	traits::{Contains, Currency, ExistenceRequirement, OriginTrait, Randomness, Time},
 	weights::Weight,
@@ -279,7 +280,7 @@ pub trait Ext: sealing::Sealed {
 	/// when the code is executing on-chain.
 	///
 	/// Returns `true` if debug message recording is enabled. Otherwise `false` is returned.
-	fn append_debug_buffer(&mut self, msg: &str) -> bool;
+	fn append_debug_buffer(&mut self, msg: &str) -> Result<bool, ()>;
 
 	/// Call some dispatchable and return the result.
 	fn call_runtime(&self, call: <Self::T as Config>::RuntimeCall) -> DispatchResultWithPostInfo;
@@ -1334,14 +1335,19 @@ where
 		&mut self.top_frame_mut().nested_gas
 	}
 
-	fn append_debug_buffer(&mut self, msg: &str) -> bool {
+	fn append_debug_buffer(&mut self, msg: &str) -> Result<bool, ()> {
 		if let Some(buffer) = &mut self.debug_message {
 			if !msg.is_empty() {
+				ensure!(
+					buffer.len().checked_add(msg.len()).ok_or(())? <=
+						self.schedule.limits.debug_buffer_len as usize,
+					()
+				);
 				buffer.extend(msg.as_bytes());
 			}
-			true
+			Ok(true)
 		} else {
-			false
+			Ok(false)
 		}
 	}
 
@@ -2499,8 +2505,12 @@ mod tests {
 	#[test]
 	fn printing_works() {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
-			ctx.ext.append_debug_buffer("This is a test");
-			ctx.ext.append_debug_buffer("More text");
+			ctx.ext
+				.append_debug_buffer("This is a test")
+				.expect("Maximum allowed debug buffer size exhausted!");
+			ctx.ext
+				.append_debug_buffer("More text")
+				.expect("Maximum allowed debug buffer size exhausted!");
 			exec_success()
 		});
 
@@ -2533,8 +2543,12 @@ mod tests {
 	#[test]
 	fn printing_works_on_fail() {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
-			ctx.ext.append_debug_buffer("This is a test");
-			ctx.ext.append_debug_buffer("More text");
+			ctx.ext
+				.append_debug_buffer("This is a test")
+				.expect("Maximum allowed debug buffer size exhausted!");
+			ctx.ext
+				.append_debug_buffer("More text")
+				.expect("Maximum allowed debug buffer size exhausted!");
 			exec_trapped()
 		});
 
@@ -2562,6 +2576,43 @@ mod tests {
 		});
 
 		assert_eq!(&String::from_utf8(debug_buffer).unwrap(), "This is a testMore text");
+	}
+
+	#[test]
+	fn debug_buffer_is_limited() {
+		let schedule: Schedule<Test> = <Test as Config>::Schedule::get();
+		let code_hash = MockLoader::insert(Call, move |ctx, _| {
+			ctx.ext.append_debug_buffer("overflowing bytes").map_err(|_| {
+				DispatchError::Other("Maximum allowed debug buffer size exhausted!")
+			})?;
+			exec_success()
+		});
+
+		// Pre-fill the buffer up to its limit
+		let mut debug_buffer = vec![0u8; schedule.limits.debug_buffer_len as usize];
+
+		ExtBuilder::default().build().execute_with(|| {
+			let min_balance = <Test as Config>::Currency::minimum_balance();
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
+			set_balance(&ALICE, min_balance * 10);
+			place_contract(&BOB, code_hash);
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			assert_err!(
+				MockStack::run_call(
+					ALICE,
+					BOB,
+					&mut gas_meter,
+					&mut storage_meter,
+					&schedule,
+					0,
+					vec![],
+					Some(&mut debug_buffer),
+					Determinism::Deterministic,
+				)
+				.map_err(|e| e.error),
+				DispatchError::Other("Maximum allowed debug buffer size exhausted!")
+			);
+		});
 	}
 
 	#[test]
