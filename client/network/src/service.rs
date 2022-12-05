@@ -383,15 +383,15 @@ where
 				.notify_handler_buffer_size(NonZeroUsize::new(32).expect("32 != 0; qed"))
 				.connection_event_buffer_size(1024)
 				.max_negotiating_inbound_streams(2048);
-			if let Some(spawner) = params.executor {
-				struct SpawnImpl<F>(F);
-				impl<F: Fn(Pin<Box<dyn Future<Output = ()> + Send>>)> Executor for SpawnImpl<F> {
-					fn exec(&self, f: Pin<Box<dyn Future<Output = ()> + Send>>) {
-						(self.0)(f)
-					}
+
+			struct SpawnImpl<F>(F);
+			impl<F: Fn(Pin<Box<dyn Future<Output = ()> + Send>>)> Executor for SpawnImpl<F> {
+				fn exec(&self, f: Pin<Box<dyn Future<Output = ()> + Send>>) {
+					(self.0)(f)
 				}
-				builder = builder.executor(Box::new(SpawnImpl(spawner)));
 			}
+			builder = builder.executor(Box::new(SpawnImpl(params.executor)));
+
 			(builder.build(), bandwidth)
 		};
 

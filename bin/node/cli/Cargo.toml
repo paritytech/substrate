@@ -122,10 +122,10 @@ nix = "0.23"
 serde_json = "1.0"
 regex = "1.6.0"
 platforms = "2.0"
-async-std = { version = "1.11.0", features = ["attributes"] }
 soketto = "0.7.1"
 criterion = { version = "0.3.5", features = ["async_tokio"] }
-tokio = { version = "1.17.0", features = ["macros", "time", "parking_lot"] }
+tokio = { version = "1.22.0", features = ["macros", "time", "parking_lot"] }
+tokio-util = { version = "0.7.4", features = ["compat"] }
 wait-timeout = "0.2"
 substrate-rpc-client = { path = "../../../utils/frame/rpc/client" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../../frame/timestamp" }
