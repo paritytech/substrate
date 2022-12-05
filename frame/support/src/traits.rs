@@ -22,8 +22,8 @@
 pub mod tokens;
 pub use tokens::{
 	currency::{
-		ActiveIssuanceOf, Currency, LockIdentifier, LockableCurrency, NamedReservableCurrency,
-		ReservableCurrency, TotalIssuanceOf, VestingSchedule,
+		ActiveIssuanceOf, Currency, NamedReservableCurrency, ReservableCurrency, TotalIssuanceOf,
+		VestingSchedule,
 	},
 	fungible, fungibles,
 	imbalance::{Imbalance, OnUnbalanced, SignedImbalance},
