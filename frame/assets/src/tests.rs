@@ -1207,8 +1207,10 @@ fn normal_asset_create_and_destroy_callbacks_should_work() {
 		assert!(storage::get(b"asset_created").is_some());
 		assert!(storage::get(b"asset_destroyed").is_none());
 
-		let w = Asset::<Test>::get(0).unwrap().destroy_witness();
-		assert_ok!(Assets::destroy(RuntimeOrigin::signed(1), 0, w));
+		assert_ok!(Assets::start_destroy(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Assets::destroy_accounts(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Assets::destroy_approvals(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Assets::finish_destroy(RuntimeOrigin::signed(1), 0));
 		assert!(storage::get(b"asset_destroyed").is_some());
 	});
 }
