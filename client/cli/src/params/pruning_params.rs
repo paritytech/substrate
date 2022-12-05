@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::error;
-use clap::Args;
+use clap::{builder::PossibleValue, Args};
 use sc_service::{BlocksPruning, PruningMode};
 
 /// Parameters to define the pruning mode
@@ -83,6 +83,52 @@ impl PruningParams {
 					.map(BlocksPruning::Some),
 			},
 			None => Ok(BlocksPruning::KeepFinalized),
+		}
+	}
+}
+
+/// Specifies the pruning mode of the database.
+///
+/// This specifies when the block's data (either state via `--state-pruning`
+/// or body via `--blocks-pruning`) should be pruned (ie, removed) from
+/// the database.
+#[derive(Clone)]
+enum PruningModeClap {
+	/// Keep the data of all blocks.
+	Archive,
+	/// Keep only the data of finalized blocks.
+	ArchiveCanonical,
+	/// Keep the data of the last number of finalized blocks.
+	Custom(u32),
+}
+
+impl clap::ValueEnum for PruningModeClap {
+	fn value_variants<'a>() -> &'a [Self] {
+		&[
+			Self::Archive,
+			Self::ArchiveCanonical,
+			// NOTE: skip non-unit variants.
+		]
+	}
+
+	fn to_possible_value(&self) -> Option<PossibleValue> {
+		Some(match self {
+			Self::Archive => PossibleValue::new("archive").help("Keep the data of all blocks"),
+			Self::ArchiveCanonical => PossibleValue::new("archive-canonical")
+				.help("Keep only the data of finalized blocks"),
+			Self::Custom(_) => PossibleValue::new("a number")
+				.help("Keep the data of the last number of finalized blocks"),
+		})
+	}
+
+	fn from_str(input: &str, _ignore_case: bool) -> Result<Self, String> {
+		match input {
+			"archive" => Ok(Self::Archive),
+			"archive-canonical" => Ok(Self::ArchiveCanonical),
+			bc => bc
+				.parse()
+				.map_err(|_| "Invalid pruning mode specified".to_string())
+				.map(Self::Custom),
 		}
 	}
 }
