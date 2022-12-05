@@ -27,7 +27,7 @@
 //! with the root origin.
 //!
 //! In the meantime the call corresponding to the hash must have been submitted to the pre-image
-//! handler [`Preimages`].
+//! handler [`pallet::Config::Preimages`].
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
