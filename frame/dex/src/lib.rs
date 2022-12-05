@@ -44,7 +44,7 @@ pub mod pallet {
 	use frame_support::{
 		traits::{
 			fungibles::{
-				metadata::Mutate as MutateMetadata, Create, Inspect, InspectEnumerable, Mutate,
+				metadata::Mutate as MutateMetadata, Create, Inspect, Mutate,
 				Transfer,
 			},
 			Currency, ReservableCurrency,
@@ -70,7 +70,6 @@ pub mod pallet {
 			+ Copy
 			+ MaybeSerializeDeserialize
 			+ sp_std::fmt::Debug
-			+ Default
 			+ From<u64>
 			+ IntegerSquareRoot
 			+ Zero
@@ -79,9 +78,7 @@ pub mod pallet {
 
 		type AssetId: Member
 			+ Parameter
-			+ Default
 			+ Copy
-			+ codec::HasCompact
 			+ From<u32>
 			+ MaybeSerializeDeserialize
 			+ MaxEncodedLen
@@ -101,15 +98,10 @@ pub mod pallet {
 			+ Incrementable;
 
 		type Assets: Inspect<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>
-			+ Create<Self::AccountId>
-			+ InspectEnumerable<Self::AccountId>
-			+ Mutate<Self::AccountId>
-			+ MutateMetadata<Self::AccountId>
 			+ Transfer<Self::AccountId>;
 
 		type PoolAssets: Inspect<Self::AccountId, AssetId = Self::PoolAssetId, Balance = Self::AssetBalance>
 			+ Create<Self::AccountId>
-			+ InspectEnumerable<Self::AccountId>
 			+ Mutate<Self::AccountId>
 			+ MutateMetadata<Self::AccountId>
 			+ Transfer<Self::AccountId>;
