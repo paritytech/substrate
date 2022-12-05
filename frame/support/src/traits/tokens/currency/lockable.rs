@@ -22,10 +22,12 @@ use crate::{dispatch::DispatchResult, traits::misc::Get};
 
 /// An identifier for a lock. Used for disambiguating different locks so that
 /// they can be individually replaced or removed.
+#[allow(dead_code)]
 #[deprecated(note = "Deprecated in favour of using fungibles::LockIdentifier type")]
 pub type LockIdentifier = [u8; 8];
 
 /// A currency whose accounts can have liquidity restrictions.
+#[allow(dead_code)]
 #[deprecated(note = "Deprecated in favour of using fungibles::Lockable trait")]
 pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	/// The quantity used to denote time; usually just a `BlockNumber`.
@@ -40,6 +42,7 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	/// the `Locks` vec in storage. Note that you can lock more funds than a user has.
 	///
 	/// If the lock `id` already exists, this will update it.
+	#[allow(deprecated)]
 	fn set_lock(
 		id: LockIdentifier,
 		who: &AccountId,
@@ -55,6 +58,7 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	/// with the new parameters. As in, `extend_lock` will set:
 	/// - maximum `amount`
 	/// - bitwise mask of all `reasons`
+	#[allow(deprecated)]
 	fn extend_lock(
 		id: LockIdentifier,
 		who: &AccountId,
@@ -63,6 +67,7 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	);
 
 	/// Remove an existing lock.
+	#[allow(deprecated)]
 	fn remove_lock(id: LockIdentifier, who: &AccountId);
 }
 
