@@ -901,3 +901,22 @@ fn batch_all_works_with_council_origin() {
 		));
 	})
 }
+
+#[test]
+fn with_weight_works() {
+	new_test_ext().execute_with(|| {
+		let upgrade_code_call =
+			Box::new(RuntimeCall::System(frame_system::Call::set_code_without_checks {
+				code: vec![],
+			}));
+		let with_weight_call = Call::<Test>::with_weight {
+			call: upgrade_code_call,
+			weight: Weight::from_parts(123, 456),
+		};
+		assert_eq!(with_weight_call.get_dispatch_info().weight, Weight::from_parts(123, 456));
+		assert_eq!(
+			with_weight_call.get_dispatch_info().class,
+			frame_support::dispatch::DispatchClass::Operational
+		);
+	})
+}
