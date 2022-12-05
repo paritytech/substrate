@@ -70,7 +70,6 @@ pub mod pallet {
 			+ Copy
 			+ MaybeSerializeDeserialize
 			+ sp_std::fmt::Debug
-			+ Default
 			+ From<u64>
 			+ IntegerSquareRoot
 			+ Zero
@@ -79,9 +78,7 @@ pub mod pallet {
 
 		type AssetId: Member
 			+ Parameter
-			+ Default
 			+ Copy
-			+ codec::HasCompact
 			+ From<u32>
 			+ MaybeSerializeDeserialize
 			+ MaxEncodedLen
@@ -89,15 +86,10 @@ pub mod pallet {
 			+ TypeInfo;
 
 		type Assets: Inspect<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>
-			+ Create<Self::AccountId>
-			+ InspectEnumerable<Self::AccountId>
-			+ Mutate<Self::AccountId>
-			+ MutateMetadata<Self::AccountId>
 			+ Transfer<Self::AccountId>;
 
 		type PoolAssets: Inspect<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>
 			+ Create<Self::AccountId>
-			+ InspectEnumerable<Self::AccountId>
 			+ Mutate<Self::AccountId>
 			+ MutateMetadata<Self::AccountId>
 			+ Transfer<Self::AccountId>;
@@ -200,28 +192,6 @@ pub mod pallet {
 	// Pallet's callable functions.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		#[pallet::weight(0)]
-		pub fn setup(origin: OriginFor<T>, amount: BalanceOf<T>) -> DispatchResult {
-			let sender = ensure_signed(origin)?;
-			let pallet_account = Self::account_id();
-			T::Currency::transfer(
-				&sender,
-				&pallet_account,
-				amount,
-				ExistenceRequirement::KeepAlive,
-			)?;
-
-			T::Assets::create(1.into(), sender.clone(), true, 1u64.into())?;
-			T::Assets::set(1.into(), &sender, "DOT".into(), "DOT".into(), 0)?;
-
-			T::Assets::create(2.into(), sender.clone(), true, 1u64.into())?;
-			T::Assets::set(2.into(), &sender, "USDC".into(), "USDC".into(), 0)?;
-
-			T::Assets::mint_into(1.into(), &sender, 10000000000000000000u64.into())?;
-			T::Assets::mint_into(2.into(), &sender, 10000000000000000000u64.into())?;
-
-			Ok(())
-		}
 
 		#[pallet::weight(0)]
 		pub fn create_pool(
