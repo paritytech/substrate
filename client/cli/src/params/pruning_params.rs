@@ -28,13 +28,13 @@ pub struct PruningParams {
 	/// This mode specifies when the block's state (ie, storage)
 	/// should be pruned (ie, removed) from the database.
 	#[arg(alias = "pruning", long, value_name = "PRUNING_MODE", default_value = "256")]
-	pub state_pruning: PruningModeClap,
+	pub state_pruning: DatabasePruningMode,
 	/// Specify the blocks pruning mode.
 	///
 	/// This mode specifies when the block's body (including justifications)
 	/// should be pruned (ie, removed) from the database.
 	#[arg(alias = "keep-blocks", long, value_name = "COUNT", default_value = "archive-canonical")]
-	pub blocks_pruning: PruningModeClap,
+	pub blocks_pruning: DatabasePruningMode,
 }
 
 impl PruningParams {
@@ -55,7 +55,7 @@ impl PruningParams {
 /// or body via `--blocks-pruning`) should be pruned (ie, removed) from
 /// the database.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum PruningModeClap {
+pub enum DatabasePruningMode {
 	/// Keep the data of all blocks.
 	Archive,
 	/// Keep only the data of finalized blocks.
@@ -64,7 +64,7 @@ pub enum PruningModeClap {
 	Custom(u32),
 }
 
-impl clap::ValueEnum for PruningModeClap {
+impl clap::ValueEnum for DatabasePruningMode {
 	fn value_variants<'a>() -> &'a [Self] {
 		&[
 			Self::Archive,
@@ -95,22 +95,22 @@ impl clap::ValueEnum for PruningModeClap {
 	}
 }
 
-impl Into<PruningMode> for PruningModeClap {
+impl Into<PruningMode> for DatabasePruningMode {
 	fn into(self) -> PruningMode {
 		match self {
-			PruningModeClap::Archive => PruningMode::ArchiveAll,
-			PruningModeClap::ArchiveCanonical => PruningMode::ArchiveCanonical,
-			PruningModeClap::Custom(n) => PruningMode::blocks_pruning(n),
+			DatabasePruningMode::Archive => PruningMode::ArchiveAll,
+			DatabasePruningMode::ArchiveCanonical => PruningMode::ArchiveCanonical,
+			DatabasePruningMode::Custom(n) => PruningMode::blocks_pruning(n),
 		}
 	}
 }
 
-impl Into<BlocksPruning> for PruningModeClap {
+impl Into<BlocksPruning> for DatabasePruningMode {
 	fn into(self) -> BlocksPruning {
 		match self {
-			PruningModeClap::Archive => BlocksPruning::KeepAll,
-			PruningModeClap::ArchiveCanonical => BlocksPruning::KeepFinalized,
-			PruningModeClap::Custom(n) => BlocksPruning::Some(n),
+			DatabasePruningMode::Archive => BlocksPruning::KeepAll,
+			DatabasePruningMode::ArchiveCanonical => BlocksPruning::KeepFinalized,
+			DatabasePruningMode::Custom(n) => BlocksPruning::Some(n),
 		}
 	}
 }
