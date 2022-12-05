@@ -27,63 +27,25 @@ pub struct PruningParams {
 	///
 	/// This mode specifies when the block's state (ie, storage)
 	/// should be pruned (ie, removed) from the database.
-	///
-	/// Options available:
-	///   'archive'            Keep the state of all blocks.
-	///   'archive-canonical'  Keep only the state of finalized blocks.
-	///   number               Keep the state of the last number of finalized blocks.
-	///
-	/// The default option is to keep the last 256 blocks (number == 256).
-	#[arg(alias = "pruning", long, value_name = "PRUNING_MODE")]
-	pub state_pruning: Option<String>,
+	#[arg(alias = "pruning", long, value_name = "PRUNING_MODE", default_value = "256")]
+	pub state_pruning: PruningModeClap,
 	/// Specify the blocks pruning mode.
 	///
 	/// This mode specifies when the block's body (including justifications)
 	/// should be pruned (ie, removed) from the database.
-	///
-	/// Options available:
-	///   'archive'            Keep all blocks.
-	///   'archive-canonical'  Keep only finalized blocks.
-	///   number               Keep the last number of finalized blocks.
-	///
-	/// The default option is 'archive-canonical'.
-	#[arg(alias = "keep-blocks", long, value_name = "COUNT")]
-	pub blocks_pruning: Option<String>,
+	#[arg(alias = "keep-blocks", long, value_name = "COUNT", default_value = "archive-canonical")]
+	pub blocks_pruning: PruningModeClap,
 }
 
 impl PruningParams {
 	/// Get the pruning value from the parameters
 	pub fn state_pruning(&self) -> error::Result<Option<PruningMode>> {
-		self.state_pruning
-			.as_ref()
-			.map(|s| match s.as_str() {
-				"archive" => Ok(PruningMode::ArchiveAll),
-				"archive-canonical" => Ok(PruningMode::ArchiveCanonical),
-				bc => bc
-					.parse()
-					.map_err(|_| {
-						error::Error::Input("Invalid state pruning mode specified".to_string())
-					})
-					.map(PruningMode::blocks_pruning),
-			})
-			.transpose()
+		Ok(Some(self.state_pruning.into()))
 	}
 
 	/// Get the block pruning value from the parameters
 	pub fn blocks_pruning(&self) -> error::Result<BlocksPruning> {
-		match self.blocks_pruning.as_ref() {
-			Some(bp) => match bp.as_str() {
-				"archive" => Ok(BlocksPruning::KeepAll),
-				"archive-canonical" => Ok(BlocksPruning::KeepFinalized),
-				bc => bc
-					.parse()
-					.map_err(|_| {
-						error::Error::Input("Invalid blocks pruning mode specified".to_string())
-					})
-					.map(BlocksPruning::Some),
-			},
-			None => Ok(BlocksPruning::KeepFinalized),
-		}
+		Ok(self.blocks_pruning.into())
 	}
 }
 
@@ -92,8 +54,8 @@ impl PruningParams {
 /// This specifies when the block's data (either state via `--state-pruning`
 /// or body via `--blocks-pruning`) should be pruned (ie, removed) from
 /// the database.
-#[derive(Debug, Clone, PartialEq)]
-enum PruningModeClap {
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PruningModeClap {
 	/// Keep the data of all blocks.
 	Archive,
 	/// Keep only the data of finalized blocks.
