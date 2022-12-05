@@ -92,7 +92,7 @@ impl PruningParams {
 /// This specifies when the block's data (either state via `--state-pruning`
 /// or body via `--blocks-pruning`) should be pruned (ie, removed) from
 /// the database.
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq)]
 enum PruningModeClap {
 	/// Keep the data of all blocks.
 	Archive,
@@ -129,6 +129,26 @@ impl clap::ValueEnum for PruningModeClap {
 				.parse()
 				.map_err(|_| "Invalid pruning mode specified".to_string())
 				.map(Self::Custom),
+		}
+	}
+}
+
+impl Into<PruningMode> for PruningModeClap {
+	fn into(self) -> PruningMode {
+		match self {
+			PruningModeClap::Archive => PruningMode::ArchiveAll,
+			PruningModeClap::ArchiveCanonical => PruningMode::ArchiveCanonical,
+			PruningModeClap::Custom(n) => PruningMode::blocks_pruning(n),
+		}
+	}
+}
+
+impl Into<BlocksPruning> for PruningModeClap {
+	fn into(self) -> BlocksPruning {
+		match self {
+			PruningModeClap::Archive => BlocksPruning::KeepAll,
+			PruningModeClap::ArchiveCanonical => BlocksPruning::KeepFinalized,
+			PruningModeClap::Custom(n) => BlocksPruning::Some(n),
 		}
 	}
 }
