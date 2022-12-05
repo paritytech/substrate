@@ -28,7 +28,7 @@ use frame_election_provider_support::SortedListProvider;
 use frame_support::{assert_ok, ensure, traits::Get};
 use frame_system::RawOrigin as RuntimeOrigin;
 use pallet_nomination_pools::{
-	BalanceOf, BondExtra, BondedPoolInner, BondedPools, ClaimableAction, ConfigOp, MaxPoolMembers,
+	BalanceOf, BondExtra, BondedPoolInner, BondedPools, RewardClaimPermission, ConfigOp, MaxPoolMembers,
 	MaxPoolMembersPerPool, MaxPools, Metadata, MinCreateBond, MinJoinBond, Pallet as Pools,
 	PoolMembers, PoolRoles, PoolState, RewardClaim, RewardPools, SubPoolsStorage,
 };
@@ -692,7 +692,7 @@ frame_benchmarking::benchmarks! {
 		);
 	}:_(RuntimeOrigin::Signed(joiner.clone()), RewardClaim::Permissionless)
 	verify {
-		assert_eq!(ClaimableAction::<T>::get(joiner), RewardClaim::Permissionless);
+		assert_eq!(RewardClaimPermission::<T>::get(joiner), RewardClaim::Permissionless);
 	}
 
 	impl_benchmark_test_suite!(

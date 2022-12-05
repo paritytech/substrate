@@ -411,7 +411,7 @@ enum AccountType {
 	Reward,
 }
 
-// Account to bond pending reward of a member
+/// Account to bond pending reward of a member
 #[derive(Encode, Decode, MaxEncodedLen, Clone, Copy, Debug, PartialEq, Eq, TypeInfo)]
 pub enum RewardClaim {
 	/// Only `origin` i.e. the pool member themself can claim their reward.
@@ -1331,7 +1331,7 @@ pub mod pallet {
 
 	/// Reward claim Permissions
 	#[pallet::storage]
-	pub type ClaimableAction<T: Config> =
+	pub type RewardClaimPermission<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, RewardClaim, ValueQuery>;
 
 	#[pallet::genesis_config]
@@ -1636,7 +1636,7 @@ pub mod pallet {
 				Self::get_member_with_pools(&member_account)?;
 
 			ensure!(
-				ClaimableAction::<T>::get(&member_account) == RewardClaim::Permissionless,
+				RewardClaimPermission::<T>::get(&member_account) == RewardClaim::Permissionless,
 				Error::<T>::DoesNotHavePermission
 			);
 
@@ -1783,7 +1783,7 @@ pub mod pallet {
 			// Now that we know everything has worked write the items to storage.
 			SubPoolsStorage::insert(&member.pool_id, sub_pools);
 			Self::put_member_with_pools(&member_account, member, bonded_pool, reward_pool);
-			<ClaimableAction<T>>::remove(member_account);
+			<RewardClaimPermission<T>>::remove(member_account);
 
 			Ok(())
 		}
@@ -2185,7 +2185,7 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 
 			ensure!(PoolMembers::<T>::contains_key(&who), Error::<T>::PoolMemberNotFound);
-			<ClaimableAction<T>>::mutate(who, |source| {
+			<RewardClaimPermission<T>>::mutate(who, |source| {
 				*source = actor;
 			});
 			Ok(())
