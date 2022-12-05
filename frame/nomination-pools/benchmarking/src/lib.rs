@@ -28,9 +28,10 @@ use frame_election_provider_support::SortedListProvider;
 use frame_support::{assert_ok, ensure, traits::Get};
 use frame_system::RawOrigin as RuntimeOrigin;
 use pallet_nomination_pools::{
-	BalanceOf, BondExtra, BondedPoolInner, BondedPools, RewardClaimPermission, ConfigOp, MaxPoolMembers,
+	BalanceOf, BondExtra, BondedPoolInner, BondedPools, ConfigOp, MaxPoolMembers,
 	MaxPoolMembersPerPool, MaxPools, Metadata, MinCreateBond, MinJoinBond, Pallet as Pools,
-	PoolMembers, PoolRoles, PoolState, RewardClaim, RewardPools, SubPoolsStorage,
+	PoolMembers, PoolRoles, PoolState, RewardClaim, RewardClaimPermission, RewardPools,
+	SubPoolsStorage,
 };
 use sp_runtime::traits::{Bounded, StaticLookup, Zero};
 use sp_staking::{EraIndex, StakingInterface};
