@@ -16,7 +16,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use futures::{executor::LocalPool, task::LocalSpawn, FutureExt};
 use std::{
 	future::Future,
 	sync::{Arc, Mutex},
@@ -316,28 +315,17 @@ where
 	F: FnOnce(Arc<MockClient>) -> Fut + 'static,
 	Fut: Future<Output = ()>,
 {
-	let mut pool = LocalPool::new();
+	let runtime = tokio::runtime::Runtime::new().unwrap();
 	let client = Arc::new(MockClient::new());
 
 	let client_clone = client.clone();
-	pool.spawner()
-		.spawn_local_obj(
-			async move {
-				let backend = client_clone.backend.clone();
-				MmrGadget::start(
-					client_clone.clone(),
-					backend,
-					MockRuntimeApi::INDEXING_PREFIX.to_vec(),
-				)
-				.await
-			}
-			.boxed_local()
-			.into(),
-		)
-		.unwrap();
+	runtime.spawn(async move {
+		let backend = client_clone.backend.clone();
+		MmrGadget::start(client_clone, backend, MockRuntimeApi::INDEXING_PREFIX.to_vec()).await
+	});
 
-	pool.run_until(async move {
-		async_std::task::sleep(Duration::from_millis(200)).await;
+	runtime.block_on(async move {
+		tokio::time::sleep(Duration::from_millis(200)).await;
 
 		f(client).await
 	});
