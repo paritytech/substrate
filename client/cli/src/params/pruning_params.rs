@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::error;
-use clap::{builder::PossibleValue, Args};
+use clap::Args;
 use sc_service::{BlocksPruning, PruningMode};
 
 /// Parameters to define the pruning mode
@@ -64,26 +64,10 @@ pub enum DatabasePruningMode {
 	Custom(u32),
 }
 
-impl clap::ValueEnum for DatabasePruningMode {
-	fn value_variants<'a>() -> &'a [Self] {
-		&[
-			Self::Archive,
-			Self::ArchiveCanonical,
-			// NOTE: skip non-unit variants.
-		]
-	}
+impl std::str::FromStr for DatabasePruningMode {
+	type Err = String;
 
-	fn to_possible_value(&self) -> Option<PossibleValue> {
-		Some(match self {
-			Self::Archive => PossibleValue::new("archive").help("Keep the data of all blocks"),
-			Self::ArchiveCanonical => PossibleValue::new("archive-canonical")
-				.help("Keep only the data of finalized blocks"),
-			Self::Custom(_) => PossibleValue::new("a number")
-				.help("Keep the data of the last number of finalized blocks"),
-		})
-	}
-
-	fn from_str(input: &str, _ignore_case: bool) -> Result<Self, String> {
+	fn from_str(input: &str) -> Result<Self, Self::Err> {
 		match input {
 			"archive" => Ok(Self::Archive),
 			"archive-canonical" => Ok(Self::ArchiveCanonical),
