@@ -53,7 +53,7 @@ variables:
   BUILDAH_IMAGE:                   "quay.io/buildah/stable:v1.27"
   RUSTY_CACHIER_SINGLE_BRANCH:     master
   RUSTY_CACHIER_DONT_OPERATE_ON_MAIN_BRANCH: "true"
-  ZOMBIENET_IMAGE:                 "docker.io/paritytech/zombienet:v1.3.18"
+  ZOMBIENET_IMAGE:                 "docker.io/paritytech/zombienet:v1.3.22"
 
 default:
   retry:
