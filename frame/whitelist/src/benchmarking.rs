@@ -37,7 +37,7 @@ benchmarks! {
 			"call not whitelisted"
 		);
 		ensure!(
-			<T::Preimages as QueryPreimage>::is_requested(&call_hash),
+			T::Preimages::is_requested(&call_hash),
 			"preimage not requested"
 		);
 	}
@@ -54,7 +54,7 @@ benchmarks! {
 			"whitelist not removed"
 		);
 		ensure!(
-			!<T::Preimages as QueryPreimage>::is_requested(&call_hash),
+			!T::Preimages::is_requested(&call_hash),
 			"preimage still requested"
 		);
 	}
@@ -64,7 +64,7 @@ benchmarks! {
 	// on the size of the call, with a new witness in parameter.
 	dispatch_whitelisted_call {
 		// NOTE: we remove `10` because we need some bytes to encode the variants and vec length
-		let n in 1 .. <T::Preimages as StorePreimage>::MAX_LENGTH as u32 - 10;
+		let n in 1 .. T::Preimages::MAX_LENGTH as u32 - 10;
 
 		let origin = T::DispatchWhitelistedOrigin::successful_origin();
 		let remark = sp_std::vec![1u8; n as usize];
@@ -77,7 +77,7 @@ benchmarks! {
 		Pallet::<T>::whitelist_call(origin.clone(), call_hash)
 			.expect("whitelisting call must be successful");
 
-		<T::Preimages as StorePreimage>::note(encoded_call.into()).unwrap();
+		T::Preimages::note(encoded_call.into()).unwrap();
 
 	}: _<T::RuntimeOrigin>(origin, call_hash, call_encoded_len, call_weight)
 	verify {
@@ -86,7 +86,7 @@ benchmarks! {
 			"whitelist not removed"
 		);
 		ensure!(
-			!<T::Preimages as QueryPreimage>::is_requested(&call_hash),
+			!T::Preimages::is_requested(&call_hash),
 			"preimage still requested"
 		);
 	}
@@ -109,7 +109,7 @@ benchmarks! {
 			"whitelist not removed"
 		);
 		ensure!(
-			!<T::Preimages as QueryPreimage>::is_requested(&call_hash),
+			!T::Preimages::is_requested(&call_hash),
 			"preimage still requested"
 		);
 	}

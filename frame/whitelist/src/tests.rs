@@ -46,7 +46,7 @@ fn test_whitelist_call_and_remove() {
 
 		assert_ok!(Whitelist::whitelist_call(RuntimeOrigin::root(), call_hash));
 
-		assert!(<Preimage as QueryPreimage>::is_requested(&call_hash));
+		assert!(Preimage::is_requested(&call_hash));
 
 		assert_noop!(
 			Whitelist::whitelist_call(RuntimeOrigin::root(), call_hash),
@@ -60,7 +60,7 @@ fn test_whitelist_call_and_remove() {
 
 		assert_ok!(Whitelist::remove_whitelisted_call(RuntimeOrigin::root(), call_hash));
 
-		assert!(!<Preimage as QueryPreimage>::is_requested(&call_hash));
+		assert!(!Preimage::is_requested(&call_hash));
 
 		assert_noop!(
 			Whitelist::remove_whitelisted_call(RuntimeOrigin::root(), call_hash),
@@ -110,9 +110,9 @@ fn test_whitelist_call_and_execute() {
 			crate::Error::<Test>::UnavailablePreImage,
 		);
 
-		assert_ok!(<Preimage as StorePreimage>::note(encoded_call.into()));
+		assert_ok!(Preimage::note(encoded_call.into()));
 
-		assert!(<Preimage as QueryPreimage>::is_requested(&call_hash));
+		assert!(Preimage::is_requested(&call_hash));
 
 		assert_noop!(
 			Whitelist::dispatch_whitelisted_call(
@@ -131,7 +131,7 @@ fn test_whitelist_call_and_execute() {
 			call_weight
 		));
 
-		assert!(!<Preimage as QueryPreimage>::is_requested(&call_hash));
+		assert!(!Preimage::is_requested(&call_hash));
 
 		assert_noop!(
 			Whitelist::dispatch_whitelisted_call(
@@ -159,15 +159,15 @@ fn test_whitelist_call_and_execute_failing_call() {
 		let call_hash = <Test as frame_system::Config>::Hashing::hash(&encoded_call[..]);
 
 		assert_ok!(Whitelist::whitelist_call(RuntimeOrigin::root(), call_hash));
-		assert_ok!(<Preimage as StorePreimage>::note(encoded_call.into()));
-		assert!(<Preimage as QueryPreimage>::is_requested(&call_hash));
+		assert_ok!(Preimage::note(encoded_call.into()));
+		assert!(Preimage::is_requested(&call_hash));
 		assert_ok!(Whitelist::dispatch_whitelisted_call(
 			RuntimeOrigin::root(),
 			call_hash,
 			call_encoded_len,
 			call_weight
 		));
-		assert!(!<Preimage as QueryPreimage>::is_requested(&call_hash));
+		assert!(!Preimage::is_requested(&call_hash));
 	});
 }
 
@@ -180,14 +180,14 @@ fn test_whitelist_call_and_execute_without_note_preimage() {
 		let call_hash = <Test as frame_system::Config>::Hashing::hash_of(&call);
 
 		assert_ok!(Whitelist::whitelist_call(RuntimeOrigin::root(), call_hash));
-		assert!(<Preimage as QueryPreimage>::is_requested(&call_hash));
+		assert!(Preimage::is_requested(&call_hash));
 
 		assert_ok!(Whitelist::dispatch_whitelisted_call_with_preimage(
 			RuntimeOrigin::root(),
 			call.clone()
 		));
 
-		assert!(!<Preimage as QueryPreimage>::is_requested(&call_hash));
+		assert!(!Preimage::is_requested(&call_hash));
 
 		assert_noop!(
 			Whitelist::dispatch_whitelisted_call_with_preimage(RuntimeOrigin::root(), call),
@@ -209,7 +209,7 @@ fn test_whitelist_call_and_execute_decode_consumes_all() {
 
 		let call_hash = <Test as frame_system::Config>::Hashing::hash(&call[..]);
 
-		assert_ok!(<Preimage as StorePreimage>::note(call.into()));
+		assert_ok!(Preimage::note(call.into()));
 		assert_ok!(Whitelist::whitelist_call(RuntimeOrigin::root(), call_hash));
 
 		assert_noop!(
