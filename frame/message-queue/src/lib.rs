@@ -602,7 +602,7 @@ pub mod pallet {
 			let _ = ensure_signed(origin)?;
 			let actual_weight =
 				Self::do_execute_overweight(message_origin, page, index, weight_limit)?;
-			Ok(Some(actual_weight).into())
+			Ok(Some(weight_limit.saturating_sub(actual_weight)).into())
 		}
 	}
 }
