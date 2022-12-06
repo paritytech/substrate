@@ -2395,11 +2395,17 @@ pub mod env {
 		str_len: u32,
 	) -> Result<ReturnCode, TrapReason> {
 		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
-		if ctx.ext.append_debug_buffer("").map_err(|_| Error::<E::T>::OutOfBounds)? {
+		if ctx
+			.ext
+			.append_debug_buffer("")
+			.map_err(|err| TrapReason::SupervisorError(err))?
+		{
 			let data = ctx.read_sandbox_memory(memory, str_ptr, str_len)?;
 			let msg =
 				core::str::from_utf8(&data).map_err(|_| <Error<E::T>>::DebugMessageInvalidUTF8)?;
-			ctx.ext.append_debug_buffer(msg).map_err(|_| Error::<E::T>::OutOfBounds)?;
+			ctx.ext
+				.append_debug_buffer(msg)
+				.map_err(|err| TrapReason::SupervisorError(err))?;
 			return Ok(ReturnCode::Success)
 		}
 		Ok(ReturnCode::LoggingDisabled)

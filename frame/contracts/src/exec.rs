@@ -279,7 +279,7 @@ pub trait Ext: sealing::Sealed {
 	/// when the code is executing on-chain.
 	///
 	/// Returns `true` if debug message recording is enabled. Otherwise `false` is returned.
-	fn append_debug_buffer(&mut self, msg: &str) -> Result<bool, ()>;
+	fn append_debug_buffer(&mut self, msg: &str) -> Result<bool, DispatchError>;
 
 	/// Call some dispatchable and return the result.
 	fn call_runtime(&self, call: <Self::T as Config>::RuntimeCall) -> DispatchResultWithPostInfo;
@@ -1328,10 +1328,12 @@ where
 		&mut self.top_frame_mut().nested_gas
 	}
 
-	fn append_debug_buffer(&mut self, msg: &str) -> Result<bool, ()> {
+	fn append_debug_buffer(&mut self, msg: &str) -> Result<bool, DispatchError> {
 		if let Some(buffer) = &mut self.debug_message {
 			if !msg.is_empty() {
-				buffer.try_append(&mut msg.as_bytes().to_vec())?;
+				buffer.try_append(&mut msg.as_bytes().to_vec()).map_err(|_| {
+					DispatchError::Other("Maximum allowed debug buffer size exhausted!")
+				})?;
 			}
 			Ok(true)
 		} else {
@@ -2578,11 +2580,8 @@ mod tests {
 
 	#[test]
 	fn debug_buffer_is_limited() {
-		let schedule: Schedule<Test> = <Test as Config>::Schedule::get();
 		let code_hash = MockLoader::insert(Call, move |ctx, _| {
-			ctx.ext.append_debug_buffer("overflowing bytes").map_err(|_| {
-				DispatchError::Other("Maximum allowed debug buffer size exhausted!")
-			})?;
+			ctx.ext.append_debug_buffer("overflowing bytes")?;
 			exec_success()
 		});
 
@@ -2591,6 +2590,7 @@ mod tests {
 			DebugBufferVec::<Test>::try_from(vec![0u8; DebugBufferVec::<Test>::bound()]).unwrap();
 
 		ExtBuilder::default().build().execute_with(|| {
+			let schedule: Schedule<Test> = <Test as Config>::Schedule::get();
 			let min_balance = <Test as Config>::Currency::minimum_balance();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, min_balance * 10);
