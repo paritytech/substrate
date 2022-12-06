@@ -141,6 +141,8 @@ pub mod v1 {
 					weight.saturating_accrue(T::DbWeight::get().reads(1));
 				}
 			});
+			StorageVersion::new(1).put::<Pallet<T, I>>();
+			weight.saturating_accrue(T::DbWeight::get().writes(1));
 			weight
 		}
 
