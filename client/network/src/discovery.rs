@@ -878,12 +878,19 @@ mod tests {
 		},
 		identity::{ed25519, Keypair},
 		noise,
-		swarm::{Swarm, SwarmEvent},
+		swarm::{Executor, Swarm, SwarmEvent},
 		yamux, Multiaddr,
 	};
 	use sc_network_common::config::ProtocolId;
 	use sp_core::hash::H256;
-	use std::{collections::HashSet, task::Poll};
+	use std::{collections::HashSet, pin::Pin, task::Poll};
+
+	struct TokioExecutor(tokio::runtime::Runtime);
+	impl Executor for TokioExecutor {
+		fn exec(&self, f: Pin<Box<dyn Future<Output = ()> + Send>>) {
+			let _ = self.0.spawn(f);
+		}
+	}
 
 	#[test]
 	fn discovery_working() {
@@ -920,8 +927,13 @@ mod tests {
 					config.finish()
 				};
 
-				let mut swarm =
-					Swarm::with_threadpool_executor(transport, behaviour, keypair.public().to_peer_id());
+				let runtime = tokio::runtime::Runtime::new().unwrap();
+				let mut swarm = Swarm::with_executor(
+					transport,
+					behaviour,
+					keypair.public().to_peer_id(),
+					TokioExecutor(runtime),
+				);
 				let listen_addr: Multiaddr =
 					format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
 

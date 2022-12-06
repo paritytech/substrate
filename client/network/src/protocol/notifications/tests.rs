@@ -25,16 +25,24 @@ use libp2p::{
 	core::{connection::ConnectionId, transport::MemoryTransport, upgrade},
 	identity, noise,
 	swarm::{
-		behaviour::FromSwarm, ConnectionHandler, IntoConnectionHandler, NetworkBehaviour,
+		behaviour::FromSwarm, ConnectionHandler, Executor, IntoConnectionHandler, NetworkBehaviour,
 		NetworkBehaviourAction, PollParameters, Swarm, SwarmEvent,
 	},
 	yamux, Multiaddr, PeerId, Transport,
 };
 use std::{
 	iter,
+	pin::Pin,
 	task::{Context, Poll},
 	time::Duration,
 };
+
+struct TokioExecutor(tokio::runtime::Runtime);
+impl Executor for TokioExecutor {
+	fn exec(&self, f: Pin<Box<dyn Future<Output = ()> + Send>>) {
+		let _ = self.0.spawn(f);
+	}
+}
 
 /// Builds two nodes that have each other as bootstrap nodes.
 /// This is to be used only for testing, and a panic will happen if something goes wrong.
@@ -96,8 +104,13 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 				.collect(),
 		};
 
-		let mut swarm =
-			Swarm::with_threadpool_executor(transport, behaviour, keypairs[index].public().to_peer_id());
+		let runtime = tokio::runtime::Runtime::new().unwrap();
+		let mut swarm = Swarm::with_executor(
+			transport,
+			behaviour,
+			keypairs[index].public().to_peer_id(),
+			TokioExecutor(runtime),
+		);
 		swarm.listen_on(addrs[index].clone()).unwrap();
 		out.push(swarm);
 	}

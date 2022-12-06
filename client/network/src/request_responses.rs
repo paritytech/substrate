@@ -920,11 +920,18 @@ mod tests {
 		},
 		identity::Keypair,
 		noise,
-		swarm::{Swarm, SwarmEvent},
+		swarm::{Executor, Swarm, SwarmEvent},
 		Multiaddr,
 	};
 	use sc_peerset::{Peerset, PeersetConfig, SetConfig};
 	use std::{iter, time::Duration};
+
+	struct TokioExecutor(tokio::runtime::Runtime);
+	impl Executor for TokioExecutor {
+		fn exec(&self, f: Pin<Box<dyn Future<Output = ()> + Send>>) {
+			let _ = self.0.spawn(f);
+		}
+	}
 
 	fn build_swarm(
 		list: impl Iterator<Item = ProtocolConfig>,
@@ -954,8 +961,13 @@ mod tests {
 
 		let behaviour = RequestResponsesBehaviour::new(list, handle).unwrap();
 
-		let mut swarm =
-			Swarm::with_threadpool_executor(transport, behaviour, keypair.public().to_peer_id());
+		let runtime = tokio::runtime::Runtime::new().unwrap();
+		let mut swarm = Swarm::with_executor(
+			transport,
+			behaviour,
+			keypair.public().to_peer_id(),
+			TokioExecutor(runtime),
+		);
 		let listen_addr: Multiaddr = format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
 
 		swarm.listen_on(listen_addr.clone()).unwrap();
@@ -1073,6 +1085,7 @@ mod tests {
 	fn max_response_size_exceeded() {
 		let protocol_name = "/test/req-resp/1";
 		let mut pool = LocalPool::new();
+		let tokio_executor = tokio::runtime::Runtime::new().unwrap();
 
 		// Build swarms whose behaviour is `RequestResponsesBehaviour`.
 		let mut swarms = (0..2)
@@ -1190,6 +1203,7 @@ mod tests {
 		let protocol_name_1 = "/test/req-resp-1/1";
 		let protocol_name_2 = "/test/req-resp-2/1";
 		let mut pool = LocalPool::new();
+		let tokio_executor = tokio::runtime::Runtime::new().unwrap();
 
 		let mut swarm_1 = {
 			let protocol_configs = vec![
