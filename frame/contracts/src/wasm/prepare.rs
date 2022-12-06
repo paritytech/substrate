@@ -29,8 +29,9 @@ use codec::{Encode, MaxEncodedLen};
 use sp_core::crypto::UncheckedFrom;
 use sp_runtime::{traits::Hash, DispatchError};
 use sp_std::prelude::*;
-use wasm_instrument::parity_wasm::elements::{
-	self, External, Internal, MemoryType, Type, ValueType,
+use wasm_instrument::{
+	gas_metering,
+	parity_wasm::elements::{self, External, Internal, MemoryType, Type, ValueType},
 };
 use wasmi::StackLimits;
 use wasmparser::{Validator, WasmFeatures};
@@ -132,6 +133,19 @@ impl<'a, T: Config> ContractModule<'a, T> {
 		Ok(())
 	}
 
+	fn ensure_local_variable_limit(&self, limit: u32) -> Result<(), &'static str> {
+		if let Some(code_section) = self.module.code_section() {
+			for func_body in code_section.bodies() {
+				let locals_count: u32 =
+					func_body.locals().iter().map(|val_type| val_type.count()).sum();
+				if locals_count > limit {
+					return Err("single function declares too many locals")
+				}
+			}
+		}
+		Ok(())
+	}
+
 	/// Ensures that no floating point types are in use.
 	fn ensure_no_floating_types(&self) -> Result<(), &'static str> {
 		if let Some(global_section) = self.module.global_section() {
@@ -197,9 +211,9 @@ impl<'a, T: Config> ContractModule<'a, T> {
 
 	fn inject_gas_metering(self, determinism: Determinism) -> Result<Self, &'static str> {
 		let gas_rules = self.schedule.rules(&self.module, determinism);
-		let contract_module =
-			wasm_instrument::gas_metering::inject(self.module, &gas_rules, "seal0")
-				.map_err(|_| "gas instrumentation failed")?;
+		let backend = gas_metering::host_function::Injector::new("seal0", "gas");
+		let contract_module = gas_metering::inject(self.module, backend, &gas_rules)
+			.map_err(|_| "gas instrumentation failed")?;
 		Ok(ContractModule { module: contract_module, schedule: self.schedule })
 	}
 
@@ -422,6 +436,7 @@ where
 		contract_module.ensure_no_internal_memory()?;
 		contract_module.ensure_table_size_limit(schedule.limits.table_size)?;
 		contract_module.ensure_global_variable_limit(schedule.limits.globals)?;
+		contract_module.ensure_local_variable_limit(schedule.limits.locals)?;
 		contract_module.ensure_parameter_limit(schedule.limits.parameters)?;
 		contract_module.ensure_br_table_size_limit(schedule.limits.br_table_size)?;
 
@@ -636,7 +651,8 @@ mod tests {
 				let wasm = wat::parse_str($wat).unwrap().try_into().unwrap();
 				let schedule = Schedule {
 					limits: Limits {
-						globals: 3,
+					    globals: 3,
+					    locals: 3,
 						parameters: 3,
 						memory_pages: 16,
 						table_size: 3,
@@ -733,6 +749,43 @@ mod tests {
 			)
 			"#,
 			Err("module declares too many globals")
+		);
+	}
+
+	mod locals {
+		use super::*;
+
+		prepare_test!(
+			local_number_valid,
+			r#"
+			(module
+				(func
+					(local i32)
+					(local i32)
+					(local i32)
+				)
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Ok(_)
+		);
+
+		prepare_test!(
+			local_number_too_high,
+			r#"
+			(module
+				(func
+					(local i32)
+					(local i32)
+					(local i32)
+					(local i32)
+				)
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Err("single function declares too many locals")
 		);
 	}
 
