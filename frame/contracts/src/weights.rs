@@ -112,6 +112,7 @@ pub trait WeightInfo {
 	fn seal_set_code_hash(r: u32, ) -> Weight;
 	fn seal_reentrance_count(r: u32, ) -> Weight;
 	fn seal_account_reentrance_count(r: u32, ) -> Weight;
+	fn seal_instantiation_nonce(r: u32, ) -> Weight;
 	fn instr_i64const(r: u32, ) -> Weight;
 	fn instr_i64load(r: u32, ) -> Weight;
 	fn instr_i64store(r: u32, ) -> Weight;
@@ -1053,6 +1054,21 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(Weight::from_ref_time(25_552_186).saturating_mul(r.into()))
 			.saturating_add(T::DbWeight::get().reads(6))
 			.saturating_add(T::DbWeight::get().writes(3))
+	}
+	// Storage: System Account (r:1 w:0)
+	// Storage: Contracts ContractInfoOf (r:1 w:1)
+	// Storage: Contracts CodeStorage (r:1 w:0)
+	// Storage: Timestamp Now (r:1 w:0)
+	// Storage: System EventTopics (r:2 w:2)
+	// Storage: Contracts Nonce (r:1 w:1)
+	/// The range of component `r` is `[0, 20]`.
+	fn seal_instantiation_nonce(r: u32, ) -> Weight {
+		// Minimum execution time: 293_987 nanoseconds.
+		Weight::from_ref_time(307_154_849)
+			// Standard Error: 27_486
+			.saturating_add(Weight::from_ref_time(8_759_333).saturating_mul(r.into()))
+			.saturating_add(T::DbWeight::get().reads(7))
+			.saturating_add(T::DbWeight::get().writes(4))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64const(r: u32, ) -> Weight {
@@ -2306,6 +2322,21 @@ impl WeightInfo for () {
 			.saturating_add(Weight::from_ref_time(25_552_186).saturating_mul(r.into()))
 			.saturating_add(RocksDbWeight::get().reads(6))
 			.saturating_add(RocksDbWeight::get().writes(3))
+	}
+	// Storage: System Account (r:1 w:0)
+	// Storage: Contracts ContractInfoOf (r:1 w:1)
+	// Storage: Contracts CodeStorage (r:1 w:0)
+	// Storage: Timestamp Now (r:1 w:0)
+	// Storage: System EventTopics (r:2 w:2)
+	// Storage: Contracts Nonce (r:1 w:1)
+	/// The range of component `r` is `[0, 20]`.
+	fn seal_instantiation_nonce(r: u32, ) -> Weight {
+		// Minimum execution time: 293_987 nanoseconds.
+		Weight::from_ref_time(307_154_849)
+			// Standard Error: 27_486
+			.saturating_add(Weight::from_ref_time(8_759_333).saturating_mul(r.into()))
+			.saturating_add(RocksDbWeight::get().reads(7))
+			.saturating_add(RocksDbWeight::get().writes(4))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64const(r: u32, ) -> Weight {
