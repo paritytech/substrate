@@ -8652,6 +8652,7 @@ dependencies = [
  "chrono",
  "futures",
  "libp2p",
+ "libp2p-tcp",
  "log",
  "parking_lot 0.12.1",
  "pin-project",
