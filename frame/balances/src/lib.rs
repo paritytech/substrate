@@ -116,7 +116,7 @@
 //! The Staking pallet uses the `fungibles::Lockable` trait to lock a stash account's funds:
 //!
 //! ```
-//! use frame_support::traits::{WithdrawReasons, fungibles::Lockable};
+//! use frame_support::traits::{WithdrawReasons, fungibles, fungibles::Lockable};
 //! use sp_runtime::traits::Bounded;
 //! pub trait Config: frame_system::Config {
 //! 	type Currency: fungibles::Lockable<Self::AccountId, Moment=Self::BlockNumber>;
