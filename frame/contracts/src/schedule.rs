@@ -153,9 +153,6 @@ pub struct Limits {
 
 	/// The maximum size of a storage value and event payload in bytes.
 	pub payload_len: u32,
-
-	/// The maximum size of the debug buffer in bytes.
-	pub debug_buffer_len: u32,
 }
 
 impl Limits {
@@ -544,7 +541,6 @@ impl Default for Limits {
 			subject_len: 32,
 			call_depth: 32,
 			payload_len: 16 * 1024,
-			debug_buffer_len: 2 * 1024 * 1024,
 		}
 	}
 }
