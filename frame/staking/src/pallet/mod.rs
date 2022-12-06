@@ -1054,12 +1054,8 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let controller = ensure_signed(origin)?;
 
-			Self::do_withdraw_unbonded(&controller, num_slashing_spans)
-				.map(|weight| frame_support::dispatch::PostDispatchInfo {
-					actual_weight: Some(weight),
-					pays_fee: Pays::Yes,
-				})
-				.map_err(|e| e.into())
+			let actualy_weight = Self::do_withdraw_unbonded(&controller, num_slashing_spans)?;
+			Ok(Some(actual_weight))
 		}
 
 		/// Declare the desire to validate for the origin controller.
