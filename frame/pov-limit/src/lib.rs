@@ -20,11 +20,12 @@
 //! Pallet that consumes up to a specified weight of a block on `on_initialize`.
 //! The weight consumed is set as a percentage as a config parameter.
 //!
-//! NOTE: This is only meant to be used for testing
+//! NOTE: This is only meant to be used for testing.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::{pallet_prelude::*, traits::GenesisBuild};
+use sp_core::{Blake2Hasher, Hasher};
 use sp_runtime::Perbill;
 
 pub use pallet::*;
@@ -77,7 +78,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
 			for i in 0..(Compute::<T>::get().mul_ceil(T::HashesForFull::get())) {
-				Self::hash_value(i);
+				Blake2Hasher::hash(&i.to_le_bytes());
 			}
 
 			/* for _i in 0..Storage::get() {} */
@@ -99,25 +100,16 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Set the `Storage` storage value that determines how much of the
-		/// block's weight to use up during `on_initialize`.
+		/// Set the `Storage` storage value that determines the PoV size for
+		/// each block.
 		///
 		/// Only callable by Root.
 		#[pallet::weight(T::DbWeight::get().writes(1))]
-		pub fn set_computation(origin: OriginFor<T>, compute: Perbill) -> DispatchResult {
+		pub fn set_storage(origin: OriginFor<T>, storage: Perbill) -> DispatchResult {
 			let _ = ensure_root(origin)?;
-			Compute::<T>::set(compute);
+			Storage::<T>::set(storage);
 
 			Ok(())
-		}
-	}
-
-	impl<T: Config> Pallet<T> {
-		fn hash_value(value: u32) {
-			let config = argon2::Config::default();
-			// the salt is really not important here.
-			let salt = b"somesalt";
-			let _ = argon2::hash_encoded(vec![value as u8, 100].as_slice(), salt, &config);
 		}
 	}
 }
@@ -189,7 +181,7 @@ mod tests {
 	}
 
 	impl Config for Test {
-		type HashesForFull = ConstU32<50>;
+		type HashesForFull = ConstU32<1000000>;
 	}
 
 	pub fn new_test_ext() -> sp_io::TestExternalities {
