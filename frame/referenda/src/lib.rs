@@ -382,6 +382,8 @@ pub mod pallet {
 		NoPermission,
 		/// The deposit cannot be refunded since none was made.
 		NoDeposit,
+		/// The referendum status is invalid for this operation.
+		BadStatus,
 	}
 
 	#[pallet::call]
@@ -492,36 +494,6 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Refund the Submission Deposit for a closed referendum back to the depositor.
-		///
-		/// - `origin`: must be `Signed` or `Root`.
-		/// - `index`: The index of a closed referendum whose Submission Deposit has not yet been
-		///   refunded.
-		///
-		/// Emits `SubmissionDepositRefunded`.
-		#[pallet::weight(T::WeightInfo::refund_submission_deposit())]
-		pub fn refund_submission_deposit(
-			origin: OriginFor<T>,
-			index: ReferendumIndex,
-		) -> DispatchResult {
-			ensure_signed_or_root(origin)?;
-			let mut info =
-				ReferendumInfoFor::<T, I>::get(index).ok_or(Error::<T, I>::BadReferendum)?;
-			let deposit = info
-				.take_submission_deposit()
-				.map_err(|_| Error::<T, I>::Unfinished)?
-				.ok_or(Error::<T, I>::NoDeposit)?;
-			Self::refund_deposit(Some(deposit.clone()));
-			ReferendumInfoFor::<T, I>::insert(index, info);
-			let e = Event::<T, I>::SubmissionDepositRefunded {
-				index,
-				who: deposit.who,
-				amount: deposit.amount,
-			};
-			Self::deposit_event(e);
-			Ok(())
-		}
-
 		/// Cancel an ongoing referendum.
 		///
 		/// - `origin`: must be the `CancelOrigin`.
@@ -622,6 +594,36 @@ pub mod pallet {
 					OneFewerDecidingBranch::QueueEmpty
 				};
 			Ok(Some(branch.weight::<T, I>()).into())
+		}
+
+		/// Refund the Submission Deposit for a closed referendum back to the depositor.
+		///
+		/// - `origin`: must be `Signed` or `Root`.
+		/// - `index`: The index of a closed referendum whose Submission Deposit has not yet been
+		///   refunded.
+		///
+		/// Emits `SubmissionDepositRefunded`.
+		#[pallet::weight(T::WeightInfo::refund_submission_deposit())]
+		pub fn refund_submission_deposit(
+			origin: OriginFor<T>,
+			index: ReferendumIndex,
+		) -> DispatchResult {
+			ensure_signed_or_root(origin)?;
+			let mut info =
+				ReferendumInfoFor::<T, I>::get(index).ok_or(Error::<T, I>::BadReferendum)?;
+			let deposit = info
+				.take_submission_deposit()
+				.map_err(|_| Error::<T, I>::BadStatus)?
+				.ok_or(Error::<T, I>::NoDeposit)?;
+			Self::refund_deposit(Some(deposit.clone()));
+			ReferendumInfoFor::<T, I>::insert(index, info);
+			let e = Event::<T, I>::SubmissionDepositRefunded {
+				index,
+				who: deposit.who,
+				amount: deposit.amount,
+			};
+			Self::deposit_event(e);
+			Ok(())
 		}
 	}
 }

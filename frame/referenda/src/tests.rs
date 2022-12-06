@@ -457,8 +457,8 @@ fn refund_submission_deposit_works() {
 			h.clone(),
 			DispatchTime::At(10),
 		));
-		// refund of an unfinished/ongoing referendum fails.
-		let e = Error::<Test>::Unfinished;
+		// refund of an ongoing referendum fails.
+		let e = Error::<Test>::BadStatus;
 		assert_noop!(Referenda::refund_submission_deposit(RuntimeOrigin::signed(3), 0), e);
 		// cancel referendum.
 		assert_ok!(Referenda::cancel(RuntimeOrigin::signed(4), 0));
