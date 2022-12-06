@@ -51,12 +51,12 @@ pub mod pallet {
 	pub(crate) type Compute<T: Config> = StorageValue<_, Perbill, ValueQuery>;
 
 	#[pallet::storage]
-	pub(crate) type Storage<T: Config> = StorageValue<_, Perbill, ValueQuery>;
+	pub(crate) type Storage<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
 		pub compute: Perbill,
-		pub storage: Perbill,
+		pub storage: u32,
 	}
 
 	#[cfg(feature = "std")]
@@ -81,7 +81,10 @@ pub mod pallet {
 				Blake2Hasher::hash(&i.to_le_bytes());
 			}
 
-			/* for _i in 0..Storage::get() {} */
+			for i in 0..Storage::<T>::get() {
+				storage::unhashed::put(&i.to_le_bytes(), &i.to_le_bytes());
+				let _: Option<Vec<u8>> = storage::unhashed::get(&i.to_le_bytes());
+			}
 			Weight::zero()
 		}
 	}
@@ -105,7 +108,7 @@ pub mod pallet {
 		///
 		/// Only callable by Root.
 		#[pallet::weight(T::DbWeight::get().writes(1))]
-		pub fn set_storage(origin: OriginFor<T>, storage: Perbill) -> DispatchResult {
+		pub fn set_storage(origin: OriginFor<T>, storage: u32) -> DispatchResult {
 			let _ = ensure_root(origin)?;
 			Storage::<T>::set(storage);
 
@@ -136,7 +139,6 @@ mod tests {
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
 			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-			Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 			PovLimit: pallet_pov_limit::{Pallet},
 		}
 	);
@@ -168,18 +170,6 @@ mod tests {
 		type MaxConsumers = ConstU32<16>;
 	}
 
-	impl pallet_balances::Config for Test {
-		type MaxLocks = ();
-		type MaxReserves = ();
-		type ReserveIdentifier = [u8; 8];
-		type Balance = u64;
-		type RuntimeEvent = RuntimeEvent;
-		type DustRemoval = ();
-		type ExistentialDeposit = ConstU64<1>;
-		type AccountStore = System;
-		type WeightInfo = ();
-	}
-
 	impl Config for Test {
 		type HashesForFull = ConstU32<1000000>;
 	}
@@ -187,10 +177,7 @@ mod tests {
 	pub fn new_test_ext() -> sp_io::TestExternalities {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
-		let genesis = pallet::GenesisConfig {
-			compute: Perbill::from_percent(50),
-			storage: Perbill::from_percent(50),
-		};
+		let genesis = pallet::GenesisConfig { compute: Perbill::from_percent(50), storage: 10000 };
 
 		GenesisBuild::<Test>::assimilate_storage(&genesis, &mut t).unwrap();
 
