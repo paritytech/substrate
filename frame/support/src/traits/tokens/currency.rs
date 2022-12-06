@@ -32,6 +32,7 @@ use sp_std::fmt::Debug;
 mod reservable;
 pub use reservable::{NamedReservableCurrency, ReservableCurrency};
 mod lockable;
+#[allow(deprecated)]
 pub use lockable::{LockIdentifier, LockableCurrency, VestingSchedule};
 
 /// Abstraction over a fungible assets system.
