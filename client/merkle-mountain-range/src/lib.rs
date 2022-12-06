@@ -201,7 +201,7 @@ mod tests {
 			let a2 = client.import_block(&BlockId::Hash(a1.hash()), b"a2", Some(1)).await;
 
 			client.finalize_block(a1.hash(), Some(1));
-			async_std::task::sleep(Duration::from_millis(200)).await;
+			tokio::time::sleep(Duration::from_millis(200)).await;
 			// expected finalized heads: a1
 			client.assert_canonicalized(&[&a1]);
 			client.assert_not_pruned(&[&a2]);
@@ -221,7 +221,7 @@ mod tests {
 			let a6 = client.import_block(&BlockId::Hash(a5.hash()), b"a6", Some(2)).await;
 
 			client.finalize_block(a5.hash(), Some(2));
-			async_std::task::sleep(Duration::from_millis(200)).await;
+			tokio::time::sleep(Duration::from_millis(200)).await;
 			// expected finalized heads: a4, a5
 			client.assert_canonicalized(&[&a4, &a5]);
 			client.assert_not_pruned(&[&a6]);
@@ -240,7 +240,7 @@ mod tests {
 			// Simulate the case where the runtime says that there are 2 mmr_blocks when in fact
 			// there is only 1.
 			client.finalize_block(a1.hash(), Some(2));
-			async_std::task::sleep(Duration::from_millis(200)).await;
+			tokio::time::sleep(Duration::from_millis(200)).await;
 			// expected finalized heads: -
 			client.assert_not_canonicalized(&[&a1]);
 		});
