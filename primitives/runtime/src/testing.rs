@@ -204,13 +204,10 @@ impl Header {
 }
 
 /// An opaque extrinsic wrapper type.
-#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode, parity_util_mem::MallocSizeOf)]
+#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode)]
 pub struct ExtrinsicWrapper<Xt>(Xt);
 
-impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt>
-where
-	Xt: parity_util_mem::MallocSizeOf,
-{
+impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt> {
 	type Call = ();
 	type SignaturePayload = ();
 
@@ -243,7 +240,7 @@ impl<Xt> Deref for ExtrinsicWrapper<Xt> {
 }
 
 /// Testing block
-#[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode, parity_util_mem::MallocSizeOf)]
+#[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode)]
 pub struct Block<Xt> {
 	/// Block header
 	pub header: Header,
@@ -305,9 +302,6 @@ impl<Call, Extra> TestXt<Call, Extra> {
 		Self { call, signature }
 	}
 }
-
-// Non-opaque extrinsics always 0.
-parity_util_mem::malloc_size_of_is_0!(any: TestXt<Call, Extra>);
 
 impl<Call, Extra> Serialize for TestXt<Call, Extra>
 where

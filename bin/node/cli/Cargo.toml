@@ -101,11 +101,6 @@ node-inspect = { version = "0.9.0-dev", optional = true, path = "../inspect" }
 try-runtime-cli = { version = "0.10.0-dev", optional = true, path = "../../../utils/frame/try-runtime/cli" }
 serde_json = "1.0.85"
 
-[target.'cfg(any(target_arch="x86_64", target_arch="aarch64"))'.dependencies]
-sp-trie = { version = "7.0.0", default-features = false, path = "../../../primitives/trie", features = [
-	"memory-tracker",
-] }
-
 [dev-dependencies]
 sc-keystore = { version = "4.0.0-dev", path = "../../../client/keystore" }
 sc-client-db = { version = "0.10.0-dev", path = "../../../client/db" }
