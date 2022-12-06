@@ -5271,7 +5271,7 @@ dependencies = [
  "sp-keystore",
  "sp-runtime",
  "sp-std",
- "wasm-instrument",
+ "wasm-instrument 0.4.0",
  "wasmi 0.20.0",
  "wasmparser-nostd",
  "wat",
@@ -7961,7 +7961,7 @@ dependencies = [
  "sp-sandbox",
  "sp-wasm-interface",
  "thiserror",
- "wasm-instrument",
+ "wasm-instrument 0.3.0",
  "wasmer",
  "wasmi 0.13.0",
 ]
@@ -11272,6 +11272,15 @@ name = "wasm-instrument"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa1dafb3e60065305741e83db35c6c2584bb3725b692b5b66148a38d72ace6cd"
+dependencies = [
+ "parity-wasm",
+]
+
+[[package]]
+name = "wasm-instrument"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a47ecb37b9734d1085eaa5ae1a81e60801fd8c28d4cabdd8aedb982021918bc"
 dependencies = [
  "parity-wasm",
 ]
