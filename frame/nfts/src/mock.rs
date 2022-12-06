@@ -20,15 +20,24 @@
 use super::*;
 use crate as pallet_nfts;
 
+use codec::MaxEncodedLen;
 use frame_support::{
-	construct_runtime, parameter_types,
-	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64},
+	construct_runtime,
+	dispatch::DispatchResult,
+	parameter_types,
+	traits::{
+		fungibles::{Inspect, Transfer},
+		AsEnsureOriginWithArg, Balance as BalanceTrait, ConstU32, ConstU64,
+		Currency as PalletCurrency, ExistenceRequirement,
+	},
 	PalletId,
 };
+use scale_info::TypeInfo;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	FixedPointOperand,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -40,6 +49,7 @@ construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
+		Assets: pallet_assets,
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Nfts: pallet_nfts::{Pallet, Call, Storage, Event<T>},
@@ -85,11 +95,20 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 }
 
+use pallet_assets::FrozenBalance;
+pub struct TestFreezer;
+impl FrozenBalance<u32, u64, u64> for TestFreezer {
+	fn frozen_balance(_asset: u32, _who: &u64) -> Option<u64> {
+		None
+	}
+	fn died(_asset: u32, _who: &u64) {}
+}
 impl pallet_assets::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Balance = u64;
 	type AssetId = u32;
 	type Currency = Balances;
+	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<u64>>;
 	type ForceOrigin = frame_system::EnsureRoot<u64>;
 	type AssetDeposit = ConstU64<1>;
 	type AssetAccountDeposit = ConstU64<10>;
@@ -97,9 +116,10 @@ impl pallet_assets::Config for Test {
 	type MetadataDepositPerByte = ConstU64<1>;
 	type ApprovalDeposit = ConstU64<1>;
 	type StringLimit = ConstU32<50>;
-	type Freezer = ();
+	type Freezer = TestFreezer;
 	type WeightInfo = ();
 	type Extra = ();
+	type RemoveItemsLimit = ConstU32<5>;
 }
 
 parameter_types! {
@@ -107,12 +127,48 @@ parameter_types! {
 	pub const NftsPalletId: PalletId = PalletId(*b"py/nfts_");
 }
 
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub enum MultiBalance<NativeBalance, AssetId, AssetBalance> {
+	Native(NativeBalance),
+	Asset(AssetId, AssetBalance),
+}
+
+use sp_std::marker::PhantomData;
+pub struct MultiCurrencyAdapter<AccountId, Balance, NativeCurrency, AssetBalance>(
+	PhantomData<(AccountId, Balance, NativeCurrency, AssetBalance)>,
+);
+
+impl<AccountId, Balance, NativeCurrency, AssetBalance> MultiCurrency<AccountId>
+	for MultiCurrencyAdapter<AccountId, Balance, NativeCurrency, AssetBalance>
+where
+	Balance: BalanceTrait + FixedPointOperand + Zero,
+	NativeCurrency: PalletCurrency<AccountId, Balance = Balance>,
+	AssetBalance: Inspect<AccountId, AssetId = u32, Balance = Balance> + Transfer<AccountId>,
+{
+	type Balance = MultiBalance<Balance, u32, AssetBalance>;
+
+	fn transfer(
+		source: &AccountId,
+		dest: &AccountId,
+		value: Self::Balance,
+		existence_requirement: ExistenceRequirement,
+	) -> DispatchResult {
+		match value {
+			MultiBalance::Native(value) =>
+				NativeCurrency::transfer(source, dest, value, existence_requirement),
+			MultiBalance::Asset(assetId, value) =>
+				AssetBalance::transfer(assetId, source, dest, value, true), // TODO: fix keep_alive
+		}
+	}
+}
+
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type CollectionId = u32;
 	type ItemId = u32;
 	type Currency = Balances;
-	type MultiCurrency = MultiCurrencyAdapter<Test, Balances, Balances>;
+	type MultiCurrency =
+		MultiCurrencyAdapter<u64, <Self as pallet_balances::Config>::Balance, Balances, Assets>;
 	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<u64>>;
 	type ForceOrigin = frame_system::EnsureRoot<u64>;
 	type Locker = ();

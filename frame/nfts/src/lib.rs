@@ -487,7 +487,7 @@ pub mod pallet {
 			item: T::ItemId,
 			sender: T::AccountId,
 			receiver: T::AccountId,
-			amount: DepositBalanceOf<T, I>,
+			amount: BalanceOf<T, I>,
 		},
 		/// An `item` swap intent was created.
 		SwapCreated {
@@ -801,7 +801,7 @@ pub mod pallet {
 					}
 
 					if let Some(price) = mint_settings.price {
-						T::Currency::transfer(
+						T::MultiCurrency::transfer(
 							&caller,
 							&collection_details.owner,
 							price,

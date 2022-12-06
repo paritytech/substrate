@@ -16,10 +16,7 @@
 // limitations under the License.
 
 use crate::*;
-use frame_support::{
-	pallet_prelude::*,
-	traits::{Currency, ExistenceRequirement::KeepAlive},
-};
+use frame_support::{pallet_prelude::*, traits::ExistenceRequirement::KeepAlive};
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub(crate) fn do_create_swap(
@@ -142,13 +139,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		if let Some(ref price) = swap.price {
 			match price.direction {
-				PriceDirection::Send => T::Currency::transfer(
+				PriceDirection::Send => T::MultiCurrency::transfer(
 					&receive_item.owner,
 					&send_item.owner,
 					price.amount,
 					KeepAlive,
 				)?,
-				PriceDirection::Receive => T::Currency::transfer(
+				PriceDirection::Receive => T::MultiCurrency::transfer(
 					&send_item.owner,
 					&receive_item.owner,
 					price.amount,

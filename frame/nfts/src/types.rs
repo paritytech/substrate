@@ -45,48 +45,21 @@ pub(super) type AttributeDepositOf<T, I> =
 	AttributeDeposit<DepositBalanceOf<T, I>, <T as SystemConfig>::AccountId>;
 pub(super) type ItemDetailsFor<T, I> =
 	ItemDetails<<T as SystemConfig>::AccountId, ItemDepositOf<T, I>, ApprovalsOf<T, I>>;
-pub(super) type NativeBalanceOf<T, I = ()> =
-	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
-pub(super) type CurrencyIdOf<T, I = ()> =
-	<<T as Config<I>>::MultiCurrency as MultiCurrency<<T as SystemConfig>::AccountId>>::CurrencyId;
-pub(super) type MultiCurrencyAmountOf<T, I = ()> =
+
+pub(super) type BalanceOf<T, I = ()> =
 	<<T as Config<I>>::MultiCurrency as MultiCurrency<<T as SystemConfig>::AccountId>>::Balance;
-pub(super) type ItemPrice<T, I = ()> = (CurrencyIdOf<T, I>, Option<MultiCurrencyAmountOf<T, I>>);
+pub(super) type ItemPrice<T, I = ()> = BalanceOf<T, I>;
 pub(super) type ItemTipOf<T, I = ()> = ItemTip<
 	<T as Config<I>>::CollectionId,
 	<T as Config<I>>::ItemId,
 	<T as SystemConfig>::AccountId,
-	NativeBalanceOf<T, I>,
+	BalanceOf<T, I>,
 >;
 pub(super) type CollectionConfigFor<T, I = ()> = CollectionConfig<
-	ItemPrice<T, I>,
+	BalanceOf<T, I>,
 	<T as SystemConfig>::BlockNumber,
 	<T as Config<I>>::CollectionId,
 >;
-
-pub struct MultiCurrencyAdapter<T, Currency, Amount>(marker::PhantomData<(T, Currency, Amount)>);
-
-impl<T, AccountId, Currency, Amount> MultiCurrency<AccountId>
-for MultiCurrencyAdapter<T, Currency, Amount>
-	where
-		Currency: PalletCurrency<AccountId>,
-		T: Config,
-{
-	type Balance = PalletBalanceOf<AccountId, Currency>;
-
-	fn transfer(
-		currency_id: Option<Self::CurrencyId>,
-		source: &AccountId,
-		dest: &AccountId,
-		value: Self::Balance,
-	) -> DispatchResult {
-		if let Some(currency_id) {
-			//
-		} else {
-			Currency::transfer(source, dest, value, ExistenceRequirement::AllowDeath)
-		}
-	}
-}
 
 /*#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum MultiCurrency<NativeBalance, AssetId, AssetBalance> {

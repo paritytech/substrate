@@ -17,24 +17,20 @@
 
 //! The MultiCurrency trait.
 
-use super::super::misc::{AssetId, Balance};
-use crate::dispatch::DispatchResult;
-use sp_runtime::{traits::MaybeSerializeDeserialize, FixedPointOperand};
-use sp_std::fmt::Debug;
+use super::super::misc::Balance;
+use crate::{dispatch::DispatchResult, traits::ExistenceRequirement};
+use sp_runtime::FixedPointOperand;
 
 /// Abstraction over a fungible multi-currency system.
 pub trait MultiCurrency<AccountId> {
-	/// The currency identifier.
-	type CurrencyId: AssetId;
-
 	/// The balance of an account.
-	type Balance: Balance + MaybeSerializeDeserialize + Debug + FixedPointOperand;
+	type Balance: Balance + FixedPointOperand;
 
 	/// Transfer some amount from one account to another.
 	fn transfer(
-		currency_id: Option<Self::CurrencyId>,
 		source: &AccountId,
 		dest: &AccountId,
 		value: Self::Balance,
+		existence_requirement: ExistenceRequirement,
 	) -> DispatchResult;
 }
