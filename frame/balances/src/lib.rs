@@ -79,7 +79,7 @@
 //! - [`ReservableCurrency`](frame_support::traits::ReservableCurrency):
 //! - [`NamedReservableCurrency`](frame_support::traits::NamedReservableCurrency):
 //! Functions for dealing with assets that can be reserved from an account.
-//! - [`LockableCurrency`](frame_support::traits::LockableCurrency): Functions for
+//! - [`Lockable`](frame_support::traits::fungibles::Lockable): Functions for
 //! dealing with accounts that allow liquidity restrictions.
 //! - [`Imbalance`](frame_support::traits::Imbalance): Functions for handling
 //! imbalances between total issuance in the system and account balances. Must be used when a
@@ -113,13 +113,13 @@
 //! # fn main() {}
 //! ```
 //!
-//! The Staking pallet uses the `LockableCurrency` trait to lock a stash account's funds:
+//! The Staking pallet uses the `fungibles::Lockable` trait to lock a stash account's funds:
 //!
 //! ```
-//! use frame_support::traits::{WithdrawReasons, LockableCurrency};
+//! use frame_support::traits::{WithdrawReasons, fungibles::Lockable};
 //! use sp_runtime::traits::Bounded;
 //! pub trait Config: frame_system::Config {
-//! 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
+//! 	type Currency: fungibles::Lockable<Self::AccountId, Moment=Self::BlockNumber>;
 //! }
 //! # struct StakingLedger<T: Config> {
 //! # 	stash: <T as frame_system::Config>::AccountId,
