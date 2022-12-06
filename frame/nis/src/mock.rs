@@ -15,15 +15,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test environment for Gilt pallet.
+//! Test environment for NIS pallet.
 
-use crate as pallet_gilt;
+use crate::{self as pallet_nis, Perquintill, WithMaximumOf};
 
 use frame_support::{
 	ord_parameter_types, parameter_types,
-	traits::{ConstU16, ConstU32, ConstU64, Currency, GenesisBuild, OnFinalize, OnInitialize},
+	traits::{ConstU16, ConstU32, ConstU64, Currency, OnFinalize, OnInitialize, StorageMapShim},
+	weights::Weight,
+	PalletId,
 };
-use sp_core::H256;
+use pallet_balances::{Instance1, Instance2};
+use sp_core::{ConstU128, H256};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -39,9 +42,10 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Pallet, Call, Config<T>, Storage, Event<T>},
-		Gilt: pallet_gilt::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system,
+		Balances: pallet_balances::<Instance1>,
+		NisBalances: pallet_balances::<Instance2>,
+		Nis: pallet_nis,
 	}
 );
 
@@ -72,7 +76,7 @@ impl frame_system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
-impl pallet_balances::Config for Test {
+impl pallet_balances::Config<Instance1> for Test {
 	type Balance = u64;
 	type DustRemoval = ();
 	type RuntimeEvent = RuntimeEvent;
@@ -84,52 +88,79 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 }
 
+impl pallet_balances::Config<Instance2> for Test {
+	type Balance = u128;
+	type DustRemoval = ();
+	type RuntimeEvent = RuntimeEvent;
+	type ExistentialDeposit = frame_support::traits::ConstU128<1>;
+	type AccountStore = StorageMapShim<
+		pallet_balances::Account<Test, Instance2>,
+		frame_system::Provider<Test>,
+		u64,
+		pallet_balances::AccountData<u128>,
+	>;
+	type WeightInfo = ();
+	type MaxLocks = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
+}
+
 parameter_types! {
 	pub IgnoredIssuance: u64 = Balances::total_balance(&0); // Account zero is ignored.
+	pub const NisPalletId: PalletId = PalletId(*b"py/nis  ");
+	pub static Target: Perquintill = Perquintill::zero();
+	pub const MinReceipt: Perquintill = Perquintill::from_percent(1);
+	pub const ThawThrottle: (Perquintill, u64) = (Perquintill::from_percent(25), 5);
+	pub static MaxIntakeWeight: Weight = Weight::from_ref_time(2_000_000_000_000);
 }
+
 ord_parameter_types! {
 	pub const One: u64 = 1;
 }
 
-impl pallet_gilt::Config for Test {
+impl pallet_nis::Config for Test {
+	type WeightInfo = ();
 	type RuntimeEvent = RuntimeEvent;
+	type PalletId = NisPalletId;
 	type Currency = Balances;
-	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
-	type AdminOrigin = frame_system::EnsureSignedBy<One, Self::AccountId>;
+	type CurrencyBalance = <Self as pallet_balances::Config<Instance1>>::Balance;
+	type FundOrigin = frame_system::EnsureSigned<Self::AccountId>;
 	type Deficit = ();
-	type Surplus = ();
 	type IgnoredIssuance = IgnoredIssuance;
+	type Counterpart = NisBalances;
+	type CounterpartAmount = WithMaximumOf<ConstU128<21_000_000u128>>;
+	type Target = Target;
 	type QueueCount = ConstU32<3>;
 	type MaxQueueLen = ConstU32<3>;
 	type FifoQueueLen = ConstU32<1>;
-	type Period = ConstU64<3>;
-	type MinFreeze = ConstU64<2>;
+	type BasePeriod = ConstU64<3>;
+	type MinBid = ConstU64<2>;
 	type IntakePeriod = ConstU64<2>;
-	type MaxIntakeBids = ConstU32<2>;
-	type WeightInfo = ();
+	type MaxIntakeWeight = MaxIntakeWeight;
+	type MinReceipt = MinReceipt;
+	type ThawThrottle = ThawThrottle;
 }
 
 // This function basically just builds a genesis storage key/value store according to
 // our desired mockup.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	pallet_balances::GenesisConfig::<Test> {
+	pallet_balances::GenesisConfig::<Test, Instance1> {
 		balances: vec![(1, 100), (2, 100), (3, 100), (4, 100)],
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();
-	GenesisBuild::<Test>::assimilate_storage(&crate::GenesisConfig, &mut t).unwrap();
 	t.into()
 }
 
 pub fn run_to_block(n: u64) {
 	while System::block_number() < n {
-		Gilt::on_finalize(System::block_number());
+		Nis::on_finalize(System::block_number());
 		Balances::on_finalize(System::block_number());
 		System::on_finalize(System::block_number());
 		System::set_block_number(System::block_number() + 1);
 		System::on_initialize(System::block_number());
 		Balances::on_initialize(System::block_number());
-		Gilt::on_initialize(System::block_number());
+		Nis::on_initialize(System::block_number());
 	}
 }

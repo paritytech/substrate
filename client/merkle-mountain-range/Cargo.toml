@@ -29,4 +29,3 @@ sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
 tokio = "1.17.0"
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
-async-std = { version = "1.11.0", default-features = false }
