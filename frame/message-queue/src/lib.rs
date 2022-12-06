@@ -602,7 +602,7 @@ pub mod pallet {
 			let _ = ensure_signed(origin)?;
 			let actual_weight =
 				Self::do_execute_overweight(message_origin, page, index, weight_limit)?;
-			Ok(Some(weight_limit.saturating_sub(actual_weight)).into())
+			Ok(Some(actual_weight).into())
 		}
 	}
 }
@@ -809,7 +809,7 @@ impl<T: Config> Pallet<T> {
 				page.note_processed_at_pos(pos);
 				book_state.message_count.saturating_dec();
 				book_state.size.saturating_reduce(payload_len);
-				if page.remaining.is_zero() {
+				let page_weight = if page.remaining.is_zero() {
 					debug_assert!(
 						page.remaining_size.is_zero(),
 						"no messages remaining; no space taken; qed"
@@ -817,18 +817,20 @@ impl<T: Config> Pallet<T> {
 					Pages::<T>::remove(&origin, page_index);
 					debug_assert!(book_state.count >= 1, "page exists, so book must have pages");
 					book_state.count.saturating_dec();
+					T::WeightInfo::execute_overweight_page_removed()
 				// no need to consider .first or ready ring since processing an overweight page
 				// would not alter that state.
 				} else {
 					Pages::<T>::insert(&origin, page_index, page);
-				}
+					T::WeightInfo::execute_overweight_page_updated()
+				};
 				BookStateFor::<T>::insert(&origin, &book_state);
 				T::QueueChangeHandler::on_queue_changed(
 					origin,
 					book_state.message_count,
 					book_state.size,
 				);
-				Ok(weight_counter.consumed)
+				Ok(weight_counter.consumed.saturating_add(page_weight))
 			},
 		}
 	}
