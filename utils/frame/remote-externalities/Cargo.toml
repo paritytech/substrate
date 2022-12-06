@@ -1,5 +1,5 @@
 [package]
-name = "remote-externalities"
+name = "frame-remote-externalities"
 version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"

@@ -14,7 +14,7 @@ homepage = "https://substrate.io"
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 futures = "0.3"
 log = "0.4"
-beefy-primitives = { version = "4.0.0-dev", path = "../../primitives/beefy" }
+beefy-primitives = { version = "4.0.0-dev", path = "../../primitives/beefy", package = "sp-beefy" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }

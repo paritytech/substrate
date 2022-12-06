@@ -374,7 +374,6 @@ version = "4.0.0-dev"
 dependencies = [
  "array-bytes",
  "async-trait",
- "beefy-primitives",
  "fnv",
  "futures",
  "futures-timer",
@@ -396,6 +395,7 @@ dependencies = [
  "sp-api",
  "sp-application-crypto",
  "sp-arithmetic",
+ "sp-beefy",
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
@@ -419,7 +419,6 @@ name = "beefy-gadget-rpc"
 version = "4.0.0-dev"
 dependencies = [
  "beefy-gadget",
- "beefy-primitives",
  "futures",
  "jsonrpsee",
  "log",
@@ -429,6 +428,7 @@ dependencies = [
  "sc-utils",
  "serde",
  "serde_json",
+ "sp-beefy",
  "sp-core",
  "sp-runtime",
  "substrate-test-runtime-client",
@@ -441,29 +441,11 @@ name = "beefy-merkle-tree"
 version = "4.0.0-dev"
 dependencies = [
  "array-bytes",
- "beefy-primitives",
  "env_logger",
  "log",
  "sp-api",
+ "sp-beefy",
  "sp-runtime",
-]
-
-[[package]]
-name = "beefy-primitives"
-version = "4.0.0-dev"
-dependencies = [
- "array-bytes",
- "parity-scale-codec",
- "scale-info",
- "serde",
- "sp-api",
- "sp-application-crypto",
- "sp-core",
- "sp-io",
- "sp-keystore",
- "sp-mmr-primitives",
- "sp-runtime",
- "sp-std",
 ]
 
 [[package]]
@@ -2224,6 +2206,25 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
+]
+
+[[package]]
+name = "frame-remote-externalities"
+version = "0.10.0-dev"
+dependencies = [
+ "env_logger",
+ "frame-support",
+ "log",
+ "pallet-elections-phragmen",
+ "parity-scale-codec",
+ "serde",
+ "serde_json",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-version",
+ "substrate-rpc-client",
+ "tokio",
 ]
 
 [[package]]
@@ -4139,7 +4140,6 @@ dependencies = [
 name = "mmr-gadget"
 version = "4.0.0-dev"
 dependencies = [
- "beefy-primitives",
  "futures",
  "log",
  "parity-scale-codec",
@@ -4147,6 +4147,7 @@ dependencies = [
  "sc-client-api",
  "sc-offchain",
  "sp-api",
+ "sp-beefy",
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
@@ -5115,12 +5116,12 @@ name = "pallet-bags-list-remote-tests"
 version = "4.0.0-dev"
 dependencies = [
  "frame-election-provider-support",
+ "frame-remote-externalities",
  "frame-support",
  "frame-system",
  "log",
  "pallet-bags-list",
  "pallet-staking",
- "remote-externalities",
  "sp-core",
  "sp-runtime",
  "sp-std",
@@ -5149,13 +5150,13 @@ dependencies = [
 name = "pallet-beefy"
 version = "4.0.0-dev"
 dependencies = [
- "beefy-primitives",
  "frame-support",
  "frame-system",
  "pallet-session",
  "parity-scale-codec",
  "scale-info",
  "serde",
+ "sp-beefy",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -5169,7 +5170,6 @@ version = "4.0.0-dev"
 dependencies = [
  "array-bytes",
  "beefy-merkle-tree",
- "beefy-primitives",
  "frame-support",
  "frame-system",
  "log",
@@ -5179,6 +5179,7 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
+ "sp-beefy",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -6087,13 +6088,13 @@ name = "pallet-state-trie-migration"
 version = "4.0.0-dev"
 dependencies = [
  "frame-benchmarking",
+ "frame-remote-externalities",
  "frame-support",
  "frame-system",
  "log",
  "pallet-balances",
  "parity-scale-codec",
  "parking_lot 0.12.1",
- "remote-externalities",
  "scale-info",
  "serde",
  "sp-core",
@@ -7187,25 +7188,6 @@ dependencies = [
  "libc",
  "mach",
  "winapi",
-]
-
-[[package]]
-name = "remote-externalities"
-version = "0.10.0-dev"
-dependencies = [
- "env_logger",
- "frame-support",
- "log",
- "pallet-elections-phragmen",
- "parity-scale-codec",
- "serde",
- "serde_json",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-version",
- "substrate-rpc-client",
- "tokio",
 ]
 
 [[package]]
@@ -9328,6 +9310,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-beefy"
+version = "4.0.0-dev"
+dependencies = [
+ "array-bytes",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-api",
+ "sp-application-crypto",
+ "sp-core",
+ "sp-io",
+ "sp-keystore",
+ "sp-mmr-primitives",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "sp-block-builder"
 version = "4.0.0-dev"
 dependencies = [
@@ -10323,7 +10323,6 @@ name = "substrate-test-runtime"
 version = "2.0.0"
 dependencies = [
  "beefy-merkle-tree",
- "beefy-primitives",
  "cfg-if",
  "frame-support",
  "frame-system",
@@ -10342,6 +10341,7 @@ dependencies = [
  "serde",
  "sp-api",
  "sp-application-crypto",
+ "sp-beefy",
  "sp-block-builder",
  "sp-consensus",
  "sp-consensus-aura",
@@ -10952,10 +10952,10 @@ name = "try-runtime-cli"
 version = "0.10.0-dev"
 dependencies = [
  "clap 4.0.11",
+ "frame-remote-externalities",
  "frame-try-runtime",
  "log",
  "parity-scale-codec",
- "remote-externalities",
  "sc-chain-spec",
  "sc-cli",
  "sc-executor",
