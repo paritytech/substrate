@@ -149,13 +149,13 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 			ensure!(Self::key().map_or(false, |k| sender == k), Error::<T>::RequireSudo);
 
-			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
-			Self::deposit_event(Event::Sudid { sudo_result: res.map(|_| ()).map_err(|e| e.error) });
+			let res = call.clone().dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
+			Self::deposit_event(Event::Sudid { sudo_result: res.clone().map(|_| ()).map_err(|e| e.error) });
 			log::info!(
 				target: "runtime::sudo",
 				"A sudo action was performed: Call - {:?}, Result - {:?}!",
-				call.clone(),
-				res.clone()
+				call,
+				res
 			);
 			// Sudo user does not pay a fee.
 			Ok(Pays::No.into())
@@ -181,13 +181,13 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 			ensure!(Self::key().map_or(false, |k| sender == k), Error::<T>::RequireSudo);
 
-			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
-			Self::deposit_event(Event::Sudid { sudo_result: res.map(|_| ()).map_err(|e| e.error) });
+			let res = call.clone().dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
+			Self::deposit_event(Event::Sudid { sudo_result: res.clone().map(|_| ()).map_err(|e| e.error) });
 			log::info!(
 				target: "runtime::sudo",
 				"A sudo action was performed with unchecked weight: Call - {:?}, Result - {:?}!",
-				call.clone(),
-				res.clone()
+				call,
+				res
 			);
 			// Sudo user does not pay a fee.
 			Ok(Pays::No.into())
@@ -255,17 +255,17 @@ pub mod pallet {
 
 			let who = T::Lookup::lookup(who)?;
 
-			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Signed(who).into());
+			let res = call.clone().dispatch_bypass_filter(frame_system::RawOrigin::Signed(who.clone()).into());
 
 			Self::deposit_event(Event::SudoAsDone {
-				sudo_result: res.map(|_| ()).map_err(|e| e.error),
+				sudo_result: res.clone().map(|_| ()).map_err(|e| e.error),
 			});
 			log::info!(
 				target: "runtime::sudo",
 				"A sudo_as action was performed: Who - {:?}, Call - {:?}, Result - {:?}!",
-				who.clone(),
-				call.clone(),
-				res.clone()
+				who,
+				call,
+				res
 			);
 			// Sudo user does not pay a fee.
 			Ok(Pays::No.into())

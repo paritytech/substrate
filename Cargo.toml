@@ -137,6 +137,7 @@ members = [
 	"frame/staking/reward-fn",
 	"frame/state-trie-migration",
 	"frame/sudo",
+	"frame/sudo-mangata",
 	"frame/support",
 	"frame/support/procedural",
 	"frame/support/procedural/tools",
