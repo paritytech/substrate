@@ -46,8 +46,8 @@ use sp_arithmetic::traits::{AtLeast32Bit, Saturating};
 use sp_consensus::SyncOracle;
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
-	traits::{Block, Header, NumberFor, Zero},
-	SaturatedConversion,
+	traits::{Block, ConstU32, Header, NumberFor, Zero},
+	BoundedVec, SaturatedConversion,
 };
 use std::{
 	collections::{BTreeMap, BTreeSet, VecDeque},
@@ -55,6 +55,13 @@ use std::{
 	marker::PhantomData,
 	sync::Arc,
 };
+/// Bound for the number of buffered future voting rounds.
+const MAX_BUFFERED_VOTE_ROUNDS: usize = 600;
+/// Bound for the number of buffered votes per round number.
+const MAX_BUFFERED_VOTES_PER_ROUND: u32 = 1000;
+/// Bound for the number of pending justifications - use 2400 - the max number
+/// of justifications possible in a single session.
+const MAX_BUFFERED_JUSTIFICATIONS: usize = 2400;
 
 pub(crate) enum RoundAction {
 	Drop,
@@ -306,7 +313,13 @@ pub(crate) struct BeefyWorker<B: Block, BE, P, N> {
 	/// BEEFY client metrics.
 	metrics: Option<Metrics>,
 	/// Buffer holding votes for future processing.
-	pending_votes: BTreeMap<NumberFor<B>, Vec<VoteMessage<NumberFor<B>, AuthorityId, Signature>>>,
+	pending_votes: BTreeMap<
+		NumberFor<B>,
+		BoundedVec<
+			VoteMessage<NumberFor<B>, AuthorityId, Signature>,
+			ConstU32<MAX_BUFFERED_VOTES_PER_ROUND>,
+		>,
+	>,
 	/// Buffer holding justifications for future processing.
 	pending_justifications: BTreeMap<NumberFor<B>, BeefyVersionedFinalityProof<B>>,
 	/// Persisted voter state.
@@ -479,7 +492,14 @@ where
 			)?,
 			RoundAction::Enqueue => {
 				debug!(target: "beefy", "🥩 Buffer vote for round: {:?}.", block_num);
-				self.pending_votes.entry(block_num).or_default().push(vote)
+				if self.pending_votes.len() < MAX_BUFFERED_VOTE_ROUNDS {
+					let votes_vec = self.pending_votes.entry(block_num).or_default();
+					if votes_vec.try_push(vote).is_err() {
+						warn!(target: "beefy", "🥩 Buffer vote dropped for round: {:?}", block_num)
+					}
+				} else {
+					error!(target: "beefy", "🥩 Buffer justification dropped for round: {:?}.", block_num);
+				}
 			},
 			RoundAction::Drop => (),
 		};
@@ -505,7 +525,11 @@ where
 			},
 			RoundAction::Enqueue => {
 				debug!(target: "beefy", "🥩 Buffer justification for round: {:?}.", block_num);
-				self.pending_justifications.entry(block_num).or_insert(justification);
+				if self.pending_justifications.len() < MAX_BUFFERED_JUSTIFICATIONS {
+					self.pending_justifications.entry(block_num).or_insert(justification);
+				} else {
+					error!(target: "beefy", "🥩 Buffer justification dropped for round: {:?}.", block_num);
+				}
 			},
 			RoundAction::Drop => (),
 		};
