@@ -55,7 +55,7 @@ use frame_system::offchain::{SendTransactionTypes, SubmitTransaction};
 use sp_consensus_sassafras::{
 	digests::{ConsensusLog, NextEpochDescriptor, PreDigest},
 	AuthorityId, EquivocationProof, Randomness, SassafrasAuthorityWeight,
-	SassafrasEpochConfiguration, Slot, Ticket, VRFOutput, VRFProof, SASSAFRAS_ENGINE_ID,
+	SassafrasEpochConfiguration, Slot, Ticket, VRFOutput, SASSAFRAS_ENGINE_ID,
 };
 use sp_io::hashing;
 use sp_runtime::{
@@ -302,12 +302,12 @@ pub mod pallet {
 				let mut metadata = TicketsMeta::<T>::get();
 				if metadata.segments_count != 0 {
 					let epoch_idx = EpochIndex::<T>::get() + 1;
-					let epoch_key = (epoch_idx & 1) as u8;
+					let epoch_tag = (epoch_idx & 1) as u8;
 					if metadata.segments_count != 0 {
 						let slots_left = epoch_duration.checked_sub(current_slot_idx).unwrap_or(1);
 						Self::sort_tickets(
 							u32::max(1, metadata.segments_count / slots_left as u32),
-							epoch_key,
+							epoch_tag,
 							&mut metadata,
 						);
 						TicketsMeta::<T>::set(metadata);
@@ -560,15 +560,15 @@ impl<T: Config> Pallet<T> {
 		};
 		Self::deposit_consensus(ConsensusLog::NextEpochData(next_epoch));
 
-		let epoch_key = (epoch_idx & 1) as u8;
+		let epoch_tag = (epoch_idx & 1) as u8;
 		let mut tickets_metadata = TicketsMeta::<T>::get();
 		// Optionally finish sorting
 		if tickets_metadata.segments_count != 0 {
-			Self::sort_tickets(tickets_metadata.segments_count, epoch_key, &mut tickets_metadata);
+			Self::sort_tickets(tickets_metadata.segments_count, epoch_tag, &mut tickets_metadata);
 		}
 		// Clear the prev (equal to the next) epoch tickets counter.
-		let next_epoch_key = epoch_key ^ 1;
-		tickets_metadata.tickets_count[next_epoch_key as usize] = 0;
+		let next_epoch_tag = epoch_tag ^ 1;
+		tickets_metadata.tickets_count[next_epoch_tag as usize] = 0;
 		TicketsMeta::<T>::set(tickets_metadata);
 	}
 
@@ -689,15 +689,15 @@ impl<T: Config> Pallet<T> {
 			ticket_idx as u32
 		};
 
-		let mut epoch_key = (epoch_idx & 1) as u8;
+		let mut epoch_tag = (epoch_idx & 1) as u8;
 
 		if duration <= slot_idx && slot_idx < 2 * duration {
 			// Try to get a ticket for the next epoch. Since its state values were not enacted yet,
 			// we may have to finish sorting the tickets.
-			epoch_key ^= 1;
+			epoch_tag ^= 1;
 			slot_idx -= duration;
 			if tickets_meta.segments_count != 0 {
-				Self::sort_tickets(tickets_meta.segments_count, epoch_key, &mut tickets_meta);
+				Self::sort_tickets(tickets_meta.segments_count, epoch_tag, &mut tickets_meta);
 				TicketsMeta::<T>::set(tickets_meta.clone());
 			}
 		} else if slot_idx >= 2 * duration {
@@ -705,47 +705,47 @@ impl<T: Config> Pallet<T> {
 		}
 
 		let ticket_idx = get_ticket_idx(slot_idx);
-		if ticket_idx < tickets_meta.tickets_count[epoch_key as usize] {
-			Tickets::<T>::get((epoch_key, ticket_idx))
+		if ticket_idx < tickets_meta.tickets_count[epoch_tag as usize] {
+			Tickets::<T>::get((epoch_tag, ticket_idx))
 		} else {
 			None
 		}
 	}
 
 	// Lexicographically sort the tickets who belongs to the next epoch.
-	// The tickets are fetched from at most `max_iter` segments received via the `submit_tickets`
-	// extrinsic. The resulting sorted vector is truncated and if all the segments where sorted
-	// it is saved to be as the next epoch tickets.
-	// Else the result is saved to be used by next calls.
-	fn sort_tickets(max_iter: u32, epoch_key: u8, metadata: &mut TicketsMetadata) {
+	//
+	// Tickets are fetched from at most `max_iter` segments received via the `submit_tickets`
+	// extrinsic.
+	//
+	// The resulting sorted vector is optionally truncated to contain at most `MaxTickets`
+	// entries. If all the segments were consumed then the sorted vector is saved as the
+	// next epoch tickets, else it is saved to be used by next calls to this function.
+	fn sort_tickets(max_iter: u32, epoch_tag: u8, metadata: &mut TicketsMetadata) {
 		let mut segments_count = metadata.segments_count;
 		let max_iter = max_iter.min(segments_count);
 		let max_tickets = T::MaxTickets::get() as usize;
 
+		// Fetch the partial result.
 		let mut new_segment = NextTicketsSegments::<T>::take(u32::MAX).into_inner();
 
 		let mut require_sort = max_iter != 0;
 
 		let mut sup = if new_segment.len() >= max_tickets {
-			new_segment[new_segment.len() - 1].clone()
+			new_segment[new_segment.len() - 1].output
 		} else {
-			Ticket {
-				output: VRFOutput::try_from([0xFF; 32])
-					.expect("This is a valid vrf output value; qed"),
-				proof: VRFProof::try_from([0xFF; 64])
-					.expect("This is a valid vrf proof value; qed"),
-			}
+			VRFOutput::try_from([0xFF; 32]).expect("This is a valid vrf output value; qed")
 		};
 
+		// Consume at most `max_iter` segments.
 		for _ in 0..max_iter {
 			let segment = NextTicketsSegments::<T>::take(segments_count);
 
-			segment.into_iter().filter(|t| t < &sup).for_each(|t| new_segment.push(t));
+			segment.into_iter().filter(|t| t.output < sup).for_each(|t| new_segment.push(t));
 			if new_segment.len() > max_tickets {
 				require_sort = false;
 				new_segment.sort_unstable();
 				new_segment.truncate(max_tickets);
-				sup = new_segment[new_segment.len() - 1].clone();
+				sup = new_segment[max_tickets - 1].output;
 			}
 
 			segments_count -= 1;
@@ -756,13 +756,14 @@ impl<T: Config> Pallet<T> {
 		}
 
 		if segments_count == 0 {
-			// Sort is over, write to the map.
+			// Sort is over, write to next epoch map.
 			// TODO-SASS-P3: is there a better way to write a map from a vector?
 			new_segment.iter().enumerate().for_each(|(i, t)| {
-				Tickets::<T>::insert((epoch_key, i as u32), t);
+				Tickets::<T>::insert((epoch_tag, i as u32), t);
 			});
-			metadata.tickets_count[epoch_key as usize] = new_segment.len() as u32;
+			metadata.tickets_count[epoch_tag as usize] = new_segment.len() as u32;
 		} else {
+			// Keep the partial result for next invocations.
 			NextTicketsSegments::<T>::insert(u32::MAX, BoundedVec::truncate_from(new_segment));
 		}
 

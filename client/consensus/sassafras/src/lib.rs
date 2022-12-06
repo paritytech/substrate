@@ -194,7 +194,7 @@ pub struct Epoch {
 	/// Epoch configuration
 	pub config: SassafrasConfiguration,
 	/// Tickets auxiliary data.
-	pub tickets_aux: BTreeMap<Ticket, (AuthorityIndex, TicketAux)>,
+	pub tickets_aux: BTreeMap<VRFOutput, (AuthorityIndex, TicketAux)>,
 }
 
 impl EpochT for Epoch {
