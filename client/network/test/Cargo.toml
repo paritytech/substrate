@@ -13,7 +13,7 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-async-std = "1.11.0"
+tokio = "1.22.0"
 async-trait = "0.1.57"
 futures = "0.3.21"
 futures-timer = "3.0.1"

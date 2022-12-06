@@ -61,7 +61,7 @@ use libp2p::{
 		GetClosestPeersError, GetRecordOk, Kademlia, KademliaBucketInserts, KademliaConfig,
 		KademliaEvent, QueryId, QueryResult, Quorum, Record,
 	},
-	mdns::{async_io::Behaviour as Mdns, Config as MdnsConfig, Event as MdnsEvent},
+	mdns::{self, tokio::Behaviour as TokioMdns},
 	multiaddr::Protocol,
 	swarm::{
 		behaviour::{
@@ -234,7 +234,7 @@ impl DiscoveryConfig {
 			allow_private_ipv4,
 			discovery_only_if_under_num,
 			mdns: if enable_mdns {
-				match Mdns::new(MdnsConfig::default()) {
+				match TokioMdns::new(mdns::Config::default()) {
 					Ok(mdns) => Some(mdns),
 					Err(err) => {
 						warn!(target: "sub-libp2p", "Failed to initialize mDNS: {:?}", err);
@@ -266,7 +266,7 @@ pub struct DiscoveryBehaviour {
 	/// it's always enabled in `NetworkWorker::new()`.
 	kademlia: Toggle<Kademlia<MemoryStore>>,
 	/// Discovers nodes on the local network.
-	mdns: Option<Mdns>,
+	mdns: Option<TokioMdns>,
 	/// Stream that fires when we need to perform the next random Kademlia query. `None` if
 	/// random walking is disabled.
 	next_kad_random_query: Option<Delay>,
@@ -812,7 +812,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			while let Poll::Ready(ev) = mdns.poll(cx, params) {
 				match ev {
 					NetworkBehaviourAction::GenerateEvent(event) => match event {
-						MdnsEvent::Discovered(list) => {
+						mdns::Event::Discovered(list) => {
 							if self.num_connections >= self.discovery_only_if_under_num {
 								continue
 							}
@@ -823,7 +823,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 								return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
 							}
 						},
-						MdnsEvent::Expired(_) => {},
+						mdns::Event::Expired(_) => {},
 					},
 					NetworkBehaviourAction::Dial { .. } => {
 						unreachable!("mDNS never dials!");
@@ -920,11 +920,8 @@ mod tests {
 					config.finish()
 				};
 
-				let mut swarm = Swarm::with_threadpool_executor(
-					transport,
-					behaviour,
-					keypair.public().to_peer_id(),
-				);
+				let mut swarm =
+					Swarm::with_threadpool_executor(transport, behaviour, keypair.public().to_peer_id());
 				let listen_addr: Multiaddr =
 					format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
 

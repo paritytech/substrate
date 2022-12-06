@@ -38,7 +38,7 @@ sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
 sp-session = { version = "4.0.0-dev", path = "../../primitives/session" }
 sp-version = { version = "5.0.0", path = "../../primitives/version" }
 
-tokio = { version = "1.17.0", optional = true }
+tokio = { version = "1.22.0", optional = true }
 
 [dev-dependencies]
 env_logger = "0.9"
@@ -49,7 +49,7 @@ sc-network = { version = "0.10.0-dev", path = "../network" }
 sc-network-common = { version = "0.10.0-dev", path = "../network/common" }
 sc-transaction-pool = { version = "4.0.0-dev", path = "../transaction-pool" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
-tokio = "1.17.0"
+tokio = "1.22.0"
 sp-io = { version = "7.0.0", path = "../../primitives/io" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 

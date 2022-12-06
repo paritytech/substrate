@@ -42,7 +42,7 @@ sp-finality-grandpa = { version = "4.0.0-dev", path = "../../../primitives/final
 sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
-async-std = { version = "1.11.0", features = ["attributes"] }
+tokio = { version = "1.22.0", features = ["macros"] }
 quickcheck = { version = "1.0.3", default-features = false }
 sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
 sp-test-primitives = { version = "2.0.0", path = "../../../primitives/test-primitives" }

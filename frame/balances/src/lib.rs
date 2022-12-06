@@ -156,6 +156,7 @@
 #[macro_use]
 mod tests;
 mod benchmarking;
+pub mod migration;
 mod tests_composite;
 mod tests_local;
 #[cfg(test)]
@@ -496,6 +497,13 @@ pub mod pallet {
 	#[pallet::getter(fn total_issuance)]
 	#[pallet::whitelist_storage]
 	pub type TotalIssuance<T: Config<I>, I: 'static = ()> = StorageValue<_, T::Balance, ValueQuery>;
+
+	/// The total units of outstanding deactivated balance in the system.
+	#[pallet::storage]
+	#[pallet::getter(fn inactive_issuance)]
+	#[pallet::whitelist_storage]
+	pub type InactiveIssuance<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, T::Balance, ValueQuery>;
 
 	/// The Balances pallet example of storing the balance of an account.
 	///
@@ -1067,6 +1075,9 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 	fn total_issuance() -> Self::Balance {
 		TotalIssuance::<T, I>::get()
 	}
+	fn active_issuance() -> Self::Balance {
+		TotalIssuance::<T, I>::get().saturating_sub(InactiveIssuance::<T, I>::get())
+	}
 	fn minimum_balance() -> Self::Balance {
 		T::ExistentialDeposit::get()
 	}
@@ -1144,6 +1155,14 @@ impl<T: Config<I>, I: 'static> fungible::Transfer<T::AccountId> for Pallet<T, I>
 	) -> Result<T::Balance, DispatchError> {
 		let er = if keep_alive { KeepAlive } else { AllowDeath };
 		<Self as Currency<T::AccountId>>::transfer(source, dest, amount, er).map(|_| amount)
+	}
+
+	fn deactivate(amount: Self::Balance) {
+		InactiveIssuance::<T, I>::mutate(|b| b.saturating_accrue(amount));
+	}
+
+	fn reactivate(amount: Self::Balance) {
+		InactiveIssuance::<T, I>::mutate(|b| b.saturating_reduce(amount));
 	}
 }
 
@@ -1418,7 +1437,19 @@ where
 	}
 
 	fn total_issuance() -> Self::Balance {
-		<TotalIssuance<T, I>>::get()
+		TotalIssuance::<T, I>::get()
+	}
+
+	fn active_issuance() -> Self::Balance {
+		<Self as fungible::Inspect<T::AccountId>>::active_issuance()
+	}
+
+	fn deactivate(amount: Self::Balance) {
+		<Self as fungible::Transfer<T::AccountId>>::deactivate(amount);
+	}
+
+	fn reactivate(amount: Self::Balance) {
+		<Self as fungible::Transfer<T::AccountId>>::reactivate(amount);
 	}
 
 	fn minimum_balance() -> Self::Balance {

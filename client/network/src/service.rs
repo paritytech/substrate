@@ -38,7 +38,7 @@ use crate::{
 	transport, ChainSyncInterface, ReputationChange,
 };
 
-use futures::{channel::oneshot, executor::ThreadPoolBuilder, prelude::*};
+use futures::{channel::oneshot, prelude::*};
 use libp2p::{
 	core::{either::EitherError, upgrade, ConnectedPoint},
 	identify::Info as IdentifyInfo,
@@ -371,17 +371,19 @@ where
 				}
 			};
 
-			let builder = if let Some(spawner) = params.executor {
+			let builder = {
 				struct SpawnImpl<F>(F);
 				impl<F: Fn(Pin<Box<dyn Future<Output = ()> + Send>>)> Executor for SpawnImpl<F> {
 					fn exec(&self, f: Pin<Box<dyn Future<Output = ()> + Send>>) {
 						(self.0)(f)
 					}
 				}
-				SwarmBuilder::with_executor(transport, behaviour, local_peer_id, SpawnImpl(spawner))
-			} else {
-				let tp = ThreadPoolBuilder::new().name_prefix("libp2p-swarm-task-").create()?;
-				SwarmBuilder::with_executor(transport, behaviour, local_peer_id, tp)
+				SwarmBuilder::with_executor(
+					transport,
+					behaviour,
+					local_peer_id,
+					SpawnImpl(params.executor),
+				)
 			};
 			let builder = builder
 				.connection_limits(
@@ -395,6 +397,7 @@ where
 				.notify_handler_buffer_size(NonZeroUsize::new(32).expect("32 != 0; qed"))
 				.connection_event_buffer_size(1024)
 				.max_negotiating_inbound_streams(2048);
+
 			(builder.build(), bandwidth)
 		};
 

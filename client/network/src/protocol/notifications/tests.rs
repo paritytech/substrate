@@ -96,11 +96,8 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 				.collect(),
 		};
 
-		let mut swarm = Swarm::with_threadpool_executor(
-			transport,
-			behaviour,
-			keypairs[index].public().to_peer_id(),
-		);
+		let mut swarm =
+			Swarm::with_threadpool_executor(transport, behaviour, keypairs[index].public().to_peer_id());
 		swarm.listen_on(addrs[index].clone()).unwrap();
 		out.push(swarm);
 	}
