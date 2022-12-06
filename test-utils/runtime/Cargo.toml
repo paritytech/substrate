@@ -13,7 +13,7 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-beefy-primitives = { version = "4.0.0-dev", default-features = false, path = "../../primitives/beefy" }
+beefy-primitives = { version = "4.0.0-dev", default-features = false, path = "../../primitives/beefy", package = "sp-beefy" }
 beefy-merkle-tree = { version = "4.0.0-dev", default-features = false, path = "../../frame/beefy-mmr/primitives" }
 sp-application-crypto = { version = "7.0.0", default-features = false, path = "../../primitives/application-crypto" }
 sp-consensus-aura = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/aura" }

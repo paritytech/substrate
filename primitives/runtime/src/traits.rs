@@ -515,6 +515,11 @@ impl<T> Convert<T, T> for Identity {
 		a
 	}
 }
+impl<T> ConvertBack<T, T> for Identity {
+	fn convert_back(a: T) -> T {
+		a
+	}
+}
 
 /// A structure that performs standard conversion using the standard Rust conversion traits.
 pub struct ConvertInto;
@@ -522,6 +527,12 @@ impl<A, B: From<A>> Convert<A, B> for ConvertInto {
 	fn convert(a: A) -> B {
 		a.into()
 	}
+}
+
+/// Extensible conversion trait. Generic over both source and destination types.
+pub trait ConvertBack<A, B>: Convert<A, B> {
+	/// Make conversion back.
+	fn convert_back(b: B) -> A;
 }
 
 /// Convenience type to work around the highly unergonomic syntax needed

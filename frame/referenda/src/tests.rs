@@ -266,6 +266,27 @@ fn queueing_works() {
 }
 
 #[test]
+fn alarm_interval_works() {
+	new_test_ext().execute_with(|| {
+		let call =
+			<Test as Config>::Preimages::bound(CallOf::<Test, ()>::from(Call::nudge_referendum {
+				index: 0,
+			}))
+			.unwrap();
+		for n in 0..10 {
+			let interval = n * n;
+			let now = 100 * (interval + 1);
+			System::set_block_number(now);
+			AlarmInterval::set(interval);
+			let when = now + 1;
+			let (actual, _) = Referenda::set_alarm(call.clone(), when).unwrap();
+			assert!(actual >= when);
+			assert!(actual - interval <= when);
+		}
+	});
+}
+
+#[test]
 fn auto_timeout_should_happen_with_nothing_but_submit() {
 	new_test_ext().execute_with(|| {
 		// #1: submit
