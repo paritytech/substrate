@@ -24,7 +24,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_support::pallet_prelude::*;
+use frame_support::{pallet_prelude::*, traits::GenesisBuild};
+use sp_runtime::Perbill;
 
 pub use pallet::*;
 
@@ -35,28 +36,79 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		/// Specifies the computation usage of this pallet on `on_initialize`.
+		/// The number of times the hash function should be called to fill up
+		/// all the block's weight.
 		#[pallet::constant]
-		type Compute: Get<u32>;
-
-		/// Specifies the storage usage of this pallet on `on_initialize`.
-		#[pallet::constant]
-		type Storage: Get<u32>;
+		type HashesForFull: Get<u32>;
 	}
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
+	#[pallet::storage]
+	pub(crate) type Compute<T: Config> = StorageValue<_, Perbill, ValueQuery>;
+
+	#[pallet::storage]
+	pub(crate) type Storage<T: Config> = StorageValue<_, Perbill, ValueQuery>;
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig {
+		pub compute: Perbill,
+		pub storage: Perbill,
+	}
+
+	#[cfg(feature = "std")]
+	impl Default for GenesisConfig {
+		fn default() -> Self {
+			Self { compute: Default::default(), storage: Default::default() }
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+		fn build(&self) {
+			Compute::<T>::set(self.compute);
+			Storage::<T>::set(self.storage);
+		}
+	}
+
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
-			for i in 0..T::Compute::get() {
-				Self::hash_value(i)
+			for i in 0..(Compute::<T>::get().mul_ceil(T::HashesForFull::get())) {
+				Self::hash_value(i);
 			}
 
-			for _i in 0..T::Storage::get() {}
+			/* for _i in 0..Storage::get() {} */
 			Weight::zero()
+		}
+	}
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
+		/// Set the `Computation` storage value that determines how much of the
+		/// block's weight to use up during `on_initialize`.
+		///
+		/// Only callable by Root.
+		#[pallet::weight(T::DbWeight::get().writes(1))]
+		pub fn set_computation(origin: OriginFor<T>, compute: Perbill) -> DispatchResult {
+			let _ = ensure_root(origin)?;
+			Compute::<T>::set(compute);
+
+			Ok(())
+		}
+
+		/// Set the `Storage` storage value that determines how much of the
+		/// block's weight to use up during `on_initialize`.
+		///
+		/// Only callable by Root.
+		#[pallet::weight(T::DbWeight::get().writes(1))]
+		pub fn set_computation(origin: OriginFor<T>, compute: Perbill) -> DispatchResult {
+			let _ = ensure_root(origin)?;
+			Compute::<T>::set(compute);
+
+			Ok(())
 		}
 	}
 
@@ -137,15 +189,28 @@ mod tests {
 	}
 
 	impl Config for Test {
-		type Compute = ConstU32<50>;
-		type Storage = ConstU32<50>;
+		type HashesForFull = ConstU32<50>;
+	}
+
+	pub fn new_test_ext() -> sp_io::TestExternalities {
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+
+		let genesis = pallet::GenesisConfig {
+			compute: Perbill::from_percent(50),
+			storage: Perbill::from_percent(50),
+		};
+
+		GenesisBuild::<Test>::assimilate_storage(&genesis, &mut t).unwrap();
+
+		let mut ext = sp_io::TestExternalities::new(t);
+		ext.execute_with(|| System::set_block_number(1));
+		ext
 	}
 
 	#[test]
 	fn hash_value_works() {
-		// I only added this so that I can check whether the hashing actually
-		// takes some time(It does, almost 9 seconds on my Apple M1 chip).
-		// I WILL REMOVE THIS.
-		PovLimit::on_initialize(0);
+		new_test_ext().execute_with(|| {
+			PovLimit::on_initialize(0);
+		});
 	}
 }
