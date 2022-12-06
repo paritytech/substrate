@@ -91,20 +91,20 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Set the `Computation` storage value that determines how much of the
-		/// block's weight to use up during `on_initialize`.
+		/// Set the `Compute` storage value that determines how much of the
+		/// block's weight to use during `on_initialize`.
 		///
 		/// Only callable by Root.
 		#[pallet::weight(T::DbWeight::get().writes(1))]
-		pub fn set_computation(origin: OriginFor<T>, compute: Perbill) -> DispatchResult {
+		pub fn set_compute(origin: OriginFor<T>, compute: Perbill) -> DispatchResult {
 			let _ = ensure_root(origin)?;
 			Compute::<T>::set(compute);
 
 			Ok(())
 		}
 
-		/// Set the `Storage` storage value that determines the PoV size for
-		/// each block.
+		/// Set the `Storage` storage value that determines the PoV size usage
+		/// for each block.
 		///
 		/// Only callable by Root.
 		#[pallet::weight(T::DbWeight::get().writes(1))]
@@ -122,7 +122,10 @@ mod tests {
 	use super::*;
 	use crate as pallet_pov_limit;
 
-	use frame_support::traits::{ConstU32, ConstU64};
+	use frame_support::{
+		assert_noop, assert_ok,
+		traits::{ConstU32, ConstU64},
+	};
 	use sp_core::H256;
 	use sp_runtime::{
 		testing::Header,
@@ -187,9 +190,42 @@ mod tests {
 	}
 
 	#[test]
-	fn hash_value_works() {
+	fn setting_compute_works() {
 		new_test_ext().execute_with(|| {
-			PovLimit::on_initialize(0);
+			assert_eq!(Compute::<Test>::get(), Perbill::from_percent(50));
+
+			assert_ok!(PovLimit::set_compute(RuntimeOrigin::root(), Perbill::from_percent(70)));
+
+			assert_eq!(Compute::<Test>::get(), Perbill::from_percent(70));
+
+			assert_noop!(
+				PovLimit::set_compute(RuntimeOrigin::signed(1), Perbill::from_percent(30)),
+				DispatchError::BadOrigin
+			);
+			assert_noop!(
+				PovLimit::set_compute(RuntimeOrigin::none(), Perbill::from_percent(30)),
+				DispatchError::BadOrigin
+			);
+		});
+	}
+
+	#[test]
+	fn setting_storage_works() {
+		new_test_ext().execute_with(|| {
+			assert_eq!(Storage::<Test>::get(), 10000);
+
+			assert_ok!(PovLimit::set_storage(RuntimeOrigin::root(), 5000));
+
+			assert_eq!(Storage::<Test>::get(), 5000);
+
+			assert_noop!(
+				PovLimit::set_storage(RuntimeOrigin::signed(1), 15000),
+				DispatchError::BadOrigin
+			);
+			assert_noop!(
+				PovLimit::set_storage(RuntimeOrigin::none(), 15000),
+				DispatchError::BadOrigin
+			);
 		});
 	}
 }
