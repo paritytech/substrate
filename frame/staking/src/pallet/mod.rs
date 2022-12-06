@@ -1029,7 +1029,7 @@ pub mod pallet {
 				Some(T::WeightInfo::unbond())
 			};
 
-			Ok(PostDispatchInfo { actual_weight, pays_fee: Pays::Yes })
+			Ok(Some(actual_weight).into())
 		}
 
 		/// Remove any unlocked chunks from the `unlocking` queue from our management.
