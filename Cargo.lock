@@ -7292,6 +7292,7 @@ dependencies = [
  "sp-trie",
  "substrate-test-runtime-client",
  "tempfile",
+ "zstd",
 ]
 
 [[package]]
