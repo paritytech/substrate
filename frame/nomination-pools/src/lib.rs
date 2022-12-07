@@ -1476,8 +1476,9 @@ pub mod pallet {
 	pub type BondedPools<T: Config> =
 		CountedStorageMap<_, Twox64Concat, PoolId, BondedPoolInner<T>>;
 
-	/// Reward pools. This is where there rewards for each pool accumulate. When a members payout
-	/// is claimed, the balance comes out fo the reward pool. Keyed by the bonded pools account.
+	/// Reward pools. This is where there rewards for each pool accumulate. When a
+	/// members payout is claimed, the balance comes out fo the reward pool. Keyed
+	/// by the bonded pools account.
 	#[pallet::storage]
 	pub type RewardPools<T: Config> = CountedStorageMap<_, Twox64Concat, PoolId, RewardPool<T>>;
 
@@ -1610,6 +1611,11 @@ pub mod pallet {
 		PoolCommissionUpdated { pool_id: PoolId, commission: Perbill, payee: T::AccountId },
 		/// A pool's maximum commission setting has been changed.
 		PoolMaxCommissionUpdated { pool_id: PoolId, max_commission: Perbill },
+		/// A pool's commission throttle has been changed.
+		PoolCommissionThrottleUpdated {
+			pool_id: PoolId,
+			prefs: CommissionThrottlePrefs<T::BlockNumber>,
+		},
 	}
 
 	#[pallet::error]
@@ -2284,6 +2290,8 @@ pub mod pallet {
 
 			bonded_pool.commission.maybe_update_throttle(prefs)?;
 			bonded_pool.put();
+
+			Self::deposit_event(Event::<T>::PoolCommissionThrottleUpdated { pool_id, prefs });
 			Ok(())
 		}
 
