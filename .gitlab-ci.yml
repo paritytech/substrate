@@ -166,26 +166,6 @@ default:
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
 
-.test-refs-wasmer-sandbox:
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "web"
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-    - if: $CI_COMMIT_REF_NAME == "master"
-      changes:
-        - client/executor/**/*
-        - frame/contracts/**/*
-        - primitives/sandbox/**/*
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
-      changes:
-        - client/executor/**/*
-        - frame/contracts/**/*
-        - primitives/sandbox/**/*
-    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
-      changes:
-        - client/executor/**/*
-        - frame/contracts/**/*
-        - primitives/sandbox/**/*
-
 .build-refs:
   rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
