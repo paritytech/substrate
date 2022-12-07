@@ -31,6 +31,7 @@ sp-runtime = { version = "7.0.0", default-features = false, path = "../../../pri
 sp-runtime-interface = { version = "7.0.0", default-features = false, path = "../../../primitives/runtime-interface" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/staking" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../../primitives/std" }
+sp-io = { optional = true, default-features = false, path = "../../../primitives/io" }
 
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../balances" }
@@ -54,7 +55,7 @@ std = [
 	"sp-runtime-interface/std",
 	"sp-io/std",
 	"sp-staking/std",
-	"sp-std/std",	
+	"sp-std/std",
 ]
 
 runtime-benchmarks = [

@@ -274,7 +274,8 @@ benchmarks_instance_pallet! {
 	verify {
 		assert_matches!(ReferendumInfoFor::<T, I>::get(index), Some(ReferendumInfo::Cancelled(_, None, _)));
 		let new_balance = T::Currency::free_balance(&caller);
-		assert!(new_balance > balance);
+		// the deposit is zero or make sure it was unreserved.
+		assert!(T::SubmissionDeposit::get().is_zero() || new_balance > balance);
 	}
 
 	cancel {
