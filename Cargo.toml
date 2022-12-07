@@ -199,7 +199,6 @@ members = [
 	"primitives/runtime-interface/test",
 	"primitives/runtime-interface/test-wasm",
 	"primitives/runtime-interface/test-wasm-deprecated",
-	"primitives/sandbox",
 	"primitives/serializer",
 	"primitives/session",
 	"primitives/staking",
