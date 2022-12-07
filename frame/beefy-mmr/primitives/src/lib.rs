@@ -257,8 +257,6 @@ where
 
 	let hash_len = <H as sp_core::Hasher>::LENGTH;
 	let mut combined = vec![0_u8; hash_len * 2];
-	let mut position = leaf_index;
-	let mut width = number_of_leaves;
 	let computed = proof.into_iter().fold(leaf_hash, |a, b| {
 		if a < b {
 			combined[..hash_len].copy_from_slice(&a.as_ref());
@@ -276,8 +274,6 @@ where
 			array_bytes::bytes2hex("", &hash.as_ref()),
 			array_bytes::bytes2hex("", &combined.as_ref())
 		);
-		position /= 2;
-		width = ((width - 1) / 2) + 1;
 		hash
 	});
 
