@@ -1257,7 +1257,7 @@ fn warp_sync_to_target_block() {
 	// Create 3 synced peers and 1 peer trying to warp sync.
 	let mut net = TestNet::new(runtime.handle().clone(), 3);
 
-	net.peer(0).push_blocks(63, false);
+	net.peer(0).push_blocks(64, false);
 	net.peer(0).push_blocks(1, false);
 
 	let target_block = net.peer(0).get_best_header();
