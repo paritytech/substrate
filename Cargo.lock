@@ -4137,6 +4137,7 @@ dependencies = [
  "futures",
  "log",
  "parity-scale-codec",
+ "parking_lot 0.12.1",
  "sc-block-builder",
  "sc-client-api",
  "sc-offchain",
@@ -4148,6 +4149,7 @@ dependencies = [
  "sp-io",
  "sp-mmr-primitives",
  "sp-runtime",
+ "sp-tracing",
  "substrate-test-runtime-client",
  "tokio",
 ]
