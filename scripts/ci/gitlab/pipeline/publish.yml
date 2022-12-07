@@ -161,3 +161,41 @@ update-node-template:
       --template-path "bin/node-template"
       --github-api-token "$GITHUB_TOKEN"
       --polkadot-branch "$CI_COMMIT_REF_NAME"
+
+.publish-crates-template:
+  stage:                           publish
+  extends:                         .crates-publishing-template
+  # We don't want multiple jobs racing to publish crates as it's redundant and they might overwrite
+  # the releases of one another. Use resource_group to ensure that at most one instance of this job
+  # is running at any given time.
+  resource_group:                  crates-publishing
+  variables:
+    # crates.io rate limits crates publishing by 1 per minute, so a delay needs to be inserted
+    # slightly higher than that after publishing each crate. The value is specified in seconds.
+    SPUB_AFTER_PUBLISH_DELAY: 64
+  # We might have to publish lots of crates at a time. Given the 1 minute delay introduced above and
+  # taking into account the 202 (as of Dec 07, 2022) publishable Substrate crates, that would equate
+  # to roughly 202 minutes of delay, or 3h and 22 minutes. As such, the job needs to have a much
+  # higher timeout than average.
+  timeout:                         5h
+  script:
+    - rusty-cachier snapshot create
+    - git clone
+        --depth 1
+        --branch "$RELENG_SCRIPTS_BRANCH"
+        https://github.com/paritytech/releng-scripts.git
+    - CRATESIO_TARGET_INSTANCE=default ./releng-scripts/publish-crates
+    - rusty-cachier cache upload
+
+publish-crates:
+  extends:                         .publish-crates-template
+  needs:
+    - job:                         publish-crates-locally
+      artifacts:                   false
+  rules:
+    - if: $CI_COMMIT_REF_NAME == "master"
+
+publish-crates-manual:
+  extends:                         .publish-crates-template
+  when:                            manual
+  allow_failure:                   true

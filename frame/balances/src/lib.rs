@@ -246,8 +246,13 @@ pub mod pallet {
 		type ReserveIdentifier: Parameter + Member + MaxEncodedLen + Ord + Copy;
 	}
 
+	/// The current storage version.
+	const STORAGE_VERSION: frame_support::traits::StorageVersion =
+		frame_support::traits::StorageVersion::new(1);
+
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::call]
@@ -556,13 +561,6 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// Storage version of the pallet.
-	///
-	/// This is set to v2.0.0 for new networks.
-	#[pallet::storage]
-	pub(super) type StorageVersion<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Releases, ValueQuery>;
-
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub balances: Vec<(T::AccountId, T::Balance)>,
@@ -580,8 +578,6 @@ pub mod pallet {
 		fn build(&self) {
 			let total = self.balances.iter().fold(Zero::zero(), |acc: T::Balance, &(_, n)| acc + n);
 			<TotalIssuance<T, I>>::put(total);
-
-			<StorageVersion<T, I>>::put(Releases::V2_0_0);
 
 			for (_, balance) in &self.balances {
 				assert!(
@@ -724,21 +720,6 @@ impl<Balance: Saturating + Copy + Ord> AccountData<Balance> {
 	/// The total balance in this account including any that is reserved and ignoring any frozen.
 	fn total(&self) -> Balance {
 		self.free.saturating_add(self.reserved)
-	}
-}
-
-// A value placed in storage that represents the current version of the Balances storage.
-// This value is used by the `on_runtime_upgrade` logic to determine whether we run
-// storage migration logic. This should match directly with the semantic versions of the Rust crate.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
-enum Releases {
-	V1_0_0,
-	V2_0_0,
-}
-
-impl Default for Releases {
-	fn default() -> Self {
-		Releases::V1_0_0
 	}
 }
 

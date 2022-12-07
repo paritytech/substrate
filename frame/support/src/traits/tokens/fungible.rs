@@ -83,7 +83,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 	/// is returned and nothing is changed. If successful, the amount of tokens reduced is returned.
 	///
 	/// The default implementation just uses `withdraw` along with `reducible_balance` to ensure
-	/// that is doesn't fail.
+	/// that it doesn't fail.
 	fn slash(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
 		Self::burn_from(who, Self::reducible_balance(who, false).min(amount))
 	}

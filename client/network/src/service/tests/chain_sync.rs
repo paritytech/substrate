@@ -44,6 +44,7 @@ use std::{
 	time::Duration,
 };
 use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt as _};
+use tokio::runtime::Handle;
 
 fn set_default_expecations_no_peers(
 	chain_sync: &mut MockChainSync<substrate_test_runtime_client::runtime::Block>,
@@ -59,7 +60,7 @@ fn set_default_expecations_no_peers(
 	});
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn normal_network_poll_no_peers() {
 	// build `ChainSync` and set default expectations for it
 	let mut chain_sync =
@@ -71,7 +72,7 @@ async fn normal_network_poll_no_peers() {
 	let chain_sync_service =
 		Box::new(MockChainSyncInterface::<substrate_test_runtime_client::runtime::Block>::new());
 
-	let mut network = TestNetworkBuilder::new()
+	let mut network = TestNetworkBuilder::new(Handle::current())
 		.with_chain_sync((chain_sync, chain_sync_service))
 		.build();
 
@@ -83,7 +84,7 @@ async fn normal_network_poll_no_peers() {
 	.await;
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn request_justification() {
 	// build `ChainSyncInterface` provider and set no expecations for it (i.e., it cannot be
 	// called)
@@ -104,7 +105,7 @@ async fn request_justification() {
 		.returning(|_, _| ());
 
 	set_default_expecations_no_peers(&mut chain_sync);
-	let mut network = TestNetworkBuilder::new()
+	let mut network = TestNetworkBuilder::new(Handle::current())
 		.with_chain_sync((chain_sync, chain_sync_service))
 		.build();
 
@@ -118,7 +119,7 @@ async fn request_justification() {
 	.await;
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn clear_justification_requests() {
 	// build `ChainSyncInterface` provider and set no expecations for it (i.e., it cannot be
 	// called)
@@ -132,7 +133,7 @@ async fn clear_justification_requests() {
 	chain_sync.expect_clear_justification_requests().once().returning(|| ());
 
 	set_default_expecations_no_peers(&mut chain_sync);
-	let mut network = TestNetworkBuilder::new()
+	let mut network = TestNetworkBuilder::new(Handle::current())
 		.with_chain_sync((chain_sync, chain_sync_service))
 		.build();
 
@@ -146,7 +147,7 @@ async fn clear_justification_requests() {
 	.await;
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn set_sync_fork_request() {
 	// build `ChainSync` and set default expectations for it
 	let mut chain_sync =
@@ -171,7 +172,7 @@ async fn set_sync_fork_request() {
 		.once()
 		.returning(|_, _, _| ());
 
-	let mut network = TestNetworkBuilder::new()
+	let mut network = TestNetworkBuilder::new(Handle::current())
 		.with_chain_sync((chain_sync, Box::new(chain_sync_service)))
 		.build();
 
@@ -185,7 +186,7 @@ async fn set_sync_fork_request() {
 	.await;
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn on_block_finalized() {
 	let client = Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0);
 	// build `ChainSyncInterface` provider and set no expecations for it (i.e., it cannot be
@@ -215,7 +216,7 @@ async fn on_block_finalized() {
 		.returning(|_, _| ());
 
 	set_default_expecations_no_peers(&mut chain_sync);
-	let mut network = TestNetworkBuilder::new()
+	let mut network = TestNetworkBuilder::new(Handle::current())
 		.with_client(client)
 		.with_chain_sync((chain_sync, chain_sync_service))
 		.build();
@@ -232,7 +233,7 @@ async fn on_block_finalized() {
 
 // report from mock import queue that importing a justification was not successful
 // and verify that connection to the peer is closed
-#[async_std::test]
+#[tokio::test]
 async fn invalid_justification_imported() {
 	struct DummyImportQueue(
 		Arc<
@@ -279,13 +280,13 @@ async fn invalid_justification_imported() {
 	let justification_info = Arc::new(RwLock::new(None));
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
-	let (service1, mut event_stream1) = TestNetworkBuilder::new()
+	let (service1, mut event_stream1) = TestNetworkBuilder::new(Handle::current())
 		.with_import_queue(Box::new(DummyImportQueue(justification_info.clone())))
 		.with_listen_addresses(vec![listen_addr.clone()])
 		.build()
 		.start_network();
 
-	let (service2, mut event_stream2) = TestNetworkBuilder::new()
+	let (service2, mut event_stream2) = TestNetworkBuilder::new(Handle::current())
 		.with_set_config(SetConfig {
 			reserved_nodes: vec![MultiaddrWithPeerId {
 				multiaddr: listen_addr,
@@ -320,15 +321,12 @@ async fn invalid_justification_imported() {
 		while !std::matches!(event_stream1.next().await, Some(Event::SyncDisconnected { .. })) {}
 	};
 
-	if async_std::future::timeout(Duration::from_secs(5), wait_disconnection)
-		.await
-		.is_err()
-	{
+	if tokio::time::timeout(Duration::from_secs(5), wait_disconnection).await.is_err() {
 		panic!("did not receive disconnection event in time");
 	}
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn disconnect_peer_using_chain_sync_handle() {
 	let client = Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0);
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
@@ -353,7 +351,7 @@ async fn disconnect_peer_using_chain_sync_handle() {
 	)
 	.unwrap();
 
-	let (node1, mut event_stream1) = TestNetworkBuilder::new()
+	let (node1, mut event_stream1) = TestNetworkBuilder::new(Handle::current())
 		.with_listen_addresses(vec![listen_addr.clone()])
 		.with_chain_sync((Box::new(chain_sync), chain_sync_service))
 		.with_chain_sync_network((chain_sync_network_provider, chain_sync_network_handle))
@@ -361,7 +359,7 @@ async fn disconnect_peer_using_chain_sync_handle() {
 		.build()
 		.start_network();
 
-	let (node2, mut event_stream2) = TestNetworkBuilder::new()
+	let (node2, mut event_stream2) = TestNetworkBuilder::new(Handle::current())
 		.with_set_config(SetConfig {
 			reserved_nodes: vec![MultiaddrWithPeerId {
 				multiaddr: listen_addr,
@@ -394,10 +392,7 @@ async fn disconnect_peer_using_chain_sync_handle() {
 		while !std::matches!(event_stream1.next().await, Some(Event::SyncDisconnected { .. })) {}
 	};
 
-	if async_std::future::timeout(Duration::from_secs(5), wait_disconnection)
-		.await
-		.is_err()
-	{
+	if tokio::time::timeout(Duration::from_secs(5), wait_disconnection).await.is_err() {
 		panic!("did not receive disconnection event in time");
 	}
 }
