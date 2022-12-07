@@ -49,6 +49,9 @@ use crate::{
 };
 
 const STAKING_ID: LockIdentifier = *b"staking ";
+// The speculative number of spans are used as an input of the weight annotation of
+// [`Call::unbond`], as the post dipatch weight may depend on the number of slashing span on the
+// account which is not provided as an input. The value set should be conservative but sensible.
 pub(crate) const SPECULATIVE_NUM_SPANS: u32 = 32;
 
 #[frame_support::pallet]
