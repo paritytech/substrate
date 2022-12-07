@@ -134,16 +134,22 @@ pub enum MultiBalance<NativeBalance, AssetId, AssetBalance> {
 }
 
 use sp_std::marker::PhantomData;
-pub struct MultiCurrencyAdapter<AccountId, Balance, NativeCurrency, AssetBalance>(
-	PhantomData<(AccountId, Balance, NativeCurrency, AssetBalance)>,
-);
+pub struct MultiCurrencyAdapter<
+	AccountId,
+	Balance,
+	TransferableCurrency,
+	AssetBalance,
+	TransferableAsset,
+>(PhantomData<(AccountId, Balance, TransferableCurrency, AssetBalance, TransferableAsset)>);
 
-impl<AccountId, Balance, NativeCurrency, AssetBalance> MultiCurrency<AccountId>
-	for MultiCurrencyAdapter<AccountId, Balance, NativeCurrency, AssetBalance>
+impl<AccountId, Balance, TransferableCurrency, AssetBalance, TransferableAsset>
+	MultiCurrency<AccountId>
+	for MultiCurrencyAdapter<AccountId, Balance, TransferableCurrency, AssetBalance, TransferableAsset>
 where
 	Balance: BalanceTrait + FixedPointOperand + Zero,
-	NativeCurrency: PalletCurrency<AccountId, Balance = Balance>,
-	AssetBalance: Inspect<AccountId, AssetId = u32, Balance = Balance> + Transfer<AccountId>,
+	TransferableCurrency: PalletCurrency<AccountId, Balance = Balance>,
+	AssetBalance: Inspect<AccountId, AssetId = u32, Balance = Balance> + Transfer<AccountId>, /* TODO: change that */
+	TransferableAsset: Inspect<AccountId, AssetId = u32, Balance = Balance> + Transfer<AccountId>,
 {
 	type Balance = MultiBalance<Balance, u32, AssetBalance>;
 
@@ -155,9 +161,11 @@ where
 	) -> DispatchResult {
 		match value {
 			MultiBalance::Native(value) =>
-				NativeCurrency::transfer(source, dest, value, existence_requirement),
-			MultiBalance::Asset(assetId, value) =>
-				AssetBalance::transfer(assetId, source, dest, value, true), // TODO: fix keep_alive
+				TransferableCurrency::transfer(source, dest, value, existence_requirement),
+			MultiBalance::Asset(assetId, value) => {
+				let keep_alive = existence_requirement == ExistenceRequirement::KeepAlive;
+				TransferableAsset::transfer(assetId, source, dest, value, keep_alive).map(|_| ())
+			},
 		}
 	}
 }
@@ -167,8 +175,13 @@ impl Config for Test {
 	type CollectionId = u32;
 	type ItemId = u32;
 	type Currency = Balances;
-	type MultiCurrency =
-		MultiCurrencyAdapter<u64, <Self as pallet_balances::Config>::Balance, Balances, Assets>;
+	type MultiCurrency = MultiCurrencyAdapter<
+		u64,
+		<Self as pallet_balances::Config>::Balance,
+		Balances,
+		<Self as pallet_assets::Config>::Balance,
+		Assets,
+	>;
 	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<u64>>;
 	type ForceOrigin = frame_system::EnsureRoot<u64>;
 	type Locker = ();
