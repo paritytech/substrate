@@ -42,7 +42,7 @@ mod offchain_mmr;
 #[cfg(test)]
 pub mod test_utils;
 
-use crate::offchain_mmr::OffchainMMR;
+use crate::offchain_mmr::OffchainMmr;
 use beefy_primitives::MmrRootHash;
 use futures::StreamExt;
 use log::{debug, error, trace, warn};
@@ -79,7 +79,7 @@ where
 	async fn try_build(
 		self,
 		finality_notifications: &mut FinalityNotifications<B>,
-	) -> Option<OffchainMMR<C, BE, B>> {
+	) -> Option<OffchainMmr<B, BE, C>> {
 		while let Some(notification) = finality_notifications.next().await {
 			let best_block = *notification.header.number();
 			match self.client.runtime_api().mmr_leaf_count(&BlockId::number(best_block)) {
@@ -110,7 +110,7 @@ where
 										return None
 									},
 								};
-							let mut offchain_mmr = OffchainMMR {
+							let mut offchain_mmr = OffchainMmr {
 								backend: self.backend,
 								client: self.client,
 								offchain_db: self.offchain_db,

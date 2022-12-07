@@ -44,14 +44,13 @@ where
 {
 	// Initialize gadget best_canon from AUX DB or from pallet genesis.
 	if let Some(best) = aux_schema::load_persistent::<B, BE>(backend)? {
-		info!(target: LOG_TARGET, "🥩 Loading MMR best canonicalized state from db: {:?}.", best);
+		info!(target: LOG_TARGET, "Loading MMR best canonicalized state from db: {:?}.", best);
 		Ok(best)
 	} else {
 		let best = first_mmr_block.saturating_sub(One::one());
 		info!(
 			target: LOG_TARGET,
-			"🥩 Loading MMR from pallet genesis on what appears to be the first startup: {:?}.",
-			best
+			"Loading MMR from pallet genesis on what appears to be the first startup: {:?}.", best
 		);
 		aux_schema::write_current_version(backend)?;
 		aux_schema::write_gadget_state::<B, BE>(backend, &best)?;
@@ -60,7 +59,7 @@ where
 }
 
 /// `OffchainMMR` exposes MMR offchain canonicalization and pruning logic.
-pub struct OffchainMMR<C, BE: Backend<B>, B: Block> {
+pub struct OffchainMmr<B: Block, BE: Backend<B>, C> {
 	pub backend: Arc<BE>,
 	pub client: Arc<C>,
 	pub offchain_db: OffchainDb<BE::OffchainStorage>,
@@ -69,7 +68,7 @@ pub struct OffchainMMR<C, BE: Backend<B>, B: Block> {
 	pub best_canonicalized: NumberFor<B>,
 }
 
-impl<C, BE, B> OffchainMMR<C, BE, B>
+impl<B, BE, C> OffchainMmr<B, BE, C>
 where
 	C: HeaderBackend<B> + HeaderMetadata<B>,
 	BE: Backend<B>,

@@ -32,7 +32,7 @@ const CURRENT_VERSION: u32 = 1;
 pub(crate) type PersistedState<B> = NumberFor<B>;
 
 pub(crate) fn write_current_version<B: AuxStore>(backend: &B) -> ClientResult<()> {
-	info!(target: LOG_TARGET, "🥩 write aux schema version {:?}", CURRENT_VERSION);
+	info!(target: LOG_TARGET, "write aux schema version {:?}", CURRENT_VERSION);
 	AuxStore::insert_aux(backend, &[(VERSION_KEY, CURRENT_VERSION.encode().as_slice())], &[])
 }
 
@@ -41,7 +41,7 @@ pub(crate) fn write_gadget_state<B: Block, BE: AuxStore>(
 	backend: &BE,
 	state: &PersistedState<B>,
 ) -> ClientResult<()> {
-	trace!(target: LOG_TARGET, "🥩 persisting {:?}", state);
+	trace!(target: LOG_TARGET, "persisting {:?}", state);
 	backend.insert_aux(&[(GADGET_STATE, state.encode().as_slice())], &[])
 }
 
