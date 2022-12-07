@@ -26,7 +26,8 @@ use frame_support::{
 	dispatch::DispatchResult,
 	parameter_types,
 	traits::{
-		fungibles::{Inspect, Transfer},
+		fungible::{Inspect as InspectFungible, Transfer as TransferFungible},
+		fungibles::{Inspect as InspectFungibles, Transfer as TransferFungibles},
 		AsEnsureOriginWithArg, Balance as BalanceTrait, ConstU32, ConstU64,
 		Currency as PalletCurrency, ExistenceRequirement,
 	},
@@ -37,7 +38,6 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	FixedPointOperand,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -128,30 +128,46 @@ parameter_types! {
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-pub enum MultiBalance<NativeBalance, AssetId, AssetBalance> {
-	Native(NativeBalance),
-	Asset(AssetId, AssetBalance),
+pub enum MultiBalance<Balance, AssetId> {
+	Native(Balance),
+	Asset(AssetId, Balance),
+}
+
+impl<B: std::convert::From<u8>, AI> From<u8> for MultiBalance<B, AI> {
+	fn from(amount: u8) -> Self {
+		Self::Native(amount.into())
+	}
+}
+
+// MultiBalance::Native(123456).into() => u8
+impl<B, AI> Into<u8> for MultiBalance<B, AI>
+where
+	u8: From<B>,
+{
+	fn into(self) -> u8 {
+		match self {
+			Self::Native(amount) => amount.into(),
+			Self::Asset(_, amount) => amount.into(),
+		}
+	}
 }
 
 use sp_std::marker::PhantomData;
-pub struct MultiCurrencyAdapter<
-	AccountId,
-	Balance,
-	TransferableCurrency,
-	AssetBalance,
-	TransferableAsset,
->(PhantomData<(AccountId, Balance, TransferableCurrency, AssetBalance, TransferableAsset)>);
+pub struct MultiCurrencyAdapter<AccountId, Balance, Currency, Asset>(
+	PhantomData<(AccountId, Balance, Currency, Asset)>,
+);
 
-impl<AccountId, Balance, TransferableCurrency, AssetBalance, TransferableAsset>
-	MultiCurrency<AccountId>
-	for MultiCurrencyAdapter<AccountId, Balance, TransferableCurrency, AssetBalance, TransferableAsset>
+impl<AccountId, Balance, Currency, Asset> MultiCurrency<AccountId>
+	for MultiCurrencyAdapter<AccountId, Balance, Currency, Asset>
 where
-	Balance: BalanceTrait + FixedPointOperand + Zero,
-	TransferableCurrency: PalletCurrency<AccountId, Balance = Balance>,
-	AssetBalance: Inspect<AccountId, AssetId = u32, Balance = Balance> + Transfer<AccountId>, /* TODO: change that */
-	TransferableAsset: Inspect<AccountId, AssetId = u32, Balance = Balance> + Transfer<AccountId>,
+	Balance: BalanceTrait,
+	// Currency: PalletCurrency<AccountId, Balance = Balance>,
+	Currency: InspectFungible<AccountId, Balance = Balance> + TransferFungible<AccountId>,
+	Asset: InspectFungibles<AccountId, AssetId = u32, Balance = Balance>
+		+ TransferFungibles<AccountId>,
+	MultiBalance<Balance, u32>: Into<u8>, // + TryInto<u64>,
 {
-	type Balance = MultiBalance<Balance, u32, AssetBalance>;
+	type Balance = MultiBalance<Balance, u32>;
 
 	fn transfer(
 		source: &AccountId,
@@ -159,13 +175,12 @@ where
 		value: Self::Balance,
 		existence_requirement: ExistenceRequirement,
 	) -> DispatchResult {
+		let keep_alive = existence_requirement == ExistenceRequirement::KeepAlive;
 		match value {
 			MultiBalance::Native(value) =>
-				TransferableCurrency::transfer(source, dest, value, existence_requirement),
-			MultiBalance::Asset(assetId, value) => {
-				let keep_alive = existence_requirement == ExistenceRequirement::KeepAlive;
-				TransferableAsset::transfer(assetId, source, dest, value, keep_alive).map(|_| ())
-			},
+				Currency::transfer(source, dest, value, keep_alive).map(|_| ()),
+			MultiBalance::Asset(assetId, value) =>
+				Asset::transfer(assetId, source, dest, value, keep_alive).map(|_| ()),
 		}
 	}
 }
@@ -175,13 +190,8 @@ impl Config for Test {
 	type CollectionId = u32;
 	type ItemId = u32;
 	type Currency = Balances;
-	type MultiCurrency = MultiCurrencyAdapter<
-		u64,
-		<Self as pallet_balances::Config>::Balance,
-		Balances,
-		<Self as pallet_assets::Config>::Balance,
-		Assets,
-	>;
+	type MultiCurrency =
+		MultiCurrencyAdapter<u64, <Self as pallet_balances::Config>::Balance, Balances, Assets>;
 	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<u64>>;
 	type ForceOrigin = frame_system::EnsureRoot<u64>;
 	type Locker = ();

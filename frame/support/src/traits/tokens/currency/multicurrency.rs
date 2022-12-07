@@ -19,12 +19,11 @@
 
 use super::super::misc::Balance;
 use crate::{dispatch::DispatchResult, traits::ExistenceRequirement};
-use sp_runtime::FixedPointOperand;
 
 /// Abstraction over a fungible multi-currency system.
 pub trait MultiCurrency<AccountId> {
 	/// The balance of an account.
-	type Balance: Balance + FixedPointOperand;
+	type Balance: Balance;
 
 	/// Transfer some amount from one account to another.
 	fn transfer(
