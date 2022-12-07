@@ -22,7 +22,7 @@ zstd = { version = "0.11.2", default-features = false, optional = true }
 frame-benchmarking = { default-features = false, optional = true, path = "../benchmarking" }
 frame-support = { default-features = false, path = "../support" }
 frame-system = { default-features = false, path = "../system" }
-remote-externalities = { optional = true, path = "../../utils/frame/remote-externalities" }
+remote-externalities = { optional = true, path = "../../utils/frame/remote-externalities", package = "frame-remote-externalities" }
 sp-core = { default-features = false, path = "../../primitives/core" }
 sp-io = { default-features = false, path = "../../primitives/io" }
 sp-runtime = { default-features = false, path = "../../primitives/runtime" }
