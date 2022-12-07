@@ -652,7 +652,10 @@ impl<T: Config> Commission<T> {
 		commission: &Perbill,
 		payee: T::AccountId,
 	) -> DispatchResult {
-		ensure!(!(self.current.is_some() && self.throttling(&commission)), Error::<T>::CommissionChangeThrottled);
+		ensure!(
+			!(self.current.is_some() && self.throttling(&commission)),
+			Error::<T>::CommissionChangeThrottled
+		);
 		ensure!(self.max.map_or(true, |m| commission <= &m), Error::<T>::CommissionExceedsMaximum);
 
 		self.current = Some((*commission, payee));
@@ -1670,6 +1673,8 @@ pub mod pallet {
 		Defensive(DefensiveError),
 		/// Partial unbonding now allowed permissionlessly.
 		PartialUnbondNotAllowedPermissionlessly,
+		/// No commission has been set.
+		NoCommissionSet,
 		/// No account has been set to receive commission.
 		NoCommissionPayeeSet,
 		/// The pool's max commission cannot be set higher than the existing value.
@@ -2221,12 +2226,16 @@ pub mod pallet {
 		pub fn set_commission(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
-			new_commission: Perbill,
+			commission: Option<Perbill>,
 			payee: Option<T::AccountId>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
+
+			let final_commission = commission
+				.or(bonded_pool.commission.current.as_ref().map(|(c, _)| c).cloned())
+				.ok_or(Error::<T>::NoCommissionSet)?;
 
 			let final_payee = payee
 				.or(bonded_pool.commission.current.as_ref().map(|(_, p)| p).cloned())
@@ -2234,11 +2243,11 @@ pub mod pallet {
 
 			bonded_pool
 				.commission
-				.maybe_update_current(&new_commission, final_payee.clone())?;
+				.maybe_update_current(&final_commission, final_payee.clone())?;
 			bonded_pool.put();
 			Self::deposit_event(Event::<T>::PoolCommissionUpdated {
 				pool_id,
-				commission: new_commission,
+				commission: final_commission,
 				payee: final_payee,
 			});
 			Ok(())
