@@ -58,6 +58,10 @@ build-linux-substrate:
   variables:
     # this variable gets overriden by "rusty-cachier environment inject", use the value as default
     CARGO_TARGET_DIR:              "$CI_PROJECT_DIR/target"
+    # see https://github.com/paritytech/ci_cd/issues/682#issuecomment-1340953589
+    # tldr: we need to checkout to the branch HEAD because of our dynamic versioning approach while building the substrate binary
+    GIT_STRATEGY: clone
+    GIT_DEPTH: 1
   needs:
     - job:                         test-linux-stable
       artifacts:                   false
