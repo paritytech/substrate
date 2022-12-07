@@ -47,8 +47,6 @@ pub use weight_meter::*;
 pub use weight_v2::*;
 
 pub mod constants {
-	use super::Weight;
-
 	pub const WEIGHT_REF_TIME_PER_SECOND: u64 = 1_000_000_000_000;
 	pub const WEIGHT_REF_TIME_PER_MILLIS: u64 = 1_000_000_000;
 	pub const WEIGHT_REF_TIME_PER_MICROS: u64 = 1_000_000;
