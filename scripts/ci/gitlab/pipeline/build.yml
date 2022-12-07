@@ -64,11 +64,11 @@ build-linux-substrate:
   before_script:
     - mkdir -p ./artifacts/substrate/
     - cat .git/HEAD
-    - ls -al  target/release/build/node-cli*/
-    - tail -n+1 target/release/build/node-cli-*/output
     - !reference [.rusty-cachier, before_script]
   script:
     - rusty-cachier snapshot create
+    - ls -al  target/release/build/node-cli*/
+    - tail -n+1 target/release/build/node-cli-*/output
     - CARGO_LOG=cargo::core::compiler::fingerprint=info WASM_BUILD_NO_COLOR=1 time cargo build --locked --release -vv
     - mv $CARGO_TARGET_DIR/release/substrate ./artifacts/substrate/.
     - echo -n "Substrate version = "
