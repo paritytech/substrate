@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! The lockable currency trait and some associated types.
+//! The Lockable trait and some associated types.
 
 use super::{super::misc::WithdrawReasons, currency::Currency};
 use crate::traits::misc::Get;
