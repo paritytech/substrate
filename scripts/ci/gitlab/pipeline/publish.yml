@@ -173,6 +173,10 @@ update-node-template:
     # crates.io rate limits crates publishing by 1 per minute, so a delay needs to be inserted
     # slightly higher than that after publishing each crate. The value is specified in seconds.
     SPUB_AFTER_PUBLISH_DELAY: 64
+  # Given the 1 minute delay introduced above, in cases where where we'll have to publish lots of
+  # crates, given that there are more than 150 crates on Substrate at the moment, that's potentially
+  # 150m of delay. As such, this job needs to have a higher timeout than usual.
+  timeout:                         4h
   script:
     - rusty-cachier snapshot create
     - git clone
