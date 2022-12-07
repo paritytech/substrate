@@ -31,7 +31,7 @@ sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain"
 sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1.22.0", features = ["full"] }
 sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
 sc-consensus = { version = "0.10.0-dev", path = "../../consensus/common" }
 sp-core = { version = "7.0.0", path = "../../../primitives/core" }

@@ -627,48 +627,6 @@ impl_into_and_from_value! {
 	i64, I64,
 }
 
-/// Something that can write a primitive to wasm memory location.
-pub trait WritePrimitive<T: PointerType> {
-	/// Write the given value `t` to the given memory location `ptr`.
-	fn write_primitive(&mut self, ptr: Pointer<T>, t: T) -> Result<()>;
-}
-
-impl WritePrimitive<u32> for &mut dyn FunctionContext {
-	fn write_primitive(&mut self, ptr: Pointer<u32>, t: u32) -> Result<()> {
-		let r = t.to_le_bytes();
-		self.write_memory(ptr.cast(), &r)
-	}
-}
-
-impl WritePrimitive<u64> for &mut dyn FunctionContext {
-	fn write_primitive(&mut self, ptr: Pointer<u64>, t: u64) -> Result<()> {
-		let r = t.to_le_bytes();
-		self.write_memory(ptr.cast(), &r)
-	}
-}
-
-/// Something that can read a primitive from a wasm memory location.
-pub trait ReadPrimitive<T: PointerType> {
-	/// Read a primitive from the given memory location `ptr`.
-	fn read_primitive(&self, ptr: Pointer<T>) -> Result<T>;
-}
-
-impl ReadPrimitive<u32> for &mut dyn FunctionContext {
-	fn read_primitive(&self, ptr: Pointer<u32>) -> Result<u32> {
-		let mut r = [0u8; 4];
-		self.read_memory_into(ptr.cast(), &mut r)?;
-		Ok(u32::from_le_bytes(r))
-	}
-}
-
-impl ReadPrimitive<u64> for &mut dyn FunctionContext {
-	fn read_primitive(&self, ptr: Pointer<u64>) -> Result<u64> {
-		let mut r = [0u8; 8];
-		self.read_memory_into(ptr.cast(), &mut r)?;
-		Ok(u64::from_le_bytes(r))
-	}
-}
-
 /// Typed value that can be returned from a function.
 ///
 /// Basically a `TypedValue` plus `Unit`, for functions which return nothing.

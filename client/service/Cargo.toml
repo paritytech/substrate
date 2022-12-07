@@ -17,7 +17,6 @@ default = ["rocksdb"]
 # The RocksDB feature activates the RocksDB database backend. If it is not activated, and you pass
 # a path to a database, an error will be produced at runtime.
 rocksdb = ["sc-client-db/rocksdb"]
-wasmtime = ["sc-executor/wasmtime"]
 # exposes the client type
 test-helpers = []
 runtime-benchmarks = ["sc-client-db/runtime-benchmarks"]
@@ -81,11 +80,8 @@ sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
 sc-sysinfo = { version = "6.0.0-dev", path = "../sysinfo" }
 tracing = "0.1.29"
 tracing-futures = { version = "0.2.4" }
-parity-util-mem = { version = "0.12.0", default-features = false, features = [
-	"primitive-types",
-] }
 async-trait = "0.1.57"
-tokio = { version = "1.17.0", features = ["time", "rt-multi-thread", "parking_lot"] }
+tokio = { version = "1.22.0", features = ["time", "rt-multi-thread", "parking_lot"] }
 tempfile = "3.1.0"
 directories = "4.0.1"
 static_init = "1.0.3"
@@ -93,4 +89,3 @@ static_init = "1.0.3"
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime/" }
-async-std = { version = "1.11.0", default-features = false }
