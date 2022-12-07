@@ -33,6 +33,7 @@ pub use types::*;
 // TODO: make it configurable
 // TODO: weights and benchmarking.
 // TODO: more specific error codes.
+// TODO: remove setup.
 pub const MIN_LIQUIDITY: u64 = 1;
 
 #[frame_support::pallet]
@@ -43,11 +44,8 @@ pub mod pallet {
 
 	use frame_support::{
 		traits::{
-			fungibles::{
-				metadata::Mutate as MutateMetadata, Create, Inspect, Mutate,
-				Transfer,
-			},
-			Currency, ReservableCurrency,
+			fungible::{Inspect as InspectFungible, Transfer as TransferFungible},
+			fungibles::{metadata::Mutate as MutateMetadata, Create, Inspect, Mutate, Transfer},
 		},
 		PalletId,
 	};
@@ -63,7 +61,8 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		type Currency: ReservableCurrency<Self::AccountId, Balance = Self::AssetBalance>;
+		type Currency: InspectFungible<Self::AccountId, Balance = Self::AssetBalance>
+			+ TransferFungible<Self::AccountId>;
 
 		type AssetBalance: AtLeast32BitUnsigned
 			+ codec::FullCodec
@@ -112,7 +111,7 @@ pub mod pallet {
 	}
 
 	pub type BalanceOf<T> =
-		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+		<<T as Config>::Currency as InspectFungible<<T as frame_system::Config>::AccountId>>::Balance;
 
 	pub type AssetBalanceOf<T> =
 		<<T as Config>::Assets as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
