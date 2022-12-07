@@ -414,15 +414,15 @@ enum AccountType {
 /// Account to bond pending reward of a member
 #[derive(Encode, Decode, MaxEncodedLen, Clone, Copy, Debug, PartialEq, Eq, TypeInfo)]
 pub enum RewardClaim {
-	/// Only `origin` i.e. the pool member themself can claim their reward.
-	Origin,
+	/// Only the pool member themself can claim their reward.
+	Permissioned,
 	/// Anyone can claim the reward of this member.
 	Permissionless,
 }
 
 impl Default for RewardClaim {
 	fn default() -> Self {
-		Self::Origin
+		Self::Permissioned
 	}
 }
 

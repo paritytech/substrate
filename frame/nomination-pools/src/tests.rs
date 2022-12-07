@@ -2091,7 +2091,7 @@ mod unbond {
 				);
 
 				// Give pool operator permission.
-				assert_eq!(RewardClaimPermission::<Runtime>::get(10), RewardClaim::Origin);
+				assert_eq!(RewardClaimPermission::<Runtime>::get(10), RewardClaim::Permissioned);
 				// assert_noop!(Pools::set_claimable_actor(RuntimeOrigin::signed(12),
 				// BondExtraSource::Open), Error::<T>::PoolMemberNotFound);
 				assert_ok!(Pools::set_reward_claim(
@@ -2103,7 +2103,7 @@ mod unbond {
 				assert_ok!(Pools::unbond(RuntimeOrigin::signed(20), 20, 15));
 				assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().active_points(), 0);
 				assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().unbonding_points(), 20);
-				assert_eq!(RewardClaimPermission::<Runtime>::get(20), RewardClaim::Origin);
+				assert_eq!(RewardClaimPermission::<Runtime>::get(20), RewardClaim::Permissioned);
 			})
 	}
 
@@ -4271,7 +4271,7 @@ fn set_claimable_actor_works() {
 		);
 
 		// Give pool operator permission.
-		assert_eq!(RewardClaimPermission::<Runtime>::get(11), RewardClaim::Origin);
+		assert_eq!(RewardClaimPermission::<Runtime>::get(11), RewardClaim::Permissioned);
 		assert_noop!(
 			Pools::set_reward_claim(RuntimeOrigin::signed(12), RewardClaim::Permissionless),
 			Error::<T>::PoolMemberNotFound
