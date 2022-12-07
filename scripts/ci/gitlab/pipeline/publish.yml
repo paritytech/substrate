@@ -2,32 +2,33 @@
 # This file is part of .gitlab-ci.yml
 # Here are all jobs that are executed during "publish" stage
 
-.build-push-docker-image:
+.build-push-docker-image-common:
   extends:
-    - .build-refs
     - .kubernetes-env
+  stage:                           publish
   variables:
     CI_IMAGE:                      $BUILDAH_IMAGE
     GIT_STRATEGY:                  none
     DOCKERFILE:                    $PRODUCT.Dockerfile
-    IMAGE_NAME:                    docker.io/parity/$PRODUCT
+    IMAGE_NAME:                    docker.io/$IMAGE_PATH
   before_script:
     - cd ./artifacts/$PRODUCT/
     - VERSION="$(cat ./VERSION)"
     - echo "${PRODUCT} version = ${VERSION}"
     - test -z "${VERSION}" && exit 1
   script:
-    - test "$Docker_Hub_User_Parity" -a "$Docker_Hub_Pass_Parity" ||
+    - test "$DOCKER_USER" -a "$DOCKER_PASS" ||
         ( echo "no docker credentials provided"; exit 1 )
     - buildah bud
         --format=docker
         --build-arg VCS_REF="${CI_COMMIT_SHA}"
         --build-arg BUILD_DATE="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+        --build-arg IMAGE_NAME="${IMAGE_PATH}"
         --tag "$IMAGE_NAME:$VERSION"
         --tag "$IMAGE_NAME:latest"
         --file "$DOCKERFILE" .
-    - echo "$Docker_Hub_Pass_Parity" |
-        buildah login --username "$Docker_Hub_User_Parity" --password-stdin docker.io
+    - echo "$DOCKER_PASS" |
+        buildah login --username "$DOCKER_USER" --password-stdin docker.io
     - buildah info
     - buildah push --format=v2s2 "$IMAGE_NAME:$VERSION"
     - buildah push --format=v2s2 "$IMAGE_NAME:latest"
@@ -38,8 +39,27 @@
     - echo "SUBSTRATE_IMAGE_TAG=${IMAGE_TAG}"   | tee -a ./artifacts/$PRODUCT/build.env
     - cat ./artifacts/$PRODUCT/build.env
 
+.build-push-docker-image:
+  extends:
+    - .publish-refs
+    - .build-push-docker-image-common
+  variables:
+    IMAGE_PATH:                    parity/$PRODUCT
+    DOCKER_USER:                   $Docker_Hub_User_Parity
+    DOCKER_PASS:                   $Docker_Hub_Pass_Parity
+
+
+# publish image to docker.io/paritypr, (e.g. for later use in zombienet testing)
+.build-push-image-temporary:
+  extends:
+    - .build-refs
+    - .build-push-docker-image-common
+  variables:
+    IMAGE_PATH:                    paritypr/$PRODUCT
+    DOCKER_USER:                   $PARITYPR_USER
+    DOCKER_PASS:                   $PARITYPR_PASS
+
 publish-docker-substrate:
-  stage:                           publish
   extends:                         .build-push-docker-image
   needs:
     - job:                         build-linux-substrate
@@ -47,8 +67,21 @@ publish-docker-substrate:
   variables:
     PRODUCT:                       substrate
 
+publish-docker-substrate-temporary:
+  extends:                         .build-push-image-temporary
+  needs:
+    - job:                         build-linux-substrate
+      artifacts:                   true
+  variables:
+    PRODUCT:                       substrate
+  artifacts:
+    reports:
+      # this artifact is used in zombienet-tests job
+      # https://docs.gitlab.com/ee/ci/multi_project_pipelines.html#with-variable-inheritance
+      dotenv: ./artifacts/$PRODUCT/build.env
+    expire_in:                     24h
+
 publish-docker-subkey:
-  stage:                           publish
   extends:                         .build-push-docker-image
   needs:
     - job:                         build-subkey-linux
@@ -59,7 +92,7 @@ publish-docker-subkey:
 publish-s3-release:
   stage:                           publish
   extends:
-    - .build-refs
+    - .publish-refs
     - .kubernetes-env
   needs:
     - job:                         build-linux-substrate

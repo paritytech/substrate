@@ -33,6 +33,7 @@ stages:
   - test
   - build
   - publish
+  - zombienet
   - deploy
   - notify
 
@@ -52,6 +53,7 @@ variables:
   BUILDAH_IMAGE:                   "quay.io/buildah/stable:v1.27"
   RUSTY_CACHIER_SINGLE_BRANCH:     master
   RUSTY_CACHIER_DONT_OPERATE_ON_MAIN_BRANCH: "true"
+  ZOMBIENET_IMAGE:                 "docker.io/paritytech/zombienet:v1.3.22"
 
 default:
   retry:
@@ -166,7 +168,7 @@ default:
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
 
-.build-refs:
+.publish-refs:
   rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
@@ -174,6 +176,20 @@ default:
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+
+.build-refs:
+  # publish-refs + PRs
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+
+.zombienet-refs:
+  extends: .build-refs
 
 .nightly-pipeline:
   rules:
@@ -224,6 +240,8 @@ include:
   - scripts/ci/gitlab/pipeline/build.yml
   # publish jobs
   - scripts/ci/gitlab/pipeline/publish.yml
+  # zombienet jobs
+  - scripts/ci/gitlab/pipeline/zombienet.yml
 
 #### stage:                        deploy
 
