@@ -477,7 +477,8 @@ pub mod v4 {
 		}
 	}
 
-	/// This migration removes stale bonded-pool metadata, if any.
+	/// This migration adds a `commission` field to every `BondedPoolInner`, if
+	/// any.
 	pub struct MigrateToV4<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV4<T> {
 		fn on_runtime_upgrade() -> Weight {
