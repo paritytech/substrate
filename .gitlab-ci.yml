@@ -55,6 +55,8 @@ variables:
   RUSTY_CACHIER_DONT_OPERATE_ON_MAIN_BRANCH: "true"
   ZOMBIENET_IMAGE:                 "docker.io/paritytech/zombienet:v1.3.22"
 
+  SKIP_JOB: "true"
+
 default:
   retry:
     max: 2
@@ -108,6 +110,10 @@ default:
 .docker-env:
   image:                           "${CI_IMAGE}"
   before_script:
+    - if [ $SKIP_JOB = "true" ]; then
+        echo "Skipped!"
+        exit 0
+      fi
     # TODO: remove unset invocation when we'll be free from 'ENV RUSTC_WRAPPER=sccache' & sccache itself in all images
     - unset RUSTC_WRAPPER
     - !reference [.rust-info-script, script]

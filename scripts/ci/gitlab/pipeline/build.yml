@@ -62,6 +62,8 @@ build-linux-substrate:
     # tldr: we need to checkout to the branch HEAD because of our dynamic versioning approach while building the substrate binary
     GIT_STRATEGY: clone
     GIT_DEPTH: 1
+
+    SKIP_JOB: "false"
   needs:
     - job:                         test-linux-stable
       artifacts:                   false
