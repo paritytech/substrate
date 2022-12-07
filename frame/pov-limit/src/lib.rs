@@ -76,16 +76,25 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
+		fn on_idle(_: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
+			let mut weight = T::DbWeight::get().reads(1);
+
 			for i in 0..(Compute::<T>::get().mul_ceil(T::HashesForFull::get())) {
 				Blake2Hasher::hash(&i.to_le_bytes());
 			}
 
 			for i in 0..Storage::<T>::get() {
+				weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
+				if remaining_weight.any_lt(weight) {
+					weight = remaining_weight;
+					break;
+				}
+
 				storage::unhashed::put(&i.to_le_bytes(), &i.to_le_bytes());
 				let _: Option<Vec<u8>> = storage::unhashed::get(&i.to_le_bytes());
 			}
-			Weight::zero()
+
+			weight
 		}
 	}
 
