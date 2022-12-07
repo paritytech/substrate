@@ -34,7 +34,9 @@ pub struct WarpProofRequest<B: BlockT> {
 pub enum WarpSyncParams<Block: BlockT> {
 	/// Standard warp sync for the relay chain
 	WithProvider(Arc<dyn WarpSyncProvider<Block>>),
-	/// Skip downloading proofs and wait for a header from the relaychain
+	/// Skip downloading proofs and wait for a header of the state that should be downloaded.
+	///
+	/// It is expected that the header provider ensures that the header is trusted.
 	WaitForTarget(oneshot::Receiver<<Block as BlockT>::Header>),
 }
 
