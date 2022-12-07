@@ -337,8 +337,3 @@ sp_core::wasm_export_functions! {
 		return 1234;
 	}
 }
-
-#[cfg(not(feature = "std"))]
-struct State {
-	counter: u32,
-}
