@@ -49,7 +49,7 @@ pub use sp_wasm_interface;
 pub use wasm_runtime::{read_embedded_version, WasmExecutionMethod};
 pub use wasmi;
 
-pub use sc_executor_common::{error, sandbox};
+pub use sc_executor_common::error;
 pub use sc_executor_wasmtime::InstantiationStrategy as WasmtimeInstantiationStrategy;
 
 /// Extracts the runtime version of a given runtime code.

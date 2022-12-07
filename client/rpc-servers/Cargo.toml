@@ -17,5 +17,5 @@ futures = "0.3.21"
 jsonrpsee = { version = "0.15.1", features = ["server"] }
 log = "0.4.17"
 serde_json = "1.0.85"
-tokio = { version = "1.17.0", features = ["parking_lot"] }
+tokio = { version = "1.22.0", features = ["parking_lot"] }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../utils/prometheus" }

@@ -441,17 +441,6 @@ fn should_push_watchers_during_maintenance() {
 }
 
 #[test]
-fn can_track_heap_size() {
-	let (pool, _api, _guard) = maintained_pool();
-	block_on(pool.submit_one(&BlockId::number(0), SOURCE, uxt(Alice, 209))).expect("1. Imported");
-	block_on(pool.submit_one(&BlockId::number(0), SOURCE, uxt(Alice, 210))).expect("1. Imported");
-	block_on(pool.submit_one(&BlockId::number(0), SOURCE, uxt(Alice, 211))).expect("1. Imported");
-	block_on(pool.submit_one(&BlockId::number(0), SOURCE, uxt(Alice, 212))).expect("1. Imported");
-
-	assert!(parity_util_mem::malloc_size(&pool) > 3000);
-}
-
-#[test]
 fn finalization() {
 	let xt = uxt(Alice, 209);
 	let api = TestApi::with_alice_nonce(209);
