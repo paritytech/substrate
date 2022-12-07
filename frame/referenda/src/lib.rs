@@ -84,6 +84,7 @@ use sp_runtime::{
 use sp_std::{fmt::Debug, prelude::*};
 
 mod branch;
+pub mod migration;
 mod types;
 pub mod weights;
 
@@ -139,8 +140,12 @@ pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
+	/// The current storage version.
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T, I = ()>(_);
 
 	#[pallet::config]
@@ -341,6 +346,15 @@ pub mod pallet {
 			/// The final tally of votes in this referendum.
 			tally: T::Tally,
 		},
+		/// The submission deposit has been refunded.
+		SubmissionDepositRefunded {
+			/// Index of the referendum.
+			index: ReferendumIndex,
+			/// The account who placed the deposit.
+			who: T::AccountId,
+			/// The amount placed by the account.
+			amount: BalanceOf<T, I>,
+		},
 	}
 
 	#[pallet::error]
@@ -367,6 +381,8 @@ pub mod pallet {
 		NoPermission,
 		/// The deposit cannot be refunded since none was made.
 		NoDeposit,
+		/// The referendum status is invalid for this operation.
+		BadStatus,
 	}
 
 	#[pallet::call]
@@ -494,7 +510,7 @@ pub mod pallet {
 			Self::deposit_event(Event::<T, I>::Cancelled { index, tally: status.tally });
 			let info = ReferendumInfo::Cancelled(
 				frame_system::Pallet::<T>::block_number(),
-				status.submission_deposit,
+				Some(status.submission_deposit),
 				status.decision_deposit,
 			);
 			ReferendumInfoFor::<T, I>::insert(index, info);
@@ -577,6 +593,36 @@ pub mod pallet {
 					OneFewerDecidingBranch::QueueEmpty
 				};
 			Ok(Some(branch.weight::<T, I>()).into())
+		}
+
+		/// Refund the Submission Deposit for a closed referendum back to the depositor.
+		///
+		/// - `origin`: must be `Signed` or `Root`.
+		/// - `index`: The index of a closed referendum whose Submission Deposit has not yet been
+		///   refunded.
+		///
+		/// Emits `SubmissionDepositRefunded`.
+		#[pallet::weight(T::WeightInfo::refund_submission_deposit())]
+		pub fn refund_submission_deposit(
+			origin: OriginFor<T>,
+			index: ReferendumIndex,
+		) -> DispatchResult {
+			ensure_signed_or_root(origin)?;
+			let mut info =
+				ReferendumInfoFor::<T, I>::get(index).ok_or(Error::<T, I>::BadReferendum)?;
+			let deposit = info
+				.take_submission_deposit()
+				.map_err(|_| Error::<T, I>::BadStatus)?
+				.ok_or(Error::<T, I>::NoDeposit)?;
+			Self::refund_deposit(Some(deposit.clone()));
+			ReferendumInfoFor::<T, I>::insert(index, info);
+			let e = Event::<T, I>::SubmissionDepositRefunded {
+				index,
+				who: deposit.who,
+				amount: deposit.amount,
+			};
+			Self::deposit_event(e);
+			Ok(())
 		}
 	}
 }
@@ -670,9 +716,9 @@ impl<T: Config<I>, I: 'static> Polling<T::Tally> for Pallet<T, I> {
 		Self::note_one_fewer_deciding(status.track);
 		let now = frame_system::Pallet::<T>::block_number();
 		let info = if approved {
-			ReferendumInfo::Approved(now, status.submission_deposit, status.decision_deposit)
+			ReferendumInfo::Approved(now, Some(status.submission_deposit), status.decision_deposit)
 		} else {
-			ReferendumInfo::Rejected(now, status.submission_deposit, status.decision_deposit)
+			ReferendumInfo::Rejected(now, Some(status.submission_deposit), status.decision_deposit)
 		};
 		ReferendumInfoFor::<T, I>::insert(index, info);
 		Ok(())
@@ -994,7 +1040,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					return (
 						ReferendumInfo::TimedOut(
 							now,
-							status.submission_deposit,
+							Some(status.submission_deposit),
 							status.decision_deposit,
 						),
 						true,
@@ -1026,7 +1072,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							return (
 								ReferendumInfo::Approved(
 									now,
-									status.submission_deposit,
+									Some(status.submission_deposit),
 									status.decision_deposit,
 								),
 								true,
@@ -1051,7 +1097,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						return (
 							ReferendumInfo::Rejected(
 								now,
-								status.submission_deposit,
+								Some(status.submission_deposit),
 								status.decision_deposit,
 							),
 							true,

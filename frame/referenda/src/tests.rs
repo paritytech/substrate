@@ -444,6 +444,44 @@ fn refund_deposit_works() {
 }
 
 #[test]
+fn refund_submission_deposit_works() {
+	new_test_ext().execute_with(|| {
+		// refund of non existing referendum fails.
+		let e = Error::<Test>::BadReferendum;
+		assert_noop!(Referenda::refund_submission_deposit(RuntimeOrigin::signed(1), 0), e);
+		// create a referendum.
+		let h = set_balance_proposal_bounded(1);
+		assert_ok!(Referenda::submit(
+			RuntimeOrigin::signed(1),
+			Box::new(RawOrigin::Root.into()),
+			h.clone(),
+			DispatchTime::At(10),
+		));
+		// refund of an ongoing referendum fails.
+		let e = Error::<Test>::BadStatus;
+		assert_noop!(Referenda::refund_submission_deposit(RuntimeOrigin::signed(3), 0), e);
+		// cancel referendum.
+		assert_ok!(Referenda::cancel(RuntimeOrigin::signed(4), 0));
+		// refund of canceled referendum works.
+		assert_ok!(Referenda::refund_submission_deposit(RuntimeOrigin::signed(3), 0));
+		// fails if already refunded.
+		let e = Error::<Test>::NoDeposit;
+		assert_noop!(Referenda::refund_submission_deposit(RuntimeOrigin::signed(2), 0), e);
+		// create second referendum.
+		assert_ok!(Referenda::submit(
+			RuntimeOrigin::signed(1),
+			Box::new(RawOrigin::Root.into()),
+			h,
+			DispatchTime::At(10),
+		));
+		// refund of a killed referendum fails.
+		assert_ok!(Referenda::kill(RuntimeOrigin::root(), 1));
+		let e = Error::<Test>::NoDeposit;
+		assert_noop!(Referenda::refund_submission_deposit(RuntimeOrigin::signed(2), 0), e);
+	});
+}
+
+#[test]
 fn cancel_works() {
 	new_test_ext().execute_with(|| {
 		let h = set_balance_proposal_bounded(1);
