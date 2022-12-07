@@ -606,7 +606,7 @@ pub struct Commission<T: Config> {
 	/// Optional maximum commission that can be set by the pool `root`. Once set, this value
 	/// can only be updated to a decreased value.
 	pub max: Option<Perbill>,
-	/// Optional configiration around how often commission can be updated, and when the last
+	/// Optional configuration around how often commission can be updated, and when the last
 	/// commission update took place.
 	pub throttle: Option<CommissionThrottle<T>>,
 }
