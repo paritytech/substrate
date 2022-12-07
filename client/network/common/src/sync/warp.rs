@@ -30,7 +30,7 @@ pub struct WarpProofRequest<B: BlockT> {
 	pub begin: B::Hash,
 }
 
-/// Defines different types of syncs
+/// The different types of warp syncing.
 pub enum WarpSyncParams<Block: BlockT> {
 	/// Standard warp sync for the relay chain
 	WithProvider(Arc<dyn WarpSyncProvider<Block>>),
