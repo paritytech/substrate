@@ -18,7 +18,6 @@
 use crate::{build_executor, state_machine_call_with_proof, SharedParams, State, LOG_TARGET};
 use parity_scale_codec::{Decode, Encode};
 use sc_executor::sp_wasm_interface::HostFunctions;
-use sc_service::Configuration;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use sp_weights::Weight;
 use std::{fmt::Debug, str::FromStr};
@@ -41,7 +40,6 @@ pub struct OnRuntimeUpgradeCmd {
 pub(crate) async fn on_runtime_upgrade<Block, HostFns>(
 	shared: SharedParams,
 	command: OnRuntimeUpgradeCmd,
-	config: Configuration,
 ) -> sc_cli::Result<()>
 where
 	Block: BlockT + serde::de::DeserializeOwned,
@@ -52,7 +50,7 @@ where
 	<NumberFor<Block> as FromStr>::Err: Debug,
 	HostFns: HostFunctions,
 {
-	let executor = build_executor(&shared, &config);
+	let executor = build_executor(&shared);
 	let ext = command.state.into_ext::<Block, HostFns>(&shared, &executor).await?;
 
 	let (_, encoded_result) = state_machine_call_with_proof::<Block, HostFns>(

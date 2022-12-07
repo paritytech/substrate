@@ -21,7 +21,6 @@ use crate::{
 };
 use parity_scale_codec::{Decode, Encode};
 use sc_executor::sp_wasm_interface::HostFunctions;
-use sc_service::Configuration;
 use serde::{de::DeserializeOwned, Serialize};
 use sp_core::H256;
 use sp_runtime::{
@@ -54,7 +53,7 @@ pub struct FollowChainCmd {
 	///   `Staking, System`).
 	/// - `rr-[x]` where `[x]` is a number. Then, the given number of pallets are checked in a
 	///   round-robin fashion.
-	#[arg(long, default_value = "none")]
+	#[arg(long, default_value = "all")]
 	try_state: frame_try_runtime::TryStateSelect,
 
 	/// If present, a single connection to a node will be kept and reused for fetching blocks.
@@ -82,7 +81,6 @@ async fn start_subscribing<Header: DeserializeOwned + Serialize + Send + Sync + 
 pub(crate) async fn follow_chain<Block, HostFns>(
 	shared: SharedParams,
 	command: FollowChainCmd,
-	config: Configuration,
 ) -> sc_cli::Result<()>
 where
 	Block: BlockT<Hash = H256> + DeserializeOwned,
@@ -98,7 +96,7 @@ where
 		FinalizedHeaders::new(&rpc, subscription);
 
 	let mut maybe_state_ext = None;
-	let executor = build_executor::<HostFns>(&shared, &config);
+	let executor = build_executor::<HostFns>(&shared);
 
 	while let Some(header) = finalized_headers.next().await {
 		let hash = header.hash();

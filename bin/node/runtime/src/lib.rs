@@ -2158,6 +2158,8 @@ impl_runtime_apis! {
 			// have a backtrace here.
 			Executive::try_execute_block(block, state_root_check, false, select).unwrap()
 		}
+
+		fn ping() {}
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]

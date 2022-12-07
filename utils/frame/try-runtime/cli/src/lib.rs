@@ -276,7 +276,6 @@ use sc_cli::{
 	DEFAULT_WASMTIME_INSTANTIATION_STRATEGY, DEFAULT_WASM_EXECUTION_METHOD,
 };
 use sc_executor::{sp_wasm_interface::HostFunctions, WasmExecutor};
-use sc_service::Configuration;
 use sp_core::{
 	offchain::{
 		testing::{TestOffchainExt, TestTransactionPoolExt},
@@ -388,6 +387,8 @@ pub enum Command {
 #[derive(Debug, Clone)]
 enum Runtime {
 	/// Use the given path to the wasm binary file.
+	///
+	/// It must have been compiled with `try-runtime`.
 	Path(PathBuf),
 
 	/// Use the code of the remote node, or the snapshot.
@@ -423,7 +424,7 @@ pub struct SharedParams {
 	#[arg(long)]
 	/// The runtime to use.
 	///
-	/// Must be a path to a wasm blob, preferably compiled with `try-runtime` feature flag.
+	/// Must be a path to a wasm blob, compiled with `try-runtime` feature flag.
 	///
 	/// Or, `existing`, indicating that you don't want to overwrite the runtime. This will use
 	/// whatever comes from the remote node, or the snapshot file.
@@ -597,7 +598,9 @@ impl State {
 
 		// then, we replace the code based on what the CLI wishes.
 		let maybe_code_to_overwrite = match shared.runtime {
-			Runtime::Path(ref path) => Some(std::fs::read(path)?),
+			Runtime::Path(ref path) => Some(std::fs::read(path).map_err(|e| {
+				format!("error while reading runtime file from {:?}: {:?}", path, e)
+			})?),
 			Runtime::Existing => None,
 		};
 
@@ -632,12 +635,17 @@ impl State {
 			}
 		}
 
+		// whatever runtime we have in store now must have been compiled with try-runtime feature.
+		if !ensure_try_runtime::<Block, HostFns>(&shared, &ext) {
+			return Err("given runtime is NOT compiled with try-runtime feature!".into())
+		}
+
 		Ok(ext)
 	}
 }
 
 impl TryRuntimeCmd {
-	pub async fn run<Block, HostFns>(&self, config: Configuration) -> sc_cli::Result<()>
+	pub async fn run<Block, HostFns>(&self) -> sc_cli::Result<()>
 	where
 		Block: BlockT<Hash = H256> + DeserializeOwned,
 		Block::Header: DeserializeOwned,
@@ -653,28 +661,24 @@ impl TryRuntimeCmd {
 				commands::on_runtime_upgrade::on_runtime_upgrade::<Block, HostFns>(
 					self.shared.clone(),
 					cmd.clone(),
-					config,
 				)
 				.await,
 			Command::OffchainWorker(cmd) =>
 				commands::offchain_worker::offchain_worker::<Block, HostFns>(
 					self.shared.clone(),
 					cmd.clone(),
-					config,
 				)
 				.await,
 			Command::ExecuteBlock(cmd) =>
 				commands::execute_block::execute_block::<Block, HostFns>(
 					self.shared.clone(),
 					cmd.clone(),
-					config,
 				)
 				.await,
 			Command::FollowChain(cmd) =>
 				commands::follow_chain::follow_chain::<Block, HostFns>(
 					self.shared.clone(),
 					cmd.clone(),
-					config,
 				)
 				.await,
 			Command::CreateSnapshot(cmd) =>
@@ -721,13 +725,10 @@ pub(crate) fn full_extensions() -> Extensions {
 	extensions
 }
 
-pub(crate) fn build_executor<H: HostFunctions>(
-	shared: &SharedParams,
-	config: &sc_service::Configuration,
-) -> WasmExecutor<H> {
-	let heap_pages = shared.heap_pages.or(config.default_heap_pages);
-	let max_runtime_instances = config.max_runtime_instances;
-	let runtime_cache_size = config.runtime_cache_size;
+pub(crate) fn build_executor<H: HostFunctions>(shared: &SharedParams) -> WasmExecutor<H> {
+	let heap_pages = shared.heap_pages.or(Some(2048));
+	let max_runtime_instances = 8;
+	let runtime_cache_size = 2;
 
 	WasmExecutor::new(
 		sc_executor::WasmExecutionMethod::Interpreted,
@@ -736,6 +737,23 @@ pub(crate) fn build_executor<H: HostFunctions>(
 		None,
 		runtime_cache_size,
 	)
+}
+
+/// Ensure that the given `ext` is compiled with `try-runtime`
+fn ensure_try_runtime<Block: BlockT, HostFns: HostFunctions>(
+	shared: &SharedParams,
+	ext: &TestExternalities,
+) -> bool {
+	let executor = build_executor::<HostFns>(&shared);
+	let extensions = full_extensions();
+	state_machine_call::<Block, HostFns>(
+		ext,
+		&executor,
+		"TryRuntime_ping",
+		Default::default(),
+		extensions,
+	)
+	.is_ok()
 }
 
 /// Execute the given `method` and `data` on top of `ext`, returning the results (encoded) and the
@@ -830,8 +848,8 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 	};
 	log::debug!(
 		target: LOG_TARGET,
-		"proof: {} / {} nodes",
-		HexDisplay::from(&proof_nodes.iter().flatten().cloned().collect::<Vec<_>>()),
+		"proof: 0x{}... / {} nodes",
+		HexDisplay::from(&proof_nodes.iter().flatten().cloned().take(10).collect::<Vec<_>>()),
 		proof_nodes.len()
 	);
 	log::debug!(target: LOG_TARGET, "proof size: {}", humanize(proof_size));
@@ -841,6 +859,9 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 		"zstd-compressed compact proof {}",
 		humanize(compressed_proof.len()),
 	);
+
+	log::debug!(target: LOG_TARGET, "{} executed without errors.", method);
+
 	Ok((changes, encoded_results))
 }
 

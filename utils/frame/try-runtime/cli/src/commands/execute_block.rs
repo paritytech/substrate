@@ -21,7 +21,6 @@ use crate::{
 };
 use parity_scale_codec::Encode;
 use sc_executor::sp_wasm_interface::HostFunctions;
-use sc_service::Configuration;
 use sp_rpc::{list::ListOrValue, number::NumberOrHex};
 use sp_runtime::{
 	generic::SignedBlock,
@@ -36,10 +35,6 @@ use substrate_rpc_client::{ws_client, ChainApi};
 /// check (useful for trying a unreleased runtime), and can execute runtime sanity checks as well.
 #[derive(Debug, Clone, clap::Parser)]
 pub struct ExecuteBlockCmd {
-	/// If set the state root check is disabled.
-	#[arg(long)]
-	no_state_root_check: bool,
-
 	/// Which try-state targets to execute when running this command.
 	///
 	/// Expected values:
@@ -49,7 +44,7 @@ pub struct ExecuteBlockCmd {
 	///   `Staking, System`).
 	/// - `rr-[x]` where `[x]` is a number. Then, the given number of pallets are checked in a
 	///   round-robin fashion.
-	#[arg(long, default_value = "none")]
+	#[arg(long, default_value = "all")]
 	try_state: frame_try_runtime::TryStateSelect,
 
 	/// The ws uri from which to fetch the block.
@@ -93,7 +88,6 @@ impl ExecuteBlockCmd {
 pub(crate) async fn execute_block<Block, HostFns>(
 	shared: SharedParams,
 	command: ExecuteBlockCmd,
-	config: Configuration,
 ) -> sc_cli::Result<()>
 where
 	Block: BlockT + serde::de::DeserializeOwned,
@@ -104,7 +98,7 @@ where
 	<NumberFor<Block> as TryInto<u64>>::Error: Debug,
 	HostFns: HostFunctions,
 {
-	let executor = build_executor::<HostFns>(&shared, &config);
+	let executor = build_executor::<HostFns>(&shared);
 	let ext = command.state.into_ext::<Block, HostFns>(&shared, &executor).await?;
 
 	// get the block number associated with this block.
@@ -128,7 +122,8 @@ where
 	let (mut header, extrinsics) = block.deconstruct();
 	header.digest_mut().pop();
 	let block = Block::new(header, extrinsics);
-	let payload = (block.clone(), !command.no_state_root_check, command.try_state).encode();
+	let state_root_check = false;
+	let payload = (block.clone(), state_root_check, command.try_state).encode();
 
 	let _ = state_machine_call_with_proof::<Block, HostFns>(
 		&ext,
@@ -137,8 +132,6 @@ where
 		&payload,
 		full_extensions(),
 	)?;
-
-	log::info!(target: LOG_TARGET, "Core_execute_block executed without errors.");
 
 	Ok(())
 }

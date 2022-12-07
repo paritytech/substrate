@@ -21,7 +21,6 @@ use crate::{
 };
 use parity_scale_codec::Encode;
 use sc_executor::sp_wasm_interface::HostFunctions;
-use sc_service::Configuration;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{fmt::Debug, str::FromStr};
 use substrate_rpc_client::{ws_client, ChainApi};
@@ -67,7 +66,6 @@ impl OffchainWorkerCmd {
 pub(crate) async fn offchain_worker<Block, HostFns>(
 	shared: SharedParams,
 	command: OffchainWorkerCmd,
-	config: Configuration,
 ) -> sc_cli::Result<()>
 where
 	Block: BlockT + serde::de::DeserializeOwned,
@@ -78,7 +76,7 @@ where
 	<NumberFor<Block> as FromStr>::Err: Debug,
 	HostFns: HostFunctions,
 {
-	let executor = build_executor(&shared, &config);
+	let executor = build_executor(&shared);
 	// we first build the externalities with the remote code.
 	let ext = command.state.into_ext::<Block, HostFns>(&shared, &executor).await?;
 
@@ -91,17 +89,16 @@ where
 	let header = ChainApi::<(), Block::Hash, Block::Header, ()>::header(&rpc, Some(next_hash))
 		.await
 		.map_err(rpc_err_handler)
-		.expect("header hash does not exist");
+		.map(|maybe_header| maybe_header.ok_or("Header does not exist"))??;
+	let payload = (header).encode();
 
 	let _ = state_machine_call::<Block, HostFns>(
 		&ext,
 		&executor,
 		"OffchainWorkerApi_offchain_worker",
-		header.encode().as_ref(),
+		&payload,
 		full_extensions(),
 	)?;
-
-	log::info!(target: LOG_TARGET, "OffchainWorkerApi_offchain_worker executed without errors.");
 
 	Ok(())
 }

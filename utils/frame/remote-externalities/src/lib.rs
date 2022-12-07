@@ -361,17 +361,22 @@ where
 		at: B::Hash,
 		pending_ext: &mut TestExternalities,
 	) -> Result<Vec<KeyValue>, &'static str> {
-		let keys = self.rpc_get_keys_paged(prefix, at).await?;
+		let keys = self.rpc_get_keys_paged(prefix.clone(), at).await?;
 		let client = self.as_online().transport.remote_client.clone().unwrap();
 		let thread_chunk_size = ((keys.len() + Self::threads() - 1) / Self::threads()).max(1);
 
 		log::info!(
 			target: LOG_TARGET,
-			"Querying a total of {} keys, splitting among {} threads, {} keys per thread",
+			"Querying a total of {} keys from prefix {:?}, splitting among {} threads, {} keys per thread",
 			keys.len(),
+			HexDisplay::from(&prefix),
 			Self::threads(),
 			thread_chunk_size,
 		);
+
+		if keys.is_empty() {
+			return Ok(Default::default())
+		}
 
 		let mut handles = Vec::new();
 		let keys_chunked: Vec<Vec<StorageKey>> =

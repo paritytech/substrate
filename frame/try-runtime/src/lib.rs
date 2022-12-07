@@ -44,5 +44,11 @@ sp_api::decl_runtime_apis! {
 		/// This is only sensible where the incoming block is from a different network, yet it has
 		/// the same block format as the runtime implementing this API.
 		fn execute_block(block: Block, state_root_check: bool, try_state: TryStateSelect) -> Weight;
+
+		/// A marker trait used just to identify if a runtime has been compiled with
+		/// `feature=try-runtime` or not.
+		///
+		/// It does nothing.
+		fn ping();
 	}
 }
