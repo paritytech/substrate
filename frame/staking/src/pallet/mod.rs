@@ -19,7 +19,7 @@
 
 use frame_election_provider_support::{SortedListProvider, VoteWeight};
 use frame_support::{
-	dispatch::{Codec, PostDispatchInfo},
+	dispatch::Codec,
 	pallet_prelude::*,
 	traits::{
 		Currency, CurrencyToVote, Defensive, DefensiveResult, DefensiveSaturating, EnsureOrigin,
@@ -953,9 +953,8 @@ pub mod pallet {
 				.map(|l| l.unlocking.len())
 				.ok_or(Error::<T>::NotController)?;
 
-			// ensure that there's chunk slots available by requesting the staking interface to
-			// withdraw chunks older than `BondingDuration`, if there are no more unlocking chunks
-			// slots available.
+			// if there are no unlocking chunks available, try to withdraw chunks older than
+			// `BondingDuration` to proceed with the unbonding.
 			let maybe_withdraw_weight = {
 				if unlocking == T::MaxUnlockingChunks::get() as usize {
 					let real_num_slashing_spans = Self::slashing_spans(&controller).iter().count();
@@ -1029,7 +1028,7 @@ pub mod pallet {
 				Some(T::WeightInfo::unbond())
 			};
 
-			Ok(Some(actual_weight).into())
+			Ok(actual_weight.into())
 		}
 
 		/// Remove any unlocked chunks from the `unlocking` queue from our management.
@@ -1054,8 +1053,8 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let controller = ensure_signed(origin)?;
 
-			let actualy_weight = Self::do_withdraw_unbonded(&controller, num_slashing_spans)?;
-			Ok(Some(actual_weight))
+			let actual_weight = Self::do_withdraw_unbonded(&controller, num_slashing_spans)?;
+			Ok(Some(actual_weight).into())
 		}
 
 		/// Declare the desire to validate for the origin controller.

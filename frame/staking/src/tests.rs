@@ -1412,7 +1412,7 @@ fn auto_withdraw_may_not_unlock_all_chunks() {
 		// unbonding will fail because i) there are no remaining chunks and ii) no filled chunks
 		// can be released because current chunk hasn't stay in the queue for at least
 		// `BondingDuration`
-		assert!(Staking::unbond(RuntimeOrigin::signed(10), 1).is_err());
+		assert_noop!(Staking::unbond(RuntimeOrigin::signed(10), 1), Error::<Test>::NoMoreChunks);
 
 		// fast-forward a few eras for unbond to be successful with implicit withdraw
 		current_era += 10;
