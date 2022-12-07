@@ -16,10 +16,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
 rand_chacha = { version = "0.2", default-features = false }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
 sp-arithmetic = { version = "6.0.0", default-features = false, path = "../../primitives/arithmetic" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
@@ -44,8 +44,10 @@ std = [
 	"sp-io/std",
 ]
 runtime-benchmarks = [
-	"frame-system/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 	"frame-benchmarking/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+	"pallet-balances/runtime-benchmarks",
 ]
 try-runtime = ["frame-support/try-runtime"]

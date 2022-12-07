@@ -36,12 +36,13 @@ fn mock_balance_deposit<T: Config<I>, I: 'static>() -> BalanceOf<T, I> {
 fn setup_society<T: Config<I>, I: 'static>() -> Result<T::AccountId, &'static str> {
 	let origin = T::FounderSetOrigin::successful_origin();
 	let founder: T::AccountId = account("founder", 0, 0);
+	let founder_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(founder.clone());
 	let max_members = 5u32;
 	let max_intake = 3u32;
 	let max_strikes = 3u32;
 	Society::<T, I>::found_society(
 		origin,
-		founder.clone(),
+		founder_lookup,
 		max_members,
 		max_intake,
 		max_strikes,
@@ -108,7 +109,8 @@ benchmarks_instance_pallet! {
 		let vouched: T::AccountId = account("vouched", 0, 0);
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T, I>::max_value());
 		let _ = Society::<T, I>::insert_member(&caller, 1u32.into());
-	}: _(RawOrigin::Signed(caller.clone()), vouched.clone(), 0u32.into(), 0u32.into())
+		let vouched_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(vouched.clone());
+	}: _(RawOrigin::Signed(caller.clone()), vouched_lookup, 0u32.into(), 0u32.into())
 	verify {
 		let bids = Bids::<T, I>::get();
 		let vouched_bid: Bid<T::AccountId, BalanceOf<T, I>> = Bid {
@@ -191,7 +193,8 @@ benchmarks_instance_pallet! {
 	found_society {
 		let founder: T::AccountId = whitelisted_caller();
 		let can_found = T::FounderSetOrigin::successful_origin();
-	}: _<T::Origin>(can_found, founder.clone(), 5, 3, 3, mock_balance_deposit::<T, I>(), b"benchmarking-society".to_vec())
+		let founder_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(founder.clone());
+	}: _<T::RuntimeOrigin>(can_found, founder_lookup, 5, 3, 3, mock_balance_deposit::<T, I>(), b"benchmarking-society".to_vec())
 	verify {
 		assert_eq!(Founder::<T, I>::get(), Some(founder.clone()));
 	}
@@ -217,9 +220,10 @@ benchmarks_instance_pallet! {
 	judge_suspended_member {
 		let founder = setup_society::<T, I>()?;
 		let caller: T::AccountId = whitelisted_caller();
+		let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller.clone());
 		let _ = Society::<T, I>::insert_member(&caller, 0u32.into());
 		let _ = Society::<T, I>::suspend_member(&caller);
-	}: _(RawOrigin::Signed(founder), caller.clone(), false)
+	}: _(RawOrigin::Signed(founder), caller_lookup, false)
 	verify {
 		assert_eq!(SuspendedMembers::<T, I>::contains_key(&caller), false);
 	}
@@ -333,7 +337,7 @@ benchmarks_instance_pallet! {
 
 	impl_benchmark_test_suite!(
 		Society,
-		crate::tests_composite::ExtBuilder::default().build(),
-		crate::tests_composite::Test,
-	)
+		sp_io::TestExternalities::from(frame_system::GenesisConfig::default().build_storage::<crate::mock::Test>().unwrap()),
+		crate::mock::Test
+	);
 }
