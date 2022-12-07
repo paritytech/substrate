@@ -132,7 +132,7 @@
 //! added, given the right flag:
 //!
 //! ```ignore
-//! 
+//!
 //! #[cfg(feature = try-runtime)]
 //! fn pre_upgrade() -> Result<Vec<u8>, &'static str> {}
 //!
@@ -300,7 +300,6 @@ use std::{fmt::Debug, path::PathBuf, str::FromStr};
 mod commands;
 pub(crate) mod parse;
 pub(crate) const LOG_TARGET: &str = "try-runtime::cli";
-pub(crate) const DEFAULT_THREADS: usize = 8;
 
 /// Possible commands of `try-runtime`.
 #[derive(Debug, Clone, clap::Subcommand)]
@@ -515,10 +514,6 @@ pub struct LiveState {
 	/// Otherwise, it must be enabled explicitly using this flag.
 	#[arg(long)]
 	child_tree: bool,
-
-	/// The number of threads to use when downloading data, when possible.
-	#[arg(long, default_value_t = DEFAULT_THREADS)]
-	threads: usize,
 }
 
 /// The source of runtime *state* to use.
@@ -558,7 +553,7 @@ impl State {
 				Builder::<Block>::new().mode(Mode::Offline(OfflineConfig {
 					state_snapshot: SnapshotConfig::new(snapshot_path),
 				})),
-			State::Live(LiveState { pallet, uri, at, child_tree, threads }) => {
+			State::Live(LiveState { pallet, uri, at, child_tree }) => {
 				let at = match at {
 					Some(at_str) => Some(hash_of::<Block>(at_str)?),
 					None => None,
@@ -579,7 +574,6 @@ impl State {
 						[twox_128(b"System"), twox_128(b"Number")].concat(),
 					],
 					hashed_prefixes: vec![],
-					threads: *threads,
 				}))
 			},
 		};

@@ -77,7 +77,6 @@ where
 			child_trie: command.child_tree,
 			hashed_prefixes: vec![],
 			hashed_keys: vec![],
-			threads: command.threads,
 		}))
 		.build()
 		.await?;

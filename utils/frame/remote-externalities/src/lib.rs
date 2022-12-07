@@ -49,7 +49,6 @@ type ChildKeyValues = Vec<(ChildInfo, Vec<KeyValue>)>;
 
 const LOG_TARGET: &str = "remote-ext";
 const DEFAULT_WS_ENDPOINT: &str = "wss://rpc.polkadot.io:443";
-const DEFAULT_VALUE_DOWNLOAD_THREADS: usize = 8;
 const DEFAULT_VALUE_DOWNLOAD_BATCH: usize = 4096;
 // NOTE: increasing this value does not seem to impact speed all that much.
 const DEFAULT_KEY_DOWNLOAD_PAGE: u32 = 1000;
@@ -162,8 +161,6 @@ pub struct OnlineConfig<B: BlockT> {
 	pub hashed_prefixes: Vec<Vec<u8>>,
 	/// Storage entry keys to be injected into the externalities. The *hashed* key must be given.
 	pub hashed_keys: Vec<Vec<u8>>,
-	/// The number of threads to be used while downloading values.
-	pub threads: usize,
 }
 
 impl<B: BlockT> OnlineConfig<B> {
@@ -185,7 +182,6 @@ impl<B: BlockT> Default for OnlineConfig<B> {
 			transport: Transport::from(DEFAULT_WS_ENDPOINT),
 			child_trie: true,
 			at: None,
-			threads: DEFAULT_VALUE_DOWNLOAD_THREADS,
 			state_snapshot: None,
 			pallets: Default::default(),
 			hashed_keys: Default::default(),
@@ -279,6 +275,11 @@ where
 	B::Hash: DeserializeOwned,
 	B::Header: DeserializeOwned,
 {
+	/// Get the number of threads to use.
+	fn threads() -> usize {
+		thread::available_parallelism().map(|x| x.get()).unwrap_or(4)
+	}
+
 	async fn rpc_get_storage(
 		&self,
 		key: StorageKey,
@@ -362,14 +363,13 @@ where
 	) -> Result<Vec<KeyValue>, &'static str> {
 		let keys = self.rpc_get_keys_paged(prefix, at).await?;
 		let client = self.as_online().transport.remote_client.clone().unwrap();
-		let thread_chunk_size =
-			((keys.len() + self.as_online().threads - 1) / self.as_online().threads).max(1);
+		let thread_chunk_size = ((keys.len() + Self::threads() - 1) / Self::threads()).max(1);
 
 		log::info!(
 			target: LOG_TARGET,
 			"Querying a total of {} keys, splitting among {} threads, {} keys per thread",
 			keys.len(),
-			self.as_online().threads,
+			Self::threads(),
 			thread_chunk_size,
 		);
 
@@ -587,15 +587,15 @@ where
 			return Ok(Default::default())
 		}
 
-		// div-ceil simulation: TODO: rework properly.
+		// div-ceil simulation.
 		let child_roots_per_thread =
-			((child_roots.len() + self.as_online().threads - 1) / self.as_online().threads).max(1);
+			((child_roots.len() + Self::threads() - 1) / Self::threads()).max(1);
 
 		info!(
 			target: LOG_TARGET,
 			"👩‍👦 scraping child-tree data from {} top keys, split among {} threads, {} top keys per thread",
 			child_roots.len(),
-			self.as_online().threads,
+			Self::threads(),
 			child_roots_per_thread,
 		);
 
@@ -1090,21 +1090,6 @@ mod remote_tests {
 			.unwrap();
 
 		assert_eq!(cached_ext.state_version, other);
-	}
-
-	#[tokio::test(flavor = "multi_thread")]
-	async fn single_multi_thread_result_is_same() {
-		let c = |threads| OnlineConfig {
-			pallets: vec!["Proxy".to_owned(), "Crowdloan".to_owned()],
-			hashed_keys: vec![well_known_keys::CODE.to_vec()],
-			child_trie: true,
-			threads,
-			..Default::default()
-		};
-
-		let ext1 = Builder::<Block>::new().mode(Mode::Online(c(1))).build().await.unwrap();
-		let ext2 = Builder::<Block>::new().mode(Mode::Online(c(8))).build().await.unwrap();
-		assert_eq!(ext1.as_backend().root(), ext2.as_backend().root());
 	}
 
 	#[tokio::test(flavor = "multi_thread")]
