@@ -75,63 +75,47 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Society SuspendedMembers (r:1 w:0)
 	// Storage: Society Parameters (r:1 w:0)
 	fn bid() -> Weight {
-		(56_738_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(5 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Bids (r:1 w:1)
 	fn unbid() -> Weight {
-		(45_204_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Bids (r:1 w:1)
 	// Storage: Society Candidates (r:1 w:0)
 	// Storage: Society Members (r:2 w:1)
 	// Storage: Society SuspendedMembers (r:1 w:0)
 	fn vouch() -> Weight {
-		(43_566_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(5 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Bids (r:1 w:1)
 	// Storage: Society Members (r:1 w:1)
 	fn unvouch() -> Weight {
-		(33_741_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Candidates (r:1 w:1)
 	// Storage: Society Members (r:1 w:0)
 	// Storage: Society Votes (r:1 w:1)
 	fn vote() -> Weight {
-		(44_890_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Defending (r:1 w:1)
 	// Storage: Society Members (r:1 w:0)
 	// Storage: Society ChallengeRoundCount (r:1 w:0)
 	// Storage: Society DefenderVotes (r:1 w:1)
 	fn defender_vote() -> Weight {
-		(41_752_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Members (r:1 w:0)
 	// Storage: Society Payouts (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
 	fn payout() -> Weight {
-		(58_145_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Members (r:1 w:1)
 	// Storage: Society Payouts (r:1 w:1)
 	fn waive_repay() -> Weight {
-		(37_796_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Head (r:1 w:1)
 	// Storage: Society MemberCount (r:1 w:1)
@@ -141,9 +125,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Society Members (r:0 w:1)
 	// Storage: Society Parameters (r:0 w:1)
 	fn found_society() -> Weight {
-		(37_221_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(7 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Founder (r:1 w:1)
 	// Storage: Society MemberCount (r:1 w:1)
@@ -162,26 +144,20 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Society Parameters (r:0 w:1)
 	// Storage: Society NextHead (r:0 w:1)
 	fn dissolve() -> Weight {
-		(105_209_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(30 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Founder (r:1 w:0)
 	// Storage: Society SuspendedMembers (r:1 w:1)
 	// Storage: Society Payouts (r:1 w:0)
 	// Storage: Society Pot (r:1 w:1)
 	fn judge_suspended_member() -> Weight {
-		(39_916_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Founder (r:1 w:0)
 	// Storage: Society MemberCount (r:1 w:0)
 	// Storage: Society Parameters (r:0 w:1)
 	fn set_parameters() -> Weight {
-		(28_251_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Candidates (r:1 w:1)
 	// Storage: Society RoundCount (r:1 w:0)
@@ -190,9 +166,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Society Members (r:1 w:1)
 	// Storage: Society Parameters (r:1 w:0)
 	fn punish_skeptic() -> Weight {
-		(40_041_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(6 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Candidates (r:1 w:1)
 	// Storage: Society RoundCount (r:1 w:0)
@@ -203,9 +177,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Society MemberByIndex (r:0 w:1)
 	// Storage: Society Members (r:0 w:1)
 	fn claim_membership() -> Weight {
-		(64_305_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(6 as Weight))
-			.saturating_add(T::DbWeight::get().writes(6 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Founder (r:1 w:0)
 	// Storage: Society Candidates (r:1 w:1)
@@ -217,46 +189,34 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Society MemberByIndex (r:0 w:1)
 	// Storage: Society Members (r:0 w:1)
 	fn bestow_membership() -> Weight {
-		(68_334_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(7 as Weight))
-			.saturating_add(T::DbWeight::get().writes(6 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Founder (r:1 w:0)
 	// Storage: Society Candidates (r:1 w:1)
 	// Storage: Society RoundCount (r:1 w:0)
 	fn kick_candidate() -> Weight {
-		(23_574_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Candidates (r:1 w:1)
 	// Storage: Society RoundCount (r:1 w:0)
 	fn resign_candidacy() -> Weight {
-		(22_284_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Candidates (r:1 w:1)
 	// Storage: Society RoundCount (r:1 w:0)
 	fn drop_candidate() -> Weight {
-		(32_618_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Candidates (r:1 w:0)
 	// Storage: Society VoteClearCursor (r:1 w:0)
 	// Storage: Society Votes (r:0 w:2)
 	fn cleanup_candidacy() -> Weight {
-		(27_936_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society ChallengeRoundCount (r:1 w:0)
 	// Storage: Society DefenderVotes (r:0 w:1)
 	fn cleanup_challenge() -> Weight {
-		(18_411_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::zero()
 	}
 }
 
@@ -268,63 +228,47 @@ impl WeightInfo for () {
 	// Storage: Society SuspendedMembers (r:1 w:0)
 	// Storage: Society Parameters (r:1 w:0)
 	fn bid() -> Weight {
-		(56_738_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Bids (r:1 w:1)
 	fn unbid() -> Weight {
-		(45_204_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Bids (r:1 w:1)
 	// Storage: Society Candidates (r:1 w:0)
 	// Storage: Society Members (r:2 w:1)
 	// Storage: Society SuspendedMembers (r:1 w:0)
 	fn vouch() -> Weight {
-		(43_566_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Bids (r:1 w:1)
 	// Storage: Society Members (r:1 w:1)
 	fn unvouch() -> Weight {
-		(33_741_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Candidates (r:1 w:1)
 	// Storage: Society Members (r:1 w:0)
 	// Storage: Society Votes (r:1 w:1)
 	fn vote() -> Weight {
-		(44_890_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Defending (r:1 w:1)
 	// Storage: Society Members (r:1 w:0)
 	// Storage: Society ChallengeRoundCount (r:1 w:0)
 	// Storage: Society DefenderVotes (r:1 w:1)
 	fn defender_vote() -> Weight {
-		(41_752_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Members (r:1 w:0)
 	// Storage: Society Payouts (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
 	fn payout() -> Weight {
-		(58_145_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Members (r:1 w:1)
 	// Storage: Society Payouts (r:1 w:1)
 	fn waive_repay() -> Weight {
-		(37_796_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Head (r:1 w:1)
 	// Storage: Society MemberCount (r:1 w:1)
@@ -334,9 +278,7 @@ impl WeightInfo for () {
 	// Storage: Society Members (r:0 w:1)
 	// Storage: Society Parameters (r:0 w:1)
 	fn found_society() -> Weight {
-		(37_221_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(7 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Founder (r:1 w:1)
 	// Storage: Society MemberCount (r:1 w:1)
@@ -355,26 +297,20 @@ impl WeightInfo for () {
 	// Storage: Society Parameters (r:0 w:1)
 	// Storage: Society NextHead (r:0 w:1)
 	fn dissolve() -> Weight {
-		(105_209_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(30 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Founder (r:1 w:0)
 	// Storage: Society SuspendedMembers (r:1 w:1)
 	// Storage: Society Payouts (r:1 w:0)
 	// Storage: Society Pot (r:1 w:1)
 	fn judge_suspended_member() -> Weight {
-		(39_916_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Founder (r:1 w:0)
 	// Storage: Society MemberCount (r:1 w:0)
 	// Storage: Society Parameters (r:0 w:1)
 	fn set_parameters() -> Weight {
-		(28_251_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Candidates (r:1 w:1)
 	// Storage: Society RoundCount (r:1 w:0)
@@ -383,9 +319,7 @@ impl WeightInfo for () {
 	// Storage: Society Members (r:1 w:1)
 	// Storage: Society Parameters (r:1 w:0)
 	fn punish_skeptic() -> Weight {
-		(40_041_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Candidates (r:1 w:1)
 	// Storage: Society RoundCount (r:1 w:0)
@@ -396,9 +330,7 @@ impl WeightInfo for () {
 	// Storage: Society MemberByIndex (r:0 w:1)
 	// Storage: Society Members (r:0 w:1)
 	fn claim_membership() -> Weight {
-		(64_305_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(6 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Founder (r:1 w:0)
 	// Storage: Society Candidates (r:1 w:1)
@@ -410,45 +342,33 @@ impl WeightInfo for () {
 	// Storage: Society MemberByIndex (r:0 w:1)
 	// Storage: Society Members (r:0 w:1)
 	fn bestow_membership() -> Weight {
-		(68_334_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(7 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(6 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Founder (r:1 w:0)
 	// Storage: Society Candidates (r:1 w:1)
 	// Storage: Society RoundCount (r:1 w:0)
 	fn kick_candidate() -> Weight {
-		(23_574_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Candidates (r:1 w:1)
 	// Storage: Society RoundCount (r:1 w:0)
 	fn resign_candidacy() -> Weight {
-		(22_284_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Candidates (r:1 w:1)
 	// Storage: Society RoundCount (r:1 w:0)
 	fn drop_candidate() -> Weight {
-		(32_618_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society Candidates (r:1 w:0)
 	// Storage: Society VoteClearCursor (r:1 w:0)
 	// Storage: Society Votes (r:0 w:2)
 	fn cleanup_candidacy() -> Weight {
-		(27_936_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::zero()
 	}
 	// Storage: Society ChallengeRoundCount (r:1 w:0)
 	// Storage: Society DefenderVotes (r:0 w:1)
 	fn cleanup_challenge() -> Weight {
-		(18_411_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::zero()
 	}
 }

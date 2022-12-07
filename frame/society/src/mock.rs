@@ -32,6 +32,8 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 };
 
+use RuntimeOrigin as Origin;
+
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -102,7 +104,7 @@ impl pallet_balances::Config for Test {
 }
 
 impl Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type PalletId = SocietyPalletId;
 	type Currency = pallet_balances::Pallet<Self>;
 	type Randomness = TestRandomness<Self>;
@@ -151,9 +153,7 @@ impl EnvBuilder {
 		pallet_balances::GenesisConfig::<Test> { balances: self.balances }
 			.assimilate_storage(&mut t)
 			.unwrap();
-		pallet_society::GenesisConfig::<Test> {
-			pot: self.pot,
-		}
+		pallet_society::GenesisConfig::<Test> { pot: self.pot }
 			.assimilate_storage(&mut t)
 			.unwrap();
 		let mut ext: sp_io::TestExternalities = t.into();
@@ -223,11 +223,17 @@ pub fn conclude_intake(allow_resignation: bool, judge_intake: Option<bool>) {
 	for (who, candidacy) in Candidates::<Test>::iter() {
 		if candidacy.tally.clear_approval() {
 			assert_ok!(Society::claim_membership(Origin::signed(who)));
-			assert_noop!(Society::claim_membership(Origin::signed(who)), Error::<Test>::NotCandidate);
+			assert_noop!(
+				Society::claim_membership(Origin::signed(who)),
+				Error::<Test>::NotCandidate
+			);
 			continue
 		}
 		if candidacy.tally.clear_rejection() && allow_resignation {
-			assert_noop!(Society::claim_membership(Origin::signed(who)), Error::<Test>::NotApproved);
+			assert_noop!(
+				Society::claim_membership(Origin::signed(who)),
+				Error::<Test>::NotApproved
+			);
 			assert_ok!(Society::resign_candidacy(Origin::signed(who)));
 			continue
 		}
@@ -244,9 +250,15 @@ pub fn conclude_intake(allow_resignation: bool, judge_intake: Option<bool>) {
 			}
 		}
 		if candidacy.tally.clear_rejection() && round > candidacy.round + 1 {
-			assert_noop!(Society::claim_membership(Origin::signed(who)), Error::<Test>::NotApproved);
+			assert_noop!(
+				Society::claim_membership(Origin::signed(who)),
+				Error::<Test>::NotApproved
+			);
 			assert_ok!(Society::drop_candidate(Origin::signed(0), who));
-			assert_noop!(Society::drop_candidate(Origin::signed(0), who), Error::<Test>::NotCandidate);
+			assert_noop!(
+				Society::drop_candidate(Origin::signed(0), who),
+				Error::<Test>::NotCandidate
+			);
 			continue
 		}
 		if !candidacy.skeptic_struck {

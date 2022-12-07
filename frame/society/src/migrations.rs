@@ -35,64 +35,74 @@ pub(crate) mod old {
 		Approve,
 	}
 
-	#[storage_alias] pub type Bids<T: Config<I>, I: 'static> = StorageValue<
+	#[storage_alias]
+	pub type Bids<T: Config<I>, I: 'static> = StorageValue<
 		Pallet<T, I>,
 		Vec<Bid<<T as frame_system::Config>::AccountId, BalanceOf<T, I>>>,
 		ValueQuery,
 	>;
-	#[storage_alias] pub type Candidates<T: Config<I>, I: 'static> = StorageValue<
+	#[storage_alias]
+	pub type Candidates<T: Config<I>, I: 'static> = StorageValue<
 		Pallet<T, I>,
 		Vec<Bid<<T as frame_system::Config>::AccountId, BalanceOf<T, I>>>,
 		ValueQuery,
 	>;
-	#[storage_alias] pub type Votes<T: Config<I>, I: 'static> = StorageDoubleMap<
+	#[storage_alias]
+	pub type Votes<T: Config<I>, I: 'static> = StorageDoubleMap<
 		Pallet<T, I>,
-		Twox64Concat, <T as frame_system::Config>::AccountId,
-		Twox64Concat, <T as frame_system::Config>::AccountId,
+		Twox64Concat,
+		<T as frame_system::Config>::AccountId,
+		Twox64Concat,
+		<T as frame_system::Config>::AccountId,
 		Vote,
 	>;
-	#[storage_alias] pub type SuspendedCandidates<T: Config<I>, I: 'static> = StorageMap<
+	#[storage_alias]
+	pub type SuspendedCandidates<T: Config<I>, I: 'static> = StorageMap<
 		Pallet<T, I>,
-		Twox64Concat, <T as frame_system::Config>::AccountId,
+		Twox64Concat,
+		<T as frame_system::Config>::AccountId,
 		(BalanceOf<T, I>, BidKind<<T as frame_system::Config>::AccountId, BalanceOf<T, I>>),
 	>;
-	#[storage_alias] pub type Members<T: Config<I>, I: 'static> = StorageValue<
+	#[storage_alias]
+	pub type Members<T: Config<I>, I: 'static> =
+		StorageValue<Pallet<T, I>, Vec<<T as frame_system::Config>::AccountId>, ValueQuery>;
+	#[storage_alias]
+	pub type Vouching<T: Config<I>, I: 'static> = StorageMap<
 		Pallet<T, I>,
-		Vec<<T as frame_system::Config>::AccountId>,
-		ValueQuery,
-	>;
-	#[storage_alias] pub type Vouching<T: Config<I>, I: 'static> = StorageMap<
-		Pallet<T, I>,
-		Twox64Concat, <T as frame_system::Config>::AccountId,
+		Twox64Concat,
+		<T as frame_system::Config>::AccountId,
 		VouchingStatus,
 	>;
-	#[storage_alias] pub type Strikes<T: Config<I>, I: 'static> = StorageMap<
+	#[storage_alias]
+	pub type Strikes<T: Config<I>, I: 'static> = StorageMap<
 		Pallet<T, I>,
-		Twox64Concat, <T as frame_system::Config>::AccountId,
+		Twox64Concat,
+		<T as frame_system::Config>::AccountId,
 		StrikeCount,
 		ValueQuery,
 	>;
-	#[storage_alias] pub type Payouts<T: Config<I>, I: 'static> = StorageMap<
+	#[storage_alias]
+	pub type Payouts<T: Config<I>, I: 'static> = StorageMap<
 		Pallet<T, I>,
-		Twox64Concat, <T as frame_system::Config>::AccountId,
+		Twox64Concat,
+		<T as frame_system::Config>::AccountId,
 		Vec<(<T as frame_system::Config>::BlockNumber, BalanceOf<T, I>)>,
 		ValueQuery,
 	>;
-	#[storage_alias] pub type SuspendedMembers<T: Config<I>, I: 'static> = StorageMap<
+	#[storage_alias]
+	pub type SuspendedMembers<T: Config<I>, I: 'static> = StorageMap<
 		Pallet<T, I>,
-		Twox64Concat, <T as frame_system::Config>::AccountId,
+		Twox64Concat,
+		<T as frame_system::Config>::AccountId,
 		bool,
 		ValueQuery,
 	>;
-	#[storage_alias] pub type Defender<T: Config<I>, I: 'static> = StorageValue<
-		Pallet<T, I>,
-		<T as frame_system::Config>::AccountId,
-	>;
-	#[storage_alias] pub type DefenderVotes<T: Config<I>, I: 'static> = StorageMap<
-		Pallet<T, I>,
-		Twox64Concat, <T as frame_system::Config>::AccountId,
-		Vote,
-	>;
+	#[storage_alias]
+	pub type Defender<T: Config<I>, I: 'static> =
+		StorageValue<Pallet<T, I>, <T as frame_system::Config>::AccountId>;
+	#[storage_alias]
+	pub type DefenderVotes<T: Config<I>, I: 'static> =
+		StorageMap<Pallet<T, I>, Twox64Concat, <T as frame_system::Config>::AccountId, Vote>;
 }
 
 pub fn can_migrate<T: Config<I>, I: Instance + 'static>() -> bool {
@@ -148,11 +158,8 @@ pub fn assert_internal_consistency<T: Config<I>, I: Instance + 'static>() {
 	assert!(!old::Members::<T, I>::exists());
 }
 
-pub fn from_original<
-	T: Config<I>,
-	I: Instance + 'static,
->(
-	past_payouts: &mut [(<T as frame_system::Config>::AccountId, BalanceOf<T, I>)]
+pub fn from_original<T: Config<I>, I: Instance + 'static>(
+	past_payouts: &mut [(<T as frame_system::Config>::AccountId, BalanceOf<T, I>)],
 ) {
 	// First check that this is the original state layout. This is easy since the original layout
 	// contained the Members value, and this value no longer exists in the new layout.
@@ -173,23 +180,21 @@ pub fn from_original<
 		// Migrate Votes from old::Votes
 		// No need to drain, since we're overwriting values.
 		for (voter, vote) in old::Votes::<T, I>::iter_prefix(&candidate) {
-			Votes::<T, I>::insert(&candidate, &voter, Vote {
-				approve: vote == old::Vote::Approve,
-				weight: 1,
-			});
+			Votes::<T, I>::insert(
+				&candidate,
+				&voter,
+				Vote { approve: vote == old::Vote::Approve, weight: 1 },
+			);
 			match vote {
 				old::Vote::Approve => tally.approvals.saturating_inc(),
 				old::Vote::Reject => tally.rejections.saturating_inc(),
 				old::Vote::Skeptic => Skeptic::<T, I>::put(&voter),
 			}
 		}
-		Candidates::<T, I>::insert(&candidate, Candidacy {
-			round: 0,
-			kind,
-			tally,
-			skeptic_struck: false,
-			bid: value,
-		});
+		Candidates::<T, I>::insert(
+			&candidate,
+			Candidacy { round: 0, kind, tally, skeptic_struck: false, bid: value },
+		);
 	}
 
 	// Migrate Members from old::Members old::Strikes old::Vouching
@@ -204,7 +209,8 @@ pub fn from_original<
 	}
 	MemberCount::<T, I>::put(member_count);
 
-	// Migrate Payouts from: old::Payouts and raw info (needed since we can't query old chain state).
+	// Migrate Payouts from: old::Payouts and raw info (needed since we can't query old chain
+	// state).
 	past_payouts.sort();
 	for (who, mut payouts) in old::Payouts::<T, I>::iter() {
 		payouts.truncate(T::MaxPayouts::get() as usize);
@@ -236,17 +242,12 @@ pub fn from_original<
 	let _ = old::DefenderVotes::<T, I>::clear(u32::MAX, None);
 }
 
-pub fn from_raw_past_payouts<
-	T: Config<I>,
-	I: Instance + 'static,
->(
-	past_payouts_raw: &[(&[u8], u128)]
+pub fn from_raw_past_payouts<T: Config<I>, I: Instance + 'static>(
+	past_payouts_raw: &[(&[u8], u128)],
 ) -> Vec<(<T as frame_system::Config>::AccountId, BalanceOf<T, I>)> {
-	past_payouts_raw.iter()
-		.filter_map(|(x, y)| Some((
-			Decode::decode(&mut x.as_ref()).ok()?,
-			(*y).try_into().ok()?,
-		)))
+	past_payouts_raw
+		.iter()
+		.filter_map(|(x, y)| Some((Decode::decode(&mut x.as_ref()).ok()?, (*y).try_into().ok()?)))
 		.collect()
 }
 

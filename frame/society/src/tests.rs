@@ -18,14 +18,16 @@
 //! Tests for the module.
 
 use super::*;
-use mock::*;
 use migrations::old;
+use mock::*;
 
 use frame_support::{assert_noop, assert_ok};
 use sp_core::blake2_256;
 use sp_runtime::traits::BadOrigin;
-use VouchingStatus::*;
 use BidKind::*;
+use VouchingStatus::*;
+
+use RuntimeOrigin as Origin;
 
 #[test]
 fn migration_works() {
@@ -42,7 +44,12 @@ fn migration_works() {
 		old::Strikes::<Test, ()>::insert(30, 2);
 		old::Strikes::<Test, ()>::insert(40, 5);
 		old::Payouts::<Test, ()>::insert(20, vec![(1, 1)]);
-		old::Payouts::<Test, ()>::insert(30, (0..=<Test as Config>::MaxPayouts::get()).map(|i| (i as u64, i as u64)).collect::<Vec<_>>());
+		old::Payouts::<Test, ()>::insert(
+			30,
+			(0..=<Test as Config>::MaxPayouts::get())
+				.map(|i| (i as u64, i as u64))
+				.collect::<Vec<_>>(),
+		);
 		old::SuspendedMembers::<Test, ()>::insert(40, true);
 
 		old::Defender::<Test, ()>::put(20);
@@ -70,14 +77,17 @@ fn migration_works() {
 			.collect::<Vec<_>>();
 		old::Bids::<Test, ()>::put(bids);
 
-		migrations::from_original::<Test, ()>(&mut[][..]);
+		migrations::from_original::<Test, ()>(&mut [][..]);
 		migrations::assert_internal_consistency::<Test, ()>();
 
-		assert_eq!(membership(), vec![
-			(10, MemberRecord { rank: 0, strikes: 0, vouching: None, index: 0 }),
-			(20, MemberRecord { rank: 0, strikes: 1, vouching: None, index: 1 }),
-			(30, MemberRecord { rank: 0, strikes: 2, vouching: Some(Vouching), index: 2 }),
-		]);
+		assert_eq!(
+			membership(),
+			vec![
+				(10, MemberRecord { rank: 0, strikes: 0, vouching: None, index: 0 }),
+				(20, MemberRecord { rank: 0, strikes: 1, vouching: None, index: 1 }),
+				(30, MemberRecord { rank: 0, strikes: 2, vouching: Some(Vouching), index: 2 }),
+			]
+		);
 		assert_eq!(Payouts::<Test>::get(10), PayoutRecord::default());
 		let payouts = vec![(1, 1)].try_into().unwrap();
 		assert_eq!(Payouts::<Test>::get(20), PayoutRecord { paid: 0, payouts });
@@ -87,9 +97,10 @@ fn migration_works() {
 			.try_into()
 			.unwrap();
 		assert_eq!(Payouts::<Test>::get(30), PayoutRecord { paid: 0, payouts });
-		assert_eq!(SuspendedMembers::<Test>::iter().collect::<Vec<_>>(), vec![
-			(40, MemberRecord { rank: 0, strikes: 5, vouching: Some(Banned), index: 0 }),
-		]);
+		assert_eq!(
+			SuspendedMembers::<Test>::iter().collect::<Vec<_>>(),
+			vec![(40, MemberRecord { rank: 0, strikes: 5, vouching: Some(Banned), index: 0 }),]
+		);
 		let bids: BoundedVec<_, <Test as Config>::MaxBids> = (0..<Test as Config>::MaxBids::get())
 			.map(|i| Bid {
 				who: 100u128 + i as u128,
@@ -101,26 +112,35 @@ fn migration_works() {
 			.unwrap();
 		assert_eq!(Bids::<Test>::get(), bids);
 		assert_eq!(RoundCount::<Test, ()>::get(), 0);
-		assert_eq!(candidacies(), vec![
-			(60, Candidacy {
-				round: 0,
-				kind: Deposit(100),
-				bid: 200,
-				tally: Tally { approvals: 1, rejections: 0 },
-				skeptic_struck: false,
-			}),
-			(70, Candidacy {
-				round: 0,
-				kind: Vouch(30, 30),
-				bid: 100,
-				tally: Tally { approvals: 2, rejections: 1 },
-				skeptic_struck: false,
-			}),
-		]);
-		assert_eq!(Votes::<Test>::get(60, 10), Some(Vote { approve: true, weight: 1}));
-		assert_eq!(Votes::<Test>::get(70, 10), Some(Vote { approve: false, weight: 1}));
-		assert_eq!(Votes::<Test>::get(70, 20), Some(Vote { approve: true, weight: 1}));
-		assert_eq!(Votes::<Test>::get(70, 30), Some(Vote { approve: true, weight: 1}));
+		assert_eq!(
+			candidacies(),
+			vec![
+				(
+					60,
+					Candidacy {
+						round: 0,
+						kind: Deposit(100),
+						bid: 200,
+						tally: Tally { approvals: 1, rejections: 0 },
+						skeptic_struck: false,
+					}
+				),
+				(
+					70,
+					Candidacy {
+						round: 0,
+						kind: Vouch(30, 30),
+						bid: 100,
+						tally: Tally { approvals: 2, rejections: 1 },
+						skeptic_struck: false,
+					}
+				),
+			]
+		);
+		assert_eq!(Votes::<Test>::get(60, 10), Some(Vote { approve: true, weight: 1 }));
+		assert_eq!(Votes::<Test>::get(70, 10), Some(Vote { approve: false, weight: 1 }));
+		assert_eq!(Votes::<Test>::get(70, 20), Some(Vote { approve: true, weight: 1 }));
+		assert_eq!(Votes::<Test>::get(70, 30), Some(Vote { approve: true, weight: 1 }));
 	});
 }
 
@@ -133,9 +153,20 @@ fn founding_works() {
 		assert_eq!(Pot::<Test>::get(), 0);
 		// Account 1 is set as the founder origin
 		// Account 5 cannot start a society
-		assert_noop!(Society::found_society(Origin::signed(5), 20, 100, 10, 2, 25, vec![]), BadOrigin);
+		assert_noop!(
+			Society::found_society(Origin::signed(5), 20, 100, 10, 2, 25, vec![]),
+			BadOrigin
+		);
 		// Account 1 can start a society, where 10 is the founding member
-		assert_ok!(Society::found_society(Origin::signed(1), 10, 100, 10, 2, 25, b"be cool".to_vec()));
+		assert_ok!(Society::found_society(
+			Origin::signed(1),
+			10,
+			100,
+			10,
+			2,
+			25,
+			b"be cool".to_vec()
+		));
 		// Society members only include 10
 		assert_eq!(members(), vec![10]);
 		// 10 is the head of the society
@@ -250,7 +281,7 @@ fn bidding_works() {
 		// No more candidates satisfy the requirements
 		assert_eq!(candidacies(), vec![]);
 		assert_ok!(Society::defender_vote(Origin::signed(10), true)); // Keep defender around
-		// Next period
+															  // Next period
 		run_to_block(16);
 		// Same members
 		assert_eq!(members(), vec![10, 30, 40, 50]);
@@ -376,16 +407,25 @@ fn slash_payout_works() {
 		assert_ok!(Society::vote(Origin::signed(10), 20, true));
 		conclude_intake(true, None);
 		// payout in queue
-		assert_eq!(Payouts::<Test>::get(20), PayoutRecord { paid: 0, payouts: vec![(8, 1000)].try_into().unwrap() });
+		assert_eq!(
+			Payouts::<Test>::get(20),
+			PayoutRecord { paid: 0, payouts: vec![(8, 1000)].try_into().unwrap() }
+		);
 		assert_noop!(Society::payout(Origin::signed(20)), Error::<Test>::NoPayout);
 		// slash payout
 		assert_eq!(Society::slash_payout(&20, 500), 500);
-		assert_eq!(Payouts::<Test>::get(20), PayoutRecord { paid: 0, payouts: vec![(8, 500)].try_into().unwrap() });
+		assert_eq!(
+			Payouts::<Test>::get(20),
+			PayoutRecord { paid: 0, payouts: vec![(8, 500)].try_into().unwrap() }
+		);
 		run_to_block(8);
 		// payout should be here, but 500 less
 		assert_ok!(Society::payout(RuntimeOrigin::signed(20)));
 		assert_eq!(Balances::free_balance(20), 550);
-		assert_eq!(Payouts::<Test>::get(20), PayoutRecord { paid: 500, payouts: Default::default() });
+		assert_eq!(
+			Payouts::<Test>::get(20),
+			PayoutRecord { paid: 500, payouts: Default::default() }
+		);
 	});
 }
 
@@ -400,13 +440,25 @@ fn slash_payout_multi_works() {
 		Society::bump_payout(&20, 15, 100);
 		Society::bump_payout(&20, 20, 100);
 		// payouts in queue
-		assert_eq!(Payouts::<Test>::get(20), PayoutRecord { paid: 0, payouts: vec![(5, 100), (10, 100), (15, 100), (20, 100)].try_into().unwrap() });
+		assert_eq!(
+			Payouts::<Test>::get(20),
+			PayoutRecord {
+				paid: 0,
+				payouts: vec![(5, 100), (10, 100), (15, 100), (20, 100)].try_into().unwrap()
+			}
+		);
 		// slash payout
 		assert_eq!(Society::slash_payout(&20, 250), 250);
-		assert_eq!(Payouts::<Test>::get(20), PayoutRecord { paid: 0, payouts: vec![(15, 50), (20, 100)].try_into().unwrap() });
+		assert_eq!(
+			Payouts::<Test>::get(20),
+			PayoutRecord { paid: 0, payouts: vec![(15, 50), (20, 100)].try_into().unwrap() }
+		);
 		// slash again
 		assert_eq!(Society::slash_payout(&20, 50), 50);
-		assert_eq!(Payouts::<Test>::get(20), PayoutRecord { paid: 0, payouts: vec![(20, 100)].try_into().unwrap() });
+		assert_eq!(
+			Payouts::<Test>::get(20),
+			PayoutRecord { paid: 0, payouts: vec![(20, 100)].try_into().unwrap() }
+		);
 	});
 }
 
@@ -425,7 +477,6 @@ fn suspended_member_life_cycle_works() {
 		next_intake();
 		conclude_intake(false, None);
 
-
 		// 2 strikes are accumulated, and 20 is suspended :(
 		assert!(SuspendedMembers::<Test>::contains_key(20));
 		assert_eq!(members(), vec![10]);
@@ -435,7 +486,10 @@ fn suspended_member_life_cycle_works() {
 		assert_noop!(Society::payout(Origin::signed(20)), Error::<Test>::NotMember);
 
 		// Normal people cannot make judgement
-		assert_noop!(Society::judge_suspended_member(Origin::signed(20), 20, true), Error::<Test>::NotFounder);
+		assert_noop!(
+			Society::judge_suspended_member(Origin::signed(20), 20, true),
+			Error::<Test>::NotFounder
+		);
 
 		// Suspension judgment origin can judge thee
 		// Suspension judgement origin forgives the suspended member
@@ -451,7 +505,10 @@ fn suspended_member_life_cycle_works() {
 		// Cleaned up
 		assert!(!SuspendedMembers::<Test>::contains_key(20));
 		assert_eq!(members(), vec![10]);
-		assert_eq!(Payouts::<Test>::get(20), PayoutRecord { paid: 0, payouts: vec![].try_into().unwrap() });
+		assert_eq!(
+			Payouts::<Test>::get(20),
+			PayoutRecord { paid: 0, payouts: vec![].try_into().unwrap() }
+		);
 	});
 }
 
@@ -468,12 +525,15 @@ fn suspended_candidate_rejected_works() {
 
 		// Rotation Period
 		next_intake();
-		assert_eq!(candidacies(), vec![
-			(40, candidacy(1, 10, Deposit(25), 0, 0)),
-			(50, candidacy(1, 10, Deposit(25), 0, 0)),
-			(60, candidacy(1, 10, Deposit(25), 0, 0)),
-			(70, candidacy(1, 10, Deposit(25), 0, 0)),
-		]);
+		assert_eq!(
+			candidacies(),
+			vec![
+				(40, candidacy(1, 10, Deposit(25), 0, 0)),
+				(50, candidacy(1, 10, Deposit(25), 0, 0)),
+				(60, candidacy(1, 10, Deposit(25), 0, 0)),
+				(70, candidacy(1, 10, Deposit(25), 0, 0)),
+			]
+		);
 
 		// Split vote over all.
 		for &x in &[40, 50, 60, 70] {
@@ -557,7 +617,10 @@ fn unpaid_vouch_works() {
 		conclude_intake(true, None);
 		assert_eq!(members(), vec![10, 20]);
 		// Vouched user gets whatever remains after the voucher's reservation.
-		assert_eq!(Payouts::<Test>::get(20), PayoutRecord { paid: 0, payouts: vec![(8, 900)].try_into().unwrap() });
+		assert_eq!(
+			Payouts::<Test>::get(20),
+			PayoutRecord { paid: 0, payouts: vec![(8, 900)].try_into().unwrap() }
+		);
 		// 10 is no longer vouching
 		assert_eq!(Members::<Test>::get(10).unwrap().vouching, None);
 	});
@@ -580,9 +643,15 @@ fn paid_vouch_works() {
 
 		assert_eq!(members(), vec![10, 20, 30]);
 		// Voucher wins a portion of the payment
-		assert_eq!(Payouts::<Test>::get(20), PayoutRecord { paid: 0, payouts: vec![(8, 100)].try_into().unwrap() });
+		assert_eq!(
+			Payouts::<Test>::get(20),
+			PayoutRecord { paid: 0, payouts: vec![(8, 100)].try_into().unwrap() }
+		);
 		// Vouched user wins the rest
-		assert_eq!(Payouts::<Test>::get(30), PayoutRecord { paid: 0, payouts: vec![(8, 900)].try_into().unwrap() });
+		assert_eq!(
+			Payouts::<Test>::get(30),
+			PayoutRecord { paid: 0, payouts: vec![(8, 900)].try_into().unwrap() }
+		);
 		// 20 is no longer vouching
 		assert_eq!(Members::<Test>::get(20).unwrap().vouching, None);
 	});
@@ -605,9 +674,15 @@ fn voucher_cannot_win_more_than_bid() {
 		conclude_intake(true, None);
 		assert_eq!(members(), vec![10, 20, 30]);
 		// Voucher wins as much as the bid
-		assert_eq!(Payouts::<Test>::get(20), PayoutRecord { paid: 0, payouts: vec![(8, 100)].try_into().unwrap() });
+		assert_eq!(
+			Payouts::<Test>::get(20),
+			PayoutRecord { paid: 0, payouts: vec![(8, 100)].try_into().unwrap() }
+		);
 		// Vouched user gets nothing
-		assert_eq!(Payouts::<Test>::get(30), PayoutRecord { paid: 0, payouts: vec![].try_into().unwrap() });
+		assert_eq!(
+			Payouts::<Test>::get(30),
+			PayoutRecord { paid: 0, payouts: vec![].try_into().unwrap() }
+		);
 	});
 }
 
@@ -746,12 +821,10 @@ fn founder_and_head_cannot_be_removed() {
 		Skeptic::<Test>::put(50);
 		conclude_intake(false, None);
 		next_intake();
-		assert_eq!(SuspendedMembers::<Test>::get(50), Some(MemberRecord {
-			rank: 0,
-			strikes: 3,
-			vouching: None,
-			index: 1,
-		}));
+		assert_eq!(
+			SuspendedMembers::<Test>::get(50),
+			Some(MemberRecord { rank: 0, strikes: 3, vouching: None, index: 1 })
+		);
 		assert_eq!(members(), vec![10, 80]);
 	});
 }
@@ -813,12 +886,10 @@ fn challenges_work() {
 		next_challenge();
 		// 30 is suspended
 		assert_eq!(members(), vec![10, 20, 40]);
-		assert_eq!(SuspendedMembers::<Test>::get(30), Some(MemberRecord {
-			rank: 0,
-			strikes: 0,
-			vouching: None,
-			index: 2,
-		}));
+		assert_eq!(
+			SuspendedMembers::<Test>::get(30),
+			Some(MemberRecord { rank: 0, strikes: 0, vouching: None, index: 2 })
+		);
 		// Reset votes for last challenge
 		assert_ok!(Society::cleanup_challenge(Origin::signed(0), 2, 10));
 		// New defender is chosen
@@ -843,10 +914,22 @@ fn bad_vote_slash_works() {
 		Society::bump_payout(&40, 5, 100);
 		Society::bump_payout(&50, 5, 100);
 		// Check starting point
-		assert_eq!(Payouts::<Test>::get(20), PayoutRecord { paid: 0, payouts: vec![(5, 100)].try_into().unwrap() });
-		assert_eq!(Payouts::<Test>::get(30), PayoutRecord { paid: 0, payouts: vec![(5, 100)].try_into().unwrap() });
-		assert_eq!(Payouts::<Test>::get(40), PayoutRecord { paid: 0, payouts: vec![(5, 100)].try_into().unwrap() });
-		assert_eq!(Payouts::<Test>::get(50), PayoutRecord { paid: 0, payouts: vec![(5, 100)].try_into().unwrap() });
+		assert_eq!(
+			Payouts::<Test>::get(20),
+			PayoutRecord { paid: 0, payouts: vec![(5, 100)].try_into().unwrap() }
+		);
+		assert_eq!(
+			Payouts::<Test>::get(30),
+			PayoutRecord { paid: 0, payouts: vec![(5, 100)].try_into().unwrap() }
+		);
+		assert_eq!(
+			Payouts::<Test>::get(40),
+			PayoutRecord { paid: 0, payouts: vec![(5, 100)].try_into().unwrap() }
+		);
+		assert_eq!(
+			Payouts::<Test>::get(50),
+			PayoutRecord { paid: 0, payouts: vec![(5, 100)].try_into().unwrap() }
+		);
 		// Create a new bid
 		assert_ok!(Society::bid(Origin::signed(60), 1000));
 		next_intake();
@@ -863,10 +946,22 @@ fn bad_vote_slash_works() {
 		assert_eq!(Members::<Test>::get(40).unwrap().strikes, 0);
 		assert_eq!(Members::<Test>::get(50).unwrap().strikes, 0);
 		// Their payout is slashed, a random person is rewarded
-		assert_eq!(Payouts::<Test>::get(20), PayoutRecord { paid: 0, payouts: vec![(5, 50)].try_into().unwrap() });
-		assert_eq!(Payouts::<Test>::get(30), PayoutRecord { paid: 0, payouts: vec![(5, 100)].try_into().unwrap() });
-		assert_eq!(Payouts::<Test>::get(40), PayoutRecord { paid: 0, payouts: vec![(5, 100)].try_into().unwrap() });
-		assert_eq!(Payouts::<Test>::get(50), PayoutRecord { paid: 0, payouts: vec![(5, 100)].try_into().unwrap() });
+		assert_eq!(
+			Payouts::<Test>::get(20),
+			PayoutRecord { paid: 0, payouts: vec![(5, 50)].try_into().unwrap() }
+		);
+		assert_eq!(
+			Payouts::<Test>::get(30),
+			PayoutRecord { paid: 0, payouts: vec![(5, 100)].try_into().unwrap() }
+		);
+		assert_eq!(
+			Payouts::<Test>::get(40),
+			PayoutRecord { paid: 0, payouts: vec![(5, 100)].try_into().unwrap() }
+		);
+		assert_eq!(
+			Payouts::<Test>::get(50),
+			PayoutRecord { paid: 0, payouts: vec![(5, 100)].try_into().unwrap() }
+		);
 	});
 }
 
@@ -881,10 +976,7 @@ fn user_cannot_bid_twice() {
 		assert_noop!(Society::bid(Origin::signed(30), 100), Error::<Test>::AlreadyBid);
 		// Cannot vouch when already bid
 		place_members([50]);
-		assert_noop!(
-			Society::vouch(Origin::signed(50), 20, 100, 100),
-			Error::<Test>::AlreadyBid
-		);
+		assert_noop!(Society::vouch(Origin::signed(50), 20, 100, 100), Error::<Test>::AlreadyBid);
 	});
 }
 
@@ -934,8 +1026,14 @@ fn vouching_handles_removed_member_with_candidate() {
 		conclude_intake(false, None);
 		assert_eq!(members(), vec![10, 30]);
 		// Payout does not go to removed member
-		assert_eq!(Payouts::<Test>::get(20), PayoutRecord { paid: 0, payouts: vec![].try_into().unwrap() });
-		assert_eq!(Payouts::<Test>::get(30), PayoutRecord { paid: 0, payouts: vec![(8, 1000)].try_into().unwrap() });
+		assert_eq!(
+			Payouts::<Test>::get(20),
+			PayoutRecord { paid: 0, payouts: vec![].try_into().unwrap() }
+		);
+		assert_eq!(
+			Payouts::<Test>::get(30),
+			PayoutRecord { paid: 0, payouts: vec![(8, 1000)].try_into().unwrap() }
+		);
 	});
 }
 
@@ -1083,13 +1181,7 @@ fn zero_bid_works() {
 				(60, candidacy(1, 400, Deposit(25), 0, 0)),
 			]
 		);
-		assert_eq!(
-			Bids::<Test>::get(),
-			vec![
-				bid(20, Deposit(25), 0),
-				bid(40, Deposit(25), 0),
-			],
-		);
+		assert_eq!(Bids::<Test>::get(), vec![bid(20, Deposit(25), 0), bid(40, Deposit(25), 0),],);
 		// A member votes for these candidates to join the society
 		assert_ok!(Society::vote(Origin::signed(10), 30, true));
 		assert_ok!(Society::vote(Origin::signed(10), 50, true));

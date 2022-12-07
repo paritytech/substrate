@@ -39,8 +39,8 @@ use substrate_bip39::mini_secret_from_entropy;
 
 use crate::{
 	crypto::{
-		ByteArray, CryptoType, CryptoTypeId, CryptoTypePublicPair, Derive, Public as TraitPublic,
-		UncheckedFrom, FromEntropy,
+		ByteArray, CryptoType, CryptoTypeId, CryptoTypePublicPair, Derive, FromEntropy,
+		Public as TraitPublic, UncheckedFrom,
 	},
 	hash::{H256, H512},
 };
