@@ -1,5 +1,5 @@
 [package]
-name = "pallet-gilt"
+name = "pallet-nis"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
@@ -19,12 +19,12 @@ frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 sp-arithmetic = { version = "6.0.0", default-features = false, path = "../../primitives/arithmetic" }
+sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
 sp-io = { version = "7.0.0", path = "../../primitives/io" }
 
 [features]
@@ -36,6 +36,7 @@ std = [
 	"frame-system/std",
 	"scale-info/std",
 	"sp-arithmetic/std",
+	"sp-core/std",
 	"sp-runtime/std",
 	"sp-std/std",
 ]

@@ -1,5 +1,5 @@
 [package]
-name = "remote-externalities"
+name = "frame-remote-externalities"
 version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
@@ -23,7 +23,7 @@ sp-core = { version = "7.0.0", path = "../../../primitives/core" }
 sp-io = { version = "7.0.0", path = "../../../primitives/io" }
 sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
 sp-version = { version = "5.0.0", path = "../../../primitives/version" }
-tokio = { version = "1.17.0", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.22.0", features = ["macros", "rt-multi-thread"] }
 substrate-rpc-client = { path = "../rpc/client" }
 
 [dev-dependencies]

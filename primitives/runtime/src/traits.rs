@@ -515,6 +515,11 @@ impl<T> Convert<T, T> for Identity {
 		a
 	}
 }
+impl<T> ConvertBack<T, T> for Identity {
+	fn convert_back(a: T) -> T {
+		a
+	}
+}
 
 /// A structure that performs standard conversion using the standard Rust conversion traits.
 pub struct ConvertInto;
@@ -522,6 +527,12 @@ impl<A, B: From<A>> Convert<A, B> for ConvertInto {
 	fn convert(a: A) -> B {
 		a.into()
 	}
+}
+
+/// Extensible conversion trait. Generic over both source and destination types.
+pub trait ConvertBack<A, B>: Convert<A, B> {
+	/// Make conversion back.
+	fn convert_back(b: B) -> A;
 }
 
 /// Convenience type to work around the highly unergonomic syntax needed
@@ -797,9 +808,6 @@ sp_core::impl_maybe_marker!(
 
 	/// A type that implements Serialize, DeserializeOwned and Debug when in std environment.
 	trait MaybeSerializeDeserialize: DeserializeOwned, Serialize;
-
-	/// A type that implements MallocSizeOf.
-	trait MaybeMallocSizeOf: parity_util_mem::MallocSizeOf;
 );
 
 /// A type that can be used in runtime structures.
@@ -817,9 +825,7 @@ pub trait IsMember<MemberId> {
 /// `parent_hash`, as well as a `digest` and a block `number`.
 ///
 /// You can also create a `new` one from those fields.
-pub trait Header:
-	Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + MaybeMallocSizeOf + 'static
-{
+pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
 	/// Header number.
 	type Number: Member
 		+ MaybeSerializeDeserialize
@@ -829,8 +835,7 @@ pub trait Header:
 		+ MaybeDisplay
 		+ AtLeast32BitUnsigned
 		+ Codec
-		+ sp_std::str::FromStr
-		+ MaybeMallocSizeOf;
+		+ sp_std::str::FromStr;
 	/// Header hash type
 	type Hash: Member
 		+ MaybeSerializeDeserialize
@@ -844,7 +849,6 @@ pub trait Header:
 		+ Codec
 		+ AsRef<[u8]>
 		+ AsMut<[u8]>
-		+ MaybeMallocSizeOf
 		+ TypeInfo;
 	/// Hashing algorithm
 	type Hashing: Hash<Output = Self::Hash>;
@@ -893,13 +897,11 @@ pub trait Header:
 /// `Extrinsic` pieces of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
-pub trait Block:
-	Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + MaybeMallocSizeOf + 'static
-{
+pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
 	/// Type for extrinsics.
-	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize + MaybeMallocSizeOf;
+	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
 	/// Header type.
-	type Header: Header<Hash = Self::Hash> + MaybeMallocSizeOf;
+	type Header: Header<Hash = Self::Hash>;
 	/// Block hash type.
 	type Hash: Member
 		+ MaybeSerializeDeserialize
@@ -913,7 +915,6 @@ pub trait Block:
 		+ Codec
 		+ AsRef<[u8]>
 		+ AsMut<[u8]>
-		+ MaybeMallocSizeOf
 		+ TypeInfo;
 
 	/// Returns a reference to the header.
@@ -934,7 +935,7 @@ pub trait Block:
 }
 
 /// Something that acts like an `Extrinsic`.
-pub trait Extrinsic: Sized + MaybeMallocSizeOf {
+pub trait Extrinsic: Sized {
 	/// The function call.
 	type Call;
 

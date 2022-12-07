@@ -143,25 +143,11 @@ cargo-check-try-runtime:
     - time cargo check --locked --features try-runtime
     - rusty-cachier cache upload
 
-cargo-check-wasmer-sandbox:
-  stage:                           test
-  # this is an artificial job dependency, for pipeline optimization using GitLab's DAGs
-  needs:
-    - job:                         cargo-check-try-runtime
-      artifacts:                   false
-  extends:
-    - .docker-env
-    - .test-refs
-  script:
-    - rusty-cachier snapshot create
-    - time cargo check --locked --features wasmer-sandbox
-    - rusty-cachier cache upload
-
 test-deterministic-wasm:
   stage:                           test
   # this is an artificial job dependency, for pipeline optimization using GitLab's DAGs
   needs:
-    - job:                         cargo-check-wasmer-sandbox
+    - job:                         cargo-check-try-runtime
       artifacts:                   false
   extends:
     - .docker-env
@@ -374,27 +360,6 @@ test-full-crypto-feature:
     - cd ../application-crypto
     - time cargo +nightly build --locked --verbose --no-default-features --features full_crypto
     - rusty-cachier cache upload
-
-test-wasmer-sandbox:
-  stage:                           test
-  needs:
-    - job:                         cargo-check-wasmer-sandbox
-      artifacts:                   false
-  extends:
-    - .docker-env
-    - .test-refs-wasmer-sandbox
-  variables:
-    RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
-    RUST_BACKTRACE:                1
-    WASM_BUILD_NO_COLOR:           1
-    WASM_BUILD_RUSTFLAGS:          "-Cdebug-assertions=y -Dwarnings"
-    CI_JOB_NAME:                   "test-wasmer-sandbox"
-  parallel: 3
-  script:
-    - rusty-cachier snapshot create
-    - echo "Node index - ${CI_NODE_INDEX}. Total amount - ${CI_NODE_TOTAL}"
-    - time cargo nextest run --locked --release --features runtime-benchmarks,wasmer-sandbox,disable-ui-tests --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
-    - if [ ${CI_NODE_INDEX} == 1 ]; then rusty-cachier cache upload; fi
 
 check-rustdoc:
   stage:                           test
