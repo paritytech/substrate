@@ -26,7 +26,7 @@ sp-std = { version = "5.0.0", default-features = false, path = "../../primitives
 [dev-dependencies]
 array-bytes = "4.1"
 env_logger = "0.9"
-itertools = "0.10.3"
+itertools = "0.10.5"
 
 [features]
 default = ["std"]
