@@ -28,7 +28,7 @@ sp-runtime = { path = "../../../primitives/runtime", version = "7.0.0" }
 sp-std = { path = "../../../primitives/std", version = "5.0.0" }
 
 # utils
-remote-externalities = { path = "../../../utils/frame/remote-externalities", version = "0.10.0-dev" }
+remote-externalities = { path = "../../../utils/frame/remote-externalities", version = "0.10.0-dev", package = "frame-remote-externalities" }
 
 # others
 log = "0.4.17"
