@@ -22,15 +22,14 @@ frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
 node-executor = { version = "3.0.0-dev", path = "../executor" }
 node-primitives = { version = "2.0.0", path = "../primitives" }
 kitchensink-runtime = { version = "3.0.0-dev", path = "../runtime" }
+pallet-assets = { version = "4.0.0-dev", path = "../../../frame/assets" }
 pallet-asset-tx-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment/asset-tx-payment" }
 pallet-transaction-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment" }
 sc-block-builder = { version = "0.10.0-dev", path = "../../../client/block-builder" }
 sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
 sc-client-db = { version = "0.10.0-dev", features = ["rocksdb"], path = "../../../client/db" }
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
-sc-executor = { version = "0.10.0-dev", features = [
-	"wasmtime",
-], path = "../../../client/executor" }
+sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
 sc-service = { version = "0.10.0-dev", features = [
 	"test-helpers",
 	"rocksdb",
@@ -39,10 +38,10 @@ sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-block-builder = { version = "4.0.0-dev", path = "../../../primitives/block-builder" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
-sp-core = { version = "6.0.0", path = "../../../primitives/core" }
+sp-core = { version = "7.0.0", path = "../../../primitives/core" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
-sp-io = { version = "6.0.0", path = "../../../primitives/io" }
-sp-keyring = { version = "6.0.0", path = "../../../primitives/keyring" }
-sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
+sp-io = { version = "7.0.0", path = "../../../primitives/io" }
+sp-keyring = { version = "7.0.0", path = "../../../primitives/keyring" }
+sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
 sp-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/timestamp" }
 substrate-test-client = { version = "2.0.0", path = "../../../test-utils/client" }
