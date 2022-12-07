@@ -105,8 +105,18 @@ where
 		let block =
 			ChainApi::<(), Block::Hash, Block::Header, SignedBlock<Block>>::block(&rpc, Some(hash))
 				.await
-				.map_err(rpc_err_handler)?
-				.expect("header exists, block should also exist; qed")
+				.or_else(|e| {
+					if matches!(e, substrate_rpc_client::Error::ParseError(_)) {
+						log::error!(
+							"failed to parse the block format of remote against the local \
+						codebase. The block format has changed, and follow-chain cannot run in \
+						this case. Try running this command in a branch of your codebase that has \
+						the same block format as the remote chain. For now, we replace the block with an empty one"
+						);
+					}
+					Err(rpc_err_handler(e))
+				})?
+				.expect("if header exists, block should also exist.")
 				.block;
 
 		log::debug!(

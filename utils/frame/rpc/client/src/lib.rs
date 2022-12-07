@@ -43,7 +43,7 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::collections::VecDeque;
 
 pub use jsonrpsee::{
-	core::client::{ClientT, Subscription, SubscriptionClientT},
+	core::{client::{ClientT, Subscription, SubscriptionClientT}, RpcResult, Error},
 	rpc_params,
 	ws_client::{WsClient, WsClientBuilder},
 };
