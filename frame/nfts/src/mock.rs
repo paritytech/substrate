@@ -133,21 +133,102 @@ pub enum MultiBalance<Balance, AssetId> {
 	Asset(AssetId, Balance),
 }
 
-impl<B: std::convert::From<u8>, AI> From<u8> for MultiBalance<B, AI> {
+// u8.into() => MultiBalance
+impl<B: From<u8>, AI> From<u8> for MultiBalance<B, AI> {
 	fn from(amount: u8) -> Self {
 		Self::Native(amount.into())
 	}
 }
+impl<B: From<u16>, AI> From<u16> for MultiBalance<B, AI> {
+	fn from(amount: u16) -> Self {
+		Self::Native(amount.into())
+	}
+}
+impl<B: From<u32>, AI> From<u32> for MultiBalance<B, AI> {
+	fn from(amount: u32) -> Self {
+		Self::Native(amount.into())
+	}
+}
+impl<B: TryFrom<u64>, AI> TryFrom<u64> for MultiBalance<B, AI> {
+	type Error = ();
+
+	fn try_from(amount: u64) -> Result<Self, Self::Error> {
+		Ok(Self::Native(amount.try_into().map_err(|_| ())?))
+	}
+}
+impl<B: TryFrom<u128>, AI> TryFrom<u128> for MultiBalance<B, AI> {
+	type Error = ();
+
+	fn try_from(amount: u128) -> Result<Self, Self::Error> {
+		Ok(Self::Native(amount.try_into().map_err(|_| ())?))
+	}
+}
+impl<B: TryFrom<usize>, AI> TryFrom<usize> for MultiBalance<B, AI> {
+	type Error = ();
+
+	fn try_from(amount: usize) -> Result<Self, Self::Error> {
+		Ok(Self::Native(amount.try_into().map_err(|_| ())?))
+	}
+}
 
 // MultiBalance::Native(123456).into() => u8
-impl<B, AI> Into<u8> for MultiBalance<B, AI>
-where
-	u8: From<B>,
-{
-	fn into(self) -> u8 {
+impl<B: TryInto<u8>, AI> TryInto<u8> for MultiBalance<B, AI> {
+	type Error = ();
+
+	fn try_into(self) -> Result<u8, Self::Error> {
 		match self {
-			Self::Native(amount) => amount.into(),
-			Self::Asset(_, amount) => amount.into(),
+			Self::Native(amount) => amount.try_into().map_err(|_| ()),
+			Self::Asset(_, amount) => amount.try_into().map_err(|_| ()),
+		}
+	}
+}
+impl<B: TryInto<u16>, AI> TryInto<u16> for MultiBalance<B, AI> {
+	type Error = ();
+
+	fn try_into(self) -> Result<u16, Self::Error> {
+		match self {
+			Self::Native(amount) => amount.try_into().map_err(|_| ()),
+			Self::Asset(_, amount) => amount.try_into().map_err(|_| ()),
+		}
+	}
+}
+impl<B: TryInto<u32>, AI> TryInto<u32> for MultiBalance<B, AI> {
+	type Error = ();
+
+	fn try_into(self) -> Result<u32, Self::Error> {
+		match self {
+			Self::Native(amount) => amount.try_into().map_err(|_| ()),
+			Self::Asset(_, amount) => amount.try_into().map_err(|_| ()),
+		}
+	}
+}
+impl<B: TryInto<u64>, AI> TryInto<u64> for MultiBalance<B, AI> {
+	type Error = ();
+
+	fn try_into(self) -> Result<u64, Self::Error> {
+		match self {
+			Self::Native(amount) => amount.try_into().map_err(|_| ()),
+			Self::Asset(_, amount) => amount.try_into().map_err(|_| ()),
+		}
+	}
+}
+impl<B: TryInto<u128>, AI> TryInto<u128> for MultiBalance<B, AI> {
+	type Error = ();
+
+	fn try_into(self) -> Result<u128, Self::Error> {
+		match self {
+			Self::Native(amount) => amount.try_into().map_err(|_| ()),
+			Self::Asset(_, amount) => amount.try_into().map_err(|_| ()),
+		}
+	}
+}
+impl<B: TryInto<usize>, AI> TryInto<usize> for MultiBalance<B, AI> {
+	type Error = ();
+
+	fn try_into(self) -> Result<usize, Self::Error> {
+		match self {
+			Self::Native(amount) => amount.try_into().map_err(|_| ()),
+			Self::Asset(_, amount) => amount.try_into().map_err(|_| ()),
 		}
 	}
 }
@@ -165,7 +246,6 @@ where
 	Currency: InspectFungible<AccountId, Balance = Balance> + TransferFungible<AccountId>,
 	Asset: InspectFungibles<AccountId, AssetId = u32, Balance = Balance>
 		+ TransferFungibles<AccountId>,
-	MultiBalance<Balance, u32>: Into<u8>, // + TryInto<u64>,
 {
 	type Balance = MultiBalance<Balance, u32>;
 
