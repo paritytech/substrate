@@ -133,7 +133,7 @@ pub trait OnRuntimeUpgrade {
 		Weight::zero()
 	}
 
-	/// Same as [`on_runtime_upgrade`], but perform the optional `pre_upgrade` and `post_upgrade` as
+	/// Same as `on_runtime_upgrade`, but perform the optional `pre_upgrade` and `post_upgrade` as
 	/// well.
 	#[cfg(feature = "try-runtime")]
 	fn try_on_runtime_upgrade(checks: bool) -> Weight {
