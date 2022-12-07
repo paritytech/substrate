@@ -24,7 +24,7 @@ use frame_election_provider_support::{onchain, SequentialPhragmen};
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64},
-	weights::constants::WEIGHT_REF_TIME_PER_SECOND,
+	weights::{constants::WEIGHT_REF_TIME_PER_SECOND, Weight},
 };
 use frame_system as system;
 use pallet_session::historical as pallet_session_historical;
