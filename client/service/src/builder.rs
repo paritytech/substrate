@@ -845,28 +845,19 @@ where
 
 	let warp_sync_protocol_config = match warp_sync_params.as_ref() {
 		Some(WarpSyncParams::WithProvider(warp_with_provider)) => {
-			let (_, warp_sync_protocol_config) = Some(warp_with_provider)
-				.map(|provider| {
-					// Allow both outgoing and incoming requests.
-					let (handler, protocol_config) = WarpSyncRequestHandler::new(
-						protocol_id.clone(),
-						client
-							.block_hash(0u32.into())
-							.ok()
-							.flatten()
-							.expect("Genesis block exists; qed"),
-						config.chain_spec.fork_id(),
-						provider.clone(),
-					);
-					spawn_handle.spawn(
-						"warp-sync-request-handler",
-						Some("networking"),
-						handler.run(),
-					);
-					(Some(provider), Some(protocol_config))
-				})
-				.unwrap_or_default();
-			warp_sync_protocol_config
+			// Allow both outgoing and incoming requests.
+			let (handler, protocol_config) = WarpSyncRequestHandler::new(
+				protocol_id.clone(),
+				client
+					.block_hash(0u32.into())
+					.ok()
+					.flatten()
+					.expect("Genesis block exists; qed"),
+				config.chain_spec.fork_id(),
+				warp_with_provider.clone(),
+			);
+			spawn_handle.spawn("warp-sync-request-handler", Some("networking"), handler.run());
+			Some(protocol_config)
 		},
 		_ => None,
 	};

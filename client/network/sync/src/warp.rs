@@ -22,18 +22,19 @@ use crate::{
 	schema::v1::{StateRequest, StateResponse},
 	state::{ImportResult, StateSync},
 };
+use futures::FutureExt;
 use sc_client_api::ProofProvider;
 use sc_network_common::sync::{
 	message::{BlockAttributes, BlockData, BlockRequest, Direction, FromBlock},
 	warp::{
-		EncodedProof, VerificationResult, WarpProofRequest, WarpSyncPhase, WarpSyncProgress,
-		WarpSyncProvider,
+		EncodedProof, VerificationResult, WarpProofRequest, WarpSyncParams, WarpSyncPhase,
+		WarpSyncProgress, WarpSyncProvider,
 	},
 };
 use sp_blockchain::HeaderBackend;
 use sp_finality_grandpa::{AuthorityList, SetId};
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor, Zero};
-use std::sync::Arc;
+use std::{sync::Arc, task::Poll};
 
 enum Phase<B: BlockT, Client> {
 	WarpProof {
@@ -88,9 +89,25 @@ where
 
 	///  Create a new instance, skip the proof downloading and verification and go directly to
 	/// target block
-	pub fn new_with_target_block(client: Arc<Client>, target_block: <B>::Header) -> Self {
+	fn new_with_target_block(client: Arc<Client>, target_block: <B>::Header) -> Self {
 		let phase = Phase::TargetBlock(target_block);
 		Self { client, phase, total_proof_bytes: 0 }
+	}
+
+	///  Poll and wait for target block
+	pub fn poll_target_block(
+		client: Arc<Client>,
+		warp_sync_params: Option<&mut WarpSyncParams<B>>,
+		cx: &mut std::task::Context,
+	) -> Poll<Self> {
+		if let Some(WarpSyncParams::WaitForTarget(target_block)) = warp_sync_params {
+			return match target_block.poll_unpin(cx) {
+				Poll::Ready(Ok(target_block)) =>
+					Poll::Ready(WarpSync::new_with_target_block(client.clone(), target_block)),
+				_ => Poll::Pending,
+			}
+		}
+		Poll::Pending
 	}
 
 	///  Validate and import a state response.
