@@ -636,8 +636,7 @@ impl<T: Config> Commission<T> {
 				return true
 			}
 			// check for `max_increase` throttling
-			return (*to).saturating_sub(self.commission_or_zero()) > t.change_rate.max_increase &&
-				self.current.is_some()
+			return (*to).saturating_sub(self.commission_or_zero()) > t.change_rate.max_increase
 		}
 		false
 	}
@@ -653,7 +652,7 @@ impl<T: Config> Commission<T> {
 		commission: &Perbill,
 		payee: T::AccountId,
 	) -> DispatchResult {
-		ensure!(!self.throttling(&commission), Error::<T>::CommissionChangeThrottled);
+		ensure!(!(self.current.is_some() && self.throttling(&commission)), Error::<T>::CommissionChangeThrottled);
 		ensure!(self.max.map_or(true, |m| commission <= &m), Error::<T>::CommissionExceedsMaximum);
 
 		self.current = Some((*commission, payee));
