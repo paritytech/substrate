@@ -1000,8 +1000,10 @@ pub trait Checkable<Context>: Sized {
 	/// function is deliberately chosen to prevent developers from ever calling it in consensus
 	/// code-paths.
 	#[cfg(feature = "try-runtime")]
-	fn unchecked_into_checked_i_know_what_i_am_doing(self, c: &Context)
-		-> Result<Self::Checked, TransactionValidityError>;
+	fn unchecked_into_checked_i_know_what_i_am_doing(
+		self,
+		c: &Context,
+	) -> Result<Self::Checked, TransactionValidityError>;
 }
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
