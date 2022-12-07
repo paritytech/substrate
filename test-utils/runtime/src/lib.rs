@@ -212,7 +212,8 @@ impl BlindCheckable for Extrinsic {
 			Extrinsic::OffchainIndexSet(key, value) => Ok(Extrinsic::OffchainIndexSet(key, value)),
 			Extrinsic::OffchainIndexClear(key) => Ok(Extrinsic::OffchainIndexClear(key)),
 			Extrinsic::Store(data) => Ok(Extrinsic::Store(data)),
-			Extrinsic::EnqueueTxs(data) => Ok(Extrinsic::EnqueueTxs(data)), }
+			Extrinsic::EnqueueTxs(data) => Ok(Extrinsic::EnqueueTxs(data)),
+		}
 	}
 }
 
@@ -726,7 +727,7 @@ cfg_if! {
 
 			  fn create_enqueue_txs_inherent(txs: Vec<<Block as BlockT>::Extrinsic>) -> <Block as BlockT>::Extrinsic{
 				  //just return some garbage
-			    	Extrinsic::EnqueueTxs(txs.len() as u64)
+					Extrinsic::EnqueueTxs(txs.len() as u64)
 			  }
 				fn pop_txs(_count: u64) -> sp_application_crypto::Vec<sp_application_crypto::Vec<u8>> { Default::default() }
 				fn get_previous_block_txs() -> Vec<Vec<u8>>{Default::default()}

@@ -915,7 +915,7 @@ mod tests {
 			.map(|v| Extrinsic::IncludeData(vec![v as u8; 10]))
 			.collect::<Vec<_>>();
 
-		let init_size = genesis_header.encoded_size() 
+		let init_size = genesis_header.encoded_size()
 			+ Vec::<Extrinsic>::new().encoded_size() // list of extrinsics
 			+ Extrinsic::EnqueueTxs(extrinsics_num).encoded_size();
 

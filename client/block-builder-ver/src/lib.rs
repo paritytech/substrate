@@ -386,7 +386,7 @@ where
 		log::debug!(target: "block_builder", "previous block enqueued {} txs", previous_block_txs_count);
 
 		for tx_bytes in previous_block_txs {
-			if (*block_size + tx_bytes.len() ) > max_block_size {
+			if (*block_size + tx_bytes.len()) > max_block_size {
 				break
 			}
 
@@ -512,36 +512,41 @@ where
 
 #[cfg(test)]
 mod tests {
+	use super::*;
+	use sp_blockchain::HeaderBackend;
+	use sp_core::Blake2Hasher;
+	use sp_state_machine::Backend;
+	use substrate_test_runtime_client::{DefaultTestClientBuilderExt, TestClientBuilderExt};
 
-	// #[test]
-	// fn block_building_storage_proof_does_not_include_runtime_by_default() {
-	// 	let builder = substrate_test_runtime_client::TestClientBuilder::new();
-	// 	let backend = builder.backend();
-	// 	let client = builder.build();
-	//
-	// 	let block = BlockBuilder::new(
-	// 		&client,
-	// 		client.info().best_hash,
-	// 		client.info().best_number,
-	// 		RecordProof::Yes,
-	// 		Default::default(),
-	// 		&*backend,
-	// 	)
-	// 	.unwrap()
-	// 	.build_with_seed(Default::default())
-	// 	.unwrap();
-	//
-	// 	let proof = block.proof.expect("Proof is build on request");
-	//
-	// 	let backend = sp_state_machine::create_proof_check_backend::<Blake2Hasher>(
-	// 		block.storage_changes.transaction_storage_root,
-	// 		proof,
-	// 	)
-	// 	.unwrap();
-	//
-	// 	assert!(backend
-	// 		.storage(&sp_core::storage::well_known_keys::CODE)
-	// 		.unwrap_err()
-	// 		.contains("Database missing expected key"),);
-	// }
+	#[test]
+	fn block_building_storage_proof_does_not_include_runtime_by_default() {
+		let builder = substrate_test_runtime_client::TestClientBuilder::new();
+		let backend = builder.backend();
+		let client = builder.build();
+
+		let block = BlockBuilder::new(
+			&client,
+			client.info().best_hash,
+			client.info().best_number,
+			RecordProof::Yes,
+			Default::default(),
+			&*backend,
+		)
+		.unwrap()
+		.build_with_seed(Default::default(), |_, _| Default::default())
+		.unwrap();
+
+		let proof = block.proof.expect("Proof is build on request");
+
+		let backend = sp_state_machine::create_proof_check_backend::<Blake2Hasher>(
+			block.storage_changes.transaction_storage_root,
+			proof,
+		)
+		.unwrap();
+
+		assert!(backend
+			.storage(&sp_core::storage::well_known_keys::CODE)
+			.unwrap_err()
+			.contains("Database missing expected key"),);
+	}
 }

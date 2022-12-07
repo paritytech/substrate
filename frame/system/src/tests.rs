@@ -17,7 +17,7 @@
 
 use crate::*;
 use frame_support::{
-	assert_noop, assert_ok,
+	assert_err, assert_noop, assert_ok,
 	dispatch::PostDispatchInfo,
 	weights::{Pays, WithPostDispatchInfo},
 };
@@ -781,48 +781,5 @@ fn do_not_allow_for_storing_txs_when_queue_is_full() {
 		assert!(System::can_enqueue_txs());
 		System::finalize();
 		System::enqueue_txs(Origin::none(), dummy_txs.clone()).unwrap();
-	});
-}
-
-#[test]
-fn replicate_problem() {
-	new_test_ext().execute_with(|| {
-		let dummy_txs = vec![
-			(Some(0), b"blah blah".to_vec()),
-			(Some(1), b"blah blah".to_vec()),
-			(Some(2), b"blah blah".to_vec()),
-			(Some(3), b"blah blah".to_vec()),
-			(Some(4), b"blah blah".to_vec()),
-			(Some(5), b"blah blah".to_vec()),
-			(Some(6), b"blah blah".to_vec()),
-			(Some(7), b"blah blah".to_vec()),
-			(Some(8), b"blah blah".to_vec()),
-			(Some(9), b"blah blah".to_vec()),
-		];
-
-		let dummy_seed =
-			H256::from_str("0x0876d51dc2c109b2e9bca322e8706879d68984a8031a537d76d0b21693a3dbd0")
-				.unwrap();
-
-		assert!(System::can_enqueue_txs());
-		System::enqueue_txs(Origin::none(), dummy_txs.clone()).unwrap();
-		System::finalize();
-		System::set_block_number(1);
-		System::set_block_seed(&dummy_seed);
-		println!("{:?}", crate::StorageQueue::<Test>::get());
-
-		assert!(!System::pop_txs(1).is_empty());
-		assert!(!System::pop_txs(1).is_empty());
-		assert!(!System::pop_txs(1).is_empty());
-		assert!(!System::pop_txs(1).is_empty());
-		assert!(!System::pop_txs(1).is_empty());
-		assert!(!System::pop_txs(1).is_empty());
-		assert!(!System::pop_txs(1).is_empty());
-		assert!(!System::pop_txs(1).is_empty());
-		assert!(!System::pop_txs(1).is_empty());
-		assert!(!System::pop_txs(1).is_empty());
-
-		println!("{:?}", crate::StorageQueue::<Test>::get());
-		assert!(false);
 	});
 }
