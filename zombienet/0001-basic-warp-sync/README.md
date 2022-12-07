@@ -7,7 +7,7 @@ As `warp-sync` requires at least 3 peers, the test spawns the `charlie` full nod
 The `dave` node executed with `--sync warp` syncs database with the rest of the network.
 
 # How to prepare database
-Database was prepared using the following zombienet file (`0001-generate-warp-sync-database.toml`):
+Database was prepared using the following zombienet file (`generate-warp-sync-database.toml`):
 ```
 [relaychain]
 default_image = "docker.io/parity/substrate:master"
@@ -15,7 +15,7 @@ default_command = "substrate"
 
 chain = "gen-db"
 
-chain_spec_path = "0001-chain-spec.json"
+chain_spec_path = "chain-spec.json"
 
   [[relaychain.nodes]]
   name = "alice"
@@ -28,7 +28,7 @@ chain_spec_path = "0001-chain-spec.json"
 
 The zombienet shall be executed with the following command, and run for some period of time to allow for few grandpa eras.
 ```
-./zombienet-linux spawn --dir ./db-test-gen --provider native 0001-generate-warp-sync-database.toml
+./zombienet-linux spawn --dir ./db-test-gen --provider native generate-warp-sync-database.toml
 ```
 
 Once the zombienet is stopped, the database snapshot
@@ -72,12 +72,12 @@ Chain spec was simply built with:
 substrate build-spec --chain=local > chain-spec.json
 ```
 
-Please note that `0001-chain-spec.json` committed into repository is `raw` version produced by `zombienet` during database snapshot generation. Zombienet applies some modifications to plain versions of chain-spec.
+Please note that `chain-spec.json` committed into repository is `raw` version produced by `zombienet` during database snapshot generation. Zombienet applies some modifications to plain versions of chain-spec.
 
 # Run the test
 Test can be run with the following command:
 ```
-zombienet-linux test --dir db-snapshot --provider native 0001-test-warp-sync.zndsl
+zombienet-linux test --dir db-snapshot --provider native test-warp-sync.zndsl
 ```
 
 *NOTE*: currently blocked by: [zombienet#578](https://github.com/paritytech/zombienet/issues/578)

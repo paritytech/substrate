@@ -6,7 +6,7 @@ default_image = "{{ZOMBIENET_INTEGRATION_TEST_IMAGE}}"
 default_command = "substrate"
 
 chain = "gen-db"
-chain_spec_path = "zombienet/0001-basic-warp-sync/0001-chain-spec.json"
+chain_spec_path = "zombienet/0001-basic-warp-sync/chain-spec.json"
 
   [[relaychain.nodes]]
   name = "alice"

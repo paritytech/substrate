@@ -1,5 +1,5 @@
 Description: Warp sync
-Network: ./0001-test-warp-sync.toml
+Network: ./test-warp-sync.toml
 Creds: config
 
 alice: is up
