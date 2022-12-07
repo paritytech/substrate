@@ -176,7 +176,7 @@ update-node-template:
   # We might have to publish lots of crates at a time. Given the 1 minute delay introduced above and
   # taking into account the 202 (as of Dec 07, 2022) publishable Substrate crates, that would equate
   # to roughly 202 minutes of delay, or 3h and 22 minutes. As such, the job needs to have a much
-  # higher timeout than usual.
+  # higher timeout than average.
   timeout:                         5h
   script:
     - rusty-cachier snapshot create
