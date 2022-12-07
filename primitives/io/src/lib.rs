@@ -1611,99 +1611,6 @@ mod tracing_setup {
 
 pub use tracing_setup::init_tracing;
 
-/// Wasm-only interface that provides functions for interacting with the sandbox.
-#[runtime_interface(wasm_only)]
-pub trait Sandbox {
-	/// Instantiate a new sandbox instance with the given `wasm_code`.
-	fn instantiate(
-		&mut self,
-		dispatch_thunk: u32,
-		wasm_code: &[u8],
-		env_def: &[u8],
-		state_ptr: Pointer<u8>,
-	) -> u32 {
-		self.sandbox()
-			.instance_new(dispatch_thunk, wasm_code, env_def, state_ptr.into())
-			.expect("Failed to instantiate a new sandbox")
-	}
-
-	/// Invoke `function` in the sandbox with `sandbox_idx`.
-	fn invoke(
-		&mut self,
-		instance_idx: u32,
-		function: &str,
-		args: &[u8],
-		return_val_ptr: Pointer<u8>,
-		return_val_len: u32,
-		state_ptr: Pointer<u8>,
-	) -> u32 {
-		self.sandbox()
-			.invoke(instance_idx, function, args, return_val_ptr, return_val_len, state_ptr.into())
-			.expect("Failed to invoke function with sandbox")
-	}
-
-	/// Create a new memory instance with the given `initial` and `maximum` size.
-	fn memory_new(&mut self, initial: u32, maximum: u32) -> u32 {
-		self.sandbox()
-			.memory_new(initial, maximum)
-			.expect("Failed to create new memory with sandbox")
-	}
-
-	/// Get the memory starting at `offset` from the instance with `memory_idx` into the buffer.
-	fn memory_get(
-		&mut self,
-		memory_idx: u32,
-		offset: u32,
-		buf_ptr: Pointer<u8>,
-		buf_len: u32,
-	) -> u32 {
-		self.sandbox()
-			.memory_get(memory_idx, offset, buf_ptr, buf_len)
-			.expect("Failed to get memory with sandbox")
-	}
-
-	/// Set the memory in the given `memory_idx` to the given value at `offset`.
-	fn memory_set(
-		&mut self,
-		memory_idx: u32,
-		offset: u32,
-		val_ptr: Pointer<u8>,
-		val_len: u32,
-	) -> u32 {
-		self.sandbox()
-			.memory_set(memory_idx, offset, val_ptr, val_len)
-			.expect("Failed to set memory with sandbox")
-	}
-
-	/// Teardown the memory instance with the given `memory_idx`.
-	fn memory_teardown(&mut self, memory_idx: u32) {
-		self.sandbox()
-			.memory_teardown(memory_idx)
-			.expect("Failed to teardown memory with sandbox")
-	}
-
-	/// Teardown the sandbox instance with the given `instance_idx`.
-	fn instance_teardown(&mut self, instance_idx: u32) {
-		self.sandbox()
-			.instance_teardown(instance_idx)
-			.expect("Failed to teardown sandbox instance")
-	}
-
-	/// Get the value from a global with the given `name`. The sandbox is determined by the given
-	/// `instance_idx`.
-	///
-	/// Returns `Some(_)` when the requested global variable could be found.
-	fn get_global_val(
-		&mut self,
-		instance_idx: u32,
-		name: &str,
-	) -> Option<sp_wasm_interface::Value> {
-		self.sandbox()
-			.get_global_val(instance_idx, name)
-			.expect("Failed to get global from sandbox")
-	}
-}
-
 /// Allocator used by Substrate when executing the Wasm runtime.
 #[cfg(all(target_arch = "wasm32", not(feature = "std")))]
 struct WasmAllocator;
@@ -1779,7 +1686,6 @@ pub type SubstrateHostFunctions = (
 	allocator::HostFunctions,
 	panic_handler::HostFunctions,
 	logging::HostFunctions,
-	sandbox::HostFunctions,
 	crate::trie::HostFunctions,
 	offchain_index::HostFunctions,
 	transaction_index::HostFunctions,

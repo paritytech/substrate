@@ -160,7 +160,6 @@ allow = [
 ]
 # List of crates to deny
 deny = [
-    { name = "parity-util-mem", version = "<0.6" }
     # Each entry the name of a crate and a version range. If version is
     # not specified, all versions will be matched.
 ]

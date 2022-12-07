@@ -36,7 +36,6 @@ pub(crate) const LAST_PRUNED: &[u8] = b"last_pruned";
 const PRUNING_JOURNAL: &[u8] = b"pruning_journal";
 
 /// See module documentation.
-#[derive(parity_util_mem_derive::MallocSizeOf)]
 pub struct RefWindow<BlockHash: Hash, Key: Hash, D: MetaDb> {
 	/// A queue of blocks keep tracking keys that should be deleted for each block in the
 	/// pruning window.
@@ -50,7 +49,6 @@ pub struct RefWindow<BlockHash: Hash, Key: Hash, D: MetaDb> {
 /// 	blocks in memory, and keep track of re-inserted keys to not delete them when pruning
 /// - `DbBacked`, used when the backend database supports reference counting, only keep
 /// 	a few number of blocks in memory and load more blocks on demand
-#[derive(parity_util_mem_derive::MallocSizeOf)]
 enum DeathRowQueue<BlockHash: Hash, Key: Hash, D: MetaDb> {
 	Mem {
 		/// A queue of keys that should be deleted for each block in the pruning window.
@@ -60,7 +58,6 @@ enum DeathRowQueue<BlockHash: Hash, Key: Hash, D: MetaDb> {
 	},
 	DbBacked {
 		// The backend database
-		#[ignore_malloc_size_of = "Shared data"]
 		db: D,
 		/// A queue of keys that should be deleted for each block in the pruning window.
 		/// Only caching the first few blocks of the pruning window, blocks inside are
@@ -251,7 +248,7 @@ fn load_death_row_from_db<BlockHash: Hash, Key: Hash, D: MetaDb>(
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, parity_util_mem_derive::MallocSizeOf)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct DeathRow<BlockHash: Hash, Key: Hash> {
 	hash: BlockHash,
 	deleted: HashSet<Key>,
@@ -343,10 +340,6 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 			DeathRowQueue::Mem { death_rows, .. } => death_rows.front().map(|r| r.hash.clone()),
 		};
 		Ok(res)
-	}
-
-	pub fn mem_used(&self) -> usize {
-		0
 	}
 
 	fn is_empty(&self) -> bool {

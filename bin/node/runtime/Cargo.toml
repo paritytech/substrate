@@ -39,7 +39,6 @@ sp-session = { version = "4.0.0-dev", default-features = false, path = "../../..
 sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/transaction-pool" }
 sp-version = { version = "5.0.0", default-features = false, path = "../../../primitives/version" }
 sp-io = { version = "7.0.0", default-features = false, path = "../../../primitives/io" }
-sp-sandbox = { version = "0.10.0-dev", default-features = false, path = "../../../primitives/sandbox" }
 
 # frame dependencies
 frame-executive = { version = "4.0.0-dev", default-features = false, path = "../../../frame/executive" }
@@ -117,7 +116,6 @@ substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-bu
 default = ["std"]
 with-tracing = ["frame-executive/with-tracing"]
 std = [
-	"sp-sandbox/std",
 	"pallet-whitelist/std",
 	"pallet-offences-benchmarking?/std",
 	"pallet-election-provider-support-benchmarking?/std",
@@ -312,8 +310,3 @@ try-runtime = [
 	"pallet-vesting/try-runtime",
 	"pallet-whitelist/try-runtime",
 ]
-# Force `sp-sandbox` to call into the host resident executor. One still need to make sure
-# that `sc-executor` gets the `wasmer-sandbox` feature which happens automatically when
-# specified on the command line.
-# Don't use that on a production chain.
-wasmer-sandbox = ["sp-sandbox/wasmer-sandbox"]
