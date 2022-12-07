@@ -202,8 +202,7 @@ default:
 
 .crates-publishing-template:
   stage:                           test
-  extends:
-    - .docker-env
+  extends:                         .docker-env
   # collect artifacts even on failure so that we know how the crates were generated (they'll be
   # generated to the artifacts folder according to SPUB_TMP further down)
   artifacts:
@@ -213,11 +212,11 @@ default:
     paths:
       - artifacts/
   variables:
-    CRATESIO_CRATES_OWNER: parity-crate-owner
-    REPO_OWNER: paritytech
-    REPO: substrate
-    GH_API: https://api.github.com
     CRATESIO_API: https://crates.io/api
+    CRATESIO_CRATES_OWNER: parity-crate-owner
+    GH_API: https://api.github.com
+    REPO: substrate
+    REPO_OWNER: paritytech
     SPUB_TMP: artifacts
 
 #### stage:                       .pre
