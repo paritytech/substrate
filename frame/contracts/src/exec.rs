@@ -1331,9 +1331,9 @@ where
 	fn append_debug_buffer(&mut self, msg: &str) -> Result<bool, DispatchError> {
 		if let Some(buffer) = &mut self.debug_message {
 			if !msg.is_empty() {
-				buffer.try_append(&mut msg.as_bytes().to_vec()).map_err(|_| {
-					DispatchError::Other("Maximum allowed debug buffer size exhausted!")
-				})?;
+				buffer
+					.try_extend(&mut msg.bytes())
+					.map_err(|_| Error::<T>::DebugBufferExhausted)?;
 			}
 			Ok(true)
 		} else {
@@ -2609,7 +2609,7 @@ mod tests {
 					Determinism::Deterministic,
 				)
 				.map_err(|e| e.error),
-				DispatchError::Other("Maximum allowed debug buffer size exhausted!")
+				Error::<Test>::DebugBufferExhausted
 			);
 		});
 	}

@@ -859,6 +859,9 @@ pub mod pallet {
 		CodeRejected,
 		/// An indetermistic code was used in a context where this is not permitted.
 		Indeterministic,
+		/// The debug buffer size used during contract execution exceeded the limit determined by
+		/// the `MaxDebugBufferLen` pallet config parameter.
+		DebugBufferExhausted,
 	}
 
 	/// A mapping from an original code hash to the original code, untouched by instrumentation.
@@ -1168,9 +1171,7 @@ where
 						TryInstantiate::Skip,
 					)
 					.map_err(|(err, msg)| {
-						debug_message
-							.as_mut()
-							.map(|buffer| buffer.try_append(&mut msg.as_bytes().to_vec()));
+						debug_message.as_mut().map(|buffer| buffer.try_extend(&mut msg.bytes()));
 						err
 					})?;
 					// The open deposit will be charged during execution when the
