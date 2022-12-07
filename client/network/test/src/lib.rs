@@ -424,11 +424,6 @@ where
 		self.push_blocks_at(BlockId::Hash(best_hash), count, with_tx)
 	}
 
-	pub fn get_best_header(&mut self) -> <Block as BlockT>::Header {
-		let info = self.client.info();
-		self.client.header(&BlockId::hash(info.best_hash)).unwrap().unwrap()
-	}
-
 	/// Push blocks to the peer (simplified: with or without a TX)
 	pub fn push_headers(&mut self, count: usize) -> Vec<H256> {
 		let best_hash = self.client.info().best_hash;
