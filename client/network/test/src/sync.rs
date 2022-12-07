@@ -1254,11 +1254,8 @@ async fn warp_sync() {
 fn warp_sync_to_target_block() {
 	sp_tracing::try_init_simple();
 	let runtime = Runtime::new().unwrap();
-	let mut net = TestNet::new(runtime.handle().clone(), 0);
 	// Create 3 synced peers and 1 peer trying to warp sync.
-	net.add_full_peer_with_config(Default::default());
-	net.add_full_peer_with_config(Default::default());
-	net.add_full_peer_with_config(Default::default());
+	let mut net = TestNet::new(runtime.handle().clone(), 3);
 
 	net.peer(0).push_blocks(63, false);
 	net.peer(0).push_blocks(1, false);
