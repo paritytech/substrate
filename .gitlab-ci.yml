@@ -219,7 +219,6 @@ default:
     GH_API: https://api.github.com
     CRATESIO_API: https://crates.io/api
     SPUB_TMP: artifacts
-    RUSTY_CACHIER_FORCE_UPLOAD: "true"
 
 #### stage:                       .pre
 
