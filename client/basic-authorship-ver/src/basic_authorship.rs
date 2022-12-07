@@ -470,8 +470,6 @@ where
 		let now = (self.now)();
 		let left = deadline.saturating_duration_since(now);
 		let left_micros: u64 = left.as_micros().saturated_into();
-		let soft_deadline =
-			now + time::Duration::from_micros(self.soft_deadline_percent.mul_floor(left_micros));
 		let first_slot_limit =
 			futures_timer::Delay::new(time::Duration::from_micros(left_micros * 55 / 100));
 
@@ -483,10 +481,8 @@ where
 		let mut unqueue_invalid = Vec::new();
 
 		let mut t1 = self.transaction_pool.ready_at(self.parent_number).fuse();
-		let mut t2 = futures_timer::Delay::new(deadline.saturating_duration_since(now) / 8).fuse();
 
-		let mut block_size = block_builder
-			.estimate_block_size_without_extrinsics(self.include_proof_in_block_size_estimation);
+		let mut block_size = 0;
 
 		let get_current_time = &self.now;
 		let is_expired = || get_current_time() > queue_processing_deadline;
@@ -499,9 +495,23 @@ where
 			is_expired,
 		);
 
+		// there might be some txs comming in that time - so its better to sleep than
+		// shortening remaining time
 		debug!(target: "block_builder", "sleeping by the end of the slot");
 		first_slot_limit.await;
 
+		// artificially simulate that block is half filled
+		// also include header & proof cost for the second part to make sure
+		// that all txs included in that phase will have enought room to be executed in following
+		// block
+		debug!(target: "block_builder", "esitmated block size{}", block_builder.estimate_block_size_without_extrinsics(self.include_proof_in_block_size_estimation));
+		block_size = block_size_limit / 2 +
+			block_builder.estimate_block_size_without_extrinsics(
+				self.include_proof_in_block_size_estimation,
+			);
+
+		let now = (self.now)();
+		let mut t2 = futures_timer::Delay::new(deadline.saturating_duration_since(now) / 8).fuse();
 		let mut pending_iterator = select! {
 			res = t1 => res,
 			_ = t2 => {
@@ -518,6 +528,12 @@ where
 		debug!(target: "block_builder", "Pool status: {:?}", self.transaction_pool.status());
 		let mut transaction_pushed = false;
 		let mut end_reason = EndProposingReason::NoMoreTransactions;
+
+		let left = deadline.saturating_duration_since(now);
+		let left_micros: u64 = left.as_micros().saturated_into();
+
+		let soft_deadline =
+			now + time::Duration::from_micros(self.soft_deadline_percent.mul_floor(left_micros));
 
 		// after previous block is applied it is possible to prevalidate incomming transaction
 		// but eventually changess needs to be rolled back, as those can be executed
@@ -545,6 +561,8 @@ where
 					let pending_tx_hash = pending_tx.hash().clone();
 
 					block_size += pending_tx_data.encoded_size();
+					block_size += sp_core::H256::len_bytes();
+
 					if block_size > block_size_limit {
 						pending_iterator.report_invalid(&pending_tx);
 						if skipped < MAX_SKIPPED_TRANSACTIONS {
@@ -593,6 +611,8 @@ where
 									 so we will try a bit more before quitting."
 								);
 							} else {
+								debug!(target: "block_builder", "now {:?}", (self.now)());
+								trace!(target:"block_builder", "soft_deadline : {:?}", soft_deadline.saturating_duration_since(now).as_secs_f64());
 								debug!(target: "block_builder",
 								"Reached block weight limit, proceeding with proposing.");
 								break EndProposingReason::HitBlockWeightLimit
@@ -873,104 +893,112 @@ mod tests {
 		// );
 	}
 
-	// #[test]
-	// fn should_cease_building_block_when_block_limit_is_reached() {
-	// 	let _ = env_logger::try_init();
-	// 	let client = Arc::new(substrate_test_runtime_client::new());
-	// 	let spawner = sp_core::testing::TaskExecutor::new();
-	// 	let txpool = BasicPool::new_full(
-	// 		Default::default(),
-	// 		true.into(),
-	// 		None,
-	// 		spawner.clone(),
-	// 		client.clone(),
-	// 	);
-	// 	let genesis_header = client
-	// 		.header(&BlockId::Number(0u64))
-	// 		.expect("header get error")
-	// 		.expect("there should be header");
-	//
-	// 	let extrinsics_num = 4;
-	// 	let extrinsics = (0..extrinsics_num)
-	// 		.map(|v| Extrinsic::IncludeData(vec![v as u8; 10]))
-	// 		.collect::<Vec<_>>();
-	//
-	// 	let block_limit = genesis_header.encoded_size() +
-	// 		extrinsics
-	// 			.iter()
-	// 			.take(extrinsics_num - 1)
-	// 			.map(Encode::encoded_size)
-	// 			.sum::<usize>() +
-	// 		Vec::<Extrinsic>::new().encoded_size();
-	//
-	// 	let mut size = genesis_header.encoded_size() + Vec::<Extrinsic>::new().encoded_size();
-	//
-	// 	println!("INIT {}", size);
-	// 	for i in extrinsics.iter() {
-	// 		size += i.encoded_size();
-	// 		println!("{}", size)
-	// 	}
-	//
-	// 	block_on(txpool.submit_at(&BlockId::number(0), SOURCE, extrinsics)).unwrap();
-	//
-	// 	block_on(txpool.maintain(chain_event(genesis_header.clone())));
-	//
-	// 	let mut proposer_factory =
-	// 		ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
-	//
-	// 	let proposer = block_on(proposer_factory.init(&genesis_header)).unwrap();
-	//
-	// 	// Give it enough time
-	// 	let deadline = time::Duration::from_secs(300);
-	// 	let block = block_on(proposer.propose(
-	// 		Default::default(),
-	// 		Default::default(),
-	// 		deadline,
-	// 		Some(block_limit * 2),
-	// 	))
-	// 	.map(|r| r.block)
-	// 	.unwrap();
-	//
-	// 	// Based on the block limit, one transaction shouldn't be included.
-	// 	assert_eq!(block.extrinsics().len(), extrinsics_num - 1);
-	//
-	// 	let proposer = block_on(proposer_factory.init(&genesis_header)).unwrap();
-	//
-	// 	let block =
-	// 		block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
-	// 			.map(|r| r.block)
-	// 			.unwrap();
-	//
-	// 	// Without a block limit we should include all of them
-	// 	assert_eq!(block.extrinsics().len(), extrinsics_num);
-	//
-	// 	let mut proposer_factory = ProposerFactory::with_proof_recording(
-	// 		spawner.clone(),
-	// 		client.clone(),
-	// 		txpool.clone(),
-	// 		None,
-	// 		None,
-	// 	);
-	//
-	// 	let proposer = block_on(proposer_factory.init(&genesis_header)).unwrap();
-	//
-	// 	// Give it enough time
-	// 	let block = block_on(proposer.propose(
-	// 		Default::default(),
-	// 		Default::default(),
-	// 		deadline,
-	// 		Some(block_limit * 2),
-	// 	))
-	// 	.map(|r| r.block)
-	// 	.unwrap();
-	//
-	// 	// The block limit didn't changed, but we now include the proof in the estimation of the
-	// 	// block size and thus, one less transaction should fit into the limit.
-	// 	assert_eq!(block.extrinsics().len(), extrinsics_num - 2);
-	// }
+	#[test]
+	fn should_cease_building_block_when_block_limit_is_reached() {
+		let _ = env_logger::try_init();
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full(
+			Default::default(),
+			true.into(),
+			None,
+			spawner.clone(),
+			client.clone(),
+		);
+		let genesis_header = client
+			.header(&BlockId::Number(0u64))
+			.expect("header get error")
+			.expect("there should be header");
+
+		let extrinsics_num = 4;
+		let extrinsics = (0..extrinsics_num)
+			.map(|v| Extrinsic::IncludeData(vec![v as u8; 10]))
+			.collect::<Vec<_>>();
+
+		let init_size = genesis_header.encoded_size() 
+			+ Vec::<Extrinsic>::new().encoded_size() // list of extrinsics
+			+ Extrinsic::EnqueueTxs(extrinsics_num).encoded_size();
+
+		let block_limit = init_size +
+			extrinsics
+				.iter()
+				.take((extrinsics_num - 1) as usize)
+				.map(|tx| Encode::encoded_size(tx) + sp_core::H256::len_bytes())
+				.sum::<usize>();
+		block_on(txpool.submit_at(&BlockId::number(0), SOURCE, extrinsics)).unwrap();
+
+		block_on(txpool.maintain(chain_event(genesis_header.clone())));
+
+		let mut proposer_factory =
+			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
+
+		let proposer = block_on(proposer_factory.init(&genesis_header)).unwrap();
+
+		// Give it enough time
+		let deadline = time::Duration::from_secs(20);
+		let block = block_on(proposer.propose(
+			Default::default(),
+			Default::default(),
+			deadline,
+			Some(block_limit * 2),
+		))
+		.map(|r| r.block)
+		.unwrap();
+
+		// Based on the block limit, one transaction shouldn't be included.
+		assert_eq!(block.extrinsics().len(), 1);
+		assert!(matches!(
+				block.extrinsics().get(0).expect("enqueue tx extrinsic"),
+				Extrinsic::EnqueueTxs(count) if *count == (extrinsics_num - 1)as u64));
+
+		let proposer = block_on(proposer_factory.init(&genesis_header)).unwrap();
+
+		let block =
+			block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
+				.map(|r| r.block)
+				.unwrap();
+
+		// Without a block limit we should include all of them
+		assert_eq!(block.extrinsics().len(), 1);
+		assert!(matches!(
+				block.extrinsics().get(0).expect("enqueue tx extrinsic"),
+				Extrinsic::EnqueueTxs(count) if *count == extrinsics_num as u64));
+
+		let mut proposer_factory = ProposerFactory::with_proof_recording(
+			spawner.clone(),
+			client.clone(),
+			txpool.clone(),
+			None,
+			None,
+		);
+
+		let proposer = block_on(proposer_factory.init(&genesis_header)).unwrap();
+
+		// EDIT: for some reason proof size is set to 0 in test-runtime
+		// so below does not apply anymore
+		//
+		// Give it enough time
+		// let block = block_on(proposer.propose(
+		// 	Default::default(),
+		// 	Default::default(),
+		// 	deadline,
+		// 	Some(block_limit * 2),
+		// ))
+		// .map(|r| r.block)
+		// .unwrap();
+		// The block limit didn't changed, but we now include the proof in the estimation of the
+		// block size and thus, one less transaction should fit into the limit.
+		// assert_eq!(block.extrinsics().len(), 1);
+		// assert!(
+		// 	matches!(
+		// 		block.extrinsics().get(0).expect("enqueue tx extrinsic"),
+		// 		Extrinsic::EnqueueTxs(count) if *count == (extrinsics_num - 2) as u64)
+		// 	);
+	}
 
 	#[test]
 	fn should_keep_adding_transactions_after_exhausts_resources_before_soft_deadline() {
+		let _ = env_logger::try_init();
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
@@ -1023,14 +1051,17 @@ mod tests {
 
 		// when
 		// give it enough time so that deadline is never triggered.
-		let deadline = time::Duration::from_secs(900);
+		let deadline = time::Duration::from_secs(90);
 		let block =
 			block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
 				.map(|r| r.block)
 				.unwrap();
 
 		// then block should have all non-exhaust resources extrinsics (+ the first one).
-		assert_eq!(block.extrinsics().len(), MAX_SKIPPED_TRANSACTIONS + 1);
+		assert_eq!(block.extrinsics().len(), 1);
+		assert!(matches!(
+				block.extrinsics().get(0).expect("enqueue tx extrinsic"),
+				Extrinsic::EnqueueTxs(count) if *count == (MAX_SKIPPED_TRANSACTIONS + 1) as u64));
 	}
 
 	#[test]

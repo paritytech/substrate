@@ -275,7 +275,9 @@ where
 		};
 
 		// that should be improved at some point
-		valid_txs.truncate(std::cmp::max(valid_txs.len() * 90 / 100, 1));
+		if valid_txs.len() > 100 {
+			valid_txs.truncate(valid_txs.len() * 90 / 100);
+		}
 
 		let valid_txs_count = valid_txs.len();
 		let store_txs_inherent = self
@@ -384,7 +386,7 @@ where
 		log::debug!(target: "block_builder", "previous block enqueued {} txs", previous_block_txs_count);
 
 		for tx_bytes in previous_block_txs {
-			if (*block_size + tx_bytes.len() + sp_core::H256::len_bytes()) > max_block_size {
+			if (*block_size + tx_bytes.len() ) > max_block_size {
 				break
 			}
 

@@ -76,7 +76,7 @@ use aquamarine::aquamarine;
 /// imagine that we have X time for tx processing in every block.
 /// **In block `N+1` ther would no room for any transaction to be included because execution of
 /// previous block will exceed block limits.**
-///```
+///```ignore
 /// 
 /// |--------------|    |--------------|    |--------------|
 /// |    Block N   |    |    Block N+1 |    |    Block N+2 |
@@ -111,7 +111,7 @@ use aquamarine::aquamarine;
 /// so comparing to origin impl which can be presented as
 ///
 ///
-/// ```
+/// ```ignore
 ///        execution time/size/weight limits (X)
 /// <-------------------------------------------------->
 ///
@@ -124,7 +124,7 @@ use aquamarine::aquamarine;
 ///
 /// In mangata its more like
 ///
-///```
+///```ignore
 ///        X/2                       X/2
 /// <--------------------->-<-------------------------->
 /// |--------------------------------------------------|
@@ -137,7 +137,7 @@ use aquamarine::aquamarine;
 ///
 /// As a result blocks will be constructed as follows
 ///
-///```
+///```ignore
 /// 
 /// |--------------|    |--------------|    |--------------|
 /// |    Block N   |    |    Block N+1 |    |    Block N+2 |
