@@ -1258,7 +1258,6 @@ fn warp_sync_to_target_block() {
 	let mut net = TestNet::new(runtime.handle().clone(), 3);
 
 	net.peer(0).push_blocks(64, false);
-	net.peer(0).push_blocks(1, false);
 
 	let target_block = net.peer(0).get_best_header();
 
