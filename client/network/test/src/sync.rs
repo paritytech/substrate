@@ -1262,9 +1262,6 @@ fn warp_sync_to_target_block() {
 
 	let target_block = net.peer(0).get_best_header();
 
-	net.peer(1).push_blocks(64, false);
-	net.peer(2).push_blocks(64, false);
-
 	net.add_full_peer_with_config(FullPeerConfig {
 		sync_mode: SyncMode::Warp,
 		target_block: Some(target_block),
