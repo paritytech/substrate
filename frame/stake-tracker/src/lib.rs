@@ -66,9 +66,9 @@ pub mod pallet {
 	/// to date even if a validator chilled or turned into nominator. Entries from this map are only
 	/// ever removed if the stash is reaped.
 	///
-	/// NOTE: This is currently a CountedStorageMap for debugging purposes. We might actually want
-	/// to revisit this once this pallet starts populating the actual `TargetList` used by
-	/// `Staking`.
+	/// NOTE: This is currently a [`CountedStorageMap`] for debugging purposes. We might actually want
+	/// to revisit this once this pallet starts populating the actual [`Config::TargetList`] used by
+	/// [`Config::Staking`].
 	#[pallet::storage]
 	#[pallet::getter(fn approval_stake)]
 	pub type ApprovalStake<T: Config> =
@@ -144,8 +144,6 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 		let update_approval_stake = |nomination: &T::AccountId, new_stake: BalanceOf<T>| {
 			ApprovalStake::<T>::set(&nomination, Some(new_stake));
 
-			// TODO: this is probably not always true, but we keep track of approval stake in the
-			// map anyway.
 			if T::TargetList::contains(&nomination) {
 				let _ = T::TargetList::on_update(&nomination, new_stake).defensive();
 			}

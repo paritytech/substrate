@@ -473,8 +473,12 @@ where
 	}
 }
 
-/// Basically a read-only part of the methods for [`SortedListProvider`] designed to be used in
-/// scenarios where the list is updated by another entity.
+/// A trait that defines a set of functions that allow read access to the underlying storage
+/// and the types those functions depend upon.
+///
+/// Initially a part of [`SortedListProvider`], it allows for restricting a consumer to read-only
+/// operations. This is particularly useful in case the list is populated by one entity and
+/// read by another.
 pub trait ReadOnlySortedListProvider<AccountId> {
 	/// The list's error type.
 	type Error: sp_std::fmt::Debug;

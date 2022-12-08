@@ -765,12 +765,12 @@ impl pallet_bags_list::Config<VoterBagsListInstance> for Runtime {
 	type WeightInfo = pallet_bags_list::weights::SubstrateWeight<Runtime>;
 }
 
-/// A special VoterList instance used to test the StakeTracker.
+// A special VoterList instance used to test the StakeTracker.
 type VoterBagsListTrackerInstance = pallet_bags_list::Instance3;
 impl pallet_bags_list::Config<VoterBagsListTrackerInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	/// The voter bags-list is loosely kept up to date, and the real source of truth for the score
-	/// of each node is the staking pallet.
+	// The voter bags-list is loosely kept up to date, and the real source of truth for the score
+	// of each node is the staking pallet.
 	type ScoreProvider = Staking;
 	type BagThresholds = BagThresholds;
 	type Score = VoteWeight;
@@ -781,6 +781,8 @@ parameter_types! {
 	pub const BagThresholdsBalances: &'static [Balance] = &voter_bags::THRESHOLDS_BALANCES;
 }
 
+// A TargetList, currently populated by StakeTracker, once this has been tested enough - this will
+// be used by pallet-staking as a list of electable targets.
 type TargetBagsListInstance = pallet_bags_list::Instance2;
 impl pallet_bags_list::Config<TargetBagsListInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;

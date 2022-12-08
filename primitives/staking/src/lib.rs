@@ -81,7 +81,7 @@ pub struct Stake<AccountId, Balance> {
 	pub active: Balance,
 }
 
-/// A generic staking event listener. Current used for implementations involved in stake tracking.
+/// A generic staking event listener. Currently used for implementations involved in stake tracking.
 /// Note that the interface is designed in a way that the events are fired post-action, so any
 /// pre-action data that is needed needs to be passed to interface methods.
 /// The rest of the data can be retrieved by using `StakingInterface`.
