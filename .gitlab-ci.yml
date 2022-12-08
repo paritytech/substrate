@@ -117,7 +117,7 @@ default:
     - !reference [.pipeline-stopper-vars, script]
     - if [ $SKIP_JOB = "true" ]; then
         echo "Skipped!";
-        exit 0
+        exit 0;
       fi
   after_script:
     - !reference [.rusty-cachier, after_script]
