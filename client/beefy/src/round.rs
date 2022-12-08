@@ -178,7 +178,7 @@ where
 	}
 }
 
-#[cfg(test)]
+#[cfg(notest)]
 mod tests {
 	use sc_network_test::Block;
 	use sp_core::H256;

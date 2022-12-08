@@ -988,7 +988,7 @@ where
 	}
 }
 
-#[cfg(test)]
+#[cfg(notest)]
 pub(crate) mod tests {
 	use super::*;
 	use crate::{

@@ -77,7 +77,7 @@ impl<B: Block> KnownPeers<B> {
 	}
 }
 
-#[cfg(test)]
+#[cfg(notest)]
 mod tests {
 	use super::*;
 

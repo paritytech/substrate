@@ -78,7 +78,7 @@ fn verify_with_validator_set<Block: BlockT, AuthId: Encode + Decode + Debug + Or
 	}
 }
 
-#[cfg(test)]
+#[cfg(notest)]
 pub(crate) mod tests {
 	use beefy_primitives::{
 		known_payloads, Commitment, Payload, SignedCommitment, VersionedFinalityProof, ecdsa_crypto,

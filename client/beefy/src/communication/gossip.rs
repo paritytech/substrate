@@ -246,7 +246,7 @@ where
 	}
 }
 
-#[cfg(test)]
+#[cfg(notest)]
 mod tests {
 	use sc_keystore::LocalKeystore;
 	use sc_network_test::Block;
