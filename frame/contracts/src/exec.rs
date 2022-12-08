@@ -305,6 +305,9 @@ pub trait Ext: sealing::Sealed {
 	/// are not calculated as separate entrance.
 	/// A value of 0 means it does not exist on the call stack.
 	fn account_reentrance_count(&self, account_id: &AccountIdOf<Self::T>) -> u32;
+
+	/// Returns a nonce that is incremented for every instantiated contract.
+	fn nonce(&mut self) -> u64;
 }
 
 /// Describes the different functions that can be exported by an [`Executable`].
@@ -654,7 +657,7 @@ where
 		let (mut stack, executable) = Self::new(
 			FrameArgs::Instantiate {
 				sender: origin.clone(),
-				nonce: Self::initial_nonce(),
+				nonce: <Nonce<T>>::get().wrapping_add(1),
 				executable,
 				salt,
 			},
@@ -1068,18 +1071,9 @@ where
 
 	/// Increments and returns the next nonce. Pulls it from storage if it isn't in cache.
 	fn next_nonce(&mut self) -> u64 {
-		let next = if let Some(current) = self.nonce {
-			current.wrapping_add(1)
-		} else {
-			Self::initial_nonce()
-		};
+		let next = self.nonce().wrapping_add(1);
 		self.nonce = Some(next);
 		next
-	}
-
-	/// Pull the current nonce from storage.
-	fn initial_nonce() -> u64 {
-		<Nonce<T>>::get().wrapping_add(1)
 	}
 }
 
@@ -1393,6 +1387,16 @@ where
 		self.frames()
 			.filter(|f| f.delegate_caller.is_none() && &f.account_id == account_id)
 			.count() as u32
+	}
+
+	fn nonce(&mut self) -> u64 {
+		if let Some(current) = self.nonce {
+			current
+		} else {
+			let current = <Nonce<T>>::get();
+			self.nonce = Some(current);
+			current
+		}
 	}
 }
 
@@ -3323,6 +3327,51 @@ mod tests {
 				Determinism::Deterministic,
 			);
 			assert_matches!(result, Ok(_));
+		});
+	}
+
+	#[test]
+	fn nonce_api_works() {
+		let fail_code = MockLoader::insert(Constructor, |_, _| exec_trapped());
+		let success_code = MockLoader::insert(Constructor, |_, _| exec_success());
+		let code_hash = MockLoader::insert(Call, move |ctx, _| {
+			// It is set to one when this contract was instantiated by `place_contract`
+			assert_eq!(ctx.ext.nonce(), 1);
+			// Should not change without any instantation in-between
+			assert_eq!(ctx.ext.nonce(), 1);
+			// Should not change with a failed instantiation
+			assert_err!(
+				ctx.ext.instantiate(Weight::zero(), fail_code, 0, vec![], &[],),
+				ExecError {
+					error: <Error<Test>>::ContractTrapped.into(),
+					origin: ErrorOrigin::Callee
+				}
+			);
+			assert_eq!(ctx.ext.nonce(), 1);
+			// Successful instantation increments
+			ctx.ext.instantiate(Weight::zero(), success_code, 0, vec![], &[]).unwrap();
+			assert_eq!(ctx.ext.nonce(), 2);
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let min_balance = <Test as Config>::Currency::minimum_balance();
+			let schedule = <Test as Config>::Schedule::get();
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
+			set_balance(&ALICE, min_balance * 1000);
+			place_contract(&BOB, code_hash);
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, None, 0).unwrap();
+			assert_ok!(MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut gas_meter,
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![],
+				None,
+				Determinism::Deterministic
+			));
 		});
 	}
 }
