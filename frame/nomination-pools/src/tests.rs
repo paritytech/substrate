@@ -593,6 +593,37 @@ mod bonded_pool {
 	}
 
 	#[test]
+	fn max_commission_after_current_commission_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// set pool commission to 50% first.
+			assert_ok!(Pools::set_commission(
+				RuntimeOrigin::signed(900),
+				1,
+				Some(Perbill::from_percent(50)),
+				Some(900),
+			));
+
+			// now set the max commission to something less than the current
+			// commission.
+			assert_ok!(Pools::set_commission_max(
+				RuntimeOrigin::signed(900),
+				1,
+				Perbill::from_percent(25)
+			));
+
+			// the current commission should now be 25%.
+			assert_eq!(
+				BondedPools::<Runtime>::get(1).unwrap().commission,
+				Commission {
+					current: Some((Perbill::from_percent(25), 900)),
+					max: Some(Perbill::from_percent(25)),
+					throttle: None
+				}
+			);
+		})
+	}
+
+	#[test]
 	fn do_not_throttle_initial_commission_set() {
 		ExtBuilder::default().build_and_execute(|| {
 			// Set a commission throttle for pool 1
