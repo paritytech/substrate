@@ -132,7 +132,7 @@
 //! added, given the right flag:
 //!
 //! ```ignore
-//! 
+//!
 //! #[cfg(feature = try-runtime)]
 //! fn pre_upgrade() -> Result<Vec<u8>, &'static str> {}
 //!
@@ -292,7 +292,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
 	DeserializeOwned,
 };
-use sp_state_machine::{OverlayedChanges, StateMachine, TrieBackendBuilder};
+use sp_state_machine::{CompactProof, OverlayedChanges, StateMachine, TrieBackendBuilder};
 use sp_version::StateVersion;
 use std::{fmt::Debug, path::PathBuf, str::FromStr};
 
@@ -826,11 +826,24 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 	let compact_proof = proof
 		.clone()
 		.into_compact_proof::<sp_runtime::traits::BlakeTwo256>(pre_root)
-		.map_err(|e| format!("failed to generate compact proof {}: {:?}", method, e))?;
+		.map_err(|e| {
+			log::error!(target: LOG_TARGET, "failed to generate compact proof {}: {:?}", method, e);
+			e
+		})
+		.unwrap_or(CompactProof { encoded_nodes: Default::default() });
 
 	let compact_proof_size = compact_proof.encoded_size();
 	let compressed_proof = zstd::stream::encode_all(&compact_proof.encode()[..], 0)
-		.map_err(|e| format!("failed to generate compact proof {}: {:?}", method, e))?;
+		.map_err(|e| {
+			log::error!(
+				target: LOG_TARGET,
+				"failed to generate compressed proof {}: {:?}",
+				method,
+				e
+			);
+			e
+		})
+		.unwrap_or_default();
 
 	let proof_nodes = proof.into_nodes();
 
