@@ -456,12 +456,6 @@ pub struct SharedParams {
 	#[arg(long)]
 	heap_pages: Option<u64>,
 
-	/// When enabled, the spec check will not panic, and instead only show a warning.
-	///
-	/// The spec checking will always check the spec name and version of the local code and the
-	#[arg(long)]
-	no_spec_check_panic: bool,
-
 	/// Overwrite the `state_version`.
 	///
 	/// Otherwise `remote-externalities` will automatically set the correct state version.
@@ -591,12 +585,7 @@ impl State {
 			builder
 		};
 
-		let mut ext = builder.build().await?;
-		let original_code = ext
-			.execute_with(|| sp_io::storage::get(well_known_keys::CODE))
-			.expect("':CODE:' is always downloaded in try-runtime-cli; qed");
-
-		// then, we replace the code based on what the CLI wishes.
+		// then, we prepare to replace the code based on what the CLI wishes.
 		let maybe_code_to_overwrite = match shared.runtime {
 			Runtime::Path(ref path) => Some(std::fs::read(path).map_err(|e| {
 				format!("error while reading runtime file from {:?}: {:?}", path, e)
@@ -604,7 +593,15 @@ impl State {
 			Runtime::Existing => None,
 		};
 
+		// build the main ext.
+		let mut ext = builder.build().await?;
+
+		// actually replace the code if needed.
 		if let Some(new_code) = maybe_code_to_overwrite {
+			let original_code = ext
+				.execute_with(|| sp_io::storage::get(well_known_keys::CODE))
+				.expect("':CODE:' is always downloaded in try-runtime-cli; qed");
+
 			// NOTE: see the impl notes of `read_runtime_version`, the ext is almost not used here,
 			// only as a backup.
 			ext.insert(well_known_keys::CODE.to_vec(), new_code.clone());

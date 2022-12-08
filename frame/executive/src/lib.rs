@@ -322,27 +322,28 @@ where
 
 	/// Execute all `OnRuntimeUpgrade` of this runtime, including the pre and post migration checks.
 	///
-	/// Runs the try-state code both before and after the migration function.
+	/// Runs the try-state code both before and after the migration function if `checks` is set to
+	/// `true`. Also, if set to `true`, it runs the `pre_upgrade` and `post_upgrade` hooks.
 	pub fn try_runtime_upgrade(checks: bool) -> Result<Weight, &'static str> {
 		if checks {
+			let _guard = frame_support::StorageNoopGuard::default();
 			<AllPalletsWithSystem as frame_support::traits::TryState<System::BlockNumber>>::try_state(
 				frame_system::Pallet::<System>::block_number(),
 				frame_try_runtime::TryStateSelect::All,
-			)
-			.unwrap();
+			)?;
 		}
 
 		let weight =
 			<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::try_on_runtime_upgrade(
 				checks,
-			);
+			)?;
 
 		if checks {
+			let _guard = frame_support::StorageNoopGuard::default();
 			<AllPalletsWithSystem as frame_support::traits::TryState<System::BlockNumber>>::try_state(
 				frame_system::Pallet::<System>::block_number(),
 				frame_try_runtime::TryStateSelect::All,
-			)
-			.unwrap();
+			)?;
 		}
 
 		Ok(weight)

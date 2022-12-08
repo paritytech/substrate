@@ -39,10 +39,10 @@ sp_api::decl_runtime_apis! {
 		/// tracking is likely inaccurate.
 		fn on_runtime_upgrade(checks: bool) -> (Weight, Weight);
 
-		/// Execute the given block, but don't check that its state root matches that of yours.
+		/// Execute the given block, but optionally disable state-root checks.
 		///
-		/// This is only sensible where the incoming block is from a different network, yet it has
-		/// the same block format as the runtime implementing this API.
+		/// Optionally, a number of `try_state` hooks can also be executed after the block
+		/// execution.
 		fn execute_block(block: Block, state_root_check: bool, try_state: TryStateSelect) -> Weight;
 
 		/// A marker trait used just to identify if a runtime has been compiled with

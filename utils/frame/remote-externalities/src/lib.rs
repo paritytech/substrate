@@ -35,6 +35,7 @@ pub use sp_io::TestExternalities;
 use sp_runtime::{traits::Block as BlockT, StateVersion};
 use std::{
 	fs,
+	num::NonZeroUsize,
 	ops::{Deref, DerefMut},
 	path::{Path, PathBuf},
 	sync::Arc,
@@ -111,32 +112,54 @@ pub struct OfflineConfig {
 
 /// Description of the transport protocol (for online execution).
 #[derive(Debug, Clone)]
-pub struct Transport {
+pub enum Transport {
 	/// Use the `URI` to open a new WebSocket connection.
-	uri: Option<String>,
+	Uri(String),
 	/// Use existing WebSocket connection.
-	remote_client: Option<Arc<WsClient>>,
+	RemoteClient(Arc<WsClient>),
 }
 
 impl Transport {
 	fn as_client(&self) -> Option<&WsClient> {
-		self.remote_client.as_ref().map(|x| x.as_ref())
+		match self {
+			Self::RemoteClient(client) => Some(client),
+			_ => None,
+		}
+	}
+
+	fn as_client_cloned(&self) -> Option<Arc<WsClient>> {
+		match self {
+			Self::RemoteClient(client) => Some(client.clone()),
+			_ => None,
+		}
 	}
 
 	// Open a new WebSocket connection if it's not connected.
 	async fn map_uri(&mut self) -> Result<(), &'static str> {
-		if let Some(uri) = &self.uri {
-			let ws_client = ws_client(uri).await.unwrap();
-			self.remote_client = Some(Arc::new(ws_client));
+		if let Self::Uri(uri) = self {
+			log::debug!(target: LOG_TARGET, "initializing remote client to {:?}", uri);
+
+			let ws_client = ws_client(uri).await.map_err(|e| {
+				log::error!(target: LOG_TARGET, "error: {:?}", e);
+				"failed to build ws client"
+			})?;
+
+			*self = Self::RemoteClient(Arc::new(ws_client))
 		}
 
 		Ok(())
 	}
 }
 
-impl<T: AsRef<str>> From<T> for Transport {
-	fn from(uri: T) -> Self {
-		Transport { uri: Some(uri.as_ref().to_string()), remote_client: None }
+impl From<String> for Transport {
+	fn from(uri: String) -> Self {
+		Transport::Uri(uri)
+	}
+}
+
+impl From<Arc<WsClient>> for Transport {
+	fn from(client: Arc<WsClient>) -> Self {
+		Transport::RemoteClient(client)
 	}
 }
 
@@ -164,10 +187,17 @@ pub struct OnlineConfig<B: BlockT> {
 }
 
 impl<B: BlockT> OnlineConfig<B> {
-	/// Return rpc (ws) client.
+	/// Return rpc (ws) client reference.
 	fn rpc_client(&self) -> &WsClient {
 		self.transport
 			.as_client()
+			.expect("ws client must have been initialized by now; qed.")
+	}
+
+	/// Return a cloned rpc (ws) client, suitable for being moved to threads.
+	fn rpc_client_cloned(&self) -> Arc<WsClient> {
+		self.transport
+			.as_client_cloned()
 			.expect("ws client must have been initialized by now; qed.")
 	}
 
@@ -179,7 +209,7 @@ impl<B: BlockT> OnlineConfig<B> {
 impl<B: BlockT> Default for OnlineConfig<B> {
 	fn default() -> Self {
 		Self {
-			transport: Transport::from(DEFAULT_WS_ENDPOINT),
+			transport: Transport::from(DEFAULT_WS_ENDPOINT.to_owned()),
 			child_trie: true,
 			at: None,
 			state_snapshot: None,
@@ -190,9 +220,9 @@ impl<B: BlockT> Default for OnlineConfig<B> {
 	}
 }
 
-impl<B: BlockT, T: AsRef<str>> From<T> for OnlineConfig<B> {
-	fn from(s: T) -> Self {
-		Self { transport: s.into(), ..Default::default() }
+impl<B: BlockT> From<String> for OnlineConfig<B> {
+	fn from(t: String) -> Self {
+		Self { transport: t.into(), ..Default::default() }
 	}
 }
 
@@ -276,8 +306,9 @@ where
 	B::Header: DeserializeOwned,
 {
 	/// Get the number of threads to use.
-	fn threads() -> usize {
-		thread::available_parallelism().map(|x| x.get()).unwrap_or(4)
+	fn threads() -> NonZeroUsize {
+		thread::available_parallelism()
+			.unwrap_or(NonZeroUsize::new(4usize).expect("4 is non-zero; qed"))
 	}
 
 	async fn rpc_get_storage(
@@ -362,21 +393,22 @@ where
 		pending_ext: &mut TestExternalities,
 	) -> Result<Vec<KeyValue>, &'static str> {
 		let keys = self.rpc_get_keys_paged(prefix.clone(), at).await?;
-		let client = self.as_online().transport.remote_client.clone().unwrap();
-		let thread_chunk_size = ((keys.len() + Self::threads() - 1) / Self::threads()).max(1);
+		if keys.is_empty() {
+			return Ok(Default::default())
+		}
+
+		let client = self.as_online().rpc_client_cloned();
+		let threads = Self::threads().get();
+		let thread_chunk_size = (keys.len() + threads - 1) / threads;
 
 		log::info!(
 			target: LOG_TARGET,
 			"Querying a total of {} keys from prefix {:?}, splitting among {} threads, {} keys per thread",
 			keys.len(),
 			HexDisplay::from(&prefix),
-			Self::threads(),
+			threads,
 			thread_chunk_size,
 		);
-
-		if keys.is_empty() {
-			return Ok(Default::default())
-		}
 
 		let mut handles = Vec::new();
 		let keys_chunked: Vec<Vec<StorageKey>> =
@@ -580,7 +612,7 @@ where
 	/// cache, we can also optimize further.
 	async fn load_child_remote(
 		&self,
-		top_kv: &Vec<KeyValue>,
+		top_kv: &[KeyValue],
 		pending_ext: &mut TestExternalities,
 	) -> Result<ChildKeyValues, &'static str> {
 		let child_roots = top_kv
@@ -593,14 +625,14 @@ where
 		}
 
 		// div-ceil simulation.
-		let child_roots_per_thread =
-			((child_roots.len() + Self::threads() - 1) / Self::threads()).max(1);
+		let threads = Self::threads().get();
+		let child_roots_per_thread = (child_roots.len() + threads - 1) / threads;
 
 		info!(
 			target: LOG_TARGET,
 			"👩‍👦 scraping child-tree data from {} top keys, split among {} threads, {} top keys per thread",
 			child_roots.len(),
-			Self::threads(),
+			threads,
 			child_roots_per_thread,
 		);
 
@@ -609,7 +641,7 @@ where
 		// different child tries underneath them, causing some threads to finish way faster than
 		// others. Certainly still better than single thread though.
 		let mut handles = vec![];
-		let client = self.as_online().transport.remote_client.clone().unwrap();
+		let client = self.as_online().rpc_client_cloned();
 		let at = self.as_online().at_expected();
 
 		enum Message {
@@ -1053,7 +1085,6 @@ mod tests {
 #[cfg(all(test, feature = "remote-test"))]
 mod remote_tests {
 	use super::test_prelude::*;
-	use sp_core::storage::well_known_keys;
 	use std::os::unix::fs::MetadataExt;
 
 	#[tokio::test(flavor = "multi_thread")]
@@ -1272,7 +1303,7 @@ mod remote_tests {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
-				transport: std::option_env!("TEST_WS").unwrap().into(),
+				transport: std::option_env!("TEST_WS").unwrap().to_owned().into(),
 				pallets: vec!["Staking".to_owned()],
 				child_trie: false,
 				..Default::default()
@@ -1291,7 +1322,7 @@ mod remote_tests {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
-				transport: std::option_env!("TEST_WS").unwrap().into(),
+				transport: std::option_env!("TEST_WS").unwrap().to_owned().into(),
 				..Default::default()
 			}))
 			.build()
