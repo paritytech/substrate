@@ -5218,6 +5218,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "log",
+ "pallet-assets",
  "pallet-balances",
  "pallet-staking",
  "pallet-staking-reward-curve",

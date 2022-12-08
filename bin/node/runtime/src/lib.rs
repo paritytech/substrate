@@ -32,9 +32,9 @@ use frame_support::{
 	pallet_prelude::Get,
 	parameter_types,
 	traits::{
-		fungible::ItemOf, AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32,
-		Currency, EitherOfDiverse, EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter,
-		KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote,
+		fungible::ItemOf, fungibles, AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16,
+		ConstU32, Currency, EitherOfDiverse, EqualPrivilegeOnly, Everything, Imbalance,
+		InstanceFilter, KeyOwnerProofSystem, Nothing, OnUnbalanced, U128CurrencyToVote,
 		WithdrawReasons,
 	},
 	weights::{
@@ -1003,7 +1003,7 @@ parameter_types! {
 	pub const DesiredRunnersUp: u32 = 7;
 	pub const MaxVoters: u32 = 10 * 1000;
 	pub const MaxCandidates: u32 = 1000;
-	pub const ElectionsPhragmenPalletId: LockIdentifier = *b"phrelect";
+	pub const ElectionsPhragmenPalletId: fungibles::LockIdentifier = *b"phrelect";
 }
 
 // Make sure that there are no more than `MaxMembers` members elected via elections-phragmen.

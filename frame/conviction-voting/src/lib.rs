@@ -31,7 +31,7 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
 	ensure,
 	traits::{
-		fungible, Currency, Get, LockIdentifier, LockableCurrency, PollStatus, Polling,
+		fungible, fungibles, fungibles::Lockable, Currency, Get, PollStatus, Polling,
 		ReservableCurrency, WithdrawReasons,
 	},
 };
@@ -60,7 +60,7 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 
-const CONVICTION_VOTING_ID: LockIdentifier = *b"pyconvot";
+const CONVICTION_VOTING_ID: fungibles::LockIdentifier = *b"pyconvot";
 
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 type BalanceOf<T, I = ()> =
@@ -104,7 +104,7 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 		/// Currency type with which voting happens.
 		type Currency: ReservableCurrency<Self::AccountId>
-			+ LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>
+			+ fungibles::Lockable<Self::AccountId, Moment = Self::BlockNumber>
 			+ fungible::Inspect<Self::AccountId>;
 
 		/// The implementation of the logic which conducts polls.
