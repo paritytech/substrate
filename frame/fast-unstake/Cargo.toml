@@ -7,7 +7,6 @@ license = "Unlicense"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "FRAME fast unstake pallet"
-readme = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -26,7 +25,10 @@ sp-std = { version = "5.0.0", default-features = false, path = "../../primitives
 sp-staking = { default-features = false, path = "../../primitives/staking" }
 frame-election-provider-support = { default-features = false, path = "../election-provider-support" }
 
+# optional dependencies for cargo features
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
+pallet-staking = { default-features = false, optional = true, path = "../staking" }
+pallet-assets = { default-features = false, optional = true, path = "../assets" }
 
 [dev-dependencies]
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward-curve" }
@@ -36,6 +38,7 @@ sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
 pallet-staking = { path = "../staking" }
 pallet-balances = { path = "../balances" }
 pallet-timestamp = { path = "../timestamp" }
+pallet-assets = { path = "../assets" }
 
 
 [features]

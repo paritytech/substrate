@@ -244,7 +244,6 @@ where
 	// The `GossipValidator` adds and removes known peers based on valid votes and network events.
 	let on_demand_justifications = OnDemandJustificationsEngine::new(
 		network.clone(),
-		runtime.clone(),
 		justifications_protocol_name,
 		known_peers,
 	);
@@ -295,7 +294,7 @@ where
 		persisted_state,
 	};
 
-	let worker = worker::BeefyWorker::<_, _, _, _, _>::new(worker_params);
+	let worker = worker::BeefyWorker::<_, _, _, _>::new(worker_params);
 
 	futures::future::join(
 		worker.run(block_import_justif, finality_notifications),
@@ -377,17 +376,8 @@ where
 			break state
 		}
 
-		// Check if we should move up the chain.
-		let parent_hash = *header.parent_hash();
-		if *header.number() == One::one() ||
-			runtime
-				.runtime_api()
-				.validator_set(&BlockId::hash(parent_hash))
-				.ok()
-				.flatten()
-				.is_none()
-		{
-			// We've reached pallet genesis, initialize voter here.
+		if *header.number() == One::one() {
+			// We've reached chain genesis, initialize voter here.
 			let genesis_num = *header.number();
 			let genesis_set = expect_validator_set(runtime, BlockId::hash(header.hash()))
 				.and_then(genesis_set_sanity_check)?;
@@ -407,6 +397,19 @@ where
 			info!(target: "beefy", "🥩 Marking block {:?} as BEEFY Mandatory.", *header.number());
 			sessions.push_front(Rounds::new(*header.number(), active));
 		}
+
+		// Check if state is still available if we move up the chain.
+		let parent_hash = *header.parent_hash();
+		runtime
+			.runtime_api()
+			.validator_set(&BlockId::hash(parent_hash))
+			.ok()
+			.flatten()
+			.ok_or_else(|| {
+				let msg = format!("{}. Could not initialize BEEFY voter.", parent_hash);
+				error!(target: "beefy", "🥩 {}", msg);
+				ClientError::Consensus(sp_consensus::Error::StateUnavailable(msg))
+			})?;
 
 		// Move up the chain.
 		header = blockchain.expect_header(BlockId::Hash(parent_hash))?;
