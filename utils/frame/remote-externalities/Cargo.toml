@@ -25,6 +25,7 @@ sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
 sp-version = { version = "5.0.0", path = "../../../primitives/version" }
 tokio = { version = "1.22.0", features = ["macros", "rt-multi-thread"] }
 substrate-rpc-client = { path = "../rpc/client" }
+futures = "0.3"
 
 [dev-dependencies]
 frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }

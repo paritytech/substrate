@@ -1613,7 +1613,10 @@ pub(crate) mod remote_tests {
 	use frame_system::Pallet as System;
 	use remote_externalities::Mode;
 	use sp_core::H256;
-	use sp_runtime::{traits::{Block as BlockT, HashFor, Header as _, One, Zero}, DeserializeOwned};
+	use sp_runtime::{
+		traits::{Block as BlockT, HashFor, Header as _, One, Zero},
+		DeserializeOwned,
+	};
 	use thousands::Separable;
 
 	#[allow(dead_code)]
