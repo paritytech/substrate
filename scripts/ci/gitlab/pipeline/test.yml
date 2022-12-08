@@ -394,7 +394,7 @@ cargo-check-each-crate:
     - if [ "$CI_NODE_INDEX" == 1 ]; then rusty-cachier cache upload; fi
   parallel: 2
 
-publish-crates-locally:
+.publish-crates-locally:
   extends:
     - .test-refs
     - .crates-publishing-template
