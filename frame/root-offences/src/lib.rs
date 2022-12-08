@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Sudo Offences Pallet
+//! # Root Offences Pallet
 //! Pallet that allows the root to create an offence.
 //!
 //! NOTE: This pallet should be used for testing purposes.

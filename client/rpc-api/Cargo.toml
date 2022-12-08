@@ -23,9 +23,9 @@ serde_json = "1.0.85"
 thiserror = "1.0"
 sc-chain-spec = { version = "4.0.0-dev", path = "../chain-spec" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
-sp-core = { version = "6.0.0", path = "../../primitives/core" }
+sp-core = { version = "7.0.0", path = "../../primitives/core" }
 sp-rpc = { version = "6.0.0", path = "../../primitives/rpc" }
-sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
-sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
+sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
+sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
 sp-version = { version = "5.0.0", path = "../../primitives/version" }
 jsonrpsee = { version = "0.15.1", features = ["server", "macros"] }

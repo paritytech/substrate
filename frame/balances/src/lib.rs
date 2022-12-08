@@ -79,7 +79,7 @@
 //! - [`ReservableCurrency`](frame_support::traits::ReservableCurrency):
 //! - [`NamedReservableCurrency`](frame_support::traits::NamedReservableCurrency):
 //! Functions for dealing with assets that can be reserved from an account.
-//! - [`LockableCurrency`](frame_support::traits::LockableCurrency): Functions for
+//! - [`Lockable`](frame_support::traits::fungibles::Lockable): Functions for
 //! dealing with accounts that allow liquidity restrictions.
 //! - [`Imbalance`](frame_support::traits::Imbalance): Functions for handling
 //! imbalances between total issuance in the system and account balances. Must be used when a
@@ -113,13 +113,13 @@
 //! # fn main() {}
 //! ```
 //!
-//! The Staking pallet uses the `LockableCurrency` trait to lock a stash account's funds:
+//! The Staking pallet uses the `fungibles::Lockable` trait to lock a stash account's funds:
 //!
 //! ```
-//! use frame_support::traits::{WithdrawReasons, LockableCurrency};
+//! use frame_support::traits::{WithdrawReasons, fungibles, fungibles::Lockable};
 //! use sp_runtime::traits::Bounded;
 //! pub trait Config: frame_system::Config {
-//! 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
+//! 	type Currency: fungibles::Lockable<Self::AccountId, Moment=Self::BlockNumber>;
 //! }
 //! # struct StakingLedger<T: Config> {
 //! # 	stash: <T as frame_system::Config>::AccountId,
@@ -156,6 +156,7 @@
 #[macro_use]
 mod tests;
 mod benchmarking;
+pub mod migration;
 mod tests_composite;
 mod tests_local;
 #[cfg(test)]
@@ -170,11 +171,13 @@ use frame_support::{
 	ensure,
 	pallet_prelude::DispatchResult,
 	traits::{
-		tokens::{fungible, BalanceStatus as Status, DepositConsequence, WithdrawConsequence},
+		tokens::{
+			fungible, fungibles, BalanceStatus as Status, DepositConsequence, WithdrawConsequence,
+		},
 		Currency, DefensiveSaturating, ExistenceRequirement,
 		ExistenceRequirement::{AllowDeath, KeepAlive},
-		Get, Imbalance, LockIdentifier, LockableCurrency, NamedReservableCurrency, OnUnbalanced,
-		ReservableCurrency, SignedImbalance, StoredMap, TryDrop, WithdrawReasons,
+		Get, Imbalance, NamedReservableCurrency, OnUnbalanced, ReservableCurrency, SignedImbalance,
+		StoredMap, TryDrop, WithdrawReasons,
 	},
 	WeakBoundedVec,
 };
@@ -245,8 +248,13 @@ pub mod pallet {
 		type ReserveIdentifier: Parameter + Member + MaxEncodedLen + Ord + Copy;
 	}
 
+	/// The current storage version.
+	const STORAGE_VERSION: frame_support::traits::StorageVersion =
+		frame_support::traits::StorageVersion::new(1);
+
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::call]
@@ -477,7 +485,7 @@ pub mod pallet {
 		VestingBalance,
 		/// Account liquidity restrictions prevent withdrawal
 		LiquidityRestrictions,
-		/// Balance too low to send value
+		/// Balance too low to send value.
 		InsufficientBalance,
 		/// Value too low to create account due to existential deposit
 		ExistentialDeposit,
@@ -496,6 +504,13 @@ pub mod pallet {
 	#[pallet::getter(fn total_issuance)]
 	#[pallet::whitelist_storage]
 	pub type TotalIssuance<T: Config<I>, I: 'static = ()> = StorageValue<_, T::Balance, ValueQuery>;
+
+	/// The total units of outstanding deactivated balance in the system.
+	#[pallet::storage]
+	#[pallet::getter(fn inactive_issuance)]
+	#[pallet::whitelist_storage]
+	pub type InactiveIssuance<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, T::Balance, ValueQuery>;
 
 	/// The Balances pallet example of storing the balance of an account.
 	///
@@ -548,13 +563,6 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// Storage version of the pallet.
-	///
-	/// This is set to v2.0.0 for new networks.
-	#[pallet::storage]
-	pub(super) type StorageVersion<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Releases, ValueQuery>;
-
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub balances: Vec<(T::AccountId, T::Balance)>,
@@ -572,8 +580,6 @@ pub mod pallet {
 		fn build(&self) {
 			let total = self.balances.iter().fold(Zero::zero(), |acc: T::Balance, &(_, n)| acc + n);
 			<TotalIssuance<T, I>>::put(total);
-
-			<StorageVersion<T, I>>::put(Releases::V2_0_0);
 
 			for (_, balance) in &self.balances {
 				assert!(
@@ -658,7 +664,7 @@ impl BitOr for Reasons {
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 pub struct BalanceLock<Balance> {
 	/// An identifier for this lock. Only one lock may be in existence for each identifier.
-	pub id: LockIdentifier,
+	pub id: fungibles::LockIdentifier,
 	/// The amount which the free balance may not drop below when this lock is in effect.
 	pub amount: Balance,
 	/// If true, then the lock remains in effect even for payment of transaction fees.
@@ -716,21 +722,6 @@ impl<Balance: Saturating + Copy + Ord> AccountData<Balance> {
 	/// The total balance in this account including any that is reserved and ignoring any frozen.
 	fn total(&self) -> Balance {
 		self.free.saturating_add(self.reserved)
-	}
-}
-
-// A value placed in storage that represents the current version of the Balances storage.
-// This value is used by the `on_runtime_upgrade` logic to determine whether we run
-// storage migration logic. This should match directly with the semantic versions of the Rust crate.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
-enum Releases {
-	V1_0_0,
-	V2_0_0,
-}
-
-impl Default for Releases {
-	fn default() -> Self {
-		Releases::V1_0_0
 	}
 }
 
@@ -1067,6 +1058,9 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 	fn total_issuance() -> Self::Balance {
 		TotalIssuance::<T, I>::get()
 	}
+	fn active_issuance() -> Self::Balance {
+		TotalIssuance::<T, I>::get().saturating_sub(InactiveIssuance::<T, I>::get())
+	}
 	fn minimum_balance() -> Self::Balance {
 		T::ExistentialDeposit::get()
 	}
@@ -1145,19 +1139,31 @@ impl<T: Config<I>, I: 'static> fungible::Transfer<T::AccountId> for Pallet<T, I>
 		let er = if keep_alive { KeepAlive } else { AllowDeath };
 		<Self as Currency<T::AccountId>>::transfer(source, dest, amount, er).map(|_| amount)
 	}
+
+	fn deactivate(amount: Self::Balance) {
+		InactiveIssuance::<T, I>::mutate(|b| b.saturating_accrue(amount));
+	}
+
+	fn reactivate(amount: Self::Balance) {
+		InactiveIssuance::<T, I>::mutate(|b| b.saturating_reduce(amount));
+	}
 }
 
 impl<T: Config<I>, I: 'static> fungible::Unbalanced<T::AccountId> for Pallet<T, I> {
 	fn set_balance(who: &T::AccountId, amount: Self::Balance) -> DispatchResult {
-		Self::mutate_account(who, |account| {
-			account.free = amount;
+		Self::mutate_account(who, |account| -> DispatchResult {
+			// fungibles::Unbalanced::decrease_balance didn't check account.reserved
+			// free = new_balance - reserved
+			account.free =
+				amount.checked_sub(&account.reserved).ok_or(ArithmeticError::Underflow)?;
 			Self::deposit_event(Event::BalanceSet {
 				who: who.clone(),
 				free: account.free,
 				reserved: account.reserved,
 			});
-		})?;
-		Ok(())
+
+			Ok(())
+		})?
 	}
 
 	fn set_total_issuance(amount: Self::Balance) {
@@ -1414,7 +1420,19 @@ where
 	}
 
 	fn total_issuance() -> Self::Balance {
-		<TotalIssuance<T, I>>::get()
+		TotalIssuance::<T, I>::get()
+	}
+
+	fn active_issuance() -> Self::Balance {
+		<Self as fungible::Inspect<T::AccountId>>::active_issuance()
+	}
+
+	fn deactivate(amount: Self::Balance) {
+		<Self as fungible::Transfer<T::AccountId>>::deactivate(amount);
+	}
+
+	fn reactivate(amount: Self::Balance) {
+		<Self as fungible::Transfer<T::AccountId>>::reactivate(amount);
 	}
 
 	fn minimum_balance() -> Self::Balance {
@@ -2115,7 +2133,7 @@ where
 	}
 }
 
-impl<T: Config<I>, I: 'static> LockableCurrency<T::AccountId> for Pallet<T, I>
+impl<T: Config<I>, I: 'static> fungibles::Lockable<T::AccountId> for Pallet<T, I>
 where
 	T::Balance: MaybeSerializeDeserialize + Debug,
 {
@@ -2126,7 +2144,7 @@ where
 	// Set a lock on the balance of `who`.
 	// Is a no-op if lock amount is zero or `reasons` `is_none()`.
 	fn set_lock(
-		id: LockIdentifier,
+		id: fungibles::LockIdentifier,
 		who: &T::AccountId,
 		amount: T::Balance,
 		reasons: WithdrawReasons,
@@ -2148,7 +2166,7 @@ where
 	// Extend a lock on the balance of `who`.
 	// Is a no-op if lock amount is zero or `reasons` `is_none()`.
 	fn extend_lock(
-		id: LockIdentifier,
+		id: fungibles::LockIdentifier,
 		who: &T::AccountId,
 		amount: T::Balance,
 		reasons: WithdrawReasons,
@@ -2177,7 +2195,7 @@ where
 		Self::update_locks(who, &locks[..]);
 	}
 
-	fn remove_lock(id: LockIdentifier, who: &T::AccountId) {
+	fn remove_lock(id: fungibles::LockIdentifier, who: &T::AccountId) {
 		let mut locks = Self::locks(who);
 		locks.retain(|l| l.id != id);
 		Self::update_locks(who, &locks[..]);

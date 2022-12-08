@@ -146,11 +146,6 @@ where
 	}
 }
 
-#[cfg(not(feature = "memory-tracker"))]
-type MemTracker = memory_db::NoopTracker<trie_db::DBValue>;
-#[cfg(feature = "memory-tracker")]
-type MemTracker = memory_db::MemCounter<trie_db::DBValue>;
-
 /// TrieDB error over `TrieConfiguration` trait.
 pub type TrieError<L> = trie_db::TrieError<TrieHash<L>, CError<L>>;
 /// Reexport from `hash_db`, with genericity set for `Hasher` trait.
@@ -161,14 +156,13 @@ pub type HashDB<'a, H> = dyn hash_db::HashDB<H, trie_db::DBValue> + 'a;
 /// Reexport from `hash_db`, with genericity set for `Hasher` trait.
 /// This uses a `KeyFunction` for prefixing keys internally (avoiding
 /// key conflict for non random keys).
-pub type PrefixedMemoryDB<H> =
-	memory_db::MemoryDB<H, memory_db::PrefixedKey<H>, trie_db::DBValue, MemTracker>;
+pub type PrefixedMemoryDB<H> = memory_db::MemoryDB<H, memory_db::PrefixedKey<H>, trie_db::DBValue>;
 /// Reexport from `hash_db`, with genericity set for `Hasher` trait.
 /// This uses a noops `KeyFunction` (key addressing must be hashed or using
 /// an encoding scheme that avoid key conflict).
-pub type MemoryDB<H> = memory_db::MemoryDB<H, memory_db::HashKey<H>, trie_db::DBValue, MemTracker>;
+pub type MemoryDB<H> = memory_db::MemoryDB<H, memory_db::HashKey<H>, trie_db::DBValue>;
 /// Reexport from `hash_db`, with genericity set for `Hasher` trait.
-pub type GenericMemoryDB<H, KF> = memory_db::MemoryDB<H, KF, trie_db::DBValue, MemTracker>;
+pub type GenericMemoryDB<H, KF> = memory_db::MemoryDB<H, KF, trie_db::DBValue>;
 
 /// Persistent trie database read-access interface for the a given hasher.
 pub type TrieDB<'a, 'cache, L> = trie_db::TrieDB<'a, 'cache, L>;
@@ -527,7 +521,6 @@ where
 /// Constants used into trie simplification codec.
 mod trie_constants {
 	const FIRST_PREFIX: u8 = 0b_00 << 6;
-	pub const NIBBLE_SIZE_BOUND: usize = u16::max_value() as usize;
 	pub const LEAF_PREFIX_MASK: u8 = 0b_01 << 6;
 	pub const BRANCH_WITHOUT_MASK: u8 = 0b_10 << 6;
 	pub const BRANCH_WITH_MASK: u8 = 0b_11 << 6;
@@ -549,8 +542,7 @@ mod tests {
 	type LayoutV0 = super::LayoutV0<Blake2Hasher>;
 	type LayoutV1 = super::LayoutV1<Blake2Hasher>;
 
-	type MemoryDBMeta<H> =
-		memory_db::MemoryDB<H, memory_db::HashKey<H>, trie_db::DBValue, MemTracker>;
+	type MemoryDBMeta<H> = memory_db::MemoryDB<H, memory_db::HashKey<H>, trie_db::DBValue>;
 
 	fn hashed_null_node<T: TrieConfiguration>() -> TrieHash<T> {
 		<T::Codec as NodeCodecT>::hashed_null_node()
@@ -985,5 +977,31 @@ mod tests {
 		.unwrap();
 
 		assert_eq!(first_storage_root, second_storage_root);
+	}
+
+	#[test]
+	fn big_key() {
+		let check = |keysize: usize| {
+			let mut memdb = PrefixedMemoryDB::<Blake2Hasher>::default();
+			let mut root = Default::default();
+			let mut t = TrieDBMutBuilder::<LayoutV1>::new(&mut memdb, &mut root).build();
+			t.insert(&vec![0x01u8; keysize][..], &[0x01u8, 0x23]).unwrap();
+			std::mem::drop(t);
+			let t = TrieDBBuilder::<LayoutV1>::new(&memdb, &root).build();
+			assert_eq!(t.get(&vec![0x01u8; keysize][..]).unwrap(), Some(vec![0x01u8, 0x23]));
+		};
+		check(u16::MAX as usize / 2); // old limit
+		check(u16::MAX as usize / 2 + 1); // value over old limit still works
+	}
+
+	#[test]
+	fn node_with_no_children_fail_decoding() {
+		let branch = NodeCodec::<Blake2Hasher>::branch_node_nibbled(
+			b"some_partial".iter().copied(),
+			24,
+			vec![None; 16].into_iter(),
+			Some(trie_db::node::Value::Inline(b"value"[..].into())),
+		);
+		assert!(NodeCodec::<Blake2Hasher>::decode(branch.as_slice()).is_err());
 	}
 }

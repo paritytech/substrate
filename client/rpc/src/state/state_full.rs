@@ -147,7 +147,7 @@ where
 			let mut block_changes = StorageChangeSet { block: *block_hash, changes: Vec::new() };
 			for key in keys {
 				let (has_changed, data) = {
-					let curr_data = self.client.storage(block_hash, key).map_err(client_err)?;
+					let curr_data = self.client.storage(*block_hash, key).map_err(client_err)?;
 					match last_values.get(key) {
 						Some(prev_data) => (curr_data != *prev_data, curr_data),
 						None => (true, curr_data),
@@ -200,7 +200,6 @@ where
 						&method,
 						&call_data,
 						self.client.execution_extensions().strategies().other,
-						None,
 					)
 					.map(Into::into)
 			})
@@ -213,7 +212,7 @@ where
 		prefix: StorageKey,
 	) -> std::result::Result<Vec<StorageKey>, Error> {
 		self.block_or_best(block)
-			.and_then(|block| self.client.storage_keys(&block, &prefix))
+			.and_then(|block| self.client.storage_keys(block, &prefix))
 			.map_err(client_err)
 	}
 
@@ -223,7 +222,7 @@ where
 		prefix: StorageKey,
 	) -> std::result::Result<Vec<(StorageKey, StorageData)>, Error> {
 		self.block_or_best(block)
-			.and_then(|block| self.client.storage_pairs(&block, &prefix))
+			.and_then(|block| self.client.storage_pairs(block, &prefix))
 			.map_err(client_err)
 	}
 
@@ -236,7 +235,7 @@ where
 	) -> std::result::Result<Vec<StorageKey>, Error> {
 		self.block_or_best(block)
 			.and_then(|block| {
-				self.client.storage_keys_iter(&block, prefix.as_ref(), start_key.as_ref())
+				self.client.storage_keys_iter(block, prefix.as_ref(), start_key.as_ref())
 			})
 			.map(|iter| iter.take(count as usize).collect())
 			.map_err(client_err)
@@ -248,7 +247,7 @@ where
 		key: StorageKey,
 	) -> std::result::Result<Option<StorageData>, Error> {
 		self.block_or_best(block)
-			.and_then(|block| self.client.storage(&block, &key))
+			.and_then(|block| self.client.storage(block, &key))
 			.map_err(client_err)
 	}
 
@@ -262,14 +261,14 @@ where
 			Err(e) => return Err(client_err(e)),
 		};
 
-		match self.client.storage(&block, &key) {
+		match self.client.storage(block, &key) {
 			Ok(Some(d)) => return Ok(Some(d.0.len() as u64)),
 			Err(e) => return Err(client_err(e)),
 			Ok(None) => {},
 		}
 
 		self.client
-			.storage_pairs(&block, &key)
+			.storage_pairs(block, &key)
 			.map(|kv| {
 				let item_sum = kv.iter().map(|(_, v)| v.0.len() as u64).sum::<u64>();
 				if item_sum > 0 {
@@ -287,7 +286,7 @@ where
 		key: StorageKey,
 	) -> std::result::Result<Option<Block::Hash>, Error> {
 		self.block_or_best(block)
-			.and_then(|block| self.client.storage_hash(&block, &key))
+			.and_then(|block| self.client.storage_hash(block, &key))
 			.map_err(client_err)
 	}
 
@@ -345,7 +344,7 @@ where
 		self.block_or_best(block)
 			.and_then(|block| {
 				self.client
-					.read_proof(&block, &mut keys.iter().map(|key| key.0.as_ref()))
+					.read_proof(block, &mut keys.iter().map(|key| key.0.as_ref()))
 					.map(|proof| proof.into_iter_nodes().map(|node| node.into()).collect())
 					.map(|proof| ReadProof { at: block, proof })
 			})
@@ -413,7 +412,7 @@ where
 			let changes = keys
 				.into_iter()
 				.map(|key| {
-					let v = self.client.storage(&block, &key).ok().flatten();
+					let v = self.client.storage(block, &key).ok().flatten();
 					(key, v)
 				})
 				.collect();
@@ -494,7 +493,7 @@ where
 				};
 				self.client
 					.read_child_proof(
-						&block,
+						block,
 						&child_info,
 						&mut keys.iter().map(|key| key.0.as_ref()),
 					)
@@ -517,7 +516,7 @@ where
 						ChildInfo::new_default(storage_key),
 					None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
 				};
-				self.client.child_storage_keys(&block, &child_info, &prefix)
+				self.client.child_storage_keys(block, &child_info, &prefix)
 			})
 			.map_err(client_err)
 	}
@@ -538,7 +537,7 @@ where
 					None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
 				};
 				self.client.child_storage_keys_iter(
-					&block,
+					block,
 					child_info,
 					prefix.as_ref(),
 					start_key.as_ref(),
@@ -561,7 +560,7 @@ where
 						ChildInfo::new_default(storage_key),
 					None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
 				};
-				self.client.child_storage(&block, &child_info, &key)
+				self.client.child_storage(block, &child_info, &key)
 			})
 			.map_err(client_err)
 	}
@@ -584,7 +583,7 @@ where
 
 		keys.into_iter()
 			.map(move |key| {
-				client.clone().child_storage(&block, &child_info, &key).map_err(client_err)
+				client.clone().child_storage(block, &child_info, &key).map_err(client_err)
 			})
 			.collect()
 	}
@@ -602,7 +601,7 @@ where
 						ChildInfo::new_default(storage_key),
 					None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
 				};
-				self.client.child_storage_hash(&block, &child_info, &key)
+				self.client.child_storage_hash(block, &child_info, &key)
 			})
 			.map_err(client_err)
 	}

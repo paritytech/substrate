@@ -119,6 +119,7 @@
 use codec::{Codec, Encode};
 use frame_support::{
 	dispatch::{DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo},
+	pallet_prelude::InvalidTransaction,
 	traits::{
 		EnsureInherentsAreFirst, ExecuteBlock, OffchainWorker, OnFinalize, OnIdle, OnInitialize,
 		OnRuntimeUpgrade,
@@ -497,6 +498,14 @@ where
 		let dispatch_info = xt.get_dispatch_info();
 		let r = Applyable::apply::<UnsignedValidator>(xt, &dispatch_info, encoded_len)?;
 
+		// Mandatory(inherents) are not allowed to fail.
+		//
+		// The entire block should be discarded if an inherent fails to apply. Otherwise
+		// it may open an attack vector.
+		if r.is_err() && dispatch_info.class == DispatchClass::Mandatory {
+			return Err(InvalidTransaction::BadMandatory.into())
+		}
+
 		<frame_system::Pallet<System>>::note_applied_extrinsic(&r, dispatch_info);
 
 		Ok(r.map(|_| ()).map_err(|e| e.error))
@@ -563,6 +572,10 @@ where
 			xt.get_dispatch_info()
 		};
 
+		if dispatch_info.class == DispatchClass::Mandatory {
+			return Err(InvalidTransaction::MandatoryValidation.into())
+		}
+
 		within_span! {
 			sp_tracing::Level::TRACE, "validate";
 			xt.validate::<UnsignedValidator>(source, &dispatch_info, encoded_len)
@@ -607,10 +620,7 @@ mod tests {
 
 	use frame_support::{
 		assert_err, parameter_types,
-		traits::{
-			ConstU32, ConstU64, ConstU8, Currency, LockIdentifier, LockableCurrency,
-			WithdrawReasons,
-		},
+		traits::{fungibles, ConstU32, ConstU64, ConstU8, Currency, WithdrawReasons},
 		weights::{ConstantMultiplier, IdentityFee, RuntimeDbWeight, Weight, WeightToFee},
 	};
 	use frame_system::{Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
@@ -692,9 +702,9 @@ mod tests {
 				Ok(())
 			}
 
-			#[pallet::weight(0)]
+			#[pallet::weight((0, DispatchClass::Mandatory))]
 			pub fn inherent_call(origin: OriginFor<T>) -> DispatchResult {
-				let _ = frame_system::ensure_none(origin)?;
+				frame_system::ensure_none(origin)?;
 				Ok(())
 			}
 
@@ -938,13 +948,13 @@ mod tests {
 		block_import_works_inner(
 			new_test_ext_v0(1),
 			array_bytes::hex_n_into_unchecked(
-				"0d786e24c1f9e6ce237806a22c005bbbc7dee4edd6692b6c5442843d164392de",
+				"216e61b2689d1243eb56d89c9084db48e50ebebc4871d758db131432c675d7c0",
 			),
 		);
 		block_import_works_inner(
 			new_test_ext(1),
 			array_bytes::hex_n_into_unchecked(
-				"348485a4ab856467b440167e45f99b491385e8528e09b0e51f85f814a3021c93",
+				"4738b4c0aab02d6ddfa62a2a6831ccc975a9f978f7db8d7ea8e68eba8639530a",
 			),
 		);
 	}
@@ -1172,11 +1182,11 @@ mod tests {
 
 	#[test]
 	fn can_pay_for_tx_fee_on_full_lock() {
-		let id: LockIdentifier = *b"0       ";
+		let id: fungibles::LockIdentifier = *b"0       ";
 		let execute_with_lock = |lock: WithdrawReasons| {
 			let mut t = new_test_ext(1);
 			t.execute_with(|| {
-				<pallet_balances::Pallet<Runtime> as LockableCurrency<Balance>>::set_lock(
+				<pallet_balances::Pallet<Runtime> as fungibles::Lockable<Balance>>::set_lock(
 					id, &1, 110, lock,
 				);
 				let xt = TestXt::new(
@@ -1532,5 +1542,39 @@ mod tests {
 		new_test_ext(1).execute_with(|| {
 			Executive::execute_block(Block::new(header, vec![xt1, xt2]));
 		});
+	}
+
+	#[test]
+	#[should_panic(expected = "A call was labelled as mandatory, but resulted in an Error.")]
+	fn invalid_inherents_fail_block_execution() {
+		let xt1 =
+			TestXt::new(RuntimeCall::Custom(custom::Call::inherent_call {}), sign_extra(1, 0, 0));
+
+		new_test_ext(1).execute_with(|| {
+			Executive::execute_block(Block::new(
+				Header::new(
+					1,
+					H256::default(),
+					H256::default(),
+					[69u8; 32].into(),
+					Digest::default(),
+				),
+				vec![xt1],
+			));
+		});
+	}
+
+	// Inherents are created by the runtime and don't need to be validated.
+	#[test]
+	fn inherents_fail_validate_block() {
+		let xt1 = TestXt::new(RuntimeCall::Custom(custom::Call::inherent_call {}), None);
+
+		new_test_ext(1).execute_with(|| {
+			assert_eq!(
+				Executive::validate_transaction(TransactionSource::External, xt1, H256::random())
+					.unwrap_err(),
+				InvalidTransaction::MandatoryValidation.into()
+			);
+		})
 	}
 }

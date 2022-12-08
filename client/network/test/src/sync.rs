@@ -17,14 +17,16 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use super::*;
-use futures::{executor::block_on, Future};
+use futures::Future;
 use sp_consensus::{block_validation::Validation, BlockOrigin};
 use sp_runtime::Justifications;
 use substrate_test_runtime::Header;
+use tokio::runtime::Runtime;
 
 fn test_ancestor_search_when_common_is(n: usize) {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(3);
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 3);
 
 	net.peer(0).push_blocks(n, false);
 	net.peer(1).push_blocks(n, false);
@@ -34,7 +36,7 @@ fn test_ancestor_search_when_common_is(n: usize) {
 	net.peer(1).push_blocks(100, false);
 	net.peer(2).push_blocks(100, false);
 
-	net.block_until_sync();
+	runtime.block_on(net.wait_until_sync());
 	let peer1 = &net.peers()[1];
 	assert!(net.peers()[0].blockchain_canon_equals(peer1));
 }
@@ -42,9 +44,10 @@ fn test_ancestor_search_when_common_is(n: usize) {
 #[test]
 fn sync_peers_works() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(3);
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 3);
 
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
+	runtime.block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 		for peer in 0..3 {
 			if net.peer(peer).num_peers() != 2 {
@@ -58,7 +61,8 @@ fn sync_peers_works() {
 #[test]
 fn sync_cycle_from_offline_to_syncing_to_offline() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(3);
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 3);
 	for peer in 0..3 {
 		// Offline, and not major syncing.
 		assert!(net.peer(peer).is_offline());
@@ -69,7 +73,7 @@ fn sync_cycle_from_offline_to_syncing_to_offline() {
 	net.peer(2).push_blocks(100, false);
 
 	// Block until all nodes are online and nodes 0 and 1 and major syncing.
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
+	runtime.block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 		for peer in 0..3 {
 			// Online
@@ -87,7 +91,7 @@ fn sync_cycle_from_offline_to_syncing_to_offline() {
 	}));
 
 	// Block until all nodes are done syncing.
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
+	runtime.block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 		for peer in 0..3 {
 			if net.peer(peer).is_major_syncing() {
@@ -100,7 +104,7 @@ fn sync_cycle_from_offline_to_syncing_to_offline() {
 	// Now drop nodes 1 and 2, and check that node 0 is offline.
 	net.peers.remove(2);
 	net.peers.remove(1);
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
+	runtime.block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 		if !net.peer(0).is_offline() {
 			Poll::Pending
@@ -113,7 +117,8 @@ fn sync_cycle_from_offline_to_syncing_to_offline() {
 #[test]
 fn syncing_node_not_major_syncing_when_disconnected() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(3);
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 3);
 
 	// Generate blocks.
 	net.peer(2).push_blocks(100, false);
@@ -122,7 +127,7 @@ fn syncing_node_not_major_syncing_when_disconnected() {
 	assert!(!net.peer(1).is_major_syncing());
 
 	// Check that we switch to major syncing.
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
+	runtime.block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 		if !net.peer(1).is_major_syncing() {
 			Poll::Pending
@@ -134,7 +139,7 @@ fn syncing_node_not_major_syncing_when_disconnected() {
 	// Destroy two nodes, and check that we switch to non-major syncing.
 	net.peers.remove(2);
 	net.peers.remove(0);
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
+	runtime.block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 		if net.peer(0).is_major_syncing() {
 			Poll::Pending
@@ -147,10 +152,11 @@ fn syncing_node_not_major_syncing_when_disconnected() {
 #[test]
 fn sync_from_two_peers_works() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(3);
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 3);
 	net.peer(1).push_blocks(100, false);
 	net.peer(2).push_blocks(100, false);
-	net.block_until_sync();
+	runtime.block_on(net.wait_until_sync());
 	let peer1 = &net.peers()[1];
 	assert!(net.peers()[0].blockchain_canon_equals(peer1));
 	assert!(!net.peer(0).is_major_syncing());
@@ -159,11 +165,12 @@ fn sync_from_two_peers_works() {
 #[test]
 fn sync_from_two_peers_with_ancestry_search_works() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(3);
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 3);
 	net.peer(0).push_blocks(10, true);
 	net.peer(1).push_blocks(100, false);
 	net.peer(2).push_blocks(100, false);
-	net.block_until_sync();
+	runtime.block_on(net.wait_until_sync());
 	let peer1 = &net.peers()[1];
 	assert!(net.peers()[0].blockchain_canon_equals(peer1));
 }
@@ -171,13 +178,14 @@ fn sync_from_two_peers_with_ancestry_search_works() {
 #[test]
 fn ancestry_search_works_when_backoff_is_one() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(3);
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 3);
 
 	net.peer(0).push_blocks(1, false);
 	net.peer(1).push_blocks(2, false);
 	net.peer(2).push_blocks(2, false);
 
-	net.block_until_sync();
+	runtime.block_on(net.wait_until_sync());
 	let peer1 = &net.peers()[1];
 	assert!(net.peers()[0].blockchain_canon_equals(peer1));
 }
@@ -185,13 +193,14 @@ fn ancestry_search_works_when_backoff_is_one() {
 #[test]
 fn ancestry_search_works_when_ancestor_is_genesis() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(3);
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 3);
 
 	net.peer(0).push_blocks(13, true);
 	net.peer(1).push_blocks(100, false);
 	net.peer(2).push_blocks(100, false);
 
-	net.block_until_sync();
+	runtime.block_on(net.wait_until_sync());
 	let peer1 = &net.peers()[1];
 	assert!(net.peers()[0].blockchain_canon_equals(peer1));
 }
@@ -214,9 +223,10 @@ fn ancestry_search_works_when_common_is_hundred() {
 #[test]
 fn sync_long_chain_works() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(2);
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 2);
 	net.peer(1).push_blocks(500, false);
-	net.block_until_sync();
+	runtime.block_on(net.wait_until_sync());
 	let peer1 = &net.peers()[1];
 	assert!(net.peers()[0].blockchain_canon_equals(peer1));
 }
@@ -224,10 +234,11 @@ fn sync_long_chain_works() {
 #[test]
 fn sync_no_common_longer_chain_fails() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(3);
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 3);
 	net.peer(0).push_blocks(20, true);
 	net.peer(1).push_blocks(20, false);
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
+	runtime.block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 		if net.peer(0).is_major_syncing() {
 			Poll::Pending
@@ -242,52 +253,45 @@ fn sync_no_common_longer_chain_fails() {
 #[test]
 fn sync_justifications() {
 	sp_tracing::try_init_simple();
-	let mut net = JustificationTestNet::new(3);
+	let runtime = Runtime::new().unwrap();
+	let mut net = JustificationTestNet::new(runtime.handle().clone(), 3);
 	net.peer(0).push_blocks(20, false);
-	net.block_until_sync();
+	runtime.block_on(net.wait_until_sync());
 
-	// there's currently no justification for block #10
-	assert_eq!(net.peer(0).client().justifications(&BlockId::Number(10)).unwrap(), None);
-	assert_eq!(net.peer(1).client().justifications(&BlockId::Number(10)).unwrap(), None);
-
-	// we finalize block #10, #15 and #20 for peer 0 with a justification
 	let backend = net.peer(0).client().as_backend();
 	let hashof10 = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(10)).unwrap();
 	let hashof15 = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(15)).unwrap();
 	let hashof20 = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(20)).unwrap();
-	let just = (*b"FRNK", Vec::new());
-	net.peer(0)
-		.client()
-		.finalize_block(&hashof10, Some(just.clone()), true)
-		.unwrap();
-	net.peer(0)
-		.client()
-		.finalize_block(&hashof15, Some(just.clone()), true)
-		.unwrap();
-	net.peer(0)
-		.client()
-		.finalize_block(&hashof20, Some(just.clone()), true)
-		.unwrap();
 
-	let h1 = net.peer(1).client().header(&BlockId::Number(10)).unwrap().unwrap();
-	let h2 = net.peer(1).client().header(&BlockId::Number(15)).unwrap().unwrap();
-	let h3 = net.peer(1).client().header(&BlockId::Number(20)).unwrap().unwrap();
+	// there's currently no justification for block #10
+	assert_eq!(net.peer(0).client().justifications(hashof10).unwrap(), None);
+	assert_eq!(net.peer(1).client().justifications(hashof10).unwrap(), None);
+
+	// we finalize block #10, #15 and #20 for peer 0 with a justification
+	let just = (*b"FRNK", Vec::new());
+	net.peer(0).client().finalize_block(hashof10, Some(just.clone()), true).unwrap();
+	net.peer(0).client().finalize_block(hashof15, Some(just.clone()), true).unwrap();
+	net.peer(0).client().finalize_block(hashof20, Some(just.clone()), true).unwrap();
+
+	let hashof10 = net.peer(1).client().header(&BlockId::Number(10)).unwrap().unwrap().hash();
+	let hashof15 = net.peer(1).client().header(&BlockId::Number(15)).unwrap().unwrap().hash();
+	let hashof20 = net.peer(1).client().header(&BlockId::Number(20)).unwrap().unwrap().hash();
 
 	// peer 1 should get the justifications from the network
-	net.peer(1).request_justification(&h1.hash().into(), 10);
-	net.peer(1).request_justification(&h2.hash().into(), 15);
-	net.peer(1).request_justification(&h3.hash().into(), 20);
+	net.peer(1).request_justification(&hashof10, 10);
+	net.peer(1).request_justification(&hashof15, 15);
+	net.peer(1).request_justification(&hashof20, 20);
 
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
+	runtime.block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 
-		for height in (10..21).step_by(5) {
-			if net.peer(0).client().justifications(&BlockId::Number(height)).unwrap() !=
+		for hash in [hashof10, hashof15, hashof20] {
+			if net.peer(0).client().justifications(hash).unwrap() !=
 				Some(Justifications::from((*b"FRNK", Vec::new())))
 			{
 				return Poll::Pending
 			}
-			if net.peer(1).client().justifications(&BlockId::Number(height)).unwrap() !=
+			if net.peer(1).client().justifications(hash).unwrap() !=
 				Some(Justifications::from((*b"FRNK", Vec::new())))
 			{
 				return Poll::Pending
@@ -301,7 +305,8 @@ fn sync_justifications() {
 #[test]
 fn sync_justifications_across_forks() {
 	sp_tracing::try_init_simple();
-	let mut net = JustificationTestNet::new(3);
+	let runtime = Runtime::new().unwrap();
+	let mut net = JustificationTestNet::new(runtime.handle().clone(), 3);
 	// we push 5 blocks
 	net.peer(0).push_blocks(5, false);
 	// and then two forks 5 and 6 blocks long
@@ -310,20 +315,20 @@ fn sync_justifications_across_forks() {
 
 	// peer 1 will only see the longer fork. but we'll request justifications
 	// for both and finalize the small fork instead.
-	net.block_until_sync();
+	runtime.block_on(net.wait_until_sync());
 
 	let just = (*b"FRNK", Vec::new());
-	net.peer(0).client().finalize_block(&f1_best, Some(just), true).unwrap();
+	net.peer(0).client().finalize_block(f1_best, Some(just), true).unwrap();
 
 	net.peer(1).request_justification(&f1_best, 10);
 	net.peer(1).request_justification(&f2_best, 11);
 
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
+	runtime.block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 
-		if net.peer(0).client().justifications(&BlockId::Number(10)).unwrap() ==
+		if net.peer(0).client().justifications(f1_best).unwrap() ==
 			Some(Justifications::from((*b"FRNK", Vec::new()))) &&
-			net.peer(1).client().justifications(&BlockId::Number(10)).unwrap() ==
+			net.peer(1).client().justifications(f1_best).unwrap() ==
 				Some(Justifications::from((*b"FRNK", Vec::new())))
 		{
 			Poll::Ready(())
@@ -336,7 +341,8 @@ fn sync_justifications_across_forks() {
 #[test]
 fn sync_after_fork_works() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(3);
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 3);
 	net.peer(0).push_blocks(30, false);
 	net.peer(1).push_blocks(30, false);
 	net.peer(2).push_blocks(30, false);
@@ -349,7 +355,7 @@ fn sync_after_fork_works() {
 	net.peer(2).push_blocks(1, false);
 
 	// peer 1 has the best chain
-	net.block_until_sync();
+	runtime.block_on(net.wait_until_sync());
 	let peer1 = &net.peers()[1];
 	assert!(net.peers()[0].blockchain_canon_equals(peer1));
 	(net.peers()[1].blockchain_canon_equals(peer1));
@@ -359,30 +365,32 @@ fn sync_after_fork_works() {
 #[test]
 fn syncs_all_forks() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(4);
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 4);
 	net.peer(0).push_blocks(2, false);
 	net.peer(1).push_blocks(2, false);
 
 	let b1 = net.peer(0).push_blocks(2, true);
 	let b2 = net.peer(1).push_blocks(4, false);
 
-	net.block_until_sync();
+	runtime.block_on(net.wait_until_sync());
 	// Check that all peers have all of the branches.
-	assert!(net.peer(0).has_block(&b1));
-	assert!(net.peer(0).has_block(&b2));
-	assert!(net.peer(1).has_block(&b1));
-	assert!(net.peer(1).has_block(&b2));
+	assert!(net.peer(0).has_block(b1));
+	assert!(net.peer(0).has_block(b2));
+	assert!(net.peer(1).has_block(b1));
+	assert!(net.peer(1).has_block(b2));
 }
 
 #[test]
 fn own_blocks_are_announced() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(3);
-	net.block_until_sync(); // connect'em
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 3);
+	runtime.block_on(net.wait_until_sync()); // connect'em
 	net.peer(0)
 		.generate_blocks(1, BlockOrigin::Own, |builder| builder.build().unwrap().block);
 
-	net.block_until_sync();
+	runtime.block_on(net.wait_until_sync());
 
 	assert_eq!(net.peer(0).client.info().best_number, 1);
 	assert_eq!(net.peer(1).client.info().best_number, 1);
@@ -394,7 +402,8 @@ fn own_blocks_are_announced() {
 #[test]
 fn can_sync_small_non_best_forks() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(2);
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 2);
 	net.peer(0).push_blocks(30, false);
 	net.peer(1).push_blocks(30, false);
 
@@ -412,7 +421,7 @@ fn can_sync_small_non_best_forks() {
 	assert!(net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_none());
 
 	// poll until the two nodes connect, otherwise announcing the block will not work
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
+	runtime.block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 		if net.peer(0).num_peers() == 0 {
 			Poll::Pending
@@ -432,7 +441,7 @@ fn can_sync_small_non_best_forks() {
 
 	// after announcing, peer 1 downloads the block.
 
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
+	runtime.block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 
 		assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
@@ -441,11 +450,11 @@ fn can_sync_small_non_best_forks() {
 		}
 		Poll::Ready(())
 	}));
-	net.block_until_sync();
+	runtime.block_on(net.wait_until_sync());
 
 	let another_fork = net.peer(0).push_blocks_at(BlockId::Number(35), 2, true);
 	net.peer(0).announce_block(another_fork, None);
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
+	runtime.block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 		if net.peer(1).client().header(&BlockId::Hash(another_fork)).unwrap().is_none() {
 			return Poll::Pending
@@ -457,11 +466,12 @@ fn can_sync_small_non_best_forks() {
 #[test]
 fn can_sync_forks_ahead_of_the_best_chain() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(2);
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 2);
 	net.peer(0).push_blocks(1, false);
 	net.peer(1).push_blocks(1, false);
 
-	net.block_until_connected();
+	runtime.block_on(net.wait_until_connected());
 	// Peer 0 is on 2-block fork which is announced with is_best=false
 	let fork_hash = net.peer(0).generate_blocks_with_fork_choice(
 		2,
@@ -476,7 +486,7 @@ fn can_sync_forks_ahead_of_the_best_chain() {
 	assert_eq!(net.peer(1).client().info().best_number, 2);
 
 	// after announcing, peer 1 downloads the block.
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
+	runtime.block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 
 		if net.peer(1).client().header(&BlockId::Hash(fork_hash)).unwrap().is_none() {
@@ -489,7 +499,8 @@ fn can_sync_forks_ahead_of_the_best_chain() {
 #[test]
 fn can_sync_explicit_forks() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(2);
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 2);
 	net.peer(0).push_blocks(30, false);
 	net.peer(1).push_blocks(30, false);
 
@@ -508,7 +519,7 @@ fn can_sync_explicit_forks() {
 	assert!(net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_none());
 
 	// poll until the two nodes connect, otherwise announcing the block will not work
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
+	runtime.block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 		if net.peer(0).num_peers() == 0 || net.peer(1).num_peers() == 0 {
 			Poll::Pending
@@ -529,7 +540,7 @@ fn can_sync_explicit_forks() {
 	net.peer(1).set_sync_fork_request(vec![first_peer_id], small_hash, small_number);
 
 	// peer 1 downloads the block.
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
+	runtime.block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 
 		assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
@@ -543,7 +554,8 @@ fn can_sync_explicit_forks() {
 #[test]
 fn syncs_header_only_forks() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(0);
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 0);
 	net.add_full_peer_with_config(Default::default());
 	net.add_full_peer_with_config(FullPeerConfig { blocks_pruning: Some(3), ..Default::default() });
 	net.peer(0).push_blocks(2, false);
@@ -554,15 +566,20 @@ fn syncs_header_only_forks() {
 	net.peer(1).push_blocks(4, false);
 
 	// Peer 1 will sync the small fork even though common block state is missing
-	while !net.peer(1).has_block(&small_hash) {
-		net.block_until_idle();
+	while !net.peer(1).has_block(small_hash) {
+		runtime.block_on(net.wait_until_idle());
 	}
+
+	runtime.block_on(net.wait_until_sync());
+	assert_eq!(net.peer(0).client().info().best_hash, net.peer(1).client().info().best_hash);
+	assert_ne!(small_hash, net.peer(0).client().info().best_hash);
 }
 
 #[test]
 fn does_not_sync_announced_old_best_block() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(3);
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 3);
 
 	let old_hash = net.peer(0).push_blocks(1, false);
 	let old_hash_with_parent = net.peer(0).push_blocks(1, false);
@@ -570,7 +587,7 @@ fn does_not_sync_announced_old_best_block() {
 	net.peer(1).push_blocks(20, true);
 
 	net.peer(0).announce_block(old_hash, None);
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
+	runtime.block_on(futures::future::poll_fn::<(), _>(|cx| {
 		// poll once to import announcement
 		net.poll(cx);
 		Poll::Ready(())
@@ -578,7 +595,7 @@ fn does_not_sync_announced_old_best_block() {
 	assert!(!net.peer(1).is_major_syncing());
 
 	net.peer(0).announce_block(old_hash_with_parent, None);
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
+	runtime.block_on(futures::future::poll_fn::<(), _>(|cx| {
 		// poll once to import announcement
 		net.poll(cx);
 		Poll::Ready(())
@@ -590,11 +607,12 @@ fn does_not_sync_announced_old_best_block() {
 fn full_sync_requires_block_body() {
 	// Check that we don't sync headers-only in full mode.
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(2);
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 2);
 
 	net.peer(0).push_headers(1);
 	// Wait for nodes to connect
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
+	runtime.block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 		if net.peer(0).num_peers() == 0 || net.peer(1).num_peers() == 0 {
 			Poll::Pending
@@ -602,20 +620,21 @@ fn full_sync_requires_block_body() {
 			Poll::Ready(())
 		}
 	}));
-	net.block_until_idle();
+	runtime.block_on(net.wait_until_idle());
 	assert_eq!(net.peer(1).client.info().best_number, 0);
 }
 
 #[test]
 fn imports_stale_once() {
 	sp_tracing::try_init_simple();
+	let runtime = Runtime::new().unwrap();
 
-	fn import_with_announce(net: &mut TestNet, hash: H256) {
+	fn import_with_announce(runtime: &Runtime, net: &mut TestNet, hash: H256) {
 		// Announce twice
 		net.peer(0).announce_block(hash, None);
 		net.peer(0).announce_block(hash, None);
 
-		block_on(futures::future::poll_fn::<(), _>(|cx| {
+		runtime.block_on(futures::future::poll_fn::<(), _>(|cx| {
 			net.poll(cx);
 			if net.peer(1).client().header(&BlockId::Hash(hash)).unwrap().is_some() {
 				Poll::Ready(())
@@ -626,43 +645,44 @@ fn imports_stale_once() {
 	}
 
 	// given the network with 2 full nodes
-	let mut net = TestNet::new(2);
+	let mut net = TestNet::new(runtime.handle().clone(), 2);
 
 	// let them connect to each other
-	net.block_until_sync();
+	runtime.block_on(net.wait_until_sync());
 
 	// check that NEW block is imported from announce message
 	let new_hash = net.peer(0).push_blocks(1, false);
-	import_with_announce(&mut net, new_hash);
+	import_with_announce(&runtime, &mut net, new_hash);
 	assert_eq!(net.peer(1).num_downloaded_blocks(), 1);
 
 	// check that KNOWN STALE block is imported from announce message
 	let known_stale_hash = net.peer(0).push_blocks_at(BlockId::Number(0), 1, true);
-	import_with_announce(&mut net, known_stale_hash);
+	import_with_announce(&runtime, &mut net, known_stale_hash);
 	assert_eq!(net.peer(1).num_downloaded_blocks(), 2);
 }
 
 #[test]
 fn can_sync_to_peers_with_wrong_common_block() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(2);
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 2);
 
 	net.peer(0).push_blocks(2, true);
 	net.peer(1).push_blocks(2, true);
 	let fork_hash = net.peer(0).push_blocks_at(BlockId::Number(0), 2, false);
 	net.peer(1).push_blocks_at(BlockId::Number(0), 2, false);
 	// wait for connection
-	net.block_until_connected();
+	runtime.block_on(net.wait_until_connected());
 
 	// both peers re-org to the same fork without notifying each other
 	let just = Some((*b"FRNK", Vec::new()));
-	net.peer(0).client().finalize_block(&fork_hash, just.clone(), true).unwrap();
-	net.peer(1).client().finalize_block(&fork_hash, just, true).unwrap();
+	net.peer(0).client().finalize_block(fork_hash, just.clone(), true).unwrap();
+	net.peer(1).client().finalize_block(fork_hash, just, true).unwrap();
 	let final_hash = net.peer(0).push_blocks(1, false);
 
-	net.block_until_sync();
+	runtime.block_on(net.wait_until_sync());
 
-	assert!(net.peer(1).has_block(&final_hash));
+	assert!(net.peer(1).has_block(final_hash));
 }
 
 /// Returns `is_new_best = true` for each validated announcement.
@@ -705,7 +725,8 @@ impl BlockAnnounceValidator<Block> for FailingBlockAnnounceValidator {
 #[test]
 fn sync_blocks_when_block_announce_validator_says_it_is_new_best() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(0);
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 0);
 	net.add_full_peer_with_config(Default::default());
 	net.add_full_peer_with_config(Default::default());
 	net.add_full_peer_with_config(FullPeerConfig {
@@ -713,7 +734,7 @@ fn sync_blocks_when_block_announce_validator_says_it_is_new_best() {
 		..Default::default()
 	});
 
-	net.block_until_connected();
+	runtime.block_on(net.wait_until_connected());
 
 	// Add blocks but don't set them as best
 	let block_hash = net.peer(0).generate_blocks_with_fork_choice(
@@ -723,8 +744,8 @@ fn sync_blocks_when_block_announce_validator_says_it_is_new_best() {
 		ForkChoiceStrategy::Custom(false),
 	);
 
-	while !net.peer(2).has_block(&block_hash) {
-		net.block_until_idle();
+	while !net.peer(2).has_block(block_hash) {
+		runtime.block_on(net.wait_until_idle());
 	}
 }
 
@@ -749,14 +770,15 @@ impl BlockAnnounceValidator<Block> for DeferredBlockAnnounceValidator {
 #[test]
 fn wait_until_deferred_block_announce_validation_is_ready() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(0);
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 0);
 	net.add_full_peer_with_config(Default::default());
 	net.add_full_peer_with_config(FullPeerConfig {
 		block_announce_validator: Some(Box::new(NewBestBlockAnnounceValidator)),
 		..Default::default()
 	});
 
-	net.block_until_connected();
+	runtime.block_on(net.wait_until_connected());
 
 	// Add blocks but don't set them as best
 	let block_hash = net.peer(0).generate_blocks_with_fork_choice(
@@ -766,8 +788,8 @@ fn wait_until_deferred_block_announce_validation_is_ready() {
 		ForkChoiceStrategy::Custom(false),
 	);
 
-	while !net.peer(1).has_block(&block_hash) {
-		net.block_until_idle();
+	while !net.peer(1).has_block(block_hash) {
+		runtime.block_on(net.wait_until_idle());
 	}
 }
 
@@ -776,22 +798,27 @@ fn wait_until_deferred_block_announce_validation_is_ready() {
 #[test]
 fn sync_to_tip_requires_that_sync_protocol_is_informed_about_best_block() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(1);
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 1);
 
 	// Produce some blocks
-	let block_hash = net.peer(0).push_blocks_at_without_informing_sync(BlockId::Number(0), 3, true);
+	let block_hash =
+		net.peer(0)
+			.push_blocks_at_without_informing_sync(BlockId::Number(0), 3, true, true);
 
 	// Add a node and wait until they are connected
-	net.add_full_peer_with_config(Default::default());
-	net.block_until_connected();
-	net.block_until_idle();
+	runtime.block_on(async {
+		net.add_full_peer_with_config(Default::default());
+		net.wait_until_connected().await;
+		net.wait_until_idle().await;
+	});
 
 	// The peer should not have synced the block.
-	assert!(!net.peer(1).has_block(&block_hash));
+	assert!(!net.peer(1).has_block(block_hash));
 
 	// Make sync protocol aware of the best block
 	net.peer(0).network_service().new_best_block_imported(block_hash, 3);
-	net.block_until_idle();
+	runtime.block_on(net.wait_until_idle());
 
 	// Connect another node that should now sync to the tip
 	net.add_full_peer_with_config(FullPeerConfig {
@@ -799,9 +826,9 @@ fn sync_to_tip_requires_that_sync_protocol_is_informed_about_best_block() {
 		..Default::default()
 	});
 
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
+	runtime.block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
-		if net.peer(2).has_block(&block_hash) {
+		if net.peer(2).has_block(block_hash) {
 			Poll::Ready(())
 		} else {
 			Poll::Pending
@@ -809,7 +836,7 @@ fn sync_to_tip_requires_that_sync_protocol_is_informed_about_best_block() {
 	}));
 
 	// However peer 1 should still not have the block.
-	assert!(!net.peer(1).has_block(&block_hash));
+	assert!(!net.peer(1).has_block(block_hash));
 }
 
 /// Ensures that if we as a syncing node sync to the tip while we are connected to another peer
@@ -817,24 +844,29 @@ fn sync_to_tip_requires_that_sync_protocol_is_informed_about_best_block() {
 #[test]
 fn sync_to_tip_when_we_sync_together_with_multiple_peers() {
 	sp_tracing::try_init_simple();
+	let runtime = Runtime::new().unwrap();
 
-	let mut net = TestNet::new(3);
+	let mut net = TestNet::new(runtime.handle().clone(), 3);
 
 	let block_hash =
 		net.peer(0)
-			.push_blocks_at_without_informing_sync(BlockId::Number(0), 10_000, false);
+			.push_blocks_at_without_informing_sync(BlockId::Number(0), 10_000, false, false);
 
 	net.peer(1)
-		.push_blocks_at_without_informing_sync(BlockId::Number(0), 5_000, false);
+		.push_blocks_at_without_informing_sync(BlockId::Number(0), 5_000, false, false);
 
-	net.block_until_connected();
-	net.block_until_idle();
+	runtime.block_on(async {
+		net.wait_until_connected().await;
+		net.wait_until_idle().await;
+	});
 
-	assert!(!net.peer(2).has_block(&block_hash));
+	assert!(!net.peer(2).has_block(block_hash));
 
 	net.peer(0).network_service().new_best_block_imported(block_hash, 10_000);
-	while !net.peer(2).has_block(&block_hash) && !net.peer(1).has_block(&block_hash) {
-		net.block_until_idle();
+	net.peer(0).network_service().announce_block(block_hash, None);
+
+	while !net.peer(2).has_block(block_hash) && !net.peer(1).has_block(block_hash) {
+		runtime.block_on(net.wait_until_idle());
 	}
 }
 
@@ -865,7 +897,8 @@ fn block_announce_data_is_propagated() {
 	}
 
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(1);
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 1);
 
 	net.add_full_peer_with_config(FullPeerConfig {
 		block_announce_validator: Some(Box::new(TestBlockAnnounceValidator)),
@@ -879,7 +912,7 @@ fn block_announce_data_is_propagated() {
 	});
 
 	// Wait until peer 1 is connected to both nodes.
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
+	runtime.block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 		if net.peer(1).num_peers() == 2 &&
 			net.peer(0).num_peers() == 1 &&
@@ -894,8 +927,8 @@ fn block_announce_data_is_propagated() {
 	let block_hash = net.peer(0).push_blocks_at_without_announcing(BlockId::Number(0), 1, true);
 	net.peer(0).announce_block(block_hash, Some(vec![137]));
 
-	while !net.peer(1).has_block(&block_hash) || !net.peer(2).has_block(&block_hash) {
-		net.block_until_idle();
+	while !net.peer(1).has_block(block_hash) || !net.peer(2).has_block(block_hash) {
+		runtime.block_on(net.wait_until_idle());
 	}
 }
 
@@ -925,20 +958,23 @@ fn continue_to_sync_after_some_block_announcement_verifications_failed() {
 	}
 
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(1);
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 1);
 
 	net.add_full_peer_with_config(FullPeerConfig {
 		block_announce_validator: Some(Box::new(TestBlockAnnounceValidator)),
 		..Default::default()
 	});
 
-	net.block_until_connected();
-	net.block_until_idle();
+	runtime.block_on(async {
+		net.wait_until_connected().await;
+		net.wait_until_idle().await;
+	});
 
 	let block_hash = net.peer(0).push_blocks(500, true);
 
-	net.block_until_sync();
-	assert!(net.peer(1).has_block(&block_hash));
+	runtime.block_on(net.wait_until_sync());
+	assert!(net.peer(1).has_block(block_hash));
 }
 
 /// When being spammed by the same request of a peer, we ban this peer. However, we should only ban
@@ -948,18 +984,19 @@ fn continue_to_sync_after_some_block_announcement_verifications_failed() {
 #[test]
 fn multiple_requests_are_accepted_as_long_as_they_are_not_fulfilled() {
 	sp_tracing::try_init_simple();
-	let mut net = JustificationTestNet::new(2);
+	let runtime = Runtime::new().unwrap();
+	let mut net = JustificationTestNet::new(runtime.handle().clone(), 2);
 	net.peer(0).push_blocks(10, false);
-	net.block_until_sync();
+	runtime.block_on(net.wait_until_sync());
+
+	let hashof10 = net.peer(1).client().header(&BlockId::Number(10)).unwrap().unwrap().hash();
 
 	// there's currently no justification for block #10
-	assert_eq!(net.peer(0).client().justifications(&BlockId::Number(10)).unwrap(), None);
-	assert_eq!(net.peer(1).client().justifications(&BlockId::Number(10)).unwrap(), None);
-
-	let h1 = net.peer(1).client().header(&BlockId::Number(10)).unwrap().unwrap();
+	assert_eq!(net.peer(0).client().justifications(hashof10).unwrap(), None);
+	assert_eq!(net.peer(1).client().justifications(hashof10).unwrap(), None);
 
 	// Let's assume block 10 was finalized, but we still need the justification from the network.
-	net.peer(1).request_justification(&h1.hash().into(), 10);
+	net.peer(1).request_justification(&hashof10, 10);
 
 	// Let's build some more blocks and wait always for the network to have synced them
 	for _ in 0..5 {
@@ -967,7 +1004,7 @@ fn multiple_requests_are_accepted_as_long_as_they_are_not_fulfilled() {
 		// justification request.
 		std::thread::sleep(std::time::Duration::from_secs(10));
 		net.peer(0).push_blocks(1, false);
-		net.block_until_sync();
+		runtime.block_on(net.wait_until_sync());
 		assert_eq!(1, net.peer(0).num_peers());
 	}
 
@@ -981,13 +1018,13 @@ fn multiple_requests_are_accepted_as_long_as_they_are_not_fulfilled() {
 	// Finalize the block and make the justification available.
 	net.peer(0)
 		.client()
-		.finalize_block(&hashof10, Some((*b"FRNK", Vec::new())), true)
+		.finalize_block(hashof10, Some((*b"FRNK", Vec::new())), true)
 		.unwrap();
 
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
+	runtime.block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 
-		if net.peer(1).client().justifications(&BlockId::Number(10)).unwrap() !=
+		if net.peer(1).client().justifications(hashof10).unwrap() !=
 			Some(Justifications::from((*b"FRNK", Vec::new())))
 		{
 			return Poll::Pending
@@ -1000,18 +1037,19 @@ fn multiple_requests_are_accepted_as_long_as_they_are_not_fulfilled() {
 #[test]
 fn syncs_all_forks_from_single_peer() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(2);
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 2);
 	net.peer(0).push_blocks(10, false);
 	net.peer(1).push_blocks(10, false);
 
 	// poll until the two nodes connect, otherwise announcing the block will not work
-	net.block_until_connected();
+	runtime.block_on(net.wait_until_connected());
 
 	// Peer 0 produces new blocks and announces.
 	let branch1 = net.peer(0).push_blocks_at(BlockId::Number(10), 2, true);
 
 	// Wait till peer 1 starts downloading
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
+	runtime.block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 		if net.peer(1).network().best_seen_block() != Some(12) {
 			return Poll::Pending
@@ -1022,7 +1060,7 @@ fn syncs_all_forks_from_single_peer() {
 	// Peer 0 produces and announces another fork
 	let branch2 = net.peer(0).push_blocks_at(BlockId::Number(10), 2, false);
 
-	net.block_until_sync();
+	runtime.block_on(net.wait_until_sync());
 
 	// Peer 1 should have both branches,
 	assert!(net.peer(1).client().header(&BlockId::Hash(branch1)).unwrap().is_some());
@@ -1032,7 +1070,8 @@ fn syncs_all_forks_from_single_peer() {
 #[test]
 fn syncs_after_missing_announcement() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(0);
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 0);
 	net.add_full_peer_with_config(Default::default());
 	// Set peer 1 to ignore announcement
 	net.add_full_peer_with_config(FullPeerConfig {
@@ -1042,22 +1081,23 @@ fn syncs_after_missing_announcement() {
 	net.peer(0).push_blocks(10, false);
 	net.peer(1).push_blocks(10, false);
 
-	net.block_until_connected();
+	runtime.block_on(net.wait_until_connected());
 
 	// Peer 0 produces a new block and announces. Peer 1 ignores announcement.
 	net.peer(0).push_blocks_at(BlockId::Number(10), 1, false);
 	// Peer 0 produces another block and announces.
 	let final_block = net.peer(0).push_blocks_at(BlockId::Number(11), 1, false);
 	net.peer(1).push_blocks_at(BlockId::Number(10), 1, true);
-	net.block_until_sync();
+	runtime.block_on(net.wait_until_sync());
 	assert!(net.peer(1).client().header(&BlockId::Hash(final_block)).unwrap().is_some());
 }
 
 #[test]
 fn syncs_state() {
 	sp_tracing::try_init_simple();
+	let runtime = Runtime::new().unwrap();
 	for skip_proofs in &[false, true] {
-		let mut net = TestNet::new(0);
+		let mut net = TestNet::new(runtime.handle().clone(), 0);
 		let mut genesis_storage: sp_core::storage::Storage = Default::default();
 		genesis_storage.top.insert(b"additional_key".to_vec(), vec![1]);
 		let mut child_data: std::collections::BTreeMap<Vec<u8>, Vec<u8>> = Default::default();
@@ -1098,7 +1138,7 @@ fn syncs_state() {
 		net.add_full_peer_with_config(config_two);
 		net.peer(0).push_blocks(64, false);
 		// Wait for peer 1 to sync header chain.
-		net.block_until_sync();
+		runtime.block_on(net.wait_until_sync());
 		assert!(!net.peer(1).client().has_state_at(&BlockId::Number(64)));
 
 		let just = (*b"FRNK", Vec::new());
@@ -1109,9 +1149,9 @@ fn syncs_state() {
 			.blockchain()
 			.expect_block_hash_from_id(&BlockId::Number(60))
 			.unwrap();
-		net.peer(1).client().finalize_block(&hashof60, Some(just), true).unwrap();
+		net.peer(1).client().finalize_block(hashof60, Some(just), true).unwrap();
 		// Wait for state sync.
-		block_on(futures::future::poll_fn::<(), _>(|cx| {
+		runtime.block_on(futures::future::poll_fn::<(), _>(|cx| {
 			net.poll(cx);
 			if net.peer(1).client.info().finalized_state.is_some() {
 				Poll::Ready(())
@@ -1121,7 +1161,7 @@ fn syncs_state() {
 		}));
 		assert!(!net.peer(1).client().has_state_at(&BlockId::Number(64)));
 		// Wait for the rest of the states to be imported.
-		block_on(futures::future::poll_fn::<(), _>(|cx| {
+		runtime.block_on(futures::future::poll_fn::<(), _>(|cx| {
 			net.poll(cx);
 			if net.peer(1).client().has_state_at(&BlockId::Number(64)) {
 				Poll::Ready(())
@@ -1136,7 +1176,8 @@ fn syncs_state() {
 fn syncs_indexed_blocks() {
 	use sp_runtime::traits::Hash;
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(0);
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 0);
 	let mut n: u64 = 0;
 	net.add_full_peer_with_config(FullPeerConfig { storage_chain: true, ..Default::default() });
 	net.add_full_peer_with_config(FullPeerConfig {
@@ -1164,23 +1205,23 @@ fn syncs_indexed_blocks() {
 		.peer(0)
 		.client()
 		.as_client()
-		.indexed_transaction(&indexed_key)
+		.indexed_transaction(indexed_key)
 		.unwrap()
 		.is_some());
 	assert!(net
 		.peer(1)
 		.client()
 		.as_client()
-		.indexed_transaction(&indexed_key)
+		.indexed_transaction(indexed_key)
 		.unwrap()
 		.is_none());
 
-	net.block_until_sync();
+	runtime.block_on(net.wait_until_sync());
 	assert!(net
 		.peer(1)
 		.client()
 		.as_client()
-		.indexed_transaction(&indexed_key)
+		.indexed_transaction(indexed_key)
 		.unwrap()
 		.is_some());
 }
@@ -1188,7 +1229,8 @@ fn syncs_indexed_blocks() {
 #[test]
 fn warp_sync() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(0);
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 0);
 	// Create 3 synced peers and 1 peer trying to warp sync.
 	net.add_full_peer_with_config(Default::default());
 	net.add_full_peer_with_config(Default::default());
@@ -1202,14 +1244,14 @@ fn warp_sync() {
 	net.peer(1).push_blocks(64, false);
 	net.peer(2).push_blocks(64, false);
 	// Wait for peer 1 to sync state.
-	net.block_until_sync();
+	runtime.block_on(net.wait_until_sync());
 	assert!(!net.peer(3).client().has_state_at(&BlockId::Number(1)));
 	assert!(net.peer(3).client().has_state_at(&BlockId::Number(64)));
 
 	// Wait for peer 1 download block history
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
+	runtime.block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
-		if net.peer(3).has_body(&gap_end) && net.peer(3).has_body(&target) {
+		if net.peer(3).has_body(gap_end) && net.peer(3).has_body(target) {
 			Poll::Ready(())
 		} else {
 			Poll::Pending
@@ -1224,7 +1266,8 @@ fn syncs_huge_blocks() {
 	use substrate_test_runtime_client::BlockBuilderExt;
 
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(2);
+	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(runtime.handle().clone(), 2);
 
 	// Increase heap space for bigger blocks.
 	net.peer(0).generate_blocks(1, BlockOrigin::Own, |mut builder| {
@@ -1241,7 +1284,7 @@ fn syncs_huge_blocks() {
 		builder.build().unwrap().block
 	});
 
-	net.block_until_sync();
+	runtime.block_on(net.wait_until_sync());
 	assert_eq!(net.peer(0).client.info().best_number, 33);
 	assert_eq!(net.peer(1).client.info().best_number, 33);
 }
