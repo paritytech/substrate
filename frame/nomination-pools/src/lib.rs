@@ -682,10 +682,10 @@ impl<T: Config> Commission<T> {
 				return Err(Error::<T>::MaxCommissionRestricted.into())
 			}
 			*old = new_max;
-			let _ = self.current.as_mut().map(|(x, _)| *x = (*x).min(new_max));
 		} else {
 			self.max = Some(new_max)
 		};
+		let _ = self.current.as_mut().map(|(x, _)| *x = (*x).min(new_max));
 		Ok(())
 	}
 
