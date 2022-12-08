@@ -24,8 +24,8 @@ use frame_support::{
 	dispatch::Codec,
 	pallet_prelude::*,
 	traits::{
-		Currency, CurrencyToVote, Defensive, DefensiveResult, DefensiveSaturating, EnsureOrigin,
-		EstimateNextNewSession, Get, LockIdentifier, LockableCurrency, OnUnbalanced, TryCollect,
+		fungibles, fungibles::Lockable, Currency, CurrencyToVote, Defensive, DefensiveResult,
+		DefensiveSaturating, EnsureOrigin, EstimateNextNewSession, Get, OnUnbalanced, TryCollect,
 		UnixTime,
 	},
 	weights::Weight,
@@ -50,7 +50,7 @@ use crate::{
 	ValidatorPrefs,
 };
 
-const STAKING_ID: LockIdentifier = *b"staking ";
+const STAKING_ID: fungibles::LockIdentifier = *b"staking ";
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -78,7 +78,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The staking balance.
-		type Currency: LockableCurrency<
+		type Currency: fungibles::Lockable<
 			Self::AccountId,
 			Moment = Self::BlockNumber,
 			Balance = Self::CurrencyBalance,
