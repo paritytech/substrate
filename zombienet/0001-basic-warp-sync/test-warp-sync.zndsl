@@ -1,0 +1,35 @@
+Description: Warp sync
+Network: ./test-warp-sync.toml
+Creds: config
+
+alice: is up
+bob: is up
+charlie: is up
+dave: is up
+
+alice: reports node_roles is 1
+bob: reports node_roles is 1
+charlie: reports node_roles is 1
+dave: reports node_roles is 1
+
+alice: reports peers count is at least 3 within 60 seconds
+bob: reports peers count is at least 3 within 60 seconds
+charlie: reports peers count is at least 3 within 60 seconds
+dave: reports peers count is at least 3 within 60 seconds
+
+
+# db snapshot has 12133 blocks
+dave: reports block height is at least 1 within 60 seconds
+dave: reports block height is at least 12132 within 60 seconds
+dave: reports block height is at least 12133 within 60 seconds
+
+alice: reports block height is at least 12133 within 60 seconds
+bob: reports block height is at least 12133 within 60 seconds
+charlie: reports block height is at least 12133 within 60 seconds
+
+dave: log line matches "Warp sync is complete" within 60 seconds
+# workaround for: https://github.com/paritytech/zombienet/issues/580
+dave: count of log lines containing  "Block history download is complete" is 1 within 10 seconds
+
+dave: count of log lines containing "error" is 0 within 10 seconds
+dave: count of log lines containing "verification failed" is 0 within 10 seconds

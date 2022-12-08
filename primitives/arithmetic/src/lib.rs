@@ -42,8 +42,8 @@ pub mod traits;
 
 pub use fixed_point::{FixedI128, FixedI64, FixedPointNumber, FixedPointOperand, FixedU128};
 pub use per_things::{
-	InnerOf, PerThing, PerU16, Perbill, Percent, Permill, Perquintill, Rounding, SignedRounding,
-	UpperOf,
+	InnerOf, MultiplyArg, PerThing, PerU16, Perbill, Percent, Permill, Perquintill, RationalArg,
+	ReciprocalArg, Rounding, SignedRounding, UpperOf,
 };
 pub use rational::{Rational128, RationalInfinite};
 

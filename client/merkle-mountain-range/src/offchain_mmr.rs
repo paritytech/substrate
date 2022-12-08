@@ -21,33 +21,57 @@
 
 #![warn(missing_docs)]
 
-use std::{marker::PhantomData, sync::Arc};
-
-use log::{debug, error, warn};
-
-use sc_client_api::FinalityNotification;
+use crate::{aux_schema, LOG_TARGET};
+use log::{debug, error, info, warn};
+use sc_client_api::{AuxStore, Backend, FinalityNotification};
 use sc_offchain::OffchainDb;
 use sp_blockchain::{CachedHeaderMetadata, ForkBackend, HeaderBackend, HeaderMetadata};
-use sp_core::offchain::{DbExternalities, OffchainStorage, StorageKind};
+use sp_core::offchain::{DbExternalities, StorageKind};
 use sp_mmr_primitives::{utils, utils::NodesUtils, NodeIndex};
-use sp_runtime::traits::{Block, Header};
+use sp_runtime::{
+	traits::{Block, NumberFor, One},
+	Saturating,
+};
+use std::{collections::VecDeque, sync::Arc};
 
-use crate::LOG_TARGET;
-
-/// `OffchainMMR` exposes MMR offchain canonicalization and pruning logic.
-pub struct OffchainMMR<C, B: Block, S> {
-	pub client: Arc<C>,
-	pub offchain_db: OffchainDb<S>,
-	pub indexing_prefix: Vec<u8>,
-	pub first_mmr_block: <B::Header as Header>::Number,
-
-	pub _phantom: PhantomData<B>,
+pub(crate) fn load_or_init_best_canonicalized<B, BE>(
+	backend: &BE,
+	first_mmr_block: NumberFor<B>,
+) -> sp_blockchain::Result<NumberFor<B>>
+where
+	BE: AuxStore,
+	B: Block,
+{
+	// Initialize gadget best_canon from AUX DB or from pallet genesis.
+	if let Some(best) = aux_schema::load_persistent::<B, BE>(backend)? {
+		info!(target: LOG_TARGET, "Loading MMR best canonicalized state from db: {:?}.", best);
+		Ok(best)
+	} else {
+		let best = first_mmr_block.saturating_sub(One::one());
+		info!(
+			target: LOG_TARGET,
+			"Loading MMR from pallet genesis on what appears to be the first startup: {:?}.", best
+		);
+		aux_schema::write_current_version(backend)?;
+		aux_schema::write_gadget_state::<B, BE>(backend, &best)?;
+		Ok(best)
+	}
 }
 
-impl<C, S, B> OffchainMMR<C, B, S>
+/// `OffchainMMR` exposes MMR offchain canonicalization and pruning logic.
+pub struct OffchainMmr<B: Block, BE: Backend<B>, C> {
+	pub backend: Arc<BE>,
+	pub client: Arc<C>,
+	pub offchain_db: OffchainDb<BE::OffchainStorage>,
+	pub indexing_prefix: Vec<u8>,
+	pub first_mmr_block: NumberFor<B>,
+	pub best_canonicalized: NumberFor<B>,
+}
+
+impl<B, BE, C> OffchainMmr<B, BE, C>
 where
 	C: HeaderBackend<B> + HeaderMetadata<B>,
-	S: OffchainStorage,
+	BE: Backend<B>,
 	B: Block,
 {
 	fn node_temp_offchain_key(&self, pos: NodeIndex, parent_hash: B::Hash) -> Vec<u8> {
@@ -77,7 +101,7 @@ where
 
 	fn right_branch_ending_in_block_or_log(
 		&self,
-		block_num: <B::Header as Header>::Number,
+		block_num: NumberFor<B>,
 		action: &str,
 	) -> Option<Vec<NodeIndex>> {
 		match utils::block_num_to_leaf_index::<B::Header>(block_num, self.first_mmr_block) {
@@ -128,9 +152,9 @@ where
 		}
 	}
 
-	fn canonicalize_branch(&mut self, block_hash: &B::Hash) {
+	fn canonicalize_branch(&mut self, block_hash: B::Hash) {
 		let action = "canonicalize";
-		let header = match self.header_metadata_or_log(*block_hash, action) {
+		let header = match self.header_metadata_or_log(block_hash, action) {
 			Some(header) => header,
 			_ => return,
 		};
@@ -148,6 +172,7 @@ where
 			None => {
 				// If we can't convert the block number to a leaf index, the chain state is probably
 				// corrupted. We only log the error, hoping that the chain state will be fixed.
+				self.best_canonicalized = header.number;
 				return
 			},
 		};
@@ -174,16 +199,58 @@ where
 				);
 			}
 		}
+		if self.best_canonicalized != header.number.saturating_sub(One::one()) {
+			warn!(
+				target: LOG_TARGET,
+				"Detected canonicalization skip: best {:?} current {:?}.",
+				self.best_canonicalized,
+				header.number,
+			);
+		}
+		self.best_canonicalized = header.number;
+	}
+
+	/// In case of missed finality notifications (node restarts for example),
+	/// make sure to also canon everything leading up to `notification.tree_route`.
+	pub fn canonicalize_catch_up(&mut self, notification: &FinalityNotification<B>) {
+		let first = notification.tree_route.first().unwrap_or(&notification.hash);
+		if let Some(mut header) = self.header_metadata_or_log(*first, "canonicalize") {
+			let mut to_canon = VecDeque::<<B as Block>::Hash>::new();
+			// Walk up the chain adding all blocks newer than `self.best_canonicalized`.
+			loop {
+				header = match self.header_metadata_or_log(header.parent, "canonicalize") {
+					Some(header) => header,
+					_ => break,
+				};
+				if header.number <= self.best_canonicalized {
+					break
+				}
+				to_canon.push_front(header.hash);
+			}
+			// Canonicalize all blocks leading up to current finality notification.
+			for hash in to_canon.drain(..) {
+				self.canonicalize_branch(hash);
+			}
+			if let Err(e) =
+				aux_schema::write_gadget_state::<B, BE>(&*self.backend, &self.best_canonicalized)
+			{
+				debug!(target: LOG_TARGET, "error saving state: {:?}", e);
+			}
+		}
 	}
 
 	/// Move leafs and nodes added by finalized blocks in offchain db from _fork-aware key_ to
 	/// _canonical key_.
 	/// Prune leafs and nodes added by stale blocks in offchain db from _fork-aware key_.
-	pub fn canonicalize_and_prune(&mut self, notification: &FinalityNotification<B>) {
+	pub fn canonicalize_and_prune(&mut self, notification: FinalityNotification<B>) {
 		// Move offchain MMR nodes for finalized blocks to canonical keys.
-		for block_hash in notification.tree_route.iter().chain(std::iter::once(&notification.hash))
+		for hash in notification.tree_route.iter().chain(std::iter::once(&notification.hash)) {
+			self.canonicalize_branch(*hash);
+		}
+		if let Err(e) =
+			aux_schema::write_gadget_state::<B, BE>(&*self.backend, &self.best_canonicalized)
 		{
-			self.canonicalize_branch(block_hash);
+			debug!(target: LOG_TARGET, "error saving state: {:?}", e);
 		}
 
 		// Remove offchain MMR nodes for stale forks.
@@ -201,9 +268,10 @@ where
 
 #[cfg(test)]
 mod tests {
-	use crate::test_utils::run_test_with_mmr_gadget;
+	use crate::test_utils::{run_test_with_mmr_gadget, run_test_with_mmr_gadget_pre_post};
+	use parking_lot::Mutex;
 	use sp_runtime::generic::BlockId;
-	use std::time::Duration;
+	use std::{sync::Arc, time::Duration};
 
 	#[test]
 	fn canonicalize_and_prune_works_correctly() {
@@ -242,5 +310,52 @@ mod tests {
 			// expected stale heads: b1, b2, b3, a4
 			client.assert_pruned(&[&b1, &b2, &b3, &a4]);
 		})
+	}
+
+	#[test]
+	fn canonicalize_catchup_works_correctly() {
+		let mmr_blocks = Arc::new(Mutex::new(vec![]));
+		let mmr_blocks_ref = mmr_blocks.clone();
+		run_test_with_mmr_gadget_pre_post(
+			|client| async move {
+				// G -> A1 -> A2
+				//      |     |
+				//      |     | -> finalized without gadget (missed notification)
+				//      |
+				//      | -> first mmr block
+
+				let a1 = client.import_block(&BlockId::Number(0), b"a1", Some(0)).await;
+				let a2 = client.import_block(&BlockId::Hash(a1.hash()), b"a2", Some(1)).await;
+
+				client.finalize_block(a2.hash(), Some(2));
+
+				{
+					let mut mmr_blocks = mmr_blocks_ref.lock();
+					mmr_blocks.push(a1);
+					mmr_blocks.push(a2);
+				}
+			},
+			|client| async move {
+				// G -> A1 -> A2 -> A3 -> A4
+				//      |     |     |     |
+				//      |     |     |     | -> finalized after starting gadget
+				//      |     |     |
+				//      |     |     | -> gadget start
+				//      |     |
+				//      |     | -> finalized before starting gadget (missed notification)
+				//      |
+				//      | -> first mmr block
+				let blocks = mmr_blocks.lock();
+				let a1 = blocks[0].clone();
+				let a2 = blocks[1].clone();
+				let a3 = client.import_block(&BlockId::Hash(a2.hash()), b"a3", Some(2)).await;
+				let a4 = client.import_block(&BlockId::Hash(a3.hash()), b"a4", Some(3)).await;
+
+				client.finalize_block(a4.hash(), Some(4));
+				tokio::time::sleep(Duration::from_millis(200)).await;
+				// expected finalized heads: a1, a2 _and_ a3, a4.
+				client.assert_canonicalized(&[&a1, &a2, &a3, &a4]);
+			},
+		)
 	}
 }

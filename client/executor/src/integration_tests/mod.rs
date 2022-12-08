@@ -18,7 +18,6 @@
 
 #[cfg(target_os = "linux")]
 mod linux;
-mod sandbox;
 
 use codec::{Decode, Encode};
 use sc_executor_common::{error::Error, runtime_blob::RuntimeBlob, wasm_runtime::WasmModule};
@@ -93,111 +92,6 @@ macro_rules! test_wasm_execution {
 			#[test]
 			fn [<$method_name _interpreted>]() {
 				$method_name(WasmExecutionMethod::Interpreted);
-			}
-		}
-	};
-}
-
-/// A macro to run a given test for each available WASM execution method *and* for each
-/// sandbox execution method.
-#[macro_export]
-macro_rules! test_wasm_execution_sandbox {
-	($method_name:ident) => {
-		paste::item! {
-			#[test]
-			fn [<$method_name _interpreted_host_executor>]() {
-				$method_name(WasmExecutionMethod::Interpreted, "_host");
-			}
-
-			#[test]
-			fn [<$method_name _interpreted_embedded_executor>]() {
-				$method_name(WasmExecutionMethod::Interpreted, "_embedded");
-			}
-
-			#[test]
-			fn [<$method_name _compiled_pooling_cow_host_executor>]() {
-				$method_name(WasmExecutionMethod::Compiled {
-					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::PoolingCopyOnWrite
-				}, "_host");
-			}
-
-			#[test]
-			fn [<$method_name _compiled_pooling_cow_embedded_executor>]() {
-				$method_name(WasmExecutionMethod::Compiled {
-					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::PoolingCopyOnWrite
-				}, "_embedded");
-			}
-
-			#[test]
-			fn [<$method_name _compiled_pooling_vanilla_host_executor>]() {
-				$method_name(WasmExecutionMethod::Compiled {
-					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::Pooling
-				}, "_host");
-			}
-
-			#[test]
-			fn [<$method_name _compiled_pooling_vanilla_embedded_executor>]() {
-				$method_name(WasmExecutionMethod::Compiled {
-					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::Pooling
-				}, "_embedded");
-			}
-
-			#[test]
-			fn [<$method_name _compiled_recreate_instance_cow_host_executor>]() {
-				$method_name(WasmExecutionMethod::Compiled {
-					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::RecreateInstanceCopyOnWrite
-				}, "_host");
-			}
-
-			#[test]
-			fn [<$method_name _compiled_recreate_instance_cow_embedded_executor>]() {
-				$method_name(WasmExecutionMethod::Compiled {
-					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::RecreateInstanceCopyOnWrite
-				}, "_embedded");
-			}
-
-			#[test]
-			fn [<$method_name _compiled_recreate_instance_vanilla_host_executor>]() {
-				$method_name(WasmExecutionMethod::Compiled {
-					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::RecreateInstance
-				}, "_host");
-			}
-
-			#[test]
-			fn [<$method_name _compiled_recreate_instance_vanilla_embedded_executor>]() {
-				$method_name(WasmExecutionMethod::Compiled {
-					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::RecreateInstance
-				}, "_embedded");
-			}
-
-			#[test]
-			fn [<$method_name _compiled_legacy_instance_reuse_host_executor>]() {
-				$method_name(WasmExecutionMethod::Compiled {
-					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::LegacyInstanceReuse
-				}, "_host");
-			}
-
-			#[test]
-			fn [<$method_name _compiled_legacy_instance_reuse_embedded_executor>]() {
-				$method_name(WasmExecutionMethod::Compiled {
-					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::LegacyInstanceReuse
-				}, "_embedded");
-			}
-		}
-	};
-
-	(interpreted_only $method_name:ident) => {
-		paste::item! {
-			#[test]
-			fn [<$method_name _interpreted_host_executor>]() {
-				$method_name(WasmExecutionMethod::Interpreted, "_host");
-			}
-		}
-
-		paste::item! {
-			#[test]
-			fn [<$method_name _interpreted_embedded_executor>]() {
-				$method_name(WasmExecutionMethod::Interpreted, "_embedded");
 			}
 		}
 	};
