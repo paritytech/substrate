@@ -8487,9 +8487,9 @@ dependencies = [
 
 [[package]]
 name = "secp256k1"
-version = "0.24.0"
+version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7649a0b3ffb32636e60c7ce0d70511eda9c52c658cd0634e194d5a19943aeff"
+checksum = "d9512ffd81e3a3503ed401f79c33168b9148c75038956039166cd750eaa037c3"
 dependencies = [
  "secp256k1-sys",
 ]
