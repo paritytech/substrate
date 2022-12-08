@@ -89,7 +89,7 @@ pub trait ServiceQueues {
 #[derive(Default, Copy, Clone, Eq, PartialEq, RuntimeDebug)]
 pub struct Footprint {
 	pub count: u32,
-	pub size: u32,
+	pub size: u64,
 }
 
 /// Can enqueue messages for multiple origins.

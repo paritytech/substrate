@@ -251,13 +251,13 @@ impl ProcessMessage for CountingMessageProcessor {
 
 parameter_types! {
 	/// Storage for `RecordingQueueChangeHandler`, do not use directly.
-	pub static QueueChanges: Vec<(MessageOrigin, u32, u32)> = vec![];
+	pub static QueueChanges: Vec<(MessageOrigin, u32, u64)> = vec![];
 }
 
 /// Records all queue changes into [`QueueChanges`].
 pub struct RecordingQueueChangeHandler;
 impl OnQueueChanged<MessageOrigin> for RecordingQueueChangeHandler {
-	fn on_queue_changed(id: MessageOrigin, items_count: u32, items_size: u32) {
+	fn on_queue_changed(id: MessageOrigin, items_count: u32, items_size: u64) {
 		QueueChanges::mutate(|cs| cs.push((id, items_count, items_size)));
 	}
 }

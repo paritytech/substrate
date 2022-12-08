@@ -413,7 +413,7 @@ pub struct BookState<MessageOrigin> {
 	/// The number of unprocessed messages stored at present.
 	message_count: u32,
 	/// The total size of all unprocessed messages stored at present.
-	size: u32,
+	size: u64,
 }
 
 impl<MessageOrigin> Default for BookState<MessageOrigin> {
@@ -425,11 +425,11 @@ impl<MessageOrigin> Default for BookState<MessageOrigin> {
 /// Notifies the implementor of changes to a queue. Mainly when messages got added or removed.
 pub trait OnQueueChanged<Id> {
 	/// The queue `id` changed and now has these properties.
-	fn on_queue_changed(id: Id, items_count: u32, items_size: u32);
+	fn on_queue_changed(id: Id, items_count: u32, items_size: u64);
 }
 
 impl<Id> OnQueueChanged<Id> for () {
-	fn on_queue_changed(_: Id, _: u32, _: u32) {}
+	fn on_queue_changed(_: Id, _: u32, _: u64) {}
 }
 
 #[frame_support::pallet]
@@ -737,7 +737,7 @@ impl<T: Config> Pallet<T> {
 		book_state
 			.size
 			// This should be payload size, but here the payload *is* the message.
-			.saturating_accrue(message.len() as u32);
+			.saturating_accrue(message.len() as u64);
 
 		if book_state.end > book_state.begin {
 			debug_assert!(book_state.ready_neighbours.is_some(), "Must be in ready ring if ready");
@@ -791,7 +791,7 @@ impl<T: Config> Pallet<T> {
 		let mut page = Pages::<T>::get(&origin, page_index).ok_or(Error::<T>::NoPage)?;
 		let (pos, is_processed, payload) =
 			page.peek_index(index.into() as usize).ok_or(Error::<T>::NoMessage)?;
-		let payload_len = payload.len() as u32;
+		let payload_len = payload.len() as u64;
 		ensure!(
 			page_index < book_state.begin ||
 				(page_index == book_state.begin && pos < page.first.into() as usize),
@@ -871,7 +871,7 @@ impl<T: Config> Pallet<T> {
 		debug_assert!(book_state.count > 0, "reaping a page implies there are pages");
 		book_state.count.saturating_dec();
 		book_state.message_count.saturating_reduce(page.remaining.into());
-		book_state.size.saturating_reduce(page.remaining_size.into());
+		book_state.size.saturating_reduce(page.remaining_size.into() as u64);
 		BookStateFor::<T>::insert(origin, &book_state);
 		T::QueueChangeHandler::on_queue_changed(
 			origin.clone(),
@@ -1029,7 +1029,7 @@ impl<T: Config> Pallet<T> {
 
 		if is_processed {
 			book_state.message_count.saturating_dec();
-			book_state.size.saturating_reduce(payload.len() as u32);
+			book_state.size.saturating_reduce(payload.len() as u64);
 		}
 		page.skip_first(is_processed);
 		ItemExecutionStatus::Executed(is_processed)

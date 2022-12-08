@@ -229,7 +229,7 @@ fn reap_page_permanent_overweight_works() {
 			assert_ok!(MessageQueue::do_reap_page(&Here, i));
 			assert_eq!(
 				QueueChanges::take(),
-				vec![(Here, b.message_count - (i + 1), b.size - (i + 1) * 8)]
+				vec![(Here, b.message_count - (i + 1), b.size - (i as u64 + 1) * 8)]
 			);
 		}
 		// Cannot reap any more pages.
@@ -901,7 +901,7 @@ fn footprint_works() {
 
 		let info = MessageQueue::footprint(origin);
 		assert_eq!(info.count as usize, msgs);
-		assert_eq!(info.size, page.remaining_size);
+		assert_eq!(info.size, page.remaining_size as u64);
 
 		// Sweeping a queue never calls OnQueueChanged.
 		assert!(QueueChanges::take().is_empty());
@@ -1046,27 +1046,31 @@ fn ready_ring_knit_and_unknit_works() {
 #[test]
 fn enqueue_message_works() {
 	use MessageOrigin::*;
-	let max_msg_per_page = <Test as Config>::HeapSize::get() /
-		(ItemHeader::<<Test as Config>::Size>::max_encoded_len() as u32 + 1);
+	let max_msg_per_page = <Test as Config>::HeapSize::get() as u64 /
+		(ItemHeader::<<Test as Config>::Size>::max_encoded_len() as u64 + 1);
 
 	new_test_ext::<Test>().execute_with(|| {
 		// Enqueue messages which should fill three pages.
 		let n = max_msg_per_page * 3;
 		for i in 1..=n {
 			MessageQueue::enqueue_message(msg("a"), Here);
-			assert_eq!(QueueChanges::take(), vec![(Here, i, i)], "OnQueueChanged not called");
+			assert_eq!(
+				QueueChanges::take(),
+				vec![(Here, i as u32, i)],
+				"OnQueueChanged not called"
+			);
 		}
 		assert_eq!(Pages::<Test>::iter().count(), 3);
 
 		// Enqueue one more onto page 4.
 		MessageQueue::enqueue_message(msg("abc"), Here);
-		assert_eq!(QueueChanges::take(), vec![(Here, n + 1, n + 3)]);
+		assert_eq!(QueueChanges::take(), vec![(Here, (n + 1) as u32, n + 3)]);
 		assert_eq!(Pages::<Test>::iter().count(), 4);
 
 		// Check the state.
 		assert_eq!(BookStateFor::<Test>::iter().count(), 1);
 		let book = BookStateFor::<Test>::get(Here);
-		assert_eq!(book.message_count, n + 1);
+		assert_eq!(book.message_count as u64, n + 1);
 		assert_eq!(book.size, n + 3);
 		assert_eq!((book.begin, book.end), (0, 4));
 		assert_eq!(book.count as usize, Pages::<Test>::iter().count());
@@ -1076,8 +1080,8 @@ fn enqueue_message_works() {
 #[test]
 fn enqueue_messages_works() {
 	use MessageOrigin::*;
-	let max_msg_per_page = <Test as Config>::HeapSize::get() /
-		(ItemHeader::<<Test as Config>::Size>::max_encoded_len() as u32 + 1);
+	let max_msg_per_page = <Test as Config>::HeapSize::get() as u64 /
+		(ItemHeader::<<Test as Config>::Size>::max_encoded_len() as u64 + 1);
 
 	new_test_ext::<Test>().execute_with(|| {
 		// Enqueue messages which should fill three pages.
@@ -1087,18 +1091,18 @@ fn enqueue_messages_works() {
 		// Now queue all messages at once.
 		MessageQueue::enqueue_messages(msgs.into_iter(), Here);
 		// The changed handler should only be called once.
-		assert_eq!(QueueChanges::take(), vec![(Here, n, n)], "OnQueueChanged not called");
+		assert_eq!(QueueChanges::take(), vec![(Here, n as u32, n)], "OnQueueChanged not called");
 		assert_eq!(Pages::<Test>::iter().count(), 3);
 
 		// Enqueue one more onto page 4.
 		MessageQueue::enqueue_message(msg("abc"), Here);
-		assert_eq!(QueueChanges::take(), vec![(Here, n + 1, n + 3)]);
+		assert_eq!(QueueChanges::take(), vec![(Here, (n + 1) as u32, n + 3)]);
 		assert_eq!(Pages::<Test>::iter().count(), 4);
 
 		// Check the state.
 		assert_eq!(BookStateFor::<Test>::iter().count(), 1);
 		let book = BookStateFor::<Test>::get(Here);
-		assert_eq!(book.message_count, n + 1);
+		assert_eq!(book.message_count as u64, n + 1);
 		assert_eq!(book.size, n + 3);
 		assert_eq!((book.begin, book.end), (0, 4));
 		assert_eq!(book.count as usize, Pages::<Test>::iter().count());
