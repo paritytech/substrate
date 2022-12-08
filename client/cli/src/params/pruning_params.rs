@@ -27,12 +27,26 @@ pub struct PruningParams {
 	///
 	/// This mode specifies when the block's state (ie, storage)
 	/// should be pruned (ie, removed) from the database.
+	///
+	/// Possible values:
+	///  'archive'            Keep the state of all blocks.
+	///  'archive-canonical'  Keep only the state of finalized blocks.
+	///   number              Keep the state of the last number of finalized blocks.
+	///
+	/// The default option is to keep the last 256 blocks (number == 256).
 	#[arg(alias = "pruning", long, value_name = "PRUNING_MODE", default_value = "256")]
 	pub state_pruning: DatabasePruningMode,
 	/// Specify the blocks pruning mode.
 	///
 	/// This mode specifies when the block's body (including justifications)
 	/// should be pruned (ie, removed) from the database.
+	///
+	/// Possible values:
+	///  'archive'            Keep all blocks.
+	///  'archive-canonical'  Keep only finalized blocks.
+	///   number              Keep the last number of finalized blocks.
+	///
+	/// The default option is 'archive-canonical'.
 	#[arg(
 		alias = "keep-blocks",
 		long,
