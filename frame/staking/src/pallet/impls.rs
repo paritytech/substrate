@@ -704,6 +704,8 @@ impl<T: Config> Pallet<T> {
 	///
 	/// `maybe_max_len` can imposes a cap on the number of voters returned;
 	///
+	/// Sets `LastMinimumActiveBond` to the minimum active bond in the returned set of nominators.
+	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
 	///
 	/// ### Slashing
@@ -792,6 +794,12 @@ impl<T: Config> Pallet<T> {
 			validators_taken,
 			nominators_taken
 		);
+
+		// `all_voters` is sorted by vote weight, so we use the last element to set the current
+		// minimum active bond. Note that depending on the `T::VoterList` list, the sorting may be
+		// inconsistent as the sorting may be lazy.
+		let min_active_bond: T::CurrencyBalance = all_voters.last().map_or(0, |v| v.1).into();
+		LastMinimumActiveBond::<T>::put(min_active_bond);
 
 		all_voters
 	}

@@ -4399,6 +4399,24 @@ mod election_data_provider {
 	}
 
 	#[test]
+	fn set_last_minimum_nominator_bond_is_correct() {
+		ExtBuilder::default()
+			.nominate(false)
+			.add_staker(61, 60, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
+			.add_staker(71, 70, 10, StakerStatus::<AccountId>::Nominator(vec![21]))
+			.add_staker(81, 80, 50, StakerStatus::<AccountId>::Nominator(vec![21]))
+			.build_and_execute(|| {
+				assert_ok!(<Staking as ElectionDataProvider>::electing_voters(None));
+				assert_eq!(LastMinimumActiveBond::<Test>::get(), 10);
+
+				// remove staker with lower bond by limiting the number of voters and check
+				// `LastMinimumActiveBond` again after electing voters.
+				assert_ok!(<Staking as ElectionDataProvider>::electing_voters(Some(5)));
+				assert_eq!(LastMinimumActiveBond::<Test>::get(), 50);
+			});
+	}
+
+	#[test]
 	fn voters_include_self_vote() {
 		ExtBuilder::default().nominate(false).build_and_execute(|| {
 			assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| Staking::electing_voters(
