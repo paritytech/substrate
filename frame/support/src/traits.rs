@@ -31,7 +31,6 @@ pub use tokens::{
 	nonfungible, nonfungibles, BalanceStatus, ExistenceRequirement, Locker, WithdrawReasons,
 };
 
-// pub use fungibles::{LockIdentifier, Lockable as LockableCurrency};
 
 mod members;
 #[allow(deprecated)]
