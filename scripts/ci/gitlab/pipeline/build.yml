@@ -58,10 +58,6 @@ build-linux-substrate:
   variables:
     # this variable gets overriden by "rusty-cachier environment inject", use the value as default
     CARGO_TARGET_DIR:              "$CI_PROJECT_DIR/target"
-    # see https://github.com/paritytech/ci_cd/issues/682#issuecomment-1340953589
-    # tldr: we need to checkout to the branch HEAD because of our dynamic versioning approach while building the substrate binary
-    GIT_STRATEGY: clone
-    GIT_DEPTH: 1
 
     SKIP_JOB: "false"
   needs:
@@ -71,6 +67,9 @@ build-linux-substrate:
     - mkdir -p ./artifacts/substrate/
     - cat .git/HEAD
     - !reference [.rusty-cachier, before_script]
+    # tldr: we need to checkout to the branch HEAD explicitly because of our dynamic versioning approach while building the substrate binary
+    # see https://github.com/paritytech/ci_cd/issues/682#issuecomment-1340953589
+    - git fetch origin +$CI_COMMIT_REF_NAME:$CI_COMMIT_REF_NAME;
   script:
     - rusty-cachier snapshot create
     - ls -al  /cargo_target_dir/release/build/node-cli*/
