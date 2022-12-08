@@ -1136,7 +1136,7 @@ parameter_types! {
 	/// Allocate at most 20% of each block for message processing.
 	///
 	/// Is set to 20% since the scheduler can already consume a maximum of 80%.
-	pub const MessageQueueServiceWeight: Option<Weight> = Perbill::from_percent(20) * RuntimeBlockWeights::get().max_block;
+	pub MessageQueueServiceWeight: Option<Weight> = Some(Perbill::from_percent(20) * RuntimeBlockWeights::get().max_block);
 }
 
 impl pallet_message_queue::Config for Runtime {

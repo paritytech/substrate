@@ -36,7 +36,7 @@ benchmarks! {
 			<T as Config>::Size: From<u32>,
 	}
 
-	// Worst case path of `ready_ring_knit`. The benchmark is unused and for verification only.
+	// Worst case path of `ready_ring_knit`.
 	ready_ring_knit {
 		let mid: MessageOriginOf::<T> = 1.into();
 		build_ring::<T>(&[0.into(), mid.clone(), 2.into()]);
@@ -51,7 +51,7 @@ benchmarks! {
 		assert_ring::<T>(&[0.into(), 2.into(), mid]);
 	}
 
-	// Worst case path of `ready_ring_unknit`. The benchmark is unused and for verification only.
+	// Worst case path of `ready_ring_unknit`.
 	ready_ring_unknit {
 		build_ring::<T>(&[0.into(), 1.into(), 2.into()]);
 		assert_ring::<T>(&[0.into(), 1.into(), 2.into()]);
@@ -95,7 +95,6 @@ benchmarks! {
 	}: {
 		MessageQueue::<T>::service_page(&origin, &mut book_state, &mut meter, limit)
 	}
-
 
 	// Processing a single message from a page.
 	service_page_item {
