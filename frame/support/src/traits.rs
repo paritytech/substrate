@@ -31,7 +31,6 @@ pub use tokens::{
 	nonfungible, nonfungibles, BalanceStatus, ExistenceRequirement, Locker, WithdrawReasons,
 };
 
-
 mod members;
 #[allow(deprecated)]
 pub use members::{AllowAll, DenyAll, Filter};

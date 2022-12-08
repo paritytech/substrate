@@ -24,7 +24,7 @@ use frame_support::{
 	dispatch::Codec,
 	pallet_prelude::*,
 	traits::{
-		fungibles, Currency, CurrencyToVote, Defensive, DefensiveResult,
+		fungibles, fungibles::Lockable, Currency, CurrencyToVote, Defensive, DefensiveResult,
 		DefensiveSaturating, EnsureOrigin, EstimateNextNewSession, Get, OnUnbalanced, TryCollect,
 		UnixTime,
 	},
