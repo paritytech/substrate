@@ -21,6 +21,7 @@
 //! based chain, or a local state snapshot file.
 
 use codec::{Decode, Encode};
+use futures::{channel::mpsc, stream::StreamExt};
 use log::*;
 use serde::de::DeserializeOwned;
 use sp_core::{
@@ -40,7 +41,6 @@ use std::{
 	sync::Arc,
 	thread,
 };
-
 use substrate_rpc_client::{rpc_params, ws_client, ChainApi, ClientT, StateApi, WsClient};
 
 type KeyValue = (StorageKey, StorageData);
@@ -386,7 +386,8 @@ where
 			Terminated,
 			Batch(Vec<(Vec<u8>, Vec<u8>)>),
 		}
-		let (tx, rx) = std::sync::mpsc::channel::<Message>();
+
+		let (tx, mut rx) = mpsc::unbounded::<Message>();
 
 		for thread_keys in keys_chunked {
 			let thread_client = client.clone();
@@ -445,10 +446,10 @@ where
 						.collect::<Vec<_>>();
 
 					// send this batch to the main thread to start inserting.
-					thread_sender.send(Message::Batch(batch_kv)).unwrap();
+					thread_sender.unbounded_send(Message::Batch(batch_kv)).unwrap();
 				}
 
-				thread_sender.send(Message::Terminated).unwrap();
+				thread_sender.unbounded_send(Message::Terminated).unwrap();
 				thread_key_values
 			});
 
@@ -459,15 +460,16 @@ where
 		// `pending_ext`.
 		let mut terminated = 0usize;
 		loop {
-			match rx.recv().unwrap() {
-				Message::Batch(kv) =>
+			match rx.next().await.unwrap() {
+				Message::Batch(kv) => {
 					for (k, v) in kv {
 						// skip writing the child root data.
 						if is_default_child_storage_key(k.as_ref()) {
 							continue
 						}
 						pending_ext.insert(k, v);
-					},
+					}
+				},
 				Message::Terminated => {
 					terminated += 1;
 					if terminated == handles.len() {
@@ -616,7 +618,7 @@ where
 			Terminated,
 			Batch((ChildInfo, Vec<(Vec<u8>, Vec<u8>)>)),
 		}
-		let (tx, rx) = std::sync::mpsc::channel::<Message>();
+		let (tx, mut rx) = mpsc::unbounded::<Message>();
 
 		for thread_child_roots in child_roots
 			.chunks(child_roots_per_thread)
@@ -652,7 +654,7 @@ where
 					};
 
 					thread_sender
-						.send(Message::Batch((
+						.unbounded_send(Message::Batch((
 							ChildInfo::new_default(un_prefixed),
 							child_kv_inner
 								.iter()
@@ -664,7 +666,7 @@ where
 					thread_child_kv.push((ChildInfo::new_default(un_prefixed), child_kv_inner));
 				}
 
-				thread_sender.send(Message::Terminated).unwrap();
+				thread_sender.unbounded_send(Message::Terminated).unwrap();
 				Ok(thread_child_kv)
 			});
 			handles.push(handle);
@@ -674,7 +676,7 @@ where
 		// `pending_ext`.
 		let mut terminated = 0usize;
 		loop {
-			match rx.recv().unwrap() {
+			match rx.next().await.unwrap() {
 				Message::Batch((info, kvs)) =>
 					for (k, v) in kvs {
 						pending_ext.insert_child(info.clone(), k, v);
@@ -1053,7 +1055,6 @@ mod tests {
 #[cfg(all(test, feature = "remote-test"))]
 mod remote_tests {
 	use super::test_prelude::*;
-	use sp_core::storage::well_known_keys;
 	use std::os::unix::fs::MetadataExt;
 
 	#[tokio::test(flavor = "multi_thread")]
