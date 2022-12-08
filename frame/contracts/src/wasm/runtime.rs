@@ -29,7 +29,6 @@ use codec::{Decode, DecodeLimit, Encode, MaxEncodedLen};
 use frame_support::{dispatch::DispatchError, ensure, traits::Get, weights::Weight, RuntimeDebug};
 use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 use pallet_contracts_proc_macro::define_env;
-use sp_core::crypto::UncheckedFrom;
 use sp_io::hashing::{blake2_128, blake2_256, keccak_256, sha2_256};
 use sp_runtime::traits::{Bounded, Zero};
 use sp_std::{fmt, prelude::*};
@@ -270,11 +269,7 @@ pub enum RuntimeCosts {
 }
 
 impl RuntimeCosts {
-	fn token<T>(&self, s: &HostFnWeights<T>) -> RuntimeToken
-	where
-		T: Config,
-		T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-	{
+	fn token<T: Config>(&self, s: &HostFnWeights<T>) -> RuntimeToken {
 		use self::RuntimeCosts::*;
 		let weight = match *self {
 			MeteringBlock(amount) => s.gas.saturating_add(amount),
@@ -375,11 +370,7 @@ struct RuntimeToken {
 	weight: Weight,
 }
 
-impl<T> Token<T> for RuntimeToken
-where
-	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
+impl<T: Config> Token<T> for RuntimeToken {
 	fn weight(&self) -> Weight {
 		self.weight
 	}
@@ -463,12 +454,7 @@ pub struct Runtime<'a, E: Ext + 'a> {
 	chain_extension: Option<Box<<E::T as Config>::ChainExtension>>,
 }
 
-impl<'a, E> Runtime<'a, E>
-where
-	E: Ext + 'a,
-	<E::T as frame_system::Config>::AccountId:
-		UncheckedFrom<<E::T as frame_system::Config>::Hash> + AsRef<[u8]>,
-{
+impl<'a, E: Ext + 'a> Runtime<'a, E> {
 	pub fn new(ext: &'a mut E, input_data: Vec<u8>) -> Self {
 		Runtime {
 			ext,

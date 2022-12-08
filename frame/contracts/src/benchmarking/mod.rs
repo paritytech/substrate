@@ -63,8 +63,6 @@ struct Contract<T: Config> {
 
 impl<T: Config> Contract<T>
 where
-	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 	<BalanceOf<T> as HasCompact>::Type: Clone + Eq + PartialEq + Debug + TypeInfo + Encode,
 {
 	/// Create new contract and use a default account id as instantiator.
@@ -90,7 +88,7 @@ where
 		let value = Pallet::<T>::min_balance();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let salt = vec![0xff];
-		let addr = Contracts::<T>::contract_address(&caller, &module.hash, &salt);
+		let addr = Contracts::<T>::contract_address(&caller, &module.hash, &data, &salt);
 
 		Contracts::<T>::store_code_raw(module.code, caller.clone())?;
 		Contracts::<T>::instantiate(
@@ -203,8 +201,6 @@ macro_rules! load_benchmark {
 
 benchmarks! {
 	where_clause { where
-		T::AccountId: UncheckedFrom<T::Hash>,
-		T::AccountId: AsRef<[u8]>,
 		<BalanceOf<T> as codec::HasCompact>::Type: Clone + Eq + PartialEq + sp_std::fmt::Debug + scale_info::TypeInfo + codec::Encode,
 	}
 
@@ -285,7 +281,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c, Location::Call);
 		let origin = RawOrigin::Signed(caller.clone());
-		let addr = Contracts::<T>::contract_address(&caller, &hash, &salt);
+		let addr = Contracts::<T>::contract_address(&caller, &hash, &[], &salt);
 	}: _(origin, value, Weight::MAX, None, code, vec![], salt)
 	verify {
 		// the contract itself does not trigger any reserves
@@ -312,7 +308,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy();
 		let origin = RawOrigin::Signed(caller.clone());
-		let addr = Contracts::<T>::contract_address(&caller, &hash, &salt);
+		let addr = Contracts::<T>::contract_address(&caller, &hash, &[], &salt);
 		Contracts::<T>::store_code_raw(code, caller.clone())?;
 	}: _(origin, value, Weight::MAX, None, hash, vec![], salt)
 	verify {
@@ -1779,7 +1775,7 @@ benchmarks! {
 		let addresses = hashes
 			.iter()
 			.map(|hash| Contracts::<T>::contract_address(
-				&instance.account_id, hash, &[],
+				&instance.account_id, hash, &[], &[],
 			))
 			.collect::<Vec<_>>();
 

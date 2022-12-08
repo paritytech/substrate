@@ -105,7 +105,7 @@ use crate::{
 	wasm::{OwnerInfo, PrefabWasmModule, TryInstantiate},
 	weights::WeightInfo,
 };
-use codec::{Codec, Encode, HasCompact};
+use codec::{Codec, Decode, Encode, HasCompact};
 use frame_support::{
 	dispatch::{Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo},
 	ensure,
@@ -123,8 +123,7 @@ use pallet_contracts_primitives::{
 	StorageDeposit,
 };
 use scale_info::TypeInfo;
-use sp_core::crypto::UncheckedFrom;
-use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup};
+use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup, TrailingZeroInput};
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 pub use crate::{
@@ -154,7 +153,7 @@ const SENTINEL: u32 = u32::MAX;
 /// Provides the contract address generation method.
 ///
 /// See [`DefaultAddressGenerator`] for the default implementation.
-pub trait AddressGenerator<T: frame_system::Config> {
+pub trait AddressGenerator<T: Config> {
 	/// Generate the address of a contract based on the given instantiate parameters.
 	///
 	/// # Note for implementors
@@ -165,6 +164,7 @@ pub trait AddressGenerator<T: frame_system::Config> {
 	fn generate_address(
 		deploying_address: &T::AccountId,
 		code_hash: &CodeHash<T>,
+		constructor_args: &[u8],
 		salt: &[u8],
 	) -> T::AccountId;
 }
@@ -176,27 +176,21 @@ pub trait AddressGenerator<T: frame_system::Config> {
 /// address of a contract. This is akin to the formula of eth's CREATE2 opcode. There
 /// is no CREATE equivalent because CREATE2 is strictly more powerful.
 ///
-/// Formula: `hash(deploying_address ++ code_hash ++ salt)`
+/// Formula: `hash("contract_addr_v1" ++ deploying_address ++ code_hash ++ constructor_args ++
+/// salt)`
 pub struct DefaultAddressGenerator;
 
-impl<T> AddressGenerator<T> for DefaultAddressGenerator
-where
-	T: frame_system::Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
+impl<T: Config> AddressGenerator<T> for DefaultAddressGenerator {
 	fn generate_address(
 		deploying_address: &T::AccountId,
 		code_hash: &CodeHash<T>,
+		constructor_args: &[u8],
 		salt: &[u8],
 	) -> T::AccountId {
-		let buf: Vec<_> = deploying_address
-			.as_ref()
-			.iter()
-			.chain(code_hash.as_ref())
-			.chain(salt)
-			.cloned()
-			.collect();
-		UncheckedFrom::unchecked_from(T::Hashing::hash(&buf))
+		let entropy = (b"contract_addr_v1", deploying_address, code_hash, constructor_args, salt)
+			.using_encoded(T::Hashing::hash);
+		Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
+			.expect("infinite length input; no invalid inputs for type; qed")
 	}
 }
 
@@ -347,11 +341,7 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
-	where
-		T::AccountId: UncheckedFrom<T::Hash>,
-		T::AccountId: AsRef<[u8]>,
-	{
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_idle(_block: T::BlockNumber, remaining_weight: Weight) -> Weight {
 			Storage::<T>::process_deletion_queue_batch(remaining_weight)
 				.saturating_add(T::WeightInfo::on_process_deletion_queue_batch())
@@ -380,8 +370,6 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T>
 	where
-		T::AccountId: UncheckedFrom<T::Hash>,
-		T::AccountId: AsRef<[u8]>,
 		<BalanceOf<T> as HasCompact>::Type: Clone + Eq + PartialEq + Debug + TypeInfo + Encode,
 	{
 		/// Deprecated version if [`Self::call`] for use in an in-storage `Call`.
@@ -926,10 +914,7 @@ struct InternalOutput<T: Config, O> {
 	result: Result<O, ExecError>,
 }
 
-impl<T: Config> Pallet<T>
-where
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
+impl<T: Config> Pallet<T> {
 	/// Perform a call to a specified contract.
 	///
 	/// This function is similar to [`Self::call`], but doesn't perform any address lookups
@@ -1064,9 +1049,10 @@ where
 	pub fn contract_address(
 		deploying_address: &T::AccountId,
 		code_hash: &CodeHash<T>,
+		constructor_args: &[u8],
 		salt: &[u8],
 	) -> T::AccountId {
-		T::AddressGenerator::generate_address(deploying_address, code_hash, salt)
+		T::AddressGenerator::generate_address(deploying_address, code_hash, constructor_args, salt)
 	}
 
 	/// Returns the code hash of the contract specified by `account` ID.

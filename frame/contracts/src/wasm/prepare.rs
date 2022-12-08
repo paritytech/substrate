@@ -26,7 +26,6 @@ use crate::{
 	AccountIdOf, CodeVec, Config, Error, Schedule,
 };
 use codec::{Encode, MaxEncodedLen};
-use sp_core::crypto::UncheckedFrom;
 use sp_runtime::{traits::Hash, DispatchError};
 use sp_std::prelude::*;
 use wasm_instrument::{
@@ -396,7 +395,6 @@ fn instrument<E, T>(
 where
 	E: Environment<()>,
 	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
 	// Do not enable any features here. Any additional feature needs to be carefully
 	// checked for potential security issues. For example, enabling multi value could lead
@@ -500,7 +498,6 @@ pub fn prepare<E, T>(
 where
 	E: Environment<()>,
 	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
 	let (code, (initial, maximum)) =
 		instrument::<E, T>(original_code.as_ref(), schedule, determinism, try_instantiate)?;
@@ -547,7 +544,6 @@ pub fn reinstrument<E, T>(
 where
 	E: Environment<()>,
 	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
 	instrument::<E, T>(original_code, schedule, determinism, TryInstantiate::Skip)
 		.map_err(|(err, msg)| {
