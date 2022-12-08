@@ -116,8 +116,12 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 		let set_changes = set_changes.iter_from(begin_number).ok_or(Error::MissingData)?;
 
 		for (_, last_block) in set_changes {
-			let header = blockchain.header(BlockId::Number(*last_block))?.expect(
-				"header number comes from previously applied set changes; must exist in db; qed.",
+			let hash = blockchain.hash(*last_block)?.expect(
+				"header number comes from previously applied set changes; corresponding hash must exist in db; qed.",
+			);
+
+			let header = blockchain.header(hash)?.expect(
+				"header for given hash obtained successfully from db exists in db; qed.",
 			);
 
 			// the last block in a set is the one that triggers a change to the next set,
