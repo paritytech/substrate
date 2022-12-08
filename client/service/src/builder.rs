@@ -311,6 +311,7 @@ where
 		executor,
 		spawn_handle,
 		config.clone(),
+		execution_extensions,
 	)?;
 	crate::client::Client::new(
 		backend,
@@ -318,7 +319,6 @@ where
 		genesis_storage,
 		fork_blocks,
 		bad_blocks,
-		execution_extensions,
 		prometheus_registry,
 		telemetry,
 		config,
@@ -436,9 +436,7 @@ where
 	TBl::Hash: Unpin,
 	TBl::Header: Unpin,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
-	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash>
-		+ parity_util_mem::MallocSizeOf
-		+ 'static,
+	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 {
 	let SpawnTasksParams {
 		mut config,
@@ -540,12 +538,7 @@ where
 	spawn_handle.spawn(
 		"informant",
 		None,
-		sc_informant::build(
-			client.clone(),
-			network,
-			transaction_pool.clone(),
-			config.informant_output_format,
-		),
+		sc_informant::build(client.clone(), network, config.informant_output_format),
 	);
 
 	task_manager.keep_alive((config.base_path, rpc));
@@ -876,9 +869,9 @@ where
 		role: config.role.clone(),
 		executor: {
 			let spawn_handle = Clone::clone(&spawn_handle);
-			Some(Box::new(move |fut| {
+			Box::new(move |fut| {
 				spawn_handle.spawn("libp2p-node", Some("networking"), fut);
-			}))
+			})
 		},
 		network_config: config.network.clone(),
 		chain: client.clone(),

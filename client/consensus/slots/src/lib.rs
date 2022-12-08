@@ -42,7 +42,11 @@ use sp_consensus::{Proposal, Proposer, SelectChain, SyncOracle};
 use sp_consensus_slots::{Slot, SlotDuration};
 use sp_inherents::CreateInherentDataProviders;
 use sp_runtime::traits::{Block as BlockT, HashFor, Header as HeaderT};
-use std::{fmt::Debug, ops::Deref, time::Duration};
+use std::{
+	fmt::Debug,
+	ops::Deref,
+	time::{Duration, Instant},
+};
 
 const LOG_TARGET: &str = "slots";
 
@@ -197,6 +201,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let slot = slot_info.slot;
 		let telemetry = self.telemetry();
 		let log_target = self.logging_target();
+
+		let inherent_data = Self::create_inherent_data(&slot_info, &log_target).await?;
+
 		let proposing_remaining_duration = self.proposing_remaining_duration(&slot_info);
 		let logs = self.pre_digest_data(slot, claim);
 
@@ -205,7 +212,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		// the result to be returned.
 		let proposing = proposer
 			.propose(
-				slot_info.inherent_data,
+				inherent_data,
 				sp_runtime::generic::Digest { logs },
 				proposing_remaining_duration.mul_f32(0.98),
 				None,
@@ -242,6 +249,41 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		};
 
 		Some(proposal)
+	}
+
+	/// Calls `create_inherent_data` and handles errors.
+	async fn create_inherent_data(
+		slot_info: &SlotInfo<B>,
+		logging_target: &str,
+	) -> Option<sp_inherents::InherentData> {
+		let remaining_duration = slot_info.ends_at.saturating_duration_since(Instant::now());
+		let delay = Delay::new(remaining_duration);
+		let cid = slot_info.create_inherent_data.create_inherent_data();
+		let inherent_data = match futures::future::select(delay, cid).await {
+			Either::Right((Ok(data), _)) => data,
+			Either::Right((Err(err), _)) => {
+				warn!(
+					target: logging_target,
+					"Unable to create inherent data for block {:?}: {}",
+					slot_info.chain_head.hash(),
+					err,
+				);
+
+				return None
+			},
+			Either::Left(_) => {
+				warn!(
+					target: logging_target,
+					"Creating inherent data took more time than we had left for slot {} for block {:?}.",
+					slot_info.slot,
+					slot_info.chain_head.hash(),
+				);
+
+				return None
+			},
+		};
+
+		Some(inherent_data)
 	}
 
 	/// Implements [`SlotWorker::on_slot`].
@@ -476,7 +518,7 @@ pub async fn start_slot_worker<B, C, W, SO, CIDP, Proof>(
 	C: SelectChain<B>,
 	W: SlotWorker<B, Proof>,
 	SO: SyncOracle + Send,
-	CIDP: CreateInherentDataProviders<B, ()> + Send,
+	CIDP: CreateInherentDataProviders<B, ()> + Send + 'static,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 {
 	let mut slots = Slots::new(slot_duration.as_duration(), create_inherent_data_providers, client);
@@ -788,7 +830,7 @@ mod test {
 		super::slots::SlotInfo {
 			slot: slot.into(),
 			duration: SLOT_DURATION,
-			inherent_data: Default::default(),
+			create_inherent_data: Box::new(()),
 			ends_at: Instant::now() + SLOT_DURATION,
 			chain_head: Header::new(
 				1,

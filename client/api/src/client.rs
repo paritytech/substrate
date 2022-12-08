@@ -197,17 +197,6 @@ impl fmt::Display for MemorySize {
 	}
 }
 
-/// Memory statistics for state db.
-#[derive(Default, Clone, Debug)]
-pub struct StateDbMemoryInfo {
-	/// Memory usage of the non-canonical overlay
-	pub non_canonical: MemorySize,
-	/// Memory usage of the pruning window.
-	pub pruning: Option<MemorySize>,
-	/// Memory usage of the pinned blocks.
-	pub pinned: MemorySize,
-}
-
 /// Memory statistics for client instance.
 #[derive(Default, Clone, Debug)]
 pub struct MemoryInfo {
@@ -215,8 +204,6 @@ pub struct MemoryInfo {
 	pub state_cache: MemorySize,
 	/// Size of backend database cache.
 	pub database_cache: MemorySize,
-	/// Size of the state db.
-	pub state_db: StateDbMemoryInfo,
 }
 
 /// I/O statistics for client instance.
@@ -264,13 +251,9 @@ impl fmt::Display for UsageInfo {
 		write!(
 			f,
 			"caches: ({} state, {} db overlay), \
-			 state db: ({} non-canonical, {} pruning, {} pinned), \
 			 i/o: ({} tx, {} write, {} read, {} avg tx, {}/{} key cache reads/total, {} trie nodes writes)",
 			self.memory.state_cache,
 			self.memory.database_cache,
-			self.memory.state_db.non_canonical,
-			self.memory.state_db.pruning.unwrap_or_default(),
-			self.memory.state_db.pinned,
 			self.io.transactions,
 			self.io.bytes_written,
 			self.io.bytes_read,

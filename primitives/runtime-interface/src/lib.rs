@@ -15,6 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Custom inner attributes are unstable, so we need to faky disable the attribute.
+// rustfmt still honors the attribute to not format the rustdocs below.
+#![cfg_attr(feature = "never", rustfmt::skip)]
 //! Substrate runtime interface
 //!
 //! This crate provides types, traits and macros around runtime interfaces. A runtime interface is
@@ -94,14 +97,13 @@
 //! | `&str` | `u64` | <code>v.len() 32bit << 32 &#124; v.as_ptr() 32bit</code> |
 //! | `&[u8]` | `u64` | <code>v.len() 32bit << 32 &#124; v.as_ptr() 32bit</code> |
 //! | `Vec<u8>` | `u64` | <code>v.len() 32bit << 32 &#124; v.as_ptr() 32bit</code> |
-//! | `Vec<T> where T: Encode` | `u64` | `let e = v.encode();`<br><br><code>e.len() 32bit << 32
-//! &#124; e.as_ptr() 32bit</code> | | `&[T] where T: Encode` | `u64` | `let e =
-//! v.encode();`<br><br><code>e.len() 32bit << 32 &#124; e.as_ptr() 32bit</code> | | `[u8; N]` |
-//! `u32` | `v.as_ptr()` | | `*const T` | `u32` | `Identity` |
-//! | `Option<T>` | `u64` | `let e = v.encode();`<br><br><code>e.len() 32bit << 32 &#124; e.as_ptr()
-//! 32bit</code> | | [`T where T: PassBy<PassBy=Inner>`](./pass_by#Inner) | Depends on inner |
-//! Depends on inner | | [`T where T: PassBy<PassBy=Codec>`](./pass_by#Codec)|`u64`|<code>v.len()
-//! 32bit << 32 &#124;v.as_ptr() 32bit</code>|
+//! | `Vec<T> where T: Encode` | `u64` | `let e = v.encode();`<br><br><code>e.len() 32bit << 32 &#124; e.as_ptr() 32bit</code> |
+//! | `&[T] where T: Encode` | `u64` | `let e = v.encode();`<br><br><code>e.len() 32bit << 32 &#124; e.as_ptr() 32bit</code> |
+//! | `[u8; N]` | `u32` | `v.as_ptr()` |
+//! | `*const T` | `u32` | `Identity` |
+//! | `Option<T>` | `u64` | `let e = v.encode();`<br><br><code>e.len() 32bit << 32 &#124; e.as_ptr() 32bit</code> |
+//! | [`T where T: PassBy<PassBy=Inner>`](./pass_by#Inner) | Depends on inner | Depends on inner |
+//! | [`T where T: PassBy<PassBy=Codec>`](./pass_by#Codec)|`u64`|<code>v.len() 32bit << 32 &#124;v.as_ptr() 32bit</code>|
 //!
 //! `Identity` means that the value is converted directly into the corresponding FFI type.
 

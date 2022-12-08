@@ -33,7 +33,9 @@ pub mod metadata;
 pub use balanced::{Balanced, Unbalanced};
 mod imbalance;
 pub use imbalance::{CreditOf, DebtOf, HandleImbalanceDrop, Imbalance};
+mod lockable;
 pub mod roles;
+pub use lockable::{LockIdentifier, Lockable};
 
 /// Trait for providing balance-inspection access to a set of named fungible assets.
 pub trait Inspect<AccountId> {
@@ -45,6 +47,12 @@ pub trait Inspect<AccountId> {
 
 	/// The total amount of issuance in the system.
 	fn total_issuance(asset: Self::AssetId) -> Self::Balance;
+
+	/// The total amount of issuance in the system excluding those which are controlled by the
+	/// system.
+	fn active_issuance(asset: Self::AssetId) -> Self::Balance {
+		Self::total_issuance(asset)
+	}
 
 	/// The minimum balance any single account may have.
 	fn minimum_balance(asset: Self::AssetId) -> Self::Balance;
@@ -75,6 +83,9 @@ pub trait Inspect<AccountId> {
 		who: &AccountId,
 		amount: Self::Balance,
 	) -> WithdrawConsequence<Self::Balance>;
+
+	/// Returns `true` if an `asset` exists.
+	fn asset_exists(asset: Self::AssetId) -> bool;
 }
 
 /// Trait for reading metadata from a fungible asset.
@@ -177,6 +188,12 @@ pub trait Transfer<AccountId>: Inspect<AccountId> {
 		amount: Self::Balance,
 		keep_alive: bool,
 	) -> Result<Self::Balance, DispatchError>;
+
+	/// Reduce the active issuance by some amount.
+	fn deactivate(_: Self::AssetId, _: Self::Balance) {}
+
+	/// Increase the active issuance by some amount, up to the outstanding amount reduced.
+	fn reactivate(_: Self::AssetId, _: Self::Balance) {}
 }
 
 /// Trait for inspecting a set of named fungible assets which can be placed on hold.

@@ -29,6 +29,7 @@ use sp_runtime::traits::Saturating;
 
 mod balanced;
 mod imbalance;
+
 pub use balanced::{Balanced, Unbalanced};
 pub use imbalance::{CreditOf, DebtOf, HandleImbalanceDrop, Imbalance};
 
@@ -39,6 +40,12 @@ pub trait Inspect<AccountId> {
 
 	/// The total amount of issuance in the system.
 	fn total_issuance() -> Self::Balance;
+
+	/// The total amount of issuance in the system excluding those which are controlled by the
+	/// system.
+	fn active_issuance() -> Self::Balance {
+		Self::total_issuance()
+	}
 
 	/// The minimum balance any single account may have.
 	fn minimum_balance() -> Self::Balance;
@@ -77,7 +84,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 	/// is returned and nothing is changed. If successful, the amount of tokens reduced is returned.
 	///
 	/// The default implementation just uses `withdraw` along with `reducible_balance` to ensure
-	/// that is doesn't fail.
+	/// that it doesn't fail.
 	fn slash(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
 		Self::burn_from(who, Self::reducible_balance(who, false).min(amount))
 	}
@@ -120,6 +127,12 @@ pub trait Transfer<AccountId>: Inspect<AccountId> {
 		amount: Self::Balance,
 		keep_alive: bool,
 	) -> Result<Self::Balance, DispatchError>;
+
+	/// Reduce the active issuance by some amount.
+	fn deactivate(_: Self::Balance) {}
+
+	/// Increase the active issuance by some amount, up to the outstanding amount reduced.
+	fn reactivate(_: Self::Balance) {}
 }
 
 /// Trait for inspecting a fungible asset which can be reserved.
@@ -213,6 +226,9 @@ impl<
 	fn total_issuance() -> Self::Balance {
 		<F as fungibles::Inspect<AccountId>>::total_issuance(A::get())
 	}
+	fn active_issuance() -> Self::Balance {
+		<F as fungibles::Inspect<AccountId>>::active_issuance(A::get())
+	}
 	fn minimum_balance() -> Self::Balance {
 		<F as fungibles::Inspect<AccountId>>::minimum_balance(A::get())
 	}
@@ -257,6 +273,12 @@ impl<
 		keep_alive: bool,
 	) -> Result<Self::Balance, DispatchError> {
 		<F as fungibles::Transfer<AccountId>>::transfer(A::get(), source, dest, amount, keep_alive)
+	}
+	fn deactivate(amount: Self::Balance) {
+		<F as fungibles::Transfer<AccountId>>::deactivate(A::get(), amount)
+	}
+	fn reactivate(amount: Self::Balance) {
+		<F as fungibles::Transfer<AccountId>>::reactivate(A::get(), amount)
 	}
 }
 

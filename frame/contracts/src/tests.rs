@@ -37,7 +37,7 @@ use frame_support::{
 	parameter_types,
 	storage::child,
 	traits::{
-		BalanceStatus, ConstU32, ConstU64, Contains, Currency, Get, LockableCurrency, OnIdle,
+		fungibles::Lockable, BalanceStatus, ConstU32, ConstU64, Contains, Currency, Get, OnIdle,
 		OnInitialize, ReservableCurrency, WithdrawReasons,
 	},
 	weights::{constants::WEIGHT_PER_SECOND, Weight},
@@ -119,6 +119,12 @@ pub mod test_utils {
 			let is = crate::OwnerInfoOf::<Test>::get($code_hash).map(|m| m.refcount()).unwrap();
 			assert_eq!(is, $should);
 		}};
+	}
+}
+
+impl Test {
+	pub fn set_unstable_interface(unstable_interface: bool) {
+		UNSTABLE_INTERFACE.with(|v| *v.borrow_mut() = unstable_interface);
 	}
 }
 
@@ -385,6 +391,7 @@ impl Contains<RuntimeCall> for TestFilter {
 
 parameter_types! {
 	pub const DeletionWeightLimit: Weight = Weight::from_ref_time(500_000_000_000);
+	pub static UnstableInterface: bool = true;
 }
 
 impl Config for Test {
@@ -407,6 +414,7 @@ impl Config for Test {
 	type AddressGenerator = DefaultAddressGenerator;
 	type MaxCodeLen = ConstU32<{ 128 * 1024 }>;
 	type MaxStorageKeyLen = ConstU32<128>;
+	type UnsafeUnstableInterface = UnstableInterface;
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);
@@ -514,7 +522,7 @@ fn calling_plain_account_fails() {
 
 #[test]
 fn instantiate_and_call_and_deposit_event() {
-	let (wasm, code_hash) = compile_module::<Test>("return_from_start_fn").unwrap();
+	let (wasm, code_hash) = compile_module::<Test>("event_and_return_on_deploy").unwrap();
 
 	ExtBuilder::default().existential_deposit(500).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
@@ -2687,7 +2695,6 @@ fn gas_estimation_nested_call_fixed_limit() {
 }
 
 #[test]
-#[cfg(feature = "unstable-interface")]
 fn gas_estimation_call_runtime() {
 	use codec::Decode;
 	let (caller_code, caller_hash) = compile_module::<Test>("call_runtime").unwrap();
@@ -3720,10 +3727,36 @@ fn contract_reverted() {
 
 #[test]
 fn code_rejected_error_works() {
-	let (wasm, _) = compile_module::<Test>("invalid_import").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 
+		let (wasm, _) = compile_module::<Test>("invalid_module").unwrap();
+		assert_noop!(
+			Contracts::upload_code(
+				RuntimeOrigin::signed(ALICE),
+				wasm.clone(),
+				None,
+				Determinism::Deterministic
+			),
+			<Error<Test>>::CodeRejected,
+		);
+		let result = Contracts::bare_instantiate(
+			ALICE,
+			0,
+			GAS_LIMIT,
+			None,
+			Code::Upload(wasm),
+			vec![],
+			vec![],
+			true,
+		);
+		assert_err!(result.result, <Error<Test>>::CodeRejected);
+		assert_eq!(
+			std::str::from_utf8(&result.debug_message).unwrap(),
+			"validation of new code failed"
+		);
+
+		let (wasm, _) = compile_module::<Test>("invalid_contract").unwrap();
 		assert_noop!(
 			Contracts::upload_code(
 				RuntimeOrigin::signed(ALICE),
@@ -3747,7 +3780,7 @@ fn code_rejected_error_works() {
 		assert_err!(result.result, <Error<Test>>::CodeRejected);
 		assert_eq!(
 			std::str::from_utf8(&result.debug_message).unwrap(),
-			"module imports a non-existent function"
+			"call function isn't exported"
 		);
 	});
 }
@@ -4385,9 +4418,8 @@ fn delegate_call_indeterministic_code() {
 }
 
 #[test]
-#[cfg(feature = "unstable-interface")]
-fn reentrant_count_works_with_call() {
-	let (wasm, code_hash) = compile_module::<Test>("reentrant_count_call").unwrap();
+fn reentrance_count_works_with_call() {
+	let (wasm, code_hash) = compile_module::<Test>("reentrance_count_call").unwrap();
 	let contract_addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
@@ -4422,9 +4454,8 @@ fn reentrant_count_works_with_call() {
 }
 
 #[test]
-#[cfg(feature = "unstable-interface")]
-fn reentrant_count_works_with_delegated_call() {
-	let (wasm, code_hash) = compile_module::<Test>("reentrant_count_delegated_call").unwrap();
+fn reentrance_count_works_with_delegated_call() {
+	let (wasm, code_hash) = compile_module::<Test>("reentrance_count_delegated_call").unwrap();
 	let contract_addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
@@ -4459,11 +4490,10 @@ fn reentrant_count_works_with_delegated_call() {
 }
 
 #[test]
-#[cfg(feature = "unstable-interface")]
 fn account_reentrance_count_works() {
 	let (wasm, code_hash) = compile_module::<Test>("account_reentrance_count_call").unwrap();
-	let (wasm_reentrant_count, code_hash_reentrant_count) =
-		compile_module::<Test>("reentrant_count_call").unwrap();
+	let (wasm_reentrance_count, code_hash_reentrance_count) =
+		compile_module::<Test>("reentrance_count_call").unwrap();
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
@@ -4483,14 +4513,14 @@ fn account_reentrance_count_works() {
 			300_000,
 			GAS_LIMIT,
 			None,
-			wasm_reentrant_count,
+			wasm_reentrance_count,
 			vec![],
 			vec![]
 		));
 
 		let contract_addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 		let another_contract_addr =
-			Contracts::contract_address(&ALICE, &code_hash_reentrant_count, &[]);
+			Contracts::contract_address(&ALICE, &code_hash_reentrance_count, &[]);
 
 		let result1 = Contracts::bare_call(
 			ALICE,
