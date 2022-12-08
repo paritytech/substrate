@@ -698,6 +698,34 @@ pub trait Misc {
 	}
 }
 
+#[cfg(feature = "std")]
+sp_externalities::decl_extension! {
+	/// Extension to signal to [`crypt::ed25519_verify`] to use the dalek crate.
+	///
+	/// The switch from `ed25519-dalek` to `ed25519-zebra` was a breaking change.
+	/// `ed25519-zebra` is more permissive when it comes to the verification of signatures.
+	/// This means that some chains may fail to sync from genesis when using `ed25519-zebra`.
+	/// So, this extension can be registered to the runtime execution environment to signal
+	/// that `ed25519-dalek` should be used for verification. The extension can be registered
+	/// in the following way:
+	///
+	/// ```nocompile
+	/// client.execution_extensions().set_extensions_factory(
+	/// 	// Let the `UseDalekExt` extension being registered for each runtime invocation
+	/// 	// until the execution happens in the context of block `1000`.
+	/// 	sc_client_api::execution_extensions::ExtensionBeforeBlock::<Block, UseDalekExt>::new(1000)
+	/// );
+	/// ```
+	pub struct UseDalekExt;
+}
+
+#[cfg(feature = "std")]
+impl Default for UseDalekExt {
+	fn default() -> Self {
+		Self
+	}
+}
+
 /// Interfaces for working with crypto related types from within the runtime.
 #[runtime_interface]
 pub trait Crypto {
@@ -747,13 +775,32 @@ pub trait Crypto {
 	///
 	/// Returns `true` when the verification was successful.
 	fn ed25519_verify(sig: &ed25519::Signature, msg: &[u8], pub_key: &ed25519::Public) -> bool {
-		ed25519::Pair::verify(sig, msg, pub_key)
+		// We don't want to force everyone needing to call the function in an externalities context.
+		// So, we assume that we should not use dalek when we are not in externalities context.
+		// Otherwise, we check if the extension is present.
+		if sp_externalities::with_externalities(|mut e| e.extension::<UseDalekExt>().is_some())
+			.unwrap_or_default()
+		{
+			use ed25519_dalek::Verifier;
+
+			let public_key = if let Ok(vk) = ed25519_dalek::PublicKey::from_bytes(&pub_key.0) {
+				vk
+			} else {
+				return false
+			};
+
+			let sig = ed25519_dalek::Signature::from(sig.0);
+
+			public_key.verify(msg, &sig).is_ok()
+		} else {
+			ed25519::Pair::verify(sig, msg, pub_key)
+		}
 	}
 
 	/// Register a `ed25519` signature for batch verification.
 	///
 	/// Batch verification must be enabled by calling [`start_batch_verify`].
-	/// If batch verification is not enabled, the signature will be verified immediatley.
+	/// If batch verification is not enabled, the signature will be verified immediately.
 	/// To get the result of the batch verification, [`finish_batch_verify`]
 	/// needs to be called.
 	///
@@ -780,7 +827,7 @@ pub trait Crypto {
 	/// Register a `sr25519` signature for batch verification.
 	///
 	/// Batch verification must be enabled by calling [`start_batch_verify`].
-	/// If batch verification is not enabled, the signature will be verified immediatley.
+	/// If batch verification is not enabled, the signature will be verified immediately.
 	/// To get the result of the batch verification, [`finish_batch_verify`]
 	/// needs to be called.
 	///
@@ -1564,99 +1611,6 @@ mod tracing_setup {
 
 pub use tracing_setup::init_tracing;
 
-/// Wasm-only interface that provides functions for interacting with the sandbox.
-#[runtime_interface(wasm_only)]
-pub trait Sandbox {
-	/// Instantiate a new sandbox instance with the given `wasm_code`.
-	fn instantiate(
-		&mut self,
-		dispatch_thunk: u32,
-		wasm_code: &[u8],
-		env_def: &[u8],
-		state_ptr: Pointer<u8>,
-	) -> u32 {
-		self.sandbox()
-			.instance_new(dispatch_thunk, wasm_code, env_def, state_ptr.into())
-			.expect("Failed to instantiate a new sandbox")
-	}
-
-	/// Invoke `function` in the sandbox with `sandbox_idx`.
-	fn invoke(
-		&mut self,
-		instance_idx: u32,
-		function: &str,
-		args: &[u8],
-		return_val_ptr: Pointer<u8>,
-		return_val_len: u32,
-		state_ptr: Pointer<u8>,
-	) -> u32 {
-		self.sandbox()
-			.invoke(instance_idx, function, args, return_val_ptr, return_val_len, state_ptr.into())
-			.expect("Failed to invoke function with sandbox")
-	}
-
-	/// Create a new memory instance with the given `initial` and `maximum` size.
-	fn memory_new(&mut self, initial: u32, maximum: u32) -> u32 {
-		self.sandbox()
-			.memory_new(initial, maximum)
-			.expect("Failed to create new memory with sandbox")
-	}
-
-	/// Get the memory starting at `offset` from the instance with `memory_idx` into the buffer.
-	fn memory_get(
-		&mut self,
-		memory_idx: u32,
-		offset: u32,
-		buf_ptr: Pointer<u8>,
-		buf_len: u32,
-	) -> u32 {
-		self.sandbox()
-			.memory_get(memory_idx, offset, buf_ptr, buf_len)
-			.expect("Failed to get memory with sandbox")
-	}
-
-	/// Set the memory in the given `memory_idx` to the given value at `offset`.
-	fn memory_set(
-		&mut self,
-		memory_idx: u32,
-		offset: u32,
-		val_ptr: Pointer<u8>,
-		val_len: u32,
-	) -> u32 {
-		self.sandbox()
-			.memory_set(memory_idx, offset, val_ptr, val_len)
-			.expect("Failed to set memory with sandbox")
-	}
-
-	/// Teardown the memory instance with the given `memory_idx`.
-	fn memory_teardown(&mut self, memory_idx: u32) {
-		self.sandbox()
-			.memory_teardown(memory_idx)
-			.expect("Failed to teardown memory with sandbox")
-	}
-
-	/// Teardown the sandbox instance with the given `instance_idx`.
-	fn instance_teardown(&mut self, instance_idx: u32) {
-		self.sandbox()
-			.instance_teardown(instance_idx)
-			.expect("Failed to teardown sandbox instance")
-	}
-
-	/// Get the value from a global with the given `name`. The sandbox is determined by the given
-	/// `instance_idx`.
-	///
-	/// Returns `Some(_)` when the requested global variable could be found.
-	fn get_global_val(
-		&mut self,
-		instance_idx: u32,
-		name: &str,
-	) -> Option<sp_wasm_interface::Value> {
-		self.sandbox()
-			.get_global_val(instance_idx, name)
-			.expect("Failed to get global from sandbox")
-	}
-}
-
 /// Allocator used by Substrate when executing the Wasm runtime.
 #[cfg(all(target_arch = "wasm32", not(feature = "std")))]
 struct WasmAllocator;
@@ -1732,7 +1686,6 @@ pub type SubstrateHostFunctions = (
 	allocator::HostFunctions,
 	panic_handler::HostFunctions,
 	logging::HostFunctions,
-	sandbox::HostFunctions,
 	crate::trie::HostFunctions,
 	offchain_index::HostFunctions,
 	transaction_index::HostFunctions,
@@ -1976,5 +1929,21 @@ mod tests {
 
 			assert!(!crypto::finish_batch_verify());
 		});
+	}
+
+	#[test]
+	fn use_dalek_ext_works() {
+		let mut ext = BasicExternalities::default();
+		ext.register_extension(UseDalekExt::default());
+
+		// With dalek the zero signature should fail to verify.
+		ext.execute_with(|| {
+			assert!(!crypto::ed25519_verify(&zero_ed_sig(), &Vec::new(), &zero_ed_pub()));
+		});
+
+		// But with zebra it should work.
+		BasicExternalities::default().execute_with(|| {
+			assert!(crypto::ed25519_verify(&zero_ed_sig(), &Vec::new(), &zero_ed_pub()));
+		})
 	}
 }

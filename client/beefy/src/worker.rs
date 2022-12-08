@@ -16,42 +16,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{
-	collections::{BTreeMap, BTreeSet, VecDeque},
-	fmt::Debug,
-	marker::PhantomData,
-	sync::Arc,
-};
-
-use codec::{Codec, Decode, Encode};
-use futures::{stream::Fuse, FutureExt, StreamExt};
-use log::{debug, error, info, log_enabled, trace, warn};
-use parking_lot::Mutex;
-
-use sc_client_api::{Backend, FinalityNotification, FinalityNotifications, HeaderBackend};
-use sc_network_common::{
-	protocol::event::Event as NetEvent,
-	service::{NetworkEventStream, NetworkRequest},
-};
-use sc_network_gossip::GossipEngine;
-
-use sp_api::{BlockId, ProvideRuntimeApi};
-use sp_arithmetic::traits::{AtLeast32Bit, Saturating};
-use sp_consensus::SyncOracle;
-use sp_mmr_primitives::MmrApi;
-use sp_runtime::{
-	generic::OpaqueDigestItemId,
-	traits::{Block, Header, NumberFor, Zero},
-	SaturatedConversion,
-};
-
-use beefy_primitives::{
-	crypto::{AuthorityId, Signature},
-	BeefyApi, Commitment, ConsensusLog, MmrRootHash, Payload, PayloadProvider, SignedCommitment,
-	ValidatorSet, VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
-};
-use sc_utils::notification::NotificationReceiver;
-
 use crate::{
 	communication::{
 		gossip::{topic, GossipValidator},
@@ -63,8 +27,41 @@ use crate::{
 	metric_inc, metric_set,
 	metrics::Metrics,
 	round::Rounds,
-	BeefyVoterLinks, KnownPeers,
+	BeefyVoterLinks,
 };
+use beefy_primitives::{
+	crypto::{AuthorityId, Signature},
+	Commitment, ConsensusLog, Payload, PayloadProvider, SignedCommitment, ValidatorSet,
+	VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
+};
+use codec::{Codec, Decode, Encode};
+use futures::{stream::Fuse, FutureExt, StreamExt};
+use log::{debug, error, info, log_enabled, trace, warn};
+use sc_client_api::{Backend, FinalityNotification, FinalityNotifications, HeaderBackend};
+use sc_network_common::service::{NetworkEventStream, NetworkRequest};
+use sc_network_gossip::GossipEngine;
+use sc_utils::notification::NotificationReceiver;
+use sp_api::BlockId;
+use sp_arithmetic::traits::{AtLeast32Bit, Saturating};
+use sp_consensus::SyncOracle;
+use sp_runtime::{
+	generic::OpaqueDigestItemId,
+	traits::{Block, ConstU32, Header, NumberFor, Zero},
+	BoundedVec, SaturatedConversion,
+};
+use std::{
+	collections::{BTreeMap, BTreeSet, VecDeque},
+	fmt::Debug,
+	marker::PhantomData,
+	sync::Arc,
+};
+/// Bound for the number of buffered future voting rounds.
+const MAX_BUFFERED_VOTE_ROUNDS: usize = 600;
+/// Bound for the number of buffered votes per round number.
+const MAX_BUFFERED_VOTES_PER_ROUND: u32 = 1000;
+/// Bound for the number of pending justifications - use 2400 - the max number
+/// of justifications possible in a single session.
+const MAX_BUFFERED_JUSTIFICATIONS: usize = 2400;
 
 pub(crate) enum RoundAction {
 	Drop,
@@ -175,13 +172,13 @@ impl<B: Block> VoterOracle<B> {
 		Ok(())
 	}
 
-	/// Return current pending mandatory block, if any.
-	pub fn mandatory_pending(&self) -> Option<NumberFor<B>> {
+	/// Return current pending mandatory block, if any, plus its active validator set.
+	pub fn mandatory_pending(&self) -> Option<(NumberFor<B>, ValidatorSet<AuthorityId>)> {
 		self.sessions.front().and_then(|round| {
 			if round.mandatory_done() {
 				None
 			} else {
-				Some(round.session_start())
+				Some((round.session_start(), round.validator_set().clone()))
 			}
 		})
 	}
@@ -248,15 +245,14 @@ impl<B: Block> VoterOracle<B> {
 	}
 }
 
-pub(crate) struct WorkerParams<B: Block, BE, P, R, N> {
+pub(crate) struct WorkerParams<B: Block, BE, P, N> {
 	pub backend: Arc<BE>,
 	pub payload_provider: P,
 	pub network: N,
 	pub key_store: BeefyKeystore,
-	pub known_peers: Arc<Mutex<KnownPeers<B>>>,
 	pub gossip_engine: GossipEngine<B>,
 	pub gossip_validator: Arc<GossipValidator<B>>,
-	pub on_demand_justifications: OnDemandJustificationsEngine<B, R>,
+	pub on_demand_justifications: OnDemandJustificationsEngine<B>,
 	pub links: BeefyVoterLinks<B>,
 	pub metrics: Option<Metrics>,
 	pub persisted_state: PersistedState<B>,
@@ -297,7 +293,7 @@ impl<B: Block> PersistedState<B> {
 }
 
 /// A BEEFY worker plays the BEEFY protocol
-pub(crate) struct BeefyWorker<B: Block, BE, P, R, N> {
+pub(crate) struct BeefyWorker<B: Block, BE, P, N> {
 	// utilities
 	backend: Arc<BE>,
 	payload_provider: P,
@@ -305,10 +301,9 @@ pub(crate) struct BeefyWorker<B: Block, BE, P, R, N> {
 	key_store: BeefyKeystore,
 
 	// communication
-	known_peers: Arc<Mutex<KnownPeers<B>>>,
 	gossip_engine: GossipEngine<B>,
 	gossip_validator: Arc<GossipValidator<B>>,
-	on_demand_justifications: OnDemandJustificationsEngine<B, R>,
+	on_demand_justifications: OnDemandJustificationsEngine<B>,
 
 	// channels
 	/// Links between the block importer, the background voter and the RPC layer.
@@ -318,20 +313,24 @@ pub(crate) struct BeefyWorker<B: Block, BE, P, R, N> {
 	/// BEEFY client metrics.
 	metrics: Option<Metrics>,
 	/// Buffer holding votes for future processing.
-	pending_votes: BTreeMap<NumberFor<B>, Vec<VoteMessage<NumberFor<B>, AuthorityId, Signature>>>,
+	pending_votes: BTreeMap<
+		NumberFor<B>,
+		BoundedVec<
+			VoteMessage<NumberFor<B>, AuthorityId, Signature>,
+			ConstU32<MAX_BUFFERED_VOTES_PER_ROUND>,
+		>,
+	>,
 	/// Buffer holding justifications for future processing.
 	pending_justifications: BTreeMap<NumberFor<B>, BeefyVersionedFinalityProof<B>>,
 	/// Persisted voter state.
 	persisted_state: PersistedState<B>,
 }
 
-impl<B, BE, P, R, N> BeefyWorker<B, BE, P, R, N>
+impl<B, BE, P, N> BeefyWorker<B, BE, P, N>
 where
 	B: Block + Codec,
 	BE: Backend<B>,
 	P: PayloadProvider<B>,
-	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash, NumberFor<B>>,
 	N: NetworkEventStream + NetworkRequest + SyncOracle + Send + Sync + Clone + 'static,
 {
 	/// Return a new BEEFY worker instance.
@@ -340,7 +339,7 @@ where
 	/// BEEFY pallet has been deployed on-chain.
 	///
 	/// The BEEFY pallet is needed in order to keep track of the BEEFY authority set.
-	pub(crate) fn new(worker_params: WorkerParams<B, BE, P, R, N>) -> Self {
+	pub(crate) fn new(worker_params: WorkerParams<B, BE, P, N>) -> Self {
 		let WorkerParams {
 			backend,
 			payload_provider,
@@ -349,7 +348,6 @@ where
 			gossip_engine,
 			gossip_validator,
 			on_demand_justifications,
-			known_peers,
 			links,
 			metrics,
 			persisted_state,
@@ -359,7 +357,6 @@ where
 			backend,
 			payload_provider,
 			network,
-			known_peers,
 			key_store,
 			gossip_engine,
 			gossip_validator,
@@ -495,7 +492,14 @@ where
 			)?,
 			RoundAction::Enqueue => {
 				debug!(target: "beefy", "🥩 Buffer vote for round: {:?}.", block_num);
-				self.pending_votes.entry(block_num).or_default().push(vote)
+				if self.pending_votes.len() < MAX_BUFFERED_VOTE_ROUNDS {
+					let votes_vec = self.pending_votes.entry(block_num).or_default();
+					if votes_vec.try_push(vote).is_err() {
+						warn!(target: "beefy", "🥩 Buffer vote dropped for round: {:?}", block_num)
+					}
+				} else {
+					error!(target: "beefy", "🥩 Buffer justification dropped for round: {:?}.", block_num);
+				}
 			},
 			RoundAction::Drop => (),
 		};
@@ -521,7 +525,11 @@ where
 			},
 			RoundAction::Enqueue => {
 				debug!(target: "beefy", "🥩 Buffer justification for round: {:?}.", block_num);
-				self.pending_justifications.entry(block_num).or_insert(justification);
+				if self.pending_justifications.len() < MAX_BUFFERED_JUSTIFICATIONS {
+					self.pending_justifications.entry(block_num).or_insert(justification);
+				} else {
+					error!(target: "beefy", "🥩 Buffer justification dropped for round: {:?}.", block_num);
+				}
 			},
 			RoundAction::Drop => (),
 		};
@@ -564,10 +572,15 @@ where
 				// New state is persisted after finalization.
 				self.finalize(finality_proof)?;
 			} else {
-				if self_vote || self.voting_oracle().mandatory_pending() == Some(round.1) {
-					// Persist state after handling self vote to avoid double voting in case
-					// of voter restarts.
-					// Also persist state after handling mandatory block vote.
+				let mandatory_round = self
+					.voting_oracle()
+					.mandatory_pending()
+					.map(|p| p.0 == round.1)
+					.unwrap_or(false);
+				// Persist state after handling self vote to avoid double voting in case
+				// of voter restarts.
+				// Also persist state after handling mandatory block vote.
+				if self_vote || mandatory_round {
 					crate::aux_schema::write_voter_state(&*self.backend, &self.persisted_state)
 						.map_err(|e| Error::Backend(e.to_string()))?;
 				}
@@ -783,6 +796,27 @@ where
 		Ok(())
 	}
 
+	fn process_new_state(&mut self) {
+		// Handle pending justifications and/or votes for now GRANDPA finalized blocks.
+		if let Err(err) = self.try_pending_justif_and_votes() {
+			debug!(target: "beefy", "🥩 {}", err);
+		}
+
+		// Don't bother voting or requesting justifications during major sync.
+		if !self.network.is_major_syncing() {
+			// There were external events, 'state' is changed, author a vote if needed/possible.
+			if let Err(err) = self.try_to_vote() {
+				debug!(target: "beefy", "🥩 {}", err);
+			}
+			// If the current target is a mandatory block,
+			// make sure there's also an on-demand justification request out for it.
+			if let Some((block, active)) = self.voting_oracle().mandatory_pending() {
+				// This only starts new request if there isn't already an active one.
+				self.on_demand_justifications.request(block, active);
+			}
+		}
+	}
+
 	/// Main loop for BEEFY worker.
 	///
 	/// Wait for BEEFY runtime pallet to be available, then start the main async loop
@@ -794,7 +828,6 @@ where
 	) {
 		info!(target: "beefy", "🥩 run BEEFY worker, best grandpa: #{:?}.", self.best_grandpa_block());
 
-		let mut network_events = self.network.event_stream("network-gossip").fuse();
 		let mut votes = Box::pin(
 			self.gossip_engine
 				.messages_for(topic::<B>())
@@ -810,25 +843,12 @@ where
 		);
 
 		loop {
-			// Don't bother voting or requesting justifications during major sync.
-			if !self.network.is_major_syncing() {
-				// If the current target is a mandatory block,
-				// make sure there's also an on-demand justification request out for it.
-				if let Some(block) = self.voting_oracle().mandatory_pending() {
-					// This only starts new request if there isn't already an active one.
-					self.on_demand_justifications.request(block);
-				}
-				// There were external events, 'state' is changed, author a vote if needed/possible.
-				if let Err(err) = self.try_to_vote() {
-					debug!(target: "beefy", "🥩 {}", err);
-				}
-			} else {
-				debug!(target: "beefy", "🥩 Skipping voting while major syncing.");
-			}
+			// Act on changed 'state'.
+			self.process_new_state();
 
 			let mut gossip_engine = &mut self.gossip_engine;
 			// Wait for, and handle external events.
-			// The branches below only change 'state', actual voting happen afterwards,
+			// The branches below only change 'state', actual voting happens afterwards,
 			// based on the new resulting 'state'.
 			futures::select_biased! {
 				// Use `select_biased!` to prioritize order below.
@@ -836,15 +856,6 @@ where
 				_ = gossip_engine => {
 					error!(target: "beefy", "🥩 Gossip engine has terminated, closing worker.");
 					return;
-				},
-				// Keep track of connected peers.
-				net_event = network_events.next() => {
-					if let Some(net_event) = net_event {
-						self.handle_network_event(net_event);
-					} else {
-						error!(target: "beefy", "🥩 Network events stream terminated, closing worker.");
-						return;
-					}
 				},
 				// Process finality notifications first since these drive the voter.
 				notification = finality_notifications.next() => {
@@ -888,25 +899,6 @@ where
 					}
 				},
 			}
-
-			// Handle pending justifications and/or votes for now GRANDPA finalized blocks.
-			if let Err(err) = self.try_pending_justif_and_votes() {
-				debug!(target: "beefy", "🥩 {}", err);
-			}
-		}
-	}
-
-	/// Update known peers based on network events.
-	fn handle_network_event(&mut self, event: NetEvent) {
-		match event {
-			NetEvent::SyncConnected { remote } => {
-				self.known_peers.lock().add_new(remote);
-			},
-			NetEvent::SyncDisconnected { remote } => {
-				self.known_peers.lock().remove(&remote);
-			},
-			// We don't care about other events.
-			_ => (),
 		}
 	}
 }
@@ -976,11 +968,11 @@ pub(crate) mod tests {
 			create_beefy_keystore, get_beefy_streams, make_beefy_ids, two_validators::TestApi,
 			BeefyPeer, BeefyTestNet,
 		},
-		BeefyRPCLinks,
+		BeefyRPCLinks, KnownPeers,
 	};
-
 	use beefy_primitives::{known_payloads, mmr::MmrRootProvider};
-	use futures::{executor::block_on, future::poll_fn, task::Poll};
+	use futures::{future::poll_fn, task::Poll};
+	use parking_lot::Mutex;
 	use sc_client_api::{Backend as BackendT, HeaderBackend};
 	use sc_network::NetworkService;
 	use sc_network_test::TestNetFactory;
@@ -991,6 +983,7 @@ pub(crate) mod tests {
 		runtime::{Block, Digest, DigestItem, Header, H256},
 		Backend,
 	};
+	use tokio::runtime::Runtime;
 
 	impl<B: super::Block> PersistedState<B> {
 		pub fn voting_oracle(&self) -> &VoterOracle<B> {
@@ -1025,7 +1018,6 @@ pub(crate) mod tests {
 		Block,
 		Backend,
 		MmrRootProvider<Block, TestApi>,
-		TestApi,
 		Arc<NetworkService<Block, H256>>,
 	> {
 		let keystore = create_beefy_keystore(*key);
@@ -1056,9 +1048,8 @@ pub(crate) mod tests {
 			GossipEngine::new(network.clone(), "/beefy/1", gossip_validator.clone(), None);
 		let on_demand_justifications = OnDemandJustificationsEngine::new(
 			network.clone(),
-			api.clone(),
 			"/beefy/justifs/1".into(),
-			known_peers.clone(),
+			known_peers,
 		);
 		let at = BlockId::number(Zero::zero());
 		let genesis_header = backend.blockchain().expect_header(at).unwrap();
@@ -1074,7 +1065,6 @@ pub(crate) mod tests {
 			backend,
 			payload_provider,
 			key_store: Some(keystore).into(),
-			known_peers,
 			links,
 			gossip_engine,
 			gossip_validator,
@@ -1083,7 +1073,7 @@ pub(crate) mod tests {
 			on_demand_justifications,
 			persisted_state,
 		};
-		BeefyWorker::<_, _, _, _, _>::new(worker_params)
+		BeefyWorker::<_, _, _, _>::new(worker_params)
 	}
 
 	#[test]
@@ -1309,7 +1299,8 @@ pub(crate) mod tests {
 	fn keystore_vs_validator_set() {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-		let mut net = BeefyTestNet::new(1);
+		let runtime = Runtime::new().unwrap();
+		let mut net = BeefyTestNet::new(runtime.handle().clone(), 1);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
 
 		// keystore doesn't contain other keys than validators'
@@ -1332,7 +1323,8 @@ pub(crate) mod tests {
 	fn should_finalize_correctly() {
 		let keys = [Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(&keys), 0).unwrap();
-		let mut net = BeefyTestNet::new(1);
+		let runtime = Runtime::new().unwrap();
+		let mut net = BeefyTestNet::new(runtime.handle().clone(), 1);
 		let backend = net.peer(0).client().as_backend();
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
 		// remove default session, will manually add custom one.
@@ -1355,7 +1347,7 @@ pub(crate) mod tests {
 
 		// no 'best beefy block' or finality proofs
 		assert_eq!(worker.best_beefy_block(), 0);
-		block_on(poll_fn(move |cx| {
+		runtime.block_on(poll_fn(move |cx| {
 			assert_eq!(best_block_stream.poll_next_unpin(cx), Poll::Pending);
 			assert_eq!(finality_proof.poll_next_unpin(cx), Poll::Pending);
 			Poll::Ready(())
@@ -1376,7 +1368,7 @@ pub(crate) mod tests {
 		worker.finalize(justif.clone()).unwrap();
 		// verify block finalized
 		assert_eq!(worker.best_beefy_block(), 1);
-		block_on(poll_fn(move |cx| {
+		runtime.block_on(poll_fn(move |cx| {
 			// unknown hash -> nothing streamed
 			assert_eq!(best_block_stream.poll_next_unpin(cx), Poll::Pending);
 			// commitment streamed
@@ -1408,7 +1400,7 @@ pub(crate) mod tests {
 		assert_eq!(worker.active_rounds().unwrap().session_start(), 2);
 		// verify block finalized
 		assert_eq!(worker.best_beefy_block(), 2);
-		block_on(poll_fn(move |cx| {
+		runtime.block_on(poll_fn(move |cx| {
 			match best_block_stream.poll_next_unpin(cx) {
 				// expect Some(hash-of-block-2)
 				Poll::Ready(Some(hash)) => {
@@ -1429,7 +1421,8 @@ pub(crate) mod tests {
 	fn should_init_session() {
 		let keys = &[Keyring::Alice, Keyring::Bob];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-		let mut net = BeefyTestNet::new(1);
+		let runtime = Runtime::new().unwrap();
+		let mut net = BeefyTestNet::new(runtime.handle().clone(), 1);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
 
 		let worker_rounds = worker.active_rounds().unwrap();
@@ -1460,7 +1453,8 @@ pub(crate) mod tests {
 	fn should_triage_votes_and_process_later() {
 		let keys = &[Keyring::Alice, Keyring::Bob];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-		let mut net = BeefyTestNet::new(1);
+		let runtime = Runtime::new().unwrap();
+		let mut net = BeefyTestNet::new(runtime.handle().clone(), 1);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
 		// remove default session, will manually add custom one.
 		worker.persisted_state.voting_oracle.sessions.clear();

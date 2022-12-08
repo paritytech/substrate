@@ -113,7 +113,7 @@ pub async fn seal_block<B, BI, SC, C, E, TP, CIDP, P>(
 			.await
 			.map_err(|e| Error::Other(e))?;
 
-		let inherent_data = inherent_data_providers.create_inherent_data()?;
+		let inherent_data = inherent_data_providers.create_inherent_data().await?;
 
 		let proposer = env.init(&parent).map_err(|err| Error::StringError(err.to_string())).await?;
 		let inherents_len = inherent_data.len();

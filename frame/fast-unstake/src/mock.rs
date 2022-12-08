@@ -21,7 +21,7 @@ use frame_support::{
 	pallet_prelude::*,
 	parameter_types,
 	traits::{ConstU64, Currency},
-	weights::constants::WEIGHT_PER_SECOND,
+	weights::constants::WEIGHT_REF_TIME_PER_SECOND,
 };
 use sp_runtime::traits::{Convert, IdentityLookup};
 
@@ -37,7 +37,7 @@ pub type T = Runtime;
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(
-			(2u64 * WEIGHT_PER_SECOND).set_proof_size(u64::MAX),
+			Weight::from_parts(2u64 * WEIGHT_REF_TIME_PER_SECOND, u64::MAX),
 		);
 }
 

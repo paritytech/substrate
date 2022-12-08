@@ -14,7 +14,6 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-lazy_static = "1.4.0"
 lru = "0.8.1"
 parking_lot = "0.12.1"
 tracing = "0.1.29"
@@ -26,7 +25,6 @@ sc-executor-wasmi = { version = "0.10.0-dev", path = "wasmi" }
 sc-executor-wasmtime = { version = "0.10.0-dev", path = "wasmtime" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-core = { version = "7.0.0", path = "../../primitives/core" }
-sp-core-hashing-proc-macro = { version = "5.0.0", path = "../../primitives/core/hashing/proc-macro" }
 sp-externalities = { version = "0.13.0", path = "../../primitives/externalities" }
 sp-io = { version = "7.0.0", path = "../../primitives/io" }
 sp-panic-handler = { version = "5.0.0", path = "../../primitives/panic-handler" }
@@ -61,4 +59,3 @@ default = ["std"]
 # This crate does not have `no_std` support, we just require this for tests
 std = []
 wasm-extern-trace = []
-wasmer-sandbox = ["sc-executor-common/wasmer-sandbox"]

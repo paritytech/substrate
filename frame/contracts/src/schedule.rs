@@ -118,6 +118,12 @@ pub struct Limits {
 	/// the linear memory limit `memory_pages` applies to them.
 	pub globals: u32,
 
+	/// Maximum number of locals a function can have.
+	///
+	/// As wasm engine initializes each of the local, we need to limit their number to confine
+	/// execution costs.
+	pub locals: u32,
+
 	/// Maximum numbers of parameters a function can have.
 	///
 	/// Those need to be limited to prevent a potentially exploitable interaction with
@@ -212,6 +218,7 @@ pub struct InstructionWeights<T: Config> {
 	pub call: u32,
 	pub call_indirect: u32,
 	pub call_indirect_per_param: u32,
+	pub call_per_local: u32,
 	pub local_get: u32,
 	pub local_set: u32,
 	pub local_tee: u32,
@@ -423,11 +430,14 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_ecdsa_to_eth_address`.
 	pub ecdsa_to_eth_address: u64,
 
-	/// Weight of calling `seal_reentrant_count`.
-	pub reentrant_count: u64,
+	/// Weight of calling `reentrance_count`.
+	pub reentrance_count: u64,
 
-	/// Weight of calling `seal_account_reentrance_count`.
+	/// Weight of calling `account_reentrance_count`.
 	pub account_reentrance_count: u64,
+
+	/// Weight of calling `instantiation_nonce`.
+	pub instantiation_nonce: u64,
 
 	/// The type parameter is used in the default implementation.
 	#[codec(skip)]
@@ -522,6 +532,7 @@ impl Default for Limits {
 			// No stack limit required because we use a runtime resident execution engine.
 			stack_height: None,
 			globals: 256,
+			locals: 1024,
 			parameters: 128,
 			memory_pages: 16,
 			// 4k function pointers (This is in count not bytes).
@@ -538,7 +549,7 @@ impl<T: Config> Default for InstructionWeights<T> {
 	fn default() -> Self {
 		let max_pages = Limits::default().memory_pages;
 		Self {
-			version: 3,
+			version: 4,
 			fallback: 0,
 			i64const: cost_instr!(instr_i64const, 1),
 			i64load: cost_instr!(instr_i64load, 2),
@@ -552,6 +563,7 @@ impl<T: Config> Default for InstructionWeights<T> {
 			call: cost_instr!(instr_call, 2),
 			call_indirect: cost_instr!(instr_call_indirect, 3),
 			call_indirect_per_param: cost_instr!(instr_call_indirect_per_param, 1),
+			call_per_local: cost_instr!(instr_call_per_local, 1),
 			local_get: cost_instr!(instr_local_get, 1),
 			local_set: cost_instr!(instr_local_set, 1),
 			local_tee: cost_instr!(instr_local_tee, 2),
@@ -665,8 +677,9 @@ impl<T: Config> Default for HostFnWeights<T> {
 			hash_blake2_128_per_byte: cost_byte_batched!(seal_hash_blake2_128_per_kb),
 			ecdsa_recover: cost_batched!(seal_ecdsa_recover),
 			ecdsa_to_eth_address: cost_batched!(seal_ecdsa_to_eth_address),
-			reentrant_count: cost_batched!(seal_reentrant_count),
+			reentrance_count: cost_batched!(seal_reentrance_count),
 			account_reentrance_count: cost_batched!(seal_account_reentrance_count),
+			instantiation_nonce: cost_batched!(seal_instantiation_nonce),
 			_phantom: PhantomData,
 		}
 	}
@@ -791,6 +804,10 @@ impl<'a, T: Config> gas_metering::Rules for ScheduleRules<'a, T> {
 		// We benchmarked the memory.grow instruction with the maximum allowed pages.
 		// The cost for growing is therefore already included in the instruction cost.
 		gas_metering::MemoryGrowCost::Free
+	}
+
+	fn call_per_local_cost(&self) -> u32 {
+		self.schedule.instruction_weights.call_per_local
 	}
 }
 
