@@ -221,13 +221,13 @@ pub enum ReferendumInfo<
 		>,
 	),
 	/// Referendum finished with approval. Submission deposit is held.
-	Approved(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
+	Approved(Moment, Option<Deposit<AccountId, Balance>>, Option<Deposit<AccountId, Balance>>),
 	/// Referendum finished with rejection. Submission deposit is held.
-	Rejected(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
+	Rejected(Moment, Option<Deposit<AccountId, Balance>>, Option<Deposit<AccountId, Balance>>),
 	/// Referendum finished with cancellation. Submission deposit is held.
-	Cancelled(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
+	Cancelled(Moment, Option<Deposit<AccountId, Balance>>, Option<Deposit<AccountId, Balance>>),
 	/// Referendum finished and was never decided. Submission deposit is held.
-	TimedOut(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
+	TimedOut(Moment, Option<Deposit<AccountId, Balance>>, Option<Deposit<AccountId, Balance>>),
 	/// Referendum finished with a kill.
 	Killed(Moment),
 }
@@ -254,6 +254,19 @@ impl<
 			Approved(_, _, d) | Rejected(_, _, d) | TimedOut(_, _, d) | Cancelled(_, _, d) =>
 				Ok(d.take()),
 			Killed(_) => Ok(None),
+		}
+	}
+
+	/// Take the Submission Deposit from `self`, if there is one and it's in a valid state to be
+	/// taken. Returns an `Err` if `self` is not in a valid state for the Submission Deposit to be
+	/// refunded.
+	pub fn take_submission_deposit(&mut self) -> Result<Option<Deposit<AccountId, Balance>>, ()> {
+		use ReferendumInfo::*;
+		match self {
+			// Can only refund deposit if it's appoved or cancelled.
+			Approved(_, s, _) | Cancelled(_, s, _) => Ok(s.take()),
+			// Cannot refund deposit if Ongoing as this breaks assumptions.
+			Ongoing(..) | Rejected(..) | TimedOut(..) | Killed(..) => Err(()),
 		}
 	}
 }
