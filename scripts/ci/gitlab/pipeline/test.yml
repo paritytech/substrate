@@ -394,6 +394,19 @@ cargo-check-each-crate:
     - if [ "$CI_NODE_INDEX" == 1 ]; then rusty-cachier cache upload; fi
   parallel: 2
 
+publish-crates-locally:
+  extends:
+    - .test-refs
+    - .crates-publishing-template
+  script:
+    - rusty-cachier snapshot create
+    - git clone
+        --depth 1
+        --branch "$RELENG_SCRIPTS_BRANCH"
+        https://github.com/paritytech/releng-scripts.git
+    - CRATESIO_TARGET_INSTANCE=local ./releng-scripts/publish-crates
+    - rusty-cachier cache upload
+
 cargo-check-each-crate-macos:
   stage: test
   extends:

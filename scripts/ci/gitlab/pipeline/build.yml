@@ -86,7 +86,7 @@ build-linux-substrate:
   extends:
     - .collect-artifacts
     - .docker-env
-    - .build-refs
+    - .publish-refs
   variables:
     # this variable gets overriden by "rusty-cachier environment inject", use the value as default
     CARGO_TARGET_DIR:              "$CI_PROJECT_DIR/target"
