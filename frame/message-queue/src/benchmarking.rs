@@ -140,8 +140,8 @@ benchmarks! {
 			}
 			book.end += 1;
 			book.count += 1;
-			book.message_count += msgs as u32;
-			book.size += page.remaining_size.into();
+			book.message_count += msgs as u64;
+			book.size += page.remaining_size.into() as u64;
 		}
 		book.begin = book.end - T::MaxStale::get();
 		BookStateFor::<T>::insert(&origin, &book);
