@@ -26,10 +26,7 @@ use sp_api::{ProvideRuntimeApi, TransactionFor};
 use sp_blockchain::HeaderBackend;
 use sp_consensus::{self, BlockOrigin, Environment, Proposer, SelectChain};
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, Header as HeaderT},
-};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 /// max duration for creating a proposal in secs
@@ -103,7 +100,7 @@ pub async fn seal_block<B, BI, SC, C, E, TP, CIDP, P>(
 		// or fetch the best_block.
 		let parent = match parent_hash {
 			Some(hash) => client
-				.header(BlockId::Hash(hash))?
+				.header(hash)?
 				.ok_or_else(|| Error::BlockNotFound(format!("{}", hash)))?,
 			None => select_chain.best_chain().await?,
 		};

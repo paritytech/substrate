@@ -1147,7 +1147,7 @@ fn get_header_by_block_number_doesnt_panic() {
 	// backend uses u32 for block numbers, make sure we don't panic when
 	// trying to convert
 	let id = BlockId::<Block>::Number(72340207214430721);
-	client.header(&id).expect_err("invalid block number overflows u32");
+	client.expect_header(id).expect_err("invalid block number overflows u32");
 }
 
 #[test]

@@ -31,8 +31,8 @@ use jsonrpsee::{core::RpcResult, types::SubscriptionResult, SubscriptionSink};
 use sc_client_api::BlockchainEvents;
 use sp_rpc::{list::ListOrValue, number::NumberOrHex};
 use sp_runtime::{
-	generic::{BlockId, SignedBlock},
-	traits::{Block as BlockT, Header, NumberFor},
+	generic::SignedBlock,
+	traits::{Block as BlockT, NumberFor},
 };
 
 use self::error::Error;
@@ -80,11 +80,9 @@ where
 					))
 				})?;
 				let block_num = <NumberFor<Block>>::from(block_num);
-				Ok(self
+				self
 					.client()
-					.header(BlockId::number(block_num))
-					.map_err(client_err)?
-					.map(|h| h.hash()))
+					.hash(block_num).map_err(client_err)
 			},
 		}
 	}

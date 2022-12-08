@@ -62,7 +62,7 @@ where
 	}
 
 	fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, Error> {
-		self.client.header(BlockId::Hash(self.unwrap_or_best(hash))).map_err(client_err)
+		self.client.header(self.unwrap_or_best(hash)).map_err(client_err)
 	}
 
 	fn block(&self, hash: Option<Block::Hash>) -> Result<Option<SignedBlock<Block>>, Error> {
@@ -130,7 +130,7 @@ fn subscribe_headers<Block, Client, F, G, S>(
 {
 	// send current head right at the start.
 	let maybe_header = client
-		.header(BlockId::Hash(best_block_hash()))
+		.header(best_block_hash())
 		.map_err(client_err)
 		.and_then(|header| header.ok_or_else(|| Error::Other("Best header missing.".into())))
 		.map_err(|e| log::warn!("Best header error {:?}", e))

@@ -678,18 +678,18 @@ fn propose_and_import_blocks<Transaction: Send + 'static>(
 	client: &PeersFullClient,
 	proposer_factory: &mut DummyFactory,
 	block_import: &mut BoxBlockImport<TestBlock, Transaction>,
-	parent_id: BlockId<TestBlock>,
+	parent_hash: Hash,
 	n: usize,
 	runtime: &Runtime,
 ) -> Vec<Hash> {
 	let mut hashes = Vec::with_capacity(n);
-	let mut parent_header = client.header(&parent_id).unwrap().unwrap();
+	let mut parent_header = client.header(parent_hash).unwrap().unwrap();
 
 	for _ in 0..n {
 		let block_hash =
 			propose_and_import_block(&parent_header, None, proposer_factory, block_import, runtime);
 		hashes.push(block_hash);
-		parent_header = client.header(&BlockId::Hash(block_hash)).unwrap().unwrap();
+		parent_header = client.header(block_hash).unwrap().unwrap();
 	}
 
 	hashes
@@ -713,7 +713,7 @@ fn importing_block_one_sets_genesis_epoch() {
 
 	let mut block_import = data.block_import.lock().take().expect("import set up during init");
 
-	let genesis_header = client.header(&BlockId::Number(0)).unwrap().unwrap();
+	let genesis_header = client.header(client.chain_info().genesis_hash).unwrap().unwrap();
 
 	let block_hash = propose_and_import_block(
 		&genesis_header,
@@ -779,10 +779,10 @@ fn revert_prunes_epoch_changes_and_removes_weights() {
 	//    \                    revert      *---- G(#13) ---- H(#19) ---#20     < fork #3
 	//     \                   to #10
 	//      *-----E(#7)---#11                                          < fork #1
-	let canon = propose_and_import_blocks_wrap(BlockId::Number(0), 21);
-	let fork1 = propose_and_import_blocks_wrap(BlockId::Hash(canon[0]), 10);
-	let fork2 = propose_and_import_blocks_wrap(BlockId::Hash(canon[7]), 10);
-	let fork3 = propose_and_import_blocks_wrap(BlockId::Hash(canon[11]), 8);
+	let canon = propose_and_import_blocks_wrap(client.chain_info().genesis_hash, 21);
+	let fork1 = propose_and_import_blocks_wrap(canon[0], 10);
+	let fork2 = propose_and_import_blocks_wrap(canon[7], 10);
+	let fork3 = propose_and_import_blocks_wrap(canon[11], 8);
 
 	// We should be tracking a total of 9 epochs in the fork tree
 	assert_eq!(epoch_changes.shared_data().tree().iter().count(), 8);
@@ -854,7 +854,7 @@ fn revert_not_allowed_for_finalized() {
 		)
 	};
 
-	let canon = propose_and_import_blocks_wrap(BlockId::Number(0), 3);
+	let canon = propose_and_import_blocks_wrap(client.chain_info().genesis_hash, 3);
 
 	// Finalize best block
 	client.finalize_block(canon[2], None, false).unwrap();
@@ -912,12 +912,12 @@ fn importing_epoch_change_block_prunes_tree() {
 
 	// Create and import the canon chain and keep track of fork blocks (A, C, D)
 	// from the diagram above.
-	let canon = propose_and_import_blocks_wrap(BlockId::Number(0), 30);
+	let canon = propose_and_import_blocks_wrap(client.chain_info().genesis_hash, 30);
 
 	// Create the forks
-	let fork_1 = propose_and_import_blocks_wrap(BlockId::Hash(canon[0]), 10);
-	let fork_2 = propose_and_import_blocks_wrap(BlockId::Hash(canon[12]), 15);
-	let fork_3 = propose_and_import_blocks_wrap(BlockId::Hash(canon[18]), 10);
+	let fork_1 = propose_and_import_blocks_wrap(canon[0], 10);
+	let fork_2 = propose_and_import_blocks_wrap(canon[12], 15);
+	let fork_3 = propose_and_import_blocks_wrap(canon[18], 10);
 
 	// We should be tracking a total of 9 epochs in the fork tree
 	assert_eq!(epoch_changes.shared_data().tree().iter().count(), 9);
@@ -928,7 +928,7 @@ fn importing_epoch_change_block_prunes_tree() {
 	// We finalize block #13 from the canon chain, so on the next epoch
 	// change the tree should be pruned, to not contain F (#7).
 	client.finalize_block(canon[12], None, false).unwrap();
-	propose_and_import_blocks_wrap(BlockId::Hash(client.chain_info().best_hash), 7);
+	propose_and_import_blocks_wrap(client.chain_info().best_hash, 7);
 
 	let nodes: Vec<_> = epoch_changes.shared_data().tree().iter().map(|(h, _, _)| *h).collect();
 
@@ -941,7 +941,7 @@ fn importing_epoch_change_block_prunes_tree() {
 
 	// finalizing block #25 from the canon chain should prune out the second fork
 	client.finalize_block(canon[24], None, false).unwrap();
-	propose_and_import_blocks_wrap(BlockId::Hash(client.chain_info().best_hash), 8);
+	propose_and_import_blocks_wrap(client.chain_info().best_hash, 8);
 
 	let nodes: Vec<_> = epoch_changes.shared_data().tree().iter().map(|(h, _, _)| *h).collect();
 
@@ -973,7 +973,7 @@ fn verify_slots_are_strictly_increasing() {
 		mutator: Arc::new(|_, _| ()),
 	};
 
-	let genesis_header = client.header(&BlockId::Number(0)).unwrap().unwrap();
+	let genesis_header = client.header(client.chain_info().genesis_hash).unwrap().unwrap();
 
 	// we should have no issue importing this block
 	let b1 = propose_and_import_block(
@@ -984,7 +984,7 @@ fn verify_slots_are_strictly_increasing() {
 		&runtime,
 	);
 
-	let b1 = client.header(&BlockId::Hash(b1)).unwrap().unwrap();
+	let b1 = client.header(b1).unwrap().unwrap();
 
 	// we should fail to import this block since the slot number didn't increase.
 	// we will panic due to the `PanickingBlockImport` defined above.
@@ -1077,9 +1077,9 @@ fn obsolete_blocks_aux_data_cleanup() {
 	// G --- A1 --- A2 --- A3 --- A4           ( < fork1 )
 	//                      \-----C4 --- C5    ( < fork3 )
 
-	let fork1_hashes = propose_and_import_blocks_wrap(BlockId::Number(0), 4);
-	let fork2_hashes = propose_and_import_blocks_wrap(BlockId::Number(0), 2);
-	let fork3_hashes = propose_and_import_blocks_wrap(BlockId::Number(3), 2);
+	let fork1_hashes = propose_and_import_blocks_wrap(client.chain_info().genesis_hash, 4);
+	let fork2_hashes = propose_and_import_blocks_wrap(client.chain_info().genesis_hash, 2);
+	let fork3_hashes = propose_and_import_blocks_wrap(fork1_hashes[2], 2);
 
 	// Check that aux data is present for all but the genesis block.
 	assert!(aux_data_check(&[client.chain_info().genesis_hash], false));

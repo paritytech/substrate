@@ -1417,7 +1417,7 @@ where
 		let parent_hash = *block.header.parent_hash();
 		let parent_header = self
 			.client
-			.header(BlockId::Hash(parent_hash))
+			.header(parent_hash)
 			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
 			.ok_or_else(|| {
 				ConsensusError::ChainLookup(
@@ -1654,7 +1654,7 @@ where
 
 	let finalized_slot = {
 		let finalized_header = client
-			.header(BlockId::Hash(info.finalized_hash))
+			.header(info.finalized_hash)
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 			.expect(
 				"best finalized hash was given by client; finalized headers must exist in db; qed",

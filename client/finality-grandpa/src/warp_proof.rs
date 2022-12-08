@@ -172,7 +172,7 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 			});
 
 			if let Some(latest_justification) = latest_justification {
-				let header = blockchain.header(BlockId::Hash(latest_justification.target().1))?
+				let header = blockchain.header(latest_justification.target().1)?
 					.expect("header hash corresponds to a justification in db; must exist in db as well; qed.");
 
 				proofs.push(WarpSyncFragment { header, justification: latest_justification })
