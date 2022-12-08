@@ -15,6 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::LOG_TARGET;
 use frame_support::{
 	traits::{Get, StorageVersion},
 	weights::Weight,
