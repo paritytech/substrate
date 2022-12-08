@@ -32,8 +32,6 @@ pub struct PruningParams {
 	///  'archive'            Keep the state of all blocks.
 	///  'archive-canonical'  Keep only the state of finalized blocks.
 	///   number              Keep the state of the last number of finalized blocks.
-	///
-	/// The default option is to keep the last 256 blocks (number == 256).
 	#[arg(alias = "pruning", long, value_name = "PRUNING_MODE", default_value = "256")]
 	pub state_pruning: DatabasePruningMode,
 	/// Specify the blocks pruning mode.
@@ -44,9 +42,7 @@ pub struct PruningParams {
 	/// Possible values:
 	///  'archive'            Keep all blocks.
 	///  'archive-canonical'  Keep only finalized blocks.
-	///   number              Keep the last number of finalized blocks.
-	///
-	/// The default option is 'archive-canonical'.
+	///   number              Keep the last `number` of finalized blocks.
 	#[arg(
 		alias = "keep-blocks",
 		long,
