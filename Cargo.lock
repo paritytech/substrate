@@ -5325,7 +5325,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-message-queue"
-version = "0.9.29"
+version = "7.0.0-dev"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
