@@ -102,6 +102,20 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+pub(crate) const LOG_TARGET: &'static str = "sudo-mangata";
+pub(crate) const ALERT_STRING: &'static str = "ALERT!ALERT!ALERT!";
+
+// syntactic sugar for logging.
+#[macro_export]
+macro_rules! alert_log {
+	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
+		log::$level!(
+			target: crate::LOG_TARGET,
+			concat!("[{:?}] {:?} ", $patter), <frame_system::Pallet<T>>::block_number(), crate::ALERT_STRING $(, $values)*
+		)
+	};
+}
+
 pub use pallet::*;
 
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
@@ -151,8 +165,8 @@ pub mod pallet {
 
 			let res = call.clone().dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
 			Self::deposit_event(Event::Sudid { sudo_result: res.clone().map(|_| ()).map_err(|e| e.error) });
-			log::info!(
-				target: "runtime::sudo",
+			alert_log!(
+				info,
 				"A sudo action was performed: Call - {:?}, Result - {:?}!",
 				call,
 				res
@@ -183,8 +197,8 @@ pub mod pallet {
 
 			let res = call.clone().dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
 			Self::deposit_event(Event::Sudid { sudo_result: res.clone().map(|_| ()).map_err(|e| e.error) });
-			log::info!(
-				target: "runtime::sudo",
+			alert_log!(
+				info,
 				"A sudo action was performed with unchecked weight: Call - {:?}, Result - {:?}!",
 				call,
 				res
@@ -214,8 +228,8 @@ pub mod pallet {
 			let new = T::Lookup::lookup(new)?;
 
 			Self::deposit_event(Event::KeyChanged { old_sudoer: Key::<T>::get() });
-			log::info!(
-				target: "runtime::sudo",
+			alert_log!(
+				info,
 				"sudo key was changed: New Key - {:?}!",
 				new.clone(),
 			);
@@ -260,8 +274,8 @@ pub mod pallet {
 			Self::deposit_event(Event::SudoAsDone {
 				sudo_result: res.clone().map(|_| ()).map_err(|e| e.error),
 			});
-			log::info!(
-				target: "runtime::sudo",
+			alert_log!(
+				info,
 				"A sudo_as action was performed: Who - {:?}, Call - {:?}, Result - {:?}!",
 				who,
 				call,

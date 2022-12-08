@@ -65,6 +65,20 @@ mod benchmarking;
 pub mod migrations;
 pub mod weights;
 
+pub(crate) const LOG_TARGET: &'static str = "collective-mangata";
+pub(crate) const ALERT_STRING: &'static str = "ALERT!ALERT!ALERT!";
+
+// syntactic sugar for logging.
+#[macro_export]
+macro_rules! alert_log {
+	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
+		log::$level!(
+			target: crate::LOG_TARGET,
+			concat!("[{:?}] {:?} ", $patter), <frame_system::Pallet<T>>::block_number(), crate::ALERT_STRING $(, $values)*
+		)
+	};
+}
+
 pub use pallet::*;
 pub use weights::WeightInfo;
 
@@ -457,15 +471,17 @@ pub mod pallet {
 			ensure!(proposal_len <= length_bound as usize, Error::<T, I>::WrongProposalLength);
 
 			let proposal_hash = T::Hashing::hash_of(&proposal);
-			let result = proposal.dispatch(RawOrigin::Member(who).into());
+			let result = proposal.clone().dispatch(RawOrigin::Member(who.clone()).into());
 			Self::deposit_event(Event::MemberExecuted {
 				proposal_hash,
 				result: result.map(|_| ()).map_err(|e| e.error),
 			});
 
-			log::info!(
-				target: "runtime::collective",
-				"A member has executed a proposal!"
+			alert_log!(
+				info,
+				"A member has executed a proposal! Member: {:?}, Proposal: {:?}",
+				who,
+				proposal
 			);
 
 			Ok(get_result_weight(result)
@@ -706,15 +722,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(!<ProposalOf<T, I>>::contains_key(proposal_hash), Error::<T, I>::DuplicateProposal);
 
 		let seats = Self::members().len() as MemberCount;
-		let result = proposal.dispatch(RawOrigin::Members(1, seats).into());
+		let result = proposal.clone().dispatch(RawOrigin::Members(1, seats).into());
 		Self::deposit_event(Event::Executed {
 			proposal_hash,
 			result: result.map(|_| ()).map_err(|e| e.error),
 		});
 		
-		log::info!(
-			target: "runtime::collective",
-			"A member has executed a proposal!"
+		alert_log!(
+			info,
+			"A member has executed a proposal! Proposal: {:?}",
+			proposal
 		);
 
 		Ok((proposal_len as u32, result))
@@ -741,7 +758,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let index = Self::proposal_count();
 		<ProposalCount<T, I>>::mutate(|i| *i += 1);
-		<ProposalOf<T, I>>::insert(proposal_hash, proposal);
+		<ProposalOf<T, I>>::insert(proposal_hash, proposal.clone());
 		<ProposalProposedTime<T, I>>::insert(proposal_hash, frame_system::Pallet::<T>::block_number());
 
 		let votes = {
@@ -757,9 +774,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			threshold,
 		});
 		
-		log::info!(
-			target: "runtime::collective",
-			"A proposal has been proposed!"
+		alert_log!(
+			info,
+			"A proposal has been proposed! Proposal: {:?}",
+			proposal
 		);
 
 		Ok((proposal_len as u32, active_proposals as u32))
@@ -805,16 +823,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let yes_votes = voting.ayes.len() as MemberCount;
 		let no_votes = voting.nays.len() as MemberCount;
 		Self::deposit_event(Event::Voted {
-			account: who,
-			proposal_hash: proposal,
+			account: who.clone(),
+			proposal_hash: proposal.clone(),
 			voted: approve,
 			yes: yes_votes,
 			no: no_votes,
 		});
 
-		log::info!(
-			target: "runtime::collective",
-			"A member has voted on a proposal!"
+		alert_log!(
+			info,
+			"A member has voted on a proposal! Member: {:?}, Proposal: {:?}, Voted: {:?}",
+			who,
+			proposal,
+			approve
 		);
 
 		Voting::<T, I>::insert(&proposal, voting);
@@ -852,9 +873,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			)?;
 			Self::deposit_event(Event::Closed { proposal_hash, yes: yes_votes, no: no_votes });
 			
-			log::info!(
-				target: "runtime::collective",
-				"A proposal has been closed!"
+			alert_log!(
+				info,
+				"A proposal has been closed! Proposal Hash: {:?}",
+				proposal_hash.clone()
 			);
 
 			let (proposal_weight, proposal_count) =
@@ -870,9 +892,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		} else if disapproved {
 			Self::deposit_event(Event::Closed { proposal_hash, yes: yes_votes, no: no_votes });
 			
-			log::info!(
-				target: "runtime::collective",
-				"A proposal has been closed!"
+			alert_log!(
+				info,
+				"A proposal has been closed! Proposal Hash: {:?}",
+				proposal_hash.clone()
 			);
 
 			let proposal_count = Self::do_disapprove_proposal(proposal_hash);
@@ -906,9 +929,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			)?;
 			Self::deposit_event(Event::Closed { proposal_hash, yes: yes_votes, no: no_votes });
 			
-			log::info!(
-				target: "runtime::collective",
-				"A proposal has been closed!"
+			alert_log!(
+				info,
+				"A proposal has been closed! Proposal Hash: {:?}",
+				proposal_hash.clone()
 			);
 
 			let (proposal_weight, proposal_count) =
@@ -924,9 +948,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		} else {
 			Self::deposit_event(Event::Closed { proposal_hash, yes: yes_votes, no: no_votes });
 			
-			log::info!(
-				target: "runtime::collective",
-				"A proposal has been closed!"
+			alert_log!(
+				info,
+				"A proposal has been closed! Proposal Hash: {:?}",
+				proposal_hash.clone()
 			);
 
 			let proposal_count = Self::do_disapprove_proposal(proposal_hash);
@@ -976,22 +1001,26 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> (Weight, u32) {
 		Self::deposit_event(Event::Approved { proposal_hash });
 		
-		log::info!(
-			target: "runtime::collective",
-			"A proposal has been approved!"
+		alert_log!(
+			info,
+			"A proposal has been approved! Proposal Hash: {:?}, Proposal: {:?}",
+			proposal_hash.clone(),
+			proposal.clone()
 		);
 
 		let dispatch_weight = proposal.get_dispatch_info().weight;
 		let origin = RawOrigin::Members(yes_votes, seats).into();
-		let result = proposal.dispatch(origin);
+		let result = proposal.clone().dispatch(origin);
 		Self::deposit_event(Event::Executed {
 			proposal_hash,
 			result: result.map(|_| ()).map_err(|e| e.error),
 		});
 		
-		log::info!(
-			target: "runtime::collective",
-			"A proposal has been executed!"
+		alert_log!(
+			info,
+			"A proposal has been executed! Proposal Hash: {:?}, Proposal: {:?}",
+			proposal_hash.clone(),
+			proposal.clone()
 		);
 
 		// default to the dispatch info weight for safety
@@ -1006,9 +1035,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// disapproved
 		Self::deposit_event(Event::Disapproved { proposal_hash });
 
-		log::info!(
-			target: "runtime::collective",
-			"A proposal has been disapproved!"
+		alert_log!(
+			info,
+			"A proposal has been disapproved! Proposal Hash: {:?}",
+			proposal_hash.clone()
 		);
 
 		Self::remove_proposal(proposal_hash)
@@ -1086,9 +1116,10 @@ impl<T: Config<I>, I: 'static> ChangeMembers<T::AccountId> for Pallet<T, I> {
 			new_members: new.to_vec()
 		});
 
-		log::info!(
-			target: "runtime::collective",
-			"Collective members have changed!!!"
+		alert_log!(
+			info,
+			"Collective members have changed!!! New Members: {:?}",
+			new.to_vec(),
 		);
 
 	}
@@ -1096,12 +1127,13 @@ impl<T: Config<I>, I: 'static> ChangeMembers<T::AccountId> for Pallet<T, I> {
 	fn set_prime(prime: Option<T::AccountId>) {
 		Prime::<T, I>::set(prime.clone());
 		Pallet::<T, I>::deposit_event(Event::PrimeSet {
-			new_prime: prime
+			new_prime: prime.clone()
 		});
 
-		log::info!(
-			target: "runtime::collective",
-			"Prime member has changed!"
+		alert_log!(
+			info,
+			"Prime member has changed! New Prime: {:?}",
+			prime,
 		);
 
 	}
