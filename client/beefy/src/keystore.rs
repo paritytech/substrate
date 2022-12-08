@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use sp_application_crypto::RuntimeAppPublic;
-use sp_core::{blake2_256, keccak_256};
+use sp_core::keccak_256;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::traits::Keccak256;
 
@@ -25,7 +25,8 @@ use log::warn;
 
 use beefy_primitives::{
 	ecdsa_crypto::{Public as ECDSAPublic, Signature as ECDSASignature},
-	bls_crypto::{Public as BLSPublic, Signature as BLSSignature},
+        bls_crypto::{Public as BLSPublic, Signature as BLSSignature},
+        BeefyVerify,
 	KEY_TYPE,
 };
 
@@ -106,7 +107,7 @@ impl BeefyKeystore<ECDSAPublic,ECDSASignature> for  BeefyECDSAKeystore
 	fn sign(&self, public: &Self::Public, message: &[u8]) -> Result<ECDSASignature,  error::Error> {
 		let store = self.0.clone().ok_or_else(|| error::Error::Keystore("no Keystore".into()))?;
 
-		let msg = blake2_256(message);
+		let msg = keccak_256(message);
 		let public = public.as_ref();
 
 		let sig = SyncCryptoStore::ecdsa_sign_prehashed(&*store, KEY_TYPE, public, &msg)
@@ -145,11 +146,7 @@ impl BeefyKeystore<ECDSAPublic,ECDSASignature> for  BeefyECDSAKeystore
 	///
 
 	fn verify(public: &Self::Public, sig: &ECDSASignature, message: &[u8]) -> bool {
-		let msg = blake2_256(message);
-		let sig = sig.as_ref();
-		let public = public.as_ref();
-
-		sp_core::ecdsa::Pair::verify_prehashed(sig, &msg, public)
+	    BeefyVerify::<Keccak256>::verify(sig, message, public)
 	}
 
 	fn authority_id_to_public_key(auth_id: &ECDSAPublic) -> Result<Self::Public,  error::Error> {
@@ -165,7 +162,7 @@ impl BeefyKeystore<BLSPublic, BLSSignature> for  BeefyBLSKeystore
 	fn new(keystore: SyncCryptoStorePtr) -> Self {	
 		Self(Some(keystore))
 	}
-
+    
 	/// Check if the keystore contains a private key for one of the public keys
 	/// contained in `keys`. A public key with a matching private key is known
 	/// as a local authority id.
@@ -197,7 +194,7 @@ impl BeefyKeystore<BLSPublic, BLSSignature> for  BeefyBLSKeystore
 	fn sign(&self, public: &Self::Public, message: &[u8]) -> Result<BLSSignature,  error::Error> {
 		let store = self.0.clone().ok_or_else(|| error::Error::Keystore("no Keystore".into()))?;
 
-		let msg = blake2_256(message);
+		let msg = keccak_256(message);
 		let public = public.as_ref();
 
 		let sig = SyncCryptoStore::bls_sign(&*store, KEY_TYPE, public, &msg)
@@ -334,8 +331,9 @@ pub mod tests {
 	use std::sync::Arc;
 
 	use sc_keystore::LocalKeystore;
-	use sp_core::{ecdsa, bls, keccak_256, Pair, blake2_256};
-	use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+	use sp_core::{ecdsa, bls, keccak_256, Pair};
+        use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+        use sp_application_crypto::Wraps;
 
 	use beefy_primitives::{ecdsa_crypto, KEY_TYPE};
         use sp_runtime::testing::TestSignature;
@@ -364,8 +362,13 @@ pub mod tests {
 		 
 	}
 
+    pub(crate) trait PrehashedSigner : Pair {
+	fn sign_prehashed(&self, hashed_message : &[u8; 32]) -> Self::Signature;
+    }
+
+ 
     pub(crate) trait  GenericKeyring<TKeyPair> where
-        TKeyPair: Clone + Sync + Send + From<Keyring> + Pair,
+        TKeyPair: Clone + Sync + Send + From<Keyring> + Pair + PrehashedSigner,
     {
 	/// Sign `msg`.
 	fn sign(self, msg: &[u8]) -> TKeyPair::Signature;
@@ -381,7 +384,7 @@ pub mod tests {
     }
 	
     impl<TKeyPair> GenericKeyring<TKeyPair> for Keyring where
-        TKeyPair: Clone + Sync + Send + From<Keyring> + Pair,
+        TKeyPair: Clone + Sync + Send + From<Keyring> + Pair + PrehashedSigner,
     {
  	// type Signature = ecdsa_crypto::Signature;
 	// type Public = ecdsa_crypto::Public;
@@ -389,8 +392,8 @@ pub mod tests {
 	
 	/// Sign `msg`.
 	fn sign(self, msg: &[u8]) -> TKeyPair::Signature {
-	    //let msg = keccak_256(msg);
-	    TKeyPair::from(self).sign(&msg).into()
+	    let msg = keccak_256(msg);
+	    TKeyPair::from(self).sign_prehashed(&msg).into()
 	}
 
 	/// Return key pair.
@@ -409,6 +412,15 @@ pub mod tests {
 	}
 
     }
+    
+    impl PrehashedSigner for ecdsa_crypto::Pair
+    {
+	fn sign_prehashed(&self, hashed_message : &[u8; 32]) -> Self::Signature {
+	    self.as_inner_ref().sign_prehashed(hashed_message).into()
+	}
+
+    }
+    
 
     impl From<Keyring> for ecdsa_crypto::Pair
     {
@@ -429,17 +441,17 @@ pub mod tests {
 
     #[test]
     fn verify_should_work() {
-		let msg = b"I am Alice!";
+		let msg = keccak_256(b"I am Alice!");
 		let sig = <Keyring as GenericKeyring<ecdsa_crypto::Pair>>::sign(Keyring::Alice, b"I am Alice!");
 
-		assert!(ecdsa_crypto::Pair::verify(
+		assert!(ecdsa::Pair::verify_prehashed(
 			&sig.clone().into(),
 			&msg,
 			&<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::public(Keyring::Alice).into(),
 		));
 
 		// different public key -> fail
-		assert!(!ecdsa_crypto::Pair::verify(
+		assert!(!ecdsa::Pair::verify_prehashed(
 			&sig.clone().into(),
 			&msg,
 			&<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::public(Keyring::Bob).into(),
@@ -449,7 +461,7 @@ pub mod tests {
 
 		// different msg -> fail
 		assert!(
-			!ecdsa_crypto::Pair::verify(&sig.into(), &msg, &<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::public(Keyring::Alice).into(),)
+			!ecdsa::Pair::verify_prehashed(&sig.into(), &msg, &<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::public(Keyring::Alice).into(),)
 		);
 	}
 
