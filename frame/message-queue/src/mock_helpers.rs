@@ -111,7 +111,7 @@ pub fn book_for<T: Config>(page: &PageOf<T>) -> BookStateOf<T> {
 		begin: 0,
 		end: 1,
 		ready_neighbours: None,
-		message_count: page.remaining.into(),
+		message_count: page.remaining.into() as u64,
 		size: page.remaining_size.into() as u64,
 	}
 }

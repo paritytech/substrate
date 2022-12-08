@@ -88,7 +88,7 @@ pub trait ServiceQueues {
 /// The resource footprint of a queue.
 #[derive(Default, Copy, Clone, Eq, PartialEq, RuntimeDebug)]
 pub struct Footprint {
-	pub count: u32,
+	pub count: u64,
 	pub size: u64,
 }
 

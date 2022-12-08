@@ -411,7 +411,7 @@ pub struct BookState<MessageOrigin> {
 	/// neighbours. This wraps around.
 	ready_neighbours: Option<Neighbours<MessageOrigin>>,
 	/// The number of unprocessed messages stored at present.
-	message_count: u32,
+	message_count: u64,
 	/// The total size of all unprocessed messages stored at present.
 	size: u64,
 }
@@ -425,11 +425,11 @@ impl<MessageOrigin> Default for BookState<MessageOrigin> {
 /// Notifies the implementor of changes to a queue. Mainly when messages got added or removed.
 pub trait OnQueueChanged<Id> {
 	/// The queue `id` changed and now has these properties.
-	fn on_queue_changed(id: Id, items_count: u32, items_size: u64);
+	fn on_queue_changed(id: Id, items_count: u64, items_size: u64);
 }
 
 impl<Id> OnQueueChanged<Id> for () {
-	fn on_queue_changed(_: Id, _: u32, _: u64) {}
+	fn on_queue_changed(_: Id, _: u64, _: u64) {}
 }
 
 #[frame_support::pallet]
@@ -870,7 +870,7 @@ impl<T: Config> Pallet<T> {
 		Pages::<T>::remove(origin, page_index);
 		debug_assert!(book_state.count > 0, "reaping a page implies there are pages");
 		book_state.count.saturating_dec();
-		book_state.message_count.saturating_reduce(page.remaining.into());
+		book_state.message_count.saturating_reduce(page.remaining.into() as u64);
 		book_state.size.saturating_reduce(page.remaining_size.into() as u64);
 		BookStateFor::<T>::insert(origin, &book_state);
 		T::QueueChangeHandler::on_queue_changed(

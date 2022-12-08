@@ -229,7 +229,7 @@ fn reap_page_permanent_overweight_works() {
 			assert_ok!(MessageQueue::do_reap_page(&Here, i));
 			assert_eq!(
 				QueueChanges::take(),
-				vec![(Here, b.message_count - (i + 1), b.size - (i as u64 + 1) * 8)]
+				vec![(Here, b.message_count - (i as u64 + 1), b.size - (i as u64 + 1) * 8)]
 			);
 		}
 		// Cannot reap any more pages.
@@ -1054,17 +1054,13 @@ fn enqueue_message_works() {
 		let n = max_msg_per_page * 3;
 		for i in 1..=n {
 			MessageQueue::enqueue_message(msg("a"), Here);
-			assert_eq!(
-				QueueChanges::take(),
-				vec![(Here, i as u32, i)],
-				"OnQueueChanged not called"
-			);
+			assert_eq!(QueueChanges::take(), vec![(Here, i, i)], "OnQueueChanged not called");
 		}
 		assert_eq!(Pages::<Test>::iter().count(), 3);
 
 		// Enqueue one more onto page 4.
 		MessageQueue::enqueue_message(msg("abc"), Here);
-		assert_eq!(QueueChanges::take(), vec![(Here, (n + 1) as u32, n + 3)]);
+		assert_eq!(QueueChanges::take(), vec![(Here, n + 1, n + 3)]);
 		assert_eq!(Pages::<Test>::iter().count(), 4);
 
 		// Check the state.
@@ -1091,12 +1087,12 @@ fn enqueue_messages_works() {
 		// Now queue all messages at once.
 		MessageQueue::enqueue_messages(msgs.into_iter(), Here);
 		// The changed handler should only be called once.
-		assert_eq!(QueueChanges::take(), vec![(Here, n as u32, n)], "OnQueueChanged not called");
+		assert_eq!(QueueChanges::take(), vec![(Here, n, n)], "OnQueueChanged not called");
 		assert_eq!(Pages::<Test>::iter().count(), 3);
 
 		// Enqueue one more onto page 4.
 		MessageQueue::enqueue_message(msg("abc"), Here);
-		assert_eq!(QueueChanges::take(), vec![(Here, (n + 1) as u32, n + 3)]);
+		assert_eq!(QueueChanges::take(), vec![(Here, n + 1, n + 3)]);
 		assert_eq!(Pages::<Test>::iter().count(), 4);
 
 		// Check the state.
