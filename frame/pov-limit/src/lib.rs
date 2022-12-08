@@ -87,7 +87,7 @@ pub mod pallet {
 				weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
 				if remaining_weight.any_lt(weight) {
 					weight = remaining_weight;
-					break;
+					break
 				}
 
 				storage::unhashed::put(&i.to_le_bytes(), &i.to_le_bytes());
