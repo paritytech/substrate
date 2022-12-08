@@ -857,12 +857,39 @@ impl<T: Config> Pallet<T> {
 		let cullable = || {
 			let total_pages = book_state.count;
 			let ready_pages = book_state.end.saturating_sub(book_state.begin).min(total_pages);
+
+			// The number of stale pages - i.e. pages which contain unprocessed overweight messages.
+			// We would prefer to keep these around but will restrict how far into history they can
+			// extend if we notice that there's too many of them.
+			//
+			// We don't know *where* in history these pages are so we use a dynamic formula which
+			// reduces the historical time horizon as the stale pages pile up and increases it as
+			// they reduce.
 			let stale_pages = total_pages - ready_pages;
+
+			// The maximum number of stale pages (i.e. of overweight messages) allowed before
+			// culling can happen at all. Once there are more stale pages than this, then historical
+			// pages may be dropped, even if they contain unprocessed overweight messages.
 			let max_stale = T::MaxStale::get();
-			if stale_pages <= max_stale {
-				return false
-			}
-			let watermark = book_state.begin.saturating_sub(max_stale);
+
+			// The amount beyond the maximum which are being used. If it's not beyond the maximum
+			// then we exit now since no culling is needed.
+			let overflow = match stale_pages.checked_sub(max_stale + 1) {
+				Some(x) => x + 1,
+				None => return false,
+			};
+
+			// The special formula which tells us how deep into index-history we will pages. As
+			// the overflow is greater (and thus the need to drop items from storage is more urgent)
+			// this is reduced, allowing a greater range of pages to be culled.
+			// With a minimum `overflow` (`1`), this returns `max_stale ** 2`, indicating we only
+			// cull beyond that number of indices deep into history.
+			// At this overflow increases, our depth reduces down to a limit of `max_stale`. We
+			// never want to reduce below this since this will certainly allow enough pages to be
+			// culled in order to bring `overflow` back to zero.
+			let backlog = (max_stale * max_stale / overflow).max(max_stale);
+
+			let watermark = book_state.begin.saturating_sub(backlog);
 			page_index < watermark
 		};
 		ensure!(reapable || cullable(), Error::<T>::NotReapable);
