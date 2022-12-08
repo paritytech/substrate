@@ -24,6 +24,8 @@ use sp_runtime::{traits::Convert, BoundedSlice, RuntimeDebug};
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 use sp_weights::Weight;
 
+/// Errors that can happen when attempting to process a message with
+/// [`ProcessMessage::process_message()`].
 #[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, TypeInfo, RuntimeDebug)]
 pub enum ProcessMessageError {
 	/// The message data format is unknown (e.g. unrecognised header)
@@ -38,6 +40,7 @@ pub enum ProcessMessageError {
 	Overweight(Weight),
 }
 
+/// Can process messages from a specific origin.
 pub trait ProcessMessage {
 	/// The transport from where a message originates.
 	type Origin: FullCodec + MaxEncodedLen + Clone + Eq + PartialEq + TypeInfo + Debug;
@@ -50,13 +53,19 @@ pub trait ProcessMessage {
 	) -> Result<(bool, Weight), ProcessMessageError>;
 }
 
+/// Errors that can happen when attempting to execute an overweight message with
+/// [`ServiceQueues::execute_overweight()`].
 #[derive(Eq, PartialEq, RuntimeDebug)]
 pub enum ExecuteOverweightError {
+	/// The referenced message was not found.
 	NotFound,
+	/// The available weight was insufficient to execute the message.
 	InsufficientWeight,
 }
 
+/// Can service queues and execute overweight messages.
 pub trait ServiceQueues {
+	/// Addresses a specific overweight message.
 	type OverweightMessageAddress;
 
 	/// Service all message queues in some fair manner.
@@ -66,6 +75,8 @@ pub trait ServiceQueues {
 	/// Returns the dynamic weight used by this call; is never greater than `weight_limit`.
 	fn service_queues(weight_limit: Weight) -> Weight;
 
+	/// Executes a message that could not be executed by [`Self::service_queues()`] because it was
+	/// temporarily overweight.
 	fn execute_overweight(
 		_weight_limit: Weight,
 		_address: Self::OverweightMessageAddress,
@@ -74,13 +85,16 @@ pub trait ServiceQueues {
 	}
 }
 
+/// The resource footprint of a queue.
 #[derive(Default, Copy, Clone, Eq, PartialEq, RuntimeDebug)]
 pub struct Footprint {
-	pub count: u32,
-	pub size: u32,
+	pub count: u64,
+	pub size: u64,
 }
 
+/// Can enqueue messages for multiple origins.
 pub trait EnqueueMessage<Origin: MaxEncodedLen> {
+	/// The maximal length any enqueued message may have.
 	type MaxMessageLen: Get<u32>;
 
 	/// Enqueue a single `message` from a specific `origin`.
@@ -113,6 +127,7 @@ impl<Origin: MaxEncodedLen> EnqueueMessage<Origin> for () {
 	}
 }
 
+/// Transform the origin of an [`EnqueueMessage`] via `C::convert`.
 pub struct TransformOrigin<E, O, N, C>(PhantomData<(E, O, N, C)>);
 impl<E: EnqueueMessage<O>, O: MaxEncodedLen, N: MaxEncodedLen, C: Convert<N, O>> EnqueueMessage<N>
 	for TransformOrigin<E, O, N, C>
@@ -139,7 +154,9 @@ impl<E: EnqueueMessage<O>, O: MaxEncodedLen, N: MaxEncodedLen, C: Convert<N, O>>
 	}
 }
 
+/// Handles incoming messages for a single origin.
 pub trait HandleMessage {
+	/// The maximal length any enqueued message may have.
 	type MaxMessageLen: Get<u32>;
 
 	/// Enqueue a single `message` with an implied origin.
@@ -157,6 +174,7 @@ pub trait HandleMessage {
 	fn footprint() -> Footprint;
 }
 
+/// Adapter type to transform an [`EnqueueMessage`] with an origin into a [`HandleMessage`] impl.
 pub struct EnqueueWithOrigin<E, O>(PhantomData<(E, O)>);
 impl<E: EnqueueMessage<O::Type>, O: TypedGet> HandleMessage for EnqueueWithOrigin<E, O>
 where

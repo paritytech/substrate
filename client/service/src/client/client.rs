@@ -67,7 +67,8 @@ use sp_keystore::SyncCryptoStorePtr;
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::{
-		Block as BlockT, HashFor, Header as HeaderT, NumberFor, One, SaturatedConversion, Zero,
+		Block as BlockT, BlockIdTo, HashFor, Header as HeaderT, NumberFor, One,
+		SaturatedConversion, Zero,
 	},
 	BuildStorage, Digest, Justification, Justifications, StateVersion,
 };
@@ -113,7 +114,6 @@ where
 	// Holds the block hash currently being imported. TODO: replace this with block queue.
 	importing_block: RwLock<Option<Block::Hash>>,
 	block_rules: BlockRules<Block>,
-	execution_extensions: ExecutionExtensions<Block>,
 	config: ClientConfig<Block>,
 	telemetry: Option<TelemetryHandle>,
 	_phantom: PhantomData<RA>,
@@ -230,20 +230,26 @@ where
 	Block: BlockT,
 	B: backend::LocalBackend<Block> + 'static,
 {
-	let call_executor =
-		LocalCallExecutor::new(backend.clone(), executor, spawn_handle, config.clone())?;
 	let extensions = ExecutionExtensions::new(
 		Default::default(),
 		keystore,
 		sc_offchain::OffchainDb::factory_from_backend(&*backend),
 	);
+
+	let call_executor = LocalCallExecutor::new(
+		backend.clone(),
+		executor,
+		spawn_handle,
+		config.clone(),
+		extensions,
+	)?;
+
 	Client::new(
 		backend,
 		call_executor,
 		build_genesis_storage,
 		Default::default(),
 		Default::default(),
-		extensions,
 		prometheus_registry,
 		telemetry,
 		config,
@@ -347,7 +353,6 @@ where
 		build_genesis_storage: &dyn BuildStorage,
 		fork_blocks: ForkBlocks<Block>,
 		bad_blocks: BadBlocks<Block>,
-		execution_extensions: ExecutionExtensions<Block>,
 		prometheus_registry: Option<Registry>,
 		telemetry: Option<TelemetryHandle>,
 		config: ClientConfig<Block>,
@@ -394,7 +399,6 @@ where
 			finality_actions: Default::default(),
 			importing_block: Default::default(),
 			block_rules: BlockRules::new(fork_blocks, bad_blocks),
-			execution_extensions,
 			config,
 			telemetry,
 			_phantom: Default::default(),
@@ -1386,7 +1390,7 @@ where
 	}
 
 	fn execution_extensions(&self) -> &ExecutionExtensions<Block> {
-		&self.execution_extensions
+		self.executor.execution_extensions()
 	}
 }
 
@@ -1580,7 +1584,7 @@ where
 	}
 }
 
-impl<B, E, Block, RA> sp_runtime::traits::BlockIdTo<Block> for Client<B, E, Block, RA>
+impl<B, E, Block, RA> BlockIdTo<Block> for Client<B, E, Block, RA>
 where
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block> + Send + Sync,
@@ -1637,7 +1641,7 @@ where
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block, Backend = B> + Send + Sync,
 	Block: BlockT,
-	RA: ConstructRuntimeApi<Block, Self>,
+	RA: ConstructRuntimeApi<Block, Self> + Send + Sync,
 {
 	type Api = <RA as ConstructRuntimeApi<Block, Self>>::RuntimeApi;
 
@@ -1651,6 +1655,7 @@ where
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block, Backend = B> + Send + Sync,
 	Block: BlockT,
+	RA: Send + Sync,
 {
 	type StateBackend = B::State;
 
@@ -1658,21 +1663,15 @@ where
 		&self,
 		params: CallApiAtParams<Block, B::State>,
 	) -> Result<Vec<u8>, sp_api::ApiError> {
-		let at = params.at;
-
-		let (manager, extensions) =
-			self.execution_extensions.manager_and_extensions(at, params.context);
-
 		self.executor
 			.contextual_call(
-				at,
+				params.at,
 				params.function,
 				&params.arguments,
 				params.overlayed_changes,
 				Some(params.storage_transaction_cache),
-				manager,
 				params.recorder,
-				Some(extensions),
+				params.context,
 			)
 			.map_err(Into::into)
 	}

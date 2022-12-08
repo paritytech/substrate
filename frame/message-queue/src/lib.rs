@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright 2022 Parity Technologies (UK) Ltd.
 // This file is part of Polkadot.
 
 // Polkadot is free software: you can redistribute it and/or modify
@@ -14,7 +14,170 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Pallet to handle XCM message queuing.
+//! # Generalized Message Queue Pallet
+//!
+//! Provides generalized message queuing and processing capabilities on a per-queue basis for
+//! arbitrary use-cases.
+//!
+//! # Design Goals
+//!
+//! 1. Minimal assumptions about `Message`s and `MessageOrigin`s. Both should be MEL bounded blobs.
+//!  This ensures the generality and reusability of the pallet.
+//! 2. Well known and tightly limited pre-dispatch PoV weights, especially for message execution.
+//!  This is paramount for the success of the pallet since message execution is done in
+//!  `on_initialize` which must _never_ under-estimate its PoV weight. It also needs a frugal PoV
+//!  footprint since PoV is scarce and this is (possibly) done in every block. This must also hold
+//! in  the presence of unpredictable message size distributions.
+//! 3. Usable as XCMP, DMP and UMP message/dispatch queue - possibly through adapter types.
+//!
+//! # Design
+//!
+//! The pallet has means to enqueue, store and process messages. This is implemented by having
+//! *queues* which store enqueued messages and can be *served* to process said messages. A queue is
+//! identified by its origin in the `BookStateFor`. Each message has an origin which defines into
+//! which queue it will be stored. Messages are stored by being appended to the last [`Page`] of a
+//! book. Each book keeps track of its pages by indexing `Pages`. The `ReadyRing` contains all
+//! queues which hold at least one unprocessed message and are thereby *ready* to be serviced. The
+//! `ServiceHead` indicates which *ready* queue is the next to be serviced.  
+//! The pallet implements [`frame_support::traits::EnqueueMessage`],
+//! [`frame_support::traits::ServiceQueues`] and has [`frame_support::traits::ProcessMessage`] and
+//! [`OnQueueChanged`] hooks to communicate with the outside world.
+//!
+//! NOTE: The storage items are not linked since they are not public.
+//!
+//! **Message Execution**
+//!
+//! Executing a message is offloaded to the [`Config::MessageProcessor`] which contains the actual
+//! logic of how to handle the message since they are blobs. A message can be temporarily or
+//! permanently overweight. The pallet will perpetually try to execute a temporarily overweight
+//! message. A permanently overweight message is skipped and must be executed manually.
+//!
+//! **Pagination**
+//!
+//! Queues are stored in a *paged* manner by splitting their messages into [`Page`]s. This results
+//! in a lot of complexity when implementing the pallet but is completely necessary to archive the
+//! second #[Design Goal](design-goals). The problem comes from the fact a message can *possibly* be
+//! quite large, lets say 64KiB. This then results in a *MEL* of at least 64KiB which results in a
+//! PoV of at least 64KiB. Now we have the assumption that most messages are much shorter than their
+//! maximum allowed length. This would result in most messages having a pre-dispatch PoV size which
+//! is much larger than their post-dispatch PoV size, possibly by a factor of thousand. Disregarding
+//! this observation would cripple the processing power of the pallet since it cannot straighten out
+//! this discrepancy at runtime. Conceptually, the implementation is packing as many messages into a
+//! single bounded vec, as actually fit into the bounds. This reduces the wasted PoV.
+//!
+//! **Page Data Layout**
+//!
+//! A Page contains a heap which holds all its messages. The heap is built by concatenating
+//! `(ItemHeader, Message)` pairs. The [`ItemHeader`] contains the length of the message which is
+//! needed for retrieving it. This layout allows for constant access time of the next message and
+//! linear access time for any message in the page. The header must remain minimal to reduce its PoV
+//! impact.
+//!
+//! **Weight Metering**
+//!
+//! The pallet utilizes the [`sp_weights::WeightMeter`] to manually track its consumption to always
+//! stay within the required limit. This implies that the message processor hook can calculate the
+//! weight of a message without executing it. This restricts the possible use-cases but is necessary
+//! since the pallet runs in `on_initialize` which has a hard weight limit. The weight meter is used
+//! in a way that `can_accrue` and `check_accrue` are always used to check the remaining weight of
+//! an operation before committing to it. The process of exiting due to insufficient weight is
+//! termed "bailing".
+//!
+//! # Scenario: Message enqueuing
+//!
+//! A message `m` is enqueued for origin `o` into queue `Q[o]` through
+//! [`frame_support::traits::EnqueueMessage::enqueue_message`]`(m, o)`.
+//!
+//! First the queue is either loaded if it exists or otherwise created with empty default values.
+//! The message is then inserted to the queue by appended it into its last `Page` or by creating a
+//! new `Page` just for `m` if it does not fit in there. The number of messages in the `Book` is
+//! incremented.
+//!
+//! `Q[o]` is now *ready* which will eventually result in `m` being processed.
+//!
+//! # Scenario: Message processing
+//!
+//! The pallet runs each block in `on_initialize` or when being manually called through
+//! [`frame_support::traits::ServiceQueues::service_queues`].
+//!
+//! First it tries to "rotate" the `ReadyRing` by one through advancing the `ServiceHead` to the
+//! next *ready* queue. It then starts to service this queue by servicing as many pages of it as
+//! possible. Servicing a page means to execute as many message of it as possible. Each executed
+//! message is marked as *processed* if the [`Config::MessageProcessor`] return Ok. An event
+//! [`Event::Processed`] is emitted afterwards. It is possible that the weight limit of the pallet
+//! will never allow a specific message to be executed. In this case it remains as unprocessed and
+//! is skipped. This process stops if either there are no more messages in the queue or the
+//! remaining weight became insufficient to service this queue. If there is enough weight it tries
+//! to advance to the next *ready* queue and service it. This continues until there are no more
+//! queues on which it can make progress or not enough weight to check that.
+//!
+//! # Scenario: Overweight execution
+//!
+//! A permanently over-weight message which was skipped by the message processing will never be
+//! executed automatically through `on_initialize` nor by calling
+//! [`frame_support::traits::ServiceQueues::service_queues`].
+//!
+//! Manual intervention in the form of
+//! [`frame_support::traits::ServiceQueues::execute_overweight`] is necessary. Overweight messages
+//! emit an [`Event::OverweightEnqueued`] event which can be used to extract the arguments for
+//! manual execution. This only works on permanently overweight messages. There is no guarantee that
+//! this will work since the message could be part of a stale page and be reaped before execution
+//! commences.
+//!
+//! # Terminology
+//!
+//! - `Message`: A blob of data into which the pallet has no introspection, defined as
+//! [`BoundedSlice<u8, MaxMessageLenOf<T>>`]. The message length is limited by [`MaxMessageLenOf`]
+//! which is calculated from [`Config::HeapSize`] and [`ItemHeader::max_encoded_len()`].
+//! - `MessageOrigin`: A generic *origin* of a message, defined as [`MessageOriginOf`]. The
+//! requirements for it are kept minimal to remain as generic as possible. The type is defined in
+//! [`frame_support::traits::ProcessMessage::Origin`].
+//! - `Page`: An array of `Message`s, see [`Page`]. Can never be empty.
+//! - `Book`: A list of `Page`s, see [`BookState`]. Can be empty.
+//! - `Queue`: A `Book` together with an `MessageOrigin` which can be part of the `ReadyRing`. Can
+//!   be empty.
+//! - `ReadyRing`: A double-linked list which contains all *ready* `Queue`s. It chains together the
+//!   queues via their `ready_neighbours` fields. A `Queue` is *ready* if it contains at least one
+//!   `Message` which can be processed. Can be empty.
+//! - `ServiceHead`: A pointer into the `ReadyRing` to the next `Queue` to be serviced.
+//! - (`un`)`processed`: A message is marked as *processed* after it was executed by the pallet. A
+//!   message which was either: not yet executed or could not be executed remains as `unprocessed`
+//!   which is the default state for a message after being enqueued.
+//! - `knitting`/`unknitting`: The means of adding or removing a `Queue` from the `ReadyRing`.
+//! - `MEL`: The Max Encoded Length of a type, see [`codec::MaxEncodedLen`].
+//!
+//! # Properties
+//!
+//! **Liveness - Enqueueing**
+//!
+//! It is always possible to enqueue any message for any `MessageOrigin`.
+//!
+//! **Liveness - Processing**
+//!
+//! `on_initialize` always respects its finite weight-limit.
+//!
+//! **Progress - Enqueueing**
+//!
+//! An enqueued message immediately becomes *unprocessed* and thereby eligible for execution.
+//!
+//! **Progress - Processing**
+//!
+//! The pallet will execute at least one unprocessed message per block, if there is any. Ensuring
+//! this property needs careful consideration of the concrete weights, since it is possible that the
+//! weight limit of `on_initialize` never allows for the execution of even one message; trivially if
+//! the limit is set to zero. `integrity_test` can be used to ensure that this property holds.
+//!
+//! **Fairness - Enqueuing**
+//!
+//! Enqueueing a message for a specific `MessageOrigin` does not influence the ability to enqueue a
+//! message for the same of any other `MessageOrigin`; guaranteed by **Liveness - Enqueueing**.
+//!
+//! **Fairness - Processing**
+//!
+//! The average amount of weight available for message processing is the same for each queue if the
+//! number of queues is constant. Creating a new queue must therefore be, possibly economically,
+//! expensive. Currently this is archived by having one queue per para-chain/thread, which keeps the
+//! number of queues within `O(n)` and should be "good enough".
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -44,7 +207,7 @@ use sp_runtime::{
 	SaturatedConversion, Saturating,
 };
 use sp_std::{fmt::Debug, ops::Deref, prelude::*, vec};
-use sp_weights::WeightCounter;
+use sp_weights::WeightMeter;
 pub use weights::WeightInfo;
 
 /// Type for identifying a page.
@@ -71,6 +234,8 @@ pub struct Page<Size: Into<u32> + Debug + Clone + Default, HeapSize: Get<Size>> 
 	/// skipped.
 	remaining: Size,
 	/// The size of all remaining messages to be processed.
+	///
+	/// Includes overweight messages outside of the `first` to `last` window.
 	remaining_size: Size,
 	/// The number of items before the `first` item in this page.
 	first_index: Size,
@@ -109,7 +274,7 @@ impl<
 		}
 	}
 
-	/// Try to append one message from an origin.
+	/// Try to append one message to a page.
 	fn try_append_message<T: Config>(
 		&mut self,
 		message: BoundedSlice<u8, MaxMessageLenOf<T>>,
@@ -197,6 +362,8 @@ impl<
 
 	/// Set the `is_processed` flag for the item at `pos` to be `true` if not already and decrement
 	/// the `remaining` counter of the page.
+	///
+	/// Does nothing if no [`ItemHeader`] could be decoded at the given position.
 	fn note_processed_at_pos(&mut self, pos: usize) {
 		if let Ok(mut h) = ItemHeader::<Size>::decode(&mut &self.heap[pos..]) {
 			if !h.is_processed {
@@ -208,17 +375,26 @@ impl<
 		}
 	}
 
+	/// Returns whether the page is *complete* which means that no messages remain.
 	fn is_complete(&self) -> bool {
 		self.remaining.is_zero()
 	}
 }
 
-#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebug)]
+/// A single link in the double-linked Ready Ring list.
+#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebug, PartialEq)]
 pub struct Neighbours<MessageOrigin> {
+	/// The previous queue.
 	prev: MessageOrigin,
+	/// The next queue.
 	next: MessageOrigin,
 }
 
+/// The state of a queue as represented by a book of its pages.
+///
+/// Each queue has exactly one book which holds all of its pages. All pages of a book combined
+/// contain all of the messages of its queue; hence the name *Book*.
+/// Books can be chained together in a double-linked fashion through their `ready_neighbours` field.
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebug)]
 pub struct BookState<MessageOrigin> {
 	/// The first page with some items to be processed in it. If this is `>= end`, then there are
@@ -227,14 +403,17 @@ pub struct BookState<MessageOrigin> {
 	/// One more than the last page with some items to be processed in it.
 	end: PageIndex,
 	/// The number of pages stored at present.
+	///
+	/// This might be larger than `end-begin`, because we keep pages with unprocessed overweight
+	/// messages outside of the end/begin window.
 	count: PageIndex,
 	/// If this book has any ready pages, then this will be `Some` with the previous and next
 	/// neighbours. This wraps around.
 	ready_neighbours: Option<Neighbours<MessageOrigin>>,
 	/// The number of unprocessed messages stored at present.
-	message_count: u32,
+	message_count: u64,
 	/// The total size of all unprocessed messages stored at present.
-	size: u32,
+	size: u64,
 }
 
 impl<MessageOrigin> Default for BookState<MessageOrigin> {
@@ -246,11 +425,11 @@ impl<MessageOrigin> Default for BookState<MessageOrigin> {
 /// Handler code for when the items in a queue change.
 pub trait OnQueueChanged<Id> {
 	/// Note that the queue `id` now has `item_count` items in it, taking up `items_size` bytes.
-	fn on_queue_changed(id: Id, items_count: u32, items_size: u32);
+	fn on_queue_changed(id: Id, items_count: u64, items_size: u64);
 }
 
 impl<Id> OnQueueChanged<Id> for () {
-	fn on_queue_changed(_: Id, _: u32, _: u32) {}
+	fn on_queue_changed(_: Id, _: u64, _: u64) {}
 }
 
 #[frame_support::pallet]
@@ -295,6 +474,10 @@ pub mod pallet {
 		type QueueChangeHandler: OnQueueChanged<<Self::MessageProcessor as ProcessMessage>::Origin>;
 
 		/// The size of the page; this implies the maximum message size which can be sent.
+		///
+		/// A good value depends on the expected message sizes, their weights, the weight that is
+		/// available for processing them and the maximal needed message size. The maximal message
+		/// size is slightly lower than this as defined by [`MaxMessageLenOf`].
 		#[pallet::constant]
 		type HeapSize: Get<Self::Size>;
 
@@ -318,22 +501,11 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// Message discarded due to an inability to decode the item. Usually caused by state
 		/// corruption.
-		Discarded {
-			hash: T::Hash,
-		},
+		Discarded { hash: T::Hash },
 		/// Message discarded due to an error in the `MessageProcessor` (usually a format error).
-		ProcessingFailed {
-			hash: T::Hash,
-			origin: MessageOriginOf<T>,
-			error: ProcessMessageError,
-		},
+		ProcessingFailed { hash: T::Hash, origin: MessageOriginOf<T>, error: ProcessMessageError },
 		/// Message is processed.
-		Processed {
-			hash: T::Hash,
-			origin: MessageOriginOf<T>,
-			weight_used: Weight,
-			success: bool,
-		},
+		Processed { hash: T::Hash, origin: MessageOriginOf<T>, weight_used: Weight, success: bool },
 		/// Message placed in overweight queue.
 		OverweightEnqueued {
 			hash: T::Hash,
@@ -341,10 +513,8 @@ pub mod pallet {
 			page_index: PageIndex,
 			message_index: T::Size,
 		},
-		PageReaped {
-			origin: MessageOriginOf<T>,
-			index: PageIndex,
-		},
+		/// This page was reaped.
+		PageReaped { origin: MessageOriginOf<T>, index: PageIndex },
 	}
 
 	#[pallet::error]
@@ -354,10 +524,13 @@ pub mod pallet {
 		NotReapable,
 		/// Page to be reaped does not exist.
 		NoPage,
+		/// The referenced message could not be found.
 		NoMessage,
-		Unexpected,
+		/// The message was already processed and cannot be processed again.
 		AlreadyProcessed,
+		/// The message is queued for future execution.
 		Queued,
+		/// There is temporarily not enough weight to continue servicing messages.
 		InsufficientWeight,
 	}
 
@@ -395,8 +568,6 @@ pub mod pallet {
 		/// Check all assumptions about [`crate::Config`].
 		fn integrity_test() {
 			assert!(!MaxMessageLenOf::<T>::get().is_zero(), "HeapSize too low");
-			// This value gets squared and should not overflow.
-			assert!(T::MaxStale::get().checked_pow(2).is_some(), "MaxStale too large");
 		}
 	}
 
@@ -423,42 +594,21 @@ pub mod pallet {
 		///   of the message.
 		///
 		/// Benchmark complexity considerations: O(index + weight_limit).
-		#[pallet::weight(T::WeightInfo::execute_overweight())]
+		#[pallet::weight(
+			T::WeightInfo::execute_overweight_page_updated().max(
+			T::WeightInfo::execute_overweight_page_removed()).saturating_add(*weight_limit)
+		)]
 		pub fn execute_overweight(
 			origin: OriginFor<T>,
 			message_origin: MessageOriginOf<T>,
 			page: PageIndex,
 			index: T::Size,
 			weight_limit: Weight,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
-			Self::do_execute_overweight(message_origin, page, index, weight_limit)?;
-			Ok(())
-		}
-	}
-}
-
-pub struct ReadyRing<T: Config> {
-	first: Option<MessageOriginOf<T>>,
-	next: Option<MessageOriginOf<T>>,
-}
-impl<T: Config> ReadyRing<T> {
-	pub fn new() -> Self {
-		Self { first: ServiceHead::<T>::get(), next: ServiceHead::<T>::get() }
-	}
-}
-impl<T: Config> Iterator for ReadyRing<T> {
-	type Item = MessageOriginOf<T>;
-	fn next(&mut self) -> Option<Self::Item> {
-		match self.next.take() {
-			None => None,
-			Some(last) => {
-				self.next = BookStateFor::<T>::get(&last)
-					.ready_neighbours
-					.map(|n| n.next)
-					.filter(|n| Some(n) != self.first.as_ref());
-				Some(last)
-			},
+			let actual_weight =
+				Self::do_execute_overweight(message_origin, page, index, weight_limit)?;
+			Ok(Some(actual_weight).into())
 		}
 	}
 }
@@ -474,9 +624,19 @@ enum PageExecutionStatus {
 	///  - The end of the page is reached but there could still be skipped messages.
 	///  - The storage is corrupted.
 	NoMore,
-	/// The execution progressed and executed some messages. The inner is the number of messages
-	/// removed from the queue.
-	Partial,
+}
+
+/// The status after trying to execute the next item of a [`Page`].
+#[derive(PartialEq, Debug)]
+enum ItemExecutionStatus {
+	/// The execution bailed because there was not enough weight remaining.
+	Bailed,
+	/// The item was not found.
+	NoItem,
+	/// Whether the execution of an item resulted in it being processed.
+	///
+	/// One reason for `false` would be permanently overweight.
+	Executed(bool),
 }
 
 /// The status of an attempt to process a message.
@@ -547,7 +707,10 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn bump_service_head(weight: &mut WeightCounter) -> Option<MessageOriginOf<T>> {
+	/// Tries to bump the current `ServiceHead` to the next ready queue.
+	///
+	/// Returns the current head if it got be bumped and `None` otherwise.
+	fn bump_service_head(weight: &mut WeightMeter) -> Option<MessageOriginOf<T>> {
 		if !weight.check_accrue(T::WeightInfo::bump_service_head()) {
 			return None
 		}
@@ -574,7 +737,8 @@ impl<T: Config> Pallet<T> {
 		book_state
 			.size
 			// This should be payload size, but here the payload *is* the message.
-			.saturating_accrue(message.len() as u32);
+			.saturating_accrue(message.len() as u64);
+
 		if book_state.end > book_state.begin {
 			debug_assert!(book_state.ready_neighbours.is_some(), "Must be in ready ring if ready");
 			// Already have a page in progress - attempt to append.
@@ -586,7 +750,7 @@ impl<T: Config> Pallet<T> {
 					return
 				},
 			};
-			if let Ok(_) = page.try_append_message::<T>(message) {
+			if page.try_append_message::<T>(message).is_ok() {
 				Pages::<T>::insert(origin, last, &page);
 				BookStateFor::<T>::insert(origin, book_state);
 				return
@@ -599,17 +763,24 @@ impl<T: Config> Pallet<T> {
 			// insert into ready queue.
 			match Self::ready_ring_knit(origin) {
 				Ok(neighbours) => book_state.ready_neighbours = Some(neighbours),
-				Err(()) => debug_assert!(false, "Ring state invalid when knitting"),
+				Err(()) => {
+					defensive!("Ring state invalid when knitting");
+				},
 			}
 		}
 		// No room on the page or no page - link in a new page.
 		book_state.end.saturating_inc();
 		book_state.count.saturating_inc();
 		let page = Page::from_message::<T>(message);
-		Pages::<T>::insert(origin, book_state.end - 1, &page);
+		Pages::<T>::insert(origin, book_state.end - 1, page);
+		// NOTE: `T::QueueChangeHandler` is called by the caller.
 		BookStateFor::<T>::insert(origin, book_state);
 	}
 
+	/// Try to execute a single message that was marked as overweight.
+	///
+	/// The `weight_limit` is the weight that can be consumed to execute the message. The base
+	/// weight of the function it self must be measured by the caller.
 	pub fn do_execute_overweight(
 		origin: MessageOriginOf<T>,
 		page_index: PageIndex,
@@ -620,7 +791,7 @@ impl<T: Config> Pallet<T> {
 		let mut page = Pages::<T>::get(&origin, page_index).ok_or(Error::<T>::NoPage)?;
 		let (pos, is_processed, payload) =
 			page.peek_index(index.into() as usize).ok_or(Error::<T>::NoMessage)?;
-		let payload_len = payload.len() as u32;
+		let payload_len = payload.len() as u64;
 		ensure!(
 			page_index < book_state.begin ||
 				(page_index == book_state.begin && pos < page.first.into() as usize),
@@ -628,7 +799,7 @@ impl<T: Config> Pallet<T> {
 		);
 		ensure!(!is_processed, Error::<T>::AlreadyProcessed);
 		use MessageExecutionStatus::*;
-		let mut weight_counter = WeightCounter::from_limit(weight_limit);
+		let mut weight_counter = WeightMeter::from_limit(weight_limit);
 		match Self::process_message_payload(
 			origin.clone(),
 			page_index,
@@ -639,12 +810,12 @@ impl<T: Config> Pallet<T> {
 			// ^^^ We never recognise it as permanently overweight, since that would result in an
 			// additional overweight event being deposited.
 		) {
-			Overweight | InsufficientWeight => Err(Error::<T>::InsufficientWeight.into()),
+			Overweight | InsufficientWeight => Err(Error::<T>::InsufficientWeight),
 			Unprocessable | Processed => {
 				page.note_processed_at_pos(pos);
 				book_state.message_count.saturating_dec();
 				book_state.size.saturating_reduce(payload_len);
-				if page.remaining.is_zero() {
+				let page_weight = if page.remaining.is_zero() {
 					debug_assert!(
 						page.remaining_size.is_zero(),
 						"no messages remaining; no space taken; qed"
@@ -652,22 +823,25 @@ impl<T: Config> Pallet<T> {
 					Pages::<T>::remove(&origin, page_index);
 					debug_assert!(book_state.count >= 1, "page exists, so book must have pages");
 					book_state.count.saturating_dec();
+					T::WeightInfo::execute_overweight_page_removed()
 				// no need to consider .first or ready ring since processing an overweight page
 				// would not alter that state.
 				} else {
 					Pages::<T>::insert(&origin, page_index, page);
-				}
+					T::WeightInfo::execute_overweight_page_updated()
+				};
+				BookStateFor::<T>::insert(&origin, &book_state);
 				T::QueueChangeHandler::on_queue_changed(
 					origin,
 					book_state.message_count,
 					book_state.size,
 				);
-				Ok(weight_counter.consumed)
+				Ok(weight_counter.consumed.saturating_add(page_weight))
 			},
 		}
 	}
 
-	/// Remove a page which has no more messages remaining to be processed.
+	/// Remove a stale page or one which has no more messages remaining to be processed.
 	fn do_reap_page(origin: &MessageOriginOf<T>, page_index: PageIndex) -> DispatchResult {
 		let mut book_state = BookStateFor::<T>::get(origin);
 		// definitely not reapable if the page's index is no less than the `begin`ning of ready
@@ -685,12 +859,10 @@ impl<T: Config> Pallet<T> {
 			let ready_pages = book_state.end.saturating_sub(book_state.begin).min(total_pages);
 			let stale_pages = total_pages - ready_pages;
 			let max_stale = T::MaxStale::get();
-			let overflow = match stale_pages.checked_sub(max_stale + 1) {
-				Some(x) => x + 1,
-				None => return false,
-			};
-			let backlog = (max_stale * max_stale / overflow).max(max_stale);
-			let watermark = book_state.begin.saturating_sub(backlog);
+			if stale_pages <= max_stale {
+				return false
+			}
+			let watermark = book_state.begin.saturating_sub(max_stale);
 			page_index < watermark
 		};
 		ensure!(reapable || cullable(), Error::<T>::NotReapable);
@@ -698,9 +870,14 @@ impl<T: Config> Pallet<T> {
 		Pages::<T>::remove(origin, page_index);
 		debug_assert!(book_state.count > 0, "reaping a page implies there are pages");
 		book_state.count.saturating_dec();
-		book_state.message_count.saturating_reduce(page.remaining.into());
-		book_state.size.saturating_reduce(page.remaining_size.into());
-		BookStateFor::<T>::insert(origin, book_state);
+		book_state.message_count.saturating_reduce(page.remaining.into() as u64);
+		book_state.size.saturating_reduce(page.remaining_size.into() as u64);
+		BookStateFor::<T>::insert(origin, &book_state);
+		T::QueueChangeHandler::on_queue_changed(
+			origin.clone(),
+			book_state.message_count,
+			book_state.size,
+		);
 		Self::deposit_event(Event::PageReaped { origin: origin.clone(), index: page_index });
 
 		Ok(())
@@ -711,7 +888,7 @@ impl<T: Config> Pallet<T> {
 	/// execute are deemed overweight and ignored.
 	fn service_queue(
 		origin: MessageOriginOf<T>,
-		weight: &mut WeightCounter,
+		weight: &mut WeightMeter,
 		overweight_limit: Weight,
 	) -> (bool, Option<MessageOriginOf<T>>) {
 		if !weight.check_accrue(
@@ -732,10 +909,6 @@ impl<T: Config> Pallet<T> {
 				PageExecutionStatus::Bailed => break,
 				// Go to the next page if this one is at the end.
 				PageExecutionStatus::NoMore => (),
-				// TODO @ggwpez think of a better enum here.
-				PageExecutionStatus::Partial => {
-					defensive!("should progress till the end or bail");
-				},
 			};
 			book_state.begin.saturating_inc();
 		}
@@ -745,33 +918,42 @@ impl<T: Config> Pallet<T> {
 			if let Some(neighbours) = book_state.ready_neighbours.take() {
 				Self::ready_ring_unknit(&origin, neighbours);
 			} else {
-				debug_assert!(false, "Freshly processed queue must have been ready");
+				defensive!("Freshly processed queue must have been ready");
 			}
 		}
 		BookStateFor::<T>::insert(&origin, &book_state);
-		T::QueueChangeHandler::on_queue_changed(origin, book_state.message_count, book_state.size);
+		if total_processed > 0 {
+			T::QueueChangeHandler::on_queue_changed(
+				origin,
+				book_state.message_count,
+				book_state.size,
+			);
+		}
 		(total_processed > 0, next_ready)
 	}
 
 	/// Service as many messages of a page as possible.
 	///
-	/// Returns whether the execution bailed.
+	/// Returns how many messages were processed and the page's status.
 	fn service_page(
 		origin: &MessageOriginOf<T>,
 		book_state: &mut BookStateOf<T>,
-		weight: &mut WeightCounter,
+		weight: &mut WeightMeter,
 		overweight_limit: Weight,
 	) -> (u32, PageExecutionStatus) {
 		use PageExecutionStatus::*;
-		if !weight.check_accrue(T::WeightInfo::service_page_base()) {
+		if !weight.check_accrue(
+			T::WeightInfo::service_page_base_completion()
+				.max(T::WeightInfo::service_page_base_no_completion()),
+		) {
 			return (0, Bailed)
 		}
 
 		let page_index = book_state.begin;
-		let mut page = match Pages::<T>::get(&origin, page_index) {
+		let mut page = match Pages::<T>::get(origin, page_index) {
 			Some(p) => p,
 			None => {
-				debug_assert!(false, "message-queue: referenced page not found");
+				defensive!("message-queue: referenced page not found");
 				return (0, NoMore)
 			},
 		};
@@ -780,6 +962,7 @@ impl<T: Config> Pallet<T> {
 
 		// Execute as many messages as possible.
 		let status = loop {
+			use ItemExecutionStatus::*;
 			match Self::service_page_item(
 				origin,
 				page_index,
@@ -788,26 +971,21 @@ impl<T: Config> Pallet<T> {
 				weight,
 				overweight_limit,
 			) {
-				s @ Bailed | s @ NoMore => break s,
+				Bailed => break PageExecutionStatus::Bailed,
+				NoItem => break PageExecutionStatus::NoMore,
 				// Keep going as long as we make progress...
-				Partial => {
-					total_processed.saturating_inc();
-					continue
-				},
+				Executed(true) => total_processed.saturating_inc(),
+				Executed(false) => (),
 			}
 		};
 
 		if page.is_complete() {
-			debug_assert!(
-				status != PageExecutionStatus::Bailed,
-				"we never bail if a page became complete"
-			);
-			Pages::<T>::remove(&origin, page_index);
+			debug_assert!(status != Bailed, "we never bail if a page became complete");
+			Pages::<T>::remove(origin, page_index);
 			debug_assert!(book_state.count > 0, "completing a page implies there are pages");
 			book_state.count.saturating_dec();
 		} else {
-			// TODO we only benchmark the `true` case; assuming that it is more expensive.
-			Pages::<T>::insert(&origin, page_index, page);
+			Pages::<T>::insert(origin, page_index, page);
 		}
 		(total_processed, status)
 	}
@@ -818,21 +996,21 @@ impl<T: Config> Pallet<T> {
 		page_index: PageIndex,
 		book_state: &mut BookStateOf<T>,
 		page: &mut PageOf<T>,
-		weight: &mut WeightCounter,
+		weight: &mut WeightMeter,
 		overweight_limit: Weight,
-	) -> PageExecutionStatus {
+	) -> ItemExecutionStatus {
 		// This ugly pre-checking is needed for the invariant
 		// "we never bail if a page became complete".
 		if page.is_complete() {
-			return PageExecutionStatus::NoMore
+			return ItemExecutionStatus::NoItem
 		}
 		if !weight.check_accrue(T::WeightInfo::service_page_item()) {
-			return PageExecutionStatus::Bailed
+			return ItemExecutionStatus::Bailed
 		}
 
 		let payload = &match page.peek_first() {
 			Some(m) => m,
-			None => return PageExecutionStatus::NoMore,
+			None => return ItemExecutionStatus::NoItem,
 		}[..];
 
 		use MessageExecutionStatus::*;
@@ -844,16 +1022,17 @@ impl<T: Config> Pallet<T> {
 			weight,
 			overweight_limit,
 		) {
-			InsufficientWeight => return PageExecutionStatus::Bailed,
+			InsufficientWeight => return ItemExecutionStatus::Bailed,
 			Processed | Unprocessable => true,
 			Overweight => false,
 		};
+
 		if is_processed {
 			book_state.message_count.saturating_dec();
-			book_state.size.saturating_reduce(payload.len() as u32);
+			book_state.size.saturating_reduce(payload.len() as u64);
 		}
 		page.skip_first(is_processed);
-		PageExecutionStatus::Partial
+		ItemExecutionStatus::Executed(is_processed)
 	}
 
 	/// Print the pages in each queue and the messages in each page.
@@ -890,7 +1069,7 @@ impl<T: Config> Pallet<T> {
 					{
 						let msg = String::from_utf8_lossy(message.deref());
 						if processed {
-							page_info.push_str("*");
+							page_info.push('*');
 						}
 						page_info.push_str(&format!("{:?}, ", msg));
 						page.skip_first(true);
@@ -906,12 +1085,17 @@ impl<T: Config> Pallet<T> {
 		info
 	}
 
+	/// Process a single message.
+	///
+	/// The base weight of this function needs to be accounted for by the caller. `weight` is the
+	/// remaining weight to process the message. `overweight_limit` is the maximum weight that a
+	/// message can ever consume. Messages above this limit are marked as permanently overweight.
 	fn process_message_payload(
 		origin: MessageOriginOf<T>,
 		page_index: PageIndex,
 		message_index: T::Size,
 		message: &[u8],
-		weight: &mut WeightCounter,
+		weight: &mut WeightMeter,
 		overweight_limit: Weight,
 	) -> MessageExecutionStatus {
 		let hash = T::Hashing::hash(message);
@@ -948,6 +1132,7 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
+/// Provides a [`sp_core::Get`] to access the `MEL` of a [`codec::MaxEncodedLen`] type.
 pub struct MaxEncodedLenOf<T>(sp_std::marker::PhantomData<T>);
 impl<T: MaxEncodedLen> Get<u32> for MaxEncodedLenOf<T> {
 	fn get() -> u32 {
@@ -955,6 +1140,7 @@ impl<T: MaxEncodedLen> Get<u32> for MaxEncodedLenOf<T> {
 	}
 }
 
+/// Calculates the maximum message length and exposed it through the [`codec::MaxEncodedLen`] trait.
 pub struct MaxMessageLen<Origin, Size, HeapSize>(
 	sp_std::marker::PhantomData<(Origin, Size, HeapSize)>,
 );
@@ -962,20 +1148,26 @@ impl<Origin: MaxEncodedLen, Size: MaxEncodedLen + Into<u32>, HeapSize: Get<Size>
 	for MaxMessageLen<Origin, Size, HeapSize>
 {
 	fn get() -> u32 {
-		(HeapSize::get().into())
-			.saturating_sub(Origin::max_encoded_len() as u32)
-			.saturating_sub(ItemHeader::<Size>::max_encoded_len() as u32)
+		(HeapSize::get().into()).saturating_sub(ItemHeader::<Size>::max_encoded_len() as u32)
 	}
 }
 
+/// The maximal message length.
 pub type MaxMessageLenOf<T> =
 	MaxMessageLen<MessageOriginOf<T>, <T as Config>::Size, <T as Config>::HeapSize>;
+/// The maximal encoded origin length.
 pub type MaxOriginLenOf<T> = MaxEncodedLenOf<MessageOriginOf<T>>;
+/// The `MessageOrigin` of this pallet.
 pub type MessageOriginOf<T> = <<T as Config>::MessageProcessor as ProcessMessage>::Origin;
+/// The maximal heap size of a page.
 pub type HeapSizeU32Of<T> = IntoU32<<T as Config>::HeapSize, <T as Config>::Size>;
+/// The [`Page`] of this pallet.
 pub type PageOf<T> = Page<<T as Config>::Size, <T as Config>::HeapSize>;
+/// The [`BookState`] of this pallet.
 pub type BookStateOf<T> = BookState<MessageOriginOf<T>>;
 
+/// Converts a [`sp_core::Get`] with returns a type that can be cast into an `u32` into a `Get`
+/// which returns an `u32`.
 pub struct IntoU32<T, O>(sp_std::marker::PhantomData<(T, O)>);
 impl<T: Get<O>, O: Into<u32>> Get<u32> for IntoU32<T, O> {
 	fn get() -> u32 {
@@ -989,7 +1181,7 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 	fn service_queues(weight_limit: Weight) -> Weight {
 		// The maximum weight that processing a single message may take.
 		let overweight_limit = weight_limit;
-		let mut weight = WeightCounter::from_limit(weight_limit);
+		let mut weight = WeightMeter::from_limit(weight_limit);
 
 		let mut next = match Self::bump_service_head(&mut weight) {
 			Some(h) => h,
@@ -1022,16 +1214,27 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 		weight.consumed
 	}
 
+	/// Execute a single overweight message.
+	///
+	/// The weight limit must be enough for `execute_overweight` and the message execution itself.
 	fn execute_overweight(
 		weight_limit: Weight,
 		(message_origin, page, index): Self::OverweightMessageAddress,
 	) -> Result<Weight, ExecuteOverweightError> {
-		Pallet::<T>::do_execute_overweight(message_origin, page, index, weight_limit).map_err(|e| {
-			match e {
+		let mut weight = WeightMeter::from_limit(weight_limit);
+		if !weight.check_accrue(
+			T::WeightInfo::execute_overweight_page_removed()
+				.max(T::WeightInfo::execute_overweight_page_updated()),
+		) {
+			return Err(ExecuteOverweightError::InsufficientWeight)
+		}
+
+		Pallet::<T>::do_execute_overweight(message_origin, page, index, weight.remaining()).map_err(
+			|e| match e {
 				Error::<T>::InsufficientWeight => ExecuteOverweightError::InsufficientWeight,
 				_ => ExecuteOverweightError::NotFound,
-			}
-		})
+			},
+		)
 	}
 }
 
@@ -1059,10 +1262,10 @@ impl<T: Config> EnqueueMessage<MessageOriginOf<T>> for Pallet<T> {
 		T::QueueChangeHandler::on_queue_changed(origin, book_state.message_count, book_state.size);
 	}
 
-	/// Force removes a queue from the ready ring.
-	///
-	/// Does not remove its pages from the storage.
 	fn sweep_queue(origin: MessageOriginOf<T>) {
+		if !BookStateFor::<T>::contains_key(&origin) {
+			return
+		}
 		let mut book_state = BookStateFor::<T>::get(&origin);
 		book_state.begin = book_state.end;
 		if let Some(neighbours) = book_state.ready_neighbours.take() {
@@ -1071,7 +1274,6 @@ impl<T: Config> EnqueueMessage<MessageOriginOf<T>> for Pallet<T> {
 		BookStateFor::<T>::insert(&origin, &book_state);
 	}
 
-	/// Returns the [`Footprint`] of a queue.
 	fn footprint(origin: MessageOriginOf<T>) -> Footprint {
 		let book_state = BookStateFor::<T>::get(&origin);
 		Footprint { count: book_state.message_count, size: book_state.size }

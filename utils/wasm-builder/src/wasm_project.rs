@@ -365,26 +365,47 @@ fn create_project_cargo_toml(
 	);
 }
 
-/// Find a package by the given `manifest_path` in the metadata.
+/// Find a package by the given `manifest_path` in the metadata. In case it can't be found by its
+/// manifest_path, fallback to finding it by name; this is necessary during publish because the
+/// package's manifest path will be *generated* within a specific packaging directory, thus it won't
+/// be found by its original path anymore.
 ///
 /// Panics if the package could not be found.
 fn find_package_by_manifest_path<'a>(
+	pkg_name: &str,
 	manifest_path: &Path,
 	crate_metadata: &'a cargo_metadata::Metadata,
 ) -> &'a cargo_metadata::Package {
-	crate_metadata
+	if let Some(pkg) = crate_metadata.packages.iter().find(|p| p.manifest_path == manifest_path) {
+		return pkg
+	}
+	let pkgs_by_name = crate_metadata
 		.packages
 		.iter()
-		.find(|p| p.manifest_path == manifest_path)
-		.expect("Wasm project exists in its own metadata; qed")
+		.filter(|p| p.name == pkg_name)
+		.collect::<Vec<_>>();
+	let mut pkgs = pkgs_by_name.iter();
+	if let Some(pkg) = pkgs.next() {
+		if pkgs.next().is_some() {
+			panic!(
+				"Found multiple packages matching the name {pkg_name} ({manifest_path:?}): {:?}",
+				pkgs_by_name
+			);
+		} else {
+			return pkg
+		}
+	} else {
+		panic!("Failed to find entry for package {pkg_name} ({manifest_path:?})");
+	}
 }
 
 /// Get a list of enabled features for the project.
 fn project_enabled_features(
+	pkg_name: &str,
 	cargo_manifest: &Path,
 	crate_metadata: &cargo_metadata::Metadata,
 ) -> Vec<String> {
-	let package = find_package_by_manifest_path(cargo_manifest, crate_metadata);
+	let package = find_package_by_manifest_path(pkg_name, cargo_manifest, crate_metadata);
 
 	let std_enabled = package.features.get("std");
 
@@ -427,10 +448,11 @@ fn project_enabled_features(
 
 /// Returns if the project has the `runtime-wasm` feature
 fn has_runtime_wasm_feature_declared(
+	pkg_name: &str,
 	cargo_manifest: &Path,
 	crate_metadata: &cargo_metadata::Metadata,
 ) -> bool {
-	let package = find_package_by_manifest_path(cargo_manifest, crate_metadata);
+	let package = find_package_by_manifest_path(pkg_name, cargo_manifest, crate_metadata);
 
 	package.features.keys().any(|k| k == "runtime-wasm")
 }
@@ -455,9 +477,10 @@ fn create_project(
 	fs::create_dir_all(wasm_project_folder.join("src"))
 		.expect("Wasm project dir create can not fail; qed");
 
-	let mut enabled_features = project_enabled_features(project_cargo_toml, crate_metadata);
+	let mut enabled_features =
+		project_enabled_features(&crate_name, project_cargo_toml, crate_metadata);
 
-	if has_runtime_wasm_feature_declared(project_cargo_toml, crate_metadata) {
+	if has_runtime_wasm_feature_declared(&crate_name, project_cargo_toml, crate_metadata) {
 		enabled_features.push("runtime-wasm".into());
 	}
 

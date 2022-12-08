@@ -22,18 +22,18 @@ serde = { version = "1.0.136", optional = true }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
-sp-application-crypto = { version = "6.0.0", default-features = false, path = "../../primitives/application-crypto" }
-sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
-sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-runtime-interface = { version = "6.0.0", default-features = false, path = "../../primitives/runtime-interface" }
-sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
-sp-storage = { version = "6.0.0", default-features = false, path = "../../primitives/storage" }
+sp-application-crypto = { version = "7.0.0", default-features = false, path = "../../primitives/application-crypto" }
+sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
+sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-runtime-interface = { version = "7.0.0", default-features = false, path = "../../primitives/runtime-interface" }
+sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
+sp-storage = { version = "7.0.0", default-features = false, path = "../../primitives/storage" }
 
 [dev-dependencies]
 array-bytes = "4.1"
 rusty-fork = { version = "0.3.0", default-features = false }
-sp-keystore = { version = "0.12.0", path = "../../primitives/keystore" }
+sp-keystore = { version = "0.13.0", path = "../../primitives/keystore" }
 
 [features]
 default = ["std"]

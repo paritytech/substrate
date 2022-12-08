@@ -73,7 +73,6 @@ use frame_support::{
 	weights::{Weight, WeightMeter},
 };
 use frame_system::{self as system};
-pub use pallet::*;
 use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
 use sp_runtime::{
@@ -81,7 +80,8 @@ use sp_runtime::{
 	BoundedVec, RuntimeDebug,
 };
 use sp_std::{borrow::Borrow, cmp::Ordering, marker::PhantomData, prelude::*};
-use sp_weights::WeightCounter;
+
+pub use pallet::*;
 pub use weights::WeightInfo;
 
 /// Just a simple index for naming period tasks.
