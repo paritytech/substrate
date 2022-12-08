@@ -44,6 +44,8 @@ use sp_inherents::CreateInherentDataProviders;
 use sp_runtime::traits::{Block as BlockT, HashFor, Header as HeaderT};
 use std::{fmt::Debug, ops::Deref, time::Duration};
 
+const LOG_TARGET: &str = "slots";
+
 /// The changes that need to applied to the storage to create the state for a block.
 ///
 /// See [`sp_state_machine::StorageChanges`] for more information.
@@ -194,7 +196,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	> {
 		let slot = slot_info.slot;
 		let telemetry = self.telemetry();
-		let logging_target = self.logging_target();
+		let log_target = self.logging_target();
 		let proposing_remaining_duration = self.proposing_remaining_duration(&slot_info);
 		let logs = self.pre_digest_data(slot, claim);
 
@@ -213,19 +215,19 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let proposal = match futures::future::select(proposing, proposing_remaining).await {
 			Either::Left((Ok(p), _)) => p,
 			Either::Left((Err(err), _)) => {
-				warn!(target: logging_target, "Proposing failed: {}", err);
+				warn!(target: log_target, "Proposing failed: {}", err);
 
 				return None
 			},
 			Either::Right(_) => {
 				info!(
-					target: logging_target,
+					target: log_target,
 					"⌛️ Discarding proposal for slot {}; block production took too long", slot,
 				);
 				// If the node was compiled with debug, tell the user to use release optimizations.
 				#[cfg(build_type = "debug")]
 				info!(
-					target: logging_target,
+					target: log_target,
 					"👉 Recompile your node in `--release` mode to mitigate this problem.",
 				);
 				telemetry!(
@@ -483,13 +485,13 @@ pub async fn start_slot_worker<B, C, W, SO, CIDP, Proof>(
 		let slot_info = match slots.next_slot().await {
 			Ok(r) => r,
 			Err(e) => {
-				warn!(target: "slots", "Error while polling for next slot: {}", e);
+				warn!(target: LOG_TARGET, "Error while polling for next slot: {}", e);
 				return
 			},
 		};
 
 		if sync_oracle.is_major_syncing() {
-			debug!(target: "slots", "Skipping proposal slot due to sync.");
+			debug!(target: LOG_TARGET, "Skipping proposal slot due to sync.");
 			continue
 		}
 

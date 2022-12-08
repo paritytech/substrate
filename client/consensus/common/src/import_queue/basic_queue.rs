@@ -35,6 +35,7 @@ use crate::{
 		buffered_link::{self, BufferedLinkReceiver, BufferedLinkSender},
 		import_single_block_metered, BlockImportError, BlockImportStatus, BoxBlockImport,
 		BoxJustificationImport, ImportQueue, IncomingBlock, Link, RuntimeOrigin, Verifier,
+		LOG_TARGET,
 	},
 	metrics::Metrics,
 };
@@ -105,14 +106,14 @@ impl<B: BlockT, Transaction: Send> ImportQueue<B> for BasicQueue<B, Transaction>
 			return
 		}
 
-		trace!(target: "sync", "Scheduling {} blocks for import", blocks.len());
+		trace!(target: LOG_TARGET, "Scheduling {} blocks for import", blocks.len());
 		let res = self
 			.block_import_sender
 			.unbounded_send(worker_messages::ImportBlocks(origin, blocks));
 
 		if res.is_err() {
 			log::error!(
-				target: "sync",
+				target: LOG_TARGET,
 				"import_blocks: Background import task is no longer alive"
 			);
 		}
@@ -132,7 +133,7 @@ impl<B: BlockT, Transaction: Send> ImportQueue<B> for BasicQueue<B, Transaction>
 
 			if res.is_err() {
 				log::error!(
-					target: "sync",
+					target: LOG_TARGET,
 					"import_justification: Background import task is no longer alive"
 				);
 			}
@@ -141,7 +142,10 @@ impl<B: BlockT, Transaction: Send> ImportQueue<B> for BasicQueue<B, Transaction>
 
 	fn poll_actions(&mut self, cx: &mut Context, link: &mut dyn Link<B>) {
 		if self.result_port.poll_actions(cx, link).is_err() {
-			log::error!(target: "sync", "poll_actions: Background import task is no longer alive");
+			log::error!(
+				target: LOG_TARGET,
+				"poll_actions: Background import task is no longer alive"
+			);
 		}
 	}
 }
@@ -180,7 +184,7 @@ async fn block_import_process<B: BlockT, Transaction: Send + 'static>(
 			Some(blocks) => blocks,
 			None => {
 				log::debug!(
-					target: "block-import",
+					target: LOG_TARGET,
 					"Stopping block import because the import channel was closed!",
 				);
 				return
@@ -254,7 +258,7 @@ impl<B: BlockT> BlockImportWorker<B> {
 				// down and we should end this future.
 				if worker.result_sender.is_closed() {
 					log::debug!(
-						target: "block-import",
+						target: LOG_TARGET,
 						"Stopping block import because result channel was closed!",
 					);
 					return
@@ -267,7 +271,7 @@ impl<B: BlockT> BlockImportWorker<B> {
 							worker.import_justification(who, hash, number, justification).await,
 						None => {
 							log::debug!(
-								target: "block-import",
+								target: LOG_TARGET,
 								"Stopping block import because justification channel was closed!",
 							);
 							return
@@ -302,7 +306,7 @@ impl<B: BlockT> BlockImportWorker<B> {
 				.await
 				.map_err(|e| {
 					debug!(
-						target: "sync",
+						target: LOG_TARGET,
 						"Justification import failed for hash = {:?} with number = {:?} coming from node = {:?} with error: {}",
 						hash,
 						number,
@@ -356,7 +360,7 @@ async fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction: Send + 'stat
 		_ => Default::default(),
 	};
 
-	trace!(target: "sync", "Starting import of {} blocks {}", count, blocks_range);
+	trace!(target: LOG_TARGET, "Starting import of {} blocks {}", count, blocks_range);
 
 	let mut imported = 0;
 	let mut results = vec![];
@@ -396,7 +400,7 @@ async fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction: Send + 'stat
 
 		if import_result.is_ok() {
 			trace!(
-				target: "sync",
+				target: LOG_TARGET,
 				"Block imported successfully {:?} ({})",
 				block_number,
 				block_hash,

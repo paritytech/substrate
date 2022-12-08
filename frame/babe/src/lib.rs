@@ -50,6 +50,8 @@ use sp_consensus_vrf::schnorrkel;
 
 pub use sp_consensus_babe::{AuthorityId, PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH};
 
+const LOG_TARGET: &str = "runtime::babe";
+
 mod default_weights;
 mod equivocation;
 mod randomness;
