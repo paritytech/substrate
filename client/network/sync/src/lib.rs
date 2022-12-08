@@ -1062,156 +1062,6 @@ where
 		Ok(OnBlockJustification::Nothing)
 	}
 
-	fn on_blocks_processed(
-		&mut self,
-		imported: usize,
-		count: usize,
-		results: Vec<(Result<BlockImportStatus<NumberFor<B>>, BlockImportError>, B::Hash)>,
-	) -> Box<dyn Iterator<Item = Result<(PeerId, BlockRequest<B>), BadPeer>>> {
-		trace!(target: "sync", "Imported {} of {}", imported, count);
-
-		let mut output = Vec::new();
-
-		let mut has_error = false;
-		for (_, hash) in &results {
-			self.queue_blocks.remove(hash);
-			self.blocks.clear_queued(hash);
-			if let Some(gap_sync) = &mut self.gap_sync {
-				gap_sync.blocks.clear_queued(hash);
-			}
-		}
-		for (result, hash) in results {
-			if has_error {
-				break
-			}
-
-			if result.is_err() {
-				has_error = true;
-			}
-
-			match result {
-				Ok(BlockImportStatus::ImportedKnown(number, who)) =>
-					if let Some(peer) = who {
-						self.update_peer_common_number(&peer, number);
-					},
-				Ok(BlockImportStatus::ImportedUnknown(number, aux, who)) => {
-					if aux.clear_justification_requests {
-						trace!(
-							target: "sync",
-							"Block imported clears all pending justification requests {}: {:?}",
-							number,
-							hash,
-						);
-						self.clear_justification_requests();
-					}
-
-					if aux.needs_justification {
-						trace!(
-							target: "sync",
-							"Block imported but requires justification {}: {:?}",
-							number,
-							hash,
-						);
-						self.request_justification(&hash, number);
-					}
-
-					if aux.bad_justification {
-						if let Some(ref peer) = who {
-							warn!("💔 Sent block with bad justification to import");
-							output.push(Err(BadPeer(*peer, rep::BAD_JUSTIFICATION)));
-						}
-					}
-
-					if let Some(peer) = who {
-						self.update_peer_common_number(&peer, number);
-					}
-					let state_sync_complete =
-						self.state_sync.as_ref().map_or(false, |s| s.target() == hash);
-					if state_sync_complete {
-						info!(
-							target: "sync",
-							"State sync is complete ({} MiB), restarting block sync.",
-							self.state_sync.as_ref().map_or(0, |s| s.progress().size / (1024 * 1024)),
-						);
-						self.state_sync = None;
-						self.mode = SyncMode::Full;
-						output.extend(self.restart());
-					}
-					let warp_sync_complete = self
-						.warp_sync
-						.as_ref()
-						.map_or(false, |s| s.target_block_hash() == Some(hash));
-					if warp_sync_complete {
-						info!(
-							target: "sync",
-							"Warp sync is complete ({} MiB), restarting block sync.",
-							self.warp_sync.as_ref().map_or(0, |s| s.progress().total_bytes / (1024 * 1024)),
-						);
-						self.warp_sync = None;
-						self.mode = SyncMode::Full;
-						output.extend(self.restart());
-					}
-					let gap_sync_complete =
-						self.gap_sync.as_ref().map_or(false, |s| s.target == number);
-					if gap_sync_complete {
-						info!(
-							target: "sync",
-							"Block history download is complete."
-						);
-						self.gap_sync = None;
-					}
-				},
-				Err(BlockImportError::IncompleteHeader(who)) =>
-					if let Some(peer) = who {
-						warn!(
-							target: "sync",
-							"💔 Peer sent block with incomplete header to import",
-						);
-						output.push(Err(BadPeer(peer, rep::INCOMPLETE_HEADER)));
-						output.extend(self.restart());
-					},
-				Err(BlockImportError::VerificationFailed(who, e)) =>
-					if let Some(peer) = who {
-						warn!(
-							target: "sync",
-							"💔 Verification failed for block {:?} received from peer: {}, {:?}",
-							hash,
-							peer,
-							e,
-						);
-						output.push(Err(BadPeer(peer, rep::VERIFICATION_FAIL)));
-						output.extend(self.restart());
-					},
-				Err(BlockImportError::BadBlock(who)) =>
-					if let Some(peer) = who {
-						warn!(
-							target: "sync",
-							"💔 Block {:?} received from peer {} has been blacklisted",
-							hash,
-							peer,
-						);
-						output.push(Err(BadPeer(peer, rep::BAD_BLOCK)));
-					},
-				Err(BlockImportError::MissingState) => {
-					// This may happen if the chain we were requesting upon has been discarded
-					// in the meantime because other chain has been finalized.
-					// Don't mark it as bad as it still may be synced if explicitly requested.
-					trace!(target: "sync", "Obsolete block {:?}", hash);
-				},
-				e @ Err(BlockImportError::UnknownParent) | e @ Err(BlockImportError::Other(_)) => {
-					warn!(target: "sync", "💔 Error importing block {:?}: {}", hash, e.unwrap_err());
-					self.state_sync = None;
-					self.warp_sync = None;
-					output.extend(self.restart());
-				},
-				Err(BlockImportError::Cancelled) => {},
-			};
-		}
-
-		self.allowed_requests.set_all();
-		Box::new(output.into_iter())
-	}
-
 	fn on_justification_import(&mut self, hash: B::Hash, number: NumberFor<B>, success: bool) {
 		let finalization_result = if success { Ok((hash, number)) } else { Err(()) };
 		self.extra_justifications
@@ -2836,6 +2686,160 @@ where
 		}
 
 		self.import_queue.import_justifications(peer, hash, number, justifications);
+	}
+
+	/// A batch of blocks have been processed, with or without errors.
+	///
+	/// Call this when a batch of blocks have been processed by the import
+	/// queue, with or without errors.
+	fn on_blocks_processed(
+		&mut self,
+		imported: usize,
+		count: usize,
+		results: Vec<(Result<BlockImportStatus<NumberFor<B>>, BlockImportError>, B::Hash)>,
+	) -> Box<dyn Iterator<Item = Result<(PeerId, BlockRequest<B>), BadPeer>>> {
+		trace!(target: "sync", "Imported {} of {}", imported, count);
+
+		let mut output = Vec::new();
+
+		let mut has_error = false;
+		for (_, hash) in &results {
+			self.queue_blocks.remove(hash);
+			self.blocks.clear_queued(hash);
+			if let Some(gap_sync) = &mut self.gap_sync {
+				gap_sync.blocks.clear_queued(hash);
+			}
+		}
+		for (result, hash) in results {
+			if has_error {
+				break
+			}
+
+			if result.is_err() {
+				has_error = true;
+			}
+
+			match result {
+				Ok(BlockImportStatus::ImportedKnown(number, who)) =>
+					if let Some(peer) = who {
+						self.update_peer_common_number(&peer, number);
+					},
+				Ok(BlockImportStatus::ImportedUnknown(number, aux, who)) => {
+					if aux.clear_justification_requests {
+						trace!(
+							target: "sync",
+							"Block imported clears all pending justification requests {}: {:?}",
+							number,
+							hash,
+						);
+						self.clear_justification_requests();
+					}
+
+					if aux.needs_justification {
+						trace!(
+							target: "sync",
+							"Block imported but requires justification {}: {:?}",
+							number,
+							hash,
+						);
+						self.request_justification(&hash, number);
+					}
+
+					if aux.bad_justification {
+						if let Some(ref peer) = who {
+							warn!("💔 Sent block with bad justification to import");
+							output.push(Err(BadPeer(*peer, rep::BAD_JUSTIFICATION)));
+						}
+					}
+
+					if let Some(peer) = who {
+						self.update_peer_common_number(&peer, number);
+					}
+					let state_sync_complete =
+						self.state_sync.as_ref().map_or(false, |s| s.target() == hash);
+					if state_sync_complete {
+						info!(
+							target: "sync",
+							"State sync is complete ({} MiB), restarting block sync.",
+							self.state_sync.as_ref().map_or(0, |s| s.progress().size / (1024 * 1024)),
+						);
+						self.state_sync = None;
+						self.mode = SyncMode::Full;
+						output.extend(self.restart());
+					}
+					let warp_sync_complete = self
+						.warp_sync
+						.as_ref()
+						.map_or(false, |s| s.target_block_hash() == Some(hash));
+					if warp_sync_complete {
+						info!(
+							target: "sync",
+							"Warp sync is complete ({} MiB), restarting block sync.",
+							self.warp_sync.as_ref().map_or(0, |s| s.progress().total_bytes / (1024 * 1024)),
+						);
+						self.warp_sync = None;
+						self.mode = SyncMode::Full;
+						output.extend(self.restart());
+					}
+					let gap_sync_complete =
+						self.gap_sync.as_ref().map_or(false, |s| s.target == number);
+					if gap_sync_complete {
+						info!(
+							target: "sync",
+							"Block history download is complete."
+						);
+						self.gap_sync = None;
+					}
+				},
+				Err(BlockImportError::IncompleteHeader(who)) =>
+					if let Some(peer) = who {
+						warn!(
+							target: "sync",
+							"💔 Peer sent block with incomplete header to import",
+						);
+						output.push(Err(BadPeer(peer, rep::INCOMPLETE_HEADER)));
+						output.extend(self.restart());
+					},
+				Err(BlockImportError::VerificationFailed(who, e)) =>
+					if let Some(peer) = who {
+						warn!(
+							target: "sync",
+							"💔 Verification failed for block {:?} received from peer: {}, {:?}",
+							hash,
+							peer,
+							e,
+						);
+						output.push(Err(BadPeer(peer, rep::VERIFICATION_FAIL)));
+						output.extend(self.restart());
+					},
+				Err(BlockImportError::BadBlock(who)) =>
+					if let Some(peer) = who {
+						warn!(
+							target: "sync",
+							"💔 Block {:?} received from peer {} has been blacklisted",
+							hash,
+							peer,
+						);
+						output.push(Err(BadPeer(peer, rep::BAD_BLOCK)));
+					},
+				Err(BlockImportError::MissingState) => {
+					// This may happen if the chain we were requesting upon has been discarded
+					// in the meantime because other chain has been finalized.
+					// Don't mark it as bad as it still may be synced if explicitly requested.
+					trace!(target: "sync", "Obsolete block {:?}", hash);
+				},
+				e @ Err(BlockImportError::UnknownParent) | e @ Err(BlockImportError::Other(_)) => {
+					warn!(target: "sync", "💔 Error importing block {:?}: {}", hash, e.unwrap_err());
+					self.state_sync = None;
+					self.warp_sync = None;
+					output.extend(self.restart());
+				},
+				Err(BlockImportError::Cancelled) => {},
+			};
+		}
+
+		self.allowed_requests.set_all();
+		Box::new(output.into_iter())
 	}
 }
 

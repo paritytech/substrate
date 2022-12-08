@@ -24,9 +24,7 @@ pub mod warp;
 
 use libp2p::PeerId;
 use message::{BlockAnnounce, BlockData, BlockRequest, BlockResponse};
-use sc_consensus::{
-	import_queue::RuntimeOrigin, BlockImportError, BlockImportStatus, IncomingBlock,
-};
+use sc_consensus::{import_queue::RuntimeOrigin, IncomingBlock};
 use sp_consensus::BlockOrigin;
 use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
@@ -331,17 +329,6 @@ pub trait ChainSync<Block: BlockT>: Send {
 		who: PeerId,
 		response: BlockResponse<Block>,
 	) -> Result<OnBlockJustification<Block>, BadPeer>;
-
-	/// A batch of blocks have been processed, with or without errors.
-	///
-	/// Call this when a batch of blocks have been processed by the import
-	/// queue, with or without errors.
-	fn on_blocks_processed(
-		&mut self,
-		imported: usize,
-		count: usize,
-		results: Vec<(Result<BlockImportStatus<NumberFor<Block>>, BlockImportError>, Block::Hash)>,
-	) -> Box<dyn Iterator<Item = Result<(PeerId, BlockRequest<Block>), BadPeer>>>;
 
 	/// Call this when a justification has been processed by the import queue,
 	/// with or without errors.
