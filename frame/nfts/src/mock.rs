@@ -127,10 +127,43 @@ parameter_types! {
 	pub const NftsPalletId: PalletId = PalletId(*b"py/nfts_");
 }
 
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Copy,
+	Clone,
+	Encode,
+	Decode,
+	Eq,
+	PartialEq,
+	PartialOrd,
+	Ord,
+	RuntimeDebug,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub enum MultiBalance<Balance, AssetId> {
 	Native(Balance),
 	Asset(AssetId, Balance),
+}
+
+impl<B, AI> MultiBalance<B, AI> {
+	fn balance(self) -> B {
+		match self {
+			Self::Native(amount) => amount,
+			Self::Asset(_, amount) => amount,
+		}
+	}
+	fn update_balance(self, new_balance: B) -> Self {
+		match self {
+			Self::Native(_) => Self::Native(new_balance),
+			Self::Asset(id, _) => Self::Asset(id, new_balance),
+		}
+	}
+}
+
+impl<B: Zero, AI> Default for MultiBalance<B, AI> {
+	fn default() -> Self {
+		MultiBalance::zero()
+	}
 }
 
 // u8.into() => MultiBalance
@@ -230,6 +263,172 @@ impl<B: TryInto<usize>, AI> TryInto<usize> for MultiBalance<B, AI> {
 			Self::Native(amount) => amount.try_into().map_err(|_| ()),
 			Self::Asset(_, amount) => amount.try_into().map_err(|_| ()),
 		}
+	}
+}
+use num_traits::{
+	CheckedAdd, CheckedDiv, CheckedMul, CheckedRem, CheckedShl, CheckedShr, CheckedSub, Num, One,
+	Unsigned, Zero,
+};
+use sp_runtime::traits::{Bounded, IntegerSquareRoot};
+use sp_std::ops::{
+	Add, AddAssign, Div, DivAssign, Mul, MulAssign, Rem, RemAssign, Shl, Shr, Sub, SubAssign,
+};
+impl<
+		B: PartialEq + Zero + One + Sub<Output = B> + Rem<Output = B> + Div<Output = B>,
+		AI: PartialEq,
+	> Unsigned for MultiBalance<B, AI>
+{
+}
+impl<
+		B: PartialEq + Zero + One + Sub<Output = B> + Rem<Output = B> + Div<Output = B>,
+		AI: PartialEq,
+	> Num for MultiBalance<B, AI>
+{
+	type FromStrRadixErr = ();
+	fn from_str_radix(str: &str, radix: u32) -> Result<Self, Self::FromStrRadixErr> {
+		Err(()) // TODO: return smth like "Unsupported"
+	}
+}
+impl<B: Add<Output = B>, AI> Add for MultiBalance<B, AI> {
+	type Output = Self;
+	fn add(self, other: Self) -> Self {
+		self.update_balance(self.balance() + other.balance())
+	}
+}
+impl<B: Add<Output = B>, AI> AddAssign for MultiBalance<B, AI> {
+	fn add_assign(&mut self, other: Self) {
+		*self = self.update_balance(self.balance() + other.balance())
+	}
+}
+impl<B: CheckedAdd + Clone, AI> CheckedAdd for MultiBalance<B, AI> {
+	fn checked_add(&self, other: &Self) -> Option<Self> {
+		<B>::checked_add(&self.balance().clone(), &other.balance().clone())
+			.map(|new_balance| self.update_balance(new_balance))
+	}
+}
+
+impl<B: Sub<Output = B>, AI> Sub for MultiBalance<B, AI> {
+	type Output = Self;
+	fn sub(self, other: Self) -> Self {
+		self.update_balance(self.balance() - other.balance())
+	}
+}
+impl<B: Sub<Output = B>, AI> SubAssign for MultiBalance<B, AI> {
+	fn sub_assign(&mut self, other: Self) {
+		*self = self.update_balance(self.balance() - other.balance())
+	}
+}
+impl<B: CheckedSub + Clone, AI> CheckedSub for MultiBalance<B, AI> {
+	fn checked_sub(&self, other: &Self) -> Option<Self> {
+		<B>::checked_sub(&self.balance().clone(), &other.balance().clone())
+			.map(|new_balance| self.update_balance(new_balance))
+	}
+}
+
+impl<B: Mul<Output = B>, AI> Mul for MultiBalance<B, AI> {
+	type Output = Self;
+	fn mul(self, other: Self) -> Self {
+		self.update_balance(self.balance() * other.balance())
+	}
+}
+impl<B: Mul<Output = B>, AI> MulAssign for MultiBalance<B, AI> {
+	fn mul_assign(&mut self, other: Self) {
+		*self = self.update_balance(self.balance() * other.balance())
+	}
+}
+impl<B: CheckedMul + Clone, AI> CheckedMul for MultiBalance<B, AI> {
+	fn checked_mul(&self, other: &Self) -> Option<Self> {
+		<B>::checked_mul(&self.balance().clone(), &other.balance().clone())
+			.map(|new_balance| self.update_balance(new_balance))
+	}
+}
+
+impl<B: Div<Output = B>, AI> Div for MultiBalance<B, AI> {
+	type Output = Self;
+	fn div(self, other: Self) -> Self {
+		self.update_balance(self.balance() / other.balance())
+	}
+}
+impl<B: Div<Output = B>, AI> DivAssign for MultiBalance<B, AI> {
+	fn div_assign(&mut self, other: Self) {
+		*self = self.update_balance(self.balance() / other.balance())
+	}
+}
+impl<B: CheckedDiv + Clone, AI> CheckedDiv for MultiBalance<B, AI> {
+	fn checked_div(&self, other: &Self) -> Option<Self> {
+		<B>::checked_div(&self.balance().clone(), &other.balance().clone())
+			.map(|new_balance| self.update_balance(new_balance))
+	}
+}
+
+impl<B: Rem<Output = B>, AI> Rem for MultiBalance<B, AI> {
+	type Output = Self;
+	fn rem(self, other: Self) -> Self {
+		self.update_balance(self.balance() % other.balance())
+	}
+}
+impl<B: Rem<Output = B>, AI> RemAssign for MultiBalance<B, AI> {
+	fn rem_assign(&mut self, other: Self) {
+		*self = self.update_balance(self.balance() % other.balance())
+	}
+}
+impl<B: CheckedRem + Clone, AI> CheckedRem for MultiBalance<B, AI> {
+	fn checked_rem(&self, other: &Self) -> Option<Self> {
+		<B>::checked_rem(&self.balance().clone(), &other.balance().clone())
+			.map(|new_balance| self.update_balance(new_balance))
+	}
+}
+impl<B: IntegerSquareRoot + Clone, AI> IntegerSquareRoot for MultiBalance<B, AI> {
+	fn integer_sqrt(&self) -> Self {
+		self.update_balance(<B>::integer_sqrt(&self.balance().clone()))
+	}
+	fn integer_sqrt_checked(&self) -> Option<Self> {
+		<B>::integer_sqrt_checked(&self.balance().clone())
+			.map(|new_balance| self.update_balance(new_balance))
+	}
+}
+
+impl<B: Zero, AI> Zero for MultiBalance<B, AI> {
+	fn zero() -> Self {
+		Self::Native(Zero::zero())
+	}
+	fn set_zero(&mut self) {
+		match self {
+			Self::Native(amount) => *amount = Zero::zero(),
+			Self::Asset(_, amount) => *amount = Zero::zero(),
+		}
+	}
+	fn is_zero(&self) -> bool {
+		match self {
+			Self::Native(amount) => amount.is_zero(),
+			Self::Asset(_, amount) => amount.is_zero(),
+		}
+	}
+}
+impl<B: One + PartialEq, AI> One for MultiBalance<B, AI> {
+	fn one() -> Self {
+		Self::Native(One::one())
+	}
+	fn set_one(&mut self) {
+		match self {
+			Self::Native(amount) => *amount = One::one(),
+			Self::Asset(_, amount) => *amount = One::one(),
+		}
+	}
+	fn is_one(&self) -> bool {
+		match self {
+			Self::Native(amount) => amount.is_one(),
+			Self::Asset(_, amount) => amount.is_one(),
+		}
+	}
+}
+
+impl<B: Bounded, AI> Bounded for MultiBalance<B, AI> {
+	fn min_value() -> Self {
+		Self::Native(<B>::min_value().into())
+	}
+	fn max_value() -> Self {
+		Self::Native(<B>::max_value().into())
 	}
 }
 
