@@ -26,13 +26,13 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_pov_limit.
 pub trait WeightInfo {
-	fn hash() -> Weight;
+	fn hash_value() -> Weight;
 }
 
 /// Weights for pallet_pov_limit using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
-	fn hash() -> Weight {
+	fn hash_value() -> Weight {
 		// Minimum execution time: 35_358 nanoseconds.
 		Weight::from_ref_time(35_935_000 as u64)
 	}

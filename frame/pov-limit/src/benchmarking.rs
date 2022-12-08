@@ -25,7 +25,7 @@ use frame_benchmarking::benchmarks;
 use crate::Pallet as PovLimit;
 
 benchmarks! {
-	hash {
+	hash_value {
 
 	}: {
 		PovLimit::<T>::hash_value(1u64);

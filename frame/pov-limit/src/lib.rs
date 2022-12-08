@@ -92,7 +92,7 @@ pub mod pallet {
 			let mut weight = T::DbWeight::get().reads(1);
 
 			for i in 0..(Compute::<T>::get().mul_ceil(T::HashesForFull::get())) {
-				weight.saturating_add(T::WeightInfo::hash());
+				weight.saturating_add(T::WeightInfo::hash_value());
 				if remaining_weight.any_lt(weight) {
 					weight = remaining_weight;
 					break
