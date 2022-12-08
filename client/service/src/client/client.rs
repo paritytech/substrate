@@ -1945,13 +1945,12 @@ where
 
 	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>> {
 		Ok(match self.backend.blockchain().block_hash_from_id(id)? {
-			Some(hash) => {
+			Some(hash) =>
 				match (self.header(hash)?, self.body(hash)?, self.justifications(hash)?) {
 					(Some(header), Some(extrinsics), justifications) =>
 						Some(SignedBlock { block: Block::new(header, extrinsics), justifications }),
 					_ => None,
-				}
-			},
+				},
 			None => None,
 		})
 	}

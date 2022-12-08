@@ -529,8 +529,12 @@ impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for Blockcha
 		if let Some(result) = cache.get_refresh(&hash) {
 			return Ok(result.clone())
 		}
-		let header =
-			utils::read_header(&*self.db, columns::KEY_LOOKUP, columns::HEADER, BlockId::<Block>::Hash(hash))?;
+		let header = utils::read_header(
+			&*self.db,
+			columns::KEY_LOOKUP,
+			columns::HEADER,
+			BlockId::<Block>::Hash(hash),
+		)?;
 		cache_header(&mut cache, hash, header.clone());
 		Ok(header)
 	}
@@ -565,8 +569,13 @@ impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for Blockcha
 	}
 
 	fn hash(&self, number: NumberFor<Block>) -> ClientResult<Option<Block::Hash>> {
-	    Ok(utils::read_header::<Block>(&*self.db, columns::KEY_LOOKUP, columns::HEADER, BlockId::Number(number))?
-			.map(|header| header.hash()))
+		Ok(utils::read_header::<Block>(
+			&*self.db,
+			columns::KEY_LOOKUP,
+			columns::HEADER,
+			BlockId::Number(number),
+		)?
+		.map(|header| header.hash()))
 	}
 }
 
@@ -1388,8 +1397,7 @@ impl<Block: BlockT> Backend<Block> {
 				.highest_leaf()
 				.map(|(n, _)| n)
 				.unwrap_or(Zero::zero());
-			let existing_header =
-				number <= highest_leaf && self.blockchain.header(hash)?.is_some();
+			let existing_header = number <= highest_leaf && self.blockchain.header(hash)?.is_some();
 
 			// blocks are keyed by number + hash.
 			let lookup_key = utils::number_and_hash_to_lookup_key(number, hash)?;
@@ -1609,10 +1617,7 @@ impl<Block: BlockT> Backend<Block> {
 						);
 					}
 				} else if number > best_num + One::one() &&
-					number > One::one() && self
-					.blockchain
-					.header(parent_hash)?
-					.is_none()
+					number > One::one() && self.blockchain.header(parent_hash)?.is_none()
 				{
 					let gap = (best_num + One::one(), number - One::one());
 					transaction.set(columns::META, meta_keys::BLOCK_GAP, &gap.encode());
@@ -1634,10 +1639,9 @@ impl<Block: BlockT> Backend<Block> {
 		};
 
 		if let Some(set_head) = operation.set_head {
-			if let Some(header) = sc_client_api::blockchain::HeaderBackend::header(
-				&self.blockchain,
-				set_head,
-			)? {
+			if let Some(header) =
+				sc_client_api::blockchain::HeaderBackend::header(&self.blockchain, set_head)?
+			{
 				let number = header.number();
 				let hash = header.hash();
 
@@ -2133,13 +2137,12 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 					return Ok(c.saturated_into::<NumberFor<Block>>())
 				}
 				let mut transaction = Transaction::new();
-				let removed =
-					self.blockchain.header(hash_to_revert)?.ok_or_else(|| {
-						sp_blockchain::Error::UnknownBlock(format!(
-							"Error reverting to {}. Block header not found.",
-							hash_to_revert,
-						))
-					})?;
+				let removed = self.blockchain.header(hash_to_revert)?.ok_or_else(|| {
+					sp_blockchain::Error::UnknownBlock(format!(
+						"Error reverting to {}. Block header not found.",
+						hash_to_revert,
+					))
+				})?;
 				let removed_hash = removed.hash();
 
 				let prev_number = number_to_revert.saturating_sub(One::one());

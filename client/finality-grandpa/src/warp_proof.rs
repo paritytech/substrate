@@ -120,9 +120,9 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 				"header number comes from previously applied set changes; corresponding hash must exist in db; qed.",
 			);
 
-			let header = blockchain.header(hash)?.expect(
-				"header for given hash obtained successfully from db exists in db; qed.",
-			);
+			let header = blockchain
+				.header(hash)?
+				.expect("header for given hash obtained successfully from db exists in db; qed.");
 
 			// the last block in a set is the one that triggers a change to the next set,
 			// therefore the block must have a digest that signals the authority set change

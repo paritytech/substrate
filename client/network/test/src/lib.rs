@@ -171,13 +171,13 @@ impl PeersClient {
 	pub fn has_state_at(&self, block: &BlockId<Block>) -> bool {
 		let (number, hash) = match *block {
 			BlockId::Hash(h) => match self.as_client().number(h) {
-				Ok(Some(n)) => (n,h),
+				Ok(Some(n)) => (n, h),
 				_ => return false,
-			}
+			},
 			BlockId::Number(n) => match self.as_client().hash(n) {
-				Ok(Some(h)) => (n,h),
+				Ok(Some(h)) => (n, h),
 				_ => return false,
-			}
+			},
 		};
 		self.backend.have_state_at(hash, number)
 	}

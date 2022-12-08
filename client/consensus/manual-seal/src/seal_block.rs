@@ -99,9 +99,8 @@ pub async fn seal_block<B, BI, SC, C, E, TP, CIDP, P>(
 		// use the parent_hash supplied via `EngineCommand`
 		// or fetch the best_block.
 		let parent = match parent_hash {
-			Some(hash) => client
-				.header(hash)?
-				.ok_or_else(|| Error::BlockNotFound(format!("{}", hash)))?,
+			Some(hash) =>
+				client.header(hash)?.ok_or_else(|| Error::BlockNotFound(format!("{}", hash)))?,
 			None => select_chain.best_chain().await?,
 		};
 

@@ -331,12 +331,13 @@ where
 
 		let mut total_size: usize = 0;
 
-		let client_header_from_block_id = |block_id: BlockId<B>| -> Result<Option<B::Header>, HandleRequestError>  {
-			if let Some(hash) = self.client.block_hash_from_id(&block_id)? {
-				return self.client.header(hash).map_err(Into::into)
-			}
-			Ok(None)
-		};
+		let client_header_from_block_id =
+			|block_id: BlockId<B>| -> Result<Option<B::Header>, HandleRequestError> {
+				if let Some(hash) = self.client.block_hash_from_id(&block_id)? {
+					return self.client.header(hash).map_err(Into::into)
+				}
+				Ok(None)
+			};
 
 		while let Some(header) = client_header_from_block_id(block_id).unwrap_or_default() {
 			let number = *header.number();

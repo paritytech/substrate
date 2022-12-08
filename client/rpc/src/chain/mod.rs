@@ -80,9 +80,7 @@ where
 					))
 				})?;
 				let block_num = <NumberFor<Block>>::from(block_num);
-				self
-					.client()
-					.hash(block_num).map_err(client_err)
+				self.client().hash(block_num).map_err(client_err)
 			},
 		}
 	}

@@ -614,13 +614,9 @@ mod tests {
 		block_on(txpool.submit_at(&BlockId::number(0), SOURCE, vec![extrinsic(0), extrinsic(1)]))
 			.unwrap();
 
-		block_on(
-			txpool.maintain(chain_event(
-				client
-					.expect_header(BlockId::Number(0u64))
-					.expect("there should be header"),
-			)),
-		);
+		block_on(txpool.maintain(chain_event(
+			client.expect_header(BlockId::Number(0u64)).expect("there should be header"),
+		)));
 
 		let mut proposer_factory =
 			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
@@ -707,13 +703,9 @@ mod tests {
 
 		block_on(txpool.submit_at(&BlockId::number(0), SOURCE, vec![extrinsic(0)])).unwrap();
 
-		block_on(
-			txpool.maintain(chain_event(
-				client
-					.expect_header(BlockId::Number(0u64))
-					.expect("there should be header"),
-			)),
-		);
+		block_on(txpool.maintain(chain_event(
+			client.expect_header(BlockId::Number(0u64)).expect("there should be header"),
+		)));
 
 		let mut proposer_factory =
 			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
@@ -807,26 +799,18 @@ mod tests {
 			block
 		};
 
-		block_on(
-			txpool.maintain(chain_event(
-				client
-					.expect_header(BlockId::Number(0u64))
-					.expect("there should be header"),
-			)),
-		);
+		block_on(txpool.maintain(chain_event(
+			client.expect_header(BlockId::Number(0u64)).expect("there should be header"),
+		)));
 		assert_eq!(txpool.ready().count(), 7);
 
 		// let's create one block and import it
 		let block = propose_block(&client, 0, 2, 7);
 		block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
-		block_on(
-			txpool.maintain(chain_event(
-				client
-					.expect_header(BlockId::Number(1))
-					.expect("there should be header"),
-			)),
-		);
+		block_on(txpool.maintain(chain_event(
+			client.expect_header(BlockId::Number(1)).expect("there should be header"),
+		)));
 		assert_eq!(txpool.ready().count(), 5);
 
 		// now let's make sure that we can still make some progress
@@ -845,9 +829,8 @@ mod tests {
 			spawner.clone(),
 			client.clone(),
 		);
-		let genesis_header = client
-			.expect_header(BlockId::Number(0u64))
-			.expect("there should be header");
+		let genesis_header =
+			client.expect_header(BlockId::Number(0u64)).expect("there should be header");
 
 		let extrinsics_num = 5;
 		let extrinsics = std::iter::once(
@@ -957,13 +940,9 @@ mod tests {
 		)
 		.unwrap();
 
-		block_on(
-			txpool.maintain(chain_event(
-				client
-					.expect_header(BlockId::Number(0u64))
-					.expect("there should be header"),
-			)),
-		);
+		block_on(txpool.maintain(chain_event(
+			client.expect_header(BlockId::Number(0u64)).expect("there should be header"),
+		)));
 		assert_eq!(txpool.ready().count(), MAX_SKIPPED_TRANSACTIONS * 3);
 
 		let mut proposer_factory =
@@ -1019,13 +998,9 @@ mod tests {
 		)
 		.unwrap();
 
-		block_on(
-			txpool.maintain(chain_event(
-				client
-					.expect_header(BlockId::Number(0u64))
-					.expect("there should be header"),
-			)),
-		);
+		block_on(txpool.maintain(chain_event(
+			client.expect_header(BlockId::Number(0u64)).expect("there should be header"),
+		)));
 		assert_eq!(txpool.ready().count(), MAX_SKIPPED_TRANSACTIONS * 2 + 2);
 
 		let mut proposer_factory =
