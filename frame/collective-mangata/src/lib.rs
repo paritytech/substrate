@@ -44,7 +44,10 @@
 
 use scale_info::TypeInfo;
 use sp_io::storage;
-use sp_runtime::{traits::{Hash, Saturating}, RuntimeDebug};
+use sp_runtime::{
+	traits::{Hash, Saturating},
+	RuntimeDebug,
+};
 use sp_std::{marker::PhantomData, prelude::*, result, vec};
 
 use frame_support::{
@@ -329,9 +332,9 @@ pub mod pallet {
 		/// A proposal was closed because its threshold was reached or after its duration was up.
 		Closed { proposal_hash: T::Hash, yes: MemberCount, no: MemberCount },
 		/// The members have been changed
-		MembersChanged {new_members: Vec<T::AccountId>},
+		MembersChanged { new_members: Vec<T::AccountId> },
 		/// The Prime member has been set
-		PrimeSet {new_prime: Option<T::AccountId>},
+		PrimeSet { new_prime: Option<T::AccountId> },
 	}
 
 	#[pallet::error]
@@ -350,7 +353,8 @@ pub mod pallet {
 		AlreadyInitialized,
 		/// The close call was made too early, before the end of the voting.
 		TooEarly,
-		///	To early to close the proposal, can only close ProposalCloseDelay blocks after proposal was proposed
+		///	To early to close the proposal, can only close ProposalCloseDelay blocks after proposal
+		/// was proposed
 		TooEarlyToClose,
 		/// There can only be a maximum of `MaxProposals` active proposals.
 		TooManyProposals,
@@ -727,12 +731,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			proposal_hash,
 			result: result.map(|_| ()).map_err(|e| e.error),
 		});
-		
-		alert_log!(
-			info,
-			"A member has executed a proposal! Proposal: {:?}",
-			proposal
-		);
+
+		alert_log!(info, "A member has executed a proposal! Proposal: {:?}", proposal);
 
 		Ok((proposal_len as u32, result))
 	}
@@ -759,7 +759,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let index = Self::proposal_count();
 		<ProposalCount<T, I>>::mutate(|i| *i += 1);
 		<ProposalOf<T, I>>::insert(proposal_hash, proposal.clone());
-		<ProposalProposedTime<T, I>>::insert(proposal_hash, frame_system::Pallet::<T>::block_number());
+		<ProposalProposedTime<T, I>>::insert(
+			proposal_hash,
+			frame_system::Pallet::<T>::block_number(),
+		);
 
 		let votes = {
 			let end = frame_system::Pallet::<T>::block_number() + T::MotionDuration::get();
@@ -773,12 +776,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			proposal_hash,
 			threshold,
 		});
-		
-		alert_log!(
-			info,
-			"A proposal has been proposed! Proposal: {:?}",
-			proposal
-		);
+
+		alert_log!(info, "A proposal has been proposed! Proposal: {:?}", proposal);
 
 		Ok((proposal_len as u32, active_proposals as u32))
 	}
@@ -855,9 +854,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		// To allow previously existing proposals to be executed we use unwrap_or_default
 		// This can be removed later on when no proposals are without a proposed time in storage.
-		let proposal_proposed_time = Self::proposal_proposed_time(&proposal_hash).unwrap_or_default();
+		let proposal_proposed_time =
+			Self::proposal_proposed_time(&proposal_hash).unwrap_or_default();
 		// Only allow actual closing of the proposal after the voting period has ended.
-		ensure!(frame_system::Pallet::<T>::block_number() >= proposal_proposed_time.saturating_add(T::ProposalCloseDelay::get()), Error::<T, I>::TooEarlyToClose);
+		ensure!(
+			frame_system::Pallet::<T>::block_number() >=
+				proposal_proposed_time.saturating_add(T::ProposalCloseDelay::get()),
+			Error::<T, I>::TooEarlyToClose
+		);
 
 		let mut no_votes = voting.nays.len() as MemberCount;
 		let mut yes_votes = voting.ayes.len() as MemberCount;
@@ -872,7 +876,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				proposal_weight_bound,
 			)?;
 			Self::deposit_event(Event::Closed { proposal_hash, yes: yes_votes, no: no_votes });
-			
+
 			alert_log!(
 				info,
 				"A proposal has been closed! Proposal Hash: {:?}",
@@ -891,7 +895,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.into())
 		} else if disapproved {
 			Self::deposit_event(Event::Closed { proposal_hash, yes: yes_votes, no: no_votes });
-			
+
 			alert_log!(
 				info,
 				"A proposal has been closed! Proposal Hash: {:?}",
@@ -928,7 +932,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				proposal_weight_bound,
 			)?;
 			Self::deposit_event(Event::Closed { proposal_hash, yes: yes_votes, no: no_votes });
-			
+
 			alert_log!(
 				info,
 				"A proposal has been closed! Proposal Hash: {:?}",
@@ -947,7 +951,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.into())
 		} else {
 			Self::deposit_event(Event::Closed { proposal_hash, yes: yes_votes, no: no_votes });
-			
+
 			alert_log!(
 				info,
 				"A proposal has been closed! Proposal Hash: {:?}",
@@ -1000,7 +1004,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		proposal: <T as Config<I>>::Proposal,
 	) -> (Weight, u32) {
 		Self::deposit_event(Event::Approved { proposal_hash });
-		
+
 		alert_log!(
 			info,
 			"A proposal has been approved! Proposal Hash: {:?}, Proposal: {:?}",
@@ -1015,7 +1019,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			proposal_hash,
 			result: result.map(|_| ()).map_err(|e| e.error),
 		});
-		
+
 		alert_log!(
 			info,
 			"A proposal has been executed! Proposal Hash: {:?}, Proposal: {:?}",
@@ -1112,30 +1116,16 @@ impl<T: Config<I>, I: 'static> ChangeMembers<T::AccountId> for Pallet<T, I> {
 		Members::<T, I>::put(new);
 		Prime::<T, I>::kill();
 
-		Pallet::<T, I>::deposit_event(Event::MembersChanged {
-			new_members: new.to_vec()
-		});
+		Pallet::<T, I>::deposit_event(Event::MembersChanged { new_members: new.to_vec() });
 
-		alert_log!(
-			info,
-			"Collective members have changed!!! New Members: {:?}",
-			new.to_vec(),
-		);
-
+		alert_log!(info, "Collective members have changed!!! New Members: {:?}", new.to_vec(),);
 	}
 
 	fn set_prime(prime: Option<T::AccountId>) {
 		Prime::<T, I>::set(prime.clone());
-		Pallet::<T, I>::deposit_event(Event::PrimeSet {
-			new_prime: prime.clone()
-		});
+		Pallet::<T, I>::deposit_event(Event::PrimeSet { new_prime: prime.clone() });
 
-		alert_log!(
-			info,
-			"Prime member has changed! New Prime: {:?}",
-			prime,
-		);
-
+		alert_log!(info, "Prime member has changed! New Prime: {:?}", prime,);
 	}
 
 	fn get_prime() -> Option<T::AccountId> {

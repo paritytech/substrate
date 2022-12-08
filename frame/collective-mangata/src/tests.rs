@@ -407,9 +407,7 @@ fn close_with_prime_works() {
 				record(Event::Collective(CollectiveEvent::MembersChanged {
 					new_members: vec![1, 2, 3]
 				})),
-				record(Event::Collective(CollectiveEvent::PrimeSet {
-					new_prime: Some(3),
-				})),
+				record(Event::Collective(CollectiveEvent::PrimeSet { new_prime: Some(3) })),
 				record(Event::Collective(CollectiveEvent::Proposed {
 					account: 1,
 					proposal_index: 0,
@@ -473,9 +471,7 @@ fn close_with_voting_prime_works() {
 				record(Event::Collective(CollectiveEvent::MembersChanged {
 					new_members: vec![1, 2, 3]
 				})),
-				record(Event::Collective(CollectiveEvent::PrimeSet {
-					new_prime: Some(1),
-				})),
+				record(Event::Collective(CollectiveEvent::PrimeSet { new_prime: Some(1) })),
 				record(Event::Collective(CollectiveEvent::Proposed {
 					account: 1,
 					proposal_index: 0,
@@ -550,9 +546,7 @@ fn close_with_no_prime_but_majority_works() {
 				record(Event::CollectiveMajority(CollectiveEvent::MembersChanged {
 					new_members: vec![1, 2, 3, 4, 5]
 				})),
-				record(Event::CollectiveMajority(CollectiveEvent::PrimeSet {
-					new_prime: Some(5),
-				})),
+				record(Event::CollectiveMajority(CollectiveEvent::PrimeSet { new_prime: Some(5) })),
 				record(Event::CollectiveMajority(CollectiveEvent::Proposed {
 					account: 1,
 					proposal_index: 0,
@@ -952,7 +946,7 @@ fn motions_all_first_vote_free_works() {
 		assert_eq!(vote_rval.unwrap().pays_fee, Pays::Yes);
 
 		// Test close() Extrincis | Check DispatchResultWithPostInfo with Pay Info
-		
+
 		System::set_block_number(3);
 
 		let proposal_weight = proposal.get_dispatch_info().weight;
@@ -982,7 +976,7 @@ fn motions_reproposing_disapproved_works() {
 			proposal_len
 		));
 		assert_ok!(Collective::vote(Origin::signed(2), hash, 0, false));
-		
+
 		System::set_block_number(3);
 		assert_ok!(Collective::close(Origin::signed(2), hash, 0, proposal_weight, proposal_len));
 		assert_eq!(*Collective::proposals(), vec![]);
@@ -1016,7 +1010,7 @@ fn motions_approval_with_enough_votes_and_lower_voting_threshold_works() {
 		));
 		assert_ok!(Collective::vote(Origin::signed(1), hash, 0, true));
 		assert_ok!(Collective::vote(Origin::signed(2), hash, 0, true));
-		
+
 		System::set_block_number(3);
 		assert_ok!(Collective::close(Origin::signed(2), hash, 0, proposal_weight, proposal_len));
 		assert_eq!(
@@ -1131,7 +1125,7 @@ fn motions_disapproval_works() {
 		));
 		assert_ok!(Collective::vote(Origin::signed(1), hash, 0, true));
 		assert_ok!(Collective::vote(Origin::signed(2), hash, 0, false));
-		
+
 		System::set_block_number(3);
 		assert_ok!(Collective::close(Origin::signed(2), hash, 0, proposal_weight, proposal_len));
 

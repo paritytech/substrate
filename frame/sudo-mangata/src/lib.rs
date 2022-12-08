@@ -164,13 +164,10 @@ pub mod pallet {
 			ensure!(Self::key().map_or(false, |k| sender == k), Error::<T>::RequireSudo);
 
 			let res = call.clone().dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
-			Self::deposit_event(Event::Sudid { sudo_result: res.clone().map(|_| ()).map_err(|e| e.error) });
-			alert_log!(
-				info,
-				"A sudo action was performed: Call - {:?}, Result - {:?}!",
-				call,
-				res
-			);
+			Self::deposit_event(Event::Sudid {
+				sudo_result: res.clone().map(|_| ()).map_err(|e| e.error),
+			});
+			alert_log!(info, "A sudo action was performed: Call - {:?}, Result - {:?}!", call, res);
 			// Sudo user does not pay a fee.
 			Ok(Pays::No.into())
 		}
@@ -196,7 +193,9 @@ pub mod pallet {
 			ensure!(Self::key().map_or(false, |k| sender == k), Error::<T>::RequireSudo);
 
 			let res = call.clone().dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
-			Self::deposit_event(Event::Sudid { sudo_result: res.clone().map(|_| ()).map_err(|e| e.error) });
+			Self::deposit_event(Event::Sudid {
+				sudo_result: res.clone().map(|_| ()).map_err(|e| e.error),
+			});
 			alert_log!(
 				info,
 				"A sudo action was performed with unchecked weight: Call - {:?}, Result - {:?}!",
@@ -228,11 +227,7 @@ pub mod pallet {
 			let new = T::Lookup::lookup(new)?;
 
 			Self::deposit_event(Event::KeyChanged { old_sudoer: Key::<T>::get() });
-			alert_log!(
-				info,
-				"sudo key was changed: New Key - {:?}!",
-				new.clone(),
-			);
+			alert_log!(info, "sudo key was changed: New Key - {:?}!", new.clone(),);
 			Key::<T>::put(&new);
 			// Sudo user does not pay a fee.
 			Ok(Pays::No.into())
@@ -269,7 +264,9 @@ pub mod pallet {
 
 			let who = T::Lookup::lookup(who)?;
 
-			let res = call.clone().dispatch_bypass_filter(frame_system::RawOrigin::Signed(who.clone()).into());
+			let res = call
+				.clone()
+				.dispatch_bypass_filter(frame_system::RawOrigin::Signed(who.clone()).into());
 
 			Self::deposit_event(Event::SudoAsDone {
 				sudo_result: res.clone().map(|_| ()).map_err(|e| e.error),
