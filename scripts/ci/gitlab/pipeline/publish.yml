@@ -220,7 +220,7 @@ update-node-template:
     - CRATESIO_TARGET_INSTANCE=default ./releng-scripts/publish-crates
     - rusty-cachier cache upload
 
-publish-crates:
+.publish-crates:
   extends:                         .publish-crates-template
   needs:
     - job:                         publish-crates-locally
@@ -228,7 +228,7 @@ publish-crates:
   rules:
     - if: $CI_COMMIT_REF_NAME == "master"
 
-publish-crates-manual:
+.publish-crates-manual:
   extends:                         .publish-crates-template
   when:                            manual
   allow_failure:                   true
