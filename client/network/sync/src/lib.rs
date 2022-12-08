@@ -246,14 +246,14 @@ impl SyncingMetrics {
 		Ok(Self {
 			import_queue_blocks_submitted: register(
 				Counter::new(
-					"substrate_import_queue_blocks_submitted",
+					"substrate_sync_import_queue_blocks_submitted",
 					"Number of blocks submitted to the import queue.",
 				)?,
 				registry,
 			)?,
 			import_queue_justifications_submitted: register(
 				Counter::new(
-					"substrate_import_queue_justifications_submitted",
+					"substrate_sync_import_queue_justifications_submitted",
 					"Number of justifications submitted to the import queue.",
 				)?,
 				registry,
