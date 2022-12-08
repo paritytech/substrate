@@ -110,15 +110,15 @@ default:
 .docker-env:
   image:                           "${CI_IMAGE}"
   before_script:
-    - if [ $SKIP_JOB = "true" ]; then
-        echo "Skipped!"
-        exit 0
-      fi
     # TODO: remove unset invocation when we'll be free from 'ENV RUSTC_WRAPPER=sccache' & sccache itself in all images
     - unset RUSTC_WRAPPER
     - !reference [.rust-info-script, script]
     - !reference [.rusty-cachier, before_script]
     - !reference [.pipeline-stopper-vars, script]
+    - if [ $SKIP_JOB = "true" ]; then
+        echo "Skipped!";
+        exit 0
+      fi
   after_script:
     - !reference [.rusty-cachier, after_script]
   tags:
