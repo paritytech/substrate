@@ -33,7 +33,7 @@ pub struct PruningParams {
 	///
 	/// This mode specifies when the block's body (including justifications)
 	/// should be pruned (ie, removed) from the database.
-	#[arg(alias = "keep-blocks", long, value_name = "COUNT", default_value = "archive-canonical")]
+	#[arg(alias = "keep-blocks", long, value_name = "PRUNING_MODE", default_value = "archive-canonical")]
 	pub blocks_pruning: DatabasePruningMode,
 }
 
