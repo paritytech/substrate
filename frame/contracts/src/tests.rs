@@ -40,7 +40,7 @@ use frame_support::{
 		fungibles::Lockable, BalanceStatus, ConstU32, ConstU64, Contains, Currency, Get, OnIdle,
 		OnInitialize, ReservableCurrency, WithdrawReasons,
 	},
-	weights::{constants::WEIGHT_PER_SECOND, Weight},
+	weights::{constants::WEIGHT_REF_TIME_PER_SECOND, Weight},
 };
 use frame_system::{self as system, EventRecord, Phase};
 use pretty_assertions::{assert_eq, assert_ne};
@@ -285,7 +285,7 @@ impl RegisteredChainExtension<Test> for TempStorageExtension {
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(
-			(2u64 * WEIGHT_PER_SECOND).set_proof_size(u64::MAX),
+			Weight::from_parts(2u64 * WEIGHT_REF_TIME_PER_SECOND, u64::MAX),
 		);
 	pub static ExistentialDeposit: u64 = 1;
 }
