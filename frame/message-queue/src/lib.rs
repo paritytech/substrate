@@ -65,9 +65,6 @@
 //! this discrepancy at runtime. Conceptually, the implementation is packing as many messages into a
 //! single bounded vec, as actually fit into the bounds. This reduces the wasted PoV.
 //!
-//! NOTE: The enqueuing and storing of messages are only a means to implement the processing and are
-//! not goals per se.
-//!
 //! **Page Data Layout**
 //!
 //! A Page contains a heap which holds all its messages. The heap is built by concatenating
@@ -237,6 +234,8 @@ pub struct Page<Size: Into<u32> + Debug + Clone + Default, HeapSize: Get<Size>> 
 	/// skipped.
 	remaining: Size,
 	/// The size of all remaining messages to be processed.
+	///
+	/// Includes overweight messages outside of the `first` to `last` window.
 	remaining_size: Size,
 	/// The number of items before the `first` item in this page.
 	first_index: Size,
@@ -404,6 +403,9 @@ pub struct BookState<MessageOrigin> {
 	/// One more than the last page with some items to be processed in it.
 	end: PageIndex,
 	/// The number of pages stored at present.
+	///
+	/// This might be larger than `end-begin`, because we keep pages with unprocessed overweight
+	/// messages outside of the end/begin window.
 	count: PageIndex,
 	/// If this book has any ready pages, then this will be `Some` with the previous and next
 	/// neighbours. This wraps around.
@@ -472,6 +474,10 @@ pub mod pallet {
 		type QueueChangeHandler: OnQueueChanged<<Self::MessageProcessor as ProcessMessage>::Origin>;
 
 		/// The size of the page; this implies the maximum message size which can be sent.
+		///
+		/// A good value depends on the expected message sizes, their weights, the weight that is
+		/// available for processing them and the maximal needed message size. The maximal message
+		/// size is slightly lower than this as defined by [`MaxMessageLenOf`].
 		#[pallet::constant]
 		type HeapSize: Get<Self::Size>;
 
@@ -853,12 +859,10 @@ impl<T: Config> Pallet<T> {
 			let ready_pages = book_state.end.saturating_sub(book_state.begin).min(total_pages);
 			let stale_pages = total_pages - ready_pages;
 			let max_stale = T::MaxStale::get();
-			let overflow = match stale_pages.checked_sub(max_stale + 1) {
-				Some(x) => x + 1,
-				None => return false,
-			};
-			let backlog = (max_stale / overflow).max(max_stale);
-			let watermark = book_state.begin.saturating_sub(backlog);
+			if stale_pages <= max_stale {
+				return false
+			}
+			let watermark = book_state.begin.saturating_sub(max_stale);
 			page_index < watermark
 		};
 		ensure!(reapable || cullable(), Error::<T>::NotReapable);

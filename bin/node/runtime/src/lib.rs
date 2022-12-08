@@ -1131,9 +1131,10 @@ impl pallet_bounties::Config for Runtime {
 }
 
 parameter_types! {
-	pub const HeapSize: u32 = 64 * 1024; // 64 KiB
-	pub const MaxStale: u32 = 128;
-	pub const ServiceWeight: Option<Weight> = None;
+	/// Allocate at most 20% of each block for message processing.
+	///
+	/// Is set to 20% since the scheduler can already consume a maximum of 80%.
+	pub const MessageQueueServiceWeight: Option<Weight> = Perbill::from_percent(20) * RuntimeBlockWeights::get().max_block;
 }
 
 impl pallet_message_queue::Config for Runtime {
@@ -1143,9 +1144,9 @@ impl pallet_message_queue::Config for Runtime {
 	type MessageProcessor = pallet_message_queue::mock_helpers::NoopMessageProcessor;
 	type Size = u32;
 	type QueueChangeHandler = ();
-	type HeapSize = HeapSize;
-	type MaxStale = MaxStale;
-	type ServiceWeight = ServiceWeight;
+	type HeapSize = ConstU32<{ 64 * 1024 }>;
+	type MaxStale = ConstU32<128>;
+	type ServiceWeight = MessageQueueServiceWeight;
 }
 
 parameter_types! {
