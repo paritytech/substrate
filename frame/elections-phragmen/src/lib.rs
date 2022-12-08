@@ -101,8 +101,8 @@
 use codec::{Decode, Encode};
 use frame_support::{
 	traits::{
-		defensive_prelude::*, ChangeMembers, Contains, ContainsLengthBound, Currency,
-		CurrencyToVote, Get, InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced,
+		defensive_prelude::*, fungibles, fungibles::Lockable, ChangeMembers, Contains,
+		ContainsLengthBound, Currency, CurrencyToVote, Get, InitializeMembers, OnUnbalanced,
 		ReservableCurrency, SortedMembers, WithdrawReasons,
 	},
 	weights::Weight,
@@ -199,10 +199,10 @@ pub mod pallet {
 
 		/// Identifier for the elections-phragmen pallet's lock
 		#[pallet::constant]
-		type PalletId: Get<LockIdentifier>;
+		type PalletId: Get<fungibles::LockIdentifier>;
 
 		/// The currency that people are electing with.
-		type Currency: LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>
+		type Currency: fungibles::Lockable<Self::AccountId, Moment = Self::BlockNumber>
 			+ ReservableCurrency<Self::AccountId>;
 
 		/// What to do when the members change.
@@ -1274,7 +1274,7 @@ mod tests {
 	}
 
 	parameter_types! {
-		pub const ElectionsPhragmenPalletId: LockIdentifier = *b"phrelect";
+		pub const ElectionsPhragmenPalletId: fungibles::LockIdentifier = *b"phrelect";
 		pub const PhragmenMaxVoters: u32 = 1000;
 		pub const PhragmenMaxCandidates: u32 = 100;
 	}
