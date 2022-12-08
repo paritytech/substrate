@@ -40,7 +40,8 @@ use frame_support::{
 	traits::{Currency, Get, InstanceFilter, IsSubType, IsType, OriginTrait, ReservableCurrency},
 	RuntimeDebug,
 };
-use frame_system::{self as system};
+use frame_system::{self as system, ensure_signed};
+pub use pallet::*;
 use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
 use sp_runtime::{
@@ -49,8 +50,6 @@ use sp_runtime::{
 };
 use sp_std::prelude::*;
 pub use weights::WeightInfo;
-
-pub use pallet::*;
 
 type CallHashOf<T> = <<T as Config>::CallHasher as Hash>::Output;
 
@@ -250,22 +249,10 @@ pub mod pallet {
 			proxy_type: T::ProxyType,
 			delay: T::BlockNumber,
 		) -> DispatchResult {
-			
+			let who = ensure_signed(origin)?;
+			let delegate = T::Lookup::lookup(delegate)?;
 			Self::remove_all_proxy_delegates(&who, delegate, proxy_type, delay)
 		}
-
-		
-		#[pallet::weight(T::WeightInfo::remove_all_proxy_delegates(T::MaxProxies::get()))]
-		pub fn pub remove_all_proxy_delegates(origin: OriginFor<T>,
-			delegate: AccountIdLookupOf<T>,
-			proxy_type: T::ProxyType,
-			delay: T::BlockNumber,
-		)-> DispatchResult{
-				let who = ensure_signed(origin)?;
-				let delegate = T::Lookup::lookup(delegate)?;
-				Self::remove_proxy_delegate(&who, delegate, proxy_type, delay)
-		}
-
 
 		/// Unregister all proxy accounts for the sender.
 		///
@@ -803,5 +790,15 @@ impl<T: Config> Pallet<T> {
 		});
 		let e = call.dispatch(origin);
 		Self::deposit_event(Event::ProxyExecuted { result: e.map(|_| ()).map_err(|e| e.error) });
+	}
+
+	pub fn remove_all_proxy_delegates(
+		delegator: &T::AccountId,
+		delegatee: T::AccountId,
+		proxy_type: T::ProxyType,
+		delay: T::BlockNumber,
+	) -> DispatchResult {
+		ensure!(delegator != &delegatee, Error::<T>::NoSelfProxy);
+		Self::remove_proxy_delegate(delegator, delegatee, proxy_type, delay)
 	}
 }
