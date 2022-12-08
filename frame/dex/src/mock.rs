@@ -108,6 +108,7 @@ impl pallet_assets::Config<Instance1> for Test {
 	type Freezer = ();
 	type WeightInfo = ();
 	type Extra = ();
+	type RemoveItemsLimit = ConstU32<1000>;
 }
 
 impl pallet_assets::Config<Instance2> for Test {
@@ -126,6 +127,7 @@ impl pallet_assets::Config<Instance2> for Test {
 	type Freezer = ();
 	type WeightInfo = ();
 	type Extra = ();
+	type RemoveItemsLimit = ConstU32<1000>;
 }
 
 parameter_types! {
