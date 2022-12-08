@@ -30,12 +30,14 @@ mod benchmarking;
 mod mock;
 #[cfg(test)]
 mod tests;
+pub mod weights;
 
 use frame_support::{pallet_prelude::*, traits::GenesisBuild};
 use sp_core::{Blake2Hasher, Hasher};
 use sp_runtime::Perbill;
 
 pub use pallet::*;
+pub use weights::WeightInfo;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -48,6 +50,9 @@ pub mod pallet {
 		/// all the block's weight.
 		#[pallet::constant]
 		type HashesForFull: Get<u32>;
+
+		/// Weight information for this pallet.
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -87,7 +92,12 @@ pub mod pallet {
 			let mut weight = T::DbWeight::get().reads(1);
 
 			for i in 0..(Compute::<T>::get().mul_ceil(T::HashesForFull::get())) {
-				Blake2Hasher::hash(&i.to_le_bytes());
+				weight.saturating_add(T::WeightInfo::hash());
+				if remaining_weight.any_lt(weight) {
+					weight = remaining_weight;
+					break
+				}
+				Self::hash_value(i.into());
 			}
 
 			for i in 0..Storage::<T>::get() {
@@ -129,6 +139,12 @@ pub mod pallet {
 			Storage::<T>::set(storage);
 
 			Ok(())
+		}
+	}
+
+	impl<T: Config> Pallet<T> {
+		pub fn hash_value(value: u64) {
+			Blake2Hasher::hash(&value.to_le_bytes());
 		}
 	}
 }

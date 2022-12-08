@@ -15,21 +15,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Pov-limit pallet benchmarking.
+//! THIS IS NOT AUTO GENERATED!
 
-#[cfg(feature = "runtime-benchmarks")]
-use super::*;
+#![cfg_attr(rustfmt, rustfmt_skip)]
+#![allow(unused_parens)]
+#![allow(unused_imports)]
 
-use frame_benchmarking::benchmarks;
+use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
+use sp_std::marker::PhantomData;
 
-use crate::Pallet as PovLimit;
+/// Weight functions needed for pallet_pov_limit.
+pub trait WeightInfo {
+	fn hash() -> Weight;
+}
 
-benchmarks! {
-	hash {
-
-	}: {
-		PovLimit::<T>::hash_value(1u64);
+/// Weights for pallet_pov_limit using the Substrate node and recommended hardware.
+pub struct SubstrateWeight<T>(PhantomData<T>);
+impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
+	fn hash() -> Weight {
+		// Minimum execution time: 35_358 nanoseconds.
+		Weight::from_ref_time(35_935_000 as u64)
 	}
-
-	impl_benchmark_test_suite!(PovLimit, crate::mock::new_test_ext(), crate::mock::Test);
 }

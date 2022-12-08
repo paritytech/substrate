@@ -68,6 +68,7 @@ impl frame_system::Config for Test {
 
 impl Config for Test {
 	type HashesForFull = ConstU32<1000000>;
+	type WeightInfo = crate::weights::SubstrateWeight<Test>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
