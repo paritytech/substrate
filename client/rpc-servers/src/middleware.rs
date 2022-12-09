@@ -206,7 +206,7 @@ impl RpcMiddleware {
 	/// Called once the JSON-RPC request is finished and response is sent to the output buffer.
 	fn on_response(&self, result: &str, started_at: std::time::Instant) {
 		log::trace!(target: "rpc_metrics", "[{}] on_response started_at={:?}", self.transport_label, started_at);
-		log::trace!(target: "extra_rpc_metrics", "[{}] result={:?}", self.transport_label, result);
+		log::trace!(target: "rpc_metrics::extra", "[{}] result={:?}", self.transport_label, result);
 		self.metrics.requests_finished.with_label_values(&[self.transport_label]).inc();
 	}
 }
