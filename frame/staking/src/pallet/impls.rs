@@ -1286,6 +1286,12 @@ where
 				disable_strategy,
 			});
 
+			Self::deposit_event(Event::<T>::SlashReported {
+				validator: stash.clone(),
+				fraction: slash_fraction.clone(),
+				slash_era,
+			});
+
 			if let Some(mut unapplied) = unapplied {
 				let nominators_len = unapplied.others.len() as u64;
 				let reporters_len = details.reporters.len() as u64;

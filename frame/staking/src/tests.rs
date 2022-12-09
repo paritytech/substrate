@@ -2845,6 +2845,7 @@ fn deferred_slashes_are_deferred() {
 		assert_eq!(Balances::free_balance(101), 2000);
 		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
 
+		System::reset_events();
 		on_offence_now(
 			&[OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
@@ -2866,8 +2867,6 @@ fn deferred_slashes_are_deferred() {
 		assert_eq!(Balances::free_balance(11), 1000);
 		assert_eq!(Balances::free_balance(101), 2000);
 
-		System::reset_events();
-
 		// at the start of era 4, slashes from era 1 are processed,
 		// after being deferred for at least 2 full eras.
 		mock::start_active_era(4);
@@ -2875,15 +2874,17 @@ fn deferred_slashes_are_deferred() {
 		assert_eq!(Balances::free_balance(11), 900);
 		assert_eq!(Balances::free_balance(101), 2000 - (nominated_value / 10));
 
-		assert_eq!(
-			staking_events_since_last_call(),
-			vec![
-				Event::StakersElected,
+		assert!(matches!(
+			&staking_events_since_last_call()[..],
+			&[
+				Event::Chilled { stash: 11 },
+				Event::SlashReported { validator: 11, fraction: _, slash_era: 1 },
+				..,
 				Event::EraPaid { era_index: 3, validator_payout: 11075, remainder: 33225 },
 				Event::Slashed { staker: 11, amount: 100 },
 				Event::Slashed { staker: 101, amount: 12 }
 			]
-		);
+		));
 	})
 }
 
@@ -2896,25 +2897,26 @@ fn retroactive_deferred_slashes_two_eras_before() {
 		let exposure_11_at_era1 = Staking::eras_stakers(active_era(), 11);
 
 		mock::start_active_era(3);
+		System::reset_events();
 		on_offence_in_era(
 			&[OffenceDetails { offender: (11, exposure_11_at_era1), reporters: vec![] }],
 			&[Perbill::from_percent(10)],
 			1, // should be deferred for two full eras, and applied at the beginning of era 4.
 			DisableStrategy::Never,
 		);
-		System::reset_events();
 
 		mock::start_active_era(4);
 
-		assert_eq!(
-			staking_events_since_last_call(),
-			vec![
-				Event::StakersElected,
-				Event::EraPaid { era_index: 3, validator_payout: 7100, remainder: 21300 },
+		assert!(matches!(
+			&staking_events_since_last_call()[..],
+			&[
+				Event::Chilled { stash: 11 },
+				Event::SlashReported { validator: 11, fraction: _, slash_era: 1 },
+				..,
 				Event::Slashed { staker: 11, amount: 100 },
-				Event::Slashed { staker: 101, amount: 12 },
+				Event::Slashed { staker: 101, amount: 12 }
 			]
-		);
+		));
 	})
 }
 
@@ -2932,18 +2934,19 @@ fn retroactive_deferred_slashes_one_before() {
 		assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 100));
 
 		mock::start_active_era(3);
+		System::reset_events();
 		on_offence_in_era(
 			&[OffenceDetails { offender: (11, exposure_11_at_era1), reporters: vec![] }],
 			&[Perbill::from_percent(10)],
 			2, // should be deferred for two full eras, and applied at the beginning of era 5.
 			DisableStrategy::Never,
 		);
-		System::reset_events();
 
 		mock::start_active_era(4);
 		assert_eq!(
 			staking_events_since_last_call(),
 			vec![
+				Event::SlashReported { validator: 11, fraction: Perbill::from_percent(10), slash_era: 2 },
 				Event::StakersElected,
 				Event::EraPaid { era_index: 3, validator_payout: 11075, remainder: 33225 }
 			]
@@ -3067,6 +3070,7 @@ fn remove_deferred() {
 
 		mock::start_active_era(2);
 
+		System::reset_events();
 		// reported later, but deferred to start of era 4 as well.
 		on_offence_in_era(
 			&[OffenceDetails { offender: (11, exposure.clone()), reporters: vec![] }],
@@ -3094,18 +3098,19 @@ fn remove_deferred() {
 
 		// at the start of era 4, slashes from era 1 are processed,
 		// after being deferred for at least 2 full eras.
-		System::reset_events();
 		mock::start_active_era(4);
 
 		// the first slash for 10% was cancelled, but the 15% one
-		assert_eq!(
-			staking_events_since_last_call(),
-			vec![
-				Event::StakersElected,
-				Event::EraPaid { era_index: 3, validator_payout: 11075, remainder: 33225 },
-				Event::Slashed { staker: 11, amount: 50 },
-				Event::Slashed { staker: 101, amount: 7 }
-			]
+		assert!(
+			matches!(
+				&staking_events_since_last_call()[..],
+				&[
+					Event::SlashReported { validator: 11, fraction: _, slash_era: 1 },
+					..,
+					Event::Slashed { staker: 11, amount: 50 },
+					Event::Slashed { staker: 101, amount: 7 },
+				]
+			)
 		);
 
 		let slash_10 = Perbill::from_percent(10);
