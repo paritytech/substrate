@@ -63,12 +63,16 @@ build-linux-substrate:
       artifacts:                   false
   before_script:
     - mkdir -p ./artifacts/substrate/
+    - cat .git/HEAD
     - !reference [.rusty-cachier, before_script]
     # tldr: we need to checkout the branch HEAD explicitly because of our dynamic versioning approach while building the substrate binary
     # see https://github.com/paritytech/ci_cd/issues/682#issuecomment-1340953589
     - git checkout -B "$CI_COMMIT_REF_NAME" "$CI_COMMIT_SHA"
+    - cat .git/HEAD
   script:
     - rusty-cachier snapshot create
+    - ls -al  /cargo_target_dir/release/build/node-cli*/
+    - tail -n+1 /cargo_target_dir/release/build/node-cli-*/output
     - WASM_BUILD_NO_COLOR=1 time cargo build --locked --release --verbose
     - mv $CARGO_TARGET_DIR/release/substrate ./artifacts/substrate/.
     - echo -n "Substrate version = "
@@ -78,6 +82,9 @@ build-linux-substrate:
         ./artifacts/substrate/substrate --version |
           cut -d ' ' -f 2 | tee ./artifacts/substrate/VERSION;
       fi
+    - ./scripts/ci/gitlab/check-substrate-version.sh
+    - ls -al  /cargo_target_dir/release/build/node-cli*/
+    - tail -n+1 /cargo_target_dir/release/build/node-cli-*/output
     - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
     - cp -r ./scripts/ci/docker/substrate.Dockerfile ./artifacts/substrate/
     - printf '\n# building node-template\n\n'
