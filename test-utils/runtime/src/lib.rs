@@ -166,8 +166,6 @@ pub enum Extrinsic {
 	Store(Vec<u8>),
 }
 
-parity_util_mem::malloc_size_of_is_0!(Extrinsic); // non-opaque extrinsic does not need this
-
 #[cfg(feature = "std")]
 impl serde::Serialize for Extrinsic {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error>
@@ -612,7 +610,7 @@ impl From<frame_system::Call<Runtime>> for Extrinsic {
 	}
 }
 
-impl frame_system::Config for Runtime {
+impl frame_system::pallet::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
@@ -974,13 +972,13 @@ cfg_if! {
 				}
 			}
 
-			impl beefy_primitives::BeefyApi<Block> for RuntimeApi {
+			impl beefy_primitives::BeefyApi<Block> for Runtime {
 				fn validator_set() -> Option<beefy_primitives::ValidatorSet<beefy_primitives::crypto::AuthorityId>> {
 					None
 				}
 			}
 
-			impl beefy_merkle_tree::BeefyMmrApi<Block, beefy_primitives::MmrRootHash> for RuntimeApi {
+			impl beefy_merkle_tree::BeefyMmrApi<Block, beefy_primitives::MmrRootHash> for Runtime {
 				fn authority_set_proof() -> beefy_primitives::mmr::BeefyAuthoritySet<beefy_primitives::MmrRootHash> {
 					Default::default()
 				}

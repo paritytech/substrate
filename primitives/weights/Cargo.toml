@@ -8,7 +8,6 @@ homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "Types and traits for interfacing between the host and the wasm runtime."
 documentation = "https://docs.rs/sp-wasm-interface"
-readme = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
