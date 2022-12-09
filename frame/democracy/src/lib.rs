@@ -157,11 +157,9 @@ use frame_support::{
 	ensure,
 	traits::{
 		defensive_prelude::*,
-		fungibles,
-		fungibles::Lockable,
 		schedule::{v3::Named as ScheduleNamed, DispatchTime},
-		Bounded, Currency, Get, OnUnbalanced, QueryPreimage, ReservableCurrency, StorePreimage,
-		WithdrawReasons,
+		Bounded, Currency, Get, LockIdentifier, LockableCurrency, OnUnbalanced, QueryPreimage,
+		ReservableCurrency, StorePreimage, WithdrawReasons,
 	},
 	weights::Weight,
 };
@@ -191,7 +189,7 @@ pub mod benchmarking;
 
 pub mod migrations;
 
-const DEMOCRACY_ID: fungibles::LockIdentifier = *b"democrac";
+const DEMOCRACY_ID: LockIdentifier = *b"democrac";
 
 /// A proposal index.
 pub type PropIndex = u32;
@@ -236,7 +234,7 @@ pub mod pallet {
 
 		/// Currency type for this pallet.
 		type Currency: ReservableCurrency<Self::AccountId>
-			+ fungibles::Lockable<Self::AccountId, Moment = Self::BlockNumber>;
+			+ LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>;
 
 		/// The period between a proposal being approved and enacted.
 		///
