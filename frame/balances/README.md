@@ -57,7 +57,7 @@ that you need, then you can avoid coupling with the Balances module.
 fungible assets system.
 - [`ReservableCurrency`](https://docs.rs/frame-support/latest/frame_support/traits/trait.ReservableCurrency.html):
 Functions for dealing with assets that can be reserved from an account.
-- [`Lockable`](https://docs.rs/frame-support/latest/frame_support/traits/fungibles/trait.Lockable.html): Functions for
+- [`Lockable`](https://docs.rs/frame-support/latest/frame_support/traits/fungible/trait.Lockable.html): Functions for
 dealing with accounts that allow liquidity restrictions.
 - [`Imbalance`](https://docs.rs/frame-support/latest/frame_support/traits/trait.Imbalance.html): Functions for handling
 imbalances between total issuance in the system and account balances. Must be used when a function
