@@ -22,7 +22,7 @@ use futures::{future, future::FutureExt, pin_mut, select, Future};
 use log::info;
 use sc_service::{Configuration, Error as ServiceError, TaskManager};
 use sc_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
-use std::marker::PhantomData;
+use std::{marker::PhantomData, time::Duration};
 
 #[cfg(target_family = "unix")]
 async fn main<F, E>(func: F) -> std::result::Result<(), E>
@@ -147,7 +147,11 @@ impl<C: SubstrateCli> Runner<C> {
 		self.print_node_infos();
 		let mut task_manager = self.tokio_runtime.block_on(initialize(self.config))?;
 		let res = self.tokio_runtime.block_on(main(task_manager.future().fuse()));
-		Ok(res?)
+
+		// Give all futures 60 seconds to shutdown, before tokio "leaks" them.
+		self.tokio_runtime.shutdown_timeout(Duration::from_secs(60));
+
+		res.map_err(Into::into)
 	}
 
 	/// A helper function that runs a command with the configuration of this node.

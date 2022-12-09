@@ -2,32 +2,33 @@
 # This file is part of .gitlab-ci.yml
 # Here are all jobs that are executed during "publish" stage
 
-.build-push-docker-image:
+.build-push-docker-image-common:
   extends:
-    - .build-refs
     - .kubernetes-env
+  stage:                           publish
   variables:
     CI_IMAGE:                      $BUILDAH_IMAGE
     GIT_STRATEGY:                  none
     DOCKERFILE:                    $PRODUCT.Dockerfile
-    IMAGE_NAME:                    docker.io/parity/$PRODUCT
+    IMAGE_NAME:                    docker.io/$IMAGE_PATH
   before_script:
     - cd ./artifacts/$PRODUCT/
     - VERSION="$(cat ./VERSION)"
     - echo "${PRODUCT} version = ${VERSION}"
     - test -z "${VERSION}" && exit 1
   script:
-    - test "$Docker_Hub_User_Parity" -a "$Docker_Hub_Pass_Parity" ||
+    - test "$DOCKER_USER" -a "$DOCKER_PASS" ||
         ( echo "no docker credentials provided"; exit 1 )
     - buildah bud
         --format=docker
         --build-arg VCS_REF="${CI_COMMIT_SHA}"
         --build-arg BUILD_DATE="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+        --build-arg IMAGE_NAME="${IMAGE_PATH}"
         --tag "$IMAGE_NAME:$VERSION"
         --tag "$IMAGE_NAME:latest"
         --file "$DOCKERFILE" .
-    - echo "$Docker_Hub_Pass_Parity" |
-        buildah login --username "$Docker_Hub_User_Parity" --password-stdin docker.io
+    - echo "$DOCKER_PASS" |
+        buildah login --username "$DOCKER_USER" --password-stdin docker.io
     - buildah info
     - buildah push --format=v2s2 "$IMAGE_NAME:$VERSION"
     - buildah push --format=v2s2 "$IMAGE_NAME:latest"
@@ -38,8 +39,27 @@
     - echo "SUBSTRATE_IMAGE_TAG=${IMAGE_TAG}"   | tee -a ./artifacts/$PRODUCT/build.env
     - cat ./artifacts/$PRODUCT/build.env
 
+.build-push-docker-image:
+  extends:
+    - .publish-refs
+    - .build-push-docker-image-common
+  variables:
+    IMAGE_PATH:                    parity/$PRODUCT
+    DOCKER_USER:                   $Docker_Hub_User_Parity
+    DOCKER_PASS:                   $Docker_Hub_Pass_Parity
+
+
+# publish image to docker.io/paritypr, (e.g. for later use in zombienet testing)
+.build-push-image-temporary:
+  extends:
+    - .build-refs
+    - .build-push-docker-image-common
+  variables:
+    IMAGE_PATH:                    paritypr/$PRODUCT
+    DOCKER_USER:                   $PARITYPR_USER
+    DOCKER_PASS:                   $PARITYPR_PASS
+
 publish-docker-substrate:
-  stage:                           publish
   extends:                         .build-push-docker-image
   needs:
     - job:                         build-linux-substrate
@@ -47,8 +67,21 @@ publish-docker-substrate:
   variables:
     PRODUCT:                       substrate
 
+publish-docker-substrate-temporary:
+  extends:                         .build-push-image-temporary
+  needs:
+    - job:                         build-linux-substrate
+      artifacts:                   true
+  variables:
+    PRODUCT:                       substrate
+  artifacts:
+    reports:
+      # this artifact is used in zombienet-tests job
+      # https://docs.gitlab.com/ee/ci/multi_project_pipelines.html#with-variable-inheritance
+      dotenv: ./artifacts/$PRODUCT/build.env
+    expire_in:                     24h
+
 publish-docker-subkey:
-  stage:                           publish
   extends:                         .build-push-docker-image
   needs:
     - job:                         build-subkey-linux
@@ -59,7 +92,7 @@ publish-docker-subkey:
 publish-s3-release:
   stage:                           publish
   extends:
-    - .build-refs
+    - .publish-refs
     - .kubernetes-env
   needs:
     - job:                         build-linux-substrate
@@ -161,3 +194,41 @@ update-node-template:
       --template-path "bin/node-template"
       --github-api-token "$GITHUB_TOKEN"
       --polkadot-branch "$CI_COMMIT_REF_NAME"
+
+.publish-crates-template:
+  stage:                           publish
+  extends:                         .crates-publishing-template
+  # We don't want multiple jobs racing to publish crates as it's redundant and they might overwrite
+  # the releases of one another. Use resource_group to ensure that at most one instance of this job
+  # is running at any given time.
+  resource_group:                  crates-publishing
+  variables:
+    # crates.io rate limits crates publishing by 1 per minute, so a delay needs to be inserted
+    # slightly higher than that after publishing each crate. The value is specified in seconds.
+    SPUB_AFTER_PUBLISH_DELAY: 64
+  # We might have to publish lots of crates at a time. Given the 1 minute delay introduced above and
+  # taking into account the 202 (as of Dec 07, 2022) publishable Substrate crates, that would equate
+  # to roughly 202 minutes of delay, or 3h and 22 minutes. As such, the job needs to have a much
+  # higher timeout than average.
+  timeout:                         5h
+  script:
+    - rusty-cachier snapshot create
+    - git clone
+        --depth 1
+        --branch "$RELENG_SCRIPTS_BRANCH"
+        https://github.com/paritytech/releng-scripts.git
+    - CRATESIO_TARGET_INSTANCE=default ./releng-scripts/publish-crates
+    - rusty-cachier cache upload
+
+publish-crates:
+  extends:                         .publish-crates-template
+  needs:
+    - job:                         publish-crates-locally
+      artifacts:                   false
+  rules:
+    - if: $CI_COMMIT_REF_NAME == "master"
+
+publish-crates-manual:
+  extends:                         .publish-crates-template
+  when:                            manual
+  allow_failure:                   true
