@@ -31,8 +31,8 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
 	ensure,
 	traits::{
-		fungible, fungible::Lockable, Currency, Get, PollStatus, Polling,
-		ReservableCurrency, WithdrawReasons,
+		fungible, fungible::Lockable, Currency, Get, PollStatus, Polling, ReservableCurrency,
+		WithdrawReasons,
 	},
 };
 use sp_runtime::{

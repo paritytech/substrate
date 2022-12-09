@@ -171,9 +171,7 @@ use frame_support::{
 	ensure,
 	pallet_prelude::DispatchResult,
 	traits::{
-		tokens::{
-			fungible, BalanceStatus as Status, DepositConsequence, WithdrawConsequence,
-		},
+		tokens::{fungible, BalanceStatus as Status, DepositConsequence, WithdrawConsequence},
 		Currency, DefensiveSaturating, ExistenceRequirement,
 		ExistenceRequirement::{AllowDeath, KeepAlive},
 		Get, Imbalance, NamedReservableCurrency, OnUnbalanced, ReservableCurrency, SignedImbalance,
