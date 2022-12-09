@@ -76,6 +76,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			that the dev-mode for your pallet is enabled. For more info see:
 			<https://github.com/paritytech/substrate/pull/11381> and
 			<https://github.com/paritytech/substrate/pull/12536>.")]
+			#[allow(non_camel_case_types)]
 			struct #name;
 		);
 		warning_names.push(name);
