@@ -54,6 +54,34 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		.map(|fn_name| format!("Create a call with the variant `{}`.", fn_name))
 		.collect::<Vec<_>>();
 
+	let mut warning_structs = Vec::new();
+	let mut warning_names = Vec::new();
+	// Emit a warning for each call that is missing `call_index` when not in dev-mode.
+	for method in &methods {
+		let explicit_call_index =
+			crate::pallet::parse::helper::take_item_pallet_attrs(&mut method.clone().attrs)
+				.unwrap_or_default()
+				.into_iter()
+				.any(|attr| matches!(attr, crate::pallet::parse::call::FunctionAttr::Weight(_)));
+		if explicit_call_index || def.dev_mode {
+			continue
+		}
+
+		let name =
+			syn::Ident::new(&format!("implicit_call_index_{}", method.name), method.name.span());
+		let warning: syn::ItemStruct = syn::parse_quote!(
+			#[deprecated(note = r"
+			`pallet::call_index` is missing on a call while the dev-mode is disabled.
+			Please ensure that either all your calls have the `pallet::call_index` attribute or
+			that the dev-mode for your pallet is enabled. For more info see:
+			<https://github.com/paritytech/substrate/pull/11381> and
+			<https://github.com/paritytech/substrate/pull/12536>.")]
+			struct #name;
+		);
+		warning_names.push(name);
+		warning_structs.push(warning);
+	}
+
 	let fn_weight = methods.iter().map(|method| &method.weight);
 
 	let fn_doc = methods.iter().map(|method| &method.docs).collect::<Vec<_>>();
@@ -178,6 +206,14 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		.collect::<Vec<_>>();
 
 	quote::quote_spanned!(span =>
+		fn __trigger_warnings() {
+			#(
+				#warning_structs
+				// This triggers the deprecated warnings.
+				let _ = #warning_names;
+			)*
+		}
+
 		#[doc(hidden)]
 		pub mod __substrate_call_check {
 			#[macro_export]
