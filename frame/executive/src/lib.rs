@@ -620,10 +620,7 @@ mod tests {
 
 	use frame_support::{
 		assert_err, parameter_types,
-		traits::{
-			ConstU32, ConstU64, ConstU8, Currency, LockIdentifier, LockableCurrency,
-			WithdrawReasons,
-		},
+		traits::{fungibles, ConstU32, ConstU64, ConstU8, Currency, WithdrawReasons},
 		weights::{ConstantMultiplier, IdentityFee, RuntimeDbWeight, Weight, WeightToFee},
 	};
 	use frame_system::{Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
@@ -1185,11 +1182,11 @@ mod tests {
 
 	#[test]
 	fn can_pay_for_tx_fee_on_full_lock() {
-		let id: LockIdentifier = *b"0       ";
+		let id: fungibles::LockIdentifier = *b"0       ";
 		let execute_with_lock = |lock: WithdrawReasons| {
 			let mut t = new_test_ext(1);
 			t.execute_with(|| {
-				<pallet_balances::Pallet<Runtime> as LockableCurrency<Balance>>::set_lock(
+				<pallet_balances::Pallet<Runtime> as fungibles::Lockable<Balance>>::set_lock(
 					id, &1, 110, lock,
 				);
 				let xt = TestXt::new(

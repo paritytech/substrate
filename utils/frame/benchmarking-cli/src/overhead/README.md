@@ -30,7 +30,8 @@ The file will contain the concrete weight value and various statistics about the
 ///   99th: 3_631_863
 ///   95th: 3_595_674
 ///   75th: 3_526_435
-pub const BlockExecutionWeight: Weight = WEIGHT_PER_NANOS.saturating_mul(3_532_484);
+pub const BlockExecutionWeight: Weight =
+    Weight::from_ref_time(WEIGHT_REF_TIME_PER_NANOS.saturating_mul(3_532_484));
 ```
 
 In this example it takes 3.5 ms to execute an empty block. That means that it always takes at least 3.5 ms to execute *any* block.
@@ -59,7 +60,8 @@ The relevant section in the output file looks like this:
 ///   99th: 68_758
 ///   95th: 67_843
 ///   75th: 67_749
-pub const ExtrinsicBaseWeight: Weight = WEIGHT_PER_NANOS.saturating_mul(67_745);
+pub const ExtrinsicBaseWeight: Weight =
+    Weight::from_ref_time(WEIGHT_REF_TIME_PER_NANOS.saturating_mul(67_745));
 ```
 
 In this example it takes 67.7 µs to execute a NO-OP extrinsic. That means that it always takes at least 67.7 µs to execute *any* extrinsic.

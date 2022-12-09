@@ -56,11 +56,6 @@ pub(crate) struct StoreData {
 }
 
 impl StoreData {
-	/// Returns a reference to the host state.
-	pub fn host_state(&self) -> Option<&HostState> {
-		self.host_state.as_ref()
-	}
-
 	/// Returns a mutable reference to the host state.
 	pub fn host_state_mut(&mut self) -> Option<&mut HostState> {
 		self.host_state.as_mut()
@@ -69,11 +64,6 @@ impl StoreData {
 	/// Returns the host memory.
 	pub fn memory(&self) -> Memory {
 		self.memory.expect("memory is always set; qed")
-	}
-
-	/// Returns the host table.
-	pub fn table(&self) -> Option<Table> {
-		self.table
 	}
 }
 

@@ -20,6 +20,7 @@
 //! NOTE: If you're looking for `parameter_types`, it has moved in to the top-level module.
 
 pub mod tokens;
+#[allow(deprecated)]
 pub use tokens::{
 	currency::{
 		ActiveIssuanceOf, Currency, LockIdentifier, LockableCurrency, NamedReservableCurrency,
@@ -99,8 +100,8 @@ mod dispatch;
 pub use dispatch::EnsureOneOf;
 pub use dispatch::{
 	AsEnsureOriginWithArg, CallerTrait, EitherOf, EitherOfDiverse, EnsureOrigin,
-	EnsureOriginWithArg, MapSuccess, NeverEnsureOrigin, OriginTrait, TryMapSuccess,
-	UnfilteredDispatchable,
+	EnsureOriginEqualOrHigherPrivilege, EnsureOriginWithArg, MapSuccess, NeverEnsureOrigin,
+	OriginTrait, TryMapSuccess, UnfilteredDispatchable,
 };
 
 mod voting;
