@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Test helpers and runtime setup for the message queue pallet.
+
 #![cfg(test)]
 
 pub use super::mock_helpers::*;
