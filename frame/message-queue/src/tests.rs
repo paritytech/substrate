@@ -211,27 +211,31 @@ fn reap_page_permanent_overweight_works() {
 	use MessageOrigin::*;
 	new_test_ext::<Test>().execute_with(|| {
 		// Create 10 pages more than the stale limit.
-		for _ in 0..(MaxStale::get() + 10) {
+		let n = (MaxStale::get() + 10) as usize;
+		for _ in 0..n {
 			MessageQueue::enqueue_message(msg("weight=2"), Here);
 		}
-		assert_eq!(Pages::<Test>::iter().count(), MaxStale::get() as usize + 10);
-		assert_eq!(QueueChanges::take().len(), MaxStale::get() as usize + 10);
+		assert_eq!(Pages::<Test>::iter().count(), n);
+		assert_eq!(QueueChanges::take().len(), n);
 		// Mark all pages as stale since their message is permanently overweight.
 		MessageQueue::service_queues(1.into_weight());
 
-		// Cannot reap any page within the stale limit.
-		for _ in 10..(MaxStale::get() + 10) {
-			assert_noop!(MessageQueue::do_reap_page(&Here, 10), Error::<Test>::NotReapable);
-		}
-		// Can reap the stale ones below the watermark.
-		let b = BookStateFor::<Test>::get(Here);
-		for i in 0..10 {
+		// Check that we can reap everything below the watermark.
+		let max_stale = MaxStale::get();
+		for i in 0..n as u32 {
+			let b = BookStateFor::<Test>::get(Here);
+			let stale_pages = n as u32 - i;
+			let overflow = stale_pages.saturating_sub(max_stale + 1) + 1;
+			let backlog = (max_stale * max_stale / overflow).max(max_stale);
+			let watermark = b.begin.saturating_sub(backlog);
+
+			if i >= watermark {
+				break
+			}
 			assert_ok!(MessageQueue::do_reap_page(&Here, i));
-			assert_eq!(
-				QueueChanges::take(),
-				vec![(Here, b.message_count - (i as u64 + 1), b.size - (i as u64 + 1) * 8)]
-			);
+			assert_eq!(QueueChanges::take(), vec![(Here, b.message_count - 1, b.size - 8)]);
 		}
+
 		// Cannot reap any more pages.
 		for (o, i, _) in Pages::<Test>::iter() {
 			assert_noop!(MessageQueue::do_reap_page(&o, i), Error::<Test>::NotReapable);
@@ -264,68 +268,50 @@ fn reaping_overweight_fails_properly() {
 		// Double-check that exactly these pages exist.
 		assert_pages(&[0, 1, 2, 3, 4, 5]);
 
-		// Start by servicing with 2 weight; this is enough for 0:"a" and 1:"b".
 		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
 		assert_eq!(MessagesProcessed::take(), vec![(vmsg("a"), Here), (vmsg("b"), Here)]);
+		// 2 stale now.
+
+		// Nothing reapable yet, because we haven't hit the stale limit.
+		for (o, i, _) in Pages::<Test>::iter() {
+			assert_noop!(MessageQueue::do_reap_page(&o, i), Error::<Test>::NotReapable);
+		}
 		assert_pages(&[0, 1, 2, 3, 4, 5]);
 
-		// 0 and 1 are now stale since they both contain a permanently overweight message.
-		// Nothing is reapable yet, because we haven't hit the stale limit of 2.
-		for (o, i, _) in Pages::<Test>::iter() {
-			assert_noop!(MessageQueue::do_reap_page(&o, i), Error::<Test>::NotReapable);
-		}
-
-		// Service with 1 weight; this is enough for 2:"c".
 		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
 		assert_eq!(MessagesProcessed::take(), vec![(vmsg("c"), Here)]);
+		// 3 stale now: can take something 4 pages in history.
 
-		// 0, 1 and 2 are stale now because of a permanently overweight message.
-		// 0 should be reapable since it is over the stale limit of 2.
-		assert_ok!(MessageQueue::do_reap_page(&Here, 0));
-		assert_pages(&[1, 2, 3, 4, 5]);
-		assert_noop!(MessageQueue::do_reap_page(&Here, 0), Error::<Test>::NoPage);
-		// ... but no other pages.
-		for (o, i, _) in Pages::<Test>::iter() {
-			assert_noop!(MessageQueue::do_reap_page(&o, i), Error::<Test>::NotReapable);
-		}
-
-		// Service page 3.
 		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
 		assert_eq!(MessagesProcessed::take(), vec![(vmsg("bigbig 1"), Here)]);
-		assert_pages(&[1, 2, 4, 5]);
 
-		// Nothing reapable.
+		// Nothing reapable yet, because we haven't hit the stale limit.
 		for (o, i, _) in Pages::<Test>::iter() {
 			assert_noop!(MessageQueue::do_reap_page(&o, i), Error::<Test>::NotReapable);
 		}
+		assert_pages(&[0, 1, 2, 4, 5]);
 
-		// Service page 4.
 		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
 		assert_eq!(MessagesProcessed::take(), vec![(vmsg("bigbig 2"), Here)]);
-		assert_pages(&[1, 2, 5]);
-		assert_noop!(MessageQueue::do_reap_page(&Here, 3), Error::<Test>::NoPage);
+		assert_pages(&[0, 1, 2, 5]);
 
-		// Nothing reapable.
+		// First is now reapable as it is too far behind the first ready page (5).
+		assert_ok!(MessageQueue::do_reap_page(&Here, 0));
+		// Others not reapable yet, because we haven't hit the stale limit.
 		for (o, i, _) in Pages::<Test>::iter() {
 			assert_noop!(MessageQueue::do_reap_page(&o, i), Error::<Test>::NotReapable);
 		}
+		assert_pages(&[1, 2, 5]);
 
-		// Mark 5 as stale by being permanently overweight.
-		assert_eq!(MessageQueue::service_queues(0.into_weight()), 0.into_weight());
-		assert!(MessagesProcessed::take().is_empty());
+		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
+		assert_eq!(MessagesProcessed::take(), vec![(vmsg("bigbig 3"), Here)]);
 
-		// 1, 2 and 5 stale now: 1 should be reapable.
-		assert_ok!(MessageQueue::do_reap_page(&Here, 1));
-		assert_noop!(MessageQueue::do_reap_page(&Here, 1), Error::<Test>::NoPage);
-
-		// 2 and 5 are present but not reapable.
-		assert_pages(&[2, 5]);
-		for i in [2, 5] {
-			assert_noop!(MessageQueue::do_reap_page(&Here, i), Error::<Test>::NotReapable);
-		}
-		// 0, 1, 3 and 4 are gone.
-		for i in [0, 1, 3, 4] {
-			assert_noop!(MessageQueue::do_reap_page(&Here, i), Error::<Test>::NoPage);
+		assert_noop!(MessageQueue::do_reap_page(&Here, 0), Error::<Test>::NoPage);
+		assert_noop!(MessageQueue::do_reap_page(&Here, 3), Error::<Test>::NoPage);
+		assert_noop!(MessageQueue::do_reap_page(&Here, 4), Error::<Test>::NoPage);
+		// Still not reapable, since the number of stale pages is only 2.
+		for (o, i, _) in Pages::<Test>::iter() {
+			assert_noop!(MessageQueue::do_reap_page(&o, i), Error::<Test>::NotReapable);
 		}
 	});
 }
@@ -948,7 +934,7 @@ fn execute_overweight_works() {
 		// Load the current book
 		let book = BookStateFor::<Test>::get(origin);
 		assert_eq!(book.message_count, 1);
-		assert!(Pages::<Test>::contains_key(&origin, 0));
+		assert!(Pages::<Test>::contains_key(origin, 0));
 
 		// Mark the message as permanently overweight.
 		assert_eq!(MessageQueue::service_queues(4.into_weight()), 4.into_weight());
@@ -987,7 +973,7 @@ fn execute_overweight_works() {
 			<MessageQueue as ServiceQueues>::execute_overweight(70.into_weight(), (origin, 0, 0));
 		assert_eq!(consumed, Err(ExecuteOverweightError::NotFound));
 		assert!(QueueChanges::take().is_empty());
-		assert!(!Pages::<Test>::contains_key(&origin, 0), "Page is gone");
+		assert!(!Pages::<Test>::contains_key(origin, 0), "Page is gone");
 	});
 }
 
@@ -1066,7 +1052,7 @@ fn enqueue_message_works() {
 		// Check the state.
 		assert_eq!(BookStateFor::<Test>::iter().count(), 1);
 		let book = BookStateFor::<Test>::get(Here);
-		assert_eq!(book.message_count as u64, n + 1);
+		assert_eq!(book.message_count, n + 1);
 		assert_eq!(book.size, n + 3);
 		assert_eq!((book.begin, book.end), (0, 4));
 		assert_eq!(book.count as usize, Pages::<Test>::iter().count());
@@ -1098,7 +1084,7 @@ fn enqueue_messages_works() {
 		// Check the state.
 		assert_eq!(BookStateFor::<Test>::iter().count(), 1);
 		let book = BookStateFor::<Test>::get(Here);
-		assert_eq!(book.message_count as u64, n + 1);
+		assert_eq!(book.message_count, n + 1);
 		assert_eq!(book.size, n + 3);
 		assert_eq!((book.begin, book.end), (0, 4));
 		assert_eq!(book.count as usize, Pages::<Test>::iter().count());

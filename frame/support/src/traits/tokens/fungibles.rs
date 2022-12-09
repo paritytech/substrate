@@ -33,7 +33,9 @@ pub mod metadata;
 pub use balanced::{Balanced, Unbalanced};
 mod imbalance;
 pub use imbalance::{CreditOf, DebtOf, HandleImbalanceDrop, Imbalance};
+mod lockable;
 pub mod roles;
+pub use lockable::{LockIdentifier, Lockable};
 
 /// Trait for providing balance-inspection access to a set of named fungible assets.
 pub trait Inspect<AccountId> {
@@ -81,6 +83,9 @@ pub trait Inspect<AccountId> {
 		who: &AccountId,
 		amount: Self::Balance,
 	) -> WithdrawConsequence<Self::Balance>;
+
+	/// Returns `true` if an `asset` exists.
+	fn asset_exists(asset: Self::AssetId) -> bool;
 }
 
 /// Trait for reading metadata from a fungible asset.
