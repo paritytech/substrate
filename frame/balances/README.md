@@ -88,13 +88,13 @@ pub type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<<T as fra
 
 ```
 
-The Staking module uses the `fungibles::Lockable` trait to lock a stash account's funds:
+The Staking module uses the `fungible::Lockable` trait to lock a stash account's funds:
 
 ```rust
 use frame_support::traits::{WithdrawReasons, fungibles};
 use sp_runtime::traits::Bounded;
 pub trait Config: frame_system::Config {
-	type Currency: fungibles::Lockable<Self::AccountId, Moment=Self::BlockNumber>;
+	type Currency: fungible::Lockable<Self::AccountId, Moment=Self::BlockNumber>;
 }
 
 fn update_ledger<T: Config>(

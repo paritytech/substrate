@@ -66,7 +66,7 @@ use codec::{Codec, Encode};
 use frame_support::{
 	ensure,
 	traits::{
-		fungibles,
+		fungible,
 		schedule::{
 			v3::{Anon as ScheduleAnon, Named as ScheduleNamed},
 			DispatchTime,
@@ -132,7 +132,7 @@ macro_rules! impl_tracksinfo_get {
 	};
 }
 
-const ASSEMBLY_ID: fungibles::LockIdentifier = *b"assembly";
+const ASSEMBLY_ID: fungible::LockIdentifier = *b"assembly";
 
 #[frame_support::pallet]
 pub mod pallet {

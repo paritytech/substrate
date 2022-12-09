@@ -29,6 +29,8 @@ use sp_runtime::traits::Saturating;
 
 mod balanced;
 mod imbalance;
+mod lockable;
+pub use lockable::{LockIdentifier, Lockable};
 
 pub use balanced::{Balanced, Unbalanced};
 pub use imbalance::{CreditOf, DebtOf, HandleImbalanceDrop, Imbalance};
