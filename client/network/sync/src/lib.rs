@@ -1362,7 +1362,7 @@ where
 		}
 		self.process_outbound_requests();
 
-		if let Poll::Ready(result) = self.poll_pending_responses(cx) {
+		while let Poll::Ready(result) = self.poll_pending_responses(cx) {
 			match result {
 				ImportResult::BlockImport(origin, blocks) => self.import_blocks(origin, blocks),
 				ImportResult::JustificationImport(who, hash, number, justifications) =>
