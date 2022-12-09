@@ -620,7 +620,7 @@ mod tests {
 
 	use frame_support::{
 		assert_err, parameter_types,
-		traits::{fungibles, ConstU32, ConstU64, ConstU8, Currency, WithdrawReasons},
+		traits::{fungible, ConstU32, ConstU64, ConstU8, Currency, WithdrawReasons},
 		weights::{ConstantMultiplier, IdentityFee, RuntimeDbWeight, Weight, WeightToFee},
 	};
 	use frame_system::{Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
