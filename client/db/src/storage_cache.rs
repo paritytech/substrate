@@ -59,15 +59,11 @@ pub struct Cache<B: BlockT> {
 
 struct LRUMap<K, V>(LinkedHashMap<K, V>, usize, usize);
 
-/// Internal trait similar to `heapsize` but using
-/// a simply estimation.
+/// Internal trait similar to `heapsize` but using a simple estimation.
 ///
-/// This should not be made public, it is implementation
-/// detail trait. If it need to become public please
-/// consider using `malloc_size_of`.
+/// This should not be made public, it is an implementation detail trait.
 trait EstimateSize {
-	/// Return a size estimation of additional size needed
-	/// to cache this struct (in bytes).
+	/// Return a size estimation of the additional size needed to cache this struct (in bytes).
 	fn estimate_size(&self) -> usize;
 }
 

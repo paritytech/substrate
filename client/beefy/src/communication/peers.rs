@@ -46,11 +46,6 @@ impl<B: Block> KnownPeers<B> {
 		Self { live: HashMap::new() }
 	}
 
-	/// Add new connected `peer`.
-	pub fn add_new(&mut self, peer: PeerId) {
-		self.live.entry(peer).or_default();
-	}
-
 	/// Note vote round number for `peer`.
 	pub fn note_vote_for(&mut self, peer: PeerId, round: NumberFor<B>) {
 		let data = self.live.entry(peer).or_default();
@@ -87,16 +82,13 @@ mod tests {
 		let mut peers = KnownPeers::<sc_network_test::Block>::new();
 		assert!(peers.live.is_empty());
 
-		// Alice and Bob new connected peers.
-		peers.add_new(alice);
-		peers.add_new(bob);
 		// 'Tracked' Bob seen voting for 5.
 		peers.note_vote_for(bob, 5);
 		// Previously unseen Charlie now seen voting for 10.
 		peers.note_vote_for(charlie, 10);
 
-		assert_eq!(peers.live.len(), 3);
-		assert!(peers.contains(&alice));
+		assert_eq!(peers.live.len(), 2);
+		assert!(!peers.contains(&alice));
 		assert!(peers.contains(&bob));
 		assert!(peers.contains(&charlie));
 

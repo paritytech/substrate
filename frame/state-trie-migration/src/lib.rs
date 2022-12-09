@@ -1606,7 +1606,6 @@ mod test {
 pub(crate) mod remote_tests {
 	use crate::{AutoLimits, MigrationLimits, Pallet as StateTrieMigration, LOG_TARGET};
 	use codec::Encode;
-	use frame_benchmarking::Zero;
 	use frame_support::{
 		traits::{Get, Hooks},
 		weights::Weight,
@@ -1614,7 +1613,7 @@ pub(crate) mod remote_tests {
 	use frame_system::Pallet as System;
 	use remote_externalities::Mode;
 	use sp_core::H256;
-	use sp_runtime::traits::{Block as BlockT, HashFor, Header as _, One};
+	use sp_runtime::traits::{Block as BlockT, HashFor, Header as _, One, Zero};
 	use thousands::Separable;
 
 	#[allow(dead_code)]
@@ -1663,18 +1662,20 @@ pub(crate) mod remote_tests {
 		// set the version to 1, as if the upgrade happened.
 		ext.state_version = sp_core::storage::StateVersion::V1;
 
-		let (top_left, child_left) =
+		let status =
 			substrate_state_trie_migration_rpc::migration_status(&ext.as_backend()).unwrap();
 		assert!(
-			top_left > 0,
+			status.top_remaining_to_migrate > 0,
 			"no node needs migrating, this probably means that state was initialized with `StateVersion::V1`",
 		);
 
 		log::info!(
 			target: LOG_TARGET,
-			"initial check: top_left: {}, child_left: {}",
-			top_left.separate_with_commas(),
-			child_left.separate_with_commas(),
+			"initial check: top_left: {}, child_left: {}, total_top {}, total_child {}",
+			status.top_remaining_to_migrate.separate_with_commas(),
+			status.child_remaining_to_migrate.separate_with_commas(),
+			status.total_top.separate_with_commas(),
+			status.total_child.separate_with_commas(),
 		);
 
 		loop {
@@ -1722,17 +1723,17 @@ pub(crate) mod remote_tests {
 			)
 		});
 
-		let (top_left, child_left) =
+		let status =
 			substrate_state_trie_migration_rpc::migration_status(&ext.as_backend()).unwrap();
-		assert_eq!(top_left, 0);
-		assert_eq!(child_left, 0);
+		assert_eq!(status.top_remaining_to_migrate, 0);
+		assert_eq!(status.child_remaining_to_migrate, 0);
 	}
 }
 
 #[cfg(all(test, feature = "remote-test"))]
 mod remote_tests_local {
 	use super::{
-		mock::{Call as MockCall, *},
+		mock::{RuntimeCall as MockCall, *},
 		remote_tests::run_with_limits,
 		*,
 	};

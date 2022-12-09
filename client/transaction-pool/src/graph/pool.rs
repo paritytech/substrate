@@ -144,15 +144,6 @@ pub struct Pool<B: ChainApi> {
 	validated_pool: Arc<ValidatedPool<B>>,
 }
 
-impl<B: ChainApi> parity_util_mem::MallocSizeOf for Pool<B>
-where
-	ExtrinsicFor<B>: parity_util_mem::MallocSizeOf,
-{
-	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
-		self.validated_pool.size_of(ops)
-	}
-}
-
 impl<B: ChainApi> Pool<B> {
 	/// Create a new transaction pool.
 	pub fn new(options: Options, is_validator: IsValidator, api: Arc<B>) -> Self {

@@ -2086,10 +2086,9 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		let state_cache = MemorySize::from_bytes(
 			self.shared_trie_cache.as_ref().map_or(0, |c| c.used_memory_size()),
 		);
-		let state_db = self.storage.state_db.memory_info();
 
 		Some(UsageInfo {
-			memory: MemoryInfo { state_cache, database_cache, state_db },
+			memory: MemoryInfo { state_cache, database_cache },
 			io: IoInfo {
 				transactions: io_stats.transactions,
 				bytes_read: io_stats.bytes_read,
@@ -2795,6 +2794,14 @@ pub(crate) mod tests {
 		// fork from genesis: 2 prong.
 		let b1 = insert_header(&backend, 1, block0, None, H256::from([1; 32]));
 		let b2 = insert_header(&backend, 2, b1, None, Default::default());
+
+		{
+			let tree_route = tree_route(blockchain, a1, a1).unwrap();
+
+			assert_eq!(tree_route.common_block().hash, a1);
+			assert!(tree_route.retracted().is_empty());
+			assert!(tree_route.enacted().is_empty());
+		}
 
 		{
 			let tree_route = tree_route(blockchain, a3, b2).unwrap();

@@ -474,6 +474,23 @@ pub mod pallet {
 			let base_weight = T::WeightInfo::batch(calls_len as u32);
 			Ok(Some(base_weight.saturating_add(weight)).into())
 		}
+
+		/// Dispatch a function call with a specified weight.
+		///
+		/// This function does not check the weight of the call, and instead allows the
+		/// Root origin to specify the weight of the call.
+		///
+		/// The dispatch origin for this call must be _Root_.
+		#[pallet::weight((*_weight, call.get_dispatch_info().class))]
+		pub fn with_weight(
+			origin: OriginFor<T>,
+			call: Box<<T as Config>::RuntimeCall>,
+			_weight: Weight,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
+			res.map(|_| ()).map_err(|e| e.error)
+		}
 	}
 }
 

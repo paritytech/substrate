@@ -17,10 +17,10 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
-sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
+sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
+sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
