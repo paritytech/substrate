@@ -1792,8 +1792,9 @@ benchmarks! {
 		}
 	}
 
-	seal_instantiate_per_transfer_salt_kb {
+	seal_instantiate_per_transfer_input_salt_kb {
 		let t in 0 .. 1;
+		let i in 0 .. (code::max_pages::<T>() - 1) * 64;
 		let s in 0 .. (code::max_pages::<T>() - 1) * 64;
 		let callee_code = WasmModule::<T>::dummy();
 		let hash = callee_code.hash;
@@ -1861,14 +1862,14 @@ benchmarks! {
 				Regular(Instruction::I64Const(0)), // gas
 				Regular(Instruction::I32Const(value_offset as i32)), // value_ptr
 				Regular(Instruction::I32Const(value_len as i32)), // value_len
-				Regular(Instruction::I32Const(0)), // input_data_ptr
-				Regular(Instruction::I32Const(0)), // input_data_len
+				Counter(salt_offset as u32, salt_len as u32), // input_data_ptr
+				Regular(Instruction::I32Const((i * 1024) as i32)), // input_data_ptr_len
 				Regular(Instruction::I32Const((addr_len_offset + addr_len) as i32)), // address_ptr
 				Regular(Instruction::I32Const(addr_len_offset as i32)), // address_len_ptr
 				Regular(Instruction::I32Const(SENTINEL as i32)), // output_ptr
 				Regular(Instruction::I32Const(0)), // output_len_ptr
 				Counter(salt_offset as u32, salt_len as u32), // salt_ptr
-				Regular(Instruction::I32Const((s * 1024).max(salt_len as u32) as i32)), // salt_len
+				Regular(Instruction::I32Const((s * 1024) as i32)), // salt_len
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::I32Eqz),
 				Regular(Instruction::If(BlockType::NoResult)),
