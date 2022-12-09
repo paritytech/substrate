@@ -266,6 +266,7 @@ benchmarks! {
 	// a code of that size into the sandbox.
 	//
 	// `c`: Size of the code in kilobytes.
+	// `i`: Size of the input in kilobytes.
 	// `s`: Size of the salt in kilobytes.
 	//
 	// # Note
@@ -274,15 +275,17 @@ benchmarks! {
 	// to be larger than the maximum size **after instrumentation**.
 	instantiate_with_code {
 		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::MaxCodeLen::get());
+		let i in 0 .. code::max_pages::<T>() * 64 * 1024;
 		let s in 0 .. code::max_pages::<T>() * 64 * 1024;
+		let input = vec![42u8; i as usize];
 		let salt = vec![42u8; s as usize];
 		let value = Pallet::<T>::min_balance();
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c, Location::Call);
 		let origin = RawOrigin::Signed(caller.clone());
-		let addr = Contracts::<T>::contract_address(&caller, &hash, &[], &salt);
-	}: _(origin, value, Weight::MAX, None, code, vec![], salt)
+		let addr = Contracts::<T>::contract_address(&caller, &hash, &input, &salt);
+	}: _(origin, value, Weight::MAX, None, code, input, salt)
 	verify {
 		// the contract itself does not trigger any reserves
 		let deposit = T::Currency::reserved_balance(&addr);
@@ -299,18 +302,21 @@ benchmarks! {
 	}
 
 	// Instantiate uses a dummy contract constructor to measure the overhead of the instantiate.
+	// `i`: Size of the input in kilobytes.
 	// `s`: Size of the salt in kilobytes.
 	instantiate {
+		let i in 0 .. code::max_pages::<T>() * 64 * 1024;
 		let s in 0 .. code::max_pages::<T>() * 64 * 1024;
+		let input = vec![42u8; i as usize];
 		let salt = vec![42u8; s as usize];
 		let value = Pallet::<T>::min_balance();
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy();
 		let origin = RawOrigin::Signed(caller.clone());
-		let addr = Contracts::<T>::contract_address(&caller, &hash, &[], &salt);
+		let addr = Contracts::<T>::contract_address(&caller, &hash, &input, &salt);
 		Contracts::<T>::store_code_raw(code, caller.clone())?;
-	}: _(origin, value, Weight::MAX, None, hash, vec![], salt)
+	}: _(origin, value, Weight::MAX, None, hash, input, salt)
 	verify {
 		// the contract itself does not trigger any reserves
 		let deposit = T::Currency::reserved_balance(&addr);
