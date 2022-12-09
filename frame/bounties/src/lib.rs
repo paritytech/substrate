@@ -333,6 +333,7 @@ pub mod pallet {
 		/// - `fee`: The curator fee.
 		/// - `value`: The total payment amount of this bounty, curator fee included.
 		/// - `description`: The description of this bounty.
+		#[pallet::call_index(0)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::propose_bounty(description.len() as u32))]
 		pub fn propose_bounty(
 			origin: OriginFor<T>,
@@ -352,6 +353,7 @@ pub mod pallet {
 		/// # <weight>
 		/// - O(1).
 		/// # </weight>
+		#[pallet::call_index(1)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::approve_bounty())]
 		pub fn approve_bounty(
 			origin: OriginFor<T>,
@@ -383,6 +385,7 @@ pub mod pallet {
 		/// # <weight>
 		/// - O(1).
 		/// # </weight>
+		#[pallet::call_index(2)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::propose_curator())]
 		pub fn propose_curator(
 			origin: OriginFor<T>,
@@ -432,6 +435,7 @@ pub mod pallet {
 		/// # <weight>
 		/// - O(1).
 		/// # </weight>
+		#[pallet::call_index(3)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::unassign_curator())]
 		pub fn unassign_curator(
 			origin: OriginFor<T>,
@@ -517,6 +521,7 @@ pub mod pallet {
 		/// # <weight>
 		/// - O(1).
 		/// # </weight>
+		#[pallet::call_index(4)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::accept_curator())]
 		pub fn accept_curator(
 			origin: OriginFor<T>,
@@ -559,6 +564,7 @@ pub mod pallet {
 		/// # <weight>
 		/// - O(1).
 		/// # </weight>
+		#[pallet::call_index(5)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::award_bounty())]
 		pub fn award_bounty(
 			origin: OriginFor<T>,
@@ -606,6 +612,7 @@ pub mod pallet {
 		/// # <weight>
 		/// - O(1).
 		/// # </weight>
+		#[pallet::call_index(6)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::claim_bounty())]
 		pub fn claim_bounty(
 			origin: OriginFor<T>,
@@ -669,6 +676,7 @@ pub mod pallet {
 		/// # <weight>
 		/// - O(1).
 		/// # </weight>
+		#[pallet::call_index(7)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::close_bounty_proposed()
 			.max(<T as Config<I>>::WeightInfo::close_bounty_active()))]
 		pub fn close_bounty(
@@ -760,6 +768,7 @@ pub mod pallet {
 		/// # <weight>
 		/// - O(1).
 		/// # </weight>
+		#[pallet::call_index(8)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::extend_bounty_expiry())]
 		pub fn extend_bounty_expiry(
 			origin: OriginFor<T>,

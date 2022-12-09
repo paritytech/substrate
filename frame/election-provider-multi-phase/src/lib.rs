@@ -892,6 +892,7 @@ pub mod pallet {
 		/// putting their authoring reward at risk.
 		///
 		/// No deposit or reward is associated with this submission.
+		#[pallet::call_index(0)]
 		#[pallet::weight((
 			T::WeightInfo::submit_unsigned(
 				witness.voters,
@@ -941,6 +942,7 @@ pub mod pallet {
 		/// Dispatch origin must be aligned with `T::ForceOrigin`.
 		///
 		/// This check can be turned off by setting the value to `None`.
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::DbWeight::get().writes(1))]
 		pub fn set_minimum_untrusted_score(
 			origin: OriginFor<T>,
@@ -959,6 +961,7 @@ pub mod pallet {
 		/// The solution is not checked for any feasibility and is assumed to be trustworthy, as any
 		/// feasibility check itself can in principle cause the election process to fail (due to
 		/// memory/weight constrains).
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn set_emergency_election_result(
 			origin: OriginFor<T>,
@@ -996,6 +999,7 @@ pub mod pallet {
 		///
 		/// A deposit is reserved and recorded for the solution. Based on the outcome, the solution
 		/// might be rewarded, slashed, or get all or a part of the deposit back.
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::submit())]
 		pub fn submit(
 			origin: OriginFor<T>,
@@ -1065,6 +1069,7 @@ pub mod pallet {
 		///
 		/// This can only be called when [`Phase::Emergency`] is enabled, as an alternative to
 		/// calling [`Call::set_emergency_election_result`].
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn governance_fallback(
 			origin: OriginFor<T>,
