@@ -691,10 +691,10 @@ frame_benchmarking::benchmarks! {
 			min_delay: 0u32.into(),
 		}).unwrap();
 
-	}:_(RuntimeOrigin::Signed(depositor.clone()), 1u32.into(), Some(Perbill::from_percent(40)), Some(depositor.clone()))
+	}:_(RuntimeOrigin::Signed(depositor.clone()), 1u32.into(), Some(Perbill::from_percent(20)), Some(depositor.clone()))
 	verify {
 		assert_eq!(BondedPools::<T>::get(1).unwrap().commission, Commission {
-			current: Some((Perbill::from_percent(40), depositor)),
+			current: Some((Perbill::from_percent(20), depositor)),
 			max: Some(Perbill::from_percent(50)),
 			throttle: Some(CommissionThrottle {
 				change_rate: CommissionThrottlePrefs {
