@@ -319,7 +319,7 @@ impl RuntimeCosts {
 			CallInputCloned(len) => s.call_per_cloned_byte.saturating_mul(len.into()),
 			InstantiateBase { input_data_len, salt_len } => s
 				.instantiate
-				.saturating_add(s.return_per_byte.saturating_mul(input_data_len.into()))
+				.saturating_add(s.instantiate_per_input_byte.saturating_mul(input_data_len.into()))
 				.saturating_add(s.instantiate_per_salt_byte.saturating_mul(salt_len.into())),
 			InstantiateSurchargeTransfer => s.instantiate_transfer_surcharge,
 			HashSha256(len) => s
