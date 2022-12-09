@@ -147,7 +147,11 @@ impl<C: SubstrateCli> Runner<C> {
 		self.print_node_infos();
 		let mut task_manager = self.tokio_runtime.block_on(initialize(self.config))?;
 		let res = self.tokio_runtime.block_on(main(task_manager.future().fuse()));
-		Ok(res?)
+
+		// Give all futures 60 seconds to shutdown, before tokio "leaks" them.
+		self.tokio_runtime.shutdown_timeout(Duration::from_secs(60));
+
+		res
 	}
 
 	/// A helper function that runs a command with the configuration of this node.
