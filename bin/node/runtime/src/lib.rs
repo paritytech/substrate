@@ -1136,6 +1136,25 @@ impl pallet_bounties::Config for Runtime {
 }
 
 parameter_types! {
+	/// Allocate at most 20% of each block for message processing.
+	///
+	/// Is set to 20% since the scheduler can already consume a maximum of 80%.
+	pub MessageQueueServiceWeight: Option<Weight> = Some(Perbill::from_percent(20) * RuntimeBlockWeights::get().max_block);
+}
+
+impl pallet_message_queue::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = ();
+	/// NOTE: Always set this to `NoopMessageProcessor` for benchmarking.
+	type MessageProcessor = pallet_message_queue::mock_helpers::NoopMessageProcessor;
+	type Size = u32;
+	type QueueChangeHandler = ();
+	type HeapSize = ConstU32<{ 64 * 1024 }>;
+	type MaxStale = ConstU32<128>;
+	type ServiceWeight = MessageQueueServiceWeight;
+}
+
+parameter_types! {
 	pub const ChildBountyValueMinimum: Balance = 1 * DOLLARS;
 }
 
@@ -1699,6 +1718,7 @@ construct_runtime!(
 		RankedPolls: pallet_referenda::<Instance2>,
 		RankedCollective: pallet_ranked_collective,
 		FastUnstake: pallet_fast_unstake,
+		MessageQueue: pallet_message_queue,
 	}
 );
 
@@ -1793,6 +1813,7 @@ mod benches {
 		[pallet_indices, Indices]
 		[pallet_lottery, Lottery]
 		[pallet_membership, TechnicalMembership]
+		[pallet_message_queue, MessageQueue]
 		[pallet_mmr, Mmr]
 		[pallet_multisig, Multisig]
 		[pallet_nomination_pools, NominationPoolsBench::<Runtime>]
