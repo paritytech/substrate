@@ -337,6 +337,15 @@ mod bonded_pool {
 				Pools::set_commission(RuntimeOrigin::signed(900), 1, None, Some(900)),
 				Error::<Runtime>::NoCommissionSet
 			);
+
+			// Set the initial commission to 5%.
+			assert_ok!(Pools::set_commission(
+				RuntimeOrigin::signed(900),
+				1,
+				Some(Perbill::from_percent(5)),
+				Some(900)
+			));
+
 			// Throttle test. We will throttle commission to be a +1% commission increase every 2
 			// blocks.
 			assert_ok!(Pools::set_commission_throttle(
@@ -350,7 +359,7 @@ mod bonded_pool {
 			assert_eq!(
 				BondedPool::<Runtime>::get(1).unwrap().commission,
 				Commission {
-					current: None,
+					current: Some((Perbill::from_percent(5), 900)),
 					max: None,
 					throttle: Some(CommissionThrottle {
 						change_rate: CommissionThrottlePrefs {
@@ -361,14 +370,6 @@ mod bonded_pool {
 					})
 				}
 			);
-
-			// Set the initial commission to 5%.
-			assert_ok!(Pools::set_commission(
-				RuntimeOrigin::signed(900),
-				1,
-				Some(Perbill::from_percent(5)),
-				Some(900)
-			));
 
 			// We now try to increase commission to 10% (5% increase): this should be throttled.
 			assert_noop!(
@@ -476,17 +477,17 @@ mod bonded_pool {
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::PoolCommissionUpdated {
+						pool_id: 1,
+						commission: Perbill::from_percent(5),
+						payee: 900
+					},
 					Event::PoolCommissionThrottleUpdated {
 						pool_id: 1,
 						prefs: CommissionThrottlePrefs {
 							max_increase: Perbill::from_percent(1),
 							min_delay: 2
 						}
-					},
-					Event::PoolCommissionUpdated {
-						pool_id: 1,
-						commission: Perbill::from_percent(5),
-						payee: 900
 					},
 					Event::PoolCommissionUpdated {
 						pool_id: 1,
@@ -619,68 +620,6 @@ mod bonded_pool {
 					max: Some(Perbill::from_percent(25)),
 					throttle: None
 				}
-			);
-		})
-	}
-
-	#[test]
-	fn do_not_throttle_initial_commission_set() {
-		ExtBuilder::default().build_and_execute(|| {
-			// Set a commission throttle for pool 1
-			assert_ok!(Pools::set_commission_throttle(
-				RuntimeOrigin::signed(900),
-				1,
-				CommissionThrottlePrefs {
-					max_increase: Perbill::from_percent(5),
-					min_delay: 5_u64
-				}
-			));
-			assert_eq!(
-				BondedPools::<Runtime>::get(1).unwrap().commission.throttle,
-				Some(CommissionThrottle {
-					change_rate: CommissionThrottlePrefs {
-						max_increase: Perbill::from_percent(5),
-						min_delay: 5_u64
-					},
-					previous_set_at: None
-				})
-			);
-
-			// add commission that is beyond the throttle boundaries
-			// setting on same block as throttle update (`min_delay` of 5 blocks should not fail tx)
-			// `None` -> 50% commission ( `max_increase` of 5% should not fail tx)
-			assert_ok!(Pools::set_commission(
-				RuntimeOrigin::signed(900),
-				1,
-				Some(Perbill::from_percent(25)),
-				Some(900)
-			));
-
-			// now throttle should take effect.
-
-			// attempt 1% commission increase on same block
-			assert_noop!(
-				Pools::set_commission(
-					RuntimeOrigin::signed(900),
-					1,
-					Some(Perbill::from_percent(26)),
-					Some(900)
-				),
-				Error::<Runtime>::CommissionChangeThrottled
-			);
-
-			// move to a block beyond `min_delay`
-			run_blocks(5);
-
-			// attempt 26% commission increase
-			assert_noop!(
-				Pools::set_commission(
-					RuntimeOrigin::signed(900),
-					1,
-					Some(Perbill::from_percent(51)),
-					Some(900)
-				),
-				Error::<Runtime>::CommissionChangeThrottled
 			);
 		})
 	}

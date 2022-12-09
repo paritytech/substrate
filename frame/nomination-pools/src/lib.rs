@@ -652,10 +652,7 @@ impl<T: Config> Commission<T> {
 		commission: &Perbill,
 		payee: T::AccountId,
 	) -> DispatchResult {
-		ensure!(
-			!(self.current.is_some() && self.throttling(&commission)),
-			Error::<T>::CommissionChangeThrottled
-		);
+		ensure!(!self.throttling(&commission), Error::<T>::CommissionChangeThrottled);
 		ensure!(self.max.map_or(true, |m| commission <= &m), Error::<T>::CommissionExceedsMaximum);
 
 		self.current = Some((*commission, payee));
