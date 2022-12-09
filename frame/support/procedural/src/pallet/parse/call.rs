@@ -235,6 +235,10 @@ impl CallDef {
 					_ => unreachable!("checked during creation of the let binding"),
 				};
 
+				if call_idx_attrs.is_empty() {
+					return Err(syn::Error::new(method.sig.span(), "Missing call_index"));
+				}
+
 				if call_idx_attrs.len() > 1 {
 					let msg = "Invalid pallet::call, too many call_index attributes given";
 					return Err(syn::Error::new(method.sig.span(), msg))
