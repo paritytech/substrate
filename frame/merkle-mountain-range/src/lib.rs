@@ -69,6 +69,8 @@ pub use sp_mmr_primitives::{
 	self as primitives, utils::NodesUtils, Error, LeafDataProvider, LeafIndex, NodeIndex,
 };
 
+pub mod migrations;
+
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 mod default_weights;
