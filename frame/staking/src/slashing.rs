@@ -241,7 +241,7 @@ pub(crate) fn compute_slash<T: Config>(
 
 	let prior_slash_p =
 		<Pallet<T> as Store>::ValidatorSlashInEra::get(&params.slash_era, params.stash)
-			.map_or(Zero::zero(), |(p, _)| p);
+			.map_or(Zero::zero(), |(prior_slash_proportion, _)| prior_slash_proportion);
 
 	// compare slash proportions rather than slash values to avoid issues due to rounding
 	// error.

@@ -793,9 +793,9 @@ benchmarks! {
 
 	get_npos_voters {
 		// number of validator intention. we will iterate all of them.
-		let v in (MaxValidators::<T>::get() / 4) .. MaxValidators::<T>::get();
+		let v in (MaxValidators::<T>::get() / 2) .. MaxValidators::<T>::get();
 		// number of nominator intention. we will iterate all of them.
-		let n in (MaxNominators::<T>::get() / 4) .. MaxNominators::<T>::get();
+		let n in (MaxNominators::<T>::get() / 2) .. MaxNominators::<T>::get();
 
 		let validators = create_validators_with_nominators_for_era::<T>(
 			v, n, T::MaxNominations::get() as usize, false, None

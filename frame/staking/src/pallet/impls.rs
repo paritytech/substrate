@@ -705,11 +705,6 @@ impl<T: Config> Pallet<T> {
 	/// `maybe_max_len` can imposes a cap on the number of voters returned;
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
-	///
-	/// ### Slashing
-	///
-	/// All votes that have been submitted before the last non-zero slash of the corresponding
-	/// target are *auto-chilled*, but still count towards the limit imposed by `maybe_max_len`.
 	pub fn get_npos_voters(maybe_max_len: Option<usize>) -> Vec<VoterOf<Self>> {
 		let max_allowed_len = {
 			let all_voter_count = T::VoterList::count() as usize;
