@@ -767,10 +767,7 @@ impl<T: Config> Pallet<T> {
 		// all_voters should have not re-allocated.
 		debug_assert!(all_voters.capacity() == max_allowed_len);
 
-		Self::register_weight(T::WeightInfo::get_npos_voters(
-			validators_taken,
-			nominators_taken,
-		));
+		Self::register_weight(T::WeightInfo::get_npos_voters(validators_taken, nominators_taken));
 
 		log!(
 			info,
