@@ -78,11 +78,11 @@ fn pool_balance(owner: u64, token_id: u32) -> u64 {
 fn create_pool_should_work() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
-		let token_1 = MultiAssetId::Asset(1);
+		let token_1 = MultiAssetId::Native;
 		let token_2 = MultiAssetId::Asset(2);
 		let pool_id = (token_1, token_2);
 
-		create_tokens(user, vec![token_1, token_2]);
+		create_tokens(user, vec![token_2]);
 
 		let lp_token: u32 = Dex::get_next_pool_asset_id();
 		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_2, token_1));
@@ -90,7 +90,7 @@ fn create_pool_should_work() {
 
 		assert_eq!(events(), [Event::<Test>::PoolCreated { creator: user, pool_id, lp_token }]);
 		assert_eq!(pools(), vec![pool_id]);
-		assert_eq!(assets(), vec![token_1, token_2]);
+		assert_eq!(assets(), vec![token_2]);
 		assert_eq!(pool_assets(), vec![lp_token]);
 	});
 }
@@ -99,10 +99,10 @@ fn create_pool_should_work() {
 fn create_same_pool_twice_should_fail() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
-		let token_1 = MultiAssetId::Asset(1);
+		let token_1 = MultiAssetId::Native;
 		let token_2 = MultiAssetId::Asset(2);
 
-		create_tokens(user, vec![token_1, token_2]);
+		create_tokens(user, vec![token_2]);
 
 		let lp_token: u32 = Dex::get_next_pool_asset_id();
 		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_2, token_1));
@@ -128,13 +128,13 @@ fn create_same_pool_twice_should_fail() {
 fn different_pools_should_have_different_lp_tokens() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
-		let token_1 = MultiAssetId::Asset(1);
+		let token_1 = MultiAssetId::Native;
 		let token_2 = MultiAssetId::Asset(2);
 		let token_3 = MultiAssetId::Asset(3);
 		let pool_id_1_2 = (token_1, token_2);
 		let pool_id_1_3 = (token_1, token_3);
 
-		create_tokens(user, vec![token_1, token_2]);
+		create_tokens(user, vec![token_2]);
 
 		let lp_token2_1: u32 = Dex::get_next_pool_asset_id();
 		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_2, token_1));
@@ -167,15 +167,15 @@ fn different_pools_should_have_different_lp_tokens() {
 fn add_liquidity_should_work() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
-		let token_1 = MultiAssetId::Asset(1);
+		let token_1 = MultiAssetId::Native;
 		let token_2 = MultiAssetId::Asset(2);
 		let pool_id = (token_1, token_2);
 
-		create_tokens(user, vec![token_1, token_2]);
+		create_tokens(user, vec![token_2]);
 		let lp_token = Dex::get_next_pool_asset_id();
 		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
 
-		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 1, user, 1000));
+		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user, 1000, 0));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 2, user, 1000));
 
 		assert_ok!(Dex::add_liquidity(
@@ -211,15 +211,15 @@ fn add_liquidity_should_work() {
 fn remove_liquidity_should_work() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
-		let token_1 = MultiAssetId::Asset(1);
+		let token_1 = MultiAssetId::Native;
 		let token_2 = MultiAssetId::Asset(2);
 		let pool_id = (token_1, token_2);
 
-		create_tokens(user, vec![token_1, token_2]);
+		create_tokens(user, vec![token_2]);
 		let lp_token = Dex::get_next_pool_asset_id();
 		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
 
-		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 1, user, 1000));
+		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user, 1000, 0));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 2, user, 1000));
 
 		assert_ok!(Dex::add_liquidity(
@@ -270,13 +270,13 @@ fn remove_liquidity_should_work() {
 fn quote_price_should_work() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
-		let token_1 = MultiAssetId::Asset(1);
+		let token_1 = MultiAssetId::Native;
 		let token_2 = MultiAssetId::Asset(2);
 
-		create_tokens(user, vec![token_1, token_2]);
+		create_tokens(user, vec![token_2]);
 		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
 
-		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 1, user, 1000));
+		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user, 1000, 0));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 2, user, 1000));
 
 		assert_ok!(Dex::add_liquidity(
@@ -291,56 +291,7 @@ fn quote_price_should_work() {
 			2
 		));
 
-		assert_eq!(Dex::quote_price(1, 2, 3000), Some(60));
-	});
-}
-
-#[test]
-fn swap_should_work() {
-	new_test_ext().execute_with(|| {
-		let user = 1;
-		let token_1 = MultiAssetId::Asset(1);
-		let token_2 = MultiAssetId::Asset(2);
-
-		create_tokens(user, vec![token_1, token_2]);
-		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
-
-		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 1, user, 1000));
-		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 2, user, 1000));
-
-		let liquidity1 = 1000;
-		let liquidity2 = 20;
-		assert_ok!(Dex::add_liquidity(
-			RuntimeOrigin::signed(user),
-			token_1,
-			token_2,
-			liquidity1,
-			liquidity2,
-			1,
-			1,
-			user,
-			2
-		));
-
-		assert_eq!(balance(user, token_1), 0);
-
-		let exchange_amount = 10;
-		assert_ok!(Dex::swap_exact_tokens_for_tokens(
-			RuntimeOrigin::signed(user),
-			token_2,
-			token_1,
-			exchange_amount,
-			1,
-			user,
-			3
-		));
-
-		let expect_receive =
-			Dex::get_amount_out(&exchange_amount, &liquidity2, &liquidity1).ok().unwrap();
-		let pallet_account = Dex::account_id();
-		assert_eq!(balance(user, token_1), expect_receive);
-		assert_eq!(balance(pallet_account, token_1), liquidity1 - expect_receive);
-		assert_eq!(balance(pallet_account, token_2), liquidity2 + exchange_amount);
+		assert_eq!(Dex::quote_price(None, Some(2), 3000), Some(60));
 	});
 }
 

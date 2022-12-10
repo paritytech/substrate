@@ -203,6 +203,8 @@ pub mod pallet {
 		InsufficientLiquidity,
 		/// Excessive input amount.
 		ExcessiveInputAmount,
+		/// Only pools with native on one side are valid.
+		PoolMustContainNativeCurrency,
 	}
 
 	// Pallet's callable functions.
@@ -219,6 +221,11 @@ pub mod pallet {
 
 			let pool_id = Self::get_pool_id(asset1, asset2);
 			let (asset1, asset2) = pool_id;
+
+			if !matches!(asset1, MultiAssetId::Native) {
+				Err(Error::<T>::PoolMustContainNativeCurrency)?;
+			}
+
 			ensure!(!Pools::<T>::contains_key(&pool_id), Error::<T>::PoolExists);
 
 			let pallet_account = Self::account_id();
@@ -644,11 +651,20 @@ pub mod pallet {
 			}
 		}
 
-		pub fn quote_price(asset1: u32, asset2: u32, amount: u64) -> Option<AssetBalanceOf<T>> {
-			let asset1: T::AssetId = asset1.into();
-			let asset2: T::AssetId = asset2.into();
-			let asset1 = MultiAssetId::Asset(asset1);
-			let asset2 = MultiAssetId::Asset(asset2);
+		pub fn quote_price(
+			asset1: Option<u32>,
+			asset2: Option<u32>,
+			amount: u64,
+		) -> Option<AssetBalanceOf<T>> {
+			let into_multi = |asset| {
+				if let Some(asset) = asset {
+					MultiAssetId::Asset(T::AssetId::from(asset))
+				} else {
+					MultiAssetId::Native
+				}
+			};
+			let asset1 = into_multi(asset1);
+			let asset2 = into_multi(asset2);
 			let amount = amount.into();
 			let pool_id = Self::get_pool_id(asset1, asset2);
 			let (pool_asset1, _) = pool_id;
