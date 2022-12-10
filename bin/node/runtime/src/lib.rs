@@ -27,9 +27,9 @@ use frame_election_provider_support::{
 	onchain, BalancingConfig, ElectionDataProvider, SequentialPhragmen, VoteWeight,
 };
 use frame_support::{
-	instances::{Instance1, Instance2},
 	construct_runtime,
 	dispatch::DispatchClass,
+	instances::{Instance1, Instance2},
 	pallet_prelude::Get,
 	parameter_types,
 	traits::{

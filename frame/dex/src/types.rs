@@ -18,16 +18,36 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
-#[derive(Encode, Decode, Default, PartialEq, Eq, MaxEncodedLen, TypeInfo)]
+#[derive(
+	Decode,
+	Encode,
+	Default,
+	PartialEq,
+	Eq,
+	MaxEncodedLen,
+	TypeInfo,
+	Clone,
+	Copy,
+	Debug,
+	Ord,
+	PartialOrd,
+)]
+pub enum MultiAssetId<AssetId> {
+	#[default]
+	Native,
+	Asset(AssetId),
+}
+
+#[derive(Decode, Encode, Default, PartialEq, Eq, MaxEncodedLen, TypeInfo)]
 pub struct PoolInfo<AccountId, AssetId, PoolAssetId, Balance> {
 	/// Owner of the pool
 	pub owner: AccountId,
 	/// Liquidity pool asset
 	pub lp_token: PoolAssetId,
 	/// The first asset supported by the pool
-	pub asset1: AssetId,
+	pub asset1: MultiAssetId<AssetId>,
 	/// The second asset supported by the pool
-	pub asset2: AssetId,
+	pub asset2: MultiAssetId<AssetId>,
 	/// Pool balance of asset1
 	pub balance1: Balance,
 	/// Pool balance of asset2
