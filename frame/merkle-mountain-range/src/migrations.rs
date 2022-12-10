@@ -35,8 +35,16 @@ pub mod v1 {
 			);
 
 			if current == 1 && onchain == 0 {
-
+				// update on-chain storage version
 				current.put::<Pallet<T>>();
+
+				// reset all storage values
+				// TODO: RootHash should be overwritten correctly, but double-check
+				// RootHash::<T>::set();
+				NumberOfLeaves::<T>::set(0);
+				// TODO: find reasonable limit for node clearing
+				let _ = Nodes::<T>::clear(u32::max_value(), None);
+
 				// TODO: adjust DbWeight
 				T::DbWeight::get().reads_writes(2, 1)
 			} else {
