@@ -354,29 +354,31 @@ mod tests {
 		let counter = Arc::new(AtomicU64::new(0));
 		let counter2 = counter.clone();
 
-		runner.run_node_until_exit(move |cfg| async move {
-			let task_manager = TaskManager::new(cfg.tokio_handle.clone(), None).unwrap();
-			let (sender, receiver) = futures::channel::oneshot::channel();
+		runner
+			.run_node_until_exit(move |cfg| async move {
+				let task_manager = TaskManager::new(cfg.tokio_handle.clone(), None).unwrap();
+				let (sender, receiver) = futures::channel::oneshot::channel();
 
-			// We need to use `spawn_blocking` here so that we get a dedicated thread for our
-			// future. This is important for this test, as otherwise tokio can just "drop" the
-			// future.
-			task_manager.spawn_handle().spawn_blocking("test", None, async move {
-				let _ = sender.send(());
-				loop {
-					counter2.fetch_add(1, Ordering::Relaxed);
-					futures_timer::Delay::new(Duration::from_millis(50)).await;
-				}
-			});
+				// We need to use `spawn_blocking` here so that we get a dedicated thread for our
+				// future. This is important for this test, as otherwise tokio can just "drop" the
+				// future.
+				task_manager.spawn_handle().spawn_blocking("test", None, async move {
+					let _ = sender.send(());
+					loop {
+						counter2.fetch_add(1, Ordering::Relaxed);
+						futures_timer::Delay::new(Duration::from_millis(50)).await;
+					}
+				});
 
-			task_manager.spawn_essential_handle().spawn_blocking("test2", None, async {
-				// Let's stop this essential task directly when our other task started.
-				// It will signal that the task manager should end.
-				let _ = receiver.await;
-			});
+				task_manager.spawn_essential_handle().spawn_blocking("test2", None, async {
+					// Let's stop this essential task directly when our other task started.
+					// It will signal that the task manager should end.
+					let _ = receiver.await;
+				});
 
-			Ok::<_, sc_service::Error>(task_manager)
-		}).unwrap_err();
+				Ok::<_, sc_service::Error>(task_manager)
+			})
+			.unwrap_err();
 
 		let count = counter.load(Ordering::Relaxed);
 
@@ -392,26 +394,28 @@ mod tests {
 	fn ensure_run_until_exit_is_not_blocking_indefinitely() {
 		let runner = create_runner();
 
-		runner.run_node_until_exit(move |cfg| async move {
-			let task_manager = TaskManager::new(cfg.tokio_handle.clone(), None).unwrap();
-			let (sender, receiver) = futures::channel::oneshot::channel();
+		runner
+			.run_node_until_exit(move |cfg| async move {
+				let task_manager = TaskManager::new(cfg.tokio_handle.clone(), None).unwrap();
+				let (sender, receiver) = futures::channel::oneshot::channel();
 
-			// We need to use `spawn_blocking` here so that we get a dedicated thread for our
-			// future. This future is more blocking code that will never end.
-			task_manager.spawn_handle().spawn_blocking("test", None, async move {
-				let _ = sender.send(());
-				loop {
-					std::thread::sleep(Duration::from_secs(30));
-				}
-			});
+				// We need to use `spawn_blocking` here so that we get a dedicated thread for our
+				// future. This future is more blocking code that will never end.
+				task_manager.spawn_handle().spawn_blocking("test", None, async move {
+					let _ = sender.send(());
+					loop {
+						std::thread::sleep(Duration::from_secs(30));
+					}
+				});
 
-			task_manager.spawn_essential_handle().spawn_blocking("test2", None, async {
-				// Let's stop this essential task directly when our other task started.
-				// It will signal that the task manager should end.
-				let _ = receiver.await;
-			});
+				task_manager.spawn_essential_handle().spawn_blocking("test2", None, async {
+					// Let's stop this essential task directly when our other task started.
+					// It will signal that the task manager should end.
+					let _ = receiver.await;
+				});
 
-			Ok::<_, sc_service::Error>(task_manager)
-		}).unwrap_err();
+				Ok::<_, sc_service::Error>(task_manager)
+			})
+			.unwrap_err();
 	}
 }
