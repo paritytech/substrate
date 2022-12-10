@@ -742,7 +742,7 @@ impl<T: Config> Pallet<T> {
 					all_voters.push((voter.clone(), weight_of(&voter), targets));
 					nominators_taken.saturating_inc();
 				} else {
-					// Technically should never happen, but not much we can do about it. 
+					// Technically should never happen, but not much we can do about it.
 				}
 			} else if Validators::<T>::contains_key(&voter) {
 				// if this voter is a validator:
