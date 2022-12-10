@@ -39,6 +39,9 @@ pub mod v1 {
 			);
 
 			if current == 1 && onchain == 0 {
+				// update the version nonetheless.
+				current.put::<Pallet<T>>();
+
 				// if a head exists, then we put them back into the queue.
 				if Head::<T>::exists() {
 					if let Some((stash, _, deposit)) =
@@ -48,7 +51,6 @@ pub mod v1 {
 						.defensive()
 					{
 						Queue::<T>::insert(stash, deposit);
-						current.put::<Pallet<T>>();
 					} else {
 						// not much we can do here -- head is already deleted.
 					}

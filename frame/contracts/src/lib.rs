@@ -102,7 +102,7 @@ use crate::{
 	exec::{AccountIdOf, ExecError, Executable, Stack as ExecStack},
 	gas::GasMeter,
 	storage::{meter::Meter as StorageMeter, ContractInfo, DeletedContract, Storage},
-	wasm::{OwnerInfo, PrefabWasmModule},
+	wasm::{OwnerInfo, PrefabWasmModule, TryInstantiate},
 	weights::WeightInfo,
 };
 use codec::{Codec, Encode, HasCompact};
@@ -326,10 +326,24 @@ pub mod pallet {
 		/// The maximum length of a contract code in bytes. This limit applies to the instrumented
 		/// version of the code. Therefore `instantiate_with_code` can fail even when supplying
 		/// a wasm binary below this maximum size.
+		#[pallet::constant]
 		type MaxCodeLen: Get<u32>;
 
 		/// The maximum allowable length in bytes for storage keys.
+		#[pallet::constant]
 		type MaxStorageKeyLen: Get<u32>;
+
+		/// Make contract callable functions marked as `#[unstable]` available.
+		///
+		/// Contracts that use `#[unstable]` functions won't be able to be uploaded unless
+		/// this is set to `true`. This is only meant for testnets and dev nodes in order to
+		/// experiment with new features.
+		///
+		/// # Warning
+		///
+		/// Do **not** set to `true` on productions chains.
+		#[pallet::constant]
+		type UnsafeUnstableInterface: Get<bool>;
 	}
 
 	#[pallet::hooks]
@@ -830,8 +844,13 @@ pub mod pallet {
 		/// to determine whether a reversion has taken place.
 		ContractReverted,
 		/// The contract's code was found to be invalid during validation or instrumentation.
+		///
+		/// The most likely cause of this is that an API was used which is not supported by the
+		/// node. This hapens if an older node is used with a new version of ink!. Try updating
+		/// your node to the newest available version.
+		///
 		/// A more detailed error can be found on the node console if debug messages are enabled
-		/// or in the debug buffer which is returned to RPC clients.
+		/// by supplying `-lruntime::contracts=debug`.
 		CodeRejected,
 		/// An indetermistic code was used in a context where this is not permitted.
 		Indeterministic,
@@ -1009,8 +1028,14 @@ where
 		determinism: Determinism,
 	) -> CodeUploadResult<CodeHash<T>, BalanceOf<T>> {
 		let schedule = T::Schedule::get();
-		let module = PrefabWasmModule::from_code(code, &schedule, origin, determinism)
-			.map_err(|(err, _)| err)?;
+		let module = PrefabWasmModule::from_code(
+			code,
+			&schedule,
+			origin,
+			determinism,
+			TryInstantiate::Instantiate,
+		)
+		.map_err(|(err, _)| err)?;
 		let deposit = module.open_deposit();
 		if let Some(storage_deposit_limit) = storage_deposit_limit {
 			ensure!(storage_deposit_limit >= deposit, <Error<T>>::StorageDepositLimitExhausted);
@@ -1135,6 +1160,7 @@ where
 						&schedule,
 						origin.clone(),
 						Determinism::Deterministic,
+						TryInstantiate::Skip,
 					)
 					.map_err(|(err, msg)| {
 						debug_message.as_mut().map(|buffer| buffer.extend(msg.as_bytes()));
@@ -1199,6 +1225,7 @@ where
 
 sp_api::decl_runtime_apis! {
 	/// The API used to dry-run contract interactions.
+	#[api_version(2)]
 	pub trait ContractsApi<AccountId, Balance, BlockNumber, Hash> where
 		AccountId: Codec,
 		Balance: Codec,

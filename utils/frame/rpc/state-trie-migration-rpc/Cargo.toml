@@ -30,7 +30,7 @@ jsonrpsee = { version = "0.15.1", features = ["server", "macros"] }
 # Substrate Dependencies
 sc-client-api = { version = "4.0.0-dev", path = "../../../../client/api" }
 sc-rpc-api = { version = "0.10.0-dev", path = "../../../../client/rpc-api" }
-sp-runtime = { version = "6.0.0", path = "../../../../primitives/runtime" }
+sp-runtime = { version = "7.0.0", path = "../../../../primitives/runtime" }
 
 [dev-dependencies]
 serde_json = "1"

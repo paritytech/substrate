@@ -46,7 +46,6 @@ pub enum WasmExecutionMethod {
 	/// Uses the Wasmi interpreter.
 	Interpreted,
 	/// Uses the Wasmtime compiled runtime.
-	#[cfg(feature = "wasmtime")]
 	Compiled {
 		/// The instantiation strategy to use.
 		instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy,
@@ -314,7 +313,6 @@ where
 			)
 			.map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) })
 		},
-		#[cfg(feature = "wasmtime")]
 		WasmExecutionMethod::Compiled { instantiation_strategy } =>
 			sc_executor_wasmtime::create_runtime::<H>(
 				blob,
