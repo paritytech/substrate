@@ -1380,7 +1380,6 @@ impl<T: Config> Pallet<T> {
 
 	/// store seed and shuffle extrinsics from precedesing block
 	pub fn set_block_seed(seed: &sp_core::H256) {
-		// TODO check in on_finalize if seed has been set for every block
 		sp_runtime::runtime_logger::RuntimeLogger::init();
 		<BlockSeed<T>>::put(seed);
 		let mut queue = <StorageQueue<T>>::get();

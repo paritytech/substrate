@@ -568,7 +568,7 @@ where
 
 
 			let enqueueq_blocks_count_before = <frame_system::Pallet<System>>::enqueued_blocks_count();
-			Self::execute_extrinsics_impl(tx_to_be_executed, *header.number());
+			Self::execute_extrinsics_with_book_keeping(tx_to_be_executed, *header.number());
 			let enqueueq_blocks_count_after = <frame_system::Pallet<System>>::enqueued_blocks_count();
 			assert!(enqueueq_blocks_count_before == 0 || (poped_txs_count.saturated_into::<u64>() != 0u64 || enqueueq_blocks_count_before == enqueueq_blocks_count_after), "Collator didnt execute enqueued txs");
 
@@ -625,28 +625,6 @@ where
 				} else {
 					log::debug!(target: "runtime::ver", "executing extrinsic :{:?} error '${:?}'", tx_hash, Into::<&'static str>::into(e));
 				}
-			}
-		});
-
-		// post-extrinsics book-keeping
-		<frame_system::Pallet<System>>::note_finished_extrinsics();
-
-		Self::idle_and_finalize_hook(block_number);
-	}
-
-	#[cfg(not(feature = "disable-execution"))]
-	/// regular impl execute inherents & extrinsics
-	fn execute_extrinsics_impl(extrinsics: Vec<Block::Extrinsic>, block_number: NumberFor<Block>) {
-		Self::execute_extrinsics_with_book_keeping(extrinsics, block_number)
-	}
-
-	#[cfg(feature = "disable-execution")]
-	/// impl for benchmark -  execute inherents only
-	fn execute_extrinsics_impl(extrinsics: Vec<Block::Extrinsic>, block_number: NumberFor<Block>) {
-		extrinsics.into_iter().filter(|e| !e.is_signed().unwrap()).for_each(|e| {
-			if let Err(e) = Self::apply_extrinsic(e) {
-				let err: &'static str = e.into();
-				panic!("{}", err)
 			}
 		});
 
