@@ -1,13 +1,12 @@
 # Substrate Node Template
 
-A fresh FRAME-based [Substrate](https://substrate.io/) node, ready for hacking :rocket:
-This template is available from two locations:
+A fresh [Substrate](https://substrate.io/) node, ready for hacking :rocket:
 
-1. The maintained upstream version in the [Substrate repository](https://github.com/paritytech/substrate/tree/master/bin/node-template) that is updated as the rest of Substrate is developed.
-1. The snapshot downstream version in the [stand-alone template](https://github.com/substrate-developer-hub/substrate-node-template) that is updated only on major Polkadot version releases.
+The stand-alone version of this template is hosted on the [Substrate Devhub Parachain Template](https://github.com/substrate-developer-hub/substrate-parachain-template/) for each release of Polkadot.
+This is generated directly at each Polkadot release branch form the [Node Template in Substreate](https://github.com/paritytech/substrate/tree/master/bin/node-template) upstream
 
-It is usually best to to use the stand-alone version.
-All bugs, suggestions, and feature requests should be made upstream.
+It is usually best to to use the stand-alone version to start a new project.
+All bugs, suggestions, and feature requests should be made upstream to [Substrate](https://github.com/paritytech/substrate/tree/master/bin/node-template).
 
 ## Getting Started
 
@@ -106,12 +105,8 @@ Substrate-based blockchain nodes expose a number of capabilities:
 
 - Networking: Substrate nodes use the [`libp2p`](https://libp2p.io/) networking stack to allow the
   nodes in the network to communicate with one another.
-- Consensus: Blockchains must have a way to come to
-  [consensus](https://docs.substrate.io/main-docs/fundamentals/consensus/) on the state of the
-  network.
-  Substrate makes it possible to supply custom consensus engines and also ships with
-  several consensus mechanisms that have been built on top of
-  [Web3 Foundation research](https://research.web3.foundation/en/latest/polkadot/NPoS/index.html).
+- Consensus: Blockchains must have a way to come to [consensus](https://docs.substrate.io/main-docs/fundamentals/consensus/) on the state of the network.
+  Substrate makes it possible to supply custom consensus engines and also ships with several consensus mechanisms that have been built on top of [Web3 Foundation research](https://research.web3.foundation/en/latest/polkadot/NPoS/index.html).
 - RPC Server: A remote procedure call (RPC) server is used to interact with Substrate nodes.
 
 There are several files in the `node` directory - take special note of the following:
