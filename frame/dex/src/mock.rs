@@ -148,6 +148,7 @@ impl Config for Test {
 	type AssetId = u32;
 	type PoolAssetId = u32;
 	type PalletId = DexPalletId;
+	type WeightInfo = ();
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

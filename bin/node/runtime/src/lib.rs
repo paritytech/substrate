@@ -1487,6 +1487,7 @@ impl pallet_dex::Config for Runtime {
 	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
 	type PoolAssetId = <Self as pallet_assets::Config<Instance2>>::AssetId;
 	type PalletId = DexPalletId;
+	type WeightInfo = pallet_dex::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {

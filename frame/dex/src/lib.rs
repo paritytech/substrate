@@ -18,7 +18,11 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use frame_support::traits::Incrementable;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
 mod types;
+pub mod weights;
 
 #[cfg(test)]
 mod tests;
@@ -27,11 +31,12 @@ mod tests;
 mod mock;
 
 pub use pallet::*;
+use sp_runtime::traits::StaticLookup;
 pub use types::*;
+pub use weights::WeightInfo;
 
 // https://docs.uniswap.org/protocol/V2/concepts/protocol-overview/smart-contracts#minimum-liquidity
 // TODO: make it configurable
-// TODO: weights and benchmarking.
 // TODO: more specific error codes.
 pub const MIN_LIQUIDITY: u64 = 1;
 
@@ -110,6 +115,9 @@ pub mod pallet {
 		/// The dex's pallet id, used for deriving its sovereign account ID.
 		#[pallet::constant]
 		type PalletId: Get<PalletId>;
+
+		/// Weight information for extrinsics in this pallet.
+		type WeightInfo: WeightInfo;
 	}
 
 	pub type BalanceOf<T> = <<T as Config>::Currency as InspectFungible<
@@ -212,7 +220,7 @@ pub mod pallet {
 	// Pallet's callable functions.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::create_pool())]
 		pub fn create_pool(
 			origin: OriginFor<T>,
 			asset1: MultiAssetId<T::AssetId>,
@@ -256,7 +264,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::add_liquidity())]
 		pub fn add_liquidity(
 			origin: OriginFor<T>,
 			asset1: MultiAssetId<T::AssetId>,
@@ -364,7 +372,7 @@ pub mod pallet {
 			})
 		}
 
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::remove_liquidity())]
 		pub fn remove_liquidity(
 			origin: OriginFor<T>,
 			asset1: MultiAssetId<T::AssetId>,
@@ -439,7 +447,7 @@ pub mod pallet {
 			})
 		}
 
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::swap_exact_tokens_for_tokens())]
 		pub fn swap_exact_tokens_for_tokens(
 			origin: OriginFor<T>,
 			asset1: MultiAssetId<T::AssetId>,
@@ -502,7 +510,7 @@ pub mod pallet {
 			})
 		}
 
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::swap_tokens_for_exact_tokens())]
 		pub fn swap_tokens_for_exact_tokens(
 			origin: OriginFor<T>,
 			asset1: MultiAssetId<T::AssetId>,
@@ -565,7 +573,6 @@ pub mod pallet {
 		}
 	}
 
-	// Your Pallet's internal functions.
 	impl<T: Config> Pallet<T> {
 		fn transfer(
 			asset_id: MultiAssetId<T::AssetId>,
@@ -728,7 +735,7 @@ pub mod pallet {
 			}
 		}
 
-		#[cfg(test)]
+		#[cfg(any(test, feature = "runtime-benchmarks"))]
 		pub fn get_next_pool_asset_id() -> T::PoolAssetId {
 			NextPoolAssetId::<T>::get().unwrap_or(T::PoolAssetId::initial_value())
 		}
