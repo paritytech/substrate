@@ -147,10 +147,10 @@ pub trait OnRuntimeUpgrade {
 
 		let weight = Self::on_runtime_upgrade();
 
-		if checks {
+		if let Some(state) = maybe_state {
 			let _guard = frame_support::StorageNoopGuard::default();
 			// we want to panic if any checks fail right here right now.
-			Self::post_upgrade(maybe_state.expect("checks has not changed; value is Some; qed"))?
+			Self::post_upgrade(state)?
 		}
 
 		Ok(weight)
