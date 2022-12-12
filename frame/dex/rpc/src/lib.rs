@@ -40,7 +40,12 @@ where
 	Balance: Copy,
 {
 	#[method(name = "dex_quotePrice")]
-	fn quote_price(&self, asset1: u32, asset2: u32, amount: u64) -> RpcResult<Option<Balance>>;
+	fn quote_price(
+		&self,
+		asset1: Option<u32>,
+		asset2: Option<u32>,
+		amount: u64,
+	) -> RpcResult<Option<Balance>>;
 }
 
 /// Dex RPC methods.
@@ -77,7 +82,12 @@ where
 	Client::Api: DexRuntimeApi<Block, Balance>,
 	Balance: Codec + MaybeDisplay + Copy,
 {
-	fn quote_price(&self, asset1: u32, asset2: u32, amount: u64) -> RpcResult<Option<Balance>> {
+	fn quote_price(
+		&self,
+		asset1: Option<u32>,
+		asset2: Option<u32>,
+		amount: u64,
+	) -> RpcResult<Option<Balance>> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(self.client.info().best_hash);
 

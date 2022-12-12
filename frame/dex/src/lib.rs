@@ -159,7 +159,7 @@ pub mod pallet {
 			amount1_provided: AssetBalanceOf<T>,
 			amount2_provided: AssetBalanceOf<T>,
 			lp_token: T::PoolAssetId,
-			liquidity: AssetBalanceOf<T>,
+			lp_tokens_minted: AssetBalanceOf<T>,
 		},
 		LiquidityRemoved {
 			who: T::AccountId,
@@ -168,7 +168,7 @@ pub mod pallet {
 			amount1: AssetBalanceOf<T>,
 			amount2: AssetBalanceOf<T>,
 			lp_token: T::PoolAssetId,
-			liquidity: AssetBalanceOf<T>,
+			lp_tokens_burned: AssetBalanceOf<T>,
 		},
 		SwapExecuted {
 			who: T::AccountId,
@@ -196,8 +196,10 @@ pub mod pallet {
 		PoolNotFound,
 		/// An overflow happened.
 		Overflow,
-		/// Insufficient amount provided.
-		InsufficientAmount,
+		/// Insufficient amount provided for the first token in the pair.
+		InsufficientAmountParam1,
+		/// Insufficient amount provided for the second token in the pair.
+		InsufficientAmountParam2,
 		/// Optimal calculated amount is less than desired.
 		OptimalAmountLessThanDesired,
 		/// Insufficient liquidity minted.
@@ -304,7 +306,10 @@ pub mod pallet {
 					let amount2_optimal = Self::quote(&amount1_desired, &reserve1, &reserve2)?;
 
 					if amount2_optimal <= amount2_desired {
-						ensure!(amount2_optimal >= amount2_min, Error::<T>::InsufficientAmount);
+						ensure!(
+							amount2_optimal >= amount2_min,
+							Error::<T>::InsufficientAmountParam2
+						);
 						amount1 = amount1_desired;
 						amount2 = amount2_optimal;
 					} else {
@@ -313,7 +318,10 @@ pub mod pallet {
 							amount1_optimal <= amount1_desired,
 							Error::<T>::OptimalAmountLessThanDesired
 						);
-						ensure!(amount1_optimal >= amount1_min, Error::<T>::InsufficientAmount);
+						ensure!(
+							amount1_optimal >= amount1_min,
+							Error::<T>::InsufficientAmountParam1
+						);
 						amount1 = amount1_optimal;
 						amount2 = amount2_desired;
 					}
@@ -325,9 +333,9 @@ pub mod pallet {
 
 				let total_supply = T::PoolAssets::total_issuance(pool.lp_token);
 
-				let liquidity: AssetBalanceOf<T>;
+				let lp_token_amount: AssetBalanceOf<T>;
 				if total_supply.is_zero() {
-					liquidity = amount1
+					lp_token_amount = amount1
 						.checked_mul(&amount2)
 						.ok_or(Error::<T>::Overflow)?
 						.integer_sqrt()
@@ -347,12 +355,15 @@ pub mod pallet {
 						.checked_div(&reserve2)
 						.ok_or(Error::<T>::Overflow)?;
 
-					liquidity = side1.min(side2);
+					lp_token_amount = side1.min(side2);
 				}
 
-				ensure!(liquidity > MIN_LIQUIDITY.into(), Error::<T>::InsufficientLiquidityMinted);
+				ensure!(
+					lp_token_amount > MIN_LIQUIDITY.into(),
+					Error::<T>::InsufficientLiquidityMinted
+				);
 
-				T::PoolAssets::mint_into(pool.lp_token, &mint_to, liquidity)?;
+				T::PoolAssets::mint_into(pool.lp_token, &mint_to, lp_token_amount)?;
 
 				pool.balance1 = reserve1 + amount1;
 				pool.balance2 = reserve2 + amount2;
@@ -364,7 +375,7 @@ pub mod pallet {
 					amount1_provided: amount1,
 					amount2_provided: amount2,
 					lp_token: pool.lp_token,
-					liquidity,
+					lp_tokens_minted: lp_token_amount,
 				});
 
 				Ok(())
@@ -376,7 +387,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			asset1: MultiAssetId<T::AssetId>,
 			asset2: MultiAssetId<T::AssetId>,
-			liquidity: AssetBalanceOf<T>,
+			lp_token_amount: AssetBalanceOf<T>,
 			amount1_min: AssetBalanceOf<T>,
 			amount2_min: AssetBalanceOf<T>,
 			withdraw_to: T::AccountId,
@@ -387,7 +398,7 @@ pub mod pallet {
 			let pool_id = Self::get_pool_id(asset1, asset2);
 			let (asset1, asset2) = pool_id;
 
-			ensure!(liquidity > Zero::zero(), Error::<T>::ZeroLiquidity);
+			ensure!(lp_token_amount > Zero::zero(), Error::<T>::ZeroLiquidity);
 
 			let now = frame_system::Pallet::<T>::block_number();
 			ensure!(deadline >= now, Error::<T>::DeadlinePassed);
@@ -396,20 +407,26 @@ pub mod pallet {
 				let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolNotFound)?;
 
 				let pallet_account = Self::account_id();
-				T::PoolAssets::transfer(pool.lp_token, &sender, &pallet_account, liquidity, false)?;
+				T::PoolAssets::transfer(
+					pool.lp_token,
+					&sender,
+					&pallet_account,
+					lp_token_amount,
+					false,
+				)?;
 
 				let reserve1 = pool.balance1;
 				let reserve2 = pool.balance2;
 
 				let total_supply = T::PoolAssets::total_issuance(pool.lp_token);
 
-				let amount1 = liquidity
+				let amount1 = lp_token_amount
 					.checked_mul(&reserve1)
 					.ok_or(Error::<T>::Overflow)?
 					.checked_div(&total_supply)
 					.ok_or(Error::<T>::Overflow)?;
 
-				let amount2 = liquidity
+				let amount2 = lp_token_amount
 					.checked_mul(&reserve2)
 					.ok_or(Error::<T>::Overflow)?
 					.checked_div(&total_supply)
@@ -417,14 +434,14 @@ pub mod pallet {
 
 				ensure!(
 					!amount1.is_zero() && amount1 >= amount1_min,
-					Error::<T>::InsufficientAmount
+					Error::<T>::InsufficientAmountParam1
 				);
 				ensure!(
 					!amount2.is_zero() && amount2 >= amount2_min,
-					Error::<T>::InsufficientAmount
+					Error::<T>::InsufficientAmountParam2
 				);
 
-				T::PoolAssets::burn_from(pool.lp_token, &pallet_account, liquidity)?;
+				T::PoolAssets::burn_from(pool.lp_token, &pallet_account, lp_token_amount)?;
 
 				Self::transfer(asset1, &pallet_account, &withdraw_to, amount1, false)?;
 				Self::transfer(asset2, &pallet_account, &withdraw_to, amount2, false)?;
@@ -439,7 +456,7 @@ pub mod pallet {
 					amount1,
 					amount2,
 					lp_token: pool.lp_token,
-					liquidity,
+					lp_tokens_burned: lp_token_amount,
 				});
 
 				Ok(())
