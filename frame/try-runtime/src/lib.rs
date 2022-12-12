@@ -44,11 +44,5 @@ sp_api::decl_runtime_apis! {
 		/// Optionally, a number of `try_state` hooks can also be executed after the block
 		/// execution.
 		fn execute_block(block: Block, state_root_check: bool, try_state: TryStateSelect) -> Weight;
-
-		/// A marker trait used just to identify if a runtime has been compiled with
-		/// `feature=try-runtime` or not.
-		///
-		/// It does nothing.
-		fn ping();
 	}
 }

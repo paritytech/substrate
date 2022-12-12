@@ -267,6 +267,7 @@
 
 #![cfg(feature = "try-runtime")]
 
+use parity_scale_codec::Decode;
 use remote_externalities::{
 	Builder, Mode, OfflineConfig, OnlineConfig, RemoteExternalities, SnapshotConfig,
 	TestExternalities,
@@ -605,7 +606,6 @@ impl State {
 			// NOTE: see the impl notes of `read_runtime_version`, the ext is almost not used here,
 			// only as a backup.
 			ext.insert(well_known_keys::CODE.to_vec(), new_code.clone());
-			use parity_scale_codec::Decode;
 			let old_version = <RuntimeVersion as Decode>::decode(
 				&mut &*executor.read_runtime_version(&original_code, &mut ext.ext()).unwrap(),
 			)
@@ -633,7 +633,7 @@ impl State {
 		}
 
 		// whatever runtime we have in store now must have been compiled with try-runtime feature.
-		if !ensure_try_runtime::<Block, HostFns>(&shared, &ext) {
+		if !ensure_try_runtime::<Block, HostFns>(&executor, &mut ext) {
 			return Err("given runtime is NOT compiled with try-runtime feature!".into())
 		}
 
@@ -738,19 +738,20 @@ pub(crate) fn build_executor<H: HostFunctions>(shared: &SharedParams) -> WasmExe
 
 /// Ensure that the given `ext` is compiled with `try-runtime`
 fn ensure_try_runtime<Block: BlockT, HostFns: HostFunctions>(
-	shared: &SharedParams,
-	ext: &TestExternalities,
+	executor: &WasmExecutor<HostFns>,
+	ext: &mut TestExternalities,
 ) -> bool {
-	let executor = build_executor::<HostFns>(&shared);
-	let extensions = full_extensions();
-	state_machine_call::<Block, HostFns>(
-		ext,
-		&executor,
-		"TryRuntime_ping",
-		Default::default(),
-		extensions,
+	use sp_api::RuntimeApiInfo;
+	let final_code = ext
+		.execute_with(|| sp_io::storage::get(well_known_keys::CODE))
+		.expect("':CODE:' is always downloaded in try-runtime-cli; qed");
+	let final_version = <RuntimeVersion as Decode>::decode(
+		&mut &*executor.read_runtime_version(&final_code, &mut ext.ext()).unwrap(),
 	)
-	.is_ok()
+	.unwrap();
+	final_version
+		.api_version(&<dyn frame_try_runtime::TryRuntime<Block>>::ID)
+		.is_some()
 }
 
 /// Execute the given `method` and `data` on top of `ext`, returning the results (encoded) and the

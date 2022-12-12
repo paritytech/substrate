@@ -239,6 +239,15 @@ where
 		signature_check: bool,
 		select: frame_try_runtime::TryStateSelect,
 	) -> Result<Weight, &'static str> {
+		frame_support::log::info!(
+			target: "frame::executive",
+			"try-runtime: executing block #{:?} / state root check: {:?} / signature check: {:?} / try-state-select: {:?}",
+			block.header().number(),
+			state_root_check,
+			signature_check,
+			select,
+		);
+
 		Self::initialize_block(block.header());
 		Self::initial_checks(&block);
 
