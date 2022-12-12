@@ -149,13 +149,18 @@ impl Contains<RuntimeCall> for BaseFilter {
 		}
 	}
 }
+
+parameter_types! {
+	pub static ProxyDepositFactor: u64 = 1;
+}
+
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type Currency = Balances;
 	type ProxyType = ProxyType;
 	type ProxyDepositBase = ConstU64<1>;
-	type ProxyDepositFactor = ConstU64<1>;
+	type ProxyDepositFactor = ProxyDepositFactor;
 	type MaxProxies = ConstU32<4>;
 	type WeightInfo = ();
 	type CallHasher = BlakeTwo256;
@@ -606,5 +611,64 @@ fn pure_works() {
 			Proxy::proxy(RuntimeOrigin::signed(1), anon, None, call.clone()),
 			Error::<Test>::NotProxy
 		);
+	});
+}
+
+#[test]
+fn pure_proxy_locks_funds_indefinitely_after_cost_decrease() {
+	new_test_ext().execute_with(|| {
+		// Start with high deposit costs.
+		ProxyDepositFactor::mutate(|v| *v = 10);
+
+		Balances::set_balance(RuntimeOrigin::root(), 1, 1000, 0).unwrap();
+		assert_eq!(0, Balances::reserved_balance(1));
+		assert_ok!(Proxy::create_pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 0));
+		let anon = Proxy::pure_account(&1, &ProxyType::Any, 0, None);
+		assert!(Balances::reserved_balance(1) > 0);
+		assert_eq!(0, Balances::reserved_balance(anon.clone()));
+		// Give the account some balance.
+		Balances::set_balance(RuntimeOrigin::root(), anon.clone(), 1000, 0).unwrap();
+
+		assert_ok!(Proxy::proxy(
+			RuntimeOrigin::signed(1),
+			anon,
+			None,
+			Box::new(
+				ProxyCall::add_proxy { delegate: 2, proxy_type: ProxyType::Any, delay: 0 }.into()
+			)
+		));
+
+		// Decrease the deposit costs
+		//
+		// Comment to make the test pass.
+		ProxyDepositFactor::mutate(|v| *v = 1);
+
+		assert_ok!(Proxy::proxy(
+			RuntimeOrigin::signed(1),
+			anon,
+			None,
+			Box::new(
+				ProxyCall::remove_proxy { delegate: 2, proxy_type: ProxyType::Any, delay: 0 }
+					.into()
+			)
+		));
+
+		assert_ok!(Proxy::proxy(
+			RuntimeOrigin::signed(1),
+			anon,
+			None,
+			Box::new(
+				ProxyCall::kill_pure {
+					spawner: 1,
+					proxy_type: ProxyType::Any,
+					index: 0,
+					height: 1,
+					ext_index: 0
+				}
+				.into()
+			)
+		));
+
+		assert_eq!(0, Balances::reserved_balance(1));
 	});
 }
