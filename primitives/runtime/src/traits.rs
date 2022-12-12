@@ -1335,12 +1335,13 @@ pub trait GetNodeBlockType {
 	type NodeBlock: self::Block;
 }
 
-/// Something that can validate unsigned extrinsics for the transaction pool.
+/// Provide validation for unsigned extrinsics.
 ///
-/// Note that any checks done here are only used for determining the validity of
-/// the transaction for the transaction pool.
-/// During block execution phase one need to perform the same checks anyway,
-/// since this function is not being called.
+/// This trait provides two functions [`pre_dispatch`](Self::pre_dispatch) and
+/// [`validate_unsigned`](Self::validate_unsigned). The [`pre_dispatch`](Self::pre_dispatch)
+/// function is called right before dispatching the call wrapped by an unsigned extrinsic. The
+/// [`validate_unsigned`](Self::validate_unsigned) function is mainly being used in the context of
+/// the transaction pool to check the validity of the call wrapped by an unsigned extrinsic.
 pub trait ValidateUnsigned {
 	/// The call to validate
 	type Call;
@@ -1348,13 +1349,15 @@ pub trait ValidateUnsigned {
 	/// Validate the call right before dispatch.
 	///
 	/// This method should be used to prevent transactions already in the pool
-	/// (i.e. passing `validate_unsigned`) from being included in blocks
-	/// in case we know they now became invalid.
+	/// (i.e. passing [`validate_unsigned`](Self::validate_unsigned)) from being included in blocks
+	/// in case they became invalid since being added to the pool.
 	///
-	/// By default it's a good idea to call `validate_unsigned` from within
-	/// this function again to make sure we never include an invalid transaction.
+	/// By default it's a good idea to call [`validate_unsigned`](Self::validate_unsigned) from
+	/// within this function again to make sure we never include an invalid transaction. Otherwise
+	/// the implementation of the call or this method will need to provide proper validation to
+	/// ensure that the transaction is valid.
 	///
-	/// Changes made to storage WILL be persisted if the call returns `Ok`.
+	/// Changes made to storage *WILL* be persisted if the call returns `Ok`.
 	fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
 		Self::validate_unsigned(TransactionSource::InBlock, call)
 			.map(|_| ())
@@ -1363,8 +1366,14 @@ pub trait ValidateUnsigned {
 
 	/// Return the validity of the call
 	///
-	/// This doesn't execute any side-effects; it merely checks
-	/// whether the transaction would panic if it were included or not.
+	/// This method has no side-effects. It merely checks whether the call would be rejected
+	/// by the runtime in an unsigned extrinsic.
+	///
+	/// The validity checks should be as lightweight as possible because every node will execute
+	/// this code before the unsigned extrinsic enters the transaction pool and also periodically
+	/// afterwards to ensure the validity. To prevent dos-ing a network with unsigned
+	/// extrinsics, these validity checks should include some checks around uniqueness, for example,
+	/// like checking that the unsigned extrinsic was send by an authority in the active set.
 	///
 	/// Changes made to storage should be discarded by caller.
 	fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity;
