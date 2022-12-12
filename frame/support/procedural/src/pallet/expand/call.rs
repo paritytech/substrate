@@ -62,8 +62,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			continue
 		}
 
-		let name =
-			syn::Ident::new(&format!("{}", method.name), method.name.span());
+		let name = syn::Ident::new(&format!("{}", method.name), method.name.span());
 		let warning: syn::ItemStruct = syn::parse_quote!(
 			#[deprecated(note = r"
 			Implicit call indices are deprecated in favour of explicit ones.
