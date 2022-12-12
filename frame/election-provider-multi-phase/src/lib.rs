@@ -2293,6 +2293,8 @@ mod tests {
 			assert_eq!(MultiPhase::elect().unwrap_err(), ElectionError::Fallback("NoFallback."));
 			// phase is now emergency.
 			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
+			// snapshot is still there until election finalizes.
+			assert!(MultiPhase::snapshot().is_some());
 
 			assert_eq!(
 				multi_phase_events(),
@@ -2318,6 +2320,7 @@ mod tests {
 			// phase is now emergency.
 			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
 			assert!(MultiPhase::queued_solution().is_none());
+			assert!(MultiPhase::snapshot().is_some());
 
 			// no single account can trigger this
 			assert_noop!(
