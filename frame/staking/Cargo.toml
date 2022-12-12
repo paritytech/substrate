@@ -43,7 +43,7 @@ sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elect
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward-curve" }
-pallet-bags-list = { version = "4.0.0-dev", path = "../bags-list" }
+pallet-bags-list = { version = "4.0.0-dev", path = "../bags-list", features = [ "runtime-benchmarks" ] }
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
 frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
@@ -74,10 +74,9 @@ runtime-benchmarks = [
 	"frame-election-provider-support/runtime-benchmarks",
 	"rand_chacha",
 	"sp-staking/runtime-benchmarks",
-	"pallet-bags-list/runtime-benchmarks",
 ]
 try-runtime = ["frame-support/try-runtime"]
 fuzz = [
-	"pallet-bags-list/fuzz",
 	"frame-election-provider-support/fuzz",
+	"runtime-benchmarks",
 ]
