@@ -53,7 +53,7 @@ impl<D: KeyValueDB> DbAdapter<D> {
 					return Err(error::DatabaseError(Box::new(std::io::Error::new(
 						std::io::ErrorKind::Other,
 						format!("Unexpected counter len {}", data.len()),
-					))))
+					))));
 				}
 				counter_data.copy_from_slice(&data);
 				let counter = u32::from_le_bytes(counter_data);

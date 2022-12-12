@@ -201,10 +201,11 @@ impl Tester {
 		futures::future::poll_fn(move |cx| loop {
 			match Stream::poll_next(Pin::new(&mut s.as_mut().unwrap().events), cx) {
 				Poll::Ready(None) => panic!("concluded early"),
-				Poll::Ready(Some(item)) =>
+				Poll::Ready(Some(item)) => {
 					if pred(item) {
-						return Poll::Ready(s.take().unwrap())
-					},
+						return Poll::Ready(s.take().unwrap());
+					}
+				},
 				Poll::Pending => return Poll::Pending,
 			}
 		})
@@ -546,8 +547,9 @@ fn bad_commit_leads_to_report() {
 			let fut = future::join(send_message, handle_commit)
 				.then(move |(tester, ())| {
 					tester.filter_network_events(move |event| match event {
-						Event::Report(who, cost_benefit) =>
-							who == id && cost_benefit == super::cost::INVALID_COMMIT,
+						Event::Report(who, cost_benefit) => {
+							who == id && cost_benefit == super::cost::INVALID_COMMIT
+						},
 						_ => false,
 					})
 				})

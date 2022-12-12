@@ -394,15 +394,15 @@ pub mod pallet {
 			// at most be maximum block weight. Make sure that this can fit in a multiplier without
 			// loss.
 			assert!(
-				<Multiplier as sp_runtime::traits::Bounded>::max_value() >=
-					Multiplier::checked_from_integer::<u128>(
+				<Multiplier as sp_runtime::traits::Bounded>::max_value()
+					>= Multiplier::checked_from_integer::<u128>(
 						T::BlockWeights::get().max_block.ref_time().try_into().unwrap()
 					)
 					.unwrap(),
 			);
 
-			let target = T::FeeMultiplierUpdate::target() *
-				T::BlockWeights::get().get(DispatchClass::Normal).max_total.expect(
+			let target = T::FeeMultiplierUpdate::target()
+				* T::BlockWeights::get().get(DispatchClass::Normal).max_total.expect(
 					"Setting `max_total` for `Normal` dispatch class is not compatible with \
 					`transaction-payment` pallet.",
 				);
@@ -411,7 +411,7 @@ pub mod pallet {
 			if addition == Weight::zero() {
 				// this is most likely because in a test setup we set everything to ()
 				// or to `ConstFeeMultiplier`.
-				return
+				return;
 			}
 
 			// We disable this test as our variability is 0, and min multiplier is set to 1.
@@ -1180,8 +1180,9 @@ mod tests {
 			// fee will be proportional to what is the actual maximum weight in the runtime.
 			assert_eq!(
 				Balances::free_balance(&1),
-				(10000 -
-					<Runtime as frame_system::Config>::BlockWeights::get().max_block.ref_time()) as u64
+				(10000
+					- <Runtime as frame_system::Config>::BlockWeights::get().max_block.ref_time())
+					as u64
 			);
 		});
 	}

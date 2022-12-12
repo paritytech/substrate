@@ -83,8 +83,9 @@ impl<Balance: Saturating> AccountVote<Balance> {
 		// winning side: can only be removed after the lock period ends.
 		match self {
 			AccountVote::Standard { vote: Vote { conviction: Conviction::None, .. }, .. } => None,
-			AccountVote::Standard { vote, balance } if vote.aye == approved =>
-				Some((vote.conviction.lock_periods(), balance)),
+			AccountVote::Standard { vote, balance } if vote.aye == approved => {
+				Some((vote.conviction.lock_periods(), balance))
+			},
 			_ => None,
 		}
 	}
@@ -236,8 +237,9 @@ where
 	/// The amount of this account's balance that much currently be locked due to voting.
 	pub fn locked_balance(&self) -> Balance {
 		match self {
-			Voting::Casting(Casting { votes, prior, .. }) =>
-				votes.iter().map(|i| i.1.balance()).fold(prior.locked(), |a, i| a.max(i)),
+			Voting::Casting(Casting { votes, prior, .. }) => {
+				votes.iter().map(|i| i.1.balance()).fold(prior.locked(), |a, i| a.max(i))
+			},
 			Voting::Delegating(Delegating { balance, prior, .. }) => *balance.max(&prior.locked()),
 		}
 	}
@@ -248,10 +250,12 @@ where
 		prior: PriorLock<BlockNumber, Balance>,
 	) {
 		let (d, p) = match self {
-			Voting::Casting(Casting { ref mut delegations, ref mut prior, .. }) =>
-				(delegations, prior),
-			Voting::Delegating(Delegating { ref mut delegations, ref mut prior, .. }) =>
-				(delegations, prior),
+			Voting::Casting(Casting { ref mut delegations, ref mut prior, .. }) => {
+				(delegations, prior)
+			},
+			Voting::Delegating(Delegating { ref mut delegations, ref mut prior, .. }) => {
+				(delegations, prior)
+			},
 		};
 		*d = delegations;
 		*p = prior;

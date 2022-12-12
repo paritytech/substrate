@@ -37,7 +37,7 @@ pub fn migrate<T: crate::Config, N: AsRef<str>>(new_pallet_name: N) -> Weight {
 			target: "runtime::afg",
 			"New pallet name is equal to the old prefix. No migration needs to be done.",
 		);
-		return Weight::zero()
+		return Weight::zero();
 	}
 	let storage_version = StorageVersion::get::<crate::Pallet<T>>();
 	log::info!(

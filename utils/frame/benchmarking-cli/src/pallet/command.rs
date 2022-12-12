@@ -58,7 +58,7 @@ fn combine_batches(
 	db_batches: Vec<BenchmarkBatch>,
 ) -> Vec<BenchmarkBatchSplitResults> {
 	if time_batches.is_empty() && db_batches.is_empty() {
-		return Default::default()
+		return Default::default();
 	}
 
 	let mut all_benchmarks =
@@ -118,34 +118,36 @@ impl PalletCmd {
 	{
 		if let Some(output_path) = &self.output {
 			if !output_path.is_dir() && output_path.file_name().is_none() {
-				return Err("Output file or path is invalid!".into())
+				return Err("Output file or path is invalid!".into());
 			}
 		}
 
 		if let Some(header_file) = &self.header {
 			if !header_file.is_file() {
-				return Err("Header file is invalid!".into())
+				return Err("Header file is invalid!".into());
 			};
 		}
 
 		if let Some(handlebars_template_file) = &self.template {
 			if !handlebars_template_file.is_file() {
-				return Err("Handlebars template file is invalid!".into())
+				return Err("Handlebars template file is invalid!".into());
 			};
 		}
 
 		if let Some(json_input) = &self.json_input {
 			let raw_data = match std::fs::read(json_input) {
 				Ok(raw_data) => raw_data,
-				Err(error) =>
-					return Err(format!("Failed to read {:?}: {}", json_input, error).into()),
+				Err(error) => {
+					return Err(format!("Failed to read {:?}: {}", json_input, error).into())
+				},
 			};
 			let batches: Vec<BenchmarkBatchSplitResults> = match serde_json::from_slice(&raw_data) {
 				Ok(batches) => batches,
-				Err(error) =>
-					return Err(format!("Failed to deserialize {:?}: {}", json_input, error).into()),
+				Err(error) => {
+					return Err(format!("Failed to deserialize {:?}: {}", json_input, error).into())
+				},
 			};
-			return self.output_from_results(&batches)
+			return self.output_from_results(&batches);
 		}
 
 		let spec = config.chain_spec;
@@ -211,9 +213,9 @@ impl PalletCmd {
 			.for_each(|item| {
 				for benchmark in &item.benchmarks {
 					let benchmark_name = &benchmark.name;
-					if extrinsic.is_empty() ||
-						extrinsic.as_bytes() == &b"*"[..] ||
-						extrinsics.contains(&&benchmark_name[..])
+					if extrinsic.is_empty()
+						|| extrinsic.as_bytes() == &b"*"[..]
+						|| extrinsics.contains(&&benchmark_name[..])
 					{
 						benchmarks_to_run.push((
 							item.pallet.clone(),
@@ -225,13 +227,13 @@ impl PalletCmd {
 			});
 
 		if benchmarks_to_run.is_empty() {
-			return Err("No benchmarks found which match your input.".into())
+			return Err("No benchmarks found which match your input.".into());
 		}
 
 		if self.list {
 			// List benchmarks instead of running them
 			list_benchmark(benchmarks_to_run);
-			return Ok(())
+			return Ok(());
 		}
 
 		// Run the benchmarks
@@ -261,7 +263,7 @@ impl PalletCmd {
 					// The slope logic needs at least two points
 					// to compute a slope.
 					if self.steps < 2 {
-						return Err("`steps` must be at least 2.".into())
+						return Err("`steps` must be at least 2.".into());
 					}
 
 					let step_size = (diff as f32 / (self.steps - 1) as f32).max(0.0);
@@ -493,7 +495,7 @@ impl PalletCmd {
 				fs::write(path, json)?;
 			} else {
 				println!("{}", json);
-				return Ok(true)
+				return Ok(true);
 			}
 		}
 
@@ -516,7 +518,7 @@ impl PalletCmd {
 
 			// Skip raw data + analysis if there are no results
 			if batch.time_results.is_empty() {
-				continue
+				continue;
 			}
 
 			if !self.no_storage_info {

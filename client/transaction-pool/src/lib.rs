@@ -209,8 +209,9 @@ where
 	) -> Self {
 		let pool = Arc::new(graph::Pool::new(options, is_validator, pool_api.clone()));
 		let (revalidation_queue, background_task) = match revalidation_type {
-			RevalidationType::Light =>
-				(revalidation::RevalidationQueue::new(pool_api.clone(), pool.clone()), None),
+			RevalidationType::Light => {
+				(revalidation::RevalidationQueue::new(pool_api.clone(), pool.clone()), None)
+			},
 			RevalidationType::Full => {
 				let (queue, background) =
 					revalidation::RevalidationQueue::new_background(pool_api.clone(), pool.clone());
@@ -227,8 +228,9 @@ where
 			pool,
 			revalidation_queue: Arc::new(revalidation_queue),
 			revalidation_strategy: Arc::new(Mutex::new(match revalidation_type {
-				RevalidationType::Light =>
-					RevalidationStrategy::Light(RevalidationStatus::NotScheduled),
+				RevalidationType::Light => {
+					RevalidationStrategy::Light(RevalidationStatus::NotScheduled)
+				},
 				RevalidationType::Full => RevalidationStrategy::Always,
 			})),
 			ready_poll: Arc::new(Mutex::new(ReadyPoll::new(best_block_number))),
@@ -343,13 +345,13 @@ where
 		// There could be transaction being added because of some re-org happening at the relevant
 		// block, but this is relative unlikely.
 		if status.ready == 0 && status.future == 0 {
-			return async { Box::new(std::iter::empty()) as Box<_> }.boxed()
+			return async { Box::new(std::iter::empty()) as Box<_> }.boxed();
 		}
 
 		if self.ready_poll.lock().updated_at() >= at {
 			log::trace!(target: "txpool", "Transaction pool already processed block  #{}", at);
 			let iterator: ReadyIteratorFor<PoolApi> = Box::new(self.pool.validated_pool().ready());
-			return async move { iterator }.boxed()
+			return async move { iterator }.boxed();
 		}
 
 		self.ready_poll
@@ -536,8 +538,8 @@ impl<N: Clone + Copy + AtLeast32Bit> RevalidationStatus<N> {
 			},
 			Self::Scheduled(revalidate_at_time, revalidate_at_block) => {
 				let is_required =
-					revalidate_at_time.map(|at| Instant::now() >= at).unwrap_or(false) ||
-						revalidate_at_block.map(|at| block >= at).unwrap_or(false);
+					revalidate_at_time.map(|at| Instant::now() >= at).unwrap_or(false)
+						|| revalidate_at_block.map(|at| block >= at).unwrap_or(false);
 				if is_required {
 					*self = Self::InProgress;
 				}
@@ -571,11 +573,11 @@ async fn prune_known_txs_for_block<Block: BlockT, Api: graph::ChainApi<Block = B
 		Ok(Some(h)) => h,
 		Ok(None) => {
 			log::debug!(target: "txpool", "Could not find header for {:?}.", block_id);
-			return hashes
+			return hashes;
 		},
 		Err(e) => {
 			log::debug!(target: "txpool", "Error retrieving header for {:?}: {}", block_id, e);
-			return hashes
+			return hashes;
 		},
 	};
 
@@ -608,7 +610,7 @@ where
 					"Skipping ChainEvent - no last block in tree route {:?}",
 					tree_route,
 				);
-				return
+				return;
 			},
 		};
 
@@ -735,10 +737,11 @@ where
 		let compute_tree_route = |from, to| -> Result<TreeRoute<Block>, String> {
 			match self.api.tree_route(from, to) {
 				Ok(tree_route) => Ok(tree_route),
-				Err(e) =>
+				Err(e) => {
 					return Err(format!(
 						"Error occurred while computing tree_route from {from:?} to {to:?}: {e}"
-					)),
+					))
+				},
 			}
 		};
 
@@ -747,7 +750,7 @@ where
 		match result {
 			Err(msg) => {
 				log::warn!(target: "txpool", "{msg}");
-				return
+				return;
 			},
 			Ok(None) => {},
 			Ok(Some(tree_route)) => {

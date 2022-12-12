@@ -176,7 +176,7 @@ impl<T> ImportResolver for EnvironmentDefinitionBuilder<T> {
 					module_name,
 					field_name,
 				);
-				return Err(wasmi::Error::Instantiation(String::new()))
+				return Err(wasmi::Error::Instantiation(String::new()));
 			},
 		};
 		Ok(FuncInstance::alloc_host(signature.clone(), host_func_idx.0))
@@ -212,7 +212,7 @@ impl<T> ImportResolver for EnvironmentDefinitionBuilder<T> {
 					module_name,
 					field_name,
 				);
-				return Err(wasmi::Error::Instantiation(String::new()))
+				return Err(wasmi::Error::Instantiation(String::new()));
 			},
 		};
 		Ok(memory.memref.clone())
@@ -315,7 +315,7 @@ mod tests {
 
 		fn env_assert(_e: &mut State, args: &[Value]) -> Result<ReturnValue, HostError> {
 			if args.len() != 1 {
-				return Err(HostError)
+				return Err(HostError);
 			}
 			let condition = args[0].as_i32().ok_or_else(|| HostError)?;
 			if condition != 0 {
@@ -326,7 +326,7 @@ mod tests {
 		}
 		fn env_inc_counter(e: &mut State, args: &[Value]) -> Result<ReturnValue, HostError> {
 			if args.len() != 1 {
-				return Err(HostError)
+				return Err(HostError);
 			}
 			let inc_by = args[0].as_i32().ok_or_else(|| HostError)?;
 			e.counter += inc_by as u32;
@@ -335,7 +335,7 @@ mod tests {
 		/// Function that takes one argument of any type and returns that value.
 		fn env_polymorphic_id(_e: &mut State, args: &[Value]) -> Result<ReturnValue, HostError> {
 			if args.len() != 1 {
-				return Err(HostError)
+				return Err(HostError);
 			}
 			Ok(ReturnValue::Value(args[0]))
 		}

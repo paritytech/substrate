@@ -200,18 +200,20 @@ where
 		match (self, rhs) {
 			(Charge(lhs), Charge(rhs)) => Charge(lhs.saturating_add(*rhs)),
 			(Refund(lhs), Refund(rhs)) => Refund(lhs.saturating_add(*rhs)),
-			(Charge(lhs), Refund(rhs)) =>
+			(Charge(lhs), Refund(rhs)) => {
 				if lhs >= rhs {
 					Charge(lhs.saturating_sub(*rhs))
 				} else {
 					Refund(rhs.saturating_sub(*lhs))
-				},
-			(Refund(lhs), Charge(rhs)) =>
+				}
+			},
+			(Refund(lhs), Charge(rhs)) => {
 				if lhs > rhs {
 					Refund(lhs.saturating_sub(*rhs))
 				} else {
 					Charge(rhs.saturating_sub(*lhs))
-				},
+				}
+			},
 		}
 	}
 
@@ -221,18 +223,20 @@ where
 		match (self, rhs) {
 			(Charge(lhs), Refund(rhs)) => Charge(lhs.saturating_add(*rhs)),
 			(Refund(lhs), Charge(rhs)) => Refund(lhs.saturating_add(*rhs)),
-			(Charge(lhs), Charge(rhs)) =>
+			(Charge(lhs), Charge(rhs)) => {
 				if lhs >= rhs {
 					Charge(lhs.saturating_sub(*rhs))
 				} else {
 					Refund(rhs.saturating_sub(*lhs))
-				},
-			(Refund(lhs), Refund(rhs)) =>
+				}
+			},
+			(Refund(lhs), Refund(rhs)) => {
 				if lhs > rhs {
 					Refund(lhs.saturating_sub(*rhs))
 				} else {
 					Charge(rhs.saturating_sub(*lhs))
-				},
+				}
+			},
 		}
 	}
 

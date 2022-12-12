@@ -45,7 +45,7 @@ pub fn expand_outer_origin(
 					 be constructed: pallet `{}` must have generic `Origin`",
 					name
 				);
-				return Err(syn::Error::new(name.span(), msg))
+				return Err(syn::Error::new(name.span(), msg));
 			}
 
 			caller_variants.extend(expand_origin_caller_variant(

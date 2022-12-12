@@ -60,8 +60,9 @@ pub fn deadline_to_future(
 	future::maybe_done(match deadline.map(timestamp_from_now) {
 		None => Either::Left(future::pending()),
 		// Only apply delay if we need to wait a non-zero duration
-		Some(duration) if duration <= Duration::from_secs(0) =>
-			Either::Right(Either::Left(future::ready(()))),
+		Some(duration) if duration <= Duration::from_secs(0) => {
+			Either::Right(Either::Left(future::ready(())))
+		},
 		Some(duration) => Either::Right(Either::Right(futures_timer::Delay::new(duration))),
 	})
 }

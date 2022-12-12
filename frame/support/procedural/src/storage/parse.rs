@@ -367,16 +367,17 @@ fn get_module_instance(
 			it is now defined at frame_support::traits::Instance. Expect `Instance` found `{}`",
 			instantiable.as_ref().unwrap(),
 		);
-		return Err(syn::Error::new(instantiable.span(), msg))
+		return Err(syn::Error::new(instantiable.span(), msg));
 	}
 
 	match (instance, instantiable, default_instance) {
-		(Some(instance), Some(instantiable), default_instance) =>
+		(Some(instance), Some(instantiable), default_instance) => {
 			Ok(Some(super::ModuleInstanceDef {
 				instance_generic: instance,
 				instance_trait: instantiable,
 				instance_default: default_instance,
-			})),
+			}))
+		},
 		(None, None, None) => Ok(None),
 		(Some(instance), None, _) => Err(syn::Error::new(
 			instance.span(),
@@ -430,7 +431,7 @@ pub fn parse(input: syn::parse::ParseStream) -> syn::Result<super::DeclStorageDe
 					return Err(syn::Error::new(
 						def.span(),
 						"Only one build expression allowed for extra genesis",
-					))
+					));
 				}
 
 				extra_genesis_build = Some(def.expr.content);
@@ -476,7 +477,7 @@ fn parse_storage_line_defs(
 					"Invalid storage definition, couldn't find config identifier: storage must \
 					either have a get identifier `get(fn ident)` or a defined config identifier \
 					`config(ident)`",
-				))
+				));
 			}
 		} else {
 			None
@@ -498,16 +499,18 @@ fn parse_storage_line_defs(
 		}
 
 		let max_values = match &line.storage_type {
-			DeclStorageType::Map(_) | DeclStorageType::DoubleMap(_) | DeclStorageType::NMap(_) =>
-				line.max_values.inner.map(|i| i.expr.content),
-			DeclStorageType::Simple(_) =>
+			DeclStorageType::Map(_) | DeclStorageType::DoubleMap(_) | DeclStorageType::NMap(_) => {
+				line.max_values.inner.map(|i| i.expr.content)
+			},
+			DeclStorageType::Simple(_) => {
 				if let Some(max_values) = line.max_values.inner {
 					let msg = "unexpected max_values attribute for storage value.";
 					let span = max_values.max_values_keyword.span();
-					return Err(syn::Error::new(span, msg))
+					return Err(syn::Error::new(span, msg));
 				} else {
 					Some(syn::parse_quote!(1u32))
-				},
+				}
+			},
 		};
 
 		let span = line.storage_type.span();
@@ -524,14 +527,15 @@ fn parse_storage_line_defs(
 				key: map.key,
 				value: map.value,
 			}),
-			DeclStorageType::DoubleMap(map) =>
+			DeclStorageType::DoubleMap(map) => {
 				super::StorageLineTypeDef::DoubleMap(Box::new(super::DoubleMapDef {
 					hasher1: map.hasher1.inner.ok_or_else(no_hasher_error)?.into(),
 					hasher2: map.hasher2.inner.ok_or_else(no_hasher_error)?.into(),
 					key1: map.key1,
 					key2: map.key2,
 					value: map.value,
-				})),
+				}))
+			},
 			DeclStorageType::NMap(map) => super::StorageLineTypeDef::NMap(super::NMapDef {
 				hashers: map
 					.storage_keys

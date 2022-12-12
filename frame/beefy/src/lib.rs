@@ -151,11 +151,11 @@ impl<T: Config> Pallet<T> {
 
 	fn initialize_authorities(authorities: &Vec<T::BeefyId>) -> Result<(), ()> {
 		if authorities.is_empty() {
-			return Ok(())
+			return Ok(());
 		}
 
 		if !<Authorities<T>>::get().is_empty() {
-			return Err(())
+			return Err(());
 		}
 
 		let bounded_authorities =

@@ -227,14 +227,14 @@ pub mod pallet {
 			// MMR push never fails, but better safe than sorry.
 			if mmr.push(data).is_none() {
 				log::error!(target: "runtime::mmr", "MMR push failed");
-				return T::WeightInfo::on_initialize(peaks_before)
+				return T::WeightInfo::on_initialize(peaks_before);
 			}
 			// Update the size, `mmr.finalize()` should also never fail.
 			let (leaves, root) = match mmr.finalize() {
 				Ok((leaves, root)) => (leaves, root),
 				Err(e) => {
 					log::error!(target: "runtime::mmr", "MMR finalize failed: {:?}", e);
-					return T::WeightInfo::on_initialize(peaks_before)
+					return T::WeightInfo::on_initialize(peaks_before);
 				},
 			};
 			<T::OnNewRoot as primitives::OnNewRoot<_>>::on_new_root(&root);
@@ -442,12 +442,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		leaves: Vec<LeafOf<T, I>>,
 		proof: primitives::BatchProof<<T as Config<I>>::Hash>,
 	) -> Result<(), primitives::Error> {
-		if proof.leaf_count > Self::mmr_leaves() ||
-			proof.leaf_count == 0 ||
-			(proof.items.len().saturating_add(leaves.len())) as u64 > proof.leaf_count
+		if proof.leaf_count > Self::mmr_leaves()
+			|| proof.leaf_count == 0
+			|| (proof.items.len().saturating_add(leaves.len())) as u64 > proof.leaf_count
 		{
 			return Err(primitives::Error::Verify
-				.log_debug("The proof has incorrect number of leaves or proof items."))
+				.log_debug("The proof has incorrect number of leaves or proof items."));
 		}
 
 		let mmr: ModuleMmr<mmr::storage::OffchainStorage, T, I> = mmr::Mmr::new(proof.leaf_count);

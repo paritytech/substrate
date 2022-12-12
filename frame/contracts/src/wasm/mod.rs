@@ -441,8 +441,9 @@ mod tests {
 			let entry = self.storage.entry(key.clone());
 			let result = match (entry, take_old) {
 				(Entry::Vacant(_), _) => WriteOutcome::New,
-				(Entry::Occupied(entry), false) =>
-					WriteOutcome::Overwritten(entry.remove().len() as u32),
+				(Entry::Occupied(entry), false) => {
+					WriteOutcome::Overwritten(entry.remove().len() as u32)
+				},
 				(Entry::Occupied(entry), true) => WriteOutcome::Taken(entry.remove()),
 			};
 			if let Some(value) = value {
@@ -460,8 +461,9 @@ mod tests {
 			let entry = self.storage.entry(key.clone());
 			let result = match (entry, take_old) {
 				(Entry::Vacant(_), _) => WriteOutcome::New,
-				(Entry::Occupied(entry), false) =>
-					WriteOutcome::Overwritten(entry.remove().len() as u32),
+				(Entry::Occupied(entry), false) => {
+					WriteOutcome::Overwritten(entry.remove().len() as u32)
+				},
 				(Entry::Occupied(entry), true) => WriteOutcome::Taken(entry.remove()),
 			};
 			if let Some(value) = value {

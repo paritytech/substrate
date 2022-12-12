@@ -910,7 +910,7 @@ macro_rules! impl_bench_name_tests {
 // Every variant must implement [`BenchmarkingSetup`].
 //
 // ```nocompile
-// 
+//
 // struct Transfer;
 // impl BenchmarkingSetup for Transfer { ... }
 //

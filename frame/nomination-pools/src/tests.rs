@@ -5174,7 +5174,7 @@ mod fuzz_test {
 
 		fn join(&mut self) {
 			if self.pool_id.is_some() {
-				return
+				return;
 			}
 			let pool_id = LastPoolId::<T>::get();
 			let amount = 10 * ExistentialDeposit::get();
@@ -5190,7 +5190,7 @@ mod fuzz_test {
 			// calculated.
 			if !PoolMembers::<T>::contains_key(&self.who) {
 				log!(warn, "reward agent is not in the pool yet, cannot claim");
-				return
+				return;
 			}
 			let pre = Balances::free_balance(&42);
 			let origin = RuntimeOrigin::signed(42);
@@ -5269,8 +5269,8 @@ mod fuzz_test {
 				}
 
 				// execute sanity checks at a fixed interval, possibly on every block.
-				if iteration %
-					(std::env::var("SANITY_CHECK_INTERVAL")
+				if iteration
+					% (std::env::var("SANITY_CHECK_INTERVAL")
 						.ok()
 						.and_then(|x| x.parse::<u64>().ok()))
 					.unwrap_or(1) == 0

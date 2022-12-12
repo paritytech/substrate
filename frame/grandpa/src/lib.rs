@@ -465,7 +465,7 @@ impl<T: Config> Pallet<T> {
 
 			if forced.is_some() {
 				if Self::next_forced().map_or(false, |next| next > scheduled_at) {
-					return Err(Error::<T>::TooSoon.into())
+					return Err(Error::<T>::TooSoon.into());
 				}
 
 				// only allow the next forced change when twice the window has passed since
@@ -538,7 +538,7 @@ impl<T: Config> Pallet<T> {
 		// validate equivocation proof (check votes are different and
 		// signatures are valid).
 		if !sp_finality_grandpa::check_equivocation_proof(equivocation_proof) {
-			return Err(Error::<T>::InvalidEquivocationProof.into())
+			return Err(Error::<T>::InvalidEquivocationProof.into());
 		}
 
 		// fetch the current and previous sets last session index. on the
@@ -557,12 +557,12 @@ impl<T: Config> Pallet<T> {
 
 		// check that the session id for the membership proof is within the
 		// bounds of the set id reported in the equivocation.
-		if session_index > set_id_session_index ||
-			previous_set_id_session_index
+		if session_index > set_id_session_index
+			|| previous_set_id_session_index
 				.map(|previous_index| session_index <= previous_index)
 				.unwrap_or(false)
 		{
-			return Err(Error::<T>::InvalidEquivocationProof.into())
+			return Err(Error::<T>::InvalidEquivocationProof.into());
 		}
 
 		// report to the offences module rewarding the sender.

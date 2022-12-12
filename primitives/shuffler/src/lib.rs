@@ -56,7 +56,7 @@ impl Xoshiro256PlusPlus {
 	fn next_u64(&mut self) -> u64 {
 		let first = ((self.next_u32()) as u64) << 32;
 		let second = self.next_u32() as u64;
-		return first | second
+		return first | second;
 	}
 }
 
@@ -176,7 +176,7 @@ where
 	Api::Api: VerApi<Block>,
 {
 	if extrinsics.len() <= 1 {
-		return extrinsics
+		return extrinsics;
 	}
 	let extrinsics: Vec<(Option<AccountId32>, Block::Extrinsic)> = extrinsics
 		.into_iter()

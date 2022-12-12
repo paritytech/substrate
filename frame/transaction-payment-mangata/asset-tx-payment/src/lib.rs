@@ -40,6 +40,7 @@ use sp_std::prelude::*;
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::DispatchResult,
+	dispatch::{DispatchInfo, PostDispatchInfo},
 	traits::{
 		tokens::{
 			fungibles::{Balanced, CreditOf, Inspect},
@@ -47,7 +48,6 @@ use frame_support::{
 		},
 		IsType,
 	},
-	dispatch::{DispatchInfo, PostDispatchInfo},
 	DefaultNoBound,
 };
 use pallet_transaction_payment_mangata::OnChargeTransaction;

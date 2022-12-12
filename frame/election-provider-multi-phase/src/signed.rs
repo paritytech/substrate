@@ -293,7 +293,7 @@ impl<T: Config> SignedSubmissions<T> {
 				self.indices
 					.try_insert(submission.raw_solution.score, prev_idx)
 					.expect("didn't change the map size; qed");
-				return InsertResult::NotInserted
+				return InsertResult::NotInserted;
 			},
 			Ok(None) => {
 				// successfully inserted into the set; no need to take out weakest member
@@ -312,7 +312,7 @@ impl<T: Config> SignedSubmissions<T> {
 
 				// if we haven't improved on the weakest score, don't change anything.
 				if !insert_score.strict_threshold_better(weakest_score, threshold) {
-					return InsertResult::NotInserted
+					return InsertResult::NotInserted;
 				}
 
 				self.swap_out_submission(weakest_score, Some((insert_score, insert_idx)))
@@ -400,7 +400,7 @@ impl<T: Config> Pallet<T> {
 
 					weight = weight
 						.saturating_add(T::WeightInfo::finalize_signed_phase_accept_solution());
-					break
+					break;
 				},
 				Err(_) => {
 					Self::finalize_signed_phase_reject_solution(&who, deposit);

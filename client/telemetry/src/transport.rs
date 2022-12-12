@@ -112,7 +112,7 @@ impl<T: AsyncWrite> StreamSink<T> {
 				log::error!(target: "telemetry",
 					"Detected some internal buffering happening in the telemetry");
 				let err = io::Error::new(io::ErrorKind::Other, "Internal buffering detected");
-				return Poll::Ready(Err(err))
+				return Poll::Ready(Err(err));
 			}
 		}
 

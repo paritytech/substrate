@@ -182,12 +182,13 @@ where
 		if let Some(storage_meter) = storage_meter {
 			let mut diff = meter::Diff::default();
 			match (old_len, new_value.as_ref().map(|v| v.len() as u32)) {
-				(Some(old_len), Some(new_len)) =>
+				(Some(old_len), Some(new_len)) => {
 					if new_len > old_len {
 						diff.bytes_added = new_len - old_len;
 					} else {
 						diff.bytes_removed = old_len - new_len;
-					},
+					}
+				},
 				(None, Some(new_len)) => {
 					diff.bytes_added = new_len;
 					diff.items_added = 1;
@@ -223,7 +224,7 @@ where
 		code_hash: CodeHash<T>,
 	) -> Result<ContractInfo<T>, DispatchError> {
 		if <ContractInfoOf<T>>::contains_key(account) {
-			return Err(Error::<T>::DuplicateContract.into())
+			return Err(Error::<T>::DuplicateContract.into());
 		}
 
 		let contract = ContractInfo::<T> {
@@ -252,10 +253,10 @@ where
 	/// and weight limit.
 	pub fn deletion_budget(queue_len: usize, weight_limit: Weight) -> (u64, u32) {
 		let base_weight = T::WeightInfo::on_process_deletion_queue_batch();
-		let weight_per_queue_item = T::WeightInfo::on_initialize_per_queue_item(1) -
-			T::WeightInfo::on_initialize_per_queue_item(0);
-		let weight_per_key = (T::WeightInfo::on_initialize_per_trie_key(1) -
-			T::WeightInfo::on_initialize_per_trie_key(0))
+		let weight_per_queue_item = T::WeightInfo::on_initialize_per_queue_item(1)
+			- T::WeightInfo::on_initialize_per_queue_item(0);
+		let weight_per_key = (T::WeightInfo::on_initialize_per_trie_key(1)
+			- T::WeightInfo::on_initialize_per_trie_key(0))
 		.ref_time();
 		let decoding_weight = weight_per_queue_item.saturating_mul(queue_len as u64);
 
@@ -277,7 +278,7 @@ where
 	pub fn process_deletion_queue_batch(weight_limit: Weight) -> Weight {
 		let queue_len = <DeletionQueue<T>>::decode_len().unwrap_or(0);
 		if queue_len == 0 {
-			return Weight::zero()
+			return Weight::zero();
 		}
 
 		let (weight_per_key, mut remaining_key_budget) =
@@ -287,7 +288,7 @@ where
 		// proceeding. Too little weight for decoding might happen during runtime upgrades
 		// which consume the whole block before the other `on_initialize` blocks are called.
 		if remaining_key_budget == 0 {
-			return weight_limit
+			return weight_limit;
 		}
 
 		let mut queue = <DeletionQueue<T>>::get();

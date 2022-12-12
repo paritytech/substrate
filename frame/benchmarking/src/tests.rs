@@ -66,7 +66,7 @@ mod pallet_test {
 
 		#[pallet::weight(0)]
 		pub fn always_error(_origin: OriginFor<T>) -> DispatchResult {
-			return Err("I always fail".into())
+			return Err("I always fail".into());
 		}
 	}
 }

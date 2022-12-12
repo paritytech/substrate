@@ -54,7 +54,7 @@ pub(crate) fn benchmark<E>(
 		elapsed = timestamp.elapsed();
 
 		if elapsed >= max_duration {
-			break
+			break;
 		}
 	}
 
@@ -461,16 +461,16 @@ mod tests {
 	#[test]
 	fn test_benchmark_disk_sequential_writes() {
 		assert!(
-			benchmark_disk_sequential_writes(DEFAULT_DISK_EXECUTION_LIMIT, "./".as_ref()).unwrap() >
-				0.0
+			benchmark_disk_sequential_writes(DEFAULT_DISK_EXECUTION_LIMIT, "./".as_ref()).unwrap()
+				> 0.0
 		);
 	}
 
 	#[test]
 	fn test_benchmark_disk_random_writes() {
 		assert!(
-			benchmark_disk_random_writes(DEFAULT_DISK_EXECUTION_LIMIT, "./".as_ref()).unwrap() >
-				0.0
+			benchmark_disk_random_writes(DEFAULT_DISK_EXECUTION_LIMIT, "./".as_ref()).unwrap()
+				> 0.0
 		);
 	}
 

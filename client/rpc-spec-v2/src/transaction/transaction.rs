@@ -102,7 +102,7 @@ where
 					None::<()>,
 				));
 				let _ = sink.reject(err);
-				return Ok(())
+				return Ok(());
 			},
 		};
 
@@ -170,8 +170,9 @@ impl TransactionState {
 		event: TransactionStatus<Hash, BlockHash>,
 	) -> Option<TransactionEvent<BlockHash>> {
 		match event {
-			TransactionStatus::Ready | TransactionStatus::Future =>
-				Some(TransactionEvent::<BlockHash>::Validated),
+			TransactionStatus::Ready | TransactionStatus::Future => {
+				Some(TransactionEvent::<BlockHash>::Validated)
+			},
 			TransactionStatus::Broadcast(peers) => {
 				// Set the broadcasted flag once if we submitted the transaction to
 				// at least one peer.
@@ -181,19 +182,22 @@ impl TransactionState {
 					num_peers: peers.len(),
 				}))
 			},
-			TransactionStatus::InBlock((hash, index)) =>
+			TransactionStatus::InBlock((hash, index)) => {
 				Some(TransactionEvent::BestChainBlockIncluded(Some(TransactionBlock {
 					hash,
 					index,
-				}))),
+				})))
+			},
 			TransactionStatus::Retracted(_) => Some(TransactionEvent::BestChainBlockIncluded(None)),
-			TransactionStatus::FinalityTimeout(_) =>
+			TransactionStatus::FinalityTimeout(_) => {
 				Some(TransactionEvent::Dropped(TransactionDropped {
 					broadcasted: self.broadcasted,
 					error: "Maximum number of finality watchers has been reached".into(),
-				})),
-			TransactionStatus::Finalized((hash, index)) =>
-				Some(TransactionEvent::Finalized(TransactionBlock { hash, index })),
+				}))
+			},
+			TransactionStatus::Finalized((hash, index)) => {
+				Some(TransactionEvent::Finalized(TransactionBlock { hash, index }))
+			},
 			TransactionStatus::Usurped(_) => Some(TransactionEvent::Invalid(TransactionError {
 				error: "Extrinsic was rendered invalid by another extrinsic".into(),
 			})),

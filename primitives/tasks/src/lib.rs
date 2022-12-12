@@ -115,7 +115,7 @@ mod inner {
 								);
 
 								// This will drop sender without sending anything.
-								return
+								return;
 							},
 						}
 					},
@@ -126,7 +126,7 @@ mod inner {
 							e,
 						);
 
-						return
+						return;
 					},
 				};
 

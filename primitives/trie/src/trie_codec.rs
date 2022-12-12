@@ -71,7 +71,7 @@ where
 	// Only check root if expected root is passed as argument.
 	if let Some(expected_root) = expected_root {
 		if expected_root != &top_root {
-			return Err(Error::RootMismatch(top_root, *expected_root))
+			return Err(Error::RootMismatch(top_root, *expected_root));
 		}
 	}
 
@@ -92,7 +92,7 @@ where
 						let mut root = TrieHash::<L>::default();
 						// still in a proof so prevent panic
 						if root.as_mut().len() != value.as_slice().len() {
-							return Err(Error::InvalidChildRoot(key, value))
+							return Err(Error::InvalidChildRoot(key, value));
 						}
 						root.as_mut().copy_from_slice(value.as_ref());
 						child_tries.push(root);
@@ -110,7 +110,7 @@ where
 	}
 
 	if !HashDBT::<L::Hash, _>::contains(db, &top_root, EMPTY_PREFIX) {
-		return Err(Error::IncompleteProof)
+		return Err(Error::IncompleteProof);
 	}
 
 	let mut previous_extracted_child_trie = None;
@@ -132,11 +132,11 @@ where
 	if let Some(child_root) = previous_extracted_child_trie {
 		// A child root was read from proof but is not present
 		// in top trie.
-		return Err(Error::ExtraneousChildProof(child_root))
+		return Err(Error::ExtraneousChildProof(child_root));
 	}
 
 	if nodes_iter.next().is_some() {
-		return Err(Error::ExtraneousChildNode)
+		return Err(Error::ExtraneousChildNode);
 	}
 
 	Ok(top_root)
@@ -171,7 +171,7 @@ where
 						let mut root = TrieHash::<L>::default();
 						if root.as_mut().len() != value.as_slice().len() {
 							// some child trie root in top trie are not an encoded hash.
-							return Err(Error::InvalidChildRoot(key.to_vec(), value.to_vec()))
+							return Err(Error::InvalidChildRoot(key.to_vec(), value.to_vec()));
 						}
 						root.as_mut().copy_from_slice(value.as_ref());
 						child_tries.push(root);
@@ -194,7 +194,7 @@ where
 		if !HashDBT::<L::Hash, _>::contains(&partial_db, &child_root, EMPTY_PREFIX) {
 			// child proof are allowed to be missing (unused root can be included
 			// due to trie structure modification).
-			continue
+			continue;
 		}
 
 		let trie = crate::TrieDBBuilder::<L>::new(&partial_db, &child_root).build();

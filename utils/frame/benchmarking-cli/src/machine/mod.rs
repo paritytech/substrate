@@ -150,10 +150,12 @@ impl MachineCmd {
 			Metric::Blake2256 => Throughput::MiBs(benchmark_cpu(hash_limit) as f64),
 			Metric::Sr25519Verify => Throughput::MiBs(benchmark_sr25519_verify(verify_limit)),
 			Metric::MemCopy => Throughput::MiBs(benchmark_memory(memory_limit) as f64),
-			Metric::DiskSeqWrite =>
-				Throughput::MiBs(benchmark_disk_sequential_writes(disk_limit, dir)? as f64),
-			Metric::DiskRndWrite =>
-				Throughput::MiBs(benchmark_disk_random_writes(disk_limit, dir)? as f64),
+			Metric::DiskSeqWrite => {
+				Throughput::MiBs(benchmark_disk_sequential_writes(disk_limit, dir)? as f64)
+			},
+			Metric::DiskRndWrite => {
+				Throughput::MiBs(benchmark_disk_random_writes(disk_limit, dir)? as f64)
+			},
 		};
 		Ok(score)
 	}
@@ -211,7 +213,7 @@ impl MachineCmd {
 	/// Validates the CLI arguments.
 	fn validate_args(&self) -> Result<()> {
 		if self.tolerance > 100.0 || self.tolerance < 0.0 {
-			return Err("The --tolerance argument is out of range".into())
+			return Err("The --tolerance argument is out of range".into());
 		}
 		Ok(())
 	}

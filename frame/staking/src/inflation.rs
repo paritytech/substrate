@@ -42,8 +42,8 @@ where
 	const MILLISECONDS_PER_YEAR: u64 = 1000 * 3600 * 24 * 36525 / 100;
 
 	let portion = Perbill::from_rational(era_duration as u64, MILLISECONDS_PER_YEAR);
-	let payout = portion *
-		yearly_inflation
+	let payout = portion
+		* yearly_inflation
 			.calculate_for_fraction_times_denominator(npos_token_staked, total_tokens.clone());
 	let maximum = portion * (yearly_inflation.maximum * total_tokens);
 	(payout, maximum)

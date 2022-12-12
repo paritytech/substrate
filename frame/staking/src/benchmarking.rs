@@ -51,7 +51,7 @@ type MaxNominators<T> = <<T as Config>::BenchmarkingConfig as BenchmarkingConfig
 // read and write operations.
 pub fn add_slashing_spans<T: Config>(who: &T::AccountId, spans: u32) {
 	if spans == 0 {
-		return
+		return;
 	}
 
 	// For the first slashing span, we initialize

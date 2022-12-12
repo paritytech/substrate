@@ -105,13 +105,13 @@ where
 		use sp_arithmetic::traits::Saturating;
 
 		if current_target.number().is_zero() {
-			return Box::pin(async { None })
+			return Box::pin(async { None });
 		}
 
 		// Constrain to the base number, if that's the minimal
 		// vote that can be placed.
 		if *base.number() + self.0 > *best_target.number() {
-			return Box::pin(std::future::ready(Some((base.hash(), *base.number()))))
+			return Box::pin(std::future::ready(Some((base.hash(), *base.number()))));
 		}
 
 		// find the target number restricted by this rule
@@ -119,7 +119,7 @@ where
 
 		// our current target is already lower than this rule would restrict
 		if target_number >= *current_target.number() {
-			return Box::pin(async { None })
+			return Box::pin(async { None });
 		}
 
 		let current_target = current_target.clone();
@@ -161,7 +161,7 @@ where
 
 		// our current target is already lower than this rule would restrict
 		if target_number >= *current_target.number() {
-			return Box::pin(async { None })
+			return Box::pin(async { None });
 		}
 
 		// find the block at the given target height
@@ -192,7 +192,7 @@ where
 		}
 
 		if *target_header.number() == target_number {
-			return Some((target_hash, target_number))
+			return Some((target_hash, target_number));
 		}
 
 		target_hash = *target_header.parent_hash();
@@ -239,8 +239,8 @@ where
 					.await
 					.filter(|(_, restricted_number)| {
 						// NOTE: we can only restrict votes within the interval [base, target)
-						restricted_number >= base.number() &&
-							restricted_number < restricted_target.number()
+						restricted_number >= base.number()
+							&& restricted_number < restricted_target.number()
 					})
 					.and_then(|(hash, _)| backend.header(BlockId::Hash(hash)).ok())
 					.and_then(std::convert::identity)

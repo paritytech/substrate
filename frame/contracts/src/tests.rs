@@ -2411,8 +2411,8 @@ fn reinstrument_does_charge() {
 		assert!(result2.gas_consumed.ref_time() > result1.gas_consumed.ref_time());
 		assert_eq!(
 			result2.gas_consumed.ref_time(),
-			result1.gas_consumed.ref_time() +
-				<Test as Config>::WeightInfo::reinstrument(code_len).ref_time(),
+			result1.gas_consumed.ref_time()
+				+ <Test as Config>::WeightInfo::reinstrument(code_len).ref_time(),
 		);
 	});
 }

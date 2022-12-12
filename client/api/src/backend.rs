@@ -347,7 +347,7 @@ where
 		// this terminates the iterator the first time it fails.
 		if let Some(prefix) = self.prefix {
 			if !next_key.starts_with(&prefix.0[..]) {
-				return None
+				return None;
 			}
 		}
 		self.current_key = next_key.clone();

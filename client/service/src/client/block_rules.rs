@@ -61,12 +61,12 @@ impl<B: BlockT> BlockRules<B> {
 	pub fn lookup(&self, number: NumberFor<B>, hash: &B::Hash) -> LookupResult<B> {
 		if let Some(hash_for_height) = self.forks.get(&number) {
 			if hash_for_height != hash {
-				return LookupResult::Expected(*hash_for_height)
+				return LookupResult::Expected(*hash_for_height);
 			}
 		}
 
 		if self.bad.contains(hash) {
-			return LookupResult::KnownBad
+			return LookupResult::KnownBad;
 		}
 
 		LookupResult::NotSpecial

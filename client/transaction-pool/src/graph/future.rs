@@ -83,8 +83,8 @@ impl<Hash, Ex> WaitingTransaction<Hash, Ex> {
 			.filter(|tag| {
 				// is true if the tag is already satisfied either via transaction in the pool
 				// or one that was recently included.
-				let is_provided = provided.contains_key(&**tag) ||
-					recently_pruned.iter().any(|x| x.contains(&**tag));
+				let is_provided = provided.contains_key(&**tag)
+					|| recently_pruned.iter().any(|x| x.contains(&**tag));
 				!is_provided
 			})
 			.cloned()

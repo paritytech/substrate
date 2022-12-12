@@ -76,9 +76,9 @@ impl<B: Block> IncomingRequest<B> {
 					sent_feedback: None,
 				};
 				if let Err(_) = pending_response.send(response) {
-					return Err(Error::DecodingErrorNoReputationChange(peer, err))
+					return Err(Error::DecodingErrorNoReputationChange(peer, err));
 				}
-				return Err(Error::DecodingError(peer, err))
+				return Err(Error::DecodingError(peer, err));
 			},
 		};
 		Ok(Self::new(peer, payload, pending_response))

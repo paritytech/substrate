@@ -455,10 +455,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		<Members<T, I>>::put(&new_members_bounded);
 
 		match notify {
-			ChangeReceiver::MembershipInitialized =>
-				T::MembershipInitialized::initialize_members(&new_members_bounded),
-			ChangeReceiver::MembershipChanged =>
-				T::MembershipChanged::set_members_sorted(&new_members_bounded[..], &old_members[..]),
+			ChangeReceiver::MembershipInitialized => {
+				T::MembershipInitialized::initialize_members(&new_members_bounded)
+			},
+			ChangeReceiver::MembershipChanged => {
+				T::MembershipChanged::set_members_sorted(&new_members_bounded[..], &old_members[..])
+			},
 		}
 	}
 

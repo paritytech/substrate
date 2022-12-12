@@ -307,7 +307,7 @@ where
 			.map_err(|e| format!("Failed to read the static section: {:?}", e))
 			.map(|v| v.map(|v| v.encode()))?
 		{
-			return Ok(version)
+			return Ok(version);
 		}
 
 		// If the blob didn't have embedded runtime version section, we fallback to the legacy
@@ -484,7 +484,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 						);
 
 						// This will drop sender and receiver end will panic
-						return
+						return;
 					},
 				};
 
@@ -500,7 +500,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 						);
 
 						// This will drop sender and receiver end will panic
-						return
+						return;
 					},
 				};
 

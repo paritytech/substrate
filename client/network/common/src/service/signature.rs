@@ -47,7 +47,7 @@ impl Signature {
 	/// Verify whether the signature was made for the given message by the entity that controls the
 	/// given `PeerId`.
 	pub fn verify(&self, message: impl AsRef<[u8]>, peer_id: &PeerId) -> bool {
-		*peer_id == self.public_key.to_peer_id() &&
-			self.public_key.verify(message.as_ref(), &self.bytes)
+		*peer_id == self.public_key.to_peer_id()
+			&& self.public_key.verify(message.as_ref(), &self.bytes)
 	}
 }

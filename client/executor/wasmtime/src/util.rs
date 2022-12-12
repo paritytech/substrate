@@ -158,8 +158,8 @@ pub(crate) fn replace_strategy_if_broken(strategy: &mut InstantiationStrategy) {
 
 		// These strategies require a working `madvise` to be sound.
 		InstantiationStrategy::PoolingCopyOnWrite => InstantiationStrategy::Pooling,
-		InstantiationStrategy::RecreateInstanceCopyOnWrite |
-		InstantiationStrategy::LegacyInstanceReuse => InstantiationStrategy::RecreateInstance,
+		InstantiationStrategy::RecreateInstanceCopyOnWrite
+		| InstantiationStrategy::LegacyInstanceReuse => InstantiationStrategy::RecreateInstance,
 	};
 
 	use once_cell::sync::OnceCell;

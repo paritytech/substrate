@@ -37,7 +37,7 @@ fn parse_knobs(
 	let vis = input.vis;
 
 	if !sig.inputs.is_empty() {
-		return Err(syn::Error::new_spanned(&sig, "No arguments expected for tests."))
+		return Err(syn::Error::new_spanned(&sig, "No arguments expected for tests."));
 	}
 
 	let crate_name = match crate_name("substrate-test-utils") {

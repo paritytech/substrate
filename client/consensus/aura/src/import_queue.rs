@@ -227,8 +227,9 @@ where
 
 					// skip the inherents verification if the runtime API is old or not expected to
 					// exist.
-					if !block.state_action.skip_execution_checks() &&
-						self.client
+					if !block.state_action.skip_execution_checks()
+						&& self
+							.client
 							.runtime_api()
 							.has_api_with::<dyn BlockBuilderApi<B>, _>(
 								&BlockId::Hash(parent_hash),
@@ -270,8 +271,9 @@ where
 						))
 					})
 					.find_map(|l| match l {
-						ConsensusLog::AuthoritiesChange(a) =>
-							Some(vec![(well_known_cache_keys::AUTHORITIES, a.encode())]),
+						ConsensusLog::AuthoritiesChange(a) => {
+							Some(vec![(well_known_cache_keys::AUTHORITIES, a.encode())])
+						},
 						_ => None,
 					});
 

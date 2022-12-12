@@ -681,7 +681,7 @@ impl<T: Config> Pallet<T> {
 			let mut now_session_keys = session_keys.iter();
 			let mut check_next_changed = |keys: &T::Keys| {
 				if changed {
-					return
+					return;
 				}
 				// since a new validator set always leads to `changed` starting
 				// as true, we can ensure that `now_session_keys` and `next_validators`
@@ -717,14 +717,14 @@ impl<T: Config> Pallet<T> {
 	/// Disable the validator of index `i`, returns `false` if the validator was already disabled.
 	pub fn disable_index(i: u32) -> bool {
 		if i >= Validators::<T>::decode_len().unwrap_or(0) as u32 {
-			return false
+			return false;
 		}
 
 		<DisabledValidators<T>>::mutate(|disabled| {
 			if let Err(index) = disabled.binary_search(&i) {
 				disabled.insert(index, i);
 				T::SessionHandler::on_disabled(i);
-				return true
+				return true;
 			}
 
 			false
@@ -839,7 +839,7 @@ impl<T: Config> Pallet<T> {
 
 			if let Some(old) = old_keys.as_ref().map(|k| k.get_raw(*id)) {
 				if key == old {
-					continue
+					continue;
 				}
 
 				Self::clear_key_owner(*id, old);

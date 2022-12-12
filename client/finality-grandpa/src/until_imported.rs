@@ -333,7 +333,7 @@ where
 			if let Some(metrics) = &mut this.metrics {
 				metrics.waiting_messages_dec();
 			}
-			return Poll::Ready(Some(Ok(ready)))
+			return Poll::Ready(Some(Ok(ready)));
 		}
 
 		if this.import_notifications.is_done() && this.incoming_messages.is_done() {
@@ -366,9 +366,9 @@ impl<Block: BlockT> BlockUntilImported<Block> for SignedMessage<Block::Header> {
 		if let Some(number) = status_check.block_number(target_hash)? {
 			if number != target_number {
 				warn_authority_wrong_target(target_hash, msg.id);
-				return Ok(DiscardWaitOrReady::Discard)
+				return Ok(DiscardWaitOrReady::Discard);
 			} else {
-				return Ok(DiscardWaitOrReady::Ready(msg))
+				return Ok(DiscardWaitOrReady::Ready(msg));
 			}
 		}
 
@@ -459,7 +459,7 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockGlobalMessage<Block> {
 					// invalid global message: messages targeting wrong number
 					// or at least different from other vote in same global
 					// message.
-					return Ok(false)
+					return Ok(false);
 				}
 
 				Ok(true)
@@ -473,7 +473,7 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockGlobalMessage<Block> {
 
 					for (target_number, target_hash) in precommit_targets {
 						if !query_known(target_hash, target_number)? {
-							return Ok(DiscardWaitOrReady::Discard)
+							return Ok(DiscardWaitOrReady::Discard);
 						}
 					}
 				},
@@ -493,7 +493,7 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockGlobalMessage<Block> {
 
 					for (target_number, target_hash) in targets {
 						if !query_known(target_hash, target_number)? {
-							return Ok(DiscardWaitOrReady::Discard)
+							return Ok(DiscardWaitOrReady::Discard);
 						}
 					}
 				},
@@ -511,7 +511,7 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockGlobalMessage<Block> {
 		if unknown_hashes.is_empty() {
 			// none of the hashes in the global message were unknown.
 			// we can just return the message directly.
-			return Ok(DiscardWaitOrReady::Ready(input))
+			return Ok(DiscardWaitOrReady::Ready(input));
 		}
 
 		let locked_global = Arc::new(Mutex::new(Some(input)));
@@ -538,7 +538,7 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockGlobalMessage<Block> {
 			// Delete the inner message so it won't ever be forwarded. Future calls to
 			// `wait_completed` on the same `inner` will ignore it.
 			*self.inner.lock() = None;
-			return None
+			return None;
 		}
 
 		match Arc::try_unwrap(self.inner) {
@@ -939,10 +939,10 @@ mod tests {
 			let block_sync_requests = block_sync_requester.requests.lock();
 
 			// we request blocks targeted by the precommits that aren't imported
-			if block_sync_requests.contains(&(h2.hash(), *h2.number())) &&
-				block_sync_requests.contains(&(h3.hash(), *h3.number()))
+			if block_sync_requests.contains(&(h2.hash(), *h2.number()))
+				&& block_sync_requests.contains(&(h3.hash(), *h3.number()))
 			{
-				return Poll::Ready(())
+				return Poll::Ready(());
 			}
 
 			// NOTE: nothing in this function is future-aware (i.e nothing gets registered to wake

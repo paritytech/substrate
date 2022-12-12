@@ -2281,6 +2281,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "frame-try-runtime",
+ "hex-literal",
  "merlin",
  "pallet-balances",
  "pallet-transaction-payment",
@@ -2290,6 +2291,7 @@ dependencies = [
  "sp-core",
  "sp-inherents",
  "sp-io",
+ "sp-keystore",
  "sp-runtime",
  "sp-std",
  "sp-tracing",
@@ -2865,6 +2867,12 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+
+[[package]]
+name = "hex-literal"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ebdb29d2ea9ed0083cd8cece49bbd968021bd99b0849edb4a9a7ee0fdf6a4e0"
 
 [[package]]
 name = "hmac"
@@ -5146,6 +5154,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-collective-mangata"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-contracts"
 version = "4.0.0-dev"
 dependencies = [
@@ -5829,28 +5853,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-root-offences"
-version = "1.0.0"
-dependencies = [
- "frame-election-provider-support",
- "frame-support",
- "frame-system",
- "pallet-balances",
- "pallet-offences",
- "pallet-session",
- "pallet-staking",
- "pallet-staking-reward-curve",
- "pallet-timestamp",
- "parity-scale-codec",
- "scale-info",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-staking",
- "sp-std",
-]
-
-[[package]]
 name = "pallet-scheduler"
 version = "4.0.0-dev"
 dependencies = [
@@ -6023,6 +6025,21 @@ version = "4.0.0-dev"
 dependencies = [
  "frame-support",
  "frame-system",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-sudo-mangata"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "log",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
@@ -11078,7 +11095,7 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 0.1.10",
+ "cfg-if 1.0.0",
  "digest 0.10.5",
  "rand 0.8.5",
  "static_assertions",

@@ -290,7 +290,7 @@ impl<'a, H: Hasher> trie_db::TrieCache<NodeCodec<H>> for TrieCache<'a, H> {
 		if let Some(res) = self.shared_inner.node_cache().get(&hash) {
 			tracing::trace!(target: LOG_TARGET, ?hash, "Serving node from shared cache");
 			self.shared_node_cache_access.insert(hash);
-			return Ok(res)
+			return Ok(res);
 		}
 
 		match self.local_cache.entry(hash) {
@@ -317,7 +317,7 @@ impl<'a, H: Hasher> trie_db::TrieCache<NodeCodec<H>> for TrieCache<'a, H> {
 		if let Some(node) = self.shared_inner.node_cache().get(hash) {
 			tracing::trace!(target: LOG_TARGET, ?hash, "Getting node from shared cache");
 			self.shared_node_cache_access.insert(*hash);
-			return Some(node)
+			return Some(node);
 		}
 
 		let res = self.local_cache.get(hash);

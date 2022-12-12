@@ -30,7 +30,9 @@ merlin = { version = "2.0", default-features = false }
 extrinsic-shuffler = { version='4.0.0-dev', default-features = false, path = '../../primitives/shuffler'}
 
 [dev-dependencies]
+hex-literal = "0.3.4"
 array-bytes = "4.1"
+sp-keystore = { version = "0.12.0", path = "../../primitives/keystore" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-transaction-payment = { version = "4.0.0-dev", path = "../transaction-payment" }
 sp-core = { version = "6.0.0", path = "../../primitives/core" }

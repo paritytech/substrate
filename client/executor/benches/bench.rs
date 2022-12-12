@@ -250,7 +250,7 @@ fn bench_call_instance(c: &mut Criterion) {
 				for thread_count in thread_counts {
 					if thread_count > num_cpus {
 						// If there are not enough cores available the benchmark is pointless.
-						continue
+						continue;
 					}
 
 					let benchmark_name = format!(

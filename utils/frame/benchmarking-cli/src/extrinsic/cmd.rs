@@ -105,15 +105,16 @@ impl ExtrinsicCmd {
 				list.len(),
 				list.join("\n")
 			);
-			return Ok(())
+			return Ok(());
 		}
 
 		let pallet = self.params.pallet.clone().unwrap_or_default();
 		let extrinsic = self.params.extrinsic.clone().unwrap_or_default();
 		let ext_builder = match ext_factory.try_get(&pallet, &extrinsic) {
 			Some(ext_builder) => ext_builder,
-			None =>
-				return Err("Unknown pallet or extrinsic. Use --list for a complete list.".into()),
+			None => {
+				return Err("Unknown pallet or extrinsic. Use --list for a complete list.".into())
+			},
 		};
 
 		let bench = Benchmark::new(client, self.params.bench.clone(), inherent_data, digest_items);

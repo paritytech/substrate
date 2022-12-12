@@ -194,11 +194,11 @@ fn find_cargo_lock(cargo_manifest: &Path) -> Option<PathBuf> {
 	fn find_impl(mut path: PathBuf) -> Option<PathBuf> {
 		loop {
 			if path.join("Cargo.lock").exists() {
-				return Some(path.join("Cargo.lock"))
+				return Some(path.join("Cargo.lock"));
 			}
 
 			if !path.pop() {
-				return None
+				return None;
 			}
 		}
 	}
@@ -207,7 +207,7 @@ fn find_cargo_lock(cargo_manifest: &Path) -> Option<PathBuf> {
 		let path = PathBuf::from(workspace);
 
 		if path.join("Cargo.lock").exists() {
-			return Some(path.join("Cargo.lock"))
+			return Some(path.join("Cargo.lock"));
 		} else {
 			build_helper::warning!(
 				"`{}` env variable doesn't point to a directory that contains a `Cargo.lock`.",
@@ -217,7 +217,7 @@ fn find_cargo_lock(cargo_manifest: &Path) -> Option<PathBuf> {
 	}
 
 	if let Some(path) = find_impl(build_helper::out_dir()) {
-		return Some(path)
+		return Some(path);
 	}
 
 	build_helper::warning!(
@@ -262,10 +262,11 @@ fn get_wasm_workspace_root() -> PathBuf {
 	loop {
 		match out_dir.parent() {
 			Some(parent) if out_dir.ends_with("build") => return parent.to_path_buf(),
-			_ =>
+			_ => {
 				if !out_dir.pop() {
-					break
-				},
+					break;
+				}
+			},
 		}
 	}
 
@@ -404,19 +405,20 @@ fn project_enabled_features(
 			// this heuristic anymore. However, for the transition phase between now and namespaced
 			// features already being present in nightly, we need this code to make
 			// runtimes compile with all the possible rustc versions.
-			if v.len() == 1 &&
-				v.get(0).map_or(false, |v| *v == format!("dep:{}", f)) &&
-				std_enabled.as_ref().map(|e| e.iter().any(|ef| ef == *f)).unwrap_or(false)
+			if v.len() == 1
+				&& v.get(0).map_or(false, |v| *v == format!("dep:{}", f))
+				&& std_enabled.as_ref().map(|e| e.iter().any(|ef| ef == *f)).unwrap_or(false)
 			{
-				return false
+				return false;
 			}
 
 			// We don't want to enable the `std`/`default` feature for the wasm build and
 			// we need to check if the feature is enabled by checking the env variable.
-			*f != "std" &&
-				*f != "default" && env::var(format!("CARGO_FEATURE_{}", feature_env))
-				.map(|v| v == "1")
-				.unwrap_or_default()
+			*f != "std"
+				&& *f != "default"
+				&& env::var(format!("CARGO_FEATURE_{}", feature_env))
+					.map(|v| v == "1")
+					.unwrap_or_default()
 		})
 		.map(|d| d.0.clone())
 		.collect::<Vec<_>>();

@@ -40,7 +40,7 @@ pub fn pallet(
 			"Invalid pallet macro call: expected no attributes, e.g. macro call must be just \
 			`#[frame_support::pallet]` or `#[pallet]`";
 		let span = proc_macro2::TokenStream::from(attr).span();
-		return syn::Error::new(span, msg).to_compile_error().into()
+		return syn::Error::new(span, msg).to_compile_error().into();
 	}
 
 	let item = syn::parse_macro_input!(item as syn::ItemMod);

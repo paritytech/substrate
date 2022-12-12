@@ -188,13 +188,13 @@ impl<B: BlockT> Future for GossipEngine<B> {
 							},
 							Event::NotificationStreamOpened { remote, protocol, role, .. } => {
 								if protocol != this.protocol {
-									continue
+									continue;
 								}
 								this.state_machine.new_peer(&mut *this.network, remote, role);
 							},
 							Event::NotificationStreamClosed { remote, protocol } => {
 								if protocol != this.protocol {
-									continue
+									continue;
 								}
 								this.state_machine.peer_disconnected(&mut *this.network, remote);
 							},
@@ -223,7 +223,7 @@ impl<B: BlockT> Future for GossipEngine<B> {
 						// The network event stream closed. Do the same for [`GossipValidator`].
 						Poll::Ready(None) => {
 							self.is_terminated = true;
-							return Poll::Ready(())
+							return Poll::Ready(());
 						},
 						Poll::Pending => break,
 					}
@@ -233,7 +233,7 @@ impl<B: BlockT> Future for GossipEngine<B> {
 						Some(n) => n,
 						None => {
 							this.forwarding_state = ForwardingState::Idle;
-							continue
+							continue;
 						},
 					};
 
@@ -251,7 +251,7 @@ impl<B: BlockT> Future for GossipEngine<B> {
 							Poll::Pending => {
 								// Push back onto queue for later.
 								to_forward.push_front((topic, notification));
-								break 'outer
+								break 'outer;
 							},
 						}
 					}
@@ -261,7 +261,7 @@ impl<B: BlockT> Future for GossipEngine<B> {
 
 					if sinks.is_empty() {
 						this.message_sinks.remove(&topic);
-						continue
+						continue;
 					}
 
 					trace!(
@@ -731,7 +731,7 @@ mod tests {
 					}
 
 					if !progress {
-						break
+						break;
 					}
 				}
 				Poll::Ready(())

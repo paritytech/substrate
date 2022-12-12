@@ -152,8 +152,9 @@ impl fmt::Display for Throughput {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		let normalized = self.normalize();
 		match normalized {
-			Self::KiBs(s) | Self::MiBs(s) | Self::GiBs(s) =>
-				write!(f, "{:.2?} {}", s, normalized.unit()),
+			Self::KiBs(s) | Self::MiBs(s) | Self::GiBs(s) => {
+				write!(f, "{:.2?} {}", s, normalized.unit())
+			},
 		}
 	}
 }

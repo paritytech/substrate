@@ -1451,7 +1451,7 @@ impl<'a, T: codec::Input> codec::Input for AppendZerosInput<'a, T> {
 					into[i] = b;
 					i += 1;
 				} else {
-					break
+					break;
 				}
 			}
 			i
@@ -1568,7 +1568,7 @@ impl<T: Encode + Decode, Id: Encode + Decode + TypeId> AccountIdConversion<T> fo
 	fn try_from_sub_account<S: Decode>(x: &T) -> Option<(Self, S)> {
 		x.using_encoded(|d| {
 			if d[0..4] != Id::TYPE_ID {
-				return None
+				return None;
 			}
 			let mut cursor = &d[4..];
 			let result = Decode::decode(&mut cursor).ok()?;

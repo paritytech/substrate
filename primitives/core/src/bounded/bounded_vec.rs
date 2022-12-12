@@ -85,7 +85,7 @@ where
 					while let Some(value) = seq.next_element()? {
 						values.push(value);
 						if values.len() > max {
-							return Err(A::Error::custom("out of bounds"))
+							return Err(A::Error::custom("out of bounds"));
 						}
 					}
 
@@ -288,7 +288,7 @@ impl<T: Decode, S: Get<u32>> Decode for BoundedVec<T, S> {
 	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
 		let inner = Vec::<T>::decode(input)?;
 		if inner.len() > S::get() as usize {
-			return Err("BoundedVec exceeds its limit".into())
+			return Err("BoundedVec exceeds its limit".into());
 		}
 		Ok(Self(inner, PhantomData))
 	}
@@ -472,7 +472,7 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 			Ok(None)
 		} else {
 			if index == 0 {
-				return Err(())
+				return Err(());
 			}
 			sp_std::mem::swap(&mut self[0], &mut element);
 			// `[0..index] cannot panic since self.len() >= index.
@@ -495,11 +495,11 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 	pub fn force_insert_keep_left(&mut self, index: usize, element: T) -> Result<Option<T>, ()> {
 		// Check against panics.
 		if Self::bound() < index || self.len() < index || Self::bound() == 0 {
-			return Err(())
+			return Err(());
 		}
 		// Noop condition.
 		if Self::bound() == index && self.len() <= Self::bound() {
-			return Err(())
+			return Err(());
 		}
 		let maybe_removed = if self.is_full() {
 			// defensive-only: since we are at capacity, this is a noop.
@@ -527,11 +527,11 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 	pub fn slide(&mut self, index: usize, insert_position: usize) -> bool {
 		// Check against panics.
 		if self.len() <= index || self.len() < insert_position || index == usize::MAX {
-			return false
+			return false;
 		}
 		// Noop conditions.
 		if index == insert_position || index + 1 == insert_position {
-			return false
+			return false;
 		}
 		if insert_position < index && index < self.len() {
 			// --- --- --- === === === === @@@ --- --- ---
@@ -544,7 +544,7 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 			// --- --- --- @@@ === === === === --- --- ---
 			//             ^N^
 			self[insert_position..index + 1].rotate_right(1);
-			return true
+			return true;
 		} else if insert_position > 0 && index + 1 < insert_position {
 			// Note that the apparent asymmetry of these two branches is due to the
 			// fact that the "new" position is the position to be inserted *before*.
@@ -558,7 +558,7 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 			// --- --- --- === === === === @@@ --- --- ---
 			//                             ^N^
 			self[index..insert_position].rotate_left(1);
-			return true
+			return true;
 		}
 
 		debug_assert!(false, "all noop conditions should have been covered above");

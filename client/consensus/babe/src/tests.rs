@@ -580,7 +580,7 @@ fn can_author_block() {
 			None => i += 1,
 			Some(s) => {
 				debug!(target: "babe", "Authored block {:?}", s.0);
-				break
+				break;
 			},
 		}
 	}

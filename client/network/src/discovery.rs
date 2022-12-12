@@ -163,7 +163,7 @@ impl DiscoveryConfig {
 	pub fn add_protocol(&mut self, id: ProtocolId) -> &mut Self {
 		if self.protocol_ids.contains(&id) {
 			warn!(target: "sub-libp2p", "Discovery already registered for protocol {:?}", id);
-			return self
+			return self;
 		}
 
 		self.protocol_ids.insert(id);
@@ -331,7 +331,7 @@ impl DiscoveryBehaviour {
 	) {
 		if !self.allow_non_globals_in_dht && !self.can_add_to_dht(&addr) {
 			trace!(target: "sub-libp2p", "Ignoring self-reported non-global address {} from {}.", addr, peer_id);
-			return
+			return;
 		}
 
 		let mut added = false;
@@ -429,8 +429,9 @@ impl DiscoveryBehaviour {
 		let ip = match addr.iter().next() {
 			Some(Protocol::Ip4(ip)) => IpNetwork::from(ip),
 			Some(Protocol::Ip6(ip)) => IpNetwork::from(ip),
-			Some(Protocol::Dns(_)) | Some(Protocol::Dns4(_)) | Some(Protocol::Dns6(_)) =>
-				return true,
+			Some(Protocol::Dns(_)) | Some(Protocol::Dns4(_)) | Some(Protocol::Dns6(_)) => {
+				return true
+			},
 			_ => return false,
 		};
 		ip.is_global()
@@ -643,7 +644,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		(pid, event): <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as ConnectionHandler>::OutEvent,
 	) {
 		if let Some(kad) = self.kademlias.get_mut(&pid) {
-			return kad.inject_event(peer_id, connection, event)
+			return kad.inject_event(peer_id, connection, event);
 		}
 		error!(
 			target: "sub-libp2p",
@@ -722,7 +723,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
 		// Immediately process the content of `discovered`.
 		if let Some(ev) = self.pending_events.pop_front() {
-			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
+			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 		}
 
 		// Poll the stream that fires when we need to start a random Kademlia query.
@@ -758,7 +759,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 					let ev = DiscoveryOut::RandomKademliaStarted(
 						self.kademlias.keys().cloned().collect(),
 					);
-					return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
+					return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 				}
 			}
 		}
@@ -770,18 +771,18 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 					NetworkBehaviourAction::GenerateEvent(ev) => match ev {
 						KademliaEvent::RoutingUpdated { peer, .. } => {
 							let ev = DiscoveryOut::Discovered(peer);
-							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
+							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 						},
 						KademliaEvent::UnroutablePeer { peer, .. } => {
 							let ev = DiscoveryOut::UnroutablePeer(peer);
-							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
+							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 						},
 						KademliaEvent::RoutablePeer { peer, .. } => {
 							let ev = DiscoveryOut::Discovered(peer);
-							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
+							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 						},
-						KademliaEvent::PendingRoutablePeer { .. } |
-						KademliaEvent::InboundRequest { .. } => {
+						KademliaEvent::PendingRoutablePeer { .. }
+						| KademliaEvent::InboundRequest { .. } => {
 							// We are not interested in this event at the moment.
 						},
 						KademliaEvent::OutboundQueryCompleted {
@@ -850,7 +851,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 									)
 								},
 							};
-							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
+							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 						},
 						KademliaEvent::OutboundQueryCompleted {
 							result: QueryResult::PutRecord(res),
@@ -874,7 +875,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 									)
 								},
 							};
-							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
+							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 						},
 						KademliaEvent::OutboundQueryCompleted {
 							result: QueryResult::RepublishRecord(res),
@@ -899,24 +900,27 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 					NetworkBehaviourAction::Dial { opts, handler } => {
 						let pid = pid.clone();
 						let handler = self.new_handler_with_replacement(pid, handler);
-						return Poll::Ready(NetworkBehaviourAction::Dial { opts, handler })
+						return Poll::Ready(NetworkBehaviourAction::Dial { opts, handler });
 					},
-					NetworkBehaviourAction::NotifyHandler { peer_id, handler, event } =>
+					NetworkBehaviourAction::NotifyHandler { peer_id, handler, event } => {
 						return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 							peer_id,
 							handler,
 							event: (pid.clone(), event),
-						}),
-					NetworkBehaviourAction::ReportObservedAddr { address, score } =>
+						})
+					},
+					NetworkBehaviourAction::ReportObservedAddr { address, score } => {
 						return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
 							address,
 							score,
-						}),
-					NetworkBehaviourAction::CloseConnection { peer_id, connection } =>
+						})
+					},
+					NetworkBehaviourAction::CloseConnection { peer_id, connection } => {
 						return Poll::Ready(NetworkBehaviourAction::CloseConnection {
 							peer_id,
 							connection,
-						}),
+						})
+					},
 				}
 			}
 		}
@@ -928,13 +932,13 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 					NetworkBehaviourAction::GenerateEvent(event) => match event {
 						MdnsEvent::Discovered(list) => {
 							if self.num_connections >= self.discovery_only_if_under_num {
-								continue
+								continue;
 							}
 
 							self.pending_events
 								.extend(list.map(|(peer_id, _)| DiscoveryOut::Discovered(peer_id)));
 							if let Some(ev) = self.pending_events.pop_front() {
-								return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
+								return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 							}
 						},
 						MdnsEvent::Expired(_) => {},
@@ -943,16 +947,18 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 						unreachable!("mDNS never dials!");
 					},
 					NetworkBehaviourAction::NotifyHandler { event, .. } => match event {}, /* `event` is an enum with no variant */
-					NetworkBehaviourAction::ReportObservedAddr { address, score } =>
+					NetworkBehaviourAction::ReportObservedAddr { address, score } => {
 						return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
 							address,
 							score,
-						}),
-					NetworkBehaviourAction::CloseConnection { peer_id, connection } =>
+						})
+					},
+					NetworkBehaviourAction::CloseConnection { peer_id, connection } => {
 						return Poll::Ready(NetworkBehaviourAction::CloseConnection {
 							peer_id,
 							connection,
-						}),
+						})
+					},
 				}
 			}
 		}
@@ -1053,8 +1059,8 @@ mod tests {
 							match e {
 								SwarmEvent::Behaviour(behavior) => {
 									match behavior {
-										DiscoveryOut::UnroutablePeer(other) |
-										DiscoveryOut::Discovered(other) => {
+										DiscoveryOut::UnroutablePeer(other)
+										| DiscoveryOut::Discovered(other) => {
 											// Call `add_self_reported_address` to simulate identify
 											// happening.
 											let addr = swarms
@@ -1087,12 +1093,12 @@ mod tests {
 								// ignore non Behaviour events
 								_ => {},
 							}
-							continue 'polling
+							continue 'polling;
 						},
 						_ => {},
 					}
 				}
-				break
+				break;
 			}
 
 			if to_discover.iter().all(|l| l.is_empty()) {

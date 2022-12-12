@@ -196,7 +196,7 @@ impl<T: 'static + Decode> FromFFIValue for Vec<T> {
 		let len = len as usize;
 
 		if len == 0 {
-			return Vec::new()
+			return Vec::new();
 		}
 
 		let data = unsafe { Vec::from_raw_parts(ptr as *mut u8, len, len) };

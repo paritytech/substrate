@@ -171,7 +171,7 @@ impl<'a> Sandbox for HostContext<'a> {
 		};
 
 		if util::write_memory_from(&mut self.caller, buf_ptr, &buffer).is_err() {
-			return Ok(sandbox_env::ERR_OUT_OF_BOUNDS)
+			return Ok(sandbox_env::ERR_OUT_OF_BOUNDS);
 		}
 
 		Ok(sandbox_env::ERR_OK)
@@ -194,7 +194,7 @@ impl<'a> Sandbox for HostContext<'a> {
 		};
 
 		if sandboxed_memory.write_from(Pointer::new(offset as u32), &buffer).is_err() {
-			return Ok(sandbox_env::ERR_OUT_OF_BOUNDS)
+			return Ok(sandbox_env::ERR_OUT_OF_BOUNDS);
 		}
 
 		Ok(sandbox_env::ERR_OK)
@@ -243,7 +243,7 @@ impl<'a> Sandbox for HostContext<'a> {
 				// Serialize return value and write it back into the memory.
 				sp_wasm_interface::ReturnValue::Value(val.into()).using_encoded(|val| {
 					if val.len() > return_val_len as usize {
-						return Err("Return value buffer is too small".into())
+						return Err("Return value buffer is too small".into());
 					}
 					<HostContext as FunctionContext>::write_memory(self, return_val, val)
 						.map_err(|_| "can't write return value")?;
@@ -360,12 +360,13 @@ impl<'a, 'b> sandbox::SandboxContext for SandboxContext<'a, 'b> {
 		);
 
 		match result {
-			Ok(()) =>
+			Ok(()) => {
 				if let Some(ret_val) = ret_vals[0].i64() {
 					Ok(ret_val)
 				} else {
 					Err("Supervisor function returned unexpected result!".into())
-				},
+				}
+			},
 			Err(err) => Err(err.to_string().into()),
 		}
 	}

@@ -403,8 +403,8 @@ where
 		// NOTE reduce deadline by half as we want to avoid situation where
 		// fully filled previous block does not allow for any extrinsic to be included in following
 		// one
-		let soft_deadline = now +
-			time::Duration::from_micros(self.soft_deadline_percent.mul_floor(left_micros) / 2);
+		let soft_deadline = now
+			+ time::Duration::from_micros(self.soft_deadline_percent.mul_floor(left_micros) / 2);
 		let block_timer = time::Instant::now();
 		let mut skipped = 0;
 		let mut unqueue_invalid = Vec::new();
@@ -451,7 +451,7 @@ where
 					let pending_tx = if let Some(pending_tx) = pending_iterator.next() {
 						pending_tx
 					} else {
-						break EndProposingReason::NoMoreTransactions
+						break EndProposingReason::NoMoreTransactions;
 					};
 					let now = (self.now)();
 					if now > deadline {
@@ -459,7 +459,7 @@ where
 							"Consensus deadline reached when pushing block transactions, \
 							proceeding with proposing."
 						);
-						break EndProposingReason::HitDeadline
+						break EndProposingReason::HitDeadline;
 					}
 
 					let pending_tx_data = pending_tx.data().clone();
@@ -475,17 +475,17 @@ where
 								 but will try {} more transactions before quitting.",
 								MAX_SKIPPED_TRANSACTIONS - skipped,
 							);
-							continue
+							continue;
 						} else if now < soft_deadline {
 							debug!(target: "block_builder",
 								"Transaction would overflow the block size limit, \
 								 but we still have time before the soft deadline, so \
 								 we will try a bit more."
 							);
-							continue
+							continue;
 						} else {
 							debug!(target: "block_builder","Reached block size limit, proceeding with proposing.");
-							break EndProposingReason::HitBlockSizeLimit
+							break EndProposingReason::HitBlockSizeLimit;
 						}
 					}
 
@@ -512,7 +512,7 @@ where
 							} else {
 								debug!(target: "block_builder",
 								"Reached block weight limit, proceeding with proposing.");
-								break EndProposingReason::HitBlockWeightLimit
+								break EndProposingReason::HitBlockWeightLimit;
 							}
 						},
 						Err(e) if skipped > 0 => {
@@ -675,7 +675,7 @@ mod tests {
 				let mut value = cell.lock();
 				if !value.0 {
 					value.0 = true;
-					return value.1
+					return value.1;
 				}
 				let old = value.1;
 				let new = old + time::Duration::from_secs(1);
@@ -719,7 +719,7 @@ mod tests {
 				let mut value = cell.lock();
 				if !value.0 {
 					value.0 = true;
-					return value.1
+					return value.1;
 				}
 				let new = value.1 + time::Duration::from_secs(160);
 				*value = (true, new);

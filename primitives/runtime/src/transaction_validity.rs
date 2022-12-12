@@ -140,10 +140,12 @@ pub enum UnknownTransaction {
 impl From<UnknownTransaction> for &'static str {
 	fn from(unknown: UnknownTransaction) -> &'static str {
 		match unknown {
-			UnknownTransaction::CannotLookup =>
-				"Could not lookup information required to validate the transaction",
-			UnknownTransaction::NoUnsignedValidator =>
-				"Could not find an unsigned validator for the unsigned transaction",
+			UnknownTransaction::CannotLookup => {
+				"Could not lookup information required to validate the transaction"
+			},
+			UnknownTransaction::NoUnsignedValidator => {
+				"Could not find an unsigned validator for the unsigned transaction"
+			},
 			UnknownTransaction::Custom(_) => "UnknownTransaction custom error",
 		}
 	}

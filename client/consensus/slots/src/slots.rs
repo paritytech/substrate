@@ -155,7 +155,7 @@ where
 					);
 					// Let's try at the next slot..
 					self.inner_delay.take();
-					continue
+					continue;
 				},
 			};
 
@@ -178,7 +178,7 @@ where
 			if slot > self.last_slot {
 				self.last_slot = slot;
 
-				break Ok(SlotInfo::new(slot, inherent_data, self.slot_duration, chain_head, None))
+				break Ok(SlotInfo::new(slot, inherent_data, self.slot_duration, chain_head, None));
 			}
 		}
 	}

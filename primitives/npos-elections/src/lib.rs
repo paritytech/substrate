@@ -553,7 +553,7 @@ pub fn setup_inputs<AccountId: IdentifierT>(
 			for v in votes {
 				if edges.iter().any(|e| e.who == v) {
 					// duplicate edge.
-					continue
+					continue;
 				}
 				if let Some(idx) = c_idx_cache.get(&v) {
 					// This candidate is valid + already cached.

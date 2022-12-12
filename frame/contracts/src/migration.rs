@@ -68,7 +68,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 		let version = StorageVersion::get::<Pallet<T>>();
 
 		if version < 7 {
-			return Ok(vec![])
+			return Ok(vec![]);
 		}
 
 		if version < 8 {
@@ -83,7 +83,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 		let version = StorageVersion::get::<Pallet<T>>();
 
 		if version < 7 {
-			return Ok(())
+			return Ok(());
 		}
 
 		if version < 8 {

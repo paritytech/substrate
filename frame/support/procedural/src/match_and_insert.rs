@@ -64,14 +64,14 @@ impl syn::parse::Parse for MatchAndInsertDef {
 		let pattern = pattern.parse::<TokenStream>()?.into_iter().collect::<Vec<TokenTree>>();
 
 		if let Some(t) = pattern.iter().find(|t| matches!(t, TokenTree::Group(_))) {
-			return Err(syn::Error::new(t.span(), "Unexpected group token tree"))
+			return Err(syn::Error::new(t.span(), "Unexpected group token tree"));
 		}
 		if let Some(t) = pattern.iter().find(|t| matches!(t, TokenTree::Literal(_))) {
-			return Err(syn::Error::new(t.span(), "Unexpected literal token tree"))
+			return Err(syn::Error::new(t.span(), "Unexpected literal token tree"));
 		}
 
 		if pattern.is_empty() {
-			return Err(syn::Error::new(Span::call_site(), "empty match pattern is invalid"))
+			return Err(syn::Error::new(Span::call_site(), "empty match pattern is invalid"));
 		}
 
 		let mut tokens;
@@ -116,7 +116,7 @@ fn expand_in_stream(
 					Ok(s) => {
 						extended.extend(once(TokenTree::Group(Group::new(group.delimiter(), s))));
 						extended.extend(stream);
-						return Ok(extended)
+						return Ok(extended);
 					},
 					Err(_) => {
 						extended.extend(once(TokenTree::Group(group)));
@@ -132,7 +132,7 @@ fn expand_in_stream(
 					extended
 						.extend(once(tokens.take().expect("tokens is used to replace only once")));
 					extended.extend(stream);
-					return Ok(extended)
+					return Ok(extended);
 				}
 			},
 		}

@@ -62,21 +62,25 @@ pub fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 	let version = load_decode::<_, u32>(backend, BABE_EPOCH_CHANGES_VERSION)?;
 
 	let maybe_epoch_changes = match version {
-		None =>
+		None => {
 			load_decode::<_, EpochChangesV0For<Block, EpochV0>>(backend, BABE_EPOCH_CHANGES_KEY)?
-				.map(|v0| v0.migrate().map(|_, _, epoch| epoch.migrate(config))),
-		Some(1) =>
+				.map(|v0| v0.migrate().map(|_, _, epoch| epoch.migrate(config)))
+		},
+		Some(1) => {
 			load_decode::<_, EpochChangesV1For<Block, EpochV0>>(backend, BABE_EPOCH_CHANGES_KEY)?
-				.map(|v1| v1.migrate().map(|_, _, epoch| epoch.migrate(config))),
+				.map(|v1| v1.migrate().map(|_, _, epoch| epoch.migrate(config)))
+		},
 		Some(2) => {
 			// v2 still uses `EpochChanges` v1 format but with a different `Epoch` type.
 			load_decode::<_, EpochChangesV1For<Block, Epoch>>(backend, BABE_EPOCH_CHANGES_KEY)?
 				.map(|v2| v2.migrate())
 		},
-		Some(BABE_EPOCH_CHANGES_CURRENT_VERSION) =>
-			load_decode::<_, EpochChangesFor<Block, Epoch>>(backend, BABE_EPOCH_CHANGES_KEY)?,
-		Some(other) =>
-			return Err(ClientError::Backend(format!("Unsupported BABE DB version: {:?}", other))),
+		Some(BABE_EPOCH_CHANGES_CURRENT_VERSION) => {
+			load_decode::<_, EpochChangesFor<Block, Epoch>>(backend, BABE_EPOCH_CHANGES_KEY)?
+		},
+		Some(other) => {
+			return Err(ClientError::Backend(format!("Unsupported BABE DB version: {:?}", other)))
+		},
 	};
 
 	let epoch_changes =
@@ -199,8 +203,8 @@ mod test {
 				.tree()
 				.iter()
 				.map(|(_, _, epoch)| epoch.clone())
-				.collect::<Vec<_>>() ==
-				vec![PersistedEpochHeader::Regular(EpochHeader {
+				.collect::<Vec<_>>()
+				== vec![PersistedEpochHeader::Regular(EpochHeader {
 					start_slot: 0.into(),
 					end_slot: 100.into(),
 				})],
