@@ -208,6 +208,11 @@ A FRAME pallet is compromised of a number of blockchain primitives:
 First, install [Docker](https://docs.docker.com/get-docker/) and
 [Docker Compose](https://docs.docker.com/compose/install/).
 
+Create the following folder before running the following scripts:
+```bash
+mkdir ./.local
+```
+
 Then run the following command to start a single node development chain.
 
 ```bash
