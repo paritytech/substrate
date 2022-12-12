@@ -45,7 +45,7 @@
 use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
-/// Weight functions needed for pallet_uniques.
+/// Weight functions needed for pallet_dex.
 pub trait WeightInfo {
 	fn create_pool() -> Weight;
 	fn add_liquidity() -> Weight;

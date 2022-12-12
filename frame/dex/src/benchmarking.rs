@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Uniques pallet benchmarking.
+//! Dex pallet benchmarking.
 
 #![cfg(feature = "runtime-benchmarks")]
 
