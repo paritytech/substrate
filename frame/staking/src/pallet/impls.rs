@@ -1272,7 +1272,7 @@ where
 
 			Self::deposit_event(Event::<T>::SlashReported {
 				validator: stash.clone(),
-				fraction: slash_fraction.clone(),
+				fraction: *slash_fraction,
 				slash_era,
 			});
 
