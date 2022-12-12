@@ -33,7 +33,6 @@ pub use types::*;
 // TODO: make it configurable
 // TODO: weights and benchmarking.
 // TODO: more specific error codes.
-// TODO: remove setup.
 pub const MIN_LIQUIDITY: u64 = 1;
 
 #[frame_support::pallet]
@@ -60,6 +59,9 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+
+		/// Units are 10ths of a percent
+		type Fee: Get<u64>;
 
 		type Currency: InspectFungible<Self::AccountId, Balance = Self::AssetBalance>
 			+ TransferFungible<Self::AccountId>;
@@ -110,25 +112,22 @@ pub mod pallet {
 		type PalletId: Get<PalletId>;
 	}
 
-	pub type BalanceOf<T> =
-		<<T as Config>::Currency as InspectFungible<<T as frame_system::Config>::AccountId>>::Balance;
+	pub type BalanceOf<T> = <<T as Config>::Currency as InspectFungible<
+		<T as frame_system::Config>::AccountId,
+	>>::Balance;
 
 	pub type AssetBalanceOf<T> =
 		<<T as Config>::Assets as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
 
-	pub type PoolIdOf<T> = (<T as Config>::AssetId, <T as Config>::AssetId);
+	pub type PoolIdOf<T> =
+		(MultiAssetId<<T as Config>::AssetId>, MultiAssetId<<T as Config>::AssetId>);
 
 	#[pallet::storage]
 	pub type Pools<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
 		PoolIdOf<T>,
-		PoolInfo<
-			T::AccountId,
-			T::AssetId,
-			T::PoolAssetId,
-			AssetBalanceOf<T>,
-		>,
+		PoolInfo<T::AccountId, T::AssetId, T::PoolAssetId, AssetBalanceOf<T>>,
 		OptionQuery,
 	>;
 
@@ -167,8 +166,8 @@ pub mod pallet {
 		SwapExecuted {
 			who: T::AccountId,
 			send_to: T::AccountId,
-			asset1: T::AssetId,
-			asset2: T::AssetId,
+			asset1: MultiAssetId<T::AssetId>,
+			asset2: MultiAssetId<T::AssetId>,
 			pool_id: PoolIdOf<T>,
 			amount_in: AssetBalanceOf<T>,
 			amount_out: AssetBalanceOf<T>,
@@ -206,6 +205,8 @@ pub mod pallet {
 		InsufficientLiquidity,
 		/// Excessive input amount.
 		ExcessiveInputAmount,
+		/// Only pools with native on one side are valid.
+		PoolMustContainNativeCurrency,
 	}
 
 	// Pallet's callable functions.
@@ -214,14 +215,19 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn create_pool(
 			origin: OriginFor<T>,
-			asset1: T::AssetId, // TODO: convert into MultiToken
-			asset2: T::AssetId,
+			asset1: MultiAssetId<T::AssetId>,
+			asset2: MultiAssetId<T::AssetId>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			ensure!(asset1 != asset2, Error::<T>::EqualAssets);
 
 			let pool_id = Self::get_pool_id(asset1, asset2);
 			let (asset1, asset2) = pool_id;
+
+			if asset1 != MultiAssetId::Native {
+				Err(Error::<T>::PoolMustContainNativeCurrency)?;
+			}
+
 			ensure!(!Pools::<T>::contains_key(&pool_id), Error::<T>::PoolExists);
 
 			let pallet_account = Self::account_id();
@@ -253,8 +259,8 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn add_liquidity(
 			origin: OriginFor<T>,
-			asset1: T::AssetId,
-			asset2: T::AssetId,
+			asset1: MultiAssetId<T::AssetId>,
+			asset2: MultiAssetId<T::AssetId>,
 			amount1_desired: AssetBalanceOf<T>,
 			amount2_desired: AssetBalanceOf<T>,
 			amount1_min: AssetBalanceOf<T>,
@@ -307,8 +313,8 @@ pub mod pallet {
 				}
 
 				let pallet_account = Self::account_id();
-				T::Assets::transfer(asset1, &sender, &pallet_account, amount1, false)?;
-				T::Assets::transfer(asset2, &sender, &pallet_account, amount2, false)?;
+				Self::transfer(asset1, &sender, &pallet_account, amount1, false)?;
+				Self::transfer(asset2, &sender, &pallet_account, amount2, false)?;
 
 				let total_supply = T::PoolAssets::total_issuance(pool.lp_token);
 
@@ -361,8 +367,8 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn remove_liquidity(
 			origin: OriginFor<T>,
-			asset1: T::AssetId,
-			asset2: T::AssetId,
+			asset1: MultiAssetId<T::AssetId>,
+			asset2: MultiAssetId<T::AssetId>,
 			liquidity: AssetBalanceOf<T>,
 			amount1_min: AssetBalanceOf<T>,
 			amount2_min: AssetBalanceOf<T>,
@@ -413,8 +419,8 @@ pub mod pallet {
 
 				T::PoolAssets::burn_from(pool.lp_token, &pallet_account, liquidity)?;
 
-				T::Assets::transfer(asset1, &pallet_account, &withdraw_to, amount1, false)?;
-				T::Assets::transfer(asset2, &pallet_account, &withdraw_to, amount2, false)?;
+				Self::transfer(asset1, &pallet_account, &withdraw_to, amount1, false)?;
+				Self::transfer(asset2, &pallet_account, &withdraw_to, amount2, false)?;
 
 				pool.balance1 = reserve1 - amount1;
 				pool.balance2 = reserve2 - amount2;
@@ -436,8 +442,8 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn swap_exact_tokens_for_tokens(
 			origin: OriginFor<T>,
-			asset1: T::AssetId,
-			asset2: T::AssetId,
+			asset1: MultiAssetId<T::AssetId>,
+			asset2: MultiAssetId<T::AssetId>,
 			amount_in: AssetBalanceOf<T>,
 			amount_out_min: AssetBalanceOf<T>,
 			send_to: T::AccountId,
@@ -467,12 +473,12 @@ pub mod pallet {
 				ensure!(amount2 >= amount_out_min, Error::<T>::InsufficientOutputAmount);
 
 				let pallet_account = Self::account_id();
-				T::Assets::transfer(asset1, &sender, &pallet_account, amount1, false)?;
+				Self::transfer(asset1, &sender, &pallet_account, amount1, false)?;
 
 				let (send_asset, send_amount) =
 					Self::validate_swap(asset1, amount2, pool_id, pool.balance1, pool.balance2)?;
 
-				T::Assets::transfer(send_asset, &pallet_account, &send_to, send_amount, false)?;
+				Self::transfer(send_asset, &pallet_account, &send_to, send_amount, false)?;
 
 				if send_asset == pool.asset1 {
 					pool.balance1 -= send_amount;
@@ -499,8 +505,8 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn swap_tokens_for_exact_tokens(
 			origin: OriginFor<T>,
-			asset1: T::AssetId,
-			asset2: T::AssetId,
+			asset1: MultiAssetId<T::AssetId>,
+			asset2: MultiAssetId<T::AssetId>,
 			amount_out: AssetBalanceOf<T>,
 			amount_in_max: AssetBalanceOf<T>,
 			send_to: T::AccountId,
@@ -529,12 +535,12 @@ pub mod pallet {
 				ensure!(amount1 <= amount_in_max, Error::<T>::ExcessiveInputAmount);
 
 				let pallet_account = Self::account_id();
-				T::Assets::transfer(asset1, &sender, &pallet_account, amount1, false)?;
+				Self::transfer(asset1, &sender, &pallet_account, amount1, false)?;
 
 				let (send_asset, send_amount) =
 					Self::validate_swap(asset1, amount2, pool_id, pool.balance1, pool.balance2)?;
 
-				T::Assets::transfer(send_asset, &pallet_account, &send_to, send_amount, false)?;
+				Self::transfer(send_asset, &pallet_account, &send_to, send_amount, false)?;
 
 				if send_asset == pool.asset1 {
 					pool.balance1 -= send_amount;
@@ -561,6 +567,20 @@ pub mod pallet {
 
 	// Your Pallet's internal functions.
 	impl<T: Config> Pallet<T> {
+		fn transfer(
+			asset_id: MultiAssetId<T::AssetId>,
+			from: &T::AccountId,
+			to: &T::AccountId,
+			amount: AssetBalanceOf<T>,
+			keep_alive: bool,
+		) -> Result<<T as pallet::Config>::AssetBalance, DispatchError> {
+			match asset_id {
+				MultiAssetId::Native => T::Currency::transfer(from, to, amount, keep_alive),
+				MultiAssetId::Asset(asset_id) =>
+					T::Assets::transfer(asset_id, from, to, amount, keep_alive),
+			}
+		}
+
 		/// The account ID of the dex pallet.
 		///
 		/// This actually does computation. If you need to keep using it, then make sure you cache
@@ -570,7 +590,10 @@ pub mod pallet {
 		}
 
 		/// Returns a pool id constructed from 2 sorted assets.
-		pub fn get_pool_id(asset1: T::AssetId, asset2: T::AssetId) -> PoolIdOf<T> {
+		pub fn get_pool_id(
+			asset1: MultiAssetId<T::AssetId>,
+			asset2: MultiAssetId<T::AssetId>,
+		) -> PoolIdOf<T> {
 			if asset1 <= asset2 {
 				(asset1, asset2)
 			} else {
@@ -578,9 +601,20 @@ pub mod pallet {
 			}
 		}
 
-		pub fn quote_price(asset1: u32, asset2: u32, amount: u64) -> Option<AssetBalanceOf<T>> {
-			let asset1 = asset1.into();
-			let asset2 = asset2.into();
+		pub fn quote_price(
+			asset1: Option<u32>,
+			asset2: Option<u32>,
+			amount: u64,
+		) -> Option<AssetBalanceOf<T>> {
+			let into_multi = |asset| {
+				if let Some(asset) = asset {
+					MultiAssetId::Asset(T::AssetId::from(asset))
+				} else {
+					MultiAssetId::Native
+				}
+			};
+			let asset1 = into_multi(asset1);
+			let asset2 = into_multi(asset2);
 			let amount = amount.into();
 			let pool_id = Self::get_pool_id(asset1, asset2);
 			let (pool_asset1, _) = pool_id;
@@ -627,8 +661,9 @@ pub mod pallet {
 
 			// TODO: extract 0.3% into config
 			// TODO: could use Permill type
-			let amount_in_with_fee =
-				amount_in.checked_mul(&997u64.into()).ok_or(Error::<T>::Overflow)?;
+			let amount_in_with_fee = amount_in
+				.checked_mul(&(1000u64 - T::Fee::get()).into())
+				.ok_or(Error::<T>::Overflow)?;
 
 			let numerator =
 				amount_in_with_fee.checked_mul(reserve_out).ok_or(Error::<T>::Overflow)?;
@@ -665,7 +700,7 @@ pub mod pallet {
 			let denominator = reserve_out
 				.checked_sub(amount_out)
 				.ok_or(Error::<T>::Overflow)?
-				.checked_mul(&997u64.into())
+				.checked_mul(&(1000u64 - T::Fee::get()).into())
 				.ok_or(Error::<T>::Overflow)?;
 
 			numerator
@@ -676,12 +711,12 @@ pub mod pallet {
 		}
 
 		pub fn validate_swap(
-			asset_from: T::AssetId,
+			asset_from: MultiAssetId<T::AssetId>,
 			amount_out: AssetBalanceOf<T>,
 			pool_id: PoolIdOf<T>,
 			reserve1: AssetBalanceOf<T>,
 			reserve2: AssetBalanceOf<T>,
-		) -> Result<(T::AssetId, AssetBalanceOf<T>), Error<T>> {
+		) -> Result<(MultiAssetId<T::AssetId>, AssetBalanceOf<T>), Error<T>> {
 			let (pool_asset1, pool_asset2) = pool_id;
 
 			if asset_from == pool_asset1 {
