@@ -22,7 +22,7 @@ use crate::{
 	generic::Digest,
 	scale_info::TypeInfo,
 	traits::{
-		self, AtLeast32BitUnsigned, Hash as HashT, MaybeDisplay, MaybeMallocSizeOf, MaybeSerialize,
+		self, AtLeast32BitUnsigned, Hash as HashT, MaybeDisplay, MaybeSerialize,
 		MaybeSerializeDeserialize, Member, SimpleBitOps,
 	},
 };
@@ -52,22 +52,6 @@ pub struct Header<Number: Copy + Into<U256> + TryFrom<U256>, Hash: HashT> {
 	pub extrinsics_root: Hash::Output,
 	/// A chain-specific digest of data useful for light clients or referencing auxiliary data.
 	pub digest: Digest,
-}
-
-#[cfg(feature = "std")]
-impl<Number, Hash> parity_util_mem::MallocSizeOf for Header<Number, Hash>
-where
-	Number: Copy + Into<U256> + TryFrom<U256> + parity_util_mem::MallocSizeOf,
-	Hash: HashT,
-	Hash::Output: parity_util_mem::MallocSizeOf,
-{
-	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
-		self.parent_hash.size_of(ops) +
-			self.number.size_of(ops) +
-			self.state_root.size_of(ops) +
-			self.extrinsics_root.size_of(ops) +
-			self.digest.size_of(ops)
-	}
 }
 
 #[cfg(feature = "std")]
@@ -103,8 +87,7 @@ where
 		+ Copy
 		+ Into<U256>
 		+ TryFrom<U256>
-		+ sp_std::str::FromStr
-		+ MaybeMallocSizeOf,
+		+ sp_std::str::FromStr,
 	Hash: HashT,
 	Hash::Output: Default
 		+ sp_std::hash::Hash
@@ -115,8 +98,7 @@ where
 		+ Debug
 		+ MaybeDisplay
 		+ SimpleBitOps
-		+ Codec
-		+ MaybeMallocSizeOf,
+		+ Codec,
 {
 	type Number = Number;
 	type Hash = <Hash as HashT>::Output;

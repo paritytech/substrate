@@ -20,7 +20,6 @@
 
 use super::*;
 use authorship::claim_slot;
-use futures::executor::block_on;
 use log::debug;
 use rand_chacha::{
 	rand_core::{RngCore, SeedableRng},
@@ -50,6 +49,7 @@ use sp_runtime::{
 };
 use sp_timestamp::Timestamp;
 use std::{cell::RefCell, task::Poll, time::Duration};
+use tokio::runtime::{Handle, Runtime};
 
 type Item = DigestItem;
 
@@ -227,9 +227,18 @@ where
 
 type BabePeer = Peer<Option<PeerData>, BabeBlockImport>;
 
-#[derive(Default)]
 pub struct BabeTestNet {
+	rt_handle: Handle,
 	peers: Vec<BabePeer>,
+}
+
+impl WithRuntime for BabeTestNet {
+	fn with_runtime(rt_handle: Handle) -> Self {
+		BabeTestNet { rt_handle, peers: Vec::new() }
+	}
+	fn rt_handle(&self) -> &Handle {
+		&self.rt_handle
+	}
 }
 
 type TestHeader = <TestBlock as BlockT>::Header;
@@ -366,7 +375,8 @@ impl TestNetFactory for BabeTestNet {
 #[should_panic]
 fn rejects_empty_block() {
 	sp_tracing::try_init_simple();
-	let mut net = BabeTestNet::new(3);
+	let runtime = Runtime::new().unwrap();
+	let mut net = BabeTestNet::new(runtime.handle().clone(), 3);
 	let block_builder = |builder: BlockBuilder<_, _, _>| builder.build().unwrap().block;
 	net.mut_peers(|peer| {
 		peer[0].generate_blocks(1, BlockOrigin::NetworkInitialSync, block_builder);
@@ -385,7 +395,9 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 	let mutator = Arc::new(mutator) as Mutator;
 
 	MUTATOR.with(|m| *m.borrow_mut() = mutator.clone());
-	let net = BabeTestNet::new(3);
+
+	let runtime = Runtime::new().unwrap();
+	let net = BabeTestNet::new(runtime.handle().clone(), 3);
 
 	let peers = [Sr25519Keyring::Alice, Sr25519Keyring::Bob, Sr25519Keyring::Charlie];
 
@@ -462,7 +474,7 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 			.expect("Starts babe"),
 		);
 	}
-	block_on(future::select(
+	runtime.block_on(future::select(
 		futures::future::poll_fn(move |cx| {
 			let mut net = net.lock();
 			net.poll(cx);
@@ -599,8 +611,9 @@ fn propose_and_import_block<Transaction: Send + 'static>(
 	slot: Option<Slot>,
 	proposer_factory: &mut DummyFactory,
 	block_import: &mut BoxBlockImport<TestBlock, Transaction>,
+	runtime: &Runtime,
 ) -> Hash {
-	let mut proposer = block_on(proposer_factory.init(parent)).unwrap();
+	let mut proposer = runtime.block_on(proposer_factory.init(parent)).unwrap();
 
 	let slot = slot.unwrap_or_else(|| {
 		let parent_pre_digest = find_pre_digest::<TestBlock>(parent).unwrap();
@@ -616,7 +629,7 @@ fn propose_and_import_block<Transaction: Send + 'static>(
 
 	let parent_hash = parent.hash();
 
-	let mut block = block_on(proposer.propose_with(pre_digest)).unwrap().block;
+	let mut block = runtime.block_on(proposer.propose_with(pre_digest)).unwrap().block;
 
 	let epoch_descriptor = proposer_factory
 		.epoch_changes
@@ -652,7 +665,8 @@ fn propose_and_import_block<Transaction: Send + 'static>(
 	import
 		.insert_intermediate(INTERMEDIATE_KEY, BabeIntermediate::<TestBlock> { epoch_descriptor });
 	import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
-	let import_result = block_on(block_import.import_block(import, Default::default())).unwrap();
+	let import_result =
+		runtime.block_on(block_import.import_block(import, Default::default())).unwrap();
 
 	match import_result {
 		ImportResult::Imported(_) => {},
@@ -671,13 +685,14 @@ fn propose_and_import_blocks<Transaction: Send + 'static>(
 	block_import: &mut BoxBlockImport<TestBlock, Transaction>,
 	parent_id: BlockId<TestBlock>,
 	n: usize,
+	runtime: &Runtime,
 ) -> Vec<Hash> {
 	let mut hashes = Vec::with_capacity(n);
 	let mut parent_header = client.header(&parent_id).unwrap().unwrap();
 
 	for _ in 0..n {
 		let block_hash =
-			propose_and_import_block(&parent_header, None, proposer_factory, block_import);
+			propose_and_import_block(&parent_header, None, proposer_factory, block_import, runtime);
 		hashes.push(block_hash);
 		parent_header = client.header(&BlockId::Hash(block_hash)).unwrap().unwrap();
 	}
@@ -687,7 +702,8 @@ fn propose_and_import_blocks<Transaction: Send + 'static>(
 
 #[test]
 fn importing_block_one_sets_genesis_epoch() {
-	let mut net = BabeTestNet::new(1);
+	let runtime = Runtime::new().unwrap();
+	let mut net = BabeTestNet::new(runtime.handle().clone(), 1);
 
 	let peer = net.peer(0);
 	let data = peer.data.as_ref().expect("babe link set up during initialization");
@@ -709,6 +725,7 @@ fn importing_block_one_sets_genesis_epoch() {
 		Some(999.into()),
 		&mut proposer_factory,
 		&mut block_import,
+		&runtime,
 	);
 
 	let genesis_epoch = Epoch::genesis(&data.link.config, 999.into());
@@ -726,7 +743,8 @@ fn importing_block_one_sets_genesis_epoch() {
 
 #[test]
 fn revert_prunes_epoch_changes_and_removes_weights() {
-	let mut net = BabeTestNet::new(1);
+	let runtime = Runtime::new().unwrap();
+	let mut net = BabeTestNet::new(runtime.handle().clone(), 1);
 
 	let peer = net.peer(0);
 	let data = peer.data.as_ref().expect("babe link set up during initialization");
@@ -744,7 +762,14 @@ fn revert_prunes_epoch_changes_and_removes_weights() {
 	};
 
 	let mut propose_and_import_blocks_wrap = |parent_id, n| {
-		propose_and_import_blocks(&client, &mut proposer_factory, &mut block_import, parent_id, n)
+		propose_and_import_blocks(
+			&client,
+			&mut proposer_factory,
+			&mut block_import,
+			parent_id,
+			n,
+			&runtime,
+		)
 	};
 
 	// Test scenario.
@@ -806,7 +831,8 @@ fn revert_prunes_epoch_changes_and_removes_weights() {
 
 #[test]
 fn revert_not_allowed_for_finalized() {
-	let mut net = BabeTestNet::new(1);
+	let runtime = Runtime::new().unwrap();
+	let mut net = BabeTestNet::new(runtime.handle().clone(), 1);
 
 	let peer = net.peer(0);
 	let data = peer.data.as_ref().expect("babe link set up during initialization");
@@ -823,7 +849,14 @@ fn revert_not_allowed_for_finalized() {
 	};
 
 	let mut propose_and_import_blocks_wrap = |parent_id, n| {
-		propose_and_import_blocks(&client, &mut proposer_factory, &mut block_import, parent_id, n)
+		propose_and_import_blocks(
+			&client,
+			&mut proposer_factory,
+			&mut block_import,
+			parent_id,
+			n,
+			&runtime,
+		)
 	};
 
 	let canon = propose_and_import_blocks_wrap(BlockId::Number(0), 3);
@@ -844,7 +877,8 @@ fn revert_not_allowed_for_finalized() {
 
 #[test]
 fn importing_epoch_change_block_prunes_tree() {
-	let mut net = BabeTestNet::new(1);
+	let runtime = Runtime::new().unwrap();
+	let mut net = BabeTestNet::new(runtime.handle().clone(), 1);
 
 	let peer = net.peer(0);
 	let data = peer.data.as_ref().expect("babe link set up during initialization");
@@ -861,7 +895,14 @@ fn importing_epoch_change_block_prunes_tree() {
 	};
 
 	let mut propose_and_import_blocks_wrap = |parent_id, n| {
-		propose_and_import_blocks(&client, &mut proposer_factory, &mut block_import, parent_id, n)
+		propose_and_import_blocks(
+			&client,
+			&mut proposer_factory,
+			&mut block_import,
+			parent_id,
+			n,
+			&runtime,
+		)
 	};
 
 	// This is the block tree that we're going to use in this test. Each node
@@ -921,7 +962,8 @@ fn importing_epoch_change_block_prunes_tree() {
 #[test]
 #[should_panic]
 fn verify_slots_are_strictly_increasing() {
-	let mut net = BabeTestNet::new(1);
+	let runtime = Runtime::new().unwrap();
+	let mut net = BabeTestNet::new(runtime.handle().clone(), 1);
 
 	let peer = net.peer(0);
 	let data = peer.data.as_ref().expect("babe link set up during initialization");
@@ -944,13 +986,20 @@ fn verify_slots_are_strictly_increasing() {
 		Some(999.into()),
 		&mut proposer_factory,
 		&mut block_import,
+		&runtime,
 	);
 
 	let b1 = client.header(&BlockId::Hash(b1)).unwrap().unwrap();
 
 	// we should fail to import this block since the slot number didn't increase.
 	// we will panic due to the `PanickingBlockImport` defined above.
-	propose_and_import_block(&b1, Some(999.into()), &mut proposer_factory, &mut block_import);
+	propose_and_import_block(
+		&b1,
+		Some(999.into()),
+		&mut proposer_factory,
+		&mut block_import,
+		&runtime,
+	);
 }
 
 #[test]
@@ -985,7 +1034,8 @@ fn babe_transcript_generation_match() {
 
 #[test]
 fn obsolete_blocks_aux_data_cleanup() {
-	let mut net = BabeTestNet::new(1);
+	let runtime = Runtime::new().unwrap();
+	let mut net = BabeTestNet::new(runtime.handle().clone(), 1);
 
 	let peer = net.peer(0);
 	let data = peer.data.as_ref().expect("babe link set up during initialization");
@@ -1008,7 +1058,14 @@ fn obsolete_blocks_aux_data_cleanup() {
 	let mut block_import = data.block_import.lock().take().expect("import set up during init");
 
 	let mut propose_and_import_blocks_wrap = |parent_id, n| {
-		propose_and_import_blocks(&client, &mut proposer_factory, &mut block_import, parent_id, n)
+		propose_and_import_blocks(
+			&client,
+			&mut proposer_factory,
+			&mut block_import,
+			parent_id,
+			n,
+			&runtime,
+		)
 	};
 
 	let aux_data_check = |hashes: &[Hash], expected: bool| {

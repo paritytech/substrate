@@ -26,6 +26,7 @@ use sc_network_common::{
 	service::{NetworkNotification, NetworkPeers, NetworkStateInfo},
 };
 use std::{sync::Arc, time::Duration};
+use tokio::runtime::Handle;
 
 type TestNetworkService = NetworkService<
 	substrate_test_runtime_client::runtime::Block,
@@ -36,7 +37,9 @@ const PROTOCOL_NAME: &str = "/foo";
 
 /// Builds two nodes and their associated events stream.
 /// The nodes are connected together and have the `PROTOCOL_NAME` protocol registered.
-fn build_nodes_one_proto() -> (
+fn build_nodes_one_proto(
+	rt_handle: &Handle,
+) -> (
 	Arc<TestNetworkService>,
 	impl Stream<Item = Event>,
 	Arc<TestNetworkService>,
@@ -44,12 +47,12 @@ fn build_nodes_one_proto() -> (
 ) {
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
-	let (node1, events_stream1) = TestNetworkBuilder::new()
+	let (node1, events_stream1) = TestNetworkBuilder::new(rt_handle.clone())
 		.with_listen_addresses(vec![listen_addr.clone()])
 		.build()
 		.start_network();
 
-	let (node2, events_stream2) = TestNetworkBuilder::new()
+	let (node2, events_stream2) = TestNetworkBuilder::new(rt_handle.clone())
 		.with_set_config(SetConfig {
 			reserved_nodes: vec![MultiaddrWithPeerId {
 				multiaddr: listen_addr,
@@ -68,7 +71,10 @@ fn notifications_state_consistent() {
 	// Runs two nodes and ensures that events are propagated out of the API in a consistent
 	// correct order, which means no notification received on a closed substream.
 
-	let (node1, mut events_stream1, node2, mut events_stream2) = build_nodes_one_proto();
+	let runtime = tokio::runtime::Runtime::new().unwrap();
+
+	let (node1, mut events_stream1, node2, mut events_stream2) =
+		build_nodes_one_proto(runtime.handle());
 
 	// Write some initial notifications that shouldn't get through.
 	for _ in 0..(rand::random::<u8>() % 5) {
@@ -86,7 +92,7 @@ fn notifications_state_consistent() {
 		);
 	}
 
-	async_std::task::block_on(async move {
+	runtime.block_on(async move {
 		// True if we have an active substream from node1 to node2.
 		let mut node1_to_node2_open = false;
 		// True if we have an active substream from node2 to node1.
@@ -211,12 +217,12 @@ fn notifications_state_consistent() {
 	});
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn lots_of_incoming_peers_works() {
 	sp_tracing::try_init_simple();
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
-	let (main_node, _) = TestNetworkBuilder::new()
+	let (main_node, _) = TestNetworkBuilder::new(Handle::current())
 		.with_listen_addresses(vec![listen_addr.clone()])
 		.with_set_config(SetConfig { in_peers: u32::MAX, ..Default::default() })
 		.build()
@@ -229,7 +235,7 @@ async fn lots_of_incoming_peers_works() {
 	let mut background_tasks_to_wait = Vec::new();
 
 	for _ in 0..32 {
-		let (_dialing_node, event_stream) = TestNetworkBuilder::new()
+		let (_dialing_node, event_stream) = TestNetworkBuilder::new(Handle::current())
 			.with_set_config(SetConfig {
 				reserved_nodes: vec![MultiaddrWithPeerId {
 					multiaddr: listen_addr.clone(),
@@ -240,7 +246,7 @@ async fn lots_of_incoming_peers_works() {
 			.build()
 			.start_network();
 
-		background_tasks_to_wait.push(async_std::task::spawn(async move {
+		background_tasks_to_wait.push(tokio::spawn(async move {
 			// Create a dummy timer that will "never" fire, and that will be overwritten when we
 			// actually need the timer. Using an Option would be technically cleaner, but it would
 			// make the code below way more complicated.
@@ -290,10 +296,13 @@ fn notifications_back_pressure() {
 
 	const TOTAL_NOTIFS: usize = 10_000;
 
-	let (node1, mut events_stream1, node2, mut events_stream2) = build_nodes_one_proto();
+	let runtime = tokio::runtime::Runtime::new().unwrap();
+
+	let (node1, mut events_stream1, node2, mut events_stream2) =
+		build_nodes_one_proto(runtime.handle());
 	let node2_id = node2.local_peer_id();
 
-	let receiver = async_std::task::spawn(async move {
+	let receiver = runtime.spawn(async move {
 		let mut received_notifications = 0;
 		let mut sync_protocol_name = None;
 
@@ -318,12 +327,12 @@ fn notifications_back_pressure() {
 			};
 
 			if rand::random::<u8>() < 2 {
-				async_std::task::sleep(Duration::from_millis(rand::random::<u64>() % 750)).await;
+				tokio::time::sleep(Duration::from_millis(rand::random::<u64>() % 750)).await;
 			}
 		}
 	});
 
-	async_std::task::block_on(async move {
+	runtime.block_on(async move {
 		// Wait for the `NotificationStreamOpened`.
 		loop {
 			match events_stream1.next().await.unwrap() {
@@ -343,7 +352,7 @@ fn notifications_back_pressure() {
 				.unwrap();
 		}
 
-		receiver.await;
+		receiver.await.unwrap();
 	});
 }
 
@@ -353,8 +362,10 @@ fn fallback_name_working() {
 	// they can connect.
 	const NEW_PROTOCOL_NAME: &str = "/new-shiny-protocol-that-isnt-PROTOCOL_NAME";
 
+	let runtime = tokio::runtime::Runtime::new().unwrap();
+
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
-	let (node1, mut events_stream1) = TestNetworkBuilder::new()
+	let (node1, mut events_stream1) = TestNetworkBuilder::new(runtime.handle().clone())
 		.with_config(config::NetworkConfiguration {
 			extra_sets: vec![NonDefaultSetConfig {
 				notifications_protocol: NEW_PROTOCOL_NAME.into(),
@@ -370,7 +381,7 @@ fn fallback_name_working() {
 		.build()
 		.start_network();
 
-	let (_, mut events_stream2) = TestNetworkBuilder::new()
+	let (_, mut events_stream2) = TestNetworkBuilder::new(runtime.handle().clone())
 		.with_set_config(SetConfig {
 			reserved_nodes: vec![MultiaddrWithPeerId {
 				multiaddr: listen_addr,
@@ -381,7 +392,7 @@ fn fallback_name_working() {
 		.build()
 		.start_network();
 
-	let receiver = async_std::task::spawn(async move {
+	let receiver = runtime.spawn(async move {
 		// Wait for the `NotificationStreamOpened`.
 		loop {
 			match events_stream2.next().await.unwrap() {
@@ -395,7 +406,7 @@ fn fallback_name_working() {
 		}
 	});
 
-	async_std::task::block_on(async move {
+	runtime.block_on(async move {
 		// Wait for the `NotificationStreamOpened`.
 		loop {
 			match events_stream1.next().await.unwrap() {
@@ -409,16 +420,16 @@ fn fallback_name_working() {
 			};
 		}
 
-		receiver.await;
+		receiver.await.unwrap();
 	});
 }
 
-#[test]
+#[tokio::test]
 #[should_panic(expected = "don't match the transport")]
-fn ensure_listen_addresses_consistent_with_transport_memory() {
+async fn ensure_listen_addresses_consistent_with_transport_memory() {
 	let listen_addr = config::build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0_u16)];
 
-	let _ = TestNetworkBuilder::new()
+	let _ = TestNetworkBuilder::new(Handle::current())
 		.with_config(config::NetworkConfiguration {
 			listen_addresses: vec![listen_addr.clone()],
 			transport: TransportConfig::MemoryOnly,
@@ -433,12 +444,12 @@ fn ensure_listen_addresses_consistent_with_transport_memory() {
 		.start_network();
 }
 
-#[test]
+#[tokio::test]
 #[should_panic(expected = "don't match the transport")]
-fn ensure_listen_addresses_consistent_with_transport_not_memory() {
+async fn ensure_listen_addresses_consistent_with_transport_not_memory() {
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
-	let _ = TestNetworkBuilder::new()
+	let _ = TestNetworkBuilder::new(Handle::current())
 		.with_config(config::NetworkConfiguration {
 			listen_addresses: vec![listen_addr.clone()],
 			..config::NetworkConfiguration::new(
@@ -452,16 +463,16 @@ fn ensure_listen_addresses_consistent_with_transport_not_memory() {
 		.start_network();
 }
 
-#[test]
+#[tokio::test]
 #[should_panic(expected = "don't match the transport")]
-fn ensure_boot_node_addresses_consistent_with_transport_memory() {
+async fn ensure_boot_node_addresses_consistent_with_transport_memory() {
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 	let boot_node = MultiaddrWithPeerId {
 		multiaddr: config::build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0_u16)],
 		peer_id: PeerId::random(),
 	};
 
-	let _ = TestNetworkBuilder::new()
+	let _ = TestNetworkBuilder::new(Handle::current())
 		.with_config(config::NetworkConfiguration {
 			listen_addresses: vec![listen_addr.clone()],
 			transport: TransportConfig::MemoryOnly,
@@ -477,16 +488,16 @@ fn ensure_boot_node_addresses_consistent_with_transport_memory() {
 		.start_network();
 }
 
-#[test]
+#[tokio::test]
 #[should_panic(expected = "don't match the transport")]
-fn ensure_boot_node_addresses_consistent_with_transport_not_memory() {
+async fn ensure_boot_node_addresses_consistent_with_transport_not_memory() {
 	let listen_addr = config::build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0_u16)];
 	let boot_node = MultiaddrWithPeerId {
 		multiaddr: config::build_multiaddr![Memory(rand::random::<u64>())],
 		peer_id: PeerId::random(),
 	};
 
-	let _ = TestNetworkBuilder::new()
+	let _ = TestNetworkBuilder::new(Handle::current())
 		.with_config(config::NetworkConfiguration {
 			listen_addresses: vec![listen_addr.clone()],
 			boot_nodes: vec![boot_node],
@@ -501,16 +512,16 @@ fn ensure_boot_node_addresses_consistent_with_transport_not_memory() {
 		.start_network();
 }
 
-#[test]
+#[tokio::test]
 #[should_panic(expected = "don't match the transport")]
-fn ensure_reserved_node_addresses_consistent_with_transport_memory() {
+async fn ensure_reserved_node_addresses_consistent_with_transport_memory() {
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 	let reserved_node = MultiaddrWithPeerId {
 		multiaddr: config::build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0_u16)],
 		peer_id: PeerId::random(),
 	};
 
-	let _ = TestNetworkBuilder::new()
+	let _ = TestNetworkBuilder::new(Handle::current())
 		.with_config(config::NetworkConfiguration {
 			listen_addresses: vec![listen_addr.clone()],
 			transport: TransportConfig::MemoryOnly,
@@ -529,16 +540,16 @@ fn ensure_reserved_node_addresses_consistent_with_transport_memory() {
 		.start_network();
 }
 
-#[test]
+#[tokio::test]
 #[should_panic(expected = "don't match the transport")]
-fn ensure_reserved_node_addresses_consistent_with_transport_not_memory() {
+async fn ensure_reserved_node_addresses_consistent_with_transport_not_memory() {
 	let listen_addr = config::build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0_u16)];
 	let reserved_node = MultiaddrWithPeerId {
 		multiaddr: config::build_multiaddr![Memory(rand::random::<u64>())],
 		peer_id: PeerId::random(),
 	};
 
-	let _ = TestNetworkBuilder::new()
+	let _ = TestNetworkBuilder::new(Handle::current())
 		.with_config(config::NetworkConfiguration {
 			listen_addresses: vec![listen_addr.clone()],
 			default_peers_set: SetConfig {
@@ -556,13 +567,13 @@ fn ensure_reserved_node_addresses_consistent_with_transport_not_memory() {
 		.start_network();
 }
 
-#[test]
+#[tokio::test]
 #[should_panic(expected = "don't match the transport")]
-fn ensure_public_addresses_consistent_with_transport_memory() {
+async fn ensure_public_addresses_consistent_with_transport_memory() {
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 	let public_address = config::build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0_u16)];
 
-	let _ = TestNetworkBuilder::new()
+	let _ = TestNetworkBuilder::new(Handle::current())
 		.with_config(config::NetworkConfiguration {
 			listen_addresses: vec![listen_addr.clone()],
 			transport: TransportConfig::MemoryOnly,
@@ -578,13 +589,13 @@ fn ensure_public_addresses_consistent_with_transport_memory() {
 		.start_network();
 }
 
-#[test]
+#[tokio::test]
 #[should_panic(expected = "don't match the transport")]
-fn ensure_public_addresses_consistent_with_transport_not_memory() {
+async fn ensure_public_addresses_consistent_with_transport_not_memory() {
 	let listen_addr = config::build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0_u16)];
 	let public_address = config::build_multiaddr![Memory(rand::random::<u64>())];
 
-	let _ = TestNetworkBuilder::new()
+	let _ = TestNetworkBuilder::new(Handle::current())
 		.with_config(config::NetworkConfiguration {
 			listen_addresses: vec![listen_addr.clone()],
 			public_addresses: vec![public_address],

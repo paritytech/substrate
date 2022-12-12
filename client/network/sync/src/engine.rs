@@ -172,7 +172,7 @@ pub struct Peer<B: BlockT> {
 pub struct SyncingEngine<B: BlockT, Client> {
 	/// State machine that handles the list of in-progress requests. Only full node peers are
 	/// registered.
-	chain_sync: Box<dyn ChainSyncT<B>>,
+	chain_sync: ChainSync<B, Client>,
 
 	/// Blockchain client.
 	client: Arc<Client>,
@@ -344,7 +344,7 @@ where
 			Self {
 				roles,
 				client,
-				chain_sync: Box::new(chain_sync),
+				chain_sync,
 				network_service,
 				peers: HashMap::new(),
 				block_announce_data_cache: LruCache::new(cache_capacity),

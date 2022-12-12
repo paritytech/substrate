@@ -434,9 +434,7 @@ where
 	TBl::Hash: Unpin,
 	TBl::Header: Unpin,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
-	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash>
-		+ parity_util_mem::MallocSizeOf
-		+ 'static,
+	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 {
 	let SpawnTasksParams {
 		mut config,
@@ -548,7 +546,6 @@ where
 			client.clone(),
 			network,
 			sync_service.clone(),
-			transaction_pool.clone(),
 			config.informant_output_format,
 		),
 	);
@@ -880,9 +877,9 @@ where
 		role: config.role.clone(),
 		executor: {
 			let spawn_handle = Clone::clone(&spawn_handle);
-			Some(Box::new(move |fut| {
+			Box::new(move |fut| {
 				spawn_handle.spawn("libp2p-node", Some("networking"), fut);
-			}))
+			})
 		},
 		network_config: config.network.clone(),
 		chain: client.clone(),

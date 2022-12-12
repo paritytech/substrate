@@ -39,6 +39,7 @@ use substrate_test_runtime_client::{
 	runtime::{Block as TestBlock, Hash as TestHash},
 	TestClient, TestClientBuilder, TestClientBuilderExt as _,
 };
+use tokio::runtime::Handle;
 
 #[cfg(test)]
 mod service;
@@ -50,11 +51,12 @@ const PROTOCOL_NAME: &str = "/foo";
 
 struct TestNetwork {
 	network: TestNetworkWorker,
+	rt_handle: Handle,
 }
 
 impl TestNetwork {
-	pub fn new(network: TestNetworkWorker) -> Self {
-		Self { network }
+	pub fn new(network: TestNetworkWorker, rt_handle: Handle) -> Self {
+		Self { network, rt_handle }
 	}
 
 	pub fn start_network(
@@ -64,7 +66,7 @@ impl TestNetwork {
 		let service = worker.service().clone();
 		let event_stream = service.event_stream("test");
 
-		async_std::task::spawn(async move {
+		self.rt_handle.spawn(async move {
 			futures::pin_mut!(worker);
 			let _ = worker.await;
 		});
@@ -81,10 +83,11 @@ struct TestNetworkBuilder {
 	set_config: Option<SetConfig>,
 	chain_sync_network: Option<(NetworkServiceProvider, NetworkServiceHandle)>,
 	config: Option<config::NetworkConfiguration>,
+	rt_handle: Handle,
 }
 
 impl TestNetworkBuilder {
-	pub fn new() -> Self {
+	pub fn new(rt_handle: Handle) -> Self {
 		Self {
 			import_queue: None,
 			link: None,
@@ -93,6 +96,7 @@ impl TestNetworkBuilder {
 			set_config: None,
 			chain_sync_network: None,
 			config: None,
+			rt_handle,
 		}
 	}
 
@@ -181,21 +185,21 @@ impl TestNetworkBuilder {
 		let block_request_protocol_config = {
 			let (handler, protocol_config) =
 				BlockRequestHandler::new(&protocol_id, None, client.clone(), 50);
-			async_std::task::spawn(handler.run().boxed());
+			self.rt_handle.spawn(handler.run().boxed());
 			protocol_config
 		};
 
 		let state_request_protocol_config = {
 			let (handler, protocol_config) =
 				StateRequestHandler::new(&protocol_id, None, client.clone(), 50);
-			async_std::task::spawn(handler.run().boxed());
+			self.rt_handle.spawn(handler.run().boxed());
 			protocol_config
 		};
 
 		let light_client_request_protocol_config = {
 			let (handler, protocol_config) =
 				LightClientRequestHandler::new(&protocol_id, None, client.clone());
-			async_std::task::spawn(handler.run().boxed());
+			self.rt_handle.spawn(handler.run().boxed());
 			protocol_config
 		};
 
@@ -219,6 +223,10 @@ impl TestNetworkBuilder {
 		)
 		.unwrap();
 		let mut link = self.link.unwrap_or(Box::new(chain_sync_service.clone()));
+		let handle = self.rt_handle.clone();
+		let executor = move |f| {
+			handle.spawn(f);
+		};
 
 		let worker = NetworkWorker::<
 			substrate_test_runtime_client::runtime::Block,
@@ -227,7 +235,7 @@ impl TestNetworkBuilder {
 		>::new(config::Params {
 			block_announce_config,
 			role: config::Role::Full,
-			executor: None,
+			executor: Box::new(executor),
 			network_config,
 			chain: client.clone(),
 			protocol_id,
@@ -243,22 +251,22 @@ impl TestNetworkBuilder {
 		.unwrap();
 
 		let service = worker.service().clone();
-		async_std::task::spawn(async move {
+		self.rt_handle.spawn(async move {
 			let _ = chain_sync_network_provider.run(service).await;
 		});
-		async_std::task::spawn(async move {
+		self.rt_handle.spawn(async move {
 			loop {
 				futures::future::poll_fn(|cx| {
 					import_queue.poll_actions(cx, &mut *link);
 					std::task::Poll::Ready(())
 				})
 				.await;
-				async_std::task::sleep(std::time::Duration::from_millis(250)).await;
+				tokio::time::sleep(std::time::Duration::from_millis(250)).await;
 			}
 		});
 		let stream = worker.service().event_stream("syncing");
-		async_std::task::spawn(async move { engine.run(stream).await });
+		self.rt_handle.spawn(async move { engine.run(stream).await });
 
-		TestNetwork::new(worker)
+		TestNetwork::new(worker, self.rt_handle)
 	}
 }

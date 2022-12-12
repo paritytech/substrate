@@ -21,7 +21,6 @@
 
 use futures::task::Poll;
 use libp2p::PeerId;
-use sc_consensus::{BlockImportError, BlockImportStatus};
 use sc_network_common::sync::{
 	message::{BlockAnnounce, BlockData, BlockRequest, BlockResponse},
 	BadPeer, ChainSync as ChainSyncT, Metrics, OnBlockData, OnBlockJustification,
@@ -66,12 +65,6 @@ mockall::mock! {
 			who: PeerId,
 			response: BlockResponse<Block>,
 		) -> Result<OnBlockJustification<Block>, BadPeer>;
-		fn on_blocks_processed(
-			&mut self,
-			imported: usize,
-			count: usize,
-			results: Vec<(Result<BlockImportStatus<NumberFor<Block>>, BlockImportError>, Block::Hash)>,
-		) -> Box<dyn Iterator<Item = Result<(PeerId, BlockRequest<Block>), BadPeer>>>;
 		fn on_justification_import(
 			&mut self,
 			hash: Block::Hash,

@@ -334,7 +334,6 @@ impl<B: BlockT> futures::future::FusedFuture for GossipEngine<B> {
 mod tests {
 	use super::*;
 	use crate::{multiaddr::Multiaddr, ValidationResult, ValidatorContext};
-	use async_std::task::spawn;
 	use futures::{
 		channel::mpsc::{unbounded, UnboundedSender},
 		executor::{block_on, block_on_stream},
@@ -559,8 +558,8 @@ mod tests {
 		}))
 	}
 
-	#[test]
-	fn keeps_multiple_subscribers_per_topic_updated_with_both_old_and_new_messages() {
+	#[tokio::test(flavor = "multi_thread")]
+	async fn keeps_multiple_subscribers_per_topic_updated_with_both_old_and_new_messages() {
 		let topic = H256::default();
 		let protocol = ProtocolName::from("/my_protocol");
 		let remote_peer = PeerId::random();
@@ -613,8 +612,10 @@ mod tests {
 			.start_send(events[1].clone())
 			.expect("Event stream is unbounded; qed.");
 
-		spawn(gossip_engine);
+		tokio::spawn(gossip_engine);
 
+		// Note: `block_on_stream()`-derived iterator will block the current thread,
+		//       so we need a `multi_thread` `tokio::test` runtime flavor.
 		let mut subscribers =
 			subscribers.into_iter().map(|s| block_on_stream(s)).collect::<Vec<_>>();
 

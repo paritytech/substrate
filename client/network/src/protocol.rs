@@ -435,10 +435,6 @@ where
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message))
 		}
 
-		if let Some(message) = self.pending_messages.pop_front() {
-			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message))
-		}
-
 		let event = match self.behaviour.poll(cx, params) {
 			Poll::Pending => return Poll::Pending,
 			Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev)) => ev,
