@@ -45,7 +45,7 @@ use crate::{
 pub use basic_queue::BasicQueue;
 use sp_consensus::{error::Error as ConsensusError, BlockOrigin, CacheKeyId};
 
-const LOG_TARGET: &str = "import-queue";
+const LOG_TARGET: &str = "sync::import-queue";
 
 /// A commonly-used Import Queue type.
 ///
