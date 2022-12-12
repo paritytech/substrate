@@ -406,6 +406,7 @@ where
 		if store.intersection(&active).count() == 0 {
 			let msg = "no authority public key found in store".to_string();
 			debug!(target: "beefy", "🥩 for block {:?} {}", block, msg);
+			metric_inc!(self, beefy_no_authority_found_in_store);
 			Err(Error::Keystore(msg))
 		} else {
 			Ok(())
@@ -491,6 +492,7 @@ where
 				false,
 			)?,
 			RoundAction::Enqueue => {
+				metric_inc!(self, beefy_buffered_votes);
 				debug!(target: "beefy", "🥩 Buffer vote for round: {:?}.", block_num);
 				if self.pending_votes.len() < MAX_BUFFERED_VOTE_ROUNDS {
 					let votes_vec = self.pending_votes.entry(block_num).or_default();
@@ -498,6 +500,7 @@ where
 						warn!(target: "beefy", "🥩 Buffer vote dropped for round: {:?}", block_num)
 					}
 				} else {
+					metric_inc!(self, beefy_buffered_votes_full);
 					error!(target: "beefy", "🥩 Buffer justification dropped for round: {:?}.", block_num);
 				}
 			},

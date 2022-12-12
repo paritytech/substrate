@@ -19,7 +19,6 @@
 //! BEEFY Prometheus metrics definition
 
 use prometheus::{register, Counter, Gauge, PrometheusError, Registry, U64};
-
 /// BEEFY metrics exposed through Prometheus
 pub(crate) struct Metrics {
 	/// Current active validator set id
@@ -34,6 +33,14 @@ pub(crate) struct Metrics {
 	pub beefy_should_vote_on: Gauge<U64>,
 	/// Number of sessions with lagging signed commitment on mandatory block
 	pub beefy_lagging_sessions: Counter<U64>,
+	/// Number of validator's trying to vote with no session initialized
+	pub beefy_voting_with_no_session_initialized: Counter<U64>,
+	/// Number of times no Authority public key found in store
+	pub beefy_no_authority_found_in_store: Counter<U64>,
+	/// Number of Buffered votes
+	pub beefy_buffered_votes: Counter<U64>,
+	/// Number of times Buffered votes is full
+	pub beefy_buffered_votes_full: Counter<U64>,
 }
 
 impl Metrics {
@@ -69,6 +76,31 @@ impl Metrics {
 				Counter::new(
 					"substrate_beefy_lagging_sessions",
 					"Number of sessions with lagging signed commitment on mandatory block",
+				)?,
+				registry,
+			)?,
+			beefy_voting_with_no_session_initialized: register(
+				Counter::new(
+					"substrate_voting_with_no_session_initialized",
+					"Number of validator's trying to vote with no session initialized",
+				)?,
+				registry,
+			)?,
+			beefy_no_authority_found_in_store: register(
+				Counter::new(
+					"substrate_beefy_no_authority_found_in_store",
+					"Number of times no Authority public key found in store",
+				)?,
+				registry,
+			)?,
+			beefy_buffered_votes: register(
+				Counter::new("substrate_beefy_buffered_votes", "Number of Buffered votes")?,
+				registry,
+			)?,
+			beefy_buffered_votes_full: register(
+				Counter::new(
+					"substrate_beefy_buffered_votes_full",
+					"Number of times Buffered votes is full",
 				)?,
 				registry,
 			)?,
