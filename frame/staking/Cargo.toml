@@ -76,6 +76,3 @@ runtime-benchmarks = [
 	"sp-staking/runtime-benchmarks",
 ]
 try-runtime = ["frame-support/try-runtime"]
-fuzz = [
-	"frame-election-provider-support/fuzz",
-]
