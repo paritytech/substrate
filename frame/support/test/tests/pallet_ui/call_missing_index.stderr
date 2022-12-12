@@ -6,7 +6,7 @@ error: use of deprecated unit struct `pallet::__warnings::foo`:
                    <https://github.com/paritytech/substrate/pull/11381>.
   --> tests/pallet_ui/call_missing_index.rs:15:10
    |
-15 |         pub fn foo(_: OriginFor<T>) -> DispatchResultWith {}
+15 |         pub fn foo(_: OriginFor<T>) -> DispatchResult {
    |                ^^^
    |
    = note: `-D deprecated` implied by `-D warnings`
