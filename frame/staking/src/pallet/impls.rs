@@ -729,6 +729,7 @@ impl<T: Config> Pallet<T> {
 		let mut nominators_taken = 0u32;
 
 		let mut sorted_voters = T::VoterList::iter();
+		let mut min_active_bond = None;
 		while all_voters.len() < max_allowed_len &&
 			voters_seen < (NPOS_MAX_ITERATIONS_COEFFICIENT * max_allowed_len as u32)
 		{
@@ -749,10 +750,19 @@ impl<T: Config> Pallet<T> {
 						.get(stash)
 						.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
 				});
+				let voter_weight = weight_of(&voter);
 				if !targets.len().is_zero() {
-					all_voters.push((voter.clone(), weight_of(&voter), targets));
+					all_voters.push((voter.clone(), voter_weight, targets));
 					nominators_taken.saturating_inc();
 				}
+
+				min_active_bond = min_active_bond.map_or(Some(voter_weight), |current_min| {
+					if voter_weight < current_min {
+						Some(voter_weight)
+					} else {
+						Some(current_min)
+					}
+				});
 			} else if Validators::<T>::contains_key(&voter) {
 				// if this voter is a validator:
 				let self_vote = (
@@ -787,6 +797,10 @@ impl<T: Config> Pallet<T> {
 			slashing_spans.len() as u32,
 		));
 
+		LastMinimumActiveBond::<T>::put::<T::CurrencyBalance>(
+			min_active_bond.map_or(0, |v| v).into(),
+		);
+
 		log!(
 			info,
 			"generated {} npos voters, {} from validators and {} nominators",
@@ -794,12 +808,6 @@ impl<T: Config> Pallet<T> {
 			validators_taken,
 			nominators_taken
 		);
-
-		// `all_voters` is sorted by vote weight, so we use the last element to set the current
-		// minimum active bond. Note that depending on the `T::VoterList` list, the sorting may be
-		// inconsistent as the sorting may be lazy.
-		let min_active_bond: T::CurrencyBalance = all_voters.last().map_or(0, |v| v.1).into();
-		LastMinimumActiveBond::<T>::put(min_active_bond);
 
 		all_voters
 	}
