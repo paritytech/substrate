@@ -517,7 +517,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn slashing_spans)]
 	#[pallet::unbounded]
-	pub(crate) type SlashingSpans<T: Config> =
+	pub type SlashingSpans<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, slashing::SlashingSpans>;
 
 	/// Records information about the maximum slash of a stash within a slashing span,
@@ -671,8 +671,11 @@ pub mod pallet {
 		EraPaid { era_index: EraIndex, validator_payout: BalanceOf<T>, remainder: BalanceOf<T> },
 		/// The nominator has been rewarded by this amount.
 		Rewarded { stash: T::AccountId, amount: BalanceOf<T> },
-		/// One staker (and potentially its nominators) has been slashed by the given amount.
+		/// A staker (validator or nominator) has been slashed by the given amount.
 		Slashed { staker: T::AccountId, amount: BalanceOf<T> },
+		/// A slash for the given validator, for the given percentage of their stake, at the given
+		/// era as been reported.
+		SlashReported { validator: T::AccountId, fraction: Perbill, slash_era: EraIndex },
 		/// An old slashing report from a prior era was discarded because it could
 		/// not be processed.
 		OldSlashingReportDiscarded { session_index: SessionIndex },
