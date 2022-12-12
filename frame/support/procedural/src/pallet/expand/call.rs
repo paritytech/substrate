@@ -58,24 +58,19 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 	let mut warning_names = Vec::new();
 	// Emit a warning for each call that is missing `call_index` when not in dev-mode.
 	for method in &methods {
-		let explicit_call_index =
-			crate::pallet::parse::helper::take_item_pallet_attrs(&mut method.clone().attrs)
-				.unwrap_or_default()
-				.into_iter()
-				.any(|attr| matches!(attr, crate::pallet::parse::call::FunctionAttr::Weight(_)));
-		if explicit_call_index || def.dev_mode {
+		if method.explicit_call_index || def.dev_mode {
 			continue
 		}
 
 		let name =
-			syn::Ident::new(&format!("implicit_call_index_{}", method.name), method.name.span());
+			syn::Ident::new(&format!("{}", method.name), method.name.span());
 		let warning: syn::ItemStruct = syn::parse_quote!(
 			#[deprecated(note = r"
-			`pallet::call_index` is missing on a call while the dev-mode is disabled.
-			Please ensure that either all your calls have the `pallet::call_index` attribute or
-			that the dev-mode for your pallet is enabled. For more info see:
-			<https://github.com/paritytech/substrate/pull/11381> and
-			<https://github.com/paritytech/substrate/pull/12536>.")]
+			Implicit call indices are deprecated in favour of explicit ones.
+			Please ensure that all calls have the `pallet::call_index` attribute or that the
+			`dev-mode` of the pallet is enabled. For more info see:
+			<https://github.com/paritytech/substrate/pull/12891> and
+			<https://github.com/paritytech/substrate/pull/11381>.")]
 			#[allow(non_camel_case_types)]
 			struct #name;
 		);
@@ -207,7 +202,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		.collect::<Vec<_>>();
 
 	quote::quote_spanned!(span =>
-		fn __trigger_warnings() {
+		fn __warnings() {
 			#(
 				#warning_structs
 				// This triggers the deprecated warnings.
