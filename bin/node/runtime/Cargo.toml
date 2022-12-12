@@ -75,6 +75,7 @@ pallet-indices = { version = "4.0.0-dev", default-features = false, path = "../.
 pallet-identity = { version = "4.0.0-dev", default-features = false, path = "../../../frame/identity" }
 pallet-lottery = { version = "4.0.0-dev", default-features = false, path = "../../../frame/lottery" }
 pallet-membership = { version = "4.0.0-dev", default-features = false, path = "../../../frame/membership" }
+pallet-message-queue = { version = "7.0.0-dev", default-features = false, path = "../../../frame/message-queue" }
 pallet-mmr = { version = "4.0.0-dev", default-features = false, path = "../../../frame/merkle-mountain-range" }
 pallet-multisig = { version = "4.0.0-dev", default-features = false, path = "../../../frame/multisig" }
 pallet-nomination-pools = { version = "1.0.0", default-features = false, path = "../../../frame/nomination-pools"}
@@ -150,6 +151,7 @@ std = [
 	"sp-inherents/std",
 	"pallet-lottery/std",
 	"pallet-membership/std",
+	"pallet-message-queue/std",
 	"pallet-mmr/std",
 	"pallet-multisig/std",
 	"pallet-nomination-pools/std",
@@ -229,6 +231,7 @@ runtime-benchmarks = [
 	"pallet-indices/runtime-benchmarks",
 	"pallet-lottery/runtime-benchmarks",
 	"pallet-membership/runtime-benchmarks",
+	"pallet-message-queue/runtime-benchmarks",
 	"pallet-mmr/runtime-benchmarks",
 	"pallet-multisig/runtime-benchmarks",
 	"pallet-nomination-pools-benchmarking/runtime-benchmarks",
@@ -282,6 +285,7 @@ try-runtime = [
 	"pallet-identity/try-runtime",
 	"pallet-lottery/try-runtime",
 	"pallet-membership/try-runtime",
+	"pallet-message-queue/try-runtime",
 	"pallet-mmr/try-runtime",
 	"pallet-multisig/try-runtime",
 	"pallet-nomination-pools/try-runtime",
