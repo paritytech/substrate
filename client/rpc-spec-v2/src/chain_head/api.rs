@@ -34,7 +34,7 @@ pub trait ChainHeadApi<Hash> {
 		unsubscribe = "chainHead_unstable_unfollow",
 		item = FollowEvent<Hash>,
 	)]
-	fn chain_head_unstable_follow(&self, runtimeUpdates: bool);
+	fn chain_head_unstable_follow(&self, runtime_updates: bool);
 
 	/// Retrieves the body (list of transactions) of a pinned block.
 	///
@@ -54,9 +54,9 @@ pub trait ChainHeadApi<Hash> {
 	)]
 	fn chain_head_unstable_body(
 		&self,
-		followSubscription: String,
+		follow_subscription: String,
 		hash: Hash,
-		networkConfig: Option<NetworkConfig>,
+		network_config: Option<NetworkConfig>,
 	);
 
 	/// Retrieves the header of a pinned block.
@@ -74,7 +74,7 @@ pub trait ChainHeadApi<Hash> {
 	#[method(name = "chainHead_unstable_header", blocking)]
 	fn chain_head_unstable_header(
 		&self,
-		followSubscription: String,
+		follow_subscription: String,
 		hash: Hash,
 	) -> RpcResult<Option<String>>;
 
@@ -98,11 +98,11 @@ pub trait ChainHeadApi<Hash> {
 	)]
 	fn chain_head_unstable_storage(
 		&self,
-		followSubscription: String,
+		follow_subscription: String,
 		hash: Hash,
 		key: String,
-		childKey: Option<String>,
-		networkConfig: Option<NetworkConfig>,
+		child_key: Option<String>,
+		network_config: Option<NetworkConfig>,
 	);
 
 	/// Call into the Runtime API at a specified block's state.
@@ -117,11 +117,11 @@ pub trait ChainHeadApi<Hash> {
 	)]
 	fn chain_head_unstable_call(
 		&self,
-		followSubscription: String,
+		follow_subscription: String,
 		hash: Hash,
 		function: String,
-		callParameters: String,
-		networkConfig: Option<NetworkConfig>,
+		call_parameters: String,
+		network_config: Option<NetworkConfig>,
 	);
 
 	/// Unpin a block reported by the `follow` method.
@@ -133,5 +133,5 @@ pub trait ChainHeadApi<Hash> {
 	///
 	/// This method is unstable and subject to change in the future.
 	#[method(name = "chainHead_unstable_unpin", blocking)]
-	fn chain_head_unstable_unpin(&self, followSubscription: String, hash: Hash) -> RpcResult<()>;
+	fn chain_head_unstable_unpin(&self, follow_subscription: String, hash: Hash) -> RpcResult<()>;
 }

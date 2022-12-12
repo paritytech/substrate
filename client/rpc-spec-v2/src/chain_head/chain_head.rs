@@ -100,8 +100,6 @@ impl<BE, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 	}
 
 	/// Accept the subscription and return the subscription ID on success.
-	///
-	/// Also keep track of the subscription ID internally.
 	fn accept_subscription(
 		&self,
 		sink: &mut SubscriptionSink,
