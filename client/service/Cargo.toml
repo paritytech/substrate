@@ -22,7 +22,7 @@ test-helpers = []
 runtime-benchmarks = ["sc-client-db/runtime-benchmarks"]
 
 [dependencies]
-jsonrpsee = { version = "0.15.1", features = ["server"] }
+jsonrpsee = { version = "0.16.2", features = ["server"] }
 thiserror = "1.0.30"
 futures = "0.3.21"
 rand = "0.7.3"
