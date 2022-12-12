@@ -41,6 +41,12 @@ pub(crate) struct Metrics {
 	pub beefy_buffered_votes: Counter<U64>,
 	/// Number of times Buffered votes is full
 	pub beefy_buffered_votes_full: Counter<U64>,
+	/// Number of Buffered justifications
+	pub beefy_buffered_justifications: Counter<U64>,
+	/// Number of times Buffered justifications is full
+	pub beefy_buffered_justifications_full: Counter<U64>,
+	/// Trying to set Best Beefy block to old block
+	pub beefy_best_block_to_old_block: Gauge<U64>,
 }
 
 impl Metrics {
@@ -101,6 +107,27 @@ impl Metrics {
 				Counter::new(
 					"substrate_beefy_buffered_votes_full",
 					"Number of times Buffered votes is full",
+				)?,
+				registry,
+			)?,
+			beefy_buffered_justifications: register(
+				Counter::new(
+					"substrate_beefy_buffered_justifications",
+					"Number of Buffered justifications",
+				)?,
+				registry,
+			)?,
+			beefy_buffered_justifications_full: register(
+				Counter::new(
+					"substrate_beefy_buffered_justifications_full",
+					"Number of times Buffered justifications is full",
+				)?,
+				registry,
+			)?,
+			beefy_best_block_to_old_block: register(
+				Gauge::new(
+					"substrate_beefy_best_block_to_old_block",
+					"Trying to set Best Beefy block to old block",
 				)?,
 				registry,
 			)?,

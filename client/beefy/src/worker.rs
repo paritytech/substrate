@@ -527,10 +527,12 @@ where
 				self.finalize(justification)?
 			},
 			RoundAction::Enqueue => {
+				metric_inc!(self, beefy_buffered_justifications);
 				debug!(target: "beefy", "🥩 Buffer justification for round: {:?}.", block_num);
 				if self.pending_justifications.len() < MAX_BUFFERED_JUSTIFICATIONS {
 					self.pending_justifications.entry(block_num).or_insert(justification);
 				} else {
+					metric_inc!(self, beefy_buffered_justifications_full);
 					error!(target: "beefy", "🥩 Buffer justification dropped for round: {:?}.", block_num);
 				}
 			},
@@ -639,6 +641,7 @@ where
 				.expect("forwards closure result; the closure always returns Ok; qed.");
 		} else {
 			debug!(target: "beefy", "🥩 Can't set best beefy to older: {}", block_num);
+			metric_set!(self, beefy_best_block_to_old_block, block_num);
 		}
 		Ok(())
 	}
