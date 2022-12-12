@@ -140,6 +140,7 @@ frame_support::ord_parameter_types! {
 
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
+	type Fee = ConstU64<3>;
 	type Currency = Balances;
 	type AssetBalance = <Self as pallet_balances::Config>::Balance;
 	type Assets = Assets;

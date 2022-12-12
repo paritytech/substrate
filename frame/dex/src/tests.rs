@@ -452,6 +452,94 @@ fn swap_tokens_for_exact_tokens_should_work() {
 }
 
 #[test]
+fn swap_tokens_for_exact_tokens_works_when_user_is_not_liquidity_provider() {
+	new_test_ext().execute_with(|| {
+		let user = 1;
+		let user2 = 2;
+		let token_1 = MultiAssetId::Native;
+		let token_2 = MultiAssetId::Asset(2);
+		let deadline = 2;
+		let pallet_account = Dex::account_id();
+		let base1 = 1000;
+
+		create_tokens(user2, vec![token_2]);
+		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user2), token_1, token_2));
+
+		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user, base1, 0));
+		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user2, 1000, 0));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(user2), 2, user2, 1000));
+
+		let before1 =
+			balance(pallet_account, token_1) + balance(user, token_1) + balance(user2, token_1);
+		let before2 =
+			balance(pallet_account, token_2) + balance(user, token_2) + balance(user2, token_2);
+
+		let liquidity1 = 1000;
+		let liquidity2 = 20;
+		assert_ok!(Dex::add_liquidity(
+			RuntimeOrigin::signed(user2),
+			token_1,
+			token_2,
+			liquidity1,
+			liquidity2,
+			1,
+			1,
+			user2,
+			deadline
+		));
+
+		assert_eq!(balance(user, token_1), 1000);
+		assert_eq!(balance(user, token_2), 0);
+
+		let exchange_out2 = 1;
+
+		let expect_in1 =
+			dbg!(Dex::get_amount_in(&exchange_out2, &liquidity1, &liquidity2).ok().unwrap());
+
+		assert_ok!(Dex::swap_tokens_for_exact_tokens(
+			RuntimeOrigin::signed(user),
+			token_1,
+			token_2,
+			exchange_out2,
+			100, // amount_in_max
+			user,
+			3
+		));
+
+		assert_eq!(balance(user, token_1), 1000 - expect_in1);
+		assert_eq!(balance(pallet_account, token_1), liquidity1 + expect_in1);
+		assert_eq!(balance(user, token_2), exchange_out2);
+		assert_eq!(balance(pallet_account, token_2), dbg!(liquidity2) - exchange_out2);
+
+		// check invariants:
+
+		// dot and asset totals should be preserved.
+		assert_eq!(
+			before1,
+			balance(pallet_account, token_1) + balance(user, token_1) + balance(user2, token_1)
+		);
+		assert_eq!(
+			before2,
+			balance(pallet_account, token_2) + balance(user, token_2) + balance(user2, token_2)
+		);
+
+		assert_ok!(Dex::remove_liquidity(
+			RuntimeOrigin::signed(user2),
+			token_1,
+			token_2,
+			9,
+			0,
+			0,
+			user2,
+			2
+		));
+
+		// assert_eq!(balance(user2, token_1), 67);
+		// assert_eq!(balance(user2, token_2), 981);
+	});
+}
+
+#[test]
 fn swap_tokens_for_exact_tokens_should_not_work_if_too_much_slippage() {
 	new_test_ext().execute_with(|| {
 		let user = 1;

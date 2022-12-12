@@ -33,7 +33,6 @@ pub use types::*;
 // TODO: make it configurable
 // TODO: weights and benchmarking.
 // TODO: more specific error codes.
-// TODO: remove setup.
 pub const MIN_LIQUIDITY: u64 = 1;
 
 #[frame_support::pallet]
@@ -60,6 +59,9 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+
+		/// Units are 10ths of a percent
+		type Fee: Get<u64>;
 
 		type Currency: InspectFungible<Self::AccountId, Balance = Self::AssetBalance>
 			+ TransferFungible<Self::AccountId>;
@@ -222,7 +224,7 @@ pub mod pallet {
 			let pool_id = Self::get_pool_id(asset1, asset2);
 			let (asset1, asset2) = pool_id;
 
-			if !matches!(asset1, MultiAssetId::Native) {
+			if asset1 != MultiAssetId::Native {
 				Err(Error::<T>::PoolMustContainNativeCurrency)?;
 			}
 
@@ -311,22 +313,8 @@ pub mod pallet {
 				}
 
 				let pallet_account = Self::account_id();
-				match asset1 {
-					MultiAssetId::Native => {
-						T::Currency::transfer(&sender, &pallet_account, amount1, false)?;
-					},
-					MultiAssetId::Asset(asset1) => {
-						T::Assets::transfer(asset1, &sender, &pallet_account, amount1, false)?;
-					},
-				}
-				match asset2 {
-					MultiAssetId::Native => {
-						T::Currency::transfer(&sender, &pallet_account, amount2, false)?;
-					},
-					MultiAssetId::Asset(asset2) => {
-						T::Assets::transfer(asset2, &sender, &pallet_account, amount2, false)?;
-					},
-				}
+				Self::transfer(asset1, &sender, &pallet_account, amount1, false)?;
+				Self::transfer(asset2, &sender, &pallet_account, amount2, false)?;
 
 				let total_supply = T::PoolAssets::total_issuance(pool.lp_token);
 
@@ -431,22 +419,9 @@ pub mod pallet {
 
 				T::PoolAssets::burn_from(pool.lp_token, &pallet_account, liquidity)?;
 
-				match asset1 {
-					MultiAssetId::Native => {
-						T::Currency::transfer(&pallet_account, &withdraw_to, amount1, false)?;
-					},
-					MultiAssetId::Asset(asset1) => {
-						T::Assets::transfer(asset1, &pallet_account, &withdraw_to, amount1, false)?;
-					},
-				}
-				match asset2 {
-					MultiAssetId::Native => {
-						T::Currency::transfer(&pallet_account, &withdraw_to, amount2, false)?;
-					},
-					MultiAssetId::Asset(asset2) => {
-						T::Assets::transfer(asset2, &pallet_account, &withdraw_to, amount2, false)?;
-					},
-				}
+				Self::transfer(asset1, &pallet_account, &withdraw_to, amount1, false)?;
+				Self::transfer(asset2, &pallet_account, &withdraw_to, amount2, false)?;
+
 				pool.balance1 = reserve1 - amount1;
 				pool.balance2 = reserve2 - amount2;
 
@@ -498,32 +473,13 @@ pub mod pallet {
 				ensure!(amount2 >= amount_out_min, Error::<T>::InsufficientOutputAmount);
 
 				let pallet_account = Self::account_id();
-				match asset1 {
-					MultiAssetId::Native => {
-						T::Currency::transfer(&sender, &pallet_account, amount1, false)?;
-					},
-					MultiAssetId::Asset(asset1) => {
-						T::Assets::transfer(asset1, &sender, &pallet_account, amount1, false)?;
-					},
-				}
+				Self::transfer(asset1, &sender, &pallet_account, amount1, false)?;
 
 				let (send_asset, send_amount) =
 					Self::validate_swap(asset1, amount2, pool_id, pool.balance1, pool.balance2)?;
 
-				match send_asset {
-					MultiAssetId::Native => {
-						T::Currency::transfer(&pallet_account, &send_to, send_amount, false)?;
-					},
-					MultiAssetId::Asset(send_asset) => {
-						T::Assets::transfer(
-							send_asset,
-							&pallet_account,
-							&send_to,
-							send_amount,
-							false,
-						)?;
-					},
-				}
+				Self::transfer(send_asset, &pallet_account, &send_to, send_amount, false)?;
+
 				if send_asset == pool.asset1 {
 					pool.balance1 -= send_amount;
 					pool.balance2 += amount1;
@@ -579,32 +535,12 @@ pub mod pallet {
 				ensure!(amount1 <= amount_in_max, Error::<T>::ExcessiveInputAmount);
 
 				let pallet_account = Self::account_id();
-				match asset1 {
-					MultiAssetId::Native => {
-						T::Currency::transfer(&sender, &pallet_account, amount1, false)?;
-					},
-					MultiAssetId::Asset(asset1) => {
-						T::Assets::transfer(asset1, &sender, &pallet_account, amount1, false)?;
-					},
-				}
+				Self::transfer(asset1, &sender, &pallet_account, amount1, false)?;
 
 				let (send_asset, send_amount) =
 					Self::validate_swap(asset1, amount2, pool_id, pool.balance1, pool.balance2)?;
 
-				match send_asset {
-					MultiAssetId::Native => {
-						T::Currency::transfer(&pallet_account, &send_to, send_amount, false)?;
-					},
-					MultiAssetId::Asset(send_asset) => {
-						T::Assets::transfer(
-							send_asset,
-							&pallet_account,
-							&send_to,
-							send_amount,
-							false,
-						)?;
-					},
-				}
+				Self::transfer(send_asset, &pallet_account, &send_to, send_amount, false)?;
 
 				if send_asset == pool.asset1 {
 					pool.balance1 -= send_amount;
@@ -631,6 +567,20 @@ pub mod pallet {
 
 	// Your Pallet's internal functions.
 	impl<T: Config> Pallet<T> {
+		fn transfer(
+			asset_id: MultiAssetId<T::AssetId>,
+			from: &T::AccountId,
+			to: &T::AccountId,
+			amount: AssetBalanceOf<T>,
+			keep_alive: bool,
+		) -> Result<<T as pallet::Config>::AssetBalance, DispatchError> {
+			match asset_id {
+				MultiAssetId::Native => T::Currency::transfer(from, to, amount, keep_alive),
+				MultiAssetId::Asset(asset_id) =>
+					T::Assets::transfer(asset_id, from, to, amount, keep_alive),
+			}
+		}
+
 		/// The account ID of the dex pallet.
 		///
 		/// This actually does computation. If you need to keep using it, then make sure you cache
@@ -711,8 +661,9 @@ pub mod pallet {
 
 			// TODO: extract 0.3% into config
 			// TODO: could use Permill type
-			let amount_in_with_fee =
-				amount_in.checked_mul(&997u64.into()).ok_or(Error::<T>::Overflow)?;
+			let amount_in_with_fee = amount_in
+				.checked_mul(&(1000u64 - T::Fee::get()).into())
+				.ok_or(Error::<T>::Overflow)?;
 
 			let numerator =
 				amount_in_with_fee.checked_mul(reserve_out).ok_or(Error::<T>::Overflow)?;
@@ -749,7 +700,7 @@ pub mod pallet {
 			let denominator = reserve_out
 				.checked_sub(amount_out)
 				.ok_or(Error::<T>::Overflow)?
-				.checked_mul(&997u64.into())
+				.checked_mul(&(1000u64 - T::Fee::get()).into())
 				.ok_or(Error::<T>::Overflow)?;
 
 			numerator
