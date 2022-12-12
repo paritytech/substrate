@@ -46,9 +46,7 @@ use sc_network_common::{
 	utils::{interval, LruHashSet},
 };
 use sp_arithmetic::traits::SaturatedConversion;
-use sp_runtime::{
-	traits::{Block as BlockT, CheckedSub, Header as HeaderT, NumberFor, Zero},
-};
+use sp_runtime::traits::{Block as BlockT, CheckedSub, Header as HeaderT, NumberFor, Zero};
 use std::{
 	collections::{HashMap, HashSet, VecDeque},
 	io, iter,
