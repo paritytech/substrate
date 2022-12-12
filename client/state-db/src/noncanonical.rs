@@ -38,6 +38,7 @@ pub struct NonCanonicalOverlay<BlockHash: Hash, Key: Hash> {
 	// would be deleted but kept around because block is pinned, ref counted.
 	pinned: HashMap<BlockHash, u32>,
 	pinned_insertions: HashMap<BlockHash, (Vec<Key>, u32)>,
+	last_canon_pinned: Option<BlockHash>,
 }
 
 #[cfg_attr(test, derive(PartialEq, Debug))]
@@ -225,6 +226,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			pinned: Default::default(),
 			pinned_insertions: Default::default(),
 			values,
+			last_canon_pinned: None,
 		})
 	}
 
@@ -366,6 +368,16 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			.iter()
 			.position(|overlay| overlay.hash == *hash)
 			.ok_or(StateDbError::InvalidBlock)?;
+
+		// No failures are possible beyond this point.
+
+		// Unpin previously canonicalized block
+		if let Some(prev_hash) = self.last_canon_pinned.take() {
+			self.unpin(&prev_hash);
+		}
+		// Force pin canonicalized block so that it is no discarded immediately
+		self.pin(hash);
+		self.last_canon_pinned = Some(hash.clone());
 
 		let mut discarded_journals = Vec::new();
 		let mut discarded_blocks = Vec::new();
@@ -680,6 +692,7 @@ mod tests {
 		db.commit(&overlay.insert(&h2, 11, &h1, make_changeset(&[5], &[3])).unwrap());
 		let mut commit = CommitSet::default();
 		overlay.canonicalize(&h1, &mut commit).unwrap();
+		overlay.unpin(&h1);
 		db.commit(&commit);
 		assert_eq!(overlay.levels.len(), 1);
 
@@ -707,15 +720,16 @@ mod tests {
 		let mut commit = CommitSet::default();
 		overlay.canonicalize(&h1, &mut commit).unwrap();
 		db.commit(&commit);
-		assert!(!contains(&overlay, 5));
+		assert!(contains(&overlay, 5));
 		assert!(contains(&overlay, 7));
 		assert_eq!(overlay.levels.len(), 1);
-		assert_eq!(overlay.parents.len(), 1);
+		assert_eq!(overlay.parents.len(), 2);
 		let mut commit = CommitSet::default();
 		overlay.canonicalize(&h2, &mut commit).unwrap();
+		assert!(!contains(&overlay, 5));
 		db.commit(&commit);
 		assert_eq!(overlay.levels.len(), 0);
-		assert_eq!(overlay.parents.len(), 0);
+		assert_eq!(overlay.parents.len(), 1);
 		assert!(db.data_eq(&make_db(&[1, 4, 6, 7, 8])));
 	}
 
@@ -732,6 +746,8 @@ mod tests {
 		let mut commit = CommitSet::default();
 		overlay.canonicalize(&h_1, &mut commit).unwrap();
 		db.commit(&commit);
+		// explicitly unpin last block
+		overlay.unpin(&h_1);
 		assert!(!contains(&overlay, 1));
 	}
 
@@ -818,6 +834,8 @@ mod tests {
 		// canonicalize 1. 2 and all its children should be discarded
 		let mut commit = CommitSet::default();
 		overlay.canonicalize(&h_1, &mut commit).unwrap();
+		// explicitly unpin last block
+		overlay.unpin(&h_1);
 		db.commit(&commit);
 		assert_eq!(overlay.levels.len(), 2);
 		assert_eq!(overlay.parents.len(), 6);
@@ -838,6 +856,7 @@ mod tests {
 		// canonicalize 1_2. 1_1 and all its children should be discarded
 		let mut commit = CommitSet::default();
 		overlay.canonicalize(&h_1_2, &mut commit).unwrap();
+		overlay.unpin(&h_1_2);
 		db.commit(&commit);
 		assert_eq!(overlay.levels.len(), 1);
 		assert_eq!(overlay.parents.len(), 3);
@@ -854,6 +873,7 @@ mod tests {
 		// canonicalize 1_2_2
 		let mut commit = CommitSet::default();
 		overlay.canonicalize(&h_1_2_2, &mut commit).unwrap();
+		overlay.unpin(&h_1_2_2);
 		db.commit(&commit);
 		assert_eq!(overlay.levels.len(), 0);
 		assert_eq!(overlay.parents.len(), 0);
@@ -964,6 +984,7 @@ mod tests {
 		assert!(contains(&overlay, 1));
 		overlay.unpin(&h_21);
 		assert!(!contains(&overlay, 1));
+		overlay.unpin(&h_12);
 		assert!(overlay.pinned.is_empty());
 	}
 
@@ -998,6 +1019,7 @@ mod tests {
 
 		let mut commit = CommitSet::default();
 		overlay.canonicalize(&h21, &mut commit).unwrap(); // h11 should stay in the DB
+		overlay.unpin(&h21);
 		db.commit(&commit);
 		assert!(!contains(&overlay, 21));
 	}
