@@ -39,7 +39,7 @@ use futures::{
 use futures_util::future::Either;
 use jsonrpsee::{
 	core::{async_trait, RpcResult},
-	types::{SubscriptionEmptyError, SubscriptionResult},
+	types::{SubscriptionEmptyError, SubscriptionId, SubscriptionResult},
 	SubscriptionSink,
 };
 use log::{debug, error};
@@ -109,26 +109,17 @@ impl<BE, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 		// The subscription must be accepted before it can provide a valid subscription ID.
 		sink.accept()?;
 
-		// TODO: Jsonrpsee needs release + merge in substrate
-		// let sub_id = match sink.subscription_id() {
-		// 	Some(id) => id,
-		// 	// This can only happen if the subscription was not accepted.
-		// 	None => {
-		// 		let err = ErrorObject::owned(PARSE_ERROR_CODE, "invalid subscription ID", None);
-		// 		sink.close(err);
-		// 		return Err(SubscriptionEmptyError)
-		// 	}
-		// };
-		// // Get the string representation for the subscription.
-		// let sub_id = match serde_json::to_string(&sub_id) {
-		// 	Ok(sub_id) => sub_id,
-		// 	Err(err) => {
-		// 		sink.close(err);
-		// 		return Err(SubscriptionEmptyError)
-		// 	},
-		// };
+		let Some(sub_id) = sink.subscription_id() else {
+			// This can only happen if the subscription was not accepted.
+			return Err(SubscriptionEmptyError)
+		};
 
-		let sub_id: String = "A".into();
+		// Get the string representation for the subscription.
+		let sub_id = match sub_id {
+			SubscriptionId::Num(num) => num.to_string(),
+			SubscriptionId::Str(id) => id.into_owned().into(),
+		};
+
 		Ok(sub_id)
 	}
 }
@@ -478,7 +469,14 @@ where
 		mut sink: SubscriptionSink,
 		runtime_updates: bool,
 	) -> SubscriptionResult {
-		let sub_id = self.accept_subscription(&mut sink)?;
+		let sub_id = match self.accept_subscription(&mut sink) {
+			Ok(sub_id) => sub_id,
+			Err(err) => {
+				sink.close(ChainHeadRpcError::InvalidSubscriptionID);
+				return Err(err)
+			},
+		};
+
 		// Keep track of the subscription.
 		let Some((rx_stop, sub_handle)) = self.subscriptions.insert_subscription(sub_id.clone(), runtime_updates, self.max_pinned_blocks) else {
 			// Inserting the subscription can only fail if the JsonRPSee

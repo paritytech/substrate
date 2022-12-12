@@ -36,6 +36,9 @@ pub enum Error {
 	/// Invalid parameter provided to the RPC method.
 	#[error("Invalid parameter: {0}")]
 	InvalidParam(String),
+	/// Invalid subscription ID provided by the RPC server.
+	#[error("Invalid subscription ID")]
+	InvalidSubscriptionID,
 }
 
 // Base code for all `chainHead` errors.
@@ -46,6 +49,8 @@ const INVALID_BLOCK_ERROR: i32 = BASE_ERROR + 1;
 const FETCH_BLOCK_HEADER_ERROR: i32 = BASE_ERROR + 2;
 /// Invalid parameter error.
 const INVALID_PARAM_ERROR: i32 = BASE_ERROR + 3;
+/// Invalid subscription ID.
+const INVALID_SUB_ID: i32 = BASE_ERROR + 4;
 
 impl From<Error> for ErrorObject<'static> {
 	fn from(e: Error) -> Self {
@@ -56,6 +61,7 @@ impl From<Error> for ErrorObject<'static> {
 			Error::FetchBlockHeader(_) =>
 				ErrorObject::owned(FETCH_BLOCK_HEADER_ERROR, msg, None::<()>),
 			Error::InvalidParam(_) => ErrorObject::owned(INVALID_PARAM_ERROR, msg, None::<()>),
+			Error::InvalidSubscriptionID => ErrorObject::owned(INVALID_SUB_ID, msg, None::<()>),
 		}
 		.into()
 	}

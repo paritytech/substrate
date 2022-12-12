@@ -3,7 +3,7 @@ use assert_matches::assert_matches;
 use codec::{Decode, Encode};
 use jsonrpsee::{
 	core::{error::Error, server::rpc_module::Subscription as RpcSubscription},
-	types::{error::CallError, EmptyParams},
+	types::{error::CallError, EmptyServerParams as EmptyParams},
 	RpcModule,
 };
 use sc_block_builder::BlockBuilderProvider;
@@ -68,10 +68,8 @@ async fn setup_api() -> (
 	.into_rpc();
 
 	let mut sub = api.subscribe("chainHead_unstable_follow", [true]).await.unwrap();
-	// TODO: Jsonrpsee release for sub_id.
-	// let sub_id = sub.subscription_id();
-	// let sub_id = serde_json::to_string(&sub_id).unwrap();
-	let sub_id: String = "A".into();
+	let sub_id = sub.subscription_id();
+	let sub_id = serde_json::to_string(&sub_id).unwrap();
 
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 	client.import(BlockOrigin::Own, block.clone()).await.unwrap();
@@ -455,10 +453,8 @@ async fn call_runtime_without_flag() {
 	.into_rpc();
 
 	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
-	// TODO: Jsonrpsee release for sub_id.
-	// let sub_id = sub.subscription_id();
-	// let sub_id = serde_json::to_string(&sub_id).unwrap();
-	let sub_id: String = "A".into();
+	let sub_id = sub.subscription_id();
+	let sub_id = serde_json::to_string(&sub_id).unwrap();
 
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 	let block_hash = format!("{:?}", block.header.hash());
@@ -809,10 +805,8 @@ async fn follow_with_unpin() {
 	.into_rpc();
 
 	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
-	// TODO: Jsonrpsee release for sub_id.
-	// let sub_id = sub.subscription_id();
-	// let sub_id = serde_json::to_string(&sub_id).unwrap();
-	let sub_id: String = "A".into();
+	let sub_id = sub.subscription_id();
+	let sub_id = serde_json::to_string(&sub_id).unwrap();
 
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 	let block_hash = format!("{:?}", block.header.hash());
