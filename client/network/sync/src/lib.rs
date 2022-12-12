@@ -998,17 +998,6 @@ where
 		Ok(self.validate_and_queue_blocks(new_blocks, gap))
 	}
 
-
-	fn poll_warp_sync_target_block(&mut self, cx: &mut std::task::Context) -> Poll<B::Header> {
-		if let Some(WarpSyncParams::WaitForTarget(target_block)) = self.warp_sync_params.as_mut() {
-			return match target_block.poll_unpin(cx) {
-				Poll::Ready(Ok(target_block)) => Poll::Ready(target_block),
-				_ => Poll::Pending,
-			}
-		}
-		Poll::Pending
-	}
-	
 	fn process_block_response_data(&mut self, blocks_to_import: Result<OnBlockData<B>, BadPeer>) {
 		match blocks_to_import {
 			Ok(OnBlockData::Import(origin, blocks)) => self.import_blocks(origin, blocks),
@@ -1380,6 +1369,12 @@ where
 		if let Poll::Ready(warp_sync) =
 			WarpSync::poll_target_block(self.client.clone(), self.warp_sync_params.as_mut(), cx)
 		{
+			let target_block = warp_sync.target_block_number().unwrap();
+			info!(
+				target: "sync",
+				"Waiting for target block complete. Target block reached {:?}",
+				target_block,
+			);
 			self.warp_sync = Some(warp_sync)
 		}
 
@@ -1449,8 +1444,8 @@ where
 		roles: Roles,
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 		max_parallel_downloads: u32,
-		metrics_registry: Option<&Registry>,
 		warp_sync_params: Option<WarpSyncParams<B>>,
+		metrics_registry: Option<&Registry>,
 		network_service: service::network::NetworkServiceHandle,
 		import_queue: Box<dyn ImportQueueService<B>>,
 		block_request_protocol_name: ProtocolName,

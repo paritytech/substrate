@@ -1259,7 +1259,8 @@ fn warp_sync_to_target_block() {
 
 	net.peer(0).push_blocks(64, false);
 
-	let target_block = net.peer(0).get_best_header();
+	let info = net.peer(0).client.info();
+	let target_block = net.peer(0).client.header(&BlockId::hash(info.best_hash)).unwrap().unwrap();
 
 	net.add_full_peer_with_config(FullPeerConfig {
 		sync_mode: SyncMode::Warp,

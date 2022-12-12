@@ -4880,7 +4880,6 @@ dependencies = [
  "sc-executor",
  "sc-finality-grandpa",
  "sc-keystore",
- "sc-network-common",
  "sc-rpc",
  "sc-rpc-api",
  "sc-service",
