@@ -31,7 +31,6 @@ mod tests;
 mod mock;
 
 pub use pallet::*;
-use sp_runtime::traits::StaticLookup;
 pub use types::*;
 pub use weights::WeightInfo;
 
