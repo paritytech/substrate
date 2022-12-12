@@ -575,6 +575,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Remove a page which has no more messages remaining to be processed or is stale.
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::reap_page())]
 		pub fn reap_page(
 			origin: OriginFor<T>,
@@ -595,6 +596,7 @@ pub mod pallet {
 		///   of the message.
 		///
 		/// Benchmark complexity considerations: O(index + weight_limit).
+		#[pallet::call_index(1)]
 		#[pallet::weight(
 			T::WeightInfo::execute_overweight_page_updated().max(
 			T::WeightInfo::execute_overweight_page_removed()).saturating_add(*weight_limit)
