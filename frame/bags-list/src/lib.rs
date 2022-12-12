@@ -224,6 +224,7 @@ pub mod pallet {
 		/// `ScoreProvider`.
 		///
 		/// If `dislocated` does not exists, it returns an error.
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::rebag_non_terminal().max(T::WeightInfo::rebag_terminal()))]
 		pub fn rebag(origin: OriginFor<T>, dislocated: AccountIdLookupOf<T>) -> DispatchResult {
 			ensure_signed(origin)?;
@@ -242,6 +243,7 @@ pub mod pallet {
 		/// Only works if
 		/// - both nodes are within the same bag,
 		/// - and `origin` has a greater `Score` than `lighter`.
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::put_in_front_of())]
 		pub fn put_in_front_of(
 			origin: OriginFor<T>,
