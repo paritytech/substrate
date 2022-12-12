@@ -90,7 +90,7 @@ where
 		.await
 		.map_err(rpc_err_handler)
 		.map(|maybe_header| maybe_header.ok_or("Header does not exist"))??;
-	let payload = (header).encode();
+	let payload = header.encode();
 
 	let _ = state_machine_call::<Block, HostFns>(
 		&ext,

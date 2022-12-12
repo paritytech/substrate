@@ -422,13 +422,13 @@ pub struct SharedParams {
 	#[clap(flatten)]
 	shared_params: sc_cli::SharedParams,
 
-	#[arg(long)]
 	/// The runtime to use.
 	///
 	/// Must be a path to a wasm blob, compiled with `try-runtime` feature flag.
 	///
 	/// Or, `existing`, indicating that you don't want to overwrite the runtime. This will use
 	/// whatever comes from the remote node, or the snapshot file.
+	#[arg(long)]
 	runtime: Runtime,
 
 	/// Type of wasm execution used.
