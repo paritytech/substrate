@@ -752,7 +752,6 @@ where
 					&function,
 					&call_parameters,
 					client.execution_extensions().strategies().other,
-					None,
 				)
 				.map(|result| {
 					let result = format!("0x{:?}", HexDisplay::from(&result));
