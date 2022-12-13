@@ -189,9 +189,10 @@ pub mod pallet {
 	type ReceiptRecordOf<T> = ReceiptRecord<
 		<T as frame_system::Config>::AccountId,
 		<T as frame_system::Config>::BlockNumber,
+		BalanceOf<T>,
 	>;
 	type IssuanceInfoOf<T> = IssuanceInfo<BalanceOf<T>>;
-	type SummaryRecordOf<T> = SummaryRecord<<T as frame_system::Config>::BlockNumber>;
+	type SummaryRecordOf<T> = SummaryRecord<<T as frame_system::Config>::BlockNumber, BalanceOf<T>>;
 	type BidOf<T> = Bid<BalanceOf<T>, <T as frame_system::Config>::AccountId>;
 	type QueueTotalsTypeOf<T> = BoundedVec<(u32, BalanceOf<T>), <T as Config>::QueueCount>;
 
@@ -321,13 +322,15 @@ pub mod pallet {
 	#[derive(
 		Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen,
 	)]
-	pub struct ReceiptRecord<AccountId, BlockNumber> {
+	pub struct ReceiptRecord<AccountId, BlockNumber, Balance> {
 		/// The proportion of the effective total issuance.
 		pub proportion: Perquintill,
 		/// The account to whom this receipt belongs.
 		pub who: AccountId,
 		/// The time after which this receipt can be thawed.
 		pub expiry: BlockNumber,
+		/// The amount of funds on hold in `who`'s account for servicing this receipt.
+		pub on_hold: Balance,
 	}
 
 	/// An index for a receipt.
@@ -344,7 +347,7 @@ pub mod pallet {
 	#[derive(
 		Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen,
 	)]
-	pub struct SummaryRecord<BlockNumber> {
+	pub struct SummaryRecord<BlockNumber, Balance> {
 		/// The total proportion over all outstanding receipts.
 		pub proportion_owed: Perquintill,
 		/// The total number of receipts created so far.
@@ -353,6 +356,9 @@ pub mod pallet {
 		pub thawed: Perquintill,
 		/// The current thaw period's beginning.
 		pub last_period: BlockNumber,
+		/// The total amount of funds on hold for receipts. This doesn't include the pot or funds
+		/// on hold for bids.
+		pub receipts_on_hold: Balance,
 	}
 
 	pub struct OnEmptyQueueTotals<T>(sp_std::marker::PhantomData<T>);
@@ -689,10 +695,31 @@ pub mod pallet {
 			receipt.proportion.saturating_reduce(proportion);
 			summary.proportion_owed.saturating_reduce(proportion);
 
-			T::Currency::transfer(&our_account, &who, amount, AllowDeath)
-				.map_err(|_| Error::<T>::Unfunded)?;
-
 			let dropped = receipt.proportion.is_zero();
+
+			if amount > receipt.on_hold {
+				T::Currency::unreserve(&who, receipt.on_hold);
+				let deficit = amount - receipt.on_hold;
+				// Try to transfer deficit from pot to receipt owner.
+				summary.receipts_on_hold -= receipt.on_hold;
+				receipt.on_hold = Zero::zero();
+				T::Currency::transfer(&our_account, &who, deficit, AllowDeath)
+					.map_err(|_| Error::<T>::Unfunded)?;
+			} else {
+				if dropped {
+					T::Currency::unreserve(&who, receipt.on_hold);
+					summary.receipts_on_hold -= receipt.on_hold;
+					let excess = receipt.on_hold - amount;
+					// Transfer `excess` to the pot if we have now fully compensated for the receipt.
+					T::Currency::transfer(&who, &our_account, excess, AllowDeath)
+						.map_err(|_| Error::<T>::Unfunded)?;
+				} else {
+					T::Currency::unreserve(&who, amount);
+					receipt.on_hold -= amount;
+					summary.receipts_on_hold -= amount;
+				}
+			}
+
 			if dropped {
 				Receipts::<T>::remove(index);
 			} else {
@@ -709,7 +736,8 @@ pub mod pallet {
 	/// Issuance information returned by `issuance()`.
 	#[derive(RuntimeDebug)]
 	pub struct IssuanceInfo<Balance> {
-		/// The balance held in reserve by this pallet instance.
+		/// The balance held by this pallet instance together with the balances on hold across
+		/// all receipt-owning accounts.
 		pub holdings: Balance,
 		/// The (non-ignored) issuance in the system, not including this pallet's account.
 		pub other: Balance,
@@ -742,6 +770,20 @@ pub mod pallet {
 		fn transfer(index: &ReceiptIndex, destination: &T::AccountId) -> DispatchResult {
 			let mut item = Receipts::<T>::get(index).ok_or(TokenError::UnknownAsset)?;
 			let from = item.who;
+
+			// TODO: This should all be replaced by a single call `transfer_held`.
+			let shortfall = T::Currency::unreserve(&from, item.on_hold);
+			if !shortfall.is_zero() {
+				let _ = T::Currency::reserve(&from, item.on_hold - shortfall);
+				return Err(TokenError::NoFunds.into());
+			}
+			if let Err(e) = T::Currency::transfer(&from, destination, item.on_hold, AllowDeath) {
+				let _ = T::Currency::reserve(&from, item.on_hold);
+				return Err(e);
+			}
+			// This can never fail, and if it somehow does, then we can't handle this gracefully.
+			let _ = T::Currency::reserve(destination, item.on_hold).defensive();
+
 			item.who = destination.clone();
 			Receipts::<T>::insert(&index, &item);
 			Pallet::<T>::deposit_event(Event::<T>::Transferred {
@@ -781,7 +823,7 @@ pub mod pallet {
 		) -> IssuanceInfo<BalanceOf<T>> {
 			let total_issuance =
 				T::Currency::total_issuance().saturating_sub(T::IgnoredIssuance::get());
-			let holdings = T::Currency::free_balance(our_account);
+			let holdings = T::Currency::free_balance(our_account).saturating_add(summary.receipts_on_hold);
 			let other = total_issuance.saturating_sub(holdings);
 			let effective =
 				summary.proportion_owed.left_from_one().saturating_reciprocal_mul(other);
@@ -893,7 +935,7 @@ pub mod pallet {
 		pub(crate) fn process_bid(
 			mut bid: BidOf<T>,
 			expiry: T::BlockNumber,
-			our_account: &T::AccountId,
+			_our_account: &T::AccountId,
 			issuance: &IssuanceInfo<BalanceOf<T>>,
 			remaining: &mut BalanceOf<T>,
 			queue_amount: &mut BalanceOf<T>,
@@ -906,10 +948,8 @@ pub mod pallet {
 			} else {
 				None
 			};
-			let amount = bid.amount.saturating_sub(T::Currency::unreserve(&bid.who, bid.amount));
-			if T::Currency::transfer(&bid.who, &our_account, amount, AllowDeath).is_err() {
-				return result
-			}
+			let amount = bid.amount;
+			summary.receipts_on_hold.saturating_accrue(amount);
 
 			// Can never overflow due to block above.
 			remaining.saturating_reduce(amount);
@@ -928,7 +968,7 @@ pub mod pallet {
 
 			let e = Event::Issued { index, expiry, who: who.clone(), amount, proportion };
 			Self::deposit_event(e);
-			let receipt = ReceiptRecord { proportion, who: who.clone(), expiry };
+			let receipt = ReceiptRecord { proportion, who: who.clone(), expiry, on_hold: amount };
 			Receipts::<T>::insert(index, receipt);
 
 			// issue the fungible counterpart

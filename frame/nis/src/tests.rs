@@ -34,8 +34,12 @@ fn pot() -> u64 {
 	Balances::free_balance(&Nis::account_id())
 }
 
+fn holdings() -> u64 {
+	Nis::issuance().holdings
+}
+
 fn enlarge(amount: u64, max_bids: u32) {
-	let summary: SummaryRecord<u64> = Summary::<Test>::get();
+	let summary: SummaryRecord<u64, u64> = Summary::<Test>::get();
 	let increase_in_proportion_owed = Perquintill::from_rational(amount, Nis::issuance().effective);
 	let target = summary.proportion_owed.saturating_add(increase_in_proportion_owed);
 	Nis::process_queues(target, u32::max_value(), max_bids, &mut WeightCounter::unlimited());
@@ -55,7 +59,8 @@ fn basic_setup_works() {
 				proportion_owed: Perquintill::zero(),
 				index: 0,
 				last_period: 0,
-				thawed: Perquintill::zero()
+				thawed: Perquintill::zero(),
+				receipts_on_hold: 0,
 			}
 		);
 	});
@@ -203,8 +208,8 @@ fn basic_enlarge_works() {
 
 		// Takes 2/2, then stopped because it reaches its max amount
 		assert_eq!(Balances::reserved_balance(1), 40);
-		assert_eq!(Balances::reserved_balance(2), 0);
-		assert_eq!(pot(), 40);
+		assert_eq!(Balances::reserved_balance(2), 40);
+		assert_eq!(holdings(), 40);
 
 		assert_eq!(Queues::<Test>::get(1), vec![Bid { amount: 40, who: 1 }]);
 		assert_eq!(Queues::<Test>::get(2), vec![]);
@@ -216,12 +221,13 @@ fn basic_enlarge_works() {
 				proportion_owed: Perquintill::from_percent(10),
 				index: 1,
 				last_period: 0,
-				thawed: Perquintill::zero()
+				thawed: Perquintill::zero(),
+				receipts_on_hold: 40,
 			}
 		);
 		assert_eq!(
 			Receipts::<Test>::get(0).unwrap(),
-			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 2, expiry: 7 }
+			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 2, expiry: 7, on_hold: 40 }
 		);
 	});
 }
@@ -244,11 +250,11 @@ fn enlarge_respects_bids_limit() {
 
 		assert_eq!(
 			Receipts::<Test>::get(0).unwrap(),
-			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 4, expiry: 10 }
+			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 4, expiry: 10, on_hold: 40 }
 		);
 		assert_eq!(
 			Receipts::<Test>::get(1).unwrap(),
-			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 2, expiry: 7 }
+			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 2, expiry: 7, on_hold: 40 }
 		);
 		assert_eq!(
 			Summary::<Test>::get(),
@@ -256,7 +262,8 @@ fn enlarge_respects_bids_limit() {
 				proportion_owed: Perquintill::from_percent(20),
 				index: 2,
 				last_period: 0,
-				thawed: Perquintill::zero()
+				thawed: Perquintill::zero(),
+				receipts_on_hold: 80,
 			}
 		);
 	});
@@ -275,7 +282,7 @@ fn enlarge_respects_amount_limit_and_will_split() {
 
 		assert_eq!(
 			Receipts::<Test>::get(0).unwrap(),
-			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 1, expiry: 4 }
+			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 1, expiry: 4, on_hold: 40 }
 		);
 		assert_eq!(
 			Summary::<Test>::get(),
@@ -283,7 +290,8 @@ fn enlarge_respects_amount_limit_and_will_split() {
 				proportion_owed: Perquintill::from_percent(10),
 				index: 1,
 				last_period: 0,
-				thawed: Perquintill::zero()
+				thawed: Perquintill::zero(),
+				receipts_on_hold: 40,
 			}
 		);
 	});
@@ -297,13 +305,13 @@ fn basic_thaw_works() {
 		assert_eq!(Nis::issuance().effective, 400);
 		assert_eq!(Balances::free_balance(1), 60);
 		assert_eq!(Balances::reserved_balance(1), 40);
-		assert_eq!(pot(), 0);
+		assert_eq!(holdings(), 0);
 
 		enlarge(40, 1);
 		assert_eq!(Nis::issuance().effective, 400);
 		assert_eq!(Balances::free_balance(1), 60);
-		assert_eq!(Balances::reserved_balance(1), 0);
-		assert_eq!(pot(), 40);
+		assert_eq!(Balances::reserved_balance(1), 40);
+		assert_eq!(holdings(), 40);
 
 		run_to_block(3);
 		assert_noop!(Nis::thaw(RuntimeOrigin::signed(1), 0, None), Error::<Test>::NotExpired);
@@ -323,7 +331,8 @@ fn basic_thaw_works() {
 				proportion_owed: Perquintill::zero(),
 				index: 1,
 				last_period: 0,
-				thawed: Perquintill::from_percent(10)
+				thawed: Perquintill::from_percent(10),
+				receipts_on_hold: 0,
 			}
 		);
 		assert_eq!(Receipts::<Test>::get(0), None);
@@ -336,7 +345,7 @@ fn partial_thaw_works() {
 		run_to_block(1);
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 80, 1));
 		enlarge(80, 1);
-		assert_eq!(pot(), 80);
+		assert_eq!(holdings(), 80);
 
 		run_to_block(4);
 		assert_noop!(
@@ -353,7 +362,7 @@ fn partial_thaw_works() {
 
 		assert_eq!(Nis::issuance().effective, 400);
 		assert_eq!(Balances::free_balance(1), 40);
-		assert_eq!(pot(), 60);
+		assert_eq!(holdings(), 60);
 
 		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0, None));
 
@@ -367,7 +376,8 @@ fn partial_thaw_works() {
 				proportion_owed: Perquintill::zero(),
 				index: 1,
 				last_period: 0,
-				thawed: Perquintill::from_percent(20)
+				thawed: Perquintill::from_percent(20),
+				receipts_on_hold: 0,
 			}
 		);
 		assert_eq!(Receipts::<Test>::get(0), None);
@@ -383,7 +393,11 @@ fn thaw_respects_transfers() {
 		run_to_block(4);
 
 		assert_eq!(Nis::owner(&0), Some(1));
+		assert_eq!(Balances::reserved_balance(&1), 40);
+		assert_eq!(Balances::reserved_balance(&2), 0);
 		assert_ok!(Nis::transfer(&0, &2));
+		assert_eq!(Balances::reserved_balance(&1), 0);
+		assert_eq!(Balances::reserved_balance(&2), 40);
 
 		// Transfering the receipt...
 		assert_noop!(Nis::thaw(RuntimeOrigin::signed(1), 0, None), Error::<Test>::NotOwner);
@@ -395,8 +409,8 @@ fn thaw_respects_transfers() {
 		// ...and thawing is possible.
 		assert_ok!(Nis::thaw(RuntimeOrigin::signed(2), 0, None));
 
-		assert_eq!(Balances::free_balance(2), 140);
-		assert_eq!(Balances::free_balance(1), 60);
+		assert_eq!(Balances::total_balance(&2), 140);
+		assert_eq!(Balances::total_balance(&1), 60);
 	});
 }
 
@@ -571,11 +585,11 @@ fn enlargement_to_target_works() {
 		// Two new items should have been issued to 2 & 3 for 40 each & duration of 3.
 		assert_eq!(
 			Receipts::<Test>::get(0).unwrap(),
-			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 2, expiry: 13 }
+			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 2, expiry: 13, on_hold: 40 }
 		);
 		assert_eq!(
 			Receipts::<Test>::get(1).unwrap(),
-			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 3, expiry: 13 }
+			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 3, expiry: 13, on_hold: 40 }
 		);
 		assert_eq!(
 			Summary::<Test>::get(),
@@ -584,6 +598,7 @@ fn enlargement_to_target_works() {
 				index: 2,
 				last_period: 0,
 				thawed: Perquintill::zero(),
+				receipts_on_hold: 80,
 			}
 		);
 
@@ -595,7 +610,8 @@ fn enlargement_to_target_works() {
 				proportion_owed: Perquintill::from_percent(20),
 				index: 2,
 				last_period: 0,
-				thawed: Perquintill::zero()
+				thawed: Perquintill::zero(),
+				receipts_on_hold: 80,
 			}
 		);
 
@@ -603,11 +619,11 @@ fn enlargement_to_target_works() {
 		// Two new items should have been issued to 1 & 2 for 40 each & duration of 2.
 		assert_eq!(
 			Receipts::<Test>::get(2).unwrap(),
-			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 1, expiry: 12 }
+			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 1, expiry: 12, on_hold: 40 }
 		);
 		assert_eq!(
 			Receipts::<Test>::get(3).unwrap(),
-			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 2, expiry: 12 }
+			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 2, expiry: 12, on_hold: 40 }
 		);
 		assert_eq!(
 			Summary::<Test>::get(),
@@ -615,7 +631,8 @@ fn enlargement_to_target_works() {
 				proportion_owed: Perquintill::from_percent(40),
 				index: 4,
 				last_period: 0,
-				thawed: Perquintill::zero()
+				thawed: Perquintill::zero(),
+				receipts_on_hold: 160,
 			}
 		);
 
@@ -627,7 +644,8 @@ fn enlargement_to_target_works() {
 				proportion_owed: Perquintill::from_percent(40),
 				index: 4,
 				last_period: 0,
-				thawed: Perquintill::zero()
+				thawed: Perquintill::zero(),
+				receipts_on_hold: 160,
 			}
 		);
 
@@ -635,10 +653,10 @@ fn enlargement_to_target_works() {
 		Target::set(Perquintill::from_percent(60));
 		run_to_block(10);
 
-		// Two new items should have been issued to 1 & 2 for 40 each & duration of 2.
+		// One new item should have been issued to 1 for 40 each & duration of 2.
 		assert_eq!(
 			Receipts::<Test>::get(4).unwrap(),
-			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 1, expiry: 13 }
+			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 1, expiry: 13, on_hold: 40 }
 		);
 
 		assert_eq!(
@@ -647,7 +665,8 @@ fn enlargement_to_target_works() {
 				proportion_owed: Perquintill::from_percent(50),
 				index: 5,
 				last_period: 0,
-				thawed: Perquintill::zero()
+				thawed: Perquintill::zero(),
+				receipts_on_hold: 200,
 			}
 		);
 	});
