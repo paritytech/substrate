@@ -96,7 +96,7 @@ pub use sp_runtime::BuildStorage;
 pub mod impls;
 #[cfg(not(feature = "runtime-benchmarks"))]
 use impls::AllianceIdentityVerifier;
-use impls::{AllianceProposalProvider, Author, CreditToBlockAuthor};
+use impls::{AllianceProposalProvider, Author, CreditToBlockAuthor, Hasher};
 
 /// Constant values used within the runtime.
 pub mod constants;
@@ -361,7 +361,7 @@ impl pallet_scheduler::Config for Runtime {
 }
 
 impl pallet_pov_limit::Config for Runtime {
-	type Hasher = sp_core::Blake2Hasher;
+	type Hasher = Hasher;
 	type WeightInfo = pallet_pov_limit::weights::SubstrateWeight<Runtime>;
 }
 

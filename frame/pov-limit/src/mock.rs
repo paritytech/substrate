@@ -66,6 +66,14 @@ impl frame_system::Config for Test {
 	type MaxConsumers = ConstU32<16>;
 }
 
+impl crate::Hasher for sp_core::Blake2Hasher {
+	type Out = <sp_core::Blake2Hasher as sp_core::Hasher>::Out;
+
+	fn hash(val: &[u8]) -> Self::Out {
+		<sp_core::Blake2Hasher as sp_core::Hasher>::hash(val)
+	}
+}
+
 impl Config for Test {
 	type Hasher = sp_core::Blake2Hasher;
 	type WeightInfo = crate::weights::SubstrateWeight<Test>;

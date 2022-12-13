@@ -111,6 +111,16 @@ impl ProposalProvider<AccountId, Hash, RuntimeCall> for AllianceProposalProvider
 	}
 }
 
+pub struct Hasher;
+impl pallet_pov_limit::Hasher for Hasher {
+	type Out = Vec<u8>;
+
+	fn hash(a: &[u8]) -> Self::Out {
+		// THIS HAS TO BE UPDATED.
+		a.into()
+	}
+}
+
 #[cfg(test)]
 mod multiplier_tests {
 	use pallet_transaction_payment::{Multiplier, TargetedFeeAdjustment};

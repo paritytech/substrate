@@ -33,12 +33,17 @@ mod tests;
 pub mod weights;
 
 use frame_support::pallet_prelude::*;
-use sp_core::Hasher;
 use sp_runtime::Perbill;
 use sp_std::vec::Vec;
 
 pub use pallet::*;
 pub use weights::WeightInfo;
+
+pub trait Hasher {
+	type Out;
+
+	fn hash(_: &[u8]) -> Self::Out;
+}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -51,7 +56,7 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 
 		/// Type that implements the `Hasher` trait.
-		type Hasher: sp_core::Hasher;
+		type Hasher: Hasher;
 	}
 
 	#[pallet::pallet]
