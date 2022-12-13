@@ -81,8 +81,18 @@ default:
     paths:
       - artifacts/
 
+.prepare-env:
+  before_script:
+    # TODO: remove unset invocation when we'll be free from 'ENV RUSTC_WRAPPER=sccache' & sccache
+    # itself in all images
+    - unset RUSTC_WRAPPER
+    # $WASM_BUILD_WORKSPACE_HINT enables wasm-builder to find the Cargo.lock from within generated
+    # packages
+    - export WASM_BUILD_WORKSPACE_HINT="$PWD"
+
 .kubernetes-env:
   image:                           "${CI_IMAGE}"
+  extends:                         .prepare-env
   tags:
     - kubernetes-parity-build
 
@@ -108,11 +118,7 @@ default:
 .docker-env:
   image:                           "${CI_IMAGE}"
   before_script:
-    # TODO: remove unset invocation when we'll be free from 'ENV RUSTC_WRAPPER=sccache' & sccache itself in all images
-    - unset RUSTC_WRAPPER
-    # $WASM_BUILD_WORKSPACE_HINT enables wasm-builder to find the Cargo.lock from within generated
-    # packages
-    - export WASM_BUILD_WORKSPACE_HINT="$PWD"
+    - !reference [.prepare-env, before_script]
     - !reference [.rust-info-script, script]
     - !reference [.rusty-cachier, before_script]
     - !reference [.pipeline-stopper-vars, script]
