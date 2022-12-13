@@ -77,7 +77,9 @@ where
 	B: BlockT,
 	Client: HeaderBackend<B> + ProofProvider<B> + 'static,
 {
-	///  Create a new instance.
+	///  Create a new instance. When passing a warp sync provider we will be checking for proof and
+	/// authorities. Alternatively we can pass a target block when we want to skip downloading
+	/// proofs, in this case we will continue polling until the target block is known.
 	pub fn new(
 		client: Arc<Client>,
 		warp_sync_params: &mut WarpSyncParams<B>,
