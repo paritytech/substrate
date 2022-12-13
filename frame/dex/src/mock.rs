@@ -95,10 +95,11 @@ impl pallet_balances::Config for Test {
 impl pallet_assets::Config<Instance1> for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = u64;
+	type RemoveItemsLimit = ConstU32<1000>;
 	type AssetId = u32;
 	type Currency = Balances;
-	type ForceOrigin = frame_system::EnsureRoot<u64>;
 	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<u64>>;
+	type ForceOrigin = frame_system::EnsureRoot<u64>;
 	type AssetDeposit = ConstU64<1>;
 	type AssetAccountDeposit = ConstU64<10>;
 	type MetadataDepositBase = ConstU64<1>;
@@ -106,18 +107,18 @@ impl pallet_assets::Config<Instance1> for Test {
 	type ApprovalDeposit = ConstU64<1>;
 	type StringLimit = ConstU32<50>;
 	type Freezer = ();
-	type WeightInfo = ();
 	type Extra = ();
-	type RemoveItemsLimit = ConstU32<1000>;
+	type WeightInfo = ();
 }
 
 impl pallet_assets::Config<Instance2> for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = u64;
+	type RemoveItemsLimit = ConstU32<1000>;
 	type AssetId = u32;
 	type Currency = Balances;
-	type ForceOrigin = frame_system::EnsureRoot<u64>;
 	type CreateOrigin = AsEnsureOriginWithArg<EnsureSignedBy<DexAccount, u64>>;
+	type ForceOrigin = frame_system::EnsureRoot<u64>;
 	type AssetDeposit = ConstU64<0>;
 	type AssetAccountDeposit = ConstU64<0>;
 	type MetadataDepositBase = ConstU64<0>;
@@ -125,9 +126,8 @@ impl pallet_assets::Config<Instance2> for Test {
 	type ApprovalDeposit = ConstU64<0>;
 	type StringLimit = ConstU32<50>;
 	type Freezer = ();
-	type WeightInfo = ();
 	type Extra = ();
-	type RemoveItemsLimit = ConstU32<1000>;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -143,10 +143,10 @@ impl Config for Test {
 	type Fee = ConstU64<3>;
 	type Currency = Balances;
 	type AssetBalance = <Self as pallet_balances::Config>::Balance;
-	type Assets = Assets;
-	type PoolAssets = PoolAssets;
 	type AssetId = u32;
 	type PoolAssetId = u32;
+	type Assets = Assets;
+	type PoolAssets = PoolAssets;
 	type PalletId = DexPalletId;
 	type WeightInfo = ();
 }

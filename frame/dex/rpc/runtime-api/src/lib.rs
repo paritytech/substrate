@@ -26,6 +26,6 @@ sp_api::decl_runtime_apis! {
 	pub trait DexApi<Balance> where
 		Balance: Codec + MaybeDisplay,
 	{
-		fn quote_price(asset1: u32, asset2: u32, amount: u64) -> Option<Balance>;
+		fn quote_price(asset1: Option<u32>, asset2: Option<u32>, amount: u64) -> Option<Balance>;
 	}
 }

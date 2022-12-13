@@ -16,8 +16,9 @@
 // limitations under the License.
 
 use crate::{mock::*, *};
+use sp_runtime::{DispatchError, ModuleError};
 
-use frame_support::{assert_err, assert_noop, assert_ok, traits::fungibles::InspectEnumerable};
+use frame_support::{assert_noop, assert_ok, traits::fungibles::InspectEnumerable};
 
 fn events() -> Vec<Event<Test>> {
 	let result = System::events()
@@ -197,7 +198,7 @@ fn add_liquidity_should_work() {
 			amount1_provided: 10,
 			amount2_provided: 10,
 			lp_token,
-			liquidity: 9,
+			lp_token_minted: 9,
 		}));
 
 		let pallet_account = Dex::account_id();
@@ -252,7 +253,7 @@ fn remove_liquidity_should_work() {
 			amount1: 9,
 			amount2: 9,
 			lp_token,
-			liquidity: 9,
+			lp_token_burned: 9,
 		}));
 
 		let pallet_account = Dex::account_id();
@@ -263,6 +264,53 @@ fn remove_liquidity_should_work() {
 		assert_eq!(balance(user, token_1), 999);
 		assert_eq!(balance(user, token_2), 999);
 		assert_eq!(pool_balance(user, lp_token), 0);
+	});
+}
+
+#[test]
+fn can_not_redeem_more_lp_tokens_than_were_minted() {
+	new_test_ext().execute_with(|| {
+		let user = 1;
+		let token_1 = MultiAssetId::Native;
+		let token_2 = MultiAssetId::Asset(2);
+
+		create_tokens(user, vec![token_2]);
+		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
+
+		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user, 1000, 0));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 2, user, 1000));
+
+		assert_ok!(Dex::add_liquidity(
+			RuntimeOrigin::signed(user),
+			token_1,
+			token_2,
+			10,
+			10,
+			10,
+			10,
+			user,
+			2
+		));
+
+		// Only 9 lp_tokens_minted
+
+		assert_noop!(
+			Dex::remove_liquidity(
+				RuntimeOrigin::signed(user),
+				token_1,
+				token_2,
+				9 + 1, // Try and redeem 10 lp tokens while only 9 minted.
+				0,
+				0,
+				user,
+				2
+			),
+			DispatchError::Module(ModuleError {
+				index: 3,
+				error: [0; 4],
+				message: Some("BalanceLow")
+			})
+		);
 	});
 }
 
@@ -344,6 +392,116 @@ fn swap_should_work_with_native() {
 }
 
 #[test]
+fn can_not_swap_in_pool_with_no_liquidity_added_yet() {
+	new_test_ext().execute_with(|| {
+		let user = 1;
+		let token_1 = MultiAssetId::Native;
+		let token_2 = MultiAssetId::Asset(2);
+
+		create_tokens(user, vec![token_2]);
+		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
+
+		// Check can't swap an empty pool
+		assert_noop!(
+			Dex::swap_exact_tokens_for_tokens(
+				RuntimeOrigin::signed(user),
+				token_2,
+				token_1,
+				10,
+				1,
+				user,
+				3
+			),
+			Error::<Test>::InsufficientLiquidity
+		);
+	});
+}
+
+#[test]
+fn check_no_panic_when_try_swap_empty_pool() {
+	new_test_ext().execute_with(|| {
+		let user = 1;
+		let token_1 = MultiAssetId::Native;
+		let token_2 = MultiAssetId::Asset(2);
+		let pool_id = (token_1, token_2);
+		let lp_token = Dex::get_next_pool_asset_id();
+		create_tokens(user, vec![token_2]);
+		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
+
+		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user, 1000, 0));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 2, user, 1000));
+
+		let liquidity1 = 1000;
+		let liquidity2 = 20;
+		assert_ok!(Dex::add_liquidity(
+			RuntimeOrigin::signed(user),
+			token_1,
+			token_2,
+			liquidity1,
+			liquidity2,
+			1,
+			1,
+			user,
+			2
+		));
+
+		assert!(events().contains(&Event::<Test>::LiquidityAdded {
+			who: user,
+			mint_to: user,
+			pool_id,
+			amount1_provided: liquidity1,
+			amount2_provided: liquidity2,
+			lp_token,
+			lp_token_minted: 140,
+		}));
+
+		let pallet_account = Dex::account_id();
+
+		assert_eq!(balance(pallet_account, token_1), 1000);
+
+		assert_ok!(Dex::remove_liquidity(
+			RuntimeOrigin::signed(user),
+			token_1,
+			token_2,
+			140,
+			992, // min1
+			19,  // min2
+			user,
+			2
+		));
+
+		// Now pool should exist but be almost empty.
+		// Let's try and drain it.
+		assert_eq!(balance(pallet_account, token_1), 8);
+
+		assert_ok!(Dex::swap_exact_tokens_for_tokens(
+			RuntimeOrigin::signed(user),
+			token_2,
+			token_1,
+			20,
+			7,
+			user,
+			3
+		));
+
+		assert_eq!(balance(pallet_account, token_1), 1);
+
+		assert_noop!(
+			Dex::swap_exact_tokens_for_tokens(
+				RuntimeOrigin::signed(user),
+				token_2,
+				token_1,
+				20,
+				1,
+				user,
+				3
+			),
+			Error::<Test>::InsufficientOutputAmount
+		); // The price for the last one is very high.
+	});
+}
+
+#[test]
 fn swap_should_not_work_with_if_too_much_slippage() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
@@ -372,7 +530,7 @@ fn swap_should_not_work_with_if_too_much_slippage() {
 
 		let exchange_amount = 10;
 
-		assert_err!(
+		assert_noop!(
 			Dex::swap_exact_tokens_for_tokens(
 				RuntimeOrigin::signed(user),
 				token_2,
@@ -425,8 +583,7 @@ fn swap_tokens_for_exact_tokens_should_work() {
 
 		let exchange_out2 = 1;
 
-		let expect_in1 =
-			dbg!(Dex::get_amount_in(&exchange_out2, &liquidity1, &liquidity2).ok().unwrap());
+		let expect_in1 = Dex::get_amount_in(&exchange_out2, &liquidity1, &liquidity2).ok().unwrap();
 
 		assert_ok!(Dex::swap_tokens_for_exact_tokens(
 			RuntimeOrigin::signed(user),
@@ -441,7 +598,7 @@ fn swap_tokens_for_exact_tokens_should_work() {
 		assert_eq!(balance(user, token_1), 1000 - expect_in1);
 		assert_eq!(balance(pallet_account, token_1), liquidity1 + expect_in1);
 		assert_eq!(balance(user, token_2), 1000 - 20 + exchange_out2);
-		assert_eq!(balance(pallet_account, token_2), dbg!(liquidity2) - exchange_out2);
+		assert_eq!(balance(pallet_account, token_2), liquidity2 - exchange_out2);
 
 		// check invariants:
 
@@ -493,8 +650,7 @@ fn swap_tokens_for_exact_tokens_works_when_user_is_not_liquidity_provider() {
 
 		let exchange_out2 = 1;
 
-		let expect_in1 =
-			dbg!(Dex::get_amount_in(&exchange_out2, &liquidity1, &liquidity2).ok().unwrap());
+		let expect_in1 = Dex::get_amount_in(&exchange_out2, &liquidity1, &liquidity2).ok().unwrap();
 
 		assert_ok!(Dex::swap_tokens_for_exact_tokens(
 			RuntimeOrigin::signed(user),
@@ -509,7 +665,7 @@ fn swap_tokens_for_exact_tokens_works_when_user_is_not_liquidity_provider() {
 		assert_eq!(balance(user, token_1), 1000 - expect_in1);
 		assert_eq!(balance(pallet_account, token_1), liquidity1 + expect_in1);
 		assert_eq!(balance(user, token_2), exchange_out2);
-		assert_eq!(balance(pallet_account, token_2), dbg!(liquidity2) - exchange_out2);
+		assert_eq!(balance(pallet_account, token_2), liquidity2 - exchange_out2);
 
 		// check invariants:
 
@@ -569,7 +725,7 @@ fn swap_tokens_for_exact_tokens_should_not_work_if_too_much_slippage() {
 		));
 		let exchange_out2 = 1;
 
-		assert_err!(
+		assert_noop!(
 			Dex::swap_tokens_for_exact_tokens(
 				RuntimeOrigin::signed(user),
 				token_1,

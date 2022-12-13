@@ -59,7 +59,7 @@ pub use pallet_transaction_payment::{CurrencyAdapter, Multiplier, TargetedFeeAdj
 use pallet_transaction_payment::{FeeDetails, RuntimeDispatchInfo};
 use sp_api::impl_runtime_apis;
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
-use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
+use sp_core::{crypto::KeyTypeId, ConstU64, OpaqueMetadata};
 use sp_inherents::{CheckInherentsResult, InherentData};
 use sp_runtime::{
 	create_runtime_str,
@@ -1479,6 +1479,7 @@ parameter_types! {
 }
 
 impl pallet_dex::Config for Runtime {
+	type Fee = ConstU64<3>;
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
 	type AssetBalance = <Self as pallet_balances::Config>::Balance;
@@ -2090,7 +2091,7 @@ impl_runtime_apis! {
 		Balance,
 	> for Runtime
 	{
-		fn quote_price(asset1: u32, asset2: u32, amount: u64) -> Option<Balance> {
+		fn quote_price(asset1: Option<u32>, asset2: Option<u32>, amount: u64) -> Option<Balance> {
 			Dex::quote_price(asset1, asset2, amount)
 		}
 	}
