@@ -133,7 +133,7 @@
 //! given the right flag:
 //!
 //! ```ignore
-//!
+//! 
 //! #[cfg(feature = try-runtime)]
 //! fn pre_upgrade() -> Result<Vec<u8>, &'static str> {}
 //!
@@ -150,7 +150,16 @@
 //!
 //! ## State Consistency
 //!
-//! TODO
+//! Similarly, each pallet can expose a function in `#[pallet::hooks]` section as follows:
+//!
+//! ```
+//! #[cfg(feature = try-runtime)]
+//! fn try_state(_) -> Result<(), &'static str> {}
+//! ```
+//!
+//! which is called on numerous code paths in the try-runtime tool. These checks should ensure that
+//! the state of the pallet is consistent and correct. See [`frame_support::try_runtime::TryState`]
+//! for more info.
 //!
 //! #### Logging
 //!
@@ -400,9 +409,9 @@ pub enum Command {
 
 	/// Executes the given block against some state.
 	///
-	/// This uses a custom runtime api call, namely "TryRuntime_execute_block". Some checks, such as
-	/// state-root and signature checks are always disabled, and additional checks like `try-state`
-	/// can be enabled.
+	/// This uses a custom runtime api call, namely "TryRuntime_execute_block". Some checks, such
+	/// as state-root and signature checks are always disabled, and additional checks like
+	/// `try-state` can be enabled.
 	///
 	/// See [`frame_try_runtime::TryRuntime`] and [`commands::execute_block::ExecuteBlockCmd`] for
 	/// more information.
@@ -413,8 +422,8 @@ pub enum Command {
 	/// This executes the same runtime api as normal block import, namely
 	/// `OffchainWorkerApi_offchain_worker`.
 	///
-	/// See [`frame_try_runtime::TryRuntime`] and [`commands::execute_block::OffchainWorkerCmd`] for
-	/// more information.
+	/// See [`frame_try_runtime::TryRuntime`] and [`commands::execute_block::OffchainWorkerCmd`]
+	/// for more information.
 	OffchainWorker(commands::offchain_worker::OffchainWorkerCmd),
 
 	/// Follow the given chain's finalized blocks and apply all of its extrinsics.

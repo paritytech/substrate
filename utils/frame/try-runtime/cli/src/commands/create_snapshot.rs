@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{LiveState, LOG_TARGET, SharedParams, build_executor, State};
+use crate::{build_executor, LiveState, SharedParams, State, LOG_TARGET};
 use sc_executor::sp_wasm_interface::HostFunctions;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{fmt::Debug, str::FromStr};
@@ -35,7 +35,10 @@ pub struct CreateSnapshotCmd {
 }
 
 /// inner command for `Command::CreateSnapshot`.
-pub(crate) async fn create_snapshot<Block, HostFns>(shared: SharedParams, command: CreateSnapshotCmd) -> sc_cli::Result<()>
+pub(crate) async fn create_snapshot<Block, HostFns>(
+	shared: SharedParams,
+	command: CreateSnapshotCmd,
+) -> sc_cli::Result<()>
 where
 	Block: BlockT + serde::de::DeserializeOwned,
 	Block::Hash: FromStr + serde::de::DeserializeOwned,
@@ -47,7 +50,7 @@ where
 {
 	let snapshot_path = command.snapshot_path;
 	if !matches!(shared.runtime, crate::Runtime::Existing) {
-		return Err("creating a snapshot is only possible with --runtime existing.".into());
+		return Err("creating a snapshot is only possible with --runtime existing.".into())
 	}
 
 	let path = match snapshot_path {
@@ -67,7 +70,9 @@ where
 	};
 
 	let executor = build_executor::<HostFns>(&shared);
-	let _ = State::Live(command.from).into_ext::<Block, HostFns>(&shared, &executor, Some(path.into())).await?;
+	let _ = State::Live(command.from)
+		.into_ext::<Block, HostFns>(&shared, &executor, Some(path.into()))
+		.await?;
 
 	Ok(())
 }
