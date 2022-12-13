@@ -131,6 +131,7 @@ pub fn beefy_block_import_and_links<B, BE, RuntimeApi, I>(
 	wrapped_block_import: I,
 	backend: Arc<BE>,
 	runtime: Arc<RuntimeApi>,
+	prometheus_registry: Option<Registry>,
 ) -> (BeefyBlockImport<B, BE, RuntimeApi, I>, BeefyVoterLinks<B>, BeefyRPCLinks<B>)
 where
 	B: Block,
@@ -151,9 +152,28 @@ where
 	let (to_voter_justif_sender, from_block_import_justif_stream) =
 		BeefyVersionedFinalityProofStream::<B>::channel();
 
+	let metrics =
+		prometheus_registry.as_ref().map(metrics::Metrics::register).and_then(
+			|result| match result {
+				Ok(metrics) => {
+					debug!(target: "beefy", "🥩 Registered metrics");
+					Some(metrics)
+				},
+				Err(err) => {
+					debug!(target: "beefy", "🥩 Failed to register metrics: {:?}", err);
+					None
+				},
+			},
+		);
+
 	// BlockImport
-	let import =
-		BeefyBlockImport::new(backend, runtime, wrapped_block_import, to_voter_justif_sender);
+	let import = BeefyBlockImport::new(
+		backend,
+		runtime,
+		wrapped_block_import,
+		to_voter_justif_sender,
+		metrics,
+	);
 	let voter_links = BeefyVoterLinks {
 		from_block_import_justif_stream,
 		to_rpc_justif_sender,

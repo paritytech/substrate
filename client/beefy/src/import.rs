@@ -35,6 +35,8 @@ use sc_consensus::{BlockCheckParams, BlockImport, BlockImportParams, ImportResul
 use crate::{
 	communication::notification::BeefyVersionedFinalityProofSender,
 	justification::{decode_and_verify_finality_proof, BeefyVersionedFinalityProof},
+	metric_inc, metric_set,
+	metrics::Metrics,
 };
 
 /// A block-import handler for BEEFY.
@@ -48,6 +50,7 @@ pub struct BeefyBlockImport<Block: BlockT, Backend, RuntimeApi, I> {
 	runtime: Arc<RuntimeApi>,
 	inner: I,
 	justification_sender: BeefyVersionedFinalityProofSender<Block>,
+	metrics: Option<Metrics>,
 }
 
 impl<Block: BlockT, BE, Runtime, I: Clone> Clone for BeefyBlockImport<Block, BE, Runtime, I> {
@@ -57,6 +60,7 @@ impl<Block: BlockT, BE, Runtime, I: Clone> Clone for BeefyBlockImport<Block, BE,
 			runtime: self.runtime.clone(),
 			inner: self.inner.clone(),
 			justification_sender: self.justification_sender.clone(),
+			metrics: self.metrics.clone(),
 		}
 	}
 }
@@ -68,8 +72,9 @@ impl<Block: BlockT, BE, Runtime, I> BeefyBlockImport<Block, BE, Runtime, I> {
 		runtime: Arc<Runtime>,
 		inner: I,
 		justification_sender: BeefyVersionedFinalityProofSender<Block>,
+		metrics: Option<Metrics>,
 	) -> BeefyBlockImport<Block, BE, Runtime, I> {
-		BeefyBlockImport { backend, runtime, inner, justification_sender }
+		BeefyBlockImport { backend, runtime, inner, justification_sender, metrics }
 	}
 }
 
@@ -143,12 +148,15 @@ where
 					self.justification_sender
 						.notify(|| Ok::<_, ()>(proof))
 						.expect("forwards closure result; the closure always returns Ok; qed.");
+
+					metric_set!(self, beefy_good_justification_imports, number);
 				} else {
 					debug!(
 						target: "beefy",
 						"🥩 error decoding justification: {:?} for imported block {:?}",
 						encoded, number,
 					);
+					metric_set!(self, beefy_bad_justification_imports, number);
 				}
 			},
 			_ => (),

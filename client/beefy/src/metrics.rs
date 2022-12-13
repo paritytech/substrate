@@ -20,7 +20,8 @@
 
 use prometheus::{register, Counter, Gauge, PrometheusError, Registry, U64};
 /// BEEFY metrics exposed through Prometheus
-pub(crate) struct Metrics {
+#[derive(Clone)]
+pub struct Metrics {
 	/// Current active validator set id
 	pub beefy_validator_set_id: Gauge<U64>,
 	/// Total number of votes sent by this node
@@ -47,6 +48,14 @@ pub(crate) struct Metrics {
 	pub beefy_buffered_justifications_full: Counter<U64>,
 	/// Trying to set Best Beefy block to old block
 	pub beefy_best_block_to_old_block: Gauge<U64>,
+	/// Number of Successful handled votes
+	pub beefy_successful_handled_votes: Counter<U64>,
+	/// Number of Successful votes
+	pub beefy_successful_votes: Counter<U64>,
+	/// Number of Bad Justification imports
+	pub beefy_bad_justification_imports: Gauge<U64>,
+	/// Number of Good Justification imports
+	pub beefy_good_justification_imports: Gauge<U64>,
 }
 
 impl Metrics {
@@ -128,6 +137,31 @@ impl Metrics {
 				Gauge::new(
 					"substrate_beefy_best_block_to_old_block",
 					"Trying to set Best Beefy block to old block",
+				)?,
+				registry,
+			)?,
+			beefy_successful_handled_votes: register(
+				Counter::new(
+					"substrate_beefy_successful_handled_votes",
+					"Number of Successful handled votes",
+				)?,
+				registry,
+			)?,
+			beefy_successful_votes: register(
+				Counter::new("substrate_beefy_successful_votes", "Number of Successful votes")?,
+				registry,
+			)?,
+			beefy_bad_justification_imports: register(
+				Gauge::new(
+					"substrate_beefy_bad_justification_imports",
+					"Number of Bad Justification imports",
+				)?,
+				registry,
+			)?,
+			beefy_good_justification_imports: register(
+				Gauge::new(
+					"substrate_beefy_good_justification_imports",
+					"Number of Good Justification imports",
 				)?,
 				registry,
 			)?,

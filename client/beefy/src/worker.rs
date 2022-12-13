@@ -591,6 +591,7 @@ where
 				}
 			}
 		}
+		metric_inc!(self, beefy_successful_handled_votes);
 		Ok(())
 	}
 
@@ -798,6 +799,8 @@ where
 		}
 
 		self.gossip_engine.gossip_message(topic::<B>(), encoded_message, false);
+
+		metric_inc!(self, beefy_successful_votes);
 
 		Ok(())
 	}
