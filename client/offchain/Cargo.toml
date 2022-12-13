@@ -1,13 +1,13 @@
 [package]
 description = "Substrate offchain workers"
 name = "sc-offchain"
-version = "4.0.0-dev"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 readme = "README.md"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -28,25 +28,25 @@ parking_lot = "0.12.1"
 rand = "0.7.2"
 threadpool = "1.7"
 tracing = "0.1.29"
-sc-client-api = { version = "4.0.0-dev", path = "../api" }
-sc-network-common = { version = "0.10.0-dev", path = "../network/common" }
-sc-peerset = { version = "4.0.0-dev", path = "../peerset" }
-sc-utils = { version = "4.0.0-dev", path = "../utils" }
-sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
-sp-offchain = { version = "4.0.0-dev", path = "../../primitives/offchain" }
-sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
+sc-client-api = { path = "../api" }
+sc-network-common = { path = "../network/common" }
+sc-peerset = { path = "../peerset" }
+sc-utils = { path = "../utils" }
+sp-api = { path = "../../primitives/api" }
+sp-core = { path = "../../primitives/core" }
+sp-offchain = { path = "../../primitives/offchain" }
+sp-runtime = { path = "../../primitives/runtime" }
 
 [dev-dependencies]
 lazy_static = "1.4.0"
 tokio = "1.22.0"
-sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
-sc-client-db = { version = "0.10.0-dev", default-features = true, path = "../db" }
-sc-transaction-pool = { version = "4.0.0-dev", path = "../transaction-pool" }
-sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
-sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
-sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
-substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
+sc-block-builder = { path = "../block-builder" }
+sc-client-db = { default-features = true, path = "../db" }
+sc-transaction-pool = { path = "../transaction-pool" }
+sc-transaction-pool-api = { path = "../transaction-pool/api" }
+sp-consensus = { path = "../../primitives/consensus/common" }
+sp-tracing = { path = "../../primitives/tracing" }
+substrate-test-runtime-client = { path = "../../test-utils/runtime/client" }
 
 [features]
 default = []

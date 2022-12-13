@@ -1,13 +1,13 @@
 [package]
 name = "sp-timestamp"
-version = "4.0.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 description = "Substrate core types and inherents for timestamps."
 readme = "README.md"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -18,10 +18,10 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 futures-timer = { version = "3.0.2", optional = true }
 log = { version = "0.4.17", optional = true }
 thiserror = { version = "1.0.30", optional = true }
-sp-api = { version = "4.0.0-dev", default-features = false, path = "../api" }
-sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../inherents" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../runtime" }
-sp-std = { version = "5.0.0", default-features = false, path = "../std" }
+sp-api = { default-features = false, path = "../api" }
+sp-inherents = { default-features = false, path = "../inherents" }
+sp-runtime = { default-features = false, path = "../runtime" }
+sp-std = { default-features = false, path = "../std" }
 
 [features]
 default = [ "std" ]

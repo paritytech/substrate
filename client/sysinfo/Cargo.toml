@@ -1,14 +1,14 @@
 [package]
 name = "sc-sysinfo"
-version = "6.0.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 description = "A crate that provides basic hardware and software telemetry information."
 documentation = "https://docs.rs/sc-sysinfo"
 readme = "README.md"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -22,10 +22,10 @@ rand_pcg = "0.2.1"
 regex = "1"
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.85"
-sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
-sp-io = { version = "7.0.0", path = "../../primitives/io" }
-sp-std = { version = "5.0.0", path = "../../primitives/std" }
+sc-telemetry = { path = "../telemetry" }
+sp-core = { path = "../../primitives/core" }
+sp-io = { path = "../../primitives/io" }
+sp-std = { path = "../../primitives/std" }
 
 [dev-dependencies]
-sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
+sp-runtime = { path = "../../primitives/runtime" }

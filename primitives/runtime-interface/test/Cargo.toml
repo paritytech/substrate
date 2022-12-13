@@ -1,12 +1,12 @@
 [package]
 name = "sp-runtime-interface-test"
-version = "2.0.0"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "Apache-2.0"
 publish = false
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -14,11 +14,11 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 tracing = "0.1.29"
 tracing-core = "0.1.28"
-sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
-sc-executor-common = { version = "0.10.0-dev", path = "../../../client/executor/common" }
-sp-io = { version = "7.0.0", path = "../../io" }
-sp-runtime = { version = "7.0.0", path = "../../runtime" }
-sp-runtime-interface = { version = "7.0.0", path = "../" }
-sp-runtime-interface-test-wasm = { version = "2.0.0", path = "../test-wasm" }
-sp-runtime-interface-test-wasm-deprecated = { version = "2.0.0", path = "../test-wasm-deprecated" }
-sp-state-machine = { version = "0.13.0", path = "../../state-machine" }
+sc-executor = { path = "../../../client/executor" }
+sc-executor-common = { path = "../../../client/executor/common" }
+sp-io = { path = "../../io" }
+sp-runtime = { path = "../../runtime" }
+sp-runtime-interface = { path = "../" }
+sp-runtime-interface-test-wasm = { path = "../test-wasm" }
+sp-runtime-interface-test-wasm-deprecated = { path = "../test-wasm-deprecated" }
+sp-state-machine = { path = "../../state-machine" }

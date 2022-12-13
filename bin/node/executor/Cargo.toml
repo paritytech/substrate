@@ -1,13 +1,13 @@
 [package]
 name = "node-executor"
-version = "3.0.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate node implementation in Rust."
-edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 publish = false
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -15,36 +15,36 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 scale-info = { version = "2.1.1", features = ["derive"] }
-frame-benchmarking = { version = "4.0.0-dev", path = "../../../frame/benchmarking" }
-node-primitives = { version = "2.0.0", path = "../primitives" }
-kitchensink-runtime = { version = "3.0.0-dev", path = "../runtime" }
-sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
-sp-core = { version = "7.0.0", path = "../../../primitives/core" }
-sp-keystore = { version = "0.13.0", path = "../../../primitives/keystore" }
-sp-state-machine = { version = "0.13.0", path = "../../../primitives/state-machine" }
-sp-tracing = { version = "6.0.0", path = "../../../primitives/tracing" }
-sp-trie = { version = "7.0.0", path = "../../../primitives/trie" }
+frame-benchmarking = { path = "../../../frame/benchmarking" }
+node-primitives = { path = "../primitives" }
+kitchensink-runtime = { path = "../runtime" }
+sc-executor = { path = "../../../client/executor" }
+sp-core = { path = "../../../primitives/core" }
+sp-keystore = { path = "../../../primitives/keystore" }
+sp-state-machine = { path = "../../../primitives/state-machine" }
+sp-tracing = { path = "../../../primitives/tracing" }
+sp-trie = { path = "../../../primitives/trie" }
 
 [dev-dependencies]
 criterion = "0.3.0"
 futures = "0.3.21"
 wat = "1.0"
-frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
-frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
-node-testing = { version = "3.0.0-dev", path = "../testing" }
-pallet-balances = { version = "4.0.0-dev", path = "../../../frame/balances" }
-pallet-contracts = { version = "4.0.0-dev", path = "../../../frame/contracts" }
-pallet-im-online = { version = "4.0.0-dev", path = "../../../frame/im-online" }
-pallet-sudo = { version = "4.0.0-dev", path = "../../../frame/sudo" }
-pallet-timestamp = { version = "4.0.0-dev", path = "../../../frame/timestamp" }
-pallet-treasury = { version = "4.0.0-dev", path = "../../../frame/treasury" }
-pallet-transaction-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment" }
-sp-application-crypto = { version = "7.0.0", path = "../../../primitives/application-crypto" }
-pallet-root-testing = { version = "1.0.0-dev", path = "../../../frame/root-testing" }
-sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
-sp-externalities = { version = "0.13.0", path = "../../../primitives/externalities" }
-sp-keyring = { version = "7.0.0", path = "../../../primitives/keyring" }
-sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
+frame-support = { path = "../../../frame/support" }
+frame-system = { path = "../../../frame/system" }
+node-testing = { path = "../testing" }
+pallet-balances = { path = "../../../frame/balances" }
+pallet-contracts = { path = "../../../frame/contracts" }
+pallet-im-online = { path = "../../../frame/im-online" }
+pallet-sudo = { path = "../../../frame/sudo" }
+pallet-timestamp = { path = "../../../frame/timestamp" }
+pallet-treasury = { path = "../../../frame/treasury" }
+pallet-transaction-payment = { path = "../../../frame/transaction-payment" }
+sp-application-crypto = { path = "../../../primitives/application-crypto" }
+pallet-root-testing = { path = "../../../frame/root-testing" }
+sp-consensus-babe = { path = "../../../primitives/consensus/babe" }
+sp-externalities = { path = "../../../primitives/externalities" }
+sp-keyring = { path = "../../../primitives/keyring" }
+sp-runtime = { path = "../../../primitives/runtime" }
 
 [features]
 stress-test = []

@@ -1,12 +1,12 @@
 [package]
 name = "pallet-election-provider-multi-phase"
-version = "4.0.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 description = "PALLET two phase election providers"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -21,32 +21,32 @@ scale-info = { version = "2.1.1", default-features = false, features = [
 ] }
 log = { version = "0.4.17", default-features = false }
 
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+frame-support = { default-features = false, path = "../support" }
+frame-system = { default-features = false, path = "../system" }
 
-sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
-sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
-sp-arithmetic = { version = "6.0.0", default-features = false, path = "../../primitives/arithmetic" }
-frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../election-provider-support" }
+sp-io = { default-features = false, path = "../../primitives/io" }
+sp-std = { default-features = false, path = "../../primitives/std" }
+sp-core = { default-features = false, path = "../../primitives/core" }
+sp-runtime = { default-features = false, path = "../../primitives/runtime" }
+sp-npos-elections = { default-features = false, path = "../../primitives/npos-elections" }
+sp-arithmetic = { default-features = false, path = "../../primitives/arithmetic" }
+frame-election-provider-support = { default-features = false, path = "../election-provider-support" }
 
 # Optional imports for benchmarking
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
-pallet-election-provider-support-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../election-provider-support/benchmarking", optional = true }
+frame-benchmarking = { default-features = false, path = "../benchmarking", optional = true }
+pallet-election-provider-support-benchmarking = { default-features = false, path = "../election-provider-support/benchmarking", optional = true }
 rand = { version = "0.7.3", default-features = false, features = ["alloc", "small_rng"], optional = true }
 strum = { version = "0.24.1",  default-features = false, features = ["derive"], optional = true }
 
 [dev-dependencies]
 parking_lot = "0.12.1"
 rand = { version = "0.7.3" }
-sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
-sp-io = { version = "7.0.0", path = "../../primitives/io" }
-sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
-sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
-pallet-balances = { version = "4.0.0-dev", path = "../balances" }
-frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
+sp-core = { default-features = false, path = "../../primitives/core" }
+sp-io = { path = "../../primitives/io" }
+sp-npos-elections = { default-features = false, path = "../../primitives/npos-elections" }
+sp-tracing = { path = "../../primitives/tracing" }
+pallet-balances = { path = "../balances" }
+frame-benchmarking = { path = "../benchmarking" }
 
 [features]
 default = ["std"]

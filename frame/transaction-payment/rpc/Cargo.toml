@@ -1,13 +1,13 @@
 [package]
 name = "pallet-transaction-payment-rpc"
-version = "4.0.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 description = "RPC interface for the transaction payment pallet."
 readme = "README.md"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -15,10 +15,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 jsonrpsee = { version = "0.16.2", features = ["client-core", "server", "macros"] }
-pallet-transaction-payment-rpc-runtime-api = { version = "4.0.0-dev", path = "./runtime-api" }
-sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
-sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-sp-core = { version = "7.0.0", path = "../../../primitives/core" }
-sp-rpc = { version = "6.0.0", path = "../../../primitives/rpc" }
-sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
-sp-weights = { version = "4.0.0", path = "../../../primitives/weights" }
+pallet-transaction-payment-rpc-runtime-api = { path = "./runtime-api" }
+sp-api = { path = "../../../primitives/api" }
+sp-blockchain = { path = "../../../primitives/blockchain" }
+sp-core = { path = "../../../primitives/core" }
+sp-rpc = { path = "../../../primitives/rpc" }
+sp-runtime = { path = "../../../primitives/runtime" }
+sp-weights = { path = "../../../primitives/weights" }

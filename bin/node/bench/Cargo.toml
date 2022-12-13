@@ -1,13 +1,13 @@
 [package]
 name = "node-bench"
-version = "0.9.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate node integration benchmarks."
-edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 publish = false
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -15,30 +15,30 @@ publish = false
 array-bytes = "4.1"
 clap = { version = "4.0.9", features = ["derive"] }
 log = "0.4.17"
-node-primitives = { version = "2.0.0", path = "../primitives" }
-node-testing = { version = "3.0.0-dev", path = "../testing" }
-kitchensink-runtime = { version = "3.0.0-dev", path = "../runtime" }
-sc-client-api = { version = "4.0.0-dev", path = "../../../client/api/" }
-sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
-sp-state-machine = { version = "0.13.0", path = "../../../primitives/state-machine" }
+node-primitives = { path = "../primitives" }
+node-testing = { path = "../testing" }
+kitchensink-runtime = { path = "../runtime" }
+sc-client-api = { path = "../../../client/api/" }
+sp-runtime = { path = "../../../primitives/runtime" }
+sp-state-machine = { path = "../../../primitives/state-machine" }
 serde = "1.0.136"
 serde_json = "1.0.85"
 derive_more = { version = "0.99.17", default-features = false, features = ["display"] }
 kvdb = "0.13.0"
 kvdb-rocksdb = "0.17.0"
-sp-trie = { version = "7.0.0", path = "../../../primitives/trie" }
-sp-core = { version = "7.0.0", path = "../../../primitives/core" }
-sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
-sc-basic-authorship = { version = "0.10.0-dev", path = "../../../client/basic-authorship" }
-sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
-sp-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/timestamp" }
-sp-tracing = { version = "6.0.0", path = "../../../primitives/tracing" }
+sp-trie = { path = "../../../primitives/trie" }
+sp-core = { path = "../../../primitives/core" }
+sp-consensus = { path = "../../../primitives/consensus/common" }
+sc-basic-authorship = { path = "../../../client/basic-authorship" }
+sp-inherents = { path = "../../../primitives/inherents" }
+sp-timestamp = { default-features = false, path = "../../../primitives/timestamp" }
+sp-tracing = { path = "../../../primitives/tracing" }
 hash-db = "0.15.2"
 tempfile = "3.1.0"
 fs_extra = "1"
 rand = { version = "0.7.2", features = ["small_rng"] }
 lazy_static = "1.4.0"
 parity-db = "0.4.2"
-sc-transaction-pool = { version = "4.0.0-dev", path = "../../../client/transaction-pool" }
-sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
+sc-transaction-pool = { path = "../../../client/transaction-pool" }
+sc-transaction-pool-api = { path = "../../../client/transaction-pool/api" }
 futures = { version = "0.3.21", features = ["thread-pool"] }

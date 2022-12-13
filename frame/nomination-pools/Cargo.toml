@@ -1,12 +1,12 @@
 [package]
 name = "pallet-nomination-pools"
-version = "1.0.0"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 description = "FRAME nomination pools pallet"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -17,22 +17,22 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 
 # FRAME
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
-sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
-sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
-sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
+frame-support = { default-features = false, path = "../support" }
+frame-system = { default-features = false, path = "../system" }
+sp-runtime = { default-features = false, path = "../../primitives/runtime" }
+sp-std = { default-features = false, path = "../../primitives/std" }
+sp-staking = { default-features = false, path = "../../primitives/staking" }
+sp-core = { default-features = false, path = "../../primitives/core" }
+sp-io = { default-features = false, path = "../../primitives/io" }
 log = { version = "0.4.0", default-features = false }
 
 # Optional: usef for testing and/or fuzzing
-pallet-balances = { version = "4.0.0-dev", path = "../balances", optional = true }
-sp-tracing = { version = "6.0.0", path = "../../primitives/tracing", optional = true }
+pallet-balances = { path = "../balances", optional = true }
+sp-tracing = { path = "../../primitives/tracing", optional = true }
 
 [dev-dependencies]
-pallet-balances = { version = "4.0.0-dev", path = "../balances" }
-sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
+pallet-balances = { path = "../balances" }
+sp-tracing = { path = "../../primitives/tracing" }
 
 [features]
 default = ["std"]

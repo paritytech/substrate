@@ -1,12 +1,12 @@
 [package]
 name = "pallet-election-provider-support-benchmarking"
-version = "4.0.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 description = "Benchmarking for election provider support onchain config trait"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -15,11 +15,11 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
 	"derive",
 ] }
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../../benchmarking" }
-frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = ".." }
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
-sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/npos-elections" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../../primitives/runtime" }
+frame-benchmarking = { default-features = false, optional = true, path = "../../benchmarking" }
+frame-election-provider-support = { default-features = false, path = ".." }
+frame-system = { default-features = false, path = "../../system" }
+sp-npos-elections = { default-features = false, path = "../../../primitives/npos-elections" }
+sp-runtime = { default-features = false, path = "../../../primitives/runtime" }
 
 [features]
 default = ["std"]

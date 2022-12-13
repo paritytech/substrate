@@ -1,13 +1,13 @@
 [package]
 name = "sc-cli"
-version = "0.10.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate CLI interface."
-edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 readme = "README.md"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -30,22 +30,22 @@ serde_json = "1.0.85"
 thiserror = "1.0.30"
 tiny-bip39 = "0.8.2"
 tokio = { version = "1.22.0", features = ["signal", "rt-multi-thread", "parking_lot"] }
-sc-client-api = { version = "4.0.0-dev", path = "../api" }
-sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../db" }
-sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
-sc-network = { version = "0.10.0-dev", path = "../network" }
-sc-network-common = { version = "0.10.0-dev", path = "../network/common" }
-sc-service = { version = "0.10.0-dev", default-features = false, path = "../service" }
-sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
-sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
-sc-utils = { version = "4.0.0-dev", path = "../utils" }
-sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
-sp-keyring = { version = "7.0.0", path = "../../primitives/keyring" }
-sp-keystore = { version = "0.13.0", path = "../../primitives/keystore" }
-sp-panic-handler = { version = "5.0.0", path = "../../primitives/panic-handler" }
-sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
-sp-version = { version = "5.0.0", path = "../../primitives/version" }
+sc-client-api = { path = "../api" }
+sc-client-db = { default-features = false, path = "../db" }
+sc-keystore = { path = "../keystore" }
+sc-network = { path = "../network" }
+sc-network-common = { path = "../network/common" }
+sc-service = { default-features = false, path = "../service" }
+sc-telemetry = { path = "../telemetry" }
+sc-tracing = { path = "../tracing" }
+sc-utils = { path = "../utils" }
+sp-blockchain = { path = "../../primitives/blockchain" }
+sp-core = { path = "../../primitives/core" }
+sp-keyring = { path = "../../primitives/keyring" }
+sp-keystore = { path = "../../primitives/keystore" }
+sp-panic-handler = { path = "../../primitives/panic-handler" }
+sp-runtime = { path = "../../primitives/runtime" }
+sp-version = { path = "../../primitives/version" }
 
 [dev-dependencies]
 tempfile = "3.1.0"

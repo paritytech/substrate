@@ -1,14 +1,14 @@
 [package]
 name = "sp-consensus"
-version = "0.10.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 description = "Common utilities for building and using consensus engines in substrate."
 documentation = "https://docs.rs/sp-consensus/"
 readme = "README.md"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -22,16 +22,16 @@ futures = { version = "0.3.21", features = ["thread-pool"] }
 futures-timer = "3.0.1"
 log = "0.4.17"
 thiserror = "1.0.30"
-sp-core = { version = "7.0.0", path = "../../core" }
-sp-inherents = { version = "4.0.0-dev", path = "../../inherents" }
-sp-runtime = { version = "7.0.0", path = "../../runtime" }
-sp-state-machine = { version = "0.13.0", path = "../../state-machine" }
-sp-std = { version = "5.0.0", path = "../../std" }
-sp-version = { version = "5.0.0", path = "../../version" }
+sp-core = { path = "../../core" }
+sp-inherents = { path = "../../inherents" }
+sp-runtime = { path = "../../runtime" }
+sp-state-machine = { path = "../../state-machine" }
+sp-std = { path = "../../std" }
+sp-version = { path = "../../version" }
 
 [dev-dependencies]
 futures = "0.3.21"
-sp-test-primitives = { version = "2.0.0", path = "../../test-primitives" }
+sp-test-primitives = { path = "../../test-primitives" }
 
 [features]
 default = []

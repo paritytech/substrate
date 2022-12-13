@@ -1,13 +1,13 @@
 [package]
 name = "sc-rpc-spec-v2"
-version = "0.10.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 description = "Substrate RPC interface v2."
 readme = "README.md"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -15,13 +15,13 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 jsonrpsee = { version = "0.16.2", features = ["client-core", "server", "macros"] }
 # Internal chain structures for "chain_spec".
-sc-chain-spec = { version = "4.0.0-dev", path = "../chain-spec" }
+sc-chain-spec = { path = "../chain-spec" }
 # Pool for submitting extrinsics required by "transaction"
-sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
-sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
-sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
-sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
+sc-transaction-pool-api = { path = "../transaction-pool/api" }
+sp-core = { path = "../../primitives/core" }
+sp-runtime = { path = "../../primitives/runtime" }
+sp-api = { path = "../../primitives/api" }
+sp-blockchain = { path = "../../primitives/blockchain" }
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 thiserror = "1.0"
 serde = "1.0"

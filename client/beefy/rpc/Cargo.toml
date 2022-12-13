@@ -1,12 +1,12 @@
 [package]
 name = "beefy-gadget-rpc"
-version = "4.0.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-repository = "https://github.com/paritytech/substrate"
 description = "RPC for the BEEFY Client gadget for substrate"
-homepage = "https://substrate.io"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive"] }
@@ -16,17 +16,17 @@ log = "0.4"
 parking_lot = "0.12.1"
 serde = { version = "1.0.136", features = ["derive"] }
 thiserror = "1.0"
-beefy-gadget = { version = "4.0.0-dev", path = "../." }
-beefy-primitives = { version = "4.0.0-dev", path = "../../../primitives/beefy", package = "sp-beefy" }
-sc-rpc = { version = "4.0.0-dev", path = "../../rpc" }
-sc-utils = { version = "4.0.0-dev", path = "../../utils" }
-sp-core = { version = "7.0.0", path = "../../../primitives/core" }
-sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
+beefy-gadget = { path = "../." }
+beefy-primitives = { path = "../../../primitives/beefy", package = "sp-beefy" }
+sc-rpc = { path = "../../rpc" }
+sc-utils = { path = "../../utils" }
+sp-core = { path = "../../../primitives/core" }
+sp-runtime = { path = "../../../primitives/runtime" }
 
 [dev-dependencies]
 serde_json = "1.0.85"
-sc-rpc = { version = "4.0.0-dev", features = [
+sc-rpc = { features = [
 	"test-helpers",
 ], path = "../../rpc" }
-substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
+substrate-test-runtime-client = { path = "../../../test-utils/runtime/client" }
 tokio = { version = "1.22.0", features = ["macros"] }

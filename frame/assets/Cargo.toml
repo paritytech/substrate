@@ -1,13 +1,13 @@
 [package]
 name = "pallet-assets"
-version = "4.0.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 description = "FRAME asset management pallet"
 readme = "README.md"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -15,20 +15,20 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
-sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
+sp-std = { default-features = false, path = "../../primitives/std" }
 # Needed for various traits. In our case, `OnFinalize`.
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-runtime = { default-features = false, path = "../../primitives/runtime" }
 # Needed for type-safe access to storage DB.
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-support = { default-features = false, path = "../support" }
 # `system` module provides us with all sorts of useful stuff and macros depend on it being around.
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
+frame-system = { default-features = false, path = "../system" }
+frame-benchmarking = { default-features = false, path = "../benchmarking", optional = true }
 
 [dev-dependencies]
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
-sp-std = { version = "5.0.0", path = "../../primitives/std" }
-sp-io = { version = "7.0.0", path = "../../primitives/io" }
-pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+sp-core = { path = "../../primitives/core" }
+sp-std = { path = "../../primitives/std" }
+sp-io = { path = "../../primitives/io" }
+pallet-balances = { path = "../balances" }
 
 [features]
 default = ["std"]

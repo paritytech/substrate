@@ -1,13 +1,13 @@
 [package]
 name = "frame-benchmarking-cli"
-version = "4.0.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 description = "CLI for benchmarking FRAME"
 readme = "README.md"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -35,28 +35,28 @@ serde_nanos = "0.1.2"
 tempfile = "3.2.0"
 thiserror = "1.0.30"
 thousands = "0.2.0"
-frame-benchmarking = { version = "4.0.0-dev", path = "../../../frame/benchmarking" }
-frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
-frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
-sc-block-builder = { version = "0.10.0-dev", path = "../../../client/block-builder" }
-sc-cli = { version = "0.10.0-dev", default-features = false, path = "../../../client/cli" }
-sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
-sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../../../client/db" }
-sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
-sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../client/service" }
-sc-sysinfo = { version = "6.0.0-dev", path = "../../../client/sysinfo" }
-sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
-sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-sp-core = { version = "7.0.0", path = "../../../primitives/core" }
-sp-database = { version = "4.0.0-dev", path = "../../../primitives/database" }
-sp-externalities = { version = "0.13.0", path = "../../../primitives/externalities" }
-sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
-sp-keystore = { version = "0.13.0", path = "../../../primitives/keystore" }
-sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
-sp-state-machine = { version = "0.13.0", path = "../../../primitives/state-machine" }
-sp-std = { version = "5.0.0", path = "../../../primitives/std" }
-sp-storage = { version = "7.0.0", path = "../../../primitives/storage" }
-sp-trie = { version = "7.0.0", path = "../../../primitives/trie" }
+frame-benchmarking = { path = "../../../frame/benchmarking" }
+frame-support = { path = "../../../frame/support" }
+frame-system = { path = "../../../frame/system" }
+sc-block-builder = { path = "../../../client/block-builder" }
+sc-cli = { default-features = false, path = "../../../client/cli" }
+sc-client-api = { path = "../../../client/api" }
+sc-client-db = { default-features = false, path = "../../../client/db" }
+sc-executor = { path = "../../../client/executor" }
+sc-service = { default-features = false, path = "../../../client/service" }
+sc-sysinfo = { path = "../../../client/sysinfo" }
+sp-api = { path = "../../../primitives/api" }
+sp-blockchain = { path = "../../../primitives/blockchain" }
+sp-core = { path = "../../../primitives/core" }
+sp-database = { path = "../../../primitives/database" }
+sp-externalities = { path = "../../../primitives/externalities" }
+sp-inherents = { path = "../../../primitives/inherents" }
+sp-keystore = { path = "../../../primitives/keystore" }
+sp-runtime = { path = "../../../primitives/runtime" }
+sp-state-machine = { path = "../../../primitives/state-machine" }
+sp-std = { path = "../../../primitives/std" }
+sp-storage = { path = "../../../primitives/storage" }
+sp-trie = { path = "../../../primitives/trie" }
 gethostname = "0.2.3"
 
 [features]

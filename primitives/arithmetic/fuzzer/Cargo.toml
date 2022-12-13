@@ -1,14 +1,14 @@
 [package]
 name = "sp-arithmetic-fuzzer"
-version = "2.0.0"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 description = "Fuzzer for fixed point arithmetic primitives."
 documentation = "https://docs.rs/sp-arithmetic-fuzzer"
 publish = false
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -17,7 +17,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 honggfuzz = "0.5.49"
 num-bigint = "0.4.3"
 primitive-types = "0.12.0"
-sp-arithmetic = { version = "6.0.0", path = ".." }
+sp-arithmetic = { path = ".." }
 
 [[bin]]
 name = "biguint"

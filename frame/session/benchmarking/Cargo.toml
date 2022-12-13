@@ -1,37 +1,37 @@
 [package]
 name = "pallet-session-benchmarking"
-version = "4.0.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 description = "FRAME sessions pallet benchmarking"
 readme = "README.md"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 rand = { version = "0.7.2", default-features = false }
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../benchmarking" }
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
-pallet-session = { version = "4.0.0-dev", default-features = false, path = "../../session" }
-pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../../staking" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../../primitives/runtime" }
-sp-session = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/session" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../../primitives/std" }
+frame-benchmarking = { default-features = false, path = "../../benchmarking" }
+frame-support = { default-features = false, path = "../../support" }
+frame-system = { default-features = false, path = "../../system" }
+pallet-session = { default-features = false, path = "../../session" }
+pallet-staking = { default-features = false, path = "../../staking" }
+sp-runtime = { default-features = false, path = "../../../primitives/runtime" }
+sp-session = { default-features = false, path = "../../../primitives/session" }
+sp-std = { default-features = false, path = "../../../primitives/std" }
 
 [dev-dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive"] }
 scale-info = "2.1.1"
-frame-election-provider-support = { version = "4.0.0-dev", path = "../../election-provider-support" }
-pallet-balances = { version = "4.0.0-dev", path = "../../balances" }
-pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../../staking/reward-curve" }
-pallet-timestamp = { version = "4.0.0-dev", path = "../../timestamp" }
-sp-core = { version = "7.0.0", path = "../../../primitives/core" }
-sp-io = { version = "7.0.0", path = "../../../primitives/io" }
+frame-election-provider-support = { path = "../../election-provider-support" }
+pallet-balances = { path = "../../balances" }
+pallet-staking-reward-curve = { path = "../../staking/reward-curve" }
+pallet-timestamp = { path = "../../timestamp" }
+sp-core = { path = "../../../primitives/core" }
+sp-io = { path = "../../../primitives/io" }
 
 [features]
 default = ["std"]

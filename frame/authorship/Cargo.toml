@@ -1,13 +1,13 @@
 [package]
 name = "pallet-authorship"
-version = "4.0.0-dev"
 description = "Block and Uncle Author tracking for the FRAME"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 readme = "README.md"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -18,15 +18,15 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 ] }
 impl-trait-for-tuples = "0.2.2"
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-sp-authorship = { version = "4.0.0-dev", default-features = false, path = "../../primitives/authorship" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
+frame-support = { default-features = false, path = "../support" }
+frame-system = { default-features = false, path = "../system" }
+sp-authorship = { default-features = false, path = "../../primitives/authorship" }
+sp-runtime = { default-features = false, path = "../../primitives/runtime" }
+sp-std = { default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
-sp-io = { version = "7.0.0", path = "../../primitives/io" }
+sp-core = { path = "../../primitives/core" }
+sp-io = { path = "../../primitives/io" }
 
 [features]
 default = ["std"]

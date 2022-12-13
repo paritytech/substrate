@@ -1,36 +1,36 @@
 [package]
 name = "sp-runtime-interface"
-version = "7.0.0"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 description = "Substrate runtime interface"
 documentation = "https://docs.rs/sp-runtime-interface/"
 readme = "README.md"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 bytes = { version = "1.1.0", default-features = false }
-sp-wasm-interface = { version = "7.0.0", path = "../wasm-interface", default-features = false }
-sp-std = { version = "5.0.0", default-features = false, path = "../std" }
-sp-tracing = { version = "6.0.0", default-features = false, path = "../tracing" }
-sp-runtime-interface-proc-macro = { version = "6.0.0", path = "proc-macro" }
-sp-externalities = { version = "0.13.0", default-features = false, path = "../externalities" }
+sp-wasm-interface = { path = "../wasm-interface", default-features = false }
+sp-std = { default-features = false, path = "../std" }
+sp-tracing = { default-features = false, path = "../tracing" }
+sp-runtime-interface-proc-macro = { path = "proc-macro" }
+sp-externalities = { default-features = false, path = "../externalities" }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["bytes"] }
 static_assertions = "1.0.0"
 primitive-types = { version = "0.12.0", default-features = false }
-sp-storage = { version = "7.0.0", default-features = false, path = "../storage" }
+sp-storage = { default-features = false, path = "../storage" }
 impl-trait-for-tuples = "0.2.2"
 
 [dev-dependencies]
-sp-runtime-interface-test-wasm = { version = "2.0.0", path = "test-wasm" }
-sp-state-machine = { version = "0.13.0", path = "../state-machine" }
-sp-core = { version = "7.0.0", path = "../core" }
-sp-io = { version = "7.0.0", path = "../io" }
+sp-runtime-interface-test-wasm = { path = "test-wasm" }
+sp-state-machine = { path = "../state-machine" }
+sp-core = { path = "../core" }
+sp-io = { path = "../io" }
 rustversion = "1.0.6"
 trybuild = "1.0.60"
 

@@ -1,12 +1,12 @@
 [package]
 name = "try-runtime-cli"
-version = "0.10.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 description = "Cli command runtime testing and dry-running"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -17,19 +17,19 @@ log = "0.4.17"
 parity-scale-codec = "3.0.0"
 serde = "1.0.136"
 zstd = { version = "0.11.2", default-features = false }
-remote-externalities = { version = "0.10.0-dev", path = "../../remote-externalities", package = "frame-remote-externalities" }
-sc-chain-spec = { version = "4.0.0-dev", path = "../../../../client/chain-spec" }
-sc-cli = { version = "0.10.0-dev", path = "../../../../client/cli" }
-sc-executor = { version = "0.10.0-dev", path = "../../../../client/executor" }
-sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../../client/service" }
-sp-core = { version = "7.0.0", path = "../../../../primitives/core" }
-sp-externalities = { version = "0.13.0", path = "../../../../primitives/externalities" }
-sp-io = { version = "7.0.0", path = "../../../../primitives/io" }
-sp-keystore = { version = "0.13.0", path = "../../../../primitives/keystore" }
-sp-runtime = { version = "7.0.0", path = "../../../../primitives/runtime" }
-sp-state-machine = { version = "0.13.0", path = "../../../../primitives/state-machine" }
-sp-version = { version = "5.0.0", path = "../../../../primitives/version" }
-sp-weights = { version = "4.0.0", path = "../../../../primitives/weights" }
+remote-externalities = { path = "../../remote-externalities", package = "frame-remote-externalities" }
+sc-chain-spec = { path = "../../../../client/chain-spec" }
+sc-cli = { path = "../../../../client/cli" }
+sc-executor = { path = "../../../../client/executor" }
+sc-service = { default-features = false, path = "../../../../client/service" }
+sp-core = { path = "../../../../primitives/core" }
+sp-externalities = { path = "../../../../primitives/externalities" }
+sp-io = { path = "../../../../primitives/io" }
+sp-keystore = { path = "../../../../primitives/keystore" }
+sp-runtime = { path = "../../../../primitives/runtime" }
+sp-state-machine = { path = "../../../../primitives/state-machine" }
+sp-version = { path = "../../../../primitives/version" }
+sp-weights = { path = "../../../../primitives/weights" }
 frame-try-runtime = { optional = true, path = "../../../../frame/try-runtime" }
 substrate-rpc-client = { path = "../../rpc/client" }
 

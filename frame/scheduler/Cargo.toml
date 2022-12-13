@@ -1,30 +1,30 @@
 [package]
 name = "pallet-scheduler"
-version = "4.0.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 description = "FRAME Scheduler pallet"
 readme = "README.md"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
 log = { version = "0.4.17", default-features = false }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
-sp-weights = { version = "4.0.0", default-features = false, path = "../../primitives/weights" }
+frame-benchmarking = { default-features = false, optional = true, path = "../benchmarking" }
+frame-support = { default-features = false, path = "../support" }
+frame-system = { default-features = false, path = "../system" }
+sp-io = { default-features = false, path = "../../primitives/io" }
+sp-runtime = { default-features = false, path = "../../primitives/runtime" }
+sp-std = { default-features = false, path = "../../primitives/std" }
+sp-weights = { default-features = false, path = "../../primitives/weights" }
 
 [dev-dependencies]
-pallet-preimage = { version = "4.0.0-dev", path = "../preimage" }
-sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
-substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
+pallet-preimage = { path = "../preimage" }
+sp-core = { default-features = false, path = "../../primitives/core" }
+substrate-test-utils = { path = "../../test-utils" }
 
 [features]
 default = ["std"]

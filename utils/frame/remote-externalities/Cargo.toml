@@ -1,12 +1,12 @@
 [package]
 name = "frame-remote-externalities"
-version = "0.10.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 description = "An externalities provided environment that can load itself from remote nodes or cached files"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -17,17 +17,17 @@ env_logger = "0.9"
 log = "0.4.17"
 serde = "1.0.136"
 serde_json = "1.0"
-frame-support = { version = "4.0.0-dev", optional = true, path = "../../../frame/support" }
-sp-core = { version = "7.0.0", path = "../../../primitives/core" }
-sp-io = { version = "7.0.0", path = "../../../primitives/io" }
-sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
-sp-version = { version = "5.0.0", path = "../../../primitives/version" }
+frame-support = { optional = true, path = "../../../frame/support" }
+sp-core = { path = "../../../primitives/core" }
+sp-io = { path = "../../../primitives/io" }
+sp-runtime = { path = "../../../primitives/runtime" }
+sp-version = { path = "../../../primitives/version" }
 substrate-rpc-client = { path = "../rpc/client" }
 
 [dev-dependencies]
 tokio = { version = "1.22.0", features = ["macros", "rt-multi-thread"] }
-frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
-pallet-elections-phragmen = { version = "5.0.0-dev", path = "../../../frame/elections-phragmen" }
+frame-support = { path = "../../../frame/support" }
+pallet-elections-phragmen = { path = "../../../frame/elections-phragmen" }
 
 [features]
 remote-test = ["frame-support"]

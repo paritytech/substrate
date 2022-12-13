@@ -1,13 +1,13 @@
 [package]
 name = "sp-consensus-babe"
-version = "0.10.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
 description = "Primitives for BABE consensus"
-edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 readme = "README.md"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -18,17 +18,17 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 merlin = { version = "2.0", default-features = false }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 serde = { version = "1.0.136", features = ["derive"], optional = true }
-sp-api = { version = "4.0.0-dev", default-features = false, path = "../../api" }
-sp-application-crypto = { version = "7.0.0", default-features = false, path = "../../application-crypto" }
-sp-consensus = { version = "0.10.0-dev", optional = true, path = "../common" }
-sp-consensus-slots = { version = "0.10.0-dev", default-features = false, path = "../slots" }
-sp-consensus-vrf = { version = "0.10.0-dev", default-features = false, path = "../vrf" }
-sp-core = { version = "7.0.0", default-features = false, path = "../../core" }
-sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../inherents" }
-sp-keystore = { version = "0.13.0", default-features = false, optional = true, path = "../../keystore" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../runtime" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../std" }
-sp-timestamp = { version = "4.0.0-dev", optional = true, path = "../../timestamp" }
+sp-api = { default-features = false, path = "../../api" }
+sp-application-crypto = { default-features = false, path = "../../application-crypto" }
+sp-consensus = { optional = true, path = "../common" }
+sp-consensus-slots = { default-features = false, path = "../slots" }
+sp-consensus-vrf = { default-features = false, path = "../vrf" }
+sp-core = { default-features = false, path = "../../core" }
+sp-inherents = { default-features = false, path = "../../inherents" }
+sp-keystore = { default-features = false, optional = true, path = "../../keystore" }
+sp-runtime = { default-features = false, path = "../../runtime" }
+sp-std = { default-features = false, path = "../../std" }
+sp-timestamp = { optional = true, path = "../../timestamp" }
 
 [features]
 default = ["std"]

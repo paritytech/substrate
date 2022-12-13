@@ -1,12 +1,12 @@
 [package]
 name = "substrate-test-runtime-client"
-version = "2.0.0"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 publish = false
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -14,13 +14,13 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 futures = "0.3.21"
-sc-block-builder = { version = "0.10.0-dev", path = "../../../client/block-builder" }
-sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
-sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
-sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
-sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
-sp-core = { version = "7.0.0", path = "../../../primitives/core" }
-sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
-substrate-test-client = { version = "2.0.0", path = "../../client" }
-substrate-test-runtime = { version = "2.0.0", path = "../../runtime" }
+sc-block-builder = { path = "../../../client/block-builder" }
+sc-client-api = { path = "../../../client/api" }
+sc-consensus = { path = "../../../client/consensus/common" }
+sp-api = { path = "../../../primitives/api" }
+sp-blockchain = { path = "../../../primitives/blockchain" }
+sp-consensus = { path = "../../../primitives/consensus/common" }
+sp-core = { path = "../../../primitives/core" }
+sp-runtime = { path = "../../../primitives/runtime" }
+substrate-test-client = { path = "../../client" }
+substrate-test-runtime = { path = "../../runtime" }

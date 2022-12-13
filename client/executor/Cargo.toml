@@ -1,14 +1,14 @@
 [package]
 name = "sc-executor"
-version = "0.10.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 description = "A crate that provides means of executing/dispatching calls into the runtime."
 documentation = "https://docs.rs/sc-executor"
 readme = "README.md"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -20,28 +20,28 @@ tracing = "0.1.29"
 wasmi = "0.13"
 
 codec = { package = "parity-scale-codec", version = "3.0.0" }
-sc-executor-common = { version = "0.10.0-dev", path = "common" }
-sc-executor-wasmi = { version = "0.10.0-dev", path = "wasmi" }
-sc-executor-wasmtime = { version = "0.10.0-dev", path = "wasmtime" }
-sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
-sp-externalities = { version = "0.13.0", path = "../../primitives/externalities" }
-sp-io = { version = "7.0.0", path = "../../primitives/io" }
-sp-panic-handler = { version = "5.0.0", path = "../../primitives/panic-handler" }
-sp-runtime-interface = { version = "7.0.0", path = "../../primitives/runtime-interface" }
-sp-trie = { version = "7.0.0", path = "../../primitives/trie" }
-sp-version = { version = "5.0.0", path = "../../primitives/version" }
-sp-wasm-interface = { version = "7.0.0", path = "../../primitives/wasm-interface" }
+sc-executor-common = { path = "common" }
+sc-executor-wasmi = { path = "wasmi" }
+sc-executor-wasmtime = { path = "wasmtime" }
+sp-api = { path = "../../primitives/api" }
+sp-core = { path = "../../primitives/core" }
+sp-externalities = { path = "../../primitives/externalities" }
+sp-io = { path = "../../primitives/io" }
+sp-panic-handler = { path = "../../primitives/panic-handler" }
+sp-runtime-interface = { path = "../../primitives/runtime-interface" }
+sp-trie = { path = "../../primitives/trie" }
+sp-version = { path = "../../primitives/version" }
+sp-wasm-interface = { path = "../../primitives/wasm-interface" }
 
 [dev-dependencies]
 array-bytes = "4.1"
 wat = "1.0"
-sc-runtime-test = { version = "2.0.0", path = "runtime-test" }
-substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
-sp-state-machine = { version = "0.13.0", path = "../../primitives/state-machine" }
-sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
-sp-maybe-compressed-blob = { version = "4.1.0-dev", path = "../../primitives/maybe-compressed-blob" }
-sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
+sc-runtime-test = { path = "runtime-test" }
+substrate-test-runtime = { path = "../../test-utils/runtime" }
+sp-state-machine = { path = "../../primitives/state-machine" }
+sp-runtime = { path = "../../primitives/runtime" }
+sp-maybe-compressed-blob = { path = "../../primitives/maybe-compressed-blob" }
+sc-tracing = { path = "../tracing" }
 tracing-subscriber = "0.2.19"
 paste = "1.0"
 regex = "1.6.0"

@@ -1,13 +1,13 @@
 [package]
 name = "pallet-alliance"
-version = "4.0.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "Apache-2.0"
-homepage = "https://docs.substrate.io/"
-repository = "https://github.com/paritytech/substrate/"
 description = "The Alliance pallet provides a collective for standard-setting industry collaboration."
 readme = "README.md"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -20,23 +20,23 @@ log = { version = "0.4.14", default-features = false }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
 scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
 
-sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
-sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
-sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { default-features = false, path = "../../primitives/std" }
+sp-core = { default-features = false, path = "../../primitives/core" }
+sp-io = { default-features = false, path = "../../primitives/io" }
+sp-runtime = { default-features = false, path = "../../primitives/runtime" }
 
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+frame-benchmarking = { default-features = false, path = "../benchmarking", optional = true }
+frame-support = { default-features = false, path = "../support" }
+frame-system = { default-features = false, path = "../system" }
 
-pallet-identity = { version = "4.0.0-dev", path = "../identity", default-features = false }
-pallet-collective = { version = "4.0.0-dev", path = "../collective", default-features = false, optional = true }
+pallet-identity = { path = "../identity", default-features = false }
+pallet-collective = { path = "../collective", default-features = false, optional = true }
 
 [dev-dependencies]
 array-bytes = "4.1"
 sha2 = "0.10.1"
-pallet-balances = { version = "4.0.0-dev", path = "../balances" }
-pallet-collective = { version = "4.0.0-dev", path = "../collective" }
+pallet-balances = { path = "../balances" }
+pallet-collective = { path = "../collective" }
 
 [features]
 default = ["std"]

@@ -247,6 +247,14 @@ members = [
 	"utils/wasm-builder",
 ]
 
+[workspace.package]
+version = "4.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+repository = "https://github.com/paritytech/substrate.git"
+homepage = "https://substrate.io"
+
+
 # The list of dependencies below (which can be both direct and indirect dependencies) are crates
 # that are suspected to be CPU-intensive, and that are unlikely to require debugging (as some of
 # their debug info might be missing) or to require to be frequently recompiled. We compile these

@@ -1,13 +1,13 @@
 [package]
 name = "pallet-offences-benchmarking"
-version = "4.0.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 description = "FRAME offences pallet benchmarking"
 readme = "README.md"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -15,26 +15,26 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
 scale-info = { version = "2.0.0", default-features = false, features = ["derive"] }
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../benchmarking" }
-frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../../election-provider-support" }
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
-pallet-babe = { version = "4.0.0-dev", default-features = false, path = "../../babe" }
-pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../balances" }
-pallet-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../grandpa" }
-pallet-im-online = { version = "4.0.0-dev", default-features = false, path = "../../im-online" }
-pallet-offences = { version = "4.0.0-dev", default-features = false, path = "../../offences" }
-pallet-session = { version = "4.0.0-dev", default-features = false, path = "../../session" }
-pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../../staking" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../../primitives/runtime" }
-sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/staking" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../../primitives/std" }
+frame-benchmarking = { default-features = false, path = "../../benchmarking" }
+frame-election-provider-support = { default-features = false, path = "../../election-provider-support" }
+frame-support = { default-features = false, path = "../../support" }
+frame-system = { default-features = false, path = "../../system" }
+pallet-babe = { default-features = false, path = "../../babe" }
+pallet-balances = { default-features = false, path = "../../balances" }
+pallet-grandpa = { default-features = false, path = "../../grandpa" }
+pallet-im-online = { default-features = false, path = "../../im-online" }
+pallet-offences = { default-features = false, path = "../../offences" }
+pallet-session = { default-features = false, path = "../../session" }
+pallet-staking = { default-features = false, path = "../../staking" }
+sp-runtime = { default-features = false, path = "../../../primitives/runtime" }
+sp-staking = { default-features = false, path = "../../../primitives/staking" }
+sp-std = { default-features = false, path = "../../../primitives/std" }
 
 [dev-dependencies]
-pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../../staking/reward-curve" }
-pallet-timestamp = { version = "4.0.0-dev", path = "../../timestamp" }
-sp-core = { version = "7.0.0", path = "../../../primitives/core" }
-sp-io = { version = "7.0.0", path = "../../../primitives/io" }
+pallet-staking-reward-curve = { path = "../../staking/reward-curve" }
+pallet-timestamp = { path = "../../timestamp" }
+sp-core = { path = "../../../primitives/core" }
+sp-io = { path = "../../../primitives/io" }
 
 [features]
 default = ["std"]

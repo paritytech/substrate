@@ -1,12 +1,12 @@
 [package]
 name = "substrate-test-runtime-transaction-pool"
-version = "2.0.0"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 publish = false
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -16,8 +16,8 @@ codec = { package = "parity-scale-codec", version = "3.0.0" }
 futures = "0.3.21"
 parking_lot = "0.12.1"
 thiserror = "1.0"
-sc-transaction-pool = { version = "4.0.0-dev", path = "../../../client/transaction-pool" }
-sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
-sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
-substrate-test-runtime-client = { version = "2.0.0", path = "../client" }
+sc-transaction-pool = { path = "../../../client/transaction-pool" }
+sc-transaction-pool-api = { path = "../../../client/transaction-pool/api" }
+sp-blockchain = { path = "../../../primitives/blockchain" }
+sp-runtime = { path = "../../../primitives/runtime" }
+substrate-test-runtime-client = { path = "../client" }

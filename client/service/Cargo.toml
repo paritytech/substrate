@@ -1,13 +1,13 @@
 [package]
 name = "sc-service"
-version = "0.10.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 description = "Substrate service. Starts a thread that spins up the network, client, and extrinsic pool. Manages communication between them."
 readme = "README.md"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -34,50 +34,50 @@ pin-project = "1.0.12"
 hash-db = "0.15.2"
 serde = "1.0.136"
 serde_json = "1.0.85"
-sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
-sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
-sp-trie = { version = "7.0.0", path = "../../primitives/trie" }
-sp-externalities = { version = "0.13.0", path = "../../primitives/externalities" }
-sc-utils = { version = "4.0.0-dev", path = "../utils" }
-sp-version = { version = "5.0.0", path = "../../primitives/version" }
-sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
-sp-keystore = { version = "0.13.0", path = "../../primitives/keystore" }
-sp-session = { version = "4.0.0-dev", path = "../../primitives/session" }
-sp-state-machine = { version = "0.13.0", path = "../../primitives/state-machine" }
-sp-application-crypto = { version = "7.0.0", path = "../../primitives/application-crypto" }
-sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
-sc-consensus = { version = "0.10.0-dev", path = "../../client/consensus/common" }
-sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
-sp-storage = { version = "7.0.0", path = "../../primitives/storage" }
-sc-network = { version = "0.10.0-dev", path = "../network" }
-sc-network-bitswap = { version = "0.10.0-dev", path = "../network/bitswap" }
-sc-network-common = { version = "0.10.0-dev", path = "../network/common" }
-sc-network-light = { version = "0.10.0-dev", path = "../network/light" }
-sc-network-sync = { version = "0.10.0-dev", path = "../network/sync" }
-sc-network-transactions = { version = "0.10.0-dev", path = "../network/transactions" }
-sc-chain-spec = { version = "4.0.0-dev", path = "../chain-spec" }
-sc-client-api = { version = "4.0.0-dev", path = "../api" }
-sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
-sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../db" }
+sc-keystore = { path = "../keystore" }
+sp-runtime = { path = "../../primitives/runtime" }
+sp-trie = { path = "../../primitives/trie" }
+sp-externalities = { path = "../../primitives/externalities" }
+sc-utils = { path = "../utils" }
+sp-version = { path = "../../primitives/version" }
+sp-blockchain = { path = "../../primitives/blockchain" }
+sp-core = { path = "../../primitives/core" }
+sp-keystore = { path = "../../primitives/keystore" }
+sp-session = { path = "../../primitives/session" }
+sp-state-machine = { path = "../../primitives/state-machine" }
+sp-application-crypto = { path = "../../primitives/application-crypto" }
+sp-consensus = { path = "../../primitives/consensus/common" }
+sc-consensus = { path = "../../client/consensus/common" }
+sp-inherents = { path = "../../primitives/inherents" }
+sp-storage = { path = "../../primitives/storage" }
+sc-network = { path = "../network" }
+sc-network-bitswap = { path = "../network/bitswap" }
+sc-network-common = { path = "../network/common" }
+sc-network-light = { path = "../network/light" }
+sc-network-sync = { path = "../network/sync" }
+sc-network-transactions = { path = "../network/transactions" }
+sc-chain-spec = { path = "../chain-spec" }
+sc-client-api = { path = "../api" }
+sp-api = { path = "../../primitives/api" }
+sc-client-db = { default-features = false, path = "../db" }
 codec = { package = "parity-scale-codec", version = "3.0.0" }
-sc-executor = { version = "0.10.0-dev", path = "../executor" }
-sc-transaction-pool = { version = "4.0.0-dev", path = "../transaction-pool" }
-sp-transaction-pool = { version = "4.0.0-dev", path = "../../primitives/transaction-pool" }
-sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
-sp-transaction-storage-proof = { version = "4.0.0-dev", path = "../../primitives/transaction-storage-proof" }
-sc-rpc-server = { version = "4.0.0-dev", path = "../rpc-servers" }
-sc-rpc = { version = "4.0.0-dev", path = "../rpc" }
-sc-rpc-spec-v2 = { version = "0.10.0-dev", path = "../rpc-spec-v2" }
-sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
-sp-block-builder = { version = "4.0.0-dev", path = "../../primitives/block-builder" }
-sc-informant = { version = "0.10.0-dev", path = "../informant" }
-sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
-sc-offchain = { version = "4.0.0-dev", path = "../offchain" }
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.10.0-dev" }
-sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
-sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
-sc-sysinfo = { version = "6.0.0-dev", path = "../sysinfo" }
+sc-executor = { path = "../executor" }
+sc-transaction-pool = { path = "../transaction-pool" }
+sp-transaction-pool = { path = "../../primitives/transaction-pool" }
+sc-transaction-pool-api = { path = "../transaction-pool/api" }
+sp-transaction-storage-proof = { path = "../../primitives/transaction-storage-proof" }
+sc-rpc-server = { path = "../rpc-servers" }
+sc-rpc = { path = "../rpc" }
+sc-rpc-spec-v2 = { path = "../rpc-spec-v2" }
+sc-block-builder = { path = "../block-builder" }
+sp-block-builder = { path = "../../primitives/block-builder" }
+sc-informant = { path = "../informant" }
+sc-telemetry = { path = "../telemetry" }
+sc-offchain = { path = "../offchain" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus"}
+sc-tracing = { path = "../tracing" }
+sp-tracing = { path = "../../primitives/tracing" }
+sc-sysinfo = { path = "../sysinfo" }
 tracing = "0.1.29"
 tracing-futures = { version = "0.2.4" }
 async-trait = "0.1.57"
@@ -87,5 +87,5 @@ directories = "4.0.1"
 static_init = "1.0.3"
 
 [dev-dependencies]
-substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
-substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime/" }
+substrate-test-runtime-client = { path = "../../test-utils/runtime/client" }
+substrate-test-runtime = { path = "../../test-utils/runtime/" }

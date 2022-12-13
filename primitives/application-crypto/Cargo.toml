@@ -1,26 +1,26 @@
 [package]
 name = "sp-application-crypto"
-version = "7.0.0"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 description = "Provides facilities for generating application specific crypto wrapper types."
 license = "Apache-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 documentation = "https://docs.rs/sp-application-crypto"
 readme = "README.md"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 
 [dependencies]
-sp-core = { version = "7.0.0", default-features = false, path = "../core" }
+sp-core = { default-features = false, path = "../core" }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 serde = { version = "1.0.136", optional = true, features = ["derive"] }
-sp-std = { version = "5.0.0", default-features = false, path = "../std" }
-sp-io = { version = "7.0.0", default-features = false, path = "../io" }
+sp-std = { default-features = false, path = "../std" }
+sp-io = { default-features = false, path = "../io" }
 
 [features]
 default = [ "std" ]

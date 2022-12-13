@@ -1,14 +1,14 @@
 [package]
 name = "sp-runtime"
-version = "7.0.0"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 description = "Runtime Modules shared primitive types."
 documentation = "https://docs.rs/sp-runtime"
 readme = "README.md"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -23,21 +23,21 @@ paste = "1.0"
 rand = { version = "0.7.2", optional = true }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 serde = { version = "1.0.136", features = ["derive"], optional = true }
-sp-application-crypto = { version = "7.0.0", default-features = false, path = "../application-crypto" }
-sp-arithmetic = { version = "6.0.0", default-features = false, path = "../arithmetic" }
-sp-core = { version = "7.0.0", default-features = false, path = "../core" }
-sp-io = { version = "7.0.0", default-features = false, path = "../io" }
-sp-std = { version = "5.0.0", default-features = false, path = "../std" }
-sp-weights = { version = "4.0.0", default-features = false, path = "../weights" }
+sp-application-crypto = { default-features = false, path = "../application-crypto" }
+sp-arithmetic = { default-features = false, path = "../arithmetic" }
+sp-core = { default-features = false, path = "../core" }
+sp-io = { default-features = false, path = "../io" }
+sp-std = { default-features = false, path = "../std" }
+sp-weights = { default-features = false, path = "../weights" }
 
 [dev-dependencies]
 rand = "0.7.2"
 serde_json = "1.0.85"
 zstd = { version = "0.11.2", default-features = false }
-sp-api = { version = "4.0.0-dev", path = "../api" }
-sp-state-machine = { version = "0.13.0", path = "../state-machine" }
-sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
-substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
+sp-api = { path = "../api" }
+sp-state-machine = { path = "../state-machine" }
+sp-tracing = { path = "../../primitives/tracing" }
+substrate-test-runtime-client = { path = "../../test-utils/runtime/client" }
 
 [features]
 runtime-benchmarks = []

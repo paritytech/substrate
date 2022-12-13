@@ -1,14 +1,14 @@
 [package]
 name = "sc-executor-common"
-version = "0.10.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 description = "A set of common definitions that are needed for defining execution engines."
 documentation = "https://docs.rs/sc-executor-common/"
 readme = "README.md"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -17,9 +17,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 thiserror = "1.0.30"
 wasm-instrument = "0.3"
 wasmi = "0.13"
-sc-allocator = { version = "4.1.0-dev", path = "../../allocator" }
-sp-maybe-compressed-blob = { version = "4.1.0-dev", path = "../../../primitives/maybe-compressed-blob" }
-sp-wasm-interface = { version = "7.0.0", path = "../../../primitives/wasm-interface" }
+sc-allocator = { path = "../../allocator" }
+sp-maybe-compressed-blob = { path = "../../../primitives/maybe-compressed-blob" }
+sp-wasm-interface = { path = "../../../primitives/wasm-interface" }
 
 [features]
 default = []

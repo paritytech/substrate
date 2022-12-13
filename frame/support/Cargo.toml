@@ -1,13 +1,13 @@
 [package]
 name = "frame-support"
-version = "4.0.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 description = "Support code for the runtime."
 readme = "README.md"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -17,33 +17,33 @@ serde = { version = "1.0.136", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "max-encoded-len"] }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 frame-metadata = { version = "15.0.0", default-features = false, features = ["v14"] }
-sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-tracing = { version = "6.0.0", default-features = false, path = "../../primitives/tracing" }
-sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
-sp-arithmetic = { version = "6.0.0", default-features = false, path = "../../primitives/arithmetic" }
-sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }
-sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
-sp-weights = { version = "4.0.0", default-features = false, path = "../../primitives/weights" }
+sp-api = { default-features = false, path = "../../primitives/api" }
+sp-std = { default-features = false, path = "../../primitives/std" }
+sp-io = { default-features = false, path = "../../primitives/io" }
+sp-runtime = { default-features = false, path = "../../primitives/runtime" }
+sp-tracing = { default-features = false, path = "../../primitives/tracing" }
+sp-core = { default-features = false, path = "../../primitives/core" }
+sp-arithmetic = { default-features = false, path = "../../primitives/arithmetic" }
+sp-inherents = { default-features = false, path = "../../primitives/inherents" }
+sp-staking = { default-features = false, path = "../../primitives/staking" }
+sp-weights = { default-features = false, path = "../../primitives/weights" }
 tt-call = "1.0.8"
-frame-support-procedural = { version = "4.0.0-dev", default-features = false, path = "./procedural" }
+frame-support-procedural = { default-features = false, path = "./procedural" }
 paste = "1.0"
 once_cell = { version = "1", default-features = false, optional = true }
-sp-state-machine = { version = "0.13.0", default-features = false, optional = true, path = "../../primitives/state-machine" }
+sp-state-machine = { default-features = false, optional = true, path = "../../primitives/state-machine" }
 bitflags = "1.3"
 impl-trait-for-tuples = "0.2.2"
 smallvec = "1.8.0"
 log = { version = "0.4.17", default-features = false }
-sp-core-hashing-proc-macro = { version = "5.0.0", path = "../../primitives/core/hashing/proc-macro" }
+sp-core-hashing-proc-macro = { path = "../../primitives/core/hashing/proc-macro" }
 k256 = { version = "0.11.5", default-features = false, features = ["ecdsa"] }
 
 [dev-dependencies]
 serde_json = "1.0.85"
 assert_matches = "1.3.0"
 pretty_assertions = "1.2.1"
-frame-system = { version = "4.0.0-dev", path = "../system" }
+frame-system = { path = "../system" }
 
 [features]
 default = ["std"]

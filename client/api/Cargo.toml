@@ -1,14 +1,14 @@
 [package]
 name = "sc-client-api"
-version = "4.0.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 description = "Substrate client interfaces."
 documentation = "https://docs.rs/sc-client-api"
 readme = "README.md"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -22,23 +22,23 @@ futures = "0.3.21"
 hash-db = { version = "0.15.2", default-features = false }
 log = "0.4.17"
 parking_lot = "0.12.1"
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../utils/prometheus" }
-sc-executor = { version = "0.10.0-dev", path = "../executor" }
-sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
-sc-utils = { version = "4.0.0-dev", path = "../utils" }
-sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
-sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
-sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
-sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
-sp-database = { version = "4.0.0-dev", path = "../../primitives/database" }
-sp-externalities = { version = "0.13.0", path = "../../primitives/externalities" }
-sp-keystore = { version = "0.13.0", default-features = false, path = "../../primitives/keystore" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-state-machine = { version = "0.13.0", path = "../../primitives/state-machine" }
-sp-storage = { version = "7.0.0", path = "../../primitives/storage" }
-sp-trie = { version = "7.0.0", path = "../../primitives/trie" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus" }
+sc-executor = { path = "../executor" }
+sc-transaction-pool-api = { path = "../transaction-pool/api" }
+sc-utils = { path = "../utils" }
+sp-api = { path = "../../primitives/api" }
+sp-blockchain = { path = "../../primitives/blockchain" }
+sp-consensus = { path = "../../primitives/consensus/common" }
+sp-core = { default-features = false, path = "../../primitives/core" }
+sp-database = { path = "../../primitives/database" }
+sp-externalities = { path = "../../primitives/externalities" }
+sp-keystore = { default-features = false, path = "../../primitives/keystore" }
+sp-runtime = { default-features = false, path = "../../primitives/runtime" }
+sp-state-machine = { path = "../../primitives/state-machine" }
+sp-storage = { path = "../../primitives/storage" }
+sp-trie = { path = "../../primitives/trie" }
 
 [dev-dependencies]
 thiserror = "1.0.30"
-sp-test-primitives = { version = "2.0.0", path = "../../primitives/test-primitives" }
-substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
+sp-test-primitives = { path = "../../primitives/test-primitives" }
+substrate-test-runtime = { path = "../../test-utils/runtime" }

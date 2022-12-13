@@ -1,21 +1,21 @@
 [package]
 name = "pallet-nomination-pools-runtime-api"
-version = "1.0.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 description = "Runtime API for nomination-pools FRAME pallet"
 readme = "README.md"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
-sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/api" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../../primitives/std" }
+sp-api = { default-features = false, path = "../../../primitives/api" }
+sp-std = { default-features = false, path = "../../../primitives/std" }
 
 [features]
 default = ["std"]

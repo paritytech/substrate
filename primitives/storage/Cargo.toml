@@ -1,14 +1,14 @@
 [package]
 name = "sp-storage"
-version = "7.0.0"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
 description = "Storage related primitives"
 license = "Apache-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 documentation = "https://docs.rs/sp-storage/"
 readme = "README.md"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -18,8 +18,8 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 impl-serde = { version = "0.4.0", optional = true }
 ref-cast = "1.0.0"
 serde = { version = "1.0.136", features = ["derive"], optional = true }
-sp-debug-derive = { version = "5.0.0", default-features = false, path = "../debug-derive" }
-sp-std = { version = "5.0.0", default-features = false, path = "../std" }
+sp-debug-derive = { default-features = false, path = "../debug-derive" }
+sp-std = { default-features = false, path = "../std" }
 
 [features]
 default = [ "std" ]

@@ -1,13 +1,13 @@
 [package]
 name = "sp-consensus-aura"
-version = "0.10.0-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
 description = "Primitives for Aura consensus"
-edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.io"
-repository = "https://github.com/paritytech/substrate/"
 readme = "README.md"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -16,14 +16,14 @@ targets = ["x86_64-unknown-linux-gnu"]
 async-trait = { version = "0.1.57", optional = true }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
-sp-api = { version = "4.0.0-dev", default-features = false, path = "../../api" }
-sp-application-crypto = { version = "7.0.0", default-features = false, path = "../../application-crypto" }
-sp-consensus = { version = "0.10.0-dev", optional = true, path = "../common" }
-sp-consensus-slots = { version = "0.10.0-dev", default-features = false, path = "../slots" }
-sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../inherents" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../runtime" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../std" }
-sp-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../timestamp" }
+sp-api = { default-features = false, path = "../../api" }
+sp-application-crypto = { default-features = false, path = "../../application-crypto" }
+sp-consensus = { optional = true, path = "../common" }
+sp-consensus-slots = { default-features = false, path = "../slots" }
+sp-inherents = { default-features = false, path = "../../inherents" }
+sp-runtime = { default-features = false, path = "../../runtime" }
+sp-std = { default-features = false, path = "../../std" }
+sp-timestamp = { default-features = false, path = "../../timestamp" }
 
 [features]
 default = ["std"]
