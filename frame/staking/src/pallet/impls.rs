@@ -25,9 +25,8 @@ use frame_support::{
 	dispatch::WithPostDispatchInfo,
 	pallet_prelude::*,
 	traits::{
-		fungibles::Lockable, Currency, CurrencyToVote, Defensive, DefensiveResult,
-		EstimateNextNewSession, Get, Imbalance, OnUnbalanced, TryCollect, UnixTime,
-		WithdrawReasons,
+		Currency, CurrencyToVote, Defensive, DefensiveResult, EstimateNextNewSession, Get,
+		Imbalance, LockableCurrency, OnUnbalanced, TryCollect, UnixTime, WithdrawReasons,
 	},
 	weights::Weight,
 };
@@ -41,7 +40,7 @@ use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
 	EraIndex, SessionIndex, Stake, StakingInterface,
 };
-use sp_std::{collections::btree_map::BTreeMap, prelude::*};
+use sp_std::prelude::*;
 
 use crate::{
 	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, Exposure, ExposureOf,
@@ -352,6 +351,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
+	/// Start a new era. It does:
 	///
 	/// * Increment `active_era.index`,
 	/// * reset `active_era.start`,
@@ -708,11 +708,6 @@ impl<T: Config> Pallet<T> {
 	/// nominators.
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
-	///
-	/// ### Slashing
-	///
-	/// All votes that have been submitted before the last non-zero slash of the corresponding
-	/// target are *auto-chilled*, but still count towards the limit imposed by `maybe_max_len`.
 	pub fn get_npos_voters(maybe_max_len: Option<usize>) -> Vec<VoterOf<Self>> {
 		let max_allowed_len = {
 			let all_voter_count = T::VoterList::count() as usize;
@@ -723,7 +718,6 @@ impl<T: Config> Pallet<T> {
 
 		// cache a few things.
 		let weight_of = Self::weight_of_fn();
-		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
 
 		let mut voters_seen = 0u32;
 		let mut validators_taken = 0u32;
@@ -742,21 +736,14 @@ impl<T: Config> Pallet<T> {
 				None => break,
 			};
 
-			if let Some(Nominations { submitted_in, mut targets, suppressed: _ }) =
-				<Nominators<T>>::get(&voter)
-			{
-				// if this voter is a nominator:
-				targets.retain(|stash| {
-					slashing_spans
-						.get(stash)
-						.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
-				});
+			if let Some(Nominations { targets, .. }) = <Nominators<T>>::get(&voter) {
 				let voter_weight = weight_of(&voter);
-				if !targets.len().is_zero() {
+				if !targets.is_empty() {
 					all_voters.push((voter.clone(), voter_weight, targets));
 					nominators_taken.saturating_inc();
+				} else {
+					// Technically should never happen, but not much we can do about it.
 				}
-
 				min_active_stake =
 					if voter_weight < min_active_stake { voter_weight } else { min_active_stake };
 			} else if Validators::<T>::contains_key(&voter) {
@@ -780,18 +767,14 @@ impl<T: Config> Pallet<T> {
 					warn,
 					"DEFENSIVE: invalid item in `VoterList`: {:?}, this nominator probably has too many nominations now",
 					voter
-				)
+				);
 			}
 		}
 
 		// all_voters should have not re-allocated.
 		debug_assert!(all_voters.capacity() == max_allowed_len);
 
-		Self::register_weight(T::WeightInfo::get_npos_voters(
-			validators_taken,
-			nominators_taken,
-			slashing_spans.len() as u32,
-		));
+		Self::register_weight(T::WeightInfo::get_npos_voters(validators_taken, nominators_taken));
 
 		let min_active_stake: T::CurrencyBalance =
 			if all_voters.len() == 0 { 0u64.into() } else { min_active_stake.into() };
@@ -1297,6 +1280,12 @@ where
 				now: active_era,
 				reward_proportion,
 				disable_strategy,
+			});
+
+			Self::deposit_event(Event::<T>::SlashReported {
+				validator: stash.clone(),
+				fraction: *slash_fraction,
+				slash_era,
 			});
 
 			if let Some(mut unapplied) = unapplied {

@@ -37,6 +37,7 @@ use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt as _
 // poll `ChainSync` and verify that a new sync fork request has been registered
 #[tokio::test]
 async fn delegate_to_chainsync() {
+	let import_queue = Box::new(sc_consensus::import_queue::mock::MockImportQueueHandle::new());
 	let (_chain_sync_network_provider, chain_sync_network_handle) = NetworkServiceProvider::new();
 	let (mut chain_sync, chain_sync_service, _) = ChainSync::new(
 		sc_network_common::sync::SyncMode::Full,
@@ -47,7 +48,9 @@ async fn delegate_to_chainsync() {
 		Box::new(DefaultBlockAnnounceValidator),
 		1u32,
 		None,
+		None,
 		chain_sync_network_handle,
+		import_queue,
 		ProtocolName::from("block-request"),
 		ProtocolName::from("state-request"),
 		None,

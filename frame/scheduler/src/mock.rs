@@ -72,6 +72,7 @@ pub mod logger {
 	where
 		<T as frame_system::Config>::RuntimeOrigin: OriginTrait<PalletsOrigin = OriginCaller>,
 	{
+		#[pallet::call_index(0)]
 		#[pallet::weight(*weight)]
 		pub fn log(origin: OriginFor<T>, i: u32, weight: Weight) -> DispatchResult {
 			Self::deposit_event(Event::Logged(i, weight));
@@ -81,6 +82,7 @@ pub mod logger {
 			Ok(())
 		}
 
+		#[pallet::call_index(1)]
 		#[pallet::weight(*weight)]
 		pub fn log_without_filter(origin: OriginFor<T>, i: u32, weight: Weight) -> DispatchResult {
 			Self::deposit_event(Event::Logged(i, weight));

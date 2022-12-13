@@ -62,6 +62,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Index and store data off chain.
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::store(remark.len() as u32))]
 		pub fn store(origin: OriginFor<T>, remark: Vec<u8>) -> DispatchResultWithPostInfo {
 			ensure!(!remark.is_empty(), Error::<T>::Empty);
