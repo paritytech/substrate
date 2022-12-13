@@ -198,7 +198,7 @@ fn add_liquidity_should_work() {
 			amount1_provided: 10,
 			amount2_provided: 10,
 			lp_token,
-			lp_tokens_minted: 9,
+			lp_token_minted: 9,
 		}));
 
 		let pallet_account = Dex::account_id();
@@ -253,7 +253,7 @@ fn remove_liquidity_should_work() {
 			amount1: 9,
 			amount2: 9,
 			lp_token,
-			lp_tokens_burned: 9,
+			lp_token_burned: 9,
 		}));
 
 		let pallet_account = Dex::account_id();
@@ -273,10 +273,8 @@ fn can_not_redeem_more_lp_tokens_than_were_minted() {
 		let user = 1;
 		let token_1 = MultiAssetId::Native;
 		let token_2 = MultiAssetId::Asset(2);
-		// let pool_id = (token_1, token_2);
 
 		create_tokens(user, vec![token_2]);
-		// let lp_token = Dex::get_next_pool_asset_id();
 		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
 
 		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user, 1000, 0));
@@ -447,33 +445,18 @@ fn check_no_panic_when_try_swap_empty_pool() {
 			2
 		));
 
-		assert!(dbg!(events()).contains(&Event::<Test>::LiquidityAdded {
+		assert!(events().contains(&Event::<Test>::LiquidityAdded {
 			who: user,
 			mint_to: user,
 			pool_id,
 			amount1_provided: liquidity1,
 			amount2_provided: liquidity2,
 			lp_token,
-			lp_tokens_minted: 140,
+			lp_token_minted: 140,
 		}));
-		// let exchange_amount = 10;
-		// let expect_receive =
-		// 	Dex::get_amount_out(&exchange_amount, &liquidity2, &liquidity1).ok().unwrap();
-
-		// assert_ok!(Dex::swap_exact_tokens_for_tokens(
-		// 	RuntimeOrigin::signed(user),
-		// 	token_2,
-		// 	token_1,
-		// 	exchange_amount,
-		// 	1,
-		// 	user,
-		// 	3
-		// ));
 
 		let pallet_account = Dex::account_id();
-		// assert_eq!(balance(user, token_1), expect_receive);
-		// assert_eq!(balance(pallet_account, token_1), liquidity1 - expect_receive);
-		// assert_eq!(balance(pallet_account, token_2), liquidity2 + exchange_amount);
+
 		assert_eq!(balance(pallet_account, token_1), 1000);
 
 		assert_ok!(Dex::remove_liquidity(
@@ -600,8 +583,7 @@ fn swap_tokens_for_exact_tokens_should_work() {
 
 		let exchange_out2 = 1;
 
-		let expect_in1 =
-			dbg!(Dex::get_amount_in(&exchange_out2, &liquidity1, &liquidity2).ok().unwrap());
+		let expect_in1 = Dex::get_amount_in(&exchange_out2, &liquidity1, &liquidity2).ok().unwrap();
 
 		assert_ok!(Dex::swap_tokens_for_exact_tokens(
 			RuntimeOrigin::signed(user),
@@ -616,7 +598,7 @@ fn swap_tokens_for_exact_tokens_should_work() {
 		assert_eq!(balance(user, token_1), 1000 - expect_in1);
 		assert_eq!(balance(pallet_account, token_1), liquidity1 + expect_in1);
 		assert_eq!(balance(user, token_2), 1000 - 20 + exchange_out2);
-		assert_eq!(balance(pallet_account, token_2), dbg!(liquidity2) - exchange_out2);
+		assert_eq!(balance(pallet_account, token_2), liquidity2 - exchange_out2);
 
 		// check invariants:
 
@@ -668,8 +650,7 @@ fn swap_tokens_for_exact_tokens_works_when_user_is_not_liquidity_provider() {
 
 		let exchange_out2 = 1;
 
-		let expect_in1 =
-			dbg!(Dex::get_amount_in(&exchange_out2, &liquidity1, &liquidity2).ok().unwrap());
+		let expect_in1 = Dex::get_amount_in(&exchange_out2, &liquidity1, &liquidity2).ok().unwrap();
 
 		assert_ok!(Dex::swap_tokens_for_exact_tokens(
 			RuntimeOrigin::signed(user),
@@ -684,7 +665,7 @@ fn swap_tokens_for_exact_tokens_works_when_user_is_not_liquidity_provider() {
 		assert_eq!(balance(user, token_1), 1000 - expect_in1);
 		assert_eq!(balance(pallet_account, token_1), liquidity1 + expect_in1);
 		assert_eq!(balance(user, token_2), exchange_out2);
-		assert_eq!(balance(pallet_account, token_2), dbg!(liquidity2) - exchange_out2);
+		assert_eq!(balance(pallet_account, token_2), liquidity2 - exchange_out2);
 
 		// check invariants:
 

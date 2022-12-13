@@ -159,7 +159,7 @@ pub mod pallet {
 			amount1_provided: AssetBalanceOf<T>,
 			amount2_provided: AssetBalanceOf<T>,
 			lp_token: T::PoolAssetId,
-			lp_tokens_minted: AssetBalanceOf<T>,
+			lp_token_minted: AssetBalanceOf<T>,
 		},
 		LiquidityRemoved {
 			who: T::AccountId,
@@ -168,7 +168,7 @@ pub mod pallet {
 			amount1: AssetBalanceOf<T>,
 			amount2: AssetBalanceOf<T>,
 			lp_token: T::PoolAssetId,
-			lp_tokens_burned: AssetBalanceOf<T>,
+			lp_token_burned: AssetBalanceOf<T>,
 		},
 		SwapExecuted {
 			who: T::AccountId,
@@ -375,7 +375,7 @@ pub mod pallet {
 					amount1_provided: amount1,
 					amount2_provided: amount2,
 					lp_token: pool.lp_token,
-					lp_tokens_minted: lp_token_amount,
+					lp_token_minted: lp_token_amount,
 				});
 
 				Ok(())
@@ -387,9 +387,9 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			asset1: MultiAssetId<T::AssetId>,
 			asset2: MultiAssetId<T::AssetId>,
-			lp_token_amount: AssetBalanceOf<T>,
-			amount1_min: AssetBalanceOf<T>,
-			amount2_min: AssetBalanceOf<T>,
+			lp_token_burn: AssetBalanceOf<T>,
+			amount1_min_receive: AssetBalanceOf<T>,
+			amount2_min_receive: AssetBalanceOf<T>,
 			withdraw_to: T::AccountId,
 			deadline: T::BlockNumber,
 		) -> DispatchResult {
@@ -398,7 +398,7 @@ pub mod pallet {
 			let pool_id = Self::get_pool_id(asset1, asset2);
 			let (asset1, asset2) = pool_id;
 
-			ensure!(lp_token_amount > Zero::zero(), Error::<T>::ZeroLiquidity);
+			ensure!(lp_token_burn > Zero::zero(), Error::<T>::ZeroLiquidity);
 
 			let now = frame_system::Pallet::<T>::block_number();
 			ensure!(deadline >= now, Error::<T>::DeadlinePassed);
@@ -411,7 +411,7 @@ pub mod pallet {
 					pool.lp_token,
 					&sender,
 					&pallet_account,
-					lp_token_amount,
+					lp_token_burn,
 					false,
 				)?;
 
@@ -420,28 +420,28 @@ pub mod pallet {
 
 				let total_supply = T::PoolAssets::total_issuance(pool.lp_token);
 
-				let amount1 = lp_token_amount
+				let amount1 = lp_token_burn
 					.checked_mul(&reserve1)
 					.ok_or(Error::<T>::Overflow)?
 					.checked_div(&total_supply)
 					.ok_or(Error::<T>::Overflow)?;
 
-				let amount2 = lp_token_amount
+				let amount2 = lp_token_burn
 					.checked_mul(&reserve2)
 					.ok_or(Error::<T>::Overflow)?
 					.checked_div(&total_supply)
 					.ok_or(Error::<T>::Overflow)?;
 
 				ensure!(
-					!amount1.is_zero() && amount1 >= amount1_min,
+					!amount1.is_zero() && amount1 >= amount1_min_receive,
 					Error::<T>::InsufficientAmountParam1
 				);
 				ensure!(
-					!amount2.is_zero() && amount2 >= amount2_min,
+					!amount2.is_zero() && amount2 >= amount2_min_receive,
 					Error::<T>::InsufficientAmountParam2
 				);
 
-				T::PoolAssets::burn_from(pool.lp_token, &pallet_account, lp_token_amount)?;
+				T::PoolAssets::burn_from(pool.lp_token, &pallet_account, lp_token_burn)?;
 
 				Self::transfer(asset1, &pallet_account, &withdraw_to, amount1, false)?;
 				Self::transfer(asset2, &pallet_account, &withdraw_to, amount2, false)?;
@@ -456,7 +456,7 @@ pub mod pallet {
 					amount1,
 					amount2,
 					lp_token: pool.lp_token,
-					lp_tokens_burned: lp_token_amount,
+					lp_token_burned: lp_token_burn,
 				});
 
 				Ok(())
