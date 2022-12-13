@@ -635,25 +635,25 @@ fn pallet_metadata_expands() {
 				index: 1,
 				name: "Example",
 				module_name: "pallet",
-				crate_version: CrateVersion { major: 3, minor: 0, patch: 0 },
+				crate_version: CrateVersion { major: 4, minor: 0, patch: 0 },
 			},
 			PalletInfoData {
 				index: 2,
 				name: "Instance1Example",
 				module_name: "pallet",
-				crate_version: CrateVersion { major: 3, minor: 0, patch: 0 },
+				crate_version: CrateVersion { major: 4, minor: 0, patch: 0 },
 			},
 			PalletInfoData {
 				index: 3,
 				name: "Example2",
 				module_name: "pallet2",
-				crate_version: CrateVersion { major: 3, minor: 0, patch: 0 },
+				crate_version: CrateVersion { major: 4, minor: 0, patch: 0 },
 			},
 			PalletInfoData {
 				index: 4,
 				name: "Instance1Example2",
 				module_name: "pallet2",
-				crate_version: CrateVersion { major: 3, minor: 0, patch: 0 },
+				crate_version: CrateVersion { major: 4, minor: 0, patch: 0 },
 			},
 		]
 	);
