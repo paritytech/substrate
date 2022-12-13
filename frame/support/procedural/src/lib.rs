@@ -19,6 +19,7 @@
 
 #![recursion_limit = "512"]
 
+mod benchmark;
 mod clone_no_bound;
 mod construct_runtime;
 mod crate_version;
@@ -477,6 +478,11 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn pallet(attr: TokenStream, item: TokenStream) -> TokenStream {
 	pallet::pallet(attr, item)
+}
+
+#[proc_macro_attribute]
+pub fn benchmark(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
+	benchmark::benchmark(tokens)
 }
 
 /// Execute the annotated function in a new storage transaction.
