@@ -628,6 +628,9 @@ macro_rules! bounded_btree_map {
 /// These feature checking macros can be used to conditionally enable/disable code in a dependent
 /// crate based on a feature in the crate where the macro is called.
 #[macro_export]
+// We need to skip formatting this macro because of this bug:
+// https://github.com/rust-lang/rustfmt/issues/5283
+#[rustfmt::skip]
 macro_rules! generate_feature_enabled_macro {
 	( $macro_name:ident, $feature_name:meta, $d:tt ) => {
 		/// Enable/disable the given code depending on
@@ -643,10 +646,10 @@ macro_rules! generate_feature_enabled_macro {
 		#[cfg($feature_name)]
 		#[macro_export]
 		macro_rules! $macro_name {
-					( $d ( $d input:tt )* ) => {
-						$d ( $d input )*
-					}
-				}
+			( $d ( $d input:tt )* ) => {
+				$d ( $d input )*
+			}
+		}
 
 		/// Enable/disable the given code depending on
 		#[doc = concat!("`", stringify!($feature_name), "`")]
