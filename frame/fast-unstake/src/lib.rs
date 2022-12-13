@@ -122,6 +122,7 @@ pub mod pallet {
 
 		/// Deposit to take for unstaking, to make sure we're able to slash the it in order to cover
 		/// the costs of resources on unsuccessful unstake.
+		#[pallet::constant]
 		type Deposit: Get<BalanceOf<Self>>;
 
 		/// The origin that can control this pallet.
@@ -166,9 +167,6 @@ pub mod pallet {
 		Unstaked { stash: T::AccountId, result: DispatchResult },
 		/// A staker was slashed for requesting fast-unstake whilst being exposed.
 		Slashed { stash: T::AccountId, amount: BalanceOf<T> },
-		/// Some internal error happened while migrating stash. They are removed as head as a
-		/// consequence.
-		Errored { stash: T::AccountId },
 		/// An internal error happened. Operations will be paused now.
 		InternalError,
 		/// A batch was partially checked for the given eras, but the process did not finish.
@@ -230,6 +228,7 @@ pub mod pallet {
 		/// If the check fails, the stash remains chilled and waiting for being unbonded as in with
 		/// the normal staking system, but they lose part of their unbonding chunks due to consuming
 		/// the chain's resources.
+		#[pallet::call_index(0)]
 		#[pallet::weight(<T as Config>::WeightInfo::register_fast_unstake())]
 		pub fn register_fast_unstake(origin: OriginFor<T>) -> DispatchResult {
 			let ctrl = ensure_signed(origin)?;
@@ -259,6 +258,7 @@ pub mod pallet {
 		/// Note that the associated stash is still fully unbonded and chilled as a consequence of
 		/// calling `register_fast_unstake`. This should probably be followed by a call to
 		/// `Staking::rebond`.
+		#[pallet::call_index(1)]
 		#[pallet::weight(<T as Config>::WeightInfo::deregister())]
 		pub fn deregister(origin: OriginFor<T>) -> DispatchResult {
 			let ctrl = ensure_signed(origin)?;
@@ -284,6 +284,7 @@ pub mod pallet {
 		/// Control the operation of this pallet.
 		///
 		/// Dispatch origin must be signed by the [`Config::ControlOrigin`].
+		#[pallet::call_index(2)]
 		#[pallet::weight(<T as Config>::WeightInfo::control())]
 		pub fn control(origin: OriginFor<T>, unchecked_eras_to_check: EraIndex) -> DispatchResult {
 			let _ = T::ControlOrigin::ensure_origin(origin)?;

@@ -59,6 +59,18 @@ pub trait Currency<AccountId> {
 	/// The total amount of issuance in the system.
 	fn total_issuance() -> Self::Balance;
 
+	/// The total amount of issuance in the system excluding those which are controlled by the
+	/// system.
+	fn active_issuance() -> Self::Balance {
+		Self::total_issuance()
+	}
+
+	/// Reduce the active issuance by some amount.
+	fn deactivate(_: Self::Balance) {}
+
+	/// Increase the active issuance by some amount, up to the outstanding amount reduced.
+	fn reactivate(_: Self::Balance) {}
+
 	/// The minimum balance any single account may have. This is equivalent to the `Balances`
 	/// module's `ExistentialDeposit`.
 	fn minimum_balance() -> Self::Balance;
@@ -209,6 +221,15 @@ pub struct TotalIssuanceOf<C: Currency<A>, A>(sp_std::marker::PhantomData<(C, A)
 impl<C: Currency<A>, A> Get<C::Balance> for TotalIssuanceOf<C, A> {
 	fn get() -> C::Balance {
 		C::total_issuance()
+	}
+}
+
+/// A non-const `Get` implementation parameterised by a `Currency` impl which provides the result
+/// of `active_issuance`.
+pub struct ActiveIssuanceOf<C: Currency<A>, A>(sp_std::marker::PhantomData<(C, A)>);
+impl<C: Currency<A>, A> Get<C::Balance> for ActiveIssuanceOf<C, A> {
+	fn get() -> C::Balance {
+		C::active_issuance()
 	}
 }
 

@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 futures = "0.3.21"
 hash-db = { version = "0.15.2", default-features = false }
-jsonrpsee = { version = "0.15.1", features = ["server"] }
+jsonrpsee = { version = "0.16.2", features = ["server"] }
 lazy_static = { version = "1.4.0", optional = true }
 log = "0.4.17"
 parking_lot = "0.12.1"
@@ -30,15 +30,15 @@ sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/a
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
-sp-core = { version = "6.0.0", path = "../../primitives/core" }
-sp-keystore = { version = "0.12.0", path = "../../primitives/keystore" }
+sp-core = { version = "7.0.0", path = "../../primitives/core" }
+sp-keystore = { version = "0.13.0", path = "../../primitives/keystore" }
 sp-offchain = { version = "4.0.0-dev", path = "../../primitives/offchain" }
 sp-rpc = { version = "6.0.0", path = "../../primitives/rpc" }
-sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
+sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
 sp-session = { version = "4.0.0-dev", path = "../../primitives/session" }
 sp-version = { version = "5.0.0", path = "../../primitives/version" }
 
-tokio = { version = "1.17.0", optional = true }
+tokio = { version = "1.22.0", optional = true }
 
 [dev-dependencies]
 env_logger = "0.9"
@@ -49,8 +49,8 @@ sc-network = { version = "0.10.0-dev", path = "../network" }
 sc-network-common = { version = "0.10.0-dev", path = "../network/common" }
 sc-transaction-pool = { version = "4.0.0-dev", path = "../transaction-pool" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
-tokio = "1.17.0"
-sp-io = { version = "6.0.0", path = "../../primitives/io" }
+tokio = "1.22.0"
+sp-io = { version = "7.0.0", path = "../../primitives/io" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 
 [features]

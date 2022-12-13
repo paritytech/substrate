@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-jsonrpsee = { version = "0.15.1", features = ["server", "macros"] }
+jsonrpsee = { version = "0.16.2", features = ["client-core", "server", "macros"] }
 assert_matches = "1.3.0"
 async-trait = "0.1.57"
 codec = { package = "parity-scale-codec", version = "3.0.0" }
@@ -35,14 +35,14 @@ sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/c
 sp-consensus-aura = { version = "0.10.0-dev", path = "../../../primitives/consensus/aura" }
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
 sp-consensus-slots = { version = "0.10.0-dev", path = "../../../primitives/consensus/slots" }
-sp-core = { version = "6.0.0", path = "../../../primitives/core" }
+sp-core = { version = "7.0.0", path = "../../../primitives/core" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
-sp-keystore = { version = "0.12.0", path = "../../../primitives/keystore" }
-sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
+sp-keystore = { version = "0.13.0", path = "../../../primitives/keystore" }
+sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
 sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
 
 [dev-dependencies]
-tokio = { version = "1.17.0", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1.22.0", features = ["rt-multi-thread", "macros"] }
 sc-basic-authorship = { version = "0.10.0-dev", path = "../../basic-authorship" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
 substrate-test-runtime-transaction-pool = { version = "2.0.0", path = "../../../test-utils/runtime/transaction-pool" }

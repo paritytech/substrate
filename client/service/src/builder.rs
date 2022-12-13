@@ -311,6 +311,7 @@ where
 		executor,
 		spawn_handle,
 		config.clone(),
+		execution_extensions,
 	)?;
 	crate::client::Client::new(
 		backend,
@@ -318,7 +319,6 @@ where
 		genesis_storage,
 		fork_blocks,
 		bad_blocks,
-		execution_extensions,
 		prometheus_registry,
 		telemetry,
 		config,
@@ -436,9 +436,7 @@ where
 	TBl::Hash: Unpin,
 	TBl::Header: Unpin,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
-	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash>
-		+ parity_util_mem::MallocSizeOf
-		+ 'static,
+	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 {
 	let SpawnTasksParams {
 		mut config,
@@ -540,12 +538,7 @@ where
 	spawn_handle.spawn(
 		"informant",
 		None,
-		sc_informant::build(
-			client.clone(),
-			network,
-			transaction_pool.clone(),
-			config.informant_output_format,
-		),
+		sc_informant::build(client.clone(), network, config.informant_output_format),
 	);
 
 	task_manager.keep_alive((config.base_path, rpc));
@@ -846,7 +839,7 @@ where
 	};
 
 	let (chain_sync_network_provider, chain_sync_network_handle) = NetworkServiceProvider::new();
-	let (chain_sync, chain_sync_service) = ChainSync::new(
+	let (chain_sync, chain_sync_service, block_announce_config) = ChainSync::new(
 		match config.network.sync_mode {
 			SyncMode::Full => sc_network_common::sync::SyncMode::Full,
 			SyncMode::Fast { skip_proofs, storage_chain_mode } =>
@@ -854,24 +847,19 @@ where
 			SyncMode::Warp => sc_network_common::sync::SyncMode::Warp,
 		},
 		client.clone(),
+		protocol_id.clone(),
+		&config.chain_spec.fork_id().map(ToOwned::to_owned),
+		Roles::from(&config.role),
 		block_announce_validator,
 		config.network.max_parallel_downloads,
 		warp_sync_provider,
+		config.prometheus_config.as_ref().map(|config| config.registry.clone()).as_ref(),
 		chain_sync_network_handle,
+		import_queue.service(),
+		block_request_protocol_config.name.clone(),
+		state_request_protocol_config.name.clone(),
+		warp_sync_protocol_config.as_ref().map(|config| config.name.clone()),
 	)?;
-
-	let block_announce_config = chain_sync.get_block_announce_proto_config(
-		protocol_id.clone(),
-		&config.chain_spec.fork_id().map(ToOwned::to_owned),
-		Roles::from(&config.role.clone()),
-		client.info().best_number,
-		client.info().best_hash,
-		client
-			.block_hash(Zero::zero())
-			.ok()
-			.flatten()
-			.expect("Genesis block exists; qed"),
-	);
 
 	request_response_protocol_configs.push(config.network.ipfs_server.then(|| {
 		let (handler, protocol_config) = BitswapRequestHandler::new(client.clone());
@@ -883,25 +871,26 @@ where
 		role: config.role.clone(),
 		executor: {
 			let spawn_handle = Clone::clone(&spawn_handle);
-			Some(Box::new(move |fut| {
+			Box::new(move |fut| {
 				spawn_handle.spawn("libp2p-node", Some("networking"), fut);
-			}))
+			})
 		},
 		network_config: config.network.clone(),
 		chain: client.clone(),
 		protocol_id: protocol_id.clone(),
 		fork_id: config.chain_spec.fork_id().map(ToOwned::to_owned),
-		import_queue: Box::new(import_queue),
 		chain_sync: Box::new(chain_sync),
-		chain_sync_service,
+		chain_sync_service: Box::new(chain_sync_service.clone()),
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		block_announce_config,
-		block_request_protocol_config,
-		state_request_protocol_config,
-		warp_sync_protocol_config,
-		light_client_request_protocol_config,
 		request_response_protocol_configs: request_response_protocol_configs
 			.into_iter()
+			.chain([
+				Some(block_request_protocol_config),
+				Some(state_request_protocol_config),
+				Some(light_client_request_protocol_config),
+				warp_sync_protocol_config,
+			])
 			.flatten()
 			.collect::<Vec<_>>(),
 	};
@@ -937,6 +926,7 @@ where
 		Some("networking"),
 		chain_sync_network_provider.run(network.clone()),
 	);
+	spawn_handle.spawn("import-queue", None, import_queue.run(Box::new(chain_sync_service)));
 
 	let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc");
 

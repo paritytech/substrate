@@ -179,9 +179,17 @@ pub struct TreeRoute<Block: BlockT> {
 impl<Block: BlockT> TreeRoute<Block> {
 	/// Creates a new `TreeRoute`.
 	///
-	/// It is required that `pivot >= route.len()`, otherwise it may panics.
-	pub fn new(route: Vec<HashAndNumber<Block>>, pivot: usize) -> Self {
-		TreeRoute { route, pivot }
+	/// To preserve the structure safety invariats it is required that `pivot < route.len()`.
+	pub fn new(route: Vec<HashAndNumber<Block>>, pivot: usize) -> Result<Self, String> {
+		if pivot < route.len() {
+			Ok(TreeRoute { route, pivot })
+		} else {
+			Err(format!(
+				"TreeRoute pivot ({}) should be less than route length ({})",
+				pivot,
+				route.len()
+			))
+		}
 	}
 
 	/// Get a slice of all retracted blocks in reverse order (towards common ancestor).
