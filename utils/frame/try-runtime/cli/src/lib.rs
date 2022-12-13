@@ -69,7 +69,7 @@
 //! To use any of the provided commands, [`SharedParams`] must be provided. The most important of
 //! which being [`SharedParams::runtime`], which specifies which runtime to use. Furthermore,
 //! [`SharedParams::overwrite_state_version`] can be used to alter the state-version (see
-//! https://forum.polkadot.network/t/state-trie-migration/852 for more info).
+//! <https://forum.polkadot.network/t/state-trie-migration/852> for more info).
 //!
 //! Then, the specific command has to be specified. See [`Command`] for more information about each
 //! command's specific customization flags, and assumptions regarding the runtime being used.
@@ -133,7 +133,7 @@
 //! given the right flag:
 //!
 //! ```ignore
-//! 
+//!
 //! #[cfg(feature = try-runtime)]
 //! fn pre_upgrade() -> Result<Vec<u8>, &'static str> {}
 //!
@@ -158,7 +158,7 @@
 //! ```
 //!
 //! which is called on numerous code paths in the try-runtime tool. These checks should ensure that
-//! the state of the pallet is consistent and correct. See [`frame_support::try_runtime::TryState`]
+//! the state of the pallet is consistent and correct. See `frame_support::try_runtime::TryState`
 //! for more info.
 //!
 //! #### Logging
@@ -281,7 +281,7 @@
 //!     --at 0xa1b16c1efd889a9f17375ec4dd5c1b4351a2be17fa069564fced10d23b9b3836
 //! ```
 //!
-//! * Executing the same command with the [`Runtime::existing`] will fail because the existing
+//! * Executing the same command with the [`Runtime::Existing`] will fail because the existing
 //!   runtime, stored onchain in `substrate` binary that we compiled earlier does not have
 //!   `try-runtime` feature!
 //!
@@ -328,7 +328,7 @@
 //! This can still be customized at a given block with `--at`. If you want to use a snapshot, you
 //! can still use `--block-ws-uri` to provide a node form which the block data can be fetched.
 //!
-//! Moreover, this runs the [`frame_support::try_runtime::TryState`] hooks as well. The hooks to run
+//! Moreover, this runs the `frame_support::try_runtime::TryState` hooks as well. The hooks to run
 //! can be customized with the `--try-state`. For example:
 //!
 //! ```bash
@@ -390,7 +390,7 @@ use sp_state_machine::{CompactProof, OverlayedChanges, StateMachine, TrieBackend
 use sp_version::StateVersion;
 use std::{fmt::Debug, path::PathBuf, str::FromStr};
 
-mod commands;
+pub mod commands;
 pub(crate) mod parse;
 pub(crate) const LOG_TARGET: &str = "try-runtime::cli";
 
@@ -403,7 +403,7 @@ pub enum Command {
 	/// only triggers all of the `on_runtime_upgrade` hooks in the runtime, and optionally
 	/// `try_state`.
 	///
-	/// See [`frame_try_runtime::TryRuntime`] and [`commands::execute_block::OnRuntimeUpgrade`] for
+	/// See [`frame_try_runtime::TryRuntime`] and [`commands::on_runtime_upgrade::OnRuntimeUpgradeCmd`] for
 	/// more information.
 	OnRuntimeUpgrade(commands::on_runtime_upgrade::OnRuntimeUpgradeCmd),
 
@@ -422,7 +422,7 @@ pub enum Command {
 	/// This executes the same runtime api as normal block import, namely
 	/// `OffchainWorkerApi_offchain_worker`.
 	///
-	/// See [`frame_try_runtime::TryRuntime`] and [`commands::execute_block::OffchainWorkerCmd`]
+	/// See [`frame_try_runtime::TryRuntime`] and [`commands::offchain_worker::OffchainWorkerCmd`]
 	/// for more information.
 	OffchainWorker(commands::offchain_worker::OffchainWorkerCmd),
 
@@ -450,7 +450,7 @@ pub enum Command {
 }
 
 #[derive(Debug, Clone)]
-enum Runtime {
+pub enum Runtime {
 	/// Use the given path to the wasm binary file.
 	///
 	/// It must have been compiled with `try-runtime`.
@@ -484,7 +484,7 @@ pub struct SharedParams {
 	/// go away.
 	#[allow(missing_docs)]
 	#[clap(flatten)]
-	shared_params: sc_cli::SharedParams,
+	pub shared_params: sc_cli::SharedParams,
 
 	/// The runtime to use.
 	///
@@ -495,7 +495,7 @@ pub struct SharedParams {
 	/// against a remote node, as no (sane) blockchain should compile its onchain wasm with
 	/// `try-runtime` feature.
 	#[arg(long)]
-	runtime: Runtime,
+	pub runtime: Runtime,
 
 	/// Type of wasm execution used.
 	#[arg(
@@ -505,7 +505,7 @@ pub struct SharedParams {
 		ignore_case = true,
 		default_value_t = DEFAULT_WASM_EXECUTION_METHOD,
 	)]
-	wasm_method: WasmExecutionMethod,
+	pub wasm_method: WasmExecutionMethod,
 
 	/// The WASM instantiation method to use.
 	///
@@ -516,18 +516,18 @@ pub struct SharedParams {
 		default_value_t = DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
 		value_enum,
 	)]
-	wasmtime_instantiation_strategy: WasmtimeInstantiationStrategy,
+	pub wasmtime_instantiation_strategy: WasmtimeInstantiationStrategy,
 
 	/// The number of 64KB pages to allocate for Wasm execution. Defaults to
 	/// [`sc_service::Configuration.default_heap_pages`].
 	#[arg(long)]
-	heap_pages: Option<u64>,
+	pub heap_pages: Option<u64>,
 
 	/// Overwrite the `state_version`.
 	///
 	/// Otherwise `remote-externalities` will automatically set the correct state version.
 	#[arg(long, value_parser = parse::state_version)]
-	overwrite_state_version: Option<StateVersion>,
+	pub overwrite_state_version: Option<StateVersion>,
 }
 
 /// Our `try-runtime` command.

@@ -22,7 +22,7 @@ use sp_runtime::traits::{Block as BlockT, NumberFor};
 use sp_weights::Weight;
 use std::{fmt::Debug, str::FromStr};
 
-/// Configurations of the [`Command::OnRuntimeUpgrade`].
+/// Configurations of the [`crate::Command::OnRuntimeUpgrade`].
 #[derive(Debug, Clone, clap::Parser)]
 pub struct OnRuntimeUpgradeCmd {
 	/// The state type to use.

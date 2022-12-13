@@ -33,16 +33,16 @@ use substrate_rpc_client::{ws_client, ChainApi, FinalizedHeaders, Subscription, 
 const SUB: &str = "chain_subscribeFinalizedHeads";
 const UN_SUB: &str = "chain_unsubscribeFinalizedHeads";
 
-/// Configurations of the [`Command::FollowChain`].
+/// Configurations of the [`crate::Command::FollowChain`].
 #[derive(Debug, Clone, clap::Parser)]
 pub struct FollowChainCmd {
 	/// The url to connect to.
 	#[arg(short, long, value_parser = parse::url)]
-	uri: String,
+	pub uri: String,
 
 	/// If set, then the state root check is enabled.
 	#[arg(long)]
-	state_root_check: bool,
+	pub state_root_check: bool,
 
 	/// Which try-state targets to execute when running this command.
 	///
@@ -54,11 +54,11 @@ pub struct FollowChainCmd {
 	/// - `rr-[x]` where `[x]` is a number. Then, the given number of pallets are checked in a
 	///   round-robin fashion.
 	#[arg(long, default_value = "all")]
-	try_state: frame_try_runtime::TryStateSelect,
+	pub try_state: frame_try_runtime::TryStateSelect,
 
 	/// If present, a single connection to a node will be kept and reused for fetching blocks.
 	#[arg(long)]
-	keep_connection: bool,
+	pub keep_connection: bool,
 }
 
 /// Start listening for with `SUB` at `url`.

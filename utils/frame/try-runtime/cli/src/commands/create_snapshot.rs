@@ -21,17 +21,17 @@ use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{fmt::Debug, str::FromStr};
 use substrate_rpc_client::{ws_client, StateApi};
 
-/// Configurations of the [`Command::CreateSnapshot`].
+/// Configurations of the [`crate::Command::CreateSnapshot`].
 #[derive(Debug, Clone, clap::Parser)]
 pub struct CreateSnapshotCmd {
 	/// The source of the snapshot. Must be a remote node.
 	#[clap(flatten)]
-	from: LiveState,
+	pub from: LiveState,
 
 	/// The snapshot path to write to.
 	///
 	/// If not provided `<spec-name>-<spec-version>@<block-hash>.snap` will be used.
-	snapshot_path: Option<String>,
+	pub snapshot_path: Option<String>,
 }
 
 /// inner command for `Command::CreateSnapshot`.

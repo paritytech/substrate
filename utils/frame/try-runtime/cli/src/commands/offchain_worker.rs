@@ -25,7 +25,7 @@ use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{fmt::Debug, str::FromStr};
 use substrate_rpc_client::{ws_client, ChainApi};
 
-/// Configurations of the [`Command::OffchainWorker`].
+/// Configurations of the [`crate::Command::OffchainWorker`].
 #[derive(Debug, Clone, clap::Parser)]
 pub struct OffchainWorkerCmd {
 	/// The ws uri from which to fetch the header.
@@ -36,7 +36,7 @@ pub struct OffchainWorkerCmd {
 		long,
 		value_parser = parse::url
 	)]
-	header_ws_uri: Option<String>,
+	pub header_ws_uri: Option<String>,
 
 	/// The state type to use.
 	#[command(subcommand)]

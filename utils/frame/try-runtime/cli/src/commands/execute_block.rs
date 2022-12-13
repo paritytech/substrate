@@ -29,7 +29,7 @@ use sp_runtime::{
 use std::{fmt::Debug, str::FromStr};
 use substrate_rpc_client::{ws_client, ChainApi};
 
-/// Configurations of the [`Command::ExecuteBlock`].
+/// Configurations of the [`crate::Command::ExecuteBlock`].
 ///
 /// This will always call into `TryRuntime_execute_block`, which can optionally skip the state-root
 /// check (useful for trying a unreleased runtime), and can execute runtime sanity checks as well.
@@ -45,7 +45,7 @@ pub struct ExecuteBlockCmd {
 	/// - `rr-[x]` where `[x]` is a number. Then, the given number of pallets are checked in a
 	///   round-robin fashion.
 	#[arg(long, default_value = "all")]
-	try_state: frame_try_runtime::TryStateSelect,
+	pub try_state: frame_try_runtime::TryStateSelect,
 
 	/// The ws uri from which to fetch the block.
 	///
@@ -58,11 +58,11 @@ pub struct ExecuteBlockCmd {
 		long,
 		value_parser = crate::parse::url
 	)]
-	block_ws_uri: Option<String>,
+	pub block_ws_uri: Option<String>,
 
 	/// The state type to use.
 	#[command(subcommand)]
-	state: State,
+	pub state: State,
 }
 
 impl ExecuteBlockCmd {
