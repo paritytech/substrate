@@ -3125,6 +3125,7 @@ dependencies = [
  "pallet-nomination-pools-runtime-api",
  "pallet-offences",
  "pallet-offences-benchmarking",
+ "pallet-pov-limit",
  "pallet-preimage",
  "pallet-proxy",
  "pallet-randomness-collective-flip",

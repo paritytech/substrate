@@ -357,6 +357,10 @@ impl pallet_scheduler::Config for Runtime {
 	type Preimages = Preimage;
 }
 
+impl pallet_pov_limit::Config for Runtime {
+	type WeightInfo = pallet_pov_limit::weights::SubstrateWeight<Runtime>;
+}
+
 parameter_types! {
 	pub const PreimageMaxSize: u32 = 4096 * 1024;
 	pub const PreimageBaseDeposit: Balance = 1 * DOLLARS;

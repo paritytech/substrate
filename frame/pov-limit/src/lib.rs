@@ -32,7 +32,7 @@ mod mock;
 mod tests;
 pub mod weights;
 
-use frame_support::{pallet_prelude::*, traits::GenesisBuild};
+use frame_support::pallet_prelude::*;
 use sp_core::{Blake2Hasher, Hasher};
 use sp_runtime::Perbill;
 
@@ -91,13 +91,17 @@ pub mod pallet {
 		fn on_idle(_: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			let mut weight = T::DbWeight::get().reads(1);
 
-			for i in 0..(Compute::<T>::get().mul_ceil(T::HashesForFull::get())) {
+			let computation_weight_limit = remaining_weight * Compute::<T>::get();
+
+			let mut value: u32 = 0;
+			loop {
 				weight.saturating_add(T::WeightInfo::hash_value());
-				if remaining_weight.any_lt(weight) {
-					weight = remaining_weight;
+				if computation_weight_limit.any_lt(weight) {
+					weight = computation_weight_limit;
 					break
 				}
-				Self::hash_value(i.into());
+				Self::hash_value(value.into());
+				value += 1;
 			}
 
 			for i in 0..Storage::<T>::get() {
