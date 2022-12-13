@@ -157,7 +157,7 @@ fn import_block_to_queue<TBl, TImpQu>(
 	let (header, extrinsics) = signed_block.block.deconstruct();
 	let hash = header.hash();
 	// import queue handles verification and importing it into the client.
-	queue.import_blocks(
+	queue.service_ref().import_blocks(
 		BlockOrigin::File,
 		vec![IncomingBlock::<TBl> {
 			hash,

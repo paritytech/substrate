@@ -64,6 +64,9 @@ build-linux-substrate:
   before_script:
     - mkdir -p ./artifacts/substrate/
     - !reference [.rusty-cachier, before_script]
+    # tldr: we need to checkout the branch HEAD explicitly because of our dynamic versioning approach while building the substrate binary
+    # see https://github.com/paritytech/ci_cd/issues/682#issuecomment-1340953589
+    - git checkout -B "$CI_COMMIT_REF_NAME" "$CI_COMMIT_SHA"
   script:
     - rusty-cachier snapshot create
     - WASM_BUILD_NO_COLOR=1 time cargo build --locked --release --verbose
