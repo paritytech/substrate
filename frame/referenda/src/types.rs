@@ -284,7 +284,7 @@ pub enum Curve {
 	/// `period` before stepping down to `(period * 2, begin - step * 2)`. This pattern continues
 	/// but the `y` component has a lower limit of `end`.
 	SteppedDecreasing { begin: Perbill, end: Perbill, step: Perbill, period: Perbill },
-	/// A recipocal (`K/(x+S)-T`) curve: `factor` is `K` and `x_offset` is `S`, `y_offset` is `T`.
+	/// A recipocal (`K/(x+S)+T`) curve: `factor` is `K` and `x_offset` is `S`, `y_offset` is `T`.
 	Reciprocal { factor: FixedI64, x_offset: FixedI64, y_offset: FixedI64 },
 }
 
