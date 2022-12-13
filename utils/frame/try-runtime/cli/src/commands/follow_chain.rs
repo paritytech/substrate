@@ -137,7 +137,7 @@ where
 				pallet: vec![],
 				child_tree: true,
 			});
-			let ext = state.into_ext::<Block, HostFns>(&shared, &executor).await?;
+			let ext = state.into_ext::<Block, HostFns>(&shared, &executor, None).await?;
 			maybe_state_ext = Some(ext);
 		}
 

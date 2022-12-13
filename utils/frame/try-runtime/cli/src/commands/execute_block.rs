@@ -53,7 +53,7 @@ pub struct ExecuteBlockCmd {
 	/// the only sensible combination. In other words, if you have the state of block `n`, you
 	/// should execute block `n+1` on top of it.
 	///
-	/// If `state` is `Live`, this can be ignored.
+	/// If `state` is `Live`, this can be ignored and the same uri is used for both.
 	#[arg(
 		long,
 		value_parser = crate::parse::url
@@ -99,7 +99,7 @@ where
 	HostFns: HostFunctions,
 {
 	let executor = build_executor::<HostFns>(&shared);
-	let ext = command.state.into_ext::<Block, HostFns>(&shared, &executor).await?;
+	let ext = command.state.into_ext::<Block, HostFns>(&shared, &executor, None).await?;
 
 	// get the block number associated with this block.
 	let block_ws_uri = command.block_ws_uri::<Block>();
@@ -122,8 +122,11 @@ where
 	let (mut header, extrinsics) = block.deconstruct();
 	header.digest_mut().pop();
 	let block = Block::new(header, extrinsics);
+
+	// for now, hardcoded for the sake of simplicity. We might customize them one day.
 	let state_root_check = false;
-	let payload = (block.clone(), state_root_check, command.try_state).encode();
+	let signature_check = false;
+	let payload = (block.clone(), state_root_check, signature_check, command.try_state).encode();
 
 	let _ = state_machine_call_with_proof::<Block, HostFns>(
 		&ext,

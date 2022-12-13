@@ -80,7 +80,7 @@
 //! * [`Command::ExecuteBlock`]: re-execute the given block.
 //! * [`Command::OffchainWorker`]: re-execute the given block's offchain worker code path.
 //! * [`Command::FollowChain`]: continuously execute the blocks of a remote chain on top of a given
-//!       runtime.
+//!   runtime.
 //! * [`Command::CreateSnapshot`]: Create a snapshot file from a remote node.
 //!
 //! Finally, To make sure there are no errors regarding this, always run any `try-runtime` command
@@ -108,6 +108,17 @@
 //! - set `--rpc-cors all` to ensure ws connections can come through.
 //!
 //! Note that *none* of the try-runtime operations need unsafe RPCs.
+//!
+//! ## Note on signature and state-root checks
+//!
+//! All of the commands calling into `TryRuntime_execute_block` ([`Command::ExecuteBlock`] and
+//! [`Command::FollowChain`]) disable both state root and signature checks. This is because in 99%
+//! of the cases, the runtime that is being tested is different from the one that is stored in the
+//! canonical chain state. This implies:
+//!
+//! 1. the state root will NEVER match, because `:CODE:` is different between the two.
+//! 2. replaying all transactions will fail, because the spec-version is part of the transaction
+//!    signature.
 //!
 //! ## Best Practices
 //!
@@ -139,7 +150,7 @@
 //!
 //! ## State Consistency
 //!
-//! Similar to
+//! TODO
 //!
 //! #### Logging
 //!
@@ -155,32 +166,187 @@
 //!
 //! ## Examples
 //!
-//! Run the migrations of a given runtime on top of live Polkadot state.
+//! For the following examples, we assume the existence of the following:
 //!
-//! ```sh
+//! 1. a substrate node compiled without `--feature try-runtime`, called `substrate`. This will be
+//! the running node that you connect to. then, after some changes to this node, you compile it with
+//! `--features try-runtime`. This gives you:
+//! 2. a substrate binary that has the try-runtime sub-command enabled.
+//! 3. a wasm blob that has try-runtime functionality.
+//!
+//! ```bash
+//! # this is like your running deployed node.
+//! cargo build --release && cp target/release/substrate .
+//!
+//! # this is like your WIP branch.
+//! cargo build --release --features try-runtime
+//! cp target/release/substrate substrate-try-runtime
+//! cp ./target/release/wbuild/kitchensink-runtime/kitchensink_runtime.wasm runtime-try-runtime.wasm
 //! ```
 //!
-//! Same as the previous one, but run it at specific block number's state. This means that this
+//! > The above example is with `substrate`'s `kitchensink-runtime`, but is applicable to any
+//! > substrate-based chain that has implemented `try-runtime-cli`.
+//!
+//! * If you run `try-runtime` subcommand against `substrate` binary listed above, you get the
+//!   following error.
+//!
+//! ```bash
+//! [substrate] ./substrate try-runtime
+//! Error: Input("TryRuntime wasn't enabled when building the node. You can enable it with `--features try-runtime`.")
+//! ```
+//!
+//! * If you run the same against `substrate-try-runtime`, it will work.
+//!
+//! ```bash
+//! [substrate] ./substrate-try-runtime try-runtime
+//! Try some command against runtime state
+//!
+//! Usage: substrate-try-runtime try-runtime [OPTIONS] --runtime <RUNTIME> <COMMAND>
+//!
+//! Commands:
+//!   on-runtime-upgrade  Execute the migrations of the "local runtime"
+//!   execute-block       Executes the given block against some state
+//!   offchain-worker     Executes *the offchain worker hooks* of a given block against some state
+//!   follow-chain        Follow the given chain's finalized blocks and apply all of its extrinsics
+//!   create-snapshot     Create a new snapshot file
+//!   help                Print this message or the help of the given subcommand(s)
+//!
+//! Options:
+//!       --chain <CHAIN_SPEC>
+//!           Specify the chain specification
+//!       --dev
+//!           Specify the development chain
+//!   -d, --base-path <PATH>
+//!           Specify custom base path
+//!   -l, --log <LOG_PATTERN>...
+//!           Sets a custom logging filter. Syntax is `<target>=<level>`, e.g. -lsync=debug
+//!       --detailed-log-output
+//!           Enable detailed log output
+//!       --disable-log-color
+//!           Disable log color output
+//!       --enable-log-reloading
+//!           Enable feature to dynamically update and reload the log filter
+//!       --tracing-targets <TARGETS>
+//!           Sets a custom profiling filter. Syntax is the same as for logging: `<target>=<level>`
+//!       --tracing-receiver <RECEIVER>
+//!           Receiver to process tracing messages [default: log] [possible values: log]
+//!       --runtime <RUNTIME>
+//!           The runtime to use
+//!       --wasm-execution <METHOD>
+//!           Type of wasm execution used [default: compiled] [possible values: interpreted-i-know-what-i-do, compiled]
+//!       --wasm-instantiation-strategy <STRATEGY>
+//!           The WASM instantiation method to use [default: pooling-copy-on-write] [possible values: pooling-copy-on-write, recreate-instance-copy-on-write, pooling, recreate-instance, legacy-instance-reuse]
+//!       --heap-pages <HEAP_PAGES>
+//!           The number of 64KB pages to allocate for Wasm execution. Defaults to [`sc_service::Configuration.default_heap_pages`]
+//!       --overwrite-state-version <OVERWRITE_STATE_VERSION>
+//!           Overwrite the `state_version`
+//!   -h, --help
+//!           Print help information (use `--help` for more detail)
+//!   -V, --version
+//!           Print version information
+//! ```
+//!
+//! * Run the migrations of a given runtime on top of a live state.
+//!
+//! ```bash
+//! # assuming there's `./substrate --dev --tmp --ws-port 9999` or similar running.
+//! ./substrate-try-runtime \
+//!     try-runtime \
+//!     --runtime kitchensink_runtime.wasm \
+//!     -lruntime=debug \
+//!     on-runtime-upgrade \
+//!     live --uri ws://localhost:9999
+//! ```
+//!
+//! * Same as the previous one, but run it at specific block number's state. This means that this
 //! block hash's state shall not yet have been pruned in `rpc.polkadot.io`.
 //!
-//! ```sh
-//! ```
-//! Same as the previous one, but use a snapshot file.
-//!
-//! ```sh
-//! ```
-//!
-//! Execute a given past block with the given runtime.
-//!
-//! ```sh
-//! ```
-//!
-//! Execute the given past block with the given runtime, while the snapshot is stored on a file.
-//!
-//! ```sh
+//! ```bash
+//! ./substrate-try-runtime \
+//!     try-runtime \
+//!     --runtime kitchensink_runtime.wasm \
+//!     -lruntime=debug \
+//!     on-runtime-upgrade \
+//!     live --uri ws://localhost:9999 \
+//!     # replace with your desired block hash!
+//!     --at 0xa1b16c1efd889a9f17375ec4dd5c1b4351a2be17fa069564fced10d23b9b3836
 //! ```
 //!
-//! Follow Polkadot's blocks using `follow-chain`, with the given runtime.
+//! * Executing the same command with the [`Runtime::existing`] will fail because the existing
+//!   runtime, stored onchain in `substrate` binary that we compiled earlier does not have
+//!   `try-runtime` feature!
+//!
+//! ```bash
+//! ./substrate-try-runtime try-runtime --runtime existing -lruntime=debug on-runtime-upgrade live --uri ws://localhost:9999
+//! ...
+//! Error: Input("given runtime is NOT compiled with try-runtime feature!")
+//! ```
+//!
+//! * Now, let's use a snapshot file. First, we create the snapshot:
+//!
+//! ```bash
+//! ./substrate-try-runtime try-runtime --runtime existing -lruntime=debug create-snapshot --uri ws://localhost:9999
+//! 2022-12-13 10:28:17.516  INFO main try-runtime::cli: snapshot path not provided (-s), using 'node-268@latest.snap'
+//! 2022-12-13 10:28:17.516  INFO                 main remote-ext: since no at is provided, setting it to latest finalized head, 0xe7d0b614dfe89af65b33577aae46a6f958c974bf52f8a5e865a0f4faeb578d22
+//! 2022-12-13 10:28:17.516  INFO                 main remote-ext: since no prefix is filtered, the data for all pallets will be downloaded
+//! 2022-12-13 10:28:17.550  INFO                 main remote-ext: writing snapshot of 1611464 bytes to "node-268@latest.snap"
+//! 2022-12-13 10:28:17.551  INFO                 main remote-ext: initialized state externalities with storage root 0x925e4e95de4c08474fb7f976c4472fa9b8a1091619cd7820a793bf796ee6d932 and state_version V1
+//! ```
+//!
+//! > Note that the snapshot contains the `existing` runtime, which does not have the correct
+//! > `try-runtime` feature. In the following commands, we still need to overwrite the runtime.
+//!
+//! Then, we can use it to have the same command as before, `on-runtime-upgrade`
+//!
+//! ```bash
+//! try-runtime \
+//!     --runtime runtime-try-runtime.wasm \
+//!     -lruntime=debug \
+//!     on-runtime-upgrade \
+//!     snap -s node-268@latest.snap
+//! ```
+//!
+//! * Execute the latest finalized block with the given runtime.
+//!
+//! ```bash
+//! ./substrate-try-runtime try-runtime \
+//!     --runtime runtime-try-runtime.wasm \
+//!     -lruntime=debug \
+//!     execute-block live \
+//!     --uri ws://localhost:999
+//! ```
+//!
+//! This can still be customized at a given block with `--at`. If you want to use a snapshot, you
+//! can still use `--block-ws-uri` to provide a node form which the block data can be fetched.
+//!
+//! Moreover, this runs the [`frame_support::try_runtime::TryState`] hooks as well. The hooks to run
+//! can be customized with the `--try-state`. For example:
+//!
+//! ```bash
+//! ./substrate-try-runtime try-runtime \
+//!     --runtime runtime-try-runtime.wasm \
+//!     -lruntime=debug \
+//!     execute-block live \
+//!     --try-state System,Staking \
+//!     --uri ws://localhost:999
+//! ```
+//!
+//! Will only run the `try-state` of the two given pallets. See
+//! [`frame_try_runtime::TryStateSelect`] for more information.
+//!
+//! * Follow our live chain's blocks using `follow-chain`, whilst running the try-state of 3 pallets
+//!   in a round robin fashion
+//!
+//! ```bash
+//! ./substrate-try-runtime \
+//!     try-runtime \
+//!     --runtime runtime-try-runtime.wasm \
+//!     -lruntime=debug \
+//!     follow-chain \
+//!     --uri ws://localhost:9999 \
+//!     --try-state rr-3
+//! ```
+
 #![cfg(feature = "try-runtime")]
 
 use parity_scale_codec::Decode;
@@ -193,7 +359,9 @@ use sc_cli::{
 	DEFAULT_WASMTIME_INSTANTIATION_STRATEGY, DEFAULT_WASM_EXECUTION_METHOD,
 };
 use sc_executor::{sp_wasm_interface::HostFunctions, WasmExecutor};
+use sp_api::HashT;
 use sp_core::{
+	hexdisplay::HexDisplay,
 	offchain::{
 		testing::{TestOffchainExt, TestTransactionPoolExt},
 		OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
@@ -206,7 +374,7 @@ use sp_core::{
 use sp_externalities::Extensions;
 use sp_keystore::{testing::KeyStore, KeystoreExt};
 use sp_runtime::{
-	traits::{Block as BlockT, NumberFor},
+	traits::{BlakeTwo256, Block as BlockT, NumberFor},
 	DeserializeOwned,
 };
 use sp_state_machine::{CompactProof, OverlayedChanges, StateMachine, TrieBackendBuilder};
@@ -220,70 +388,38 @@ pub(crate) const LOG_TARGET: &str = "try-runtime::cli";
 /// Possible commands of `try-runtime`.
 #[derive(Debug, Clone, clap::Subcommand)]
 pub enum Command {
-	/// Execute the migrations of the "local runtime".
+	/// Execute the migrations of the given runtime
 	///
-	/// This uses a custom runtime api call, namely "TryRuntime_on_runtime_upgrade".
+	/// This uses a custom runtime api call, namely "TryRuntime_on_runtime_upgrade". The code path
+	/// only triggers all of the `on_runtime_upgrade` hooks in the runtime, and optionally
+	/// `try_state`.
 	///
-	/// This always overwrites the wasm code with the local runtime (specified by `--chain`), to
-	/// ensure the new migrations are being executed. Re-executing already existing migrations is
-	/// evidently not very exciting.
+	/// See [`frame_try_runtime::TryRuntime`] and [`commands::execute_block::OnRuntimeUpgrade`] for
+	/// more information.
 	OnRuntimeUpgrade(commands::on_runtime_upgrade::OnRuntimeUpgradeCmd),
 
 	/// Executes the given block against some state.
 	///
-	/// Unlike [`Command::OnRuntimeUpgrade`], this command needs two inputs: the state, and the
-	/// block data. Since the state could be cached (see [`State::Snap`]), different flags are
-	/// provided for both. `--block-at` and `--block-uri`, if provided, are only used for fetching
-	/// the block. For convenience, these flags can be both emitted, if the [`State::Live`] is
-	/// being used.
+	/// This uses a custom runtime api call, namely "TryRuntime_execute_block". Some checks, such as
+	/// state-root and signature checks are always disabled, and additional checks like `try-state`
+	/// can be enabled.
 	///
-	/// Note that by default, this command does not overwrite the code, so in wasm execution, the
-	/// live chain's code is used. This can be disabled if desired, see
-	/// `ExecuteBlockCmd::overwrite_wasm_code`.
-	///
-	/// Note that if you do overwrite the wasm code, or generally use the local runtime for this,
-	/// you might
-	///   - not be able to decode the block, if the block format has changed.
-	///   - quite possibly will get a signature verification failure, since the spec and
-	///     transaction version are part of the signature's payload, and if they differ between
-	///     your local runtime and the remote counterparts, the signatures cannot be verified.
-	///   - almost certainly will get a state root mismatch, since, well, you are executing a
-	///     different state transition function.
-	///
-	/// To make testing slightly more dynamic, you can disable the state root  check by enabling
-	/// `ExecuteBlockCmd::no_check`. If you get signature verification errors, you should manually
-	/// tweak your local runtime's spec version to fix this.
-	///
-	/// A subtle detail of execute block is that if you want to execute block 100 of a live chain
-	/// again, you need to scrape the state of block 99. This is already done automatically if you
-	/// use [`State::Live`], and the parent hash of the target block is used to scrape the state.
-	/// If [`State::Snap`] is being used, then this needs to be manually taken into consideration.
-	///
-	/// This does not execute the same runtime api as normal block import do, namely
-	/// `Core_execute_block`. Instead, it uses `TryRuntime_execute_block`, which can optionally
-	/// skip state-root check (useful for trying a unreleased runtime), and can execute runtime
-	/// sanity checks as well.
+	/// See [`frame_try_runtime::TryRuntime`] and [`commands::execute_block::ExecuteBlockCmd`] for
+	/// more information.
 	ExecuteBlock(commands::execute_block::ExecuteBlockCmd),
 
 	/// Executes *the offchain worker hooks* of a given block against some state.
 	///
-	/// Similar to [`Command::ExecuteBlock`], this command needs two inputs: the state, and the
-	/// header data. Likewise, `--header-at` and `--header-uri` can be filled, or omitted if
-	/// [`State::Live`] is used.
-	///
-	/// Similar to [`Command::ExecuteBlock`], this command does not overwrite the code, so in wasm
-	/// execution, the live chain's code is used. This can be disabled if desired, see
-	/// `OffchainWorkerCmd::overwrite_wasm_code`.
-	///
 	/// This executes the same runtime api as normal block import, namely
 	/// `OffchainWorkerApi_offchain_worker`.
+	///
+	/// See [`frame_try_runtime::TryRuntime`] and [`commands::execute_block::OffchainWorkerCmd`] for
+	/// more information.
 	OffchainWorker(commands::offchain_worker::OffchainWorkerCmd),
 
 	/// Follow the given chain's finalized blocks and apply all of its extrinsics.
 	///
-	/// This is essentially repeated calls to [`Command::ExecuteBlock`], whilst the local runtime
-	/// is always at use, the state root check is disabled, and the state is persisted between
-	/// executions.
+	/// This is essentially repeated calls to [`Command::ExecuteBlock`].
 	///
 	/// This allows the behavior of a new runtime to be inspected over a long period of time, with
 	/// realistic transactions coming as input.
@@ -295,6 +431,9 @@ pub enum Command {
 	/// connections, starts listening for finalized block events. Upon first block notification, it
 	/// initializes the state from the remote node, and starts applying that block, plus all the
 	/// blocks that follow, to the same growing state.
+	///
+	/// This can only work if the block format between the remote chain and the new runtime being
+	/// tested has remained the same, otherwise block decoding might fail.
 	FollowChain(commands::follow_chain::FollowChainCmd),
 
 	/// Create a new snapshot file.
@@ -407,8 +546,7 @@ pub struct LiveState {
 
 	/// The block hash at which to fetch the state.
 	///
-	/// If non provided, then the latest finalized head is used. This is particularly useful
-	/// for [`Command::OnRuntimeUpgrade`].
+	/// If non provided, then the latest finalized head is used.
 	#[arg(
 		short,
 		long,
@@ -455,6 +593,7 @@ impl State {
 		&self,
 		shared: &SharedParams,
 		executor: &WasmExecutor<HostFns>,
+		state_snapshot: Option<SnapshotConfig>,
 	) -> sc_cli::Result<RemoteExternalities<Block>>
 	where
 		Block::Hash: FromStr,
@@ -475,7 +614,7 @@ impl State {
 				Builder::<Block>::new().mode(Mode::Online(OnlineConfig {
 					at,
 					transport: uri.to_owned().into(),
-					state_snapshot: None,
+					state_snapshot,
 					pallets: pallet.clone(),
 					child_trie: *child_tree,
 					hashed_keys: vec![
@@ -530,9 +669,10 @@ impl State {
 			.unwrap();
 			log::info!(
 				target: LOG_TARGET,
-				"original spec: {:?}-{:?}",
+				"original spec: {:?}-{:?}, code hash: {:?}",
 				old_version.spec_name,
-				old_version.spec_version
+				old_version.spec_version,
+				HexDisplay::from(BlakeTwo256::hash(&original_code).as_fixed_bytes()),
 			);
 			let new_version = <RuntimeVersion as Decode>::decode(
 				&mut &*executor.read_runtime_version(&new_code, &mut ext.ext()).unwrap(),
@@ -540,9 +680,10 @@ impl State {
 			.unwrap();
 			log::info!(
 				target: LOG_TARGET,
-				"new spec: {:?}-{:?}",
+				"new spec: {:?}-{:?}, code hash: {:?}",
 				new_version.spec_name,
-				new_version.spec_version
+				new_version.spec_version,
+				HexDisplay::from(BlakeTwo256::hash(&new_code).as_fixed_bytes())
 			);
 
 			if new_version.spec_name != old_version.spec_name {
@@ -597,7 +738,11 @@ impl TryRuntimeCmd {
 				)
 				.await,
 			Command::CreateSnapshot(cmd) =>
-				commands::create_snapshot::create_snapshot::<Block>(cmd.clone()).await,
+				commands::create_snapshot::create_snapshot::<Block, HostFns>(
+					self.shared.clone(),
+					cmd.clone(),
+				)
+				.await,
 		}
 	}
 }
@@ -711,7 +856,6 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 	extensions: Extensions,
 ) -> sc_cli::Result<(OverlayedChanges, Vec<u8>)> {
 	use parity_scale_codec::Encode;
-	use sp_core::hexdisplay::HexDisplay;
 
 	let mut changes = Default::default();
 	let backend = ext.backend.clone();

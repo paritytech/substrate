@@ -39,10 +39,15 @@ sp_api::decl_runtime_apis! {
 		/// tracking is likely inaccurate.
 		fn on_runtime_upgrade(checks: bool) -> (Weight, Weight);
 
-		/// Execute the given block, but optionally disable state-root checks.
+		/// Execute the given block, but optionally disable state-root and signature checks.
 		///
 		/// Optionally, a number of `try_state` hooks can also be executed after the block
 		/// execution.
-		fn execute_block(block: Block, state_root_check: bool, try_state: TryStateSelect) -> Weight;
+		fn execute_block(
+			block: Block,
+			state_root_check: bool,
+			signature_check: bool,
+			try_state: TryStateSelect,
+		) -> Weight;
 	}
 }

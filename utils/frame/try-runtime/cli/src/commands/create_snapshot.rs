@@ -15,8 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{hash_of, LiveState, LOG_TARGET};
-use remote_externalities::{Builder, Mode, OnlineConfig, SnapshotConfig};
+use crate::{LiveState, LOG_TARGET, SharedParams, build_executor, State};
+use sc_executor::sp_wasm_interface::HostFunctions;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{fmt::Debug, str::FromStr};
 use substrate_rpc_client::{ws_client, StateApi};
@@ -35,7 +35,7 @@ pub struct CreateSnapshotCmd {
 }
 
 /// inner command for `Command::CreateSnapshot`.
-pub(crate) async fn create_snapshot<Block>(command: CreateSnapshotCmd) -> sc_cli::Result<()>
+pub(crate) async fn create_snapshot<Block, HostFns>(shared: SharedParams, command: CreateSnapshotCmd) -> sc_cli::Result<()>
 where
 	Block: BlockT + serde::de::DeserializeOwned,
 	Block::Hash: FromStr + serde::de::DeserializeOwned,
@@ -43,43 +43,31 @@ where
 	<Block::Hash as FromStr>::Err: Debug,
 	NumberFor<Block>: FromStr,
 	<NumberFor<Block> as FromStr>::Err: Debug,
+	HostFns: HostFunctions,
 {
 	let snapshot_path = command.snapshot_path;
-	let command = command.from;
-
-	let at = match command.at {
-		Some(ref at_str) => Some(hash_of::<Block>(at_str)?),
-		None => None,
-	};
+	if !matches!(shared.runtime, crate::Runtime::Existing) {
+		return Err("creating a snapshot is only possible with --runtime existing.".into());
+	}
 
 	let path = match snapshot_path {
 		Some(path) => path,
 		None => {
-			let rpc = ws_client(&command.uri).await.unwrap();
+			let rpc = ws_client(&command.from.uri).await.unwrap();
 			let remote_spec = StateApi::<Block::Hash>::runtime_version(&rpc, None).await.unwrap();
 			let path_str = format!(
 				"{}-{}@{}.snap",
 				remote_spec.spec_name.to_lowercase(),
 				remote_spec.spec_version,
-				command.at.clone().unwrap_or("latest".to_owned())
+				command.from.at.clone().unwrap_or("latest".to_owned())
 			);
 			log::info!(target: LOG_TARGET, "snapshot path not provided (-s), using '{}'", path_str);
 			path_str.into()
 		},
 	};
 
-	let _ = Builder::<Block>::new()
-		.mode(Mode::Online(OnlineConfig {
-			at,
-			state_snapshot: Some(SnapshotConfig::new(path)),
-			pallets: command.pallet,
-			transport: command.uri.into(),
-			child_trie: command.child_tree,
-			hashed_prefixes: vec![],
-			hashed_keys: vec![],
-		}))
-		.build()
-		.await?;
+	let executor = build_executor::<HostFns>(&shared);
+	let _ = State::Live(command.from).into_ext::<Block, HostFns>(&shared, &executor, Some(path.into())).await?;
 
 	Ok(())
 }
