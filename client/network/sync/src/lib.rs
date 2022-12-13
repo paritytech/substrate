@@ -631,19 +631,15 @@ where
 					},
 				);
 
-				if let SyncMode::Warp = &self.mode {
+				if let SyncMode::Warp = self.mode {
 					if self.peers.len() >= MIN_PEERS_TO_START_WARP_SYNC && self.warp_sync.is_none()
 					{
-						match self.warp_sync_params.as_mut() {
-							Some(WarpSyncParams::WithProvider(warp_with_provider)) => {
-								log::debug!(target: "sync", "Starting warp state sync.");
-								self.warp_sync = Some(WarpSync::new(
-									self.client.clone(),
-									warp_with_provider.clone(),
-								));
-							},
-							_ => {},
-						}
+						log::debug!(target: "sync", "Starting warp state sync.");
+						self.warp_sync = Some(WarpSync::new(
+							self.client.clone(),
+							self.warp_sync_params.as_mut().unwrap(),
+							None,
+						));
 					}
 				}
 				Ok(req)
@@ -1366,16 +1362,17 @@ where
 		}
 		self.process_outbound_requests();
 
-		if let Poll::Ready(warp_sync) =
-			WarpSync::poll_target_block(self.client.clone(), self.warp_sync_params.as_mut(), cx)
-		{
-			let target_block = warp_sync.target_block_number().unwrap();
-			info!(
-				target: "sync",
-				"Waiting for target block complete. Target block reached {:?}",
-				target_block,
-			);
-			self.warp_sync = Some(warp_sync)
+		if let Some(WarpSyncParams::WaitForTarget(_)) = self.warp_sync_params {
+			if self.warp_sync.is_none() ||
+				self.warp_sync.as_ref().unwrap().progress().phase ==
+					WarpSyncPhase::AwaitingTargetBlock
+			{
+				self.warp_sync = Some(WarpSync::new(
+					self.client.clone(),
+					self.warp_sync_params.as_mut().unwrap(),
+					Some(cx),
+				))
+			}
 		}
 
 		while let Poll::Ready(result) = self.poll_pending_responses(cx) {

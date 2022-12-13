@@ -73,6 +73,8 @@ pub trait WarpSyncProvider<Block: BlockT>: Send + Sync {
 pub enum WarpSyncPhase<Block: BlockT> {
 	/// Waiting for peers to connect.
 	AwaitingPeers,
+	/// Waiting for target block to be received
+	AwaitingTargetBlock,
 	/// Downloading and verifying grandpa warp proofs.
 	DownloadingWarpProofs,
 	/// Downloading target block.
@@ -89,6 +91,7 @@ impl<Block: BlockT> fmt::Display for WarpSyncPhase<Block> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
 			Self::AwaitingPeers => write!(f, "Waiting for peers"),
+			Self::AwaitingTargetBlock => write!(f, "Waiting for target block to be reached"),
 			Self::DownloadingWarpProofs => write!(f, "Downloading finality proofs"),
 			Self::DownloadingTargetBlock => write!(f, "Downloading target block"),
 			Self::DownloadingState => write!(f, "Downloading state"),

@@ -19,6 +19,7 @@
 //! Warp sync support.
 
 use crate::{
+	oneshot,
 	schema::v1::{StateRequest, StateResponse},
 	state::{ImportResult, StateSync},
 };
@@ -43,6 +44,7 @@ enum Phase<B: BlockT, Client> {
 		last_hash: B::Hash,
 		warp_sync_provider: Arc<dyn WarpSyncProvider<B>>,
 	},
+	PendingTargetBlock,
 	TargetBlock(B::Header),
 	State(StateSync<B, Client>),
 }
@@ -76,44 +78,52 @@ where
 	Client: HeaderBackend<B> + ProofProvider<B> + 'static,
 {
 	///  Create a new instance.
-	pub fn new(client: Arc<Client>, warp_sync_provider: Arc<dyn WarpSyncProvider<B>>) -> Self {
+	pub fn new(
+		client: Arc<Client>,
+		warp_sync_params: &mut WarpSyncParams<B>,
+		cx: Option<&mut std::task::Context>,
+	) -> Self {
 		let last_hash = client.hash(Zero::zero()).unwrap().expect("Genesis header always exists");
-		let phase = Phase::WarpProof {
-			set_id: 0,
-			authorities: warp_sync_provider.current_authorities(),
-			last_hash,
-			warp_sync_provider,
-		};
-		Self { client, phase, total_proof_bytes: 0 }
-	}
-
-	///  Create a new instance, skip the proof downloading and verification and go directly to
-	/// target block
-	fn new_with_target_block(client: Arc<Client>, target_block: <B>::Header) -> Self {
-		let phase = Phase::TargetBlock(target_block);
-		Self { client, phase, total_proof_bytes: 0 }
+		match warp_sync_params {
+			WarpSyncParams::WithProvider(warp_sync_provider) => {
+				let phase = Phase::WarpProof {
+					set_id: 0,
+					authorities: warp_sync_provider.current_authorities(),
+					last_hash,
+					warp_sync_provider: warp_sync_provider.clone(),
+				};
+				Self { client, phase, total_proof_bytes: 0 }
+			},
+			WarpSyncParams::WaitForTarget(block) => {
+				match Self::poll_target_block(block, cx.unwrap()) {
+					Poll::Ready(target_block) => {
+						let phase = Phase::TargetBlock(target_block);
+						Self { client, phase, total_proof_bytes: 0 }
+					},
+					Poll::Pending => {
+						let phase = Phase::PendingTargetBlock;
+						Self { client, phase, total_proof_bytes: 0 }
+					},
+				}
+			},
+		}
 	}
 
 	///  Poll and wait for target block
-	pub fn poll_target_block(
-		client: Arc<Client>,
-		warp_sync_params: Option<&mut WarpSyncParams<B>>,
+	fn poll_target_block(
+		target_block: &mut oneshot::Receiver<B::Header>,
 		cx: &mut std::task::Context,
-	) -> Poll<Self> {
-		if let Some(WarpSyncParams::WaitForTarget(target_block)) = warp_sync_params {
-			return match target_block.poll_unpin(cx) {
-				Poll::Ready(Ok(target_block)) =>
-					Poll::Ready(WarpSync::new_with_target_block(client.clone(), target_block)),
-				_ => Poll::Pending,
-			}
+	) -> Poll<B::Header> {
+		return match target_block.poll_unpin(cx) {
+			Poll::Ready(Ok(target_block)) => Poll::Ready(target_block),
+			_ => Poll::Pending,
 		}
-		Poll::Pending
 	}
 
 	///  Validate and import a state response.
 	pub fn import_state(&mut self, response: StateResponse) -> ImportResult<B> {
 		match &mut self.phase {
-			Phase::WarpProof { .. } | Phase::TargetBlock(_) => {
+			Phase::WarpProof { .. } | Phase::TargetBlock(_) | Phase::PendingTargetBlock => {
 				log::debug!(target: "sync", "Unexpected state response");
 				ImportResult::BadResponse
 			},
@@ -124,7 +134,7 @@ where
 	///  Validate and import a warp proof response.
 	pub fn import_warp_proof(&mut self, response: EncodedProof) -> WarpProofImportResult {
 		match &mut self.phase {
-			Phase::State(_) | Phase::TargetBlock(_) => {
+			Phase::State(_) | Phase::TargetBlock(_) | Phase::PendingTargetBlock => {
 				log::debug!(target: "sync", "Unexpected warp proof response");
 				WarpProofImportResult::BadResponse
 			},
@@ -155,7 +165,7 @@ where
 	/// Import the target block body.
 	pub fn import_target_block(&mut self, block: BlockData<B>) -> TargetBlockImportResult {
 		match &mut self.phase {
-			Phase::WarpProof { .. } | Phase::State(_) => {
+			Phase::WarpProof { .. } | Phase::State(_) | Phase::PendingTargetBlock => {
 				log::debug!(target: "sync", "Unexpected target block response");
 				TargetBlockImportResult::BadResponse
 			},
@@ -196,8 +206,7 @@ where
 	/// Produce next state request.
 	pub fn next_state_request(&self) -> Option<StateRequest> {
 		match &self.phase {
-			Phase::WarpProof { .. } => None,
-			Phase::TargetBlock(_) => None,
+			Phase::WarpProof { .. } | Phase::TargetBlock(_) | Phase::PendingTargetBlock => None,
 			Phase::State(sync) => Some(sync.next_request()),
 		}
 	}
@@ -206,15 +215,14 @@ where
 	pub fn next_warp_proof_request(&self) -> Option<WarpProofRequest<B>> {
 		match &self.phase {
 			Phase::WarpProof { last_hash, .. } => Some(WarpProofRequest { begin: *last_hash }),
-			Phase::TargetBlock(_) => None,
-			Phase::State(_) => None,
+			Phase::TargetBlock(_) | Phase::State(_) | Phase::PendingTargetBlock => None,
 		}
 	}
 
 	/// Produce next target block request.
 	pub fn next_target_block_request(&self) -> Option<(NumberFor<B>, BlockRequest<B>)> {
 		match &self.phase {
-			Phase::WarpProof { .. } => None,
+			Phase::WarpProof { .. } | Phase::State(_) | Phase::PendingTargetBlock => None,
 			Phase::TargetBlock(header) => {
 				let request = BlockRequest::<B> {
 					id: 0,
@@ -226,15 +234,13 @@ where
 				};
 				Some((*header.number(), request))
 			},
-			Phase::State(_) => None,
 		}
 	}
 
 	/// Return target block hash if it is known.
 	pub fn target_block_hash(&self) -> Option<B::Hash> {
 		match &self.phase {
-			Phase::WarpProof { .. } => None,
-			Phase::TargetBlock(_) => None,
+			Phase::WarpProof { .. } | Phase::TargetBlock(_) | Phase::PendingTargetBlock => None,
 			Phase::State(s) => Some(s.target()),
 		}
 	}
@@ -242,7 +248,7 @@ where
 	/// Return target block number if it is known.
 	pub fn target_block_number(&self) -> Option<NumberFor<B>> {
 		match &self.phase {
-			Phase::WarpProof { .. } => None,
+			Phase::WarpProof { .. } | Phase::PendingTargetBlock => None,
 			Phase::TargetBlock(header) => Some(*header.number()),
 			Phase::State(s) => Some(s.target_block_num()),
 		}
@@ -251,8 +257,7 @@ where
 	/// Check if the state is complete.
 	pub fn is_complete(&self) -> bool {
 		match &self.phase {
-			Phase::WarpProof { .. } => false,
-			Phase::TargetBlock(_) => false,
+			Phase::WarpProof { .. } | Phase::TargetBlock(_) | Phase::PendingTargetBlock => false,
 			Phase::State(sync) => sync.is_complete(),
 		}
 	}
@@ -266,6 +271,10 @@ where
 			},
 			Phase::TargetBlock(_) => WarpSyncProgress {
 				phase: WarpSyncPhase::DownloadingTargetBlock,
+				total_bytes: self.total_proof_bytes,
+			},
+			Phase::PendingTargetBlock => WarpSyncProgress {
+				phase: WarpSyncPhase::AwaitingTargetBlock,
 				total_bytes: self.total_proof_bytes,
 			},
 			Phase::State(sync) => WarpSyncProgress {
