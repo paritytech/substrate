@@ -379,18 +379,6 @@ impl_runtime_apis! {
 	}
 
 	impl sp_consensus_sassafras::SassafrasApi<Block> for Runtime {
-		// TODO-SASS-P3: this maybe is not necessary...
-		// we can fetch the information using current_epoch()
-		fn configuration() -> sp_consensus_sassafras::SassafrasConfiguration {
-			sp_consensus_sassafras::SassafrasConfiguration {
-				slot_duration: SLOT_DURATION_IN_MILLISECONDS,
-				epoch_duration: EPOCH_DURATION_IN_SLOTS,
-				authorities: Sassafras::authorities().to_vec(),
-				randomness: Sassafras::randomness(),
-				threshold_params: Sassafras::config(),
-			}
-		}
-
 		fn submit_tickets_unsigned_extrinsic(
 			tickets: Vec<sp_consensus_sassafras::Ticket>
 		) -> bool {

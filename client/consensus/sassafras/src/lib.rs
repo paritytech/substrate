@@ -263,8 +263,8 @@ where
 		info.genesis_hash
 	});
 
-	let config = client.runtime_api().configuration(&BlockId::Hash(hash))?;
-	Ok(config)
+	let epoch = client.runtime_api().current_epoch(&BlockId::Hash(hash))?;
+	Ok(epoch.config)
 }
 
 /// Intermediate value passed to block importer from authoring or validation logic.

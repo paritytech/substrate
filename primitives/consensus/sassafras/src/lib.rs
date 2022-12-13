@@ -212,9 +212,6 @@ impl OpaqueKeyOwnershipProof {
 sp_api::decl_runtime_apis! {
 	/// API necessary for block authorship with Sassafras.
 	pub trait SassafrasApi {
-		 /// Return the genesis configuration for Sassafras. The configuration is only read on genesis.
-		fn configuration() -> SassafrasConfiguration;
-
 		/// Submit next epoch validator tickets via an unsigned extrinsic.
 		/// This method returns `false` when creation of the extrinsics fails.
 		fn submit_tickets_unsigned_extrinsic(tickets: Vec<Ticket>) -> bool;
