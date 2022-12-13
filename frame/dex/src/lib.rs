@@ -76,8 +76,6 @@ pub mod pallet {
 			+ MaybeSerializeDeserialize
 			+ sp_std::fmt::Debug
 			+ From<u64>
-			+ IntegerSquareRoot
-			+ Zero
 			+ TypeInfo
 			+ MaxEncodedLen;
 
@@ -92,9 +90,7 @@ pub mod pallet {
 
 		type PoolAssetId: Member
 			+ Parameter
-			+ Default
 			+ Copy
-			+ codec::HasCompact
 			+ From<u32>
 			+ MaybeSerializeDeserialize
 			+ MaxEncodedLen
@@ -713,7 +709,6 @@ pub mod pallet {
 				return Err(Error::<T>::InsufficientLiquidity.into())
 			}
 
-			// TODO: extract 0.3% into config
 			let numerator = reserve_in
 				.checked_mul(amount_out)
 				.ok_or(Error::<T>::Overflow)?
