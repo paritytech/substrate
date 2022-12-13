@@ -989,6 +989,14 @@ cfg_if! {
 					<pallet_sassafras::Pallet<Runtime>>::submit_tickets_unsigned_extrinsic(tickets)
 				}
 
+				fn current_epoch() -> sp_consensus_sassafras::Epoch {
+					<pallet_sassafras::Pallet<Runtime>>::current_epoch()
+				}
+
+				fn next_epoch() -> sp_consensus_sassafras::Epoch {
+					<pallet_sassafras::Pallet<Runtime>>::next_epoch()
+				}
+
 				fn slot_ticket(slot: sp_consensus_sassafras::Slot) -> Option<sp_consensus_sassafras::Ticket> {
 					<pallet_sassafras::Pallet<Runtime>>::slot_ticket(slot)
 				}
@@ -1299,6 +1307,14 @@ cfg_if! {
 					tickets: Vec<sp_consensus_sassafras::Ticket>
 				) -> bool {
 					<pallet_sassafras::Pallet<Runtime>>::submit_tickets_unsigned_extrinsic(tickets)
+				}
+
+				fn current_epoch() -> sp_consensus_sassafras::Epoch {
+					<pallet_sassafras::Pallet<Runtime>>::current_epoch()
+				}
+
+				fn next_epoch() -> sp_consensus_sassafras::Epoch {
+					<pallet_sassafras::Pallet<Runtime>>::next_epoch()
 				}
 
 				fn slot_ticket(slot: sp_consensus_sassafras::Slot) -> Option<sp_consensus_sassafras::Ticket> {

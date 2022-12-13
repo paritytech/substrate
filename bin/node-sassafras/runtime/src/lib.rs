@@ -379,6 +379,8 @@ impl_runtime_apis! {
 	}
 
 	impl sp_consensus_sassafras::SassafrasApi<Block> for Runtime {
+		// TODO-SASS-P3: this maybe is not necessary...
+		// we can fetch the information using current_epoch()
 		fn configuration() -> sp_consensus_sassafras::SassafrasConfiguration {
 			sp_consensus_sassafras::SassafrasConfiguration {
 				slot_duration: SLOT_DURATION_IN_MILLISECONDS,
@@ -397,6 +399,14 @@ impl_runtime_apis! {
 
 		fn slot_ticket(slot: sp_consensus_sassafras::Slot) -> Option<sp_consensus_sassafras::Ticket> {
 			Sassafras::slot_ticket(slot)
+		}
+
+		fn current_epoch() -> sp_consensus_sassafras::Epoch {
+			Sassafras::current_epoch()
+		}
+
+		fn next_epoch() -> sp_consensus_sassafras::Epoch {
+			Sassafras::next_epoch()
 		}
 
 		fn generate_key_ownership_proof(

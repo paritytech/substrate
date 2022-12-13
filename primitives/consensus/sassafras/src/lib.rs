@@ -103,6 +103,17 @@ impl SassafrasConfiguration {
 	}
 }
 
+/// Sassafras epoch information
+#[derive(Encode, Decode, PartialEq, Eq, Clone, Debug)]
+pub struct Epoch {
+	/// The epoch index.
+	pub epoch_idx: u64,
+	/// The starting slot of the epoch.
+	pub start_slot: Slot,
+	/// Epoch configuration.
+	pub config: SassafrasConfiguration,
+}
+
 /// Configuration data used by the Sassafras consensus engine that can be modified on epoch change.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, MaxEncodedLen, TypeInfo, Default)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -210,6 +221,12 @@ sp_api::decl_runtime_apis! {
 
 		/// Get expected ticket for the given slot.
 		fn slot_ticket(slot: Slot) -> Option<Ticket>;
+
+		/// Current epoch information.
+		fn current_epoch() -> Epoch;
+
+		/// Next epoch information.
+		fn next_epoch() -> Epoch;
 
 		/// Generates a proof of key ownership for the given authority in the current epoch.
 		///

@@ -33,6 +33,8 @@ struct VerificationParams<'a, B: 'a + BlockT> {
 	slot_now: Slot,
 	/// Epoch descriptor of the epoch this block _should_ be under, if it's valid.
 	epoch: &'a Epoch,
+	/// Origin
+	origin: BlockOrigin,
 	/// Expected ticket for this block.
 	ticket: Option<Ticket>,
 }
@@ -57,7 +59,7 @@ struct VerifiedHeaderInfo {
 fn check_header<B: BlockT + Sized>(
 	params: VerificationParams<B>,
 ) -> Result<CheckedHeader<B::Header, VerifiedHeaderInfo>, Error<B>> {
-	let VerificationParams { mut header, pre_digest, slot_now, epoch, ticket } = params;
+	let VerificationParams { mut header, pre_digest, slot_now, epoch, origin, ticket } = params;
 	let config = &epoch.config;
 
 	// Check that the slot is not in the future, with some drift being allowed.
@@ -109,10 +111,11 @@ fn check_header<B: BlockT + Sized>(
 			log::warn!(target: "sassafras", "🌳 Unexpected secondary authoring mechanism");
 			return Err(Error::UnexpectedAuthoringMechanism)
 		},
-		(None, Some(_)) => {
-			log::warn!(target: "sassafras", "🌳 Unexpected primary authoring mechanism");
-			return Err(Error::UnexpectedAuthoringMechanism)
-		},
+		(None, Some(_)) =>
+			if origin != BlockOrigin::NetworkInitialSync {
+				log::warn!(target: "sassafras", "🌳 Unexpected primary authoring mechanism");
+				return Err(Error::UnexpectedAuthoringMechanism)
+			},
 	}
 
 	// Check slot-vrf proof
@@ -299,27 +302,30 @@ where
 {
 	async fn verify(
 		&mut self,
-		mut import_params: BlockImportParams<Block, ()>,
+		mut block: BlockImportParams<Block, ()>,
 	) -> BlockVerificationResult<Block> {
 		trace!(
 			target: "sassafras",
 			"🌳 Verifying origin: {:?} header: {:?} justification(s): {:?} body: {:?}",
-			import_params.origin,
-			import_params.header,
-			import_params.justifications,
-			import_params.body,
+			block.origin,
+			block.header,
+			block.justifications,
+			block.body,
 		);
 
-		if import_params.with_state() {
+		if block.with_state() {
 			// When importing whole state we don't calculate epoch descriptor, but rather
 			// read it from the state after import. We also skip all verifications
 			// because there's no parent state and we trust the sync module to verify
 			// that the state is correct and finalized.
-			return Ok((import_params, Default::default()))
+			// Just insert a tag to notify that this is indeed a Sassafras block to the
+			// `BlockImport` implementation.
+			block.insert_intermediate(INTERMEDIATE_KEY, ());
+			return Ok((block, Default::default()))
 		}
 
-		let hash = import_params.header.hash();
-		let parent_hash = *import_params.header.parent_hash();
+		let hash = block.header.hash();
+		let parent_hash = *block.header.parent_hash();
 
 		let create_inherent_data_providers = self
 			.create_inherent_data_providers
@@ -334,7 +340,7 @@ where
 			.header_metadata(parent_hash)
 			.map_err(Error::<Block>::FetchParentHeader)?;
 
-		let pre_digest = find_pre_digest::<Block>(&import_params.header)?;
+		let pre_digest = find_pre_digest::<Block>(&block.header)?;
 
 		let (checked_header, epoch_descriptor) = {
 			let epoch_changes = self.epoch_changes.shared_data();
@@ -355,13 +361,15 @@ where
 				.client
 				.runtime_api()
 				.slot_ticket(&BlockId::Hash(parent_hash), pre_digest.slot)
-				.map_err(|err| err.to_string())?;
+				.ok()
+				.unwrap_or_else(|| None);
 
 			let verification_params = VerificationParams {
-				header: import_params.header.clone(),
+				header: block.header.clone(),
 				pre_digest: &pre_digest,
 				slot_now,
 				epoch: viable_epoch.as_ref(),
+				origin: block.origin,
 				ticket,
 			};
 			let checked_header = check_header::<Block>(verification_params)?;
@@ -378,9 +386,9 @@ where
 					.check_and_report_equivocation(
 						slot_now,
 						pre_digest.slot,
-						&import_params.header,
+						&block.header,
 						&verified_info.authority_id,
-						&import_params.origin,
+						&block.origin,
 					)
 					.await
 				{
@@ -390,24 +398,27 @@ where
 				// If the body is passed through, we need to use the runtime to check that the
 				// internally-set timestamp in the inherents actually matches the slot set in the
 				// seal.
-				if let Some(inner_body) = import_params.body {
-					let mut inherent_data = create_inherent_data_providers
-						.create_inherent_data()
-						.map_err(Error::<Block>::CreateInherents)?;
-					inherent_data.sassafras_replace_inherent_data(pre_digest.slot);
-					let block = Block::new(pre_header.clone(), inner_body);
+				if let Some(inner_body) = block.body {
+					let new_block = Block::new(pre_header.clone(), inner_body);
 
-					self.check_inherents(
-						block.clone(),
-						BlockId::Hash(parent_hash),
-						inherent_data,
-						create_inherent_data_providers,
-						import_params.origin.into(),
-					)
-					.await?;
+					if !block.state_action.skip_execution_checks() {
+						// TODO-SASS-P3 :??? DOC
+						let mut inherent_data = create_inherent_data_providers
+							.create_inherent_data()
+							.map_err(Error::<Block>::CreateInherents)?;
+						inherent_data.sassafras_replace_inherent_data(pre_digest.slot);
+						self.check_inherents(
+							new_block.clone(),
+							BlockId::Hash(parent_hash),
+							inherent_data,
+							create_inherent_data_providers,
+							block.origin.into(),
+						)
+						.await?;
+					}
 
-					let (_, inner_body) = block.deconstruct();
-					import_params.body = Some(inner_body);
+					let (_, inner_body) = new_block.deconstruct();
+					block.body = Some(inner_body);
 				}
 
 				trace!(target: "sassafras", "🌳 Checked {:?}; importing.", pre_header);
@@ -418,15 +429,15 @@ where
 					"pre_header" => ?pre_header,
 				);
 
-				import_params.header = pre_header;
-				import_params.post_hash = Some(hash);
-				import_params.post_digests.push(verified_info.seal);
-				import_params.insert_intermediate(
+				block.header = pre_header;
+				block.post_hash = Some(hash);
+				block.post_digests.push(verified_info.seal);
+				block.insert_intermediate(
 					INTERMEDIATE_KEY,
 					SassafrasIntermediate::<Block> { epoch_descriptor },
 				);
 
-				Ok((import_params, Default::default()))
+				Ok((block, Default::default()))
 			},
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: "sassafras", "🌳 Checking {:?} failed; {:?}, {:?}.", hash, a, b);

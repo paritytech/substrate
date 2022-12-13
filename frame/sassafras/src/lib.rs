@@ -54,8 +54,9 @@ use frame_support::{traits::Get, weights::Weight, BoundedVec, WeakBoundedVec};
 use frame_system::offchain::{SendTransactionTypes, SubmitTransaction};
 use sp_consensus_sassafras::{
 	digests::{ConsensusLog, NextEpochDescriptor, PreDigest},
-	AuthorityId, EquivocationProof, Randomness, SassafrasAuthorityWeight,
-	SassafrasEpochConfiguration, Slot, Ticket, VRFOutput, SASSAFRAS_ENGINE_ID,
+	AuthorityId, Epoch, EquivocationProof, Randomness, SassafrasAuthorityWeight,
+	SassafrasConfiguration, SassafrasEpochConfiguration, Slot, Ticket, VRFOutput,
+	SASSAFRAS_ENGINE_ID,
 };
 use sp_io::hashing;
 use sp_runtime::{
@@ -151,6 +152,7 @@ pub mod pallet {
 
 	/// Next epoch authorities.
 	#[pallet::storage]
+	#[pallet::getter(fn next_authorities)]
 	pub type NextAuthorities<T: Config> = StorageValue<
 		_,
 		WeakBoundedVec<(AuthorityId, SassafrasAuthorityWeight), T::MaxAuthorities>,
@@ -175,6 +177,7 @@ pub mod pallet {
 
 	/// Next epoch randomness.
 	#[pallet::storage]
+	#[pallet::getter(fn next_randomness)]
 	pub type NextRandomness<T> = StorageValue<_, Randomness, ValueQuery>;
 
 	/// Randomness accumulator.
@@ -194,6 +197,7 @@ pub mod pallet {
 
 	/// The configuration for the next epoch.
 	#[pallet::storage]
+	#[pallet::getter(fn next_config)]
 	pub type NextEpochConfig<T> = StorageValue<_, SassafrasEpochConfiguration>;
 
 	/// Pending epoch configuration change that will be set as `NextEpochConfig` when the next
@@ -649,6 +653,36 @@ impl<T: Config> Pallet<T> {
 			config: None,
 		};
 		Self::deposit_consensus(ConsensusLog::NextEpochData(next));
+	}
+
+	/// Current epoch configuration.
+	pub fn current_epoch() -> Epoch {
+		let config = SassafrasConfiguration {
+			slot_duration: T::SlotDuration::get(),
+			epoch_duration: T::EpochDuration::get(),
+			authorities: Self::authorities().to_vec(),
+			randomness: Self::randomness(),
+			threshold_params: Self::config(),
+		};
+		let epoch_idx = EpochIndex::<T>::get();
+		let start_slot = Self::current_epoch_start();
+		Epoch { epoch_idx, start_slot, config }
+	}
+
+	/// Current epoch configuration.
+	pub fn next_epoch() -> Epoch {
+		let config = SassafrasConfiguration {
+			slot_duration: T::SlotDuration::get(),
+			epoch_duration: T::EpochDuration::get(),
+			authorities: Self::next_authorities().to_vec(),
+			randomness: Self::next_randomness(),
+			threshold_params: Self::next_config().unwrap_or_else(|| Self::config()),
+		};
+		let epoch_idx = EpochIndex::<T>::get()
+			.checked_add(1)
+			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
+		let start_slot = Self::epoch_start(epoch_idx);
+		Epoch { epoch_idx, start_slot, config }
 	}
 
 	/// Fetch expected ticket for the given slot according to an "outside-in" sorting strategy.
