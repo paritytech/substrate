@@ -361,6 +361,7 @@ impl pallet_scheduler::Config for Runtime {
 }
 
 impl pallet_pov_limit::Config for Runtime {
+	type Hasher = sp_core::Blake2Hasher;
 	type WeightInfo = pallet_pov_limit::weights::SubstrateWeight<Runtime>;
 }
 

@@ -67,7 +67,7 @@ impl frame_system::Config for Test {
 }
 
 impl Config for Test {
-	type HashesForFull = ConstU32<1000000>;
+	type Hasher = sp_core::Blake2Hasher;
 	type WeightInfo = crate::weights::SubstrateWeight<Test>;
 }
 

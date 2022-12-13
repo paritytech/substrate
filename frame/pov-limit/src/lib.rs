@@ -33,8 +33,9 @@ mod tests;
 pub mod weights;
 
 use frame_support::pallet_prelude::*;
-use sp_core::{Blake2Hasher, Hasher};
+use sp_core::Hasher;
 use sp_runtime::Perbill;
+use sp_std::vec::Vec;
 
 pub use pallet::*;
 pub use weights::WeightInfo;
@@ -46,13 +47,11 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		/// The number of times the hash function should be called to fill up
-		/// all the block's weight.
-		#[pallet::constant]
-		type HashesForFull: Get<u32>;
-
 		/// Weight information for this pallet.
 		type WeightInfo: WeightInfo;
+
+		/// Type that implements the `Hasher` trait.
+		type Hasher: sp_core::Hasher;
 	}
 
 	#[pallet::pallet]
@@ -148,7 +147,7 @@ pub mod pallet {
 
 	impl<T: Config> Pallet<T> {
 		pub fn hash_value(value: u64) {
-			Blake2Hasher::hash(&value.to_le_bytes());
+			T::Hasher::hash(&value.to_le_bytes());
 		}
 	}
 }
