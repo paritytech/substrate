@@ -22,7 +22,10 @@ use enumflags2::BitFlags;
 use frame_support::{
 	assert_noop, assert_ok,
 	dispatch::Dispatchable,
-	traits::{tokens::nonfungibles_v2::Destroy, Currency, Get},
+	traits::{
+		tokens::nonfungibles_v2::{Destroy, Mutate},
+		Currency, Get,
+	},
 };
 use pallet_balances::Error as BalancesError;
 use sp_core::bounded::BoundedVec;
@@ -975,12 +978,19 @@ fn validate_deposit_required_setting() {
 			bvec![2],
 			bvec![0],
 		));
+		assert_ok!(<Nfts as Mutate<<Test as SystemConfig>::AccountId, ItemConfig>>::set_attribute(
+			&0,
+			&0,
+			&[3],
+			&[0],
+		));
 		assert_eq!(
 			attributes(0),
 			vec![
 				(Some(0), AttributeNamespace::CollectionOwner, bvec![0], bvec![0]),
 				(Some(0), AttributeNamespace::ItemOwner, bvec![1], bvec![0]),
 				(Some(0), AttributeNamespace::Account(3), bvec![2], bvec![0]),
+				(Some(0), AttributeNamespace::Pallet, bvec![3], bvec![0]),
 			]
 		);
 		assert_eq!(Balances::reserved_balance(1), 0);

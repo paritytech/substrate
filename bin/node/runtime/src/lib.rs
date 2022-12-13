@@ -1557,7 +1557,6 @@ impl pallet_uniques::Config for Runtime {
 
 parameter_types! {
 	pub Features: PalletFeatures = PalletFeatures::all_enabled();
-	pub const NftsPalletId: PalletId = PalletId(*b"py/nfts_");
 }
 
 impl pallet_nfts::Config for Runtime {
@@ -1580,7 +1579,6 @@ impl pallet_nfts::Config for Runtime {
 	type MaxDeadlineDuration = MaxDeadlineDuration;
 	type Features = Features;
 	type WeightInfo = pallet_nfts::weights::SubstrateWeight<Runtime>;
-	type PalletId = NftsPalletId;
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = ();
 	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
