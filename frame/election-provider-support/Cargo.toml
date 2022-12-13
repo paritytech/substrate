@@ -21,10 +21,10 @@ sp-arithmetic = { version = "6.0.0", default-features = false, path = "../../pri
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
+sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
 
 [dev-dependencies]
 rand = "0.7.3"
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
 sp-io = { version = "7.0.0", path = "../../primitives/io" }
 sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elections" }
 
@@ -38,6 +38,7 @@ std = [
 	"scale-info/std",
 	"sp-arithmetic/std",
 	"sp-npos-elections/std",
+	"sp-core/std",
 	"sp-runtime/std",
 	"sp-std/std",
 ]

@@ -32,7 +32,7 @@ pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward
 sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
-pallet-staking = { path = "../staking", features = [ "runtime-benchmarks" ] }
+pallet-staking = { path = "../staking" }
 pallet-balances = { path = "../balances" }
 pallet-timestamp = { path = "../timestamp" }
 

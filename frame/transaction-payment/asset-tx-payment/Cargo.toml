@@ -34,7 +34,7 @@ serde_json = "1.0.85"
 
 sp-storage = { version = "7.0.0", default-features = false, path = "../../../primitives/storage" }
 
-pallet-assets = { version = "4.0.0-dev", path = "../../assets", features = [ "runtime-benchmarks" ] }
+pallet-assets = { version = "4.0.0-dev", path = "../../assets" }
 pallet-authorship = { version = "4.0.0-dev", path = "../../authorship" }
 pallet-balances = { version = "4.0.0-dev", path = "../../balances" }
 

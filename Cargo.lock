@@ -9484,6 +9484,7 @@ version = "4.0.0-dev"
 dependencies = [
  "parity-scale-codec",
  "scale-info",
+ "sp-core",
  "sp-runtime",
  "sp-std",
 ]
