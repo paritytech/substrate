@@ -142,6 +142,7 @@ type BalanceOf<T> =
 type CodeVec<T> = BoundedVec<u8, <T as Config>::MaxCodeLen>;
 type RelaxedCodeVec<T> = WeakBoundedVec<u8, <T as Config>::MaxCodeLen>;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
+type DebugBufferVec<T> = BoundedVec<u8, <T as Config>::MaxDebugBufferLen>;
 
 /// Used as a sentinel value when reading and writing contract memory.
 ///
@@ -344,6 +345,10 @@ pub mod pallet {
 		/// Do **not** set to `true` on productions chains.
 		#[pallet::constant]
 		type UnsafeUnstableInterface: Get<bool>;
+
+		/// The maximum length of the debug buffer in bytes.
+		#[pallet::constant]
+		type MaxDebugBufferLen: Get<u32>;
 	}
 
 	#[pallet::hooks]
@@ -863,6 +868,9 @@ pub mod pallet {
 		CodeRejected,
 		/// An indetermistic code was used in a context where this is not permitted.
 		Indeterministic,
+		/// The debug buffer size used during contract execution exceeded the limit determined by
+		/// the `MaxDebugBufferLen` pallet config parameter.
+		DebugBufferExhausted,
 	}
 
 	/// A mapping from an original code hash to the original code, untouched by instrumentation.
@@ -961,7 +969,7 @@ where
 		debug: bool,
 		determinism: Determinism,
 	) -> ContractExecResult<BalanceOf<T>> {
-		let mut debug_message = if debug { Some(Vec::new()) } else { None };
+		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
 		let output = Self::internal_call(
 			origin,
 			dest,
@@ -977,7 +985,7 @@ where
 			gas_consumed: output.gas_meter.gas_consumed(),
 			gas_required: output.gas_meter.gas_required(),
 			storage_deposit: output.storage_deposit,
-			debug_message: debug_message.unwrap_or_default(),
+			debug_message: debug_message.unwrap_or_default().to_vec(),
 		}
 	}
 
@@ -1003,7 +1011,7 @@ where
 		salt: Vec<u8>,
 		debug: bool,
 	) -> ContractInstantiateResult<T::AccountId, BalanceOf<T>> {
-		let mut debug_message = if debug { Some(Vec::new()) } else { None };
+		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
 		let output = Self::internal_instantiate(
 			origin,
 			value,
@@ -1022,7 +1030,7 @@ where
 			gas_consumed: output.gas_meter.gas_consumed(),
 			gas_required: output.gas_meter.gas_required(),
 			storage_deposit: output.storage_deposit,
-			debug_message: debug_message.unwrap_or_default(),
+			debug_message: debug_message.unwrap_or_default().to_vec(),
 		}
 	}
 
@@ -1113,7 +1121,7 @@ where
 		gas_limit: Weight,
 		storage_deposit_limit: Option<BalanceOf<T>>,
 		data: Vec<u8>,
-		debug_message: Option<&mut Vec<u8>>,
+		debug_message: Option<&mut DebugBufferVec<T>>,
 		determinism: Determinism,
 	) -> InternalCallOutput<T> {
 		let mut gas_meter = GasMeter::new(gas_limit);
@@ -1156,7 +1164,7 @@ where
 		code: Code<CodeHash<T>>,
 		data: Vec<u8>,
 		salt: Vec<u8>,
-		mut debug_message: Option<&mut Vec<u8>>,
+		mut debug_message: Option<&mut DebugBufferVec<T>>,
 	) -> InternalInstantiateOutput<T> {
 		let mut storage_deposit = Default::default();
 		let mut gas_meter = GasMeter::new(gas_limit);
@@ -1172,7 +1180,7 @@ where
 						TryInstantiate::Skip,
 					)
 					.map_err(|(err, msg)| {
-						debug_message.as_mut().map(|buffer| buffer.extend(msg.as_bytes()));
+						debug_message.as_mut().map(|buffer| buffer.try_extend(&mut msg.bytes()));
 						err
 					})?;
 					// The open deposit will be charged during execution when the
