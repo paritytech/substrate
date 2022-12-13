@@ -133,7 +133,7 @@
 //! given the right flag:
 //!
 //! ```ignore
-//!
+//! 
 //! #[cfg(feature = try-runtime)]
 //! fn pre_upgrade() -> Result<Vec<u8>, &'static str> {}
 //!
@@ -403,8 +403,8 @@ pub enum Command {
 	/// only triggers all of the `on_runtime_upgrade` hooks in the runtime, and optionally
 	/// `try_state`.
 	///
-	/// See [`frame_try_runtime::TryRuntime`] and [`commands::on_runtime_upgrade::OnRuntimeUpgradeCmd`] for
-	/// more information.
+	/// See [`frame_try_runtime::TryRuntime`] and
+	/// [`commands::on_runtime_upgrade::OnRuntimeUpgradeCmd`] for more information.
 	OnRuntimeUpgrade(commands::on_runtime_upgrade::OnRuntimeUpgradeCmd),
 
 	/// Executes the given block against some state.
