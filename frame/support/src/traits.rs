@@ -99,8 +99,8 @@ mod dispatch;
 pub use dispatch::EnsureOneOf;
 pub use dispatch::{
 	AsEnsureOriginWithArg, CallerTrait, EitherOf, EitherOfDiverse, EnsureOrigin,
-	EnsureOriginWithArg, MapSuccess, NeverEnsureOrigin, OriginTrait, TryMapSuccess,
-	UnfilteredDispatchable,
+	EnsureOriginEqualOrHigherPrivilege, EnsureOriginWithArg, MapSuccess, NeverEnsureOrigin,
+	OriginTrait, TryMapSuccess, UnfilteredDispatchable,
 };
 
 mod voting;
@@ -111,6 +111,12 @@ pub use voting::{
 
 mod preimages;
 pub use preimages::{Bounded, BoundedInline, FetchResult, Hash, QueryPreimage, StorePreimage};
+
+mod messages;
+pub use messages::{
+	EnqueueMessage, ExecuteOverweightError, Footprint, ProcessMessage, ProcessMessageError,
+	ServiceQueues,
+};
 
 #[cfg(feature = "try-runtime")]
 mod try_runtime;

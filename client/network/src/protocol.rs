@@ -29,32 +29,26 @@ use libp2p::{
 	},
 	Multiaddr, PeerId,
 };
-use log::{debug, error, info, log, trace, warn, Level};
+use log::{debug, error, log, trace, warn, Level};
 use lru::LruCache;
 use message::{generic::Message as GenericMessage, Message};
 use notifications::{Notifications, NotificationsOut};
 use prometheus_endpoint::{register, Gauge, GaugeVec, Opts, PrometheusError, Registry, U64};
 use sc_client_api::HeaderBackend;
-use sc_consensus::import_queue::{
-	BlockImportError, BlockImportStatus, IncomingBlock, RuntimeOrigin,
-};
 use sc_network_common::{
 	config::NonReservedPeerMode,
 	error,
 	protocol::{role::Roles, ProtocolName},
 	sync::{
 		message::{BlockAnnounce, BlockAnnouncesHandshake, BlockData, BlockResponse, BlockState},
-		BadPeer, ChainSync, ImportResult, OnBlockData, PollBlockAnnounceValidation, PollResult,
-		SyncStatus,
+		BadPeer, ChainSync, PollBlockAnnounceValidation, SyncStatus,
 	},
 	utils::{interval, LruHashSet},
 };
 use sp_arithmetic::traits::SaturatedConversion;
-use sp_consensus::BlockOrigin;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, CheckedSub, Header as HeaderT, NumberFor, Zero},
-	Justifications,
 };
 use std::{
 	collections::{HashMap, HashSet, VecDeque},
@@ -481,12 +475,7 @@ where
 		}
 
 		if let Some(_peer_data) = self.peers.remove(&peer) {
-			if let Some(OnBlockData::Import(origin, blocks)) =
-				self.chain_sync.peer_disconnected(&peer)
-			{
-				self.pending_messages
-					.push_back(CustomMessageOutcome::BlockImport(origin, blocks));
-			}
+			self.chain_sync.peer_disconnected(&peer);
 			self.default_peers_set_no_slot_connected_peers.remove(&peer);
 			Ok(())
 		} else {
@@ -785,83 +774,19 @@ where
 				}],
 			},
 		);
+		self.chain_sync.process_block_response_data(blocks_to_import);
 
 		if is_best {
 			self.pending_messages.push_back(CustomMessageOutcome::PeerNewBest(who, number));
 		}
 
-		match blocks_to_import {
-			Ok(OnBlockData::Import(origin, blocks)) =>
-				CustomMessageOutcome::BlockImport(origin, blocks),
-			Ok(OnBlockData::Request(peer, req)) => {
-				self.chain_sync.send_block_request(peer, req);
-				CustomMessageOutcome::None
-			},
-			Ok(OnBlockData::Continue) => CustomMessageOutcome::None,
-			Err(BadPeer(id, repu)) => {
-				self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
-				self.peerset_handle.report_peer(id, repu);
-				CustomMessageOutcome::None
-			},
-		}
+		CustomMessageOutcome::None
 	}
 
 	/// Call this when a block has been finalized. The sync layer may have some additional
 	/// requesting to perform.
 	pub fn on_block_finalized(&mut self, hash: B::Hash, header: &B::Header) {
 		self.chain_sync.on_block_finalized(&hash, *header.number())
-	}
-
-	/// Request a justification for the given block.
-	///
-	/// Uses `protocol` to queue a new justification request and tries to dispatch all pending
-	/// requests.
-	pub fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		self.chain_sync.request_justification(hash, number)
-	}
-
-	/// Clear all pending justification requests.
-	pub fn clear_justification_requests(&mut self) {
-		self.chain_sync.clear_justification_requests();
-	}
-
-	/// A batch of blocks have been processed, with or without errors.
-	/// Call this when a batch of blocks have been processed by the importqueue, with or without
-	/// errors.
-	pub fn on_blocks_processed(
-		&mut self,
-		imported: usize,
-		count: usize,
-		results: Vec<(Result<BlockImportStatus<NumberFor<B>>, BlockImportError>, B::Hash)>,
-	) {
-		let results = self.chain_sync.on_blocks_processed(imported, count, results);
-		for result in results {
-			match result {
-				Ok((id, req)) => self.chain_sync.send_block_request(id, req),
-				Err(BadPeer(id, repu)) => {
-					self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
-					self.peerset_handle.report_peer(id, repu)
-				},
-			}
-		}
-	}
-
-	/// Call this when a justification has been processed by the import queue, with or without
-	/// errors.
-	pub fn justification_import_result(
-		&mut self,
-		who: PeerId,
-		hash: B::Hash,
-		number: NumberFor<B>,
-		success: bool,
-	) {
-		self.chain_sync.on_justification_import(hash, number, success);
-		if !success {
-			info!("💔 Invalid justification provided by {} for #{}", who, hash);
-			self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_SYNC);
-			self.peerset_handle
-				.report_peer(who, sc_peerset::ReputationChange::new_fatal("Invalid justification"));
-		}
 	}
 
 	/// Set whether the syncing peers set is in reserved-only mode.
@@ -997,8 +922,6 @@ where
 #[derive(Debug)]
 #[must_use]
 pub enum CustomMessageOutcome<B: BlockT> {
-	BlockImport(BlockOrigin, Vec<IncomingBlock<B>>),
-	JustificationImport(RuntimeOrigin, B::Hash, NumberFor<B>, Justifications),
 	/// Notification protocols have been opened with a remote.
 	NotificationStreamOpened {
 		remote: PeerId,
@@ -1106,23 +1029,9 @@ where
 		// Process any received requests received from `NetworkService` and
 		// check if there is any block announcement validation finished.
 		while let Poll::Ready(result) = self.chain_sync.poll(cx) {
-			match result {
-				PollResult::Import(import) => self.pending_messages.push_back(match import {
-					ImportResult::BlockImport(origin, blocks) =>
-						CustomMessageOutcome::BlockImport(origin, blocks),
-					ImportResult::JustificationImport(origin, hash, number, justifications) =>
-						CustomMessageOutcome::JustificationImport(
-							origin,
-							hash,
-							number,
-							justifications,
-						),
-				}),
-				PollResult::Announce(announce) =>
-					match self.process_block_announce_validation_result(announce) {
-						CustomMessageOutcome::None => {},
-						outcome => self.pending_messages.push_back(outcome),
-					},
+			match self.process_block_announce_validation_result(result) {
+				CustomMessageOutcome::None => {},
+				outcome => self.pending_messages.push_back(outcome),
 			}
 		}
 
