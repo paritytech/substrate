@@ -156,6 +156,7 @@ impl OverheadCmd {
 	{
 		let mut bench = BenchmarkVer::new(client, self.params.bench.clone(), inherent_data);
 
+		let count = bench.prepare_benchmark(ext_builder)?;
 		// per-block execution overhead
 		{
 			let stats = bench.bench_block(ext_builder)?;
@@ -165,7 +166,7 @@ impl OverheadCmd {
 		}
 		// per-extrinsic execution overhead
 		{
-			let stats = bench.bench_extrinsic(ext_builder)?;
+			let stats = bench.bench_extrinsic(ext_builder, count)?;
 			info!("Per-extrinsic execution overhead [ns]:\n{:?}", stats);
 			let template = TemplateData::new(BenchmarkType::Extrinsic, &cfg, &self.params, &stats)?;
 			template.write(&self.params.weight.weight_path)?;

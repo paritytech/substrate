@@ -246,10 +246,17 @@ where
 		Self { client, params, inherent_data, _p: PhantomData }
 	}
 
-	/// Benchmark a block with only inherents.
-	pub fn bench_block(&mut self, ext_builder: &dyn ExtrinsicBuilder) -> Result<Stats> {
+	pub fn prepare_benchmark(&mut self, ext_builder: &dyn ExtrinsicBuilder) -> Result<usize> {
 		let block = self.build_first_block(ext_builder)?;
-		let record = self.measure_block(&block.block, BlockId::Number(Zero::zero()))?;
+		let num_ext = block.block.extrinsics().len();
+		self.import_block(block);
+		Ok(num_ext)
+	}
+
+	/// Benchmark a block that does not include any new extrinsics but needs to shuffle previous one
+	pub fn bench_block(&mut self, ext_builder: &dyn ExtrinsicBuilder) -> Result<Stats> {
+		let block = self.build_second_block(ext_builder, 0)?;
+		let record = self.measure_block(&block.block, BlockId::Number(One::one()))?;
 		Stats::new(&record)
 	}
 
@@ -259,11 +266,12 @@ where
 	/// Then benchmarks a full block built with the given `ext_builder` and subtracts the baseline
 	/// from the result.
 	/// This is necessary to account for the time the inherents use.
-	pub fn bench_extrinsic(&mut self, ext_builder: &dyn ExtrinsicBuilder) -> Result<Stats> {
-		let block = self.build_first_block(ext_builder)?;
-		let num_ext = block.block.extrinsics().len();
-		self.import_block(block);
-		let block = self.build_second_block(ext_builder, num_ext)?;
+	pub fn bench_extrinsic(
+		&mut self,
+		ext_builder: &dyn ExtrinsicBuilder,
+		count: usize,
+	) -> Result<Stats> {
+		let block = self.build_second_block(ext_builder, count)?;
 		let num_ext = block.block.extrinsics().len();
 		let mut records = self.measure_block(&block.block.clone(), BlockId::Number(One::one()))?;
 
