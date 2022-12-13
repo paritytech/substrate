@@ -113,11 +113,16 @@ impl ProposalProvider<AccountId, Hash, RuntimeCall> for AllianceProposalProvider
 
 pub struct Hasher;
 impl pallet_pov_limit::Hasher for Hasher {
-	type Out = Vec<u8>;
+	type Out = ();
 
-	fn hash(a: &[u8]) -> Self::Out {
-		// THIS HAS TO BE UPDATED.
-		a.into()
+	fn hash(_: &[u8]) -> Self::Out {
+		// this calculates factorial. should be replaced by a hashing algorithm
+		// but `Blake2Hasher` cannot be used here since this is no_std.
+		let num: u32 = 30;
+		match num {
+			0 => 1,
+			1.. => (1..num + 1).product(),
+		};
 	}
 }
 

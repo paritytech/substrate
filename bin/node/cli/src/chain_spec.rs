@@ -372,6 +372,7 @@ pub fn testnet_genesis(
 			min_join_bond: 1 * DOLLARS,
 			..Default::default()
 		},
+		pov_limit: Default::default(),
 	}
 }
 
