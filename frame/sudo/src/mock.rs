@@ -49,6 +49,7 @@ pub mod logger {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		#[pallet::call_index(0)]
 		#[pallet::weight(*weight)]
 		pub fn privileged_i32_log(
 			origin: OriginFor<T>,
@@ -62,6 +63,7 @@ pub mod logger {
 			Ok(().into())
 		}
 
+		#[pallet::call_index(1)]
 		#[pallet::weight(*weight)]
 		pub fn non_privileged_log(
 			origin: OriginFor<T>,
