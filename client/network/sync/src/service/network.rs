@@ -126,7 +126,7 @@ mod tests {
 
 	// typical pattern in `Protocol` code where peer is disconnected
 	// and then reported
-	#[async_std::test]
+	#[tokio::test]
 	async fn disconnect_and_report_peer() {
 		let (provider, handle) = NetworkServiceProvider::new();
 
@@ -147,7 +147,7 @@ mod tests {
 			.once()
 			.returning(|_, _| ());
 
-		async_std::task::spawn(async move {
+		tokio::spawn(async move {
 			provider.run(Arc::new(mock_network)).await;
 		});
 

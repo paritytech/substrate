@@ -39,7 +39,9 @@ use std::{
 	path::{Path, PathBuf},
 	sync::Arc,
 };
-use substrate_rpc_client::{rpc_params, ws_client, ChainApi, ClientT, StateApi, WsClient};
+use substrate_rpc_client::{
+	rpc_params, ws_client, BatchRequestBuilder, ChainApi, ClientT, StateApi, WsClient,
+};
 
 type KeyValue = (StorageKey, StorageData);
 type TopKeyValues = Vec<KeyValue>;
@@ -334,33 +336,50 @@ where
 		log::debug!(target: LOG_TARGET, "Querying a total of {} keys", keys.len());
 
 		let mut key_values: Vec<KeyValue> = vec![];
+		let mut batch_success = true;
+
 		let client = self.as_online().rpc_client();
 		for chunk_keys in keys.chunks(BATCH_SIZE) {
-			let batch = chunk_keys
-				.iter()
-				.cloned()
-				.map(|key| ("state_getStorage", rpc_params![key, at]))
-				.collect::<Vec<_>>();
+			let mut batch = BatchRequestBuilder::new();
 
-			let values = client.batch_request::<Option<StorageData>>(batch).await.map_err(|e| {
-				log::error!(
-					target: LOG_TARGET,
-					"failed to execute batch: {:?}. Error: {:?}",
-					chunk_keys.iter().map(HexDisplay::from).collect::<Vec<_>>(),
-					e
-				);
-				"batch failed."
-			})?;
+			for key in chunk_keys.iter() {
+				batch
+					.insert("state_getStorage", rpc_params![key, at])
+					.map_err(|_| "Invalid batch params")?;
+			}
 
-			assert_eq!(chunk_keys.len(), values.len());
+			let batch_response =
+				client.batch_request::<Option<StorageData>>(batch).await.map_err(|e| {
+					log::error!(
+						target: LOG_TARGET,
+						"failed to execute batch: {:?}. Error: {:?}",
+						chunk_keys.iter().map(HexDisplay::from).collect::<Vec<_>>(),
+						e
+					);
+					"batch failed."
+				})?;
 
-			for (idx, key) in chunk_keys.iter().enumerate() {
-				let maybe_value = values[idx].clone();
-				let value = maybe_value.unwrap_or_else(|| {
-					log::warn!(target: LOG_TARGET, "key {:?} had none corresponding value.", &key);
-					StorageData(vec![])
-				});
-				key_values.push((key.clone(), value));
+			assert_eq!(chunk_keys.len(), batch_response.len());
+
+			for (key, maybe_value) in chunk_keys.into_iter().zip(batch_response) {
+				match maybe_value {
+					Ok(Some(v)) => {
+						key_values.push((key.clone(), v));
+					},
+					Ok(None) => {
+						log::warn!(
+							target: LOG_TARGET,
+							"key {:?} had none corresponding value.",
+							&key
+						);
+						key_values.push((key.clone(), StorageData(vec![])));
+					},
+					Err(e) => {
+						log::error!(target: LOG_TARGET, "key {:?} failed: {:?}", &key, e);
+						batch_success = false;
+					},
+				};
+
 				if key_values.len() % (10 * BATCH_SIZE) == 0 {
 					let ratio: f64 = key_values.len() as f64 / keys_count as f64;
 					log::debug!(
@@ -374,7 +393,11 @@ where
 			}
 		}
 
-		Ok(key_values)
+		if batch_success {
+			Ok(key_values)
+		} else {
+			Err("batch failed.")
+		}
 	}
 
 	/// Get the values corresponding to `child_keys` at the given `prefixed_top_key`.
@@ -385,12 +408,14 @@ where
 		at: B::Hash,
 	) -> Result<Vec<KeyValue>, &'static str> {
 		let mut child_kv_inner = vec![];
+		let mut batch_success = true;
+
 		for batch_child_key in child_keys.chunks(BATCH_SIZE) {
-			let batch_request = batch_child_key
-				.iter()
-				.cloned()
-				.map(|key| {
-					(
+			let mut batch_request = BatchRequestBuilder::new();
+
+			for key in batch_child_key {
+				batch_request
+					.insert(
 						"childstate_getStorage",
 						rpc_params![
 							PrefixedStorageKey::new(prefixed_top_key.as_ref().to_vec()),
@@ -398,8 +423,8 @@ where
 							at
 						],
 					)
-				})
-				.collect::<Vec<_>>();
+					.map_err(|_| "Invalid batch params")?;
+			}
 
 			let batch_response = self
 				.as_online()
@@ -418,17 +443,32 @@ where
 
 			assert_eq!(batch_child_key.len(), batch_response.len());
 
-			for (idx, key) in batch_child_key.iter().enumerate() {
-				let maybe_value = batch_response[idx].clone();
-				let value = maybe_value.unwrap_or_else(|| {
-					log::warn!(target: LOG_TARGET, "key {:?} had none corresponding value.", &key);
-					StorageData(vec![])
-				});
-				child_kv_inner.push((key.clone(), value));
+			for (key, maybe_value) in batch_child_key.iter().zip(batch_response) {
+				match maybe_value {
+					Ok(Some(v)) => {
+						child_kv_inner.push((key.clone(), v));
+					},
+					Ok(None) => {
+						log::warn!(
+							target: LOG_TARGET,
+							"key {:?} had none corresponding value.",
+							&key
+						);
+						child_kv_inner.push((key.clone(), StorageData(vec![])));
+					},
+					Err(e) => {
+						log::error!(target: LOG_TARGET, "key {:?} failed: {:?}", &key, e);
+						batch_success = false;
+					},
+				};
 			}
 		}
 
-		Ok(child_kv_inner)
+		if batch_success {
+			Ok(child_kv_inner)
+		} else {
+			Err("batch failed.")
+		}
 	}
 
 	pub(crate) async fn rpc_child_get_keys(
@@ -736,6 +776,8 @@ impl<B: BlockT> Builder<B> {
 
 	/// Inject a hashed prefix. This is treated as-is, and should be pre-hashed.
 	///
+	/// Only relevant is `Mode::Online` is being used. Noop otherwise.
+	///
 	/// This should be used to inject a "PREFIX", like a storage (double) map.
 	pub fn inject_hashed_prefix(mut self, hashed: &[u8]) -> Self {
 		self.hashed_prefixes.push(hashed.to_vec());
@@ -744,6 +786,8 @@ impl<B: BlockT> Builder<B> {
 
 	/// Just a utility wrapper of [`Self::inject_hashed_prefix`] that injects
 	/// [`DEFAULT_CHILD_STORAGE_KEY_PREFIX`] as a prefix.
+	///
+	/// Only relevant is `Mode::Online` is being used. Noop otherwise.
 	///
 	/// If set, this will guarantee that the child-tree data of ALL pallets will be downloaded.
 	///
@@ -759,6 +803,8 @@ impl<B: BlockT> Builder<B> {
 	}
 
 	/// Inject a hashed key to scrape. This is treated as-is, and should be pre-hashed.
+	///
+	/// Only relevant is `Mode::Online` is being used. Noop otherwise.
 	///
 	/// This should be used to inject a "KEY", like a storage value.
 	pub fn inject_hashed_key(mut self, hashed: &[u8]) -> Self {
@@ -911,7 +957,6 @@ mod tests {
 #[cfg(all(test, feature = "remote-test"))]
 mod remote_tests {
 	use super::test_prelude::*;
-	const REMOTE_INACCESSIBLE: &'static str = "Can't reach the remote node. Is it running?";
 
 	#[tokio::test]
 	async fn offline_else_online_works() {
@@ -930,7 +975,7 @@ mod remote_tests {
 			))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 
 		// this shows that in the second run, we are not using the remote
@@ -948,7 +993,7 @@ mod remote_tests {
 			))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 
 		let to_delete = std::fs::read_dir(Path::new("."))
@@ -978,7 +1023,7 @@ mod remote_tests {
 			}))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 	}
 
@@ -993,7 +1038,7 @@ mod remote_tests {
 			}))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 
 		Builder::<Block>::new()
@@ -1004,7 +1049,7 @@ mod remote_tests {
 			}))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 	}
 
@@ -1019,7 +1064,7 @@ mod remote_tests {
 			}))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 
 		Builder::<Block>::new()
@@ -1030,7 +1075,7 @@ mod remote_tests {
 			}))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 	}
 
@@ -1045,7 +1090,7 @@ mod remote_tests {
 			}))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 
 		let to_delete = std::fs::read_dir(Path::new("."))
@@ -1086,7 +1131,7 @@ mod remote_tests {
 			.inject_default_child_tree_prefix()
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 
 		let to_delete = std::fs::read_dir(Path::new("."))
@@ -1124,7 +1169,7 @@ mod remote_tests {
 			}))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 
 		let to_delete = std::fs::read_dir(Path::new("."))
@@ -1163,7 +1208,7 @@ mod remote_tests {
 			}))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 	}
 }

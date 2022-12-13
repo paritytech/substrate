@@ -1,0 +1,30 @@
+[settings]
+enable_tracing = false
+
+[relaychain]
+default_image = "{{ZOMBIENET_INTEGRATION_TEST_IMAGE}}"
+default_command = "substrate"
+
+chain = "gen-db"
+chain_spec_path = "zombienet/0001-basic-warp-sync/chain-spec.json"
+
+  [[relaychain.nodes]]
+  name = "alice"
+  validator = false
+  db_snapshot="https://storage.googleapis.com/zombienet-db-snaps/substrate/0001-basic-warp-sync/chains-0bb3f0be2ce41b5615b224215bcc8363aa0416a6.tgz"
+
+  [[relaychain.nodes]]
+  name = "bob"
+  validator = false
+  db_snapshot="https://storage.googleapis.com/zombienet-db-snaps/substrate/0001-basic-warp-sync/chains-0bb3f0be2ce41b5615b224215bcc8363aa0416a6.tgz"
+
+  #we need at least 3 nodes for warp sync
+  [[relaychain.nodes]]
+  name = "charlie"
+  validator = false
+  db_snapshot="https://storage.googleapis.com/zombienet-db-snaps/substrate/0001-basic-warp-sync/chains-0bb3f0be2ce41b5615b224215bcc8363aa0416a6.tgz"
+
+  [[relaychain.nodes]]
+  name = "dave"
+  validator = false
+  args = ["--sync warp"]

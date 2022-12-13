@@ -2086,10 +2086,9 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		let state_cache = MemorySize::from_bytes(
 			self.shared_trie_cache.as_ref().map_or(0, |c| c.used_memory_size()),
 		);
-		let state_db = self.storage.state_db.memory_info();
 
 		Some(UsageInfo {
-			memory: MemoryInfo { state_cache, database_cache, state_db },
+			memory: MemoryInfo { state_cache, database_cache },
 			io: IoInfo {
 				transactions: io_stats.transactions,
 				bytes_read: io_stats.bytes_read,

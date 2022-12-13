@@ -119,6 +119,7 @@
 use codec::{Codec, Encode};
 use frame_support::{
 	dispatch::{DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo},
+	pallet_prelude::InvalidTransaction,
 	traits::{
 		EnsureInherentsAreFirst, ExecuteBlock, OffchainWorker, OnFinalize, OnIdle, OnInitialize,
 		OnRuntimeUpgrade,
@@ -497,6 +498,14 @@ where
 		let dispatch_info = xt.get_dispatch_info();
 		let r = Applyable::apply::<UnsignedValidator>(xt, &dispatch_info, encoded_len)?;
 
+		// Mandatory(inherents) are not allowed to fail.
+		//
+		// The entire block should be discarded if an inherent fails to apply. Otherwise
+		// it may open an attack vector.
+		if r.is_err() && dispatch_info.class == DispatchClass::Mandatory {
+			return Err(InvalidTransaction::BadMandatory.into())
+		}
+
 		<frame_system::Pallet<System>>::note_applied_extrinsic(&r, dispatch_info);
 
 		Ok(r.map(|_| ()).map_err(|e| e.error))
@@ -562,6 +571,10 @@ where
 		let dispatch_info = within_span! { sp_tracing::Level::TRACE, "dispatch_info";
 			xt.get_dispatch_info()
 		};
+
+		if dispatch_info.class == DispatchClass::Mandatory {
+			return Err(InvalidTransaction::MandatoryValidation.into())
+		}
 
 		within_span! {
 			sp_tracing::Level::TRACE, "validate";
@@ -661,6 +674,7 @@ mod tests {
 
 		#[pallet::call]
 		impl<T: Config> Pallet<T> {
+			#[pallet::call_index(0)]
 			#[pallet::weight(100)]
 			pub fn some_function(origin: OriginFor<T>) -> DispatchResult {
 				// NOTE: does not make any different.
@@ -668,36 +682,42 @@ mod tests {
 				Ok(())
 			}
 
+			#[pallet::call_index(1)]
 			#[pallet::weight((200, DispatchClass::Operational))]
 			pub fn some_root_operation(origin: OriginFor<T>) -> DispatchResult {
 				frame_system::ensure_root(origin)?;
 				Ok(())
 			}
 
+			#[pallet::call_index(2)]
 			#[pallet::weight(0)]
 			pub fn some_unsigned_message(origin: OriginFor<T>) -> DispatchResult {
 				frame_system::ensure_none(origin)?;
 				Ok(())
 			}
 
+			#[pallet::call_index(3)]
 			#[pallet::weight(0)]
 			pub fn allowed_unsigned(origin: OriginFor<T>) -> DispatchResult {
 				frame_system::ensure_root(origin)?;
 				Ok(())
 			}
 
+			#[pallet::call_index(4)]
 			#[pallet::weight(0)]
 			pub fn unallowed_unsigned(origin: OriginFor<T>) -> DispatchResult {
 				frame_system::ensure_root(origin)?;
 				Ok(())
 			}
 
-			#[pallet::weight(0)]
+			#[pallet::call_index(5)]
+			#[pallet::weight((0, DispatchClass::Mandatory))]
 			pub fn inherent_call(origin: OriginFor<T>) -> DispatchResult {
-				let _ = frame_system::ensure_none(origin)?;
+				frame_system::ensure_none(origin)?;
 				Ok(())
 			}
 
+			#[pallet::call_index(6)]
 			#[pallet::weight(0)]
 			pub fn calculate_storage_root(_origin: OriginFor<T>) -> DispatchResult {
 				let root = sp_io::storage::root(sp_runtime::StateVersion::V1);
@@ -938,13 +958,13 @@ mod tests {
 		block_import_works_inner(
 			new_test_ext_v0(1),
 			array_bytes::hex_n_into_unchecked(
-				"0d786e24c1f9e6ce237806a22c005bbbc7dee4edd6692b6c5442843d164392de",
+				"216e61b2689d1243eb56d89c9084db48e50ebebc4871d758db131432c675d7c0",
 			),
 		);
 		block_import_works_inner(
 			new_test_ext(1),
 			array_bytes::hex_n_into_unchecked(
-				"348485a4ab856467b440167e45f99b491385e8528e09b0e51f85f814a3021c93",
+				"4738b4c0aab02d6ddfa62a2a6831ccc975a9f978f7db8d7ea8e68eba8639530a",
 			),
 		);
 	}
@@ -1532,5 +1552,39 @@ mod tests {
 		new_test_ext(1).execute_with(|| {
 			Executive::execute_block(Block::new(header, vec![xt1, xt2]));
 		});
+	}
+
+	#[test]
+	#[should_panic(expected = "A call was labelled as mandatory, but resulted in an Error.")]
+	fn invalid_inherents_fail_block_execution() {
+		let xt1 =
+			TestXt::new(RuntimeCall::Custom(custom::Call::inherent_call {}), sign_extra(1, 0, 0));
+
+		new_test_ext(1).execute_with(|| {
+			Executive::execute_block(Block::new(
+				Header::new(
+					1,
+					H256::default(),
+					H256::default(),
+					[69u8; 32].into(),
+					Digest::default(),
+				),
+				vec![xt1],
+			));
+		});
+	}
+
+	// Inherents are created by the runtime and don't need to be validated.
+	#[test]
+	fn inherents_fail_validate_block() {
+		let xt1 = TestXt::new(RuntimeCall::Custom(custom::Call::inherent_call {}), None);
+
+		new_test_ext(1).execute_with(|| {
+			assert_eq!(
+				Executive::validate_transaction(TransactionSource::External, xt1, H256::random())
+					.unwrap_err(),
+				InvalidTransaction::MandatoryValidation.into()
+			);
+		})
 	}
 }

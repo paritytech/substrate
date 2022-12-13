@@ -135,17 +135,6 @@ impl<T, Block: BlockT> ReadyPoll<T, Block> {
 	}
 }
 
-impl<PoolApi, Block> parity_util_mem::MallocSizeOf for BasicPool<PoolApi, Block>
-where
-	PoolApi: graph::ChainApi<Block = Block>,
-	Block: BlockT,
-{
-	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
-		// other entries insignificant or non-primary references
-		self.pool.size_of(ops)
-	}
-}
-
 /// Type of revalidation.
 pub enum RevalidationType {
 	/// Light revalidation type.

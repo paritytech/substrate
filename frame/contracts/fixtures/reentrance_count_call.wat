@@ -4,7 +4,7 @@
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "seal0" "seal_address" (func $seal_address (param i32 i32)))
 	(import "seal1" "seal_call" (func $seal_call (param i32 i32 i64 i32 i32 i32 i32 i32) (result i32)))
-	(import "__unstable__" "reentrance_count" (func $reentrance_count (result i32)))
+	(import "seal0" "reentrance_count" (func $reentrance_count (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0, 32) reserved for $seal_address output
