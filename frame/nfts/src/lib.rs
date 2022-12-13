@@ -65,7 +65,7 @@ type AccountIdLookupOf<T> = <<T as SystemConfig>::Lookup as StaticLookup>::Sourc
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{pallet_prelude::*, traits::ExistenceRequirement, PalletId};
+	use frame_support::{pallet_prelude::*, traits::ExistenceRequirement};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -170,10 +170,6 @@ pub mod pallet {
 		/// Disables some of pallet's features.
 		#[pallet::constant]
 		type Features: Get<PalletFeatures>;
-
-		/// The pallet's id.
-		#[pallet::constant]
-		type PalletId: Get<PalletId>;
 
 		#[cfg(feature = "runtime-benchmarks")]
 		/// A set of helper functions for benchmarking.
@@ -782,7 +778,7 @@ pub mod pallet {
 							let key = (
 								&collection_id,
 								Some(owner_of_item),
-								AttributeNamespace::Pallet(T::PalletId::get()),
+								AttributeNamespace::Pallet,
 								&attribute_key,
 							);
 							let already_claimed = Attribute::<T, I>::contains_key(key.clone());
