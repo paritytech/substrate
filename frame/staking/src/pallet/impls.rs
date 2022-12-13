@@ -704,7 +704,8 @@ impl<T: Config> Pallet<T> {
 	///
 	/// `maybe_max_len` can imposes a cap on the number of voters returned;
 	///
-	/// Sets `LastMinimumActiveBond` to the minimum active bond in the returned set of nominators.
+	/// Sets `MinimumActiveStake` to the minimum active nominator stake in the returned set of
+	/// nominators.
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
 	///
@@ -727,9 +728,9 @@ impl<T: Config> Pallet<T> {
 		let mut voters_seen = 0u32;
 		let mut validators_taken = 0u32;
 		let mut nominators_taken = 0u32;
+		let mut min_active_stake = u64::MAX;
 
 		let mut sorted_voters = T::VoterList::iter();
-		let mut min_active_bond = None;
 		while all_voters.len() < max_allowed_len &&
 			voters_seen < (NPOS_MAX_ITERATIONS_COEFFICIENT * max_allowed_len as u32)
 		{
@@ -756,13 +757,8 @@ impl<T: Config> Pallet<T> {
 					nominators_taken.saturating_inc();
 				}
 
-				min_active_bond = min_active_bond.map_or(Some(voter_weight), |current_min| {
-					if voter_weight < current_min {
-						Some(voter_weight)
-					} else {
-						Some(current_min)
-					}
-				});
+				min_active_stake =
+					if voter_weight < min_active_stake { voter_weight } else { min_active_stake };
 			} else if Validators::<T>::contains_key(&voter) {
 				// if this voter is a validator:
 				let self_vote = (
@@ -797,9 +793,10 @@ impl<T: Config> Pallet<T> {
 			slashing_spans.len() as u32,
 		));
 
-		LastMinimumActiveBond::<T>::put::<T::CurrencyBalance>(
-			min_active_bond.map_or(0, |v| v).into(),
-		);
+		let min_active_stake: T::CurrencyBalance =
+			if all_voters.len() == 0 { 0u64.into() } else { min_active_stake.into() };
+
+		MinimumActiveStake::<T>::put(min_active_stake);
 
 		log!(
 			info,

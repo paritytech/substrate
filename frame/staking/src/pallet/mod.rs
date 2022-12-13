@@ -295,9 +295,9 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type MinValidatorBond<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
 
-	/// The minimum active bond of the last successful election.
+	/// The minimum active nominator stake of the last successful election.
 	#[pallet::storage]
-	pub type LastMinimumActiveBond<T> = StorageValue<_, BalanceOf<T>, ValueQuery>;
+	pub type MinimumActiveStake<T> = StorageValue<_, BalanceOf<T>, ValueQuery>;
 
 	/// The minimum amount of commission that validators can set.
 	///
