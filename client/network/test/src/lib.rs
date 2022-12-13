@@ -43,8 +43,8 @@ use sc_client_api::{
 };
 use sc_consensus::{
 	BasicQueue, BlockCheckParams, BlockImport, BlockImportParams, BoxJustificationImport,
-	ForkChoiceStrategy, ImportResult, JustificationImport, JustificationSyncLink, LongestChain,
-	Verifier,
+	ForkChoiceStrategy, ImportQueue, ImportResult, JustificationImport, JustificationSyncLink,
+	LongestChain, Verifier,
 };
 use sc_network::{
 	config::{NetworkConfiguration, RequestResponseConfig, Role, SyncMode},
@@ -896,7 +896,9 @@ where
 			block_announce_validator,
 			network_config.max_parallel_downloads,
 			Some(warp_sync),
+			None,
 			chain_sync_network_handle,
+			import_queue.service(),
 			block_request_protocol_config.name.clone(),
 			state_request_protocol_config.name.clone(),
 			Some(warp_protocol_config.name.clone()),
@@ -915,9 +917,8 @@ where
 			chain: client.clone(),
 			protocol_id,
 			fork_id,
-			import_queue,
 			chain_sync: Box::new(chain_sync),
-			chain_sync_service,
+			chain_sync_service: Box::new(chain_sync_service.clone()),
 			metrics_registry: None,
 			block_announce_config,
 			request_response_protocol_configs: [
@@ -935,6 +936,9 @@ where
 		let service = network.service().clone();
 		self.rt_handle().spawn(async move {
 			chain_sync_network_provider.run(service).await;
+		});
+		self.rt_handle().spawn(async move {
+			import_queue.run(Box::new(chain_sync_service)).await;
 		});
 
 		self.mut_peers(move |peers| {

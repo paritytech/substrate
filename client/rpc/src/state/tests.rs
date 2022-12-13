@@ -23,7 +23,7 @@ use assert_matches::assert_matches;
 use futures::executor;
 use jsonrpsee::{
 	core::Error as RpcError,
-	types::{error::CallError as RpcCallError, EmptyParams, ErrorObject},
+	types::{error::CallError as RpcCallError, EmptyServerParams as EmptyParams, ErrorObject},
 };
 use sc_block_builder::BlockBuilderProvider;
 use sc_rpc_api::DenyUnsafe;
