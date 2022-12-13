@@ -543,7 +543,7 @@ where
 
 		// Ensure all threads finished execution before returning.
 		let keys_and_values =
-			handles.into_iter().map(|h| h.join().unwrap()).flatten().collect::<Vec<_>>();
+			handles.into_iter().flat_map(|h| h.join().unwrap()).collect::<Vec<_>>();
 
 		if batch_failed {
 			return Err("Batch failed.")
@@ -776,8 +776,7 @@ where
 
 		let child_kv = handles
 			.into_iter()
-			.map(|h| h.join().unwrap())
-			.flatten()
+			.flat_map(|h| h.join().unwrap())
 			.flatten()
 			.collect::<Vec<_>>();
 		Ok(child_kv)
