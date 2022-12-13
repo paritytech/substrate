@@ -228,6 +228,7 @@ pub mod pallet {
 		/// If the check fails, the stash remains chilled and waiting for being unbonded as in with
 		/// the normal staking system, but they lose part of their unbonding chunks due to consuming
 		/// the chain's resources.
+		#[pallet::call_index(0)]
 		#[pallet::weight(<T as Config>::WeightInfo::register_fast_unstake())]
 		pub fn register_fast_unstake(origin: OriginFor<T>) -> DispatchResult {
 			let ctrl = ensure_signed(origin)?;
@@ -257,6 +258,7 @@ pub mod pallet {
 		/// Note that the associated stash is still fully unbonded and chilled as a consequence of
 		/// calling `register_fast_unstake`. This should probably be followed by a call to
 		/// `Staking::rebond`.
+		#[pallet::call_index(1)]
 		#[pallet::weight(<T as Config>::WeightInfo::deregister())]
 		pub fn deregister(origin: OriginFor<T>) -> DispatchResult {
 			let ctrl = ensure_signed(origin)?;
@@ -282,6 +284,7 @@ pub mod pallet {
 		/// Control the operation of this pallet.
 		///
 		/// Dispatch origin must be signed by the [`Config::ControlOrigin`].
+		#[pallet::call_index(2)]
 		#[pallet::weight(<T as Config>::WeightInfo::control())]
 		pub fn control(origin: OriginFor<T>, unchecked_eras_to_check: EraIndex) -> DispatchResult {
 			let _ = T::ControlOrigin::ensure_origin(origin)?;

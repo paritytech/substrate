@@ -82,6 +82,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Doc comment put in metadata
+		#[pallet::call_index(0)]
 		#[pallet::weight(Weight::from_ref_time(*_foo as u64))]
 		pub fn foo(
 			origin: OriginFor<T>,
@@ -93,6 +94,7 @@ pub mod pallet {
 		}
 
 		/// Doc comment put in metadata
+		#[pallet::call_index(1)]
 		#[pallet::weight(1)]
 		pub fn foo_storage_layer(
 			origin: OriginFor<T>,
