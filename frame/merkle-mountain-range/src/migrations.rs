@@ -39,17 +39,14 @@ pub mod v1 {
 				current.put::<Pallet<T>>();
 
 				// reset all storage values
-				// TODO: RootHash should be overwritten correctly, but double-check
-				// RootHash::<T>::set();
 				NumberOfLeaves::<T>::set(0);
-				// TODO: find reasonable limit for node clearing
-				let _ = Nodes::<T>::clear(u32::max_value(), None);
+				let res = Nodes::<T>::clear(u32::max_value(), None);
 
-				// TODO: adjust DbWeight
-				T::DbWeight::get().reads_writes(2, 1)
+				// (storage version + Nodes::clear,
+				// storage version write + NumberOfLeaves write + node key removals)
+				T::DbWeight::get().reads_writes(1 + res.loops as u64, 2 + res.unique as u64)
 			} else {
 				log::info!("Migration did not execute. This probably should be removed");
-				// TODO: adjust DbWeight (but reads -> 1 should remain correct)
 				T::DbWeight::get().reads(1)
 			}
 		}
