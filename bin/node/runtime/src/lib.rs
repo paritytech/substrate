@@ -1549,12 +1549,14 @@ impl pallet_nfts::Config for Runtime {
 
 parameter_types! {
 	pub const NftFractionsPalletId: PalletId = PalletId(*b"fraction");
+	pub const BuybackThreshold: u32 = 1;
 }
 
 impl pallet_nft_fractionalisation::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type PalletId = NftFractionsPalletId;
 	type Currency = Balances;
+	type BuybackThreshold = BuybackThreshold;
 	type CollectionId = <Self as pallet_nfts::Config>::CollectionId;
 	type ItemId = <Self as pallet_nfts::Config>::ItemId;
 	type AssetBalance = <Self as pallet_balances::Config>::Balance;

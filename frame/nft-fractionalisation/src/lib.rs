@@ -24,8 +24,8 @@ pub mod pallet {
 	use frame_support::{
 		dispatch::DispatchResult,
 		sp_runtime::traits::{
-			AccountIdConversion, AtLeast32BitUnsigned, IntegerSquareRoot, Saturating, StaticLookup,
-			Zero,
+			AccountIdConversion, AtLeast32BitUnsigned, IntegerSquareRoot, SaturatedConversion,
+			Saturating, StaticLookup, Zero,
 		},
 		traits::{
 			fungibles::{
@@ -105,6 +105,9 @@ pub mod pallet {
 
 		#[pallet::constant]
 		type PalletId: Get<PalletId>;
+
+		#[pallet::constant]
+		type BuybackThreshold: Get<u32>;
 	}
 
 	#[pallet::storage]
@@ -113,6 +116,12 @@ pub mod pallet {
 	// Add a public getter function to pallet assets.
 	pub type AssetsMinted<T: Config> =
 		StorageMap<_, Twox64Concat, AssetIdOf<T>, AssetBalanceOf<T>, OptionQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn asset_to_nft)]
+	// TODO: store information about Asset ID and the corresponding Collection and Item ID. 
+	pub type AssetToNft<T: Config> =
+		StorageMap<_, Twox64Concat, AssetIdOf<T>, (T::CollectionId, T::ItemId), OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -172,8 +181,22 @@ pub mod pallet {
 			Ok(())
 		}
 
-		// TODO: return and burn 100% of the asset, unlock the NFT.
-		// pub fn burn_asset_unlock_nft() -> DispatchResult {}
+		// Return and burn a % of the asset, unlock the NFT. Currently 100% is the minimum threshold.
+		#[pallet::weight(10_000 + T::DbWeight::get().writes(2).ref_time())]
+		pub fn burn_asset_unlock_nft(
+			origin: OriginFor<T>,
+			collection_id: T::CollectionId,
+			item_id: T::ItemId,
+			asset_id: AssetIdOf<T>,
+			amount: AssetBalanceOf<T>,
+		) -> DispatchResult {
+			let who = ensure_signed(origin.clone())?;
+
+			Self::do_burn_asset(asset_id, &who, amount)?;
+			Self::do_unlock_nft(collection_id, item_id, who)?;
+
+			Ok(())
+		}
 	}
 
 	impl<T: Config> Pallet<T> {
@@ -181,12 +204,13 @@ pub mod pallet {
 			T::PalletId::get().into_account_truncating()
 		}
 
-		fn do_lock_nft(
-			collection_id: T::CollectionId,
-			item_id: T::ItemId,
-		) -> DispatchResult {
+		fn do_lock_nft(collection_id: T::CollectionId, item_id: T::ItemId) -> DispatchResult {
 			let admin_account_id = Self::pallet_account_id();
 			T::Items::transfer(&collection_id, &item_id, &admin_account_id)
+		}
+
+		fn do_unlock_nft(collection_id: T::CollectionId, item_id: T::ItemId, account: T::AccountId) -> DispatchResult {
+			T::Items::transfer(&collection_id, &item_id, &account)
 		}
 
 		fn do_create_asset(
@@ -205,10 +229,26 @@ pub mod pallet {
 			T::Assets::mint_into(asset_id, beneficiary, amount)
 		}
 
-		fn check_total_ownership(asset_id: AssetIdOf<T>, account: &T::AccountId) -> () {
+		fn do_burn_asset(
+			asset_id: AssetIdOf<T>,
+			account: &T::AccountId,
+			amount: AssetBalanceOf<T>,
+		) -> Result<AssetBalanceOf<T>, DispatchError> {
+			Self::check_token_amount(asset_id, amount);
+			T::Assets::burn_from(asset_id, account, amount)
+		}
+
+		fn check_token_amount(
+			asset_id: AssetIdOf<T>, 
+			amount: AssetBalanceOf<T>,
+		) -> () {
+			// TODO: create a threshold of tokens to return in order to get back the NFT.
+			// Otherwise one person can hold one token in order not to let others buy back.
+			let buyback_threshold: AssetBalanceOf<T> =
+				T::BuybackThreshold::get().saturated_into::<AssetBalanceOf<T>>();
 			assert_eq!(
-				Some(T::Assets::balance(asset_id, account)),
-				<AssetsMinted<T>>::get(asset_id)
+				Some(amount),
+				Some(<AssetsMinted<T>>::get(asset_id).unwrap().saturating_mul(buyback_threshold))
 			);
 		}
 	}
