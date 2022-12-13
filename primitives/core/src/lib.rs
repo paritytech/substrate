@@ -643,10 +643,10 @@ macro_rules! generate_feature_enabled_macro {
 		#[cfg($feature_name)]
 		#[macro_export]
 		macro_rules! $macro_name {
-			( $d ( $d input:tt )* ) => {
-				$d ( $d input )*
-			}
-		}
+					( $d ( $d input:tt )* ) => {
+						$d ( $d input )*
+					}
+				}
 
 		/// Enable/disable the given code depending on
 		#[doc = concat!("`", stringify!($feature_name), "`")]
