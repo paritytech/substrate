@@ -40,7 +40,7 @@ use frame_support::{
 		BalanceStatus, ConstU32, ConstU64, Contains, Currency, Get, LockableCurrency, OnIdle,
 		OnInitialize, ReservableCurrency, WithdrawReasons,
 	},
-	weights::{constants::WEIGHT_PER_SECOND, Weight},
+	weights::{constants::WEIGHT_REF_TIME_PER_SECOND, Weight},
 };
 use frame_system::{self as system, EventRecord, Phase};
 use pretty_assertions::{assert_eq, assert_ne};
@@ -119,6 +119,12 @@ pub mod test_utils {
 			let is = crate::OwnerInfoOf::<Test>::get($code_hash).map(|m| m.refcount()).unwrap();
 			assert_eq!(is, $should);
 		}};
+	}
+}
+
+impl Test {
+	pub fn set_unstable_interface(unstable_interface: bool) {
+		UNSTABLE_INTERFACE.with(|v| *v.borrow_mut() = unstable_interface);
 	}
 }
 
@@ -279,7 +285,7 @@ impl RegisteredChainExtension<Test> for TempStorageExtension {
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(
-			(2u64 * WEIGHT_PER_SECOND).set_proof_size(u64::MAX),
+			Weight::from_parts(2u64 * WEIGHT_REF_TIME_PER_SECOND, u64::MAX),
 		);
 	pub static ExistentialDeposit: u64 = 1;
 }
@@ -385,6 +391,7 @@ impl Contains<RuntimeCall> for TestFilter {
 
 parameter_types! {
 	pub const DeletionWeightLimit: Weight = Weight::from_ref_time(500_000_000_000);
+	pub static UnstableInterface: bool = true;
 }
 
 impl Config for Test {
@@ -407,6 +414,7 @@ impl Config for Test {
 	type AddressGenerator = DefaultAddressGenerator;
 	type MaxCodeLen = ConstU32<{ 128 * 1024 }>;
 	type MaxStorageKeyLen = ConstU32<128>;
+	type UnsafeUnstableInterface = UnstableInterface;
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);
@@ -2687,7 +2695,6 @@ fn gas_estimation_nested_call_fixed_limit() {
 }
 
 #[test]
-#[cfg(feature = "unstable-interface")]
 fn gas_estimation_call_runtime() {
 	use codec::Decode;
 	let (caller_code, caller_hash) = compile_module::<Test>("call_runtime").unwrap();
@@ -4411,7 +4418,6 @@ fn delegate_call_indeterministic_code() {
 }
 
 #[test]
-#[cfg(feature = "unstable-interface")]
 fn reentrance_count_works_with_call() {
 	let (wasm, code_hash) = compile_module::<Test>("reentrance_count_call").unwrap();
 	let contract_addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
@@ -4448,7 +4454,6 @@ fn reentrance_count_works_with_call() {
 }
 
 #[test]
-#[cfg(feature = "unstable-interface")]
 fn reentrance_count_works_with_delegated_call() {
 	let (wasm, code_hash) = compile_module::<Test>("reentrance_count_delegated_call").unwrap();
 	let contract_addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
@@ -4485,7 +4490,6 @@ fn reentrance_count_works_with_delegated_call() {
 }
 
 #[test]
-#[cfg(feature = "unstable-interface")]
 fn account_reentrance_count_works() {
 	let (wasm, code_hash) = compile_module::<Test>("account_reentrance_count_call").unwrap();
 	let (wasm_reentrance_count, code_hash_reentrance_count) =
