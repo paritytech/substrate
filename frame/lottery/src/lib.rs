@@ -296,6 +296,7 @@ pub mod pallet {
 		/// should listen for the `TicketBought` event.
 		///
 		/// This extrinsic must be called by a signed origin.
+		#[pallet::call_index(0)]
 		#[pallet::weight(
 			T::WeightInfo::buy_ticket()
 				.saturating_add(call.get_dispatch_info().weight)
@@ -317,6 +318,7 @@ pub mod pallet {
 		/// provided by this pallet, which uses storage to determine the valid calls.
 		///
 		/// This extrinsic must be called by the Manager origin.
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::set_calls(calls.len() as u32))]
 		pub fn set_calls(
 			origin: OriginFor<T>,
@@ -344,6 +346,7 @@ pub mod pallet {
 		/// * `length`: How long the lottery should run for starting at the current block.
 		/// * `delay`: How long after the lottery end we should wait before picking a winner.
 		/// * `repeat`: If the lottery should repeat when completed.
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::start_lottery())]
 		pub fn start_lottery(
 			origin: OriginFor<T>,
@@ -376,6 +379,7 @@ pub mod pallet {
 		/// The lottery will continue to run to completion.
 		///
 		/// This extrinsic must be called by the `ManagerOrigin`.
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::stop_repeat())]
 		pub fn stop_repeat(origin: OriginFor<T>) -> DispatchResult {
 			T::ManagerOrigin::ensure_origin(origin)?;

@@ -308,17 +308,20 @@ benchmarks! {
 		let slash_amount = slash_fraction * bond_amount;
 		let reward_amount = slash_amount.saturating_mul(1 + n) / 2;
 		let reward = reward_amount / r;
+		let slash_report = |id| core::iter::once(
+			<T as StakingConfig>::RuntimeEvent::from(StakingEvent::<T>::SlashReported{ validator: id, fraction: slash_fraction, slash_era: 0})
+		);
 		let slash = |id| core::iter::once(
-			<T as StakingConfig>::RuntimeEvent::from(StakingEvent::<T>::Slashed{staker: id, amount: BalanceOf::<T>::from(slash_amount)})
+			<T as StakingConfig>::RuntimeEvent::from(StakingEvent::<T>::Slashed{ staker: id, amount: BalanceOf::<T>::from(slash_amount) })
 		);
 		let balance_slash = |id| core::iter::once(
-			<T as BalancesConfig>::RuntimeEvent::from(pallet_balances::Event::<T>::Slashed{who: id, amount: slash_amount.into()})
+			<T as BalancesConfig>::RuntimeEvent::from(pallet_balances::Event::<T>::Slashed{ who: id, amount: slash_amount.into() })
 		);
 		let chill = |id| core::iter::once(
-			<T as StakingConfig>::RuntimeEvent::from(StakingEvent::<T>::Chilled{stash: id})
+			<T as StakingConfig>::RuntimeEvent::from(StakingEvent::<T>::Chilled{ stash: id })
 		);
 		let balance_deposit = |id, amount: u32|
-			<T as BalancesConfig>::RuntimeEvent::from(pallet_balances::Event::<T>::Deposit{who: id, amount: amount.into()});
+			<T as BalancesConfig>::RuntimeEvent::from(pallet_balances::Event::<T>::Deposit{ who: id, amount: amount.into() });
 		let mut first = true;
 		let slash_events = raw_offenders.into_iter()
 			.flat_map(|offender| {
@@ -328,6 +331,7 @@ benchmarks! {
 				});
 
 				let mut events = chill(offender.stash.clone()).map(Into::into)
+					.chain(slash_report(offender.stash.clone()).map(Into::into))
 					.chain(balance_slash(offender.stash.clone()).map(Into::into))
 					.chain(slash(offender.stash).map(Into::into))
 					.chain(nom_slashes)
@@ -407,6 +411,7 @@ benchmarks! {
 			System::<T>::event_count(), 0
 			+ 1 // offence
 			+ 3 // reporter (reward + endowment)
+			+ 1 // offenders reported
 			+ 2 // offenders slashed
 			+ 1 // offenders chilled
 			+ 2 * n // nominators slashed
@@ -443,6 +448,7 @@ benchmarks! {
 			System::<T>::event_count(), 0
 			+ 1 // offence
 			+ 3 // reporter (reward + endowment)
+			+ 1 // offenders reported
 			+ 2 // offenders slashed
 			+ 1 // offenders chilled
 			+ 2 * n // nominators slashed
