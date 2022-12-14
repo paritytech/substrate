@@ -359,25 +359,26 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 		List::<T, I>::unsafe_clear()
 	}
 
-	#[cfg(feature = "runtime-benchmarks")]
-	fn score_update_worst_case(who: &T::AccountId, is_increase: bool) -> Self::Score {
-		use frame_support::traits::Get as _;
-		let thresholds = T::BagThresholds::get();
-		let node = list::Node::<T, I>::get(who).unwrap();
-		let current_bag_idx = thresholds
-			.iter()
-			.chain(sp_std::iter::once(&T::Score::max_value()))
-			.position(|w| w == &node.bag_upper())
-			.unwrap();
+	frame_election_provider_support::runtime_benchmarks_enabled! {
+		fn score_update_worst_case(who: &T::AccountId, is_increase: bool) -> Self::Score {
+			use frame_support::traits::Get as _;
+			let thresholds = T::BagThresholds::get();
+			let node = list::Node::<T, I>::get(who).unwrap();
+			let current_bag_idx = thresholds
+				.iter()
+				.chain(sp_std::iter::once(&T::Score::max_value()))
+				.position(|w| w == &node.bag_upper)
+				.unwrap();
 
-		if is_increase {
-			let next_threshold_idx = current_bag_idx + 1;
-			assert!(thresholds.len() > next_threshold_idx);
-			thresholds[next_threshold_idx]
-		} else {
-			assert!(current_bag_idx != 0);
-			let prev_threshold_idx = current_bag_idx - 1;
-			thresholds[prev_threshold_idx]
+			if is_increase {
+				let next_threshold_idx = current_bag_idx + 1;
+				assert!(thresholds.len() > next_threshold_idx);
+				thresholds[next_threshold_idx]
+			} else {
+				assert!(current_bag_idx != 0);
+				let prev_threshold_idx = current_bag_idx - 1;
+				thresholds[prev_threshold_idx]
+			}
 		}
 	}
 }
@@ -389,14 +390,15 @@ impl<T: Config<I>, I: 'static> ScoreProvider<T::AccountId> for Pallet<T, I> {
 		Node::<T, I>::get(id).map(|node| node.score()).unwrap_or_default()
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", feature = "fuzz", test))]
-	fn set_score_of(id: &T::AccountId, new_score: T::Score) {
-		ListNodes::<T, I>::mutate(id, |maybe_node| {
-			if let Some(node) = maybe_node.as_mut() {
-				node.set_score(new_score)
-			} else {
-				panic!("trying to mutate {:?} which does not exists", id);
-			}
-		})
+	frame_election_provider_support::runtime_benchmarks_or_fuzz_enabled! {
+		fn set_score_of(id: &T::AccountId, new_score: T::Score) {
+			ListNodes::<T, I>::mutate(id, |maybe_node| {
+				if let Some(node) = maybe_node.as_mut() {
+					node.score = new_score;
+				} else {
+					panic!("trying to mutate {:?} which does not exists", id);
+				}
+			})
+		}
 	}
 }
