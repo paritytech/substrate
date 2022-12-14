@@ -330,7 +330,6 @@ where
 				},
 			)
 			.map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) })
-		},
 	}
 }
 
