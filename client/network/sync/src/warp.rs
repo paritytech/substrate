@@ -97,16 +97,7 @@ where
 				Self { client, phase, total_proof_bytes: 0 }
 			},
 			WarpSyncParams::WaitForTarget(block) => {
-				match Self::poll_target_block(block, cx.unwrap()) {
-					Poll::Ready(target_block) => {
-						let phase = Phase::TargetBlock(target_block);
-						Self { client, phase, total_proof_bytes: 0 }
-					},
-					Poll::Pending => {
-						let phase = Phase::PendingTargetBlock;
-						Self { client, phase, total_proof_bytes: 0 }
-					},
-				}
+				Self { client, phase: Phase::PendingTargetBlock { target_block: block }, total_proof_bytes: 0 }
 			},
 		}
 	}
