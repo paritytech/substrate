@@ -45,8 +45,8 @@ use std::collections::VecDeque;
 pub use jsonrpsee::{
 	core::{
 		client::{ClientT, Subscription, SubscriptionClientT},
-		Error, RpcResult,
 		params::BatchRequestBuilder,
+		Error, RpcResult,
 	},
 	rpc_params,
 	ws_client::{WsClient, WsClientBuilder},
