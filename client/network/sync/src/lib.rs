@@ -1366,17 +1366,8 @@ where
 		}
 		self.process_outbound_requests();
 
-		if let Some(WarpSyncParams::WaitForTarget(_)) = self.warp_sync_params {
-			if self.warp_sync.is_none() ||
-				self.warp_sync.as_ref().unwrap().progress().phase ==
-					WarpSyncPhase::AwaitingTargetBlock
-			{
-				self.warp_sync = Some(WarpSync::new(
-					self.client.clone(),
-					self.warp_sync_params.as_mut().unwrap(),
-					Some(cx),
-				))
-			}
+		if let Some(warp_sync) = &mut self.warp_sync {
+			let _ = warp_sync.poll(cx);
 		}
 
 		while let Poll::Ready(result) = self.poll_pending_responses(cx) {
