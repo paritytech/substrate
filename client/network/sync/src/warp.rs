@@ -44,7 +44,7 @@ enum Phase<B: BlockT, Client> {
 		last_hash: B::Hash,
 		warp_sync_provider: Arc<dyn WarpSyncProvider<B>>,
 	},
-	PendingTargetBlock,
+	PendingTargetBlock { target_block: oneshot::Receiver<B::Header> },
 	TargetBlock(B::Header),
 	State(StateSync<B, Client>),
 }
