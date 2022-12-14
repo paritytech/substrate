@@ -637,11 +637,13 @@ where
 					if self.peers.len() >= MIN_PEERS_TO_START_WARP_SYNC && self.warp_sync.is_none()
 					{
 						log::debug!(target: "sync", "Starting warp state sync.");
-						self.warp_sync = Some(WarpSync::new(
-							self.client.clone(),
-							self.warp_sync_params.as_mut().unwrap(),
-							None,
-						));
+						if let Some(params) = self.warp_sync_params.take() {
+							self.warp_sync = Some(WarpSync::new(
+								self.client.clone(),
+								params,
+								None,
+							));
+						}
 					}
 				}
 				Ok(req)
