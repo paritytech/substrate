@@ -1,0 +1,28 @@
+[package]
+name = "sp-arkworks"
+version = "0.0.1"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "Apache-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+description = "Primitive core crate hashing implementation."
+documentation = "https://docs.rs/sp-core-hashing"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+ark-serialize = { version = "0.4.0-alpha", default-features = false }
+ark-ff = { version = "0.4.0-alpha", default-features = false }
+ark-ec = { version = "0.4.0-alpha", default-features = false }
+ark-std = { version = "0.4.0-alpha", default-features = false }
+ark-bls12-381 = { version = "0.4.0-alpha" }
+sp-std = { version = "5.0.0", default-features = false, path = "../std" }
+
+
+[features]
+default = ["std"]
+std = [
+	"sp-std/std",
+]
