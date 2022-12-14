@@ -99,7 +99,7 @@ pub mod pallet {
 
 			let mut value: u32 = 0;
 			loop {
-				weight.saturating_add(T::WeightInfo::hash_value());
+				weight = weight.saturating_add(T::WeightInfo::hash_value());
 				if computation_weight_limit.any_lt(weight) {
 					weight = computation_weight_limit;
 					break
