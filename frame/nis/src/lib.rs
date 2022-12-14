@@ -169,7 +169,7 @@ pub mod pallet {
 			nonfungible::{Inspect as NonfungibleInspect, Transfer as NonfungibleTransfer},
 			Currency, Defensive, DefensiveSaturating,
 			ExistenceRequirement::AllowDeath,
-			OnUnbalanced, ReservableCurrency,
+			NamedReservableCurrency, OnUnbalanced,
 		},
 		PalletId,
 	};
@@ -209,7 +209,7 @@ pub mod pallet {
 		type PalletId: Get<PalletId>;
 
 		/// Currency type that this works on.
-		type Currency: ReservableCurrency<Self::AccountId, Balance = Self::CurrencyBalance>;
+		type Currency: NamedReservableCurrency<Self::AccountId, Balance = Self::CurrencyBalance>;
 
 		/// Just the `Currency::Balance` type; we have this item to allow us to constrain it to
 		/// `From<u64>`.
@@ -301,6 +301,12 @@ pub mod pallet {
 		/// The maximum proportion which may be thawed and the period over which it is reset.
 		#[pallet::constant]
 		type ThawThrottle: Get<(Perquintill, Self::BlockNumber)>;
+
+		/// The name for the reserve ID.
+		#[pallet::constant]
+		type ReserveId: Get<
+			<Self::Currency as NamedReservableCurrency<Self::AccountId>>::ReserveIdentifier,
+		>;
 	}
 
 	#[pallet::pallet]
@@ -549,13 +555,17 @@ pub mod pallet {
 				|q| -> Result<(u32, BalanceOf<T>), DispatchError> {
 					let queue_full = q.len() == T::MaxQueueLen::get() as usize;
 					ensure!(!queue_full || q[0].amount < amount, Error::<T>::BidTooLow);
-					T::Currency::reserve(&who, amount)?;
+					T::Currency::reserve_named(&T::ReserveId::get(), &who, amount)?;
 
 					// queue is <Ordered: Lowest ... Highest><Fifo: Last ... First>
 					let mut bid = Bid { amount, who: who.clone() };
 					let net = if queue_full {
 						sp_std::mem::swap(&mut q[0], &mut bid);
-						let _ = T::Currency::unreserve(&bid.who, bid.amount);
+						let _ = T::Currency::unreserve_named(
+							&T::ReserveId::get(),
+							&bid.who,
+							bid.amount,
+						);
 						Self::deposit_event(Event::<T>::BidDropped {
 							who: bid.who,
 							amount: bid.amount,
@@ -618,7 +628,7 @@ pub mod pallet {
 				qs[queue_index].1.saturating_reduce(bid.amount);
 			});
 
-			T::Currency::unreserve(&bid.who, bid.amount);
+			T::Currency::unreserve_named(&T::ReserveId::get(), &bid.who, bid.amount);
 			Self::deposit_event(Event::BidRetracted { who: bid.who, amount: bid.amount, duration });
 
 			Ok(())
@@ -701,7 +711,7 @@ pub mod pallet {
 			let dropped = receipt.proportion.is_zero();
 
 			if amount > on_hold {
-				T::Currency::unreserve(&who, on_hold);
+				T::Currency::unreserve_named(&T::ReserveId::get(), &who, on_hold);
 				let deficit = amount - on_hold;
 				// Try to transfer deficit from pot to receipt owner.
 				summary.receipts_on_hold -= on_hold;
@@ -710,7 +720,7 @@ pub mod pallet {
 					.map_err(|_| Error::<T>::Unfunded)?;
 			} else {
 				if dropped {
-					T::Currency::unreserve(&who, on_hold);
+					T::Currency::unreserve_named(&T::ReserveId::get(), &who, on_hold);
 					summary.receipts_on_hold -= on_hold;
 					let excess = on_hold - amount;
 					// Transfer `excess` to the pot if we have now fully compensated for the
@@ -718,7 +728,7 @@ pub mod pallet {
 					T::Currency::transfer(&who, &our_account, excess, AllowDeath)
 						.map_err(|_| Error::<T>::Unfunded)?;
 				} else {
-					T::Currency::unreserve(&who, amount);
+					T::Currency::unreserve_named(&T::ReserveId::get(), &who, amount);
 					on_hold -= amount;
 					summary.receipts_on_hold -= amount;
 				}
@@ -821,7 +831,7 @@ pub mod pallet {
 			ensure!(owner == who, Error::<T>::NotOwner);
 
 			// Unreserve and transfer the funds to the pot.
-			T::Currency::unreserve(&who, on_hold);
+			T::Currency::unreserve_named(&T::ReserveId::get(), &who, on_hold);
 			// Transfer `excess` to the pot if we have now fully compensated for the receipt.
 			T::Currency::transfer(&who, &Self::account_id(), on_hold, AllowDeath)
 				.map_err(|_| Error::<T>::Unfunded)?; //< Requires transactional storage TODO: OK?
@@ -870,8 +880,8 @@ pub mod pallet {
 			// Transfer the funds from the pot to the owner and reserve
 			T::Currency::transfer(&Self::account_id(), &who, amount, AllowDeath)
 				.map_err(|_| Error::<T>::Unfunded)?; //< Requires transactional storage TODO: OK?
-			T::Currency::reserve(&who, amount)?; //< Requires transactional storage TODO: OK?
-									 // TODO: ^^^ The above should be done in a single operation `transfer_and_hold`.
+			T::Currency::reserve_named(&T::ReserveId::get(), &who, amount)?; //< Requires transactional storage TODO: OK?
+																 // TODO: ^^^ The above should be done in a single operation `transfer_and_hold`.
 
 			// Record that we've moved the amount reserved.
 			summary.receipts_on_hold.saturating_accrue(amount);
@@ -926,17 +936,19 @@ pub mod pallet {
 			let (owner, on_hold) = item.owner.take().ok_or(Error::<T>::NotOwned)?;
 
 			// TODO: This should all be replaced by a single call `transfer_held`.
-			let shortfall = T::Currency::unreserve(&owner, on_hold);
+			let shortfall = T::Currency::unreserve_named(&T::ReserveId::get(), &owner, on_hold);
 			if !shortfall.is_zero() {
-				let _ = T::Currency::reserve(&owner, on_hold - shortfall);
+				let _ =
+					T::Currency::reserve_named(&T::ReserveId::get(), &owner, on_hold - shortfall);
 				return Err(TokenError::NoFunds.into())
 			}
 			if let Err(e) = T::Currency::transfer(&owner, destination, on_hold, AllowDeath) {
-				let _ = T::Currency::reserve(&owner, on_hold);
+				let _ = T::Currency::reserve_named(&T::ReserveId::get(), &owner, on_hold);
 				return Err(e)
 			}
 			// This can never fail, and if it somehow does, then we can't handle this gracefully.
-			let _ = T::Currency::reserve(destination, on_hold).defensive();
+			let _ =
+				T::Currency::reserve_named(&T::ReserveId::get(), destination, on_hold).defensive();
 
 			item.owner = Some((destination.clone(), on_hold));
 			Receipts::<T>::insert(&index, &item);
