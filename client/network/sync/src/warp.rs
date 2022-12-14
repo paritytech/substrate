@@ -111,15 +111,28 @@ where
 		}
 	}
 
-	///  Poll and wait for target block
-	fn poll_target_block(
-		target_block: &mut oneshot::Receiver<B::Header>,
+	/// Poll to make progress.
+	///
+	/// This only makes progress when `phase = Phase::PendingTargetBlock` and the pending block was send.
+	fn poll(
+		&mut self,
 		cx: &mut std::task::Context,
-	) -> Poll<B::Header> {
-		return match target_block.poll_unpin(cx) {
-			Poll::Ready(Ok(target_block)) => Poll::Ready(target_block),
-			_ => Poll::Pending,
+	) -> Poll<()> {
+		let new_phase = if let Phase::PendingTarget { target_block } = &mut self.phase {
+			if let Poll::Ready(target_block) = target_block.poll_unpin(cx) {
+				Some(Phase::TargetBlock(target_block))
+			} else {
+				None
+			}
+		} else {
+			None
+		};
+		
+		if let Some(new_phase) = phase {
+			self.phase = new_phase;
 		}
+		
+		Poll::Pending
 	}
 
 	///  Validate and import a state response.
