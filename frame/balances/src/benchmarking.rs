@@ -31,6 +31,17 @@ const SEED: u32 = 0;
 // existential deposit multiplier
 const ED_MULTIPLIER: u32 = 10;
 
+#[frame_support::benchmark]
+fn bench_name(x: LinearComponent<0, MAX_X>, y: LinearComponent<0, MAX_Y>) {
+	// Setup code
+	let z = x + y;
+	let caller = whitelisted_caller();
+	// The extrinsic call.
+	extrinsic_name(z, other_arguments);
+	// Post condition verification
+	assert_eq!(MyPallet::<T>::my_var(), == z);
+}
+
 benchmarks_instance_pallet! {
 	// Benchmark `transfer` extrinsic with the worst possible conditions:
 	// * Transfer will kill the sender account.
