@@ -25,9 +25,8 @@ use frame_support::{
 	dispatch::WithPostDispatchInfo,
 	pallet_prelude::*,
 	traits::{
-		fungibles::Lockable, Currency, CurrencyToVote, Defensive, DefensiveResult,
-		EstimateNextNewSession, Get, Imbalance, OnUnbalanced, TryCollect, UnixTime,
-		WithdrawReasons,
+		Currency, CurrencyToVote, Defensive, DefensiveResult, EstimateNextNewSession, Get,
+		Imbalance, LockableCurrency, OnUnbalanced, TryCollect, UnixTime, WithdrawReasons,
 	},
 	weights::Weight,
 };
@@ -41,7 +40,7 @@ use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
 	EraIndex, SessionIndex, Stake, StakingInterface,
 };
-use sp_std::{collections::btree_map::BTreeMap, prelude::*};
+use sp_std::prelude::*;
 
 use crate::{
 	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, Exposure, ExposureOf,
@@ -391,6 +390,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
+	/// Start a new era. It does:
 	///
 	/// * Increment `active_era.index`,
 	/// * reset `active_era.start`,
@@ -744,11 +744,6 @@ impl<T: Config> Pallet<T> {
 	/// `maybe_max_len` can imposes a cap on the number of voters returned;
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
-	///
-	/// ### Slashing
-	///
-	/// All votes that have been submitted before the last non-zero slash of the corresponding
-	/// target are *auto-chilled*, but still count towards the limit imposed by `maybe_max_len`.
 	pub fn get_npos_voters(maybe_max_len: Option<usize>) -> Vec<VoterOf<Self>> {
 		let max_allowed_len = {
 			let all_voter_count = T::VoterList::count() as usize;
@@ -759,7 +754,6 @@ impl<T: Config> Pallet<T> {
 
 		// cache a few things.
 		let weight_of = Self::weight_of_fn();
-		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
 
 		let mut voters_seen = 0u32;
 		let mut validators_taken = 0u32;
@@ -777,18 +771,12 @@ impl<T: Config> Pallet<T> {
 				None => break,
 			};
 
-			if let Some(Nominations { submitted_in, mut targets, suppressed: _ }) =
-				<Nominators<T>>::get(&voter)
-			{
-				// if this voter is a nominator:
-				targets.retain(|stash| {
-					slashing_spans
-						.get(stash)
-						.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
-				});
-				if !targets.len().is_zero() {
+			if let Some(Nominations { targets, .. }) = <Nominators<T>>::get(&voter) {
+				if !targets.is_empty() {
 					all_voters.push((voter.clone(), weight_of(&voter), targets));
 					nominators_taken.saturating_inc();
+				} else {
+					// Technically should never happen, but not much we can do about it.
 				}
 			} else if Validators::<T>::contains_key(&voter) {
 				// if this voter is a validator:
@@ -811,18 +799,14 @@ impl<T: Config> Pallet<T> {
 					warn,
 					"DEFENSIVE: invalid item in `VoterList`: {:?}, this nominator probably has too many nominations now",
 					voter
-				)
+				);
 			}
 		}
 
 		// all_voters should have not re-allocated.
 		debug_assert!(all_voters.capacity() == max_allowed_len);
 
-		Self::register_weight(T::WeightInfo::get_npos_voters(
-			validators_taken,
-			nominators_taken,
-			slashing_spans.len() as u32,
-		));
+		Self::register_weight(T::WeightInfo::get_npos_voters(validators_taken, nominators_taken));
 
 		log!(
 			info,
@@ -1325,6 +1309,12 @@ where
 				disable_strategy,
 			});
 
+			Self::deposit_event(Event::<T>::SlashReported {
+				validator: stash.clone(),
+				fraction: *slash_fraction,
+				slash_era,
+			});
+
 			if let Some(mut unapplied) = unapplied {
 				let nominators_len = unapplied.others.len() as u64;
 				let reporters_len = details.reporters.len() as u64;
@@ -1378,7 +1368,7 @@ impl<T: Config> ScoreProvider<T::AccountId> for Pallet<T> {
 		Self::weight_of(who)
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", feature = "fuzz"))]
+	#[cfg(feature = "runtime-benchmarks")]
 	fn set_score_of(who: &T::AccountId, weight: Self::Score) {
 		// this will clearly results in an inconsistent state, but it should not matter for a
 		// benchmark.
@@ -1645,28 +1635,27 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::nominate(RawOrigin::Signed(ctrl).into(), targets)
 	}
 
-	#[cfg(feature = "runtime-benchmarks")]
-	fn nominations(who: Self::AccountId) -> Option<Vec<T::AccountId>> {
-		Nominators::<T>::get(who).map(|n| n.targets.into_inner())
-	}
+	sp_staking::runtime_benchmarks_enabled! {
+		fn nominations(who: Self::AccountId) -> Option<Vec<T::AccountId>> {
+			Nominators::<T>::get(who).map(|n| n.targets.into_inner())
+		}
 
-	#[cfg(feature = "runtime-benchmarks")]
-	fn add_era_stakers(
-		current_era: &EraIndex,
-		stash: &T::AccountId,
-		exposures: Vec<(Self::AccountId, Self::Balance)>,
-	) {
-		let others = exposures
-			.iter()
-			.map(|(who, value)| IndividualExposure { who: who.clone(), value: value.clone() })
-			.collect::<Vec<_>>();
-		let exposure = Exposure { total: Default::default(), own: Default::default(), others };
-		Self::add_era_stakers(current_era.clone(), stash.clone(), exposure)
-	}
+		fn add_era_stakers(
+			current_era: &EraIndex,
+			stash: &T::AccountId,
+			exposures: Vec<(Self::AccountId, Self::Balance)>,
+		) {
+			let others = exposures
+				.iter()
+				.map(|(who, value)| IndividualExposure { who: who.clone(), value: value.clone() })
+				.collect::<Vec<_>>();
+			let exposure = Exposure { total: Default::default(), own: Default::default(), others };
+			<ErasStakers<T>>::insert(&current_era, &stash, &exposure);
+		}
 
-	#[cfg(feature = "runtime-benchmarks")]
-	fn set_current_era(era: EraIndex) {
-		CurrentEra::<T>::put(era);
+		fn set_current_era(era: EraIndex) {
+			CurrentEra::<T>::put(era);
+		}
 	}
 }
 

@@ -46,6 +46,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		#[pallet::call_index(0)]
 		#[pallet::weight(1)]
 		pub fn set_value(_origin: OriginFor<T>, value: u32) -> DispatchResult {
 			Value::<T>::put(value);
