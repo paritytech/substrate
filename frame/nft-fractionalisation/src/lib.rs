@@ -138,6 +138,8 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(2).ref_time())]
+		/// Pallet's account must be funded before lock is possible!
+		/// 5EYCAe5gjC5dxKPbV2GPQUetETjFNSYZsSwSurVTTXidSLbh
 		pub fn lock_nft_create_asset(
 			origin: OriginFor<T>,
 			collection_id: T::CollectionId,
