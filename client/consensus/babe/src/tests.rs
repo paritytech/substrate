@@ -779,7 +779,7 @@ async fn revert_prunes_epoch_changes_and_removes_weights() {
 		&mut proposer_factory,
 		&mut block_import,
 		BlockId::Hash(canon[0]),
-		10
+		10,
 	)
 	.await;
 	let fork2 = propose_and_import_blocks(
@@ -787,7 +787,7 @@ async fn revert_prunes_epoch_changes_and_removes_weights() {
 		&mut proposer_factory,
 		&mut block_import,
 		BlockId::Hash(canon[7]),
-		10
+		10,
 	)
 	.await;
 	let fork3 = propose_and_import_blocks(
@@ -795,7 +795,7 @@ async fn revert_prunes_epoch_changes_and_removes_weights() {
 		&mut proposer_factory,
 		&mut block_import,
 		BlockId::Hash(canon[11]),
-		8
+		8,
 	)
 	.await;
 
@@ -860,9 +860,9 @@ async fn revert_not_allowed_for_finalized() {
 	let canon = propose_and_import_blocks(
 		&client,
 		&mut proposer_factory,
-		&mut block_import, 
+		&mut block_import,
 		BlockId::Number(0),
-		3
+		3,
 	)
 	.await;
 
@@ -913,9 +913,9 @@ async fn importing_epoch_change_block_prunes_tree() {
 	let canon = propose_and_import_blocks(
 		&client,
 		&mut proposer_factory,
-		&mut block_import, 
+		&mut block_import,
 		BlockId::Number(0),
-		30
+		30,
 	)
 	.await;
 
@@ -923,25 +923,25 @@ async fn importing_epoch_change_block_prunes_tree() {
 	let fork_1 = propose_and_import_blocks(
 		&client,
 		&mut proposer_factory,
-		&mut block_import, 
+		&mut block_import,
 		BlockId::Hash(canon[0]),
-		10
+		10,
 	)
 	.await;
 	let fork_2 = propose_and_import_blocks(
 		&client,
 		&mut proposer_factory,
-		&mut block_import, 
+		&mut block_import,
 		BlockId::Hash(canon[12]),
-		15
+		15,
 	)
 	.await;
 	let fork_3 = propose_and_import_blocks(
 		&client,
 		&mut proposer_factory,
-		&mut block_import, 
+		&mut block_import,
 		BlockId::Hash(canon[18]),
-		10
+		10,
 	)
 	.await;
 
@@ -957,9 +957,9 @@ async fn importing_epoch_change_block_prunes_tree() {
 	propose_and_import_blocks(
 		&client,
 		&mut proposer_factory,
-		&mut block_import, 
+		&mut block_import,
 		BlockId::Hash(client.chain_info().best_hash),
-		7
+		7,
 	)
 	.await;
 
@@ -977,9 +977,9 @@ async fn importing_epoch_change_block_prunes_tree() {
 	propose_and_import_blocks(
 		&client,
 		&mut proposer_factory,
-		&mut block_import, 
+		&mut block_import,
 		BlockId::Hash(client.chain_info().best_hash),
-		8
+		8,
 	)
 	.await;
 
@@ -1101,25 +1101,25 @@ async fn obsolete_blocks_aux_data_cleanup() {
 	let fork1_hashes = propose_and_import_blocks(
 		&client,
 		&mut proposer_factory,
-		&mut block_import, 
+		&mut block_import,
 		BlockId::Number(0),
-		4
+		4,
 	)
 	.await;
 	let fork2_hashes = propose_and_import_blocks(
 		&client,
 		&mut proposer_factory,
-		&mut block_import, 
+		&mut block_import,
 		BlockId::Number(0),
-		2
+		2,
 	)
 	.await;
 	let fork3_hashes = propose_and_import_blocks(
 		&client,
 		&mut proposer_factory,
-		&mut block_import, 
+		&mut block_import,
 		BlockId::Number(3),
-		2
+		2,
 	)
 	.await;
 
