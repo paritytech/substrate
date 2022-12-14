@@ -481,8 +481,8 @@ pub fn pallet(attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
-pub fn benchmark(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
-	benchmark::benchmark(tokens)
+pub fn benchmark(attrs: TokenStream, tokens: TokenStream) -> TokenStream {
+	benchmark::benchmark(attrs, tokens)
 }
 
 /// Execute the annotated function in a new storage transaction.
