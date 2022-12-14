@@ -2,10 +2,10 @@ Description: Warp sync
 Network: ./test-warp-sync.toml
 Creds: config
 
-alice: is up
-bob: is up
-charlie: is up
-dave: is up
+alice: is up within 30 seconds
+bob: is up within 30 seconds
+charlie: is up within 30 seconds
+dave: is up within 30 seconds
 
 alice: reports node_roles is 1
 bob: reports node_roles is 1

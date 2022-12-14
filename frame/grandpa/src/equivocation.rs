@@ -52,7 +52,7 @@ use sp_staking::{
 	SessionIndex,
 };
 
-use super::{Call, Config, Pallet};
+use super::{Call, Config, Pallet, LOG_TARGET};
 
 /// A trait with utility methods for handling equivocation reports in GRANDPA.
 /// The offence type is generic, and the trait provides , reporting an offence
@@ -170,15 +170,9 @@ where
 		};
 
 		match SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {
-			Ok(()) => log::info!(
-				target: "runtime::afg",
-				"Submitted GRANDPA equivocation report.",
-			),
-			Err(e) => log::error!(
-				target: "runtime::afg",
-				"Error submitting equivocation report: {:?}",
-				e,
-			),
+			Ok(()) => log::info!(target: LOG_TARGET, "Submitted GRANDPA equivocation report.",),
+			Err(e) =>
+				log::error!(target: LOG_TARGET, "Error submitting equivocation report: {:?}", e,),
 		}
 
 		Ok(())
@@ -211,7 +205,7 @@ impl<T: Config> Pallet<T> {
 				TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ },
 				_ => {
 					log::warn!(
-						target: "runtime::afg",
+						target: LOG_TARGET,
 						"rejecting unsigned report equivocation transaction because it is not local/in-block."
 					);
 

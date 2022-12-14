@@ -57,7 +57,7 @@ that you need, then you can avoid coupling with the Balances module.
 fungible assets system.
 - [`ReservableCurrency`](https://docs.rs/frame-support/latest/frame_support/traits/trait.ReservableCurrency.html):
 Functions for dealing with assets that can be reserved from an account.
-- [`Lockable`](https://docs.rs/frame-support/latest/frame_support/traits/fungibles/trait.Lockable.html): Functions for
+- [`LockableCurrency`](https://docs.rs/frame-support/latest/frame_support/traits/trait.LockableCurrency.html): Functions for
 dealing with accounts that allow liquidity restrictions.
 - [`Imbalance`](https://docs.rs/frame-support/latest/frame_support/traits/trait.Imbalance.html): Functions for handling
 imbalances between total issuance in the system and account balances. Must be used when a function
@@ -88,13 +88,13 @@ pub type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<<T as fra
 
 ```
 
-The Staking module uses the `fungibles::Lockable` trait to lock a stash account's funds:
+The Staking module uses the `LockableCurrency` trait to lock a stash account's funds:
 
 ```rust
-use frame_support::traits::{WithdrawReasons, fungibles};
+use frame_support::traits::{WithdrawReasons, LockableCurrency};
 use sp_runtime::traits::Bounded;
 pub trait Config: frame_system::Config {
-	type Currency: fungibles::Lockable<Self::AccountId, Moment=Self::BlockNumber>;
+	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 }
 
 fn update_ledger<T: Config>(

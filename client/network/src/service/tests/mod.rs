@@ -21,7 +21,7 @@ use crate::{config, ChainSyncInterface, NetworkService, NetworkWorker};
 use futures::prelude::*;
 use libp2p::Multiaddr;
 use sc_client_api::{BlockBackend, HeaderBackend};
-use sc_consensus::ImportQueue;
+use sc_consensus::{ImportQueue, Link};
 use sc_network_common::{
 	config::{
 		NonDefaultSetConfig, NonReservedPeerMode, NotificationHandshake, ProtocolId, SetConfig,
@@ -93,6 +93,7 @@ impl TestNetwork {
 
 struct TestNetworkBuilder {
 	import_queue: Option<Box<dyn ImportQueue<TestBlock>>>,
+	link: Option<Box<dyn Link<TestBlock>>>,
 	client: Option<Arc<substrate_test_runtime_client::TestClient>>,
 	listen_addresses: Vec<Multiaddr>,
 	set_config: Option<SetConfig>,
@@ -106,6 +107,7 @@ impl TestNetworkBuilder {
 	pub fn new(rt_handle: Handle) -> Self {
 		Self {
 			import_queue: None,
+			link: None,
 			client: None,
 			listen_addresses: Vec::new(),
 			set_config: None,
@@ -212,13 +214,14 @@ impl TestNetworkBuilder {
 			}
 		}
 
-		let import_queue = self.import_queue.unwrap_or(Box::new(sc_consensus::BasicQueue::new(
-			PassThroughVerifier(false),
-			Box::new(client.clone()),
-			None,
-			&sp_core::testing::TaskExecutor::new(),
-			None,
-		)));
+		let mut import_queue =
+			self.import_queue.unwrap_or(Box::new(sc_consensus::BasicQueue::new(
+				PassThroughVerifier(false),
+				Box::new(client.clone()),
+				None,
+				&sp_core::testing::TaskExecutor::new(),
+				None,
+			)));
 
 		let protocol_id = ProtocolId::from("test-protocol-name");
 		let fork_id = Some(String::from("test-fork-id"));
@@ -289,15 +292,23 @@ impl TestNetworkBuilder {
 				Box::new(sp_consensus::block_validation::DefaultBlockAnnounceValidator),
 				network_config.max_parallel_downloads,
 				None,
+				None,
 				chain_sync_network_handle,
+				import_queue.service(),
 				block_request_protocol_config.name.clone(),
 				state_request_protocol_config.name.clone(),
 				None,
 			)
 			.unwrap();
 
-			(Box::new(chain_sync), chain_sync_service)
+			if let None = self.link {
+				self.link = Some(Box::new(chain_sync_service.clone()));
+			}
+			(Box::new(chain_sync), Box::new(chain_sync_service))
 		});
+		let mut link = self
+			.link
+			.unwrap_or(Box::new(sc_network_sync::service::mock::MockChainSyncInterface::new()));
 
 		let handle = self.rt_handle.clone();
 		let executor = move |f| {
@@ -316,7 +327,6 @@ impl TestNetworkBuilder {
 			chain: client.clone(),
 			protocol_id,
 			fork_id,
-			import_queue,
 			chain_sync,
 			chain_sync_service,
 			metrics_registry: None,
@@ -332,6 +342,16 @@ impl TestNetworkBuilder {
 		let service = worker.service().clone();
 		self.rt_handle.spawn(async move {
 			let _ = chain_sync_network_provider.run(service).await;
+		});
+		self.rt_handle.spawn(async move {
+			loop {
+				futures::future::poll_fn(|cx| {
+					import_queue.poll_actions(cx, &mut *link);
+					std::task::Poll::Ready(())
+				})
+				.await;
+				tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+			}
 		});
 
 		TestNetwork::new(worker, self.rt_handle)

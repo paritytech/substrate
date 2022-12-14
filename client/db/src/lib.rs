@@ -2002,6 +2002,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				.map_err(sp_blockchain::Error::from_state_db)?;
 			Err(e)
 		} else {
+			self.storage.state_db.sync();
 			Ok(())
 		}
 	}
