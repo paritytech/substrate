@@ -27,7 +27,10 @@
 //! Implementations of these traits may be converted to implementations of corresponding
 //! `nonfungible` traits by using the `nonfungible::ItemOf` type adapter.
 
-use crate::dispatch::{DispatchError, DispatchResult};
+use crate::{
+	dispatch::{DispatchError, DispatchResult},
+	traits::tokens::misc::AttributeNamespace,
+};
 use codec::{Decode, Encode};
 use sp_runtime::TokenError;
 use sp_std::prelude::*;
@@ -58,6 +61,7 @@ pub trait Inspect<AccountId> {
 	fn attribute(
 		_collection: &Self::CollectionId,
 		_item: &Self::ItemId,
+		_namespace: &AttributeNamespace<AccountId>,
 		_key: &[u8],
 	) -> Option<Vec<u8>> {
 		None
@@ -70,9 +74,10 @@ pub trait Inspect<AccountId> {
 	fn typed_attribute<K: Encode, V: Decode>(
 		collection: &Self::CollectionId,
 		item: &Self::ItemId,
+		namespace: &AttributeNamespace<AccountId>,
 		key: &K,
 	) -> Option<V> {
-		key.using_encoded(|d| Self::attribute(collection, item, d))
+		key.using_encoded(|d| Self::attribute(collection, item, namespace, d))
 			.and_then(|v| V::decode(&mut &v[..]).ok())
 	}
 
@@ -105,31 +110,39 @@ pub trait Inspect<AccountId> {
 /// Interface for enumerating items in existence or owned by a given account over many collections
 /// of NFTs.
 pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
+	/// The iterator type for [`Self::collections`].
+	type CollectionsIterator: Iterator<Item = Self::CollectionId>;
+	/// The iterator type for [`Self::items`].
+	type ItemsIterator: Iterator<Item = Self::ItemId>;
+	/// The iterator type for [`Self::owned`].
+	type OwnedIterator: Iterator<Item = (Self::CollectionId, Self::ItemId)>;
+	/// The iterator type for [`Self::owned_in_collection`].
+	type OwnedInCollectionIterator: Iterator<Item = Self::ItemId>;
+
 	/// Returns an iterator of the collections in existence.
-	fn collections() -> Box<dyn Iterator<Item = Self::CollectionId>>;
+	fn collections() -> Self::CollectionsIterator;
 
 	/// Returns an iterator of the items of a `collection` in existence.
-	fn items(collection: &Self::CollectionId) -> Box<dyn Iterator<Item = Self::ItemId>>;
+	fn items(collection: &Self::CollectionId) -> Self::ItemsIterator;
 
 	/// Returns an iterator of the items of all collections owned by `who`.
-	fn owned(who: &AccountId) -> Box<dyn Iterator<Item = (Self::CollectionId, Self::ItemId)>>;
+	fn owned(who: &AccountId) -> Self::OwnedIterator;
 
 	/// Returns an iterator of the items of `collection` owned by `who`.
 	fn owned_in_collection(
 		collection: &Self::CollectionId,
 		who: &AccountId,
-	) -> Box<dyn Iterator<Item = Self::ItemId>>;
+	) -> Self::OwnedInCollectionIterator;
 }
 
 /// Trait for providing the ability to create collections of nonfungible items.
 pub trait Create<AccountId, CollectionConfig>: Inspect<AccountId> {
 	/// Create a `collection` of nonfungible items to be owned by `who` and managed by `admin`.
 	fn create_collection(
-		collection: &Self::CollectionId,
 		who: &AccountId,
 		admin: &AccountId,
 		config: &CollectionConfig,
-	) -> DispatchResult;
+	) -> Result<Self::CollectionId, DispatchError>;
 }
 
 /// Trait for providing the ability to destroy collections of nonfungible items.

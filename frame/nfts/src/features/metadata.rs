@@ -46,7 +46,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				collection_details.item_metadatas.saturating_inc();
 			}
 			let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
-			collection_details.total_deposit.saturating_reduce(old_deposit);
+			collection_details.owner_deposit.saturating_reduce(old_deposit);
 			let mut deposit = Zero::zero();
 			if collection_config.is_setting_enabled(CollectionSetting::DepositRequired)
 				&& maybe_check_owner.is_some()
@@ -60,7 +60,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			} else if deposit < old_deposit {
 				T::Currency::unreserve(&collection_details.owner, old_deposit - deposit);
 			}
-			collection_details.total_deposit.saturating_accrue(deposit);
+			collection_details.owner_deposit.saturating_accrue(deposit);
 
 			*metadata = Some(ItemMetadata { deposit, data: data.clone() });
 
@@ -93,7 +93,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 			let deposit = metadata.take().ok_or(Error::<T, I>::UnknownItem)?.deposit;
 			T::Currency::unreserve(&collection_details.owner, deposit);
-			collection_details.total_deposit.saturating_reduce(deposit);
+			collection_details.owner_deposit.saturating_reduce(deposit);
 
 			Collection::<T, I>::insert(&collection, &collection_details);
 			Self::deposit_event(Event::MetadataCleared { collection, item });
@@ -121,7 +121,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		CollectionMetadataOf::<T, I>::try_mutate_exists(collection, |metadata| {
 			let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
-			details.total_deposit.saturating_reduce(old_deposit);
+			details.owner_deposit.saturating_reduce(old_deposit);
 			let mut deposit = Zero::zero();
 			if maybe_check_owner.is_some()
 				&& collection_config.is_setting_enabled(CollectionSetting::DepositRequired)
@@ -135,7 +135,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			} else if deposit < old_deposit {
 				T::Currency::unreserve(&details.owner, old_deposit - deposit);
 			}
-			details.total_deposit.saturating_accrue(deposit);
+			details.owner_deposit.saturating_accrue(deposit);
 
 			Collection::<T, I>::insert(&collection, details);
 

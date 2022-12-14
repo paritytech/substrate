@@ -25,7 +25,10 @@
 //! use.
 
 use super::nonfungibles_v2 as nonfungibles;
-use crate::{dispatch::DispatchResult, traits::Get};
+use crate::{
+	dispatch::DispatchResult,
+	traits::{tokens::misc::AttributeNamespace, Get},
+};
 use codec::{Decode, Encode};
 use sp_runtime::TokenError;
 use sp_std::prelude::*;
@@ -42,15 +45,23 @@ pub trait Inspect<AccountId> {
 	/// Returns the attribute value of `item` corresponding to `key`.
 	///
 	/// By default this is `None`; no attributes are defined.
-	fn attribute(_item: &Self::ItemId, _key: &[u8]) -> Option<Vec<u8>> {
+	fn attribute(
+		_item: &Self::ItemId,
+		_namespace: &AttributeNamespace<AccountId>,
+		_key: &[u8],
+	) -> Option<Vec<u8>> {
 		None
 	}
 
 	/// Returns the strongly-typed attribute value of `item` corresponding to `key`.
 	///
 	/// By default this just attempts to use `attribute`.
-	fn typed_attribute<K: Encode, V: Decode>(item: &Self::ItemId, key: &K) -> Option<V> {
-		key.using_encoded(|d| Self::attribute(item, d))
+	fn typed_attribute<K: Encode, V: Decode>(
+		item: &Self::ItemId,
+		namespace: &AttributeNamespace<AccountId>,
+		key: &K,
+	) -> Option<V> {
+		key.using_encoded(|d| Self::attribute(item, namespace, d))
 			.and_then(|v| V::decode(&mut &v[..]).ok())
 	}
 
@@ -65,11 +76,16 @@ pub trait Inspect<AccountId> {
 /// Interface for enumerating items in existence or owned by a given account over a collection
 /// of NFTs.
 pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
+	/// The iterator type for [`Self::items`].
+	type ItemsIterator: Iterator<Item = Self::ItemId>;
+	/// The iterator type for [`Self::owned`].
+	type OwnedIterator: Iterator<Item = Self::ItemId>;
+
 	/// Returns an iterator of the items within a `collection` in existence.
-	fn items() -> Box<dyn Iterator<Item = Self::ItemId>>;
+	fn items() -> Self::ItemsIterator;
 
 	/// Returns an iterator of the items of all collections owned by `who`.
-	fn owned(who: &AccountId) -> Box<dyn Iterator<Item = Self::ItemId>>;
+	fn owned(who: &AccountId) -> Self::OwnedIterator;
 }
 
 /// Trait for providing an interface for NFT-like items which may be minted, burned and/or have
@@ -137,11 +153,19 @@ impl<
 	fn owner(item: &Self::ItemId) -> Option<AccountId> {
 		<F as nonfungibles::Inspect<AccountId>>::owner(&A::get(), item)
 	}
-	fn attribute(item: &Self::ItemId, key: &[u8]) -> Option<Vec<u8>> {
-		<F as nonfungibles::Inspect<AccountId>>::attribute(&A::get(), item, key)
+	fn attribute(
+		item: &Self::ItemId,
+		namespace: &AttributeNamespace<AccountId>,
+		key: &[u8],
+	) -> Option<Vec<u8>> {
+		<F as nonfungibles::Inspect<AccountId>>::attribute(&A::get(), item, namespace, key)
 	}
-	fn typed_attribute<K: Encode, V: Decode>(item: &Self::ItemId, key: &K) -> Option<V> {
-		<F as nonfungibles::Inspect<AccountId>>::typed_attribute(&A::get(), item, key)
+	fn typed_attribute<K: Encode, V: Decode>(
+		item: &Self::ItemId,
+		namespace: &AttributeNamespace<AccountId>,
+		key: &K,
+	) -> Option<V> {
+		<F as nonfungibles::Inspect<AccountId>>::typed_attribute(&A::get(), item, namespace, key)
 	}
 	fn can_transfer(item: &Self::ItemId) -> bool {
 		<F as nonfungibles::Inspect<AccountId>>::can_transfer(&A::get(), item)
@@ -154,10 +178,14 @@ impl<
 		AccountId,
 	> InspectEnumerable<AccountId> for ItemOf<F, A, AccountId>
 {
-	fn items() -> Box<dyn Iterator<Item = Self::ItemId>> {
+	type ItemsIterator = <F as nonfungibles::InspectEnumerable<AccountId>>::ItemsIterator;
+	type OwnedIterator =
+		<F as nonfungibles::InspectEnumerable<AccountId>>::OwnedInCollectionIterator;
+
+	fn items() -> Self::ItemsIterator {
 		<F as nonfungibles::InspectEnumerable<AccountId>>::items(&A::get())
 	}
-	fn owned(who: &AccountId) -> Box<dyn Iterator<Item = Self::ItemId>> {
+	fn owned(who: &AccountId) -> Self::OwnedIterator {
 		<F as nonfungibles::InspectEnumerable<AccountId>>::owned_in_collection(&A::get(), who)
 	}
 }

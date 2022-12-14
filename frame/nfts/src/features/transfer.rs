@@ -100,11 +100,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			T::Currency::repatriate_reserved(
 				&details.owner,
 				&owner,
-				details.total_deposit,
+				details.owner_deposit,
 				Reserved,
 			)?;
 			CollectionAccount::<T, I>::remove(&details.owner, &collection);
 			CollectionAccount::<T, I>::insert(&owner, &collection, ());
+
 			details.owner = owner.clone();
 			OwnershipAcceptance::<T, I>::remove(&owner);
 
@@ -150,7 +151,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			T::Currency::repatriate_reserved(
 				&details.owner,
 				&owner,
-				details.total_deposit,
+				details.owner_deposit,
 				Reserved,
 			)?;
 

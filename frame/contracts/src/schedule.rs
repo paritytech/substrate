@@ -423,8 +423,8 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_ecdsa_to_eth_address`.
 	pub ecdsa_to_eth_address: u64,
 
-	/// Weight of calling `seal_reentrant_count`.
-	pub reentrant_count: u64,
+	/// Weight of calling `seal_reentrance_count`.
+	pub reentrance_count: u64,
 
 	/// Weight of calling `seal_account_reentrance_count`.
 	pub account_reentrance_count: u64,
@@ -538,7 +538,7 @@ impl<T: Config> Default for InstructionWeights<T> {
 	fn default() -> Self {
 		let max_pages = Limits::default().memory_pages;
 		Self {
-			version: 3,
+			version: 4,
 			fallback: 0,
 			i64const: cost_instr!(instr_i64const, 1),
 			i64load: cost_instr!(instr_i64load, 2),
@@ -665,7 +665,7 @@ impl<T: Config> Default for HostFnWeights<T> {
 			hash_blake2_128_per_byte: cost_byte_batched!(seal_hash_blake2_128_per_kb),
 			ecdsa_recover: cost_batched!(seal_ecdsa_recover),
 			ecdsa_to_eth_address: cost_batched!(seal_ecdsa_to_eth_address),
-			reentrant_count: cost_batched!(seal_reentrant_count),
+			reentrance_count: cost_batched!(seal_reentrance_count),
 			account_reentrance_count: cost_batched!(seal_account_reentrance_count),
 			_phantom: PhantomData,
 		}

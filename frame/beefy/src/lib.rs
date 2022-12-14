@@ -34,6 +34,7 @@ use sp_std::prelude::*;
 
 use beefy_primitives::{
 	AuthorityIndex, ConsensusLog, OnNewValidatorSet, ValidatorSet, BEEFY_ENGINE_ID,
+	GENESIS_AUTHORITY_SET_ID,
 };
 
 #[cfg(test)]
@@ -162,7 +163,7 @@ impl<T: Config> Pallet<T> {
 			BoundedSlice::<T::BeefyId, T::MaxAuthorities>::try_from(authorities.as_slice())
 				.map_err(|_| ())?;
 
-		let id = 0;
+		let id = GENESIS_AUTHORITY_SET_ID;
 		<Authorities<T>>::put(bounded_authorities);
 		<ValidatorSetId<T>>::put(id);
 		// Like `pallet_session`, initialize the next validator set as well.

@@ -133,24 +133,8 @@ node-bench-regression-guard:
        --compare-with artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA'
   after_script: [""]
 
-cargo-check-subkey:
-  stage:                           test
-  extends:
-    - .docker-env
-    - .test-refs
-    - .pipeline-stopper-artifacts
-  script:
-    - rusty-cachier snapshot create
-    - cd ./bin/utils/subkey
-    - SKIP_WASM_BUILD=1 time cargo check --locked --release
-    - rusty-cachier cache upload
-
 cargo-check-try-runtime:
   stage:                           test
-  # this is an artificial job dependency, for pipeline optimization using GitLab's DAGs
-  needs:
-    - job:                         cargo-check-subkey
-      artifacts:                   false
   extends:
     - .docker-env
     - .test-refs
@@ -393,6 +377,9 @@ test-full-crypto-feature:
 
 test-wasmer-sandbox:
   stage:                           test
+  needs:
+    - job:                         cargo-check-wasmer-sandbox
+      artifacts:                   false
   extends:
     - .docker-env
     - .test-refs-wasmer-sandbox
@@ -409,18 +396,6 @@ test-wasmer-sandbox:
     - time cargo nextest run --locked --release --features runtime-benchmarks,wasmer-sandbox,disable-ui-tests --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
     - if [ ${CI_NODE_INDEX} == 1 ]; then rusty-cachier cache upload; fi
 
-cargo-check-macos:
-  stage:                           test
-  extends:                         .test-refs-no-trigger
-  before_script:
-    - !reference [.rust-info-script, script]
-  variables:
-    SKIP_WASM_BUILD:               1
-  script:
-    - time cargo check --locked --release
-  tags:
-    - osx
-
 check-rustdoc:
   stage:                           test
   variables:
@@ -435,3 +410,39 @@ check-rustdoc:
     - rusty-cachier snapshot create
     - time cargo +nightly doc --locked --workspace --all-features --verbose --no-deps
     - rusty-cachier cache upload
+
+cargo-check-each-crate:
+  stage:                           test
+  extends:
+    - .docker-env
+    - .test-refs
+    - .collect-artifacts
+    - .pipeline-stopper-artifacts
+  variables:
+    # $CI_JOB_NAME is set manually so that rusty-cachier can share the cache for all
+    # "cargo-check-each-crate I/N" jobs
+    CI_JOB_NAME:                   cargo-check-each-crate
+  script:
+    - rusty-cachier snapshot create
+    - time ./scripts/ci/gitlab/check-each-crate.sh "$CI_NODE_INDEX" "$CI_NODE_TOTAL"
+    # need to update cache only from one job
+    - if [ "$CI_NODE_INDEX" == 1 ]; then rusty-cachier cache upload; fi
+  parallel: 2
+
+cargo-check-each-crate-macos:
+  stage: test
+  extends:
+    - .test-refs
+    - .collect-artifacts
+    - .pipeline-stopper-artifacts
+  before_script:
+    - !reference [.rust-info-script, script]
+    - !reference [.pipeline-stopper-vars, script]
+  variables:
+    SKIP_WASM_BUILD:               1
+  script:
+    # TODO: enable rusty-cachier once it supports Mac
+    # TODO: use parallel jobs, as per cargo-check-each-crate, once more Mac runners are available
+    - time ./scripts/ci/gitlab/check-each-crate.sh 1 1
+  tags:
+    - osx

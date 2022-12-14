@@ -28,10 +28,6 @@ use crate::{Config, Determinism};
 use frame_support::traits::Get;
 use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::Hash;
-use sp_sandbox::{
-	default_executor::{EnvironmentDefinitionBuilder, Memory},
-	SandboxEnvironmentBuilder, SandboxMemory,
-};
 use sp_std::{borrow::ToOwned, prelude::*};
 use wasm_instrument::parity_wasm::{
 	builder,
@@ -128,7 +124,7 @@ pub struct ImportedFunction {
 pub struct WasmModule<T: Config> {
 	pub code: Vec<u8>,
 	pub hash: <T::Hashing as Hash>::Output,
-	memory: Option<ImportedMemory>,
+	pub memory: Option<ImportedMemory>,
 }
 
 impl<T: Config> From<ModuleDefinition> for WasmModule<T>
@@ -393,16 +389,6 @@ where
 			..Default::default()
 		}
 		.into()
-	}
-
-	/// Creates a memory instance for use in a sandbox with dimensions declared in this module
-	/// and adds it to `env`. A reference to that memory is returned so that it can be used to
-	/// access the memory contents from the supervisor.
-	pub fn add_memory<S>(&self, env: &mut EnvironmentDefinitionBuilder<S>) -> Option<Memory> {
-		let memory = if let Some(memory) = &self.memory { memory } else { return None };
-		let memory = Memory::new(memory.min_pages, Some(memory.max_pages)).unwrap();
-		env.add_memory("env", "memory", memory.clone());
-		Some(memory)
 	}
 
 	pub fn unary_instr(instr: Instruction, repeat: u32) -> Self {

@@ -97,10 +97,6 @@ impl ProposalProvider<AccountId, Hash, RuntimeCall> for AllianceProposalProvider
 		AllianceMotion::do_vote(who, proposal, index, approve)
 	}
 
-	fn veto_proposal(proposal_hash: Hash) -> u32 {
-		AllianceMotion::do_disapprove_proposal(proposal_hash)
-	}
-
 	fn close_proposal(
 		proposal_hash: Hash,
 		proposal_index: ProposalIndex,

@@ -42,7 +42,7 @@ tempfile = "3.1.0"
 sc-keystore = { version = "4.0.0-dev", path = "../../keystore" }
 sc-network = { version = "0.10.0-dev", path = "../../network" }
 sc-network-test = { version = "0.8.0", path = "../../network/test" }
-sp-keyring = { version = "6.0.0", path = "../../../primitives/keyring" }
+sp-keyring = { version = "7.0.0", path = "../../../primitives/keyring" }
 sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
 sp-tracing = { version = "6.0.0", path = "../../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }

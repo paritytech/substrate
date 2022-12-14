@@ -1,6 +1,6 @@
 [package]
 name = "pallet-contracts-primitives"
-version = "6.0.0"
+version = "7.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"

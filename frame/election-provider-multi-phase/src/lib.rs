@@ -237,7 +237,7 @@ use frame_election_provider_support::{
 use frame_support::{
 	dispatch::DispatchClass,
 	ensure,
-	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
+	traits::{Currency, DefensiveResult, Get, OnUnbalanced, ReservableCurrency},
 	weights::Weight,
 	DefaultNoBound, EqNoBound, PartialEqNoBound,
 };
@@ -547,6 +547,10 @@ pub enum FeasibilityError {
 	UntrustedScoreTooLow,
 	/// Data Provider returned too many desired targets
 	TooManyDesiredTargets,
+	/// Conversion into bounded types failed.
+	///
+	/// Should never happen under correct configurations.
+	BoundedConversionFailed,
 }
 
 impl From<sp_npos_elections::Error> for FeasibilityError {
@@ -560,10 +564,7 @@ pub use pallet::*;
 pub mod pallet {
 	use super::*;
 	use frame_election_provider_support::{InstantElectionProvider, NposSolver};
-	use frame_support::{
-		pallet_prelude::*,
-		traits::{DefensiveResult, EstimateCallFee},
-	};
+	use frame_support::{pallet_prelude::*, traits::EstimateCallFee};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::config]
@@ -1549,7 +1550,9 @@ impl<T: Config> Pallet<T> {
 		ensure!(known_score == score, FeasibilityError::InvalidScore);
 
 		// Size of winners in miner solution is equal to `desired_targets` <= `MaxWinners`.
-		let supports = supports.try_into().expect("checked desired_targets <= MaxWinners; qed");
+		let supports = supports
+			.try_into()
+			.defensive_map_err(|_| FeasibilityError::BoundedConversionFailed)?;
 		Ok(ReadySolution { supports, compute, score })
 	}
 

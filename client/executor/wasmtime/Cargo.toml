@@ -33,7 +33,7 @@ sc-allocator = { version = "4.1.0-dev", path = "../../allocator" }
 sc-executor-common = { version = "0.10.0-dev", path = "../common" }
 sp-runtime-interface = { version = "7.0.0", path = "../../../primitives/runtime-interface" }
 sp-sandbox = { version = "0.10.0-dev", path = "../../../primitives/sandbox" }
-sp-wasm-interface = { version = "7.0.0", features = ["wasmtime"], path = "../../../primitives/wasm-interface" }
+sp-wasm-interface = { version = "7.0.0", path = "../../../primitives/wasm-interface" }
 
 # Here we include the rustix crate in the exactly same semver-compatible version as used by
 # wasmtime and enable its 'use-libc' flag.

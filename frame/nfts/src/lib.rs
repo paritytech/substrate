@@ -44,11 +44,10 @@ pub mod macros;
 pub mod weights;
 
 use codec::{Decode, Encode};
-use frame_support::{
-	traits::{
-		tokens::Locker, BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
-	},
-	BoundedBTreeMap,
+use frame_support::traits::{
+	tokens::{AttributeNamespace, Locker},
+	BalanceStatus::Reserved,
+	Currency, EnsureOriginWithArg, ReservableCurrency,
 };
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
@@ -66,7 +65,7 @@ type AccountIdLookupOf<T> = <<T as SystemConfig>::Lookup as StaticLookup>::Sourc
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{pallet_prelude::*, traits::ExistenceRequirement};
+	use frame_support::{pallet_prelude::*, traits::ExistenceRequirement, PalletId};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -156,6 +155,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type ApprovalsLimit: Get<u32>;
 
+		/// The maximum attributes approvals an item could have.
+		#[pallet::constant]
+		type ItemAttributesApprovalsLimit: Get<u32>;
+
 		/// The max number of tips a user could send.
 		#[pallet::constant]
 		type MaxTips: Get<u32>;
@@ -167,6 +170,10 @@ pub mod pallet {
 		/// Disables some of pallet's features.
 		#[pallet::constant]
 		type Features: Get<PalletFeatures>;
+
+		/// The pallet's id.
+		#[pallet::constant]
+		type PalletId: Get<PalletId>;
 
 		#[cfg(feature = "runtime-benchmarks")]
 		/// A set of helper functions for benchmarking.
@@ -271,9 +278,10 @@ pub mod pallet {
 		(
 			NMapKey<Blake2_128Concat, T::CollectionId>,
 			NMapKey<Blake2_128Concat, Option<T::ItemId>>,
+			NMapKey<Blake2_128Concat, AttributeNamespace<T::AccountId>>,
 			NMapKey<Blake2_128Concat, BoundedVec<u8, T::KeyLimit>>,
 		),
-		(BoundedVec<u8, T::ValueLimit>, DepositBalanceOf<T, I>),
+		(BoundedVec<u8, T::ValueLimit>, AttributeDepositOf<T, I>),
 		OptionQuery,
 	>;
 
@@ -289,8 +297,20 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// Item attribute approvals.
+	#[pallet::storage]
+	pub(super) type ItemAttributesApprovalsOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		T::CollectionId,
+		Blake2_128Concat,
+		T::ItemId,
+		ItemAttributesApprovals<T, I>,
+		ValueQuery,
+	>;
+
 	/// Stores the `CollectionId` that is going to be used for the next collection.
-	/// This gets incremented by 1 whenever a new collection is created.
+	/// This gets incremented whenever a new collection is created.
 	#[pallet::storage]
 	pub(super) type NextCollectionId<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, T::CollectionId, OptionQuery>;
@@ -412,12 +432,26 @@ pub mod pallet {
 			maybe_item: Option<T::ItemId>,
 			key: BoundedVec<u8, T::KeyLimit>,
 			value: BoundedVec<u8, T::ValueLimit>,
+			namespace: AttributeNamespace<T::AccountId>,
 		},
 		/// Attribute metadata has been cleared for a `collection` or `item`.
 		AttributeCleared {
 			collection: T::CollectionId,
 			maybe_item: Option<T::ItemId>,
 			key: BoundedVec<u8, T::KeyLimit>,
+			namespace: AttributeNamespace<T::AccountId>,
+		},
+		/// A new approval to modify item attributes was added.
+		ItemAttributesApprovalAdded {
+			collection: T::CollectionId,
+			item: T::ItemId,
+			delegate: T::AccountId,
+		},
+		/// A new approval to modify item attributes was removed.
+		ItemAttributesApprovalRemoved {
+			collection: T::CollectionId,
+			item: T::ItemId,
+			delegate: T::AccountId,
 		},
 		/// Ownership acceptance has changed for an account.
 		OwnershipAcceptanceChanged { who: T::AccountId, maybe_collection: Option<T::CollectionId> },
@@ -550,9 +584,13 @@ pub mod pallet {
 		/// Some roles were not cleared.
 		RolesNotCleared,
 		/// Mint has not started yet.
-		MintNotStated,
+		MintNotStarted,
 		/// Mint has already ended.
 		MintEnded,
+		/// The provided Item was already used for claiming.
+		AlreadyClaimed,
+		/// The provided data is incorrect.
+		IncorrectData,
 	}
 
 	#[pallet::call]
@@ -712,7 +750,7 @@ pub mod pallet {
 					let now = frame_system::Pallet::<T>::block_number();
 
 					if let Some(start_block) = mint_settings.start_block {
-						ensure!(start_block <= now, Error::<T, I>::MintNotStated);
+						ensure!(start_block <= now, Error::<T, I>::MintNotStarted);
 					}
 					if let Some(end_block) = mint_settings.end_block {
 						ensure!(end_block >= now, Error::<T, I>::MintEnded);
@@ -726,17 +764,35 @@ pub mod pallet {
 							)
 						},
 						MintType::HolderOf(collection_id) => {
-							let correct_witness = match witness_data {
-								Some(MintWitness { owner_of_item }) => {
-									Account::<T, I>::contains_key((
-										&caller,
-										&collection_id,
-										&owner_of_item,
-									))
-								},
-								None => false,
-							};
-							ensure!(correct_witness, Error::<T, I>::BadWitness)
+							let MintWitness { owner_of_item } =
+								witness_data.ok_or(Error::<T, I>::BadWitness)?;
+
+							let has_item = Account::<T, I>::contains_key((
+								&caller,
+								&collection_id,
+								&owner_of_item,
+							));
+							ensure!(has_item, Error::<T, I>::BadWitness);
+
+							let attribute_key = Self::construct_attribute_key(
+								PalletAttributes::<T::CollectionId>::UsedToClaim(collection)
+									.encode(),
+							)?;
+
+							let key = (
+								&collection_id,
+								Some(owner_of_item),
+								AttributeNamespace::Pallet(T::PalletId::get()),
+								&attribute_key,
+							);
+							let already_claimed = Attribute::<T, I>::contains_key(key.clone());
+							ensure!(!already_claimed, Error::<T, I>::AlreadyClaimed);
+
+							let value = Self::construct_attribute_value(vec![0])?;
+							Attribute::<T, I>::insert(
+								key,
+								(value, AttributeDeposit { account: None, amount: Zero::zero() }),
+							);
 						},
 						_ => {},
 					}
@@ -868,7 +924,7 @@ pub mod pallet {
 		///
 		/// Origin must be Signed and the sender should be the Owner of the `collection`.
 		///
-		/// - `collection`: The collection to be frozen.
+		/// - `collection`: The collection of the items to be reevaluated.
 		/// - `items`: The items of the collection whose deposits will be reevaluated.
 		///
 		/// NOTE: This exists as a best-effort function. Any items which are unknown or
@@ -1174,16 +1230,20 @@ pub mod pallet {
 			Self::do_clear_all_transfer_approvals(maybe_check_origin, collection, item)
 		}
 
-		/// Disallows changing the metadata of attributes of the item.
+		/// Disallows changing the metadata or attributes of the item.
 		///
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
 		/// `collection`.
 		///
 		/// - `collection`: The collection if the `item`.
 		/// - `item`: An item to be locked.
-		/// - `lock_config`: The config with the settings to be locked.
+		/// - `lock_metadata`: Specifies whether the metadata should be locked.
+		/// - `lock_attributes`: Specifies whether the attributes in the `CollectionOwner` namespace
+		///   should be locked.
 		///
-		/// Note: when the metadata or attributes are locked, it won't be possible the unlock them.
+		/// Note: `lock_attributes` affects the attributes in the `CollectionOwner` namespace
+		/// only. When the metadata or attributes are locked, it won't be possible the unlock them.
+		///
 		/// Emits `ItemPropertiesLocked`.
 		///
 		/// Weight: `O(1)`
@@ -1209,15 +1269,20 @@ pub mod pallet {
 
 		/// Set an attribute for a collection or item.
 		///
-		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
-		/// `collection`.
+		/// Origin must be Signed and must conform to the namespace ruleset:
+		/// - `CollectionOwner` namespace could be modified by the `collection` owner only;
+		/// - `ItemOwner` namespace could be modified by the `maybe_item` owner only. `maybe_item`
+		///   should be set in that case;
+		/// - `Account(AccountId)` namespace could be modified only when the `origin` was given a
+		///   permission to do so;
 		///
-		/// If the origin is Signed, then funds of signer are reserved according to the formula:
-		/// `MetadataDepositBase + DepositPerByte * (key.len + value.len)` taking into
+		/// The funds of `origin` are reserved according to the formula:
+		/// `AttributeDepositBase + DepositPerByte * (key.len + value.len)` taking into
 		/// account any already reserved funds.
 		///
 		/// - `collection`: The identifier of the collection whose item's metadata to set.
 		/// - `maybe_item`: The identifier of the item whose metadata to set.
+		/// - `namespace`: Attribute's namespace.
 		/// - `key`: The key of the attribute.
 		/// - `value`: The value to which to set the attribute.
 		///
@@ -1229,13 +1294,43 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			maybe_item: Option<T::ItemId>,
+			namespace: AttributeNamespace<T::AccountId>,
 			key: BoundedVec<u8, T::KeyLimit>,
 			value: BoundedVec<u8, T::ValueLimit>,
 		) -> DispatchResult {
-			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
-				.map(|_| None)
-				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
-			Self::do_set_attribute(maybe_check_owner, collection, maybe_item, key, value)
+			let origin = ensure_signed(origin)?;
+			Self::do_set_attribute(origin, collection, maybe_item, namespace, key, value)
+		}
+
+		/// Force-set an attribute for a collection or item.
+		///
+		/// Origin must be `ForceOrigin`.
+		///
+		/// If the attribute already exists and it was set by another account, the deposit
+		/// will be returned to the previous owner.
+		///
+		/// - `set_as`: An optional owner of the attribute.
+		/// - `collection`: The identifier of the collection whose item's metadata to set.
+		/// - `maybe_item`: The identifier of the item whose metadata to set.
+		/// - `namespace`: Attribute's namespace.
+		/// - `key`: The key of the attribute.
+		/// - `value`: The value to which to set the attribute.
+		///
+		/// Emits `AttributeSet`.
+		///
+		/// Weight: `O(1)`
+		#[pallet::weight(T::WeightInfo::force_set_attribute())]
+		pub fn force_set_attribute(
+			origin: OriginFor<T>,
+			set_as: Option<T::AccountId>,
+			collection: T::CollectionId,
+			maybe_item: Option<T::ItemId>,
+			namespace: AttributeNamespace<T::AccountId>,
+			key: BoundedVec<u8, T::KeyLimit>,
+			value: BoundedVec<u8, T::ValueLimit>,
+		) -> DispatchResult {
+			T::ForceOrigin::ensure_origin(origin)?;
+			Self::do_force_set_attribute(set_as, collection, maybe_item, namespace, key, value)
 		}
 
 		/// Clear an attribute for a collection or item.
@@ -1247,6 +1342,7 @@ pub mod pallet {
 		///
 		/// - `collection`: The identifier of the collection whose item's metadata to clear.
 		/// - `maybe_item`: The identifier of the item whose metadata to clear.
+		/// - `namespace`: Attribute's namespace.
 		/// - `key`: The key of the attribute.
 		///
 		/// Emits `AttributeCleared`.
@@ -1257,12 +1353,59 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			maybe_item: Option<T::ItemId>,
+			namespace: AttributeNamespace<T::AccountId>,
 			key: BoundedVec<u8, T::KeyLimit>,
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
-			Self::do_clear_attribute(maybe_check_owner, collection, maybe_item, key)
+			Self::do_clear_attribute(maybe_check_owner, collection, maybe_item, namespace, key)
+		}
+
+		/// Approve item's attributes to be changed by a delegated third-party account.
+		///
+		/// Origin must be Signed and must be an owner of the `item`.
+		///
+		/// - `collection`: A collection of the item.
+		/// - `item`: The item that holds attributes.
+		/// - `delegate`: The account to delegate permission to change attributes of the item.
+		///
+		/// Emits `ItemAttributesApprovalAdded` on success.
+		#[pallet::weight(T::WeightInfo::approve_item_attributes())]
+		pub fn approve_item_attributes(
+			origin: OriginFor<T>,
+			collection: T::CollectionId,
+			item: T::ItemId,
+			delegate: AccountIdLookupOf<T>,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			let delegate = T::Lookup::lookup(delegate)?;
+			Self::do_approve_item_attributes(origin, collection, item, delegate)
+		}
+
+		/// Cancel the previously provided approval to change item's attributes.
+		/// All the previously set attributes by the `delegate` will be removed.
+		///
+		/// Origin must be Signed and must be an owner of the `item`.
+		///
+		/// - `collection`: Collection that the item is contained within.
+		/// - `item`: The item that holds attributes.
+		/// - `delegate`: The previously approved account to remove.
+		///
+		/// Emits `ItemAttributesApprovalRemoved` on success.
+		#[pallet::weight(T::WeightInfo::cancel_item_attributes_approval(
+			witness.account_attributes
+		))]
+		pub fn cancel_item_attributes_approval(
+			origin: OriginFor<T>,
+			collection: T::CollectionId,
+			item: T::ItemId,
+			delegate: AccountIdLookupOf<T>,
+			witness: CancelAttributesApprovalWitness,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			let delegate = T::Lookup::lookup(delegate)?;
+			Self::do_cancel_item_attributes_approval(origin, collection, item, delegate, witness)
 		}
 
 		/// Set the metadata for an item.

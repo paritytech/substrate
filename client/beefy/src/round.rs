@@ -16,27 +16,23 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{
-	collections::{BTreeMap, HashMap},
-	hash::Hash,
-};
-
-use log::{debug, trace};
-
 use beefy_primitives::{
 	crypto::{Public, Signature},
 	ValidatorSet, ValidatorSetId,
 };
+use codec::{Decode, Encode};
+use log::{debug, trace};
 use sp_runtime::traits::{Block, NumberFor};
+use std::{collections::BTreeMap, hash::Hash};
 
 /// Tracks for each round which validators have voted/signed and
 /// whether the local `self` validator has voted/signed.
 ///
 /// Does not do any validation on votes or signatures, layers above need to handle that (gossip).
-#[derive(Debug, Default)]
+#[derive(Debug, Decode, Default, Encode, PartialEq)]
 struct RoundTracker {
 	self_vote: bool,
-	votes: HashMap<Public, Signature>,
+	votes: BTreeMap<Public, Signature>,
 }
 
 impl RoundTracker {
@@ -69,7 +65,7 @@ pub fn threshold(authorities: usize) -> usize {
 /// Only round numbers > `best_done` are of interest, all others are considered stale.
 ///
 /// Does not do any validation on votes or signatures, layers above need to handle that (gossip).
-#[derive(Debug)]
+#[derive(Debug, Decode, Encode, PartialEq)]
 pub(crate) struct Rounds<Payload, B: Block> {
 	rounds: BTreeMap<(Payload, NumberFor<B>), RoundTracker>,
 	session_start: NumberFor<B>,
