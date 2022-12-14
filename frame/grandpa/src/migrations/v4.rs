@@ -15,7 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::LOG_TARGET;
 use frame_support::{
 	traits::{Get, StorageVersion},
 	weights::Weight,
@@ -35,14 +34,14 @@ pub const OLD_PREFIX: &[u8] = b"GrandpaFinality";
 pub fn migrate<T: crate::Config, N: AsRef<str>>(new_pallet_name: N) -> Weight {
 	if new_pallet_name.as_ref().as_bytes() == OLD_PREFIX {
 		log::info!(
-			target: LOG_TARGET,
+			target: "runtime::afg",
 			"New pallet name is equal to the old prefix. No migration needs to be done.",
 		);
 		return Weight::zero()
 	}
 	let storage_version = StorageVersion::get::<crate::Pallet<T>>();
 	log::info!(
-		target: LOG_TARGET,
+		target: "runtime::afg",
 		"Running migration to v3.1 for grandpa with storage version {:?}",
 		storage_version,
 	);

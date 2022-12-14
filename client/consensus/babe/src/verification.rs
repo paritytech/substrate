@@ -17,9 +17,9 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Verification for BABE headers.
-use crate::{
+use super::{
 	authorship::{calculate_primary_threshold, check_primary_threshold, secondary_slot_author},
-	babe_err, find_pre_digest, BlockT, Epoch, Error, LOG_TARGET,
+	babe_err, find_pre_digest, BlockT, Epoch, Error,
 };
 use log::{debug, trace};
 use sc_consensus_slots::CheckedHeader;
@@ -67,7 +67,7 @@ pub(super) fn check_header<B: BlockT + Sized>(
 	let authorities = &epoch.authorities;
 	let pre_digest = pre_digest.map(Ok).unwrap_or_else(|| find_pre_digest::<B>(&header))?;
 
-	trace!(target: LOG_TARGET, "Checking header");
+	trace!(target: "babe", "Checking header");
 	let seal = header
 		.digest_mut()
 		.pop()
@@ -93,8 +93,7 @@ pub(super) fn check_header<B: BlockT + Sized>(
 
 	match &pre_digest {
 		PreDigest::Primary(primary) => {
-			debug!(
-				target: LOG_TARGET,
+			debug!(target: "babe",
 				"Verifying primary block #{} at slot: {}",
 				header.number(),
 				primary.slot,
@@ -105,8 +104,7 @@ pub(super) fn check_header<B: BlockT + Sized>(
 		PreDigest::SecondaryPlain(secondary)
 			if epoch.config.allowed_slots.is_secondary_plain_slots_allowed() =>
 		{
-			debug!(
-				target: LOG_TARGET,
+			debug!(target: "babe",
 				"Verifying secondary plain block #{} at slot: {}",
 				header.number(),
 				secondary.slot,
@@ -117,8 +115,7 @@ pub(super) fn check_header<B: BlockT + Sized>(
 		PreDigest::SecondaryVRF(secondary)
 			if epoch.config.allowed_slots.is_secondary_vrf_slots_allowed() =>
 		{
-			debug!(
-				target: LOG_TARGET,
+			debug!(target: "babe",
 				"Verifying secondary VRF block #{} at slot: {}",
 				header.number(),
 				secondary.slot,

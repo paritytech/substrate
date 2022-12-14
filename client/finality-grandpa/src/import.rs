@@ -45,7 +45,6 @@ use crate::{
 	justification::GrandpaJustification,
 	notification::GrandpaJustificationSender,
 	AuthoritySetChanges, ClientForGrandpa, CommandOrError, Error, NewAuthoritySet, VoterCommand,
-	LOG_TARGET,
 };
 
 /// A block-import handler for GRANDPA.
@@ -590,16 +589,18 @@ where
 				Ok(ImportResult::Imported(aux)) => aux,
 				Ok(r) => {
 					debug!(
-						target: LOG_TARGET,
-						"Restoring old authority set after block import result: {:?}", r,
+						target: "afg",
+						"Restoring old authority set after block import result: {:?}",
+						r,
 					);
 					pending_changes.revert();
 					return Ok(r)
 				},
 				Err(e) => {
 					debug!(
-						target: LOG_TARGET,
-						"Restoring old authority set after block import error: {}", e,
+						target: "afg",
+						"Restoring old authority set after block import error: {}",
+						e,
 					);
 					pending_changes.revert();
 					return Err(ConsensusError::ClientImport(e.to_string()))
@@ -664,7 +665,7 @@ where
 				import_res.unwrap_or_else(|err| {
 					if needs_justification {
 						debug!(
-							target: LOG_TARGET,
+							target: "afg",
 							"Requesting justification from peers due to imported block #{} that enacts authority set change with invalid justification: {}",
 							number,
 							err
@@ -677,7 +678,7 @@ where
 			None =>
 				if needs_justification {
 					debug!(
-						target: LOG_TARGET,
+						target: "afg",
 						"Imported unjustified block #{} that enacts authority set change, waiting for finality for enactment.",
 						number,
 					);
@@ -802,7 +803,7 @@ where
 
 		match result {
 			Err(CommandOrError::VoterCommand(command)) => {
-				grandpa_log!(
+				afg_log!(
 					initial_sync,
 					"👴 Imported justification for block #{} that triggers \
 					command {}, signaling voter.",

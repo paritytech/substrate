@@ -52,7 +52,7 @@ use crate::{
 	authorities::{AuthoritySetChangeId, AuthoritySetChanges},
 	best_justification,
 	justification::GrandpaJustification,
-	SharedAuthoritySet, LOG_TARGET,
+	SharedAuthoritySet,
 };
 
 const MAX_UNKNOWN_HEADERS: usize = 100_000;
@@ -163,7 +163,7 @@ where
 			"Requested finality proof for descendant of #{} while we only have finalized #{}.",
 			block, info.finalized_number,
 		);
-		trace!(target: LOG_TARGET, "{}", &err);
+		trace!(target: "afg", "{}", &err);
 		return Err(FinalityProofError::BlockNotYetFinalized)
 	}
 
@@ -175,7 +175,7 @@ where
 				justification
 			} else {
 				trace!(
-					target: LOG_TARGET,
+					target: "afg",
 					"No justification found for the latest finalized block. \
 					Returning empty proof.",
 				);
@@ -194,7 +194,7 @@ where
 				grandpa_justification
 			} else {
 				trace!(
-					target: LOG_TARGET,
+					target: "afg",
 					"No justification found when making finality proof for {}. \
 					Returning empty proof.",
 					block,
@@ -205,7 +205,7 @@ where
 		},
 		AuthoritySetChangeId::Unknown => {
 			warn!(
-				target: LOG_TARGET,
+				target: "afg",
 				"AuthoritySetChanges does not cover the requested block #{} due to missing data. \
 				 You need to resync to populate AuthoritySetChanges properly.",
 				block,

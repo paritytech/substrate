@@ -520,7 +520,6 @@ pub mod pallet {
 		///
 		/// Complexities:
 		/// - `Queues[duration].len()` (just take max).
-		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::place_bid_max())]
 		pub fn place_bid(
 			origin: OriginFor<T>,
@@ -582,7 +581,6 @@ pub mod pallet {
 		///
 		/// - `amount`: The amount of the previous bid.
 		/// - `duration`: The duration of the previous bid.
-		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::retract_bid(T::MaxQueueLen::get()))]
 		pub fn retract_bid(
 			origin: OriginFor<T>,
@@ -617,7 +615,6 @@ pub mod pallet {
 		/// Ensure we have sufficient funding for all potential payouts.
 		///
 		/// - `origin`: Must be accepted by `FundOrigin`.
-		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::fund_deficit())]
 		pub fn fund_deficit(origin: OriginFor<T>) -> DispatchResult {
 			T::FundOrigin::ensure_origin(origin)?;
@@ -639,7 +636,6 @@ pub mod pallet {
 		/// - `index`: The index of the receipt.
 		/// - `portion`: If `Some`, then only the given portion of the receipt should be thawed. If
 		///   `None`, then all of it should be.
-		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::thaw())]
 		pub fn thaw(
 			origin: OriginFor<T>,

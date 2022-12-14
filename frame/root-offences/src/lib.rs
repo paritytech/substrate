@@ -81,7 +81,6 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Allows the `root`, for example sudo to create an offence.
-		#[pallet::call_index(0)]
 		#[pallet::weight(T::DbWeight::get().reads(2))]
 		pub fn create_offence(
 			origin: OriginFor<T>,

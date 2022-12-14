@@ -45,8 +45,6 @@ use crate::{
 pub use basic_queue::BasicQueue;
 use sp_consensus::{error::Error as ConsensusError, BlockOrigin, CacheKeyId};
 
-const LOG_TARGET: &str = "sync::import-queue";
-
 /// A commonly-used Import Queue type.
 ///
 /// This defines the transaction type of the `BasicQueue` to be the transaction type for a client.
@@ -55,7 +53,6 @@ pub type DefaultImportQueue<Block, Client> =
 
 mod basic_queue;
 pub mod buffered_link;
-pub mod mock;
 
 /// Shared block import struct used by the queue.
 pub type BoxBlockImport<B, Transaction> =
@@ -108,10 +105,10 @@ pub trait Verifier<B: BlockT>: Send + Sync {
 /// Blocks import queue API.
 ///
 /// The `import_*` methods can be called in order to send elements for the import queue to verify.
-pub trait ImportQueueService<B: BlockT>: Send {
+/// Afterwards, call `poll_actions` to determine how to respond to these elements.
+pub trait ImportQueue<B: BlockT>: Send {
 	/// Import bunch of blocks.
 	fn import_blocks(&mut self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>);
-
 	/// Import block justifications.
 	fn import_justifications(
 		&mut self,
@@ -120,26 +117,12 @@ pub trait ImportQueueService<B: BlockT>: Send {
 		number: NumberFor<B>,
 		justifications: Justifications,
 	);
-}
-
-#[async_trait::async_trait]
-pub trait ImportQueue<B: BlockT>: Send {
-	/// Get a copy of the handle to [`ImportQueueService`].
-	fn service(&self) -> Box<dyn ImportQueueService<B>>;
-
-	/// Get a reference to the handle to [`ImportQueueService`].
-	fn service_ref(&mut self) -> &mut dyn ImportQueueService<B>;
-
+	/// Polls for actions to perform on the network.
+	///
 	/// This method should behave in a way similar to `Future::poll`. It can register the current
 	/// task and notify later when more actions are ready to be polled. To continue the comparison,
 	/// it is as if this method always returned `Poll::Pending`.
 	fn poll_actions(&mut self, cx: &mut futures::task::Context, link: &mut dyn Link<B>);
-
-	/// Start asynchronous runner for import queue.
-	///
-	/// Takes an object implementing [`Link`] which allows the import queue to
-	/// influece the synchronization process.
-	async fn run(self, link: Box<dyn Link<B>>);
 }
 
 /// Hooks that the verification queue can use to influence the synchronization
@@ -249,15 +232,15 @@ pub(crate) async fn import_single_block_metered<
 		(Some(header), justifications) => (header, justifications),
 		(None, _) => {
 			if let Some(ref peer) = peer {
-				debug!(target: LOG_TARGET, "Header {} was not provided by {} ", block.hash, peer);
+				debug!(target: "sync", "Header {} was not provided by {} ", block.hash, peer);
 			} else {
-				debug!(target: LOG_TARGET, "Header {} was not provided ", block.hash);
+				debug!(target: "sync", "Header {} was not provided ", block.hash);
 			}
 			return Err(BlockImportError::IncompleteHeader(peer))
 		},
 	};
 
-	trace!(target: LOG_TARGET, "Header {} has {:?} logs", block.hash, header.digest().logs().len());
+	trace!(target: "sync", "Header {} has {:?} logs", block.hash, header.digest().logs().len());
 
 	let number = *header.number();
 	let hash = block.hash;
@@ -265,31 +248,27 @@ pub(crate) async fn import_single_block_metered<
 
 	let import_handler = |import| match import {
 		Ok(ImportResult::AlreadyInChain) => {
-			trace!(target: LOG_TARGET, "Block already in chain {}: {:?}", number, hash);
+			trace!(target: "sync", "Block already in chain {}: {:?}", number, hash);
 			Ok(BlockImportStatus::ImportedKnown(number, peer))
 		},
 		Ok(ImportResult::Imported(aux)) =>
 			Ok(BlockImportStatus::ImportedUnknown(number, aux, peer)),
 		Ok(ImportResult::MissingState) => {
-			debug!(
-				target: LOG_TARGET,
-				"Parent state is missing for {}: {:?}, parent: {:?}", number, hash, parent_hash
-			);
+			debug!(target: "sync", "Parent state is missing for {}: {:?}, parent: {:?}",
+					number, hash, parent_hash);
 			Err(BlockImportError::MissingState)
 		},
 		Ok(ImportResult::UnknownParent) => {
-			debug!(
-				target: LOG_TARGET,
-				"Block with unknown parent {}: {:?}, parent: {:?}", number, hash, parent_hash
-			);
+			debug!(target: "sync", "Block with unknown parent {}: {:?}, parent: {:?}",
+					number, hash, parent_hash);
 			Err(BlockImportError::UnknownParent)
 		},
 		Ok(ImportResult::KnownBad) => {
-			debug!(target: LOG_TARGET, "Peer gave us a bad block {}: {:?}", number, hash);
+			debug!(target: "sync", "Peer gave us a bad block {}: {:?}", number, hash);
 			Err(BlockImportError::BadBlock(peer))
 		},
 		Err(e) => {
-			debug!(target: LOG_TARGET, "Error importing block {}: {:?}: {}", number, hash, e);
+			debug!(target: "sync", "Error importing block {}: {:?}: {}", number, hash, e);
 			Err(BlockImportError::Other(e))
 		},
 	};
@@ -330,16 +309,9 @@ pub(crate) async fn import_single_block_metered<
 
 	let (import_block, maybe_keys) = verifier.verify(import_block).await.map_err(|msg| {
 		if let Some(ref peer) = peer {
-			trace!(
-				target: LOG_TARGET,
-				"Verifying {}({}) from {} failed: {}",
-				number,
-				hash,
-				peer,
-				msg
-			);
+			trace!(target: "sync", "Verifying {}({}) from {} failed: {}", number, hash, peer, msg);
 		} else {
-			trace!(target: LOG_TARGET, "Verifying {}({}) failed: {}", number, hash, msg);
+			trace!(target: "sync", "Verifying {}({}) failed: {}", number, hash, msg);
 		}
 		if let Some(metrics) = metrics.as_ref() {
 			metrics.report_verification(false, started.elapsed());

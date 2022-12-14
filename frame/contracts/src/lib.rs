@@ -142,7 +142,6 @@ type BalanceOf<T> =
 type CodeVec<T> = BoundedVec<u8, <T as Config>::MaxCodeLen>;
 type RelaxedCodeVec<T> = WeakBoundedVec<u8, <T as Config>::MaxCodeLen>;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
-type DebugBufferVec<T> = BoundedVec<u8, <T as Config>::MaxDebugBufferLen>;
 
 /// Used as a sentinel value when reading and writing contract memory.
 ///
@@ -345,10 +344,6 @@ pub mod pallet {
 		/// Do **not** set to `true` on productions chains.
 		#[pallet::constant]
 		type UnsafeUnstableInterface: Get<bool>;
-
-		/// The maximum length of the debug buffer in bytes.
-		#[pallet::constant]
-		type MaxDebugBufferLen: Get<u32>;
 	}
 
 	#[pallet::hooks]
@@ -390,7 +385,6 @@ pub mod pallet {
 		<BalanceOf<T> as HasCompact>::Type: Clone + Eq + PartialEq + Debug + TypeInfo + Encode,
 	{
 		/// Deprecated version if [`Self::call`] for use in an in-storage `Call`.
-		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::call().saturating_add(<Pallet<T>>::compat_weight(*gas_limit)))]
 		#[allow(deprecated)]
 		#[deprecated(note = "1D weight is used in this extrinsic, please migrate to `call`")]
@@ -413,7 +407,6 @@ pub mod pallet {
 		}
 
 		/// Deprecated version if [`Self::instantiate_with_code`] for use in an in-storage `Call`.
-		#[pallet::call_index(1)]
 		#[pallet::weight(
 			T::WeightInfo::instantiate_with_code(code.len() as u32, salt.len() as u32)
 			.saturating_add(<Pallet<T>>::compat_weight(*gas_limit))
@@ -443,7 +436,6 @@ pub mod pallet {
 		}
 
 		/// Deprecated version if [`Self::instantiate`] for use in an in-storage `Call`.
-		#[pallet::call_index(2)]
 		#[pallet::weight(
 			T::WeightInfo::instantiate(salt.len() as u32).saturating_add(<Pallet<T>>::compat_weight(*gas_limit))
 		)]
@@ -489,7 +481,6 @@ pub mod pallet {
 		/// To avoid this situation a constructor could employ access control so that it can
 		/// only be instantiated by permissioned entities. The same is true when uploading
 		/// through [`Self::instantiate_with_code`].
-		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::upload_code(code.len() as u32))]
 		pub fn upload_code(
 			origin: OriginFor<T>,
@@ -506,7 +497,6 @@ pub mod pallet {
 		///
 		/// A code can only be removed by its original uploader (its owner) and only if it is
 		/// not used by any contract.
-		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::remove_code())]
 		pub fn remove_code(
 			origin: OriginFor<T>,
@@ -528,7 +518,6 @@ pub mod pallet {
 		/// This does **not** change the address of the contract in question. This means
 		/// that the contract address is no longer derived from its code hash after calling
 		/// this dispatchable.
-		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::set_code())]
 		pub fn set_code(
 			origin: OriginFor<T>,
@@ -574,7 +563,6 @@ pub mod pallet {
 		/// * If the account is a regular account, any value will be transferred.
 		/// * If no account exists and the call value is not less than `existential_deposit`,
 		/// a regular account will be created and any value will be transferred.
-		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::call().saturating_add(*gas_limit))]
 		pub fn call(
 			origin: OriginFor<T>,
@@ -631,7 +619,6 @@ pub mod pallet {
 		/// - The smart-contract account is created at the computed address.
 		/// - The `value` is transferred to the new account.
 		/// - The `deploy` function is executed in the context of the newly-created account.
-		#[pallet::call_index(7)]
 		#[pallet::weight(
 			T::WeightInfo::instantiate_with_code(code.len() as u32, salt.len() as u32)
 			.saturating_add(*gas_limit)
@@ -674,7 +661,6 @@ pub mod pallet {
 		/// This function is identical to [`Self::instantiate_with_code`] but without the
 		/// code deployment step. Instead, the `code_hash` of an on-chain deployed wasm binary
 		/// must be supplied.
-		#[pallet::call_index(8)]
 		#[pallet::weight(
 			T::WeightInfo::instantiate(salt.len() as u32).saturating_add(*gas_limit)
 		)]
@@ -868,9 +854,6 @@ pub mod pallet {
 		CodeRejected,
 		/// An indetermistic code was used in a context where this is not permitted.
 		Indeterministic,
-		/// The debug buffer size used during contract execution exceeded the limit determined by
-		/// the `MaxDebugBufferLen` pallet config parameter.
-		DebugBufferExhausted,
 	}
 
 	/// A mapping from an original code hash to the original code, untouched by instrumentation.
@@ -969,7 +952,7 @@ where
 		debug: bool,
 		determinism: Determinism,
 	) -> ContractExecResult<BalanceOf<T>> {
-		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
+		let mut debug_message = if debug { Some(Vec::new()) } else { None };
 		let output = Self::internal_call(
 			origin,
 			dest,
@@ -985,7 +968,7 @@ where
 			gas_consumed: output.gas_meter.gas_consumed(),
 			gas_required: output.gas_meter.gas_required(),
 			storage_deposit: output.storage_deposit,
-			debug_message: debug_message.unwrap_or_default().to_vec(),
+			debug_message: debug_message.unwrap_or_default(),
 		}
 	}
 
@@ -1011,7 +994,7 @@ where
 		salt: Vec<u8>,
 		debug: bool,
 	) -> ContractInstantiateResult<T::AccountId, BalanceOf<T>> {
-		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
+		let mut debug_message = if debug { Some(Vec::new()) } else { None };
 		let output = Self::internal_instantiate(
 			origin,
 			value,
@@ -1030,7 +1013,7 @@ where
 			gas_consumed: output.gas_meter.gas_consumed(),
 			gas_required: output.gas_meter.gas_required(),
 			storage_deposit: output.storage_deposit,
-			debug_message: debug_message.unwrap_or_default().to_vec(),
+			debug_message: debug_message.unwrap_or_default(),
 		}
 	}
 
@@ -1121,7 +1104,7 @@ where
 		gas_limit: Weight,
 		storage_deposit_limit: Option<BalanceOf<T>>,
 		data: Vec<u8>,
-		debug_message: Option<&mut DebugBufferVec<T>>,
+		debug_message: Option<&mut Vec<u8>>,
 		determinism: Determinism,
 	) -> InternalCallOutput<T> {
 		let mut gas_meter = GasMeter::new(gas_limit);
@@ -1164,7 +1147,7 @@ where
 		code: Code<CodeHash<T>>,
 		data: Vec<u8>,
 		salt: Vec<u8>,
-		mut debug_message: Option<&mut DebugBufferVec<T>>,
+		mut debug_message: Option<&mut Vec<u8>>,
 	) -> InternalInstantiateOutput<T> {
 		let mut storage_deposit = Default::default();
 		let mut gas_meter = GasMeter::new(gas_limit);
@@ -1180,7 +1163,7 @@ where
 						TryInstantiate::Skip,
 					)
 					.map_err(|(err, msg)| {
-						debug_message.as_mut().map(|buffer| buffer.try_extend(&mut msg.bytes()));
+						debug_message.as_mut().map(|buffer| buffer.extend(msg.as_bytes()));
 						err
 					})?;
 					// The open deposit will be charged during execution when the

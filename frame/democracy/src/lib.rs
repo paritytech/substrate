@@ -157,9 +157,11 @@ use frame_support::{
 	ensure,
 	traits::{
 		defensive_prelude::*,
+		fungibles,
+		fungibles::Lockable,
 		schedule::{v3::Named as ScheduleNamed, DispatchTime},
-		Bounded, Currency, Get, LockIdentifier, LockableCurrency, OnUnbalanced, QueryPreimage,
-		ReservableCurrency, StorePreimage, WithdrawReasons,
+		Bounded, Currency, Get, OnUnbalanced, QueryPreimage, ReservableCurrency, StorePreimage,
+		WithdrawReasons,
 	},
 	weights::Weight,
 };
@@ -189,7 +191,7 @@ pub mod benchmarking;
 
 pub mod migrations;
 
-const DEMOCRACY_ID: LockIdentifier = *b"democrac";
+const DEMOCRACY_ID: fungibles::LockIdentifier = *b"democrac";
 
 /// A proposal index.
 pub type PropIndex = u32;
@@ -234,7 +236,7 @@ pub mod pallet {
 
 		/// Currency type for this pallet.
 		type Currency: ReservableCurrency<Self::AccountId>
-			+ LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>;
+			+ fungibles::Lockable<Self::AccountId, Moment = Self::BlockNumber>;
 
 		/// The period between a proposal being approved and enacted.
 		///
@@ -549,7 +551,6 @@ pub mod pallet {
 		/// - `value`: The amount of deposit (must be at least `MinimumDeposit`).
 		///
 		/// Emits `Proposed`.
-		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::propose())]
 		pub fn propose(
 			origin: OriginFor<T>,
@@ -592,7 +593,6 @@ pub mod pallet {
 		/// must have funds to cover the deposit, equal to the original deposit.
 		///
 		/// - `proposal`: The index of the proposal to second.
-		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::second())]
 		pub fn second(
 			origin: OriginFor<T>,
@@ -618,7 +618,6 @@ pub mod pallet {
 		///
 		/// - `ref_index`: The index of the referendum to vote for.
 		/// - `vote`: The vote configuration.
-		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::vote_new().max(T::WeightInfo::vote_existing()))]
 		pub fn vote(
 			origin: OriginFor<T>,
@@ -637,7 +636,6 @@ pub mod pallet {
 		/// -`ref_index`: The index of the referendum to cancel.
 		///
 		/// Weight: `O(1)`.
-		#[pallet::call_index(3)]
 		#[pallet::weight((T::WeightInfo::emergency_cancel(), DispatchClass::Operational))]
 		pub fn emergency_cancel(
 			origin: OriginFor<T>,
@@ -660,7 +658,6 @@ pub mod pallet {
 		/// The dispatch origin of this call must be `ExternalOrigin`.
 		///
 		/// - `proposal_hash`: The preimage hash of the proposal.
-		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::external_propose())]
 		pub fn external_propose(
 			origin: OriginFor<T>,
@@ -689,7 +686,6 @@ pub mod pallet {
 		/// pre-scheduled `external_propose` call.
 		///
 		/// Weight: `O(1)`
-		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::external_propose_majority())]
 		pub fn external_propose_majority(
 			origin: OriginFor<T>,
@@ -711,7 +707,6 @@ pub mod pallet {
 		/// pre-scheduled `external_propose` call.
 		///
 		/// Weight: `O(1)`
-		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::external_propose_default())]
 		pub fn external_propose_default(
 			origin: OriginFor<T>,
@@ -738,7 +733,6 @@ pub mod pallet {
 		/// Emits `Started`.
 		///
 		/// Weight: `O(1)`
-		#[pallet::call_index(7)]
 		#[pallet::weight(T::WeightInfo::fast_track())]
 		pub fn fast_track(
 			origin: OriginFor<T>,
@@ -791,7 +785,6 @@ pub mod pallet {
 		/// Emits `Vetoed`.
 		///
 		/// Weight: `O(V + log(V))` where V is number of `existing vetoers`
-		#[pallet::call_index(8)]
 		#[pallet::weight(T::WeightInfo::veto_external())]
 		pub fn veto_external(origin: OriginFor<T>, proposal_hash: H256) -> DispatchResult {
 			let who = T::VetoOrigin::ensure_origin(origin)?;
@@ -826,7 +819,6 @@ pub mod pallet {
 		/// - `ref_index`: The index of the referendum to cancel.
 		///
 		/// # Weight: `O(1)`.
-		#[pallet::call_index(9)]
 		#[pallet::weight(T::WeightInfo::cancel_referendum())]
 		pub fn cancel_referendum(
 			origin: OriginFor<T>,
@@ -859,7 +851,6 @@ pub mod pallet {
 		///   voted on. Weight is charged as if maximum votes.
 		// NOTE: weight must cover an incorrect voting of origin with max votes, this is ensure
 		// because a valid delegation cover decoding a direct voting with max votes.
-		#[pallet::call_index(10)]
 		#[pallet::weight(T::WeightInfo::delegate(T::MaxVotes::get()))]
 		pub fn delegate(
 			origin: OriginFor<T>,
@@ -888,7 +879,6 @@ pub mod pallet {
 		///   voted on. Weight is charged as if maximum votes.
 		// NOTE: weight must cover an incorrect voting of origin with max votes, this is ensure
 		// because a valid delegation cover decoding a direct voting with max votes.
-		#[pallet::call_index(11)]
 		#[pallet::weight(T::WeightInfo::undelegate(T::MaxVotes::get()))]
 		pub fn undelegate(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
@@ -901,7 +891,6 @@ pub mod pallet {
 		/// The dispatch origin of this call must be _Root_.
 		///
 		/// Weight: `O(1)`.
-		#[pallet::call_index(12)]
 		#[pallet::weight(T::WeightInfo::clear_public_proposals())]
 		pub fn clear_public_proposals(origin: OriginFor<T>) -> DispatchResult {
 			ensure_root(origin)?;
@@ -916,7 +905,6 @@ pub mod pallet {
 		/// - `target`: The account to remove the lock on.
 		///
 		/// Weight: `O(R)` with R number of vote of target.
-		#[pallet::call_index(13)]
 		#[pallet::weight(T::WeightInfo::unlock_set(T::MaxVotes::get()).max(T::WeightInfo::unlock_remove(T::MaxVotes::get())))]
 		pub fn unlock(origin: OriginFor<T>, target: AccountIdLookupOf<T>) -> DispatchResult {
 			ensure_signed(origin)?;
@@ -952,7 +940,6 @@ pub mod pallet {
 		///
 		/// Weight: `O(R + log R)` where R is the number of referenda that `target` has voted on.
 		///   Weight is calculated for the maximum number of vote.
-		#[pallet::call_index(14)]
 		#[pallet::weight(T::WeightInfo::remove_vote(T::MaxVotes::get()))]
 		pub fn remove_vote(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -974,7 +961,6 @@ pub mod pallet {
 		///
 		/// Weight: `O(R + log R)` where R is the number of referenda that `target` has voted on.
 		///   Weight is calculated for the maximum number of vote.
-		#[pallet::call_index(15)]
 		#[pallet::weight(T::WeightInfo::remove_other_vote(T::MaxVotes::get()))]
 		pub fn remove_other_vote(
 			origin: OriginFor<T>,
@@ -1003,7 +989,6 @@ pub mod pallet {
 		///
 		/// Weight: `O(p)` (though as this is an high-privilege dispatch, we assume it has a
 		///   reasonable value).
-		#[pallet::call_index(16)]
 		#[pallet::weight((T::WeightInfo::blacklist(), DispatchClass::Operational))]
 		pub fn blacklist(
 			origin: OriginFor<T>,
@@ -1053,7 +1038,6 @@ pub mod pallet {
 		/// - `prop_index`: The index of the proposal to cancel.
 		///
 		/// Weight: `O(p)` where `p = PublicProps::<T>::decode_len()`
-		#[pallet::call_index(17)]
 		#[pallet::weight(T::WeightInfo::cancel_proposal())]
 		pub fn cancel_proposal(
 			origin: OriginFor<T>,

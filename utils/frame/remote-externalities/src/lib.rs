@@ -42,9 +42,7 @@ use std::{
 	sync::Arc,
 	thread,
 };
-use substrate_rpc_client::{
-	rpc_params, ws_client, BatchRequestBuilder, ChainApi, ClientT, StateApi, WsClient,
-};
+use substrate_rpc_client::{rpc_params, ws_client, ChainApi, ClientT, StateApi, WsClient};
 
 type KeyValue = (StorageKey, StorageData);
 type TopKeyValues = Vec<KeyValue>;
@@ -417,12 +415,8 @@ where
 			keys.chunks(thread_chunk_size).map(|s| s.into()).collect::<Vec<_>>();
 
 		enum Message {
-			/// This thread completed the assigned work.
 			Terminated,
-			/// The thread produced the following batch response.
 			Batch(Vec<(Vec<u8>, Vec<u8>)>),
-			/// A request from the batch failed.
-			BatchFailed(String),
 		}
 
 		let (tx, mut rx) = mpsc::unbounded::<Message>();
@@ -433,75 +427,57 @@ where
 			let handle = std::thread::spawn(move || {
 				let rt = tokio::runtime::Runtime::new().unwrap();
 				let mut thread_key_values = Vec::with_capacity(thread_keys.len());
-
 				for chunk_keys in thread_keys.chunks(DEFAULT_VALUE_DOWNLOAD_BATCH) {
-					let mut batch = BatchRequestBuilder::new();
+					let batch = chunk_keys
+						.iter()
+						.cloned()
+						.map(|key| ("state_getStorage", rpc_params![key, at]))
+						.collect::<Vec<_>>();
 
-					for key in chunk_keys.iter() {
-						batch
-							.insert("state_getStorage", rpc_params![key, at])
-							.map_err(|_| "Invalid batch params")
-							.unwrap();
-					}
-
-					let batch_response = rt
+					let values = rt
 						.block_on(thread_client.batch_request::<Option<StorageData>>(batch))
 						.map_err(|e| {
 							log::error!(
 								target: LOG_TARGET,
-								"failed to execute batch: {:?}. Error: {:?}",
-								chunk_keys.iter().map(HexDisplay::from).collect::<Vec<_>>(),
+								"failed to execute batch of {} values. Error: {:?}",
+								chunk_keys.len(),
 								e
 							);
 							"batch failed."
 						})
 						.unwrap();
 
-					// Check if we got responses for all submitted requests.
-					assert_eq!(chunk_keys.len(), batch_response.len());
-
-					let mut batch_kv = Vec::with_capacity(chunk_keys.len());
-					for (key, maybe_value) in chunk_keys.into_iter().zip(batch_response) {
-						match maybe_value {
-							Ok(Some(data)) => {
-								thread_key_values.push((key.clone(), data.clone()));
-								batch_kv.push((key.clone().0, data.0));
-							},
-							Ok(None) => {
+					let batch_kv = chunk_keys
+						.into_iter()
+						.enumerate()
+						.map(|(idx, key)| {
+							let maybe_value = values[idx].clone();
+							let value = maybe_value.unwrap_or_else(|| {
 								log::warn!(
 									target: LOG_TARGET,
 									"key {:?} had none corresponding value.",
 									&key
 								);
-								let data = StorageData(vec![]);
-								thread_key_values.push((key.clone(), data.clone()));
-								batch_kv.push((key.clone().0, data.0));
-							},
-							Err(e) => {
-								let reason = format!("key {:?} failed: {:?}", &key, e);
-								log::error!(target: LOG_TARGET, "Reason: {}", reason);
-								// Signal failures to the main thread, stop aggregating (key, value)
-								// pairs and return immediately an error.
-								thread_sender.unbounded_send(Message::BatchFailed(reason)).unwrap();
-								return Default::default()
-							},
-						};
+								StorageData(vec![])
+							});
+							thread_key_values.push((key.clone(), value.clone()));
+							if thread_key_values.len() % (thread_keys.len() / 10).max(1) == 0 {
+								let ratio: f64 =
+									thread_key_values.len() as f64 / thread_keys.len() as f64;
+								log::debug!(
+									target: LOG_TARGET,
+									"[thread = {:?}] progress = {:.2} [{} / {}]",
+									std::thread::current().id(),
+									ratio,
+									thread_key_values.len(),
+									thread_keys.len(),
+								);
+							}
+							(key.clone().0, value.0)
+						})
+						.collect::<Vec<_>>();
 
-						if thread_key_values.len() % (thread_keys.len() / 10).max(1) == 0 {
-							let ratio: f64 =
-								thread_key_values.len() as f64 / thread_keys.len() as f64;
-							log::debug!(
-								target: LOG_TARGET,
-								"[thread = {:?}] progress = {:.2} [{} / {}]",
-								std::thread::current().id(),
-								ratio,
-								thread_key_values.len(),
-								thread_keys.len(),
-							);
-						}
-					}
-
-					// Send this batch to the main thread to start inserting.
+					// send this batch to the main thread to start inserting.
 					thread_sender.unbounded_send(Message::Batch(batch_kv)).unwrap();
 				}
 
@@ -515,7 +491,6 @@ where
 		// first, wait until all threads send a `Terminated` message, in the meantime populate
 		// `pending_ext`.
 		let mut terminated = 0usize;
-		let mut batch_failed = false;
 		loop {
 			match rx.next().await.unwrap() {
 				Message::Batch(kv) => {
@@ -527,11 +502,6 @@ where
 						pending_ext.insert(k, v);
 					}
 				},
-				Message::BatchFailed(error) => {
-					log::error!(target: LOG_TARGET, "Batch processing failed: {:?}", error);
-					batch_failed = true;
-					break
-				},
 				Message::Terminated => {
 					terminated += 1;
 					if terminated == handles.len() {
@@ -541,13 +511,8 @@ where
 			}
 		}
 
-		// Ensure all threads finished execution before returning.
 		let keys_and_values =
-			handles.into_iter().flat_map(|h| h.join().unwrap()).collect::<Vec<_>>();
-
-		if batch_failed {
-			return Err("Batch failed.")
-		}
+			handles.into_iter().map(|h| h.join().unwrap()).flatten().collect::<Vec<_>>();
 
 		Ok(keys_and_values)
 	}
@@ -560,14 +525,12 @@ where
 		at: B::Hash,
 	) -> Result<Vec<KeyValue>, &'static str> {
 		let mut child_kv_inner = vec![];
-		let mut batch_success = true;
-
 		for batch_child_key in child_keys.chunks(DEFAULT_VALUE_DOWNLOAD_BATCH) {
-			let mut batch_request = BatchRequestBuilder::new();
-
-			for key in batch_child_key {
-				batch_request
-					.insert(
+			let batch_request = batch_child_key
+				.iter()
+				.cloned()
+				.map(|key| {
+					(
 						"childstate_getStorage",
 						rpc_params![
 							PrefixedStorageKey::new(prefixed_top_key.as_ref().to_vec()),
@@ -575,8 +538,8 @@ where
 							at
 						],
 					)
-					.map_err(|_| "Invalid batch params")?;
-			}
+				})
+				.collect::<Vec<_>>();
 
 			let batch_response =
 				client.batch_request::<Option<StorageData>>(batch_request).await.map_err(|e| {
@@ -591,32 +554,17 @@ where
 
 			assert_eq!(batch_child_key.len(), batch_response.len());
 
-			for (key, maybe_value) in batch_child_key.iter().zip(batch_response) {
-				match maybe_value {
-					Ok(Some(v)) => {
-						child_kv_inner.push((key.clone(), v));
-					},
-					Ok(None) => {
-						log::warn!(
-							target: LOG_TARGET,
-							"key {:?} had none corresponding value.",
-							&key
-						);
-						child_kv_inner.push((key.clone(), StorageData(vec![])));
-					},
-					Err(e) => {
-						log::error!(target: LOG_TARGET, "key {:?} failed: {:?}", &key, e);
-						batch_success = false;
-					},
-				};
+			for (idx, key) in batch_child_key.iter().enumerate() {
+				let maybe_value = batch_response[idx].clone();
+				let value = maybe_value.unwrap_or_else(|| {
+					log::warn!(target: LOG_TARGET, "key {:?} had none corresponding value.", &key);
+					StorageData(vec![])
+				});
+				child_kv_inner.push((key.clone(), value));
 			}
 		}
 
-		if batch_success {
-			Ok(child_kv_inner)
-		} else {
-			Err("batch failed.")
-		}
+		Ok(child_kv_inner)
 	}
 
 	pub(crate) async fn rpc_child_get_keys(
@@ -776,7 +724,8 @@ where
 
 		let child_kv = handles
 			.into_iter()
-			.flat_map(|h| h.join().unwrap())
+			.map(|h| h.join().unwrap())
+			.flatten()
 			.flatten()
 			.collect::<Vec<_>>();
 		Ok(child_kv)

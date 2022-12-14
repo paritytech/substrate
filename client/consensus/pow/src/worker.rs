@@ -41,7 +41,7 @@ use std::{
 	time::Duration,
 };
 
-use crate::{PowAlgorithm, PowIntermediate, Seal, INTERMEDIATE_KEY, LOG_TARGET, POW_ENGINE_ID};
+use crate::{PowAlgorithm, PowIntermediate, Seal, INTERMEDIATE_KEY, POW_ENGINE_ID};
 
 /// Mining metadata. This is the information needed to start an actual mining loop.
 #[derive(Clone, Eq, PartialEq)]
@@ -159,16 +159,26 @@ where
 			) {
 				Ok(true) => (),
 				Ok(false) => {
-					warn!(target: LOG_TARGET, "Unable to import mined block: seal is invalid",);
+					warn!(
+						target: "pow",
+						"Unable to import mined block: seal is invalid",
+					);
 					return false
 				},
 				Err(err) => {
-					warn!(target: LOG_TARGET, "Unable to import mined block: {}", err,);
+					warn!(
+						target: "pow",
+						"Unable to import mined block: {}",
+						err,
+					);
 					return false
 				},
 			}
 		} else {
-			warn!(target: LOG_TARGET, "Unable to import mined block: metadata does not exist",);
+			warn!(
+				target: "pow",
+				"Unable to import mined block: metadata does not exist",
+			);
 			return false
 		}
 
@@ -182,7 +192,10 @@ where
 		} {
 			build
 		} else {
-			warn!(target: LOG_TARGET, "Unable to import mined block: build does not exist",);
+			warn!(
+				target: "pow",
+				"Unable to import mined block: build does not exist",
+			);
 			return false
 		};
 
@@ -212,13 +225,18 @@ where
 				);
 
 				info!(
-					target: LOG_TARGET,
-					"✅ Successfully mined block on top of: {}", build.metadata.best_hash
+					target: "pow",
+					"✅ Successfully mined block on top of: {}",
+					build.metadata.best_hash
 				);
 				true
 			},
 			Err(err) => {
-				warn!(target: LOG_TARGET, "Unable to import mined block: {}", err,);
+				warn!(
+					target: "pow",
+					"Unable to import mined block: {}",
+					err,
+				);
 				false
 			},
 		}

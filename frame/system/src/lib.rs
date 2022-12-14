@@ -372,7 +372,6 @@ pub mod pallet {
 		/// # <weight>
 		/// - `O(1)`
 		/// # </weight>
-		#[pallet::call_index(0)]
 		#[pallet::weight(T::SystemWeightInfo::remark(_remark.len() as u32))]
 		pub fn remark(origin: OriginFor<T>, _remark: Vec<u8>) -> DispatchResultWithPostInfo {
 			ensure_signed_or_root(origin)?;
@@ -380,7 +379,6 @@ pub mod pallet {
 		}
 
 		/// Set the number of pages in the WebAssembly environment's heap.
-		#[pallet::call_index(1)]
 		#[pallet::weight((T::SystemWeightInfo::set_heap_pages(), DispatchClass::Operational))]
 		pub fn set_heap_pages(origin: OriginFor<T>, pages: u64) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
@@ -401,7 +399,6 @@ pub mod pallet {
 		/// The weight of this function is dependent on the runtime, but generally this is very
 		/// expensive. We will treat this as a full block.
 		/// # </weight>
-		#[pallet::call_index(2)]
 		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
 		pub fn set_code(origin: OriginFor<T>, code: Vec<u8>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
@@ -419,7 +416,6 @@ pub mod pallet {
 		/// - 1 event.
 		/// The weight of this function is dependent on the runtime. We will treat this as a full
 		/// block. # </weight>
-		#[pallet::call_index(3)]
 		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
 		pub fn set_code_without_checks(
 			origin: OriginFor<T>,
@@ -431,7 +427,6 @@ pub mod pallet {
 		}
 
 		/// Set some items of storage.
-		#[pallet::call_index(4)]
 		#[pallet::weight((
 			T::SystemWeightInfo::set_storage(items.len() as u32),
 			DispatchClass::Operational,
@@ -448,7 +443,6 @@ pub mod pallet {
 		}
 
 		/// Kill some items from storage.
-		#[pallet::call_index(5)]
 		#[pallet::weight((
 			T::SystemWeightInfo::kill_storage(keys.len() as u32),
 			DispatchClass::Operational,
@@ -465,7 +459,6 @@ pub mod pallet {
 		///
 		/// **NOTE:** We rely on the Root origin to provide us the number of subkeys under
 		/// the prefix we are removing to accurately calculate the weight of this function.
-		#[pallet::call_index(6)]
 		#[pallet::weight((
 			T::SystemWeightInfo::kill_prefix(_subkeys.saturating_add(1)),
 			DispatchClass::Operational,
@@ -481,7 +474,6 @@ pub mod pallet {
 		}
 
 		/// Make some on-chain remark and emit event.
-		#[pallet::call_index(7)]
 		#[pallet::weight(T::SystemWeightInfo::remark_with_event(remark.len() as u32))]
 		pub fn remark_with_event(
 			origin: OriginFor<T>,

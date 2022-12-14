@@ -28,8 +28,9 @@ use std::sync::Arc;
 use crate::SubscriptionTaskExecutor;
 
 use jsonrpsee::{
-	core::{server::rpc_module::SubscriptionSink, Error as JsonRpseeError, RpcResult},
+	core::{Error as JsonRpseeError, RpcResult},
 	types::SubscriptionResult,
+	ws_server::SubscriptionSink,
 };
 
 use sc_rpc_api::{state::ReadProof, DenyUnsafe};

@@ -67,8 +67,6 @@ use sp_runtime::{
 };
 use std::{cmp::Ordering, collections::HashMap, marker::PhantomData, sync::Arc, time::Duration};
 
-const LOG_TARGET: &str = "pow";
-
 #[derive(Debug, thiserror::Error)]
 pub enum Error<B: BlockT> {
 	#[error("Header uses the wrong engine {0:?}")]
@@ -533,7 +531,7 @@ where
 			}
 
 			if sync_oracle.is_major_syncing() {
-				debug!(target: LOG_TARGET, "Skipping proposal due to sync.");
+				debug!(target: "pow", "Skipping proposal due to sync.");
 				worker.on_major_syncing();
 				continue
 			}
@@ -542,7 +540,7 @@ where
 				Ok(x) => x,
 				Err(err) => {
 					warn!(
-						target: LOG_TARGET,
+						target: "pow",
 						"Unable to pull new block for authoring. \
 						 Select best chain error: {}",
 						err
@@ -563,7 +561,7 @@ where
 				Ok(x) => x,
 				Err(err) => {
 					warn!(
-						target: LOG_TARGET,
+						target: "pow",
 						"Unable to propose new block for authoring. \
 						 Fetch difficulty failed: {}",
 						err,
@@ -579,7 +577,7 @@ where
 				Ok(x) => x,
 				Err(err) => {
 					warn!(
-						target: LOG_TARGET,
+						target: "pow",
 						"Unable to propose new block for authoring. \
 						 Creating inherent data providers failed: {}",
 						err,
@@ -592,7 +590,7 @@ where
 				Ok(r) => r,
 				Err(e) => {
 					warn!(
-						target: LOG_TARGET,
+						target: "pow",
 						"Unable to propose new block for authoring. \
 						 Creating inherent data failed: {}",
 						e,
@@ -612,7 +610,7 @@ where
 				Ok(x) => x,
 				Err(err) => {
 					warn!(
-						target: LOG_TARGET,
+						target: "pow",
 						"Unable to propose new block for authoring. \
 						 Creating proposer failed: {:?}",
 						err,
@@ -626,7 +624,7 @@ where
 					Ok(x) => x,
 					Err(err) => {
 						warn!(
-							target: LOG_TARGET,
+							target: "pow",
 							"Unable to propose new block for authoring. \
 							 Creating proposal failed: {}",
 							err,
@@ -656,14 +654,14 @@ where
 fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<Option<Vec<u8>>, Error<B>> {
 	let mut pre_digest: Option<_> = None;
 	for log in header.digest().logs() {
-		trace!(target: LOG_TARGET, "Checking log {:?}, looking for pre runtime digest", log);
+		trace!(target: "pow", "Checking log {:?}, looking for pre runtime digest", log);
 		match (log, pre_digest.is_some()) {
 			(DigestItem::PreRuntime(POW_ENGINE_ID, _), true) =>
 				return Err(Error::MultiplePreRuntimeDigests),
 			(DigestItem::PreRuntime(POW_ENGINE_ID, v), false) => {
 				pre_digest = Some(v.clone());
 			},
-			(_, _) => trace!(target: LOG_TARGET, "Ignoring digest not meant for us"),
+			(_, _) => trace!(target: "pow", "Ignoring digest not meant for us"),
 		}
 	}
 

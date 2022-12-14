@@ -21,7 +21,7 @@ use assert_matches::assert_matches;
 use futures::prelude::*;
 use jsonrpsee::{
 	core::Error as RpcError,
-	types::{error::CallError, EmptyServerParams as EmptyParams},
+	types::{error::CallError, EmptyParams},
 	RpcModule,
 };
 use sc_network::{self, config::Role, PeerId};

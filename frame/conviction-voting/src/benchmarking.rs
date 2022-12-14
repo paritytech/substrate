@@ -23,7 +23,7 @@ use assert_matches::assert_matches;
 use frame_benchmarking::{account, benchmarks_instance_pallet, whitelist_account};
 use frame_support::{
 	dispatch::RawOrigin,
-	traits::{fungible, Currency, Get},
+	traits::{Currency, Get},
 };
 use sp_runtime::traits::Bounded;
 use sp_std::collections::btree_map::BTreeMap;

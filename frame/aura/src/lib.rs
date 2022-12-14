@@ -58,8 +58,6 @@ mod tests;
 
 pub use pallet::*;
 
-const LOG_TARGET: &str = "runtime::aura";
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -224,7 +222,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 			if last_authorities != next_authorities {
 				if next_authorities.len() as u32 > T::MaxAuthorities::get() {
 					log::warn!(
-						target: LOG_TARGET,
+						target: "runtime::aura",
 						"next authorities list larger than {}, truncating",
 						T::MaxAuthorities::get(),
 					);

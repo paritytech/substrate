@@ -54,7 +54,7 @@ use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, Numb
 
 use crate::{
 	environment::HasVoted, CatchUp, Commit, CommunicationIn, CommunicationOutH, CompactCommit,
-	Error, Message, SignedMessage, LOG_TARGET,
+	Error, Message, SignedMessage,
 };
 use gossip::{
 	FullCatchUpMessage, FullCommitMessage, GossipMessage, GossipValidator, PeerReport, VoteMessage,
@@ -274,8 +274,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 					gossip_engine.lock().register_gossip_message(topic, message.encode());
 				}
 
-				trace!(
-					target: LOG_TARGET,
+				trace!(target: "afg",
 					"Registered {} messages for topic {:?} (round: {}, set_id: {})",
 					round.votes.len(),
 					topic,
@@ -341,19 +340,13 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 
 				match decoded {
 					Err(ref e) => {
-						debug!(
-							target: LOG_TARGET,
-							"Skipping malformed message {:?}: {}", notification, e
-						);
+						debug!(target: "afg", "Skipping malformed message {:?}: {}", notification, e);
 						future::ready(None)
 					},
 					Ok(GossipMessage::Vote(msg)) => {
 						// check signature.
 						if !voters.contains(&msg.message.id) {
-							debug!(
-								target: LOG_TARGET,
-								"Skipping message from unknown voter {}", msg.message.id
-							);
+							debug!(target: "afg", "Skipping message from unknown voter {}", msg.message.id);
 							return future::ready(None)
 						}
 
@@ -395,7 +388,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 						future::ready(Some(msg.message))
 					},
 					_ => {
-						debug!(target: LOG_TARGET, "Skipping unknown message type");
+						debug!(target: "afg", "Skipping unknown message type");
 						future::ready(None)
 					},
 				}
@@ -638,12 +631,7 @@ fn incoming_global<B: BlockT>(
 			// this could be optimized by decoding piecewise.
 			let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
 			if let Err(ref e) = decoded {
-				trace!(
-					target: LOG_TARGET,
-					"Skipping malformed commit message {:?}: {}",
-					notification,
-					e
-				);
+				trace!(target: "afg", "Skipping malformed commit message {:?}: {}", notification, e);
 			}
 			future::ready(decoded.map(move |d| (notification, d)).ok())
 		})
@@ -654,7 +642,7 @@ fn incoming_global<B: BlockT>(
 				GossipMessage::CatchUp(msg) =>
 					process_catch_up(msg, notification, &gossip_engine, &gossip_validator, &voters),
 				_ => {
-					debug!(target: LOG_TARGET, "Skipping unknown message type");
+					debug!(target: "afg", "Skipping unknown message type");
 					None
 				},
 			})
@@ -760,7 +748,7 @@ impl<Block: BlockT> Sink<Message<Block::Header>> for OutgoingMessages<Block> {
 			});
 
 			debug!(
-				target: LOG_TARGET,
+				target: "afg",
 				"Announcing block {} to peers which we voted on in round {} in set {}",
 				target_hash,
 				self.round,
@@ -825,7 +813,7 @@ fn check_compact_commit<Block: BlockT>(
 				return Err(cost::MALFORMED_COMMIT)
 			}
 		} else {
-			debug!(target: LOG_TARGET, "Skipping commit containing unknown voter {}", id);
+			debug!(target: "afg", "Skipping commit containing unknown voter {}", id);
 			return Err(cost::MALFORMED_COMMIT)
 		}
 	}
@@ -850,7 +838,7 @@ fn check_compact_commit<Block: BlockT>(
 			set_id.0,
 			&mut buf,
 		) {
-			debug!(target: LOG_TARGET, "Bad commit message signature {}", id);
+			debug!(target: "afg", "Bad commit message signature {}", id);
 			telemetry!(
 				telemetry;
 				CONSENSUS_DEBUG;
@@ -898,10 +886,7 @@ fn check_catch_up<Block: BlockT>(
 					return Err(cost::MALFORMED_CATCH_UP)
 				}
 			} else {
-				debug!(
-					target: LOG_TARGET,
-					"Skipping catch up message containing unknown voter {}", id
-				);
+				debug!(target: "afg", "Skipping catch up message containing unknown voter {}", id);
 				return Err(cost::MALFORMED_CATCH_UP)
 			}
 		}
@@ -937,7 +922,7 @@ fn check_catch_up<Block: BlockT>(
 			if !sp_finality_grandpa::check_message_signature_with_buffer(
 				&msg, id, sig, round, set_id, buf,
 			) {
-				debug!(target: LOG_TARGET, "Bad catch up message signature {}", id);
+				debug!(target: "afg", "Bad catch up message signature {}", id);
 				telemetry!(
 					telemetry;
 					CONSENSUS_DEBUG;

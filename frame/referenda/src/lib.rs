@@ -1,5 +1,3 @@
-// This file is part of Substrate.
-
 // Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -68,11 +66,12 @@ use codec::{Codec, Encode};
 use frame_support::{
 	ensure,
 	traits::{
+		fungibles,
 		schedule::{
 			v3::{Anon as ScheduleAnon, Named as ScheduleNamed},
 			DispatchTime,
 		},
-		Currency, LockIdentifier, OnUnbalanced, OriginTrait, PollStatus, Polling, QueryPreimage,
+		Currency, OnUnbalanced, OriginTrait, PollStatus, Polling, QueryPreimage,
 		ReservableCurrency, StorePreimage, VoteTally,
 	},
 	BoundedVec,
@@ -133,7 +132,7 @@ macro_rules! impl_tracksinfo_get {
 	};
 }
 
-const ASSEMBLY_ID: LockIdentifier = *b"assembly";
+const ASSEMBLY_ID: fungibles::LockIdentifier = *b"assembly";
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -397,7 +396,6 @@ pub mod pallet {
 		/// - `enactment_moment`: The moment that the proposal should be enacted.
 		///
 		/// Emits `Submitted`.
-		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::submit())]
 		pub fn submit(
 			origin: OriginFor<T>,
@@ -445,7 +443,6 @@ pub mod pallet {
 		///   posted.
 		///
 		/// Emits `DecisionDepositPlaced`.
-		#[pallet::call_index(1)]
 		#[pallet::weight(ServiceBranch::max_weight_of_deposit::<T, I>())]
 		pub fn place_decision_deposit(
 			origin: OriginFor<T>,
@@ -473,7 +470,6 @@ pub mod pallet {
 		///   refunded.
 		///
 		/// Emits `DecisionDepositRefunded`.
-		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::refund_decision_deposit())]
 		pub fn refund_decision_deposit(
 			origin: OriginFor<T>,
@@ -503,7 +499,6 @@ pub mod pallet {
 		/// - `index`: The index of the referendum to be cancelled.
 		///
 		/// Emits `Cancelled`.
-		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::cancel())]
 		pub fn cancel(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
 			T::CancelOrigin::ensure_origin(origin)?;
@@ -528,7 +523,6 @@ pub mod pallet {
 		/// - `index`: The index of the referendum to be cancelled.
 		///
 		/// Emits `Killed` and `DepositSlashed`.
-		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::kill())]
 		pub fn kill(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
 			T::KillOrigin::ensure_origin(origin)?;
@@ -549,7 +543,6 @@ pub mod pallet {
 		///
 		/// - `origin`: must be `Root`.
 		/// - `index`: the referendum to be advanced.
-		#[pallet::call_index(5)]
 		#[pallet::weight(ServiceBranch::max_weight_of_nudge::<T, I>())]
 		pub fn nudge_referendum(
 			origin: OriginFor<T>,
@@ -576,7 +569,6 @@ pub mod pallet {
 		/// `DecidingCount` is not yet updated. This means that we should either:
 		/// - begin deciding another referendum (and leave `DecidingCount` alone); or
 		/// - decrement `DecidingCount`.
-		#[pallet::call_index(6)]
 		#[pallet::weight(OneFewerDecidingBranch::max_weight::<T, I>())]
 		pub fn one_fewer_deciding(
 			origin: OriginFor<T>,
@@ -610,7 +602,6 @@ pub mod pallet {
 		///   refunded.
 		///
 		/// Emits `SubmissionDepositRefunded`.
-		#[pallet::call_index(7)]
 		#[pallet::weight(T::WeightInfo::refund_submission_deposit())]
 		pub fn refund_submission_deposit(
 			origin: OriginFor<T>,

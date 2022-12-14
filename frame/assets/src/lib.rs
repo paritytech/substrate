@@ -563,7 +563,6 @@ pub mod pallet {
 		/// Emits `Created` event when successful.
 		///
 		/// Weight: `O(1)`
-		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::create())]
 		pub fn create(
 			origin: OriginFor<T>,
@@ -621,7 +620,6 @@ pub mod pallet {
 		/// Emits `ForceCreated` event when successful.
 		///
 		/// Weight: `O(1)`
-		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::force_create())]
 		pub fn force_create(
 			origin: OriginFor<T>,
@@ -647,7 +645,6 @@ pub mod pallet {
 		///   asset.
 		///
 		/// The asset class must be frozen before calling `start_destroy`.
-		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::start_destroy())]
 		pub fn start_destroy(origin: OriginFor<T>, id: T::AssetIdParameter) -> DispatchResult {
 			let maybe_check_owner = match T::ForceOrigin::try_origin(origin) {
@@ -670,7 +667,6 @@ pub mod pallet {
 		///   asset.
 		///
 		/// Each call emits the `Event::DestroyedAccounts` event.
-		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::destroy_accounts(T::RemoveItemsLimit::get()))]
 		pub fn destroy_accounts(
 			origin: OriginFor<T>,
@@ -694,7 +690,6 @@ pub mod pallet {
 		///   asset.
 		///
 		/// Each call emits the `Event::DestroyedApprovals` event.
-		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::destroy_approvals(T::RemoveItemsLimit::get()))]
 		pub fn destroy_approvals(
 			origin: OriginFor<T>,
@@ -716,7 +711,6 @@ pub mod pallet {
 		///   asset.
 		///
 		/// Each successful call emits the `Event::Destroyed` event.
-		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::finish_destroy())]
 		pub fn finish_destroy(origin: OriginFor<T>, id: T::AssetIdParameter) -> DispatchResult {
 			let _ = ensure_signed(origin)?;
@@ -736,7 +730,6 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		/// Modes: Pre-existing balance of `beneficiary`; Account pre-existence of `beneficiary`.
-		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::mint())]
 		pub fn mint(
 			origin: OriginFor<T>,
@@ -766,7 +759,6 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		/// Modes: Post-existence of `who`; Pre & post Zombie-status of `who`.
-		#[pallet::call_index(7)]
 		#[pallet::weight(T::WeightInfo::burn())]
 		pub fn burn(
 			origin: OriginFor<T>,
@@ -801,7 +793,6 @@ pub mod pallet {
 		/// Weight: `O(1)`
 		/// Modes: Pre-existence of `target`; Post-existence of sender; Account pre-existence of
 		/// `target`.
-		#[pallet::call_index(8)]
 		#[pallet::weight(T::WeightInfo::transfer())]
 		pub fn transfer(
 			origin: OriginFor<T>,
@@ -835,7 +826,6 @@ pub mod pallet {
 		/// Weight: `O(1)`
 		/// Modes: Pre-existence of `target`; Post-existence of sender; Account pre-existence of
 		/// `target`.
-		#[pallet::call_index(9)]
 		#[pallet::weight(T::WeightInfo::transfer_keep_alive())]
 		pub fn transfer_keep_alive(
 			origin: OriginFor<T>,
@@ -870,7 +860,6 @@ pub mod pallet {
 		/// Weight: `O(1)`
 		/// Modes: Pre-existence of `dest`; Post-existence of `source`; Account pre-existence of
 		/// `dest`.
-		#[pallet::call_index(10)]
 		#[pallet::weight(T::WeightInfo::force_transfer())]
 		pub fn force_transfer(
 			origin: OriginFor<T>,
@@ -898,7 +887,6 @@ pub mod pallet {
 		/// Emits `Frozen`.
 		///
 		/// Weight: `O(1)`
-		#[pallet::call_index(11)]
 		#[pallet::weight(T::WeightInfo::freeze())]
 		pub fn freeze(
 			origin: OriginFor<T>,
@@ -935,7 +923,6 @@ pub mod pallet {
 		/// Emits `Thawed`.
 		///
 		/// Weight: `O(1)`
-		#[pallet::call_index(12)]
 		#[pallet::weight(T::WeightInfo::thaw())]
 		pub fn thaw(
 			origin: OriginFor<T>,
@@ -971,7 +958,6 @@ pub mod pallet {
 		/// Emits `Frozen`.
 		///
 		/// Weight: `O(1)`
-		#[pallet::call_index(13)]
 		#[pallet::weight(T::WeightInfo::freeze_asset())]
 		pub fn freeze_asset(origin: OriginFor<T>, id: T::AssetIdParameter) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
@@ -998,7 +984,6 @@ pub mod pallet {
 		/// Emits `Thawed`.
 		///
 		/// Weight: `O(1)`
-		#[pallet::call_index(14)]
 		#[pallet::weight(T::WeightInfo::thaw_asset())]
 		pub fn thaw_asset(origin: OriginFor<T>, id: T::AssetIdParameter) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
@@ -1026,7 +1011,6 @@ pub mod pallet {
 		/// Emits `OwnerChanged`.
 		///
 		/// Weight: `O(1)`
-		#[pallet::call_index(15)]
 		#[pallet::weight(T::WeightInfo::transfer_ownership())]
 		pub fn transfer_ownership(
 			origin: OriginFor<T>,
@@ -1070,7 +1054,6 @@ pub mod pallet {
 		/// Emits `TeamChanged`.
 		///
 		/// Weight: `O(1)`
-		#[pallet::call_index(16)]
 		#[pallet::weight(T::WeightInfo::set_team())]
 		pub fn set_team(
 			origin: OriginFor<T>,
@@ -1115,7 +1098,6 @@ pub mod pallet {
 		/// Emits `MetadataSet`.
 		///
 		/// Weight: `O(1)`
-		#[pallet::call_index(17)]
 		#[pallet::weight(T::WeightInfo::set_metadata(name.len() as u32, symbol.len() as u32))]
 		pub fn set_metadata(
 			origin: OriginFor<T>,
@@ -1140,7 +1122,6 @@ pub mod pallet {
 		/// Emits `MetadataCleared`.
 		///
 		/// Weight: `O(1)`
-		#[pallet::call_index(18)]
 		#[pallet::weight(T::WeightInfo::clear_metadata())]
 		pub fn clear_metadata(origin: OriginFor<T>, id: T::AssetIdParameter) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
@@ -1172,7 +1153,6 @@ pub mod pallet {
 		/// Emits `MetadataSet`.
 		///
 		/// Weight: `O(N + S)` where N and S are the length of the name and symbol respectively.
-		#[pallet::call_index(19)]
 		#[pallet::weight(T::WeightInfo::force_set_metadata(name.len() as u32, symbol.len() as u32))]
 		pub fn force_set_metadata(
 			origin: OriginFor<T>,
@@ -1224,7 +1204,6 @@ pub mod pallet {
 		/// Emits `MetadataCleared`.
 		///
 		/// Weight: `O(1)`
-		#[pallet::call_index(20)]
 		#[pallet::weight(T::WeightInfo::force_clear_metadata())]
 		pub fn force_clear_metadata(
 			origin: OriginFor<T>,
@@ -1264,7 +1243,6 @@ pub mod pallet {
 		/// Emits `AssetStatusChanged` with the identity of the asset.
 		///
 		/// Weight: `O(1)`
-		#[pallet::call_index(21)]
 		#[pallet::weight(T::WeightInfo::force_asset_status())]
 		pub fn force_asset_status(
 			origin: OriginFor<T>,
@@ -1321,7 +1299,6 @@ pub mod pallet {
 		/// Emits `ApprovedTransfer` on success.
 		///
 		/// Weight: `O(1)`
-		#[pallet::call_index(22)]
 		#[pallet::weight(T::WeightInfo::approve_transfer())]
 		pub fn approve_transfer(
 			origin: OriginFor<T>,
@@ -1348,7 +1325,6 @@ pub mod pallet {
 		/// Emits `ApprovalCancelled` on success.
 		///
 		/// Weight: `O(1)`
-		#[pallet::call_index(23)]
 		#[pallet::weight(T::WeightInfo::cancel_approval())]
 		pub fn cancel_approval(
 			origin: OriginFor<T>,
@@ -1385,7 +1361,6 @@ pub mod pallet {
 		/// Emits `ApprovalCancelled` on success.
 		///
 		/// Weight: `O(1)`
-		#[pallet::call_index(24)]
 		#[pallet::weight(T::WeightInfo::force_cancel_approval())]
 		pub fn force_cancel_approval(
 			origin: OriginFor<T>,
@@ -1435,7 +1410,6 @@ pub mod pallet {
 		/// Emits `TransferredApproved` on success.
 		///
 		/// Weight: `O(1)`
-		#[pallet::call_index(25)]
 		#[pallet::weight(T::WeightInfo::transfer_approved())]
 		pub fn transfer_approved(
 			origin: OriginFor<T>,
@@ -1460,7 +1434,6 @@ pub mod pallet {
 		/// - `id`: The identifier of the asset for the account to be created.
 		///
 		/// Emits `Touched` event when successful.
-		#[pallet::call_index(26)]
 		#[pallet::weight(T::WeightInfo::mint())]
 		pub fn touch(origin: OriginFor<T>, id: T::AssetIdParameter) -> DispatchResult {
 			let id: T::AssetId = id.into();
@@ -1475,7 +1448,6 @@ pub mod pallet {
 		/// - `allow_burn`: If `true` then assets may be destroyed in order to complete the refund.
 		///
 		/// Emits `Refunded` event when successful.
-		#[pallet::call_index(27)]
 		#[pallet::weight(T::WeightInfo::mint())]
 		pub fn refund(
 			origin: OriginFor<T>,
@@ -1487,5 +1459,3 @@ pub mod pallet {
 		}
 	}
 }
-
-sp_core::generate_feature_enabled_macro!(runtime_benchmarks_enabled, feature = "runtime-benchmarks", $);

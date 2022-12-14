@@ -80,7 +80,7 @@ impl<B: BlockT> Clone for BufferedLinkSender<B> {
 }
 
 /// Internal buffered message.
-pub enum BlockImportWorkerMsg<B: BlockT> {
+enum BlockImportWorkerMsg<B: BlockT> {
 	BlocksProcessed(usize, usize, Vec<(BlockImportResult<B>, B::Hash)>),
 	JustificationImported(RuntimeOrigin, B::Hash, NumberFor<B>, bool),
 	RequestJustification(B::Hash, NumberFor<B>),
@@ -122,18 +122,6 @@ pub struct BufferedLinkReceiver<B: BlockT> {
 }
 
 impl<B: BlockT> BufferedLinkReceiver<B> {
-	/// Send action for the synchronization to perform.
-	pub fn send_actions(&mut self, msg: BlockImportWorkerMsg<B>, link: &mut dyn Link<B>) {
-		match msg {
-			BlockImportWorkerMsg::BlocksProcessed(imported, count, results) =>
-				link.blocks_processed(imported, count, results),
-			BlockImportWorkerMsg::JustificationImported(who, hash, number, success) =>
-				link.justification_imported(who, &hash, number, success),
-			BlockImportWorkerMsg::RequestJustification(hash, number) =>
-				link.request_justification(&hash, number),
-		}
-	}
-
 	/// Polls for the buffered link actions. Any enqueued action will be propagated to the link
 	/// passed as parameter.
 	///
@@ -150,17 +138,15 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 				Poll::Pending => break Ok(()),
 			};
 
-			self.send_actions(msg, &mut *link);
+			match msg {
+				BlockImportWorkerMsg::BlocksProcessed(imported, count, results) =>
+					link.blocks_processed(imported, count, results),
+				BlockImportWorkerMsg::JustificationImported(who, hash, number, success) =>
+					link.justification_imported(who, &hash, number, success),
+				BlockImportWorkerMsg::RequestJustification(hash, number) =>
+					link.request_justification(&hash, number),
+			}
 		}
-	}
-
-	/// Poll next element from import queue and send the corresponding action command over the link.
-	pub async fn next_action(&mut self, link: &mut dyn Link<B>) -> Result<(), ()> {
-		if let Some(msg) = self.rx.next().await {
-			self.send_actions(msg, link);
-			return Ok(())
-		}
-		Err(())
 	}
 
 	/// Close the channel.

@@ -29,7 +29,7 @@ use sc_consensus::shared_data::{SharedData, SharedDataLocked};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_INFO};
 use sp_finality_grandpa::{AuthorityId, AuthorityList};
 
-use crate::{SetId, LOG_TARGET};
+use crate::SetId;
 
 /// Error type returned on operations on the `AuthoritySet`.
 #[derive(Debug, thiserror::Error)]
@@ -314,7 +314,7 @@ where
 		let number = pending.canon_height.clone();
 
 		debug!(
-			target: LOG_TARGET,
+			target: "afg",
 			"Inserting potential standard set change signaled at block {:?} (delayed by {:?} blocks).",
 			(&number, &hash),
 			pending.delay,
@@ -323,7 +323,7 @@ where
 		self.pending_standard_changes.import(hash, number, pending, is_descendent_of)?;
 
 		debug!(
-			target: LOG_TARGET,
+			target: "afg",
 			"There are now {} alternatives for the next pending standard change (roots), and a \
 			 total of {} pending standard changes (across all forks).",
 			self.pending_standard_changes.roots().count(),
@@ -362,7 +362,7 @@ where
 			.unwrap_or_else(|i| i);
 
 		debug!(
-			target: LOG_TARGET,
+			target: "afg",
 			"Inserting potential forced set change at block {:?} (delayed by {:?} blocks).",
 			(&pending.canon_height, &pending.canon_hash),
 			pending.delay,
@@ -370,11 +370,7 @@ where
 
 		self.pending_forced_changes.insert(idx, pending);
 
-		debug!(
-			target: LOG_TARGET,
-			"There are now {} pending forced changes.",
-			self.pending_forced_changes.len()
-		);
+		debug!(target: "afg", "There are now {} pending forced changes.", self.pending_forced_changes.len());
 
 		Ok(())
 	}
@@ -479,7 +475,7 @@ where
 					if standard_change.effective_number() <= median_last_finalized &&
 						is_descendent_of(&standard_change.canon_hash, &change.canon_hash)?
 					{
-						log::info!(target: LOG_TARGET,
+						log::info!(target: "afg",
 							"Not applying authority set change forced at block #{:?}, due to pending standard change at block #{:?}",
 							change.canon_height,
 							standard_change.effective_number(),
@@ -492,7 +488,7 @@ where
 				}
 
 				// apply this change: make the set canonical
-				grandpa_log!(
+				afg_log!(
 					initial_sync,
 					"👴 Applying authority set change forced at block #{:?}",
 					change.canon_height,
@@ -574,7 +570,7 @@ where
 				}
 
 				if let Some(change) = change {
-					grandpa_log!(
+					afg_log!(
 						initial_sync,
 						"👴 Applying authority set change scheduled at block #{:?}",
 						change.canon_height,

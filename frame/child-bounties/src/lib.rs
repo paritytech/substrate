@@ -237,7 +237,6 @@ pub mod pallet {
 		/// - `parent_bounty_id`: Index of parent bounty for which child-bounty is being added.
 		/// - `value`: Value for executing the proposal.
 		/// - `description`: Text description for the child-bounty.
-		#[pallet::call_index(0)]
 		#[pallet::weight(<T as Config>::WeightInfo::add_child_bounty(description.len() as u32))]
 		pub fn add_child_bounty(
 			origin: OriginFor<T>,
@@ -312,7 +311,6 @@ pub mod pallet {
 		/// - `child_bounty_id`: Index of child bounty.
 		/// - `curator`: Address of child-bounty curator.
 		/// - `fee`: payment fee to child-bounty curator for execution.
-		#[pallet::call_index(1)]
 		#[pallet::weight(<T as Config>::WeightInfo::propose_curator())]
 		pub fn propose_curator(
 			origin: OriginFor<T>,
@@ -382,7 +380,6 @@ pub mod pallet {
 		///
 		/// - `parent_bounty_id`: Index of parent bounty.
 		/// - `child_bounty_id`: Index of child bounty.
-		#[pallet::call_index(2)]
 		#[pallet::weight(<T as Config>::WeightInfo::accept_curator())]
 		pub fn accept_curator(
 			origin: OriginFor<T>,
@@ -459,7 +456,6 @@ pub mod pallet {
 		///
 		/// - `parent_bounty_id`: Index of parent bounty.
 		/// - `child_bounty_id`: Index of child bounty.
-		#[pallet::call_index(3)]
 		#[pallet::weight(<T as Config>::WeightInfo::unassign_curator())]
 		pub fn unassign_curator(
 			origin: OriginFor<T>,
@@ -574,7 +570,6 @@ pub mod pallet {
 		/// - `parent_bounty_id`: Index of parent bounty.
 		/// - `child_bounty_id`: Index of child bounty.
 		/// - `beneficiary`: Beneficiary account.
-		#[pallet::call_index(4)]
 		#[pallet::weight(<T as Config>::WeightInfo::award_child_bounty())]
 		pub fn award_child_bounty(
 			origin: OriginFor<T>,
@@ -641,7 +636,6 @@ pub mod pallet {
 		///
 		/// - `parent_bounty_id`: Index of parent bounty.
 		/// - `child_bounty_id`: Index of child bounty.
-		#[pallet::call_index(5)]
 		#[pallet::weight(<T as Config>::WeightInfo::claim_child_bounty())]
 		pub fn claim_child_bounty(
 			origin: OriginFor<T>,
@@ -751,7 +745,6 @@ pub mod pallet {
 		///
 		/// - `parent_bounty_id`: Index of parent bounty.
 		/// - `child_bounty_id`: Index of child bounty.
-		#[pallet::call_index(6)]
 		#[pallet::weight(<T as Config>::WeightInfo::close_child_bounty_added()
 			.max(<T as Config>::WeightInfo::close_child_bounty_active()))]
 		pub fn close_child_bounty(

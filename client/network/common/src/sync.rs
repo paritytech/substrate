@@ -24,7 +24,9 @@ pub mod warp;
 
 use libp2p::PeerId;
 use message::{BlockAnnounce, BlockData, BlockRequest, BlockResponse};
-use sc_consensus::{import_queue::RuntimeOrigin, IncomingBlock};
+use sc_consensus::{
+	import_queue::RuntimeOrigin, BlockImportError, BlockImportStatus, IncomingBlock,
+};
 use sp_consensus::BlockOrigin;
 use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
@@ -315,12 +317,6 @@ pub trait ChainSync<Block: BlockT>: Send {
 		response: BlockResponse<Block>,
 	) -> Result<OnBlockData<Block>, BadPeer>;
 
-	/// Procss received block data.
-	fn process_block_response_data(
-		&mut self,
-		blocks_to_import: Result<OnBlockData<Block>, BadPeer>,
-	);
-
 	/// Handle a response from the remote to a justification request that we made.
 	///
 	/// `request` must be the original request that triggered `response`.
@@ -329,6 +325,17 @@ pub trait ChainSync<Block: BlockT>: Send {
 		who: PeerId,
 		response: BlockResponse<Block>,
 	) -> Result<OnBlockJustification<Block>, BadPeer>;
+
+	/// A batch of blocks have been processed, with or without errors.
+	///
+	/// Call this when a batch of blocks have been processed by the import
+	/// queue, with or without errors.
+	fn on_blocks_processed(
+		&mut self,
+		imported: usize,
+		count: usize,
+		results: Vec<(Result<BlockImportStatus<NumberFor<Block>>, BlockImportError>, Block::Hash)>,
+	) -> Box<dyn Iterator<Item = Result<(PeerId, BlockRequest<Block>), BadPeer>>>;
 
 	/// Call this when a justification has been processed by the import queue,
 	/// with or without errors.
@@ -371,7 +378,7 @@ pub trait ChainSync<Block: BlockT>: Send {
 	/// Call when a peer has disconnected.
 	/// Canceled obsolete block request may result in some blocks being ready for
 	/// import, so this functions checks for such blocks and returns them.
-	fn peer_disconnected(&mut self, who: &PeerId);
+	fn peer_disconnected(&mut self, who: &PeerId) -> Option<OnBlockData<Block>>;
 
 	/// Return some key metrics.
 	fn metrics(&self) -> Metrics;
@@ -388,10 +395,7 @@ pub trait ChainSync<Block: BlockT>: Send {
 	/// Internally calls [`ChainSync::poll_block_announce_validation()`] and
 	/// this function should be polled until it returns [`Poll::Pending`] to
 	/// consume all pending events.
-	fn poll(
-		&mut self,
-		cx: &mut std::task::Context,
-	) -> Poll<PollBlockAnnounceValidation<Block::Header>>;
+	fn poll(&mut self, cx: &mut std::task::Context) -> Poll<PollResult<Block>>;
 
 	/// Send block request to peer
 	fn send_block_request(&mut self, who: PeerId, request: BlockRequest<Block>);
