@@ -1619,7 +1619,10 @@ pub(crate) mod remote_tests {
 	use frame_system::Pallet as System;
 	use remote_externalities::Mode;
 	use sp_core::H256;
-	use sp_runtime::traits::{Block as BlockT, HashFor, Header as _, One, Zero};
+	use sp_runtime::{
+		traits::{Block as BlockT, HashFor, Header as _, One, Zero},
+		DeserializeOwned,
+	};
 	use thousands::Separable;
 
 	#[allow(dead_code)]
@@ -1648,12 +1651,12 @@ pub(crate) mod remote_tests {
 	pub(crate) async fn run_with_limits<Runtime, Block>(limits: MigrationLimits, mode: Mode<Block>)
 	where
 		Runtime: crate::Config<Hash = H256>,
-		Block: BlockT<Hash = H256>,
+		Block: BlockT<Hash = H256> + DeserializeOwned,
 		Block::Header: serde::de::DeserializeOwned,
 	{
 		let mut ext = remote_externalities::Builder::<Block>::new()
 			.mode(mode)
-			.state_version(sp_core::storage::StateVersion::V0)
+			.overwrite_state_version(sp_core::storage::StateVersion::V0)
 			.build()
 			.await
 			.unwrap();
