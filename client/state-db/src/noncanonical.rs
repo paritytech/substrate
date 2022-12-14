@@ -350,6 +350,8 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		self.last_canonicalized.as_ref().map(|&(_, n)| n)
 	}
 
+	/// Confirm that all changes made to commit sets are on disk. Allows for temporarily pinned
+	/// blocks to be released.
 	pub fn sync(&mut self) {
 		let mut pinned = std::mem::take(&mut self.pinned_canonincalized);
 		for hash in pinned.iter() {

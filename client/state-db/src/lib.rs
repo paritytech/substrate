@@ -577,7 +577,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDb<BlockHash, Key, D> {
 		self.db.write().unpin(hash)
 	}
 
-	/// Confirm that all changes made to commit sets are on disk. Allow for temporarily pinned
+	/// Confirm that all changes made to commit sets are on disk. Allows for temporarily pinned
 	/// blocks to be released.
 	pub fn sync(&self) {
 		self.db.write().sync()
