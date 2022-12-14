@@ -704,6 +704,9 @@ impl<T: Config> Pallet<T> {
 	///
 	/// `maybe_max_len` can imposes a cap on the number of voters returned;
 	///
+	/// Sets `MinimumActiveStake` to the minimum active nominator stake in the returned set of
+	/// nominators.
+	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
 	pub fn get_npos_voters(maybe_max_len: Option<usize>) -> Vec<VoterOf<Self>> {
 		let max_allowed_len = {
@@ -719,6 +722,7 @@ impl<T: Config> Pallet<T> {
 		let mut voters_seen = 0u32;
 		let mut validators_taken = 0u32;
 		let mut nominators_taken = 0u32;
+		let mut min_active_stake = u64::MAX;
 
 		let mut sorted_voters = T::VoterList::iter();
 		while all_voters.len() < max_allowed_len &&
@@ -733,12 +737,15 @@ impl<T: Config> Pallet<T> {
 			};
 
 			if let Some(Nominations { targets, .. }) = <Nominators<T>>::get(&voter) {
+				let voter_weight = weight_of(&voter);
 				if !targets.is_empty() {
-					all_voters.push((voter.clone(), weight_of(&voter), targets));
+					all_voters.push((voter.clone(), voter_weight, targets));
 					nominators_taken.saturating_inc();
 				} else {
 					// Technically should never happen, but not much we can do about it.
 				}
+				min_active_stake =
+					if voter_weight < min_active_stake { voter_weight } else { min_active_stake };
 			} else if Validators::<T>::contains_key(&voter) {
 				// if this voter is a validator:
 				let self_vote = (
@@ -768,6 +775,11 @@ impl<T: Config> Pallet<T> {
 		debug_assert!(all_voters.capacity() == max_allowed_len);
 
 		Self::register_weight(T::WeightInfo::get_npos_voters(validators_taken, nominators_taken));
+
+		let min_active_stake: T::CurrencyBalance =
+			if all_voters.len() == 0 { 0u64.into() } else { min_active_stake.into() };
+
+		MinimumActiveStake::<T>::put(min_active_stake);
 
 		log!(
 			info,
