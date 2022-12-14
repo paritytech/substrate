@@ -638,11 +638,7 @@ where
 					{
 						log::debug!(target: "sync", "Starting warp state sync.");
 						if let Some(params) = self.warp_sync_params.take() {
-							self.warp_sync = Some(WarpSync::new(
-								self.client.clone(),
-								params,
-								None,
-							));
+							self.warp_sync = Some(WarpSync::new(self.client.clone(), params));
 						}
 					}
 				}

@@ -1258,6 +1258,12 @@ fn warp_sync_to_target_block() {
 	let mut net = TestNet::new(runtime.handle().clone(), 3);
 
 	net.peer(0).push_blocks(64, false);
+	net.add_full_peer_with_config(Default::default());
+	net.add_full_peer_with_config(Default::default());
+	net.add_full_peer_with_config(Default::default());
+
+	net.peer(1).push_blocks(64, false);
+	net.peer(2).push_blocks(64, false);
 
 	let info = net.peer(0).client.info();
 	let target_block = net.peer(0).client.header(&BlockId::hash(info.best_hash)).unwrap().unwrap();
@@ -1270,8 +1276,7 @@ fn warp_sync_to_target_block() {
 
 	// Wait for peer 1 to sync state.
 	runtime.block_on(net.wait_until_sync());
-	assert!(!net.peer(3).client().has_state_at(&BlockId::Number(1)));
-	assert!(net.peer(3).client().has_state_at(&BlockId::Number(64)));
+	assert!(net.peer(5).client().has_state_at(&BlockId::Number(64)));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
