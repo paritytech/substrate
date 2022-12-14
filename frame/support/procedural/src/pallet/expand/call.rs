@@ -201,11 +201,11 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		.collect::<Vec<_>>();
 
 	quote::quote_spanned!(span =>
-		fn __warnings() {
+		mod warnings {
 			#(
 				#warning_structs
-				// This triggers the deprecated warnings.
-				let _ = #warning_names;
+				// This triggers each deprecated warning once.
+				const _: Option<#warning_names> = None;
 			)*
 		}
 
