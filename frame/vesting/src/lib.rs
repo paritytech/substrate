@@ -62,7 +62,7 @@ use frame_support::{
 	ensure,
 	storage::bounded_vec::BoundedVec,
 	traits::{
-		fungibles, fungibles::Lockable, Currency, ExistenceRequirement, Get, VestingSchedule,
+		Currency, ExistenceRequirement, Get, LockIdentifier, LockableCurrency, VestingSchedule,
 		WithdrawReasons,
 	},
 	weights::Weight,
@@ -83,12 +83,11 @@ pub use weights::WeightInfo;
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-type MaxLocksOf<T> = <<T as Config>::Currency as fungibles::Lockable<
-	<T as frame_system::Config>::AccountId,
->>::MaxLocks;
+type MaxLocksOf<T> =
+	<<T as Config>::Currency as LockableCurrency<<T as frame_system::Config>::AccountId>>::MaxLocks;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
-const VESTING_ID: fungibles::LockIdentifier = *b"vesting ";
+const VESTING_ID: LockIdentifier = *b"vesting ";
 
 // A value placed in storage that represents the current version of the Vesting storage.
 // This value is used by `on_runtime_upgrade` to determine whether we run storage migration logic.
@@ -160,7 +159,7 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The currency trait.
-		type Currency: fungibles::Lockable<Self::AccountId>;
+		type Currency: LockableCurrency<Self::AccountId>;
 
 		/// Convert the block number into a balance.
 		type BlockNumberToBalance: Convert<Self::BlockNumber, BalanceOf<Self>>;
@@ -304,6 +303,7 @@ pub mod pallet {
 		///     - Reads: Vesting Storage, Balances Locks, [Sender Account]
 		///     - Writes: Vesting Storage, Balances Locks, [Sender Account]
 		/// # </weight>
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::vest_locked(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES)
 			.max(T::WeightInfo::vest_unlocked(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES))
 		)]
@@ -327,6 +327,7 @@ pub mod pallet {
 		///     - Reads: Vesting Storage, Balances Locks, Target Account
 		///     - Writes: Vesting Storage, Balances Locks, Target Account
 		/// # </weight>
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::vest_other_locked(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES)
 			.max(T::WeightInfo::vest_other_unlocked(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES))
 		)]
@@ -353,6 +354,7 @@ pub mod pallet {
 		///     - Reads: Vesting Storage, Balances Locks, Target Account, [Sender Account]
 		///     - Writes: Vesting Storage, Balances Locks, Target Account, [Sender Account]
 		/// # </weight>
+		#[pallet::call_index(2)]
 		#[pallet::weight(
 			T::WeightInfo::vested_transfer(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES)
 		)]
@@ -384,6 +386,7 @@ pub mod pallet {
 		///     - Reads: Vesting Storage, Balances Locks, Target Account, Source Account
 		///     - Writes: Vesting Storage, Balances Locks, Target Account, Source Account
 		/// # </weight>
+		#[pallet::call_index(3)]
 		#[pallet::weight(
 			T::WeightInfo::force_vested_transfer(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES)
 		)]
@@ -418,6 +421,7 @@ pub mod pallet {
 		///
 		/// - `schedule1_index`: index of the first schedule to merge.
 		/// - `schedule2_index`: index of the second schedule to merge.
+		#[pallet::call_index(4)]
 		#[pallet::weight(
 			T::WeightInfo::not_unlocking_merge_schedules(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES)
 			.max(T::WeightInfo::unlocking_merge_schedules(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES))

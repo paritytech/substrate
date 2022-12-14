@@ -37,10 +37,10 @@ use frame_support::{
 	parameter_types,
 	storage::child,
 	traits::{
-		fungibles::Lockable, BalanceStatus, ConstU32, ConstU64, Contains, Currency, Get, OnIdle,
+		BalanceStatus, ConstU32, ConstU64, Contains, Currency, Get, LockableCurrency, OnIdle,
 		OnInitialize, ReservableCurrency, WithdrawReasons,
 	},
-	weights::{constants::WEIGHT_PER_SECOND, Weight},
+	weights::{constants::WEIGHT_REF_TIME_PER_SECOND, Weight},
 };
 use frame_system::{self as system, EventRecord, Phase};
 use pretty_assertions::{assert_eq, assert_ne};
@@ -285,7 +285,7 @@ impl RegisteredChainExtension<Test> for TempStorageExtension {
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(
-			(2u64 * WEIGHT_PER_SECOND).set_proof_size(u64::MAX),
+			Weight::from_parts(2u64 * WEIGHT_REF_TIME_PER_SECOND, u64::MAX),
 		);
 	pub static ExistentialDeposit: u64 = 1;
 }
@@ -415,6 +415,7 @@ impl Config for Test {
 	type MaxCodeLen = ConstU32<{ 128 * 1024 }>;
 	type MaxStorageKeyLen = ConstU32<128>;
 	type UnsafeUnstableInterface = UnstableInterface;
+	type MaxDebugBufferLen = ConstU32<{ 2 * 1024 * 1024 }>;
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);

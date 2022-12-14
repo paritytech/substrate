@@ -33,9 +33,7 @@ pub mod metadata;
 pub use balanced::{Balanced, Unbalanced};
 mod imbalance;
 pub use imbalance::{CreditOf, DebtOf, HandleImbalanceDrop, Imbalance};
-mod lockable;
 pub mod roles;
-pub use lockable::{LockIdentifier, Lockable};
 
 /// Trait for providing balance-inspection access to a set of named fungible assets.
 pub trait Inspect<AccountId> {

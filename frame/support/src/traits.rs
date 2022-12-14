@@ -20,7 +20,6 @@
 //! NOTE: If you're looking for `parameter_types`, it has moved in to the top-level module.
 
 pub mod tokens;
-#[allow(deprecated)]
 pub use tokens::{
 	currency::{
 		ActiveIssuanceOf, Currency, LockIdentifier, LockableCurrency, NamedReservableCurrency,
@@ -112,6 +111,12 @@ pub use voting::{
 
 mod preimages;
 pub use preimages::{Bounded, BoundedInline, FetchResult, Hash, QueryPreimage, StorePreimage};
+
+mod messages;
+pub use messages::{
+	EnqueueMessage, ExecuteOverweightError, Footprint, ProcessMessage, ProcessMessageError,
+	ServiceQueues,
+};
 
 #[cfg(feature = "try-runtime")]
 mod try_runtime;

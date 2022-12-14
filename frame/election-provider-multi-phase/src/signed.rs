@@ -594,10 +594,12 @@ mod tests {
 			DesiredTargets::set(4);
 			MaxWinners::set(3);
 
-			let (_, _, actual_desired_targets) = MultiPhase::create_snapshot_external().unwrap();
-
-			// snapshot is created with min of desired_targets and MaxWinners
-			assert_eq!(actual_desired_targets, 3);
+			// snapshot not created because data provider returned an unexpected number of
+			// desired_targets
+			assert_noop!(
+				MultiPhase::create_snapshot_external(),
+				ElectionError::DataProvider("desired_targets must not be greater than MaxWinners."),
+			);
 		})
 	}
 

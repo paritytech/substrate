@@ -65,6 +65,7 @@ cargo-check-benches:
   before_script:
     # perform rusty-cachier operations before any further modifications to the git repo to make cargo feel cheated not so much
     - !reference [.rust-info-script, script]
+    - !reference [.job-switcher, before_script]
     - !reference [.rusty-cachier, before_script]
     - !reference [.pipeline-stopper-vars, script]
     # merges in the master branch on PRs
@@ -414,6 +415,7 @@ cargo-check-each-crate-macos:
     - .collect-artifacts
     - .pipeline-stopper-artifacts
   before_script:
+    - !reference [.job-switcher, before_script]
     - !reference [.rust-info-script, script]
     - !reference [.pipeline-stopper-vars, script]
   variables:
