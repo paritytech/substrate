@@ -674,6 +674,7 @@ mod tests {
 
 		#[pallet::call]
 		impl<T: Config> Pallet<T> {
+			#[pallet::call_index(0)]
 			#[pallet::weight(100)]
 			pub fn some_function(origin: OriginFor<T>) -> DispatchResult {
 				// NOTE: does not make any different.
@@ -681,36 +682,42 @@ mod tests {
 				Ok(())
 			}
 
+			#[pallet::call_index(1)]
 			#[pallet::weight((200, DispatchClass::Operational))]
 			pub fn some_root_operation(origin: OriginFor<T>) -> DispatchResult {
 				frame_system::ensure_root(origin)?;
 				Ok(())
 			}
 
+			#[pallet::call_index(2)]
 			#[pallet::weight(0)]
 			pub fn some_unsigned_message(origin: OriginFor<T>) -> DispatchResult {
 				frame_system::ensure_none(origin)?;
 				Ok(())
 			}
 
+			#[pallet::call_index(3)]
 			#[pallet::weight(0)]
 			pub fn allowed_unsigned(origin: OriginFor<T>) -> DispatchResult {
 				frame_system::ensure_root(origin)?;
 				Ok(())
 			}
 
+			#[pallet::call_index(4)]
 			#[pallet::weight(0)]
 			pub fn unallowed_unsigned(origin: OriginFor<T>) -> DispatchResult {
 				frame_system::ensure_root(origin)?;
 				Ok(())
 			}
 
+			#[pallet::call_index(5)]
 			#[pallet::weight((0, DispatchClass::Mandatory))]
 			pub fn inherent_call(origin: OriginFor<T>) -> DispatchResult {
 				frame_system::ensure_none(origin)?;
 				Ok(())
 			}
 
+			#[pallet::call_index(6)]
 			#[pallet::weight(0)]
 			pub fn calculate_storage_root(_origin: OriginFor<T>) -> DispatchResult {
 				let root = sp_io::storage::root(sp_runtime::StateVersion::V1);
@@ -951,13 +958,13 @@ mod tests {
 		block_import_works_inner(
 			new_test_ext_v0(1),
 			array_bytes::hex_n_into_unchecked(
-				"0d786e24c1f9e6ce237806a22c005bbbc7dee4edd6692b6c5442843d164392de",
+				"216e61b2689d1243eb56d89c9084db48e50ebebc4871d758db131432c675d7c0",
 			),
 		);
 		block_import_works_inner(
 			new_test_ext(1),
 			array_bytes::hex_n_into_unchecked(
-				"348485a4ab856467b440167e45f99b491385e8528e09b0e51f85f814a3021c93",
+				"4738b4c0aab02d6ddfa62a2a6831ccc975a9f978f7db8d7ea8e68eba8639530a",
 			),
 		);
 	}

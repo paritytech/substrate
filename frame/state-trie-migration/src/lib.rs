@@ -546,6 +546,7 @@ pub mod pallet {
 		/// Control the automatic migration.
 		///
 		/// The dispatch origin of this call must be [`Config::ControlOrigin`].
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn control_auto_migration(
 			origin: OriginFor<T>,
@@ -577,6 +578,7 @@ pub mod pallet {
 		/// Based on the documentation of [`MigrationTask::migrate_until_exhaustion`], the
 		/// recommended way of doing this is to pass a `limit` that only bounds `count`, as the
 		/// `size` limit can always be overwritten.
+		#[pallet::call_index(1)]
 		#[pallet::weight(
 			// the migration process
 			Pallet::<T>::dynamic_weight(limits.item, * real_size_upper)
@@ -648,6 +650,7 @@ pub mod pallet {
 		///
 		/// This does not affect the global migration process tracker ([`MigrationProcess`]), and
 		/// should only be used in case any keys are leftover due to a bug.
+		#[pallet::call_index(2)]
 		#[pallet::weight(
 			T::WeightInfo::migrate_custom_top_success()
 				.max(T::WeightInfo::migrate_custom_top_fail())
@@ -704,6 +707,7 @@ pub mod pallet {
 		///
 		/// This does not affect the global migration process tracker ([`MigrationProcess`]), and
 		/// should only be used in case any keys are leftover due to a bug.
+		#[pallet::call_index(3)]
 		#[pallet::weight(
 			T::WeightInfo::migrate_custom_child_success()
 				.max(T::WeightInfo::migrate_custom_child_fail())
@@ -764,6 +768,7 @@ pub mod pallet {
 		}
 
 		/// Set the maximum limit of the signed migration.
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn set_signed_max_limits(
 			origin: OriginFor<T>,
@@ -783,6 +788,7 @@ pub mod pallet {
 		///
 		/// In case you mess things up, you can also, in principle, use this to reset the migration
 		/// process.
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn force_set_progress(
 			origin: OriginFor<T>,
