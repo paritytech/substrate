@@ -1360,11 +1360,12 @@ where
 				},
 			}
 		}
-		self.process_outbound_requests();
 
 		if let Some(warp_sync) = &mut self.warp_sync {
 			let _ = warp_sync.poll(cx);
 		}
+
+		self.process_outbound_requests();
 
 		while let Poll::Ready(result) = self.poll_pending_responses(cx) {
 			match result {

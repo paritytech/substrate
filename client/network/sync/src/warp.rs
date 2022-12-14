@@ -24,6 +24,7 @@ use crate::{
 	state::{ImportResult, StateSync},
 };
 use futures::FutureExt;
+use log::error;
 use sc_client_api::ProofProvider;
 use sc_network_common::sync::{
 	message::{BlockAttributes, BlockData, BlockRequest, Direction, FromBlock},
@@ -110,6 +111,9 @@ where
 		let new_phase = if let Phase::PendingTargetBlock { target_block } = &mut self.phase {
 			if let Poll::Ready(Ok(target_block)) = target_block.poll_unpin(cx) {
 				Some(Phase::TargetBlock(target_block))
+			} else if let Poll::Ready(Err(e)) = target_block.poll_unpin(cx) {
+				error!(target: "warp_sync", "Failed to get target block. Error: {:?}",e);
+				None
 			} else {
 				None
 			}
