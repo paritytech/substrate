@@ -151,8 +151,7 @@ pub enum BountyStatus<AccountId, BlockNumber> {
 	Approved,
 	/// The bounty is funded and waiting for curator assignment.
 	Funded,
-	/// A curator has been proposed by the `ApproveOrigin`. Waiting for acceptance from the
-	/// curator.
+	/// A curator has been proposed. Waiting for acceptance from the curator.
 	CuratorProposed {
 		/// The assigned curator of this bounty.
 		curator: AccountId,
@@ -348,7 +347,7 @@ pub mod pallet {
 		/// Approve a bounty proposal. At a later time, the bounty will be funded and become active
 		/// and the original deposit will be returned.
 		///
-		/// May only be called from `T::ApproveOrigin`.
+		/// May only be called from `T::SpendOrigin`.
 		///
 		/// # <weight>
 		/// - O(1).
@@ -380,7 +379,7 @@ pub mod pallet {
 
 		/// Assign a curator to a funded bounty.
 		///
-		/// May only be called from `T::ApproveOrigin`.
+		/// May only be called from `T::SpendOrigin`.
 		///
 		/// # <weight>
 		/// - O(1).

@@ -72,6 +72,8 @@ pub use sp_consensus_aura::{
 	AuraApi, ConsensusLog, SlotDuration, AURA_ENGINE_ID,
 };
 
+const LOG_TARGET: &str = "aura";
+
 type AuthorityId<P> = <P as Pair>::Public;
 
 /// Run `AURA` in a compatibility mode.
@@ -530,7 +532,7 @@ where
 }
 
 fn aura_err<B: BlockT>(error: Error<B>) -> Error<B> {
-	debug!(target: "aura", "{}", error);
+	debug!(target: LOG_TARGET, "{}", error);
 	error
 }
 
@@ -580,10 +582,10 @@ pub fn find_pre_digest<B: BlockT, Signature: Codec>(header: &B::Header) -> Resul
 
 	let mut pre_digest: Option<Slot> = None;
 	for log in header.digest().logs() {
-		trace!(target: "aura", "Checking log {:?}", log);
+		trace!(target: LOG_TARGET, "Checking log {:?}", log);
 		match (CompatibleDigestItem::<Signature>::as_aura_pre_digest(log), pre_digest.is_some()) {
 			(Some(_), true) => return Err(aura_err(Error::MultipleHeaders)),
-			(None, _) => trace!(target: "aura", "Ignoring digest not meant for us"),
+			(None, _) => trace!(target: LOG_TARGET, "Ignoring digest not meant for us"),
 			(s, false) => pre_digest = s,
 		}
 	}

@@ -23,9 +23,9 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../su
 # `system` module provides us with all sorts of useful stuff and macros depend on it being around.
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
+sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
 
 [dev-dependencies]
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
 sp-std = { version = "5.0.0", path = "../../primitives/std" }
 sp-io = { version = "7.0.0", path = "../../primitives/io" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
@@ -35,6 +35,7 @@ default = ["std"]
 std = [
 	"codec/std",
 	"scale-info/std",
+	"sp-core/std",
 	"sp-std/std",
 	"sp-runtime/std",
 	"frame-support/std",

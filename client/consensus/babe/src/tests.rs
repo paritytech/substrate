@@ -323,7 +323,7 @@ impl TestNetFactory for BabeTestNet {
 		use substrate_test_runtime_client::DefaultTestClientBuilderExt;
 
 		let client = client.as_client();
-		trace!(target: "babe", "Creating a verifier");
+		trace!(target: LOG_TARGET, "Creating a verifier");
 
 		// ensure block import and verifier are linked correctly.
 		let data = maybe_link
@@ -352,12 +352,12 @@ impl TestNetFactory for BabeTestNet {
 	}
 
 	fn peer(&mut self, i: usize) -> &mut BabePeer {
-		trace!(target: "babe", "Retrieving a peer");
+		trace!(target: LOG_TARGET, "Retrieving a peer");
 		&mut self.peers[i]
 	}
 
 	fn peers(&self) -> &Vec<BabePeer> {
-		trace!(target: "babe", "Retrieving peers");
+		trace!(target: LOG_TARGET, "Retrieving peers");
 		&self.peers
 	}
 
@@ -583,7 +583,7 @@ fn can_author_block() {
 	// with secondary slots enabled it should never be empty
 	match claim_slot(i.into(), &epoch, &keystore) {
 		None => i += 1,
-		Some(s) => debug!(target: "babe", "Authored block {:?}", s.0),
+		Some(s) => debug!(target: LOG_TARGET, "Authored block {:?}", s.0),
 	}
 
 	// otherwise with only vrf-based primary slots we might need to try a couple
@@ -593,7 +593,7 @@ fn can_author_block() {
 		match claim_slot(i.into(), &epoch, &keystore) {
 			None => i += 1,
 			Some(s) => {
-				debug!(target: "babe", "Authored block {:?}", s.0);
+				debug!(target: LOG_TARGET, "Authored block {:?}", s.0);
 				break
 			},
 		}

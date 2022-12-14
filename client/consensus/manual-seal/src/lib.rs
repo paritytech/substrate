@@ -49,6 +49,8 @@ pub use self::{
 use sc_transaction_pool_api::TransactionPool;
 use sp_api::{ProvideRuntimeApi, TransactionFor};
 
+const LOG_TARGET: &str = "manual-seal";
+
 /// The `ConsensusEngineId` of Manual Seal.
 pub const MANUAL_SEAL_ENGINE_ID: ConsensusEngineId = [b'm', b'a', b'n', b'l'];
 

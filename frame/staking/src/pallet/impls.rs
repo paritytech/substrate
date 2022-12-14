@@ -1329,7 +1329,7 @@ impl<T: Config> ScoreProvider<T::AccountId> for Pallet<T> {
 		Self::weight_of(who)
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", feature = "fuzz"))]
+	#[cfg(feature = "runtime-benchmarks")]
 	fn set_score_of(who: &T::AccountId, weight: Self::Score) {
 		// this will clearly results in an inconsistent state, but it should not matter for a
 		// benchmark.
@@ -1594,28 +1594,27 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::nominate(RawOrigin::Signed(ctrl).into(), targets)
 	}
 
-	#[cfg(feature = "runtime-benchmarks")]
-	fn nominations(who: Self::AccountId) -> Option<Vec<T::AccountId>> {
-		Nominators::<T>::get(who).map(|n| n.targets.into_inner())
-	}
+	sp_staking::runtime_benchmarks_enabled! {
+		fn nominations(who: Self::AccountId) -> Option<Vec<T::AccountId>> {
+			Nominators::<T>::get(who).map(|n| n.targets.into_inner())
+		}
 
-	#[cfg(feature = "runtime-benchmarks")]
-	fn add_era_stakers(
-		current_era: &EraIndex,
-		stash: &T::AccountId,
-		exposures: Vec<(Self::AccountId, Self::Balance)>,
-	) {
-		let others = exposures
-			.iter()
-			.map(|(who, value)| IndividualExposure { who: who.clone(), value: value.clone() })
-			.collect::<Vec<_>>();
-		let exposure = Exposure { total: Default::default(), own: Default::default(), others };
-		Self::add_era_stakers(current_era.clone(), stash.clone(), exposure)
-	}
+		fn add_era_stakers(
+			current_era: &EraIndex,
+			stash: &T::AccountId,
+			exposures: Vec<(Self::AccountId, Self::Balance)>,
+		) {
+			let others = exposures
+				.iter()
+				.map(|(who, value)| IndividualExposure { who: who.clone(), value: value.clone() })
+				.collect::<Vec<_>>();
+			let exposure = Exposure { total: Default::default(), own: Default::default(), others };
+			<ErasStakers<T>>::insert(&current_era, &stash, &exposure);
+		}
 
-	#[cfg(feature = "runtime-benchmarks")]
-	fn set_current_era(era: EraIndex) {
-		CurrentEra::<T>::put(era);
+		fn set_current_era(era: EraIndex) {
+			CurrentEra::<T>::put(era);
+		}
 	}
 }
 

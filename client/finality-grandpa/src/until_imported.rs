@@ -24,7 +24,7 @@
 
 use super::{
 	BlockStatus as BlockStatusT, BlockSyncRequester as BlockSyncRequesterT, CommunicationIn, Error,
-	SignedMessage,
+	SignedMessage, LOG_TARGET,
 };
 
 use finality_grandpa::voter;
@@ -296,7 +296,7 @@ where
 					let next_log = *last_log + LOG_PENDING_INTERVAL;
 					if Instant::now() >= next_log {
 						debug!(
-							target: "afg",
+							target: LOG_TARGET,
 							"Waiting to import block {} before {} {} messages can be imported. \
 							Requesting network sync service to retrieve block from. \
 							Possible fork?",
@@ -346,7 +346,7 @@ where
 
 fn warn_authority_wrong_target<H: ::std::fmt::Display>(hash: H, id: AuthorityId) {
 	warn!(
-		target: "afg",
+		target: LOG_TARGET,
 		"Authority {:?} signed GRANDPA message with \
 		wrong block number for hash {}",
 		id,
