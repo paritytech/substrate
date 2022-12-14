@@ -210,6 +210,37 @@ fn add_liquidity_should_work() {
 }
 
 #[test]
+fn add_tiny_liquidity_leads_to_insufficient_liquidity_minted_error() {
+	new_test_ext().execute_with(|| {
+		let user = 1;
+		let token_1 = MultiAssetId::Native;
+		let token_2 = MultiAssetId::Asset(2);
+
+		create_tokens(user, vec![token_2]);
+		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
+
+		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user, 1000, 0));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 2, user, 1000));
+
+		assert_noop!(
+			Dex::add_liquidity(
+				RuntimeOrigin::signed(user),
+				token_1,
+				token_2,
+				1,
+				1,
+				1,
+				1,
+				user,
+				2,
+				false
+			),
+			Error::<Test>::InsufficientLiquidityMinted
+		);
+	});
+}
+
+#[test]
 fn remove_liquidity_should_work() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
