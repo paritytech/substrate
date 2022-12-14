@@ -58,3 +58,13 @@ fn setting_storage_works() {
 		assert_noop!(PovLimit::set_storage(RuntimeOrigin::none(), 15000), DispatchError::BadOrigin);
 	});
 }
+
+#[test]
+fn on_idle_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(PovLimit::set_compute(RuntimeOrigin::root(), Perbill::from_percent(100)));
+		assert_ok!(PovLimit::set_storage(RuntimeOrigin::root(), 5000));
+
+		PovLimit::on_idle(1, Weight::from_ref_time(20_000_000));
+	});
+}

@@ -97,11 +97,10 @@ pub mod pallet {
 
 			let computation_weight_limit = remaining_weight * Compute::<T>::get();
 
-			let mut value: u32 = 0;
+			let mut value: u64 = 0;
 			loop {
 				weight = weight.saturating_add(T::WeightInfo::hash_value());
 				if computation_weight_limit.any_lt(weight) {
-					weight = computation_weight_limit;
 					break
 				}
 				Self::hash_value(value.into());

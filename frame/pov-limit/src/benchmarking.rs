@@ -29,14 +29,14 @@ benchmarks! {
 	hash_value {
 
 	}: {
-		PovLimit::<T>::hash_value(1u64);
+		PovLimit::<T>::hash_value(42u64);
 	}
 
 	on_idle {
 		let _ = PovLimit::<T>::set_compute(SystemOrigin::Root.into(), Perbill::from_percent(100));
 		let _ = PovLimit::<T>::set_storage(SystemOrigin::Root.into(), 10_000);
 	}: {
-		PovLimit::<T>::on_idle(0u32.into(), Weight::from_ref_time(20_000_000));
+		PovLimit::<T>::on_idle(0u32.into(), Weight::from_ref_time(2_000_000));
 	}
 
 	impl_benchmark_test_suite!(PovLimit, crate::mock::new_test_ext(), crate::mock::Test);
