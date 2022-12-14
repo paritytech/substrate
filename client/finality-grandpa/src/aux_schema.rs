@@ -38,7 +38,7 @@ use crate::{
 		CompletedRound, CompletedRounds, CurrentRounds, HasVoted, SharedVoterSetState,
 		VoterSetState,
 	},
-	GrandpaJustification, NewAuthoritySet,
+	GrandpaJustification, NewAuthoritySet, LOG_TARGET,
 };
 
 const VERSION_KEY: &[u8] = b"grandpa_schema_version";
@@ -100,8 +100,8 @@ where
 				// previously we only supported at most one pending change per fork
 				&|_, _| Ok(false),
 			) {
-				warn!(target: "afg", "Error migrating pending authority set change: {}", err);
-				warn!(target: "afg", "Node is in a potentially inconsistent state.");
+				warn!(target: LOG_TARGET, "Error migrating pending authority set change: {}", err);
+				warn!(target: LOG_TARGET, "Node is in a potentially inconsistent state.");
 			}
 		}
 
@@ -384,8 +384,11 @@ where
 	}
 
 	// genesis.
-	info!(target: "afg", "👴 Loading GRANDPA authority set \
-		from genesis on what appears to be first startup.");
+	info!(
+		target: LOG_TARGET,
+		"👴 Loading GRANDPA authority set \
+		from genesis on what appears to be first startup."
+	);
 
 	let genesis_authorities = genesis_authorities()?;
 	let genesis_set = AuthoritySet::genesis(genesis_authorities)
