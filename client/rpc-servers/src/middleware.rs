@@ -16,9 +16,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! RPC middleware to collect prometheus metrics on RPC calls.
+//! RPC middlware to collect prometheus metrics on RPC calls.
 
-use jsonrpsee::server::logger::{HttpRequest, Logger, MethodKind, Params, TransportProtocol};
+use jsonrpsee::core::middleware::{Headers, HttpMiddleware, MethodKind, Params, WsMiddleware};
 use prometheus_endpoint::{
 	register, Counter, CounterVec, HistogramOpts, HistogramVec, Opts, PrometheusError, Registry,
 	U64,
@@ -54,9 +54,9 @@ pub struct RpcMetrics {
 	calls_started: CounterVec<U64>,
 	/// Number of calls completed.
 	calls_finished: CounterVec<U64>,
-	/// Number of Websocket sessions opened.
+	/// Number of Websocket sessions opened (Websocket only).
 	ws_sessions_opened: Option<Counter<U64>>,
-	/// Number of Websocket sessions closed.
+	/// Number of Websocket sessions closed (Websocket only).
 	ws_sessions_closed: Option<Counter<U64>>,
 }
 
@@ -139,61 +139,62 @@ impl RpcMetrics {
 	}
 }
 
-impl Logger for RpcMetrics {
-	type Instant = std::time::Instant;
+#[derive(Clone)]
+/// Middleware for RPC calls
+pub struct RpcMiddleware {
+	metrics: RpcMetrics,
+	transport_label: &'static str,
+}
 
-	fn on_connect(
-		&self,
-		_remote_addr: SocketAddr,
-		_request: &HttpRequest,
-		transport: TransportProtocol,
-	) {
-		if let TransportProtocol::WebSocket = transport {
-			self.ws_sessions_opened.as_ref().map(|counter| counter.inc());
-		}
+impl RpcMiddleware {
+	/// Create a new [`RpcMiddleware`] with the provided [`RpcMetrics`].
+	pub fn new(metrics: RpcMetrics, transport_label: &'static str) -> Self {
+		Self { metrics, transport_label }
 	}
 
-	fn on_request(&self, transport: TransportProtocol) -> Self::Instant {
-		let transport_label = transport_label_str(transport);
+	/// Called when a new JSON-RPC request comes to the server.
+	fn on_request(&self) -> std::time::Instant {
 		let now = std::time::Instant::now();
-		self.requests_started.with_label_values(&[transport_label]).inc();
+		self.metrics.requests_started.with_label_values(&[self.transport_label]).inc();
 		now
 	}
 
-	fn on_call(&self, name: &str, params: Params, kind: MethodKind, transport: TransportProtocol) {
-		let transport_label = transport_label_str(transport);
+	/// Called on each JSON-RPC method call, batch requests will trigger `on_call` multiple times.
+	fn on_call(&self, name: &str, params: Params, kind: MethodKind) {
 		log::trace!(
 			target: "rpc_metrics",
 			"[{}] on_call name={} params={:?} kind={}",
-			transport_label,
+			self.transport_label,
 			name,
 			params,
 			kind,
 		);
-		self.calls_started.with_label_values(&[transport_label, name]).inc();
+		self.metrics
+			.calls_started
+			.with_label_values(&[self.transport_label, name])
+			.inc();
 	}
 
-	fn on_result(
-		&self,
-		name: &str,
-		success: bool,
-		started_at: Self::Instant,
-		transport: TransportProtocol,
-	) {
-		let transport_label = transport_label_str(transport);
+	/// Called on each JSON-RPC method completion, batch requests will trigger `on_result` multiple
+	/// times.
+	fn on_result(&self, name: &str, success: bool, started_at: std::time::Instant) {
 		let micros = started_at.elapsed().as_micros();
 		log::debug!(
 			target: "rpc_metrics",
 			"[{}] {} call took {} μs",
-			transport_label,
+			self.transport_label,
 			name,
 			micros,
 		);
-		self.calls_time.with_label_values(&[transport_label, name]).observe(micros as _);
+		self.metrics
+			.calls_time
+			.with_label_values(&[self.transport_label, name])
+			.observe(micros as _);
 
-		self.calls_finished
+		self.metrics
+			.calls_finished
 			.with_label_values(&[
-				transport_label,
+				self.transport_label,
 				name,
 				// the label "is_error", so `success` should be regarded as false
 				// and vice-versa to be registrered correctly.
@@ -202,23 +203,57 @@ impl Logger for RpcMetrics {
 			.inc();
 	}
 
-	fn on_response(&self, result: &str, started_at: Self::Instant, transport: TransportProtocol) {
-		let transport_label = transport_label_str(transport);
-		log::trace!(target: "rpc_metrics", "[{}] on_response started_at={:?}", transport_label, started_at);
-		log::trace!(target: "rpc_metrics::extra", "[{}] result={:?}", transport_label, result);
-		self.requests_finished.with_label_values(&[transport_label]).inc();
-	}
-
-	fn on_disconnect(&self, _remote_addr: SocketAddr, transport: TransportProtocol) {
-		if let TransportProtocol::WebSocket = transport {
-			self.ws_sessions_closed.as_ref().map(|counter| counter.inc());
-		}
+	/// Called once the JSON-RPC request is finished and response is sent to the output buffer.
+	fn on_response(&self, _result: &str, started_at: std::time::Instant) {
+		log::trace!(target: "rpc_metrics", "[{}] on_response started_at={:?}", self.transport_label, started_at);
+		self.metrics.requests_finished.with_label_values(&[self.transport_label]).inc();
 	}
 }
 
-fn transport_label_str(t: TransportProtocol) -> &'static str {
-	match t {
-		TransportProtocol::Http => "http",
-		TransportProtocol::WebSocket => "ws",
+impl WsMiddleware for RpcMiddleware {
+	type Instant = std::time::Instant;
+
+	fn on_connect(&self, _remote_addr: SocketAddr, _headers: &Headers) {
+		self.metrics.ws_sessions_opened.as_ref().map(|counter| counter.inc());
+	}
+
+	fn on_request(&self) -> Self::Instant {
+		self.on_request()
+	}
+
+	fn on_call(&self, name: &str, params: Params, kind: MethodKind) {
+		self.on_call(name, params, kind)
+	}
+
+	fn on_result(&self, name: &str, success: bool, started_at: Self::Instant) {
+		self.on_result(name, success, started_at)
+	}
+
+	fn on_response(&self, _result: &str, started_at: Self::Instant) {
+		self.on_response(_result, started_at)
+	}
+
+	fn on_disconnect(&self, _remote_addr: SocketAddr) {
+		self.metrics.ws_sessions_closed.as_ref().map(|counter| counter.inc());
+	}
+}
+
+impl HttpMiddleware for RpcMiddleware {
+	type Instant = std::time::Instant;
+
+	fn on_request(&self, _remote_addr: SocketAddr, _headers: &Headers) -> Self::Instant {
+		self.on_request()
+	}
+
+	fn on_call(&self, name: &str, params: Params, kind: MethodKind) {
+		self.on_call(name, params, kind)
+	}
+
+	fn on_result(&self, name: &str, success: bool, started_at: Self::Instant) {
+		self.on_result(name, success, started_at)
+	}
+
+	fn on_response(&self, _result: &str, started_at: Self::Instant) {
+		self.on_response(_result, started_at)
 	}
 }

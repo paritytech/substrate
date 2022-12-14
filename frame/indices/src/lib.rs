@@ -98,7 +98,6 @@ pub mod pallet {
 		/// -------------------
 		/// - DB Weight: 1 Read/Write (Accounts)
 		/// # </weight>
-		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::claim())]
 		pub fn claim(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -132,7 +131,6 @@ pub mod pallet {
 		///    - Reads: Indices Accounts, System Account (recipient)
 		///    - Writes: Indices Accounts, System Account (recipient)
 		/// # </weight>
-		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::transfer())]
 		pub fn transfer(
 			origin: OriginFor<T>,
@@ -173,7 +171,6 @@ pub mod pallet {
 		/// -------------------
 		/// - DB Weight: 1 Read/Write (Accounts)
 		/// # </weight>
-		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::free())]
 		pub fn free(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -210,7 +207,6 @@ pub mod pallet {
 		///    - Reads: Indices Accounts, System Account (original owner)
 		///    - Writes: Indices Accounts, System Account (original owner)
 		/// # </weight>
-		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::force_transfer())]
 		pub fn force_transfer(
 			origin: OriginFor<T>,
@@ -249,7 +245,6 @@ pub mod pallet {
 		/// -------------------
 		/// - DB Weight: 1 Read/Write (Accounts)
 		/// # </weight>
-		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::freeze())]
 		pub fn freeze(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;

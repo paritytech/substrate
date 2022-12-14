@@ -24,8 +24,8 @@ pub mod constants {
 		/// By default, Substrate uses RocksDB, so this will be the weight used throughout
 		/// the runtime.
 		pub const RocksDbWeight: RuntimeDbWeight = RuntimeDbWeight {
-			read: 25_000 * constants::WEIGHT_REF_TIME_PER_NANOS,
-			write: 100_000 * constants::WEIGHT_REF_TIME_PER_NANOS,
+			read: 25_000 * constants::WEIGHT_PER_NANOS.ref_time(),
+			write: 100_000 * constants::WEIGHT_PER_NANOS.ref_time(),
 		};
 	}
 
@@ -41,20 +41,20 @@ pub mod constants {
 		fn sane() {
 			// At least 1 µs.
 			assert!(
-				W::get().reads(1).ref_time() >= constants::WEIGHT_REF_TIME_PER_MICROS,
+				W::get().reads(1).ref_time() >= constants::WEIGHT_PER_MICROS.ref_time(),
 				"Read weight should be at least 1 µs."
 			);
 			assert!(
-				W::get().writes(1).ref_time() >= constants::WEIGHT_REF_TIME_PER_MICROS,
+				W::get().writes(1).ref_time() >= constants::WEIGHT_PER_MICROS.ref_time(),
 				"Write weight should be at least 1 µs."
 			);
 			// At most 1 ms.
 			assert!(
-				W::get().reads(1).ref_time() <= constants::WEIGHT_REF_TIME_PER_MILLIS,
+				W::get().reads(1).ref_time() <= constants::WEIGHT_PER_MILLIS.ref_time(),
 				"Read weight should be at most 1 ms."
 			);
 			assert!(
-				W::get().writes(1).ref_time() <= constants::WEIGHT_REF_TIME_PER_MILLIS,
+				W::get().writes(1).ref_time() <= constants::WEIGHT_PER_MILLIS.ref_time(),
 				"Write weight should be at most 1 ms."
 			);
 		}

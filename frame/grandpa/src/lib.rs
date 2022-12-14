@@ -193,7 +193,6 @@ pub mod pallet {
 		/// equivocation proof and validate the given key ownership proof
 		/// against the extracted offender. If both are valid, the offence
 		/// will be reported.
-		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count()))]
 		pub fn report_equivocation(
 			origin: OriginFor<T>,
@@ -214,7 +213,6 @@ pub mod pallet {
 		/// block authors will call it (validated in `ValidateUnsigned`), as such
 		/// if the block author is defined it will be defined as the equivocation
 		/// reporter.
-		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count()))]
 		pub fn report_equivocation_unsigned(
 			origin: OriginFor<T>,
@@ -242,7 +240,6 @@ pub mod pallet {
 		/// block of all validators of the new authority set.
 		///
 		/// Only callable by root.
-		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::note_stalled())]
 		pub fn note_stalled(
 			origin: OriginFor<T>,

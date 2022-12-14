@@ -101,8 +101,8 @@
 use codec::{Decode, Encode};
 use frame_support::{
 	traits::{
-		defensive_prelude::*, ChangeMembers, Contains, ContainsLengthBound, Currency,
-		CurrencyToVote, Get, InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced,
+		defensive_prelude::*, fungibles, fungibles::Lockable, ChangeMembers, Contains,
+		ContainsLengthBound, Currency, CurrencyToVote, Get, InitializeMembers, OnUnbalanced,
 		ReservableCurrency, SortedMembers, WithdrawReasons,
 	},
 	weights::Weight,
@@ -199,10 +199,10 @@ pub mod pallet {
 
 		/// Identifier for the elections-phragmen pallet's lock
 		#[pallet::constant]
-		type PalletId: Get<LockIdentifier>;
+		type PalletId: Get<fungibles::LockIdentifier>;
 
 		/// The currency that people are electing with.
-		type Currency: LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>
+		type Currency: fungibles::Lockable<Self::AccountId, Moment = Self::BlockNumber>
 			+ ReservableCurrency<Self::AccountId>;
 
 		/// What to do when the members change.
@@ -309,7 +309,6 @@ pub mod pallet {
 		/// # <weight>
 		/// We assume the maximum weight among all 3 cases: vote_equal, vote_more and vote_less.
 		/// # </weight>
-		#[pallet::call_index(0)]
 		#[pallet::weight(
 			T::WeightInfo::vote_more(votes.len() as u32)
 			.max(T::WeightInfo::vote_less(votes.len() as u32))
@@ -372,7 +371,6 @@ pub mod pallet {
 		/// This removes the lock and returns the deposit.
 		///
 		/// The dispatch origin of this call must be signed and be a voter.
-		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::remove_voter())]
 		pub fn remove_voter(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -396,7 +394,6 @@ pub mod pallet {
 		/// # <weight>
 		/// The number of current candidates must be provided as witness data.
 		/// # </weight>
-		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::submit_candidacy(*candidate_count))]
 		pub fn submit_candidacy(
 			origin: OriginFor<T>,
@@ -441,7 +438,6 @@ pub mod pallet {
 		/// # <weight>
 		/// The type of renouncing must be provided as witness data.
 		/// # </weight>
-		#[pallet::call_index(3)]
 		#[pallet::weight(match *renouncing {
 			Renouncing::Candidate(count) => T::WeightInfo::renounce_candidacy_candidate(count),
 			Renouncing::Member => T::WeightInfo::renounce_candidacy_members(),
@@ -504,7 +500,6 @@ pub mod pallet {
 		/// If we have a replacement, we use a small weight. Else, since this is a root call and
 		/// will go into phragmen, we assume full block for now.
 		/// # </weight>
-		#[pallet::call_index(4)]
 		#[pallet::weight(if *rerun_election {
 			T::WeightInfo::remove_member_without_replacement()
 		} else {
@@ -540,7 +535,6 @@ pub mod pallet {
 		/// # <weight>
 		/// The total number of voters and those that are defunct must be provided as witness data.
 		/// # </weight>
-		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::clean_defunct_voters(*_num_voters, *_num_defunct))]
 		pub fn clean_defunct_voters(
 			origin: OriginFor<T>,
@@ -1280,7 +1274,7 @@ mod tests {
 	}
 
 	parameter_types! {
-		pub const ElectionsPhragmenPalletId: LockIdentifier = *b"phrelect";
+		pub const ElectionsPhragmenPalletId: fungibles::LockIdentifier = *b"phrelect";
 		pub const PhragmenMaxVoters: u32 = 1000;
 		pub const PhragmenMaxCandidates: u32 = 100;
 	}

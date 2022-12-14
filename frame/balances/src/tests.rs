@@ -28,15 +28,15 @@ macro_rules! decl_tests {
 		use frame_support::{
 			assert_noop, assert_storage_noop, assert_ok, assert_err,
 			traits::{
-				LockableCurrency, LockIdentifier, WithdrawReasons,
+				fungibles, fungibles::Lockable, WithdrawReasons,
 				Currency, ReservableCurrency, ExistenceRequirement::AllowDeath
 			}
 		};
 		use pallet_transaction_payment::{ChargeTransactionPayment, Multiplier};
 		use frame_system::RawOrigin;
 
-		const ID_1: LockIdentifier = *b"1       ";
-		const ID_2: LockIdentifier = *b"2       ";
+		const ID_1: fungibles::LockIdentifier = *b"1       ";
+		const ID_2: fungibles::LockIdentifier = *b"2       ";
 
 		pub const CALL: &<$test as frame_system::Config>::RuntimeCall =
 			&RuntimeCall::Balances(pallet_balances::Call::transfer { dest: 0, value: 0 });

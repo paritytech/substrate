@@ -148,7 +148,6 @@ pub mod pallet {
 		/// - One DB write (event).
 		/// - Weight of derivative `call` execution + 10,000.
 		/// # </weight>
-		#[pallet::call_index(0)]
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
 			(dispatch_info.weight, dispatch_info.class)
@@ -177,7 +176,6 @@ pub mod pallet {
 		/// - O(1).
 		/// - The weight of this call is defined by the caller.
 		/// # </weight>
-		#[pallet::call_index(1)]
 		#[pallet::weight((*_weight, call.get_dispatch_info().class))]
 		pub fn sudo_unchecked_weight(
 			origin: OriginFor<T>,
@@ -204,7 +202,6 @@ pub mod pallet {
 		/// - Limited storage reads.
 		/// - One DB change.
 		/// # </weight>
-		#[pallet::call_index(2)]
 		#[pallet::weight(0)]
 		pub fn set_key(
 			origin: OriginFor<T>,
@@ -232,7 +229,6 @@ pub mod pallet {
 		/// - One DB write (event).
 		/// - Weight of derivative `call` execution + 10,000.
 		/// # </weight>
-		#[pallet::call_index(3)]
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
 			(

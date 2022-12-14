@@ -21,10 +21,11 @@
 
 use futures::task::Poll;
 use libp2p::PeerId;
+use sc_consensus::{BlockImportError, BlockImportStatus};
 use sc_network_common::sync::{
 	message::{BlockAnnounce, BlockData, BlockRequest, BlockResponse},
 	BadPeer, ChainSync as ChainSyncT, Metrics, OnBlockData, OnBlockJustification,
-	OpaqueBlockResponse, PeerInfo, PollBlockAnnounceValidation, SyncStatus,
+	OpaqueBlockResponse, PeerInfo, PollBlockAnnounceValidation, PollResult, SyncStatus,
 };
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
@@ -59,12 +60,17 @@ mockall::mock! {
 			request: Option<BlockRequest<Block>>,
 			response: BlockResponse<Block>,
 		) -> Result<OnBlockData<Block>, BadPeer>;
-		fn process_block_response_data(&mut self, blocks_to_import: Result<OnBlockData<Block>, BadPeer>);
 		fn on_block_justification(
 			&mut self,
 			who: PeerId,
 			response: BlockResponse<Block>,
 		) -> Result<OnBlockJustification<Block>, BadPeer>;
+		fn on_blocks_processed(
+			&mut self,
+			imported: usize,
+			count: usize,
+			results: Vec<(Result<BlockImportStatus<NumberFor<Block>>, BlockImportError>, Block::Hash)>,
+		) -> Box<dyn Iterator<Item = Result<(PeerId, BlockRequest<Block>), BadPeer>>>;
 		fn on_justification_import(
 			&mut self,
 			hash: Block::Hash,
@@ -83,7 +89,7 @@ mockall::mock! {
 			&mut self,
 			cx: &mut std::task::Context<'a>,
 		) -> Poll<PollBlockAnnounceValidation<Block::Header>>;
-		fn peer_disconnected(&mut self, who: &PeerId);
+		fn peer_disconnected(&mut self, who: &PeerId) -> Option<OnBlockData<Block>>;
 		fn metrics(&self) -> Metrics;
 		fn block_response_into_blocks(
 			&self,
@@ -93,7 +99,7 @@ mockall::mock! {
 		fn poll<'a>(
 			&mut self,
 			cx: &mut std::task::Context<'a>,
-		) -> Poll<PollBlockAnnounceValidation<Block::Header>>;
+		) -> Poll<PollResult<Block>>;
 		fn send_block_request(
 			&mut self,
 			who: PeerId,

@@ -272,7 +272,6 @@ pub mod pallet {
 		/// - DB Weight: None
 		/// - Plus Call Weight
 		/// # </weight>
-		#[pallet::call_index(0)]
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
 			(
@@ -366,7 +365,6 @@ pub mod pallet {
 		///     - Writes: Multisig Storage, [Caller Account]
 		/// - Plus Call Weight
 		/// # </weight>
-		#[pallet::call_index(1)]
 		#[pallet::weight({
 			let s = other_signatories.len() as u32;
 			let z = call.using_encoded(|d| d.len()) as u32;
@@ -430,7 +428,6 @@ pub mod pallet {
 		///     - Read: Multisig Storage, [Caller Account]
 		///     - Write: Multisig Storage, [Caller Account]
 		/// # </weight>
-		#[pallet::call_index(2)]
 		#[pallet::weight({
 			let s = other_signatories.len() as u32;
 
@@ -483,7 +480,6 @@ pub mod pallet {
 		///     - Read: Multisig Storage, [Caller Account], Refund Account
 		///     - Write: Multisig Storage, [Caller Account], Refund Account
 		/// # </weight>
-		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::cancel_as_multi(other_signatories.len() as u32))]
 		pub fn cancel_as_multi(
 			origin: OriginFor<T>,

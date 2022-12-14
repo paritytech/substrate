@@ -372,7 +372,6 @@ pub mod pallet {
 		///   - `P` storage mutations (codec `O(M)`) for updating the votes for each proposal
 		///   - 1 storage write (codec `O(1)`) for deleting the old `prime` and setting the new one
 		/// # </weight>
-		#[pallet::call_index(0)]
 		#[pallet::weight((
 			T::WeightInfo::set_members(
 				*old_count, // M
@@ -430,7 +429,6 @@ pub mod pallet {
 		/// - DB: 1 read (codec `O(M)`) + DB access of `proposal`
 		/// - 1 event
 		/// # </weight>
-		#[pallet::call_index(1)]
 		#[pallet::weight((
 			T::WeightInfo::execute(
 				*length_bound, // B
@@ -494,7 +492,6 @@ pub mod pallet {
 		///       - 1 storage write `Voting` (codec `O(M)`)
 		///   - 1 event
 		/// # </weight>
-		#[pallet::call_index(2)]
 		#[pallet::weight((
 			if *threshold < 2 {
 				T::WeightInfo::propose_execute(
@@ -560,7 +557,6 @@ pub mod pallet {
 		///   - 1 storage mutation `Voting` (codec `O(M)`)
 		/// - 1 event
 		/// # </weight>
-		#[pallet::call_index(3)]
 		#[pallet::weight((T::WeightInfo::vote(T::MaxMembers::get()), DispatchClass::Operational))]
 		pub fn vote(
 			origin: OriginFor<T>,
@@ -614,7 +610,6 @@ pub mod pallet {
 		///  - any mutations done while executing `proposal` (`P1`)
 		/// - up to 3 events
 		/// # </weight>
-		#[pallet::call_index(4)]
 		#[pallet::weight((
 			{
 				let b = *length_bound;
@@ -658,7 +653,6 @@ pub mod pallet {
 		/// * Reads: Proposals
 		/// * Writes: Voting, Proposals, ProposalOf
 		/// # </weight>
-		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::disapprove_proposal(T::MaxProposals::get()))]
 		pub fn disapprove_proposal(
 			origin: OriginFor<T>,
@@ -701,7 +695,6 @@ pub mod pallet {
 		///  - any mutations done while executing `proposal` (`P1`)
 		/// - up to 3 events
 		/// # </weight>
-		#[pallet::call_index(6)]
 		#[pallet::weight((
 			{
 				let b = *length_bound;

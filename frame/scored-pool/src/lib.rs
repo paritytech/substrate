@@ -311,7 +311,6 @@ pub mod pallet {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of the transactor in the `Pool`.
-		#[pallet::call_index(0)]
 		#[pallet::weight(0)]
 		pub fn submit_candidacy(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -341,7 +340,6 @@ pub mod pallet {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of the transactor in the `Pool`.
-		#[pallet::call_index(1)]
 		#[pallet::weight(0)]
 		pub fn withdraw_candidacy(origin: OriginFor<T>, index: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -360,7 +358,6 @@ pub mod pallet {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of `dest` in the `Pool`.
-		#[pallet::call_index(2)]
 		#[pallet::weight(0)]
 		pub fn kick(
 			origin: OriginFor<T>,
@@ -385,7 +382,6 @@ pub mod pallet {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of the `dest` in the `Pool`.
-		#[pallet::call_index(3)]
 		#[pallet::weight(0)]
 		pub fn score(
 			origin: OriginFor<T>,
@@ -425,7 +421,6 @@ pub mod pallet {
 		/// (this happens each `Period`).
 		///
 		/// May only be called from root.
-		#[pallet::call_index(4)]
 		#[pallet::weight(0)]
 		pub fn change_member_count(origin: OriginFor<T>, count: u32) -> DispatchResult {
 			ensure_root(origin)?;

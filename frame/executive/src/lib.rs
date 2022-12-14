@@ -686,10 +686,7 @@ mod tests {
 
 	use frame_support::{
 		assert_err, parameter_types,
-		traits::{
-			ConstU32, ConstU64, ConstU8, Currency, LockIdentifier, LockableCurrency,
-			WithdrawReasons,
-		},
+		traits::{fungibles, ConstU32, ConstU64, ConstU8, Currency, WithdrawReasons},
 		weights::{ConstantMultiplier, IdentityFee, RuntimeDbWeight, Weight, WeightToFee},
 	};
 	use frame_system::{Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
@@ -740,7 +737,6 @@ mod tests {
 
 		#[pallet::call]
 		impl<T: Config> Pallet<T> {
-			#[pallet::call_index(0)]
 			#[pallet::weight(100)]
 			pub fn some_function(origin: OriginFor<T>) -> DispatchResult {
 				// NOTE: does not make any different.
@@ -748,42 +744,36 @@ mod tests {
 				Ok(())
 			}
 
-			#[pallet::call_index(1)]
 			#[pallet::weight((200, DispatchClass::Operational))]
 			pub fn some_root_operation(origin: OriginFor<T>) -> DispatchResult {
 				frame_system::ensure_root(origin)?;
 				Ok(())
 			}
 
-			#[pallet::call_index(2)]
 			#[pallet::weight(0)]
 			pub fn some_unsigned_message(origin: OriginFor<T>) -> DispatchResult {
 				frame_system::ensure_none(origin)?;
 				Ok(())
 			}
 
-			#[pallet::call_index(3)]
 			#[pallet::weight(0)]
 			pub fn allowed_unsigned(origin: OriginFor<T>) -> DispatchResult {
 				frame_system::ensure_root(origin)?;
 				Ok(())
 			}
 
-			#[pallet::call_index(4)]
 			#[pallet::weight(0)]
 			pub fn unallowed_unsigned(origin: OriginFor<T>) -> DispatchResult {
 				frame_system::ensure_root(origin)?;
 				Ok(())
 			}
 
-			#[pallet::call_index(5)]
 			#[pallet::weight((0, DispatchClass::Mandatory))]
 			pub fn inherent_call(origin: OriginFor<T>) -> DispatchResult {
 				frame_system::ensure_none(origin)?;
 				Ok(())
 			}
 
-			#[pallet::call_index(6)]
 			#[pallet::weight(0)]
 			pub fn calculate_storage_root(_origin: OriginFor<T>) -> DispatchResult {
 				let root = sp_io::storage::root(sp_runtime::StateVersion::V1);
@@ -1258,11 +1248,11 @@ mod tests {
 
 	#[test]
 	fn can_pay_for_tx_fee_on_full_lock() {
-		let id: LockIdentifier = *b"0       ";
+		let id: fungibles::LockIdentifier = *b"0       ";
 		let execute_with_lock = |lock: WithdrawReasons| {
 			let mut t = new_test_ext(1);
 			t.execute_with(|| {
-				<pallet_balances::Pallet<Runtime> as LockableCurrency<Balance>>::set_lock(
+				<pallet_balances::Pallet<Runtime> as fungibles::Lockable<Balance>>::set_lock(
 					id, &1, 110, lock,
 				);
 				let xt = TestXt::new(

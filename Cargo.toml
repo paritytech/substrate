@@ -121,7 +121,6 @@ members = [
 	"frame/offences/benchmarking",
 	"frame/preimage",
 	"frame/proxy",
-	"frame/message-queue",
 	"frame/nomination-pools",
 	"frame/nomination-pools/fuzzer",
 	"frame/nomination-pools/benchmarking",
