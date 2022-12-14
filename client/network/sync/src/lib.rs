@@ -318,7 +318,9 @@ pub struct ChainSync<B: BlockT, Client> {
 	state_sync: Option<StateSync<B, Client>>,
 	/// Warp sync in progress, if any.
 	warp_sync: Option<WarpSync<B, Client>>,
-	/// Warp sync params. Provider vs TargetBlock.
+	/// Warp sync params.
+	///
+	/// Will be `None` after `self.warp_sync` is `Some(_)`.
 	warp_sync_params: Option<WarpSyncParams<B>>,
 	/// Enable importing existing blocks. This is used used after the state download to
 	/// catch up to the latest state while re-importing blocks.
