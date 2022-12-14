@@ -1,4 +1,4 @@
-error: use of deprecated unit struct `pallet::__warnings::my_call`:
+error: use of deprecated struct `pallet::warnings::my_call`:
                    Implicit call indices are deprecated in favour of explicit ones.
                    Please ensure that all calls have the `pallet::call_index` attribute or that the
                    `dev-mode` of the pallet is enabled. For more info see:
