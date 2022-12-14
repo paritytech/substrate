@@ -74,10 +74,5 @@ runtime-benchmarks = [
 	"frame-election-provider-support/runtime-benchmarks",
 	"rand_chacha",
 	"sp-staking/runtime-benchmarks",
-	"pallet-bags-list/runtime-benchmarks",
 ]
 try-runtime = ["frame-support/try-runtime"]
-fuzz = [
-	"pallet-bags-list/fuzz",
-	"frame-election-provider-support/fuzz",
-]

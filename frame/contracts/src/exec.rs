@@ -18,8 +18,8 @@
 use crate::{
 	gas::GasMeter,
 	storage::{self, Storage, WriteOutcome},
-	BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, Determinism, Error, Event, Nonce,
-	Pallet as Contracts, Schedule,
+	BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, DebugBufferVec, Determinism, Error,
+	Event, Nonce, Pallet as Contracts, Schedule,
 };
 use frame_support::{
 	crypto::ecdsa::ECDSAExt,
@@ -279,7 +279,7 @@ pub trait Ext: sealing::Sealed {
 	/// when the code is executing on-chain.
 	///
 	/// Returns `true` if debug message recording is enabled. Otherwise `false` is returned.
-	fn append_debug_buffer(&mut self, msg: &str) -> bool;
+	fn append_debug_buffer(&mut self, msg: &str) -> Result<bool, DispatchError>;
 
 	/// Call some dispatchable and return the result.
 	fn call_runtime(&self, call: <Self::T as Config>::RuntimeCall) -> DispatchResultWithPostInfo;
@@ -409,7 +409,7 @@ pub struct Stack<'a, T: Config, E> {
 	///
 	/// All the bytes added to this field should be valid UTF-8. The buffer has no defined
 	/// structure and is intended to be shown to users as-is for debugging purposes.
-	debug_message: Option<&'a mut Vec<u8>>,
+	debug_message: Option<&'a mut DebugBufferVec<T>>,
 	/// The determinism requirement of this call stack.
 	determinism: Determinism,
 	/// No executable is held by the struct but influences its behaviour.
@@ -617,7 +617,7 @@ where
 		schedule: &'a Schedule<T>,
 		value: BalanceOf<T>,
 		input_data: Vec<u8>,
-		debug_message: Option<&'a mut Vec<u8>>,
+		debug_message: Option<&'a mut DebugBufferVec<T>>,
 		determinism: Determinism,
 	) -> Result<ExecReturnValue, ExecError> {
 		let (mut stack, executable) = Self::new(
@@ -652,7 +652,7 @@ where
 		value: BalanceOf<T>,
 		input_data: Vec<u8>,
 		salt: &[u8],
-		debug_message: Option<&'a mut Vec<u8>>,
+		debug_message: Option<&'a mut DebugBufferVec<T>>,
 	) -> Result<(T::AccountId, ExecReturnValue), ExecError> {
 		let (mut stack, executable) = Self::new(
 			FrameArgs::Instantiate {
@@ -681,7 +681,7 @@ where
 		storage_meter: &'a mut storage::meter::Meter<T>,
 		schedule: &'a Schedule<T>,
 		value: BalanceOf<T>,
-		debug_message: Option<&'a mut Vec<u8>>,
+		debug_message: Option<&'a mut DebugBufferVec<T>>,
 		determinism: Determinism,
 	) -> Result<(Self, E), ExecError> {
 		let (first_frame, executable, nonce) = Self::new_frame(
@@ -1328,14 +1328,16 @@ where
 		&mut self.top_frame_mut().nested_gas
 	}
 
-	fn append_debug_buffer(&mut self, msg: &str) -> bool {
+	fn append_debug_buffer(&mut self, msg: &str) -> Result<bool, DispatchError> {
 		if let Some(buffer) = &mut self.debug_message {
 			if !msg.is_empty() {
-				buffer.extend(msg.as_bytes());
+				buffer
+					.try_extend(&mut msg.bytes())
+					.map_err(|_| Error::<T>::DebugBufferExhausted)?;
 			}
-			true
+			Ok(true)
 		} else {
-			false
+			Ok(false)
 		}
 	}
 
@@ -2503,12 +2505,16 @@ mod tests {
 	#[test]
 	fn printing_works() {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
-			ctx.ext.append_debug_buffer("This is a test");
-			ctx.ext.append_debug_buffer("More text");
+			ctx.ext
+				.append_debug_buffer("This is a test")
+				.expect("Maximum allowed debug buffer size exhausted!");
+			ctx.ext
+				.append_debug_buffer("More text")
+				.expect("Maximum allowed debug buffer size exhausted!");
 			exec_success()
 		});
 
-		let mut debug_buffer = Vec::new();
+		let mut debug_buffer = DebugBufferVec::<Test>::try_from(Vec::new()).unwrap();
 
 		ExtBuilder::default().build().execute_with(|| {
 			let min_balance = <Test as Config>::Currency::minimum_balance();
@@ -2531,18 +2537,22 @@ mod tests {
 			.unwrap();
 		});
 
-		assert_eq!(&String::from_utf8(debug_buffer).unwrap(), "This is a testMore text");
+		assert_eq!(&String::from_utf8(debug_buffer.to_vec()).unwrap(), "This is a testMore text");
 	}
 
 	#[test]
 	fn printing_works_on_fail() {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
-			ctx.ext.append_debug_buffer("This is a test");
-			ctx.ext.append_debug_buffer("More text");
+			ctx.ext
+				.append_debug_buffer("This is a test")
+				.expect("Maximum allowed debug buffer size exhausted!");
+			ctx.ext
+				.append_debug_buffer("More text")
+				.expect("Maximum allowed debug buffer size exhausted!");
 			exec_trapped()
 		});
 
-		let mut debug_buffer = Vec::new();
+		let mut debug_buffer = DebugBufferVec::<Test>::try_from(Vec::new()).unwrap();
 
 		ExtBuilder::default().build().execute_with(|| {
 			let min_balance = <Test as Config>::Currency::minimum_balance();
@@ -2565,7 +2575,43 @@ mod tests {
 			assert!(result.is_err());
 		});
 
-		assert_eq!(&String::from_utf8(debug_buffer).unwrap(), "This is a testMore text");
+		assert_eq!(&String::from_utf8(debug_buffer.to_vec()).unwrap(), "This is a testMore text");
+	}
+
+	#[test]
+	fn debug_buffer_is_limited() {
+		let code_hash = MockLoader::insert(Call, move |ctx, _| {
+			ctx.ext.append_debug_buffer("overflowing bytes")?;
+			exec_success()
+		});
+
+		// Pre-fill the buffer up to its limit
+		let mut debug_buffer =
+			DebugBufferVec::<Test>::try_from(vec![0u8; DebugBufferVec::<Test>::bound()]).unwrap();
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule: Schedule<Test> = <Test as Config>::Schedule::get();
+			let min_balance = <Test as Config>::Currency::minimum_balance();
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
+			set_balance(&ALICE, min_balance * 10);
+			place_contract(&BOB, code_hash);
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			assert_err!(
+				MockStack::run_call(
+					ALICE,
+					BOB,
+					&mut gas_meter,
+					&mut storage_meter,
+					&schedule,
+					0,
+					vec![],
+					Some(&mut debug_buffer),
+					Determinism::Deterministic,
+				)
+				.map_err(|e| e.error),
+				Error::<Test>::DebugBufferExhausted
+			);
+		});
 	}
 
 	#[test]

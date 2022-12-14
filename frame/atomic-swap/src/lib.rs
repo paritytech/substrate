@@ -243,6 +243,7 @@ pub mod pallet {
 		/// - `duration`: Locked duration of the atomic swap. For safety reasons, it is recommended
 		///   that the revealer uses a shorter duration than the counterparty, to prevent the
 		///   situation where the revealer reveals the proof too late around the end block.
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1).ref_time().saturating_add(40_000_000))]
 		pub fn create_swap(
 			origin: OriginFor<T>,
@@ -278,6 +279,7 @@ pub mod pallet {
 		/// - `proof`: Revealed proof of the claim.
 		/// - `action`: Action defined in the swap, it must match the entry in blockchain. Otherwise
 		///   the operation fails. This is used for weight calculation.
+		#[pallet::call_index(1)]
 		#[pallet::weight(
 			T::DbWeight::get().reads_writes(1, 1)
 				.saturating_add(action.weight())
@@ -318,6 +320,7 @@ pub mod pallet {
 		///
 		/// - `target`: Target of the original atomic swap.
 		/// - `hashed_proof`: Hashed proof of the original atomic swap.
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1).ref_time().saturating_add(40_000_000))]
 		pub fn cancel_swap(
 			origin: OriginFor<T>,

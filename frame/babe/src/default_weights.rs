@@ -19,7 +19,7 @@
 //! This file was not auto-generated.
 
 use frame_support::weights::{
-	constants::{RocksDbWeight as DbWeight, WEIGHT_PER_MICROS, WEIGHT_PER_NANOS},
+	constants::{RocksDbWeight as DbWeight, WEIGHT_REF_TIME_PER_MICROS, WEIGHT_REF_TIME_PER_NANOS},
 	Weight,
 };
 
@@ -38,17 +38,20 @@ impl crate::WeightInfo for () {
 		const MAX_NOMINATORS: u64 = 200;
 
 		// checking membership proof
-		let ref_time_weight = (35u64 * WEIGHT_PER_MICROS)
-			.saturating_add((175u64 * WEIGHT_PER_NANOS).saturating_mul(validator_count))
+		Weight::from_ref_time(35u64 * WEIGHT_REF_TIME_PER_MICROS)
+			.saturating_add(
+				Weight::from_ref_time(175u64 * WEIGHT_REF_TIME_PER_NANOS)
+					.saturating_mul(validator_count),
+			)
 			.saturating_add(DbWeight::get().reads(5))
 			// check equivocation proof
-			.saturating_add(110u64 * WEIGHT_PER_MICROS)
+			.saturating_add(Weight::from_ref_time(110u64 * WEIGHT_REF_TIME_PER_MICROS))
 			// report offence
-			.saturating_add(110u64 * WEIGHT_PER_MICROS)
-			.saturating_add(25u64 * WEIGHT_PER_MICROS * MAX_NOMINATORS)
+			.saturating_add(Weight::from_ref_time(110u64 * WEIGHT_REF_TIME_PER_MICROS))
+			.saturating_add(Weight::from_ref_time(
+				25u64 * WEIGHT_REF_TIME_PER_MICROS * MAX_NOMINATORS,
+			))
 			.saturating_add(DbWeight::get().reads(14 + 3 * MAX_NOMINATORS))
-			.saturating_add(DbWeight::get().writes(10 + 3 * MAX_NOMINATORS));
-
-		ref_time_weight
+			.saturating_add(DbWeight::get().writes(10 + 3 * MAX_NOMINATORS))
 	}
 }
