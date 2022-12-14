@@ -227,7 +227,11 @@ fn basic_enlarge_works() {
 		);
 		assert_eq!(
 			Receipts::<Test>::get(0).unwrap(),
-			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 2, expiry: 7, on_hold: 40 }
+			ReceiptRecord {
+				proportion: Perquintill::from_percent(10),
+				owner: Some((2, 40)),
+				expiry: 7
+			}
 		);
 	});
 }
@@ -250,11 +254,19 @@ fn enlarge_respects_bids_limit() {
 
 		assert_eq!(
 			Receipts::<Test>::get(0).unwrap(),
-			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 4, expiry: 10, on_hold: 40 }
+			ReceiptRecord {
+				proportion: Perquintill::from_percent(10),
+				owner: Some((4, 40)),
+				expiry: 10
+			}
 		);
 		assert_eq!(
 			Receipts::<Test>::get(1).unwrap(),
-			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 2, expiry: 7, on_hold: 40 }
+			ReceiptRecord {
+				proportion: Perquintill::from_percent(10),
+				owner: Some((2, 40)),
+				expiry: 7
+			}
 		);
 		assert_eq!(
 			Summary::<Test>::get(),
@@ -282,7 +294,11 @@ fn enlarge_respects_amount_limit_and_will_split() {
 
 		assert_eq!(
 			Receipts::<Test>::get(0).unwrap(),
-			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 1, expiry: 4, on_hold: 40 }
+			ReceiptRecord {
+				proportion: Perquintill::from_percent(10),
+				owner: Some((1, 40)),
+				expiry: 4
+			}
 		);
 		assert_eq!(
 			Summary::<Test>::get(),
@@ -314,12 +330,15 @@ fn basic_thaw_works() {
 		assert_eq!(holdings(), 40);
 
 		run_to_block(3);
-		assert_noop!(Nis::thaw(RuntimeOrigin::signed(1), 0, None), Error::<Test>::NotExpired);
+		assert_noop!(
+			Nis::thaw_private(RuntimeOrigin::signed(1), 0, None),
+			Error::<Test>::NotExpired
+		);
 		run_to_block(4);
-		assert_noop!(Nis::thaw(RuntimeOrigin::signed(1), 1, None), Error::<Test>::Unknown);
-		assert_noop!(Nis::thaw(RuntimeOrigin::signed(2), 0, None), Error::<Test>::NotOwner);
+		assert_noop!(Nis::thaw_private(RuntimeOrigin::signed(1), 1, None), Error::<Test>::Unknown);
+		assert_noop!(Nis::thaw_private(RuntimeOrigin::signed(2), 0, None), Error::<Test>::NotOwner);
 
-		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0, None));
+		assert_ok!(Nis::thaw_private(RuntimeOrigin::signed(1), 0, None));
 		assert_eq!(NisBalances::free_balance(1), 0);
 		assert_eq!(Nis::typed_attribute::<_, Perquintill>(&0, b"proportion"), None);
 		assert_eq!(Nis::issuance().effective, 400);
@@ -348,13 +367,15 @@ fn partial_thaw_works() {
 		assert_eq!(holdings(), 80);
 
 		run_to_block(4);
+		let prop = Perquintill::from_rational(4_100_000, 21_000_000u64);
 		assert_noop!(
-			Nis::thaw(RuntimeOrigin::signed(1), 0, Some(4_100_000)),
+			Nis::thaw_private(RuntimeOrigin::signed(1), 0, Some(prop)),
 			Error::<Test>::MakesDust
 		);
-		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0, Some(1_050_000)));
+		let prop = Perquintill::from_rational(1_050_000, 21_000_000u64);
+		assert_ok!(Nis::thaw_private(RuntimeOrigin::signed(1), 0, Some(prop)));
 
-		assert_eq!(NisBalances::free_balance(1), 3_150_000);
+		//		assert_eq!(NisBalances::free_balance(1), 3_150_000);
 		assert_eq!(
 			Nis::typed_attribute::<_, Perquintill>(&0, b"proportion"),
 			Some(Perquintill::from_rational(3_150_000u64, 21_000_000u64)),
@@ -364,7 +385,7 @@ fn partial_thaw_works() {
 		assert_eq!(Balances::free_balance(1), 40);
 		assert_eq!(holdings(), 60);
 
-		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0, None));
+		assert_ok!(Nis::thaw_private(RuntimeOrigin::signed(1), 0, None));
 
 		assert_eq!(Nis::issuance().effective, 400);
 		assert_eq!(Balances::free_balance(1), 100);
@@ -400,14 +421,10 @@ fn thaw_respects_transfers() {
 		assert_eq!(Balances::reserved_balance(&2), 40);
 
 		// Transfering the receipt...
-		assert_noop!(Nis::thaw(RuntimeOrigin::signed(1), 0, None), Error::<Test>::NotOwner);
-		// ...can't be thawed due to missing counterpart
-		assert_noop!(Nis::thaw(RuntimeOrigin::signed(2), 0, None), TokenError::NoFunds);
+		assert_noop!(Nis::thaw_private(RuntimeOrigin::signed(1), 0, None), Error::<Test>::NotOwner);
 
-		// Transfer the counterpart also...
-		assert_ok!(NisBalances::transfer(RuntimeOrigin::signed(1), 2, 2100000));
 		// ...and thawing is possible.
-		assert_ok!(Nis::thaw(RuntimeOrigin::signed(2), 0, None));
+		assert_ok!(Nis::thaw_private(RuntimeOrigin::signed(2), 0, None));
 
 		assert_eq!(Balances::total_balance(&2), 140);
 		assert_eq!(Balances::total_balance(&1), 60);
@@ -415,11 +432,13 @@ fn thaw_respects_transfers() {
 }
 
 #[test]
-fn thaw_when_issuance_higher_works() {
+fn communal_thaw_when_issuance_higher_works() {
 	new_test_ext().execute_with(|| {
 		run_to_block(1);
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 100, 1));
 		enlarge(100, 1);
+
+		assert_ok!(Nis::communify(RuntimeOrigin::signed(1), 0));
 
 		assert_eq!(NisBalances::free_balance(1), 5_250_000); // (25% of 21m)
 
@@ -431,19 +450,45 @@ fn thaw_when_issuance_higher_works() {
 		run_to_block(4);
 
 		// Unfunded initially...
-		assert_noop!(Nis::thaw(RuntimeOrigin::signed(1), 0, None), Error::<Test>::Unfunded);
+		assert_noop!(Nis::thaw_communal(RuntimeOrigin::signed(1), 0), Error::<Test>::Unfunded);
 		// ...so we fund.
 		assert_ok!(Nis::fund_deficit(RuntimeOrigin::signed(1)));
 
-		// Transfer counterpart away...
+		// Transfer counterparts away...
 		assert_ok!(NisBalances::transfer(RuntimeOrigin::signed(1), 2, 250_000));
 		// ...and it's not thawable.
-		assert_noop!(Nis::thaw(RuntimeOrigin::signed(1), 0, None), TokenError::NoFunds);
+		assert_noop!(Nis::thaw_communal(RuntimeOrigin::signed(1), 0), TokenError::NoFunds);
 
-		// Transfer counterpart back...
+		// Transfer counterparts back...
 		assert_ok!(NisBalances::transfer(RuntimeOrigin::signed(2), 1, 250_000));
 		// ...and it is.
-		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0, None));
+		assert_ok!(Nis::thaw_communal(RuntimeOrigin::signed(1), 0));
+
+		assert_eq!(Balances::free_balance(1), 150);
+		assert_eq!(Balances::reserved_balance(1), 0);
+	});
+}
+
+#[test]
+fn private_thaw_when_issuance_higher_works() {
+	new_test_ext().execute_with(|| {
+		run_to_block(1);
+		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 100, 1));
+		enlarge(100, 1);
+
+		// Everybody else's balances goes up by 50%
+		Balances::make_free_balance_be(&2, 150);
+		Balances::make_free_balance_be(&3, 150);
+		Balances::make_free_balance_be(&4, 150);
+
+		run_to_block(4);
+
+		// Unfunded initially...
+		assert_noop!(Nis::thaw_private(RuntimeOrigin::signed(1), 0, None), Error::<Test>::Unfunded);
+		// ...so we fund.
+		assert_ok!(Nis::fund_deficit(RuntimeOrigin::signed(1)));
+
+		assert_ok!(Nis::thaw_private(RuntimeOrigin::signed(1), 0, None));
 
 		assert_eq!(Balances::free_balance(1), 150);
 		assert_eq!(Balances::reserved_balance(1), 0);
@@ -467,11 +512,11 @@ fn thaw_with_ignored_issuance_works() {
 
 		run_to_block(4);
 		// Unfunded initially...
-		assert_noop!(Nis::thaw(RuntimeOrigin::signed(1), 0, None), Error::<Test>::Unfunded);
+		assert_noop!(Nis::thaw_private(RuntimeOrigin::signed(1), 0, None), Error::<Test>::Unfunded);
 		// ...so we fund...
 		assert_ok!(Nis::fund_deficit(RuntimeOrigin::signed(1)));
 		// ...and then it's ok.
-		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0, None));
+		assert_ok!(Nis::thaw_private(RuntimeOrigin::signed(1), 0, None));
 
 		// Account zero changes have been ignored.
 		assert_eq!(Balances::free_balance(1), 150);
@@ -492,7 +537,7 @@ fn thaw_when_issuance_lower_works() {
 		Balances::make_free_balance_be(&4, 75);
 
 		run_to_block(4);
-		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0, None));
+		assert_ok!(Nis::thaw_private(RuntimeOrigin::signed(1), 0, None));
 
 		assert_eq!(Balances::free_balance(1), 75);
 		assert_eq!(Balances::reserved_balance(1), 0);
@@ -515,11 +560,14 @@ fn multiple_thaws_works() {
 		assert_ok!(Nis::fund_deficit(RuntimeOrigin::signed(1)));
 
 		run_to_block(4);
-		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0, None));
-		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 1, None));
-		assert_noop!(Nis::thaw(RuntimeOrigin::signed(2), 2, None), Error::<Test>::Throttled);
+		assert_ok!(Nis::thaw_private(RuntimeOrigin::signed(1), 0, None));
+		assert_ok!(Nis::thaw_private(RuntimeOrigin::signed(1), 1, None));
+		assert_noop!(
+			Nis::thaw_private(RuntimeOrigin::signed(2), 2, None),
+			Error::<Test>::Throttled
+		);
 		run_to_block(5);
-		assert_ok!(Nis::thaw(RuntimeOrigin::signed(2), 2, None));
+		assert_ok!(Nis::thaw_private(RuntimeOrigin::signed(2), 2, None));
 
 		assert_eq!(Balances::free_balance(1), 200);
 		assert_eq!(Balances::free_balance(2), 200);
@@ -542,12 +590,15 @@ fn multiple_thaws_works_in_alternative_thaw_order() {
 		assert_ok!(Nis::fund_deficit(RuntimeOrigin::signed(1)));
 
 		run_to_block(4);
-		assert_ok!(Nis::thaw(RuntimeOrigin::signed(2), 2, None));
-		assert_noop!(Nis::thaw(RuntimeOrigin::signed(1), 1, None), Error::<Test>::Throttled);
-		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0, None));
+		assert_ok!(Nis::thaw_private(RuntimeOrigin::signed(2), 2, None));
+		assert_noop!(
+			Nis::thaw_private(RuntimeOrigin::signed(1), 1, None),
+			Error::<Test>::Throttled
+		);
+		assert_ok!(Nis::thaw_private(RuntimeOrigin::signed(1), 0, None));
 
 		run_to_block(5);
-		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 1, None));
+		assert_ok!(Nis::thaw_private(RuntimeOrigin::signed(1), 1, None));
 
 		assert_eq!(Balances::free_balance(1), 200);
 		assert_eq!(Balances::free_balance(2), 200);
@@ -585,11 +636,19 @@ fn enlargement_to_target_works() {
 		// Two new items should have been issued to 2 & 3 for 40 each & duration of 3.
 		assert_eq!(
 			Receipts::<Test>::get(0).unwrap(),
-			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 2, expiry: 13, on_hold: 40 }
+			ReceiptRecord {
+				proportion: Perquintill::from_percent(10),
+				owner: Some((2, 40)),
+				expiry: 13
+			}
 		);
 		assert_eq!(
 			Receipts::<Test>::get(1).unwrap(),
-			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 3, expiry: 13, on_hold: 40 }
+			ReceiptRecord {
+				proportion: Perquintill::from_percent(10),
+				owner: Some((3, 40)),
+				expiry: 13
+			}
 		);
 		assert_eq!(
 			Summary::<Test>::get(),
@@ -619,11 +678,19 @@ fn enlargement_to_target_works() {
 		// Two new items should have been issued to 1 & 2 for 40 each & duration of 2.
 		assert_eq!(
 			Receipts::<Test>::get(2).unwrap(),
-			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 1, expiry: 12, on_hold: 40 }
+			ReceiptRecord {
+				proportion: Perquintill::from_percent(10),
+				owner: Some((1, 40)),
+				expiry: 12
+			}
 		);
 		assert_eq!(
 			Receipts::<Test>::get(3).unwrap(),
-			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 2, expiry: 12, on_hold: 40 }
+			ReceiptRecord {
+				proportion: Perquintill::from_percent(10),
+				owner: Some((2, 40)),
+				expiry: 12
+			}
 		);
 		assert_eq!(
 			Summary::<Test>::get(),
@@ -656,7 +723,11 @@ fn enlargement_to_target_works() {
 		// One new item should have been issued to 1 for 40 each & duration of 2.
 		assert_eq!(
 			Receipts::<Test>::get(4).unwrap(),
-			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 1, expiry: 13, on_hold: 40 }
+			ReceiptRecord {
+				proportion: Perquintill::from_percent(10),
+				owner: Some((1, 40)),
+				expiry: 13
+			}
 		);
 
 		assert_eq!(
