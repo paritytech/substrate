@@ -25,6 +25,7 @@ use crate::{
 	dispatch::{DispatchError, DispatchResult},
 	traits::misc::Get,
 };
+use scale_info::TypeInfo;
 use sp_runtime::traits::Saturating;
 
 mod balanced;
@@ -78,16 +79,6 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 	/// returned and nothing is changed. If successful, the amount of tokens reduced is returned.
 	fn burn_from(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError>;
 
-	/// Attempt to reduce the balance of `who` by as much as possible up to `amount`, and possibly
-	/// slightly more due to minimum_balance requirements. If no decrease is possible then an `Err`
-	/// is returned and nothing is changed. If successful, the amount of tokens reduced is returned.
-	///
-	/// The default implementation just uses `withdraw` along with `reducible_balance` to ensure
-	/// that it doesn't fail.
-	fn slash(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
-		Self::burn_from(who, Self::reducible_balance(who, false).min(amount))
-	}
-
 	/// Transfer funds from one account into another. The default implementation uses `mint_into`
 	/// and `burn_from` and may generate unwanted events.
 	fn teleport(
@@ -134,19 +125,24 @@ pub trait Transfer<AccountId>: Inspect<AccountId> {
 	fn reactivate(_: Self::Balance) {}
 }
 
-/// Trait for inspecting a fungible asset which can be reserved.
+/// Trait for inspecting a fungible asset whose accounts support partitioning and slashing.
 pub trait InspectHold<AccountId>: Inspect<AccountId> {
+	/// An identifier for a hold. Used for disambiguating different holds so that
+	/// they can be individually replaced or removed and funds from one hold don't accidentally
+	/// become unreserved or slashed for another.
+	type Reason: codec::Encode + TypeInfo + 'static;
+
 	/// Amount of funds held in reserve by `who`.
-	fn balance_on_hold(who: &AccountId) -> Self::Balance;
+	fn balance_on_hold(reason: &Self::Reason, who: &AccountId) -> Self::Balance;
 
 	/// Check to see if some `amount` of funds of `who` may be placed on hold.
 	fn can_hold(who: &AccountId, amount: Self::Balance) -> bool;
 }
 
-/// Trait for mutating a fungible asset which can be reserved.
+/// Trait for mutating a fungible asset which can be placed on hold.
 pub trait MutateHold<AccountId>: InspectHold<AccountId> + Transfer<AccountId> {
 	/// Hold some funds in an account.
-	fn hold(who: &AccountId, amount: Self::Balance) -> DispatchResult;
+	fn hold(reason: &Self::Reason, who: &AccountId, amount: Self::Balance) -> DispatchResult;
 
 	/// Release up to `amount` held funds in an account.
 	///
@@ -155,9 +151,29 @@ pub trait MutateHold<AccountId>: InspectHold<AccountId> + Transfer<AccountId> {
 	/// If `best_effort` is `true`, then the amount actually unreserved and returned as the inner
 	/// value of `Ok` may be smaller than the `amount` passed.
 	fn release(
+		reason: &Self::Reason,
 		who: &AccountId,
 		amount: Self::Balance,
 		best_effort: bool,
+	) -> Result<Self::Balance, DispatchError>;
+
+	/// Attempt to decrease the balance of `who` which is held for the given `reason` by `amount`.
+	///
+	/// If `best_effort` is true, then as much as possible is reduced, up to `amount`, and the
+	/// amount of tokens reduced is returned. Otherwise, if the total amount can be reduced, then it
+	/// is and the amount returned, and if not, then nothing changes and `Err` is returned.
+	///
+	/// If `force` is true, then locks/freezes will be ignored. This should only be used when
+	/// conducting slashing or other activity which materially disadvantages the account holder
+	/// since it could provide a means of circumventing freezes.
+	///
+	/// In general this should not be used but rather the Imbalance-aware `slash`.
+	fn burn_held(
+		reason: &Self::Reason,
+		who: &AccountId,
+		amount: Self::Balance,
+		best_effort: bool,
+		force: bool,
 	) -> Result<Self::Balance, DispatchError>;
 
 	/// Transfer held funds into a destination account.
@@ -169,18 +185,24 @@ pub trait MutateHold<AccountId>: InspectHold<AccountId> + Transfer<AccountId> {
 	/// If `best_effort` is `true`, then an amount less than `amount` may be transferred without
 	/// error.
 	///
+	/// If `force` is `true`, then other fund-locking mechanisms may be disregarded. It should be
+	/// left as `false` in most circumstances, but when you want the same power as a `slash`, it
+	/// may be true.
+	///
 	/// The actual amount transferred is returned, or `Err` in the case of error and nothing is
 	/// changed.
 	fn transfer_held(
+		reason: &Self::Reason,
 		source: &AccountId,
 		dest: &AccountId,
 		amount: Self::Balance,
 		best_effort: bool,
-		on_held: bool,
+		on_hold: bool,
+		force: bool,
 	) -> Result<Self::Balance, DispatchError>;
 }
 
-/// Trait for slashing a fungible asset which can be reserved.
+/// Trait for slashing a fungible asset which can be place on hold.
 pub trait BalancedHold<AccountId>: Balanced<AccountId> + MutateHold<AccountId> {
 	/// Reduce the balance of some funds on hold in an account.
 	///
@@ -188,23 +210,72 @@ pub trait BalancedHold<AccountId>: Balanced<AccountId> + MutateHold<AccountId> {
 	///
 	/// As much funds that are on hold up to `amount` will be deducted as possible. If this is less
 	/// than `amount`, then a non-zero second item will be returned.
-	fn slash_held(
+	fn slash(
+		reason: &Self::Reason,
 		who: &AccountId,
 		amount: Self::Balance,
-	) -> (CreditOf<AccountId, Self>, Self::Balance);
-}
-
-impl<AccountId, T: Balanced<AccountId> + MutateHold<AccountId>> BalancedHold<AccountId> for T {
-	fn slash_held(
-		who: &AccountId,
-		amount: Self::Balance,
-	) -> (CreditOf<AccountId, Self>, Self::Balance) {
+		best_effort: bool,
+	) -> (CreditOf<AccountId, Self>, Self::Balance);/* {
 		let actual = match Self::release(who, amount, true) {
 			Ok(x) => x,
 			Err(_) => return (Imbalance::default(), amount),
 		};
 		<Self as fungible::Balanced<AccountId>>::slash(who, actual)
 	}
+	*/
+}
+
+/// Trait for inspecting a fungible asset which can be frozen. Freezing is essentially setting a
+/// minimum balance bellow which the total balance (inclusive of any funds placed on hold) may not
+/// be normally allowed to drop. Generally, freezers will provide an "update" function such that
+/// if the total balance does drop below the limit, then the freezer can update their housekeeping
+/// accordingly.
+pub trait InspectFreeze<AccountId>: Inspect<AccountId> {
+	/// An identifier for a freeze.
+	type Reason: codec::Encode + TypeInfo + 'static;
+
+	/// Amount of funds held in reserve by `who`.
+	fn balance_frozen(reason: &Self::Reason, who: &AccountId) -> Self::Balance;
+
+	/// Returns `true` if it's possible to introduce a freeze for the given `reason` onto the
+	/// account of `who`. This will be true as long as the implementor supports as many
+	/// concurrent freeze locks as there are possible values of `reason`.
+	fn can_freeze(reason: &Self::Reason, who: &AccountId) -> bool;
+}
+
+/// Trait for introducing, altering and removing locks to freeze an account's funds so they never
+/// go below a set minimum.
+pub trait MutateFreeze<AccountId>: InspectFreeze<AccountId> {
+	/// Create a new freeze lock on account `who`.
+	///
+	/// If the new lock is valid (i.e. not already expired), it will push the struct to
+	/// the `Locks` vec in storage. Note that you can lock more funds than a user has.
+	///
+	/// If the lock `reason` already exists, this will update it.
+	fn set_lock(
+		reason: &Self::Reason,
+		who: &AccountId,
+		amount: Self::Balance,
+		reasons: WithdrawReasons,
+	);
+
+	/// Changes a balance lock (selected by `reason`) so that it becomes less liquid in all
+	/// parameters or creates a new one if it does not exist.
+	///
+	/// Calling `extend_lock` on an existing lock `reason` differs from `set_lock` in that it
+	/// applies the most severe constraints of the two, while `set_lock` replaces the lock
+	/// with the new parameters. As in, `extend_lock` will set:
+	/// - maximum `amount`
+	/// - bitwise mask of all `reasons`
+	fn extend_lock(
+		reason: &Self::Reason,
+		who: &AccountId,
+		amount: Self::Balance,
+		reasons: WithdrawReasons,
+	);
+
+	/// Remove an existing lock.
+	fn remove(reason: &Self::Reason, who: &AccountId);
 }
 
 /// Convert a `fungibles` trait implementation into a `fungible` trait implementation by identifying
@@ -287,8 +358,10 @@ impl<
 		AccountId,
 	> InspectHold<AccountId> for ItemOf<F, A, AccountId>
 {
-	fn balance_on_hold(who: &AccountId) -> Self::Balance {
-		<F as fungibles::InspectHold<AccountId>>::balance_on_hold(A::get(), who)
+	type Reason = F::Reason;
+
+	fn balance_on_hold(reason: &Self::Reason, who: &AccountId) -> Self::Balance {
+		<F as fungibles::InspectHold<AccountId>>::balance_on_hold(reason, A::get(), who)
 	}
 	fn can_hold(who: &AccountId, amount: Self::Balance) -> bool {
 		<F as fungibles::InspectHold<AccountId>>::can_hold(A::get(), who, amount)
@@ -301,30 +374,35 @@ impl<
 		AccountId,
 	> MutateHold<AccountId> for ItemOf<F, A, AccountId>
 {
-	fn hold(who: &AccountId, amount: Self::Balance) -> DispatchResult {
-		<F as fungibles::MutateHold<AccountId>>::hold(A::get(), who, amount)
+	fn hold(reason: &Self::Reason, who: &AccountId, amount: Self::Balance) -> DispatchResult {
+		<F as fungibles::MutateHold<AccountId>>::hold(reason, A::get(), who, amount)
 	}
 	fn release(
+		reason: &Self::Reason,
 		who: &AccountId,
 		amount: Self::Balance,
 		best_effort: bool,
 	) -> Result<Self::Balance, DispatchError> {
-		<F as fungibles::MutateHold<AccountId>>::release(A::get(), who, amount, best_effort)
+		<F as fungibles::MutateHold<AccountId>>::release(reason, A::get(), who, amount, best_effort)
 	}
 	fn transfer_held(
+		reason: &Self::Reason,
 		source: &AccountId,
 		dest: &AccountId,
 		amount: Self::Balance,
 		best_effort: bool,
 		on_hold: bool,
+		force: bool,
 	) -> Result<Self::Balance, DispatchError> {
 		<F as fungibles::MutateHold<AccountId>>::transfer_held(
+			reason,
 			A::get(),
 			source,
 			dest,
 			amount,
 			best_effort,
 			on_hold,
+			force,
 		)
 	}
 }

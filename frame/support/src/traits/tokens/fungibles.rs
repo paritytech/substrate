@@ -22,6 +22,7 @@ use super::{
 	*,
 };
 use crate::dispatch::{DispatchError, DispatchResult};
+use scale_info::TypeInfo;
 use sp_runtime::traits::Saturating;
 use sp_std::vec::Vec;
 
@@ -196,8 +197,13 @@ pub trait Transfer<AccountId>: Inspect<AccountId> {
 
 /// Trait for inspecting a set of named fungible assets which can be placed on hold.
 pub trait InspectHold<AccountId>: Inspect<AccountId> {
+	/// An identifier for a hold. Used for disambiguating different holds so that
+	/// they can be individually replaced or removed and funds from one hold don't accidentally
+	/// become released or slashed for another.
+	type Reason: codec::Encode + TypeInfo + 'static;
+
 	/// Amount of funds held in hold.
-	fn balance_on_hold(asset: Self::AssetId, who: &AccountId) -> Self::Balance;
+	fn balance_on_hold(reason: &Self::Reason, asset: Self::AssetId, who: &AccountId) -> Self::Balance;
 
 	/// Check to see if some `amount` of `asset` may be held on the account of `who`.
 	fn can_hold(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> bool;
@@ -206,13 +212,14 @@ pub trait InspectHold<AccountId>: Inspect<AccountId> {
 /// Trait for mutating a set of named fungible assets which can be placed on hold.
 pub trait MutateHold<AccountId>: InspectHold<AccountId> + Transfer<AccountId> {
 	/// Hold some funds in an account.
-	fn hold(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> DispatchResult;
+	fn hold(reason: &Self::Reason, asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> DispatchResult;
 
 	/// Release some funds in an account from being on hold.
 	///
 	/// If `best_effort` is `true`, then the amount actually released and returned as the inner
 	/// value of `Ok` may be smaller than the `amount` passed.
 	fn release(
+		reason: &Self::Reason,
 		asset: Self::AssetId,
 		who: &AccountId,
 		amount: Self::Balance,
@@ -228,15 +235,21 @@ pub trait MutateHold<AccountId>: InspectHold<AccountId> + Transfer<AccountId> {
 	/// If `best_effort` is `true`, then an amount less than `amount` may be transferred without
 	/// error.
 	///
+	/// If `force` is `true`, then other fund-locking mechanisms may be disregarded. It should be
+	/// left as `false` in most circumstances, but when you want the same power as a `slash`, it
+	/// may be true.
+	///
 	/// The actual amount transferred is returned, or `Err` in the case of error and nothing is
 	/// changed.
 	fn transfer_held(
+		reason: &Self::Reason,
 		asset: Self::AssetId,
 		source: &AccountId,
 		dest: &AccountId,
 		amount: Self::Balance,
 		best_effort: bool,
 		on_hold: bool,
+		force: bool,
 	) -> Result<Self::Balance, DispatchError>;
 }
 
@@ -248,25 +261,12 @@ pub trait BalancedHold<AccountId>: Balanced<AccountId> + MutateHold<AccountId> {
 	///
 	/// As much funds up to `amount` will be deducted as possible. If this is less than `amount`,
 	/// then a non-zero second item will be returned.
-	fn slash_held(
+	fn slash(
+		reason: &Self::Reason,
 		asset: Self::AssetId,
 		who: &AccountId,
 		amount: Self::Balance,
 	) -> (CreditOf<AccountId, Self>, Self::Balance);
-}
-
-impl<AccountId, T: Balanced<AccountId> + MutateHold<AccountId>> BalancedHold<AccountId> for T {
-	fn slash_held(
-		asset: Self::AssetId,
-		who: &AccountId,
-		amount: Self::Balance,
-	) -> (CreditOf<AccountId, Self>, Self::Balance) {
-		let actual = match Self::release(asset, who, amount, true) {
-			Ok(x) => x,
-			Err(_) => return (Imbalance::zero(asset), amount),
-		};
-		<Self as fungibles::Balanced<AccountId>>::slash(asset, who, actual)
-	}
 }
 
 /// Trait for providing the ability to create new fungible assets.

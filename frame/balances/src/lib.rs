@@ -1176,7 +1176,8 @@ impl<T: Config<I>, I: 'static> fungible::Unbalanced<T::AccountId> for Pallet<T, 
 }
 
 impl<T: Config<I>, I: 'static> fungible::InspectHold<T::AccountId> for Pallet<T, I> {
-	fn balance_on_hold(who: &T::AccountId) -> T::Balance {
+	type Reason = ();
+	fn balance_on_hold(_reason: &Self::Reason, who: &T::AccountId) -> T::Balance {
 		Self::account(who).reserved
 	}
 	fn can_hold(who: &T::AccountId, amount: T::Balance) -> bool {
@@ -1195,7 +1196,7 @@ impl<T: Config<I>, I: 'static> fungible::InspectHold<T::AccountId> for Pallet<T,
 	}
 }
 impl<T: Config<I>, I: 'static> fungible::MutateHold<T::AccountId> for Pallet<T, I> {
-	fn hold(who: &T::AccountId, amount: Self::Balance) -> DispatchResult {
+	fn hold(_reason: &Self::Reason, who: &T::AccountId, amount: Self::Balance) -> DispatchResult {
 		if amount.is_zero() {
 			return Ok(())
 		}
@@ -1207,6 +1208,7 @@ impl<T: Config<I>, I: 'static> fungible::MutateHold<T::AccountId> for Pallet<T, 
 		Ok(())
 	}
 	fn release(
+		_reason: &Self::Reason,
 		who: &T::AccountId,
 		amount: Self::Balance,
 		best_effort: bool,
@@ -1226,14 +1228,26 @@ impl<T: Config<I>, I: 'static> fungible::MutateHold<T::AccountId> for Pallet<T, 
 		})
 	}
 	fn transfer_held(
+		_reason: &Self::Reason,
 		source: &T::AccountId,
 		dest: &T::AccountId,
 		amount: Self::Balance,
 		best_effort: bool,
 		on_hold: bool,
+		_force: bool,
 	) -> Result<Self::Balance, DispatchError> {
 		let status = if on_hold { Status::Reserved } else { Status::Free };
 		Self::do_transfer_reserved(source, dest, amount, best_effort, status)
+	}
+}
+
+impl<T: Config<I>, I: 'static> fungible::BalancedHold<T::AccountId> for Pallet<T, I> {
+	fn slash(
+		reason: &Self::Reason,
+		who: &T::AccountId,
+		amount: Self::Balance,
+	) -> (CreditOf<AccountId, Self>, Self::Balance) {
+		todo!()
 	}
 }
 

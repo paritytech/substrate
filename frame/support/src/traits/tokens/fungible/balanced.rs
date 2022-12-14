@@ -63,14 +63,6 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 		(Self::rescind(amount), Self::issue(amount))
 	}
 
-	/// Deducts up to `value` from the combined balance of `who`. This function cannot fail.
-	///
-	/// The resulting imbalance is the first item of the tuple returned.
-	///
-	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
-	/// then a non-zero second item will be returned.
-	fn slash(who: &AccountId, amount: Self::Balance) -> (CreditOf<AccountId, Self>, Self::Balance);
-
 	/// Mints exactly `value` into the account of `who`.
 	///
 	/// If `who` doesn't exist, nothing is done and an `Err` returned. This could happen because it
@@ -325,7 +317,7 @@ impl<AccountId, U: Unbalanced<AccountId>> Balanced<AccountId> for U {
 		U::set_total_issuance(new);
 		credit(new - old)
 	}
-	fn slash(who: &AccountId, amount: Self::Balance) -> (Credit<AccountId, Self>, Self::Balance) {
+/*	fn slash(who: &AccountId, amount: Self::Balance) -> (Credit<AccountId, Self>, Self::Balance) {
 		let slashed = U::decrease_balance_at_most(who, amount);
 		// `slashed` could be less than, greater than or equal to `amount`.
 		// If slashed == amount, it means the account had at least amount in it and it could all be
@@ -335,7 +327,7 @@ impl<AccountId, U: Unbalanced<AccountId>> Balanced<AccountId> for U {
 		// If slashed < amount, it means the account didn't have enough in it to be reduced by
 		//   `amount` without being destroyed.
 		(credit(slashed), amount.saturating_sub(slashed))
-	}
+	}*/
 	fn deposit(
 		who: &AccountId,
 		amount: Self::Balance,
