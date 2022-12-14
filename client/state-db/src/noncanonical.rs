@@ -840,8 +840,8 @@ mod tests {
 		// canonicalize 1. 2 and all its children should be discarded
 		let mut commit = CommitSet::default();
 		overlay.canonicalize(&h_1, &mut commit).unwrap();
-		overlay.sync();
 		db.commit(&commit);
+		overlay.sync();
 		assert_eq!(overlay.levels.len(), 2);
 		assert_eq!(overlay.parents.len(), 6);
 		assert!(!contains(&overlay, 1));
@@ -861,8 +861,8 @@ mod tests {
 		// canonicalize 1_2. 1_1 and all its children should be discarded
 		let mut commit = CommitSet::default();
 		overlay.canonicalize(&h_1_2, &mut commit).unwrap();
-		overlay.sync();
 		db.commit(&commit);
+		overlay.sync();
 		assert_eq!(overlay.levels.len(), 1);
 		assert_eq!(overlay.parents.len(), 3);
 		assert!(!contains(&overlay, 11));
@@ -964,6 +964,28 @@ mod tests {
 	}
 
 	#[test]
+	fn pins_canonicalized() {
+		let mut db = make_db(&[]);
+
+		let (h_1, c_1) = (H256::random(), make_changeset(&[1], &[]));
+		let (h_2, c_2) = (H256::random(), make_changeset(&[2], &[]));
+
+		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
+		db.commit(&overlay.insert(&h_1, 1, &H256::default(), c_1).unwrap());
+		db.commit(&overlay.insert(&h_2, 2, &h_1, c_2).unwrap());
+
+		let mut commit = CommitSet::default();
+		overlay.canonicalize(&h_1, &mut commit).unwrap();
+		overlay.canonicalize(&h_2, &mut commit).unwrap();
+		assert!(contains(&overlay, 1));
+		assert!(contains(&overlay, 2));
+		db.commit(&commit);
+		overlay.sync();
+		assert!(!contains(&overlay, 1));
+		assert!(!contains(&overlay, 2));
+	}
+
+	#[test]
 	fn pin_keeps_parent() {
 		let mut db = make_db(&[]);
 
@@ -1024,8 +1046,8 @@ mod tests {
 
 		let mut commit = CommitSet::default();
 		overlay.canonicalize(&h21, &mut commit).unwrap(); // h11 should stay in the DB
-		overlay.sync();
 		db.commit(&commit);
+		overlay.sync();
 		assert!(!contains(&overlay, 21));
 	}
 
