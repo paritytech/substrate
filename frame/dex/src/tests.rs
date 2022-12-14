@@ -188,7 +188,8 @@ fn add_liquidity_should_work() {
 			10,
 			10,
 			user,
-			2
+			2,
+			false
 		));
 
 		assert!(events().contains(&Event::<Test>::LiquidityAdded {
@@ -232,7 +233,8 @@ fn remove_liquidity_should_work() {
 			10,
 			10,
 			user,
-			2
+			2,
+			false
 		));
 
 		assert_ok!(Dex::remove_liquidity(
@@ -289,7 +291,8 @@ fn can_not_redeem_more_lp_tokens_than_were_minted() {
 			10,
 			10,
 			user,
-			2
+			2,
+			false
 		));
 
 		// Only 9 lp_tokens_minted
@@ -336,7 +339,8 @@ fn quote_price_should_work() {
 			1,
 			1,
 			user,
-			2
+			2,
+			false
 		));
 
 		assert_eq!(Dex::quote_price(None, Some(2), 3000), Some(60));
@@ -367,7 +371,8 @@ fn swap_should_work_with_native() {
 			1,
 			1,
 			user,
-			2
+			2,
+			false
 		));
 
 		let exchange_amount = 10;
@@ -381,13 +386,51 @@ fn swap_should_work_with_native() {
 			exchange_amount,
 			1,
 			user,
-			3
+			3,
+			false
 		));
 
 		let pallet_account = Dex::account_id();
 		assert_eq!(balance(user, token_1), expect_receive);
 		assert_eq!(balance(pallet_account, token_1), liquidity1 - expect_receive);
 		assert_eq!(balance(pallet_account, token_2), liquidity2 + exchange_amount);
+	});
+}
+
+#[test]
+fn add_liquidity_causes_below_existential_deposit_but_keep_alive_set() {
+	new_test_ext().execute_with(|| {
+		let user = 1;
+		let token_1 = MultiAssetId::Native;
+		let token_2 = MultiAssetId::Asset(2);
+
+		create_tokens(user, vec![token_2]);
+		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
+
+		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user, 1000, 0));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 2, user, 1000));
+
+		let liquidity1 = 1000;
+		let liquidity2 = 20;
+		assert_noop!(
+			Dex::add_liquidity(
+				RuntimeOrigin::signed(user),
+				token_1,
+				token_2,
+				liquidity1,
+				liquidity2,
+				1,
+				1,
+				user,
+				2,
+				true // keep_alive set so user account doesn't get reaped.
+			),
+			DispatchError::Module(ModuleError {
+				index: 1,
+				error: [4, 0, 0, 0],
+				message: Some("KeepAlive")
+			})
+		);
 	});
 }
 
@@ -410,7 +453,8 @@ fn can_not_swap_in_pool_with_no_liquidity_added_yet() {
 				10,
 				1,
 				user,
-				3
+				3,
+				false
 			),
 			Error::<Test>::InsufficientLiquidity
 		);
@@ -418,7 +462,7 @@ fn can_not_swap_in_pool_with_no_liquidity_added_yet() {
 }
 
 #[test]
-fn check_no_panic_when_try_swap_empty_pool() {
+fn check_no_panic_when_try_swap_close_to_empty_pool() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
 		let token_1 = MultiAssetId::Native;
@@ -442,7 +486,8 @@ fn check_no_panic_when_try_swap_empty_pool() {
 			1,
 			1,
 			user,
-			2
+			2,
+			false
 		));
 
 		assert!(events().contains(&Event::<Test>::LiquidityAdded {
@@ -481,7 +526,8 @@ fn check_no_panic_when_try_swap_empty_pool() {
 			20,
 			7,
 			user,
-			3
+			3,
+			false
 		));
 
 		assert_eq!(balance(pallet_account, token_1), 1);
@@ -494,7 +540,8 @@ fn check_no_panic_when_try_swap_empty_pool() {
 				20,
 				1,
 				user,
-				3
+				3,
+				false
 			),
 			Error::<Test>::InsufficientOutputAmount
 		); // The price for the last one is very high.
@@ -525,7 +572,8 @@ fn swap_should_not_work_with_if_too_much_slippage() {
 			1,
 			1,
 			user,
-			2
+			2,
+			false
 		));
 
 		let exchange_amount = 10;
@@ -538,7 +586,8 @@ fn swap_should_not_work_with_if_too_much_slippage() {
 				exchange_amount,
 				333, // amount out min
 				user,
-				3
+				3,
+				false
 			),
 			Error::<Test>::InsufficientOutputAmount
 		);
@@ -575,7 +624,8 @@ fn swap_tokens_for_exact_tokens_should_work() {
 			1,
 			1,
 			user,
-			deadline
+			deadline,
+			true
 		));
 
 		assert_eq!(balance(user, token_1), 1000);
@@ -592,7 +642,8 @@ fn swap_tokens_for_exact_tokens_should_work() {
 			exchange_out2,
 			100, // amount_in_max
 			user,
-			3
+			3,
+			true
 		));
 
 		assert_eq!(balance(user, token_1), 1000 - expect_in1);
@@ -642,7 +693,8 @@ fn swap_tokens_for_exact_tokens_works_when_user_is_not_liquidity_provider() {
 			1,
 			1,
 			user2,
-			deadline
+			deadline,
+			false
 		));
 
 		assert_eq!(balance(user, token_1), 1000);
@@ -659,7 +711,8 @@ fn swap_tokens_for_exact_tokens_works_when_user_is_not_liquidity_provider() {
 			exchange_out2,
 			100, // amount_in_max
 			user,
-			3
+			3,
+			true
 		));
 
 		assert_eq!(balance(user, token_1), 1000 - expect_in1);
@@ -696,6 +749,107 @@ fn swap_tokens_for_exact_tokens_works_when_user_is_not_liquidity_provider() {
 }
 
 #[test]
+fn swap_when_existential_deposit_would_cause_reaping_but_keep_alive_set() {
+	new_test_ext().execute_with(|| {
+		let user = 1;
+		let user2 = 2;
+		let token_1 = MultiAssetId::Native;
+		let token_2 = MultiAssetId::Asset(2);
+		let deadline = 2;
+
+		create_tokens(user2, vec![token_2]);
+		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user2), token_1, token_2));
+
+		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user, 1, 0));
+		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user2, 1000, 0));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(user2), 2, user2, 2000));
+
+		assert_ok!(Dex::add_liquidity(
+			RuntimeOrigin::signed(user2),
+			token_1,
+			token_2,
+			1000,
+			2000,
+			1,
+			1,
+			user2,
+			deadline,
+			false
+		));
+
+		assert_noop!(
+			Dex::swap_tokens_for_exact_tokens(
+				RuntimeOrigin::signed(user),
+				token_1,
+				token_2,
+				1,
+				1, // amount_in_min
+				user,
+				3,
+				true
+			),
+			DispatchError::Module(ModuleError {
+				index: 1,
+				error: [4, 0, 0, 0],
+				message: Some("KeepAlive")
+			})
+		);
+
+		assert_noop!(
+			Dex::swap_exact_tokens_for_tokens(
+				RuntimeOrigin::signed(user),
+				token_1,
+				token_2,
+				1,
+				1, // amount_in_min
+				user,
+				3,
+				true
+			),
+			DispatchError::Module(ModuleError {
+				index: 1,
+				error: [4, 0, 0, 0],
+				message: Some("KeepAlive")
+			})
+		);
+	});
+}
+
+#[test]
+fn add_liquidity_past_deadline() {
+	new_test_ext().execute_with(|| {
+		let user = 1;
+		let user2 = 2;
+		let token_1 = MultiAssetId::Native;
+		let token_2 = MultiAssetId::Asset(2);
+		let deadline = 0;
+
+		create_tokens(user2, vec![token_2]);
+		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user2), token_1, token_2));
+
+		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user, 100, 0));
+		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user2, 1000, 0));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(user2), 2, user2, 1000));
+
+		assert_noop!(
+			Dex::add_liquidity(
+				RuntimeOrigin::signed(user2),
+				token_1,
+				token_2,
+				1000,
+				20,
+				1,
+				1,
+				user2,
+				deadline,
+				false
+			),
+			Error::<Test>::DeadlinePassed
+		);
+	});
+}
+
+#[test]
 fn swap_tokens_for_exact_tokens_should_not_work_if_too_much_slippage() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
@@ -721,7 +875,8 @@ fn swap_tokens_for_exact_tokens_should_not_work_if_too_much_slippage() {
 			1,
 			1,
 			user,
-			deadline
+			deadline,
+			true
 		));
 		let exchange_out2 = 1;
 
@@ -733,7 +888,8 @@ fn swap_tokens_for_exact_tokens_should_not_work_if_too_much_slippage() {
 				exchange_out2,
 				52, // amount_in_max just greater than slippage.
 				user,
-				3
+				3,
+				true
 			),
 			<Error<Test>>::ExcessiveInputAmount
 		);
@@ -766,7 +922,8 @@ fn same_asset_swap_should_fail() {
 				1,
 				1,
 				user,
-				2
+				2,
+				true
 			),
 			Error::<Test>::PoolNotFound
 		);
@@ -780,7 +937,8 @@ fn same_asset_swap_should_fail() {
 				exchange_amount,
 				1,
 				user,
-				3
+				3,
+				true
 			),
 			Error::<Test>::PoolNotFound
 		);
@@ -793,7 +951,8 @@ fn same_asset_swap_should_fail() {
 				exchange_amount,
 				1,
 				user,
-				3
+				3,
+				true
 			),
 			Error::<Test>::PoolNotFound
 		);
