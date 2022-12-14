@@ -32,6 +32,7 @@ use std::{marker::PhantomData, sync::Arc};
 use crate::communication::request_response::{
 	on_demand_justifications_protocol_config, Error, JustificationRequest,
 };
+use crate::{metrics::Metrics, metric_inc, metric_set};
 
 /// A request coming in, including a sender for sending responses.
 #[derive(Debug)]
@@ -89,7 +90,7 @@ impl<B: Block> IncomingRequest<B> {
 ///
 /// Takes care of decoding and handling of invalid encoded requests.
 pub(crate) struct IncomingRequestReceiver {
-	raw: mpsc::Receiver<netconfig::IncomingRequest>,
+	raw: mpsc::Receiver<netconfig::IncomingRequest>
 }
 
 impl IncomingRequestReceiver {
@@ -101,7 +102,7 @@ impl IncomingRequestReceiver {
 	///
 	/// Any received request will be decoded, on decoding errors the provided reputation changes
 	/// will be applied and an error will be reported.
-	pub async fn recv<B, F>(&mut self, reputation_changes: F) -> Result<IncomingRequest<B>, Error>
+	pub async fn recv<B, F>(&mut self, reputation_changes: F,) -> Result<IncomingRequest<B>, Error>
 	where
 		B: Block,
 		F: FnOnce() -> Vec<ReputationChange>,
@@ -120,6 +121,7 @@ pub struct BeefyJustifsRequestHandler<B, Client> {
 	pub(crate) justif_protocol_name: ProtocolName,
 	pub(crate) client: Arc<Client>,
 	pub(crate) _block: PhantomData<B>,
+	metrics: Option<Metrics>,
 }
 
 impl<B, Client> BeefyJustifsRequestHandler<B, Client>
@@ -132,12 +134,13 @@ where
 		genesis_hash: Hash,
 		fork_id: Option<&str>,
 		client: Arc<Client>,
+		metrics: Option<Metrics>
 	) -> (Self, RequestResponseConfig) {
 		let (request_receiver, config) =
 			on_demand_justifications_protocol_config(genesis_hash, fork_id);
 		let justif_protocol_name = config.name.clone();
 
-		(Self { request_receiver, justif_protocol_name, client, _block: PhantomData }, config)
+		(Self { request_receiver, justif_protocol_name, client, _block: PhantomData, metrics }, config)
 	}
 
 	/// Network request-response protocol name used by this handler.
@@ -180,12 +183,14 @@ where
 			let peer = request.peer;
 			match self.handle_request(request) {
 				Ok(()) => {
+					metric_inc!(self, beefy_successful_justification_respond_request);
 					debug!(
 						target: "beefy::sync",
 						"🥩 Handled BEEFY justification request from {:?}.", peer
 					)
 				},
 				Err(e) => {
+					metric_inc!(self, beefy_failed_justification_respond_request);
 					// TODO (issue #12293): apply reputation changes here based on error type.
 					debug!(
 						target: "beefy::sync",

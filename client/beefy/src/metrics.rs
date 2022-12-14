@@ -20,7 +20,7 @@
 
 use prometheus::{register, Counter, Gauge, PrometheusError, Registry, U64};
 /// BEEFY metrics exposed through Prometheus
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Metrics {
 	/// Current active validator set id
 	pub beefy_validator_set_id: Gauge<U64>,
@@ -56,6 +56,10 @@ pub struct Metrics {
 	pub beefy_bad_justification_imports: Gauge<U64>,
 	/// Number of Good Justification imports
 	pub beefy_good_justification_imports: Gauge<U64>,
+	/// Number of Successful Justification respond request
+	pub beefy_successful_justification_respond_request: Counter<U64>,
+	/// Number of Failed Justification respond request
+	pub beefy_failed_justification_respond_request: Counter<U64>,
 }
 
 impl Metrics {
@@ -163,6 +167,14 @@ impl Metrics {
 					"substrate_beefy_good_justification_imports",
 					"Number of Good Justification imports",
 				)?,
+				registry,
+			)?,
+			beefy_successful_justification_respond_request: register(
+				Counter::new("substrate_beefy_successful_justification_respond_request", "Number of Successful Justification respond request")?,
+				registry,
+			)?,
+			beefy_failed_justification_respond_request: register(
+				Counter::new("substrate_beefy_failed_justification_respond_request", "Number of Failed Justification respond request")?,
 				registry,
 			)?,
 		})
