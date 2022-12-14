@@ -1123,37 +1123,37 @@ pub trait Crypto {
 
 	/// Compute a multi pairing
 	fn bls12_381_multi_pairing(a: Vec<Vec<u8>>, b: Vec<Vec<u8>>) -> Vec<u8> {
-		sp_arkworks::multi_pairing(a, b)
+		sp_arkworks::bls12_381::multi_pairing(a, b)
 	}
 
 	/// Compute a multi Miller loop
 	fn bls12_381_multi_miller_loop(a: Vec<Vec<u8>>, b: Vec<Vec<u8>>) -> Vec<u8> {
-		sp_arkworks::multi_miller_loop(a, b)
+		sp_arkworks::bls12_381::multi_miller_loop(a, b)
 	}
 
 	/// Compute a final exponentiation
 	fn bls12_381_final_exponentiation(f12: &[u8]) -> Vec<u8> {
-		sp_arkworks::final_exponentiation(f12)
+		sp_arkworks::bls12_381::final_exponentiation(f12)
 	}
 
 	/// Compute a bigint_msm on G2
 	fn bls12_381_mul_projective_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-		sp_arkworks::mul_projective_g2(base, scalar)
+		sp_arkworks::bls12_381::mul_projective_g2(base, scalar)
 	}
 
 	/// Compute a bigint_msm on G2
 	fn bls12_381_mul_affine_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-		sp_arkworks::mul_affine_g2(base, scalar)
+		sp_arkworks::bls12_381::mul_affine_g2(base, scalar)
 	}
 
 	/// Compute a bigint_msm on G2
 	fn bls12_381_mul_projective_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-		sp_arkworks::mul_projective_g1(base, scalar)
+		sp_arkworks::bls12_381::mul_projective_g1(base, scalar)
 	}
 
 	/// Compute a bigint_msm on G2
 	fn bls12_381_mul_affine_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-		sp_arkworks::mul_affine_g1(base, scalar)
+		sp_arkworks::bls12_381::mul_affine_g1(base, scalar)
 	}
 }
 
