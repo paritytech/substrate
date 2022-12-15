@@ -343,9 +343,6 @@ impl pallet_utility::Config for Test {
 parameter_types! {
 	pub MySchedule: Schedule<Test> = {
 		let mut schedule = <Schedule<Test>>::default();
-		// We want stack height to be always enabled for tests so that this
-		// instrumentation path is always tested implicitly.
-		schedule.limits.stack_height = Some(512);
 		schedule.instruction_weights.fallback = 1;
 		schedule
 	};
@@ -2853,7 +2850,7 @@ fn upload_code_works() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
-						amount: 241,
+						amount: 173,
 					}),
 					topics: vec![],
 				},
@@ -2943,7 +2940,7 @@ fn remove_code_works() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
-						amount: 241,
+						amount: 173,
 					}),
 					topics: vec![],
 				},
@@ -2956,7 +2953,7 @@ fn remove_code_works() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Balances(pallet_balances::Event::Unreserved {
 						who: ALICE,
-						amount: 241,
+						amount: 173,
 					}),
 					topics: vec![],
 				},
@@ -2999,7 +2996,7 @@ fn remove_code_wrong_origin() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
-						amount: 241,
+						amount: 173,
 					}),
 					topics: vec![],
 				},
@@ -3132,7 +3129,7 @@ fn instantiate_with_zero_balance_works() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
-						amount: 241,
+						amount: 173,
 					}),
 					topics: vec![],
 				},
@@ -3234,7 +3231,7 @@ fn instantiate_with_below_existential_deposit_works() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
-						amount: 241,
+						amount: 173,
 					}),
 					topics: vec![],
 				},
