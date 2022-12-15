@@ -51,6 +51,10 @@ use crate::{
 };
 
 const STAKING_ID: LockIdentifier = *b"staking ";
+// The speculative number of spans are used as an input of the weight annotation of
+// [`Call::unbond`], as the post dipatch weight may depend on the number of slashing span on the
+// account which is not provided as an input. The value set should be conservative but sensible.
+pub(crate) const SPECULATIVE_NUM_SPANS: u32 = 32;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -115,7 +119,6 @@ pub mod pallet {
 			// we only accept an election provider that has staking as data provider.
 			DataProvider = Pallet<Self>,
 		>;
-
 		/// Something that provides the election functionality at genesis.
 		type GenesisElectionProvider: ElectionProvider<
 			AccountId = Self::AccountId,
@@ -953,8 +956,8 @@ pub mod pallet {
 		/// the funds out of management ready for transfer.
 		///
 		/// No more than a limited number of unlocking chunks (see `MaxUnlockingChunks`)
-		/// can co-exists at the same time. In that case, [`Call::withdraw_unbonded`] need
-		/// to be called first to remove some of the chunks (if possible).
+		/// can co-exists at the same time. If there are no unlocking chunks slots available
+		/// [`Call::withdraw_unbonded`] is called to remove some of the chunks (if possible).
 		///
 		/// If a user encounters the `InsufficientBond` error when calling this extrinsic,
 		/// they should call `chill` first in order to free up their bonded funds.
@@ -963,19 +966,38 @@ pub mod pallet {
 		///
 		/// See also [`Call::withdraw_unbonded`].
 		#[pallet::call_index(2)]
-		#[pallet::weight(T::WeightInfo::unbond())]
+		#[pallet::weight(
+            T::WeightInfo::withdraw_unbonded_kill(SPECULATIVE_NUM_SPANS).saturating_add(T::WeightInfo::unbond()))
+        ]
 		pub fn unbond(
 			origin: OriginFor<T>,
 			#[pallet::compact] value: BalanceOf<T>,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let controller = ensure_signed(origin)?;
+			let unlocking = Self::ledger(&controller)
+				.map(|l| l.unlocking.len())
+				.ok_or(Error::<T>::NotController)?;
+
+			// if there are no unlocking chunks available, try to withdraw chunks older than
+			// `BondingDuration` to proceed with the unbonding.
+			let maybe_withdraw_weight = {
+				if unlocking == T::MaxUnlockingChunks::get() as usize {
+					let real_num_slashing_spans = Self::slashing_spans(&controller).iter().count();
+					Some(Self::do_withdraw_unbonded(&controller, real_num_slashing_spans as u32)?)
+				} else {
+					None
+				}
+			};
+
+			// we need to fetch the ledger again because it may have been mutated in the call
+			// to `Self::do_withdraw_unbonded` above.
 			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			let mut value = value.min(ledger.active);
+
 			ensure!(
 				ledger.unlocking.len() < T::MaxUnlockingChunks::get() as usize,
 				Error::<T>::NoMoreChunks,
 			);
-
-			let mut value = value.min(ledger.active);
 
 			if !value.is_zero() {
 				ledger.active -= value;
@@ -1024,7 +1046,14 @@ pub mod pallet {
 
 				Self::deposit_event(Event::<T>::Unbonded { stash: ledger.stash, amount: value });
 			}
-			Ok(())
+
+			let actual_weight = if let Some(withdraw_weight) = maybe_withdraw_weight {
+				Some(T::WeightInfo::unbond().saturating_add(withdraw_weight))
+			} else {
+				Some(T::WeightInfo::unbond())
+			};
+
+			Ok(actual_weight.into())
 		}
 
 		/// Remove any unlocked chunks from the `unlocking` queue from our management.
@@ -1049,40 +1078,9 @@ pub mod pallet {
 			num_slashing_spans: u32,
 		) -> DispatchResultWithPostInfo {
 			let controller = ensure_signed(origin)?;
-			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			let (stash, old_total) = (ledger.stash.clone(), ledger.total);
-			if let Some(current_era) = Self::current_era() {
-				ledger = ledger.consolidate_unlocked(current_era)
-			}
 
-			let post_info_weight = if ledger.unlocking.is_empty() &&
-				ledger.active < T::Currency::minimum_balance()
-			{
-				// This account must have called `unbond()` with some value that caused the active
-				// portion to fall below existential deposit + will have no more unlocking chunks
-				// left. We can now safely remove all staking-related information.
-				Self::kill_stash(&stash, num_slashing_spans)?;
-				// Remove the lock.
-				T::Currency::remove_lock(STAKING_ID, &stash);
-				// This is worst case scenario, so we use the full weight and return None
-				None
-			} else {
-				// This was the consequence of a partial unbond. just update the ledger and move on.
-				Self::update_ledger(&controller, &ledger);
-
-				// This is only an update, so we use less overall weight.
-				Some(T::WeightInfo::withdraw_unbonded_update(num_slashing_spans))
-			};
-
-			// `old_total` should never be less than the new total because
-			// `consolidate_unlocked` strictly subtracts balance.
-			if ledger.total < old_total {
-				// Already checked that this won't overflow by entry condition.
-				let value = old_total - ledger.total;
-				Self::deposit_event(Event::<T>::Withdrawn { stash, amount: value });
-			}
-
-			Ok(post_info_weight.into())
+			let actual_weight = Self::do_withdraw_unbonded(&controller, num_slashing_spans)?;
+			Ok(Some(actual_weight).into())
 		}
 
 		/// Declare the desire to validate for the origin controller.

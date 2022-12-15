@@ -1350,12 +1350,14 @@ fn bond_extra_and_withdraw_unbonded_works() {
 }
 
 #[test]
-fn too_many_unbond_calls_should_not_work() {
+fn many_unbond_calls_should_work() {
 	ExtBuilder::default().build_and_execute(|| {
 		let mut current_era = 0;
 		// locked at era MaxUnlockingChunks - 1 until 3
 
-		for i in 0..<<Test as Config>::MaxUnlockingChunks as Get<u32>>::get() - 1 {
+		let max_unlocking_chunks = <<Test as Config>::MaxUnlockingChunks as Get<u32>>::get();
+
+		for i in 0..max_unlocking_chunks - 1 {
 			// There is only 1 chunk per era, so we need to be in a new era to create a chunk.
 			current_era = i as u32;
 			mock::start_active_era(current_era);
@@ -1365,27 +1367,57 @@ fn too_many_unbond_calls_should_not_work() {
 		current_era += 1;
 		mock::start_active_era(current_era);
 
-		// This chunk is locked at `current_era` through `current_era + 2` (because BondingDuration
-		// == 3).
+		// This chunk is locked at `current_era` through `current_era + 2` (because
+		// `BondingDuration` == 3).
 		assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
 		assert_eq!(
-			Staking::ledger(&10).unwrap().unlocking.len(),
+			Staking::ledger(&10).map(|l| l.unlocking.len()).unwrap(),
 			<<Test as Config>::MaxUnlockingChunks as Get<u32>>::get() as usize
 		);
-		// can't do more.
-		assert_noop!(Staking::unbond(RuntimeOrigin::signed(10), 1), Error::<Test>::NoMoreChunks);
 
-		current_era += 2;
+		// even though the number of unlocked chunks is the same as `MaxUnlockingChunks`,
+		// unbonding works as expected.
+		for i in current_era..(current_era + max_unlocking_chunks) - 1 {
+			// There is only 1 chunk per era, so we need to be in a new era to create a chunk.
+			current_era = i as u32;
+			mock::start_active_era(current_era);
+			assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
+		}
+
+		// only slots within last `BondingDuration` are filled.
+		assert_eq!(
+			Staking::ledger(&10).map(|l| l.unlocking.len()).unwrap(),
+			<<Test as Config>::BondingDuration>::get() as usize
+		);
+	})
+}
+
+#[test]
+fn auto_withdraw_may_not_unlock_all_chunks() {
+	ExtBuilder::default().build_and_execute(|| {
+		// set `MaxUnlockingChunks` to a low number to test case when the unbonding period
+		// is larger than the number of unlocking chunks available, which may result on a
+		// `Error::NoMoreChunks`, even when the auto-withdraw tries to release locked chunks.
+		MaxUnlockingChunks::set(1);
+
+		let mut current_era = 0;
+
+		// fills the chunking slots for account
+		mock::start_active_era(current_era);
+		assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
+
+		current_era += 1;
 		mock::start_active_era(current_era);
 
+		// unbonding will fail because i) there are no remaining chunks and ii) no filled chunks
+		// can be released because current chunk hasn't stay in the queue for at least
+		// `BondingDuration`
 		assert_noop!(Staking::unbond(RuntimeOrigin::signed(10), 1), Error::<Test>::NoMoreChunks);
-		// free up everything except the most recently added chunk.
-		assert_ok!(Staking::withdraw_unbonded(RuntimeOrigin::signed(10), 0));
-		assert_eq!(Staking::ledger(&10).unwrap().unlocking.len(), 1);
 
-		// Can add again.
+		// fast-forward a few eras for unbond to be successful with implicit withdraw
+		current_era += 10;
+		mock::start_active_era(current_era);
 		assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
-		assert_eq!(Staking::ledger(&10).unwrap().unlocking.len(), 2);
 	})
 }
 
