@@ -42,9 +42,8 @@ pub const MIN_LIQUIDITY: u64 = 1;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, sp_io};
 	use frame_system::pallet_prelude::*;
-	use frame_support::sp_io;
 
 	use frame_support::{
 		traits::{
@@ -131,10 +130,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		PoolIdOf<T>,
-		PoolInfo<T::AccountId,
-			// T::AssetId,
-			 T::PoolAssetId
-		>,
+		PoolInfo<T::AccountId, T::PoolAssetId>,
 		OptionQuery,
 	>;
 
@@ -248,10 +244,7 @@ pub mod pallet {
 			T::PoolAssets::create(lp_token, pool_account.clone(), true, MIN_LIQUIDITY.into())?;
 			T::PoolAssets::set(lp_token, &pool_account, "LP".into(), "LP".into(), 0)?;
 
-			let pool_info = PoolInfo {
-				owner: sender.clone(),
-				lp_token,
-			};
+			let pool_info = PoolInfo { owner: sender.clone(), lp_token };
 
 			Pools::<T>::insert(pool_id, pool_info);
 
@@ -259,8 +252,6 @@ pub mod pallet {
 
 			Ok(())
 		}
-
-
 
 		#[pallet::weight(T::WeightInfo::add_liquidity())]
 		pub fn add_liquidity(
@@ -485,7 +476,7 @@ pub mod pallet {
 			let balance1 = Self::get_balance(&pool_account, asset1);
 			let balance2 = Self::get_balance(&pool_account, asset2);
 			if balance1.is_zero() {
-				return Err(Error::<T>::PoolNotFound.into());
+				return Err(Error::<T>::PoolNotFound.into())
 			}
 
 			let amount_out = Self::get_amount_out(&amount_in, &balance1, &balance2)?;
@@ -538,7 +529,7 @@ pub mod pallet {
 			let balance1 = Self::get_balance(&pool_account, asset1);
 			let balance2 = Self::get_balance(&pool_account, asset2);
 			if balance1.is_zero() {
-				return Err(Error::<T>::PoolNotFound.into());
+				return Err(Error::<T>::PoolNotFound.into())
 			}
 
 			let amount_in = Self::get_amount_in(&amount_out, &balance1, &balance2)?;
@@ -588,7 +579,10 @@ pub mod pallet {
 			T::PalletId::get().into_sub_account_truncating(sub)
 		}
 
-		fn get_balance(owner: &T::AccountId, token_id: MultiAssetId<T::AssetId>) -> T::AssetBalance {
+		fn get_balance(
+			owner: &T::AccountId,
+			token_id: MultiAssetId<T::AssetId>,
+		) -> T::AssetBalance {
 			match token_id {
 				MultiAssetId::Native => <<T as Config>::Currency>::balance(owner),
 				MultiAssetId::Asset(token_id) => <<T as Config>::Assets>::balance(token_id, owner),
@@ -630,11 +624,8 @@ pub mod pallet {
 			if !balance1.is_zero() {
 				let balance2 = Self::get_balance(&pool_account, asset2);
 
-				let (reserve1, reserve2) = if asset1 == pool_asset1 {
-					(balance1, balance2)
-				} else {
-					(balance2, balance1)
-				};
+				let (reserve1, reserve2) =
+					if asset1 == pool_asset1 { (balance1, balance2) } else { (balance2, balance1) };
 				Self::quote(&amount, &reserve1, &reserve2).ok()
 			} else {
 				None
