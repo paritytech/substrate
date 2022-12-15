@@ -272,6 +272,7 @@ pub mod pallet {
 			amount2_min: AssetBalanceOf<T>,
 			mint_to: T::AccountId,
 			deadline: T::BlockNumber,
+			keep_alive: bool,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
@@ -324,8 +325,8 @@ pub mod pallet {
 				}
 
 				let pallet_account = Self::account_id();
-				Self::transfer(asset1, &sender, &pallet_account, amount1, false)?;
-				Self::transfer(asset2, &sender, &pallet_account, amount2, false)?;
+				Self::transfer(asset1, &sender, &pallet_account, amount1, keep_alive)?;
+				Self::transfer(asset2, &sender, &pallet_account, amount2, keep_alive)?;
 
 				let total_supply = T::PoolAssets::total_issuance(pool.lp_token);
 
@@ -408,7 +409,7 @@ pub mod pallet {
 					&sender,
 					&pallet_account,
 					lp_token_burn,
-					false,
+					false, // LP tokens should not be sufficient assets so can't kill account
 				)?;
 
 				let reserve1 = pool.balance1;
@@ -468,6 +469,7 @@ pub mod pallet {
 			amount_out_min: AssetBalanceOf<T>,
 			send_to: T::AccountId,
 			deadline: T::BlockNumber,
+			keep_alive: bool,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
@@ -493,7 +495,7 @@ pub mod pallet {
 				ensure!(amount2 >= amount_out_min, Error::<T>::InsufficientOutputAmount);
 
 				let pallet_account = Self::account_id();
-				Self::transfer(asset1, &sender, &pallet_account, amount1, false)?;
+				Self::transfer(asset1, &sender, &pallet_account, amount1, keep_alive)?;
 
 				let (send_asset, send_amount) =
 					Self::validate_swap(asset1, amount2, pool_id, pool.balance1, pool.balance2)?;
@@ -531,6 +533,7 @@ pub mod pallet {
 			amount_in_max: AssetBalanceOf<T>,
 			send_to: T::AccountId,
 			deadline: T::BlockNumber,
+			keep_alive: bool,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
@@ -555,7 +558,7 @@ pub mod pallet {
 				ensure!(amount1 <= amount_in_max, Error::<T>::ExcessiveInputAmount);
 
 				let pallet_account = Self::account_id();
-				Self::transfer(asset1, &sender, &pallet_account, amount1, false)?;
+				Self::transfer(asset1, &sender, &pallet_account, amount1, keep_alive)?;
 
 				let (send_asset, send_amount) =
 					Self::validate_swap(asset1, amount2, pool_id, pool.balance1, pool.balance2)?;
