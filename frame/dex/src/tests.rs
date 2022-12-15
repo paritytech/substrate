@@ -78,9 +78,12 @@ fn pool_balance(owner: u64, token_id: u32) -> u64 {
 #[test]
 fn check_u64() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(Dex::quote(&3u64, &u64::MAX, &u64::MAX).ok(), Some(3));
+		assert_eq!(Dex::quote(&3u64, &u64::MAX, &u64::MAX).ok().unwrap(), 3);
 		assert!(Dex::quote(&u64::MAX, &3u64, &u64::MAX).is_err());
-		assert_eq!(Dex::quote(&u64::MAX, &u64::MAX, &1u64).ok(), Some(1));
+		assert_eq!(Dex::quote(&u64::MAX, &u64::MAX, &1u64).ok().unwrap(), 1);
+
+		assert_eq!(Dex::get_amount_out(&100u64, &u64::MAX, &u64::MAX).ok().unwrap(), 99);
+		assert_eq!(Dex::get_amount_in(&100u64, &u64::MAX, &u64::MAX).ok().unwrap(), 101);
 	});
 }
 
