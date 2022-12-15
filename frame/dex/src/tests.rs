@@ -202,7 +202,7 @@ fn add_liquidity_should_work() {
 			lp_token_minted: 9,
 		}));
 
-		let pallet_account = Dex::account_id();
+		let pallet_account = Dex::get_pool_account(pool_id);
 		assert_eq!(balance(pallet_account, token_1), 10);
 		assert_eq!(balance(pallet_account, token_2), 10);
 		assert_eq!(pool_balance(user, lp_token), 9);
@@ -289,7 +289,7 @@ fn remove_liquidity_should_work() {
 			lp_token_burned: 9,
 		}));
 
-		let pallet_account = Dex::account_id();
+		let pallet_account = Dex::get_pool_account(pool_id);
 		assert_eq!(balance(pallet_account, token_1), 1);
 		assert_eq!(balance(pallet_account, token_2), 1);
 		assert_eq!(pool_balance(pallet_account, lp_token), 1);
@@ -384,6 +384,7 @@ fn swap_should_work_with_native() {
 		let user = 1;
 		let token_1 = MultiAssetId::Native;
 		let token_2 = MultiAssetId::Asset(2);
+		let pool_id = (token_1, token_2);
 
 		create_tokens(user, vec![token_2]);
 		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
@@ -406,25 +407,25 @@ fn swap_should_work_with_native() {
 			false
 		));
 
-		let exchange_amount = 10;
+		let input_amount = 10;
 		let expect_receive =
-			Dex::get_amount_out(&exchange_amount, &liquidity2, &liquidity1).ok().unwrap();
+			Dex::get_amount_out(&input_amount, &liquidity2, &liquidity1).ok().unwrap();
 
 		assert_ok!(Dex::swap_exact_tokens_for_tokens(
 			RuntimeOrigin::signed(user),
 			token_2,
 			token_1,
-			exchange_amount,
+			input_amount,
 			1,
 			user,
 			3,
 			false
 		));
 
-		let pallet_account = Dex::account_id();
+		let pallet_account = Dex::get_pool_account(pool_id);
 		assert_eq!(balance(user, token_1), expect_receive);
 		assert_eq!(balance(pallet_account, token_1), liquidity1 - expect_receive);
-		assert_eq!(balance(pallet_account, token_2), liquidity2 + exchange_amount);
+		assert_eq!(balance(pallet_account, token_2), liquidity2 + input_amount);
 	});
 }
 
@@ -487,7 +488,7 @@ fn can_not_swap_in_pool_with_no_liquidity_added_yet() {
 				3,
 				false
 			),
-			Error::<Test>::InsufficientLiquidity
+			Error::<Test>::PoolNotFound
 		);
 	});
 }
@@ -531,7 +532,7 @@ fn check_no_panic_when_try_swap_close_to_empty_pool() {
 			lp_token_minted: 140,
 		}));
 
-		let pallet_account = Dex::account_id();
+		let pallet_account = Dex::get_pool_account(pool_id);
 
 		assert_eq!(balance(pallet_account, token_1), 1000);
 
@@ -632,7 +633,8 @@ fn swap_tokens_for_exact_tokens_should_work() {
 		let token_1 = MultiAssetId::Native;
 		let token_2 = MultiAssetId::Asset(2);
 		let deadline = 2;
-		let pallet_account = Dex::account_id();
+		let pool_id = (token_1, token_2);
+		let pallet_account = Dex::get_pool_account(pool_id);
 		let base1 = 1000;
 
 		create_tokens(user, vec![token_2]);
@@ -698,7 +700,8 @@ fn swap_tokens_for_exact_tokens_works_when_user_is_not_liquidity_provider() {
 		let token_1 = MultiAssetId::Native;
 		let token_2 = MultiAssetId::Asset(2);
 		let deadline = 2;
-		let pallet_account = Dex::account_id();
+		let pool_id = (token_1, token_2);
+		let pallet_account = Dex::get_pool_account(pool_id);
 		let base1 = 1000;
 
 		create_tokens(user2, vec![token_2]);

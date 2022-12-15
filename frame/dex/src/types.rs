@@ -39,17 +39,9 @@ pub enum MultiAssetId<AssetId> {
 }
 
 #[derive(Decode, Encode, Default, PartialEq, Eq, MaxEncodedLen, TypeInfo)]
-pub struct PoolInfo<AccountId, AssetId, PoolAssetId, Balance> {
+pub struct PoolInfo<AccountId, PoolAssetId> {
 	/// Owner of the pool
 	pub owner: AccountId,
 	/// Liquidity pool asset
 	pub lp_token: PoolAssetId,
-	/// The first asset supported by the pool
-	pub asset1: MultiAssetId<AssetId>,
-	/// The second asset supported by the pool
-	pub asset2: MultiAssetId<AssetId>,
-	/// Pool balance of asset1
-	pub balance1: Balance,
-	/// Pool balance of asset2
-	pub balance2: Balance,
 }
