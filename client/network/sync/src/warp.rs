@@ -112,7 +112,7 @@ where
 			if let Poll::Ready(Ok(target_block)) = target_block.poll_unpin(cx) {
 				Some(Phase::TargetBlock(target_block))
 			} else if let Poll::Ready(Err(e)) = target_block.poll_unpin(cx) {
-				error!(target: "warp_sync", "Failed to get target block. Error: {:?}",e);
+				error!(target: "sync", "Failed to get target block. Error: {:?}",e);
 				None
 			} else {
 				None
