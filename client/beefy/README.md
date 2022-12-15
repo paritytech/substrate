@@ -18,8 +18,8 @@ in the [whitepaper](https://github.com/w3f/consensus/blob/master/pdf/grandpa.pdf
 
 ## Bridges
 
-We want to be able "bridge" different blockchains. We do so by safely sharing and verifying
-information about each chain’s state, i.e. blockchain A should be able to verify that blockchain
+We want to be able to "bridge" different blockchains. We do so by safely sharing and verifying
+information about each chain’s state, i.e. blockchain `A` should be able to verify that blockchain
 `B` is at block #X.
 
 ## Finality
