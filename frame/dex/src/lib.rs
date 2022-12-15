@@ -55,8 +55,8 @@ pub mod pallet {
 	use sp_runtime::{
 		helpers_128bit::multiply_by_rational_with_rounding,
 		traits::{
-			AccountIdConversion, AtLeast32BitUnsigned, CheckedDiv, CheckedMul, CheckedSub,
-			IntegerSquareRoot, One, Zero,
+			AccountIdConversion, AtLeast32BitUnsigned, CheckedMul, CheckedSub, IntegerSquareRoot,
+			One, Zero,
 		},
 		Rounding,
 	};
@@ -337,6 +337,7 @@ pub mod pallet {
 
 				let lp_token_amount: AssetBalanceOf<T>;
 				if total_supply.is_zero() {
+					// TODO: sqrt(amount1 * amount2) - MIN_LIQUIDITY
 					lp_token_amount = amount1
 						.checked_mul(&amount2)
 						.ok_or(Error::<T>::Overflow)?
@@ -345,18 +346,8 @@ pub mod pallet {
 						.ok_or(Error::<T>::Overflow)?;
 					T::PoolAssets::mint_into(pool.lp_token, &pallet_account, MIN_LIQUIDITY.into())?;
 				} else {
-					let side1 = amount1
-						.checked_mul(&total_supply)
-						.ok_or(Error::<T>::Overflow)?
-						.checked_div(&reserve1)
-						.ok_or(Error::<T>::Overflow)?;
-
-					let side2 = amount2
-						.checked_mul(&total_supply)
-						.ok_or(Error::<T>::Overflow)?
-						.checked_div(&reserve2)
-						.ok_or(Error::<T>::Overflow)?;
-
+					let side1 = Self::mul_div(&amount1, &total_supply, &reserve1)?;
+					let side2 = Self::mul_div(&amount2, &total_supply, &reserve2)?;
 					lp_token_amount = side1.min(side2);
 				}
 
@@ -422,17 +413,8 @@ pub mod pallet {
 
 				let total_supply = T::PoolAssets::total_issuance(pool.lp_token);
 
-				let amount1 = lp_token_burn
-					.checked_mul(&reserve1)
-					.ok_or(Error::<T>::Overflow)?
-					.checked_div(&total_supply)
-					.ok_or(Error::<T>::Overflow)?;
-
-				let amount2 = lp_token_burn
-					.checked_mul(&reserve2)
-					.ok_or(Error::<T>::Overflow)?
-					.checked_div(&total_supply)
-					.ok_or(Error::<T>::Overflow)?;
+				let amount1 = Self::mul_div(&lp_token_burn, &reserve1, &total_supply)?;
+				let amount2 = Self::mul_div(&lp_token_burn, &reserve2, &total_supply)?;
 
 				ensure!(
 					!amount1.is_zero() && amount1 >= amount1_min_receive,
@@ -665,10 +647,19 @@ pub mod pallet {
 			reserve2: &AssetBalanceOf<T>,
 		) -> Result<AssetBalanceOf<T>, Error<T>> {
 			// amount * reserve2 / reserve1
+			Self::mul_div(amount, reserve2, reserve1)
+		}
+
+		fn mul_div(
+			a: &AssetBalanceOf<T>,
+			b: &AssetBalanceOf<T>,
+			c: &AssetBalanceOf<T>,
+		) -> Result<AssetBalanceOf<T>, Error<T>> {
+			// amount * reserve2 / reserve1
 			let result = multiply_by_rational_with_rounding(
-				(*amount).into(),
-				(*reserve2).into(),
-				(*reserve1).into(),
+				(*a).into(),
+				(*b).into(),
+				(*c).into(),
 				Rounding::Down,
 			)
 			.ok_or(Error::<T>::Overflow)?;
