@@ -452,28 +452,28 @@ pub mod pallet {
 		/// The queue for the bid's duration is full and the amount bid is too low to get in
 		/// through replacing an existing bid.
 		BidTooLow,
-		/// Bond index is unknown.
-		Unknown,
+		/// Receipt index is unknown.
+		UnknownReceipt,
 		/// Not the owner of the receipt.
 		NotOwner,
 		/// Bond not yet at expiry date.
 		NotExpired,
 		/// The given bid for retraction is not found.
-		NotFound,
+		UnknownBid,
 		/// The portion supplied is beyond the value of the receipt.
-		TooMuch,
+		PortionTooBig,
 		/// Not enough funds are held to pay out.
 		Unfunded,
 		/// There are enough funds for what is required.
-		Funded,
+		AlreadyFunded,
 		/// The thaw throttle has been reached for this period.
 		Throttled,
 		/// The operation would result in a receipt worth an insignficant value.
 		MakesDust,
 		/// The receipt is already communal.
-		NotOwned,
+		AlreadyCommunal,
 		/// The receipt is already private.
-		Owned,
+		AlreadyPrivate,
 	}
 
 	pub(crate) struct WeightCounter {
@@ -617,7 +617,7 @@ pub mod pallet {
 
 			let bid = Bid { amount, who };
 			let new_len = Queues::<T>::try_mutate(duration, |q| -> Result<u32, DispatchError> {
-				let pos = q.iter().position(|i| i == &bid).ok_or(Error::<T>::NotFound)?;
+				let pos = q.iter().position(|i| i == &bid).ok_or(Error::<T>::UnknownBid)?;
 				q.remove(pos);
 				Ok(q.len() as u32)
 			})?;
@@ -645,7 +645,7 @@ pub mod pallet {
 			let our_account = Self::account_id();
 			let issuance = Self::issuance_with(&our_account, &summary);
 			let deficit = issuance.required.saturating_sub(issuance.holdings);
-			ensure!(!deficit.is_zero(), Error::<T>::Funded);
+			ensure!(!deficit.is_zero(), Error::<T>::AlreadyFunded);
 			T::Deficit::on_unbalanced(T::Currency::deposit_creating(&our_account, deficit));
 			Self::deposit_event(Event::<T>::Funded { deficit });
 			Ok(())
@@ -670,9 +670,9 @@ pub mod pallet {
 
 			// Look for `index`
 			let mut receipt: ReceiptRecordOf<T> =
-				Receipts::<T>::get(index).ok_or(Error::<T>::Unknown)?;
+				Receipts::<T>::get(index).ok_or(Error::<T>::UnknownReceipt)?;
 			// If found, check the owner is `who`.
-			let (owner, mut on_hold) = receipt.owner.ok_or(Error::<T>::NotOwned)?;
+			let (owner, mut on_hold) = receipt.owner.ok_or(Error::<T>::AlreadyCommunal)?;
 			ensure!(owner == who, Error::<T>::NotOwner);
 
 			let now = frame_system::Pallet::<T>::block_number();
@@ -681,7 +681,7 @@ pub mod pallet {
 			let mut summary: SummaryRecordOf<T> = Summary::<T>::get();
 
 			let proportion = if let Some(proportion) = maybe_proportion {
-				ensure!(proportion <= receipt.proportion, Error::<T>::TooMuch);
+				ensure!(proportion <= receipt.proportion, Error::<T>::PortionTooBig);
 				let remaining = receipt.proportion.saturating_sub(proportion);
 				ensure!(
 					remaining.is_zero() || remaining >= T::MinReceipt::get(),
@@ -765,7 +765,7 @@ pub mod pallet {
 
 			// Look for `index`
 			let mut receipt: ReceiptRecordOf<T> =
-				Receipts::<T>::get(index).ok_or(Error::<T>::Unknown)?;
+				Receipts::<T>::get(index).ok_or(Error::<T>::UnknownReceipt)?;
 			// If found, check it is actually communal.
 			ensure!(receipt.owner.is_none(), Error::<T>::NotOwner);
 			let now = frame_system::Pallet::<T>::block_number();
@@ -822,10 +822,10 @@ pub mod pallet {
 
 			// Look for `index`
 			let mut receipt: ReceiptRecordOf<T> =
-				Receipts::<T>::get(index).ok_or(Error::<T>::Unknown)?;
+				Receipts::<T>::get(index).ok_or(Error::<T>::UnknownReceipt)?;
 
 			// Check it's not already communal and make it so.
-			let (owner, on_hold) = receipt.owner.take().ok_or(Error::<T>::NotOwned)?;
+			let (owner, on_hold) = receipt.owner.take().ok_or(Error::<T>::AlreadyCommunal)?;
 
 			// If found, check the owner is `who`.
 			ensure!(owner == who, Error::<T>::NotOwner);
@@ -861,10 +861,10 @@ pub mod pallet {
 
 			// Look for `index`
 			let mut receipt: ReceiptRecordOf<T> =
-				Receipts::<T>::get(index).ok_or(Error::<T>::Unknown)?;
+				Receipts::<T>::get(index).ok_or(Error::<T>::UnknownReceipt)?;
 
 			// If found, check there is no owner.
-			ensure!(receipt.owner.is_none(), Error::<T>::Owned);
+			ensure!(receipt.owner.is_none(), Error::<T>::AlreadyPrivate);
 
 			// Multiply the proportion it is by the total issued.
 			let mut summary: SummaryRecordOf<T> = Summary::<T>::get();
@@ -933,7 +933,7 @@ pub mod pallet {
 	impl<T: Config> NonfungibleTransfer<T::AccountId> for Pallet<T> {
 		fn transfer(index: &ReceiptIndex, destination: &T::AccountId) -> DispatchResult {
 			let mut item = Receipts::<T>::get(index).ok_or(TokenError::UnknownAsset)?;
-			let (owner, on_hold) = item.owner.take().ok_or(Error::<T>::NotOwned)?;
+			let (owner, on_hold) = item.owner.take().ok_or(Error::<T>::AlreadyCommunal)?;
 
 			// TODO: This should all be replaced by a single call `transfer_held`.
 			let shortfall = T::Currency::unreserve_named(&T::ReserveId::get(), &owner, on_hold);
