@@ -19,6 +19,7 @@ sc-executor = { version = "0.10.0-dev", path = "../../../../client/executor" }
 sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../../client/service" }
 sp-core = { version = "7.0.0", path = "../../../../primitives/core" }
 sp-externalities = { version = "0.13.0", path = "../../../../primitives/externalities" }
+sp-inherents = { path = "../../../../primitives/inherents" }
 sp-io = { version = "7.0.0", path = "../../../../primitives/io" }
 sp-keystore = { version = "0.13.0", path = "../../../../primitives/keystore" }
 sp-runtime = { version = "7.0.0", path = "../../../../primitives/runtime" }
@@ -31,6 +32,7 @@ sp-weights = { version = "4.0.0", path = "../../../../primitives/weights" }
 frame-try-runtime = { optional = true, path = "../../../../frame/try-runtime" }
 substrate-rpc-client = { path = "../../rpc/client" }
 
+async-trait = "0.1.57"
 parity-scale-codec = "3.0.0"
 hex = "0.4.3"
 clap = { version = "4.0.9", features = ["derive"] }

@@ -358,6 +358,7 @@
 
 #![cfg(feature = "try-runtime")]
 
+use crate::commands::fast_forward::BlockBuildingInfoProvider;
 use parity_scale_codec::Decode;
 use remote_externalities::{
 	Builder, Mode, OfflineConfig, OnlineConfig, RemoteExternalities, SnapshotConfig,
@@ -381,10 +382,11 @@ use sp_core::{
 	twox_128, H256,
 };
 use sp_externalities::Extensions;
+use sp_inherents::InherentData;
 use sp_keystore::{testing::KeyStore, KeystoreExt};
 use sp_runtime::{
 	traits::{BlakeTwo256, Block as BlockT, NumberFor},
-	DeserializeOwned,
+	DeserializeOwned, Digest,
 };
 use sp_state_machine::{CompactProof, OverlayedChanges, StateMachine, TrieBackendBuilder};
 use sp_version::StateVersion;
@@ -445,6 +447,15 @@ pub enum Command {
 	/// tested has remained the same, otherwise block decoding might fail.
 	FollowChain(commands::follow_chain::FollowChainCmd),
 
+	/// Produce a series of empty, consecutive blocks and execute them one-by-one.
+	///
+	/// To compare it with [`Command::FollowChain`]:
+	///  - we don't have the delay of the original blocktime (for Polkadot 6s), but instead, we
+	///    execute every block immediately
+	///  - the only data that will be put into blocks are pre-runtime digest items and inherent
+	///    extrinsics; both things should be defined in your node CLI handling level
+	FastForward(commands::fast_forward::FastForwardCmd),
+
 	/// Create a new snapshot file.
 	CreateSnapshot(commands::create_snapshot::CreateSnapshotCmd),
 }
@@ -484,7 +495,7 @@ pub struct SharedParams {
 	/// go away.
 	#[allow(missing_docs)]
 	#[clap(flatten)]
-	pub shared_params: sc_cli::SharedParams,
+	shared_params: sc_cli::SharedParams,
 
 	/// The runtime to use.
 	///
@@ -505,7 +516,7 @@ pub struct SharedParams {
 		ignore_case = true,
 		default_value_t = DEFAULT_WASM_EXECUTION_METHOD,
 	)]
-	pub wasm_method: WasmExecutionMethod,
+	wasm_method: WasmExecutionMethod,
 
 	/// The WASM instantiation method to use.
 	///
@@ -516,7 +527,7 @@ pub struct SharedParams {
 		default_value_t = DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
 		value_enum,
 	)]
-	pub wasmtime_instantiation_strategy: WasmtimeInstantiationStrategy,
+	wasmtime_instantiation_strategy: WasmtimeInstantiationStrategy,
 
 	/// The number of 64KB pages to allocate for Wasm execution. Defaults to
 	/// [`sc_service::Configuration.default_heap_pages`].
@@ -710,7 +721,10 @@ impl State {
 }
 
 impl TryRuntimeCmd {
-	pub async fn run<Block, HostFns>(&self) -> sc_cli::Result<()>
+	pub async fn run<Block, HostFns, BBIP>(
+		&self,
+		block_building_info_provider: Option<BBIP>,
+	) -> sc_cli::Result<()>
 	where
 		Block: BlockT<Hash = H256> + DeserializeOwned,
 		Block::Header: DeserializeOwned,
@@ -720,6 +734,7 @@ impl TryRuntimeCmd {
 		<NumberFor<Block> as TryInto<u64>>::Error: Debug,
 		NumberFor<Block>: FromStr,
 		HostFns: HostFunctions,
+		BBIP: BlockBuildingInfoProvider<Block, Option<(InherentData, Digest)>>,
 	{
 		match &self.command {
 			Command::OnRuntimeUpgrade(ref cmd) =>
@@ -744,6 +759,13 @@ impl TryRuntimeCmd {
 				commands::follow_chain::follow_chain::<Block, HostFns>(
 					self.shared.clone(),
 					cmd.clone(),
+				)
+				.await,
+			Command::FastForward(cmd) =>
+				commands::fast_forward::fast_forward::<Block, HostFns, BBIP>(
+					self.shared.clone(),
+					cmd.clone(),
+					block_building_info_provider,
 				)
 				.await,
 			Command::CreateSnapshot(cmd) =>

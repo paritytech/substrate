@@ -8,7 +8,12 @@ use frame_benchmarking_cli::{BenchmarkCmd, ExtrinsicFactory, SUBSTRATE_REFERENCE
 use node_template_runtime::{Block, EXISTENTIAL_DEPOSIT};
 use sc_cli::{ChainSpec, RuntimeVersion, SubstrateCli};
 use sc_service::PartialComponents;
+use sp_consensus_aura::{Slot, SlotDuration, AURA_ENGINE_ID};
+use sp_core::Encode;
+use sp_inherents::InherentData;
 use sp_keyring::Sr25519Keyring;
+use sp_runtime::{Digest, DigestItem};
+use sp_timestamp::TimestampInherentData;
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> String {
@@ -184,11 +189,32 @@ pub fn run() -> sc_cli::Result<()> {
 				let task_manager =
 					sc_service::TaskManager::new(config.tokio_handle.clone(), registry)
 						.map_err(|e| sc_cli::Error::Service(sc_service::Error::Prometheus(e)))?;
+
+				let info_provider = |_, maybe_prev_info: Option<(InherentData, Digest)>| async {
+					const BLOCKTIME_MILLIS: u64 = 2 * 3_000;
+
+					let timestamp_idp = match maybe_prev_info {
+						Some((inherent_data, _)) => sp_timestamp::InherentDataProvider::new(
+							inherent_data.timestamp_inherent_data().unwrap().unwrap() +
+								BLOCKTIME_MILLIS,
+						),
+						None => sp_timestamp::InherentDataProvider::from_system_time(),
+					};
+
+					let slot = Slot::from_timestamp(
+						*timestamp_idp,
+						SlotDuration::from_millis(BLOCKTIME_MILLIS),
+					);
+					let digest = vec![DigestItem::PreRuntime(AURA_ENGINE_ID, slot.encode())];
+
+					Ok((timestamp_idp, digest))
+				};
+
 				Ok((
 					cmd.run::<Block, ExtendedHostFunctions<
 						sp_io::SubstrateHostFunctions,
 						<ExecutorDispatch as NativeExecutionDispatch>::ExtendHostFunctions,
-					>>(),
+					>, _>(Some(info_provider)),
 					task_manager,
 				))
 			})
