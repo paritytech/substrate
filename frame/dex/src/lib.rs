@@ -52,9 +52,10 @@ pub mod pallet {
 		},
 		PalletId,
 	};
-	use sp_runtime::traits::{
-		AccountIdConversion, AtLeast32BitUnsigned, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub,
-		IntegerSquareRoot, One, Zero,
+	use sp_runtime::{
+		helpers_128bit::multiply_by_rational_with_rounding,
+		traits::{AccountIdConversion, AtLeast32BitUnsigned, IntegerSquareRoot, One, Zero},
+		Rounding,
 	};
 
 	#[pallet::pallet]
@@ -76,6 +77,7 @@ pub mod pallet {
 			+ MaybeSerializeDeserialize
 			+ sp_std::fmt::Debug
 			+ From<u64>
+			+ Into<u128>
 			+ TypeInfo
 			+ MaxEncodedLen;
 
@@ -332,26 +334,11 @@ pub mod pallet {
 
 				let lp_token_amount: AssetBalanceOf<T>;
 				if total_supply.is_zero() {
-					lp_token_amount = amount1
-						.checked_mul(&amount2)
-						.ok_or(Error::<T>::Overflow)?
-						.integer_sqrt()
-						.checked_sub(&MIN_LIQUIDITY.into())
-						.ok_or(Error::<T>::Overflow)?;
+					lp_token_amount = Self::calc_lp_amount_for_zero_supply(&amount1, &amount2)?;
 					T::PoolAssets::mint_into(pool.lp_token, &pallet_account, MIN_LIQUIDITY.into())?;
 				} else {
-					let side1 = amount1
-						.checked_mul(&total_supply)
-						.ok_or(Error::<T>::Overflow)?
-						.checked_div(&reserve1)
-						.ok_or(Error::<T>::Overflow)?;
-
-					let side2 = amount2
-						.checked_mul(&total_supply)
-						.ok_or(Error::<T>::Overflow)?
-						.checked_div(&reserve2)
-						.ok_or(Error::<T>::Overflow)?;
-
+					let side1 = Self::mul_div(&amount1, &total_supply, &reserve1)?;
+					let side2 = Self::mul_div(&amount2, &total_supply, &reserve2)?;
 					lp_token_amount = side1.min(side2);
 				}
 
@@ -417,17 +404,8 @@ pub mod pallet {
 
 				let total_supply = T::PoolAssets::total_issuance(pool.lp_token);
 
-				let amount1 = lp_token_burn
-					.checked_mul(&reserve1)
-					.ok_or(Error::<T>::Overflow)?
-					.checked_div(&total_supply)
-					.ok_or(Error::<T>::Overflow)?;
-
-				let amount2 = lp_token_burn
-					.checked_mul(&reserve2)
-					.ok_or(Error::<T>::Overflow)?
-					.checked_div(&total_supply)
-					.ok_or(Error::<T>::Overflow)?;
+				let amount1 = Self::mul_div(&lp_token_burn, &reserve1, &total_supply)?;
+				let amount2 = Self::mul_div(&lp_token_burn, &reserve2, &total_supply)?;
 
 				ensure!(
 					!amount1.is_zero() && amount1 >= amount1_min_receive,
@@ -653,7 +631,6 @@ pub mod pallet {
 			}
 		}
 
-		// TODO: we should probably use u128 for calculations
 		/// Calculates the optimal amount from the reserves.
 		pub fn quote(
 			amount: &AssetBalanceOf<T>,
@@ -661,11 +638,41 @@ pub mod pallet {
 			reserve2: &AssetBalanceOf<T>,
 		) -> Result<AssetBalanceOf<T>, Error<T>> {
 			// amount * reserve2 / reserve1
-			amount
-				.checked_mul(&reserve2)
+			Self::mul_div(amount, reserve2, reserve1)
+		}
+
+		fn calc_lp_amount_for_zero_supply(
+			amount1: &AssetBalanceOf<T>,
+			amount2: &AssetBalanceOf<T>,
+		) -> Result<AssetBalanceOf<T>, Error<T>> {
+			let amount1 = u128::try_from(*amount1).map_err(|_| Error::<T>::Overflow)?;
+			let amount2 = u128::try_from(*amount2).map_err(|_| Error::<T>::Overflow)?;
+
+			let result = amount1
+				.checked_mul(amount2)
 				.ok_or(Error::<T>::Overflow)?
-				.checked_div(&reserve1)
-				.ok_or(Error::<T>::Overflow)
+				.integer_sqrt()
+				.checked_sub(MIN_LIQUIDITY.into())
+				.ok_or(Error::<T>::Overflow)?;
+
+			result.try_into().map_err(|_| Error::<T>::Overflow)
+		}
+
+		fn mul_div(
+			a: &AssetBalanceOf<T>,
+			b: &AssetBalanceOf<T>,
+			c: &AssetBalanceOf<T>,
+		) -> Result<AssetBalanceOf<T>, Error<T>> {
+			// amount * reserve2 / reserve1
+			let result = multiply_by_rational_with_rounding(
+				(*a).into(),
+				(*b).into(),
+				(*c).into(),
+				Rounding::Down,
+			)
+			.ok_or(Error::<T>::Overflow)?;
+
+			result.try_into().map_err(|_| Error::<T>::Overflow)
 		}
 
 		/// Calculates amount out
@@ -677,26 +684,31 @@ pub mod pallet {
 			reserve_in: &AssetBalanceOf<T>,
 			reserve_out: &AssetBalanceOf<T>,
 		) -> Result<AssetBalanceOf<T>, Error<T>> {
+			let amount_in = u128::try_from(*amount_in).map_err(|_| Error::<T>::Overflow)?;
+			let reserve_in = u128::try_from(*reserve_in).map_err(|_| Error::<T>::Overflow)?;
+			let reserve_out = u128::try_from(*reserve_out).map_err(|_| Error::<T>::Overflow)?;
+
 			if reserve_in.is_zero() || reserve_out.is_zero() {
 				return Err(Error::<T>::InsufficientLiquidity.into())
 			}
 
-			// TODO: extract 0.3% into config
 			// TODO: could use Permill type
 			let amount_in_with_fee = amount_in
-				.checked_mul(&(1000u64 - T::Fee::get()).into())
+				.checked_mul(1000u128 - (T::Fee::get() as u128))
 				.ok_or(Error::<T>::Overflow)?;
 
 			let numerator =
 				amount_in_with_fee.checked_mul(reserve_out).ok_or(Error::<T>::Overflow)?;
 
 			let denominator = reserve_in
-				.checked_mul(&1000u64.into())
+				.checked_mul(1000u128)
 				.ok_or(Error::<T>::Overflow)?
-				.checked_add(&amount_in_with_fee)
+				.checked_add(amount_in_with_fee)
 				.ok_or(Error::<T>::Overflow)?;
 
-			numerator.checked_div(&denominator).ok_or(Error::<T>::Overflow)
+			let result = numerator.checked_div(denominator).ok_or(Error::<T>::Overflow)?;
+
+			result.try_into().map_err(|_| Error::<T>::Overflow)
 		}
 
 		/// Calculates amount in
@@ -708,6 +720,10 @@ pub mod pallet {
 			reserve_in: &AssetBalanceOf<T>,
 			reserve_out: &AssetBalanceOf<T>,
 		) -> Result<AssetBalanceOf<T>, Error<T>> {
+			let amount_out = u128::try_from(*amount_out).map_err(|_| Error::<T>::Overflow)?;
+			let reserve_in = u128::try_from(*reserve_in).map_err(|_| Error::<T>::Overflow)?;
+			let reserve_out = u128::try_from(*reserve_out).map_err(|_| Error::<T>::Overflow)?;
+
 			if reserve_in.is_zero() || reserve_out.is_zero() {
 				return Err(Error::<T>::InsufficientLiquidity.into())
 			}
@@ -715,20 +731,22 @@ pub mod pallet {
 			let numerator = reserve_in
 				.checked_mul(amount_out)
 				.ok_or(Error::<T>::Overflow)?
-				.checked_mul(&1000u64.into())
+				.checked_mul(1000u128)
 				.ok_or(Error::<T>::Overflow)?;
 
 			let denominator = reserve_out
 				.checked_sub(amount_out)
 				.ok_or(Error::<T>::Overflow)?
-				.checked_mul(&(1000u64 - T::Fee::get()).into())
+				.checked_mul(1000u128 - T::Fee::get() as u128)
 				.ok_or(Error::<T>::Overflow)?;
 
-			numerator
-				.checked_div(&denominator)
+			let result = numerator
+				.checked_div(denominator)
 				.ok_or(Error::<T>::Overflow)?
-				.checked_add(&One::one())
-				.ok_or(Error::<T>::Overflow)
+				.checked_add(One::one())
+				.ok_or(Error::<T>::Overflow)?;
+
+			result.try_into().map_err(|_| Error::<T>::Overflow)
 		}
 
 		pub fn validate_swap(
