@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,8 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use syn::spanned::Spanned;
 use super::helper;
+use syn::spanned::Spanned;
 
 /// The definition of the pallet inherent implementation.
 pub struct InherentDef {
@@ -32,27 +32,28 @@ impl InherentDef {
 			item
 		} else {
 			let msg = "Invalid pallet::inherent, expected item impl";
-			return Err(syn::Error::new(item.span(), msg));
+			return Err(syn::Error::new(item.span(), msg))
 		};
 
 		if item.trait_.is_none() {
 			let msg = "Invalid pallet::inherent, expected impl<..> ProvideInherent for Pallet<..>";
-			return Err(syn::Error::new(item.span(), msg));
+			return Err(syn::Error::new(item.span(), msg))
 		}
 
 		if let Some(last) = item.trait_.as_ref().unwrap().1.segments.last() {
 			if last.ident != "ProvideInherent" {
 				let msg = "Invalid pallet::inherent, expected trait ProvideInherent";
-				return Err(syn::Error::new(last.span(), msg));
+				return Err(syn::Error::new(last.span(), msg))
 			}
 		} else {
 			let msg = "Invalid pallet::inherent, expected impl<..> ProvideInherent for Pallet<..>";
-			return Err(syn::Error::new(item.span(), msg));
+			return Err(syn::Error::new(item.span(), msg))
 		}
 
-		let mut instances = vec![];
-		instances.push(helper::check_pallet_struct_usage(&item.self_ty)?);
-		instances.push(helper::check_impl_gen(&item.generics, item.impl_token.span())?);
+		let instances = vec![
+			helper::check_pallet_struct_usage(&item.self_ty)?,
+			helper::check_impl_gen(&item.generics, item.impl_token.span())?,
+		];
 
 		Ok(InherentDef { index, instances })
 	}

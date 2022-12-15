@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,9 +18,9 @@
 //! Substrate blockchain traits and primitives.
 
 mod backend;
-mod header_metadata;
 mod error;
+mod header_metadata;
 
-pub use error::*;
 pub use backend::*;
+pub use error::*;
 pub use header_metadata::*;

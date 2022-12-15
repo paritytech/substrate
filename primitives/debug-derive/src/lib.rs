@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -38,6 +38,5 @@ use proc_macro::TokenStream;
 
 #[proc_macro_derive(RuntimeDebug)]
 pub fn debug_derive(input: TokenStream) -> TokenStream {
-   impls::debug_derive(syn::parse_macro_input!(input))
+	impls::debug_derive(syn::parse_macro_input!(input))
 }
-

@@ -1,31 +1,32 @@
 [package]
 name = "frame-try-runtime"
-version = "0.9.0"
+version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "FRAME pallet for democracy"
-readme = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
-
-sp-api = { version = "3.0.0", path = "../../primitives/api", default-features = false }
-sp-std = { version = "3.0.0", path = "../../primitives/std" , default-features = false }
-sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" , default-features = false }
-
-frame-support = { version = "3.0.0", path = "../support", default-features = false }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"]}
+frame-support = { version = "4.0.0-dev", default-features = false,  path = "../support" }
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 
 [features]
 default = [ "std" ]
 std = [
-	"sp-api/std",
-	"sp-std/std",
-	"sp-runtime/std",
+	"codec/std",
 	"frame-support/std",
+	"sp-api/std",
+	"sp-runtime/std",
+	"sp-std/std",
+]
+try-runtime = [
+	"frame-support/try-runtime",
 ]

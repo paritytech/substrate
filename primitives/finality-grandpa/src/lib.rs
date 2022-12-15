@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,12 +25,15 @@ extern crate alloc;
 #[cfg(feature = "std")]
 use serde::Serialize;
 
-use codec::{Encode, Decode, Input, Codec};
-use sp_runtime::{ConsensusEngineId, RuntimeDebug, traits::NumberFor};
-use sp_std::borrow::Cow;
-use sp_std::vec::Vec;
+use codec::{Codec, Decode, Encode, Input};
+use scale_info::TypeInfo;
 #[cfg(feature = "std")]
-use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
+use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_runtime::{
+	traits::{Header as HeaderT, NumberFor},
+	ConsensusEngineId, RuntimeDebug,
+};
+use sp_std::{borrow::Cow, vec::Vec};
 
 #[cfg(feature = "std")]
 use log::debug;
@@ -39,7 +42,7 @@ use log::debug;
 pub const KEY_TYPE: sp_core::crypto::KeyTypeId = sp_application_crypto::key_types::GRANDPA;
 
 mod app {
-	use sp_application_crypto::{app_crypto, key_types::GRANDPA, ed25519};
+	use sp_application_crypto::{app_crypto, ed25519, key_types::GRANDPA};
 	app_crypto!(ed25519, GRANDPA);
 }
 
@@ -59,7 +62,7 @@ pub const GRANDPA_ENGINE_ID: ConsensusEngineId = *b"FRNK";
 
 /// The storage key for the current set of weighted Grandpa authorities.
 /// The value stored is an encoded VersionedAuthorityList.
-pub const GRANDPA_AUTHORITIES_KEY: &'static [u8] = b":grandpa_authorities";
+pub const GRANDPA_AUTHORITIES_KEY: &[u8] = b":grandpa_authorities";
 
 /// The weight of an authority.
 pub type AuthorityWeight = u64;
@@ -76,9 +79,67 @@ pub type RoundNumber = u64;
 /// A list of Grandpa authorities with associated weights.
 pub type AuthorityList = Vec<(AuthorityId, AuthorityWeight)>;
 
+/// A GRANDPA message for a substrate chain.
+pub type Message<Header> = grandpa::Message<<Header as HeaderT>::Hash, <Header as HeaderT>::Number>;
+
+/// A signed message.
+pub type SignedMessage<Header> = grandpa::SignedMessage<
+	<Header as HeaderT>::Hash,
+	<Header as HeaderT>::Number,
+	AuthoritySignature,
+	AuthorityId,
+>;
+
+/// A primary propose message for this chain's block type.
+pub type PrimaryPropose<Header> =
+	grandpa::PrimaryPropose<<Header as HeaderT>::Hash, <Header as HeaderT>::Number>;
+/// A prevote message for this chain's block type.
+pub type Prevote<Header> = grandpa::Prevote<<Header as HeaderT>::Hash, <Header as HeaderT>::Number>;
+/// A precommit message for this chain's block type.
+pub type Precommit<Header> =
+	grandpa::Precommit<<Header as HeaderT>::Hash, <Header as HeaderT>::Number>;
+/// A catch up message for this chain's block type.
+pub type CatchUp<Header> = grandpa::CatchUp<
+	<Header as HeaderT>::Hash,
+	<Header as HeaderT>::Number,
+	AuthoritySignature,
+	AuthorityId,
+>;
+/// A commit message for this chain's block type.
+pub type Commit<Header> = grandpa::Commit<
+	<Header as HeaderT>::Hash,
+	<Header as HeaderT>::Number,
+	AuthoritySignature,
+	AuthorityId,
+>;
+
+/// A compact commit message for this chain's block type.
+pub type CompactCommit<Header> = grandpa::CompactCommit<
+	<Header as HeaderT>::Hash,
+	<Header as HeaderT>::Number,
+	AuthoritySignature,
+	AuthorityId,
+>;
+
+/// A GRANDPA justification for block finality, it includes a commit message and
+/// an ancestry proof including all headers routing all precommit target blocks
+/// to the commit target block. Due to the current voting strategy the precommit
+/// targets should be the same as the commit target, since honest voters don't
+/// vote past authority set change blocks.
+///
+/// This is meant to be stored in the db and passed around the network to other
+/// nodes, and are used by syncing nodes to prove authority set handoffs.
+#[derive(Clone, Encode, Decode, PartialEq, Eq, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct GrandpaJustification<Header: HeaderT> {
+	pub round: u64,
+	pub commit: Commit<Header>,
+	pub votes_ancestries: Vec<Header>,
+}
+
 /// A scheduled change of authority set.
 #[cfg_attr(feature = "std", derive(Serialize))]
-#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct ScheduledChange<N> {
 	/// The new authorities after the change, along with their respective weights.
 	pub next_authorities: AuthorityList,
@@ -171,7 +232,7 @@ impl<N: Codec> ConsensusLog<N> {
 /// GRANDPA happens when a voter votes on the same round (either at prevote or
 /// precommit stage) for different blocks. Proving is achieved by collecting the
 /// signed messages of conflicting votes.
-#[derive(Clone, Debug, Decode, Encode, PartialEq)]
+#[derive(Clone, Debug, Decode, Encode, PartialEq, TypeInfo)]
 pub struct EquivocationProof<H, N> {
 	set_id: SetId,
 	equivocation: Equivocation<H, N>,
@@ -181,10 +242,7 @@ impl<H, N> EquivocationProof<H, N> {
 	/// Create a new `EquivocationProof` for the given set id and using the
 	/// given equivocation as proof.
 	pub fn new(set_id: SetId, equivocation: Equivocation<H, N>) -> Self {
-		EquivocationProof {
-			set_id,
-			equivocation,
-		}
+		EquivocationProof { set_id, equivocation }
 	}
 
 	/// Returns the set id at which the equivocation occurred.
@@ -208,7 +266,7 @@ impl<H, N> EquivocationProof<H, N> {
 
 /// Wrapper object for GRANDPA equivocation proofs, useful for unifying prevote
 /// and precommit equivocations under a common type.
-#[derive(Clone, Debug, Decode, Encode, PartialEq)]
+#[derive(Clone, Debug, Decode, Encode, PartialEq, TypeInfo)]
 pub enum Equivocation<H, N> {
 	/// Proof of equivocation at prevote stage.
 	Prevote(grandpa::Equivocation<AuthorityId, grandpa::Prevote<H, N>, AuthoritySignature>),
@@ -277,7 +335,7 @@ where
 			if $equivocation.first.0.target_hash == $equivocation.second.0.target_hash &&
 				$equivocation.first.0.target_number == $equivocation.second.0.target_number
 			{
-				return false;
+				return false
 			}
 
 			// check signatures on both votes are valid
@@ -297,17 +355,17 @@ where
 				report.set_id,
 			);
 
-			return valid_first && valid_second;
+			return valid_first && valid_second
 		};
 	}
 
 	match report.equivocation {
 		Equivocation::Prevote(equivocation) => {
 			check!(equivocation, grandpa::Message::Prevote);
-		}
+		},
 		Equivocation::Precommit(equivocation) => {
 			check!(equivocation, grandpa::Message::Precommit);
-		}
+		},
 	}
 }
 
@@ -390,9 +448,8 @@ where
 	H: Encode,
 	N: Encode,
 {
-	use sp_core::crypto::Public;
 	use sp_application_crypto::AppKey;
-	use sp_std::convert::TryInto;
+	use sp_core::crypto::Public;
 
 	let encoded = localized_payload(round, set_id, &message);
 	let signature = SyncCryptoStore::sign_with(
@@ -400,13 +457,13 @@ where
 		AuthorityId::ID,
 		&public.to_public_crypto_pair(),
 		&encoded[..],
-	).ok().flatten()?.try_into().ok()?;
+	)
+	.ok()
+	.flatten()?
+	.try_into()
+	.ok()?;
 
-	Some(grandpa::SignedMessage {
-		message,
-		signature,
-		id: public,
-	})
+	Some(grandpa::SignedMessage { message, signature, id: public })
 }
 
 /// WASM function call to check for pending changes.
@@ -457,7 +514,7 @@ impl<'a> Decode for VersionedAuthorityList<'a> {
 	fn decode<I: Input>(value: &mut I) -> Result<Self, codec::Error> {
 		let (version, authorities): (u8, AuthorityList) = Decode::decode(value)?;
 		if version != AUTHORITIES_VERSION {
-			return Err("unknown Grandpa authorities version".into());
+			return Err("unknown Grandpa authorities version".into())
 		}
 		Ok(authorities.into())
 	}
@@ -496,7 +553,7 @@ sp_api::decl_runtime_apis! {
 	/// applied in the runtime after those N blocks have passed.
 	///
 	/// The consensus protocol will coordinate the handoff externally.
-	#[api_version(2)]
+	#[api_version(3)]
 	pub trait GrandpaApi {
 		/// Get the current GRANDPA authorities and weights. This should not change except
 		/// for when changes are scheduled and the corresponding delay has passed.
@@ -534,5 +591,8 @@ sp_api::decl_runtime_apis! {
 			set_id: SetId,
 			authority_id: AuthorityId,
 		) -> Option<OpaqueKeyOwnershipProof>;
+
+		/// Get current GRANDPA authority set id.
+		fn current_set_id() -> SetId;
 	}
 }

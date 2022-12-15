@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,116 +15,107 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod command;
-mod writer;
+//! Contains the root [`BenchmarkCmd`] command and exports its sub-commands.
 
-use sc_cli::{ExecutionStrategy, WasmExecutionMethod};
-use std::fmt::Debug;
+mod block;
+mod extrinsic;
+mod machine;
+mod overhead;
+mod pallet;
+mod shared;
+mod storage;
 
-// Add a more relaxed parsing for pallet names by allowing pallet directory names with `-` to be used
-// like crate names with `_`
-fn parse_pallet_name(pallet: &str) -> String {
-	pallet.replace("-", "_")
+pub use block::BlockCmd;
+pub use extrinsic::{ExtrinsicBuilder, ExtrinsicCmd, ExtrinsicFactory};
+pub use machine::{MachineCmd, Requirements, SUBSTRATE_REFERENCE_HARDWARE};
+pub use overhead::OverheadCmd;
+pub use pallet::PalletCmd;
+pub use sc_service::BasePath;
+pub use storage::StorageCmd;
+
+use sc_cli::{CliConfiguration, DatabaseParams, ImportParams, PruningParams, Result, SharedParams};
+
+/// The root `benchmarking` command.
+///
+/// Has no effect itself besides printing a help menu of the sub-commands.
+#[derive(Debug, clap::Subcommand)]
+pub enum BenchmarkCmd {
+	Pallet(PalletCmd),
+	Storage(StorageCmd),
+	Overhead(OverheadCmd),
+	Block(BlockCmd),
+	Machine(MachineCmd),
+	Extrinsic(ExtrinsicCmd),
 }
 
-/// The `benchmark` command used to benchmark FRAME Pallets.
-#[derive(Debug, structopt::StructOpt)]
-pub struct BenchmarkCmd {
-	/// Select a FRAME Pallet to benchmark, or `*` for all (in which case `extrinsic` must be `*`).
-	#[structopt(short, long, parse(from_str = parse_pallet_name))]
-	pub pallet: String,
+/// Unwraps a [`BenchmarkCmd`] into its concrete sub-command.
+macro_rules! unwrap_cmd {
+	{
+		$self:expr,
+		$cmd:ident,
+		$code:expr
+	} => {
+		match $self {
+			BenchmarkCmd::Pallet($cmd) => $code,
+			BenchmarkCmd::Storage($cmd) => $code,
+			BenchmarkCmd::Overhead($cmd) => $code,
+			BenchmarkCmd::Block($cmd) => $code,
+			BenchmarkCmd::Machine($cmd) => $code,
+			BenchmarkCmd::Extrinsic($cmd) => $code,
+		}
+	}
+}
 
-	/// Select an extrinsic inside the pallet to benchmark, or `*` for all.
-	#[structopt(short, long)]
-	pub extrinsic: String,
+/// Forward the [`CliConfiguration`] trait implementation.
+///
+/// Each time a sub-command exposes a new config option, it must be added here.
+impl CliConfiguration for BenchmarkCmd {
+	fn shared_params(&self) -> &SharedParams {
+		unwrap_cmd! {
+			self, cmd, cmd.shared_params()
+		}
+	}
 
-	/// Select how many samples we should take across the variable components.
-	#[structopt(short, long, use_delimiter = true)]
-	pub steps: Vec<u32>,
+	fn import_params(&self) -> Option<&ImportParams> {
+		unwrap_cmd! {
+			self, cmd, cmd.import_params()
+		}
+	}
 
-	/// Indicates lowest values for each of the component ranges.
-	#[structopt(long = "low", use_delimiter = true)]
-	pub lowest_range_values: Vec<u32>,
+	fn database_params(&self) -> Option<&DatabaseParams> {
+		unwrap_cmd! {
+			self, cmd, cmd.database_params()
+		}
+	}
 
-	/// Indicates highest values for each of the component ranges.
-	#[structopt(long = "high", use_delimiter = true)]
-	pub highest_range_values: Vec<u32>,
+	fn base_path(&self) -> Result<Option<BasePath>> {
+		let inner = unwrap_cmd! {
+			self, cmd, cmd.base_path()
+		};
 
-	/// Select how many repetitions of this benchmark should run.
-	#[structopt(short, long, default_value = "1")]
-	pub repeat: u32,
+		// If the base path was not provided, benchmark command shall use temporary path. Otherwise
+		// we may end up using shared path, which may be inappropriate for benchmarking.
+		match inner {
+			Ok(None) => Some(BasePath::new_temp_dir()).transpose().map_err(|e| e.into()),
+			e => e,
+		}
+	}
 
-	/// Print the raw results.
-	#[structopt(long = "raw")]
-	pub raw_data: bool,
+	fn pruning_params(&self) -> Option<&PruningParams> {
+		unwrap_cmd! {
+			self, cmd, cmd.pruning_params()
+		}
+	}
 
-	/// Don't print the median-slopes linear regression analysis.
-	#[structopt(long)]
-	pub no_median_slopes: bool,
+	fn trie_cache_maximum_size(&self) -> Result<Option<usize>> {
+		unwrap_cmd! {
+			self, cmd, cmd.trie_cache_maximum_size()
+		}
+	}
 
-	/// Don't print the min-squares linear regression analysis.
-	#[structopt(long)]
-	pub no_min_squares: bool,
-
-	/// Output the benchmarks to a Rust file at the given path.
-	#[structopt(long)]
-	pub output: Option<std::path::PathBuf>,
-
-	/// Add a header file to your outputted benchmarks
-	#[structopt(long)]
-	pub header: Option<std::path::PathBuf>,
-
-	/// Path to Handlebars template file used for outputting benchmark results. (Optional)
-	#[structopt(long)]
-	pub template: Option<std::path::PathBuf>,
-
-	/// Which analysis function to use when outputting benchmarks:
-	/// * min-squares (default)
-	/// * median-slopes
-	/// * max (max of min squares and median slopes for each value)
-	#[structopt(long)]
-	pub output_analysis: Option<String>,
-
-	/// Set the heap pages while running benchmarks.
-	#[structopt(long)]
-	pub heap_pages: Option<u64>,
-
-	/// Disable verification logic when running benchmarks.
-	#[structopt(long)]
-	pub no_verify: bool,
-
-	/// Display and run extra benchmarks that would otherwise not be needed for weight construction.
-	#[structopt(long)]
-	pub extra: bool,
-
-	/// Estimate PoV size.
-	#[structopt(long)]
-	pub record_proof: bool,
-
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub shared_params: sc_cli::SharedParams,
-
-	/// The execution strategy that should be used for benchmarks
-	#[structopt(
-		long = "execution",
-		value_name = "STRATEGY",
-		possible_values = &ExecutionStrategy::variants(),
-		case_insensitive = true,
-	)]
-	pub execution: Option<ExecutionStrategy>,
-
-	/// Method for executing Wasm runtime code.
-	#[structopt(
-		long = "wasm-execution",
-		value_name = "METHOD",
-		possible_values = &WasmExecutionMethod::variants(),
-		case_insensitive = true,
-		default_value = "Interpreted"
-	)]
-	pub wasm_method: WasmExecutionMethod,
-
-	/// Limit the memory the database cache can use.
-	#[structopt(long = "db-cache", value_name = "MiB", default_value = "128")]
-	pub database_cache_size: u32,
+	fn chain_id(&self, is_dev: bool) -> Result<String> {
+		unwrap_cmd! {
+			self, cmd, cmd.chain_id(is_dev)
+		}
+	}
 }

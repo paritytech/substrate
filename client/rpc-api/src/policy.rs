@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -21,7 +21,13 @@
 //! Contains a `DenyUnsafe` type that can be used to deny potentially unsafe
 //! RPC when accessed externally.
 
-use jsonrpc_core as rpc;
+use jsonrpsee::{
+	core::Error as JsonRpseeError,
+	types::{
+		error::{CallError, ErrorCode},
+		ErrorObject,
+	},
+};
 
 /// Signifies whether a potentially unsafe RPC should be denied.
 #[derive(Clone, Copy, Debug)]
@@ -55,8 +61,18 @@ impl std::fmt::Display for UnsafeRpcError {
 
 impl std::error::Error for UnsafeRpcError {}
 
-impl From<UnsafeRpcError> for rpc::Error {
-	fn from(_: UnsafeRpcError) -> rpc::Error {
-		rpc::Error::method_not_found()
+impl From<UnsafeRpcError> for CallError {
+	fn from(e: UnsafeRpcError) -> CallError {
+		CallError::Custom(ErrorObject::owned(
+			ErrorCode::MethodNotFound.code(),
+			e.to_string(),
+			None::<()>,
+		))
+	}
+}
+
+impl From<UnsafeRpcError> for JsonRpseeError {
+	fn from(e: UnsafeRpcError) -> JsonRpseeError {
+		JsonRpseeError::Call(e.into())
 	}
 }

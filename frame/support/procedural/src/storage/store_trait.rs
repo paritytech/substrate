@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,26 +17,26 @@
 
 //! Declaration of store trait and implementation on module structure.
 
+use super::DeclStorageDefExt;
 use proc_macro2::TokenStream;
 use quote::quote;
-use super::DeclStorageDefExt;
 
 pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
-	let decl_store_items = def.storage_lines.iter()
-		.map(|sline| &sline.name)
-		.fold(TokenStream::new(), |mut items, name| {
+	let decl_store_items = def.storage_lines.iter().map(|sline| &sline.name).fold(
+		TokenStream::new(),
+		|mut items, name| {
 			items.extend(quote!(type #name;));
 			items
-		});
+		},
+	);
 
-	let impl_store_items = def.storage_lines.iter()
-		.fold(TokenStream::new(), |mut items, line| {
-			let name = &line.name;
-			let storage_struct = &line.storage_struct;
+	let impl_store_items = def.storage_lines.iter().fold(TokenStream::new(), |mut items, line| {
+		let name = &line.name;
+		let storage_struct = &line.storage_struct;
 
-			items.extend(quote!(type #name = #storage_struct;));
-			items
-		});
+		items.extend(quote!(type #name = #storage_struct;));
+		items
+	});
 
 	let visibility = &def.visibility;
 	let store_trait = &def.store_trait;
@@ -48,7 +48,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 		#visibility trait #store_trait {
 			#decl_store_items
 		}
-		impl#module_impl #store_trait for #module_struct #where_clause {
+		impl #module_impl #store_trait for #module_struct #where_clause {
 			#impl_store_items
 		}
 	)

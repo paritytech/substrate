@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,14 +18,14 @@
 //! Declaration of genesis config structure and implementation of build storage trait and
 //! functions.
 
-use proc_macro2::{TokenStream, Span};
-use quote::quote;
 use super::DeclStorageDefExt;
-pub use genesis_config_def::GenesisConfigDef;
 pub use builder_def::BuilderDef;
+pub use genesis_config_def::GenesisConfigDef;
+use proc_macro2::{Span, TokenStream};
+use quote::quote;
 
-mod genesis_config_def;
 mod builder_def;
+mod genesis_config_def;
 
 const DEFAULT_INSTANCE_NAME: &str = "__GeneratedInstance";
 
@@ -75,12 +75,12 @@ fn decl_genesis_config_and_impl_default(
 		#[serde(deny_unknown_fields)]
 		#[serde(crate = #serde_crate)]
 		#serde_bug_bound
-		pub struct GenesisConfig#genesis_struct_decl #genesis_where_clause {
+		pub struct GenesisConfig #genesis_struct_decl #genesis_where_clause {
 			#( #config_fields )*
 		}
 
 		#[cfg(feature = "std")]
-		impl#genesis_impl Default for GenesisConfig#genesis_struct #genesis_where_clause {
+		impl #genesis_impl Default for GenesisConfig #genesis_struct #genesis_where_clause {
 			fn default() -> Self {
 				GenesisConfig {
 					#( #config_field_defaults )*
@@ -118,19 +118,16 @@ fn impl_build_storage(
 	let genesis_impl = &genesis_config.genesis_impl;
 	let genesis_where_clause = &genesis_config.genesis_where_clause;
 
-	let (
-		fn_generic,
-		fn_traitinstance,
-		fn_where_clause
-	) = if !genesis_config.is_generic && builders.is_generic {
-		(
-			quote!( <#runtime_generic: #runtime_trait, #optional_instance_bound> ),
-			quote!( #runtime_generic, #optional_instance ),
-			Some(&def.where_clause),
-		)
-	} else {
-		(quote!(), quote!(), None)
-	};
+	let (fn_generic, fn_traitinstance, fn_where_clause) =
+		if !genesis_config.is_generic && builders.is_generic {
+			(
+				quote!( <#runtime_generic: #runtime_trait, #optional_instance_bound> ),
+				quote!( #runtime_generic, #optional_instance ),
+				Some(&def.where_clause),
+			)
+		} else {
+			(quote!(), quote!(), None)
+		};
 
 	let builder_blocks = &builders.blocks;
 
@@ -138,9 +135,9 @@ fn impl_build_storage(
 		#scrate::sp_runtime::BuildModuleGenesisStorage<#runtime_generic, #inherent_instance>
 	);
 
-	quote!{
+	quote! {
 		#[cfg(feature = "std")]
-		impl#genesis_impl GenesisConfig#genesis_struct #genesis_where_clause {
+		impl #genesis_impl GenesisConfig #genesis_struct #genesis_where_clause {
 			/// Build the storage for this module.
 			pub fn build_storage #fn_generic (&self) -> std::result::Result<
 				#scrate::sp_runtime::Storage,
@@ -164,7 +161,7 @@ fn impl_build_storage(
 		}
 
 		#[cfg(feature = "std")]
-		impl#build_storage_impl #build_storage_impl_trait for GenesisConfig#genesis_struct
+		impl #build_storage_impl #build_storage_impl_trait for GenesisConfig #genesis_struct
 			#where_clause
 		{
 			fn build_module_genesis_storage(
@@ -189,7 +186,7 @@ pub fn genesis_config_and_build_storage(def: &DeclStorageDefExt) -> TokenStream 
 			decl_genesis_config_and_impl_default(scrate, &genesis_config);
 		let impl_build_storage = impl_build_storage(scrate, def, &genesis_config, &builders);
 
-		quote!{
+		quote! {
 			#decl_genesis_config_and_impl_default
 			#impl_build_storage
 		}

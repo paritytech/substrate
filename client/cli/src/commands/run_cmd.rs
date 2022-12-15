@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,15 +16,16 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::arg_enums::RpcMethods;
-use crate::error::{Error, Result};
-use crate::params::ImportParams;
-use crate::params::KeystoreParams;
-use crate::params::NetworkParams;
-use crate::params::OffchainWorkerParams;
-use crate::params::SharedParams;
-use crate::params::TransactionPoolParams;
-use crate::CliConfiguration;
+use crate::{
+	arg_enums::RpcMethods,
+	error::{Error, Result},
+	params::{
+		ImportParams, KeystoreParams, NetworkParams, OffchainWorkerParams, SharedParams,
+		TransactionPoolParams,
+	},
+	CliConfiguration,
+};
+use clap::Parser;
 use regex::Regex;
 use sc_service::{
 	config::{BasePath, PrometheusConfig, TransactionPoolOptions},
@@ -32,95 +33,114 @@ use sc_service::{
 };
 use sc_telemetry::TelemetryEndpoints;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use structopt::StructOpt;
 
 /// The `run` command used to run a node.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, Clone, Parser)]
 pub struct RunCmd {
 	/// Enable validator mode.
 	///
 	/// The node will be started with the authority role and actively
 	/// participate in any consensus task that it can (e.g. depending on
 	/// availability of local keys).
-	#[structopt(
-		long = "validator"
-	)]
+	#[arg(long)]
 	pub validator: bool,
 
-	/// Disable GRANDPA voter when running in validator mode, otherwise disable the GRANDPA observer.
-	#[structopt(long)]
+	/// Disable GRANDPA voter when running in validator mode, otherwise disable the GRANDPA
+	/// observer.
+	#[arg(long)]
 	pub no_grandpa: bool,
-
-	/// Experimental: Run in light client mode.
-	#[structopt(long = "light")]
-	pub light: bool,
 
 	/// Listen to all RPC interfaces.
 	///
-	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC proxy
-	/// server to filter out dangerous methods. More details:
-	/// <https://github.com/paritytech/substrate/wiki/Public-RPC>.
+	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC
+	/// proxy server to filter out dangerous methods. More details:
+	/// <https://docs.substrate.io/main-docs/build/custom-rpc/#public-rpcs>.
 	/// Use `--unsafe-rpc-external` to suppress the warning if you understand the risks.
-	#[structopt(long = "rpc-external")]
+	#[arg(long)]
 	pub rpc_external: bool,
 
 	/// Listen to all RPC interfaces.
 	///
 	/// Same as `--rpc-external`.
-	#[structopt(long)]
+	#[arg(long)]
 	pub unsafe_rpc_external: bool,
 
 	/// RPC methods to expose.
 	///
-	/// - `Unsafe`: Exposes every RPC method.
-	/// - `Safe`: Exposes only a safe subset of RPC methods, denying unsafe RPC methods.
-	/// - `Auto`: Acts as `Safe` if RPC is served externally, e.g. when `--{rpc,ws}-external` is passed,
-	///   otherwise acts as `Unsafe`.
-	#[structopt(
+	/// - `unsafe`: Exposes every RPC method.
+	/// - `safe`: Exposes only a safe subset of RPC methods, denying unsafe RPC methods.
+	/// - `auto`: Acts as `safe` if RPC is served externally, e.g. when `--{rpc,ws}-external` is
+	///   passed, otherwise acts as `unsafe`.
+	#[arg(
 		long,
 		value_name = "METHOD SET",
-		possible_values = &RpcMethods::variants(),
-		case_insensitive = true,
-		default_value = "Auto",
+		value_enum,
+		ignore_case = true,
+		default_value_t = RpcMethods::Auto,
 		verbatim_doc_comment
 	)]
 	pub rpc_methods: RpcMethods,
 
 	/// Listen to all Websocket interfaces.
 	///
-	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC proxy
-	/// server to filter out dangerous methods. More details: <https://github.com/paritytech/substrate/wiki/Public-RPC>.
+	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC
+	/// proxy server to filter out dangerous methods. More details:
+	/// <https://docs.substrate.io/main-docs/build/custom-rpc/#public-rpcs>.
 	/// Use `--unsafe-ws-external` to suppress the warning if you understand the risks.
-	#[structopt(long = "ws-external")]
+	#[arg(long)]
 	pub ws_external: bool,
 
 	/// Listen to all Websocket interfaces.
 	///
 	/// Same as `--ws-external` but doesn't warn you about it.
-	#[structopt(long = "unsafe-ws-external")]
+	#[arg(long)]
 	pub unsafe_ws_external: bool,
 
-	/// Listen to all Prometheus data source interfaces.
+	/// DEPRECATED, this has no affect anymore. Use `rpc_max_request_size` or
+	/// `rpc_max_response_size` instead.
+	#[arg(long)]
+	pub rpc_max_payload: Option<usize>,
+
+	/// Set the the maximum RPC request payload size for both HTTP and WS in megabytes.
+	/// Default is 15MiB.
+	#[arg(long)]
+	pub rpc_max_request_size: Option<usize>,
+
+	/// Set the the maximum RPC response payload size for both HTTP and WS in megabytes.
+	/// Default is 15MiB.
+	#[arg(long)]
+	pub rpc_max_response_size: Option<usize>,
+
+	/// Set the the maximum concurrent subscriptions per connection.
+	/// Default is 1024.
+	#[arg(long)]
+	pub rpc_max_subscriptions_per_connection: Option<usize>,
+
+	/// Expose Prometheus exporter on all interfaces.
 	///
 	/// Default is local.
-	#[structopt(long = "prometheus-external")]
+	#[arg(long)]
 	pub prometheus_external: bool,
 
-	/// Specify IPC RPC server path
-	#[structopt(long = "ipc-path", value_name = "PATH")]
+	/// DEPRECATED, IPC support has been removed.
+	#[arg(long, value_name = "PATH")]
 	pub ipc_path: Option<String>,
 
 	/// Specify HTTP RPC server TCP port.
-	#[structopt(long = "rpc-port", value_name = "PORT")]
+	#[arg(long, value_name = "PORT")]
 	pub rpc_port: Option<u16>,
 
 	/// Specify WebSockets RPC server TCP port.
-	#[structopt(long = "ws-port", value_name = "PORT")]
+	#[arg(long, value_name = "PORT")]
 	pub ws_port: Option<u16>,
 
 	/// Maximum number of WS RPC server connections.
-	#[structopt(long = "ws-max-connections", value_name = "COUNT")]
+	#[arg(long, value_name = "COUNT")]
 	pub ws_max_connections: Option<usize>,
+
+	/// DEPRECATED, this has no affect anymore. Use `rpc_max_response_size` instead.
+	#[arg(long)]
+	pub ws_max_out_buffer_capacity: Option<usize>,
 
 	/// Specify browser Origins allowed to access the HTTP & WS RPC servers.
 	///
@@ -128,29 +148,29 @@ pub struct RunCmd {
 	/// value). Value of `all` will disable origin validation. Default is to
 	/// allow localhost and <https://polkadot.js.org> origins. When running in
 	/// --dev mode the default is to allow all origins.
-	#[structopt(long = "rpc-cors", value_name = "ORIGINS", parse(try_from_str = parse_cors))]
+	#[arg(long, value_name = "ORIGINS", value_parser = parse_cors)]
 	pub rpc_cors: Option<Cors>,
 
-	/// Specify Prometheus data source server TCP Port.
-	#[structopt(long = "prometheus-port", value_name = "PORT")]
+	/// Specify Prometheus exporter TCP Port.
+	#[arg(long, value_name = "PORT")]
 	pub prometheus_port: Option<u16>,
 
-	/// Do not expose a Prometheus metric endpoint.
+	/// Do not expose a Prometheus exporter endpoint.
 	///
 	/// Prometheus metric endpoint is enabled by default.
-	#[structopt(long = "no-prometheus")]
+	#[arg(long)]
 	pub no_prometheus: bool,
 
 	/// The human-readable name for this node.
 	///
 	/// The node name will be reported to the telemetry server, if enabled.
-	#[structopt(long = "name", value_name = "NAME")]
+	#[arg(long, value_name = "NAME")]
 	pub name: Option<String>,
 
 	/// Disable connecting to the Substrate telemetry server.
 	///
 	/// Telemetry is on by default on global chains.
-	#[structopt(long = "no-telemetry")]
+	#[arg(long)]
 	pub no_telemetry: bool,
 
 	/// The URL of the telemetry server to connect to.
@@ -159,74 +179,79 @@ pub struct RunCmd {
 	/// telemetry endpoints. Verbosity levels range from 0-9, with 0 denoting
 	/// the least verbosity.
 	/// Expected format is 'URL VERBOSITY', e.g. `--telemetry-url 'wss://foo/bar 0'`.
-	#[structopt(long = "telemetry-url", value_name = "URL VERBOSITY", parse(try_from_str = parse_telemetry_endpoints))]
+	#[arg(long = "telemetry-url", value_name = "URL VERBOSITY", value_parser = parse_telemetry_endpoints)]
 	pub telemetry_endpoints: Vec<(String, u8)>,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub offchain_worker_params: OffchainWorkerParams,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub shared_params: SharedParams,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub import_params: ImportParams,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub network_params: NetworkParams,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub pool_config: TransactionPoolParams,
 
 	/// Shortcut for `--name Alice --validator` with session keys for `Alice` added to keystore.
-	#[structopt(long, conflicts_with_all = &["bob", "charlie", "dave", "eve", "ferdie", "one", "two"])]
+	#[arg(long, conflicts_with_all = &["bob", "charlie", "dave", "eve", "ferdie", "one", "two"])]
 	pub alice: bool,
 
 	/// Shortcut for `--name Bob --validator` with session keys for `Bob` added to keystore.
-	#[structopt(long, conflicts_with_all = &["alice", "charlie", "dave", "eve", "ferdie", "one", "two"])]
+	#[arg(long, conflicts_with_all = &["alice", "charlie", "dave", "eve", "ferdie", "one", "two"])]
 	pub bob: bool,
 
-	/// Shortcut for `--name Charlie --validator` with session keys for `Charlie` added to keystore.
-	#[structopt(long, conflicts_with_all = &["alice", "bob", "dave", "eve", "ferdie", "one", "two"])]
+	/// Shortcut for `--name Charlie --validator` with session keys for `Charlie` added to
+	/// keystore.
+	#[arg(long, conflicts_with_all = &["alice", "bob", "dave", "eve", "ferdie", "one", "two"])]
 	pub charlie: bool,
 
 	/// Shortcut for `--name Dave --validator` with session keys for `Dave` added to keystore.
-	#[structopt(long, conflicts_with_all = &["alice", "bob", "charlie", "eve", "ferdie", "one", "two"])]
+	#[arg(long, conflicts_with_all = &["alice", "bob", "charlie", "eve", "ferdie", "one", "two"])]
 	pub dave: bool,
 
 	/// Shortcut for `--name Eve --validator` with session keys for `Eve` added to keystore.
-	#[structopt(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "ferdie", "one", "two"])]
+	#[arg(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "ferdie", "one", "two"])]
 	pub eve: bool,
 
 	/// Shortcut for `--name Ferdie --validator` with session keys for `Ferdie` added to keystore.
-	#[structopt(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "eve", "one", "two"])]
+	#[arg(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "eve", "one", "two"])]
 	pub ferdie: bool,
 
 	/// Shortcut for `--name One --validator` with session keys for `One` added to keystore.
-	#[structopt(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "eve", "ferdie", "two"])]
+	#[arg(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "eve", "ferdie", "two"])]
 	pub one: bool,
 
 	/// Shortcut for `--name Two --validator` with session keys for `Two` added to keystore.
-	#[structopt(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "eve", "ferdie", "one"])]
+	#[arg(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "eve", "ferdie", "one"])]
 	pub two: bool,
 
 	/// Enable authoring even when offline.
-	#[structopt(long = "force-authoring")]
+	#[arg(long)]
 	pub force_authoring: bool,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub keystore_params: KeystoreParams,
 
 	/// The size of the instances cache for each runtime.
 	///
 	/// The default value is 8 and the values higher than 256 are ignored.
-	#[structopt(long)]
+	#[arg(long)]
 	pub max_runtime_instances: Option<usize>,
+
+	/// Maximum number of different runtimes that can be cached.
+	#[arg(long, default_value_t = 2)]
+	pub runtime_cache_size: u8,
 
 	/// Run a temporary node.
 	///
@@ -235,7 +260,9 @@ pub struct RunCmd {
 	///
 	/// Note: the directory is random per process execution. This directory is used as base path
 	/// which includes: database, node key and keystore.
-	#[structopt(long, conflicts_with = "base-path")]
+	///
+	/// When `--dev` is given and no explicit `--base-path`, this option is implied.
+	#[arg(long, conflicts_with = "base_path")]
 	pub tmp: bool,
 }
 
@@ -298,7 +325,7 @@ impl CliConfiguration for RunCmd {
 			Error::Input(format!(
 				"Invalid node name '{}'. Reason: {}. If unsure, use none.",
 				name, msg
-		))
+			))
 		})?;
 
 		Ok(name)
@@ -306,7 +333,7 @@ impl CliConfiguration for RunCmd {
 
 	fn dev_key_seed(&self, is_dev: bool) -> Result<Option<String>> {
 		Ok(self.get_keyring().map(|a| format!("//{}", a)).or_else(|| {
-			if is_dev && !self.light {
+			if is_dev {
 				Some("//Alice".into())
 			} else {
 				None
@@ -332,16 +359,9 @@ impl CliConfiguration for RunCmd {
 
 	fn role(&self, is_dev: bool) -> Result<Role> {
 		let keyring = self.get_keyring();
-		let is_light = self.light;
-		let is_authority = (self.validator || is_dev || keyring.is_some()) && !is_light;
+		let is_authority = self.validator || is_dev || keyring.is_some();
 
-		Ok(if is_light {
-			sc_service::Role::Light
-		} else if is_authority {
-			sc_service::Role::Authority
-		} else {
-			sc_service::Role::Full
-		})
+		Ok(if is_authority { sc_service::Role::Authority } else { sc_service::Role::Full })
 	}
 
 	fn force_authoring(&self) -> Result<bool> {
@@ -349,21 +369,23 @@ impl CliConfiguration for RunCmd {
 		Ok(self.shared_params.dev || self.force_authoring)
 	}
 
-	fn prometheus_config(&self, default_listen_port: u16) -> Result<Option<PrometheusConfig>> {
+	fn prometheus_config(
+		&self,
+		default_listen_port: u16,
+		chain_spec: &Box<dyn ChainSpec>,
+	) -> Result<Option<PrometheusConfig>> {
 		Ok(if self.no_prometheus {
 			None
 		} else {
-			let interface = if self.prometheus_external {
-				Ipv4Addr::UNSPECIFIED
-			} else {
-				Ipv4Addr::LOCALHOST
-			};
+			let interface =
+				if self.prometheus_external { Ipv4Addr::UNSPECIFIED } else { Ipv4Addr::LOCALHOST };
 
 			Some(PrometheusConfig::new_with_default_registry(
 				SocketAddr::new(
 					interface.into(),
 					self.prometheus_port.unwrap_or(default_listen_port),
-				)
+				),
+				chain_spec.id().into(),
 			))
 		})
 	}
@@ -402,7 +424,7 @@ impl CliConfiguration for RunCmd {
 			self.rpc_external,
 			self.unsafe_rpc_external,
 			self.rpc_methods,
-			self.validator
+			self.validator,
 		)?;
 
 		Ok(Some(SocketAddr::new(interface, self.rpc_port.unwrap_or(default_listen_port))))
@@ -427,19 +449,48 @@ impl CliConfiguration for RunCmd {
 		Ok(self.rpc_methods.into())
 	}
 
-	fn transaction_pool(&self) -> Result<TransactionPoolOptions> {
-		Ok(self.pool_config.transaction_pool())
+	fn rpc_max_payload(&self) -> Result<Option<usize>> {
+		Ok(self.rpc_max_payload)
+	}
+
+	fn rpc_max_request_size(&self) -> Result<Option<usize>> {
+		Ok(self.rpc_max_request_size)
+	}
+
+	fn rpc_max_response_size(&self) -> Result<Option<usize>> {
+		Ok(self.rpc_max_response_size)
+	}
+
+	fn rpc_max_subscriptions_per_connection(&self) -> Result<Option<usize>> {
+		Ok(self.rpc_max_subscriptions_per_connection)
+	}
+
+	fn ws_max_out_buffer_capacity(&self) -> Result<Option<usize>> {
+		Ok(self.ws_max_out_buffer_capacity)
+	}
+
+	fn transaction_pool(&self, is_dev: bool) -> Result<TransactionPoolOptions> {
+		Ok(self.pool_config.transaction_pool(is_dev))
 	}
 
 	fn max_runtime_instances(&self) -> Result<Option<usize>> {
 		Ok(self.max_runtime_instances.map(|x| x.min(256)))
 	}
 
+	fn runtime_cache_size(&self) -> Result<u8> {
+		Ok(self.runtime_cache_size)
+	}
+
 	fn base_path(&self) -> Result<Option<BasePath>> {
 		Ok(if self.tmp {
 			Some(BasePath::new_temp_dir()?)
 		} else {
-			self.shared_params().base_path()
+			match self.shared_params().base_path()? {
+				Some(r) => Some(r),
+				// If `dev` is enabled, we use the temp base path.
+				None if self.shared_params().is_dev() => Some(BasePath::new_temp_dir()?),
+				None => None,
+			}
 		})
 	}
 }
@@ -448,19 +499,19 @@ impl CliConfiguration for RunCmd {
 pub fn is_node_name_valid(_name: &str) -> std::result::Result<(), &str> {
 	let name = _name.to_string();
 	if name.chars().count() >= crate::NODE_NAME_MAX_LENGTH {
-		return Err("Node name too long");
+		return Err("Node name too long")
 	}
 
 	let invalid_chars = r"[\\.@]";
 	let re = Regex::new(invalid_chars).unwrap();
 	if re.is_match(&name) {
-		return Err("Node name should not contain invalid chars such as '.' and '@'");
+		return Err("Node name should not contain invalid chars such as '.' and '@'")
 	}
 
 	let invalid_patterns = r"(https?:\\/+)?(www)+";
 	let re = Regex::new(invalid_patterns).unwrap();
 	if re.is_match(&name) {
-		return Err("Node name should not contain urls");
+		return Err("Node name should not contain urls")
 	}
 
 	Ok(())
@@ -474,19 +525,18 @@ fn rpc_interface(
 ) -> Result<IpAddr> {
 	if is_external && is_validator && rpc_methods != RpcMethods::Unsafe {
 		return Err(Error::Input(
-			"--rpc-external and --ws-external options shouldn't be \
-		used if the node is running as a validator. Use `--unsafe-rpc-external` \
-		or `--rpc-methods=unsafe` if you understand the risks. See the options \
-		description for more information."
+			"--rpc-external and --ws-external options shouldn't be used if the node is running as \
+			 a validator. Use `--unsafe-rpc-external` or `--rpc-methods=unsafe` if you understand \
+			 the risks. See the options description for more information."
 				.to_owned(),
-		));
+		))
 	}
 
 	if is_external || is_unsafe_external {
 		if rpc_methods == RpcMethods::Unsafe {
 			log::warn!(
 				"It isn't safe to expose RPC publicly without a proxy server that filters \
-			available set of RPC methods."
+				 available set of RPC methods."
 			);
 		}
 
@@ -506,7 +556,7 @@ impl std::error::Error for TelemetryParsingError {}
 
 impl std::fmt::Display for TelemetryParsingError {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match &*self {
+		match self {
 			TelemetryParsingError::MissingVerbosity => write!(f, "Verbosity level missing"),
 			TelemetryParsingError::VerbosityParsingError(e) => write!(f, "{}", e),
 		}
@@ -519,18 +569,16 @@ fn parse_telemetry_endpoints(s: &str) -> std::result::Result<(String, u8), Telem
 		None => Err(TelemetryParsingError::MissingVerbosity),
 		Some(pos_) => {
 			let url = s[..pos_].to_string();
-			let verbosity = s[pos_ + 1..]
-				.parse()
-				.map_err(TelemetryParsingError::VerbosityParsingError)?;
+			let verbosity =
+				s[pos_ + 1..].parse().map_err(TelemetryParsingError::VerbosityParsingError)?;
 			Ok((url, verbosity))
-		}
+		},
 	}
 }
 
 /// CORS setting
 ///
-/// The type is introduced to overcome `Option<Option<T>>`
-/// handling of `structopt`.
+/// The type is introduced to overcome `Option<Option<T>>` handling of `clap`.
 #[derive(Clone, Debug)]
 pub enum Cors {
 	/// All hosts allowed.
@@ -549,24 +597,24 @@ impl From<Cors> for Option<Vec<String>> {
 }
 
 /// Parse cors origins.
-fn parse_cors(s: &str) -> std::result::Result<Cors, Box<dyn std::error::Error>> {
+fn parse_cors(s: &str) -> Result<Cors> {
 	let mut is_all = false;
 	let mut origins = Vec::new();
 	for part in s.split(',') {
 		match part {
 			"all" | "*" => {
 				is_all = true;
-				break;
-			}
+				break
+			},
 			other => origins.push(other.to_owned()),
 		}
 	}
 
-	Ok(if is_all {
-		Cors::All
+	if is_all {
+		Ok(Cors::All)
 	} else {
-		Cors::List(origins)
-	})
+		Ok(Cors::List(origins))
+	}
 }
 
 #[cfg(test)]
@@ -582,7 +630,8 @@ mod tests {
 	fn tests_node_name_bad() {
 		assert!(is_node_name_valid(
 			"very very long names are really not very cool for the ui at all, really they're not"
-		).is_err());
+		)
+		.is_err());
 		assert!(is_node_name_valid("Dots.not.Ok").is_err());
 		assert!(is_node_name_valid("http://visit.me").is_err());
 		assert!(is_node_name_valid("https://visit.me").is_err());

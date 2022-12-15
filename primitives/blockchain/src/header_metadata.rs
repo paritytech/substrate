@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,9 +18,10 @@
 //! Implements tree backend, cached header metadata and algorithms
 //! to compute routes efficiently over the tree of headers.
 
-use sp_runtime::traits::{Block as BlockT, NumberFor, Header};
-use parking_lot::RwLock;
 use lru::LruCache;
+use parking_lot::RwLock;
+use sp_runtime::traits::{Block as BlockT, Header, NumberFor, One};
+use std::num::NonZeroUsize;
 
 /// Set to the expected max difference between `best` and `finalized` blocks at sync.
 const LRU_CACHE_SIZE: usize = 5_000;
@@ -37,7 +38,14 @@ pub fn lowest_common_ancestor<Block: BlockT, T: HeaderMetadata<Block> + ?Sized>(
 	id_two: Block::Hash,
 ) -> Result<HashAndNumber<Block>, T::Error> {
 	let mut header_one = backend.header_metadata(id_one)?;
+	if header_one.parent == id_two {
+		return Ok(HashAndNumber { hash: id_two, number: header_one.number - One::one() })
+	}
+
 	let mut header_two = backend.header_metadata(id_two)?;
+	if header_two.parent == id_one {
+		return Ok(HashAndNumber { hash: id_one, number: header_one.number })
+	}
 
 	let mut orig_header_one = header_one.clone();
 	let mut orig_header_two = header_two.clone();
@@ -86,10 +94,7 @@ pub fn lowest_common_ancestor<Block: BlockT, T: HeaderMetadata<Block> + ?Sized>(
 		backend.insert_header_metadata(orig_header_two.hash, orig_header_two);
 	}
 
-	Ok(HashAndNumber {
-		hash: header_one.hash,
-		number: header_one.number,
-	})
+	Ok(HashAndNumber { hash: header_one.hash, number: header_one.number })
 }
 
 /// Compute a tree-route between two blocks. See tree-route docs for more details.
@@ -105,51 +110,33 @@ pub fn tree_route<Block: BlockT, T: HeaderMetadata<Block>>(
 	let mut to_branch = Vec::new();
 
 	while to.number > from.number {
-		to_branch.push(HashAndNumber {
-			number: to.number,
-			hash: to.hash,
-		});
+		to_branch.push(HashAndNumber { number: to.number, hash: to.hash });
 
 		to = backend.header_metadata(to.parent)?;
 	}
 
 	while from.number > to.number {
-		from_branch.push(HashAndNumber {
-			number: from.number,
-			hash: from.hash,
-		});
+		from_branch.push(HashAndNumber { number: from.number, hash: from.hash });
 		from = backend.header_metadata(from.parent)?;
 	}
 
 	// numbers are equal now. walk backwards until the block is the same
 
 	while to.hash != from.hash {
-		to_branch.push(HashAndNumber {
-			number: to.number,
-			hash: to.hash,
-		});
+		to_branch.push(HashAndNumber { number: to.number, hash: to.hash });
 		to = backend.header_metadata(to.parent)?;
 
-		from_branch.push(HashAndNumber {
-			number: from.number,
-			hash: from.hash,
-		});
+		from_branch.push(HashAndNumber { number: from.number, hash: from.hash });
 		from = backend.header_metadata(from.parent)?;
 	}
 
 	// add the pivot block. and append the reversed to-branch
 	// (note that it's reverse order originals)
 	let pivot = from_branch.len();
-	from_branch.push(HashAndNumber {
-		number: to.number,
-		hash: to.hash,
-	});
+	from_branch.push(HashAndNumber { number: to.number, hash: to.hash });
 	from_branch.extend(to_branch.into_iter().rev());
 
-	Ok(TreeRoute {
-		route: from_branch,
-		pivot,
-	})
+	Ok(TreeRoute { route: from_branch, pivot })
 }
 
 /// Hash and number of a block.
@@ -190,6 +177,21 @@ pub struct TreeRoute<Block: BlockT> {
 }
 
 impl<Block: BlockT> TreeRoute<Block> {
+	/// Creates a new `TreeRoute`.
+	///
+	/// To preserve the structure safety invariats it is required that `pivot < route.len()`.
+	pub fn new(route: Vec<HashAndNumber<Block>>, pivot: usize) -> Result<Self, String> {
+		if pivot < route.len() {
+			Ok(TreeRoute { route, pivot })
+		} else {
+			Err(format!(
+				"TreeRoute pivot ({}) should be less than route length ({})",
+				pivot,
+				route.len()
+			))
+		}
+	}
+
 	/// Get a slice of all retracted blocks in reverse order (towards common ancestor).
 	pub fn retracted(&self) -> &[HashAndNumber<Block>] {
 		&self.route[..self.pivot]
@@ -204,21 +206,28 @@ impl<Block: BlockT> TreeRoute<Block> {
 	/// Get the common ancestor block. This might be one of the two blocks of the
 	/// route.
 	pub fn common_block(&self) -> &HashAndNumber<Block> {
-		self.route.get(self.pivot).expect("tree-routes are computed between blocks; \
+		self.route.get(self.pivot).expect(
+			"tree-routes are computed between blocks; \
 			which are included in the route; \
-			thus it is never empty; qed")
+			thus it is never empty; qed",
+		)
 	}
 
 	/// Get a slice of enacted blocks (descendents of the common ancestor)
 	pub fn enacted(&self) -> &[HashAndNumber<Block>] {
-		&self.route[self.pivot + 1 ..]
+		&self.route[self.pivot + 1..]
+	}
+
+	/// Returns the last block.
+	pub fn last(&self) -> Option<&HashAndNumber<Block>> {
+		self.route.last()
 	}
 }
 
 /// Handles header metadata: hash, number, parent hash, etc.
 pub trait HeaderMetadata<Block: BlockT> {
 	/// Error used in case the header metadata is not found.
-	type Error;
+	type Error: std::error::Error;
 
 	fn header_metadata(
 		&self,
@@ -239,18 +248,15 @@ pub struct HeaderMetadataCache<Block: BlockT> {
 
 impl<Block: BlockT> HeaderMetadataCache<Block> {
 	/// Creates a new LRU header metadata cache with `capacity`.
-	pub fn new(capacity: usize) -> Self {
-		HeaderMetadataCache {
-			cache: RwLock::new(LruCache::new(capacity)),
-		}
+	pub fn new(capacity: NonZeroUsize) -> Self {
+		HeaderMetadataCache { cache: RwLock::new(LruCache::new(capacity)) }
 	}
 }
 
 impl<Block: BlockT> Default for HeaderMetadataCache<Block> {
 	fn default() -> Self {
-		HeaderMetadataCache {
-			cache: RwLock::new(LruCache::new(LRU_CACHE_SIZE)),
-		}
+		let cap = NonZeroUsize::new(LRU_CACHE_SIZE).expect("cache capacity is not zero");
+		HeaderMetadataCache { cache: RwLock::new(LruCache::new(cap)) }
 	}
 }
 
@@ -286,11 +292,11 @@ pub struct CachedHeaderMetadata<Block: BlockT> {
 impl<Block: BlockT> From<&Block::Header> for CachedHeaderMetadata<Block> {
 	fn from(header: &Block::Header) -> Self {
 		CachedHeaderMetadata {
-			hash: header.hash().clone(),
-			number: header.number().clone(),
-			parent: header.parent_hash().clone(),
-			state_root: header.state_root().clone(),
-			ancestor: header.parent_hash().clone(),
+			hash: header.hash(),
+			number: *header.number(),
+			parent: *header.parent_hash(),
+			state_root: *header.state_root(),
+			ancestor: *header.parent_hash(),
 		}
 	}
 }

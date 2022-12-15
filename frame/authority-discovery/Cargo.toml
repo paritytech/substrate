@@ -1,10 +1,10 @@
 [package]
 name = "pallet-authority-discovery"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "FRAME pallet for authority discovery"
 readme = "README.md"
@@ -13,30 +13,35 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-authority-discovery = { version = "3.0.0", default-features = false, path = "../../primitives/authority-discovery" }
-sp-application-crypto = { version = "3.0.0", default-features = false, path = "../../primitives/application-crypto" }
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
-pallet-session = { version = "3.0.0", features = ["historical" ], path = "../session", default-features = false }
-sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
-frame-support = { version = "3.0.0", default-features = false, path = "../support" }
-frame-system = { version = "3.0.0", default-features = false, path = "../system" }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
+	"derive",
+] }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+pallet-session = { version = "4.0.0-dev", default-features = false, features = [
+	"historical",
+], path = "../session" }
+sp-application-crypto = { version = "7.0.0", default-features = false, path = "../../primitives/application-crypto" }
+sp-authority-discovery = { version = "4.0.0-dev", default-features = false, path = "../../primitives/authority-discovery" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
-sp-core = { version = "3.0.0", path = "../../primitives/core" }
-sp-io = { version = "3.0.0", path = "../../primitives/io" }
-sp-staking = { version = "3.0.0", default-features = false, path = "../../primitives/staking" }
+sp-core = { version = "7.0.0", path = "../../primitives/core" }
+sp-io = { version = "7.0.0", path = "../../primitives/io" }
 
 [features]
 default = ["std"]
 std = [
-	"sp-application-crypto/std",
-	"sp-authority-discovery/std",
 	"codec/std",
-	"sp-std/std",
-	"pallet-session/std",
-	"sp-runtime/std",
 	"frame-support/std",
 	"frame-system/std",
+	"pallet-session/std",
+	"scale-info/std",
+	"sp-application-crypto/std",
+	"sp-authority-discovery/std",
+	"sp-runtime/std",
+	"sp-std/std",
 ]
 try-runtime = ["frame-support/try-runtime"]

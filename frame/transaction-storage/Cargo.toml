@@ -1,0 +1,53 @@
+[package]
+name = "pallet-transaction-storage"
+version = "4.0.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "Unlicense"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+description = "Storage chain pallet"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+array-bytes = { version = "4.1", optional = true }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
+serde = { version = "1.0.136", optional = true }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../balances" }
+sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }
+sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
+sp-transaction-storage-proof = { version = "4.0.0-dev", default-features = false, path = "../../primitives/transaction-storage-proof" }
+log = { version = "0.4.17", default-features = false }
+
+[dev-dependencies]
+sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
+sp-transaction-storage-proof = { version = "4.0.0-dev", default-features = true, path = "../../primitives/transaction-storage-proof" }
+
+[features]
+default = ["std"]
+runtime-benchmarks = ["array-bytes", "frame-benchmarking/runtime-benchmarks"]
+std = [
+	"log/std",
+	"frame-benchmarking?/std",
+	"codec/std",
+	"frame-support/std",
+	"frame-system/std",
+	"pallet-balances/std",
+	"scale-info/std",
+	"serde",
+	"sp-inherents/std",
+	"sp-io/std",
+	"sp-runtime/std",
+	"sp-std/std",
+	"sp-transaction-storage-proof/std",
+]
+try-runtime = ["frame-support/try-runtime"]

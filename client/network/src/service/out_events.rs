@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -30,17 +30,17 @@
 //! [`OutChannels::push`] to put the sender within a [`OutChannels`].
 //! - Send events by calling [`OutChannels::send`]. Events are cloned for each sender in the
 //! collection.
-//!
 
-use crate::Event;
-
-use futures::{prelude::*, channel::mpsc, ready, stream::FusedStream};
+use futures::{channel::mpsc, prelude::*, ready, stream::FusedStream};
 use parking_lot::Mutex;
 use prometheus_endpoint::{register, CounterVec, GaugeVec, Opts, PrometheusError, Registry, U64};
+use sc_network_common::protocol::event::Event;
 use std::{
-	convert::TryFrom as _,
-	fmt, pin::Pin, sync::Arc,
-	task::{Context, Poll}
+	cell::RefCell,
+	fmt,
+	pin::Pin,
+	sync::Arc,
+	task::{Context, Poll},
 };
 
 /// Creates a new channel that can be associated to a [`OutChannels`].
@@ -100,8 +100,10 @@ impl Stream for Receiver {
 			let metrics = self.metrics.lock().clone();
 			match metrics.as_ref().map(|m| m.as_ref()) {
 				Some(Some(metrics)) => metrics.event_out(&ev, self.name),
-				Some(None) => (),	// no registry
-				None => log::warn!("Inconsistency in out_events: event happened before sender associated"),
+				Some(None) => (), // no registry
+				None => log::warn!(
+					"Inconsistency in out_events: event happened before sender associated"
+				),
 			}
 			Poll::Ready(Some(ev))
 		} else {
@@ -136,16 +138,10 @@ pub struct OutChannels {
 impl OutChannels {
 	/// Creates a new empty collection of senders.
 	pub fn new(registry: Option<&Registry>) -> Result<Self, PrometheusError> {
-		let metrics = if let Some(registry) = registry {
-			Some(Metrics::register(registry)?)
-		} else {
-			None
-		};
+		let metrics =
+			if let Some(registry) = registry { Some(Metrics::register(registry)?) } else { None };
 
-		Ok(OutChannels {
-			event_streams: Vec::new(),
-			metrics: Arc::new(metrics),
-		})
+		Ok(Self { event_streams: Vec::new(), metrics: Arc::new(metrics) })
 	}
 
 	/// Adds a new [`Sender`] to the collection.
@@ -164,9 +160,8 @@ impl OutChannels {
 
 	/// Sends an event.
 	pub fn send(&mut self, event: Event) {
-		self.event_streams.retain(|sender| {
-			sender.inner.unbounded_send(event.clone()).is_ok()
-		});
+		self.event_streams
+			.retain(|sender| sender.inner.unbounded_send(event.clone()).is_ok());
 
 		if let Some(metrics) = &*self.metrics {
 			for ev in &self.event_streams {
@@ -191,12 +186,29 @@ struct Metrics {
 	num_channels: GaugeVec<U64>,
 }
 
+thread_local! {
+	static LABEL_BUFFER: RefCell<String> = RefCell::new(String::new());
+}
+
+fn format_label(prefix: &str, protocol: &str, callback: impl FnOnce(&str)) {
+	LABEL_BUFFER.with(|label_buffer| {
+		let mut label_buffer = label_buffer.borrow_mut();
+		label_buffer.clear();
+		label_buffer.reserve(prefix.len() + protocol.len() + 2);
+		label_buffer.push_str(prefix);
+		label_buffer.push('"');
+		label_buffer.push_str(protocol);
+		label_buffer.push('"');
+		callback(&label_buffer);
+	});
+}
+
 impl Metrics {
 	fn register(registry: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
 			events_total: register(CounterVec::new(
 				Opts::new(
-					"sub_libp2p_out_events_events_total",
+					"substrate_sub_libp2p_out_events_events_total",
 					"Number of broadcast network events that have been sent or received across all \
 					 channels"
 				),
@@ -204,7 +216,7 @@ impl Metrics {
 			)?, registry)?,
 			notifications_sizes: register(CounterVec::new(
 				Opts::new(
-					"sub_libp2p_out_events_notifications_sizes",
+					"substrate_sub_libp2p_out_events_notifications_sizes",
 					"Size of notification events that have been sent or received across all \
 					 channels"
 				),
@@ -212,7 +224,7 @@ impl Metrics {
 			)?, registry)?,
 			num_channels: register(GaugeVec::new(
 				Opts::new(
-					"sub_libp2p_out_events_num_channels",
+					"substrate_sub_libp2p_out_events_num_channels",
 					"Number of internal active channels that broadcast network events",
 				),
 				&["name"]
@@ -223,80 +235,80 @@ impl Metrics {
 	fn event_in(&self, event: &Event, num: u64, name: &str) {
 		match event {
 			Event::Dht(_) => {
-				self.events_total
-					.with_label_values(&["dht", "sent", name])
-					.inc_by(num);
-			}
+				self.events_total.with_label_values(&["dht", "sent", name]).inc_by(num);
+			},
 			Event::SyncConnected { .. } => {
 				self.events_total
 					.with_label_values(&["sync-connected", "sent", name])
 					.inc_by(num);
-			}
+			},
 			Event::SyncDisconnected { .. } => {
 				self.events_total
 					.with_label_values(&["sync-disconnected", "sent", name])
 					.inc_by(num);
-			}
+			},
 			Event::NotificationStreamOpened { protocol, .. } => {
-				self.events_total
-					.with_label_values(&[&format!("notif-open-{:?}", protocol), "sent", name])
-					.inc_by(num);
+				format_label("notif-open-", protocol, |protocol_label| {
+					self.events_total
+						.with_label_values(&[protocol_label, "sent", name])
+						.inc_by(num);
+				});
 			},
 			Event::NotificationStreamClosed { protocol, .. } => {
-				self.events_total
-					.with_label_values(&[&format!("notif-closed-{:?}", protocol), "sent", name])
-					.inc_by(num);
-			},
-			Event::NotificationsReceived { messages, .. } => {
-				for (protocol, message) in messages {
+				format_label("notif-closed-", protocol, |protocol_label| {
 					self.events_total
-						.with_label_values(&[&format!("notif-{:?}", protocol), "sent", name])
+						.with_label_values(&[protocol_label, "sent", name])
 						.inc_by(num);
-					self.notifications_sizes
-						.with_label_values(&[protocol, "sent", name])
-						.inc_by(num.saturating_mul(u64::try_from(message.len()).unwrap_or(u64::max_value())));
-				}
+				});
 			},
+			Event::NotificationsReceived { messages, .. } =>
+				for (protocol, message) in messages {
+					format_label("notif-", protocol, |protocol_label| {
+						self.events_total
+							.with_label_values(&[protocol_label, "sent", name])
+							.inc_by(num);
+					});
+					self.notifications_sizes.with_label_values(&[protocol, "sent", name]).inc_by(
+						num.saturating_mul(u64::try_from(message.len()).unwrap_or(u64::MAX)),
+					);
+				},
 		}
 	}
 
 	fn event_out(&self, event: &Event, name: &str) {
 		match event {
 			Event::Dht(_) => {
-				self.events_total
-					.with_label_values(&["dht", "received", name])
-					.inc();
-			}
+				self.events_total.with_label_values(&["dht", "received", name]).inc();
+			},
 			Event::SyncConnected { .. } => {
-				self.events_total
-					.with_label_values(&["sync-connected", "received", name])
-					.inc();
-			}
+				self.events_total.with_label_values(&["sync-connected", "received", name]).inc();
+			},
 			Event::SyncDisconnected { .. } => {
 				self.events_total
 					.with_label_values(&["sync-disconnected", "received", name])
 					.inc();
-			}
+			},
 			Event::NotificationStreamOpened { protocol, .. } => {
-				self.events_total
-					.with_label_values(&[&format!("notif-open-{:?}", protocol), "received", name])
-					.inc();
+				format_label("notif-open-", protocol, |protocol_label| {
+					self.events_total.with_label_values(&[protocol_label, "received", name]).inc();
+				});
 			},
 			Event::NotificationStreamClosed { protocol, .. } => {
-				self.events_total
-					.with_label_values(&[&format!("notif-closed-{:?}", protocol), "received", name])
-					.inc();
+				format_label("notif-closed-", protocol, |protocol_label| {
+					self.events_total.with_label_values(&[protocol_label, "received", name]).inc();
+				});
 			},
-			Event::NotificationsReceived { messages, .. } => {
+			Event::NotificationsReceived { messages, .. } =>
 				for (protocol, message) in messages {
-					self.events_total
-						.with_label_values(&[&format!("notif-{:?}", protocol), "received", name])
-						.inc();
+					format_label("notif-", protocol, |protocol_label| {
+						self.events_total
+							.with_label_values(&[protocol_label, "received", name])
+							.inc();
+					});
 					self.notifications_sizes
-						.with_label_values(&[&protocol, "received", name])
-						.inc_by(u64::try_from(message.len()).unwrap_or(u64::max_value()));
-				}
-			},
+						.with_label_values(&[protocol, "received", name])
+						.inc_by(u64::try_from(message.len()).unwrap_or(u64::MAX));
+				},
 		}
 	}
 }

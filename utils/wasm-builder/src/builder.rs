@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,7 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{env, path::{PathBuf, Path}, process};
+use std::{
+	env,
+	path::{Path, PathBuf},
+	process,
+};
 
 /// Returns the manifest dir from the `CARGO_MANIFEST_DIR` env.
 fn get_manifest_dir() -> PathBuf {
@@ -50,10 +54,7 @@ impl WasmBuilderSelectProject {
 	/// Use the given `path` as project for building the WASM binary.
 	///
 	/// Returns an error if the given `path` does not points to a `Cargo.toml`.
-	pub fn with_project(
-		self,
-		path: impl Into<PathBuf>,
-	) -> Result<WasmBuilder, &'static str> {
+	pub fn with_project(self, path: impl Into<PathBuf>) -> Result<WasmBuilder, &'static str> {
 		let path = path.into();
 
 		if path.ends_with("Cargo.toml") && path.exists() {
@@ -97,9 +98,7 @@ pub struct WasmBuilder {
 impl WasmBuilder {
 	/// Create a new instance of the builder.
 	pub fn new() -> WasmBuilderSelectProject {
-		WasmBuilderSelectProject {
-			_ignore: (),
-		}
+		WasmBuilderSelectProject { _ignore: () }
 	}
 
 	/// Enable exporting `__heap_base` as global variable in the WASM binary.
@@ -147,9 +146,8 @@ impl WasmBuilder {
 	/// Build the WASM binary.
 	pub fn build(self) {
 		let out_dir = PathBuf::from(env::var("OUT_DIR").expect("`OUT_DIR` is set by cargo!"));
-		let file_path = out_dir.join(
-			self.file_name.clone().unwrap_or_else(|| "wasm_binary.rs".into()),
-		);
+		let file_path =
+			out_dir.join(self.file_name.clone().unwrap_or_else(|| "wasm_binary.rs".into()));
 
 		if check_skip_build() {
 			// If we skip the build, we still want to make sure to be called when an env variable
@@ -158,7 +156,7 @@ impl WasmBuilder {
 
 			provide_dummy_wasm_binary_if_not_exist(&file_path);
 
-			return;
+			return
 		}
 
 		build_project(
@@ -179,13 +177,17 @@ impl WasmBuilder {
 fn generate_crate_skip_build_env_name() -> String {
 	format!(
 		"SKIP_{}_WASM_BUILD",
-		env::var("CARGO_PKG_NAME").expect("Package name is set").to_uppercase().replace('-', "_"),
+		env::var("CARGO_PKG_NAME")
+			.expect("Package name is set")
+			.to_uppercase()
+			.replace('-', "_"),
 	)
 }
 
 /// Checks if the build of the WASM binary should be skipped.
 fn check_skip_build() -> bool {
-	env::var(crate::SKIP_BUILD_ENV).is_ok() || env::var(generate_crate_skip_build_env_name()).is_ok()
+	env::var(crate::SKIP_BUILD_ENV).is_ok() ||
+		env::var(generate_crate_skip_build_env_name()).is_ok()
 }
 
 /// Provide a dummy WASM binary if there doesn't exist one.
@@ -213,12 +215,17 @@ fn generate_rerun_if_changed_instructions() {
 /// The current project is determined by using the `CARGO_MANIFEST_DIR` environment variable.
 ///
 /// `file_name` - The name + path of the file being generated. The file contains the
-///               constant `WASM_BINARY`, which contains the built WASM binary.
+/// constant `WASM_BINARY`, which contains the built WASM binary.
+///
 /// `project_cargo_toml` - The path to the `Cargo.toml` of the project that should be built.
+///
 /// `default_rustflags` - Default `RUSTFLAGS` that will always be set for the build.
+///
 /// `features_to_enable` - Features that should be enabled for the project.
-/// `wasm_binary_name` - The optional wasm binary name that is extended with `.compact.compressed.wasm`.
-///                      If `None`, the project name will be used.
+///
+/// `wasm_binary_name` - The optional wasm binary name that is extended with
+///
+/// `.compact.compressed.wasm`. If `None`, the project name will be used.
 fn build_project(
 	file_name: PathBuf,
 	project_cargo_toml: PathBuf,
@@ -243,15 +250,9 @@ fn build_project(
 	);
 
 	let (wasm_binary, wasm_binary_bloaty) = if let Some(wasm_binary) = wasm_binary {
-		(
-			wasm_binary.wasm_binary_path_escaped(),
-			bloaty.wasm_binary_bloaty_path_escaped(),
-		)
+		(wasm_binary.wasm_binary_path_escaped(), bloaty.wasm_binary_bloaty_path_escaped())
 	} else {
-		(
-			bloaty.wasm_binary_bloaty_path_escaped(),
-			bloaty.wasm_binary_bloaty_path_escaped(),
-		)
+		(bloaty.wasm_binary_bloaty_path_escaped(), bloaty.wasm_binary_bloaty_path_escaped())
 	};
 
 	crate::write_file_if_changed(

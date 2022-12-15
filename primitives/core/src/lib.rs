@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,6 @@
 //! Shareable Substrate types.
 
 #![warn(missing_docs)]
-
 #![cfg_attr(not(feature = "std"), no_std)]
 
 /// Initialize a key-value collection from array.
@@ -32,17 +31,15 @@ macro_rules! map {
 	);
 }
 
-use sp_runtime_interface::pass_by::{PassByEnum, PassByInner};
-use sp_std::prelude::*;
-use sp_std::ops::Deref;
-#[cfg(feature = "std")]
-use std::borrow::Cow;
-#[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
+#[doc(hidden)]
+pub use codec::{Decode, Encode, MaxEncodedLen};
+use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 pub use serde;
-#[doc(hidden)]
-pub use codec::{Encode, Decode};
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
+use sp_runtime_interface::pass_by::{PassByEnum, PassByInner};
+use sp_std::{ops::Deref, prelude::*};
 
 pub use sp_debug_derive::RuntimeDebug;
 
@@ -53,37 +50,36 @@ pub use impl_serde::serialize as bytes;
 pub mod hashing;
 
 #[cfg(feature = "full_crypto")]
-pub use hashing::{blake2_128, blake2_256, twox_64, twox_128, twox_256, keccak_256};
-pub mod hexdisplay;
+pub use hashing::{blake2_128, blake2_256, keccak_256, twox_128, twox_256, twox_64};
+pub mod bounded;
 pub mod crypto;
+pub mod hexdisplay;
 
-pub mod u32_trait;
-
-pub mod ed25519;
-pub mod sr25519;
+pub mod defer;
 pub mod ecdsa;
+pub mod ed25519;
 pub mod hash;
 #[cfg(feature = "std")]
 mod hasher;
 pub mod offchain;
-pub mod sandbox;
-pub mod uint;
-mod changes_trie;
+pub mod sr25519;
+pub mod testing;
 #[cfg(feature = "std")]
 pub mod traits;
-pub mod testing;
+pub mod uint;
 
-pub use self::hash::{H160, H256, H512, convert_hash};
-pub use self::uint::{U256, U512};
-pub use changes_trie::{ChangesTrieConfiguration, ChangesTrieConfigurationRange};
+pub use self::{
+	hash::{convert_hash, H160, H256, H512},
+	uint::{U256, U512},
+};
 #[cfg(feature = "full_crypto")]
-pub use crypto::{DeriveJunction, Pair, Public};
+pub use crypto::{ByteArray, DeriveJunction, Pair, Public};
 
-pub use hash_db::Hasher;
 #[cfg(feature = "std")]
 pub use self::hasher::blake2::Blake2Hasher;
 #[cfg(feature = "std")]
 pub use self::hasher::keccak::KeccakHasher;
+pub use hash_db::Hasher;
 
 pub use sp_storage as storage;
 
@@ -99,7 +95,7 @@ pub enum ExecutionContext {
 	/// We distinguish between major sync and import so that validators who are running
 	/// their initial sync (or catching up after some time offline) can use the faster
 	/// native runtime (since we can reasonably assume the network as a whole has already
-	/// come to a broad conensus on the block and it probably hasn't been crafted
+	/// come to a broad consensus on the block and it probably hasn't been crafted
 	/// specifically to attack this node), but when importing blocks at the head of the
 	/// chain in normal operation they can use the safer Wasm version.
 	Syncing,
@@ -117,14 +113,13 @@ impl ExecutionContext {
 		use ExecutionContext::*;
 
 		match self {
-			Importing | Syncing | BlockConstruction =>
-				offchain::Capabilities::none(),
-			// Enable keystore, transaction pool and Offchain DB reads by default for offchain calls.
-			OffchainCall(None) => [
-				offchain::Capability::Keystore,
-				offchain::Capability::OffchainDbRead,
-				offchain::Capability::TransactionPool,
-			][..].into(),
+			Importing | Syncing | BlockConstruction => offchain::Capabilities::empty(),
+			// Enable keystore, transaction pool and Offchain DB reads by default for offchain
+			// calls.
+			OffchainCall(None) =>
+				offchain::Capabilities::KEYSTORE |
+					offchain::Capabilities::OFFCHAIN_DB_READ |
+					offchain::Capabilities::TRANSACTION_POOL,
 			OffchainCall(Some((_, capabilities))) => *capabilities,
 		}
 	}
@@ -133,19 +128,25 @@ impl ExecutionContext {
 /// Hex-serialized shim for `Vec<u8>`.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord))]
-pub struct Bytes(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
+pub struct Bytes(#[cfg_attr(feature = "std", serde(with = "bytes"))] pub Vec<u8>);
 
 impl From<Vec<u8>> for Bytes {
-	fn from(s: Vec<u8>) -> Self { Bytes(s) }
+	fn from(s: Vec<u8>) -> Self {
+		Bytes(s)
+	}
 }
 
 impl From<OpaqueMetadata> for Bytes {
-	fn from(s: OpaqueMetadata) -> Self { Bytes(s.0) }
+	fn from(s: OpaqueMetadata) -> Self {
+		Bytes(s.0)
+	}
 }
 
 impl Deref for Bytes {
 	type Target = [u8];
-	fn deref(&self) -> &[u8] { &self.0[..] }
+	fn deref(&self) -> &[u8] {
+		&self.0[..]
+	}
 }
 
 impl codec::WrapperTypeEncode for Bytes {}
@@ -183,7 +184,19 @@ impl sp_std::ops::Deref for OpaqueMetadata {
 }
 
 /// Simple blob to hold a `PeerId` without committing to its format.
-#[derive(Default, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug, PassByInner)]
+#[derive(
+	Default,
+	Clone,
+	Eq,
+	PartialEq,
+	Ord,
+	PartialOrd,
+	Encode,
+	Decode,
+	RuntimeDebug,
+	PassByInner,
+	TypeInfo,
+)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct OpaquePeerId(pub Vec<u8>);
 
@@ -191,85 +204,6 @@ impl OpaquePeerId {
 	/// Create new `OpaquePeerId`
 	pub fn new(vec: Vec<u8>) -> Self {
 		OpaquePeerId(vec)
-	}
-}
-
-/// Something that is either a native or an encoded value.
-#[cfg(feature = "std")]
-pub enum NativeOrEncoded<R> {
-	/// The native representation.
-	Native(R),
-	/// The encoded representation.
-	Encoded(Vec<u8>)
-}
-
-#[cfg(feature = "std")]
-impl<R> From<R> for NativeOrEncoded<R> {
-	fn from(val: R) -> Self {
-		Self::Native(val)
-	}
-}
-
-#[cfg(feature = "std")]
-impl<R: codec::Encode> sp_std::fmt::Debug for NativeOrEncoded<R> {
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		hexdisplay::HexDisplay::from(&self.as_encoded().as_ref()).fmt(f)
-	}
-}
-
-#[cfg(feature = "std")]
-impl<R: codec::Encode> NativeOrEncoded<R> {
-	/// Return the value as the encoded format.
-	pub fn as_encoded(&self) -> Cow<'_, [u8]> {
-		match self {
-			NativeOrEncoded::Encoded(e) => Cow::Borrowed(e.as_slice()),
-			NativeOrEncoded::Native(n) => Cow::Owned(n.encode()),
-		}
-	}
-
-	/// Return the value as the encoded format.
-	pub fn into_encoded(self) -> Vec<u8> {
-		match self {
-			NativeOrEncoded::Encoded(e) => e,
-			NativeOrEncoded::Native(n) => n.encode(),
-		}
-	}
-}
-
-#[cfg(feature = "std")]
-impl<R: PartialEq + codec::Decode> PartialEq for NativeOrEncoded<R> {
-	fn eq(&self, other: &Self) -> bool {
-		match (self, other) {
-			(NativeOrEncoded::Native(l), NativeOrEncoded::Native(r)) => l == r,
-			(NativeOrEncoded::Native(n), NativeOrEncoded::Encoded(e)) |
-			(NativeOrEncoded::Encoded(e), NativeOrEncoded::Native(n)) =>
-				Some(n) == codec::Decode::decode(&mut &e[..]).ok().as_ref(),
-			(NativeOrEncoded::Encoded(l), NativeOrEncoded::Encoded(r)) => l == r,
-		}
-	}
-}
-
-/// A value that is never in a native representation.
-/// This is type is useful in conjunction with `NativeOrEncoded`.
-#[cfg(feature = "std")]
-#[derive(PartialEq)]
-pub enum NeverNativeValue {}
-
-#[cfg(feature = "std")]
-impl codec::Encode for NeverNativeValue {
-	fn encode(&self) -> Vec<u8> {
-		// The enum is not constructable, so this function should never be callable!
-		unreachable!()
-	}
-}
-
-#[cfg(feature = "std")]
-impl codec::EncodeLike for NeverNativeValue {}
-
-#[cfg(feature = "std")]
-impl codec::Decode for NeverNativeValue {
-	fn decode<I: codec::Input>(_: &mut I) -> Result<Self, codec::Error> {
-		Err("`NeverNativeValue` should never be decoded".into())
 	}
 }
 
@@ -405,7 +339,7 @@ pub fn to_substrate_wasm_fn_return_value(value: &impl Encode) -> u64 {
 
 /// The void type - it cannot exist.
 // Oh rust, you crack me up...
-#[derive(Clone, Decode, Encode, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Decode, Encode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum Void {}
 
 /// Macro for creating `Maybe*` marker traits.
@@ -446,4 +380,245 @@ macro_rules! impl_maybe_marker {
 			impl<T> $trait_name for T {}
 		)+
 	}
+}
+
+/// The maximum number of bytes that can be allocated at one time.
+// The maximum possible allocation size was chosen rather arbitrary, 32 MiB should be enough for
+// everybody.
+pub const MAX_POSSIBLE_ALLOCATION: u32 = 33554432; // 2^25 bytes, 32 MiB
+
+/// A trait for querying a single value from a type defined in the trait.
+///
+/// It is not required that the value is constant.
+pub trait TypedGet {
+	/// The type which is returned.
+	type Type;
+	/// Return the current value.
+	fn get() -> Self::Type;
+}
+
+/// A trait for querying a single value from a type.
+///
+/// It is not required that the value is constant.
+pub trait Get<T> {
+	/// Return the current value.
+	fn get() -> T;
+}
+
+impl<T: Default> Get<T> for () {
+	fn get() -> T {
+		T::default()
+	}
+}
+
+/// Implement Get by returning Default for any type that implements Default.
+pub struct GetDefault;
+impl<T: Default> Get<T> for GetDefault {
+	fn get() -> T {
+		T::default()
+	}
+}
+
+macro_rules! impl_const_get {
+	($name:ident, $t:ty) => {
+		#[doc = "Const getter for a basic type."]
+		#[derive($crate::RuntimeDebug)]
+		pub struct $name<const T: $t>;
+		impl<const T: $t> Get<$t> for $name<T> {
+			fn get() -> $t {
+				T
+			}
+		}
+		impl<const T: $t> Get<Option<$t>> for $name<T> {
+			fn get() -> Option<$t> {
+				Some(T)
+			}
+		}
+		impl<const T: $t> TypedGet for $name<T> {
+			type Type = $t;
+			fn get() -> $t {
+				T
+			}
+		}
+	};
+}
+
+impl_const_get!(ConstBool, bool);
+impl_const_get!(ConstU8, u8);
+impl_const_get!(ConstU16, u16);
+impl_const_get!(ConstU32, u32);
+impl_const_get!(ConstU64, u64);
+impl_const_get!(ConstU128, u128);
+impl_const_get!(ConstI8, i8);
+impl_const_get!(ConstI16, i16);
+impl_const_get!(ConstI32, i32);
+impl_const_get!(ConstI64, i64);
+impl_const_get!(ConstI128, i128);
+
+/// Try and collect into a collection `C`.
+pub trait TryCollect<C> {
+	/// The error type that gets returned when a collection can't be made from `self`.
+	type Error;
+	/// Consume self and try to collect the results into `C`.
+	///
+	/// This is useful in preventing the undesirable `.collect().try_into()` call chain on
+	/// collections that need to be converted into a bounded type (e.g. `BoundedVec`).
+	fn try_collect(self) -> Result<C, Self::Error>;
+}
+
+/// Create new implementations of the [`Get`](crate::Get) trait.
+///
+/// The so-called parameter type can be created in four different ways:
+///
+/// - Using `const` to create a parameter type that provides a `const` getter. It is required that
+///   the `value` is const.
+///
+/// - Declare the parameter type without `const` to have more freedom when creating the value.
+///
+/// NOTE: A more substantial version of this macro is available in `frame_support` crate which
+/// allows mutable and persistant variants.
+///
+/// # Examples
+///
+/// ```
+/// # use sp_core::Get;
+/// # use sp_core::parameter_types;
+/// // This function cannot be used in a const context.
+/// fn non_const_expression() -> u64 { 99 }
+///
+/// const FIXED_VALUE: u64 = 10;
+/// parameter_types! {
+///    pub const Argument: u64 = 42 + FIXED_VALUE;
+///    /// Visibility of the type is optional
+///    OtherArgument: u64 = non_const_expression();
+/// }
+///
+/// trait Config {
+///    type Parameter: Get<u64>;
+///    type OtherParameter: Get<u64>;
+/// }
+///
+/// struct Runtime;
+/// impl Config for Runtime {
+///    type Parameter = Argument;
+///    type OtherParameter = OtherArgument;
+/// }
+/// ```
+///
+/// # Invalid example:
+///
+/// ```compile_fail
+/// # use sp_core::Get;
+/// # use sp_core::parameter_types;
+/// // This function cannot be used in a const context.
+/// fn non_const_expression() -> u64 { 99 }
+///
+/// parameter_types! {
+///    pub const Argument: u64 = non_const_expression();
+/// }
+/// ```
+#[macro_export]
+macro_rules! parameter_types {
+	(
+		$( #[ $attr:meta ] )*
+		$vis:vis const $name:ident: $type:ty = $value:expr;
+		$( $rest:tt )*
+	) => (
+		$( #[ $attr ] )*
+		$vis struct $name;
+		$crate::parameter_types!(@IMPL_CONST $name , $type , $value);
+		$crate::parameter_types!( $( $rest )* );
+	);
+	(
+		$( #[ $attr:meta ] )*
+		$vis:vis $name:ident: $type:ty = $value:expr;
+		$( $rest:tt )*
+	) => (
+		$( #[ $attr ] )*
+		$vis struct $name;
+		$crate::parameter_types!(@IMPL $name, $type, $value);
+		$crate::parameter_types!( $( $rest )* );
+	);
+	() => ();
+	(@IMPL_CONST $name:ident, $type:ty, $value:expr) => {
+		impl $name {
+			/// Returns the value of this parameter type.
+			pub const fn get() -> $type {
+				$value
+			}
+		}
+
+		impl<I: From<$type>> $crate::Get<I> for $name {
+			fn get() -> I {
+				I::from(Self::get())
+			}
+		}
+
+		impl $crate::TypedGet for $name {
+			type Type = $type;
+			fn get() -> $type {
+				Self::get()
+			}
+		}
+	};
+	(@IMPL $name:ident, $type:ty, $value:expr) => {
+		impl $name {
+			/// Returns the value of this parameter type.
+			pub fn get() -> $type {
+				$value
+			}
+		}
+
+		impl<I: From<$type>> $crate::Get<I> for $name {
+			fn get() -> I {
+				I::from(Self::get())
+			}
+		}
+
+		impl $crate::TypedGet for $name {
+			type Type = $type;
+			fn get() -> $type {
+				Self::get()
+			}
+		}
+	};
+}
+
+/// Build a bounded vec from the given literals.
+///
+/// The type of the outcome must be known.
+///
+/// Will not handle any errors and just panic if the given literals cannot fit in the corresponding
+/// bounded vec type. Thus, this is only suitable for testing and non-consensus code.
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! bounded_vec {
+	($ ($values:expr),* $(,)?) => {
+		{
+			$crate::sp_std::vec![$($values),*].try_into().unwrap()
+		}
+	};
+	( $value:expr ; $repetition:expr ) => {
+		{
+			$crate::sp_std::vec![$value ; $repetition].try_into().unwrap()
+		}
+	}
+}
+
+/// Build a bounded btree-map from the given literals.
+///
+/// The type of the outcome must be known.
+///
+/// Will not handle any errors and just panic if the given literals cannot fit in the corresponding
+/// bounded vec type. Thus, this is only suitable for testing and non-consensus code.
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! bounded_btree_map {
+	($ ( $key:expr => $value:expr ),* $(,)?) => {
+		{
+			$crate::TryCollect::<$crate::bounded::BoundedBTreeMap<_, _, _>>::try_collect(
+				$crate::sp_std::vec![$(($key, $value)),*].into_iter()
+			).unwrap()
+		}
+	};
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,13 +19,10 @@
 
 use codec::Encode;
 use sp_runtime::traits::Convert;
-
-use super::super::Config as SessionConfig;
-use super::super::{Pallet as SessionModule, SessionIndex};
-use super::Config as HistoricalConfig;
-
-use super::shared;
 use sp_std::prelude::*;
+
+use super::{shared, Config as HistoricalConfig};
+use crate::{Config as SessionConfig, Pallet as SessionModule, SessionIndex};
 
 /// Store the validator-set associated to the `session_index` to the off-chain database.
 ///

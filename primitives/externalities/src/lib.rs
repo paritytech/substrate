@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,12 +25,16 @@
 //!
 //! This crate exposes the main [`Externalities`] trait.
 
-use sp_std::{any::{Any, TypeId}, vec::Vec, boxed::Box};
+use sp_std::{
+	any::{Any, TypeId},
+	boxed::Box,
+	vec::Vec,
+};
 
-use sp_storage::{ChildInfo, TrackedStorageKey};
+use sp_storage::{ChildInfo, StateVersion, TrackedStorageKey};
 
+pub use extensions::{Extension, ExtensionStore, Extensions};
 pub use scope_limited::{set_and_run_with_externalities, with_externalities};
-pub use extensions::{Extension, Extensions, ExtensionStore};
 
 mod extensions;
 mod scope_limited;
@@ -46,6 +50,30 @@ pub enum Error {
 	ExtensionIsNotRegistered(TypeId),
 	/// Failed to update storage,
 	StorageUpdateFailed(&'static str),
+}
+
+/// Results concerning an operation to remove many keys.
+#[derive(codec::Encode, codec::Decode)]
+#[must_use]
+pub struct MultiRemovalResults {
+	/// A continuation cursor which, if `Some` must be provided to the subsequent removal call.
+	/// If `None` then all removals are complete and no further calls are needed.
+	pub maybe_cursor: Option<Vec<u8>>,
+	/// The number of items removed from the backend database.
+	pub backend: u32,
+	/// The number of unique keys removed, taking into account both the backend and the overlay.
+	pub unique: u32,
+	/// The number of iterations (each requiring a storage seek/read) which were done.
+	pub loops: u32,
+}
+
+impl MultiRemovalResults {
+	/// Deconstruct into the internal components.
+	///
+	/// Returns `(maybe_cursor, backend, unique, loops)`.
+	pub fn deconstruct(self) -> (Option<Vec<u8>>, u32, u32, u32) {
+		(self.maybe_cursor, self.backend, self.unique, self.loops)
+	}
 }
 
 /// The Substrate externalities.
@@ -68,20 +96,12 @@ pub trait Externalities: ExtensionStore {
 	/// This may be optimized for large values.
 	///
 	/// Returns an `Option` that holds the SCALE encoded hash.
-	fn child_storage_hash(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Option<Vec<u8>>;
+	fn child_storage_hash(&self, child_info: &ChildInfo, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Read child runtime storage.
 	///
 	/// Returns an `Option` that holds the SCALE encoded hash.
-	fn child_storage(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Option<Vec<u8>>;
+	fn child_storage(&self, child_info: &ChildInfo, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Set storage entry `key` of current contract being called (effective immediately).
 	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
@@ -89,12 +109,7 @@ pub trait Externalities: ExtensionStore {
 	}
 
 	/// Set child storage entry `key` of current contract being called (effective immediately).
-	fn set_child_storage(
-		&mut self,
-		child_info: &ChildInfo,
-		key: Vec<u8>,
-		value: Vec<u8>,
-	) {
+	fn set_child_storage(&mut self, child_info: &ChildInfo, key: Vec<u8>, value: Vec<u8>) {
 		self.place_child_storage(child_info, key, Some(value))
 	}
 
@@ -103,12 +118,9 @@ pub trait Externalities: ExtensionStore {
 		self.place_storage(key.to_vec(), None);
 	}
 
-	/// Clear a child storage entry (`key`) of current contract being called (effective immediately).
-	fn clear_child_storage(
-		&mut self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) {
+	/// Clear a child storage entry (`key`) of current contract being called (effective
+	/// immediately).
+	fn clear_child_storage(&mut self, child_info: &ChildInfo, key: &[u8]) {
 		self.place_child_storage(child_info, key.to_vec(), None)
 	}
 
@@ -118,11 +130,7 @@ pub trait Externalities: ExtensionStore {
 	}
 
 	/// Whether a child storage entry exists.
-	fn exists_child_storage(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> bool {
+	fn exists_child_storage(&self, child_info: &ChildInfo, key: &[u8]) -> bool {
 		self.child_storage(child_info, key).is_some()
 	}
 
@@ -130,53 +138,65 @@ pub trait Externalities: ExtensionStore {
 	fn next_storage_key(&self, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Returns the key immediately following the given key, if it exists, in child storage.
-	fn next_child_storage_key(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Option<Vec<u8>>;
+	fn next_child_storage_key(&self, child_info: &ChildInfo, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Clear an entire child storage.
 	///
-	/// Deletes all keys from the overlay and up to `limit` keys from the backend. No
-	/// limit is applied if `limit` is `None`. Returned boolean is `true` if the child trie was
-	/// removed completely and `false` if there are remaining keys after the function
-	/// returns. Returned `u32` is the number of keys that was removed at the end of the
-	/// operation.
+	/// Deletes all keys from the overlay and up to `maybe_limit` keys from the backend. No
+	/// limit is applied if `maybe_limit` is `None`. Returns the cursor for the next call as `Some`
+	/// if the child trie deletion operation is incomplete. In this case, it should be passed into
+	/// the next call to avoid unaccounted iterations on the backend. Returns also the the number
+	/// of keys that were removed from the backend, the number of unique keys removed in total
+	/// (including from the overlay) and the number of backend iterations done.
+	///
+	/// As long as `maybe_cursor` is passed from the result of the previous call, then the number of
+	/// iterations done will only ever be one more than the number of keys removed.
 	///
 	/// # Note
 	///
 	/// An implementation is free to delete more keys than the specified limit as long as
 	/// it is able to do that in constant time.
-	fn kill_child_storage(&mut self, child_info: &ChildInfo, limit: Option<u32>) -> (bool, u32);
+	fn kill_child_storage(
+		&mut self,
+		child_info: &ChildInfo,
+		maybe_limit: Option<u32>,
+		maybe_cursor: Option<&[u8]>,
+	) -> MultiRemovalResults;
 
 	/// Clear storage entries which keys are start with the given prefix.
-	fn clear_prefix(&mut self, prefix: &[u8]);
+	///
+	/// `maybe_limit`, `maybe_cursor` and result works as for `kill_child_storage`.
+	fn clear_prefix(
+		&mut self,
+		prefix: &[u8],
+		maybe_limit: Option<u32>,
+		maybe_cursor: Option<&[u8]>,
+	) -> MultiRemovalResults;
 
 	/// Clear child storage entries which keys are start with the given prefix.
+	///
+	/// `maybe_limit`, `maybe_cursor` and result works as for `kill_child_storage`.
 	fn clear_child_prefix(
 		&mut self,
 		child_info: &ChildInfo,
 		prefix: &[u8],
-	);
+		maybe_limit: Option<u32>,
+		maybe_cursor: Option<&[u8]>,
+	) -> MultiRemovalResults;
 
-	/// Set or clear a storage entry (`key`) of current contract being called (effective immediately).
+	/// Set or clear a storage entry (`key`) of current contract being called (effective
+	/// immediately).
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>);
 
 	/// Set or clear a child storage entry.
-	fn place_child_storage(
-		&mut self,
-		child_info: &ChildInfo,
-		key: Vec<u8>,
-		value: Option<Vec<u8>>,
-	);
+	fn place_child_storage(&mut self, child_info: &ChildInfo, key: Vec<u8>, value: Option<Vec<u8>>);
 
 	/// Get the trie root of the current storage map.
 	///
 	/// This will also update all child storage keys in the top-level storage map.
 	///
 	/// The returned hash is defined by the `Block` and is SCALE encoded.
-	fn storage_root(&mut self) -> Vec<u8>;
+	fn storage_root(&mut self, state_version: StateVersion) -> Vec<u8>;
 
 	/// Get the trie root of a child storage map.
 	///
@@ -187,23 +207,14 @@ pub trait Externalities: ExtensionStore {
 	fn child_storage_root(
 		&mut self,
 		child_info: &ChildInfo,
+		state_version: StateVersion,
 	) -> Vec<u8>;
 
 	/// Append storage item.
 	///
-	/// This assumes specific format of the storage item. Also there is no way to undo this operation.
-	fn storage_append(
-		&mut self,
-		key: Vec<u8>,
-		value: Vec<u8>,
-	);
-
-	/// Get the changes trie root of the current storage overlay at a block with given `parent`.
-	///
-	/// `parent` expects a SCALE encoded hash.
-	///
-	/// The returned hash is defined by the `Block` and is SCALE encoded.
-	fn storage_changes_root(&mut self, parent: &[u8]) -> Result<Option<Vec<u8>>, ()>;
+	/// This assumes specific format of the storage item. Also there is no way to undo this
+	/// operation.
+	fn storage_append(&mut self, key: Vec<u8>, value: Vec<u8>);
 
 	/// Start a new nested transaction.
 	///
@@ -229,12 +240,12 @@ pub trait Externalities: ExtensionStore {
 	fn storage_commit_transaction(&mut self) -> Result<(), ()>;
 
 	/// Index specified transaction slice and store it.
-	fn storage_index_transaction(&mut self, _index: u32, _offset: u32) {
+	fn storage_index_transaction(&mut self, _index: u32, _hash: &[u8], _size: u32) {
 		unimplemented!("storage_index_transaction");
 	}
 
 	/// Renew existing piece of transaction storage.
-	fn storage_renew_transaction_index(&mut self, _index: u32, _hash: &[u8], _size: u32) {
+	fn storage_renew_transaction_index(&mut self, _index: u32, _hash: &[u8]) {
 		unimplemented!("storage_renew_transaction_index");
 	}
 
@@ -291,6 +302,13 @@ pub trait Externalities: ExtensionStore {
 	fn proof_size(&self) -> Option<u32> {
 		None
 	}
+
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	/// Benchmarking related functionality and shouldn't be used anywhere else!
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	///
+	/// Get all the keys that have been read or written to during the benchmark.
+	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, u32, u32, bool)>;
 }
 
 /// Extension for the [`Externalities`] trait.

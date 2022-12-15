@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,38 +16,41 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::error;
-use crate::params::{DatabaseParams, SharedParams};
-use crate::CliConfiguration;
-use sc_service::DatabaseConfig;
-use std::fmt::Debug;
-use std::fs;
-use std::io::{self, Write};
-use structopt::StructOpt;
+use crate::{
+	error,
+	params::{DatabaseParams, SharedParams},
+	CliConfiguration,
+};
+use clap::Parser;
+use sc_service::DatabaseSource;
+use std::{
+	fmt::Debug,
+	fs,
+	io::{self, Write},
+};
 
 /// The `purge-chain` command used to remove the whole chain.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, Clone, Parser)]
 pub struct PurgeChainCmd {
 	/// Skip interactive prompt by answering yes automatically.
-	#[structopt(short = "y")]
+	#[arg(short = 'y')]
 	pub yes: bool,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub shared_params: SharedParams,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub database_params: DatabaseParams,
 }
 
 impl PurgeChainCmd {
 	/// Run the purge command
-	pub fn run(&self, database_config: DatabaseConfig) -> error::Result<()> {
-		let db_path = database_config.path()
-			.ok_or_else(||
-				error::Error::Input("Cannot purge custom database implementation".into())
-		)?;
+	pub fn run(&self, database_config: DatabaseSource) -> error::Result<()> {
+		let db_path = database_config.path().ok_or_else(|| {
+			error::Error::Input("Cannot purge custom database implementation".into())
+		})?;
 
 		if !self.yes {
 			print!("Are you sure to remove {:?}? [y/N]: ", &db_path);
@@ -57,11 +60,11 @@ impl PurgeChainCmd {
 			io::stdin().read_line(&mut input)?;
 			let input = input.trim();
 
-			match input.chars().nth(0) {
+			match input.chars().next() {
 				Some('y') | Some('Y') => {},
 				_ => {
 					println!("Aborted");
-					return Ok(());
+					return Ok(())
 				},
 			}
 		}

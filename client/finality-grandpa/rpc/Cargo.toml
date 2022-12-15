@@ -1,39 +1,37 @@
 [package]
 name = "sc-finality-grandpa-rpc"
-version = "0.9.0"
+version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "RPC extensions for the GRANDPA finality gadget"
 repository = "https://github.com/paritytech/substrate/"
-edition = "2018"
+edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 readme = "README.md"
+homepage = "https://substrate.io"
 
 [dependencies]
-sc-finality-grandpa = { version = "0.9.0", path = "../" }
-sc-rpc = { version = "3.0.0", path = "../../rpc" }
-sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
-sp-core = { version = "3.0.0", path = "../../../primitives/core" }
-sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
-finality-grandpa = { version = "0.14.0", features = ["derive-codec"] }
-jsonrpc-core = "15.1.0"
-jsonrpc-core-client = "15.1.0"
-jsonrpc-derive = "15.1.0"
-jsonrpc-pubsub = "15.1.0"
-futures = { version = "0.3.4", features = ["compat"] }
+finality-grandpa = { version = "0.16.0", features = ["derive-codec"] }
+futures = "0.3.16"
+jsonrpsee = { version = "0.16.2", features = ["client-core", "server", "macros"] }
+log = "0.4.8"
+parity-scale-codec = { version = "3.0.0", features = ["derive"] }
 serde = { version = "1.0.105", features = ["derive"] }
 serde_json = "1.0.50"
-log = "0.4.8"
-derive_more = "0.99.2"
-parity-scale-codec = { version = "2.0.0", features = ["derive"] }
-sc-client-api = { version = "3.0.0", path = "../../api" }
+thiserror = "1.0"
+sc-client-api = { version = "4.0.0-dev", path = "../../api" }
+sc-finality-grandpa = { version = "0.10.0-dev", path = "../" }
+sc-rpc = { version = "4.0.0-dev", path = "../../rpc" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
+sp-core = { version = "7.0.0", path = "../../../primitives/core" }
+sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
-sc-block-builder = { version = "0.9.0", path = "../../block-builder" }
-sc-network-test = { version = "0.8.0", path = "../../network/test" }
-sc-rpc = { version = "3.0.0", path = "../../rpc", features = ["test-helpers"] }
-sp-consensus = { version = "0.9.0", path = "../../../primitives/consensus/common" }
-sp-core = { version = "3.0.0", path = "../../../primitives/core" }
-sp-finality-grandpa = { version = "3.0.0", path = "../../../primitives/finality-grandpa" }
-sp-keyring = { version = "3.0.0", path = "../../../primitives/keyring" }
-substrate-test-runtime-client = { version = "2.0.0",  path = "../../../test-utils/runtime/client" }
-lazy_static = "1.4"
+sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
+sc-rpc = { version = "4.0.0-dev", features = [
+	"test-helpers",
+], path = "../../rpc" }
+sp-core = { version = "7.0.0", path = "../../../primitives/core" }
+sp-finality-grandpa = { version = "4.0.0-dev", path = "../../../primitives/finality-grandpa" }
+sp-keyring = { version = "7.0.0", path = "../../../primitives/keyring" }
+substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
+tokio = { version = "1.22.0", features = ["macros"] }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2015-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2015-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,17 +15,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use criterion::{Criterion, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, Criterion};
 criterion_group!(benches, benchmark);
 criterion_main!(benches);
 
 fn benchmark(c: &mut Criterion) {
 	trie_bench::standard_benchmark::<
-		sp_trie::Layout<sp_runtime::traits::BlakeTwo256>,
+		sp_trie::LayoutV1<sp_runtime::traits::BlakeTwo256>,
 		sp_trie::TrieStream,
 	>(c, "substrate-blake2");
 	trie_bench::standard_benchmark::<
-		sp_trie::Layout<sp_runtime::traits::BlakeTwo256>,
+		sp_trie::LayoutV1<sp_runtime::traits::BlakeTwo256>,
 		sp_trie::TrieStream,
 	>(c, "substrate-keccak");
 }

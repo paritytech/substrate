@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,13 +17,19 @@
 
 //! Schnorrkel-based VRF.
 
-use codec::{Encode, Decode, EncodeLike};
-use sp_std::{convert::TryFrom, prelude::*};
-use sp_core::U512;
-use sp_std::ops::{Deref, DerefMut};
+use codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
+use scale_info::TypeInfo;
 use schnorrkel::errors::MultiSignatureStage;
+use sp_core::U512;
+use sp_std::{
+	ops::{Deref, DerefMut},
+	prelude::*,
+};
 
-pub use schnorrkel::{SignatureError, PublicKey, vrf::{VRF_PROOF_LENGTH, VRF_OUTPUT_LENGTH}};
+pub use schnorrkel::{
+	vrf::{VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH},
+	PublicKey, SignatureError,
+};
 
 /// The length of the Randomness.
 pub const RANDOMNESS_LENGTH: usize = VRF_OUTPUT_LENGTH;
@@ -34,11 +40,15 @@ pub struct VRFOutput(pub schnorrkel::vrf::VRFOutput);
 
 impl Deref for VRFOutput {
 	type Target = schnorrkel::vrf::VRFOutput;
-	fn deref(&self) -> &Self::Target { &self.0 }
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
 }
 
 impl DerefMut for VRFOutput {
-	fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.0
+	}
 }
 
 impl Encode for VRFOutput {
@@ -47,12 +57,26 @@ impl Encode for VRFOutput {
 	}
 }
 
-impl EncodeLike for VRFOutput { }
+impl EncodeLike for VRFOutput {}
 
 impl Decode for VRFOutput {
 	fn decode<R: codec::Input>(i: &mut R) -> Result<Self, codec::Error> {
 		let decoded = <[u8; VRF_OUTPUT_LENGTH]>::decode(i)?;
 		Ok(Self(schnorrkel::vrf::VRFOutput::from_bytes(&decoded).map_err(convert_error)?))
+	}
+}
+
+impl MaxEncodedLen for VRFOutput {
+	fn max_encoded_len() -> usize {
+		<[u8; VRF_OUTPUT_LENGTH]>::max_encoded_len()
+	}
+}
+
+impl TypeInfo for VRFOutput {
+	type Identity = [u8; VRF_OUTPUT_LENGTH];
+
+	fn type_info() -> scale_info::Type {
+		Self::Identity::type_info()
 	}
 }
 
@@ -82,11 +106,15 @@ impl Ord for VRFProof {
 
 impl Deref for VRFProof {
 	type Target = schnorrkel::vrf::VRFProof;
-	fn deref(&self) -> &Self::Target { &self.0 }
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
 }
 
 impl DerefMut for VRFProof {
-	fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.0
+	}
 }
 
 impl Encode for VRFProof {
@@ -95,12 +123,26 @@ impl Encode for VRFProof {
 	}
 }
 
-impl EncodeLike for VRFProof { }
+impl EncodeLike for VRFProof {}
 
 impl Decode for VRFProof {
 	fn decode<R: codec::Input>(i: &mut R) -> Result<Self, codec::Error> {
 		let decoded = <[u8; VRF_PROOF_LENGTH]>::decode(i)?;
 		Ok(Self(schnorrkel::vrf::VRFProof::from_bytes(&decoded).map_err(convert_error)?))
+	}
+}
+
+impl MaxEncodedLen for VRFProof {
+	fn max_encoded_len() -> usize {
+		<[u8; VRF_PROOF_LENGTH]>::max_encoded_len()
+	}
+}
+
+impl TypeInfo for VRFProof {
+	type Identity = [u8; VRF_PROOF_LENGTH];
+
+	fn type_info() -> scale_info::Type {
+		Self::Identity::type_info()
 	}
 }
 
@@ -113,8 +155,8 @@ impl TryFrom<[u8; VRF_PROOF_LENGTH]> for VRFProof {
 }
 
 fn convert_error(e: SignatureError) -> codec::Error {
-	use SignatureError::*;
 	use MultiSignatureStage::*;
+	use SignatureError::*;
 	match e {
 		EquationFalse => "Signature error: `EquationFalse`".into(),
 		PointDecompressionError => "Signature error: `PointDecompressionError`".into(),

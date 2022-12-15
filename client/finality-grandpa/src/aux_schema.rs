@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -30,13 +30,16 @@ use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sp_finality_grandpa::{AuthorityList, RoundNumber, SetId};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
-use crate::authorities::{
-	AuthoritySet, AuthoritySetChanges, DelayKind, PendingChange, SharedAuthoritySet,
+use crate::{
+	authorities::{
+		AuthoritySet, AuthoritySetChanges, DelayKind, PendingChange, SharedAuthoritySet,
+	},
+	environment::{
+		CompletedRound, CompletedRounds, CurrentRounds, HasVoted, SharedVoterSetState,
+		VoterSetState,
+	},
+	GrandpaJustification, NewAuthoritySet,
 };
-use crate::environment::{
-	CompletedRound, CompletedRounds, CurrentRounds, HasVoted, SharedVoterSetState, VoterSetState,
-};
-use crate::{GrandpaJustification, NewAuthoritySet};
 
 const VERSION_KEY: &[u8] = b"grandpa_schema_version";
 const SET_STATE_KEY: &[u8] = b"grandpa_completed_round";
@@ -97,7 +100,7 @@ where
 				// previously we only supported at most one pending change per fork
 				&|_, _| Ok(false),
 			) {
-				warn!(target: "afg", "Error migrating pending authority set change: {:?}.", err);
+				warn!(target: "afg", "Error migrating pending authority set change: {}", err);
 				warn!(target: "afg", "Node is in a potentially inconsistent state.");
 			}
 		}
@@ -141,13 +144,13 @@ struct V2AuthoritySet<H, N> {
 
 pub(crate) fn load_decode<B: AuxStore, T: Decode>(
 	backend: &B,
-	key: &[u8]
+	key: &[u8],
 ) -> ClientResult<Option<T>> {
 	match backend.get_aux(key)? {
 		None => Ok(None),
 		Some(t) => T::decode(&mut &t[..])
 			.map_err(|e| ClientError::Backend(format!("GRANDPA DB is corrupted: {}", e)))
-			.map(Some)
+			.map(Some),
 	}
 }
 
@@ -160,24 +163,16 @@ pub(crate) struct PersistentData<Block: BlockT> {
 fn migrate_from_version0<Block: BlockT, B, G>(
 	backend: &B,
 	genesis_round: &G,
-) -> ClientResult<
-	Option<(
-		AuthoritySet<Block::Hash, NumberFor<Block>>,
-		VoterSetState<Block>,
-	)>,
->
+) -> ClientResult<Option<(AuthoritySet<Block::Hash, NumberFor<Block>>, VoterSetState<Block>)>>
 where
 	B: AuxStore,
 	G: Fn() -> RoundState<Block::Hash, NumberFor<Block>>,
 {
-	CURRENT_VERSION.using_encoded(|s|
-		backend.insert_aux(&[(VERSION_KEY, s)], &[])
-	)?;
+	CURRENT_VERSION.using_encoded(|s| backend.insert_aux(&[(VERSION_KEY, s)], &[]))?;
 
-	if let Some(old_set) = load_decode::<_, V0AuthoritySet<Block::Hash, NumberFor<Block>>>(
-		backend,
-		AUTHORITY_SET_KEY,
-	)? {
+	if let Some(old_set) =
+		load_decode::<_, V0AuthoritySet<Block::Hash, NumberFor<Block>>>(backend, AUTHORITY_SET_KEY)?
+	{
 		let new_set: AuthoritySet<Block::Hash, NumberFor<Block>> = old_set.into();
 		backend.insert_aux(&[(AUTHORITY_SET_KEY, new_set.encode().as_slice())], &[])?;
 
@@ -193,10 +188,10 @@ where
 		let set_id = new_set.set_id;
 
 		let base = last_round_state.prevote_ghost.expect(
-			"state is for completed round; completed rounds must have a prevote ghost; qed."
+			"state is for completed round; completed rounds must have a prevote ghost; qed.",
 		);
 
-		let mut current_rounds = CurrentRounds::new();
+		let mut current_rounds = CurrentRounds::<Block>::new();
 		current_rounds.insert(last_round_number + 1, HasVoted::No);
 
 		let set_state = VoterSetState::Live {
@@ -215,7 +210,7 @@ where
 
 		backend.insert_aux(&[(SET_STATE_KEY, set_state.encode().as_slice())], &[])?;
 
-		return Ok(Some((new_set, set_state)));
+		return Ok(Some((new_set, set_state)))
 	}
 
 	Ok(None)
@@ -224,36 +219,25 @@ where
 fn migrate_from_version1<Block: BlockT, B, G>(
 	backend: &B,
 	genesis_round: &G,
-) -> ClientResult<
-	Option<(
-		AuthoritySet<Block::Hash, NumberFor<Block>>,
-		VoterSetState<Block>,
-	)>,
->
+) -> ClientResult<Option<(AuthoritySet<Block::Hash, NumberFor<Block>>, VoterSetState<Block>)>>
 where
 	B: AuxStore,
 	G: Fn() -> RoundState<Block::Hash, NumberFor<Block>>,
 {
-	CURRENT_VERSION.using_encoded(|s|
-		backend.insert_aux(&[(VERSION_KEY, s)], &[])
-	)?;
+	CURRENT_VERSION.using_encoded(|s| backend.insert_aux(&[(VERSION_KEY, s)], &[]))?;
 
-	if let Some(set) = load_decode::<_, AuthoritySet<Block::Hash, NumberFor<Block>>>(
-		backend,
-		AUTHORITY_SET_KEY,
-	)? {
+	if let Some(set) =
+		load_decode::<_, AuthoritySet<Block::Hash, NumberFor<Block>>>(backend, AUTHORITY_SET_KEY)?
+	{
 		let set_id = set.set_id;
 
-		let completed_rounds = |number, state, base| CompletedRounds::new(
-			CompletedRound {
-				number,
-				state,
-				votes: Vec::new(),
-				base,
-			},
-			set_id,
-			&set,
-		);
+		let completed_rounds = |number, state, base| {
+			CompletedRounds::new(
+				CompletedRound { number, state, votes: Vec::new(), base },
+				set_id,
+				&set,
+			)
+		};
 
 		let set_state = match load_decode::<_, V1VoterSetState<Block::Hash, NumberFor<Block>>>(
 			backend,
@@ -271,7 +255,7 @@ where
 				let base = set_state.prevote_ghost
 					.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
 
-				let mut current_rounds = CurrentRounds::new();
+				let mut current_rounds = CurrentRounds::<Block>::new();
 				current_rounds.insert(last_round_number + 1, HasVoted::No);
 
 				VoterSetState::Live {
@@ -284,17 +268,13 @@ where
 				let base = set_state.prevote_ghost
 					.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
 
-				VoterSetState::live(
-					set_id,
-					&set,
-					base,
-				)
+				VoterSetState::live(set_id, &set, base)
 			},
 		};
 
 		backend.insert_aux(&[(SET_STATE_KEY, set_state.encode().as_slice())], &[])?;
 
-		return Ok(Some((set, set_state)));
+		return Ok(Some((set, set_state)))
 	}
 
 	Ok(None)
@@ -303,46 +283,31 @@ where
 fn migrate_from_version2<Block: BlockT, B, G>(
 	backend: &B,
 	genesis_round: &G,
-) -> ClientResult<
-	Option<(
-		AuthoritySet<Block::Hash, NumberFor<Block>>,
-		VoterSetState<Block>,
-	)>,
->
+) -> ClientResult<Option<(AuthoritySet<Block::Hash, NumberFor<Block>>, VoterSetState<Block>)>>
 where
 	B: AuxStore,
 	G: Fn() -> RoundState<Block::Hash, NumberFor<Block>>,
 {
-	CURRENT_VERSION.using_encoded(|s|
-		backend.insert_aux(&[(VERSION_KEY, s)], &[])
-	)?;
+	CURRENT_VERSION.using_encoded(|s| backend.insert_aux(&[(VERSION_KEY, s)], &[]))?;
 
-	if let Some(old_set) = load_decode::<_, V2AuthoritySet<Block::Hash, NumberFor<Block>>>(
-		backend,
-		AUTHORITY_SET_KEY,
-	)? {
+	if let Some(old_set) =
+		load_decode::<_, V2AuthoritySet<Block::Hash, NumberFor<Block>>>(backend, AUTHORITY_SET_KEY)?
+	{
 		let new_set: AuthoritySet<Block::Hash, NumberFor<Block>> = old_set.into();
 		backend.insert_aux(&[(AUTHORITY_SET_KEY, new_set.encode().as_slice())], &[])?;
 
-		let set_state = match load_decode::<_, VoterSetState<Block>>(
-			backend,
-			SET_STATE_KEY,
-		)? {
+		let set_state = match load_decode::<_, VoterSetState<Block>>(backend, SET_STATE_KEY)? {
 			Some(state) => state,
 			None => {
 				let state = genesis_round();
 				let base = state.prevote_ghost
 					.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
 
-				VoterSetState::live(
-					new_set.set_id,
-					&new_set,
-					base,
-				)
-			}
+				VoterSetState::live(new_set.set_id, &new_set, base)
+			},
 		};
 
-		return Ok(Some((new_set, set_state)));
+		return Ok(Some((new_set, set_state)))
 	}
 
 	Ok(None)
@@ -371,7 +336,7 @@ where
 				return Ok(PersistentData {
 					authority_set: new_set.into(),
 					set_state: set_state.into(),
-				});
+				})
 			}
 		},
 		Some(1) => {
@@ -381,7 +346,7 @@ where
 				return Ok(PersistentData {
 					authority_set: new_set.into(),
 					set_state: set_state.into(),
-				});
+				})
 			}
 		},
 		Some(2) => {
@@ -391,41 +356,31 @@ where
 				return Ok(PersistentData {
 					authority_set: new_set.into(),
 					set_state: set_state.into(),
-				});
+				})
 			}
-		}
+		},
 		Some(3) => {
 			if let Some(set) = load_decode::<_, AuthoritySet<Block::Hash, NumberFor<Block>>>(
 				backend,
 				AUTHORITY_SET_KEY,
 			)? {
-				let set_state = match load_decode::<_, VoterSetState<Block>>(
-					backend,
-					SET_STATE_KEY,
-				)? {
-					Some(state) => state,
-					None => {
-						let state = make_genesis_round();
-						let base = state.prevote_ghost
+				let set_state =
+					match load_decode::<_, VoterSetState<Block>>(backend, SET_STATE_KEY)? {
+						Some(state) => state,
+						None => {
+							let state = make_genesis_round();
+							let base = state.prevote_ghost
 							.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
 
-						VoterSetState::live(
-							set.set_id,
-							&set,
-							base,
-						)
-					}
-				};
+							VoterSetState::live(set.set_id, &set, base)
+						},
+					};
 
-				return Ok(PersistentData {
-					authority_set: set.into(),
-					set_state: set_state.into(),
-				});
+				return Ok(PersistentData { authority_set: set.into(), set_state: set_state.into() })
 			}
-		}
-		Some(other) => return Err(ClientError::Backend(
-			format!("Unsupported GRANDPA DB version: {:?}", other)
-		)),
+		},
+		Some(other) =>
+			return Err(ClientError::Backend(format!("Unsupported GRANDPA DB version: {:?}", other))),
 	}
 
 	// genesis.
@@ -436,14 +391,11 @@ where
 	let genesis_set = AuthoritySet::genesis(genesis_authorities)
 		.expect("genesis authorities is non-empty; all weights are non-zero; qed.");
 	let state = make_genesis_round();
-	let base = state.prevote_ghost
+	let base = state
+		.prevote_ghost
 		.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
 
-	let genesis_state = VoterSetState::live(
-		0,
-		&genesis_set,
-		base,
-	);
+	let genesis_state = VoterSetState::live(0, &genesis_set, base);
 
 	backend.insert_aux(
 		&[
@@ -453,10 +405,7 @@ where
 		&[],
 	)?;
 
-	Ok(PersistentData {
-		authority_set: genesis_set.into(),
-		set_state: genesis_state.into(),
-	})
+	Ok(PersistentData { authority_set: genesis_set.into(), set_state: genesis_state.into() })
 }
 
 /// Update the authority set on disk after a change.
@@ -481,15 +430,12 @@ where
 		// reset.
 		let set_state = VoterSetState::<Block>::live(
 			new_set.set_id,
-			&set,
+			set,
 			(new_set.canon_hash, new_set.canon_number),
 		);
 		let encoded = set_state.encode();
 
-		write_aux(&[
-			(AUTHORITY_SET_KEY, &encoded_set[..]),
-			(SET_STATE_KEY, &encoded[..]),
-		])
+		write_aux(&[(AUTHORITY_SET_KEY, &encoded_set[..]), (SET_STATE_KEY, &encoded[..])])
 	} else {
 		write_aux(&[(AUTHORITY_SET_KEY, &encoded_set[..])])
 	}
@@ -527,10 +473,7 @@ pub(crate) fn write_voter_set_state<Block: BlockT, B: AuxStore>(
 	backend: &B,
 	state: &VoterSetState<Block>,
 ) -> ClientResult<()> {
-	backend.insert_aux(
-		&[(SET_STATE_KEY, state.encode().as_slice())],
-		&[]
-	)
+	backend.insert_aux(&[(SET_STATE_KEY, state.encode().as_slice())], &[])
 }
 
 /// Write concluded round.
@@ -554,16 +497,20 @@ pub(crate) fn load_authorities<B: AuxStore, H: Decode, N: Decode + Clone + Ord>(
 
 #[cfg(test)]
 mod test {
-	use sp_finality_grandpa::AuthorityId;
-	use sp_core::H256;
-	use substrate_test_runtime_client;
 	use super::*;
+	use sp_core::{crypto::UncheckedFrom, H256};
+	use sp_finality_grandpa::AuthorityId;
+	use substrate_test_runtime_client::{self, runtime::Block};
+
+	fn dummy_id() -> AuthorityId {
+		AuthorityId::unchecked_from([1; 32])
+	}
 
 	#[test]
 	fn load_decode_from_v0_migrates_data_format() {
 		let client = substrate_test_runtime_client::new();
 
-		let authorities = vec![(AuthorityId::default(), 100)];
+		let authorities = vec![(dummy_id(), 100)];
 		let set_id = 3;
 		let round_number: RoundNumber = 42;
 		let round_state = RoundState::<H256, u64> {
@@ -582,19 +529,18 @@ mod test {
 
 			let voter_set_state = (round_number, round_state.clone());
 
-			client.insert_aux(
-				&[
-					(AUTHORITY_SET_KEY, authority_set.encode().as_slice()),
-					(SET_STATE_KEY, voter_set_state.encode().as_slice()),
-				],
-				&[],
-			).unwrap();
+			client
+				.insert_aux(
+					&[
+						(AUTHORITY_SET_KEY, authority_set.encode().as_slice()),
+						(SET_STATE_KEY, voter_set_state.encode().as_slice()),
+					],
+					&[],
+				)
+				.unwrap();
 		}
 
-		assert_eq!(
-			load_decode::<_, u32>(&client, VERSION_KEY).unwrap(),
-			None,
-		);
+		assert_eq!(load_decode::<_, u32>(&client, VERSION_KEY).unwrap(), None);
 
 		// should perform the migration
 		load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
@@ -602,23 +548,19 @@ mod test {
 			H256::random(),
 			0,
 			|| unreachable!(),
-		).unwrap();
+		)
+		.unwrap();
 
-		assert_eq!(
-			load_decode::<_, u32>(&client, VERSION_KEY).unwrap(),
-			Some(3),
-		);
+		assert_eq!(load_decode::<_, u32>(&client, VERSION_KEY).unwrap(), Some(3));
 
-		let PersistentData {
-			authority_set,
-			set_state,
-			..
-		} = load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
-			&client,
-			H256::random(),
-			0,
-			|| unreachable!(),
-		).unwrap();
+		let PersistentData { authority_set, set_state, .. } =
+			load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
+				&client,
+				H256::random(),
+				0,
+				|| unreachable!(),
+			)
+			.unwrap();
 
 		assert_eq!(
 			*authority_set.inner(),
@@ -628,10 +570,11 @@ mod test {
 				ForkTree::new(),
 				Vec::new(),
 				AuthoritySetChanges::empty(),
-			).unwrap(),
+			)
+			.unwrap(),
 		);
 
-		let mut current_rounds = CurrentRounds::new();
+		let mut current_rounds = CurrentRounds::<Block>::new();
 		current_rounds.insert(round_number + 1, HasVoted::No);
 
 		assert_eq!(
@@ -656,7 +599,7 @@ mod test {
 	fn load_decode_from_v1_migrates_data_format() {
 		let client = substrate_test_runtime_client::new();
 
-		let authorities = vec![(AuthorityId::default(), 100)];
+		let authorities = vec![(dummy_id(), 100)];
 		let set_id = 3;
 		let round_number: RoundNumber = 42;
 		let round_state = RoundState::<H256, u64> {
@@ -673,24 +616,24 @@ mod test {
 				ForkTree::new(),
 				Vec::new(),
 				AuthoritySetChanges::empty(),
-			).unwrap();
+			)
+			.unwrap();
 
 			let voter_set_state = V1VoterSetState::Live(round_number, round_state.clone());
 
-			client.insert_aux(
-				&[
-					(AUTHORITY_SET_KEY, authority_set.encode().as_slice()),
-					(SET_STATE_KEY, voter_set_state.encode().as_slice()),
-					(VERSION_KEY, 1u32.encode().as_slice()),
-				],
-				&[],
-			).unwrap();
+			client
+				.insert_aux(
+					&[
+						(AUTHORITY_SET_KEY, authority_set.encode().as_slice()),
+						(SET_STATE_KEY, voter_set_state.encode().as_slice()),
+						(VERSION_KEY, 1u32.encode().as_slice()),
+					],
+					&[],
+				)
+				.unwrap();
 		}
 
-		assert_eq!(
-			load_decode::<_, u32>(&client, VERSION_KEY).unwrap(),
-			Some(1),
-		);
+		assert_eq!(load_decode::<_, u32>(&client, VERSION_KEY).unwrap(), Some(1));
 
 		// should perform the migration
 		load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
@@ -698,23 +641,19 @@ mod test {
 			H256::random(),
 			0,
 			|| unreachable!(),
-		).unwrap();
+		)
+		.unwrap();
 
-		assert_eq!(
-			load_decode::<_, u32>(&client, VERSION_KEY).unwrap(),
-			Some(3),
-		);
+		assert_eq!(load_decode::<_, u32>(&client, VERSION_KEY).unwrap(), Some(3));
 
-		let PersistentData {
-			authority_set,
-			set_state,
-			..
-		} = load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
-			&client,
-			H256::random(),
-			0,
-			|| unreachable!(),
-		).unwrap();
+		let PersistentData { authority_set, set_state, .. } =
+			load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
+				&client,
+				H256::random(),
+				0,
+				|| unreachable!(),
+			)
+			.unwrap();
 
 		assert_eq!(
 			*authority_set.inner(),
@@ -724,10 +663,11 @@ mod test {
 				ForkTree::new(),
 				Vec::new(),
 				AuthoritySetChanges::empty(),
-			).unwrap(),
+			)
+			.unwrap(),
 		);
 
-		let mut current_rounds = CurrentRounds::new();
+		let mut current_rounds = CurrentRounds::<Block>::new();
 		current_rounds.insert(round_number + 1, HasVoted::No);
 
 		assert_eq!(
@@ -752,7 +692,7 @@ mod test {
 	fn load_decode_from_v2_migrates_data_format() {
 		let client = substrate_test_runtime_client::new();
 
-		let authorities = vec![(AuthorityId::default(), 100)];
+		let authorities = vec![(dummy_id(), 100)];
 		let set_id = 3;
 
 		{
@@ -768,23 +708,22 @@ mod test {
 				VoterSetState::live(
 					set_id,
 					&authority_set.clone().into(), // Note the conversion!
-					genesis_state
+					genesis_state,
 				);
 
-			client.insert_aux(
-				&[
-					(AUTHORITY_SET_KEY, authority_set.encode().as_slice()),
-					(SET_STATE_KEY, voter_set_state.encode().as_slice()),
-					(VERSION_KEY, 2u32.encode().as_slice()),
-				],
-				&[],
-			).unwrap();
+			client
+				.insert_aux(
+					&[
+						(AUTHORITY_SET_KEY, authority_set.encode().as_slice()),
+						(SET_STATE_KEY, voter_set_state.encode().as_slice()),
+						(VERSION_KEY, 2u32.encode().as_slice()),
+					],
+					&[],
+				)
+				.unwrap();
 		}
 
-		assert_eq!(
-			load_decode::<_, u32>(&client, VERSION_KEY).unwrap(),
-			Some(2),
-		);
+		assert_eq!(load_decode::<_, u32>(&client, VERSION_KEY).unwrap(), Some(2));
 
 		// should perform the migration
 		load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
@@ -792,22 +731,17 @@ mod test {
 			H256::random(),
 			0,
 			|| unreachable!(),
-		).unwrap();
+		)
+		.unwrap();
 
-		assert_eq!(
-			load_decode::<_, u32>(&client, VERSION_KEY).unwrap(),
-			Some(3),
-		);
+		assert_eq!(load_decode::<_, u32>(&client, VERSION_KEY).unwrap(), Some(3));
 
-		let PersistentData {
-			authority_set,
-			..
-		 } = load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
-			&client,
-			H256::random(),
-			0,
-			|| unreachable!(),
-		).unwrap();
+		let PersistentData { authority_set, .. } = load_persistent::<
+			substrate_test_runtime_client::runtime::Block,
+			_,
+			_,
+		>(&client, H256::random(), 0, || unreachable!())
+		.unwrap();
 
 		assert_eq!(
 			*authority_set.inner(),
@@ -817,7 +751,8 @@ mod test {
 				ForkTree::new(),
 				Vec::new(),
 				AuthoritySetChanges::empty(),
-			).unwrap(),
+			)
+			.unwrap(),
 		);
 	}
 
@@ -843,7 +778,8 @@ mod test {
 		assert_eq!(
 			load_decode::<_, CompletedRound::<substrate_test_runtime_client::runtime::Block>>(
 				&client, &key
-			).unwrap(),
+			)
+			.unwrap(),
 			Some(completed_round),
 		);
 	}

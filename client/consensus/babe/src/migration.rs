@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,12 +16,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use codec::{Encode, Decode};
-use sc_consensus_epochs::Epoch as EpochT;
 use crate::{
-	Epoch, AuthorityId, BabeAuthorityWeight, BabeGenesisConfiguration,
-	BabeEpochConfiguration, VRF_OUTPUT_LENGTH, NextEpochDescriptor,
+	AuthorityId, BabeAuthorityWeight, BabeConfiguration, BabeEpochConfiguration, Epoch,
+	NextEpochDescriptor, VRF_OUTPUT_LENGTH,
 };
+use codec::{Decode, Encode};
+use sc_consensus_epochs::Epoch as EpochT;
 use sp_consensus_slots::Slot;
 
 /// BABE epoch information, version 0.
@@ -43,10 +43,7 @@ impl EpochT for EpochV0 {
 	type NextEpochDescriptor = NextEpochDescriptor;
 	type Slot = Slot;
 
-	fn increment(
-		&self,
-		descriptor: NextEpochDescriptor
-	) -> EpochV0 {
+	fn increment(&self, descriptor: NextEpochDescriptor) -> EpochV0 {
 		EpochV0 {
 			epoch_index: self.epoch_index + 1,
 			start_slot: self.start_slot + self.duration,
@@ -67,17 +64,14 @@ impl EpochT for EpochV0 {
 
 impl EpochV0 {
 	/// Migrate the sturct to current epoch version.
-	pub fn migrate(self, config: &BabeGenesisConfiguration) -> Epoch {
+	pub fn migrate(self, config: &BabeConfiguration) -> Epoch {
 		Epoch {
 			epoch_index: self.epoch_index,
 			start_slot: self.start_slot,
 			duration: self.duration,
 			authorities: self.authorities,
 			randomness: self.randomness,
-			config: BabeEpochConfiguration {
-				c: config.c,
-				allowed_slots: config.allowed_slots,
-			},
+			config: BabeEpochConfiguration { c: config.c, allowed_slots: config.allowed_slots },
 		}
 	}
 }

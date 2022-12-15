@@ -1,10 +1,10 @@
 [package]
 name = "pallet-vesting"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "FRAME pallet for manage vesting"
 readme = "README.md"
@@ -13,29 +13,33 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-enumflags2 = { version = "0.6.2" }
-sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
-sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
-frame-support = { version = "3.0.0", default-features = false, path = "../support" }
-frame-system = { version = "3.0.0", default-features = false, path = "../system" }
-frame-benchmarking = { version = "3.1.0", default-features = false, path = "../benchmarking", optional = true }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
+	"derive",
+] }
+log = { version = "0.4.17", default-features = false }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
-sp-io = { version = "3.0.0", path = "../../primitives/io" }
-sp-core = { version = "3.0.0", path = "../../primitives/core" }
-pallet-balances = { version = "3.0.0", path = "../balances" }
-sp-storage = { version = "3.0.0", path = "../../primitives/storage" }
-hex-literal = "0.3.1"
+pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+sp-core = { version = "7.0.0", path = "../../primitives/core" }
+sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
 
 [features]
 default = ["std"]
 std = [
+	"frame-benchmarking?/std",
 	"codec/std",
-	"sp-std/std",
-	"sp-runtime/std",
 	"frame-support/std",
 	"frame-system/std",
+	"log/std",
+	"scale-info/std",
+	"sp-runtime/std",
+	"sp-std/std",
 ]
-runtime-benchmarks = ["frame-benchmarking"]
+runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
 try-runtime = ["frame-support/try-runtime"]

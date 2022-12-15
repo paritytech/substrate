@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -40,7 +40,6 @@ pub struct VRFTranscriptData {
 	pub items: Vec<(&'static str, VRFTranscriptValue)>,
 }
 /// VRF signature data
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct VRFSignature {
 	/// The VRFOutput serialized
 	pub output: VRFOutput,
@@ -60,21 +59,17 @@ pub fn make_transcript(data: VRFTranscriptData) -> Transcript {
 			},
 			VRFTranscriptValue::U64(val) => {
 				transcript.append_u64(label.as_bytes(), val);
-			}
+			},
 		}
 	}
 	transcript
 }
 
-
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use rand::RngCore;
-	use rand_chacha::{
-		rand_core::SeedableRng,
-		ChaChaRng,
-	};
+	use rand_chacha::{rand_core::SeedableRng, ChaChaRng};
 
 	#[test]
 	fn transcript_creation_matches() {
@@ -91,9 +86,7 @@ mod tests {
 		});
 		let test = |t: Transcript| -> [u8; 16] {
 			let mut b = [0u8; 16];
-			t.build_rng()
-				.finalize(&mut ChaChaRng::from_seed([0u8;32]))
-				.fill_bytes(&mut b);
+			t.build_rng().finalize(&mut ChaChaRng::from_seed([0u8; 32])).fill_bytes(&mut b);
 			b
 		};
 		debug_assert!(test(orig_transcript) == test(new_transcript));

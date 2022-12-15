@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,17 +19,25 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use core::fmt::Display;
+
 #[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use sp_debug_derive::RuntimeDebug;
 
-use sp_std::{vec::Vec, ops::{Deref, DerefMut}};
+use codec::{Decode, Encode};
 use ref_cast::RefCast;
-use codec::{Encode, Decode};
+use sp_std::{
+	ops::{Deref, DerefMut},
+	vec::Vec,
+};
 
 /// Storage key.
 #[derive(PartialEq, Eq, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord, Clone, Encode, Decode))]
+#[cfg_attr(
+	feature = "std",
+	derive(Serialize, Deserialize, Hash, PartialOrd, Ord, Clone, Encode, Decode)
+)]
 pub struct StorageKey(
 	#[cfg_attr(feature = "std", serde(with = "impl_serde::serialize"))] pub Vec<u8>,
 );
@@ -41,22 +49,52 @@ impl AsRef<[u8]> for StorageKey {
 }
 
 /// Storage key with read/write tracking information.
-#[derive(PartialEq, Eq, RuntimeDebug, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Hash, PartialOrd, Ord))]
+#[derive(
+	PartialEq, Eq, Ord, PartialOrd, sp_std::hash::Hash, RuntimeDebug, Clone, Encode, Decode,
+)]
 pub struct TrackedStorageKey {
 	pub key: Vec<u8>,
-	pub has_been_read: bool,
-	pub has_been_written: bool,
+	pub reads: u32,
+	pub writes: u32,
+	pub whitelisted: bool,
 }
 
-// Easily convert a key to a `TrackedStorageKey` that has been read and written to.
+impl TrackedStorageKey {
+	/// Create a default `TrackedStorageKey`
+	pub fn new(key: Vec<u8>) -> Self {
+		Self { key, reads: 0, writes: 0, whitelisted: false }
+	}
+	/// Check if this key has been "read", i.e. it exists in the memory overlay.
+	///
+	/// Can be true if the key has been read, has been written to, or has been
+	/// whitelisted.
+	pub fn has_been_read(&self) -> bool {
+		self.whitelisted || self.reads > 0u32 || self.has_been_written()
+	}
+	/// Check if this key has been "written", i.e. a new value will be committed to the database.
+	///
+	/// Can be true if the key has been written to, or has been whitelisted.
+	pub fn has_been_written(&self) -> bool {
+		self.whitelisted || self.writes > 0u32
+	}
+	/// Add a storage read to this key.
+	pub fn add_read(&mut self) {
+		self.reads += 1;
+	}
+	/// Add a storage write to this key.
+	pub fn add_write(&mut self) {
+		self.writes += 1;
+	}
+	/// Whitelist this key.
+	pub fn whitelist(&mut self) {
+		self.whitelisted = true;
+	}
+}
+
+// Easily convert a key to a `TrackedStorageKey` that has been whitelisted.
 impl From<Vec<u8>> for TrackedStorageKey {
 	fn from(key: Vec<u8>) -> Self {
-		Self {
-			key: key,
-			has_been_read: true,
-			has_been_written: true,
-		}
+		Self { key, reads: 0, writes: 0, whitelisted: true }
 	}
 }
 
@@ -66,8 +104,7 @@ impl From<Vec<u8>> for TrackedStorageKey {
 #[repr(transparent)]
 #[derive(RefCast)]
 pub struct PrefixedStorageKey(
-	#[cfg_attr(feature = "std", serde(with="impl_serde::serialize"))]
-	Vec<u8>,
+	#[cfg_attr(feature = "std", serde(with = "impl_serde::serialize"))] Vec<u8>,
 );
 
 impl Deref for PrefixedStorageKey {
@@ -85,8 +122,7 @@ impl DerefMut for PrefixedStorageKey {
 }
 
 impl PrefixedStorageKey {
-	/// Create a prefixed storage key from its byte array
-	/// representation.
+	/// Create a prefixed storage key from its byte array representation.
 	pub fn new(inner: Vec<u8>) -> Self {
 		PrefixedStorageKey(inner)
 	}
@@ -96,9 +132,7 @@ impl PrefixedStorageKey {
 		PrefixedStorageKey::ref_cast(inner)
 	}
 
-	/// Get inner key, this should
-	/// only be needed when writing
-	/// into parent trie to avoid an
+	/// Get inner key, this should only be needed when writing into parent trie to avoid an
 	/// allocation.
 	pub fn into_inner(self) -> Vec<u8> {
 		self.0
@@ -107,10 +141,12 @@ impl PrefixedStorageKey {
 
 /// Storage data associated to a [`StorageKey`].
 #[derive(PartialEq, Eq, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord, Clone, Encode, Decode))]
+#[cfg_attr(
+	feature = "std",
+	derive(Serialize, Deserialize, Hash, PartialOrd, Ord, Clone, Encode, Decode, Default)
+)]
 pub struct StorageData(
-	#[cfg_attr(feature = "std", serde(with="impl_serde::serialize"))]
-	pub Vec<u8>,
+	#[cfg_attr(feature = "std", serde(with = "impl_serde::serialize"))] pub Vec<u8>,
 );
 
 /// Map of data to use in a storage, it is a collection of
@@ -135,10 +171,8 @@ pub struct StorageChild {
 pub struct Storage {
 	/// Top trie storage data.
 	pub top: StorageMap,
-	/// Children trie storage data.
-	/// The key does not including prefix, for the `default`
-	/// trie kind, so this is exclusively for the `ChildType::ParentKeyId`
-	/// tries.
+	/// Children trie storage data. Key does not include prefix, only for the `default` trie kind,
+	/// of `ChildType::ParentKeyId` type.
 	pub children_default: std::collections::HashMap<Vec<u8>, StorageChild>,
 }
 
@@ -158,24 +192,29 @@ pub mod well_known_keys {
 	/// Wasm code of the runtime.
 	///
 	/// Stored as a raw byte vector. Required by substrate.
-	pub const CODE: &'static [u8] = b":code";
+	pub const CODE: &[u8] = b":code";
 
 	/// Number of wasm linear memory pages required for execution of the runtime.
 	///
 	/// The type of this value is encoded `u64`.
-	pub const HEAP_PAGES: &'static [u8] = b":heappages";
+	pub const HEAP_PAGES: &[u8] = b":heappages";
 
 	/// Current extrinsic index (u32) is stored under this key.
-	pub const EXTRINSIC_INDEX: &'static [u8] = b":extrinsic_index";
-
-	/// Changes trie configuration is stored under this key.
-	pub const CHANGES_TRIE_CONFIG: &'static [u8] = b":changes_trie";
+	pub const EXTRINSIC_INDEX: &[u8] = b":extrinsic_index";
 
 	/// Prefix of child storage keys.
-	pub const CHILD_STORAGE_KEY_PREFIX: &'static [u8] = b":child_storage:";
+	pub const CHILD_STORAGE_KEY_PREFIX: &[u8] = b":child_storage:";
 
 	/// Prefix of the default child storage keys in the top trie.
-	pub const DEFAULT_CHILD_STORAGE_KEY_PREFIX: &'static [u8] = b":child_storage:default:";
+	pub const DEFAULT_CHILD_STORAGE_KEY_PREFIX: &[u8] = b":child_storage:default:";
+
+	/// Whether a key is a default child storage key.
+	///
+	/// This is convenience function which basically checks if the given `key` starts
+	/// with `DEFAULT_CHILD_STORAGE_KEY_PREFIX` and doesn't do anything apart from that.
+	pub fn is_default_child_storage_key(key: &[u8]) -> bool {
+		key.starts_with(DEFAULT_CHILD_STORAGE_KEY_PREFIX)
+	}
 
 	/// Whether a key is a child storage key.
 	///
@@ -194,12 +233,14 @@ pub mod well_known_keys {
 			CHILD_STORAGE_KEY_PREFIX.starts_with(key)
 		}
 	}
-
 }
+
+/// Threshold size to start using trie value nodes in state.
+pub const TRIE_VALUE_NODE_THRESHOLD: u32 = 33;
 
 /// Information related to a child state.
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode))]
 pub enum ChildInfo {
 	/// This is the one used by default.
 	ParentKeyId(ChildTrieParentKeyId),
@@ -216,9 +257,7 @@ impl ChildInfo {
 
 	/// Same as `new_default` but with `Vec<u8>` as input.
 	pub fn new_default_from_vec(storage_key: Vec<u8>) -> Self {
-		ChildInfo::ParentKeyId(ChildTrieParentKeyId {
-			data: storage_key,
-		})
+		ChildInfo::ParentKeyId(ChildTrieParentKeyId { data: storage_key })
 	}
 
 	/// Try to update with another instance, return false if both instance
@@ -243,9 +282,7 @@ impl ChildInfo {
 	/// child trie.
 	pub fn storage_key(&self) -> &[u8] {
 		match self {
-			ChildInfo::ParentKeyId(ChildTrieParentKeyId {
-				data,
-			}) => &data[..],
+			ChildInfo::ParentKeyId(ChildTrieParentKeyId { data }) => &data[..],
 		}
 	}
 
@@ -253,9 +290,8 @@ impl ChildInfo {
 	/// this trie.
 	pub fn prefixed_storage_key(&self) -> PrefixedStorageKey {
 		match self {
-			ChildInfo::ParentKeyId(ChildTrieParentKeyId {
-				data,
-			}) => ChildType::ParentKeyId.new_prefixed_key(data.as_slice()),
+			ChildInfo::ParentKeyId(ChildTrieParentKeyId { data }) =>
+				ChildType::ParentKeyId.new_prefixed_key(data.as_slice()),
 		}
 	}
 
@@ -263,9 +299,7 @@ impl ChildInfo {
 	/// this trie.
 	pub fn into_prefixed_storage_key(self) -> PrefixedStorageKey {
 		match self {
-			ChildInfo::ParentKeyId(ChildTrieParentKeyId {
-				mut data,
-			}) => {
+			ChildInfo::ParentKeyId(ChildTrieParentKeyId { mut data }) => {
 				ChildType::ParentKeyId.do_prefix_key(&mut data);
 				PrefixedStorageKey(data)
 			},
@@ -328,7 +362,7 @@ impl ChildType {
 	fn do_prefix_key(&self, key: &mut Vec<u8>) {
 		let parent_prefix = self.parent_prefix();
 		let key_len = key.len();
-		if parent_prefix.len() > 0 {
+		if !parent_prefix.is_empty() {
 			key.resize(key_len + parent_prefix.len(), 0);
 			key.copy_within(..key_len, parent_prefix.len());
 			key[..parent_prefix.len()].copy_from_slice(parent_prefix);
@@ -345,16 +379,14 @@ impl ChildType {
 }
 
 /// A child trie of default type.
-/// It uses the same default implementation as the top trie,
-/// top trie being a child trie with no keyspace and no storage key.
-/// Its keyspace is the variable (unprefixed) part of its storage key.
-/// It shares its trie nodes backend storage with every other
-/// child trie, so its storage key needs to be a unique id
-/// that will be use only once.
-/// Those unique id also required to be long enough to avoid any
-/// unique id to be prefixed by an other unique id.
+///
+/// It uses the same default implementation as the top trie, top trie being a child trie with no
+/// keyspace and no storage key. Its keyspace is the variable (unprefixed) part of its storage key.
+/// It shares its trie nodes backend storage with every other child trie, so its storage key needs
+/// to be a unique id that will be use only once. Those unique id also required to be long enough to
+/// avoid any unique id to be prefixed by an other unique id.
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode))]
 pub struct ChildTrieParentKeyId {
 	/// Data is the storage key without prefix.
 	data: Vec<u8>,
@@ -366,6 +398,63 @@ impl ChildTrieParentKeyId {
 	fn try_update(&mut self, other: &ChildInfo) -> bool {
 		match other {
 			ChildInfo::ParentKeyId(other) => self.data[..] == other.data[..],
+		}
+	}
+}
+
+/// Different possible state version.
+///
+/// V0 and V1 uses a same trie implementation, but V1 will write external value node in the trie for
+/// value with size at least `TRIE_VALUE_NODE_THRESHOLD`.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum StateVersion {
+	/// Old state version, no value nodes.
+	V0 = 0,
+	/// New state version can use value nodes.
+	V1 = 1,
+}
+
+impl Display for StateVersion {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		match self {
+			StateVersion::V0 => f.write_str("0"),
+			StateVersion::V1 => f.write_str("1"),
+		}
+	}
+}
+
+impl Default for StateVersion {
+	fn default() -> Self {
+		StateVersion::V1
+	}
+}
+
+impl From<StateVersion> for u8 {
+	fn from(version: StateVersion) -> u8 {
+		version as u8
+	}
+}
+
+impl TryFrom<u8> for StateVersion {
+	type Error = ();
+	fn try_from(val: u8) -> sp_std::result::Result<StateVersion, ()> {
+		match val {
+			0 => Ok(StateVersion::V0),
+			1 => Ok(StateVersion::V1),
+			_ => Err(()),
+		}
+	}
+}
+
+impl StateVersion {
+	/// If defined, values in state of size bigger or equal
+	/// to this threshold will use a separate trie node.
+	/// Otherwhise, value will be inlined in branch or leaf
+	/// node.
+	pub fn state_value_threshold(&self) -> Option<u32> {
+		match self {
+			StateVersion::V0 => None,
+			StateVersion::V1 => Some(TRIE_VALUE_NODE_THRESHOLD),
 		}
 	}
 }

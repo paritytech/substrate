@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,8 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use syn::spanned::Spanned;
 use super::helper;
+use syn::spanned::Spanned;
 
 /// Definition for pallet genesis config type.
 ///
@@ -42,14 +42,14 @@ impl GenesisConfigDef {
 			syn::Item::Struct(item) => (&item.vis, &item.ident, &item.generics),
 			_ => {
 				let msg = "Invalid pallet::genesis_config, expected enum or struct";
-				return Err(syn::Error::new(item.span(), msg));
+				return Err(syn::Error::new(item.span(), msg))
 			},
 		};
 
 		let mut instances = vec![];
 		// NOTE: GenesisConfig is not allowed to be only generic on I because it is not supported
 		// by construct_runtime.
-		if let Some(u) = helper::check_type_def_optional_gen(&generics, ident.span())? {
+		if let Some(u) = helper::check_type_def_optional_gen(generics, ident.span())? {
 			instances.push(u);
 		}
 
@@ -60,19 +60,14 @@ impl GenesisConfigDef {
 
 		if !matches!(vis, syn::Visibility::Public(_)) {
 			let msg = "Invalid pallet::genesis_config, GenesisConfig must be public";
-			return Err(syn::Error::new(item_span, msg));
+			return Err(syn::Error::new(item_span, msg))
 		}
 
 		if ident != "GenesisConfig" {
 			let msg = "Invalid pallet::genesis_config, ident must `GenesisConfig`";
-			return Err(syn::Error::new(ident.span(), msg));
+			return Err(syn::Error::new(ident.span(), msg))
 		}
 
-		Ok(GenesisConfigDef {
-			index,
-			genesis_config: ident.clone(),
-			instances,
-			gen_kind,
-		})
+		Ok(GenesisConfigDef { index, genesis_config: ident.clone(), instances, gen_kind })
 	}
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,13 +16,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use sc_network::{config::identity::ed25519, config::NodeKeyConfig};
+use clap::Args;
+use sc_network::config::{identity::ed25519, NodeKeyConfig};
 use sp_core::H256;
 use std::{path::PathBuf, str::FromStr};
-use structopt::StructOpt;
 
-use crate::arg_enums::NodeKeyType;
-use crate::error;
+use crate::{arg_enums::NodeKeyType, error};
 
 /// The file name of the node's Ed25519 secret key inside the chain-specific
 /// network config directory, if neither `--node-key` nor `--node-key-file`
@@ -31,7 +30,7 @@ const NODE_KEY_ED25519_FILE: &str = "secret_ed25519";
 
 /// Parameters used to create the `NodeKeyConfig`, which determines the keypair
 /// used for libp2p networking.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, Clone, Args)]
 pub struct NodeKeyParams {
 	/// The secret key to use for libp2p networking.
 	///
@@ -47,34 +46,27 @@ pub struct NodeKeyParams {
 	/// WARNING: Secrets provided as command-line arguments are easily exposed.
 	/// Use of this option should be limited to development and testing. To use
 	/// an externally managed secret key, use `--node-key-file` instead.
-	#[structopt(long = "node-key", value_name = "KEY")]
+	#[arg(long, value_name = "KEY")]
 	pub node_key: Option<String>,
 
 	/// The type of secret key to use for libp2p networking.
 	///
 	/// The secret key of the node is obtained as follows:
 	///
-	///   * If the `--node-key` option is given, the value is parsed as a secret key
-	///     according to the type. See the documentation for `--node-key`.
+	///   * If the `--node-key` option is given, the value is parsed as a secret key according to
+	///     the type. See the documentation for `--node-key`.
 	///
-	///   * If the `--node-key-file` option is given, the secret key is read from the
-	///     specified file. See the documentation for `--node-key-file`.
+	///   * If the `--node-key-file` option is given, the secret key is read from the specified
+	///     file. See the documentation for `--node-key-file`.
 	///
-	///   * Otherwise, the secret key is read from a file with a predetermined,
-	///     type-specific name from the chain-specific network config directory
-	///     inside the base directory specified by `--base-dir`. If this file does
-	///     not exist, it is created with a newly generated secret key of the
-	///     chosen type.
+	///   * Otherwise, the secret key is read from a file with a predetermined, type-specific name
+	///     from the chain-specific network config directory inside the base directory specified by
+	///     `--base-dir`. If this file does not exist, it is created with a newly generated secret
+	///     key of the chosen type.
 	///
 	/// The node's secret key determines the corresponding public key and hence the
 	/// node's peer ID in the context of libp2p.
-	#[structopt(
-		long = "node-key-type",
-		value_name = "TYPE",
-		possible_values = &NodeKeyType::variants(),
-		case_insensitive = true,
-		default_value = "Ed25519"
-	)]
+	#[arg(long, value_name = "TYPE", value_enum, ignore_case = true, default_value_t = NodeKeyType::Ed25519)]
 	pub node_key_type: NodeKeyType,
 
 	/// The file from which to read the node's secret key to use for libp2p networking.
@@ -87,7 +79,7 @@ pub struct NodeKeyParams {
 	///
 	/// If the file does not exist, it is created with a newly generated secret key of
 	/// the chosen type.
-	#[structopt(long = "node-key-file", value_name = "FILE")]
+	#[arg(long, value_name = "FILE")]
 	pub node_key_file: Option<PathBuf>,
 }
 
@@ -103,12 +95,12 @@ impl NodeKeyParams {
 					sc_network::config::Secret::File(
 						self.node_key_file
 							.clone()
-							.unwrap_or_else(|| net_config_dir.join(NODE_KEY_ED25519_FILE))
+							.unwrap_or_else(|| net_config_dir.join(NODE_KEY_ED25519_FILE)),
 					)
 				};
 
 				NodeKeyConfig::Ed25519(secret)
-			}
+			},
 		})
 	}
 }
@@ -120,26 +112,25 @@ fn invalid_node_key(e: impl std::fmt::Display) -> error::Error {
 
 /// Parse a Ed25519 secret key from a hex string into a `sc_network::Secret`.
 fn parse_ed25519_secret(hex: &str) -> error::Result<sc_network::config::Ed25519Secret> {
-	H256::from_str(&hex)
-		.map_err(invalid_node_key)
-		.and_then(|bytes| {
-			ed25519::SecretKey::from_bytes(bytes)
-				.map(sc_network::config::Secret::Input)
-				.map_err(invalid_node_key)
-		})
+	H256::from_str(hex).map_err(invalid_node_key).and_then(|bytes| {
+		ed25519::SecretKey::from_bytes(bytes)
+			.map(sc_network::config::Secret::Input)
+			.map_err(invalid_node_key)
+	})
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use clap::ValueEnum;
 	use sc_network::config::identity::{ed25519, Keypair};
 	use std::fs;
 
 	#[test]
 	fn test_node_key_config_input() {
 		fn secret_input(net_config_dir: &PathBuf) -> error::Result<()> {
-			NodeKeyType::variants().iter().try_for_each(|t| {
-				let node_key_type = NodeKeyType::from_str(t).unwrap();
+			NodeKeyType::value_variants().iter().try_for_each(|t| {
+				let node_key_type = *t;
 				let sk = match node_key_type {
 					NodeKeyType::Ed25519 => ed25519::SecretKey::generate().as_ref().to_vec(),
 				};
@@ -151,9 +142,7 @@ mod tests {
 				params.node_key(net_config_dir).and_then(|c| match c {
 					NodeKeyConfig::Ed25519(sc_network::config::Secret::Input(ref ski))
 						if node_key_type == NodeKeyType::Ed25519 && &sk[..] == ski.as_ref() =>
-					{
-						Ok(())
-					}
+						Ok(()),
 					_ => Err(error::Error::Input("Unexpected node key config".into())),
 				})
 			})
@@ -171,14 +160,14 @@ mod tests {
 				node_key_file: Some(file),
 			};
 
-			let node_key = params.node_key(&PathBuf::from("not-used"))
+			let node_key = params
+				.node_key(&PathBuf::from("not-used"))
 				.expect("Creates node key config")
 				.into_keypair()
 				.expect("Creates node key pair");
 
 			match node_key {
-				Keypair::Ed25519(ref pair)
-					if pair.secret().as_ref() == key.as_ref() => {}
+				Keypair::Ed25519(ref pair) if pair.secret().as_ref() == key.as_ref() => {},
 				_ => panic!("Invalid key"),
 			}
 		}
@@ -187,7 +176,7 @@ mod tests {
 		let file = tmp.path().join("mysecret").to_path_buf();
 		let key = ed25519::SecretKey::generate();
 
-		fs::write(&file, hex::encode(key.as_ref())).expect("Writes secret key");
+		fs::write(&file, array_bytes::bytes2hex("", key.as_ref())).expect("Writes secret key");
 		check_key(file.clone(), &key);
 
 		fs::write(&file, &key).expect("Writes secret key");
@@ -200,13 +189,9 @@ mod tests {
 		where
 			F: Fn(NodeKeyParams) -> error::Result<()>,
 		{
-			NodeKeyType::variants().iter().try_for_each(|t| {
-				let node_key_type = NodeKeyType::from_str(t).unwrap();
-				f(NodeKeyParams {
-					node_key_type,
-					node_key: None,
-					node_key_file: None,
-				})
+			NodeKeyType::value_variants().iter().try_for_each(|t| {
+				let node_key_type = *t;
+				f(NodeKeyParams { node_key_type, node_key: None, node_key_file: None })
 			})
 		}
 
@@ -214,17 +199,12 @@ mod tests {
 			with_def_params(|params| {
 				let dir = PathBuf::from(net_config_dir.clone());
 				let typ = params.node_key_type;
-				params
-					.node_key(net_config_dir)
-					.and_then(move |c| match c {
-						NodeKeyConfig::Ed25519(sc_network::config::Secret::File(ref f))
-						if typ == NodeKeyType::Ed25519
-								&& f == &dir.join(NODE_KEY_ED25519_FILE) =>
-						{
-							Ok(())
-						}
-						_ => Err(error::Error::Input("Unexpected node key config".into())),
-					})
+				params.node_key(net_config_dir).and_then(move |c| match c {
+					NodeKeyConfig::Ed25519(sc_network::config::Secret::File(ref f))
+						if typ == NodeKeyType::Ed25519 && f == &dir.join(NODE_KEY_ED25519_FILE) =>
+						Ok(()),
+					_ => Err(error::Error::Input("Unexpected node key config".into())),
+				})
 			})
 		}
 

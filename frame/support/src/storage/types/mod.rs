@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,31 +18,36 @@
 //! Storage types to build abstraction on storage, they implements storage traits such as
 //! StorageMap and others.
 
+use crate::metadata::{StorageEntryMetadata, StorageEntryModifier};
 use codec::FullCodec;
-use frame_metadata::{DefaultByte, StorageEntryModifier};
+use sp_std::prelude::*;
 
+mod counted_map;
 mod double_map;
 mod key;
 mod map;
 mod nmap;
 mod value;
 
-pub use double_map::{StorageDoubleMap, StorageDoubleMapMetadata};
+pub use counted_map::{CountedStorageMap, CountedStorageMapInstance};
+pub use double_map::StorageDoubleMap;
 pub use key::{
 	EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, Key, KeyGenerator,
-	ReversibleKeyGenerator, TupleToEncodedIter, KeyGeneratorMaxEncodedLen,
+	KeyGeneratorMaxEncodedLen, ReversibleKeyGenerator, TupleToEncodedIter,
 };
-pub use map::{StorageMap, StorageMapMetadata};
-pub use nmap::{StorageNMap, StorageNMapMetadata};
-pub use value::{StorageValue, StorageValueMetadata};
+pub use map::StorageMap;
+pub use nmap::StorageNMap;
+pub use value::StorageValue;
 
 /// Trait implementing how the storage optional value is converted into the queried type.
 ///
 /// It is implemented by:
-/// * `OptionQuery` which convert an optional value to an optional value, user when querying
-///   storage will get an optional value.
-/// * `ValueQuery` which convert an optional value to a value, user when querying storage will get
-///   a value.
+/// * `OptionQuery` which converts an optional value to an optional value, used when querying
+///   storage returns an optional value.
+/// * `ResultQuery` which converts an optional value to a result value, used when querying storage
+///   returns a result value.
+/// * `ValueQuery` which converts an optional value to a value, used when querying storage returns a
+///   value.
 pub trait QueryKindTrait<Value, OnEmpty> {
 	/// Metadata for the storage kind.
 	const METADATA: StorageEntryModifier;
@@ -82,6 +87,30 @@ where
 	}
 }
 
+/// Implement QueryKindTrait with query being `Result<Value, PalletError>`
+pub struct ResultQuery<Error>(sp_std::marker::PhantomData<Error>);
+impl<Value, Error, OnEmpty> QueryKindTrait<Value, OnEmpty> for ResultQuery<Error>
+where
+	Value: FullCodec + 'static,
+	Error: FullCodec + 'static,
+	OnEmpty: crate::traits::Get<Result<Value, Error>>,
+{
+	const METADATA: StorageEntryModifier = StorageEntryModifier::Optional;
+
+	type Query = Result<Value, Error>;
+
+	fn from_optional_value_to_query(v: Option<Value>) -> Self::Query {
+		match v {
+			Some(v) => Ok(v),
+			None => OnEmpty::get(),
+		}
+	}
+
+	fn from_query_to_optional_value(v: Self::Query) -> Option<Value> {
+		v.ok()
+	}
+}
+
 /// Implement QueryKindTrait with query being `Value`
 pub struct ValueQuery;
 impl<Value, OnEmpty> QueryKindTrait<Value, OnEmpty> for ValueQuery
@@ -102,14 +131,10 @@ where
 	}
 }
 
-/// A helper struct which implements DefaultByte using `Get<Value>` and encode it.
-struct OnEmptyGetter<Value, OnEmpty>(core::marker::PhantomData<(Value, OnEmpty)>);
-impl<Value: FullCodec, OnEmpty: crate::traits::Get<Value>> DefaultByte
-	for OnEmptyGetter<Value, OnEmpty>
-{
-	fn default_byte(&self) -> sp_std::vec::Vec<u8> {
-		OnEmpty::get().encode()
-	}
+/// Build the metadata of a storage.
+///
+/// Implemented by each of the storage types: value, map, countedmap, doublemap and nmap.
+pub trait StorageEntryMetadataBuilder {
+	/// Build into `entries` the storage metadata entries of a storage given some `docs`.
+	fn build_metadata(doc: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>);
 }
-unsafe impl<Value, OnEmpty: crate::traits::Get<Value>> Send for OnEmptyGetter<Value, OnEmpty> {}
-unsafe impl<Value, OnEmpty: crate::traits::Get<Value>> Sync for OnEmptyGetter<Value, OnEmpty> {}

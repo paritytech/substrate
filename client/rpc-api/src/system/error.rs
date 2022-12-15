@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -19,39 +19,43 @@
 //! System RPC module errors.
 
 use crate::system::helpers::Health;
-use jsonrpc_core as rpc;
+use jsonrpsee::{
+	core::Error as JsonRpseeError,
+	types::error::{CallError, ErrorObject},
+};
 
 /// System RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// System RPC errors.
-#[derive(Debug, derive_more::Display, derive_more::From)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// Provided block range couldn't be resolved to a list of blocks.
-	#[display(fmt = "Node is not fully functional: {}", _0)]
+	#[error("Node is not fully functional: {}", .0)]
 	NotHealthy(Health),
 	/// Peer argument is malformatted.
+	#[error("{0}")]
 	MalformattedPeerArg(String),
 }
 
-impl std::error::Error for Error {}
+// Base code for all system errors.
+const BASE_ERROR: i32 = 2000;
+// Provided block range couldn't be resolved to a list of blocks.
+const NOT_HEALTHY_ERROR: i32 = BASE_ERROR + 1;
+// Peer argument is malformatted.
+const MALFORMATTED_PEER_ARG_ERROR: i32 = BASE_ERROR + 2;
 
-/// Base code for all system errors.
-const BASE_ERROR: i64 = 2000;
-
-impl From<Error> for rpc::Error {
+impl From<Error> for JsonRpseeError {
 	fn from(e: Error) -> Self {
 		match e {
-			Error::NotHealthy(ref h) => rpc::Error {
-				code: rpc::ErrorCode::ServerError(BASE_ERROR + 1),
-				message: format!("{}", e),
-				data: serde_json::to_value(h).ok(),
-			},
-			Error::MalformattedPeerArg(ref e) => rpc::Error {
-				code :rpc::ErrorCode::ServerError(BASE_ERROR + 2),
-				message: e.clone(),
-				data: None,
-			}
+			Error::NotHealthy(ref h) =>
+				CallError::Custom(ErrorObject::owned(NOT_HEALTHY_ERROR, e.to_string(), Some(h))),
+			Error::MalformattedPeerArg(e) => CallError::Custom(ErrorObject::owned(
+				MALFORMATTED_PEER_ARG_ERROR + 2,
+				e,
+				None::<()>,
+			)),
 		}
+		.into()
 	}
 }

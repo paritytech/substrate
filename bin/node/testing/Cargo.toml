@@ -1,55 +1,47 @@
 [package]
 name = "node-testing"
-version = "2.0.0"
+version = "3.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Test utilities for Substrate node."
-edition = "2018"
+edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
-publish = true
+publish = false
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-pallet-balances = { version = "3.0.0", path = "../../../frame/balances" }
-sc-service = { version = "0.9.0", features = ["test-helpers", "db"],  path = "../../../client/service" }
-sc-client-db = { version = "0.9.0", path = "../../../client/db/", features = ["kvdb-rocksdb", "parity-db"] }
-sc-client-api = { version = "3.0.0", path = "../../../client/api/" }
-codec = { package = "parity-scale-codec", version = "2.0.0" }
-pallet-contracts = { version = "3.0.0", path = "../../../frame/contracts" }
-pallet-grandpa = { version = "3.1.0", path = "../../../frame/grandpa" }
-pallet-indices = { version = "3.0.0", path = "../../../frame/indices" }
-sp-keyring = { version = "3.0.0", path = "../../../primitives/keyring" }
-node-executor = { version = "2.0.0", path = "../executor" }
-node-primitives = { version = "2.0.0", path = "../primitives" }
-node-runtime = { version = "2.0.0", path = "../runtime" }
-sp-core = { version = "3.0.0", path = "../../../primitives/core" }
-sp-io = { version = "3.0.0", path = "../../../primitives/io" }
-frame-support = { version = "3.0.0", path = "../../../frame/support" }
-pallet-session = { version = "3.0.0", path = "../../../frame/session" }
-pallet-society = { version = "3.0.0", path = "../../../frame/society" }
-sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
-pallet-staking = { version = "3.0.0", path = "../../../frame/staking" }
-sc-executor = { version = "0.9.0", path = "../../../client/executor", features = ["wasmtime"] }
-sp-consensus = { version = "0.9.0", path = "../../../primitives/consensus/common" }
-frame-system = { version = "3.0.0", path = "../../../frame/system" }
-substrate-test-client = { version = "2.0.0", path = "../../../test-utils/client" }
-pallet-timestamp = { version = "3.0.0", path = "../../../frame/timestamp" }
-pallet-transaction-payment = { version = "3.0.0", path = "../../../frame/transaction-payment" }
-pallet-treasury = { version = "3.0.0", path = "../../../frame/treasury" }
-sp-api = { version = "3.0.0", path = "../../../primitives/api" }
-sp-timestamp = { version = "3.0.0", default-features = false, path = "../../../primitives/timestamp" }
-sp-block-builder = { version = "3.0.0", path = "../../../primitives/block-builder" }
-sc-block-builder = { version = "0.9.0", path = "../../../client/block-builder" }
-sp-inherents = { version = "3.0.0", path = "../../../primitives/inherents" }
-sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
-log = "0.4.8"
-tempfile = "3.1.0"
+codec = { package = "parity-scale-codec", version = "3.0.0" }
 fs_extra = "1"
-futures = "0.3.1"
-
-[dev-dependencies]
-criterion = "0.3.0"
-sc-cli = { version = "0.9.0", path = "../../../client/cli" }
+futures = "0.3.21"
+log = "0.4.17"
+tempfile = "3.1.0"
+frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
+node-executor = { version = "3.0.0-dev", path = "../executor" }
+node-primitives = { version = "2.0.0", path = "../primitives" }
+kitchensink-runtime = { version = "3.0.0-dev", path = "../runtime" }
+pallet-assets = { version = "4.0.0-dev", path = "../../../frame/assets" }
+pallet-asset-tx-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment/asset-tx-payment" }
+pallet-transaction-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment" }
+sc-block-builder = { version = "0.10.0-dev", path = "../../../client/block-builder" }
+sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
+sc-client-db = { version = "0.10.0-dev", features = ["rocksdb"], path = "../../../client/db" }
+sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
+sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
+sc-service = { version = "0.10.0-dev", features = [
+	"test-helpers",
+	"rocksdb",
+], path = "../../../client/service" }
+sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
+sp-block-builder = { version = "4.0.0-dev", path = "../../../primitives/block-builder" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
+sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
+sp-core = { version = "7.0.0", path = "../../../primitives/core" }
+sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
+sp-io = { version = "7.0.0", path = "../../../primitives/io" }
+sp-keyring = { version = "7.0.0", path = "../../../primitives/keyring" }
+sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
+sp-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/timestamp" }
+substrate-test-client = { version = "2.0.0", path = "../../../test-utils/client" }

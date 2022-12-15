@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -20,21 +20,25 @@
 //! Tracks changes over the span of a few recent blocks and handles forks
 //! by tracking/removing cache entries for conflicting changes.
 
-use std::collections::{VecDeque, HashSet, HashMap};
-use std::sync::Arc;
-use std::hash::Hash as StdHash;
-use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
-use linked_hash_map::{LinkedHashMap, Entry};
+use crate::{stats::StateUsageStats, utils::Meta};
 use hash_db::Hasher;
-use sp_runtime::traits::{Block as BlockT, Header, HashFor, NumberFor};
-use sp_core::hexdisplay::HexDisplay;
-use sp_core::storage::ChildInfo;
-use sp_state_machine::{
-	backend::Backend as StateBackend, TrieBackend, StorageKey, StorageValue,
-	StorageCollection, ChildStorageCollection,
-};
+use linked_hash_map::{Entry, LinkedHashMap};
 use log::trace;
-use crate::{utils::Meta, stats::StateUsageStats};
+use parking_lot::{RwLock, RwLockUpgradableReadGuard};
+use sp_core::{hexdisplay::HexDisplay, storage::ChildInfo};
+use sp_runtime::{
+	traits::{Block as BlockT, HashFor, Header, NumberFor},
+	StateVersion,
+};
+use sp_state_machine::{
+	backend::Backend as StateBackend, ChildStorageCollection, StorageCollection, StorageKey,
+	StorageValue, TrieBackend,
+};
+use std::{
+	collections::{HashMap, HashSet, VecDeque},
+	hash::Hash as StdHash,
+	sync::Arc,
+};
 
 const STATE_CACHE_BLOCKS: usize = 12;
 
@@ -55,15 +59,11 @@ pub struct Cache<B: BlockT> {
 
 struct LRUMap<K, V>(LinkedHashMap<K, V>, usize, usize);
 
-/// Internal trait similar to `heapsize` but using
-/// a simply estimation.
+/// Internal trait similar to `heapsize` but using a simple estimation.
 ///
-/// This should not be made public, it is implementation
-/// detail trait. If it need to become public please
-/// consider using `malloc_size_of`.
+/// This should not be made public, it is an implementation detail trait.
 trait EstimateSize {
-	/// Return a size estimation of additional size needed
-	/// to cache this struct (in bytes).
+	/// Return a size estimation of the additional size needed to cache this struct (in bytes).
 	fn estimate_size(&self) -> usize;
 }
 
@@ -75,7 +75,7 @@ impl EstimateSize for Vec<u8> {
 
 impl EstimateSize for Option<Vec<u8>> {
 	fn estimate_size(&self) -> usize {
-		self.as_ref().map(|v|v.capacity()).unwrap_or(0)
+		self.as_ref().map(|v| v.capacity()).unwrap_or(0)
 	}
 }
 
@@ -84,7 +84,7 @@ struct OptionHOut<T: AsRef<[u8]>>(Option<T>);
 impl<T: AsRef<[u8]>> EstimateSize for OptionHOut<T> {
 	fn estimate_size(&self) -> usize {
 		// capacity would be better
-		self.0.as_ref().map(|v|v.as_ref().len()).unwrap_or(0)
+		self.0.as_ref().map(|v| v.as_ref().len()).unwrap_or(0)
 	}
 }
 
@@ -125,20 +125,22 @@ impl<K: EstimateSize + Eq + StdHash, V: EstimateSize> LRUMap<K, V> {
 		};
 
 		while *storage_used_size > limit {
-			if let Some((k,v)) = lmap.pop_front() {
+			if let Some((k, v)) = lmap.pop_front() {
 				*storage_used_size -= k.estimate_size();
 				*storage_used_size -= v.estimate_size();
 			} else {
 				// can happen fairly often as we get value from multiple lru
 				// and only remove from a single lru
-				break;
+				break
 			}
 		}
 	}
 
-	fn get<Q:?Sized>(&mut self, k: &Q) -> Option<&mut V>
-		where K: std::borrow::Borrow<Q>,
-			Q: StdHash + Eq {
+	fn get<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut V>
+	where
+		K: std::borrow::Borrow<Q>,
+		Q: StdHash + Eq,
+	{
 		self.0.get_refresh(k)
 	}
 
@@ -149,15 +151,13 @@ impl<K: EstimateSize + Eq + StdHash, V: EstimateSize> LRUMap<K, V> {
 		self.0.clear();
 		self.1 = 0;
 	}
-
 }
 
 impl<B: BlockT> Cache<B> {
 	/// Returns the used memory size of the storage cache in bytes.
 	pub fn used_storage_cache_size(&self) -> usize {
-		self.lru_storage.used_size()
-			+ self.lru_child_storage.used_size()
-			//  ignore small hashes storage and self.lru_hashes.used_size()
+		self.lru_storage.used_size() + self.lru_child_storage.used_size()
+		//  ignore small hashes storage and self.lru_hashes.used_size()
 	}
 
 	/// Synchronize the shared cache with the best block state.
@@ -222,7 +222,7 @@ impl<B: BlockT> Cache<B> {
 	}
 }
 
-pub type SharedCache<B> = Arc<Mutex<Cache<B>>>;
+pub type SharedCache<B> = Arc<RwLock<Cache<B>>>;
 
 /// Fix lru storage size for hash (small 64ko).
 const FIX_LRU_HASH_SIZE: usize = 65_536;
@@ -233,20 +233,16 @@ pub fn new_shared_cache<B: BlockT>(
 	child_ratio: (usize, usize),
 ) -> SharedCache<B> {
 	let top = child_ratio.1.saturating_sub(child_ratio.0);
-	Arc::new(
-		Mutex::new(
-			Cache {
-				lru_storage: LRUMap(
-					LinkedHashMap::new(), 0, shared_cache_size * top / child_ratio.1
-				),
-				lru_hashes: LRUMap(LinkedHashMap::new(), 0, FIX_LRU_HASH_SIZE),
-				lru_child_storage: LRUMap(
-					LinkedHashMap::new(), 0, shared_cache_size * child_ratio.0 / child_ratio.1
-				),
-				modifications: VecDeque::new(),
-			}
-		)
-	)
+	Arc::new(RwLock::new(Cache {
+		lru_storage: LRUMap(LinkedHashMap::new(), 0, shared_cache_size * top / child_ratio.1),
+		lru_hashes: LRUMap(LinkedHashMap::new(), 0, FIX_LRU_HASH_SIZE),
+		lru_child_storage: LRUMap(
+			LinkedHashMap::new(),
+			0,
+			shared_cache_size * child_ratio.0 / child_ratio.1,
+		),
+		modifications: VecDeque::new(),
+	}))
 }
 
 #[derive(Debug)]
@@ -337,7 +333,7 @@ impl<B: BlockT> CacheChanges<B> {
 		commit_number: Option<NumberFor<B>>,
 		is_best: bool,
 	) {
-		let mut cache = self.shared_cache.lock();
+		let mut cache = self.shared_cache.write();
 		trace!(
 			"Syncing cache, id = (#{:?}, {:?}), parent={:?}, best={}",
 			commit_number,
@@ -360,18 +356,18 @@ impl<B: BlockT> CacheChanges<B> {
 					// Same block comitted twice with different state changes.
 					// Treat it as reenacted/retracted.
 					if is_best {
-						enacted.push(commit_hash.clone());
+						enacted.push(*commit_hash);
 					} else {
-						retracted.to_mut().push(commit_hash.clone());
+						retracted.to_mut().push(*commit_hash);
 					}
 				}
 			}
 		}
 		cache.sync(&enacted, &retracted);
 		// Propagate cache only if committing on top of the latest canonical state
-		// blocks are ordered by number and only one block with a given number is marked as canonical
-		// (contributed to canonical state cache)
-		if let Some(_) = self.parent_hash {
+		// blocks are ordered by number and only one block with a given number is marked as
+		// canonical (contributed to canonical state cache)
+		if self.parent_hash.is_some() {
 			let mut local_cache = self.local_cache.write();
 			if is_best {
 				trace!(
@@ -393,16 +389,15 @@ impl<B: BlockT> CacheChanges<B> {
 			}
 		}
 
-		if let (
-			Some(ref number), Some(ref hash), Some(ref parent))
-				= (commit_number, commit_hash, self.parent_hash)
+		if let (Some(ref number), Some(ref hash), Some(ref parent)) =
+			(commit_number, commit_hash, self.parent_hash)
 		{
 			if cache.modifications.len() == STATE_CACHE_BLOCKS {
 				cache.modifications.pop_back();
 			}
 			let mut modifications = HashSet::new();
 			let mut child_modifications = HashSet::new();
-			child_changes.into_iter().for_each(|(sk, changes)|
+			child_changes.into_iter().for_each(|(sk, changes)| {
 				for (k, v) in changes.into_iter() {
 					let k = (sk.clone(), k);
 					if is_best {
@@ -410,7 +405,7 @@ impl<B: BlockT> CacheChanges<B> {
 					}
 					child_modifications.insert(k);
 				}
-			);
+			});
 			for (k, v) in changes.into_iter() {
 				if is_best {
 					cache.lru_hashes.remove(&k);
@@ -424,11 +419,13 @@ impl<B: BlockT> CacheChanges<B> {
 				storage: modifications,
 				child_storage: child_modifications,
 				number: *number,
-				hash: hash.clone(),
+				hash: *hash,
 				is_canon: is_best,
-				parent: parent.clone(),
+				parent: *parent,
 			};
-			let insert_at = cache.modifications.iter()
+			let insert_at = cache
+				.modifications
+				.iter()
 				.enumerate()
 				.find(|(_, m)| m.number < *number)
 				.map(|(i, _)| i);
@@ -465,19 +462,22 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> CachingState<S, B> {
 		}
 	}
 
-	/// Check if the key can be returned from cache by matching current block parent hash against canonical
-	/// state and filtering out entries modified in later blocks.
+	/// Check if the key can be returned from cache by matching current block parent hash against
+	/// canonical state and filtering out entries modified in later blocks.
 	fn is_allowed(
 		key: Option<&[u8]>,
 		child_key: Option<&ChildStorageKey>,
 		parent_hash: &Option<B::Hash>,
-		modifications: &VecDeque<BlockChanges<B::Header>>
+		modifications: &VecDeque<BlockChanges<B::Header>>,
 	) -> bool {
 		let mut parent = match *parent_hash {
 			None => {
-				trace!("Cache lookup skipped for {:?}: no parent hash", key.as_ref().map(HexDisplay::from));
-				return false;
-			}
+				trace!(
+					"Cache lookup skipped for {:?}: no parent hash",
+					key.as_ref().map(HexDisplay::from)
+				);
+				return false
+			},
 			Some(ref parent) => parent,
 		};
 		// Ignore all storage entries modified in later blocks.
@@ -488,20 +488,23 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> CachingState<S, B> {
 		for m in modifications {
 			if &m.hash == parent {
 				if m.is_canon {
-					return true;
+					return true
 				}
 				parent = &m.parent;
 			}
 			if let Some(key) = key {
 				if m.storage.contains(key) {
-					trace!("Cache lookup skipped for {:?}: modified in a later block", HexDisplay::from(&key));
-					return false;
+					trace!(
+						"Cache lookup skipped for {:?}: modified in a later block",
+						HexDisplay::from(&key)
+					);
+					return false
 				}
 			}
 			if let Some(child_key) = child_key {
 				if m.child_storage.contains(child_key) {
 					trace!("Cache lookup skipped for {:?}: modified in a later block", child_key);
-					return false;
+					return false
 				}
 			}
 		}
@@ -527,17 +530,22 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 
 			return Ok(entry)
 		}
-		let mut cache = self.cache.shared_cache.lock();
-		if Self::is_allowed(Some(key), None, &self.cache.parent_hash, &cache.modifications) {
-			if let Some(entry) = cache.lru_storage.get(key).map(|a| a.clone()) {
-				trace!("Found in shared cache: {:?}", HexDisplay::from(&key));
-				self.usage.tally_key_read(key, entry.as_ref(), true);
-				return Ok(entry)
+		{
+			let cache = self.cache.shared_cache.upgradable_read();
+			if Self::is_allowed(Some(key), None, &self.cache.parent_hash, &cache.modifications) {
+				let mut cache = RwLockUpgradableReadGuard::upgrade(cache);
+				if let Some(entry) = cache.lru_storage.get(key).map(|a| a.clone()) {
+					trace!("Found in shared cache: {:?}", HexDisplay::from(&key));
+					self.usage.tally_key_read(key, entry.as_ref(), true);
+					return Ok(entry)
+				}
 			}
 		}
 		trace!("Cache miss: {:?}", HexDisplay::from(&key));
 		let value = self.state.storage(key)?;
-		RwLockUpgradableReadGuard::upgrade(local_cache).storage.insert(key.to_vec(), value.clone());
+		RwLockUpgradableReadGuard::upgrade(local_cache)
+			.storage
+			.insert(key.to_vec(), value.clone());
 		self.usage.tally_key_read(key, value.as_ref(), false);
 		Ok(value)
 	}
@@ -548,16 +556,21 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 			trace!("Found hash in local cache: {:?}", HexDisplay::from(&key));
 			return Ok(entry)
 		}
-		let mut cache = self.cache.shared_cache.lock();
-		if Self::is_allowed(Some(key), None, &self.cache.parent_hash, &cache.modifications) {
-			if let Some(entry) = cache.lru_hashes.get(key).map(|a| a.0.clone()) {
-				trace!("Found hash in shared cache: {:?}", HexDisplay::from(&key));
-				return Ok(entry)
+		{
+			let cache = self.cache.shared_cache.upgradable_read();
+			if Self::is_allowed(Some(key), None, &self.cache.parent_hash, &cache.modifications) {
+				let mut cache = RwLockUpgradableReadGuard::upgrade(cache);
+				if let Some(entry) = cache.lru_hashes.get(key).map(|a| a.0) {
+					trace!("Found hash in shared cache: {:?}", HexDisplay::from(&key));
+					return Ok(entry)
+				}
 			}
 		}
 		trace!("Cache hash miss: {:?}", HexDisplay::from(&key));
 		let hash = self.state.storage_hash(key)?;
-		RwLockUpgradableReadGuard::upgrade(local_cache).hashes.insert(key.to_vec(), hash);
+		RwLockUpgradableReadGuard::upgrade(local_cache)
+			.hashes
+			.insert(key.to_vec(), hash);
 		Ok(hash)
 	}
 
@@ -570,26 +583,27 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		let local_cache = self.cache.local_cache.upgradable_read();
 		if let Some(entry) = local_cache.child_storage.get(&key).cloned() {
 			trace!("Found in local cache: {:?}", key);
-			return Ok(
-				self.usage.tally_child_key_read(&key, entry, true)
-			)
+			return Ok(self.usage.tally_child_key_read(&key, entry, true))
 		}
-		let mut cache = self.cache.shared_cache.lock();
-		if Self::is_allowed(None, Some(&key), &self.cache.parent_hash, &cache.modifications) {
-			if let Some(entry) = cache.lru_child_storage.get(&key).map(|a| a.clone()) {
-				trace!("Found in shared cache: {:?}", key);
-				return Ok(
-					self.usage.tally_child_key_read(&key, entry, true)
-				)
+		{
+			let cache = self.cache.shared_cache.upgradable_read();
+			if Self::is_allowed(None, Some(&key), &self.cache.parent_hash, &cache.modifications) {
+				let mut cache = RwLockUpgradableReadGuard::upgrade(cache);
+				if let Some(entry) = cache.lru_child_storage.get(&key).map(|a| a.clone()) {
+					trace!("Found in shared cache: {:?}", key);
+					return Ok(self.usage.tally_child_key_read(&key, entry, true))
+				}
 			}
 		}
 		trace!("Cache miss: {:?}", key);
 		let value = self.state.child_storage(child_info, &key.1[..])?;
 
 		// just pass it through the usage counter
-		let value =	self.usage.tally_child_key_read(&key, value, false);
+		let value = self.usage.tally_child_key_read(&key, value, false);
 
-		RwLockUpgradableReadGuard::upgrade(local_cache).child_storage.insert(key, value.clone());
+		RwLockUpgradableReadGuard::upgrade(local_cache)
+			.child_storage
+			.insert(key, value.clone());
 		Ok(value)
 	}
 
@@ -605,12 +619,26 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		self.state.exists_child_storage(child_info, key)
 	}
 
-	fn apply_to_child_keys_while<F: FnMut(&[u8]) -> bool>(
+	fn apply_to_key_values_while<F: FnMut(Vec<u8>, Vec<u8>) -> bool>(
 		&self,
-		child_info: &ChildInfo,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
+		f: F,
+		allow_missing: bool,
+	) -> Result<bool, Self::Error> {
+		self.state
+			.apply_to_key_values_while(child_info, prefix, start_at, f, allow_missing)
+	}
+
+	fn apply_to_keys_while<F: FnMut(&[u8]) -> bool>(
+		&self,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
 		f: F,
 	) {
-		self.state.apply_to_child_keys_while(child_info, f)
+		self.state.apply_to_keys_while(child_info, prefix, start_at, f)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -644,17 +672,25 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 
 	fn storage_root<'a>(
 		&self,
-		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-	) -> (B::Hash, Self::Transaction) where B::Hash: Ord {
-		self.state.storage_root(delta)
+		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		state_version: StateVersion,
+	) -> (B::Hash, Self::Transaction)
+	where
+		B::Hash: Ord,
+	{
+		self.state.storage_root(delta, state_version)
 	}
 
 	fn child_storage_root<'a>(
 		&self,
 		child_info: &ChildInfo,
-		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-	) -> (B::Hash, bool, Self::Transaction) where B::Hash: Ord {
-		self.state.child_storage_root(child_info, delta)
+		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		state_version: StateVersion,
+	) -> (B::Hash, bool, Self::Transaction)
+	where
+		B::Hash: Ord,
+	{
+		self.state.child_storage_root(child_info, delta, state_version)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -665,15 +701,11 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		self.state.keys(prefix)
 	}
 
-	fn child_keys(
-		&self,
-		child_info: &ChildInfo,
-		prefix: &[u8],
-	) -> Vec<Vec<u8>> {
+	fn child_keys(&self, child_info: &ChildInfo, prefix: &[u8]) -> Vec<Vec<u8>> {
 		self.state.child_keys(child_info, prefix)
 	}
 
-	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, HashFor<B>>> {
+	fn as_trie_backend(&self) -> Option<&TrieBackend<Self::TrieBackendStorage, HashFor<B>>> {
 		self.state.as_trie_backend()
 	}
 
@@ -718,13 +750,7 @@ impl<S, B: BlockT> SyncingCachingState<S, B> {
 		meta: Arc<RwLock<Meta<NumberFor<B>, B::Hash>>>,
 		lock: Arc<RwLock<()>>,
 	) -> Self {
-		Self {
-			caching_state: Some(caching_state),
-			state_usage,
-			meta,
-			lock,
-			disable_syncing: false,
-		}
+		Self { caching_state: Some(caching_state), state_usage, meta, lock, disable_syncing: false }
 	}
 
 	/// Returns the reference to the internal [`CachingState`].
@@ -754,7 +780,9 @@ impl<S, B: BlockT> std::fmt::Debug for SyncingCachingState<S, B> {
 	}
 }
 
-impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for SyncingCachingState<S, B> {
+impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>>
+	for SyncingCachingState<S, B>
+{
 	type Error = S::Error;
 	type Transaction = S::Transaction;
 	type TrieBackendStorage = S::TrieBackendStorage;
@@ -787,12 +815,31 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 		self.caching_state().exists_child_storage(child_info, key)
 	}
 
-	fn apply_to_child_keys_while<F: FnMut(&[u8]) -> bool>(
+	fn apply_to_key_values_while<F: FnMut(Vec<u8>, Vec<u8>) -> bool>(
 		&self,
-		child_info: &ChildInfo,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
+		f: F,
+		allow_missing: bool,
+	) -> Result<bool, Self::Error> {
+		self.caching_state().apply_to_key_values_while(
+			child_info,
+			prefix,
+			start_at,
+			f,
+			allow_missing,
+		)
+	}
+
+	fn apply_to_keys_while<F: FnMut(&[u8]) -> bool>(
+		&self,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
 		f: F,
 	) {
-		self.caching_state().apply_to_child_keys_while(child_info, f)
+		self.caching_state().apply_to_keys_while(child_info, prefix, start_at, f)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -826,17 +873,25 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 
 	fn storage_root<'a>(
 		&self,
-		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-	) -> (B::Hash, Self::Transaction) where B::Hash: Ord {
-		self.caching_state().storage_root(delta)
+		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		state_version: StateVersion,
+	) -> (B::Hash, Self::Transaction)
+	where
+		B::Hash: Ord,
+	{
+		self.caching_state().storage_root(delta, state_version)
 	}
 
 	fn child_storage_root<'a>(
 		&self,
 		child_info: &ChildInfo,
-		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-	) -> (B::Hash, bool, Self::Transaction) where B::Hash: Ord {
-		self.caching_state().child_storage_root(child_info, delta)
+		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		state_version: StateVersion,
+	) -> (B::Hash, bool, Self::Transaction)
+	where
+		B::Hash: Ord,
+	{
+		self.caching_state().child_storage_root(child_info, delta, state_version)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -847,17 +902,13 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 		self.caching_state().keys(prefix)
 	}
 
-	fn child_keys(
-		&self,
-		child_info: &ChildInfo,
-		prefix: &[u8],
-	) -> Vec<Vec<u8>> {
+	fn child_keys(&self, child_info: &ChildInfo, prefix: &[u8]) -> Vec<Vec<u8>> {
 		self.caching_state().child_keys(child_info, prefix)
 	}
 
-	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, HashFor<B>>> {
+	fn as_trie_backend(&self) -> Option<&TrieBackend<Self::TrieBackendStorage, HashFor<B>>> {
 		self.caching_state
-			.as_mut()
+			.as_ref()
 			.expect("`caching_state` is valid for the lifetime of the object; qed")
 			.as_trie_backend()
 	}
@@ -874,14 +925,14 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 impl<S, B: BlockT> Drop for SyncingCachingState<S, B> {
 	fn drop(&mut self) {
 		if self.disable_syncing {
-			return;
+			return
 		}
 
 		if let Some(mut caching_state) = self.caching_state.take() {
 			let _lock = self.lock.read();
 
 			self.state_usage.merge_sm(caching_state.usage.take());
-			if let Some(hash) = caching_state.cache.parent_hash.clone() {
+			if let Some(hash) = caching_state.cache.parent_hash {
 				let is_best = self.meta.read().best_hash == hash;
 				caching_state.cache.sync_cache(&[], &[], vec![], vec![], None, None, is_best);
 			}
@@ -893,8 +944,8 @@ impl<S, B: BlockT> Drop for SyncingCachingState<S, B> {
 mod tests {
 	use super::*;
 	use sp_runtime::{
+		testing::{Block as RawBlock, ExtrinsicWrapper, H256},
 		traits::BlakeTwo256,
-		testing::{H256, Block as RawBlock, ExtrinsicWrapper},
 	};
 	use sp_state_machine::InMemoryBackend;
 
@@ -902,7 +953,7 @@ mod tests {
 
 	#[test]
 	fn smoke() {
-		//init_log();
+		// init_log();
 		let root_parent = H256::random();
 		let key = H256::random()[..].to_vec();
 		let h0 = H256::random();
@@ -932,18 +983,12 @@ mod tests {
 			true,
 		);
 
-		let mut s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::default(),
-			shared.clone(),
-			Some(h0),
-		);
+		let mut s =
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::default(), shared.clone(), Some(h0));
 		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h1a), Some(1), true);
 
-		let mut s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::default(),
-			shared.clone(),
-			Some(h0),
-		);
+		let mut s =
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::default(), shared.clone(), Some(h0));
 		s.cache.sync_cache(
 			&[],
 			&[],
@@ -954,11 +999,8 @@ mod tests {
 			false,
 		);
 
-		let mut s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::default(),
-			shared.clone(),
-			Some(h1b),
-		);
+		let mut s =
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::default(), shared.clone(), Some(h1b));
 		s.cache.sync_cache(
 			&[],
 			&[],
@@ -969,11 +1011,8 @@ mod tests {
 			false,
 		);
 
-		let mut s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::default(),
-			shared.clone(),
-			Some(h1a),
-		);
+		let mut s =
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::default(), shared.clone(), Some(h1a));
 		s.cache.sync_cache(
 			&[],
 			&[],
@@ -984,48 +1023,30 @@ mod tests {
 			true,
 		);
 
-		let mut s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::default(),
-			shared.clone(),
-			Some(h2a),
-		);
+		let mut s =
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::default(), shared.clone(), Some(h2a));
 		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h3a), Some(3), true);
 
-		let s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::default(),
-			shared.clone(),
-			Some(h3a),
-		);
+		let s =
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::default(), shared.clone(), Some(h3a));
 		assert_eq!(s.storage(&key).unwrap().unwrap(), vec![5]);
 
-		let s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::default(),
-			shared.clone(),
-			Some(h1a),
-		);
+		let s =
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::default(), shared.clone(), Some(h1a));
 		assert!(s.storage(&key).unwrap().is_none());
 
-		let s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::default(),
-			shared.clone(),
-			Some(h2b),
-		);
+		let s =
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::default(), shared.clone(), Some(h2b));
 		assert!(s.storage(&key).unwrap().is_none());
 
-		let s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::default(),
-			shared.clone(),
-			Some(h1b),
-		);
+		let s =
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::default(), shared.clone(), Some(h1b));
 		assert!(s.storage(&key).unwrap().is_none());
 
 		// reorg to 3b
 		// blocks  [ 3b(c) 3a 2a 2b(c) 1b 1a 0 ]
-		let mut s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::default(),
-			shared.clone(),
-			Some(h2b),
-		);
+		let mut s =
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::default(), shared.clone(), Some(h2b));
 		s.cache.sync_cache(
 			&[h1b, h2b, h3b],
 			&[h1a, h2a, h3a],
@@ -1035,11 +1056,8 @@ mod tests {
 			Some(3),
 			true,
 		);
-		let s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::default(),
-			shared.clone(),
-			Some(h3a),
-		);
+		let s =
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::default(), shared.clone(), Some(h3a));
 		assert!(s.storage(&key).unwrap().is_none());
 	}
 
@@ -1054,7 +1072,7 @@ mod tests {
 		let h2b = H256::random();
 		let h3b = H256::random();
 
-		let shared = new_shared_cache::<Block>(256*1024, (0,1));
+		let shared = new_shared_cache::<Block>(256 * 1024, (0, 1));
 
 		let mut s = CachingState::new(
 			InMemoryBackend::<BlakeTwo256>::default(),
@@ -1071,18 +1089,12 @@ mod tests {
 			true,
 		);
 
-		let mut s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::default(),
-			shared.clone(),
-			Some(h1),
-		);
+		let mut s =
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::default(), shared.clone(), Some(h1));
 		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2a), Some(2), true);
 
-		let mut s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::default(),
-			shared.clone(),
-			Some(h1),
-		);
+		let mut s =
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::default(), shared.clone(), Some(h1));
 		s.cache.sync_cache(
 			&[],
 			&[],
@@ -1093,11 +1105,8 @@ mod tests {
 			false,
 		);
 
-		let mut s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::default(),
-			shared.clone(),
-			Some(h2b),
-		);
+		let mut s =
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::default(), shared.clone(), Some(h2b));
 		s.cache.sync_cache(
 			&[],
 			&[],
@@ -1108,11 +1117,8 @@ mod tests {
 			false,
 		);
 
-		let s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::default(),
-			shared.clone(),
-			Some(h2a),
-		);
+		let s =
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::default(), shared.clone(), Some(h2a));
 		assert_eq!(s.storage(&key).unwrap().unwrap(), vec![2]);
 	}
 
@@ -1126,7 +1132,7 @@ mod tests {
 		let h3a = H256::random();
 		let h3b = H256::random();
 
-		let shared = new_shared_cache::<Block>(256*1024, (0,1));
+		let shared = new_shared_cache::<Block>(256 * 1024, (0, 1));
 
 		let mut s = CachingState::new(
 			InMemoryBackend::<BlakeTwo256>::default(),
@@ -1135,18 +1141,12 @@ mod tests {
 		);
 		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h1), Some(1), true);
 
-		let mut s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::default(),
-			shared.clone(),
-			Some(h1),
-		);
+		let mut s =
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::default(), shared.clone(), Some(h1));
 		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2a), Some(2), true);
 
-		let mut s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::default(),
-			shared.clone(),
-			Some(h2a),
-		);
+		let mut s =
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::default(), shared.clone(), Some(h2a));
 		s.cache.sync_cache(
 			&[],
 			&[],
@@ -1157,18 +1157,12 @@ mod tests {
 			true,
 		);
 
-		let mut s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::default(),
-			shared.clone(),
-			Some(h1),
-		);
+		let mut s =
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::default(), shared.clone(), Some(h1));
 		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2b), Some(2), false);
 
-		let mut s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::default(),
-			shared.clone(),
-			Some(h2b),
-		);
+		let mut s =
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::default(), shared.clone(), Some(h2b));
 		s.cache.sync_cache(
 			&[],
 			&[],
@@ -1179,11 +1173,8 @@ mod tests {
 			false,
 		);
 
-		let s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::default(),
-			shared.clone(),
-			Some(h3a),
-		);
+		let s =
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::default(), shared.clone(), Some(h3a));
 		assert_eq!(s.storage(&key).unwrap().unwrap(), vec![2]);
 	}
 
@@ -1194,15 +1185,14 @@ mod tests {
 		let h1a = H256::random();
 		let h1b = H256::random();
 
-		let shared = new_shared_cache::<Block>(256*1024, (0,1));
+		let shared = new_shared_cache::<Block>(256 * 1024, (0, 1));
 		let mut backend = InMemoryBackend::<BlakeTwo256>::default();
-		backend.insert(std::iter::once((None, vec![(key.clone(), Some(vec![1]))])));
-
-		let mut s = CachingState::new(
-			backend.clone(),
-			shared.clone(),
-			Some(root_parent),
+		backend.insert(
+			std::iter::once((None, vec![(key.clone(), Some(vec![1]))])),
+			Default::default(),
 		);
+
+		let mut s = CachingState::new(backend.clone(), shared.clone(), Some(root_parent));
 		s.cache.sync_cache(
 			&[],
 			&[],
@@ -1213,29 +1203,23 @@ mod tests {
 			true,
 		);
 
-		let mut s = CachingState::new(
-			backend.clone(),
-			shared.clone(),
-			Some(root_parent),
-		);
+		let mut s = CachingState::new(backend.clone(), shared.clone(), Some(root_parent));
 		s.cache.sync_cache(&[], &[h1a], vec![], vec![], Some(h1b), Some(1), true);
 
-		let s = CachingState::new(
-			backend.clone(),
-			shared.clone(),
-			Some(h1b),
-		);
+		let s = CachingState::new(backend.clone(), shared.clone(), Some(h1b));
 		assert_eq!(s.storage_hash(&key).unwrap().unwrap(), BlakeTwo256::hash(&vec![1]));
 	}
 
 	#[test]
 	fn should_track_used_size_correctly() {
 		let root_parent = H256::random();
-		let shared = new_shared_cache::<Block>(109, ((109-36), 109));
+		let shared = new_shared_cache::<Block>(109, ((109 - 36), 109));
 		let h0 = H256::random();
 
 		let mut s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::default(), shared.clone(), Some(root_parent.clone()),
+			InMemoryBackend::<BlakeTwo256>::default(),
+			shared.clone(),
+			Some(root_parent),
 		);
 
 		let key = H256::random()[..].to_vec();
@@ -1250,7 +1234,7 @@ mod tests {
 			true,
 		);
 		// 32 key, 3 byte size
-		assert_eq!(shared.lock().used_storage_cache_size(), 35 /* bytes */);
+		assert_eq!(shared.read().used_storage_cache_size(), 35 /* bytes */);
 
 		let key = H256::random()[..].to_vec();
 		s.cache.sync_cache(
@@ -1263,13 +1247,13 @@ mod tests {
 			true,
 		);
 		// 35 + (2 * 32) key, 2 byte size
-		assert_eq!(shared.lock().used_storage_cache_size(), 101 /* bytes */);
+		assert_eq!(shared.read().used_storage_cache_size(), 101 /* bytes */);
 	}
 
 	#[test]
 	fn should_remove_lru_items_based_on_tracking_used_size() {
 		let root_parent = H256::random();
-		let shared = new_shared_cache::<Block>(36*3, (2,3));
+		let shared = new_shared_cache::<Block>(36 * 3, (2, 3));
 		let h0 = H256::random();
 
 		let mut s = CachingState::new(
@@ -1289,7 +1273,7 @@ mod tests {
 			true,
 		);
 		// 32 key, 4 byte size
-		assert_eq!(shared.lock().used_storage_cache_size(), 36 /* bytes */);
+		assert_eq!(shared.read().used_storage_cache_size(), 36 /* bytes */);
 
 		let key = H256::random()[..].to_vec();
 		s.cache.sync_cache(
@@ -1302,7 +1286,7 @@ mod tests {
 			true,
 		);
 		// 32 key, 2 byte size
-		assert_eq!(shared.lock().used_storage_cache_size(), 34 /* bytes */);
+		assert_eq!(shared.read().used_storage_cache_size(), 34 /* bytes */);
 	}
 
 	#[test]
@@ -1319,23 +1303,20 @@ mod tests {
 		let mut s = CachingState::new(
 			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
-			Some(root_parent.clone()),
+			Some(root_parent),
 		);
 		s.cache.sync_cache(
 			&[],
 			&[],
 			vec![(key.clone(), Some(vec![2]))],
 			vec![],
-			Some(h0.clone()),
+			Some(h0),
 			Some(0),
 			true,
 		);
 
-		let mut s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::default(),
-			shared.clone(),
-			Some(h0),
-		);
+		let mut s =
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::default(), shared.clone(), Some(h0));
 		s.cache.sync_cache(
 			&[],
 			&[],
@@ -1346,16 +1327,13 @@ mod tests {
 			true,
 		);
 
-		let mut s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::default(),
-			shared.clone(),
-			Some(h1),
-		);
+		let mut s =
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::default(), shared.clone(), Some(h1));
 		assert_eq!(s.storage(&key).unwrap(), Some(vec![3]));
 
 		// Restart (or unknown block?), clear caches.
 		{
-			let mut cache = s.cache.shared_cache.lock();
+			let mut cache = s.cache.shared_cache.write();
 			let cache = &mut *cache;
 			cache.lru_storage.clear();
 			cache.lru_hashes.clear();
@@ -1369,11 +1347,8 @@ mod tests {
 		// New value is propagated.
 		s.cache.sync_cache(&[], &[], vec![], vec![], None, None, true);
 
-		let s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::default(),
-			shared.clone(),
-			Some(h1),
-		);
+		let s =
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::default(), shared.clone(), Some(h1));
 		assert_eq!(s.storage(&key).unwrap(), None);
 	}
 
@@ -1386,7 +1361,7 @@ mod tests {
 		let h1 = H256::random();
 		let h2 = H256::random();
 
-		let shared = new_shared_cache::<Block>(256*1024, (0,1));
+		let shared = new_shared_cache::<Block>(256 * 1024, (0, 1));
 
 		let mut s = CachingState::new(
 			InMemoryBackend::<BlakeTwo256>::default(),
@@ -1402,13 +1377,10 @@ mod tests {
 			Some(1),
 			true,
 		);
-		assert_eq!(shared.lock().lru_storage.get(&key).unwrap(), &Some(vec![1]));
+		assert_eq!(shared.write().lru_storage.get(&key).unwrap(), &Some(vec![1]));
 
-		let mut s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::default(),
-			shared.clone(),
-			Some(h1),
-		);
+		let mut s =
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::default(), shared.clone(), Some(h1));
 
 		// commit as non-best
 		s.cache.sync_cache(
@@ -1421,38 +1393,27 @@ mod tests {
 			false,
 		);
 
-		assert_eq!(shared.lock().lru_storage.get(&key).unwrap(), &Some(vec![1]));
+		assert_eq!(shared.write().lru_storage.get(&key).unwrap(), &Some(vec![1]));
 
-		let mut s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::default(),
-			shared.clone(),
-			Some(h1),
-		);
+		let mut s =
+			CachingState::new(InMemoryBackend::<BlakeTwo256>::default(), shared.clone(), Some(h1));
 
 		// commit again as best with no changes
-		s.cache.sync_cache(
-			&[],
-			&[],
-			vec![],
-			vec![],
-			Some(h2),
-			Some(2),
-			true,
-		);
+		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2), Some(2), true);
 		assert_eq!(s.storage(&key).unwrap(), None);
 	}
 }
 
 #[cfg(test)]
 mod qc {
-	use std::collections::{HashMap, hash_map::Entry};
+	use std::collections::{hash_map::Entry, HashMap};
 
-	use quickcheck::{quickcheck, TestResult, Arbitrary};
+	use quickcheck::{quickcheck, Arbitrary, TestResult};
 
 	use super::*;
 	use sp_runtime::{
+		testing::{Block as RawBlock, ExtrinsicWrapper, H256},
 		traits::BlakeTwo256,
-		testing::{H256, Block as RawBlock, ExtrinsicWrapper},
 	};
 	use sp_state_machine::InMemoryBackend;
 
@@ -1465,6 +1426,7 @@ mod qc {
 	#[derive(Debug, Clone)]
 	struct Node {
 		hash: H256,
+		#[allow(unused)]
 		parent: H256,
 		state: KeyMap,
 		changes: KeySet,
@@ -1474,28 +1436,24 @@ mod qc {
 		fn new_next(&self, hash: H256, changes: KeySet) -> Self {
 			let mut state = self.state.clone();
 
-			for (k, v) in self.state.iter() { state.insert(k.clone(), v.clone()); }
-			for (k, v) in changes.clone().into_iter() { state.insert(k, v); }
-
-			Self {
-				hash,
-				parent: self.hash,
-				changes,
-				state,
+			for (k, v) in self.state.iter() {
+				state.insert(k.clone(), v.clone());
 			}
+			for (k, v) in changes.clone().into_iter() {
+				state.insert(k, v);
+			}
+
+			Self { hash, parent: self.hash, changes, state }
 		}
 
 		fn new(hash: H256, parent: H256, changes: KeySet) -> Self {
 			let mut state = KeyMap::new();
 
-			for (k, v) in changes.clone().into_iter() { state.insert(k, v); }
-
-			Self {
-				hash,
-				parent,
-				state,
-				changes,
+			for (k, v) in changes.clone().into_iter() {
+				state.insert(k, v);
 			}
+
+			Self { hash, parent, state, changes }
 		}
 
 		fn purge(&mut self, other_changes: &KeySet) {
@@ -1519,30 +1477,26 @@ mod qc {
 			let buf = (0..32).map(|_| u8::arbitrary(gen)).collect::<Vec<_>>();
 
 			match path {
-				0..=175 => {
-					Action::Next {
-						hash: H256::from_slice(&buf[..]),
-						changes: {
-							let mut set = Vec::new();
-							for _ in 0..<u32>::arbitrary(gen)/(64*256*256*256) {
-								set.push((vec![u8::arbitrary(gen)], Some(vec![u8::arbitrary(gen)])));
-							}
-							set
+				0..=175 => Action::Next {
+					hash: H256::from_slice(&buf[..]),
+					changes: {
+						let mut set = Vec::new();
+						for _ in 0..<u32>::arbitrary(gen) / (64 * 256 * 256 * 256) {
+							set.push((vec![u8::arbitrary(gen)], Some(vec![u8::arbitrary(gen)])));
 						}
-					}
+						set
+					},
 				},
-				176..=220 => {
-					Action::Fork {
-						hash: H256::from_slice(&buf[..]),
-						depth: ((u8::arbitrary(gen)) / 32) as usize,
-						changes: {
-							let mut set = Vec::new();
-							for _ in 0..<u32>::arbitrary(gen)/(64*256*256*256) {
-								set.push((vec![u8::arbitrary(gen)], Some(vec![u8::arbitrary(gen)])));
-							}
-							set
+				176..=220 => Action::Fork {
+					hash: H256::from_slice(&buf[..]),
+					depth: ((u8::arbitrary(gen)) / 32) as usize,
+					changes: {
+						let mut set = Vec::new();
+						for _ in 0..<u32>::arbitrary(gen) / (64 * 256 * 256 * 256) {
+							set.push((vec![u8::arbitrary(gen)], Some(vec![u8::arbitrary(gen)])));
 						}
-					}
+						set
+					},
 				},
 				221..=240 => {
 					Action::ReorgWithImport {
@@ -1553,7 +1507,7 @@ mod qc {
 				_ => {
 					Action::FinalizationReorg {
 						fork_depth: ((u8::arbitrary(gen)) / 32) as usize, // 0-7
-						depth: ((u8::arbitrary(gen)) / 64) as usize, // 0-3
+						depth: ((u8::arbitrary(gen)) / 64) as usize,      // 0-3
 					}
 				},
 			}
@@ -1568,13 +1522,9 @@ mod qc {
 
 	impl Mutator {
 		fn new_empty() -> Self {
-			let shared = new_shared_cache::<Block>(256*1024, (0,1));
+			let shared = new_shared_cache::<Block>(256 * 1024, (0, 1));
 
-			Self {
-				shared,
-				canon: vec![],
-				forks: HashMap::new(),
-			}
+			Self { shared, canon: vec![], forks: HashMap::new() }
 		}
 
 		fn head_state(&self, hash: H256) -> CachingState<InMemoryBackend<BlakeTwo256>, Block> {
@@ -1593,11 +1543,12 @@ mod qc {
 			&mut self,
 			action: Action,
 		) -> CachingState<InMemoryBackend<BlakeTwo256>, Block> {
-			self.mutate(action).expect("Expected to provide only valid actions to the mutate_static")
+			self.mutate(action)
+				.expect("Expected to provide only valid actions to the mutate_static")
 		}
 
 		fn canon_len(&self) -> usize {
-			return self.canon.len();
+			return self.canon.len()
 		}
 
 		fn head_storage_ref(&self) -> &KeyMap {
@@ -1615,10 +1566,10 @@ mod qc {
 			let state = match action {
 				Action::Fork { depth, hash, changes } => {
 					let pos = self.canon.len() as isize - depth as isize;
-					if pos < 0 || self.canon.len() == 0 || pos >= (self.canon.len()-1) as isize
+					if pos < 0 || self.canon.len() == 0 || pos >= (self.canon.len() - 1) as isize
 					// no fork on top also, thus len-1
 					{
-						return Err(());
+						return Err(())
 					}
 
 					let pos = pos as usize;
@@ -1628,7 +1579,8 @@ mod qc {
 					let (total_h, parent) = match self.forks.entry(fork_at) {
 						Entry::Occupied(occupied) => {
 							let chain = occupied.into_mut();
-							let parent = chain.last().expect("No empty forks are ever created").clone();
+							let parent =
+								chain.last().expect("No empty forks are ever created").clone();
 							let mut node = parent.new_next(hash, changes.clone());
 
 							for earlier in chain.iter() {
@@ -1644,7 +1596,7 @@ mod qc {
 							vacant.insert(vec![canon_parent.new_next(hash, changes.clone())]);
 
 							(pos + 1, fork_at)
-						}
+						},
 					};
 
 					let mut state = CachingState::new(
@@ -1671,9 +1623,7 @@ mod qc {
 							let parent_hash = H256::from(&[0u8; 32]);
 							(Node::new(hash, parent_hash, changes.clone()), parent_hash)
 						},
-						Some(parent) => {
-							(parent.new_next(hash, changes.clone()), parent.hash)
-						}
+						Some(parent) => (parent.new_next(hash, changes.clone()), parent.hash),
 					};
 
 					// delete cache entries for earlier
@@ -1708,22 +1658,26 @@ mod qc {
 				},
 				Action::ReorgWithImport { depth, hash } => {
 					let pos = self.canon.len() as isize - depth as isize;
-					if pos < 0 || pos+1 >= self.canon.len() as isize { return Err(()); }
+					if pos < 0 || pos + 1 >= self.canon.len() as isize {
+						return Err(())
+					}
 					let fork_at = self.canon[pos as usize].hash;
 					let pos = pos as usize;
 
 					match self.forks.get_mut(&fork_at) {
 						Some(chain) => {
-							let mut new_fork = self.canon.drain(pos+1..).collect::<Vec<Node>>();
+							let mut new_fork = self.canon.drain(pos + 1..).collect::<Vec<Node>>();
 
-							let retracted: Vec<H256> = new_fork.iter().map(|node| node.hash).collect();
+							let retracted: Vec<H256> =
+								new_fork.iter().map(|node| node.hash).collect();
 							let enacted: Vec<H256> = chain.iter().map(|node| node.hash).collect();
 
 							std::mem::swap(chain, &mut new_fork);
 
-							let mut node = new_fork.last().map(
-								|node| node.new_next(hash, vec![])
-							).expect("No empty fork ever created!");
+							let mut node = new_fork
+								.last()
+								.map(|node| node.new_next(hash, vec![]))
+								.expect("No empty fork ever created!");
 
 							for invalidators in chain.iter().chain(new_fork.iter()) {
 								node.purge(&invalidators.changes);
@@ -1751,44 +1705,54 @@ mod qc {
 							);
 
 							state
-						}
+						},
 						None => {
-							return Err(()); // no reorg without a fork atm!
+							return Err(()) // no reorg without a fork atm!
 						},
 					}
 				},
 				Action::FinalizationReorg { fork_depth, depth } => {
 					let pos = self.canon.len() as isize - fork_depth as isize;
-					if pos < 0 || pos+1 >= self.canon.len() as isize { return Err(()); }
+					if pos < 0 || pos + 1 >= self.canon.len() as isize {
+						return Err(())
+					}
 					let fork_at = self.canon[pos as usize].hash;
 					let pos = pos as usize;
 
 					match self.forks.get_mut(&fork_at) {
 						Some(fork_chain) => {
-							let sync_pos = fork_chain.len() as isize - fork_chain.len() as isize - depth as isize;
-							if sync_pos < 0 || sync_pos >= fork_chain.len() as isize { return Err (()); }
+							let sync_pos = fork_chain.len() as isize -
+								fork_chain.len() as isize - depth as isize;
+							if sync_pos < 0 || sync_pos >= fork_chain.len() as isize {
+								return Err(())
+							}
 							let sync_pos = sync_pos as usize;
 
-							let mut new_fork = self.canon.drain(pos+1..).collect::<Vec<Node>>();
+							let mut new_fork = self.canon.drain(pos + 1..).collect::<Vec<Node>>();
 
-							let retracted: Vec<H256> = new_fork.iter().map(|node| node.hash).collect();
-							let enacted: Vec<H256> = fork_chain.iter().take(sync_pos+1).map(|node| node.hash).collect();
+							let retracted: Vec<H256> =
+								new_fork.iter().map(|node| node.hash).collect();
+							let enacted: Vec<H256> = fork_chain
+								.iter()
+								.take(sync_pos + 1)
+								.map(|node| node.hash)
+								.collect();
 
 							std::mem::swap(fork_chain, &mut new_fork);
 
-							self.shared.lock().sync(&retracted, &enacted);
+							self.shared.write().sync(&retracted, &enacted);
 
 							self.head_state(
-								self.canon.last()
-								.expect("wasn't forking to emptiness so there should be one!")
-								.hash
+								self.canon
+									.last()
+									.expect("wasn't forking to emptiness so there should be one!")
+									.hash,
 							)
 						},
 						None => {
-							return Err(()); // no reorg to nothing pls!
-						}
+							return Err(()) // no reorg to nothing pls!
+						},
 					}
-
 				},
 			};
 
@@ -1808,14 +1772,27 @@ mod qc {
 		let h3b = H256::random();
 
 		let mut mutator = Mutator::new_empty();
-		mutator.mutate_static(Action::Next { hash: h0, changes: vec![(key.clone(), Some(vec![2]))] });
+		mutator
+			.mutate_static(Action::Next { hash: h0, changes: vec![(key.clone(), Some(vec![2]))] });
 		mutator.mutate_static(Action::Next { hash: h1a, changes: vec![] });
-		mutator.mutate_static(Action::Fork { depth: 2, hash: h1b, changes: vec![(key.clone(), Some(vec![3]))] });
-		mutator.mutate_static(Action::Fork { depth: 2, hash: h2b, changes: vec![(key.clone(), Some(vec![4]))] });
-		mutator.mutate_static(Action::Next { hash: h2a, changes: vec![(key.clone(), Some(vec![5]))] });
+		mutator.mutate_static(Action::Fork {
+			depth: 2,
+			hash: h1b,
+			changes: vec![(key.clone(), Some(vec![3]))],
+		});
+		mutator.mutate_static(Action::Fork {
+			depth: 2,
+			hash: h2b,
+			changes: vec![(key.clone(), Some(vec![4]))],
+		});
+		mutator
+			.mutate_static(Action::Next { hash: h2a, changes: vec![(key.clone(), Some(vec![5]))] });
 		mutator.mutate_static(Action::Next { hash: h3a, changes: vec![] });
 
-		assert_eq!(mutator.head_state(h3a).storage(&key).unwrap().expect("there should be a value"), vec![5]);
+		assert_eq!(
+			mutator.head_state(h3a).storage(&key).unwrap().expect("there should be a value"),
+			vec![5]
+		);
 		assert!(mutator.head_state(h1a).storage(&key).unwrap().is_none());
 		assert!(mutator.head_state(h2b).storage(&key).unwrap().is_none());
 		assert!(mutator.head_state(h1b).storage(&key).unwrap().is_none());
@@ -1829,18 +1806,17 @@ mod qc {
 
 		for key in Mutator::key_permutations() {
 			match (head_state.storage(&key).unwrap(), mutator.head_storage_ref().get(&key)) {
-				(Some(x), Some(y)) => {
+				(Some(x), Some(y)) =>
 					if Some(&x) != y.as_ref() {
 						eprintln!("{:?} != {:?}", x, y);
-						return false;
-					}
-				},
+						return false
+					},
 				(None, Some(_y)) => {
 					// TODO: cache miss is not tracked atm
 				},
 				(Some(x), None) => {
 					eprintln!("{:?} != <missing>", x);
-					return false;
+					return false
 				},
 				_ => continue,
 			}
@@ -1853,18 +1829,17 @@ mod qc {
 			let head_state = mutator.head_state(node.hash);
 			for key in Mutator::key_permutations() {
 				match (head_state.storage(&key).unwrap(), node.state.get(&key)) {
-					(Some(x), Some(y)) => {
+					(Some(x), Some(y)) =>
 						if Some(&x) != y.as_ref() {
 							eprintln!("at [{}]: {:?} != {:?}", node.hash, x, y);
-							return false;
-						}
-					},
+							return false
+						},
 					(None, Some(_y)) => {
 						// cache miss is not tracked atm
 					},
 					(Some(x), None) => {
 						eprintln!("at [{}]: {:?} != <missing>", node.hash, x);
-						return false;
+						return false
 					},
 					_ => continue,
 				}
@@ -1885,16 +1860,27 @@ mod qc {
 		let mut mutator = Mutator::new_empty();
 		mutator.mutate_static(Action::Next { hash: h0, changes: vec![] });
 		mutator.mutate_static(Action::Next { hash: h1, changes: vec![] });
-		mutator.mutate_static(Action::Next { hash: h2, changes: vec![(key.clone(), Some(vec![2]))] });
-		mutator.mutate_static(Action::Fork { depth: 2, hash: h1b, changes: vec![(key.clone(), Some(vec![3]))] });
+		mutator
+			.mutate_static(Action::Next { hash: h2, changes: vec![(key.clone(), Some(vec![2]))] });
+		mutator.mutate_static(Action::Fork {
+			depth: 2,
+			hash: h1b,
+			changes: vec![(key.clone(), Some(vec![3]))],
+		});
 		mutator.mutate_static(Action::ReorgWithImport { depth: 2, hash: h2b });
 
 		assert!(is_head_match(&mutator))
 	}
 
-	fn key(k: u8) -> Vec<u8> { vec![k] }
-	fn val(v: u8) -> Option<Vec<u8>> { Some(vec![v]) }
-	fn keyval(k: u8, v: u8) -> KeySet { vec![(key(k), val(v))] }
+	fn key(k: u8) -> Vec<u8> {
+		vec![k]
+	}
+	fn val(v: u8) -> Option<Vec<u8>> {
+		Some(vec![v])
+	}
+	fn keyval(k: u8, v: u8) -> KeySet {
+		vec![(key(k), val(v))]
+	}
 
 	#[test]
 	fn reorg2() {
@@ -1908,7 +1894,7 @@ mod qc {
 		let mut mutator = Mutator::new_empty();
 		mutator.mutate_static(Action::Next { hash: h0, changes: keyval(1, 1) });
 		mutator.mutate_static(Action::Next { hash: h1a, changes: keyval(1, 1) });
-		mutator.mutate_static(Action::Fork { depth: 2, hash: h1b, changes: keyval(2, 2 ) });
+		mutator.mutate_static(Action::Fork { depth: 2, hash: h1b, changes: keyval(2, 2) });
 
 		mutator.mutate_static(Action::Next { hash: h2a, changes: keyval(3, 3) });
 		mutator.mutate_static(Action::Next { hash: h3a, changes: keyval(4, 4) });

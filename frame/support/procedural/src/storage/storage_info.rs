@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,15 +17,11 @@
 
 //! Implementation of trait `StorageInfoTrait` on module structure.
 
+use super::DeclStorageDefExt;
 use proc_macro2::TokenStream;
 use quote::quote;
-use super::DeclStorageDefExt;
 
 pub fn impl_storage_info(def: &DeclStorageDefExt) -> TokenStream {
-	if !def.generate_storage_info {
-		return Default::default()
-	}
-
 	let scrate = &def.hidden_crate;
 
 	let mut res_append_storage = TokenStream::new();
@@ -33,10 +29,16 @@ pub fn impl_storage_info(def: &DeclStorageDefExt) -> TokenStream {
 	for line in def.storage_lines.iter() {
 		let storage_struct = &line.storage_struct;
 
+		let (trait_, method) = if def.generate_storage_info {
+			(quote!(#scrate::traits::StorageInfoTrait), quote!(storage_info))
+		} else {
+			(quote!(#scrate::traits::PartialStorageInfoTrait), quote!(partial_storage_info))
+		};
+
 		res_append_storage.extend(quote!(
 			let mut storage_info = <
-				#storage_struct as #scrate::traits::StorageInfoTrait
-			>::storage_info();
+				#storage_struct as #trait_
+			>::#method();
 			res.append(&mut storage_info);
 		));
 	}
@@ -46,7 +48,7 @@ pub fn impl_storage_info(def: &DeclStorageDefExt) -> TokenStream {
 	let where_clause = &def.where_clause;
 
 	quote!(
-		impl#module_impl #scrate::traits::StorageInfoTrait for #module_struct #where_clause {
+		impl #module_impl #scrate::traits::StorageInfoTrait for #module_struct #where_clause {
 			fn storage_info() -> #scrate::sp_std::vec::Vec<#scrate::traits::StorageInfo> {
 				let mut res = #scrate::sp_std::vec![];
 				#res_append_storage

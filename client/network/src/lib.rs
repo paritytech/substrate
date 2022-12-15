@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -103,8 +103,8 @@
 //! protocol ID.
 //!
 //! > **Note**: It is possible for the same connection to be used for multiple chains. For example,
-//! >           one can use both the `/dot/sync/2` and `/sub/sync/2` protocols on the same
-//! >           connection, provided that the remote supports them.
+//! > one can use both the `/dot/sync/2` and `/sub/sync/2` protocols on the same
+//! > connection, provided that the remote supports them.
 //!
 //! Substrate uses the following standard libp2p protocols:
 //!
@@ -121,10 +121,10 @@
 //!
 //! - **`/substrate/<protocol-id>/<version>`** (where `<protocol-id>` must be replaced with the
 //! protocol ID of the targeted chain, and `<version>` is a number between 2 and 6). For each
-//! connection we optionally keep an additional substream for all Substrate-based communications alive.
-//! This protocol is considered legacy, and is progressively being replaced with alternatives.
-//! This is designated as "The legacy Substrate substream" in this documentation. See below for
-//! more details.
+//! connection we optionally keep an additional substream for all Substrate-based communications
+//! alive. This protocol is considered legacy, and is progressively being replaced with
+//! alternatives. This is designated as "The legacy Substrate substream" in this documentation. See
+//! below for more details.
 //! - **`/<protocol-id>/sync/2`** is a request-response protocol (see below) that lets one perform
 //! requests for information about blocks. Each request is the encoding of a `BlockRequest` and
 //! each response is the encoding of a `BlockResponse`, as defined in the `api.v1.proto` file in
@@ -243,39 +243,46 @@
 //! - Calling `trigger_repropagate` when a transaction is added to the pool.
 //!
 //! More precise usage details are still being worked on and will likely change in the future.
-//!
 
 mod behaviour;
-mod chain;
-mod peer_info;
 mod discovery;
-mod on_demand_layer;
+mod peer_info;
 mod protocol;
 mod request_responses;
-mod schema;
 mod service;
 mod transport;
-mod utils;
 
-pub mod block_request_handler;
-pub mod bitswap;
-pub mod light_client_requests;
 pub mod config;
-pub mod error;
-pub mod gossip;
 pub mod network_state;
-pub mod transactions;
 
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
-pub use protocol::{event::{DhtEvent, Event, ObservedRole}, sync::SyncState, PeerInfo};
-pub use service::{
-	NetworkService, NetworkWorker, RequestFailure, OutboundFailure, NotificationSender,
-	NotificationSenderReady, IfDisconnected,
+pub use protocol::PeerInfo;
+use sc_consensus::{JustificationSyncLink, Link};
+pub use sc_network_common::{
+	protocol::{
+		event::{DhtEvent, Event},
+		role::ObservedRole,
+		ProtocolName,
+	},
+	request_responses::{IfDisconnected, RequestFailure},
+	service::{
+		KademliaKey, NetworkBlock, NetworkDHTProvider, NetworkRequest, NetworkSigner,
+		NetworkStateInfo, NetworkStatus, NetworkStatusProvider, NetworkSyncForkRequest, Signature,
+		SigningError,
+	},
+	sync::{
+		warp::{WarpSyncPhase, WarpSyncProgress},
+		StateDownloadProgress, SyncState,
+	},
 };
+pub use service::{
+	DecodingError, Keypair, NetworkService, NetworkWorker, NotificationSender,
+	NotificationSenderReady, OutboundFailure, PublicKey,
+};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 pub use sc_peerset::ReputationChange;
-use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 /// The maximum allowed number of established connections per peer.
 ///
@@ -289,36 +296,17 @@ const MAX_CONNECTIONS_PER_PEER: usize = 2;
 /// The maximum number of concurrent established connections that were incoming.
 const MAX_CONNECTIONS_ESTABLISHED_INCOMING: u32 = 10_000;
 
-/// Minimum Requirements for a Hash within Networking
-pub trait ExHashT: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static {}
-
-impl<T> ExHashT for T where T: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static
-{}
-
-/// Trait for providing information about the local network state
-pub trait NetworkStateInfo {
-	/// Returns the local external addresses.
-	fn external_addresses(&self) -> Vec<Multiaddr>;
-
-	/// Returns the local Peer ID.
-	fn local_peer_id(&self) -> PeerId;
+/// Abstraction over syncing-related services
+pub trait ChainSyncInterface<B: BlockT>:
+	NetworkSyncForkRequest<B::Hash, NumberFor<B>> + JustificationSyncLink<B> + Link<B> + Send + Sync
+{
 }
 
-/// Overview status of the network.
-#[derive(Clone)]
-pub struct NetworkStatus<B: BlockT> {
-	/// Current global sync state.
-	pub sync_state: SyncState,
-	/// Target sync block number.
-	pub best_seen_block: Option<NumberFor<B>>,
-	/// Number of peers participating in syncing.
-	pub num_sync_peers: u32,
-	/// Total number of connected peers
-	pub num_connected_peers: usize,
-	/// Total number of active peers.
-	pub num_active_peers: usize,
-	/// The total number of bytes received.
-	pub total_bytes_inbound: u64,
-	/// The total number of bytes sent.
-	pub total_bytes_outbound: u64,
+impl<T, B: BlockT> ChainSyncInterface<B> for T where
+	T: NetworkSyncForkRequest<B::Hash, NumberFor<B>>
+		+ JustificationSyncLink<B>
+		+ Link<B>
+		+ Send
+		+ Sync
+{
 }

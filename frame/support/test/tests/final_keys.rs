@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,19 +15,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frame_support::storage::unhashed;
 use codec::Encode;
-use frame_support::{StorageDoubleMap, StorageMap, StorageValue, StoragePrefixedMap};
-use sp_io::{TestExternalities, hashing::{twox_64, twox_128, blake2_128}};
+use frame_support::{
+	storage::unhashed, StorageDoubleMap, StorageMap, StoragePrefixedMap, StorageValue,
+};
+use sp_io::{
+	hashing::{blake2_128, twox_128, twox_64},
+	TestExternalities,
+};
 
 mod no_instance {
 	pub trait Config: frame_support_test::Config {}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=frame_support_test {}
+		pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=frame_support_test {}
 	}
 
-	frame_support::decl_storage!{
+	frame_support::decl_storage! {
 		trait Store for Module<T: Config> as FinalKeysNone {
 			pub Value config(value): u32;
 
@@ -49,10 +53,10 @@ mod instance {
 
 	frame_support::decl_module! {
 		pub struct Module<T: Config<I>, I: Instance = DefaultInstance>
-			for enum Call where origin: T::Origin, system=frame_support_test {}
+			for enum Call where origin: T::RuntimeOrigin, system=frame_support_test {}
 	}
 
-	frame_support::decl_storage!{
+	frame_support::decl_storage! {
 		trait Store for Module<T: Config<I>, I: Instance = DefaultInstance>
 			as FinalKeysSome
 		{

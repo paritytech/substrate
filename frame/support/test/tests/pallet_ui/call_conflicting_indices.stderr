@@ -1,0 +1,11 @@
+error: Call indices are conflicting: Both functions foo and bar are at index 10
+  --> tests/pallet_ui/call_conflicting_indices.rs:15:10
+   |
+15 |         pub fn foo(origin: OriginFor<T>) -> DispatchResultWithPostInfo {}
+   |                ^^^
+
+error: Call indices are conflicting: Both functions foo and bar are at index 10
+  --> tests/pallet_ui/call_conflicting_indices.rs:19:10
+   |
+19 |         pub fn bar(origin: OriginFor<T>) -> DispatchResultWithPostInfo {}
+   |                ^^^

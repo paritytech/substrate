@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,8 +19,11 @@
 
 //! Useful function for inflation for nominated proof of stake.
 
-use sp_arithmetic::{Perquintill, PerThing, biguint::BigUint, traits::{Zero, SaturatedConversion}};
-use core::convert::TryFrom;
+use sp_arithmetic::{
+	biguint::BigUint,
+	traits::{SaturatedConversion, Zero},
+	PerThing, Perquintill,
+};
 
 /// Compute yearly inflation using function
 ///
@@ -41,24 +44,14 @@ use core::convert::TryFrom;
 /// [here](https://research.web3.foundation/en/latest/polkadot/economics/1-token-economics.html#inflation-model-with-parachains))
 ///
 /// Arguments are:
-/// * `stake`:
-///   The fraction of total issued tokens that actively staked behind
-///   validators. Known as `x` in the literature.
-///   Must be between 0 and 1.
-/// * `ideal_stake`:
-///   The fraction of total issued tokens that should be actively staked behind
-///   validators. Known as `x_ideal` in the literature.
-///   Must be between 0 and 1.
-/// * `falloff`:
-///   Known as `decay_rate` in the literature. A co-efficient dictating the strength of
+/// * `stake`: The fraction of total issued tokens that actively staked behind validators. Known as
+///   `x` in the literature. Must be between 0 and 1.
+/// * `ideal_stake`: The fraction of total issued tokens that should be actively staked behind
+///   validators. Known as `x_ideal` in the literature. Must be between 0 and 1.
+/// * `falloff`: Known as `decay_rate` in the literature. A co-efficient dictating the strength of
 ///   the global incentivization to get the `ideal_stake`. A higher number results in less typical
-///   inflation at the cost of greater volatility for validators.
-///   Must be more than 0.01.
-pub fn compute_inflation<P: PerThing>(
-	stake: P,
-	ideal_stake: P,
-	falloff: P,
-) -> P {
+///   inflation at the cost of greater volatility for validators. Must be more than 0.01.
+pub fn compute_inflation<P: PerThing>(stake: P, ideal_stake: P, falloff: P) -> P {
 	if stake < ideal_stake {
 		// ideal_stake is more than 0 because it is strictly more than stake
 		return stake / ideal_stake
@@ -98,9 +91,7 @@ pub fn compute_inflation<P: PerThing>(
 	let res = compute_taylor_serie_part(&inpos_param);
 
 	match u128::try_from(res.clone()) {
-		Ok(res) if res <= Into::<u128>::into(P::ACCURACY) => {
-			P::from_parts(res.saturated_into())
-		},
+		Ok(res) if res <= Into::<u128>::into(P::ACCURACY) => P::from_parts(res.saturated_into()),
 		// If result is beyond bounds there is nothing we can do
 		_ => {
 			log::error!("Invalid inflation computation: unexpected result {:?}", res);
@@ -108,7 +99,6 @@ pub fn compute_inflation<P: PerThing>(
 		},
 	}
 }
-
 
 /// Internal struct holding parameter info alongside other cached value.
 ///
@@ -147,17 +137,18 @@ fn compute_taylor_serie_part(p: &INPoSParam) -> BigUint {
 
 		if taylor_sum_positive == last_taylor_term_positive {
 			taylor_sum = taylor_sum.add(&last_taylor_term);
+		} else if taylor_sum >= last_taylor_term {
+			taylor_sum = taylor_sum
+				.sub(&last_taylor_term)
+				// NOTE: Should never happen as checked above
+				.unwrap_or_else(|e| e);
 		} else {
-			if taylor_sum >= last_taylor_term {
-				taylor_sum = taylor_sum.sub(&last_taylor_term)
-					// NOTE: Should never happen as checked above
-					.unwrap_or_else(|e| e);
-			} else {
-				taylor_sum_positive = !taylor_sum_positive;
-				taylor_sum = last_taylor_term.clone().sub(&taylor_sum)
-					// NOTE: Should never happen as checked above
-					.unwrap_or_else(|e| e);
-			}
+			taylor_sum_positive = !taylor_sum_positive;
+			taylor_sum = last_taylor_term
+				.clone()
+				.sub(&taylor_sum)
+				// NOTE: Should never happen as checked above
+				.unwrap_or_else(|e| e);
 		}
 	}
 
@@ -180,14 +171,13 @@ fn compute_taylor_serie_part(p: &INPoSParam) -> BigUint {
 ///
 /// `previous_taylor_term` and result are expressed with accuracy `INPoSParam.accuracy`
 fn compute_taylor_term(k: u32, previous_taylor_term: &BigUint, p: &INPoSParam) -> BigUint {
-	let x_minus_x_ideal = p.x.clone().sub(&p.x_ideal)
-		// NOTE: Should never happen, as x must be more than x_ideal
-		.unwrap_or_else(|_| BigUint::zero());
+	let x_minus_x_ideal =
+		p.x.clone()
+			.sub(&p.x_ideal)
+			// NOTE: Should never happen, as x must be more than x_ideal
+			.unwrap_or_else(|_| BigUint::zero());
 
-	let res = previous_taylor_term.clone()
-		.mul(&x_minus_x_ideal)
-		.mul(&p.ln2_div_d)
-		.div_unit(k);
+	let res = previous_taylor_term.clone().mul(&x_minus_x_ideal).mul(&p.ln2_div_d).div_unit(k);
 
 	// p.accuracy is stripped by definition.
 	let res = div_by_stripped(res, &p.accuracy);
@@ -225,12 +215,10 @@ fn div_by_stripped(mut a: BigUint, b: &BigUint) -> BigUint {
 		return new_a
 			.div(b, false)
 			.map(|res| res.0)
-			.unwrap_or_else(|| BigUint::zero())
+			.unwrap_or_else(BigUint::zero)
 			.div_unit(100_000)
 			.div_unit(100_000)
 	}
 
-	a.div(b, false)
-		.map(|res| res.0)
-		.unwrap_or_else(|| BigUint::zero())
+	a.div(b, false).map(|res| res.0).unwrap_or_else(BigUint::zero)
 }

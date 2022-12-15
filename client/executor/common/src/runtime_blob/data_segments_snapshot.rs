@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,10 +16,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::error::{self, Error};
 use super::RuntimeBlob;
+use crate::error::{self, Error};
 use std::mem;
-use parity_wasm::elements::Instruction;
+use wasm_instrument::parity_wasm::elements::Instruction;
 
 /// This is a snapshot of data segments specialzied for a particular instantiation.
 ///
@@ -39,7 +39,7 @@ impl DataSegmentsSnapshot {
 			.map(|mut segment| {
 				// Just replace contents of the segment since the segments will be discarded later
 				// anyway.
-				let contents = mem::replace(segment.value_mut(), vec![]);
+				let contents = mem::take(segment.value_mut());
 
 				let init_expr = match segment.offset() {
 					Some(offset) => offset.code(),
@@ -49,7 +49,7 @@ impl DataSegmentsSnapshot {
 
 				// [op, End]
 				if init_expr.len() != 2 {
-					return Err(Error::InitializerHasTooManyExpressions);
+					return Err(Error::InitializerHasTooManyExpressions)
 				}
 				let offset = match &init_expr[0] {
 					Instruction::I32Const(v) => *v as u32,
@@ -60,8 +60,8 @@ impl DataSegmentsSnapshot {
 						// At the moment of writing the Substrate Runtime Interface does not provide
 						// any globals. There is nothing that prevents us from supporting this
 						// if/when we gain those.
-						return Err(Error::ImportedGlobalsUnsupported);
-					}
+						return Err(Error::ImportedGlobalsUnsupported)
+					},
 					insn => return Err(Error::InvalidInitializerExpression(format!("{:?}", insn))),
 				};
 

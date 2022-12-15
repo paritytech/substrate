@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,28 +18,16 @@
 
 //! Testing utils used by the RPC tests.
 
-use rpc::futures::future as future01;
-use futures::{executor, compat::Future01CompatExt, FutureExt};
+use std::{future::Future, sync::Arc};
 
-// Executor shared by all tests.
-//
-// This shared executor is used to prevent `Too many open files` errors
-// on systems with a lot of cores.
-lazy_static::lazy_static! {
-	static ref EXECUTOR: executor::ThreadPool = executor::ThreadPool::new()
-		.expect("Failed to create thread pool executor for tests");
+use sp_core::testing::TaskExecutor;
+
+/// Executor for testing.
+pub fn test_executor() -> Arc<sp_core::testing::TaskExecutor> {
+	Arc::new(TaskExecutor::default())
 }
 
-type Boxed01Future01 = Box<dyn future01::Future<Item = (), Error = ()> + Send + 'static>;
-
-/// Executor for use in testing
-pub struct TaskExecutor;
-impl future01::Executor<Boxed01Future01> for TaskExecutor {
-	fn execute(
-		&self,
-		future: Boxed01Future01,
-	) -> std::result::Result<(), future01::ExecuteError<Boxed01Future01>>{
-		EXECUTOR.spawn_ok(future.compat().map(drop));
-		Ok(())
-	}
+/// Wrap a future in a timeout a little more concisely
+pub fn timeout_secs<I, F: Future<Output = I>>(s: u64, f: F) -> tokio::time::Timeout<F> {
+	tokio::time::timeout(std::time::Duration::from_secs(s), f)
 }

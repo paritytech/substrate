@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,8 +18,8 @@
 
 //! Provides a generic wrapper around shared data. See [`SharedData`] for more information.
 
+use parking_lot::{Condvar, MappedMutexGuard, Mutex, MutexGuard};
 use std::sync::Arc;
-use parking_lot::{Mutex, MappedMutexGuard, Condvar, MutexGuard};
 
 /// Created by [`SharedDataLocked::release_mutex`].
 ///
@@ -54,10 +54,11 @@ impl<T> Drop for SharedDataLockedUpgradable<T> {
 /// Created by [`SharedData::shared_data_locked`].
 ///
 /// As long as this object isn't dropped, the shared data is held in a mutex guard and the shared
-/// data is tagged as locked. Access to the shared data is provided through [`Deref`] and
-/// [`DerefMut`]. The trick is to use [`Self::release_mutex`] to release the mutex, but still keep
-/// the shared data locked. This means every other thread trying to access the shared data in this
-/// time will need to wait until this lock is freed.
+/// data is tagged as locked. Access to the shared data is provided through
+/// [`Deref`](std::ops::Deref) and [`DerefMut`](std::ops::DerefMut). The trick is to use
+/// [`Self::release_mutex`] to release the mutex, but still keep the shared data locked. This means
+/// every other thread trying to access the shared data in this time will need to wait until this
+/// lock is freed.
 ///
 /// If this object is dropped without calling [`Self::release_mutex`], the lock will be dropped
 /// immediately.
@@ -75,8 +76,7 @@ impl<'a, T> SharedDataLocked<'a, T> {
 	/// Release the mutex, but keep the shared data locked.
 	pub fn release_mutex(mut self) -> SharedDataLockedUpgradable<T> {
 		SharedDataLockedUpgradable {
-			shared_data: self.shared_data.take()
-				.expect("`shared_data` is only taken on drop; qed"),
+			shared_data: self.shared_data.take().expect("`shared_data` is only taken on drop; qed"),
 		}
 	}
 }
@@ -132,7 +132,7 @@ struct SharedDataInner<T> {
 /// # Example
 ///
 /// ```
-///# use sc_consensus::shared_data::SharedData;
+/// # use sc_consensus::shared_data::SharedData;
 ///
 /// let shared_data = SharedData::new(String::from("hello world"));
 ///
@@ -167,6 +167,13 @@ struct SharedDataInner<T> {
 /// // As we don't know the order of the threads, we need to check for both combinations
 /// assert!(*data == "hello world321" || *data == "hello world312");
 /// ```
+///
+/// # Deadlock
+///
+/// Be aware that this data structure doesn't give you any guarantees that you can not create a
+/// deadlock. If you use [`release_mutex`](SharedDataLocked::release_mutex) followed by a call
+/// to [`shared_data`](Self::shared_data) in the same thread will make your program dead lock.
+/// The same applies when you are using a single threaded executor.
 pub struct SharedData<T> {
 	inner: Arc<Mutex<SharedDataInner<T>>>,
 	cond_var: Arc<Condvar>,
@@ -174,10 +181,7 @@ pub struct SharedData<T> {
 
 impl<T> Clone for SharedData<T> {
 	fn clone(&self) -> Self {
-		Self {
-			inner: self.inner.clone(),
-			cond_var: self.cond_var.clone(),
-		}
+		Self { inner: self.inner.clone(), cond_var: self.cond_var.clone() }
 	}
 }
 
@@ -214,8 +218,8 @@ impl<T> SharedData<T> {
 	///
 	/// This will give mutable access to the shared data. The returned [`SharedDataLocked`]
 	/// provides the function [`SharedDataLocked::release_mutex`] to release the mutex, but
-	/// keeping the data locked. This is useful in async contexts for example where the data needs to
-	/// be locked, but a mutex guard can not be held.
+	/// keeping the data locked. This is useful in async contexts for example where the data needs
+	/// to be locked, but a mutex guard can not be held.
 	///
 	/// For an example see [`SharedData`].
 	pub fn shared_data_locked(&self) -> SharedDataLocked<T> {
@@ -228,10 +232,7 @@ impl<T> SharedData<T> {
 		debug_assert!(!guard.locked);
 		guard.locked = true;
 
-		SharedDataLocked {
-			inner: guard,
-			shared_data: Some(self.clone()),
-		}
+		SharedDataLocked { inner: guard, shared_data: Some(self.clone()) }
 	}
 }
 

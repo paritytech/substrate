@@ -1,10 +1,10 @@
 [package]
 name = "sc-client-api"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "Substrate client interfaces."
 documentation = "https://docs.rs/sc-client-api"
@@ -14,36 +14,31 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-sp-consensus = { version = "0.9.0", path = "../../primitives/consensus/common" }
-derive_more = "0.99.2"
-sc-executor = { version = "0.9.0", path = "../executor" }
-sp-externalities = { version = "0.9.0", path = "../../primitives/externalities" }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
+	"derive",
+] }
 fnv = "1.0.6"
-futures = "0.3.1"
+futures = "0.3.21"
 hash-db = { version = "0.15.2", default-features = false }
-sp-blockchain = { version = "3.0.0", path = "../../primitives/blockchain" }
-sp-inherents = { version = "3.0.0", default-features = false, path = "../../primitives/inherents" }
-kvdb = "0.9.0"
-log = "0.4.8"
-parking_lot = "0.11.1"
-lazy_static =  "1.4.0"
-sp-database = { version = "3.0.0", path = "../../primitives/database" }
-sp-core = { version = "3.0.0", default-features = false, path = "../../primitives/core" }
-sp-keystore = { version = "0.9.0", default-features = false, path = "../../primitives/keystore" }
-sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
-sp-version = { version = "3.0.0", default-features = false, path = "../../primitives/version" }
-sp-api = { version = "3.0.0", path = "../../primitives/api" }
-sp-utils = { version = "3.0.0", path = "../../primitives/utils" }
-sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-state-machine = { version = "0.9.0", path = "../../primitives/state-machine" }
-sp-trie = { version = "3.0.0", path = "../../primitives/trie" }
-sp-storage = { version = "3.0.0", path = "../../primitives/storage" }
-sp-transaction-pool = { version = "3.0.0", path = "../../primitives/transaction-pool" }
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.9.0", path = "../../utils/prometheus" }
+log = "0.4.17"
+parking_lot = "0.12.1"
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../utils/prometheus" }
+sc-executor = { version = "0.10.0-dev", path = "../executor" }
+sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
+sc-utils = { version = "4.0.0-dev", path = "../utils" }
+sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
+sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
+sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
+sp-database = { version = "4.0.0-dev", path = "../../primitives/database" }
+sp-externalities = { version = "0.13.0", path = "../../primitives/externalities" }
+sp-keystore = { version = "0.13.0", default-features = false, path = "../../primitives/keystore" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-state-machine = { version = "0.13.0", path = "../../primitives/state-machine" }
+sp-storage = { version = "7.0.0", path = "../../primitives/storage" }
+sp-trie = { version = "7.0.0", path = "../../primitives/trie" }
 
 [dev-dependencies]
-kvdb-memorydb = "0.9.0"
+thiserror = "1.0.30"
 sp-test-primitives = { version = "2.0.0", path = "../../primitives/test-primitives" }
-substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime"  }
-thiserror = "1.0.21"
+substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }

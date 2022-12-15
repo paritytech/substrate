@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -22,103 +22,94 @@
 #![warn(missing_docs)]
 #![recursion_limit = "1024"]
 
-pub mod config;
 pub mod chain_ops;
+pub mod config;
 pub mod error;
 
-mod metrics;
 mod builder;
 #[cfg(feature = "test-helpers")]
 pub mod client;
 #[cfg(not(feature = "test-helpers"))]
 mod client;
+mod metrics;
 mod task_manager;
 
-use std::{io, pin::Pin};
-use std::net::SocketAddr;
-use std::collections::HashMap;
-use std::task::Poll;
+use std::{collections::HashMap, net::SocketAddr};
 
-use futures::{Future, FutureExt, Stream, StreamExt, stream, compat::*};
+use codec::{Decode, Encode};
+use futures::{channel::mpsc, FutureExt, StreamExt};
+use jsonrpsee::{core::Error as JsonRpseeError, RpcModule};
+use log::{debug, error, warn};
+use sc_client_api::{blockchain::HeaderBackend, BlockBackend, BlockchainEvents, ProofProvider};
 use sc_network::PeerId;
-use log::{warn, debug, error};
-use codec::{Encode, Decode};
-use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
-use parity_util_mem::MallocSizeOf;
-use sp_utils::mpsc::TracingUnboundedReceiver;
+use sc_network_common::{config::MultiaddrWithPeerId, service::NetworkBlock};
+use sc_utils::mpsc::TracingUnboundedReceiver;
+use sp_blockchain::HeaderMetadata;
+use sp_consensus::SyncOracle;
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, Header as HeaderT},
+};
 
-pub use self::error::Error;
-pub use self::builder::{
-	new_full_client, new_db_backend, new_client, new_full_parts, new_light_parts,
-	spawn_tasks, build_network, build_offchain_workers,
-	BuildNetworkParams, KeystoreContainer, NetworkStarter, SpawnTasksParams, TFullClient, TLightClient,
-	TFullBackend, TLightBackend, TLightBackendWithHash, TLightClientWithBackend,
-	TFullCallExecutor, TLightCallExecutor, RpcExtensionBuilder, NoopRpcExtensionBuilder,
+pub use self::{
+	builder::{
+		build_network, build_offchain_workers, new_client, new_db_backend, new_full_client,
+		new_full_parts, spawn_tasks, BuildNetworkParams, KeystoreContainer, NetworkStarter,
+		SpawnTasksParams, TFullBackend, TFullCallExecutor, TFullClient,
+	},
+	client::{ClientConfig, LocalCallExecutor},
+	error::Error,
 };
 pub use config::{
-	BasePath, Configuration, DatabaseConfig, PruningMode, Role, RpcMethods, TaskExecutor, TaskType,
-	KeepBlocks, TransactionStorageMode,
+	BasePath, BlocksPruning, Configuration, DatabaseSource, PruningMode, Role, RpcMethods, TaskType,
 };
 pub use sc_chain_spec::{
-	ChainSpec, GenericChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension,
-	NoExtension, ChainType,
+	ChainSpec, ChainType, Extension as ChainSpecExtension, GenericChainSpec, NoExtension,
+	Properties, RuntimeGenesis,
 };
-pub use sp_transaction_pool::{TransactionPool, InPoolTransaction, error::IntoPoolError};
-pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
-pub use sc_rpc::Metadata as RpcMetadata;
+
+pub use sc_consensus::ImportQueue;
 pub use sc_executor::NativeExecutionDispatch;
 #[doc(hidden)]
-pub use std::{ops::Deref, result::Result, sync::Arc};
-#[doc(hidden)]
-pub use sc_network::config::{
-	OnDemand, TransactionImport,
-	TransactionImportFuture,
+pub use sc_network_transactions::config::{TransactionImport, TransactionImportFuture};
+pub use sc_rpc::{
+	RandomIntegerSubscriptionId, RandomStringSubscriptionId, RpcSubscriptionIdProvider,
 };
 pub use sc_tracing::TracingReceiver;
-pub use task_manager::SpawnTaskHandle;
-pub use task_manager::TaskManager;
-pub use sp_consensus::import_queue::ImportQueue;
-pub use self::client::{LocalCallExecutor, ClientConfig};
-use sc_client_api::{blockchain::HeaderBackend, BlockchainEvents};
+pub use sc_transaction_pool::Options as TransactionPoolOptions;
+pub use sc_transaction_pool_api::{error::IntoPoolError, InPoolTransaction, TransactionPool};
+#[doc(hidden)]
+pub use std::{ops::Deref, result::Result, sync::Arc};
+pub use task_manager::{SpawnTaskHandle, TaskManager, DEFAULT_GROUP_NAME};
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
-/// A type that implements `MallocSizeOf` on native but not wasm.
-#[cfg(not(target_os = "unknown"))]
-pub trait MallocSizeOfWasm: MallocSizeOf {}
-#[cfg(target_os = "unknown")]
-pub trait MallocSizeOfWasm {}
-#[cfg(not(target_os = "unknown"))]
-impl<T: MallocSizeOf> MallocSizeOfWasm for T {}
-#[cfg(target_os = "unknown")]
-impl<T> MallocSizeOfWasm for T {}
-
 /// RPC handlers that can perform RPC queries.
 #[derive(Clone)]
-pub struct RpcHandlers(Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>>);
+pub struct RpcHandlers(Arc<RpcModule<()>>);
 
 impl RpcHandlers {
 	/// Starts an RPC query.
 	///
-	/// The query is passed as a string and must be a JSON text similar to what an HTTP client
-	/// would for example send.
+	/// The query is passed as a string and must be valid JSON-RPC request object.
 	///
-	/// Returns a `Future` that contains the optional response.
+	/// Returns a response and a stream if the call successful, fails if the
+	/// query could not be decoded as a JSON-RPC request object.
 	///
-	/// If the request subscribes you to events, the `Sender` in the `RpcSession` object is used to
-	/// send back spontaneous events.
-	pub fn rpc_query(&self, mem: &RpcSession, request: &str)
-		-> Pin<Box<dyn Future<Output = Option<String>> + Send>> {
-		self.0.handle_request(request, mem.metadata.clone())
-			.compat()
-			.map(|res| res.expect("this should never fail"))
-			.boxed()
+	/// If the request subscribes you to events, the `stream` can be used to
+	/// retrieve the events.
+	pub async fn rpc_query(
+		&self,
+		json_query: &str,
+	) -> Result<(String, mpsc::UnboundedReceiver<String>), JsonRpseeError> {
+		self.0
+			.raw_json_request(json_query)
+			.await
+			.map(|(method_res, recv)| (method_res.result, recv))
 	}
 
-	/// Provides access to the underlying `MetaIoHandler`
-	pub fn io_handler(&self)
-		-> Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>> {
+	/// Provides access to the underlying `RpcModule`
+	pub fn handle(&self) -> Arc<RpcModule<()>> {
 		self.0.clone()
 	}
 }
@@ -148,11 +139,18 @@ pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, Transact
 /// The `status_sink` contain a list of senders to send a periodic network status to.
 async fn build_network_future<
 	B: BlockT,
-	C: BlockchainEvents<B> + HeaderBackend<B>,
-	H: sc_network::ExHashT
-> (
+	C: BlockchainEvents<B>
+		+ HeaderBackend<B>
+		+ BlockBackend<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ ProofProvider<B>
+		+ Send
+		+ Sync
+		+ 'static,
+	H: sc_network_common::ExHashT,
+>(
 	role: Role,
-	mut network: sc_network::NetworkWorker<B, H>,
+	mut network: sc_network::NetworkWorker<B, H, C>,
 	client: Arc<C>,
 	mut rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
@@ -164,26 +162,10 @@ async fn build_network_future<
 	let starting_block = client.info().best_number;
 
 	// Stream of finalized blocks reported by the client.
-	let mut finality_notification_stream = {
-		let mut finality_notification_stream = client.finality_notification_stream().fuse();
-
-		// We tweak the `Stream` in order to merge together multiple items if they happen to be
-		// ready. This way, we only get the latest finalized block.
-		stream::poll_fn(move |cx| {
-			let mut last = None;
-			while let Poll::Ready(Some(item)) = Pin::new(&mut finality_notification_stream).poll_next(cx) {
-				last = Some(item);
-			}
-			if let Some(last) = last {
-				Poll::Ready(Some(last))
-			} else {
-				Poll::Pending
-			}
-		}).fuse()
-	};
+	let mut finality_notification_stream = client.finality_notification_stream().fuse();
 
 	loop {
-		futures::select!{
+		futures::select! {
 			// List of blocks that the client has imported.
 			notification = imported_blocks_stream.next() => {
 				let notification = match notification {
@@ -200,7 +182,7 @@ async fn build_network_future<
 				if notification.is_new_best {
 					network.service().new_best_block_imported(
 						notification.hash,
-						notification.header.number().clone(),
+						*notification.header.number(),
 					);
 				}
 			}
@@ -224,7 +206,7 @@ async fn build_network_future<
 						let _ = sender.send(network.local_peer_id().to_base58());
 					},
 					sc_rpc::system::Request::LocalListenAddresses(sender) => {
-						let peer_id = network.local_peer_id().clone().into();
+						let peer_id = (*network.local_peer_id()).into();
 						let p2p_proto_suffix = sc_network::multiaddr::Protocol::P2p(peer_id);
 						let addresses = network.listen_addresses()
 							.map(|addr| addr.clone().with(p2p_proto_suffix.clone()).to_string())
@@ -242,13 +224,20 @@ async fn build_network_future<
 						).collect());
 					}
 					sc_rpc::system::Request::NetworkState(sender) => {
-						if let Some(network_state) = serde_json::to_value(&network.network_state()).ok() {
+						if let Ok(network_state) = serde_json::to_value(&network.network_state()) {
 							let _ = sender.send(network_state);
 						}
 					}
 					sc_rpc::system::Request::NetworkAddReservedPeer(peer_addr, sender) => {
-						let x = network.add_reserved_peer(peer_addr)
-							.map_err(sc_rpc::system::error::Error::MalformattedPeerArg);
+						let result = match MultiaddrWithPeerId::try_from(peer_addr) {
+							Ok(peer) => {
+								network.add_reserved_peer(peer)
+							},
+							Err(err) => {
+								Err(err.to_string())
+							},
+						};
+						let x = result.map_err(sc_rpc::system::error::Error::MalformattedPeerArg);
 						let _ = sender.send(x);
 					}
 					sc_rpc::system::Request::NetworkRemoveReservedPeer(peer_id, sender) => {
@@ -275,7 +264,6 @@ async fn build_network_future<
 
 						let node_role = match role {
 							Role::Authority { .. } => NodeRole::Authority,
-							Role::Light => NodeRole::LightClient,
 							Role::Full => NodeRole::Full,
 						};
 
@@ -284,10 +272,12 @@ async fn build_network_future<
 					sc_rpc::system::Request::SyncState(sender) => {
 						use sc_rpc::system::SyncState;
 
+						let best_number = client.info().best_number;
+
 						let _ = sender.send(SyncState {
-							starting_block: starting_block,
-							current_block: client.info().best_number,
-							highest_block: network.best_seen_block(),
+							starting_block,
+							current_block: best_number,
+							highest_block: network.best_seen_block().unwrap_or(best_number),
 						});
 					}
 				}
@@ -301,145 +291,94 @@ async fn build_network_future<
 	}
 }
 
-#[cfg(not(target_os = "unknown"))]
 // Wrapper for HTTP and WS servers that makes sure they are properly shut down.
 mod waiting {
-	pub struct HttpServer(pub Option<sc_rpc_server::HttpServer>);
-	impl Drop for HttpServer {
-		fn drop(&mut self) {
-			if let Some(server) = self.0.take() {
-				server.close_handle().close();
-				server.wait();
-			}
-		}
-	}
+	pub struct Server(pub Option<sc_rpc_server::Server>);
 
-	pub struct IpcServer(pub Option<sc_rpc_server::IpcServer>);
-	impl Drop for IpcServer {
+	impl Drop for Server {
 		fn drop(&mut self) {
 			if let Some(server) = self.0.take() {
-				server.close_handle().close();
-				let _ = server.wait();
-			}
-		}
-	}
-
-	pub struct WsServer(pub Option<sc_rpc_server::WsServer>);
-	impl Drop for WsServer {
-		fn drop(&mut self) {
-			if let Some(server) = self.0.take() {
-				server.close_handle().close();
-				let _ = server.wait();
+				// This doesn't not wait for the server to be stopped but fires the signal.
+				let _ = server.stop();
 			}
 		}
 	}
 }
 
-/// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
-#[cfg(not(target_os = "unknown"))]
-fn start_rpc_servers<
-	H: FnMut(sc_rpc::DenyUnsafe, sc_rpc_server::RpcMiddleware)
-	-> sc_rpc_server::RpcHandler<sc_rpc::Metadata>
->(
+/// Starts RPC servers.
+fn start_rpc_servers<R>(
 	config: &Configuration,
-	mut gen_handler: H,
-	rpc_metrics: sc_rpc_server::RpcMetrics,
-) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
-	fn maybe_start_server<T, F>(address: Option<SocketAddr>, mut start: F) -> Result<Option<T>, io::Error>
-		where F: FnMut(&SocketAddr) -> Result<T, io::Error>,
-		{
-			address.map(|mut address| start(&address)
-				.or_else(|e| match e.kind() {
-					io::ErrorKind::AddrInUse |
-					io::ErrorKind::PermissionDenied => {
-						warn!("Unable to bind RPC server to {}. Trying random port.", address);
-						address.set_port(0);
-						start(&address)
-					},
-					_ => Err(e),
-				}
-			) ).transpose()
-		}
-
-	fn deny_unsafe(addr: &SocketAddr, methods: &RpcMethods) -> sc_rpc::DenyUnsafe {
+	gen_rpc_module: R,
+	rpc_id_provider: Option<Box<dyn RpcSubscriptionIdProvider>>,
+) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error>
+where
+	R: Fn(sc_rpc::DenyUnsafe) -> Result<RpcModule<()>, Error>,
+{
+	fn deny_unsafe(addr: SocketAddr, methods: &RpcMethods) -> sc_rpc::DenyUnsafe {
 		let is_exposed_addr = !addr.ip().is_loopback();
 		match (is_exposed_addr, methods) {
-			| (_, RpcMethods::Unsafe)
-			| (false, RpcMethods::Auto) => sc_rpc::DenyUnsafe::No,
-			_ => sc_rpc::DenyUnsafe::Yes
+			| (_, RpcMethods::Unsafe) | (false, RpcMethods::Auto) => sc_rpc::DenyUnsafe::No,
+			_ => sc_rpc::DenyUnsafe::Yes,
 		}
 	}
 
-	Ok(Box::new((
-		config.rpc_ipc.as_ref().map(|path| sc_rpc_server::start_ipc(
-			&*path, gen_handler(
-				sc_rpc::DenyUnsafe::No,
-				sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ipc")
-			)
-		)),
-		maybe_start_server(
-			config.rpc_http,
-			|address| sc_rpc_server::start_http(
-				address,
-				config.rpc_cors.as_ref(),
-				gen_handler(
-					deny_unsafe(&address, &config.rpc_methods),
-					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "http")
-				),
-			),
-		)?.map(|s| waiting::HttpServer(Some(s))),
-		maybe_start_server(
-			config.rpc_ws,
-			|address| sc_rpc_server::start_ws(
-				address,
-				config.rpc_ws_max_connections,
-				config.rpc_cors.as_ref(),
-				gen_handler(
-					deny_unsafe(&address, &config.rpc_methods),
-					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ws")
-				),
-			),
-		)?.map(|s| waiting::WsServer(Some(s))),
-	)))
-}
+	let (max_request_size, ws_max_response_size, http_max_response_size) =
+		legacy_cli_parsing(config);
 
-/// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
-#[cfg(target_os = "unknown")]
-fn start_rpc_servers<
-	H: FnMut(sc_rpc::DenyUnsafe, sc_rpc_server::RpcMiddleware)
-	-> sc_rpc_server::RpcHandler<sc_rpc::Metadata>
->(
-	_: &Configuration,
-	_: H,
-	_: sc_rpc_server::RpcMetrics,
-) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
-	Ok(Box::new(()))
-}
+	let random_port = |mut addr: SocketAddr| {
+		addr.set_port(0);
+		addr
+	};
 
-/// An RPC session. Used to perform in-memory RPC queries (ie. RPC queries that don't go through
-/// the HTTP or WebSockets server).
-#[derive(Clone)]
-pub struct RpcSession {
-	metadata: sc_rpc::Metadata,
-}
+	let ws_addr = config
+		.rpc_ws
+		.unwrap_or_else(|| "127.0.0.1:9944".parse().expect("valid sockaddr; qed"));
+	let ws_addr2 = random_port(ws_addr);
 
-impl RpcSession {
-	/// Creates an RPC session.
-	///
-	/// The `sender` is stored inside the `RpcSession` and is used to communicate spontaneous JSON
-	/// messages.
-	///
-	/// The `RpcSession` must be kept alive in order to receive messages on the sender.
-	pub fn new(sender: futures01::sync::mpsc::Sender<String>) -> RpcSession {
-		RpcSession {
-			metadata: sender.into(),
-		}
+	let http_addr = config
+		.rpc_http
+		.unwrap_or_else(|| "127.0.0.1:9933".parse().expect("valid sockaddr; qed"));
+	let http_addr2 = random_port(http_addr);
+
+	let metrics = sc_rpc_server::RpcMetrics::new(config.prometheus_registry())?;
+
+	let server_config = sc_rpc_server::WsConfig {
+		max_connections: config.rpc_ws_max_connections,
+		max_payload_in_mb: max_request_size,
+		max_payload_out_mb: ws_max_response_size,
+		max_subs_per_conn: config.rpc_max_subs_per_conn,
+	};
+
+	let http_fut = sc_rpc_server::start_http(
+		[http_addr, http_addr2],
+		config.rpc_cors.as_ref(),
+		max_request_size,
+		http_max_response_size,
+		metrics.clone(),
+		gen_rpc_module(deny_unsafe(http_addr, &config.rpc_methods))?,
+		config.tokio_handle.clone(),
+	);
+
+	let ws_fut = sc_rpc_server::start(
+		[ws_addr, ws_addr2],
+		config.rpc_cors.as_ref(),
+		server_config.clone(),
+		metrics.clone(),
+		gen_rpc_module(deny_unsafe(ws_addr, &config.rpc_methods))?,
+		config.tokio_handle.clone(),
+		rpc_id_provider,
+	);
+
+	match tokio::task::block_in_place(|| {
+		config.tokio_handle.block_on(futures::future::try_join(http_fut, ws_fut))
+	}) {
+		Ok((http, ws)) => Ok(Box::new((waiting::Server(Some(http)), waiting::Server(Some(ws))))),
+		Err(e) => Err(Error::Application(e)),
 	}
 }
 
 /// Transaction pool adapter.
 pub struct TransactionPoolAdapter<C, P> {
-	imports_external_transactions: bool,
 	pool: Arc<P>,
 	client: Arc<C>,
 }
@@ -447,13 +386,12 @@ pub struct TransactionPoolAdapter<C, P> {
 /// Get transactions for propagation.
 ///
 /// Function extracted to simplify the test and prevent creating `ServiceFactory`.
-fn transactions_to_propagate<Pool, B, H, E>(pool: &Pool)
-	-> Vec<(H, B::Extrinsic)>
+fn transactions_to_propagate<Pool, B, H, E>(pool: &Pool) -> Vec<(H, B::Extrinsic)>
 where
-	Pool: TransactionPool<Block=B, Hash=H, Error=E>,
+	Pool: TransactionPool<Block = B, Hash = H, Error = E>,
 	B: BlockT,
 	H: std::hash::Hash + Eq + sp_runtime::traits::Member + sp_runtime::traits::MaybeSerialize,
-	E: IntoPoolError + From<sp_transaction_pool::error::Error>,
+	E: IntoPoolError + From<sc_transaction_pool_api::error::Error>,
 {
 	pool.ready()
 		.filter(|t| t.is_propagable())
@@ -465,14 +403,20 @@ where
 		.collect()
 }
 
-impl<B, H, C, Pool, E> sc_network::config::TransactionPool<H, B> for
-	TransactionPoolAdapter<C, Pool>
+impl<B, H, C, Pool, E> sc_network_transactions::config::TransactionPool<H, B>
+	for TransactionPoolAdapter<C, Pool>
 where
-	C: sc_network::config::Client<B> + Send + Sync,
-	Pool: 'static + TransactionPool<Block=B, Hash=H, Error=E>,
+	C: HeaderBackend<B>
+		+ BlockBackend<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ ProofProvider<B>
+		+ Send
+		+ Sync
+		+ 'static,
+	Pool: 'static + TransactionPool<Block = B, Hash = H, Error = E>,
 	B: BlockT,
 	H: std::hash::Hash + Eq + sp_runtime::traits::Member + sp_runtime::traits::MaybeSerialize,
-	E: 'static + IntoPoolError + From<sp_transaction_pool::error::Error>,
+	E: 'static + IntoPoolError + From<sc_transaction_pool_api::error::Error>,
 {
 	fn transactions(&self) -> Vec<(H, B::Extrinsic)> {
 		transactions_to_propagate(&*self.pool)
@@ -482,42 +426,40 @@ where
 		self.pool.hash_of(transaction)
 	}
 
-	fn import(
-		&self,
-		transaction: B::Extrinsic,
-	) -> TransactionImportFuture {
-		if !self.imports_external_transactions {
-			debug!("Transaction rejected");
-			Box::pin(futures::future::ready(TransactionImport::None));
-		}
-
+	fn import(&self, transaction: B::Extrinsic) -> TransactionImportFuture {
 		let encoded = transaction.encode();
 		let uxt = match Decode::decode(&mut &encoded[..]) {
 			Ok(uxt) => uxt,
 			Err(e) => {
 				debug!("Transaction invalid: {:?}", e);
-				return Box::pin(futures::future::ready(TransactionImport::Bad));
-			}
+				return Box::pin(futures::future::ready(TransactionImport::Bad))
+			},
 		};
 
 		let best_block_id = BlockId::hash(self.client.info().best_hash);
 
-		let import_future = self.pool.submit_one(&best_block_id, sp_transaction_pool::TransactionSource::External, uxt);
+		let import_future = self.pool.submit_one(
+			&best_block_id,
+			sc_transaction_pool_api::TransactionSource::External,
+			uxt,
+		);
 		Box::pin(async move {
 			match import_future.await {
 				Ok(_) => TransactionImport::NewGood,
 				Err(e) => match e.into_pool_error() {
-					Ok(sp_transaction_pool::error::Error::AlreadyImported(_)) => TransactionImport::KnownGood,
+					Ok(sc_transaction_pool_api::error::Error::AlreadyImported(_)) =>
+						TransactionImport::KnownGood,
 					Ok(e) => {
 						debug!("Error adding transaction to the pool: {:?}", e);
 						TransactionImport::Bad
-					}
+					},
 					Err(e) => {
-						debug!("Error converting pool error: {:?}", e);
-						// it is not bad at least, just some internal node logic error, so peer is innocent.
+						debug!("Error converting pool error: {}", e);
+						// it is not bad at least, just some internal node logic error, so peer is
+						// innocent.
 						TransactionImport::KnownGood
-					}
-				}
+					},
+				},
 			}
 		})
 	}
@@ -527,22 +469,69 @@ where
 	}
 
 	fn transaction(&self, hash: &H) -> Option<B::Extrinsic> {
-		self.pool.ready_transaction(hash)
-			.and_then(
-				// Only propagable transactions should be resolved for network service.
-				|tx| if tx.is_propagable() { Some(tx.data().clone()) } else { None }
-			)
+		self.pool.ready_transaction(hash).and_then(
+			// Only propagable transactions should be resolved for network service.
+			|tx| if tx.is_propagable() { Some(tx.data().clone()) } else { None },
+		)
 	}
+}
+
+fn legacy_cli_parsing(config: &Configuration) -> (Option<usize>, Option<usize>, Option<usize>) {
+	let ws_max_response_size = match (
+		config.ws_max_out_buffer_capacity,
+		config.rpc_max_response_size,
+	) {
+		(Some(legacy_max), max) => {
+			eprintln!("DEPRECATED: `--ws_max_out_buffer_capacity` has been removed; use `rpc-max-response-size or rpc-max-request-size` instead");
+			eprintln!("Setting WS `rpc-max-response-size` to `max(ws_max_out_buffer_capacity, rpc_max_response_size)`");
+			Some(std::cmp::max(legacy_max, max.unwrap_or(0)))
+		},
+		(None, Some(m)) => Some(m),
+		(None, None) => None,
+	};
+
+	let max_request_size = match (config.rpc_max_payload, config.rpc_max_request_size) {
+		(Some(legacy_max), max) => {
+			eprintln!("DEPRECATED: `--rpc_max_payload` has been removed use `rpc-max-response-size or rpc-max-request-size` instead");
+			eprintln!(
+				"Setting `rpc-max-response-size` to `max(rpc_max_payload, rpc_max_request_size)`"
+			);
+			Some(std::cmp::max(legacy_max, max.unwrap_or(0)))
+		},
+		(None, Some(max)) => Some(max),
+		(None, None) => None,
+	};
+
+	let http_max_response_size = match (config.rpc_max_payload, config.rpc_max_response_size) {
+		(Some(legacy_max), max) => {
+			eprintln!("DEPRECATED: `--rpc_max_payload` has been removed use `rpc-max-response-size or rpc-max-request-size` instead");
+			eprintln!(
+				"Setting HTTP `rpc-max-response-size` to `max(rpc_max_payload, rpc_max_response_size)`"
+			);
+			Some(std::cmp::max(legacy_max, max.unwrap_or(0)))
+		},
+		(None, Some(max)) => Some(max),
+		(None, None) => None,
+	};
+
+	if config.rpc_ipc.is_some() {
+		eprintln!("DEPRECATED: `--ipc-path` has no effect anymore IPC support has been removed");
+	}
+
+	(max_request_size, ws_max_response_size, http_max_response_size)
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use futures::executor::block_on;
+	use sc_transaction_pool::BasicPool;
 	use sp_consensus::SelectChain;
 	use sp_runtime::traits::BlindCheckable;
-	use substrate_test_runtime_client::{prelude::*, runtime::{Extrinsic, Transfer}};
-	use sc_transaction_pool::BasicPool;
+	use substrate_test_runtime_client::{
+		prelude::*,
+		runtime::{Extrinsic, Transfer},
+	};
 
 	#[test]
 	fn should_not_propagate_transactions_that_are_marked_as_such() {
@@ -550,27 +539,25 @@ mod tests {
 		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
 		let client = Arc::new(client);
 		let spawner = sp_core::testing::TaskExecutor::new();
-		let pool = BasicPool::new_full(
-			Default::default(),
-			true.into(),
-			None,
-			spawner,
-			client.clone(),
-		);
+		let pool =
+			BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
 		let source = sp_runtime::transaction_validity::TransactionSource::External;
-		let best = longest_chain.best_chain().unwrap();
+		let best = block_on(longest_chain.best_chain()).unwrap();
 		let transaction = Transfer {
 			amount: 5,
 			nonce: 0,
 			from: AccountKeyring::Alice.into(),
-			to: Default::default(),
-		}.into_signed_tx();
+			to: AccountKeyring::Bob.into(),
+		}
+		.into_signed_tx();
+		block_on(pool.submit_one(&BlockId::hash(best.hash()), source, transaction.clone()))
+			.unwrap();
 		block_on(pool.submit_one(
-			&BlockId::hash(best.hash()), source, transaction.clone()),
-		).unwrap();
-		block_on(pool.submit_one(
-			&BlockId::hash(best.hash()), source, Extrinsic::IncludeData(vec![1])),
-		).unwrap();
+			&BlockId::hash(best.hash()),
+			source,
+			Extrinsic::IncludeData(vec![1]),
+		))
+		.unwrap();
 		assert_eq!(pool.status().ready, 2);
 
 		// when

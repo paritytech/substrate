@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,24 +17,19 @@
 
 //! Client extension for tests.
 
-use sc_service::client::Client;
-use sc_client_api::backend::Finalizer;
-use sc_client_api::client::BlockBackend;
-use sp_consensus::{
-	BlockImportParams, BlockImport, BlockOrigin, Error as ConsensusError,
-	ForkChoiceStrategy,
-};
-use sp_runtime::{Justification, Justifications};
-use sp_runtime::traits::{Block as BlockT};
-use sp_runtime::generic::BlockId;
 use codec::alloc::collections::hash_map::HashMap;
+use sc_client_api::{backend::Finalizer, client::BlockBackend};
+use sc_consensus::{BlockImport, BlockImportParams, ForkChoiceStrategy};
+use sc_service::client::Client;
+use sp_consensus::{BlockOrigin, Error as ConsensusError};
+use sp_runtime::{traits::Block as BlockT, Justification, Justifications};
 
 /// Extension trait for a test client.
 pub trait ClientExt<Block: BlockT>: Sized {
 	/// Finalize a block.
 	fn finalize_block(
 		&self,
-		id: BlockId<Block>,
+		hash: Block::Hash,
 		justification: Option<Justification>,
 	) -> sp_blockchain::Result<()>;
 
@@ -49,11 +44,18 @@ pub trait ClientBlockImportExt<Block: BlockT>: Sized {
 	async fn import(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError>;
 
 	/// Import a block and make it our best block if possible.
-	async fn import_as_best(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError>;
+	async fn import_as_best(
+		&mut self,
+		origin: BlockOrigin,
+		block: Block,
+	) -> Result<(), ConsensusError>;
 
 	/// Import a block and finalize it.
-	async fn import_as_final(&mut self, origin: BlockOrigin, block: Block)
-		-> Result<(), ConsensusError>;
+	async fn import_as_final(
+		&mut self,
+		origin: BlockOrigin,
+		block: Block,
+	) -> Result<(), ConsensusError>;
 
 	/// Import block with justification(s), finalizes block.
 	async fn import_justified(
@@ -65,18 +67,18 @@ pub trait ClientBlockImportExt<Block: BlockT>: Sized {
 }
 
 impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
-	where
-		B: sc_client_api::backend::Backend<Block>,
-		E: sc_client_api::CallExecutor<Block> + 'static,
-		Self: BlockImport<Block, Error = ConsensusError>,
-		Block: BlockT,
+where
+	B: sc_client_api::backend::Backend<Block>,
+	E: sc_client_api::CallExecutor<Block> + sc_executor::RuntimeVersionOf + 'static,
+	Self: BlockImport<Block, Error = ConsensusError>,
+	Block: BlockT,
 {
 	fn finalize_block(
 		&self,
-		id: BlockId<Block>,
+		hash: Block::Hash,
 		justification: Option<Justification>,
 	) -> sp_blockchain::Result<()> {
-		Finalizer::finalize_block(self, id, justification, true)
+		Finalizer::finalize_block(self, hash, justification, true)
 	}
 
 	fn genesis_hash(&self) -> <Block as BlockT>::Hash {
@@ -87,16 +89,12 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 /// This implementation is required, because of the weird api requirements around `BlockImport`.
 #[async_trait::async_trait]
 impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for std::sync::Arc<T>
-	where
-		for<'r> &'r T: BlockImport<Block, Error = ConsensusError, Transaction = Transaction>,
-		Transaction: Send + 'static,
-		T: Send + Sync,
+where
+	for<'r> &'r T: BlockImport<Block, Error = ConsensusError, Transaction = Transaction>,
+	Transaction: Send + 'static,
+	T: Send + Sync,
 {
-	async fn import(
-		&mut self,
-		origin: BlockOrigin,
-		block: Block,
-	) -> Result<(), ConsensusError> {
+	async fn import(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
 		let mut import = BlockImportParams::new(origin, header);
 		import.body = Some(extrinsics);
@@ -151,18 +149,14 @@ impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for std::sync::A
 
 #[async_trait::async_trait]
 impl<B, E, RA, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block, RA>
-	where
-		Self: BlockImport<Block, Error = ConsensusError>,
-		RA: Send,
-		B: Send + Sync,
-		E: Send,
-		<Self as BlockImport<Block>>::Transaction: Send,
+where
+	Self: BlockImport<Block, Error = ConsensusError>,
+	RA: Send,
+	B: Send + Sync,
+	E: Send,
+	<Self as BlockImport<Block>>::Transaction: Send,
 {
-	async fn import(
-		&mut self,
-		origin: BlockOrigin,
-		block: Block,
-	) -> Result<(), ConsensusError> {
+	async fn import(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
 		let mut import = BlockImportParams::new(origin, header);
 		import.body = Some(extrinsics);

@@ -1,0 +1,46 @@
+error: `Pallet` does not have the std feature enabled, this will cause the `test_pallet::GenesisConfig` type to be undefined.
+  --> tests/construct_runtime_ui/no_std_genesis_config.rs:40:1
+   |
+40 | / construct_runtime! {
+41 | |     pub enum Runtime where
+42 | |         Block = Block,
+43 | |         NodeBlock = Block,
+...  |
+48 | |     }
+49 | | }
+   | |_^
+   |
+   = note: this error originates in the macro `test_pallet::__substrate_genesis_config_check::is_std_enabled_for_genesis` which comes from the expansion of the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0412]: cannot find type `GenesisConfig` in crate `test_pallet`
+  --> tests/construct_runtime_ui/no_std_genesis_config.rs:40:1
+   |
+40 | / construct_runtime! {
+41 | |     pub enum Runtime where
+42 | |         Block = Block,
+43 | |         NodeBlock = Block,
+...  |
+48 | |     }
+49 | | }
+   | |_^ not found in `test_pallet`
+   |
+   = note: this error originates in the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider importing this struct
+   |
+1  | use frame_system::GenesisConfig;
+   |
+
+error[E0283]: type annotations needed
+  --> tests/construct_runtime_ui/no_std_genesis_config.rs:40:1
+   |
+40 | / construct_runtime! {
+41 | |     pub enum Runtime where
+42 | |         Block = Block,
+43 | |         NodeBlock = Block,
+...  |
+48 | |     }
+49 | | }
+   | |_^ cannot infer type
+   |
+   = note: cannot satisfy `_: std::default::Default`
+   = note: this error originates in the derive macro `Default` (in Nightly builds, run with -Z macro-backtrace for more info)

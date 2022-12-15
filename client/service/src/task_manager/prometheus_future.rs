@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -20,20 +20,20 @@
 
 use futures::prelude::*;
 use prometheus_endpoint::{Counter, Histogram, U64};
-use std::{fmt, pin::Pin, task::{Context, Poll}};
+use std::{
+	fmt,
+	pin::Pin,
+	task::{Context, Poll},
+};
 
 /// Wraps around a `Future`. Report the polling duration to the `Histogram` and when the polling
 /// starts to the `Counter`.
 pub fn with_poll_durations<T>(
 	poll_duration: Histogram,
 	poll_start: Counter<U64>,
-	inner: T
+	inner: T,
 ) -> PrometheusFuture<T> {
-	PrometheusFuture {
-		inner,
-		poll_duration,
-		poll_start,
-	}
+	PrometheusFuture { inner, poll_duration, poll_start }
 }
 
 /// Wraps around `Future` and adds diagnostics to it.

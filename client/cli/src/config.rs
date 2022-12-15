@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,30 +18,29 @@
 
 //! Configuration trait for a CLI based on substrate
 
-use crate::arg_enums::Database;
-use crate::error::Result;
 use crate::{
-	DatabaseParams, ImportParams, KeystoreParams, NetworkParams, NodeKeyParams,
-	OffchainWorkerParams, PruningParams, SharedParams, SubstrateCli,
+	arg_enums::Database, error::Result, DatabaseParams, ImportParams, KeystoreParams,
+	NetworkParams, NodeKeyParams, OffchainWorkerParams, PruningParams, SharedParams, SubstrateCli,
 };
 use log::warn;
 use names::{Generator, Name};
 use sc_client_api::execution_extensions::ExecutionStrategies;
-use sc_service::config::{
-	BasePath, Configuration, DatabaseConfig, ExtTransport, KeystoreConfig, NetworkConfiguration,
-	NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods,
-	TaskExecutor, TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
+use sc_service::{
+	config::{
+		BasePath, Configuration, DatabaseSource, KeystoreConfig, NetworkConfiguration,
+		NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods,
+		TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
+	},
+	BlocksPruning, ChainSpec, TracingReceiver,
 };
-use sc_service::{ChainSpec, TracingReceiver, KeepBlocks, TransactionStorageMode};
 use sc_tracing::logging::LoggerBuilder;
-use std::net::SocketAddr;
-use std::path::PathBuf;
+use std::{net::SocketAddr, path::PathBuf};
 
 /// The maximum number of characters for a node name.
 pub(crate) const NODE_NAME_MAX_LENGTH: usize = 64;
 
 /// Default sub directory to store network config.
-pub(crate) const DEFAULT_NETWORK_CONFIG_PATH: &'static str = "network";
+pub(crate) const DEFAULT_NETWORK_CONFIG_PATH: &str = "network";
 
 /// The recommended open file descriptor limit to be configured for the process.
 const RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT: u64 = 10_000;
@@ -126,7 +125,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	///
 	/// By default this is retrieved from `SharedParams`.
 	fn base_path(&self) -> Result<Option<BasePath>> {
-		Ok(self.shared_params().base_path())
+		self.shared_params().base_path()
 	}
 
 	/// Returns `true` if the node is for development or not
@@ -146,7 +145,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// Get the transaction pool options
 	///
 	/// By default this is `TransactionPoolOptions::default()`.
-	fn transaction_pool(&self) -> Result<TransactionPoolOptions> {
+	fn transaction_pool(&self, _is_dev: bool) -> Result<TransactionPoolOptions> {
 		Ok(Default::default())
 	}
 
@@ -178,12 +177,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 				default_listen_port,
 			)
 		} else {
-			NetworkConfiguration::new(
-				node_name,
-				client_id,
-				node_key,
-				Some(net_config_dir),
-			)
+			NetworkConfiguration::new(node_name, client_id, node_key, Some(net_config_dir))
 		})
 	}
 
@@ -201,16 +195,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	///
 	/// By default this is retrieved from `DatabaseParams` if it is available. Otherwise its `None`.
 	fn database_cache_size(&self) -> Result<Option<usize>> {
-		Ok(self.database_params()
-			.map(|x| x.database_cache_size())
-			.unwrap_or_default())
-	}
-
-	/// Get the database transaction storage scheme.
-	fn database_transaction_storage(&self) -> Result<TransactionStorageMode> {
-		Ok(self.database_params()
-			.map(|x| x.transaction_storage())
-			.unwrap_or(TransactionStorageMode::BlockBody))
+		Ok(self.database_params().map(|x| x.database_cache_size()).unwrap_or_default())
 	}
 
 	/// Get the database backend variant.
@@ -226,52 +211,51 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		base_path: &PathBuf,
 		cache_size: usize,
 		database: Database,
-	) -> Result<DatabaseConfig> {
+	) -> Result<DatabaseSource> {
+		let role_dir = "full";
+		let rocksdb_path = base_path.join("db").join(role_dir);
+		let paritydb_path = base_path.join("paritydb").join(role_dir);
 		Ok(match database {
-			Database::RocksDb => DatabaseConfig::RocksDb {
-				path: base_path.join("db"),
-				cache_size,
+			#[cfg(feature = "rocksdb")]
+			Database::RocksDb => DatabaseSource::RocksDb { path: rocksdb_path, cache_size },
+			Database::ParityDb => DatabaseSource::ParityDb { path: paritydb_path },
+			Database::ParityDbDeprecated => {
+				eprintln!(
+					"WARNING: \"paritydb-experimental\" database setting is deprecated and will be removed in future releases. \
+				Please update your setup to use the new value: \"paritydb\"."
+				);
+				DatabaseSource::ParityDb { path: paritydb_path }
 			},
-			Database::ParityDb => DatabaseConfig::ParityDb {
-				path: base_path.join("paritydb"),
-			},
+			Database::Auto => DatabaseSource::Auto { paritydb_path, rocksdb_path, cache_size },
 		})
 	}
 
-	/// Get the state cache size.
+	/// Get the trie cache maximum size.
 	///
 	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its `0`.
-	fn state_cache_size(&self) -> Result<usize> {
-		Ok(self.import_params()
-			.map(|x| x.state_cache_size())
-			.unwrap_or_default())
-	}
-
-	/// Get the state cache child ratio (if any).
-	///
-	/// By default this is `None`.
-	fn state_cache_child_ratio(&self) -> Result<Option<usize>> {
-		Ok(Default::default())
+	/// If `None` is returned the trie cache is disabled.
+	fn trie_cache_maximum_size(&self) -> Result<Option<usize>> {
+		Ok(self.import_params().map(|x| x.trie_cache_maximum_size()).unwrap_or_default())
 	}
 
 	/// Get the state pruning mode.
 	///
 	/// By default this is retrieved from `PruningMode` if it is available. Otherwise its
 	/// `PruningMode::default()`.
-	fn state_pruning(&self, unsafe_pruning: bool, role: &Role) -> Result<PruningMode> {
+	fn state_pruning(&self) -> Result<Option<PruningMode>> {
 		self.pruning_params()
-			.map(|x| x.state_pruning(unsafe_pruning, role))
+			.map(|x| x.state_pruning())
 			.unwrap_or_else(|| Ok(Default::default()))
 	}
 
 	/// Get the block pruning mode.
 	///
 	/// By default this is retrieved from `block_pruning` if it is available. Otherwise its
-	/// `KeepBlocks::All`.
-	fn keep_blocks(&self) -> Result<KeepBlocks> {
+	/// `BlocksPruning::KeepFinalized`.
+	fn blocks_pruning(&self) -> Result<BlocksPruning> {
 		self.pruning_params()
-			.map(|x| x.keep_blocks())
-			.unwrap_or_else(|| Ok(KeepBlocks::All))
+			.map(|x| x.blocks_pruning())
+			.unwrap_or_else(|| Ok(BlocksPruning::KeepFinalized))
 	}
 
 	/// Get the chain ID (string).
@@ -293,18 +277,14 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its
 	/// `WasmExecutionMethod::default()`.
 	fn wasm_method(&self) -> Result<WasmExecutionMethod> {
-		Ok(self.import_params()
-			.map(|x| x.wasm_method())
-			.unwrap_or_default())
+		Ok(self.import_params().map(|x| x.wasm_method()).unwrap_or_default())
 	}
 
 	/// Get the path where WASM overrides live.
 	///
 	/// By default this is `None`.
 	fn wasm_runtime_overrides(&self) -> Option<PathBuf> {
-		self.import_params()
-			.map(|x| x.wasm_runtime_overrides())
-			.unwrap_or_default()
+		self.import_params().map(|x| x.wasm_runtime_overrides()).unwrap_or_default()
 	}
 
 	/// Get the execution strategies.
@@ -365,10 +345,39 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(Some(Vec::new()))
 	}
 
+	/// Get maximum RPC payload.
+	fn rpc_max_payload(&self) -> Result<Option<usize>> {
+		Ok(None)
+	}
+
+	/// Get maximum RPC request payload size.
+	fn rpc_max_request_size(&self) -> Result<Option<usize>> {
+		Ok(None)
+	}
+
+	/// Get maximum RPC response payload size.
+	fn rpc_max_response_size(&self) -> Result<Option<usize>> {
+		Ok(None)
+	}
+
+	/// Get maximum number of subscriptions per connection.
+	fn rpc_max_subscriptions_per_connection(&self) -> Result<Option<usize>> {
+		Ok(None)
+	}
+
+	/// Get maximum WS output buffer capacity.
+	fn ws_max_out_buffer_capacity(&self) -> Result<Option<usize>> {
+		Ok(None)
+	}
+
 	/// Get the prometheus configuration (`None` if disabled)
 	///
 	/// By default this is `None`.
-	fn prometheus_config(&self, _default_listen_port: u16) -> Result<Option<PrometheusConfig>> {
+	fn prometheus_config(
+		&self,
+		_default_listen_port: u16,
+		_chain_spec: &Box<dyn ChainSpec>,
+	) -> Result<Option<PrometheusConfig>> {
 		Ok(None)
 	}
 
@@ -380,13 +389,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		chain_spec: &Box<dyn ChainSpec>,
 	) -> Result<Option<TelemetryEndpoints>> {
 		Ok(chain_spec.telemetry_endpoints().clone())
-	}
-
-	/// Get the telemetry external transport
-	///
-	/// By default this is `None`.
-	fn telemetry_external_transport(&self) -> Result<Option<ExtTransport>> {
-		Ok(None)
 	}
 
 	/// Get the default value for heap pages
@@ -459,6 +461,13 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(Default::default())
 	}
 
+	/// Get maximum different runtimes in cache
+	///
+	/// By default this is `2`.
+	fn runtime_cache_size(&self) -> Result<u8> {
+		Ok(2)
+	}
+
 	/// Activate or not the automatic announcing of blocks after import
 	///
 	/// By default this is `false`.
@@ -470,7 +479,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	fn create_configuration<C: SubstrateCli>(
 		&self,
 		cli: &C,
-		task_executor: TaskExecutor,
+		tokio_handle: tokio::runtime::Handle,
 	) -> Result<Configuration> {
 		let is_dev = self.is_dev()?;
 		let chain_id = self.chain_id(is_dev)?;
@@ -481,25 +490,30 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let config_dir = base_path.config_dir(chain_spec.id());
 		let net_config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
 		let client_id = C::client_id();
-		let database_cache_size = self.database_cache_size()?.unwrap_or(128);
-		let database = self.database()?.unwrap_or(Database::RocksDb);
+		let database_cache_size = self.database_cache_size()?.unwrap_or(1024);
+		let database = self.database()?.unwrap_or(
+			#[cfg(feature = "rocksdb")]
+			{
+				Database::RocksDb
+			},
+			#[cfg(not(feature = "rocksdb"))]
+			{
+				Database::ParityDb
+			},
+		);
 		let node_key = self.node_key(&net_config_dir)?;
 		let role = self.role(is_dev)?;
 		let max_runtime_instances = self.max_runtime_instances()?.unwrap_or(8);
 		let is_validator = role.is_authority();
 		let (keystore_remote, keystore) = self.keystore_config(&config_dir)?;
 		let telemetry_endpoints = self.telemetry_endpoints(&chain_spec)?;
-
-		let unsafe_pruning = self
-			.import_params()
-			.map(|p| p.unsafe_pruning)
-			.unwrap_or(false);
+		let runtime_cache_size = self.runtime_cache_size()?;
 
 		Ok(Configuration {
 			impl_name: C::impl_name(),
 			impl_version: C::impl_version(),
-			task_executor,
-			transaction_pool: self.transaction_pool()?,
+			tokio_handle,
+			transaction_pool: self.transaction_pool(is_dev)?,
 			network: self.network_config(
 				&chain_spec,
 				is_dev,
@@ -513,11 +527,9 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			keystore_remote,
 			keystore,
 			database: self.database_config(&config_dir, database_cache_size, database)?,
-			state_cache_size: self.state_cache_size()?,
-			state_cache_child_ratio: self.state_cache_child_ratio()?,
-			state_pruning: self.state_pruning(unsafe_pruning, &role)?,
-			keep_blocks: self.keep_blocks()?,
-			transaction_storage: self.database_transaction_storage()?,
+			trie_cache_maximum_size: self.trie_cache_maximum_size()?,
+			state_pruning: self.state_pruning()?,
+			blocks_pruning: self.blocks_pruning()?,
 			wasm_method: self.wasm_method()?,
 			wasm_runtime_overrides: self.wasm_runtime_overrides(),
 			execution_strategies: self.execution_strategies(is_dev, is_validator)?,
@@ -527,9 +539,15 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			rpc_methods: self.rpc_methods()?,
 			rpc_ws_max_connections: self.rpc_ws_max_connections()?,
 			rpc_cors: self.rpc_cors(is_dev)?,
-			prometheus_config: self.prometheus_config(DCV::prometheus_listen_port())?,
+			rpc_max_payload: self.rpc_max_payload()?,
+			rpc_max_request_size: self.rpc_max_request_size()?,
+			rpc_max_response_size: self.rpc_max_response_size()?,
+			rpc_id_provider: None,
+			rpc_max_subs_per_conn: self.rpc_max_subscriptions_per_connection()?,
+			ws_max_out_buffer_capacity: self.ws_max_out_buffer_capacity()?,
+			prometheus_config: self
+				.prometheus_config(DCV::prometheus_listen_port(), &chain_spec)?,
 			telemetry_endpoints,
-			telemetry_external_transport: self.telemetry_external_transport()?,
 			default_heap_pages: self.default_heap_pages()?,
 			offchain_worker: self.offchain_worker(&role)?,
 			force_authoring: self.force_authoring()?,
@@ -537,13 +555,13 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			dev_key_seed: self.dev_key_seed(is_dev)?,
 			tracing_targets: self.tracing_targets()?,
 			tracing_receiver: self.tracing_receiver()?,
-			disable_log_reloading: self.is_log_filter_reloading_disabled()?,
 			chain_spec,
 			max_runtime_instances,
 			announce_block: self.announce_block()?,
 			role,
 			base_path: Some(base_path),
 			informant_output_format: Default::default(),
+			runtime_cache_size,
 		})
 	}
 
@@ -557,9 +575,14 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(self.shared_params().log_filters().join(","))
 	}
 
-	/// Is log reloading disabled (enabled by default)
-	fn is_log_filter_reloading_disabled(&self) -> Result<bool> {
-		Ok(self.shared_params().is_log_filter_reloading_disabled())
+	/// Should the detailed log output be enabled.
+	fn detailed_log_output(&self) -> Result<bool> {
+		Ok(self.shared_params().detailed_log_output())
+	}
+
+	/// Is log reloading enabled?
+	fn enable_log_reloading(&self) -> Result<bool> {
+		Ok(self.shared_params().enable_log_reloading())
 	}
 
 	/// Should the log color output be disabled?
@@ -572,13 +595,45 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// This method:
 	///
 	/// 1. Sets the panic handler
+	/// 2. Optionally customize logger/profiling
 	/// 2. Initializes the logger
 	/// 3. Raises the FD limit
-	fn init<C: SubstrateCli>(&self) -> Result<()> {
-		sp_panic_handler::set(&C::support_url(), &C::impl_version());
+	///
+	/// The `logger_hook` closure is executed before the logger is constructed
+	/// and initialized. It is useful for setting up a custom profiler.
+	///
+	/// Example:
+	/// ```
+	/// use sc_tracing::{SpanDatum, TraceEvent};
+	/// struct TestProfiler;
+	///
+	/// impl sc_tracing::TraceHandler for TestProfiler {
+	///  	fn handle_span(&self, sd: &SpanDatum) {}
+	/// 		fn handle_event(&self, _event: &TraceEvent) {}
+	/// };
+	///
+	/// fn logger_hook() -> impl FnOnce(&mut sc_cli::LoggerBuilder, &sc_service::Configuration) -> () {
+	/// 	|logger_builder, config| {
+	/// 			logger_builder.with_custom_profiling(Box::new(TestProfiler{}));
+	/// 	}
+	/// }
+	/// ```
+	fn init<F>(
+		&self,
+		support_url: &String,
+		impl_version: &String,
+		logger_hook: F,
+		config: &Configuration,
+	) -> Result<()>
+	where
+		F: FnOnce(&mut LoggerBuilder, &Configuration),
+	{
+		sp_panic_handler::set(support_url, impl_version);
 
 		let mut logger = LoggerBuilder::new(self.log_filters()?);
-		logger.with_log_reloading(!self.is_log_filter_reloading_disabled()?);
+		logger
+			.with_log_reloading(self.enable_log_reloading()?)
+			.with_detailed_output(self.detailed_log_output()?);
 
 		if let Some(tracing_targets) = self.tracing_targets()? {
 			let tracing_receiver = self.tracing_receiver()?;
@@ -588,6 +643,9 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		if self.disable_log_color()? {
 			logger.with_colors(false);
 		}
+
+		// Call hook for custom profiling setup.
+		logger_hook(&mut logger, config);
 
 		logger.init()?;
 
@@ -614,7 +672,7 @@ pub fn generate_node_name() -> String {
 		let count = node_name.chars().count();
 
 		if count < NODE_NAME_MAX_LENGTH {
-			return node_name;
+			return node_name
 		}
 	}
 }

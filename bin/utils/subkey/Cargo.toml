@@ -1,12 +1,13 @@
 [package]
 name = "subkey"
-version = "2.0.1"
+version = "2.0.2"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 readme = "README.md"
+publish = false
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -16,5 +17,5 @@ path = "src/main.rs"
 name = "subkey"
 
 [dependencies]
-sc-cli = { version = "0.9.0", path = "../../../client/cli" }
-structopt = "0.3.14"
+clap = { version = "4.0.9", features = ["derive"] }
+sc-cli = { version = "0.10.0-dev", path = "../../../client/cli" }

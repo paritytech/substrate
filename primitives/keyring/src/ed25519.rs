@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,11 +17,14 @@
 
 //! Support code for the runtime. A set of test accounts.
 
-use std::{collections::HashMap, ops::Deref};
 use lazy_static::lazy_static;
-use sp_core::{ed25519::{Pair, Public, Signature}, Pair as PairT, Public as PublicT, H256};
 pub use sp_core::ed25519;
+use sp_core::{
+	ed25519::{Pair, Public, Signature},
+	ByteArray, Pair as PairT, H256,
+};
 use sp_runtime::AccountId32;
+use std::{collections::HashMap, ops::Deref};
 
 /// Set of test accounts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumIter)]
@@ -79,7 +82,7 @@ impl Keyring {
 	}
 
 	/// Returns an iterator over all test accounts.
-	pub fn iter() -> impl Iterator<Item=Keyring> {
+	pub fn iter() -> impl Iterator<Item = Keyring> {
 		<Self as strum::IntoEnumIterator>::iter()
 	}
 
@@ -114,18 +117,15 @@ impl From<Keyring> for sp_runtime::MultiSigner {
 }
 
 lazy_static! {
-	static ref PRIVATE_KEYS: HashMap<Keyring, Pair> = {
-		Keyring::iter().map(|i| (i, i.pair())).collect()
-	};
-
-	static ref PUBLIC_KEYS: HashMap<Keyring, Public> = {
-		PRIVATE_KEYS.iter().map(|(&name, pair)| (name, pair.public())).collect()
-	};
+	static ref PRIVATE_KEYS: HashMap<Keyring, Pair> =
+		Keyring::iter().map(|i| (i, i.pair())).collect();
+	static ref PUBLIC_KEYS: HashMap<Keyring, Public> =
+		PRIVATE_KEYS.iter().map(|(&name, pair)| (name, pair.public())).collect();
 }
 
 impl From<Keyring> for Public {
 	fn from(k: Keyring) -> Self {
-		(*PUBLIC_KEYS).get(&k).unwrap().clone()
+		*(*PUBLIC_KEYS).get(&k).unwrap()
 	}
 }
 
@@ -185,26 +185,20 @@ mod tests {
 
 	#[test]
 	fn should_work() {
-		assert!(
-			Pair::verify(
-				&Keyring::Alice.sign(b"I am Alice!"),
-				b"I am Alice!",
-				&Keyring::Alice.public(),
-			)
-		);
-		assert!(
-			!Pair::verify(
-				&Keyring::Alice.sign(b"I am Alice!"),
-				b"I am Bob!",
-				&Keyring::Alice.public(),
-			)
-		);
-		assert!(
-			!Pair::verify(
-				&Keyring::Alice.sign(b"I am Alice!"),
-				b"I am Alice!",
-				&Keyring::Bob.public(),
-			)
-		);
+		assert!(Pair::verify(
+			&Keyring::Alice.sign(b"I am Alice!"),
+			b"I am Alice!",
+			&Keyring::Alice.public(),
+		));
+		assert!(!Pair::verify(
+			&Keyring::Alice.sign(b"I am Alice!"),
+			b"I am Bob!",
+			&Keyring::Alice.public(),
+		));
+		assert!(!Pair::verify(
+			&Keyring::Alice.sign(b"I am Alice!"),
+			b"I am Alice!",
+			&Keyring::Bob.public(),
+		));
 	}
 }

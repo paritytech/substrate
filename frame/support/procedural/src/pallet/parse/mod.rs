@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,24 +19,24 @@
 //!
 //! Parse the module into `Def` struct through `Def::try_from` function.
 
-pub mod config;
-pub mod pallet_struct;
-pub mod hooks;
 pub mod call;
+pub mod config;
 pub mod error;
-pub mod origin;
-pub mod inherent;
-pub mod storage;
 pub mod event;
-pub mod helper;
-pub mod genesis_config;
-pub mod genesis_build;
-pub mod validate_unsigned;
-pub mod type_value;
 pub mod extra_constants;
+pub mod genesis_build;
+pub mod genesis_config;
+pub mod helper;
+pub mod hooks;
+pub mod inherent;
+pub mod origin;
+pub mod pallet_struct;
+pub mod storage;
+pub mod type_value;
+pub mod validate_unsigned;
 
-use syn::spanned::Spanned;
 use frame_support_procedural_tools::generate_crate_access_2018;
+use syn::spanned::Spanned;
 
 /// Parsed definition of a pallet.
 pub struct Def {
@@ -59,19 +59,23 @@ pub struct Def {
 	pub type_values: Vec<type_value::TypeValueDef>,
 	pub frame_system: syn::Ident,
 	pub frame_support: syn::Ident,
+	pub dev_mode: bool,
 }
 
 impl Def {
-	pub fn try_from(mut item: syn::ItemMod) -> syn::Result<Self> {
+	pub fn try_from(mut item: syn::ItemMod, dev_mode: bool) -> syn::Result<Self> {
 		let frame_system = generate_crate_access_2018("frame-system")?;
 		let frame_support = generate_crate_access_2018("frame-support")?;
 
 		let item_span = item.span();
-		let items = &mut item.content.as_mut()
+		let items = &mut item
+			.content
+			.as_mut()
 			.ok_or_else(|| {
 				let msg = "Invalid pallet definition, expected mod to be inlined.";
 				syn::Error::new(item_span, msg)
-			})?.1;
+			})?
+			.1;
 
 		let mut config = None;
 		let mut pallet_struct = None;
@@ -102,11 +106,11 @@ impl Def {
 					let m = hooks::HooksDef::try_from(span, index, item)?;
 					hooks = Some(m);
 				},
-				Some(PalletAttr::Call(span)) if call.is_none() =>
-					call = Some(call::CallDef::try_from(span, index, item)?),
+				Some(PalletAttr::RuntimeCall(span)) if call.is_none() =>
+					call = Some(call::CallDef::try_from(span, index, item, dev_mode)?),
 				Some(PalletAttr::Error(span)) if error.is_none() =>
 					error = Some(error::ErrorDef::try_from(span, index, item)?),
-				Some(PalletAttr::Event(span)) if event.is_none() =>
+				Some(PalletAttr::RuntimeEvent(span)) if event.is_none() =>
 					event = Some(event::EventDef::try_from(span, index, item)?),
 				Some(PalletAttr::GenesisConfig(_)) if genesis_config.is_none() => {
 					let g = genesis_config::GenesisConfigDef::try_from(index, item)?;
@@ -116,25 +120,24 @@ impl Def {
 					let g = genesis_build::GenesisBuildDef::try_from(span, index, item)?;
 					genesis_build = Some(g);
 				},
-				Some(PalletAttr::Origin(_)) if origin.is_none() =>
+				Some(PalletAttr::RuntimeOrigin(_)) if origin.is_none() =>
 					origin = Some(origin::OriginDef::try_from(index, item)?),
 				Some(PalletAttr::Inherent(_)) if inherent.is_none() =>
 					inherent = Some(inherent::InherentDef::try_from(index, item)?),
 				Some(PalletAttr::Storage(span)) =>
-					storages.push(storage::StorageDef::try_from(span, index, item)?),
+					storages.push(storage::StorageDef::try_from(span, index, item, dev_mode)?),
 				Some(PalletAttr::ValidateUnsigned(_)) if validate_unsigned.is_none() => {
 					let v = validate_unsigned::ValidateUnsignedDef::try_from(index, item)?;
 					validate_unsigned = Some(v);
 				},
 				Some(PalletAttr::TypeValue(span)) =>
 					type_values.push(type_value::TypeValueDef::try_from(span, index, item)?),
-				Some(PalletAttr::ExtraConstants(_)) => {
+				Some(PalletAttr::ExtraConstants(_)) =>
 					extra_constants =
-						Some(extra_constants::ExtraConstantsDef::try_from(index, item)?)
-				},
+						Some(extra_constants::ExtraConstantsDef::try_from(index, item)?),
 				Some(attr) => {
 					let msg = "Invalid duplicated attribute";
-					return Err(syn::Error::new(attr.span(), msg));
+					return Err(syn::Error::new(attr.span(), msg))
 				},
 				None => (),
 			}
@@ -148,12 +151,13 @@ impl Def {
 				genesis_config.as_ref().map_or("unused", |_| "used"),
 				genesis_build.as_ref().map_or("unused", |_| "used"),
 			);
-			return Err(syn::Error::new(item_span, msg));
+			return Err(syn::Error::new(item_span, msg))
 		}
 
 		let def = Def {
 			item,
-			config: config.ok_or_else(|| syn::Error::new(item_span, "Missing `#[pallet::config]`"))?,
+			config: config
+				.ok_or_else(|| syn::Error::new(item_span, "Missing `#[pallet::config]`"))?,
 			pallet_struct: pallet_struct
 				.ok_or_else(|| syn::Error::new(item_span, "Missing `#[pallet::pallet]`"))?,
 			hooks,
@@ -170,6 +174,7 @@ impl Def {
 			type_values,
 			frame_system,
 			frame_support,
+			dev_mode,
 		};
 
 		def.check_instance_usage()?;
@@ -179,25 +184,22 @@ impl Def {
 	}
 
 	/// Check that usage of trait `Event` is consistent with the definition, i.e. it is declared
-	/// and trait defines type Event, or not declared and no trait associated type.
+	/// and trait defines type RuntimeEvent, or not declared and no trait associated type.
 	fn check_event_usage(&self) -> syn::Result<()> {
-		match (
-			self.config.has_event_type,
-			self.event.is_some(),
-		) {
+		match (self.config.has_event_type, self.event.is_some()) {
 			(true, false) => {
-				let msg = "Invalid usage of Event, `Config` contains associated type `Event`, \
+				let msg = "Invalid usage of RuntimeEvent, `Config` contains associated type `RuntimeEvent`, \
 					but enum `Event` is not declared (i.e. no use of `#[pallet::event]`). \
-					Note that type `Event` in trait is reserved to work alongside pallet event.";
+					Note that type `RuntimeEvent` in trait is reserved to work alongside pallet event.";
 				Err(syn::Error::new(proc_macro2::Span::call_site(), msg))
 			},
 			(false, true) => {
-				let msg = "Invalid usage of Event, `Config` contains no associated type \
-					`Event`, but enum `Event` is declared (in use of `#[pallet::event]`). \
-					An Event associated type must be declare on trait `Config`.";
+				let msg = "Invalid usage of RuntimeEvent, `Config` contains no associated type \
+					`RuntimeEvent`, but enum `Event` is declared (in use of `#[pallet::event]`). \
+					An RuntimeEvent associated type must be declare on trait `Config`.";
 				Err(syn::Error::new(proc_macro2::Span::call_site(), msg))
 			},
-			_ => Ok(())
+			_ => Ok(()),
 		}
 	}
 
@@ -235,19 +237,18 @@ impl Def {
 			instances.extend_from_slice(&extra_constants.instances[..]);
 		}
 
-		let mut errors = instances.into_iter()
-			.filter_map(|instances| {
-				if instances.has_instance == self.config.has_instance {
-					return None
-				}
-				let msg = if self.config.has_instance {
-					"Invalid generic declaration, trait is defined with instance but generic use none"
-				} else {
-					"Invalid generic declaration, trait is defined without instance but generic use \
+		let mut errors = instances.into_iter().filter_map(|instances| {
+			if instances.has_instance == self.config.has_instance {
+				return None
+			}
+			let msg = if self.config.has_instance {
+				"Invalid generic declaration, trait is defined with instance but generic use none"
+			} else {
+				"Invalid generic declaration, trait is defined without instance but generic use \
 						some"
-				};
-				Some(syn::Error::new(instances.span, msg))
-			});
+			};
+			Some(syn::Error::new(instances.span, msg))
+		});
 
 		if let Some(mut first_error) = errors.next() {
 			for error in errors {
@@ -351,7 +352,9 @@ impl GenericKind {
 		match self {
 			GenericKind::None => quote::quote!(),
 			GenericKind::Config => quote::quote_spanned!(span => T: Config),
-			GenericKind::ConfigAndInstance => quote::quote_spanned!(span => T: Config<I>, I: 'static),
+			GenericKind::ConfigAndInstance => {
+				quote::quote_spanned!(span => T: Config<I>, I: 'static)
+			},
 		}
 	}
 
@@ -390,10 +393,10 @@ enum PalletAttr {
 	Config(proc_macro2::Span),
 	Pallet(proc_macro2::Span),
 	Hooks(proc_macro2::Span),
-	Call(proc_macro2::Span),
+	RuntimeCall(proc_macro2::Span),
 	Error(proc_macro2::Span),
-	Event(proc_macro2::Span),
-	Origin(proc_macro2::Span),
+	RuntimeEvent(proc_macro2::Span),
+	RuntimeOrigin(proc_macro2::Span),
 	Inherent(proc_macro2::Span),
 	Storage(proc_macro2::Span),
 	GenesisConfig(proc_macro2::Span),
@@ -409,10 +412,10 @@ impl PalletAttr {
 			Self::Config(span) => *span,
 			Self::Pallet(span) => *span,
 			Self::Hooks(span) => *span,
-			Self::Call(span) => *span,
+			Self::RuntimeCall(span) => *span,
 			Self::Error(span) => *span,
-			Self::Event(span) => *span,
-			Self::Origin(span) => *span,
+			Self::RuntimeEvent(span) => *span,
+			Self::RuntimeOrigin(span) => *span,
 			Self::Inherent(span) => *span,
 			Self::Storage(span) => *span,
 			Self::GenesisConfig(span) => *span,
@@ -440,13 +443,13 @@ impl syn::parse::Parse for PalletAttr {
 		} else if lookahead.peek(keyword::hooks) {
 			Ok(PalletAttr::Hooks(content.parse::<keyword::hooks>()?.span()))
 		} else if lookahead.peek(keyword::call) {
-			Ok(PalletAttr::Call(content.parse::<keyword::call>()?.span()))
+			Ok(PalletAttr::RuntimeCall(content.parse::<keyword::call>()?.span()))
 		} else if lookahead.peek(keyword::error) {
 			Ok(PalletAttr::Error(content.parse::<keyword::error>()?.span()))
 		} else if lookahead.peek(keyword::event) {
-			Ok(PalletAttr::Event(content.parse::<keyword::event>()?.span()))
+			Ok(PalletAttr::RuntimeEvent(content.parse::<keyword::event>()?.span()))
 		} else if lookahead.peek(keyword::origin) {
-			Ok(PalletAttr::Origin(content.parse::<keyword::origin>()?.span()))
+			Ok(PalletAttr::RuntimeOrigin(content.parse::<keyword::origin>()?.span()))
 		} else if lookahead.peek(keyword::inherent) {
 			Ok(PalletAttr::Inherent(content.parse::<keyword::inherent>()?.span()))
 		} else if lookahead.peek(keyword::storage) {

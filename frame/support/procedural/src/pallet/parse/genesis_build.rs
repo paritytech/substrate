@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,8 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use syn::spanned::Spanned;
 use super::helper;
+use syn::spanned::Spanned;
 
 /// Definition for pallet genesis build implementation.
 pub struct GenesisBuildDef {
@@ -40,24 +40,21 @@ impl GenesisBuildDef {
 			item
 		} else {
 			let msg = "Invalid pallet::genesis_build, expected item impl";
-			return Err(syn::Error::new(item.span(), msg));
+			return Err(syn::Error::new(item.span(), msg))
 		};
 
-		let item_trait = &item.trait_.as_ref()
+		let item_trait = &item
+			.trait_
+			.as_ref()
 			.ok_or_else(|| {
 				let msg = "Invalid pallet::genesis_build, expected impl<..> GenesisBuild<..> \
 					for GenesisConfig<..>";
 				syn::Error::new(item.span(), msg)
-			})?.1;
+			})?
+			.1;
 
-		let mut instances = vec![];
-		instances.push(helper::check_genesis_builder_usage(&item_trait)?);
+		let instances = vec![helper::check_genesis_builder_usage(item_trait)?];
 
-		Ok(Self {
-			attr_span,
-			index,
-			instances,
-			where_clause: item.generics.where_clause.clone(),
-		})
+		Ok(Self { attr_span, index, instances, where_clause: item.generics.where_clause.clone() })
 	}
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,16 +21,16 @@ use super::*;
 use crate as pallet_society;
 
 use frame_support::{
-	parameter_types, ord_parameter_types,
-	traits::{OnInitialize, OnFinalize},
+	ord_parameter_types, parameter_types,
+	traits::{ConstU32, ConstU64},
 };
 use frame_support_test::TestRandomness;
+use frame_system::EnsureSignedBy;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
-use frame_system::EnsureSignedBy;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -48,19 +48,9 @@ frame_support::construct_runtime!(
 );
 
 parameter_types! {
-	pub const CandidateDeposit: u64 = 25;
-	pub const WrongSideDeduction: u64 = 2;
-	pub const MaxStrikes: u32 = 2;
-	pub const RotationPeriod: u64 = 4;
-	pub const PeriodSpend: u64 = 1000;
-	pub const MaxLockDuration: u64 = 100;
-	pub const ChallengePeriod: u64 = 8;
-	pub const BlockHashCount: u64 = 250;
-	pub const ExistentialDeposit: u64 = 1;
-	pub const MaxCandidateIntake: u32 = 10;
 	pub const SocietyPalletId: PalletId = PalletId(*b"py/socie");
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(1024);
+		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
 }
 
 ord_parameter_types! {
@@ -69,21 +59,21 @@ ord_parameter_types! {
 }
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = u128;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type RuntimeEvent = RuntimeEvent;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type OnNewAccount = ();
@@ -92,33 +82,36 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
 
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
 	type Balance = u64;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 }
 
 impl Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Currency = pallet_balances::Pallet<Self>;
 	type Randomness = TestRandomness<Self>;
-	type CandidateDeposit = CandidateDeposit;
-	type WrongSideDeduction = WrongSideDeduction;
-	type MaxStrikes = MaxStrikes;
-	type PeriodSpend = PeriodSpend;
+	type CandidateDeposit = ConstU64<25>;
+	type WrongSideDeduction = ConstU64<2>;
+	type MaxStrikes = ConstU32<2>;
+	type PeriodSpend = ConstU64<1000>;
 	type MembershipChanged = ();
-	type RotationPeriod = RotationPeriod;
-	type MaxLockDuration = MaxLockDuration;
+	type RotationPeriod = ConstU64<4>;
+	type MaxLockDuration = ConstU64<100>;
 	type FounderSetOrigin = EnsureSignedBy<FounderSetAccount, u128>;
 	type SuspensionJudgementOrigin = EnsureSignedBy<SuspensionJudgementSetAccount, u128>;
-	type ChallengePeriod = ChallengePeriod;
-	type MaxCandidateIntake = MaxCandidateIntake;
+	type ChallengePeriod = ConstU64<8>;
+	type MaxCandidateIntake = ConstU32<10>;
 	type PalletId = SocietyPalletId;
 }
 
@@ -154,14 +147,16 @@ impl EnvBuilder {
 	pub fn execute<R, F: FnOnce() -> R>(mut self, f: F) -> R {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		self.balances.push((Society::account_id(), self.balance.max(self.pot)));
-		pallet_balances::GenesisConfig::<Test> {
-			balances: self.balances,
-		}.assimilate_storage(&mut t).unwrap();
-		pallet_society::GenesisConfig::<Test>{
+		pallet_balances::GenesisConfig::<Test> { balances: self.balances }
+			.assimilate_storage(&mut t)
+			.unwrap();
+		pallet_society::GenesisConfig::<Test> {
 			members: self.members,
 			pot: self.pot,
 			max_members: self.max_members,
-		}.assimilate_storage(&mut t).unwrap();
+		}
+		.assimilate_storage(&mut t)
+		.unwrap();
 		let mut ext: sp_io::TestExternalities = t.into();
 		ext.execute_with(f)
 	}
@@ -208,12 +203,7 @@ pub fn run_to_block(n: u64) {
 pub fn create_bid<AccountId, Balance>(
 	value: Balance,
 	who: AccountId,
-	kind: BidKind<AccountId, Balance>
-) -> Bid<AccountId, Balance>
-{
-	Bid {
-		who,
-		kind,
-		value
-	}
+	kind: BidKind<AccountId, Balance>,
+) -> Bid<AccountId, Balance> {
+	Bid { who, kind, value }
 }

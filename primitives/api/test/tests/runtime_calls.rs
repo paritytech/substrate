@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,21 +15,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use sp_api::ProvideRuntimeApi;
+use sp_api::{Core, ProvideRuntimeApi};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{HashFor, Header as HeaderT},
+};
+use sp_state_machine::{
+	create_proof_check_backend, execution_proof_check_on_trie_backend, ExecutionStrategy,
+};
 use substrate_test_runtime_client::{
 	prelude::*,
+	runtime::{Block, Header, TestAPI, Transfer},
 	DefaultTestClientBuilderExt, TestClientBuilder,
-	runtime::{TestAPI, DecodeFails, Transfer, Block},
-};
-use sp_runtime::{generic::BlockId, traits::{Header as HeaderT, HashFor}};
-use sp_state_machine::{
-	ExecutionStrategy, create_proof_check_backend,
-	execution_proof_check_on_trie_backend,
 };
 
-use sp_consensus::SelectChain;
 use codec::Encode;
 use sc_block_builder::BlockBuilderProvider;
+use sp_consensus::SelectChain;
 
 fn calling_function_with_strat(strat: ExecutionStrategy) {
 	let client = TestClientBuilder::new().set_execution_strategy(strat).build();
@@ -50,26 +52,10 @@ fn calling_wasm_runtime_function() {
 }
 
 #[test]
-#[should_panic(expected = "FailedToConvertParameter { function: \"fail_convert_parameter\"")]
-fn calling_native_runtime_function_with_non_decodable_parameter() {
-	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::NativeWhenPossible).build();
-	let runtime_api = client.runtime_api();
-	let block_id = BlockId::Number(client.chain_info().best_number);
-	runtime_api.fail_convert_parameter(&block_id, DecodeFails::new()).unwrap();
-}
-
-#[test]
-#[should_panic(expected = "FailedToConvertReturnValue { function: \"fail_convert_return_value\"")]
-fn calling_native_runtime_function_with_non_decodable_return_value() {
-	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::NativeWhenPossible).build();
-	let runtime_api = client.runtime_api();
-	let block_id = BlockId::Number(client.chain_info().best_number);
-	runtime_api.fail_convert_return_value(&block_id).unwrap();
-}
-
-#[test]
 fn calling_native_runtime_signature_changed_function() {
-	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::NativeWhenPossible).build();
+	let client = TestClientBuilder::new()
+		.set_execution_strategy(ExecutionStrategy::NativeWhenPossible)
+		.build();
 	let runtime_api = client.runtime_api();
 	let block_id = BlockId::Number(client.chain_info().best_number);
 
@@ -78,7 +64,9 @@ fn calling_native_runtime_signature_changed_function() {
 
 #[test]
 fn calling_wasm_runtime_signature_changed_old_function() {
-	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
+	let client = TestClientBuilder::new()
+		.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
+		.build();
 	let runtime_api = client.runtime_api();
 	let block_id = BlockId::Number(client.chain_info().best_number);
 
@@ -103,10 +91,11 @@ fn calling_with_both_strategy_and_fail_on_native_should_work() {
 	assert_eq!(runtime_api.fail_on_native(&block_id).unwrap(), 1);
 }
 
-
 #[test]
 fn calling_with_native_else_wasm_and_fail_on_wasm_should_work() {
-	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::NativeElseWasm).build();
+	let client = TestClientBuilder::new()
+		.set_execution_strategy(ExecutionStrategy::NativeElseWasm)
+		.build();
 	let runtime_api = client.runtime_api();
 	let block_id = BlockId::Number(client.chain_info().best_number);
 	assert_eq!(runtime_api.fail_on_wasm(&block_id).unwrap(), 1);
@@ -114,7 +103,9 @@ fn calling_with_native_else_wasm_and_fail_on_wasm_should_work() {
 
 #[test]
 fn calling_with_native_else_wasm_and_fail_on_native_should_work() {
-	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::NativeElseWasm).build();
+	let client = TestClientBuilder::new()
+		.set_execution_strategy(ExecutionStrategy::NativeElseWasm)
+		.build();
 	let runtime_api = client.runtime_api();
 	let block_id = BlockId::Number(client.chain_info().best_number);
 	assert_eq!(runtime_api.fail_on_native(&block_id).unwrap(), 1);
@@ -122,7 +113,9 @@ fn calling_with_native_else_wasm_and_fail_on_native_should_work() {
 
 #[test]
 fn use_trie_function() {
-	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
+	let client = TestClientBuilder::new()
+		.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
+		.build();
 	let runtime_api = client.runtime_api();
 	let block_id = BlockId::Number(client.chain_info().best_number);
 	assert_eq!(runtime_api.use_trie(&block_id).unwrap(), 2);
@@ -133,24 +126,19 @@ fn initialize_block_works() {
 	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
 	let runtime_api = client.runtime_api();
 	let block_id = BlockId::Number(client.chain_info().best_number);
+	runtime_api
+		.initialize_block(
+			&block_id,
+			&Header::new(
+				1,
+				Default::default(),
+				Default::default(),
+				Default::default(),
+				Default::default(),
+			),
+		)
+		.unwrap();
 	assert_eq!(runtime_api.get_block_number(&block_id).unwrap(), 1);
-}
-
-#[test]
-fn initialize_block_is_called_only_once() {
-	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
-	let runtime_api = client.runtime_api();
-	let block_id = BlockId::Number(client.chain_info().best_number);
-	assert_eq!(runtime_api.take_block_number(&block_id).unwrap(), Some(1));
-	assert_eq!(runtime_api.take_block_number(&block_id).unwrap(), None);
-}
-
-#[test]
-fn initialize_block_is_skipped() {
-	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
-	let runtime_api = client.runtime_api();
-	let block_id = BlockId::Number(client.chain_info().best_number);
-	assert!(runtime_api.without_initialize_block(&block_id).unwrap());
 }
 
 #[test]
@@ -160,10 +148,13 @@ fn record_proof_works() {
 		.build_with_longest_chain();
 
 	let block_id = BlockId::Number(client.chain_info().best_number);
-	let storage_root = longest_chain.best_chain().unwrap().state_root().clone();
+	let storage_root =
+		*futures::executor::block_on(longest_chain.best_chain()).unwrap().state_root();
 
 	let runtime_code = sp_core::traits::RuntimeCode {
-		code_fetcher: &sp_core::traits::WrappedRuntimeCode(client.code_at(&block_id).unwrap().into()),
+		code_fetcher: &sp_core::traits::WrappedRuntimeCode(
+			client.code_at(&block_id).unwrap().into(),
+		),
 		hash: vec![1],
 		heap_pages: None,
 	};
@@ -172,8 +163,9 @@ fn record_proof_works() {
 		amount: 1000,
 		nonce: 0,
 		from: AccountKeyring::Alice.into(),
-		to: Default::default(),
-	}.into_signed_tx();
+		to: AccountKeyring::Bob.into(),
+	}
+	.into_signed_tx();
 
 	// Build the block and record proof
 	let mut builder = client
@@ -185,16 +177,18 @@ fn record_proof_works() {
 	let backend = create_proof_check_backend::<HashFor<Block>>(
 		storage_root,
 		proof.expect("Proof was generated"),
-	).expect("Creates proof backend.");
+	)
+	.expect("Creates proof backend.");
 
 	// Use the proof backend to execute `execute_block`.
 	let mut overlay = Default::default();
-	let executor = NativeExecutor::<LocalExecutor>::new(
+	let executor = NativeElseWasmExecutor::<LocalExecutorDispatch>::new(
 		WasmExecutionMethod::Interpreted,
 		None,
 		8,
+		2,
 	);
-	execution_proof_check_on_trie_backend::<_, u64, _, _>(
+	execution_proof_check_on_trie_backend(
 		&backend,
 		&mut overlay,
 		&executor,
@@ -202,7 +196,8 @@ fn record_proof_works() {
 		"Core_execute_block",
 		&block.encode(),
 		&runtime_code,
-	).expect("Executes block while using the proof backend");
+	)
+	.expect("Executes block while using the proof backend");
 }
 
 #[test]
@@ -211,7 +206,8 @@ fn call_runtime_api_with_multiple_arguments() {
 
 	let data = vec![1, 2, 4, 5, 6, 7, 8, 8, 10, 12];
 	let block_id = BlockId::Number(client.chain_info().best_number);
-	client.runtime_api()
+	client
+		.runtime_api()
 		.test_multiple_arguments(&block_id, data.clone(), data.clone(), data.len() as u32)
 		.unwrap();
 }
@@ -221,8 +217,8 @@ fn disable_logging_works() {
 	if std::env::var("RUN_TEST").is_ok() {
 		sp_tracing::try_init_simple();
 
-		let mut builder = TestClientBuilder::new()
-			.set_execution_strategy(ExecutionStrategy::AlwaysWasm);
+		let mut builder =
+			TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm);
 		builder.genesis_init_mut().set_wasm_code(
 			substrate_test_runtime_client::runtime::wasm_binary_logging_disabled_unwrap().to_vec(),
 		);

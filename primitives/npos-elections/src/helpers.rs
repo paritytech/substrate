@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,7 @@
 
 //! Helper methods for npos-elections.
 
-use crate::{Assignment, Error, IdentifierT, PerThing128, StakedAssignment, VoteWeight, WithApprovalOf};
+use crate::{Assignment, Error, IdentifierT, PerThing128, StakedAssignment, VoteWeight};
 use sp_arithmetic::PerThing;
 use sp_std::prelude::*;
 
@@ -49,12 +49,9 @@ where
 	for<'r> FS: Fn(&'r A) -> VoteWeight,
 {
 	let mut staked = assignment_ratio_to_staked(ratio, &stake_of);
-	staked
-		.iter_mut()
-		.map(|a| {
-			a.try_normalize(stake_of(&a.who).into()).map_err(|err| Error::ArithmeticError(err))
-		})
-		.collect::<Result<_, _>>()?;
+	staked.iter_mut().try_for_each(|a| {
+		a.try_normalize(stake_of(&a.who).into()).map_err(Error::ArithmeticError)
+	})?;
 	Ok(staked)
 }
 
@@ -73,14 +70,9 @@ pub fn assignment_staked_to_ratio_normalized<A: IdentifierT, P: PerThing128>(
 ) -> Result<Vec<Assignment<A, P>>, Error> {
 	let mut ratio = staked.into_iter().map(|a| a.into_assignment()).collect::<Vec<_>>();
 	for assignment in ratio.iter_mut() {
-		assignment.try_normalize().map_err(|err| Error::ArithmeticError(err))?;
+		assignment.try_normalize().map_err(Error::ArithmeticError)?;
 	}
 	Ok(ratio)
-}
-
-/// consumes a vector of winners with backing stake to just winners.
-pub fn to_without_backing<A: IdentifierT>(winners: Vec<WithApprovalOf<A>>) -> Vec<A> {
-	winners.into_iter().map(|(who, _)| who).collect::<Vec<A>>()
 }
 
 #[cfg(test)]
@@ -113,14 +105,8 @@ mod tests {
 		assert_eq!(
 			staked,
 			vec![
-				StakedAssignment {
-					who: 1u32,
-					distribution: vec![(10u32, 50), (20, 50),]
-				},
-				StakedAssignment {
-					who: 2u32,
-					distribution: vec![(10u32, 33), (20, 67),]
-				}
+				StakedAssignment { who: 1u32, distribution: vec![(10u32, 50), (20, 50),] },
+				StakedAssignment { who: 2u32, distribution: vec![(10u32, 33), (20, 67),] }
 			]
 		);
 	}

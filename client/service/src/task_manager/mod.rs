@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,84 +18,124 @@
 
 //! Substrate service tasks management module.
 
-use std::{panic, result::Result, pin::Pin};
+use crate::{config::TaskType, Error};
 use exit_future::Signal;
-use log::{debug, error};
 use futures::{
+	future::{pending, select, try_join_all, BoxFuture, Either},
 	Future, FutureExt, StreamExt,
-	future::{select, Either, BoxFuture, join_all, try_join_all, pending},
-	sink::SinkExt,
 };
 use prometheus_endpoint::{
-	exponential_buckets, register,
-	PrometheusError,
-	CounterVec, HistogramOpts, HistogramVec, Opts, Registry, U64
+	exponential_buckets, register, CounterVec, HistogramOpts, HistogramVec, Opts, PrometheusError,
+	Registry, U64,
 };
-use sp_utils::mpsc::{TracingUnboundedSender, TracingUnboundedReceiver, tracing_unbounded};
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+use std::{panic, pin::Pin, result::Result};
+use tokio::runtime::Handle;
 use tracing_futures::Instrument;
-use crate::{config::{TaskExecutor, TaskType, JoinFuture}, Error};
 
 mod prometheus_future;
 #[cfg(test)]
 mod tests;
 
+/// Default task group name.
+pub const DEFAULT_GROUP_NAME: &str = "default";
+
+/// The name of a group a task belongs to.
+///
+/// This name is passed belong-side the task name to the prometheus metrics and can be used
+/// to group tasks.
+pub enum GroupName {
+	/// Sets the group name to `default`.
+	Default,
+	/// Use the specifically given name as group name.
+	Specific(&'static str),
+}
+
+impl From<Option<&'static str>> for GroupName {
+	fn from(name: Option<&'static str>) -> Self {
+		match name {
+			Some(name) => Self::Specific(name),
+			None => Self::Default,
+		}
+	}
+}
+
+impl From<&'static str> for GroupName {
+	fn from(name: &'static str) -> Self {
+		Self::Specific(name)
+	}
+}
+
 /// An handle for spawning tasks in the service.
 #[derive(Clone)]
 pub struct SpawnTaskHandle {
 	on_exit: exit_future::Exit,
-	executor: TaskExecutor,
+	tokio_handle: Handle,
 	metrics: Option<Metrics>,
-	task_notifier: TracingUnboundedSender<JoinFuture>,
 }
 
 impl SpawnTaskHandle {
-	/// Spawns the given task with the given name.
+	/// Spawns the given task with the given name and a group name.
+	/// If group is not specified `DEFAULT_GROUP_NAME` will be used.
 	///
-	/// Note that the `name` is a `&'static str`. The reason for this choice is that statistics
-	/// about this task are getting reported to the Prometheus endpoint (if enabled), and that
-	/// therefore the set of possible task names must be bounded.
+	/// Note that the `name` is a `&'static str`. The reason for this choice is that
+	/// statistics about this task are getting reported to the Prometheus endpoint (if enabled), and
+	/// that therefore the set of possible task names must be bounded.
 	///
 	/// In other words, it would be a bad idea for someone to do for example
 	/// `spawn(format!("{:?}", some_public_key))`.
-	pub fn spawn(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
-		self.spawn_inner(name, task, TaskType::Async)
+	pub fn spawn(
+		&self,
+		name: &'static str,
+		group: impl Into<GroupName>,
+		task: impl Future<Output = ()> + Send + 'static,
+	) {
+		self.spawn_inner(name, group, task, TaskType::Async)
 	}
 
 	/// Spawns the blocking task with the given name. See also `spawn`.
-	pub fn spawn_blocking(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
-		self.spawn_inner(name, task, TaskType::Blocking)
+	pub fn spawn_blocking(
+		&self,
+		name: &'static str,
+		group: impl Into<GroupName>,
+		task: impl Future<Output = ()> + Send + 'static,
+	) {
+		self.spawn_inner(name, group, task, TaskType::Blocking)
 	}
 
 	/// Helper function that implements the spawning logic. See `spawn` and `spawn_blocking`.
 	fn spawn_inner(
 		&self,
 		name: &'static str,
+		group: impl Into<GroupName>,
 		task: impl Future<Output = ()> + Send + 'static,
 		task_type: TaskType,
 	) {
-		if self.task_notifier.is_closed() {
-			debug!("Attempt to spawn a new task has been prevented: {}", name);
-			return;
-		}
-
 		let on_exit = self.on_exit.clone();
 		let metrics = self.metrics.clone();
+
+		let group = match group.into() {
+			GroupName::Specific(var) => var,
+			// If no group is specified use default.
+			GroupName::Default => DEFAULT_GROUP_NAME,
+		};
 
 		// Note that we increase the started counter here and not within the future. This way,
 		// we could properly visualize on Prometheus situations where the spawning doesn't work.
 		if let Some(metrics) = &self.metrics {
-			metrics.tasks_spawned.with_label_values(&[name]).inc();
+			metrics.tasks_spawned.with_label_values(&[name, group]).inc();
 			// We do a dummy increase in order for the task to show up in metrics.
-			metrics.tasks_ended.with_label_values(&[name, "finished"]).inc_by(0);
+			metrics.tasks_ended.with_label_values(&[name, "finished", group]).inc_by(0);
 		}
 
 		let future = async move {
 			if let Some(metrics) = metrics {
 				// Add some wrappers around `task`.
 				let task = {
-					let poll_duration = metrics.poll_duration.with_label_values(&[name]);
-					let poll_start = metrics.poll_start.with_label_values(&[name]);
-					let inner = prometheus_future::with_poll_durations(poll_duration, poll_start, task);
+					let poll_duration = metrics.poll_duration.with_label_values(&[name, group]);
+					let poll_start = metrics.poll_start.with_label_values(&[name, group]);
+					let inner =
+						prometheus_future::with_poll_durations(poll_duration, poll_start, task);
 					// The logic of `AssertUnwindSafe` here is ok considering that we throw
 					// away the `Future` after it has panicked.
 					panic::AssertUnwindSafe(inner).catch_unwind()
@@ -104,45 +144,55 @@ impl SpawnTaskHandle {
 
 				match select(on_exit, task).await {
 					Either::Right((Err(payload), _)) => {
-						metrics.tasks_ended.with_label_values(&[name, "panic"]).inc();
+						metrics.tasks_ended.with_label_values(&[name, "panic", group]).inc();
 						panic::resume_unwind(payload)
-					}
+					},
 					Either::Right((Ok(()), _)) => {
-						metrics.tasks_ended.with_label_values(&[name, "finished"]).inc();
-					}
+						metrics.tasks_ended.with_label_values(&[name, "finished", group]).inc();
+					},
 					Either::Left(((), _)) => {
 						// The `on_exit` has triggered.
-						metrics.tasks_ended.with_label_values(&[name, "interrupted"]).inc();
-					}
+						metrics.tasks_ended.with_label_values(&[name, "interrupted", group]).inc();
+					},
 				}
-
 			} else {
 				futures::pin_mut!(task);
 				let _ = select(on_exit, task).await;
 			}
-		};
+		}
+		.in_current_span();
 
-		let join_handle = self.executor.spawn(future.in_current_span().boxed(), task_type);
-
-		let mut task_notifier = self.task_notifier.clone();
-		self.executor.spawn(
-			Box::pin(async move {
-				if let Err(err) = task_notifier.send(join_handle).await {
-					error!("Could not send spawned task handle to queue: {}", err);
-				}
-			}),
-			TaskType::Async,
-		);
+		match task_type {
+			TaskType::Async => {
+				self.tokio_handle.spawn(future);
+			},
+			TaskType::Blocking => {
+				let handle = self.tokio_handle.clone();
+				self.tokio_handle.spawn_blocking(move || {
+					handle.block_on(future);
+				});
+			},
+		}
 	}
 }
 
 impl sp_core::traits::SpawnNamed for SpawnTaskHandle {
-	fn spawn_blocking(&self, name: &'static str, future: BoxFuture<'static, ()>) {
-		self.spawn_blocking(name, future);
+	fn spawn_blocking(
+		&self,
+		name: &'static str,
+		group: Option<&'static str>,
+		future: BoxFuture<'static, ()>,
+	) {
+		self.spawn_inner(name, group, future, TaskType::Blocking)
 	}
 
-	fn spawn(&self, name: &'static str, future: BoxFuture<'static, ()>) {
-		self.spawn(name, future);
+	fn spawn(
+		&self,
+		name: &'static str,
+		group: Option<&'static str>,
+		future: BoxFuture<'static, ()>,
+	) {
+		self.spawn_inner(name, group, future, TaskType::Async)
 	}
 }
 
@@ -162,17 +212,19 @@ impl SpawnEssentialTaskHandle {
 		essential_failed_tx: TracingUnboundedSender<()>,
 		spawn_task_handle: SpawnTaskHandle,
 	) -> SpawnEssentialTaskHandle {
-		SpawnEssentialTaskHandle {
-			essential_failed_tx,
-			inner: spawn_task_handle,
-		}
+		SpawnEssentialTaskHandle { essential_failed_tx, inner: spawn_task_handle }
 	}
 
 	/// Spawns the given task with the given name.
 	///
 	/// See also [`SpawnTaskHandle::spawn`].
-	pub fn spawn(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
-		self.spawn_inner(name, task, TaskType::Async)
+	pub fn spawn(
+		&self,
+		name: &'static str,
+		group: impl Into<GroupName>,
+		task: impl Future<Output = ()> + Send + 'static,
+	) {
+		self.spawn_inner(name, group, task, TaskType::Async)
 	}
 
 	/// Spawns the blocking task with the given name.
@@ -181,36 +233,46 @@ impl SpawnEssentialTaskHandle {
 	pub fn spawn_blocking(
 		&self,
 		name: &'static str,
+		group: impl Into<GroupName>,
 		task: impl Future<Output = ()> + Send + 'static,
 	) {
-		self.spawn_inner(name, task, TaskType::Blocking)
+		self.spawn_inner(name, group, task, TaskType::Blocking)
 	}
 
 	fn spawn_inner(
 		&self,
 		name: &'static str,
+		group: impl Into<GroupName>,
 		task: impl Future<Output = ()> + Send + 'static,
 		task_type: TaskType,
 	) {
 		let essential_failed = self.essential_failed_tx.clone();
-		let essential_task = std::panic::AssertUnwindSafe(task)
-			.catch_unwind()
-			.map(move |_| {
-				log::error!("Essential task `{}` failed. Shutting down service.", name);
-				let _ = essential_failed.close_channel();
-			});
+		let essential_task = std::panic::AssertUnwindSafe(task).catch_unwind().map(move |_| {
+			log::error!("Essential task `{}` failed. Shutting down service.", name);
+			let _ = essential_failed.close_channel();
+		});
 
-		let _ = self.inner.spawn_inner(name, essential_task, task_type);
+		let _ = self.inner.spawn_inner(name, group, essential_task, task_type);
 	}
 }
 
 impl sp_core::traits::SpawnEssentialNamed for SpawnEssentialTaskHandle {
-	fn spawn_essential_blocking(&self, name: &'static str, future: BoxFuture<'static, ()>) {
-		self.spawn_blocking(name, future);
+	fn spawn_essential_blocking(
+		&self,
+		name: &'static str,
+		group: Option<&'static str>,
+		future: BoxFuture<'static, ()>,
+	) {
+		self.spawn_blocking(name, group, future);
 	}
 
-	fn spawn_essential(&self, name: &'static str, future: BoxFuture<'static, ()>) {
-		self.spawn(name, future);
+	fn spawn_essential(
+		&self,
+		name: &'static str,
+		group: Option<&'static str>,
+		future: BoxFuture<'static, ()>,
+	) {
+		self.spawn(name, group, future);
 	}
 }
 
@@ -219,10 +281,10 @@ pub struct TaskManager {
 	/// A future that resolves when the service has exited, this is useful to
 	/// make sure any internally spawned futures stop when the service does.
 	on_exit: exit_future::Exit,
-	/// A signal that makes the exit future above resolve, fired on service drop.
-	signal: Option<Signal>,
-	/// How to spawn background tasks.
-	executor: TaskExecutor,
+	/// A signal that makes the exit future above resolve, fired on drop.
+	_signal: Signal,
+	/// Tokio runtime handle that is used to spawn futures.
+	tokio_handle: Handle,
 	/// Prometheus metric where to report the polling times.
 	metrics: Option<Metrics>,
 	/// Send a signal when a spawned essential task has concluded. The next time
@@ -231,11 +293,7 @@ pub struct TaskManager {
 	/// A receiver for spawned essential-tasks concluding.
 	essential_failed_rx: TracingUnboundedReceiver<()>,
 	/// Things to keep alive until the task manager is dropped.
-	keep_alive: Box<dyn std::any::Any + Send + Sync>,
-	/// A sender to a stream of background tasks. This is used for the completion future.
-	task_notifier: TracingUnboundedSender<JoinFuture>,
-	/// This future will complete when all the tasks are joined and the stream is closed.
-	completion_future: JoinFuture,
+	keep_alive: Box<dyn std::any::Any + Send>,
 	/// A list of other `TaskManager`'s to terminate and gracefully shutdown when the parent
 	/// terminates and gracefully shutdown. Also ends the parent `future()` if a child's essential
 	/// task fails.
@@ -246,7 +304,7 @@ impl TaskManager {
 	/// If a Prometheus registry is passed, it will be used to report statistics about the
 	/// service tasks.
 	pub fn new(
-		executor: TaskExecutor,
+		tokio_handle: Handle,
 		prometheus_registry: Option<&Registry>,
 	) -> Result<Self, PrometheusError> {
 		let (signal, on_exit) = exit_future::signal();
@@ -256,25 +314,14 @@ impl TaskManager {
 
 		let metrics = prometheus_registry.map(Metrics::register).transpose()?;
 
-		let (task_notifier, background_tasks) = tracing_unbounded("mpsc_background_tasks");
-		// NOTE: for_each_concurrent will await on all the JoinHandle futures at the same time. It
-		// is possible to limit this but it's actually better for the memory foot print to await
-		// them all to not accumulate anything on that stream.
-		let completion_future = executor.spawn(
-			Box::pin(background_tasks.for_each_concurrent(None, |x| x)),
-			TaskType::Async,
-		);
-
 		Ok(Self {
 			on_exit,
-			signal: Some(signal),
-			executor,
+			_signal: signal,
+			tokio_handle,
 			metrics,
 			essential_failed_tx,
 			essential_failed_rx,
 			keep_alive: Box::new(()),
-			task_notifier,
-			completion_future,
 			children: Vec::new(),
 		})
 	}
@@ -283,9 +330,8 @@ impl TaskManager {
 	pub fn spawn_handle(&self) -> SpawnTaskHandle {
 		SpawnTaskHandle {
 			on_exit: self.on_exit.clone(),
-			executor: self.executor.clone(),
+			tokio_handle: self.tokio_handle.clone(),
 			metrics: self.metrics.clone(),
-			task_notifier: self.task_notifier.clone(),
 		}
 	}
 
@@ -294,45 +340,27 @@ impl TaskManager {
 		SpawnEssentialTaskHandle::new(self.essential_failed_tx.clone(), self.spawn_handle())
 	}
 
-	/// Send the signal for termination, prevent new tasks to be created, await for all the existing
-	/// tasks to be finished and drop the object. You can consider this as an async drop.
-	///
-	/// It's always better to call and await this function before exiting the process as background
-	/// tasks may be running in the background. If the process exit and the background tasks are not
-	/// cancelled, this will lead to objects not getting dropped properly.
-	///
-	/// This is an issue in some cases as some of our dependencies do require that we drop all the
-	/// objects properly otherwise it triggers a SIGABRT on exit.
-	pub fn clean_shutdown(mut self) -> Pin<Box<dyn Future<Output = ()> + Send>> {
-		self.terminate();
-		let children_shutdowns = self.children.into_iter().map(|x| x.clean_shutdown());
-		let keep_alive = self.keep_alive;
-		let completion_future = self.completion_future;
-
-		Box::pin(async move {
-			join_all(children_shutdowns).await;
-			completion_future.await;
-			drop(keep_alive);
-		})
-	}
-
 	/// Return a future that will end with success if the signal to terminate was sent
 	/// (`self.terminate()`) or with an error if an essential task fails.
 	///
 	/// # Warning
 	///
-	/// This function will not wait until the end of the remaining task. You must call and await
-	/// `clean_shutdown()` after this.
-	pub fn future<'a>(&'a mut self) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'a>> {
+	/// This function will not wait until the end of the remaining task.
+	pub fn future<'a>(
+		&'a mut self,
+	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'a>> {
 		Box::pin(async move {
 			let mut t1 = self.essential_failed_rx.next().fuse();
 			let mut t2 = self.on_exit.clone().fuse();
 			let mut t3 = try_join_all(
-				self.children.iter_mut().map(|x| x.future())
+				self.children
+					.iter_mut()
+					.map(|x| x.future())
 					// Never end this future if there is no error because if there is no children,
 					// it must not stop
-					.chain(std::iter::once(pending().boxed()))
-			).fuse();
+					.chain(std::iter::once(pending().boxed())),
+			)
+			.fuse();
 
 			futures::select! {
 				_ = t1 => Err(Error::Other("Essential task failed.".into())),
@@ -342,20 +370,8 @@ impl TaskManager {
 		})
 	}
 
-	/// Signal to terminate all the running tasks.
-	pub fn terminate(&mut self) {
-		if let Some(signal) = self.signal.take() {
-			let _ = signal.fire();
-			// NOTE: this will prevent new tasks to be spawned
-			self.task_notifier.close_channel();
-			for child in self.children.iter_mut() {
-				child.terminate();
-			}
-		}
-	}
-
 	/// Set what the task manager should keep alive, can be called multiple times.
-	pub fn keep_alive<T: 'static + Send + Sync>(&mut self, to_keep_alive: T) {
+	pub fn keep_alive<T: 'static + Send>(&mut self, to_keep_alive: T) {
 		// allows this fn to safely called multiple times.
 		use std::mem;
 		let old = mem::replace(&mut self.keep_alive, Box::new(()));
@@ -385,34 +401,34 @@ impl Metrics {
 			poll_duration: register(HistogramVec::new(
 				HistogramOpts {
 					common_opts: Opts::new(
-						"tasks_polling_duration",
+						"substrate_tasks_polling_duration",
 						"Duration in seconds of each invocation of Future::poll"
 					),
 					buckets: exponential_buckets(0.001, 4.0, 9)
 						.expect("function parameters are constant and always valid; qed"),
 				},
-				&["task_name"]
+				&["task_name", "task_group"]
 			)?, registry)?,
 			poll_start: register(CounterVec::new(
 				Opts::new(
-					"tasks_polling_started_total",
+					"substrate_tasks_polling_started_total",
 					"Total number of times we started invoking Future::poll"
 				),
-				&["task_name"]
+				&["task_name", "task_group"]
 			)?, registry)?,
 			tasks_spawned: register(CounterVec::new(
 				Opts::new(
-					"tasks_spawned_total",
+					"substrate_tasks_spawned_total",
 					"Total number of tasks that have been spawned on the Service"
 				),
-				&["task_name"]
+				&["task_name", "task_group"]
 			)?, registry)?,
 			tasks_ended: register(CounterVec::new(
 				Opts::new(
-					"tasks_ended_total",
+					"substrate_tasks_ended_total",
 					"Total number of tasks for which Future::poll has returned Ready(()) or panicked"
 				),
-				&["task_name", "reason"]
+				&["task_name", "reason", "task_group"]
 			)?, registry)?,
 		})
 	}

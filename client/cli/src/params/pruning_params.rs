@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -17,58 +17,99 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::error;
-use sc_service::{PruningMode, Role, KeepBlocks};
-use structopt::StructOpt;
+use clap::Args;
+use sc_service::{BlocksPruning, PruningMode};
 
 /// Parameters to define the pruning mode
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, Clone, PartialEq, Args)]
 pub struct PruningParams {
-	/// Specify the state pruning mode, a number of blocks to keep or 'archive'.
+	/// Specify the state pruning mode.
 	///
-	/// Default is to keep all block states if the node is running as a
-	/// validator (i.e. 'archive'), otherwise state is only kept for the last
-	/// 256 blocks.
-	#[structopt(long = "pruning", value_name = "PRUNING_MODE")]
-	pub pruning: Option<String>,
-	/// Specify the number of finalized blocks to keep in the database.
+	/// This mode specifies when the block's state (ie, storage)
+	/// should be pruned (ie, removed) from the database.
 	///
-	/// Default is to keep all blocks.
-	#[structopt(long, value_name = "COUNT")]
-	pub keep_blocks: Option<u32>,
+	/// Possible values:
+	///  'archive'            Keep the state of all blocks.
+	///  'archive-canonical'  Keep only the state of finalized blocks.
+	///   number              Keep the state of the last number of finalized blocks.
+	#[arg(alias = "pruning", long, value_name = "PRUNING_MODE", default_value = "256")]
+	pub state_pruning: DatabasePruningMode,
+	/// Specify the blocks pruning mode.
+	///
+	/// This mode specifies when the block's body (including justifications)
+	/// should be pruned (ie, removed) from the database.
+	///
+	/// Possible values:
+	///  'archive'            Keep all blocks.
+	///  'archive-canonical'  Keep only finalized blocks.
+	///   number              Keep the last `number` of finalized blocks.
+	#[arg(
+		alias = "keep-blocks",
+		long,
+		value_name = "PRUNING_MODE",
+		default_value = "archive-canonical"
+	)]
+	pub blocks_pruning: DatabasePruningMode,
 }
 
 impl PruningParams {
 	/// Get the pruning value from the parameters
-	pub fn state_pruning(&self, unsafe_pruning: bool, role: &Role) -> error::Result<PruningMode> {
-		// by default we disable pruning if the node is an authority (i.e.
-		// `ArchiveAll`), otherwise we keep state for the last 256 blocks. if the
-		// node is an authority and pruning is enabled explicitly, then we error
-		// unless `unsafe_pruning` is set.
-		Ok(match &self.pruning {
-			Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
-			None if role.is_authority() => PruningMode::ArchiveAll,
-			None => PruningMode::default(),
-			Some(s) => {
-				if role.is_authority() && !unsafe_pruning {
-					return Err(error::Error::Input(
-						"Validators should run with state pruning disabled (i.e. archive). \
-						You can ignore this check with `--unsafe-pruning`."
-							.to_string(),
-					));
-				}
-
-				PruningMode::keep_blocks(s.parse().map_err(|_| {
-					error::Error::Input("Invalid pruning mode specified".to_string())
-				})?)
-			}
-		})
+	pub fn state_pruning(&self) -> error::Result<Option<PruningMode>> {
+		Ok(Some(self.state_pruning.into()))
 	}
 
 	/// Get the block pruning value from the parameters
-	pub fn keep_blocks(&self) -> error::Result<KeepBlocks> {
-		Ok(match self.keep_blocks {
-			Some(n) => KeepBlocks::Some(n),
-			None => KeepBlocks::All,
-		})
+	pub fn blocks_pruning(&self) -> error::Result<BlocksPruning> {
+		Ok(self.blocks_pruning.into())
+	}
+}
+
+/// Specifies the pruning mode of the database.
+///
+/// This specifies when the block's data (either state via `--state-pruning`
+/// or body via `--blocks-pruning`) should be pruned (ie, removed) from
+/// the database.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum DatabasePruningMode {
+	/// Keep the data of all blocks.
+	Archive,
+	/// Keep only the data of finalized blocks.
+	ArchiveCanonical,
+	/// Keep the data of the last number of finalized blocks.
+	Custom(u32),
+}
+
+impl std::str::FromStr for DatabasePruningMode {
+	type Err = String;
+
+	fn from_str(input: &str) -> Result<Self, Self::Err> {
+		match input {
+			"archive" => Ok(Self::Archive),
+			"archive-canonical" => Ok(Self::ArchiveCanonical),
+			bc => bc
+				.parse()
+				.map_err(|_| "Invalid pruning mode specified".to_string())
+				.map(Self::Custom),
+		}
+	}
+}
+
+impl Into<PruningMode> for DatabasePruningMode {
+	fn into(self) -> PruningMode {
+		match self {
+			DatabasePruningMode::Archive => PruningMode::ArchiveAll,
+			DatabasePruningMode::ArchiveCanonical => PruningMode::ArchiveCanonical,
+			DatabasePruningMode::Custom(n) => PruningMode::blocks_pruning(n),
+		}
+	}
+}
+
+impl Into<BlocksPruning> for DatabasePruningMode {
+	fn into(self) -> BlocksPruning {
+		match self {
+			DatabasePruningMode::Archive => BlocksPruning::KeepAll,
+			DatabasePruningMode::ArchiveCanonical => BlocksPruning::KeepFinalized,
+			DatabasePruningMode::Custom(n) => BlocksPruning::Some(n),
+		}
 	}
 }

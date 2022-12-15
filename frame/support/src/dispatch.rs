@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,26 +18,35 @@
 //! Dispatch system. Contains a macro for defining runtime modules and
 //! generating values representing lazy module function calls.
 
-pub use crate::sp_std::{result, fmt, prelude::{Vec, Clone, Eq, PartialEq}, marker};
-pub use crate::codec::{Codec, EncodeLike, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
-pub use frame_metadata::{
-	FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata,
-	ModuleConstantMetadata, DefaultByte, DefaultByteGetter, ModuleErrorMetadata, ErrorMetadata
+pub use crate::{
+	codec::{
+		Codec, Decode, Encode, EncodeAsRef, EncodeLike, HasCompact, Input, MaxEncodedLen, Output,
+	},
+	scale_info::TypeInfo,
+	sp_std::{
+		fmt, marker,
+		prelude::{Clone, Eq, PartialEq, Vec},
+		result,
+	},
+	traits::{
+		CallMetadata, GetCallMetadata, GetCallName, GetStorageVersion, UnfilteredDispatchable,
+	},
 };
-pub use crate::weights::{
-	GetDispatchInfo, DispatchInfo, WeighData, ClassifyDispatch, TransactionPriority, Weight,
-	PaysFee, PostDispatchInfo, WithPostDispatchInfo,
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
+use sp_runtime::{
+	generic::{CheckedExtrinsic, UncheckedExtrinsic},
+	traits::SignedExtension,
 };
-pub use sp_runtime::{traits::Dispatchable, DispatchError};
-pub use crate::traits::{
-	CallMetadata, GetCallMetadata, GetCallName, UnfilteredDispatchable, GetPalletVersion,
+pub use sp_runtime::{
+	traits::Dispatchable, transaction_validity::TransactionPriority, DispatchError, RuntimeDebug,
 };
+pub use sp_weights::Weight;
 
-/// The return typ of a `Dispatchable` in frame. When returned explicitly from
+/// The return type of a `Dispatchable` in frame. When returned explicitly from
 /// a dispatchable function it allows overriding the default `PostDispatchInfo`
 /// returned from a dispatch.
-pub type DispatchResultWithPostInfo =
-	sp_runtime::DispatchResultWithInfo<crate::weights::PostDispatchInfo>;
+pub type DispatchResultWithPostInfo = sp_runtime::DispatchResultWithInfo<PostDispatchInfo>;
 
 /// Unaugmented version of `DispatchResultWithPostInfo` that can be returned from
 /// dispatchable functions and is automatically converted to the augmented type. Should be
@@ -46,23 +55,592 @@ pub type DispatchResultWithPostInfo =
 pub type DispatchResult = Result<(), sp_runtime::DispatchError>;
 
 /// The error type contained in a `DispatchResultWithPostInfo`.
-pub type DispatchErrorWithPostInfo =
-	sp_runtime::DispatchErrorWithPostInfo<crate::weights::PostDispatchInfo>;
+pub type DispatchErrorWithPostInfo = sp_runtime::DispatchErrorWithPostInfo<PostDispatchInfo>;
 
 /// Serializable version of pallet dispatchable.
 pub trait Callable<T> {
-	type Call: UnfilteredDispatchable + Codec + Clone + PartialEq + Eq;
+	type RuntimeCall: UnfilteredDispatchable + Codec + Clone + PartialEq + Eq;
 }
 
 // dirty hack to work around serde_derive issue
 // https://github.com/rust-lang/rust/issues/51331
-pub type CallableCallFor<A, R> = <A as Callable<R>>::Call;
+pub type CallableCallFor<A, R> = <A as Callable<R>>::RuntimeCall;
+
+/// Origin for the System pallet.
+#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum RawOrigin<AccountId> {
+	/// The system itself ordained this dispatch to happen: this is the highest privilege level.
+	Root,
+	/// It is signed by some public key and we provide the `AccountId`.
+	Signed(AccountId),
+	/// It is signed by nobody, can be either:
+	/// * included and agreed upon by the validators anyway,
+	/// * or unsigned transaction validated by a pallet.
+	None,
+}
+
+impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
+	fn from(s: Option<AccountId>) -> RawOrigin<AccountId> {
+		match s {
+			Some(who) => RawOrigin::Signed(who),
+			None => RawOrigin::None,
+		}
+	}
+}
 
 /// A type that can be used as a parameter in a dispatchable function.
 ///
 /// When using `decl_module` all arguments for call functions must implement this trait.
-pub trait Parameter: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
-impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
+pub trait Parameter: Codec + EncodeLike + Clone + Eq + fmt::Debug + scale_info::TypeInfo {}
+impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug + scale_info::TypeInfo {}
+
+/// Means of classifying a dispatchable function.
+pub trait ClassifyDispatch<T> {
+	/// Classify the dispatch function based on input data `target` of type `T`. When implementing
+	/// this for a dispatchable, `T` will be a tuple of all arguments given to the function (except
+	/// origin).
+	fn classify_dispatch(&self, target: T) -> DispatchClass;
+}
+
+/// Indicates if dispatch function should pay fees or not.
+///
+/// If set to `Pays::No`, the block resource limits are applied, yet no fee is deducted.
+pub trait PaysFee<T> {
+	fn pays_fee(&self, _target: T) -> Pays;
+}
+
+/// Explicit enum to denote if a transaction pays fee or not.
+#[derive(Clone, Copy, Eq, PartialEq, RuntimeDebug, Encode, Decode, TypeInfo)]
+pub enum Pays {
+	/// Transactor will pay related fees.
+	Yes,
+	/// Transactor will NOT pay related fees.
+	No,
+}
+
+impl Default for Pays {
+	fn default() -> Self {
+		Self::Yes
+	}
+}
+
+impl From<Pays> for PostDispatchInfo {
+	fn from(pays_fee: Pays) -> Self {
+		Self { actual_weight: None, pays_fee }
+	}
+}
+
+/// A generalized group of dispatch types.
+///
+/// NOTE whenever upgrading the enum make sure to also update
+/// [DispatchClass::all] and [DispatchClass::non_mandatory] helper functions.
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, TypeInfo)]
+pub enum DispatchClass {
+	/// A normal dispatch.
+	Normal,
+	/// An operational dispatch.
+	Operational,
+	/// A mandatory dispatch. These kinds of dispatch are always included regardless of their
+	/// weight, therefore it is critical that they are separately validated to ensure that a
+	/// malicious validator cannot craft a valid but impossibly heavy block. Usually this just
+	/// means ensuring that the extrinsic can only be included once and that it is always very
+	/// light.
+	///
+	/// Do *NOT* use it for extrinsics that can be heavy.
+	///
+	/// The only real use case for this is inherent extrinsics that are required to execute in a
+	/// block for the block to be valid, and it solves the issue in the case that the block
+	/// initialization is sufficiently heavy to mean that those inherents do not fit into the
+	/// block. Essentially, we assume that in these exceptional circumstances, it is better to
+	/// allow an overweight block to be created than to not allow any block at all to be created.
+	Mandatory,
+}
+
+impl Default for DispatchClass {
+	fn default() -> Self {
+		Self::Normal
+	}
+}
+
+impl DispatchClass {
+	/// Returns an array containing all dispatch classes.
+	pub fn all() -> &'static [DispatchClass] {
+		&[DispatchClass::Normal, DispatchClass::Operational, DispatchClass::Mandatory]
+	}
+
+	/// Returns an array of all dispatch classes except `Mandatory`.
+	pub fn non_mandatory() -> &'static [DispatchClass] {
+		&[DispatchClass::Normal, DispatchClass::Operational]
+	}
+}
+
+/// A trait that represents one or many values of given type.
+///
+/// Useful to accept as parameter type to let the caller pass either a single value directly
+/// or an iterator.
+pub trait OneOrMany<T> {
+	/// The iterator type.
+	type Iter: Iterator<Item = T>;
+	/// Convert this item into an iterator.
+	fn into_iter(self) -> Self::Iter;
+}
+
+impl OneOrMany<DispatchClass> for DispatchClass {
+	type Iter = sp_std::iter::Once<DispatchClass>;
+	fn into_iter(self) -> Self::Iter {
+		sp_std::iter::once(self)
+	}
+}
+
+impl<'a> OneOrMany<DispatchClass> for &'a [DispatchClass] {
+	type Iter = sp_std::iter::Cloned<sp_std::slice::Iter<'a, DispatchClass>>;
+	fn into_iter(self) -> Self::Iter {
+		self.iter().cloned()
+	}
+}
+
+/// A bundle of static information collected from the `#[pallet::weight]` attributes.
+#[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo)]
+pub struct DispatchInfo {
+	/// Weight of this transaction.
+	pub weight: Weight,
+	/// Class of this transaction.
+	pub class: DispatchClass,
+	/// Does this transaction pay fees.
+	pub pays_fee: Pays,
+}
+
+/// A `Dispatchable` function (aka transaction) that can carry some static information along with
+/// it, using the `#[pallet::weight]` attribute.
+pub trait GetDispatchInfo {
+	/// Return a `DispatchInfo`, containing relevant information of this dispatch.
+	///
+	/// This is done independently of its encoded size.
+	fn get_dispatch_info(&self) -> DispatchInfo;
+}
+
+impl GetDispatchInfo for () {
+	fn get_dispatch_info(&self) -> DispatchInfo {
+		DispatchInfo::default()
+	}
+}
+
+/// Extract the actual weight from a dispatch result if any or fall back to the default weight.
+pub fn extract_actual_weight(result: &DispatchResultWithPostInfo, info: &DispatchInfo) -> Weight {
+	match result {
+		Ok(post_info) => post_info,
+		Err(err) => &err.post_info,
+	}
+	.calc_actual_weight(info)
+}
+
+/// Extract the actual pays_fee from a dispatch result if any or fall back to the default weight.
+pub fn extract_actual_pays_fee(result: &DispatchResultWithPostInfo, info: &DispatchInfo) -> Pays {
+	match result {
+		Ok(post_info) => post_info,
+		Err(err) => &err.post_info,
+	}
+	.pays_fee(info)
+}
+
+/// Weight information that is only available post dispatch.
+/// NOTE: This can only be used to reduce the weight or fee, not increase it.
+#[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo)]
+pub struct PostDispatchInfo {
+	/// Actual weight consumed by a call or `None` which stands for the worst case static weight.
+	pub actual_weight: Option<Weight>,
+	/// Whether this transaction should pay fees when all is said and done.
+	pub pays_fee: Pays,
+}
+
+impl PostDispatchInfo {
+	/// Calculate how much (if any) weight was not used by the `Dispatchable`.
+	pub fn calc_unspent(&self, info: &DispatchInfo) -> Weight {
+		info.weight - self.calc_actual_weight(info)
+	}
+
+	/// Calculate how much weight was actually spent by the `Dispatchable`.
+	pub fn calc_actual_weight(&self, info: &DispatchInfo) -> Weight {
+		if let Some(actual_weight) = self.actual_weight {
+			actual_weight.min(info.weight)
+		} else {
+			info.weight
+		}
+	}
+
+	/// Determine if user should actually pay fees at the end of the dispatch.
+	pub fn pays_fee(&self, info: &DispatchInfo) -> Pays {
+		// If they originally were not paying fees, or the post dispatch info
+		// says they should not pay fees, then they don't pay fees.
+		// This is because the pre dispatch information must contain the
+		// worst case for weight and fees paid.
+		if info.pays_fee == Pays::No || self.pays_fee == Pays::No {
+			Pays::No
+		} else {
+			// Otherwise they pay.
+			Pays::Yes
+		}
+	}
+}
+
+impl From<()> for PostDispatchInfo {
+	fn from(_: ()) -> Self {
+		Self { actual_weight: None, pays_fee: Default::default() }
+	}
+}
+
+impl sp_runtime::traits::Printable for PostDispatchInfo {
+	fn print(&self) {
+		"actual_weight=".print();
+		match self.actual_weight {
+			Some(weight) => weight.print(),
+			None => "max-weight".print(),
+		};
+		"pays_fee=".print();
+		match self.pays_fee {
+			Pays::Yes => "Yes".print(),
+			Pays::No => "No".print(),
+		}
+	}
+}
+
+/// Allows easy conversion from `DispatchError` to `DispatchErrorWithPostInfo` for dispatchables
+/// that want to return a custom a posterior weight on error.
+pub trait WithPostDispatchInfo {
+	/// Call this on your modules custom errors type in order to return a custom weight on error.
+	///
+	/// # Example
+	///
+	/// ```ignore
+	/// let who = ensure_signed(origin).map_err(|e| e.with_weight(Weight::from_ref_time(100)))?;
+	/// ensure!(who == me, Error::<T>::NotMe.with_weight(200_000));
+	/// ```
+	fn with_weight(self, actual_weight: Weight) -> DispatchErrorWithPostInfo;
+}
+
+impl<T> WithPostDispatchInfo for T
+where
+	T: Into<DispatchError>,
+{
+	fn with_weight(self, actual_weight: Weight) -> DispatchErrorWithPostInfo {
+		DispatchErrorWithPostInfo {
+			post_info: PostDispatchInfo {
+				actual_weight: Some(actual_weight),
+				pays_fee: Default::default(),
+			},
+			error: self.into(),
+		}
+	}
+}
+
+/// Implementation for unchecked extrinsic.
+impl<Address, Call, Signature, Extra> GetDispatchInfo
+	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+where
+	Call: GetDispatchInfo,
+	Extra: SignedExtension,
+{
+	fn get_dispatch_info(&self) -> DispatchInfo {
+		self.function.get_dispatch_info()
+	}
+}
+
+/// Implementation for checked extrinsic.
+impl<AccountId, Call, Extra> GetDispatchInfo for CheckedExtrinsic<AccountId, Call, Extra>
+where
+	Call: GetDispatchInfo,
+{
+	fn get_dispatch_info(&self) -> DispatchInfo {
+		self.function.get_dispatch_info()
+	}
+}
+
+/// Implementation for test extrinsic.
+#[cfg(feature = "std")]
+impl<Call: Encode + GetDispatchInfo, Extra: Encode> GetDispatchInfo
+	for sp_runtime::testing::TestXt<Call, Extra>
+{
+	fn get_dispatch_info(&self) -> DispatchInfo {
+		// for testing: weight == size.
+		DispatchInfo {
+			weight: Weight::from_ref_time(self.encode().len() as _),
+			pays_fee: Pays::Yes,
+			class: self.call.get_dispatch_info().class,
+		}
+	}
+}
+
+/// A struct holding value for each `DispatchClass`.
+#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub struct PerDispatchClass<T> {
+	/// Value for `Normal` extrinsics.
+	normal: T,
+	/// Value for `Operational` extrinsics.
+	operational: T,
+	/// Value for `Mandatory` extrinsics.
+	mandatory: T,
+}
+
+impl<T> PerDispatchClass<T> {
+	/// Create new `PerDispatchClass` with the same value for every class.
+	pub fn new(val: impl Fn(DispatchClass) -> T) -> Self {
+		Self {
+			normal: val(DispatchClass::Normal),
+			operational: val(DispatchClass::Operational),
+			mandatory: val(DispatchClass::Mandatory),
+		}
+	}
+
+	/// Get a mutable reference to current value of given class.
+	pub fn get_mut(&mut self, class: DispatchClass) -> &mut T {
+		match class {
+			DispatchClass::Operational => &mut self.operational,
+			DispatchClass::Normal => &mut self.normal,
+			DispatchClass::Mandatory => &mut self.mandatory,
+		}
+	}
+
+	/// Get current value for given class.
+	pub fn get(&self, class: DispatchClass) -> &T {
+		match class {
+			DispatchClass::Normal => &self.normal,
+			DispatchClass::Operational => &self.operational,
+			DispatchClass::Mandatory => &self.mandatory,
+		}
+	}
+}
+
+impl<T: Clone> PerDispatchClass<T> {
+	/// Set the value of given class.
+	pub fn set(&mut self, new: T, class: impl OneOrMany<DispatchClass>) {
+		for class in class.into_iter() {
+			*self.get_mut(class) = new.clone();
+		}
+	}
+}
+
+impl PerDispatchClass<Weight> {
+	/// Returns the total weight consumed by all extrinsics in the block.
+	pub fn total(&self) -> Weight {
+		let mut sum = Weight::zero();
+		for class in DispatchClass::all() {
+			sum = sum.saturating_add(*self.get(*class));
+		}
+		sum
+	}
+
+	/// Add some weight of a specific dispatch class, saturating at the numeric bounds of `Weight`.
+	pub fn add(&mut self, weight: Weight, class: DispatchClass) {
+		let value = self.get_mut(class);
+		*value = value.saturating_add(weight);
+	}
+
+	/// Try to add some weight of a specific dispatch class, returning Err(()) if overflow would
+	/// occur.
+	pub fn checked_add(&mut self, weight: Weight, class: DispatchClass) -> Result<(), ()> {
+		let value = self.get_mut(class);
+		*value = value.checked_add(&weight).ok_or(())?;
+		Ok(())
+	}
+
+	/// Subtract some weight of a specific dispatch class, saturating at the numeric bounds of
+	/// `Weight`.
+	pub fn sub(&mut self, weight: Weight, class: DispatchClass) {
+		let value = self.get_mut(class);
+		*value = value.saturating_sub(weight);
+	}
+}
+
+/// Means of weighing some particular kind of data (`T`).
+pub trait WeighData<T> {
+	/// Weigh the data `T` given by `target`. When implementing this for a dispatchable, `T` will be
+	/// a tuple of all arguments given to the function (except origin).
+	fn weigh_data(&self, target: T) -> Weight;
+}
+
+impl<T> WeighData<T> for Weight {
+	fn weigh_data(&self, _: T) -> Weight {
+		return *self
+	}
+}
+
+impl<T> PaysFee<T> for (Weight, DispatchClass, Pays) {
+	fn pays_fee(&self, _: T) -> Pays {
+		self.2
+	}
+}
+
+impl<T> WeighData<T> for (Weight, DispatchClass) {
+	fn weigh_data(&self, args: T) -> Weight {
+		return self.0.weigh_data(args)
+	}
+}
+
+impl<T> WeighData<T> for (Weight, DispatchClass, Pays) {
+	fn weigh_data(&self, args: T) -> Weight {
+		return self.0.weigh_data(args)
+	}
+}
+
+impl<T> ClassifyDispatch<T> for (Weight, DispatchClass) {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		self.1
+	}
+}
+
+impl<T> PaysFee<T> for (Weight, DispatchClass) {
+	fn pays_fee(&self, _: T) -> Pays {
+		Pays::Yes
+	}
+}
+
+impl<T> WeighData<T> for (Weight, Pays) {
+	fn weigh_data(&self, args: T) -> Weight {
+		return self.0.weigh_data(args)
+	}
+}
+
+impl<T> ClassifyDispatch<T> for (Weight, Pays) {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		DispatchClass::Normal
+	}
+}
+
+impl<T> PaysFee<T> for (Weight, Pays) {
+	fn pays_fee(&self, _: T) -> Pays {
+		self.1
+	}
+}
+
+impl From<(Option<Weight>, Pays)> for PostDispatchInfo {
+	fn from(post_weight_info: (Option<Weight>, Pays)) -> Self {
+		let (actual_weight, pays_fee) = post_weight_info;
+		Self { actual_weight, pays_fee }
+	}
+}
+
+impl From<Option<Weight>> for PostDispatchInfo {
+	fn from(actual_weight: Option<Weight>) -> Self {
+		Self { actual_weight, pays_fee: Default::default() }
+	}
+}
+
+impl<T> ClassifyDispatch<T> for Weight {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		DispatchClass::Normal
+	}
+}
+
+impl<T> PaysFee<T> for Weight {
+	fn pays_fee(&self, _: T) -> Pays {
+		Pays::Yes
+	}
+}
+
+impl<T> ClassifyDispatch<T> for (Weight, DispatchClass, Pays) {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		self.1
+	}
+}
+
+// TODO: Eventually remove these
+
+impl From<Option<u64>> for PostDispatchInfo {
+	fn from(maybe_actual_computation: Option<u64>) -> Self {
+		let actual_weight = match maybe_actual_computation {
+			Some(actual_computation) => Some(Weight::zero().set_ref_time(actual_computation)),
+			None => None,
+		};
+		Self { actual_weight, pays_fee: Default::default() }
+	}
+}
+
+impl From<(Option<u64>, Pays)> for PostDispatchInfo {
+	fn from(post_weight_info: (Option<u64>, Pays)) -> Self {
+		let (maybe_actual_time, pays_fee) = post_weight_info;
+		let actual_weight = match maybe_actual_time {
+			Some(actual_time) => Some(Weight::zero().set_ref_time(actual_time)),
+			None => None,
+		};
+		Self { actual_weight, pays_fee }
+	}
+}
+
+impl<T> ClassifyDispatch<T> for u64 {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		DispatchClass::Normal
+	}
+}
+
+impl<T> PaysFee<T> for u64 {
+	fn pays_fee(&self, _: T) -> Pays {
+		Pays::Yes
+	}
+}
+
+impl<T> WeighData<T> for u64 {
+	fn weigh_data(&self, _: T) -> Weight {
+		return Weight::zero().set_ref_time(*self)
+	}
+}
+
+impl<T> WeighData<T> for (u64, DispatchClass, Pays) {
+	fn weigh_data(&self, args: T) -> Weight {
+		return self.0.weigh_data(args)
+	}
+}
+
+impl<T> ClassifyDispatch<T> for (u64, DispatchClass, Pays) {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		self.1
+	}
+}
+
+impl<T> PaysFee<T> for (u64, DispatchClass, Pays) {
+	fn pays_fee(&self, _: T) -> Pays {
+		self.2
+	}
+}
+
+impl<T> WeighData<T> for (u64, DispatchClass) {
+	fn weigh_data(&self, args: T) -> Weight {
+		return self.0.weigh_data(args)
+	}
+}
+
+impl<T> ClassifyDispatch<T> for (u64, DispatchClass) {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		self.1
+	}
+}
+
+impl<T> PaysFee<T> for (u64, DispatchClass) {
+	fn pays_fee(&self, _: T) -> Pays {
+		Pays::Yes
+	}
+}
+
+impl<T> WeighData<T> for (u64, Pays) {
+	fn weigh_data(&self, args: T) -> Weight {
+		return self.0.weigh_data(args)
+	}
+}
+
+impl<T> ClassifyDispatch<T> for (u64, Pays) {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		DispatchClass::Normal
+	}
+}
+
+impl<T> PaysFee<T> for (u64, Pays) {
+	fn pays_fee(&self, _: T) -> Pays {
+		self.1
+	}
+}
+
+// END TODO
 
 /// Declares a `Module` struct and a `Call` enum, which implements the dispatch logic.
 ///
@@ -74,7 +652,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # use frame_support::dispatch;
 /// # use frame_system::{Config, ensure_signed};
 /// decl_module! {
-/// 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
+/// 	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {
 ///
 /// 		// Private functions are dispatchable, but not available to other
 /// 		// FRAME pallets.
@@ -101,8 +679,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// * `Module`: The struct generated by the macro, with type `Config`.
 /// * `Call`: The enum generated for every pallet, which implements
 ///   [`Callable`](./dispatch/trait.Callable.html).
-/// * `origin`: Alias of `T::Origin`, declared by the
-///   [`impl_outer_origin!`](./macro.impl_outer_origin.html) macro.
+/// * `origin`: Alias of `T::RuntimeOrigin`.
 /// * `Result`: The expected return type from pallet functions.
 ///
 /// The first parameter of dispatchable functions must always be `origin`.
@@ -118,7 +695,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # use frame_support::dispatch;
 /// # use frame_system::{Config, ensure_signed};
 /// decl_module! {
-/// 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
+/// 	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {
 /// 		#[weight = 0]
 /// 		fn my_long_function(origin) -> dispatch::DispatchResult {
 /// 				// Your implementation
@@ -150,18 +727,18 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// ```
 /// # #[macro_use]
 /// # extern crate frame_support;
-/// # use frame_support::dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo};
+/// # use frame_support::{weights::Weight, dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo}};
 /// # use frame_system::{Config, ensure_signed};
 /// decl_module! {
-/// 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
+/// 	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {
 /// 		#[weight = 1_000_000]
 /// 		fn my_long_function(origin, do_expensive_calc: bool) -> DispatchResultWithPostInfo {
-/// 			ensure_signed(origin).map_err(|e| e.with_weight(100_000))?;
+/// 			ensure_signed(origin).map_err(|e| e.with_weight(Weight::from_ref_time(100_000)))?;
 /// 			if do_expensive_calc {
 /// 				// do the expensive calculation
 /// 				// ...
 /// 				// return None to indicate that we are using all weight (the default)
-/// 				return Ok(None.into());
+/// 				return Ok(None::<Weight>.into());
 /// 			}
 /// 			// expensive calculation not executed: use only a portion of the weight
 /// 			Ok(Some(100_000).into())
@@ -175,6 +752,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 ///
 /// Transactional function discards all changes to storage if it returns `Err`, or commits if
 /// `Ok`, via the #\[transactional\] attribute. Note the attribute must be after #\[weight\].
+/// The #\[transactional\] attribute is deprecated since it is the default behaviour.
 ///
 /// ```
 /// # #[macro_use]
@@ -182,7 +760,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # use frame_support::transactional;
 /// # use frame_system::Config;
 /// decl_module! {
-/// 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
+/// 	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {
 /// 		#[weight = 0]
 /// 		#[transactional]
 /// 		fn my_short_function(origin) {
@@ -203,7 +781,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # use frame_support::dispatch;
 /// # use frame_system::{Config, ensure_signed, ensure_root};
 /// decl_module! {
-/// 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
+/// 	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {
 /// 		#[weight = 0]
 /// 			fn my_privileged_function(origin) -> dispatch::DispatchResult {
 /// 			ensure_root(origin)?;
@@ -243,7 +821,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// pub trait Config<I: Instance=DefaultInstance>: frame_system::Config {}
 ///
 /// decl_module! {
-/// 	pub struct Module<T: Config<I>, I: Instance = DefaultInstance> for enum Call where origin: T::Origin {
+/// 	pub struct Module<T: Config<I>, I: Instance = DefaultInstance> for enum Call where origin: T::RuntimeOrigin {
 /// 		// Your implementation
 /// 	}
 /// }
@@ -255,7 +833,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 ///
 /// ## Where clause
 ///
-/// Besides the default `origin: T::Origin`, you can also pass other bounds to the module
+/// Besides the default `origin: T::RuntimeOrigin`, you can also pass other bounds to the module
 /// declaration. This where bound will be replicated to all types generated by this macro. The
 /// chaining of multiple trait bounds with `+` is not supported. If multiple bounds for one type are
 /// required, it needs to be split up into multiple bounds.
@@ -268,7 +846,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// pub trait Config: system::Config where Self::AccountId: From<u32> {}
 ///
 /// decl_module! {
-/// 	pub struct Module<T: Config> for enum Call where origin: T::Origin, T::AccountId: From<u32> {
+/// 	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, T::AccountId: From<u32> {
 /// 		// Your implementation
 /// 	}
 /// }
@@ -279,7 +857,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 ///
 /// The following are reserved function signatures:
 ///
-/// * `deposit_event`: Helper function for depositing an [event](https://docs.substrate.dev/docs/event-enum).
+/// * `deposit_event`: Helper function for depositing an [event](https://docs.substrate.io/main-docs/build/events-errors/).
 /// The default behavior is to call `deposit_event` from the [System
 /// module](../frame_system/index.html). However, you can write your own implementation for events
 /// in your runtime. To use the default behavior, add `fn deposit_event() = default;` to your
@@ -347,6 +925,7 @@ macro_rules! decl_module {
 			{}
 			{}
 			{}
+			{}
 			[]
 			$($t)*
 		);
@@ -383,6 +962,7 @@ macro_rules! decl_module {
 			{}
 			{}
 			{}
+			{}
 			[]
 			$($t)*
 		);
@@ -403,6 +983,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
+		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn deposit_event() = default;
@@ -421,7 +1002,8 @@ macro_rules! decl_module {
 			{ $( $offchain )* }
 			{ $( $constants )* }
 			{ $( $error_type )* }
-			{ $( $integrity_test)* }
+			{ $( $integrity_test )* }
+			{ $( $storage_version )* }
 			[ $( $dispatchables )* ]
 			$($rest)*
 		);
@@ -440,6 +1022,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
+		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn deposit_event
@@ -466,6 +1049,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
+		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn deposit_event() = default;
@@ -488,6 +1072,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
+		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_finalize( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
@@ -508,7 +1093,8 @@ macro_rules! decl_module {
 			{ $( $offchain )* }
 			{ $( $constants )* }
 			{ $( $error_type )* }
-			{ $( $integrity_test)* }
+			{ $( $integrity_test )* }
+			{ $( $storage_version )* }
 			[ $( $dispatchables )* ]
 			$($rest)*
 		);
@@ -528,6 +1114,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
+		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		#[weight = $weight:expr]
@@ -556,6 +1143,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
+		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		#[weight = $weight:expr]
@@ -580,6 +1168,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
+		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_idle($param_name1:ident : $param1:ty, $param_name2:ident: $param2:ty $(,)? ) -> $return:ty { $( $impl:tt )* }
@@ -600,7 +1189,8 @@ macro_rules! decl_module {
 			{ $( $offchain )* }
 			{ $( $constants )* }
 			{ $( $error_type )* }
-			{ $( $integrity_test)* }
+			{ $( $integrity_test )* }
+			{ $( $storage_version )* }
 			[ $( $dispatchables )* ]
 			$($rest)*
 		);
@@ -621,6 +1211,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
+		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$(#[weight = $weight:expr])?
@@ -647,6 +1238,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
+		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_runtime_upgrade( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
@@ -673,6 +1265,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
+		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		#[weight = $weight:expr]
@@ -701,6 +1294,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
+		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_runtime_upgrade( $( $param_name:ident : $param:ty ),* $(,)? ) -> $return:ty { $( $impl:tt )* }
@@ -721,7 +1315,8 @@ macro_rules! decl_module {
 			{ $( $offchain )* }
 			{ $( $constants )* }
 			{ $( $error_type )* }
-			{ $( $integrity_test)* }
+			{ $( $integrity_test )* }
+			{ $( $storage_version )* }
 			[ $( $dispatchables )* ]
 			$($rest)*
 		);
@@ -743,6 +1338,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
+		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_runtime_upgrade( $( $param_name:ident : $param:ty ),* $(,)? ) -> $return:ty { $( $impl:tt )* }
@@ -767,6 +1363,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{}
+		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn integrity_test() { $( $impl:tt )* }
@@ -789,6 +1386,7 @@ macro_rules! decl_module {
 				$(#[doc = $doc_attr])*
 				fn integrity_test() { $( $impl)* }
 			}
+			{ $( $storage_version )* }
 			[ $( $dispatchables )* ]
 			$($rest)*
 		);
@@ -810,6 +1408,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )+ }
+		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn integrity_test() { $( $impl:tt )* }
@@ -834,6 +1433,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
+		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_initialize( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
@@ -860,6 +1460,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
+		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		#[weight = $weight:expr]
@@ -888,6 +1489,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
+		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_initialize( $( $param_name:ident : $param:ty ),* $(,)? ) -> $return:ty { $( $impl:tt )* }
@@ -908,7 +1510,8 @@ macro_rules! decl_module {
 			{ $( $offchain )* }
 			{ $( $constants )* }
 			{ $( $error_type )* }
-			{ $( $integrity_test)* }
+			{ $( $integrity_test )* }
+			{ $( $storage_version )* }
 			[ $( $dispatchables )* ]
 			$($rest)*
 		);
@@ -930,6 +1533,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
+		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_initialize( $( $param_name:ident : $param:ty ),* $(,)? ) -> $return:ty { $( $impl:tt )* }
@@ -954,6 +1558,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
+		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn offchain_worker( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
@@ -974,7 +1579,8 @@ macro_rules! decl_module {
 			{ fn offchain_worker( $( $param_name : $param ),* ) { $( $impl )* } }
 			{ $( $constants )* }
 			{ $( $error_type )* }
-			{ $( $integrity_test)* }
+			{ $( $integrity_test )* }
+			{ $( $storage_version )* }
 			[ $( $dispatchables )* ]
 			$($rest)*
 		);
@@ -996,6 +1602,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
+		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn offchain_worker( $( $param_name:ident : $param:ty ),* $(,)? ) -> $return:ty { $( $impl:tt )* }
@@ -1021,6 +1628,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
+		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$( #[doc = $doc_attr:tt] )*
 		const $name:ident: $ty:ty = $value:expr;
@@ -1046,7 +1654,8 @@ macro_rules! decl_module {
 				$name: $ty = $value;
 			}
 			{ $( $error_type )* }
-			{ $( $integrity_test)* }
+			{ $( $integrity_test )* }
+			{ $( $storage_version )* }
 			[ $( $dispatchables )* ]
 			$($rest)*
 		);
@@ -1070,6 +1679,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ }
 		{ $( $integrity_test:tt )* }
+		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		type Error = $error_type:ty;
@@ -1090,7 +1700,8 @@ macro_rules! decl_module {
 			{ $( $offchain )* }
 			{ $( $constants )* }
 			{ $error_type }
-			{ $( $integrity_test)* }
+			{ $( $integrity_test )* }
+			{ $( $storage_version )* }
 			[ $( $dispatchables )* ]
 			$($rest)*
 		);
@@ -1113,6 +1724,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ }
 		{ $( $integrity_test:tt )* }
+		{ $( $storage_version:tt )* }
 		[ $($t:tt)* ]
 		$($rest:tt)*
 	) => {
@@ -1130,9 +1742,56 @@ macro_rules! decl_module {
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
 			{ $( $constants )* }
-			{ &'static str }
-			{ $( $integrity_test)* }
+			{ __NO_ERROR_DEFINED }
+			{ $( $integrity_test )* }
+			{ $( $storage_version )* }
 			[ $($t)* ]
+			$($rest)*
+		);
+	};
+
+	// Parse storage version
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<
+			$trait_instance:ident:
+				$trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?
+			>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
+		{ $( $deposit_event:tt )* }
+		{ $( $on_initialize:tt )* }
+		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_idle:tt )* }
+		{ $( $on_finalize:tt )* }
+		{ $( $offchain:tt )* }
+		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
+		{ }
+		[ $( $dispatchables:tt )* ]
+		$(#[doc = $doc_attr:tt])*
+		type StorageVersion = $storage_version:path;
+		$($rest:tt)*
+	) => {
+		$crate::decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<
+				$trait_instance: $trait_name$(<I>, $instance: $instantiable $(= $module_default_instance)?)?
+			>
+			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $other_where_bounds )* }
+			{ $( $deposit_event )* }
+			{ $( $on_initialize )* }
+			{ $( $on_runtime_upgrade )* }
+			{ $( $on_idle )* }
+			{ $( $on_finalize )* }
+			{ $( $offchain )* }
+			{ $( $constants )* }
+			{ $( $error_type )* }
+			{ $( $integrity_test)* }
+			{ $storage_version }
+			[ $( $dispatchables )* ]
 			$($rest)*
 		);
 	};
@@ -1153,8 +1812,9 @@ macro_rules! decl_module {
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
-		{ $error_type:ty }
+		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
+		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		#[weight = $weight:expr]
@@ -1178,8 +1838,9 @@ macro_rules! decl_module {
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
 			{ $( $constants )* }
-			{ $error_type }
+			{ $( $error_type )* }
 			{ $( $integrity_test)* }
+			{ $( $storage_version )* }
 			[
 				$( $dispatchables )*
 				$(#[doc = $doc_attr])*
@@ -1211,6 +1872,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
+		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$(#[$fn_attr:meta])*
@@ -1225,7 +1887,7 @@ macro_rules! decl_module {
 			)
 		);
 	};
-	// Ignore any ident which is not `origin` with type `T::Origin`.
+	// Ignore any ident which is not `origin` with type `T::RuntimeOrigin`.
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
@@ -1240,12 +1902,13 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
+		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$(#[weight = $weight:expr])?
 		$(#[$fn_attr:meta])*
 		$fn_vis:vis fn $fn_name:ident(
-			$origin:ident : T::Origin $( , $( #[$codec_attr:ident] )* $param_name:ident : $param:ty )* $(,)?
+			$origin:ident : T::RuntimeOrigin $( , $( #[$codec_attr:ident] )* $param_name:ident : $param:ty )* $(,)?
 		) $( -> $result:ty )* { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
@@ -1269,6 +1932,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
+		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$(#[weight = $weight:expr])?
@@ -1298,6 +1962,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
+		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$(#[weight = $weight:expr])?
@@ -1328,6 +1993,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
+		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 	) => {
 		$crate::decl_module!(@imp
@@ -1345,7 +2011,8 @@ macro_rules! decl_module {
 			{ $( $offchain )* }
 			{ $( $constants )* }
 			{ $( $error_type )* }
-			{ $( $integrity_test)* }
+			{ $( $integrity_test )* }
+			{ $( $storage_version )* }
 		);
 	};
 
@@ -1356,7 +2023,11 @@ macro_rules! decl_module {
 		$ignore:ident
 		$mod_type:ident<$trait_instance:ident $(, $instance:ident)?> $fn_name:ident $origin:ident $system:ident [ $( $param_name:ident),* ]
 	) => {
-		<$mod_type<$trait_instance $(, $instance)?>>::$fn_name( $origin $(, $param_name )* ).map(Into::into).map_err(Into::into)
+			// We execute all dispatchable in a new storage layer, allowing them
+			// to return an error at any point, and undoing any storage changes.
+			$crate::storage::with_storage_layer(|| {
+				<$mod_type<$trait_instance $(, $instance)?>>::$fn_name( $origin $(, $param_name )* ).map(Into::into).map_err(Into::into)
+			})
 	};
 
 	// no `deposit_event` function wanted
@@ -1377,7 +2048,7 @@ macro_rules! decl_module {
 		{
 			/// Deposits an event using `frame_system::Pallet::deposit_event`.
 			$vis fn deposit_event(
-				event: impl Into<< $trait_instance as $trait_name $(<$instance>)? >::Event>
+				event: impl Into<< $trait_instance as $trait_name $(<$instance>)? >::RuntimeEvent>
 			) {
 				<$system::Pallet<$trait_instance>>::deposit_event(event.into())
 			}
@@ -1429,6 +2100,35 @@ macro_rules! decl_module {
 		{}
 	};
 
+	(@impl_try_state_default
+		{ $system:ident }
+		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
+		{ $( $other_where_bounds:tt )* }
+	) => {
+		#[cfg(feature = "try-runtime")]
+		impl<$trait_instance: $system::Config + $trait_name$(<I>, $instance: $instantiable)?>
+			$crate::traits::TryState<<$trait_instance as $system::Config>::BlockNumber>
+			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
+		{
+			fn try_state(
+				_: <$trait_instance as $system::Config>::BlockNumber,
+				_: $crate::traits::TryStateSelect,
+			) -> Result<(), &'static str> {
+				let pallet_name = <<
+					$trait_instance
+					as
+					$system::Config
+				>::PalletInfo as $crate::traits::PalletInfo>::name::<Self>().unwrap_or("<unknown pallet name>");
+				$crate::log::debug!(
+					target: $crate::LOG_TARGET,
+					"⚠️ pallet {} cannot have try-state because it is using decl_module!",
+					pallet_name,
+				);
+				Ok(())
+			}
+		}
+	};
+
 	(@impl_on_runtime_upgrade
 		{ $system:ident }
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
@@ -1446,34 +2146,26 @@ macro_rules! decl_module {
 					as
 					$system::Config
 				>::PalletInfo as $crate::traits::PalletInfo>::name::<Self>().unwrap_or("<unknown pallet name>");
-				let new_storage_version = $crate::crate_to_pallet_version!();
 
 				$crate::log::info!(
 					target: $crate::LOG_TARGET,
-					"⚠️ {} declares internal migrations (which *might* execute), setting storage version to {:?}",
+					"⚠️ {} declares internal migrations (which *might* execute). \
+					 On-chain `{:?}` vs current storage version `{:?}`",
 					pallet_name,
-					new_storage_version,
+					<Self as $crate::traits::GetStorageVersion>::on_chain_storage_version(),
+					<Self as $crate::traits::GetStorageVersion>::current_storage_version(),
 				);
 
-				let result: $return = (|| { $( $impl )* })();
-
-				new_storage_version
-					.put_into_storage::<<$trait_instance as $system::Config>::PalletInfo, Self>();
-
-				let additional_write = <
-					<$trait_instance as $system::Config>::DbWeight as $crate::traits::Get<_>
-				>::get().writes(1);
-
-				result.saturating_add(additional_write)
+				{ $( $impl )* }
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn pre_upgrade() -> Result<(), &'static str> {
-				Ok(())
+			fn pre_upgrade() -> Result<$crate::sp_std::vec::Vec<u8>, &'static str> {
+				Ok($crate::sp_std::vec::Vec::new())
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn post_upgrade() -> Result<(), &'static str> {
+			fn post_upgrade(_: $crate::sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
 				Ok(())
 			}
 		}
@@ -1495,28 +2187,23 @@ macro_rules! decl_module {
 					as
 					$system::Config
 				>::PalletInfo as $crate::traits::PalletInfo>::name::<Self>().unwrap_or("<unknown pallet name>");
-				let new_storage_version = $crate::crate_to_pallet_version!();
 
 				$crate::log::info!(
 					target: $crate::LOG_TARGET,
-					"✅ no migration for {}, setting storage version to {:?}",
+					"✅ no migration for {}",
 					pallet_name,
-					new_storage_version,
 				);
 
-				new_storage_version
-					.put_into_storage::<<$trait_instance as $system::Config>::PalletInfo, Self>();
-
-				<<$trait_instance as $system::Config>::DbWeight as $crate::traits::Get<_>>::get().writes(1)
+				$crate::dispatch::Weight::zero()
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn pre_upgrade() -> Result<(), &'static str> {
-				Ok(())
+			fn pre_upgrade() -> Result<$crate::sp_std::vec::Vec<u8>, &'static str> {
+				Ok($crate::sp_std::vec::Vec::new())
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn post_upgrade() -> Result<(), &'static str> {
+			fn post_upgrade(_: $crate::sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
 				Ok(())
 			}
 		}
@@ -1669,7 +2356,6 @@ macro_rules! decl_module {
 	(@impl_function
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		$origin_ty:ty;
-		$error_type:ty;
 		$ignore:ident;
 		$(#[$fn_attr:meta])*
 		$vis:vis fn $name:ident (
@@ -1681,9 +2367,11 @@ macro_rules! decl_module {
 		$vis fn $name(
 			$origin: $origin_ty $(, $param: $param_ty )*
 		) -> $crate::dispatch::DispatchResult {
-			$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!(stringify!($name)));
-			{ $( $impl )* }
-			Ok(())
+			$crate::storage::with_storage_layer(|| {
+				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!(stringify!($name)));
+				{ $( $impl )* }
+				Ok(())
+			})
 		}
 	};
 
@@ -1691,7 +2379,6 @@ macro_rules! decl_module {
 	(@impl_function
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		$origin_ty:ty;
-		$error_type:ty;
 		$ignore:ident;
 		$(#[$fn_attr:meta])*
 		$vis:vis fn $name:ident (
@@ -1700,8 +2387,10 @@ macro_rules! decl_module {
 	) => {
 		$(#[$fn_attr])*
 		$vis fn $name($origin: $origin_ty $(, $param: $param_ty )* ) -> $result {
-			$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!(stringify!($name)));
-			$( $impl )*
+			$crate::storage::with_storage_layer(|| {
+				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!(stringify!($name)));
+				$( $impl )*
+			})
 		}
 	};
 
@@ -1715,7 +2404,7 @@ macro_rules! decl_module {
 		variant $fn_name:ident;
 		$( #[doc = $doc_attr:tt] )*
 		#[compact]
-		$type:ty;
+		$name:ident : $type:ty;
 		$( $rest:tt )*
 	) => {
 		$crate::decl_module! {
@@ -1727,7 +2416,7 @@ macro_rules! decl_module {
 			{
 				$( $current_params )*
 				#[codec(compact)]
-				$type,
+				$name: $type,
 			}
 			variant $fn_name;
 			$( #[doc = $doc_attr] )*
@@ -1744,7 +2433,7 @@ macro_rules! decl_module {
 		{ $( $current_params:tt )* }
 		variant $fn_name:ident;
 		$(#[doc = $doc_attr:tt])*
-		$type:ty;
+		$name:ident : $type:ty;
 		$( $rest:tt )*
 	) => {
 		$crate::decl_module! {
@@ -1755,7 +2444,7 @@ macro_rules! decl_module {
 			{ $( $generated_variants )* }
 			{
 				$( $current_params )*
-				$type,
+				$name: $type,
 			}
 			variant $fn_name;
 			$( #[doc = $doc_attr] )*
@@ -1785,9 +2474,9 @@ macro_rules! decl_module {
 				$( $generated_variants )*
 				#[allow(non_camel_case_types)]
 				$(#[doc = $doc_attr])*
-				$fn_name (
+				$fn_name {
 					$( $current_params )*
-				),
+				},
 			}
 			{}
 			$(
@@ -1807,7 +2496,8 @@ macro_rules! decl_module {
 		/// Dispatchable calls.
 		///
 		/// Each variant of this enum maps to a dispatchable function from the associated module.
-		#[derive($crate::codec::Encode, $crate::codec::Decode)]
+		#[derive($crate::codec::Encode, $crate::codec::Decode, $crate::scale_info::TypeInfo)]
+		#[scale_info(skip_type_params($trait_instance $(, $instance)?), capture_docs = "always")]
 		pub enum $call_type<$trait_instance: $trait_name$(<I>, $instance: $instantiable $( = $module_default_instance)?)?>
 			where $( $other_where_bounds )*
 		{
@@ -1815,6 +2505,45 @@ macro_rules! decl_module {
 			#[codec(skip)]
 			__PhantomItem($crate::sp_std::marker::PhantomData<($trait_instance, $($instance)?)>, $crate::Never),
 			$( $generated_variants )*
+		}
+	};
+
+	// Implementation for `GetStorageVersion`.
+	(@impl_get_storage_version
+		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
+		{ $( $other_where_bounds:tt )* }
+		$( $storage_version:tt )+
+	) => {
+		// Implement `GetStorageVersion` for `Pallet`
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::GetStorageVersion
+			for $module<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
+		{
+			fn current_storage_version() -> $crate::traits::StorageVersion {
+				$( $storage_version )*
+			}
+
+			fn on_chain_storage_version() -> $crate::traits::StorageVersion {
+				$crate::traits::StorageVersion::get::<Self>()
+			}
+		}
+	};
+
+	// Implementation for `GetStorageVersion` when no storage version is passed.
+	(@impl_get_storage_version
+		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
+		{ $( $other_where_bounds:tt )* }
+	) => {
+		// Implement `GetStorageVersion` for `Pallet`
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::GetStorageVersion
+			for $module<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
+		{
+			fn current_storage_version() -> $crate::traits::StorageVersion {
+				Default::default()
+			}
+
+			fn on_chain_storage_version() -> $crate::traits::StorageVersion {
+				$crate::traits::StorageVersion::get::<Self>()
+			}
 		}
 	};
 
@@ -1845,8 +2574,9 @@ macro_rules! decl_module {
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
-		{ $error_type:ty }
+		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
+		{ $( $storage_version:tt )* }
 	) => {
 		$crate::__check_reserved_fn_name! { $( $fn_name )* }
 
@@ -1864,12 +2594,23 @@ macro_rules! decl_module {
 		pub type Pallet<$trait_instance $(, $instance $( = $module_default_instance)?)?>
 			= $mod_type<$trait_instance $(, $instance)?>;
 
+		$crate::__create_tt_macro! {
+			tt_error_token,
+		}
+
 		$crate::decl_module! {
 			@impl_on_initialize
 			{ $system }
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
 			{ $( $other_where_bounds )* }
 			$( $on_initialize )*
+		}
+
+		$crate::decl_module! {
+			@impl_try_state_default
+			{ $system }
+			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
+			{ $( $other_where_bounds )* }
 		}
 
 		$crate::decl_module! {
@@ -1903,6 +2644,7 @@ macro_rules! decl_module {
 			{ $( $other_where_bounds )* }
 			$( $offchain )*
 		}
+
 		$crate::decl_module! {
 			@impl_deposit_event
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
@@ -1929,7 +2671,6 @@ macro_rules! decl_module {
 					@impl_function
 					$mod_type<$trait_instance: $trait_name $(<I>, $fn_instance: $fn_instantiable)?>;
 					$origin_type;
-					$error_type;
 					$from;
 					$(#[doc = $doc_attr])*
 					///
@@ -1954,9 +2695,33 @@ macro_rules! decl_module {
 				$(#[doc = $doc_attr])*
 				$(
 					$(#[$codec_attr])*
-					$param;
+					$param_name : $param;
 				)*
 			)*
+		}
+
+		$crate::paste::paste! {
+			impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>
+				$call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
+			{
+				$(
+					#[doc = "Create a call with the variant `" $fn_name "`."]
+					pub fn [< new_call_variant_ $fn_name >](
+						$( $param_name: $param ),*
+					) -> Self {
+						Self::$fn_name {
+							$( $param_name ),*
+						}
+					}
+				)*
+			}
+		}
+
+		$crate::decl_module! {
+			@impl_get_storage_version
+			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
+			{ $( $other_where_bounds )* }
+			$( $storage_version )*
 		}
 
 		// Implement weight calculation function for Call
@@ -1966,7 +2731,7 @@ macro_rules! decl_module {
 			fn get_dispatch_info(&self) -> $crate::dispatch::DispatchInfo {
 				match *self {
 					$(
-						$call_type::$fn_name( $( ref $param_name ),* ) => {
+						$call_type::$fn_name { $( ref $param_name ),* } => {
 							let __pallet_base_weight = $weight;
 							let __pallet_weight = <dyn $crate::dispatch::WeighData<( $( & $param, )* )>>::weigh_data(
 								&__pallet_base_weight,
@@ -1992,6 +2757,55 @@ macro_rules! decl_module {
 			}
 		}
 
+		// Implement PalletInfoAccess for the module.
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::PalletInfoAccess
+			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
+		{
+			fn index() -> usize {
+				<
+					<$trait_instance as $system::Config>::PalletInfo as $crate::traits::PalletInfo
+				>::index::<Self>()
+					.expect("Pallet is part of the runtime because pallet `Config` trait is \
+						implemented by the runtime")
+			}
+
+			fn name() -> &'static str {
+				<
+					<$trait_instance as $system::Config>::PalletInfo as $crate::traits::PalletInfo
+				>::name::<Self>()
+					.expect("Pallet is part of the runtime because pallet `Config` trait is \
+						implemented by the runtime")
+			}
+
+			fn module_name() -> &'static str {
+				<
+					<$trait_instance as $system::Config>::PalletInfo as $crate::traits::PalletInfo
+				>::module_name::<Self>()
+					.expect("Pallet is part of the runtime because pallet `Config` trait is \
+						implemented by the runtime")
+			}
+
+			fn crate_version() -> $crate::traits::CrateVersion {
+				$crate::crate_to_crate_version!()
+			}
+		}
+
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::PalletsInfoAccess
+			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
+		{
+			fn count() -> usize { 1 }
+			fn infos() -> $crate::sp_std::vec::Vec<$crate::traits::PalletInfoData> {
+				use $crate::traits::PalletInfoAccess;
+				let item = $crate::traits::PalletInfoData {
+					index: Self::index(),
+					name: Self::name(),
+					module_name: Self::module_name(),
+					crate_version: Self::crate_version(),
+				};
+				vec![item]
+			}
+		}
+
 		// Implement GetCallName for the Call.
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::GetCallName
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
@@ -1999,7 +2813,7 @@ macro_rules! decl_module {
 			fn get_call_name(&self) -> &'static str {
 				match *self {
 					$(
-						$call_type::$fn_name( $( ref $param_name ),* ) => {
+						$call_type::$fn_name { $( ref $param_name ),* } => {
 							// Don't generate any warnings for unused variables
 							let _ = ( $( $param_name ),* );
 							stringify!($fn_name)
@@ -2018,32 +2832,13 @@ macro_rules! decl_module {
 			}
 		}
 
-		// Bring `GetPalletVersion` into scope to make it easily usable.
-		pub use $crate::traits::GetPalletVersion as _;
-		// Implement `GetPalletVersion` for `Module`
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::GetPalletVersion
-			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
-		{
-			fn current_version() -> $crate::traits::PalletVersion {
-				$crate::crate_to_pallet_version!()
-			}
-
-			fn storage_version() -> Option<$crate::traits::PalletVersion> {
-				let key = $crate::traits::PalletVersion::storage_key::<
-						<$trait_instance as $system::Config>::PalletInfo, Self
-					>().expect("Every active pallet has a name in the runtime; qed");
-
-				$crate::storage::unhashed::get(&key)
-			}
-		}
-
 		// Implement `OnGenesis` for `Module`
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::OnGenesis
 			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_genesis() {
-				$crate::crate_to_pallet_version!()
-					.put_into_storage::<<$trait_instance as $system::Config>::PalletInfo, Self>();
+				let storage_version = <Self as $crate::traits::GetStorageVersion>::current_storage_version();
+				storage_version.put::<Self>();
 			}
 		}
 
@@ -2055,8 +2850,8 @@ macro_rules! decl_module {
 			fn clone(&self) -> Self {
 				match *self {
 					$(
-						$call_type::$fn_name( $( ref $param_name ),* ) =>
-							$call_type::$fn_name( $( (*$param_name).clone() ),* )
+						$call_type::$fn_name { $( ref $param_name ),* } =>
+							$call_type::$fn_name { $( $param_name: (*$param_name).clone() ),* }
 					,)*
 					_ => unreachable!(),
 				}
@@ -2069,9 +2864,9 @@ macro_rules! decl_module {
 			fn eq(&self, _other: &Self) -> bool {
 				match *self {
 					$(
-						$call_type::$fn_name( $( ref $param_name ),* ) => {
+						$call_type::$fn_name { $( ref $param_name ),* } => {
 							let self_params = ( $( $param_name, )* );
-							if let $call_type::$fn_name( $( ref $param_name ),* ) = *_other {
+							if let $call_type::$fn_name { $( ref $param_name ),* } = *_other {
 								self_params == ( $( $param_name, )* )
 							} else {
 								match *_other {
@@ -2099,7 +2894,7 @@ macro_rules! decl_module {
 			) -> $crate::dispatch::result::Result<(), $crate::dispatch::fmt::Error> {
 				match *self {
 					$(
-						$call_type::$fn_name( $( ref $param_name ),* ) =>
+						$call_type::$fn_name { $( ref $param_name ),* } =>
 							write!(_f, "{}{:?}",
 								stringify!($fn_name),
 								( $( $param_name.clone(), )* )
@@ -2113,11 +2908,11 @@ macro_rules! decl_module {
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::UnfilteredDispatchable
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
-			type Origin = $origin_type;
-			fn dispatch_bypass_filter(self, _origin: Self::Origin) -> $crate::dispatch::DispatchResultWithPostInfo {
+			type RuntimeOrigin = $origin_type;
+			fn dispatch_bypass_filter(self, _origin: Self::RuntimeOrigin) -> $crate::dispatch::DispatchResultWithPostInfo {
 				match self {
 					$(
-						$call_type::$fn_name( $( $param_name ),* ) => {
+						$call_type::$fn_name { $( $param_name ),* } => {
 							$crate::decl_module!(
 								@call
 								$from
@@ -2132,7 +2927,7 @@ macro_rules! decl_module {
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Callable<$trait_instance>
 			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
-			type Call = $call_type<$trait_instance $(, $instance)?>;
+			type RuntimeCall = $call_type<$trait_instance $(, $instance)?>;
 		}
 
 		$crate::__dispatch_impl_metadata! {
@@ -2146,170 +2941,18 @@ macro_rules! decl_module {
 				)*
 			}
 		}
+		$crate::__impl_error_metadata! {
+			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>
+			{ $( $other_where_bounds )* }
+			$( $error_type )*
+		}
 		$crate::__impl_module_constants_metadata ! {
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>
 			{ $( $other_where_bounds )* }
 			$( $constants )*
 		}
 
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::ModuleErrorMetadata
-			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
-		{
-			fn metadata() -> &'static [$crate::dispatch::ErrorMetadata] {
-				<$error_type as $crate::dispatch::ModuleErrorMetadata>::metadata()
-			}
-		}
-	}
-}
-
-/// Implement a meta-dispatch module to dispatch to other dispatchers.
-#[macro_export]
-macro_rules! impl_outer_dispatch {
-	(
-		$(#[$attr:meta])*
-		pub enum $call_type:ident for $runtime:ident where origin: $origin:ty {
-			$(
-				$( #[codec(index = $index:tt)] )? $module:ident::$camelcase:ident,
-			)*
-		}
-	) => {
-		$(#[$attr])*
-		#[derive(
-			Clone, PartialEq, Eq,
-			$crate::codec::Encode,
-			$crate::codec::Decode,
-			$crate::RuntimeDebug,
-		)]
-		pub enum $call_type {
-			$(
-				$( #[codec(index = $index)] )?
-				$camelcase ( $crate::dispatch::CallableCallFor<$camelcase, $runtime> )
-			,)*
-		}
-		impl $crate::dispatch::GetDispatchInfo for $call_type {
-			fn get_dispatch_info(&self) -> $crate::dispatch::DispatchInfo {
-				match self {
-					$( $call_type::$camelcase(call) => call.get_dispatch_info(), )*
-				}
-			}
-		}
-		impl $crate::dispatch::GetCallMetadata for $call_type {
-			fn get_call_metadata(&self) -> $crate::dispatch::CallMetadata {
-				use $crate::dispatch::GetCallName;
-				match self {
-					$( $call_type::$camelcase(call) => {
-						let function_name = call.get_call_name();
-						let pallet_name = stringify!($camelcase);
-						$crate::dispatch::CallMetadata { function_name, pallet_name }
-					}, )*
-				}
-			}
-
-			fn get_module_names() -> &'static [&'static str] {
-				&[$(
-					stringify!($camelcase),
-				)*]
-			}
-
-			fn get_call_names(module: &str) -> &'static [&'static str] {
-				use $crate::dispatch::{Callable, GetCallName};
-				match module {
-					$(
-						stringify!($camelcase) =>
-							<<$camelcase as Callable<$runtime>>::Call
-								as GetCallName>::get_call_names(),
-					)*
-					_ => unreachable!(),
-				}
-			}
-		}
-		impl $crate::dispatch::Dispatchable for $call_type {
-			type Origin = $origin;
-			type Config = $call_type;
-			type Info = $crate::weights::DispatchInfo;
-			type PostInfo = $crate::weights::PostDispatchInfo;
-			fn dispatch(
-				self,
-				origin: $origin,
-			) -> $crate::dispatch::DispatchResultWithPostInfo {
-				if !<Self::Origin as $crate::traits::OriginTrait>::filter_call(&origin, &self) {
-					return $crate::sp_std::result::Result::Err($crate::dispatch::DispatchError::BadOrigin.into())
-				}
-
-				$crate::traits::UnfilteredDispatchable::dispatch_bypass_filter(self, origin)
-			}
-		}
-
-		impl $crate::traits::UnfilteredDispatchable for $call_type {
-			type Origin = $origin;
-			fn dispatch_bypass_filter(
-				self,
-				origin: $origin,
-			) -> $crate::dispatch::DispatchResultWithPostInfo {
-				$crate::impl_outer_dispatch! {
-					@DISPATCH_MATCH
-					self
-					$call_type
-					origin
-					{}
-					0;
-					$( $camelcase ),*
-				}
-			}
-		}
-
-		$(
-			impl $crate::traits::IsSubType<$crate::dispatch::CallableCallFor<$camelcase, $runtime>> for $call_type {
-				#[allow(unreachable_patterns)]
-				fn is_sub_type(&self) -> Option<&$crate::dispatch::CallableCallFor<$camelcase, $runtime>> {
-					match *self {
-						$call_type::$camelcase(ref r) => Some(r),
-						// May be unreachable
-						_ => None,
-					}
-				}
-			}
-
-			impl From<$crate::dispatch::CallableCallFor<$camelcase, $runtime>> for $call_type {
-				fn from(call: $crate::dispatch::CallableCallFor<$camelcase, $runtime>) -> Self {
-					$call_type::$camelcase(call)
-				}
-			}
-		)*
-	};
-	(@DISPATCH_MATCH
-		$self:ident
-		$call_type:ident
-		$origin:ident
-		{ $( $generated:tt )* }
-		$index:expr;
-		$name:ident
-		$( , $rest:ident )*
-	) => {
-		$crate::impl_outer_dispatch! {
-			@DISPATCH_MATCH
-			$self
-			$call_type
-			$origin
-			{
-				$( $generated )*
-				$call_type::$name(call) =>
-					$crate::traits::UnfilteredDispatchable::dispatch_bypass_filter(call, $origin),
-			}
-			$index + 1;
-			$( $rest ),*
-		}
-	};
-	(@DISPATCH_MATCH
-		$self:ident
-		$call_type:ident
-		$origin:ident
-		{ $( $generated:tt )* }
-		$index:expr;
-	) => {
-		match $self {
-			$( $generated )*
-		}
+		$crate::__generate_dummy_part_checker!();
 	}
 }
 
@@ -2320,6 +2963,7 @@ macro_rules! __dispatch_impl_metadata {
 	(
 		$mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>
 		{ $( $other_where_bounds:tt )* }
+		$call_type:ident
 		$($rest:tt)*
 	) => {
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $mod_type<$trait_instance $(, $instance)?>
@@ -2327,11 +2971,49 @@ macro_rules! __dispatch_impl_metadata {
 		{
 			#[doc(hidden)]
 			#[allow(dead_code)]
-			pub fn call_functions() -> &'static [$crate::dispatch::FunctionMetadata] {
-				$crate::__call_to_functions!($($rest)*)
+			pub fn call_functions() -> $crate::metadata::PalletCallMetadata {
+				$crate::scale_info::meta_type::<$call_type<$trait_instance $(, $instance)?>>().into()
 			}
 		}
 	}
+}
+
+/// Implement metadata for pallet error.
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __impl_error_metadata {
+	(
+		$mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>
+		{ $( $other_where_bounds:tt )* }
+		__NO_ERROR_DEFINED
+	) => {
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $mod_type<$trait_instance $(, $instance)?>
+			where $( $other_where_bounds )*
+		{
+			#[doc(hidden)]
+			#[allow(dead_code)]
+			pub fn error_metadata() -> Option<$crate::metadata::PalletErrorMetadata> {
+				None
+			}
+		}
+	};
+	(
+		$mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>
+		{ $( $other_where_bounds:tt )* }
+		$( $error_type:tt )*
+	) => {
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $mod_type<$trait_instance $(, $instance)?>
+			where $( $other_where_bounds )*
+		{
+			#[doc(hidden)]
+			#[allow(dead_code)]
+			pub fn error_metadata() -> Option<$crate::metadata::PalletErrorMetadata> {
+				Some($crate::metadata::PalletErrorMetadata {
+					ty: $crate::scale_info::meta_type::<$( $error_type )*>()
+				})
+			}
+		}
+	};
 }
 
 /// Implement metadata for module constants.
@@ -2401,7 +3083,7 @@ macro_rules! __impl_module_constants_metadata {
 		{
 			#[doc(hidden)]
 			#[allow(dead_code)]
-			pub fn module_constants_metadata() -> &'static [$crate::dispatch::ModuleConstantMetadata] {
+			pub fn pallet_constants_metadata() -> $crate::sp_std::vec::Vec<$crate::metadata::PalletConstantMetadata> {
 				// Create the `ByteGetter`s
 				$(
 					#[allow(non_upper_case_types)]
@@ -2415,146 +3097,28 @@ macro_rules! __impl_module_constants_metadata {
 					>);
 					impl<$const_trait_instance: 'static + $const_trait_name $(
 						<I>, $const_instance: $const_instantiable)?
-					> $crate::dispatch::DefaultByte
-						for $default_byte_name <$const_trait_instance $(, $const_instance)?>
+					> $default_byte_name <$const_trait_instance $(, $const_instance)?>
 					{
 						fn default_byte(&self) -> $crate::dispatch::Vec<u8> {
 							let value: $type = $value;
 							$crate::dispatch::Encode::encode(&value)
 						}
 					}
-
-					unsafe impl<$const_trait_instance: 'static + $const_trait_name $(
-						<I>, $const_instance: $const_instantiable)?
-					> Send for $default_byte_name <$const_trait_instance $(, $const_instance)?> {}
-
-					unsafe impl<$const_trait_instance: 'static + $const_trait_name $(
-						<I>, $const_instance: $const_instantiable)?
-					> Sync for $default_byte_name <$const_trait_instance $(, $const_instance)?> {}
 				)*
-				&[
+				$crate::sp_std::vec![
 					$(
-						$crate::dispatch::ModuleConstantMetadata {
-							name: $crate::dispatch::DecodeDifferent::Encode(stringify!($name)),
-							ty: $crate::dispatch::DecodeDifferent::Encode(stringify!($type)),
-							value: $crate::dispatch::DecodeDifferent::Encode(
-								$crate::dispatch::DefaultByteGetter(
-									&$default_byte_name::<
-										$const_trait_instance $(, $const_instance)?
-									>(
-										$crate::dispatch::marker::PhantomData
-									)
-								)
-							),
-							documentation: $crate::dispatch::DecodeDifferent::Encode(
-								&[ $( $doc_attr ),* ]
-							),
+						$crate::metadata::PalletConstantMetadata {
+							name: stringify!($name),
+							ty: $crate::scale_info::meta_type::<$type>(),
+							value: $default_byte_name::<$const_trait_instance $(, $const_instance)?>(
+								Default::default()
+							).default_byte(),
+							docs: $crate::sp_std::vec![ $( $doc_attr ),* ],
 						}
 					),*
 				]
 			}
 		}
-	}
-}
-
-/// Convert the list of calls into their JSON representation, joined by ",".
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __call_to_functions {
-	(
-		$call_type:ident $origin_type:ty
-		{
-			$(
-				$(#[doc = $doc_attr:tt])*
-				fn $fn_name:ident($from:ident
-					$(
-						, $(#[$codec_attr:ident])* $param_name:ident : $param:ty
-					)*
-				);
-			)*
-		}
-	) => {
-		$crate::__functions_to_metadata!(0; $origin_type;; $(
-			fn $fn_name( $($(#[$codec_attr])* $param_name: $param ),* );
-			$( $doc_attr ),*;
-		)*)
-	};
-}
-
-
-/// Convert a list of functions into a list of `FunctionMetadata` items.
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __functions_to_metadata{
-	(
-		$fn_id:expr;
-		$origin_type:ty;
-		$( $function_metadata:expr ),*;
-		fn $fn_name:ident(
-			$(
-				$(#[$codec_attr:ident])* $param_name:ident : $param:ty
-			),*
-		);
-		$( $fn_doc:expr ),*;
-		$( $rest:tt )*
-	) => {
-		$crate::__functions_to_metadata!(
-			$fn_id + 1; $origin_type;
-			$( $function_metadata, )* $crate::__function_to_metadata!(
-				fn $fn_name($( $(#[$codec_attr])* $param_name : $param ),*); $( $fn_doc ),*; $fn_id;
-			);
-			$($rest)*
-		)
-	};
-	(
-		$fn_id:expr;
-		$origin_type:ty;
-		$( $function_metadata:expr ),*;
-	) => {
-		&[ $( $function_metadata ),* ]
-	}
-}
-
-/// Convert a function into its metadata representation.
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __function_to_metadata {
-	(
-		fn $fn_name:ident(
-			$( $(#[$codec_attr:ident])* $param_name:ident : $param:ty),*
-		);
-		$( $fn_doc:expr ),*;
-		$fn_id:expr;
-	) => {
-		$crate::dispatch::FunctionMetadata {
-			name: $crate::dispatch::DecodeDifferent::Encode(stringify!($fn_name)),
-			arguments: $crate::dispatch::DecodeDifferent::Encode(&[
-				$(
-					$crate::dispatch::FunctionArgumentMetadata {
-						name: $crate::dispatch::DecodeDifferent::Encode(stringify!($param_name)),
-						ty: $crate::dispatch::DecodeDifferent::Encode(
-							$crate::__function_to_metadata!(@stringify_expand_attr
-								$(#[$codec_attr])* $param_name: $param
-							)
-						),
-					}
-				),*
-			]),
-			documentation: $crate::dispatch::DecodeDifferent::Encode(&[ $( $fn_doc ),* ]),
-		}
-	};
-
-	(@stringify_expand_attr #[compact] $param_name:ident : $param:ty) => {
-		concat!("Compact<", stringify!($param), ">")
-	};
-
-	(@stringify_expand_attr $param_name:ident : $param:ty) => { stringify!($param) };
-
-	(@stringify_expand_attr $(#[codec_attr:ident])* $param_name:ident : $param:ty) => {
-		compile_error!(concat!(
-			"Invalid attribute for parameter `", stringify!($param_name),
-			"`, the following attributes are supported: `#[compact]`"
-		));
 	}
 }
 
@@ -2615,48 +3179,42 @@ macro_rules! __check_reserved_fn_name {
 #[allow(dead_code)]
 mod tests {
 	use super::*;
-	use crate::weights::{DispatchInfo, DispatchClass, Pays, RuntimeDbWeight};
-	use crate::traits::{
-		CallMetadata, GetCallMetadata, GetCallName, OnInitialize, OnFinalize, OnIdle, OnRuntimeUpgrade,
-		IntegrityTest, Get, PalletInfo,
+	use crate::{
+		dispatch::{DispatchClass, DispatchInfo, Pays},
+		metadata::*,
+		traits::{
+			CallerTrait, CrateVersion, Get, GetCallName, IntegrityTest, OnFinalize, OnIdle,
+			OnInitialize, OnRuntimeUpgrade, PalletInfo,
+		},
 	};
+	use sp_weights::RuntimeDbWeight;
 
-	pub trait Config: system::Config + Sized where Self::AccountId: From<u32> { }
+	pub trait Config: system::Config + Sized
+	where
+		Self::AccountId: From<u32>,
+	{
+	}
 
 	pub mod system {
 		use super::*;
 
 		pub trait Config: 'static {
 			type AccountId;
-			type Call;
+			type RuntimeCall;
 			type BaseCallFilter;
-			type Origin: crate::traits::OriginTrait<Call = Self::Call>;
+			type RuntimeOrigin: crate::traits::OriginTrait<Call = Self::RuntimeCall>;
 			type BlockNumber: Into<u32>;
 			type PalletInfo: crate::traits::PalletInfo;
 			type DbWeight: Get<RuntimeDbWeight>;
 		}
 
-		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
-		pub enum RawOrigin<AccountId> {
-			Root,
-			Signed(AccountId),
-			None,
-		}
-
-		impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
-			fn from(s: Option<AccountId>) -> RawOrigin<AccountId> {
-				match s {
-					Some(who) => RawOrigin::Signed(who),
-					None => RawOrigin::None,
-				}
-			}
-		}
+		pub use super::super::RawOrigin;
 
 		pub type Origin<T> = RawOrigin<<T as Config>::AccountId>;
 	}
 
 	decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: T::Origin, system = system, T::AccountId: From<u32> {
+		pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system = system, T::AccountId: From<u32> {
 			/// Hi, this is a comment.
 			#[weight = 0]
 			fn aux_0(_origin) -> DispatchResult { unreachable!() }
@@ -2679,101 +3237,24 @@ mod tests {
 			#[weight = (5, DispatchClass::Operational)]
 			fn operational(_origin) { unreachable!() }
 
-			fn on_initialize(n: T::BlockNumber,) -> Weight { if n.into() == 42 { panic!("on_initialize") } 7 }
+			fn on_initialize(n: T::BlockNumber,) -> Weight { if n.into() == 42 { panic!("on_initialize") } Weight::from_ref_time(7) }
 			fn on_idle(n: T::BlockNumber, remaining_weight: Weight,) -> Weight {
-				if n.into() == 42 || remaining_weight == 42  { panic!("on_idle") }
-				7
+				if n.into() == 42 || remaining_weight == Weight::from_ref_time(42)  { panic!("on_idle") }
+				Weight::from_ref_time(7)
 			}
 			fn on_finalize(n: T::BlockNumber,) { if n.into() == 42 { panic!("on_finalize") } }
-			fn on_runtime_upgrade() -> Weight { 10 }
+			fn on_runtime_upgrade() -> Weight { Weight::from_ref_time(10) }
 			fn offchain_worker() {}
 			/// Some doc
 			fn integrity_test() { panic!("integrity_test") }
 		}
 	}
 
-	const EXPECTED_METADATA: &'static [FunctionMetadata] = &[
-		FunctionMetadata {
-			name: DecodeDifferent::Encode("aux_0"),
-			arguments: DecodeDifferent::Encode(&[]),
-			documentation: DecodeDifferent::Encode(&[
-				" Hi, this is a comment."
-			])
-		},
-		FunctionMetadata {
-			name: DecodeDifferent::Encode("aux_1"),
-			arguments: DecodeDifferent::Encode(&[
-				FunctionArgumentMetadata {
-					name: DecodeDifferent::Encode("_data"),
-					ty: DecodeDifferent::Encode("Compact<u32>")
-				}
-			]),
-			documentation: DecodeDifferent::Encode(&[]),
-		},
-		FunctionMetadata {
-			name: DecodeDifferent::Encode("aux_2"),
-			arguments: DecodeDifferent::Encode(&[
-				FunctionArgumentMetadata {
-					name: DecodeDifferent::Encode("_data"),
-					ty: DecodeDifferent::Encode("i32"),
-				},
-				FunctionArgumentMetadata {
-					name: DecodeDifferent::Encode("_data2"),
-					ty: DecodeDifferent::Encode("String"),
-				}
-			]),
-			documentation: DecodeDifferent::Encode(&[]),
-		},
-		FunctionMetadata {
-			name: DecodeDifferent::Encode("aux_3"),
-			arguments: DecodeDifferent::Encode(&[]),
-			documentation: DecodeDifferent::Encode(&[]),
-		},
-		FunctionMetadata {
-			name: DecodeDifferent::Encode("aux_4"),
-			arguments: DecodeDifferent::Encode(&[
-				FunctionArgumentMetadata {
-					name: DecodeDifferent::Encode("_data"),
-					ty: DecodeDifferent::Encode("i32"),
-				}
-			]),
-			documentation: DecodeDifferent::Encode(&[]),
-		},
-		FunctionMetadata {
-			name: DecodeDifferent::Encode("aux_5"),
-			arguments: DecodeDifferent::Encode(&[
-				FunctionArgumentMetadata {
-					name: DecodeDifferent::Encode("_data"),
-					ty: DecodeDifferent::Encode("i32"),
-				},
-				FunctionArgumentMetadata {
-					name: DecodeDifferent::Encode("_data2"),
-					ty: DecodeDifferent::Encode("Compact<u32>")
-				}
-			]),
-			documentation: DecodeDifferent::Encode(&[]),
-		},
-		FunctionMetadata {
-			name: DecodeDifferent::Encode("operational"),
-			arguments: DecodeDifferent::Encode(&[]),
-			documentation: DecodeDifferent::Encode(&[]),
-		},
-	];
-
+	#[derive(Eq, PartialEq, Clone, crate::RuntimeDebug, scale_info::TypeInfo)]
 	pub struct TraitImpl {}
-	impl Config for TraitImpl { }
+	impl Config for TraitImpl {}
 
 	type Test = Module<TraitImpl>;
-
-	impl_outer_origin!{
-		pub enum OuterOrigin for TraitImpl where system = system {}
-	}
-
-	impl_outer_dispatch! {
-		pub enum OuterCall for TraitImpl where origin: OuterOrigin {
-			self::Test,
-		}
-	}
 
 	impl PalletInfo for TraitImpl {
 		fn index<P: 'static>() -> Option<usize> {
@@ -2792,13 +3273,103 @@ mod tests {
 
 			None
 		}
+		fn module_name<P: 'static>() -> Option<&'static str> {
+			let type_id = sp_std::any::TypeId::of::<P>();
+			if type_id == sp_std::any::TypeId::of::<Test>() {
+				return Some("tests")
+			}
+
+			None
+		}
+		fn crate_version<P: 'static>() -> Option<CrateVersion> {
+			let type_id = sp_std::any::TypeId::of::<P>();
+			if type_id == sp_std::any::TypeId::of::<Test>() {
+				return Some(frame_support::crate_to_crate_version!())
+			}
+
+			None
+		}
+	}
+
+	#[derive(
+		TypeInfo, crate::RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, MaxEncodedLen,
+	)]
+	pub struct OuterOrigin;
+
+	impl From<RawOrigin<<TraitImpl as system::Config>::AccountId>> for OuterOrigin {
+		fn from(_: RawOrigin<<TraitImpl as system::Config>::AccountId>) -> Self {
+			unimplemented!("Not required in tests!")
+		}
+	}
+
+	impl CallerTrait<<TraitImpl as system::Config>::AccountId> for OuterOrigin {
+		fn into_system(self) -> Option<RawOrigin<<TraitImpl as system::Config>::AccountId>> {
+			unimplemented!("Not required in tests!")
+		}
+
+		fn as_system_ref(&self) -> Option<&RawOrigin<<TraitImpl as system::Config>::AccountId>> {
+			unimplemented!("Not required in tests!")
+		}
+	}
+
+	impl crate::traits::OriginTrait for OuterOrigin {
+		type Call = <TraitImpl as system::Config>::RuntimeCall;
+		type PalletsOrigin = OuterOrigin;
+		type AccountId = <TraitImpl as system::Config>::AccountId;
+
+		fn add_filter(&mut self, _filter: impl Fn(&Self::Call) -> bool + 'static) {
+			unimplemented!("Not required in tests!")
+		}
+
+		fn reset_filter(&mut self) {
+			unimplemented!("Not required in tests!")
+		}
+
+		fn set_caller_from(&mut self, _other: impl Into<Self>) {
+			unimplemented!("Not required in tests!")
+		}
+
+		fn filter_call(&self, _call: &Self::Call) -> bool {
+			unimplemented!("Not required in tests!")
+		}
+
+		fn caller(&self) -> &Self::PalletsOrigin {
+			unimplemented!("Not required in tests!")
+		}
+
+		fn into_caller(self) -> Self::PalletsOrigin {
+			unimplemented!("Not required in tests!")
+		}
+
+		fn try_with_caller<R>(
+			self,
+			_f: impl FnOnce(Self::PalletsOrigin) -> Result<R, Self::PalletsOrigin>,
+		) -> Result<R, Self> {
+			unimplemented!("Not required in tests!")
+		}
+
+		fn none() -> Self {
+			unimplemented!("Not required in tests!")
+		}
+		fn root() -> Self {
+			unimplemented!("Not required in tests!")
+		}
+		fn signed(_by: <TraitImpl as system::Config>::AccountId) -> Self {
+			unimplemented!("Not required in tests!")
+		}
+		fn as_signed(self) -> Option<Self::AccountId> {
+			unimplemented!("Not required in tests!")
+		}
+		fn as_system_ref(&self) -> Option<&RawOrigin<Self::AccountId>> {
+			unimplemented!("Not required in tests!")
+		}
 	}
 
 	impl system::Config for TraitImpl {
-		type Origin = OuterOrigin;
+		type RuntimeOrigin = OuterOrigin;
 		type AccountId = u32;
-		type Call = OuterCall;
-		type BaseCallFilter = ();
+		type RuntimeCall = ();
+		type BaseCallFilter = frame_support::traits::Everything;
 		type BlockNumber = u32;
 		type PalletInfo = Self;
 		type DbWeight = ();
@@ -2807,17 +3378,19 @@ mod tests {
 	#[test]
 	fn module_json_metadata() {
 		let metadata = Module::<TraitImpl>::call_functions();
-		assert_eq!(EXPECTED_METADATA, metadata);
+		let expected_metadata =
+			PalletCallMetadata { ty: scale_info::meta_type::<Call<TraitImpl>>() };
+		assert_eq!(expected_metadata, metadata);
 	}
 
 	#[test]
 	fn compact_attr() {
-		let call: Call<TraitImpl> = Call::aux_1(1);
+		let call: Call<TraitImpl> = Call::aux_1 { _data: 1 };
 		let encoded = call.encode();
 		assert_eq!(2, encoded.len());
 		assert_eq!(vec![1, 4], encoded);
 
-		let call: Call<TraitImpl> = Call::aux_5(1, 2);
+		let call: Call<TraitImpl> = Call::aux_5 { _data: 1, _data2: 2 };
 		let encoded = call.encode();
 		assert_eq!(6, encoded.len());
 		assert_eq!(vec![5, 1, 0, 0, 0, 8], encoded);
@@ -2825,13 +3398,13 @@ mod tests {
 
 	#[test]
 	fn encode_is_correct_and_decode_works() {
-		let call: Call<TraitImpl> = Call::aux_0();
+		let call: Call<TraitImpl> = Call::aux_0 {};
 		let encoded = call.encode();
 		assert_eq!(vec![0], encoded);
 		let decoded = Call::<TraitImpl>::decode(&mut &encoded[..]).unwrap();
 		assert_eq!(decoded, call);
 
-		let call: Call<TraitImpl> = Call::aux_2(32, "hello".into());
+		let call: Call<TraitImpl> = Call::aux_2 { _data: 32, _data2: "hello".into() };
 		let encoded = call.encode();
 		assert_eq!(vec![2, 32, 0, 0, 0, 20, 104, 101, 108, 108, 111], encoded);
 		let decoded = Call::<TraitImpl>::decode(&mut &encoded[..]).unwrap();
@@ -2846,24 +3419,30 @@ mod tests {
 
 	#[test]
 	fn on_initialize_should_work_2() {
-		assert_eq!(<Module<TraitImpl> as OnInitialize<u32>>::on_initialize(10), 7);
+		assert_eq!(
+			<Module<TraitImpl> as OnInitialize<u32>>::on_initialize(10),
+			Weight::from_ref_time(7)
+		);
 	}
 
 	#[test]
 	#[should_panic(expected = "on_idle")]
 	fn on_idle_should_work_1() {
-		<Module<TraitImpl> as OnIdle<u32>>::on_idle(42, 9);
+		<Module<TraitImpl> as OnIdle<u32>>::on_idle(42, Weight::from_ref_time(9));
 	}
 
 	#[test]
 	#[should_panic(expected = "on_idle")]
 	fn on_idle_should_work_2() {
-		<Module<TraitImpl> as OnIdle<u32>>::on_idle(9, 42);
+		<Module<TraitImpl> as OnIdle<u32>>::on_idle(9, Weight::from_ref_time(42));
 	}
 
 	#[test]
 	fn on_idle_should_work_3() {
-		assert_eq!(<Module<TraitImpl> as OnIdle<u32>>::on_idle(10, 11), 7);
+		assert_eq!(
+			<Module<TraitImpl> as OnIdle<u32>>::on_idle(10, Weight::from_ref_time(11)),
+			Weight::from_ref_time(7)
+		);
 	}
 
 	#[test]
@@ -2874,54 +3453,243 @@ mod tests {
 
 	#[test]
 	fn on_runtime_upgrade_should_work() {
-		sp_io::TestExternalities::default().execute_with(||
-			assert_eq!(<Module<TraitImpl> as OnRuntimeUpgrade>::on_runtime_upgrade(), 10)
-		);
+		sp_io::TestExternalities::default().execute_with(|| {
+			assert_eq!(
+				<Module<TraitImpl> as OnRuntimeUpgrade>::on_runtime_upgrade(),
+				Weight::from_ref_time(10)
+			)
+		});
 	}
 
 	#[test]
 	fn weight_should_attach_to_call_enum() {
 		// operational.
 		assert_eq!(
-			Call::<TraitImpl>::operational().get_dispatch_info(),
-			DispatchInfo { weight: 5, class: DispatchClass::Operational, pays_fee: Pays::Yes },
+			Call::<TraitImpl>::operational {}.get_dispatch_info(),
+			DispatchInfo {
+				weight: Weight::from_ref_time(5),
+				class: DispatchClass::Operational,
+				pays_fee: Pays::Yes
+			},
 		);
 		// custom basic
 		assert_eq!(
-			Call::<TraitImpl>::aux_3().get_dispatch_info(),
-			DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes },
+			Call::<TraitImpl>::aux_3 {}.get_dispatch_info(),
+			DispatchInfo {
+				weight: Weight::from_ref_time(3),
+				class: DispatchClass::Normal,
+				pays_fee: Pays::Yes
+			},
 		);
 	}
 
 	#[test]
 	fn call_name() {
-		let name = Call::<TraitImpl>::aux_3().get_call_name();
+		let name = Call::<TraitImpl>::aux_3 {}.get_call_name();
 		assert_eq!("aux_3", name);
-	}
-
-	#[test]
-	fn call_metadata() {
-		let call = OuterCall::Test(Call::<TraitImpl>::aux_3());
-		let metadata = call.get_call_metadata();
-		let expected = CallMetadata { function_name: "aux_3".into(), pallet_name: "Test".into() };
-		assert_eq!(metadata, expected);
 	}
 
 	#[test]
 	fn get_call_names() {
 		let call_names = Call::<TraitImpl>::get_call_names();
-		assert_eq!(["aux_0", "aux_1", "aux_2", "aux_3", "aux_4", "aux_5", "operational"], call_names);
-	}
-
-	#[test]
-	fn get_module_names() {
-		let module_names = OuterCall::get_module_names();
-		assert_eq!(["Test"], module_names);
+		assert_eq!(
+			["aux_0", "aux_1", "aux_2", "aux_3", "aux_4", "aux_5", "operational"],
+			call_names
+		);
 	}
 
 	#[test]
 	#[should_panic(expected = "integrity_test")]
 	fn integrity_test_should_work() {
 		<Module<TraitImpl> as IntegrityTest>::integrity_test();
+	}
+
+	#[test]
+	fn test_new_call_variant() {
+		Call::<TraitImpl>::new_call_variant_aux_0();
+	}
+}
+
+#[cfg(test)]
+// Do not complain about unused `dispatch` and `dispatch_aux`.
+#[allow(dead_code)]
+mod weight_tests {
+	use super::*;
+	use sp_core::{parameter_types, Get};
+	use sp_weights::RuntimeDbWeight;
+
+	pub trait Config: 'static {
+		type RuntimeOrigin;
+		type Balance;
+		type BlockNumber;
+		type DbWeight: Get<RuntimeDbWeight>;
+		type PalletInfo: crate::traits::PalletInfo;
+	}
+
+	pub struct TraitImpl {}
+
+	parameter_types! {
+		pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
+			read: 100,
+			write: 1000,
+		};
+	}
+
+	impl Config for TraitImpl {
+		type RuntimeOrigin = u32;
+		type BlockNumber = u32;
+		type Balance = u32;
+		type DbWeight = DbWeight;
+		type PalletInfo = crate::tests::PanicPalletInfo;
+	}
+
+	decl_module! {
+		pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=self {
+			// no arguments, fixed weight
+			#[weight = 1000]
+			fn f00(_origin) { unimplemented!(); }
+
+			#[weight = (1000, DispatchClass::Mandatory)]
+			fn f01(_origin) { unimplemented!(); }
+
+			#[weight = (1000, Pays::No)]
+			fn f02(_origin) { unimplemented!(); }
+
+			#[weight = (1000, DispatchClass::Operational, Pays::No)]
+			fn f03(_origin) { unimplemented!(); }
+
+			// weight = a x 10 + b
+			#[weight = ((_a * 10 + _eb * 1) as u64, DispatchClass::Normal, Pays::Yes)]
+			fn f11(_origin, _a: u32, _eb: u32) { unimplemented!(); }
+
+			#[weight = (0, DispatchClass::Operational, Pays::Yes)]
+			fn f12(_origin, _a: u32, _eb: u32) { unimplemented!(); }
+
+			#[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + Weight::from_ref_time(10_000)]
+			fn f20(_origin) { unimplemented!(); }
+
+			#[weight = T::DbWeight::get().reads_writes(6, 5) + Weight::from_ref_time(40_000)]
+			fn f21(_origin) { unimplemented!(); }
+
+		}
+	}
+
+	#[test]
+	fn weights_are_correct() {
+		// #[weight = 1000]
+		let info = Call::<TraitImpl>::f00 {}.get_dispatch_info();
+		assert_eq!(info.weight, Weight::from_ref_time(1000));
+		assert_eq!(info.class, DispatchClass::Normal);
+		assert_eq!(info.pays_fee, Pays::Yes);
+
+		// #[weight = (1000, DispatchClass::Mandatory)]
+		let info = Call::<TraitImpl>::f01 {}.get_dispatch_info();
+		assert_eq!(info.weight, Weight::from_ref_time(1000));
+		assert_eq!(info.class, DispatchClass::Mandatory);
+		assert_eq!(info.pays_fee, Pays::Yes);
+
+		// #[weight = (1000, Pays::No)]
+		let info = Call::<TraitImpl>::f02 {}.get_dispatch_info();
+		assert_eq!(info.weight, Weight::from_ref_time(1000));
+		assert_eq!(info.class, DispatchClass::Normal);
+		assert_eq!(info.pays_fee, Pays::No);
+
+		// #[weight = (1000, DispatchClass::Operational, Pays::No)]
+		let info = Call::<TraitImpl>::f03 {}.get_dispatch_info();
+		assert_eq!(info.weight, Weight::from_ref_time(1000));
+		assert_eq!(info.class, DispatchClass::Operational);
+		assert_eq!(info.pays_fee, Pays::No);
+
+		// #[weight = ((_a * 10 + _eb * 1) as Weight, DispatchClass::Normal, Pays::Yes)]
+		let info = Call::<TraitImpl>::f11 { _a: 13, _eb: 20 }.get_dispatch_info();
+		assert_eq!(info.weight, Weight::from_ref_time(150)); // 13*10 + 20
+		assert_eq!(info.class, DispatchClass::Normal);
+		assert_eq!(info.pays_fee, Pays::Yes);
+
+		// #[weight = (0, DispatchClass::Operational, Pays::Yes)]
+		let info = Call::<TraitImpl>::f12 { _a: 10, _eb: 20 }.get_dispatch_info();
+		assert_eq!(info.weight, Weight::from_ref_time(0));
+		assert_eq!(info.class, DispatchClass::Operational);
+		assert_eq!(info.pays_fee, Pays::Yes);
+
+		// #[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + 10_000]
+		let info = Call::<TraitImpl>::f20 {}.get_dispatch_info();
+		assert_eq!(info.weight, Weight::from_ref_time(12300)); // 100*3 + 1000*2 + 10_1000
+		assert_eq!(info.class, DispatchClass::Normal);
+		assert_eq!(info.pays_fee, Pays::Yes);
+
+		// #[weight = T::DbWeight::get().reads_writes(6, 5) + 40_000]
+		let info = Call::<TraitImpl>::f21 {}.get_dispatch_info();
+		assert_eq!(info.weight, Weight::from_ref_time(45600)); // 100*6 + 1000*5 + 40_1000
+		assert_eq!(info.class, DispatchClass::Normal);
+		assert_eq!(info.pays_fee, Pays::Yes);
+	}
+
+	#[test]
+	fn extract_actual_weight_works() {
+		let pre = DispatchInfo { weight: Weight::from_ref_time(1000), ..Default::default() };
+		assert_eq!(extract_actual_weight(&Ok(Some(7).into()), &pre), Weight::from_ref_time(7));
+		assert_eq!(
+			extract_actual_weight(&Ok(Some(1000).into()), &pre),
+			Weight::from_ref_time(1000)
+		);
+		assert_eq!(
+			extract_actual_weight(
+				&Err(DispatchError::BadOrigin.with_weight(Weight::from_ref_time(9))),
+				&pre
+			),
+			Weight::from_ref_time(9)
+		);
+	}
+
+	#[test]
+	fn extract_actual_weight_caps_at_pre_weight() {
+		let pre = DispatchInfo { weight: Weight::from_ref_time(1000), ..Default::default() };
+		assert_eq!(
+			extract_actual_weight(&Ok(Some(1250).into()), &pre),
+			Weight::from_ref_time(1000)
+		);
+		assert_eq!(
+			extract_actual_weight(
+				&Err(DispatchError::BadOrigin.with_weight(Weight::from_ref_time(1300))),
+				&pre
+			),
+			Weight::from_ref_time(1000),
+		);
+	}
+
+	#[test]
+	fn extract_actual_pays_fee_works() {
+		let pre = DispatchInfo { weight: Weight::from_ref_time(1000), ..Default::default() };
+		assert_eq!(extract_actual_pays_fee(&Ok(Some(7).into()), &pre), Pays::Yes);
+		assert_eq!(extract_actual_pays_fee(&Ok(Some(1000).into()), &pre), Pays::Yes);
+		assert_eq!(extract_actual_pays_fee(&Ok((Some(1000), Pays::Yes).into()), &pre), Pays::Yes);
+		assert_eq!(extract_actual_pays_fee(&Ok((Some(1000), Pays::No).into()), &pre), Pays::No);
+		assert_eq!(
+			extract_actual_pays_fee(
+				&Err(DispatchError::BadOrigin.with_weight(Weight::from_ref_time(9))),
+				&pre
+			),
+			Pays::Yes
+		);
+		assert_eq!(
+			extract_actual_pays_fee(
+				&Err(DispatchErrorWithPostInfo {
+					post_info: PostDispatchInfo { actual_weight: None, pays_fee: Pays::No },
+					error: DispatchError::BadOrigin,
+				}),
+				&pre
+			),
+			Pays::No
+		);
+
+		let pre = DispatchInfo {
+			weight: Weight::from_ref_time(1000),
+			pays_fee: Pays::No,
+			..Default::default()
+		};
+		assert_eq!(extract_actual_pays_fee(&Ok(Some(7).into()), &pre), Pays::No);
+		assert_eq!(extract_actual_pays_fee(&Ok(Some(1000).into()), &pre), Pays::No);
+		assert_eq!(extract_actual_pays_fee(&Ok((Some(1000), Pays::Yes).into()), &pre), Pays::No);
 	}
 }

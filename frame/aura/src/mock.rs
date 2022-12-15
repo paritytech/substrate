@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,10 +20,16 @@
 #![cfg(test)]
 
 use crate as pallet_aura;
-use sp_consensus_aura::ed25519::AuthorityId;
-use sp_runtime::{traits::IdentityLookup, testing::{Header, UintAuthorityId}};
-use frame_support::{parameter_types, traits::GenesisBuild};
+use frame_support::{
+	parameter_types,
+	traits::{ConstU32, ConstU64, DisabledValidators, GenesisBuild},
+};
+use sp_consensus_aura::{ed25519::AuthorityId, AuthorityIndex};
 use sp_core::H256;
+use sp_runtime::{
+	testing::{Header, UintAuthorityId},
+	traits::IdentityLookup,
+};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -36,33 +42,31 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-		Aura: pallet_aura::{Pallet, Call, Storage, Config<T>},
+		Aura: pallet_aura::{Pallet, Storage, Config<T>},
 	}
 );
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(1024);
-	pub const MinimumPeriod: u64 = 1;
+		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
 }
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type RuntimeEvent = RuntimeEvent;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
@@ -71,23 +75,50 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
 impl pallet_timestamp::Config for Test {
 	type Moment = u64;
 	type OnTimestampSet = Aura;
-	type MinimumPeriod = MinimumPeriod;
+	type MinimumPeriod = ConstU64<1>;
 	type WeightInfo = ();
+}
+
+parameter_types! {
+	static DisabledValidatorTestValue: Vec<AuthorityIndex> = Default::default();
+}
+
+pub struct MockDisabledValidators;
+
+impl MockDisabledValidators {
+	pub fn disable_validator(index: AuthorityIndex) {
+		DisabledValidatorTestValue::mutate(|v| {
+			if let Err(i) = v.binary_search(&index) {
+				v.insert(i, index);
+			}
+		})
+	}
+}
+
+impl DisabledValidators for MockDisabledValidators {
+	fn is_disabled(index: AuthorityIndex) -> bool {
+		DisabledValidatorTestValue::get().binary_search(&index).is_ok()
+	}
 }
 
 impl pallet_aura::Config for Test {
 	type AuthorityId = AuthorityId;
+	type DisabledValidators = MockDisabledValidators;
+	type MaxAuthorities = ConstU32<10>;
 }
 
 pub fn new_test_ext(authorities: Vec<u64>) -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	pallet_aura::GenesisConfig::<Test>{
+	pallet_aura::GenesisConfig::<Test> {
 		authorities: authorities.into_iter().map(|a| UintAuthorityId(a).to_public_key()).collect(),
-	}.assimilate_storage(&mut t).unwrap();
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
 	t.into()
 }

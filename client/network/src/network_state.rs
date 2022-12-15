@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -20,9 +20,15 @@
 //!
 //! **Warning**: These APIs are not stable.
 
-use libp2p::{core::ConnectedPoint, Multiaddr};
+use libp2p::{
+	core::{ConnectedPoint, Endpoint as CoreEndpoint},
+	Multiaddr,
+};
 use serde::{Deserialize, Serialize};
-use std::{collections::{HashMap, HashSet}, time::Duration};
+use std::{
+	collections::{HashMap, HashSet},
+	time::Duration,
+};
 
 /// Returns general information about the networking.
 ///
@@ -77,7 +83,7 @@ pub struct NotConnectedPeer {
 #[serde(rename_all = "camelCase")]
 pub enum PeerEndpoint {
 	/// We are dialing the given address.
-	Dialing(Multiaddr),
+	Dialing(Multiaddr, Endpoint),
 	/// We are listening.
 	Listening {
 		/// Local address of the connection.
@@ -87,16 +93,32 @@ pub enum PeerEndpoint {
 	},
 }
 
+/// Part of the `NetworkState` struct. Unstable.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Endpoint {
+	/// The socket comes from a dialer.
+	Dialer,
+	/// The socket comes from a listener.
+	Listener,
+}
+
 impl From<ConnectedPoint> for PeerEndpoint {
 	fn from(endpoint: ConnectedPoint) -> Self {
 		match endpoint {
-			ConnectedPoint::Dialer { address } =>
-				PeerEndpoint::Dialing(address),
+			ConnectedPoint::Dialer { address, role_override } =>
+				Self::Dialing(address, role_override.into()),
 			ConnectedPoint::Listener { local_addr, send_back_addr } =>
-				PeerEndpoint::Listening {
-					local_addr,
-					send_back_addr
-				}
+				Self::Listening { local_addr, send_back_addr },
+		}
+	}
+}
+
+impl From<CoreEndpoint> for Endpoint {
+	fn from(endpoint: CoreEndpoint) -> Self {
+		match endpoint {
+			CoreEndpoint::Dialer => Self::Dialer,
+			CoreEndpoint::Listener => Self::Listener,
 		}
 	}
 }

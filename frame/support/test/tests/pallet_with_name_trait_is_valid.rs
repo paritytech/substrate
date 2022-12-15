@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,7 @@
 pub trait Trait: frame_system::Config {
 	type Balance: frame_support::dispatch::Parameter;
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
+	type RuntimeEvent: From<Event<Self>> + Into<<Self as frame_system::Config>::RuntimeEvent>;
 }
 
 frame_support::decl_storage! {
@@ -28,7 +28,10 @@ frame_support::decl_storage! {
 }
 
 frame_support::decl_event!(
-	pub enum Event<T> where B = <T as Trait>::Balance {
+	pub enum Event<T>
+	where
+		B = <T as Trait>::Balance,
+	{
 		Dummy(B),
 	}
 );
@@ -40,10 +43,10 @@ frame_support::decl_error!(
 );
 
 frame_support::decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Trait> for enum Call where origin: T::RuntimeOrigin {
 		fn deposit_event() = default;
 		type Error = Error<T>;
-		const Foo: u32 = u32::max_value();
+		const Foo: u32 = u32::MAX;
 
 		#[weight = 0]
 		fn accumulate_dummy(_origin, _increase_by: T::Balance) {
@@ -51,7 +54,7 @@ frame_support::decl_module! {
 		}
 
 		fn on_initialize(_n: T::BlockNumber) -> frame_support::weights::Weight {
-			0
+			frame_support::weights::Weight::zero()
 		}
 	}
 }
@@ -94,7 +97,7 @@ impl<T: Trait> frame_support::inherent::ProvideInherent for Module<T> {
 mod tests {
 	use crate as pallet_test;
 
-	use frame_support::parameter_types;
+	use frame_support::traits::ConstU64;
 
 	type SignedExtra = (
 		frame_system::CheckEra<Runtime>,
@@ -105,7 +108,7 @@ mod tests {
 	type TestHeader = sp_runtime::generic::Header<u64, sp_runtime::traits::BlakeTwo256>;
 	type TestUncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<
 		<Runtime as frame_system::Config>::AccountId,
-		<Runtime as frame_system::Config>::Call,
+		<Runtime as frame_system::Config>::RuntimeCall,
 		(),
 		SignedExtra,
 	>;
@@ -121,23 +124,19 @@ mod tests {
 		}
 	);
 
-	parameter_types! {
-		pub const BlockHashCount: u64 = 250;
-	}
-
 	impl frame_system::Config for Runtime {
-		type BaseCallFilter = ();
-		type Origin = Origin;
+		type BaseCallFilter = frame_support::traits::Everything;
+		type RuntimeOrigin = RuntimeOrigin;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = sp_core::H256;
-		type Call = Call;
+		type RuntimeCall = RuntimeCall;
 		type Hashing = sp_runtime::traits::BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 		type Header = TestHeader;
-		type Event = ();
-		type BlockHashCount = BlockHashCount;
+		type RuntimeEvent = ();
+		type BlockHashCount = ConstU64<250>;
 		type DbWeight = ();
 		type BlockWeights = ();
 		type BlockLength = ();
@@ -149,10 +148,11 @@ mod tests {
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
 		type OnSetCode = ();
+		type MaxConsumers = frame_support::traits::ConstU32<16>;
 	}
 
 	impl pallet_test::Trait for Runtime {
 		type Balance = u32;
-		type Event = ();
+		type RuntimeEvent = ();
 	}
 }

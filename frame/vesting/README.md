@@ -1,13 +1,14 @@
 # Vesting Module
 
-- [`vesting::Trait`](https://docs.rs/pallet-vesting/latest/pallet_vesting/trait.Trait.html)
+- [`vesting::Config`](https://docs.rs/pallet-vesting/latest/pallet_vesting/trait.Config.html)
 - [`Call`](https://docs.rs/pallet-vesting/latest/pallet_vesting/enum.Call.html)
 
 ## Overview
 
 A simple module providing a means of placing a linear curve on an account's locked balance. This
 module ensures that there is a lock in place preventing the balance to drop below the *unvested*
-amount for any reason other than transaction fee payment.
+amount for reason other than the ones specified in `UnvestedFundsAllowedWithdrawReasons`
+configuration value.
 
 As the amount vested increases over time, the amount unvested reduces. However, locks remain in
 place and explicit action is needed on behalf of the user to ensure that the amount locked is

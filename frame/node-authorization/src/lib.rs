@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,7 @@
 //! # Node authorization pallet
 //!
 //! This pallet manages a configurable set of nodes for a permissioned network.
-//! Each node is dentified by a PeerId (i.e. Vec<u8>). It provides two ways to
+//! Each node is dentified by a PeerId (i.e. `Vec<u8>`). It provides two ways to
 //! authorize a node,
 //!
 //! - a set of well known nodes across different organizations in which the
@@ -44,33 +44,30 @@ mod tests;
 
 pub mod weights;
 
-use sp_core::OpaquePeerId as PeerId;
-use sp_std::{
-	collections::btree_set::BTreeSet,
-	iter::FromIterator,
-	prelude::*,
-};
 pub use pallet::*;
+use sp_core::OpaquePeerId as PeerId;
+use sp_runtime::traits::StaticLookup;
+use sp_std::{collections::btree_set::BTreeSet, iter::FromIterator, prelude::*};
 pub use weights::WeightInfo;
+
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{
-		dispatch::DispatchResult,
-		pallet_prelude::*,
-	};
+	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	/// The module configuration trait
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The maximum number of well known nodes that are allowed to set
 		#[pallet::constant]
@@ -81,16 +78,16 @@ pub mod pallet {
 		type MaxPeerIdLength: Get<u32>;
 
 		/// The origin which can add a well known node.
-		type AddOrigin: EnsureOrigin<Self::Origin>;
+		type AddOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The origin which can remove a well known node.
-		type RemoveOrigin: EnsureOrigin<Self::Origin>;
+		type RemoveOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The origin which can swap the well known nodes.
-		type SwapOrigin: EnsureOrigin<Self::Origin>;
+		type SwapOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The origin which can reset the well known nodes.
-		type ResetOrigin: EnsureOrigin<Self::Origin>;
+		type ResetOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -104,23 +101,13 @@ pub mod pallet {
 	/// A map that maintains the ownership of each node.
 	#[pallet::storage]
 	#[pallet::getter(fn owners)]
-	pub type Owners<T: Config> = StorageMap<
-		_,
-		Blake2_128Concat,
-		PeerId,
-		T::AccountId,
-	>;
+	pub type Owners<T: Config> = StorageMap<_, Blake2_128Concat, PeerId, T::AccountId>;
 
 	/// The additional adapative connections of each node.
 	#[pallet::storage]
 	#[pallet::getter(fn additional_connection)]
-	pub type AdditionalConnections<T> = StorageMap<
-		_,
-		Blake2_128Concat,
-		PeerId,
-		BTreeSet<PeerId>,
-		ValueQuery,
-	>;
+	pub type AdditionalConnections<T> =
+		StorageMap<_, Blake2_128Concat, PeerId, BTreeSet<PeerId>, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -143,27 +130,26 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(T::AccountId = "AccountId")]
 	pub enum Event<T: Config> {
 		/// The given well known node was added.
-		NodeAdded(PeerId, T::AccountId),
+		NodeAdded { peer_id: PeerId, who: T::AccountId },
 		/// The given well known node was removed.
-		NodeRemoved(PeerId),
+		NodeRemoved { peer_id: PeerId },
 		/// The given well known node was swapped; first item was removed,
 		/// the latter was added.
-		NodeSwapped(PeerId, PeerId),
+		NodeSwapped { removed: PeerId, added: PeerId },
 		/// The given well known nodes were reset.
-		NodesReset(Vec<(PeerId, T::AccountId)>),
+		NodesReset { nodes: Vec<(PeerId, T::AccountId)> },
 		/// The given node was claimed by a user.
-		NodeClaimed(PeerId, T::AccountId),
+		NodeClaimed { peer_id: PeerId, who: T::AccountId },
 		/// The given claim was removed by its owner.
-		ClaimRemoved(PeerId, T::AccountId),
+		ClaimRemoved { peer_id: PeerId, who: T::AccountId },
 		/// The node was transferred to another account.
-		NodeTransferred(PeerId, T::AccountId),
+		NodeTransferred { peer_id: PeerId, target: T::AccountId },
 		/// The allowed connections were added to a node.
-		ConnectionsAdded(PeerId, Vec<PeerId>),
+		ConnectionsAdded { peer_id: PeerId, allowed_connections: Vec<PeerId> },
 		/// The allowed connections were removed from a node.
-		ConnectionsRemoved(PeerId, Vec<PeerId>),
+		ConnectionsRemoved { peer_id: PeerId, allowed_connections: Vec<PeerId> },
 	}
 
 	#[pallet::error]
@@ -208,10 +194,10 @@ pub mod pallet {
 						),
 						Ok(node) => sp_io::offchain::set_authorized_nodes(
 							Self::get_authorized_nodes(&PeerId(node)),
-							true
-						)
+							true,
+						),
 					}
-				}
+				},
 			}
 		}
 	}
@@ -228,9 +214,10 @@ pub mod pallet {
 		pub fn add_well_known_node(
 			origin: OriginFor<T>,
 			node: PeerId,
-			owner: T::AccountId
+			owner: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			T::AddOrigin::ensure_origin(origin)?;
+			let owner = T::Lookup::lookup(owner)?;
 			ensure!(node.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
 
 			let mut nodes = WellKnownNodes::<T>::get();
@@ -242,7 +229,7 @@ pub mod pallet {
 			WellKnownNodes::<T>::put(&nodes);
 			<Owners<T>>::insert(&node, &owner);
 
-			Self::deposit_event(Event::NodeAdded(node, owner));
+			Self::deposit_event(Event::NodeAdded { peer_id: node, who: owner });
 			Ok(())
 		}
 
@@ -266,7 +253,7 @@ pub mod pallet {
 			<Owners<T>>::remove(&node);
 			AdditionalConnections::<T>::remove(&node);
 
-			Self::deposit_event(Event::NodeRemoved(node));
+			Self::deposit_event(Event::NodeRemoved { peer_id: node });
 			Ok(())
 		}
 
@@ -281,16 +268,15 @@ pub mod pallet {
 		pub fn swap_well_known_node(
 			origin: OriginFor<T>,
 			remove: PeerId,
-			add: PeerId
+			add: PeerId,
 		) -> DispatchResult {
 			T::SwapOrigin::ensure_origin(origin)?;
-			ensure!(
-				remove.0.len() < T::MaxPeerIdLength::get() as usize,
-				Error::<T>::PeerIdTooLong
-			);
+			ensure!(remove.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
 			ensure!(add.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
 
-			if remove == add { return Ok(()) }
+			if remove == add {
+				return Ok(())
+			}
 
 			let mut nodes = WellKnownNodes::<T>::get();
 			ensure!(nodes.contains(&remove), Error::<T>::NotExist);
@@ -303,7 +289,7 @@ pub mod pallet {
 			Owners::<T>::swap(&remove, &add);
 			AdditionalConnections::<T>::swap(&remove, &add);
 
-			Self::deposit_event(Event::NodeSwapped(remove, add));
+			Self::deposit_event(Event::NodeSwapped { removed: remove, added: add });
 			Ok(())
 		}
 
@@ -317,14 +303,14 @@ pub mod pallet {
 		#[pallet::weight((T::WeightInfo::reset_well_known_nodes(), DispatchClass::Operational))]
 		pub fn reset_well_known_nodes(
 			origin: OriginFor<T>,
-			nodes: Vec<(PeerId, T::AccountId)>
+			nodes: Vec<(PeerId, T::AccountId)>,
 		) -> DispatchResult {
 			T::ResetOrigin::ensure_origin(origin)?;
 			ensure!(nodes.len() < T::MaxWellKnownNodes::get() as usize, Error::<T>::TooManyNodes);
 
 			Self::initialize_nodes(&nodes);
 
-			Self::deposit_event(Event::NodesReset(nodes));
+			Self::deposit_event(Event::NodesReset { nodes });
 			Ok(())
 		}
 
@@ -337,10 +323,10 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 
 			ensure!(node.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
-			ensure!(!Owners::<T>::contains_key(&node),Error::<T>::AlreadyClaimed);
+			ensure!(!Owners::<T>::contains_key(&node), Error::<T>::AlreadyClaimed);
 
 			Owners::<T>::insert(&node, &sender);
-			Self::deposit_event(Event::NodeClaimed(node, sender));
+			Self::deposit_event(Event::NodeClaimed { peer_id: node, who: sender });
 			Ok(())
 		}
 
@@ -361,7 +347,7 @@ pub mod pallet {
 			Owners::<T>::remove(&node);
 			AdditionalConnections::<T>::remove(&node);
 
-			Self::deposit_event(Event::ClaimRemoved(node, sender));
+			Self::deposit_event(Event::ClaimRemoved { peer_id: node, who: sender });
 			Ok(())
 		}
 
@@ -373,9 +359,10 @@ pub mod pallet {
 		pub fn transfer_node(
 			origin: OriginFor<T>,
 			node: PeerId,
-			owner: T::AccountId
+			owner: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
+			let owner = T::Lookup::lookup(owner)?;
 
 			ensure!(node.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
 			let pre_owner = Owners::<T>::get(&node).ok_or(Error::<T>::NotClaimed)?;
@@ -383,7 +370,7 @@ pub mod pallet {
 
 			Owners::<T>::insert(&node, &owner);
 
-			Self::deposit_event(Event::NodeTransferred(node, owner));
+			Self::deposit_event(Event::NodeTransferred { peer_id: node, target: owner });
 			Ok(())
 		}
 
@@ -395,7 +382,7 @@ pub mod pallet {
 		pub fn add_connections(
 			origin: OriginFor<T>,
 			node: PeerId,
-			connections: Vec<PeerId>
+			connections: Vec<PeerId>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
@@ -407,14 +394,17 @@ pub mod pallet {
 
 			for add_node in connections.iter() {
 				if *add_node == node {
-					continue;
+					continue
 				}
 				nodes.insert(add_node.clone());
 			}
 
 			AdditionalConnections::<T>::insert(&node, nodes);
 
-			Self::deposit_event(Event::ConnectionsAdded(node, connections));
+			Self::deposit_event(Event::ConnectionsAdded {
+				peer_id: node,
+				allowed_connections: connections,
+			});
 			Ok(())
 		}
 
@@ -426,7 +416,7 @@ pub mod pallet {
 		pub fn remove_connections(
 			origin: OriginFor<T>,
 			node: PeerId,
-			connections: Vec<PeerId>
+			connections: Vec<PeerId>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
@@ -442,7 +432,10 @@ pub mod pallet {
 
 			AdditionalConnections::<T>::insert(&node, nodes);
 
-			Self::deposit_event(Event::ConnectionsRemoved(node, connections));
+			Self::deposit_event(Event::ConnectionsRemoved {
+				peer_id: node,
+				allowed_connections: connections,
+			});
 			Ok(())
 		}
 	}
@@ -450,9 +443,7 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	fn initialize_nodes(nodes: &Vec<(PeerId, T::AccountId)>) {
-		let peer_ids = nodes.iter()
-			.map(|item| item.0.clone())
-			.collect::<BTreeSet<PeerId>>();
+		let peer_ids = nodes.iter().map(|item| item.0.clone()).collect::<BTreeSet<PeerId>>();
 		WellKnownNodes::<T>::put(&peer_ids);
 
 		for (node, who) in nodes.iter() {

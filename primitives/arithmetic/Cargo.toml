@@ -1,10 +1,10 @@
 [package]
 name = "sp-arithmetic"
-version = "3.0.0"
+version = "6.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "Minimal fixed point arithmetic primitives and types for runtime."
 documentation = "https://docs.rs/sp-arithmetic"
@@ -13,30 +13,34 @@ readme = "README.md"
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
-
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
+	"derive",
+	"max-encoded-len",
+] }
 integer-sqrt = "0.1.2"
-static_assertions = "1.1.0"
 num-traits = { version = "0.2.8", default-features = false }
-sp-std = { version = "3.0.0", default-features = false, path = "../std" }
-serde = { version = "1.0.101", optional = true, features = ["derive"] }
-sp-debug-derive = { version = "3.0.0", default-features = false, path = "../debug-derive" }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
+serde = { version = "1.0.136", features = ["derive"], optional = true }
+static_assertions = "1.1.0"
+sp-debug-derive = { version = "5.0.0", default-features = false, path = "../debug-derive" }
+sp-std = { version = "5.0.0", default-features = false, path = "../std" }
 
 [dev-dependencies]
-rand = "0.7.2"
 criterion = "0.3"
-serde_json = "1.0"
-primitive-types = "0.9.0"
+primitive-types = "0.12.0"
+sp-core = { version = "7.0.0", features = ["full_crypto"], path = "../core" }
+rand = "0.7.2"
 
 [features]
 default = ["std"]
 std = [
 	"codec/std",
 	"num-traits/std",
-	"sp-std/std",
+	"scale-info/std",
 	"serde",
 	"sp-debug-derive/std",
+	"sp-std/std",
 ]
 
 [[bench]]

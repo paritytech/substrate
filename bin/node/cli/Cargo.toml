@@ -1,14 +1,15 @@
 [package]
 name = "node-cli"
-version = "2.0.0"
+version = "3.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Generic Substrate node implementation in Rust."
 build = "build.rs"
-edition = "2018"
+edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 default-run = "substrate"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
+publish = false
 
 [package.metadata.wasm-pack.profile.release]
 # `wasm-opt` has some problems on linux, see
@@ -34,144 +35,134 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 # third-party dependencies
-codec = { package = "parity-scale-codec", version = "2.0.0" }
-serde = { version = "1.0.102", features = ["derive"] }
-futures = { version = "0.3.9", features = ["compat"] }
-hex-literal = "0.3.1"
-log = "0.4.8"
-rand = "0.7.2"
-structopt = { version = "0.3.8", optional = true }
-parking_lot = "0.11.1"
+array-bytes = "4.1"
+clap = { version = "4.0.9", features = ["derive"], optional = true }
+codec = { package = "parity-scale-codec", version = "3.0.0" }
+serde = { version = "1.0.136", features = ["derive"] }
+jsonrpsee = { version = "0.16.2", features = ["server"] }
+futures = "0.3.21"
+log = "0.4.17"
+rand = "0.8"
 
 # primitives
-sp-authority-discovery = { version = "3.0.0",  path = "../../../primitives/authority-discovery" }
-sp-consensus-babe = { version = "0.9.0", path = "../../../primitives/consensus/babe" }
-grandpa-primitives = { version = "3.0.0", package = "sp-finality-grandpa", path = "../../../primitives/finality-grandpa" }
-sp-core = { version = "3.0.0", path = "../../../primitives/core" }
-sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
-sp-timestamp = { version = "3.0.0", path = "../../../primitives/timestamp" }
-sp-authorship = { version = "3.0.0", path = "../../../primitives/authorship" }
-sp-inherents = { version = "3.0.0", path = "../../../primitives/inherents" }
-sp-keyring = { version = "3.0.0", path = "../../../primitives/keyring" }
-sp-keystore = { version = "0.9.0", path = "../../../primitives/keystore" }
-sp-io = { version = "3.0.0", path = "../../../primitives/io" }
-sp-consensus = { version = "0.9.0", path = "../../../primitives/consensus/common" }
-sp-transaction-pool = { version = "3.0.0", path = "../../../primitives/transaction-pool" }
+sp-authority-discovery = { version = "4.0.0-dev", path = "../../../primitives/authority-discovery" }
+sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
+grandpa-primitives = { version = "4.0.0-dev", package = "sp-finality-grandpa", path = "../../../primitives/finality-grandpa" }
+sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
+sp-core = { version = "7.0.0", path = "../../../primitives/core" }
+sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
+sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
+sp-authorship = { version = "4.0.0-dev", path = "../../../primitives/authorship" }
+sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
+sp-keyring = { version = "7.0.0", path = "../../../primitives/keyring" }
+sp-keystore = { version = "0.13.0", path = "../../../primitives/keystore" }
+sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
+sp-transaction-pool = { version = "4.0.0-dev", path = "../../../primitives/transaction-pool" }
+sp-transaction-storage-proof = { version = "4.0.0-dev", path = "../../../primitives/transaction-storage-proof" }
 
 # client dependencies
-sc-client-api = { version = "3.0.0", path = "../../../client/api" }
-sc-chain-spec = { version = "3.0.0", path = "../../../client/chain-spec" }
-sc-consensus = { version = "0.9.0", path = "../../../client/consensus/common" }
-sc-transaction-pool = { version = "3.0.0", path = "../../../client/transaction-pool" }
-sc-network = { version = "0.9.0", path = "../../../client/network" }
-sc-consensus-slots = { version = "0.9.0", path = "../../../client/consensus/slots" }
-sc-consensus-babe = { version = "0.9.0", path = "../../../client/consensus/babe" }
-sc-consensus-uncles = { version = "0.9.0", path = "../../../client/consensus/uncles" }
-grandpa = { version = "0.9.0", package = "sc-finality-grandpa", path = "../../../client/finality-grandpa" }
-sc-client-db = { version = "0.9.0", default-features = false, path = "../../../client/db" }
-sc-offchain = { version = "3.0.0", path = "../../../client/offchain" }
-sc-rpc = { version = "3.0.0", path = "../../../client/rpc" }
-sc-basic-authorship = { version = "0.9.0", path = "../../../client/basic-authorship" }
-sc-service = { version = "0.9.0", default-features = false, path = "../../../client/service" }
-sc-tracing = { version = "3.0.0", path = "../../../client/tracing" }
-sc-telemetry = { version = "3.0.0", path = "../../../client/telemetry" }
-sc-authority-discovery = { version = "0.9.0",  path = "../../../client/authority-discovery" }
-sc-finality-grandpa-warp-sync = { version = "0.9.0", path = "../../../client/finality-grandpa-warp-sync", optional = true }
+sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
+sc-chain-spec = { version = "4.0.0-dev", path = "../../../client/chain-spec" }
+sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
+sc-transaction-pool = { version = "4.0.0-dev", path = "../../../client/transaction-pool" }
+sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
+sc-network = { version = "0.10.0-dev", path = "../../../client/network" }
+sc-network-common = { version = "0.10.0-dev", path = "../../../client/network/common" }
+sc-consensus-slots = { version = "0.10.0-dev", path = "../../../client/consensus/slots" }
+sc-consensus-babe = { version = "0.10.0-dev", path = "../../../client/consensus/babe" }
+sc-consensus-uncles = { version = "0.10.0-dev", path = "../../../client/consensus/uncles" }
+grandpa = { version = "0.10.0-dev", package = "sc-finality-grandpa", path = "../../../client/finality-grandpa" }
+sc-rpc = { version = "4.0.0-dev", path = "../../../client/rpc" }
+sc-basic-authorship = { version = "0.10.0-dev", path = "../../../client/basic-authorship" }
+sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../client/service" }
+sc-telemetry = { version = "4.0.0-dev", path = "../../../client/telemetry" }
+sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
+sc-authority-discovery = { version = "0.10.0-dev", path = "../../../client/authority-discovery" }
+sc-sync-state-rpc = { version = "0.10.0-dev", path = "../../../client/sync-state-rpc" }
+sc-sysinfo = { version = "6.0.0-dev", path = "../../../client/sysinfo" }
 
 # frame dependencies
-pallet-indices = { version = "3.0.0", path = "../../../frame/indices" }
-pallet-timestamp = { version = "3.0.0", default-features = false, path = "../../../frame/timestamp" }
-pallet-contracts = { version = "3.0.0", path = "../../../frame/contracts" }
-frame-system = { version = "3.0.0", path = "../../../frame/system" }
-pallet-balances = { version = "3.0.0", path = "../../../frame/balances" }
-pallet-transaction-payment = { version = "3.0.0", path = "../../../frame/transaction-payment" }
-frame-support = { version = "3.0.0", default-features = false, path = "../../../frame/support" }
-pallet-im-online = { version = "3.0.0", default-features = false, path = "../../../frame/im-online" }
-pallet-authority-discovery = { version = "3.0.0", path = "../../../frame/authority-discovery" }
-pallet-staking = { version = "3.0.0", path = "../../../frame/staking" }
-pallet-grandpa = { version = "3.1.0", path = "../../../frame/grandpa" }
+frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
+frame-system-rpc-runtime-api = { version = "4.0.0-dev", path = "../../../frame/system/rpc/runtime-api" }
+pallet-transaction-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment" }
+pallet-assets = { version = "4.0.0-dev", path = "../../../frame/assets/" }
+pallet-asset-tx-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment/asset-tx-payment/" }
+pallet-im-online = { version = "4.0.0-dev", default-features = false, path = "../../../frame/im-online" }
 
 # node-specific dependencies
-node-runtime = { version = "2.0.0", path = "../runtime" }
-node-rpc = { version = "2.0.0", path = "../rpc" }
+kitchensink-runtime = { version = "3.0.0-dev", path = "../runtime" }
+node-rpc = { version = "3.0.0-dev", path = "../rpc" }
 node-primitives = { version = "2.0.0", path = "../primitives" }
-node-executor = { version = "2.0.0", path = "../executor" }
+node-executor = { version = "3.0.0-dev", path = "../executor" }
 
 # CLI-specific dependencies
-sc-cli = { version = "0.9.0", optional = true, path = "../../../client/cli" }
-frame-benchmarking-cli = { version = "3.0.0", optional = true, path = "../../../utils/frame/benchmarking-cli" }
-node-inspect = { version = "0.8.0", optional = true, path = "../inspect" }
-try-runtime-cli = { version = "0.9.0", optional = true, path = "../../../utils/frame/try-runtime/cli" }
-
-# WASM-specific dependencies
-wasm-bindgen = { version = "0.2.73", optional = true }
-wasm-bindgen-futures = { version = "0.4.18", optional = true }
-browser-utils = { package = "substrate-browser-utils", path = "../../../utils/browser", optional = true, version = "0.9.0"}
-libp2p-wasm-ext = { version = "0.28", features = ["websocket"], optional = true }
-
-[target.'cfg(target_arch="x86_64")'.dependencies]
-node-executor = { version = "2.0.0", path = "../executor", features = [ "wasmtime" ] }
-sc-cli = { version = "0.9.0", optional = true, path = "../../../client/cli", features = [ "wasmtime" ] }
-sc-service = { version = "0.9.0", default-features = false, path = "../../../client/service", features = [ "wasmtime" ] }
-sp-trie = { version = "3.0.0", default-features = false, path = "../../../primitives/trie", features = ["memory-tracker"] }
+sc-cli = { version = "0.10.0-dev", optional = true, path = "../../../client/cli" }
+frame-benchmarking-cli = { version = "4.0.0-dev", optional = true, path = "../../../utils/frame/benchmarking-cli" }
+node-inspect = { version = "0.9.0-dev", optional = true, path = "../inspect" }
+try-runtime-cli = { version = "0.10.0-dev", optional = true, path = "../../../utils/frame/try-runtime/cli" }
+serde_json = "1.0.85"
 
 [dev-dependencies]
-sc-keystore = { version = "3.0.0", path = "../../../client/keystore" }
-sc-consensus = { version = "0.9.0", path = "../../../client/consensus/common" }
-sc-consensus-babe = { version = "0.9.0", path = "../../../client/consensus/babe" }
-sc-consensus-epochs = { version = "0.9.0", path = "../../../client/consensus/epochs" }
+sc-keystore = { version = "4.0.0-dev", path = "../../../client/keystore" }
+sc-client-db = { version = "0.10.0-dev", path = "../../../client/db" }
+sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
+sc-consensus-babe = { version = "0.10.0-dev", path = "../../../client/consensus/babe" }
+sc-consensus-epochs = { version = "0.10.0-dev", path = "../../../client/consensus/epochs" }
 sc-service-test = { version = "2.0.0", path = "../../../client/service/test" }
-futures = "0.3.9"
+sc-block-builder = { version = "0.10.0-dev", path = "../../../client/block-builder" }
+sp-tracing = { version = "6.0.0", path = "../../../primitives/tracing" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
+futures = "0.3.21"
 tempfile = "3.1.0"
-assert_cmd = "1.0"
-nix = "0.19"
+assert_cmd = "2.0.2"
+nix = "0.23"
 serde_json = "1.0"
-regex = "1"
-platforms = "1.1"
-async-std = { version = "1.6.5", features = ["attributes"] }
-soketto = "0.4.2"
+regex = "1.6.0"
+platforms = "2.0"
+soketto = "0.7.1"
+criterion = { version = "0.3.5", features = ["async_tokio"] }
+tokio = { version = "1.22.0", features = ["macros", "time", "parking_lot"] }
+tokio-util = { version = "0.7.4", features = ["compat"] }
+wait-timeout = "0.2"
+substrate-rpc-client = { path = "../../../utils/frame/rpc/client" }
+pallet-timestamp = { version = "4.0.0-dev", path = "../../../frame/timestamp" }
 
 [build-dependencies]
-structopt = { version = "0.3.8", optional = true }
-node-inspect = { version = "0.8.0", optional = true, path = "../inspect" }
-frame-benchmarking-cli = { version = "3.0.0", optional = true, path = "../../../utils/frame/benchmarking-cli" }
+clap = { version = "4.0.9", optional = true }
+clap_complete = { version = "4.0.2", optional = true }
+node-inspect = { version = "0.9.0-dev", optional = true, path = "../inspect" }
+frame-benchmarking-cli = { version = "4.0.0-dev", optional = true, path = "../../../utils/frame/benchmarking-cli" }
 substrate-build-script-utils = { version = "3.0.0", optional = true, path = "../../../utils/build-script-utils" }
-substrate-frame-cli = { version = "3.0.0", optional = true, path = "../../../utils/frame/frame-utilities-cli" }
-try-runtime-cli = { version = "0.9.0", optional = true, path = "../../../utils/frame/try-runtime/cli" }
-
-[build-dependencies.sc-cli]
-version = "0.9.0"
-package = "sc-cli"
-path = "../../../client/cli"
-optional = true
+substrate-frame-cli = { version = "4.0.0-dev", optional = true, path = "../../../utils/frame/frame-utilities-cli" }
+try-runtime-cli = { version = "0.10.0-dev", optional = true, path = "../../../utils/frame/try-runtime/cli" }
+sc-cli = { version = "0.10.0-dev", path = "../../../client/cli", optional = true }
+pallet-balances = { version = "4.0.0-dev", path = "../../../frame/balances" }
 
 [features]
-default = [ "cli" ]
-browser = [
-	"browser-utils",
-	"wasm-bindgen",
-	"wasm-bindgen-futures",
-	"libp2p-wasm-ext",
-]
+default = ["cli"]
 cli = [
-	"node-executor/wasmi-errno",
 	"node-inspect",
 	"sc-cli",
 	"frame-benchmarking-cli",
 	"substrate-frame-cli",
-	"sc-service/db",
-	"sc-finality-grandpa-warp-sync",
-	"structopt",
+	"sc-service/rocksdb",
+	"clap",
+	"clap_complete",
 	"substrate-build-script-utils",
 	"try-runtime-cli",
 ]
 runtime-benchmarks = [
-	"node-runtime/runtime-benchmarks",
-	"frame-benchmarking-cli",
+	"kitchensink-runtime/runtime-benchmarks",
+	"frame-benchmarking-cli/runtime-benchmarks"
 ]
 # Enable features that allow the runtime to be tried and debugged. Name might be subject to change
 # in the near future.
-try-runtime = [
-	"node-runtime/try-runtime",
-	"try-runtime-cli",
-]
+try-runtime = ["kitchensink-runtime/try-runtime", "try-runtime-cli/try-runtime"]
+
+[[bench]]
+name = "transaction_pool"
+harness = false
+
+[[bench]]
+name = "block_production"
+harness = false

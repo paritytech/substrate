@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,13 +16,16 @@
 // limitations under the License.
 
 use crate::{self as frame_system, *};
-use sp_std::cell::RefCell;
+use frame_support::{
+	parameter_types,
+	traits::{ConstU32, ConstU64},
+};
 use sp_core::H256;
 use sp_runtime::{
+	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	testing::Header, BuildStorage,
+	BuildStorage, Perbill,
 };
-use frame_support::parameter_types;
 
 type UncheckedExtrinsic = mocking::MockUncheckedExtrinsic<Test>;
 type Block = mocking::MockBlock<Test>;
@@ -38,10 +41,9 @@ frame_support::construct_runtime!(
 );
 
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
-const MAX_BLOCK_WEIGHT: Weight = 1024;
+const MAX_BLOCK_WEIGHT: Weight = Weight::from_ref_time(1024).set_proof_size(u64::MAX);
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 10;
 	pub Version: RuntimeVersion = RuntimeVersion {
 		spec_name: sp_version::create_runtime_str!("test"),
 		impl_name: sp_version::create_runtime_str!("system-test"),
@@ -50,20 +52,22 @@ parameter_types! {
 		impl_version: 1,
 		apis: sp_version::create_apis_vec!([]),
 		transaction_version: 1,
+		state_version: 1,
 	};
 	pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
 		read: 10,
 		write: 100,
 	};
 	pub RuntimeBlockWeights: limits::BlockWeights = limits::BlockWeights::builder()
-		.base_block(10)
+		.base_block(Weight::from_ref_time(10))
 		.for_class(DispatchClass::all(), |weights| {
-			weights.base_extrinsic = 5;
+			weights.base_extrinsic = Weight::from_ref_time(5);
 		})
 		.for_class(DispatchClass::Normal, |weights| {
 			weights.max_total = Some(NORMAL_DISPATCH_RATIO * MAX_BLOCK_WEIGHT);
 		})
 		.for_class(DispatchClass::Operational, |weights| {
+			weights.base_extrinsic = Weight::from_ref_time(10);
 			weights.max_total = Some(MAX_BLOCK_WEIGHT);
 			weights.reserved = Some(
 				MAX_BLOCK_WEIGHT - NORMAL_DISPATCH_RATIO * MAX_BLOCK_WEIGHT
@@ -75,21 +79,23 @@ parameter_types! {
 		limits::BlockLength::max_with_normal_ratio(1024, NORMAL_DISPATCH_RATIO);
 }
 
-thread_local!{
-	pub static KILLED: RefCell<Vec<u64>> = RefCell::new(vec![]);
+parameter_types! {
+	pub static Killed: Vec<u64> = vec![];
 }
 
 pub struct RecordKilled;
 impl OnKilledAccount<u64> for RecordKilled {
-	fn on_killed_account(who: &u64) { KILLED.with(|r| r.borrow_mut().push(*who)) }
+	fn on_killed_account(who: &u64) {
+		Killed::mutate(|r| r.push(*who))
+	}
 }
 
 impl Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
-	type Origin = Origin;
-	type Call = Call;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -97,8 +103,8 @@ impl Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type RuntimeEvent = RuntimeEvent;
+	type BlockHashCount = ConstU64<10>;
 	type DbWeight = DbWeight;
 	type Version = Version;
 	type PalletInfo = PalletInfo;
@@ -108,21 +114,25 @@ impl Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
 
 pub type SysEvent = frame_system::Event<Test>;
 
 /// A simple call, which one doesn't matter.
-pub const CALL: &<Test as Config>::Call = &Call::System(frame_system::Call::set_heap_pages(0u64));
+pub const CALL: &<Test as Config>::RuntimeCall =
+	&RuntimeCall::System(frame_system::Call::set_heap_pages { pages: 0u64 });
 
 /// Create new externalities for `System` module tests.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut ext: sp_io::TestExternalities = GenesisConfig::default()
-		.build_storage().unwrap().into();
+	let mut ext: sp_io::TestExternalities =
+		GenesisConfig::default().build_storage().unwrap().into();
 	// Add to each test the initial weight of a block
-	ext.execute_with(|| System::register_extra_weight_unchecked(
-		<Test as crate::Config>::BlockWeights::get().base_block,
-		DispatchClass::Mandatory
-	));
+	ext.execute_with(|| {
+		System::register_extra_weight_unchecked(
+			<Test as crate::Config>::BlockWeights::get().base_block,
+			DispatchClass::Mandatory,
+		)
+	});
 	ext
 }

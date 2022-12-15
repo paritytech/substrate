@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,11 +22,7 @@
 use sp_std::vec::Vec;
 
 mod app {
-	use sp_application_crypto::{
-		key_types::AUTHORITY_DISCOVERY,
-		app_crypto,
-		sr25519,
-	};
+	use sp_application_crypto::{app_crypto, key_types::AUTHORITY_DISCOVERY, sr25519};
 	app_crypto!(sr25519, AUTHORITY_DISCOVERY);
 }
 

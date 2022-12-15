@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,48 +16,47 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::error::Result;
+use crate::{error, error::Result};
+use clap::Args;
 use sc_service::config::KeystoreConfig;
-use std::{fs, path::{PathBuf, Path}};
-use structopt::StructOpt;
-use crate::error;
 use sp_core::crypto::SecretString;
+use std::{
+	fs,
+	path::{Path, PathBuf},
+};
 
 /// default sub directory for the key store
-const DEFAULT_KEYSTORE_CONFIG_PATH: &'static str = "keystore";
+const DEFAULT_KEYSTORE_CONFIG_PATH: &str = "keystore";
 
 /// Parameters of the keystore
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, Clone, Args)]
 pub struct KeystoreParams {
 	/// Specify custom URIs to connect to for keystore-services
-	#[structopt(long = "keystore-uri")]
+	#[arg(long)]
 	pub keystore_uri: Option<String>,
 
 	/// Specify custom keystore path.
-	#[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]
+	#[arg(long, value_name = "PATH")]
 	pub keystore_path: Option<PathBuf>,
 
 	/// Use interactive shell for entering the password used by the keystore.
-	#[structopt(
-		long = "password-interactive",
-		conflicts_with_all = &[ "password", "password-filename" ]
-	)]
+	#[arg(long, conflicts_with_all = &["password", "password_filename"])]
 	pub password_interactive: bool,
 
-	/// Password used by the keystore.
-	#[structopt(
-		long = "password",
-		parse(try_from_str = secret_string_from_str),
-		conflicts_with_all = &[ "password-interactive", "password-filename" ]
+	/// Password used by the keystore. This allows appending an extra user-defined secret to the
+	/// seed.
+	#[arg(
+		long,
+		value_parser = secret_string_from_str,
+		conflicts_with_all = &["password_interactive", "password_filename"]
 	)]
 	pub password: Option<SecretString>,
 
 	/// File that contains the password used by the keystore.
-	#[structopt(
-		long = "password-filename",
+	#[arg(
+		long,
 		value_name = "PATH",
-		parse(from_os_str),
-		conflicts_with_all = &[ "password-interactive", "password" ]
+		conflicts_with_all = &["password_interactive", "password"]
 	)]
 	pub password_filename: Option<PathBuf>,
 }
@@ -73,16 +72,9 @@ impl KeystoreParams {
 	/// Returns a vector of remote-urls and the local Keystore configuration
 	pub fn keystore_config(&self, config_dir: &Path) -> Result<(Option<String>, KeystoreConfig)> {
 		let password = if self.password_interactive {
-			#[cfg(not(target_os = "unknown"))]
-			{
-				let password = input_keystore_password()?;
-				Some(SecretString::new(password))
-			}
-			#[cfg(target_os = "unknown")]
-			None
+			Some(SecretString::new(input_keystore_password()?))
 		} else if let Some(ref file) = self.password_filename {
-			let password = fs::read_to_string(file)
-				.map_err(|e| format!("{}", e))?;
+			let password = fs::read_to_string(file).map_err(|e| format!("{}", e))?;
 			Some(SecretString::new(password))
 		} else {
 			self.password.clone()
@@ -101,7 +93,7 @@ impl KeystoreParams {
 		let (password_interactive, password) = (self.password_interactive, self.password.clone());
 
 		let pass = if password_interactive {
-			let password = rpassword::read_password_from_tty(Some("Key password: "))?;
+			let password = rpassword::prompt_password("Key password: ")?;
 			Some(SecretString::new(password))
 		} else {
 			password
@@ -111,8 +103,6 @@ impl KeystoreParams {
 	}
 }
 
-#[cfg(not(target_os = "unknown"))]
 fn input_keystore_password() -> Result<String> {
-	rpassword::read_password_from_tty(Some("Keystore password: "))
-		.map_err(|e| format!("{:?}", e).into())
+	rpassword::prompt_password("Keystore password: ").map_err(|e| format!("{:?}", e).into())
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,126 +18,114 @@
 
 //! Substrate state API.
 
+use jsonrpsee::{core::RpcResult, proc_macros::rpc};
+use sp_core::{
+	storage::{StorageChangeSet, StorageData, StorageKey},
+	Bytes,
+};
+use sp_version::RuntimeVersion;
+
 pub mod error;
 pub mod helpers;
 
-use jsonrpc_core::Result as RpcResult;
-use jsonrpc_derive::rpc;
-use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
-use sp_core::Bytes;
-use sp_core::storage::{StorageKey, StorageData, StorageChangeSet};
-use sp_version::RuntimeVersion;
-use self::error::FutureResult;
-
-pub use self::gen_client::Client as StateClient;
 pub use self::helpers::ReadProof;
 
 /// Substrate state API
-#[rpc]
+#[rpc(client, server)]
 pub trait StateApi<Hash> {
-	/// RPC Metadata
-	type Metadata;
-
 	/// Call a contract at a block's state.
-	#[rpc(name = "state_call", alias("state_callAt"))]
-	fn call(&self, name: String, bytes: Bytes, hash: Option<Hash>) -> FutureResult<Bytes>;
+	#[method(name = "state_call", aliases = ["state_callAt"], blocking)]
+	fn call(&self, name: String, bytes: Bytes, hash: Option<Hash>) -> RpcResult<Bytes>;
 
-	/// DEPRECATED: Please use `state_getKeysPaged` with proper paging support.
 	/// Returns the keys with prefix, leave empty to get all the keys.
-	#[rpc(name = "state_getKeys")]
-	fn storage_keys(&self, prefix: StorageKey, hash: Option<Hash>) -> FutureResult<Vec<StorageKey>>;
+	#[method(name = "state_getKeys", blocking)]
+	#[deprecated(since = "2.0.0", note = "Please use `getKeysPaged` with proper paging support")]
+	fn storage_keys(&self, prefix: StorageKey, hash: Option<Hash>) -> RpcResult<Vec<StorageKey>>;
 
 	/// Returns the keys with prefix, leave empty to get all the keys
-	#[rpc(name = "state_getPairs")]
-	fn storage_pairs(&self, prefix: StorageKey, hash: Option<Hash>) -> FutureResult<Vec<(StorageKey, StorageData)>>;
+	#[method(name = "state_getPairs", blocking)]
+	fn storage_pairs(
+		&self,
+		prefix: StorageKey,
+		hash: Option<Hash>,
+	) -> RpcResult<Vec<(StorageKey, StorageData)>>;
 
 	/// Returns the keys with prefix with pagination support.
 	/// Up to `count` keys will be returned.
 	/// If `start_key` is passed, return next keys in storage in lexicographic order.
-	#[rpc(name = "state_getKeysPaged", alias("state_getKeysPagedAt"))]
+	#[method(name = "state_getKeysPaged", aliases = ["state_getKeysPagedAt"], blocking)]
 	fn storage_keys_paged(
 		&self,
 		prefix: Option<StorageKey>,
 		count: u32,
 		start_key: Option<StorageKey>,
 		hash: Option<Hash>,
-	) -> FutureResult<Vec<StorageKey>>;
+	) -> RpcResult<Vec<StorageKey>>;
 
 	/// Returns a storage entry at a specific block's state.
-	#[rpc(name = "state_getStorage", alias("state_getStorageAt"))]
-	fn storage(&self, key: StorageKey, hash: Option<Hash>) -> FutureResult<Option<StorageData>>;
+	#[method(name = "state_getStorage", aliases = ["state_getStorageAt"], blocking)]
+	fn storage(&self, key: StorageKey, hash: Option<Hash>) -> RpcResult<Option<StorageData>>;
 
 	/// Returns the hash of a storage entry at a block's state.
-	#[rpc(name = "state_getStorageHash", alias("state_getStorageHashAt"))]
-	fn storage_hash(&self, key: StorageKey, hash: Option<Hash>) -> FutureResult<Option<Hash>>;
+	#[method(name = "state_getStorageHash", aliases = ["state_getStorageHashAt"], blocking)]
+	fn storage_hash(&self, key: StorageKey, hash: Option<Hash>) -> RpcResult<Option<Hash>>;
 
 	/// Returns the size of a storage entry at a block's state.
-	#[rpc(name = "state_getStorageSize", alias("state_getStorageSizeAt"))]
-	fn storage_size(&self, key: StorageKey, hash: Option<Hash>) -> FutureResult<Option<u64>>;
+	#[method(name = "state_getStorageSize", aliases = ["state_getStorageSizeAt"], blocking)]
+	fn storage_size(&self, key: StorageKey, hash: Option<Hash>) -> RpcResult<Option<u64>>;
 
 	/// Returns the runtime metadata as an opaque blob.
-	#[rpc(name = "state_getMetadata")]
-	fn metadata(&self, hash: Option<Hash>) -> FutureResult<Bytes>;
+	#[method(name = "state_getMetadata", blocking)]
+	fn metadata(&self, hash: Option<Hash>) -> RpcResult<Bytes>;
 
 	/// Get the runtime version.
-	#[rpc(name = "state_getRuntimeVersion", alias("chain_getRuntimeVersion"))]
-	fn runtime_version(&self, hash: Option<Hash>) -> FutureResult<RuntimeVersion>;
+	#[method(name = "state_getRuntimeVersion", aliases = ["chain_getRuntimeVersion"], blocking)]
+	fn runtime_version(&self, hash: Option<Hash>) -> RpcResult<RuntimeVersion>;
 
-	/// Query historical storage entries (by key) starting from a block given as the second parameter.
+	/// Query historical storage entries (by key) starting from a block given as the second
+	/// parameter.
 	///
 	/// NOTE This first returned result contains the initial state of storage for all keys.
 	/// Subsequent values in the vector represent changes to the previous state (diffs).
-	#[rpc(name = "state_queryStorage")]
+	#[method(name = "state_queryStorage", blocking)]
 	fn query_storage(
 		&self,
 		keys: Vec<StorageKey>,
 		block: Hash,
-		hash: Option<Hash>
-	) -> FutureResult<Vec<StorageChangeSet<Hash>>>;
+		hash: Option<Hash>,
+	) -> RpcResult<Vec<StorageChangeSet<Hash>>>;
 
 	/// Query storage entries (by key) starting at block hash given as the second parameter.
-	#[rpc(name = "state_queryStorageAt")]
+	#[method(name = "state_queryStorageAt", blocking)]
 	fn query_storage_at(
 		&self,
 		keys: Vec<StorageKey>,
 		at: Option<Hash>,
-	) -> FutureResult<Vec<StorageChangeSet<Hash>>>;
+	) -> RpcResult<Vec<StorageChangeSet<Hash>>>;
 
 	/// Returns proof of storage entries at a specific block's state.
-	#[rpc(name = "state_getReadProof")]
-	fn read_proof(&self, keys: Vec<StorageKey>, hash: Option<Hash>) -> FutureResult<ReadProof<Hash>>;
+	#[method(name = "state_getReadProof", blocking)]
+	fn read_proof(&self, keys: Vec<StorageKey>, hash: Option<Hash>) -> RpcResult<ReadProof<Hash>>;
 
 	/// New runtime version subscription
-	#[pubsub(
-		subscription = "state_runtimeVersion",
-		subscribe,
-		name = "state_subscribeRuntimeVersion",
-		alias("chain_subscribeRuntimeVersion")
+	#[subscription(
+		name = "state_subscribeRuntimeVersion" => "state_runtimeVersion",
+		unsubscribe = "state_unsubscribeRuntimeVersion",
+		aliases = ["chain_subscribeRuntimeVersion"],
+		unsubscribe_aliases = ["chain_unsubscribeRuntimeVersion"],
+		item = RuntimeVersion,
 	)]
-	fn subscribe_runtime_version(&self, metadata: Self::Metadata, subscriber: Subscriber<RuntimeVersion>);
-
-	/// Unsubscribe from runtime version subscription
-	#[pubsub(
-		subscription = "state_runtimeVersion",
-		unsubscribe,
-		name = "state_unsubscribeRuntimeVersion",
-		alias("chain_unsubscribeRuntimeVersion")
-	)]
-	fn unsubscribe_runtime_version(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool>;
+	fn subscribe_runtime_version(&self);
 
 	/// New storage subscription
-	#[pubsub(subscription = "state_storage", subscribe, name = "state_subscribeStorage")]
-	fn subscribe_storage(
-		&self, metadata: Self::Metadata, subscriber: Subscriber<StorageChangeSet<Hash>>, keys: Option<Vec<StorageKey>>
-	);
+	#[subscription(
+		name = "state_subscribeStorage" => "state_storage",
+		unsubscribe = "state_unsubscribeStorage",
+		item = StorageChangeSet<Hash>,
+	)]
+	fn subscribe_storage(&self, keys: Option<Vec<StorageKey>>);
 
-	/// Unsubscribe from storage subscription
-	#[pubsub(subscription = "state_storage", unsubscribe, name = "state_unsubscribeStorage")]
-	fn unsubscribe_storage(
-		&self, metadata: Option<Self::Metadata>, id: SubscriptionId
-	) -> RpcResult<bool>;
-
-	/// The `state_traceBlock` RPC provides a way to trace the re-execution of a single
+	/// The `traceBlock` RPC provides a way to trace the re-execution of a single
 	/// block, collecting Spans and Events from both the client and the relevant WASM runtime.
 	/// The Spans and Events are conceptually equivalent to those from the [Tracing][1] crate.
 	///
@@ -153,7 +141,8 @@ pub trait StateApi<Hash> {
 	/// ## Node requirements
 	///
 	/// - Fully synced archive node (i.e. a node that is not actively doing a "major" sync).
-	/// - [Tracing enabled WASM runtimes](#creating-tracing-enabled-wasm-runtimes) for all runtime versions
+	/// - [Tracing enabled WASM runtimes](#creating-tracing-enabled-wasm-runtimes) for all runtime
+	///   versions
 	/// for which tracing is desired.
 	///
 	/// ## Node recommendations
@@ -169,12 +158,14 @@ pub trait StateApi<Hash> {
 	/// - Add feature `with-tracing = ["frame-executive/with-tracing", "sp-io/with-tracing"]`
 	/// under `[features]` to the `runtime` packages' `Cargo.toml`.
 	/// - Compile the runtime with `cargo build --release --features with-tracing`
-	/// - Tracing-enabled WASM runtime should be found in `./target/release/wbuild/{{chain}}-runtime`
+	/// - Tracing-enabled WASM runtime should be found in
+	///   `./target/release/wbuild/{{chain}}-runtime`
 	/// and be called something like `{{your_chain}}_runtime.compact.wasm`. This can be
 	/// renamed/modified however you like, as long as it retains the `.wasm` extension.
-	/// - Run the node with the wasm blob overrides by placing them in a folder with all your runtimes,
+	/// - Run the node with the wasm blob overrides by placing them in a folder with all your
+	///   runtimes,
 	/// and passing the path of this folder to your chain, e.g.:
-	/// 	- `./target/release/polkadot --wasm-runtime-overrides /home/user/my-custom-wasm-runtimes`
+	/// - `./target/release/polkadot --wasm-runtime-overrides /home/user/my-custom-wasm-runtimes`
 	///
 	/// You can also find some pre-built tracing enabled wasm runtimes in [substrate-archive][2]
 	///
@@ -195,45 +186,88 @@ pub trait StateApi<Hash> {
 	///
 	/// ### `curl` example
 	///
+	/// - Get tracing spans and events
 	/// ```text
 	/// curl \
 	/// 	-H "Content-Type: application/json" \
 	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "state_traceBlock", \
-	///		"params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264"]}' \
+	/// 		"params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264", "pallet,frame,state", "", ""]}' \
+	/// 	http://localhost:9933/
+	/// ```
+	///
+	/// - Get tracing events with all `storage_keys`
+	/// ```text
+	/// curl \
+	/// 	-H "Content-Type: application/json" \
+	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "state_traceBlock", \
+	/// 		"params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264", "state", "", ""]}' \
+	/// 	http://localhost:9933/
+	/// ```
+	///
+	/// - Get tracing events with `storage_keys` ('f0c365c3cf59d671eb72da0e7a4113c4')
+	/// ```text
+	/// curl \
+	/// 	-H "Content-Type: application/json" \
+	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "state_traceBlock", \
+	/// 		"params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264", "state", "f0c365c3cf59d671eb72da0e7a4113c4", ""]}' \
+	/// 	http://localhost:9933/
+	/// ```
+	///
+	/// - Get tracing events with `storage_keys` ('f0c365c3cf59d671eb72da0e7a4113c4') and method
+	///   ('Put')
+	/// ```text
+	/// curl \
+	/// 	-H "Content-Type: application/json" \
+	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "state_traceBlock", \
+	/// 		"params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264", "state", "f0c365c3cf59d671eb72da0e7a4113c4", "Put"]}' \
+	/// 	http://localhost:9933/
+	/// ```
+	///
+	/// - Get tracing events with all `storage_keys` and method ('Put')
+	/// ```text
+	/// curl \
+	/// 	-H "Content-Type: application/json" \
+	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "state_traceBlock", \
+	/// 		"params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264", "state", "", "Put"]}' \
 	/// 	http://localhost:9933/
 	/// ```
 	///
 	/// ### Params
 	///
-	/// - `block_hash` (param index 0): Hash of the block to trace.
+	/// - `block` (param index 0): Hash of the block to trace.
 	/// - `targets` (param index 1): String of comma separated (no spaces) targets. Specified
-	/// 	targets match with trace targets by prefix (i.e if a target is in the beginning
-	/// 	of a trace target it is considered a match). If an empty string is specified no
-	/// 	targets will be filtered out. The majority of targets correspond to Rust module names,
-	/// 	and the ones that do not are typically "hardcoded" into span or event location
-	/// 	somewhere in the Substrate source code. ("Non-hardcoded" targets typically come from frame
-	/// 	support macros.)
+	/// targets match with trace targets by prefix (i.e if a target is in the beginning
+	/// of a trace target it is considered a match). If an empty string is specified no
+	/// targets will be filtered out. The majority of targets correspond to Rust module names,
+	/// and the ones that do not are typically "hardcoded" into span or event location
+	/// somewhere in the Substrate source code. ("Non-hardcoded" targets typically come from frame
+	/// support macros.)
 	/// - `storage_keys` (param index 2): String of comma separated (no spaces) hex encoded
-	/// 	(no `0x` prefix) storage keys. If an empty string is specified no events will
-	/// 	be filtered out. If anything other than an empty string is specified, events
-	/// 	will be filtered by storage key (so non-storage events will **not** show up).
-	/// 	You can specify any length of a storage key prefix (i.e. if a specified storage
-	/// 	key is in the beginning of an events storage key it is considered a match).
-	/// 	Example: for balance tracking on Polkadot & Kusama you would likely want
-	///		to track changes to account balances with the frame_system::Account storage item,
-	///		which is a map from `AccountId` to `AccountInfo`. The key filter for this would be
-	///		the storage prefix for the map:
-	///		`26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9`
-	/// 	Additionally you would want to track the extrinsic index, which is under the
-	///		`:extrinsic_index` key. The key for this would be the aforementioned string as bytes
-	///		in hex: `3a65787472696e7369635f696e646578`.
-	///		The following are some resources to learn more about storage keys in substrate:
-	///		[substrate storage][1], [transparent keys in substrate][2],
-	///		[querying substrate storage via rpc][3].
+	/// (no `0x` prefix) storage keys. If an empty string is specified no events will
+	/// be filtered out. If anything other than an empty string is specified, events
+	/// will be filtered by storage key (so non-storage events will **not** show up).
+	/// You can specify any length of a storage key prefix (i.e. if a specified storage
+	/// key is in the beginning of an events storage key it is considered a match).
+	/// Example: for balance tracking on Polkadot & Kusama you would likely want
+	/// to track changes to account balances with the frame_system::Account storage item,
+	/// which is a map from `AccountId` to `AccountInfo`. The key filter for this would be
+	/// the storage prefix for the map:
+	/// `26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9`
+	/// - `methods` (param index 3): String of comma separated (no spaces) tracing event method.
+	/// If an empty string is specified no events will be filtered out. If anything other than
+	/// an empty string is specified, events will be filtered by method (so non-method events will
+	/// **not** show up).
 	///
-	///		[1]: https://substrate.dev/docs/en/knowledgebase/advanced/storage#storage-map-key
-	///		[2]: https://www.shawntabrizi.com/substrate/transparent-keys-in-substrate/
-	///		[3]: https://www.shawntabrizi.com/substrate/querying-substrate-storage-via-rpc/
+	/// Additionally you would want to track the extrinsic index, which is under the
+	/// `:extrinsic_index` key. The key for this would be the aforementioned string as bytes
+	/// in hex: `3a65787472696e7369635f696e646578`.
+	/// The following are some resources to learn more about storage keys in substrate:
+	/// [substrate storage][1], [transparent keys in substrate][2],
+	/// [querying substrate storage via rpc][3].
+	///
+	/// [1]: https://docs.substrate.io/main-docs/fundamentals/state-transitions-and-storage/
+	/// [2]: https://www.shawntabrizi.com/substrate/transparent-keys-in-substrate/
+	/// [3]: https://www.shawntabrizi.com/substrate/querying-substrate-storage-via-rpc/
 	///
 	/// ### Maximum payload size
 	///
@@ -242,12 +276,13 @@ pub trait StateApi<Hash> {
 	/// narrow down the traces using a smaller set of targets and/or storage keys.
 	///
 	/// If you are having issues with maximum payload size you can use the flag
-	/// `-lstate_tracing=trace` to get some logging during tracing.
-	#[rpc(name = "state_traceBlock")]
+	/// `-ltracing=trace` to get some logging during tracing.
+	#[method(name = "state_traceBlock", blocking)]
 	fn trace_block(
 		&self,
 		block: Hash,
 		targets: Option<String>,
 		storage_keys: Option<String>,
-	) -> FutureResult<sp_rpc::tracing::TraceBlockResponse>;
+		methods: Option<String>,
+	) -> RpcResult<sp_rpc::tracing::TraceBlockResponse>;
 }

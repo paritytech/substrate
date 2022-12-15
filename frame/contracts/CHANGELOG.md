@@ -20,9 +20,11 @@ In other words: Upgrading this pallet will not break pre-existing contracts.
 
 ### Added
 
-- New **unstable** `seal_rent_params` and `seal_rent_status` contract callable function.
-[#8231](https://github.com/paritytech/substrate/pull/8231)
-[#8780](https://github.com/paritytech/substrate/pull/8780)
+- Allow contracts to dispatch calls into the runtime (**unstable**)
+[#9276](https://github.com/paritytech/substrate/pull/9276)
+
+- New version of `seal_call` that offers more features.
+[#8909](https://github.com/paritytech/substrate/pull/8909)
 
 - New `instantiate` RPC that allows clients to dry-run contract instantiation.
 [#8451](https://github.com/paritytech/substrate/pull/8451)
@@ -32,12 +34,22 @@ In other words: Upgrading this pallet will not break pre-existing contracts.
 
 ### Changed
 
-- Replaced `seal_println` with the **unstable** `seal_debug_message` API which allows
-output to an RPC client.
+- Replaced storage rent with automatic storage deposits
+[#9669](https://github.com/paritytech/substrate/pull/9669)
+[#10082](https://github.com/paritytech/substrate/pull/10082)
+
+- Replaced `seal_println` with the `seal_debug_message` API which allows outputting debug
+messages to the console and RPC clients.
 [#8773](https://github.com/paritytech/substrate/pull/8773)
+[#9550](https://github.com/paritytech/substrate/pull/9550)
 
 - Make storage and fields of `Schedule` private to the crate.
 [#8359](https://github.com/paritytech/substrate/pull/8359)
+
+### Fixed
+
+- Remove pre-charging which caused wrongly estimated weights
+[#8976](https://github.com/paritytech/substrate/pull/8976)
 
 ## [v3.0.0] 2021-02-25
 

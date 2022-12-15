@@ -1,11 +1,11 @@
 [package]
 description = "Substrate offchain workers primitives"
 name = "sp-offchain"
-version = "3.0.0"
+version = "4.0.0-dev"
 license = "Apache-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
-homepage = "https://substrate.dev"
+edition = "2021"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 readme = "README.md"
 
@@ -13,17 +13,10 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-core = { version = "3.0.0", default-features = false, path = "../core" }
-sp-api = { version = "3.0.0", default-features = false, path = "../api" }
-sp-runtime = { version = "3.0.0", default-features = false, path = "../runtime" }
-
-[dev-dependencies]
-sp-state-machine = { version = "0.9.0", default-features = false, path = "../state-machine" }
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../api" }
+sp-core = { version = "7.0.0", default-features = false, path = "../core" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../runtime" }
 
 [features]
 default = ["std"]
-std = [
-	"sp-core/std",
-	"sp-api/std",
-	"sp-runtime/std"
-]
+std = ["sp-api/std", "sp-core/std", "sp-runtime/std"]

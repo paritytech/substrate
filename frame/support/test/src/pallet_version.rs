@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,8 +25,5 @@ fn ensure_that_current_pallet_version_is_correct() {
 		patch: env!("CARGO_PKG_VERSION_PATCH").parse().unwrap(),
 	};
 
-	assert_eq!(
-		expected,
-		crate_to_pallet_version!(),
-	)
+	assert_eq!(expected, crate_to_pallet_version!())
 }

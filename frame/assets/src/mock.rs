@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,9 +20,15 @@
 use super::*;
 use crate as pallet_assets;
 
+use frame_support::{
+	construct_runtime, parameter_types,
+	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64, GenesisBuild},
+};
 use sp_core::H256;
-use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
-use frame_support::{parameter_types, construct_runtime};
+use sp_runtime::{
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -39,15 +45,12 @@ construct_runtime!(
 	}
 );
 
-parameter_types! {
-	pub const BlockHashCount: u64 = 250;
-}
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
-	type Origin = Origin;
-	type Call = Call;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -55,8 +58,8 @@ impl frame_system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type RuntimeEvent = RuntimeEvent;
+	type BlockHashCount = ConstU64<250>;
 	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -66,71 +69,111 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-}
-
-parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
+	type MaxConsumers = ConstU32<2>;
 }
 
 impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type DustRemoval = ();
-	type Event = Event;
-	type ExistentialDeposit = ExistentialDeposit;
+	type RuntimeEvent = RuntimeEvent;
+	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 	type MaxLocks = ();
-}
-
-parameter_types! {
-	pub const AssetDeposit: u64 = 1;
-	pub const ApprovalDeposit: u64 = 1;
-	pub const StringLimit: u32 = 50;
-	pub const MetadataDepositBase: u64 = 1;
-	pub const MetadataDepositPerByte: u64 = 1;
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
 }
 
 impl Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Balance = u64;
 	type AssetId = u32;
+	type AssetIdParameter = u32;
 	type Currency = Balances;
+	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<u64>>;
 	type ForceOrigin = frame_system::EnsureRoot<u64>;
-	type AssetDeposit = AssetDeposit;
-	type MetadataDepositBase = MetadataDepositBase;
-	type MetadataDepositPerByte = MetadataDepositPerByte;
-	type ApprovalDeposit = ApprovalDeposit;
-	type StringLimit = StringLimit;
+	type AssetDeposit = ConstU64<1>;
+	type AssetAccountDeposit = ConstU64<10>;
+	type MetadataDepositBase = ConstU64<1>;
+	type MetadataDepositPerByte = ConstU64<1>;
+	type ApprovalDeposit = ConstU64<1>;
+	type StringLimit = ConstU32<50>;
 	type Freezer = TestFreezer;
 	type WeightInfo = ();
 	type Extra = ();
+	type RemoveItemsLimit = ConstU32<5>;
+	#[cfg(feature = "runtime-benchmarks")]
+	type BenchmarkHelper = ();
 }
 
-use std::cell::RefCell;
 use std::collections::HashMap;
 
-thread_local! {
-	static FROZEN: RefCell<HashMap<(u32, u64), u64>> = RefCell::new(Default::default());
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum Hook {
+	Died(u32, u64),
+}
+parameter_types! {
+	static Frozen: HashMap<(u32, u64), u64> = Default::default();
+	static Hooks: Vec<Hook> = Default::default();
 }
 
 pub struct TestFreezer;
 impl FrozenBalance<u32, u64, u64> for TestFreezer {
 	fn frozen_balance(asset: u32, who: &u64) -> Option<u64> {
-		FROZEN.with(|f| f.borrow().get(&(asset, who.clone())).cloned())
+		Frozen::get().get(&(asset, *who)).cloned()
+	}
+
+	fn died(asset: u32, who: &u64) {
+		Hooks::mutate(|v| v.push(Hook::Died(asset, *who)));
+
+		// Sanity check: dead accounts have no balance.
+		assert!(Assets::balance(asset, *who).is_zero());
 	}
 }
 
 pub(crate) fn set_frozen_balance(asset: u32, who: u64, amount: u64) {
-	FROZEN.with(|f| f.borrow_mut().insert((asset, who), amount));
+	Frozen::mutate(|v| {
+		v.insert((asset, who), amount);
+	});
 }
+
 pub(crate) fn clear_frozen_balance(asset: u32, who: u64) {
-	FROZEN.with(|f| f.borrow_mut().remove(&(asset, who)));
+	Frozen::mutate(|v| {
+		v.remove(&(asset, who));
+	});
+}
+
+pub(crate) fn hooks() -> Vec<Hook> {
+	Hooks::get().clone()
+}
+
+pub(crate) fn take_hooks() -> Vec<Hook> {
+	Hooks::take()
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
-	let mut ext = sp_io::TestExternalities::new(t);
+	let config: pallet_assets::GenesisConfig<Test> = pallet_assets::GenesisConfig {
+		assets: vec![
+			// id, owner, is_sufficient, min_balance
+			(999, 0, true, 1),
+		],
+		metadata: vec![
+			// id, name, symbol, decimals
+			(999, "Token Name".into(), "TOKEN".into(), 10),
+		],
+		accounts: vec![
+			// id, account_id, balance
+			(999, 1, 100),
+		],
+	};
+
+	config.assimilate_storage(&mut storage).unwrap();
+
+	let mut ext: sp_io::TestExternalities = storage.into();
+	// Clear thread local vars for https://github.com/paritytech/substrate/issues/10479.
+	ext.execute_with(|| take_hooks());
 	ext.execute_with(|| System::set_block_number(1));
 	ext
 }

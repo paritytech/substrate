@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,7 +26,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			let has_runtime_upgrade = hooks.has_runtime_upgrade;
 			(where_clause, span, has_runtime_upgrade)
 		},
-		None => (None, def.pallet_struct.attr_span, false),
+		None => (def.config.where_clause.clone(), def.pallet_struct.attr_span, false),
 	};
 
 	let frame_support = &def.frame_support;
@@ -40,9 +40,11 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 		quote::quote! {
 			#frame_support::log::info!(
 				target: #frame_support::LOG_TARGET,
-				"⚠️ {} declares internal migrations (which *might* execute), setting storage version to {:?}",
+				"⚠️ {} declares internal migrations (which *might* execute). \
+				 On-chain `{:?}` vs current storage version `{:?}`",
 				pallet_name,
-				new_storage_version,
+				<Self as #frame_support::traits::GetStorageVersion>::on_chain_storage_version(),
+				<Self as #frame_support::traits::GetStorageVersion>::current_storage_version(),
 			);
 		}
 	} else {
@@ -50,16 +52,28 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 		quote::quote! {
 			#frame_support::log::info!(
 				target: #frame_support::LOG_TARGET,
-				"✅ no migration for {}, setting storage version to {:?}",
+				"✅ no migration for {}",
 				pallet_name,
-				new_storage_version,
 			);
 		}
 	};
 
+	let log_try_state = quote::quote! {
+		let pallet_name = <
+			<T as #frame_system::Config>::PalletInfo
+			as
+			#frame_support::traits::PalletInfo
+		>::name::<Self>().expect("Every active pallet has a name in the runtime; qed");
+		#frame_support::log::debug!(
+			target: #frame_support::LOG_TARGET,
+			"🩺 try-state pallet {:?}",
+			pallet_name,
+		);
+	};
+
 	let hooks_impl = if def.hooks.is_none() {
 		let frame_system = &def.frame_system;
-		quote::quote!{
+		quote::quote! {
 			impl<#type_impl_gen>
 				#frame_support::traits::Hooks<<T as #frame_system::Config>::BlockNumber>
 				for Pallet<#type_use_gen> {}
@@ -131,7 +145,6 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 				);
 
 				// log info about the upgrade.
-				let new_storage_version = #frame_support::crate_to_pallet_version!();
 				let pallet_name = <
 					<T as #frame_system::Config>::PalletInfo
 					as
@@ -139,23 +152,15 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 				>::name::<Self>().unwrap_or("<unknown pallet name>");
 				#log_runtime_upgrade
 
-				let result = <
+				<
 					Self as #frame_support::traits::Hooks<
 						<T as #frame_system::Config>::BlockNumber
 					>
-				>::on_runtime_upgrade();
-
-				new_storage_version.put_into_storage::<<T as #frame_system::Config>::PalletInfo, Self>();
-
-				let additional_write = <
-					<T as #frame_system::Config>::DbWeight as #frame_support::traits::Get<_>
-				>::get().writes(1);
-
-				result.saturating_add(additional_write)
+				>::on_runtime_upgrade()
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn pre_upgrade() -> Result<(), &'static str> {
+			fn pre_upgrade() -> Result<#frame_support::sp_std::vec::Vec<u8>, &'static str> {
 				<
 					Self
 					as
@@ -164,12 +169,12 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn post_upgrade() -> Result<(), &'static str> {
+			fn post_upgrade(state: #frame_support::sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
 				<
 					Self
 					as
 					#frame_support::traits::Hooks<<T as #frame_system::Config>::BlockNumber>
-				>::post_upgrade()
+				>::post_upgrade(state)
 			}
 		}
 
@@ -196,6 +201,24 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 						<T as #frame_system::Config>::BlockNumber
 					>
 				>::integrity_test()
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		impl<#type_impl_gen>
+			#frame_support::traits::TryState<<T as #frame_system::Config>::BlockNumber>
+			for #pallet_ident<#type_use_gen> #where_clause
+		{
+			fn try_state(
+				n: <T as #frame_system::Config>::BlockNumber,
+				_s: #frame_support::traits::TryStateSelect
+			) -> Result<(), &'static str> {
+				#log_try_state
+				<
+					Self as #frame_support::traits::Hooks<
+						<T as #frame_system::Config>::BlockNumber
+					>
+				>::try_state(n)
 			}
 		}
 	)

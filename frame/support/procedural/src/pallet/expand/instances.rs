@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,17 +15,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::{pallet::Def, NUMBER_OF_INSTANCE};
 use proc_macro2::Span;
-use crate::pallet::Def;
-use crate::NUMBER_OF_INSTANCE;
 
+///
 /// * Provide inherent instance to be used by construct_runtime
 /// * Provide Instance1 ..= Instance16 for instantiable pallet
 pub fn expand_instances(def: &mut Def) -> proc_macro2::TokenStream {
 	let frame_support = &def.frame_support;
 	let inherent_ident = syn::Ident::new(crate::INHERENT_INSTANCE_NAME, Span::call_site());
 	let instances = if def.config.has_instance {
-		(1..=NUMBER_OF_INSTANCE).map(|i| syn::Ident::new(&format!("Instance{}", i), Span::call_site())).collect()
+		(1..=NUMBER_OF_INSTANCE)
+			.map(|i| syn::Ident::new(&format!("Instance{}", i), Span::call_site()))
+			.collect()
 	} else {
 		vec![]
 	};

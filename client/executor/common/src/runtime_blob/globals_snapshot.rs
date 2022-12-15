@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -34,31 +34,30 @@ pub trait InstanceGlobals {
 	/// Get a handle to a global by it's export name.
 	///
 	/// The requested export is must exist in the exported list, and it should be a mutable global.
-	fn get_global(&self, export_name: &str) -> Self::Global;
+	fn get_global(&mut self, export_name: &str) -> Self::Global;
 	/// Get the current value of the global.
-	fn get_global_value(&self, global: &Self::Global) -> sp_wasm_interface::Value;
+	fn get_global_value(&mut self, global: &Self::Global) -> sp_wasm_interface::Value;
 	/// Update the current value of the global.
 	///
 	/// The global behind the handle is guaranteed to be mutable and the value to be the same type
 	/// as the global.
-	fn set_global_value(&self, global: &Self::Global, value: sp_wasm_interface::Value);
+	fn set_global_value(&mut self, global: &Self::Global, value: sp_wasm_interface::Value);
 }
 
 /// A set of exposed mutable globals.
 ///
 /// This is set of globals required to create a [`GlobalsSnapshot`] and that are collected from
-/// a runtime blob that was instrumented by [`InstrumentModule::expose_mutable_globals`].
-///
+/// a runtime blob that was instrumented by
+/// [`RuntimeBlob::expose_mutable_globals`](super::RuntimeBlob::expose_mutable_globals`).
+
 /// If the code wasn't instrumented then it would be empty and snapshot would do nothing.
 pub struct ExposedMutableGlobalsSet(Vec<String>);
 
 impl ExposedMutableGlobalsSet {
 	/// Collect the set from the given runtime blob. See the struct documentation for details.
 	pub fn collect(runtime_blob: &RuntimeBlob) -> Self {
-		let global_names = runtime_blob
-			.exported_internal_global_names()
-			.map(ToOwned::to_owned)
-			.collect();
+		let global_names =
+			runtime_blob.exported_internal_global_names().map(ToOwned::to_owned).collect();
 		Self(global_names)
 	}
 }
@@ -80,7 +79,10 @@ impl<Global> GlobalsSnapshot<Global> {
 	///
 	/// This function panics if the instance doesn't correspond to the module from which the
 	/// [`ExposedMutableGlobalsSet`] was collected.
-	pub fn take<Instance>(mutable_globals: &ExposedMutableGlobalsSet, instance: &Instance) -> Self
+	pub fn take<Instance>(
+		mutable_globals: &ExposedMutableGlobalsSet,
+		instance: &mut Instance,
+	) -> Self
 	where
 		Instance: InstanceGlobals<Global = Global>,
 	{
@@ -99,7 +101,7 @@ impl<Global> GlobalsSnapshot<Global> {
 	/// Apply the snapshot to the given instance.
 	///
 	/// This instance must be the same that was used for creation of this snapshot.
-	pub fn apply<Instance>(&self, instance: &Instance)
+	pub fn apply<Instance>(&self, instance: &mut Instance)
 	where
 		Instance: InstanceGlobals<Global = Global>,
 	{

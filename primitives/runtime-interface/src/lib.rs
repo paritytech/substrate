@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,6 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Custom inner attributes are unstable, so we need to faky disable the attribute.
+// rustfmt still honors the attribute to not format the rustdocs below.
+#![cfg_attr(feature = "never", rustfmt::skip)]
 //! Substrate runtime interface
 //!
 //! This crate provides types, traits and macros around runtime interfaces. A runtime interface is
@@ -26,11 +29,12 @@
 //! # Using a type in a runtime interface
 //!
 //! Any type that should be used in a runtime interface as argument or return value needs to
-//! implement [`RIType`]. The associated type [`FFIType`](./trait.RIType.html#associatedtype.FFIType)
-//! is the type that is used in the FFI function to represent the actual type. For example `[T]` is
-//! represented by an `u64`. The slice pointer and the length will be mapped to an `u64` value.
-//! For more information see this [table](#ffi-type-and-conversion).
-//! The FFI function definition is used when calling from the wasm runtime into the node.
+//! implement [`RIType`]. The associated type
+//! [`FFIType`](./trait.RIType.html#associatedtype.FFIType) is the type that is used in the FFI
+//! function to represent the actual type. For example `[T]` is represented by an `u64`. The slice
+//! pointer and the length will be mapped to an `u64` value. For more information see this
+//! [table](#ffi-type-and-conversion). The FFI function definition is used when calling from the
+//! wasm runtime into the node.
 //!
 //! Traits are used to convert from a type to the corresponding
 //! [`RIType::FFIType`](./trait.RIType.html#associatedtype.FFIType).
@@ -79,17 +83,17 @@
 //!
 //! | Type | FFI type | Conversion |
 //! |----|----|----|
-//! | `u8` | `u8` | `Identity` |
-//! | `u16` | `u16` | `Identity` |
+//! | `u8` | `u32` | zero-extended to 32-bits |
+//! | `u16` | `u32` | zero-extended to 32-bits |
 //! | `u32` | `u32` | `Identity` |
 //! | `u64` | `u64` | `Identity` |
 //! | `i128` | `u32` | `v.as_ptr()` (pointer to a 16 byte array) |
-//! | `i8` | `i8` | `Identity` |
-//! | `i16` | `i16` | `Identity` |
+//! | `i8` | `i32` | sign-extended to 32-bits |
+//! | `i16` | `i32` | sign-extended to 32-bits |
 //! | `i32` | `i32` | `Identity` |
 //! | `i64` | `i64` | `Identity` |
 //! | `u128` | `u32` | `v.as_ptr()` (pointer to a 16 byte array) |
-//! | `bool` | `u8` | `if v { 1 } else { 0 }` |
+//! | `bool` | `u32` | `if v { 1 } else { 0 }` |
 //! | `&str` | `u64` | <code>v.len() 32bit << 32 &#124; v.as_ptr() 32bit</code> |
 //! | `&[u8]` | `u64` | <code>v.len() 32bit << 32 &#124; v.as_ptr() 32bit</code> |
 //! | `Vec<u8>` | `u64` | <code>v.len() 32bit << 32 &#124; v.as_ptr() 32bit</code> |
@@ -119,10 +123,10 @@ pub use sp_std;
 
 /// Attribute macro for transforming a trait declaration into a runtime interface.
 ///
-/// A runtime interface is a fixed interface between a Substrate compatible runtime and the native
-/// node. This interface is callable from a native and a wasm runtime. The macro will generate the
-/// corresponding code for the native implementation and the code for calling from the wasm
-/// side to the native implementation.
+/// A runtime interface is a fixed interface between a Substrate compatible runtime and the
+/// native node. This interface is callable from a native and a wasm runtime. The macro will
+/// generate the corresponding code for the native implementation and the code for calling from
+/// the wasm side to the native implementation.
 ///
 /// The macro expects the runtime interface declaration as trait declaration:
 ///
@@ -151,6 +155,22 @@ pub use sp_std;
 ///         [17].to_vec()
 ///     }
 ///
+///     /// Call function, different version and only being registered.
+///     ///
+///     /// This `register_only` version is only being registered, aka exposed to the runtime,
+///     /// but the runtime will still use the version 2 of this function. This is useful for when
+///     /// new host functions should be introduced. Adding new host functions requires that all
+///     /// nodes have the host functions available, because otherwise they fail at instantiation
+///     /// of the runtime. With `register_only` the function will not be used when compiling the
+///     /// runtime, but it will already be there for a future version of the runtime that will
+///     /// switch to using these host function.
+///     #[version(3, register_only)]
+///     fn call(data: &[u8]) -> Vec<u8> {
+///         // Here you could call some rather complex code that only compiles on native or
+///         // is way faster in native than executing it in wasm.
+///         [18].to_vec()
+///     }
+///
 ///     /// A function can take a `&self` or `&mut self` argument to get access to the
 ///     /// `Externalities`. (The generated method does not require
 ///     /// this argument, so the function can be called just with the `optional` argument)
@@ -175,12 +195,14 @@ pub use sp_std;
 ///     trait Interface {
 ///         fn call_version_1(data: &[u8]) -> Vec<u8>;
 ///         fn call_version_2(data: &[u8]) -> Vec<u8>;
+///         fn call_version_3(data: &[u8]) -> Vec<u8>;
 ///         fn set_or_clear_version_1(&mut self, optional: Option<Vec<u8>>);
 ///     }
 ///
 ///     impl Interface for &mut dyn sp_externalities::Externalities {
 ///         fn call_version_1(data: &[u8]) -> Vec<u8> { Vec::new() }
 ///         fn call_version_2(data: &[u8]) -> Vec<u8> { [17].to_vec() }
+///         fn call_version_3(data: &[u8]) -> Vec<u8> { [18].to_vec() }
 ///         fn set_or_clear_version_1(&mut self, optional: Option<Vec<u8>>) {
 ///             match optional {
 ///                 Some(value) => self.set_storage([1, 2, 3, 4].to_vec(), value),
@@ -200,6 +222,10 @@ pub use sp_std;
 ///
 ///     fn call_version_2(data: &[u8]) -> Vec<u8> {
 ///         <&mut dyn sp_externalities::Externalities as Interface>::call_version_2(data)
+///     }
+///
+///     fn call_version_3(data: &[u8]) -> Vec<u8> {
+///         <&mut dyn sp_externalities::Externalities as Interface>::call_version_3(data)
 ///     }
 ///
 ///     pub fn set_or_clear(optional: Option<Vec<u8>>) {
@@ -273,47 +299,47 @@ pub use sp_std;
 /// The macro supports any kind of argument type, as long as it implements [`RIType`] and the
 /// required `FromFFIValue`/`IntoFFIValue`. The macro will convert each
 /// argument to the corresponding FFI representation and will call into the host using this FFI
-/// representation. On the host each argument is converted back to the native representation and
-/// the native implementation is called. Any return value is handled in the same way.
+/// representation. On the host each argument is converted back to the native representation
+/// and the native implementation is called. Any return value is handled in the same way.
 ///
 /// # Wasm only interfaces
 ///
-/// Some interfaces are only required from within the wasm runtime e.g. the allocator interface.
-/// To support this, the macro can be called like `#[runtime_interface(wasm_only)]`. This instructs
-/// the macro to make two significant changes to the generated code:
+/// Some interfaces are only required from within the wasm runtime e.g. the allocator
+/// interface. To support this, the macro can be called like `#[runtime_interface(wasm_only)]`.
+/// This instructs the macro to make two significant changes to the generated code:
 ///
 /// 1. The generated functions are not callable from the native side.
-/// 2. The trait as shown above is not implemented for `Externalities` and is instead implemented
-///    for `FunctionExecutor` (from `sp-wasm-interface`).
+/// 2. The trait as shown above is not implemented for [`Externalities`] and is instead
+/// implemented for `FunctionContext` (from `sp-wasm-interface`).
 ///
 /// # Disable tracing
-/// By addding `no_tracing` to the list of options you can prevent the wasm-side interface from
-/// generating the default `sp-tracing`-calls. Note that this is rarely needed but only meant for
-/// the case when that would create a circular dependency. You usually _do not_ want to add this
-/// flag, as tracing doesn't cost you anything by default anyways (it is added as a no-op) but is
-/// super useful for debugging later.
-///
+/// By adding `no_tracing` to the list of options you can prevent the wasm-side interface from
+/// generating the default `sp-tracing`-calls. Note that this is rarely needed but only meant
+/// for the case when that would create a circular dependency. You usually _do not_ want to add
+/// this flag, as tracing doesn't cost you anything by default anyways (it is added as a no-op)
+/// but is super useful for debugging later.
 pub use sp_runtime_interface_proc_macro::runtime_interface;
 
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use sp_externalities::{
-	set_and_run_with_externalities, with_externalities, Externalities, ExternalitiesExt, ExtensionStore,
+	set_and_run_with_externalities, with_externalities, ExtensionStore, Externalities,
+	ExternalitiesExt,
 };
 
 #[doc(hidden)]
 pub use codec;
 
-pub(crate) mod impls;
 #[cfg(feature = "std")]
 pub mod host;
+pub(crate) mod impls;
+pub mod pass_by;
 #[cfg(any(not(feature = "std"), doc))]
 pub mod wasm;
-pub mod pass_by;
 
 mod util;
 
-pub use util::{unpack_ptr_and_len, pack_ptr_and_len};
+pub use util::{pack_ptr_and_len, unpack_ptr_and_len};
 
 /// Something that can be used by the runtime interface as type to communicate between wasm and the
 /// host.
@@ -323,7 +349,9 @@ pub use util::{unpack_ptr_and_len, pack_ptr_and_len};
 pub trait RIType {
 	/// The ffi type that is used to represent `Self`.
 	#[cfg(feature = "std")]
-	type FFIType: sp_wasm_interface::IntoValue + sp_wasm_interface::TryFromValue;
+	type FFIType: sp_wasm_interface::IntoValue
+		+ sp_wasm_interface::TryFromValue
+		+ sp_wasm_interface::WasmTy;
 	#[cfg(not(feature = "std"))]
 	type FFIType;
 }

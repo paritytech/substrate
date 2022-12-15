@@ -1,0 +1,43 @@
+[package]
+name = "sp-beefy"
+version = "4.0.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "Apache-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate"
+description = "Primitives for BEEFY protocol."
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
+serde = { version = "1.0.136", optional = true, features = ["derive"] }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../api" }
+sp-application-crypto = { version = "7.0.0", default-features = false, path = "../application-crypto" }
+sp-core = { version = "7.0.0", default-features = false, path = "../core" }
+sp-io = { version = "7.0.0", default-features = false, path = "../io" }
+sp-mmr-primitives = { version = "4.0.0-dev", default-features = false, path = "../merkle-mountain-range" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../runtime" }
+sp-std = { version = "5.0.0", default-features = false, path = "../std" }
+
+[dev-dependencies]
+array-bytes = "4.1"
+sp-keystore = { version = "0.13.0", path = "../keystore" }
+
+[features]
+default = ["std"]
+std = [
+	"codec/std",
+	"scale-info/std",
+	"serde",
+	"sp-api/std",
+	"sp-application-crypto/std",
+	"sp-core/std",
+	"sp-io/std",
+	"sp-mmr-primitives/std",
+	"sp-runtime/std",
+	"sp-std/std",
+]

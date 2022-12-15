@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,15 +18,16 @@
 //! Storage map type. Implements StorageMap, StorageIterableMap, StoragePrefixedMap traits and their
 //! methods directly.
 
-use codec::{FullCodec, Decode, EncodeLike, Encode};
 use crate::{
+	metadata::{StorageEntryMetadata, StorageEntryType},
 	storage::{
-		StorageAppend, StorageTryAppend, StorageDecodeLength, StoragePrefixedMap,
-		types::{OptionQuery, QueryKindTrait, OnEmptyGetter},
+		types::{OptionQuery, QueryKindTrait, StorageEntryMetadataBuilder},
+		KeyLenOf, StorageAppend, StorageDecodeLength, StoragePrefixedMap, StorageTryAppend,
 	},
-	traits::{GetDefault, StorageInstance, Get, MaxEncodedLen, StorageInfo},
+	traits::{Get, GetDefault, StorageInfo, StorageInstance},
+	StorageHasher, Twox128,
 };
-use frame_metadata::{DefaultByteGetter, StorageEntryModifier};
+use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_std::prelude::*;
 
@@ -35,8 +36,8 @@ use sp_std::prelude::*;
 /// Each value is stored at:
 /// ```nocompile
 /// Twox128(Prefix::pallet_prefix())
-///		++ Twox128(Prefix::STORAGE_PREFIX)
-///		++ Hasher1(encode(key))
+/// 		++ Twox128(Prefix::STORAGE_PREFIX)
+/// 		++ Hasher1(encode(key))
 /// ```
 ///
 /// # Warning
@@ -44,10 +45,29 @@ use sp_std::prelude::*;
 /// If the keys are not trusted (e.g. can be set by a user), a cryptographic `hasher` such as
 /// `blake2_128_concat` must be used.  Otherwise, other values in storage can be compromised.
 pub struct StorageMap<
-	Prefix, Hasher, Key, Value, QueryKind=OptionQuery, OnEmpty=GetDefault, MaxValues=GetDefault,
->(
-	core::marker::PhantomData<(Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues)>
-);
+	Prefix,
+	Hasher,
+	Key,
+	Value,
+	QueryKind = OptionQuery,
+	OnEmpty = GetDefault,
+	MaxValues = GetDefault,
+>(core::marker::PhantomData<(Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues)>);
+
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> Get<u32>
+	for KeyLenOf<StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>>
+where
+	Prefix: StorageInstance,
+	Hasher: crate::hash::StorageHasher,
+	Key: FullCodec + MaxEncodedLen,
+{
+	fn get() -> u32 {
+		// The `max_len` of the key hash plus the pallet prefix and storage prefix (which both are
+		// hashed with `Twox128`).
+		let z = Hasher::max_len::<Key>() + Twox128::max_len::<()>() * 2;
+		z as u32
+	}
+}
 
 impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
 	crate::storage::generator::StorageMap<Key, Value>
@@ -77,9 +97,8 @@ where
 	}
 }
 
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
-	StoragePrefixedMap<Value> for
-	StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> StoragePrefixedMap<Value>
+	for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: StorageInstance,
 	Hasher: crate::hash::StorageHasher,
@@ -135,6 +154,11 @@ where
 		<Self as crate::storage::StorageMap<Key, Value>>::swap(key1, key2)
 	}
 
+	/// Store or remove the value to be associated with `key` so that `get` returns the `query`.
+	pub fn set<KeyArg: EncodeLike<Key>>(key: KeyArg, q: QueryKind::Query) {
+		<Self as crate::storage::StorageMap<Key, Value>>::set(key, q)
+	}
+
 	/// Store a value to be associated with the given key from the map.
 	pub fn insert<KeyArg: EncodeLike<Key>, ValArg: EncodeLike<Value>>(key: KeyArg, val: ValArg) {
 		<Self as crate::storage::StorageMap<Key, Value>>::insert(key, val)
@@ -148,7 +172,7 @@ where
 	/// Mutate the value under a key.
 	pub fn mutate<KeyArg: EncodeLike<Key>, R, F: FnOnce(&mut QueryKind::Query) -> R>(
 		key: KeyArg,
-		f: F
+		f: F,
 	) -> R {
 		<Self as crate::storage::StorageMap<Key, Value>>::mutate(key, f)
 	}
@@ -165,12 +189,14 @@ where
 	/// Mutate the value under a key. Deletes the item if mutated to a `None`.
 	pub fn mutate_exists<KeyArg: EncodeLike<Key>, R, F: FnOnce(&mut Option<Value>) -> R>(
 		key: KeyArg,
-		f: F
+		f: F,
 	) -> R {
 		<Self as crate::storage::StorageMap<Key, Value>>::mutate_exists(key, f)
 	}
 
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
+	/// `f` will always be called with an option representing if the storage item exists (`Some<V>`)
+	/// or if the storage item does not exist (`None`), independent of the `QueryType`.
 	pub fn try_mutate_exists<KeyArg, R, E, F>(key: KeyArg, f: F) -> Result<R, E>
 	where
 		KeyArg: EncodeLike<Key>,
@@ -198,7 +224,7 @@ where
 		EncodeLikeKey: EncodeLike<Key>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		Value: StorageAppend<Item>
+		Value: StorageAppend<Item>,
 	{
 		<Self as crate::storage::StorageMap<Key, Value>>::append(key, item)
 	}
@@ -216,7 +242,8 @@ where
 	/// `None` does not mean that `get()` does not return a value. The default value is completly
 	/// ignored by this function.
 	pub fn decode_len<KeyArg: EncodeLike<Key>>(key: KeyArg) -> Option<usize>
-		where Value: StorageDecodeLength,
+	where
+		Value: StorageDecodeLength,
 	{
 		<Self as crate::storage::StorageMap<Key, Value>>::decode_len(key)
 	}
@@ -225,19 +252,58 @@ where
 	///
 	/// If the key doesn't exist, then it's a no-op. If it does, then it returns its value.
 	pub fn migrate_key<OldHasher: crate::hash::StorageHasher, KeyArg: EncodeLike<Key>>(
-		key: KeyArg
+		key: KeyArg,
 	) -> Option<Value> {
 		<Self as crate::storage::StorageMap<Key, Value>>::migrate_key::<OldHasher, _>(key)
 	}
 
-	/// Remove all value of the storage.
-	pub fn remove_all() {
-		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all()
+	/// Remove all values of the storage in the overlay and up to `limit` in the backend.
+	///
+	/// All values in the client overlay will be deleted, if there is some `limit` then up to
+	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
+	/// the client backend are deleted.
+	///
+	/// # Note
+	///
+	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
+	/// removed and the same result being returned. This happens because the keys to delete in the
+	/// overlay are not taken into account when deleting keys in the backend.
+	#[deprecated = "Use `clear` instead"]
+	pub fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
+		#[allow(deprecated)]
+		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all(limit)
+	}
+
+	/// Attempt to remove all items from the map.
+	///
+	/// Returns [`MultiRemovalResults`](sp_io::MultiRemovalResults) to inform about the result. Once
+	/// the resultant `maybe_cursor` field is `None`, then no further items remain to be deleted.
+	///
+	/// NOTE: After the initial call for any given map, it is important that no further items
+	/// are inserted into the map. If so, then the map may not be empty when the resultant
+	/// `maybe_cursor` is `None`.
+	///
+	/// # Limit
+	///
+	/// A `limit` must always be provided through in order to cap the maximum
+	/// amount of deletions done in a single call. This is one fewer than the
+	/// maximum number of backend iterations which may be done by this operation and as such
+	/// represents the maximum number of backend deletions which may happen. A `limit` of zero
+	/// implies that no keys will be deleted, though there may be a single iteration done.
+	///
+	/// # Cursor
+	///
+	/// A *cursor* may be passed in to this operation with `maybe_cursor`. `None` should only be
+	/// passed once (in the initial call) for any given storage map. Subsequent calls
+	/// operating on the same map should always pass `Some`, and this should be equal to the
+	/// previous call result's `maybe_cursor` field.
+	pub fn clear(limit: u32, maybe_cursor: Option<&[u8]>) -> sp_io::MultiRemovalResults {
+		<Self as crate::storage::StoragePrefixedMap<Value>>::clear(limit, maybe_cursor)
 	}
 
 	/// Iter over all value of the storage.
 	///
-	/// NOTE: If a value failed to decode becaues storage is corrupted then it is skipped.
+	/// NOTE: If a value failed to decode because storage is corrupted then it is skipped.
 	pub fn iter_values() -> crate::storage::PrefixIterator<Value> {
 		<Self as crate::storage::StoragePrefixedMap<Value>>::iter_values()
 	}
@@ -263,19 +329,14 @@ where
 	/// Try and append the given item to the value in the storage.
 	///
 	/// Is only available if `Value` of the storage implements [`StorageTryAppend`].
-	pub fn try_append<KArg, Item, EncodeLikeItem>(
-		key: KArg,
-		item: EncodeLikeItem,
-	) -> Result<(), ()>
+	pub fn try_append<KArg, Item, EncodeLikeItem>(key: KArg, item: EncodeLikeItem) -> Result<(), ()>
 	where
 		KArg: EncodeLike<Key> + Clone,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
 		Value: StorageTryAppend<Item>,
 	{
-		<
-			Self as crate::storage::TryAppendMap<Key, Value, Item>
-		>::try_append(key, item)
+		<Self as crate::storage::TryAppendMap<Key, Value, Item>>::try_append(key, item)
 	}
 }
 
@@ -297,6 +358,29 @@ where
 		<Self as crate::storage::IterableStorageMap<Key, Value>>::iter()
 	}
 
+	/// Enumerate all elements in the map after a specified `starting_raw_key` in no
+	/// particular order.
+	///
+	/// If you alter the map while doing this, you'll get undefined results.
+	pub fn iter_from(starting_raw_key: Vec<u8>) -> crate::storage::PrefixIterator<(Key, Value)> {
+		<Self as crate::storage::IterableStorageMap<Key, Value>>::iter_from(starting_raw_key)
+	}
+
+	/// Enumerate all keys in the map in no particular order.
+	///
+	/// If you alter the map while doing this, you'll get undefined results.
+	pub fn iter_keys() -> crate::storage::KeyPrefixIterator<Key> {
+		<Self as crate::storage::IterableStorageMap<Key, Value>>::iter_keys()
+	}
+
+	/// Enumerate all keys in the map after a specified `starting_raw_key` in no particular
+	/// order.
+	///
+	/// If you alter the map while doing this, you'll get undefined results.
+	pub fn iter_keys_from(starting_raw_key: Vec<u8>) -> crate::storage::KeyPrefixIterator<Key> {
+		<Self as crate::storage::IterableStorageMap<Key, Value>>::iter_keys_from(starting_raw_key)
+	}
+
 	/// Remove all elements from the map and iterate through them in no particular order.
 	///
 	/// If you add elements to the map while doing this, you'll get undefined results.
@@ -314,36 +398,38 @@ where
 	}
 }
 
-/// Part of storage metadata for a storage map.
-///
-/// NOTE: Generic hasher is supported.
-pub trait StorageMapMetadata {
-	const MODIFIER: StorageEntryModifier;
-	const NAME: &'static str;
-	const DEFAULT: DefaultByteGetter;
-	const HASHER: frame_metadata::StorageHasher;
-}
-
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> StorageMapMetadata
-	for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> where
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> StorageEntryMetadataBuilder
+	for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+where
 	Prefix: StorageInstance,
 	Hasher: crate::hash::StorageHasher,
-	Key: FullCodec,
-	Value: FullCodec,
+	Key: FullCodec + scale_info::StaticTypeInfo,
+	Value: FullCodec + scale_info::StaticTypeInfo,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
 {
-	const MODIFIER: StorageEntryModifier = QueryKind::METADATA;
-	const HASHER: frame_metadata::StorageHasher = Hasher::METADATA;
-	const NAME: &'static str = Prefix::STORAGE_PREFIX;
-	const DEFAULT: DefaultByteGetter =
-		DefaultByteGetter(&OnEmptyGetter::<QueryKind::Query, OnEmpty>(core::marker::PhantomData));
+	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>) {
+		let docs = if cfg!(feature = "no-metadata-docs") { vec![] } else { docs };
+
+		let entry = StorageEntryMetadata {
+			name: Prefix::STORAGE_PREFIX,
+			modifier: QueryKind::METADATA,
+			ty: StorageEntryType::Map {
+				hashers: vec![Hasher::METADATA],
+				key: scale_info::meta_type::<Key>(),
+				value: scale_info::meta_type::<Value>(),
+			},
+			default: OnEmpty::get().encode(),
+			docs,
+		};
+
+		entries.push(entry);
+	}
 }
 
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
-	crate::traits::StorageInfoTrait for
-	StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> crate::traits::StorageInfoTrait
+	for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: StorageInstance,
 	Hasher: crate::hash::StorageHasher,
@@ -354,31 +440,59 @@ where
 	MaxValues: Get<Option<u32>>,
 {
 	fn storage_info() -> Vec<StorageInfo> {
-		vec![
-			StorageInfo {
-				prefix: Self::final_prefix(),
-				max_values: MaxValues::get(),
-				max_size: Some(
-					Hasher::max_len::<Key>()
-						.saturating_add(Value::max_encoded_len())
-						.saturated_into(),
-				),
-			}
-		]
+		vec![StorageInfo {
+			pallet_name: Self::module_prefix().to_vec(),
+			storage_name: Self::storage_prefix().to_vec(),
+			prefix: Self::final_prefix().to_vec(),
+			max_values: MaxValues::get(),
+			max_size: Some(
+				Hasher::max_len::<Key>()
+					.saturating_add(Value::max_encoded_len())
+					.saturated_into(),
+			),
+		}]
+	}
+}
+
+/// It doesn't require to implement `MaxEncodedLen` and give no information for `max_size`.
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+	crate::traits::PartialStorageInfoTrait
+	for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+where
+	Prefix: StorageInstance,
+	Hasher: crate::hash::StorageHasher,
+	Key: FullCodec,
+	Value: FullCodec,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
+{
+	fn partial_storage_info() -> Vec<StorageInfo> {
+		vec![StorageInfo {
+			pallet_name: Self::module_prefix().to_vec(),
+			storage_name: Self::storage_prefix().to_vec(),
+			prefix: Self::final_prefix().to_vec(),
+			max_values: MaxValues::get(),
+			max_size: None,
+		}]
 	}
 }
 
 #[cfg(test)]
 mod test {
 	use super::*;
-	use sp_io::{TestExternalities, hashing::twox_128};
-	use crate::hash::*;
-	use crate::storage::types::ValueQuery;
-	use frame_metadata::StorageEntryModifier;
+	use crate::{
+		hash::*,
+		metadata::{StorageEntryModifier, StorageEntryType, StorageHasher},
+		storage::types::ValueQuery,
+	};
+	use sp_io::{hashing::twox_128, TestExternalities};
 
 	struct Prefix;
 	impl StorageInstance for Prefix {
-		fn pallet_prefix() -> &'static str { "test" }
+		fn pallet_prefix() -> &'static str {
+			"test"
+		}
 		const STORAGE_PREFIX: &'static str = "foo";
 	}
 
@@ -390,11 +504,31 @@ mod test {
 	}
 
 	#[test]
+	fn keylenof_works() {
+		// Works with Blake2_128Concat.
+		type A = StorageMap<Prefix, Blake2_128Concat, u32, u32>;
+		let size = 16 * 2 // Two Twox128
+			+ 16 + 4; // Blake2_128Concat = hash + key
+		assert_eq!(KeyLenOf::<A>::get(), size);
+
+		// Works with Blake2_256.
+		type B = StorageMap<Prefix, Blake2_256, u32, u32>;
+		let size = 16 * 2 // Two Twox128
+			+ 32; // Blake2_256
+		assert_eq!(KeyLenOf::<B>::get(), size);
+
+		// Works with Twox64Concat.
+		type C = StorageMap<Prefix, Twox64Concat, u32, u32>;
+		let size = 16 * 2 // Two Twox128
+			+ 8 + 4; // Twox64Concat = hash + key
+		assert_eq!(KeyLenOf::<C>::get(), size);
+	}
+
+	#[test]
 	fn test() {
 		type A = StorageMap<Prefix, Blake2_128Concat, u16, u32, OptionQuery>;
-		type AValueQueryWithAnOnEmpty = StorageMap<
-			Prefix, Blake2_128Concat, u16, u32, ValueQuery, ADefault
-		>;
+		type AValueQueryWithAnOnEmpty =
+			StorageMap<Prefix, Blake2_128Concat, u16, u32, ValueQuery, ADefault>;
 		type B = StorageMap<Prefix, Blake2_256, u16, u32, ValueQuery>;
 		type C = StorageMap<Prefix, Blake2_128Concat, u16, u8, ValueQuery>;
 		type WithLen = StorageMap<Prefix, Blake2_128Concat, u16, Vec<u32>>;
@@ -436,17 +570,20 @@ mod test {
 
 			A::remove(2);
 			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate(2, |v| {
-				*v = *v * 2; Ok(())
+				*v = *v * 2;
+				Ok(())
 			});
 			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate(2, |v| {
-				*v = *v * 2; Ok(())
+				*v = *v * 2;
+				Ok(())
 			});
 			assert_eq!(A::contains_key(2), true);
 			assert_eq!(A::get(2), Some(97 * 4));
 
 			A::remove(2);
 			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate(2, |v| {
-				*v = *v * 2; Err(())
+				*v = *v * 2;
+				Err(())
 			});
 			assert_eq!(A::contains_key(2), false);
 
@@ -484,7 +621,6 @@ mod test {
 			assert_eq!(A::contains_key(2), true);
 			assert_eq!(A::get(2), Some(100));
 
-
 			A::insert(2, 10);
 			assert_eq!(A::take(2), Some(10));
 			assert_eq!(A::contains_key(2), false);
@@ -498,7 +634,7 @@ mod test {
 
 			A::insert(3, 10);
 			A::insert(4, 10);
-			A::remove_all();
+			let _ = A::clear(u32::max_value(), None);
 			assert_eq!(A::contains_key(3), false);
 			assert_eq!(A::contains_key(4), false);
 
@@ -508,7 +644,7 @@ mod test {
 
 			C::insert(3, 10);
 			C::insert(4, 10);
-			A::translate_values::<u8,_>(|v| Some((v * 2).into()));
+			A::translate_values::<u8, _>(|v| Some((v * 2).into()));
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![(4, 20), (3, 20)]);
 
 			A::insert(3, 10);
@@ -519,21 +655,41 @@ mod test {
 
 			C::insert(3, 10);
 			C::insert(4, 10);
-			A::translate::<u8,_>(|k, v| Some((k * v as u16).into()));
+			A::translate::<u8, _>(|k, v| Some((k * v as u16).into()));
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![(4, 40), (3, 30)]);
 
-			assert_eq!(A::MODIFIER, StorageEntryModifier::Optional);
-			assert_eq!(AValueQueryWithAnOnEmpty::MODIFIER, StorageEntryModifier::Default);
-			assert_eq!(A::HASHER, frame_metadata::StorageHasher::Blake2_128Concat);
+			let mut entries = vec![];
+			A::build_metadata(vec![], &mut entries);
+			AValueQueryWithAnOnEmpty::build_metadata(vec![], &mut entries);
 			assert_eq!(
-				AValueQueryWithAnOnEmpty::HASHER,
-				frame_metadata::StorageHasher::Blake2_128Concat
+				entries,
+				vec![
+					StorageEntryMetadata {
+						name: "foo",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							hashers: vec![StorageHasher::Blake2_128Concat],
+							key: scale_info::meta_type::<u16>(),
+							value: scale_info::meta_type::<u32>(),
+						},
+						default: Option::<u32>::None.encode(),
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "foo",
+						modifier: StorageEntryModifier::Default,
+						ty: StorageEntryType::Map {
+							hashers: vec![StorageHasher::Blake2_128Concat],
+							key: scale_info::meta_type::<u16>(),
+							value: scale_info::meta_type::<u32>(),
+						},
+						default: 97u32.encode(),
+						docs: vec![],
+					}
+				]
 			);
-			assert_eq!(A::NAME, "foo");
-			assert_eq!(AValueQueryWithAnOnEmpty::DEFAULT.0.default_byte(), 97u32.encode());
-			assert_eq!(A::DEFAULT.0.default_byte(), Option::<u32>::None.encode());
 
-			WithLen::remove_all();
+			let _ = WithLen::clear(u32::max_value(), None);
 			assert_eq!(WithLen::decode_len(3), None);
 			WithLen::append(0, 10);
 			assert_eq!(WithLen::decode_len(0), Some(1));

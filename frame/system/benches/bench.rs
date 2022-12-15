@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,30 +15,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use criterion::{Criterion, criterion_group, criterion_main, black_box};
-use frame_system as system;
-use frame_support::{decl_module, decl_event};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use frame_support::{
+	traits::{ConstU32, ConstU64},
+	weights::Weight,
+};
 use sp_core::H256;
-use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+use sp_runtime::{
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+	Perbill,
+};
 
+#[frame_support::pallet]
 mod module {
-	use super::*;
+	use frame_support::pallet_prelude::*;
 
-	pub trait Config: system::Config {
-		type Event: From<Event> + Into<<Self as system::Config>::Event>;
+	#[pallet::pallet]
+	#[pallet::generate_store(pub(super) trait Store)]
+	pub struct Pallet<T>(_);
+
+	#[pallet::config]
+	pub trait Config: frame_system::Config {
+		type RuntimeEvent: From<Event> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
-	decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: T::Origin {
-			pub fn deposit_event() = default;
-		}
+	#[pallet::event]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	pub enum Event {
+		Complex(Vec<u8>, u32, u16, u128),
 	}
-
-	decl_event!(
-		pub enum Event {
-			Complex(Vec<u8>, u32, u16, u128),
-		}
-	);
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
@@ -51,37 +57,36 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Module: module::{Pallet, Call, Event},
+		Module: module::{Pallet, Event},
 	}
 );
 
 frame_support::parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::with_sensible_defaults(
-			4 * 1024 * 1024, Perbill::from_percent(75),
+			Weight::from_ref_time(4 * 1024 * 1024), Perbill::from_percent(75),
 		);
 	pub BlockLength: frame_system::limits::BlockLength =
 		frame_system::limits::BlockLength::max_with_normal_ratio(
 			4 * 1024 * 1024, Perbill::from_percent(75),
 		);
 }
-impl system::Config for Runtime {
-	type BaseCallFilter = ();
+impl frame_system::Config for Runtime {
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = BlockLength;
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type RuntimeEvent = RuntimeEvent;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
@@ -90,31 +95,36 @@ impl system::Config for Runtime {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
 
 impl module::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 }
 
 fn new_test_ext() -> sp_io::TestExternalities {
-	system::GenesisConfig::default().build_storage::<Runtime>().unwrap().into()
+	frame_system::GenesisConfig::default()
+		.build_storage::<Runtime>()
+		.unwrap()
+		.into()
 }
 
 fn deposit_events(n: usize) {
 	let mut t = new_test_ext();
 	t.execute_with(|| {
 		for _ in 0..n {
-			module::Module::<Runtime>::deposit_event(
-				module::Event::Complex(vec![1, 2, 3], 2, 3, 899)
-			);
+			module::Pallet::<Runtime>::deposit_event(module::Event::Complex(
+				vec![1, 2, 3],
+				2,
+				3,
+				899,
+			));
 		}
 	});
 }
 
 fn sr_system_benchmark(c: &mut Criterion) {
-	c.bench_function("deposit 100 events", |b| {
-		b.iter(|| deposit_events(black_box(100)))
-	});
+	c.bench_function("deposit 100 events", |b| b.iter(|| deposit_events(black_box(100))));
 }
 
 criterion_group!(benches, sr_system_benchmark);

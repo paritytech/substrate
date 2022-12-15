@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,10 @@
 
 //! Provides some utilities to define a piecewise linear function.
 
-use crate::{Perbill, traits::{AtLeast32BitUnsigned, SaturatedConversion}};
+use crate::{
+	traits::{AtLeast32BitUnsigned, SaturatedConversion},
+	Perbill,
+};
 use core::ops::Sub;
 
 /// Piecewise Linear function in [0, 1] -> [0, 1].
@@ -29,14 +32,45 @@ pub struct PiecewiseLinear<'a> {
 	pub maximum: Perbill,
 }
 
-fn abs_sub<N: Ord + Sub<Output=N> + Clone>(a: N, b: N) -> N where {
+// This can be replaced with
+// #[derive(scale_info::TypeInfo)]
+// #[scale_info(skip_type_params(S))]
+// again once this issue is fixed in the rust compiler: https://github.com/rust-lang/rust/issues/96956
+// Tracking issues: https://github.com/paritytech/substrate/issues/11915
+impl scale_info::TypeInfo for PiecewiseLinear<'static> {
+	type Identity = Self;
+	fn type_info() -> ::scale_info::Type {
+		scale_info::Type::builder()
+			.path(scale_info::Path::new("PiecewiseLinear", "sp_runtime::curve"))
+			.type_params(crate::Vec::new())
+			.docs(&["Piecewise Linear function in [0, 1] -> [0, 1]."])
+			.composite(
+				scale_info::build::Fields::named()
+					.field(|f| {
+						f.ty::<&'static[(Perbill, Perbill)]>()
+							  .name("points")
+							  .type_name("&'static[(Perbill, Perbill)]")
+							  .docs(&["Array of points. Must be in order from the lowest abscissas to the highest."])
+					})
+					.field(|f| {
+						f.ty::<Perbill>()
+							.name("maximum")
+							.type_name("Perbill")
+							.docs(&["The maximum value that can be returned."])
+					}),
+			)
+	}
+}
+
+fn abs_sub<N: Ord + Sub<Output = N> + Clone>(a: N, b: N) -> N where {
 	a.clone().max(b.clone()) - a.min(b)
 }
 
 impl<'a> PiecewiseLinear<'a> {
 	/// Compute `f(n/d)*d` with `n <= d`. This is useful to avoid loss of precision.
-	pub fn calculate_for_fraction_times_denominator<N>(&self, n: N, d: N) -> N where
-		N: AtLeast32BitUnsigned + Clone
+	pub fn calculate_for_fraction_times_denominator<N>(&self, n: N, d: N) -> N
+	where
+		N: AtLeast32BitUnsigned + Clone,
 	{
 		let n = n.min(d.clone());
 
@@ -44,8 +78,7 @@ impl<'a> PiecewiseLinear<'a> {
 			return N::zero()
 		}
 
-		let next_point_index = self.points.iter()
-			.position(|p| n < p.0 * d.clone());
+		let next_point_index = self.points.iter().position(|p| n < p.0 * d.clone());
 
 		let (prev, next) = if let Some(next_point_index) = next_point_index {
 			if let Some(previous_point_index) = next_point_index.checked_sub(1) {
@@ -80,7 +113,8 @@ impl<'a> PiecewiseLinear<'a> {
 // This is guaranteed not to overflow on whatever values nor lose precision.
 // `q` must be superior to zero.
 fn multiply_by_rational_saturating<N>(value: N, p: u32, q: u32) -> N
-	where N: AtLeast32BitUnsigned + Clone
+where
+	N: AtLeast32BitUnsigned + Clone,
 {
 	let q = q.max(1);
 
@@ -106,23 +140,18 @@ fn multiply_by_rational_saturating<N>(value: N, p: u32, q: u32) -> N
 
 #[test]
 fn test_multiply_by_rational_saturating() {
-	use std::convert::TryInto;
-
 	let div = 100u32;
 	for value in 0..=div {
 		for p in 0..=div {
 			for q in 1..=div {
-				let value: u64 = (value as u128 * u64::max_value() as u128 / div as u128)
-					.try_into().unwrap();
-				let p = (p as u64 * u32::max_value() as u64 / div as u64)
-					.try_into().unwrap();
-				let q = (q as u64 * u32::max_value() as u64 / div as u64)
-					.try_into().unwrap();
+				let value: u64 =
+					(value as u128 * u64::MAX as u128 / div as u128).try_into().unwrap();
+				let p = (p as u64 * u32::MAX as u64 / div as u64).try_into().unwrap();
+				let q = (q as u64 * u32::MAX as u64 / div as u64).try_into().unwrap();
 
 				assert_eq!(
 					multiply_by_rational_saturating(value, p, q),
-					(value as u128 * p as u128 / q as u128)
-						.try_into().unwrap_or(u64::max_value())
+					(value as u128 * p as u128 / q as u128).try_into().unwrap_or(u64::MAX)
 				);
 			}
 		}
@@ -131,8 +160,6 @@ fn test_multiply_by_rational_saturating() {
 
 #[test]
 fn test_calculate_for_fraction_times_denominator() {
-	use std::convert::TryInto;
-
 	let curve = PiecewiseLinear {
 		points: &[
 			(Perbill::from_parts(0_000_000_000), Perbill::from_parts(0_500_000_000)),
@@ -143,7 +170,7 @@ fn test_calculate_for_fraction_times_denominator() {
 	};
 
 	pub fn formal_calculate_for_fraction_times_denominator(n: u64, d: u64) -> u64 {
-		if n <= Perbill::from_parts(0_500_000_000) * d.clone() {
+		if n <= Perbill::from_parts(0_500_000_000) * d {
 			n + d / 2
 		} else {
 			(d as u128 * 2 - n as u128 * 2).try_into().unwrap()
@@ -153,10 +180,8 @@ fn test_calculate_for_fraction_times_denominator() {
 	let div = 100u32;
 	for d in 0..=div {
 		for n in 0..=d {
-			let d: u64 = (d as u128 * u64::max_value() as u128 / div as u128)
-				.try_into().unwrap();
-			let n: u64 = (n as u128 * u64::max_value() as u128 / div as u128)
-				.try_into().unwrap();
+			let d: u64 = (d as u128 * u64::MAX as u128 / div as u128).try_into().unwrap();
+			let n: u64 = (n as u128 * u64::MAX as u128 / div as u128).try_into().unwrap();
 
 			let res = curve.calculate_for_fraction_times_denominator(n, d);
 			let expected = formal_calculate_for_fraction_times_denominator(n, d);

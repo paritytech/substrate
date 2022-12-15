@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,8 +17,7 @@
 
 //! Inherents for BABE
 
-use sp_inherents::{InherentData, InherentIdentifier, Error};
-
+use sp_inherents::{Error, InherentData, InherentIdentifier};
 use sp_std::result::Result;
 
 /// The BABE inherent identifier.
@@ -60,17 +59,13 @@ impl InherentDataProvider {
 
 	/// Creates the inherent data provider by calculating the slot from the given
 	/// `timestamp` and `duration`.
-	pub fn from_timestamp_and_duration(
+	pub fn from_timestamp_and_slot_duration(
 		timestamp: sp_timestamp::Timestamp,
-		duration: std::time::Duration,
+		slot_duration: sp_consensus_slots::SlotDuration,
 	) -> Self {
-		let slot = InherentType::from(
-			(timestamp.as_duration().as_millis() / duration.as_millis()) as u64
-		);
+		let slot = InherentType::from_timestamp(timestamp, slot_duration);
 
-		Self {
-			slot,
-		}
+		Self { slot }
 	}
 
 	/// Returns the `slot` of this inherent data provider.
@@ -91,7 +86,7 @@ impl sp_std::ops::Deref for InherentDataProvider {
 #[cfg(feature = "std")]
 #[async_trait::async_trait]
 impl sp_inherents::InherentDataProvider for InherentDataProvider {
-	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error> {
+	async fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error> {
 		inherent_data.put_data(INHERENT_IDENTIFIER, &self.slot)
 	}
 

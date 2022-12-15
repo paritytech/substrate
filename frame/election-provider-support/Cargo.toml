@@ -1,37 +1,44 @@
 [package]
 name = "frame-election-provider-support"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "election provider supporting traits"
-readme = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
-sp-arithmetic = { version = "3.0.0", default-features = false, path = "../../primitives/arithmetic" }
-sp-npos-elections = { version = "3.0.0", default-features = false, path = "../../primitives/npos-elections" }
-frame-support = { version = "3.0.0", default-features = false, path = "../support" }
-frame-system = { version = "3.0.0", default-features = false, path = "../system" }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
+frame-election-provider-solution-type = { version = "4.0.0-dev", path = "solution-type" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+sp-arithmetic = { version = "6.0.0", default-features = false, path = "../../primitives/arithmetic" }
+sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
-sp-npos-elections = { version = "3.0.0", path = "../../primitives/npos-elections" }
-sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" }
+rand = "0.7.3"
+sp-core = { version = "7.0.0", path = "../../primitives/core" }
+sp-io = { version = "7.0.0", path = "../../primitives/io" }
+sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elections" }
 
 [features]
 default = ["std"]
+fuzz = ["default"]
 std = [
 	"codec/std",
-	"sp-std/std",
-	"sp-npos-elections/std",
-	"sp-arithmetic/std",
 	"frame-support/std",
 	"frame-system/std",
+	"scale-info/std",
+	"sp-arithmetic/std",
+	"sp-npos-elections/std",
+	"sp-runtime/std",
+	"sp-std/std",
 ]
 runtime-benchmarks = []

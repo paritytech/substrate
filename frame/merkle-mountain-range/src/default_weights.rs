@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +19,8 @@
 //! This file was not auto-generated.
 
 use frame_support::weights::{
-	Weight, constants::{WEIGHT_PER_NANOS, RocksDbWeight as DbWeight},
+	constants::{RocksDbWeight as DbWeight, WEIGHT_REF_TIME_PER_NANOS},
+	Weight,
 };
 
 impl crate::WeightInfo for () {
@@ -27,16 +28,13 @@ impl crate::WeightInfo for () {
 		// Reading the parent hash.
 		let leaf_weight = DbWeight::get().reads(1);
 		// Blake2 hash cost.
-		let hash_weight = 2 * WEIGHT_PER_NANOS;
+		let hash_weight = Weight::from_ref_time(2u64 * WEIGHT_REF_TIME_PER_NANOS);
 		// No-op hook.
-		let hook_weight = 0;
+		let hook_weight = Weight::zero();
 
 		leaf_weight
 			.saturating_add(hash_weight)
 			.saturating_add(hook_weight)
-			.saturating_add(DbWeight::get().reads_writes(
-				2 + peaks,
-				2 + peaks,
-			))
+			.saturating_add(DbWeight::get().reads_writes(2 + peaks, 2 + peaks))
 	}
 }

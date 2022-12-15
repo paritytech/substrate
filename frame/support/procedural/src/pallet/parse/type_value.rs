@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -38,6 +38,8 @@ pub struct TypeValueDef {
 	pub where_clause: Option<syn::WhereClause>,
 	/// The span of the pallet::type_value attribute.
 	pub attr_span: proc_macro2::Span,
+	/// Docs on the item.
+	pub docs: Vec<syn::Lit>,
 }
 
 impl TypeValueDef {
@@ -50,28 +52,40 @@ impl TypeValueDef {
 			item
 		} else {
 			let msg = "Invalid pallet::type_value, expected item fn";
-			return Err(syn::Error::new(item.span(), msg));
+			return Err(syn::Error::new(item.span(), msg))
 		};
 
+		let mut docs = vec![];
+		for attr in &item.attrs {
+			if let Ok(syn::Meta::NameValue(meta)) = attr.parse_meta() {
+				if meta.path.get_ident().map_or(false, |ident| ident == "doc") {
+					docs.push(meta.lit);
+					continue
+				}
+			}
 
-		if !item.attrs.is_empty() {
-			let msg = "Invalid pallet::type_value, unexpected attribute";
-			return Err(syn::Error::new(item.attrs[0].span(), msg));
+			let msg = "Invalid pallet::type_value, unexpected attribute, only doc attribute are \
+				allowed";
+			return Err(syn::Error::new(attr.span(), msg))
 		}
 
-		if let Some(span) = item.sig.constness.as_ref().map(|t| t.span())
+		if let Some(span) = item
+			.sig
+			.constness
+			.as_ref()
+			.map(|t| t.span())
 			.or_else(|| item.sig.asyncness.as_ref().map(|t| t.span()))
 			.or_else(|| item.sig.unsafety.as_ref().map(|t| t.span()))
 			.or_else(|| item.sig.abi.as_ref().map(|t| t.span()))
 			.or_else(|| item.sig.variadic.as_ref().map(|t| t.span()))
 		{
 			let msg = "Invalid pallet::type_value, unexpected token";
-			return Err(syn::Error::new(span, msg));
+			return Err(syn::Error::new(span, msg))
 		}
 
 		if !item.sig.inputs.is_empty() {
 			let msg = "Invalid pallet::type_value, unexpected argument";
-			return Err(syn::Error::new(item.sig.inputs[0].span(), msg));
+			return Err(syn::Error::new(item.sig.inputs[0].span(), msg))
 		}
 
 		let vis = item.vis.clone();
@@ -81,7 +95,7 @@ impl TypeValueDef {
 			syn::ReturnType::Type(_, type_) => type_,
 			syn::ReturnType::Default => {
 				let msg = "Invalid pallet::type_value, expected return type";
-				return Err(syn::Error::new(item.sig.span(), msg));
+				return Err(syn::Error::new(item.sig.span(), msg))
 			},
 		};
 
@@ -103,6 +117,7 @@ impl TypeValueDef {
 			type_,
 			instances,
 			where_clause,
+			docs,
 		})
 	}
 }

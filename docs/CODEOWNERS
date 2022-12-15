@@ -19,24 +19,24 @@
 # - The latest matching rule, if multiple, takes precedence.
 
 # CI
-/.maintain/ @paritytech/ci
+/scripts/ci/ @paritytech/ci
 /.github/ @paritytech/ci
 /.gitlab-ci.yml @paritytech/ci
 
-# Block production
-/client/basic-authorship/ @NikVolf
-
 # Sandboxing capability of Substrate Runtime
-/primitives/sr-sandbox/ @pepyakin
-/primitives/core/src/sandbox.rs @pepyakin
+/primitives/sandbox/ @pepyakin @koute
 
-# Transaction pool
-/client/transaction-pool/ @NikVolf
-/primitives/transaction-pool/ @NikVolf
+# WASM executor, low-level client <-> WASM interface and other WASM-related code
+/client/executor/ @koute
+/client/allocator/ @koute
+/primitives/wasm-interface/ @koute
+/primitives/runtime-interface/ @koute
+/primitives/panic-handler/ @koute
+/utils/wasm-builder/ @koute
 
-# Offchain
-/client/offchain/ @tomusdrw
-/primitives/offchain/ @tomusdrw
+# Systems-related bits and bobs on the client side
+/client/sysinfo/ @koute
+/client/tracing/ @koute
 
 # GRANDPA, BABE, consensus stuff
 /frame/babe/ @andresilva
@@ -46,6 +46,14 @@
 /client/consensus/slots/ @andresilva
 /client/consensus/pow/ @sorpaas
 /primitives/consensus/pow/ @sorpaas
+
+# BEEFY, MMR
+/client/beefy/ @acatangiu
+/frame/beefy/ @acatangiu
+/frame/beefy-mmr/ @acatangiu
+/frame/merkle-mountain-range/ @acatangiu
+/primitives/beefy/ @acatangiu
+/primitives/merkle-mountain-range/ @acatangiu
 
 # Contracts
 /frame/contracts/ @athei

@@ -1,10 +1,10 @@
 [package]
 name = "sp-consensus"
-version = "0.9.0"
+version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "Common utilities for building and using consensus engines in substrate."
 documentation = "https://docs.rs/sp-consensus/"
@@ -13,31 +13,24 @@ readme = "README.md"
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
-
 [dependencies]
-thiserror = "1.0.21"
-libp2p = { version = "0.37.1", default-features = false }
-log = "0.4.8"
-sp-core = { path= "../../core", version = "3.0.0"}
-sp-inherents = { version = "3.0.0", path = "../../inherents" }
-sp-state-machine = { version = "0.9.0", path = "../../state-machine" }
-futures = { version = "0.3.1", features = ["thread-pool"] }
+async-trait = "0.1.57"
+codec = { package = "parity-scale-codec", version = "3.0.0", features = [
+	"derive",
+] }
+futures = { version = "0.3.21", features = ["thread-pool"] }
 futures-timer = "3.0.1"
-sp-std = { version = "3.0.0", path = "../../std" }
-sp-version = { version = "3.0.0", path = "../../version" }
-sp-runtime = { version = "3.0.0", path = "../../runtime" }
-sp-utils = { version = "3.0.0", path = "../../utils" }
-sp-trie = { version = "3.0.0", path = "../../trie" }
-sp-api = { version = "3.0.0", path = "../../api" }
-codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
-parking_lot = "0.11.1"
-serde = { version = "1.0", features = ["derive"] }
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.9.0"}
-wasm-timer = "0.2.5"
-async-trait = "0.1.42"
+log = "0.4.17"
+thiserror = "1.0.30"
+sp-core = { version = "7.0.0", path = "../../core" }
+sp-inherents = { version = "4.0.0-dev", path = "../../inherents" }
+sp-runtime = { version = "7.0.0", path = "../../runtime" }
+sp-state-machine = { version = "0.13.0", path = "../../state-machine" }
+sp-std = { version = "5.0.0", path = "../../std" }
+sp-version = { version = "5.0.0", path = "../../version" }
 
 [dev-dependencies]
-futures = "0.3.9"
+futures = "0.3.21"
 sp-test-primitives = { version = "2.0.0", path = "../../test-primitives" }
 
 [features]

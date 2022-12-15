@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,7 @@
 pub trait Config: frame_support_test::Config {}
 
 frame_support::decl_module! {
-	pub struct Module<T: Config> for enum Call where origin: T::Origin, system=frame_support_test {}
+	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=frame_support_test {}
 }
 
 frame_support::decl_storage! {
@@ -31,7 +31,7 @@ struct Test;
 
 impl frame_support_test::Config for Test {
 	type BlockNumber = u32;
-	type Origin = ();
+	type RuntimeOrigin = ();
 	type PalletInfo = frame_support_test::PanicPalletInfo;
 	type DbWeight = ();
 }
@@ -40,7 +40,5 @@ impl Config for Test {}
 
 #[test]
 fn init_genesis_config() {
-	GenesisConfig::<Test> {
-		t: Default::default(),
-	};
+	GenesisConfig::<Test>::default();
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,15 +19,14 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 
-#[cfg(feature = "std")]
-use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 #[cfg(feature = "std")]
 use sp_api::ProvideRuntimeApi;
+#[cfg(feature = "std")]
+use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 
-use sp_core::RuntimeDebug;
-use sp_core::crypto::KeyTypeId;
+use sp_core::{crypto::KeyTypeId, RuntimeDebug};
 use sp_staking::SessionIndex;
 use sp_std::vec::Vec;
 
@@ -54,7 +53,7 @@ sp_api::decl_runtime_apis! {
 pub type ValidatorCount = u32;
 
 /// Proof of membership of a specific key in a given session.
-#[derive(Encode, Decode, Clone, Eq, PartialEq, Default, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, Eq, PartialEq, Default, RuntimeDebug, scale_info::TypeInfo)]
 pub struct MembershipProof {
 	/// The session index on which the specific key is a member.
 	pub session: SessionIndex,
@@ -119,6 +118,10 @@ where
 	T: ProvideRuntimeApi<Block>,
 	T::Api: SessionKeys<Block>,
 {
+	if seeds.is_empty() {
+		return Ok(())
+	}
+
 	let runtime_api = client.runtime_api();
 
 	for seed in seeds {

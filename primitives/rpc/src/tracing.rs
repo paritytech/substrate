@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,7 @@
 
 //! Types for working with tracing data
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use rustc_hash::FxHashMap;
 
@@ -35,6 +35,9 @@ pub struct BlockTrace {
 	/// Storage key targets used to filter out events that do not have one of the storage keys.
 	/// Empty string means do not filter out any events.
 	pub storage_keys: String,
+	/// Method targets used to filter out events that do not have one of the event method.
+	/// Empty string means do not filter out any events.
+	pub methods: String,
 	/// Vec of tracing spans
 	pub spans: Vec<Span>,
 	/// Vec of tracing events
@@ -84,7 +87,7 @@ pub struct Data {
 #[serde(rename_all = "camelCase")]
 pub struct TraceError {
 	/// Error message
-    pub error: String,
+	pub error: String,
 }
 
 /// Response for the `state_traceBlock` RPC.
@@ -94,5 +97,5 @@ pub enum TraceBlockResponse {
 	/// Error block tracing response
 	TraceError(TraceError),
 	/// Successful block tracing response
-	BlockTrace(BlockTrace)
+	BlockTrace(BlockTrace),
 }

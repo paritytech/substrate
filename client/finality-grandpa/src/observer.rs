@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,33 +16,35 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::{Context, Poll};
-
-use futures::prelude::*;
-
-use finality_grandpa::{
-	BlockNumberOps, Error as GrandpaError, voter, voter_set::VoterSet
+use std::{
+	marker::{PhantomData, Unpin},
+	pin::Pin,
+	sync::Arc,
+	task::{Context, Poll},
 };
+
+use finality_grandpa::{voter, voter_set::VoterSet, BlockNumberOps, Error as GrandpaError};
+use futures::prelude::*;
 use log::{debug, info, warn};
-use sp_keystore::SyncCryptoStorePtr;
-use sp_consensus::SelectChain;
+
 use sc_client_api::backend::Backend;
 use sc_telemetry::TelemetryHandle;
-use sp_utils::mpsc::TracingUnboundedReceiver;
-use sp_runtime::traits::{NumberFor, Block as BlockT};
+use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_blockchain::HeaderMetadata;
+use sp_consensus::SelectChain;
+use sp_finality_grandpa::AuthorityId;
+use sp_keystore::SyncCryptoStorePtr;
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 use crate::{
-	global_communication, CommandOrError, CommunicationIn, Config, environment,
-	LinkHalf, Error, aux_schema::PersistentData, VoterCommand, VoterSetState,
+	authorities::SharedAuthoritySet,
+	aux_schema::PersistentData,
+	communication::{Network as NetworkT, NetworkBridge},
+	environment, global_communication,
+	notification::GrandpaJustificationSender,
+	ClientForGrandpa, CommandOrError, CommunicationIn, Config, Error, LinkHalf, VoterCommand,
+	VoterSetState,
 };
-use crate::authorities::SharedAuthoritySet;
-use crate::communication::{Network as NetworkT, NetworkBridge};
-use crate::notification::GrandpaJustificationSender;
-use sp_finality_grandpa::AuthorityId;
-use std::marker::{PhantomData, Unpin};
 
 struct ObserverChain<'a, Block: BlockT, Client> {
 	client: &'a Arc<Client>,
@@ -50,13 +52,18 @@ struct ObserverChain<'a, Block: BlockT, Client> {
 }
 
 impl<'a, Block, Client> finality_grandpa::Chain<Block::Hash, NumberFor<Block>>
-	for ObserverChain<'a, Block, Client> where
-		Block: BlockT,
-		Client: HeaderMetadata<Block, Error = sp_blockchain::Error>,
-		NumberFor<Block>: BlockNumberOps,
+	for ObserverChain<'a, Block, Client>
+where
+	Block: BlockT,
+	Client: HeaderMetadata<Block, Error = sp_blockchain::Error>,
+	NumberFor<Block>: BlockNumberOps,
 {
-	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
-		environment::ancestry(&self.client, base, block)
+	fn ancestry(
+		&self,
+		base: Block::Hash,
+		block: Block::Hash,
+	) -> Result<Vec<Block::Hash>, GrandpaError> {
+		environment::ancestry(self.client, base, block)
 	}
 }
 
@@ -75,7 +82,7 @@ where
 	S: Stream<Item = Result<CommunicationIn<Block>, CommandOrError<Block::Hash, NumberFor<Block>>>>,
 	F: Fn(u64),
 	BE: Backend<Block>,
-	Client: crate::ClientForGrandpa<Block, BE>,
+	Client: ClientForGrandpa<Block, BE>,
 {
 	let authority_set = authority_set.clone();
 	let client = client.clone();
@@ -90,14 +97,14 @@ where
 			},
 			voter::CommunicationIn::CatchUp(..) => {
 				// ignore catch up messages
-				return future::ok(last_finalized_number);
+				return future::ok(last_finalized_number)
 			},
 		};
 
 		// if the commit we've received targets a block lower or equal to the last
 		// finalized, ignore it and continue with the current state
 		if commit.target_number <= last_finalized_number {
-			return future::ok(last_finalized_number);
+			return future::ok(last_finalized_number)
 		}
 
 		let validation_result = match finality_grandpa::validate_commit(
@@ -109,7 +116,7 @@ where
 			Err(e) => return future::err(e.into()),
 		};
 
-		if validation_result.ghost().is_some() {
+		if validation_result.is_valid() {
 			let finalized_hash = commit.target_hash;
 			let finalized_number = commit.target_number;
 
@@ -160,22 +167,21 @@ pub fn run_grandpa_observer<BE, Block: BlockT, Client, N, SC>(
 	config: Config,
 	link: LinkHalf<Block, Client, SC>,
 	network: N,
-) -> sp_blockchain::Result<impl Future<Output = ()> + Unpin + Send + 'static>
+) -> sp_blockchain::Result<impl Future<Output = ()> + Send>
 where
 	BE: Backend<Block> + Unpin + 'static,
-	N: NetworkT<Block> + Send + Clone + 'static,
-	SC: SelectChain<Block> + 'static,
+	N: NetworkT<Block>,
+	SC: SelectChain<Block>,
 	NumberFor<Block>: BlockNumberOps,
-	Client: crate::ClientForGrandpa<Block, BE> + 'static,
+	Client: ClientForGrandpa<Block, BE> + 'static,
 {
 	let LinkHalf {
 		client,
-		select_chain: _,
 		persistent_data,
 		voter_commands_rx,
 		justification_sender,
-		justification_stream: _,
 		telemetry,
+		..
 	} = link;
 
 	let network = NetworkBridge::new(
@@ -187,20 +193,18 @@ where
 	);
 
 	let observer_work = ObserverWork::new(
-		client.clone(),
+		client,
 		network,
 		persistent_data,
 		config.keystore,
 		voter_commands_rx,
 		Some(justification_sender),
-		telemetry.clone(),
+		telemetry,
 	);
 
-	let observer_work = observer_work
-		.map_ok(|_| ())
-		.map_err(|e| {
-			warn!("GRANDPA Observer failed: {:?}", e);
-		});
+	let observer_work = observer_work.map_ok(|_| ()).map_err(|e| {
+		warn!("GRANDPA Observer failed: {}", e);
+	});
 
 	Ok(observer_work.map(drop))
 }
@@ -208,7 +212,8 @@ where
 /// Future that powers the observer.
 #[must_use]
 struct ObserverWork<B: BlockT, BE, Client, N: NetworkT<B>> {
-	observer: Pin<Box<dyn Future<Output = Result<(), CommandOrError<B::Hash, NumberFor<B>>>> + Send>>,
+	observer:
+		Pin<Box<dyn Future<Output = Result<(), CommandOrError<B::Hash, NumberFor<B>>>> + Send>>,
 	client: Arc<Client>,
 	network: NetworkBridge<B, N>,
 	persistent_data: PersistentData<B>,
@@ -223,7 +228,7 @@ impl<B, BE, Client, Network> ObserverWork<B, BE, Client, Network>
 where
 	B: BlockT,
 	BE: Backend<B> + 'static,
-	Client: crate::ClientForGrandpa<B, BE> + 'static,
+	Client: ClientForGrandpa<B, BE> + 'static,
 	Network: NetworkT<B>,
 	NumberFor<B>: BlockNumberOps,
 {
@@ -236,7 +241,6 @@ where
 		justification_sender: Option<GrandpaJustificationSender<B>>,
 		telemetry: Option<TelemetryHandle>,
 	) -> Self {
-
 		let mut work = ObserverWork {
 			// `observer` is set to a temporary value and replaced below when
 			// calling `rebuild_observer`.
@@ -281,11 +285,13 @@ where
 			let network = self.network.clone();
 			let voters = voters.clone();
 
-			move |round| network.note_round(
-				crate::communication::Round(round),
-				crate::communication::SetId(set_id),
-				&*voters,
-			)
+			move |round| {
+				network.note_round(
+					crate::communication::Round(round),
+					crate::communication::SetId(set_id),
+					&voters,
+				)
+			}
 		};
 
 		// create observer for the current set
@@ -333,7 +339,8 @@ where
 
 				set_state
 			},
-		}.into();
+		}
+		.into();
 
 		self.rebuild_observer();
 		Ok(())
@@ -344,7 +351,7 @@ impl<B, BE, C, N> Future for ObserverWork<B, BE, C, N>
 where
 	B: BlockT,
 	BE: Backend<B> + Unpin + 'static,
-	C: crate::ClientForGrandpa<B, BE> + 'static,
+	C: ClientForGrandpa<B, BE> + 'static,
 	N: NetworkT<B>,
 	NumberFor<B>: BlockNumberOps,
 {
@@ -352,33 +359,34 @@ where
 
 	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		match Future::poll(Pin::new(&mut self.observer), cx) {
-			Poll::Pending => {}
+			Poll::Pending => {},
 			Poll::Ready(Ok(())) => {
-				// observer commit stream doesn't conclude naturally; this could reasonably be an error.
+				// observer commit stream doesn't conclude naturally; this could reasonably be an
+				// error.
 				return Poll::Ready(Ok(()))
-			}
+			},
 			Poll::Ready(Err(CommandOrError::Error(e))) => {
 				// return inner observer error
 				return Poll::Ready(Err(e))
-			}
+			},
 			Poll::Ready(Err(CommandOrError::VoterCommand(command))) => {
 				// some command issued internally
 				self.handle_voter_command(command)?;
 				cx.waker().wake_by_ref();
-			}
+			},
 		}
 
 		match Stream::poll_next(Pin::new(&mut self.voter_commands_rx), cx) {
-			Poll::Pending => {}
+			Poll::Pending => {},
 			Poll::Ready(None) => {
 				// the `voter_commands_rx` stream should never conclude since it's never closed.
 				return Poll::Ready(Ok(()))
-			}
+			},
 			Poll::Ready(Some(command)) => {
 				// some command issued externally
 				self.handle_voter_command(command)?;
 				cx.waker().wake_by_ref();
-			}
+			},
 		}
 
 		Future::poll(Pin::new(&mut self.network), cx)
@@ -389,12 +397,15 @@ where
 mod tests {
 	use super::*;
 
+	use crate::{
+		aux_schema,
+		communication::tests::{make_test_network, Event},
+	};
 	use assert_matches::assert_matches;
-	use sp_utils::mpsc::tracing_unbounded;
-	use crate::{aux_schema,	communication::tests::{Event, make_test_network}};
-	use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt};
 	use sc_network::PeerId;
+	use sc_utils::mpsc::tracing_unbounded;
 	use sp_blockchain::HeaderBackend as _;
+	use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt};
 
 	use futures::executor;
 
@@ -422,12 +433,9 @@ mod tests {
 
 		let voters = vec![(sp_keyring::Ed25519Keyring::Alice.public().into(), 1)];
 
-		let persistent_data = aux_schema::load_persistent(
-			&*backend,
-			client.info().genesis_hash,
-			0,
-			|| Ok(voters),
-		).unwrap();
+		let persistent_data =
+			aux_schema::load_persistent(&*backend, client.info().genesis_hash, 0, || Ok(voters))
+				.unwrap();
 
 		let (_tx, voter_command_rx) = tracing_unbounded("");
 

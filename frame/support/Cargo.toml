@@ -1,10 +1,10 @@
 [package]
 name = "frame-support"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "Support code for the runtime."
 readme = "README.md"
@@ -13,38 +13,49 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-serde = { version = "1.0.101", optional = true, features = ["derive"] }
-codec = { package = "parity-scale-codec", version = "2.1.0", default-features = false, features = ["derive"] }
-frame-metadata = { version = "13.0.0", default-features = false, path = "../metadata" }
-sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-tracing = { version = "3.0.0", default-features = false, path = "../../primitives/tracing" }
-sp-core = { version = "3.0.0", default-features = false, path = "../../primitives/core" }
-sp-arithmetic = { version = "3.0.0", default-features = false, path = "../../primitives/arithmetic" }
-sp-inherents = { version = "3.0.0", default-features = false, path = "../../primitives/inherents" }
-sp-staking = { version = "3.0.0", default-features = false, path = "../../primitives/staking" }
-frame-support-procedural = { version = "3.0.0", default-features = false, path = "./procedural" }
+serde = { version = "1.0.136", optional = true, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "max-encoded-len"] }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
+frame-metadata = { version = "15.0.0", default-features = false, features = ["v14"] }
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
+sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
+sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-tracing = { version = "6.0.0", default-features = false, path = "../../primitives/tracing" }
+sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
+sp-arithmetic = { version = "6.0.0", default-features = false, path = "../../primitives/arithmetic" }
+sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }
+sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
+sp-weights = { version = "4.0.0", default-features = false, path = "../../primitives/weights" }
+tt-call = "1.0.8"
+frame-support-procedural = { version = "4.0.0-dev", default-features = false, path = "./procedural" }
 paste = "1.0"
 once_cell = { version = "1", default-features = false, optional = true }
-sp-state-machine = { version = "0.9.0", optional = true, path = "../../primitives/state-machine" }
-bitflags = "1.2"
-impl-trait-for-tuples = "0.2.1"
-smallvec = "1.4.1"
-log = { version = "0.4.14", default-features = false }
+sp-state-machine = { version = "0.13.0", default-features = false, optional = true, path = "../../primitives/state-machine" }
+bitflags = "1.3"
+impl-trait-for-tuples = "0.2.2"
+smallvec = "1.8.0"
+log = { version = "0.4.17", default-features = false }
+sp-core-hashing-proc-macro = { version = "5.0.0", path = "../../primitives/core/hashing/proc-macro" }
+k256 = { version = "0.11.5", default-features = false, features = ["ecdsa"] }
 
 [dev-dependencies]
-pretty_assertions = "0.6.1"
-frame-system = { version = "3.0.0", path = "../system" }
-parity-util-mem = { version = "0.9.0", default-features = false, features = ["primitive-types"] }
+serde_json = "1.0.85"
+assert_matches = "1.3.0"
+pretty_assertions = "1.2.1"
+frame-system = { version = "4.0.0-dev", path = "../system" }
 
 [features]
 default = ["std"]
 std = [
+	"sp-core/std",
+	"k256/std",
 	"once_cell",
 	"serde",
+	"sp-api/std",
 	"sp-io/std",
 	"codec/std",
+	"scale-info/std",
 	"sp-std/std",
 	"sp-runtime/std",
 	"sp-tracing/std",
@@ -52,9 +63,20 @@ std = [
 	"frame-metadata/std",
 	"sp-inherents/std",
 	"sp-staking/std",
-	"sp-state-machine",
+	"sp-state-machine/std",
+	"sp-weights/std",
 	"frame-support-procedural/std",
 	"log/std",
 ]
 runtime-benchmarks = []
 try-runtime = []
+# By default some types have documentation, `no-metadata-docs` allows to reduce the documentation
+# in the metadata.
+no-metadata-docs = ["frame-support-procedural/no-metadata-docs"]
+# By default some types have documentation, `full-metadata-docs` allows to add documentation to
+# more types in the metadata.
+full-metadata-docs = ["scale-info/docs"]
+# Generate impl-trait for tuples with the given number of tuples. Will be needed as the number of
+# pallets in a runtime grows. Does increase the compile time!
+tuples-96 = []
+tuples-128 = []

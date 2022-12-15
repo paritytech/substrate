@@ -4,34 +4,36 @@ name = "sc-network-test"
 version = "0.8.0"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 publish = false
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-async-std = "1.6.5"
-sc-network = { version = "0.9.0", path = "../" }
-log = "0.4.8"
-parking_lot = "0.11.1"
-futures = "0.3.9"
+tokio = "1.22.0"
+async-trait = "0.1.57"
+futures = "0.3.21"
 futures-timer = "3.0.1"
+libp2p = { version = "0.49.0", default-features = false }
+log = "0.4.17"
+parking_lot = "0.12.1"
 rand = "0.7.2"
-libp2p = { version = "0.37.1", default-features = false }
-sp-consensus = { version = "0.9.0", path = "../../../primitives/consensus/common" }
-sc-consensus = { version = "0.9.0", path = "../../consensus/common" }
-sc-client-api = { version = "3.0.0", path = "../../api" }
-sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
-sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
-sp-core = { version = "3.0.0", path = "../../../primitives/core" }
-sc-block-builder = { version = "0.9.0", path = "../../block-builder" }
-sp-consensus-babe = { version = "0.9.0", path = "../../../primitives/consensus/babe" }
-substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
+sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
+sc-client-api = { version = "4.0.0-dev", path = "../../api" }
+sc-consensus = { version = "0.10.0-dev", path = "../../consensus/common" }
+sc-network = { version = "0.10.0-dev", path = "../" }
+sc-network-common = { version = "0.10.0-dev", path = "../common" }
+sc-network-light = { version = "0.10.0-dev", path = "../light" }
+sc-network-sync = { version = "0.10.0-dev", path = "../sync" }
+sc-service = { version = "0.10.0-dev", default-features = false, features = ["test-helpers"], path = "../../service" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
+sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
+sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
+sp-core = { version = "7.0.0", path = "../../../primitives/core" }
+sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
+sp-tracing = { version = "6.0.0", path = "../../../primitives/tracing" }
 substrate-test-runtime = { version = "2.0.0", path = "../../../test-utils/runtime" }
-tempfile = "3.1.0"
-sp-tracing = { version = "3.0.0", path = "../../../primitives/tracing" }
-sc-service = { version = "0.9.0", default-features = false, features = ["test-helpers"],  path = "../../service" }
-async-trait = "0.1.42"
+substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }

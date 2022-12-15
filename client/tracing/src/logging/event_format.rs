@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,6 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use crate::logging::fast_local_time::FastLocalTime;
 use ansi_term::Colour;
 use regex::Regex;
 use std::fmt::{self, Write};
@@ -23,16 +24,13 @@ use tracing::{Event, Level, Subscriber};
 use tracing_log::NormalizeEvent;
 use tracing_subscriber::{
 	field::RecordFields,
-	fmt::{
-		time::{FormatTime, SystemTime},
-		FmtContext, FormatEvent, FormatFields,
-	},
+	fmt::{time::FormatTime, FmtContext, FormatEvent, FormatFields},
 	layer::Context,
 	registry::{LookupSpan, SpanRef},
 };
 
 /// A pre-configured event formatter.
-pub struct EventFormat<T = SystemTime> {
+pub struct EventFormat<T = FastLocalTime> {
 	/// Use the given timer for log message timestamps.
 	pub timer: T,
 	/// Sets whether or not an event's target is displayed.
@@ -64,7 +62,7 @@ where
 		S: Subscriber + for<'a> LookupSpan<'a>,
 		N: for<'a> FormatFields<'a> + 'static,
 	{
-		let writer = &mut MaybeColorWriter::new(self.enable_color, writer);
+		let writer = &mut ControlCodeSanitizer::new(!self.enable_color, writer);
 		let normalized_meta = event.normalized_metadata();
 		let meta = normalized_meta.as_ref().unwrap_or_else(|| event.metadata());
 		time::write(&self.timer, writer, self.enable_color)?;
@@ -79,11 +77,11 @@ where
 			match current_thread.name() {
 				Some(name) => {
 					write!(writer, "{} ", FmtThreadName::new(name))?;
-				}
+				},
 				// fall-back to thread id when name is absent and ids are not enabled
 				None => {
 					write!(writer, "{:0>2?} ", current_thread.id())?;
-				}
+				},
 			}
 		}
 
@@ -93,20 +91,27 @@ where
 
 		// Custom code to display node name
 		if let Some(span) = ctx.lookup_current() {
-			let parents = span.parents();
-			for span in std::iter::once(span).chain(parents) {
+			for span in span.scope() {
 				let exts = span.extensions();
 				if let Some(prefix) = exts.get::<super::layers::Prefix>() {
 					write!(writer, "{}", prefix.as_str())?;
-					break;
+					break
 				}
 			}
+		}
+
+		// The writer only sanitizes its output once it's flushed, so if we don't actually need
+		// to sanitize everything we need to flush out what was already buffered as-is and only
+		// force-sanitize what follows.
+		if !writer.sanitize {
+			writer.flush()?;
+			writer.sanitize = true;
 		}
 
 		ctx.format_fields(writer, event)?;
 		writeln!(writer)?;
 
-		writer.write()
+		writer.flush()
 	}
 }
 
@@ -125,11 +130,11 @@ where
 		writer: &mut dyn fmt::Write,
 		event: &Event,
 	) -> fmt::Result {
-		if self.dup_to_stdout && (
-			event.metadata().level() == &Level::INFO ||
-			event.metadata().level() == &Level::WARN ||
-			event.metadata().level() == &Level::ERROR
-		) {
+		if self.dup_to_stdout &&
+			(event.metadata().level() == &Level::INFO ||
+				event.metadata().level() == &Level::WARN ||
+				event.metadata().level() == &Level::ERROR)
+		{
 			let mut out = String::new();
 			self.format_event_custom(CustomFmtContext::FmtContext(ctx), &mut out, event)?;
 			writer.write_str(&out)?;
@@ -271,9 +276,8 @@ where
 	) -> fmt::Result {
 		match self {
 			CustomFmtContext::FmtContext(fmt_ctx) => fmt_ctx.format_fields(writer, fields),
-			CustomFmtContext::ContextWithFormatFields(_ctx, fmt_fields) => {
-				fmt_fields.format_fields(writer, fields)
-			}
+			CustomFmtContext::ContextWithFormatFields(_ctx, fmt_fields) =>
+				fmt_fields.format_fields(writer, fields),
 		}
 	}
 }
@@ -298,47 +302,60 @@ where
 	}
 }
 
-/// A writer that may write to `inner_writer` with colors.
+/// A writer which (optionally) strips out terminal control codes from the logs.
 ///
-/// This is used by [`EventFormat`] to kill colors when `enable_color` is `false`.
+/// This is used by [`EventFormat`] to sanitize the log messages.
 ///
-/// It is required to call [`MaybeColorWriter::write`] after all writes are done,
+/// It is required to call [`ControlCodeSanitizer::flush`] after all writes are done,
 /// because the content of these writes is buffered and will only be written to the
 /// `inner_writer` at that point.
-struct MaybeColorWriter<'a> {
-	enable_color: bool,
+struct ControlCodeSanitizer<'a> {
+	sanitize: bool,
 	buffer: String,
 	inner_writer: &'a mut dyn fmt::Write,
 }
 
-impl<'a> fmt::Write for MaybeColorWriter<'a> {
+impl<'a> fmt::Write for ControlCodeSanitizer<'a> {
 	fn write_str(&mut self, buf: &str) -> fmt::Result {
 		self.buffer.push_str(buf);
 		Ok(())
 	}
 }
 
-impl<'a> MaybeColorWriter<'a> {
+// NOTE: When making any changes here make sure to also change this function in `sp-panic-handler`.
+fn strip_control_codes(input: &str) -> std::borrow::Cow<str> {
+	lazy_static::lazy_static! {
+		static ref RE: Regex = Regex::new(r#"(?x)
+			\x1b\[[^m]+m|        # VT100 escape codes
+			[
+			  \x00-\x09\x0B-\x1F # ASCII control codes / Unicode C0 control codes, except \n
+			  \x7F               # ASCII delete
+			  \u{80}-\u{9F}      # Unicode C1 control codes
+			  \u{202A}-\u{202E}  # Unicode left-to-right / right-to-left control characters
+			  \u{2066}-\u{2069}  # Same as above
+			]
+		"#).expect("regex parsing doesn't fail; qed");
+	}
+
+	RE.replace_all(input, "")
+}
+
+impl<'a> ControlCodeSanitizer<'a> {
 	/// Creates a new instance.
-	fn new(enable_color: bool, inner_writer: &'a mut dyn fmt::Write) -> Self {
-		Self {
-			enable_color,
-			inner_writer,
-			buffer: String::new(),
-		}
+	fn new(sanitize: bool, inner_writer: &'a mut dyn fmt::Write) -> Self {
+		Self { sanitize, inner_writer, buffer: String::new() }
 	}
 
 	/// Write the buffered content to the `inner_writer`.
-	fn write(&mut self) -> fmt::Result {
-		lazy_static::lazy_static! {
-			static ref RE: Regex = Regex::new("\x1b\\[[^m]+m").expect("Error initializing color regex");
+	fn flush(&mut self) -> fmt::Result {
+		if self.sanitize {
+			let replaced = strip_control_codes(&self.buffer);
+			self.inner_writer.write_str(&replaced)?
+		} else {
+			self.inner_writer.write_str(&self.buffer)?
 		}
 
-		if !self.enable_color {
-			let replaced = RE.replace_all(&self.buffer, "");
-			self.inner_writer.write_str(&replaced)
-		} else {
-			self.inner_writer.write_str(&self.buffer)
-		}
+		self.buffer.clear();
+		Ok(())
 	}
 }

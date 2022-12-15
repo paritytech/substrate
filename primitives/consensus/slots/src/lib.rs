@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,10 +19,13 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
+use scale_info::TypeInfo;
+use sp_timestamp::Timestamp;
 
 /// Unit type wrapper that represents a slot.
-#[derive(Debug, Encode, Decode, Eq, Clone, Copy, Default, Ord)]
+#[derive(Debug, Encode, MaxEncodedLen, Decode, Eq, Clone, Copy, Default, Ord, TypeInfo)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct Slot(u64);
 
 impl core::ops::Deref for Slot {
@@ -62,6 +65,11 @@ impl<T: Into<u64> + Copy> core::cmp::PartialOrd<T> for Slot {
 }
 
 impl Slot {
+	/// Create a new slot by calculating it from the given timestamp and slot duration.
+	pub const fn from_timestamp(timestamp: Timestamp, slot_duration: SlotDuration) -> Self {
+		Slot(timestamp.as_millis() / slot_duration.as_millis())
+	}
+
 	/// Saturating addition.
 	pub fn saturating_add<T: Into<u64>>(self, rhs: T) -> Self {
 		Self(self.0.saturating_add(rhs.into()))
@@ -92,11 +100,37 @@ impl From<Slot> for u64 {
 	}
 }
 
+/// A slot duration defined in milliseconds.
+#[derive(Clone, Copy, Debug, Encode, Decode, Hash, PartialOrd, Ord, PartialEq, Eq, TypeInfo)]
+pub struct SlotDuration(u64);
+
+impl SlotDuration {
+	/// Initialize from the given milliseconds.
+	pub const fn from_millis(millis: u64) -> Self {
+		Self(millis)
+	}
+}
+
+impl SlotDuration {
+	/// Returns `self` as a `u64` representing the duration in milliseconds.
+	pub const fn as_millis(&self) -> u64 {
+		self.0
+	}
+}
+
+#[cfg(feature = "std")]
+impl SlotDuration {
+	/// Returns `self` as [`sp_std::time::Duration`].
+	pub const fn as_duration(&self) -> sp_std::time::Duration {
+		sp_std::time::Duration::from_millis(self.0)
+	}
+}
+
 /// Represents an equivocation proof. An equivocation happens when a validator
 /// produces more than one block on the same slot. The proof of equivocation
 /// are the given distinct headers that were signed by the validator and which
 /// include the slot number.
-#[derive(Clone, Debug, Decode, Encode, PartialEq)]
+#[derive(Clone, Debug, Decode, Encode, PartialEq, TypeInfo)]
 pub struct EquivocationProof<Header, Id> {
 	/// Returns the authority id of the equivocator.
 	pub offender: Id,

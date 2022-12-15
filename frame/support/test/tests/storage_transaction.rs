@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,17 +15,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Disable warnings for #\[transactional\] being deprecated.
+#![allow(deprecated)]
+
 use frame_support::{
-	assert_ok, assert_noop, transactional, StorageMap, StorageValue,
-	dispatch::{DispatchError, DispatchResult}, storage::{with_transaction, TransactionOutcome::*},
+	assert_noop, assert_ok, assert_storage_noop,
+	dispatch::{DispatchError, DispatchResult},
+	storage::{with_transaction, TransactionOutcome::*},
+	transactional, StorageMap, StorageValue,
 };
 use sp_io::TestExternalities;
+use sp_runtime::TransactionOutcome;
 use sp_std::result;
 
 pub trait Config: frame_support_test::Config {}
 
 frame_support::decl_module! {
-	pub struct Module<T: Config> for enum Call where origin: T::Origin, system=frame_support_test {
+	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=frame_support_test {
 		#[weight = 0]
 		#[transactional]
 		fn value_commits(_origin, v: u32) {
@@ -41,7 +47,7 @@ frame_support::decl_module! {
 	}
 }
 
-frame_support::decl_storage!{
+frame_support::decl_storage! {
 	trait Store for Module<T: Config> as StorageTransactions {
 		pub Value: u32;
 		pub Map: map hasher(twox_64_concat) String => u32;
@@ -51,7 +57,7 @@ frame_support::decl_storage!{
 struct Runtime;
 
 impl frame_support_test::Config for Runtime {
-	type Origin = u32;
+	type RuntimeOrigin = u32;
 	type BlockNumber = u32;
 	type PalletInfo = frame_support_test::PanicPalletInfo;
 	type DbWeight = ();
@@ -62,17 +68,16 @@ impl Config for Runtime {}
 #[test]
 fn storage_transaction_basic_commit() {
 	TestExternalities::default().execute_with(|| {
-
 		assert_eq!(Value::get(), 0);
 		assert!(!Map::contains_key("val0"));
 
-		with_transaction(|| {
+		assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
 			Value::set(99);
 			Map::insert("val0", 99);
 			assert_eq!(Value::get(), 99);
 			assert_eq!(Map::get("val0"), 99);
-			Commit(())
-		});
+			Commit(Ok(()))
+		}));
 
 		assert_eq!(Value::get(), 99);
 		assert_eq!(Map::get("val0"), 99);
@@ -82,17 +87,29 @@ fn storage_transaction_basic_commit() {
 #[test]
 fn storage_transaction_basic_rollback() {
 	TestExternalities::default().execute_with(|| {
-
 		assert_eq!(Value::get(), 0);
 		assert_eq!(Map::get("val0"), 0);
 
-		with_transaction(|| {
-			Value::set(99);
-			Map::insert("val0", 99);
-			assert_eq!(Value::get(), 99);
-			assert_eq!(Map::get("val0"), 99);
-			Rollback(())
-		});
+		assert_noop!(
+			with_transaction(|| -> TransactionOutcome<DispatchResult> {
+				Value::set(99);
+				Map::insert("val0", 99);
+				assert_eq!(Value::get(), 99);
+				assert_eq!(Map::get("val0"), 99);
+				Rollback(Err("revert".into()))
+			}),
+			"revert"
+		);
+
+		assert_storage_noop!(assert_ok!(with_transaction(
+			|| -> TransactionOutcome<DispatchResult> {
+				Value::set(99);
+				Map::insert("val0", 99);
+				assert_eq!(Value::get(), 99);
+				assert_eq!(Map::get("val0"), 99);
+				Rollback(Ok(()))
+			}
+		)));
 
 		assert_eq!(Value::get(), 0);
 		assert_eq!(Map::get("val0"), 0);
@@ -105,32 +122,35 @@ fn storage_transaction_rollback_then_commit() {
 		Value::set(1);
 		Map::insert("val1", 1);
 
-		with_transaction(|| {
+		assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
 			Value::set(2);
 			Map::insert("val1", 2);
 			Map::insert("val2", 2);
 
-			with_transaction(|| {
-				Value::set(3);
-				Map::insert("val1", 3);
-				Map::insert("val2", 3);
-				Map::insert("val3", 3);
+			assert_noop!(
+				with_transaction(|| -> TransactionOutcome<DispatchResult> {
+					Value::set(3);
+					Map::insert("val1", 3);
+					Map::insert("val2", 3);
+					Map::insert("val3", 3);
 
-				assert_eq!(Value::get(), 3);
-				assert_eq!(Map::get("val1"), 3);
-				assert_eq!(Map::get("val2"), 3);
-				assert_eq!(Map::get("val3"), 3);
+					assert_eq!(Value::get(), 3);
+					assert_eq!(Map::get("val1"), 3);
+					assert_eq!(Map::get("val2"), 3);
+					assert_eq!(Map::get("val3"), 3);
 
-				Rollback(())
-			});
+					Rollback(Err("revert".into()))
+				}),
+				"revert"
+			);
 
 			assert_eq!(Value::get(), 2);
 			assert_eq!(Map::get("val1"), 2);
 			assert_eq!(Map::get("val2"), 2);
 			assert_eq!(Map::get("val3"), 0);
 
-			Commit(())
-		});
+			Commit(Ok(()))
+		}));
 
 		assert_eq!(Value::get(), 2);
 		assert_eq!(Map::get("val1"), 2);
@@ -145,32 +165,35 @@ fn storage_transaction_commit_then_rollback() {
 		Value::set(1);
 		Map::insert("val1", 1);
 
-		with_transaction(|| {
-			Value::set(2);
-			Map::insert("val1", 2);
-			Map::insert("val2", 2);
+		assert_noop!(
+			with_transaction(|| -> TransactionOutcome<DispatchResult> {
+				Value::set(2);
+				Map::insert("val1", 2);
+				Map::insert("val2", 2);
 
-			with_transaction(|| {
-				Value::set(3);
-				Map::insert("val1", 3);
-				Map::insert("val2", 3);
-				Map::insert("val3", 3);
+				assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
+					Value::set(3);
+					Map::insert("val1", 3);
+					Map::insert("val2", 3);
+					Map::insert("val3", 3);
+
+					assert_eq!(Value::get(), 3);
+					assert_eq!(Map::get("val1"), 3);
+					assert_eq!(Map::get("val2"), 3);
+					assert_eq!(Map::get("val3"), 3);
+
+					Commit(Ok(()))
+				}));
 
 				assert_eq!(Value::get(), 3);
 				assert_eq!(Map::get("val1"), 3);
 				assert_eq!(Map::get("val2"), 3);
 				assert_eq!(Map::get("val3"), 3);
 
-				Commit(())
-			});
-
-			assert_eq!(Value::get(), 3);
-			assert_eq!(Map::get("val1"), 3);
-			assert_eq!(Map::get("val2"), 3);
-			assert_eq!(Map::get("val3"), 3);
-
-			Rollback(())
-		});
+				Rollback(Err("revert".into()))
+			}),
+			"revert"
+		);
 
 		assert_eq!(Value::get(), 1);
 		assert_eq!(Map::get("val1"), 1);

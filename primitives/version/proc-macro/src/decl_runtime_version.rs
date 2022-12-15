@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,18 +16,19 @@
 // limitations under the License.
 
 use codec::Encode;
+use proc_macro2::{Span, TokenStream};
+use quote::quote;
 use syn::{
-	Expr, ExprLit, FieldValue, ItemConst, Lit,
-	parse::{Result, Error},
+	parse::{Error, Result},
 	parse_macro_input,
 	spanned::Spanned as _,
+	Expr, ExprLit, FieldValue, ItemConst, Lit,
 };
-use quote::quote;
-use proc_macro2::{TokenStream, Span};
 
-/// This macro accepts a `const` item that has a struct initializer expression of `RuntimeVersion`-like type.
-/// The macro will pass through this declaration and append an item declaration that will
-/// lead to emitting a wasm custom section with the contents of `RuntimeVersion`.
+/// This macro accepts a `const` item that has a struct initializer expression of
+/// `RuntimeVersion`-like type. The macro will pass through this declaration and append an item
+/// declaration that will lead to emitting a wasm custom section with the contents of
+/// `RuntimeVersion`.
 pub fn decl_runtime_version_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let item = parse_macro_input!(input as ItemConst);
 	decl_runtime_version_impl_inner(item)
@@ -36,7 +37,7 @@ pub fn decl_runtime_version_impl(input: proc_macro::TokenStream) -> proc_macro::
 }
 
 fn decl_runtime_version_impl_inner(item: ItemConst) -> Result<TokenStream> {
-	let runtime_version = ParseRuntimeVersion::parse_expr(&*item.expr)?.build(item.expr.span())?;
+	let runtime_version = ParseRuntimeVersion::parse_expr(&item.expr)?.build(item.expr.span())?;
 	let link_section =
 		generate_emit_link_section_decl(&runtime_version.encode(), "runtime_version");
 
@@ -62,6 +63,7 @@ struct RuntimeVersion {
 	impl_version: u32,
 	apis: u8,
 	transaction_version: u32,
+	state_version: u8,
 }
 
 #[derive(Default, Debug)]
@@ -72,18 +74,15 @@ struct ParseRuntimeVersion {
 	spec_version: Option<u32>,
 	impl_version: Option<u32>,
 	transaction_version: Option<u32>,
+	state_version: Option<u8>,
 }
 
 impl ParseRuntimeVersion {
 	fn parse_expr(init_expr: &Expr) -> Result<ParseRuntimeVersion> {
 		let init_expr = match init_expr {
 			Expr::Struct(ref e) => e,
-			_ => {
-				return Err(Error::new(
-					init_expr.span(),
-					"expected a struct initializer expression",
-				));
-			}
+			_ =>
+				return Err(Error::new(init_expr.span(), "expected a struct initializer expression")),
 		};
 
 		let mut parsed = ParseRuntimeVersion::default();
@@ -96,12 +95,8 @@ impl ParseRuntimeVersion {
 	fn parse_field_value(&mut self, field_value: &FieldValue) -> Result<()> {
 		let field_name = match field_value.member {
 			syn::Member::Named(ref ident) => ident,
-			syn::Member::Unnamed(_) => {
-				return Err(Error::new(
-					field_value.span(),
-					"only named members must be used",
-				));
-			}
+			syn::Member::Unnamed(_) =>
+				return Err(Error::new(field_value.span(), "only named members must be used")),
 		};
 
 		fn parse_once<T>(
@@ -110,10 +105,7 @@ impl ParseRuntimeVersion {
 			parser: impl FnOnce(&Expr) -> Result<T>,
 		) -> Result<()> {
 			if value.is_some() {
-				return Err(Error::new(
-					field.span(),
-					"field is already initialized before",
-				));
+				Err(Error::new(field.span(), "field is already initialized before"))
 			} else {
 				*value = Some(parser(&field.expr)?);
 				Ok(())
@@ -125,29 +117,23 @@ impl ParseRuntimeVersion {
 		} else if field_name == "impl_name" {
 			parse_once(&mut self.impl_name, field_value, Self::parse_str_literal)?;
 		} else if field_name == "authoring_version" {
-			parse_once(
-				&mut self.authoring_version,
-				field_value,
-				Self::parse_num_literal,
-			)?;
+			parse_once(&mut self.authoring_version, field_value, Self::parse_num_literal)?;
 		} else if field_name == "spec_version" {
 			parse_once(&mut self.spec_version, field_value, Self::parse_num_literal)?;
 		} else if field_name == "impl_version" {
 			parse_once(&mut self.impl_version, field_value, Self::parse_num_literal)?;
 		} else if field_name == "transaction_version" {
-			parse_once(
-				&mut self.transaction_version,
-				field_value,
-				Self::parse_num_literal,
-			)?;
+			parse_once(&mut self.transaction_version, field_value, Self::parse_num_literal)?;
+		} else if field_name == "state_version" {
+			parse_once(&mut self.state_version, field_value, Self::parse_num_literal_u8)?;
 		} else if field_name == "apis" {
 			// Intentionally ignored
 			//
 			// The definition will pass through for the declaration, however, it won't get into
-			// the "runtime_version" custom section. `impl_runtime_apis` is responsible for generating
-			// a custom section with the supported runtime apis descriptor.
+			// the "runtime_version" custom section. `impl_runtime_apis` is responsible for
+			// generating a custom section with the supported runtime apis descriptor.
 		} else {
-			return Err(Error::new(field_name.span(), "unknown field"));
+			return Err(Error::new(field_name.span(), "unknown field"))
 		}
 
 		Ok(())
@@ -155,61 +141,53 @@ impl ParseRuntimeVersion {
 
 	fn parse_num_literal(expr: &Expr) -> Result<u32> {
 		let lit = match *expr {
-			Expr::Lit(ExprLit {
-				lit: Lit::Int(ref lit),
-				..
-			}) => lit,
-			_ => {
+			Expr::Lit(ExprLit { lit: Lit::Int(ref lit), .. }) => lit,
+			_ =>
 				return Err(Error::new(
 					expr.span(),
 					"only numeric literals (e.g. `10`) are supported here",
-				));
-			}
+				)),
 		};
 		lit.base10_parse::<u32>()
+	}
+
+	fn parse_num_literal_u8(expr: &Expr) -> Result<u8> {
+		let lit = match *expr {
+			Expr::Lit(ExprLit { lit: Lit::Int(ref lit), .. }) => lit,
+			_ =>
+				return Err(Error::new(
+					expr.span(),
+					"only numeric literals (e.g. `10`) are supported here",
+				)),
+		};
+		lit.base10_parse::<u8>()
 	}
 
 	fn parse_str_literal(expr: &Expr) -> Result<String> {
 		let mac = match *expr {
 			Expr::Macro(syn::ExprMacro { ref mac, .. }) => mac,
-			_ => {
-				return Err(Error::new(
-					expr.span(),
-					"a macro expression is expected here",
-				));
-			}
+			_ => return Err(Error::new(expr.span(), "a macro expression is expected here")),
 		};
 
 		let lit: ExprLit = mac.parse_body().map_err(|e| {
 			Error::new(
 				e.span(),
-				format!(
-					"a single literal argument is expected, but parsing is failed: {}",
-					e
-				),
+				format!("a single literal argument is expected, but parsing is failed: {}", e),
 			)
 		})?;
 
 		match lit.lit {
 			Lit::Str(ref lit) => Ok(lit.value()),
-			_ => Err(Error::new(
-				lit.span(),
-				"only string literals are supported here",
-			)),
+			_ => Err(Error::new(lit.span(), "only string literals are supported here")),
 		}
 	}
 
 	fn build(self, span: Span) -> Result<RuntimeVersion> {
 		macro_rules! required {
 			($e:expr) => {
-				$e.ok_or_else(||
-					{
-						Error::new(
-							span,
-							format!("required field '{}' is missing", stringify!($e)),
-						)
-					}
-				)?
+				$e.ok_or_else(|| {
+					Error::new(span, format!("required field '{}' is missing", stringify!($e)))
+				})?
 			};
 		}
 
@@ -220,6 +198,7 @@ impl ParseRuntimeVersion {
 			spec_version,
 			impl_version,
 			transaction_version,
+			state_version,
 		} = self;
 
 		Ok(RuntimeVersion {
@@ -229,6 +208,7 @@ impl ParseRuntimeVersion {
 			spec_version: required!(spec_version),
 			impl_version: required!(impl_version),
 			transaction_version: required!(transaction_version),
+			state_version: required!(state_version),
 			apis: 0,
 		})
 	}
@@ -248,7 +228,6 @@ fn generate_emit_link_section_decl(contents: &[u8], section_name: &str) -> Token
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use codec::DecodeAll;
 	use std::borrow::Cow;
 
 	#[test]
@@ -261,11 +240,13 @@ mod tests {
 			impl_version: 1,
 			apis: 0,
 			transaction_version: 2,
+			state_version: 1,
 		}
 		.encode();
 
 		assert_eq!(
-			sp_version::RuntimeVersion::decode_all(&mut &version_bytes[..]).unwrap(),
+			sp_version::RuntimeVersion::decode_with_version_hint(&mut &version_bytes[..], Some(4))
+				.unwrap(),
 			sp_version::RuntimeVersion {
 				spec_name: "hello".into(),
 				impl_name: "world".into(),
@@ -274,6 +255,7 @@ mod tests {
 				impl_version: 1,
 				apis: Cow::Owned(vec![]),
 				transaction_version: 2,
+				state_version: 1,
 			},
 		);
 	}

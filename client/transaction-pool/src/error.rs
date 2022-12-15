@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,7 +18,7 @@
 
 //! Transaction pool error.
 
-use sp_transaction_pool::error::Error as TxPoolError;
+use sc_transaction_pool_api::error::Error as TxPoolError;
 
 /// Transaction pool result.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -27,10 +27,10 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, thiserror::Error)]
 #[allow(missing_docs)]
 pub enum Error {
-	#[error("Transaction pool error")]
+	#[error("Transaction pool error: {0}")]
 	Pool(#[from] TxPoolError),
 
-	#[error("Blockchain error")]
+	#[error("Blockchain error: {0}")]
 	Blockchain(#[from] sp_blockchain::Error),
 
 	#[error("Block conversion error: {0}")]
@@ -40,8 +40,7 @@ pub enum Error {
 	RuntimeApi(String),
 }
 
-
-impl sp_transaction_pool::error::IntoPoolError for Error {
+impl sc_transaction_pool_api::error::IntoPoolError for Error {
 	fn into_pool_error(self) -> std::result::Result<TxPoolError, Self> {
 		match self {
 			Error::Pool(e) => Ok(e),

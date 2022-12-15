@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,23 +18,21 @@
 
 //! State RPC errors.
 
-use crate::errors;
-use jsonrpc_core as rpc;
-
+use jsonrpsee::{
+	core::Error as JsonRpseeError,
+	types::error::{CallError, ErrorObject},
+};
 /// State RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// State RPC future Result type.
-pub type FutureResult<T> = Box<dyn rpc::futures::Future<Item = T, Error = Error> + Send>;
-
 /// State RPC errors.
-#[derive(Debug, derive_more::Display, derive_more::From)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// Client error.
-	#[display(fmt="Client error: {}", _0)]
-	Client(Box<dyn std::error::Error + Send>),
+	#[error("Client error: {}", .0)]
+	Client(#[from] Box<dyn std::error::Error + Send + Sync>),
 	/// Provided block range couldn't be resolved to a list of blocks.
-	#[display(fmt = "Cannot resolve a block range ['{:?}' ... '{:?}]. {}", from, to, details)]
+	#[error("Cannot resolve a block range ['{:?}' ... '{:?}]. {}", .from, .to, .details)]
 	InvalidBlockRange {
 		/// Beginning of the block range.
 		from: String,
@@ -44,7 +42,7 @@ pub enum Error {
 		details: String,
 	},
 	/// Provided count exceeds maximum value.
-	#[display(fmt = "count exceeds maximum value. value: {}, max: {}", value, max)]
+	#[error("count exceeds maximum value. value: {}, max: {}", .value, .max)]
 	InvalidCount {
 		/// Provided value
 		value: u32,
@@ -52,35 +50,23 @@ pub enum Error {
 		max: u32,
 	},
 	/// Call to an unsafe RPC was denied.
-	UnsafeRpcCalled(crate::policy::UnsafeRpcError),
-}
-
-impl std::error::Error for Error {
-	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-		match self {
-			Error::Client(ref err) => Some(&**err),
-			_ => None,
-		}
-	}
+	#[error(transparent)]
+	UnsafeRpcCalled(#[from] crate::policy::UnsafeRpcError),
 }
 
 /// Base code for all state errors.
-const BASE_ERROR: i64 = 4000;
+const BASE_ERROR: i32 = 4000;
 
-impl From<Error> for rpc::Error {
+impl From<Error> for JsonRpseeError {
 	fn from(e: Error) -> Self {
 		match e {
-			Error::InvalidBlockRange { .. } => rpc::Error {
-				code: rpc::ErrorCode::ServerError(BASE_ERROR + 1),
-				message: format!("{}", e),
-				data: None,
-			},
-			Error::InvalidCount { .. } => rpc::Error {
-				code: rpc::ErrorCode::ServerError(BASE_ERROR + 2),
-				message: format!("{}", e),
-				data: None,
-			},
-			e => errors::internal(e),
+			Error::InvalidBlockRange { .. } =>
+				CallError::Custom(ErrorObject::owned(BASE_ERROR + 1, e.to_string(), None::<()>))
+					.into(),
+			Error::InvalidCount { .. } =>
+				CallError::Custom(ErrorObject::owned(BASE_ERROR + 2, e.to_string(), None::<()>))
+					.into(),
+			e => Self::to_call_error(e),
 		}
 	}
 }

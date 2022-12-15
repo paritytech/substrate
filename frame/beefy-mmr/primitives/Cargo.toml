@@ -1,0 +1,30 @@
+[package]
+name = "beefy-merkle-tree"
+version = "4.0.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/paritytech/substrate"
+description = "A no-std/Substrate compatible library to construct binary merkle tree."
+homepage = "https://substrate.io"
+
+[dependencies]
+array-bytes = { version = "4.1", optional = true }
+log = { version = "0.4", default-features = false, optional = true }
+
+beefy-primitives = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/beefy", package = "sp-beefy" }
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/api" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../../primitives/runtime" }
+
+[dev-dependencies]
+array-bytes = "4.1"
+env_logger = "0.9"
+
+[features]
+debug = ["array-bytes", "log"]
+default = ["debug", "std"]
+std = [
+	"beefy-primitives/std",
+	"sp-api/std",
+	"sp-runtime/std"
+]

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -19,92 +19,107 @@
 //! Defines data and logic needed for interaction with an WebAssembly instance of a substrate
 //! runtime module.
 
-use crate::util;
-use crate::imports::Imports;
-
-use std::{slice, marker};
+use crate::runtime::{Store, StoreData};
 use sc_executor_common::{
-	error::{Error, Result},
-	runtime_blob,
+	error::{Backtrace, Error, MessageWithBacktrace, Result, WasmError},
 	wasm_runtime::InvokeMethod,
 };
-use sp_wasm_interface::{Pointer, WordSize, Value};
-use wasmtime::{Instance, Module, Memory, Table, Val, Func, Extern, Global, Store};
+use sp_wasm_interface::{Pointer, Value, WordSize};
+use wasmtime::{
+	AsContext, AsContextMut, Engine, Extern, Func, Global, Instance, InstancePre, Memory, Table,
+	Val,
+};
 
 /// Invoked entrypoint format.
 pub enum EntryPointType {
 	/// Direct call.
 	///
 	/// Call is made by providing only payload reference and length.
-	Direct,
+	Direct { entrypoint: wasmtime::TypedFunc<(u32, u32), u64> },
 	/// Indirect call.
 	///
 	/// Call is made by providing payload reference and length, and extra argument
-	/// for advanced routing (typically extra WASM function pointer).
-	Wrapped(u32),
+	/// for advanced routing.
+	Wrapped {
+		/// The extra argument passed to the runtime. It is typically a wasm function pointer.
+		func: u32,
+		dispatcher: wasmtime::TypedFunc<(u32, u32, u32), u64>,
+	},
 }
 
 /// Wasm blob entry point.
 pub struct EntryPoint {
 	call_type: EntryPointType,
-	func: wasmtime::Func,
 }
 
 impl EntryPoint {
 	/// Call this entry point.
-	pub fn call(&self, data_ptr: Pointer<u8>, data_len: WordSize) -> Result<u64> {
-		let data_ptr = u32::from(data_ptr) as i32;
-		let data_len = u32::from(data_len) as i32;
+	pub(crate) fn call(
+		&self,
+		store: &mut Store,
+		data_ptr: Pointer<u8>,
+		data_len: WordSize,
+	) -> Result<u64> {
+		let data_ptr = u32::from(data_ptr);
+		let data_len = u32::from(data_len);
 
-		(match self.call_type {
-			EntryPointType::Direct => {
-				self.func.call(&[
-					wasmtime::Val::I32(data_ptr),
-					wasmtime::Val::I32(data_len),
-				])
-			},
-			EntryPointType::Wrapped(func) => {
-				self.func.call(&[
-					wasmtime::Val::I32(func as _),
-					wasmtime::Val::I32(data_ptr),
-					wasmtime::Val::I32(data_len),
-				])
-			},
+		match self.call_type {
+			EntryPointType::Direct { ref entrypoint } =>
+				entrypoint.call(&mut *store, (data_ptr, data_len)),
+			EntryPointType::Wrapped { func, ref dispatcher } =>
+				dispatcher.call(&mut *store, (func, data_ptr, data_len)),
+		}
+		.map_err(|trap| {
+			let host_state = store
+				.data_mut()
+				.host_state
+				.as_mut()
+				.expect("host state cannot be empty while a function is being called; qed");
+
+			// The logic to print out a backtrace is somewhat complicated,
+			// so let's get wasmtime to print it out for us.
+			let mut backtrace_string = trap.to_string();
+			let suffix = "\nwasm backtrace:";
+			if let Some(index) = backtrace_string.find(suffix) {
+				// Get rid of the error message and just grab the backtrace,
+				// since we're storing the error message ourselves separately.
+				backtrace_string.replace_range(0..index + suffix.len(), "");
+			}
+
+			let backtrace = Backtrace { backtrace_string };
+			if let Some(error) = host_state.take_panic_message() {
+				Error::AbortedDueToPanic(MessageWithBacktrace {
+					message: error,
+					backtrace: Some(backtrace),
+				})
+			} else {
+				Error::AbortedDueToTrap(MessageWithBacktrace {
+					message: trap.display_reason().to_string(),
+					backtrace: Some(backtrace),
+				})
+			}
 		})
-			.map(|results|
-				// the signature is checked to have i64 return type
-				results[0].unwrap_i64() as u64
-			)
-			.map_err(|err| Error::from(format!(
-				"Wasm execution trapped: {}",
-				err
-			)))
 	}
 
-	pub fn direct(func: wasmtime::Func) -> std::result::Result<Self, &'static str> {
-		use wasmtime::ValType;
-		let entry_point = wasmtime::FuncType::new(
-			[ValType::I32, ValType::I32].iter().cloned(),
-			[ValType::I64].iter().cloned(),
-		);
-		if func.ty() == entry_point {
-			Ok(Self { func, call_type: EntryPointType::Direct })
-		} else {
-			Err("Invalid signature for direct entry point")
-		}
+	pub fn direct(
+		func: wasmtime::Func,
+		ctx: impl AsContext,
+	) -> std::result::Result<Self, &'static str> {
+		let entrypoint = func
+			.typed::<(u32, u32), u64, _>(ctx)
+			.map_err(|_| "Invalid signature for direct entry point")?;
+		Ok(Self { call_type: EntryPointType::Direct { entrypoint } })
 	}
 
-	pub fn wrapped(dispatcher: wasmtime::Func, func: u32) -> std::result::Result<Self, &'static str> {
-		use wasmtime::ValType;
-		let entry_point = wasmtime::FuncType::new(
-			[ValType::I32, ValType::I32, ValType::I32].iter().cloned(),
-			[ValType::I64].iter().cloned(),
-		);
-		if dispatcher.ty() == entry_point {
-			Ok(Self { func: dispatcher, call_type: EntryPointType::Wrapped(func) })
-		} else {
-			Err("Invalid signature for wrapped entry point")
-		}
+	pub fn wrapped(
+		dispatcher: wasmtime::Func,
+		func: u32,
+		ctx: impl AsContext,
+	) -> std::result::Result<Self, &'static str> {
+		let dispatcher = dispatcher
+			.typed::<(u32, u32, u32), u64, _>(ctx)
+			.map_err(|_| "Invalid signature for wrapped entry point")?;
+		Ok(Self { call_type: EntryPointType::Wrapped { func, dispatcher } })
 	}
 }
 
@@ -114,14 +129,8 @@ impl EntryPoint {
 /// routines.
 pub struct InstanceWrapper {
 	instance: Instance,
-	// The memory instance of the `instance`.
-	//
-	// It is important to make sure that we don't make any copies of this to make it easier to proof
-	// See `memory_as_slice` and `memory_as_slice_mut`.
 	memory: Memory,
-	table: Option<Table>,
-	// Make this struct explicitly !Send & !Sync.
-	_not_send_nor_sync: marker::PhantomData<*const ()>,
+	store: Store,
 }
 
 fn extern_memory(extern_: &Extern) -> Option<&Memory> {
@@ -130,7 +139,6 @@ fn extern_memory(extern_: &Extern) -> Option<&Memory> {
 		_ => None,
 	}
 }
-
 
 fn extern_global(extern_: &Extern) -> Option<&Global> {
 	match extern_ {
@@ -153,121 +161,119 @@ fn extern_func(extern_: &Extern) -> Option<&Func> {
 	}
 }
 
+pub(crate) fn create_store(engine: &wasmtime::Engine, max_memory_size: Option<usize>) -> Store {
+	let limits = if let Some(max_memory_size) = max_memory_size {
+		wasmtime::StoreLimitsBuilder::new().memory_size(max_memory_size).build()
+	} else {
+		Default::default()
+	};
+
+	let mut store =
+		Store::new(engine, StoreData { limits, host_state: None, memory: None, table: None });
+	if max_memory_size.is_some() {
+		store.limiter(|s| &mut s.limits);
+	}
+	store
+}
+
 impl InstanceWrapper {
-	/// Create a new instance wrapper from the given wasm module.
-	pub fn new(store: &Store, module: &Module, imports: &Imports, heap_pages: u32) -> Result<Self> {
-		let instance = Instance::new(store, module, &imports.externs)
-			.map_err(|e| Error::from(format!("cannot instantiate: {}", e)))?;
+	pub(crate) fn new(
+		engine: &Engine,
+		instance_pre: &InstancePre<StoreData>,
+		max_memory_size: Option<usize>,
+	) -> Result<Self> {
+		let mut store = create_store(engine, max_memory_size);
+		let instance = instance_pre.instantiate(&mut store).map_err(|error| {
+			WasmError::Other(format!(
+				"failed to instantiate a new WASM module instance: {:#}",
+				error,
+			))
+		})?;
 
-		let memory = match imports.memory_import_index {
-			Some(memory_idx) => {
-				extern_memory(&imports.externs[memory_idx])
-					.expect("only memory can be at the `memory_idx`; qed")
-					.clone()
-			}
-			None => {
-				let memory = get_linear_memory(&instance)?;
-				if !memory.grow(heap_pages).is_ok() {
-					return Err("failed top increase the linear memory size".into());
-				}
-				memory
-			},
-		};
+		let memory = get_linear_memory(&instance, &mut store)?;
+		let table = get_table(&instance, &mut store);
 
-		Ok(Self {
-			table: get_table(&instance),
-			instance,
-			memory,
-			_not_send_nor_sync: marker::PhantomData,
-		})
+		store.data_mut().memory = Some(memory);
+		store.data_mut().table = table;
+
+		Ok(InstanceWrapper { instance, memory, store })
 	}
 
 	/// Resolves a substrate entrypoint by the given name.
 	///
 	/// An entrypoint must have a signature `(i32, i32) -> i64`, otherwise this function will return
 	/// an error.
-	pub fn resolve_entrypoint(&self, method: InvokeMethod) -> Result<EntryPoint> {
+	pub fn resolve_entrypoint(&mut self, method: InvokeMethod) -> Result<EntryPoint> {
 		Ok(match method {
 			InvokeMethod::Export(method) => {
 				// Resolve the requested method and verify that it has a proper signature.
-				let export = self
-					.instance
-					.get_export(method)
-					.ok_or_else(|| Error::from(format!("Exported method {} is not found", method)))?;
+				let export =
+					self.instance.get_export(&mut self.store, method).ok_or_else(|| {
+						Error::from(format!("Exported method {} is not found", method))
+					})?;
 				let func = extern_func(&export)
-					.ok_or_else(|| Error::from(format!("Export {} is not a function", method)))?
-					.clone();
-				EntryPoint::direct(func)
-					.map_err(|_|
-						Error::from(format!(
-							"Exported function '{}' has invalid signature.",
-							method,
-						))
-					)?
+					.ok_or_else(|| Error::from(format!("Export {} is not a function", method)))?;
+				EntryPoint::direct(*func, &self.store).map_err(|_| {
+					Error::from(format!("Exported function '{}' has invalid signature.", method))
+				})?
 			},
 			InvokeMethod::Table(func_ref) => {
-				let table = self.instance.get_table("__indirect_function_table").ok_or(Error::NoTable)?;
-				let val = table.get(func_ref)
+				let table = self
+					.instance
+					.get_table(&mut self.store, "__indirect_function_table")
+					.ok_or(Error::NoTable)?;
+				let val = table
+					.get(&mut self.store, func_ref)
 					.ok_or(Error::NoTableEntryWithIndex(func_ref))?;
 				let func = val
 					.funcref()
 					.ok_or(Error::TableElementIsNotAFunction(func_ref))?
-					.ok_or(Error::FunctionRefIsNull(func_ref))?
-					.clone();
+					.ok_or(Error::FunctionRefIsNull(func_ref))?;
 
-				EntryPoint::direct(func)
-					.map_err(|_|
-						Error::from(format!(
-							"Function @{} in exported table has invalid signature for direct call.",
-							func_ref,
-						))
-					)?
-				},
+				EntryPoint::direct(*func, &self.store).map_err(|_| {
+					Error::from(format!(
+						"Function @{} in exported table has invalid signature for direct call.",
+						func_ref,
+					))
+				})?
+			},
 			InvokeMethod::TableWithWrapper { dispatcher_ref, func } => {
-				let table = self.instance.get_table("__indirect_function_table").ok_or(Error::NoTable)?;
-				let val = table.get(dispatcher_ref)
+				let table = self
+					.instance
+					.get_table(&mut self.store, "__indirect_function_table")
+					.ok_or(Error::NoTable)?;
+				let val = table
+					.get(&mut self.store, dispatcher_ref)
 					.ok_or(Error::NoTableEntryWithIndex(dispatcher_ref))?;
 				let dispatcher = val
 					.funcref()
 					.ok_or(Error::TableElementIsNotAFunction(dispatcher_ref))?
-					.ok_or(Error::FunctionRefIsNull(dispatcher_ref))?
-					.clone();
+					.ok_or(Error::FunctionRefIsNull(dispatcher_ref))?;
 
-				EntryPoint::wrapped(dispatcher, func)
-					.map_err(|_|
-						Error::from(format!(
-							"Function @{} in exported table has invalid signature for wrapped call.",
-							dispatcher_ref,
-						))
-					)?
+				EntryPoint::wrapped(*dispatcher, func, &self.store).map_err(|_| {
+					Error::from(format!(
+						"Function @{} in exported table has invalid signature for wrapped call.",
+						dispatcher_ref,
+					))
+				})?
 			},
 		})
-	}
-
-	/// Returns an indirect function table of this instance.
-	pub fn table(&self) -> Option<&Table> {
-		self.table.as_ref()
-	}
-
-	/// Returns the byte size of the linear memory instance attached to this instance.
-	pub fn memory_size(&self) -> u32 {
-		self.memory.data_size() as u32
 	}
 
 	/// Reads `__heap_base: i32` global variable and returns it.
 	///
 	/// If it doesn't exist, not a global or of not i32 type returns an error.
-	pub fn extract_heap_base(&self) -> Result<u32> {
+	pub fn extract_heap_base(&mut self) -> Result<u32> {
 		let heap_base_export = self
 			.instance
-			.get_export("__heap_base")
+			.get_export(&mut self.store, "__heap_base")
 			.ok_or_else(|| Error::from("__heap_base is not found"))?;
 
 		let heap_base_global = extern_global(&heap_base_export)
 			.ok_or_else(|| Error::from("__heap_base is not a global"))?;
 
 		let heap_base = heap_base_global
-			.get()
+			.get(&mut self.store)
 			.i32()
 			.ok_or_else(|| Error::from("__heap_base is not a i32"))?;
 
@@ -275,15 +281,15 @@ impl InstanceWrapper {
 	}
 
 	/// Get the value from a global with the given `name`.
-	pub fn get_global_val(&self, name: &str) -> Result<Option<Value>> {
-		let global = match self.instance.get_export(name) {
+	pub fn get_global_val(&mut self, name: &str) -> Result<Option<Value>> {
+		let global = match self.instance.get_export(&mut self.store, name) {
 			Some(global) => global,
 			None => return Ok(None),
 		};
 
 		let global = extern_global(&global).ok_or_else(|| format!("`{}` is not a global", name))?;
 
-		match global.get() {
+		match global.get(&mut self.store) {
 			Val::I32(val) => Ok(Some(Value::I32(val))),
 			Val::I64(val) => Ok(Some(Value::I64(val))),
 			Val::F32(val) => Ok(Some(Value::F32(val))),
@@ -291,152 +297,126 @@ impl InstanceWrapper {
 			_ => Err("Unknown value type".into()),
 		}
 	}
+
+	/// Get a global with the given `name`.
+	pub fn get_global(&mut self, name: &str) -> Option<wasmtime::Global> {
+		self.instance.get_global(&mut self.store, name)
+	}
 }
 
 /// Extract linear memory instance from the given instance.
-fn get_linear_memory(instance: &Instance) -> Result<Memory> {
+fn get_linear_memory(instance: &Instance, ctx: impl AsContextMut) -> Result<Memory> {
 	let memory_export = instance
-		.get_export("memory")
+		.get_export(ctx, "memory")
 		.ok_or_else(|| Error::from("memory is not exported under `memory` name"))?;
 
-	let memory = extern_memory(&memory_export)
-		.ok_or_else(|| Error::from("the `memory` export should have memory type"))?
-		.clone();
+	let memory = *extern_memory(&memory_export)
+		.ok_or_else(|| Error::from("the `memory` export should have memory type"))?;
 
 	Ok(memory)
 }
 
 /// Extract the table from the given instance if any.
-fn get_table(instance: &Instance) -> Option<Table> {
+fn get_table(instance: &Instance, ctx: &mut Store) -> Option<Table> {
 	instance
-		.get_export("__indirect_function_table")
+		.get_export(ctx, "__indirect_function_table")
 		.as_ref()
 		.and_then(extern_table)
 		.cloned()
 }
 
-/// Functions realted to memory.
+/// Functions related to memory.
 impl InstanceWrapper {
-	/// Read data from a slice of memory into a destination buffer.
-	///
-	/// Returns an error if the read would go out of the memory bounds.
-	pub fn read_memory_into(&self, address: Pointer<u8>, dest: &mut [u8]) -> Result<()> {
-		unsafe {
-			// This should be safe since we don't grow up memory while caching this reference and
-			// we give up the reference before returning from this function.
-			let memory = self.memory_as_slice();
-
-			let range = util::checked_range(address.into(), dest.len(), memory.len())
-				.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
-			dest.copy_from_slice(&memory[range]);
-			Ok(())
-		}
+	/// Returns the pointer to the first byte of the linear memory for this instance.
+	pub fn base_ptr(&self) -> *const u8 {
+		self.memory.data_ptr(&self.store)
 	}
 
-	/// Write data to a slice of memory.
-	///
-	/// Returns an error if the write would go out of the memory bounds.
-	pub fn write_memory_from(&self, address: Pointer<u8>, data: &[u8]) -> Result<()> {
-		unsafe {
-			// This should be safe since we don't grow up memory while caching this reference and
-			// we give up the reference before returning from this function.
-			let memory = self.memory_as_slice_mut();
-
-			let range = util::checked_range(address.into(), data.len(), memory.len())
-				.ok_or_else(|| Error::Other("memory write is out of bounds".into()))?;
-			&mut memory[range].copy_from_slice(data);
-			Ok(())
+	/// If possible removes physical backing from the allocated linear memory which
+	/// leads to returning the memory back to the system; this also zeroes the memory
+	/// as a side-effect.
+	pub fn decommit(&mut self) {
+		if self.memory.data_size(&self.store) == 0 {
+			return
 		}
+
+		cfg_if::cfg_if! {
+			if #[cfg(target_os = "linux")] {
+				use std::sync::Once;
+
+				unsafe {
+					let ptr = self.memory.data_ptr(&self.store);
+					let len = self.memory.data_size(&self.store);
+
+					// Linux handles MADV_DONTNEED reliably. The result is that the given area
+					// is unmapped and will be zeroed on the next pagefault.
+					if libc::madvise(ptr as _, len, libc::MADV_DONTNEED) != 0 {
+						static LOGGED: Once = Once::new();
+						LOGGED.call_once(|| {
+							log::warn!(
+								"madvise(MADV_DONTNEED) failed: {}",
+								std::io::Error::last_os_error(),
+							);
+						});
+					} else {
+						return;
+					}
+				}
+			} else if #[cfg(target_os = "macos")] {
+				use std::sync::Once;
+
+				unsafe {
+					let ptr = self.memory.data_ptr(&self.store);
+					let len = self.memory.data_size(&self.store);
+
+					// On MacOS we can simply overwrite memory mapping.
+					if libc::mmap(
+						ptr as _,
+						len,
+						libc::PROT_READ | libc::PROT_WRITE,
+						libc::MAP_FIXED | libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
+						-1,
+						0,
+					) == libc::MAP_FAILED {
+						static LOGGED: Once = Once::new();
+						LOGGED.call_once(|| {
+							log::warn!(
+								"Failed to decommit WASM instance memory through mmap: {}",
+								std::io::Error::last_os_error(),
+							);
+						});
+					} else {
+						return;
+					}
+				}
+			}
+		}
+
+		// If we're on an unsupported OS or the memory couldn't have been
+		// decommited for some reason then just manually zero it out.
+		self.memory.data_mut(self.store.as_context_mut()).fill(0);
 	}
 
-	/// Allocate some memory of the given size. Returns pointer to the allocated memory region.
-	///
-	/// Returns `Err` in case memory cannot be allocated. Refer to the allocator documentation
-	/// to get more details.
-	pub fn allocate(
-		&self,
-		allocator: &mut sp_allocator::FreeingBumpHeapAllocator,
-		size: WordSize,
-	) -> Result<Pointer<u8>> {
-		unsafe {
-			// This should be safe since we don't grow up memory while caching this reference and
-			// we give up the reference before returning from this function.
-			let memory = self.memory_as_slice_mut();
-
-			allocator.allocate(memory, size).map_err(Into::into)
-		}
+	pub(crate) fn store(&self) -> &Store {
+		&self.store
 	}
 
-	/// Deallocate the memory pointed by the given pointer.
-	///
-	/// Returns `Err` in case the given memory region cannot be deallocated.
-	pub fn deallocate(
-		&self,
-		allocator: &mut sp_allocator::FreeingBumpHeapAllocator,
-		ptr: Pointer<u8>,
-	) -> Result<()> {
-		unsafe {
-			// This should be safe since we don't grow up memory while caching this reference and
-			// we give up the reference before returning from this function.
-			let memory = self.memory_as_slice_mut();
-
-			allocator.deallocate(memory, ptr).map_err(Into::into)
-		}
-	}
-
-	/// Returns linear memory of the wasm instance as a slice.
-	///
-	/// # Safety
-	///
-	/// Wasmtime doesn't provide comprehensive documentation about the exact behavior of the data
-	/// pointer. If a dynamic style heap is used the base pointer of the heap can change. Since
-	/// growing, we cannot guarantee the lifetime of the returned slice reference.
-	unsafe fn memory_as_slice(&self) -> &[u8] {
-		let ptr = self.memory.data_ptr() as *const _;
-		let len = self.memory.data_size();
-
-		if len == 0 {
-			&[]
-		} else {
-			slice::from_raw_parts(ptr, len)
-		}
-	}
-
-	/// Returns linear memory of the wasm instance as a slice.
-	///
-	/// # Safety
-	///
-	/// See `[memory_as_slice]`. In addition to those requirements, since a mutable reference is
-	/// returned it must be ensured that only one mutable and no shared references to memory exists
-	/// at the same time.
-	unsafe fn memory_as_slice_mut(&self) -> &mut [u8] {
-		let ptr = self.memory.data_ptr();
-		let len = self.memory.data_size();
-
-		if len == 0 {
-			&mut []
-		} else {
-			slice::from_raw_parts_mut(ptr, len)
-		}
+	pub(crate) fn store_mut(&mut self) -> &mut Store {
+		&mut self.store
 	}
 }
 
-impl runtime_blob::InstanceGlobals for InstanceWrapper {
-	type Global = wasmtime::Global;
-
-	fn get_global(&self, export_name: &str) -> Self::Global {
-		self.instance
-			.get_global(export_name)
-			.expect("get_global is guaranteed to be called with an export name of a global; qed")
-	}
-
-	fn get_global_value(&self, global: &Self::Global) -> Value {
-		util::from_wasmtime_val(global.get())
-	}
-
-	fn set_global_value(&self, global: &Self::Global, value: Value) {
-		global.set(util::into_wasmtime_val(value)).expect(
-			"the value is guaranteed to be of the same value; the global is guaranteed to be mutable; qed",
-		);
-	}
+#[test]
+fn decommit_works() {
+	let engine = wasmtime::Engine::default();
+	let code = wat::parse_str("(module (memory (export \"memory\") 1 4))").unwrap();
+	let module = wasmtime::Module::new(&engine, code).unwrap();
+	let linker = wasmtime::Linker::new(&engine);
+	let mut store = create_store(&engine, None);
+	let instance_pre = linker.instantiate_pre(&mut store, &module).unwrap();
+	let mut wrapper = InstanceWrapper::new(&engine, &instance_pre, None).unwrap();
+	unsafe { *wrapper.memory.data_ptr(&wrapper.store) = 42 };
+	assert_eq!(unsafe { *wrapper.memory.data_ptr(&wrapper.store) }, 42);
+	wrapper.decommit();
+	assert_eq!(unsafe { *wrapper.memory.data_ptr(&wrapper.store) }, 0);
 }

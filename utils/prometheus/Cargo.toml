@@ -1,11 +1,11 @@
 [package]
 description = "Endpoint to expose Prometheus metrics"
 name = "substrate-prometheus-endpoint"
-version = "0.9.0"
+version = "0.10.0-dev"
 license = "Apache-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
-homepage = "https://substrate.dev"
+edition = "2021"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 readme = "README.md"
 
@@ -13,12 +13,13 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-log = "0.4.8"
-prometheus = { version = "0.11.0", default-features = false }
-futures-util = { version = "0.3.1", default-features = false, features = ["io"] }
-derive_more = "0.99"
+futures-util = { version = "0.3.19", default-features = false, features = ["io"] }
+hyper = { version = "0.14.16", default-features = false, features = ["http1", "server", "tcp"] }
+log = "0.4.17"
+prometheus = { version = "0.13.0", default-features = false }
+thiserror = "1.0"
+tokio = { version = "1.22.0", features = ["parking_lot"] }
 
-[target.'cfg(not(target_os = "unknown"))'.dependencies]
-async-std = { version = "1.6.5", features = ["unstable"] }
-hyper = { version = "0.13.9", default-features = false, features = ["stream"] }
-tokio = "0.2"
+[dev-dependencies]
+hyper = { version = "0.14.16", features = ["client"] }
+tokio = { version = "1.22.0", features = ["rt-multi-thread"] }

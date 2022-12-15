@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,56 +16,51 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::error;
-use crate::params::{GenericNumber, DatabaseParams, PruningParams, SharedParams};
-use crate::CliConfiguration;
-use log::info;
-use sc_service::{
-	config::DatabaseConfig, chain_ops::export_blocks,
+use crate::{
+	error,
+	params::{DatabaseParams, GenericNumber, PruningParams, SharedParams},
+	CliConfiguration,
 };
+use clap::Parser;
+use log::info;
 use sc_client_api::{BlockBackend, UsageProvider};
+use sc_service::{chain_ops::export_blocks, config::DatabaseSource};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
-use std::fmt::Debug;
-use std::fs;
-use std::io;
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::sync::Arc;
-use structopt::StructOpt;
+use std::{fmt::Debug, fs, io, path::PathBuf, str::FromStr, sync::Arc};
 
 /// The `export-blocks` command used to export blocks.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, Clone, Parser)]
 pub struct ExportBlocksCmd {
 	/// Output file name or stdout if unspecified.
-	#[structopt(parse(from_os_str))]
+	#[arg()]
 	pub output: Option<PathBuf>,
 
 	/// Specify starting block number.
 	///
 	/// Default is 1.
-	#[structopt(long = "from", value_name = "BLOCK")]
+	#[arg(long, value_name = "BLOCK")]
 	pub from: Option<GenericNumber>,
 
 	/// Specify last block number.
 	///
 	/// Default is best block.
-	#[structopt(long = "to", value_name = "BLOCK")]
+	#[arg(long, value_name = "BLOCK")]
 	pub to: Option<GenericNumber>,
 
 	/// Use binary output rather than JSON.
-	#[structopt(long)]
+	#[arg(long)]
 	pub binary: bool,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub shared_params: SharedParams,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub pruning_params: PruningParams,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub database_params: DatabaseParams,
 }
 
@@ -74,14 +69,14 @@ impl ExportBlocksCmd {
 	pub async fn run<B, C>(
 		&self,
 		client: Arc<C>,
-		database_config: DatabaseConfig,
+		database_config: DatabaseSource,
 	) -> error::Result<()>
 	where
 		B: BlockT,
 		C: BlockBackend<B> + UsageProvider<B> + 'static,
 		<<B::Header as HeaderT>::Number as FromStr>::Err: Debug,
 	{
-		if let DatabaseConfig::RocksDb { ref path, .. } = database_config {
+		if let Some(path) = database_config.path() {
 			info!("DB path: {}", path.display());
 		}
 
@@ -95,9 +90,7 @@ impl ExportBlocksCmd {
 			None => Box::new(io::stdout()),
 		};
 
-		export_blocks(client, file, from.into(), to, binary)
-			.await
-			.map_err(Into::into)
+		export_blocks(client, file, from.into(), to, binary).await.map_err(Into::into)
 	}
 }
 

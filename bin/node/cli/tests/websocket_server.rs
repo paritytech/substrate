@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,11 +16,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use async_std::net::{TcpListener, TcpStream};
 use core::pin::Pin;
 use futures::prelude::*;
 use soketto::handshake::{server::Response, Server};
 use std::{io, net::SocketAddr};
+use tokio::net::{TcpListener, TcpStream};
+use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
 /// Configuration for a [`WsServer`].
 pub struct Config {
@@ -71,8 +72,12 @@ pub struct WsServer {
 	negotiating: stream::FuturesUnordered<
 		Pin<
 			Box<
-				dyn Future<Output = Result<Server<'static, TcpStream>, Box<dyn std::error::Error>>>
-					+ Send,
+				dyn Future<
+						Output = Result<
+							Server<'static, Compat<TcpStream>>,
+							Box<dyn std::error::Error>,
+						>,
+					> + Send,
 			>,
 		>,
 	>,
@@ -116,28 +121,22 @@ impl WsServer {
 	/// # Panic
 	///
 	/// Panics if no connection is pending.
-	///
 	pub fn accept(&mut self) {
 		let pending_incoming = self.pending_incoming.take().expect("no pending socket");
 
 		self.negotiating.push(Box::pin(async move {
-			let mut server = Server::new(pending_incoming);
+			let mut server = Server::new(pending_incoming.compat());
 
 			let websocket_key = match server.receive_request().await {
-				Ok(req) => req.into_key(),
+				Ok(req) => req.key(),
 				Err(err) => return Err(Box::new(err) as Box<_>),
 			};
 
 			match server
-				.send_response(&{
-					Response::Accept {
-						key: &websocket_key,
-						protocol: None,
-					}
-				})
+				.send_response(&{ Response::Accept { key: websocket_key, protocol: None } })
 				.await
 			{
-				Ok(()) => {}
+				Ok(()) => {},
 				Err(err) => return Err(Box::new(err) as Box<_>),
 			};
 
@@ -153,7 +152,6 @@ impl WsServer {
 	/// # Panic
 	///
 	/// Panics if no connection is pending.
-	///
 	pub fn reject(&mut self) {
 		let _ = self.pending_incoming.take().expect("no pending socket");
 	}

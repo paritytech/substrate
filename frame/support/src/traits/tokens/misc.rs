@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,14 +17,14 @@
 
 //! Miscellaneous types.
 
-use sp_std::fmt::Debug;
-use codec::{Encode, Decode, FullCodec};
+use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
+use sp_arithmetic::traits::{AtLeast32BitUnsigned, Zero};
 use sp_core::RuntimeDebug;
-use sp_arithmetic::traits::{Zero, AtLeast32BitUnsigned};
-use sp_runtime::{DispatchError, ArithmeticError, TokenError};
+use sp_runtime::{ArithmeticError, DispatchError, TokenError};
+use sp_std::fmt::Debug;
 
 /// One of a number of consequences of withdrawing a fungible from an account.
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
 pub enum WithdrawConsequence<Balance> {
 	/// Withdraw could not happen since the amount to be withdrawn is less than the total funds in
 	/// the account.
@@ -51,9 +51,9 @@ pub enum WithdrawConsequence<Balance> {
 }
 
 impl<Balance: Zero> WithdrawConsequence<Balance> {
-	/// Convert the type into a `Result` with `DispatchError` as the error or the additional `Balance`
-	/// by which the account will be reduced.
-	pub fn into_result(self, keep_alive: bool) -> Result<Balance, DispatchError> {
+	/// Convert the type into a `Result` with `DispatchError` as the error or the additional
+	/// `Balance` by which the account will be reduced.
+	pub fn into_result(self) -> Result<Balance, DispatchError> {
 		use WithdrawConsequence::*;
 		match self {
 			Success => Ok(Zero::zero()),
@@ -69,7 +69,7 @@ impl<Balance: Zero> WithdrawConsequence<Balance> {
 }
 
 /// One of a number of consequences of withdrawing a fungible from an account.
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
 pub enum DepositConsequence {
 	/// Deposit couldn't happen due to the amount being too low. This is usually because the
 	/// account doesn't yet exist and the deposit wouldn't bring it to at least the minimum needed
@@ -104,7 +104,7 @@ impl DepositConsequence {
 }
 
 /// Simple boolean for whether an account needs to be kept in existence.
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
 pub enum ExistenceRequirement {
 	/// Operation must not result in the account going out of existence.
 	///
@@ -116,7 +116,9 @@ pub enum ExistenceRequirement {
 }
 
 /// Status of funds.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+#[derive(
+	PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, scale_info::TypeInfo, MaxEncodedLen,
+)]
 pub enum BalanceStatus {
 	/// Funds are free, as corresponding to `free` item in Balances.
 	Free,
@@ -170,7 +172,7 @@ impl<AssetId, AccountId, Balance> FrozenBalance<AssetId, AccountId, Balance> for
 
 bitflags::bitflags! {
 	/// Reasons for moving funds out of an account.
-	#[derive(Encode, Decode)]
+	#[derive(Encode, Decode, MaxEncodedLen)]
 	pub struct WithdrawReasons: u8 {
 		/// In order to pay for (system) transaction costs.
 		const TRANSACTION_PAYMENT = 0b00000001;
@@ -194,7 +196,7 @@ impl WithdrawReasons {
 	/// assert_eq!(
 	/// 	WithdrawReasons::FEE | WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE | WithdrawReasons::TIP,
 	/// 	WithdrawReasons::except(WithdrawReasons::TRANSACTION_PAYMENT),
-	///	);
+	/// 	);
 	/// # }
 	/// ```
 	pub fn except(one: WithdrawReasons) -> WithdrawReasons {
@@ -205,9 +207,50 @@ impl WithdrawReasons {
 }
 
 /// Simple amalgamation trait to collect together properties for an AssetId under one roof.
-pub trait AssetId: FullCodec + Copy + Default + Eq + PartialEq + Debug {}
-impl<T: FullCodec + Copy + Default + Eq + PartialEq + Debug> AssetId for T {}
+pub trait AssetId:
+	FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen
+{
+}
+impl<T: FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen> AssetId
+	for T
+{
+}
 
 /// Simple amalgamation trait to collect together properties for a Balance under one roof.
-pub trait Balance: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug {}
-impl<T: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug> Balance for T {}
+pub trait Balance:
+	AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug + scale_info::TypeInfo + MaxEncodedLen
+{
+}
+impl<
+		T: AtLeast32BitUnsigned
+			+ FullCodec
+			+ Copy
+			+ Default
+			+ Debug
+			+ scale_info::TypeInfo
+			+ MaxEncodedLen,
+	> Balance for T
+{
+}
+
+/// Converts a balance value into an asset balance.
+pub trait BalanceConversion<InBalance, AssetId, OutBalance> {
+	type Error;
+	fn to_asset_balance(balance: InBalance, asset_id: AssetId) -> Result<OutBalance, Self::Error>;
+}
+
+/// Trait to handle asset locking mechanism to ensure interactions with the asset can be implemented
+/// downstream to extend logic of Uniques current functionality.
+pub trait Locker<CollectionId, ItemId> {
+	/// Check if the asset should be locked and prevent interactions with the asset from executing.
+	fn is_locked(collection: CollectionId, item: ItemId) -> bool;
+}
+
+impl<CollectionId, ItemId> Locker<CollectionId, ItemId> for () {
+	// Default will be false if not implemented downstream.
+	// Note: The logic check in this function must be constant time and consistent for benchmarks
+	// to work.
+	fn is_locked(_collection: CollectionId, _item: ItemId) -> bool {
+		false
+	}
+}

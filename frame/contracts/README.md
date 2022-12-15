@@ -2,10 +2,10 @@
 
 The Contract module provides functionality for the runtime to deploy and execute WebAssembly smart-contracts.
 
-- [`Call`](https://docs.rs/pallet-contracts/latest/pallet_contracts/enum.Call.html)
-- [`Config`](https://docs.rs/pallet-contracts/latest/pallet_contracts/trait.Config.html)
-- [`Error`](https://docs.rs/pallet-contracts/latest/pallet_contracts/enum.Error.html)
-- [`Event`](https://docs.rs/pallet-contracts/latest/pallet_contracts/enum.Event.html)
+- [`Call`](https://paritytech.github.io/substrate/master/pallet_contracts/pallet/enum.Call.html)
+- [`Config`](https://paritytech.github.io/substrate/master/pallet_contracts/pallet/trait.Config.html)
+- [`Error`](https://paritytech.github.io/substrate/master/pallet_contracts/pallet/enum.Error.html)
+- [`Event`](https://paritytech.github.io/substrate/master/pallet_contracts/pallet/enum.Error.html)
 
 ## Overview
 
@@ -34,20 +34,73 @@ reverted at the current call's contract level. For example, if contract A calls 
 then all of B's calls are reverted. Assuming correct error handling by contract A, A's other calls and state
 changes still persist.
 
-One gas is equivalent to one [weight](https://substrate.dev/docs/en/knowledgebase/learn-substrate/weight)
+One gas is equivalent to one [weight](https://docs.substrate.io/v3/runtime/weights-and-fees)
 which is defined as one picosecond of execution time on the runtime's reference machine.
 
-### Notable Scenarios
+### Revert Behaviour
 
-Contract call failures are not always cascading. When failures occur in a sub-call, they do not "bubble up",
+Contract call failures are not cascading. When failures occur in a sub-call, they do not "bubble up",
 and the call will only revert at the specific contract level. For example, if contract A calls contract B, and B
 fails, A can decide how to handle that failure, either proceeding or reverting A's changes.
+
+### Offchain Execution
+
+In general, a contract execution needs to be deterministic so that all nodes come to the same
+conclusion when executing it. To that end we disallow any instructions that could cause
+indeterminism. Most notable are any floating point arithmetic. That said, sometimes contracts
+are executed off-chain and hence are not subject to consensus. If code is only executed by a
+single node and implicitly trusted by other actors is such a case. Trusted execution environments
+come to mind. To that end we allow the execution of indeterminstic code for offchain usages
+with the following constraints:
+
+1. No contract can ever be instantiated from an indeterministic code. The only way to execute
+the code is to use a delegate call from a deterministic contract.
+2. The code that wants to use this feature needs to depend on `pallet-contracts` and use `bare_call`
+directly. This makes sure that by default `pallet-contracts` does not expose any indeterminism.
+
+## How to use
+
+When setting up the `Schedule` for your runtime make sure to set `InstructionWeights::fallback`
+to a non zero value. The default is `0` and prevents the upload of any non deterministic code.
+
+An indeterministic code can be deployed on-chain by passing `Determinism::AllowIndeterministic`
+to `upload_code`. A determinstic contract can then delegate call into it if and only if it
+is ran by using `bare_call` and passing `Determinism::AllowIndeterministic` to it. **Never use
+this argument when the contract is called from an on-chain transaction.**
 
 ## Interface
 
 ### Dispatchable functions
 
-Those are documented in the [reference documentation](https://docs.rs/pallet-contracts/latest/pallet_contracts/#dispatchable-functions).
+Those are documented in the [reference documentation](https://paritytech.github.io/substrate/master/pallet_contracts/index.html#dispatchable-functions).
+
+### Interface exposed to contracts
+
+Each contract is one WebAssembly module that looks like this:
+
+```wat
+(module
+    ;; Invoked by pallet-contracts when a contract is instantiated.
+    ;; No arguments and empty return type.
+    (func (export "deploy"))
+
+    ;; Invoked by pallet-contracts when a contract is called.
+    ;; No arguments and empty return type.
+    (func (export "call"))
+
+    ;; If a contract uses memory it must be imported. Memory is optional.
+    ;; The maximum allowed memory size depends on the pallet-contracts configuration.
+    (import "env" "memory" (memory 1 1))
+
+    ;; This is one of many functions that can be imported and is implemented by pallet-contracts.
+    ;; This function is used to copy the result buffer and flags back to the caller.
+    (import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
+)
+```
+
+The documentation of all importable functions can be found
+[here](https://github.com/paritytech/substrate/blob/master/frame/contracts/src/wasm/runtime.rs).
+Look for the `define_env!` macro invocation.
 
 ## Usage
 
@@ -61,7 +114,7 @@ writing WebAssembly based smart contracts in the Rust programming language.
 
 Contracts can emit messages to the client when called as RPC through the `seal_debug_message`
 API. This is exposed in ink! via
-[`ink_env::debug_println()`](https://docs.rs/ink_env/latest/ink_env/fn.debug_println.html).
+[`ink_env::debug_message()`](https://paritytech.github.io/ink/ink_env/fn.debug_message.html).
 
 Those messages are gathered into an internal buffer and send to the RPC client.
 It is up the the individual client if and how those messages are presented to the user.
@@ -73,7 +126,7 @@ by block production. A good starting point for observing them on the console is 
 command line in the root directory of the substrate repository:
 
 ```bash
-cargo run --release -- --dev --tmp -lerror,runtime::contracts=debug
+cargo run --release -- --dev -lerror,runtime::contracts=debug
 ```
 
 This raises the log level of `runtime::contracts` to `debug` and all other targets
@@ -89,18 +142,11 @@ this pallet contains the concept of an unstable interface. Akin to the rust nigh
 it allows us to add new interfaces but mark them as unstable so that contract languages can
 experiment with them and give feedback before we stabilize those.
 
-In order to access interfaces marked as `__unstable__` in `runtime.rs` one need to compile
-this crate with the `unstable-interface` feature enabled. It should be obvious that any
-live runtime should never be compiled with this feature: In addition to be subject to
-change or removal those interfaces do not have proper weights associated with them and
-are therefore considered unsafe.
-
-The substrate runtime exposes this feature as `contracts-unstable-interface`. Example
-commandline for running the substrate node with unstable contracts interfaces:
-
-```bash
-cargo run --release --features contracts-unstable-interface -- --dev
-```
+In order to access interfaces marked as `#[unstable]` in `runtime.rs` one need to set
+`pallet_contracts::Config::UnsafeUnstableInterface` to `ConstU32<true>`. It should be obvious
+that any production runtime should never be compiled with this feature: In addition to be
+subject to change or removal those interfaces might not have proper weights associated with
+them and are therefore considered unsafe.
 
 New interfaces are generally added as unstable and might go through several iterations
 before they are promoted to a stable interface.

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,66 +16,82 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Substrate state API.
-
-use jsonrpc_derive::rpc;
-use sp_core::storage::{StorageKey, PrefixedStorageKey, StorageData};
-use crate::state::error::FutureResult;
-
-pub use self::gen_client::Client as ChildStateClient;
+//! Substrate child state API
 use crate::state::ReadProof;
+use jsonrpsee::{core::RpcResult, proc_macros::rpc};
+use sp_core::storage::{PrefixedStorageKey, StorageData, StorageKey};
 
 /// Substrate child state API
 ///
-/// Note that all `PrefixedStorageKey` are desierialized
-/// from json and not guaranted valid.
-#[rpc]
+/// Note that all `PrefixedStorageKey` are deserialized
+/// from json and not guaranteed valid.
+#[rpc(client, server)]
 pub trait ChildStateApi<Hash> {
-	/// RPC Metadata
-	type Metadata;
-
 	/// Returns the keys with prefix from a child storage, leave empty to get all the keys
-	#[rpc(name = "childstate_getKeys")]
+	#[method(name = "childstate_getKeys", blocking)]
+	#[deprecated(since = "2.0.0", note = "Please use `getKeysPaged` with proper paging support")]
 	fn storage_keys(
 		&self,
 		child_storage_key: PrefixedStorageKey,
 		prefix: StorageKey,
-		hash: Option<Hash>
-	) -> FutureResult<Vec<StorageKey>>;
+		hash: Option<Hash>,
+	) -> RpcResult<Vec<StorageKey>>;
+
+	/// Returns the keys with prefix from a child storage with pagination support.
+	/// Up to `count` keys will be returned.
+	/// If `start_key` is passed, return next keys in storage in lexicographic order.
+	#[method(name = "childstate_getKeysPaged", aliases = ["childstate_getKeysPagedAt"], blocking)]
+	fn storage_keys_paged(
+		&self,
+		child_storage_key: PrefixedStorageKey,
+		prefix: Option<StorageKey>,
+		count: u32,
+		start_key: Option<StorageKey>,
+		hash: Option<Hash>,
+	) -> RpcResult<Vec<StorageKey>>;
 
 	/// Returns a child storage entry at a specific block's state.
-	#[rpc(name = "childstate_getStorage")]
+	#[method(name = "childstate_getStorage", blocking)]
 	fn storage(
 		&self,
 		child_storage_key: PrefixedStorageKey,
 		key: StorageKey,
-		hash: Option<Hash>
-	) -> FutureResult<Option<StorageData>>;
+		hash: Option<Hash>,
+	) -> RpcResult<Option<StorageData>>;
+
+	/// Returns child storage entries for multiple keys at a specific block's state.
+	#[method(name = "childstate_getStorageEntries", blocking)]
+	fn storage_entries(
+		&self,
+		child_storage_key: PrefixedStorageKey,
+		keys: Vec<StorageKey>,
+		hash: Option<Hash>,
+	) -> RpcResult<Vec<Option<StorageData>>>;
 
 	/// Returns the hash of a child storage entry at a block's state.
-	#[rpc(name = "childstate_getStorageHash")]
+	#[method(name = "childstate_getStorageHash", blocking)]
 	fn storage_hash(
 		&self,
 		child_storage_key: PrefixedStorageKey,
 		key: StorageKey,
-		hash: Option<Hash>
-	) -> FutureResult<Option<Hash>>;
+		hash: Option<Hash>,
+	) -> RpcResult<Option<Hash>>;
 
 	/// Returns the size of a child storage entry at a block's state.
-	#[rpc(name = "childstate_getStorageSize")]
+	#[method(name = "childstate_getStorageSize", blocking)]
 	fn storage_size(
 		&self,
 		child_storage_key: PrefixedStorageKey,
 		key: StorageKey,
-		hash: Option<Hash>
-	) -> FutureResult<Option<u64>>;
+		hash: Option<Hash>,
+	) -> RpcResult<Option<u64>>;
 
 	/// Returns proof of storage for child key entries at a specific block's state.
-	#[rpc(name = "state_getChildReadProof")]
+	#[method(name = "state_getChildReadProof", blocking)]
 	fn read_child_proof(
 		&self,
 		child_storage_key: PrefixedStorageKey,
 		keys: Vec<StorageKey>,
 		hash: Option<Hash>,
-	) -> FutureResult<ReadProof<Hash>>;
+	) -> RpcResult<ReadProof<Hash>>;
 }

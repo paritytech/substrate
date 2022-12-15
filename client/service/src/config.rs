@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,26 +18,30 @@
 
 //! Service configuration.
 
-pub use sc_client_db::{
-	Database, PruningMode, DatabaseSettingsSrc as DatabaseConfig,
-	KeepBlocks, TransactionStorageMode
-};
-pub use sc_network::Multiaddr;
-pub use sc_network::config::{
-	ExtTransport, MultiaddrWithPeerId, NetworkConfiguration, Role, NodeKeyConfig,
-	SetConfig, NonDefaultSetConfig, TransportConfig,
-	RequestResponseConfig, IncomingRequest, OutgoingResponse,
-};
-pub use sc_executor::WasmExecutionMethod;
 pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionStrategy};
+pub use sc_client_db::{BlocksPruning, Database, DatabaseSource, PruningMode};
+pub use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
+pub use sc_network::{
+	config::{NetworkConfiguration, NodeKeyConfig, Role},
+	Multiaddr,
+};
+pub use sc_network_common::{
+	config::{MultiaddrWithPeerId, NonDefaultSetConfig, ProtocolId, SetConfig, TransportConfig},
+	request_responses::{
+		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
+	},
+};
 
-use std::{io, future::Future, path::{PathBuf, Path}, pin::Pin, net::SocketAddr, sync::Arc};
-pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
-use sc_chain_spec::ChainSpec;
-use sp_core::crypto::SecretString;
-pub use sc_telemetry::TelemetryEndpoints;
 use prometheus_endpoint::Registry;
-#[cfg(not(target_os = "unknown"))]
+use sc_chain_spec::ChainSpec;
+pub use sc_telemetry::TelemetryEndpoints;
+pub use sc_transaction_pool::Options as TransactionPoolOptions;
+use sp_core::crypto::SecretString;
+use std::{
+	io, iter,
+	net::SocketAddr,
+	path::{Path, PathBuf},
+};
 use tempfile::TempDir;
 
 /// Service configuration.
@@ -49,8 +53,8 @@ pub struct Configuration {
 	pub impl_version: String,
 	/// Node role.
 	pub role: Role,
-	/// How to spawn background tasks. Mandatory, otherwise creating a `Service` will error.
-	pub task_executor: TaskExecutor,
+	/// Handle to the tokio runtime. Will be used to spawn futures by the task manager.
+	pub tokio_handle: tokio::runtime::Handle,
 	/// Extrinsic pool configuration.
 	pub transaction_pool: TransactionPoolOptions,
 	/// Network configuration.
@@ -60,17 +64,17 @@ pub struct Configuration {
 	/// Remote URI to connect to for async keystore support
 	pub keystore_remote: Option<String>,
 	/// Configuration for the database.
-	pub database: DatabaseConfig,
-	/// Size of internal state cache in Bytes
-	pub state_cache_size: usize,
-	/// Size in percent of cache size dedicated to child tries
-	pub state_cache_child_ratio: Option<usize>,
+	pub database: DatabaseSource,
+	/// Maximum size of internal trie cache in bytes.
+	///
+	/// If `None` is given the cache is disabled.
+	pub trie_cache_maximum_size: Option<usize>,
 	/// State pruning settings.
-	pub state_pruning: PruningMode,
+	pub state_pruning: Option<PruningMode>,
 	/// Number of blocks to keep in the db.
-	pub keep_blocks: KeepBlocks,
-	/// Transaction storage scheme.
-	pub transaction_storage: TransactionStorageMode,
+	///
+	/// NOTE: only finalized blocks are subject for removal!
+	pub blocks_pruning: BlocksPruning,
 	/// Chain configuration.
 	pub chain_spec: Box<dyn ChainSpec>,
 	/// Wasm execution method.
@@ -93,13 +97,26 @@ pub struct Configuration {
 	pub rpc_cors: Option<Vec<String>>,
 	/// RPC methods to expose (by default only a safe subset or all of them).
 	pub rpc_methods: RpcMethods,
+	/// Maximum payload of rpc request/responses.
+	pub rpc_max_payload: Option<usize>,
+	/// Maximum payload of a rpc request
+	pub rpc_max_request_size: Option<usize>,
+	/// Maximum payload of a rpc request
+	pub rpc_max_response_size: Option<usize>,
+	/// Custom JSON-RPC subscription ID provider.
+	///
+	/// Default: [`crate::RandomStringSubscriptionId`].
+	pub rpc_id_provider: Option<Box<dyn crate::RpcSubscriptionIdProvider>>,
+	/// Maximum allowed subscriptions per rpc connection
+	///
+	/// Default: 1024.
+	pub rpc_max_subs_per_conn: Option<usize>,
+	/// Maximum size of the output buffer capacity for websocket connections.
+	pub ws_max_out_buffer_capacity: Option<usize>,
 	/// Prometheus endpoint configuration. `None` if disabled.
 	pub prometheus_config: Option<PrometheusConfig>,
 	/// Telemetry service URL. `None` if disabled.
 	pub telemetry_endpoints: Option<TelemetryEndpoints>,
-	/// External WASM transport for the telemetry. If `Some`, when connection to a telemetry
-	/// endpoint, this transport will be tried in priority before all others.
-	pub telemetry_external_transport: Option<ExtTransport>,
 	/// The default number of 64KB pages to allocate for Wasm execution
 	pub default_heap_pages: Option<u64>,
 	/// Should offchain workers be executed.
@@ -110,14 +127,13 @@ pub struct Configuration {
 	pub disable_grandpa: bool,
 	/// Development key seed.
 	///
-	/// When running in development mode, the seed will be used to generate authority keys by the keystore.
+	/// When running in development mode, the seed will be used to generate authority keys by the
+	/// keystore.
 	///
 	/// Should only be set when `node` is running development mode.
 	pub dev_key_seed: Option<String>,
 	/// Tracing targets
 	pub tracing_targets: Option<String>,
-	/// Is log filter reloading disabled
-	pub disable_log_reloading: bool,
 	/// Tracing receiver
 	pub tracing_receiver: sc_tracing::TracingReceiver,
 	/// The size of the instances cache.
@@ -130,6 +146,8 @@ pub struct Configuration {
 	pub base_path: Option<BasePath>,
 	/// Configuration of the output format that the informant uses.
 	pub informant_output_format: sc_informant::OutputFormat,
+	/// Maximum number of different runtime versions that can be cached.
+	pub runtime_cache_size: u8,
 }
 
 /// Type for tasks spawned by the executor.
@@ -149,7 +167,7 @@ pub enum KeystoreConfig {
 		/// The path of the keystore.
 		path: PathBuf,
 		/// Node keystore's password.
-		password: Option<SecretString>
+		password: Option<SecretString>,
 	},
 	/// In-memory keystore. Recommended for in-browser nodes.
 	InMemory,
@@ -184,13 +202,12 @@ pub struct PrometheusConfig {
 
 impl PrometheusConfig {
 	/// Create a new config using the default registry.
-	///
-	/// The default registry prefixes metrics with `substrate`.
-	pub fn new_with_default_registry(port: SocketAddr) -> Self {
+	pub fn new_with_default_registry(port: SocketAddr, chain_id: String) -> Self {
+		let param = iter::once((String::from("chain"), chain_id)).collect();
 		Self {
 			port,
-			registry: Registry::new_custom(Some("substrate".into()), None)
-				.expect("this can only fail if the prefix is empty")
+			registry: Registry::new_custom(None, Some(param))
+				.expect("this can only fail if the prefix is empty"),
 		}
 	}
 }
@@ -207,17 +224,19 @@ impl Configuration {
 	}
 
 	/// Returns the network protocol id from the chain spec, or the default.
-	pub fn protocol_id(&self) -> sc_network::config::ProtocolId {
+	pub fn protocol_id(&self) -> ProtocolId {
 		let protocol_id_full = match self.chain_spec.protocol_id() {
 			Some(pid) => pid,
 			None => {
-				log::warn!("Using default protocol ID {:?} because none is configured in the \
-					chain specs", crate::DEFAULT_PROTOCOL_ID
+				log::warn!(
+					"Using default protocol ID {:?} because none is configured in the \
+					chain specs",
+					crate::DEFAULT_PROTOCOL_ID
 				);
 				crate::DEFAULT_PROTOCOL_ID
-			}
+			},
 		};
-		sc_network::config::ProtocolId::from(protocol_id_full)
+		ProtocolId::from(protocol_id_full)
 	}
 }
 
@@ -239,39 +258,46 @@ impl Default for RpcMethods {
 	}
 }
 
-/// The base path that is used for everything that needs to be write on disk to run a node.
+#[static_init::dynamic(drop, lazy)]
+static mut BASE_PATH_TEMP: Option<TempDir> = None;
+
+/// The base path that is used for everything that needs to be written on disk to run a node.
 #[derive(Debug)]
-pub enum BasePath {
-	/// A temporary directory is used as base path and will be deleted when dropped.
-	#[cfg(not(target_os = "unknown"))]
-	Temporary(TempDir),
-	/// A path on the disk.
-	Permanenent(PathBuf),
+pub struct BasePath {
+	path: PathBuf,
 }
 
 impl BasePath {
 	/// Create a `BasePath` instance using a temporary directory prefixed with "substrate" and use
 	/// it as base path.
 	///
-	/// Note: the temporary directory will be created automatically and deleted when the `BasePath`
-	/// instance is dropped.
-	#[cfg(not(target_os = "unknown"))]
+	/// Note: The temporary directory will be created automatically and deleted when the program
+	/// exits. Every call to this function will return the same path for the lifetime of the
+	/// program.
 	pub fn new_temp_dir() -> io::Result<BasePath> {
-		Ok(BasePath::Temporary(
-			tempfile::Builder::new().prefix("substrate").tempdir()?,
-		))
+		let mut temp = BASE_PATH_TEMP.write();
+
+		match &*temp {
+			Some(p) => Ok(Self::new(p.path())),
+			None => {
+				let temp_dir = tempfile::Builder::new().prefix("substrate").tempdir()?;
+				let path = PathBuf::from(temp_dir.path());
+
+				*temp = Some(temp_dir);
+				Ok(Self::new(path))
+			},
+		}
 	}
 
 	/// Create a `BasePath` instance based on an existing path on disk.
 	///
 	/// Note: this function will not ensure that the directory exist nor create the directory. It
 	/// will also not delete the directory when the instance is dropped.
-	pub fn new<P: AsRef<Path>>(path: P) -> BasePath {
-		BasePath::Permanenent(path.as_ref().to_path_buf())
+	pub fn new<P: Into<PathBuf>>(path: P) -> BasePath {
+		Self { path: path.into() }
 	}
 
 	/// Create a base path from values describing the project.
-	#[cfg(not(target_os = "unknown"))]
 	pub fn from_project(qualifier: &str, organization: &str, application: &str) -> BasePath {
 		BasePath::new(
 			directories::ProjectDirs::from(qualifier, organization, application)
@@ -282,11 +308,7 @@ impl BasePath {
 
 	/// Retrieve the base path.
 	pub fn path(&self) -> &Path {
-		match self {
-			#[cfg(not(target_os = "unknown"))]
-			BasePath::Temporary(temp_dir) => temp_dir.path(),
-			BasePath::Permanenent(path) => path.as_path(),
-		}
+		&self.path
 	}
 
 	/// Returns the configuration directory inside this base path.
@@ -297,67 +319,8 @@ impl BasePath {
 	}
 }
 
-impl std::convert::From<PathBuf> for BasePath {
+impl From<PathBuf> for BasePath {
 	fn from(path: PathBuf) -> Self {
 		BasePath::new(path)
-	}
-}
-
-// NOTE: here for code readability.
-pub(crate) type SomeFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
-pub(crate) type JoinFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
-
-/// Callable object that execute tasks.
-///
-/// This struct can be created easily using `Into`.
-///
-/// # Examples
-///
-/// ## Using tokio
-///
-/// ```
-/// # use sc_service::TaskExecutor;
-/// use futures::future::FutureExt;
-/// use tokio::runtime::Runtime;
-///
-/// let runtime = Runtime::new().unwrap();
-/// let handle = runtime.handle().clone();
-/// let task_executor: TaskExecutor = (move |future, _task_type| {
-///     handle.spawn(future).map(|_| ())
-/// }).into();
-/// ```
-///
-/// ## Using async-std
-///
-/// ```
-/// # use sc_service::TaskExecutor;
-/// let task_executor: TaskExecutor = (|future, _task_type| {
-///     // NOTE: async-std's JoinHandle is not a Result so we don't need to map the result
-///     async_std::task::spawn(future)
-/// }).into();
-/// ```
-#[derive(Clone)]
-pub struct TaskExecutor(Arc<dyn Fn(SomeFuture, TaskType) -> JoinFuture + Send + Sync>);
-
-impl std::fmt::Debug for TaskExecutor {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		write!(f, "TaskExecutor")
-	}
-}
-
-impl<F, FUT> std::convert::From<F> for TaskExecutor
-where
-	F: Fn(SomeFuture, TaskType) -> FUT + Send + Sync + 'static,
-	FUT: Future<Output = ()> + Send + 'static,
-{
-	fn from(func: F) -> Self {
-		Self(Arc::new(move |fut, tt| Box::pin(func(fut, tt))))
-	}
-}
-
-impl TaskExecutor {
-	/// Spawns a new asynchronous task.
-	pub fn spawn(&self, future: SomeFuture, task_type: TaskType) -> JoinFuture {
-		self.0(future, task_type)
 	}
 }

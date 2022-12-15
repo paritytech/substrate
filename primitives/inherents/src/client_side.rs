@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{InherentData, Error, InherentIdentifier};
+use crate::{Error, InherentData, InherentIdentifier};
 use sp_runtime::traits::Block as BlockT;
 
 /// Something that can create inherent data providers.
@@ -44,7 +44,9 @@ impl<F, Block, IDP, ExtraArgs, Fut> CreateInherentDataProviders<Block, ExtraArgs
 where
 	Block: BlockT,
 	F: Fn(Block::Hash, ExtraArgs) -> Fut + Sync + Send,
-	Fut: std::future::Future<Output = Result<IDP, Box<dyn std::error::Error + Send + Sync>>> + Send + 'static,
+	Fut: std::future::Future<Output = Result<IDP, Box<dyn std::error::Error + Send + Sync>>>
+		+ Send
+		+ 'static,
 	IDP: InherentDataProvider + 'static,
 	ExtraArgs: Send + 'static,
 {
@@ -81,16 +83,16 @@ pub trait InherentDataProvider: Send + Sync {
 	/// Convenience function for creating [`InherentData`].
 	///
 	/// Basically maps around [`Self::provide_inherent_data`].
-	fn create_inherent_data(&self) -> Result<InherentData, Error> {
+	async fn create_inherent_data(&self) -> Result<InherentData, Error> {
 		let mut inherent_data = InherentData::new();
-		self.provide_inherent_data(&mut inherent_data)?;
+		self.provide_inherent_data(&mut inherent_data).await?;
 		Ok(inherent_data)
 	}
 
 	/// Provide inherent data that should be included in a block.
 	///
 	/// The data should be stored in the given `InherentData` structure.
-	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error>;
+	async fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error>;
 
 	/// Convert the given encoded error to a string.
 	///
@@ -106,8 +108,8 @@ pub trait InherentDataProvider: Send + Sync {
 #[async_trait::async_trait]
 impl InherentDataProvider for Tuple {
 	for_tuples!( where #( Tuple: Send + Sync )* );
-	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error> {
-		for_tuples!( #( Tuple.provide_inherent_data(inherent_data)?; )* );
+	async fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error> {
+		for_tuples!( #( Tuple.provide_inherent_data(inherent_data).await?; )* );
 		Ok(())
 	}
 

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,20 +19,19 @@
 
 use super::{Call, *};
 use frame_support::{
-	assert_err, assert_ok, assert_noop,
+	assert_err, assert_noop, assert_ok,
+	dispatch::{GetDispatchInfo, Pays},
 	traits::{Currency, EstimateNextSessionRotation, OnFinalize},
-	weights::{GetDispatchInfo, Pays},
 };
 use mock::*;
 use pallet_session::ShouldEndSession;
 use sp_consensus_babe::{AllowedSlots, BabeEpochConfiguration, Slot};
+use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sp_core::crypto::Pair;
 
 const EMPTY_RANDOMNESS: [u8; 32] = [
-	74, 25, 49, 128, 53, 97, 244, 49,
-	222, 202, 176, 2, 231, 66, 95, 10,
-	133, 49, 213, 228, 86, 161, 164, 127,
-	217, 153, 138, 37, 48, 192, 248, 0,
+	74, 25, 49, 128, 53, 97, 244, 49, 222, 202, 176, 2, 231, 66, 95, 10, 133, 49, 213, 228, 86,
+	161, 164, 127, 217, 153, 138, 37, 48, 192, 248, 0,
 ];
 
 #[test]
@@ -43,17 +42,17 @@ fn empty_randomness_is_correct() {
 
 #[test]
 fn initial_values() {
-	new_test_ext(4).execute_with(|| {
-		assert_eq!(Babe::authorities().len(), 4)
-	})
+	new_test_ext(4).execute_with(|| assert_eq!(Babe::authorities().len(), 4))
 }
 
 #[test]
 fn check_module() {
 	new_test_ext(4).execute_with(|| {
 		assert!(!Babe::should_end_session(0), "Genesis does not change sessions");
-		assert!(!Babe::should_end_session(200000),
-			"BABE does not include the block number in epoch calculations");
+		assert!(
+			!Babe::should_end_session(200000),
+			"BABE does not include the block number in epoch calculations"
+		);
 	})
 }
 
@@ -66,20 +65,11 @@ fn first_block_epoch_zero_start() {
 		let (vrf_output, vrf_proof, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
 
 		let first_vrf = vrf_output;
-		let pre_digest = make_primary_pre_digest(
-			0,
-			genesis_slot,
-			first_vrf.clone(),
-			vrf_proof,
-		);
+		let pre_digest = make_primary_pre_digest(0, genesis_slot, first_vrf.clone(), vrf_proof);
 
 		assert_eq!(Babe::genesis_slot(), Slot::from(0));
-		System::initialize(
-			&1,
-			&Default::default(),
-			&pre_digest,
-			Default::default(),
-		);
+		System::reset_events();
+		System::initialize(&1, &Default::default(), &pre_digest);
 
 		// see implementation of the function for details why: we issue an
 		// epoch-change digest but don't do it via the normal session mechanism.
@@ -87,15 +77,15 @@ fn first_block_epoch_zero_start() {
 		assert_eq!(Babe::genesis_slot(), genesis_slot);
 		assert_eq!(Babe::current_slot(), genesis_slot);
 		assert_eq!(Babe::epoch_index(), 0);
-		assert_eq!(Babe::author_vrf_randomness(), Some(vrf_randomness));
 
 		Babe::on_finalize(1);
 		let header = System::finalize();
 
+		assert_eq!(Babe::author_vrf_randomness(), Some(vrf_randomness));
 		assert_eq!(SegmentIndex::<Test>::get(), 0);
 		assert_eq!(UnderConstruction::<Test>::get(0), vec![vrf_randomness]);
 		assert_eq!(Babe::randomness(), [0; 32]);
-		assert_eq!(Babe::author_vrf_randomness(), None);
+		assert_eq!(Babe::author_vrf_randomness(), Some(vrf_randomness));
 		assert_eq!(NextRandomness::<Test>::get(), [0; 32]);
 
 		assert_eq!(header.digest.logs.len(), 2);
@@ -104,9 +94,9 @@ fn first_block_epoch_zero_start() {
 
 		let consensus_log = sp_consensus_babe::ConsensusLog::NextEpochData(
 			sp_consensus_babe::digests::NextEpochDescriptor {
-				authorities: Babe::authorities(),
+				authorities: Babe::authorities().to_vec(),
 				randomness: Babe::randomness(),
-			}
+			},
 		);
 		let consensus_digest = DigestItem::Consensus(BABE_ENGINE_ID, consensus_log.encode());
 
@@ -116,55 +106,69 @@ fn first_block_epoch_zero_start() {
 }
 
 #[test]
-fn author_vrf_output_for_primary() {
+fn current_slot_is_processed_on_initialization() {
 	let (pairs, mut ext) = new_test_ext_with_pairs(1);
 
 	ext.execute_with(|| {
 		let genesis_slot = Slot::from(10);
 		let (vrf_output, vrf_proof, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
-		let primary_pre_digest = make_primary_pre_digest(0, genesis_slot, vrf_output, vrf_proof);
+		let pre_digest = make_primary_pre_digest(0, genesis_slot, vrf_output, vrf_proof);
 
-		System::initialize(
-			&1,
-			&Default::default(),
-			&primary_pre_digest,
-			Default::default(),
-		);
+		System::reset_events();
+		System::initialize(&1, &Default::default(), &pre_digest);
+		assert_eq!(Babe::current_slot(), Slot::from(0));
+		assert!(Babe::initialized().is_none());
+
+		// current slot is updated on initialization
+		Babe::initialize(1);
+		assert_eq!(Babe::current_slot(), genesis_slot);
+		assert!(Babe::initialized().is_some());
+		// but author vrf randomness isn't
 		assert_eq!(Babe::author_vrf_randomness(), None);
 
-		Babe::do_initialize(1);
+		// instead it is updated on block finalization
+		Babe::on_finalize(1);
+		assert_eq!(Babe::author_vrf_randomness(), Some(vrf_randomness));
+	})
+}
+
+fn test_author_vrf_output<F>(make_pre_digest: F)
+where
+	F: Fn(sp_consensus_babe::AuthorityIndex, Slot, VRFOutput, VRFProof) -> sp_runtime::Digest,
+{
+	let (pairs, mut ext) = new_test_ext_with_pairs(1);
+
+	ext.execute_with(|| {
+		let genesis_slot = Slot::from(10);
+		let (vrf_output, vrf_proof, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
+		let pre_digest = make_pre_digest(0, genesis_slot, vrf_output, vrf_proof);
+
+		System::reset_events();
+		System::initialize(&1, &Default::default(), &pre_digest);
+
+		// author vrf randomness is not updated on initialization
+		Babe::initialize(1);
+		assert_eq!(Babe::author_vrf_randomness(), None);
+
+		// instead it is updated on block finalization to account for any
+		// epoch changes that might happen during the block
+		Babe::on_finalize(1);
 		assert_eq!(Babe::author_vrf_randomness(), Some(vrf_randomness));
 
-		Babe::on_finalize(1);
+		// and it is kept after finalizing the block
 		System::finalize();
-		assert_eq!(Babe::author_vrf_randomness(), None);
+		assert_eq!(Babe::author_vrf_randomness(), Some(vrf_randomness));
 	})
 }
 
 #[test]
+fn author_vrf_output_for_primary() {
+	test_author_vrf_output(make_primary_pre_digest);
+}
+
+#[test]
 fn author_vrf_output_for_secondary_vrf() {
-	let (pairs, mut ext) = new_test_ext_with_pairs(1);
-
-	ext.execute_with(|| {
-		let genesis_slot = Slot::from(10);
-		let (vrf_output, vrf_proof, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
-		let secondary_vrf_pre_digest = make_secondary_vrf_pre_digest(0, genesis_slot, vrf_output, vrf_proof);
-
-		System::initialize(
-			&1,
-			&Default::default(),
-			&secondary_vrf_pre_digest,
-			Default::default(),
-		);
-		assert_eq!(Babe::author_vrf_randomness(), None);
-
-		Babe::do_initialize(1);
-		assert_eq!(Babe::author_vrf_randomness(), Some(vrf_randomness));
-
-		Babe::on_finalize(1);
-		System::finalize();
-		assert_eq!(Babe::author_vrf_randomness(), None);
-	})
+	test_author_vrf_output(make_secondary_vrf_pre_digest);
 }
 
 #[test]
@@ -173,15 +177,11 @@ fn no_author_vrf_output_for_secondary_plain() {
 		let genesis_slot = Slot::from(10);
 		let secondary_plain_pre_digest = make_secondary_plain_pre_digest(0, genesis_slot);
 
-		System::initialize(
-			&1,
-			&Default::default(),
-			&secondary_plain_pre_digest,
-			Default::default(),
-		);
+		System::reset_events();
+		System::initialize(&1, &Default::default(), &secondary_plain_pre_digest);
 		assert_eq!(Babe::author_vrf_randomness(), None);
 
-		Babe::do_initialize(1);
+		Babe::initialize(1);
 		assert_eq!(Babe::author_vrf_randomness(), None);
 
 		Babe::on_finalize(1);
@@ -194,8 +194,10 @@ fn no_author_vrf_output_for_secondary_plain() {
 fn authority_index() {
 	new_test_ext(4).execute_with(|| {
 		assert_eq!(
-			Babe::find_author((&[(BABE_ENGINE_ID, &[][..])]).into_iter().cloned()), None,
-			"Trivially invalid authorities are ignored")
+			Babe::find_author((&[(BABE_ENGINE_ID, &[][..])]).into_iter().cloned()),
+			None,
+			"Trivially invalid authorities are ignored"
+		)
 	})
 }
 
@@ -236,10 +238,13 @@ fn can_estimate_current_epoch_progress() {
 			if Babe::estimate_next_session_rotation(i).0.unwrap() - 1 == i {
 				assert_eq!(
 					Babe::estimate_current_session_progress(i).0.unwrap(),
-					Percent::from_percent(100)
+					Permill::from_percent(100)
 				);
 			} else {
-				assert!(Babe::estimate_current_session_progress(i).0.unwrap() < Percent::from_percent(100));
+				assert!(
+					Babe::estimate_current_session_progress(i).0.unwrap() <
+						Permill::from_percent(100)
+				);
 			}
 		}
 
@@ -247,7 +252,7 @@ fn can_estimate_current_epoch_progress() {
 		progress_to_block(4);
 		assert_eq!(
 			Babe::estimate_current_session_progress(4).0.unwrap(),
-			Percent::from_percent(33),
+			Permill::from_float(1.0 / 3.0),
 		);
 	})
 }
@@ -284,12 +289,13 @@ fn can_enact_next_config() {
 		assert_eq!(NextEpochConfig::<Test>::get(), Some(next_config.clone()));
 
 		Babe::plan_config_change(
-			Origin::root(),
+			RuntimeOrigin::root(),
 			NextConfigDescriptor::V1 {
 				c: next_next_config.c,
 				allowed_slots: next_next_config.allowed_slots,
 			},
-		).unwrap();
+		)
+		.unwrap();
 
 		progress_to_block(4);
 		Babe::on_finalize(9);
@@ -298,12 +304,11 @@ fn can_enact_next_config() {
 		assert_eq!(EpochConfig::<Test>::get(), Some(next_config));
 		assert_eq!(NextEpochConfig::<Test>::get(), Some(next_next_config.clone()));
 
-		let consensus_log = sp_consensus_babe::ConsensusLog::NextConfigData(
-			NextConfigDescriptor::V1 {
+		let consensus_log =
+			sp_consensus_babe::ConsensusLog::NextConfigData(NextConfigDescriptor::V1 {
 				c: next_next_config.c,
 				allowed_slots: next_next_config.allowed_slots,
-			}
-		);
+			});
 		let consensus_digest = DigestItem::Consensus(BABE_ENGINE_ID, consensus_log.encode());
 
 		assert_eq!(header.digest.logs[2], consensus_digest.clone())
@@ -315,29 +320,18 @@ fn only_root_can_enact_config_change() {
 	use sp_runtime::DispatchError;
 
 	new_test_ext(1).execute_with(|| {
-		let next_config = NextConfigDescriptor::V1 {
-			c: (1, 4),
-			allowed_slots: AllowedSlots::PrimarySlots,
-		};
+		let next_config =
+			NextConfigDescriptor::V1 { c: (1, 4), allowed_slots: AllowedSlots::PrimarySlots };
 
-		let res = Babe::plan_config_change(
-			Origin::none(),
-			next_config.clone(),
-		);
+		let res = Babe::plan_config_change(RuntimeOrigin::none(), next_config.clone());
 
 		assert_noop!(res, DispatchError::BadOrigin);
 
-		let res = Babe::plan_config_change(
-			Origin::signed(1),
-			next_config.clone(),
-		);
+		let res = Babe::plan_config_change(RuntimeOrigin::signed(1), next_config.clone());
 
 		assert_noop!(res, DispatchError::BadOrigin);
 
-		let res = Babe::plan_config_change(
-			Origin::root(),
-			next_config,
-		);
+		let res = Babe::plan_config_change(RuntimeOrigin::root(), next_config);
 
 		assert!(res.is_ok());
 	});
@@ -352,10 +346,7 @@ fn can_fetch_current_and_next_epoch_data() {
 		});
 
 		// genesis authorities should be used for the first and second epoch
-		assert_eq!(
-			Babe::current_epoch().authorities,
-			Babe::next_epoch().authorities,
-		);
+		assert_eq!(Babe::current_epoch().authorities, Babe::next_epoch().authorities);
 		// 1 era = 3 epochs
 		// 1 epoch = 3 slots
 		// Eras start from 0.
@@ -406,6 +397,31 @@ fn tracks_block_numbers_when_current_and_previous_epoch_started() {
 }
 
 #[test]
+#[should_panic(
+	expected = "Validator with index 0 is disabled and should not be attempting to author blocks."
+)]
+fn disabled_validators_cannot_author_blocks() {
+	new_test_ext(4).execute_with(|| {
+		start_era(1);
+
+		// let's disable the validator at index 1
+		Session::disable_index(1);
+
+		// the mocking infrastructure always authors all blocks using authority index 0,
+		// so we should still be able to author blocks
+		start_era(2);
+
+		assert_eq!(Staking::current_era().unwrap(), 2);
+
+		// let's disable the validator at index 0
+		Session::disable_index(0);
+
+		// this should now panic as the validator authoring blocks is disabled
+		start_era(3);
+	});
+}
+
+#[test]
 fn report_equivocation_current_session_works() {
 	let (pairs, mut ext) = new_test_ext_with_pairs(3);
 
@@ -422,16 +438,12 @@ fn report_equivocation_current_session_works() {
 
 			assert_eq!(
 				Staking::eras_stakers(1, validator),
-				pallet_staking::Exposure {
-					total: 10_000,
-					own: 10_000,
-					others: vec![],
-				},
+				pallet_staking::Exposure { total: 10_000, own: 10_000, others: vec![] },
 			);
 		}
 
-		// we will use the validator at index 0 as the offending authority
-		let offending_validator_index = 0;
+		// we will use the validator at index 1 as the offending authority
+		let offending_validator_index = 1;
 		let offending_validator_id = Session::validators()[offending_validator_index];
 		let offending_authority_pair = pairs
 			.into_iter()
@@ -447,50 +459,40 @@ fn report_equivocation_current_session_works() {
 		);
 
 		// create the key ownership proof
-		let key = (
-			sp_consensus_babe::KEY_TYPE,
-			&offending_authority_pair.public(),
-		);
+		let key = (sp_consensus_babe::KEY_TYPE, &offending_authority_pair.public());
 		let key_owner_proof = Historical::prove(key).unwrap();
 
 		// report the equivocation
-		Babe::report_equivocation_unsigned(Origin::none(), equivocation_proof, key_owner_proof)
-			.unwrap();
+		Babe::report_equivocation_unsigned(
+			RuntimeOrigin::none(),
+			Box::new(equivocation_proof),
+			key_owner_proof,
+		)
+		.unwrap();
 
 		// start a new era so that the results of the offence report
 		// are applied at era end
 		start_era(2);
 
 		// check that the balance of offending validator is slashed 100%.
-		assert_eq!(
-			Balances::total_balance(&offending_validator_id),
-			10_000_000 - 10_000
-		);
+		assert_eq!(Balances::total_balance(&offending_validator_id), 10_000_000 - 10_000);
 		assert_eq!(Staking::slashable_balance_of(&offending_validator_id), 0);
 		assert_eq!(
 			Staking::eras_stakers(2, offending_validator_id),
-			pallet_staking::Exposure {
-				total: 0,
-				own: 0,
-				others: vec![],
-			},
+			pallet_staking::Exposure { total: 0, own: 0, others: vec![] },
 		);
 
 		// check that the balances of all other validators are left intact.
 		for validator in &validators {
 			if *validator == offending_validator_id {
-				continue;
+				continue
 			}
 
 			assert_eq!(Balances::total_balance(validator), 10_000_000);
 			assert_eq!(Staking::slashable_balance_of(validator), 10_000);
 			assert_eq!(
 				Staking::eras_stakers(2, validator),
-				pallet_staking::Exposure {
-					total: 10_000,
-					own: 10_000,
-					others: vec![],
-				},
+				pallet_staking::Exposure { total: 10_000, own: 10_000, others: vec![] },
 			);
 		}
 	})
@@ -506,7 +508,7 @@ fn report_equivocation_old_session_works() {
 		let authorities = Babe::authorities();
 
 		// we will use the validator at index 0 as the offending authority
-		let offending_validator_index = 0;
+		let offending_validator_index = 1;
 		let offending_validator_id = Session::validators()[offending_validator_index];
 		let offending_authority_pair = pairs
 			.into_iter()
@@ -521,10 +523,7 @@ fn report_equivocation_old_session_works() {
 		);
 
 		// create the key ownership proof
-		let key = (
-			sp_consensus_babe::KEY_TYPE,
-			&offending_authority_pair.public(),
-		);
+		let key = (sp_consensus_babe::KEY_TYPE, &offending_authority_pair.public());
 		let key_owner_proof = Historical::prove(key).unwrap();
 
 		// start a new era and report the equivocation
@@ -533,32 +532,26 @@ fn report_equivocation_old_session_works() {
 
 		// check the balance of the offending validator
 		assert_eq!(Balances::total_balance(&offending_validator_id), 10_000_000);
-		assert_eq!(
-			Staking::slashable_balance_of(&offending_validator_id),
-			10_000
-		);
+		assert_eq!(Staking::slashable_balance_of(&offending_validator_id), 10_000);
 
 		// report the equivocation
-		Babe::report_equivocation_unsigned(Origin::none(), equivocation_proof, key_owner_proof)
-			.unwrap();
+		Babe::report_equivocation_unsigned(
+			RuntimeOrigin::none(),
+			Box::new(equivocation_proof),
+			key_owner_proof,
+		)
+		.unwrap();
 
 		// start a new era so that the results of the offence report
 		// are applied at era end
 		start_era(3);
 
 		// check that the balance of offending validator is slashed 100%.
-		assert_eq!(
-			Balances::total_balance(&offending_validator_id),
-			10_000_000 - 10_000
-		);
+		assert_eq!(Balances::total_balance(&offending_validator_id), 10_000_000 - 10_000);
 		assert_eq!(Staking::slashable_balance_of(&offending_validator_id), 0);
 		assert_eq!(
 			Staking::eras_stakers(3, offending_validator_id),
-			pallet_staking::Exposure {
-				total: 0,
-				own: 0,
-				others: vec![],
-			},
+			pallet_staking::Exposure { total: 0, own: 0, others: vec![] },
 		);
 	})
 }
@@ -587,10 +580,7 @@ fn report_equivocation_invalid_key_owner_proof() {
 		);
 
 		// create the key ownership proof
-		let key = (
-			sp_consensus_babe::KEY_TYPE,
-			&offending_authority_pair.public(),
-		);
+		let key = (sp_consensus_babe::KEY_TYPE, &offending_authority_pair.public());
 		let mut key_owner_proof = Historical::prove(key).unwrap();
 
 		// we change the session index in the key ownership proof
@@ -598,8 +588,8 @@ fn report_equivocation_invalid_key_owner_proof() {
 		key_owner_proof.session = 0;
 		assert_err!(
 			Babe::report_equivocation_unsigned(
-				Origin::none(),
-				equivocation_proof.clone(),
+				RuntimeOrigin::none(),
+				Box::new(equivocation_proof.clone()),
 				key_owner_proof
 			),
 			Error::<Test>::InvalidKeyOwnershipProof,
@@ -617,7 +607,11 @@ fn report_equivocation_invalid_key_owner_proof() {
 		start_era(2);
 
 		assert_err!(
-			Babe::report_equivocation_unsigned(Origin::none(), equivocation_proof, key_owner_proof),
+			Babe::report_equivocation_unsigned(
+				RuntimeOrigin::none(),
+				Box::new(equivocation_proof),
+				key_owner_proof,
+			),
 			Error::<Test>::InvalidKeyOwnershipProof,
 		);
 	})
@@ -642,17 +636,14 @@ fn report_equivocation_invalid_equivocation_proof() {
 			.unwrap();
 
 		// create the key ownership proof
-		let key = (
-			sp_consensus_babe::KEY_TYPE,
-			&offending_authority_pair.public(),
-		);
+		let key = (sp_consensus_babe::KEY_TYPE, &offending_authority_pair.public());
 		let key_owner_proof = Historical::prove(key).unwrap();
 
 		let assert_invalid_equivocation = |equivocation_proof| {
 			assert_err!(
 				Babe::report_equivocation_unsigned(
-					Origin::none(),
-					equivocation_proof,
+					RuntimeOrigin::none(),
+					Box::new(equivocation_proof),
 					key_owner_proof.clone(),
 				),
 				Error::<Test>::InvalidEquivocationProof,
@@ -668,7 +659,7 @@ fn report_equivocation_invalid_equivocation_proof() {
 		equivocation_proof.second_header = equivocation_proof.first_header.clone();
 		assert_invalid_equivocation(equivocation_proof);
 
-		// missing preruntime digest from one header
+		// missing pre-runtime digest from one header
 		let mut equivocation_proof = generate_equivocation_proof(
 			offending_validator_index as u32,
 			&offending_authority_pair,
@@ -755,14 +746,13 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 			CurrentSlot::<Test>::get(),
 		);
 
-		let key = (
-			sp_consensus_babe::KEY_TYPE,
-			&offending_authority_pair.public(),
-		);
+		let key = (sp_consensus_babe::KEY_TYPE, &offending_authority_pair.public());
 		let key_owner_proof = Historical::prove(key).unwrap();
 
-		let inner =
-			Call::report_equivocation_unsigned(equivocation_proof.clone(), key_owner_proof.clone());
+		let inner = Call::report_equivocation_unsigned {
+			equivocation_proof: Box::new(equivocation_proof.clone()),
+			key_owner_proof: key_owner_proof.clone(),
+		};
 
 		// only local/inblock reports are allowed
 		assert_eq!(
@@ -793,8 +783,12 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		assert_ok!(<Babe as sp_runtime::traits::ValidateUnsigned>::pre_dispatch(&inner));
 
 		// we submit the report
-		Babe::report_equivocation_unsigned(Origin::none(), equivocation_proof, key_owner_proof)
-			.unwrap();
+		Babe::report_equivocation_unsigned(
+			RuntimeOrigin::none(),
+			Box::new(equivocation_proof),
+			key_owner_proof,
+		)
+		.unwrap();
 
 		// the report should now be considered stale and the transaction is invalid.
 		// the check for staleness should be done on both `validate_unsigned` and on `pre_dispatch`
@@ -817,23 +811,19 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 fn report_equivocation_has_valid_weight() {
 	// the weight depends on the size of the validator set,
 	// but there's a lower bound of 100 validators.
-	assert!(
-		(1..=100)
-			.map(<Test as Config>::WeightInfo::report_equivocation)
-			.collect::<Vec<_>>()
-			.windows(2)
-			.all(|w| w[0] == w[1])
-	);
+	assert!((1..=100)
+		.map(<Test as Config>::WeightInfo::report_equivocation)
+		.collect::<Vec<_>>()
+		.windows(2)
+		.all(|w| w[0] == w[1]));
 
 	// after 100 validators the weight should keep increasing
 	// with every extra validator.
-	assert!(
-		(100..=1000)
-			.map(<Test as Config>::WeightInfo::report_equivocation)
-			.collect::<Vec<_>>()
-			.windows(2)
-			.all(|w| w[0] < w[1])
-	);
+	assert!((100..=1000)
+		.map(<Test as Config>::WeightInfo::report_equivocation)
+		.collect::<Vec<_>>()
+		.windows(2)
+		.all(|w| w[0].ref_time() < w[1].ref_time()));
 }
 
 #[test]
@@ -850,27 +840,26 @@ fn valid_equivocation_reports_dont_pay_fees() {
 			generate_equivocation_proof(0, &offending_authority_pair, CurrentSlot::<Test>::get());
 
 		// create the key ownership proof.
-		let key_owner_proof = Historical::prove((
-			sp_consensus_babe::KEY_TYPE,
-			&offending_authority_pair.public(),
-		))
-		.unwrap();
+		let key_owner_proof =
+			Historical::prove((sp_consensus_babe::KEY_TYPE, &offending_authority_pair.public()))
+				.unwrap();
 
 		// check the dispatch info for the call.
-		let info = Call::<Test>::report_equivocation_unsigned(
-			equivocation_proof.clone(),
-			key_owner_proof.clone(),
-		)
+		let info = Call::<Test>::report_equivocation_unsigned {
+			equivocation_proof: Box::new(equivocation_proof.clone()),
+			key_owner_proof: key_owner_proof.clone(),
+		}
 		.get_dispatch_info();
 
 		// it should have non-zero weight and the fee has to be paid.
-		assert!(info.weight > 0);
+		// TODO: account for proof size weight
+		assert!(info.weight.ref_time() > 0);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// report the equivocation.
 		let post_info = Babe::report_equivocation_unsigned(
-			Origin::none(),
-			equivocation_proof.clone(),
+			RuntimeOrigin::none(),
+			Box::new(equivocation_proof.clone()),
 			key_owner_proof.clone(),
 		)
 		.unwrap();
@@ -882,11 +871,14 @@ fn valid_equivocation_reports_dont_pay_fees() {
 
 		// report the equivocation again which is invalid now since it is
 		// duplicate.
-		let post_info =
-			Babe::report_equivocation_unsigned(Origin::none(), equivocation_proof, key_owner_proof)
-				.err()
-				.unwrap()
-				.post_info;
+		let post_info = Babe::report_equivocation_unsigned(
+			RuntimeOrigin::none(),
+			Box::new(equivocation_proof),
+			key_owner_proof,
+		)
+		.err()
+		.unwrap()
+		.post_info;
 
 		// the fee is not waived and the original weight is kept.
 		assert!(post_info.actual_weight.is_none());
@@ -896,9 +888,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 
 #[test]
 fn add_epoch_configurations_migration_works() {
-	use frame_support::storage::migration::{
-		put_storage_value, get_storage_value,
-	};
+	use frame_support::storage::migration::{get_storage_value, put_storage_value};
 
 	impl crate::migrations::BabePalletPrefix for Test {
 		fn pallet_prefix() -> &'static str {
@@ -907,40 +897,54 @@ fn add_epoch_configurations_migration_works() {
 	}
 
 	new_test_ext(1).execute_with(|| {
-		let next_config_descriptor = NextConfigDescriptor::V1 {
-			c: (3, 4),
-			allowed_slots: AllowedSlots::PrimarySlots
-		};
+		let next_config_descriptor =
+			NextConfigDescriptor::V1 { c: (3, 4), allowed_slots: AllowedSlots::PrimarySlots };
 
-		put_storage_value(
-			b"Babe",
-			b"NextEpochConfig",
-			&[],
-			Some(next_config_descriptor.clone())
-		);
+		put_storage_value(b"Babe", b"NextEpochConfig", &[], Some(next_config_descriptor.clone()));
 
 		assert!(get_storage_value::<Option<NextConfigDescriptor>>(
 			b"Babe",
 			b"NextEpochConfig",
 			&[],
-		).is_some());
+		)
+		.is_some());
 
 		let current_epoch = BabeEpochConfiguration {
 			c: (1, 4),
 			allowed_slots: sp_consensus_babe::AllowedSlots::PrimarySlots,
 		};
 
-		crate::migrations::add_epoch_configuration::<Test>(
-			current_epoch.clone()
-		);
+		crate::migrations::add_epoch_configuration::<Test>(current_epoch.clone());
 
 		assert!(get_storage_value::<Option<NextConfigDescriptor>>(
 			b"Babe",
 			b"NextEpochConfig",
 			&[],
-		).is_none());
+		)
+		.is_none());
 
 		assert_eq!(EpochConfig::<Test>::get(), Some(current_epoch));
 		assert_eq!(PendingEpochConfigChange::<Test>::get(), Some(next_config_descriptor));
+	});
+}
+
+#[test]
+fn generate_equivocation_report_blob() {
+	let (pairs, mut ext) = new_test_ext_with_pairs(3);
+
+	let offending_authority_index = 0;
+	let offending_authority_pair = &pairs[0];
+
+	ext.execute_with(|| {
+		start_era(1);
+
+		let equivocation_proof = generate_equivocation_proof(
+			offending_authority_index,
+			offending_authority_pair,
+			CurrentSlot::<Test>::get() + 1,
+		);
+
+		println!("equivocation_proof: {:?}", equivocation_proof);
+		println!("equivocation_proof.encode(): {:?}", equivocation_proof.encode());
 	});
 }

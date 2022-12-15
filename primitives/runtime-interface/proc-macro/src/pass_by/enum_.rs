@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,11 +21,11 @@
 
 use crate::utils::{generate_crate_access, generate_runtime_interface_include};
 
-use syn::{DeriveInput, Result, Data, Fields, Error, Ident};
+use syn::{Data, DeriveInput, Error, Fields, Ident, Result};
 
 use quote::quote;
 
-use proc_macro2::{TokenStream, Span};
+use proc_macro2::{Span, TokenStream};
 
 /// The derive implementation for `PassBy` with `Enum`.
 pub fn derive_impl(input: DeriveInput) -> Result<TokenStream> {
@@ -51,7 +51,7 @@ pub fn derive_impl(input: DeriveInput) -> Result<TokenStream> {
 				type PassBy = #crate_::pass_by::Enum<#ident>;
 			}
 
-			impl #crate_::sp_std::convert::TryFrom<u8> for #ident {
+			impl TryFrom<u8> for #ident {
 				type Error = ();
 
 				fn try_from(inner: u8) -> #crate_::sp_std::result::Result<Self, ()> {
@@ -79,24 +79,23 @@ pub fn derive_impl(input: DeriveInput) -> Result<TokenStream> {
 ///
 /// Returns an error if the number of variants is greater than `256`, the given `data` is not an
 /// enum or a variant is not an unit.
-fn get_enum_field_idents<'a>(data: &'a Data) -> Result<impl Iterator<Item = Result<&'a Ident>>> {
+fn get_enum_field_idents(data: &Data) -> Result<impl Iterator<Item = Result<&Ident>>> {
 	match data {
-		Data::Enum(d) => {
+		Data::Enum(d) =>
 			if d.variants.len() <= 256 {
-				Ok(
-					d.variants.iter().map(|v| if let Fields::Unit = v.fields {
+				Ok(d.variants.iter().map(|v| {
+					if let Fields::Unit = v.fields {
 						Ok(&v.ident)
 					} else {
 						Err(Error::new(
 							Span::call_site(),
 							"`PassByEnum` only supports unit variants.",
 						))
-					})
-				)
+					}
+				}))
 			} else {
 				Err(Error::new(Span::call_site(), "`PassByEnum` only supports `256` variants."))
-			}
-		},
-		_ => Err(Error::new(Span::call_site(), "`PassByEnum` only supports enums as input type."))
+			},
+		_ => Err(Error::new(Span::call_site(), "`PassByEnum` only supports enums as input type.")),
 	}
 }

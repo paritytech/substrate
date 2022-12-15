@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -19,54 +19,45 @@
 #![cfg(unix)]
 
 use assert_cmd::cargo::cargo_bin;
-use nix::sys::signal::{kill, Signal::SIGINT};
-use nix::unistd::Pid;
+use nix::{
+	sys::signal::{kill, Signal::SIGINT},
+	unistd::Pid,
+};
 use regex::Regex;
-use std::convert::TryInto;
-use std::io::Read;
-use std::path::PathBuf;
-use std::process::{Command, Stdio};
-use std::thread;
-use std::time::Duration;
+use std::{
+	io::Read,
+	path::PathBuf,
+	process::{Command, Stdio},
+};
 
 pub mod common;
 
-#[test]
-fn temp_base_path_works() {
+#[tokio::test]
+async fn temp_base_path_works() {
 	let mut cmd = Command::new(cargo_bin("substrate"));
+	let mut child = common::KillChildOnDrop(
+		cmd.args(&["--dev", "--tmp", "--no-hardware-benchmarks"])
+			.stdout(Stdio::piped())
+			.stderr(Stdio::piped())
+			.spawn()
+			.unwrap(),
+	);
 
-	let mut cmd = cmd
-		.args(&["--dev", "--tmp"])
-		.stdout(Stdio::piped())
-		.stderr(Stdio::piped())
-		.spawn()
-		.unwrap();
+	let mut stderr = child.stderr.take().unwrap();
+	let (ws_url, mut data) = common::find_ws_url_from_output(&mut stderr);
 
 	// Let it produce some blocks.
-	thread::sleep(Duration::from_secs(30));
-	assert!(
-		cmd.try_wait().unwrap().is_none(),
-		"the process should still be running"
-	);
+	common::wait_n_finalized_blocks(3, 30, &ws_url).await.unwrap();
+	assert!(child.try_wait().unwrap().is_none(), "the process should still be running");
 
 	// Stop the process
-	kill(Pid::from_raw(cmd.id().try_into().unwrap()), SIGINT).unwrap();
-	assert!(common::wait_for(&mut cmd, 40)
-		.map(|x| x.success())
-		.unwrap_or_default());
+	kill(Pid::from_raw(child.id().try_into().unwrap()), SIGINT).unwrap();
+	assert!(common::wait_for(&mut child, 40).map(|x| x.success()).unwrap_or_default());
 
 	// Ensure the database has been deleted
-	let mut stderr = String::new();
-	cmd.stderr.unwrap().read_to_string(&mut stderr).unwrap();
+	stderr.read_to_string(&mut data).unwrap();
 	let re = Regex::new(r"Database: .+ at (\S+)").unwrap();
-	let db_path = PathBuf::from(
-		re.captures(stderr.as_str())
-			.unwrap()
-			.get(1)
-			.unwrap()
-			.as_str()
-			.to_string(),
-	);
+	let db_path = PathBuf::from(re.captures(data.as_str()).unwrap().get(1).unwrap().as_str());
 
 	assert!(!db_path.exists());
 }

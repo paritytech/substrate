@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,87 +18,61 @@
 
 //! Substrate block-author/full-node API.
 
+use jsonrpsee::{core::RpcResult, proc_macros::rpc};
+use sc_transaction_pool_api::TransactionStatus;
+use sp_core::Bytes;
+
 pub mod error;
 pub mod hash;
 
-use jsonrpc_derive::rpc;
-use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
-use sp_core::Bytes;
-use sp_transaction_pool::TransactionStatus;
-use self::error::{FutureResult, Result};
-
-pub use self::gen_client::Client as AuthorClient;
-
 /// Substrate authoring RPC API
-#[rpc]
+#[rpc(client, server)]
 pub trait AuthorApi<Hash, BlockHash> {
-	/// RPC metadata
-	type Metadata;
-
 	/// Submit hex-encoded extrinsic for inclusion in block.
-	#[rpc(name = "author_submitExtrinsic")]
-	fn submit_extrinsic(&self, extrinsic: Bytes) -> FutureResult<Hash>;
+	#[method(name = "author_submitExtrinsic")]
+	async fn submit_extrinsic(&self, extrinsic: Bytes) -> RpcResult<Hash>;
 
 	/// Insert a key into the keystore.
-	#[rpc(name = "author_insertKey")]
-	fn insert_key(
-		&self,
-		key_type: String,
-		suri: String,
-		public: Bytes,
-	) -> Result<()>;
+	#[method(name = "author_insertKey")]
+	fn insert_key(&self, key_type: String, suri: String, public: Bytes) -> RpcResult<()>;
 
 	/// Generate new session keys and returns the corresponding public keys.
-	#[rpc(name = "author_rotateKeys")]
-	fn rotate_keys(&self) -> Result<Bytes>;
+	#[method(name = "author_rotateKeys")]
+	fn rotate_keys(&self) -> RpcResult<Bytes>;
 
 	/// Checks if the keystore has private keys for the given session public keys.
 	///
 	/// `session_keys` is the SCALE encoded session keys object from the runtime.
 	///
 	/// Returns `true` iff all private keys could be found.
-	#[rpc(name = "author_hasSessionKeys")]
-	fn has_session_keys(&self, session_keys: Bytes) -> Result<bool>;
+	#[method(name = "author_hasSessionKeys")]
+	fn has_session_keys(&self, session_keys: Bytes) -> RpcResult<bool>;
 
 	/// Checks if the keystore has private keys for the given public key and key type.
 	///
 	/// Returns `true` if a private key could be found.
-	#[rpc(name = "author_hasKey")]
-	fn has_key(&self, public_key: Bytes, key_type: String) -> Result<bool>;
+	#[method(name = "author_hasKey")]
+	fn has_key(&self, public_key: Bytes, key_type: String) -> RpcResult<bool>;
 
 	/// Returns all pending extrinsics, potentially grouped by sender.
-	#[rpc(name = "author_pendingExtrinsics")]
-	fn pending_extrinsics(&self) -> Result<Vec<Bytes>>;
+	#[method(name = "author_pendingExtrinsics")]
+	fn pending_extrinsics(&self) -> RpcResult<Vec<Bytes>>;
 
 	/// Remove given extrinsic from the pool and temporarily ban it to prevent reimporting.
-	#[rpc(name = "author_removeExtrinsic")]
-	fn remove_extrinsic(&self,
-		bytes_or_hash: Vec<hash::ExtrinsicOrHash<Hash>>
-	) -> Result<Vec<Hash>>;
+	#[method(name = "author_removeExtrinsic")]
+	fn remove_extrinsic(
+		&self,
+		bytes_or_hash: Vec<hash::ExtrinsicOrHash<Hash>>,
+	) -> RpcResult<Vec<Hash>>;
 
 	/// Submit an extrinsic to watch.
 	///
-	/// See [`TransactionStatus`](sp_transaction_pool::TransactionStatus) for details on transaction
-	/// life cycle.
-	#[pubsub(
-		subscription = "author_extrinsicUpdate",
-		subscribe,
-		name = "author_submitAndWatchExtrinsic"
+	/// See [`TransactionStatus`](sc_transaction_pool_api::TransactionStatus) for details on
+	/// transaction life cycle.
+	#[subscription(
+		name = "author_submitAndWatchExtrinsic" => "author_extrinsicUpdate",
+		unsubscribe = "author_unwatchExtrinsic",
+		item = TransactionStatus<Hash, BlockHash>,
 	)]
-	fn watch_extrinsic(&self,
-		metadata: Self::Metadata,
-		subscriber: Subscriber<TransactionStatus<Hash, BlockHash>>,
-		bytes: Bytes
-	);
-
-	/// Unsubscribe from extrinsic watching.
-	#[pubsub(
-		subscription = "author_extrinsicUpdate",
-		unsubscribe,
-		name = "author_unwatchExtrinsic"
-	)]
-	fn unwatch_extrinsic(&self,
-		metadata: Option<Self::Metadata>,
-		id: SubscriptionId
-	) -> Result<bool>;
+	fn watch_extrinsic(&self, bytes: Bytes);
 }

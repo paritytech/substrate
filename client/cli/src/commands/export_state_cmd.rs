@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -17,29 +17,35 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	CliConfiguration, error, params::{PruningParams, SharedParams, BlockNumberOrHash},
+	error,
+	params::{BlockNumberOrHash, DatabaseParams, PruningParams, SharedParams},
+	CliConfiguration,
 };
+use clap::Parser;
 use log::info;
+use sc_client_api::{HeaderBackend, StorageProvider, UsageProvider};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
-use std::{fmt::Debug, str::FromStr, io::Write, sync::Arc};
-use structopt::StructOpt;
-use sc_client_api::{StorageProvider, UsageProvider};
+use std::{fmt::Debug, io::Write, str::FromStr, sync::Arc};
 
 /// The `export-state` command used to export the state of a given block into
 /// a chain spec.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, Clone, Parser)]
 pub struct ExportStateCmd {
 	/// Block hash or number.
-	#[structopt(value_name = "HASH or NUMBER")]
+	#[arg(value_name = "HASH or NUMBER")]
 	pub input: Option<BlockNumberOrHash>,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub shared_params: SharedParams,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub pruning_params: PruningParams,
+
+	#[allow(missing_docs)]
+	#[clap(flatten)]
+	pub database_params: DatabaseParams,
 }
 
 impl ExportStateCmd {
@@ -51,7 +57,7 @@ impl ExportStateCmd {
 	) -> error::Result<()>
 	where
 		B: BlockT,
-		C: UsageProvider<B> + StorageProvider<B, BA>,
+		C: UsageProvider<B> + StorageProvider<B, BA> + HeaderBackend<B>,
 		BA: sc_client_api::backend::Backend<B>,
 		B::Hash: FromStr,
 		<B::Hash as FromStr>::Err: Debug,
@@ -59,7 +65,11 @@ impl ExportStateCmd {
 	{
 		info!("Exporting raw state...");
 		let block_id = self.input.as_ref().map(|b| b.parse()).transpose()?;
-		let raw_state = sc_service::chain_ops::export_raw_state(client, block_id)?;
+		let hash = match block_id {
+			Some(id) => client.expect_block_hash_from_id(&id)?,
+			None => client.usage_info().chain.best_hash,
+		};
+		let raw_state = sc_service::chain_ops::export_raw_state(client, hash)?;
 		input_spec.set_storage(raw_state);
 
 		info!("Generating new chain spec...");
@@ -78,5 +88,9 @@ impl CliConfiguration for ExportStateCmd {
 
 	fn pruning_params(&self) -> Option<&PruningParams> {
 		Some(&self.pruning_params)
+	}
+
+	fn database_params(&self) -> Option<&DatabaseParams> {
+		Some(&self.database_params)
 	}
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,43 +16,46 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::error;
-use crate::params::ImportParams;
-use crate::params::SharedParams;
-use crate::CliConfiguration;
+use crate::{
+	error,
+	params::{ImportParams, SharedParams},
+	CliConfiguration,
+};
+use clap::Parser;
+use sc_client_api::HeaderBackend;
 use sc_service::chain_ops::import_blocks;
 use sp_runtime::traits::Block as BlockT;
-use std::fmt::Debug;
-use std::fs;
-use std::io::{self, Read, Seek};
-use std::path::PathBuf;
-use std::sync::Arc;
-use structopt::StructOpt;
-use sc_client_api::UsageProvider;
+use std::{
+	fmt::Debug,
+	fs,
+	io::{self, Read, Seek},
+	path::PathBuf,
+	sync::Arc,
+};
 
 /// The `import-blocks` command used to import blocks.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 pub struct ImportBlocksCmd {
 	/// Input file or stdin if unspecified.
-	#[structopt(parse(from_os_str))]
+	#[arg()]
 	pub input: Option<PathBuf>,
 
 	/// The default number of 64KB pages to ever allocate for Wasm execution.
 	///
 	/// Don't alter this unless you know what you're doing.
-	#[structopt(long = "default-heap-pages", value_name = "COUNT")]
+	#[arg(long, value_name = "COUNT")]
 	pub default_heap_pages: Option<u32>,
 
 	/// Try importing blocks from binary format rather than JSON.
-	#[structopt(long)]
+	#[arg(long)]
 	pub binary: bool,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub shared_params: SharedParams,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub import_params: ImportParams,
 }
 
@@ -63,23 +66,15 @@ impl<T: Read + Seek> ReadPlusSeek for T {}
 
 impl ImportBlocksCmd {
 	/// Run the import-blocks command
-	pub async fn run<B, C, IQ>(
-		&self,
-		client: Arc<C>,
-		import_queue: IQ,
-	) -> error::Result<()>
+	pub async fn run<B, C, IQ>(&self, client: Arc<C>, import_queue: IQ) -> error::Result<()>
 	where
-		C: UsageProvider<B> + Send + Sync + 'static,
+		C: HeaderBackend<B> + Send + Sync + 'static,
 		B: BlockT + for<'de> serde::Deserialize<'de>,
 		IQ: sc_service::ImportQueue<B> + 'static,
 	{
-		let file: Box<dyn ReadPlusSeek + Send> = match &self.input {
+		let file: Box<dyn Read + Send> = match &self.input {
 			Some(filename) => Box::new(fs::File::open(filename)?),
-			None => {
-				let mut buffer = Vec::new();
-				io::stdin().read_to_end(&mut buffer)?;
-				Box::new(io::Cursor::new(buffer))
-			}
+			None => Box::new(io::stdin()),
 		};
 
 		import_blocks(client, import_queue, file, false, self.binary)

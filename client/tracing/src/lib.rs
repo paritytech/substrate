@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -28,26 +28,27 @@
 
 #![warn(missing_docs)]
 
-pub mod logging;
 pub mod block;
+pub mod logging;
 
 use rustc_hash::FxHashMap;
-use std::fmt;
-use std::time::{Duration, Instant};
-use parking_lot::Mutex;
-use serde::ser::{Serialize, Serializer, SerializeMap};
+use serde::ser::{Serialize, SerializeMap, Serializer};
+use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
+use std::{
+	fmt,
+	time::{Duration, Instant},
+};
 use tracing::{
 	event::Event,
-	field::{Visit, Field},
-	Level,
+	field::{Field, Visit},
 	span::{Attributes, Id, Record},
 	subscriber::Subscriber,
+	Level,
 };
 use tracing_subscriber::{
-	CurrentSpan,
-	layer::{Layer, Context},
+	layer::{Context, Layer},
+	registry::LookupSpan,
 };
-use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 
 #[doc(hidden)]
 pub use tracing;
@@ -57,9 +58,7 @@ const ZERO_DURATION: Duration = Duration::from_nanos(0);
 /// Responsible for assigning ids to new spans, which are not re-used.
 pub struct ProfilingLayer {
 	targets: Vec<(String, Level)>,
-	trace_handler: Box<dyn TraceHandler>,
-	span_data: Mutex<FxHashMap<Id, SpanDatum>>,
-	current_span: CurrentSpan,
+	trace_handlers: Vec<Box<dyn TraceHandler>>,
 }
 
 /// Used to configure how to receive the metrics
@@ -77,14 +76,14 @@ impl Default for TracingReceiver {
 
 /// A handler for tracing `SpanDatum`
 pub trait TraceHandler: Send + Sync {
-	/// Process a `SpanDatum`
-	fn handle_span(&self, span: SpanDatum);
-	/// Process a `TraceEvent`
-	fn handle_event(&self, event: TraceEvent);
+	/// Process a `SpanDatum`.
+	fn handle_span(&self, span: &SpanDatum);
+	/// Process a `TraceEvent`.
+	fn handle_event(&self, event: &TraceEvent);
 }
 
 /// Represents a tracing event, complete with values
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TraceEvent {
 	/// Name of the event.
 	pub name: String,
@@ -99,7 +98,7 @@ pub struct TraceEvent {
 }
 
 /// Represents a single instance of a tracing span
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SpanDatum {
 	/// id for this span
 	pub id: Id,
@@ -167,15 +166,19 @@ impl Visit for Values {
 	}
 
 	fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
-		self.string_values.insert(field.name().to_string(), format!("{:?}", value).to_owned());
+		self.string_values.insert(field.name().to_string(), format!("{:?}", value));
 	}
 }
 
 impl Serialize for Values {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-		where S: Serializer,
+	where
+		S: Serializer,
 	{
-		let len = self.bool_values.len() + self.i64_values.len() + self.u64_values.len() + self.string_values.len();
+		let len = self.bool_values.len() +
+			self.i64_values.len() +
+			self.u64_values.len() +
+			self.string_values.len();
 		let mut map = serializer.serialize_map(Some(len))?;
 		for (k, v) in &self.bool_values {
 			map.serialize_entry(k, v)?;
@@ -199,9 +202,23 @@ impl fmt::Display for Values {
 		let i64_iter = self.i64_values.iter().map(|(k, v)| format!("{}={}", k, v));
 		let u64_iter = self.u64_values.iter().map(|(k, v)| format!("{}={}", k, v));
 		let string_iter = self.string_values.iter().map(|(k, v)| format!("{}=\"{}\"", k, v));
-		let values = bool_iter.chain(i64_iter).chain(u64_iter).chain(string_iter).collect::<Vec<String>>().join(", ");
+		let values = bool_iter
+			.chain(i64_iter)
+			.chain(u64_iter)
+			.chain(string_iter)
+			.collect::<Vec<String>>()
+			.join(", ");
 		write!(f, "{}", values)
 	}
+}
+
+/// Trace handler event types.
+#[derive(Debug)]
+pub enum TraceHandlerEvents {
+	/// An event.
+	Event(TraceEvent),
+	/// A span.
+	Span(SpanDatum),
 }
 
 impl ProfilingLayer {
@@ -221,22 +238,34 @@ impl ProfilingLayer {
 	/// or without: "pallet" in which case the level defaults to `trace`.
 	/// wasm_tracing indicates whether to enable wasm traces
 	pub fn new_with_handler(trace_handler: Box<dyn TraceHandler>, targets: &str) -> Self {
-		let targets: Vec<_> = targets.split(',').map(|s| parse_target(s)).collect();
-		Self {
-			targets,
-			trace_handler,
-			span_data: Mutex::new(FxHashMap::default()),
-			current_span: Default::default(),
-		}
+		let targets: Vec<_> = targets.split(',').map(parse_target).collect();
+		Self { targets, trace_handlers: vec![trace_handler] }
+	}
+
+	/// Attach additional handlers to allow handling of custom events/spans.
+	pub fn add_handler(&mut self, trace_handler: Box<dyn TraceHandler>) {
+		self.trace_handlers.push(trace_handler);
 	}
 
 	fn check_target(&self, target: &str, level: &Level) -> bool {
 		for t in &self.targets {
 			if target.starts_with(t.0.as_str()) && level <= &t.1 {
-				return true;
+				return true
 			}
 		}
 		false
+	}
+
+	/// Sequentially dispatch a trace event to all handlers.
+	fn dispatch_event(&self, event: TraceHandlerEvents) {
+		match &event {
+			TraceHandlerEvents::Span(span_datum) => {
+				self.trace_handlers.iter().for_each(|handler| handler.handle_span(span_datum));
+			},
+			TraceHandlerEvents::Event(event) => {
+				self.trace_handlers.iter().for_each(|handler| handler.handle_event(event));
+			},
+		}
 	}
 }
 
@@ -252,37 +281,61 @@ fn parse_target(s: &str) -> (String, Level) {
 			} else {
 				(target, Level::TRACE)
 			}
-		}
-		None => (s.to_string(), Level::TRACE)
+		},
+		None => (s.to_string(), Level::TRACE),
 	}
 }
 
-impl<S: Subscriber> Layer<S> for ProfilingLayer {
-	fn new_span(&self, attrs: &Attributes<'_>, id: &Id, _ctx: Context<S>) {
-		let mut values = Values::default();
-		attrs.record(&mut values);
-		let span_datum = SpanDatum {
-			id: id.clone(),
-			parent_id: attrs.parent().cloned().or_else(|| self.current_span.id()),
-			name: attrs.metadata().name().to_owned(),
-			target: attrs.metadata().target().to_owned(),
-			level: *attrs.metadata().level(),
-			line: attrs.metadata().line().unwrap_or(0),
-			start_time: Instant::now(),
-			overall_time: ZERO_DURATION,
-			values,
-		};
-		self.span_data.lock().insert(id.clone(), span_datum);
-	}
+impl<S> Layer<S> for ProfilingLayer
+where
+	S: Subscriber + for<'span> LookupSpan<'span>,
+{
+	fn new_span(&self, attrs: &Attributes<'_>, id: &Id, ctx: Context<S>) {
+		if let Some(span) = ctx.span(id) {
+			let mut extension = span.extensions_mut();
+			let parent_id = attrs.parent().cloned().or_else(|| {
+				if attrs.is_contextual() {
+					ctx.lookup_current().map(|span| span.id())
+				} else {
+					None
+				}
+			});
 
-	fn on_record(&self, span: &Id, values: &Record<'_>, _ctx: Context<S>) {
-		let mut span_data = self.span_data.lock();
-		if let Some(s) = span_data.get_mut(span) {
-			values.record(&mut s.values);
+			let mut values = Values::default();
+			attrs.record(&mut values);
+			let span_datum = SpanDatum {
+				id: id.clone(),
+				parent_id,
+				name: attrs.metadata().name().to_owned(),
+				target: attrs.metadata().target().to_owned(),
+				level: *attrs.metadata().level(),
+				line: attrs.metadata().line().unwrap_or(0),
+				start_time: Instant::now(),
+				overall_time: ZERO_DURATION,
+				values,
+			};
+			extension.insert(span_datum);
 		}
 	}
 
-	fn on_event(&self, event: &Event<'_>, _ctx: Context<S>) {
+	fn on_record(&self, id: &Id, values: &Record<'_>, ctx: Context<S>) {
+		if let Some(span) = ctx.span(id) {
+			let mut extensions = span.extensions_mut();
+			if let Some(s) = extensions.get_mut::<SpanDatum>() {
+				values.record(&mut s.values);
+			}
+		}
+	}
+
+	fn on_event(&self, event: &Event<'_>, ctx: Context<S>) {
+		let parent_id = event.parent().cloned().or_else(|| {
+			if event.is_contextual() {
+				ctx.lookup_current().map(|span| span.id())
+			} else {
+				None
+			}
+		});
+
 		let mut values = Values::default();
 		event.record(&mut values);
 		let trace_event = TraceEvent {
@@ -290,46 +343,43 @@ impl<S: Subscriber> Layer<S> for ProfilingLayer {
 			target: event.metadata().target().to_owned(),
 			level: *event.metadata().level(),
 			values,
-			parent_id: event.parent().cloned().or_else(|| self.current_span.id()),
+			parent_id,
 		};
-		self.trace_handler.handle_event(trace_event);
+		self.dispatch_event(TraceHandlerEvents::Event(trace_event));
 	}
 
-	fn on_enter(&self, span: &Id, _ctx: Context<S>) {
-		self.current_span.enter(span.clone());
-		let mut span_data = self.span_data.lock();
-		let start_time = Instant::now();
-		if let Some(mut s) = span_data.get_mut(&span) {
-			s.start_time = start_time;
+	fn on_enter(&self, span: &Id, ctx: Context<S>) {
+		if let Some(span) = ctx.span(span) {
+			let mut extensions = span.extensions_mut();
+			if let Some(s) = extensions.get_mut::<SpanDatum>() {
+				let start_time = Instant::now();
+				s.start_time = start_time;
+			}
 		}
 	}
 
-	fn on_exit(&self, span: &Id, _ctx: Context<S>) {
-		let end_time = Instant::now();
-		let span_datum = {
-			let mut span_data = self.span_data.lock();
-			span_data.remove(&span)
-		};
-
-		if let Some(mut span_datum) = span_datum {
-			// If `span_datum` is `None` we don't exit (we'd be exiting the parent span)
-			self.current_span.exit();
-			span_datum.overall_time += end_time - span_datum.start_time;
-			if span_datum.name == WASM_TRACE_IDENTIFIER {
-				span_datum.values.bool_values.insert("wasm".to_owned(), true);
-				if let Some(n) = span_datum.values.string_values.remove(WASM_NAME_KEY) {
-					span_datum.name = n;
+	fn on_exit(&self, span: &Id, ctx: Context<S>) {
+		if let Some(span) = ctx.span(span) {
+			let end_time = Instant::now();
+			let mut extensions = span.extensions_mut();
+			if let Some(mut span_datum) = extensions.remove::<SpanDatum>() {
+				span_datum.overall_time += end_time - span_datum.start_time;
+				if span_datum.name == WASM_TRACE_IDENTIFIER {
+					span_datum.values.bool_values.insert("wasm".to_owned(), true);
+					if let Some(n) = span_datum.values.string_values.remove(WASM_NAME_KEY) {
+						span_datum.name = n;
+					}
+					if let Some(t) = span_datum.values.string_values.remove(WASM_TARGET_KEY) {
+						span_datum.target = t;
+					}
+					if self.check_target(&span_datum.target, &span_datum.level) {
+						self.dispatch_event(TraceHandlerEvents::Span(span_datum));
+					}
+				} else {
+					self.dispatch_event(TraceHandlerEvents::Span(span_datum));
 				}
-				if let Some(t) = span_datum.values.string_values.remove(WASM_TARGET_KEY) {
-					span_datum.target = t;
-				}
-				if self.check_target(&span_datum.target, &span_datum.level) {
-					self.trace_handler.handle_span(span_datum);
-				}
-			} else {
-				self.trace_handler.handle_span(span_datum);
 			}
-		};
+		}
 	}
 
 	fn on_close(&self, _span: Id, _ctx: Context<S>) {}
@@ -349,7 +399,7 @@ fn log_level(level: Level) -> log::Level {
 }
 
 impl TraceHandler for LogTraceHandler {
-	fn handle_span(&self, span_datum: SpanDatum) {
+	fn handle_span(&self, span_datum: &SpanDatum) {
 		if span_datum.values.is_empty() {
 			log::log!(
 				log_level(span_datum.level),
@@ -358,7 +408,7 @@ impl TraceHandler for LogTraceHandler {
 				span_datum.name,
 				span_datum.overall_time.as_nanos(),
 				span_datum.id.into_u64(),
-				span_datum.parent_id.map(|s| s.into_u64()),
+				span_datum.parent_id.as_ref().map(|s| s.into_u64()),
 			);
 		} else {
 			log::log!(
@@ -368,18 +418,18 @@ impl TraceHandler for LogTraceHandler {
 				span_datum.name,
 				span_datum.overall_time.as_nanos(),
 				span_datum.id.into_u64(),
-				span_datum.parent_id.map(|s| s.into_u64()),
+				span_datum.parent_id.as_ref().map(|s| s.into_u64()),
 				span_datum.values,
 			);
 		}
 	}
 
-	fn handle_event(&self, event: TraceEvent) {
+	fn handle_event(&self, event: &TraceEvent) {
 		log::log!(
 			log_level(event.level),
 			"{}, parent_id: {:?}, {}",
 			event.target,
-			event.parent_id.map(|s| s.into_u64()),
+			event.parent_id.as_ref().map(|s| s.into_u64()),
 			event.values,
 		);
 	}
@@ -387,13 +437,11 @@ impl TraceHandler for LogTraceHandler {
 
 impl From<TraceEvent> for sp_rpc::tracing::Event {
 	fn from(trace_event: TraceEvent) -> Self {
-		let data = sp_rpc::tracing::Data {
-			string_values: trace_event.values.string_values
-		};
+		let data = sp_rpc::tracing::Data { string_values: trace_event.values.string_values };
 		sp_rpc::tracing::Event {
 			target: trace_event.target,
 			data,
-			parent_id: trace_event.parent_id.map(|id| id.into_u64())
+			parent_id: trace_event.parent_id.map(|id| id.into_u64()),
 		}
 	}
 }
@@ -414,7 +462,11 @@ impl From<SpanDatum> for sp_rpc::tracing::Span {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::sync::Arc;
+	use parking_lot::Mutex;
+	use std::sync::{
+		mpsc::{Receiver, Sender},
+		Arc,
+	};
 	use tracing_subscriber::layer::SubscriberExt;
 
 	struct TestTraceHandler {
@@ -423,30 +475,24 @@ mod tests {
 	}
 
 	impl TraceHandler for TestTraceHandler {
-		fn handle_span(&self, sd: SpanDatum) {
-			self.spans.lock().push(sd);
+		fn handle_span(&self, sd: &SpanDatum) {
+			self.spans.lock().push(sd.clone());
 		}
 
-		fn handle_event(&self, event: TraceEvent) {
-			self.events.lock().push(event);
+		fn handle_event(&self, event: &TraceEvent) {
+			self.events.lock().push(event.clone());
 		}
 	}
 
 	fn setup_subscriber() -> (
 		impl tracing::Subscriber + Send + Sync,
 		Arc<Mutex<Vec<SpanDatum>>>,
-		Arc<Mutex<Vec<TraceEvent>>>
+		Arc<Mutex<Vec<TraceEvent>>>,
 	) {
 		let spans = Arc::new(Mutex::new(Vec::new()));
 		let events = Arc::new(Mutex::new(Vec::new()));
-		let handler = TestTraceHandler {
-			spans: spans.clone(),
-			events: events.clone(),
-		};
-		let layer = ProfilingLayer::new_with_handler(
-			Box::new(handler),
-			"test_target",
-		);
+		let handler = TestTraceHandler { spans: spans.clone(), events: events.clone() };
+		let layer = ProfilingLayer::new_with_handler(Box::new(handler), "test_target");
 		let subscriber = tracing_subscriber::fmt().with_writer(std::io::sink).finish().with(layer);
 		(subscriber, spans, events)
 	}
@@ -524,7 +570,10 @@ mod tests {
 		let _sub_guard = tracing::subscriber::set_default(sub);
 		tracing::event!(target: "test_target", tracing::Level::INFO, "test_event");
 		let mut te1 = events.lock().remove(0);
-		assert_eq!(te1.values.string_values.remove(&"message".to_owned()).unwrap(), "test_event".to_owned());
+		assert_eq!(
+			te1.values.string_values.remove(&"message".to_owned()).unwrap(),
+			"test_event".to_owned()
+		);
 	}
 
 	#[test]
@@ -539,7 +588,7 @@ mod tests {
 		// emit event
 		tracing::event!(target: "test_target", tracing::Level::INFO, "test_event");
 
-		//exit span
+		// exit span
 		drop(_guard1);
 		drop(span1);
 
@@ -570,17 +619,13 @@ mod tests {
 			let span1 = tracing::info_span!(target: "test_target", "test_span1");
 			let _guard1 = span1.enter();
 
-			let (tx, rx) = mpsc::channel();
+			let (tx, rx): (Sender<bool>, Receiver<bool>) = mpsc::channel();
 			let handle = thread::spawn(move || {
 				let span2 = tracing::info_span!(target: "test_target", "test_span2");
 				let _guard2 = span2.enter();
 				// emit event
 				tracing::event!(target: "test_target", tracing::Level::INFO, "test_event1");
-				for msg in rx.recv() {
-					if msg == false {
-						break;
-					}
-				}
+				let _ = rx.recv();
 				// guard2 and span2 dropped / exited
 			});
 

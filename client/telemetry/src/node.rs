@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -17,12 +17,15 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::TelemetryPayload;
-use futures::channel::mpsc;
-use futures::prelude::*;
-use libp2p::core::transport::Transport;
-use libp2p::Multiaddr;
+use futures::{channel::mpsc, prelude::*};
+use libp2p::{core::transport::Transport, Multiaddr};
 use rand::Rng as _;
-use std::{fmt, mem, pin::Pin, task::Context, task::Poll, time::Duration};
+use std::{
+	fmt, mem,
+	pin::Pin,
+	task::{Context, Poll},
+	time::Duration,
+};
 use wasm_timer::Delay;
 
 pub(crate) type ConnectionNotifierSender = mpsc::Sender<()>;
@@ -36,14 +39,14 @@ pub(crate) fn connection_notifier_channel() -> (ConnectionNotifierSender, Connec
 /// Handler for a single telemetry node.
 ///
 /// This is a wrapper `Sink` around a network `Sink` with 3 particularities:
-///  -  It is infallible: if the connection stops, it will reconnect automatically when the server
-///     becomes available again.
-///  -  It holds a list of "connection messages" which are sent automatically when the connection is
-///     (re-)established. This is used for the "system.connected" message that needs to be send for
-///     every substrate node that connects.
-///  -  It doesn't stay in pending while waiting for connection. Instead, it moves data into the
-///     void if the connection could not be established. This is important for the `Dispatcher`
-///     `Sink` which we don't want to block if one connection is broken.
+///  - It is infallible: if the connection stops, it will reconnect automatically when the server
+///    becomes available again.
+///  - It holds a list of "connection messages" which are sent automatically when the connection is
+///    (re-)established. This is used for the "system.connected" message that needs to be send for
+///    every substrate node that connects.
+///  - It doesn't stay in pending while waiting for connection. Instead, it moves data into the void
+///    if the connection could not be established. This is important for the `Dispatcher` `Sink`
+///    which we don't want to block if one connection is broken.
 #[derive(Debug)]
 pub(crate) struct Node<TTrans: Transport> {
 	/// Address of the node.
@@ -73,8 +76,9 @@ enum NodeSocket<TTrans: Transport> {
 
 impl<TTrans: Transport> NodeSocket<TTrans> {
 	fn wait_reconnect() -> NodeSocket<TTrans> {
-		let random_delay = rand::thread_rng().gen_range(5, 10);
+		let random_delay = rand::thread_rng().gen_range(10, 20);
 		let delay = Delay::new(Duration::from_secs(random_delay));
+		log::trace!(target: "telemetry", "Pausing for {} secs before reconnecting", random_delay);
 		NodeSocket::WaitingReconnect(delay)
 	}
 }
@@ -106,7 +110,6 @@ impl<TTrans: Transport> Node<TTrans> {
 
 impl<TTrans: Transport, TSinkErr> Node<TTrans>
 where
-	TTrans: Clone + Unpin,
 	TTrans::Dial: Unpin,
 	TTrans::Output:
 		Sink<Vec<u8>, Error = TSinkErr> + Stream<Item = Result<Vec<u8>, TSinkErr>> + Unpin,
@@ -121,7 +124,7 @@ where
 	) -> Poll<Result<(), TSinkErr>> {
 		while let Some(item) = conn.buf.pop() {
 			if let Err(e) = conn.sink.start_send_unpin(item) {
-				return Poll::Ready(Err(e));
+				return Poll::Ready(Err(e))
 			}
 			futures::ready!(conn.sink.poll_ready_unpin(cx))?;
 		}
@@ -133,7 +136,7 @@ pub(crate) enum Infallible {}
 
 impl<TTrans: Transport, TSinkErr> Sink<TelemetryPayload> for Node<TTrans>
 where
-	TTrans: Clone + Unpin,
+	TTrans: Unpin,
 	TTrans::Dial: Unpin,
 	TTrans::Output:
 		Sink<Vec<u8>, Error = TSinkErr> + Stream<Item = Result<Vec<u8>, TSinkErr>> + Unpin,
@@ -151,32 +154,44 @@ where
 							Poll::Ready(Err(err)) => {
 								log::warn!(target: "telemetry", "⚠️  Disconnected from {}: {:?}", self.addr, err);
 								socket = NodeSocket::wait_reconnect();
-							}
+							},
 							Poll::Ready(Ok(())) => {
 								self.socket = NodeSocket::Connected(conn);
-								return Poll::Ready(Ok(()));
-							}
+								return Poll::Ready(Ok(()))
+							},
 							Poll::Pending => {
 								self.socket = NodeSocket::Connected(conn);
-								return Poll::Pending;
-							}
+								return Poll::Pending
+							},
 						}
-					}
+					},
 					Poll::Ready(Err(err)) => {
 						log::warn!(target: "telemetry", "⚠️  Disconnected from {}: {:?}", self.addr, err);
 						socket = NodeSocket::wait_reconnect();
-					}
+					},
 					Poll::Pending => {
 						self.socket = NodeSocket::Connected(conn);
-						return Poll::Pending;
-					}
+						return Poll::Pending
+					},
 				},
 				NodeSocket::Dialing(mut s) => match Future::poll(Pin::new(&mut s), cx) {
 					Poll::Ready(Ok(sink)) => {
 						log::debug!(target: "telemetry", "✅ Connected to {}", self.addr);
 
-						for sender in self.telemetry_connection_notifier.iter_mut() {
-							let _ = sender.send(());
+						{
+							let mut index = 0;
+							while index < self.telemetry_connection_notifier.len() {
+								let sender = &mut self.telemetry_connection_notifier[index];
+								if let Err(error) = sender.try_send(()) {
+									if !error.is_disconnected() {
+										log::debug!(target: "telemetry", "Failed to send a telemetry connection notification: {}", error);
+									} else {
+										self.telemetry_connection_notifier.swap_remove(index);
+										continue
+									}
+								}
+								index += 1;
+							}
 						}
 
 						let buf = self
@@ -200,72 +215,73 @@ where
 										err,
 									);
 									None
-								}
+								},
 							})
 							.collect();
 
 						socket = NodeSocket::Connected(NodeSocketConnected { sink, buf });
-					}
+					},
 					Poll::Pending => break NodeSocket::Dialing(s),
 					Poll::Ready(Err(err)) => {
 						log::warn!(target: "telemetry", "❌ Error while dialing {}: {:?}", self.addr, err);
 						socket = NodeSocket::wait_reconnect();
-					}
+					},
 				},
-				NodeSocket::ReconnectNow => match self.transport.clone().dial(self.addr.clone()) {
-					Ok(d) => {
-						log::debug!(target: "telemetry", "Started dialing {}", self.addr);
-						socket = NodeSocket::Dialing(d);
-					}
-					Err(err) => {
-						log::warn!(target: "telemetry", "❌ Error while dialing {}: {:?}", self.addr, err);
-						socket = NodeSocket::wait_reconnect();
+				NodeSocket::ReconnectNow => {
+					let addr = self.addr.clone();
+					match self.transport.dial(addr) {
+						Ok(d) => {
+							log::trace!(target: "telemetry", "Re-dialing {}", self.addr);
+							socket = NodeSocket::Dialing(d);
+						},
+						Err(err) => {
+							log::warn!(target: "telemetry", "❌ Error while re-dialing {}: {:?}", self.addr, err);
+							socket = NodeSocket::wait_reconnect();
+						},
 					}
 				},
 				NodeSocket::WaitingReconnect(mut s) => {
-					if let Poll::Ready(_) = Future::poll(Pin::new(&mut s), cx) {
+					if Future::poll(Pin::new(&mut s), cx).is_ready() {
 						socket = NodeSocket::ReconnectNow;
 					} else {
-						break NodeSocket::WaitingReconnect(s);
+						break NodeSocket::WaitingReconnect(s)
 					}
-				}
+				},
 				NodeSocket::Poisoned => {
 					log::error!(target: "telemetry", "‼️ Poisoned connection with {}", self.addr);
-					break NodeSocket::Poisoned;
-				}
+					break NodeSocket::Poisoned
+				},
 			}
 		};
 
-		// The Dispatcher blocks when the Node sinks blocks. This is why it is important that the
-		// Node sinks doesn't go into "Pending" state while waiting for reconnection but rather
+		// The Dispatcher blocks when the Node syncs blocks. This is why it is important that the
+		// Node sinks don't go into "Pending" state while waiting for reconnection but rather
 		// discard the excess of telemetry messages.
 		Poll::Ready(Ok(()))
 	}
 
 	fn start_send(mut self: Pin<&mut Self>, item: TelemetryPayload) -> Result<(), Self::Error> {
+		// Any buffered outgoing telemetry messages are discarded while (re-)connecting.
 		match &mut self.socket {
 			NodeSocket::Connected(conn) => match serde_json::to_vec(&item) {
 				Ok(data) => {
+					log::trace!(target: "telemetry", "Sending {} bytes", data.len());
 					let _ = conn.sink.start_send_unpin(data);
-				}
+				},
 				Err(err) => log::debug!(
 					target: "telemetry",
 					"Could not serialize payload: {}",
 					err,
 				),
 			},
-			_socket => {
-				log::trace!(
-					target: "telemetry",
-					"Message has been discarded: {}",
-					serde_json::to_string(&item)
-						.unwrap_or_else(|err| format!(
-							"could not be serialized ({}): {:?}",
-							err,
-							item,
-						)),
-				);
-			}
+			// We are currently dialing the node.
+			NodeSocket::Dialing(_) => log::trace!(target: "telemetry", "Dialing"),
+			// A new connection should be started as soon as possible.
+			NodeSocket::ReconnectNow => log::trace!(target: "telemetry", "Reconnecting"),
+			// Waiting before attempting to dial again.
+			NodeSocket::WaitingReconnect(_) => {},
+			// Temporary transition state.
+			NodeSocket::Poisoned => log::trace!(target: "telemetry", "Poisoned"),
 		}
 		Ok(())
 	}
@@ -273,10 +289,15 @@ where
 	fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
 		match &mut self.socket {
 			NodeSocket::Connected(conn) => match conn.sink.poll_flush_unpin(cx) {
-				Poll::Ready(Err(_)) => {
+				Poll::Ready(Err(e)) => {
+					// When `telemetry` closes the websocket connection we end
+					// up here, which is sub-optimal. See
+					// https://github.com/libp2p/rust-libp2p/issues/2021 for
+					// what we could do to improve this.
+					log::trace!(target: "telemetry", "[poll_flush] Error: {:?}", e);
 					self.socket = NodeSocket::wait_reconnect();
 					Poll::Ready(Ok(()))
-				}
+				},
 				Poll::Ready(Ok(())) => Poll::Ready(Ok(())),
 				Poll::Pending => Poll::Pending,
 			},

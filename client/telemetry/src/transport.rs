@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -17,49 +17,37 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use futures::{
-	executor::block_on,
 	prelude::*,
 	ready,
 	task::{Context, Poll},
 };
-use libp2p::{
-	core::transport::{timeout::TransportTimeout, OptionalTransport},
-	wasm_ext, Transport,
-};
-use std::io;
-use std::pin::Pin;
-use std::time::Duration;
+use libp2p::{core::transport::timeout::TransportTimeout, Transport};
+use std::{io, pin::Pin, time::Duration};
 
 /// Timeout after which a connection attempt is considered failed. Includes the WebSocket HTTP
 /// upgrading.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
 
-pub(crate) fn initialize_transport(
-	wasm_external_transport: Option<wasm_ext::ExtTransport>,
-) -> Result<WsTrans, io::Error> {
-	let transport = match wasm_external_transport.clone() {
-		Some(t) => OptionalTransport::some(t),
-		None => OptionalTransport::none(),
-	}
-	.map((|inner, _| StreamSink::from(inner)) as fn(_, _) -> _);
-
-	// The main transport is the `wasm_external_transport`, but if we're on desktop we add
-	// support for TCP+WebSocket+DNS as a fallback. In practice, you're not expected to pass
-	// an external transport on desktop and the fallback is used all the time.
-	#[cfg(not(target_os = "unknown"))]
-	let transport = transport.or_transport({
-		let inner = block_on(libp2p::dns::DnsConfig::system(libp2p::tcp::TcpConfig::new()))?;
+pub(crate) fn initialize_transport() -> Result<WsTrans, io::Error> {
+	let transport = {
+		let tcp_transport = libp2p::tcp::TokioTcpTransport::new(libp2p::tcp::GenTcpConfig::new());
+		let inner = libp2p::dns::TokioDnsConfig::system(tcp_transport)?;
 		libp2p::websocket::framed::WsConfig::new(inner).and_then(|connec, _| {
 			let connec = connec
 				.with(|item| {
 					let item = libp2p::websocket::framed::OutgoingData::Binary(item);
 					future::ready(Ok::<_, io::Error>(item))
 				})
-				.try_filter(|item| future::ready(item.is_data()))
-				.map_ok(|data| data.into_bytes());
+				.try_filter_map(|item| async move {
+					if let libp2p::websocket::framed::Incoming::Data(data) = item {
+						Ok(Some(data.into_bytes()))
+					} else {
+						Ok(None)
+					}
+				});
 			future::ready(Ok::<_, io::Error>(connec))
 		})
-	});
+	};
 
 	Ok(TransportTimeout::new(
 		transport.map(|out, _| {
@@ -88,9 +76,6 @@ pub(crate) type WsTrans = libp2p::core::transport::Boxed<
 
 /// Wraps around an `AsyncWrite` and implements `Sink`. Guarantees that each item being sent maps
 /// to one call of `write`.
-///
-/// For some context, we put this object around the `wasm_ext::ExtTransport` in order to make sure
-/// that each telemetry message maps to one single call to `write` in the WASM FFI.
 #[pin_project::pin_project]
 pub(crate) struct StreamSink<T>(#[pin] T, Option<Vec<u8>>);
 
@@ -111,7 +96,7 @@ impl<T: AsyncRead> Stream for StreamSink<T> {
 			Ok(n) => {
 				buf.truncate(n);
 				Poll::Ready(Some(Ok(buf)))
-			}
+			},
 			Err(err) => Poll::Ready(Some(Err(err))),
 		}
 	}
@@ -126,7 +111,7 @@ impl<T: AsyncWrite> StreamSink<T> {
 				log::error!(target: "telemetry",
 					"Detected some internal buffering happening in the telemetry");
 				let err = io::Error::new(io::ErrorKind::Other, "Internal buffering detected");
-				return Poll::Ready(Err(err));
+				return Poll::Ready(Err(err))
 			}
 		}
 

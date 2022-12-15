@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,9 +21,10 @@
 
 use proc_macro::TokenStream;
 
+mod common;
+mod decl_runtime_apis;
 mod impl_runtime_apis;
 mod mock_impl_runtime_apis;
-mod decl_runtime_apis;
 mod utils;
 
 #[proc_macro]

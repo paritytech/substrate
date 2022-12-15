@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -25,16 +25,19 @@
 //! slots.
 //!
 //! > Note: This module is purely dedicated to managing slots and reputations. Features such as
-//! >       for example connecting to some nodes in priority should be added outside of this
-//! >       module, rather than inside.
+//! > for example connecting to some nodes in priority should be added outside of this
+//! > module, rather than inside.
 
 use libp2p::PeerId;
 use log::error;
 use std::{
 	borrow::Cow,
-	collections::{HashMap, HashSet, hash_map::{Entry, OccupiedEntry}},
+	collections::{
+		hash_map::{Entry, OccupiedEntry},
+		HashMap, HashSet,
+	},
+	time::Instant,
 };
-use wasm_timer::Instant;
 
 /// State storage behind the peerset.
 ///
@@ -42,14 +45,13 @@ use wasm_timer::Instant;
 ///
 /// This struct is nothing more but a data structure containing a list of nodes, where each node
 /// has a reputation and is either connected to us or not.
-///
 #[derive(Debug, Clone)]
 pub struct PeersState {
 	/// List of nodes that we know about.
 	///
 	/// > **Note**: This list should really be ordered by decreasing reputation, so that we can
-	///           easily select the best node to connect to. As a first draft, however, we don't
-	///           sort, to make the logic easier.
+	/// > easily select the best node to connect to. As a first draft, however, we don't sort, to
+	/// > make the logic easier.
 	nodes: HashMap<PeerId, Node>,
 
 	/// Configuration of each set. The size of this `Vec` is never modified.
@@ -97,17 +99,14 @@ struct Node {
 	/// are indices into this `Vec`.
 	sets: Vec<MembershipState>,
 
-	/// Reputation value of the node, between `i32::min_value` (we hate that node) and
-	/// `i32::max_value` (we love that node).
+	/// Reputation value of the node, between `i32::MIN` (we hate that node) and
+	/// `i32::MAX` (we love that node).
 	reputation: i32,
 }
 
 impl Node {
-	fn new(num_sets: usize) -> Node {
-		Node {
-			sets: (0..num_sets).map(|_| MembershipState::NotMember).collect(),
-			reputation: 0,
-		}
+	fn new(num_sets: usize) -> Self {
+		Self { sets: (0..num_sets).map(|_| MembershipState::NotMember).collect(), reputation: 0 }
 	}
 }
 
@@ -129,21 +128,24 @@ enum MembershipState {
 }
 
 impl MembershipState {
-	/// Returns `true` for `In` and `Out`.
+	/// Returns `true` for [`MembershipState::In`] and [`MembershipState::Out`].
 	fn is_connected(self) -> bool {
 		match self {
-			MembershipState::NotMember => false,
-			MembershipState::In => true,
-			MembershipState::Out => true,
-			MembershipState::NotConnected { .. } => false,
+			Self::In | Self::Out => true,
+			Self::NotMember | Self::NotConnected { .. } => false,
 		}
+	}
+
+	/// Returns `true` for [`MembershipState::NotConnected`].
+	fn is_not_connected(self) -> bool {
+		matches!(self, Self::NotConnected { .. })
 	}
 }
 
 impl PeersState {
-	/// Builds a new empty `PeersState`.
+	/// Builds a new empty [`PeersState`].
 	pub fn new(sets: impl IntoIterator<Item = SetConfig>) -> Self {
-		PeersState {
+		Self {
 			nodes: HashMap::new(),
 			sets: sets
 				.into_iter()
@@ -167,9 +169,7 @@ impl PeersState {
 
 	/// Returns an object that grants access to the reputation value of a peer.
 	pub fn peer_reputation(&mut self, peer_id: PeerId) -> Reputation {
-		if !self.nodes.contains_key(&peer_id) {
-			self.nodes.insert(peer_id.clone(), Node::new(self.sets.len()));
-		}
+		self.nodes.entry(peer_id).or_insert_with(|| Node::new(self.sets.len()));
 
 		let entry = match self.nodes.entry(peer_id) {
 			Entry::Vacant(_) => unreachable!("guaranteed to be inserted above; qed"),
@@ -185,25 +185,16 @@ impl PeersState {
 	/// # Panic
 	///
 	/// `set` must be within range of the sets passed to [`PeersState::new`].
-	///
 	pub fn peer<'a>(&'a mut self, set: usize, peer_id: &'a PeerId) -> Peer<'a> {
 		// The code below will panic anyway if this happens to be false, but this earlier assert
 		// makes it explicit what is wrong.
 		assert!(set < self.sets.len());
 
 		match self.nodes.get_mut(peer_id).map(|p| &p.sets[set]) {
-			None | Some(MembershipState::NotMember) => Peer::Unknown(UnknownPeer {
-				parent: self,
-				set,
-				peer_id: Cow::Borrowed(peer_id),
-			}),
-			Some(MembershipState::In) | Some(MembershipState::Out) => {
-				Peer::Connected(ConnectedPeer {
-					state: self,
-					set,
-					peer_id: Cow::Borrowed(peer_id),
-				})
-			}
+			None | Some(MembershipState::NotMember) =>
+				Peer::Unknown(UnknownPeer { parent: self, set, peer_id: Cow::Borrowed(peer_id) }),
+			Some(MembershipState::In) | Some(MembershipState::Out) =>
+				Peer::Connected(ConnectedPeer { state: self, set, peer_id: Cow::Borrowed(peer_id) }),
 			Some(MembershipState::NotConnected { .. }) => Peer::NotConnected(NotConnectedPeer {
 				state: self,
 				set,
@@ -224,7 +215,6 @@ impl PeersState {
 	/// # Panic
 	///
 	/// `set` must be within range of the sets passed to [`PeersState::new`].
-	///
 	// Note: this method could theoretically return a `ConnectedPeer`, but implementing that
 	// isn't simple.
 	pub fn connected_peers(&self, set: usize) -> impl Iterator<Item = &PeerId> {
@@ -245,7 +235,6 @@ impl PeersState {
 	/// # Panic
 	///
 	/// `set` must be within range of the sets passed to [`PeersState::new`].
-	///
 	pub fn highest_not_connected_peer(&mut self, set: usize) -> Option<NotConnectedPeer> {
 		// The code below will panic anyway if this happens to be false, but this earlier assert
 		// makes it explicit what is wrong.
@@ -254,29 +243,22 @@ impl PeersState {
 		let outcome = self
 			.nodes
 			.iter_mut()
-			.filter(|(_, Node { sets, .. })| {
-				match sets[set] {
-					MembershipState::NotMember => false,
-					MembershipState::In => false,
-					MembershipState::Out => false,
-					MembershipState::NotConnected { .. } => true,
-				}
-			})
+			.filter(|(_, Node { sets, .. })| sets[set].is_not_connected())
 			.fold(None::<(&PeerId, &mut Node)>, |mut cur_node, to_try| {
 				if let Some(cur_node) = cur_node.take() {
 					if cur_node.1.reputation >= to_try.1.reputation {
-						return Some(cur_node);
+						return Some(cur_node)
 					}
 				}
 				Some(to_try)
 			})
-			.map(|(peer_id, _)| peer_id.clone());
+			.map(|(peer_id, _)| *peer_id);
 
 		outcome.map(move |peer_id| NotConnectedPeer {
-				state: self,
-				set,
-				peer_id: Cow::Owned(peer_id),
-			})
+			state: self,
+			set,
+			peer_id: Cow::Owned(peer_id),
+		})
 	}
 
 	/// Returns `true` if there is a free outgoing slot available related to this set.
@@ -289,15 +271,15 @@ impl PeersState {
 	/// Has no effect if the node was already in the group.
 	pub fn add_no_slot_node(&mut self, set: usize, peer_id: PeerId) {
 		// Reminder: `HashSet::insert` returns false if the node was already in the set
-		if !self.sets[set].no_slot_nodes.insert(peer_id.clone()) {
-			return;
+		if !self.sets[set].no_slot_nodes.insert(peer_id) {
+			return
 		}
 
 		if let Some(peer) = self.nodes.get_mut(&peer_id) {
 			match peer.sets[set] {
 				MembershipState::In => self.sets[set].num_in -= 1,
 				MembershipState::Out => self.sets[set].num_out -= 1,
-				MembershipState::NotConnected { .. } | MembershipState::NotMember => {}
+				MembershipState::NotConnected { .. } | MembershipState::NotMember => {},
 			}
 		}
 	}
@@ -308,14 +290,14 @@ impl PeersState {
 	pub fn remove_no_slot_node(&mut self, set: usize, peer_id: &PeerId) {
 		// Reminder: `HashSet::remove` returns false if the node was already not in the set
 		if !self.sets[set].no_slot_nodes.remove(peer_id) {
-			return;
+			return
 		}
 
 		if let Some(peer) = self.nodes.get_mut(peer_id) {
 			match peer.sets[set] {
 				MembershipState::In => self.sets[set].num_in += 1,
 				MembershipState::Out => self.sets[set].num_out += 1,
-				MembershipState::NotConnected { .. } | MembershipState::NotMember => {}
+				MembershipState::NotConnected { .. } | MembershipState::NotMember => {},
 			}
 		}
 	}
@@ -332,35 +314,32 @@ pub enum Peer<'a> {
 }
 
 impl<'a> Peer<'a> {
-	/// If we are the `Connected` variant, returns the inner `ConnectedPeer`. Returns `None`
+	/// If we are the `Connected` variant, returns the inner [`ConnectedPeer`]. Returns `None`
 	/// otherwise.
 	pub fn into_connected(self) -> Option<ConnectedPeer<'a>> {
 		match self {
-			Peer::Connected(peer) => Some(peer),
-			Peer::NotConnected(_) => None,
-			Peer::Unknown(_) => None,
+			Self::Connected(peer) => Some(peer),
+			Self::NotConnected(..) | Self::Unknown(..) => None,
 		}
 	}
 
-	/// If we are the `Unknown` variant, returns the inner `ConnectedPeer`. Returns `None`
+	/// If we are the `NotConnected` variant, returns the inner [`NotConnectedPeer`]. Returns `None`
 	/// otherwise.
 	#[cfg(test)] // Feel free to remove this if this function is needed outside of tests
 	pub fn into_not_connected(self) -> Option<NotConnectedPeer<'a>> {
 		match self {
-			Peer::Connected(_) => None,
-			Peer::NotConnected(peer) => Some(peer),
-			Peer::Unknown(_) => None,
+			Self::NotConnected(peer) => Some(peer),
+			Self::Connected(..) | Self::Unknown(..) => None,
 		}
 	}
 
-	/// If we are the `Unknown` variant, returns the inner `ConnectedPeer`. Returns `None`
+	/// If we are the `Unknown` variant, returns the inner [`UnknownPeer`]. Returns `None`
 	/// otherwise.
 	#[cfg(test)] // Feel free to remove this if this function is needed outside of tests
 	pub fn into_unknown(self) -> Option<UnknownPeer<'a>> {
 		match self {
-			Peer::Connected(_) => None,
-			Peer::NotConnected(_) => None,
-			Peer::Unknown(peer) => Some(peer),
+			Self::Unknown(peer) => Some(peer),
+			Self::Connected(..) | Self::NotConnected(..) => None,
 		}
 	}
 }
@@ -396,24 +375,15 @@ impl<'a> ConnectedPeer<'a> {
 							false,
 							"State inconsistency: disconnecting a disconnected node"
 						)
-					}
+					},
 				}
 			}
-			node.sets[self.set] = MembershipState::NotConnected {
-				last_connected: Instant::now(),
-			};
+			node.sets[self.set] = MembershipState::NotConnected { last_connected: Instant::now() };
 		} else {
-			debug_assert!(
-				false,
-				"State inconsistency: disconnecting a disconnected node"
-			);
+			debug_assert!(false, "State inconsistency: disconnecting a disconnected node");
 		}
 
-		NotConnectedPeer {
-			state: self.state,
-			set: self.set,
-			peer_id: self.peer_id,
-		}
+		NotConnectedPeer { state: self.state, set: self.set, peer_id: self.peer_id }
 	}
 
 	/// Performs an arithmetic addition on the reputation score of that peer.
@@ -425,10 +395,7 @@ impl<'a> ConnectedPeer<'a> {
 		if let Some(node) = self.state.nodes.get_mut(&*self.peer_id) {
 			node.reputation = node.reputation.saturating_add(modifier);
 		} else {
-			debug_assert!(
-				false,
-				"State inconsistency: add_reputation on an unknown node"
-			);
+			debug_assert!(false, "State inconsistency: add_reputation on an unknown node");
 		}
 	}
 
@@ -436,10 +403,7 @@ impl<'a> ConnectedPeer<'a> {
 	///
 	/// > **Note**: Reputation values aren't specific to a set but are global per peer.
 	pub fn reputation(&self) -> i32 {
-		self.state
-			.nodes
-			.get(&*self.peer_id)
-			.map_or(0, |p| p.reputation)
+		self.state.nodes.get(&*self.peer_id).map_or(0, |p| p.reputation)
 	}
 }
 
@@ -483,8 +447,8 @@ impl<'a> NotConnectedPeer<'a> {
 					"State inconsistency with {}; not connected after borrow",
 					self.peer_id
 				);
-				return Instant::now();
-			}
+				return Instant::now()
+			},
 		};
 
 		match state.sets[self.set] {
@@ -492,7 +456,7 @@ impl<'a> NotConnectedPeer<'a> {
 			_ => {
 				error!(target: "peerset", "State inconsistency with {}", self.peer_id);
 				Instant::now()
-			}
+			},
 		}
 	}
 
@@ -502,13 +466,13 @@ impl<'a> NotConnectedPeer<'a> {
 	/// the slots are full, the node stays "not connected" and we return `Err`.
 	///
 	/// Non-slot-occupying nodes don't count towards the number of slots.
-	pub fn try_outgoing(self) -> Result<ConnectedPeer<'a>, NotConnectedPeer<'a>> {
+	pub fn try_outgoing(self) -> Result<ConnectedPeer<'a>, Self> {
 		let is_no_slot_occupy = self.state.sets[self.set].no_slot_nodes.contains(&*self.peer_id);
 
 		// Note that it is possible for num_out to be strictly superior to the max, in case we were
 		// connected to reserved node then marked them as not reserved.
 		if !self.state.has_free_outgoing_slot(self.set) && !is_no_slot_occupy {
-			return Err(self);
+			return Err(self)
 		}
 
 		if let Some(peer) = self.state.nodes.get_mut(&*self.peer_id) {
@@ -517,17 +481,10 @@ impl<'a> NotConnectedPeer<'a> {
 				self.state.sets[self.set].num_out += 1;
 			}
 		} else {
-			debug_assert!(
-				false,
-				"State inconsistency: try_outgoing on an unknown node"
-			);
+			debug_assert!(false, "State inconsistency: try_outgoing on an unknown node");
 		}
 
-		Ok(ConnectedPeer {
-			state: self.state,
-			set: self.set,
-			peer_id: self.peer_id,
-		})
+		Ok(ConnectedPeer { state: self.state, set: self.set, peer_id: self.peer_id })
 	}
 
 	/// Tries to accept the peer as an incoming connection.
@@ -536,15 +493,15 @@ impl<'a> NotConnectedPeer<'a> {
 	/// the slots are full, the node stays "not connected" and we return `Err`.
 	///
 	/// Non-slot-occupying nodes don't count towards the number of slots.
-	pub fn try_accept_incoming(self) -> Result<ConnectedPeer<'a>, NotConnectedPeer<'a>> {
+	pub fn try_accept_incoming(self) -> Result<ConnectedPeer<'a>, Self> {
 		let is_no_slot_occupy = self.state.sets[self.set].no_slot_nodes.contains(&*self.peer_id);
 
 		// Note that it is possible for num_in to be strictly superior to the max, in case we were
 		// connected to reserved node then marked them as not reserved.
-		if self.state.sets[self.set].num_in >= self.state.sets[self.set].max_in
-			&& !is_no_slot_occupy
+		if self.state.sets[self.set].num_in >= self.state.sets[self.set].max_in &&
+			!is_no_slot_occupy
 		{
-			return Err(self);
+			return Err(self)
 		}
 
 		if let Some(peer) = self.state.nodes.get_mut(&*self.peer_id) {
@@ -553,27 +510,17 @@ impl<'a> NotConnectedPeer<'a> {
 				self.state.sets[self.set].num_in += 1;
 			}
 		} else {
-			debug_assert!(
-				false,
-				"State inconsistency: try_accept_incoming on an unknown node"
-			);
+			debug_assert!(false, "State inconsistency: try_accept_incoming on an unknown node");
 		}
 
-		Ok(ConnectedPeer {
-			state: self.state,
-			set: self.set,
-			peer_id: self.peer_id,
-		})
+		Ok(ConnectedPeer { state: self.state, set: self.set, peer_id: self.peer_id })
 	}
 
 	/// Returns the reputation value of the node.
 	///
 	/// > **Note**: Reputation values aren't specific to a set but are global per peer.
 	pub fn reputation(&self) -> i32 {
-		self.state
-			.nodes
-			.get(&*self.peer_id)
-			.map_or(0, |p| p.reputation)
+		self.state.nodes.get(&*self.peer_id).map_or(0, |p| p.reputation)
 	}
 
 	/// Sets the reputation of the peer.
@@ -584,10 +531,7 @@ impl<'a> NotConnectedPeer<'a> {
 		if let Some(node) = self.state.nodes.get_mut(&*self.peer_id) {
 			node.reputation = value;
 		} else {
-			debug_assert!(
-				false,
-				"State inconsistency: set_reputation on an unknown node"
-			);
+			debug_assert!(false, "State inconsistency: set_reputation on an unknown node");
 		}
 	}
 
@@ -598,10 +542,8 @@ impl<'a> NotConnectedPeer<'a> {
 			peer.sets[self.set] = MembershipState::NotMember;
 
 			// Remove the peer from `self.state.nodes` entirely if it isn't a member of any set.
-			if peer.reputation == 0 && peer
-				.sets
-				.iter()
-				.all(|set| matches!(set, MembershipState::NotMember))
+			if peer.reputation == 0 &&
+				peer.sets.iter().all(|set| matches!(set, MembershipState::NotMember))
 			{
 				self.state.nodes.remove(&*self.peer_id);
 			}
@@ -614,11 +556,7 @@ impl<'a> NotConnectedPeer<'a> {
 			);
 		};
 
-		UnknownPeer {
-			parent: self.state,
-			set: self.set,
-			peer_id: self.peer_id,
-		}
+		UnknownPeer { parent: self.state, set: self.set, peer_id: self.peer_id }
 	}
 }
 
@@ -641,15 +579,9 @@ impl<'a> UnknownPeer<'a> {
 			.nodes
 			.entry(self.peer_id.clone().into_owned())
 			.or_insert_with(|| Node::new(num_sets))
-			.sets[self.set] = MembershipState::NotConnected {
-			last_connected: Instant::now(),
-		};
+			.sets[self.set] = MembershipState::NotConnected { last_connected: Instant::now() };
 
-		NotConnectedPeer {
-			state: self.parent,
-			set: self.set,
-			peer_id: self.peer_id,
-		}
+		NotConnectedPeer { state: self.parent, set: self.set, peer_id: self.peer_id }
 	}
 }
 
@@ -699,10 +631,7 @@ mod tests {
 
 	#[test]
 	fn full_slots_in() {
-		let mut peers_state = PeersState::new(iter::once(SetConfig {
-			in_peers: 1,
-			out_peers: 1,
-		}));
+		let mut peers_state = PeersState::new(iter::once(SetConfig { in_peers: 1, out_peers: 1 }));
 		let id1 = PeerId::random();
 		let id2 = PeerId::random();
 
@@ -717,14 +646,11 @@ mod tests {
 
 	#[test]
 	fn no_slot_node_doesnt_use_slot() {
-		let mut peers_state = PeersState::new(iter::once(SetConfig {
-			in_peers: 1,
-			out_peers: 1,
-		}));
+		let mut peers_state = PeersState::new(iter::once(SetConfig { in_peers: 1, out_peers: 1 }));
 		let id1 = PeerId::random();
 		let id2 = PeerId::random();
 
-		peers_state.add_no_slot_node(0, id1.clone());
+		peers_state.add_no_slot_node(0, id1);
 		if let Peer::Unknown(p) = peers_state.peer(0, &id1) {
 			assert!(p.discover().try_accept_incoming().is_ok());
 		} else {
@@ -740,10 +666,7 @@ mod tests {
 
 	#[test]
 	fn disconnecting_frees_slot() {
-		let mut peers_state = PeersState::new(iter::once(SetConfig {
-			in_peers: 1,
-			out_peers: 1,
-		}));
+		let mut peers_state = PeersState::new(iter::once(SetConfig { in_peers: 1, out_peers: 1 }));
 		let id1 = PeerId::random();
 		let id2 = PeerId::random();
 
@@ -761,11 +684,7 @@ mod tests {
 			.discover()
 			.try_accept_incoming()
 			.is_err());
-		peers_state
-			.peer(0, &id1)
-			.into_connected()
-			.unwrap()
-			.disconnect();
+		peers_state.peer(0, &id1).into_connected().unwrap().disconnect();
 		assert!(peers_state
 			.peer(0, &id2)
 			.into_not_connected()
@@ -776,92 +695,36 @@ mod tests {
 
 	#[test]
 	fn highest_not_connected_peer() {
-		let mut peers_state = PeersState::new(iter::once(SetConfig {
-			in_peers: 25,
-			out_peers: 25,
-		}));
+		let mut peers_state =
+			PeersState::new(iter::once(SetConfig { in_peers: 25, out_peers: 25 }));
 		let id1 = PeerId::random();
 		let id2 = PeerId::random();
 
 		assert!(peers_state.highest_not_connected_peer(0).is_none());
-		peers_state
-			.peer(0, &id1)
-			.into_unknown()
-			.unwrap()
-			.discover()
-			.set_reputation(50);
-		peers_state
-			.peer(0, &id2)
-			.into_unknown()
-			.unwrap()
-			.discover()
-			.set_reputation(25);
-		assert_eq!(
-			peers_state
-				.highest_not_connected_peer(0)
-				.map(|p| p.into_peer_id()),
-			Some(id1.clone())
-		);
-		peers_state
-			.peer(0, &id2)
-			.into_not_connected()
-			.unwrap()
-			.set_reputation(75);
-		assert_eq!(
-			peers_state
-				.highest_not_connected_peer(0)
-				.map(|p| p.into_peer_id()),
-			Some(id2.clone())
-		);
+		peers_state.peer(0, &id1).into_unknown().unwrap().discover().set_reputation(50);
+		peers_state.peer(0, &id2).into_unknown().unwrap().discover().set_reputation(25);
+		assert_eq!(peers_state.highest_not_connected_peer(0).map(|p| p.into_peer_id()), Some(id1));
+		peers_state.peer(0, &id2).into_not_connected().unwrap().set_reputation(75);
+		assert_eq!(peers_state.highest_not_connected_peer(0).map(|p| p.into_peer_id()), Some(id2));
 		peers_state
 			.peer(0, &id2)
 			.into_not_connected()
 			.unwrap()
 			.try_accept_incoming()
 			.unwrap();
-		assert_eq!(
-			peers_state
-				.highest_not_connected_peer(0)
-				.map(|p| p.into_peer_id()),
-			Some(id1.clone())
-		);
-		peers_state
-			.peer(0, &id1)
-			.into_not_connected()
-			.unwrap()
-			.set_reputation(100);
-		peers_state
-			.peer(0, &id2)
-			.into_connected()
-			.unwrap()
-			.disconnect();
-		assert_eq!(
-			peers_state
-				.highest_not_connected_peer(0)
-				.map(|p| p.into_peer_id()),
-			Some(id1.clone())
-		);
-		peers_state
-			.peer(0, &id1)
-			.into_not_connected()
-			.unwrap()
-			.set_reputation(-100);
-		assert_eq!(
-			peers_state
-				.highest_not_connected_peer(0)
-				.map(|p| p.into_peer_id()),
-			Some(id2.clone())
-		);
+		assert_eq!(peers_state.highest_not_connected_peer(0).map(|p| p.into_peer_id()), Some(id1));
+		peers_state.peer(0, &id1).into_not_connected().unwrap().set_reputation(100);
+		peers_state.peer(0, &id2).into_connected().unwrap().disconnect();
+		assert_eq!(peers_state.highest_not_connected_peer(0).map(|p| p.into_peer_id()), Some(id1));
+		peers_state.peer(0, &id1).into_not_connected().unwrap().set_reputation(-100);
+		assert_eq!(peers_state.highest_not_connected_peer(0).map(|p| p.into_peer_id()), Some(id2));
 	}
 
 	#[test]
 	fn disconnect_no_slot_doesnt_panic() {
-		let mut peers_state = PeersState::new(iter::once(SetConfig {
-			in_peers: 1,
-			out_peers: 1,
-		}));
+		let mut peers_state = PeersState::new(iter::once(SetConfig { in_peers: 1, out_peers: 1 }));
 		let id = PeerId::random();
-		peers_state.add_no_slot_node(0, id.clone());
+		peers_state.add_no_slot_node(0, id);
 		let peer = peers_state
 			.peer(0, &id)
 			.into_unknown()

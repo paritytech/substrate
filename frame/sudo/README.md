@@ -1,6 +1,6 @@
 # Sudo Module
 
-- [`sudo::Trait`](https://docs.rs/pallet-sudo/latest/pallet_sudo/trait.Trait.html)
+- [`sudo::Config`](https://docs.rs/pallet-sudo/latest/pallet_sudo/trait.Config.html)
 - [`Call`](https://docs.rs/pallet-sudo/latest/pallet_sudo/enum.Call.html)
 
 ## Overview
@@ -35,15 +35,22 @@ Learn more about privileged functions and `Root` origin in the [`Origin`] type d
 This is an example of a module that exposes a privileged function:
 
 ```rust
-use frame_support::{decl_module, dispatch};
-use frame_system::ensure_root;
+#[frame_support::pallet]
+pub mod pallet {
+    use super::*;
+    use frame_support::pallet_prelude::*;
+    use frame_system::pallet_prelude::*;
 
-pub trait Config: frame_system::Config {}
+    #[pallet::pallet]
+    pub struct Pallet<T>(_);
 
-decl_module! {
-    pub struct Module<T: Config> for enum Call where origin: T::Origin {
-		#[weight = 0]
-        pub fn privileged_function(origin) -> dispatch::DispatchResult {
+    #[pallet::config]
+    pub trait Config: frame_system::Config {}
+
+    #[pallet::call]
+    impl<T: Config> Pallet<T> {
+        #[pallet::weight(0)]
+        pub fn privileged_function(origin: OriginFor<T>) -> DispatchResult {
             ensure_root(origin)?;
 
             // do something...
@@ -65,6 +72,6 @@ You need to set an initial superuser account as the sudo `key`.
 
 [`Call`]: ./enum.Call.html
 [`Config`]: ./trait.Config.html
-[`Origin`]: https://docs.substrate.dev/docs/substrate-types
+[`Origin`]: https://docs.substrate.io/main-docs/build/origins/
 
 License: Apache-2.0

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,94 +20,105 @@
 //! NOTE: If you're looking for `parameter_types`, it has moved in to the top-level module.
 
 pub mod tokens;
-pub use tokens::fungible;
-pub use tokens::fungibles;
-pub use tokens::currency::{
-	Currency, LockIdentifier, LockableCurrency, ReservableCurrency, VestingSchedule,
+pub use tokens::{
+	currency::{
+		ActiveIssuanceOf, Currency, LockIdentifier, LockableCurrency, NamedReservableCurrency,
+		ReservableCurrency, TotalIssuanceOf, VestingSchedule,
+	},
+	fungible, fungibles,
+	imbalance::{Imbalance, OnUnbalanced, SignedImbalance},
+	nonfungible, nonfungibles, BalanceStatus, ExistenceRequirement, Locker, WithdrawReasons,
 };
-pub use tokens::imbalance::{Imbalance, OnUnbalanced, SignedImbalance};
-pub use tokens::{ExistenceRequirement, WithdrawReasons, BalanceStatus};
 
 mod members;
+#[allow(deprecated)]
+pub use members::{AllowAll, DenyAll, Filter};
 pub use members::{
-	Contains, ContainsLengthBound, SortedMembers, InitializeMembers, ChangeMembers, All, IsInVec,
-	AsContains,
+	AsContains, ChangeMembers, Contains, ContainsLengthBound, ContainsPair, Everything,
+	EverythingBut, FromContainsPair, InitializeMembers, InsideBoth, IsInVec, Nothing,
+	SortedMembers, TheseExcept,
 };
 
 mod validation;
 pub use validation::{
-	ValidatorSet, ValidatorSetWithIdentification, OneSessionHandler, FindAuthor, VerifySeal,
-	EstimateNextNewSession, EstimateNextSessionRotation, KeyOwnerProofSystem, ValidatorRegistration,
-	Lateness,
+	DisabledValidators, EstimateNextNewSession, EstimateNextSessionRotation, FindAuthor,
+	KeyOwnerProofSystem, Lateness, OneSessionHandler, ValidatorRegistration, ValidatorSet,
+	ValidatorSetWithIdentification, VerifySeal,
 };
 
+mod error;
+pub use error::PalletError;
+
 mod filter;
-pub use filter::{
-	Filter, FilterStack, FilterStackGuard, ClearFilterGuard, InstanceFilter, IntegrityTest,
-};
+pub use filter::{ClearFilterGuard, FilterStack, FilterStackGuard, InstanceFilter};
 
 mod misc;
 pub use misc::{
-	Len, Get, GetDefault, HandleLifetime, TryDrop, Time, UnixTime, IsType, IsSubType, ExecuteBlock,
-	SameOrOther, OnNewAccount, OnKilledAccount, OffchainWorker, GetBacking, Backing, ExtrinsicCall,
-	EnsureInherentsAreFirst, ConstU32,
+	defensive_prelude::{self, *},
+	Backing, ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128, ConstU16,
+	ConstU32, ConstU64, ConstU8, DefensiveMax, DefensiveMin, DefensiveSaturating,
+	DefensiveTruncateFrom, EnsureInherentsAreFirst, EqualPrivilegeOnly, EstimateCallFee,
+	ExecuteBlock, ExtrinsicCall, Get, GetBacking, GetDefault, HandleLifetime, IsSubType, IsType,
+	Len, OffchainWorker, OnKilledAccount, OnNewAccount, PrivilegeCmp, SameOrOther, Time,
+	TryCollect, TryDrop, TypedGet, UnixTime, WrapperKeepOpaque, WrapperOpaque,
 };
+#[allow(deprecated)]
+pub use misc::{PreimageProvider, PreimageRecipient};
+#[doc(hidden)]
+pub use misc::{DEFENSIVE_OP_INTERNAL_ERROR, DEFENSIVE_OP_PUBLIC_ERROR};
 
 mod stored_map;
-pub use stored_map::{StoredMap, StorageMapShim};
+pub use stored_map::{StorageMapShim, StoredMap};
 mod randomness;
 pub use randomness::Randomness;
 
 mod metadata;
 pub use metadata::{
-	CallMetadata, GetCallMetadata, GetCallName, PalletInfo, PalletVersion, GetPalletVersion,
-	PALLET_VERSION_STORAGE_KEY_POSTFIX, PalletInfoAccess,
+	CallMetadata, CrateVersion, GetCallMetadata, GetCallName, GetStorageVersion, PalletInfo,
+	PalletInfoAccess, PalletInfoData, PalletsInfoAccess, StorageVersion,
+	STORAGE_VERSION_STORAGE_KEY_POSTFIX,
 };
 
 mod hooks;
-pub use hooks::{Hooks, OnGenesis, OnInitialize, OnFinalize, OnIdle, OnRuntimeUpgrade, OnTimestampSet};
-#[cfg(feature = "try-runtime")]
-pub use hooks::{OnRuntimeUpgradeHelpersExt, ON_RUNTIME_UPGRADE_PREFIX};
 #[cfg(feature = "std")]
 pub use hooks::GenesisBuild;
+pub use hooks::{
+	Hooks, IntegrityTest, OnFinalize, OnGenesis, OnIdle, OnInitialize, OnRuntimeUpgrade,
+	OnTimestampSet,
+};
 
 pub mod schedule;
 mod storage;
-pub use storage::{Instance, StorageInstance, StorageInfo, StorageInfoTrait};
+pub use storage::{
+	Instance, PartialStorageInfoTrait, StorageInfo, StorageInfoTrait, StorageInstance,
+	TrackedStorageKey, WhitelistedStorageKeys,
+};
 
 mod dispatch;
-pub use dispatch::{EnsureOrigin, OriginTrait, UnfilteredDispatchable};
+#[allow(deprecated)]
+pub use dispatch::EnsureOneOf;
+pub use dispatch::{
+	AsEnsureOriginWithArg, CallerTrait, EitherOf, EitherOfDiverse, EnsureOrigin,
+	EnsureOriginEqualOrHigherPrivilege, EnsureOriginWithArg, MapSuccess, NeverEnsureOrigin,
+	OriginTrait, TryMapSuccess, UnfilteredDispatchable,
+};
 
 mod voting;
-pub use voting::{CurrencyToVote, SaturatingCurrencyToVote, U128CurrencyToVote};
+pub use voting::{
+	ClassCountOf, CurrencyToVote, PollStatus, Polling, SaturatingCurrencyToVote,
+	U128CurrencyToVote, VoteTally,
+};
 
-mod max_encoded_len;
-// This looks like an overlapping import/export, but it isn't:
-// macros and traits live in distinct namespaces.
-pub use max_encoded_len::MaxEncodedLen;
-/// Derive [`MaxEncodedLen`][max_encoded_len::MaxEncodedLen].
-///
-/// # Examples
-///
-/// ```
-/// # use codec::Encode;
-/// # use frame_support::traits::MaxEncodedLen;
-/// #[derive(Encode, MaxEncodedLen)]
-/// struct TupleStruct(u8, u32);
-///
-/// assert_eq!(TupleStruct::max_encoded_len(), u8::max_encoded_len() + u32::max_encoded_len());
-/// ```
-///
-/// ```
-/// # use codec::Encode;
-/// # use frame_support::traits::MaxEncodedLen;
-/// #[derive(Encode, MaxEncodedLen)]
-/// enum GenericEnum<T> {
-/// 	A,
-/// 	B(T),
-/// }
-///
-/// assert_eq!(GenericEnum::<u8>::max_encoded_len(), u8::max_encoded_len() + u8::max_encoded_len());
-/// assert_eq!(GenericEnum::<u128>::max_encoded_len(), u8::max_encoded_len() + u128::max_encoded_len());
-/// ```
-pub use frame_support_procedural::MaxEncodedLen;
+mod preimages;
+pub use preimages::{Bounded, BoundedInline, FetchResult, Hash, QueryPreimage, StorePreimage};
+
+mod messages;
+pub use messages::{
+	EnqueueMessage, ExecuteOverweightError, Footprint, ProcessMessage, ProcessMessageError,
+	ServiceQueues,
+};
+
+#[cfg(feature = "try-runtime")]
+mod try_runtime;
+#[cfg(feature = "try-runtime")]
+pub use try_runtime::{Select as TryStateSelect, TryState};

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,10 +17,8 @@
 
 //! The lockable currency trait and some associated types.
 
-use crate::dispatch::DispatchResult;
-use crate::traits::misc::Get;
-use super::Currency;
-use super::super::misc::WithdrawReasons;
+use super::{super::misc::WithdrawReasons, Currency};
+use crate::{dispatch::DispatchResult, traits::misc::Get};
 
 /// An identifier for a lock. Used for disambiguating different locks so that
 /// they can be individually replaced or removed.
@@ -63,10 +61,7 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	);
 
 	/// Remove an existing lock.
-	fn remove_lock(
-		id: LockIdentifier,
-		who: &AccountId,
-	);
+	fn remove_lock(id: LockIdentifier, who: &AccountId);
 }
 
 /// A vesting schedule over a currency. This allows a particular currency to have vesting limits
@@ -80,12 +75,13 @@ pub trait VestingSchedule<AccountId> {
 
 	/// Get the amount that is currently being vested and cannot be transferred out of this account.
 	/// Returns `None` if the account has no vesting schedule.
-	fn vesting_balance(who: &AccountId) -> Option<<Self::Currency as Currency<AccountId>>::Balance>;
+	fn vesting_balance(who: &AccountId)
+		-> Option<<Self::Currency as Currency<AccountId>>::Balance>;
 
 	/// Adds a vesting schedule to a given account.
 	///
-	/// If there already exists a vesting schedule for the given account, an `Err` is returned
-	/// and nothing is updated.
+	/// If the account has `MaxVestingSchedules`, an Error is returned and nothing
+	/// is updated.
 	///
 	/// Is a no-op if the amount to be vested is zero.
 	///
@@ -97,8 +93,16 @@ pub trait VestingSchedule<AccountId> {
 		starting_block: Self::Moment,
 	) -> DispatchResult;
 
+	/// Checks if `add_vesting_schedule` would work against `who`.
+	fn can_add_vesting_schedule(
+		who: &AccountId,
+		locked: <Self::Currency as Currency<AccountId>>::Balance,
+		per_block: <Self::Currency as Currency<AccountId>>::Balance,
+		starting_block: Self::Moment,
+	) -> DispatchResult;
+
 	/// Remove a vesting schedule for a given account.
 	///
 	/// NOTE: This doesn't alter the free balance of the account.
-	fn remove_vesting_schedule(who: &AccountId);
+	fn remove_vesting_schedule(who: &AccountId, schedule_index: u32) -> DispatchResult;
 }

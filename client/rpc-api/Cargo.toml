@@ -1,10 +1,10 @@
 [package]
 name = "sc-rpc-api"
-version = "0.9.0"
+version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "Substrate RPC interfaces."
 readme = "README.md"
@@ -13,21 +13,19 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0" }
-derive_more = "0.99.2"
-futures = { version = "0.3.1", features = ["compat"] }
-jsonrpc-core = "15.1.0"
-jsonrpc-core-client = "15.1.0"
-jsonrpc-derive = "15.1.0"
-jsonrpc-pubsub = "15.1.0"
-log = "0.4.8"
-parking_lot = "0.11.1"
-sp-core = { version = "3.0.0", path = "../../primitives/core" }
-sp-version = { version = "3.0.0", path = "../../primitives/version" }
-sp-runtime = { path = "../../primitives/runtime" , version = "3.0.0"}
-sp-chain-spec = { path = "../../primitives/chain-spec" , version = "3.0.0"}
-serde = { version = "1.0.101", features = ["derive"] }
-serde_json = "1.0.41"
-sp-transaction-pool = { version = "3.0.0", path = "../../primitives/transaction-pool" }
-sp-rpc = { version = "3.0.0", path = "../../primitives/rpc" }
-sp-tracing = { version = "3.0.0", path = "../../primitives/tracing" }
+codec = { package = "parity-scale-codec", version = "3.0.0" }
+futures = "0.3.21"
+log = "0.4.17"
+parking_lot = "0.12.1"
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
+serde = { version = "1.0.136", features = ["derive"] }
+serde_json = "1.0.85"
+thiserror = "1.0"
+sc-chain-spec = { version = "4.0.0-dev", path = "../chain-spec" }
+sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
+sp-core = { version = "7.0.0", path = "../../primitives/core" }
+sp-rpc = { version = "6.0.0", path = "../../primitives/rpc" }
+sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
+sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
+sp-version = { version = "5.0.0", path = "../../primitives/version" }
+jsonrpsee = { version = "0.16.2", features = ["server", "client-core", "macros"] }

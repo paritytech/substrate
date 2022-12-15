@@ -1,0 +1,5 @@
+error: Invalid pallet::call, dispatchable function must be public: `pub fn`
+  --> $DIR/call_invalid_vis.rs:20:3
+   |
+20 |         fn foo(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+   |         ^^

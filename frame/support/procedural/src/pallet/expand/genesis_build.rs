@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,8 +17,9 @@
 
 use crate::pallet::Def;
 
+///
 /// * implement the trait `sp_runtime::BuildModuleGenesisStorage`
-/// * add #[cfg(features = "std")] to GenesisBuild implementation.
+/// * add #[cfg(feature = "std")] to GenesisBuild implementation.
 pub fn expand_genesis_build(def: &mut Def) -> proc_macro2::TokenStream {
 	let genesis_config = if let Some(genesis_config) = &def.genesis_config {
 		genesis_config
@@ -40,8 +41,8 @@ pub fn expand_genesis_build(def: &mut Def) -> proc_macro2::TokenStream {
 
 	let gen_cfg_use_gen = genesis_config.gen_kind.type_use_gen(genesis_build.attr_span);
 
-	let genesis_build_item = &mut def.item.content.as_mut()
-		.expect("Checked by def parser").1[genesis_build.index];
+	let genesis_build_item =
+		&mut def.item.content.as_mut().expect("Checked by def parser").1[genesis_build.index];
 
 	let genesis_build_item_impl = if let syn::Item::Impl(impl_) = genesis_build_item {
 		impl_

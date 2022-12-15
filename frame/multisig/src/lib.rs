@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -46,32 +46,57 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-mod tests;
 mod benchmarking;
+pub mod migrations;
+mod tests;
 pub mod weights;
 
-use sp_std::prelude::*;
-use codec::{Encode, Decode};
-use sp_io::hashing::blake2_256;
-use frame_support::{ensure, RuntimeDebug};
-use frame_support::{traits::{Get, ReservableCurrency, Currency},
-	weights::{Weight, GetDispatchInfo},
-	dispatch::{DispatchResultWithPostInfo, DispatchResult, DispatchErrorWithPostInfo, PostDispatchInfo},
+use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::{
+	dispatch::{
+		DispatchErrorWithPostInfo, DispatchResult, DispatchResultWithPostInfo, GetDispatchInfo,
+		PostDispatchInfo,
+	},
+	ensure,
+	traits::{Currency, Get, ReservableCurrency},
+	weights::Weight,
+	BoundedVec, RuntimeDebug,
 };
 use frame_system::{self as system, RawOrigin};
-use sp_runtime::{DispatchError, traits::{Dispatchable, Zero}};
+use scale_info::TypeInfo;
+use sp_io::hashing::blake2_256;
+use sp_runtime::{
+	traits::{Dispatchable, TrailingZeroInput, Zero},
+	DispatchError,
+};
+use sp_std::prelude::*;
 pub use weights::WeightInfo;
 
 pub use pallet::*;
 
-type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-/// Just a bunch of bytes, but they should decode to a valid `Call`.
-pub type OpaqueCall = Vec<u8>;
+/// The log target of this pallet.
+pub const LOG_TARGET: &'static str = "runtime::multisig";
+
+// syntactic sugar for logging.
+#[macro_export]
+macro_rules! log {
+	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
+		log::$level!(
+			target: crate::LOG_TARGET,
+			concat!("[{:?}] ✍️ ", $patter), <frame_system::Pallet<T>>::block_number() $(, $values)*
+		)
+	};
+}
+
+type BalanceOf<T> =
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 /// A global extrinsic index, formed as the extrinsic index within a block, together with that
 /// block's height. This allows a transaction in which a multisig operation of a particular
 /// composite was created to be uniquely identified.
-#[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug)]
+#[derive(
+	Copy, Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug, TypeInfo, MaxEncodedLen,
+)]
 pub struct Timepoint<BlockNumber> {
 	/// The height of the chain at the point in time.
 	height: BlockNumber,
@@ -80,8 +105,12 @@ pub struct Timepoint<BlockNumber> {
 }
 
 /// An open multisig operation.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug)]
-pub struct Multisig<BlockNumber, Balance, AccountId> {
+#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[scale_info(skip_type_params(MaxApprovals))]
+pub struct Multisig<BlockNumber, Balance, AccountId, MaxApprovals>
+where
+	MaxApprovals: Get<u32>,
+{
 	/// The extrinsic when the multisig operation was opened.
 	when: Timepoint<BlockNumber>,
 	/// The amount held in reserve of the `depositor`, to be returned once the operation ends.
@@ -89,36 +118,38 @@ pub struct Multisig<BlockNumber, Balance, AccountId> {
 	/// The account who opened it (i.e. the first to approve it).
 	depositor: AccountId,
 	/// The approvals achieved so far, including the depositor. Always sorted.
-	approvals: Vec<AccountId>,
+	approvals: BoundedVec<AccountId, MaxApprovals>,
 }
 
 type CallHash = [u8; 32];
 
-enum CallOrHash {
-	Call(OpaqueCall, bool),
+enum CallOrHash<T: Config> {
+	Call(<T as Config>::RuntimeCall),
 	Hash([u8; 32]),
 }
 
 #[frame_support::pallet]
-pub mod pallet{
+pub mod pallet {
+	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use super::*;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The overarching call type.
-		type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo>
-			+ GetDispatchInfo + From<frame_system::Call<Self>>;
+		type RuntimeCall: Parameter
+			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin, PostInfo = PostDispatchInfo>
+			+ GetDispatchInfo
+			+ From<frame_system::Call<Self>>;
 
 		/// The currency mechanism.
 		type Currency: ReservableCurrency<Self::AccountId>;
 
-		/// The base amount of currency needed to reserve for creating a multisig execution or to store
-		/// a dispatch call for later.
+		/// The base amount of currency needed to reserve for creating a multisig execution or to
+		/// store a dispatch call for later.
 		///
 		/// This is held for an additional storage item whose value size is
 		/// `4 + sizeof((BlockNumber, Balance, AccountId))` bytes and whose key size is
@@ -134,14 +165,18 @@ pub mod pallet{
 
 		/// The maximum amount of signatories allowed in the multisig.
 		#[pallet::constant]
-		type MaxSignatories: Get<u16>;
+		type MaxSignatories: Get<u32>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 	}
 
+	/// The current storage version.
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	/// The set of open multisig operations.
@@ -152,15 +187,7 @@ pub mod pallet{
 		T::AccountId,
 		Blake2_128Concat,
 		[u8; 32],
-		Multisig<T::BlockNumber, BalanceOf<T>, T::AccountId>,
-	>;
-
-	#[pallet::storage]
-	pub type Calls<T: Config> = StorageMap<
-		_,
-		Identity,
-		[u8; 32],
-		(OpaqueCall, T::AccountId, BalanceOf<T>),
+		Multisig<T::BlockNumber, BalanceOf<T>, T::AccountId, T::MaxSignatories>,
 	>;
 
 	#[pallet::error]
@@ -197,21 +224,31 @@ pub mod pallet{
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(
-		T::AccountId = "AccountId",
-		T::BlockNumber = "BlockNumber",
-		Timepoint<T::BlockNumber> = "Timepoint<BlockNumber>"
-	)]
 	pub enum Event<T: Config> {
-		/// A new multisig operation has begun. \[approving, multisig, call_hash\]
-		NewMultisig(T::AccountId, T::AccountId, CallHash),
+		/// A new multisig operation has begun.
+		NewMultisig { approving: T::AccountId, multisig: T::AccountId, call_hash: CallHash },
 		/// A multisig operation has been approved by someone.
-		/// \[approving, timepoint, multisig, call_hash\]
-		MultisigApproval(T::AccountId, Timepoint<T::BlockNumber>, T::AccountId, CallHash),
-		/// A multisig operation has been executed. \[approving, timepoint, multisig, call_hash\]
-		MultisigExecuted(T::AccountId, Timepoint<T::BlockNumber>, T::AccountId, CallHash, DispatchResult),
-		/// A multisig operation has been cancelled. \[cancelling, timepoint, multisig, call_hash\]
-		MultisigCancelled(T::AccountId, Timepoint<T::BlockNumber>, T::AccountId, CallHash)
+		MultisigApproval {
+			approving: T::AccountId,
+			timepoint: Timepoint<T::BlockNumber>,
+			multisig: T::AccountId,
+			call_hash: CallHash,
+		},
+		/// A multisig operation has been executed.
+		MultisigExecuted {
+			approving: T::AccountId,
+			timepoint: Timepoint<T::BlockNumber>,
+			multisig: T::AccountId,
+			call_hash: CallHash,
+			result: DispatchResult,
+		},
+		/// A multisig operation has been cancelled.
+		MultisigCancelled {
+			cancelling: T::AccountId,
+			timepoint: Timepoint<T::BlockNumber>,
+			multisig: T::AccountId,
+			call_hash: CallHash,
+		},
 	}
 
 	#[pallet::hooks]
@@ -239,16 +276,16 @@ pub mod pallet{
 			let dispatch_info = call.get_dispatch_info();
 			(
 				T::WeightInfo::as_multi_threshold_1(call.using_encoded(|c| c.len() as u32))
-					.saturating_add(dispatch_info.weight)
 					// AccountData for inner call origin accountdata.
-					.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
+					.saturating_add(T::DbWeight::get().reads_writes(1, 1))
+					.saturating_add(dispatch_info.weight),
 				dispatch_info.class,
 			)
 		})]
-		pub(super) fn as_multi_threshold_1(
+		pub fn as_multi_threshold_1(
 			origin: OriginFor<T>,
 			other_signatories: Vec<T::AccountId>,
-			call: Box<<T as Config>::Call>,
+			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let max_sigs = T::MaxSignatories::get() as usize;
@@ -262,21 +299,25 @@ pub mod pallet{
 			let call_len = call.using_encoded(|c| c.len());
 			let result = call.dispatch(RawOrigin::Signed(id).into());
 
-			result.map(|post_dispatch_info| post_dispatch_info.actual_weight
-				.map(|actual_weight|
-					T::WeightInfo::as_multi_threshold_1(call_len as u32)
-						.saturating_add(actual_weight)
-				).into()
-			).map_err(|err| match err.post_info.actual_weight {
-				Some(actual_weight) => {
-					let weight_used = T::WeightInfo::as_multi_threshold_1(call_len as u32)
-						.saturating_add(actual_weight);
-					let post_info = Some(weight_used).into();
-					let error = err.error.into();
-					DispatchErrorWithPostInfo { post_info, error }
-				},
-				None => err,
-			})
+			result
+				.map(|post_dispatch_info| {
+					post_dispatch_info
+						.actual_weight
+						.map(|actual_weight| {
+							T::WeightInfo::as_multi_threshold_1(call_len as u32)
+								.saturating_add(actual_weight)
+						})
+						.into()
+				})
+				.map_err(|err| match err.post_info.actual_weight {
+					Some(actual_weight) => {
+						let weight_used = T::WeightInfo::as_multi_threshold_1(call_len as u32)
+							.saturating_add(actual_weight);
+						let post_info = Some(weight_used).into();
+						DispatchErrorWithPostInfo { post_info, error: err.error }
+					},
+					None => err,
+				})
 		}
 
 		/// Register approval for a dispatch to be made from a deterministic composite account if
@@ -316,36 +357,40 @@ pub mod pallet{
 		/// - I/O: 1 read `O(S)`, up to 1 mutate `O(S)`. Up to one remove.
 		/// - One event.
 		/// - The weight of the `call`.
-		/// - Storage: inserts one item, value size bounded by `MaxSignatories`, with a
-		///   deposit taken for its lifetime of
-		///   `DepositBase + threshold * DepositFactor`.
+		/// - Storage: inserts one item, value size bounded by `MaxSignatories`, with a deposit
+		///   taken for its lifetime of `DepositBase + threshold * DepositFactor`.
 		/// -------------------------------
 		/// - DB Weight:
-		///     - Reads: Multisig Storage, [Caller Account], Calls (if `store_call`)
-		///     - Writes: Multisig Storage, [Caller Account], Calls (if `store_call`)
+		///     - Reads: Multisig Storage, [Caller Account]
+		///     - Writes: Multisig Storage, [Caller Account]
 		/// - Plus Call Weight
 		/// # </weight>
 		#[pallet::weight({
 			let s = other_signatories.len() as u32;
-			let z = call.len() as u32;
+			let z = call.using_encoded(|d| d.len()) as u32;
 
 			T::WeightInfo::as_multi_create(s, z)
-			.max(T::WeightInfo::as_multi_create_store(s, z))
 			.max(T::WeightInfo::as_multi_approve(s, z))
 			.max(T::WeightInfo::as_multi_complete(s, z))
 			.saturating_add(*max_weight)
 		})]
-		pub(super) fn as_multi(
+		pub fn as_multi(
 			origin: OriginFor<T>,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
 			maybe_timepoint: Option<Timepoint<T::BlockNumber>>,
-			call: OpaqueCall,
-			store_call: bool,
+			call: Box<<T as Config>::RuntimeCall>,
 			max_weight: Weight,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			Self::operate(who, threshold, other_signatories, maybe_timepoint, CallOrHash::Call(call, store_call), max_weight)
+			Self::operate(
+				who,
+				threshold,
+				other_signatories,
+				maybe_timepoint,
+				CallOrHash::Call(*call),
+				max_weight,
+			)
 		}
 
 		/// Register approval for a dispatch to be made from a deterministic composite account if
@@ -376,9 +421,8 @@ pub mod pallet{
 		/// - Up to one binary search and insert (`O(logS + S)`).
 		/// - I/O: 1 read `O(S)`, up to 1 mutate `O(S)`. Up to one remove.
 		/// - One event.
-		/// - Storage: inserts one item, value size bounded by `MaxSignatories`, with a
-		///   deposit taken for its lifetime of
-		///   `DepositBase + threshold * DepositFactor`.
+		/// - Storage: inserts one item, value size bounded by `MaxSignatories`, with a deposit
+		///   taken for its lifetime of `DepositBase + threshold * DepositFactor`.
 		/// ----------------------------------
 		/// - DB Weight:
 		///     - Read: Multisig Storage, [Caller Account]
@@ -388,11 +432,10 @@ pub mod pallet{
 			let s = other_signatories.len() as u32;
 
 			T::WeightInfo::approve_as_multi_create(s)
-			.max(T::WeightInfo::approve_as_multi_approve(s))
-			.max(T::WeightInfo::approve_as_multi_complete(s))
-			.saturating_add(*max_weight)
+				.max(T::WeightInfo::approve_as_multi_approve(s))
+				.saturating_add(*max_weight)
 		})]
-		pub(super) fn approve_as_multi(
+		pub fn approve_as_multi(
 			origin: OriginFor<T>,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
@@ -401,7 +444,14 @@ pub mod pallet{
 			max_weight: Weight,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			Self::operate(who, threshold, other_signatories, maybe_timepoint, CallOrHash::Hash(call_hash), max_weight)
+			Self::operate(
+				who,
+				threshold,
+				other_signatories,
+				maybe_timepoint,
+				CallOrHash::Hash(call_hash),
+				max_weight,
+			)
 		}
 
 		/// Cancel a pre-existing, on-going multisig transaction. Any deposit reserved previously
@@ -427,11 +477,11 @@ pub mod pallet{
 		/// - Storage: removes one item.
 		/// ----------------------------------
 		/// - DB Weight:
-		///     - Read: Multisig Storage, [Caller Account], Refund Account, Calls
-		///     - Write: Multisig Storage, [Caller Account], Refund Account, Calls
+		///     - Read: Multisig Storage, [Caller Account], Refund Account
+		///     - Write: Multisig Storage, [Caller Account], Refund Account
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::cancel_as_multi(other_signatories.len() as u32))]
-		pub(super) fn cancel_as_multi(
+		pub fn cancel_as_multi(
 			origin: OriginFor<T>,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
@@ -447,17 +497,20 @@ pub mod pallet{
 
 			let id = Self::multi_account_id(&signatories, threshold);
 
-			let m = <Multisigs<T>>::get(&id, call_hash)
-				.ok_or(Error::<T>::NotFound)?;
+			let m = <Multisigs<T>>::get(&id, call_hash).ok_or(Error::<T>::NotFound)?;
 			ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
 			ensure!(m.depositor == who, Error::<T>::NotOwner);
 
 			let err_amount = T::Currency::unreserve(&m.depositor, m.deposit);
 			debug_assert!(err_amount.is_zero());
 			<Multisigs<T>>::remove(&id, &call_hash);
-			Self::clear_call(&call_hash);
 
-			Self::deposit_event(Event::MultisigCancelled(who, timepoint, id, call_hash));
+			Self::deposit_event(Event::MultisigCancelled {
+				cancelling: who,
+				timepoint,
+				multisig: id,
+				call_hash,
+			});
 			Ok(())
 		}
 	}
@@ -470,7 +523,8 @@ impl<T: Config> Pallet<T> {
 	/// NOTE: `who` must be sorted. If it is not, then you'll get the wrong answer.
 	pub fn multi_account_id(who: &[T::AccountId], threshold: u16) -> T::AccountId {
 		let entropy = (b"modlpy/utilisuba", who, threshold).using_encoded(blake2_256);
-		T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
+		Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
+			.expect("infinite length input; no invalid inputs for type; qed")
 	}
 
 	fn operate(
@@ -478,7 +532,7 @@ impl<T: Config> Pallet<T> {
 		threshold: u16,
 		other_signatories: Vec<T::AccountId>,
 		maybe_timepoint: Option<Timepoint<T::BlockNumber>>,
-		call_or_hash: CallOrHash,
+		call_or_hash: CallOrHash<T>,
 		max_weight: Weight,
 	) -> DispatchResultWithPostInfo {
 		ensure!(threshold >= 2, Error::<T>::MinimumThreshold);
@@ -491,13 +545,12 @@ impl<T: Config> Pallet<T> {
 		let id = Self::multi_account_id(&signatories, threshold);
 
 		// Threshold > 1; this means it's a multi-step operation. We extract the `call_hash`.
-		let (call_hash, call_len, maybe_call, store) = match call_or_hash {
-			CallOrHash::Call(call, should_store) => {
-				let call_hash = blake2_256(&call);
-				let call_len = call.len();
-				(call_hash, call_len, Some(call), should_store)
-			}
-			CallOrHash::Hash(h) => (h, 0, None, false),
+		let (call_hash, call_len, maybe_call) = match call_or_hash {
+			CallOrHash::Call(call) => {
+				let (call_hash, call_len) = call.using_encoded(|d| (blake2_256(d), d.len()));
+				(call_hash, call_len, Some(call))
+			},
+			CallOrHash::Hash(h) => (h, 0, None),
 		};
 
 		// Branch on whether the operation has already started or not.
@@ -511,67 +564,64 @@ impl<T: Config> Pallet<T> {
 			// We only bother with the approval if we're below threshold.
 			let maybe_pos = m.approvals.binary_search(&who).err().filter(|_| approvals < threshold);
 			// Bump approvals if not yet voted and the vote is needed.
-			if maybe_pos.is_some() { approvals += 1; }
+			if maybe_pos.is_some() {
+				approvals += 1;
+			}
 
 			// We only bother fetching/decoding call if we know that we're ready to execute.
-			let maybe_approved_call = if approvals >= threshold {
-				Self::get_call(&call_hash, maybe_call.as_ref().map(|c| c.as_ref()))
-			} else { None };
-
-			if let Some((call, call_len)) = maybe_approved_call {
+			if let Some(call) = maybe_call.filter(|_| approvals >= threshold) {
 				// verify weight
-				ensure!(call.get_dispatch_info().weight <= max_weight, Error::<T>::MaxWeightTooLow);
+				ensure!(
+					call.get_dispatch_info().weight.all_lte(max_weight),
+					Error::<T>::MaxWeightTooLow
+				);
 
 				// Clean up storage before executing call to avoid an possibility of reentrancy
 				// attack.
 				<Multisigs<T>>::remove(&id, call_hash);
-				Self::clear_call(&call_hash);
 				T::Currency::unreserve(&m.depositor, m.deposit);
 
 				let result = call.dispatch(RawOrigin::Signed(id.clone()).into());
-				Self::deposit_event(Event::MultisigExecuted(
-					who, timepoint, id, call_hash, result.map(|_| ()).map_err(|e| e.error)
-				));
-				Ok(get_result_weight(result).map(|actual_weight|
-					T::WeightInfo::as_multi_complete(
-						other_signatories_len as u32,
-						call_len as u32
-					).saturating_add(actual_weight)
-				).into())
+				Self::deposit_event(Event::MultisigExecuted {
+					approving: who,
+					timepoint,
+					multisig: id,
+					call_hash,
+					result: result.map(|_| ()).map_err(|e| e.error),
+				});
+				Ok(get_result_weight(result)
+					.map(|actual_weight| {
+						T::WeightInfo::as_multi_complete(
+							other_signatories_len as u32,
+							call_len as u32,
+						)
+						.saturating_add(actual_weight)
+					})
+					.into())
 			} else {
 				// We cannot dispatch the call now; either it isn't available, or it is, but we
 				// don't have threshold approvals even with our signature.
 
-				// Store the call if desired.
-				let stored = if let Some(data) = maybe_call.filter(|_| store) {
-					Self::store_call_and_reserve(who.clone(), &call_hash, data, BalanceOf::<T>::zero())?;
-					true
-				} else {
-					false
-				};
-
 				if let Some(pos) = maybe_pos {
 					// Record approval.
-					m.approvals.insert(pos, who.clone());
+					m.approvals
+						.try_insert(pos, who.clone())
+						.map_err(|_| Error::<T>::TooManySignatories)?;
 					<Multisigs<T>>::insert(&id, call_hash, m);
-					Self::deposit_event(Event::MultisigApproval(who, timepoint, id, call_hash));
+					Self::deposit_event(Event::MultisigApproval {
+						approving: who,
+						timepoint,
+						multisig: id,
+						call_hash,
+					});
 				} else {
 					// If we already approved and didn't store the Call, then this was useless and
 					// we report an error.
-					ensure!(stored, Error::<T>::AlreadyApproved);
+					Err(Error::<T>::AlreadyApproved)?
 				}
 
-				let final_weight = if stored {
-					T::WeightInfo::as_multi_approve_store(
-						other_signatories_len as u32,
-						call_len as u32,
-					)
-				} else {
-					T::WeightInfo::as_multi_approve(
-						other_signatories_len as u32,
-						call_len as u32,
-					)
-				};
+				let final_weight =
+					T::WeightInfo::as_multi_approve(other_signatories_len as u32, call_len as u32);
 				// Call is not made, so the actual weight does not include call
 				Ok(Some(final_weight).into())
 			}
@@ -582,73 +632,27 @@ impl<T: Config> Pallet<T> {
 			// Just start the operation by recording it in storage.
 			let deposit = T::DepositBase::get() + T::DepositFactor::get() * threshold.into();
 
-			// Store the call if desired.
-			let stored = if let Some(data) = maybe_call.filter(|_| store) {
-				Self::store_call_and_reserve(who.clone(), &call_hash, data, deposit)?;
-				true
-			} else {
-				T::Currency::reserve(&who, deposit)?;
-				false
-			};
+			T::Currency::reserve(&who, deposit)?;
 
-			<Multisigs<T>>::insert(&id, call_hash, Multisig {
-				when: Self::timepoint(),
-				deposit,
-				depositor: who.clone(),
-				approvals: vec![who.clone()],
-			});
-			Self::deposit_event(Event::NewMultisig(who, id, call_hash));
+			let initial_approvals =
+				vec![who.clone()].try_into().map_err(|_| Error::<T>::TooManySignatories)?;
 
-			let final_weight = if stored {
-				T::WeightInfo::as_multi_create_store(
-					other_signatories_len as u32,
-					call_len as u32,
-				)
-			} else {
-				T::WeightInfo::as_multi_create(
-					other_signatories_len as u32,
-					call_len as u32,
-				)
-			};
+			<Multisigs<T>>::insert(
+				&id,
+				call_hash,
+				Multisig {
+					when: Self::timepoint(),
+					deposit,
+					depositor: who.clone(),
+					approvals: initial_approvals,
+				},
+			);
+			Self::deposit_event(Event::NewMultisig { approving: who, multisig: id, call_hash });
+
+			let final_weight =
+				T::WeightInfo::as_multi_create(other_signatories_len as u32, call_len as u32);
 			// Call is not made, so the actual weight does not include call
 			Ok(Some(final_weight).into())
-		}
-	}
-
-	/// Place a call's encoded data in storage, reserving funds as appropriate.
-	///
-	/// We store `data` here because storing `call` would result in needing another `.encode`.
-	///
-	/// Returns a `bool` indicating whether the data did end up being stored.
-	fn store_call_and_reserve(
-		who: T::AccountId,
-		hash: &[u8; 32],
-		data: OpaqueCall,
-		other_deposit: BalanceOf<T>,
-	) -> DispatchResult {
-		ensure!(!Calls::<T>::contains_key(hash), Error::<T>::AlreadyStored);
-		let deposit = other_deposit + T::DepositBase::get()
-			+ T::DepositFactor::get() * BalanceOf::<T>::from(((data.len() + 31) / 32) as u32);
-		T::Currency::reserve(&who, deposit)?;
-		Calls::<T>::insert(&hash, (data, who, deposit));
-		Ok(())
-	}
-
-	/// Attempt to decode and return the call, provided by the user or from storage.
-	fn get_call(hash: &[u8; 32], maybe_known: Option<&[u8]>) -> Option<(<T as Config>::Call, usize)> {
-		maybe_known.map_or_else(|| {
-			Calls::<T>::get(hash).and_then(|(data, ..)| {
-				Decode::decode(&mut &data[..]).ok().map(|d| (d, data.len()))
-			})
-		}, |data| {
-			Decode::decode(&mut &data[..]).ok().map(|d| (d, data.len()))
-		})
-	}
-
-	/// Attempt to remove a call from storage, returning any deposit on it to the owner.
-	fn clear_call(hash: &[u8; 32]) {
-		if let Some((_, who, deposit)) = Calls::<T>::take(hash) {
-			T::Currency::unreserve(&who, deposit);
 		}
 	}
 
@@ -661,9 +665,10 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Check that signatories is sorted and doesn't contain sender, then insert sender.
-	fn ensure_sorted_and_insert(other_signatories: Vec<T::AccountId>, who: T::AccountId)
-		-> Result<Vec<T::AccountId>, DispatchError>
-	{
+	fn ensure_sorted_and_insert(
+		other_signatories: Vec<T::AccountId>,
+		who: T::AccountId,
+	) -> Result<Vec<T::AccountId>, DispatchError> {
 		let mut signatories = other_signatories;
 		let mut maybe_last = None;
 		let mut index = 0;

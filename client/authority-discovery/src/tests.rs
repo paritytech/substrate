@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,15 +16,24 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{new_worker_and_service, worker::{tests::{TestApi, TestNetwork}, Role}};
+use crate::{
+	new_worker_and_service,
+	worker::{
+		tests::{TestApi, TestNetwork},
+		Role,
+	},
+};
 
-use std::sync::Arc;
 use futures::{channel::mpsc::channel, executor::LocalPool, task::LocalSpawn};
-use libp2p::core::{multiaddr::{Multiaddr, Protocol}, PeerId};
+use libp2p::core::{
+	multiaddr::{Multiaddr, Protocol},
+	PeerId,
+};
+use std::{collections::HashSet, sync::Arc};
 
 use sp_authority_discovery::AuthorityId;
 use sp_core::crypto::key_types;
-use sp_keystore::{CryptoStore, testing::KeyStore};
+use sp_keystore::{testing::KeyStore, CryptoStore};
 
 #[test]
 fn get_addresses_and_authority_id() {
@@ -44,13 +53,12 @@ fn get_addresses_and_authority_id() {
 	});
 
 	let remote_peer_id = PeerId::random();
-	let remote_addr = "/ip6/2001:db8:0:0:0:0:0:2/tcp/30333".parse::<Multiaddr>()
+	let remote_addr = "/ip6/2001:db8:0:0:0:0:0:2/tcp/30333"
+		.parse::<Multiaddr>()
 		.unwrap()
-		.with(Protocol::P2p(remote_peer_id.clone().into()));
+		.with(Protocol::P2p(remote_peer_id.into()));
 
-	let test_api = Arc::new(TestApi {
-		authorities: vec![],
-	});
+	let test_api = Arc::new(TestApi { authorities: vec![] });
 
 	let (mut worker, mut service) = new_worker_and_service(
 		test_api,
@@ -65,12 +73,38 @@ fn get_addresses_and_authority_id() {
 
 	pool.run_until(async {
 		assert_eq!(
-			Some(vec![remote_addr]),
+			Some(HashSet::from([remote_addr])),
 			service.get_addresses_by_authority_id(remote_authority_id.clone()).await,
 		);
 		assert_eq!(
-			Some(remote_authority_id),
-			service.get_authority_id_by_peer_id(remote_peer_id).await,
+			Some(HashSet::from([remote_authority_id])),
+			service.get_authority_ids_by_peer_id(remote_peer_id).await,
 		);
 	});
+}
+
+#[test]
+fn cryptos_are_compatible() {
+	use sp_core::crypto::Pair;
+
+	let libp2p_secret = libp2p::identity::Keypair::generate_ed25519();
+	let libp2p_public = libp2p_secret.public();
+
+	let sp_core_secret = {
+		let libp2p::identity::Keypair::Ed25519(libp2p_ed_secret) = libp2p_secret.clone();
+		sp_core::ed25519::Pair::from_seed_slice(&libp2p_ed_secret.secret().as_ref()).unwrap()
+	};
+	let sp_core_public = sp_core_secret.public();
+
+	let message = b"we are more powerful than not to be better";
+
+	let libp2p_signature = libp2p_secret.sign(message).unwrap();
+	let sp_core_signature = sp_core_secret.sign(message); // no error expected...
+
+	assert!(sp_core::ed25519::Pair::verify(
+		&sp_core::ed25519::Signature::from_slice(&libp2p_signature).unwrap(),
+		message,
+		&sp_core_public
+	));
+	assert!(libp2p_public.verify(message, sp_core_signature.as_ref()));
 }

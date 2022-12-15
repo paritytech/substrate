@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,9 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use criterion::{Criterion, Throughput, BenchmarkId, criterion_group, criterion_main};
-use sp_arithmetic::biguint::{BigUint, Single};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use rand::Rng;
+use sp_arithmetic::biguint::{BigUint, Single};
 
 fn random_big_uint(size: usize) -> BigUint {
 	let mut rng = rand::thread_rng();
@@ -41,19 +41,19 @@ fn bench_op<F: Fn(&BigUint, &BigUint)>(c: &mut Criterion, name: &str, op: F) {
 
 fn bench_addition(c: &mut Criterion) {
 	bench_op(c, "addition", |a, b| {
-		let _ = a.clone().add(&b);
+		let _ = a.clone().add(b);
 	});
 }
 
 fn bench_subtraction(c: &mut Criterion) {
 	bench_op(c, "subtraction", |a, b| {
-		let _ = a.clone().sub(&b);
+		let _ = a.clone().sub(b);
 	});
 }
 
 fn bench_multiplication(c: &mut Criterion) {
 	bench_op(c, "multiplication", |a, b| {
-		let _ = a.clone().mul(&b);
+		let _ = a.clone().mul(b);
 	});
 }
 
@@ -73,7 +73,7 @@ fn bench_division(c: &mut Criterion) {
 	}
 }
 
-criterion_group!{
+criterion_group! {
 	name = benches;
 	config = Criterion::default();
 	targets = bench_addition, bench_subtraction, bench_multiplication, bench_division

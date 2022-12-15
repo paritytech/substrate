@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,9 +17,9 @@
 
 //! Usage statistics for state db
 
-#[cfg(feature = "std")]
-use std::time::{Instant, Duration};
 use sp_std::cell::RefCell;
+#[cfg(feature = "std")]
+use std::time::{Duration, Instant};
 
 /// Measured count of operations and total bytes.
 #[derive(Clone, Debug, Default)]

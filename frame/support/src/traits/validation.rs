@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,20 +17,21 @@
 
 //! Traits for dealing with validation and validators.
 
-use sp_std::prelude::*;
-use codec::{Codec, Decode};
-use sp_runtime::traits::{Convert, Zero};
-use sp_runtime::{BoundToRuntimeAppPublic, ConsensusEngineId, Percent, RuntimeAppPublic};
+use crate::{dispatch::Parameter, weights::Weight};
+use codec::{Codec, Decode, MaxEncodedLen};
+use sp_runtime::{
+	traits::{Convert, Zero},
+	BoundToRuntimeAppPublic, ConsensusEngineId, Permill, RuntimeAppPublic,
+};
 use sp_staking::SessionIndex;
-use crate::dispatch::Parameter;
-use crate::weights::Weight;
+use sp_std::prelude::*;
 
 /// A trait for online node inspection in a session.
 ///
 /// Something that can give information about the current validator set.
 pub trait ValidatorSet<AccountId> {
 	/// Type for representing validator id in a session.
-	type ValidatorId: Parameter;
+	type ValidatorId: Parameter + MaxEncodedLen;
 	/// A type for converting `AccountId` to `ValidatorId`.
 	type ValidatorIdOf: Convert<AccountId, Option<Self::ValidatorId>>;
 
@@ -54,12 +55,14 @@ pub trait ValidatorSetWithIdentification<AccountId>: ValidatorSet<AccountId> {
 pub trait FindAuthor<Author> {
 	/// Find the author of a block based on the pre-runtime digests.
 	fn find_author<'a, I>(digests: I) -> Option<Author>
-		where I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>;
+	where
+		I: 'a + IntoIterator<Item = (ConsensusEngineId, &'a [u8])>;
 }
 
 impl<A> FindAuthor<A> for () {
 	fn find_author<'a, I>(_: I) -> Option<A>
-		where I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
+	where
+		I: 'a + IntoIterator<Item = (ConsensusEngineId, &'a [u8])>,
 	{
 		None
 	}
@@ -74,14 +77,16 @@ pub trait VerifySeal<Header, Author> {
 /// A session handler for specific key type.
 pub trait OneSessionHandler<ValidatorId>: BoundToRuntimeAppPublic {
 	/// The key type expected.
-	type Key: Decode + Default + RuntimeAppPublic;
+	type Key: Decode + RuntimeAppPublic;
 
 	/// The given validator set will be used for the genesis session.
 	/// It is guaranteed that the given validator set will also be used
 	/// for the second session, therefore the first call to `on_new_session`
 	/// should provide the same validator set.
 	fn on_genesis_session<'a, I: 'a>(validators: I)
-		where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
+	where
+		I: Iterator<Item = (&'a ValidatorId, Self::Key)>,
+		ValidatorId: 'a;
 
 	/// Session set has changed; act appropriately. Note that this can be called
 	/// before initialization of your module.
@@ -92,11 +97,10 @@ pub trait OneSessionHandler<ValidatorId>: BoundToRuntimeAppPublic {
 	///
 	/// The `validators` are the validators of the incoming session, and `queued_validators`
 	/// will follow.
-	fn on_new_session<'a, I: 'a>(
-		changed: bool,
-		validators: I,
-		queued_validators: I,
-	) where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
+	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, queued_validators: I)
+	where
+		I: Iterator<Item = (&'a ValidatorId, Self::Key)>,
+		ValidatorId: 'a;
 
 	/// A notification for end of the session.
 	///
@@ -105,7 +109,7 @@ pub trait OneSessionHandler<ValidatorId>: BoundToRuntimeAppPublic {
 	fn on_before_session_ending() {}
 
 	/// A validator got disabled. Act accordingly until a new session begins.
-	fn on_disabled(_validator_index: usize);
+	fn on_disabled(_validator_index: u32);
 }
 
 /// Something that can estimate at which block the next session rotation will happen (i.e. a new
@@ -126,7 +130,7 @@ pub trait EstimateNextSessionRotation<BlockNumber> {
 	/// Return an estimate of the current session progress.
 	///
 	/// None should be returned if the estimation fails to come to an answer.
-	fn estimate_current_session_progress(now: BlockNumber) -> (Option<Percent>, Weight);
+	fn estimate_current_session_progress(now: BlockNumber) -> (Option<Permill>, Weight);
 
 	/// Return the block number at which the next session rotation is estimated to happen.
 	///
@@ -139,7 +143,7 @@ impl<BlockNumber: Zero> EstimateNextSessionRotation<BlockNumber> for () {
 		Zero::zero()
 	}
 
-	fn estimate_current_session_progress(_: BlockNumber) -> (Option<Percent>, Weight) {
+	fn estimate_current_session_progress(_: BlockNumber) -> (Option<Permill>, Weight) {
 		(None, Zero::zero())
 	}
 
@@ -234,9 +238,23 @@ impl<N: Zero> Lateness<N> for () {
 }
 
 /// Implementors of this trait provide information about whether or not some validator has
-/// been registered with them. The [Session module](../../pallet_session/index.html) is an implementor.
+/// been registered with them. The [Session module](../../pallet_session/index.html) is an
+/// implementor.
 pub trait ValidatorRegistration<ValidatorId> {
 	/// Returns true if the provided validator ID has been registered with the implementing runtime
 	/// module
 	fn is_registered(id: &ValidatorId) -> bool;
+}
+
+/// Trait used to check whether a given validator is currently disabled and should not be
+/// participating in consensus (e.g. because they equivocated).
+pub trait DisabledValidators {
+	/// Returns true if the given validator is disabled.
+	fn is_disabled(index: u32) -> bool;
+}
+
+impl DisabledValidators for () {
+	fn is_disabled(_index: u32) -> bool {
+		false
+	}
 }

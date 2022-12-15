@@ -14,7 +14,7 @@ mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		fn foo(origin: u8) {}
+		pub fn foo(origin: u8) {}
 	}
 }
 

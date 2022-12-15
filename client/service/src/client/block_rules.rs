@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -20,11 +20,9 @@
 
 use std::collections::{HashMap, HashSet};
 
-use sp_runtime::{
-	traits::{Block as BlockT, NumberFor},
-};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 
-use sc_client_api::{ForkBlocks, BadBlocks};
+use sc_client_api::{BadBlocks, ForkBlocks};
 
 /// Chain specification rules lookup result.
 pub enum LookupResult<B: BlockT> {
@@ -33,7 +31,7 @@ pub enum LookupResult<B: BlockT> {
 	/// The block is known to be bad and should not be imported
 	KnownBad,
 	/// There is a specified canonical block hash for the given height
-	Expected(B::Hash)
+	Expected(B::Hash),
 }
 
 /// Chain-specific block filtering rules.
@@ -47,13 +45,10 @@ pub struct BlockRules<B: BlockT> {
 
 impl<B: BlockT> BlockRules<B> {
 	/// New block rules with provided black and white lists.
-	pub fn new(
-		fork_blocks: ForkBlocks<B>,
-		bad_blocks: BadBlocks<B>,
-	) -> Self {
+	pub fn new(fork_blocks: ForkBlocks<B>, bad_blocks: BadBlocks<B>) -> Self {
 		Self {
-			bad: bad_blocks.unwrap_or_else(|| HashSet::new()),
-			forks: fork_blocks.unwrap_or_else(|| vec![]).into_iter().collect(),
+			bad: bad_blocks.unwrap_or_default(),
+			forks: fork_blocks.unwrap_or_default().into_iter().collect(),
 		}
 	}
 
@@ -66,7 +61,7 @@ impl<B: BlockT> BlockRules<B> {
 	pub fn lookup(&self, number: NumberFor<B>, hash: &B::Hash) -> LookupResult<B> {
 		if let Some(hash_for_height) = self.forks.get(&number) {
 			if hash_for_height != hash {
-				return LookupResult::Expected(hash_for_height.clone());
+				return LookupResult::Expected(*hash_for_height)
 			}
 		}
 

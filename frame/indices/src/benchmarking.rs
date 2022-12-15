@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,8 +20,8 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
+use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
 use sp_runtime::traits::Bounded;
 
 use crate::Pallet as Indices;
@@ -44,10 +44,11 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		let recipient: T::AccountId = account("recipient", 0, SEED);
+		let recipient_lookup = T::Lookup::unlookup(recipient.clone());
 		T::Currency::make_free_balance_be(&recipient, BalanceOf::<T>::max_value());
 		// Claim the index
 		Indices::<T>::claim(RawOrigin::Signed(caller.clone()).into(), account_index)?;
-	}: _(RawOrigin::Signed(caller.clone()), recipient.clone(), account_index)
+	}: _(RawOrigin::Signed(caller.clone()), recipient_lookup, account_index)
 	verify {
 		assert_eq!(Accounts::<T>::get(account_index).unwrap().0, recipient);
 	}
@@ -70,10 +71,11 @@ benchmarks! {
 		let original: T::AccountId = account("original", 0, SEED);
 		T::Currency::make_free_balance_be(&original, BalanceOf::<T>::max_value());
 		let recipient: T::AccountId = account("recipient", 0, SEED);
+		let recipient_lookup = T::Lookup::unlookup(recipient.clone());
 		T::Currency::make_free_balance_be(&recipient, BalanceOf::<T>::max_value());
 		// Claim the index
 		Indices::<T>::claim(RawOrigin::Signed(original).into(), account_index)?;
-	}: _(RawOrigin::Root, recipient.clone(), account_index, false)
+	}: _(RawOrigin::Root, recipient_lookup, account_index, false)
 	verify {
 		assert_eq!(Accounts::<T>::get(account_index).unwrap().0, recipient);
 	}
@@ -91,11 +93,6 @@ benchmarks! {
 	}
 
 	// TODO in another PR: lookup and unlookup trait weights (not critical)
+
+	impl_benchmark_test_suite!(Indices, crate::mock::new_test_ext(), crate::mock::Test);
 }
-
-
-impl_benchmark_test_suite!(
-	Indices,
-	crate::mock::new_test_ext(),
-	crate::mock::Test,
-);

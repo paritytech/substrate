@@ -1,11 +1,11 @@
 [package]
 name = "sp-authority-discovery"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Authority discovery primitives"
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 readme = "README.md"
 
@@ -13,18 +13,20 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-application-crypto = { version = "3.0.0", default-features = false, path = "../application-crypto" }
-codec = { package = "parity-scale-codec", default-features = false, version = "2.0.0" }
-sp-std = { version = "3.0.0", default-features = false, path = "../std" }
-sp-api = { version = "3.0.0", default-features = false, path = "../api" }
-sp-runtime = { version = "3.0.0", default-features = false, path = "../runtime" }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../api" }
+sp-application-crypto = { version = "7.0.0", default-features = false, path = "../application-crypto" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../runtime" }
+sp-std = { version = "5.0.0", default-features = false, path = "../std" }
 
 [features]
 default = ["std"]
 std = [
-	"sp-application-crypto/std",
 	"codec/std",
-	"sp-std/std",
+	"scale-info/std",
 	"sp-api/std",
-	"sp-runtime/std"
+	"sp-application-crypto/std",
+	"sp-runtime/std",
+	"sp-std/std",
 ]

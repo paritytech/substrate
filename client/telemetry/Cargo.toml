@@ -1,11 +1,11 @@
 [package]
 name = "sc-telemetry"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Telemetry utils"
-edition = "2018"
+edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 documentation = "https://docs.rs/sc-telemetry"
 readme = "README.md"
@@ -13,18 +13,15 @@ readme = "README.md"
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
-
 [dependencies]
-parking_lot = "0.11.1"
-futures = "0.3.9"
-wasm-timer = "0.2.5"
-libp2p = { version = "0.37.1", default-features = false, features = ["dns-async-std", "tcp-async-io", "wasm-ext", "websocket"] }
-log = "0.4.8"
-pin-project = "1.0.4"
-rand = "0.7.2"
-serde = { version = "1.0.101", features = ["derive"] }
-take_mut = "0.2.2"
-void = "1.0.2"
-serde_json = "1.0.41"
 chrono = "0.4.19"
-thiserror = "1.0.21"
+futures = "0.3.21"
+libp2p = { version = "0.49.0", default-features = false, features = ["dns", "tcp", "tokio", "wasm-ext", "websocket"] }
+log = "0.4.17"
+parking_lot = "0.12.1"
+pin-project = "1.0.12"
+rand = "0.7.2"
+serde = { version = "1.0.136", features = ["derive"] }
+serde_json = "1.0.85"
+thiserror = "1.0.30"
+wasm-timer = "0.2.5"

@@ -1,0 +1,52 @@
+error: `Pallet` does not have #[pallet::origin] defined, perhaps you should remove `Origin` from construct_runtime?
+  --> tests/construct_runtime_ui/undefined_origin_part.rs:5:1
+   |
+5  |   #[frame_support::pallet]
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+49 | / construct_runtime! {
+50 | |     pub enum Runtime where
+51 | |         Block = Block,
+52 | |         NodeBlock = Block,
+...  |
+57 | |     }
+58 | | }
+   | |_- in this macro invocation
+   |
+   = note: this error originates in the macro `pallet::__substrate_origin_check::is_origin_part_defined` which comes from the expansion of the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0412]: cannot find type `Origin` in module `pallet`
+  --> tests/construct_runtime_ui/undefined_origin_part.rs:49:1
+   |
+49 | / construct_runtime! {
+50 | |     pub enum Runtime where
+51 | |         Block = Block,
+52 | |         NodeBlock = Block,
+...  |
+57 | |     }
+58 | | }
+   | |_^ not found in `pallet`
+   |
+   = note: this error originates in the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider importing this type alias
+   |
+1  | use frame_system::Origin;
+   |
+
+error[E0282]: type annotations needed
+  --> tests/construct_runtime_ui/undefined_origin_part.rs:49:1
+   |
+49 | / construct_runtime! {
+50 | |     pub enum Runtime where
+51 | |         Block = Block,
+52 | |         NodeBlock = Block,
+...  |
+57 | |     }
+58 | | }
+   | |_^ cannot infer type of the type parameter `AccountId` declared on the enum `RawOrigin`
+   |
+   = note: this error originates in the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider specifying the generic argument
+   |
+58 | }::<AccountId>
+   |  +++++++++++++

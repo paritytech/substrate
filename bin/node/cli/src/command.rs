@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,12 +16,21 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{chain_spec, service, Cli, Subcommand};
-use node_executor::Executor;
-use node_runtime::{Block, RuntimeApi};
-use sc_cli::{Result, SubstrateCli, RuntimeVersion, Role, ChainSpec};
+use super::benchmarking::{inherent_benchmark_data, RemarkBuilder, TransferKeepAliveBuilder};
+use crate::{
+	chain_spec, service,
+	service::{new_partial, FullClient},
+	Cli, Subcommand,
+};
+use frame_benchmarking_cli::*;
+use kitchensink_runtime::{ExistentialDeposit, RuntimeApi};
+use node_executor::ExecutorDispatch;
+use node_primitives::Block;
+use sc_cli::{ChainSpec, Result, RuntimeVersion, SubstrateCli};
 use sc_service::PartialComponents;
-use crate::service::new_partial;
+use sp_keyring::Sr25519Keyring;
+
+use std::sync::Arc;
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> String {
@@ -49,22 +58,24 @@ impl SubstrateCli for Cli {
 	}
 
 	fn load_spec(&self, id: &str) -> std::result::Result<Box<dyn sc_service::ChainSpec>, String> {
-		let spec =
-			match id {
-				"" => return Err("Please specify which chain you want to run, e.g. --dev or --chain=local".into()),
-				"dev" => Box::new(chain_spec::development_config()),
-				"local" => Box::new(chain_spec::local_testnet_config()),
-				"fir" | "flaming-fir" => Box::new(chain_spec::flaming_fir_config()?),
-				"staging" => Box::new(chain_spec::staging_testnet_config()),
-				path => Box::new(chain_spec::ChainSpec::from_json_file(
-					std::path::PathBuf::from(path),
-				)?),
-			};
+		let spec = match id {
+			"" =>
+				return Err(
+					"Please specify which chain you want to run, e.g. --dev or --chain=local"
+						.into(),
+				),
+			"dev" => Box::new(chain_spec::development_config()),
+			"local" => Box::new(chain_spec::local_testnet_config()),
+			"fir" | "flaming-fir" => Box::new(chain_spec::flaming_fir_config()?),
+			"staging" => Box::new(chain_spec::staging_testnet_config()),
+			path =>
+				Box::new(chain_spec::ChainSpec::from_json_file(std::path::PathBuf::from(path))?),
+		};
 		Ok(spec)
 	}
 
 	fn native_runtime_version(_: &Box<dyn ChainSpec>) -> &'static RuntimeVersion {
-		&node_runtime::VERSION
+		&kitchensink_runtime::VERSION
 	}
 }
 
@@ -76,27 +87,90 @@ pub fn run() -> Result<()> {
 		None => {
 			let runner = cli.create_runner(&cli.run)?;
 			runner.run_node_until_exit(|config| async move {
-				match config.role {
-					Role::Light => service::new_light(config),
-					_ => service::new_full(config),
-				}.map_err(sc_cli::Error::Service)
+				service::new_full(config, cli.no_hardware_benchmarks)
+					.map_err(sc_cli::Error::Service)
 			})
-		}
+		},
 		Some(Subcommand::Inspect(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
 
-			runner.sync_run(|config| cmd.run::<Block, RuntimeApi, Executor>(config))
-		}
+			runner.sync_run(|config| cmd.run::<Block, RuntimeApi, ExecutorDispatch>(config))
+		},
 		Some(Subcommand::Benchmark(cmd)) => {
-			if cfg!(feature = "runtime-benchmarks") {
-				let runner = cli.create_runner(cmd)?;
+			let runner = cli.create_runner(cmd)?;
 
-				runner.sync_run(|config| cmd.run::<Block, Executor>(config))
-			} else {
-				Err("Benchmarking wasn't enabled when building the node. \
-				You can enable it with `--features runtime-benchmarks`.".into())
-			}
-		}
+			runner.sync_run(|config| {
+				// This switch needs to be in the client, since the client decides
+				// which sub-commands it wants to support.
+				match cmd {
+					BenchmarkCmd::Pallet(cmd) => {
+						if !cfg!(feature = "runtime-benchmarks") {
+							return Err(
+								"Runtime benchmarking wasn't enabled when building the node. \
+							You can enable it with `--features runtime-benchmarks`."
+									.into(),
+							)
+						}
+
+						cmd.run::<Block, ExecutorDispatch>(config)
+					},
+					BenchmarkCmd::Block(cmd) => {
+						// ensure that we keep the task manager alive
+						let partial = new_partial(&config)?;
+						cmd.run(partial.client)
+					},
+					#[cfg(not(feature = "runtime-benchmarks"))]
+					BenchmarkCmd::Storage(_) => Err(
+						"Storage benchmarking can be enabled with `--features runtime-benchmarks`."
+							.into(),
+					),
+					#[cfg(feature = "runtime-benchmarks")]
+					BenchmarkCmd::Storage(cmd) => {
+						// ensure that we keep the task manager alive
+						let partial = new_partial(&config)?;
+						let db = partial.backend.expose_db();
+						let storage = partial.backend.expose_storage();
+
+						cmd.run(config, partial.client, db, storage)
+					},
+					BenchmarkCmd::Overhead(cmd) => {
+						// ensure that we keep the task manager alive
+						let partial = new_partial(&config)?;
+						let ext_builder = RemarkBuilder::new(partial.client.clone());
+
+						cmd.run(
+							config,
+							partial.client,
+							inherent_benchmark_data()?,
+							Vec::new(),
+							&ext_builder,
+						)
+					},
+					BenchmarkCmd::Extrinsic(cmd) => {
+						// ensure that we keep the task manager alive
+						let partial = service::new_partial(&config)?;
+						// Register the *Remark* and *TKA* builders.
+						let ext_factory = ExtrinsicFactory(vec![
+							Box::new(RemarkBuilder::new(partial.client.clone())),
+							Box::new(TransferKeepAliveBuilder::new(
+								partial.client.clone(),
+								Sr25519Keyring::Alice.to_account_id(),
+								ExistentialDeposit::get(),
+							)),
+						]);
+
+						cmd.run(
+							partial.client,
+							inherent_benchmark_data()?,
+							Vec::new(),
+							&ext_factory,
+						)
+					},
+					BenchmarkCmd::Machine(cmd) =>
+						cmd.run(&config, SUBSTRATE_REFERENCE_HARDWARE.clone()),
+				}
+			})
+		},
 		Some(Subcommand::Key(cmd)) => cmd.run(&cli),
 		Some(Subcommand::Sign(cmd)) => cmd.run(),
 		Some(Subcommand::Verify(cmd)) => cmd.run(),
@@ -108,32 +182,30 @@ pub fn run() -> Result<()> {
 		Some(Subcommand::CheckBlock(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
 			runner.async_run(|config| {
-				let PartialComponents { client, task_manager, import_queue, ..}
-					= new_partial(&config)?;
+				let PartialComponents { client, task_manager, import_queue, .. } =
+					new_partial(&config)?;
 				Ok((cmd.run(client, import_queue), task_manager))
 			})
 		},
 		Some(Subcommand::ExportBlocks(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
 			runner.async_run(|config| {
-				let PartialComponents { client, task_manager, ..}
-					= new_partial(&config)?;
+				let PartialComponents { client, task_manager, .. } = new_partial(&config)?;
 				Ok((cmd.run(client, config.database), task_manager))
 			})
 		},
 		Some(Subcommand::ExportState(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
 			runner.async_run(|config| {
-				let PartialComponents { client, task_manager, ..}
-					= new_partial(&config)?;
+				let PartialComponents { client, task_manager, .. } = new_partial(&config)?;
 				Ok((cmd.run(client, config.chain_spec), task_manager))
 			})
 		},
 		Some(Subcommand::ImportBlocks(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
 			runner.async_run(|config| {
-				let PartialComponents { client, task_manager, import_queue, ..}
-					= new_partial(&config)?;
+				let PartialComponents { client, task_manager, import_queue, .. } =
+					new_partial(&config)?;
 				Ok((cmd.run(client, import_queue), task_manager))
 			})
 		},
@@ -144,9 +216,13 @@ pub fn run() -> Result<()> {
 		Some(Subcommand::Revert(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
 			runner.async_run(|config| {
-				let PartialComponents { client, task_manager, backend, ..}
-					= new_partial(&config)?;
-				Ok((cmd.run(client, backend), task_manager))
+				let PartialComponents { client, task_manager, backend, .. } = new_partial(&config)?;
+				let aux_revert = Box::new(|client: Arc<FullClient>, backend, blocks| {
+					sc_consensus_babe::revert(client.clone(), backend, blocks)?;
+					grandpa::revert(client, blocks)?;
+					Ok(())
+				});
+				Ok((cmd.run(client, backend, Some(aux_revert)), task_manager))
 			})
 		},
 		#[cfg(feature = "try-runtime")]
@@ -156,13 +232,20 @@ pub fn run() -> Result<()> {
 				// we don't need any of the components of new_partial, just a runtime, or a task
 				// manager to do `async_run`.
 				let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
-				let task_manager = sc_service::TaskManager::new(
-					config.task_executor.clone(),
-					registry,
-				).map_err(|e| sc_cli::Error::Service(sc_service::Error::Prometheus(e)))?;
+				let task_manager =
+					sc_service::TaskManager::new(config.tokio_handle.clone(), registry)
+						.map_err(|e| sc_cli::Error::Service(sc_service::Error::Prometheus(e)))?;
 
-				Ok((cmd.run::<Block, Executor>(config), task_manager))
+				Ok((cmd.run::<Block, ExecutorDispatch>(config), task_manager))
 			})
-		}
+		},
+		#[cfg(not(feature = "try-runtime"))]
+		Some(Subcommand::TryRuntime) => Err("TryRuntime wasn't enabled when building the node. \
+				You can enable it with `--features try-runtime`."
+			.into()),
+		Some(Subcommand::ChainInfo(cmd)) => {
+			let runner = cli.create_runner(cmd)?;
+			runner.sync_run(|config| cmd.run::<Block>(&config))
+		},
 	}
 }

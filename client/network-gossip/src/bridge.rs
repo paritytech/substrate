@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,32 +16,36 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{Network, Validator};
-use crate::state_machine::{ConsensusGossip, TopicNotification, PERIODIC_MAINTENANCE_INTERVAL};
+use crate::{
+	state_machine::{ConsensusGossip, TopicNotification, PERIODIC_MAINTENANCE_INTERVAL},
+	Network, Validator,
+};
 
-use sc_network::{Event, ReputationChange};
+use sc_network_common::protocol::{event::Event, ProtocolName};
+use sc_peerset::ReputationChange;
 
-use futures::prelude::*;
-use futures::channel::mpsc::{channel, Sender, Receiver};
+use futures::{
+	channel::mpsc::{channel, Receiver, Sender},
+	prelude::*,
+};
 use libp2p::PeerId;
 use log::trace;
 use prometheus_endpoint::Registry;
 use sp_runtime::traits::Block as BlockT;
 use std::{
-	borrow::Cow,
 	collections::{HashMap, VecDeque},
 	pin::Pin,
 	sync::Arc,
 	task::{Context, Poll},
 };
 
-/// Wraps around an implementation of the `Network` crate and provides gossiping capabilities on
+/// Wraps around an implementation of the [`Network`] trait and provides gossiping capabilities on
 /// top of it.
 pub struct GossipEngine<B: BlockT> {
 	state_machine: ConsensusGossip<B>,
 	network: Box<dyn Network<B> + Send>,
 	periodic_maintenance_interval: futures_timer::Delay,
-	protocol: Cow<'static, str>,
+	protocol: ProtocolName,
 
 	/// Incoming events from the network.
 	network_event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
@@ -49,10 +53,12 @@ pub struct GossipEngine<B: BlockT> {
 	message_sinks: HashMap<B::Hash, Vec<Sender<TopicNotification>>>,
 	/// Buffered messages (see [`ForwardingState`]).
 	forwarding_state: ForwardingState<B>,
+
+	is_terminated: bool,
 }
 
 /// A gossip engine receives messages from the network via the `network_event_stream` and forwards
-/// them to upper layers via the `message sinks`. In the scenario where messages have been received
+/// them to upper layers via the `message_sinks`. In the scenario where messages have been received
 /// from the network but a subscribed message sink is not yet ready to receive the messages, the
 /// messages are buffered. To model this process a gossip engine can be in two states.
 enum ForwardingState<B: BlockT> {
@@ -60,8 +66,8 @@ enum ForwardingState<B: BlockT> {
 	/// more messages to forward.
 	Idle,
 	/// The gossip engine is in the progress of forwarding messages and thus will not poll the
-	/// network for more messages until it has send all current messages into the subscribed message
-	/// sinks.
+	/// network for more messages until it has send all current messages into the subscribed
+	/// message sinks.
 	Busy(VecDeque<(B::Hash, TopicNotification)>),
 }
 
@@ -71,12 +77,15 @@ impl<B: BlockT> GossipEngine<B> {
 	/// Create a new instance.
 	pub fn new<N: Network<B> + Send + Clone + 'static>(
 		network: N,
-		protocol: impl Into<Cow<'static, str>>,
+		protocol: impl Into<ProtocolName>,
 		validator: Arc<dyn Validator<B>>,
 		metrics_registry: Option<&Registry>,
-	) -> Self where B: 'static {
+	) -> Self
+	where
+		B: 'static,
+	{
 		let protocol = protocol.into();
-		let network_event_stream = network.event_stream();
+		let network_event_stream = network.event_stream("network-gossip");
 
 		GossipEngine {
 			state_machine: ConsensusGossip::new(validator, protocol.clone(), metrics_registry),
@@ -87,6 +96,8 @@ impl<B: BlockT> GossipEngine<B> {
 			network_event_stream,
 			message_sinks: HashMap::new(),
 			forwarding_state: ForwardingState::Idle,
+
+			is_terminated: false,
 		}
 	}
 
@@ -99,11 +110,7 @@ impl<B: BlockT> GossipEngine<B> {
 	/// the message's topic. No validation is performed on the message, if the
 	/// message is already expired it should be dropped on the next garbage
 	/// collection.
-	pub fn register_gossip_message(
-		&mut self,
-		topic: B::Hash,
-		message: Vec<u8>,
-	) {
+	pub fn register_gossip_message(&mut self, topic: B::Hash, message: Vec<u8>) {
 		self.state_machine.register_message(topic, message);
 	}
 
@@ -113,9 +120,7 @@ impl<B: BlockT> GossipEngine<B> {
 	}
 
 	/// Get data of valid, incoming messages for a topic (but might have expired meanwhile).
-	pub fn messages_for(&mut self, topic: B::Hash)
-		-> Receiver<TopicNotification>
-	{
+	pub fn messages_for(&mut self, topic: B::Hash) -> Receiver<TopicNotification> {
 		let past_messages = self.state_machine.messages_for(topic).collect::<Vec<_>>();
 		// The channel length is not critical for correctness. By the implementation of `channel`
 		// each sender is guaranteed a single buffer slot, making it a non-rendezvous channel and
@@ -124,7 +129,7 @@ impl<B: BlockT> GossipEngine<B> {
 		// contains a single message.
 		let (mut tx, rx) = channel(usize::max(past_messages.len(), 10));
 
-		for notification in past_messages{
+		for notification in past_messages {
 			tx.try_send(notification)
 				.expect("receiver known to be live, and buffer size known to suffice; qed");
 		}
@@ -135,28 +140,18 @@ impl<B: BlockT> GossipEngine<B> {
 	}
 
 	/// Send all messages with given topic to a peer.
-	pub fn send_topic(
-		&mut self,
-		who: &PeerId,
-		topic: B::Hash,
-		force: bool
-	) {
+	pub fn send_topic(&mut self, who: &PeerId, topic: B::Hash, force: bool) {
 		self.state_machine.send_topic(&mut *self.network, who, topic, force)
 	}
 
 	/// Multicast a message to all peers.
-	pub fn gossip_message(
-		&mut self,
-		topic: B::Hash,
-		message: Vec<u8>,
-		force: bool,
-	) {
+	pub fn gossip_message(&mut self, topic: B::Hash, message: Vec<u8>, force: bool) {
 		self.state_machine.multicast(&mut *self.network, topic, message, force)
 	}
 
 	/// Send addressed message to the given peers. The message is not kept or multicast
 	/// later on.
-	pub fn send_message(&mut self, who: Vec<sc_network::PeerId>, data: Vec<u8>) {
+	pub fn send_message(&mut self, who: Vec<PeerId>, data: Vec<u8>) {
 		for who in &who {
 			self.state_machine.send_message(&mut *self.network, who, data.clone());
 		}
@@ -167,7 +162,7 @@ impl<B: BlockT> GossipEngine<B> {
 	/// Note: this method isn't strictly related to gossiping and should eventually be moved
 	/// somewhere else.
 	pub fn announce(&self, block: B::Hash, associated_data: Option<Vec<u8>>) {
-		self.network.announce(block, associated_data);
+		self.network.announce_block(block, associated_data);
 	}
 }
 
@@ -184,30 +179,36 @@ impl<B: BlockT> Future for GossipEngine<B> {
 						Poll::Ready(Some(event)) => match event {
 							Event::SyncConnected { remote } => {
 								this.network.add_set_reserved(remote, this.protocol.clone());
-							}
+							},
 							Event::SyncDisconnected { remote } => {
-								this.network.remove_set_reserved(remote, this.protocol.clone());
-							}
+								this.network.remove_peers_from_reserved_set(
+									this.protocol.clone(),
+									vec![remote],
+								);
+							},
 							Event::NotificationStreamOpened { remote, protocol, role, .. } => {
 								if protocol != this.protocol {
-									continue;
+									continue
 								}
 								this.state_machine.new_peer(&mut *this.network, remote, role);
-							}
+							},
 							Event::NotificationStreamClosed { remote, protocol } => {
 								if protocol != this.protocol {
-									continue;
+									continue
 								}
 								this.state_machine.peer_disconnected(&mut *this.network, remote);
 							},
 							Event::NotificationsReceived { remote, messages } => {
-								let messages = messages.into_iter().filter_map(|(engine, data)| {
-									if engine == this.protocol {
-										Some(data.to_vec())
-									} else {
-										None
-									}
-								}).collect();
+								let messages = messages
+									.into_iter()
+									.filter_map(|(engine, data)| {
+										if engine == this.protocol {
+											Some(data.to_vec())
+										} else {
+											None
+										}
+									})
+									.collect();
 
 								let to_forward = this.state_machine.on_incoming(
 									&mut *this.network,
@@ -217,27 +218,28 @@ impl<B: BlockT> Future for GossipEngine<B> {
 
 								this.forwarding_state = ForwardingState::Busy(to_forward.into());
 							},
-							Event::Dht(_) => {}
-						}
+							Event::Dht(_) => {},
+						},
 						// The network event stream closed. Do the same for [`GossipValidator`].
-						Poll::Ready(None) => return Poll::Ready(()),
+						Poll::Ready(None) => {
+							self.is_terminated = true;
+							return Poll::Ready(())
+						},
 						Poll::Pending => break,
 					}
-				}
+				},
 				ForwardingState::Busy(to_forward) => {
 					let (topic, notification) = match to_forward.pop_front() {
 						Some(n) => n,
 						None => {
 							this.forwarding_state = ForwardingState::Idle;
-							continue;
-						}
+							continue
+						},
 					};
 
 					let sinks = match this.message_sinks.get_mut(&topic) {
 						Some(sinks) => sinks,
-						None => {
-							continue;
-						},
+						None => continue,
 					};
 
 					// Make sure all sinks for the given topic are ready.
@@ -249,8 +251,8 @@ impl<B: BlockT> Future for GossipEngine<B> {
 							Poll::Pending => {
 								// Push back onto queue for later.
 								to_forward.push_front((topic, notification));
-								break 'outer;
-							}
+								break 'outer
+							},
 						}
 					}
 
@@ -259,7 +261,7 @@ impl<B: BlockT> Future for GossipEngine<B> {
 
 					if sinks.is_empty() {
 						this.message_sinks.remove(&topic);
-						continue;
+						continue
 					}
 
 					trace!(
@@ -271,17 +273,16 @@ impl<B: BlockT> Future for GossipEngine<B> {
 					for sink in sinks {
 						match sink.start_send(notification.clone()) {
 							Ok(()) => {},
-							Err(e) if e.is_full() => unreachable!(
-								"Previously ensured that all sinks are ready; qed.",
-							),
+							Err(e) if e.is_full() => {
+								unreachable!("Previously ensured that all sinks are ready; qed.")
+							},
 							// Receiver got dropped. Will be removed in next iteration (See (1)).
 							Err(_) => {},
 						}
 					}
-				}
+				},
 			}
 		}
-
 
 		while let Poll::Ready(()) = this.periodic_maintenance_interval.poll_unpin(cx) {
 			this.periodic_maintenance_interval.reset(PERIODIC_MAINTENANCE_INTERVAL);
@@ -297,19 +298,39 @@ impl<B: BlockT> Future for GossipEngine<B> {
 	}
 }
 
+impl<B: BlockT> futures::future::FusedFuture for GossipEngine<B> {
+	fn is_terminated(&self) -> bool {
+		self.is_terminated
+	}
+}
+
 #[cfg(test)]
 mod tests {
-	use async_std::task::spawn;
-	use crate::{ValidationResult, ValidatorContext};
-	use futures::{channel::mpsc::{unbounded, UnboundedSender}, executor::{block_on, block_on_stream}, future::poll_fn};
-	use quickcheck::{Arbitrary, Gen, QuickCheck};
-	use sc_network::ObservedRole;
-	use sp_runtime::{testing::H256, traits::{Block as BlockT}};
-	use std::borrow::Cow;
-	use std::convert::TryInto;
-	use std::sync::{Arc, Mutex};
-	use substrate_test_runtime_client::runtime::Block;
 	use super::*;
+	use crate::{multiaddr::Multiaddr, ValidationResult, ValidatorContext};
+	use futures::{
+		channel::mpsc::{unbounded, UnboundedSender},
+		executor::{block_on, block_on_stream},
+		future::poll_fn,
+	};
+	use quickcheck::{Arbitrary, Gen, QuickCheck};
+	use sc_network_common::{
+		config::MultiaddrWithPeerId,
+		protocol::role::ObservedRole,
+		service::{
+			NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
+			NotificationSender, NotificationSenderError,
+		},
+	};
+	use sp_runtime::{
+		testing::H256,
+		traits::{Block as BlockT, NumberFor},
+	};
+	use std::{
+		collections::HashSet,
+		sync::{Arc, Mutex},
+	};
+	use substrate_test_runtime_client::runtime::Block;
 
 	#[derive(Clone, Default)]
 	struct TestNetwork {
@@ -321,32 +342,109 @@ mod tests {
 		event_senders: Vec<UnboundedSender<Event>>,
 	}
 
-	impl<B: BlockT> Network<B> for TestNetwork {
-		fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
+	impl NetworkPeers for TestNetwork {
+		fn set_authorized_peers(&self, _peers: HashSet<PeerId>) {
+			unimplemented!();
+		}
+
+		fn set_authorized_only(&self, _reserved_only: bool) {
+			unimplemented!();
+		}
+
+		fn add_known_address(&self, _peer_id: PeerId, _addr: Multiaddr) {
+			unimplemented!();
+		}
+
+		fn report_peer(&self, _who: PeerId, _cost_benefit: ReputationChange) {}
+
+		fn disconnect_peer(&self, _who: PeerId, _protocol: ProtocolName) {
+			unimplemented!();
+		}
+
+		fn accept_unreserved_peers(&self) {
+			unimplemented!();
+		}
+
+		fn deny_unreserved_peers(&self) {
+			unimplemented!();
+		}
+
+		fn add_reserved_peer(&self, _peer: MultiaddrWithPeerId) -> Result<(), String> {
+			unimplemented!();
+		}
+
+		fn remove_reserved_peer(&self, _peer_id: PeerId) {
+			unimplemented!();
+		}
+
+		fn set_reserved_peers(
+			&self,
+			_protocol: ProtocolName,
+			_peers: HashSet<Multiaddr>,
+		) -> Result<(), String> {
+			unimplemented!();
+		}
+
+		fn add_peers_to_reserved_set(
+			&self,
+			_protocol: ProtocolName,
+			_peers: HashSet<Multiaddr>,
+		) -> Result<(), String> {
+			unimplemented!();
+		}
+
+		fn remove_peers_from_reserved_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {}
+
+		fn add_to_peers_set(
+			&self,
+			_protocol: ProtocolName,
+			_peers: HashSet<Multiaddr>,
+		) -> Result<(), String> {
+			unimplemented!();
+		}
+
+		fn remove_from_peers_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {
+			unimplemented!();
+		}
+
+		fn sync_num_connected(&self) -> usize {
+			unimplemented!();
+		}
+	}
+
+	impl NetworkEventStream for TestNetwork {
+		fn event_stream(&self, _name: &'static str) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
 			let (tx, rx) = unbounded();
 			self.inner.lock().unwrap().event_senders.push(tx);
 
 			Box::pin(rx)
 		}
+	}
 
-		fn report_peer(&self, _: PeerId, _: ReputationChange) {
-		}
-
-		fn disconnect_peer(&self, _: PeerId, _: Cow<'static, str>) {
+	impl NetworkNotification for TestNetwork {
+		fn write_notification(&self, _target: PeerId, _protocol: ProtocolName, _message: Vec<u8>) {
 			unimplemented!();
 		}
 
-		fn add_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {
+		fn notification_sender(
+			&self,
+			_target: PeerId,
+			_protocol: ProtocolName,
+		) -> Result<Box<dyn NotificationSender>, NotificationSenderError> {
+			unimplemented!();
 		}
+	}
 
-		fn remove_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {
-		}
-
-		fn write_notification(&self, _: PeerId, _: Cow<'static, str>, _: Vec<u8>) {
+	impl NetworkBlock<<Block as BlockT>::Hash, NumberFor<Block>> for TestNetwork {
+		fn announce_block(&self, _hash: <Block as BlockT>::Hash, _data: Option<Vec<u8>>) {
 			unimplemented!();
 		}
 
-		fn announce(&self, _: B::Hash, _: Option<Vec<u8>>) {
+		fn new_best_block_imported(
+			&self,
+			_hash: <Block as BlockT>::Hash,
+			_number: NumberFor<Block>,
+		) {
 			unimplemented!();
 		}
 	}
@@ -391,10 +489,10 @@ mod tests {
 		}))
 	}
 
-	#[test]
-	fn keeps_multiple_subscribers_per_topic_updated_with_both_old_and_new_messages() {
+	#[tokio::test(flavor = "multi_thread")]
+	async fn keeps_multiple_subscribers_per_topic_updated_with_both_old_and_new_messages() {
 		let topic = H256::default();
-		let protocol = Cow::Borrowed("/my_protocol");
+		let protocol = ProtocolName::from("/my_protocol");
 		let remote_peer = PeerId::random();
 		let network = TestNetwork::default();
 
@@ -405,32 +503,32 @@ mod tests {
 			None,
 		);
 
-		let mut event_sender = network.inner.lock()
-			.unwrap()
-			.event_senders
-			.pop()
-			.unwrap();
+		let mut event_sender = network.inner.lock().unwrap().event_senders.pop().unwrap();
 
 		// Register the remote peer.
-		event_sender.start_send(
-			Event::NotificationStreamOpened {
-				remote: remote_peer.clone(),
+		event_sender
+			.start_send(Event::NotificationStreamOpened {
+				remote: remote_peer,
 				protocol: protocol.clone(),
 				negotiated_fallback: None,
 				role: ObservedRole::Authority,
-			}
-		).expect("Event stream is unbounded; qed.");
+			})
+			.expect("Event stream is unbounded; qed.");
 
 		let messages = vec![vec![1], vec![2]];
-		let events = messages.iter().cloned().map(|m| {
-			Event::NotificationsReceived {
-				remote: remote_peer.clone(),
-				messages: vec![(protocol.clone(), m.into())]
-			}
-		}).collect::<Vec<_>>();
+		let events = messages
+			.iter()
+			.cloned()
+			.map(|m| Event::NotificationsReceived {
+				remote: remote_peer,
+				messages: vec![(protocol.clone(), m.into())],
+			})
+			.collect::<Vec<_>>();
 
 		// Send first event before subscribing.
-		event_sender.start_send(events[0].clone()).expect("Event stream is unbounded; qed.");
+		event_sender
+			.start_send(events[0].clone())
+			.expect("Event stream is unbounded; qed.");
 
 		let mut subscribers = vec![];
 		for _ in 0..2 {
@@ -438,23 +536,23 @@ mod tests {
 		}
 
 		// Send second event after subscribing.
-		event_sender.start_send(events[1].clone()).expect("Event stream is unbounded; qed.");
+		event_sender
+			.start_send(events[1].clone())
+			.expect("Event stream is unbounded; qed.");
 
-		spawn(gossip_engine);
+		tokio::spawn(gossip_engine);
 
-		let mut subscribers = subscribers.into_iter()
-			.map(|s| block_on_stream(s))
-			.collect::<Vec<_>>();
+		// Note: `block_on_stream()`-derived iterator will block the current thread,
+		//       so we need a `multi_thread` `tokio::test` runtime flavor.
+		let mut subscribers =
+			subscribers.into_iter().map(|s| block_on_stream(s)).collect::<Vec<_>>();
 
 		// Expect each subscriber to receive both events.
 		for message in messages {
 			for subscriber in subscribers.iter_mut() {
 				assert_eq!(
 					subscriber.next(),
-					Some(TopicNotification {
-						message: message.clone(),
-						sender: Some(remote_peer.clone()),
-					}),
+					Some(TopicNotification { message: message.clone(), sender: Some(remote_peer) }),
 				);
 			}
 		}
@@ -463,7 +561,7 @@ mod tests {
 	#[test]
 	fn forwarding_to_different_size_and_topic_channels() {
 		#[derive(Clone, Debug)]
-		struct ChannelLengthAndTopic{
+		struct ChannelLengthAndTopic {
 			length: usize,
 			topic: H256,
 		}
@@ -486,7 +584,7 @@ mod tests {
 			topic: H256,
 		}
 
-		impl Arbitrary for Message{
+		impl Arbitrary for Message {
 			fn arbitrary(g: &mut Gen) -> Self {
 				let possible_topics = (0..10).collect::<Vec<u64>>();
 				Self {
@@ -513,17 +611,20 @@ mod tests {
 		}
 
 		fn prop(channels: Vec<ChannelLengthAndTopic>, notifications: Vec<Vec<Message>>) {
-			let protocol = Cow::Borrowed("/my_protocol");
+			let protocol = ProtocolName::from("/my_protocol");
 			let remote_peer = PeerId::random();
 			let network = TestNetwork::default();
 
-			let num_channels_per_topic = channels.iter()
-				.fold(HashMap::new(), |mut acc, ChannelLengthAndTopic { topic, .. }| {
+			let num_channels_per_topic = channels.iter().fold(
+				HashMap::new(),
+				|mut acc, ChannelLengthAndTopic { topic, .. }| {
 					acc.entry(topic).and_modify(|e| *e += 1).or_insert(1);
 					acc
-				});
+				},
+			);
 
-			let expected_msgs_per_topic_all_chan = notifications.iter()
+			let expected_msgs_per_topic_all_chan = notifications
+				.iter()
 				.fold(HashMap::new(), |mut acc, messages| {
 					for message in messages {
 						acc.entry(message.topic).and_modify(|e| *e += 1).or_insert(1);
@@ -545,12 +646,12 @@ mod tests {
 			);
 
 			// Create channels.
-			let (txs, mut rxs) = channels.iter()
-				.map(|ChannelLengthAndTopic { length, topic }| {
-					(topic.clone(), channel(*length))
-				})
+			let (txs, mut rxs) = channels
+				.iter()
+				.map(|ChannelLengthAndTopic { length, topic }| (*topic, channel(*length)))
 				.fold((vec![], vec![]), |mut acc, (topic, (tx, rx))| {
-					acc.0.push((topic, tx)); acc.1.push((topic, rx));
+					acc.0.push((topic, tx));
+					acc.1.push((topic, rx));
 					acc
 				});
 
@@ -560,30 +661,27 @@ mod tests {
 					Some(entry) => entry.push(tx),
 					None => {
 						gossip_engine.message_sinks.insert(topic, vec![tx]);
-					}
+					},
 				}
 			}
 
-
-			let mut event_sender = network.inner.lock()
-				.unwrap()
-				.event_senders
-				.pop()
-				.unwrap();
+			let mut event_sender = network.inner.lock().unwrap().event_senders.pop().unwrap();
 
 			// Register the remote peer.
-			event_sender.start_send(
-				Event::NotificationStreamOpened {
-					remote: remote_peer.clone(),
+			event_sender
+				.start_send(Event::NotificationStreamOpened {
+					remote: remote_peer,
 					protocol: protocol.clone(),
 					negotiated_fallback: None,
 					role: ObservedRole::Authority,
-				}
-			).expect("Event stream is unbounded; qed.");
+				})
+				.expect("Event stream is unbounded; qed.");
 
 			// Send messages into the network event stream.
 			for (i_notification, messages) in notifications.iter().enumerate() {
-				let messages = messages.into_iter().enumerate()
+				let messages = messages
+					.into_iter()
+					.enumerate()
 					.map(|(i_message, Message { topic })| {
 						// Embed the topic in the first 256 bytes of the message to be extracted by
 						// the [`TestValidator`] later on.
@@ -595,12 +693,12 @@ mod tests {
 						message.push(i_message.try_into().unwrap());
 
 						(protocol.clone(), message.into())
-					}).collect();
+					})
+					.collect();
 
-				event_sender.start_send(Event::NotificationsReceived {
-					remote: remote_peer.clone(),
-					messages,
-				}).expect("Event stream is unbounded; qed.");
+				event_sender
+					.start_send(Event::NotificationsReceived { remote: remote_peer, messages })
+					.expect("Event stream is unbounded; qed.");
 			}
 
 			let mut received_msgs_per_topic_all_chan = HashMap::<H256, _>::new();
@@ -621,19 +719,20 @@ mod tests {
 						match rx.poll_next_unpin(cx) {
 							Poll::Ready(Some(_)) => {
 								progress = true;
-								received_msgs_per_topic_all_chan.entry(*topic)
+								received_msgs_per_topic_all_chan
+									.entry(*topic)
 									.and_modify(|e| *e += 1)
 									.or_insert(1);
 							},
-							Poll::Ready(None) => unreachable!(
-								"Sender side of channel is never dropped",
-							),
+							Poll::Ready(None) => {
+								unreachable!("Sender side of channel is never dropped")
+							},
 							Poll::Pending => {},
 						}
 					}
 
 					if !progress {
-						break;
+						break
 					}
 				}
 				Poll::Ready(())
@@ -655,10 +754,10 @@ mod tests {
 		}
 
 		// Past regressions.
-		prop(vec![], vec![vec![Message{ topic: H256::default()}]]);
+		prop(vec![], vec![vec![Message { topic: H256::default() }]]);
 		prop(
-			vec![ChannelLengthAndTopic {length: 71, topic: H256::default()}],
-			vec![vec![Message{ topic: H256::default()}]],
+			vec![ChannelLengthAndTopic { length: 71, topic: H256::default() }],
+			vec![vec![Message { topic: H256::default() }]],
 		);
 
 		QuickCheck::new().quickcheck(prop as fn(_, _))

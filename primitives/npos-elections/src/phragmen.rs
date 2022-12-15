@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,19 +21,19 @@
 //! to the Maximin problem.
 
 use crate::{
-	balancing, setup_inputs, CandidatePtr, ElectionResult, ExtendedBalance, IdentifierT,
-	PerThing128, VoteWeight, Voter,
+	balancing, setup_inputs, BalancingConfig, CandidatePtr, ElectionResult, ExtendedBalance,
+	IdentifierT, PerThing128, VoteWeight, Voter,
 };
 use sp_arithmetic::{
-	helpers_128bit::multiply_by_rational,
+	helpers_128bit::multiply_by_rational_with_rounding,
 	traits::{Bounded, Zero},
-	Rational128,
+	Rational128, Rounding,
 };
 use sp_std::prelude::*;
 
 /// The denominator used for loads. Since votes are collected as u64, the smallest ratio that we
 /// might collect is `1/approval_stake` where approval stake is the sum of votes. Hence, some number
-/// bigger than u64::max_value() is needed. For maximum accuracy we simply use u128;
+/// bigger than u64::MAX is needed. For maximum accuracy we simply use u128;
 const DEN: ExtendedBalance = ExtendedBalance::max_value();
 
 /// Execute sequential phragmen with potentially some rounds of `balancing`. The return type is list
@@ -68,30 +68,26 @@ const DEN: ExtendedBalance = ExtendedBalance::max_value();
 /// check where t is the standard threshold. The underlying algorithm is sound, but the conversions
 /// between numeric types can be lossy.
 pub fn seq_phragmen<AccountId: IdentifierT, P: PerThing128>(
-	rounds: usize,
-	initial_candidates: Vec<AccountId>,
-	initial_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
-	balance: Option<(usize, ExtendedBalance)>,
+	to_elect: usize,
+	candidates: Vec<AccountId>,
+	voters: Vec<(AccountId, VoteWeight, impl IntoIterator<Item = AccountId>)>,
+	balancing: Option<BalancingConfig>,
 ) -> Result<ElectionResult<AccountId, P>, crate::Error> {
-	let (candidates, voters) = setup_inputs(initial_candidates, initial_voters);
+	let (candidates, voters) = setup_inputs(candidates, voters);
 
-	let (candidates, mut voters) = seq_phragmen_core::<AccountId>(
-		rounds,
-		candidates,
-		voters,
-	)?;
+	let (candidates, mut voters) = seq_phragmen_core::<AccountId>(to_elect, candidates, voters)?;
 
-	if let Some((iterations, tolerance)) = balance {
+	if let Some(ref config) = balancing {
 		// NOTE: might create zero-edges, but we will strip them again when we convert voter into
 		// assignment.
-		let _iters = balancing::balance::<AccountId>(&mut voters, iterations, tolerance);
+		let _iters = balancing::balance::<AccountId>(&mut voters, config);
 	}
 
 	let mut winners = candidates
 		.into_iter()
 		.filter(|c_ptr| c_ptr.borrow().elected)
 		// defensive only: seq-phragmen-core returns only up to rounds.
-		.take(rounds)
+		.take(to_elect)
 		.collect::<Vec<_>>();
 
 	// sort winners based on desirability.
@@ -101,8 +97,7 @@ pub fn seq_phragmen<AccountId: IdentifierT, P: PerThing128>(
 		voters.into_iter().filter_map(|v| v.into_assignment()).collect::<Vec<_>>();
 	let _ = assignments
 		.iter_mut()
-		.map(|a| a.try_normalize().map_err(|e| crate::Error::ArithmeticError(e)))
-		.collect::<Result<(), _>>()?;
+		.try_for_each(|a| a.try_normalize().map_err(crate::Error::ArithmeticError))?;
 	let winners = winners
 		.into_iter()
 		.map(|w_ptr| (w_ptr.borrow().who.clone(), w_ptr.borrow().backed_stake))
@@ -120,12 +115,12 @@ pub fn seq_phragmen<AccountId: IdentifierT, P: PerThing128>(
 /// This can only fail if the normalization fails.
 // To create the inputs needed for this function, see [`crate::setup_inputs`].
 pub fn seq_phragmen_core<AccountId: IdentifierT>(
-	rounds: usize,
+	to_elect: usize,
 	candidates: Vec<CandidatePtr<AccountId>>,
 	mut voters: Vec<Voter<AccountId>>,
 ) -> Result<(Vec<CandidatePtr<AccountId>>, Vec<Voter<AccountId>>), crate::Error> {
 	// we have already checked that we have more candidates than minimum_candidate_count.
-	let to_elect = rounds.min(candidates.len());
+	let to_elect = to_elect.min(candidates.len());
 
 	// main election loop
 	for round in 0..to_elect {
@@ -148,11 +143,13 @@ pub fn seq_phragmen_core<AccountId: IdentifierT>(
 			for edge in &voter.edges {
 				let mut candidate = edge.candidate.borrow_mut();
 				if !candidate.elected && !candidate.approval_stake.is_zero() {
-					let temp_n = multiply_by_rational(
+					let temp_n = multiply_by_rational_with_rounding(
 						voter.load.n(),
 						voter.budget,
 						candidate.approval_stake,
-					).unwrap_or(Bounded::max_value());
+						Rounding::Down,
+					)
+					.unwrap_or(Bounded::max_value());
 					let temp_d = voter.load.d();
 					let temp = Rational128::from(temp_n, temp_d);
 					candidate.score = candidate.score.lazy_saturating_add(temp);
@@ -188,10 +185,11 @@ pub fn seq_phragmen_core<AccountId: IdentifierT>(
 		for edge in &mut voter.edges {
 			if edge.candidate.borrow().elected {
 				// update internal state.
-				edge.weight = multiply_by_rational(
+				edge.weight = multiply_by_rational_with_rounding(
 					voter.budget,
 					edge.load.n(),
 					voter.load.n(),
+					Rounding::Down,
 				)
 				// If result cannot fit in u128. Not much we can do about it.
 				.unwrap_or(Bounded::max_value());
@@ -207,7 +205,7 @@ pub fn seq_phragmen_core<AccountId: IdentifierT>(
 		// edge of all candidates that eventually have a non-zero weight must be elected.
 		debug_assert!(voter.edges.iter().all(|e| e.candidate.borrow().elected));
 		// inc budget to sum the budget.
-		voter.try_normalize_elected().map_err(|e| crate::Error::ArithmeticError(e))?;
+		voter.try_normalize_elected().map_err(crate::Error::ArithmeticError)?;
 	}
 
 	Ok((candidates, voters))

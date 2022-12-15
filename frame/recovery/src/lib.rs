@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -33,12 +33,12 @@
 //!
 //! The recovery process for each recoverable account can be configured by the account owner.
 //! They are able to choose:
-//! * `friends` - The list of friends that the account owner trusts to protect the
-//!   recovery process for their account.
-//! * `threshold` - The number of friends that need to approve a recovery process for
-//!   the account to be successfully recovered.
-//! * `delay_period` - The minimum number of blocks after the beginning of the recovery
-//!   process that need to pass before the account can be successfully recovered.
+//! * `friends` - The list of friends that the account owner trusts to protect the recovery process
+//!   for their account.
+//! * `threshold` - The number of friends that need to approve a recovery process for the account to
+//!   be successfully recovered.
+//! * `delay_period` - The minimum number of blocks after the beginning of the recovery process that
+//!   need to pass before the account can be successfully recovered.
 //!
 //! There is a configurable deposit that all users need to pay to create a recovery
 //! configuration. This deposit is composed of a base deposit plus a multiplier for
@@ -101,25 +101,23 @@
 //! security of an account if used incorrectly. Some recommended practices for users
 //! of this pallet are:
 //!
-//! * Configure a significant `delay_period` for your recovery process: As long as you
-//!   have access to your recoverable account, you need only check the blockchain once
-//!   every `delay_period` blocks to ensure that no recovery attempt is successful
-//!   against your account. Using off-chain notification systems can help with this,
-//!   but ultimately, setting a large `delay_period` means that even the most skilled
-//!   attacker will need to wait this long before they can access your account.
-//! * Use a high threshold of approvals: Setting a value of 1 for the threshold means
-//!   that any of your friends would be able to recover your account. They would
-//!   simply need to start a recovery process and approve their own process. Similarly,
-//!   a threshold of 2 would mean that any 2 friends could work together to gain
-//!   access to your account. The only way to prevent against these kinds of attacks
-//!   is to choose a high threshold of approvals and select from a diverse friend
-//!   group that would not be able to reasonably coordinate with one another.
-//! * Reset your configuration over time: Since the entire deposit of creating a
-//!   recovery configuration is returned to the user, the only cost of updating
-//!   your recovery configuration is the transaction fees for the calls. Thus,
-//!   it is strongly encouraged to regularly update your recovery configuration
-//!   as your life changes and your relationship with new and existing friends
-//!   change as well.
+//! * Configure a significant `delay_period` for your recovery process: As long as you have access
+//!   to your recoverable account, you need only check the blockchain once every `delay_period`
+//!   blocks to ensure that no recovery attempt is successful against your account. Using off-chain
+//!   notification systems can help with this, but ultimately, setting a large `delay_period` means
+//!   that even the most skilled attacker will need to wait this long before they can access your
+//!   account.
+//! * Use a high threshold of approvals: Setting a value of 1 for the threshold means that any of
+//!   your friends would be able to recover your account. They would simply need to start a recovery
+//!   process and approve their own process. Similarly, a threshold of 2 would mean that any 2
+//!   friends could work together to gain access to your account. The only way to prevent against
+//!   these kinds of attacks is to choose a high threshold of approvals and select from a diverse
+//!   friend group that would not be able to reasonably coordinate with one another.
+//! * Reset your configuration over time: Since the entire deposit of creating a recovery
+//!   configuration is returned to the user, the only cost of updating your recovery configuration
+//!   is the transaction fees for the calls. Thus, it is strongly encouraged to regularly update
+//!   your recovery configuration as your life changes and your relationship with new and existing
+//!   friends change as well.
 //!
 //! ## Interface
 //!
@@ -131,61 +129,75 @@
 //! * `initiate_recovery` - Start the recovery process for a recoverable account.
 //!
 //! #### For Friends of a Recoverable Account
-//! * `vouch_recovery` - As a `friend` of a recoverable account, vouch for a recovery attempt on the account.
+//! * `vouch_recovery` - As a `friend` of a recoverable account, vouch for a recovery attempt on the
+//!   account.
 //!
 //! #### For a User Who Successfully Recovered an Account
 //!
-//! * `claim_recovery` - Claim access to the account that you have successfully completed the recovery process for.
-//! * `as_recovered` - Send a transaction as an account that you have recovered. See other functions below.
+//! * `claim_recovery` - Claim access to the account that you have successfully completed the
+//!   recovery process for.
+//! * `as_recovered` - Send a transaction as an account that you have recovered. See other functions
+//!   below.
 //!
 //! #### For the Recoverable Account
 //!
-//! * `close_recovery` - Close an active recovery process for your account and reclaim the recovery deposit.
-//! * `remove_recovery` - Remove the recovery configuration from the account, making it un-recoverable.
+//! * `close_recovery` - Close an active recovery process for your account and reclaim the recovery
+//!   deposit.
+//! * `remove_recovery` - Remove the recovery configuration from the account, making it
+//!   un-recoverable.
 //!
 //! #### For Super Users
 //!
-//! * `set_recovered` - The ROOT origin is able to skip the recovery process and directly allow
-//!   one account to access another.
+//! * `set_recovered` - The ROOT origin is able to skip the recovery process and directly allow one
+//!   account to access another.
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use codec::{Decode, Encode, MaxEncodedLen};
+use scale_info::TypeInfo;
+use sp_runtime::traits::{CheckedAdd, CheckedMul, Dispatchable, SaturatedConversion, StaticLookup};
 use sp_std::prelude::*;
-use sp_runtime::traits::{Dispatchable, SaturatedConversion, CheckedAdd, CheckedMul};
-use codec::{Encode, Decode};
 
 use frame_support::{
-	RuntimeDebug, weights::GetDispatchInfo,
-	traits::{Currency, ReservableCurrency, BalanceStatus},
-	dispatch::PostDispatchInfo,
+	dispatch::{GetDispatchInfo, PostDispatchInfo},
+	traits::{BalanceStatus, Currency, ReservableCurrency},
+	BoundedVec, RuntimeDebug,
 };
 
 pub use pallet::*;
+pub use weights::WeightInfo;
+
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
+pub mod weights;
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
+type FriendsOf<T> = BoundedVec<<T as frame_system::Config>::AccountId, <T as Config>::MaxFriends>;
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
+
 /// An active recovery process.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug)]
-pub struct ActiveRecovery<BlockNumber, Balance, AccountId> {
+#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub struct ActiveRecovery<BlockNumber, Balance, Friends> {
 	/// The block number when the recovery process started.
 	created: BlockNumber,
 	/// The amount held in reserve of the `depositor`,
 	/// To be returned once this recovery process is closed.
 	deposit: Balance,
 	/// The friends which have vouched so far. Always sorted.
-	friends: Vec<AccountId>,
+	friends: Friends,
 }
 
 /// Configuration for recovering an account.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug)]
-pub struct RecoveryConfig<BlockNumber, Balance, AccountId> {
+#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub struct RecoveryConfig<BlockNumber, Balance, Friends> {
 	/// The minimum number of blocks since the start of the recovery process before the account
 	/// can be recovered.
 	delay_period: BlockNumber,
@@ -193,17 +205,17 @@ pub struct RecoveryConfig<BlockNumber, Balance, AccountId> {
 	/// to be returned once this configuration is removed.
 	deposit: Balance,
 	/// The list of friends which can help recover an account. Always sorted.
-	friends: Vec<AccountId>,
+	friends: Friends,
 	/// The number of approving friends needed to recover an account.
 	threshold: u16,
 }
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::{ensure, Parameter, pallet_prelude::*, traits::Get};
-	use frame_system::{pallet_prelude::*, ensure_signed, ensure_root};
-	use sp_runtime::ArithmeticError;
 	use super::*;
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
+	use sp_runtime::ArithmeticError;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -213,10 +225,16 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+
+		/// Weight information for extrinsics in this pallet.
+		type WeightInfo: WeightInfo;
 
 		/// The overarching call type.
-		type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo> + GetDispatchInfo;
+		type RuntimeCall: Parameter
+			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin, PostInfo = PostDispatchInfo>
+			+ GetDispatchInfo
+			+ From<frame_system::Call<Self>>;
 
 		/// The currency mechanism.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -228,15 +246,22 @@ pub mod pallet {
 		#[pallet::constant]
 		type ConfigDepositBase: Get<BalanceOf<Self>>;
 
-		/// The amount of currency needed per additional user when creating a recovery configuration.
+		/// The amount of currency needed per additional user when creating a recovery
+		/// configuration.
 		///
-		/// This is held for adding `sizeof(AccountId)` bytes more into a pre-existing storage value.
+		/// This is held for adding `sizeof(AccountId)` bytes more into a pre-existing storage
+		/// value.
 		#[pallet::constant]
 		type FriendDepositFactor: Get<BalanceOf<Self>>;
 
 		/// The maximum amount of friends allowed in a recovery configuration.
+		///
+		/// NOTE: The threshold programmed in this Pallet uses u16, so it does
+		/// not really make sense to have a limit here greater than u16::MAX.
+		/// But also, that is a lot more than you should probably set this value
+		/// to anyway...
 		#[pallet::constant]
-		type MaxFriends: Get<u16>;
+		type MaxFriends: Get<u32>;
 
 		/// The base amount of currency needed to reserve for starting a recovery.
 		///
@@ -252,24 +277,23 @@ pub mod pallet {
 	/// Events type.
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(T::AccountId = "AccountId")]
 	pub enum Event<T: Config> {
-		/// A recovery process has been set up for an \[account\].
-		RecoveryCreated(T::AccountId),
+		/// A recovery process has been set up for an account.
+		RecoveryCreated { account: T::AccountId },
 		/// A recovery process has been initiated for lost account by rescuer account.
-		/// \[lost, rescuer\]
-		RecoveryInitiated(T::AccountId, T::AccountId),
+		RecoveryInitiated { lost_account: T::AccountId, rescuer_account: T::AccountId },
 		/// A recovery process for lost account by rescuer account has been vouched for by sender.
-		/// \[lost, rescuer, sender\]
-		RecoveryVouched(T::AccountId, T::AccountId, T::AccountId),
+		RecoveryVouched {
+			lost_account: T::AccountId,
+			rescuer_account: T::AccountId,
+			sender: T::AccountId,
+		},
 		/// A recovery process for lost account by rescuer account has been closed.
-		/// \[lost, rescuer\]
-		RecoveryClosed(T::AccountId, T::AccountId),
+		RecoveryClosed { lost_account: T::AccountId, rescuer_account: T::AccountId },
 		/// Lost account has been successfully recovered by rescuer account.
-		/// \[lost, rescuer\]
-		AccountRecovered(T::AccountId, T::AccountId),
-		/// A recovery process has been removed for an \[account\].
-		RecoveryRemoved(T::AccountId),
+		AccountRecovered { lost_account: T::AccountId, rescuer_account: T::AccountId },
+		/// A recovery process has been removed for an account.
+		RecoveryRemoved { lost_account: T::AccountId },
 	}
 
 	#[pallet::error]
@@ -313,8 +337,9 @@ pub mod pallet {
 	#[pallet::getter(fn recovery_config)]
 	pub type Recoverable<T: Config> = StorageMap<
 		_,
-		Twox64Concat, T::AccountId,
-		RecoveryConfig<T::BlockNumber, BalanceOf<T>, T::AccountId>,
+		Twox64Concat,
+		T::AccountId,
+		RecoveryConfig<T::BlockNumber, BalanceOf<T>, FriendsOf<T>>,
 	>;
 
 	/// Active recovery attempts.
@@ -323,11 +348,13 @@ pub mod pallet {
 	/// is the user trying to recover the account.
 	#[pallet::storage]
 	#[pallet::getter(fn active_recovery)]
-	pub type ActiveRecoveries<T: Config>= StorageDoubleMap<
+	pub type ActiveRecoveries<T: Config> = StorageDoubleMap<
 		_,
-		Twox64Concat, T::AccountId,
-		Twox64Concat, T::AccountId,
-		ActiveRecovery<T::BlockNumber, BalanceOf<T>, T::AccountId>,
+		Twox64Concat,
+		T::AccountId,
+		Twox64Concat,
+		T::AccountId,
+		ActiveRecovery<T::BlockNumber, BalanceOf<T>, FriendsOf<T>>,
 	>;
 
 	/// The list of allowed proxy accounts.
@@ -347,32 +374,25 @@ pub mod pallet {
 		/// Parameters:
 		/// - `account`: The recovered account you want to make a call on-behalf-of.
 		/// - `call`: The call you want to make with the recovered account.
-		///
-		/// # <weight>
-		/// - The weight of the `call` + 10,000.
-		/// - One storage lookup to check account is recovered by `who`. O(1)
-		/// # </weight>
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
 			(
-				dispatch_info.weight
-					.saturating_add(10_000)
-					// AccountData for inner call origin accountdata.
-					.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
+				T::WeightInfo::as_recovered().saturating_add(dispatch_info.weight),
 				dispatch_info.class,
-			)
-		})]
-		pub(crate) fn as_recovered(
+			)})]
+		pub fn as_recovered(
 			origin: OriginFor<T>,
-			account: T::AccountId,
-			call: Box<<T as Config>::Call>
+			account: AccountIdLookupOf<T>,
+			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let account = T::Lookup::lookup(account)?;
 			// Check `who` is allowed to make a call on behalf of `account`
 			let target = Self::proxy(&who).ok_or(Error::<T>::NotAllowed)?;
-			ensure!(&target == &account, Error::<T>::NotAllowed);
+			ensure!(target == account, Error::<T>::NotAllowed);
 			call.dispatch(frame_system::RawOrigin::Signed(account).into())
-				.map(|_| ()).map_err(|e| e.error)
+				.map(|_| ())
+				.map_err(|e| e.error)
 		}
 
 		/// Allow ROOT to bypass the recovery process and set an a rescuer account
@@ -383,21 +403,21 @@ pub mod pallet {
 		/// Parameters:
 		/// - `lost`: The "lost account" to be recovered.
 		/// - `rescuer`: The "rescuer account" which can call as the lost account.
-		///
-		/// # <weight>
-		/// - One storage write O(1)
-		/// - One event
-		/// # </weight>
-		#[pallet::weight(30_000_000)]
-		pub(crate) fn set_recovered(
+		#[pallet::weight(T::WeightInfo::set_recovered())]
+		pub fn set_recovered(
 			origin: OriginFor<T>,
-			lost: T::AccountId,
-			rescuer: T::AccountId,
+			lost: AccountIdLookupOf<T>,
+			rescuer: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
+			let lost = T::Lookup::lookup(lost)?;
+			let rescuer = T::Lookup::lookup(rescuer)?;
 			// Create the recovery storage item.
 			<Proxy<T>>::insert(&rescuer, &lost);
-			Self::deposit_event(Event::<T>::AccountRecovered(lost, rescuer));
+			Self::deposit_event(Event::<T>::AccountRecovered {
+				lost_account: lost,
+				rescuer_account: rescuer,
+			});
 			Ok(())
 		}
 
@@ -410,30 +430,19 @@ pub mod pallet {
 		/// The dispatch origin for this call must be _Signed_.
 		///
 		/// Parameters:
-		/// - `friends`: A list of friends you trust to vouch for recovery attempts.
-		///   Should be ordered and contain no duplicate values.
-		/// - `threshold`: The number of friends that must vouch for a recovery attempt
-		///   before the account can be recovered. Should be less than or equal to
-		///   the length of the list of friends.
-		/// - `delay_period`: The number of blocks after a recovery attempt is initialized
-		///   that needs to pass before the account can be recovered.
-		///
-		/// # <weight>
-		/// - Key: F (len of friends)
-		/// - One storage read to check that account is not already recoverable. O(1).
-		/// - A check that the friends list is sorted and unique. O(F)
-		/// - One currency reserve operation. O(X)
-		/// - One storage write. O(1). Codec O(F).
-		/// - One event.
-		///
-		/// Total Complexity: O(F + X)
-		/// # </weight>
-		#[pallet::weight(100_000_000)]
-		pub(crate) fn create_recovery(
+		/// - `friends`: A list of friends you trust to vouch for recovery attempts. Should be
+		///   ordered and contain no duplicate values.
+		/// - `threshold`: The number of friends that must vouch for a recovery attempt before the
+		///   account can be recovered. Should be less than or equal to the length of the list of
+		///   friends.
+		/// - `delay_period`: The number of blocks after a recovery attempt is initialized that
+		///   needs to pass before the account can be recovered.
+		#[pallet::weight(T::WeightInfo::create_recovery(friends.len() as u32))]
+		pub fn create_recovery(
 			origin: OriginFor<T>,
 			friends: Vec<T::AccountId>,
 			threshold: u16,
-			delay_period: T::BlockNumber
+			delay_period: T::BlockNumber,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// Check account is not already set up for recovery
@@ -442,12 +451,12 @@ pub mod pallet {
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			ensure!(!friends.is_empty(), Error::<T>::NotEnoughFriends);
 			ensure!(threshold as usize <= friends.len(), Error::<T>::NotEnoughFriends);
-			let max_friends = T::MaxFriends::get() as usize;
-			ensure!(friends.len() <= max_friends, Error::<T>::MaxFriends);
-			ensure!(Self::is_sorted_and_unique(&friends), Error::<T>::NotSorted);
+			let bounded_friends: FriendsOf<T> =
+				friends.try_into().map_err(|_| Error::<T>::MaxFriends)?;
+			ensure!(Self::is_sorted_and_unique(&bounded_friends), Error::<T>::NotSorted);
 			// Total deposit is base fee + number of friends * factor fee
 			let friend_deposit = T::FriendDepositFactor::get()
-				.checked_mul(&friends.len().saturated_into())
+				.checked_mul(&bounded_friends.len().saturated_into())
 				.ok_or(ArithmeticError::Overflow)?;
 			let total_deposit = T::ConfigDepositBase::get()
 				.checked_add(&friend_deposit)
@@ -458,13 +467,13 @@ pub mod pallet {
 			let recovery_config = RecoveryConfig {
 				delay_period,
 				deposit: total_deposit,
-				friends,
+				friends: bounded_friends,
 				threshold,
 			};
 			// Create the recovery configuration storage item
 			<Recoverable<T>>::insert(&who, recovery_config);
 
-			Self::deposit_event(Event::<T>::RecoveryCreated(who));
+			Self::deposit_event(Event::<T>::RecoveryCreated { account: who });
 			Ok(())
 		}
 
@@ -477,26 +486,22 @@ pub mod pallet {
 		/// The dispatch origin for this call must be _Signed_.
 		///
 		/// Parameters:
-		/// - `account`: The lost account that you want to recover. This account
-		///   needs to be recoverable (i.e. have a recovery configuration).
-		///
-		/// # <weight>
-		/// - One storage read to check that account is recoverable. O(F)
-		/// - One storage read to check that this recovery process hasn't already started. O(1)
-		/// - One currency reserve operation. O(X)
-		/// - One storage read to get the current block number. O(1)
-		/// - One storage write. O(1).
-		/// - One event.
-		///
-		/// Total Complexity: O(F + X)
-		/// # </weight>
-		#[pallet::weight(100_000_000)]
-		pub(crate) fn initiate_recovery(origin: OriginFor<T>, account: T::AccountId) -> DispatchResult {
+		/// - `account`: The lost account that you want to recover. This account needs to be
+		///   recoverable (i.e. have a recovery configuration).
+		#[pallet::weight(T::WeightInfo::initiate_recovery())]
+		pub fn initiate_recovery(
+			origin: OriginFor<T>,
+			account: AccountIdLookupOf<T>,
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let account = T::Lookup::lookup(account)?;
 			// Check that the account is recoverable
 			ensure!(<Recoverable<T>>::contains_key(&account), Error::<T>::NotRecoverable);
 			// Check that the recovery process has not already been started
-			ensure!(!<ActiveRecoveries<T>>::contains_key(&account, &who), Error::<T>::AlreadyStarted);
+			ensure!(
+				!<ActiveRecoveries<T>>::contains_key(&account, &who),
+				Error::<T>::AlreadyStarted
+			);
 			// Take recovery deposit
 			let recovery_deposit = T::RecoveryDeposit::get();
 			T::Currency::reserve(&who, recovery_deposit)?;
@@ -504,11 +509,14 @@ pub mod pallet {
 			let recovery_status = ActiveRecovery {
 				created: <frame_system::Pallet<T>>::block_number(),
 				deposit: recovery_deposit,
-				friends: vec![],
+				friends: Default::default(),
 			};
 			// Create the active recovery storage item
 			<ActiveRecoveries<T>>::insert(&account, &who, recovery_status);
-			Self::deposit_event(Event::<T>::RecoveryInitiated(account, who));
+			Self::deposit_event(Event::<T>::RecoveryInitiated {
+				lost_account: account,
+				rescuer_account: who,
+			});
 			Ok(())
 		}
 
@@ -520,44 +528,41 @@ pub mod pallet {
 		///
 		/// Parameters:
 		/// - `lost`: The lost account that you want to recover.
-		/// - `rescuer`: The account trying to rescue the lost account that you
-		///   want to vouch for.
+		/// - `rescuer`: The account trying to rescue the lost account that you want to vouch for.
 		///
 		/// The combination of these two parameters must point to an active recovery
 		/// process.
-		///
-		/// # <weight>
-		/// Key: F (len of friends in config), V (len of vouching friends)
-		/// - One storage read to get the recovery configuration. O(1), Codec O(F)
-		/// - One storage read to get the active recovery process. O(1), Codec O(V)
-		/// - One binary search to confirm caller is a friend. O(logF)
-		/// - One binary search to confirm caller has not already vouched. O(logV)
-		/// - One storage write. O(1), Codec O(V).
-		/// - One event.
-		///
-		/// Total Complexity: O(F + logF + V + logV)
-		/// # </weight>
-		#[pallet::weight(100_000_000)]
-		pub(crate) fn vouch_recovery(
+		#[pallet::weight(T::WeightInfo::vouch_recovery(T::MaxFriends::get()))]
+		pub fn vouch_recovery(
 			origin: OriginFor<T>,
-			lost: T::AccountId,
-			rescuer: T::AccountId
+			lost: AccountIdLookupOf<T>,
+			rescuer: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let lost = T::Lookup::lookup(lost)?;
+			let rescuer = T::Lookup::lookup(rescuer)?;
 			// Get the recovery configuration for the lost account.
 			let recovery_config = Self::recovery_config(&lost).ok_or(Error::<T>::NotRecoverable)?;
 			// Get the active recovery process for the rescuer.
-			let mut active_recovery = Self::active_recovery(&lost, &rescuer).ok_or(Error::<T>::NotStarted)?;
+			let mut active_recovery =
+				Self::active_recovery(&lost, &rescuer).ok_or(Error::<T>::NotStarted)?;
 			// Make sure the voter is a friend
 			ensure!(Self::is_friend(&recovery_config.friends, &who), Error::<T>::NotFriend);
 			// Either insert the vouch, or return an error that the user already vouched.
 			match active_recovery.friends.binary_search(&who) {
-				Ok(_pos) => Err(Error::<T>::AlreadyVouched)?,
-				Err(pos) => active_recovery.friends.insert(pos, who.clone()),
+				Ok(_pos) => return Err(Error::<T>::AlreadyVouched.into()),
+				Err(pos) => active_recovery
+					.friends
+					.try_insert(pos, who.clone())
+					.map_err(|_| Error::<T>::MaxFriends)?,
 			}
 			// Update storage with the latest details
 			<ActiveRecoveries<T>>::insert(&lost, &rescuer, active_recovery);
-			Self::deposit_event(Event::<T>::RecoveryVouched(lost, rescuer, who));
+			Self::deposit_event(Event::<T>::RecoveryVouched {
+				lost_account: lost,
+				rescuer_account: rescuer,
+				sender: who,
+			});
 			Ok(())
 		}
 
@@ -568,30 +573,26 @@ pub mod pallet {
 		/// `threshold` or more vouches, waited `delay_period` blocks since initiation.
 		///
 		/// Parameters:
-		/// - `account`: The lost account that you want to claim has been successfully
-		///   recovered by you.
-		///
-		/// # <weight>
-		/// Key: F (len of friends in config), V (len of vouching friends)
-		/// - One storage read to get the recovery configuration. O(1), Codec O(F)
-		/// - One storage read to get the active recovery process. O(1), Codec O(V)
-		/// - One storage read to get the current block number. O(1)
-		/// - One storage write. O(1), Codec O(V).
-		/// - One event.
-		///
-		/// Total Complexity: O(F + V)
-		/// # </weight>
-		#[pallet::weight(100_000_000)]
-		pub(crate) fn claim_recovery(origin: OriginFor<T>, account: T::AccountId) -> DispatchResult {
+		/// - `account`: The lost account that you want to claim has been successfully recovered by
+		///   you.
+		#[pallet::weight(T::WeightInfo::claim_recovery(T::MaxFriends::get()))]
+		pub fn claim_recovery(
+			origin: OriginFor<T>,
+			account: AccountIdLookupOf<T>,
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let account = T::Lookup::lookup(account)?;
 			// Get the recovery configuration for the lost account
-			let recovery_config = Self::recovery_config(&account).ok_or(Error::<T>::NotRecoverable)?;
+			let recovery_config =
+				Self::recovery_config(&account).ok_or(Error::<T>::NotRecoverable)?;
 			// Get the active recovery process for the rescuer
-			let active_recovery = Self::active_recovery(&account, &who).ok_or(Error::<T>::NotStarted)?;
+			let active_recovery =
+				Self::active_recovery(&account, &who).ok_or(Error::<T>::NotStarted)?;
 			ensure!(!Proxy::<T>::contains_key(&who), Error::<T>::AlreadyProxy);
 			// Make sure the delay period has passed
 			let current_block_number = <frame_system::Pallet<T>>::block_number();
-			let recoverable_block_number = active_recovery.created
+			let recoverable_block_number = active_recovery
+				.created
 				.checked_add(&recovery_config.delay_period)
 				.ok_or(ArithmeticError::Overflow)?;
 			ensure!(recoverable_block_number <= current_block_number, Error::<T>::DelayPeriod);
@@ -603,7 +604,10 @@ pub mod pallet {
 			frame_system::Pallet::<T>::inc_consumers(&who).map_err(|_| Error::<T>::BadState)?;
 			// Create the recovery storage item
 			Proxy::<T>::insert(&who, &account);
-			Self::deposit_event(Event::<T>::AccountRecovered(account, who));
+			Self::deposit_event(Event::<T>::AccountRecovered {
+				lost_account: account,
+				rescuer_account: who,
+			});
 			Ok(())
 		}
 
@@ -618,25 +622,29 @@ pub mod pallet {
 		///
 		/// Parameters:
 		/// - `rescuer`: The account trying to rescue this recoverable account.
-		///
-		/// # <weight>
-		/// Key: V (len of vouching friends)
-		/// - One storage read/remove to get the active recovery process. O(1), Codec O(V)
-		/// - One balance call to repatriate reserved. O(X)
-		/// - One event.
-		///
-		/// Total Complexity: O(V + X)
-		/// # </weight>
-		#[pallet::weight(30_000_000)]
-		pub(crate) fn close_recovery(origin: OriginFor<T>, rescuer: T::AccountId) -> DispatchResult {
+		#[pallet::weight(T::WeightInfo::close_recovery(T::MaxFriends::get()))]
+		pub fn close_recovery(
+			origin: OriginFor<T>,
+			rescuer: AccountIdLookupOf<T>,
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let rescuer = T::Lookup::lookup(rescuer)?;
 			// Take the active recovery process started by the rescuer for this account.
-			let active_recovery = <ActiveRecoveries<T>>::take(&who, &rescuer).ok_or(Error::<T>::NotStarted)?;
+			let active_recovery =
+				<ActiveRecoveries<T>>::take(&who, &rescuer).ok_or(Error::<T>::NotStarted)?;
 			// Move the reserved funds from the rescuer to the rescued account.
 			// Acts like a slashing mechanism for those who try to maliciously recover accounts.
-			let res = T::Currency::repatriate_reserved(&rescuer, &who, active_recovery.deposit, BalanceStatus::Free);
+			let res = T::Currency::repatriate_reserved(
+				&rescuer,
+				&who,
+				active_recovery.deposit,
+				BalanceStatus::Free,
+			);
 			debug_assert!(res.is_ok());
-			Self::deposit_event(Event::<T>::RecoveryClosed(who, rescuer));
+			Self::deposit_event(Event::<T>::RecoveryClosed {
+				lost_account: who,
+				rescuer_account: rescuer,
+			});
 			Ok(())
 		}
 
@@ -651,18 +659,8 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be _Signed_ and must be a
 		/// recoverable account (i.e. has a recovery configuration).
-		///
-		/// # <weight>
-		/// Key: F (len of friends)
-		/// - One storage read to get the prefix iterator for active recoveries. O(1)
-		/// - One storage read/remove to get the recovery configuration. O(1), Codec O(F)
-		/// - One balance call to unreserved. O(X)
-		/// - One event.
-		///
-		/// Total Complexity: O(F + X)
-		/// # </weight>
-		#[pallet::weight(30_000_000)]
-		pub(crate) fn remove_recovery(origin: OriginFor<T>) -> DispatchResult {
+		#[pallet::weight(T::WeightInfo::remove_recovery(T::MaxFriends::get()))]
+		pub fn remove_recovery(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// Check there are no active recoveries
 			let mut active_recoveries = <ActiveRecoveries<T>>::iter_prefix_values(&who);
@@ -672,7 +670,7 @@ pub mod pallet {
 
 			// Unreserve the initial deposit for the recovery configuration.
 			T::Currency::unreserve(&who, recovery_config.deposit);
-			Self::deposit_event(Event::<T>::RecoveryRemoved(who));
+			Self::deposit_event(Event::<T>::RecoveryRemoved { lost_account: who });
 			Ok(())
 		}
 
@@ -683,16 +681,17 @@ pub mod pallet {
 		///
 		/// Parameters:
 		/// - `account`: The recovered account you are able to call on-behalf-of.
-		///
-		/// # <weight>
-		/// - One storage mutation to check account is recovered by `who`. O(1)
-		/// # </weight>
-		#[pallet::weight(30_000_000)]
-		pub(crate) fn cancel_recovered(origin: OriginFor<T>, account: T::AccountId) -> DispatchResult {
+		#[pallet::weight(T::WeightInfo::cancel_recovered())]
+		pub fn cancel_recovered(
+			origin: OriginFor<T>,
+			account: AccountIdLookupOf<T>,
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let account = T::Lookup::lookup(account)?;
 			// Check `who` is allowed to make a call on behalf of `account`
 			ensure!(Self::proxy(&who) == Some(account), Error::<T>::NotAllowed);
 			Proxy::<T>::remove(&who);
+
 			frame_system::Pallet::<T>::dec_consumers(&who);
 			Ok(())
 		}

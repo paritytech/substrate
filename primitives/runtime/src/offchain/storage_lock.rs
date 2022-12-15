@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -38,8 +38,8 @@
 //! # use codec::{Decode, Encode, Codec};
 //! // in your off-chain worker code
 //! use sp_runtime::offchain::{
-//!		storage::StorageValueRef,
-//!		storage_lock::{StorageLock, Time},
+//! 		storage::StorageValueRef,
+//! 		storage_lock::{StorageLock, Time},
 //! };
 //!
 //! fn append_to_in_storage_vec<'a, T>(key: &'a [u8], _: T) where T: Codec {
@@ -61,8 +61,10 @@
 //! }
 //! ```
 
-use crate::offchain::storage::StorageValueRef;
-use crate::traits::AtLeast32BitUnsigned;
+use crate::{
+	offchain::storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
+	traits::BlockNumberProvider,
+};
 use codec::{Codec, Decode, Encode};
 use sp_core::offchain::{Duration, Timestamp};
 use sp_io::offchain;
@@ -75,8 +77,8 @@ const STORAGE_LOCK_DEFAULT_EXPIRY_DURATION: Duration = Duration::from_millis(20_
 const STORAGE_LOCK_DEFAULT_EXPIRY_BLOCKS: u32 = 4;
 
 /// Time between checks if the lock is still being held in milliseconds.
-const STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MIN: Duration = Duration::from_millis(100);
-const STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MAX: Duration = Duration::from_millis(10);
+const STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MIN: Duration = Duration::from_millis(10);
+const STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MAX: Duration = Duration::from_millis(100);
 
 /// Lockable item for use with a persisted storage lock.
 ///
@@ -115,9 +117,7 @@ pub struct Time {
 
 impl Default for Time {
 	fn default() -> Self {
-		Self {
-			expiration_duration: STORAGE_LOCK_DEFAULT_EXPIRY_DURATION,
-		}
+		Self { expiration_duration: STORAGE_LOCK_DEFAULT_EXPIRY_DURATION }
 	}
 }
 
@@ -134,13 +134,12 @@ impl Lockable for Time {
 
 	fn snooze(deadline: &Self::Deadline) {
 		let now = offchain::timestamp();
-		let remainder: Duration = now.diff(&deadline);
+		let remainder: Duration = now.diff(deadline);
 		// do not snooze the full duration, but instead snooze max 100ms
 		// it might get unlocked in another thread
-		use core::cmp::{max, min};
-		let snooze = max(
-			min(remainder, STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MAX),
+		let snooze = remainder.clamp(
 			STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MIN,
+			STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MAX,
 		);
 		sp_io::offchain::sleep_until(now.add(snooze));
 	}
@@ -157,10 +156,7 @@ pub struct BlockAndTimeDeadline<B: BlockNumberProvider> {
 
 impl<B: BlockNumberProvider> Clone for BlockAndTimeDeadline<B> {
 	fn clone(&self) -> Self {
-		Self {
-			block_number: self.block_number.clone(),
-			timestamp: self.timestamp,
-		}
+		Self { block_number: self.block_number.clone(), timestamp: self.timestamp }
 	}
 }
 
@@ -175,7 +171,8 @@ impl<B: BlockNumberProvider> Default for BlockAndTimeDeadline<B> {
 }
 
 impl<B: BlockNumberProvider> fmt::Debug for BlockAndTimeDeadline<B>
-	where <B as BlockNumberProvider>::BlockNumber: fmt::Debug
+where
+	<B as BlockNumberProvider>::BlockNumber: fmt::Debug,
 {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("BlockAndTimeDeadline")
@@ -225,8 +222,8 @@ impl<B: BlockNumberProvider> Lockable for BlockAndTime<B> {
 	type Deadline = BlockAndTimeDeadline<B>;
 
 	fn deadline(&self) -> Self::Deadline {
-		let block_number = <B as BlockNumberProvider>::current_block_number()
-			+ self.expiration_block_number_offset.into();
+		let block_number = <B as BlockNumberProvider>::current_block_number() +
+			self.expiration_block_number_offset.into();
 		BlockAndTimeDeadline {
 			timestamp: offchain::timestamp().add(self.expiration_duration),
 			block_number,
@@ -234,17 +231,16 @@ impl<B: BlockNumberProvider> Lockable for BlockAndTime<B> {
 	}
 
 	fn has_expired(deadline: &Self::Deadline) -> bool {
-		offchain::timestamp() > deadline.timestamp
-			&& <B as BlockNumberProvider>::current_block_number() > deadline.block_number
+		offchain::timestamp() > deadline.timestamp &&
+			<B as BlockNumberProvider>::current_block_number() > deadline.block_number
 	}
 
 	fn snooze(deadline: &Self::Deadline) {
 		let now = offchain::timestamp();
 		let remainder: Duration = now.diff(&(deadline.timestamp));
-		use core::cmp::{max, min};
-		let snooze = max(
-			min(remainder, STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MAX),
+		let snooze = remainder.clamp(
 			STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MIN,
+			STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MAX,
 		);
 		sp_io::offchain::sleep_until(now.add(snooze));
 	}
@@ -271,27 +267,25 @@ impl<'a, L: Lockable + Default> StorageLock<'a, L> {
 impl<'a, L: Lockable> StorageLock<'a, L> {
 	/// Create a new storage lock with an explicit instance of a lockable `L`.
 	pub fn with_lockable(key: &'a [u8], lockable: L) -> Self {
-		Self {
-			value_ref: StorageValueRef::<'a>::persistent(key),
-			lockable,
-		}
+		Self { value_ref: StorageValueRef::<'a>::persistent(key), lockable }
 	}
 
 	/// Extend active lock's deadline
 	fn extend_active_lock(&mut self) -> Result<<L as Lockable>::Deadline, ()> {
-		let res = self.value_ref.mutate(|s: Option<Option<L::Deadline>>| -> Result<<L as Lockable>::Deadline, ()> {
+		let res = self.value_ref.mutate(
+			|s: Result<Option<L::Deadline>, StorageRetrievalError>| -> Result<<L as Lockable>::Deadline, ()> {
 			match s {
 				// lock is present and is still active, extend the lock.
-				Some(Some(deadline)) if !<L as Lockable>::has_expired(&deadline) =>
+				Ok(Some(deadline)) if !<L as Lockable>::has_expired(&deadline) =>
 					Ok(self.lockable.deadline()),
 				// other cases
 				_ => Err(()),
 			}
 		});
 		match res {
-			Ok(Ok(deadline)) => Ok(deadline),
-			Ok(Err(_)) => Err(()),
-			Err(e) => Err(e),
+			Ok(deadline) => Ok(deadline),
+			Err(MutateStorageError::ConcurrentModification(_)) => Err(()),
+			Err(MutateStorageError::ValueFunctionFailed(e)) => Err(e),
 		}
 	}
 
@@ -301,25 +295,25 @@ impl<'a, L: Lockable> StorageLock<'a, L> {
 		new_deadline: L::Deadline,
 	) -> Result<(), <L as Lockable>::Deadline> {
 		let res = self.value_ref.mutate(
-			|s: Option<Option<L::Deadline>>|
+			|s: Result<Option<L::Deadline>, StorageRetrievalError>|
 			-> Result<<L as Lockable>::Deadline, <L as Lockable>::Deadline> {
 				match s {
 					// no lock set, we can safely acquire it
-					None => Ok(new_deadline),
+					Ok(None) => Ok(new_deadline),
 					// write was good, but read failed
-					Some(None) => Ok(new_deadline),
+					Err(_) => Ok(new_deadline),
 					// lock is set, but it is expired. We can re-acquire it.
-					Some(Some(deadline)) if <L as Lockable>::has_expired(&deadline) =>
+					Ok(Some(deadline)) if <L as Lockable>::has_expired(&deadline) =>
 						Ok(new_deadline),
 					// lock is present and is still active
-					Some(Some(deadline)) => Err(deadline),
+					Ok(Some(deadline)) => Err(deadline),
 				}
 			},
 		);
 		match res {
-			Ok(Ok(_)) => Ok(()),
-			Ok(Err(deadline)) => Err(deadline),
-			Err(e) => Err(e),
+			Ok(_) => Ok(()),
+			Err(MutateStorageError::ConcurrentModification(deadline)) => Err(deadline),
+			Err(MutateStorageError::ValueFunctionFailed(e)) => Err(e),
 		}
 	}
 
@@ -397,9 +391,7 @@ impl<'a> StorageLock<'a, Time> {
 	pub fn with_deadline(key: &'a [u8], expiration_duration: Duration) -> Self {
 		Self {
 			value_ref: StorageValueRef::<'a>::persistent(key),
-			lockable: Time {
-				expiration_duration,
-			},
+			lockable: Time { expiration_duration },
 		}
 	}
 }
@@ -439,33 +431,10 @@ where
 	}
 }
 
-/// Bound for a block number source
-/// used with [`BlockAndTime<BlockNumberProvider>`](BlockAndTime).
-pub trait BlockNumberProvider {
-	/// Type of `BlockNumber` to provide.
-	type BlockNumber: Codec + Clone + Ord + Eq + AtLeast32BitUnsigned;
-	/// Returns the current block number.
-	///
-	/// Provides an abstraction over an arbitrary way of providing the
-	/// current block number.
-	///
-	/// In case of using crate `sp_runtime` without the crate `frame`
-	/// system, it is already implemented for
-	/// `frame_system::Pallet<T: Config>` as:
-	///
-	/// ```ignore
-	/// fn current_block_number() -> Self {
-	///     frame_system::Pallet<Config>::block_number()
-	/// }
-	/// ```
-	/// .
-	fn current_block_number() -> Self::BlockNumber;
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_core::offchain::{testing, OffchainWorkerExt, OffchainDbExt};
+	use sp_core::offchain::{testing, OffchainDbExt, OffchainWorkerExt};
 	use sp_io::TestExternalities;
 
 	const VAL_1: u32 = 0u32;
@@ -488,14 +457,14 @@ mod tests {
 
 				val.set(&VAL_1);
 
-				assert_eq!(val.get::<u32>(), Some(Some(VAL_1)));
+				assert_eq!(val.get::<u32>(), Ok(Some(VAL_1)));
 			}
 
 			{
 				let _guard = lock.lock();
 				val.set(&VAL_2);
 
-				assert_eq!(val.get::<u32>(), Some(Some(VAL_2)));
+				assert_eq!(val.get::<u32>(), Ok(Some(VAL_2)));
 			}
 		});
 		// lock must have been cleared at this point
@@ -518,7 +487,7 @@ mod tests {
 
 			val.set(&VAL_1);
 
-			assert_eq!(val.get::<u32>(), Some(Some(VAL_1)));
+			assert_eq!(val.get::<u32>(), Ok(Some(VAL_1)));
 
 			guard.forget();
 		});

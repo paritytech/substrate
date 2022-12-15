@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,7 +18,7 @@
 
 use super::*;
 use assert_matches::assert_matches;
-use sp_core::{Bytes, offchain::storage::InMemOffchainStorage};
+use sp_core::{offchain::storage::InMemOffchainStorage, Bytes};
 
 #[test]
 fn local_storage_should_work() {
@@ -39,6 +39,7 @@ fn local_storage_should_work() {
 
 #[test]
 fn offchain_calls_considered_unsafe() {
+	use jsonrpsee::types::error::CallError;
 	let storage = InMemOffchainStorage::default();
 	let offchain = Offchain::new(storage, DenyUnsafe::Yes);
 	let key = Bytes(b"offchain_storage".to_vec());
@@ -46,10 +47,14 @@ fn offchain_calls_considered_unsafe() {
 
 	assert_matches!(
 		offchain.set_local_storage(StorageKind::PERSISTENT, key.clone(), value.clone()),
-		Err(Error::UnsafeRpcCalled(_))
+		Err(JsonRpseeError::Call(CallError::Custom(err))) => {
+			assert_eq!(err.message(), "RPC call is unsafe to be called externally")
+		}
 	);
 	assert_matches!(
 		offchain.get_local_storage(StorageKind::PERSISTENT, key),
-		Err(Error::UnsafeRpcCalled(_))
+		Err(JsonRpseeError::Call(CallError::Custom(err))) => {
+			assert_eq!(err.message(), "RPC call is unsafe to be called externally")
+		}
 	);
 }

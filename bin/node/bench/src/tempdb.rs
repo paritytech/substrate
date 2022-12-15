@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,11 +16,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use kvdb::{DBKeyValue, DBTransaction, KeyValueDB};
+use kvdb_rocksdb::{Database, DatabaseConfig};
 use std::{io, path::PathBuf, sync::Arc};
-use kvdb::{KeyValueDB, DBTransaction};
-use kvdb_rocksdb::{DatabaseConfig, Database};
 
-#[derive(Debug, Clone, Copy, derive_more::Display)]
+#[derive(Clone, Copy, Debug)]
 pub enum DatabaseType {
 	RocksDb,
 	ParityDb,
@@ -29,7 +29,6 @@ pub enum DatabaseType {
 pub struct TempDatabase(tempfile::TempDir);
 
 struct ParityDbWrapper(parity_db::Db);
-parity_util_mem::malloc_size_of_is_0!(ParityDbWrapper);
 
 impl KeyValueDB for ParityDbWrapper {
 	/// Get a value by key.
@@ -38,24 +37,25 @@ impl KeyValueDB for ParityDbWrapper {
 	}
 
 	/// Get a value by partial key. Only works for flushed data.
-	fn get_by_prefix(&self, _col: u32, _prefix: &[u8]) -> Option<Box<[u8]>> {
+	fn get_by_prefix(&self, _col: u32, _prefix: &[u8]) -> io::Result<Option<Vec<u8>>> {
 		unimplemented!()
 	}
 
 	/// Write a transaction of changes to the buffer.
 	fn write(&self, transaction: DBTransaction) -> io::Result<()> {
-		self.0.commit(
-			transaction.ops.iter().map(|op| match op {
-				kvdb::DBOp::Insert { col, key, value } => (*col as u8, &key[key.len() - 32..], Some(value.to_vec())),
+		self.0
+			.commit(transaction.ops.iter().map(|op| match op {
+				kvdb::DBOp::Insert { col, key, value } =>
+					(*col as u8, &key[key.len() - 32..], Some(value.to_vec())),
 				kvdb::DBOp::Delete { col, key } => (*col as u8, &key[key.len() - 32..], None),
-				kvdb::DBOp::DeletePrefix { col: _, prefix: _ } => unimplemented!()
-			})
-		).expect("db error");
+				kvdb::DBOp::DeletePrefix { col: _, prefix: _ } => unimplemented!(),
+			}))
+			.expect("db error");
 		Ok(())
 	}
 
 	/// Iterate over flushed data for a given column.
-	fn iter<'a>(&'a self, _col: u32) -> Box<dyn Iterator<Item = (Box<[u8]>, Box<[u8]>)> + 'a> {
+	fn iter<'a>(&'a self, _col: u32) -> Box<dyn Iterator<Item = io::Result<DBKeyValue>> + 'a> {
 		unimplemented!()
 	}
 
@@ -64,12 +64,7 @@ impl KeyValueDB for ParityDbWrapper {
 		&'a self,
 		_col: u32,
 		_prefix: &'a [u8],
-	) -> Box<dyn Iterator<Item = (Box<[u8]>, Box<[u8]>)> + 'a> {
-		unimplemented!()
-	}
-
-	/// Attempt to replace this database with a new one located at the given path.
-	fn restore(&self, _new_db: &str) -> io::Result<()> {
+	) -> Box<dyn Iterator<Item = io::Result<DBKeyValue>> + 'a> {
 		unimplemented!()
 	}
 }
@@ -90,21 +85,18 @@ impl TempDatabase {
 		match db_type {
 			DatabaseType::RocksDb => {
 				let db_cfg = DatabaseConfig::with_columns(1);
-				let db = Database::open(&db_cfg, &self.0.path().to_string_lossy()).expect("Database backend error");
+				let db = Database::open(&db_cfg, &self.0.path()).expect("Database backend error");
 				Arc::new(db)
 			},
-			DatabaseType::ParityDb => {
-				Arc::new(ParityDbWrapper({
-					let mut options = parity_db::Options::with_columns(self.0.path(), 1);
-					let mut column_options = &mut options.columns[0];
-					column_options.ref_counted = true;
-					column_options.preimage = true;
-					column_options.uniform = true;
-					parity_db::Db::open(&options).expect("db open error")
-				}))
-			}
+			DatabaseType::ParityDb => Arc::new(ParityDbWrapper({
+				let mut options = parity_db::Options::with_columns(self.0.path(), 1);
+				let mut column_options = &mut options.columns[0];
+				column_options.ref_counted = true;
+				column_options.preimage = true;
+				column_options.uniform = true;
+				parity_db::Db::open_or_create(&options).expect("db open error")
+			})),
 		}
-
 	}
 }
 
@@ -121,15 +113,10 @@ impl Clone for TempDatabase {
 		);
 		let self_db_files = std::fs::read_dir(self_dir)
 			.expect("failed to list file in seed dir")
-			.map(|f_result|
-				f_result.expect("failed to read file in seed db")
-					.path()
-			).collect::<Vec<PathBuf>>();
-		fs_extra::copy_items(
-			&self_db_files,
-			new_dir.path(),
-			&fs_extra::dir::CopyOptions::new(),
-		).expect("Copy of seed database is ok");
+			.map(|f_result| f_result.expect("failed to read file in seed db").path())
+			.collect::<Vec<PathBuf>>();
+		fs_extra::copy_items(&self_db_files, new_dir.path(), &fs_extra::dir::CopyOptions::new())
+			.expect("Copy of seed database is ok");
 
 		TempDatabase(new_dir)
 	}

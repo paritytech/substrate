@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,11 +18,11 @@
 //! The main database trait, allowing Substrate to store data persistently.
 
 pub mod error;
-mod mem;
 mod kvdb;
+mod mem;
 
-pub use mem::MemDb;
 pub use crate::kvdb::as_database;
+pub use mem::MemDb;
 
 /// An identifier for a column.
 pub type ColumnId = u32;
@@ -103,6 +103,18 @@ pub trait Database<H: Clone + AsRef<[u8]>>: Send + Sync {
 	fn with_get(&self, col: ColumnId, key: &[u8], f: &mut dyn FnMut(&[u8])) {
 		self.get(col, key).map(|v| f(&v));
 	}
+
+	/// Check if database supports internal ref counting for state data.
+	///
+	/// For backwards compatibility returns `false` by default.
+	fn supports_ref_counting(&self) -> bool {
+		false
+	}
+
+	/// Remove a possible path-prefix from the key.
+	///
+	/// Not all database implementations use a prefix for keys, so this function may be a noop.
+	fn sanitize_key(&self, _key: &mut Vec<u8>) {}
 }
 
 impl<H> std::fmt::Debug for dyn Database<H> {
@@ -118,10 +130,13 @@ impl<H> std::fmt::Debug for dyn Database<H> {
 pub fn with_get<R, H: Clone + AsRef<[u8]>>(
 	db: &dyn Database<H>,
 	col: ColumnId,
-	key: &[u8], mut f: impl FnMut(&[u8]) -> R
+	key: &[u8],
+	mut f: impl FnMut(&[u8]) -> R,
 ) -> Option<R> {
 	let mut result: Option<R> = None;
-	let mut adapter = |k: &_| { result = Some(f(k)); };
+	let mut adapter = |k: &_| {
+		result = Some(f(k));
+	};
 	db.with_get(col, key, &mut adapter);
 	result
 }

@@ -1,32 +1,33 @@
 [package]
-name = "remote-externalities"
-version = "0.9.0"
+name = "frame-remote-externalities"
+version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
-description = "An externalities provided environemnt that can load itself from remote nodes or cache files"
-readme = "README.md"
+description = "An externalities provided environment that can load itself from remote nodes or cached files"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-jsonrpsee-ws-client = { version = "=0.2.0-alpha.6", default-features = false }
-jsonrpsee-proc-macros = "=0.2.0-alpha.6"
-
-hex-literal = "0.3.1"
-env_logger = "0.8.2"
-log = "0.4.11"
-codec = { package = "parity-scale-codec", version = "2.0.0" }
-
-sp-io = { version = "3.0.0", path = "../../../primitives/io" }
-sp-core = { version = "3.0.0", path = "../../../primitives/core" }
-sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
+codec = { package = "parity-scale-codec", version = "3.0.0" }
+env_logger = "0.9"
+log = "0.4.17"
+serde = "1.0.136"
+serde_json = "1.0"
+frame-support = { version = "4.0.0-dev", optional = true, path = "../../../frame/support" }
+sp-core = { version = "7.0.0", path = "../../../primitives/core" }
+sp-io = { version = "7.0.0", path = "../../../primitives/io" }
+sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
+sp-version = { version = "5.0.0", path = "../../../primitives/version" }
+substrate-rpc-client = { path = "../rpc/client" }
 
 [dev-dependencies]
-tokio = { version = "1.6.0", features = ["macros", "rt"] }
+tokio = { version = "1.22.0", features = ["macros", "rt-multi-thread"] }
+frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
+pallet-elections-phragmen = { version = "5.0.0-dev", path = "../../../frame/elections-phragmen" }
 
 [features]
-remote-test = []
+remote-test = ["frame-support"]

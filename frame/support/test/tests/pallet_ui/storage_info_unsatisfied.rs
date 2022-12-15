@@ -7,7 +7,6 @@ mod pallet {
 	pub trait Config: frame_system::Config {}
 
 	#[pallet::pallet]
-	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(core::marker::PhantomData<T>);
 
 	#[pallet::hooks]
@@ -16,7 +15,7 @@ mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {}
 
-	#[derive(codec::Encode, codec::Decode)]
+	#[derive(codec::Encode, codec::Decode, scale_info::TypeInfo)]
 	struct Bar;
 
 	#[pallet::storage]

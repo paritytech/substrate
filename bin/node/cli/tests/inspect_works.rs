@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -24,14 +24,14 @@ use tempfile::tempdir;
 
 pub mod common;
 
-#[test]
-fn inspect_works() {
+#[tokio::test]
+async fn inspect_works() {
 	let base_path = tempdir().expect("could not create a temp dir");
 
-	common::run_dev_node_for_a_while(base_path.path());
+	common::run_node_for_a_while(base_path.path(), &["--dev", "--no-hardware-benchmarks"]).await;
 
 	let status = Command::new(cargo_bin("substrate"))
-		.args(&["inspect", "--dev", "--pruning", "archive", "-d"])
+		.args(&["inspect", "--dev", "-d"])
 		.arg(base_path.path())
 		.args(&["block", "1"])
 		.status()

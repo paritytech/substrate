@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2015-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2015-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,42 +15,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(feature="std")]
-use std::fmt;
-#[cfg(feature="std")]
-use std::error::Error as StdError;
+use sp_std::{boxed::Box, vec::Vec};
 
+/// Error type used for trie related errors.
 #[derive(Debug, PartialEq, Eq, Clone)]
-/// Error for trie node decoding.
-pub enum Error {
-	/// Bad format.
+#[cfg_attr(feature = "std", derive(thiserror::Error))]
+pub enum Error<H> {
+	#[cfg_attr(feature = "std", error("Bad format"))]
 	BadFormat,
-	/// Decoding error.
-	Decode(codec::Error)
+	#[cfg_attr(feature = "std", error("Decoding failed: {0}"))]
+	Decode(#[cfg_attr(feature = "std", source)] codec::Error),
+	#[cfg_attr(
+		feature = "std",
+		error("Recorded key ({0:x?}) access with value as found={1}, but could not confirm with trie.")
+	)]
+	InvalidRecording(Vec<u8>, bool),
+	#[cfg_attr(feature = "std", error("Trie error: {0:?}"))]
+	TrieError(Box<trie_db::TrieError<H, Self>>),
 }
 
-impl From<codec::Error> for Error {
+impl<H> From<codec::Error> for Error<H> {
 	fn from(x: codec::Error) -> Self {
 		Error::Decode(x)
 	}
 }
 
-#[cfg(feature="std")]
-impl StdError for Error {
-	fn description(&self) -> &str {
-		match self {
-			Error::BadFormat => "Bad format error",
-			Error::Decode(_) => "Decoding error",
-		}
-	}
-}
-
-#[cfg(feature="std")]
-impl fmt::Display for Error {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match self {
-			Error::Decode(e) => write!(f, "Decode error: {}", e),
-			Error::BadFormat => write!(f, "Bad format"),
-		}
+impl<H> From<Box<trie_db::TrieError<H, Self>>> for Error<H> {
+	fn from(x: Box<trie_db::TrieError<H, Self>>) -> Self {
+		Error::TrieError(x)
 	}
 }

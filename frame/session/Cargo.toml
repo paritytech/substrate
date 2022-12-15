@@ -1,10 +1,10 @@
 [package]
 name = "pallet-session"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "FRAME sessions pallet"
 readme = "README.md"
@@ -13,36 +13,37 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-sp-core = { version = "3.0.0", default-features = false, path = "../../primitives/core" }
-sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-session = { version = "3.0.0", default-features = false, path = "../../primitives/session" }
-sp-staking = { version = "3.0.0", default-features = false, path = "../../primitives/staking" }
-frame-support = { version = "3.0.0", default-features = false, path = "../support" }
-frame-system = { version = "3.0.0", default-features = false, path = "../system" }
-pallet-timestamp = { version = "3.0.0", default-features = false, path = "../timestamp" }
-sp-trie = { version = "3.0.0", optional = true, default-features = false, path = "../../primitives/trie" }
-impl-trait-for-tuples = "0.2.1"
-
-[dev-dependencies]
-sp-application-crypto = { version = "3.0.0", path = "../../primitives/application-crypto" }
-lazy_static = "1.4.0"
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
+impl-trait-for-tuples = "0.2.2"
+log = { version = "0.4.17", default-features = false }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../timestamp" }
+sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
+sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-session = { version = "4.0.0-dev", default-features = false, path = "../../primitives/session" }
+sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
+sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
+sp-trie = { version = "7.0.0", default-features = false, optional = true, path = "../../primitives/trie" }
 
 [features]
-default = ["std", "historical"]
+default = ["historical", "std"]
 historical = ["sp-trie"]
 std = [
 	"codec/std",
-	"sp-std/std",
-	"sp-io/std",
 	"frame-support/std",
+	"frame-system/std",
+	"log/std",
+	"pallet-timestamp/std",
+	"scale-info/std",
 	"sp-core/std",
+	"sp-io/std",
 	"sp-runtime/std",
 	"sp-session/std",
 	"sp-staking/std",
-	"pallet-timestamp/std",
+	"sp-std/std",
 	"sp-trie/std",
 ]
 try-runtime = ["frame-support/try-runtime"]

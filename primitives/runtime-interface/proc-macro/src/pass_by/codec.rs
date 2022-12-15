@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +22,7 @@
 
 use crate::utils::{generate_crate_access, generate_runtime_interface_include};
 
-use syn::{DeriveInput, Result, Generics, parse_quote};
+use syn::{parse_quote, DeriveInput, Generics, Result};
 
 use quote::quote;
 
@@ -53,7 +53,7 @@ pub fn derive_impl(mut input: DeriveInput) -> Result<TokenStream> {
 fn add_trait_bounds(generics: &mut Generics) {
 	let crate_ = generate_crate_access();
 
-	generics.type_params_mut()
+	generics
+		.type_params_mut()
 		.for_each(|type_param| type_param.bounds.push(parse_quote!(#crate_::codec::Codec)));
 }
-

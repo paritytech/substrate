@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,18 +17,20 @@
 
 //! Tool for creating the genesis block.
 
-use std::collections::BTreeMap;
-use sp_io::hashing::{blake2_256, twox_128};
-use super::{AuthorityId, AccountId, wasm_binary_unwrap, system};
-use codec::{Encode, KeyedVec, Joiner};
-use sp_core::{ChangesTrieConfiguration, map};
-use sp_core::storage::{well_known_keys, Storage};
-use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
+use super::{system, wasm_binary_unwrap, AccountId, AuthorityId, Runtime};
+use codec::{Encode, Joiner, KeyedVec};
+use frame_support::traits::GenesisBuild;
 use sc_service::client::genesis;
+use sp_core::{
+	map,
+	storage::{well_known_keys, Storage},
+};
+use sp_io::hashing::{blake2_256, twox_128};
+use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
+use std::collections::BTreeMap;
 
 /// Configuration of a general Substrate test genesis block.
 pub struct GenesisConfig {
-	changes_trie_config: Option<ChangesTrieConfiguration>,
 	authorities: Vec<AuthorityId>,
 	balances: Vec<(AccountId, u64)>,
 	heap_pages_override: Option<u64>,
@@ -38,7 +40,6 @@ pub struct GenesisConfig {
 
 impl GenesisConfig {
 	pub fn new(
-		changes_trie_config: Option<ChangesTrieConfiguration>,
 		authorities: Vec<AuthorityId>,
 		endowed_accounts: Vec<AccountId>,
 		balance: u64,
@@ -46,8 +47,7 @@ impl GenesisConfig {
 		extra_storage: Storage,
 	) -> Self {
 		GenesisConfig {
-			changes_trie_config,
-			authorities: authorities,
+			authorities,
 			balances: endowed_accounts.into_iter().map(|a| (a, balance)).collect(),
 			heap_pages_override,
 			extra_storage,
@@ -56,47 +56,55 @@ impl GenesisConfig {
 
 	pub fn genesis_map(&self) -> Storage {
 		let wasm_runtime = wasm_binary_unwrap().to_vec();
-		let mut map: BTreeMap<Vec<u8>, Vec<u8>> = self.balances.iter()
-			.map(|&(ref account, balance)| (account.to_keyed_vec(b"balance:"), vec![].and(&balance)))
+		let mut map: BTreeMap<Vec<u8>, Vec<u8>> = self
+			.balances
+			.iter()
+			.map(|&(ref account, balance)| {
+				(account.to_keyed_vec(b"balance:"), vec![].and(&balance))
+			})
 			.map(|(k, v)| (blake2_256(&k[..])[..].to_vec(), v.to_vec()))
-			.chain(vec![
-				(well_known_keys::CODE.into(), wasm_runtime),
-				(
-					well_known_keys::HEAP_PAGES.into(),
-					vec![].and(&(self.heap_pages_override.unwrap_or(16 as u64))),
-				),
-			].into_iter())
+			.chain(
+				vec![
+					(well_known_keys::CODE.into(), wasm_runtime),
+					(
+						well_known_keys::HEAP_PAGES.into(),
+						vec![].and(&(self.heap_pages_override.unwrap_or(16_u64))),
+					),
+				]
+				.into_iter(),
+			)
 			.collect();
-		if let Some(ref changes_trie_config) = self.changes_trie_config {
-			map.insert(well_known_keys::CHANGES_TRIE_CONFIG.to_vec(), changes_trie_config.encode());
-		}
 		map.insert(twox_128(&b"sys:auth"[..])[..].to_vec(), self.authorities.encode());
 		// Add the extra storage entries.
 		map.extend(self.extra_storage.top.clone().into_iter());
 
 		// Assimilate the system genesis config.
-		let mut storage = Storage { top: map, children_default: self.extra_storage.children_default.clone()};
-		let mut config = system::GenesisConfig::default();
-		config.authorities = self.authorities.clone();
-		config.assimilate_storage(&mut storage).expect("Adding `system::GensisConfig` to the genesis");
+		let mut storage =
+			Storage { top: map, children_default: self.extra_storage.children_default.clone() };
+		<system::GenesisConfig as GenesisBuild<Runtime>>::assimilate_storage(
+			&system::GenesisConfig { authorities: self.authorities.clone() },
+			&mut storage,
+		)
+		.expect("Adding `system::GensisConfig` to the genesis");
 
 		storage
 	}
 }
 
-pub fn insert_genesis_block(
-	storage: &mut Storage,
-) -> sp_core::hash::H256 {
+pub fn insert_genesis_block(storage: &mut Storage) -> sp_core::hash::H256 {
 	let child_roots = storage.children_default.iter().map(|(sk, child_content)| {
-		let state_root = <<<crate::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
-			child_content.data.clone().into_iter().collect(),
-		);
+		let state_root =
+			<<<crate::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
+				child_content.data.clone().into_iter().collect(),
+				sp_runtime::StateVersion::V1,
+			);
 		(sk.clone(), state_root.encode())
 	});
 	// add child roots to storage
 	storage.top.extend(child_roots);
 	let state_root = <<<crate::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
-		storage.top.clone().into_iter().collect()
+		storage.top.clone().into_iter().collect(),
+		sp_runtime::StateVersion::V1,
 	);
 	let block: crate::Block = genesis::construct_genesis_block(state_root);
 	let genesis_hash = block.header.hash();

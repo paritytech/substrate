@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -19,14 +19,9 @@
 //! Block finalization utilities
 
 use crate::rpc;
-use sp_runtime::{
-	Justification,
-	traits::Block as BlockT,
-	generic::BlockId,
-};
-use std::sync::Arc;
 use sc_client_api::backend::{Backend as ClientBackend, Finalizer};
-use std::marker::PhantomData;
+use sp_runtime::{traits::Block as BlockT, Justification};
+use std::{marker::PhantomData, sync::Arc};
 
 /// params for block finalization.
 pub struct FinalizeBlockParams<B: BlockT, F, CB> {
@@ -42,30 +37,23 @@ pub struct FinalizeBlockParams<B: BlockT, F, CB> {
 	pub _phantom: PhantomData<CB>,
 }
 
-
 /// finalizes a block in the backend with the given params.
 pub async fn finalize_block<B, F, CB>(params: FinalizeBlockParams<B, F, CB>)
-	where
-		B: BlockT,
-		F: Finalizer<B, CB>,
-		CB: ClientBackend<B>,
+where
+	B: BlockT,
+	F: Finalizer<B, CB>,
+	CB: ClientBackend<B>,
 {
-	let FinalizeBlockParams {
-		hash,
-		mut sender,
-		justification,
-		finalizer,
-		..
-	} = params;
+	let FinalizeBlockParams { hash, mut sender, justification, finalizer, .. } = params;
 
-	match finalizer.finalize_block(BlockId::Hash(hash), justification, true) {
+	match finalizer.finalize_block(hash, justification, true) {
 		Err(e) => {
-			log::warn!("Failed to finalize block {:?}", e);
+			log::warn!("Failed to finalize block {}", e);
 			rpc::send_result(&mut sender, Err(e.into()))
-		}
+		},
 		Ok(()) => {
 			log::info!("✅ Successfully finalized block: {}", hash);
 			rpc::send_result(&mut sender, Ok(()))
-		}
+		},
 	}
 }

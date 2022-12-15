@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,11 +17,12 @@
 
 //! Overlayed changes for offchain indexing.
 
+use super::changeset::OverlayedMap;
 use sp_core::offchain::OffchainOverlayedChange;
 use sp_std::prelude::Vec;
-use super::changeset::OverlayedMap;
 
-/// In-memory storage for offchain workers recoding changes for the actual offchain storage implementation.
+/// In-memory storage for offchain workers recoding changes for the actual offchain storage
+/// implementation.
 #[derive(Debug, Clone, Default)]
 pub struct OffchainOverlayedChanges(OverlayedMap<(Vec<u8>, Vec<u8>), OffchainOverlayedChange>);
 
@@ -41,7 +42,7 @@ impl OffchainOverlayedChanges {
 	}
 
 	/// Iterate over all key value pairs by reference.
-	pub fn iter<'a>(&'a self) -> impl Iterator<Item = OffchainOverlayedChangesItem<'a>> {
+	pub fn iter(&self) -> impl Iterator<Item = OffchainOverlayedChangesItem> {
 		self.0.changes().map(|kv| (kv.0, kv.1.value_ref()))
 	}
 
@@ -52,11 +53,9 @@ impl OffchainOverlayedChanges {
 
 	/// Remove a key and its associated value from the offchain database.
 	pub fn remove(&mut self, prefix: &[u8], key: &[u8]) {
-		let _ = self.0.set(
-			(prefix.to_vec(), key.to_vec()),
-			OffchainOverlayedChange::Remove,
-			None,
-		);
+		let _ = self
+			.0
+			.set((prefix.to_vec(), key.to_vec()), OffchainOverlayedChange::Remove, None);
 	}
 
 	/// Set the value associated with a key under a prefix to the value provided.
@@ -80,7 +79,9 @@ impl OffchainOverlayedChanges {
 	}
 
 	/// Mutable reference to inner change set.
-	pub fn overlay_mut(&mut self) -> &mut OverlayedMap<(Vec<u8>, Vec<u8>), OffchainOverlayedChange> {
+	pub fn overlay_mut(
+		&mut self,
+	) -> &mut OverlayedMap<(Vec<u8>, Vec<u8>), OffchainOverlayedChange> {
 		&mut self.0
 	}
 }
@@ -120,10 +121,10 @@ mod test {
 		let mut iter = ooc.into_iter();
 		assert_eq!(
 			iter.next(),
-			Some(
-				((STORAGE_PREFIX.to_vec(), b"ppp".to_vec()),
-				OffchainOverlayedChange::SetValue(b"rrr".to_vec()))
-			)
+			Some((
+				(STORAGE_PREFIX.to_vec(), b"ppp".to_vec()),
+				OffchainOverlayedChange::SetValue(b"rrr".to_vec())
+			))
 		);
 		assert_eq!(iter.next(), None);
 	}

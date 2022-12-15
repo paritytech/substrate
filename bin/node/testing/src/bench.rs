@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -22,44 +22,41 @@
 //! can pregenerate seed database and `clone` it for every iteration of your benchmarks
 //! or tests to get consistent, smooth benchmark experience!
 
-use std::{sync::Arc, path::{Path, PathBuf}, collections::BTreeMap};
-
-use node_primitives::Block;
-use crate::client::{Client, Backend};
-use crate::keyring::*;
-use sc_client_db::PruningMode;
-use sc_executor::{NativeExecutor, WasmExecutionMethod};
-use sp_consensus::{
-	BlockOrigin, BlockImport, BlockImportParams,
-	ForkChoiceStrategy, ImportResult, ImportedAux
+use std::{
+	collections::BTreeMap,
+	path::{Path, PathBuf},
+	sync::Arc,
 };
-use sp_runtime::{
-	generic::BlockId,
-	OpaqueExtrinsic,
-	traits::{Block as BlockT, Verify, Zero, IdentifyAccount},
+
+use crate::{
+	client::{Backend, Client},
+	keyring::*,
 };
 use codec::{Decode, Encode};
-use node_runtime::{
-	Call,
-	CheckedExtrinsic,
-	constants::currency::DOLLARS,
-	UncheckedExtrinsic,
-	MinimumPeriod,
-	SystemCall,
-	BalancesCall,
-	AccountId,
-	Signature,
+use futures::executor;
+use kitchensink_runtime::{
+	constants::currency::DOLLARS, AccountId, BalancesCall, CheckedExtrinsic, MinimumPeriod,
+	RuntimeCall, Signature, SystemCall, UncheckedExtrinsic,
 };
-use sp_core::{ExecutionContext, blake2_256, traits::SpawnNamed, Pair, Public, sr25519, ed25519};
+use node_primitives::Block;
+use sc_block_builder::BlockBuilderProvider;
+use sc_client_api::{
+	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
+	BlockBackend, ExecutionStrategy,
+};
+use sc_client_db::PruningMode;
+use sc_consensus::{BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult, ImportedAux};
+use sc_executor::{NativeElseWasmExecutor, WasmExecutionMethod, WasmtimeInstantiationStrategy};
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;
+use sp_consensus::BlockOrigin;
+use sp_core::{blake2_256, ed25519, sr25519, traits::SpawnNamed, ExecutionContext, Pair, Public};
 use sp_inherents::InherentData;
-use sc_client_api::{
-	ExecutionStrategy, BlockBackend,
-	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, IdentifyAccount, Verify, Zero},
+	OpaqueExtrinsic,
 };
-use sc_block_builder::BlockBuilderProvider;
-use futures::executor;
 
 /// Keyring full of accounts for benching.
 ///
@@ -92,19 +89,21 @@ impl BenchPair {
 ///
 /// Will panic if cache drop is impossbile.
 pub fn drop_system_cache() {
-	#[cfg(target_os = "windows")] {
+	#[cfg(target_os = "windows")]
+	{
 		log::warn!(
 			target: "bench-logistics",
 			"Clearing system cache on windows is not supported. Benchmark might totally be wrong.",
 		);
-		return;
+		return
 	}
 
 	std::process::Command::new("sync")
 		.output()
 		.expect("Failed to execute system cache clear");
 
-	#[cfg(target_os = "linux")] {
+	#[cfg(target_os = "linux")]
+	{
 		log::trace!(target: "bench-logistics", "Clearing system cache...");
 		std::process::Command::new("echo")
 			.args(&["3", ">", "/proc/sys/vm/drop_caches", "2>", "/dev/null"])
@@ -133,7 +132,8 @@ pub fn drop_system_cache() {
 		log::trace!(target: "bench-logistics", "Clearing system cache done!");
 	}
 
-	#[cfg(target_os = "macos")] {
+	#[cfg(target_os = "macos")]
+	{
 		log::trace!(target: "bench-logistics", "Clearing system cache...");
 		if let Err(err) = std::process::Command::new("purge").output() {
 			log::error!("purge error {:?}: ", err);
@@ -169,15 +169,10 @@ impl Clone for BenchDb {
 		);
 		let seed_db_files = std::fs::read_dir(seed_dir)
 			.expect("failed to list file in seed dir")
-			.map(|f_result|
-				f_result.expect("failed to read file in seed db")
-					.path()
-			).collect::<Vec<PathBuf>>();
-		fs_extra::copy_items(
-			&seed_db_files,
-			dir.path(),
-			&fs_extra::dir::CopyOptions::new(),
-		).expect("Copy of seed database is ok");
+			.map(|f_result| f_result.expect("failed to read file in seed db").path())
+			.collect::<Vec<PathBuf>>();
+		fs_extra::copy_items(&seed_db_files, dir.path(), &fs_extra::dir::CopyOptions::new())
+			.expect("Copy of seed database is ok");
 
 		// We clear system cache after db clone but before any warmups.
 		// This populates system cache with some data unrelated to actual
@@ -204,10 +199,7 @@ pub enum BlockType {
 impl BlockType {
 	/// Create block content description with specified number of transactions.
 	pub fn to_content(self, size: Option<usize>) -> BlockContent {
-		BlockContent {
-			block_type: self,
-			size,
-		}
+		BlockContent { block_type: self, size }
 	}
 }
 
@@ -228,15 +220,10 @@ pub enum DatabaseType {
 }
 
 impl DatabaseType {
-	fn into_settings(self, path: PathBuf) -> sc_client_db::DatabaseSettingsSrc {
+	fn into_settings(self, path: PathBuf) -> sc_client_db::DatabaseSource {
 		match self {
-			Self::RocksDb => sc_client_db::DatabaseSettingsSrc::RocksDb {
-				path,
-				cache_size: 512,
-			},
-			Self::ParityDb => sc_client_db::DatabaseSettingsSrc::ParityDb {
-				path,
-			}
+			Self::RocksDb => sc_client_db::DatabaseSource::RocksDb { path, cache_size: 512 },
+			Self::ParityDb => sc_client_db::DatabaseSource::ParityDb { path },
 		}
 	}
 }
@@ -251,19 +238,26 @@ pub struct TaskExecutor {
 
 impl TaskExecutor {
 	fn new() -> Self {
-		Self {
-			pool: executor::ThreadPool::new()
-				.expect("Failed to create task executor")
-		}
+		Self { pool: executor::ThreadPool::new().expect("Failed to create task executor") }
 	}
 }
 
 impl SpawnNamed for TaskExecutor {
-	fn spawn(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+	fn spawn(
+		&self,
+		_: &'static str,
+		_: Option<&'static str>,
+		future: futures::future::BoxFuture<'static, ()>,
+	) {
 		self.pool.spawn_ok(future);
 	}
 
-	fn spawn_blocking(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+	fn spawn_blocking(
+		&self,
+		_: &'static str,
+		_: Option<&'static str>,
+		future: futures::future::BoxFuture<'static, ()>,
+	) {
 		self.pool.spawn_ok(future);
 	}
 }
@@ -279,21 +273,16 @@ pub struct BlockContentIterator<'a> {
 
 impl<'a> BlockContentIterator<'a> {
 	fn new(content: BlockContent, keyring: &'a BenchKeyring, client: &Client) -> Self {
-		let runtime_version = client.runtime_version_at(&BlockId::number(0))
+		let runtime_version = client
+			.runtime_version_at(&BlockId::number(0))
 			.expect("There should be runtime version at 0");
 
-		let genesis_hash = client.block_hash(Zero::zero())
+		let genesis_hash = client
+			.block_hash(Zero::zero())
 			.expect("Database error?")
-			.expect("Genesis block always exists; qed")
-			.into();
+			.expect("Genesis block always exists; qed");
 
-		BlockContentIterator {
-			iteration: 0,
-			content,
-			keyring,
-			runtime_version,
-			genesis_hash,
-		}
+		BlockContentIterator { iteration: 0, content, keyring, runtime_version, genesis_hash }
 	}
 }
 
@@ -302,41 +291,38 @@ impl<'a> Iterator for BlockContentIterator<'a> {
 
 	fn next(&mut self) -> Option<Self::Item> {
 		if self.content.size.map(|size| size <= self.iteration).unwrap_or(false) {
-			return None;
+			return None
 		}
 
 		let sender = self.keyring.at(self.iteration);
-		let receiver = get_account_id_from_seed::<sr25519::Public>(
-			&format!("random-user//{}", self.iteration)
-		);
+		let receiver = get_account_id_from_seed::<sr25519::Public>(&format!(
+			"random-user//{}",
+			self.iteration
+		));
 
 		let signed = self.keyring.sign(
 			CheckedExtrinsic {
-				signed: Some((sender, signed_extra(0, node_runtime::ExistentialDeposit::get() + 1))),
+				signed: Some((
+					sender,
+					signed_extra(0, kitchensink_runtime::ExistentialDeposit::get() + 1),
+				)),
 				function: match self.content.block_type {
-					BlockType::RandomTransfersKeepAlive => {
-						Call::Balances(
-							BalancesCall::transfer_keep_alive(
-								sp_runtime::MultiAddress::Id(receiver),
-								node_runtime::ExistentialDeposit::get() + 1,
-							)
-						)
-					},
+					BlockType::RandomTransfersKeepAlive =>
+						RuntimeCall::Balances(BalancesCall::transfer_keep_alive {
+							dest: sp_runtime::MultiAddress::Id(receiver),
+							value: kitchensink_runtime::ExistentialDeposit::get() + 1,
+						}),
 					BlockType::RandomTransfersReaping => {
-						Call::Balances(
-							BalancesCall::transfer(
-								sp_runtime::MultiAddress::Id(receiver),
-								// Transfer so that ending balance would be 1 less than existential deposit
-								// so that we kill the sender account.
-								100*DOLLARS - (node_runtime::ExistentialDeposit::get() - 1),
-							)
-						)
+						RuntimeCall::Balances(BalancesCall::transfer {
+							dest: sp_runtime::MultiAddress::Id(receiver),
+							// Transfer so that ending balance would be 1 less than existential
+							// deposit so that we kill the sender account.
+							value: 100 * DOLLARS -
+								(kitchensink_runtime::ExistentialDeposit::get() - 1),
+						})
 					},
-					BlockType::Noop => {
-						Call::System(
-							SystemCall::remark(Vec::new())
-						)
-					},
+					BlockType::Noop =>
+						RuntimeCall::System(SystemCall::remark { remark: Vec::new() }),
 				},
 			},
 			self.runtime_version.spec_version,
@@ -346,8 +332,7 @@ impl<'a> Iterator for BlockContentIterator<'a> {
 
 		let encoded = Encode::encode(&signed);
 
-		let opaque = OpaqueExtrinsic::decode(&mut &encoded[..])
-			.expect("Failed  to decode opaque");
+		let opaque = OpaqueExtrinsic::decode(&mut &encoded[..]).expect("Failed  to decode opaque");
 
 		self.iteration += 1;
 
@@ -373,12 +358,8 @@ impl BenchDb {
 			"Created seed db at {}",
 			dir.path().to_string_lossy(),
 		);
-		let (_client, _backend, _task_executor) = Self::bench_client(
-			database_type,
-			dir.path(),
-			Profile::Native,
-			&keyring,
-		);
+		let (_client, _backend, _task_executor) =
+			Self::bench_client(database_type, dir.path(), Profile::Native, &keyring);
 		let directory_guard = Guard(dir);
 
 		BenchDb { keyring, directory_guard, database_type }
@@ -408,19 +389,24 @@ impl BenchDb {
 		keyring: &BenchKeyring,
 	) -> (Client, std::sync::Arc<Backend>, TaskExecutor) {
 		let db_config = sc_client_db::DatabaseSettings {
-			state_cache_size: 16*1024*1024,
-			state_cache_child_ratio: Some((0, 100)),
-			state_pruning: PruningMode::ArchiveAll,
+			trie_cache_maximum_size: Some(16 * 1024 * 1024),
+			state_pruning: Some(PruningMode::ArchiveAll),
 			source: database_type.into_settings(dir.into()),
-			keep_blocks: sc_client_db::KeepBlocks::All,
-			transaction_storage: sc_client_db::TransactionStorageMode::BlockBody,
+			blocks_pruning: sc_client_db::BlocksPruning::KeepAll,
 		};
 		let task_executor = TaskExecutor::new();
 
 		let backend = sc_service::new_db_backend(db_config).expect("Should not fail");
 		let client = sc_service::new_client(
 			backend.clone(),
-			NativeExecutor::new(WasmExecutionMethod::Compiled, None, 8),
+			NativeElseWasmExecutor::new(
+				WasmExecutionMethod::Compiled {
+					instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
+				},
+				None,
+				8,
+				2,
+			),
 			&keyring.generate_genesis(),
 			None,
 			None,
@@ -429,7 +415,8 @@ impl BenchDb {
 			None,
 			None,
 			Default::default(),
-		).expect("Should not fail");
+		)
+		.expect("Should not fail");
 
 		(client, backend, task_executor)
 	}
@@ -445,12 +432,14 @@ impl BenchDb {
 			.put_data(sp_timestamp::INHERENT_IDENTIFIER, &timestamp)
 			.expect("Put timestamp failed");
 
-		client.runtime_api()
+		client
+			.runtime_api()
 			.inherent_extrinsics_with_context(
 				&BlockId::number(0),
 				ExecutionContext::BlockConstruction,
 				inherent_data,
-			).expect("Get inherents failed")
+			)
+			.expect("Get inherents failed")
 	}
 
 	/// Iterate over some block content with transaction signed using this database keyring.
@@ -474,9 +463,7 @@ impl BenchDb {
 	pub fn generate_block(&mut self, content: BlockContent) -> Block {
 		let client = self.client();
 
-		let mut block = client
-			.new_block(Default::default())
-			.expect("Block creation failed");
+		let mut block = client.new_block(Default::default()).expect("Block creation failed");
 
 		for extrinsic in self.generate_inherents(&client) {
 			block.push(extrinsic).expect("Push inherent failed");
@@ -486,14 +473,12 @@ impl BenchDb {
 		for opaque in self.block_content(content, &client) {
 			match block.push(opaque) {
 				Err(sp_blockchain::Error::ApplyExtrinsicFailed(
-						sp_blockchain::ApplyExtrinsicFailed::Validity(e)
-				)) if e.exhausted_resources() => {
-					break;
-				},
+					sp_blockchain::ApplyExtrinsicFailed::Validity(e),
+				)) if e.exhausted_resources() => break,
 				Err(err) => panic!("Error pushing transaction: {:?}", err),
 				Ok(_) => {},
 			}
-		};
+		}
 
 		let block = block.build().expect("Block build failed").block;
 
@@ -514,12 +499,8 @@ impl BenchDb {
 	/// Clone this database and create context for testing/benchmarking.
 	pub fn create_context(&self, profile: Profile) -> BenchContext {
 		let BenchDb { directory_guard, keyring, database_type } = self.clone();
-		let (client, backend, task_executor) = Self::bench_client(
-			database_type,
-			directory_guard.path(),
-			profile,
-			&keyring
-		);
+		let (client, backend, task_executor) =
+			Self::bench_client(database_type, directory_guard.path(), profile, &keyring);
 
 		BenchContext {
 			client: Arc::new(client),
@@ -549,7 +530,8 @@ impl BenchKeyring {
 			let seed = format!("//endowed-user/{}", n);
 			let (account_id, pair) = match key_types {
 				KeyTypes::Sr25519 => {
-					let pair = sr25519::Pair::from_string(&seed, None).expect("failed to generate pair");
+					let pair =
+						sr25519::Pair::from_string(&seed, None).expect("failed to generate pair");
 					let account_id = AccountPublic::from(pair.public()).into_account();
 					(account_id, BenchPair::Sr25519(pair))
 				},
@@ -581,11 +563,18 @@ impl BenchKeyring {
 		xt: CheckedExtrinsic,
 		spec_version: u32,
 		tx_version: u32,
-		genesis_hash: [u8; 32]
+		genesis_hash: [u8; 32],
 	) -> UncheckedExtrinsic {
 		match xt.signed {
 			Some((signed, extra)) => {
-				let payload = (xt.function, extra.clone(), spec_version, tx_version, genesis_hash, genesis_hash);
+				let payload = (
+					xt.function,
+					extra.clone(),
+					spec_version,
+					tx_version,
+					genesis_hash,
+					genesis_hash,
+				);
 				let key = self.accounts.get(&signed).expect("Account id not found in keyring");
 				let signature = payload.using_encoded(|b| {
 					if b.len() > 256 {
@@ -593,24 +582,20 @@ impl BenchKeyring {
 					} else {
 						key.sign(b)
 					}
-				}).into();
+				});
 				UncheckedExtrinsic {
 					signature: Some((sp_runtime::MultiAddress::Id(signed), signature, extra)),
 					function: payload.0,
 				}
-			}
-			None => UncheckedExtrinsic {
-				signature: None,
-				function: xt.function,
 			},
+			None => UncheckedExtrinsic { signature: None, function: xt.function },
 		}
 	}
 
 	/// Generate genesis with accounts from this keyring endowed with some balance.
-	pub fn generate_genesis(&self) -> node_runtime::GenesisConfig {
+	pub fn generate_genesis(&self) -> kitchensink_runtime::GenesisConfig {
 		crate::genesis::config_endowed(
-			false,
-			Some(node_runtime::wasm_binary_unwrap()),
+			Some(kitchensink_runtime::wasm_binary_unwrap()),
 			self.collect_account_ids(),
 		)
 	}
@@ -641,7 +626,7 @@ impl Profile {
 				block_construction: ExecutionStrategy::NativeElseWasm,
 				offchain_worker: ExecutionStrategy::NativeElseWasm,
 				other: ExecutionStrategy::NativeElseWasm,
-			}
+			},
 		}
 	}
 }
@@ -676,7 +661,7 @@ fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public
 
 fn get_account_id_from_seed<TPublic: Public>(seed: &str) -> AccountId
 where
-	AccountPublic: From<<TPublic::Pair as Pair>::Public>
+	AccountPublic: From<<TPublic::Pair as Pair>::Public>,
 {
 	AccountPublic::from(get_from_seed::<TPublic>(seed)).into_account()
 }
@@ -684,24 +669,25 @@ where
 impl BenchContext {
 	/// Import some block.
 	pub fn import_block(&mut self, block: Block) {
-		let mut import_params = BlockImportParams::new(BlockOrigin::NetworkBroadcast, block.header.clone());
+		let mut import_params =
+			BlockImportParams::new(BlockOrigin::NetworkBroadcast, block.header.clone());
 		import_params.body = Some(block.extrinsics().to_vec());
 		import_params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
 		assert_eq!(self.client.chain_info().best_number, 0);
 
 		assert_eq!(
-			futures::executor::block_on(self.client.import_block(import_params, Default::default()))
-				.expect("Failed to import block"),
-			ImportResult::Imported(
-				ImportedAux {
-					header_only: false,
-					clear_justification_requests: false,
-					needs_justification: false,
-					bad_justification: false,
-					is_new_best: true,
-				}
+			futures::executor::block_on(
+				self.client.import_block(import_params, Default::default())
 			)
+			.expect("Failed to import block"),
+			ImportResult::Imported(ImportedAux {
+				header_only: false,
+				clear_justification_requests: false,
+				needs_justification: false,
+				bad_justification: false,
+				is_new_best: true,
+			})
 		);
 
 		assert_eq!(self.client.chain_info().best_number, 1);

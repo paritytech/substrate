@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,22 +19,16 @@
 
 #![warn(missing_docs)]
 
-pub mod number;
 pub mod list;
+pub mod number;
 pub mod tracing;
 
 /// A util function to assert the result of serialization and deserialization is the same.
 #[cfg(test)]
-pub(crate) fn assert_deser<T>(s: &str, expected: T) where
-	T: std::fmt::Debug + serde::ser::Serialize + serde::de::DeserializeOwned + PartialEq
+pub(crate) fn assert_deser<T>(s: &str, expected: T)
+where
+	T: std::fmt::Debug + serde::ser::Serialize + serde::de::DeserializeOwned + PartialEq,
 {
-	assert_eq!(
-		serde_json::from_str::<T>(s).unwrap(),
-		expected
-	);
-	assert_eq!(
-		serde_json::to_string(&expected).unwrap(),
-		s
-	);
+	assert_eq!(serde_json::from_str::<T>(s).unwrap(), expected);
+	assert_eq!(serde_json::to_string(&expected).unwrap(), s);
 }
-

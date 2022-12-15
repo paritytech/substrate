@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,13 +19,29 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::{
-	vec,
-	borrow::Cow, marker::PhantomData, mem, iter::Iterator, result, vec::Vec,
-};
+use sp_std::{borrow::Cow, iter::Iterator, marker::PhantomData, mem, result, vec, vec::Vec};
 
-#[cfg(feature = "std")]
+#[cfg(feature = "wasmi")]
 mod wasmi_impl;
+
+#[cfg(not(all(feature = "std", feature = "wasmtime")))]
+#[macro_export]
+macro_rules! if_wasmtime_is_enabled {
+	($($token:tt)*) => {};
+}
+
+#[cfg(all(feature = "std", feature = "wasmtime"))]
+#[macro_export]
+macro_rules! if_wasmtime_is_enabled {
+    ($($token:tt)*) => {
+        $($token)*
+    }
+}
+
+if_wasmtime_is_enabled! {
+	// Reexport wasmtime so that its types are accessible from the procedural macro.
+	pub use wasmtime;
+}
 
 /// Result type used by traits in this crate.
 #[cfg(feature = "std")]
@@ -57,7 +73,7 @@ impl From<ValueType> for u8 {
 	}
 }
 
-impl sp_std::convert::TryFrom<u8> for ValueType {
+impl TryFrom<u8> for ValueType {
 	type Error = ();
 
 	fn try_from(val: u8) -> sp_std::result::Result<ValueType, ()> {
@@ -108,7 +124,8 @@ impl Value {
 	}
 }
 
-/// Provides `Sealed` trait to prevent implementing trait `PointerType` outside of this crate.
+/// Provides `Sealed` trait to prevent implementing trait `PointerType` and `WasmTy` outside of this
+/// crate.
 mod private {
 	pub trait Sealed {}
 
@@ -116,6 +133,9 @@ mod private {
 	impl Sealed for u16 {}
 	impl Sealed for u32 {}
 	impl Sealed for u64 {}
+
+	impl Sealed for i32 {}
+	impl Sealed for i64 {}
 }
 
 /// Something that can be wrapped in a wasm `Pointer`.
@@ -141,24 +161,20 @@ pub struct Pointer<T: PointerType> {
 impl<T: PointerType> Pointer<T> {
 	/// Create a new instance of `Self`.
 	pub fn new(ptr: u32) -> Self {
-		Self {
-			ptr,
-			_marker: Default::default(),
-		}
+		Self { ptr, _marker: Default::default() }
 	}
 
 	/// Calculate the offset from this pointer.
 	///
-	/// `offset` is in units of `T`. So, `3` means `3 * mem::size_of::<T>()` as offset to the pointer.
+	/// `offset` is in units of `T`. So, `3` means `3 * mem::size_of::<T>()` as offset to the
+	/// pointer.
 	///
 	/// Returns an `Option` to respect that the pointer could probably overflow.
 	pub fn offset(self, offset: u32) -> Option<Self> {
-		offset.checked_mul(T::SIZE).and_then(|o| self.ptr.checked_add(o)).map(|ptr| {
-			Self {
-				ptr,
-				_marker: Default::default(),
-			}
-		})
+		offset
+			.checked_mul(T::SIZE)
+			.and_then(|o| self.ptr.checked_add(o))
+			.map(|ptr| Self { ptr, _marker: Default::default() })
 	}
 
 	/// Create a null pointer.
@@ -198,7 +214,9 @@ impl<T: PointerType> From<Pointer<T>> for usize {
 
 impl<T: PointerType> IntoValue for Pointer<T> {
 	const VALUE_TYPE: ValueType = ValueType::I32;
-	fn into_value(self) -> Value { Value::I32(self.ptr as _) }
+	fn into_value(self) -> Value {
+		Value::I32(self.ptr as _)
+	}
 }
 
 impl<T: PointerType> TryFromValue for Pointer<T> {
@@ -224,19 +242,16 @@ pub struct Signature {
 
 impl Signature {
 	/// Create a new instance of `Signature`.
-	pub fn new<T: Into<Cow<'static, [ValueType]>>>(args: T, return_value: Option<ValueType>) -> Self {
-		Self {
-			args: args.into(),
-			return_value,
-		}
+	pub fn new<T: Into<Cow<'static, [ValueType]>>>(
+		args: T,
+		return_value: Option<ValueType>,
+	) -> Self {
+		Self { args: args.into(), return_value }
 	}
 
 	/// Create a new instance of `Signature` with the given `args` and without any return value.
 	pub fn new_with_args<T: Into<Cow<'static, [ValueType]>>>(args: T) -> Self {
-		Self {
-			args: args.into(),
-			return_value: None,
-		}
+		Self { args: args.into(), return_value: None }
 	}
 }
 
@@ -288,68 +303,72 @@ pub trait FunctionContext {
 	fn allocate_memory(&mut self, size: WordSize) -> Result<Pointer<u8>>;
 	/// Deallocate a given memory instance.
 	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> Result<()>;
-	/// Provides access to the sandbox.
-	fn sandbox(&mut self) -> &mut dyn Sandbox;
+	/// Registers a panic error message within the executor.
+	///
+	/// This is meant to be used in situations where the runtime
+	/// encounters an unrecoverable error and intends to panic.
+	///
+	/// Panicking in WASM is done through the [`unreachable`](https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-control)
+	/// instruction which causes an unconditional trap and immediately aborts
+	/// the execution. It does not however allow for any diagnostics to be
+	/// passed through to the host, so while we do know that *something* went
+	/// wrong we don't have any direct indication of what *exactly* went wrong.
+	///
+	/// As a workaround we use this method right before the execution is
+	/// actually aborted to pass an error message to the host so that it
+	/// can associate it with the next trap, and return that to the caller.
+	///
+	/// A WASM trap should be triggered immediately after calling this method;
+	/// otherwise the error message might be associated with a completely
+	/// unrelated trap.
+	///
+	/// It should only be called once, however calling it more than once
+	/// is harmless and will overwrite the previously set error message.
+	fn register_panic_error_message(&mut self, message: &str);
 }
 
-/// Sandbox memory identifier.
-pub type MemoryId = u32;
-
-/// Something that provides access to the sandbox.
-pub trait Sandbox {
-	/// Get sandbox memory from the `memory_id` instance at `offset` into the given buffer.
-	fn memory_get(
-		&mut self,
-		memory_id: MemoryId,
-		offset: WordSize,
-		buf_ptr: Pointer<u8>,
-		buf_len: WordSize,
-	) -> Result<u32>;
-	/// Set sandbox memory from the given value.
-	fn memory_set(
-		&mut self,
-		memory_id: MemoryId,
-		offset: WordSize,
-		val_ptr: Pointer<u8>,
-		val_len: WordSize,
-	) -> Result<u32>;
-	/// Delete a memory instance.
-	fn memory_teardown(&mut self, memory_id: MemoryId) -> Result<()>;
-	/// Create a new memory instance with the given `initial` size and the `maximum` size.
-	/// The size is given in wasm pages.
-	fn memory_new(&mut self, initial: u32, maximum: u32) -> Result<MemoryId>;
-	/// Invoke an exported function by a name.
-	fn invoke(
-		&mut self,
-		instance_id: u32,
-		export_name: &str,
-		args: &[u8],
-		return_val: Pointer<u8>,
-		return_val_len: WordSize,
-		state: u32,
-	) -> Result<u32>;
-	/// Delete a sandbox instance.
-	fn instance_teardown(&mut self, instance_id: u32) -> Result<()>;
-	/// Create a new sandbox instance.
-	fn instance_new(
-		&mut self,
-		dispatch_thunk_id: u32,
-		wasm: &[u8],
-		raw_env_def: &[u8],
-		state: u32,
-	) -> Result<u32>;
-
-	/// Get the value from a global with the given `name`. The sandbox is determined by the
-	/// given `instance_idx` instance.
+if_wasmtime_is_enabled! {
+	/// A trait used to statically register host callbacks with the WASM executor,
+	/// so that they call be called from within the runtime with minimal overhead.
 	///
-	/// Returns `Some(_)` when the requested global variable could be found.
-	fn get_global_val(&self, instance_idx: u32, name: &str) -> Result<Option<Value>>;
+	/// This is used internally to interface the wasmtime-based executor with the
+	/// host functions' definitions generated through the runtime interface macro,
+	/// and is not meant to be used directly.
+	pub trait HostFunctionRegistry {
+		type State;
+		type Error;
+		type FunctionContext: FunctionContext;
+
+		/// Wraps the given `caller` in a type which implements `FunctionContext`
+		/// and calls the given `callback`.
+		fn with_function_context<R>(
+			caller: wasmtime::Caller<Self::State>,
+			callback: impl FnOnce(&mut dyn FunctionContext) -> R,
+		) -> R;
+
+		/// Registers a given host function with the WASM executor.
+		///
+		/// The function has to be statically callable, and all of its arguments
+		/// and its return value have to be compatible with WASM FFI.
+		fn register_static<Params, Results>(
+			&mut self,
+			fn_name: &str,
+			func: impl wasmtime::IntoFunc<Self::State, Params, Results> + 'static,
+		) -> core::result::Result<(), Self::Error>;
+	}
 }
 
 /// Something that provides implementations for host functions.
-pub trait HostFunctions: 'static {
+pub trait HostFunctions: 'static + Send + Sync {
 	/// Returns the host functions `Self` provides.
 	fn host_functions() -> Vec<&'static dyn Function>;
+
+	if_wasmtime_is_enabled! {
+		/// Statically registers the host functions.
+		fn register_static<T>(registry: &mut T) -> core::result::Result<(), T::Error>
+		where
+			T: HostFunctionRegistry;
+	}
 }
 
 #[impl_trait_for_tuples::impl_for_tuples(30)]
@@ -361,7 +380,145 @@ impl HostFunctions for Tuple {
 
 		host_functions
 	}
+
+	#[cfg(all(feature = "std", feature = "wasmtime"))]
+	fn register_static<T>(registry: &mut T) -> core::result::Result<(), T::Error>
+	where
+		T: HostFunctionRegistry,
+	{
+		for_tuples!(
+			#( Tuple::register_static(registry)?; )*
+		);
+
+		Ok(())
+	}
 }
+
+/// A wrapper which merges two sets of host functions, and allows the second set to override
+/// the host functions from the first set.
+pub struct ExtendedHostFunctions<Base, Overlay> {
+	phantom: PhantomData<(Base, Overlay)>,
+}
+
+impl<Base, Overlay> HostFunctions for ExtendedHostFunctions<Base, Overlay>
+where
+	Base: HostFunctions,
+	Overlay: HostFunctions,
+{
+	fn host_functions() -> Vec<&'static dyn Function> {
+		let mut base = Base::host_functions();
+		let overlay = Overlay::host_functions();
+		base.retain(|host_fn| {
+			!overlay.iter().any(|ext_host_fn| host_fn.name() == ext_host_fn.name())
+		});
+		base.extend(overlay);
+		base
+	}
+
+	if_wasmtime_is_enabled! {
+		fn register_static<T>(registry: &mut T) -> core::result::Result<(), T::Error>
+		where
+			T: HostFunctionRegistry,
+		{
+			struct Proxy<'a, T> {
+				registry: &'a mut T,
+				seen_overlay: std::collections::HashSet<String>,
+				seen_base: std::collections::HashSet<String>,
+				overlay_registered: bool,
+			}
+
+			impl<'a, T> HostFunctionRegistry for Proxy<'a, T>
+			where
+				T: HostFunctionRegistry,
+			{
+				type State = T::State;
+				type Error = T::Error;
+				type FunctionContext = T::FunctionContext;
+
+				fn with_function_context<R>(
+					caller: wasmtime::Caller<Self::State>,
+					callback: impl FnOnce(&mut dyn FunctionContext) -> R,
+				) -> R {
+					T::with_function_context(caller, callback)
+				}
+
+				fn register_static<Params, Results>(
+					&mut self,
+					fn_name: &str,
+					func: impl wasmtime::IntoFunc<Self::State, Params, Results> + 'static,
+				) -> core::result::Result<(), Self::Error> {
+					if self.overlay_registered {
+						if !self.seen_base.insert(fn_name.to_owned()) {
+							log::warn!(
+								target: "extended_host_functions",
+								"Duplicate base host function: '{}'",
+								fn_name,
+							);
+
+							// TODO: Return an error here?
+							return Ok(())
+						}
+
+						if self.seen_overlay.contains(fn_name) {
+							// Was already registered when we went through the overlay, so just ignore it.
+							log::debug!(
+								target: "extended_host_functions",
+								"Overriding base host function: '{}'",
+								fn_name,
+							);
+
+							return Ok(())
+						}
+					} else if !self.seen_overlay.insert(fn_name.to_owned()) {
+						log::warn!(
+							target: "extended_host_functions",
+							"Duplicate overlay host function: '{}'",
+							fn_name,
+						);
+
+						// TODO: Return an error here?
+						return Ok(())
+					}
+
+					self.registry.register_static(fn_name, func)
+				}
+			}
+
+			let mut proxy = Proxy {
+				registry,
+				seen_overlay: Default::default(),
+				seen_base: Default::default(),
+				overlay_registered: false,
+			};
+
+			// The functions from the `Overlay` can override those from the `Base`,
+			// so `Overlay` is registered first, and then we skip those functions
+			// in `Base` if they were already registered from the `Overlay`.
+			Overlay::register_static(&mut proxy)?;
+			proxy.overlay_registered = true;
+			Base::register_static(&mut proxy)?;
+
+			Ok(())
+		}
+	}
+}
+
+/// A trait for types directly usable at the WASM FFI boundary without any conversion at all.
+///
+/// This trait is sealed and should not be implemented downstream.
+#[cfg(all(feature = "std", feature = "wasmtime"))]
+pub trait WasmTy: wasmtime::WasmTy + private::Sealed {}
+
+/// A trait for types directly usable at the WASM FFI boundary without any conversion at all.
+///
+/// This trait is sealed and should not be implemented downstream.
+#[cfg(not(all(feature = "std", feature = "wasmtime")))]
+pub trait WasmTy: private::Sealed {}
+
+impl WasmTy for i32 {}
+impl WasmTy for u32 {}
+impl WasmTy for i64 {}
+impl WasmTy for u64 {}
 
 /// Something that can be converted into a wasm compatible `Value`.
 pub trait IntoValue {
@@ -413,48 +570,6 @@ impl_into_and_from_value! {
 	i64, I64,
 }
 
-/// Something that can write a primitive to wasm memory location.
-pub trait WritePrimitive<T: PointerType> {
-	/// Write the given value `t` to the given memory location `ptr`.
-	fn write_primitive(&mut self, ptr: Pointer<T>, t: T) -> Result<()>;
-}
-
-impl WritePrimitive<u32> for &mut dyn FunctionContext {
-	fn write_primitive(&mut self, ptr: Pointer<u32>, t: u32) -> Result<()> {
-		let r = t.to_le_bytes();
-		self.write_memory(ptr.cast(), &r)
-	}
-}
-
-impl WritePrimitive<u64> for &mut dyn FunctionContext {
-	fn write_primitive(&mut self, ptr: Pointer<u64>, t: u64) -> Result<()> {
-		let r = t.to_le_bytes();
-		self.write_memory(ptr.cast(), &r)
-	}
-}
-
-/// Something that can read a primitive from a wasm memory location.
-pub trait ReadPrimitive<T: PointerType> {
-	/// Read a primitive from the given memory location `ptr`.
-	fn read_primitive(&self, ptr: Pointer<T>) -> Result<T>;
-}
-
-impl ReadPrimitive<u32> for &mut dyn FunctionContext {
-	fn read_primitive(&self, ptr: Pointer<u32>) -> Result<u32> {
-		let mut r = [0u8; 4];
-		self.read_memory_into(ptr.cast(), &mut r)?;
-		Ok(u32::from_le_bytes(r))
-	}
-}
-
-impl ReadPrimitive<u64> for &mut dyn FunctionContext {
-	fn read_primitive(&self, ptr: Pointer<u64>) -> Result<u64> {
-		let mut r = [0u8; 8];
-		self.read_memory_into(ptr.cast(), &mut r)?;
-		Ok(u64::from_le_bytes(r))
-	}
-}
-
 /// Typed value that can be returned from a function.
 ///
 /// Basically a `TypedValue` plus `Unit`, for functions which return nothing.
@@ -499,7 +614,6 @@ mod tests {
 		assert_eq!(ptr.offset(10).unwrap(), Pointer::new(80));
 		assert_eq!(ptr.offset(32).unwrap(), Pointer::new(256));
 	}
-
 
 	#[test]
 	fn return_value_encoded_max_size() {

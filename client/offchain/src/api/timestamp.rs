@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -19,8 +19,7 @@
 //! Helper methods dedicated to timestamps.
 
 use sp_core::offchain::Timestamp;
-use std::convert::TryInto;
-use std::time::{SystemTime, Duration};
+use std::time::{Duration, SystemTime};
 
 /// Returns the current time as a `Timestamp`.
 pub fn now() -> Timestamp {
@@ -34,9 +33,12 @@ pub fn now() -> Timestamp {
 		Ok(d) => {
 			let duration = d.as_millis();
 			// Assuming overflow won't happen for a few hundred years.
-			Timestamp::from_unix_millis(duration.try_into()
-				.expect("epoch milliseconds won't overflow u64 for hundreds of years; qed"))
-		}
+			Timestamp::from_unix_millis(
+				duration
+					.try_into()
+					.expect("epoch milliseconds won't overflow u64 for hundreds of years; qed"),
+			)
+		},
 	}
 }
 
@@ -60,7 +62,6 @@ pub fn deadline_to_future(
 		// Only apply delay if we need to wait a non-zero duration
 		Some(duration) if duration <= Duration::from_secs(0) =>
 			Either::Right(Either::Left(future::ready(()))),
-		Some(duration) =>
-			Either::Right(Either::Right(futures_timer::Delay::new(duration))),
+		Some(duration) => Either::Right(Either::Right(futures_timer::Delay::new(duration))),
 	})
 }

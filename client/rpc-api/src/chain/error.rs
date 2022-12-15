@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,46 +18,33 @@
 
 //! Error helpers for Chain RPC module.
 
-use crate::errors;
-use jsonrpc_core as rpc;
-
+use jsonrpsee::{
+	core::Error as JsonRpseeError,
+	types::error::{CallError, ErrorObject},
+};
 /// Chain RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// Chain RPC future Result type.
-pub type FutureResult<T> = Box<dyn rpc::futures::Future<Item = T, Error = Error> + Send>;
-
 /// Chain RPC errors.
-#[derive(Debug, derive_more::Display, derive_more::From)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// Client error.
-	#[display(fmt="Client error: {}", _0)]
-	Client(Box<dyn std::error::Error + Send>),
+	#[error("Client error: {}", .0)]
+	Client(#[from] Box<dyn std::error::Error + Send + Sync>),
 	/// Other error type.
+	#[error("{0}")]
 	Other(String),
 }
 
-impl std::error::Error for Error {
-	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-		match self {
-			Error::Client(ref err) => Some(&**err),
-			_ => None,
-		}
-	}
-}
-
 /// Base error code for all chain errors.
-const BASE_ERROR: i64 = 3000;
+const BASE_ERROR: i32 = 3000;
 
-impl From<Error> for rpc::Error {
+impl From<Error> for JsonRpseeError {
 	fn from(e: Error) -> Self {
 		match e {
-			Error::Other(message) => rpc::Error {
-				code: rpc::ErrorCode::ServerError(BASE_ERROR + 1),
-				message,
-				data: None,
-			},
-			e => errors::internal(e),
+			Error::Other(message) =>
+				CallError::Custom(ErrorObject::owned(BASE_ERROR + 1, message, None::<()>)).into(),
+			e => e.into(),
 		}
 	}
 }

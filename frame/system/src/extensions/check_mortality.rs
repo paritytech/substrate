@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,19 +15,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use codec::{Encode, Decode};
-use crate::{Config, Pallet, BlockHash};
+use crate::{BlockHash, Config, Pallet};
+use codec::{Decode, Encode};
+use scale_info::TypeInfo;
 use sp_runtime::{
 	generic::Era,
-	traits::{SignedExtension, DispatchInfoOf, SaturatedConversion},
+	traits::{DispatchInfoOf, SaturatedConversion, SignedExtension},
 	transaction_validity::{
-		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
+		InvalidTransaction, TransactionValidity, TransactionValidityError, ValidTransaction,
 	},
 };
 
 /// Check for transaction mortality.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckMortality<T: Config + Send + Sync>(Era, sp_std::marker::PhantomData<T>);
+///
+/// # Transaction Validity
+///
+/// The extension affects `longevity` of the transaction according to the [`Era`] definition.
+#[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[scale_info(skip_type_params(T))]
+pub struct CheckMortality<T: Config + Send + Sync>(pub Era, sp_std::marker::PhantomData<T>);
 
 impl<T: Config + Send + Sync> CheckMortality<T> {
 	/// utility constructor. Used only in client/factory code.
@@ -50,7 +56,7 @@ impl<T: Config + Send + Sync> sp_std::fmt::Debug for CheckMortality<T> {
 
 impl<T: Config + Send + Sync> SignedExtension for CheckMortality<T> {
 	type AccountId = T::AccountId;
-	type Call = T::Call;
+	type Call = T::RuntimeCall;
 	type AdditionalSigned = T::Hash;
 	type Pre = ();
 	const IDENTIFIER: &'static str = "CheckMortality";
@@ -79,13 +85,26 @@ impl<T: Config + Send + Sync> SignedExtension for CheckMortality<T> {
 			Ok(<Pallet<T>>::block_hash(n))
 		}
 	}
+
+	fn pre_dispatch(
+		self,
+		who: &Self::AccountId,
+		call: &Self::Call,
+		info: &DispatchInfoOf<Self::Call>,
+		len: usize,
+	) -> Result<Self::Pre, TransactionValidityError> {
+		self.validate(who, call, info, len).map(|_| ())
+	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::mock::{Test, new_test_ext, System, CALL};
-	use frame_support::weights::{DispatchClass, DispatchInfo, Pays};
+	use crate::mock::{new_test_ext, System, Test, CALL};
+	use frame_support::{
+		dispatch::{DispatchClass, DispatchInfo, Pays},
+		weights::Weight,
+	};
 	use sp_core::H256;
 
 	#[test]
@@ -93,7 +112,10 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			// future
 			assert_eq!(
-				CheckMortality::<Test>::from(Era::mortal(4, 2)).additional_signed().err().unwrap(),
+				CheckMortality::<Test>::from(Era::mortal(4, 2))
+					.additional_signed()
+					.err()
+					.unwrap(),
 				InvalidTransaction::AncientBirthBlock.into(),
 			);
 
@@ -107,7 +129,11 @@ mod tests {
 	#[test]
 	fn signed_ext_check_era_should_change_longevity() {
 		new_test_ext().execute_with(|| {
-			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
+			let normal = DispatchInfo {
+				weight: Weight::from_ref_time(100),
+				class: DispatchClass::Normal,
+				pays_fee: Pays::Yes,
+			};
 			let len = 0_usize;
 			let ext = (
 				crate::CheckWeight::<Test>::new(),

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,32 +17,29 @@
 
 //! Implementation of `storage_metadata` on module structure, used by construct_runtime.
 
-use frame_support_procedural_tools::clean_type_string;
+use super::{DeclStorageDefExt, StorageLineDefExt, StorageLineTypeDef};
+use frame_support_procedural_tools::get_doc_literals;
 use proc_macro2::TokenStream;
 use quote::quote;
-use super::{DeclStorageDefExt, StorageLineDefExt, StorageLineTypeDef};
 
 fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) -> TokenStream {
 	let value_type = &line.value_type;
-	let value_type = clean_type_string(&quote!( #value_type ).to_string());
 	match &line.storage_type {
 		StorageLineTypeDef::Simple(_) => {
-			quote!{
+			quote! {
 				#scrate::metadata::StorageEntryType::Plain(
-					#scrate::metadata::DecodeDifferent::Encode(#value_type),
+					#scrate::scale_info::meta_type::<#value_type>()
 				)
 			}
 		},
 		StorageLineTypeDef::Map(map) => {
 			let hasher = map.hasher.into_metadata();
 			let key = &map.key;
-			let key = clean_type_string(&quote!(#key).to_string());
-			quote!{
+			quote! {
 				#scrate::metadata::StorageEntryType::Map {
-					hasher: #scrate::metadata::#hasher,
-					key: #scrate::metadata::DecodeDifferent::Encode(#key),
-					value: #scrate::metadata::DecodeDifferent::Encode(#value_type),
-					unused: false,
+					hashers: #scrate::sp_std::vec! [ #scrate::metadata::#hasher ],
+					key: #scrate::scale_info::meta_type::<#key>(),
+					value: #scrate::scale_info::meta_type::<#value_type>(),
 				}
 			}
 		},
@@ -50,40 +47,35 @@ fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) ->
 			let hasher1 = map.hasher1.into_metadata();
 			let hasher2 = map.hasher2.into_metadata();
 			let key1 = &map.key1;
-			let key1 = clean_type_string(&quote!(#key1).to_string());
 			let key2 = &map.key2;
-			let key2 = clean_type_string(&quote!(#key2).to_string());
-			quote!{
-				#scrate::metadata::StorageEntryType::DoubleMap {
-					hasher: #scrate::metadata::#hasher1,
-					key1: #scrate::metadata::DecodeDifferent::Encode(#key1),
-					key2: #scrate::metadata::DecodeDifferent::Encode(#key2),
-					value: #scrate::metadata::DecodeDifferent::Encode(#value_type),
-					key2_hasher: #scrate::metadata::#hasher2,
+			quote! {
+				#scrate::metadata::StorageEntryType::Map {
+					hashers: #scrate::sp_std::vec! [
+						#scrate::metadata::#hasher1,
+						#scrate::metadata::#hasher2,
+					],
+					key: #scrate::scale_info::meta_type::<(#key1, #key2)>(),
+					value: #scrate::scale_info::meta_type::<#value_type>(),
 				}
 			}
 		},
 		StorageLineTypeDef::NMap(map) => {
-			let keys = map.keys
-				.iter()
-				.map(|key| clean_type_string(&quote!(#key).to_string()))
-				.collect::<Vec<_>>();
-			let hashers = map.hashers
+			let key_tuple = &map.to_key_tuple();
+			let hashers = map
+				.hashers
 				.iter()
 				.map(|hasher| hasher.to_storage_hasher_struct())
 				.collect::<Vec<_>>();
-			quote!{
-				#scrate::metadata::StorageEntryType::NMap {
-					keys: #scrate::metadata::DecodeDifferent::Encode(&[
-						#( #keys, )*
-					]),
-					hashers: #scrate::metadata::DecodeDifferent::Encode(&[
+			quote! {
+				#scrate::metadata::StorageEntryType::Map {
+					hashers: #scrate::sp_std::vec! [
 						#( #scrate::metadata::StorageHasher::#hashers, )*
-					]),
-					value: #scrate::metadata::DecodeDifferent::Encode(#value_type),
+					],
+					key: #scrate::scale_info::meta_type::<#key_tuple>(),
+					value: #scrate::scale_info::meta_type::<#value_type>(),
 				}
 			}
-		}
+		},
 	}
 }
 
@@ -92,12 +84,17 @@ fn default_byte_getter(
 	line: &StorageLineDefExt,
 	def: &DeclStorageDefExt,
 ) -> (TokenStream, TokenStream) {
-	let default = line.default_value.as_ref().map(|d| quote!( #d ))
-		.unwrap_or_else(|| quote!( Default::default() ));
+	let default = line
+		.default_value
+		.as_ref()
+		.map(|d| quote!( #d ))
+		.unwrap_or_else(|| quote!(Default::default()));
 
 	let str_name = line.name.to_string();
-	let struct_name = syn::Ident::new(&("__GetByteStruct".to_string() + &str_name), line.name.span());
-	let cache_name = syn::Ident::new(&("__CACHE_GET_BYTE_STRUCT_".to_string() + &str_name), line.name.span());
+	let struct_name =
+		syn::Ident::new(&("__GetByteStruct".to_string() + &str_name), line.name.span());
+	let cache_name =
+		syn::Ident::new(&("__CACHE_GET_BYTE_STRUCT_".to_string() + &str_name), line.name.span());
 
 	let runtime_generic = &def.module_runtime_generic;
 	let runtime_trait = &def.module_runtime_trait;
@@ -122,8 +119,7 @@ fn default_byte_getter(
 
 		#[cfg(feature = "std")]
 		impl<#runtime_generic: #runtime_trait, #optional_instance_bound>
-			#scrate::metadata::DefaultByte
-			for #struct_name<#runtime_generic, #optional_instance>
+			#struct_name<#runtime_generic, #optional_instance>
 			#where_clause
 		{
 			fn default_byte(&self) -> #scrate::sp_std::vec::Vec<u8> {
@@ -135,16 +131,9 @@ fn default_byte_getter(
 			}
 		}
 
-		unsafe impl<#runtime_generic: #runtime_trait, #optional_instance_bound> Send
-			for #struct_name<#runtime_generic, #optional_instance> #where_clause {}
-
-		unsafe impl<#runtime_generic: #runtime_trait, #optional_instance_bound> Sync
-			for #struct_name<#runtime_generic, #optional_instance> #where_clause {}
-
 		#[cfg(not(feature = "std"))]
 		impl<#runtime_generic: #runtime_trait, #optional_instance_bound>
-			#scrate::metadata::DefaultByte
-			for #struct_name<#runtime_generic, #optional_instance>
+			#struct_name<#runtime_generic, #optional_instance>
 			#where_clause
 		{
 			fn default_byte(&self) -> #scrate::sp_std::vec::Vec<u8> {
@@ -177,30 +166,18 @@ pub fn impl_metadata(def: &DeclStorageDefExt) -> TokenStream {
 
 		let ty = storage_line_metadata_type(scrate, line);
 
-		let (
-			default_byte_getter_struct_def,
-			default_byte_getter_struct_instance,
-		) = default_byte_getter(scrate, line, def);
+		let (default_byte_getter_struct_def, default_byte_getter_struct_instance) =
+			default_byte_getter(scrate, line, def);
 
-		let mut docs = TokenStream::new();
-		for attr in line.attrs.iter().filter_map(|v| v.parse_meta().ok()) {
-			if let syn::Meta::NameValue(meta) = attr {
-				if meta.path.is_ident("doc") {
-					let lit = meta.lit;
-					docs.extend(quote!(#lit,));
-				}
-			}
-		}
+		let docs = get_doc_literals(&line.attrs);
 
 		let entry = quote! {
 			#scrate::metadata::StorageEntryMetadata {
-				name: #scrate::metadata::DecodeDifferent::Encode(#str_name),
+				name: #str_name,
 				modifier: #modifier,
 				ty: #ty,
-				default: #scrate::metadata::DecodeDifferent::Encode(
-					#scrate::metadata::DefaultByteGetter(&#default_byte_getter_struct_instance)
-				),
-				documentation: #scrate::metadata::DecodeDifferent::Encode(&[ #docs ]),
+				default: #default_byte_getter_struct_instance.default_byte(),
+				docs: #scrate::sp_std::vec![ #( #docs ),* ],
 			},
 		};
 
@@ -217,9 +194,9 @@ pub fn impl_metadata(def: &DeclStorageDefExt) -> TokenStream {
 	};
 
 	let store_metadata = quote!(
-		#scrate::metadata::StorageMetadata {
-			prefix: #scrate::metadata::DecodeDifferent::Encode(#prefix),
-			entries: #scrate::metadata::DecodeDifferent::Encode(&[ #entries ][..]),
+		#scrate::metadata::PalletStorageMetadata {
+			prefix: #prefix,
+			entries: #scrate::sp_std::vec![ #entries ],
 		}
 	);
 
@@ -230,9 +207,9 @@ pub fn impl_metadata(def: &DeclStorageDefExt) -> TokenStream {
 	quote!(
 		#default_byte_getter_struct_defs
 
-		impl#module_impl #module_struct #where_clause {
+		impl #module_impl #module_struct #where_clause {
 			#[doc(hidden)]
-			pub fn storage_metadata() -> #scrate::metadata::StorageMetadata {
+			pub fn storage_metadata() -> #scrate::metadata::PalletStorageMetadata {
 				#store_metadata
 			}
 		}

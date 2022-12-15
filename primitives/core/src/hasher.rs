@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,9 +18,9 @@
 //! Substrate Blake2b Hasher implementation
 
 pub mod blake2 {
-	use hash_db::Hasher;
-	use hash256_std_hasher::Hash256StdHasher;
 	use crate::hash::H256;
+	use hash256_std_hasher::Hash256StdHasher;
+	use hash_db::Hasher;
 
 	/// Concrete implementation of Hasher using Blake2b 256-bit hashes
 	#[derive(Debug)]
@@ -38,9 +38,9 @@ pub mod blake2 {
 }
 
 pub mod keccak {
-	use hash_db::Hasher;
-	use hash256_std_hasher::Hash256StdHasher;
 	use crate::hash::H256;
+	use hash256_std_hasher::Hash256StdHasher;
+	use hash_db::Hasher;
 
 	/// Concrete implementation of Hasher using Keccak 256-bit hashes
 	#[derive(Debug)]

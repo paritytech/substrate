@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -33,16 +33,16 @@ pub fn rerun_if_git_head_changed() {
 			Err(err) => {
 				eprintln!("cargo:warning=Unable to read the Git repository: {}", err);
 
-				return;
-			}
-			Ok(None) => {}
+				return
+			},
+			Ok(None) => {},
 			Ok(Some(paths)) => {
 				for p in paths {
 					println!("cargo:rerun-if-changed={}", p.display());
 				}
 
-				return;
-			}
+				return
+			},
 		}
 
 		manifest_dir.pop();

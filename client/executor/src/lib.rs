@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -29,34 +29,31 @@
 //! wasm engine used, instance cache.
 
 #![warn(missing_docs)]
-#![recursion_limit="128"]
+#![recursion_limit = "128"]
 
 #[macro_use]
 mod native_executor;
-mod wasm_runtime;
 #[cfg(test)]
 mod integration_tests;
+mod wasm_runtime;
 
-pub use wasmi;
-pub use native_executor::{
-	with_externalities_safe, NativeExecutor, WasmExecutor, NativeExecutionDispatch,
-};
-pub use sp_version::{RuntimeVersion, NativeVersion};
 pub use codec::Codec;
+pub use native_executor::{
+	with_externalities_safe, NativeElseWasmExecutor, NativeExecutionDispatch, WasmExecutor,
+};
 #[doc(hidden)]
-pub use sp_core::traits::{Externalities};
+pub use sp_core::traits::Externalities;
+pub use sp_version::{NativeVersion, RuntimeVersion};
 #[doc(hidden)]
 pub use sp_wasm_interface;
-pub use wasm_runtime::WasmExecutionMethod;
-pub use wasm_runtime::read_embedded_version;
+pub use wasm_runtime::{read_embedded_version, WasmExecutionMethod};
+pub use wasmi;
 
-pub use sc_executor_common::{error, sandbox};
+pub use sc_executor_common::error;
+pub use sc_executor_wasmtime::InstantiationStrategy as WasmtimeInstantiationStrategy;
 
-/// Provides runtime information.
-pub trait RuntimeInfo {
-	/// Native runtime information.
-	fn native_version(&self) -> &NativeVersion;
-
+/// Extracts the runtime version of a given runtime code.
+pub trait RuntimeVersionOf {
 	/// Extract [`RuntimeVersion`](sp_version::RuntimeVersion) of the given `runtime_code`.
 	fn runtime_version(
 		&self,
@@ -68,26 +65,25 @@ pub trait RuntimeInfo {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use sc_executor_common::runtime_blob::RuntimeBlob;
 	use sc_runtime_test::wasm_binary_unwrap;
 	use sp_io::TestExternalities;
-	use sp_wasm_interface::HostFunctions;
-	use sc_executor_common::runtime_blob::RuntimeBlob;
 
 	#[test]
 	fn call_in_interpreted_wasm_works() {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
 
-		let executor = WasmExecutor::new(
+		let executor = WasmExecutor::<sp_io::SubstrateHostFunctions>::new(
 			WasmExecutionMethod::Interpreted,
 			Some(8),
-			sp_io::SubstrateHostFunctions::host_functions(),
 			8,
 			None,
+			2,
 		);
 		let res = executor
 			.uncached_call(
-				RuntimeBlob::uncompress_if_needed(&wasm_binary_unwrap()[..]).unwrap(),
+				RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap()).unwrap(),
 				&mut ext,
 				true,
 				"test_empty_return",

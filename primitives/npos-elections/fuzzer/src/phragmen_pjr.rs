@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,29 +21,28 @@
 //! ## Running a single iteration
 //!
 //! Honggfuzz shuts down each individual loop iteration after a configurable time limit.
-//! It can be helpful to run a single iteration on your hardware to help benchmark how long that time
-//! limit should reasonably be. Simply run the program without the `fuzzing` configuration to run a
-//! single iteration: `cargo run --bin phragmen_pjr`.
+//! It can be helpful to run a single iteration on your hardware to help benchmark how long that
+//! time limit should reasonably be. Simply run the program without the `fuzzing` configuration to
+//! run a single iteration: `cargo run --bin phragmen_pjr`.
 //!
 //! ## Running
 //!
 //! Run with `HFUZZ_RUN_ARGS="-t 10" cargo hfuzz run phragmen_pjr`.
 //!
-//! Note the environment variable: by default, `cargo hfuzz` shuts down each iteration after 1 second
-//! of runtime. We significantly increase that to ensure that the fuzzing gets a chance to complete.
-//! Running a single iteration can help determine an appropriate value for this parameter.
+//! Note the environment variable: by default, `cargo hfuzz` shuts down each iteration after 1
+//! second of runtime. We significantly increase that to ensure that the fuzzing gets a chance to
+//! complete. Running a single iteration can help determine an appropriate value for this parameter.
 //!
 //! ## Debugging a panic
 //!
 //! Once a panic is found, it can be debugged with
 //! `HFUZZ_RUN_ARGS="-t 10" cargo hfuzz run-debug phragmen_pjr hfuzz_workspace/phragmen_pjr/*.fuzz`.
-//!
 
 #[cfg(fuzzing)]
 use honggfuzz::fuzz;
 
 #[cfg(not(fuzzing))]
-use structopt::StructOpt;
+use clap::Parser;
 
 mod common;
 use common::{generate_random_npos_inputs, to_range};
@@ -68,24 +67,25 @@ fn main() {
 }
 
 #[cfg(not(fuzzing))]
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
+#[command(author, version, about)]
 struct Opt {
 	/// How many candidates participate in this election
-	#[structopt(short, long)]
+	#[arg(short, long)]
 	candidates: Option<usize>,
 
 	/// How many voters participate in this election
-	#[structopt(short, long)]
+	#[arg(short, long)]
 	voters: Option<usize>,
 
 	/// Random seed to use in this election
-	#[structopt(long)]
+	#[arg(long)]
 	seed: Option<u64>,
 }
 
 #[cfg(not(fuzzing))]
 fn main() {
-	let opt = Opt::from_args();
+	let opt = Opt::parse();
 	// candidates and voters by default use the maxima, which turn out to be one less than
 	// the constant.
 	iteration(

@@ -1,10 +1,10 @@
 [package]
 name = "pallet-transaction-payment-rpc-runtime-api"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "RPC runtime API for transaction payment FRAME pallet"
 readme = "README.md"
@@ -13,16 +13,18 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-api = { version = "3.0.0", default-features = false, path = "../../../../primitives/api" }
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-sp-runtime = { version = "3.0.0", default-features = false, path = "../../../../primitives/runtime" }
-pallet-transaction-payment = { version = "3.0.0", default-features = false, path = "../../../transaction-payment" }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
+pallet-transaction-payment = { version = "4.0.0-dev", default-features = false, path = "../../../transaction-payment" }
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../../primitives/api" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../../../primitives/runtime" }
+sp-weights = { version = "4.0.0", default-features = false, path = "../../../../primitives/weights" }
 
 [features]
 default = ["std"]
 std = [
-	"sp-api/std",
 	"codec/std",
-	"sp-runtime/std",
 	"pallet-transaction-payment/std",
+	"sp-api/std",
+	"sp-runtime/std",
+	"sp-weights/std",
 ]

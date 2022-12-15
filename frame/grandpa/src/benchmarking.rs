@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,9 +17,7 @@
 
 //! Benchmarks for the GRANDPA pallet.
 
-#![cfg_attr(not(feature = "std"), no_std)]
-
-use super::{*, Pallet as Grandpa};
+use super::{Pallet as Grandpa, *};
 use frame_benchmarking::benchmarks;
 use frame_system::RawOrigin;
 use sp_core::H256;
@@ -70,21 +68,18 @@ benchmarks! {
 	verify {
 		assert!(Grandpa::<T>::stalled().is_some());
 	}
+
+	impl_benchmark_test_suite!(
+		Pallet,
+		crate::mock::new_test_ext(vec![(1, 1), (2, 1), (3, 1)]),
+		crate::mock::Test,
+	);
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use crate::mock::*;
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext(vec![(1, 1), (2, 1), (3, 1)]).execute_with(|| {
-			assert_ok!(test_benchmark_check_equivocation_proof::<Test>());
-			assert_ok!(test_benchmark_note_stalled::<Test>());
-		})
-	}
 
 	#[test]
 	fn test_generate_equivocation_report_blob() {
@@ -106,10 +101,7 @@ mod tests {
 			);
 
 			println!("equivocation_proof: {:?}", equivocation_proof);
-			println!(
-				"equivocation_proof.encode(): {:?}",
-				equivocation_proof.encode()
-			);
+			println!("equivocation_proof.encode(): {:?}", equivocation_proof.encode());
 		});
 	}
 }

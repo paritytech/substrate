@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,6 +16,8 @@
 // limitations under the License.
 
 //! Benchmarks for the BABE Pallet.
+
+#![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
 use frame_benchmarking::benchmarks;
@@ -63,42 +65,10 @@ benchmarks! {
 	} verify {
 		assert!(sp_consensus_babe::check_equivocation_proof::<Header>(equivocation_proof2));
 	}
-}
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::mock::*;
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext(3).execute_with(|| {
-			assert_ok!(test_benchmark_check_equivocation_proof::<Test>());
-		})
-	}
-
-	#[test]
-	fn test_generate_equivocation_report_blob() {
-		let (pairs, mut ext) = new_test_ext_with_pairs(3);
-
-		let offending_authority_index = 0;
-		let offending_authority_pair = &pairs[0];
-
-		ext.execute_with(|| {
-			start_era(1);
-
-			let equivocation_proof = generate_equivocation_proof(
-				offending_authority_index,
-				offending_authority_pair,
-				CurrentSlot::<Test>::get() + 1,
-			);
-
-			println!("equivocation_proof: {:?}", equivocation_proof);
-			println!(
-				"equivocation_proof.encode(): {:?}",
-				equivocation_proof.encode()
-			);
-		});
-	}
+	impl_benchmark_test_suite!(
+		Pallet,
+		crate::mock::new_test_ext(3),
+		crate::mock::Test,
+	)
 }
