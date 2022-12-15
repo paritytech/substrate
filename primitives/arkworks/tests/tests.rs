@@ -1,4 +1,4 @@
-use ark_algebra_test_templates::{msm::test_var_base_msm, test_pairing, test_group};
+use ark_algebra_test_templates::{msm::test_var_base_msm, test_group, test_pairing};
 use ark_ec::{pairing::Pairing, AffineRepr};
 use ark_sub_bls12_381::{
 	Bls12_381 as Bls12_381_Host, Fr as BlsFr, G1Affine as G1Affine_Host,
@@ -48,7 +48,7 @@ test_pairing!(pairing; crate::Bls12_381);
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+	use super::*;
 	#[test]
 	fn bls12_381_msm() {
 		test_var_base_msm::<G1Projective>();

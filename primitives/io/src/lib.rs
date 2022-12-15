@@ -1166,8 +1166,6 @@ pub trait Crypto {
 		sp_arkworks::bls12_381::msm_bigint_g2(bases, bigints)
 	}
 
-
-
 	/// Compute a multi pairing
 	fn bls12_377_multi_pairing(a: Vec<Vec<u8>>, b: Vec<Vec<u8>>) -> Vec<u8> {
 		sp_arkworks::bls12_377::multi_pairing(a, b)

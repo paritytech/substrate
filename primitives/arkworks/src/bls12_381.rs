@@ -31,8 +31,6 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate
 use ark_std::{io::Cursor, Zero};
 use sp_std::{vec, vec::Vec};
 
-const F12_COMPRESSED_SIZE: usize = 576;
-
 /// Compute multi pairing through arkworksrk_bls12_381::G2Projective
 pub fn multi_pairing(vec_a: Vec<Vec<u8>>, vec_b: Vec<Vec<u8>>) -> Vec<u8> {
 	let g1: Vec<_> = vec_a
@@ -61,7 +59,7 @@ pub fn multi_pairing(vec_a: Vec<Vec<u8>>, vec_b: Vec<Vec<u8>>) -> Vec<u8> {
 		.collect();
 	let res = Bls12_381::multi_pairing(g1, g2);
 	// serialize the result
-	let mut res_bytes = [0u8; F12_COMPRESSED_SIZE];
+	let mut res_bytes = vec![0u8; res.serialized_size(Compress::Yes)];
 	let mut cursor = Cursor::new(&mut res_bytes[..]);
 	res.0.serialize_compressed(&mut cursor).unwrap();
 	res_bytes.to_vec()
@@ -97,7 +95,7 @@ pub fn multi_miller_loop(a_vec: Vec<Vec<u8>>, b_vec: Vec<Vec<u8>>) -> Vec<u8> {
 		.collect();
 	let res = Bls12_381::multi_miller_loop(g1, g2);
 	// serialize the result
-	let mut res_bytes = [0u8; F12_COMPRESSED_SIZE];
+	let mut res_bytes = vec![0u8; res.0.serialized_size(Compress::Yes)];
 	let mut cursor = Cursor::new(&mut res_bytes[..]);
 	res.0.serialize_compressed(&mut cursor).unwrap();
 	res_bytes.to_vec()
@@ -109,7 +107,7 @@ pub fn final_exponentiation(f12: &[u8]) -> Vec<u8> {
 	let f12 = Fq12::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
 	let res = Bls12_381::final_exponentiation(MillerLoopOutput(f12)).unwrap();
 	// serialize the result
-	let mut res_bytes = [0u8; F12_COMPRESSED_SIZE];
+	let mut res_bytes = vec![0u8; res.serialized_size(Compress::Yes)];
 	let mut cursor = Cursor::new(&mut res_bytes[..]);
 	res.0.serialize_compressed(&mut cursor).unwrap();
 	res_bytes.to_vec()
