@@ -388,61 +388,60 @@ pub mod pallet {
 			let now = frame_system::Pallet::<T>::block_number();
 			ensure!(deadline >= now, Error::<T>::DeadlinePassed);
 
-			Pools::<T>::try_mutate(&pool_id, |maybe_pool| {
-				let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolNotFound)?;
+			let maybe_pool = Pools::<T>::get(pool_id);
+			let pool = maybe_pool.as_ref().ok_or(Error::<T>::PoolNotFound)?;
 
-				let pool_account = Self::get_pool_account(pool_id);
-				T::PoolAssets::transfer(
-					pool.lp_token,
-					&sender,
-					&pool_account,
-					lp_token_burn,
-					false, // LP tokens should not be sufficient assets so can't kill account
-				)?;
+			let pool_account = Self::get_pool_account(pool_id);
+			T::PoolAssets::transfer(
+				pool.lp_token,
+				&sender,
+				&pool_account,
+				lp_token_burn,
+				false, // LP tokens should not be sufficient assets so can't kill account
+			)?;
 
-				let reserve1 = Self::get_balance(&pool_account, asset1);
-				let reserve2 = Self::get_balance(&pool_account, asset2);
+			let reserve1 = Self::get_balance(&pool_account, asset1);
+			let reserve2 = Self::get_balance(&pool_account, asset2);
 
-				let total_supply = T::PoolAssets::total_issuance(pool.lp_token);
+			let total_supply = T::PoolAssets::total_issuance(pool.lp_token);
 
-				let amount1 = lp_token_burn
-					.checked_mul(&reserve1)
-					.ok_or(Error::<T>::Overflow)?
-					.checked_div(&total_supply)
-					.ok_or(Error::<T>::Overflow)?;
+			let amount1 = lp_token_burn
+				.checked_mul(&reserve1)
+				.ok_or(Error::<T>::Overflow)?
+				.checked_div(&total_supply)
+				.ok_or(Error::<T>::Overflow)?;
 
-				let amount2 = lp_token_burn
-					.checked_mul(&reserve2)
-					.ok_or(Error::<T>::Overflow)?
-					.checked_div(&total_supply)
-					.ok_or(Error::<T>::Overflow)?;
+			let amount2 = lp_token_burn
+				.checked_mul(&reserve2)
+				.ok_or(Error::<T>::Overflow)?
+				.checked_div(&total_supply)
+				.ok_or(Error::<T>::Overflow)?;
 
-				ensure!(
-					!amount1.is_zero() && amount1 >= amount1_min_receive,
-					Error::<T>::InsufficientAmountParam1
-				);
-				ensure!(
-					!amount2.is_zero() && amount2 >= amount2_min_receive,
-					Error::<T>::InsufficientAmountParam2
-				);
+			ensure!(
+				!amount1.is_zero() && amount1 >= amount1_min_receive,
+				Error::<T>::InsufficientAmountParam1
+			);
+			ensure!(
+				!amount2.is_zero() && amount2 >= amount2_min_receive,
+				Error::<T>::InsufficientAmountParam2
+			);
 
-				T::PoolAssets::burn_from(pool.lp_token, &pool_account, lp_token_burn)?;
+			T::PoolAssets::burn_from(pool.lp_token, &pool_account, lp_token_burn)?;
 
-				Self::transfer(asset1, &pool_account, &withdraw_to, amount1, false)?;
-				Self::transfer(asset2, &pool_account, &withdraw_to, amount2, false)?;
+			Self::transfer(asset1, &pool_account, &withdraw_to, amount1, false)?;
+			Self::transfer(asset2, &pool_account, &withdraw_to, amount2, false)?;
 
-				Self::deposit_event(Event::LiquidityRemoved {
-					who: sender,
-					withdraw_to,
-					pool_id,
-					amount1,
-					amount2,
-					lp_token: pool.lp_token,
-					lp_token_burned: lp_token_burn,
-				});
+			Self::deposit_event(Event::LiquidityRemoved {
+				who: sender,
+				withdraw_to,
+				pool_id,
+				amount1,
+				amount2,
+				lp_token: pool.lp_token,
+				lp_token_burned: lp_token_burn,
+			});
 
-				Ok(())
-			})
+			Ok(())
 		}
 
 		#[pallet::weight(T::WeightInfo::swap_exact_tokens_for_tokens())]
@@ -617,9 +616,8 @@ pub mod pallet {
 			let (pool_asset1, _) = pool_id;
 
 			let balance1 = Self::get_balance(&pool_account, asset1);
+			let balance2 = Self::get_balance(&pool_account, asset2);
 			if !balance1.is_zero() {
-				let balance2 = Self::get_balance(&pool_account, asset2);
-
 				let (reserve1, reserve2) =
 					if asset1 == pool_asset1 { (balance1, balance2) } else { (balance2, balance1) };
 				Self::quote(&amount, &reserve1, &reserve2).ok()
