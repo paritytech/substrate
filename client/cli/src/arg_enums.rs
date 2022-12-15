@@ -232,7 +232,8 @@ pub enum OffchainWorkerEnabled {
 	Always,
 	/// Never enable the offchain worker.
 	Never,
-	/// Only enable the offchain worker when running as a validator (or collator, if this is a parachain node).
+	/// Only enable the offchain worker when running as a validator (or collator, if this is a
+	/// parachain node).
 	WhenAuthority,
 }
 
