@@ -10,7 +10,7 @@ fn emit_error<T: Into<TokenStream> + Clone, S: Into<String>>(item: &T, message: 
 	let item = Into::<TokenStream>::into(item.clone());
 	let message = Into::<String>::into(message);
 	let span = proc_macro2::TokenStream::from(item).span();
-	return syn::Error::new(span, message).to_compile_error().into()
+	return syn::Error::new(span, message).to_compile_error().into();
 }
 
 struct BenchmarkDef {
@@ -29,21 +29,20 @@ impl BenchmarkDef {
 						if let Ok(_) = syn::parse::<keywords::extrinsic_call>(
 							segment.ident.to_token_stream().into(),
 						) {
-							//let setup_stmts = &item_fn.block.stmts[0..i];
 							return Some(BenchmarkDef {
 								setup_stmts: Vec::from(&item_fn.block.stmts[0..i]),
 								extrinsic_call: fn_call.clone(),
 								verify_stmts: Vec::from(
 									&item_fn.block.stmts[i..item_fn.block.stmts.len()],
 								),
-							})
+							});
 						}
 					}
 				}
 			}
 			i += 1;
 		}
-		return None
+		return None;
 	}
 }
 
@@ -55,7 +54,7 @@ pub fn benchmark(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 		return emit_error(
 			&item_fn.block.to_token_stream(),
 			"Missing #[extrinsic_call] annotation in benchmark function body.",
-		)
+		);
 	}
-	return quote!().into()
+	return quote!().into();
 }
