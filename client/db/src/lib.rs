@@ -1213,9 +1213,8 @@ impl<Block: BlockT> Backend<Block> {
 
 		let meta = self.blockchain.meta.read();
 
-		if meta.best_number > best_number &&
-			(meta.best_number - best_number).saturated_into::<u64>() >
-				self.canonicalization_delay
+		if meta.best_number.saturating_sub(best_number).saturated_into::<u64>() >
+			self.canonicalization_delay
 		{
 			return Err(sp_blockchain::Error::SetHeadTooOld)
 		}
@@ -1320,31 +1319,55 @@ impl<Block: BlockT> Backend<Block> {
 		number: NumberFor<Block>,
 	) -> ClientResult<()> {
 		let number_u64 = number.saturated_into::<u64>();
-		if number_u64 > self.canonicalization_delay {
-			let new_canonical = number_u64 - self.canonicalization_delay;
+		if number_u64 <= self.canonicalization_delay {
+			return Ok(())
+		}
 
-			if new_canonical <= self.storage.state_db.best_canonical().unwrap_or(0) {
-				return Ok(())
-			}
-			let hash = if new_canonical == number_u64 {
+		let new_canonical = number_u64 - self.canonicalization_delay;
+		let best_canonical = self.storage.state_db.best_canonical().unwrap_or(0);
+
+		if new_canonical <= best_canonical {
+			return Ok(())
+		}
+
+		let best_number = self.blockchain.info().best_number.saturated_into();
+
+		// We can not canonicalize beyond the `best_number` as setting the best block also sets the
+		// mapping from block number to hash that is required down below. This is just some safety
+		// guard against potential bugs.
+		let last_to_canonicalize = std::cmp::min(best_number, new_canonical);
+
+		if new_canonical > best_number {
+			trace!(
+				target: "db",
+				"Block to force canonicalize (#{new_canonical}) is above the best block (#{best_number})",
+			);
+		}
+
+		// As there could be some gap between the point when we last canonicalized and the block we
+		// want to canonicalize (`new_canonical`), we canonicalize from the best canonicalized block
+		// to the last block to canonicalize.
+		for to_canonicalize in best_canonical + 1..=last_to_canonicalize {
+			let hash = if to_canonicalize == number_u64 {
 				hash
 			} else {
 				sc_client_api::blockchain::HeaderBackend::hash(
 					&self.blockchain,
-					new_canonical.saturated_into(),
+					to_canonicalize.saturated_into(),
 				)?
 				.ok_or_else(|| {
 					sp_blockchain::Error::Backend(format!(
 						"Can't canonicalize missing block number #{} when importing {:?} (#{})",
-						new_canonical, hash, number,
+						to_canonicalize, hash, number,
 					))
 				})?
 			};
-			if !sc_client_api::Backend::have_state_at(self, hash, new_canonical.saturated_into()) {
+			if !sc_client_api::Backend::have_state_at(self, hash, to_canonicalize.saturated_into())
+			{
 				return Ok(())
 			}
 
-			trace!(target: "db", "Canonicalize block #{} ({:?})", new_canonical, hash);
+			trace!(target: "db", "Canonicalize block #{} ({:?})", to_canonicalize, hash);
 			let commit = self.storage.state_db.canonicalize_block(&hash).map_err(
 				sp_blockchain::Error::from_state_db::<
 					sc_state_db::Error<sp_database::error::DatabaseError>,
@@ -1352,6 +1375,7 @@ impl<Block: BlockT> Backend<Block> {
 			)?;
 			apply_state_commit(transaction, commit);
 		}
+
 		Ok(())
 	}
 
@@ -3800,5 +3824,101 @@ pub(crate) mod tests {
 		let block2 = insert_header(&backend, 2, block1, None, Default::default());
 		assert_eq!(backend.blockchain().leaves().unwrap(), vec![block2]);
 		assert_eq!(backend.blockchain().info().best_hash, block2);
+	}
+
+	#[test]
+	fn force_delayed_canonicalize_waiting_for_blocks_to_be_finalized() {
+		let backend = Backend::<Block>::new_test(10, 1);
+
+		let genesis =
+			insert_block(&backend, 0, Default::default(), None, Default::default(), vec![], None)
+				.unwrap();
+
+		let block1 = {
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, genesis).unwrap();
+			let header = Header {
+				number: 1,
+				parent_hash: genesis,
+				state_root: BlakeTwo256::trie_root(Vec::new(), StateVersion::V1),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+
+			op.set_block_data(header.clone(), Some(Vec::new()), None, None, NewBlockState::Normal)
+				.unwrap();
+
+			backend.commit_operation(op).unwrap();
+
+			header.hash()
+		};
+
+		assert_eq!(0, backend.storage.state_db.best_canonical().unwrap());
+
+		let block2 = {
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, block1).unwrap();
+			let header = Header {
+				number: 2,
+				parent_hash: block1,
+				state_root: BlakeTwo256::trie_root(Vec::new(), StateVersion::V1),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+
+			op.set_block_data(header.clone(), Some(Vec::new()), None, None, NewBlockState::Normal)
+				.unwrap();
+
+			backend.commit_operation(op).unwrap();
+
+			header.hash()
+		};
+
+		assert_eq!(0, backend.storage.state_db.best_canonical().unwrap());
+
+		let block3 = {
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, block2).unwrap();
+			let header = Header {
+				number: 3,
+				parent_hash: block2,
+				state_root: BlakeTwo256::trie_root(Vec::new(), StateVersion::V1),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+
+			op.set_block_data(header.clone(), Some(Vec::new()), None, None, NewBlockState::Best)
+				.unwrap();
+
+			backend.commit_operation(op).unwrap();
+
+			header.hash()
+		};
+
+		let block4 = {
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, block3).unwrap();
+			let header = Header {
+				number: 4,
+				parent_hash: block3,
+				state_root: BlakeTwo256::trie_root(Vec::new(), StateVersion::V1),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+
+			op.set_block_data(header.clone(), Some(Vec::new()), None, None, NewBlockState::Best)
+				.unwrap();
+
+			backend.commit_operation(op).unwrap();
+
+			header.hash()
+		};
+
+		assert_eq!(3, backend.storage.state_db.best_canonical().unwrap());
+
+		assert_eq!(block1, backend.blockchain().hash(1).unwrap().unwrap());
+		assert_eq!(block2, backend.blockchain().hash(2).unwrap().unwrap());
+		assert_eq!(block3, backend.blockchain().hash(3).unwrap().unwrap());
+		assert_eq!(block4, backend.blockchain().hash(4).unwrap().unwrap());
 	}
 }
