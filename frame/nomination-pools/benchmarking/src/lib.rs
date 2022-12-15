@@ -272,17 +272,16 @@ frame_benchmarking::benchmarks! {
 	bond_extra_pending_rewards_other {
 		let origin_weight = Pools::<T>::depositor_min_bond() * 2u32.into();
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
-		let scenario_creator1_lookup = T::Lookup::unlookup(scenario.creator1.clone());
+		let scenario_creator_lookup = T::Lookup::unlookup(scenario.creator1.clone());
 		let extra = (scenario.dest_weight - origin_weight).max(CurrencyOf::<T>::minimum_balance());
 
-		// transfer exactly `extra` to the depositor of the src pool (1), from the reward balance
-		let reward_account1 = Pools::<T>::create_reward_account(1);
+		let reward_account = Pools::<T>::create_reward_account(1);
 		assert!(extra >= CurrencyOf::<T>::minimum_balance());
-		CurrencyOf::<T>::deposit_creating(&reward_account1, extra);
+		CurrencyOf::<T>::deposit_creating(&reward_account, extra);
 		Pools::<T>::set_reward_claim(RuntimeOrigin::Signed(scenario.creator1.clone()).into(), RewardClaim::Permissionless)
 			.unwrap();
 
-	}:_(RuntimeOrigin::Signed(scenario.creator1.clone()), scenario_creator1_lookup)
+	}:_(RuntimeOrigin::Signed(scenario.creator1.clone()), scenario_creator_lookup)
 	verify {
 		assert!(
 			T::Staking::active_stake(&scenario.origin1).unwrap() >=
@@ -679,9 +678,9 @@ frame_benchmarking::benchmarks! {
 		let min_create_bond = Pools::<T>::depositor_min_bond();
 		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
 
-		// Add a new member
+		// Join pool
 		let min_join_bond = MinJoinBond::<T>::get().max(CurrencyOf::<T>::minimum_balance());
-		let joiner = create_funded_user_with_balance::<T>("joiner", 0, min_join_bond * 2u32.into());
+		let joiner = create_funded_user_with_balance::<T>("joiner", 0, min_join_bond * 4u32.into());
 		let joiner_lookup = T::Lookup::unlookup(joiner.clone());
 		Pools::<T>::join(RuntimeOrigin::Signed(joiner.clone()).into(), min_join_bond, 1)
 			.unwrap();

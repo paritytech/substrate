@@ -411,7 +411,7 @@ enum AccountType {
 	Reward,
 }
 
-/// Account to bond pending reward of a member
+/// Account to bond pending reward of a member.
 #[derive(Encode, Decode, MaxEncodedLen, Clone, Copy, Debug, PartialEq, Eq, TypeInfo)]
 pub enum RewardClaim {
 	/// Only the pool member themself can claim their reward.
@@ -1329,7 +1329,7 @@ pub mod pallet {
 	pub type ReversePoolIdLookup<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, PoolId, OptionQuery>;
 
-	/// Reward claim Permissions
+	/// Map from a pool member account to their preference regarding reward payout
 	#[pallet::storage]
 	pub type RewardClaimPermission<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, RewardClaim, ValueQuery>;
@@ -1619,9 +1619,10 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Bond pending rewards of `member_account` from any AccountId
-		/// into the pool they already belong.
-		/// member_account must `set_reward_claim` to `RewardClaim::Permissionless`.
+		/// Bond pending rewards of `member_account` into the pool they already belong.
+		/// 
+		/// Note: `member_account` must pass `RewardClaim::Permissionless` to `set_reward_claim`,
+		/// making this call permissionless.
 		#[pallet::weight(
 			T::WeightInfo::bond_extra_transfer()
 			.max(T::WeightInfo::bond_extra_reward())
@@ -2174,12 +2175,12 @@ pub mod pallet {
 			T::Staking::chill(&bonded_pool.bonded_account())
 		}
 
-		/// Pool Member set reward claim permission
+		/// Set reward claim permission.
 		///
-		/// # Account
+		/// # Arguments
 		///
-		/// `Origin`
-		/// `Permissionless`
+		/// * `Origin` - Member of a pool.
+		/// * `actor` - Account to claim reward.
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn set_reward_claim(origin: OriginFor<T>, actor: RewardClaim) -> DispatchResult {
 			let who = ensure_signed(origin)?;

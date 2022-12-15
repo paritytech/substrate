@@ -2090,10 +2090,8 @@ mod unbond {
 					Error::<T>::MinimumBondNotMet
 				);
 
-				// Give pool operator permission.
+				// Make permissionless
 				assert_eq!(RewardClaimPermission::<Runtime>::get(10), RewardClaim::Permissioned);
-				// assert_noop!(Pools::set_claimable_actor(RuntimeOrigin::signed(12),
-				// BondExtraSource::Open), Error::<T>::PoolMemberNotFound);
 				assert_ok!(Pools::set_reward_claim(
 					RuntimeOrigin::signed(20),
 					RewardClaim::Permissionless
@@ -4270,7 +4268,7 @@ fn set_claimable_actor_works() {
 			]
 		);
 
-		// Give pool operator permission.
+		// Make permissionless
 		assert_eq!(RewardClaimPermission::<Runtime>::get(11), RewardClaim::Permissioned);
 		assert_noop!(
 			Pools::set_reward_claim(RuntimeOrigin::signed(12), RewardClaim::Permissionless),
@@ -4644,6 +4642,7 @@ mod bond_extra {
 			assert_eq!(Balances::free_balance(10), 35);
 			assert_eq!(Balances::free_balance(20), 20);
 
+			// Make permissionless and bond pending rewards of member
 			assert_noop!(
 				Pools::bond_extra_pending_rewards_other(RuntimeOrigin::signed(80), 10),
 				Error::<Runtime>::DoesNotHavePermission
