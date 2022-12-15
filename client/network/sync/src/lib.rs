@@ -1361,6 +1361,8 @@ where
 			}
 		}
 
+		/// Should be called before `process_outbound_requests` to ensure 
+		/// that a potential target block is directly leading to requests.
 		if let Some(warp_sync) = &mut self.warp_sync {
 			let _ = warp_sync.poll(cx);
 		}
