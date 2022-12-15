@@ -660,7 +660,7 @@ pub mod pallet {
 		/// - `portion`: If `Some`, then only the given portion of the receipt should be thawed. If
 		///   `None`, then all of it should be.
 		#[pallet::call_index(3)]
-		#[pallet::weight(T::WeightInfo::thaw/*_private*/())]
+		#[pallet::weight(T::WeightInfo::thaw_private())]
 		pub fn thaw_private(
 			origin: OriginFor<T>,
 			#[pallet::compact] index: ReceiptIndex,
@@ -710,6 +710,15 @@ pub mod pallet {
 
 			let dropped = receipt.proportion.is_zero();
 
+			let reserved = T::Currency::reserved_balance_named(&T::ReserveId::get(), &who);
+			log::info!(
+				"{:?} {:?} {:?} {:?}",
+				amount,
+				on_hold,
+				reserved,
+				Self::issuance_with(&our_account, &summary)
+			);
+
 			if amount > on_hold {
 				T::Currency::unreserve_named(&T::ReserveId::get(), &who, on_hold);
 				let deficit = amount - on_hold;
@@ -719,18 +728,32 @@ pub mod pallet {
 				T::Currency::transfer(&our_account, &who, deficit, AllowDeath)
 					.map_err(|_| Error::<T>::Unfunded)?;
 			} else {
-				if dropped {
-					T::Currency::unreserve_named(&T::ReserveId::get(), &who, on_hold);
-					summary.receipts_on_hold -= on_hold;
-					let excess = on_hold - amount;
+				T::Currency::unreserve_named(&T::ReserveId::get(), &who, amount);
+				on_hold -= amount;
+				summary.receipts_on_hold -= amount;
+				if dropped && !on_hold.is_zero() {
+					// Reclaim any remainder:
 					// Transfer `excess` to the pot if we have now fully compensated for the
 					// receipt.
-					T::Currency::transfer(&who, &our_account, excess, AllowDeath)
-						.map_err(|_| Error::<T>::Unfunded)?;
-				} else {
-					T::Currency::unreserve_named(&T::ReserveId::get(), &who, amount);
-					on_hold -= amount;
-					summary.receipts_on_hold -= amount;
+					//
+					// This will legitimately fail if there is no pot account in existance.
+					// There's nothing we can do about this so we just swallow the error.
+					/*let _ = T::Currency::repatriate_reserved_named(
+						&T::ReserveId::get(),
+						&who,
+						&our_account,
+						excess,
+						BalanceStatus::Free,
+					).defensive();*/
+					T::Currency::unreserve_named(&T::ReserveId::get(), &who, on_hold);
+					// It could theoretically be locked, so really we should be using a more
+					// forceful variant. But the alternative `repatriate_reserved_named` will
+					// fail if the destination account doesn't exist. This should be fixed when
+					// we move to the `fungible::*` traits, which should include a force
+					// transfer function to transfer the reserved balance into free balance in
+					// the destination regardless of locks and create it if it doesn't exist.
+					let _ = T::Currency::transfer(&who, &Self::account_id(), on_hold, AllowDeath);
+					summary.receipts_on_hold -= on_hold;
 				}
 			}
 
@@ -756,7 +779,7 @@ pub mod pallet {
 		/// - `portion`: If `Some`, then only the given portion of the receipt should be thawed. If
 		///   `None`, then all of it should be.
 		#[pallet::call_index(4)]
-		#[pallet::weight(T::WeightInfo::thaw/*_communal*/())]
+		#[pallet::weight(T::WeightInfo::thaw_communal())]
 		pub fn thaw_communal(
 			origin: OriginFor<T>,
 			#[pallet::compact] index: ReceiptIndex,
@@ -764,7 +787,7 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 
 			// Look for `index`
-			let mut receipt: ReceiptRecordOf<T> =
+			let receipt: ReceiptRecordOf<T> =
 				Receipts::<T>::get(index).ok_or(Error::<T>::UnknownReceipt)?;
 			// If found, check it is actually communal.
 			ensure!(receipt.owner.is_none(), Error::<T>::NotOwner);
@@ -773,47 +796,42 @@ pub mod pallet {
 
 			let mut summary: SummaryRecordOf<T> = Summary::<T>::get();
 
-			let proportion = receipt.proportion;
-
 			let (throttle, throttle_period) = T::ThawThrottle::get();
 			if now.saturating_sub(summary.last_period) >= throttle_period {
 				summary.thawed = Zero::zero();
 				summary.last_period = now;
 			}
-			summary.thawed.saturating_accrue(proportion);
+			summary.thawed.saturating_accrue(receipt.proportion);
 			ensure!(summary.thawed <= throttle, Error::<T>::Throttled);
 
-			T::Counterpart::burn_from(&who, T::CounterpartAmount::convert(proportion))?;
+			T::Counterpart::burn_from(&who, T::CounterpartAmount::convert(receipt.proportion))?;
 
 			// Multiply the proportion it is by the total issued.
 			let our_account = Self::account_id();
 			let effective_issuance = Self::issuance_with(&our_account, &summary).effective;
-			let amount = proportion * effective_issuance;
+			let amount = receipt.proportion * effective_issuance;
 
-			receipt.proportion.saturating_reduce(proportion);
-			summary.proportion_owed.saturating_reduce(proportion);
+			summary.proportion_owed.saturating_reduce(receipt.proportion);
 
-			let dropped = receipt.proportion.is_zero();
+			log::info!("{:?} {:?}", amount, Self::issuance_with(&our_account, &summary));
 
 			// Try to transfer amount owed from pot to receipt owner.
 			T::Currency::transfer(&our_account, &who, amount, AllowDeath)
 				.map_err(|_| Error::<T>::Unfunded)?;
 
-			if dropped {
-				Receipts::<T>::remove(index);
-			} else {
-				Receipts::<T>::insert(index, &receipt);
-			}
+			Receipts::<T>::remove(index);
 			Summary::<T>::put(&summary);
 
-			Self::deposit_event(Event::Thawed { index, who, amount, proportion, dropped });
+			let e =
+				Event::Thawed { index, who, amount, proportion: receipt.proportion, dropped: true };
+			Self::deposit_event(e);
 
 			Ok(())
 		}
 
 		/// Make a private receipt communal and create fungible counterparts for its owner.
 		#[pallet::call_index(5)]
-		#[pallet::weight(0/*T::WeightInfo::communify()*/)]
+		#[pallet::weight(T::WeightInfo::communify())]
 		pub fn communify(
 			origin: OriginFor<T>,
 			#[pallet::compact] index: ReceiptIndex,
@@ -852,7 +870,7 @@ pub mod pallet {
 
 		/// Make a private receipt communal and create fungible counterparts for its owner.
 		#[pallet::call_index(6)]
-		#[pallet::weight(0/*T::WeightInfo::privatize()*/)]
+		#[pallet::weight(T::WeightInfo::privatize())]
 		pub fn privatize(
 			origin: OriginFor<T>,
 			#[pallet::compact] index: ReceiptIndex,
@@ -896,7 +914,7 @@ pub mod pallet {
 	}
 
 	/// Issuance information returned by `issuance()`.
-	#[derive(RuntimeDebug)]
+	#[derive(Debug)]
 	pub struct IssuanceInfo<Balance> {
 		/// The balance held by this pallet instance together with the balances on hold across
 		/// all receipt-owning accounts.
@@ -906,8 +924,8 @@ pub mod pallet {
 		/// The effective total issuance, hypothetically if all outstanding receipts were thawed at
 		/// present.
 		pub effective: Balance,
-		/// The amount needed to be the pallet instance's account in case all outstanding receipts
-		/// were thawed at present.
+		/// The amount needed to be accessible to this pallet in case all outstanding receipts were
+		/// thawed at present. If it is more than `holdings`, then the pallet will need funding.
 		pub required: Balance,
 	}
 
