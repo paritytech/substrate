@@ -151,6 +151,9 @@ impl BeefyTestNet {
 		});
 	}
 
+	/// Builds the blocks and returns the vector of built block hashes.
+	/// Returned vector contains the genesis hash which allows for easy indexing (block number is
+	/// equal to index)
 	pub(crate) fn generate_blocks_and_sync(
 		&mut self,
 		count: usize,
@@ -158,8 +161,17 @@ impl BeefyTestNet {
 		validator_set: &BeefyValidatorSet,
 		include_mmr_digest: bool,
 		runtime: &mut Runtime,
-	) {
-		self.peer(0).generate_blocks(count, BlockOrigin::File, |builder| {
+	) -> Vec<H256> {
+		let mut all_hashes = Vec::with_capacity(count + 1);
+
+		// make sure genesis is the only block in network, so we can insert genesis at he beginning
+		// of hashes, otherwise indexing would be broken
+		assert!(self.peer(0).client().as_backend().blockchain().hash(1).unwrap().is_none());
+
+		// push genesis to make indexing human readable (index equals to block number)
+		all_hashes.push(self.peer(0).client().info().genesis_hash);
+
+		let mut built_hashes = self.peer(0).generate_blocks(count, BlockOrigin::File, |builder| {
 			let mut block = builder.build().unwrap().block;
 
 			if include_mmr_digest {
@@ -176,6 +188,9 @@ impl BeefyTestNet {
 			block
 		});
 		runtime.block_on(self.wait_until_sync());
+
+		all_hashes.append(&mut built_hashes);
+		all_hashes
 	}
 }
 
@@ -512,7 +527,7 @@ fn finalize_block_and_wait_for_beefy(
 	// peer index and key
 	peers: impl Iterator<Item = (usize, BeefyKeyring)> + Clone,
 	runtime: &mut Runtime,
-	finalize_targets: &[u64],
+	finalize_targets: &[H256],
 	expected_beefy: &[u64],
 ) {
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
@@ -520,8 +535,7 @@ fn finalize_block_and_wait_for_beefy(
 	for block in finalize_targets {
 		peers.clone().for_each(|(index, _)| {
 			let client = net.lock().peer(index).client().as_client();
-			let finalize = client.expect_block_hash_from_id(&BlockId::number(*block)).unwrap();
-			client.finalize_block(finalize, None).unwrap();
+			client.finalize_block(*block, None).unwrap();
 		})
 	}
 
@@ -554,7 +568,7 @@ fn beefy_finalizing_blocks() {
 	runtime.spawn(initialize_beefy(&mut net, beefy_peers, min_block_delta));
 
 	// push 42 blocks including `AuthorityChange` digests every 10 blocks.
-	net.generate_blocks_and_sync(42, session_len, &validator_set, true, &mut runtime);
+	let hashes = net.generate_blocks_and_sync(42, session_len, &validator_set, true, &mut runtime);
 
 	let net = Arc::new(Mutex::new(net));
 
@@ -562,19 +576,25 @@ fn beefy_finalizing_blocks() {
 
 	let peers = peers.into_iter().enumerate();
 	// finalize block #5 -> BEEFY should finalize #1 (mandatory) and #5 from diff-power-of-two rule.
-	finalize_block_and_wait_for_beefy(&net, peers.clone(), &mut runtime, &[1, 5], &[1, 5]);
+	finalize_block_and_wait_for_beefy(
+		&net,
+		peers.clone(),
+		&mut runtime,
+		&[hashes[1], hashes[5]],
+		&[1, 5],
+	);
 
 	// GRANDPA finalize #10 -> BEEFY finalize #10 (mandatory)
-	finalize_block_and_wait_for_beefy(&net, peers.clone(), &mut runtime, &[10], &[10]);
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &mut runtime, &[hashes[10]], &[10]);
 
 	// GRANDPA finalize #18 -> BEEFY finalize #14, then #18 (diff-power-of-two rule)
-	finalize_block_and_wait_for_beefy(&net, peers.clone(), &mut runtime, &[18], &[14, 18]);
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &mut runtime, &[hashes[18]], &[14, 18]);
 
 	// GRANDPA finalize #20 -> BEEFY finalize #20 (mandatory)
-	finalize_block_and_wait_for_beefy(&net, peers.clone(), &mut runtime, &[20], &[20]);
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &mut runtime, &[hashes[20]], &[20]);
 
 	// GRANDPA finalize #21 -> BEEFY finalize nothing (yet) because min delta is 4
-	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[21], &[]);
+	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[hashes[21]], &[]);
 }
 
 #[test]
@@ -593,7 +613,7 @@ fn lagging_validators() {
 	runtime.spawn(initialize_beefy(&mut net, beefy_peers, min_block_delta));
 
 	// push 62 blocks including `AuthorityChange` digests every 30 blocks.
-	net.generate_blocks_and_sync(62, session_len, &validator_set, true, &mut runtime);
+	let hashes = net.generate_blocks_and_sync(62, session_len, &validator_set, true, &mut runtime);
 
 	let net = Arc::new(Mutex::new(net));
 
@@ -604,18 +624,12 @@ fn lagging_validators() {
 		&net,
 		peers.clone(),
 		&mut runtime,
-		&[1, 15],
+		&[hashes[1], hashes[15]],
 		&[1, 9, 13, 14, 15],
 	);
 
 	// Alice finalizes #25, Bob lags behind
-	let finalize = net
-		.lock()
-		.peer(0)
-		.client()
-		.as_client()
-		.expect_block_hash_from_id(&BlockId::number(25))
-		.unwrap();
+	let finalize = hashes[25];
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
 	net.lock().peer(0).client().as_client().finalize_block(finalize, None).unwrap();
 	// verify nothing gets finalized by BEEFY
@@ -631,7 +645,13 @@ fn lagging_validators() {
 	wait_for_beefy_signed_commitments(versioned_finality_proof, &net, &mut runtime, &[23, 24, 25]);
 
 	// Both finalize #30 (mandatory session) and #32 -> BEEFY finalize #30 (mandatory), #31, #32
-	finalize_block_and_wait_for_beefy(&net, peers.clone(), &mut runtime, &[30, 32], &[30, 31, 32]);
+	finalize_block_and_wait_for_beefy(
+		&net,
+		peers.clone(),
+		&mut runtime,
+		&[hashes[30], hashes[32]],
+		&[30, 31, 32],
+	);
 
 	// Verify that session-boundary votes get buffered by client and only processed once
 	// session-boundary block is GRANDPA-finalized (this guarantees authenticity for the new session
@@ -639,13 +659,7 @@ fn lagging_validators() {
 
 	// Alice finalizes session-boundary mandatory block #60, Bob lags behind
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
-	let finalize = net
-		.lock()
-		.peer(0)
-		.client()
-		.as_client()
-		.expect_block_hash_from_id(&BlockId::number(60))
-		.unwrap();
+	let finalize = hashes[60];
 	net.lock().peer(0).client().as_client().finalize_block(finalize, None).unwrap();
 	// verify nothing gets finalized by BEEFY
 	let timeout = Some(Duration::from_millis(250));
@@ -687,24 +701,18 @@ fn correct_beefy_payload() {
 	runtime.spawn(initialize_beefy(&mut net, bad_peers, min_block_delta));
 
 	// push 12 blocks
-	net.generate_blocks_and_sync(12, session_len, &validator_set, false, &mut runtime);
+	let hashes = net.generate_blocks_and_sync(12, session_len, &validator_set, false, &mut runtime);
 
 	let net = Arc::new(Mutex::new(net));
 	let peers = peers.into_iter().enumerate();
 	// with 3 good voters and 1 bad one, consensus should happen and best blocks produced.
-	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[1, 10], &[1, 9]);
+	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[hashes[1], hashes[10]], &[1, 9]);
 
 	let (best_blocks, versioned_finality_proof) =
 		get_beefy_streams(&mut net.lock(), [(0, BeefyKeyring::Alice)].into_iter());
 
 	// now 2 good validators and 1 bad one are voting
-	let hashof11 = net
-		.lock()
-		.peer(0)
-		.client()
-		.as_client()
-		.expect_block_hash_from_id(&BlockId::number(11))
-		.unwrap();
+	let hashof11 = hashes[11];
 	net.lock().peer(0).client().as_client().finalize_block(hashof11, None).unwrap();
 	net.lock().peer(1).client().as_client().finalize_block(hashof11, None).unwrap();
 	net.lock().peer(3).client().as_client().finalize_block(hashof11, None).unwrap();
@@ -894,7 +902,7 @@ fn voter_initialization() {
 	runtime.spawn(initialize_beefy(&mut net, beefy_peers, min_block_delta));
 
 	// push 26 blocks
-	net.generate_blocks_and_sync(26, session_len, &validator_set, false, &mut runtime);
+	let hashes = net.generate_blocks_and_sync(26, session_len, &validator_set, false, &mut runtime);
 	let net = Arc::new(Mutex::new(net));
 
 	// Finalize multiple blocks at once to get a burst of finality notifications right from start.
@@ -904,7 +912,7 @@ fn voter_initialization() {
 		&net,
 		peers.into_iter().enumerate(),
 		&mut runtime,
-		&[1, 6, 10, 17, 24, 26],
+		&[hashes[1], hashes[6], hashes[10], hashes[17], hashes[24], hashes[26]],
 		&[1, 5, 10, 15, 20, 25],
 	);
 }
@@ -937,7 +945,7 @@ fn on_demand_beefy_justification_sync() {
 	let dave_index = 3;
 
 	// push 30 blocks
-	net.generate_blocks_and_sync(30, session_len, &validator_set, false, &mut runtime);
+	let hashes = net.generate_blocks_and_sync(30, session_len, &validator_set, false, &mut runtime);
 
 	let fast_peers = fast_peers.into_iter().enumerate();
 	let net = Arc::new(Mutex::new(net));
@@ -947,7 +955,7 @@ fn on_demand_beefy_justification_sync() {
 		&net,
 		fast_peers.clone(),
 		&mut runtime,
-		&[1, 6, 10, 17, 24],
+		&[hashes[1], hashes[6], hashes[10], hashes[17], hashes[24]],
 		&[1, 5, 10, 15, 20],
 	);
 
@@ -959,14 +967,13 @@ fn on_demand_beefy_justification_sync() {
 	let (dave_best_blocks, _) =
 		get_beefy_streams(&mut net.lock(), [(dave_index, BeefyKeyring::Dave)].into_iter());
 	let client = net.lock().peer(dave_index).client().as_client();
-	let hashof1 = client.expect_block_hash_from_id(&BlockId::number(1)).unwrap();
-	client.finalize_block(hashof1, None).unwrap();
+	client.finalize_block(hashes[1], None).unwrap();
 	// Give Dave task some cpu cycles to process the finality notification,
 	run_for(Duration::from_millis(100), &net, &mut runtime);
 	// freshly spun up Dave now needs to listen for gossip to figure out the state of his peers.
 
 	// Have the other peers do some gossip so Dave finds out about their progress.
-	finalize_block_and_wait_for_beefy(&net, fast_peers, &mut runtime, &[25], &[25]);
+	finalize_block_and_wait_for_beefy(&net, fast_peers, &mut runtime, &[hashes[25]], &[25]);
 
 	// Now verify Dave successfully finalized #1 (through on-demand justification request).
 	wait_for_best_beefy_blocks(dave_best_blocks, &net, &mut runtime, &[1]);
@@ -978,13 +985,13 @@ fn on_demand_beefy_justification_sync() {
 		&net,
 		[(dave_index, BeefyKeyring::Dave)].into_iter(),
 		&mut runtime,
-		&[6, 10, 17, 24, 26],
+		&[hashes[6], hashes[10], hashes[17], hashes[24], hashes[26]],
 		&[5, 10, 15, 20, 25],
 	);
 
 	let all_peers = all_peers.into_iter().enumerate();
 	// Now that Dave has caught up, sanity check voting works for all of them.
-	finalize_block_and_wait_for_beefy(&net, all_peers, &mut runtime, &[30], &[30]);
+	finalize_block_and_wait_for_beefy(&net, all_peers, &mut runtime, &[hashes[30]], &[30]);
 }
 
 #[test]
@@ -996,13 +1003,12 @@ fn should_initialize_voter_at_genesis() {
 	let backend = net.peer(0).client().as_backend();
 
 	// push 15 blocks with `AuthorityChange` digests every 10 blocks
-	net.generate_blocks_and_sync(15, 10, &validator_set, false, &mut runtime);
+	let hashes = net.generate_blocks_and_sync(15, 10, &validator_set, false, &mut runtime);
 
 	let mut finality = net.peer(0).client().as_client().finality_notification_stream().fuse();
 
 	// finalize 13 without justifications
-	let hashof13 = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(13)).unwrap();
-	net.peer(0).client().as_client().finalize_block(hashof13, None).unwrap();
+	net.peer(0).client().as_client().finalize_block(hashes[13], None).unwrap();
 
 	// load persistent state - nothing in DB, should init at session boundary
 	let persisted_state = voter_init_setup(&mut net, &mut finality).unwrap();
@@ -1042,13 +1048,12 @@ fn should_initialize_voter_when_last_final_is_session_boundary() {
 	let backend = net.peer(0).client().as_backend();
 
 	// push 15 blocks with `AuthorityChange` digests every 10 blocks
-	net.generate_blocks_and_sync(15, 10, &validator_set, false, &mut runtime);
+	let hashes = net.generate_blocks_and_sync(15, 10, &validator_set, false, &mut runtime);
 
 	let mut finality = net.peer(0).client().as_client().finality_notification_stream().fuse();
 
 	// finalize 13 without justifications
-	let hashof13 = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(13)).unwrap();
-	net.peer(0).client().as_client().finalize_block(hashof13, None).unwrap();
+	net.peer(0).client().as_client().finalize_block(hashes[13], None).unwrap();
 
 	// import/append BEEFY justification for session boundary block 10
 	let commitment = Commitment {
@@ -1060,9 +1065,8 @@ fn should_initialize_voter_when_last_final_is_session_boundary() {
 		commitment,
 		signatures: vec![None],
 	});
-	let hashof10 = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(10)).unwrap();
 	backend
-		.append_justification(hashof10, (BEEFY_ENGINE_ID, justif.encode()))
+		.append_justification(hashes[10], (BEEFY_ENGINE_ID, justif.encode()))
 		.unwrap();
 
 	// Test corner-case where session boundary == last beefy finalized,
@@ -1103,13 +1107,12 @@ fn should_initialize_voter_at_latest_finalized() {
 	let backend = net.peer(0).client().as_backend();
 
 	// push 15 blocks with `AuthorityChange` digests every 10 blocks
-	net.generate_blocks_and_sync(15, 10, &validator_set, false, &mut runtime);
+	let hashes = net.generate_blocks_and_sync(15, 10, &validator_set, false, &mut runtime);
 
 	let mut finality = net.peer(0).client().as_client().finality_notification_stream().fuse();
 
 	// finalize 13 without justifications
-	let hashof13 = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(13)).unwrap();
-	net.peer(0).client().as_client().finalize_block(hashof13, None).unwrap();
+	net.peer(0).client().as_client().finalize_block(hashes[13], None).unwrap();
 
 	// import/append BEEFY justification for block 12
 	let commitment = Commitment {
@@ -1121,9 +1124,8 @@ fn should_initialize_voter_at_latest_finalized() {
 		commitment,
 		signatures: vec![None],
 	});
-	let hashof12 = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(12)).unwrap();
 	backend
-		.append_justification(hashof12, (BEEFY_ENGINE_ID, justif.encode()))
+		.append_justification(hashes[12], (BEEFY_ENGINE_ID, justif.encode()))
 		.unwrap();
 
 	// Test initialization at last BEEFY finalized.
