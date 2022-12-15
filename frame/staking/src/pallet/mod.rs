@@ -184,7 +184,7 @@ pub mod pallet {
 		type SlashDeferDuration: Get<EraIndex>;
 
 		/// The origin which can cancel a deferred slash. Root can always do this.
-		type SlashCancelOrigin: EnsureOrigin<Self::RuntimeOrigin>;
+		type StakingAdminOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Interface for interacting with a session pallet.
 		type SessionInterface: SessionInterface<Self::AccountId>;
@@ -1290,7 +1290,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] new: u32,
 		) -> DispatchResult {
-			ensure_root(origin)?;
+			T::StakingAdminOrigin::ensure_origin(origin)?;
 			// ensure new validator count does not exceed maximum winners
 			// support by election provider.
 			ensure!(
@@ -1315,7 +1315,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] additional: u32,
 		) -> DispatchResult {
-			ensure_root(origin)?;
+			T::StakingAdminOrigin::ensure_origin(origin)?;
 			let old = ValidatorCount::<T>::get();
 			let new = old.checked_add(additional).ok_or(ArithmeticError::Overflow)?;
 			ensure!(
@@ -1338,7 +1338,7 @@ pub mod pallet {
 		#[pallet::call_index(11)]
 		#[pallet::weight(T::WeightInfo::set_validator_count())]
 		pub fn scale_validator_count(origin: OriginFor<T>, factor: Percent) -> DispatchResult {
-			ensure_root(origin)?;
+			T::StakingAdminOrigin::ensure_origin(origin)?;
 			let old = ValidatorCount::<T>::get();
 			let new = old.checked_add(factor.mul_floor(old)).ok_or(ArithmeticError::Overflow)?;
 
@@ -1369,7 +1369,7 @@ pub mod pallet {
 		#[pallet::call_index(12)]
 		#[pallet::weight(T::WeightInfo::force_no_eras())]
 		pub fn force_no_eras(origin: OriginFor<T>) -> DispatchResult {
-			ensure_root(origin)?;
+			T::StakingAdminOrigin::ensure_origin(origin)?;
 			ForceEra::<T>::put(Forcing::ForceNone);
 			Ok(())
 		}
@@ -1393,7 +1393,7 @@ pub mod pallet {
 		#[pallet::call_index(13)]
 		#[pallet::weight(T::WeightInfo::force_new_era())]
 		pub fn force_new_era(origin: OriginFor<T>) -> DispatchResult {
-			ensure_root(origin)?;
+			T::StakingAdminOrigin::ensure_origin(origin)?;
 			ForceEra::<T>::put(Forcing::ForceNew);
 			Ok(())
 		}
@@ -1422,7 +1422,7 @@ pub mod pallet {
 			stash: T::AccountId,
 			num_slashing_spans: u32,
 		) -> DispatchResult {
-			ensure_root(origin)?;
+			T::StakingAdminOrigin::ensure_origin(origin)?;
 
 			// Remove all staking-related information.
 			Self::kill_stash(&stash, num_slashing_spans)?;
@@ -1444,7 +1444,7 @@ pub mod pallet {
 		#[pallet::call_index(16)]
 		#[pallet::weight(T::WeightInfo::force_new_era_always())]
 		pub fn force_new_era_always(origin: OriginFor<T>) -> DispatchResult {
-			ensure_root(origin)?;
+			T::StakingAdminOrigin::ensure_origin(origin)?;
 			ForceEra::<T>::put(Forcing::ForceAlways);
 			Ok(())
 		}
@@ -1461,7 +1461,7 @@ pub mod pallet {
 			era: EraIndex,
 			slash_indices: Vec<u32>,
 		) -> DispatchResult {
-			T::SlashCancelOrigin::ensure_origin(origin)?;
+			T::StakingAdminOrigin::ensure_origin(origin)?;
 
 			ensure!(!slash_indices.is_empty(), Error::<T>::EmptyTargets);
 			ensure!(is_sorted_and_unique(&slash_indices), Error::<T>::NotSortedAndUnique);
@@ -1662,7 +1662,7 @@ pub mod pallet {
 			chill_threshold: ConfigOp<Percent>,
 			min_commission: ConfigOp<Perbill>,
 		) -> DispatchResult {
-			ensure_root(origin)?;
+			T::StakingAdminOrigin::ensure_origin(origin)?;
 
 			macro_rules! config_op_exp {
 				($storage:ty, $op:ident) => {
