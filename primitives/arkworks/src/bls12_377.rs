@@ -20,7 +20,7 @@
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use ark_bls12_381::{Bls12_381, Fq12, G1Affine, G1Projective, G2Affine, G2Projective, Parameters};
+use ark_bls12_377::{Bls12_377, Fq12, G1Affine, G1Projective, G2Affine, G2Projective, Parameters};
 use ark_ec::{
 	models::CurveConfig,
 	pairing::{MillerLoopOutput, Pairing},
@@ -33,13 +33,13 @@ use sp_std::{vec, vec::Vec};
 
 const F12_COMPRESSED_SIZE: usize = 576;
 
-/// Compute multi pairing through arkworksrk_bls12_381::G2Projective
+/// Compute multi pairing through arkworksrk_Bls12_377::G2Projective
 pub fn multi_pairing(vec_a: Vec<Vec<u8>>, vec_b: Vec<Vec<u8>>) -> Vec<u8> {
 	let g1: Vec<_> = vec_a
 		.iter()
 		.map(|a| {
 			let cursor = Cursor::new(a);
-			<Bls12_381 as Pairing>::G1Prepared::deserialize_with_mode(
+			<Bls12_377 as Pairing>::G1Prepared::deserialize_with_mode(
 				cursor,
 				Compress::Yes,
 				Validate::No,
@@ -51,7 +51,7 @@ pub fn multi_pairing(vec_a: Vec<Vec<u8>>, vec_b: Vec<Vec<u8>>) -> Vec<u8> {
 		.iter()
 		.map(|b| {
 			let cursor = Cursor::new(b);
-			<Bls12_381 as Pairing>::G2Affine::deserialize_with_mode(
+			<Bls12_377 as Pairing>::G2Affine::deserialize_with_mode(
 				cursor,
 				Compress::Yes,
 				Validate::No,
@@ -59,7 +59,7 @@ pub fn multi_pairing(vec_a: Vec<Vec<u8>>, vec_b: Vec<Vec<u8>>) -> Vec<u8> {
 			.unwrap()
 		})
 		.collect();
-	let res = Bls12_381::multi_pairing(g1, g2);
+	let res = Bls12_377::multi_pairing(g1, g2);
 	// serialize the result
 	let mut res_bytes = [0u8; F12_COMPRESSED_SIZE];
 	let mut cursor = Cursor::new(&mut res_bytes[..]);
@@ -73,12 +73,12 @@ pub fn multi_miller_loop(a_vec: Vec<Vec<u8>>, b_vec: Vec<Vec<u8>>) -> Vec<u8> {
 		.iter()
 		.map(|a| {
 			let cursor = Cursor::new(a);
-			<Bls12_381 as Pairing>::G1Affine::deserialize_with_mode(
+			<Bls12_377 as Pairing>::G1Affine::deserialize_with_mode(
 				cursor,
 				Compress::Yes,
 				Validate::No,
 			)
-			.map(<Bls12_381 as Pairing>::G1Prepared::from)
+			.map(<Bls12_377 as Pairing>::G1Prepared::from)
 			.unwrap()
 		})
 		.collect();
@@ -86,16 +86,16 @@ pub fn multi_miller_loop(a_vec: Vec<Vec<u8>>, b_vec: Vec<Vec<u8>>) -> Vec<u8> {
 		.iter()
 		.map(|b| {
 			let cursor = Cursor::new(b);
-			<Bls12_381 as Pairing>::G2Affine::deserialize_with_mode(
+			<Bls12_377 as Pairing>::G2Affine::deserialize_with_mode(
 				cursor,
 				Compress::Yes,
 				Validate::No,
 			)
-			.map(<Bls12_381 as Pairing>::G2Prepared::from)
+			.map(<Bls12_377 as Pairing>::G2Prepared::from)
 			.unwrap()
 		})
 		.collect();
-	let res = Bls12_381::multi_miller_loop(g1, g2);
+	let res = Bls12_377::multi_miller_loop(g1, g2);
 	// serialize the result
 	let mut res_bytes = [0u8; F12_COMPRESSED_SIZE];
 	let mut cursor = Cursor::new(&mut res_bytes[..]);
@@ -107,7 +107,7 @@ pub fn multi_miller_loop(a_vec: Vec<Vec<u8>>, b_vec: Vec<Vec<u8>>) -> Vec<u8> {
 pub fn final_exponentiation(f12: &[u8]) -> Vec<u8> {
 	let cursor = Cursor::new(f12);
 	let f12 = Fq12::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
-	let res = Bls12_381::final_exponentiation(MillerLoopOutput(f12)).unwrap();
+	let res = Bls12_377::final_exponentiation(MillerLoopOutput(f12)).unwrap();
 	// serialize the result
 	let mut res_bytes = [0u8; F12_COMPRESSED_SIZE];
 	let mut cursor = Cursor::new(&mut res_bytes[..]);
@@ -201,7 +201,7 @@ pub fn msm_bigint_g1(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
 		.iter()
 		.map(|a| {
 			let cursor = Cursor::new(a);
-			<Bls12_381 as Pairing>::G1Affine::deserialize_with_mode(
+			<Bls12_377 as Pairing>::G1Affine::deserialize_with_mode(
 				cursor,
 				Compress::Yes,
 				Validate::No,
@@ -213,7 +213,7 @@ pub fn msm_bigint_g1(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
 		.iter()
 		.map(|a| {
 			let cursor = Cursor::new(a);
-			<<ark_bls12_381::g1::Parameters as CurveConfig>::ScalarField as PrimeField>::BigInt::deserialize_with_mode(
+			<<ark_bls12_377::g1::Parameters as CurveConfig>::ScalarField as PrimeField>::BigInt::deserialize_with_mode(
 				cursor,
 				Compress::Yes,
 				Validate::No,
@@ -222,7 +222,7 @@ pub fn msm_bigint_g1(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
 		})
 		.collect();
 	let result =
-		<<Bls12_381 as Pairing>::G1 as ark_ec::VariableBaseMSM>::msm_bigint(&bases, &bigints);
+		<<Bls12_377 as Pairing>::G1 as ark_ec::VariableBaseMSM>::msm_bigint(&bases, &bigints);
 	let mut serialized = vec![0; result.serialized_size(Compress::Yes)];
 	let mut cursor = Cursor::new(&mut serialized[..]);
 	result.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
@@ -235,7 +235,7 @@ pub fn msm_bigint_g2(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
 		.iter()
 		.map(|a| {
 			let cursor = Cursor::new(a);
-			<Bls12_381 as Pairing>::G2Affine::deserialize_with_mode(
+			<Bls12_377 as Pairing>::G2Affine::deserialize_with_mode(
 				cursor,
 				Compress::Yes,
 				Validate::No,
@@ -247,7 +247,7 @@ pub fn msm_bigint_g2(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
 		.iter()
 		.map(|a| {
 			let cursor = Cursor::new(a);
-			<<ark_bls12_381::g2::Parameters as CurveConfig>::ScalarField as PrimeField>::BigInt::deserialize_with_mode(
+			<<ark_bls12_377::g2::Parameters as CurveConfig>::ScalarField as PrimeField>::BigInt::deserialize_with_mode(
 				cursor,
 				Compress::Yes,
 				Validate::No,
@@ -256,7 +256,7 @@ pub fn msm_bigint_g2(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
 		})
 		.collect();
 	let result =
-		<<Bls12_381 as Pairing>::G2 as ark_ec::VariableBaseMSM>::msm_bigint(&bases, &bigints);
+		<<Bls12_377 as Pairing>::G2 as ark_ec::VariableBaseMSM>::msm_bigint(&bases, &bigints);
 	let mut serialized = vec![0; result.serialized_size(Compress::Yes)];
 	let mut cursor = Cursor::new(&mut serialized[..]);
 	result.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();

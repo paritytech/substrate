@@ -124,10 +124,47 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "698b65a961a9d730fb45b6b0327e20207810c9f61ee421b082b27ba003f49e2b"
 
 [[package]]
+name = "ark-algebra-test-templates"
+version = "0.4.0-alpha.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "87c8f1fd0f6578c14a7bd37b751f51303a3df867a2565632579f52d8e458fd7f"
+dependencies = [
+ "ark-ec",
+ "ark-ff",
+ "ark-serialize",
+ "ark-std",
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
+name = "ark-bls12-377"
+version = "0.4.0-alpha.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc213b03e8462cc880b4b80cb4d0636235e86474b47ae172d8c1e1daf792f4ac"
+dependencies = [
+ "ark-ec",
+ "ark-ff",
+ "ark-std",
+]
+
+[[package]]
 name = "ark-bls12-381"
 version = "0.4.0-alpha.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "45de41dee7fbd21b6241a2c1254498aa25463bd91ce3cc7c5bccaa6916ef047d"
+dependencies = [
+ "ark-ec",
+ "ark-ff",
+ "ark-serialize",
+ "ark-std",
+]
+
+[[package]]
+name = "ark-bls12-381"
+version = "0.4.0-alpha.1"
+source = "git+https://github.com/arkworks-rs/curves/#f8a6a4050e088cbfbb20675c03f15fc61593cfdf"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -238,6 +275,35 @@ checksum = "cc5b16d734e9b2e43886ff586755219df7fb9639cc04ab00c7e636708a5ba06a"
 dependencies = [
  "num-traits",
  "rand 0.8.5",
+]
+
+[[package]]
+name = "ark-sub-bls12-381"
+version = "0.3.0"
+source = "git+https://github.com/achimcc/ark-substrate#aad0d6c1e34d3f791be4297690f7cbdfe3587032"
+dependencies = [
+ "ark-bls12-381 0.4.0-alpha.1 (git+https://github.com/arkworks-rs/curves/)",
+ "ark-ec",
+ "ark-ff",
+ "ark-serialize",
+ "ark-std",
+ "ark-sub-models",
+]
+
+[[package]]
+name = "ark-sub-models"
+version = "0.3.0"
+source = "git+https://github.com/achimcc/ark-substrate#aad0d6c1e34d3f791be4297690f7cbdfe3587032"
+dependencies = [
+ "ark-ec",
+ "ark-ff",
+ "ark-serialize",
+ "ark-std",
+ "derivative",
+ "getrandom 0.2.3",
+ "itertools",
+ "num-traits",
+ "zeroize",
 ]
 
 [[package]]
@@ -2572,8 +2638,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7fcd999463524c52659517fe2cea98493cfe485d10565e7b0fb07dbba7ad2753"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "wasi 0.10.0+wasi-snapshot-preview1",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -9071,11 +9139,14 @@ dependencies = [
 name = "sp-arkworks"
 version = "0.0.1"
 dependencies = [
- "ark-bls12-381",
+ "ark-algebra-test-templates",
+ "ark-bls12-377",
+ "ark-bls12-381 0.4.0-alpha.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "ark-ec",
  "ark-ff",
  "ark-serialize",
  "ark-std",
+ "ark-sub-bls12-381",
  "sp-std",
 ]
 
