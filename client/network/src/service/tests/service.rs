@@ -37,8 +37,7 @@ const PROTOCOL_NAME: &str = "/foo";
 
 /// Builds two nodes and their associated events stream.
 /// The nodes are connected together and have the `PROTOCOL_NAME` protocol registered.
-fn build_nodes_one_proto(
-) -> (
+fn build_nodes_one_proto() -> (
 	Arc<TestNetworkService>,
 	impl Stream<Item = Event>,
 	Arc<TestNetworkService>,
@@ -70,8 +69,7 @@ async fn notifications_state_consistent() {
 	// Runs two nodes and ensures that events are propagated out of the API in a consistent
 	// correct order, which means no notification received on a closed substream.
 
-	let (node1, mut events_stream1, node2, mut events_stream2) =
-		build_nodes_one_proto();
+	let (node1, mut events_stream1, node2, mut events_stream2) = build_nodes_one_proto();
 
 	// Write some initial notifications that shouldn't get through.
 	for _ in 0..(rand::random::<u8>() % 5) {
@@ -148,35 +146,27 @@ async fn notifications_state_consistent() {
 		};
 
 		match next_event {
-			future::Either::Left(Event::NotificationStreamOpened {
-				remote, protocol, ..
-			}) =>
+			future::Either::Left(Event::NotificationStreamOpened { remote, protocol, .. }) =>
 				if protocol == PROTOCOL_NAME.into() {
 					something_happened = true;
 					assert!(!node1_to_node2_open);
 					node1_to_node2_open = true;
 					assert_eq!(remote, node2.local_peer_id());
 				},
-			future::Either::Right(Event::NotificationStreamOpened {
-				remote, protocol, ..
-			}) =>
+			future::Either::Right(Event::NotificationStreamOpened { remote, protocol, .. }) =>
 				if protocol == PROTOCOL_NAME.into() {
 					something_happened = true;
 					assert!(!node2_to_node1_open);
 					node2_to_node1_open = true;
 					assert_eq!(remote, node1.local_peer_id());
 				},
-			future::Either::Left(Event::NotificationStreamClosed {
-				remote, protocol, ..
-			}) =>
+			future::Either::Left(Event::NotificationStreamClosed { remote, protocol, .. }) =>
 				if protocol == PROTOCOL_NAME.into() {
 					assert!(node1_to_node2_open);
 					node1_to_node2_open = false;
 					assert_eq!(remote, node2.local_peer_id());
 				},
-			future::Either::Right(Event::NotificationStreamClosed {
-				remote, protocol, ..
-			}) =>
+			future::Either::Right(Event::NotificationStreamClosed { remote, protocol, .. }) =>
 				if protocol == PROTOCOL_NAME.into() {
 					assert!(node2_to_node1_open);
 					node2_to_node1_open = false;
@@ -287,8 +277,7 @@ async fn notifications_back_pressure() {
 
 	const TOTAL_NOTIFS: usize = 10_000;
 
-	let (node1, mut events_stream1, node2, mut events_stream2) =
-		build_nodes_one_proto();
+	let (node1, mut events_stream1, node2, mut events_stream2) = build_nodes_one_proto();
 	let node2_id = node2.local_peer_id();
 
 	let receiver = tokio::spawn(async move {
@@ -402,8 +391,7 @@ async fn fallback_name_working() {
 // protocol name and verify that `SyncDisconnected` event is emitted
 #[tokio::test]
 async fn disconnect_sync_peer_using_block_announcement_protocol_name() {
-	let (node1, mut events_stream1, node2, mut events_stream2) =
-		build_nodes_one_proto();
+	let (node1, mut events_stream1, node2, mut events_stream2) = build_nodes_one_proto();
 
 	async fn wait_for_events(stream: &mut (impl Stream<Item = Event> + std::marker::Unpin)) {
 		let mut notif_received = false;

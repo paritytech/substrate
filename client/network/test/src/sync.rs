@@ -420,7 +420,8 @@ async fn can_sync_small_non_best_forks() {
 		} else {
 			Poll::Ready(())
 		}
-	}).await;
+	})
+	.await;
 
 	// synchronization: 0 synced to longer chain and 1 didn't sync to small chain.
 
@@ -635,7 +636,8 @@ async fn imports_stale_once() {
 			} else {
 				Poll::Pending
 			}
-		}).await;
+		})
+		.await;
 	}
 
 	// given the network with 2 full nodes

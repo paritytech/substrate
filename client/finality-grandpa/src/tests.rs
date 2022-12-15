@@ -79,10 +79,8 @@ struct GrandpaTestNet {
 
 impl GrandpaTestNet {
 	fn new(test_config: TestApi, n_authority: usize, n_full: usize) -> Self {
-		let mut net = GrandpaTestNet {
-			peers: Vec::with_capacity(n_authority + n_full),
-			test_config,
-		};
+		let mut net =
+			GrandpaTestNet { peers: Vec::with_capacity(n_authority + n_full), test_config };
 
 		for _ in 0..n_authority {
 			net.add_authority_peer();

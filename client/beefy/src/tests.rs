@@ -110,9 +110,7 @@ pub(crate) struct BeefyTestNet {
 
 impl BeefyTestNet {
 	pub(crate) fn new(n_authority: usize) -> Self {
-		let mut net = BeefyTestNet {
-			peers: Vec::with_capacity(n_authority),
-		};
+		let mut net = BeefyTestNet { peers: Vec::with_capacity(n_authority) };
 
 		for i in 0..n_authority {
 			let (rx, cfg) = on_demand_justifications_protocol_config(GENESIS_HASH, None);
