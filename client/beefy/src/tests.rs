@@ -164,7 +164,7 @@ impl BeefyTestNet {
 
 			block
 		});
-		self.wait_until_sync().await;
+		self.run_until_sync().await;
 	}
 }
 

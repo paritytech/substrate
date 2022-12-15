@@ -356,7 +356,7 @@ async fn finalize_3_voters_no_observers() {
 	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3, 0);
 	tokio::spawn(initialize_grandpa(&mut net, peers));
 	net.peer(0).push_blocks(20, false);
-	net.wait_until_sync().await;
+	net.run_until_sync().await;
 	let hashof20 = net.peer(0).client().info().best_hash;
 
 	for i in 0..3 {
@@ -498,7 +498,7 @@ async fn transition_3_voters_twice_1_full_observer() {
 	}
 
 	net.lock().peer(0).push_blocks(1, false);
-	net.lock().wait_until_sync().await;
+	net.lock().run_until_sync().await;
 
 	for (i, peer) in net.lock().peers().iter().enumerate() {
 		let full_client = peer.client().as_client();
@@ -600,7 +600,7 @@ async fn justification_is_generated_periodically() {
 	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3, 0);
 	tokio::spawn(initialize_grandpa(&mut net, peers));
 	net.peer(0).push_blocks(32, false);
-	net.wait_until_sync().await;
+	net.run_until_sync().await;
 
 	let hashof32 = net.peer(0).client().info().best_hash;
 
@@ -640,7 +640,7 @@ async fn sync_justifications_on_change_blocks() {
 
 	// add more blocks on top of it (until we have 25)
 	net.peer(0).push_blocks(4, false);
-	net.wait_until_sync().await;
+	net.run_until_sync().await;
 
 	for i in 0..4 {
 		assert_eq!(net.peer(i).client().info().best_number, 25, "Peer #{} failed to sync", i);
@@ -722,7 +722,7 @@ async fn finalizes_multiple_pending_changes_in_order() {
 	// add more blocks on top of it (until we have 30)
 	net.peer(0).push_blocks(4, false);
 
-	net.wait_until_sync().await;
+	net.run_until_sync().await;
 
 	// all peers imported both change blocks
 	for i in 0..6 {
@@ -772,7 +772,7 @@ async fn force_change_to_new_set() {
 	});
 
 	net.lock().peer(0).push_blocks(25, false);
-	net.lock().wait_until_sync().await;
+	net.lock().run_until_sync().await;
 
 	for (i, peer) in net.lock().peers().iter().enumerate() {
 		assert_eq!(peer.client().info().best_number, 26, "Peer #{} failed to sync", i);
@@ -1021,7 +1021,7 @@ async fn voter_persists_its_votes() {
 	tokio::spawn(alice_voter1);
 
 	net.peer(0).push_blocks(20, false);
-	net.wait_until_sync().await;
+	net.run_until_sync().await;
 
 	assert_eq!(net.peer(0).client().info().best_number, 20, "Peer #{} failed to sync", 0);
 
@@ -1165,7 +1165,7 @@ async fn finalize_3_voters_1_light_observer() {
 	)
 	.unwrap();
 	net.peer(0).push_blocks(20, false);
-	net.wait_until_sync().await;
+	net.run_until_sync().await;
 
 	for i in 0..4 {
 		assert_eq!(net.peer(i).client().info().best_number, 20, "Peer #{} failed to sync", i);
@@ -1241,7 +1241,7 @@ async fn voter_catches_up_to_latest_round_when_behind() {
 	}
 
 	net.lock().peer(0).push_blocks(50, false);
-	net.lock().wait_until_sync().await;
+	net.lock().run_until_sync().await;
 
 	// wait for them to finalize block 50. since they'll vote on 3/4 of the
 	// unfinalized chain it will take at least 4 rounds to do it.

@@ -1016,12 +1016,11 @@ where
 		Poll::Pending
 	}
 
-	/// Wait until we are sync'ed.
+	/// Run the network until we are sync'ed.
 	///
 	/// Calls `poll_until_sync` repeatedly.
 	/// (If we've not synced within 10 mins then panic rather than hang.)
-	async fn wait_until_sync(&mut self) {
-		// TODO: rename into run_until_sync() (and below).
+	async fn run_until_sync(&mut self) {
 		timeout(
 			Duration::from_secs(10 * 60),
 			futures::future::poll_fn::<(), _>(|cx| self.poll_until_sync(cx)),
@@ -1030,17 +1029,17 @@ where
 		.expect("sync didn't happen within 10 mins");
 	}
 
-	/// Wait until there are no pending packets.
+	/// Run the network until there are no pending packets.
 	///
 	/// Calls `poll_until_idle` repeatedly with the runtime passed as parameter.
-	async fn wait_until_idle(&mut self) {
+	async fn run_until_idle(&mut self) {
 		futures::future::poll_fn::<(), _>(|cx| self.poll_until_idle(cx)).await;
 	}
 
-	/// Wait until all peers are connected to each other.
+	/// Run the network until all peers are connected to each other.
 	///
 	/// Calls `poll_until_connected` repeatedly with the runtime passed as parameter.
-	async fn wait_until_connected(&mut self) {
+	async fn run_until_connected(&mut self) {
 		futures::future::poll_fn::<(), _>(|cx| self.poll_until_connected(cx)).await;
 	}
 

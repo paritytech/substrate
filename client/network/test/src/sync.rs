@@ -34,7 +34,7 @@ async fn test_ancestor_search_when_common_is(n: usize) {
 	net.peer(1).push_blocks(100, false);
 	net.peer(2).push_blocks(100, false);
 
-	net.wait_until_sync().await;
+	net.run_until_sync().await;
 	let peer1 = &net.peers()[1];
 	assert!(net.peers()[0].blockchain_canon_equals(peer1));
 }
@@ -156,7 +156,7 @@ async fn sync_from_two_peers_works() {
 	let mut net = TestNet::new(3);
 	net.peer(1).push_blocks(100, false);
 	net.peer(2).push_blocks(100, false);
-	net.wait_until_sync().await;
+	net.run_until_sync().await;
 	let peer1 = &net.peers()[1];
 	assert!(net.peers()[0].blockchain_canon_equals(peer1));
 	assert!(!net.peer(0).is_major_syncing());
@@ -169,7 +169,7 @@ async fn sync_from_two_peers_with_ancestry_search_works() {
 	net.peer(0).push_blocks(10, true);
 	net.peer(1).push_blocks(100, false);
 	net.peer(2).push_blocks(100, false);
-	net.wait_until_sync().await;
+	net.run_until_sync().await;
 	let peer1 = &net.peers()[1];
 	assert!(net.peers()[0].blockchain_canon_equals(peer1));
 }
@@ -183,7 +183,7 @@ async fn ancestry_search_works_when_backoff_is_one() {
 	net.peer(1).push_blocks(2, false);
 	net.peer(2).push_blocks(2, false);
 
-	net.wait_until_sync().await;
+	net.run_until_sync().await;
 	let peer1 = &net.peers()[1];
 	assert!(net.peers()[0].blockchain_canon_equals(peer1));
 }
@@ -197,7 +197,7 @@ async fn ancestry_search_works_when_ancestor_is_genesis() {
 	net.peer(1).push_blocks(100, false);
 	net.peer(2).push_blocks(100, false);
 
-	net.wait_until_sync().await;
+	net.run_until_sync().await;
 	let peer1 = &net.peers()[1];
 	assert!(net.peers()[0].blockchain_canon_equals(peer1));
 }
@@ -222,7 +222,7 @@ async fn sync_long_chain_works() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(2);
 	net.peer(1).push_blocks(500, false);
-	net.wait_until_sync().await;
+	net.run_until_sync().await;
 	let peer1 = &net.peers()[1];
 	assert!(net.peers()[0].blockchain_canon_equals(peer1));
 }
@@ -251,7 +251,7 @@ async fn sync_justifications() {
 	sp_tracing::try_init_simple();
 	let mut net = JustificationTestNet::new(3);
 	net.peer(0).push_blocks(20, false);
-	net.wait_until_sync().await;
+	net.run_until_sync().await;
 
 	let backend = net.peer(0).client().as_backend();
 	let hashof10 = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(10)).unwrap();
@@ -310,7 +310,7 @@ async fn sync_justifications_across_forks() {
 
 	// peer 1 will only see the longer fork. but we'll request justifications
 	// for both and finalize the small fork instead.
-	net.wait_until_sync().await;
+	net.run_until_sync().await;
 
 	let just = (*b"FRNK", Vec::new());
 	net.peer(0).client().finalize_block(f1_best, Some(just), true).unwrap();
@@ -350,7 +350,7 @@ async fn sync_after_fork_works() {
 	net.peer(2).push_blocks(1, false);
 
 	// peer 1 has the best chain
-	net.wait_until_sync().await;
+	net.run_until_sync().await;
 	let peer1 = &net.peers()[1];
 	assert!(net.peers()[0].blockchain_canon_equals(peer1));
 	(net.peers()[1].blockchain_canon_equals(peer1));
@@ -367,7 +367,7 @@ async fn syncs_all_forks() {
 	let b1 = net.peer(0).push_blocks(2, true);
 	let b2 = net.peer(1).push_blocks(4, false);
 
-	net.wait_until_sync().await;
+	net.run_until_sync().await;
 	// Check that all peers have all of the branches.
 	assert!(net.peer(0).has_block(b1));
 	assert!(net.peer(0).has_block(b2));
@@ -379,11 +379,11 @@ async fn syncs_all_forks() {
 async fn own_blocks_are_announced() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(3);
-	net.wait_until_sync().await; // connect'em
+	net.run_until_sync().await; // connect'em
 	net.peer(0)
 		.generate_blocks(1, BlockOrigin::Own, |builder| builder.build().unwrap().block);
 
-	net.wait_until_sync().await;
+	net.run_until_sync().await;
 
 	assert_eq!(net.peer(0).client.info().best_number, 1);
 	assert_eq!(net.peer(1).client.info().best_number, 1);
@@ -443,7 +443,7 @@ async fn can_sync_small_non_best_forks() {
 		Poll::Ready(())
 	})
 	.await;
-	net.wait_until_sync().await;
+	net.run_until_sync().await;
 
 	let another_fork = net.peer(0).push_blocks_at(BlockId::Number(35), 2, true);
 	net.peer(0).announce_block(another_fork, None);
@@ -464,7 +464,7 @@ async fn can_sync_forks_ahead_of_the_best_chain() {
 	net.peer(0).push_blocks(1, false);
 	net.peer(1).push_blocks(1, false);
 
-	net.wait_until_connected().await;
+	net.run_until_connected().await;
 	// Peer 0 is on 2-block fork which is announced with is_best=false
 	let fork_hash = net.peer(0).generate_blocks_with_fork_choice(
 		2,
@@ -561,10 +561,10 @@ async fn syncs_header_only_forks() {
 
 	// Peer 1 will sync the small fork even though common block state is missing
 	while !net.peer(1).has_block(small_hash) {
-		net.wait_until_idle().await;
+		net.run_until_idle().await;
 	}
 
-	net.wait_until_sync().await;
+	net.run_until_sync().await;
 	assert_eq!(net.peer(0).client().info().best_hash, net.peer(1).client().info().best_hash);
 	assert_ne!(small_hash, net.peer(0).client().info().best_hash);
 }
@@ -615,7 +615,7 @@ async fn full_sync_requires_block_body() {
 		}
 	})
 	.await;
-	net.wait_until_idle().await;
+	net.run_until_idle().await;
 	assert_eq!(net.peer(1).client.info().best_number, 0);
 }
 
@@ -642,7 +642,7 @@ async fn imports_stale_once() {
 	let mut net = TestNet::new(2);
 
 	// let them connect to each other
-	net.wait_until_sync().await;
+	net.run_until_sync().await;
 
 	// check that NEW block is imported from announce message
 	let new_hash = net.peer(0).push_blocks(1, false);
@@ -665,7 +665,7 @@ async fn can_sync_to_peers_with_wrong_common_block() {
 	let fork_hash = net.peer(0).push_blocks_at(BlockId::Number(0), 2, false);
 	net.peer(1).push_blocks_at(BlockId::Number(0), 2, false);
 	// wait for connection
-	net.wait_until_connected().await;
+	net.run_until_connected().await;
 
 	// both peers re-org to the same fork without notifying each other
 	let just = Some((*b"FRNK", Vec::new()));
@@ -673,7 +673,7 @@ async fn can_sync_to_peers_with_wrong_common_block() {
 	net.peer(1).client().finalize_block(fork_hash, just, true).unwrap();
 	let final_hash = net.peer(0).push_blocks(1, false);
 
-	net.wait_until_sync().await;
+	net.run_until_sync().await;
 
 	assert!(net.peer(1).has_block(final_hash));
 }
@@ -726,7 +726,7 @@ async fn sync_blocks_when_block_announce_validator_says_it_is_new_best() {
 		..Default::default()
 	});
 
-	net.wait_until_connected().await;
+	net.run_until_connected().await;
 
 	// Add blocks but don't set them as best
 	let block_hash = net.peer(0).generate_blocks_with_fork_choice(
@@ -737,7 +737,7 @@ async fn sync_blocks_when_block_announce_validator_says_it_is_new_best() {
 	);
 
 	while !net.peer(2).has_block(block_hash) {
-		net.wait_until_idle().await;
+		net.run_until_idle().await;
 	}
 }
 
@@ -769,7 +769,7 @@ async fn wait_until_deferred_block_announce_validation_is_ready() {
 		..Default::default()
 	});
 
-	net.wait_until_connected().await;
+	net.run_until_connected().await;
 
 	// Add blocks but don't set them as best
 	let block_hash = net.peer(0).generate_blocks_with_fork_choice(
@@ -780,7 +780,7 @@ async fn wait_until_deferred_block_announce_validation_is_ready() {
 	);
 
 	while !net.peer(1).has_block(block_hash) {
-		net.wait_until_idle().await;
+		net.run_until_idle().await;
 	}
 }
 
@@ -798,15 +798,15 @@ async fn sync_to_tip_requires_that_sync_protocol_is_informed_about_best_block() 
 
 	// Add a node and wait until they are connected
 	net.add_full_peer_with_config(Default::default());
-	net.wait_until_connected().await;
-	net.wait_until_idle().await;
+	net.run_until_connected().await;
+	net.run_until_idle().await;
 
 	// The peer should not have synced the block.
 	assert!(!net.peer(1).has_block(block_hash));
 
 	// Make sync protocol aware of the best block
 	net.peer(0).network_service().new_best_block_imported(block_hash, 3);
-	net.wait_until_idle().await;
+	net.run_until_idle().await;
 
 	// Connect another node that should now sync to the tip
 	net.add_full_peer_with_config(FullPeerConfig {
@@ -843,8 +843,8 @@ async fn sync_to_tip_when_we_sync_together_with_multiple_peers() {
 	net.peer(1)
 		.push_blocks_at_without_informing_sync(BlockId::Number(0), 5_000, false, false);
 
-	net.wait_until_connected().await;
-	net.wait_until_idle().await;
+	net.run_until_connected().await;
+	net.run_until_idle().await;
 
 	assert!(!net.peer(2).has_block(block_hash));
 
@@ -852,7 +852,7 @@ async fn sync_to_tip_when_we_sync_together_with_multiple_peers() {
 	net.peer(0).network_service().announce_block(block_hash, None);
 
 	while !net.peer(2).has_block(block_hash) && !net.peer(1).has_block(block_hash) {
-		net.wait_until_idle().await;
+		net.run_until_idle().await;
 	}
 }
 
@@ -914,7 +914,7 @@ async fn block_announce_data_is_propagated() {
 	net.peer(0).announce_block(block_hash, Some(vec![137]));
 
 	while !net.peer(1).has_block(block_hash) || !net.peer(2).has_block(block_hash) {
-		net.wait_until_idle().await;
+		net.run_until_idle().await;
 	}
 }
 
@@ -951,12 +951,12 @@ async fn continue_to_sync_after_some_block_announcement_verifications_failed() {
 		..Default::default()
 	});
 
-	net.wait_until_connected().await;
-	net.wait_until_idle().await;
+	net.run_until_connected().await;
+	net.run_until_idle().await;
 
 	let block_hash = net.peer(0).push_blocks(500, true);
 
-	net.wait_until_sync().await;
+	net.run_until_sync().await;
 	assert!(net.peer(1).has_block(block_hash));
 }
 
@@ -969,7 +969,7 @@ async fn multiple_requests_are_accepted_as_long_as_they_are_not_fulfilled() {
 	sp_tracing::try_init_simple();
 	let mut net = JustificationTestNet::new(2);
 	net.peer(0).push_blocks(10, false);
-	net.wait_until_sync().await;
+	net.run_until_sync().await;
 
 	let hashof10 = net.peer(1).client().header(&BlockId::Number(10)).unwrap().unwrap().hash();
 
@@ -986,7 +986,7 @@ async fn multiple_requests_are_accepted_as_long_as_they_are_not_fulfilled() {
 		// justification request.
 		tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
 		net.peer(0).push_blocks(1, false);
-		net.wait_until_sync().await;
+		net.run_until_sync().await;
 		assert_eq!(1, net.peer(0).num_peers());
 	}
 
@@ -1025,7 +1025,7 @@ async fn syncs_all_forks_from_single_peer() {
 	net.peer(1).push_blocks(10, false);
 
 	// poll until the two nodes connect, otherwise announcing the block will not work
-	net.wait_until_connected().await;
+	net.run_until_connected().await;
 
 	// Peer 0 produces new blocks and announces.
 	let branch1 = net.peer(0).push_blocks_at(BlockId::Number(10), 2, true);
@@ -1043,7 +1043,7 @@ async fn syncs_all_forks_from_single_peer() {
 	// Peer 0 produces and announces another fork
 	let branch2 = net.peer(0).push_blocks_at(BlockId::Number(10), 2, false);
 
-	net.wait_until_sync().await;
+	net.run_until_sync().await;
 
 	// Peer 1 should have both branches,
 	assert!(net.peer(1).client().header(&BlockId::Hash(branch1)).unwrap().is_some());
@@ -1063,14 +1063,14 @@ async fn syncs_after_missing_announcement() {
 	net.peer(0).push_blocks(10, false);
 	net.peer(1).push_blocks(10, false);
 
-	net.wait_until_connected().await;
+	net.run_until_connected().await;
 
 	// Peer 0 produces a new block and announces. Peer 1 ignores announcement.
 	net.peer(0).push_blocks_at(BlockId::Number(10), 1, false);
 	// Peer 0 produces another block and announces.
 	let final_block = net.peer(0).push_blocks_at(BlockId::Number(11), 1, false);
 	net.peer(1).push_blocks_at(BlockId::Number(10), 1, true);
-	net.wait_until_sync().await;
+	net.run_until_sync().await;
 	assert!(net.peer(1).client().header(&BlockId::Hash(final_block)).unwrap().is_some());
 }
 
@@ -1119,7 +1119,7 @@ async fn syncs_state() {
 		net.add_full_peer_with_config(config_two);
 		net.peer(0).push_blocks(64, false);
 		// Wait for peer 1 to sync header chain.
-		net.wait_until_sync().await;
+		net.run_until_sync().await;
 		assert!(!net.peer(1).client().has_state_at(&BlockId::Number(64)));
 
 		let just = (*b"FRNK", Vec::new());
@@ -1198,7 +1198,7 @@ async fn syncs_indexed_blocks() {
 		.unwrap()
 		.is_none());
 
-	net.wait_until_sync().await;
+	net.run_until_sync().await;
 	assert!(net
 		.peer(1)
 		.client()
@@ -1225,7 +1225,7 @@ async fn warp_sync() {
 	net.peer(1).push_blocks(64, false);
 	net.peer(2).push_blocks(64, false);
 	// Wait for peer 1 to sync state.
-	net.wait_until_sync().await;
+	net.run_until_sync().await;
 	assert!(!net.peer(3).client().has_state_at(&BlockId::Number(1)));
 	assert!(net.peer(3).client().has_state_at(&BlockId::Number(64)));
 
@@ -1265,7 +1265,7 @@ async fn syncs_huge_blocks() {
 		builder.build().unwrap().block
 	});
 
-	net.wait_until_sync().await;
+	net.run_until_sync().await;
 	assert_eq!(net.peer(0).client.info().best_number, 33);
 	assert_eq!(net.peer(1).client.info().best_number, 33);
 }
