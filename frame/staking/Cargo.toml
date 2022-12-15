@@ -62,7 +62,6 @@ std = [
 	"sp-runtime/std",
 	"sp-staking/std",
 	"pallet-session/std",
-	"pallet-bags-list/std",
 	"frame-system/std",
 	"pallet-authorship/std",
 	"sp-application-crypto/std",
