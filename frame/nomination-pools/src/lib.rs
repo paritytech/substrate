@@ -1526,6 +1526,7 @@ pub mod pallet {
 		/// * This call will *not* dust the member account, so the member must have at least
 		///   `existential deposit + amount` in their account.
 		/// * Only a pool with [`PoolState::Open`] can be joined
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::join())]
 		pub fn join(
 			origin: OriginFor<T>,
@@ -1583,6 +1584,7 @@ pub mod pallet {
 		// NOTE: this transaction is implemented with the sole purpose of readability and
 		// correctness, not optimization. We read/write several storage items multiple times instead
 		// of just once, in the spirit reusing code.
+		#[pallet::call_index(1)]
 		#[pallet::weight(
 			T::WeightInfo::bond_extra_transfer()
 			.max(T::WeightInfo::bond_extra_reward())
@@ -1680,6 +1682,7 @@ pub mod pallet {
 		///
 		/// The member will earn rewards pro rata based on the members stake vs the sum of the
 		/// members in the pools stake. Rewards do not "expire".
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::claim_payout())]
 		pub fn claim_payout(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -1716,9 +1719,13 @@ pub mod pallet {
 		/// # Note
 		///
 		/// If there are too many unlocking chunks to unbond with the pool account,
-		/// [`Call::pool_withdraw_unbonded`] can be called to try and minimize unlocking chunks. If
-		/// there are too many unlocking chunks, the result of this call will likely be the
-		/// `NoMoreChunks` error from the staking system.
+		/// [`Call::pool_withdraw_unbonded`] can be called to try and minimize unlocking chunks.
+		/// The [`StakingInterface::unbond`] will implicitly call [`Call::pool_withdraw_unbonded`]
+		/// to try to free chunks if necessary (ie. if unbound was called and no unlocking chunks
+		/// are available). However, it may not be possible to release the current unlocking chunks,
+		/// in which case, the result of this call will likely be the `NoMoreChunks` error from the
+		/// staking system.
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::unbond())]
 		pub fn unbond(
 			origin: OriginFor<T>,
@@ -1795,6 +1802,7 @@ pub mod pallet {
 		/// can be cleared by withdrawing. In the case there are too many unlocking chunks, the user
 		/// would probably see an error like `NoMoreChunks` emitted from the staking system when
 		/// they attempt to unbond.
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::pool_withdraw_unbonded(*num_slashing_spans))]
 		pub fn pool_withdraw_unbonded(
 			origin: OriginFor<T>,
@@ -1829,6 +1837,7 @@ pub mod pallet {
 		/// # Note
 		///
 		/// If the target is the depositor, the pool will be destroyed.
+		#[pallet::call_index(5)]
 		#[pallet::weight(
 			T::WeightInfo::withdraw_unbonded_kill(*num_slashing_spans)
 		)]
@@ -1950,6 +1959,7 @@ pub mod pallet {
 		///
 		/// In addition to `amount`, the caller will transfer the existential deposit; so the caller
 		/// needs at have at least `amount + existential_deposit` transferrable.
+		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::create())]
 		pub fn create(
 			origin: OriginFor<T>,
@@ -1974,6 +1984,7 @@ pub mod pallet {
 		///
 		/// same as `create` with the inclusion of
 		/// * `pool_id` - `A valid PoolId.
+		#[pallet::call_index(7)]
 		#[pallet::weight(T::WeightInfo::create())]
 		pub fn create_with_pool_id(
 			origin: OriginFor<T>,
@@ -1998,6 +2009,7 @@ pub mod pallet {
 		///
 		/// This directly forward the call to the staking pallet, on behalf of the pool bonded
 		/// account.
+		#[pallet::call_index(8)]
 		#[pallet::weight(T::WeightInfo::nominate(validators.len() as u32))]
 		pub fn nominate(
 			origin: OriginFor<T>,
@@ -2020,6 +2032,7 @@ pub mod pallet {
 		/// 1. signed by the state toggler, or the root role of the pool,
 		/// 2. if the pool conditions to be open are NOT met (as described by `ok_to_be_open`), and
 		///    then the state of the pool can be permissionlessly changed to `Destroying`.
+		#[pallet::call_index(9)]
 		#[pallet::weight(T::WeightInfo::set_state())]
 		pub fn set_state(
 			origin: OriginFor<T>,
@@ -2048,6 +2061,7 @@ pub mod pallet {
 		///
 		/// The dispatch origin of this call must be signed by the state toggler, or the root role
 		/// of the pool.
+		#[pallet::call_index(10)]
 		#[pallet::weight(T::WeightInfo::set_metadata(metadata.len() as u32))]
 		pub fn set_metadata(
 			origin: OriginFor<T>,
@@ -2079,6 +2093,7 @@ pub mod pallet {
 		/// * `max_pools` - Set [`MaxPools`].
 		/// * `max_members` - Set [`MaxPoolMembers`].
 		/// * `max_members_per_pool` - Set [`MaxPoolMembersPerPool`].
+		#[pallet::call_index(11)]
 		#[pallet::weight(T::WeightInfo::set_configs())]
 		pub fn set_configs(
 			origin: OriginFor<T>,
@@ -2115,6 +2130,7 @@ pub mod pallet {
 		///
 		/// It emits an event, notifying UIs of the role change. This event is quite relevant to
 		/// most pool members and they should be informed of changes to pool roles.
+		#[pallet::call_index(12)]
 		#[pallet::weight(T::WeightInfo::update_roles())]
 		pub fn update_roles(
 			origin: OriginFor<T>,
@@ -2167,6 +2183,7 @@ pub mod pallet {
 		///
 		/// This directly forward the call to the staking pallet, on behalf of the pool bonded
 		/// account.
+		#[pallet::call_index(13)]
 		#[pallet::weight(T::WeightInfo::chill())]
 		pub fn chill(origin: OriginFor<T>, pool_id: PoolId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
