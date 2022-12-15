@@ -211,7 +211,7 @@ update-node-template:
   # taking into account the 202 (as of Dec 07, 2022) publishable Substrate crates, that would equate
   # to roughly 202 minutes of delay, or 3h and 22 minutes. As such, the job needs to have a much
   # higher timeout than average.
-  timeout:                         5h
+  timeout:                         9h
   # A custom publishing environment is used for us to be able to set up protected secrets
   # specifically for it
   environment: publish-crates
