@@ -183,7 +183,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type SlashDeferDuration: Get<EraIndex>;
 
-		/// The origin which can cancel a deferred slash. Root can always do this.
+		/// The origin which can manage critical staking operations.
+		///
+		/// Set of operations that needs StakingAdminOrigin: `set_config`, changing validator count,
+		/// force era changes, `force_unstake`, `cancel_deferred_slash`.
 		type StakingAdminOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Interface for interacting with a session pallet.
@@ -1278,7 +1281,7 @@ pub mod pallet {
 
 		/// Sets the ideal number of validators.
 		///
-		/// The dispatch origin must be Root.
+		/// The dispatch origin must be `T::StakingAdminOrigin`.
 		///
 		/// # <weight>
 		/// Weight: O(1)
@@ -1304,7 +1307,7 @@ pub mod pallet {
 		/// Increments the ideal number of validators upto maximum of
 		/// `ElectionProviderBase::MaxWinners`.
 		///
-		/// The dispatch origin must be Root.
+		/// The dispatch origin must be `T::StakingAdminOrigin`.
 		///
 		/// # <weight>
 		/// Same as [`Self::set_validator_count`].
@@ -1330,7 +1333,7 @@ pub mod pallet {
 		/// Scale up the ideal number of validators by a factor upto maximum of
 		/// `ElectionProviderBase::MaxWinners`.
 		///
-		/// The dispatch origin must be Root.
+		/// The dispatch origin must be `T::StakingAdminOrigin`.
 		///
 		/// # <weight>
 		/// Same as [`Self::set_validator_count`].
@@ -1353,7 +1356,7 @@ pub mod pallet {
 
 		/// Force there to be no new eras indefinitely.
 		///
-		/// The dispatch origin must be Root.
+		/// The dispatch origin must be `T::StakingAdminOrigin`.
 		///
 		/// # Warning
 		///
@@ -1377,7 +1380,7 @@ pub mod pallet {
 		/// Force there to be a new era at the end of the next session. After this, it will be
 		/// reset to normal (non-forced) behaviour.
 		///
-		/// The dispatch origin must be Root.
+		/// The dispatch origin must be `T::StakingAdminOrigin`.
 		///
 		/// # Warning
 		///
@@ -1414,7 +1417,7 @@ pub mod pallet {
 
 		/// Force a current staker to become completely unstaked, immediately.
 		///
-		/// The dispatch origin must be Root.
+		/// The dispatch origin must be `T::StakingAdminOrigin`.
 		#[pallet::call_index(15)]
 		#[pallet::weight(T::WeightInfo::force_unstake(*num_slashing_spans))]
 		pub fn force_unstake(
@@ -1434,7 +1437,7 @@ pub mod pallet {
 
 		/// Force there to be a new era at the end of sessions indefinitely.
 		///
-		/// The dispatch origin must be Root.
+		/// The dispatch origin must be `T::StakingAdminOrigin`.
 		///
 		/// # Warning
 		///
@@ -1451,7 +1454,7 @@ pub mod pallet {
 
 		/// Cancel enactment of a deferred slash.
 		///
-		/// Can be called by the `T::SlashCancelOrigin`.
+		/// Can be called by the `T::StakingAdminOrigin`.
 		///
 		/// Parameters: era and indices of the slashes for that era to kill.
 		#[pallet::call_index(17)]
@@ -1642,7 +1645,7 @@ pub mod pallet {
 		/// * `min_commission`: The minimum amount of commission that each validators must maintain.
 		///   This is checked only upon calling `validate`. Existing validators are not affected.
 		///
-		/// RuntimeOrigin must be Root to call this function.
+		/// RuntimeOrigin must be `T::StakingAdminOrigin` to call this function.
 		///
 		/// NOTE: Existing nominators and validators will not be affected by this update.
 		/// to kick people under the new limits, `chill_other` should be called.
