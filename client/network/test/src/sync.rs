@@ -21,11 +21,10 @@ use futures::Future;
 use sp_consensus::{block_validation::Validation, BlockOrigin};
 use sp_runtime::Justifications;
 use substrate_test_runtime::Header;
-use tokio::runtime::Handle;
 
 async fn test_ancestor_search_when_common_is(n: usize) {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 3);
+	let mut net = TestNet::new(3);
 
 	net.peer(0).push_blocks(n, false);
 	net.peer(1).push_blocks(n, false);
@@ -43,7 +42,7 @@ async fn test_ancestor_search_when_common_is(n: usize) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn sync_peers_works() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 3);
+	let mut net = TestNet::new(3);
 
 	futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
@@ -60,7 +59,7 @@ async fn sync_peers_works() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn sync_cycle_from_offline_to_syncing_to_offline() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 3);
+	let mut net = TestNet::new(3);
 	for peer in 0..3 {
 		// Offline, and not major syncing.
 		assert!(net.peer(peer).is_offline());
@@ -118,7 +117,7 @@ async fn sync_cycle_from_offline_to_syncing_to_offline() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn syncing_node_not_major_syncing_when_disconnected() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 3);
+	let mut net = TestNet::new(3);
 
 	// Generate blocks.
 	net.peer(2).push_blocks(100, false);
@@ -154,7 +153,7 @@ async fn syncing_node_not_major_syncing_when_disconnected() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn sync_from_two_peers_works() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 3);
+	let mut net = TestNet::new(3);
 	net.peer(1).push_blocks(100, false);
 	net.peer(2).push_blocks(100, false);
 	net.wait_until_sync().await;
@@ -166,7 +165,7 @@ async fn sync_from_two_peers_works() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn sync_from_two_peers_with_ancestry_search_works() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 3);
+	let mut net = TestNet::new(3);
 	net.peer(0).push_blocks(10, true);
 	net.peer(1).push_blocks(100, false);
 	net.peer(2).push_blocks(100, false);
@@ -178,7 +177,7 @@ async fn sync_from_two_peers_with_ancestry_search_works() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn ancestry_search_works_when_backoff_is_one() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 3);
+	let mut net = TestNet::new(3);
 
 	net.peer(0).push_blocks(1, false);
 	net.peer(1).push_blocks(2, false);
@@ -192,7 +191,7 @@ async fn ancestry_search_works_when_backoff_is_one() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn ancestry_search_works_when_ancestor_is_genesis() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 3);
+	let mut net = TestNet::new(3);
 
 	net.peer(0).push_blocks(13, true);
 	net.peer(1).push_blocks(100, false);
@@ -221,7 +220,7 @@ async fn ancestry_search_works_when_common_is_hundred() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn sync_long_chain_works() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 2);
+	let mut net = TestNet::new(2);
 	net.peer(1).push_blocks(500, false);
 	net.wait_until_sync().await;
 	let peer1 = &net.peers()[1];
@@ -231,7 +230,7 @@ async fn sync_long_chain_works() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn sync_no_common_longer_chain_fails() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 3);
+	let mut net = TestNet::new(3);
 	net.peer(0).push_blocks(20, true);
 	net.peer(1).push_blocks(20, false);
 	futures::future::poll_fn::<(), _>(|cx| {
@@ -250,7 +249,7 @@ async fn sync_no_common_longer_chain_fails() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn sync_justifications() {
 	sp_tracing::try_init_simple();
-	let mut net = JustificationTestNet::new(Handle::current(), 3);
+	let mut net = JustificationTestNet::new(3);
 	net.peer(0).push_blocks(20, false);
 	net.wait_until_sync().await;
 
@@ -302,7 +301,7 @@ async fn sync_justifications() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn sync_justifications_across_forks() {
 	sp_tracing::try_init_simple();
-	let mut net = JustificationTestNet::new(Handle::current(), 3);
+	let mut net = JustificationTestNet::new(3);
 	// we push 5 blocks
 	net.peer(0).push_blocks(5, false);
 	// and then two forks 5 and 6 blocks long
@@ -338,7 +337,7 @@ async fn sync_justifications_across_forks() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn sync_after_fork_works() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 3);
+	let mut net = TestNet::new(3);
 	net.peer(0).push_blocks(30, false);
 	net.peer(1).push_blocks(30, false);
 	net.peer(2).push_blocks(30, false);
@@ -361,7 +360,7 @@ async fn sync_after_fork_works() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn syncs_all_forks() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 4);
+	let mut net = TestNet::new(4);
 	net.peer(0).push_blocks(2, false);
 	net.peer(1).push_blocks(2, false);
 
@@ -379,7 +378,7 @@ async fn syncs_all_forks() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn own_blocks_are_announced() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 3);
+	let mut net = TestNet::new(3);
 	net.wait_until_sync().await; // connect'em
 	net.peer(0)
 		.generate_blocks(1, BlockOrigin::Own, |builder| builder.build().unwrap().block);
@@ -396,7 +395,7 @@ async fn own_blocks_are_announced() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn can_sync_small_non_best_forks() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 2);
+	let mut net = TestNet::new(2);
 	net.peer(0).push_blocks(30, false);
 	net.peer(1).push_blocks(30, false);
 
@@ -461,7 +460,7 @@ async fn can_sync_small_non_best_forks() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn can_sync_forks_ahead_of_the_best_chain() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 2);
+	let mut net = TestNet::new(2);
 	net.peer(0).push_blocks(1, false);
 	net.peer(1).push_blocks(1, false);
 
@@ -494,7 +493,7 @@ async fn can_sync_forks_ahead_of_the_best_chain() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn can_sync_explicit_forks() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 2);
+	let mut net = TestNet::new(2);
 	net.peer(0).push_blocks(30, false);
 	net.peer(1).push_blocks(30, false);
 
@@ -550,7 +549,7 @@ async fn can_sync_explicit_forks() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn syncs_header_only_forks() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 0);
+	let mut net = TestNet::new(0);
 	net.add_full_peer_with_config(Default::default());
 	net.add_full_peer_with_config(FullPeerConfig { blocks_pruning: Some(3), ..Default::default() });
 	net.peer(0).push_blocks(2, false);
@@ -573,7 +572,7 @@ async fn syncs_header_only_forks() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn does_not_sync_announced_old_best_block() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 3);
+	let mut net = TestNet::new(3);
 
 	let old_hash = net.peer(0).push_blocks(1, false);
 	let old_hash_with_parent = net.peer(0).push_blocks(1, false);
@@ -603,7 +602,7 @@ async fn does_not_sync_announced_old_best_block() {
 async fn full_sync_requires_block_body() {
 	// Check that we don't sync headers-only in full mode.
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 2);
+	let mut net = TestNet::new(2);
 
 	net.peer(0).push_headers(1);
 	// Wait for nodes to connect
@@ -640,7 +639,7 @@ async fn imports_stale_once() {
 	}
 
 	// given the network with 2 full nodes
-	let mut net = TestNet::new(Handle::current(), 2);
+	let mut net = TestNet::new(2);
 
 	// let them connect to each other
 	net.wait_until_sync().await;
@@ -659,7 +658,7 @@ async fn imports_stale_once() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn can_sync_to_peers_with_wrong_common_block() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 2);
+	let mut net = TestNet::new(2);
 
 	net.peer(0).push_blocks(2, true);
 	net.peer(1).push_blocks(2, true);
@@ -719,7 +718,7 @@ impl BlockAnnounceValidator<Block> for FailingBlockAnnounceValidator {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn sync_blocks_when_block_announce_validator_says_it_is_new_best() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 0);
+	let mut net = TestNet::new(0);
 	net.add_full_peer_with_config(Default::default());
 	net.add_full_peer_with_config(Default::default());
 	net.add_full_peer_with_config(FullPeerConfig {
@@ -763,7 +762,7 @@ impl BlockAnnounceValidator<Block> for DeferredBlockAnnounceValidator {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn wait_until_deferred_block_announce_validation_is_ready() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 0);
+	let mut net = TestNet::new(0);
 	net.add_full_peer_with_config(Default::default());
 	net.add_full_peer_with_config(FullPeerConfig {
 		block_announce_validator: Some(Box::new(NewBestBlockAnnounceValidator)),
@@ -790,7 +789,7 @@ async fn wait_until_deferred_block_announce_validation_is_ready() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn sync_to_tip_requires_that_sync_protocol_is_informed_about_best_block() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 1);
+	let mut net = TestNet::new(1);
 
 	// Produce some blocks
 	let block_hash =
@@ -835,7 +834,7 @@ async fn sync_to_tip_requires_that_sync_protocol_is_informed_about_best_block() 
 async fn sync_to_tip_when_we_sync_together_with_multiple_peers() {
 	sp_tracing::try_init_simple();
 
-	let mut net = TestNet::new(Handle::current(), 3);
+	let mut net = TestNet::new(3);
 
 	let block_hash =
 		net.peer(0)
@@ -884,7 +883,7 @@ async fn block_announce_data_is_propagated() {
 	}
 
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 1);
+	let mut net = TestNet::new(1);
 
 	net.add_full_peer_with_config(FullPeerConfig {
 		block_announce_validator: Some(Box::new(TestBlockAnnounceValidator)),
@@ -945,7 +944,7 @@ async fn continue_to_sync_after_some_block_announcement_verifications_failed() {
 	}
 
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 1);
+	let mut net = TestNet::new(1);
 
 	net.add_full_peer_with_config(FullPeerConfig {
 		block_announce_validator: Some(Box::new(TestBlockAnnounceValidator)),
@@ -968,7 +967,7 @@ async fn continue_to_sync_after_some_block_announcement_verifications_failed() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn multiple_requests_are_accepted_as_long_as_they_are_not_fulfilled() {
 	sp_tracing::try_init_simple();
-	let mut net = JustificationTestNet::new(Handle::current(), 2);
+	let mut net = JustificationTestNet::new(2);
 	net.peer(0).push_blocks(10, false);
 	net.wait_until_sync().await;
 
@@ -1021,7 +1020,7 @@ async fn multiple_requests_are_accepted_as_long_as_they_are_not_fulfilled() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn syncs_all_forks_from_single_peer() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 2);
+	let mut net = TestNet::new(2);
 	net.peer(0).push_blocks(10, false);
 	net.peer(1).push_blocks(10, false);
 
@@ -1054,7 +1053,7 @@ async fn syncs_all_forks_from_single_peer() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn syncs_after_missing_announcement() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 0);
+	let mut net = TestNet::new(0);
 	net.add_full_peer_with_config(Default::default());
 	// Set peer 1 to ignore announcement
 	net.add_full_peer_with_config(FullPeerConfig {
@@ -1079,7 +1078,7 @@ async fn syncs_after_missing_announcement() {
 async fn syncs_state() {
 	sp_tracing::try_init_simple();
 	for skip_proofs in &[false, true] {
-		let mut net = TestNet::new(Handle::current(), 0);
+		let mut net = TestNet::new(0);
 		let mut genesis_storage: sp_core::storage::Storage = Default::default();
 		genesis_storage.top.insert(b"additional_key".to_vec(), vec![1]);
 		let mut child_data: std::collections::BTreeMap<Vec<u8>, Vec<u8>> = Default::default();
@@ -1160,7 +1159,7 @@ async fn syncs_state() {
 async fn syncs_indexed_blocks() {
 	use sp_runtime::traits::Hash;
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 0);
+	let mut net = TestNet::new(0);
 	let mut n: u64 = 0;
 	net.add_full_peer_with_config(FullPeerConfig { storage_chain: true, ..Default::default() });
 	net.add_full_peer_with_config(FullPeerConfig {
@@ -1212,7 +1211,7 @@ async fn syncs_indexed_blocks() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn warp_sync() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 0);
+	let mut net = TestNet::new(0);
 	// Create 3 synced peers and 1 peer trying to warp sync.
 	net.add_full_peer_with_config(Default::default());
 	net.add_full_peer_with_config(Default::default());
@@ -1249,7 +1248,7 @@ async fn syncs_huge_blocks() {
 	use substrate_test_runtime_client::BlockBuilderExt;
 
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(Handle::current(), 2);
+	let mut net = TestNet::new(2);
 
 	// Increase heap space for bigger blocks.
 	net.peer(0).generate_blocks(1, BlockOrigin::Own, |mut builder| {

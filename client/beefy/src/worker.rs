@@ -983,7 +983,6 @@ pub(crate) mod tests {
 		runtime::{Block, Digest, DigestItem, Header, H256},
 		Backend,
 	};
-	use tokio::runtime::Handle;
 
 	impl<B: super::Block> PersistedState<B> {
 		pub fn voting_oracle(&self) -> &VoterOracle<B> {
@@ -1299,7 +1298,7 @@ pub(crate) mod tests {
 	async fn keystore_vs_validator_set() {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-		let mut net = BeefyTestNet::new(Handle::current(), 1);
+		let mut net = BeefyTestNet::new(1);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
 
 		// keystore doesn't contain other keys than validators'
@@ -1322,7 +1321,7 @@ pub(crate) mod tests {
 	async fn should_finalize_correctly() {
 		let keys = [Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(&keys), 0).unwrap();
-		let mut net = BeefyTestNet::new(Handle::current(), 1);
+		let mut net = BeefyTestNet::new(1);
 		let backend = net.peer(0).client().as_backend();
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
 		// remove default session, will manually add custom one.
@@ -1422,7 +1421,7 @@ pub(crate) mod tests {
 	async fn should_init_session() {
 		let keys = &[Keyring::Alice, Keyring::Bob];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-		let mut net = BeefyTestNet::new(Handle::current(), 1);
+		let mut net = BeefyTestNet::new(1);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
 
 		let worker_rounds = worker.active_rounds().unwrap();
@@ -1453,7 +1452,7 @@ pub(crate) mod tests {
 	async fn should_triage_votes_and_process_later() {
 		let keys = &[Keyring::Alice, Keyring::Bob];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-		let mut net = BeefyTestNet::new(Handle::current(), 1);
+		let mut net = BeefyTestNet::new(1);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
 		// remove default session, will manually add custom one.
 		worker.persisted_state.voting_oracle.sessions.clear();

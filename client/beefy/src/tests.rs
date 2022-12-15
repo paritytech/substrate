@@ -47,7 +47,7 @@ use sc_consensus::{
 use sc_network::{config::RequestResponseConfig, ProtocolName};
 use sc_network_test::{
 	Block, BlockImportAdapter, FullPeerConfig, PassThroughVerifier, Peer, PeersClient,
-	PeersFullClient, TestNetFactory, WithRuntime,
+	PeersFullClient, TestNetFactory,
 };
 use sc_utils::notification::NotificationReceiver;
 use serde::{Deserialize, Serialize};
@@ -64,7 +64,7 @@ use sp_runtime::{
 };
 use std::{collections::HashMap, marker::PhantomData, sync::Arc, task::Poll};
 use substrate_test_runtime_client::{runtime::Header, ClientExt};
-use tokio::{runtime::Handle, time::Duration};
+use tokio::time::Duration;
 
 const GENESIS_HASH: H256 = H256::zero();
 fn beefy_gossip_proto_name() -> ProtocolName {
@@ -103,23 +103,16 @@ pub(crate) struct PeerData {
 		Mutex<Option<BeefyJustifsRequestHandler<Block, PeersFullClient>>>,
 }
 
+#[derive(Default)]
 pub(crate) struct BeefyTestNet {
-	rt_handle: Handle,
 	peers: Vec<BeefyPeer>,
 }
 
-impl WithRuntime for BeefyTestNet {
-	fn with_runtime(rt_handle: Handle) -> Self {
-		BeefyTestNet { rt_handle, peers: Vec::new() }
-	}
-	fn rt_handle(&self) -> &Handle {
-		&self.rt_handle
-	}
-}
-
 impl BeefyTestNet {
-	pub(crate) fn new(rt_handle: Handle, n_authority: usize) -> Self {
-		let mut net = BeefyTestNet::with_runtime(rt_handle);
+	pub(crate) fn new(n_authority: usize) -> Self {
+		let mut net = BeefyTestNet {
+			peers: Vec::with_capacity(n_authority),
+		};
 
 		for i in 0..n_authority {
 			let (rx, cfg) = on_demand_justifications_protocol_config(GENESIS_HASH, None);
@@ -538,7 +531,7 @@ async fn beefy_finalizing_blocks() {
 	let session_len = 10;
 	let min_block_delta = 4;
 
-	let mut net = BeefyTestNet::new(Handle::current(), 2);
+	let mut net = BeefyTestNet::new(2);
 
 	let api = Arc::new(two_validators::TestApi {});
 	let beefy_peers = peers.iter().enumerate().map(|(id, key)| (id, key, api.clone())).collect();
@@ -577,7 +570,7 @@ async fn lagging_validators() {
 	let session_len = 30;
 	let min_block_delta = 1;
 
-	let mut net = BeefyTestNet::new(Handle::current(), 2);
+	let mut net = BeefyTestNet::new(2);
 	let api = Arc::new(two_validators::TestApi {});
 	let beefy_peers = peers.iter().enumerate().map(|(id, key)| (id, key, api.clone())).collect();
 	tokio::spawn(initialize_beefy(&mut net, beefy_peers, min_block_delta));
@@ -653,7 +646,7 @@ async fn correct_beefy_payload() {
 	let session_len = 20;
 	let min_block_delta = 2;
 
-	let mut net = BeefyTestNet::new(Handle::current(), 4);
+	let mut net = BeefyTestNet::new(4);
 
 	// Alice, Bob, Charlie will vote on good payloads
 	let good_api = Arc::new(four_validators::TestApi {});
@@ -715,7 +708,7 @@ async fn beefy_importing_blocks() {
 
 	sp_tracing::try_init_simple();
 
-	let mut net = BeefyTestNet::new(Handle::current(), 2);
+	let mut net = BeefyTestNet::new(2);
 
 	let client = net.peer(0).client().clone();
 	let (mut block_import, _, peer_data) = net.make_block_import(client.clone());
@@ -866,7 +859,7 @@ async fn voter_initialization() {
 	// Should vote on all mandatory blocks no matter the `min_block_delta`.
 	let min_block_delta = 10;
 
-	let mut net = BeefyTestNet::new(Handle::current(), 2);
+	let mut net = BeefyTestNet::new(2);
 	let api = Arc::new(two_validators::TestApi {});
 	let beefy_peers = peers.iter().enumerate().map(|(id, key)| (id, key, api.clone())).collect();
 	tokio::spawn(initialize_beefy(&mut net, beefy_peers, min_block_delta));
@@ -897,7 +890,7 @@ async fn on_demand_beefy_justification_sync() {
 	let session_len = 5;
 	let min_block_delta = 5;
 
-	let mut net = BeefyTestNet::new(Handle::current(), 4);
+	let mut net = BeefyTestNet::new(4);
 
 	// Alice, Bob, Charlie start first and make progress through voting.
 	let api = Arc::new(four_validators::TestApi {});
@@ -968,7 +961,7 @@ async fn on_demand_beefy_justification_sync() {
 async fn should_initialize_voter_at_genesis() {
 	let keys = &[BeefyKeyring::Alice];
 	let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-	let mut net = BeefyTestNet::new(Handle::current(), 1);
+	let mut net = BeefyTestNet::new(1);
 	let backend = net.peer(0).client().as_backend();
 
 	// push 15 blocks with `AuthorityChange` digests every 10 blocks
@@ -1013,7 +1006,7 @@ async fn should_initialize_voter_at_genesis() {
 async fn should_initialize_voter_when_last_final_is_session_boundary() {
 	let keys = &[BeefyKeyring::Alice];
 	let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-	let mut net = BeefyTestNet::new(Handle::current(), 1);
+	let mut net = BeefyTestNet::new(1);
 	let backend = net.peer(0).client().as_backend();
 
 	// push 15 blocks with `AuthorityChange` digests every 10 blocks
@@ -1073,7 +1066,7 @@ async fn should_initialize_voter_when_last_final_is_session_boundary() {
 async fn should_initialize_voter_at_latest_finalized() {
 	let keys = &[BeefyKeyring::Alice];
 	let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-	let mut net = BeefyTestNet::new(Handle::current(), 1);
+	let mut net = BeefyTestNet::new(1);
 	let backend = net.peer(0).client().as_backend();
 
 	// push 15 blocks with `AuthorityChange` digests every 10 blocks

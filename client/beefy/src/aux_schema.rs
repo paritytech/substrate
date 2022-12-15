@@ -77,7 +77,6 @@ pub(crate) mod tests {
 	use super::*;
 	use crate::tests::BeefyTestNet;
 	use sc_network_test::TestNetFactory;
-	use tokio::runtime::Handle;
 
 	// also used in tests.rs
 	pub fn verify_persisted_version<B: BlockT, BE: Backend<B>>(backend: &BE) -> bool {
@@ -87,7 +86,7 @@ pub(crate) mod tests {
 
 	#[tokio::test]
 	async fn should_load_persistent_sanity_checks() {
-		let mut net = BeefyTestNet::new(Handle::current(), 1);
+		let mut net = BeefyTestNet::new(1);
 		let backend = net.peer(0).client().as_backend();
 
 		// version not available in db -> None

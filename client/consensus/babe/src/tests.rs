@@ -49,7 +49,6 @@ use sp_runtime::{
 };
 use sp_timestamp::Timestamp;
 use std::{cell::RefCell, task::Poll, time::Duration};
-use tokio::runtime::{Handle, Runtime};
 
 type Item = DigestItem;
 
@@ -227,18 +226,9 @@ where
 
 type BabePeer = Peer<Option<PeerData>, BabeBlockImport>;
 
+#[derive(Default)]
 pub struct BabeTestNet {
-	rt_handle: Handle,
 	peers: Vec<BabePeer>,
-}
-
-impl WithRuntime for BabeTestNet {
-	fn with_runtime(rt_handle: Handle) -> Self {
-		BabeTestNet { rt_handle, peers: Vec::new() }
-	}
-	fn rt_handle(&self) -> &Handle {
-		&self.rt_handle
-	}
 }
 
 type TestHeader = <TestBlock as BlockT>::Header;
@@ -366,12 +356,11 @@ impl TestNetFactory for BabeTestNet {
 	}
 }
 
-#[test]
+#[tokio::test]
 #[should_panic]
-fn rejects_empty_block() {
+async fn rejects_empty_block() {
 	sp_tracing::try_init_simple();
-	let runtime = Runtime::new().unwrap();
-	let mut net = BabeTestNet::new(runtime.handle().clone(), 3);
+	let mut net = BabeTestNet::new(3);
 	let block_builder = |builder: BlockBuilder<_, _, _>| builder.build().unwrap().block;
 	net.mut_peers(|peer| {
 		peer[0].generate_blocks(1, BlockOrigin::NetworkInitialSync, block_builder);
@@ -391,7 +380,7 @@ async fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + '
 
 	MUTATOR.with(|m| *m.borrow_mut() = mutator.clone());
 
-	let net = BabeTestNet::new(Handle::current(), 3);
+	let net = BabeTestNet::new(3);
 
 	let peers = [Sr25519Keyring::Alice, Sr25519Keyring::Bob, Sr25519Keyring::Charlie];
 
@@ -697,7 +686,7 @@ async fn propose_and_import_blocks<Transaction: Send + 'static>(
 
 #[tokio::test]
 async fn importing_block_one_sets_genesis_epoch() {
-	let mut net = BabeTestNet::new(Handle::current(), 1);
+	let mut net = BabeTestNet::new(1);
 
 	let peer = net.peer(0);
 	let data = peer.data.as_ref().expect("babe link set up during initialization");
@@ -737,7 +726,7 @@ async fn importing_block_one_sets_genesis_epoch() {
 
 #[tokio::test]
 async fn revert_prunes_epoch_changes_and_removes_weights() {
-	let mut net = BabeTestNet::new(Handle::current(), 1);
+	let mut net = BabeTestNet::new(1);
 
 	let peer = net.peer(0);
 	let data = peer.data.as_ref().expect("babe link set up during initialization");
@@ -841,7 +830,7 @@ async fn revert_prunes_epoch_changes_and_removes_weights() {
 
 #[tokio::test]
 async fn revert_not_allowed_for_finalized() {
-	let mut net = BabeTestNet::new(Handle::current(), 1);
+	let mut net = BabeTestNet::new(1);
 
 	let peer = net.peer(0);
 	let data = peer.data.as_ref().expect("babe link set up during initialization");
@@ -882,7 +871,7 @@ async fn revert_not_allowed_for_finalized() {
 
 #[tokio::test]
 async fn importing_epoch_change_block_prunes_tree() {
-	let mut net = BabeTestNet::new(Handle::current(), 1);
+	let mut net = BabeTestNet::new(1);
 
 	let peer = net.peer(0);
 	let data = peer.data.as_ref().expect("babe link set up during initialization");
@@ -997,7 +986,7 @@ async fn importing_epoch_change_block_prunes_tree() {
 #[tokio::test]
 #[should_panic]
 async fn verify_slots_are_strictly_increasing() {
-	let mut net = BabeTestNet::new(Handle::current(), 1);
+	let mut net = BabeTestNet::new(1);
 
 	let peer = net.peer(0);
 	let data = peer.data.as_ref().expect("babe link set up during initialization");
@@ -1062,7 +1051,7 @@ fn babe_transcript_generation_match() {
 
 #[tokio::test]
 async fn obsolete_blocks_aux_data_cleanup() {
-	let mut net = BabeTestNet::new(Handle::current(), 1);
+	let mut net = BabeTestNet::new(1);
 
 	let peer = net.peer(0);
 	let data = peer.data.as_ref().expect("babe link set up during initialization");

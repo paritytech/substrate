@@ -660,7 +660,6 @@ mod tests {
 		runtime::{Header, H256},
 		TestClient,
 	};
-	use tokio::runtime::Handle;
 
 	const SLOT_DURATION_MS: u64 = 1000;
 
@@ -718,18 +717,9 @@ mod tests {
 	>;
 	type AuraPeer = Peer<(), PeersClient>;
 
+	#[derive(Default)]
 	pub struct AuraTestNet {
-		rt_handle: Handle,
 		peers: Vec<AuraPeer>,
-	}
-
-	impl WithRuntime for AuraTestNet {
-		fn with_runtime(rt_handle: Handle) -> Self {
-			AuraTestNet { rt_handle, peers: Vec::new() }
-		}
-		fn rt_handle(&self) -> &Handle {
-			&self.rt_handle
-		}
 	}
 
 	impl TestNetFactory for AuraTestNet {
@@ -783,7 +773,7 @@ mod tests {
 	#[tokio::test]
 	async fn authoring_blocks() {
 		sp_tracing::try_init_simple();
-		let net = AuraTestNet::new(Handle::current(), 3);
+		let net = AuraTestNet::new(3);
 
 		let peers = &[(0, Keyring::Alice), (1, Keyring::Bob), (2, Keyring::Charlie)];
 
@@ -877,7 +867,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn current_node_authority_should_claim_slot() {
-		let net = AuraTestNet::new(Handle::current(), 4);
+		let net = AuraTestNet::new(4);
 
 		let mut authorities = vec![
 			Keyring::Alice.public().into(),
@@ -933,7 +923,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn on_slot_returns_correct_block() {
-		let net = AuraTestNet::new(Handle::current(), 4);
+		let net = AuraTestNet::new(4);
 
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 		let keystore = LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore.");

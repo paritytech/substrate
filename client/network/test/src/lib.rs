@@ -708,16 +708,8 @@ pub struct FullPeerConfig {
 	pub storage_chain: bool,
 }
 
-/// Trait for text fixtures with tokio runtime.
-pub trait WithRuntime {
-	/// Construct with runtime handle.
-	fn with_runtime(rt_handle: tokio::runtime::Handle) -> Self;
-	/// Get runtime handle.
-	fn rt_handle(&self) -> &tokio::runtime::Handle;
-}
-
 #[async_trait::async_trait]
-pub trait TestNetFactory: WithRuntime + Sized
+pub trait TestNetFactory: Default + Sized
 where
 	<Self::BlockImport as BlockImport<Block>>::Transaction: Send,
 {
@@ -747,9 +739,9 @@ where
 	);
 
 	/// Create new test network with this many peers.
-	fn new(rt_handle: tokio::runtime::Handle, n: usize) -> Self {
+	fn new(n: usize) -> Self {
 		trace!(target: "test_network", "Creating test network");
-		let mut net = Self::with_runtime(rt_handle);
+		let mut net = Self::default();
 
 		for i in 0..n {
 			trace!(target: "test_network", "Adding peer {}", i);
@@ -905,14 +897,11 @@ where
 		)
 		.unwrap();
 
-		let handle = self.rt_handle().clone();
-		let executor = move |f| {
-			handle.spawn(f);
-		};
-
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: if config.is_authority { Role::Authority } else { Role::Full },
-			executor: Box::new(executor),
+			executor: Box::new(|f| {
+				tokio::spawn(f);
+			}),
 			network_config,
 			chain: client.clone(),
 			protocol_id,
@@ -934,10 +923,10 @@ where
 		trace!(target: "test_network", "Peer identifier: {}", network.service().local_peer_id());
 
 		let service = network.service().clone();
-		self.rt_handle().spawn(async move {
+		tokio::spawn(async move {
 			chain_sync_network_provider.run(service).await;
 		});
-		self.rt_handle().spawn(async move {
+		tokio::spawn(async move {
 			import_queue.run(Box::new(chain_sync_service)).await;
 		});
 
@@ -968,7 +957,7 @@ where
 
 	/// Used to spawn background tasks, e.g. the block request protocol handler.
 	fn spawn_task(&self, f: BoxFuture<'static, ()>) {
-		self.rt_handle().spawn(f);
+		tokio::spawn(f);
 	}
 
 	/// Polls the testnet until all nodes are in sync.
@@ -1083,18 +1072,9 @@ where
 	}
 }
 
+#[derive(Default)]
 pub struct TestNet {
-	rt_handle: tokio::runtime::Handle,
 	peers: Vec<Peer<(), PeersClient>>,
-}
-
-impl WithRuntime for TestNet {
-	fn with_runtime(rt_handle: tokio::runtime::Handle) -> Self {
-		TestNet { rt_handle, peers: Vec::new() }
-	}
-	fn rt_handle(&self) -> &tokio::runtime::Handle {
-		&self.rt_handle
-	}
 }
 
 impl TestNetFactory for TestNet {
@@ -1151,16 +1131,9 @@ impl JustificationImport<Block> for ForceFinalized {
 			.map_err(|_| ConsensusError::InvalidJustification)
 	}
 }
-pub struct JustificationTestNet(TestNet);
 
-impl WithRuntime for JustificationTestNet {
-	fn with_runtime(rt_handle: tokio::runtime::Handle) -> Self {
-		JustificationTestNet(TestNet::with_runtime(rt_handle))
-	}
-	fn rt_handle(&self) -> &tokio::runtime::Handle {
-		&self.0.rt_handle()
-	}
-}
+#[derive(Default)]
+pub struct JustificationTestNet(TestNet);
 
 impl TestNetFactory for JustificationTestNet {
 	type Verifier = PassThroughVerifier;
