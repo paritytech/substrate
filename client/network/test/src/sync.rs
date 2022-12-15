@@ -258,7 +258,6 @@ fn sync_justifications() {
 	let hashes = net.peer(0).push_blocks(20, false);
 	runtime.block_on(net.wait_until_sync());
 
-	let backend = net.peer(0).client().as_backend();
 	let hashof10 = hashes[9];
 	let hashof15 = hashes[14];
 	let hashof20 = hashes[19];
