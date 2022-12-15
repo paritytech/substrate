@@ -710,15 +710,6 @@ pub mod pallet {
 
 			let dropped = receipt.proportion.is_zero();
 
-			let reserved = T::Currency::reserved_balance_named(&T::ReserveId::get(), &who);
-			log::info!(
-				"{:?} {:?} {:?} {:?}",
-				amount,
-				on_hold,
-				reserved,
-				Self::issuance_with(&our_account, &summary)
-			);
-
 			if amount > on_hold {
 				T::Currency::unreserve_named(&T::ReserveId::get(), &who, on_hold);
 				let deficit = amount - on_hold;
@@ -812,8 +803,6 @@ pub mod pallet {
 			let amount = receipt.proportion * effective_issuance;
 
 			summary.proportion_owed.saturating_reduce(receipt.proportion);
-
-			log::info!("{:?} {:?}", amount, Self::issuance_with(&our_account, &summary));
 
 			// Try to transfer amount owed from pot to receipt owner.
 			T::Currency::transfer(&our_account, &who, amount, AllowDeath)
