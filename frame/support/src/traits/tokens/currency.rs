@@ -32,10 +32,7 @@ use sp_std::fmt::Debug;
 mod reservable;
 pub use reservable::{NamedReservableCurrency, ReservableCurrency};
 mod lockable;
-
-#[deprecated(note = "Deprecated in favour of using fungible::Lockable trait directly")]
-pub use super::fungible::{LockIdentifier, Lockable as LockableCurrency};
-pub use lockable::VestingSchedule;
+pub use lockable::{LockIdentifier, LockableCurrency, VestingSchedule};
 
 /// Abstraction over a fungible assets system.
 pub trait Currency<AccountId> {
