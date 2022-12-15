@@ -95,19 +95,22 @@ pub mod pallet {
 		fn on_idle(_: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			let mut weight = T::DbWeight::get().reads(1);
 
-			let computation_weight_limit = remaining_weight * Compute::<T>::get();
+			let computation_weight_limit =
+				Compute::<T>::get().mul_ceil(remaining_weight.ref_time());
 
 			let mut value: u64 = 0;
 			loop {
-				weight = weight.saturating_add(T::WeightInfo::hash_value());
-				if computation_weight_limit.any_lt(weight) {
+				if computation_weight_limit <
+					weight.ref_time().saturating_add(T::WeightInfo::hash_value().ref_time())
+				{
 					break
 				}
-				Self::hash_value(value.into());
+				weight = weight.saturating_add(T::WeightInfo::hash_value());
+				Self::hash_value(value);
 				value += 1;
 			}
 
-			for i in 0..Storage::<T>::get() {
+			/*for i in 0..Storage::<T>::get() {
 				weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
 				if remaining_weight.any_lt(weight) {
 					weight = remaining_weight;
@@ -116,7 +119,7 @@ pub mod pallet {
 
 				storage::unhashed::put(&i.to_le_bytes(), &i.to_le_bytes());
 				let _: Option<Vec<u8>> = storage::unhashed::get(&i.to_le_bytes());
-			}
+			}*/
 
 			weight
 		}
@@ -128,6 +131,7 @@ pub mod pallet {
 		/// block's weight to use during `on_initialize`.
 		///
 		/// Only callable by Root.
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::DbWeight::get().writes(1))]
 		pub fn set_compute(origin: OriginFor<T>, compute: Perbill) -> DispatchResult {
 			let _ = ensure_root(origin)?;
@@ -140,6 +144,7 @@ pub mod pallet {
 		/// for each block.
 		///
 		/// Only callable by Root.
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::DbWeight::get().writes(1))]
 		pub fn set_storage(origin: OriginFor<T>, storage: u32) -> DispatchResult {
 			let _ = ensure_root(origin)?;
