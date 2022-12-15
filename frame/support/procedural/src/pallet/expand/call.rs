@@ -54,6 +54,29 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		.map(|fn_name| format!("Create a call with the variant `{}`.", fn_name))
 		.collect::<Vec<_>>();
 
+	let mut warning_structs = Vec::new();
+	let mut warning_names = Vec::new();
+	// Emit a warning for each call that is missing `call_index` when not in dev-mode.
+	for method in &methods {
+		if method.explicit_call_index || def.dev_mode {
+			continue
+		}
+
+		let name = syn::Ident::new(&format!("{}", method.name), method.name.span());
+		let warning: syn::ItemStruct = syn::parse_quote!(
+			#[deprecated(note = r"
+			Implicit call indices are deprecated in favour of explicit ones.
+			Please ensure that all calls have the `pallet::call_index` attribute or that the
+			`dev-mode` of the pallet is enabled. For more info see:
+			<https://github.com/paritytech/substrate/pull/12891> and
+			<https://github.com/paritytech/substrate/pull/11381>.")]
+			#[allow(non_camel_case_types)]
+			struct #name;
+		);
+		warning_names.push(name);
+		warning_structs.push(warning);
+	}
+
 	let fn_weight = methods.iter().map(|method| &method.weight);
 
 	let fn_doc = methods.iter().map(|method| &method.docs).collect::<Vec<_>>();
@@ -178,6 +201,14 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		.collect::<Vec<_>>();
 
 	quote::quote_spanned!(span =>
+		mod warnings {
+			#(
+				#warning_structs
+				// This triggers each deprecated warning once.
+				const _: Option<#warning_names> = None;
+			)*
+		}
+
 		#[doc(hidden)]
 		pub mod __substrate_call_check {
 			#[macro_export]
