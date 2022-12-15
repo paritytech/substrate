@@ -173,6 +173,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ark-bw6-761"
+version = "0.4.0-alpha.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ebff1ddcda7ab77367e63b75981e992a4f4fe70b80a0da5733a02c74d939d17e"
+dependencies = [
+ "ark-bls12-377",
+ "ark-ec",
+ "ark-ff",
+ "ark-std",
+]
+
+[[package]]
 name = "ark-ec"
 version = "0.4.0-alpha.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9142,6 +9154,7 @@ dependencies = [
  "ark-algebra-test-templates",
  "ark-bls12-377",
  "ark-bls12-381 0.4.0-alpha.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ark-bw6-761",
  "ark-ec",
  "ark-ff",
  "ark-serialize",
