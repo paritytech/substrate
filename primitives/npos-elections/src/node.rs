@@ -93,7 +93,7 @@ impl<A: PartialEq + Eq + Clone + fmt::Debug> Node<A> {
 	/// Returns true if `other` is the parent of `who`.
 	pub fn is_parent_of(who: &NodeRef<A>, other: &NodeRef<A>) -> bool {
 		if who.borrow().parent.is_none() {
-			return false;
+			return false
 		}
 		who.borrow().parent.as_ref() == Some(other)
 	}
@@ -127,7 +127,7 @@ impl<A: PartialEq + Eq + Clone + fmt::Debug> Node<A> {
 
 		while let Some(ref next_parent) = current.clone().borrow().parent {
 			if visited.contains(next_parent) {
-				break;
+				break
 			}
 			parent_path.push(next_parent.clone());
 			current = next_parent.clone();

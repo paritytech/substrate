@@ -41,11 +41,10 @@ impl<Hash> From<Error> for TransactionEvent<Hash> {
 			Error::Verification(e) => TransactionEvent::Invalid(TransactionError {
 				error: format!("Verification error: {}", e),
 			}),
-			Error::Pool(PoolError::InvalidTransaction(InvalidTransaction::Custom(e))) => {
+			Error::Pool(PoolError::InvalidTransaction(InvalidTransaction::Custom(e))) =>
 				TransactionEvent::Invalid(TransactionError {
 					error: format!("Invalid transaction with custom error: {}", e),
-				})
-			},
+				}),
 			Error::Pool(PoolError::InvalidTransaction(e)) => {
 				let msg: &str = e.into();
 				TransactionEvent::Invalid(TransactionError {
@@ -58,32 +57,28 @@ impl<Hash> From<Error> for TransactionEvent<Hash> {
 					error: format!("Unknown transaction validity: {}", msg),
 				})
 			},
-			Error::Pool(PoolError::TemporarilyBanned) => {
+			Error::Pool(PoolError::TemporarilyBanned) =>
 				TransactionEvent::Invalid(TransactionError {
 					error: "Transaction is temporarily banned".into(),
-				})
-			},
-			Error::Pool(PoolError::AlreadyImported(_)) => {
+				}),
+			Error::Pool(PoolError::AlreadyImported(_)) =>
 				TransactionEvent::Invalid(TransactionError {
 					error: "Transaction is already imported".into(),
-				})
-			},
-			Error::Pool(PoolError::TooLowPriority { old, new }) => {
+				}),
+			Error::Pool(PoolError::TooLowPriority { old, new }) =>
 				TransactionEvent::Invalid(TransactionError {
 					error: format!(
 						"The priority of the transactin is too low (pool {} > current {})",
 						old, new
 					),
-				})
-			},
+				}),
 			Error::Pool(PoolError::CycleDetected) => TransactionEvent::Invalid(TransactionError {
 				error: "The transaction contains a cyclic dependency".into(),
 			}),
-			Error::Pool(PoolError::ImmediatelyDropped) => {
+			Error::Pool(PoolError::ImmediatelyDropped) =>
 				TransactionEvent::Invalid(TransactionError {
 					error: "The transaction could not enter the pool because of the limit".into(),
-				})
-			},
+				}),
 			Error::Pool(PoolError::Unactionable) => TransactionEvent::Invalid(TransactionError {
 				error: "Transaction cannot be propagated and the local node does not author blocks"
 					.into(),
@@ -92,16 +87,14 @@ impl<Hash> From<Error> for TransactionEvent<Hash> {
 				error: "Transaction does not provide any tags, so the pool cannot identify it"
 					.into(),
 			}),
-			Error::Pool(PoolError::InvalidBlockId(_)) => {
+			Error::Pool(PoolError::InvalidBlockId(_)) =>
 				TransactionEvent::Invalid(TransactionError {
 					error: "The provided block ID is not valid".into(),
-				})
-			},
-			Error::Pool(PoolError::RejectedFutureTransaction) => {
+				}),
+			Error::Pool(PoolError::RejectedFutureTransaction) =>
 				TransactionEvent::Invalid(TransactionError {
 					error: "The pool is not accepting future transactions".into(),
-				})
-			},
+				}),
 		}
 	}
 }

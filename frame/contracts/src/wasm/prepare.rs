@@ -81,7 +81,7 @@ impl<'a, T: Config> ContractModule<'a, T> {
 	/// we reject such a module.
 	fn ensure_no_internal_memory(&self) -> Result<(), &'static str> {
 		if self.module.memory_section().map_or(false, |ms| ms.entries().len() > 0) {
-			return Err("module declares internal memory");
+			return Err("module declares internal memory")
 		}
 		Ok(())
 	}
@@ -92,13 +92,13 @@ impl<'a, T: Config> ContractModule<'a, T> {
 			// In Wasm MVP spec, there may be at most one table declared. Double check this
 			// explicitly just in case the Wasm version changes.
 			if table_section.entries().len() > 1 {
-				return Err("multiple tables declared");
+				return Err("multiple tables declared")
 			}
 			if let Some(table_type) = table_section.entries().first() {
 				// Check the table's initial size as there is no instruction or environment function
 				// capable of growing the table.
 				if table_type.limits().initial() > limit {
-					return Err("table exceeds maximum size allowed");
+					return Err("table exceeds maximum size allowed")
 				}
 			}
 		}
@@ -110,13 +110,13 @@ impl<'a, T: Config> ContractModule<'a, T> {
 		let code_section = if let Some(type_section) = self.module.code_section() {
 			type_section
 		} else {
-			return Ok(());
+			return Ok(())
 		};
 		for instr in code_section.bodies().iter().flat_map(|body| body.code().elements()) {
 			use self::elements::Instruction::BrTable;
 			if let BrTable(table) = instr {
 				if table.table.len() > limit as usize {
-					return Err("BrTable's immediate value is too big.");
+					return Err("BrTable's immediate value is too big.")
 				}
 			}
 		}
@@ -126,7 +126,7 @@ impl<'a, T: Config> ContractModule<'a, T> {
 	fn ensure_global_variable_limit(&self, limit: u32) -> Result<(), &'static str> {
 		if let Some(global_section) = self.module.global_section() {
 			if global_section.entries().len() > limit as usize {
-				return Err("module declares too many globals");
+				return Err("module declares too many globals")
 			}
 		}
 		Ok(())
@@ -137,9 +137,8 @@ impl<'a, T: Config> ContractModule<'a, T> {
 		if let Some(global_section) = self.module.global_section() {
 			for global in global_section.entries() {
 				match global.global_type().content_type() {
-					ValueType::F32 | ValueType::F64 => {
-						return Err("use of floating point type in globals is forbidden")
-					},
+					ValueType::F32 | ValueType::F64 =>
+						return Err("use of floating point type in globals is forbidden"),
 					_ => {},
 				}
 			}
@@ -149,9 +148,8 @@ impl<'a, T: Config> ContractModule<'a, T> {
 			for func_body in code_section.bodies() {
 				for local in func_body.locals() {
 					match local.value_type() {
-						ValueType::F32 | ValueType::F64 => {
-							return Err("use of floating point type in locals is forbidden")
-						},
+						ValueType::F32 | ValueType::F64 =>
+							return Err("use of floating point type in locals is forbidden"),
 						_ => {},
 					}
 				}
@@ -165,11 +163,10 @@ impl<'a, T: Config> ContractModule<'a, T> {
 						let return_type = func_type.results().get(0);
 						for value_type in func_type.params().iter().chain(return_type) {
 							match value_type {
-								ValueType::F32 | ValueType::F64 => {
+								ValueType::F32 | ValueType::F64 =>
 									return Err(
 										"use of floating point type in function types is forbidden",
-									)
-								},
+									),
 								_ => {},
 							}
 						}
@@ -186,12 +183,12 @@ impl<'a, T: Config> ContractModule<'a, T> {
 		let type_section = if let Some(type_section) = self.module.type_section() {
 			type_section
 		} else {
-			return Ok(());
+			return Ok(())
 		};
 
 		for Type::Function(func) in type_section.types() {
 			if func.params().len() > limit as usize {
-				return Err("Use of a function type with too many parameters.");
+				return Err("Use of a function type with too many parameters.")
 			}
 		}
 
@@ -263,7 +260,7 @@ impl<'a, T: Config> ContractModule<'a, T> {
 				Some(fn_idx) => fn_idx,
 				None => {
 					// Underflow here means fn_idx points to imported function which we don't allow!
-					return Err("entry point points to an imported function");
+					return Err("entry point points to an imported function")
 				},
 			};
 
@@ -276,18 +273,18 @@ impl<'a, T: Config> ContractModule<'a, T> {
 				.type_ref();
 			let Type::Function(ref func_ty) =
 				types.get(func_ty_idx as usize).ok_or("function has a non-existent type")?;
-			if !(func_ty.params().is_empty()
-				&& (func_ty.results().is_empty() || func_ty.results() == [ValueType::I32]))
+			if !(func_ty.params().is_empty() &&
+				(func_ty.results().is_empty() || func_ty.results() == [ValueType::I32]))
 			{
-				return Err("entry point has wrong signature");
+				return Err("entry point has wrong signature")
 			}
 		}
 
 		if !deploy_found {
-			return Err("deploy function isn't exported");
+			return Err("deploy function isn't exported")
 		}
 		if !call_found {
-			return Err("call function isn't exported");
+			return Err("call function isn't exported")
 		}
 
 		Ok(())
@@ -324,16 +321,16 @@ impl<'a, T: Config> ContractModule<'a, T> {
 				},
 				External::Memory(ref memory_type) => {
 					if import.module() != IMPORT_MODULE_MEMORY {
-						return Err("Invalid module for imported memory");
+						return Err("Invalid module for imported memory")
 					}
 					if import.field() != "memory" {
-						return Err("Memory import must have the field name 'memory'");
+						return Err("Memory import must have the field name 'memory'")
 					}
 					if imported_mem_type.is_some() {
-						return Err("Multiple memory imports defined");
+						return Err("Multiple memory imports defined")
 					}
 					imported_mem_type = Some(memory_type);
-					continue;
+					continue
 				},
 			}
 		}
@@ -353,12 +350,10 @@ fn get_memory_limits<T: Config>(
 		// Inspect the module to extract the initial and maximum page count.
 		let limits = memory_type.limits();
 		match (limits.initial(), limits.maximum()) {
-			(initial, Some(maximum)) if initial > maximum => {
-				Err("Requested initial number of pages should not exceed the requested maximum")
-			},
-			(_, Some(maximum)) if maximum > schedule.limits.memory_pages => {
-				Err("Maximum number of pages should not exceed the configured maximum.")
-			},
+			(initial, Some(maximum)) if initial > maximum =>
+				Err("Requested initial number of pages should not exceed the requested maximum"),
+			(_, Some(maximum)) if maximum > schedule.limits.memory_pages =>
+				Err("Maximum number of pages should not exceed the configured maximum."),
 			(initial, Some(maximum)) => Ok((initial, maximum)),
 			(_, None) => {
 				// Maximum number of pages should be always declared.

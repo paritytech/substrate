@@ -2208,9 +2208,9 @@ fn collection_locking_should_work() {
 
 		let stored_config = CollectionConfigOf::<Test>::get(collection_id).unwrap();
 		let full_lock_config = collection_config_from_disabled_settings(
-			CollectionSetting::TransferableItems
-				| CollectionSetting::UnlockedMetadata
-				| CollectionSetting::UnlockedAttributes,
+			CollectionSetting::TransferableItems |
+				CollectionSetting::UnlockedMetadata |
+				CollectionSetting::UnlockedAttributes,
 		);
 		assert_eq!(stored_config, full_lock_config);
 	});

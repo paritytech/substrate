@@ -428,15 +428,14 @@ fn generate_wasm_interface_signature_for_host_function(sig: &Signature) -> Resul
 /// Generate the variable name that stores the FFI value.
 fn generate_ffi_value_var_name(pat: &Pat) -> Result<Ident> {
 	match pat {
-		Pat::Ident(pat_ident) => {
+		Pat::Ident(pat_ident) =>
 			if let Some(by_ref) = pat_ident.by_ref {
 				Err(Error::new(by_ref.span(), "`ref` not supported!"))
 			} else if let Some(sub_pattern) = &pat_ident.subpat {
 				Err(Error::new(sub_pattern.0.span(), "Not supported!"))
 			} else {
 				Ok(Ident::new(&format!("{}_ffi_value", pat_ident.ident), Span::call_site()))
-			}
-		},
+			},
 		_ => Err(Error::new(pat.span(), "Not supported as variable name!")),
 	}
 }

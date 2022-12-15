@@ -139,15 +139,12 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 			};
 
 			match msg {
-				BlockImportWorkerMsg::BlocksProcessed(imported, count, results) => {
-					link.blocks_processed(imported, count, results)
-				},
-				BlockImportWorkerMsg::JustificationImported(who, hash, number, success) => {
-					link.justification_imported(who, &hash, number, success)
-				},
-				BlockImportWorkerMsg::RequestJustification(hash, number) => {
-					link.request_justification(&hash, number)
-				},
+				BlockImportWorkerMsg::BlocksProcessed(imported, count, results) =>
+					link.blocks_processed(imported, count, results),
+				BlockImportWorkerMsg::JustificationImported(who, hash, number, success) =>
+					link.justification_imported(who, &hash, number, success),
+				BlockImportWorkerMsg::RequestJustification(hash, number) =>
+					link.request_justification(&hash, number),
 			}
 		}
 	}

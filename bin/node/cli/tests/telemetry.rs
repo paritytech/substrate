@@ -54,7 +54,7 @@ async fn telemetry_works() {
 					let object =
 						json.as_object().unwrap().get("payload").unwrap().as_object().unwrap();
 					if matches!(object.get("best"), Some(serde_json::Value::String(_))) {
-						break;
+						break
 					}
 				},
 

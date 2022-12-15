@@ -140,11 +140,11 @@ pub trait CryptoStore: Send + Sync {
 		msg: &[u8],
 	) -> Result<Option<(CryptoTypePublicPair, Vec<u8>)>, Error> {
 		if keys.len() == 1 {
-			return Ok(self.sign_with(id, &keys[0], msg).await?.map(|s| (keys[0].clone(), s)));
+			return Ok(self.sign_with(id, &keys[0], msg).await?.map(|s| (keys[0].clone(), s)))
 		} else {
 			for k in self.supported_keys(id, keys).await? {
 				if let Ok(Some(sign)) = self.sign_with(id, &k, msg).await {
-					return Ok(Some((k, sign)));
+					return Ok(Some((k, sign)))
 				}
 			}
 		}
@@ -317,11 +317,11 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 		if keys.len() == 1 {
 			return Ok(
 				SyncCryptoStore::sign_with(self, id, &keys[0], msg)?.map(|s| (keys[0].clone(), s))
-			);
+			)
 		} else {
 			for k in SyncCryptoStore::supported_keys(self, id, keys)? {
 				if let Ok(Some(sign)) = SyncCryptoStore::sign_with(self, id, &k, msg) {
-					return Ok(Some((k, sign)));
+					return Ok(Some((k, sign)))
 				}
 			}
 		}

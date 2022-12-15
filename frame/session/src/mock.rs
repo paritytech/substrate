@@ -122,8 +122,8 @@ pub struct TestShouldEndSession;
 impl ShouldEndSession<u64> for TestShouldEndSession {
 	fn should_end_session(now: u64) -> bool {
 		let l = SessionLength::get();
-		now % l == 0
-			|| ForceSessionEnd::mutate(|l| {
+		now % l == 0 ||
+			ForceSessionEnd::mutate(|l| {
 				let r = *l;
 				*l = false;
 				r

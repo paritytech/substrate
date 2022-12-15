@@ -119,28 +119,26 @@ fn test_once() {
 				},
 
 				// If we generate 2, adjust a random reputation.
-				2 => {
+				2 =>
 					if let Some(id) = known_nodes.iter().choose(&mut rng) {
 						let val = Uniform::new_inclusive(i32::MIN, i32::MAX).sample(&mut rng);
 						peerset_handle.report_peer(*id, ReputationChange::new(val, ""));
-					}
-				},
+					},
 
 				// If we generate 3, disconnect from a random node.
-				3 => {
+				3 =>
 					if let Some(id) = connected_nodes.iter().choose(&mut rng).cloned() {
 						connected_nodes.remove(&id);
 						peerset.dropped(SetId::from(0), id, DropReason::Unknown);
-					}
-				},
+					},
 
 				// If we generate 4, connect to a random node.
 				4 => {
 					if let Some(id) = known_nodes
 						.iter()
 						.filter(|n| {
-							incoming_nodes.values().all(|m| m != *n)
-								&& !connected_nodes.contains(*n)
+							incoming_nodes.values().all(|m| m != *n) &&
+								!connected_nodes.contains(*n)
 						})
 						.choose(&mut rng)
 					{
@@ -163,12 +161,11 @@ fn test_once() {
 						reserved_nodes.insert(*id);
 					}
 				},
-				8 => {
+				8 =>
 					if let Some(id) = reserved_nodes.iter().choose(&mut rng).cloned() {
 						reserved_nodes.remove(&id);
 						peerset_handle.remove_reserved_peer(SetId::from(0), id);
-					}
-				},
+					},
 
 				_ => unreachable!(),
 			}

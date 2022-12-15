@@ -371,7 +371,7 @@ impl SyncCryptoStore for KeyStore {
 		let pair = if let Some(k) = self.sr25519_key_pair(key_type, public) {
 			k
 		} else {
-			return Ok(None);
+			return Ok(None)
 		};
 
 		let (inout, proof, _) = pair.as_ref().vrf_sign(transcript);

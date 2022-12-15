@@ -172,7 +172,7 @@ fn linear_regression(
 	let (intercept, params, errors) = raw_linear_regression(&xs, &ys, x_vars, true)?;
 	if intercept >= -0.0001 {
 		// The intercept is positive, or is effectively zero.
-		return Some((intercept, params, errors[1..].to_vec()));
+		return Some((intercept, params, errors[1..].to_vec()))
 	}
 
 	// The intercept is negative.
@@ -199,7 +199,7 @@ impl Analysis {
 	// results. Note: We choose the median value because it is more robust to outliers.
 	fn median_value(r: &Vec<BenchmarkResult>, selector: BenchmarkSelector) -> Option<Self> {
 		if r.is_empty() {
-			return None;
+			return None
 		}
 
 		let mut values: Vec<u128> = r
@@ -229,7 +229,7 @@ impl Analysis {
 
 	pub fn median_slopes(r: &Vec<BenchmarkResult>, selector: BenchmarkSelector) -> Option<Self> {
 		if r[0].components.is_empty() {
-			return Self::median_value(r, selector);
+			return Self::median_value(r, selector)
 		}
 
 		let results = r[0]
@@ -329,7 +329,7 @@ impl Analysis {
 
 	pub fn min_squares_iqr(r: &Vec<BenchmarkResult>, selector: BenchmarkSelector) -> Option<Self> {
 		if r[0].components.is_empty() || r.len() <= 2 {
-			return Self::median_value(r, selector);
+			return Self::median_value(r, selector)
 		}
 
 		let mut results = BTreeMap::<Vec<u32>, Vec<u128>>::new();
@@ -356,7 +356,7 @@ impl Analysis {
 			.map(|(p, vs)| {
 				// Avoid divide by zero
 				if vs.is_empty() {
-					return (p.clone(), 0, 0);
+					return (p.clone(), 0, 0)
 				}
 				let total = vs.iter().fold(0u128, |acc, v| acc + *v);
 				let mean = total / vs.len() as u128;
@@ -405,7 +405,7 @@ impl Analysis {
 		let min_squares = Self::min_squares_iqr(r, selector);
 
 		if median_slopes.is_none() || min_squares.is_none() {
-			return None;
+			return None
 		}
 
 		let median_slopes = median_slopes.unwrap();
@@ -438,7 +438,7 @@ fn ms(mut nanos: u128) -> String {
 	while x > 1 {
 		if nanos > x * 1_000 {
 			nanos = nanos / x * x;
-			break;
+			break
 		}
 		x /= 10;
 	}

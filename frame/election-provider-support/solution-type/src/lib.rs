@@ -155,10 +155,10 @@ fn check_attributes(input: ParseStream) -> syn::Result<bool> {
 		return Err(syn::Error::new_spanned(
 			extra_attr,
 			"compact solution can accept only #[compact]",
-		));
+		))
 	}
 	if attrs.is_empty() {
-		return Ok(false);
+		return Ok(false)
 	}
 	let attr = attrs.pop().expect("attributes vec with len 1 can be popped.");
 	if attr.path.is_ident("compact") {
@@ -183,7 +183,7 @@ impl Parse for SolutionDef {
 		let generics: syn::AngleBracketedGenericArguments = input.parse()?;
 
 		if generics.args.len() != 4 {
-			return Err(syn_err("Must provide 4 generic args."));
+			return Err(syn_err("Must provide 4 generic args."))
 		}
 
 		let expected_types = ["VoterIndex", "TargetIndex", "Accuracy", "MaxVoters"];
@@ -267,7 +267,7 @@ mod tests {
 	fn ui_fail() {
 		// Only run the ui tests when `RUN_UI_TESTS` is set.
 		if std::env::var("RUN_UI_TESTS").is_err() {
-			return;
+			return
 		}
 
 		let cases = trybuild::TestCases::new();

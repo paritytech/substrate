@@ -125,7 +125,7 @@ pub mod v3 {
 						agenda.len(),
 						max_scheduled_per_block,
 					);
-					return Err("Agenda would overflow `MaxScheduledPerBlock`.");
+					return Err("Agenda would overflow `MaxScheduledPerBlock`.")
 				}
 			}
 			// Check that bounding the calls will not overflow `MAX_LENGTH`.
@@ -142,7 +142,7 @@ pub mod v3 {
 									block_number,
 									l,
 								);
-								return Err("Call is too large.");
+								return Err("Call is too large.")
 							}
 						},
 						_ => (),
@@ -162,7 +162,7 @@ pub mod v3 {
 				Expected version 3, found {:?}",
 					version,
 				);
-				return T::DbWeight::get().reads(1);
+				return T::DbWeight::get().reads(1)
 			}
 
 			crate::Pallet::<T>::migrate_v3_to_v4()

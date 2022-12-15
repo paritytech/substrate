@@ -113,17 +113,17 @@ impl ServiceBranch {
 			NotQueued => T::WeightInfo::place_decision_deposit_not_queued(),
 			BeginDecidingPassing => T::WeightInfo::place_decision_deposit_passing(),
 			BeginDecidingFailing => T::WeightInfo::place_decision_deposit_failing(),
-			BeginConfirming
-			| ContinueConfirming
-			| EndConfirming
-			| ContinueNotConfirming
-			| Approved
-			| Rejected
-			| RequeuedInsertion
-			| RequeuedSlide
-			| TimedOut
-			| Fail
-			| NoDeposit => return None,
+			BeginConfirming |
+			ContinueConfirming |
+			EndConfirming |
+			ContinueNotConfirming |
+			Approved |
+			Rejected |
+			RequeuedInsertion |
+			RequeuedSlide |
+			TimedOut |
+			Fail |
+			NoDeposit => return None,
 		};
 
 		Some(ref_time_weight)

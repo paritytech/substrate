@@ -57,7 +57,7 @@ pub struct WeightParams {
 impl WeightParams {
 	pub fn calc_weight(&self, stat: &Stats) -> Result<u64> {
 		if self.weight_mul.is_sign_negative() || !self.weight_mul.is_normal() {
-			return Err("invalid floating number for `weight_mul`".into());
+			return Err("invalid floating number for `weight_mul`".into())
 		}
 		let s = stat.select(self.weight_metric) as f64;
 		let w = s.mul_add(self.weight_mul, self.weight_add as f64).ceil();

@@ -93,11 +93,11 @@ fn extract_inner_ty_and_name(data: &Data) -> Result<(Type, Option<Ident>)> {
 		match struct_data.fields {
 			Fields::Named(ref named) if named.named.len() == 1 => {
 				let field = &named.named[0];
-				return Ok((field.ty.clone(), field.ident.clone()));
+				return Ok((field.ty.clone(), field.ident.clone()))
 			},
 			Fields::Unnamed(ref unnamed) if unnamed.unnamed.len() == 1 => {
 				let field = &unnamed.unnamed[0];
-				return Ok((field.ty.clone(), field.ident.clone()));
+				return Ok((field.ty.clone(), field.ident.clone()))
 			},
 			_ => {},
 		}

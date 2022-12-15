@@ -151,14 +151,12 @@ pub fn extract_parameter_names_types_and_borrows(
 					generate_unique_pattern((*arg.pat).clone(), &mut generated_pattern_counter);
 				result.push((name, ty, borrow));
 			},
-			FnArg::Receiver(_) if matches!(allow_self, AllowSelfRefInParameters::No) => {
-				return Err(Error::new(input.span(), "`self` parameter not supported!"))
-			},
-			FnArg::Receiver(recv) => {
+			FnArg::Receiver(_) if matches!(allow_self, AllowSelfRefInParameters::No) =>
+				return Err(Error::new(input.span(), "`self` parameter not supported!")),
+			FnArg::Receiver(recv) =>
 				if recv.mutability.is_some() || recv.reference.is_none() {
-					return Err(Error::new(recv.span(), "Only `&self` is supported!"));
-				}
-			},
+					return Err(Error::new(recv.span(), "Only `&self` is supported!"))
+				},
 		}
 	}
 
@@ -224,9 +222,8 @@ pub fn extract_block_type_from_trait_path(trait_: &Path) -> Result<&TypePath> {
 			let span = trait_.segments.last().as_ref().unwrap().span();
 			Err(Error::new(span, "Missing `Block` generic parameter."))
 		},
-		PathArguments::Parenthesized(_) => {
-			Err(Error::new(generics.arguments.span(), "Unexpected parentheses in path!"))
-		},
+		PathArguments::Parenthesized(_) =>
+			Err(Error::new(generics.arguments.span(), "Unexpected parentheses in path!")),
 	}
 }
 

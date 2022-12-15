@@ -40,7 +40,7 @@ where
 	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
 		let inner = BTreeSet::<T>::decode(input)?;
 		if inner.len() > S::get() as usize {
-			return Err("BoundedBTreeSet exceeds its limit".into());
+			return Err("BoundedBTreeSet exceeds its limit".into())
 		}
 		Ok(Self(inner, PhantomData))
 	}

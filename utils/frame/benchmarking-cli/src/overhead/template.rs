@@ -117,7 +117,7 @@ impl TemplateData {
 		let mut path = weight_out.clone().unwrap_or_else(|| PathBuf::from("."));
 
 		if !path.is_dir() {
-			return Err("Need directory as --weight-path".into());
+			return Err("Need directory as --weight-path".into())
 		}
 		path.push(format!("{}_weights.rs", self.short_name));
 		Ok(path)

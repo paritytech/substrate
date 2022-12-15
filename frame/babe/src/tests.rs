@@ -242,8 +242,8 @@ fn can_estimate_current_epoch_progress() {
 				);
 			} else {
 				assert!(
-					Babe::estimate_current_session_progress(i).0.unwrap()
-						< Permill::from_percent(100)
+					Babe::estimate_current_session_progress(i).0.unwrap() <
+						Permill::from_percent(100)
 				);
 			}
 		}
@@ -485,7 +485,7 @@ fn report_equivocation_current_session_works() {
 		// check that the balances of all other validators are left intact.
 		for validator in &validators {
 			if *validator == offending_validator_id {
-				continue;
+				continue
 			}
 
 			assert_eq!(Balances::total_balance(validator), 10_000_000);

@@ -26,7 +26,7 @@ fn to_cleaned_string(t: impl quote::ToTokens) -> String {
 /// Print an incomplete upgrade from decl_storage macro to new pallet attribute.
 pub fn maybe_print_pallet_upgrade(def: &super::DeclStorageDefExt) {
 	if !check_print_pallet_upgrade() {
-		return;
+		return
 	}
 
 	let scrate = &quote::quote!(frame_support);
@@ -58,7 +58,7 @@ pub fn maybe_print_pallet_upgrade(def: &super::DeclStorageDefExt) {
 			Ok(g) => g,
 			Err(err) => {
 				println!("Could not print upgrade due compile error: {:?}", err);
-				return;
+				return
 			},
 		};
 

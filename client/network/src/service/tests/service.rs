@@ -101,7 +101,7 @@ fn notifications_state_consistent() {
 			iterations += 1;
 			if iterations >= 1_000 {
 				assert!(something_happened);
-				break;
+				break
 			}
 
 			// Start by sending a notification from node1 to node2 and vice-versa. Part of the
@@ -137,12 +137,10 @@ fn notifications_state_consistent() {
 				// forever while nothing at all happens on the network.
 				let continue_test = futures_timer::Delay::new(Duration::from_millis(20));
 				match future::select(future::select(next1, next2), continue_test).await {
-					future::Either::Left((future::Either::Left((Some(ev), _)), _)) => {
-						future::Either::Left(ev)
-					},
-					future::Either::Left((future::Either::Right((Some(ev), _)), _)) => {
-						future::Either::Right(ev)
-					},
+					future::Either::Left((future::Either::Left((Some(ev), _)), _)) =>
+						future::Either::Left(ev),
+					future::Either::Left((future::Either::Right((Some(ev), _)), _)) =>
+						future::Either::Right(ev),
 					future::Either::Right(_) => continue,
 					_ => break,
 				}
@@ -151,42 +149,38 @@ fn notifications_state_consistent() {
 			match next_event {
 				future::Either::Left(Event::NotificationStreamOpened {
 					remote, protocol, ..
-				}) => {
+				}) =>
 					if protocol == PROTOCOL_NAME.into() {
 						something_happened = true;
 						assert!(!node1_to_node2_open);
 						node1_to_node2_open = true;
 						assert_eq!(remote, node2.local_peer_id());
-					}
-				},
+					},
 				future::Either::Right(Event::NotificationStreamOpened {
 					remote, protocol, ..
-				}) => {
+				}) =>
 					if protocol == PROTOCOL_NAME.into() {
 						something_happened = true;
 						assert!(!node2_to_node1_open);
 						node2_to_node1_open = true;
 						assert_eq!(remote, node1.local_peer_id());
-					}
-				},
+					},
 				future::Either::Left(Event::NotificationStreamClosed {
 					remote, protocol, ..
-				}) => {
+				}) =>
 					if protocol == PROTOCOL_NAME.into() {
 						assert!(node1_to_node2_open);
 						node1_to_node2_open = false;
 						assert_eq!(remote, node2.local_peer_id());
-					}
-				},
+					},
 				future::Either::Right(Event::NotificationStreamClosed {
 					remote, protocol, ..
-				}) => {
+				}) =>
 					if protocol == PROTOCOL_NAME.into() {
 						assert!(node2_to_node1_open);
 						node2_to_node1_open = false;
 						assert_eq!(remote, node1.local_peer_id());
-					}
-				},
+					},
 				future::Either::Left(Event::NotificationsReceived { remote, .. }) => {
 					assert!(node1_to_node2_open);
 					assert_eq!(remote, node2.local_peer_id());
@@ -302,13 +296,12 @@ fn notifications_back_pressure() {
 		while received_notifications < TOTAL_NOTIFS {
 			match events_stream2.next().await.unwrap() {
 				Event::NotificationStreamClosed { .. } => panic!(),
-				Event::NotificationsReceived { messages, .. } => {
+				Event::NotificationsReceived { messages, .. } =>
 					for message in messages {
 						assert_eq!(message.0, PROTOCOL_NAME.into());
 						assert_eq!(message.1, format!("hello #{}", received_notifications));
 						received_notifications += 1;
-					}
-				},
+					},
 				_ => {},
 			};
 
@@ -383,7 +376,7 @@ fn fallback_name_working() {
 				Event::NotificationStreamOpened { protocol, negotiated_fallback, .. } => {
 					assert_eq!(protocol, PROTOCOL_NAME.into());
 					assert_eq!(negotiated_fallback, None);
-					break;
+					break
 				},
 				_ => {},
 			};
@@ -398,7 +391,7 @@ fn fallback_name_working() {
 					if protocol == NEW_PROTOCOL_NAME.into() =>
 				{
 					assert_eq!(negotiated_fallback, Some(PROTOCOL_NAME.into()));
-					break;
+					break
 				},
 				_ => {},
 			};

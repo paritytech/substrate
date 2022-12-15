@@ -430,7 +430,7 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 				Some(value) => value,
 				None => {
 					log::error!("Invalid translate: fail to decode old value");
-					continue;
+					continue
 				},
 			};
 
@@ -438,7 +438,7 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 				Ok((final_key, _)) => final_key,
 				Err(_) => {
 					log::error!("Invalid translate: fail to decode key");
-					continue;
+					continue
 				},
 			};
 

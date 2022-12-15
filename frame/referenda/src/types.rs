@@ -251,9 +251,8 @@ impl<
 			Ongoing(x) if x.decision_deposit.is_none() => Ok(None),
 			// Cannot refund deposit if Ongoing as this breaks assumptions.
 			Ongoing(_) => Err(()),
-			Approved(_, _, d) | Rejected(_, _, d) | TimedOut(_, _, d) | Cancelled(_, _, d) => {
-				Ok(d.take())
-			},
+			Approved(_, _, d) | Rejected(_, _, d) | TimedOut(_, _, d) | Cancelled(_, _, d) =>
+				Ok(d.take()),
 			Killed(_) => Ok(None),
 		}
 	}
@@ -412,12 +411,10 @@ impl Curve {
 	/// Determine the `y` value for the given `x` value.
 	pub(crate) fn threshold(&self, x: Perbill) -> Perbill {
 		match self {
-			Self::LinearDecreasing { length, floor, ceil } => {
-				*ceil - (x.min(*length).saturating_div(*length, Down) * (*ceil - *floor))
-			},
-			Self::SteppedDecreasing { begin, end, step, period } => {
-				(*begin - (step.int_mul(x.int_div(*period))).min(*begin)).max(*end)
-			},
+			Self::LinearDecreasing { length, floor, ceil } =>
+				*ceil - (x.min(*length).saturating_div(*length, Down) * (*ceil - *floor)),
+			Self::SteppedDecreasing { begin, end, step, period } =>
+				(*begin - (step.int_mul(x.int_div(*period))).min(*begin)).max(*end),
 			Self::Reciprocal { factor, x_offset, y_offset } => factor
 				.checked_rounding_div(FixedI64::from(x) + *x_offset, Low)
 				.map(|yp| (yp + *y_offset).into_clamped_perthing())
@@ -456,22 +453,20 @@ impl Curve {
 	/// ```
 	pub fn delay(&self, y: Perbill) -> Perbill {
 		match self {
-			Self::LinearDecreasing { length, floor, ceil } => {
+			Self::LinearDecreasing { length, floor, ceil } =>
 				if y < *floor {
 					Perbill::one()
 				} else if y > *ceil {
 					Perbill::zero()
 				} else {
 					(*ceil - y).saturating_div(*ceil - *floor, Up).saturating_mul(*length)
-				}
-			},
-			Self::SteppedDecreasing { begin, end, step, period } => {
+				},
+			Self::SteppedDecreasing { begin, end, step, period } =>
 				if y < *end {
 					Perbill::one()
 				} else {
 					period.int_mul((*begin - y.min(*begin) + step.less_epsilon()).int_div(*step))
-				}
-			},
+				},
 			Self::Reciprocal { factor, x_offset, y_offset } => {
 				let y = FixedI64::from(y);
 				let maybe_term = factor.checked_rounding_div(y - *y_offset, High);

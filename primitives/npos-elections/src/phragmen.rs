@@ -176,7 +176,7 @@ pub fn seq_phragmen_core<AccountId: IdentifierT>(
 				}
 			}
 		} else {
-			break;
+			break
 		}
 	}
 

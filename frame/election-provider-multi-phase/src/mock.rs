@@ -366,12 +366,10 @@ impl MinerConfig for Runtime {
 			MockedWeightInfo::Basic => Weight::from_ref_time(
 				(10 as u64).saturating_add((5 as u64).saturating_mul(a as u64)),
 			),
-			MockedWeightInfo::Complex => {
-				Weight::from_ref_time((0 * v + 0 * t + 1000 * a + 0 * d) as u64)
-			},
-			MockedWeightInfo::Real => {
-				<() as multi_phase::weights::WeightInfo>::feasibility_check(v, t, a, d)
-			},
+			MockedWeightInfo::Complex =>
+				Weight::from_ref_time((0 * v + 0 * t + 1000 * a + 0 * d) as u64),
+			MockedWeightInfo::Real =>
+				<() as multi_phase::weights::WeightInfo>::feasibility_check(v, t, a, d),
 		}
 	}
 }
@@ -437,10 +435,10 @@ impl ElectionDataProvider for StakingMock {
 	fn electable_targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
 		let targets = Targets::get();
 
-		if !DataProviderAllowBadData::get()
-			&& maybe_max_len.map_or(false, |max_len| targets.len() > max_len)
+		if !DataProviderAllowBadData::get() &&
+			maybe_max_len.map_or(false, |max_len| targets.len() > max_len)
 		{
-			return Err("Targets too big");
+			return Err("Targets too big")
 		}
 
 		Ok(targets)

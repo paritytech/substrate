@@ -365,12 +365,11 @@ where
 
 			let body = if get_body {
 				match self.client.block_body(hash)? {
-					Some(mut extrinsics) => {
-						extrinsics.iter_mut().map(|extrinsic| extrinsic.encode()).collect()
-					},
+					Some(mut extrinsics) =>
+						extrinsics.iter_mut().map(|extrinsic| extrinsic.encode()).collect(),
 					None => {
 						log::trace!(target: LOG_TARGET, "Missing data for block request.");
-						break;
+						break
 					},
 				}
 			} else {
@@ -407,13 +406,13 @@ where
 				indexed_body,
 			};
 
-			let new_total_size = total_size
-				+ block_data.body.iter().map(|ex| ex.len()).sum::<usize>()
-				+ block_data.indexed_body.iter().map(|ex| ex.len()).sum::<usize>();
+			let new_total_size = total_size +
+				block_data.body.iter().map(|ex| ex.len()).sum::<usize>() +
+				block_data.indexed_body.iter().map(|ex| ex.len()).sum::<usize>();
 
 			// Send at least one block, but make sure to not exceed the limit.
 			if !blocks.is_empty() && new_total_size > MAX_BODY_BYTES {
-				break;
+				break
 			}
 
 			total_size = new_total_size;
@@ -421,14 +420,14 @@ where
 			blocks.push(block_data);
 
 			if blocks.len() >= max_blocks as usize {
-				break;
+				break
 			}
 
 			match direction {
 				Direction::Ascending => block_id = BlockId::Number(number + One::one()),
 				Direction::Descending => {
 					if number.is_zero() {
-						break;
+						break
 					}
 					block_id = BlockId::Hash(parent_hash)
 				},

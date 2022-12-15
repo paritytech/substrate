@@ -49,7 +49,7 @@ pub fn pallet(
 				`dev_mode` attribute, such as `#[frame_support::pallet(dev_mode)]` or \
 				#[pallet(dev_mode)].";
 			let span = proc_macro2::TokenStream::from(attr).span();
-			return syn::Error::new(span, msg).to_compile_error().into();
+			return syn::Error::new(span, msg).to_compile_error().into()
 		}
 	}
 

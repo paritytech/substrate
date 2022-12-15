@@ -325,9 +325,9 @@ fn rewards_should_work() {
 		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
 		assert_eq_error_rate!(
 			Balances::total_balance(&100),
-			init_balance_100
-				+ part_for_100_from_10 * total_payout_0 * 2 / 3
-				+ part_for_100_from_20 * total_payout_0 * 1 / 3,
+			init_balance_100 +
+				part_for_100_from_10 * total_payout_0 * 2 / 3 +
+				part_for_100_from_20 * total_payout_0 * 1 / 3,
 			2
 		);
 		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
@@ -367,9 +367,9 @@ fn rewards_should_work() {
 		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
 		assert_eq_error_rate!(
 			Balances::total_balance(&100),
-			init_balance_100
-				+ part_for_100_from_10 * (total_payout_0 * 2 / 3 + total_payout_1)
-				+ part_for_100_from_20 * total_payout_0 * 1 / 3,
+			init_balance_100 +
+				part_for_100_from_10 * (total_payout_0 * 2 / 3 + total_payout_1) +
+				part_for_100_from_20 * total_payout_0 * 1 / 3,
 			2
 		);
 		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);

@@ -154,20 +154,15 @@ pub mod pallet {
 
 			Self::do_lock_nft(collection_id, item_id)?;
 			Self::do_create_asset(asset_id, admin_account_id, min_balance)?;
-			Self::do_mint_asset(
-				asset_id,
-				&beneficiary,
-				amount,
-			)?;
+			Self::do_mint_asset(asset_id, &beneficiary, amount)?;
 
 			// Mutate this storage item to retain information about the amount minted.
 			<AssetsMinted<T>>::try_mutate(
 				asset_id,
 				|assets_minted| -> Result<(), DispatchError> {
 					match assets_minted.is_some() {
-						true => {
-							*assets_minted = Some(assets_minted.unwrap().saturating_add(amount))
-						},
+						true =>
+							*assets_minted = Some(assets_minted.unwrap().saturating_add(amount)),
 						false => *assets_minted = Some(amount),
 					}
 
@@ -187,7 +182,8 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Return and burn a % of the asset, unlock the NFT. Currently 100% is the minimum threshold.
+		/// Return and burn a % of the asset, unlock the NFT. Currently 100% is the minimum
+		/// threshold.
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(2).ref_time())]
 		pub fn burn_asset_unlock_nft(
 			origin: OriginFor<T>,
@@ -240,7 +236,7 @@ pub mod pallet {
 					<AssetToNft<T>>::take(asset_id);
 					return Ok(())
 				},
-    			Err(e) => return Err(e),
+				Err(e) => return Err(e),
 			}
 		}
 

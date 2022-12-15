@@ -68,7 +68,7 @@ where
 	fn tcmp(&self, other: &T, threshold: T) -> Ordering {
 		// early exit.
 		if threshold.is_zero() {
-			return self.cmp(other);
+			return self.cmp(other)
 		}
 
 		let upper_bound = other.saturating_add(threshold);
@@ -173,12 +173,12 @@ where
 
 	// Nothing to do here.
 	if count.is_zero() {
-		return Ok(Vec::<T>::new());
+		return Ok(Vec::<T>::new())
 	}
 
 	let diff = targeted_sum.max(sum) - targeted_sum.min(sum);
 	if diff.is_zero() {
-		return Ok(input.to_vec());
+		return Ok(input.to_vec())
 	}
 
 	let needs_bump = targeted_sum > sum;

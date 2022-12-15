@@ -178,7 +178,7 @@ impl WasmOverride {
 		};
 
 		if !dir.is_dir() {
-			return Err(WasmOverrideError::NotADirectory(dir.to_owned()).into());
+			return Err(WasmOverrideError::NotADirectory(dir.to_owned()).into())
 		}
 
 		let mut overrides = HashMap::new();
@@ -214,7 +214,7 @@ impl WasmOverride {
 		}
 
 		if !duplicates.is_empty() {
-			return Err(WasmOverrideError::DuplicateRuntime(duplicates).into());
+			return Err(WasmOverrideError::DuplicateRuntime(duplicates).into())
 		}
 
 		Ok(overrides)

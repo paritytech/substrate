@@ -132,7 +132,7 @@ where
 	S: Serializer,
 {
 	if let Some(throughput) = maybe_throughput {
-		return serializer.serialize_some(&(throughput.as_mibs() as u64));
+		return serializer.serialize_some(&(throughput.as_mibs() as u64))
 	}
 	serializer.serialize_none()
 }
@@ -159,7 +159,7 @@ pub(crate) fn benchmark<E>(
 		elapsed = timestamp.elapsed();
 
 		if elapsed >= max_duration {
-			break;
+			break
 		}
 	}
 
@@ -567,16 +567,16 @@ mod tests {
 	#[test]
 	fn test_benchmark_disk_sequential_writes() {
 		assert!(
-			benchmark_disk_sequential_writes(DEFAULT_DISK_EXECUTION_LIMIT, "./".as_ref()).unwrap()
-				> Throughput::from_mibs(0.0)
+			benchmark_disk_sequential_writes(DEFAULT_DISK_EXECUTION_LIMIT, "./".as_ref()).unwrap() >
+				Throughput::from_mibs(0.0)
 		);
 	}
 
 	#[test]
 	fn test_benchmark_disk_random_writes() {
 		assert!(
-			benchmark_disk_random_writes(DEFAULT_DISK_EXECUTION_LIMIT, "./".as_ref()).unwrap()
-				> Throughput::from_mibs(0.0)
+			benchmark_disk_random_writes(DEFAULT_DISK_EXECUTION_LIMIT, "./".as_ref()).unwrap() >
+				Throughput::from_mibs(0.0)
 		);
 	}
 

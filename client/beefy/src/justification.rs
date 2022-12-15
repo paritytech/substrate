@@ -48,11 +48,11 @@ fn verify_with_validator_set<Block: BlockT>(
 ) -> Result<(), ConsensusError> {
 	match proof {
 		VersionedFinalityProof::V1(signed_commitment) => {
-			if signed_commitment.signatures.len() != validator_set.len()
-				|| signed_commitment.commitment.validator_set_id != validator_set.id()
-				|| signed_commitment.commitment.block_number != target_number
+			if signed_commitment.signatures.len() != validator_set.len() ||
+				signed_commitment.commitment.validator_set_id != validator_set.id() ||
+				signed_commitment.commitment.block_number != target_number
 			{
-				return Err(ConsensusError::InvalidJustification);
+				return Err(ConsensusError::InvalidJustification)
 			}
 
 			// Arrangement of signatures in the commitment should be in the same order

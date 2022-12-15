@@ -477,9 +477,8 @@ where
 				phase: WarpSyncPhase::DownloadingBlocks(gap_sync.best_queued_number),
 				total_bytes: 0,
 			}),
-			(None, SyncMode::Warp, _) => {
-				Some(WarpSyncProgress { phase: WarpSyncPhase::AwaitingPeers, total_bytes: 0 })
-			},
+			(None, SyncMode::Warp, _) =>
+				Some(WarpSyncProgress { phase: WarpSyncPhase::AwaitingPeers, total_bytes: 0 }),
 			(Some(sync), _, _) => Some(sync.progress()),
 			_ => None,
 		};
@@ -532,7 +531,7 @@ where
 			Ok(BlockStatus::Unknown) => {
 				if best_number.is_zero() {
 					info!("💔 New peer with unknown genesis hash {} ({}).", best_hash, best_number);
-					return Err(BadPeer(who, rep::GENESIS_MISMATCH));
+					return Err(BadPeer(who, rep::GENESIS_MISMATCH))
 				}
 				// If there are more than `MAJOR_SYNC_BLOCKS` in the import queue then we have
 				// enough to do in the import queue that it's not worth kicking off
@@ -554,7 +553,7 @@ where
 							state: PeerSyncState::Available,
 						},
 					);
-					return Ok(None);
+					return Ok(None)
 				}
 
 				// If we are at genesis, just start downloading.
@@ -612,9 +611,9 @@ where
 
 				Ok(req)
 			},
-			Ok(BlockStatus::Queued)
-			| Ok(BlockStatus::InChainWithState)
-			| Ok(BlockStatus::InChainPruned) => {
+			Ok(BlockStatus::Queued) |
+			Ok(BlockStatus::InChainWithState) |
+			Ok(BlockStatus::InChainPruned) => {
 				debug!(
 					target: "sync",
 					"New peer with known best hash {} ({}).",
@@ -679,14 +678,14 @@ where
 
 		if self.is_known(hash) {
 			debug!(target: "sync", "Refusing to sync known hash {:?}", hash);
-			return;
+			return
 		}
 
 		trace!(target: "sync", "Downloading requested old fork {:?}", hash);
 		for peer_id in &peers {
 			if let Some(peer) = self.peers.get_mut(peer_id) {
 				if let PeerSyncState::AncestorSearch { .. } = peer.state {
-					continue;
+					continue
 				}
 
 				if number > peer.best_number {
@@ -770,14 +769,14 @@ where
 							blocks
 						} else {
 							debug!(target: "sync", "Unexpected gap block response from {}", who);
-							return Err(BadPeer(*who, rep::NO_BLOCK));
+							return Err(BadPeer(*who, rep::NO_BLOCK))
 						}
 					},
 					PeerSyncState::DownloadingStale(_) => {
 						peer.state = PeerSyncState::Available;
 						if blocks.is_empty() {
 							debug!(target: "sync", "Empty block response from {}", who);
-							return Err(BadPeer(*who, rep::NO_BLOCK));
+							return Err(BadPeer(*who, rep::NO_BLOCK))
 						}
 						validate_blocks::<B>(&blocks, who, Some(request))?;
 						blocks
@@ -819,7 +818,7 @@ where
 									"Invalid response when searching for ancestor from {}",
 									who,
 								);
-								return Err(BadPeer(*who, rep::UNKNOWN_ANCESTOR));
+								return Err(BadPeer(*who, rep::UNKNOWN_ANCESTOR))
 							},
 							(_, Err(e)) => {
 								info!(
@@ -827,12 +826,12 @@ where
 									"❌ Error answering legitimate blockchain query: {}",
 									e,
 								);
-								return Err(BadPeer(*who, rep::BLOCKCHAIN_READ_ERROR));
+								return Err(BadPeer(*who, rep::BLOCKCHAIN_READ_ERROR))
 							},
 						};
 						if matching_hash.is_some() {
-							if *start < self.best_queued_number
-								&& self.best_queued_number <= peer.best_number
+							if *start < self.best_queued_number &&
+								self.best_queued_number <= peer.best_number
 							{
 								// We've made progress on this chain since the search was started.
 								// Opportunistically set common number to updated number
@@ -844,7 +843,7 @@ where
 						}
 						if matching_hash.is_none() && current.is_zero() {
 							trace!(target:"sync", "Ancestry search: genesis mismatch for peer {}", who);
-							return Err(BadPeer(*who, rep::GENESIS_MISMATCH));
+							return Err(BadPeer(*who, rep::GENESIS_MISMATCH))
 						}
 						if let Some((next_state, next_num)) =
 							handle_ancestor_search_state(state, *current, matching_hash.is_some())
@@ -854,7 +853,7 @@ where
 								start: *start,
 								state: next_state,
 							};
-							return Ok(OnBlockData::Request(*who, ancestry_request::<B>(next_num)));
+							return Ok(OnBlockData::Request(*who, ancestry_request::<B>(next_num)))
 						} else {
 							// Ancestry search is complete. Check if peer is on a stale fork unknown
 							// to us and add it to sync targets if necessary.
@@ -868,8 +867,8 @@ where
 								matching_hash,
 								peer.common_number,
 							);
-							if peer.common_number < peer.best_number
-								&& peer.best_number < self.best_queued_number
+							if peer.common_number < peer.best_number &&
+								peer.best_number < self.best_queued_number
 							{
 								trace!(
 									target: "sync",
@@ -899,16 +898,14 @@ where
 								match warp_sync.import_target_block(
 									blocks.pop().expect("`blocks` len checked above."),
 								) {
-									TargetBlockImportResult::Success => {
-										return Ok(OnBlockData::Continue)
-									},
-									TargetBlockImportResult::BadResponse => {
-										return Err(BadPeer(*who, rep::VERIFICATION_FAIL))
-									},
+									TargetBlockImportResult::Success =>
+										return Ok(OnBlockData::Continue),
+									TargetBlockImportResult::BadResponse =>
+										return Err(BadPeer(*who, rep::VERIFICATION_FAIL)),
 								}
 							} else if blocks.is_empty() {
 								debug!(target: "sync", "Empty block response from {}", who);
-								return Err(BadPeer(*who, rep::NO_BLOCK));
+								return Err(BadPeer(*who, rep::NO_BLOCK))
 							} else {
 								debug!(
 									target: "sync",
@@ -916,7 +913,7 @@ where
 									blocks.len(),
 									who,
 								);
-								return Err(BadPeer(*who, rep::NOT_REQUESTED));
+								return Err(BadPeer(*who, rep::NOT_REQUESTED))
 							}
 						} else {
 							debug!(
@@ -924,13 +921,13 @@ where
 								"Logic error: we think we are downloading warp target block from {}, but no warp sync is happening.",
 								who,
 							);
-							return Ok(OnBlockData::Continue);
+							return Ok(OnBlockData::Continue)
 						}
 					},
-					PeerSyncState::Available
-					| PeerSyncState::DownloadingJustification(..)
-					| PeerSyncState::DownloadingState
-					| PeerSyncState::DownloadingWarpProof => Vec::new(),
+					PeerSyncState::Available |
+					PeerSyncState::DownloadingJustification(..) |
+					PeerSyncState::DownloadingState |
+					PeerSyncState::DownloadingWarpProof => Vec::new(),
 				}
 			} else {
 				// When request.is_none() this is a block announcement. Just accept blocks.
@@ -958,7 +955,7 @@ where
 			}
 		} else {
 			// We don't know of this peer, so we also did not request anything from it.
-			return Err(BadPeer(*who, rep::NOT_REQUESTED));
+			return Err(BadPeer(*who, rep::NOT_REQUESTED))
 		};
 
 		Ok(self.validate_and_queue_blocks(new_blocks, gap))
@@ -973,7 +970,7 @@ where
 			peer
 		} else {
 			error!(target: "sync", "💔 Called on_block_justification with a bad peer ID");
-			return Ok(OnBlockJustification::Nothing);
+			return Ok(OnBlockJustification::Nothing)
 		};
 
 		self.allowed_requests.add(&who);
@@ -990,7 +987,7 @@ where
 						hash,
 						block.hash,
 					);
-					return Err(BadPeer(who, rep::BAD_JUSTIFICATION));
+					return Err(BadPeer(who, rep::BAD_JUSTIFICATION))
 				}
 
 				block
@@ -1012,7 +1009,7 @@ where
 			if let Some((peer, hash, number, j)) =
 				self.extra_justifications.on_response(who, justification)
 			{
-				return Ok(OnBlockJustification::Import { peer, hash, number, justifications: j });
+				return Ok(OnBlockJustification::Import { peer, hash, number, justifications: j })
 			}
 		}
 
@@ -1039,7 +1036,7 @@ where
 		}
 		for (result, hash) in results {
 			if has_error {
-				break;
+				break
 			}
 
 			if result.is_err() {
@@ -1047,11 +1044,10 @@ where
 			}
 
 			match result {
-				Ok(BlockImportStatus::ImportedKnown(number, who)) => {
+				Ok(BlockImportStatus::ImportedKnown(number, who)) =>
 					if let Some(peer) = who {
 						self.update_peer_common_number(&peer, number);
-					}
-				},
+					},
 				Ok(BlockImportStatus::ImportedUnknown(number, aux, who)) => {
 					if aux.clear_justification_requests {
 						trace!(
@@ -1119,7 +1115,7 @@ where
 						self.gap_sync = None;
 					}
 				},
-				Err(BlockImportError::IncompleteHeader(who)) => {
+				Err(BlockImportError::IncompleteHeader(who)) =>
 					if let Some(peer) = who {
 						warn!(
 							target: "sync",
@@ -1127,9 +1123,8 @@ where
 						);
 						output.push(Err(BadPeer(peer, rep::INCOMPLETE_HEADER)));
 						output.extend(self.restart());
-					}
-				},
-				Err(BlockImportError::VerificationFailed(who, e)) => {
+					},
+				Err(BlockImportError::VerificationFailed(who, e)) =>
 					if let Some(peer) = who {
 						warn!(
 							target: "sync",
@@ -1140,9 +1135,8 @@ where
 						);
 						output.push(Err(BadPeer(peer, rep::VERIFICATION_FAIL)));
 						output.extend(self.restart());
-					}
-				},
-				Err(BlockImportError::BadBlock(who)) => {
+					},
+				Err(BlockImportError::BadBlock(who)) =>
 					if let Some(peer) = who {
 						warn!(
 							target: "sync",
@@ -1151,8 +1145,7 @@ where
 							peer,
 						);
 						output.push(Err(BadPeer(peer, rep::BAD_BLOCK)));
-					}
-				},
+					},
 				Err(BlockImportError::MissingState) => {
 					// This may happen if the chain we were requesting upon has been discarded
 					// in the meantime because other chain has been finalized.
@@ -1252,7 +1245,7 @@ where
 				}
 				.boxed(),
 			);
-			return;
+			return
 		}
 
 		// Check if there is a slot for this block announce validation.
@@ -1272,7 +1265,7 @@ where
 					}
 					.boxed(),
 				);
-				return;
+				return
 			},
 			HasSlotForBlockAnnounceValidation::MaximumPeerSlotsReached => {
 				self.block_announce_validation.push(async move {
@@ -1285,7 +1278,7 @@ where
 					);
 					PreValidateBlockAnnounce::Skip
 				}.boxed());
-				return;
+				return
 			},
 		}
 
@@ -1573,18 +1566,15 @@ where
 
 	fn required_block_attributes(&self) -> BlockAttributes {
 		match self.mode {
-			SyncMode::Full => {
-				BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION | BlockAttributes::BODY
-			},
+			SyncMode::Full =>
+				BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION | BlockAttributes::BODY,
 			SyncMode::Light => BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION,
-			SyncMode::LightState { storage_chain_mode: false, .. } | SyncMode::Warp => {
-				BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION | BlockAttributes::BODY
-			},
-			SyncMode::LightState { storage_chain_mode: true, .. } => {
-				BlockAttributes::HEADER
-					| BlockAttributes::JUSTIFICATION
-					| BlockAttributes::INDEXED_BODY
-			},
+			SyncMode::LightState { storage_chain_mode: false, .. } | SyncMode::Warp =>
+				BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION | BlockAttributes::BODY,
+			SyncMode::LightState { storage_chain_mode: true, .. } =>
+				BlockAttributes::HEADER |
+					BlockAttributes::JUSTIFICATION |
+					BlockAttributes::INDEXED_BODY,
 		}
 	}
 
@@ -1661,7 +1651,7 @@ where
 			for (n, peer) in self.peers.iter_mut() {
 				if let PeerSyncState::AncestorSearch { .. } = peer.state {
 					// Wait for ancestry search to complete first.
-					continue;
+					continue
 				}
 				let new_common_number =
 					if peer.best_number >= number { number } else { peer.best_number };
@@ -1696,7 +1686,7 @@ where
 		peer: &PeerId,
 	) -> HasSlotForBlockAnnounceValidation {
 		if self.block_announce_validation.len() >= MAX_CONCURRENT_BLOCK_ANNOUNCE_VALIDATIONS {
-			return HasSlotForBlockAnnounceValidation::TotalMaximumSlotsReached;
+			return HasSlotForBlockAnnounceValidation::TotalMaximumSlotsReached
 		}
 
 		match self.block_announce_validation_per_peer_stats.entry(*peer) {
@@ -1722,9 +1712,9 @@ where
 		res: &PreValidateBlockAnnounce<B::Header>,
 	) {
 		let peer = match res {
-			PreValidateBlockAnnounce::Failure { who, .. }
-			| PreValidateBlockAnnounce::Process { who, .. }
-			| PreValidateBlockAnnounce::Error { who } => who,
+			PreValidateBlockAnnounce::Failure { who, .. } |
+			PreValidateBlockAnnounce::Process { who, .. } |
+			PreValidateBlockAnnounce::Error { who } => who,
 			PreValidateBlockAnnounce::Skip => return,
 		};
 
@@ -1758,17 +1748,16 @@ where
 					who,
 					disconnect,
 				);
-				return PollBlockAnnounceValidation::Failure { who, disconnect };
+				return PollBlockAnnounceValidation::Failure { who, disconnect }
 			},
-			PreValidateBlockAnnounce::Process { announce, is_new_best, who } => {
-				(announce, is_new_best, who)
-			},
+			PreValidateBlockAnnounce::Process { announce, is_new_best, who } =>
+				(announce, is_new_best, who),
 			PreValidateBlockAnnounce::Error { .. } | PreValidateBlockAnnounce::Skip => {
 				debug!(
 					target: "sync",
 					"Ignored announce validation",
 				);
-				return PollBlockAnnounceValidation::Skip;
+				return PollBlockAnnounceValidation::Skip
 			},
 		};
 
@@ -1792,12 +1781,12 @@ where
 			peer
 		} else {
 			error!(target: "sync", "💔 Called on_block_announce with a bad peer ID");
-			return PollBlockAnnounceValidation::Nothing { is_best, who, announce };
+			return PollBlockAnnounceValidation::Nothing { is_best, who, announce }
 		};
 
 		if let PeerSyncState::AncestorSearch { .. } = peer.state {
 			trace!(target: "sync", "Peer state is ancestor search.");
-			return PollBlockAnnounceValidation::Nothing { is_best, who, announce };
+			return PollBlockAnnounceValidation::Nothing { is_best, who, announce }
 		}
 
 		if is_best {
@@ -1811,8 +1800,8 @@ where
 		if is_best {
 			if known && self.best_queued_number >= number {
 				self.update_peer_common_number(&who, number);
-			} else if announce.header.parent_hash() == &self.best_queued_hash
-				|| known_parent && self.best_queued_number >= number
+			} else if announce.header.parent_hash() == &self.best_queued_hash ||
+				known_parent && self.best_queued_number >= number
 			{
 				self.update_peer_common_number(&who, number - One::one());
 			}
@@ -1825,7 +1814,7 @@ where
 			if let Some(target) = self.fork_targets.get_mut(&hash) {
 				target.peers.insert(who);
 			}
-			return PollBlockAnnounceValidation::Nothing { is_best, who, announce };
+			return PollBlockAnnounceValidation::Nothing { is_best, who, announce }
 		}
 
 		if ancient_parent {
@@ -1836,7 +1825,7 @@ where
 				hash,
 				announce.header,
 			);
-			return PollBlockAnnounceValidation::Nothing { is_best, who, announce };
+			return PollBlockAnnounceValidation::Nothing { is_best, who, announce }
 		}
 
 		let requires_additional_data = self.mode != SyncMode::Light || !known_parent;
@@ -1848,7 +1837,7 @@ where
 				hash,
 				announce.header,
 			);
-			return PollBlockAnnounceValidation::ImportHeader { is_best, announce, who };
+			return PollBlockAnnounceValidation::ImportHeader { is_best, announce, who }
 		}
 
 		if self.status().state == SyncState::Idle {
@@ -1892,7 +1881,7 @@ where
 				// We make sure our commmon number is at least something we have.
 				p.common_number = self.best_queued_number;
 				self.peers.insert(id, p);
-				return None;
+				return None
 			}
 
 			// handle peers that were in other states.
@@ -1926,9 +1915,9 @@ where
 		self.best_queued_hash = info.best_hash;
 		self.best_queued_number = info.best_number;
 
-		if self.mode == SyncMode::Full
-			&& self.client.block_status(&BlockId::hash(info.best_hash))?
-				!= BlockStatus::InChainWithState
+		if self.mode == SyncMode::Full &&
+			self.client.block_status(&BlockId::hash(info.best_hash))? !=
+				BlockStatus::InChainWithState
 		{
 			self.import_existing = true;
 			// Latest state is missing, start with the last finalized state or genesis instead.
@@ -1958,7 +1947,7 @@ where
 	/// What is the status of the block corresponding to the given hash?
 	fn block_status(&self, hash: &B::Hash) -> Result<BlockStatus, ClientError> {
 		if self.queue_blocks.contains(hash) {
-			return Ok(BlockStatus::Queued);
+			return Ok(BlockStatus::Queued)
 		}
 		self.client.block_status(&BlockId::Hash(*hash))
 	}
@@ -2778,7 +2767,7 @@ fn handle_ancestor_search_state<B: BlockT>(
 			if block_hash_match && next_distance_to_tip == One::one() {
 				// We found the ancestor in the first step so there is no need to execute binary
 				// search.
-				return None;
+				return None
 			}
 			if block_hash_match {
 				let left = curr_block_num;
@@ -2797,7 +2786,7 @@ fn handle_ancestor_search_state<B: BlockT>(
 		},
 		AncestorSearchState::BinarySearch(mut left, mut right) => {
 			if left >= curr_block_num {
-				return None;
+				return None
 			}
 			if block_hash_match {
 				left = curr_block_num;
@@ -2827,7 +2816,7 @@ fn peer_block_request<B: BlockT>(
 ) -> Option<(Range<NumberFor<B>>, BlockRequest<B>)> {
 	if best_num >= peer.best_number {
 		// Will be downloaded as alternative fork instead.
-		return None;
+		return None
 	} else if peer.common_number < finalized {
 		trace!(
 			target: "sync",
@@ -2908,22 +2897,22 @@ fn fork_sync_request<B: BlockT>(
 	targets.retain(|hash, r| {
 		if r.number <= finalized {
 			trace!(target: "sync", "Removed expired fork sync request {:?} (#{})", hash, r.number);
-			return false;
+			return false
 		}
 		if check_block(hash) != BlockStatus::Unknown {
 			trace!(target: "sync", "Removed obsolete fork sync request {:?} (#{})", hash, r.number);
-			return false;
+			return false
 		}
 		true
 	});
 	for (hash, r) in targets {
 		if !r.peers.contains(&id) {
-			continue;
+			continue
 		}
 		// Download the fork only if it is behind or not too far ahead our tip of the chain
 		// Otherwise it should be downloaded in full sync mode.
-		if r.number <= best_num
-			|| (r.number - best_num).saturated_into::<u32>() < MAX_BLOCKS_TO_REQUEST as u32
+		if r.number <= best_num ||
+			(r.number - best_num).saturated_into::<u32>() < MAX_BLOCKS_TO_REQUEST as u32
 		{
 			let parent_status = r.parent_hash.as_ref().map_or(BlockStatus::Unknown, check_block);
 			let count = if parent_status == BlockStatus::Unknown {
@@ -2942,7 +2931,7 @@ fn fork_sync_request<B: BlockT>(
 					direction: Direction::Descending,
 					max: Some(count),
 				},
-			));
+			))
 		} else {
 			trace!(target: "sync", "Fork too far in the future: {:?} (#{})", hash, r.number);
 		}
@@ -2961,7 +2950,7 @@ where
 	T: HeaderMetadata<Block, Error = sp_blockchain::Error> + ?Sized,
 {
 	if base == block {
-		return Ok(false);
+		return Ok(false)
 	}
 
 	let ancestor = sp_blockchain::lowest_common_ancestor(client, *block, *base)?;
@@ -2988,7 +2977,7 @@ fn validate_blocks<Block: BlockT>(
 				blocks.len(),
 			);
 
-			return Err(BadPeer(*who, rep::NOT_REQUESTED));
+			return Err(BadPeer(*who, rep::NOT_REQUESTED))
 		}
 
 		let block_header =
@@ -3008,11 +2997,11 @@ fn validate_blocks<Block: BlockT>(
 				block_header,
 			);
 
-			return Err(BadPeer(*who, rep::NOT_REQUESTED));
+			return Err(BadPeer(*who, rep::NOT_REQUESTED))
 		}
 
-		if request.fields.contains(BlockAttributes::HEADER)
-			&& blocks.iter().any(|b| b.header.is_none())
+		if request.fields.contains(BlockAttributes::HEADER) &&
+			blocks.iter().any(|b| b.header.is_none())
 		{
 			trace!(
 				target: "sync",
@@ -3020,7 +3009,7 @@ fn validate_blocks<Block: BlockT>(
 				who,
 			);
 
-			return Err(BadPeer(*who, rep::BAD_RESPONSE));
+			return Err(BadPeer(*who, rep::BAD_RESPONSE))
 		}
 
 		if request.fields.contains(BlockAttributes::BODY) && blocks.iter().any(|b| b.body.is_none())
@@ -3031,7 +3020,7 @@ fn validate_blocks<Block: BlockT>(
 				who,
 			);
 
-			return Err(BadPeer(*who, rep::BAD_RESPONSE));
+			return Err(BadPeer(*who, rep::BAD_RESPONSE))
 		}
 	}
 
@@ -3046,7 +3035,7 @@ fn validate_blocks<Block: BlockT>(
 					b.hash,
 					hash,
 				);
-				return Err(BadPeer(*who, rep::BAD_BLOCK));
+				return Err(BadPeer(*who, rep::BAD_BLOCK))
 			}
 		}
 		if let (Some(header), Some(body)) = (&b.header, &b.body) {
@@ -3064,7 +3053,7 @@ fn validate_blocks<Block: BlockT>(
 					expected,
 					got,
 				);
-				return Err(BadPeer(*who, rep::BAD_BLOCK));
+				return Err(BadPeer(*who, rep::BAD_BLOCK))
 			}
 		}
 	}
@@ -3217,9 +3206,9 @@ mod test {
 		// the justification request should be scheduled to the
 		// new peer which is at the given block
 		assert!(sync.justification_requests().any(|(p, r)| {
-			p == peer_id3
-				&& r.fields == BlockAttributes::JUSTIFICATION
-				&& r.from == FromBlock::Hash(b1_hash)
+			p == peer_id3 &&
+				r.fields == BlockAttributes::JUSTIFICATION &&
+				r.from == FromBlock::Hash(b1_hash)
 		}));
 
 		assert_eq!(
@@ -3264,7 +3253,7 @@ mod test {
 		// Poll until we have procssed the block announcement
 		block_on(poll_fn(|cx| loop {
 			if sync.poll_block_announce_validation(cx).is_pending() {
-				break Poll::Ready(());
+				break Poll::Ready(())
 			}
 		}))
 	}
@@ -3664,7 +3653,7 @@ mod test {
 				request
 			} else {
 				// We found the ancenstor
-				break;
+				break
 			};
 
 			log::trace!(target: "sync", "Request: {:?}", request);
@@ -3802,7 +3791,7 @@ mod test {
 				request
 			} else {
 				// We found the ancenstor
-				break;
+				break
 			};
 
 			log::trace!(target: "sync", "Request: {:?}", request);

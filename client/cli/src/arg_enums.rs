@@ -80,21 +80,16 @@ pub fn execution_method_from_cli(
 		WasmExecutionMethod::Interpreted => sc_service::config::WasmExecutionMethod::Interpreted,
 		WasmExecutionMethod::Compiled => sc_service::config::WasmExecutionMethod::Compiled {
 			instantiation_strategy: match _instantiation_strategy {
-				WasmtimeInstantiationStrategy::PoolingCopyOnWrite => {
-					sc_service::config::WasmtimeInstantiationStrategy::PoolingCopyOnWrite
-				},
-				WasmtimeInstantiationStrategy::RecreateInstanceCopyOnWrite => {
-					sc_service::config::WasmtimeInstantiationStrategy::RecreateInstanceCopyOnWrite
-				},
-				WasmtimeInstantiationStrategy::Pooling => {
-					sc_service::config::WasmtimeInstantiationStrategy::Pooling
-				},
-				WasmtimeInstantiationStrategy::RecreateInstance => {
-					sc_service::config::WasmtimeInstantiationStrategy::RecreateInstance
-				},
-				WasmtimeInstantiationStrategy::LegacyInstanceReuse => {
-					sc_service::config::WasmtimeInstantiationStrategy::LegacyInstanceReuse
-				},
+				WasmtimeInstantiationStrategy::PoolingCopyOnWrite =>
+					sc_service::config::WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
+				WasmtimeInstantiationStrategy::RecreateInstanceCopyOnWrite =>
+					sc_service::config::WasmtimeInstantiationStrategy::RecreateInstanceCopyOnWrite,
+				WasmtimeInstantiationStrategy::Pooling =>
+					sc_service::config::WasmtimeInstantiationStrategy::Pooling,
+				WasmtimeInstantiationStrategy::RecreateInstance =>
+					sc_service::config::WasmtimeInstantiationStrategy::RecreateInstance,
+				WasmtimeInstantiationStrategy::LegacyInstanceReuse =>
+					sc_service::config::WasmtimeInstantiationStrategy::LegacyInstanceReuse,
 			},
 		},
 	}
@@ -259,12 +254,10 @@ impl Into<sc_network::config::SyncMode> for SyncMode {
 	fn into(self) -> sc_network::config::SyncMode {
 		match self {
 			SyncMode::Full => sc_network::config::SyncMode::Full,
-			SyncMode::Fast => {
-				sc_network::config::SyncMode::Fast { skip_proofs: false, storage_chain_mode: false }
-			},
-			SyncMode::FastUnsafe => {
-				sc_network::config::SyncMode::Fast { skip_proofs: true, storage_chain_mode: false }
-			},
+			SyncMode::Fast =>
+				sc_network::config::SyncMode::Fast { skip_proofs: false, storage_chain_mode: false },
+			SyncMode::FastUnsafe =>
+				sc_network::config::SyncMode::Fast { skip_proofs: true, storage_chain_mode: false },
 			SyncMode::Warp => sc_network::config::SyncMode::Warp,
 		}
 	}

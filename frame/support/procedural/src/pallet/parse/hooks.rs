@@ -42,7 +42,7 @@ impl HooksDef {
 			item
 		} else {
 			let msg = "Invalid pallet::hooks, expected item impl";
-			return Err(syn::Error::new(item.span(), msg));
+			return Err(syn::Error::new(item.span(), msg))
 		};
 
 		let instances = vec![
@@ -67,7 +67,7 @@ impl HooksDef {
 				quote::quote!(#item_trait)
 			);
 
-			return Err(syn::Error::new(item_trait.span(), msg));
+			return Err(syn::Error::new(item_trait.span(), msg))
 		}
 
 		let has_runtime_upgrade = item.items.iter().any(|i| match i {

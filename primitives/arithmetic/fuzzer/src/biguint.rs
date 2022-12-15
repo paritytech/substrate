@@ -106,7 +106,7 @@ fn main() {
 			if check_digit_lengths(&u, &v, 4) {
 				let (ue, ve) = (ue.unwrap(), ve.unwrap());
 				if ve == 0 {
-					return;
+					return
 				}
 				let (q, r) = (ue / ve, ue % ve);
 				if let Some((qq, rr)) = u.clone().div(&v, true) {

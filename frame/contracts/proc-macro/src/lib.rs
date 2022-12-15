@@ -60,7 +60,7 @@ fn derive_debug(input: TokenStream, fmt: impl Fn(&Ident) -> TokenStream2) -> Tok
 			name.span() =>
 			compile_error!("WeightDebug is only supported for structs.");
 		}
-		.into();
+		.into()
 	};
 
 	#[cfg(feature = "full")]
@@ -97,7 +97,7 @@ fn iterate_fields(data: &syn::DataStruct, fmt: impl Fn(&Ident) -> TokenStream2) 
 			let recurse = fields.named.iter().filter_map(|f| {
 				let name = f.ident.as_ref()?;
 				if name.to_string().starts_with('_') {
-					return None;
+					return None
 				}
 				let value = fmt(name);
 				let ret = quote_spanned! { f.span() =>
@@ -247,7 +247,7 @@ impl HostFn {
 				match &result.arguments {
 					syn::PathArguments::AngleBracketed(group) => {
 						if group.args.len() != 2 {
-							return Err(err(span, &msg));
+							return Err(err(span, &msg))
 						};
 
 						let arg2 = group.args.last().ok_or(err(span, &msg))?;
@@ -286,7 +286,7 @@ impl HostFn {
 								.to_string()),
 							syn::Type::Tuple(tt) => {
 								if !tt.elems.is_empty() {
-									return Err(err(arg1.span(), &msg));
+									return Err(err(arg1.span(), &msg))
 								};
 								Ok("()".to_string())
 							},

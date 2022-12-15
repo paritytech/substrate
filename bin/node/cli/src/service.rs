@@ -686,7 +686,7 @@ mod tests {
 						sc_consensus_babe::authorship::claim_slot(slot.into(), &epoch, &keystore)
 							.map(|(digest, _)| digest)
 					{
-						break (babe_pre_digest, epoch_descriptor);
+						break (babe_pre_digest, epoch_descriptor)
 					}
 
 					slot += 1;

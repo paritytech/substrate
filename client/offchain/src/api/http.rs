@@ -156,7 +156,7 @@ impl HttpApi {
 					target: LOG_TARGET,
 					"Overflow in offchain worker HTTP request ID assignment"
 				);
-				return Err(());
+				return Err(())
 			},
 		};
 		self.requests
@@ -219,7 +219,7 @@ impl HttpApi {
 				future::MaybeDone::Done(Err(_)) => return Err(HttpError::IoError),
 				future::MaybeDone::Future(_) | future::MaybeDone::Gone => {
 					debug_assert!(matches!(deadline, future::MaybeDone::Done(..)));
-					return Err(HttpError::DeadlineReached);
+					return Err(HttpError::DeadlineReached)
 				},
 			};
 
@@ -248,13 +248,13 @@ impl HttpApi {
 						match poll_sender(&mut sender) {
 							Err(HttpError::IoError) => {
 								tracing::debug!(target: LOG_TARGET, id = %request_id.0, "Encountered io error while trying to add new chunk to body");
-								return Err(HttpError::IoError);
+								return Err(HttpError::IoError)
 							},
 							other => {
 								tracing::debug!(target: LOG_TARGET, id = %request_id.0, res = ?other, "Added chunk to body");
 								self.requests
 									.insert(request_id, HttpApiRequest::Dispatched(Some(sender)));
-								return other;
+								return other
 							},
 						}
 					} else {
@@ -263,7 +263,7 @@ impl HttpApi {
 						// Writing an empty body is a hint that we should stop writing. Dropping
 						// the sender.
 						self.requests.insert(request_id, HttpApiRequest::Dispatched(None));
-						return Ok(());
+						return Ok(())
 					}
 				},
 
@@ -279,13 +279,13 @@ impl HttpApi {
 						) {
 							Err(HttpError::IoError) => {
 								tracing::debug!(target: LOG_TARGET, id = %request_id.0, "Encountered io error while trying to add new chunk to body");
-								return Err(HttpError::IoError);
+								return Err(HttpError::IoError)
 							},
 							other => {
 								tracing::debug!(target: LOG_TARGET, id = %request_id.0, res = ?other, "Added chunk to body");
 								self.requests
 									.insert(request_id, HttpApiRequest::Response(response));
-								return other;
+								return other
 							},
 						}
 					} else {
@@ -300,7 +300,7 @@ impl HttpApi {
 								..response
 							}),
 						);
-						return Ok(());
+						return Ok(())
 					}
 				},
 
@@ -309,16 +309,16 @@ impl HttpApi {
 
 					// If the request has already failed, return without putting back the request
 					// in the list.
-					return Err(HttpError::IoError);
+					return Err(HttpError::IoError)
 				},
 
-				v @ HttpApiRequest::Dispatched(None)
-				| v @ HttpApiRequest::Response(HttpApiRequestRp { sending_body: None, .. }) => {
+				v @ HttpApiRequest::Dispatched(None) |
+				v @ HttpApiRequest::Response(HttpApiRequestRp { sending_body: None, .. }) => {
 					tracing::debug!(target: LOG_TARGET, id = %request_id.0, "Body sending already finished");
 
 					// We have already finished sending this body.
 					self.requests.insert(request_id, v);
-					return Err(HttpError::Invalid);
+					return Err(HttpError::Invalid)
 				},
 			}
 		}
@@ -335,10 +335,10 @@ impl HttpApi {
 		for id in ids {
 			match self.requests.get_mut(id) {
 				Some(HttpApiRequest::NotDispatched(_, _)) => {},
-				Some(HttpApiRequest::Dispatched(sending_body))
-				| Some(HttpApiRequest::Response(HttpApiRequestRp { sending_body, .. })) => {
+				Some(HttpApiRequest::Dispatched(sending_body)) |
+				Some(HttpApiRequest::Response(HttpApiRequestRp { sending_body, .. })) => {
 					let _ = sending_body.take();
-					continue;
+					continue
 				},
 				_ => continue,
 			};
@@ -403,7 +403,7 @@ impl HttpApi {
 							},
 						}
 					}
-					return output;
+					return output
 				}
 			}
 
@@ -416,7 +416,7 @@ impl HttpApi {
 					msg
 				} else {
 					debug_assert!(matches!(deadline, future::MaybeDone::Done(..)));
-					continue;
+					continue
 				}
 			};
 
@@ -456,7 +456,7 @@ impl HttpApi {
 
 				None => {
 					tracing::error!(target: "offchain-worker::http", "Worker has crashed");
-					return ids.iter().map(|_| HttpRequestStatus::IoError).collect();
+					return ids.iter().map(|_| HttpRequestStatus::IoError).collect()
 				},
 			}
 		}
@@ -496,14 +496,14 @@ impl HttpApi {
 			// and we still haven't received a response.
 			Some(rq @ HttpApiRequest::Dispatched(_)) => {
 				self.requests.insert(request_id, rq);
-				return Err(HttpError::DeadlineReached);
+				return Err(HttpError::DeadlineReached)
 			},
 			// The request has failed.
 			Some(HttpApiRequest::Fail { .. }) => return Err(HttpError::IoError),
 			// Request hasn't been dispatched yet; reading the body is invalid.
 			Some(rq @ HttpApiRequest::NotDispatched(_, _)) => {
 				self.requests.insert(request_id, rq);
-				return Err(HttpError::Invalid);
+				return Err(HttpError::Invalid)
 			},
 			None => return Err(HttpError::Invalid),
 		};
@@ -524,12 +524,12 @@ impl HttpApi {
 								..response
 							}),
 						);
-						return Ok(n);
+						return Ok(n)
 					},
 					Err(err) => {
 						// This code should never be reached unless there's a logic error somewhere.
 						tracing::error!(target: "offchain-worker::http", "Failed to read from current read chunk: {:?}", err);
-						return Err(HttpError::IoError);
+						return Err(HttpError::IoError)
 					},
 				}
 			}
@@ -550,7 +550,7 @@ impl HttpApi {
 
 			if let future::MaybeDone::Done(_) = deadline {
 				self.requests.insert(request_id, HttpApiRequest::Response(response));
-				return Err(HttpError::DeadlineReached);
+				return Err(HttpError::DeadlineReached)
 			}
 		}
 	}
@@ -565,9 +565,8 @@ impl fmt::Debug for HttpApi {
 impl fmt::Debug for HttpApiRequest {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			HttpApiRequest::NotDispatched(_, _) => {
-				f.debug_tuple("HttpApiRequest::NotDispatched").finish()
-			},
+			HttpApiRequest::NotDispatched(_, _) =>
+				f.debug_tuple("HttpApiRequest::NotDispatched").finish(),
 			HttpApiRequest::Dispatched(_) => f.debug_tuple("HttpApiRequest::Dispatched").finish(),
 			HttpApiRequest::Response(HttpApiRequestRp { status_code, headers, .. }) => f
 				.debug_tuple("HttpApiRequest::Response")
@@ -662,12 +661,12 @@ impl Future for HttpWorker {
 					let response = match Future::poll(Pin::new(&mut future), cx) {
 						Poll::Pending => {
 							me.requests.push((id, HttpWorkerRequest::Dispatched(future)));
-							continue;
+							continue
 						},
 						Poll::Ready(Ok(response)) => response,
 						Poll::Ready(Err(error)) => {
 							let _ = me.to_api.unbounded_send(WorkerToApi::Fail { id, error });
-							continue; // don't insert the request back
+							continue // don't insert the request back
 						},
 					};
 
@@ -685,7 +684,7 @@ impl Future for HttpWorker {
 
 					me.requests.push((id, HttpWorkerRequest::ReadBody { body, tx: body_tx }));
 					cx.waker().wake_by_ref(); // reschedule in order to poll the new future
-					continue;
+					continue
 				},
 
 				HttpWorkerRequest::ReadBody { mut body, mut tx } => {
@@ -696,7 +695,7 @@ impl Future for HttpWorker {
 						Poll::Ready(Err(_)) => continue, // don't insert the request back
 						Poll::Pending => {
 							me.requests.push((id, HttpWorkerRequest::ReadBody { body, tx }));
-							continue;
+							continue
 						},
 					}
 
@@ -745,12 +744,10 @@ impl fmt::Debug for HttpWorker {
 impl fmt::Debug for HttpWorkerRequest {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			HttpWorkerRequest::Dispatched(_) => {
-				f.debug_tuple("HttpWorkerRequest::Dispatched").finish()
-			},
-			HttpWorkerRequest::ReadBody { .. } => {
-				f.debug_tuple("HttpWorkerRequest::Response").finish()
-			},
+			HttpWorkerRequest::Dispatched(_) =>
+				f.debug_tuple("HttpWorkerRequest::Dispatched").finish(),
+			HttpWorkerRequest::ReadBody { .. } =>
+				f.debug_tuple("HttpWorkerRequest::Response").finish(),
 		}
 	}
 }

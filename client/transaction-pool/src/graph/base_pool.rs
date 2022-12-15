@@ -268,7 +268,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 	/// ready to be included in the block.
 	pub fn import(&mut self, tx: Transaction<Hash, Ex>) -> error::Result<Imported<Hash, Ex>> {
 		if self.is_imported(&tx.hash) {
-			return Err(error::Error::AlreadyImported(Box::new(tx.hash)));
+			return Err(error::Error::AlreadyImported(Box::new(tx.hash)))
 		}
 
 		let tx = WaitingTransaction::new(tx, self.ready.provided_tags(), &self.recently_pruned);
@@ -283,12 +283,12 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 		// If all tags are not satisfied import to future.
 		if !tx.is_ready() {
 			if self.reject_future_transactions {
-				return Err(error::Error::RejectedFutureTransaction);
+				return Err(error::Error::RejectedFutureTransaction)
 			}
 
 			let hash = tx.transaction.hash.clone();
 			self.future.import(tx);
-			return Ok(Imported::Future { hash });
+			return Ok(Imported::Future { hash })
 		}
 
 		self.import_to_ready(tx)
@@ -326,14 +326,13 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 					removed.append(&mut replaced);
 				},
 				// transaction failed to be imported.
-				Err(e) => {
+				Err(e) =>
 					if first {
 						debug!(target: "txpool", "[{:?}] Error importing: {:?}", current_hash, e);
-						return Err(e);
+						return Err(e)
 					} else {
 						failed.push(current_hash);
-					}
-				},
+					},
 			}
 			first = false;
 		}
@@ -349,7 +348,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 			self.ready.remove_subtree(&promoted);
 
 			debug!(target: "txpool", "[{:?}] Cycle detected, bailing.", hash);
-			return Err(error::Error::CycleDetected);
+			return Err(error::Error::CycleDetected)
 		}
 
 		Ok(Imported::Ready { hash, promoted, failed, removed })
@@ -406,13 +405,12 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 						// newer transactions instead and drop the older ones.
 						match worst.transaction.priority.cmp(&transaction.transaction.priority) {
 							Ordering::Less => worst,
-							Ordering::Equal => {
+							Ordering::Equal =>
 								if worst.insertion_id > transaction.insertion_id {
 									transaction.clone()
 								} else {
 									worst
-								}
-							},
+								},
 							Ordering::Greater => transaction.clone(),
 						}
 					})
@@ -422,7 +420,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 			if let Some(worst) = worst {
 				removed.append(&mut self.remove_subtree(&[worst.transaction.hash.clone()]))
 			} else {
-				break;
+				break
 			}
 		}
 
@@ -437,7 +435,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 			if let Some(worst) = worst {
 				removed.append(&mut self.remove_subtree(&[worst.transaction.hash.clone()]))
 			} else {
-				break;
+				break
 			}
 		}
 

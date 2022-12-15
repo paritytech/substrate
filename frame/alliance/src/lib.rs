@@ -1130,7 +1130,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let res = judgement(who);
 		if res.is_err() {
 			if let Some(parent) = T::IdentityVerifier::super_account_id(who) {
-				return judgement(&parent);
+				return judgement(&parent)
 			}
 		}
 		res

@@ -177,7 +177,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 	// Childtrie is identified by its storage key (i.e. `ChildInfo::storage_key`)
 	fn add_read_key(&self, childtrie: Option<&[u8]>, key: &[u8]) {
 		if !self.enable_tracking {
-			return;
+			return
 		}
 
 		let mut child_key_tracker = self.child_key_tracker.borrow_mut();
@@ -218,7 +218,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 	// Childtrie is identified by its storage key (i.e. `ChildInfo::storage_key`)
 	fn add_write_key(&self, childtrie: Option<&[u8]>, key: &[u8]) {
 		if !self.enable_tracking {
-			return;
+			return
 		}
 
 		let mut child_key_tracker = self.child_key_tracker.borrow_mut();
@@ -489,7 +489,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 				})
 			});
 		} else {
-			return Err("Trying to commit to a closed db".into());
+			return Err("Trying to commit to a closed db".into())
 		}
 		self.reopen()
 	}

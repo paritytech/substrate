@@ -94,7 +94,7 @@ fn path_to_header_file() -> Option<PathBuf> {
 	for file_name in &["HEADER-APACHE2", "HEADER-GPL3", "HEADER", "file_header.txt"] {
 		let path = workdir.join(file_name);
 		if path.exists() {
-			return Some(path);
+			return Some(path)
 		}
 	}
 	None
@@ -146,7 +146,7 @@ pub fn thresholds(
 			thresholds.push(successor as VoteWeight);
 		} else {
 			eprintln!("unexpectedly exceeded weight limit; breaking threshold generation loop");
-			break;
+			break
 		}
 	}
 

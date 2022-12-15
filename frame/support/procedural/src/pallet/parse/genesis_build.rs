@@ -40,7 +40,7 @@ impl GenesisBuildDef {
 			item
 		} else {
 			let msg = "Invalid pallet::genesis_build, expected item impl";
-			return Err(syn::Error::new(item.span(), msg));
+			return Err(syn::Error::new(item.span(), msg))
 		};
 
 		let item_trait = &item

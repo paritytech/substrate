@@ -131,7 +131,7 @@ where
 				log::debug!(target: "sync", "Unexpected target block response");
 				TargetBlockImportResult::BadResponse
 			},
-			Phase::TargetBlock(header) => {
+			Phase::TargetBlock(header) =>
 				if let Some(block_header) = &block.header {
 					if block_header == header {
 						if block.body.is_some() {
@@ -161,8 +161,7 @@ where
 				} else {
 					log::debug!(target: "sync", "Importing target block failed: missing header.");
 					TargetBlockImportResult::BadResponse
-				}
-			},
+				},
 		}
 	}
 
@@ -191,8 +190,8 @@ where
 			Phase::TargetBlock(header) => {
 				let request = BlockRequest::<B> {
 					id: 0,
-					fields: BlockAttributes::HEADER
-						| BlockAttributes::BODY | BlockAttributes::JUSTIFICATION,
+					fields: BlockAttributes::HEADER |
+						BlockAttributes::BODY | BlockAttributes::JUSTIFICATION,
 					from: FromBlock::Hash(header.hash()),
 					direction: Direction::Ascending,
 					max: Some(1),

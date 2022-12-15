@@ -100,13 +100,12 @@ impl SharedParams {
 	pub fn chain_id(&self, is_dev: bool) -> String {
 		match self.chain {
 			Some(ref chain) => chain.clone(),
-			None => {
+			None =>
 				if is_dev {
 					"dev".into()
 				} else {
 					"".into()
-				}
-			},
+				},
 		}
 	}
 

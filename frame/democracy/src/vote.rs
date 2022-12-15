@@ -88,9 +88,8 @@ impl<Balance: Saturating> AccountVote<Balance> {
 	pub fn locked_if(self, approved: bool) -> Option<(u32, Balance)> {
 		// winning side: can only be removed after the lock period ends.
 		match self {
-			AccountVote::Standard { vote, balance } if vote.aye == approved => {
-				Some((vote.conviction.lock_periods(), balance))
-			},
+			AccountVote::Standard { vote, balance } if vote.aye == approved =>
+				Some((vote.conviction.lock_periods(), balance)),
 			_ => None,
 		}
 	}
@@ -206,9 +205,8 @@ impl<
 	/// The amount of this account's balance that much currently be locked due to voting.
 	pub fn locked_balance(&self) -> Balance {
 		match self {
-			Voting::Direct { votes, prior, .. } => {
-				votes.iter().map(|i| i.1.balance()).fold(prior.locked(), |a, i| a.max(i))
-			},
+			Voting::Direct { votes, prior, .. } =>
+				votes.iter().map(|i| i.1.balance()).fold(prior.locked(), |a, i| a.max(i)),
 			Voting::Delegating { balance, prior, .. } => *balance.max(&prior.locked()),
 		}
 	}

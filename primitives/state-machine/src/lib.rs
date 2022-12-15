@@ -242,9 +242,8 @@ mod execution {
 		/// Gets the corresponding manager for the execution strategy.
 		pub fn get_manager<E: fmt::Debug>(self) -> ExecutionManager<DefaultHandler<E>> {
 			match self {
-				ExecutionStrategy::AlwaysWasm => {
-					ExecutionManager::AlwaysWasm(BackendTrustLevel::Trusted)
-				},
+				ExecutionStrategy::AlwaysWasm =>
+					ExecutionManager::AlwaysWasm(BackendTrustLevel::Trusted),
 				ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
 				ExecutionStrategy::NativeElseWasm => ExecutionManager::NativeElseWasm,
 				ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
@@ -441,10 +440,9 @@ mod execution {
 				self.overlay.rollback_transaction().expect(PROOF_CLOSE_TRANSACTION);
 				let (wasm_result, _) = self.execute_aux(false);
 
-				if (result.is_ok()
-					&& wasm_result.is_ok()
-					&& result.as_ref().ok() == wasm_result.as_ref().ok())
-					|| result.is_err() && wasm_result.is_err()
+				if (result.is_ok() &&
+					wasm_result.is_ok() && result.as_ref().ok() == wasm_result.as_ref().ok()) ||
+					result.is_err() && wasm_result.is_err()
 				{
 					result
 				} else {
@@ -488,18 +486,15 @@ mod execution {
 		{
 			let result = {
 				match manager {
-					ExecutionManager::Both(on_consensus_failure) => {
-						self.execute_call_with_both_strategy(on_consensus_failure)
-					},
-					ExecutionManager::NativeElseWasm => {
-						self.execute_call_with_native_else_wasm_strategy()
-					},
+					ExecutionManager::Both(on_consensus_failure) =>
+						self.execute_call_with_both_strategy(on_consensus_failure),
+					ExecutionManager::NativeElseWasm =>
+						self.execute_call_with_native_else_wasm_strategy(),
 					ExecutionManager::AlwaysWasm(trust_level) => {
 						let _abort_guard = match trust_level {
 							BackendTrustLevel::Trusted => None,
-							BackendTrustLevel::Untrusted => {
-								Some(sp_panic_handler::AbortGuard::never_abort())
-							},
+							BackendTrustLevel::Untrusted =>
+								Some(sp_panic_handler::AbortGuard::never_abort()),
 						};
 						self.execute_aux(false).0
 					},
@@ -710,7 +705,7 @@ mod execution {
 			last: &mut SmallVec<[Vec<u8>; 2]>,
 		) -> bool {
 			if stopped_at == 0 || stopped_at > MAX_NESTED_TRIE_DEPTH {
-				return false;
+				return false
 			}
 			match stopped_at {
 				1 => {
@@ -720,7 +715,7 @@ mod execution {
 						match last.len() {
 							0 => {
 								last.push(top_last);
-								return true;
+								return true
 							},
 							2 => {
 								last.pop();
@@ -729,12 +724,12 @@ mod execution {
 						}
 						// update top trie access.
 						last[0] = top_last;
-						return true;
+						return true
 					} else {
 						// No change in top trie accesses.
 						// Indicates end of reading of a child trie.
 						last.truncate(1);
-						return true;
+						return true
 					}
 				},
 				2 => {
@@ -748,7 +743,7 @@ mod execution {
 							if let Some(top_last) = top_last {
 								last.push(top_last)
 							} else {
-								return false;
+								return false
 							}
 						} else if let Some(top_last) = top_last {
 							last[0] = top_last;
@@ -757,10 +752,10 @@ mod execution {
 							last.pop();
 						}
 						last.push(child_last);
-						return true;
+						return true
 					} else {
 						// stopped at level 2 so child last is define.
-						return false;
+						return false
 					}
 				},
 				_ => (),
@@ -804,7 +799,7 @@ mod execution {
 		H::Out: Ord + Codec,
 	{
 		if start_at.len() > MAX_NESTED_TRIE_DEPTH {
-			return Err(Box::new("Invalid start of range."));
+			return Err(Box::new("Invalid start of range."))
 		}
 
 		let recorder = sp_trie::recorder::Recorder::default();
@@ -821,7 +816,7 @@ mod execution {
 			{
 				child_roots.insert(state_root);
 			} else {
-				return Err(Box::new("Invalid range start child trie key."));
+				return Err(Box::new("Invalid range start child trie key."))
 			}
 
 			(Some(storage_key), start_at.get(1).cloned())
@@ -834,9 +829,8 @@ mod execution {
 				let storage_key = PrefixedStorageKey::new_ref(storage_key);
 				(
 					Some(match ChildType::from_prefixed_key(storage_key) {
-						Some((ChildType::ParentKeyId, storage_key)) => {
-							ChildInfo::new_default(storage_key)
-						},
+						Some((ChildType::ParentKeyId, storage_key)) =>
+							ChildInfo::new_default(storage_key),
 						None => return Err(Box::new("Invalid range start child trie key.")),
 					}),
 					2,
@@ -854,8 +848,8 @@ mod execution {
 					None,
 					start_at_ref,
 					|key, value| {
-						if first
-							&& start_at_ref
+						if first &&
+							start_at_ref
 								.as_ref()
 								.map(|start| &key.as_slice() > start)
 								.unwrap_or(true)
@@ -865,8 +859,8 @@ mod execution {
 
 						if first {
 							true
-						} else if depth < MAX_NESTED_TRIE_DEPTH
-							&& sp_core::storage::well_known_keys::is_child_storage_key(
+						} else if depth < MAX_NESTED_TRIE_DEPTH &&
+							sp_core::storage::well_known_keys::is_child_storage_key(
 								key.as_slice(),
 							) {
 							count += 1;
@@ -891,11 +885,11 @@ mod execution {
 
 			if switch_child_key.is_none() {
 				if depth == 1 {
-					break;
+					break
 				} else if completed {
 					start_at = child_key.take();
 				} else {
-					break;
+					break
 				}
 			} else {
 				child_key = switch_child_key;
@@ -1204,7 +1198,7 @@ mod execution {
 			parent_storage_keys: Default::default(),
 		}];
 		if start_at.len() > MAX_NESTED_TRIE_DEPTH {
-			return Err(Box::new("Invalid start of range."));
+			return Err(Box::new("Invalid start of range."))
 		}
 
 		let mut child_roots = HashSet::new();
@@ -1217,7 +1211,7 @@ mod execution {
 				child_roots.insert(state_root.clone());
 				Some((storage_key, state_root))
 			} else {
-				return Err(Box::new("Invalid range start child trie key."));
+				return Err(Box::new("Invalid range start child trie key."))
 			};
 
 			(child_key, start_at.get(1).cloned())
@@ -1236,9 +1230,8 @@ mod execution {
 				let storage_key = PrefixedStorageKey::new_ref(storage_key);
 				(
 					Some(match ChildType::from_prefixed_key(storage_key) {
-						Some((ChildType::ParentKeyId, storage_key)) => {
-							ChildInfo::new_default(storage_key)
-						},
+						Some((ChildType::ParentKeyId, storage_key)) =>
+							ChildInfo::new_default(storage_key),
 						None => return Err(Box::new("Invalid range start child trie key.")),
 					}),
 					2,
@@ -1261,8 +1254,8 @@ mod execution {
 					None,
 					start_at_ref,
 					|key, value| {
-						if first
-							&& start_at_ref
+						if first &&
+							start_at_ref
 								.as_ref()
 								.map(|start| &key.as_slice() > start)
 								.unwrap_or(true)
@@ -1275,8 +1268,8 @@ mod execution {
 						}
 						if first {
 							true
-						} else if depth < MAX_NESTED_TRIE_DEPTH
-							&& sp_core::storage::well_known_keys::is_child_storage_key(
+						} else if depth < MAX_NESTED_TRIE_DEPTH &&
+							sp_core::storage::well_known_keys::is_child_storage_key(
 								key.as_slice(),
 							) {
 							if child_roots.contains(value.as_slice()) {
@@ -1297,10 +1290,10 @@ mod execution {
 
 			if switch_child_key.is_none() {
 				if !completed {
-					break depth;
+					break depth
 				}
 				if depth == 1 {
-					break 0;
+					break 0
 				} else {
 					start_at = child_key.take().map(|entry| entry.0);
 				}
@@ -1910,7 +1903,7 @@ mod tests {
 									key.clone(),
 									Some(value.clone()),
 								));
-								break;
+								break
 							}
 						}
 					}
@@ -2071,7 +2064,7 @@ mod tests {
 			.unwrap();
 
 			if completed_depth == 0 {
-				break;
+				break
 			}
 			assert!(result.update_last_key(completed_depth, &mut start_at));
 		}

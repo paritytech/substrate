@@ -251,8 +251,8 @@ impl ExtBuilder {
 		(VALIDATOR_PREFIX..VALIDATOR_PREFIX + VALIDATORS_PER_ERA)
 			.map(|v| {
 				// for the sake of sanity, let's register this taker as an actual validator.
-				let others = (NOMINATOR_PREFIX
-					..(NOMINATOR_PREFIX + NOMINATORS_PER_VALIDATOR_PER_ERA))
+				let others = (NOMINATOR_PREFIX..
+					(NOMINATOR_PREFIX + NOMINATORS_PER_VALIDATOR_PER_ERA))
 					.map(|n| IndividualExposure { who: n, value: 0 as Balance })
 					.collect::<Vec<_>>();
 				(v, Exposure { total: 0, own: 0, others })

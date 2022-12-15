@@ -130,7 +130,7 @@ fn declare_essential_trait(trait_def: &ItemTrait) -> Result<TokenStream> {
 	let trait_ = &trait_def.ident;
 
 	if let Some(param) = trait_def.generics.params.first() {
-		return Err(Error::new(param.span(), "Generic parameters not supported."));
+		return Err(Error::new(param.span(), "Generic parameters not supported."))
 	}
 
 	let interface = get_runtime_interface(trait_def)?;

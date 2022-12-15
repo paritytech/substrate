@@ -267,11 +267,11 @@ pub mod pallet {
 							LotteryIndex::<T>::mutate(|index| *index = index.saturating_add(1));
 							// Set a new start with the current block.
 							config.start = n;
-							return T::WeightInfo::on_initialize_repeat();
+							return T::WeightInfo::on_initialize_repeat()
 						} else {
 							// Else, kill the lottery storage.
 							*lottery = None;
-							return T::WeightInfo::on_initialize_end();
+							return T::WeightInfo::on_initialize_end()
 						}
 						// We choose not need to kill Participants and Tickets to avoid a large
 						// number of writes at one time. Instead, data persists between lotteries,
@@ -424,7 +424,7 @@ impl<T: Config> Pallet<T> {
 	fn call_to_index(call: &<T as Config>::RuntimeCall) -> Result<CallIndex, DispatchError> {
 		let encoded_call = call.encode();
 		if encoded_call.len() < 2 {
-			return Err(Error::<T>::EncodingFailed.into());
+			return Err(Error::<T>::EncodingFailed.into())
 		}
 		Ok((encoded_call[0], encoded_call[1]))
 	}
@@ -487,14 +487,14 @@ impl<T: Config> Pallet<T> {
 	/// Returns `None` if there are no tickets.
 	fn choose_ticket(total: u32) -> Option<u32> {
 		if total == 0 {
-			return None;
+			return None
 		}
 		let mut random_number = Self::generate_random_number(0);
 
 		// Best effort attempt to remove bias from modulus operator.
 		for i in 1..T::MaxGenerateRandom::get() {
 			if random_number < u32::MAX - u32::MAX % total {
-				break;
+				break
 			}
 
 			random_number = Self::generate_random_number(i);

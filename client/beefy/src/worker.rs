@@ -222,7 +222,7 @@ impl<B: Block> VoterOracle<B> {
 			r
 		} else {
 			debug!(target: "beefy", "🥩 No voting round started");
-			return None;
+			return None
 		};
 
 		// `target` is guaranteed > `best_beefy` since `min_block_delta` is at least `1`.
@@ -709,7 +709,7 @@ where
 			hash
 		} else {
 			warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", target_hash);
-			return Ok(());
+			return Ok(())
 		};
 
 		let rounds = self
@@ -719,7 +719,7 @@ where
 			.ok_or(Error::UninitSession)?;
 		if !rounds.should_self_vote(&(payload.clone(), target_number)) {
 			debug!(target: "beefy", "🥩 Don't double vote for block number: {:?}", target_number);
-			return Ok(());
+			return Ok(())
 		}
 		let (validators, validator_set_id) = (rounds.validators(), rounds.validator_set_id());
 
@@ -728,7 +728,7 @@ where
 			id
 		} else {
 			debug!(target: "beefy", "🥩 Missing validator id - can't vote for: {:?}", target_hash);
-			return Ok(());
+			return Ok(())
 		};
 
 		let commitment = Commitment { payload, block_number: target_number, validator_set_id };
@@ -738,7 +738,7 @@ where
 			Ok(sig) => sig,
 			Err(err) => {
 				warn!(target: "beefy", "🥩 Error signing commitment: {:?}", err);
-				return Ok(());
+				return Ok(())
 			},
 		};
 

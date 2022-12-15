@@ -188,7 +188,7 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 					ext_hash,
 				);
 
-				continue;
+				continue
 			}
 
 			self.block_ordered

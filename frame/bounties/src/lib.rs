@@ -447,7 +447,7 @@ pub mod pallet {
 				match bounty.status {
 					BountyStatus::Proposed | BountyStatus::Approved | BountyStatus::Funded => {
 						// No curator to unassign at this point.
-						return Err(Error::<T, I>::UnexpectedStatus.into());
+						return Err(Error::<T, I>::UnexpectedStatus.into())
 					},
 					BountyStatus::CuratorProposed { ref curator } => {
 						// A curator has been proposed, but not accepted yet.
@@ -472,7 +472,7 @@ pub mod pallet {
 									// Continue to change bounty status below...
 									} else {
 										// Curator has more time to give an update.
-										return Err(Error::<T, I>::Premature.into());
+										return Err(Error::<T, I>::Premature.into())
 									}
 								} else {
 									// Else this is the curator, willingly giving up their role.
@@ -528,8 +528,8 @@ pub mod pallet {
 						T::Currency::reserve(curator, deposit)?;
 						bounty.curator_deposit = deposit;
 
-						let update_due = frame_system::Pallet::<T>::block_number()
-							+ T::BountyUpdatePeriod::get();
+						let update_due = frame_system::Pallet::<T>::block_number() +
+							T::BountyUpdatePeriod::get();
 						bounty.status =
 							BountyStatus::Active { curator: curator.clone(), update_due };
 
@@ -579,8 +579,8 @@ pub mod pallet {
 				bounty.status = BountyStatus::PendingPayout {
 					curator: signer,
 					beneficiary: beneficiary.clone(),
-					unlock_at: frame_system::Pallet::<T>::block_number()
-						+ T::BountyDepositPayoutDelay::get(),
+					unlock_at: frame_system::Pallet::<T>::block_number() +
+						T::BountyDepositPayoutDelay::get(),
 				};
 
 				Ok(())
@@ -697,12 +697,12 @@ pub mod pallet {
 							// Return early, nothing else to do.
 							return Ok(
 								Some(<T as Config<I>>::WeightInfo::close_bounty_proposed()).into()
-							);
+							)
 						},
 						BountyStatus::Approved => {
 							// For weight reasons, we don't allow a council to cancel in this phase.
 							// We ask for them to wait until it is funded before they can cancel.
-							return Err(Error::<T, I>::UnexpectedStatus.into());
+							return Err(Error::<T, I>::UnexpectedStatus.into())
 						},
 						BountyStatus::Funded | BountyStatus::CuratorProposed { .. } => {
 							// Nothing extra to do besides the removal of the bounty below.
@@ -719,7 +719,7 @@ pub mod pallet {
 							// this bounty, it should mean the curator was acting maliciously.
 							// So the council should first unassign the curator, slashing their
 							// deposit.
-							return Err(Error::<T, I>::PendingPayout.into());
+							return Err(Error::<T, I>::PendingPayout.into())
 						},
 					}
 
@@ -767,8 +767,8 @@ pub mod pallet {
 				match bounty.status {
 					BountyStatus::Active { ref curator, ref mut update_due } => {
 						ensure!(*curator == signer, Error::<T, I>::RequireCurator);
-						*update_due = (frame_system::Pallet::<T>::block_number()
-							+ T::BountyUpdatePeriod::get())
+						*update_due = (frame_system::Pallet::<T>::block_number() +
+							T::BountyUpdatePeriod::get())
 						.max(*update_due);
 					},
 					_ => return Err(Error::<T, I>::UnexpectedStatus.into()),
@@ -825,8 +825,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let index = Self::bounty_count();
 
 		// reserve deposit for new bounty
-		let bond = T::BountyDepositBase::get()
-			+ T::DataDepositPerByte::get() * (bounded_description.len() as u32).into();
+		let bond = T::BountyDepositBase::get() +
+			T::DataDepositPerByte::get() * (bounded_description.len() as u32).into();
 		T::Currency::reserve(&proposer, bond)
 			.map_err(|_| Error::<T, I>::InsufficientProposersBalance)?;
 

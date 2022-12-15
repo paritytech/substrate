@@ -62,11 +62,11 @@ where
 	Hash::Output: parity_util_mem::MallocSizeOf,
 {
 	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
-		self.parent_hash.size_of(ops)
-			+ self.number.size_of(ops)
-			+ self.state_root.size_of(ops)
-			+ self.extrinsics_root.size_of(ops)
-			+ self.digest.size_of(ops)
+		self.parent_hash.size_of(ops) +
+			self.number.size_of(ops) +
+			self.state_root.size_of(ops) +
+			self.extrinsics_root.size_of(ops) +
+			self.digest.size_of(ops)
 	}
 }
 

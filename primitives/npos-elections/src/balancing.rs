@@ -60,7 +60,7 @@ pub fn balance<AccountId: IdentifierT>(
 	config: &BalancingConfig,
 ) -> usize {
 	if config.iterations == 0 {
-		return 0;
+		return 0
 	}
 
 	let mut iter = 0;
@@ -75,7 +75,7 @@ pub fn balance<AccountId: IdentifierT>(
 
 		iter += 1;
 		if max_diff <= config.tolerance || iter >= config.iterations {
-			break iter;
+			break iter
 		}
 	}
 }
@@ -94,7 +94,7 @@ pub(crate) fn balance_voter<AccountId: IdentifierT>(
 
 	// Either empty, or a self vote. Not much to do in either case.
 	if elected_edges.len() <= 1 {
-		return Zero::zero();
+		return Zero::zero()
 	}
 
 	// amount of stake from this voter that is used in edges.
@@ -125,7 +125,7 @@ pub(crate) fn balance_voter<AccountId: IdentifierT>(
 		let mut difference = max_stake.saturating_sub(*min_stake);
 		difference = difference.saturating_add(voter.budget.saturating_sub(stake_used));
 		if difference < tolerance {
-			return difference;
+			return difference
 		}
 		difference
 	} else {
@@ -151,7 +151,7 @@ pub(crate) fn balance_voter<AccountId: IdentifierT>(
 		if temp.saturating_sub(cumulative_backed_stake) > voter.budget {
 			// defensive only. length of elected_edges is checked to be above 1.
 			last_index = index.saturating_sub(1) as usize;
-			break;
+			break
 		}
 		cumulative_backed_stake = cumulative_backed_stake.saturating_add(backed_stake);
 	}

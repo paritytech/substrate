@@ -210,7 +210,7 @@ impl MachineCmd {
 	/// Validates the CLI arguments.
 	fn validate_args(&self) -> Result<()> {
 		if self.tolerance > 100.0 || self.tolerance < 0.0 {
-			return Err("The --tolerance argument is out of range".into());
+			return Err("The --tolerance argument is out of range".into())
 		}
 		Ok(())
 	}

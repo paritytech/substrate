@@ -48,22 +48,20 @@ impl Parse for InputBytes {
 						syn::Expr::Lit(lit) => match &lit.lit {
 							syn::Lit::Int(b) => bytes.push(b.base10_parse()?),
 							syn::Lit::Byte(b) => bytes.push(b.value()),
-							_ => {
+							_ =>
 								return Err(syn::Error::new(
 									input.span(),
 									"Expected array of u8 elements.".to_string(),
-								))
-							},
+								)),
 						},
-						_ => {
+						_ =>
 							return Err(syn::Error::new(
 								input.span(),
 								"Expected array of u8 elements.".to_string(),
-							))
-						},
+							)),
 					}
 				}
-				return Ok(InputBytes(bytes));
+				return Ok(InputBytes(bytes))
 			},
 			Err(_e) => (),
 		}

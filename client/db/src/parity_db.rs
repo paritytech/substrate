@@ -97,16 +97,15 @@ impl<H: Clone + AsRef<[u8]>> Database<H> for DbAdapter {
 			Some(match change {
 				Change::Set(col, key, value) => (col as u8, key, Some(value)),
 				Change::Remove(col, key) => (col as u8, key, None),
-				Change::Store(col, key, value) => {
+				Change::Store(col, key, value) =>
 					if ref_counted_column(col) {
 						(col as u8, key.as_ref().to_vec(), Some(value))
 					} else {
 						if !not_ref_counted_column.contains(&col) {
 							not_ref_counted_column.push(col);
 						}
-						return None;
-					}
-				},
+						return None
+					},
 				Change::Reference(col, key) => {
 					if ref_counted_column(col) {
 						// FIXME accessing value is not strictly needed, optimize this in parity-db.
@@ -116,19 +115,18 @@ impl<H: Clone + AsRef<[u8]>> Database<H> for DbAdapter {
 						if !not_ref_counted_column.contains(&col) {
 							not_ref_counted_column.push(col);
 						}
-						return None;
+						return None
 					}
 				},
-				Change::Release(col, key) => {
+				Change::Release(col, key) =>
 					if ref_counted_column(col) {
 						(col as u8, key.as_ref().to_vec(), None)
 					} else {
 						if !not_ref_counted_column.contains(&col) {
 							not_ref_counted_column.push(col);
 						}
-						return None;
-					}
-				},
+						return None
+					},
 			})
 		}));
 
@@ -136,7 +134,7 @@ impl<H: Clone + AsRef<[u8]>> Database<H> for DbAdapter {
 			return Err(DatabaseError(Box::new(parity_db::Error::InvalidInput(format!(
 				"Ref counted operation on non ref counted columns {:?}",
 				not_ref_counted_column
-			)))));
+			)))))
 		}
 
 		result.map_err(|e| DatabaseError(Box::new(e)))

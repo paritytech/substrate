@@ -358,7 +358,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 		// if the queue is empty or the block number exceed the pruning window, we definitely
 		// do not have this block
 		if self.is_empty() || number < self.base || number >= self.base + self.window_size() {
-			return HaveBlock::No;
+			return HaveBlock::No
 		}
 		self.queue.have_block(hash, (number - self.base) as usize)
 	}
@@ -390,7 +390,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 			// assume that parent was canonicalized
 			self.base = number;
 		} else if (self.base + self.window_size()) != number {
-			return Err(Error::StateDb(StateDbError::InvalidBlockNumber));
+			return Err(Error::StateDb(StateDbError::InvalidBlockNumber))
 		}
 		trace!(target: "state-db", "Adding to pruning window: {:?} ({} inserted, {} deleted)", hash, commit.data.inserted.len(), commit.data.deleted.len());
 		let inserted = if matches!(self.queue, DeathRowQueue::Mem { .. }) {
