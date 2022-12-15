@@ -495,7 +495,7 @@ pub struct SharedParams {
 	/// go away.
 	#[allow(missing_docs)]
 	#[clap(flatten)]
-	shared_params: sc_cli::SharedParams,
+	pub shared_params: sc_cli::SharedParams,
 
 	/// The runtime to use.
 	///
@@ -516,7 +516,7 @@ pub struct SharedParams {
 		ignore_case = true,
 		default_value_t = DEFAULT_WASM_EXECUTION_METHOD,
 	)]
-	wasm_method: WasmExecutionMethod,
+	pub wasm_method: WasmExecutionMethod,
 
 	/// The WASM instantiation method to use.
 	///
@@ -527,7 +527,7 @@ pub struct SharedParams {
 		default_value_t = DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
 		value_enum,
 	)]
-	wasmtime_instantiation_strategy: WasmtimeInstantiationStrategy,
+	pub wasmtime_instantiation_strategy: WasmtimeInstantiationStrategy,
 
 	/// The number of 64KB pages to allocate for Wasm execution. Defaults to
 	/// [`sc_service::Configuration.default_heap_pages`].
