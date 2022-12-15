@@ -74,8 +74,18 @@ impl crate::Hasher for sp_core::Blake2Hasher {
 	}
 }
 
+pub struct StorageUnhashedReader;
+impl crate::Reader for StorageUnhashedReader {
+	fn read<T: Config>(k: &[u8]) -> Weight {
+		storage::unhashed::put(&k, &k);
+		let _: Option<Vec<u8>> = storage::unhashed::get(&k);
+		T::DbWeight::get().reads_writes(1, 1)
+	}
+}
+
 impl Config for Test {
 	type Hasher = sp_core::Blake2Hasher;
+	type Reader = StorageUnhashedReader;
 	type WeightInfo = crate::weights::SubstrateWeight<Test>;
 }
 

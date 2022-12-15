@@ -34,15 +34,21 @@ pub mod weights;
 
 use frame_support::pallet_prelude::*;
 use sp_runtime::Perbill;
-use sp_std::vec::Vec;
 
 pub use pallet::*;
 pub use weights::WeightInfo;
 
 pub trait Hasher {
+	/// The output type of the hashing algorithm.
 	type Out;
 
+	/// Hashes a slice of bytes and returns the result.
 	fn hash(_: &[u8]) -> Self::Out;
+}
+
+pub trait Reader {
+	/// Reads some storage value and returns the weight consumed from reading.
+	fn read<T: crate::Config>(_: &[u8]) -> Weight;
 }
 
 #[frame_support::pallet]
@@ -57,6 +63,9 @@ pub mod pallet {
 
 		/// Type that implements the `Hasher` trait.
 		type Hasher: Hasher;
+
+		/// Type that implements the `Reader` trait.
+		type Reader: Reader;
 	}
 
 	#[pallet::pallet]
@@ -110,16 +119,15 @@ pub mod pallet {
 				value += 1;
 			}
 
-			/*for i in 0..Storage::<T>::get() {
-				weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
+			for i in 0..Storage::<T>::get() {
 				if remaining_weight.any_lt(weight) {
 					weight = remaining_weight;
 					break
 				}
 
-				storage::unhashed::put(&i.to_le_bytes(), &i.to_le_bytes());
-				let _: Option<Vec<u8>> = storage::unhashed::get(&i.to_le_bytes());
-			}*/
+				let consumed_weight = T::Reader::read::<T>(&i.to_le_bytes());
+				weight = weight.saturating_add(consumed_weight);
+			}
 
 			weight
 		}

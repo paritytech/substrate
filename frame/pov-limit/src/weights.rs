@@ -59,10 +59,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		Weight::from_ref_time(3_000_000)
 	}
 	// Storage: PovLimit Compute (r:1 w:0)
+	// Storage: PovLimit Storage (r:1 w:0)
 	fn on_idle() -> Weight {
-		// Minimum execution time: 85_000 nanoseconds.
-		Weight::from_ref_time(86_000_000)
-			.saturating_add(T::DbWeight::get().reads(1))
+		// Minimum execution time: 105_000 nanoseconds.
+		Weight::from_ref_time(107_000_000)
+			.saturating_add(T::DbWeight::get().reads(2))
 	}
 }
 
@@ -73,9 +74,10 @@ impl WeightInfo for () {
 		Weight::from_ref_time(3_000_000)
 	}
 	// Storage: PovLimit Compute (r:1 w:0)
+	// Storage: PovLimit Storage (r:1 w:0)
 	fn on_idle() -> Weight {
-		// Minimum execution time: 85_000 nanoseconds.
-		Weight::from_ref_time(86_000_000)
-			.saturating_add(RocksDbWeight::get().reads(1))
+		// Minimum execution time: 105_000 nanoseconds.
+		Weight::from_ref_time(107_000_000)
+			.saturating_add(RocksDbWeight::get().reads(2))
 	}
 }

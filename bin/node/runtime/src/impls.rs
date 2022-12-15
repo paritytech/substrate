@@ -126,6 +126,14 @@ impl pallet_pov_limit::Hasher for Hasher {
 	}
 }
 
+pub struct AccountReader;
+impl pallet_pov_limit::Reader for AccountReader {
+	fn read<T: pallet_pov_limit::Config>(_: &[u8]) -> Weight {
+		// read.
+		T::DbWeight::get().reads(1)
+	}
+}
+
 #[cfg(test)]
 mod multiplier_tests {
 	use pallet_transaction_payment::{Multiplier, TargetedFeeAdjustment};
