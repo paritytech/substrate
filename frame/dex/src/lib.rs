@@ -432,9 +432,6 @@ pub mod pallet {
 				Self::transfer(asset1, &pool_account, &withdraw_to, amount1, false)?;
 				Self::transfer(asset2, &pool_account, &withdraw_to, amount2, false)?;
 
-				// pool.balance1 = reserve1 - amount1;
-				// pool.balance2 = reserve2 - amount2;
-
 				Self::deposit_event(Event::LiquidityRemoved {
 					who: sender,
 					withdraw_to,
@@ -485,7 +482,7 @@ pub mod pallet {
 
 			Self::transfer(asset1, &sender, &pool_account, amount_in, keep_alive)?;
 
-			ensure!(amount_out < balance2, Error::<T>::InsufficientAmountParam2);
+			ensure!(amount_out < balance2, Error::<T>::InsufficientLiquidity);
 
 			Self::transfer(asset2, &pool_account, &send_to, amount_out, false)?;
 
@@ -537,7 +534,7 @@ pub mod pallet {
 
 			Self::transfer(asset1, &sender, &pool_account, amount_in, keep_alive)?;
 
-			ensure!(amount_out < balance2, Error::<T>::InsufficientAmountParam2);
+			ensure!(amount_out < balance2, Error::<T>::InsufficientLiquidity);
 
 			Self::transfer(asset2, &pool_account, &send_to, amount_out, false)?;
 
