@@ -1620,7 +1620,7 @@ pub mod pallet {
 		}
 
 		/// Bond pending rewards of `member_account` into the pool they already belong.
-		/// 
+		///
 		/// Note: `member_account` must pass `RewardClaim::Permissionless` to `set_reward_claim`,
 		/// making this call permissionless.
 		#[pallet::weight(
