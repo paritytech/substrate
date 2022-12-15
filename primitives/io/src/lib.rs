@@ -1155,6 +1155,16 @@ pub trait Crypto {
 	fn bls12_381_mul_affine_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 		sp_arkworks::bls12_381::mul_affine_g1(base, scalar)
 	}
+
+	/// Compute a bigint_msm on G1
+	fn bls12_381_bigint_msm_g1(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
+		sp_arkworks::bls12_381::msm_bigint_g1(bases, bigints)
+	}
+
+	/// Compute a bigint_msm on G2
+	fn bls12_381_bigint_msm_g2(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
+		sp_arkworks::bls12_381::msm_bigint_g2(bases, bigints)
+	}
 }
 
 /// Interface that provides functions for hashing with different algorithms.
