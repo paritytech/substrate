@@ -3855,6 +3855,8 @@ pub(crate) mod tests {
 
 		assert_eq!(0, backend.storage.state_db.best_canonical().unwrap());
 
+		// This should not trigger any forced canonicalization as we didn't have imported any best
+		// block by now.
 		let block2 = {
 			let mut op = backend.begin_operation().unwrap();
 			backend.begin_state_operation(&mut op, block1).unwrap();
@@ -3876,6 +3878,8 @@ pub(crate) mod tests {
 
 		assert_eq!(0, backend.storage.state_db.best_canonical().unwrap());
 
+		// This should also not trigger it yet, because we import a best block, but the best block
+		// from the POV of the db is still at `0`.
 		let block3 = {
 			let mut op = backend.begin_operation().unwrap();
 			backend.begin_state_operation(&mut op, block2).unwrap();
@@ -3895,6 +3899,7 @@ pub(crate) mod tests {
 			header.hash()
 		};
 
+		// Now it should kick in.
 		let block4 = {
 			let mut op = backend.begin_operation().unwrap();
 			backend.begin_state_operation(&mut op, block3).unwrap();
