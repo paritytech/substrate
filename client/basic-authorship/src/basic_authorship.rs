@@ -614,16 +614,20 @@ mod tests {
 		block_on(txpool.submit_at(&BlockId::number(0), SOURCE, vec![extrinsic(0), extrinsic(1)]))
 			.unwrap();
 
-		block_on(txpool.maintain(chain_event(
-			client.expect_header(BlockId::Number(0u64)).expect("there should be header"),
-		)));
+		block_on(
+			txpool.maintain(chain_event(
+				client
+					.expect_header(client.info().genesis_hash)
+					.expect("there should be header"),
+			)),
+		);
 
 		let mut proposer_factory =
 			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
 
 		let cell = Mutex::new((false, time::Instant::now()));
 		let proposer = proposer_factory.init_with_now(
-			&client.expect_header(BlockId::number(0)).unwrap(),
+			&client.expect_header(client.info().genesis_hash).unwrap(),
 			Box::new(move || {
 				let mut value = cell.lock();
 				if !value.0 {
@@ -667,7 +671,7 @@ mod tests {
 
 		let cell = Mutex::new((false, time::Instant::now()));
 		let proposer = proposer_factory.init_with_now(
-			&client.expect_header(BlockId::number(0)).unwrap(),
+			&client.expect_header(client.info().genesis_hash).unwrap(),
 			Box::new(move || {
 				let mut value = cell.lock();
 				if !value.0 {
@@ -703,9 +707,13 @@ mod tests {
 
 		block_on(txpool.submit_at(&BlockId::number(0), SOURCE, vec![extrinsic(0)])).unwrap();
 
-		block_on(txpool.maintain(chain_event(
-			client.expect_header(BlockId::Number(0u64)).expect("there should be header"),
-		)));
+		block_on(
+			txpool.maintain(chain_event(
+				client
+					.expect_header(client.info().genesis_hash)
+					.expect("there should be header"),
+			)),
+		);
 
 		let mut proposer_factory =
 			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
@@ -779,8 +787,9 @@ mod tests {
 		                         number,
 		                         expected_block_extrinsics,
 		                         expected_pool_transactions| {
+			let hash = client.expect_block_hash_from_id(&BlockId::Number(number)).unwrap();
 			let proposer = proposer_factory.init_with_now(
-				&client.expect_header(BlockId::number(number)).unwrap(),
+				&client.expect_header(hash).unwrap(),
 				Box::new(move || time::Instant::now()),
 			);
 
@@ -799,18 +808,25 @@ mod tests {
 			block
 		};
 
-		block_on(txpool.maintain(chain_event(
-			client.expect_header(BlockId::Number(0u64)).expect("there should be header"),
-		)));
+		block_on(
+			txpool.maintain(chain_event(
+				client
+					.expect_header(client.info().genesis_hash)
+					.expect("there should be header"),
+			)),
+		);
 		assert_eq!(txpool.ready().count(), 7);
 
 		// let's create one block and import it
 		let block = propose_block(&client, 0, 2, 7);
+		let hashof1 = block.hash();
 		block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
-		block_on(txpool.maintain(chain_event(
-			client.expect_header(BlockId::Number(1)).expect("there should be header"),
-		)));
+		block_on(
+			txpool.maintain(chain_event(
+				client.expect_header(hashof1).expect("there should be header"),
+			)),
+		);
 		assert_eq!(txpool.ready().count(), 5);
 
 		// now let's make sure that we can still make some progress
@@ -829,8 +845,9 @@ mod tests {
 			spawner.clone(),
 			client.clone(),
 		);
-		let genesis_header =
-			client.expect_header(BlockId::Number(0u64)).expect("there should be header");
+		let genesis_header = client
+			.expect_header(client.info().genesis_hash)
+			.expect("there should be header");
 
 		let extrinsics_num = 5;
 		let extrinsics = std::iter::once(
@@ -940,9 +957,13 @@ mod tests {
 		)
 		.unwrap();
 
-		block_on(txpool.maintain(chain_event(
-			client.expect_header(BlockId::Number(0u64)).expect("there should be header"),
-		)));
+		block_on(
+			txpool.maintain(chain_event(
+				client
+					.expect_header(client.info().genesis_hash)
+					.expect("there should be header"),
+			)),
+		);
 		assert_eq!(txpool.ready().count(), MAX_SKIPPED_TRANSACTIONS * 3);
 
 		let mut proposer_factory =
@@ -950,7 +971,7 @@ mod tests {
 
 		let cell = Mutex::new(time::Instant::now());
 		let proposer = proposer_factory.init_with_now(
-			&client.expect_header(BlockId::number(0)).unwrap(),
+			&client.expect_header(client.info().genesis_hash).unwrap(),
 			Box::new(move || {
 				let mut value = cell.lock();
 				let old = *value;
@@ -998,9 +1019,13 @@ mod tests {
 		)
 		.unwrap();
 
-		block_on(txpool.maintain(chain_event(
-			client.expect_header(BlockId::Number(0u64)).expect("there should be header"),
-		)));
+		block_on(
+			txpool.maintain(chain_event(
+				client
+					.expect_header(client.info().genesis_hash)
+					.expect("there should be header"),
+			)),
+		);
 		assert_eq!(txpool.ready().count(), MAX_SKIPPED_TRANSACTIONS * 2 + 2);
 
 		let mut proposer_factory =
@@ -1010,7 +1035,7 @@ mod tests {
 		let cell = Arc::new(Mutex::new((0, time::Instant::now())));
 		let cell2 = cell.clone();
 		let proposer = proposer_factory.init_with_now(
-			&client.expect_header(BlockId::number(0)).unwrap(),
+			&client.expect_header(client.info().genesis_hash).unwrap(),
 			Box::new(move || {
 				let mut value = cell.lock();
 				let (called, old) = *value;

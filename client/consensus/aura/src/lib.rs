@@ -969,7 +969,7 @@ mod tests {
 			compatibility_mode: Default::default(),
 		};
 
-		let head = client.expect_header(BlockId::Number(0)).unwrap();
+		let head = client.expect_header(client.info().genesis_hash).unwrap();
 
 		let res = runtime
 			.block_on(worker.on_slot(SlotInfo {

@@ -1564,9 +1564,12 @@ fn justification_with_equivocation() {
 	net.peer(0).push_blocks(3, false);
 
 	let client = net.peer(0).client().as_client().clone();
-	let block1 = client.expect_header(BlockId::Number(1)).unwrap();
-	let block2 = client.expect_header(BlockId::Number(2)).unwrap();
-	let block3 = client.expect_header(BlockId::Number(3)).unwrap();
+	let hashof1 = client.expect_block_hash_from_id(&BlockId::Number(1)).unwrap();
+	let hashof2 = client.expect_block_hash_from_id(&BlockId::Number(2)).unwrap();
+	let hashof3 = client.expect_block_hash_from_id(&BlockId::Number(3)).unwrap();
+	let block1 = client.expect_header(hashof1).unwrap();
+	let block2 = client.expect_header(hashof2).unwrap();
+	let block3 = client.expect_header(hashof3).unwrap();
 
 	let set_id = 0;
 	let justification = {

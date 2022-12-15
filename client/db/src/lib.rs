@@ -1372,7 +1372,7 @@ impl<Block: BlockT> Backend<Block> {
 		};
 
 		for (block_hash, justification) in operation.finalized_blocks {
-			let block_header = self.blockchain.expect_header(BlockId::Hash(block_hash))?;
+			let block_header = self.blockchain.expect_header(block_hash)?;
 			meta_updates.push(self.finalize_block_with_transaction(
 				&mut transaction,
 				block_hash,
@@ -2010,7 +2010,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		justification: Option<Justification>,
 	) -> ClientResult<()> {
 		let mut transaction = Transaction::new();
-		let header = self.blockchain.expect_header(BlockId::Hash(hash))?;
+		let header = self.blockchain.expect_header(hash)?;
 		let mut displaced = None;
 
 		let m = self.finalize_block_with_transaction(
@@ -2032,7 +2032,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		justification: Justification,
 	) -> ClientResult<()> {
 		let mut transaction: Transaction<DbHash> = Transaction::new();
-		let header = self.blockchain.expect_header(BlockId::Hash(hash))?;
+		let header = self.blockchain.expect_header(hash)?;
 		let number = *header.number();
 
 		// Check if the block is finalized first.

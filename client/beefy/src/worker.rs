@@ -465,7 +465,7 @@ where
 				.map(|hash| {
 					backend
 						.blockchain()
-						.expect_header(BlockId::hash(*hash))
+						.expect_header(*hash)
 						.expect("just finalized block should be available; qed.")
 				})
 				.chain(std::iter::once(header.clone()))
@@ -718,13 +718,24 @@ where
 		let target_header = if target_number == self.best_grandpa_block() {
 			self.persisted_state.best_grandpa_block_header.clone()
 		} else {
-			self.backend
+			let hash = self.backend
 				.blockchain()
-				.expect_header(BlockId::Number(target_number))
+				.expect_block_hash_from_id(&BlockId::Number(target_number))
 				.map_err(|err| {
 					let err_msg = format!(
-						"Couldn't get header for block #{:?} (error: {:?}), skipping vote..",
+						"Couldn't get hash for block #{:?} (error: {:?}), skipping vote..",
 						target_number, err
+					);
+					Error::Backend(err_msg)
+				})?;
+
+			self.backend
+				.blockchain()
+				.expect_header(hash)
+				.map_err(|err| {
+					let err_msg = format!(
+						"Couldn't get header for block #{:?} ({:?}) (error: {:?}), skipping vote..",
+						target_number, hash, err
 					);
 					Error::Backend(err_msg)
 				})?
@@ -1051,8 +1062,10 @@ pub(crate) mod tests {
 			"/beefy/justifs/1".into(),
 			known_peers,
 		);
-		let at = BlockId::number(Zero::zero());
-		let genesis_header = backend.blockchain().expect_header(at).unwrap();
+		let genesis_header = backend
+			.blockchain()
+			.expect_header(backend.blockchain().info().genesis_hash)
+			.unwrap();
 		let persisted_state = PersistedState::checked_new(
 			genesis_header,
 			Zero::zero(),
