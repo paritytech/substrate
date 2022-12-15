@@ -20,6 +20,7 @@ ark-std = { version = "0.4.0-alpha", default-features = false }
 ark-bls12-381 = { version = "0.4.0-alpha" }
 ark-bls12-377 = { version = "0.4.0-alpha" }
 ark-bw6-761 = { version = "0.4.0-alpha" }
+ark-ed-on-bls12-381 = { version = "0.4.0-alpha" }
 sp-std = { version = "5.0.0", default-features = false, path = "../std" }
 
 [dev-dependencies]
