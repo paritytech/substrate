@@ -718,7 +718,8 @@ where
 		let target_header = if target_number == self.best_grandpa_block() {
 			self.persisted_state.best_grandpa_block_header.clone()
 		} else {
-			let hash = self.backend
+			let hash = self
+				.backend
 				.blockchain()
 				.expect_block_hash_from_id(&BlockId::Number(target_number))
 				.map_err(|err| {
@@ -729,16 +730,13 @@ where
 					Error::Backend(err_msg)
 				})?;
 
-			self.backend
-				.blockchain()
-				.expect_header(hash)
-				.map_err(|err| {
-					let err_msg = format!(
-						"Couldn't get header for block #{:?} ({:?}) (error: {:?}), skipping vote..",
-						target_number, hash, err
-					);
-					Error::Backend(err_msg)
-				})?
+			self.backend.blockchain().expect_header(hash).map_err(|err| {
+				let err_msg = format!(
+					"Couldn't get header for block #{:?} ({:?}) (error: {:?}), skipping vote..",
+					target_number, hash, err
+				);
+				Error::Backend(err_msg)
+			})?
 		};
 		let target_hash = target_header.hash();
 
