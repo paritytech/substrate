@@ -16,34 +16,18 @@
 // limitations under the License.
 
 use crate::{
-	build_executor, ensure_matching_spec, extract_code, full_extensions, hash_of, local_spec,
-	parse, state_machine_call, SharedParams, State, LOG_TARGET,
+	build_executor, commands::execute_block::next_hash_of, full_extensions, parse, rpc_err_handler,
+	state_machine_call, LiveState, SharedParams, State, LOG_TARGET,
 };
 use parity_scale_codec::Encode;
-use sc_executor::NativeExecutionDispatch;
-use sc_service::Configuration;
-use sp_core::storage::well_known_keys;
-use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
+use sc_executor::sp_wasm_interface::HostFunctions;
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{fmt::Debug, str::FromStr};
 use substrate_rpc_client::{ws_client, ChainApi};
 
-/// Configurations of the [`Command::OffchainWorker`].
+/// Configurations of the [`crate::Command::OffchainWorker`].
 #[derive(Debug, Clone, clap::Parser)]
 pub struct OffchainWorkerCmd {
-	/// Overwrite the wasm code in state or not.
-	#[arg(long)]
-	overwrite_wasm_code: bool,
-
-	/// The block hash at which to fetch the header.
-	///
-	/// If the `live` state type is being used, then this can be omitted, and is equal to whatever
-	/// the `state::at` is. Only use this (with care) when combined with a snapshot.
-	#[arg(
-		long,
-		value_parser = parse::hash
-	)]
-	header_at: Option<String>,
-
 	/// The ws uri from which to fetch the header.
 	///
 	/// If the `live` state type is being used, then this can be omitted, and is equal to whatever
@@ -52,7 +36,7 @@ pub struct OffchainWorkerCmd {
 		long,
 		value_parser = parse::url
 	)]
-	header_ws_uri: Option<String>,
+	pub header_ws_uri: Option<String>,
 
 	/// The state type to use.
 	#[command(subcommand)]
@@ -60,24 +44,6 @@ pub struct OffchainWorkerCmd {
 }
 
 impl OffchainWorkerCmd {
-	fn header_at<Block: BlockT>(&self) -> sc_cli::Result<Block::Hash>
-	where
-		Block::Hash: FromStr,
-		<Block::Hash as FromStr>::Err: Debug,
-	{
-		match (&self.header_at, &self.state) {
-			(Some(header_at), State::Snap { .. }) => hash_of::<Block>(header_at),
-			(Some(header_at), State::Live { .. }) => {
-				log::error!(target: LOG_TARGET, "--header-at is provided while state type is live, this will most likely lead to a nonsensical result.");
-				hash_of::<Block>(header_at)
-			},
-			(None, State::Live { at: Some(at), .. }) => hash_of::<Block>(at),
-			_ => {
-				panic!("either `--header-at` must be provided, or state must be `live` with a proper `--at`");
-			},
-		}
-	}
-
 	fn header_ws_uri<Block: BlockT>(&self) -> String
 	where
 		Block::Hash: FromStr,
@@ -89,7 +55,7 @@ impl OffchainWorkerCmd {
 				log::error!(target: LOG_TARGET, "--header-uri is provided while state type is live, this will most likely lead to a nonsensical result.");
 				header_ws_uri.to_owned()
 			},
-			(None, State::Live { uri, .. }) => uri.clone(),
+			(None, State::Live(LiveState { uri, .. })) => uri.clone(),
 			(None, State::Snap { .. }) => {
 				panic!("either `--header-uri` must be provided, or state must be `live`");
 			},
@@ -97,76 +63,42 @@ impl OffchainWorkerCmd {
 	}
 }
 
-pub(crate) async fn offchain_worker<Block, ExecDispatch>(
+pub(crate) async fn offchain_worker<Block, HostFns>(
 	shared: SharedParams,
 	command: OffchainWorkerCmd,
-	config: Configuration,
 ) -> sc_cli::Result<()>
 where
 	Block: BlockT + serde::de::DeserializeOwned,
-	Block::Hash: FromStr,
 	Block::Header: serde::de::DeserializeOwned,
+	Block::Hash: FromStr,
 	<Block::Hash as FromStr>::Err: Debug,
 	NumberFor<Block>: FromStr,
 	<NumberFor<Block> as FromStr>::Err: Debug,
-	ExecDispatch: NativeExecutionDispatch + 'static,
+	HostFns: HostFunctions,
 {
-	let executor = build_executor(&shared, &config);
-	let execution = shared.execution;
+	let executor = build_executor(&shared);
+	// we first build the externalities with the remote code.
+	let ext = command.state.into_ext::<Block, HostFns>(&shared, &executor, None).await?;
 
-	let header_at = command.header_at::<Block>()?;
 	let header_ws_uri = command.header_ws_uri::<Block>();
 
 	let rpc = ws_client(&header_ws_uri).await?;
-	let header = ChainApi::<(), Block::Hash, Block::Header, ()>::header(&rpc, Some(header_at))
+	let next_hash = next_hash_of::<Block>(&rpc, ext.block_hash).await?;
+	log::info!(target: LOG_TARGET, "fetching next header: {:?} ", next_hash);
+
+	let header = ChainApi::<(), Block::Hash, Block::Header, ()>::header(&rpc, Some(next_hash))
 		.await
-		.unwrap()
-		.unwrap();
-	log::info!(
-		target: LOG_TARGET,
-		"fetched header from {:?}, block number: {:?}",
-		header_ws_uri,
-		header.number()
-	);
+		.map_err(rpc_err_handler)
+		.map(|maybe_header| maybe_header.ok_or("Header does not exist"))??;
+	let payload = header.encode();
 
-	let ext = {
-		let builder = command.state.builder::<Block>()?.state_version(shared.state_version);
-
-		let builder = if command.overwrite_wasm_code {
-			log::info!(
-				target: LOG_TARGET,
-				"replacing the in-storage :code: with the local code from {}'s chain_spec (your local repo)",
-				config.chain_spec.name(),
-			);
-			let (code_key, code) = extract_code(&config.chain_spec)?;
-			builder.inject_hashed_key_value(&[(code_key, code)])
-		} else {
-			builder.inject_hashed_key(well_known_keys::CODE)
-		};
-
-		builder.build().await?
-	};
-
-	let (expected_spec_name, expected_spec_version, _) =
-		local_spec::<Block, ExecDispatch>(&ext, &executor);
-	ensure_matching_spec::<Block>(
-		header_ws_uri,
-		expected_spec_name,
-		expected_spec_version,
-		shared.no_spec_check_panic,
-	)
-	.await;
-
-	let _ = state_machine_call::<Block, ExecDispatch>(
+	let _ = state_machine_call::<Block, HostFns>(
 		&ext,
 		&executor,
-		execution,
 		"OffchainWorkerApi_offchain_worker",
-		header.encode().as_ref(),
+		&payload,
 		full_extensions(),
 	)?;
-
-	log::info!(target: LOG_TARGET, "OffchainWorkerApi_offchain_worker executed without errors.");
 
 	Ok(())
 }
