@@ -76,6 +76,15 @@ fn pool_balance(owner: u64, token_id: u32) -> u64 {
 }
 
 #[test]
+fn check_u64() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(Dex::quote(&3u64, &u64::MAX, &u64::MAX).ok(), Some(3));
+		assert!(Dex::quote(&u64::MAX, &3u64, &u64::MAX).is_err());
+		assert_eq!(Dex::quote(&u64::MAX, &u64::MAX, &1u64).ok(), Some(1));
+	});
+}
+
+#[test]
 fn create_pool_should_work() {
 	new_test_ext().execute_with(|| {
 		let user = 1;

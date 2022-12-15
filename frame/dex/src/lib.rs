@@ -52,9 +52,13 @@ pub mod pallet {
 		},
 		PalletId,
 	};
-	use sp_runtime::traits::{
-		AccountIdConversion, AtLeast32BitUnsigned, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub,
-		IntegerSquareRoot, One, Zero,
+	use sp_runtime::{
+		helpers_128bit::multiply_by_rational_with_rounding,
+		traits::{
+			AccountIdConversion, AtLeast32BitUnsigned, CheckedAdd, CheckedDiv, CheckedMul,
+			CheckedSub, IntegerSquareRoot, One, Zero,
+		},
+		Rounding,
 	};
 
 	#[pallet::pallet]
@@ -76,6 +80,7 @@ pub mod pallet {
 			+ MaybeSerializeDeserialize
 			+ sp_std::fmt::Debug
 			+ From<u64>
+			+ Into<u128>
 			+ TypeInfo
 			+ MaxEncodedLen;
 
@@ -653,7 +658,6 @@ pub mod pallet {
 			}
 		}
 
-		// TODO: we should probably use u128 for calculations
 		/// Calculates the optimal amount from the reserves.
 		pub fn quote(
 			amount: &AssetBalanceOf<T>,
@@ -661,11 +665,14 @@ pub mod pallet {
 			reserve2: &AssetBalanceOf<T>,
 		) -> Result<AssetBalanceOf<T>, Error<T>> {
 			// amount * reserve2 / reserve1
-			amount
-				.checked_mul(&reserve2)
-				.ok_or(Error::<T>::Overflow)?
-				.checked_div(&reserve1)
-				.ok_or(Error::<T>::Overflow)
+			multiply_by_rational_with_rounding(
+				(*amount).into(),
+				(*reserve2).into(),
+				(*reserve1).into(),
+				Rounding::Down,
+			)
+			.map(|res| res.try_into().map_err(|_| Error::<T>::Overflow))
+			.unwrap_or_else(|| Err(Error::<T>::Overflow))
 		}
 
 		/// Calculates amount out
@@ -681,7 +688,6 @@ pub mod pallet {
 				return Err(Error::<T>::InsufficientLiquidity.into())
 			}
 
-			// TODO: extract 0.3% into config
 			// TODO: could use Permill type
 			let amount_in_with_fee = amount_in
 				.checked_mul(&(1000u64 - T::Fee::get()).into())
