@@ -92,6 +92,45 @@ impl<T: Config> Pallet<T> {
 		Self::slashable_balance_of_vote_weight(who, issuance)
 	}
 
+	pub(super) fn do_withdraw_unbonded(
+		controller: &T::AccountId,
+		num_slashing_spans: u32,
+	) -> Result<Weight, DispatchError> {
+		let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+		let (stash, old_total) = (ledger.stash.clone(), ledger.total);
+		if let Some(current_era) = Self::current_era() {
+			ledger = ledger.consolidate_unlocked(current_era)
+		}
+
+		let used_weight =
+			if ledger.unlocking.is_empty() && ledger.active < T::Currency::minimum_balance() {
+				// This account must have called `unbond()` with some value that caused the active
+				// portion to fall below existential deposit + will have no more unlocking chunks
+				// left. We can now safely remove all staking-related information.
+				Self::kill_stash(&stash, num_slashing_spans)?;
+				// Remove the lock.
+				T::Currency::remove_lock(STAKING_ID, &stash);
+
+				T::WeightInfo::withdraw_unbonded_kill(num_slashing_spans)
+			} else {
+				// This was the consequence of a partial unbond. just update the ledger and move on.
+				Self::update_ledger(&controller, &ledger);
+
+				// This is only an update, so we use less overall weight.
+				T::WeightInfo::withdraw_unbonded_update(num_slashing_spans)
+			};
+
+		// `old_total` should never be less than the new total because
+		// `consolidate_unlocked` strictly subtracts balance.
+		if ledger.total < old_total {
+			// Already checked that this won't overflow by entry condition.
+			let value = old_total - ledger.total;
+			Self::deposit_event(Event::<T>::Withdrawn { stash, amount: value });
+		}
+
+		Ok(used_weight)
+	}
+
 	pub(super) fn do_payout_stakers(
 		validator_stash: T::AccountId,
 		era: EraIndex,
@@ -704,6 +743,9 @@ impl<T: Config> Pallet<T> {
 	///
 	/// `maybe_max_len` can imposes a cap on the number of voters returned;
 	///
+	/// Sets `MinimumActiveStake` to the minimum active nominator stake in the returned set of
+	/// nominators.
+	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
 	pub fn get_npos_voters(maybe_max_len: Option<usize>) -> Vec<VoterOf<Self>> {
 		let max_allowed_len = {
@@ -719,6 +761,7 @@ impl<T: Config> Pallet<T> {
 		let mut voters_seen = 0u32;
 		let mut validators_taken = 0u32;
 		let mut nominators_taken = 0u32;
+		let mut min_active_stake = u64::MAX;
 
 		let mut sorted_voters = T::VoterList::iter();
 		while all_voters.len() < max_allowed_len &&
@@ -733,12 +776,15 @@ impl<T: Config> Pallet<T> {
 			};
 
 			if let Some(Nominations { targets, .. }) = <Nominators<T>>::get(&voter) {
+				let voter_weight = weight_of(&voter);
 				if !targets.is_empty() {
-					all_voters.push((voter.clone(), weight_of(&voter), targets));
+					all_voters.push((voter.clone(), voter_weight, targets));
 					nominators_taken.saturating_inc();
 				} else {
 					// Technically should never happen, but not much we can do about it.
 				}
+				min_active_stake =
+					if voter_weight < min_active_stake { voter_weight } else { min_active_stake };
 			} else if Validators::<T>::contains_key(&voter) {
 				// if this voter is a validator:
 				let self_vote = (
@@ -768,6 +814,11 @@ impl<T: Config> Pallet<T> {
 		debug_assert!(all_voters.capacity() == max_allowed_len);
 
 		Self::register_weight(T::WeightInfo::get_npos_voters(validators_taken, nominators_taken));
+
+		let min_active_stake: T::CurrencyBalance =
+			if all_voters.len() == 0 { 0u64.into() } else { min_active_stake.into() };
+
+		MinimumActiveStake::<T>::put(min_active_stake);
 
 		log!(
 			info,
@@ -1556,6 +1607,8 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	fn unbond(who: &Self::AccountId, value: Self::Balance) -> DispatchResult {
 		let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
 		Self::unbond(RawOrigin::Signed(ctrl).into(), value)
+			.map_err(|with_post| with_post.error)
+			.map(|_| ())
 	}
 
 	fn chill(who: &Self::AccountId) -> DispatchResult {
@@ -1624,9 +1677,9 @@ impl<T: Config> Pallet<T> {
 		ensure!(
 			T::VoterList::iter()
 				.all(|x| <Nominators<T>>::contains_key(&x) || <Validators<T>>::contains_key(&x)),
-			"VoterList contains non-nominators"
+			"VoterList contains non-staker"
 		);
-		T::VoterList::try_state()?;
+
 		Self::check_nominators()?;
 		Self::check_exposures()?;
 		Self::check_ledgers()?;
@@ -1639,7 +1692,10 @@ impl<T: Config> Pallet<T> {
 				Nominators::<T>::count() + Validators::<T>::count(),
 			"wrong external count"
 		);
-
+		ensure!(
+			<T as Config>::TargetList::count() == Validators::<T>::count(),
+			"wrong external count"
+		);
 		ensure!(
 			ValidatorCount::<T>::get() <=
 				<T::ElectionProvider as frame_election_provider_support::ElectionProviderBase>::MaxWinners::get(),
@@ -1680,7 +1736,7 @@ impl<T: Config> Pallet<T> {
 		<Nominators<T>>::iter()
 			.filter_map(
 				|(nominator, nomination)| {
-					if nomination.submitted_in > era {
+					if nomination.submitted_in < era {
 						Some(nominator)
 					} else {
 						None
