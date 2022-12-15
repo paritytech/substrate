@@ -20,7 +20,7 @@
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use ark_bls12_377::{Bls12_377, Fq12, G1Affine, G1Projective, G2Affine, G2Projective, Parameters};
+use ark_bls12_377::{Bls12_377, G1Affine, G1Projective, G2Affine, G2Projective, Parameters};
 use ark_ec::{
 	models::CurveConfig,
 	pairing::{MillerLoopOutput, Pairing},
@@ -30,7 +30,6 @@ use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use ark_std::{io::Cursor, Zero};
 use sp_std::{vec, vec::Vec};
-
 
 /// Compute multi pairing through arkworksrk_Bls12_377::G2Projective
 pub fn multi_pairing(vec_a: Vec<Vec<u8>>, vec_b: Vec<Vec<u8>>) -> Vec<u8> {
@@ -103,10 +102,15 @@ pub fn multi_miller_loop(a_vec: Vec<Vec<u8>>, b_vec: Vec<Vec<u8>>) -> Vec<u8> {
 }
 
 /// Compute final exponentiation through arkworks
-pub fn final_exponentiation(f12: &[u8]) -> Vec<u8> {
-	let cursor = Cursor::new(f12);
-	let f12 = Fq12::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
-	let res = Bls12_377::final_exponentiation(MillerLoopOutput(f12)).unwrap();
+pub fn final_exponentiation(target: &[u8]) -> Vec<u8> {
+	let cursor = Cursor::new(target);
+	let target = <Bls12_377 as Pairing>::TargetField::deserialize_with_mode(
+		cursor,
+		Compress::Yes,
+		Validate::No,
+	)
+	.unwrap();
+	let res = Bls12_377::final_exponentiation(MillerLoopOutput(target)).unwrap();
 	// serialize the result
 	let mut res_bytes = vec![0u8; res.0.serialized_size(Compress::Yes)];
 	let mut cursor = Cursor::new(&mut res_bytes[..]);

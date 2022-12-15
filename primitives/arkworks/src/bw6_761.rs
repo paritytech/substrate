@@ -20,7 +20,7 @@
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use ark_bw6_761::{BW6_761, G1Affine, G1Projective, G2Affine, G2Projective, Parameters};
+use ark_bw6_761::{G1Affine, G1Projective, G2Affine, G2Projective, Parameters, BW6_761};
 use ark_ec::{
 	models::CurveConfig,
 	pairing::{MillerLoopOutput, Pairing, PairingOutput},
@@ -104,7 +104,12 @@ pub fn multi_miller_loop(a_vec: Vec<Vec<u8>>, b_vec: Vec<Vec<u8>>) -> Vec<u8> {
 /// Compute final exponentiation through arkworks
 pub fn final_exponentiation(target: &[u8]) -> Vec<u8> {
 	let cursor = Cursor::new(target);
-	let target = <BW6_761 as Pairing>::TargetField::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+	let target = <BW6_761 as Pairing>::TargetField::deserialize_with_mode(
+		cursor,
+		Compress::Yes,
+		Validate::No,
+	)
+	.unwrap();
 	let res = BW6_761::final_exponentiation(MillerLoopOutput(target)).unwrap();
 	// serialize the result
 	let mut res_bytes = vec![0u8; res.serialized_size(Compress::Yes)];
