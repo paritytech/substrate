@@ -279,93 +279,92 @@ pub mod pallet {
 			let now = frame_system::Pallet::<T>::block_number();
 			ensure!(deadline >= now, Error::<T>::DeadlinePassed);
 
-			Pools::<T>::try_mutate(&pool_id, |maybe_pool| {
-				let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolNotFound)?;
+			let maybe_pool = Pools::<T>::get(pool_id);
+			let pool = maybe_pool.as_ref().ok_or(Error::<T>::PoolNotFound)?;
 
-				let amount1: AssetBalanceOf<T>;
-				let amount2: AssetBalanceOf<T>;
+			let amount1: AssetBalanceOf<T>;
+			let amount2: AssetBalanceOf<T>;
 
-				let pool_account = Self::get_pool_account(pool_id);
-				let reserve1 = Self::get_balance(&pool_account, asset1);
-				let reserve2 = Self::get_balance(&pool_account, asset2);
+			let pool_account = Self::get_pool_account(pool_id);
+			let reserve1 = Self::get_balance(&pool_account, asset1);
+			let reserve2 = Self::get_balance(&pool_account, asset2);
 
-				if reserve1.is_zero() && reserve2.is_zero() {
+			if reserve1.is_zero() && reserve2.is_zero() {
+				amount1 = amount1_desired;
+				amount2 = amount2_desired;
+			} else {
+				let amount2_optimal = Self::quote(&amount1_desired, &reserve1, &reserve2)?;
+
+				if amount2_optimal <= amount2_desired {
+					ensure!(
+						amount2_optimal >= amount2_min,
+						Error::<T>::InsufficientAmountParam2
+					);
 					amount1 = amount1_desired;
+					amount2 = amount2_optimal;
+				} else {
+					let amount1_optimal = Self::quote(&amount2_desired, &reserve2, &reserve1)?;
+					ensure!(
+						amount1_optimal <= amount1_desired,
+						Error::<T>::OptimalAmountLessThanDesired
+					);
+					ensure!(
+						amount1_optimal >= amount1_min,
+						Error::<T>::InsufficientAmountParam1
+					);
+					amount1 = amount1_optimal;
 					amount2 = amount2_desired;
-				} else {
-					let amount2_optimal = Self::quote(&amount1_desired, &reserve1, &reserve2)?;
-
-					if amount2_optimal <= amount2_desired {
-						ensure!(
-							amount2_optimal >= amount2_min,
-							Error::<T>::InsufficientAmountParam2
-						);
-						amount1 = amount1_desired;
-						amount2 = amount2_optimal;
-					} else {
-						let amount1_optimal = Self::quote(&amount2_desired, &reserve2, &reserve1)?;
-						ensure!(
-							amount1_optimal <= amount1_desired,
-							Error::<T>::OptimalAmountLessThanDesired
-						);
-						ensure!(
-							amount1_optimal >= amount1_min,
-							Error::<T>::InsufficientAmountParam1
-						);
-						amount1 = amount1_optimal;
-						amount2 = amount2_desired;
-					}
 				}
+			}
 
-				Self::transfer(asset1, &sender, &pool_account, amount1, keep_alive)?;
-				Self::transfer(asset2, &sender, &pool_account, amount2, keep_alive)?;
+			Self::transfer(asset1, &sender, &pool_account, amount1, keep_alive)?;
+			Self::transfer(asset2, &sender, &pool_account, amount2, keep_alive)?;
 
-				let total_supply = T::PoolAssets::total_issuance(pool.lp_token);
+			let total_supply = T::PoolAssets::total_issuance(pool.lp_token);
 
-				let lp_token_amount: AssetBalanceOf<T>;
-				if total_supply.is_zero() {
-					lp_token_amount = amount1
-						.checked_mul(&amount2)
-						.ok_or(Error::<T>::Overflow)?
-						.integer_sqrt()
-						.checked_sub(&MIN_LIQUIDITY.into())
-						.ok_or(Error::<T>::Overflow)?;
-					T::PoolAssets::mint_into(pool.lp_token, &pool_account, MIN_LIQUIDITY.into())?;
-				} else {
-					let side1 = amount1
-						.checked_mul(&total_supply)
-						.ok_or(Error::<T>::Overflow)?
-						.checked_div(&reserve1)
-						.ok_or(Error::<T>::Overflow)?;
+			let lp_token_amount: AssetBalanceOf<T>;
+			if total_supply.is_zero() {
+				lp_token_amount = amount1
+					.checked_mul(&amount2)
+					.ok_or(Error::<T>::Overflow)?
+					.integer_sqrt()
+					.checked_sub(&MIN_LIQUIDITY.into())
+					.ok_or(Error::<T>::Overflow)?;
+				T::PoolAssets::mint_into(pool.lp_token, &pool_account, MIN_LIQUIDITY.into())?;
+			} else {
+				let side1 = amount1
+					.checked_mul(&total_supply)
+					.ok_or(Error::<T>::Overflow)?
+					.checked_div(&reserve1)
+					.ok_or(Error::<T>::Overflow)?;
 
-					let side2 = amount2
-						.checked_mul(&total_supply)
-						.ok_or(Error::<T>::Overflow)?
-						.checked_div(&reserve2)
-						.ok_or(Error::<T>::Overflow)?;
+				let side2 = amount2
+					.checked_mul(&total_supply)
+					.ok_or(Error::<T>::Overflow)?
+					.checked_div(&reserve2)
+					.ok_or(Error::<T>::Overflow)?;
 
-					lp_token_amount = side1.min(side2);
-				}
+				lp_token_amount = side1.min(side2);
+			}
 
-				ensure!(
-					lp_token_amount > MIN_LIQUIDITY.into(),
-					Error::<T>::InsufficientLiquidityMinted
-				);
+			ensure!(
+				lp_token_amount > MIN_LIQUIDITY.into(),
+				Error::<T>::InsufficientLiquidityMinted
+			);
 
-				T::PoolAssets::mint_into(pool.lp_token, &mint_to, lp_token_amount)?;
+			T::PoolAssets::mint_into(pool.lp_token, &mint_to, lp_token_amount)?;
 
-				Self::deposit_event(Event::LiquidityAdded {
-					who: sender,
-					mint_to,
-					pool_id,
-					amount1_provided: amount1,
-					amount2_provided: amount2,
-					lp_token: pool.lp_token,
-					lp_token_minted: lp_token_amount,
-				});
+			Self::deposit_event(Event::LiquidityAdded {
+				who: sender,
+				mint_to,
+				pool_id,
+				amount1_provided: amount1,
+				amount2_provided: amount2,
+				lp_token: pool.lp_token,
+				lp_token_minted: lp_token_amount,
+			});
 
-				Ok(())
-			})
+			Ok(())
 		}
 
 		#[pallet::weight(T::WeightInfo::remove_liquidity())]
