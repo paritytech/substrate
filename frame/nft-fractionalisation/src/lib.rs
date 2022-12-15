@@ -132,11 +132,13 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		AssetAlreadyRegistered,
+		AssetDataNotFound,
+		NFTDataNotFound
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		// TODO: correct weights
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(2).ref_time())]
 		/// Pallet's account must be funded before lock is possible!
 		/// 5EYCAe5gjC5dxKPbV2GPQUetETjFNSYZsSwSurVTTXidSLbh
@@ -149,7 +151,7 @@ pub mod pallet {
 			min_balance: AssetBalanceOf<T>,
 			amount: AssetBalanceOf<T>,
 		) -> DispatchResult {
-			let _who = ensure_signed(origin.clone())?;
+			let _who = ensure_signed(origin)?;
 			let admin_account_id = Self::pallet_account_id();
 
 			Self::do_lock_nft(collection_id, item_id)?;
@@ -184,14 +186,16 @@ pub mod pallet {
 
 		/// Return and burn a % of the asset, unlock the NFT. Currently 100% is the minimum
 		/// threshold.
+		// TODO: correct weights
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(2).ref_time())]
 		pub fn burn_asset_unlock_nft(
 			origin: OriginFor<T>,
 			asset_id: AssetIdOf<T>,
 			amount: AssetBalanceOf<T>,
 		) -> DispatchResult {
-			let who = ensure_signed(origin.clone())?;
+			let who = ensure_signed(origin)?;
 
+			ensure!(<AssetToNft<T>>::contains_key(asset_id), Error::<T>::NFTDataNotFound);
 			let (collection_id, item_id) = Self::get_nft_id(asset_id);
 			Self::do_burn_asset(asset_id, &who, amount)?;
 
@@ -243,7 +247,7 @@ pub mod pallet {
 		/// Assert that the `asset_id` was created by means of locking an NFT and fetch
 		/// its `CollectionId` and `ItemId`.
 		fn get_nft_id(asset_id: AssetIdOf<T>) -> (T::CollectionId, T::ItemId) {
-			assert_eq!(<AssetToNft<T>>::contains_key(asset_id), true);
+			// Check for explicit existence of the value in the extrinsic.
 			<AssetToNft<T>>::get(asset_id).unwrap()
 		}
 
@@ -273,7 +277,7 @@ pub mod pallet {
 			amount: AssetBalanceOf<T>,
 		) -> Result<AssetBalanceOf<T>, DispatchError> {
 			// Assert that the asset exists in storage.
-			assert_eq!(<AssetsMinted<T>>::contains_key(asset_id), true);
+			ensure!(<AssetsMinted<T>>::contains_key(asset_id), Error::<T>::NFTDataNotFound);
 			Self::check_token_amount(asset_id, amount);
 			T::Assets::burn_from(asset_id, account, amount)
 		}
