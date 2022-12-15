@@ -54,7 +54,6 @@ use libp2p::{
 use log::{debug, error, info, trace, warn};
 use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
-use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_network_common::{
 	config::{MultiaddrWithPeerId, TransportConfig},
 	error::Error,
@@ -450,7 +449,6 @@ where
 			is_major_syncing,
 			network_service: swarm,
 			service,
-			import_queue: params.import_queue,
 			from_service,
 			event_streams: out_events::OutChannels::new(params.metrics_registry.as_ref())?,
 			peers_notifications_sinks,
@@ -748,13 +746,11 @@ impl<B: BlockT, H: ExHashT> sc_consensus::JustificationSyncLink<B> for NetworkSe
 	/// On success, the justification will be passed to the import queue that was part at
 	/// initialization as part of the configuration.
 	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
-		let _ = self
-			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::RequestJustification(*hash, number));
+		let _ = self.chain_sync_service.request_justification(hash, number);
 	}
 
 	fn clear_justification_requests(&self) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::ClearJustificationRequests);
+		let _ = self.chain_sync_service.clear_justification_requests();
 	}
 }
 
@@ -1208,8 +1204,6 @@ impl<'a> NotificationSenderReadyT for NotificationSenderReady<'a> {
 ///
 /// Each entry corresponds to a method of `NetworkService`.
 enum ServiceToWorkerMsg<B: BlockT> {
-	RequestJustification(B::Hash, NumberFor<B>),
-	ClearJustificationRequests,
 	AnnounceBlock(B::Hash, Option<Vec<u8>>),
 	GetValue(KademliaKey),
 	PutValue(KademliaKey, Vec<u8>),
@@ -1261,8 +1255,6 @@ where
 	service: Arc<NetworkService<B, H>>,
 	/// The *actual* network.
 	network_service: Swarm<Behaviour<B, Client>>,
-	/// The import queue that was passed at initialization.
-	import_queue: Box<dyn ImportQueue<B>>,
 	/// Messages from the [`NetworkService`] that must be processed.
 	from_service: TracingUnboundedReceiver<ServiceToWorkerMsg<B>>,
 	/// Senders for events that happen on the network.
@@ -1289,10 +1281,6 @@ where
 
 	fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context) -> Poll<Self::Output> {
 		let this = &mut *self;
-
-		// Poll the import queue for actions to perform.
-		this.import_queue
-			.poll_actions(cx, &mut NetworkLink { protocol: &mut this.network_service });
 
 		// At the time of writing of this comment, due to a high volume of messages, the network
 		// worker sometimes takes a long time to process the loop below. When that happens, the
@@ -1322,16 +1310,6 @@ where
 					.behaviour_mut()
 					.user_protocol_mut()
 					.announce_block(hash, data),
-				ServiceToWorkerMsg::RequestJustification(hash, number) => this
-					.network_service
-					.behaviour_mut()
-					.user_protocol_mut()
-					.request_justification(&hash, number),
-				ServiceToWorkerMsg::ClearJustificationRequests => this
-					.network_service
-					.behaviour_mut()
-					.user_protocol_mut()
-					.clear_justification_requests(),
 				ServiceToWorkerMsg::GetValue(key) =>
 					this.network_service.behaviour_mut().get_value(key),
 				ServiceToWorkerMsg::PutValue(key, value) =>
@@ -1435,23 +1413,6 @@ where
 
 			match poll_value {
 				Poll::Pending => break,
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::BlockImport(origin, blocks))) => {
-					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.import_queue_blocks_submitted.inc();
-					}
-					this.import_queue.import_blocks(origin, blocks);
-				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::JustificationImport(
-					origin,
-					hash,
-					nb,
-					justifications,
-				))) => {
-					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.import_queue_justifications_submitted.inc();
-					}
-					this.import_queue.import_justifications(origin, hash, nb, justifications);
-				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::InboundRequest {
 					protocol,
 					result,
@@ -1950,51 +1911,6 @@ where
 	H: ExHashT,
 	Client: HeaderBackend<B> + 'static,
 {
-}
-
-// Implementation of `import_queue::Link` trait using the available local variables.
-struct NetworkLink<'a, B, Client>
-where
-	B: BlockT,
-	Client: HeaderBackend<B> + 'static,
-{
-	protocol: &'a mut Swarm<Behaviour<B, Client>>,
-}
-
-impl<'a, B, Client> Link<B> for NetworkLink<'a, B, Client>
-where
-	B: BlockT,
-	Client: HeaderBackend<B> + 'static,
-{
-	fn blocks_processed(
-		&mut self,
-		imported: usize,
-		count: usize,
-		results: Vec<(Result<BlockImportStatus<NumberFor<B>>, BlockImportError>, B::Hash)>,
-	) {
-		self.protocol
-			.behaviour_mut()
-			.user_protocol_mut()
-			.on_blocks_processed(imported, count, results)
-	}
-	fn justification_imported(
-		&mut self,
-		who: PeerId,
-		hash: &B::Hash,
-		number: NumberFor<B>,
-		success: bool,
-	) {
-		self.protocol
-			.behaviour_mut()
-			.user_protocol_mut()
-			.justification_import_result(who, *hash, number, success);
-	}
-	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		self.protocol
-			.behaviour_mut()
-			.user_protocol_mut()
-			.request_justification(hash, number)
-	}
 }
 
 fn ensure_addresses_consistent_with_transport<'a>(

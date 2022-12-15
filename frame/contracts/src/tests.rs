@@ -415,6 +415,7 @@ impl Config for Test {
 	type MaxCodeLen = ConstU32<{ 128 * 1024 }>;
 	type MaxStorageKeyLen = ConstU32<128>;
 	type UnsafeUnstableInterface = UnstableInterface;
+	type MaxDebugBufferLen = ConstU32<{ 2 * 1024 * 1024 }>;
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);

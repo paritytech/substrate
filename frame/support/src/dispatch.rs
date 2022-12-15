@@ -2188,7 +2188,7 @@ macro_rules! decl_module {
 					$system::Config
 				>::PalletInfo as $crate::traits::PalletInfo>::name::<Self>().unwrap_or("<unknown pallet name>");
 
-				$crate::log::info!(
+				$crate::log::debug!(
 					target: $crate::LOG_TARGET,
 					"✅ no migration for {}",
 					pallet_name,
