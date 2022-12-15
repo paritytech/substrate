@@ -105,7 +105,7 @@ pub mod pallet {
 			let mut weight = T::DbWeight::get().reads(1);
 
 			let computation_weight_limit =
-				Compute::<T>::get().mul_ceil(remaining_weight.ref_time());
+				Compute::<T>::get().mul_floor(remaining_weight.ref_time());
 
 			let mut value: u64 = 0;
 			loop {
