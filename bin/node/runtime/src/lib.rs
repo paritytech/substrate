@@ -1476,6 +1476,7 @@ impl pallet_assets::Config<Instance2> for Runtime {
 
 parameter_types! {
 	pub const DexPalletId: PalletId = PalletId(*b"py/dexer");
+	pub AllowMultiAssetPools: bool = true;
 }
 
 impl pallet_dex::Config for Runtime {
@@ -1489,6 +1490,7 @@ impl pallet_dex::Config for Runtime {
 	type PoolAssetId = <Self as pallet_assets::Config<Instance2>>::AssetId;
 	type PalletId = DexPalletId;
 	type WeightInfo = pallet_dex::weights::SubstrateWeight<Runtime>;
+	type AllowMultiAssetPools = AllowMultiAssetPools;
 }
 
 parameter_types! {

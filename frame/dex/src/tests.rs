@@ -115,12 +115,12 @@ fn create_pool_should_work() {
 			Error::<Test>::EqualAssets
 		);
 		let token_1 = MultiAssetId::Asset(1);
+		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
+		AllowMultiAssetPools::set(&false);
 		assert_noop!(
 			Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2),
 			Error::<Test>::PoolMustContainNativeCurrency
 		);
-		AllowMultiAssetPools::set(&true);
-		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
 	});
 }
 
