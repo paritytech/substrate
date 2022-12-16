@@ -118,7 +118,7 @@ impl pallet_pov_limit::Hasher for Hasher {
 	fn hash(_: &[u8]) -> Self::Out {
 		// this calculates factorial. should be replaced by a hashing algorithm
 		// but `Blake2Hasher` cannot be used here since this is no_std.
-		let num: u32 = 13;
+		let num: u64 = 20;
 		match num {
 			0 => 1,
 			1.. => (1..num + 1).product(),
