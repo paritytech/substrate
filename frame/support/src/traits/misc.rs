@@ -445,7 +445,7 @@ pub trait DefensiveMin<T> {
 	/// assert_eq!(4, 4_u32.defensive_min(4_u32));
 	/// ```
 	///
-	/// ```should_panic
+	/// ```#[cfg_attr(debug_assertions, should_panic)]
 	/// use frame_support::traits::DefensiveMin;
 	/// // min(4, 3) panics.
 	/// 4_u32.defensive_min(3_u32);
@@ -462,7 +462,7 @@ pub trait DefensiveMin<T> {
 	/// assert_eq!(3, 3_u32.defensive_strict_min(4_u32));
 	/// ```
 	///
-	/// ```should_panic
+	/// ```#[cfg_attr(debug_assertions, should_panic)]
 	/// use frame_support::traits::DefensiveMin;
 	/// // min(4, 4) panics.
 	/// 4_u32.defensive_strict_min(4_u32);
@@ -509,7 +509,7 @@ pub trait DefensiveMax<T> {
 	/// assert_eq!(4, 4_u32.defensive_max(4_u32));
 	/// ```
 	///
-	/// ```should_panic
+	/// ```#[cfg_attr(debug_assertions, should_panic)]
 	/// use frame_support::traits::DefensiveMax;
 	/// // max(4, 5) panics.
 	/// 4_u32.defensive_max(5_u32);
@@ -526,7 +526,7 @@ pub trait DefensiveMax<T> {
 	/// assert_eq!(4, 4_u32.defensive_strict_max(3_u32));
 	/// ```
 	///
-	/// ```should_panic
+	/// ```#[cfg_attr(debug_assertions, should_panic)]
 	/// use frame_support::traits::DefensiveMax;
 	/// // max(4, 4) panics.
 	/// 4_u32.defensive_strict_max(4_u32);
