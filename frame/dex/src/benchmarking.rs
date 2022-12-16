@@ -113,7 +113,7 @@ benchmarks! {
 		let asset2 = MultiAssetId::Asset(0.into());
 		let (lp_token, caller, _) = create_asset_and_pool::<T>(asset1, asset2);
 		let deadline = T::BlockNumber::max_value();
-	}: _(SystemOrigin::Signed(caller.clone()), asset1, asset2, 10.into(), 10.into(), 10.into(), 10.into(), caller.clone(), deadline)
+	}: _(SystemOrigin::Signed(caller.clone()), asset1, asset2, 10.into(), 10.into(), 10.into(), 10.into(), caller.clone(), deadline, false)
 	verify {
 		let pool_id = (asset1, asset2);
 		assert_last_event::<T>(Event::LiquidityAdded {
@@ -123,7 +123,7 @@ benchmarks! {
 			amount1_provided: 10.into(),
 			amount2_provided: 10.into(),
 			lp_token,
-			liquidity: 9.into(),
+			lp_token_minted: 9.into(),
 		}.into());
 	}
 
@@ -143,6 +143,7 @@ benchmarks! {
 			10.into(),
 			caller.clone(),
 			deadline,
+			false,
 		)?;
 	}: _(SystemOrigin::Signed(caller.clone()), asset1, asset2, 8.into(), 1.into(), 1.into(), caller.clone(), deadline)
 	verify {
@@ -154,7 +155,7 @@ benchmarks! {
 			amount1: 8.into(),
 			amount2: 8.into(),
 			lp_token,
-			liquidity: 8.into(),
+			lp_token_burned: 8.into(),
 		}.into());
 	}
 
@@ -174,8 +175,9 @@ benchmarks! {
 			10.into(),
 			caller.clone(),
 			deadline,
+			false,
 		)?;
-	}: _(SystemOrigin::Signed(caller.clone()), asset1, asset2, 5.into(), 1.into(), caller.clone(), deadline)
+	}: _(SystemOrigin::Signed(caller.clone()), asset1, asset2, 5.into(), 1.into(), caller.clone(), deadline, false)
 	verify {
 		let pool_id = (asset1, asset2);
 		assert_last_event::<T>(Event::SwapExecuted {
@@ -205,8 +207,9 @@ benchmarks! {
 			10.into(),
 			caller.clone(),
 			deadline,
+			false,
 		)?;
-	}: _(SystemOrigin::Signed(caller.clone()), asset1, asset2, 3.into(), 8.into(), caller.clone(), deadline)
+	}: _(SystemOrigin::Signed(caller.clone()), asset1, asset2, 3.into(), 8.into(), caller.clone(), deadline, false)
 	verify {
 		let pool_id = (asset1, asset2);
 		assert_last_event::<T>(Event::SwapExecuted {
@@ -215,7 +218,7 @@ benchmarks! {
 			asset1,
 			asset2,
 			pool_id,
-			amount_in: 3.into(),
+			amount_in: 5.into(),
 			amount_out: 3.into(),
 		}.into());
 	}
