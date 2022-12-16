@@ -26,7 +26,7 @@ sp-std = { version = "5.0.0", default-features = false, path = "../std" }
 
 [dev-dependencies]
 ark-sub-bls12-381 = { git = "https://github.com/achimcc/ark-substrate" }
-ark-algebra-test-templates = { version = "0.4.0-alpha", default-features = false }
+ark-algebra-test-templates = { git = "https://github.com/arkworks-rs/algebra", default-features = false }
 
 [features]
 default = ["std"]
