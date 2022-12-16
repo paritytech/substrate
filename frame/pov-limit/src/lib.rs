@@ -123,7 +123,7 @@ pub mod pallet {
 
 			let mut value: u64 = 0;
 			loop {
-				if storage_weight_limit < weight.proof_size().saturating_add(50_000_000_000) {
+				if storage_weight_limit < weight.proof_size().saturating_add(5_000_000) {
 					break
 				}
 				let consumed_weight = T::Reader::read::<T>(&value.to_le_bytes());

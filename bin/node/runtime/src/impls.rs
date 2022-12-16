@@ -129,8 +129,8 @@ impl pallet_pov_limit::Hasher for Hasher {
 pub struct AccountReader;
 impl pallet_pov_limit::Reader for AccountReader {
 	fn read<T: pallet_pov_limit::Config>(_: &[u8]) -> Weight {
-		// read.
-		T::DbWeight::get().reads(1)
+		// should actually read something.
+		Weight::from_proof_size(5_000_000)
 	}
 }
 
