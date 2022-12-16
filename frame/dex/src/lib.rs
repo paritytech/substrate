@@ -48,7 +48,7 @@ pub mod pallet {
 	use frame_support::{
 		traits::{
 			fungible::{Inspect as InspectFungible, Transfer as TransferFungible},
-			fungibles::{metadata::Mutate as MutateMetadata, Create, Inspect, Mutate, Transfer},
+			fungibles::{Create, Inspect, Mutate, Transfer},
 		},
 		PalletId,
 	};
@@ -106,7 +106,6 @@ pub mod pallet {
 		type PoolAssets: Inspect<Self::AccountId, AssetId = Self::PoolAssetId, Balance = Self::AssetBalance>
 			+ Create<Self::AccountId>
 			+ Mutate<Self::AccountId>
-			+ MutateMetadata<Self::AccountId>
 			+ Transfer<Self::AccountId>;
 
 		/// The dex's pallet id, used for deriving its sovereign account ID.
@@ -128,13 +127,8 @@ pub mod pallet {
 		(MultiAssetId<<T as Config>::AssetId>, MultiAssetId<<T as Config>::AssetId>);
 
 	#[pallet::storage]
-	pub type Pools<T: Config> = StorageMap<
-		_,
-		Blake2_128Concat,
-		PoolIdOf<T>,
-		PoolInfo<T::AccountId, T::PoolAssetId>,
-		OptionQuery,
-	>;
+	pub type Pools<T: Config> =
+		StorageMap<_, Blake2_128Concat, PoolIdOf<T>, PoolInfo<T::PoolAssetId>, OptionQuery>;
 
 	/// Stores the `PoolAssetId` that is going to be used for the next lp token.
 	/// This gets incremented whenever a new lp pool is created.
@@ -244,10 +238,8 @@ pub mod pallet {
 			NextPoolAssetId::<T>::set(Some(next_lp_token_id));
 
 			T::PoolAssets::create(lp_token, pool_account.clone(), true, MIN_LIQUIDITY.into())?;
-			T::PoolAssets::set(lp_token, &pool_account, "LP".into(), "LP".into(), 0)?;
 
-			let pool_info = PoolInfo { owner: sender.clone(), lp_token };
-
+			let pool_info = PoolInfo { lp_token };
 			Pools::<T>::insert(pool_id, pool_info);
 
 			Self::deposit_event(Event::PoolCreated { creator: sender, pool_id, lp_token });
