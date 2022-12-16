@@ -1156,14 +1156,14 @@ pub trait Crypto {
 		sp_arkworks::bls12_381::mul_affine_g1(base, scalar)
 	}
 
-	/// Compute a bigint_msm on G1
-	fn bls12_381_bigint_msm_g1(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
-		sp_arkworks::bls12_381::msm_bigint_g1(bases, bigints)
+	/// Compute a msm on G1
+	fn bls12_381_msm_g1(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
+		sp_arkworks::bls12_381::msm_g1(bases, scalars)
 	}
 
-	/// Compute a bigint_msm on G2
-	fn bls12_381_bigint_msm_g2(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
-		sp_arkworks::bls12_381::msm_bigint_g2(bases, bigints)
+	/// Compute a msm on G2
+	fn bls12_381_msm_g2(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
+		sp_arkworks::bls12_381::msm_g2(bases, scalars)
 	}
 
 	/// Compute a multi pairing
@@ -1202,13 +1202,13 @@ pub trait Crypto {
 	}
 
 	/// Compute a bigint_msm on G1
-	fn bls12_377_msm_g1(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
-		sp_arkworks::bls12_377::msm_g1(bases, bigints)
+	fn bls12_377_msm_g1(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
+		sp_arkworks::bls12_377::msm_g1(bases, scalars)
 	}
 
 	/// Compute a bigint_msm on G2
-	fn bls12_377_msm_g2(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
-		sp_arkworks::bls12_377::msm_g2(bases, bigints)
+	fn bls12_377_msm_g2(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
+		sp_arkworks::bls12_377::msm_g2(bases, scalars)
 	}
 
 	/// Compute a multi pairing

@@ -199,7 +199,7 @@ pub fn mul_affine_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 }
 
 /// Compute a multi scalar multiplication on G! through arkworks
-pub fn msm_bigint_g1(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
+pub fn msm_g1(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 	let bases: Vec<_> = bases
 		.iter()
 		.map(|a| {
@@ -212,11 +212,11 @@ pub fn msm_bigint_g1(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
 			.unwrap()
 		})
 		.collect();
-	let bigints: Vec<_> = bigints
+	let scalars: Vec<_> = scalars
 		.iter()
 		.map(|a| {
 			let cursor = Cursor::new(a);
-			<<ark_bls12_381::g1::Parameters as CurveConfig>::ScalarField as PrimeField>::BigInt::deserialize_with_mode(
+			<ark_bls12_381::g1::Parameters as CurveConfig>::ScalarField::deserialize_with_mode(
 				cursor,
 				Compress::Yes,
 				Validate::No,
@@ -225,7 +225,7 @@ pub fn msm_bigint_g1(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
 		})
 		.collect();
 	let result =
-		<<Bls12_381 as Pairing>::G1 as ark_ec::VariableBaseMSM>::msm_bigint(&bases, &bigints);
+		<<Bls12_381 as Pairing>::G1 as ark_ec::VariableBaseMSM>::msm(&bases, &scalars);
 	let mut serialized = vec![0; result.serialized_size(Compress::Yes)];
 	let mut cursor = Cursor::new(&mut serialized[..]);
 	result.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
@@ -233,7 +233,7 @@ pub fn msm_bigint_g1(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
 }
 
 /// Compute a multi scalar multiplication on G! through arkworks
-pub fn msm_bigint_g2(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
+pub fn msm_g2(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 	let bases: Vec<_> = bases
 		.iter()
 		.map(|a| {
@@ -246,11 +246,11 @@ pub fn msm_bigint_g2(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
 			.unwrap()
 		})
 		.collect();
-	let bigints: Vec<_> = bigints
+	let scalars: Vec<_> = scalars
 		.iter()
 		.map(|a| {
 			let cursor = Cursor::new(a);
-			<<ark_bls12_381::g2::Parameters as CurveConfig>::ScalarField as PrimeField>::BigInt::deserialize_with_mode(
+			<ark_bls12_381::g2::Parameters as CurveConfig>::ScalarField::deserialize_with_mode(
 				cursor,
 				Compress::Yes,
 				Validate::No,
@@ -259,7 +259,7 @@ pub fn msm_bigint_g2(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
 		})
 		.collect();
 	let result =
-		<<Bls12_381 as Pairing>::G2 as ark_ec::VariableBaseMSM>::msm_bigint(&bases, &bigints);
+		<<Bls12_381 as Pairing>::G2 as ark_ec::VariableBaseMSM>::msm(&bases, &scalars);
 	let mut serialized = vec![0; result.serialized_size(Compress::Yes)];
 	let mut cursor = Cursor::new(&mut serialized[..]);
 	result.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
