@@ -321,7 +321,7 @@ pub mod pallet {
 			let lp_token_amount: AssetBalanceOf<T>;
 			if total_supply.is_zero() {
 				lp_token_amount = Self::calc_lp_amount_for_zero_supply(&amount1, &amount2)?;
-				T::PoolAssets::mint_into(pool.lp_token, &pallet_account, MIN_LIQUIDITY.into())?;
+				T::PoolAssets::mint_into(pool.lp_token, &pool_account, MIN_LIQUIDITY.into())?;
 			} else {
 				let side1 = Self::mul_div(&amount1, &total_supply, &reserve1)?;
 				let side2 = Self::mul_div(&amount2, &total_supply, &reserve2)?;
