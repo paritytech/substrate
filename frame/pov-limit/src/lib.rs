@@ -103,7 +103,8 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_idle(_: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			let mut weight = T::DbWeight::get().reads(1);
-
+			//println!("ON IDLE REF TIME: {:?}", T::WeightInfo::on_idle().ref_time());
+			//println!("ON IDLE PROOF SIZE: {:?}", T::WeightInfo::on_idle().proof_size());
 			let computation_weight_limit =
 				Compute::<T>::get().mul_floor(remaining_weight.ref_time());
 
@@ -130,7 +131,8 @@ pub mod pallet {
 				weight = weight.saturating_add(consumed_weight);
 				value += 1;
 			}
-
+			log::info!("WEIGHT REF TIME: {:?}", weight.ref_time());
+			log::info!("WEIGHT PROOF SIZE: {:?}", weight.proof_size());
 			weight
 		}
 	}
