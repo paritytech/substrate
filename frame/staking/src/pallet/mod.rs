@@ -45,9 +45,9 @@ pub use impls::*;
 
 use crate::{
 	slashing, weights::WeightInfo, AccountIdLookupOf, ActiveEraInfo, BalanceOf, EraPayout,
-	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations, PositiveImbalanceOf,
-	Releases, RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
-	ValidatorPrefs,
+	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations, NominationsQuota,
+	PositiveImbalanceOf, Releases, RewardDestination, SessionInterface, StakingLedger,
+	UnappliedSlash, UnlockChunk, ValidatorPrefs,
 };
 
 const STAKING_ID: LockIdentifier = *b"staking ";
@@ -126,9 +126,8 @@ pub mod pallet {
 			DataProvider = Pallet<Self>,
 		>;
 
-		/// Maximum number of nominations per nominator.
-		#[pallet::constant]
-		type MaxNominations: Get<u32>;
+		/// Something that defines the maximum number of nominations per nominator.
+		type NominationsQuota: NominationsQuota<BalanceOf<Self>>;
 
 		/// Number of eras to keep in history.
 		///
@@ -792,11 +791,11 @@ pub mod pallet {
 		fn integrity_test() {
 			// ensure that we funnel the correct value to the `DataProvider::MaxVotesPerVoter`;
 			assert_eq!(
-				T::MaxNominations::get(),
+				T::NominationsQuota::get(),
 				<Self as ElectionDataProvider>::MaxVotesPerVoter::get()
 			);
 			// and that MaxNominations is always greater than 1, since we count on this.
-			assert!(!T::MaxNominations::get().is_zero());
+			assert!(!T::NominationsQuota::get().is_zero());
 
 			// ensure election results are always bounded with the same value
 			assert!(
@@ -1158,7 +1157,10 @@ pub mod pallet {
 			}
 
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
-			ensure!(targets.len() <= T::MaxNominations::get() as usize, Error::<T>::TooManyTargets);
+			ensure!(
+				targets.len() <= T::NominationsQuota::get() as usize,
+				Error::<T>::TooManyTargets
+			);
 
 			let old = Nominators::<T>::get(stash).map_or_else(Vec::new, |x| x.targets.into_inner());
 

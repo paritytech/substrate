@@ -337,6 +337,9 @@ macro_rules! log {
 /// pallet.
 pub type MaxWinnersOf<T> = <<T as Config>::ElectionProvider as frame_election_provider_support::ElectionProviderBase>::MaxWinners;
 
+/// Absolute maximum number of nominations per nominator.
+type AbsoluteMaxNominationsOf<T> = <<T as Config>::NominationsQuota as NominationsQuota<BalanceOf<T>>>::AbsoluteMaxNominations;
+
 /// Counter for the number of "reward" points earned by a given validator.
 pub type RewardPoint = u32;
 
@@ -691,7 +694,7 @@ impl<T: Config> StakingLedger<T> {
 #[scale_info(skip_type_params(T))]
 pub struct Nominations<T: Config> {
 	/// The targets of nomination.
-	pub targets: BoundedVec<T::AccountId, T::MaxNominations>,
+	pub targets: BoundedVec<T::AccountId, AbsoluteMaxNominationsOf<T>>,
 	/// The era the nominations were submitted.
 	///
 	/// Except for initial nominations which are considered submitted at era 0.
@@ -759,6 +762,33 @@ impl<AccountId, Balance: HasCompact + Zero> UnappliedSlash<AccountId, Balance> {
 			payout: Zero::zero(),
 		}
 	}
+}
+
+/// Something that defines the maximum number of nominations per nominator.
+pub trait NominationsQuota<Balance>: Get<u32> {
+    const ABSOLUTE_MAX_NOMINATIONS: u32;
+
+    type AbsoluteMaxNominations: Get<u32>;
+
+    fn nomination_quota(balance: Balance) -> u32;
+}
+
+/// A nomination quota that allows up to MAX nominations for all validators.
+pub struct FixedNominationsQuota<const MAX: u32>;
+impl<Balance, const MAX: u32> NominationsQuota<Balance> for FixedNominationsQuota<MAX> {
+    const ABSOLUTE_MAX_NOMINATIONS: u32 = MAX;
+
+    type AbsoluteMaxNominations = Self;
+
+    fn nomination_quota(_: Balance) -> u32 {
+        MAX
+    }
+}
+
+impl<const MAX: u32> Get<u32> for FixedNominationsQuota<MAX> {
+    fn get() -> u32 {
+        MAX
+    }
 }
 
 /// Means for interacting with a specialized version of the `session` trait.

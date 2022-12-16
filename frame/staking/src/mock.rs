@@ -281,7 +281,7 @@ impl<T: Config> sp_staking::OnStakerSlash<AccountId, Balance> for OnStakerSlashM
 }
 
 impl crate::pallet::pallet::Config for Test {
-	type MaxNominations = MaxNominations;
+    type NominationsQuota = FixedNominationsQuota<16>;
 	type Currency = Balances;
 	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
 	type UnixTime = Timestamp;

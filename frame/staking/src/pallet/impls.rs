@@ -43,9 +43,9 @@ use sp_staking::{
 use sp_std::prelude::*;
 
 use crate::{
-	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, Exposure, ExposureOf,
-	Forcing, IndividualExposure, MaxWinnersOf, Nominations, PositiveImbalanceOf, RewardDestination,
-	SessionInterface, StakingLedger, ValidatorPrefs,
+	log, slashing, weights::WeightInfo, AbsoluteMaxNominationsOf, ActiveEraInfo, BalanceOf,
+	EraPayout, Exposure, ExposureOf, Forcing, IndividualExposure, MaxWinnersOf, Nominations,
+	PositiveImbalanceOf, RewardDestination, SessionInterface, StakingLedger, ValidatorPrefs,
 };
 
 use super::{pallet::*, STAKING_ID};
@@ -968,7 +968,8 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> ElectionDataProvider for Pallet<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = BlockNumberFor<T>;
-	type MaxVotesPerVoter = T::MaxNominations;
+	//type MaxVotesPerVoter = T::NominationsQuota;
+	type MaxVotesPerVoter = AbsoluteMaxNominationsOf<T>;
 
 	fn desired_targets() -> data_provider::Result<u32> {
 		Self::register_weight(T::DbWeight::get().reads(1));
