@@ -165,7 +165,7 @@ impl OutChannels {
 
 		if let Some(metrics) = &*self.metrics {
 			for ev in &self.event_streams {
-				metrics.event_in(&event, 1, ev.name);
+				metrics.event_in(&event, ev.name);
 			}
 		}
 	}
@@ -232,45 +232,35 @@ impl Metrics {
 		})
 	}
 
-	fn event_in(&self, event: &Event, num: u64, name: &str) {
+	fn event_in(&self, event: &Event, name: &str) {
 		match event {
 			Event::Dht(_) => {
-				self.events_total.with_label_values(&["dht", "sent", name]).inc_by(num);
+				self.events_total.with_label_values(&["dht", "sent", name]).inc();
 			},
 			Event::SyncConnected { .. } => {
-				self.events_total
-					.with_label_values(&["sync-connected", "sent", name])
-					.inc_by(num);
+				self.events_total.with_label_values(&["sync-connected", "sent", name]).inc();
 			},
 			Event::SyncDisconnected { .. } => {
-				self.events_total
-					.with_label_values(&["sync-disconnected", "sent", name])
-					.inc_by(num);
+				self.events_total.with_label_values(&["sync-disconnected", "sent", name]).inc();
 			},
 			Event::NotificationStreamOpened { protocol, .. } => {
 				format_label("notif-open-", protocol, |protocol_label| {
-					self.events_total
-						.with_label_values(&[protocol_label, "sent", name])
-						.inc_by(num);
+					self.events_total.with_label_values(&[protocol_label, "sent", name]).inc();
 				});
 			},
 			Event::NotificationStreamClosed { protocol, .. } => {
 				format_label("notif-closed-", protocol, |protocol_label| {
-					self.events_total
-						.with_label_values(&[protocol_label, "sent", name])
-						.inc_by(num);
+					self.events_total.with_label_values(&[protocol_label, "sent", name]).inc();
 				});
 			},
 			Event::NotificationsReceived { messages, .. } =>
 				for (protocol, message) in messages {
 					format_label("notif-", protocol, |protocol_label| {
-						self.events_total
-							.with_label_values(&[protocol_label, "sent", name])
-							.inc_by(num);
+						self.events_total.with_label_values(&[protocol_label, "sent", name]).inc();
 					});
-					self.notifications_sizes.with_label_values(&[protocol, "sent", name]).inc_by(
-						num.saturating_mul(u64::try_from(message.len()).unwrap_or(u64::MAX)),
-					);
+					self.notifications_sizes
+						.with_label_values(&[protocol, "sent", name])
+						.inc_by(u64::try_from(message.len()).unwrap_or(u64::MAX));
 				},
 		}
 	}
