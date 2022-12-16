@@ -317,7 +317,7 @@ impl<AccountId, U: Unbalanced<AccountId>> Balanced<AccountId> for U {
 		U::set_total_issuance(new);
 		credit(new - old)
 	}
-/*	fn slash(who: &AccountId, amount: Self::Balance) -> (Credit<AccountId, Self>, Self::Balance) {
+	/*	fn slash(who: &AccountId, amount: Self::Balance) -> (Credit<AccountId, Self>, Self::Balance) {
 		let slashed = U::decrease_balance_at_most(who, amount);
 		// `slashed` could be less than, greater than or equal to `amount`.
 		// If slashed == amount, it means the account had at least amount in it and it could all be

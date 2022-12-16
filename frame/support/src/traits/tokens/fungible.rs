@@ -135,8 +135,10 @@ pub trait InspectHold<AccountId>: Inspect<AccountId> {
 	/// Amount of funds held in reserve by `who`.
 	fn balance_on_hold(reason: &Self::Reason, who: &AccountId) -> Self::Balance;
 
-	/// Check to see if some `amount` of funds of `who` may be placed on hold.
-	fn can_hold(who: &AccountId, amount: Self::Balance) -> bool;
+	/// Check to see if some `amount` of funds of `who` may be placed on hold for the given
+	/// `reason`. This will be true as long as the implementor supports as many
+	/// concurrent holds as there are possible values of `reason`.
+	fn can_hold(reason: &Self::Reason, who: &AccountId, amount: Self::Balance) -> bool;
 }
 
 /// Trait for mutating a fungible asset which can be placed on hold.
@@ -166,8 +168,6 @@ pub trait MutateHold<AccountId>: InspectHold<AccountId> + Transfer<AccountId> {
 	/// If `force` is true, then locks/freezes will be ignored. This should only be used when
 	/// conducting slashing or other activity which materially disadvantages the account holder
 	/// since it could provide a means of circumventing freezes.
-	///
-	/// In general this should not be used but rather the Imbalance-aware `slash`.
 	fn burn_held(
 		reason: &Self::Reason,
 		who: &AccountId,
@@ -187,7 +187,7 @@ pub trait MutateHold<AccountId>: InspectHold<AccountId> + Transfer<AccountId> {
 	///
 	/// If `force` is `true`, then other fund-locking mechanisms may be disregarded. It should be
 	/// left as `false` in most circumstances, but when you want the same power as a `slash`, it
-	/// may be true.
+	/// may be `true`.
 	///
 	/// The actual amount transferred is returned, or `Err` in the case of error and nothing is
 	/// changed.
@@ -215,14 +215,14 @@ pub trait BalancedHold<AccountId>: Balanced<AccountId> + MutateHold<AccountId> {
 		who: &AccountId,
 		amount: Self::Balance,
 		best_effort: bool,
-	) -> (CreditOf<AccountId, Self>, Self::Balance);/* {
-		let actual = match Self::release(who, amount, true) {
-			Ok(x) => x,
-			Err(_) => return (Imbalance::default(), amount),
-		};
-		<Self as fungible::Balanced<AccountId>>::slash(who, actual)
-	}
-	*/
+	) -> (CreditOf<AccountId, Self>, Self::Balance); /* {
+													 let actual = match Self::release(who, amount, true) {
+														 Ok(x) => x,
+														 Err(_) => return (Imbalance::default(), amount),
+													 };
+													 <Self as fungible::Balanced<AccountId>>::slash(who, actual)
+												 }
+												 */
 }
 
 /// Trait for inspecting a fungible asset which can be frozen. Freezing is essentially setting a
@@ -232,50 +232,48 @@ pub trait BalancedHold<AccountId>: Balanced<AccountId> + MutateHold<AccountId> {
 /// accordingly.
 pub trait InspectFreeze<AccountId>: Inspect<AccountId> {
 	/// An identifier for a freeze.
-	type Reason: codec::Encode + TypeInfo + 'static;
+	type Id: codec::Encode + TypeInfo + 'static;
 
-	/// Amount of funds held in reserve by `who`.
-	fn balance_frozen(reason: &Self::Reason, who: &AccountId) -> Self::Balance;
+	/// Amount of funds held in reserve by `who` for the given `id`.
+	fn balance_frozen(id: &Self::Id, who: &AccountId) -> Self::Balance;
 
-	/// Returns `true` if it's possible to introduce a freeze for the given `reason` onto the
+	/// Returns `true` if it's possible to introduce a freeze for the given `id` onto the
 	/// account of `who`. This will be true as long as the implementor supports as many
-	/// concurrent freeze locks as there are possible values of `reason`.
-	fn can_freeze(reason: &Self::Reason, who: &AccountId) -> bool;
+	/// concurrent freeze locks as there are possible values of `id`.
+	fn can_freeze(id: &Self::Id, who: &AccountId) -> bool;
 }
 
 /// Trait for introducing, altering and removing locks to freeze an account's funds so they never
 /// go below a set minimum.
 pub trait MutateFreeze<AccountId>: InspectFreeze<AccountId> {
-	/// Create a new freeze lock on account `who`.
+	/// Create or replace the freeze lock for `id` on account `who`.
 	///
-	/// If the new lock is valid (i.e. not already expired), it will push the struct to
-	/// the `Locks` vec in storage. Note that you can lock more funds than a user has.
-	///
-	/// If the lock `reason` already exists, this will update it.
+	/// The lock applies only for attempts to reduce the balance for the `applicable_circumstances`.
+	/// Note that more funds can be locked than the total balance, if desired.
 	fn set_lock(
-		reason: &Self::Reason,
+		id: &Self::Id,
 		who: &AccountId,
 		amount: Self::Balance,
-		reasons: WithdrawReasons,
-	);
+		applicable_circumstances: WithdrawReasons,
+	) -> Result<(), DispatchError>;
 
-	/// Changes a balance lock (selected by `reason`) so that it becomes less liquid in all
+	/// Changes a balance lock (selected by `id`) so that it becomes less liquid in all
 	/// parameters or creates a new one if it does not exist.
 	///
-	/// Calling `extend_lock` on an existing lock `reason` differs from `set_lock` in that it
+	/// Calling `extend_lock` on an existing lock differs from `set_lock` in that it
 	/// applies the most severe constraints of the two, while `set_lock` replaces the lock
 	/// with the new parameters. As in, `extend_lock` will set:
-	/// - maximum `amount`
-	/// - bitwise mask of all `reasons`
+	/// - maximum `amount`; and
+	/// - union of all `applicable_circumstances`.
 	fn extend_lock(
-		reason: &Self::Reason,
+		id: &Self::Id,
 		who: &AccountId,
 		amount: Self::Balance,
-		reasons: WithdrawReasons,
+		applicable_circumstances: WithdrawReasons,
 	);
 
 	/// Remove an existing lock.
-	fn remove(reason: &Self::Reason, who: &AccountId);
+	fn remove(id: &Self::Id, who: &AccountId);
 }
 
 /// Convert a `fungibles` trait implementation into a `fungible` trait implementation by identifying

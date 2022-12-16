@@ -203,7 +203,11 @@ pub trait InspectHold<AccountId>: Inspect<AccountId> {
 	type Reason: codec::Encode + TypeInfo + 'static;
 
 	/// Amount of funds held in hold.
-	fn balance_on_hold(reason: &Self::Reason, asset: Self::AssetId, who: &AccountId) -> Self::Balance;
+	fn balance_on_hold(
+		reason: &Self::Reason,
+		asset: Self::AssetId,
+		who: &AccountId,
+	) -> Self::Balance;
 
 	/// Check to see if some `amount` of `asset` may be held on the account of `who`.
 	fn can_hold(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> bool;
@@ -212,7 +216,12 @@ pub trait InspectHold<AccountId>: Inspect<AccountId> {
 /// Trait for mutating a set of named fungible assets which can be placed on hold.
 pub trait MutateHold<AccountId>: InspectHold<AccountId> + Transfer<AccountId> {
 	/// Hold some funds in an account.
-	fn hold(reason: &Self::Reason, asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> DispatchResult;
+	fn hold(
+		reason: &Self::Reason,
+		asset: Self::AssetId,
+		who: &AccountId,
+		amount: Self::Balance,
+	) -> DispatchResult;
 
 	/// Release some funds in an account from being on hold.
 	///
