@@ -1,6 +1,11 @@
 use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
-use syn::{parse_macro_input, spanned::Spanned, Expr, ExprCall, ItemFn, Stmt};
+use syn::{
+	parse::{Parse, ParseStream},
+	parse_macro_input,
+	spanned::Spanned,
+	Block, Expr, ExprCall, Item, ItemFn, ItemMod, Stmt,
+};
 
 mod keywords {
 	syn::custom_keyword!(extrinsic_call);
@@ -46,10 +51,37 @@ impl BenchmarkDef {
 	}
 }
 
+struct BareBlock {
+	stmts: Vec<Stmt>,
+}
+
+impl Parse for BareBlock {
+	fn parse(input: ParseStream) -> syn::Result<Self> {
+		match Block::parse_within(input) {
+			Ok(stmts) => Ok(BareBlock { stmts }),
+			Err(e) => Err(e),
+		}
+	}
+}
+
+pub fn benchmarks(tokens: TokenStream) -> TokenStream {
+	let block = parse_macro_input!(tokens as BareBlock);
+	let contents = block.stmts;
+	quote! {
+		#[cfg(any(feature = "runtime-benchmarks", test))]
+		mod benchmarking {
+			#(#contents)
+			*
+		}
+	}
+	.into()
+}
+
 pub fn benchmark(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 	let item_fn = parse_macro_input!(tokens as ItemFn);
 	if let Some(_benchmark_def) = BenchmarkDef::from(&item_fn) {
-		// todo
+		println!("benchmark def found!");
+	// todo
 	} else {
 		return emit_error(
 			&item_fn.block.to_token_stream(),
