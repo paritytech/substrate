@@ -279,7 +279,7 @@ pub trait Ext: sealing::Sealed {
 	/// when the code is executing on-chain.
 	///
 	/// Returns `true` if debug message recording is enabled. Otherwise `false` is returned.
-	fn append_debug_buffer(&mut self, msg: &str) -> Result<bool, DispatchError>;
+	fn append_debug_buffer(&mut self, msg: &str) -> bool;
 
 	/// Call some dispatchable and return the result.
 	fn call_runtime(&self, call: <Self::T as Config>::RuntimeCall) -> DispatchResultWithPostInfo;
@@ -1328,16 +1328,19 @@ where
 		&mut self.top_frame_mut().nested_gas
 	}
 
-	fn append_debug_buffer(&mut self, msg: &str) -> Result<bool, DispatchError> {
+	fn append_debug_buffer(&mut self, msg: &str) -> bool {
 		if let Some(buffer) = &mut self.debug_message {
 			if !msg.is_empty() {
+				if buffer.len() + msg.len() > DebugBufferVec::<T>::bound() {
+					buffer.drain(0..msg.len());
+				}
 				buffer
 					.try_extend(&mut msg.bytes())
-					.map_err(|_| Error::<T>::DebugBufferExhausted)?;
+					.expect("Debug buffer has enough space for the message, it's been truncated if needed; qed");
 			}
-			Ok(true)
+			true
 		} else {
-			Ok(false)
+			false
 		}
 	}
 
@@ -2505,12 +2508,8 @@ mod tests {
 	#[test]
 	fn printing_works() {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
-			ctx.ext
-				.append_debug_buffer("This is a test")
-				.expect("Maximum allowed debug buffer size exhausted!");
-			ctx.ext
-				.append_debug_buffer("More text")
-				.expect("Maximum allowed debug buffer size exhausted!");
+			ctx.ext.append_debug_buffer("This is a test");
+			ctx.ext.append_debug_buffer("More text");
 			exec_success()
 		});
 
@@ -2543,12 +2542,8 @@ mod tests {
 	#[test]
 	fn printing_works_on_fail() {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
-			ctx.ext
-				.append_debug_buffer("This is a test")
-				.expect("Maximum allowed debug buffer size exhausted!");
-			ctx.ext
-				.append_debug_buffer("More text")
-				.expect("Maximum allowed debug buffer size exhausted!");
+			ctx.ext.append_debug_buffer("This is a test");
+			ctx.ext.append_debug_buffer("More text");
 			exec_trapped()
 		});
 
@@ -2581,7 +2576,7 @@ mod tests {
 	#[test]
 	fn debug_buffer_is_limited() {
 		let code_hash = MockLoader::insert(Call, move |ctx, _| {
-			ctx.ext.append_debug_buffer("overflowing bytes")?;
+			ctx.ext.append_debug_buffer("overflowing bytes");
 			exec_success()
 		});
 
@@ -2596,20 +2591,22 @@ mod tests {
 			set_balance(&ALICE, min_balance * 10);
 			place_contract(&BOB, code_hash);
 			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
-			assert_err!(
-				MockStack::run_call(
-					ALICE,
-					BOB,
-					&mut gas_meter,
-					&mut storage_meter,
-					&schedule,
-					0,
-					vec![],
-					Some(&mut debug_buffer),
-					Determinism::Deterministic,
-				)
-				.map_err(|e| e.error),
-				Error::<Test>::DebugBufferExhausted
+			MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut gas_meter,
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![],
+				Some(&mut debug_buffer),
+				Determinism::Deterministic,
+			)
+			.unwrap();
+			assert_eq!(
+				&String::from_utf8(debug_buffer[DebugBufferVec::<Test>::bound() - 17..].to_vec())
+					.unwrap(),
+				"overflowing bytes"
 			);
 		});
 	}
