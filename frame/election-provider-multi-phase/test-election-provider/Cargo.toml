@@ -25,6 +25,7 @@ sp-std = { version = "5.0.0", path = "../../../primitives/std" }
 sp-staking = { version = "4.0.0-dev", path = "../../../primitives/staking" }
 sp-core = { version = "7.0.0", path = "../../../primitives/core" }
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/npos-elections" }
+sp-tracing = { version = "6.0.0", path = "../../../primitives/tracing" }
 
 frame-system = { version = "4.0.0-dev", path = "../../system" }
 frame-support = { version = "4.0.0-dev", path = "../../support" }

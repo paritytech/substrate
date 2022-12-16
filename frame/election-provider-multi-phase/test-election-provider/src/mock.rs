@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frame_support::{parameter_types, traits};
+use frame_support::{bounded_vec, parameter_types, traits, traits::Hooks, BoundedVec};
 use frame_system::EnsureRoot;
 use sp_core::{ConstU32, H256};
 use sp_npos_elections::{BalancingConfig, VoteWeight};
@@ -23,17 +23,37 @@ use sp_runtime::{testing, traits::IdentityLookup, transaction_validity, PerU16, 
 use sp_std::prelude::*;
 
 use frame_election_provider_support::{onchain, SequentialPhragmen, Weight};
-use pallet_election_provider_multi_phase::{unsigned::MinerConfig, SolutionAccuracyOf};
+use pallet_election_provider_multi_phase::{
+	unsigned::{MinerConfig, VoterOf},
+	SolutionAccuracyOf,
+};
 
-// Duration in number of blocks for each of the EPM phases.
-const EPM_PHASE_DURATION: u32 = 10;
+type Block = frame_system::mocking::MockBlock<Runtime>;
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
+type Extrinsic = testing::TestXt<RuntimeCall, ()>;
+
+frame_support::construct_runtime!(
+	pub enum Runtime where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic
+	{
+		System: frame_system,
+		ElectionProviderMultiPhase: pallet_election_provider_multi_phase,
+		Staking: pallet_staking,
+		Balances: pallet_balances,
+		BagsList: pallet_bags_list,
+		Session: pallet_session,
+	}
+);
 
 pub(crate) type AccountId = u128;
 pub(crate) type AccountIndex = u32;
 pub(crate) type BlockNumber = u64;
-pub(crate) type Balance = u128;
+pub(crate) type Balance = u64;
 pub(crate) type VoterIndex = u32;
 pub(crate) type TargetIndex = u16;
+pub(crate) type Moment = u64;
 
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = traits::Everything;
@@ -78,15 +98,27 @@ impl pallet_balances::Config for Runtime {
 	type WeightInfo = ();
 }
 
+parameter_types! {
+	pub static CapturedMoment: Option<Moment> = None;
+}
+
+// TOOD(gpestana) needed or can we set Timestamp::OnTimestampSet = ()?
+pub struct MockOnTimestampSet;
+impl traits::OnTimestampSet<Moment> for MockOnTimestampSet {
+	fn on_timestamp_set(moment: Moment) {
+		CapturedMoment::mutate(|x| *x = Some(moment));
+	}
+}
+
 impl pallet_timestamp::Config for Runtime {
-	type Moment = u64;
-	type OnTimestampSet = ();
+	type Moment = Moment;
+	type OnTimestampSet = MockOnTimestampSet;
 	type MinimumPeriod = traits::ConstU64<5>;
 	type WeightInfo = ();
 }
 
 parameter_types! {
-	pub static Period: BlockNumber = 5;
+	pub static Period: BlockNumber = 15;
 	pub static Offset: BlockNumber = 0;
 }
 
@@ -123,25 +155,24 @@ frame_election_provider_support::generate_solution_type!(
 );
 
 parameter_types! {
-	pub SignedPhase: u32 = EPM_PHASE_DURATION;
-	pub UnsignedPhase: u32 = EPM_PHASE_DURATION;
-	pub BetterSignedThreshold: Perbill = Perbill::zero();
-	pub BetterUnsignedThreshold: Perbill = Perbill::zero();
-	pub OffchainRepeat: u32 = 5;
-	pub TransactionPriority: transaction_validity::TransactionPriority = 1;
-	pub MaxWinners: u32 = 100;
-	pub MaxVotesPerVoter: u32 = 16;
-	pub MaxNominations: u32 = 16;
-
+	pub static SignedPhase: BlockNumber = 10;
+	pub static UnsignedPhase: BlockNumber = 5;
 	pub static MaxElectingVoters: VoterIndex = 1000;
 	pub static MaxElectableTargets: TargetIndex = 1000;
 	pub static MaxActiveValidators: u32 = 1000;
 	pub static Balancing: Option<BalancingConfig> = Some( BalancingConfig { iterations: 0, tolerance: 0 } );
+	pub static BetterSignedThreshold: Perbill = Perbill::zero();
+	pub static BetterUnsignedThreshold: Perbill = Perbill::zero();
+	pub static OffchainRepeat: u32 = 5;
+	pub static TransactionPriority: transaction_validity::TransactionPriority = 1;
+	pub static MaxWinners: u32 = 100;
+	pub static MaxVotesPerVoter: u32 = 16;
+	pub static MaxNominations: u32 = 16;
 }
 
 impl pallet_election_provider_multi_phase::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Currency = ();
+	type Currency = Balances;
 	type EstimateCallFee = frame_support::traits::ConstU32<8>;
 	type SignedPhase = SignedPhase;
 	type UnsignedPhase = UnsignedPhase;
@@ -187,9 +218,9 @@ const THRESHOLDS: [VoteWeight; 9] = [10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_00
 
 parameter_types! {
 	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
-	pub const SessionsPerEra: sp_staking::SessionIndex = 6;
-	pub const BondingDuration: sp_staking::EraIndex = 24 * 28;
-	pub const SlashDeferDuration: sp_staking::EraIndex = 24 * 7; // 1/4 the bonding duration.
+	pub const SessionsPerEra: sp_staking::SessionIndex = 1;
+	pub const BondingDuration: sp_staking::EraIndex = 28;
+	pub const SlashDeferDuration: sp_staking::EraIndex = 7; // 1/4 the bonding duration.
 	pub const MaxNominatorRewardedPerValidator: u32 = 256;
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
 	pub HistoryDepth: u32 = 84;
@@ -208,7 +239,7 @@ impl pallet_staking::Config for Runtime {
 	type Currency = Balances;
 	type CurrencyBalance = Balance;
 	type UnixTime = pallet_timestamp::Pallet<Self>;
-	type CurrencyToVote = traits::U128CurrencyToVote;
+	type CurrencyToVote = traits::SaturatingCurrencyToVote;
 	type RewardRemainder = ();
 	type RuntimeEvent = RuntimeEvent;
 	type Slash = (); // burn slashes
@@ -241,25 +272,6 @@ where
 	type Extrinsic = Extrinsic;
 }
 
-type Block = frame_system::mocking::MockBlock<Runtime>;
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
-type Extrinsic = testing::TestXt<RuntimeCall, ()>;
-
-frame_support::construct_runtime!(
-	pub enum Runtime where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
-	{
-		System: frame_system::{Pallet, Call, Event<T>},
-		ElectionProviderMultiPhase: pallet_election_provider_multi_phase,
-		Staking: pallet_staking,
-		Balances: pallet_balances,
-		BagsList: pallet_bags_list,
-		Session: pallet_session,
-	}
-);
-
 pub struct OnChainSeqPhragmen;
 
 parameter_types! {
@@ -273,7 +285,7 @@ impl onchain::Config for OnChainSeqPhragmen {
 		AccountId,
 		pallet_election_provider_multi_phase::SolutionAccuracyOf<Runtime>,
 	>;
-	type DataProvider = Staking; //StakingTemporary;
+	type DataProvider = Staking;
 	type WeightInfo = ();
 	type MaxWinners = MaxWinners;
 	type VotersBound = VotersBound;
@@ -321,4 +333,162 @@ impl traits::OneSessionHandler<AccountId> for OtherSessionHandler {
 
 impl sp_runtime::BoundToRuntimeAppPublic for OtherSessionHandler {
 	type Public = testing::UintAuthorityId;
+}
+
+#[derive(Default)]
+pub struct ExtBuilder;
+
+pub mod agents {
+	use super::AccountId;
+
+	pub const ACCOUNT_0: AccountId = 0;
+	pub const ACCOUNT_1: AccountId = 1;
+	pub const ACCOUNT_2: AccountId = 2;
+	pub const ACCOUNT_3: AccountId = 3;
+	pub const ACCOUNT_4: AccountId = 4;
+	pub const ACCOUNT_5: AccountId = 5;
+	pub const ACCOUNT_6: AccountId = 6;
+	pub const ACCOUNT_7: AccountId = 7;
+	pub const ACCOUNT_8: AccountId = 8;
+	pub const ACCOUNT_9: AccountId = 9;
+	pub const ACCOUNT_10: AccountId = 10;
+}
+
+use agents::*;
+
+parameter_types! {
+	pub static Targets: Vec<AccountId> = vec![ACCOUNT_0, ACCOUNT_1, ACCOUNT_2, ACCOUNT_3];
+	pub static Voters: Vec<VoterOf<Runtime>> = vec![
+		(ACCOUNT_0, 10, bounded_vec![ACCOUNT_9, ACCOUNT_10]),
+		(ACCOUNT_1, 10, bounded_vec![ACCOUNT_0, ACCOUNT_2]),
+		(ACCOUNT_2, 10, bounded_vec![ACCOUNT_0]),
+		(ACCOUNT_3, 10, bounded_vec![ACCOUNT_7, ACCOUNT_8, ACCOUNT_9, ACCOUNT_10]),
+		// self votes.
+		(ACCOUNT_10, 10, bounded_vec![ACCOUNT_10]),
+		(ACCOUNT_9, 20, bounded_vec![ACCOUNT_9]),
+		(ACCOUNT_8, 30, bounded_vec![ACCOUNT_8]),
+		(ACCOUNT_7, 40, bounded_vec![ACCOUNT_7]),
+	];
+}
+
+impl ExtBuilder {
+	pub fn build(self) -> sp_io::TestExternalities {
+		sp_tracing::try_init_simple();
+		let mut storage =
+			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+
+		let _ = pallet_balances::GenesisConfig::<Runtime> {
+			balances: vec![
+				(ACCOUNT_0, 100),
+				(ACCOUNT_1, 100),
+				(ACCOUNT_2, 100),
+				(ACCOUNT_3, 100),
+				(ACCOUNT_4, 100),
+				(ACCOUNT_5, 100),
+				(ACCOUNT_6, 100),
+				(ACCOUNT_7, 100),
+				(ACCOUNT_8, 100),
+				(ACCOUNT_9, 100),
+				(ACCOUNT_10, 100),
+			],
+		}
+		.assimilate_storage(&mut storage);
+
+		sp_io::TestExternalities::from(storage)
+	}
+
+	pub fn phases(self, signed: BlockNumber, unsigned: BlockNumber) -> Self {
+		<SignedPhase>::set(signed);
+		<UnsignedPhase>::set(unsigned);
+		self
+	}
+
+	pub fn add_voter(
+		self,
+		who: AccountId,
+		stake: Balance,
+		targets: BoundedVec<AccountId, MaxNominations>,
+	) -> Self {
+		VOTERS.with(|v| v.borrow_mut().push((who, stake, targets)));
+		self
+	}
+
+	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
+		self.build().execute_with(test)
+	}
+}
+
+// Fast forward `n` blocks.
+pub fn roll_to(n: BlockNumber) {
+	let now = System::block_number();
+	for i in now + 1..=n {
+		System::set_block_number(i);
+		ElectionProviderMultiPhase::on_initialize(i);
+		Staking::on_initialize(i);
+	}
+}
+
+// Fast forward until EPM signed phase.
+pub fn roll_to_signed() {
+	while !matches!(
+		ElectionProviderMultiPhase::current_phase(),
+		pallet_election_provider_multi_phase::Phase::Signed
+	) {
+		roll_to(System::block_number() + 1);
+	}
+}
+
+// Fast forward until EPM unsigned phase.
+pub fn roll_to_unsigned() {
+	while !matches!(
+		ElectionProviderMultiPhase::current_phase(),
+		pallet_election_provider_multi_phase::Phase::Unsigned(_)
+	) {
+		roll_to(System::block_number() + 1);
+	}
+}
+
+parameter_types! {
+	static EPMEventsIndex: usize = 0;
+	static SessionEventsIndex: usize = 0;
+	static StakingEventsIndex: usize = 0;
+}
+
+// TODO(gpestana): refactor to events_sinve_last_call() -> Vec<_>
+pub fn epm_events_since_last_call() -> Vec<pallet_election_provider_multi_phase::Event<Runtime>> {
+	let all: Vec<_> = System::events()
+		.into_iter()
+		.filter_map(|r| {
+			if let RuntimeEvent::ElectionProviderMultiPhase(inner) = r.event {
+				Some(inner)
+			} else {
+				None
+			}
+		})
+		.collect();
+	let seen = EPMEventsIndex::get();
+	EPMEventsIndex::set(all.len());
+	all.into_iter().skip(seen).collect()
+}
+
+// TODO(gpestana): refactor to events_sinve_last_call() -> Vec<_>
+pub fn session_events_since_last_call() -> Vec<pallet_session::Event> {
+	let all: Vec<_> = System::events()
+		.into_iter()
+		.filter_map(|r| if let RuntimeEvent::Session(inner) = r.event { Some(inner) } else { None })
+		.collect();
+	let seen = SessionEventsIndex::get();
+	SessionEventsIndex::set(all.len());
+	all.into_iter().skip(seen).collect()
+}
+
+// TODO(gpestana): refactor to events_sinve_last_call() -> Vec<_>
+pub fn staking_events_since_last_call() -> Vec<pallet_staking::Event<Runtime>> {
+	let all: Vec<_> = System::events()
+		.into_iter()
+		.filter_map(|r| if let RuntimeEvent::Staking(inner) = r.event { Some(inner) } else { None })
+		.collect();
+	let seen = StakingEventsIndex::get();
+	StakingEventsIndex::set(all.len());
+	all.into_iter().skip(seen).collect()
 }

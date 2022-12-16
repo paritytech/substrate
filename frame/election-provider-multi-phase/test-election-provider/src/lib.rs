@@ -16,10 +16,36 @@
 // limitations under the License.
 
 #![cfg(test)]
-
 mod mock;
 
+use frame_support::bounded_vec;
+use mock::{agents::*, *};
+
 #[test]
-fn test_one() {
-	assert!(true);
+fn test_extbuilder_and_helpers() {
+	ExtBuilder.phases(5, 5).build_and_execute(|| {
+		assert_eq!(Balances::free_balance(ACCOUNT_1), 100);
+
+		assert_eq!(System::block_number(), 0);
+		assert!(ElectionProviderMultiPhase::current_phase().is_off());
+
+		roll_to_signed();
+		assert!(ElectionProviderMultiPhase::current_phase().is_signed());
+		assert_eq!(System::block_number(), 5);
+
+		roll_to_unsigned();
+		assert!(ElectionProviderMultiPhase::current_phase().is_unsigned());
+		assert_eq!(System::block_number(), 10);
+	});
+
+	ExtBuilder
+		.add_voter(ACCOUNT_0, 100, bounded_vec![ACCOUNT_0, ACCOUNT_1])
+		.build_and_execute(|| {
+			// TODO: add staking genesis init in extbuilder
+
+			roll_to_unsigned();
+			let _snapshot = ElectionProviderMultiPhase::snapshot();
+
+			// TODO: check snapshot
+		});
 }
