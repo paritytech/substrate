@@ -1331,6 +1331,10 @@ impl<Block: BlockT> Backend<Block> {
 		}
 
 		let best_number = self.blockchain.info().best_number.saturated_into();
+		// If the `best_number` is one off from the current block we are just importing, we can
+		// take the block number of the current block as the best block. Even if this block is not
+		// imported as best block, we know its hash and can canonicalize it if required below.
+		let best_number = if best_number + 1 == number_u64 { number_u64 } else { best_number };
 
 		// We can not canonicalize beyond the `best_number` as setting the best block also sets the
 		// mapping from block number to hash that is required down below. This is just some safety
