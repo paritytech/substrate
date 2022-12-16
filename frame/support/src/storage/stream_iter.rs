@@ -144,7 +144,7 @@ impl<T> ScaleContainerStreamIter<T> {
 					// TODO #3700: error should be handleable.
 					log::error!(
 						target: "runtime::storage",
-						"Corrupted state at `{:?}`: {:?}",
+						"Corrupted state at `{:?}`: failed to decode element count: {:?}",
 						input.key,
 						e,
 					);
