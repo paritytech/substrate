@@ -4,6 +4,7 @@ use syn::{
 	parse::{Parse, ParseStream},
 	parse_macro_input,
 	spanned::Spanned,
+	token::Token,
 	Block, Expr, ExprCall, Item, ItemFn, ItemMod, Stmt,
 };
 
@@ -20,7 +21,8 @@ fn emit_error<T: Into<TokenStream> + Clone, S: Into<String>>(item: &T, message: 
 
 struct BenchmarkDef {
 	setup_stmts: Vec<Stmt>,
-	extrinsic_call: ExprCall,
+	extrinsic_call_stmt: Stmt,
+	extrinsic_call_fn: ExprCall,
 	verify_stmts: Vec<Stmt>,
 }
 
@@ -28,15 +30,22 @@ impl BenchmarkDef {
 	pub fn from(item_fn: &ItemFn) -> Option<BenchmarkDef> {
 		let mut i = 0;
 		for child in &item_fn.block.stmts {
-			if let Stmt::Semi(Expr::Call(fn_call), _) = child {
+			if let Stmt::Semi(Expr::Call(fn_call), token) = child {
+				let i = 0;
 				for attr in &fn_call.attrs {
 					if let Some(segment) = attr.path.segments.last() {
 						if let Ok(_) = syn::parse::<keywords::extrinsic_call>(
 							segment.ident.to_token_stream().into(),
 						) {
+							let mut fn_call_copy = fn_call.clone();
+							fn_call_copy.attrs.pop(); // consume #[extrinsic call]
 							return Some(BenchmarkDef {
 								setup_stmts: Vec::from(&item_fn.block.stmts[0..i]),
-								extrinsic_call: fn_call.clone(),
+								extrinsic_call_stmt: Stmt::Semi(
+									Expr::Call(fn_call.clone()),
+									token.clone(),
+								),
+								extrinsic_call_fn: fn_call.clone(),
 								verify_stmts: Vec::from(
 									&item_fn.block.stmts[i..item_fn.block.stmts.len()],
 								),
@@ -87,18 +96,21 @@ pub fn benchmarks(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 
 pub fn benchmark(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 	let item_fn = parse_macro_input!(tokens as ItemFn);
-	if let Some(_benchmark_def) = BenchmarkDef::from(&item_fn) {
-		println!("benchmark def found!");
-	// todo
-	} else {
-		return emit_error(
-			&item_fn.block.to_token_stream(),
-			"Missing #[extrinsic_call] annotation in benchmark function body.",
-		)
-	}
+	let mut benchmark_def = match BenchmarkDef::from(&item_fn) {
+		Some(def) => def,
+		None =>
+			return emit_error(
+				&item_fn.block.to_token_stream(),
+				"Missing #[extrinsic_call] annotation in benchmark function body.",
+			),
+	};
 	let name = item_fn.sig.ident;
 	let krate = quote!(::frame_benchmarking);
+	let setup_stmts = benchmark_def.setup_stmts;
+	let extrinsic_call_stmt = benchmark_def.extrinsic_call_stmt;
+	let verify_stmts = benchmark_def.verify_stmts;
 	let params = vec![quote!(x, 0, 1)];
+	let param_names = vec![quote!(x)];
 	quote! {
 		#[allow(non_camel_case_types)]
 		struct #name;
@@ -112,6 +124,42 @@ pub fn benchmark(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 						(#krate::BenchmarkParameter::#params)
 					),*
 				]
+			}
+
+			fn instance(
+				&self,
+				components: &[(#krate::BenchmarkParameter, u32)],
+				verify: bool
+			) -> Result<#krate::Box<dyn FnOnce() -> Result<(), #krate::BenchmarkError>>, #krate::BenchmarkError> {
+				#(
+					// prepare instance #param_names
+					let #param_names = components.iter()
+						.find(|&c| c.0 == #krate::BenchmarkParameter::#param_names)
+						.ok_or("Could not find component during benchmark preparation.")?
+						.1;
+				)*
+
+				// TODO: figure out parameter parsing:
+				// $(
+				// 	let $pre_id : $pre_ty = $pre_ex;
+				// )*
+				// $( $param_instancer ; )*
+				// $( $post )*
+
+				// benchmark setup code (stuff before #[extrinsic_call])
+				#(
+					#setup_stmts
+				)*
+
+				Ok(#krate::Box::new(move || -> Result<(), #krate::BenchmarkError> {
+					#extrinsic_call_stmt
+					if verify {
+						#(
+							#verify_stmts
+						)*
+					}
+					Ok(())
+				}))
 			}
 		}
 	}
