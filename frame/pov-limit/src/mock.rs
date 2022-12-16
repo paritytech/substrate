@@ -76,7 +76,7 @@ impl crate::Hasher for sp_core::Blake2Hasher {
 
 pub struct StorageUnhashedReader;
 impl crate::Reader for StorageUnhashedReader {
-	fn read<T: Config>(k: &[u8]) -> Weight {
+	fn read<T: Config>(_: &[u8]) -> Weight {
 		// should actually read something.
 		Weight::from_proof_size(50_000_000_000)
 	}
