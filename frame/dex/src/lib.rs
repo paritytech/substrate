@@ -51,10 +51,8 @@ pub mod pallet {
 		PalletId,
 	};
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::{
-		helpers_128bit::multiply_by_rational_with_rounding,
-		traits::{AccountIdConversion, AtLeast32BitUnsigned, Hash, IntegerSquareRoot, One, Zero},
-		Rounding,
+	use sp_runtime::traits::{
+		AccountIdConversion, AtLeast32BitUnsigned, Hash, IntegerSquareRoot, One, Zero,
 	};
 
 	#[pallet::pallet]
@@ -191,6 +189,8 @@ pub mod pallet {
 		PoolNotFound,
 		/// An overflow happened.
 		Overflow,
+		/// This balance type can't be converted into u128.
+		UnsupportedBalanceType,
 		/// Insufficient amount provided for the first token in the pair.
 		InsufficientAmountParam1,
 		/// Insufficient amount provided for the second token in the pair.
@@ -607,8 +607,10 @@ pub mod pallet {
 			amount1: &AssetBalanceOf<T>,
 			amount2: &AssetBalanceOf<T>,
 		) -> Result<AssetBalanceOf<T>, Error<T>> {
-			let amount1 = u128::try_from(*amount1).map_err(|_| Error::<T>::Overflow)?;
-			let amount2 = u128::try_from(*amount2).map_err(|_| Error::<T>::Overflow)?;
+			let amount1 =
+				u128::try_from(*amount1).map_err(|_| Error::<T>::UnsupportedBalanceType)?;
+			let amount2 =
+				u128::try_from(*amount2).map_err(|_| Error::<T>::UnsupportedBalanceType)?;
 
 			let result = amount1
 				.checked_mul(amount2)
@@ -625,14 +627,15 @@ pub mod pallet {
 			b: &AssetBalanceOf<T>,
 			c: &AssetBalanceOf<T>,
 		) -> Result<AssetBalanceOf<T>, Error<T>> {
-			// amount * reserve2 / reserve1
-			let result = multiply_by_rational_with_rounding(
-				(*a).into(),
-				(*b).into(),
-				(*c).into(),
-				Rounding::Down,
-			)
-			.ok_or(Error::<T>::Overflow)?;
+			let a = u128::try_from(*a).map_err(|_| Error::<T>::UnsupportedBalanceType)?;
+			let b = u128::try_from(*b).map_err(|_| Error::<T>::UnsupportedBalanceType)?;
+			let c = u128::try_from(*c).map_err(|_| Error::<T>::UnsupportedBalanceType)?;
+
+			let result = a
+				.checked_mul(b)
+				.ok_or(Error::<T>::Overflow)?
+				.checked_div(c)
+				.ok_or(Error::<T>::Overflow)?;
 
 			result.try_into().map_err(|_| Error::<T>::Overflow)
 		}
@@ -646,15 +649,17 @@ pub mod pallet {
 			reserve_in: &AssetBalanceOf<T>,
 			reserve_out: &AssetBalanceOf<T>,
 		) -> Result<AssetBalanceOf<T>, Error<T>> {
-			let amount_in = u128::try_from(*amount_in).map_err(|_| Error::<T>::Overflow)?;
-			let reserve_in = u128::try_from(*reserve_in).map_err(|_| Error::<T>::Overflow)?;
-			let reserve_out = u128::try_from(*reserve_out).map_err(|_| Error::<T>::Overflow)?;
+			let amount_in =
+				u128::try_from(*amount_in).map_err(|_| Error::<T>::UnsupportedBalanceType)?;
+			let reserve_in =
+				u128::try_from(*reserve_in).map_err(|_| Error::<T>::UnsupportedBalanceType)?;
+			let reserve_out =
+				u128::try_from(*reserve_out).map_err(|_| Error::<T>::UnsupportedBalanceType)?;
 
 			if reserve_in.is_zero() || reserve_out.is_zero() {
 				return Err(Error::<T>::ZeroLiquidity.into())
 			}
 
-			// TODO: could use Permill type
 			let amount_in_with_fee = amount_in
 				.checked_mul(1000u128 - (T::Fee::get() as u128))
 				.ok_or(Error::<T>::Overflow)?;
@@ -682,9 +687,12 @@ pub mod pallet {
 			reserve_in: &AssetBalanceOf<T>,
 			reserve_out: &AssetBalanceOf<T>,
 		) -> Result<AssetBalanceOf<T>, Error<T>> {
-			let amount_out = u128::try_from(*amount_out).map_err(|_| Error::<T>::Overflow)?;
-			let reserve_in = u128::try_from(*reserve_in).map_err(|_| Error::<T>::Overflow)?;
-			let reserve_out = u128::try_from(*reserve_out).map_err(|_| Error::<T>::Overflow)?;
+			let amount_out =
+				u128::try_from(*amount_out).map_err(|_| Error::<T>::UnsupportedBalanceType)?;
+			let reserve_in =
+				u128::try_from(*reserve_in).map_err(|_| Error::<T>::UnsupportedBalanceType)?;
+			let reserve_out =
+				u128::try_from(*reserve_out).map_err(|_| Error::<T>::UnsupportedBalanceType)?;
 
 			if reserve_in.is_zero() || reserve_out.is_zero() {
 				return Err(Error::<T>::ZeroLiquidity.into())
