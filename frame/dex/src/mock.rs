@@ -132,6 +132,7 @@ impl pallet_assets::Config<Instance2> for Test {
 
 parameter_types! {
 	pub const DexPalletId: PalletId = PalletId(*b"py/dexer");
+	pub storage AllowMultiAssetPools: bool = false;
 }
 
 frame_support::ord_parameter_types! {
@@ -149,6 +150,7 @@ impl Config for Test {
 	type PoolAssets = PoolAssets;
 	type PalletId = DexPalletId;
 	type WeightInfo = ();
+	type AllowMultiAssetPools = AllowMultiAssetPools;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
