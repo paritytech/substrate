@@ -9,6 +9,7 @@ license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 default-run = "substrate"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
+publish = false
 
 [package.metadata.wasm-pack.profile.release]
 # `wasm-opt` has some problems on linux, see
@@ -38,7 +39,7 @@ array-bytes = "4.1"
 clap = { version = "4.0.9", features = ["derive"], optional = true }
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 serde = { version = "1.0.136", features = ["derive"] }
-jsonrpsee = { version = "0.15.1", features = ["server"] }
+jsonrpsee = { version = "0.16.2", features = ["server"] }
 futures = "0.3.21"
 log = "0.4.17"
 rand = "0.8"
@@ -58,6 +59,7 @@ sp-keystore = { version = "0.13.0", path = "../../../primitives/keystore" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-transaction-pool = { version = "4.0.0-dev", path = "../../../primitives/transaction-pool" }
 sp-transaction-storage-proof = { version = "4.0.0-dev", path = "../../../primitives/transaction-storage-proof" }
+sp-io = { path = "../../../primitives/io" }
 
 # client dependencies
 sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
@@ -84,6 +86,7 @@ sc-sysinfo = { version = "6.0.0-dev", path = "../../../client/sysinfo" }
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", path = "../../../frame/system/rpc/runtime-api" }
 pallet-transaction-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment" }
+pallet-assets = { version = "4.0.0-dev", path = "../../../frame/assets/" }
 pallet-asset-tx-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment/asset-tx-payment/" }
 pallet-im-online = { version = "4.0.0-dev", default-features = false, path = "../../../frame/im-online" }
 
@@ -99,16 +102,6 @@ frame-benchmarking-cli = { version = "4.0.0-dev", optional = true, path = "../..
 node-inspect = { version = "0.9.0-dev", optional = true, path = "../inspect" }
 try-runtime-cli = { version = "0.10.0-dev", optional = true, path = "../../../utils/frame/try-runtime/cli" }
 serde_json = "1.0.85"
-
-[target.'cfg(any(target_arch="x86_64", target_arch="aarch64"))'.dependencies]
-node-executor = { version = "3.0.0-dev", path = "../executor", features = ["wasmtime"] }
-sc-cli = { version = "0.10.0-dev", optional = true, path = "../../../client/cli", features = ["wasmtime"] }
-sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../client/service", features = [
-	"wasmtime",
-] }
-sp-trie = { version = "7.0.0", default-features = false, path = "../../../primitives/trie", features = [
-	"memory-tracker",
-] }
 
 [dev-dependencies]
 sc-keystore = { version = "4.0.0-dev", path = "../../../client/keystore" }
@@ -127,10 +120,10 @@ nix = "0.23"
 serde_json = "1.0"
 regex = "1.6.0"
 platforms = "2.0"
-async-std = { version = "1.11.0", features = ["attributes"] }
 soketto = "0.7.1"
 criterion = { version = "0.3.5", features = ["async_tokio"] }
-tokio = { version = "1.17.0", features = ["macros", "time", "parking_lot"] }
+tokio = { version = "1.22.0", features = ["macros", "time", "parking_lot"] }
+tokio-util = { version = "0.7.4", features = ["compat"] }
 wait-timeout = "0.2"
 substrate-rpc-client = { path = "../../../utils/frame/rpc/client" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../../frame/timestamp" }
