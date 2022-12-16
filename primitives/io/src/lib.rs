@@ -1270,6 +1270,21 @@ pub trait Crypto {
 	fn ed_on_bls12_381_msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 		sp_arkworks::ed_on_bls12_381::msm(bases, scalars)
 	}
+
+	/// Compute affine multiplication on ed_on_bls12_377
+	fn ed_on_bls12_377_mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
+		sp_arkworks::ed_on_bls12_377::mul_affine(base, scalar)
+	}
+
+	/// Compute projective multiplication on ed_on_bls12_377
+	fn ed_on_bls12_377_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
+		sp_arkworks::ed_on_bls12_377::mul_projective(base, scalar)
+	}
+
+	/// Compute msm on ed_on_bls12_377
+	fn ed_on_bls12_377_msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
+		sp_arkworks::ed_on_bls12_377::msm(bases, scalars)
+	}
 }
 
 /// Interface that provides functions for hashing with different algorithms.

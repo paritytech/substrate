@@ -220,6 +220,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ark-ed-on-bls12-377"
+version = "0.4.0-alpha.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35a244cfa3960b94c70b9b28f5c9c213bb9dfbbffd5282ef886d0d415c9850b6"
+dependencies = [
+ "ark-bls12-377",
+ "ark-ec",
+ "ark-ff",
+ "ark-std",
+]
+
+[[package]]
 name = "ark-ed-on-bls12-381"
 version = "0.4.0-alpha.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9309,6 +9321,7 @@ dependencies = [
  "ark-bls12-381 0.4.0-alpha.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "ark-bw6-761",
  "ark-ec",
+ "ark-ed-on-bls12-377",
  "ark-ed-on-bls12-381",
  "ark-ff",
  "ark-serialize",
