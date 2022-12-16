@@ -32,6 +32,7 @@
 //! collection.
 
 use futures::{channel::mpsc, prelude::*, ready, stream::FusedStream};
+use log::error;
 use parking_lot::Mutex;
 use prometheus_endpoint::{register, CounterVec, GaugeVec, Opts, PrometheusError, Registry, U64};
 use sc_network_common::protocol::event::Event;
@@ -39,18 +40,29 @@ use std::{
 	cell::RefCell,
 	fmt,
 	pin::Pin,
-	sync::Arc,
+	sync::{
+		atomic::{AtomicUsize, Ordering},
+		Arc,
+	},
 	task::{Context, Poll},
 };
 
 /// Creates a new channel that can be associated to a [`OutChannels`].
 ///
 /// The name is used in Prometheus reports.
-pub fn channel(name: &'static str) -> (Sender, Receiver) {
+pub fn channel(name: &'static str, queue_size_warning: usize) -> (Sender, Receiver) {
 	let (tx, rx) = mpsc::unbounded();
 	let metrics = Arc::new(Mutex::new(None));
-	let tx = Sender { inner: tx, name, metrics: metrics.clone() };
-	let rx = Receiver { inner: rx, name, metrics };
+	let queue_size = Arc::new(AtomicUsize::new(0));
+	let tx = Sender {
+		inner: tx,
+		name,
+		queue_size: queue_size.clone(),
+		queue_size_warning,
+		warning_fired: false,
+		metrics: metrics.clone(),
+	};
+	let rx = Receiver { inner: rx, name, queue_size, metrics };
 	(tx, rx)
 }
 
@@ -63,7 +75,14 @@ pub fn channel(name: &'static str) -> (Sender, Receiver) {
 /// sync on drop. If someone adds a `#[derive(Clone)]` below, it is **wrong**.
 pub struct Sender {
 	inner: mpsc::UnboundedSender<Event>,
+	/// Name to identify the channel (e.g., in Prometheus and logs).
 	name: &'static str,
+	/// Number of events in the queue. Clone of [`Receiver::in_transit`].
+	queue_size: Arc<AtomicUsize>,
+	/// Threshold queue size to generate an error message in the logs.
+	queue_size_warning: usize,
+	/// We generate the error message only once to not spam the logs.
+	warning_fired: bool,
 	/// Clone of [`Receiver::metrics`].
 	metrics: Arc<Mutex<Option<Arc<Option<Metrics>>>>>,
 }
@@ -87,6 +106,7 @@ impl Drop for Sender {
 pub struct Receiver {
 	inner: mpsc::UnboundedReceiver<Event>,
 	name: &'static str,
+	queue_size: Arc<AtomicUsize>,
 	/// Initially contains `None`, and will be set to a value once the corresponding [`Sender`]
 	/// is assigned to an instance of [`OutChannels`].
 	metrics: Arc<Mutex<Option<Arc<Option<Metrics>>>>>,
@@ -97,6 +117,7 @@ impl Stream for Receiver {
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Event>> {
 		if let Some(ev) = ready!(Pin::new(&mut self.inner).poll_next(cx)) {
+			let _ = self.queue_size.fetch_sub(1, Ordering::Release);
 			let metrics = self.metrics.lock().clone();
 			match metrics.as_ref().map(|m| m.as_ref()) {
 				Some(Some(metrics)) => metrics.event_out(&ev, self.name),
@@ -160,8 +181,17 @@ impl OutChannels {
 
 	/// Sends an event.
 	pub fn send(&mut self, event: Event) {
-		self.event_streams
-			.retain(|sender| sender.inner.unbounded_send(event.clone()).is_ok());
+		self.event_streams.retain_mut(|sender| {
+			let queue_size = sender.queue_size.fetch_add(1, Ordering::Acquire);
+			if queue_size == sender.queue_size_warning && !sender.warning_fired {
+				sender.warning_fired = true;
+				error!(
+					"Number of unprocessed events in channel `{}` reached {}.",
+					sender.name, sender.queue_size_warning,
+				);
+			}
+			sender.inner.unbounded_send(event.clone()).is_ok()
+		});
 
 		if let Some(metrics) = &*self.metrics {
 			for ev in &self.event_streams {
