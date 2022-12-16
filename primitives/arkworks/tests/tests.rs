@@ -17,8 +17,8 @@ impl HostFunctions for Host {
 	fn bls12_381_final_exponentiation(f12: &[u8]) -> Vec<u8> {
 		bls12_381::final_exponentiation(f12)
 	}
-	fn bls12_381_bigint_msm_g1(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
-		bls12_381::msm_bigint_g1(bases, bigints)
+	fn bls12_381_msm_g1(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
+		bls12_381::msm_g1(bases, scalars)
 	}
 	fn bls12_381_mul_projective_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 		bls12_381::mul_projective_g1(base, scalar)
@@ -26,8 +26,8 @@ impl HostFunctions for Host {
 	fn bls12_381_mul_affine_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 		bls12_381::mul_affine_g1(base, scalar)
 	}
-	fn bls12_381_bigint_msm_g2(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
-		bls12_381::msm_bigint_g2(bases, bigints)
+	fn bls12_381_msm_g2(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
+		bls12_381::msm_g2(bases, scalars)
 	}
 	fn bls12_381_mul_projective_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 		bls12_381::mul_projective_g2(base, scalar)
