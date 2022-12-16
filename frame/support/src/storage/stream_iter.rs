@@ -177,32 +177,32 @@ impl<T: codec::Decode> sp_std::iter::Iterator for ScaleContainerStreamIter<T> {
 
 	fn next(&mut self) -> Option<T> {
 		if self.read >= self.length {
-			None
-		} else {
-			match codec::Decode::decode(&mut self.input) {
-				Ok(r) => {
-					self.read += 1;
-					Some(r)
-				},
-				Err(e) => {
-					log::error!(
-						target: "runtime::storage",
-						"Corrupted state at `{:?}`: failed to decode element {} (out of {} in total): {:?}",
-						self.input.key,
-						self.read,
-						self.length,
-						e,
-					);
+			return None
+		}
 
-					self.read = self.length;
-					None
-				},
-			}
+		match codec::Decode::decode(&mut self.input) {
+			Ok(r) => {
+				self.read += 1;
+				Some(r)
+			},
+			Err(e) => {
+				log::error!(
+					target: "runtime::storage",
+					"Corrupted state at `{:?}`: failed to decode element {} (out of {} in total): {:?}",
+					self.input.key,
+					self.read,
+					self.length,
+					e,
+				);
+
+				self.read = self.length;
+				None
+			},
 		}
 	}
 
 	fn size_hint(&self) -> (usize, Option<usize>) {
-		let left = self.length.saturating_sub(self.read) as usize;
+		let left = (self.length - self.read) as usize;
 
 		(left, Some(left))
 	}
@@ -302,7 +302,8 @@ impl StorageInput {
 	fn read_big_item(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
 		let num_cached = self.buffer.len() - self.buffer_pos;
 
-		into[..num_cached].copy_from_slice(&self.buffer[self.buffer_pos..]);
+		let (out_already_read, mut out_remaining) = into.split_at_mut(num_cached);
+		out_already_read.copy_from_slice(&self.buffer[self.buffer_pos..]);
 
 		self.buffer_pos = 0;
 		unsafe {
@@ -310,17 +311,15 @@ impl StorageInput {
 		}
 
 		if let Some(length_minus_offset) =
-			sp_io::storage::read(&self.key, &mut into[num_cached..], self.offset)
+			sp_io::storage::read(&self.key, &mut out_remaining, self.offset)
 		{
-			let required_to_read = (into.len() - num_cached) as u32;
-
-			if length_minus_offset < required_to_read {
+			if (length_minus_offset as usize) < out_remaining.len() {
 				return Err("Not enough data to fill the buffer".into())
 			}
 
 			self.ensure_total_length_did_not_change(length_minus_offset)?;
 
-			self.offset += required_to_read;
+			self.offset += out_remaining.len() as u32;
 
 			Ok(())
 		} else {
@@ -373,7 +372,7 @@ impl codec::Input for StorageInput {
 		if self.offset < self.total_length {
 			if into.len() > self.buffer.capacity() {
 				return self.read_big_item(into)
-			} else if self.buffer_pos + into.len() >= self.buffer.len() {
+			} else if self.buffer_pos + into.len() > self.buffer.len() {
 				self.fill_buffer()?;
 			}
 		}
