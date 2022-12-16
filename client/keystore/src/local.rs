@@ -396,7 +396,7 @@ impl SyncCryptoStore for LocalKeystore {
 		&self,
 		id: KeyTypeId,
 		public: &bls::Public,
-		msg: &[u8; 32],
+		msg:  &[u8],
 	) -> std::result::Result<Option<bls::Signature>, TraitError> {
 		let pair = self.0.read().key_pair_by_type::<bls::Pair>(public, id)?;
 		pair.map(|k| k.sign(msg)).map(Ok).transpose()

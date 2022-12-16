@@ -426,7 +426,7 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 		&self,
 		id: KeyTypeId,
 		public: &bls::Public,
-		msg: &[u8; 32],
+		msg: &[u8],
 	) -> Result<Option<bls::Signature>, Error>;
 
 }

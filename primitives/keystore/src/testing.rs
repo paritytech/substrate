@@ -456,7 +456,7 @@ impl SyncCryptoStore for KeyStore {
 		&self,
 		id: KeyTypeId,
 		public: &bls::Public,
-		msg: &[u8; 32],
+		msg: &[u8],
 	) -> Result<Option<bls::Signature>, Error> {
 		let pair = self.bls_key_pair(id, public);
 		pair.map(|k| k.sign(msg)).map(Ok).transpose()
