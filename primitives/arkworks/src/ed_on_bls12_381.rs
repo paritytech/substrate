@@ -20,97 +20,54 @@
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use ark_ed_on_bls12_381::{EdwardsAffine, EdwardsProjective, JubjubParameters};
 use ark_ec::{
 	models::CurveConfig,
 	pairing::{MillerLoopOutput, Pairing},
+	twisted_edwards,
+	twisted_edwards::TECurveConfig,
 	Group, VariableBaseMSM,
 };
+use ark_ed_on_bls12_381::{EdwardsAffine, EdwardsProjective, JubjubParameters};
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use ark_std::{io::Cursor, Zero};
 use sp_std::{vec, vec::Vec};
 
-// /// Compute a scalar multiplication on G2 through arkworks
-// pub fn mul_projective_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-// 	let cursor = Cursor::new(base);
-// 	let base = G2Projective::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
-	
-// 	let cursor = Cursor::new(scalar);
-// 	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
-// 	let mut res = EdwardsProjective::mul_bigint(&self, other);
-// 	let mut res = ark_ec::bls12::G2Projective::<Parameters>::zero();
-// 	for b in ark_ff::BitIteratorBE::without_leading_zeros(scalar) {
-// 		res.double_in_place();
-// 		if b {
-// 			res += base;
-// 		}
-// 	}
-// 	let mut serialized = vec![0; res.serialized_size(Compress::Yes)];
-// 	let mut cursor = Cursor::new(&mut serialized[..]);
-// 	res.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
-// 	serialized
-// }
+/// Compute a scalar multiplication on G2 through arkworks
+pub fn mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
+	let cursor = Cursor::new(base);
+	let base = twisted_edwards::Projective::<JubjubParameters>::deserialize_with_mode(
+		cursor,
+		Compress::Yes,
+		Validate::No,
+	)
+	.unwrap();
+	let cursor = Cursor::new(scalar);
+	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+	let res = <JubjubParameters as TECurveConfig>::mul_projective(&base, &scalar);
+	let mut serialized = vec![0; res.serialized_size(Compress::Yes)];
+	let mut cursor = Cursor::new(&mut serialized[..]);
+	res.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
+	serialized
+}
 
-// /// Compute a scalar multiplication on G2 through arkworks
-// pub fn mul_projective_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-// 	let cursor = Cursor::new(base);
-// 	let base = G1Projective::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
-
-// 	let cursor = Cursor::new(scalar);
-// 	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
-// 	let mut res = ark_ec::bls12::G1Projective::<Parameters>::zero();
-// 	for b in ark_ff::BitIteratorBE::without_leading_zeros(scalar) {
-// 		res.double_in_place();
-// 		if b {
-// 			res += base;
-// 		}
-// 	}
-// 	let mut serialized = vec![0; res.serialized_size(Compress::Yes)];
-// 	let mut cursor = Cursor::new(&mut serialized[..]);
-// 	res.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
-// 	serialized
-// }
-
-// /// Compute a scalar multiplication on G2 through arkworks
-// pub fn mul_affine_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-// 	let cursor = Cursor::new(base);
-// 	let base = G1Affine::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
-
-// 	let cursor = Cursor::new(scalar);
-// 	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
-// 	let mut res = ark_ec::bls12::G1Projective::<Parameters>::zero();
-// 	for b in ark_ff::BitIteratorBE::without_leading_zeros(scalar) {
-// 		res.double_in_place();
-// 		if b {
-// 			res += base;
-// 		}
-// 	}
-// 	let mut serialized = vec![0; res.serialized_size(Compress::Yes)];
-// 	let mut cursor = Cursor::new(&mut serialized[..]);
-// 	res.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
-// 	serialized
-// }
-
-// /// Compute a scalar multiplication on G2 through arkworks
-// pub fn mul_affine_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-// 	let cursor = Cursor::new(base);
-// 	let base = G2Affine::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
-
-// 	let cursor = Cursor::new(scalar);
-// 	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
-// 	let mut res = ark_ec::bls12::G2Projective::<Parameters>::zero();
-// 	for b in ark_ff::BitIteratorBE::without_leading_zeros(scalar) {
-// 		res.double_in_place();
-// 		if b {
-// 			res += base;
-// 		}
-// 	}
-// 	let mut serialized = vec![0; res.serialized_size(Compress::Yes)];
-// 	let mut cursor = Cursor::new(&mut serialized[..]);
-// 	res.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
-// 	serialized
-// }
+/// Compute a scalar multiplication through arkworks
+pub fn mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
+	let cursor = Cursor::new(base);
+	let base = twisted_edwards::Affine::<JubjubParameters>::deserialize_with_mode(
+		cursor,
+		Compress::Yes,
+		Validate::No,
+	)
+	.unwrap();
+	let cursor = Cursor::new(scalar);
+	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+	let res = <JubjubParameters as TECurveConfig>::mul_affine(&base, &scalar);
+	let mut serialized = vec![0; res.serialized_size(Compress::Yes)];
+	let mut cursor = Cursor::new(&mut serialized[..]);
+	res.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
+	serialized
+}
 
 /// Compute a multi scalar multiplication on G! through arkworks
 pub fn msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
@@ -118,7 +75,7 @@ pub fn msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 		.iter()
 		.map(|a| {
 			let cursor = Cursor::new(a);
-			ark_ec::twisted_edwards::Affine::<JubjubParameters>::deserialize_with_mode(
+			twisted_edwards::Affine::<JubjubParameters>::deserialize_with_mode(
 				cursor,
 				Compress::Yes,
 				Validate::No,
@@ -138,44 +95,10 @@ pub fn msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 			.unwrap()
 		})
 		.collect();
-	
+
 	let result = <EdwardsProjective as VariableBaseMSM>::msm(&bases, &scalars);
 	let mut serialized = vec![0; result.serialized_size(Compress::Yes)];
 	let mut cursor = Cursor::new(&mut serialized[..]);
 	result.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
 	serialized
 }
-
-// /// Compute a multi scalar multiplication on G! through arkworks
-// pub fn msm_bigint_g2(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
-// 	let bases: Vec<_> = bases
-// 		.iter()
-// 		.map(|a| {
-// 			let cursor = Cursor::new(a);
-// 			<Bls12_381 as Pairing>::G2Affine::deserialize_with_mode(
-// 				cursor,
-// 				Compress::Yes,
-// 				Validate::No,
-// 			)
-// 			.unwrap()
-// 		})
-// 		.collect();
-// 	let bigints: Vec<_> = bigints
-// 		.iter()
-// 		.map(|a| {
-// 			let cursor = Cursor::new(a);
-// 			<<ark_bls12_381::g2::Parameters as CurveConfig>::ScalarField as PrimeField>::BigInt::deserialize_with_mode(
-// 				cursor,
-// 				Compress::Yes,
-// 				Validate::No,
-// 			)
-// 			.unwrap()
-// 		})
-// 		.collect();
-// 	let result =
-// 		<<Bls12_381 as Pairing>::G2 as ark_ec::VariableBaseMSM>::msm_bigint(&bases, &bigints);
-// 	let mut serialized = vec![0; result.serialized_size(Compress::Yes)];
-// 	let mut cursor = Cursor::new(&mut serialized[..]);
-// 	result.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
-// 	serialized
-// }
