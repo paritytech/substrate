@@ -1202,13 +1202,13 @@ pub trait Crypto {
 	}
 
 	/// Compute a bigint_msm on G1
-	fn bls12_377_bigint_msm_g1(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
-		sp_arkworks::bls12_377::msm_bigint_g1(bases, bigints)
+	fn bls12_377_msm_g1(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
+		sp_arkworks::bls12_377::msm_g1(bases, bigints)
 	}
 
 	/// Compute a bigint_msm on G2
-	fn bls12_377_bigint_msm_g2(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
-		sp_arkworks::bls12_377::msm_bigint_g2(bases, bigints)
+	fn bls12_377_msm_g2(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
+		sp_arkworks::bls12_377::msm_g2(bases, bigints)
 	}
 
 	/// Compute a multi pairing
