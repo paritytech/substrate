@@ -132,7 +132,7 @@ impl pallet_assets::Config<Instance2> for Test {
 
 parameter_types! {
 	pub const DexPalletId: PalletId = PalletId(*b"py/dexer");
-	pub storage AllowMultiAssetPools: bool = false;
+	pub storage AllowMultiAssetPools: bool = true;
 }
 
 frame_support::ord_parameter_types! {
