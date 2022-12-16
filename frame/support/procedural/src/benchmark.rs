@@ -96,5 +96,24 @@ pub fn benchmark(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 			"Missing #[extrinsic_call] annotation in benchmark function body.",
 		)
 	}
-	return quote!().into()
+	let name = item_fn.sig.ident;
+	let krate = quote!(::frame_benchmarking);
+	let params = vec![quote!(x, 0, 1)];
+	quote! {
+		#[allow(non_camel_case_types)]
+		struct #name;
+
+		#[allow(unused_variables)]
+		impl<T: Config> ::frame_benchmarking::BenchmarkingSetup<T>
+		for #name {
+			fn components(&self) -> #krate::Vec<(#krate::BenchmarkParameter, u32, u32)> {
+				#krate::vec! [
+					#(
+						(#krate::BenchmarkParameter::#params)
+					),*
+				]
+			}
+		}
+	}
+	.into()
 }
