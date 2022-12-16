@@ -15,7 +15,7 @@ fn emit_error<T: Into<TokenStream> + Clone, S: Into<String>>(item: &T, message: 
 	let item = Into::<TokenStream>::into(item.clone());
 	let message = Into::<String>::into(message);
 	let span = proc_macro2::TokenStream::from(item).span();
-	return syn::Error::new(span, message).to_compile_error().into();
+	return syn::Error::new(span, message).to_compile_error().into()
 }
 
 struct BenchmarkDef {
@@ -40,14 +40,14 @@ impl BenchmarkDef {
 								verify_stmts: Vec::from(
 									&item_fn.block.stmts[i..item_fn.block.stmts.len()],
 								),
-							});
+							})
 						}
 					}
 				}
 			}
 			i += 1;
 		}
-		return None;
+		return None
 	}
 }
 
@@ -68,12 +68,11 @@ pub fn benchmarks(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 	let item_mod = parse_macro_input!(tokens as ItemMod);
 	let contents = match item_mod.content {
 		Some(content) => content.1,
-		None => {
+		None =>
 			return emit_error(
 				&item_mod.to_token_stream(),
 				"#[frame_support::benchmarks] can only be applied to a non-empty module.",
-			)
-		},
+			),
 	};
 	let mod_ident = item_mod.ident;
 	quote! {
@@ -95,7 +94,7 @@ pub fn benchmark(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 		return emit_error(
 			&item_fn.block.to_token_stream(),
 			"Missing #[extrinsic_call] annotation in benchmark function body.",
-		);
+		)
 	}
-	return quote!().into();
+	return quote!().into()
 }
