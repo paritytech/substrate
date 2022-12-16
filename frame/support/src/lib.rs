@@ -2744,4 +2744,3 @@ pub mod pallet_macros {
 		type_value, unbounded, validate_unsigned, weight, whitelist_storage,
 	};
 }
-
