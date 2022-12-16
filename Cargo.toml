@@ -312,12 +312,12 @@ lto = "fat"
 codegen-units = 1
 
 [patch.crates-io]
-#bls-like = {git = "https://github.com/w3f/bls", branch = "skalman-hash-to-curve-wb", default-features = false}
-ark-ec = { git = "https://github.com/w3f/arkworks-algebra", branch = 'master'}
-ark-ff = { git = "https://github.com/w3f/arkworks-algebra", branch = 'master'}
-ark-std = { git = "https://github.com/arkworks-rs/std"}
-ark-serialize = { git = "https://github.com/w3f/arkworks-algebra", branch = 'master'}
-ark-serialize-derive = { git = "https://github.com/w3f/arkworks-algebra", branch = 'master'}
+bls-like = {git = "https://github.com/w3f/bls", branch = "skalman-hash-to-curve-wb"}
+# ark-ec = { git = "https://github.com/w3f/arkworks-algebra", branch = 'master'}
+# ark-ff = { git = "https://github.com/w3f/arkworks-algebra", branch = 'master'}
+# ark-std = { git = "https://github.com/arkworks-rs/std"}
+# ark-serialize = { git = "https://github.com/w3f/arkworks-algebra", branch = 'master'}
+# ark-serialize-derive = { git = "https://github.com/w3f/arkworks-algebra", branch = 'master'}
 ark-bls12-381 = { git = "https://github.com/w3f/arkworks-curves", branch = 'skalman-bls12-377-wb-hash2curve'}
 ark-bls12-377 = { git = "https://github.com/w3f/arkworks-curves", branch = 'skalman-bls12-377-wb-hash2curve'}
 
