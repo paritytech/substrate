@@ -45,17 +45,20 @@ fn setting_compute_works() {
 #[test]
 fn setting_storage_works() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(Storage::<Test>::get(), 10000);
+		assert_eq!(Storage::<Test>::get(), Perbill::from_percent(50));
 
-		assert_ok!(PovLimit::set_storage(RuntimeOrigin::root(), 5000));
+		assert_ok!(PovLimit::set_storage(RuntimeOrigin::root(), Perbill::from_percent(30)));
 
-		assert_eq!(Storage::<Test>::get(), 5000);
+		assert_eq!(Storage::<Test>::get(), Perbill::from_percent(30));
 
 		assert_noop!(
-			PovLimit::set_storage(RuntimeOrigin::signed(1), 15000),
+			PovLimit::set_storage(RuntimeOrigin::signed(1), Perbill::from_percent(90)),
 			DispatchError::BadOrigin
 		);
-		assert_noop!(PovLimit::set_storage(RuntimeOrigin::none(), 15000), DispatchError::BadOrigin);
+		assert_noop!(
+			PovLimit::set_storage(RuntimeOrigin::none(), Perbill::from_percent(90)),
+			DispatchError::BadOrigin
+		);
 	});
 }
 
@@ -63,7 +66,7 @@ fn setting_storage_works() {
 fn on_idle_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(PovLimit::set_compute(RuntimeOrigin::root(), Perbill::from_percent(100)));
-		assert_ok!(PovLimit::set_storage(RuntimeOrigin::root(), 5000));
+		assert_ok!(PovLimit::set_storage(RuntimeOrigin::root(), Perbill::from_percent(100)));
 
 		PovLimit::on_idle(1, Weight::from_ref_time(20_000_000));
 	});

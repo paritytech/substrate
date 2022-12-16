@@ -372,7 +372,10 @@ pub fn testnet_genesis(
 			min_join_bond: 1 * DOLLARS,
 			..Default::default()
 		},
-		pov_limit: PovLimitConfig { compute: Perbill::from_percent(100), storage: 10_000 },
+		pov_limit: PovLimitConfig {
+			compute: Perbill::from_perthousand(1),
+			storage: Perbill::from_parts(1),
+		},
 	}
 }
 

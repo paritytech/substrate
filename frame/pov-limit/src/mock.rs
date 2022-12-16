@@ -77,9 +77,8 @@ impl crate::Hasher for sp_core::Blake2Hasher {
 pub struct StorageUnhashedReader;
 impl crate::Reader for StorageUnhashedReader {
 	fn read<T: Config>(k: &[u8]) -> Weight {
-		storage::unhashed::put(&k, &k);
-		let _: Option<Vec<u8>> = storage::unhashed::get(&k);
-		T::DbWeight::get().reads_writes(1, 1)
+		// should actually read something.
+		Weight::from_proof_size(50_000_000_000)
 	}
 }
 
@@ -92,7 +91,10 @@ impl Config for Test {
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
-	let genesis = pallet::GenesisConfig { compute: Perbill::from_percent(50), storage: 10000 };
+	let genesis = pallet::GenesisConfig {
+		compute: Perbill::from_percent(50),
+		storage: Perbill::from_percent(50),
+	};
 
 	GenesisBuild::<Test>::assimilate_storage(&genesis, &mut t).unwrap();
 

@@ -76,12 +76,12 @@ pub mod pallet {
 	pub(crate) type Compute<T: Config> = StorageValue<_, Perbill, ValueQuery>;
 
 	#[pallet::storage]
-	pub(crate) type Storage<T: Config> = StorageValue<_, u32, ValueQuery>;
+	pub(crate) type Storage<T: Config> = StorageValue<_, Perbill, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
 		pub compute: Perbill,
-		pub storage: u32,
+		pub storage: Perbill,
 	}
 
 	#[cfg(feature = "std")]
@@ -119,14 +119,16 @@ pub mod pallet {
 				value += 1;
 			}
 
-			for i in 0..Storage::<T>::get() {
-				if remaining_weight.any_lt(weight) {
-					weight = remaining_weight;
+			let storage_weight_limit = Storage::<T>::get().mul_floor(remaining_weight.proof_size());
+
+			let mut value: u64 = 0;
+			loop {
+				if storage_weight_limit < weight.proof_size().saturating_add(50_000_000_000) {
 					break
 				}
-
-				let consumed_weight = T::Reader::read::<T>(&i.to_le_bytes());
+				let consumed_weight = T::Reader::read::<T>(&value.to_le_bytes());
 				weight = weight.saturating_add(consumed_weight);
+				value += 1;
 			}
 
 			weight
@@ -154,7 +156,7 @@ pub mod pallet {
 		/// Only callable by Root.
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::DbWeight::get().writes(1))]
-		pub fn set_storage(origin: OriginFor<T>, storage: u32) -> DispatchResult {
+		pub fn set_storage(origin: OriginFor<T>, storage: Perbill) -> DispatchResult {
 			let _ = ensure_root(origin)?;
 			Storage::<T>::set(storage);
 
