@@ -179,20 +179,22 @@ impl<T: codec::Decode> sp_std::iter::Iterator for ScaleContainerStreamIter<T> {
 		if self.read >= self.length {
 			None
 		} else {
-			self.read += 1;
-
 			match codec::Decode::decode(&mut self.input) {
-				Ok(r) => Some(r),
+				Ok(r) => {
+					self.read += 1;
+					Some(r)
+				},
 				Err(e) => {
-					self.read = self.length;
-
 					log::error!(
 						target: "runtime::storage",
-						"Corrupted state at `{:?}`: {:?}",
+						"Corrupted state at `{:?}`: failed to decode element {} (out of {} in total): {:?}",
 						self.input.key,
+						self.read,
+						self.length,
 						e,
 					);
 
+					self.read = self.length;
 					None
 				},
 			}
