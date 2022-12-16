@@ -22,12 +22,14 @@ sp-core = { version = "7.0.0", path = "../../../primitives/core" }
 sp-io = { version = "7.0.0", path = "../../../primitives/io" }
 sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
 sp-version = { version = "5.0.0", path = "../../../primitives/version" }
+tokio = { version = "1.22.0", features = ["macros", "rt-multi-thread"] }
 substrate-rpc-client = { path = "../rpc/client" }
+futures = "0.3"
 
 [dev-dependencies]
-tokio = { version = "1.22.0", features = ["macros", "rt-multi-thread"] }
 frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
 pallet-elections-phragmen = { version = "5.0.0-dev", path = "../../../frame/elections-phragmen" }
+tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
 
 [features]
 remote-test = ["frame-support"]
