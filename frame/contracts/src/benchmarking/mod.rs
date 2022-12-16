@@ -2381,7 +2381,6 @@ benchmarks! {
 			call_body: Some(body::repeated(r * INSTR_BENCHMARK_BATCH_SIZE, &[
 				Instruction::Call(2), // call aux
 			])),
-			inject_stack_metering: true,
 			.. Default::default()
 		}));
 	}: {
@@ -2405,7 +2404,6 @@ benchmarks! {
 				RandomI32(0, num_elements as i32),
 				Regular(Instruction::CallIndirect(0, 0)), // we only have one sig: 0
 			])),
-			inject_stack_metering: true,
 			table: Some(TableSegment {
 				num_elements,
 				function_index: 2, // aux
@@ -2438,7 +2436,6 @@ benchmarks! {
 				RandomI32(0, num_elements as i32),
 				Regular(Instruction::CallIndirect(p.min(1), 0)), // aux signature: 1 or 0
 			])),
-			inject_stack_metering: true,
 			table: Some(TableSegment {
 				num_elements,
 				function_index: 2, // aux
@@ -2965,7 +2962,7 @@ benchmarks! {
 			new.encode()
 		};
 		let instance = Contract::<T>::new(
-			WasmModule::instrumented(code, gas_metering, true), data,
+			WasmModule::instrumented(code, gas_metering), data,
 		)?;
 		let data = {
 			let transfer: ([u8; 4], AccountIdOf<T>, BalanceOf<T>) = (
@@ -3012,7 +3009,7 @@ benchmarks! {
 			new.encode()
 		};
 		let instance = Contract::<T>::with_caller(
-			caller, WasmModule::instrumented(code, gas_metering, true), data,
+			caller, WasmModule::instrumented(code, gas_metering), data,
 		)?;
 		balance[0] = 1;
 		let data = {
