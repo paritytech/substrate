@@ -5279,6 +5279,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-collective-mangata"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-contracts"
 version = "4.0.0-dev"
 dependencies = [
@@ -6135,6 +6151,21 @@ version = "4.0.0-dev"
 dependencies = [
  "frame-support",
  "frame-system",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-sudo-mangata"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "log",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
