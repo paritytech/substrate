@@ -5,7 +5,8 @@ use frame_benchmarking::benchmarks;
 use frame_system::RawOrigin;
 use sp_core::H256;
 
-frame_support::benchmarks! {
+#[frame_support::benchmarks]
+mod my_benchmarks {
 	#[frame_support::benchmark]
 	fn bench_name(x: LinearComponent<0, MAX_X>, y: LinearComponent<0, MAX_Y>) {
 		// Setup code

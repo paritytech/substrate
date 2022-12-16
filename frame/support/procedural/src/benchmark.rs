@@ -64,12 +64,21 @@ impl Parse for BareBlock {
 	}
 }
 
-pub fn benchmarks(tokens: TokenStream) -> TokenStream {
-	let block = parse_macro_input!(tokens as BareBlock);
-	let contents = block.stmts;
+pub fn benchmarks(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
+	let item_mod = parse_macro_input!(tokens as ItemMod);
+	let contents = match item_mod.content {
+		Some(content) => content.1,
+		None => {
+			return emit_error(
+				&item_mod.to_token_stream(),
+				"#[frame_support::benchmarks] can only be applied to a non-empty module.",
+			)
+		},
+	};
+	let mod_ident = item_mod.ident;
 	quote! {
 		#[cfg(any(feature = "runtime-benchmarks", test))]
-		mod benchmarking {
+		mod #mod_ident {
 			#(#contents)
 			*
 		}
