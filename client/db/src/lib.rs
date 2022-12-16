@@ -1319,7 +1319,6 @@ impl<Block: BlockT> Backend<Block> {
 		let best_canonical = || self.storage.state_db.best_canonical().unwrap_or(0);
 		let info = self.blockchain.info();
 		let best_number: u64 = self.blockchain.info().best_number.saturated_into();
-		let best_hash = info.best_hash;
 
 		while best_number.saturating_sub(best_canonical()) > self.canonicalization_delay {
 			let to_canonicalize = best_canonical() + 1;
@@ -1329,9 +1328,10 @@ impl<Block: BlockT> Backend<Block> {
 				to_canonicalize.saturated_into(),
 			)?
 			.ok_or_else(|| {
+					let best_hash = info.best_hash;
+
 				sp_blockchain::Error::Backend(format!(
-					"Can't canonicalize missing block number #{} when for best block {:?} (#{})",
-					to_canonicalize, best_hash, best_number,
+					"Can't canonicalize missing block number #{to_canonicalize} when for best block {best_hash:?} (#{best_number})",
 				))
 			})?;
 
