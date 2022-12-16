@@ -42,19 +42,18 @@ pub const MIN_LIQUIDITY: u64 = 1;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{pallet_prelude::*, sp_io};
-	use frame_system::pallet_prelude::*;
-
 	use frame_support::{
+		pallet_prelude::*,
 		traits::{
 			fungible::{Inspect as InspectFungible, Transfer as TransferFungible},
 			fungibles::{metadata::Mutate as MutateMetadata, Create, Inspect, Mutate, Transfer},
 		},
 		PalletId,
 	};
+	use frame_system::pallet_prelude::*;
 	use sp_runtime::{
 		helpers_128bit::multiply_by_rational_with_rounding,
-		traits::{AccountIdConversion, AtLeast32BitUnsigned, IntegerSquareRoot, One, Zero},
+		traits::{AccountIdConversion, AtLeast32BitUnsigned, Hash, IntegerSquareRoot, One, Zero},
 		Rounding,
 	};
 
@@ -542,7 +541,7 @@ pub mod pallet {
 		/// This actually does computation. If you need to keep using it, then make sure you cache
 		/// the value and only call this once.
 		pub fn get_pool_account(pool_id: PoolIdOf<T>) -> T::AccountId {
-			let sub = sp_io::hashing::blake2_256(&Encode::encode(&pool_id)[..]);
+			let sub = T::Hashing::hash_of(&pool_id);
 			T::PalletId::get().into_sub_account_truncating(sub)
 		}
 
