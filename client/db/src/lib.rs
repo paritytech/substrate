@@ -1315,64 +1315,36 @@ impl<Block: BlockT> Backend<Block> {
 	fn force_delayed_canonicalize(
 		&self,
 		transaction: &mut Transaction<DbHash>,
-		hash: Block::Hash,
-		number: NumberFor<Block>,
 	) -> ClientResult<()> {
-		let number_u64 = number.saturated_into::<u64>();
-		if number_u64 <= self.canonicalization_delay {
-			return Ok(())
-		}
+		let best_canonical = || self.storage.state_db.best_canonical().unwrap_or(0);
+		let info = self.blockchain.info();
+		let best_number: u64 = self.blockchain.info().best_number.saturated_into();
+		let best_hash = info.best_hash;
 
-		let new_canonical = number_u64 - self.canonicalization_delay;
-		let best_canonical = self.storage.state_db.best_canonical().unwrap_or(0);
+		while best_number.saturating_sub(best_canonical()) > self.canonicalization_delay {
+			let to_canonicalize = best_canonical() + 1;
 
-		if new_canonical <= best_canonical {
-			return Ok(())
-		}
+			let hash_to_canonicalize = sc_client_api::blockchain::HeaderBackend::hash(
+				&self.blockchain,
+				to_canonicalize.saturated_into(),
+			)?
+			.ok_or_else(|| {
+				sp_blockchain::Error::Backend(format!(
+					"Can't canonicalize missing block number #{} when for best block {:?} (#{})",
+					to_canonicalize, best_hash, best_number,
+				))
+			})?;
 
-		let best_number = self.blockchain.info().best_number.saturated_into();
-		// If the `best_number` is one off from the current block we are just importing, we can
-		// take the block number of the current block as the best block. Even if this block is not
-		// imported as best block, we know its hash and can canonicalize it if required below.
-		let best_number = if best_number + 1 == number_u64 { number_u64 } else { best_number };
-
-		// We can not canonicalize beyond the `best_number` as setting the best block also sets the
-		// mapping from block number to hash that is required down below. This is just some safety
-		// guard against potential bugs.
-		let last_to_canonicalize = std::cmp::min(best_number, new_canonical);
-
-		if new_canonical > best_number {
-			trace!(
-				target: "db",
-				"Block to force canonicalize (#{new_canonical}) is above the best block (#{best_number})",
-			);
-		}
-
-		// As there could be some gap between the point when we last canonicalized and the block we
-		// want to canonicalize (`new_canonical`), we canonicalize from the best canonicalized block
-		// to the last block to canonicalize.
-		for to_canonicalize in best_canonical + 1..=last_to_canonicalize {
-			let hash = if to_canonicalize == number_u64 {
-				hash
-			} else {
-				sc_client_api::blockchain::HeaderBackend::hash(
-					&self.blockchain,
-					to_canonicalize.saturated_into(),
-				)?
-				.ok_or_else(|| {
-					sp_blockchain::Error::Backend(format!(
-						"Can't canonicalize missing block number #{} when importing {:?} (#{})",
-						to_canonicalize, hash, number,
-					))
-				})?
-			};
-			if !sc_client_api::Backend::have_state_at(self, hash, to_canonicalize.saturated_into())
-			{
+			if !sc_client_api::Backend::have_state_at(
+				self,
+				hash_to_canonicalize,
+				to_canonicalize.saturated_into(),
+			) {
 				return Ok(())
 			}
 
-			trace!(target: "db", "Canonicalize block #{} ({:?})", to_canonicalize, hash);
-			let commit = self.storage.state_db.canonicalize_block(&hash).map_err(
+			trace!(target: "db", "Canonicalize block #{} ({:?})", to_canonicalize, hash_to_canonicalize);
+			let commit = self.storage.state_db.canonicalize_block(&hash_to_canonicalize).map_err(
 				sp_blockchain::Error::from_state_db::<
 					sc_state_db::Error<sp_database::error::DatabaseError>,
 				>,
@@ -1587,7 +1559,7 @@ impl<Block: BlockT> Backend<Block> {
 				)?;
 			} else {
 				// canonicalize blocks which are old enough, regardless of finality.
-				self.force_delayed_canonicalize(&mut transaction, hash, *header.number())?
+				self.force_delayed_canonicalize(&mut transaction)?
 			}
 
 			if !existing_header {
@@ -2791,6 +2763,33 @@ pub(crate) mod tests {
 				.unwrap();
 
 			backend.commit_operation(op).unwrap();
+			hash
+		};
+
+		let hashof4 = {
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, hashof3).unwrap();
+			let mut header = Header {
+				number: 4,
+				parent_hash: hashof3,
+				state_root: Default::default(),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+
+			let storage: Vec<(_, _)> = vec![];
+
+			header.state_root = op
+				.old_state
+				.storage_root(storage.iter().cloned().map(|(x, y)| (x, Some(y))), state_version)
+				.0
+				.into();
+			let hash = header.hash();
+
+			op.set_block_data(header, Some(vec![]), None, None, NewBlockState::Best)
+				.unwrap();
+
+			backend.commit_operation(op).unwrap();
 			assert!(backend
 				.storage
 				.db
@@ -2802,6 +2801,7 @@ pub(crate) mod tests {
 		backend.finalize_block(hashof1, None).unwrap();
 		backend.finalize_block(hashof2, None).unwrap();
 		backend.finalize_block(hashof3, None).unwrap();
+		backend.finalize_block(hashof4, None).unwrap();
 		assert!(backend
 			.storage
 			.db
@@ -3923,7 +3923,7 @@ pub(crate) mod tests {
 			header.hash()
 		};
 
-		assert_eq!(3, backend.storage.state_db.best_canonical().unwrap());
+		assert_eq!(2, backend.storage.state_db.best_canonical().unwrap());
 
 		assert_eq!(block1, backend.blockchain().hash(1).unwrap().unwrap());
 		assert_eq!(block2, backend.blockchain().hash(2).unwrap().unwrap());
