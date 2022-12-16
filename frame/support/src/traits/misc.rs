@@ -1353,6 +1353,7 @@ mod test {
 	}
 
 	#[test]
+	#[cfg(debug_assertions)]
 	#[should_panic(expected = "Defensive failure has been triggered!: \"DefensiveMin\"")]
 	fn defensive_min_panics() {
 		10_u32.defensive_min(9_u32);
@@ -1365,6 +1366,7 @@ mod test {
 	}
 
 	#[test]
+	#[cfg(debug_assertions)]
 	#[should_panic(expected = "Defensive failure has been triggered!: \"DefensiveMin strict\"")]
 	fn defensive_strict_min_panics() {
 		9_u32.defensive_strict_min(9_u32);
@@ -1377,6 +1379,7 @@ mod test {
 	}
 
 	#[test]
+	#[cfg(debug_assertions)]
 	#[should_panic(expected = "Defensive failure has been triggered!: \"DefensiveMax\"")]
 	fn defensive_max_panics() {
 		9_u32.defensive_max(10_u32);
@@ -1389,6 +1392,7 @@ mod test {
 	}
 
 	#[test]
+	#[cfg(debug_assertions)]
 	#[should_panic(expected = "Defensive failure has been triggered!: \"DefensiveMax strict\"")]
 	fn defensive_strict_max_panics() {
 		9_u32.defensive_strict_max(9_u32);
