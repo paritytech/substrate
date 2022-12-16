@@ -55,6 +55,7 @@ pub mod bounded;
 pub mod crypto;
 pub mod hexdisplay;
 
+pub mod bls;
 pub mod defer;
 pub mod ecdsa;
 pub mod ed25519;

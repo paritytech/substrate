@@ -59,6 +59,12 @@ secp256k1 = { version = "0.24.0", default-features = false, features = ["recover
 ss58-registry = { version = "1.34.0", default-features = false }
 sp-core-hashing = { version = "5.0.0", path = "./hashing", default-features = false, optional = true }
 sp-runtime-interface = { version = "7.0.0", default-features = false, path = "../runtime-interface" }
+ark-ff = { version = "0.4.0-alpha", default-features = false, optional = true }
+ark-ec =  { version = "0.4.0-alpha", default-features = false, optional = true }
+ark-serialize =  { version = "0.4.0-alpha", default-features = false, optional = true }
+ark-std =  { version = "0.4.0-alpha", default-features = false, optional = true }
+ark-bls12-381 = { git = "https://github.com/w3f/arkworks-curves.git", branch = "skalman-bls12-377-wb-hash2curve", optional = true }
+sha2 = { version = "0.10.2", default-features = false, optional = true }
 
 [dev-dependencies]
 sp-serializer = { version = "4.0.0-dev", path = "../serializer" }
@@ -66,6 +72,7 @@ rand = "0.7.2"
 criterion = "0.3.3"
 serde_json = "1.0"
 sp-core-hashing-proc-macro = { version = "5.0.0", path = "./hashing/proc-macro" }
+hex-literal = "0.3.1"
 
 [[bench]]
 name = "bench"
@@ -126,12 +133,18 @@ std = [
 # or Intel SGX.
 # For the regular wasm runtime builds this should not be used.
 full_crypto = [
+	"ark-bls12-381",
+	"ark-ec",
+	"ark-ff",
+	"ark-serialize",
+	"ark-std",
 	"array-bytes",
 	"ed25519-zebra",
 	"blake2",
 	"schnorrkel",
 	"libsecp256k1",
 	"secp256k1",
+	"sha2",
 	"sp-core-hashing",
 	"sp-runtime-interface/disable_target_static_assertions",
 	"merlin",

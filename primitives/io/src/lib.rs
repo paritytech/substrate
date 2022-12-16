@@ -1120,6 +1120,18 @@ pub trait Crypto {
 			.map_err(|_| EcdsaVerifyError::BadSignature)?;
 		Ok(pubkey.serialize())
 	}
+
+	/// Verify a BLS signature on the BLS12-381 curve.
+	/// Subgroup checks are NOT performed during deserialization of `sig` and `pub_key`.
+	///
+	/// - `sig` is 96 bytes, encodes a G2 point.
+	/// - `msg` is 32 bytes.
+	/// - `pub_key` is 48 bytes, encodes a G1 point.
+	///
+	/// Returns `true` when the verification was successful.
+	fn bls12_381_bls_sig_verify(sig: &[u8; 96], msg: &[u8; 32], pub_key: &[u8; 48]) -> bool {
+		sp_core::bls::bls_verify(sig, msg, pub_key).unwrap_or(false)
+	}
 }
 
 /// Interface that provides functions for hashing with different algorithms.
