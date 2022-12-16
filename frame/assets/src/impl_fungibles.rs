@@ -97,8 +97,10 @@ impl<T: Config<I>, I: 'static> fungibles::Mutate<<T as SystemConfig>::AccountId>
 		asset: Self::AssetId,
 		who: &<T as SystemConfig>::AccountId,
 		amount: Self::Balance,
+		best_effort: bool,
+		_force: bool,
 	) -> Result<Self::Balance, DispatchError> {
-		let f = DebitFlags { keep_alive: false, best_effort: false };
+		let f = DebitFlags { keep_alive: false, best_effort };
 		Self::do_burn(asset, who, amount, None, f)
 	}
 

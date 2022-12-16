@@ -28,6 +28,7 @@ macro_rules! decl_tests {
 		use frame_support::{
 			assert_noop, assert_storage_noop, assert_ok, assert_err,
 			traits::{
+				fungible::{InspectHold, MutateHold},
 				LockableCurrency, LockIdentifier, WithdrawReasons,
 				Currency, ReservableCurrency, ExistenceRequirement::AllowDeath
 			}
@@ -1026,43 +1027,67 @@ macro_rules! decl_tests {
 		}
 
 		#[test]
-		fn transfer_all_works() {
+		fn transfer_all_works_1() {
 			<$ext_builder>::default()
-				.existential_deposit(100)
-				.build()
-				.execute_with(|| {
-					// setup
-					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 200, 0));
-					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 2, 0, 0));
-					// transfer all and allow death
-					assert_ok!(Balances::transfer_all(Some(1).into(), 2, false));
-					assert_eq!(Balances::total_balance(&1), 0);
-					assert_eq!(Balances::total_balance(&2), 200);
+			.existential_deposit(100)
+			.build()
+			.execute_with(|| {
+				// setup
+				assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 200, 0));
+				assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 2, 0, 0));
+				// transfer all and allow death
+				assert_ok!(Balances::transfer_all(Some(1).into(), 2, false));
+				assert_eq!(Balances::total_balance(&1), 0);
+				assert_eq!(Balances::total_balance(&2), 200);
+			});
+		}
 
-					// setup
-					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 200, 0));
-					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 2, 0, 0));
-					// transfer all and keep alive
-					assert_ok!(Balances::transfer_all(Some(1).into(), 2, true));
-					assert_eq!(Balances::total_balance(&1), 100);
-					assert_eq!(Balances::total_balance(&2), 100);
+		#[test]
+		fn transfer_all_works_2() {
+			<$ext_builder>::default()
+			.existential_deposit(100)
+			.build()
+			.execute_with(|| {
+				// setup
+				assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 200, 0));
+				assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 2, 0, 0));
+				// transfer all and keep alive
+				assert_ok!(Balances::transfer_all(Some(1).into(), 2, true));
+				assert_eq!(Balances::total_balance(&1), 100);
+				assert_eq!(Balances::total_balance(&2), 100);
+			});
+		}
 
-					// setup
-					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 200, 10));
-					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 2, 0, 0));
-					// transfer all and allow death w/ reserved
-					assert_ok!(Balances::transfer_all(Some(1).into(), 2, false));
-					assert_eq!(Balances::total_balance(&1), 0);
-					assert_eq!(Balances::total_balance(&2), 200);
+		#[test]
+		fn transfer_all_works_3() {
+			<$ext_builder>::default()
+			.existential_deposit(100)
+			.build()
+			.execute_with(|| {
+				// setup
+				assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 200, 10));
+				assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 2, 0, 0));
+				// transfer all and allow death w/ reserved
+				assert_ok!(Balances::transfer_all(Some(1).into(), 2, false));
+				assert_eq!(Balances::total_balance(&1), 110);
+				assert_eq!(Balances::total_balance(&2), 100);
+			});
+		}
 
-					// setup
-					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 200, 10));
-					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 2, 0, 0));
-					// transfer all and keep alive w/ reserved
-					assert_ok!(Balances::transfer_all(Some(1).into(), 2, true));
-					assert_eq!(Balances::total_balance(&1), 100);
-					assert_eq!(Balances::total_balance(&2), 110);
-				});
+		#[test]
+		fn transfer_all_works_4() {
+			<$ext_builder>::default()
+			.existential_deposit(100)
+			.build()
+			.execute_with(|| {
+				// setup
+				assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 200, 10));
+				assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 2, 0, 0));
+				// transfer all and keep alive w/ reserved
+				assert_ok!(Balances::transfer_all(Some(1).into(), 2, true));
+				assert_eq!(Balances::total_balance(&1), 110);
+				assert_eq!(Balances::total_balance(&2), 100);
+			});
 		}
 
 		#[test]
@@ -1306,15 +1331,15 @@ macro_rules! decl_tests {
 				assert_ok!(<Balances as fungible::Unbalanced<_>>::set_balance(&1337, 100));
 				assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 100);
 
-				assert_ok!(Balances::reserve(&1337, 60));
-				assert_eq!(Balances::free_balance(1337) , 40);
-				assert_eq!(Balances::reserved_balance(1337), 60);
+				assert_ok!(<Balances as fungible::MutateHold<_>>::hold(&(), &1337, 60));
+				assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 40);
+				assert_eq!(<Balances as fungible::InspectHold<_>>::balance_on_hold(&(), &1337), 60);
 
-				assert_noop!(<Balances as fungible::Unbalanced<_>>::set_balance(&1337, 0), ArithmeticError::Underflow);
+				assert_noop!(<Balances as fungible::Unbalanced<_>>::set_balance(&1337, Balances::minimum_balance() - 1), Error::<Test>::InsufficientBalance);
 
-				assert_ok!(<Balances as fungible::Unbalanced<_>>::set_balance(&1337, 60));
-				assert_eq!(Balances::free_balance(1337) , 0);
-				assert_eq!(Balances::reserved_balance(1337), 60);
+				assert_ok!(<Balances as fungible::Unbalanced<_>>::set_balance(&1337, Balances::minimum_balance()));
+				assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), Balances::minimum_balance());
+				assert_eq!(<Balances as fungible::InspectHold<_>>::balance_on_hold(&(), &1337), 60);
 			});
 		}
 
@@ -1332,91 +1357,106 @@ macro_rules! decl_tests {
 			<$ext_builder>::default().build().execute_with(|| {
 				// An Account that starts at 100
 				assert_ok!(<Balances as fungible::Unbalanced<_>>::set_balance(&1337, 100));
+				assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 100);
 				// and reserves 50
-				assert_ok!(Balances::reserve(&1337, 50));
+				assert_ok!(<Balances as fungible::MutateHold<_>>::hold(&(), &1337, 50));
+				assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 50);
 				// and is decreased by 20
-				assert_ok!(<Balances as fungible::Unbalanced<_>>::decrease_balance(&1337, 20));
-				// should end up at 80.
-				assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 80);
+				assert_ok!(<Balances as fungible::Unbalanced<_>>::decrease_balance(&1337, 20, false, false));
+				assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 30);
 			});
 		}
 
 		#[test]
-		fn fungible_unbalanced_trait_decrease_balance_works() {
+		fn fungible_unbalanced_trait_decrease_balance_works_1() {
 			<$ext_builder>::default().build().execute_with(|| {
 				assert_ok!(<Balances as fungible::Unbalanced<_>>::set_balance(&1337, 100));
 				assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 100);
 
 				assert_noop!(
-					<Balances as fungible::Unbalanced<_>>::decrease_balance(&1337, 101),
+					<Balances as fungible::Unbalanced<_>>::decrease_balance(&1337, 101, false, false),
 					TokenError::NoFunds
 				);
 				assert_eq!(
-					<Balances as fungible::Unbalanced<_>>::decrease_balance(&1337, 100),
+					<Balances as fungible::Unbalanced<_>>::decrease_balance(&1337, 100, false, false),
 					Ok(100)
 				);
 				assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 0);
-
-				// free: 40, reserved: 60
-				assert_ok!(<Balances as fungible::Unbalanced<_>>::set_balance(&1337, 100));
-				assert_ok!(Balances::reserve(&1337, 60));
-				assert_eq!(Balances::free_balance(1337) , 40);
-				assert_eq!(Balances::reserved_balance(1337), 60);
-				assert_noop!(
-					<Balances as fungible::Unbalanced<_>>::decrease_balance(&1337, 41),
-					TokenError::NoFunds
-				);
-				assert_eq!(
-					<Balances as fungible::Unbalanced<_>>::decrease_balance(&1337, 40),
-					Ok(40)
-				);
-				assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 60);
-				assert_eq!(Balances::free_balance(1337), 0);
-				assert_eq!(Balances::reserved_balance(1337), 60);
 			});
 		}
 
 		#[test]
-		fn fungible_unbalanced_trait_decrease_balance_at_most_works() {
+		fn fungible_unbalanced_trait_decrease_balance_works_2() {
+			<$ext_builder>::default().build().execute_with(|| {
+				// free: 40, reserved: 60
+				assert_ok!(<Balances as fungible::Unbalanced<_>>::set_balance(&1337, 100));
+				assert_ok!(Balances::hold(&(), &1337, 60));
+				assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 40);
+				assert_eq!(Balances::total_balance_on_hold(&1337), 60);
+				assert_noop!(
+					<Balances as fungible::Unbalanced<_>>::decrease_balance(&1337, 40, false, false),
+					Error::<Test>::InsufficientBalance
+				);
+				assert_eq!(
+					<Balances as fungible::Unbalanced<_>>::decrease_balance(&1337, 39, false, false),
+					Ok(39)
+				);
+				assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 1);
+				assert_eq!(Balances::total_balance_on_hold(&1337), 60);
+			});
+		}
+
+		#[test]
+		fn fungible_unbalanced_trait_decrease_balance_at_most_works_1() {
 			<$ext_builder>::default().build().execute_with(|| {
 				assert_ok!(<Balances as fungible::Unbalanced<_>>::set_balance(&1337, 100));
 				assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 100);
 
 				assert_eq!(
-					<Balances as fungible::Unbalanced<_>>::decrease_balance_at_most(&1337, 101),
-					100
+					<Balances as fungible::Unbalanced<_>>::decrease_balance(&1337, 101, true, false),
+					Ok(100)
 				);
 				assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 0);
+			});
+		}
 
-				assert_ok!(<Balances as fungible::Unbalanced<_>>::set_balance(&1337, 100));
+		#[test]
+		fn fungible_unbalanced_trait_decrease_balance_at_most_works_2() {
+			<$ext_builder>::default().build().execute_with(|| {
+				assert_ok!(<Balances as fungible::Unbalanced<_>>::set_balance(&1337, 99));
 				assert_eq!(
-					<Balances as fungible::Unbalanced<_>>::decrease_balance_at_most(&1337, 100),
-					100
+					<Balances as fungible::Unbalanced<_>>::decrease_balance(&1337, 99, true, false),
+					Ok(99)
 				);
 				assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 0);
+			});
+		}
 
+		#[test]
+		fn fungible_unbalanced_trait_decrease_balance_at_most_works_3() {
+			<$ext_builder>::default().build().execute_with(|| {
 				// free: 40, reserved: 60
 				assert_ok!(<Balances as fungible::Unbalanced<_>>::set_balance(&1337, 100));
 				assert_ok!(Balances::reserve(&1337, 60));
-				assert_eq!(Balances::free_balance(1337) , 40);
+				assert_eq!(Balances::free_balance(1337), 40);
 				assert_eq!(Balances::reserved_balance(1337), 60);
 				assert_eq!(
-					<Balances as fungible::Unbalanced<_>>::decrease_balance_at_most(&1337, 0),
-					0
+					<Balances as fungible::Unbalanced<_>>::decrease_balance(&1337, 0, true, false),
+					Ok(0)
 				);
-				assert_eq!(Balances::free_balance(1337) , 40);
+				assert_eq!(Balances::free_balance(1337), 40);
 				assert_eq!(Balances::reserved_balance(1337), 60);
 				assert_eq!(
-					<Balances as fungible::Unbalanced<_>>::decrease_balance_at_most(&1337, 10),
-					10
+					<Balances as fungible::Unbalanced<_>>::decrease_balance(&1337, 10, true, false),
+					Ok(10)
 				);
 				assert_eq!(Balances::free_balance(1337), 30);
 				assert_eq!(
-					<Balances as fungible::Unbalanced<_>>::decrease_balance_at_most(&1337, 200),
-					30
+					<Balances as fungible::Unbalanced<_>>::decrease_balance(&1337, 200, true, false),
+					Ok(29)
 				);
-				assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 60);
-				assert_eq!(Balances::free_balance(1337), 0);
+				assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 1);
+				assert_eq!(Balances::free_balance(1337), 1);
 				assert_eq!(Balances::reserved_balance(1337), 60);
 			});
 		}
@@ -1425,15 +1465,15 @@ macro_rules! decl_tests {
 		fn fungible_unbalanced_trait_increase_balance_works() {
 			<$ext_builder>::default().build().execute_with(|| {
 				assert_noop!(
-					<Balances as fungible::Unbalanced<_>>::increase_balance(&1337, 0),
+					<Balances as fungible::Unbalanced<_>>::increase_balance(&1337, 0, false),
 					TokenError::BelowMinimum
 				);
 				assert_eq!(
-					<Balances as fungible::Unbalanced<_>>::increase_balance(&1337, 1),
+					<Balances as fungible::Unbalanced<_>>::increase_balance(&1337, 1, false),
 					Ok(1)
 				);
 				assert_noop!(
-					<Balances as fungible::Unbalanced<_>>::increase_balance(&1337, u64::MAX),
+					<Balances as fungible::Unbalanced<_>>::increase_balance(&1337, u64::MAX, false),
 					ArithmeticError::Overflow
 				);
 			});
@@ -1443,16 +1483,16 @@ macro_rules! decl_tests {
 		fn fungible_unbalanced_trait_increase_balance_at_most_works() {
 			<$ext_builder>::default().build().execute_with(|| {
 				assert_eq!(
-					<Balances as fungible::Unbalanced<_>>::increase_balance_at_most(&1337, 0),
-					0
+					<Balances as fungible::Unbalanced<_>>::increase_balance(&1337, 0, true),
+					Ok(0)
 				);
 				assert_eq!(
-					<Balances as fungible::Unbalanced<_>>::increase_balance_at_most(&1337, 1),
-					1
+					<Balances as fungible::Unbalanced<_>>::increase_balance(&1337, 1, true),
+					Ok(1)
 				);
 				assert_eq!(
-					<Balances as fungible::Unbalanced<_>>::increase_balance_at_most(&1337, u64::MAX),
-					u64::MAX - 1
+					<Balances as fungible::Unbalanced<_>>::increase_balance(&1337, u64::MAX, true),
+					Ok(u64::MAX - 1)
 				);
 			});
 		}

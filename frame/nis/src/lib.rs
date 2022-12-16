@@ -128,7 +128,7 @@ impl<T> FungibleInspect<T> for NoCounterpart<T> {
 	fn balance(_who: &T) -> u32 {
 		0
 	}
-	fn reducible_balance(_who: &T, _keep_alive: bool) -> u32 {
+	fn balance_reducible(_who: &T, _keep_alive: bool) -> u32 {
 		0
 	}
 	fn can_deposit(
@@ -149,7 +149,12 @@ impl<T> FungibleMutate<T> for NoCounterpart<T> {
 	fn mint_into(_who: &T, _amount: u32) -> DispatchResult {
 		Ok(())
 	}
-	fn burn_from(_who: &T, _amount: u32) -> Result<u32, DispatchError> {
+	fn burn_from(
+		_who: &T,
+		_amount: u32,
+		_best_effort: bool,
+		_force: bool,
+	) -> Result<u32, DispatchError> {
 		Ok(0)
 	}
 }
@@ -679,7 +684,12 @@ pub mod pallet {
 			summary.thawed.saturating_accrue(proportion);
 			ensure!(summary.thawed <= throttle, Error::<T>::Throttled);
 
-			T::Counterpart::burn_from(&who, T::CounterpartAmount::convert(proportion))?;
+			T::Counterpart::burn_from(
+				&who,
+				T::CounterpartAmount::convert(proportion),
+				false,
+				false,
+			)?;
 
 			// Multiply the proportion it is by the total issued.
 			let our_account = Self::account_id();
