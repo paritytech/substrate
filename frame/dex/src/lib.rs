@@ -113,6 +113,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type PalletId: Get<PalletId>;
 
+		/// A setting to allow creating pools with both non-native assets.
+		#[pallet::constant]
+		type AllowMultiAssetPools: Get<bool>;
+
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 	}
@@ -231,7 +235,7 @@ pub mod pallet {
 			let pool_id = Self::get_pool_id(asset1, asset2);
 			let (asset1, _asset2) = pool_id;
 
-			if asset1 != MultiAssetId::Native {
+			if !T::AllowMultiAssetPools::get() && asset1 != MultiAssetId::Native {
 				Err(Error::<T>::PoolMustContainNativeCurrency)?;
 			}
 

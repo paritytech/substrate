@@ -105,6 +105,22 @@ fn create_pool_should_work() {
 		assert_eq!(pools(), vec![pool_id]);
 		assert_eq!(assets(), vec![token_2]);
 		assert_eq!(pool_assets(), vec![lp_token]);
+
+		assert_noop!(
+			Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_1),
+			Error::<Test>::EqualAssets
+		);
+		assert_noop!(
+			Dex::create_pool(RuntimeOrigin::signed(user), token_2, token_2),
+			Error::<Test>::EqualAssets
+		);
+		let token_1 = MultiAssetId::Asset(1);
+		assert_noop!(
+			Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2),
+			Error::<Test>::PoolMustContainNativeCurrency
+		);
+		AllowMultiAssetPools::set(&true);
+		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
 	});
 }
 
@@ -949,11 +965,6 @@ fn same_asset_swap_should_fail() {
 		let token_1 = MultiAssetId::Asset(1);
 
 		create_tokens(user, vec![token_1]);
-		assert_noop!(
-			Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_1),
-			Error::<Test>::EqualAssets
-		);
-
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 1, user, 1000));
 
 		let liquidity1 = 1000;
