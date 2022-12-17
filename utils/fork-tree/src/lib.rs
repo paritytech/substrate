@@ -382,21 +382,20 @@ where
 				None => return Ok(RemovedIterator { stack: Vec::new() }),
 			};
 
-		let mut old_roots = std::mem::take(&mut self.roots);
+		let mut removed = std::mem::take(&mut self.roots);
 
 		// Find and detach the new root from the removed nodes
-		let curr_children = root_index
+		let root_siblings = root_index
 			.iter()
 			.take(root_index.len() - 1)
-			.fold(&mut old_roots, |curr, idx| &mut curr[*idx].children);
-		let mut root = curr_children.remove(root_index[root_index.len() - 1]);
+			.fold(&mut removed, |curr, idx| &mut curr[*idx].children);
+		let root = root_siblings.remove(root_index[root_index.len() - 1]);
+		self.roots = vec![root];
 
-		let mut removed = old_roots;
-
-		// If (because of the `predicate`) the new root is not the deepest
+		// If, because of the `predicate`, the new root is not the deepest
 		// ancestor of `hash` then we can remove all the nodes that are
-		// descendents of the new `root` but not ancestors of `hash`.
-		let mut curr = &mut root;
+		// descendants of the new `root` but not ancestors of `hash`.
+		let mut curr = &mut self.roots[0];
 		loop {
 			let mut next_ancestor_idx = usize::MAX;
 			for (idx, child) in curr.children.iter().enumerate() {
@@ -411,28 +410,29 @@ where
 				// We are above all current node children, stop searching
 				break
 			}
-			// Preserve only the valid ancestor node
-			let mut curr_children = std::mem::take(&mut curr.children);
-			let keep_node = curr_children.remove(next_ancestor_idx);
-			removed.append(&mut curr_children);
-			curr.children = vec![keep_node];
+			// Preserve only the ancestor node, the siblings are removed
+			let mut next_siblings = std::mem::take(&mut curr.children);
+			let next = next_siblings.remove(next_ancestor_idx);
+			curr.children = vec![next];
+			removed.append(&mut next_siblings);
 			curr = &mut curr.children[0];
 		}
 
-		// Curr now points to our direct ancestor,
-		// remove all additional stale nodes
-		let children = std::mem::take(&mut curr.children);
-		for child in children {
-			if child.number == *number && child.hash == *hash ||
-				*number < child.number && is_descendent_of(hash, &child.hash)?
-			{
-				curr.children.push(child);
-			} else {
-				removed.push(child);
+		// Curr now points to our direct ancestor, if necessary remove any node that is
+		// not a descendant of `hash`.
+		if curr.children.len() > 0 {
+			let children = std::mem::take(&mut curr.children);
+			for child in children {
+				if child.number == *number && child.hash == *hash ||
+					*number < child.number && is_descendent_of(hash, &child.hash)?
+				{
+					curr.children.push(child);
+				} else {
+					removed.push(child);
+				}
 			}
 		}
 
-		self.roots = vec![root];
 		self.rebalance();
 
 		Ok(RemovedIterator { stack: removed })
