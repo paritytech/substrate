@@ -15,15 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Complete pallet to test benchmarking. This should only be deployed to the substrate node
-//! runtime and not to any production one. The pallet is necessary since it provides certain
-//! storage metadata that we don't have without a pallet.
+//! End-to-end testing pallet for PoV benchmarking. Should only be deployed in a  testing runtime.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod benchmarking;
 mod tests;
-pub mod weights;
+mod weights;
 
 pub use pallet::*;
 

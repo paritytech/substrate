@@ -93,9 +93,9 @@ fn storage_map_read_per_component_double_linear() {
 /// needs to be provided through a CLI flag. It will therefore return the same value for all.
 #[test]
 fn additional_layers_do_not_matter() {
-	let w2 = W::storage_1m_full_map_read_one_value_two_additional_layers().proof_size();
-	let w3 = W::storage_1m_full_map_read_one_value_three_additional_layers().proof_size();
-	let w4 = W::storage_1m_full_map_read_one_value_four_additional_layers().proof_size();
+	let w2 = W::storage_1m_map_read_one_value_two_additional_layers().proof_size();
+	let w3 = W::storage_1m_map_read_one_value_three_additional_layers().proof_size();
+	let w4 = W::storage_1m_map_read_one_value_four_additional_layers().proof_size();
 	assert!(w2 == w3 && w3 == w4, "Additional layers do not matter");
 }
 

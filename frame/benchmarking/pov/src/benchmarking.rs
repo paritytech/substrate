@@ -52,69 +52,49 @@ frame_benchmarking::benchmarks! {
 		assert!(!Value::<T>::exists());
 	}
 
-	// Put 1M entries in a map and evenly read 1024 entries at `n * 1024`.
-	#[extra]
-	storage_1m_full_map_read_n_values {
-		let n in 0 .. 1024;
-		(0..(1<<20)).for_each(|i| Map1M::<T>::insert(i, i));
-	}: {
-		(0..n).for_each(|i|
-		assert_eq!(Map1M::<T>::get(i<<10), Some(i<<10)));
-	}
-
-	// Put 16M entries in a map and evenly read 1024 entries at `n * 16384`.
-	#[extra]
-	storage_16m_full_map_read_n_values {
-		let n in 0 .. 1024;
-		(0..(1<<24)).for_each(|i| Map1M::<T>::insert(i, i));
-	}: {
-		(0..n).for_each(|i|
-			assert_eq!(Map16M::<T>::get(i<<14), Some(i<<14)));
-	}
-
-	// This benchmark and the following are testing a full storage map with adjacent storage items.
+	// This benchmark and the following are testing a storage map with adjacent storage items.
 	//
-	// First a storage map with 1M keys is filled and a specific number of other storage items is
+	// First a storage map is filled and a specific number of other storage items is
 	// created. Then the one value is read from the map. This demonstrates that the number of other
 	// nodes in the Trie influences the proof size. The number of inserted nodes can be interpreted
 	// as the number of `StorageMap`/`StorageValue` in the whole runtime.
-	storage_1m_full_map_read_one_value_two_additional_layers {
-		(0..(1<<20)).for_each(|i| Map1M::<T>::insert(i, i));
+	storage_1m_map_read_one_value_two_additional_layers {
+		(0..(1<<10)).for_each(|i| Map1M::<T>::insert(i, i));
 		// Assume there are 16-256 other storage items.
 		(0..(1u32<<4)).for_each(|i| {
 			let k = T::Hashing::hash(&i.to_be_bytes());
 			frame_support::storage::unhashed::put(k.as_ref(), &i);
 		});
 	}: {
-		assert_eq!(Map1M::<T>::get(1<<19), Some(1<<19));
+		assert_eq!(Map1M::<T>::get(1<<9), Some(1<<9));
 	}
 
-	storage_1m_full_map_read_one_value_three_additional_layers {
-		(0..(1<<20)).for_each(|i| Map1M::<T>::insert(i, i));
+	storage_1m_map_read_one_value_three_additional_layers {
+		(0..(1<<10)).for_each(|i| Map1M::<T>::insert(i, i));
 		// Assume there are 256-4096 other storage items.
 		(0..(1u32<<8)).for_each(|i| {
 			let k = T::Hashing::hash(&i.to_be_bytes());
 			frame_support::storage::unhashed::put(k.as_ref(), &i);
 		});
 	}: {
-		assert_eq!(Map1M::<T>::get(1<<19), Some(1<<19));
+		assert_eq!(Map1M::<T>::get(1<<9), Some(1<<9));
 	}
 
-	storage_1m_full_map_read_one_value_four_additional_layers {
-		(0..(1<<20)).for_each(|i| Map1M::<T>::insert(i, i));
+	storage_1m_map_read_one_value_four_additional_layers {
+		(0..(1<<10)).for_each(|i| Map1M::<T>::insert(i, i));
 		// Assume there are 4096-65536 other storage items.
 		(0..(1u32<<12)).for_each(|i| {
 			let k = T::Hashing::hash(&i.to_be_bytes());
 			frame_support::storage::unhashed::put(k.as_ref(), &i);
 		});
 	}: {
-		assert_eq!(Map1M::<T>::get(1<<19), Some(1<<19));
+		assert_eq!(Map1M::<T>::get(1<<9), Some(1<<9));
 	}
 
 	// Reads from both storage maps each `n` and `m` times. Should result in two linear components.
 	storage_map_read_per_component {
-		let n in 0 .. 1024;
-		let m in 0 .. 1024;
+		let n in 0 .. 100;
+		let m in 0 .. 100;
 
 		(0..m*10).for_each(|i| Map1M::<T>::insert(i, i));
 		(0..n*10).for_each(|i| Map16M::<T>::insert(i, i));
