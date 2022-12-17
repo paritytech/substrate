@@ -21,9 +21,7 @@ use super::*;
 
 use frame_support::traits::UnfilteredDispatchable;
 use frame_system::{Pallet as System, RawOrigin};
-use sp_runtime::{
-	traits::{Hash},
-};
+use sp_runtime::traits::Hash;
 
 frame_benchmarking::benchmarks! {
 	storage_single_value_read {
@@ -116,7 +114,7 @@ frame_benchmarking::benchmarks! {
 	// Reads from both storage maps each `n` and `m` times. Should result in two linear components.
 	storage_map_read_per_component {
 		let n in 0 .. 1024;
-		let m in 0 .. 1024;		
+		let m in 0 .. 1024;
 
 		(0..m*10).for_each(|i| Map1M::<T>::insert(i, i));
 		(0..n*10).for_each(|i| Map16M::<T>::insert(i, i));

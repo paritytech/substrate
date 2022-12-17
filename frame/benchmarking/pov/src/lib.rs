@@ -21,9 +21,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-pub mod weights;
 mod benchmarking;
 mod tests;
+pub mod weights;
 
 pub use pallet::*;
 
@@ -48,11 +48,13 @@ pub mod pallet {
 	/// A value without a MEL bound.
 	#[pallet::storage]
 	#[pallet::unbounded]
-	pub(crate) type UnboundedValue<T: Config> = StorageValue<Value = Vec<u8>, QueryKind = OptionQuery>;
+	pub(crate) type UnboundedValue<T: Config> =
+		StorageValue<Value = Vec<u8>, QueryKind = OptionQuery>;
 
 	/// A value with a MEL bound of 32 byte.
 	#[pallet::storage]
-	pub(crate) type BoundedValue<T: Config> = StorageValue<Value = BoundedVec<u8, ConstU32<32>>, QueryKind = OptionQuery>;
+	pub(crate) type BoundedValue<T: Config> =
+		StorageValue<Value = BoundedVec<u8, ConstU32<32>>, QueryKind = OptionQuery>;
 
 	/// A map with a maximum of 1M entries.
 	#[pallet::storage]
@@ -76,12 +78,8 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::unbounded]
-	pub(crate) type UnboundedMap<T: Config> = StorageMap<
-		Hasher = Blake2_256,
-		Key = u32,
-		Value = u32,
-		QueryKind = OptionQuery,
-	>;
+	pub(crate) type UnboundedMap<T: Config> =
+		StorageMap<Hasher = Blake2_256, Key = u32, Value = u32, QueryKind = OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]

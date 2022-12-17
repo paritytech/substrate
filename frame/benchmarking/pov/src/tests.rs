@@ -19,7 +19,7 @@
 
 #![cfg(test)]
 
-use super::weights::{WeightInfo};
+use super::weights::WeightInfo;
 use mock::Test as T;
 type W = crate::weights::SubstrateWeight<T>;
 
@@ -74,7 +74,7 @@ fn storage_map_read_per_component_double_linear() {
 	let weight = W::storage_map_read_per_component;
 	let w00 = weight(0, 0).proof_size();
 	assert_eq!(w00, 0, "There is no base weight");
-	
+
 	let w10 = weight(1, 0).proof_size();
 	let w01 = weight(0, 1).proof_size();
 	assert!(w10 > 0 && w01 > 0, "Components matter");

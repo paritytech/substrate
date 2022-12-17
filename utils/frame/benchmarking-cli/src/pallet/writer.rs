@@ -193,8 +193,9 @@ fn get_benchmark_data(
 		.expect("analysis function should return the number of reads for valid inputs");
 	let writes = analysis_function(&batch.db_results, BenchmarkSelector::Writes)
 		.expect("analysis function should return the number of writes for valid inputs");
-	let recorded_proof_size = Analysis::median_slopes(&batch.db_results, BenchmarkSelector::ProofSize)
-		.expect("analysis function should return proof sizes for valid inputs");
+	let recorded_proof_size =
+		Analysis::median_slopes(&batch.db_results, BenchmarkSelector::ProofSize)
+			.expect("analysis function should return proof sizes for valid inputs");
 
 	// Analysis data may include components that are not used, this filters out anything whose value
 	// is zero.
@@ -268,16 +269,18 @@ fn get_benchmark_data(
 	for warning in warnings {
 		log::warn!("{}", warning);
 	}
-	
-	let proof_size_per_components = storage_per_prefix.iter()
+
+	let proof_size_per_components = storage_per_prefix
+		.iter()
 		.map(|(prefix, results)| {
 			let proof_size = analysis_function(results, BenchmarkSelector::ProofSize)
 				.expect("analysis function should return proof sizes for valid inputs");
-			let slope = proof_size.slopes.into_iter().zip(proof_size.names.iter())
+			let slope = proof_size
+				.slopes
+				.into_iter()
+				.zip(proof_size.names.iter())
 				.zip(extract_errors(&proof_size.errors))
-				.map(|((slope, name), error)|
-					ComponentSlope { name: name.clone(), slope, error }
-				)
+				.map(|((slope, name), error)| ComponentSlope { name: name.clone(), slope, error })
 				.collect::<Vec<_>>();
 			(prefix.clone(), slope, proof_size.base)
 		})
@@ -293,28 +296,32 @@ fn get_benchmark_data(
 				if used_component.name == component.name {
 					used_component.slope += component.slope;
 					found = true;
-					break;
+					break
 				}
 			}
 			if !found && !component.slope.is_zero() {
 				if !used_components.contains(&&component.name) {
 					used_components.push(&component.name);
 				}
-				used_calculated_proof_size.push(ComponentSlope { name: component.name.clone(), slope: component.slope, error: component.error });
+				used_calculated_proof_size.push(ComponentSlope {
+					name: component.name.clone(),
+					slope: component.slope,
+					error: component.error,
+				});
 			}
 		}
 	}
 
 	// This puts a marker on any component which is entirely unused in the weight formula.
 	let components = batch.time_results[0]
-	.components
-	.iter()
-	.map(|(name, _)| -> Component {
-		let name_string = name.to_string();
-		let is_used = used_components.contains(&&name_string);
-		Component { name: name_string, is_used }
-	})
-	.collect::<Vec<_>>();
+		.components
+		.iter()
+		.map(|(name, _)| -> Component {
+			let name_string = name.to_string();
+			let is_used = used_components.contains(&&name_string);
+			Component { name: name_string, is_used }
+		})
+		.collect::<Vec<_>>();
 
 	let component_ranges = component_ranges
 		.get(&(batch.pallet.clone(), batch.benchmark.clone()))
@@ -327,7 +334,7 @@ fn get_benchmark_data(
 		base_weight: extrinsic_time.base,
 		base_reads: reads.base,
 		base_writes: writes.base,
-		base_calculated_proof_size: base_calculated_proof_size,
+		base_calculated_proof_size,
 		base_recorded_proof_size: recorded_proof_size.base,
 		component_weight: used_extrinsic_time,
 		component_reads: used_reads,
@@ -498,12 +505,12 @@ pub(crate) fn process_storage_results(
 			if *whitelisted {
 				continue
 			}
-			
+
 			let prefix_length = key.len().min(32);
 			let prefix = key[0..prefix_length].to_vec();
 			let is_key_identified = identified_key.contains(key);
 			let is_prefix_identified = identified_prefix.contains(&prefix);
-			
+
 			let mut prefix_result = result.clone();
 			let key_info = storage_info_map.get(&prefix);
 			// Use the mathematical worst case, if any. The only case where this is not possible is
@@ -514,7 +521,7 @@ pub(crate) fn process_storage_results(
 					key_info.max_size,
 					true,
 					worst_case_map_values,
-				) {				
+				) {
 					prefix_result.proof_size = *reads * max_pov_per_component;
 				}
 			}
@@ -589,18 +596,18 @@ pub(crate) fn process_storage_results(
 							},
 							None => {
 								let pallet = String::from_utf8(key_info.pallet_name.clone())
-								.expect("encoded from string");
+									.expect("encoded from string");
 								let item = String::from_utf8(key_info.storage_name.clone())
-								.expect("encoded from string");
+									.expect("encoded from string");
 								let comment = format!(
 									"Proof Skipped: {} {} (max_values: {:?}, max_size: {:?})",
-									pallet,
-									item,
-									key_info.max_values,
-									key_info.max_size,
+									pallet, item, key_info.max_values, key_info.max_size,
 								);
 								comments.push(comment);
-								warnings.insert(format!("No worst-case PoV size for unbounded item {}::{}", pallet, item));
+								warnings.insert(format!(
+									"No worst-case PoV size for unbounded item {}::{}",
+									pallet, item
+								));
 							},
 						}
 					},

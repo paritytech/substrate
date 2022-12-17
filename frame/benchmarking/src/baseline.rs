@@ -20,16 +20,16 @@
 
 #![cfg(feature = "runtime-benchmarks")]
 
+use super::*;
 use crate::benchmarks;
-use frame_system::{Pallet as System};
+use frame_system::Pallet as System;
 use sp_runtime::{
 	traits::{AppVerify, Hash},
 	RuntimeAppPublic,
 };
-use super::*;
 
 mod crypto {
-	use sp_application_crypto::{app_crypto, KeyTypeId, sr25519};
+	use sp_application_crypto::{app_crypto, sr25519, KeyTypeId};
 
 	pub const TEST_KEY_TYPE_ID: KeyTypeId = KeyTypeId(*b"test");
 	app_crypto!(sr25519, TEST_KEY_TYPE_ID);
