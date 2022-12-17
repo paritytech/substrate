@@ -103,6 +103,10 @@ pub struct PalletCmd {
 	#[arg(long)]
 	pub output_analysis: Option<String>,
 
+	/// Which analysis function to use when analyzing measured proof sizes.
+	#[arg(long, default_value("median-slopes"))]
+	pub output_pov_analysis: Option<String>,
+
 	/// Set the heap pages while running benchmarks. If not set, the default value from the client
 	/// is used.
 	#[arg(long)]

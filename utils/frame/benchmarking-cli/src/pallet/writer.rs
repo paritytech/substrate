@@ -130,6 +130,7 @@ fn map_results(
 	storage_info: &[StorageInfo],
 	component_ranges: &HashMap<(Vec<u8>, Vec<u8>), Vec<ComponentRange>>,
 	analysis_choice: &AnalysisChoice,
+	pov_analysis_choice: &AnalysisChoice,
 	worst_case_map_values: u32,
 ) -> Result<HashMap<(String, String), Vec<BenchmarkData>>, std::io::Error> {
 	// Skip if batches is empty.
@@ -152,6 +153,7 @@ fn map_results(
 			storage_info,
 			&component_ranges,
 			analysis_choice,
+			pov_analysis_choice,
 			worst_case_map_values,
 		);
 		let pallet_benchmarks = all_benchmarks.entry((pallet_string, instance_string)).or_default();
@@ -178,10 +180,16 @@ fn get_benchmark_data(
 	// Per extrinsic component ranges.
 	component_ranges: &HashMap<(Vec<u8>, Vec<u8>), Vec<ComponentRange>>,
 	analysis_choice: &AnalysisChoice,
+	pov_analysis_choice: &AnalysisChoice,
 	worst_case_map_values: u32,
 ) -> BenchmarkData {
 	// Analyze benchmarks to get the linear regression.
 	let analysis_function = match analysis_choice {
+		AnalysisChoice::MinSquares => Analysis::min_squares_iqr,
+		AnalysisChoice::MedianSlopes => Analysis::median_slopes,
+		AnalysisChoice::Max => Analysis::max,
+	};
+	let pov_analysis_function = match pov_analysis_choice {
 		AnalysisChoice::MinSquares => Analysis::min_squares_iqr,
 		AnalysisChoice::MedianSlopes => Analysis::median_slopes,
 		AnalysisChoice::Max => Analysis::max,
@@ -194,7 +202,7 @@ fn get_benchmark_data(
 	let writes = analysis_function(&batch.db_results, BenchmarkSelector::Writes)
 		.expect("analysis function should return the number of writes for valid inputs");
 	let recorded_proof_size =
-		Analysis::median_slopes(&batch.db_results, BenchmarkSelector::ProofSize)
+		pov_analysis_function(&batch.db_results, BenchmarkSelector::ProofSize)
 			.expect("analysis function should return proof sizes for valid inputs");
 
 	// Analysis data may include components that are not used, this filters out anything whose value
@@ -379,6 +387,8 @@ pub(crate) fn write_results(
 	// Which analysis function should be used when outputting benchmarks
 	let analysis_choice: AnalysisChoice =
 		cmd.output_analysis.clone().try_into().map_err(io_error)?;
+	let pov_analysis_choice: AnalysisChoice =
+		cmd.output_pov_analysis.clone().try_into().map_err(io_error)?;
 
 	// Capture individual args
 	let cmd_data = CmdData {
@@ -407,6 +417,7 @@ pub(crate) fn write_results(
 		storage_info,
 		component_ranges,
 		&analysis_choice,
+		&pov_analysis_choice,
 		cmd.worst_case_map_values,
 	)?;
 	let mut created_files = Vec::new();
