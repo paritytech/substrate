@@ -18,7 +18,7 @@
 // Outputs benchmark results to Rust files that can be ingested by the runtime.
 
 use std::{
-	collections::{HashMap, HashSet},
+	collections::{BTreeSet, HashMap, HashSet},
 	fs,
 	path::PathBuf,
 };
@@ -65,12 +65,14 @@ struct BenchmarkData {
 	#[serde(serialize_with = "string_serialize")]
 	base_writes: u128,
 	#[serde(serialize_with = "string_serialize")]
-	base_proof_size: u128,
+	base_calculated_proof_size: u128,
+	#[serde(serialize_with = "string_serialize")]
+	base_recorded_proof_size: u128,
 	component_weight: Vec<ComponentSlope>,
 	component_reads: Vec<ComponentSlope>,
 	component_writes: Vec<ComponentSlope>,
-	component_proof_size: Vec<ComponentSlope>,
-	worst_case_proof_size: u32,
+	component_calculated_proof_size: Vec<ComponentSlope>,
+	component_recorded_proof_size: Vec<ComponentSlope>,
 	component_ranges: Vec<ComponentRange>,
 	comments: Vec<String>,
 	#[serde(serialize_with = "string_serialize")]
@@ -178,9 +180,6 @@ fn get_benchmark_data(
 	analysis_choice: &AnalysisChoice,
 	worst_case_map_values: u32,
 ) -> BenchmarkData {
-	// You can use this to put any additional comments with the benchmarking output.
-	let mut comments = Vec::<String>::new();
-
 	// Analyze benchmarks to get the linear regression.
 	let analysis_function = match analysis_choice {
 		AnalysisChoice::MinSquares => Analysis::min_squares_iqr,
@@ -194,7 +193,7 @@ fn get_benchmark_data(
 		.expect("analysis function should return the number of reads for valid inputs");
 	let writes = analysis_function(&batch.db_results, BenchmarkSelector::Writes)
 		.expect("analysis function should return the number of writes for valid inputs");
-	let proof_size = analysis_function(&batch.db_results, BenchmarkSelector::ProofSize)
+	let recorded_proof_size = Analysis::median_slopes(&batch.db_results, BenchmarkSelector::ProofSize)
 		.expect("analysis function should return proof sizes for valid inputs");
 
 	// Analysis data may include components that are not used, this filters out anything whose value
@@ -203,7 +202,8 @@ fn get_benchmark_data(
 	let mut used_extrinsic_time = Vec::new();
 	let mut used_reads = Vec::new();
 	let mut used_writes = Vec::new();
-	let mut used_proof_size = Vec::new();
+	let mut used_calculated_proof_size = Vec::<ComponentSlope>::new();
+	let mut used_recorded_proof_size = Vec::<ComponentSlope>::new();
 
 	extrinsic_time
 		.slopes
@@ -244,39 +244,78 @@ fn get_benchmark_data(
 				used_writes.push(ComponentSlope { name: name.clone(), slope, error });
 			}
 		});
-	proof_size
+	recorded_proof_size
 		.slopes
 		.into_iter()
-		.zip(proof_size.names.iter())
-		.zip(extract_errors(&proof_size.model))
+		.zip(recorded_proof_size.names.iter())
+		.zip(extract_errors(&recorded_proof_size.errors))
 		.for_each(|((slope, name), error)| {
 			if !slope.is_zero() {
-				if !used_components.contains(&name) {
-					used_components.push(name);
-				}
-				used_proof_size.push(ComponentSlope { name: name.clone(), slope, error });
+				// These are only for comments, so don't touch the `used_components`.
+				used_recorded_proof_size.push(ComponentSlope { name: name.clone(), slope, error });
 			}
 		});
 
-	// This puts a marker on any component which is entirely unused in the weight formula.
-	let components = batch.time_results[0]
-		.components
-		.iter()
-		.map(|(name, _)| -> Component {
-			let name_string = name.to_string();
-			let is_used = used_components.contains(&&name_string);
-			Component { name: name_string, is_used }
-		})
-		.collect::<Vec<_>>();
-
 	// We add additional comments showing which storage items were touched.
 	// We find the worst case proof size, and use that as the final proof size result.
-	let worst_case_proof_size: u32 = process_storage_results(
-		&mut comments,
+	let mut storage_per_prefix = HashMap::<Vec<u8>, Vec<BenchmarkResult>>::new();
+	let (comments, warnings) = process_storage_results(
+		&mut storage_per_prefix,
 		&batch.db_results,
 		storage_info,
 		worst_case_map_values,
 	);
+	for warning in warnings {
+		log::warn!("{}", warning);
+	}
+	
+	let proof_size_per_components = storage_per_prefix.iter()
+		.map(|(prefix, results)| {
+			let proof_size = analysis_function(results, BenchmarkSelector::ProofSize)
+				.expect("analysis function should return proof sizes for valid inputs");
+			let slope = proof_size.slopes.into_iter().zip(proof_size.names.iter())
+				.zip(extract_errors(&proof_size.errors))
+				.map(|((slope, name), error)|
+					ComponentSlope { name: name.clone(), slope, error }
+				)
+				.collect::<Vec<_>>();
+			(prefix.clone(), slope, proof_size.base)
+		})
+		.collect::<Vec<_>>();
+
+	let mut base_calculated_proof_size = 0;
+	// Sum up the proof sizes per component
+	for (_, slope, base) in proof_size_per_components.iter() {
+		base_calculated_proof_size += base;
+		for component in slope.iter() {
+			let mut found = false;
+			for used_component in used_calculated_proof_size.iter_mut() {
+				if used_component.name == component.name {
+					used_component.slope += component.slope;
+					found = true;
+					break;
+				}
+			}
+			if !found && !component.slope.is_zero() {
+				if !used_components.contains(&&component.name) {
+					used_components.push(&component.name);
+				}
+				used_calculated_proof_size.push(ComponentSlope { name: component.name.clone(), slope: component.slope, error: component.error });
+			}
+		}
+	}
+
+	// This puts a marker on any component which is entirely unused in the weight formula.
+	let components = batch.time_results[0]
+	.components
+	.iter()
+	.map(|(name, _)| -> Component {
+		let name_string = name.to_string();
+		let is_used = used_components.contains(&&name_string);
+		Component { name: name_string, is_used }
+	})
+	.collect::<Vec<_>>();
+
 	let component_ranges = component_ranges
 		.get(&(batch.pallet.clone(), batch.benchmark.clone()))
 		.map(|c| c.clone())
@@ -288,12 +327,13 @@ fn get_benchmark_data(
 		base_weight: extrinsic_time.base,
 		base_reads: reads.base,
 		base_writes: writes.base,
-		base_proof_size: proof_size.base,
+		base_calculated_proof_size: base_calculated_proof_size,
+		base_recorded_proof_size: recorded_proof_size.base,
 		component_weight: used_extrinsic_time,
 		component_reads: used_reads,
 		component_writes: used_writes,
-		component_proof_size: used_proof_size,
-		worst_case_proof_size,
+		component_calculated_proof_size: used_calculated_proof_size,
+		component_recorded_proof_size: used_recorded_proof_size,
 		component_ranges,
 		comments,
 		min_execution_time: extrinsic_time.minimum,
@@ -413,13 +453,14 @@ pub(crate) fn write_results(
 // from the pallets, and creates comments with information about the storage keys touched during
 // each benchmark.
 //
-// It returns the max PoV size used by all the storage accesses from these results.
+// It returns (comments, warnings) for human consumption.
 pub(crate) fn process_storage_results(
-	comments: &mut Vec<String>,
+	storage_per_prefix: &mut HashMap<Vec<u8>, Vec<BenchmarkResult>>,
 	results: &[BenchmarkResult],
 	storage_info: &[StorageInfo],
 	worst_case_map_values: u32,
-) -> u32 {
+) -> (Vec<String>, Vec<String>) {
+	let (mut comments, mut warnings) = (Vec::new(), BTreeSet::new());
 	let mut storage_info_map = storage_info
 		.iter()
 		.map(|info| (info.prefix.clone(), info))
@@ -449,18 +490,35 @@ pub(crate) fn process_storage_results(
 	let mut identified_prefix = HashSet::<Vec<u8>>::new();
 	let mut identified_key = HashSet::<Vec<u8>>::new();
 
-	let mut max_pov: u32 = 0;
-
-	for result in results {
+	// We have to iterate in reverse order to catch the largest values for read/write since the
+	// components start low and then increase and only the first value is used.
+	for result in results.iter().rev() {
 		for (key, reads, writes, whitelisted) in &result.keys {
 			// skip keys which are whitelisted
 			if *whitelisted {
 				continue
 			}
+			
 			let prefix_length = key.len().min(32);
 			let prefix = key[0..prefix_length].to_vec();
 			let is_key_identified = identified_key.contains(key);
 			let is_prefix_identified = identified_prefix.contains(&prefix);
+			
+			let mut prefix_result = result.clone();
+			let key_info = storage_info_map.get(&prefix);
+			// Use the mathematical worst case, if any. The only case where this is not possible is
+			// for unbounded storage items, for which we use the measured "best effort" value.
+			if let Some(key_info) = key_info {
+				if let Some(max_pov_per_component) = worst_case_pov(
+					key_info.max_values,
+					key_info.max_size,
+					true,
+					worst_case_map_values,
+				) {				
+					prefix_result.proof_size = *reads * max_pov_per_component;
+				}
+			}
+			storage_per_prefix.entry(prefix.clone()).or_default().push(prefix_result);
 
 			match (is_key_identified, is_prefix_identified) {
 				// We already did everything, move on...
@@ -481,7 +539,7 @@ pub(crate) fn process_storage_results(
 			// For any new prefix, we should write some comment about the number of reads and
 			// writes.
 			if !is_prefix_identified {
-				match storage_info_map.get(&prefix) {
+				match key_info {
 					Some(key_info) => {
 						let comment = format!(
 							"Storage: {} {} (r:{} w:{})",
@@ -508,7 +566,7 @@ pub(crate) fn process_storage_results(
 
 			// For any new key, we should add the PoV impact.
 			if !is_key_identified {
-				match storage_info_map.get(&prefix) {
+				match key_info {
 					Some(key_info) => {
 						match worst_case_pov(
 							key_info.max_values,
@@ -517,7 +575,6 @@ pub(crate) fn process_storage_results(
 							worst_case_map_values,
 						) {
 							Some(new_pov) => {
-								max_pov += new_pov;
 								let comment = format!(
 									"Proof: {} {} (max_values: {:?}, max_size: {:?}, added: {})",
 									String::from_utf8(key_info.pallet_name.clone())
@@ -531,16 +588,19 @@ pub(crate) fn process_storage_results(
 								comments.push(comment)
 							},
 							None => {
+								let pallet = String::from_utf8(key_info.pallet_name.clone())
+								.expect("encoded from string");
+								let item = String::from_utf8(key_info.storage_name.clone())
+								.expect("encoded from string");
 								let comment = format!(
 									"Proof Skipped: {} {} (max_values: {:?}, max_size: {:?})",
-									String::from_utf8(key_info.pallet_name.clone())
-										.expect("encoded from string"),
-									String::from_utf8(key_info.storage_name.clone())
-										.expect("encoded from string"),
+									pallet,
+									item,
 									key_info.max_values,
 									key_info.max_size,
 								);
-								comments.push(comment)
+								comments.push(comment);
+								warnings.insert(format!("No worst-case PoV size for unbounded item {}::{}", pallet, item));
 							},
 						}
 					},
@@ -558,11 +618,15 @@ pub(crate) fn process_storage_results(
 		}
 	}
 
-	max_pov
+	(comments, warnings.into_iter().collect())
 }
 
-// Given the max values and max size of some storage item, calculate the worst
-// case PoV.
+/// Given the max values and max size of some storage item, calculate the worst
+/// case PoV.
+///
+/// # Arguments
+/// * `max_values`: The maximum number of values in the storage item. `None` for  unbounded items.
+/// * `max_size`: The maximum size of the value in the storage. `None` for unbounded items.
 fn worst_case_pov(
 	max_values: Option<u32>,
 	max_size: Option<u32>,
@@ -573,8 +637,11 @@ fn worst_case_pov(
 		let trie_size: u32 = if is_new_prefix {
 			let max_values = max_values.unwrap_or(worst_case_map_values);
 			let depth: u32 = easy_log_16(max_values);
-			// 16 items per depth layer, each containing a 32 byte hash.
-			depth * 16 * 32
+			// Normally we have 16 entries of 32 byte hashes per tree layer. In the new trie
+			// layout the hashes are prefixed by their compact length, hence 33 instead. The proof
+			// compaction can compress one node per layer since we send the value itself,
+			// therefore we end up with a size of `15 * 33` per layer.
+			depth * 15 * 33
 		} else {
 			0
 		};

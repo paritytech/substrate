@@ -534,9 +534,9 @@ impl PalletCmd {
 			}
 
 			if !self.no_storage_info {
-				let mut comments: Vec<String> = Default::default();
-				writer::process_storage_results(
-					&mut comments,
+				let mut storage_per_prefix = Default::default();
+				let (comments, _) = writer::process_storage_results(
+					&mut storage_per_prefix,
 					&batch.db_results,
 					storage_info,
 					self.worst_case_map_values,
