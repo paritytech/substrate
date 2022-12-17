@@ -18,6 +18,7 @@ name = "node-template"
 
 [dependencies]
 clap = { version = "4.0.9", features = ["derive"] }
+futures = { version = "0.3.21", features = ["thread-pool"]}
 
 sc-cli = { version = "0.10.0-dev", path = "../../../client/cli" }
 sp-core = { version = "7.0.0", path = "../../../primitives/core" }
@@ -35,6 +36,7 @@ sc-finality-grandpa = { version = "0.10.0-dev", path = "../../../client/finality
 sp-finality-grandpa = { version = "4.0.0-dev", path = "../../../primitives/finality-grandpa" }
 sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
 sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
+sp-io = { version = "7.0.0", path = "../../../primitives/io" }
 sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 sp-keyring = { version = "7.0.0", path = "../../../primitives/keyring" }
@@ -42,7 +44,7 @@ frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
 pallet-transaction-payment = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-payment" }
 
 # These dependencies are used for the node template's RPCs
-jsonrpsee = { version = "0.15.1", features = ["server"] }
+jsonrpsee = { version = "0.16.2", features = ["server"] }
 sc-rpc = { version = "4.0.0-dev", path = "../../../client/rpc" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sc-rpc-api = { version = "0.10.0-dev", path = "../../../client/rpc-api" }
