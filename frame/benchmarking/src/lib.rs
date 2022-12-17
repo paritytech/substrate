@@ -1072,9 +1072,10 @@ macro_rules! impl_benchmark {
 					// Time the extrinsic logic.
 					$crate::log::trace!(
 						target: "benchmark",
-						"Start Benchmark: {} ({:?})",
+						"Start Benchmark: {} ({:?}) verify {}",
 						extrinsic,
-						c
+						c,
+						verify
 					);
 
 					let start_pov = $crate::benchmarking::proof_size();
@@ -1102,6 +1103,10 @@ macro_rules! impl_benchmark {
 					$crate::log::trace!(
 						target: "benchmark",
 						"Read/Write Count {:?}", read_write_count
+					);
+					$crate::log::trace!(
+						target: "benchmark",
+						"Proof sizes: before {:?} after {:?} diff {}", &start_pov, &end_pov, &diff_pov
 					);
 
 					// Time the storage root recalculation.

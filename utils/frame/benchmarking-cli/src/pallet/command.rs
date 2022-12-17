@@ -575,7 +575,7 @@ impl PalletCmd {
 				if let Some(analysis) =
 					Analysis::median_slopes(&batch.db_results, BenchmarkSelector::ProofSize)
 				{
-					println!("Proof Size = {:?}", analysis);
+					println!("Recorded proof Size = {:?}", analysis);
 				}
 				println!();
 			}
@@ -599,7 +599,7 @@ impl PalletCmd {
 				if let Some(analysis) =
 					Analysis::min_squares_iqr(&batch.db_results, BenchmarkSelector::ProofSize)
 				{
-					println!("Proof Size = {:?}", analysis);
+					println!("Recorded proof Size = {:?}", analysis);
 				}
 				println!();
 			}

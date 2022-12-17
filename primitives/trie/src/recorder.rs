@@ -132,6 +132,7 @@ impl<H: Hasher> Recorder<H> {
 	/// This discards all recorded data.
 	pub fn reset(&self) {
 		mem::take(&mut *self.inner.lock());
+		tracing::trace!(target: LOG_TARGET, "Resetting recorder");
 		self.encoded_size_estimation.store(0, Ordering::Relaxed);
 	}
 }
@@ -155,7 +156,7 @@ impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> trie_db::TrieRecord
 				tracing::trace!(
 					target: LOG_TARGET,
 					hash = ?hash,
-					"Recording node",
+					"Recording owned node",
 				);
 
 				self.inner.accessed_nodes.entry(hash).or_insert_with(|| {
@@ -170,7 +171,7 @@ impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> trie_db::TrieRecord
 				tracing::trace!(
 					target: LOG_TARGET,
 					hash = ?hash,
-					"Recording node",
+					"Recording encoded node",
 				);
 
 				self.inner.accessed_nodes.entry(hash).or_insert_with(|| {

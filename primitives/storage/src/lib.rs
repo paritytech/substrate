@@ -200,6 +200,8 @@ pub mod well_known_keys {
 	pub const HEAP_PAGES: &[u8] = b":heappages";
 
 	/// Current extrinsic index (u32) is stored under this key.
+	///
+	/// Encodes to `0x3a65787472696e7369635f696e646578`.
 	pub const EXTRINSIC_INDEX: &[u8] = b":extrinsic_index";
 
 	/// Prefix of child storage keys.
