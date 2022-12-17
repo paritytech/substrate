@@ -31,7 +31,6 @@ use std::{
 	time::Duration,
 };
 
-use async_std::future::timeout;
 use futures::{future::BoxFuture, prelude::*};
 use libp2p::{build_multiaddr, PeerId};
 use log::trace;
@@ -44,8 +43,8 @@ use sc_client_api::{
 };
 use sc_consensus::{
 	BasicQueue, BlockCheckParams, BlockImport, BlockImportParams, BoxJustificationImport,
-	ForkChoiceStrategy, ImportResult, JustificationImport, JustificationSyncLink, LongestChain,
-	Verifier,
+	ForkChoiceStrategy, ImportQueue, ImportResult, JustificationImport, JustificationSyncLink,
+	LongestChain, Verifier,
 };
 use sc_network::{
 	config::{NetworkConfiguration, RequestResponseConfig, Role, SyncMode},
@@ -85,6 +84,7 @@ pub use substrate_test_runtime_client::{
 	runtime::{Block, Extrinsic, Hash, Transfer},
 	TestClient, TestClientBuilder, TestClientBuilderExt,
 };
+use tokio::time::timeout;
 
 type AuthorityId = sp_consensus_babe::AuthorityId;
 
@@ -708,6 +708,7 @@ pub struct FullPeerConfig {
 	pub storage_chain: bool,
 }
 
+#[async_trait::async_trait]
 pub trait TestNetFactory: Default + Sized
 where
 	<Self::BlockImport as BlockImport<Block>>::Transaction: Send,
@@ -887,7 +888,9 @@ where
 			block_announce_validator,
 			network_config.max_parallel_downloads,
 			Some(warp_sync),
+			None,
 			chain_sync_network_handle,
+			import_queue.service(),
 			block_request_protocol_config.name.clone(),
 			state_request_protocol_config.name.clone(),
 			Some(warp_protocol_config.name.clone()),
@@ -896,14 +899,15 @@ where
 
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: if config.is_authority { Role::Authority } else { Role::Full },
-			executor: None,
+			executor: Box::new(|f| {
+				tokio::spawn(f);
+			}),
 			network_config,
 			chain: client.clone(),
 			protocol_id,
 			fork_id,
-			import_queue,
 			chain_sync: Box::new(chain_sync),
-			chain_sync_service,
+			chain_sync_service: Box::new(chain_sync_service.clone()),
 			metrics_registry: None,
 			block_announce_config,
 			request_response_protocol_configs: [
@@ -919,8 +923,11 @@ where
 		trace!(target: "test_network", "Peer identifier: {}", network.service().local_peer_id());
 
 		let service = network.service().clone();
-		async_std::task::spawn(async move {
+		tokio::spawn(async move {
 			chain_sync_network_provider.run(service).await;
+		});
+		tokio::spawn(async move {
+			import_queue.run(Box::new(chain_sync_service)).await;
 		});
 
 		self.mut_peers(move |peers| {
@@ -950,7 +957,7 @@ where
 
 	/// Used to spawn background tasks, e.g. the block request protocol handler.
 	fn spawn_task(&self, f: BoxFuture<'static, ()>) {
-		async_std::task::spawn(f);
+		tokio::spawn(f);
 	}
 
 	/// Polls the testnet until all nodes are in sync.
@@ -1009,34 +1016,31 @@ where
 		Poll::Pending
 	}
 
-	/// Blocks the current thread until we are sync'ed.
+	/// Run the network until we are sync'ed.
 	///
 	/// Calls `poll_until_sync` repeatedly.
 	/// (If we've not synced within 10 mins then panic rather than hang.)
-	fn block_until_sync(&mut self) {
-		futures::executor::block_on(timeout(
+	async fn run_until_sync(&mut self) {
+		timeout(
 			Duration::from_secs(10 * 60),
 			futures::future::poll_fn::<(), _>(|cx| self.poll_until_sync(cx)),
-		))
+		)
+		.await
 		.expect("sync didn't happen within 10 mins");
 	}
 
-	/// Blocks the current thread until there are no pending packets.
+	/// Run the network until there are no pending packets.
 	///
 	/// Calls `poll_until_idle` repeatedly with the runtime passed as parameter.
-	fn block_until_idle(&mut self) {
-		futures::executor::block_on(futures::future::poll_fn::<(), _>(|cx| {
-			self.poll_until_idle(cx)
-		}));
+	async fn run_until_idle(&mut self) {
+		futures::future::poll_fn::<(), _>(|cx| self.poll_until_idle(cx)).await;
 	}
 
-	/// Blocks the current thread until all peers are connected to each other.
+	/// Run the network until all peers are connected to each other.
 	///
 	/// Calls `poll_until_connected` repeatedly with the runtime passed as parameter.
-	fn block_until_connected(&mut self) {
-		futures::executor::block_on(futures::future::poll_fn::<(), _>(|cx| {
-			self.poll_until_connected(cx)
-		}));
+	async fn run_until_connected(&mut self) {
+		futures::future::poll_fn::<(), _>(|cx| self.poll_until_connected(cx)).await;
 	}
 
 	/// Polls the testnet. Processes all the pending actions.

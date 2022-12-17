@@ -359,13 +359,15 @@ where
 
 /// Implementation for test extrinsic.
 #[cfg(feature = "std")]
-impl<Call: Encode, Extra: Encode> GetDispatchInfo for sp_runtime::testing::TestXt<Call, Extra> {
+impl<Call: Encode + GetDispatchInfo, Extra: Encode> GetDispatchInfo
+	for sp_runtime::testing::TestXt<Call, Extra>
+{
 	fn get_dispatch_info(&self) -> DispatchInfo {
 		// for testing: weight == size.
 		DispatchInfo {
 			weight: Weight::from_ref_time(self.encode().len() as _),
 			pays_fee: Pays::Yes,
-			..Default::default()
+			class: self.call.get_dispatch_info().class,
 		}
 	}
 }
@@ -2186,7 +2188,7 @@ macro_rules! decl_module {
 					$system::Config
 				>::PalletInfo as $crate::traits::PalletInfo>::name::<Self>().unwrap_or("<unknown pallet name>");
 
-				$crate::log::info!(
+				$crate::log::debug!(
 					target: $crate::LOG_TARGET,
 					"✅ no migration for {}",
 					pallet_name,
