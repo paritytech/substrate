@@ -28,30 +28,31 @@ struct BenchmarkDef {
 
 impl BenchmarkDef {
 	pub fn from(item_fn: &ItemFn) -> Option<BenchmarkDef> {
-		let mut i = 0;
+		let mut i = 0; // index of child
 		for child in &item_fn.block.stmts {
 			if let Stmt::Semi(Expr::Call(fn_call), token) = child {
-				let i = 0;
+				let mut k = 0; // index of attr
 				for attr in &fn_call.attrs {
 					if let Some(segment) = attr.path.segments.last() {
 						if let Ok(_) = syn::parse::<keywords::extrinsic_call>(
 							segment.ident.to_token_stream().into(),
 						) {
 							let mut fn_call_copy = fn_call.clone();
-							fn_call_copy.attrs.pop(); // consume #[extrinsic call]
+							fn_call_copy.attrs.remove(k); // consume #[extrinsic call]
 							return Some(BenchmarkDef {
 								setup_stmts: Vec::from(&item_fn.block.stmts[0..i]),
 								extrinsic_call_stmt: Stmt::Semi(
-									Expr::Call(fn_call.clone()),
+									Expr::Call(fn_call_copy.clone()),
 									token.clone(),
 								),
-								extrinsic_call_fn: fn_call.clone(),
+								extrinsic_call_fn: fn_call_copy,
 								verify_stmts: Vec::from(
-									&item_fn.block.stmts[i..item_fn.block.stmts.len()],
+									&item_fn.block.stmts[(i + 1)..item_fn.block.stmts.len()],
 								),
 							})
 						}
 					}
+					k += 1;
 				}
 			}
 			i += 1;
