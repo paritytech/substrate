@@ -47,7 +47,7 @@ pub use sp_runtime::traits::Zero;
 pub use sp_runtime::StateVersion;
 #[doc(hidden)]
 pub use sp_std::{self, boxed::Box, prelude::Vec, str, vec};
-pub use sp_storage::TrackedStorageKey;
+pub use sp_storage::{well_known_keys, TrackedStorageKey};
 pub use utils::*;
 
 /// Whitelist the given account.
@@ -1030,6 +1030,11 @@ macro_rules! impl_benchmark {
 					$crate::frame_support::storage::transactional::TRANSACTION_LEVEL_KEY.into()
 				);
 				whitelist.push(transactional_layer_key);
+				// Whitelist the `:extrinsic_index`.
+				let extrinsic_index = $crate::TrackedStorageKey::new(
+					$crate::well_known_keys::EXTRINSIC_INDEX.into()
+				);
+				whitelist.push(extrinsic_index);
 
 				$crate::benchmarking::set_whitelist(whitelist);
 
