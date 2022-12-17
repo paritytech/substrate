@@ -233,7 +233,7 @@ impl StorageInput {
 	///
 	/// - `key`: The storage key of the storage item that this input will read.
 	fn new(key: Vec<u8>) -> Self {
-		let mut buffer = Vec::with_capacity(STORAGE_INPUT_BUFFER_CAPACITY);
+		let mut buffer = vec![0; STORAGE_INPUT_BUFFER_CAPACITY];
 		unsafe {
 			buffer.set_len(buffer.capacity());
 		}
