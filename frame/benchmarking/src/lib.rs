@@ -1036,7 +1036,7 @@ macro_rules! impl_benchmark {
 				);
 				whitelist.push(extrinsic_index);
 
-				$crate::benchmarking::set_whitelist(whitelist);
+				$crate::benchmarking::set_whitelist(whitelist.clone());
 
 				let mut results: $crate::Vec<$crate::BenchmarkResult> = $crate::Vec::new();
 
@@ -1059,6 +1059,12 @@ macro_rules! impl_benchmark {
 					// Commit the externalities to the database, flushing the DB cache.
 					// This will enable worst case scenario for reading from the database.
 					$crate::benchmarking::commit_db();
+
+					// Access all whitelisted keys to get them into the proof recorder since the
+					// recorder does now have a whitelist.
+					for key in &whitelist {
+						$crate::frame_support::storage::unhashed::get_raw(&key.key);
+					}
 
 					// Reset the read/write counter so we don't count operations in the setup process.
 					$crate::benchmarking::reset_read_write_count();
