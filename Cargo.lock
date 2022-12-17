@@ -1945,26 +1945,14 @@ dependencies = [
 name = "frame-benchmarking-pallet-pov"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "linregress",
- "log",
  "parity-scale-codec",
- "paste",
- "rusty-fork",
  "scale-info",
- "serde",
- "sp-api",
- "sp-application-crypto",
- "sp-core",
  "sp-io",
- "sp-keystore",
  "sp-runtime",
- "sp-runtime-interface",
  "sp-std",
- "sp-storage",
 ]
 
 [[package]]

@@ -13,27 +13,13 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
-linregress = { version = "0.4.4", optional = true }
-log = { version = "0.4.17", default-features = false }
-paste = "1.0"
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
-serde = { version = "1.0.136", optional = true }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
-sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/api" }
-sp-application-crypto = { version = "7.0.0", default-features = false, path = "../../../primitives/application-crypto" }
-sp-core = { version = "7.0.0", default-features = false, path = "../../../primitives/core" }
 sp-io = { version = "7.0.0", default-features = false, path = "../../../primitives/io" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../../primitives/runtime" }
-sp-runtime-interface = { version = "7.0.0", default-features = false, path = "../../../primitives/runtime-interface" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../../primitives/std" }
-sp-storage = { version = "7.0.0", default-features = false, path = "../../../primitives/storage" }
-
-[dev-dependencies]
-array-bytes = "4.1"
-rusty-fork = { version = "0.3.0", default-features = false }
-sp-keystore = { version = "0.13.0", path = "../../../primitives/keystore" }
 
 [features]
 default = ["std"]
@@ -42,20 +28,16 @@ std = [
 	"frame-benchmarking/std",
 	"frame-support/std",
 	"frame-system/std",
-	"linregress",
-	"log/std",
 	"scale-info/std",
-	"serde",
-	"sp-api/std",
-	"sp-application-crypto/std",
-	"sp-core/std",
 	"sp-io/std",
-	"sp-runtime-interface/std",
 	"sp-runtime/std",
 	"sp-std/std",
-	"sp-storage/std",
 ]
 runtime-benchmarks = [
 	"frame-system/runtime-benchmarks",
 	"frame-benchmarking/runtime-benchmarks",
+]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-system/try-runtime",
 ]

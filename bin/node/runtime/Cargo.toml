@@ -262,6 +262,7 @@ runtime-benchmarks = [
 ]
 try-runtime = [
 	"frame-try-runtime/try-runtime",
+	"frame-benchmarking-pallet-pov/try-runtime",
 	"frame-executive/try-runtime",
 	"frame-system/try-runtime",
 	"frame-support/try-runtime",
