@@ -20,7 +20,8 @@ use futures::executor::block_on;
 use parity_scale_codec::{Decode, Encode, Joiner};
 use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::{
-	in_mem, BlockBackend, BlockchainEvents, FinalityNotifications, HeaderBackend, StorageProvider,
+	in_mem, BlockBackend, BlockchainEvents, ExecutorProvider, FinalityNotifications, HeaderBackend,
+	StorageProvider,
 };
 use sc_client_db::{Backend, BlocksPruning, DatabaseSettings, DatabaseSource, PruningMode};
 use sc_consensus::{
@@ -1874,4 +1875,41 @@ fn reorg_triggers_a_notification_even_for_sources_that_should_not_trigger_notifi
 	// We should have a tree route of the re-org
 	let tree_route = notification.tree_route.unwrap();
 	assert_eq!(tree_route.enacted()[0].hash, b1.hash());
+}
+
+#[test]
+fn use_dalek_ext_works() {
+	fn zero_ed_pub() -> sp_core::ed25519::Public {
+		sp_core::ed25519::Public([0u8; 32])
+	}
+
+	fn zero_ed_sig() -> sp_core::ed25519::Signature {
+		sp_core::ed25519::Signature::from_raw([0u8; 64])
+	}
+
+	let mut client = TestClientBuilder::new().build();
+
+	client.execution_extensions().set_extensions_factory(
+		sc_client_api::execution_extensions::ExtensionBeforeBlock::<Block, sp_io::UseDalekExt>::new(
+			1,
+		),
+	);
+
+	let a1 = client
+		.new_block_at(&BlockId::Number(0), Default::default(), false)
+		.unwrap()
+		.build()
+		.unwrap()
+		.block;
+	block_on(client.import(BlockOrigin::NetworkInitialSync, a1.clone())).unwrap();
+
+	// On block zero it will use dalek and then on block 1 it will use zebra
+	assert!(!client
+		.runtime_api()
+		.verify_ed25519(&BlockId::Number(0), zero_ed_sig(), zero_ed_pub(), vec![])
+		.unwrap());
+	assert!(client
+		.runtime_api()
+		.verify_ed25519(&BlockId::Number(1), zero_ed_sig(), zero_ed_pub(), vec![])
+		.unwrap());
 }
