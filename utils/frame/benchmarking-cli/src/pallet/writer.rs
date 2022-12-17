@@ -739,7 +739,7 @@ mod test {
 		let mut results = Vec::new();
 		for i in 0..5 {
 			results.push(BenchmarkResult {
-				components: vec![(param, i), (BenchmarkParameter::z, 0)],
+				components: vec![(param, i)],
 				extrinsic_time: (base + slope * i).into(),
 				storage_root_time: (base + slope * i).into(),
 				reads: (base + slope * i).into(),
@@ -747,7 +747,8 @@ mod test {
 				writes: (base + slope * i).into(),
 				repeat_writes: 0,
 				proof_size: (i + 1) * 1024,
-				keys: vec![],
+				// All R/W come from this key:
+				keys: vec![(b"bounded".to_vec(), (base + slope * i), (base + slope * i), false)],
 			})
 		}
 
@@ -760,13 +761,20 @@ mod test {
 		}
 	}
 
+	fn test_storage_info() -> Vec<StorageInfo> {
+		vec![StorageInfo {
+			pallet_name: b"bounded".to_vec(),
+			storage_name: b"bounded".to_vec(),
+			prefix: b"bounded".to_vec(),
+			max_values: Some(1 << 20),
+			max_size: Some(32),
+		}]
+	}
+
 	fn check_data(benchmark: &BenchmarkData, component: &str, base: u128, slope: u128) {
 		assert_eq!(
 			benchmark.components,
-			vec![
-				Component { name: component.to_string(), is_used: true },
-				Component { name: "z".to_string(), is_used: false },
-			],
+			vec![Component { name: component.to_string(), is_used: true },],
 		);
 		// Weights multiplied by 1,000
 		assert_eq!(benchmark.base_weight, base * 1_000);
@@ -785,9 +793,10 @@ mod test {
 			benchmark.component_writes,
 			vec![ComponentSlope { name: component.to_string(), slope, error: 0 }]
 		);
-		assert_eq!(benchmark.base_proof_size, 1024);
+		// Measure PoV is correct
+		assert_eq!(benchmark.base_recorded_proof_size, 1024);
 		assert_eq!(
-			benchmark.component_proof_size,
+			benchmark.component_recorded_proof_size,
 			vec![ComponentSlope { name: component.to_string(), slope: 1024, error: 0 }]
 		);
 	}
@@ -799,10 +808,12 @@ mod test {
 				test_data(b"first", b"first", BenchmarkParameter::a, 10, 3),
 				test_data(b"first", b"second", BenchmarkParameter::b, 9, 2),
 				test_data(b"second", b"first", BenchmarkParameter::c, 3, 4),
+				test_data(b"bounded", b"bounded", BenchmarkParameter::d, 4, 6),
 			],
-			&[],
+			&test_storage_info(),
 			&Default::default(),
 			&AnalysisChoice::default(),
+			&AnalysisChoice::MedianSlopes,
 			1_000_000,
 		)
 		.unwrap();
@@ -824,6 +835,19 @@ mod test {
 			.unwrap()[0];
 		assert_eq!(second_pallet_benchmark.name, "first_benchmark");
 		check_data(second_pallet_benchmark, "c", 3, 4);
+
+		let bounded_pallet_benchmark = &mapped_results
+			.get(&("bounded_pallet".to_string(), "instance".to_string()))
+			.unwrap()[0];
+		assert_eq!(bounded_pallet_benchmark.name, "bounded_benchmark");
+		check_data(bounded_pallet_benchmark, "d", 4, 6);
+		// (5 * 15 * 33 + 32) * 4 = 10028
+		assert_eq!(bounded_pallet_benchmark.base_calculated_proof_size, 10028);
+		// (5 * 15 * 33 + 32) * 6 = 15042
+		assert_eq!(
+			bounded_pallet_benchmark.component_calculated_proof_size,
+			vec![ComponentSlope { name: "d".into(), slope: 15042, error: 0 }]
+		);
 	}
 
 	#[test]
@@ -837,6 +861,7 @@ mod test {
 			&[],
 			&Default::default(),
 			&AnalysisChoice::default(),
+			&AnalysisChoice::MedianSlopes,
 			1_000_000,
 		)
 		.unwrap();
