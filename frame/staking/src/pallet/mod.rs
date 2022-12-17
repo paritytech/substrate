@@ -185,9 +185,9 @@ pub mod pallet {
 
 		/// The origin which can manage critical staking operations.
 		///
-		/// Set of operations that needs StakingAdminOrigin: `set_config`, changing validator count,
+		/// Set of operations that needs AdminOrigin: `set_config`, changing validator count,
 		/// force era changes, `force_unstake`, `cancel_deferred_slash`.
-		type StakingAdminOrigin: EnsureOrigin<Self::RuntimeOrigin>;
+		type AdminOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Interface for interacting with a session pallet.
 		type SessionInterface: SessionInterface<Self::AccountId>;
@@ -1281,7 +1281,7 @@ pub mod pallet {
 
 		/// Sets the ideal number of validators.
 		///
-		/// The dispatch origin must be `T::StakingAdminOrigin`.
+		/// The dispatch origin must be `T::AdminOrigin`.
 		///
 		/// # <weight>
 		/// Weight: O(1)
@@ -1293,7 +1293,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] new: u32,
 		) -> DispatchResult {
-			T::StakingAdminOrigin::ensure_origin(origin)?;
+			T::AdminOrigin::ensure_origin(origin)?;
 			// ensure new validator count does not exceed maximum winners
 			// support by election provider.
 			ensure!(
@@ -1307,7 +1307,7 @@ pub mod pallet {
 		/// Increments the ideal number of validators upto maximum of
 		/// `ElectionProviderBase::MaxWinners`.
 		///
-		/// The dispatch origin must be `T::StakingAdminOrigin`.
+		/// The dispatch origin must be `T::AdminOrigin`.
 		///
 		/// # <weight>
 		/// Same as [`Self::set_validator_count`].
@@ -1318,7 +1318,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] additional: u32,
 		) -> DispatchResult {
-			T::StakingAdminOrigin::ensure_origin(origin)?;
+			T::AdminOrigin::ensure_origin(origin)?;
 			let old = ValidatorCount::<T>::get();
 			let new = old.checked_add(additional).ok_or(ArithmeticError::Overflow)?;
 			ensure!(
@@ -1333,7 +1333,7 @@ pub mod pallet {
 		/// Scale up the ideal number of validators by a factor upto maximum of
 		/// `ElectionProviderBase::MaxWinners`.
 		///
-		/// The dispatch origin must be `T::StakingAdminOrigin`.
+		/// The dispatch origin must be `T::AdminOrigin`.
 		///
 		/// # <weight>
 		/// Same as [`Self::set_validator_count`].
@@ -1341,7 +1341,7 @@ pub mod pallet {
 		#[pallet::call_index(11)]
 		#[pallet::weight(T::WeightInfo::set_validator_count())]
 		pub fn scale_validator_count(origin: OriginFor<T>, factor: Percent) -> DispatchResult {
-			T::StakingAdminOrigin::ensure_origin(origin)?;
+			T::AdminOrigin::ensure_origin(origin)?;
 			let old = ValidatorCount::<T>::get();
 			let new = old.checked_add(factor.mul_floor(old)).ok_or(ArithmeticError::Overflow)?;
 
@@ -1356,7 +1356,7 @@ pub mod pallet {
 
 		/// Force there to be no new eras indefinitely.
 		///
-		/// The dispatch origin must be `T::StakingAdminOrigin`.
+		/// The dispatch origin must be `T::AdminOrigin`.
 		///
 		/// # Warning
 		///
@@ -1372,7 +1372,7 @@ pub mod pallet {
 		#[pallet::call_index(12)]
 		#[pallet::weight(T::WeightInfo::force_no_eras())]
 		pub fn force_no_eras(origin: OriginFor<T>) -> DispatchResult {
-			T::StakingAdminOrigin::ensure_origin(origin)?;
+			T::AdminOrigin::ensure_origin(origin)?;
 			ForceEra::<T>::put(Forcing::ForceNone);
 			Ok(())
 		}
@@ -1380,7 +1380,7 @@ pub mod pallet {
 		/// Force there to be a new era at the end of the next session. After this, it will be
 		/// reset to normal (non-forced) behaviour.
 		///
-		/// The dispatch origin must be `T::StakingAdminOrigin`.
+		/// The dispatch origin must be `T::AdminOrigin`.
 		///
 		/// # Warning
 		///
@@ -1396,7 +1396,7 @@ pub mod pallet {
 		#[pallet::call_index(13)]
 		#[pallet::weight(T::WeightInfo::force_new_era())]
 		pub fn force_new_era(origin: OriginFor<T>) -> DispatchResult {
-			T::StakingAdminOrigin::ensure_origin(origin)?;
+			T::AdminOrigin::ensure_origin(origin)?;
 			ForceEra::<T>::put(Forcing::ForceNew);
 			Ok(())
 		}
@@ -1417,7 +1417,7 @@ pub mod pallet {
 
 		/// Force a current staker to become completely unstaked, immediately.
 		///
-		/// The dispatch origin must be `T::StakingAdminOrigin`.
+		/// The dispatch origin must be `T::AdminOrigin`.
 		#[pallet::call_index(15)]
 		#[pallet::weight(T::WeightInfo::force_unstake(*num_slashing_spans))]
 		pub fn force_unstake(
@@ -1425,7 +1425,7 @@ pub mod pallet {
 			stash: T::AccountId,
 			num_slashing_spans: u32,
 		) -> DispatchResult {
-			T::StakingAdminOrigin::ensure_origin(origin)?;
+			T::AdminOrigin::ensure_origin(origin)?;
 
 			// Remove all staking-related information.
 			Self::kill_stash(&stash, num_slashing_spans)?;
@@ -1437,7 +1437,7 @@ pub mod pallet {
 
 		/// Force there to be a new era at the end of sessions indefinitely.
 		///
-		/// The dispatch origin must be `T::StakingAdminOrigin`.
+		/// The dispatch origin must be `T::AdminOrigin`.
 		///
 		/// # Warning
 		///
@@ -1447,14 +1447,14 @@ pub mod pallet {
 		#[pallet::call_index(16)]
 		#[pallet::weight(T::WeightInfo::force_new_era_always())]
 		pub fn force_new_era_always(origin: OriginFor<T>) -> DispatchResult {
-			T::StakingAdminOrigin::ensure_origin(origin)?;
+			T::AdminOrigin::ensure_origin(origin)?;
 			ForceEra::<T>::put(Forcing::ForceAlways);
 			Ok(())
 		}
 
 		/// Cancel enactment of a deferred slash.
 		///
-		/// Can be called by the `T::StakingAdminOrigin`.
+		/// Can be called by the `T::AdminOrigin`.
 		///
 		/// Parameters: era and indices of the slashes for that era to kill.
 		#[pallet::call_index(17)]
@@ -1464,7 +1464,7 @@ pub mod pallet {
 			era: EraIndex,
 			slash_indices: Vec<u32>,
 		) -> DispatchResult {
-			T::StakingAdminOrigin::ensure_origin(origin)?;
+			T::AdminOrigin::ensure_origin(origin)?;
 
 			ensure!(!slash_indices.is_empty(), Error::<T>::EmptyTargets);
 			ensure!(is_sorted_and_unique(&slash_indices), Error::<T>::NotSortedAndUnique);
@@ -1645,7 +1645,7 @@ pub mod pallet {
 		/// * `min_commission`: The minimum amount of commission that each validators must maintain.
 		///   This is checked only upon calling `validate`. Existing validators are not affected.
 		///
-		/// RuntimeOrigin must be `T::StakingAdminOrigin` to call this function.
+		/// RuntimeOrigin must be `T::AdminOrigin` to call this function.
 		///
 		/// NOTE: Existing nominators and validators will not be affected by this update.
 		/// to kick people under the new limits, `chill_other` should be called.
@@ -1665,7 +1665,7 @@ pub mod pallet {
 			chill_threshold: ConfigOp<Percent>,
 			min_commission: ConfigOp<Perbill>,
 		) -> DispatchResult {
-			T::StakingAdminOrigin::ensure_origin(origin)?;
+			T::AdminOrigin::ensure_origin(origin)?;
 
 			macro_rules! config_op_exp {
 				($storage:ty, $op:ident) => {

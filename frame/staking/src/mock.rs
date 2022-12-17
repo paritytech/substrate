@@ -292,7 +292,7 @@ impl crate::pallet::pallet::Config for Test {
 	type Reward = MockReward;
 	type SessionsPerEra = SessionsPerEra;
 	type SlashDeferDuration = SlashDeferDuration;
-	type StakingAdminOrigin = frame_system::EnsureRoot<Self::AccountId>;
+	type AdminOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;
 	type EraPayout = ConvertCurve<RewardCurve>;
