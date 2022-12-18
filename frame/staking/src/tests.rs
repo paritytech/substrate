@@ -5728,9 +5728,9 @@ fn scale_validator_count_errors() {
 
 mod staking_interface {
 	use frame_support::storage::with_storage_layer;
-use sp_staking::StakingInterface;
+	use sp_staking::StakingInterface;
 
-use super::*;
+	use super::*;
 
 	#[test]
 	fn force_unstake_with_slash_works() {
