@@ -83,6 +83,12 @@ pub mod migrations;
 pub mod traits;
 pub mod weights;
 
+#[macro_use]
+extern crate static_assertions;
+
+#[doc(hidden)]
+pub use static_assertions::assert_impl_all;
+
 #[doc(hidden)]
 pub mod unsigned {
 	#[doc(hidden)]
@@ -2751,3 +2757,18 @@ sp_core::generate_feature_enabled_macro!(std_enabled, feature = "std", $);
 pub use frame_support_procedural::{benchmark, benchmarks};
 
 pub struct Linear<const A: u32, const B: u32>;
+
+pub trait ParamRange {
+	fn start(&self) -> u32;
+	fn end(&self) -> u32;
+}
+
+impl<const A: u32, const B: u32> ParamRange for Linear<A, B> {
+	fn start(&self) -> u32 {
+		return A
+	}
+
+	fn end(&self) -> u32 {
+		return B
+	}
+}

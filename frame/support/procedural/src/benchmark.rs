@@ -4,8 +4,7 @@ use syn::{
 	parse::{Parse, ParseStream},
 	parse_macro_input,
 	spanned::Spanned,
-	token::Token,
-	Block, Expr, ExprCall, Item, ItemFn, ItemMod, Stmt,
+	Block, Expr, ExprCall, FnArg, ItemFn, ItemMod, Pat, Stmt, Type,
 };
 
 mod keywords {
@@ -20,6 +19,7 @@ fn emit_error<T: Into<TokenStream> + Clone, S: Into<String>>(item: &T, message: 
 }
 
 struct BenchmarkDef {
+	params: Vec<(String, u32, u32)>,
 	setup_stmts: Vec<Stmt>,
 	extrinsic_call_stmt: Stmt,
 	extrinsic_call_fn: ExprCall,
@@ -29,7 +29,26 @@ struct BenchmarkDef {
 impl BenchmarkDef {
 	pub fn from(item_fn: &ItemFn) -> Option<BenchmarkDef> {
 		let mut i = 0; // index of child
+		for arg in &item_fn.sig.inputs {
+			// parse params such as "x: Linear<0, 1>"
+			let mut name: Option<String> = None;
+			let mut typ: Option<&Type> = None;
+			if let FnArg::Typed(arg) = arg {
+				if let Pat::Ident(ident) = &*arg.pat {
+					name = Some(ident.ident.to_token_stream().to_string());
+				}
+				typ = Some(&*arg.ty);
+			}
+			if let (Some(name), Some(typ)) = (name, typ) {
+				// test
+				println!("name: {:?}", name);
+				println!("type: {:?}", typ);
+			} else {
+			}
+		}
 		for child in &item_fn.block.stmts {
+			// find #[extrinsic_call] annotation and build up the setup, call, and verify
+			// blocks based on the location of this annotation
 			if let Stmt::Semi(Expr::Call(fn_call), token) = child {
 				let mut k = 0; // index of attr
 				for attr in &fn_call.attrs {
@@ -40,6 +59,7 @@ impl BenchmarkDef {
 							let mut fn_call_copy = fn_call.clone();
 							fn_call_copy.attrs.remove(k); // consume #[extrinsic call]
 							return Some(BenchmarkDef {
+								params: Vec::new(),
 								setup_stmts: Vec::from(&item_fn.block.stmts[0..i]),
 								extrinsic_call_stmt: Stmt::Semi(
 									Expr::Call(fn_call_copy.clone()),
@@ -97,7 +117,7 @@ pub fn benchmarks(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 
 pub fn benchmark(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 	let item_fn = parse_macro_input!(tokens as ItemFn);
-	let mut benchmark_def = match BenchmarkDef::from(&item_fn) {
+	let benchmark_def = match BenchmarkDef::from(&item_fn) {
 		Some(def) => def,
 		None =>
 			return emit_error(
@@ -113,6 +133,9 @@ pub fn benchmark(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 	let params = vec![quote!(x, 0, 1)];
 	let param_names = vec![quote!(x)];
 	quote! {
+		use ::frame_support::assert_impl_all;
+		assert_impl_all!(::frame_support::Linear<0, 1>: ::frame_support::ParamRange);
+
 		#[allow(non_camel_case_types)]
 		struct #name;
 
