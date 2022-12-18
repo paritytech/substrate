@@ -105,6 +105,10 @@ pub mod pallet {
 			+ Mutate<Self::AccountId>
 			+ Transfer<Self::AccountId>;
 
+		/// The max number of hops in a swap.
+		#[pallet::constant]
+		type MaxSwapPathLength: Get<u32>;
+
 		/// The dex's pallet id, used for deriving its sovereign account ID.
 		#[pallet::constant]
 		type PalletId: Get<PalletId>;
@@ -166,11 +170,15 @@ pub mod pallet {
 		SwapExecuted {
 			who: T::AccountId,
 			send_to: T::AccountId,
-			asset1: MultiAssetId<T::AssetId>,
-			asset2: MultiAssetId<T::AssetId>,
-			pool_id: PoolIdOf<T>,
+			path: BoundedVec<MultiAssetId<T::AssetId>, T::MaxSwapPathLength>,
 			amount_in: AssetBalanceOf<T>,
 			amount_out: AssetBalanceOf<T>,
+		},
+		Transfer {
+			from: T::AccountId,
+			to: T::AccountId,
+			asset: MultiAssetId<T::AssetId>,
+			amount: AssetBalanceOf<T>,
 		},
 	}
 
@@ -211,6 +219,10 @@ pub mod pallet {
 		ExcessiveInputAmount,
 		/// Only pools with native on one side are valid.
 		PoolMustContainNativeCurrency,
+		/// The provided path must consists of 2 assets at least.
+		InvalidPath,
+		/// It was not possible to calculate path data.
+		PathError,
 	}
 
 	// Pallet's callable functions.
@@ -451,7 +463,7 @@ pub mod pallet {
 
 			Self::transfer(asset2, &pool_account, &send_to, amount_out, false)?;
 
-			Self::deposit_event(Event::SwapExecuted {
+			/*Self::deposit_event(Event::SwapExecuted {
 				who: sender,
 				send_to,
 				asset1,
@@ -459,7 +471,7 @@ pub mod pallet {
 				pool_id,
 				amount_in,
 				amount_out,
-			});
+			});*/
 
 			Ok(())
 		}
@@ -467,8 +479,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::swap_tokens_for_exact_tokens())]
 		pub fn swap_tokens_for_exact_tokens(
 			origin: OriginFor<T>,
-			asset1: MultiAssetId<T::AssetId>,
-			asset2: MultiAssetId<T::AssetId>,
+			path: BoundedVec<MultiAssetId<T::AssetId>, T::MaxSwapPathLength>,
 			amount_out: AssetBalanceOf<T>,
 			amount_in_max: AssetBalanceOf<T>,
 			send_to: T::AccountId,
@@ -485,35 +496,26 @@ pub mod pallet {
 			let now = frame_system::Pallet::<T>::block_number();
 			ensure!(deadline >= now, Error::<T>::DeadlinePassed);
 
-			let pool_id = Self::get_pool_id(asset1, asset2);
-			let pool_account = Self::get_pool_account(pool_id);
+			let amounts = Self::get_amounts_in(&amount_out, &path)?;
+			let amount_in = amounts.get(0).ok_or(Error::<T>::PathError)?;
+			ensure!(*amount_in <= amount_in_max, Error::<T>::ExcessiveInputAmount);
 
-			let balance1 = Self::get_balance(&pool_account, asset1);
-			let balance2 = Self::get_balance(&pool_account, asset2);
-			if balance1.is_zero() {
-				return Err(Error::<T>::PoolNotFound.into())
+			if let Some(&[asset1, asset2]) = path.get(0..2) {
+				let pool_id = Self::get_pool_id(asset1, asset2);
+				let pool_account = Self::get_pool_account(pool_id);
+				Self::transfer(asset1, &sender, &pool_account, *amount_in, keep_alive)?;
+				Self::swap(&amounts, &path, &send_to)?;
+				Self::deposit_event(Event::SwapExecuted {
+					who: sender,
+					send_to,
+					path,
+					amount_in: *amount_in,
+					amount_out,
+				});
+				Ok(())
+			} else {
+				Err(Error::<T>::PathError.into())
 			}
-
-			let amount_in = Self::get_amount_in(&amount_out, &balance1, &balance2)?;
-			ensure!(amount_in <= amount_in_max, Error::<T>::ExcessiveInputAmount);
-
-			Self::transfer(asset1, &sender, &pool_account, amount_in, keep_alive)?;
-
-			ensure!(amount_out < balance2, Error::<T>::InsufficientLiquidity);
-
-			Self::transfer(asset2, &pool_account, &send_to, amount_out, false)?;
-
-			Self::deposit_event(Event::SwapExecuted {
-				who: sender,
-				send_to,
-				asset1,
-				asset2,
-				pool_id,
-				amount_in,
-				amount_out,
-			});
-
-			Ok(())
 		}
 	}
 
@@ -524,12 +526,46 @@ pub mod pallet {
 			to: &T::AccountId,
 			amount: AssetBalanceOf<T>,
 			keep_alive: bool,
-		) -> Result<<T as pallet::Config>::AssetBalance, DispatchError> {
+		) -> Result<T::AssetBalance, DispatchError> {
+			Self::deposit_event(Event::Transfer {
+				from: from.clone(),
+				to: to.clone(),
+				asset: asset_id,
+				amount,
+			});
 			match asset_id {
 				MultiAssetId::Native => T::Currency::transfer(from, to, amount, keep_alive),
 				MultiAssetId::Asset(asset_id) =>
 					T::Assets::transfer(asset_id, from, to, amount, keep_alive),
 			}
+		}
+
+		fn swap(
+			amounts: &Vec<AssetBalanceOf<T>>,
+			path: &BoundedVec<MultiAssetId<T::AssetId>, T::MaxSwapPathLength>,
+			send_to: &T::AccountId,
+		) -> Result<(), DispatchError> {
+			let path_len = path.len() as u32;
+			for i in 0..(path_len - 1) {
+				if let Some(&[asset1, asset2]) = path.get(i as usize..(i + 2) as usize) {
+					let pool_id = Self::get_pool_id(asset1, asset2);
+					let (sorted_asset1, sorted_asset2) = pool_id;
+					let pool_account = Self::get_pool_account(pool_id);
+
+					let amount_out = amounts.get((i + 1) as usize).ok_or(Error::<T>::PathError)?;
+					let to = if i < path_len - 2 {
+						let asset3 = path.get((i + 2) as usize).ok_or(Error::<T>::PathError)?;
+						Self::get_pool_account(Self::get_pool_id(asset2, *asset3))
+					} else {
+						send_to.clone()
+					};
+
+					let send_asset =
+						if asset1 == sorted_asset1 { sorted_asset2 } else { sorted_asset1 };
+					Self::transfer(send_asset, &pool_account, &to, *amount_out, false)?;
+				}
+			}
+			Ok(())
 		}
 
 		/// The account ID of the pool.
@@ -561,6 +597,45 @@ pub mod pallet {
 			} else {
 				(asset2, asset1)
 			}
+		}
+
+		fn get_reserves(
+			asset1: MultiAssetId<T::AssetId>,
+			asset2: MultiAssetId<T::AssetId>,
+		) -> Result<(AssetBalanceOf<T>, AssetBalanceOf<T>), Error<T>> {
+			let pool_id = Self::get_pool_id(asset1, asset2);
+			let pool_account = Self::get_pool_account(pool_id);
+
+			let balance1 = Self::get_balance(&pool_account, asset1);
+			let balance2 = Self::get_balance(&pool_account, asset2);
+
+			if balance1.is_zero() || balance2.is_zero() {
+				Err(Error::<T>::PoolNotFound)?;
+			}
+
+			Ok((balance1, balance2))
+		}
+
+		fn get_amounts_in(
+			amount_out: &AssetBalanceOf<T>,
+			path: &BoundedVec<MultiAssetId<T::AssetId>, T::MaxSwapPathLength>,
+		) -> Result<Vec<AssetBalanceOf<T>>, DispatchError> {
+			ensure!(path.len() >= 2, Error::<T>::InvalidPath);
+			let mut amounts: Vec<AssetBalanceOf<T>> = Vec::new();
+
+			amounts.push(*amount_out);
+			for i in (1..path.len() as u32).rev() {
+				if let Some(&[asset1, asset2]) = path.get((i - 1) as usize..(i + 1) as usize) {
+					let (reserve_in, reserve_out) = Self::get_reserves(asset1, asset2)?;
+					let prev_amount = amounts.get(i as usize).ok_or(Error::<T>::PathError)?;
+					let amount_in = Self::get_amount_in(prev_amount, &reserve_in, &reserve_out)?;
+					ensure!(amount_in > Zero::zero(), Error::<T>::ZeroAmount);
+					amounts.push(amount_in);
+				}
+			}
+
+			amounts.reverse();
+			Ok(amounts)
 		}
 
 		pub fn quote_price(

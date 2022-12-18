@@ -75,6 +75,12 @@ fn pool_balance(owner: u64, token_id: u32) -> u64 {
 	<<Test as Config>::PoolAssets>::balance(token_id, owner)
 }
 
+macro_rules! bvec {
+	($( $x:tt )*) => {
+		vec![$( $x )*].try_into().unwrap()
+	}
+}
+
 #[test]
 fn check_u64() {
 	new_test_ext().execute_with(|| {
@@ -698,8 +704,7 @@ fn swap_tokens_for_exact_tokens_should_work() {
 
 		assert_ok!(Dex::swap_tokens_for_exact_tokens(
 			RuntimeOrigin::signed(user),
-			token_1,
-			token_2,
+			bvec![token_1, token_2],
 			exchange_out2,
 			100, // amount_in_max
 			user,
@@ -768,8 +773,7 @@ fn swap_tokens_for_exact_tokens_works_when_user_is_not_liquidity_provider() {
 
 		assert_ok!(Dex::swap_tokens_for_exact_tokens(
 			RuntimeOrigin::signed(user),
-			token_1,
-			token_2,
+			bvec![token_1, token_2],
 			exchange_out2,
 			100, // amount_in_max
 			user,
@@ -842,8 +846,7 @@ fn swap_when_existential_deposit_would_cause_reaping_but_keep_alive_set() {
 		assert_noop!(
 			Dex::swap_tokens_for_exact_tokens(
 				RuntimeOrigin::signed(user),
-				token_1,
-				token_2,
+				bvec![token_1, token_2],
 				1,
 				1, // amount_in_min
 				user,
@@ -945,15 +948,14 @@ fn swap_tokens_for_exact_tokens_should_not_work_if_too_much_slippage() {
 		assert_noop!(
 			Dex::swap_tokens_for_exact_tokens(
 				RuntimeOrigin::signed(user),
-				token_1,
-				token_2,
+				bvec![token_1, token_2],
 				exchange_out2,
 				52, // amount_in_max just greater than slippage.
 				user,
 				3,
 				true
 			),
-			<Error<Test>>::ExcessiveInputAmount
+			Error::<Test>::ExcessiveInputAmount
 		);
 	});
 }

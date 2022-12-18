@@ -151,6 +151,7 @@ impl Config for Test {
 	type PalletId = DexPalletId;
 	type WeightInfo = ();
 	type AllowMultiAssetPools = AllowMultiAssetPools;
+	type MaxSwapPathLength = ConstU32<4>;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
