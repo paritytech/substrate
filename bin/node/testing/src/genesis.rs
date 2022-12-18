@@ -96,7 +96,7 @@ pub fn config_endowed(code: Option<&[u8]>, extra_endowed: Vec<AccountId>) -> Gen
 		nomination_pools: Default::default(),
 		pov_limit: PovLimitConfig {
 			compute: Perbill::from_percent(100),
-			storage: Perbill::from_parts(1),
+			storage: Perbill::from_percent(100),
 		},
 	}
 }

@@ -44,8 +44,6 @@ benchmarks! {
 		let _ = PovLimit::<T>::set_storage(SystemOrigin::Root.into(), Perbill::from_percent(100));
 	}: {
 		let weight = PovLimit::<T>::on_idle(System::<T>::block_number(), Weight::from_parts(200_000_000, 100_000));
-		//log::info!("ref time: {:?}", weight.ref_time());
-		//log::info!("proof size: {:?}", weight.proof_size());
 	}
 
 	impl_benchmark_test_suite!(PovLimit, crate::mock::new_test_ext(), crate::mock::Test);

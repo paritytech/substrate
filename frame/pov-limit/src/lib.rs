@@ -126,8 +126,6 @@ pub mod pallet {
 				}
 				value += 1;
 			}
-			log::info!("Weight after reading: {:?}", weight.ref_time());
-			log::info!("Computation limit: {:?}", computation_weight_limit);
 
 			let mut value: u64 = 0;
 			loop {
@@ -140,7 +138,6 @@ pub mod pallet {
 				Self::hash_value(value);
 				value += 1;
 			}
-			log::info!("Weight after hashing: {:?}", weight.ref_time());
 
 			weight
 		}
