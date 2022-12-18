@@ -85,7 +85,7 @@ impl crate::Reader for StorageUnhashedReader {
 impl Config for Test {
 	type Hasher = sp_core::Blake2Hasher;
 	type Reader = StorageUnhashedReader;
-	type WeightInfo = crate::weights::SubstrateWeight<Test>;
+	type WeightInfo = ();
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

@@ -120,6 +120,7 @@ pub mod pallet {
 				value += 1;
 			}
 
+			/*
 			let storage_weight_limit = Storage::<T>::get().mul_floor(remaining_weight.proof_size());
 
 			let mut value: u64 = 0;
@@ -133,6 +134,8 @@ pub mod pallet {
 			}
 			log::info!("WEIGHT REF TIME: {:?}", weight.ref_time());
 			log::info!("WEIGHT PROOF SIZE: {:?}", weight.proof_size());
+			*/
+
 			weight
 		}
 	}

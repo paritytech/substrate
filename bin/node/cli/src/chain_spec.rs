@@ -373,7 +373,7 @@ pub fn testnet_genesis(
 			..Default::default()
 		},
 		pov_limit: PovLimitConfig {
-			compute: Perbill::from_perthousand(1),
+			compute: Perbill::from_percent(100),
 			storage: Perbill::from_parts(1),
 		},
 	}
