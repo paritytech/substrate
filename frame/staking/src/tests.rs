@@ -5725,3 +5725,28 @@ fn scale_validator_count_errors() {
 		);
 	})
 }
+
+mod staking_interface {
+	use frame_support::storage::with_storage_layer;
+use sp_staking::StakingInterface;
+
+use super::*;
+
+	#[test]
+	fn force_unstake_with_slash_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// without slash
+			let _ = with_storage_layer::<(), _, _>(|| {
+				// bond an account, can unstake
+				assert_eq!(Staking::bonded(&11), Some(10));
+				assert_ok!(<Staking as StakingInterface>::force_unstake(11));
+				Err(DispatchError::from("revert"))
+			});
+
+			// bond again and add a slash, still can unstake.
+			assert_eq!(Staking::bonded(&11), Some(10));
+			add_slash(&11);
+			assert_ok!(<Staking as StakingInterface>::force_unstake(11));
+		});
+	}
+}
