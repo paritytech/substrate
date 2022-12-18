@@ -1,11 +1,12 @@
 #![cfg(any(feature = "runtime-benchmarks", test))]
 
 use super::{Pallet as Grandpa, *};
+use frame_support::{benchmark, Linear};
 use frame_system::RawOrigin;
 use sp_core::H256;
 
-#[frame_support::benchmark]
-fn bench_name(x: LinearComponent<0, 1>) {
+#[benchmark]
+fn bench_name(x: Linear<0, 1>) {
 	// NOTE: generated with the test below `test_generate_equivocation_report_blob`.
 	// the output should be deterministic since the keys we use are static.
 	// with the current benchmark setup it is not possible to generate this

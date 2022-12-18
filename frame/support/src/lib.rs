@@ -2749,3 +2749,5 @@ pub mod pallet_macros {
 sp_core::generate_feature_enabled_macro!(std_enabled, feature = "std", $);
 
 pub use frame_support_procedural::{benchmark, benchmarks};
+
+pub struct Linear<const A: u32, const B: u32>;
