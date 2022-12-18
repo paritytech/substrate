@@ -35,7 +35,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		PovLimit: pallet_pov_limit::{Pallet},
+		PovLimit: pallet_pov_limit::{Pallet, Event},
 	}
 );
 
@@ -85,6 +85,7 @@ impl crate::Reader for StorageUnhashedReader {
 impl Config for Test {
 	type Hasher = sp_core::Blake2Hasher;
 	type Reader = StorageUnhashedReader;
+	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
 }
 

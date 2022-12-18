@@ -58,19 +58,30 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		/// Weight information for this pallet.
-		type WeightInfo: WeightInfo;
-
 		/// Type that implements the `Hasher` trait.
 		type Hasher: Hasher;
 
 		/// Type that implements the `Reader` trait.
 		type Reader: Reader;
+
+		type RuntimeEvent: From<Event> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+
+		/// Weight information for this pallet.
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
+
+	#[pallet::event]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	pub enum Event {
+		/// The computation limit has been updated by root.
+		ComputationLimitSet { compute: Perbill },
+		/// The storage limit has been updated by root.
+		StorageLimitSet { storage: Perbill },
+	}
 
 	#[pallet::storage]
 	pub(crate) type Compute<T: Config> = StorageValue<_, Perbill, ValueQuery>;
@@ -155,6 +166,7 @@ pub mod pallet {
 			let _ = ensure_root(origin)?;
 			Compute::<T>::set(compute);
 
+			Self::deposit_event(Event::ComputationLimitSet { compute });
 			Ok(())
 		}
 
@@ -168,6 +180,7 @@ pub mod pallet {
 			let _ = ensure_root(origin)?;
 			Storage::<T>::set(storage);
 
+			Self::deposit_event(Event::StorageLimitSet { storage });
 			Ok(())
 		}
 	}

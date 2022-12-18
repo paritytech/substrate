@@ -20,14 +20,18 @@
 use super::*;
 
 use frame_support::{assert_noop, assert_ok};
-use mock::{new_test_ext, PovLimit, RuntimeOrigin, Test};
+use mock::{new_test_ext, PovLimit, RuntimeOrigin, System, Test};
 
 #[test]
 fn setting_compute_works() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(Compute::<Test>::get(), Perbill::from_percent(50));
+
 		assert_ok!(PovLimit::set_compute(RuntimeOrigin::root(), Perbill::from_percent(70)));
 		assert_eq!(Compute::<Test>::get(), Perbill::from_percent(70));
+		System::assert_last_event(
+			Event::ComputationLimitSet { compute: Perbill::from_percent(70) }.into(),
+		);
 
 		assert_noop!(
 			PovLimit::set_compute(RuntimeOrigin::signed(1), Perbill::from_percent(30)),
@@ -44,8 +48,12 @@ fn setting_compute_works() {
 fn setting_storage_works() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(Storage::<Test>::get(), Perbill::from_percent(50));
+
 		assert_ok!(PovLimit::set_storage(RuntimeOrigin::root(), Perbill::from_percent(30)));
 		assert_eq!(Storage::<Test>::get(), Perbill::from_percent(30));
+		System::assert_last_event(
+			Event::StorageLimitSet { storage: Perbill::from_percent(30) }.into(),
+		);
 
 		assert_noop!(
 			PovLimit::set_storage(RuntimeOrigin::signed(1), Perbill::from_percent(90)),

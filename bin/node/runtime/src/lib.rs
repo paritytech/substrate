@@ -363,6 +363,7 @@ impl pallet_scheduler::Config for Runtime {
 impl pallet_pov_limit::Config for Runtime {
 	type Hasher = Hasher;
 	type Reader = AccountReader;
+	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_pov_limit::weights::SubstrateWeight<Runtime>;
 }
 
