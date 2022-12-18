@@ -48,7 +48,7 @@ pub fn construct_genesis_block<Block: BlockT>(state_root: Block::Hash) -> Block 
 
 /// Trait for building the genesis block.
 pub trait BuildGenesisBlock<Block: BlockT> {
-	/// Same type with `sc_client_api::backend::Backend::BlockImportOperation`.
+	/// The import operation used to import the genesis block into the backend.
 	type BlockImportOperation;
 
 	/// Returns the built genesis block along with the block import operation
@@ -56,7 +56,7 @@ pub trait BuildGenesisBlock<Block: BlockT> {
 	fn build_genesis_block(self) -> sp_blockchain::Result<(Block, Self::BlockImportOperation)>;
 }
 
-/// Build the genesis block.
+/// Default genesis block builder in Substrate.
 pub struct GenesisBlockBuilder<Block: BlockT, B, E> {
 	genesis_storage: Storage,
 	commit_genesis_state: bool,
@@ -89,6 +89,7 @@ impl<Block: BlockT, B: Backend<Block>, E: RuntimeVersionOf> BuildGenesisBlock<Bl
 	for GenesisBlockBuilder<Block, B, E>
 {
 	type BlockImportOperation = <B as Backend<Block>>::BlockImportOperation;
+
 	fn build_genesis_block(self) -> sp_blockchain::Result<(Block, Self::BlockImportOperation)> {
 		let Self { genesis_storage, commit_genesis_state, backend, executor, _phantom } = self;
 
