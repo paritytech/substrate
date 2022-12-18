@@ -84,8 +84,8 @@ pub(crate) mod tests {
 		version == CURRENT_VERSION
 	}
 
-	#[test]
-	fn should_load_persistent_sanity_checks() {
+	#[tokio::test]
+	async fn should_load_persistent_sanity_checks() {
 		let mut net = BeefyTestNet::new(1);
 		let backend = net.peer(0).client().as_backend();
 

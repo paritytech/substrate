@@ -11,13 +11,13 @@ homepage = "https://substrate.io"
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive"] }
 futures = "0.3.21"
-jsonrpsee = { version = "0.15.1", features = ["server", "macros"] }
+jsonrpsee = { version = "0.16.2", features = ["client-core", "server", "macros"] }
 log = "0.4"
 parking_lot = "0.12.1"
 serde = { version = "1.0.136", features = ["derive"] }
 thiserror = "1.0"
 beefy-gadget = { version = "4.0.0-dev", path = "../." }
-beefy-primitives = { version = "4.0.0-dev", path = "../../../primitives/beefy" }
+beefy-primitives = { version = "4.0.0-dev", path = "../../../primitives/beefy", package = "sp-beefy" }
 sc-rpc = { version = "4.0.0-dev", path = "../../rpc" }
 sc-utils = { version = "4.0.0-dev", path = "../../utils" }
 sp-core = { version = "7.0.0", path = "../../../primitives/core" }
@@ -29,4 +29,4 @@ sc-rpc = { version = "4.0.0-dev", features = [
 	"test-helpers",
 ], path = "../../rpc" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
-tokio = { version = "1.17.0", features = ["macros"] }
+tokio = { version = "1.22.0", features = ["macros"] }

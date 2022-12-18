@@ -61,6 +61,7 @@ mod pallet_test {
 	where
 		<T as OtherConfig>::OtherEvent: Into<<T as Config<I>>::RuntimeEvent>,
 	{
+		#[pallet::call_index(0)]
 		#[pallet::weight(0)]
 		pub fn set_value(origin: OriginFor<T>, n: u32) -> DispatchResult {
 			let _sender = ensure_signed(origin)?;
@@ -68,6 +69,7 @@ mod pallet_test {
 			Ok(())
 		}
 
+		#[pallet::call_index(1)]
 		#[pallet::weight(0)]
 		pub fn dummy(origin: OriginFor<T>, _n: u32) -> DispatchResult {
 			let _sender = ensure_none(origin)?;

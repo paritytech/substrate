@@ -67,6 +67,8 @@ use sp_runtime::{
 };
 use std::{cmp::Ordering, collections::HashMap, marker::PhantomData, sync::Arc, time::Duration};
 
+const LOG_TARGET: &str = "pow";
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error<B: BlockT> {
 	#[error("Header uses the wrong engine {0:?}")]
@@ -275,6 +277,7 @@ where
 
 		let inherent_data = inherent_data_providers
 			.create_inherent_data()
+			.await
 			.map_err(|e| Error::CreateInherents(e))?;
 
 		let inherent_res = self
@@ -530,7 +533,7 @@ where
 			}
 
 			if sync_oracle.is_major_syncing() {
-				debug!(target: "pow", "Skipping proposal due to sync.");
+				debug!(target: LOG_TARGET, "Skipping proposal due to sync.");
 				worker.on_major_syncing();
 				continue
 			}
@@ -539,7 +542,7 @@ where
 				Ok(x) => x,
 				Err(err) => {
 					warn!(
-						target: "pow",
+						target: LOG_TARGET,
 						"Unable to pull new block for authoring. \
 						 Select best chain error: {}",
 						err
@@ -560,7 +563,7 @@ where
 				Ok(x) => x,
 				Err(err) => {
 					warn!(
-						target: "pow",
+						target: LOG_TARGET,
 						"Unable to propose new block for authoring. \
 						 Fetch difficulty failed: {}",
 						err,
@@ -576,7 +579,7 @@ where
 				Ok(x) => x,
 				Err(err) => {
 					warn!(
-						target: "pow",
+						target: LOG_TARGET,
 						"Unable to propose new block for authoring. \
 						 Creating inherent data providers failed: {}",
 						err,
@@ -585,11 +588,11 @@ where
 				},
 			};
 
-			let inherent_data = match inherent_data_providers.create_inherent_data() {
+			let inherent_data = match inherent_data_providers.create_inherent_data().await {
 				Ok(r) => r,
 				Err(e) => {
 					warn!(
-						target: "pow",
+						target: LOG_TARGET,
 						"Unable to propose new block for authoring. \
 						 Creating inherent data failed: {}",
 						e,
@@ -609,7 +612,7 @@ where
 				Ok(x) => x,
 				Err(err) => {
 					warn!(
-						target: "pow",
+						target: LOG_TARGET,
 						"Unable to propose new block for authoring. \
 						 Creating proposer failed: {:?}",
 						err,
@@ -623,7 +626,7 @@ where
 					Ok(x) => x,
 					Err(err) => {
 						warn!(
-							target: "pow",
+							target: LOG_TARGET,
 							"Unable to propose new block for authoring. \
 							 Creating proposal failed: {}",
 							err,
@@ -653,14 +656,14 @@ where
 fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<Option<Vec<u8>>, Error<B>> {
 	let mut pre_digest: Option<_> = None;
 	for log in header.digest().logs() {
-		trace!(target: "pow", "Checking log {:?}, looking for pre runtime digest", log);
+		trace!(target: LOG_TARGET, "Checking log {:?}, looking for pre runtime digest", log);
 		match (log, pre_digest.is_some()) {
 			(DigestItem::PreRuntime(POW_ENGINE_ID, _), true) =>
 				return Err(Error::MultiplePreRuntimeDigests),
 			(DigestItem::PreRuntime(POW_ENGINE_ID, v), false) => {
 				pre_digest = Some(v.clone());
 			},
-			(_, _) => trace!(target: "pow", "Ignoring digest not meant for us"),
+			(_, _) => trace!(target: LOG_TARGET, "Ignoring digest not meant for us"),
 		}
 	}
 

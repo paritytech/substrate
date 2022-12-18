@@ -25,10 +25,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
 	codec::{Codec, Decode, Encode},
-	traits::{
-		self, Block as BlockT, Header as HeaderT, MaybeMallocSizeOf, MaybeSerialize, Member,
-		NumberFor,
-	},
+	traits::{self, Block as BlockT, Header as HeaderT, MaybeSerialize, Member, NumberFor},
 	Justifications,
 };
 use sp_core::RuntimeDebug;
@@ -82,7 +79,7 @@ impl<Block: BlockT> fmt::Display for BlockId<Block> {
 
 /// Abstraction over a substrate block.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, parity_util_mem::MallocSizeOf))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub struct Block<Header, Extrinsic: MaybeSerialize> {
@@ -95,7 +92,7 @@ pub struct Block<Header, Extrinsic: MaybeSerialize> {
 impl<Header, Extrinsic: MaybeSerialize> traits::Block for Block<Header, Extrinsic>
 where
 	Header: HeaderT,
-	Extrinsic: Member + Codec + traits::Extrinsic + MaybeMallocSizeOf,
+	Extrinsic: Member + Codec + traits::Extrinsic,
 {
 	type Extrinsic = Extrinsic;
 	type Header = Header;
