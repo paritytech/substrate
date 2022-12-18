@@ -26,15 +26,16 @@ use self::common::*;
 fn expected_weight_same_as_actual() {
 	let mut t = new_test_ext(compact_code_unwrap());
 
-	let expected_weight = <Runtime as pallet_pov_limit::Config>::WeightInfo::on_idle();
+	let actual_weight = <Runtime as pallet_pov_limit::Config>::WeightInfo::on_idle();
 
 	t.execute_with(|| {
-		let actual_weight =
+		let expected_weight =
 			PovLimit::on_idle(System::block_number(), Weight::from_ref_time(200_000_000));
 		let avg_ref_time = (expected_weight.ref_time() + actual_weight.ref_time()) / 2;
 		// the tolerance is 5%
 		let tolerance = avg_ref_time / 20;
 
+		assert_eq!(expected_weight.ref_time(), actual_weight.ref_time());
 		let ref_time_delta =
 			i128::abs(actual_weight.ref_time() as i128 - expected_weight.ref_time() as i128);
 		assert!(ref_time_delta < tolerance.into());

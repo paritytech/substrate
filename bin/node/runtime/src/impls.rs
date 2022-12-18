@@ -130,7 +130,7 @@ pub struct AccountReader;
 impl pallet_pov_limit::Reader for AccountReader {
 	fn read<T: pallet_pov_limit::Config>(_: &[u8]) -> Weight {
 		// should actually read something.
-		Weight::from_proof_size(5_000_000)
+		Weight::from_proof_size(5_000)
 	}
 }
 

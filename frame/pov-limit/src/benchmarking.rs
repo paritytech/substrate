@@ -22,7 +22,6 @@ use super::*;
 
 use frame_benchmarking::benchmarks;
 use frame_system::RawOrigin as SystemOrigin;
-//use log;
 
 use crate::Pallet as PovLimit;
 use frame_system::Pallet as System;
@@ -34,17 +33,19 @@ benchmarks! {
 		PovLimit::<T>::hash_value(42u64);
 	}
 
+	read {
+
+	}: {
+		PovLimit::<T>::read(42u64);
+	}
+
 	on_idle {
 		let _ = PovLimit::<T>::set_compute(SystemOrigin::Root.into(), Perbill::from_percent(100));
-		let _ = PovLimit::<T>::set_storage(SystemOrigin::Root.into(), Perbill::from_parts(1));
-
-		let weight = System::<T>::block_weight().total();
-		let max_weight = <T as frame_system::Config>::BlockWeights::get().max_block;
-		let remaining_weight = max_weight.saturating_sub(weight);
-		//log::info!("REMAINING COMPUTATION: {:?}", Perbill::from_perthousand(1).mul_floor(remaining_weight.ref_time()));
-		//log::info!("REMAINING STORAGE: {:?}", Perbill::from_parts(1).mul_floor(remaining_weight.proof_size()));
+		let _ = PovLimit::<T>::set_storage(SystemOrigin::Root.into(), Perbill::from_percent(100));
 	}: {
-		PovLimit::<T>::on_idle(System::<T>::block_number(), Weight::from_ref_time(200_000_000));
+		let weight = PovLimit::<T>::on_idle(System::<T>::block_number(), Weight::from_parts(200_000_000, 100_000));
+		//log::info!("ref time: {:?}", weight.ref_time());
+		//log::info!("proof size: {:?}", weight.proof_size());
 	}
 
 	impl_benchmark_test_suite!(PovLimit, crate::mock::new_test_ext(), crate::mock::Test);

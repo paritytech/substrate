@@ -102,11 +102,32 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_idle(_: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
-			let mut weight = T::DbWeight::get().reads(1);
-			//println!("ON IDLE REF TIME: {:?}", T::WeightInfo::on_idle().ref_time());
-			//println!("ON IDLE PROOF SIZE: {:?}", T::WeightInfo::on_idle().proof_size());
+			let mut weight = T::DbWeight::get().reads(2);
+
+			let proof_size_limit = Storage::<T>::get().mul_floor(remaining_weight.proof_size());
 			let computation_weight_limit =
 				Compute::<T>::get().mul_floor(remaining_weight.ref_time());
+
+			let mut value: u64 = 0;
+			loop {
+				let consumed_weight = Self::read(value);
+
+				weight = weight.saturating_add(consumed_weight);
+				weight = weight.saturating_add(T::WeightInfo::read());
+
+				let is_over_size_limit = proof_size_limit <
+					weight.proof_size().saturating_add(consumed_weight.proof_size());
+
+				let is_over_ref_time_limit = computation_weight_limit <
+					weight.ref_time().saturating_add(T::WeightInfo::read().ref_time());
+
+				if is_over_size_limit || is_over_ref_time_limit {
+					break
+				}
+				value += 1;
+			}
+			log::info!("Weight after reading: {:?}", weight.ref_time());
+			log::info!("Computation limit: {:?}", computation_weight_limit);
 
 			let mut value: u64 = 0;
 			loop {
@@ -119,22 +140,7 @@ pub mod pallet {
 				Self::hash_value(value);
 				value += 1;
 			}
-
-			/*
-			let storage_weight_limit = Storage::<T>::get().mul_floor(remaining_weight.proof_size());
-
-			let mut value: u64 = 0;
-			loop {
-				if storage_weight_limit < weight.proof_size().saturating_add(5_000_000) {
-					break
-				}
-				let consumed_weight = T::Reader::read::<T>(&value.to_le_bytes());
-				weight = weight.saturating_add(consumed_weight);
-				value += 1;
-			}
-			log::info!("WEIGHT REF TIME: {:?}", weight.ref_time());
-			log::info!("WEIGHT PROOF SIZE: {:?}", weight.proof_size());
-			*/
+			log::info!("Weight after hashing: {:?}", weight.ref_time());
 
 			weight
 		}
@@ -172,6 +178,10 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		pub fn hash_value(value: u64) {
 			T::Hasher::hash(&value.to_le_bytes());
+		}
+
+		pub fn read(value: u64) -> Weight {
+			T::Reader::read::<T>(&value.to_le_bytes())
 		}
 	}
 }

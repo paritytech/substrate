@@ -48,6 +48,7 @@ use sp_std::marker::PhantomData;
 /// Weight functions needed for pallet_pov_limit.
 pub trait WeightInfo {
 	fn hash_value() -> Weight;
+	fn read() -> Weight;
 	fn on_idle() -> Weight;
 }
 
@@ -55,27 +56,37 @@ pub trait WeightInfo {
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn hash_value() -> Weight {
-		// Minimum execution time: 2_000 nanoseconds.
+		// Minimum execution time: 3_000 nanoseconds.
 		Weight::from_ref_time(3_000_000)
 	}
+	fn read() -> Weight {
+		// Minimum execution time: 3_000 nanoseconds.
+		Weight::from_ref_time(3_000_000)
+	}
+	// Storage: PovLimit Storage (r:1 w:0)
 	// Storage: PovLimit Compute (r:1 w:0)
 	fn on_idle() -> Weight {
-		// Minimum execution time: 179_000 nanoseconds.
-		Weight::from_ref_time(181_000_000)
-			.saturating_add(T::DbWeight::get().reads(1))
+		// Minimum execution time: 261_000 nanoseconds.
+		Weight::from_ref_time(263_000_000)
+			.saturating_add(T::DbWeight::get().reads(2))
 	}
 }
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
 	fn hash_value() -> Weight {
-		// Minimum execution time: 2_000 nanoseconds.
+		// Minimum execution time: 3_000 nanoseconds.
 		Weight::from_ref_time(3_000_000)
 	}
+	fn read() -> Weight {
+		// Minimum execution time: 3_000 nanoseconds.
+		Weight::from_ref_time(3_000_000)
+	}
+	// Storage: PovLimit Storage (r:1 w:0)
 	// Storage: PovLimit Compute (r:1 w:0)
 	fn on_idle() -> Weight {
-		// Minimum execution time: 179_000 nanoseconds.
-		Weight::from_ref_time(181_000_000)
-			.saturating_add(RocksDbWeight::get().reads(1))
+		// Minimum execution time: 261_000 nanoseconds.
+		Weight::from_ref_time(263_000_000)
+			.saturating_add(RocksDbWeight::get().reads(2))
 	}
 }

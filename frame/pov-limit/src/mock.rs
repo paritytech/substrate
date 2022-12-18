@@ -78,7 +78,7 @@ pub struct StorageUnhashedReader;
 impl crate::Reader for StorageUnhashedReader {
 	fn read<T: Config>(_: &[u8]) -> Weight {
 		// should actually read something.
-		Weight::from_proof_size(5_000_000)
+		Weight::from_proof_size(5_000)
 	}
 }
 
