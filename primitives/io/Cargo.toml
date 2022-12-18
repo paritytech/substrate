@@ -38,7 +38,7 @@ tracing-core = { version = "0.1.28", default-features = false}
 # Required for backwards compatibility reason, but only used for verifying when `UseDalekExt` is set.
 ed25519-dalek = { version = "1.0.1", default-features = false, optional = true }
 # Force the usage of ed25519, this is being used in `ed25519-dalek`.
-ed25519 = "1.5.2"
+ed25519 = { version = "1.5.2", optional = true }
 
 [features]
 default = ["std"]
@@ -63,6 +63,8 @@ std = [
 	"futures",
 	"parking_lot",
 	"ed25519-dalek",
+	"ed25519",
+
 ]
 
 with-tracing = [
