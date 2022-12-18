@@ -80,14 +80,11 @@ pub fn new_partial(
 		config.runtime_cache_size,
 	);
 
-	let backend = sc_service::new_db_backend(config.db_config())?;
-
 	let (client, backend, keystore_container, task_manager) =
 		sc_service::new_full_parts::<Block, RuntimeApi, _>(
 			config,
 			telemetry.as_ref().map(|(_, telemetry)| telemetry.handle()),
 			executor,
-			backend,
 		)?;
 	let client = Arc::new(client);
 

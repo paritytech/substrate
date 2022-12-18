@@ -44,9 +44,7 @@ impl InspectCmd {
 			config.runtime_cache_size,
 		);
 
-		let backend = sc_service::new_db_backend(config.db_config())?;
-
-		let client = new_full_client::<B, RA, _>(&config, None, executor, backend)?;
+		let client = new_full_client::<B, RA, _>(&config, None, executor)?;
 		let inspect = Inspector::<B>::new(client);
 
 		match &self.command {

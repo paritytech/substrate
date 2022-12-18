@@ -174,13 +174,12 @@ pub fn new_full_client<TBl, TRtApi, TExec>(
 	config: &Configuration,
 	telemetry: Option<TelemetryHandle>,
 	executor: TExec,
-	backend: Arc<TFullBackend<TBl>>,
 ) -> Result<TFullClient<TBl, TRtApi, TExec>, Error>
 where
 	TBl: BlockT,
 	TExec: CodeExecutor + RuntimeVersionOf + Clone,
 {
-	new_full_parts(config, telemetry, executor, backend).map(|parts| parts.0)
+	new_full_parts(config, telemetry, executor).map(|parts| parts.0)
 }
 
 /// Create the initial parts of a full node with the default genesis block builder.
@@ -188,12 +187,13 @@ pub fn new_full_parts<TBl, TRtApi, TExec>(
 	config: &Configuration,
 	telemetry: Option<TelemetryHandle>,
 	executor: TExec,
-	backend: Arc<TFullBackend<TBl>>,
 ) -> Result<TFullParts<TBl, TRtApi, TExec>, Error>
 where
 	TBl: BlockT,
 	TExec: CodeExecutor + RuntimeVersionOf + Clone,
 {
+	let backend = new_db_backend(config.db_config())?;
+
 	let genesis_block_builder = GenesisBlockBuilder::new(
 		config.chain_spec.as_storage_builder(),
 		!config.no_genesis(),
