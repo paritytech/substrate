@@ -35,7 +35,6 @@ fn expected_weight_same_as_actual() {
 		// the tolerance is 5%
 		let tolerance = avg_ref_time / 20;
 
-		assert_eq!(expected_weight.ref_time(), actual_weight.ref_time());
 		let ref_time_delta =
 			i128::abs(actual_weight.ref_time() as i128 - expected_weight.ref_time() as i128);
 		assert!(ref_time_delta < tolerance.into());
