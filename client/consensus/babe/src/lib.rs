@@ -149,6 +149,8 @@ pub mod aux_schema;
 #[cfg(test)]
 mod tests;
 
+const LOG_TARGET: &str = "babe";
+
 /// BABE epoch information
 #[derive(Decode, Encode, PartialEq, Eq, Clone, Debug)]
 pub struct Epoch {
@@ -323,7 +325,7 @@ impl<B: BlockT> From<Error<B>> for String {
 }
 
 fn babe_err<B: BlockT>(error: Error<B>) -> Error<B> {
-	debug!(target: "babe", "{}", error);
+	debug!(target: LOG_TARGET, "{}", error);
 	error
 }
 
@@ -345,7 +347,7 @@ where
 	let block_id = if client.usage_info().chain.finalized_state.is_some() {
 		BlockId::Hash(client.usage_info().chain.best_hash)
 	} else {
-		debug!(target: "babe", "No finalized state is available. Reading config from genesis");
+		debug!(target: LOG_TARGET, "No finalized state is available. Reading config from genesis");
 		BlockId::Hash(client.usage_info().chain.genesis_hash)
 	};
 
@@ -486,7 +488,7 @@ where
 		telemetry,
 	};
 
-	info!(target: "babe", "👶 Starting BABE Authorship worker");
+	info!(target: LOG_TARGET, "👶 Starting BABE Authorship worker");
 
 	let slot_worker = sc_consensus_slots::start_slot_worker(
 		babe_link.config.slot_duration(),
@@ -523,12 +525,8 @@ fn aux_storage_cleanup<C: HeaderMetadata<Block> + HeaderBackend<Block>, Block: B
 		Ok(meta) => {
 			hashes.insert(meta.parent);
 		},
-		Err(err) => warn!(
-			target: "babe",
-			"Failed to lookup metadata for block `{:?}`: {}",
-			first,
-			err,
-		),
+		Err(err) =>
+			warn!(target: LOG_TARGET, "Failed to lookup metadata for block `{:?}`: {}", first, err,),
 	}
 
 	// Cleans data for finalized block's ancestors
@@ -716,7 +714,7 @@ where
 	type AuxData = ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>;
 
 	fn logging_target(&self) -> &'static str {
-		"babe"
+		LOG_TARGET
 	}
 
 	fn block_import(&mut self) -> &mut Self::BlockImport {
@@ -749,7 +747,7 @@ where
 		slot: Slot,
 		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
 	) -> Option<Self::Claim> {
-		debug!(target: "babe", "Attempting to claim slot {}", slot);
+		debug!(target: LOG_TARGET, "Attempting to claim slot {}", slot);
 		let s = authorship::claim_slot(
 			slot,
 			self.epoch_changes
@@ -760,7 +758,7 @@ where
 		);
 
 		if s.is_some() {
-			debug!(target: "babe", "Claimed slot {}", slot);
+			debug!(target: LOG_TARGET, "Claimed slot {}", slot);
 		}
 
 		s
@@ -777,7 +775,7 @@ where
 			Ok(()) => true,
 			Err(e) =>
 				if e.is_full() {
-					warn!(target: "babe", "Trying to notify a slot but the channel is full");
+					warn!(target: LOG_TARGET, "Trying to notify a slot but the channel is full");
 					true
 				} else {
 					false
@@ -904,10 +902,10 @@ pub fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error
 
 	let mut pre_digest: Option<_> = None;
 	for log in header.digest().logs() {
-		trace!(target: "babe", "Checking log {:?}, looking for pre runtime digest", log);
+		trace!(target: LOG_TARGET, "Checking log {:?}, looking for pre runtime digest", log);
 		match (log.as_babe_pre_digest(), pre_digest.is_some()) {
 			(Some(_), true) => return Err(babe_err(Error::MultiplePreRuntimeDigests)),
-			(None, _) => trace!(target: "babe", "Ignoring digest not meant for us"),
+			(None, _) => trace!(target: LOG_TARGET, "Ignoring digest not meant for us"),
 			(s, false) => pre_digest = s,
 		}
 	}
@@ -920,13 +918,13 @@ fn find_next_epoch_digest<B: BlockT>(
 ) -> Result<Option<NextEpochDescriptor>, Error<B>> {
 	let mut epoch_digest: Option<_> = None;
 	for log in header.digest().logs() {
-		trace!(target: "babe", "Checking log {:?}, looking for epoch change digest.", log);
+		trace!(target: LOG_TARGET, "Checking log {:?}, looking for epoch change digest.", log);
 		let log = log.try_to::<ConsensusLog>(OpaqueDigestItemId::Consensus(&BABE_ENGINE_ID));
 		match (log, epoch_digest.is_some()) {
 			(Some(ConsensusLog::NextEpochData(_)), true) =>
 				return Err(babe_err(Error::MultipleEpochChangeDigests)),
 			(Some(ConsensusLog::NextEpochData(epoch)), false) => epoch_digest = Some(epoch),
-			_ => trace!(target: "babe", "Ignoring digest not meant for us"),
+			_ => trace!(target: LOG_TARGET, "Ignoring digest not meant for us"),
 		}
 	}
 
@@ -939,13 +937,13 @@ fn find_next_config_digest<B: BlockT>(
 ) -> Result<Option<NextConfigDescriptor>, Error<B>> {
 	let mut config_digest: Option<_> = None;
 	for log in header.digest().logs() {
-		trace!(target: "babe", "Checking log {:?}, looking for epoch change digest.", log);
+		trace!(target: LOG_TARGET, "Checking log {:?}, looking for epoch change digest.", log);
 		let log = log.try_to::<ConsensusLog>(OpaqueDigestItemId::Consensus(&BABE_ENGINE_ID));
 		match (log, config_digest.is_some()) {
 			(Some(ConsensusLog::NextConfigData(_)), true) =>
 				return Err(babe_err(Error::MultipleConfigChangeDigests)),
 			(Some(ConsensusLog::NextConfigData(config)), false) => config_digest = Some(config),
-			_ => trace!(target: "babe", "Ignoring digest not meant for us"),
+			_ => trace!(target: LOG_TARGET, "Ignoring digest not meant for us"),
 		}
 	}
 
@@ -1075,7 +1073,10 @@ where
 			None => match generate_key_owner_proof(&best_id)? {
 				Some(proof) => proof,
 				None => {
-					debug!(target: "babe", "Equivocation offender is not part of the authority set.");
+					debug!(
+						target: LOG_TARGET,
+						"Equivocation offender is not part of the authority set."
+					);
 					return Ok(())
 				},
 			},
@@ -1091,7 +1092,7 @@ where
 			)
 			.map_err(Error::RuntimeApi)?;
 
-		info!(target: "babe", "Submitted equivocation report for author {:?}", author);
+		info!(target: LOG_TARGET, "Submitted equivocation report for author {:?}", author);
 
 		Ok(())
 	}
@@ -1121,7 +1122,7 @@ where
 		mut block: BlockImportParams<Block, ()>,
 	) -> BlockVerificationResult<Block> {
 		trace!(
-			target: "babe",
+			target: LOG_TARGET,
 			"Verifying origin: {:?} header: {:?} justification(s): {:?} body: {:?}",
 			block.origin,
 			block.header,
@@ -1140,7 +1141,11 @@ where
 			return Ok((block, Default::default()))
 		}
 
-		debug!(target: "babe", "We have {:?} logs in this header", block.header.digest().logs().len());
+		debug!(
+			target: LOG_TARGET,
+			"We have {:?} logs in this header",
+			block.header.digest().logs().len()
+		);
 
 		let create_inherent_data_providers = self
 			.create_inherent_data_providers
@@ -1204,7 +1209,10 @@ where
 					)
 					.await
 				{
-					warn!(target: "babe", "Error checking/reporting BABE equivocation: {}", err);
+					warn!(
+						target: LOG_TARGET,
+						"Error checking/reporting BABE equivocation: {}", err
+					);
 				}
 
 				if let Some(inner_body) = block.body {
@@ -1233,7 +1241,7 @@ where
 					block.body = Some(inner_body);
 				}
 
-				trace!(target: "babe", "Checked {:?}; importing.", pre_header);
+				trace!(target: LOG_TARGET, "Checked {:?}; importing.", pre_header);
 				telemetry!(
 					self.telemetry;
 					CONSENSUS_TRACE;
@@ -1252,7 +1260,7 @@ where
 				Ok((block, Default::default()))
 			},
 			CheckedHeader::Deferred(a, b) => {
-				debug!(target: "babe", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
+				debug!(target: LOG_TARGET, "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
 				telemetry!(
 					self.telemetry;
 					CONSENSUS_DEBUG;
@@ -1520,21 +1528,23 @@ where
 					log::Level::Info
 				};
 
-				log!(target: "babe",
-					 log_level,
-					 "👶 New epoch {} launching at block {} (block slot {} >= start slot {}).",
-					 viable_epoch.as_ref().epoch_index,
-					 hash,
-					 slot,
-					 viable_epoch.as_ref().start_slot,
+				log!(
+					target: LOG_TARGET,
+					log_level,
+					"👶 New epoch {} launching at block {} (block slot {} >= start slot {}).",
+					viable_epoch.as_ref().epoch_index,
+					hash,
+					slot,
+					viable_epoch.as_ref().start_slot,
 				);
 
 				let next_epoch = viable_epoch.increment((next_epoch_descriptor, epoch_config));
 
-				log!(target: "babe",
-					 log_level,
-					 "👶 Next epoch starts at slot {}",
-					 next_epoch.as_ref().start_slot,
+				log!(
+					target: LOG_TARGET,
+					log_level,
+					"👶 Next epoch starts at slot {}",
+					next_epoch.as_ref().start_slot,
 				);
 
 				// prune the tree of epochs not part of the finalized chain or
@@ -1565,7 +1575,7 @@ where
 				};
 
 				if let Err(e) = prune_and_import() {
-					debug!(target: "babe", "Failed to launch next epoch: {}", e);
+					debug!(target: LOG_TARGET, "Failed to launch next epoch: {}", e);
 					*epoch_changes =
 						old_epoch_changes.expect("set `Some` above and not taken; qed");
 					return Err(e)
