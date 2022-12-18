@@ -64,7 +64,6 @@ std = [
 	"parking_lot",
 	"ed25519-dalek",
 	"ed25519",
-
 ]
 
 with-tracing = [
