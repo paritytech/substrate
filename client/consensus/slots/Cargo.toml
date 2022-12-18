@@ -19,7 +19,6 @@ codec = { package = "parity-scale-codec", version = "3.0.0" }
 futures = "0.3.21"
 futures-timer = "3.0.1"
 log = "0.4.17"
-thiserror = "1.0.30"
 sc-client-api = { version = "4.0.0-dev", path = "../../api" }
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
 sc-telemetry = { version = "4.0.0-dev", path = "../../telemetry" }
