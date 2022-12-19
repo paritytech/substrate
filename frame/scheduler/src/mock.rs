@@ -208,6 +208,9 @@ impl WeightInfo for TestWeightInfo {
 parameter_types! {
 	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) *
 		BlockWeights::get().max_block;
+	// We allow the scheduler to have at most 50% overhead.
+	pub MinAvailableTaskWeight: Weight = Perbill::from_percent(50) *
+		MaximumSchedulerWeight::get();
 }
 
 impl Config for Test {
@@ -216,6 +219,7 @@ impl Config for Test {
 	type PalletsOrigin = OriginCaller;
 	type RuntimeCall = RuntimeCall;
 	type MaximumWeight = MaximumSchedulerWeight;
+	type MinAvailableTaskWeight = MinAvailableTaskWeight;
 	type ScheduleOrigin = EitherOfDiverse<EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
 	type MaxScheduledPerBlock = ConstU32<10>;
 	type WeightInfo = TestWeightInfo;

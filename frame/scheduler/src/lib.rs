@@ -204,6 +204,16 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaximumWeight: Get<Weight>;
 
+		/// The minimal weight that is required to be available for task dispatching per block.
+		///
+		/// Must never be larger than [`MaximumWeight`]. The correctness of this is checked in the
+		/// runtime `integrity_test`. The task is assumed to be periodic, named and of maximal
+		/// length. You can use this to ensure that there is always at least a minimal amount of
+		/// weight available for runtime upgrades.
+
+		#[pallet::constant]
+		type MinAvailableTaskWeight: Get<Weight>;
+
 		/// Required origin to schedule or cancel calls.
 		type ScheduleOrigin: EnsureOrigin<<Self as system::Config>::RuntimeOrigin>;
 
@@ -291,6 +301,35 @@ pub mod pallet {
 			let mut weight_counter = WeightMeter::from_limit(T::MaximumWeight::get());
 			Self::service_agendas(&mut weight_counter, now, u32::max_value());
 			weight_counter.consumed
+		}
+
+		fn integrity_test() {
+			let min_required = T::WeightInfo::service_agendas_base()
+				.saturating_add(T::WeightInfo::service_agenda_base(T::MaxScheduledPerBlock::get()))
+				.saturating_add(T::WeightInfo::service_task(
+					Some(T::Preimages::MAX_LENGTH),
+					true,
+					true,
+				))
+				.saturating_add(
+					T::WeightInfo::execute_dispatch_signed()
+						.max(T::WeightInfo::execute_dispatch_unsigned()),
+				);
+
+			assert!(
+				T::MaximumWeight::get().all_gte(min_required),
+				"MaximumWeight is too low to service a single task: {} < {}",
+				min_required,
+				T::MaximumWeight::get()
+			);
+
+			let left = T::MaximumWeight::get().saturating_sub(min_required);
+			assert!(
+				left.all_gte(T::MinAvailableTaskWeight::get()),
+				"MinAvailableTaskWeight is not guaranteed: {} < {}",
+				T::MinAvailableTaskWeight::get(),
+				left,
+			);
 		}
 	}
 
