@@ -94,7 +94,7 @@ impl<Block: BlockT, B: Backend<Block>, E: RuntimeVersionOf> BuildGenesisBlock<Bl
 		let Self { genesis_storage, commit_genesis_state, backend, executor, _phantom } = self;
 
 		let genesis_state_version =
-			crate::resolve_state_version_from_wasm::<Block, _>(&genesis_storage, &executor)?;
+			crate::resolve_state_version_from_wasm(&genesis_storage, &executor)?;
 		let mut op = backend.begin_operation()?;
 		let state_root =
 			op.set_genesis_state(genesis_storage, commit_genesis_state, genesis_state_version)?;

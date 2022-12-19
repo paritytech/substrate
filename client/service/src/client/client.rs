@@ -641,7 +641,7 @@ where
 						// This is use by fast sync for runtime version to be resolvable from
 						// changes.
 						let state_version =
-							resolve_state_version_from_wasm::<Block, _>(&storage, &self.executor)?;
+							resolve_state_version_from_wasm(&storage, &self.executor)?;
 						let state_root = operation.op.reset_storage(storage, state_version)?;
 						if state_root != *import_headers.post().state_root() {
 							// State root mismatch when importing state. This should not happen in
@@ -1108,12 +1108,11 @@ where
 }
 
 /// Return the genesis state version given the genesis storage and executor.
-pub fn resolve_state_version_from_wasm<Block, E>(
+pub fn resolve_state_version_from_wasm<E>(
 	storage: &Storage,
 	executor: &E,
 ) -> sp_blockchain::Result<StateVersion>
 where
-	Block: BlockT,
 	E: RuntimeVersionOf,
 {
 	if let Some(wasm) = storage.top.get(well_known_keys::CODE) {
