@@ -323,7 +323,7 @@ pub mod v9 {
 				log!(
 					warn,
 					"InjectValidatorsIntoVoterList being executed on the wrong storage \
-				version, expected OldReleases::V8_0_0"
+				version, expected ObsoleteReleases::V8_0_0"
 				);
 				T::DbWeight::get().reads(1)
 			}
@@ -378,7 +378,7 @@ pub mod v8 {
 	/// Migration to sorted `VoterList`.
 	pub fn migrate<T: Config>() -> Weight {
 		if StorageVersion::<T>::get() == ObsoleteReleases::V7_0_0 {
-			crate::log!(info, "migrating staking to OldReleases::V8_0_0");
+			crate::log!(info, "migrating staking to ObsoleteReleases::V8_0_0");
 
 			let migrated = T::VoterList::unsafe_regenerate(
 				Nominators::<T>::iter().map(|(id, _)| id),
@@ -389,7 +389,7 @@ pub mod v8 {
 			StorageVersion::<T>::put(ObsoleteReleases::V8_0_0);
 			crate::log!(
 				info,
-				"👜 completed staking migration to OldReleases::V8_0_0 with {} voters migrated",
+				"👜 completed staking migration to ObsoleteReleases::V8_0_0 with {} voters migrated",
 				migrated,
 			);
 
@@ -432,7 +432,7 @@ pub mod v7 {
 	}
 
 	pub fn migrate<T: Config>() -> Weight {
-		log!(info, "Migrating staking to OldReleases::V7_0_0");
+		log!(info, "Migrating staking to ObsoleteReleases::V7_0_0");
 		let validator_count = Validators::<T>::iter().count() as u32;
 		let nominator_count = Nominators::<T>::iter().count() as u32;
 
@@ -440,7 +440,7 @@ pub mod v7 {
 		CounterForNominators::<T>::put(nominator_count);
 
 		StorageVersion::<T>::put(ObsoleteReleases::V7_0_0);
-		log!(info, "Completed staking migration to OldReleases::V7_0_0");
+		log!(info, "Completed staking migration to ObsoleteReleases::V7_0_0");
 
 		T::DbWeight::get().reads_writes(validator_count.saturating_add(nominator_count).into(), 2)
 	}
@@ -482,7 +482,7 @@ pub mod v6 {
 
 	/// Migrate storage to v6.
 	pub fn migrate<T: Config>() -> Weight {
-		log!(info, "Migrating staking to OldReleases::V6_0_0");
+		log!(info, "Migrating staking to ObsoleteReleases::V6_0_0");
 
 		SnapshotValidators::<T>::kill();
 		SnapshotNominators::<T>::kill();
