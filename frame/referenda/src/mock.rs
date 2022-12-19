@@ -62,7 +62,7 @@ impl Contains<RuntimeCall> for BaseFilter {
 }
 
 parameter_types! {
-	pub MaxWeight: Weight = Weight::from_ref_time(2_000_000_000_000);
+	pub MaxWeight: Weight = Weight::from_parts(2_000_000_000_000, u64::MAX);
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(MaxWeight::get());
 }
