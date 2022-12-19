@@ -62,6 +62,7 @@ build-linux-substrate:
     - job:                         test-linux-stable
       artifacts:                   false
   before_script:
+    - !reference [.job-switcher, before_script]
     - mkdir -p ./artifacts/substrate/
     - !reference [.rusty-cachier, before_script]
     # tldr: we need to checkout the branch HEAD explicitly because of our dynamic versioning approach while building the substrate binary
@@ -94,6 +95,7 @@ build-linux-substrate:
     # this variable gets overriden by "rusty-cachier environment inject", use the value as default
     CARGO_TARGET_DIR:              "$CI_PROJECT_DIR/target"
   before_script:
+    - !reference [.job-switcher, before_script]
     - mkdir -p ./artifacts/subkey
     - !reference [.rusty-cachier, before_script]
   script:
@@ -118,6 +120,7 @@ build-subkey-macos:
   # duplicating before_script & script sections from .build-subkey hidden job
   # to overwrite rusty-cachier integration as it doesn't work on macos
   before_script:
+    - !reference [.job-switcher, before_script]
     - mkdir -p ./artifacts/subkey
   script:
     - cd ./bin/utils/subkey
