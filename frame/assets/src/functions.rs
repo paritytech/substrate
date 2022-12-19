@@ -892,7 +892,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 		ensure!(d.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
-		ensure!(Some(origin) == d.owner, Error::<T, I>::NoPermission);
+		ensure!(Some(from) == d.owner.as_ref(), Error::<T, I>::NoPermission);
 
 		Metadata::<T, I>::try_mutate_exists(id, |metadata| {
 			ensure!(metadata.as_ref().map_or(true, |m| !m.is_frozen), Error::<T, I>::NoPermission);

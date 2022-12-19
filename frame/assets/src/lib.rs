@@ -1162,9 +1162,10 @@ pub mod pallet {
 			Metadata::<T, I>::try_mutate_exists(id, |metadata| {
 				let deposit = metadata.take().ok_or(Error::<T, I>::Unknown)?.deposit;
 
-				if d.owner.is_some() {
-					T::Currency::unreserve(&d.owner.unwrap(), deposit);
+				if let Some(owner) = d.owner {
+					T::Currency::unreserve(&owner, deposit);
 				}
+
 				Self::deposit_event(Event::MetadataCleared { asset_id: id });
 				Ok(())
 			})
