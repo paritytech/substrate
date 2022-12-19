@@ -192,9 +192,7 @@ impl OutChannels {
 				error!(
 					"The number of unprocessed events in channel `{}` reached {}.\n\
 					 The channel was created at:\n{}",
-					sender.name,
-					sender.queue_size_warning,
-					sender.created_backtrace,
+					sender.name, sender.queue_size_warning, sender.created_backtrace,
 				);
 			}
 			sender.inner.unbounded_send(event.clone()).is_ok()
