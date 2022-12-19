@@ -23,7 +23,9 @@ use frame_support::{
 	traits::OnRuntimeUpgrade,
 };
 
-/// Outdated since v12. Useful to make encoding/decoding of old migration code easier.
+/// Used for release versioning upto v12.
+///
+/// Obsolete from v13. Keeping around to make encoding/decoding of old migration code easier.
 #[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 enum ObsoleteReleases {
 	V1_0_0Ancient,
@@ -46,7 +48,7 @@ impl Default for ObsoleteReleases {
 	}
 }
 
-/// Alias to the old storage item for keeping versions. Outdated since v12.
+/// Alias to the old storage item used for release versioning. Obsolete since v13.
 #[storage_alias]
 type StorageVersion<T: Config> = StorageValue<Pallet<T>, ObsoleteReleases, ValueQuery>;
 
