@@ -20,8 +20,8 @@
 //! careful when using it onchain.
 
 use crate::{
-	BoundedSupportsOf, Debug, ElectionDataProvider, ElectionProvider, ElectionProviderBase,
-	InstantElectionProvider, NposSolver, WeightInfo,
+	BoundedSupportsOf, Debug, ElectionBounds, ElectionDataProvider, ElectionProvider,
+	ElectionProviderBase, InstantElectionProvider, NposSolver, WeightInfo,
 };
 use frame_support::{dispatch::DispatchClass, traits::Get};
 use sp_npos_elections::{
@@ -87,11 +87,11 @@ pub trait Config {
 
 	/// Bounds the number of voters, when calling into [`Config::DataProvider`]. It might be
 	/// overwritten in the `InstantElectionProvider` impl.
-	type VotersBound: Get<u32>;
+	type VotersBounds: Get<ElectionBounds>;
 
 	/// Bounds the number of targets, when calling into [`Config::DataProvider`]. It might be
 	/// overwritten in the `InstantElectionProvider` impl.
-	type TargetsBound: Get<u32>;
+	type TargetsBounds: Get<ElectionBounds>;
 }
 
 /// Same as `BoundedSupportsOf` but for `onchain::Config`.
@@ -101,12 +101,11 @@ pub type OnChainBoundedSupportsOf<E> = BoundedSupports<
 >;
 
 fn elect_with_input_bounds<T: Config>(
-	maybe_max_voters: Option<usize>,
-	maybe_max_targets: Option<usize>,
+	voter_bounds: ElectionBounds,
+	target_bounds: ElectionBounds,
 ) -> Result<OnChainBoundedSupportsOf<T>, Error> {
-	let voters = T::DataProvider::electing_voters(maybe_max_voters).map_err(Error::DataProvider)?;
-	let targets =
-		T::DataProvider::electable_targets(maybe_max_targets).map_err(Error::DataProvider)?;
+	let voters = T::DataProvider::electing_voters(voter_bounds).map_err(Error::DataProvider)?;
+	let targets = T::DataProvider::electable_targets(target_bounds).map_err(Error::DataProvider)?;
 	let desired_targets = T::DataProvider::desired_targets().map_err(Error::DataProvider)?;
 
 	if desired_targets > T::MaxWinners::get() {
@@ -159,12 +158,12 @@ impl<T: Config> ElectionProviderBase for OnChainExecution<T> {
 
 impl<T: Config> InstantElectionProvider for OnChainExecution<T> {
 	fn instant_elect(
-		forced_input_voters_bound: Option<u32>,
-		forced_input_target_bound: Option<u32>,
+		voters_bounds: ElectionBounds,
+		targets_bounds: ElectionBounds,
 	) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		elect_with_input_bounds::<T>(
-			Some(T::VotersBound::get().min(forced_input_voters_bound.unwrap_or(u32::MAX)) as usize),
-			Some(T::TargetsBound::get().min(forced_input_target_bound.unwrap_or(u32::MAX)) as usize),
+			T::VotersBounds::get().min(voters_bounds),
+			T::TargetsBounds::get().min(targets_bounds),
 		)
 	}
 }
@@ -175,10 +174,7 @@ impl<T: Config> ElectionProvider for OnChainExecution<T> {
 	}
 
 	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
-		elect_with_input_bounds::<T>(
-			Some(T::VotersBound::get() as usize),
-			Some(T::TargetsBound::get() as usize),
-		)
+		elect_with_input_bounds::<T>(T::VotersBounds::get(), T::TargetsBounds::get())
 	}
 }
 
@@ -272,7 +268,7 @@ mod tests {
 			type AccountId = AccountId;
 			type BlockNumber = BlockNumber;
 			type MaxVotesPerVoter = ConstU32<2>;
-			fn electing_voters(_: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
+			fn electing_voters(_: ElectionBounds) -> data_provider::Result<Vec<VoterOf<Self>>> {
 				Ok(vec![
 					(1, 10, bounded_vec![10, 20]),
 					(2, 20, bounded_vec![30, 20]),
@@ -280,7 +276,7 @@ mod tests {
 				])
 			}
 
-			fn electable_targets(_: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
+			fn electable_targets(_: ElectionBounds) -> data_provider::Result<Vec<AccountId>> {
 				Ok(vec![10, 20, 30])
 			}
 

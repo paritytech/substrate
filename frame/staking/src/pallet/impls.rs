@@ -18,8 +18,8 @@
 //! Implementations for the Staking FRAME Pallet.
 
 use frame_election_provider_support::{
-	data_provider, BoundedSupportsOf, ElectionDataProvider, ElectionProvider, ScoreProvider,
-	SortedListProvider, VoteWeight, VoterOf,
+	data_provider, BoundedSupportsOf, ElectionBounds, ElectionDataProvider, ElectionProvider,
+	ScoreProvider, SortedListProvider, VoteWeight, VoterOf,
 };
 use frame_support::{
 	dispatch::WithPostDispatchInfo,
@@ -748,8 +748,9 @@ impl<T: Config> Pallet<T> {
 	/// nominators.
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
-	pub fn get_npos_voters(maybe_max_len: Option<usize>) -> Vec<VoterOf<Self>> {
-		// TODO: limits are snapshot/election bounds passed as input (election_bounds: ElectionBounds)
+	pub fn get_npos_voters(voter_bounds: ElectionBounds) -> Vec<VoterOf<Self>> {
+		// TODO: limits are snapshot/election bounds passed as input (election_bounds:
+		// ElectionBounds)
 		let (size, count) = (None, Some(10));
 
 		let mut voters_size_tracker: ElectionSizeTracker<T::AccountId> =
@@ -787,7 +788,7 @@ impl<T: Config> Pallet<T> {
 				let target_quota = T::NominationsQuota::get_quota_capped(voter_weight.into());
 				if !targets.is_empty() {
 					if voters_size_tracker.try_register_voter(targets.len()).is_err() {
-                    // TODO(gpestana): needs logging?
+						// TODO(gpestana): needs logging?
 						// no more space in the election result, stop iterating over the voters.
 						// TODO(gpestana): needs logging?
 						break
@@ -995,19 +996,21 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		Ok(Self::validator_count())
 	}
 
-	fn electing_voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
+	fn electing_voters(bounds: ElectionBounds) -> data_provider::Result<Vec<VoterOf<Self>>> {
 		// This can never fail -- if `maybe_max_len` is `Some(_)` we handle it.
-		let voters = Self::get_npos_voters(maybe_max_len);
-		debug_assert!(maybe_max_len.map_or(true, |max| voters.len() <= max));
+		let voters = Self::get_npos_voters(bounds);
+		debug_assert!(
+			!bounds.exhausted(Some(voters.len() as u32), Some(voters.encoded_size() as u32))
+		);
 
 		Ok(voters)
 	}
 
-	fn electable_targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>> {
+	fn electable_targets(bounds: ElectionBounds) -> data_provider::Result<Vec<T::AccountId>> {
 		let target_count = T::TargetList::count();
 
 		// We can't handle this case yet -- return an error.
-		if maybe_max_len.map_or(false, |max_len| target_count > max_len as u32) {
+		if bounds.exhausted(Some(target_count as u32), None) {
 			return Err("Target snapshot too big")
 		}
 

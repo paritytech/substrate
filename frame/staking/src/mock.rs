@@ -18,7 +18,7 @@
 //! Test utilities
 
 use crate::{self as pallet_staking, *};
-use frame_election_provider_support::{onchain, SequentialPhragmen, VoteWeight};
+use frame_election_provider_support::{onchain, ElectionBounds, SequentialPhragmen, VoteWeight};
 use frame_support::{
 	assert_ok, parameter_types,
 	traits::{
@@ -239,6 +239,8 @@ parameter_types! {
 	pub static RewardOnUnbalanceWasCalled: bool = false;
 	pub static LedgerSlashPerEra: (BalanceOf<Test>, BTreeMap<EraIndex, BalanceOf<Test>>) = (Zero::zero(), BTreeMap::new());
 	pub static MaxWinners: u32 = 100;
+	pub static VotersBounds: ElectionBounds = ElectionBounds::new_unbounded();
+	pub static TargetsBounds: ElectionBounds = ElectionBounds::new_unbounded();
 }
 
 type VoterBagsListInstance = pallet_bags_list::Instance1;
@@ -258,8 +260,8 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type DataProvider = Staking;
 	type WeightInfo = ();
 	type MaxWinners = MaxWinners;
-	type VotersBound = ConstU32<{ u32::MAX }>;
-	type TargetsBound = ConstU32<{ u32::MAX }>;
+	type VotersBounds = VotersBounds;
+	type TargetsBounds = TargetsBounds;
 }
 
 pub struct MockReward {}

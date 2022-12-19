@@ -1159,8 +1159,8 @@ pub mod pallet {
 
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
 			ensure!(
-                // TODO(gpestana): this is the absolute max nomination, make it more explicit 
-				targets.len() <= T::NominationsQuota::get() as usize, 
+				// TODO(gpestana): this is the absolute max nomination, make it more explicit
+				targets.len() <= T::NominationsQuota::get() as usize,
 				Error::<T>::TooManyTargets
 			);
 

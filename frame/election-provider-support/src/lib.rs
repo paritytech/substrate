@@ -283,25 +283,23 @@ pub trait ElectionDataProvider {
 	/// All possible targets for the election, i.e. the targets that could become elected, thus
 	/// "electable".
 	///
-	/// If `maybe_max_len` is `Some(v)` then the resulting vector MUST NOT be longer than `v` items
-	/// long.
+	/// If `bounds` are defined, then the resulting vector MUST NOT be longer or larger in MB than
+	/// `v` items long.
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
-	fn electable_targets(
-		maybe_max_len: Option<usize>,
-	) -> data_provider::Result<Vec<Self::AccountId>>;
+	fn electable_targets(bounds: ElectionBounds) -> data_provider::Result<Vec<Self::AccountId>>;
 
 	/// All the voters that participate in the election, thus "electing".
 	///
 	/// Note that if a notion of self-vote exists, it should be represented here.
 	///
-	/// If `maybe_max_len` is `Some(v)` then the resulting vector MUST NOT be longer than `v` items
-	/// long.
+	/// If `bounds` are defined, then the resulting vector MUST NOT be longer or larger in bytes
+	/// than `v` items long.
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
-	fn electing_voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>>;
+	fn electing_voters(bounds: ElectionBounds) -> data_provider::Result<Vec<VoterOf<Self>>>;
 
 	/// The number of targets to elect.
 	///
@@ -422,8 +420,8 @@ pub trait ElectionProvider: ElectionProviderBase {
 /// data provider at runtime via `forced_input_voters_bound` and `forced_input_target_bound`.
 pub trait InstantElectionProvider: ElectionProviderBase {
 	fn instant_elect(
-		forced_input_voters_bound: Option<u32>,
-		forced_input_target_bound: Option<u32>,
+		forced_input_voters_bound: ElectionBounds,
+		forced_input_target_bound: ElectionBounds,
 	) -> Result<BoundedSupportsOf<Self>, Self::Error>;
 }
 
@@ -465,8 +463,8 @@ where
 	MaxWinners: Get<u32>,
 {
 	fn instant_elect(
-		_: Option<u32>,
-		_: Option<u32>,
+		_: ElectionBounds,
+		_: ElectionBounds,
 	) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		Err("`NoElection` cannot do anything.")
 	}
@@ -676,83 +674,86 @@ pub type BoundedSupportsOf<E> = BoundedSupports<
 sp_core::generate_feature_enabled_macro!(runtime_benchmarks_enabled, feature = "runtime-benchmarks", $);
 sp_core::generate_feature_enabled_macro!(runtime_benchmarks_or_fuzz_enabled, any(feature = "runtime-benchmarks", feature = "fuzzing"), $);
 
-/// The voter or target bounds of an election
+/// The limits of an election result. The bounds are defined over the count of element of the
+/// election (voters or targets) or the overall datastructure size.
+///
+/// Ordering: when comparing two instances of `ElectionBounds`, the `count` has priority over the
+/// `size`, ie. if `A.count > B.count`, then `A > B` regardless of their relative `size`.
+#[derive(Clone, Copy, RuntimeDebug, scale_info::TypeInfo, Encode, Decode, Eq)]
 pub struct ElectionBounds {
-	pub count: Option<u32>,
-}
-
-impl ElectionBounds {
-	pub fn new(count: Option<u32>) -> Self {
-		ElectionBounds { count }
-	}
-}
-
-impl ElectionBounds {
-	pub fn exhausted(self, count: usize) -> bool {
-		self.count.map_or(false, |c| c > count as u32)
-	}
-}
-
-impl From<SnapshotBounds> for ElectionBounds {
-	fn from(bounds: SnapshotBounds) -> Self {
-		ElectionBounds { count: bounds.count }
-	}
-}
-
-impl From<Option<usize>> for ElectionBounds {
-	fn from(bounds: Option<usize>) -> Self {
-		ElectionBounds { count: bounds.map(|b| b as u32) }
-	}
-}
-
-/// The limits of an election snapshot.
-#[derive(Clone, Copy, RuntimeDebug, scale_info::TypeInfo, Encode, Decode)]
-pub struct SnapshotBounds {
 	/// The bound on number of elements. `None` means unbounded.
-	count: Option<u32>,
+	pub count: Option<u32>,
 	/// The bound on size, in bytes. `None` means unbounded.
-	size: Option<u32>,
+	pub size: Option<u32>,
 }
 
-impl SnapshotBounds {
+impl ElectionBounds {
 	/// Returns a new instance of self without bounds.
 	pub const fn new_unbounded() -> Self {
-		SnapshotBounds { count: None, size: None }
+		ElectionBounds { count: None, size: None }
 	}
 
 	// Returns true if `given_size` or `given_count` exhausts `self.size` or `self_count`
 	// respectively.
-	pub fn exhausted(self, given_size: u32, given_count: u32) -> bool {
-		self.size.map_or(false, |size| given_size > size) ||
-			self.count.map_or(false, |count| given_count > count)
+	pub fn exhausted(self, given_size: Option<u32>, given_count: Option<u32>) -> bool {
+		self.size.map_or(false, |size| given_size.unwrap_or(0) > size) ||
+			self.count.map_or(false, |count| given_count.unwrap_or(0) > count)
 	}
 }
 
-/// Utility builder for [`SnapshotBounds`].
+impl PartialEq for ElectionBounds {
+	fn eq(&self, other: &Self) -> bool {
+		self.count == other.count || self.size == self.size
+	}
+}
+
+impl PartialOrd for ElectionBounds {
+	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+		Some(self.cmp(other))
+	}
+}
+
+impl Ord for ElectionBounds {
+	fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+		if self.count == other.count {
+			self.size.cmp(&other.size)
+		} else {
+			self.count.cmp(&other.count)
+		}
+	}
+}
+
+/// Utility builder for [`ElectionBounds`].
 ///
 /// The main purpose of this is to prevent mixing the order of similarly typed arguments (e.g. u32
 /// size and count).
-pub struct SnapshotBoundsBuilder {
+#[derive(Copy, Clone)]
+pub struct ElectionBoundsBuilder {
 	count: Option<u32>,
 	size: Option<u32>,
 }
 
-impl SnapshotBoundsBuilder {
-	/// set the count of the snapshot.
-	pub fn count(mut self, count: Option<u32>) -> SnapshotBoundsBuilder {
+impl ElectionBoundsBuilder {
+	/// Returns a new election bounds builder
+	pub fn new() -> Self {
+		ElectionBoundsBuilder { count: None, size: None }
+	}
+
+	/// Set the count of the snapshot.
+	pub fn count(mut self, count: Option<u32>) -> Self {
 		self.count = count;
 		self
 	}
 
 	/// Set the size of the snapshot.
-	pub fn size(mut self, size: Option<u32>) -> SnapshotBoundsBuilder {
+	pub fn size(mut self, size: Option<u32>) -> Self {
 		self.size = size;
 		self
 	}
 
-	/// Returns an instance of `SnapshotBounds` from the current state.
-	pub fn build(self) -> SnapshotBounds {
-		SnapshotBounds { count: self.count, size: self.size }
+	/// Returns an instance of `ElectionBounds` from the current state.
+	pub fn build(self) -> ElectionBounds {
+		ElectionBounds { count: self.count, size: self.size }
 	}
 }
 

@@ -231,8 +231,8 @@
 
 use codec::{Decode, Encode};
 use frame_election_provider_support::{
-	BoundedSupportsOf, ElectionDataProvider, ElectionProvider, ElectionProviderBase,
-	InstantElectionProvider, NposSolution, SnapshotBounds,
+	BoundedSupportsOf, ElectionBounds, ElectionBoundsBuilder, ElectionDataProvider,
+	ElectionProvider, ElectionProviderBase, InstantElectionProvider, NposSolution,
 };
 use frame_support::{
 	dispatch::DispatchClass,
@@ -671,13 +671,13 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxWinners: Get<u32>;
 
-        // The limits of targets to include in the snapshot per block.
-        #[pallet::constant]
-        type TargetSnapshotBounds: Get<SnapshotBounds>;
+		// The limits of targets to include in the snapshot per block.
+		#[pallet::constant]
+		type TargetsBounds: Get<ElectionBounds>;
 
-        // The limits of voters to include in the snapshot per block.
-        #[pallet::constant]
-        type VoterSnapshotBounds: Get<SnapshotBounds>;
+		// The limits of voters to include in the snapshot per block.
+		#[pallet::constant]
+		type VotersBounds: Get<ElectionBounds>;
 
 		/// Handler for the slashed deposits.
 		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -1086,14 +1086,13 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 			ensure!(Self::current_phase().is_emergency(), <Error<T>>::CallNotAllowed);
-
-			let supports =
-				T::GovernanceFallback::instant_elect(maybe_max_voters, maybe_max_targets).map_err(
-					|e| {
-						log!(error, "GovernanceFallback failed: {:?}", e);
-						Error::<T>::FallbackFailed
-					},
-				)?;
+			let voters_bounds = ElectionBoundsBuilder::new().count(maybe_max_voters).build();
+			let targets_bounds = ElectionBoundsBuilder::new().count(maybe_max_voters).build();
+			let supports = T::GovernanceFallback::instant_elect(voters_bounds, targets_bounds)
+				.map_err(|e| {
+					log!(error, "GovernanceFallback failed: {:?}", e);
+					Error::<T>::FallbackFailed
+				})?;
 
 			// transform BoundedVec<_, T::GovernanceFallback::MaxWinners> into
 			// `BoundedVec<_, T::MaxWinners>`
@@ -1409,17 +1408,18 @@ impl<T: Config> Pallet<T> {
 	/// Extracted for easier weight calculation.
 	fn create_snapshot_external(
 	) -> Result<(Vec<T::AccountId>, Vec<VoterOf<T>>, u32), ElectionError<T>> {
+		// TODO: do we need T::MaxElect* limits now or can we rely on T::*Bounds?
 		let target_limit = T::MaxElectableTargets::get().saturated_into::<usize>();
 		let voter_limit = T::MaxElectingVoters::get().saturated_into::<usize>();
 
-        let target_bounds = T::TargetSnapshotBounds::get();
-        let voter_bounds = T::VoterSnapshotBounds::get();
+		let targets_bounds = T::TargetsBounds::get();
+		let voters_bounds = T::VotersBounds::get();
 
-		let targets = T::DataProvider::electable_targets(Some(target_limit))
+		let targets = T::DataProvider::electable_targets(targets_bounds)
 			.map_err(ElectionError::DataProvider)?;
 
-		let voters = T::DataProvider::electing_voters(Some(voter_limit))
-			.map_err(ElectionError::DataProvider)?;
+		let voters =
+			T::DataProvider::electing_voters(voters_bounds).map_err(ElectionError::DataProvider)?;
 
 		if targets.len() > target_limit || voters.len() > voter_limit {
 			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
@@ -1600,15 +1600,18 @@ impl<T: Config> Pallet<T> {
 		<QueuedSolution<T>>::take()
 			.ok_or(ElectionError::<T>::NothingQueued)
 			.or_else(|_| {
-				T::Fallback::instant_elect(None, None)
-					.map_err(|fe| ElectionError::Fallback(fe))
-					.and_then(|supports| {
-						Ok(ReadySolution {
-							supports,
-							score: Default::default(),
-							compute: ElectionCompute::Fallback,
-						})
+				T::Fallback::instant_elect(
+					ElectionBounds::new_unbounded(),
+					ElectionBounds::new_unbounded(),
+				)
+				.map_err(|fe| ElectionError::Fallback(fe))
+				.and_then(|supports| {
+					Ok(ReadySolution {
+						supports,
+						score: Default::default(),
+						compute: ElectionCompute::Fallback,
 					})
+				})
 			})
 			.map(|ReadySolution { compute, score, supports }| {
 				Self::deposit_event(Event::ElectionFinalized { compute, score });

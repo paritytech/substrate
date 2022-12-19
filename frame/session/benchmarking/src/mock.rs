@@ -151,8 +151,8 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type DataProvider = Staking;
 	type WeightInfo = ();
 	type MaxWinners = ConstU32<100>;
-	type VotersBound = ConstU32<{ u32::MAX }>;
-	type TargetsBound = ConstU32<{ u32::MAX }>;
+	type VotersBounds = ElectionsBounds::new_unbounded();
+	type TargetsBounds = ElectionsBounds::new_unbounded();
 }
 
 impl pallet_staking::Config for Test {
