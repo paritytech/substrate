@@ -19,7 +19,8 @@ fn emit_error<T: Into<TokenStream> + Clone, S: Into<String>>(item: &T, message: 
 }
 
 struct BenchmarkDef {
-	params: Vec<(String, u32, u32)>,
+	//           name,   typ,    A,   B
+	params: Vec<(String, String, u32, u32)>,
 	setup_stmts: Vec<Stmt>,
 	extrinsic_call_stmt: Stmt,
 	extrinsic_call_fn: ExprCall,
@@ -29,6 +30,7 @@ struct BenchmarkDef {
 impl BenchmarkDef {
 	pub fn from(item_fn: &ItemFn) -> Option<BenchmarkDef> {
 		let mut i = 0; // index of child
+		let params: Vec<(String, String, u32, u32)> = Vec::new();
 		for arg in &item_fn.sig.inputs {
 			// parse params such as "x: Linear<0, 1>"
 			let mut name: Option<String> = None;
@@ -59,7 +61,7 @@ impl BenchmarkDef {
 							let mut fn_call_copy = fn_call.clone();
 							fn_call_copy.attrs.remove(k); // consume #[extrinsic call]
 							return Some(BenchmarkDef {
-								params: Vec::new(),
+								params,
 								setup_stmts: Vec::from(&item_fn.block.stmts[0..i]),
 								extrinsic_call_stmt: Stmt::Semi(
 									Expr::Call(fn_call_copy.clone()),
@@ -78,19 +80,6 @@ impl BenchmarkDef {
 			i += 1;
 		}
 		return None
-	}
-}
-
-struct BareBlock {
-	stmts: Vec<Stmt>,
-}
-
-impl Parse for BareBlock {
-	fn parse(input: ParseStream) -> syn::Result<Self> {
-		match Block::parse_within(input) {
-			Ok(stmts) => Ok(BareBlock { stmts }),
-			Err(e) => Err(e),
-		}
 	}
 }
 
