@@ -21,6 +21,7 @@
 use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 use sp_api::ApiError;
 use sp_version::RuntimeVersion;
+use std::num::NonZeroUsize;
 
 /// The network config parameter is used when a function
 /// needs to request the information from its peers.
@@ -36,7 +37,7 @@ pub struct NetworkConfig {
 	/// # Note
 	///
 	/// A zero value is illegal.
-	max_parallel: u64,
+	max_parallel: NonZeroUsize,
 	/// The time, in milliseconds, after which a single requests towards one peer
 	/// is considered unsuccessful.
 	timeout_ms: u64,
@@ -463,7 +464,11 @@ mod tests {
 
 	#[test]
 	fn chain_head_network_config() {
-		let conf = NetworkConfig { total_attempts: 1, max_parallel: 2, timeout_ms: 3 };
+		let conf = NetworkConfig {
+			total_attempts: 1,
+			max_parallel: NonZeroUsize::new(2).expect("Non zero number; qed"),
+			timeout_ms: 3,
+		};
 
 		let ser = serde_json::to_string(&conf).unwrap();
 		let exp = r#"{"totalAttempts":1,"maxParallel":2,"timeoutMs":3}"#;
