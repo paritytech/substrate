@@ -23,6 +23,7 @@ use super::*;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_support::{
 	assert_ok,
+	storage::bounded_vec::BoundedVec,
 	traits::{
 		fungible::Unbalanced,
 		fungibles::{Create, Mutate},
@@ -164,6 +165,8 @@ benchmarks! {
 		let asset2 = MultiAssetId::Asset(0.into());
 		let (lp_token, caller, _) = create_asset_and_pool::<T>(asset1, asset2);
 		let deadline = T::BlockNumber::max_value();
+		let path: BoundedVec<_, T::MaxSwapPathLength> =
+			BoundedVec::try_from(vec![asset1, asset2]).unwrap();
 
 		Dex::<T>::add_liquidity(
 			SystemOrigin::Signed(caller.clone()).into(),
@@ -177,15 +180,13 @@ benchmarks! {
 			deadline,
 			false,
 		)?;
-	}: _(SystemOrigin::Signed(caller.clone()), asset1, asset2, 5.into(), 1.into(), caller.clone(), deadline, false)
+	}: _(SystemOrigin::Signed(caller.clone()), path.clone(), 5.into(), 1.into(), caller.clone(), deadline, false)
 	verify {
 		let pool_id = (asset1, asset2);
 		assert_last_event::<T>(Event::SwapExecuted {
 			who: caller.clone(),
 			send_to: caller.clone(),
-			asset1,
-			asset2,
-			pool_id,
+			path,
 			amount_in: 5.into(),
 			amount_out: 3.into(),
 		}.into());
@@ -196,6 +197,8 @@ benchmarks! {
 		let asset2 = MultiAssetId::Asset(0.into());
 		let (lp_token, caller, _) = create_asset_and_pool::<T>(asset1, asset2);
 		let deadline = T::BlockNumber::max_value();
+		let path: BoundedVec<_, T::MaxSwapPathLength> =
+			BoundedVec::try_from(vec![asset1, asset2]).unwrap();
 
 		Dex::<T>::add_liquidity(
 			SystemOrigin::Signed(caller.clone()).into(),
@@ -209,15 +212,13 @@ benchmarks! {
 			deadline,
 			false,
 		)?;
-	}: _(SystemOrigin::Signed(caller.clone()), asset1, asset2, 3.into(), 8.into(), caller.clone(), deadline, false)
+	}: _(SystemOrigin::Signed(caller.clone()), path.clone(), 3.into(), 8.into(), caller.clone(), deadline, false)
 	verify {
 		let pool_id = (asset1, asset2);
 		assert_last_event::<T>(Event::SwapExecuted {
 			who: caller.clone(),
 			send_to: caller.clone(),
-			asset1,
-			asset2,
-			pool_id,
+			path,
 			amount_in: 5.into(),
 			amount_out: 3.into(),
 		}.into());
