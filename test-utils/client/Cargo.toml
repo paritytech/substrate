@@ -1,5 +1,6 @@
 [package]
 name = "substrate-test-client"
+description = "Client testing utilities"
 version = "2.0.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"

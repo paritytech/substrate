@@ -92,7 +92,7 @@ mod solution_type {
 
 	#[test]
 	fn from_assignment_fail_too_many_voters() {
-		let rng = rand::rngs::SmallRng::seed_from_u64(0);
+		let rng = rand::rngs::SmallRng::seed_from_u64(1);
 
 		// This will produce 24 voters..
 		let (voters, assignments, candidates) = generate_random_votes(10, 25, rng);

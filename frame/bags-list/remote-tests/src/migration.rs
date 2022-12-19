@@ -30,7 +30,7 @@ pub async fn execute<Runtime, Block>(
 	ws_url: String,
 ) where
 	Runtime: RuntimeT<pallet_bags_list::Instance1>,
-	Block: BlockT,
+	Block: BlockT + DeserializeOwned,
 	Block::Header: DeserializeOwned,
 {
 	let mut ext = Builder::<Block>::new()

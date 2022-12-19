@@ -89,6 +89,10 @@ where
 		}
 	}
 
+	pub(crate) fn validator_set(&self) -> &ValidatorSet<Public> {
+		&self.validator_set
+	}
+
 	pub(crate) fn validator_set_id(&self) -> ValidatorSetId {
 		self.validator_set.id()
 	}

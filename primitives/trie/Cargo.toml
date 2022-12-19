@@ -24,7 +24,7 @@ hashbrown = { version = "0.12.3", optional = true }
 hash-db = { version = "0.15.2", default-features = false }
 lazy_static = { version = "1.4.0", optional = true }
 lru = { version = "0.8.1", optional = true }
-memory-db = { version = "0.30.0", default-features = false }
+memory-db = { version = "0.31.0", default-features = false }
 nohash-hasher = { version = "0.2.0", optional = true }
 parking_lot = { version = "0.12.1", optional = true }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
@@ -38,7 +38,7 @@ sp-std = { version = "5.0.0", default-features = false, path = "../std" }
 [dev-dependencies]
 array-bytes = "4.1"
 criterion = "0.3.3"
-trie-bench = "0.32.0"
+trie-bench = "0.33.0"
 trie-standardmap = "0.15.2"
 sp-runtime = { version = "7.0.0", path = "../runtime" }
 
@@ -62,4 +62,3 @@ std = [
 	"trie-db/std",
 	"trie-root/std",
 ]
-memory-tracker = []

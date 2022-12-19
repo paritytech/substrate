@@ -22,7 +22,7 @@ sp-runtime = { version = "7.0.0", default-features = false, path = "../runtime" 
 sp-std = { version = "5.0.0", default-features = false, path = "../std" }
 
 [dev-dependencies]
-rand = "0.7.3"
+rand = "0.8.5"
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 
 [features]
