@@ -44,7 +44,6 @@ use std::{
 	time::Duration,
 };
 use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt as _};
-use tokio::runtime::Handle;
 
 fn set_default_expecations_no_peers(
 	chain_sync: &mut MockChainSync<substrate_test_runtime_client::runtime::Block>,
@@ -72,7 +71,7 @@ async fn normal_network_poll_no_peers() {
 	let chain_sync_service =
 		Box::new(MockChainSyncInterface::<substrate_test_runtime_client::runtime::Block>::new());
 
-	let mut network = TestNetworkBuilder::new(Handle::current())
+	let mut network = TestNetworkBuilder::new()
 		.with_chain_sync((chain_sync, chain_sync_service))
 		.build();
 
@@ -104,7 +103,7 @@ async fn request_justification() {
 	let mut chain_sync = MockChainSync::<substrate_test_runtime_client::runtime::Block>::new();
 
 	set_default_expecations_no_peers(&mut chain_sync);
-	let mut network = TestNetworkBuilder::new(Handle::current())
+	let mut network = TestNetworkBuilder::new()
 		.with_chain_sync((Box::new(chain_sync), chain_sync_service))
 		.build();
 
@@ -135,7 +134,7 @@ async fn clear_justification_requests() {
 		Box::new(MockChainSync::<substrate_test_runtime_client::runtime::Block>::new());
 
 	set_default_expecations_no_peers(&mut chain_sync);
-	let mut network = TestNetworkBuilder::new(Handle::current())
+	let mut network = TestNetworkBuilder::new()
 		.with_chain_sync((chain_sync, chain_sync_service))
 		.build();
 
@@ -174,7 +173,7 @@ async fn set_sync_fork_request() {
 		.once()
 		.returning(|_, _, _| ());
 
-	let mut network = TestNetworkBuilder::new(Handle::current())
+	let mut network = TestNetworkBuilder::new()
 		.with_chain_sync((chain_sync, Box::new(chain_sync_service)))
 		.build();
 
@@ -218,7 +217,7 @@ async fn on_block_finalized() {
 		.returning(|_, _| ());
 
 	set_default_expecations_no_peers(&mut chain_sync);
-	let mut network = TestNetworkBuilder::new(Handle::current())
+	let mut network = TestNetworkBuilder::new()
 		.with_client(client)
 		.with_chain_sync((chain_sync, chain_sync_service))
 		.build();
@@ -316,7 +315,7 @@ async fn invalid_justification_imported() {
 	let justification_info = Arc::new(RwLock::new(None));
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
-	let (service1, mut event_stream1) = TestNetworkBuilder::new(Handle::current())
+	let (service1, mut event_stream1) = TestNetworkBuilder::new()
 		.with_import_queue(Box::new(DummyImportQueue(
 			justification_info.clone(),
 			DummyImportQueueHandle {},
@@ -325,7 +324,7 @@ async fn invalid_justification_imported() {
 		.build()
 		.start_network();
 
-	let (service2, mut event_stream2) = TestNetworkBuilder::new(Handle::current())
+	let (service2, mut event_stream2) = TestNetworkBuilder::new()
 		.with_set_config(SetConfig {
 			reserved_nodes: vec![MultiaddrWithPeerId {
 				multiaddr: listen_addr,
@@ -393,7 +392,7 @@ async fn disconnect_peer_using_chain_sync_handle() {
 	)
 	.unwrap();
 
-	let (node1, mut event_stream1) = TestNetworkBuilder::new(Handle::current())
+	let (node1, mut event_stream1) = TestNetworkBuilder::new()
 		.with_listen_addresses(vec![listen_addr.clone()])
 		.with_chain_sync((Box::new(chain_sync), Box::new(chain_sync_service)))
 		.with_chain_sync_network((chain_sync_network_provider, chain_sync_network_handle))
@@ -401,7 +400,7 @@ async fn disconnect_peer_using_chain_sync_handle() {
 		.build()
 		.start_network();
 
-	let (node2, mut event_stream2) = TestNetworkBuilder::new(Handle::current())
+	let (node2, mut event_stream2) = TestNetworkBuilder::new()
 		.with_set_config(SetConfig {
 			reserved_nodes: vec![MultiaddrWithPeerId {
 				multiaddr: listen_addr,

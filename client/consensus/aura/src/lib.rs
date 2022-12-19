@@ -660,7 +660,6 @@ mod tests {
 		runtime::{Header, H256},
 		TestClient,
 	};
-	use tokio::runtime::{Handle, Runtime};
 
 	const SLOT_DURATION_MS: u64 = 1000;
 
@@ -718,18 +717,9 @@ mod tests {
 	>;
 	type AuraPeer = Peer<(), PeersClient>;
 
+	#[derive(Default)]
 	pub struct AuraTestNet {
-		rt_handle: Handle,
 		peers: Vec<AuraPeer>,
-	}
-
-	impl WithRuntime for AuraTestNet {
-		fn with_runtime(rt_handle: Handle) -> Self {
-			AuraTestNet { rt_handle, peers: Vec::new() }
-		}
-		fn rt_handle(&self) -> &Handle {
-			&self.rt_handle
-		}
 	}
 
 	impl TestNetFactory for AuraTestNet {
@@ -780,11 +770,10 @@ mod tests {
 		}
 	}
 
-	#[test]
-	fn authoring_blocks() {
+	#[tokio::test]
+	async fn authoring_blocks() {
 		sp_tracing::try_init_simple();
-		let runtime = Runtime::new().unwrap();
-		let net = AuraTestNet::new(runtime.handle().clone(), 3);
+		let net = AuraTestNet::new(3);
 
 		let peers = &[(0, Keyring::Alice), (1, Keyring::Bob), (2, Keyring::Charlie)];
 
@@ -850,13 +839,14 @@ mod tests {
 			);
 		}
 
-		runtime.block_on(future::select(
+		future::select(
 			future::poll_fn(move |cx| {
 				net.lock().poll(cx);
 				Poll::<()>::Pending
 			}),
 			future::select(future::join_all(aura_futures), future::join_all(import_notifications)),
-		));
+		)
+		.await;
 	}
 
 	#[test]
@@ -875,10 +865,9 @@ mod tests {
 		);
 	}
 
-	#[test]
-	fn current_node_authority_should_claim_slot() {
-		let runtime = Runtime::new().unwrap();
-		let net = AuraTestNet::new(runtime.handle().clone(), 4);
+	#[tokio::test]
+	async fn current_node_authority_should_claim_slot() {
+		let net = AuraTestNet::new(4);
 
 		let mut authorities = vec![
 			Keyring::Alice.public().into(),
@@ -922,20 +911,19 @@ mod tests {
 			Default::default(),
 			Default::default(),
 		);
-		assert!(runtime.block_on(worker.claim_slot(&head, 0.into(), &authorities)).is_none());
-		assert!(runtime.block_on(worker.claim_slot(&head, 1.into(), &authorities)).is_none());
-		assert!(runtime.block_on(worker.claim_slot(&head, 2.into(), &authorities)).is_none());
-		assert!(runtime.block_on(worker.claim_slot(&head, 3.into(), &authorities)).is_some());
-		assert!(runtime.block_on(worker.claim_slot(&head, 4.into(), &authorities)).is_none());
-		assert!(runtime.block_on(worker.claim_slot(&head, 5.into(), &authorities)).is_none());
-		assert!(runtime.block_on(worker.claim_slot(&head, 6.into(), &authorities)).is_none());
-		assert!(runtime.block_on(worker.claim_slot(&head, 7.into(), &authorities)).is_some());
+		assert!(worker.claim_slot(&head, 0.into(), &authorities).await.is_none());
+		assert!(worker.claim_slot(&head, 1.into(), &authorities).await.is_none());
+		assert!(worker.claim_slot(&head, 2.into(), &authorities).await.is_none());
+		assert!(worker.claim_slot(&head, 3.into(), &authorities).await.is_some());
+		assert!(worker.claim_slot(&head, 4.into(), &authorities).await.is_none());
+		assert!(worker.claim_slot(&head, 5.into(), &authorities).await.is_none());
+		assert!(worker.claim_slot(&head, 6.into(), &authorities).await.is_none());
+		assert!(worker.claim_slot(&head, 7.into(), &authorities).await.is_some());
 	}
 
-	#[test]
-	fn on_slot_returns_correct_block() {
-		let runtime = Runtime::new().unwrap();
-		let net = AuraTestNet::new(runtime.handle().clone(), 4);
+	#[tokio::test]
+	async fn on_slot_returns_correct_block() {
+		let net = AuraTestNet::new(4);
 
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 		let keystore = LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore.");
@@ -971,15 +959,16 @@ mod tests {
 
 		let head = client.header(&BlockId::Number(0)).unwrap().unwrap();
 
-		let res = runtime
-			.block_on(worker.on_slot(SlotInfo {
+		let res = worker
+			.on_slot(SlotInfo {
 				slot: 0.into(),
 				ends_at: Instant::now() + Duration::from_secs(100),
 				create_inherent_data: Box::new(()),
 				duration: Duration::from_millis(1000),
 				chain_head: head,
 				block_size_limit: None,
-			}))
+			})
+			.await
 			.unwrap();
 
 		// The returned block should be imported and we should be able to get its header by now.

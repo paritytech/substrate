@@ -17,20 +17,17 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 bytes = { version = "1.1.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "3.1.3", default-features = false, features = ["bytes"] }
-hash-db = { version = "0.15.2", default-features = false }
 sp-core = { version = "7.0.0", default-features = false, path = "../core" }
 sp-keystore = { version = "0.13.0", default-features = false, optional = true, path = "../keystore" }
 sp-std = { version = "5.0.0", default-features = false, path = "../std" }
 libsecp256k1 = { version = "0.7", optional = true }
 sp-state-machine = { version = "0.13.0", default-features = false, optional = true, path = "../state-machine" }
-sp-wasm-interface = { version = "7.0.0", path = "../wasm-interface", default-features = false }
 sp-runtime-interface = { version = "7.0.0", default-features = false, path = "../runtime-interface" }
 sp-trie = { version = "7.0.0", default-features = false, optional = true, path = "../trie" }
 sp-externalities = { version = "0.13.0", default-features = false, path = "../externalities" }
 sp-tracing = { version = "6.0.0", default-features = false, path = "../tracing" }
 log = { version = "0.4.17", optional = true }
 futures = { version = "0.3.21", features = ["thread-pool"], optional = true }
-parking_lot = { version = "0.12.1", optional = true }
 secp256k1 = { version = "0.24.0", features = ["recovery", "global-context"], optional = true }
 tracing = { version = "0.1.29", default-features = false }
 tracing-core = { version = "0.1.28", default-features = false}
@@ -45,19 +42,16 @@ std = [
 	"sp-keystore",
 	"codec/std",
 	"sp-std/std",
-	"hash-db/std",
 	"sp-trie/std",
 	"sp-state-machine/std",
 	"libsecp256k1",
 	"secp256k1",
 	"sp-runtime-interface/std",
-	"sp-wasm-interface/std",
 	"sp-tracing/std",
 	"tracing/std",
 	"tracing-core/std",
 	"log",
 	"futures",
-	"parking_lot",
 	"ed25519-dalek",
 ]
 

@@ -30,7 +30,7 @@ use sc_consensus::{
 use sc_network::config::Role;
 use sc_network_test::{
 	Block, BlockImportAdapter, FullPeerConfig, Hash, PassThroughVerifier, Peer, PeersClient,
-	PeersFullClient, TestClient, TestNetFactory, WithRuntime,
+	PeersFullClient, TestClient, TestNetFactory,
 };
 use sp_api::{ApiRef, ProvideRuntimeApi};
 use sp_blockchain::Result;
@@ -52,7 +52,7 @@ use std::{
 	pin::Pin,
 };
 use substrate_test_runtime_client::runtime::BlockNumber;
-use tokio::runtime::{Handle, Runtime};
+use tokio::runtime::Handle;
 
 use authorities::AuthoritySet;
 use communication::grandpa_protocol_name;
@@ -71,26 +71,16 @@ type GrandpaBlockImport = crate::GrandpaBlockImport<
 	LongestChain<substrate_test_runtime_client::Backend, Block>,
 >;
 
+#[derive(Default)]
 struct GrandpaTestNet {
 	peers: Vec<GrandpaPeer>,
 	test_config: TestApi,
-	rt_handle: Handle,
-}
-
-impl WithRuntime for GrandpaTestNet {
-	fn with_runtime(rt_handle: Handle) -> Self {
-		GrandpaTestNet { peers: Vec::new(), test_config: TestApi::default(), rt_handle }
-	}
-	fn rt_handle(&self) -> &Handle {
-		&self.rt_handle
-	}
 }
 
 impl GrandpaTestNet {
-	fn new(test_config: TestApi, n_authority: usize, n_full: usize, rt_handle: Handle) -> Self {
-		let mut net = GrandpaTestNet::with_runtime(rt_handle);
-		net.peers = Vec::with_capacity(n_authority + n_full);
-		net.test_config = test_config;
+	fn new(test_config: TestApi, n_authority: usize, n_full: usize) -> Self {
+		let mut net =
+			GrandpaTestNet { peers: Vec::with_capacity(n_authority + n_full), test_config };
 
 		for _ in 0..n_authority {
 			net.add_authority_peer();
@@ -228,16 +218,12 @@ fn create_keystore(authority: Ed25519Keyring) -> SyncCryptoStorePtr {
 	keystore
 }
 
-fn block_until_complete(
-	future: impl Future + Unpin,
-	net: &Arc<Mutex<GrandpaTestNet>>,
-	runtime: &mut Runtime,
-) {
+async fn run_until_complete(future: impl Future + Unpin, net: &Arc<Mutex<GrandpaTestNet>>) {
 	let drive_to_completion = futures::future::poll_fn(|cx| {
 		net.lock().poll(cx);
 		Poll::<()>::Pending
 	});
-	runtime.block_on(future::select(future, drive_to_completion));
+	future::select(future, drive_to_completion).await;
 }
 
 // Spawns grandpa voters. Returns a future to spawn on the runtime.
@@ -289,8 +275,7 @@ fn initialize_grandpa(
 
 // run the voters to completion. provide a closure to be invoked after
 // the voters are spawned but before blocking on them.
-fn run_to_completion_with<F>(
-	runtime: &mut Runtime,
+async fn run_to_completion_with<F>(
 	blocks: u64,
 	net: Arc<Mutex<GrandpaTestNet>>,
 	peers: &[Ed25519Keyring],
@@ -303,7 +288,7 @@ where
 
 	let highest_finalized = Arc::new(RwLock::new(0));
 
-	if let Some(f) = (with)(runtime.handle().clone()) {
+	if let Some(f) = (with)(Handle::current()) {
 		wait_for.push(f);
 	};
 
@@ -329,18 +314,17 @@ where
 	// wait for all finalized on each.
 	let wait_for = ::futures::future::join_all(wait_for);
 
-	block_until_complete(wait_for, &net, runtime);
+	run_until_complete(wait_for, &net).await;
 	let highest_finalized = *highest_finalized.read();
 	highest_finalized
 }
 
-fn run_to_completion(
-	runtime: &mut Runtime,
+async fn run_to_completion(
 	blocks: u64,
 	net: Arc<Mutex<GrandpaTestNet>>,
 	peers: &[Ed25519Keyring],
 ) -> u64 {
-	run_to_completion_with(runtime, blocks, net, peers, |_| None)
+	run_to_completion_with(blocks, net, peers, |_| None).await
 }
 
 fn add_scheduled_change(block: &mut Block, change: ScheduledChange<BlockNumber>) {
@@ -361,17 +345,16 @@ fn add_forced_change(
 	));
 }
 
-#[test]
-fn finalize_3_voters_no_observers() {
+#[tokio::test]
+async fn finalize_3_voters_no_observers() {
 	sp_tracing::try_init_simple();
-	let mut runtime = Runtime::new().unwrap();
 	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let voters = make_ids(peers);
 
-	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3, 0, runtime.handle().clone());
-	runtime.spawn(initialize_grandpa(&mut net, peers));
+	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3, 0);
+	tokio::spawn(initialize_grandpa(&mut net, peers));
 	net.peer(0).push_blocks(20, false);
-	runtime.block_on(net.wait_until_sync());
+	net.run_until_sync().await;
 	let hashof20 = net.peer(0).client().info().best_hash;
 
 	for i in 0..3 {
@@ -380,7 +363,7 @@ fn finalize_3_voters_no_observers() {
 	}
 
 	let net = Arc::new(Mutex::new(net));
-	run_to_completion(&mut runtime, 20, net.clone(), peers);
+	run_to_completion(20, net.clone(), peers).await;
 
 	// normally there's no justification for finalized blocks
 	assert!(
@@ -389,17 +372,15 @@ fn finalize_3_voters_no_observers() {
 	);
 }
 
-#[test]
-fn finalize_3_voters_1_full_observer() {
-	let mut runtime = Runtime::new().unwrap();
-
+#[tokio::test]
+async fn finalize_3_voters_1_full_observer() {
 	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let voters = make_ids(peers);
 
-	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3, 1, runtime.handle().clone());
-	runtime.spawn(initialize_grandpa(&mut net, peers));
+	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3, 1);
+	tokio::spawn(initialize_grandpa(&mut net, peers));
 
-	runtime.spawn({
+	tokio::spawn({
 		let peer_id = 3;
 		let net_service = net.peers[peer_id].network_service().clone();
 		let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
@@ -444,7 +425,7 @@ fn finalize_3_voters_1_full_observer() {
 	// wait for all finalized on each.
 	let wait_for = futures::future::join_all(finality_notifications).map(|_| ());
 
-	block_until_complete(wait_for, &net, &mut runtime);
+	run_until_complete(wait_for, &net).await;
 
 	// all peers should have stored the justification for the best finalized block #20
 	for peer_id in 0..4 {
@@ -456,8 +437,8 @@ fn finalize_3_voters_1_full_observer() {
 	}
 }
 
-#[test]
-fn transition_3_voters_twice_1_full_observer() {
+#[tokio::test]
+async fn transition_3_voters_twice_1_full_observer() {
 	sp_tracing::try_init_simple();
 	let peers_a = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 
@@ -478,8 +459,7 @@ fn transition_3_voters_twice_1_full_observer() {
 	let genesis_voters = make_ids(peers_a);
 
 	let api = TestApi::new(genesis_voters);
-	let mut runtime = Runtime::new().unwrap();
-	let net = Arc::new(Mutex::new(GrandpaTestNet::new(api, 8, 1, runtime.handle().clone())));
+	let net = Arc::new(Mutex::new(GrandpaTestNet::new(api, 8, 1)));
 
 	let mut voters = Vec::new();
 	for (peer_id, local_key) in all_peers.clone().into_iter().enumerate() {
@@ -516,7 +496,7 @@ fn transition_3_voters_twice_1_full_observer() {
 	}
 
 	net.lock().peer(0).push_blocks(1, false);
-	runtime.block_on(net.lock().wait_until_sync());
+	net.lock().run_until_sync().await;
 
 	for (i, peer) in net.lock().peers().iter().enumerate() {
 		let full_client = peer.client().as_client();
@@ -577,13 +557,13 @@ fn transition_3_voters_twice_1_full_observer() {
 				future::ready(())
 			});
 
-		runtime.spawn(block_production);
+		tokio::spawn(block_production);
 	}
 
 	let mut finality_notifications = Vec::new();
 
 	for voter in voters {
-		runtime.spawn(voter);
+		tokio::spawn(voter);
 	}
 
 	for (peer_id, _) in all_peers.into_iter().enumerate() {
@@ -607,24 +587,23 @@ fn transition_3_voters_twice_1_full_observer() {
 	// wait for all finalized on each.
 	let wait_for = ::futures::future::join_all(finality_notifications);
 
-	block_until_complete(wait_for, &net, &mut runtime);
+	run_until_complete(wait_for, &net).await;
 }
 
-#[test]
-fn justification_is_generated_periodically() {
-	let mut runtime = Runtime::new().unwrap();
+#[tokio::test]
+async fn justification_is_generated_periodically() {
 	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let voters = make_ids(peers);
 
-	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3, 0, runtime.handle().clone());
-	runtime.spawn(initialize_grandpa(&mut net, peers));
+	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3, 0);
+	tokio::spawn(initialize_grandpa(&mut net, peers));
 	net.peer(0).push_blocks(32, false);
-	runtime.block_on(net.wait_until_sync());
+	net.run_until_sync().await;
 
 	let hashof32 = net.peer(0).client().info().best_hash;
 
 	let net = Arc::new(Mutex::new(net));
-	run_to_completion(&mut runtime, 32, net.clone(), peers);
+	run_to_completion(32, net.clone(), peers).await;
 
 	// when block#32 (justification_period) is finalized, justification
 	// is required => generated
@@ -633,16 +612,15 @@ fn justification_is_generated_periodically() {
 	}
 }
 
-#[test]
-fn sync_justifications_on_change_blocks() {
-	let mut runtime = Runtime::new().unwrap();
+#[tokio::test]
+async fn sync_justifications_on_change_blocks() {
 	let peers_a = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let peers_b = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob];
 	let voters = make_ids(peers_b);
 
 	// 4 peers, 3 of them are authorities and participate in grandpa
 	let api = TestApi::new(voters);
-	let mut net = GrandpaTestNet::new(api, 3, 1, runtime.handle().clone());
+	let mut net = GrandpaTestNet::new(api, 3, 1);
 	let voters = initialize_grandpa(&mut net, peers_a);
 
 	// add 20 blocks
@@ -664,15 +642,15 @@ fn sync_justifications_on_change_blocks() {
 
 	// add more blocks on top of it (until we have 25)
 	net.peer(0).push_blocks(4, false);
-	runtime.block_on(net.wait_until_sync());
+	net.run_until_sync().await;
 
 	for i in 0..4 {
 		assert_eq!(net.peer(i).client().info().best_number, 25, "Peer #{} failed to sync", i);
 	}
 
 	let net = Arc::new(Mutex::new(net));
-	runtime.spawn(voters);
-	run_to_completion(&mut runtime, 25, net.clone(), peers_a);
+	tokio::spawn(voters);
+	run_to_completion(25, net.clone(), peers_a).await;
 
 	// the first 3 peers are grandpa voters and therefore have already finalized
 	// block 21 and stored a justification
@@ -681,20 +659,20 @@ fn sync_justifications_on_change_blocks() {
 	}
 
 	// the last peer should get the justification by syncing from other peers
-	futures::executor::block_on(futures::future::poll_fn(move |cx| {
+	futures::future::poll_fn(move |cx| {
 		if net.lock().peer(3).client().justifications(hashof21).unwrap().is_none() {
 			net.lock().poll(cx);
 			Poll::Pending
 		} else {
 			Poll::Ready(())
 		}
-	}))
+	})
+	.await;
 }
 
-#[test]
-fn finalizes_multiple_pending_changes_in_order() {
+#[tokio::test]
+async fn finalizes_multiple_pending_changes_in_order() {
 	sp_tracing::try_init_simple();
-	let mut runtime = Runtime::new().unwrap();
 
 	let peers_a = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let peers_b = &[Ed25519Keyring::Dave, Ed25519Keyring::Eve, Ed25519Keyring::Ferdie];
@@ -714,8 +692,8 @@ fn finalizes_multiple_pending_changes_in_order() {
 	// but all of them will be part of the voter set eventually so they should be
 	// all added to the network as authorities
 	let api = TestApi::new(genesis_voters);
-	let mut net = GrandpaTestNet::new(api, 6, 0, runtime.handle().clone());
-	runtime.spawn(initialize_grandpa(&mut net, all_peers));
+	let mut net = GrandpaTestNet::new(api, 6, 0);
+	tokio::spawn(initialize_grandpa(&mut net, all_peers));
 
 	// add 20 blocks
 	net.peer(0).push_blocks(20, false);
@@ -746,7 +724,7 @@ fn finalizes_multiple_pending_changes_in_order() {
 	// add more blocks on top of it (until we have 30)
 	net.peer(0).push_blocks(4, false);
 
-	runtime.block_on(net.wait_until_sync());
+	net.run_until_sync().await;
 
 	// all peers imported both change blocks
 	for i in 0..6 {
@@ -754,13 +732,12 @@ fn finalizes_multiple_pending_changes_in_order() {
 	}
 
 	let net = Arc::new(Mutex::new(net));
-	run_to_completion(&mut runtime, 30, net.clone(), all_peers);
+	run_to_completion(30, net.clone(), all_peers).await;
 }
 
-#[test]
-fn force_change_to_new_set() {
+#[tokio::test]
+async fn force_change_to_new_set() {
 	sp_tracing::try_init_simple();
-	let mut runtime = Runtime::new().unwrap();
 	// two of these guys are offline.
 	let genesis_authorities = &[
 		Ed25519Keyring::Alice,
@@ -773,7 +750,7 @@ fn force_change_to_new_set() {
 	let api = TestApi::new(make_ids(genesis_authorities));
 
 	let voters = make_ids(peers_a);
-	let mut net = GrandpaTestNet::new(api, 3, 0, runtime.handle().clone());
+	let mut net = GrandpaTestNet::new(api, 3, 0);
 	let voters_future = initialize_grandpa(&mut net, peers_a);
 	let net = Arc::new(Mutex::new(net));
 
@@ -797,7 +774,7 @@ fn force_change_to_new_set() {
 	});
 
 	net.lock().peer(0).push_blocks(25, false);
-	runtime.block_on(net.lock().wait_until_sync());
+	net.lock().run_until_sync().await;
 
 	for (i, peer) in net.lock().peers().iter().enumerate() {
 		assert_eq!(peer.client().info().best_number, 26, "Peer #{} failed to sync", i);
@@ -813,18 +790,17 @@ fn force_change_to_new_set() {
 	// it will only finalize if the forced transition happens.
 	// we add_blocks after the voters are spawned because otherwise
 	// the link-halves have the wrong AuthoritySet
-	runtime.spawn(voters_future);
-	run_to_completion(&mut runtime, 25, net, peers_a);
+	tokio::spawn(voters_future);
+	run_to_completion(25, net, peers_a).await;
 }
 
-#[test]
-fn allows_reimporting_change_blocks() {
+#[tokio::test]
+async fn allows_reimporting_change_blocks() {
 	let peers_a = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let peers_b = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob];
 	let voters = make_ids(peers_a);
 	let api = TestApi::new(voters);
-	let runtime = Runtime::new().unwrap();
-	let mut net = GrandpaTestNet::new(api.clone(), 3, 0, runtime.handle().clone());
+	let mut net = GrandpaTestNet::new(api.clone(), 3, 0);
 
 	let client = net.peer(0).client().clone();
 	let (mut block_import, ..) = net.make_block_import(client.clone());
@@ -849,7 +825,7 @@ fn allows_reimporting_change_blocks() {
 	};
 
 	assert_eq!(
-		runtime.block_on(block_import.import_block(block(), HashMap::new())).unwrap(),
+		block_import.import_block(block(), HashMap::new()).await.unwrap(),
 		ImportResult::Imported(ImportedAux {
 			needs_justification: true,
 			clear_justification_requests: false,
@@ -860,19 +836,18 @@ fn allows_reimporting_change_blocks() {
 	);
 
 	assert_eq!(
-		runtime.block_on(block_import.import_block(block(), HashMap::new())).unwrap(),
+		block_import.import_block(block(), HashMap::new()).await.unwrap(),
 		ImportResult::AlreadyInChain
 	);
 }
 
-#[test]
-fn test_bad_justification() {
+#[tokio::test]
+async fn test_bad_justification() {
 	let peers_a = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let peers_b = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob];
 	let voters = make_ids(peers_a);
 	let api = TestApi::new(voters);
-	let runtime = Runtime::new().unwrap();
-	let mut net = GrandpaTestNet::new(api.clone(), 3, 0, runtime.handle().clone());
+	let mut net = GrandpaTestNet::new(api.clone(), 3, 0);
 
 	let client = net.peer(0).client().clone();
 	let (mut block_import, ..) = net.make_block_import(client.clone());
@@ -899,7 +874,7 @@ fn test_bad_justification() {
 	};
 
 	assert_eq!(
-		runtime.block_on(block_import.import_block(block(), HashMap::new())).unwrap(),
+		block_import.import_block(block(), HashMap::new()).await.unwrap(),
 		ImportResult::Imported(ImportedAux {
 			needs_justification: true,
 			clear_justification_requests: false,
@@ -910,18 +885,17 @@ fn test_bad_justification() {
 	);
 
 	assert_eq!(
-		runtime.block_on(block_import.import_block(block(), HashMap::new())).unwrap(),
+		block_import.import_block(block(), HashMap::new()).await.unwrap(),
 		ImportResult::AlreadyInChain
 	);
 }
 
-#[test]
-fn voter_persists_its_votes() {
+#[tokio::test]
+async fn voter_persists_its_votes() {
 	use futures::future;
 	use std::sync::atomic::{AtomicUsize, Ordering};
 
 	sp_tracing::try_init_simple();
-	let mut runtime = Runtime::new().unwrap();
 
 	// we have two authorities but we'll only be running the voter for alice
 	// we are going to be listening for the prevotes it casts
@@ -929,7 +903,7 @@ fn voter_persists_its_votes() {
 	let voters = make_ids(peers);
 
 	// alice has a chain with 20 blocks
-	let mut net = GrandpaTestNet::new(TestApi::new(voters.clone()), 2, 0, runtime.handle().clone());
+	let mut net = GrandpaTestNet::new(TestApi::new(voters.clone()), 2, 0);
 
 	// create the communication layer for bob, but don't start any
 	// voter. instead we'll listen for the prevote that alice casts
@@ -1046,10 +1020,10 @@ fn voter_persists_its_votes() {
 			})
 	}
 
-	runtime.spawn(alice_voter1);
+	tokio::spawn(alice_voter1);
 
 	net.peer(0).push_blocks(20, false);
-	runtime.block_on(net.wait_until_sync());
+	net.run_until_sync().await;
 
 	assert_eq!(net.peer(0).client().info().best_number, 20, "Peer #{} failed to sync", 0);
 
@@ -1066,7 +1040,7 @@ fn voter_persists_its_votes() {
 			HasVoted::No,
 		);
 
-		runtime.spawn(bob_network);
+		tokio::spawn(bob_network);
 
 		let round_tx = Arc::new(Mutex::new(round_tx));
 		let exit_tx = Arc::new(Mutex::new(Some(exit_tx)));
@@ -1074,15 +1048,13 @@ fn voter_persists_its_votes() {
 		let net = net.clone();
 		let state = Arc::new(AtomicUsize::new(0));
 
-		let runtime_handle = runtime.handle().clone();
-		runtime.spawn(round_rx.for_each(move |signed| {
+		tokio::spawn(round_rx.for_each(move |signed| {
 			let net2 = net.clone();
 			let net = net.clone();
 			let abort = abort.clone();
 			let round_tx = round_tx.clone();
 			let state = state.clone();
 			let exit_tx = exit_tx.clone();
-			let runtime_handle = runtime_handle.clone();
 
 			async move {
 				if state.compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst).unwrap() == 0 {
@@ -1119,7 +1091,7 @@ fn voter_persists_its_votes() {
 
 					// we restart alice's voter
 					abort.abort();
-					runtime_handle.spawn(alice_voter2(peers, net.clone()));
+					tokio::spawn(alice_voter2(peers, net.clone()));
 
 					// and we push our own prevote for block 30
 					let prevote =
@@ -1168,17 +1140,16 @@ fn voter_persists_its_votes() {
 		}));
 	}
 
-	block_until_complete(exit_rx.into_future(), &net, &mut runtime);
+	run_until_complete(exit_rx.into_future(), &net).await;
 }
 
-#[test]
-fn finalize_3_voters_1_light_observer() {
+#[tokio::test]
+async fn finalize_3_voters_1_light_observer() {
 	sp_tracing::try_init_simple();
-	let mut runtime = Runtime::new().unwrap();
 	let authorities = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let voters = make_ids(authorities);
 
-	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3, 1, runtime.handle().clone());
+	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3, 1);
 	let voters = initialize_grandpa(&mut net, authorities);
 	let observer = observer::run_grandpa_observer(
 		Config {
@@ -1196,7 +1167,7 @@ fn finalize_3_voters_1_light_observer() {
 	)
 	.unwrap();
 	net.peer(0).push_blocks(20, false);
-	runtime.block_on(net.wait_until_sync());
+	net.run_until_sync().await;
 
 	for i in 0..4 {
 		assert_eq!(net.peer(i).client().info().best_number, 20, "Peer #{} failed to sync", i);
@@ -1204,20 +1175,19 @@ fn finalize_3_voters_1_light_observer() {
 
 	let net = Arc::new(Mutex::new(net));
 
-	runtime.spawn(voters);
-	runtime.spawn(observer);
-	run_to_completion(&mut runtime, 20, net.clone(), authorities);
+	tokio::spawn(voters);
+	tokio::spawn(observer);
+	run_to_completion(20, net.clone(), authorities).await;
 }
 
-#[test]
-fn voter_catches_up_to_latest_round_when_behind() {
+#[tokio::test]
+async fn voter_catches_up_to_latest_round_when_behind() {
 	sp_tracing::try_init_simple();
-	let runtime = Runtime::new().unwrap();
 
 	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob];
 	let voters = make_ids(peers);
 
-	let net = GrandpaTestNet::new(TestApi::new(voters), 2, 0, runtime.handle().clone());
+	let net = GrandpaTestNet::new(TestApi::new(voters), 2, 0);
 
 	let net = Arc::new(Mutex::new(net));
 	let mut finality_notifications = Vec::new();
@@ -1269,11 +1239,11 @@ fn voter_catches_up_to_latest_round_when_behind() {
 
 		let voter = voter(Some(keystore), peer_id, link, net.clone());
 
-		runtime.spawn(voter);
+		tokio::spawn(voter);
 	}
 
 	net.lock().peer(0).push_blocks(50, false);
-	runtime.block_on(net.lock().wait_until_sync());
+	net.lock().run_until_sync().await;
 
 	// wait for them to finalize block 50. since they'll vote on 3/4 of the
 	// unfinalized chain it will take at least 4 rounds to do it.
@@ -1283,7 +1253,6 @@ fn voter_catches_up_to_latest_round_when_behind() {
 	// able to catch up to the latest round
 	let test = {
 		let net = net.clone();
-		let runtime = runtime.handle().clone();
 
 		wait_for_finality.then(move |_| {
 			net.lock().add_authority_peer();
@@ -1294,7 +1263,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 				link.take().expect("link initialized at startup; qed")
 			};
 			let set_state = link.persistent_data.set_state.clone();
-			runtime.spawn(voter(None, 2, link, net.clone()));
+			tokio::spawn(voter(None, 2, link, net.clone()));
 
 			let start_time = std::time::Instant::now();
 			let timeout = Duration::from_secs(5 * 60);
@@ -1319,7 +1288,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 		net.lock().poll(cx);
 		Poll::<()>::Pending
 	});
-	runtime.block_on(future::select(test, drive_to_completion));
+	future::select(test, drive_to_completion).await;
 }
 
 type TestEnvironment<N, VR> = Environment<
@@ -1374,15 +1343,14 @@ where
 	}
 }
 
-#[test]
-fn grandpa_environment_respects_voting_rules() {
+#[tokio::test]
+async fn grandpa_environment_respects_voting_rules() {
 	use finality_grandpa::voter::Environment;
 
 	let peers = &[Ed25519Keyring::Alice];
 	let voters = make_ids(peers);
 
-	let runtime = Runtime::new().unwrap();
-	let mut net = GrandpaTestNet::new(TestApi::new(voters), 1, 0, runtime.handle().clone());
+	let mut net = GrandpaTestNet::new(TestApi::new(voters), 1, 0);
 	let peer = net.peer(0);
 	let network_service = peer.network_service().clone();
 	let link = peer.data.lock().take().unwrap();
@@ -1412,8 +1380,9 @@ fn grandpa_environment_respects_voting_rules() {
 
 	// the unrestricted environment should just return the best block
 	assert_eq!(
-		runtime
-			.block_on(unrestricted_env.best_chain_containing(peer.client().info().finalized_hash))
+		unrestricted_env
+			.best_chain_containing(peer.client().info().finalized_hash)
+			.await
 			.unwrap()
 			.unwrap()
 			.1,
@@ -1423,8 +1392,9 @@ fn grandpa_environment_respects_voting_rules() {
 	// both the other environments should return block 16, which is 3/4 of the
 	// way in the unfinalized chain
 	assert_eq!(
-		runtime
-			.block_on(three_quarters_env.best_chain_containing(peer.client().info().finalized_hash))
+		three_quarters_env
+			.best_chain_containing(peer.client().info().finalized_hash)
+			.await
 			.unwrap()
 			.unwrap()
 			.1,
@@ -1432,8 +1402,9 @@ fn grandpa_environment_respects_voting_rules() {
 	);
 
 	assert_eq!(
-		runtime
-			.block_on(default_env.best_chain_containing(peer.client().info().finalized_hash))
+		default_env
+			.best_chain_containing(peer.client().info().finalized_hash)
+			.await
 			.unwrap()
 			.unwrap()
 			.1,
@@ -1445,8 +1416,9 @@ fn grandpa_environment_respects_voting_rules() {
 
 	// the 3/4 environment should propose block 21 for voting
 	assert_eq!(
-		runtime
-			.block_on(three_quarters_env.best_chain_containing(peer.client().info().finalized_hash))
+		three_quarters_env
+			.best_chain_containing(peer.client().info().finalized_hash)
+			.await
 			.unwrap()
 			.unwrap()
 			.1,
@@ -1456,8 +1428,9 @@ fn grandpa_environment_respects_voting_rules() {
 	// while the default environment will always still make sure we don't vote
 	// on the best block (2 behind)
 	assert_eq!(
-		runtime
-			.block_on(default_env.best_chain_containing(peer.client().info().finalized_hash))
+		default_env
+			.best_chain_containing(peer.client().info().finalized_hash)
+			.await
 			.unwrap()
 			.unwrap()
 			.1,
@@ -1472,8 +1445,9 @@ fn grandpa_environment_respects_voting_rules() {
 	// best block, there's a hard rule that we can't cast any votes lower than
 	// the given base (#21).
 	assert_eq!(
-		runtime
-			.block_on(default_env.best_chain_containing(peer.client().info().finalized_hash))
+		default_env
+			.best_chain_containing(peer.client().info().finalized_hash)
+			.await
 			.unwrap()
 			.unwrap()
 			.1,
@@ -1481,15 +1455,14 @@ fn grandpa_environment_respects_voting_rules() {
 	);
 }
 
-#[test]
-fn grandpa_environment_never_overwrites_round_voter_state() {
+#[tokio::test]
+async fn grandpa_environment_never_overwrites_round_voter_state() {
 	use finality_grandpa::voter::Environment;
 
 	let peers = &[Ed25519Keyring::Alice];
 	let voters = make_ids(peers);
 
-	let runtime = Runtime::new().unwrap();
-	let mut net = GrandpaTestNet::new(TestApi::new(voters), 1, 0, runtime.handle().clone());
+	let mut net = GrandpaTestNet::new(TestApi::new(voters), 1, 0);
 	let peer = net.peer(0);
 	let network_service = peer.network_service().clone();
 	let link = peer.data.lock().take().unwrap();
@@ -1544,16 +1517,15 @@ fn grandpa_environment_never_overwrites_round_voter_state() {
 	assert_matches!(get_current_round(2).unwrap(), HasVoted::Yes(_, _));
 }
 
-#[test]
-fn justification_with_equivocation() {
+#[tokio::test]
+async fn justification_with_equivocation() {
 	use sp_application_crypto::Pair;
 
 	// we have 100 authorities
 	let pairs = (0..100).map(|n| AuthorityPair::from_seed(&[n; 32])).collect::<Vec<_>>();
 	let voters = pairs.iter().map(AuthorityPair::public).map(|id| (id, 1)).collect::<Vec<_>>();
 	let api = TestApi::new(voters.clone());
-	let runtime = Runtime::new().unwrap();
-	let mut net = GrandpaTestNet::new(api.clone(), 1, 0, runtime.handle().clone());
+	let mut net = GrandpaTestNet::new(api.clone(), 1, 0);
 
 	// we create a basic chain with 3 blocks (no forks)
 	net.peer(0).push_blocks(3, false);
@@ -1612,16 +1584,15 @@ fn justification_with_equivocation() {
 	assert!(justification.verify(set_id, &voters).is_ok());
 }
 
-#[test]
-fn imports_justification_for_regular_blocks_on_import() {
+#[tokio::test]
+async fn imports_justification_for_regular_blocks_on_import() {
 	// NOTE: this is a regression test since initially we would only import
 	// justifications for authority change blocks, and would discard any
 	// existing justification otherwise.
 	let peers = &[Ed25519Keyring::Alice];
 	let voters = make_ids(peers);
 	let api = TestApi::new(voters);
-	let runtime = Runtime::new().unwrap();
-	let mut net = GrandpaTestNet::new(api.clone(), 1, 0, runtime.handle().clone());
+	let mut net = GrandpaTestNet::new(api.clone(), 1, 0);
 
 	let client = net.peer(0).client().clone();
 	let (mut block_import, ..) = net.make_block_import(client.clone());
@@ -1670,7 +1641,7 @@ fn imports_justification_for_regular_blocks_on_import() {
 	import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
 	assert_eq!(
-		runtime.block_on(block_import.import_block(import, HashMap::new())).unwrap(),
+		block_import.import_block(import, HashMap::new()).await.unwrap(),
 		ImportResult::Imported(ImportedAux {
 			needs_justification: false,
 			clear_justification_requests: false,
@@ -1684,17 +1655,15 @@ fn imports_justification_for_regular_blocks_on_import() {
 	assert!(client.justifications(block_hash).unwrap().is_some());
 }
 
-#[test]
-fn grandpa_environment_doesnt_send_equivocation_reports_for_itself() {
+#[tokio::test]
+async fn grandpa_environment_doesnt_send_equivocation_reports_for_itself() {
 	use finality_grandpa::voter::Environment;
 
 	let alice = Ed25519Keyring::Alice;
 	let voters = make_ids(&[alice]);
 
-	let runtime = Runtime::new().unwrap();
-
 	let environment = {
-		let mut net = GrandpaTestNet::new(TestApi::new(voters), 1, 0, runtime.handle().clone());
+		let mut net = GrandpaTestNet::new(TestApi::new(voters), 1, 0);
 		let peer = net.peer(0);
 		let network_service = peer.network_service().clone();
 		let link = peer.data.lock().take().unwrap();
@@ -1732,10 +1701,9 @@ fn grandpa_environment_doesnt_send_equivocation_reports_for_itself() {
 	assert!(environment.report_equivocation(equivocation_proof).is_ok());
 }
 
-#[test]
-fn revert_prunes_authority_changes() {
+#[tokio::test]
+async fn revert_prunes_authority_changes() {
 	sp_tracing::try_init_simple();
-	let runtime = Runtime::new().unwrap();
 
 	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 
@@ -1752,8 +1720,8 @@ fn revert_prunes_authority_changes() {
 
 	let api = TestApi::new(make_ids(peers));
 
-	let mut net = GrandpaTestNet::new(api, 3, 0, runtime.handle().clone());
-	runtime.spawn(initialize_grandpa(&mut net, peers));
+	let mut net = GrandpaTestNet::new(api, 3, 0);
+	tokio::spawn(initialize_grandpa(&mut net, peers));
 
 	let peer = net.peer(0);
 	let client = peer.client().as_client();
