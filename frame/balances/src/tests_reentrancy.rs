@@ -96,8 +96,7 @@ impl Config for Test {
 	type DustRemoval = OnDustRemoval;
 	type RuntimeEvent = RuntimeEvent;
 	type ExistentialDeposit = ExistentialDeposit;
-	type AccountStore =
-		StorageMapShim<super::Account<Test>, u64, super::AccountData<u64>>;
+	type AccountStore = StorageMapShim<super::Account<Test>, u64, super::AccountData<u64>>;
 	type MaxLocks = ConstU32<50>;
 	type MaxReserves = ConstU32<2>;
 	type ReserveIdentifier = TestId;
@@ -224,11 +223,7 @@ fn repatriating_reserved_balance_dust_removal_should_work() {
 		// Reserve a value on account 2,
 		// Such that free balance is lower than
 		// Exestintial deposit.
-		assert_ok!(Balances::reserve(&2, 450));
-
-		// Transfer of reserved fund from slashed account 2 to
-		// beneficiary account 1
-		assert_ok!(Balances::repatriate_reserved(&2, &1, 450, Status::Free), 0);
+		assert_ok!(Balances::transfer(RuntimeOrigin::signed(2), 1, 450));
 
 		// Since free balance of account 2 is lower than
 		// existential deposit, dust amount is
@@ -243,21 +238,19 @@ fn repatriating_reserved_balance_dust_removal_should_work() {
 		assert_eq!(Balances::free_balance(1), 1500);
 
 		// Verify the events
-		assert_eq!(System::events().len(), 11);
+		assert_eq!(System::events().len(), 10);
 
-		System::assert_has_event(RuntimeEvent::Balances(crate::Event::ReserveRepatriated {
+		System::assert_has_event(RuntimeEvent::Balances(crate::Event::Transfer {
 			from: 2,
 			to: 1,
 			amount: 450,
-			destination_status: Status::Free,
 		}));
 
 		System::assert_has_event(RuntimeEvent::Balances(crate::Event::DustLost {
 			account: 2,
 			amount: 50,
 		}));
-
-		System::assert_last_event(RuntimeEvent::Balances(crate::Event::Deposit {
+		System::assert_has_event(RuntimeEvent::Balances(crate::Event::Deposit {
 			who: 1,
 			amount: 50,
 		}));

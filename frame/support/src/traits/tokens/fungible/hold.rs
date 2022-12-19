@@ -17,8 +17,8 @@
 
 //! The traits for putting holds within a single fungible token class.
 
-use sp_runtime::TokenError;
 use crate::ensure;
+use sp_runtime::TokenError;
 use DepositConsequence::Success;
 
 use super::*;
@@ -55,8 +55,8 @@ pub trait InspectHold<AccountId>: Inspect<AccountId> {
 	/// Check to see if some `amount` of funds of `who` may be placed on hold for the given
 	/// `reason`. Reasons why this may not be true:
 	///
-	/// - The implementor supports only a limited number of concurrernt holds on an account which
-	///   is the possible values of `reason`;
+	/// - The implementor supports only a limited number of concurrernt holds on an account which is
+	///   the possible values of `reason`;
 	/// - The main balance of the account is less than `amount`;
 	/// - Removing `amount` from the main balance would kill the account and remove the only
 	///   provider reference.
@@ -64,17 +64,24 @@ pub trait InspectHold<AccountId>: Inspect<AccountId> {
 	/// NOTE: This does not take into account changes which could be made to the account of `who`
 	/// (such as removing a provider reference) after this call is made. Any usage of this should
 	/// therefore ensure the account is already in the appropriate state prior to calling it.
-	fn ensure_can_hold(reason: &Self::Reason, who: &AccountId, amount: Self::Balance) -> DispatchResult {
+	fn ensure_can_hold(
+		reason: &Self::Reason,
+		who: &AccountId,
+		amount: Self::Balance,
+	) -> DispatchResult {
 		ensure!(Self::hold_available(reason, who), TokenError::CannotCreateHold);
-		ensure!(amount <= Self::reducible_balance(who, KeepAlive::NoKill, false), TokenError::NoFunds);
+		ensure!(
+			amount <= Self::reducible_balance(who, KeepAlive::NoKill, false),
+			TokenError::NoFunds
+		);
 		Ok(())
 	}
 
 	/// Check to see if some `amount` of funds of `who` may be placed on hold for the given
 	/// `reason`. Reasons why this may not be true:
 	///
-	/// - The implementor supports only a limited number of concurrernt holds on an account which
-	///   is the possible values of `reason`;
+	/// - The implementor supports only a limited number of concurrernt holds on an account which is
+	///   the possible values of `reason`;
 	/// - The main balance of the account is less than `amount`;
 	/// - Removing `amount` from the main balance would kill the account and remove the only
 	///   provider reference.
@@ -165,7 +172,9 @@ pub trait BalancedHold<AccountId>: Balanced<AccountId> + MutateHold<AccountId> {
 	) -> (CreditOf<AccountId, Self>, Self::Balance);
 }
 
-impl<AccountId, U: Unbalanced<AccountId> + UnbalancedHold<AccountId> + InspectHold<AccountId>> MutateHold<AccountId> for U {
+impl<AccountId, U: Unbalanced<AccountId> + UnbalancedHold<AccountId> + InspectHold<AccountId>>
+	MutateHold<AccountId> for U
+{
 	fn hold(reason: &Self::Reason, who: &AccountId, amount: Self::Balance) -> DispatchResult {
 		// NOTE: This doesn't change the total balance of the account so there's no need to
 		// check liquidity.

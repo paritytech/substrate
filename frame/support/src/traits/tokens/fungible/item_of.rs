@@ -117,7 +117,11 @@ impl<
 	type Reason = F::Reason;
 
 	fn reducible_total_balance_on_hold(who: &AccountId, force: bool) -> Self::Balance {
-		<F as fungibles::InspectHold<AccountId>>::reducible_total_balance_on_hold(A::get(), who, force)
+		<F as fungibles::InspectHold<AccountId>>::reducible_total_balance_on_hold(
+			A::get(),
+			who,
+			force,
+		)
 	}
 	fn hold_available(reason: &Self::Reason, who: &AccountId) -> bool {
 		<F as fungibles::InspectHold<AccountId>>::hold_available(A::get(), reason, who)
@@ -179,8 +183,17 @@ impl<
 		AccountId,
 	> UnbalancedHold<AccountId> for ItemOf<F, A, AccountId>
 {
-	fn set_balance_on_hold(reason: &Self::Reason, who: &AccountId, amount: Self::Balance) -> DispatchResult {
-		<F as fungibles::UnbalancedHold<AccountId>>::set_balance_on_hold(A::get(), reason, who, amount)
+	fn set_balance_on_hold(
+		reason: &Self::Reason,
+		who: &AccountId,
+		amount: Self::Balance,
+	) -> DispatchResult {
+		<F as fungibles::UnbalancedHold<AccountId>>::set_balance_on_hold(
+			A::get(),
+			reason,
+			who,
+			amount,
+		)
 	}
 	fn decrease_balance_on_hold(
 		reason: &Self::Reason,
@@ -188,7 +201,13 @@ impl<
 		amount: Self::Balance,
 		best_effort: bool,
 	) -> Result<Self::Balance, DispatchError> {
-		<F as fungibles::UnbalancedHold<AccountId>>::decrease_balance_on_hold(A::get(), reason, who, amount, best_effort)
+		<F as fungibles::UnbalancedHold<AccountId>>::decrease_balance_on_hold(
+			A::get(),
+			reason,
+			who,
+			amount,
+			best_effort,
+		)
 	}
 	fn increase_balance_on_hold(
 		reason: &Self::Reason,
@@ -196,6 +215,12 @@ impl<
 		amount: Self::Balance,
 		best_effort: bool,
 	) -> Result<Self::Balance, DispatchError> {
-		<F as fungibles::UnbalancedHold<AccountId>>::increase_balance_on_hold(A::get(), reason, who, amount, best_effort)
+		<F as fungibles::UnbalancedHold<AccountId>>::increase_balance_on_hold(
+			A::get(),
+			reason,
+			who,
+			amount,
+			best_effort,
+		)
 	}
 }

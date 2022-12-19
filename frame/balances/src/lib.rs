@@ -172,8 +172,12 @@ use frame_support::{
 	ensure,
 	pallet_prelude::DispatchResult,
 	traits::{
-		tokens::{fungible, BalanceStatus as Status, DepositConsequence, WithdrawConsequence, KeepAlive::{CanKill, Keep}},
-		Currency, DefensiveSaturating, ExistenceRequirement, Defensive,
+		tokens::{
+			fungible, BalanceStatus as Status, DepositConsequence,
+			KeepAlive::{CanKill, Keep},
+			WithdrawConsequence,
+		},
+		Currency, Defensive, DefensiveSaturating, ExistenceRequirement,
 		ExistenceRequirement::{AllowDeath, KeepAlive},
 		Get, Imbalance, LockIdentifier, LockableCurrency, NamedReservableCurrency, OnUnbalanced,
 		ReservableCurrency, SignedImbalance, StoredMap, TryDrop, WithdrawReasons,
@@ -603,9 +607,9 @@ pub mod pallet {
 			);
 
 			for &(ref who, free) in self.balances.iter() {
+				frame_system::Pallet::<T>::inc_providers(who);
 				assert!(T::AccountStore::insert(who, AccountData { free, ..Default::default() })
 					.is_ok());
-				frame_system::Pallet::<T>::inc_providers(who);
 			}
 		}
 	}
@@ -959,7 +963,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			let maybe_account_maybe_dust = Self::post_mutation(who, account);
 			*maybe_account = maybe_account_maybe_dust.0;
 			if let Some(ref account) = &maybe_account {
-				assert!(account.free.is_zero() || account.free >= T::ExistentialDeposit::get() || !account.reserved.is_zero());
+				assert!(
+					account.free.is_zero() ||
+						account.free >= T::ExistentialDeposit::get() ||
+						!account.reserved.is_zero()
+				);
 			}
 			Ok((maybe_endowed, maybe_account_maybe_dust.1, result))
 		});
@@ -1389,8 +1397,6 @@ where
 						)
 						.map_err(|_| Error::<T, I>::LiquidityRestrictions)?;
 
-						// TODO: This is over-conservative. There may now be other providers, and
-						// this pallet may not even be a provider.
 						let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
 						let allow_death =
 							allow_death && system::Pallet::<T>::can_dec_provider(transactor);
@@ -1432,9 +1438,9 @@ where
 		if Self::total_balance(who).is_zero() {
 			return (NegativeImbalance::zero(), value)
 		}
-		match Self::try_mutate_account(who, |account, _is_new|
-				-> Result<(Self::NegativeImbalance, Self::Balance), DispatchError>
-			{
+		match Self::try_mutate_account(
+			who,
+			|account, _is_new| -> Result<(Self::NegativeImbalance, Self::Balance), DispatchError> {
 				// Best value is the most amount we can slash following liveness rules.
 				let ed = T::ExistentialDeposit::get();
 				let actual = match system::Pallet::<T>::can_dec_provider(who) {
@@ -1575,10 +1581,7 @@ where
 					SignedImbalance::Negative(NegativeImbalance::new(account.free - value))
 				};
 				account.free = value;
-				Self::deposit_event(Event::BalanceSet {
-					who: who.clone(),
-					free: account.free,
-				});
+				Self::deposit_event(Event::BalanceSet { who: who.clone(), free: account.free });
 				Ok(imbalance)
 			},
 		)

@@ -95,8 +95,7 @@ impl Config for Test {
 	type DustRemoval = ();
 	type RuntimeEvent = RuntimeEvent;
 	type ExistentialDeposit = ExistentialDeposit;
-	type AccountStore =
-		StorageMapShim<super::Account<Test>, u64, super::AccountData<u64>>;
+	type AccountStore = StorageMapShim<super::Account<Test>, u64, super::AccountData<u64>>;
 	type MaxLocks = ConstU32<50>;
 	type MaxReserves = ConstU32<2>;
 	type ReserveIdentifier = TestId;

@@ -19,7 +19,7 @@
 
 use crate::{storage::StorageMap, traits::misc::HandleLifetime};
 use codec::FullCodec;
-use sp_runtime::{DispatchError, traits::Convert};
+use sp_runtime::{traits::Convert, DispatchError};
 
 /// An abstraction of a value stored within storage, but possibly as part of a larger composite
 /// item.
@@ -82,11 +82,8 @@ pub trait StoredMap<K, T: Default> {
 /// where previously it did exist (though may have been in a default state). This works well with
 /// system module's `CallOnCreatedAccount` and `CallKillAccount`.
 pub struct StorageMapShim<S, K, T>(sp_std::marker::PhantomData<(S, K, T)>);
-impl<
-		S: StorageMap<K, T, Query = T>,
-		K: FullCodec,
-		T: FullCodec + Default,
-	> StoredMap<K, T> for StorageMapShim<S,  K, T>
+impl<S: StorageMap<K, T, Query = T>, K: FullCodec, T: FullCodec + Default> StoredMap<K, T>
+	for StorageMapShim<S, K, T>
 {
 	fn get(k: &K) -> T {
 		S::get(k)

@@ -633,7 +633,8 @@ impl From<TokenError> for &'static str {
 			TokenError::UnknownAsset => "The asset in question is unknown",
 			TokenError::Frozen => "Funds exist but are frozen",
 			TokenError::Unsupported => "Operation is not supported by the asset",
-			TokenError::CannotCreateHold => "Account cannot be created for recording amount on hold",
+			TokenError::CannotCreateHold =>
+				"Account cannot be created for recording amount on hold",
 		}
 	}
 }

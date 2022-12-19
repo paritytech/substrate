@@ -17,9 +17,9 @@
 
 //! Trait for doing raw changes to a fungible asset accounting system.
 
-use sp_arithmetic::traits::{CheckedSub, CheckedAdd, Zero};
-use sp_runtime::{TokenError, ArithmeticError};
 use crate::traits::tokens::misc::KeepAlive;
+use sp_arithmetic::traits::{CheckedAdd, CheckedSub, Zero};
+use sp_runtime::{ArithmeticError, TokenError};
 
 use super::*;
 
@@ -131,7 +131,11 @@ pub trait UnbalancedHold<AccountId>: InspectHold<AccountId> {
 	//
 	// Since this was not done in the previous logic, this will need either a migration or a
 	// state item which tracks whether the account is on the old logic or new.
-	fn set_balance_on_hold(reason: &Self::Reason, who: &AccountId, amount: Self::Balance) -> DispatchResult;
+	fn set_balance_on_hold(
+		reason: &Self::Reason,
+		who: &AccountId,
+		amount: Self::Balance,
+	) -> DispatchResult;
 
 	/// Reduce the balance on hold of `who` by `amount`.
 	///

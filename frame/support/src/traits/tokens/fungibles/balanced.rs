@@ -266,7 +266,12 @@ pub trait UnbalancedHold<AccountId>: InspectHold<AccountId> {
 	//
 	// Since this was not done in the previous logic, this will need either a migration or a
 	// state item which tracks whether the account is on the old logic or new.
-	fn set_balance_on_hold(asset: Self::AssetId, reason: &Self::Reason, who: &AccountId, amount: Self::Balance) -> DispatchResult;
+	fn set_balance_on_hold(
+		asset: Self::AssetId,
+		reason: &Self::Reason,
+		who: &AccountId,
+		amount: Self::Balance,
+	) -> DispatchResult;
 
 	/// Reduce the balance on hold of `who` by `amount`.
 	///

@@ -16,8 +16,11 @@
 // limitations under the License.
 
 //! Implementation of `fungible` traits for Balances pallet.
-use frame_support::traits::{tokens::KeepAlive::{self, NoKill, Keep}, fungible::CreditOf};
 use super::*;
+use frame_support::traits::{
+	fungible::CreditOf,
+	tokens::KeepAlive::{self, Keep, NoKill},
+};
 
 impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> {
 	type Balance = T::Balance;
@@ -129,17 +132,15 @@ impl<T: Config<I>, I: 'static> fungible::Transfer<T::AccountId> for Pallet<T, I>
 
 impl<T: Config<I>, I: 'static> fungible::Unbalanced<T::AccountId> for Pallet<T, I> {
 	fn set_balance(who: &T::AccountId, amount: Self::Balance) -> DispatchResult {
-		let max_reduction = <Self as fungible::Inspect<_>>::reducible_balance(who, KeepAlive::CanKill, true);
+		let max_reduction =
+			<Self as fungible::Inspect<_>>::reducible_balance(who, KeepAlive::CanKill, true);
 		Self::mutate_account(who, |account| -> DispatchResult {
 			// Make sure the reduction (if there is one) is no more than the maximum allowed.
 			let reduction = account.free.saturating_sub(amount);
 			ensure!(reduction <= max_reduction, Error::<T, I>::InsufficientBalance);
 
 			account.free = amount;
-			Self::deposit_event(Event::BalanceSet {
-				who: who.clone(),
-				free: account.free,
-			});
+			Self::deposit_event(Event::BalanceSet { who: who.clone(), free: account.free });
 			Ok(())
 		})?
 	}
@@ -174,9 +175,13 @@ impl<T: Config<I>, I: 'static> fungible::InspectHold<T::AccountId> for Pallet<T,
 			.map_or_else(Zero::zero, |x| x.amount)
 	}
 	fn hold_available(reason: &Self::Reason, who: &T::AccountId) -> bool {
-		if frame_system::Pallet::<T>::providers(who) == 0 { return false }
+		if frame_system::Pallet::<T>::providers(who) == 0 {
+			return false
+		}
 		let holds = Reserves::<T, I>::get(who);
-		if holds.is_full() && !holds.iter().any(|x| &x.id == reason) { return false }
+		if holds.is_full() && !holds.iter().any(|x| &x.id == reason) {
+			return false
+		}
 		true
 	}
 }
@@ -199,7 +204,8 @@ impl<T: Config<I>, I: 'static> fungible::UnbalancedHold<T::AccountId> for Pallet
 			increase = amount > item.amount;
 			item.amount = amount;
 		} else {
-			holds.try_push(ReserveData { id: reason.clone(), amount })
+			holds
+				.try_push(ReserveData { id: reason.clone(), amount })
 				.map_err(|_| Error::<T, I>::TooManyReserves)?;
 		}
 
@@ -218,57 +224,57 @@ impl<T: Config<I>, I: 'static> fungible::UnbalancedHold<T::AccountId> for Pallet
 	}
 }
 /*
-	(_reason: &Self::Reason, who: &T::AccountId, amount: Self::Balance) -> DispatchResult {
-		if amount.is_zero() {
-			return Ok(())
-		}
-		ensure!(Self::can_reserve(who, amount), Error::<T, I>::InsufficientBalance);
-		Self::mutate_account(who, |a| {
-			a.free -= amount;
-			a.reserved += amount;
-		})?;
-		Ok(())
+(_reason: &Self::Reason, who: &T::AccountId, amount: Self::Balance) -> DispatchResult {
+	if amount.is_zero() {
+		return Ok(())
 	}
-	fn release(
-		_reason: &Self::Reason,
-		who: &T::AccountId,
-		amount: Self::Balance,
-		best_effort: bool,
-	) -> Result<T::Balance, DispatchError> {
-		if amount.is_zero() {
-			return Ok(amount)
-		}
-		// Done on a best-effort basis.
-		Self::try_mutate_account(who, |a, _| {
-			let new_free = a.free.saturating_add(amount.min(a.reserved));
-			let actual = new_free - a.free;
-			ensure!(best_effort || actual == amount, Error::<T, I>::InsufficientBalance);
-			// ^^^ Guaranteed to be <= amount and <= a.reserved
-			a.free = new_free;
-			a.reserved = a.reserved.saturating_sub(actual);
-			Ok(actual)
-		})
+	ensure!(Self::can_reserve(who, amount), Error::<T, I>::InsufficientBalance);
+	Self::mutate_account(who, |a| {
+		a.free -= amount;
+		a.reserved += amount;
+	})?;
+	Ok(())
+}
+fn release(
+	_reason: &Self::Reason,
+	who: &T::AccountId,
+	amount: Self::Balance,
+	best_effort: bool,
+) -> Result<T::Balance, DispatchError> {
+	if amount.is_zero() {
+		return Ok(amount)
 	}
-	fn burn_held(
-		reason: &Self::Reason,
-		who: &T::AccountId,
-		amount: Self::Balance,
-		best_effort: bool,
-		force: bool,
-	) -> Result<Self::Balance, DispatchError> {
-		// Essentially an unreserve + burn_from, but we want to do it in a single op.
-		todo!()
-	}
-	fn transfer_held(
-		_reason: &Self::Reason,
-		source: &T::AccountId,
-		dest: &T::AccountId,
-		amount: Self::Balance,
-		best_effort: bool,
-		on_hold: bool,
-		_force: bool,
-	) -> Result<Self::Balance, DispatchError> {
-		let status = if on_hold { Status::Reserved } else { Status::Free };
-		Self::do_transfer_reserved(source, dest, amount, best_effort, status)
-	}
-	*/
+	// Done on a best-effort basis.
+	Self::try_mutate_account(who, |a, _| {
+		let new_free = a.free.saturating_add(amount.min(a.reserved));
+		let actual = new_free - a.free;
+		ensure!(best_effort || actual == amount, Error::<T, I>::InsufficientBalance);
+		// ^^^ Guaranteed to be <= amount and <= a.reserved
+		a.free = new_free;
+		a.reserved = a.reserved.saturating_sub(actual);
+		Ok(actual)
+	})
+}
+fn burn_held(
+	reason: &Self::Reason,
+	who: &T::AccountId,
+	amount: Self::Balance,
+	best_effort: bool,
+	force: bool,
+) -> Result<Self::Balance, DispatchError> {
+	// Essentially an unreserve + burn_from, but we want to do it in a single op.
+	todo!()
+}
+fn transfer_held(
+	_reason: &Self::Reason,
+	source: &T::AccountId,
+	dest: &T::AccountId,
+	amount: Self::Balance,
+	best_effort: bool,
+	on_hold: bool,
+	_force: bool,
+) -> Result<Self::Balance, DispatchError> {
+	let status = if on_hold { Status::Reserved } else { Status::Free };
+	Self::do_transfer_reserved(source, dest, amount, best_effort, status)
+}
+*/

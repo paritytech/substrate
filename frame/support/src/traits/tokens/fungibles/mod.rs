@@ -259,7 +259,11 @@ pub trait InspectHold<AccountId>: Inspect<AccountId> {
 	/// restrictions on the minimum amount of the account.
 	///
 	/// Always less than `total_balance_on_hold()`.
-	fn reducible_total_balance_on_hold(asset: Self::AssetId, who: &AccountId, force: bool) -> Self::Balance;
+	fn reducible_total_balance_on_hold(
+		asset: Self::AssetId,
+		who: &AccountId,
+		force: bool,
+	) -> Self::Balance;
 
 	/// Amount of funds held in hold for the given `reason`.
 	fn balance_on_hold(

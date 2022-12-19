@@ -18,7 +18,7 @@
 //! The traits for dealing with a single fungible token class and any associated types.
 
 use super::{
-	misc::{Balance, DepositConsequence, WithdrawConsequence, KeepAlive},
+	misc::{Balance, DepositConsequence, KeepAlive, WithdrawConsequence},
 	*,
 };
 use crate::{
@@ -29,17 +29,17 @@ use scale_info::TypeInfo;
 use sp_runtime::traits::Saturating;
 
 mod balanced;
+mod freeze;
+mod hold;
 mod imbalance;
 mod item_of;
-mod hold;
-mod freeze;
 mod unbalanced;
 
 pub use balanced::Balanced;
+pub use freeze::{InspectFreeze, MutateFreeze};
+pub use hold::{BalancedHold, InspectHold, MutateHold};
 pub use imbalance::{CreditOf, DebtOf, HandleImbalanceDrop, Imbalance};
 pub use item_of::ItemOf;
-pub use hold::{MutateHold, InspectHold, BalancedHold};
-pub use freeze::{MutateFreeze, InspectFreeze};
 pub use unbalanced::{Unbalanced, UnbalancedHold};
 
 /// Trait for providing balance-inspection access to a fungible asset.
