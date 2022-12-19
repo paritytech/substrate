@@ -29,11 +29,14 @@ use frame_support::traits::Get;
 use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::Hash;
 use sp_std::{borrow::ToOwned, prelude::*};
-use wasm_instrument::parity_wasm::{
-	builder,
-	elements::{
-		self, BlockType, CustomSection, External, FuncBody, Instruction, Instructions, Module,
-		Section, ValueType,
+use wasm_instrument::{
+	gas_metering,
+	parity_wasm::{
+		builder,
+		elements::{
+			self, BlockType, CustomSection, External, FuncBody, Instruction, Instructions, Module,
+			Section, ValueType,
+		},
 	},
 };
 
@@ -541,7 +544,8 @@ where
 fn inject_gas_metering<T: Config>(module: Module) -> Module {
 	let schedule = T::Schedule::get();
 	let gas_rules = schedule.rules(&module, Determinism::Deterministic);
-	wasm_instrument::gas_metering::inject(module, &gas_rules, "seal0").unwrap()
+	let backend = gas_metering::host_function::Injector::new("seal0", "gas");
+	gas_metering::inject(module, backend, &gas_rules).unwrap()
 }
 
 fn inject_stack_metering<T: Config>(module: Module) -> Module {

@@ -23,7 +23,7 @@ use assert_matches::assert_matches;
 use codec::Encode;
 use jsonrpsee::{
 	core::Error as RpcError,
-	types::{error::CallError, EmptyParams},
+	types::{error::CallError, EmptyServerParams as EmptyParams},
 	RpcModule,
 };
 use sc_transaction_pool::{BasicPool, FullChainApi};

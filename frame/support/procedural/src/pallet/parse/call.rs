@@ -59,6 +59,8 @@ pub struct CallVariantDef {
 	pub weight: syn::Expr,
 	/// Call index of the dispatchable.
 	pub call_index: u8,
+	/// Whether an explicit call index was specified.
+	pub explicit_call_index: bool,
 	/// Docs, used for metadata.
 	pub docs: Vec<syn::Lit>,
 	/// Attributes annotated at the top of the dispatchable function.
@@ -243,6 +245,7 @@ impl CallDef {
 					FunctionAttr::CallIndex(idx) => idx,
 					_ => unreachable!("checked during creation of the let binding"),
 				});
+				let explicit_call_index = call_index.is_some();
 
 				let final_index = match call_index {
 					Some(i) => i,
@@ -296,6 +299,7 @@ impl CallDef {
 					name: method.sig.ident.clone(),
 					weight,
 					call_index: final_index,
+					explicit_call_index,
 					args,
 					docs,
 					attrs: method.attrs.clone(),

@@ -208,6 +208,7 @@ pub mod pallet {
 		/// - `vote`: The vote configuration.
 		///
 		/// Weight: `O(R)` where R is the number of polls the voter has voted on.
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::vote_new().max(T::WeightInfo::vote_existing()))]
 		pub fn vote(
 			origin: OriginFor<T>,
@@ -243,6 +244,7 @@ pub mod pallet {
 		///   voted on. Weight is initially charged as if maximum votes, but is refunded later.
 		// NOTE: weight must cover an incorrect voting of origin with max votes, this is ensure
 		// because a valid delegation cover decoding a direct voting with max votes.
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::delegate(T::MaxVotes::get()))]
 		pub fn delegate(
 			origin: OriginFor<T>,
@@ -274,6 +276,7 @@ pub mod pallet {
 		///   voted on. Weight is initially charged as if maximum votes, but is refunded later.
 		// NOTE: weight must cover an incorrect voting of origin with max votes, this is ensure
 		// because a valid delegation cover decoding a direct voting with max votes.
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::undelegate(T::MaxVotes::get().into()))]
 		pub fn undelegate(
 			origin: OriginFor<T>,
@@ -293,6 +296,7 @@ pub mod pallet {
 		/// - `target`: The account to remove the lock on.
 		///
 		/// Weight: `O(R)` with R number of vote of target.
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::unlock())]
 		pub fn unlock(
 			origin: OriginFor<T>,
@@ -334,6 +338,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(R + log R)` where R is the number of polls that `target` has voted on.
 		///   Weight is calculated for the maximum number of vote.
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::remove_vote())]
 		pub fn remove_vote(
 			origin: OriginFor<T>,
@@ -360,6 +365,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(R + log R)` where R is the number of polls that `target` has voted on.
 		///   Weight is calculated for the maximum number of vote.
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::remove_other_vote())]
 		pub fn remove_other_vote(
 			origin: OriginFor<T>,
