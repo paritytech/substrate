@@ -20,7 +20,7 @@
 
 use super::{
 	block_rules::{BlockRules, LookupResult as BlockLookupResult},
-	genesis,
+	genesis::BuildGenesisBlock,
 };
 use log::{info, trace, warn};
 use parking_lot::{Mutex, RwLock};
@@ -70,7 +70,7 @@ use sp_runtime::{
 		Block as BlockT, BlockIdTo, HashFor, Header as HeaderT, NumberFor, One,
 		SaturatedConversion, Zero,
 	},
-	BuildStorage, Digest, Justification, Justifications, StateVersion,
+	Digest, Justification, Justifications, StateVersion,
 };
 use sp_state_machine::{
 	prove_child_read, prove_range_read_with_child_with_size, prove_read,
@@ -155,9 +155,10 @@ enum PrepareStorageChangesResult<B: backend::Backend<Block>, Block: BlockT> {
 
 /// Create an instance of in-memory client.
 #[cfg(feature = "test-helpers")]
-pub fn new_in_mem<E, Block, S, RA>(
+pub fn new_in_mem<E, Block, G, RA>(
+	backend: Arc<in_mem::Backend<Block>>,
 	executor: E,
-	genesis_storage: &S,
+	genesis_block_builder: G,
 	keystore: Option<SyncCryptoStorePtr>,
 	prometheus_registry: Option<Registry>,
 	telemetry: Option<TelemetryHandle>,
@@ -168,13 +169,16 @@ pub fn new_in_mem<E, Block, S, RA>(
 >
 where
 	E: CodeExecutor + RuntimeVersionOf,
-	S: BuildStorage,
 	Block: BlockT,
+	G: BuildGenesisBlock<
+			Block,
+			BlockImportOperation = <in_mem::Backend<Block> as backend::Backend<Block>>::BlockImportOperation,
+		>,
 {
 	new_with_backend(
-		Arc::new(in_mem::Backend::new()),
+		backend,
 		executor,
-		genesis_storage,
+		genesis_block_builder,
 		keystore,
 		spawn_handle,
 		prometheus_registry,
@@ -214,10 +218,10 @@ impl<Block: BlockT> Default for ClientConfig<Block> {
 /// Create a client with the explicitly provided backend.
 /// This is useful for testing backend implementations.
 #[cfg(feature = "test-helpers")]
-pub fn new_with_backend<B, E, Block, S, RA>(
+pub fn new_with_backend<B, E, Block, G, RA>(
 	backend: Arc<B>,
 	executor: E,
-	build_genesis_storage: &S,
+	genesis_block_builder: G,
 	keystore: Option<SyncCryptoStorePtr>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
@@ -226,7 +230,10 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 ) -> sp_blockchain::Result<Client<B, LocalCallExecutor<Block, B, E>, Block, RA>>
 where
 	E: CodeExecutor + RuntimeVersionOf,
-	S: BuildStorage,
+	G: BuildGenesisBlock<
+		Block,
+		BlockImportOperation = <B as backend::Backend<Block>>::BlockImportOperation,
+	>,
 	Block: BlockT,
 	B: backend::LocalBackend<Block> + 'static,
 {
@@ -247,7 +254,7 @@ where
 	Client::new(
 		backend,
 		call_executor,
-		build_genesis_storage,
+		genesis_block_builder,
 		Default::default(),
 		Default::default(),
 		prometheus_registry,
@@ -347,26 +354,25 @@ where
 	Block::Header: Clone,
 {
 	/// Creates new Substrate Client with given blockchain and code executor.
-	pub fn new(
+	pub fn new<G>(
 		backend: Arc<B>,
 		executor: E,
-		build_genesis_storage: &dyn BuildStorage,
+		genesis_block_builder: G,
 		fork_blocks: ForkBlocks<Block>,
 		bad_blocks: BadBlocks<Block>,
 		prometheus_registry: Option<Registry>,
 		telemetry: Option<TelemetryHandle>,
 		config: ClientConfig<Block>,
-	) -> sp_blockchain::Result<Self> {
+	) -> sp_blockchain::Result<Self>
+	where
+		G: BuildGenesisBlock<
+			Block,
+			BlockImportOperation = <B as backend::Backend<Block>>::BlockImportOperation,
+		>,
+	{
 		let info = backend.blockchain().info();
 		if info.finalized_state.is_none() {
-			let genesis_storage =
-				build_genesis_storage.build_storage().map_err(sp_blockchain::Error::Storage)?;
-			let genesis_state_version =
-				Self::resolve_state_version_from_wasm(&genesis_storage, &executor)?;
-			let mut op = backend.begin_operation()?;
-			let state_root =
-				op.set_genesis_state(genesis_storage, !config.no_genesis, genesis_state_version)?;
-			let genesis_block = genesis::construct_genesis_block::<Block>(state_root);
+			let (genesis_block, mut op) = genesis_block_builder.build_genesis_block()?;
 			info!(
 				"🔨 Initializing Genesis block/state (state: {}, header-hash: {})",
 				genesis_block.header().state_root(),
@@ -379,13 +385,8 @@ where
 			} else {
 				NewBlockState::Normal
 			};
-			op.set_block_data(
-				genesis_block.deconstruct().0,
-				Some(vec![]),
-				None,
-				None,
-				block_state,
-			)?;
+			let (header, body) = genesis_block.deconstruct();
+			op.set_block_data(header, Some(body), None, None, block_state)?;
 			backend.commit_operation(op)?;
 		}
 
@@ -640,7 +641,7 @@ where
 						// This is use by fast sync for runtime version to be resolvable from
 						// changes.
 						let state_version =
-							Self::resolve_state_version_from_wasm(&storage, &self.executor)?;
+							resolve_state_version_from_wasm(&storage, &self.executor)?;
 						let state_root = operation.op.reset_storage(storage, state_version)?;
 						if state_root != *import_headers.post().state_root() {
 							// State root mismatch when importing state. This should not happen in
@@ -1104,34 +1105,37 @@ where
 		trace!("Collected {} uncles", uncles.len());
 		Ok(uncles)
 	}
+}
 
-	fn resolve_state_version_from_wasm(
-		storage: &Storage,
-		executor: &E,
-	) -> sp_blockchain::Result<StateVersion> {
-		if let Some(wasm) = storage.top.get(well_known_keys::CODE) {
-			let mut ext = sp_state_machine::BasicExternalities::new_empty(); // just to read runtime version.
+/// Return the genesis state version given the genesis storage and executor.
+pub fn resolve_state_version_from_wasm<E>(
+	storage: &Storage,
+	executor: &E,
+) -> sp_blockchain::Result<StateVersion>
+where
+	E: RuntimeVersionOf,
+{
+	if let Some(wasm) = storage.top.get(well_known_keys::CODE) {
+		let mut ext = sp_state_machine::BasicExternalities::new_empty(); // just to read runtime version.
 
-			let code_fetcher = sp_core::traits::WrappedRuntimeCode(wasm.as_slice().into());
-			let runtime_code = sp_core::traits::RuntimeCode {
-				code_fetcher: &code_fetcher,
-				heap_pages: None,
-				hash: {
-					use std::hash::{Hash, Hasher};
-					let mut state = DefaultHasher::new();
-					wasm.hash(&mut state);
-					state.finish().to_le_bytes().to_vec()
-				},
-			};
-			let runtime_version =
-				RuntimeVersionOf::runtime_version(executor, &mut ext, &runtime_code)
-					.map_err(|e| sp_blockchain::Error::VersionInvalid(e.to_string()))?;
-			Ok(runtime_version.state_version())
-		} else {
-			Err(sp_blockchain::Error::VersionInvalid(
-				"Runtime missing from initial storage, could not read state version.".to_string(),
-			))
-		}
+		let code_fetcher = sp_core::traits::WrappedRuntimeCode(wasm.as_slice().into());
+		let runtime_code = sp_core::traits::RuntimeCode {
+			code_fetcher: &code_fetcher,
+			heap_pages: None,
+			hash: {
+				use std::hash::{Hash, Hasher};
+				let mut state = DefaultHasher::new();
+				wasm.hash(&mut state);
+				state.finish().to_le_bytes().to_vec()
+			},
+		};
+		let runtime_version = RuntimeVersionOf::runtime_version(executor, &mut ext, &runtime_code)
+			.map_err(|e| sp_blockchain::Error::VersionInvalid(e.to_string()))?;
+		Ok(runtime_version.state_version())
+	} else {
+		Err(sp_blockchain::Error::VersionInvalid(
+			"Runtime missing from initial storage, could not read state version.".to_string(),
+		))
 	}
 }
 

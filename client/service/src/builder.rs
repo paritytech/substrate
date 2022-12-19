@@ -22,7 +22,8 @@ use crate::{
 	config::{Configuration, KeystoreConfig, PrometheusConfig},
 	error::Error,
 	metrics::MetricsService,
-	start_rpc_servers, RpcHandlers, SpawnTaskHandle, TaskManager, TransactionPoolAdapter,
+	start_rpc_servers, BuildGenesisBlock, GenesisBlockBuilder, RpcHandlers, SpawnTaskHandle,
+	TaskManager, TransactionPoolAdapter,
 };
 use futures::{channel::oneshot, future::ready, FutureExt, StreamExt};
 use jsonrpsee::RpcModule;
@@ -72,7 +73,6 @@ use sp_keystore::{CryptoStore, SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, BlockIdTo, NumberFor, Zero},
-	BuildStorage,
 };
 use std::{str::FromStr, sync::Arc, time::SystemTime};
 
@@ -182,7 +182,7 @@ where
 	new_full_parts(config, telemetry, executor).map(|parts| parts.0)
 }
 
-/// Create the initial parts of a full node.
+/// Create the initial parts of a full node with the default genesis block builder.
 pub fn new_full_parts<TBl, TRtApi, TExec>(
 	config: &Configuration,
 	telemetry: Option<TelemetryHandle>,
@@ -191,6 +191,34 @@ pub fn new_full_parts<TBl, TRtApi, TExec>(
 where
 	TBl: BlockT,
 	TExec: CodeExecutor + RuntimeVersionOf + Clone,
+{
+	let backend = new_db_backend(config.db_config())?;
+
+	let genesis_block_builder = GenesisBlockBuilder::new(
+		config.chain_spec.as_storage_builder(),
+		!config.no_genesis(),
+		backend.clone(),
+		executor.clone(),
+	)?;
+
+	new_full_parts_with_genesis_builder(config, telemetry, executor, backend, genesis_block_builder)
+}
+
+/// Create the initial parts of a full node.
+pub fn new_full_parts_with_genesis_builder<TBl, TRtApi, TExec, TBuildGenesisBlock>(
+	config: &Configuration,
+	telemetry: Option<TelemetryHandle>,
+	executor: TExec,
+	backend: Arc<TFullBackend<TBl>>,
+	genesis_block_builder: TBuildGenesisBlock,
+) -> Result<TFullParts<TBl, TRtApi, TExec>, Error>
+where
+	TBl: BlockT,
+	TExec: CodeExecutor + RuntimeVersionOf + Clone,
+	TBuildGenesisBlock: BuildGenesisBlock<
+		TBl,
+		BlockImportOperation = <Backend<TBl> as sc_client_api::backend::Backend<TBl>>::BlockImportOperation
+	>,
 {
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 
@@ -208,16 +236,7 @@ where
 		.cloned()
 		.unwrap_or_default();
 
-	let (client, backend) = {
-		let db_config = sc_client_db::DatabaseSettings {
-			trie_cache_maximum_size: config.trie_cache_maximum_size,
-			state_pruning: config.state_pruning.clone(),
-			source: config.database.clone(),
-			blocks_pruning: config.blocks_pruning,
-		};
-
-		let backend = new_db_backend(db_config)?;
-
+	let client = {
 		let extensions = sc_client_api::execution_extensions::ExecutionExtensions::new(
 			config.execution_strategies.clone(),
 			Some(keystore_container.sync_keystore()),
@@ -244,7 +263,7 @@ where
 		let client = new_client(
 			backend.clone(),
 			executor,
-			chain_spec.as_storage_builder(),
+			genesis_block_builder,
 			fork_blocks,
 			bad_blocks,
 			extensions,
@@ -263,7 +282,7 @@ where
 			},
 		)?;
 
-		(client, backend)
+		client
 	};
 
 	Ok((client, backend, keystore_container, task_manager))
@@ -282,10 +301,10 @@ where
 }
 
 /// Create an instance of client backed by given backend.
-pub fn new_client<E, Block, RA>(
+pub fn new_client<E, Block, RA, G>(
 	backend: Arc<Backend<Block>>,
 	executor: E,
-	genesis_storage: &dyn BuildStorage,
+	genesis_block_builder: G,
 	fork_blocks: ForkBlocks<Block>,
 	bad_blocks: BadBlocks<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
@@ -305,6 +324,10 @@ pub fn new_client<E, Block, RA>(
 where
 	Block: BlockT,
 	E: CodeExecutor + RuntimeVersionOf,
+	G: BuildGenesisBlock<
+		Block,
+		BlockImportOperation = <Backend<Block> as sc_client_api::backend::Backend<Block>>::BlockImportOperation
+	>,
 {
 	let executor = crate::client::LocalCallExecutor::new(
 		backend.clone(),
@@ -316,7 +339,7 @@ where
 	crate::client::Client::new(
 		backend,
 		executor,
-		genesis_storage,
+		genesis_block_builder,
 		fork_blocks,
 		bad_blocks,
 		prometheus_registry,
