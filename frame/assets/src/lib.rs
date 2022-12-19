@@ -1247,9 +1247,6 @@ pub mod pallet {
 				if let Some(owner) = &d.owner {
 					T::Currency::unreserve(owner, deposit);
 				}
-				if d.owner.is_some() {
-					T::Currency::unreserve(&d.owner.unwrap(), deposit);
-				}
 				Self::deposit_event(Event::MetadataCleared { asset_id: id });
 				Ok(())
 			})
