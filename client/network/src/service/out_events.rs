@@ -37,6 +37,7 @@ use parking_lot::Mutex;
 use prometheus_endpoint::{register, CounterVec, GaugeVec, Opts, PrometheusError, Registry, U64};
 use sc_network_common::protocol::event::Event;
 use std::{
+	backtrace::Backtrace,
 	cell::RefCell,
 	fmt,
 	pin::Pin,
@@ -60,6 +61,7 @@ pub fn channel(name: &'static str, queue_size_warning: usize) -> (Sender, Receiv
 		queue_size: queue_size.clone(),
 		queue_size_warning,
 		warning_fired: false,
+		created_backtrace: Backtrace::force_capture(),
 		metrics: metrics.clone(),
 	};
 	let rx = Receiver { inner: rx, name, queue_size, metrics };
@@ -83,6 +85,8 @@ pub struct Sender {
 	queue_size_warning: usize,
 	/// We generate the error message only once to not spam the logs.
 	warning_fired: bool,
+	/// Backtrace of a place where the channel was created.
+	created_backtrace: Backtrace,
 	/// Clone of [`Receiver::metrics`].
 	metrics: Arc<Mutex<Option<Arc<Option<Metrics>>>>>,
 }
@@ -186,8 +190,11 @@ impl OutChannels {
 			if queue_size == sender.queue_size_warning && !sender.warning_fired {
 				sender.warning_fired = true;
 				error!(
-					"Number of unprocessed events in channel `{}` reached {}.",
-					sender.name, sender.queue_size_warning,
+					"The number of unprocessed events in channel `{}` reached {}.\n\
+					 The channel was created at:\n{}",
+					sender.name,
+					sender.queue_size_warning,
+					sender.created_backtrace,
 				);
 			}
 			sender.inner.unbounded_send(event.clone()).is_ok()
