@@ -619,6 +619,8 @@ pub enum TokenError {
 	Frozen,
 	/// Operation is not supported by the asset.
 	Unsupported,
+	/// Account cannot be created for a held balance.
+	CannotCreateHold,
 }
 
 impl From<TokenError> for &'static str {
@@ -631,6 +633,7 @@ impl From<TokenError> for &'static str {
 			TokenError::UnknownAsset => "The asset in question is unknown",
 			TokenError::Frozen => "Funds exist but are frozen",
 			TokenError::Unsupported => "Operation is not supported by the asset",
+			TokenError::CannotCreateHold => "Account cannot be created for recording amount on hold",
 		}
 	}
 }

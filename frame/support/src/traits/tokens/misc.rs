@@ -23,6 +23,16 @@ use sp_core::RuntimeDebug;
 use sp_runtime::{ArithmeticError, DispatchError, TokenError};
 use sp_std::fmt::Debug;
 
+#[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
+pub enum KeepAlive {
+	/// We don't care if the account gets killed.
+	CanKill,
+	/// The account may not be killed, but we don't care if the balance gets dusted.
+	NoKill,
+	/// The account may not be killed and our provider reference must remain.
+	Keep,
+}
+
 /// One of a number of consequences of withdrawing a fungible from an account.
 #[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
 pub enum WithdrawConsequence<Balance> {

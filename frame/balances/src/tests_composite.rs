@@ -88,6 +88,13 @@ impl pallet_transaction_payment::Config for Test {
 	type FeeMultiplierUpdate = ();
 }
 
+#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, MaxEncodedLen, TypeInfo, RuntimeDebug)]
+pub enum TestId {
+	Foo,
+	Bar,
+	Baz,
+}
+
 impl Config for Test {
 	type Balance = u64;
 	type DustRemoval = ();
@@ -96,7 +103,7 @@ impl Config for Test {
 	type AccountStore = frame_system::Pallet<Test>;
 	type MaxLocks = ();
 	type MaxReserves = ConstU32<2>;
-	type ReserveIdentifier = [u8; 8];
+	type ReserveIdentifier = TestId;
 	type WeightInfo = ();
 }
 

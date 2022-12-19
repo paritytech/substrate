@@ -30,6 +30,7 @@ use pallet_transaction_payment::CurrencyAdapter;
 use sp_core::H256;
 use sp_io;
 use sp_runtime::{testing::Header, traits::IdentityLookup};
+use tests_composite::TestId;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -95,10 +96,10 @@ impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore =
-		StorageMapShim<super::Account<Test>, system::Provider<Test>, u64, super::AccountData<u64>>;
+		StorageMapShim<super::Account<Test>, u64, super::AccountData<u64>>;
 	type MaxLocks = ConstU32<50>;
 	type MaxReserves = ConstU32<2>;
-	type ReserveIdentifier = [u8; 8];
+	type ReserveIdentifier = TestId;
 	type WeightInfo = ();
 }
 
@@ -156,14 +157,14 @@ decl_tests! { Test, ExtBuilder, EXISTENTIAL_DEPOSIT }
 #[test]
 fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 	<ExtBuilder>::default().existential_deposit(2).build().execute_with(|| {
-		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 100, 0));
+		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 100));
 
 		assert_eq!(
 			events(),
 			[
 				RuntimeEvent::System(system::Event::NewAccount { account: 1 }),
 				RuntimeEvent::Balances(crate::Event::Endowed { account: 1, free_balance: 100 }),
-				RuntimeEvent::Balances(crate::Event::BalanceSet { who: 1, free: 100, reserved: 0 }),
+				RuntimeEvent::Balances(crate::Event::BalanceSet { who: 1, free: 100 }),
 			]
 		);
 

@@ -172,8 +172,8 @@ use frame_support::{
 	ensure,
 	pallet_prelude::DispatchResult,
 	traits::{
-		tokens::{fungible, BalanceStatus as Status, DepositConsequence, WithdrawConsequence},
-		Currency, DefensiveSaturating, ExistenceRequirement,
+		tokens::{fungible, BalanceStatus as Status, DepositConsequence, WithdrawConsequence, KeepAlive::{CanKill, Keep}},
+		Currency, DefensiveSaturating, ExistenceRequirement, Defensive,
 		ExistenceRequirement::{AllowDeath, KeepAlive},
 		Get, Imbalance, LockIdentifier, LockableCurrency, NamedReservableCurrency, OnUnbalanced,
 		ReservableCurrency, SignedImbalance, StoredMap, TryDrop, WithdrawReasons,
@@ -201,6 +201,12 @@ pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+
+	pub enum RefType {
+		Provides,
+		Consumes,
+		Sufficient,
+	}
 
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
@@ -245,6 +251,8 @@ pub mod pallet {
 
 		/// The id type for named reserves.
 		type ReserveIdentifier: Parameter + Member + MaxEncodedLen + Ord + Copy;
+
+		// TODO: LockIdentifier
 	}
 
 	/// The current storage version.
@@ -318,25 +326,19 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			who: AccountIdLookupOf<T>,
 			#[pallet::compact] new_free: T::Balance,
-			#[pallet::compact] new_reserved: T::Balance,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
 			let existential_deposit = T::ExistentialDeposit::get();
 
-			let wipeout = new_free + new_reserved < existential_deposit;
+			let wipeout = new_free < existential_deposit;
 			let new_free = if wipeout { Zero::zero() } else { new_free };
-			let new_reserved = if wipeout { Zero::zero() } else { new_reserved };
 
 			// First we try to modify the account's balance to the forced balance.
-			let (old_free, old_reserved) = Self::mutate_account(&who, |account| {
+			let old_free = Self::mutate_account(&who, |account| {
 				let old_free = account.free;
-				let old_reserved = account.reserved;
-
 				account.free = new_free;
-				account.reserved = new_reserved;
-
-				(old_free, old_reserved)
+				old_free
 			})?;
 
 			// This will adjust the total issuance, which was not done by the `mutate_account`
@@ -347,13 +349,7 @@ pub mod pallet {
 				mem::drop(NegativeImbalance::<T, I>::new(old_free - new_free));
 			}
 
-			if new_reserved > old_reserved {
-				mem::drop(PositiveImbalance::<T, I>::new(new_reserved - old_reserved));
-			} else if new_reserved < old_reserved {
-				mem::drop(NegativeImbalance::<T, I>::new(old_reserved - new_reserved));
-			}
-
-			Self::deposit_event(Event::BalanceSet { who, free: new_free, reserved: new_reserved });
+			Self::deposit_event(Event::BalanceSet { who, free: new_free });
 			Ok(().into())
 		}
 
@@ -428,6 +424,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			use fungible::{Inspect, Transfer};
 			let transactor = ensure_signed(origin)?;
+			let keep_alive = if keep_alive { Keep } else { CanKill };
 			let reducible_balance = Self::reducible_balance(&transactor, keep_alive, false);
 			let dest = T::Lookup::lookup(dest)?;
 			<Self as Transfer<_>>::transfer(&transactor, &dest, reducible_balance, keep_alive)?;
@@ -462,7 +459,7 @@ pub mod pallet {
 		/// Transfer succeeded.
 		Transfer { from: T::AccountId, to: T::AccountId, amount: T::Balance },
 		/// A balance was set by root.
-		BalanceSet { who: T::AccountId, free: T::Balance, reserved: T::Balance },
+		BalanceSet { who: T::AccountId, free: T::Balance },
 		/// Some balance was reserved (moved from free to reserved).
 		Reserved { who: T::AccountId, amount: T::Balance },
 		/// Some balance was unreserved (moved from reserved to free).
@@ -608,6 +605,7 @@ pub mod pallet {
 			for &(ref who, free) in self.balances.iter() {
 				assert!(T::AccountStore::insert(who, AccountData { free, ..Default::default() })
 					.is_ok());
+				frame_system::Pallet::<T>::inc_providers(who);
 			}
 		}
 	}
@@ -782,12 +780,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		_who: &T::AccountId,
 		new: AccountData<T::Balance>,
 	) -> (Option<AccountData<T::Balance>>, Option<NegativeImbalance<T, I>>) {
-		let total = new.total();
-		if total < T::ExistentialDeposit::get() {
-			if total.is_zero() {
+		// We should never be dropping if reserved is non-zero. Reserved being non-zero should imply
+		// that we have a consumer ref, so this is economically safe.
+		if new.free < T::ExistentialDeposit::get() && new.reserved.is_zero() {
+			if new.free.is_zero() {
 				(None, None)
 			} else {
-				(None, Some(NegativeImbalance::new(total)))
+				(None, Some(NegativeImbalance::new(new.free)))
 			}
 		} else {
 			(Some(new), None)
@@ -925,12 +924,44 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let result = T::AccountStore::try_mutate_exists(who, |maybe_account| {
 			let is_new = maybe_account.is_none();
 			let mut account = maybe_account.take().unwrap_or_default();
-			f(&mut account, is_new).map(move |result| {
-				let maybe_endowed = if is_new { Some(account.free) } else { None };
-				let maybe_account_maybe_dust = Self::post_mutation(who, account);
-				*maybe_account = maybe_account_maybe_dust.0;
-				(maybe_endowed, maybe_account_maybe_dust.1, result)
-			})
+			let did_provide = account.free >= T::ExistentialDeposit::get();
+			let did_consume = !is_new && !account.reserved.is_zero();
+
+			let result = f(&mut account, is_new)?;
+
+			let does_provide = account.free >= T::ExistentialDeposit::get();
+			let does_consume = !account.reserved.is_zero();
+
+			if !did_provide && does_provide {
+				frame_system::Pallet::<T>::inc_providers(who);
+			}
+			if did_consume && !does_consume {
+				frame_system::Pallet::<T>::dec_consumers(who);
+			}
+			if !did_consume && does_consume {
+				frame_system::Pallet::<T>::inc_consumers(who)?;
+			}
+			if did_provide && !does_provide {
+				// This could reap the account so must go last.
+				frame_system::Pallet::<T>::dec_providers(who).map_err(|r| {
+					if did_consume && !does_consume {
+						// best-effort revert consumer change.
+						let _ = frame_system::Pallet::<T>::inc_consumers(who).defensive();
+					}
+					if !did_consume && does_consume {
+						let _ = frame_system::Pallet::<T>::dec_consumers(who);
+					}
+					r
+				})?;
+			}
+
+			let maybe_endowed = if is_new { Some(account.free) } else { None };
+			let maybe_account_maybe_dust = Self::post_mutation(who, account);
+			*maybe_account = maybe_account_maybe_dust.0;
+			if let Some(ref account) = &maybe_account {
+				assert!(account.free.is_zero() || account.free >= T::ExistentialDeposit::get() || !account.reserved.is_zero());
+			}
+			Ok((maybe_endowed, maybe_account_maybe_dust.1, result))
 		});
 		result.map(|(maybe_endowed, maybe_dust, result)| {
 			if let Some(endowed) = maybe_endowed {
@@ -1401,61 +1432,29 @@ where
 		if Self::total_balance(who).is_zero() {
 			return (NegativeImbalance::zero(), value)
 		}
-
-		for attempt in 0..2 {
-			match Self::try_mutate_account(
-				who,
-				|account,
-				 _is_new|
-				 -> Result<(Self::NegativeImbalance, Self::Balance), DispatchError> {
-					// Best value is the most amount we can slash following liveness rules.
-					let best_value = match attempt {
-						// First attempt we try to slash the full amount, and see if liveness issues
-						// happen.
-						0 => value,
-						// If acting as a critical provider (i.e. first attempt failed), then slash
-						// as much as possible while leaving at least at ED.
-						_ => value.min(
-							(account.free + account.reserved)
-								.saturating_sub(T::ExistentialDeposit::get()),
-						),
-					};
-
-					let free_slash = cmp::min(account.free, best_value);
-					account.free -= free_slash; // Safe because of above check
-					let remaining_slash = best_value - free_slash; // Safe because of above check
-
-					if !remaining_slash.is_zero() {
-						// If we have remaining slash, take it from reserved balance.
-						let reserved_slash = cmp::min(account.reserved, remaining_slash);
-						account.reserved -= reserved_slash; // Safe because of above check
-						Ok((
-							NegativeImbalance::new(free_slash + reserved_slash),
-							value - free_slash - reserved_slash, /* Safe because value is gt or
-							                                      * eq total slashed */
-						))
-					} else {
-						// Else we are done!
-						Ok((
-							NegativeImbalance::new(free_slash),
-							value - free_slash, // Safe because value is gt or eq to total slashed
-						))
-					}
-				},
-			) {
-				Ok((imbalance, not_slashed)) => {
-					Self::deposit_event(Event::Slashed {
-						who: who.clone(),
-						amount: value.saturating_sub(not_slashed),
-					});
-					return (imbalance, not_slashed)
-				},
-				Err(_) => (),
-			}
+		match Self::try_mutate_account(who, |account, _is_new|
+				-> Result<(Self::NegativeImbalance, Self::Balance), DispatchError>
+			{
+				// Best value is the most amount we can slash following liveness rules.
+				let ed = T::ExistentialDeposit::get();
+				let actual = match system::Pallet::<T>::can_dec_provider(who) {
+					true => value.min(account.free),
+					false => value.min(account.free.saturating_sub(ed)),
+				};
+				account.free.saturating_reduce(actual);
+				let remaining = value.saturating_sub(actual);
+				Ok((NegativeImbalance::new(actual), remaining))
+			},
+		) {
+			Ok((imbalance, remaining)) => {
+				Self::deposit_event(Event::Slashed {
+					who: who.clone(),
+					amount: value.saturating_sub(remaining),
+				});
+				(imbalance, remaining)
+			},
+			Err(_) => (Self::NegativeImbalance::zero(), value),
 		}
-
-		// Should never get here. But we'll be defensive anyway.
-		(Self::NegativeImbalance::zero(), value)
 	}
 
 	/// Deposit some `value` into the free balance of an existing target account `who`.
@@ -1579,7 +1578,6 @@ where
 				Self::deposit_event(Event::BalanceSet {
 					who: who.clone(),
 					free: account.free,
-					reserved: account.reserved,
 				});
 				Ok(imbalance)
 			},
@@ -1680,37 +1678,22 @@ where
 		// NOTE: `mutate_account` may fail if it attempts to reduce the balance to the point that an
 		//   account is attempted to be illegally destroyed.
 
-		for attempt in 0..2 {
-			match Self::mutate_account(who, |account| {
-				let best_value = match attempt {
-					0 => value,
-					// If acting as a critical provider (i.e. first attempt failed), then ensure
-					// slash leaves at least the ED.
-					_ => value.min(
-						(account.free + account.reserved)
-							.saturating_sub(T::ExistentialDeposit::get()),
-					),
-				};
+		match Self::mutate_account(who, |account| {
+			let actual = value.min(account.reserved);
+			account.reserved.saturating_reduce(actual);
 
-				let actual = cmp::min(account.reserved, best_value);
-				account.reserved -= actual;
-
-				// underflow should never happen, but it if does, there's nothing to be done here.
-				(NegativeImbalance::new(actual), value - actual)
-			}) {
-				Ok((imbalance, not_slashed)) => {
-					Self::deposit_event(Event::Slashed {
-						who: who.clone(),
-						amount: value.saturating_sub(not_slashed),
-					});
-					return (imbalance, not_slashed)
-				},
-				Err(_) => (),
-			}
+			// underflow should never happen, but it if does, there's nothing to be done here.
+			(NegativeImbalance::new(actual), value.saturating_sub(actual))
+		}) {
+			Ok((imbalance, not_slashed)) => {
+				Self::deposit_event(Event::Slashed {
+					who: who.clone(),
+					amount: value.saturating_sub(not_slashed),
+				});
+				(imbalance, not_slashed)
+			},
+			Err(_) => (Self::NegativeImbalance::zero(), value),
 		}
-		// Should never get here as we ensure that ED is left in the second attempt.
-		// In case we do, though, then we fail gracefully.
-		(Self::NegativeImbalance::zero(), value)
 	}
 
 	/// Move the reserved balance of one account into the balance of another, according to `status`.

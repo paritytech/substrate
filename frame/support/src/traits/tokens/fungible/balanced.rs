@@ -20,13 +20,8 @@
 
 use super::{super::Imbalance as ImbalanceT, *};
 use crate::{
-	dispatch::{DispatchError, DispatchResult},
+	dispatch::DispatchError,
 	traits::misc::{SameOrOther, TryDrop},
-};
-use sp_arithmetic::traits::CheckedSub;
-use sp_runtime::{
-	traits::{CheckedAdd, Zero},
-	ArithmeticError, TokenError,
 };
 use sp_std::marker::PhantomData;
 
@@ -96,7 +91,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 		who: &AccountId,
 		value: Self::Balance,
 		best_effort: bool,
-		keep_alive: bool,
+		keep_alive: KeepAlive,
 	) -> Result<CreditOf<AccountId, Self>, DispatchError>;
 
 	/// The balance of `who` is increased in order to counter `credit`. If the whole of `credit`
@@ -125,7 +120,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 	fn settle(
 		who: &AccountId,
 		debt: DebtOf<AccountId, Self>,
-		keep_alive: bool,
+		keep_alive: KeepAlive,
 	) -> Result<CreditOf<AccountId, Self>, DebtOf<AccountId, Self>> {
 		let amount = debt.peek();
 		let credit = match Self::withdraw(who, amount, false, keep_alive) {
@@ -142,93 +137,6 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 		}
 	}
 }
-
-/// A fungible token class where the balance can be set arbitrarily.
-///
-/// **WARNING**
-/// Do not use this directly unless you want trouble, since it allows you to alter account balances
-/// without keeping the issuance up to date. It has no safeguards against accidentally creating
-/// token imbalances in your system leading to accidental imflation or deflation. It's really just
-/// for the underlying datatype to implement so the user gets the much safer `Balanced` trait to
-/// use.
-pub trait Unbalanced<AccountId>: Inspect<AccountId> {
-	/// Forcefully set the balance of `who` to `amount`.
-	///
-	/// If this this call executes successfully, you can `assert_eq!(Self::balance(), amount);`.
-	///
-	/// For implementations which include one or more balances on hold, then these are *not*
-	/// included in the `amount`.
-	///
-	/// This function does its best to force the balance change through, but will not break system
-	/// invariants such as any Existential Deposits needed or overflows/underflows.
-	/// If this cannot be done for some reason (e.g. because the account cannot be created, deleted
-	/// or would overflow) then an `Err` is returned.
-	fn set_balance(who: &AccountId, amount: Self::Balance) -> DispatchResult;
-
-	/// Set the total issuance to `amount`.
-	fn set_total_issuance(amount: Self::Balance);
-
-	/// Reduce the balance of `who` by `amount`.
-	///
-	/// If `best_effort` is `false` and it cannot be reduced by that amount for
-	/// some reason, return `Err` and don't reduce it at all. If `best_effort` is `true`, then
-	/// reduce the balance of `who` by the most that is possible, up to `amount`.
-	///
-	/// In either case, if `Ok` is returned then the inner is the amount by which is was reduced.
-	/// Minimum balance will be respected and thus the returned amount may be up to
-	/// `Self::minimum_balance() - 1` greater than `amount` in the case that the reduction caused
-	/// the account to be deleted.
-	fn decrease_balance(
-		who: &AccountId,
-		mut amount: Self::Balance,
-		best_effort: bool,
-		keep_alive: bool,
-	) -> Result<Self::Balance, DispatchError> {
-		let old_balance = Self::balance(who);
-		let free = Self::reducible_balance(who, keep_alive, false);
-		if best_effort {
-			amount = amount.min(free);
-		}
-		let new_balance = old_balance.checked_sub(&amount).ok_or(TokenError::NoFunds)?;
-		Self::set_balance(who, new_balance)?;
-		Ok(amount)
-	}
-
-	/// Increase the balance of `who` by `amount`.
-	///
-	/// If it cannot be increased by that amount for some reason, return `Err` and don't increase
-	/// it at all. If Ok, return the imbalance.
-	/// Minimum balance will be respected and an error will be returned if
-	/// `amount < Self::minimum_balance()` when the account of `who` is zero.
-	fn increase_balance(
-		who: &AccountId,
-		amount: Self::Balance,
-		best_effort: bool,
-	) -> Result<Self::Balance, DispatchError> {
-		let old_balance = Self::balance(who);
-		let new_balance = if best_effort {
-			old_balance.saturating_add(amount)
-		} else {
-			old_balance.checked_add(&amount).ok_or(ArithmeticError::Overflow)?
-		};
-		if new_balance < Self::minimum_balance() {
-			// Attempt to increase from 0 to below minimum -> stays at zero.
-			if best_effort {
-				Ok(Self::Balance::zero())
-			} else {
-				Err(TokenError::BelowMinimum.into())
-			}
-		} else {
-			let amount = new_balance.saturating_sub(old_balance);
-			if !amount.is_zero() {
-				Self::set_balance(who, new_balance)?;
-			}
-			Ok(amount)
-		}
-	}
-}
-
-// TODO: UnbalancedHold?
 
 /// Simple handler for an imbalance drop which increases the total issuance of the system by the
 /// imbalance amount. Used for leftover debt.
@@ -311,7 +219,7 @@ impl<AccountId, U: Unbalanced<AccountId>> Balanced<AccountId> for U {
 		who: &AccountId,
 		amount: Self::Balance,
 		best_effort: bool,
-		keep_alive: bool,
+		keep_alive: KeepAlive,
 	) -> Result<Credit<AccountId, Self>, DispatchError> {
 		let decrease = U::decrease_balance(who, amount, best_effort, keep_alive)?;
 		Ok(credit(decrease))

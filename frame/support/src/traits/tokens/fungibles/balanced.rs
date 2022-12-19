@@ -101,7 +101,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 		who: &AccountId,
 		value: Self::Balance,
 		best_effort: bool,
-		keep_alive: bool,
+		keep_alive: KeepAlive,
 	) -> Result<CreditOf<AccountId, Self>, DispatchError>;
 
 	/// The balance of `who` is increased in order to counter `credit`. If the whole of `credit`
@@ -134,7 +134,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 	fn settle(
 		who: &AccountId,
 		debt: DebtOf<AccountId, Self>,
-		keep_alive: bool,
+		keep_alive: KeepAlive,
 	) -> Result<CreditOf<AccountId, Self>, DebtOf<AccountId, Self>> {
 		let amount = debt.peek();
 		let asset = debt.asset();
@@ -197,7 +197,7 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		who: &AccountId,
 		mut amount: Self::Balance,
 		best_effort: bool,
-		keep_alive: bool,
+		keep_alive: KeepAlive,
 	) -> Result<Self::Balance, DispatchError> {
 		let free = Self::reducible_balance(asset, who, keep_alive, false);
 		if best_effort {
@@ -240,6 +240,79 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 			}
 			Ok(amount)
 		}
+	}
+}
+
+/// A fungible, holdable token class where the balance on hold can be set arbitrarily.
+///
+/// **WARNING**
+/// Do not use this directly unless you want trouble, since it allows you to alter account balances
+/// without keeping the issuance up to date. It has no safeguards against accidentally creating
+/// token imbalances in your system leading to accidental imflation or deflation. It's really just
+/// for the underlying datatype to implement so the user gets the much safer `Balanced` trait to
+/// use.
+pub trait UnbalancedHold<AccountId>: InspectHold<AccountId> {
+	/// Forcefully set the balance on hold of `who` to `amount`. This is independent of any other
+	/// balances on hold or the main ("free") balance.
+	///
+	/// If this call executes successfully, you can `assert_eq!(Self::balance_on_hold(), amount);`.
+	///
+	/// This function does its best to force the balance change through, but will not break system
+	/// invariants such as any Existential Deposits needed or overflows/underflows.
+	/// If this cannot be done for some reason (e.g. because the account doesn't exist) then an
+	/// `Err` is returned.
+	// Implmentation note: This should increment the consumer refs if it moves total on hold from
+	// zero to non-zero and decrement in the opposite direction.
+	//
+	// Since this was not done in the previous logic, this will need either a migration or a
+	// state item which tracks whether the account is on the old logic or new.
+	fn set_balance_on_hold(asset: Self::AssetId, reason: &Self::Reason, who: &AccountId, amount: Self::Balance) -> DispatchResult;
+
+	/// Reduce the balance on hold of `who` by `amount`.
+	///
+	/// If `best_effort` is `false` and it cannot be reduced by that amount for
+	/// some reason, return `Err` and don't reduce it at all. If `best_effort` is `true`, then
+	/// reduce the balance of `who` by the most that is possible, up to `amount`.
+	///
+	/// In either case, if `Ok` is returned then the inner is the amount by which is was reduced.
+	fn decrease_balance_on_hold(
+		asset: Self::AssetId,
+		reason: &Self::Reason,
+		who: &AccountId,
+		mut amount: Self::Balance,
+		best_effort: bool,
+	) -> Result<Self::Balance, DispatchError> {
+		let old_balance = Self::balance_on_hold(asset, reason, who);
+		if best_effort {
+			amount = amount.min(old_balance);
+		}
+		let new_balance = old_balance.checked_sub(&amount).ok_or(TokenError::NoFunds)?;
+		Self::set_balance_on_hold(asset, reason, who, new_balance)?;
+		Ok(amount)
+	}
+
+	/// Increase the balance on hold of `who` by `amount`.
+	///
+	/// If it cannot be increased by that amount for some reason, return `Err` and don't increase
+	/// it at all. If Ok, return the imbalance.
+	fn increase_balance_on_hold(
+		asset: Self::AssetId,
+		reason: &Self::Reason,
+		who: &AccountId,
+		amount: Self::Balance,
+		best_effort: bool,
+	) -> Result<Self::Balance, DispatchError> {
+		let old_balance = Self::balance_on_hold(asset, reason, who);
+		let new_balance = if best_effort {
+			old_balance.saturating_add(amount)
+		} else {
+			old_balance.checked_add(&amount).ok_or(ArithmeticError::Overflow)?
+		};
+		let amount = new_balance.saturating_sub(old_balance);
+		if !amount.is_zero() {
+			Self::set_balance_on_hold(asset, reason, who, new_balance)?;
+		}
+		Ok(amount)
 	}
 }
 
@@ -330,7 +403,7 @@ impl<AccountId, U: Unbalanced<AccountId>> Balanced<AccountId> for U {
 		who: &AccountId,
 		amount: Self::Balance,
 		best_effort: bool,
-		keep_alive: bool,
+		keep_alive: KeepAlive,
 	) -> Result<Credit<AccountId, Self>, DispatchError> {
 		let decrease = U::decrease_balance(asset, who, amount, best_effort, keep_alive)?;
 		Ok(credit(asset, decrease))

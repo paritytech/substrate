@@ -34,6 +34,7 @@ use frame_support::{
 	traits::{Currency, ReservableCurrency},
 };
 use frame_system::RawOrigin;
+use tests_composite::TestId;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -96,10 +97,10 @@ impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore =
-		StorageMapShim<super::Account<Test>, system::Provider<Test>, u64, super::AccountData<u64>>;
+		StorageMapShim<super::Account<Test>, u64, super::AccountData<u64>>;
 	type MaxLocks = ConstU32<50>;
 	type MaxReserves = ConstU32<2>;
-	type ReserveIdentifier = [u8; 8];
+	type ReserveIdentifier = TestId;
 	type WeightInfo = ();
 }
 
@@ -137,8 +138,8 @@ impl ExtBuilder {
 fn transfer_dust_removal_tst1_should_work() {
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		// Verification of reentrancy in dust removal
-		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 1000, 0));
-		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 2, 500, 0));
+		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 1000));
+		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 2, 500));
 
 		// In this transaction, account 2 free balance
 		// drops below existential balance
@@ -179,8 +180,8 @@ fn transfer_dust_removal_tst1_should_work() {
 fn transfer_dust_removal_tst2_should_work() {
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		// Verification of reentrancy in dust removal
-		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 1000, 0));
-		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 2, 500, 0));
+		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 1000));
+		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 2, 500));
 
 		// In this transaction, account 2 free balance
 		// drops below existential balance
@@ -217,8 +218,8 @@ fn transfer_dust_removal_tst2_should_work() {
 fn repatriating_reserved_balance_dust_removal_should_work() {
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		// Verification of reentrancy in dust removal
-		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 1000, 0));
-		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 2, 500, 0));
+		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 1000));
+		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 2, 500));
 
 		// Reserve a value on account 2,
 		// Such that free balance is lower than
