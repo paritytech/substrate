@@ -853,13 +853,17 @@ impl<T: Config> Pallet<T> {
 	/// Get the targets for an upcoming npos election.
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
-	pub fn get_npos_targets(maybe_max_len: Option<usize>) -> Vec<T::AccountId> {
-		let max_allowed_len = maybe_max_len.unwrap_or_else(|| T::TargetList::count() as usize);
-		let mut all_targets = Vec::<T::AccountId>::with_capacity(max_allowed_len);
+	pub fn get_npos_targets(target_bounds: ElectionBounds) -> Vec<T::AccountId> {
+		let max_allowed_len = {
+			let all_target_count = T::TargetList::count();
+			target_bounds.count.unwrap_or(all_target_count).min(all_target_count)
+		};
+
+		let mut all_targets = Vec::<T::AccountId>::with_capacity(max_allowed_len as usize);
 		let mut targets_seen = 0;
 
 		let mut targets_iter = T::TargetList::iter();
-		while all_targets.len() < max_allowed_len &&
+		while all_targets.len() < max_allowed_len as usize &&
 			targets_seen < (NPOS_MAX_ITERATIONS_COEFFICIENT * max_allowed_len as u32)
 		{
 			let target = match targets_iter.next() {
@@ -1012,7 +1016,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 			return Err("Target snapshot too big")
 		}
 
-		Ok(Self::get_npos_targets(None))
+		Ok(Self::get_npos_targets(bounds))
 	}
 
 	fn next_election_prediction(now: T::BlockNumber) -> T::BlockNumber {
