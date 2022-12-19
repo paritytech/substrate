@@ -300,7 +300,7 @@ pub mod weights;
 mod pallet;
 
 use codec::{Decode, Encode, HasCompact, MaxEncodedLen};
-use frame_election_provider_support::VoteWeight;
+use frame_election_provider_support::{ElectionBounds, VoteWeight};
 use frame_support::{
 	traits::{Currency, Defensive, Get},
 	weights::Weight,
@@ -797,6 +797,8 @@ impl<Balance, const MAX: u32> NominationsQuota<Balance> for FixedNominationsQuot
 	}
 }
 
+// TODO(gpestana): temporary -- `Get<u32>` is returning the ABSOLUTE_MAX_NOMINATIONS, make it more
+// explicit (unclear which u32 instance is returning)
 impl<const MAX: u32> Get<u32> for FixedNominationsQuota<MAX> {
 	fn get() -> u32 {
 		MAX
@@ -805,18 +807,26 @@ impl<const MAX: u32> Get<u32> for FixedNominationsQuota<MAX> {
 
 pub(crate) struct ElectionSizeTracker<AccountId> {
 	size: usize,
-	limit: Option<usize>,
 	_marker: sp_std::marker::PhantomData<AccountId>,
 }
 
 impl<AccountId> ElectionSizeTracker<AccountId> {
 	pub(crate) fn new(limit: Option<usize>) -> Self {
-		ElectionSizeTracker { size: 0, limit, _marker: Default::default() }
+		ElectionSizeTracker { size: 0, _marker: Default::default() }
 	}
 
-	// TODO: finish by calculating if current size vote fits in the tracker, result err if not
-	pub(crate) fn try_register_voter(&mut self, votes: usize) -> Result<(), ()> {
-		Ok(self.size = self.size.saturating_add(Self::voter_size(votes)))
+	pub(crate) fn try_register_voter(
+		&mut self,
+		votes: usize,
+		bounds: ElectionBounds,
+	) -> Result<(), ()> {
+		let voter_size = Self::voter_size(votes);
+		// refactor
+		if bounds.size_exhausted(Some(self.size.saturating_add(voter_size) as u32)) {
+			Err(())
+		} else {
+			Ok(self.size = self.size.saturating_add(voter_size))
+		}
 	}
 
 	fn voter_size(votes: usize) -> usize {

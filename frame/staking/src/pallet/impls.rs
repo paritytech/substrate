@@ -749,19 +749,15 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
 	pub fn get_npos_voters(voter_bounds: ElectionBounds) -> Vec<VoterOf<Self>> {
-		// TODO: limits are snapshot/election bounds passed as input (election_bounds:
-		// ElectionBounds)
-		let (size, count) = (None, Some(10));
-
 		let mut voters_size_tracker: ElectionSizeTracker<T::AccountId> =
-			ElectionSizeTracker::new(size);
+			ElectionSizeTracker::new(voter_bounds.size.map_or(None, |s| Some(s as usize)));
 
 		let max_allowed_len = {
-			let all_voter_count = T::VoterList::count() as usize;
-			count.unwrap_or(all_voter_count).min(all_voter_count)
+			let all_voter_count = T::VoterList::count();
+			voter_bounds.count.unwrap_or(all_voter_count).min(all_voter_count)
 		};
 
-		let mut all_voters = Vec::<_>::with_capacity(max_allowed_len);
+		let mut all_voters = Vec::<_>::with_capacity(max_allowed_len as usize);
 
 		// cache a few things.
 		let weight_of = Self::weight_of_fn();
@@ -772,7 +768,7 @@ impl<T: Config> Pallet<T> {
 		let mut min_active_stake = u64::MAX;
 
 		let mut sorted_voters = T::VoterList::iter();
-		while all_voters.len() < max_allowed_len &&
+		while all_voters.len() < max_allowed_len as usize &&
 			voters_seen < (NPOS_MAX_ITERATIONS_COEFFICIENT * max_allowed_len as u32)
 		{
 			let voter = match sorted_voters.next() {
@@ -785,12 +781,14 @@ impl<T: Config> Pallet<T> {
 
 			if let Some(Nominations { targets, .. }) = <Nominators<T>>::get(&voter) {
 				let voter_weight = weight_of(&voter);
-				let target_quota = T::NominationsQuota::get_quota_capped(voter_weight.into());
+				let nominations_quota = T::NominationsQuota::get_quota_capped(voter_weight.into());
 				if !targets.is_empty() {
-					if voters_size_tracker.try_register_voter(targets.len()).is_err() {
-						// TODO(gpestana): needs logging?
-						// no more space in the election result, stop iterating over the voters.
-						// TODO(gpestana): needs logging?
+					if voters_size_tracker
+						.try_register_voter(nominations_quota as usize, voter_bounds)
+						.is_err()
+					{
+						// no more space left for the election result, stop iterating over the
+						// voters.
 						break
 					}
 
@@ -799,13 +797,13 @@ impl<T: Config> Pallet<T> {
 				} else {
 					// Technically should never happen, but not much we can do about it.
 				}
+
 				min_active_stake =
 					if voter_weight < min_active_stake { voter_weight } else { min_active_stake };
 			} else if Validators::<T>::contains_key(&voter) {
 				// if this voter is a validator:
-				if voters_size_tracker.try_register_voter(1).is_err() {
-					// no more space in the election result, stop iterating over the voters.
-					// TODO(gpestana): needs logging?
+				if voters_size_tracker.try_register_voter(1, voter_bounds).is_err() {
+					// no more space left for the election result, stop iterating over the voters.
 					break
 				}
 				let self_vote = (
@@ -832,7 +830,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		// all_voters should have not re-allocated.
-		debug_assert!(all_voters.capacity() == max_allowed_len);
+		debug_assert!(all_voters.capacity() == max_allowed_len as usize);
 
 		Self::register_weight(T::WeightInfo::get_npos_voters(validators_taken, nominators_taken));
 
