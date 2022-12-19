@@ -121,7 +121,7 @@ impl<Block: BlockT> SubscriptionHandle<Block> {
 	}
 
 	/// Get the `runtime_updates` flag of this subscription.
-	pub fn runtime_updates(&self) -> bool {
+	pub fn has_runtime_updates(&self) -> bool {
 		let inner = self.inner.read();
 		inner.runtime_updates
 	}
@@ -259,11 +259,11 @@ mod tests {
 
 		let id = "abc".to_string();
 		let (_, handle) = subs.insert_subscription(id.clone(), false, 10).unwrap();
-		assert!(!handle.runtime_updates());
+		assert!(!handle.has_runtime_updates());
 
 		let id2 = "abcd".to_string();
 		let (_, handle) = subs.insert_subscription(id2.clone(), true, 10).unwrap();
-		assert!(handle.runtime_updates());
+		assert!(handle.has_runtime_updates());
 	}
 
 	#[test]

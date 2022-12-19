@@ -734,7 +734,7 @@ where
 			}
 
 			// Reject subscription if runtime_updates is false.
-			if !handle.runtime_updates() {
+			if !handle.has_runtime_updates() {
 				let _ = sink.reject(ChainHeadRpcError::InvalidParam(
 					"The runtime updates flag must be set".into(),
 				));
