@@ -1491,6 +1491,7 @@ impl pallet_dex::Config for Runtime {
 	type PalletId = DexPalletId;
 	type WeightInfo = pallet_dex::weights::SubstrateWeight<Runtime>;
 	type AllowMultiAssetPools = AllowMultiAssetPools;
+	type MaxSwapPathLength = ConstU32<4>;
 }
 
 parameter_types! {

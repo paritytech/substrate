@@ -54,6 +54,7 @@ pub mod pallet {
 	use sp_runtime::traits::{
 		AccountIdConversion, AtLeast32BitUnsigned, Hash, IntegerSquareRoot, One, Zero,
 	};
+	use sp_std::prelude::*;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
