@@ -351,8 +351,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		maybe_check_issuer: Option<T::AccountId>,
 	) -> DispatchResult {
 		Self::increase_balance(id, beneficiary, amount, |details| -> DispatchResult {
-			if let Some(check_issuer) = maybe_check_issuer {
-				ensure!(Some(check_issuer) == details.issuer, Error::<T, I>::NoPermission);
+			if maybe_check_issuer.is_some() {
+				ensure!(maybe_check_issuer == details.issuer, Error::<T, I>::NoPermission);
 			}
 			debug_assert!(
 				T::Balance::max_value() - details.supply >= amount,
@@ -438,8 +438,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let actual = Self::decrease_balance(id, target, amount, f, |actual, details| {
 			// Check admin rights.
-			if let Some(check_admin) = maybe_check_admin {
-				ensure!(Some(check_admin) == details.admin, Error::<T, I>::NoPermission);
+			if maybe_check_admin.is_some() {
+				ensure!(maybe_check_admin == details.admin, Error::<T, I>::NoPermission);
 			}
 
 			debug_assert!(details.supply >= actual, "checked in prep; qed");
@@ -676,8 +676,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> DispatchResult {
 		Asset::<T, I>::try_mutate_exists(id, |maybe_details| -> Result<(), DispatchError> {
 			let mut details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
-			if let Some(check_owner) = maybe_check_owner {
-				ensure!(details.owner.clone().unwrap() == check_owner, Error::<T, I>::NoPermission);
+			if maybe_check_owner.is_some() {
+				ensure!(maybe_check_owner == details.owner, Error::<T, I>::NoPermission);
 			}
 			details.status = AssetStatus::Destroying;
 
@@ -770,12 +770,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ensure!(details.approvals == 0, Error::<T, I>::InUse);
 
 			let metadata = Metadata::<T, I>::take(&id);
-			if details.owner.is_some() {
-				T::Currency::unreserve(
-					&details.owner.unwrap(),
-					details.deposit.saturating_add(metadata.deposit),
-				);
+
+			if let Some(owner) = details.owner {
+				T::Currency::unreserve(&owner, details.deposit.saturating_add(metadata.deposit));
 			}
+
 			Self::deposit_event(Event::Destroyed { asset_id: id });
 
 			Ok(())
@@ -893,7 +892,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 		ensure!(d.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
-		ensure!(from == &d.owner.unwrap(), Error::<T, I>::NoPermission);
+		ensure!(Some(origin) == d.owner, Error::<T, I>::NoPermission);
 
 		Metadata::<T, I>::try_mutate_exists(id, |metadata| {
 			ensure!(metadata.as_ref().map_or(true, |m| !m.is_frozen), Error::<T, I>::NoPermission);
