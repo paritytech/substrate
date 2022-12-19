@@ -297,7 +297,12 @@ where
 	}
 
 	/// Add blocks to the peer -- edit the block before adding
-	pub fn generate_blocks<F>(&mut self, count: usize, origin: BlockOrigin, edit_block: F) -> H256
+	pub fn generate_blocks<F>(
+		&mut self,
+		count: usize,
+		origin: BlockOrigin,
+		edit_block: F,
+	) -> Vec<H256>
 	where
 		F: FnMut(
 			BlockBuilder<Block, PeersFullClient, substrate_test_runtime_client::Backend>,
@@ -323,7 +328,7 @@ where
 		origin: BlockOrigin,
 		edit_block: F,
 		fork_choice: ForkChoiceStrategy,
-	) -> H256
+	) -> Vec<H256>
 	where
 		F: FnMut(
 			BlockBuilder<Block, PeersFullClient, substrate_test_runtime_client::Backend>,
@@ -354,12 +359,13 @@ where
 		inform_sync_about_new_best_block: bool,
 		announce_block: bool,
 		fork_choice: ForkChoiceStrategy,
-	) -> H256
+	) -> Vec<H256>
 	where
 		F: FnMut(
 			BlockBuilder<Block, PeersFullClient, substrate_test_runtime_client::Backend>,
 		) -> Block,
 	{
+		let mut hashes = Vec::with_capacity(count);
 		let full_client = self.client.as_client();
 		let mut at = full_client.header(&at).unwrap().unwrap().hash();
 		for _ in 0..count {
@@ -391,6 +397,7 @@ where
 			if announce_block {
 				self.network.service().announce_block(hash, None);
 			}
+			hashes.push(hash);
 			at = hash;
 		}
 
@@ -400,24 +407,24 @@ where
 				*full_client.header(&BlockId::Hash(at)).ok().flatten().unwrap().number(),
 			);
 		}
-		at
+		hashes
 	}
 
 	/// Push blocks to the peer (simplified: with or without a TX)
-	pub fn push_blocks(&mut self, count: usize, with_tx: bool) -> H256 {
+	pub fn push_blocks(&mut self, count: usize, with_tx: bool) -> Vec<H256> {
 		let best_hash = self.client.info().best_hash;
 		self.push_blocks_at(BlockId::Hash(best_hash), count, with_tx)
 	}
 
 	/// Push blocks to the peer (simplified: with or without a TX)
-	pub fn push_headers(&mut self, count: usize) -> H256 {
+	pub fn push_headers(&mut self, count: usize) -> Vec<H256> {
 		let best_hash = self.client.info().best_hash;
 		self.generate_tx_blocks_at(BlockId::Hash(best_hash), count, false, true, true, true)
 	}
 
 	/// Push blocks to the peer (simplified: with or without a TX) starting from
 	/// given hash.
-	pub fn push_blocks_at(&mut self, at: BlockId<Block>, count: usize, with_tx: bool) -> H256 {
+	pub fn push_blocks_at(&mut self, at: BlockId<Block>, count: usize, with_tx: bool) -> Vec<H256> {
 		self.generate_tx_blocks_at(at, count, with_tx, false, true, true)
 	}
 
@@ -429,7 +436,7 @@ where
 		count: usize,
 		with_tx: bool,
 		announce_block: bool,
-	) -> H256 {
+	) -> Vec<H256> {
 		self.generate_tx_blocks_at(at, count, with_tx, false, false, announce_block)
 	}
 
@@ -440,7 +447,7 @@ where
 		at: BlockId<Block>,
 		count: usize,
 		with_tx: bool,
-	) -> H256 {
+	) -> Vec<H256> {
 		self.generate_tx_blocks_at(at, count, with_tx, false, true, false)
 	}
 
@@ -454,7 +461,7 @@ where
 		headers_only: bool,
 		inform_sync_about_new_best_block: bool,
 		announce_block: bool,
-	) -> H256 {
+	) -> Vec<H256> {
 		let mut nonce = 0;
 		if with_tx {
 			self.generate_blocks_at(
@@ -491,7 +498,10 @@ where
 		}
 	}
 
-	pub fn push_authorities_change_block(&mut self, new_authorities: Vec<AuthorityId>) -> H256 {
+	pub fn push_authorities_change_block(
+		&mut self,
+		new_authorities: Vec<AuthorityId>,
+	) -> Vec<H256> {
 		self.generate_blocks(1, BlockOrigin::File, |mut builder| {
 			builder.push(Extrinsic::AuthoritiesChange(new_authorities.clone())).unwrap();
 			builder.build().unwrap().block

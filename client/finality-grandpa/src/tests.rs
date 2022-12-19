@@ -627,14 +627,18 @@ async fn sync_justifications_on_change_blocks() {
 	net.peer(0).push_blocks(20, false);
 
 	// at block 21 we do add a transition which is instant
-	let hashof21 = net.peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
-		let mut block = builder.build().unwrap().block;
-		add_scheduled_change(
-			&mut block,
-			ScheduledChange { next_authorities: make_ids(peers_b), delay: 0 },
-		);
-		block
-	});
+	let hashof21 = net
+		.peer(0)
+		.generate_blocks(1, BlockOrigin::File, |builder| {
+			let mut block = builder.build().unwrap().block;
+			add_scheduled_change(
+				&mut block,
+				ScheduledChange { next_authorities: make_ids(peers_b), delay: 0 },
+			);
+			block
+		})
+		.pop()
+		.unwrap();
 
 	// add more blocks on top of it (until we have 25)
 	net.peer(0).push_blocks(4, false);
@@ -1352,7 +1356,7 @@ async fn grandpa_environment_respects_voting_rules() {
 	let link = peer.data.lock().take().unwrap();
 
 	// add 21 blocks
-	peer.push_blocks(21, false);
+	let hashes = peer.push_blocks(21, false);
 
 	// create an environment with no voting rule restrictions
 	let unrestricted_env = test_environment(&link, None, network_service.clone(), ());
@@ -1408,12 +1412,7 @@ async fn grandpa_environment_respects_voting_rules() {
 	);
 
 	// we finalize block 19 with block 21 being the best block
-	let hashof19 = peer
-		.client()
-		.as_client()
-		.expect_block_hash_from_id(&BlockId::Number(19))
-		.unwrap();
-	peer.client().finalize_block(hashof19, None, false).unwrap();
+	peer.client().finalize_block(hashes[18], None, false).unwrap();
 
 	// the 3/4 environment should propose block 21 for voting
 	assert_eq!(
@@ -1439,11 +1438,7 @@ async fn grandpa_environment_respects_voting_rules() {
 	);
 
 	// we finalize block 21 with block 21 being the best block
-	let hashof21 = peer
-		.client()
-		.as_client()
-		.expect_block_hash_from_id(&BlockId::Number(21))
-		.unwrap();
+	let hashof21 = hashes[20];
 	peer.client().finalize_block(hashof21, None, false).unwrap();
 
 	// even though the default environment will always try to not vote on the
@@ -1757,20 +1752,23 @@ async fn revert_prunes_authority_changes() {
 	// Fork before revert point
 
 	// add more blocks on top of block 23 (until we have 26)
-	let hash = peer.generate_blocks_at(
-		BlockId::Number(23),
-		3,
-		BlockOrigin::File,
-		|builder| {
-			let mut block = builder.build().unwrap().block;
-			block.header.digest_mut().push(DigestItem::Other(vec![1]));
-			block
-		},
-		false,
-		false,
-		true,
-		ForkChoiceStrategy::LongestChain,
-	);
+	let hash = peer
+		.generate_blocks_at(
+			BlockId::Number(23),
+			3,
+			BlockOrigin::File,
+			|builder| {
+				let mut block = builder.build().unwrap().block;
+				block.header.digest_mut().push(DigestItem::Other(vec![1]));
+				block
+			},
+			false,
+			false,
+			true,
+			ForkChoiceStrategy::LongestChain,
+		)
+		.pop()
+		.unwrap();
 	// at block 27 of the fork add an authority transition
 	peer.generate_blocks_at(
 		BlockId::Hash(hash),
@@ -1786,20 +1784,23 @@ async fn revert_prunes_authority_changes() {
 	// Fork after revert point
 
 	// add more block on top of block 25 (until we have 28)
-	let hash = peer.generate_blocks_at(
-		BlockId::Number(25),
-		3,
-		BlockOrigin::File,
-		|builder| {
-			let mut block = builder.build().unwrap().block;
-			block.header.digest_mut().push(DigestItem::Other(vec![2]));
-			block
-		},
-		false,
-		false,
-		true,
-		ForkChoiceStrategy::LongestChain,
-	);
+	let hash = peer
+		.generate_blocks_at(
+			BlockId::Number(25),
+			3,
+			BlockOrigin::File,
+			|builder| {
+				let mut block = builder.build().unwrap().block;
+				block.header.digest_mut().push(DigestItem::Other(vec![2]));
+				block
+			},
+			false,
+			false,
+			true,
+			ForkChoiceStrategy::LongestChain,
+		)
+		.pop()
+		.unwrap();
 	// at block 29 of the fork add an authority transition
 	peer.generate_blocks_at(
 		BlockId::Hash(hash),
