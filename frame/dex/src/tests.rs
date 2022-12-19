@@ -705,8 +705,8 @@ fn swap_tokens_for_exact_tokens_should_work() {
 		assert_ok!(Dex::swap_tokens_for_exact_tokens(
 			RuntimeOrigin::signed(user),
 			bvec![token_1, token_2],
-			exchange_out2,
-			100, // amount_in_max
+			exchange_out2, // amount_out
+			100,           // amount_in_max
 			user,
 			3,
 			true

@@ -497,7 +497,7 @@ pub mod pallet {
 			ensure!(deadline >= now, Error::<T>::DeadlinePassed);
 
 			let amounts = Self::get_amounts_in(&amount_out, &path)?;
-			let amount_in = amounts.get(0).ok_or(Error::<T>::PathError)?;
+			let amount_in = amounts.first().expect("Has always more than 1 element");
 			ensure!(*amount_in <= amount_in_max, Error::<T>::ExcessiveInputAmount);
 
 			if let Some(&[asset1, asset2]) = path.get(0..2) {
@@ -512,10 +512,8 @@ pub mod pallet {
 					amount_in: *amount_in,
 					amount_out,
 				});
-				Ok(())
-			} else {
-				Err(Error::<T>::PathError.into())
 			}
+			Ok(())
 		}
 	}
 
@@ -627,7 +625,7 @@ pub mod pallet {
 			for i in (1..path.len() as u32).rev() {
 				if let Some(&[asset1, asset2]) = path.get((i - 1) as usize..(i + 1) as usize) {
 					let (reserve_in, reserve_out) = Self::get_reserves(asset1, asset2)?;
-					let prev_amount = amounts.get(i as usize).ok_or(Error::<T>::PathError)?;
+					let prev_amount = amounts.last().expect("Always has at least one element");
 					let amount_in = Self::get_amount_in(prev_amount, &reserve_in, &reserve_out)?;
 					ensure!(amount_in > Zero::zero(), Error::<T>::ZeroAmount);
 					amounts.push(amount_in);
