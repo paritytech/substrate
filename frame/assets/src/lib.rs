@@ -1051,13 +1051,8 @@ pub mod pallet {
 				let deposit = details.deposit + metadata_deposit;
 
 				// Move the deposit to the new owner.
-				if details.owner.is_some() {
-					T::Currency::repatriate_reserved(
-						&details.owner.as_ref().unwrap(),
-						&owner,
-						deposit,
-						Reserved,
-					)?;
+				if let Some(details_owner) = &details.owner {
+					T::Currency::repatriate_reserved(details_owner, &owner, deposit, Reserved)?;
 				}
 
 				details.owner = Some(owner.clone());
@@ -1249,6 +1244,9 @@ pub mod pallet {
 			let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 			Metadata::<T, I>::try_mutate_exists(id, |metadata| {
 				let deposit = metadata.take().ok_or(Error::<T, I>::Unknown)?.deposit;
+				if let Some(owner) = &d.owner {
+					T::Currency::unreserve(owner, deposit);
+				}
 				if d.owner.is_some() {
 					T::Currency::unreserve(&d.owner.unwrap(), deposit);
 				}
