@@ -2074,6 +2074,10 @@ pub mod ensure {
 	impl<T: CheckedMul + PartialOrd + Zero + Copy> EnsureMul for T {}
 	impl<T: CheckedDiv + PartialOrd + Zero + Copy> EnsureDiv for T {}
 
+	/// Meta trait that supports all arithmetic operations
+	pub trait EnsureOp: EnsureAdd + EnsureSub + EnsureMul + EnsureDiv {}
+	impl<T: EnsureAdd + EnsureSub + EnsureMul + EnsureDiv> EnsureOp for T {}
+
 	/// Performs self addition that returns `ArithmeticError` instead of wrapping around on
 	/// overflow.
 	pub trait EnsureAddAssign: EnsureAdd {
@@ -2202,6 +2206,16 @@ pub mod ensure {
 	impl<T: EnsureSub> EnsureSubAssign for T {}
 	impl<T: EnsureMul> EnsureMulAssign for T {}
 	impl<T: EnsureDiv> EnsureDivAssign for T {}
+
+	/// Meta trait that supports all assigned arithmetic operations
+	pub trait EnsureOpAssign:
+		EnsureAddAssign + EnsureSubAssign + EnsureMulAssign + EnsureDivAssign
+	{
+	}
+	impl<T: EnsureAddAssign + EnsureSubAssign + EnsureMulAssign + EnsureDivAssign> EnsureOpAssign
+		for T
+	{
+	}
 
 	/// Extends `FixedPointNumber with` the Ensure family functions.
 	pub trait EnsureFixedPointNumber: FixedPointNumber {
