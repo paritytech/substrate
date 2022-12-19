@@ -426,8 +426,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::swap_exact_tokens_for_tokens())]
 		pub fn swap_exact_tokens_for_tokens(
 			origin: OriginFor<T>,
-			asset1: MultiAssetId<T::AssetId>,
-			asset2: MultiAssetId<T::AssetId>,
+			path: BoundedVec<MultiAssetId<T::AssetId>, T::MaxSwapPathLength>,
 			amount_in: AssetBalanceOf<T>,
 			amount_out_min: AssetBalanceOf<T>,
 			send_to: T::AccountId,
@@ -436,42 +435,28 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
-			let pool_id = Self::get_pool_id(asset1, asset2);
-
 			ensure!(
 				amount_in > Zero::zero() && amount_out_min > Zero::zero(),
 				Error::<T>::ZeroAmount
 			);
+			ensure!(path.len() >= 2, Error::<T>::InvalidPath);
 
 			let now = frame_system::Pallet::<T>::block_number();
 			ensure!(deadline >= now, Error::<T>::DeadlinePassed);
 
-			let pool_account = Self::get_pool_account(pool_id);
-			let balance1 = Self::get_balance(&pool_account, asset1);
-			let balance2 = Self::get_balance(&pool_account, asset2);
-			if balance1.is_zero() {
-				return Err(Error::<T>::PoolNotFound.into())
-			}
+			let amounts = Self::get_amounts_out(&amount_in, &path)?;
+			let amount_out = amounts.last().expect("Has always more than 1 element");
+			ensure!(*amount_out >= amount_out_min, Error::<T>::InsufficientOutputAmount);
 
-			let amount_out = Self::get_amount_out(&amount_in, &balance1, &balance2)?;
+			Self::do_swap(&sender, &amounts, &path, &send_to, keep_alive)?;
 
-			ensure!(amount_out >= amount_out_min, Error::<T>::InsufficientOutputAmount);
-
-			Self::transfer(asset1, &sender, &pool_account, amount_in, keep_alive)?;
-
-			ensure!(amount_out < balance2, Error::<T>::InsufficientLiquidity);
-
-			Self::transfer(asset2, &pool_account, &send_to, amount_out, false)?;
-
-			/*Self::deposit_event(Event::SwapExecuted {
+			Self::deposit_event(Event::SwapExecuted {
 				who: sender,
 				send_to,
-				asset1,
-				asset2,
-				pool_id,
+				path,
 				amount_in,
-				amount_out,
-			});*/
+				amount_out: *amount_out,
+			});
 
 			Ok(())
 		}
@@ -492,27 +477,25 @@ pub mod pallet {
 				amount_out > Zero::zero() && amount_in_max > Zero::zero(),
 				Error::<T>::ZeroAmount
 			);
+			ensure!(path.len() >= 2, Error::<T>::InvalidPath);
 
 			let now = frame_system::Pallet::<T>::block_number();
 			ensure!(deadline >= now, Error::<T>::DeadlinePassed);
 
 			let amounts = Self::get_amounts_in(&amount_out, &path)?;
-			let amount_in = amounts.first().expect("Has always more than 1 element");
+			let amount_in = amounts.first().expect("Always has more than one element");
 			ensure!(*amount_in <= amount_in_max, Error::<T>::ExcessiveInputAmount);
 
-			if let Some(&[asset1, asset2]) = path.get(0..2) {
-				let pool_id = Self::get_pool_id(asset1, asset2);
-				let pool_account = Self::get_pool_account(pool_id);
-				Self::transfer(asset1, &sender, &pool_account, *amount_in, keep_alive)?;
-				Self::swap(&amounts, &path, &send_to)?;
-				Self::deposit_event(Event::SwapExecuted {
-					who: sender,
-					send_to,
-					path,
-					amount_in: *amount_in,
-					amount_out,
-				});
-			}
+			Self::do_swap(&sender, &amounts, &path, &send_to, keep_alive)?;
+
+			Self::deposit_event(Event::SwapExecuted {
+				who: sender,
+				send_to,
+				path,
+				amount_in: *amount_in,
+				amount_out,
+			});
+
 			Ok(())
 		}
 	}
@@ -538,29 +521,40 @@ pub mod pallet {
 			}
 		}
 
-		fn swap(
+		fn do_swap(
+			sender: &T::AccountId,
 			amounts: &Vec<AssetBalanceOf<T>>,
 			path: &BoundedVec<MultiAssetId<T::AssetId>, T::MaxSwapPathLength>,
 			send_to: &T::AccountId,
+			keep_alive: bool,
 		) -> Result<(), DispatchError> {
-			let path_len = path.len() as u32;
-			for i in 0..(path_len - 1) {
-				if let Some(&[asset1, asset2]) = path.get(i as usize..(i + 2) as usize) {
-					let pool_id = Self::get_pool_id(asset1, asset2);
-					let (sorted_asset1, sorted_asset2) = pool_id;
-					let pool_account = Self::get_pool_account(pool_id);
+			if let Some(&[asset1, asset2]) = path.get(0..2) {
+				let pool_id = Self::get_pool_id(asset1, asset2);
+				let pool_account = Self::get_pool_account(pool_id);
+				let first_amount = amounts.first().expect("Always has more than one element");
 
-					let amount_out = amounts.get((i + 1) as usize).ok_or(Error::<T>::PathError)?;
-					let to = if i < path_len - 2 {
-						let asset3 = path.get((i + 2) as usize).ok_or(Error::<T>::PathError)?;
-						Self::get_pool_account(Self::get_pool_id(asset2, *asset3))
-					} else {
-						send_to.clone()
-					};
+				Self::transfer(asset1, sender, &pool_account, *first_amount, keep_alive)?;
 
-					let send_asset =
-						if asset1 == sorted_asset1 { sorted_asset2 } else { sorted_asset1 };
-					Self::transfer(send_asset, &pool_account, &to, *amount_out, false)?;
+				let path_len = path.len() as u32;
+				for i in 0..(path_len - 1) {
+					if let Some(&[asset1, asset2]) = path.get(i as usize..(i + 2) as usize) {
+						let pool_id = Self::get_pool_id(asset1, asset2);
+						let (sorted_asset1, sorted_asset2) = pool_id;
+						let pool_account = Self::get_pool_account(pool_id);
+
+						let amount_out =
+							amounts.get((i + 1) as usize).ok_or(Error::<T>::PathError)?;
+						let to = if i < path_len - 2 {
+							let asset3 = path.get((i + 2) as usize).ok_or(Error::<T>::PathError)?;
+							Self::get_pool_account(Self::get_pool_id(asset2, *asset3))
+						} else {
+							send_to.clone()
+						};
+
+						let send_asset =
+							if asset1 == sorted_asset1 { sorted_asset2 } else { sorted_asset1 };
+						Self::transfer(send_asset, &pool_account, &to, *amount_out, false)?;
+					}
 				}
 			}
 			Ok(())
@@ -618,21 +612,37 @@ pub mod pallet {
 			amount_out: &AssetBalanceOf<T>,
 			path: &BoundedVec<MultiAssetId<T::AssetId>, T::MaxSwapPathLength>,
 		) -> Result<Vec<AssetBalanceOf<T>>, DispatchError> {
-			ensure!(path.len() >= 2, Error::<T>::InvalidPath);
-			let mut amounts: Vec<AssetBalanceOf<T>> = Vec::new();
+			let mut amounts: Vec<AssetBalanceOf<T>> = vec![*amount_out];
 
-			amounts.push(*amount_out);
 			for i in (1..path.len() as u32).rev() {
 				if let Some(&[asset1, asset2]) = path.get((i - 1) as usize..(i + 1) as usize) {
 					let (reserve_in, reserve_out) = Self::get_reserves(asset1, asset2)?;
 					let prev_amount = amounts.last().expect("Always has at least one element");
 					let amount_in = Self::get_amount_in(prev_amount, &reserve_in, &reserve_out)?;
-					ensure!(amount_in > Zero::zero(), Error::<T>::ZeroAmount);
 					amounts.push(amount_in);
 				}
 			}
 
 			amounts.reverse();
+			Ok(amounts)
+		}
+
+		fn get_amounts_out(
+			amount_in: &AssetBalanceOf<T>,
+			path: &BoundedVec<MultiAssetId<T::AssetId>, T::MaxSwapPathLength>,
+		) -> Result<Vec<AssetBalanceOf<T>>, DispatchError> {
+			let mut amounts: Vec<AssetBalanceOf<T>> = vec![*amount_in];
+
+			let path_len = path.len() as u32;
+			for i in 0..(path_len - 1) {
+				if let Some(&[asset1, asset2]) = path.get(i as usize..(i + 2) as usize) {
+					let (reserve_in, reserve_out) = Self::get_reserves(asset1, asset2)?;
+					let prev_amount = amounts.last().expect("Always has at least one element");
+					let amount_out = Self::get_amount_out(prev_amount, &reserve_in, &reserve_out)?;
+					amounts.push(amount_out);
+				}
+			}
+
 			Ok(amounts)
 		}
 

@@ -447,8 +447,7 @@ fn swap_should_work_with_native() {
 
 		assert_ok!(Dex::swap_exact_tokens_for_tokens(
 			RuntimeOrigin::signed(user),
-			token_2,
-			token_1,
+			bvec![token_2, token_1],
 			input_amount,
 			1,
 			user,
@@ -514,8 +513,7 @@ fn can_not_swap_in_pool_with_no_liquidity_added_yet() {
 		assert_noop!(
 			Dex::swap_exact_tokens_for_tokens(
 				RuntimeOrigin::signed(user),
-				token_2,
-				token_1,
+				bvec![token_2, token_1],
 				10,
 				1,
 				user,
@@ -587,8 +585,7 @@ fn check_no_panic_when_try_swap_close_to_empty_pool() {
 
 		assert_ok!(Dex::swap_exact_tokens_for_tokens(
 			RuntimeOrigin::signed(user),
-			token_2,
-			token_1,
+			bvec![token_2, token_1],
 			20,
 			7,
 			user,
@@ -601,8 +598,7 @@ fn check_no_panic_when_try_swap_close_to_empty_pool() {
 		assert_noop!(
 			Dex::swap_exact_tokens_for_tokens(
 				RuntimeOrigin::signed(user),
-				token_2,
-				token_1,
+				bvec![token_2, token_1],
 				20,
 				1,
 				user,
@@ -647,8 +643,7 @@ fn swap_should_not_work_with_if_too_much_slippage() {
 		assert_noop!(
 			Dex::swap_exact_tokens_for_tokens(
 				RuntimeOrigin::signed(user),
-				token_2,
-				token_1,
+				bvec![token_2, token_1],
 				exchange_amount,
 				333, // amount out min
 				user,
@@ -863,8 +858,7 @@ fn swap_when_existential_deposit_would_cause_reaping_but_keep_alive_set() {
 		assert_noop!(
 			Dex::swap_exact_tokens_for_tokens(
 				RuntimeOrigin::signed(user),
-				token_1,
-				token_2,
+				bvec![token_1, token_2],
 				1,
 				1, // amount_in_min
 				user,
@@ -991,8 +985,7 @@ fn same_asset_swap_should_fail() {
 		assert_noop!(
 			Dex::swap_exact_tokens_for_tokens(
 				RuntimeOrigin::signed(user),
-				token_1,
-				token_1,
+				bvec![token_1, token_1],
 				exchange_amount,
 				1,
 				user,
@@ -1005,8 +998,7 @@ fn same_asset_swap_should_fail() {
 		assert_noop!(
 			Dex::swap_exact_tokens_for_tokens(
 				RuntimeOrigin::signed(user),
-				MultiAssetId::Native,
-				MultiAssetId::Native,
+				bvec![MultiAssetId::Native, MultiAssetId::Native],
 				exchange_amount,
 				1,
 				user,
