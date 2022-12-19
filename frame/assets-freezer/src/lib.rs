@@ -27,27 +27,36 @@ pub mod mock;
 #[cfg(test)]
 mod tests;
 
-use sp_std::prelude::*;
-use sp_runtime::{TokenError, ArithmeticError, traits::{Zero, Saturating, CheckedAdd, CheckedSub}};
-use frame_support::{ensure, dispatch::{DispatchError, DispatchResult}};
-use frame_support::traits::{
-	StoredMap, tokens::{
-		WithdrawConsequence, DepositConsequence, fungibles, fungibles::InspectHold, FrozenBalance,
-		WhenDust
-	}
+use frame_support::{
+	dispatch::{DispatchError, DispatchResult},
+	ensure,
+	traits::{
+		tokens::{
+			fungibles, fungibles::InspectHold, DepositConsequence, FrozenBalance, WhenDust,
+			WithdrawConsequence,
+		},
+		StoredMap,
+	},
 };
 use frame_system::Config as SystemConfig;
+use sp_runtime::{
+	traits::{CheckedAdd, CheckedSub, Saturating, Zero},
+	ArithmeticError, TokenError,
+};
+use sp_std::prelude::*;
 
 pub use pallet::*;
 
-type BalanceOf<T> = <<T as Config>::Assets as fungibles::Inspect<<T as SystemConfig>::AccountId>>::Balance;
-type AssetIdOf<T> = <<T as Config>::Assets as fungibles::Inspect<<T as SystemConfig>::AccountId>>::AssetId;
+type BalanceOf<T> =
+	<<T as Config>::Assets as fungibles::Inspect<<T as SystemConfig>::AccountId>>::Balance;
+type AssetIdOf<T> =
+	<<T as Config>::Assets as fungibles::Inspect<<T as SystemConfig>::AccountId>>::AssetId;
 
 #[frame_support::pallet]
 pub mod pallet {
+	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use super::*;
 
 	/// The information concerning our freezing.
 	#[derive(Eq, PartialEq, Clone, Encode, Decode, RuntimeDebug, Default)]
@@ -107,7 +116,11 @@ pub mod pallet {
 impl<T: Config> FrozenBalance<AssetIdOf<T>, T::AccountId, BalanceOf<T>> for Pallet<T> {
 	fn frozen_balance(id: AssetIdOf<T>, who: &T::AccountId) -> Option<BalanceOf<T>> {
 		let f = T::Store::get(&(id, who.clone()));
-		if f.reserved.is_zero() { None } else { Some(f.reserved) }
+		if f.reserved.is_zero() {
+			None
+		} else {
+			Some(f.reserved)
+		}
 	}
 }
 
@@ -123,12 +136,18 @@ impl<T: Config> fungibles::Inspect<<T as SystemConfig>::AccountId> for Pallet<T>
 	fn balance(asset: AssetIdOf<T>, who: &T::AccountId) -> BalanceOf<T> {
 		T::Assets::balance(asset, who)
 	}
-	fn reducible_balance(asset: AssetIdOf<T>, who: &T::AccountId, keep_alive: bool) -> BalanceOf<T> {
+	fn reducible_balance(
+		asset: AssetIdOf<T>,
+		who: &T::AccountId,
+		keep_alive: bool,
+	) -> BalanceOf<T> {
 		T::Assets::reducible_balance(asset, who, keep_alive)
 	}
-	fn can_deposit(asset: AssetIdOf<T>, who: &T::AccountId, amount: BalanceOf<T>)
-		-> DepositConsequence
-	{
+	fn can_deposit(
+		asset: AssetIdOf<T>,
+		who: &T::AccountId,
+		amount: BalanceOf<T>,
+	) -> DepositConsequence {
 		T::Assets::can_deposit(asset, who, amount)
 	}
 	fn can_withdraw(
@@ -140,8 +159,9 @@ impl<T: Config> fungibles::Inspect<<T as SystemConfig>::AccountId> for Pallet<T>
 	}
 }
 
-impl<T: Config> fungibles::Transfer<<T as SystemConfig>::AccountId> for Pallet<T> where
-	T::Assets: fungibles::Transfer<T::AccountId>
+impl<T: Config> fungibles::Transfer<<T as SystemConfig>::AccountId> for Pallet<T>
+where
+	T::Assets: fungibles::Transfer<T::AccountId>,
 {
 	fn transfer(
 		asset: Self::AssetId,
@@ -163,12 +183,15 @@ impl<T: Config> fungibles::Transfer<<T as SystemConfig>::AccountId> for Pallet<T
 	}
 }
 
-impl<T: Config> fungibles::Unbalanced<T::AccountId> for Pallet<T> where
-	T::Assets: fungibles::Unbalanced<T::AccountId>
+impl<T: Config> fungibles::Unbalanced<T::AccountId> for Pallet<T>
+where
+	T::Assets: fungibles::Unbalanced<T::AccountId>,
 {
-	fn set_balance(asset: Self::AssetId, who: &T::AccountId, amount: Self::Balance)
-		-> DispatchResult
-	{
+	fn set_balance(
+		asset: Self::AssetId,
+		who: &T::AccountId,
+		amount: Self::Balance,
+	) -> DispatchResult {
 		T::Assets::set_balance(asset, who, amount)
 	}
 
@@ -185,9 +208,11 @@ impl<T: Config> fungibles::Unbalanced<T::AccountId> for Pallet<T> where
 		T::Assets::decrease_balance(asset, who, amount, keep_alive)
 	}
 
-	fn increase_balance(asset: Self::AssetId, who: &T::AccountId, amount: Self::Balance)
-		-> Result<(), DispatchError>
-	{
+	fn increase_balance(
+		asset: Self::AssetId,
+		who: &T::AccountId,
+		amount: Self::Balance,
+	) -> Result<(), DispatchError> {
 		T::Assets::increase_balance(asset, who, amount)
 	}
 
@@ -215,7 +240,8 @@ impl<T: Config> fungibles::InspectHold<<T as SystemConfig>::AccountId> for Palle
 	}
 	fn can_hold(asset: AssetIdOf<T>, who: &T::AccountId, amount: BalanceOf<T>) -> bool {
 		// If we can withdraw without destroying the account, then we're good.
-		<Self as fungibles::Inspect<T::AccountId>>::can_withdraw(asset, who, amount) == WithdrawConsequence::Success
+		<Self as fungibles::Inspect<T::AccountId>>::can_withdraw(asset, who, amount) ==
+			WithdrawConsequence::Success
 	}
 	fn reducible_balance_on_hold(asset: AssetIdOf<T>, who: &T::AccountId) -> BalanceOf<T> {
 		// Figure out the most we can transfer from the balance on hold. This is basically the same
@@ -228,28 +254,30 @@ impl<T: Config> fungibles::InspectHold<<T as SystemConfig>::AccountId> for Palle
 	}
 }
 
-impl<T: Config> fungibles::MutateHold<<T as SystemConfig>::AccountId> for Pallet<T> where
-	T::Assets: fungibles::Transfer<T::AccountId> + fungibles::InspectWithoutFreezer<T::AccountId>
+impl<T: Config> fungibles::MutateHold<<T as SystemConfig>::AccountId> for Pallet<T>
+where
+	T::Assets: fungibles::Transfer<T::AccountId> + fungibles::InspectWithoutFreezer<T::AccountId>,
 {
 	fn hold(asset: AssetIdOf<T>, who: &T::AccountId, amount: BalanceOf<T>) -> DispatchResult {
 		if !Self::can_hold(asset, who, amount) {
 			Err(TokenError::NoFunds)?
 		}
-		T::Store::mutate(
-			&(asset, who.clone()),
-			|extra| extra.reserved = extra.reserved.saturating_add(amount),
-		)?;
+		T::Store::mutate(&(asset, who.clone()), |extra| {
+			extra.reserved = extra.reserved.saturating_add(amount)
+		})?;
 
 		Self::deposit_event(Event::Held(asset, who.clone(), amount));
 		Ok(())
 	}
 
-	fn release(asset: AssetIdOf<T>, who: &T::AccountId, amount: BalanceOf<T>, best_effort: bool)
-		-> Result<BalanceOf<T>, DispatchError>
-	{
-		T::Store::try_mutate_exists(
-			&(asset, who.clone()),
-			|maybe_extra| if let Some(ref mut extra) = maybe_extra {
+	fn release(
+		asset: AssetIdOf<T>,
+		who: &T::AccountId,
+		amount: BalanceOf<T>,
+		best_effort: bool,
+	) -> Result<BalanceOf<T>, DispatchError> {
+		T::Store::try_mutate_exists(&(asset, who.clone()), |maybe_extra| {
+			if let Some(ref mut extra) = maybe_extra {
 				let old = extra.reserved;
 				extra.reserved = extra.reserved.saturating_sub(amount);
 				let actual = old - extra.reserved;
@@ -260,8 +288,8 @@ impl<T: Config> fungibles::MutateHold<<T as SystemConfig>::AccountId> for Pallet
 				Ok(actual)
 			} else {
 				Err(TokenError::NoFunds)?
-			},
-		)
+			}
+		})
 	}
 
 	fn transfer_held(
@@ -276,7 +304,9 @@ impl<T: Config> fungibles::MutateHold<<T as SystemConfig>::AccountId> for Pallet
 		let min_balance = <Self as fungibles::Inspect<_>>::minimum_balance(asset);
 		let dest_balance = <Self as fungibles::Inspect<_>>::balance(asset, dest);
 		ensure!(!on_hold || dest_balance >= min_balance, TokenError::CannotCreate);
-		Self::balance_on_hold(asset, dest).checked_add(&amount).ok_or(ArithmeticError::Overflow)?;
+		Self::balance_on_hold(asset, dest)
+			.checked_add(&amount)
+			.ok_or(ArithmeticError::Overflow)?;
 
 		Self::decrease_on_hold_ensuring_backed(asset, source, amount)?;
 
@@ -298,8 +328,9 @@ impl<T: Config> fungibles::MutateHold<<T as SystemConfig>::AccountId> for Pallet
 	}
 }
 
-impl<T: Config> fungibles::UnbalancedHold<<T as SystemConfig>::AccountId> for Pallet<T> where
-	T::Assets: fungibles::Unbalanced<T::AccountId>
+impl<T: Config> fungibles::UnbalancedHold<<T as SystemConfig>::AccountId> for Pallet<T>
+where
+	T::Assets: fungibles::Unbalanced<T::AccountId>,
 {
 	fn decrease_balance_on_hold(
 		asset: AssetIdOf<T>,
@@ -338,10 +369,9 @@ impl<T: Config> Pallet<T> {
 		source: &T::AccountId,
 		amount: BalanceOf<T>,
 	) -> Result<(), DispatchError> {
-		T::Store::mutate(
-			&(asset, source.clone()),
-			|extra| extra.reserved = extra.reserved.saturating_add(amount)
-		)?;
+		T::Store::mutate(&(asset, source.clone()), |extra| {
+			extra.reserved = extra.reserved.saturating_add(amount)
+		})?;
 		Ok(())
 	}
 
