@@ -61,7 +61,7 @@ pub fn channel(name: &'static str, queue_size_warning: usize) -> (Sender, Receiv
 		queue_size: queue_size.clone(),
 		queue_size_warning,
 		warning_fired: false,
-		created_backtrace: Backtrace::force_capture(),
+		creation_backtrace: Backtrace::force_capture(),
 		metrics: metrics.clone(),
 	};
 	let rx = Receiver { inner: rx, name, queue_size, metrics };
@@ -86,7 +86,7 @@ pub struct Sender {
 	/// We generate the error message only once to not spam the logs.
 	warning_fired: bool,
 	/// Backtrace of a place where the channel was created.
-	created_backtrace: Backtrace,
+	creation_backtrace: Backtrace,
 	/// Clone of [`Receiver::metrics`].
 	metrics: Arc<Mutex<Option<Arc<Option<Metrics>>>>>,
 }
@@ -192,7 +192,7 @@ impl OutChannels {
 				error!(
 					"The number of unprocessed events in channel `{}` reached {}.\n\
 					 The channel was created at:\n{}",
-					sender.name, sender.queue_size_warning, sender.created_backtrace,
+					sender.name, sender.queue_size_warning, sender.creation_backtrace,
 				);
 			}
 			sender.inner.unbounded_send(event.clone()).is_ok()
