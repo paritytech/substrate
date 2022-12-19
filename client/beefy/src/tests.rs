@@ -171,7 +171,7 @@ impl BeefyTestNet {
 		// push genesis to make indexing human readable (index equals to block number)
 		all_hashes.push(self.peer(0).client().info().genesis_hash);
 
-		let mut built_hashes = self.peer(0).generate_blocks(count, BlockOrigin::File, |builder| {
+		let built_hashes = self.peer(0).generate_blocks(count, BlockOrigin::File, |builder| {
 			let mut block = builder.build().unwrap().block;
 
 			if include_mmr_digest {
@@ -189,7 +189,7 @@ impl BeefyTestNet {
 		});
 		runtime.block_on(self.wait_until_sync());
 
-		all_hashes.append(&mut built_hashes);
+		all_hashes.extend(built_hashes);
 		all_hashes
 	}
 }
