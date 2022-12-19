@@ -2503,7 +2503,7 @@ dependencies = [
  "indexmap",
  "slab",
  "tokio",
- "tokio-util",
+ "tokio-util 0.7.4",
  "tracing",
 ]
 
@@ -2928,7 +2928,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-rustls",
- "tokio-util",
+ "tokio-util 0.7.4",
  "tracing",
  "webpki-roots",
 ]
@@ -2991,7 +2991,7 @@ dependencies = [
  "soketto",
  "tokio",
  "tokio-stream",
- "tokio-util",
+ "tokio-util 0.7.4",
  "tower",
  "tracing",
 ]
@@ -4279,7 +4279,7 @@ dependencies = [
  "substrate-rpc-client",
  "tempfile",
  "tokio",
- "tokio-util",
+ "tokio-util 0.7.4",
  "try-runtime-cli",
  "wait-timeout",
 ]
@@ -7774,7 +7774,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
- "tokio-util",
+ "tokio-util 0.7.4",
  "unsigned-varint",
  "zeroize",
 ]
@@ -8085,20 +8085,33 @@ dependencies = [
 name = "sc-rpc-spec-v2"
 version = "0.10.0-dev"
 dependencies = [
+ "array-bytes",
+ "assert_matches",
  "futures",
+ "futures-util",
  "hex",
  "jsonrpsee",
+ "log",
  "parity-scale-codec",
+ "parking_lot 0.12.1",
+ "sc-block-builder",
  "sc-chain-spec",
+ "sc-client-api",
  "sc-transaction-pool-api",
  "serde",
  "serde_json",
  "sp-api",
  "sp-blockchain",
+ "sp-consensus",
  "sp-core",
+ "sp-maybe-compressed-blob",
  "sp-runtime",
+ "sp-version",
+ "substrate-test-runtime",
+ "substrate-test-runtime-client",
  "thiserror",
  "tokio",
+ "tokio-stream",
 ]
 
 [[package]]
@@ -10264,6 +10277,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite 0.2.9",
  "tokio",
+ "tokio-util 0.6.10",
 ]
 
 [[package]]
@@ -10277,6 +10291,20 @@ dependencies = [
  "futures-core",
  "tokio",
  "tokio-stream",
+]
+
+[[package]]
+name = "tokio-util"
+version = "0.6.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36943ee01a6d67977dd3f84a5a1d2efeb4ada3a1ae771cadfaa535d9d9fc6507"
+dependencies = [
+ "bytes",
+ "futures-core",
+ "futures-sink",
+ "log",
+ "pin-project-lite 0.2.9",
+ "tokio",
 ]
 
 [[package]]
