@@ -51,8 +51,9 @@ pub mod pallet {
 		PalletId,
 	};
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::traits::{
-		AccountIdConversion, AtLeast32BitUnsigned, Hash, IntegerSquareRoot, One, Zero,
+	use sp_runtime::{
+		traits::{AccountIdConversion, AtLeast32BitUnsigned, Hash, IntegerSquareRoot, One, Zero},
+		Saturating,
 	};
 	use sp_std::prelude::*;
 
@@ -440,7 +441,6 @@ pub mod pallet {
 				amount_in > Zero::zero() && amount_out_min > Zero::zero(),
 				Error::<T>::ZeroAmount
 			);
-			ensure!(path.len() >= 2, Error::<T>::InvalidPath);
 
 			let now = frame_system::Pallet::<T>::block_number();
 			ensure!(deadline >= now, Error::<T>::DeadlinePassed);
@@ -536,9 +536,10 @@ pub mod pallet {
 
 				Self::transfer(asset1, sender, &pool_account, *first_amount, keep_alive)?;
 
+				let mut i = 0;
 				let path_len = path.len() as u32;
-				for i in 0..(path_len - 1) {
-					if let Some(&[asset1, asset2]) = path.get(i as usize..(i + 2) as usize) {
+				for assets_pair in path.windows(2).rev() {
+					if let &[asset1, asset2] = assets_pair {
 						let pool_id = Self::get_pool_id(asset1, asset2);
 						let (sorted_asset1, sorted_asset2) = pool_id;
 						let pool_account = Self::get_pool_account(pool_id);
@@ -556,6 +557,7 @@ pub mod pallet {
 							if asset1 == sorted_asset1 { sorted_asset2 } else { sorted_asset1 };
 						Self::transfer(send_asset, &pool_account, &to, *amount_out, false)?;
 					}
+					i.saturating_inc();
 				}
 			}
 			Ok(())
@@ -615,8 +617,8 @@ pub mod pallet {
 		) -> Result<Vec<AssetBalanceOf<T>>, DispatchError> {
 			let mut amounts: Vec<AssetBalanceOf<T>> = vec![*amount_out];
 
-			for i in (1..path.len() as u32).rev() {
-				if let Some(&[asset1, asset2]) = path.get((i - 1) as usize..(i + 1) as usize) {
+			for assets_pair in path.windows(2).rev() {
+				if let &[asset1, asset2] = assets_pair {
 					let (reserve_in, reserve_out) = Self::get_reserves(asset1, asset2)?;
 					let prev_amount = amounts.last().expect("Always has at least one element");
 					let amount_in = Self::get_amount_in(prev_amount, &reserve_in, &reserve_out)?;
@@ -632,11 +634,11 @@ pub mod pallet {
 			amount_in: &AssetBalanceOf<T>,
 			path: &BoundedVec<MultiAssetId<T::AssetId>, T::MaxSwapPathLength>,
 		) -> Result<Vec<AssetBalanceOf<T>>, DispatchError> {
+			ensure!(path.len() >= 2, Error::<T>::InvalidPath);
 			let mut amounts: Vec<AssetBalanceOf<T>> = vec![*amount_in];
 
-			let path_len = path.len() as u32;
-			for i in 0..(path_len - 1) {
-				if let Some(&[asset1, asset2]) = path.get(i as usize..(i + 2) as usize) {
+			for assets_pair in path.windows(2) {
+				if let &[asset1, asset2] = assets_pair {
 					let (reserve_in, reserve_out) = Self::get_reserves(asset1, asset2)?;
 					let prev_amount = amounts.last().expect("Always has at least one element");
 					let amount_out = Self::get_amount_out(prev_amount, &reserve_in, &reserve_out)?;
