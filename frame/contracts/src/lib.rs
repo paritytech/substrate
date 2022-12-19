@@ -391,7 +391,7 @@ pub mod pallet {
 	{
 		/// Deprecated version if [`Self::call`] for use in an in-storage `Call`.
 		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::call().saturating_add(<Pallet<T>>::compat_weight(*gas_limit)))]
+		#[pallet::weight(T::WeightInfo::call().saturating_add(<Pallet<T>>::compat_weight_limit(*gas_limit)))]
 		#[allow(deprecated)]
 		#[deprecated(note = "1D weight is used in this extrinsic, please migrate to `call`")]
 		pub fn call_old_weight(
@@ -406,7 +406,7 @@ pub mod pallet {
 				origin,
 				dest,
 				value,
-				<Pallet<T>>::compat_weight(gas_limit),
+				<Pallet<T>>::compat_weight_limit(gas_limit),
 				storage_deposit_limit,
 				data,
 			)
@@ -416,7 +416,7 @@ pub mod pallet {
 		#[pallet::call_index(1)]
 		#[pallet::weight(
 			T::WeightInfo::instantiate_with_code(code.len() as u32, salt.len() as u32)
-			.saturating_add(<Pallet<T>>::compat_weight(*gas_limit))
+			.saturating_add(<Pallet<T>>::compat_weight_limit(*gas_limit))
 		)]
 		#[allow(deprecated)]
 		#[deprecated(
@@ -434,7 +434,7 @@ pub mod pallet {
 			Self::instantiate_with_code(
 				origin,
 				value,
-				<Pallet<T>>::compat_weight(gas_limit),
+				<Pallet<T>>::compat_weight_limit(gas_limit),
 				storage_deposit_limit,
 				code,
 				data,
@@ -445,7 +445,7 @@ pub mod pallet {
 		/// Deprecated version if [`Self::instantiate`] for use in an in-storage `Call`.
 		#[pallet::call_index(2)]
 		#[pallet::weight(
-			T::WeightInfo::instantiate(salt.len() as u32).saturating_add(<Pallet<T>>::compat_weight(*gas_limit))
+			T::WeightInfo::instantiate(salt.len() as u32).saturating_add(<Pallet<T>>::compat_weight_limit(*gas_limit))
 		)]
 		#[allow(deprecated)]
 		#[deprecated(note = "1D weight is used in this extrinsic, please migrate to `instantiate`")]
@@ -461,7 +461,7 @@ pub mod pallet {
 			Self::instantiate(
 				origin,
 				value,
-				<Pallet<T>>::compat_weight(gas_limit),
+				<Pallet<T>>::compat_weight_limit(gas_limit),
 				storage_deposit_limit,
 				code_hash,
 				data,
@@ -1231,11 +1231,11 @@ where
 		<T::Currency as Inspect<AccountIdOf<T>>>::minimum_balance()
 	}
 
-	/// Convert a 1D Weight to a 2D weight.
+	/// Convert gas_limit from 1D Weight to a 2D Weight.
 	///
-	/// Used by backwards compatible extrinsics. We cannot just set the proof to zero
-	/// or an old `Call` will just fail.
-	fn compat_weight(gas_limit: OldWeight) -> Weight {
+	/// Used by backwards compatible extrinsics. We cannot just set the proof_size weight limit to zero
+	/// or an old `Call` will just fail with OutOfGas.
+	fn compat_weight_limit(gas_limit: OldWeight) -> Weight {
 		Weight::from(gas_limit).set_proof_size(u64::from(T::MaxCodeLen::get()) * 2)
 	}
 }
