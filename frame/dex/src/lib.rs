@@ -445,8 +445,8 @@ pub mod pallet {
 			ensure!(deadline >= now, Error::<T>::DeadlinePassed);
 
 			let amounts = Self::get_amounts_out(&amount_in, &path)?;
-			let amount_out = amounts.last().expect("Has always more than 1 element");
-			ensure!(*amount_out >= amount_out_min, Error::<T>::InsufficientOutputAmount);
+			let amount_out = *amounts.last().expect("Has always more than 1 element");
+			ensure!(amount_out >= amount_out_min, Error::<T>::InsufficientOutputAmount);
 
 			Self::do_swap(&sender, &amounts, &path, &send_to, keep_alive)?;
 
@@ -455,7 +455,7 @@ pub mod pallet {
 				send_to,
 				path,
 				amount_in,
-				amount_out: *amount_out,
+				amount_out,
 			});
 
 			Ok(())
@@ -483,8 +483,8 @@ pub mod pallet {
 			ensure!(deadline >= now, Error::<T>::DeadlinePassed);
 
 			let amounts = Self::get_amounts_in(&amount_out, &path)?;
-			let amount_in = amounts.first().expect("Always has more than one element");
-			ensure!(*amount_in <= amount_in_max, Error::<T>::ExcessiveInputAmount);
+			let amount_in = *amounts.first().expect("Always has more than one element");
+			ensure!(amount_in <= amount_in_max, Error::<T>::ExcessiveInputAmount);
 
 			Self::do_swap(&sender, &amounts, &path, &send_to, keep_alive)?;
 
@@ -492,7 +492,7 @@ pub mod pallet {
 				who: sender,
 				send_to,
 				path,
-				amount_in: *amount_in,
+				amount_in,
 				amount_out,
 			});
 
