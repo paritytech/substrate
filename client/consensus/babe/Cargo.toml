@@ -24,7 +24,6 @@ num-rational = "0.4.1"
 num-traits = "0.2.8"
 parking_lot = "0.12.1"
 schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated"] }
-serde = { version = "1.0.136", features = ["derive"] }
 thiserror = "1.0"
 fork-tree = { version = "3.0.0", path = "../../../utils/fork-tree" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../../utils/prometheus" }
@@ -44,10 +43,8 @@ sp-consensus-slots = { version = "0.10.0-dev", path = "../../../primitives/conse
 sp-consensus-vrf = { version = "0.10.0-dev", path = "../../../primitives/consensus/vrf" }
 sp-core = { version = "7.0.0", path = "../../../primitives/core" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
-sp-io = { version = "7.0.0", path = "../../../primitives/io" }
 sp-keystore = { version = "0.13.0", path = "../../../primitives/keystore" }
 sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
-sp-version = { version = "5.0.0", path = "../../../primitives/version" }
 
 [dev-dependencies]
 rand_chacha = "0.2.2"

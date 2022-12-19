@@ -36,7 +36,7 @@ sp-tracing = { version = "6.0.0", path = "../../../primitives/tracing" }
 hash-db = "0.15.2"
 tempfile = "3.1.0"
 fs_extra = "1"
-rand = { version = "0.7.2", features = ["small_rng"] }
+rand = { version = "0.8.5", features = ["small_rng"] }
 lazy_static = "1.4.0"
 parity-db = "0.4.2"
 sc-transaction-pool = { version = "4.0.0-dev", path = "../../../client/transaction-pool" }
