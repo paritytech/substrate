@@ -1944,7 +1944,7 @@ pub trait BlockNumberProvider {
 /// The *EnsureOps* family functions follows the same behavior as *CheckedOps* but
 /// returning an [`ArithmeticError`] instead of `None`.
 ///
-/// [`ArithmeticError`]: sp_runtime::ArithmeticError
+/// [`ArithmeticError`]: crate::ArithmeticError
 pub mod ensure {
 	use crate::ArithmeticError;
 	use sp_arithmetic::{
