@@ -366,6 +366,8 @@ pub mod tests {
 	    type Signature:  Clone + Encode + Decode + Debug + Clone + Sync + Send;
 
 	fn generate_in_store(store: SyncCryptoStorePtr, owner: Keyring) -> Self::Public;
+
+	fn add_typed_key_to_store(store: SyncCryptoStorePtr, key_type: sp_application_crypto::KeyTypeId, seed: Option<&str>) -> Self::Public;
 			     
 	fn sign(&self, hashed_message : &[u8]) -> Self::Signature;
 
@@ -434,6 +436,13 @@ pub mod tests {
 		.unwrap()
 		.into()
 	}
+
+	fn add_typed_key_to_store(store: SyncCryptoStorePtr, key_type: sp_application_crypto::KeyTypeId, seed: Option<&str>)-> Self::Public {
+	    SyncCryptoStore::ecdsa_generate_new(&*store, key_type, seed)
+		.ok()
+		.unwrap()
+		.into()
+	}
 			     
 	fn sign(&self, message : &[u8]) -> Self::Signature {
 	    let hashed_message = keccak_256(message);
@@ -485,6 +494,19 @@ pub mod tests {
 	    )
     
 	}
+
+	fn add_typed_key_to_store(store: SyncCryptoStorePtr, key_type: sp_application_crypto::KeyTypeId, seed: Option<&str>)-> Self::Public {
+	    (SyncCryptoStore::ecdsa_generate_new(&*store, key_type, seed)
+		.ok()
+		.unwrap()
+	     .into()
+	     ,
+	     SyncCryptoStore::bls_generate_new(&*store, key_type, seed)
+	     .ok()
+	     .unwrap()
+	     .into())
+	}
+
         
 	fn sign(&self, message : &[u8]) -> Self::Signature {
 	    let hashed_message = keccak_256(message);
@@ -746,42 +768,59 @@ pub mod tests {
     #[test]
     fn verify_works_for_ecdsa_n_bls() {
 	    verify_works::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>();
-   } 
+    }
 
     // Note that we use keys with and without a seed for this test.
-    #[test]
-    fn public_keys_works() {
+    fn public_keys_works<TKeyPair, AuthId, TSignature, TBeefyKeystore>() 
+    where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId>,
+	  TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
+	  AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send,
+	  TSignature:  Encode + Decode + Debug + Clone + Sync + Send,
+    {
 	const TEST_TYPE: sp_application_crypto::KeyTypeId =
 	    sp_application_crypto::KeyTypeId(*b"test");
 
 	let store = keystore();
 
-	let add_key = |key_type, seed: Option<&str>| {
-	    SyncCryptoStore::ecdsa_generate_new(&*store, key_type, seed).unwrap()
-	};
+	// test keys
+	let _ = TKeyPair::add_typed_key_to_store(store.clone(), TEST_TYPE, Some(<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::to_seed(Keyring::Alice).as_str()));		
+	let _ = TKeyPair::add_typed_key_to_store(store.clone(), TEST_TYPE, Some(<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::to_seed(Keyring::Bob).as_str()));
 
-		// test keys
-		let _ = add_key(TEST_TYPE, Some(<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::to_seed(Keyring::Alice).as_str()));
-		let _ = add_key(TEST_TYPE, Some(<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::to_seed(Keyring::Bob).as_str()));
+	// BEEFY keys
+	let _ = TKeyPair::add_typed_key_to_store(store.clone(), KEY_TYPE, Some(<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::to_seed(Keyring::Dave).as_str()));
+	let _ = TKeyPair::add_typed_key_to_store(store.clone(), KEY_TYPE, Some(<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::to_seed(Keyring::Eve).as_str()));
 
-		let _ = add_key(TEST_TYPE, None);
-		let _ = add_key(TEST_TYPE, None);
+	let _ = TKeyPair::add_typed_key_to_store(store.clone(), TEST_TYPE, None);
+	let _ = TKeyPair::add_typed_key_to_store(store.clone(), TEST_TYPE, None);
 
-		// BEEFY keys
-		let _ = add_key(KEY_TYPE, Some(<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::to_seed(Keyring::Dave).as_str()));
-		let _ = add_key(KEY_TYPE, Some(<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::to_seed(Keyring::Eve).as_str()));
+	let key1: AuthId = TKeyPair::add_typed_key_to_store(store.clone(), KEY_TYPE, None);
+	let key2: AuthId = TKeyPair::add_typed_key_to_store(store.clone(), KEY_TYPE, None);
 
-		let key1: ecdsa_crypto::Public = add_key(KEY_TYPE, None).into();
-		let key2: ecdsa_crypto::Public = add_key(KEY_TYPE, None).into();
+	let store : TBeefyKeystore = TBeefyKeystore::new(store);
 
-		let store = BeefyECDSAKeystore::new(store);
+	let keys = store.public_keys().ok().unwrap();
 
-		let keys = store.public_keys().ok().unwrap();
+	println!("key len {}",keys.len());
+	println!("keys {:?}",keys);
+	println!("dave's {:?}", <Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Dave));
+	println!("Eve's {:?}", <Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Eve));
 
-		assert!(keys.len() == 4);
-		assert!(keys.contains(&<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::public(Keyring::Dave)));
-		assert!(keys.contains(&<Keyring as GenericKeyring<ecdsa_crypto::Pair>>::public(Keyring::Eve)));
-		assert!(keys.contains(&key1));
-		assert!(keys.contains(&key2));
-	}
+	assert!(keys.len() == 4);
+	assert!(keys.contains(&<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Dave)));
+	assert!(keys.contains(&<Keyring as GenericKeyring<TKeyPair>>::public(Keyring::Eve)));
+	assert!(keys.contains(&key1));
+	assert!(keys.contains(&key2));
+    }
+
+    #[test]
+    fn public_keys_works_for_ecdsa_keystore() {
+	public_keys_works::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>();
+    }
+
+    #[test]
+    fn public_keys_works_for_ecdsa_n_bls() {
+	public_keys_works::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>();
+    }
+
 }
+
