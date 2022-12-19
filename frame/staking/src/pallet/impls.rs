@@ -44,8 +44,9 @@ use sp_std::prelude::*;
 
 use crate::{
 	log, slashing, weights::WeightInfo, AbsoluteMaxNominationsOf, ActiveEraInfo, BalanceOf,
-	EraPayout, Exposure, ExposureOf, Forcing, IndividualExposure, MaxWinnersOf, Nominations,
-	PositiveImbalanceOf, RewardDestination, SessionInterface, StakingLedger, ValidatorPrefs,
+	ElectionSizeTracker, EraPayout, Exposure, ExposureOf, Forcing, IndividualExposure,
+	MaxWinnersOf, Nominations, NominationsQuota, PositiveImbalanceOf, RewardDestination,
+	SessionInterface, StakingLedger, ValidatorPrefs,
 };
 
 use super::{pallet::*, STAKING_ID};
@@ -748,9 +749,15 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
 	pub fn get_npos_voters(maybe_max_len: Option<usize>) -> Vec<VoterOf<Self>> {
+		// TODO: limits are snapshot/election bounds passed as input (election_bounds: ElectionBounds)
+		let (size, count) = (None, Some(10));
+
+		let mut voters_size_tracker: ElectionSizeTracker<T::AccountId> =
+			ElectionSizeTracker::new(size);
+
 		let max_allowed_len = {
 			let all_voter_count = T::VoterList::count() as usize;
-			maybe_max_len.unwrap_or(all_voter_count).min(all_voter_count)
+			count.unwrap_or(all_voter_count).min(all_voter_count)
 		};
 
 		let mut all_voters = Vec::<_>::with_capacity(max_allowed_len);
@@ -777,7 +784,15 @@ impl<T: Config> Pallet<T> {
 
 			if let Some(Nominations { targets, .. }) = <Nominators<T>>::get(&voter) {
 				let voter_weight = weight_of(&voter);
+				let target_quota = T::NominationsQuota::get_quota_capped(voter_weight.into());
 				if !targets.is_empty() {
+					if voters_size_tracker.try_register_voter(targets.len()).is_err() {
+                    // TODO(gpestana): needs logging?
+						// no more space in the election result, stop iterating over the voters.
+						// TODO(gpestana): needs logging?
+						break
+					}
+
 					all_voters.push((voter.clone(), voter_weight, targets));
 					nominators_taken.saturating_inc();
 				} else {
@@ -787,6 +802,11 @@ impl<T: Config> Pallet<T> {
 					if voter_weight < min_active_stake { voter_weight } else { min_active_stake };
 			} else if Validators::<T>::contains_key(&voter) {
 				// if this voter is a validator:
+				if voters_size_tracker.try_register_voter(1).is_err() {
+					// no more space in the election result, stop iterating over the voters.
+					// TODO(gpestana): needs logging?
+					break
+				}
 				let self_vote = (
 					voter.clone(),
 					weight_of(&voter),
@@ -968,7 +988,6 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> ElectionDataProvider for Pallet<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = BlockNumberFor<T>;
-	//type MaxVotesPerVoter = T::NominationsQuota;
 	type MaxVotesPerVoter = AbsoluteMaxNominationsOf<T>;
 
 	fn desired_targets() -> data_provider::Result<u32> {

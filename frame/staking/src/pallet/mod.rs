@@ -129,7 +129,8 @@ pub mod pallet {
 		/// Something that defines the maximum number of nominations per nominator.
 		type NominationsQuota: NominationsQuota<BalanceOf<Self>>;
 
-		/// Number of eras to keep in history.
+		/// Maximum number of nominations per nominator, regardless of the
+		/// `Config::NominationsQuota` Number of eras to keep in history.
 		///
 		/// Following information is kept for eras in `[current_era -
 		/// HistoryDepth, current_era]`: `ErasStakers`, `ErasStakersClipped`,
@@ -1158,7 +1159,8 @@ pub mod pallet {
 
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
 			ensure!(
-				targets.len() <= T::NominationsQuota::get() as usize,
+                // TODO(gpestana): this is the absolute max nomination, make it more explicit 
+				targets.len() <= T::NominationsQuota::get() as usize, 
 				Error::<T>::TooManyTargets
 			);
 

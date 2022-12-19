@@ -20,7 +20,7 @@ use crate::{self as multi_phase, unsigned::MinerConfig};
 use frame_election_provider_support::{
 	data_provider,
 	onchain::{self},
-	ElectionDataProvider, NposSolution, SequentialPhragmen,
+	ElectionDataProvider, NposSolution, SequentialPhragmen, SnapshotBounds,
 };
 pub use frame_support::{assert_noop, assert_ok, pallet_prelude::GetDefault};
 use frame_support::{
@@ -298,6 +298,8 @@ parameter_types! {
 	pub static MaxElectingVoters: VoterIndex = u32::max_value();
 	pub static MaxElectableTargets: TargetIndex = TargetIndex::max_value();
 	pub static MaxWinners: u32 = 200;
+	pub static VoterSnapshotBounds: SnapshotBounds = SnapshotBounds::new_unbounded();
+    pub static TargetSnapshotBounds: SnapshotBounds = SnapshotBounds::new_unbounded();
 
 	pub static EpochLength: u64 = 30;
 	pub static OnChainFallback: bool = true;
@@ -405,6 +407,8 @@ impl crate::Config for Runtime {
 	type MaxWinners = MaxWinners;
 	type MinerConfig = Self;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
+    type VoterSnapshotBounds = VoterSnapshotBounds;
+    type TargetSnapshotBounds = TargetSnapshotBounds;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime

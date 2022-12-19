@@ -178,6 +178,7 @@ pub mod traits;
 use sp_runtime::traits::{Bounded, Saturating, Zero};
 use sp_std::{fmt::Debug, prelude::*};
 
+pub use codec::{Decode, Encode};
 /// Re-export the solution generation macro.
 pub use frame_election_provider_solution_type::generate_solution_type;
 pub use frame_support::{traits::Get, weights::Weight, BoundedVec, RuntimeDebug};
@@ -227,7 +228,7 @@ impl<T> __OrInvalidIndex<T> for Option<T> {
 /// making it fast to repeatedly encode into a `SolutionOf<T>`. This property turns out
 /// to be important when trimming for solution length.
 #[derive(RuntimeDebug, Clone, Default)]
-#[cfg_attr(feature = "std", derive(PartialEq, Eq, codec::Encode, codec::Decode))]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
 pub struct IndexAssignment<VoterIndex, TargetIndex, P: PerThing> {
 	/// Index of the voter among the voters list.
 	pub who: VoterIndex,
@@ -674,3 +675,88 @@ pub type BoundedSupportsOf<E> = BoundedSupports<
 
 sp_core::generate_feature_enabled_macro!(runtime_benchmarks_enabled, feature = "runtime-benchmarks", $);
 sp_core::generate_feature_enabled_macro!(runtime_benchmarks_or_fuzz_enabled, any(feature = "runtime-benchmarks", feature = "fuzzing"), $);
+
+/// The voter or target bounds of an election
+pub struct ElectionBounds {
+	pub count: Option<u32>,
+}
+
+impl ElectionBounds {
+	pub fn new(count: Option<u32>) -> Self {
+		ElectionBounds { count }
+	}
+}
+
+impl ElectionBounds {
+	pub fn exhausted(self, count: usize) -> bool {
+		self.count.map_or(false, |c| c > count as u32)
+	}
+}
+
+impl From<SnapshotBounds> for ElectionBounds {
+	fn from(bounds: SnapshotBounds) -> Self {
+		ElectionBounds { count: bounds.count }
+	}
+}
+
+impl From<Option<usize>> for ElectionBounds {
+	fn from(bounds: Option<usize>) -> Self {
+		ElectionBounds { count: bounds.map(|b| b as u32) }
+	}
+}
+
+/// The limits of an election snapshot.
+#[derive(Clone, Copy, RuntimeDebug, scale_info::TypeInfo, Encode, Decode)]
+pub struct SnapshotBounds {
+	/// The bound on number of elements. `None` means unbounded.
+	count: Option<u32>,
+	/// The bound on size, in bytes. `None` means unbounded.
+	size: Option<u32>,
+}
+
+impl SnapshotBounds {
+	/// Returns a new instance of self without bounds.
+	pub const fn new_unbounded() -> Self {
+		SnapshotBounds { count: None, size: None }
+	}
+
+	// Returns true if `given_size` or `given_count` exhausts `self.size` or `self_count`
+	// respectively.
+	pub fn exhausted(self, given_size: u32, given_count: u32) -> bool {
+		self.size.map_or(false, |size| given_size > size) ||
+			self.count.map_or(false, |count| given_count > count)
+	}
+}
+
+/// Utility builder for [`SnapshotBounds`].
+///
+/// The main purpose of this is to prevent mixing the order of similarly typed arguments (e.g. u32
+/// size and count).
+pub struct SnapshotBoundsBuilder {
+	count: Option<u32>,
+	size: Option<u32>,
+}
+
+impl SnapshotBoundsBuilder {
+	/// set the count of the snapshot.
+	pub fn count(mut self, count: Option<u32>) -> SnapshotBoundsBuilder {
+		self.count = count;
+		self
+	}
+
+	/// Set the size of the snapshot.
+	pub fn size(mut self, size: Option<u32>) -> SnapshotBoundsBuilder {
+		self.size = size;
+		self
+	}
+
+	/// Returns an instance of `SnapshotBounds` from the current state.
+	pub fn build(self) -> SnapshotBounds {
+		SnapshotBounds { count: self.count, size: self.size }
+	}
+}
+
+#[cfg(test)]
+mod snapshot_bounds {
+	// TODO(gpestana)
+}

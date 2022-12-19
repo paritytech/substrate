@@ -300,6 +300,7 @@ pub mod weights;
 mod pallet;
 
 use codec::{Decode, Encode, HasCompact, MaxEncodedLen};
+use frame_election_provider_support::VoteWeight;
 use frame_support::{
 	traits::{Currency, Defensive, Get},
 	weights::Weight,
@@ -316,6 +317,7 @@ use sp_staking::{
 	EraIndex, SessionIndex,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
+
 pub use weights::WeightInfo;
 
 pub use pallet::{pallet::*, *};
@@ -338,7 +340,8 @@ macro_rules! log {
 pub type MaxWinnersOf<T> = <<T as Config>::ElectionProvider as frame_election_provider_support::ElectionProviderBase>::MaxWinners;
 
 /// Absolute maximum number of nominations per nominator.
-type AbsoluteMaxNominationsOf<T> = <<T as Config>::NominationsQuota as NominationsQuota<BalanceOf<T>>>::AbsoluteMaxNominations;
+type AbsoluteMaxNominationsOf<T> =
+	<<T as Config>::NominationsQuota as NominationsQuota<BalanceOf<T>>>::AbsoluteMaxNominations;
 
 /// Counter for the number of "reward" points earned by a given validator.
 pub type RewardPoint = u32;
@@ -766,29 +769,78 @@ impl<AccountId, Balance: HasCompact + Zero> UnappliedSlash<AccountId, Balance> {
 
 /// Something that defines the maximum number of nominations per nominator.
 pub trait NominationsQuota<Balance>: Get<u32> {
-    const ABSOLUTE_MAX_NOMINATIONS: u32;
+	const ABSOLUTE_MAX_NOMINATIONS: u32;
 
-    type AbsoluteMaxNominations: Get<u32>;
+	type AbsoluteMaxNominations: Get<u32>;
 
-    fn nomination_quota(balance: Balance) -> u32;
+	fn get_quota_capped(balance: Balance) -> u32 {
+		let quota = Self::get_quota(balance);
+		if quota < Self::ABSOLUTE_MAX_NOMINATIONS {
+			quota
+		} else {
+			Self::ABSOLUTE_MAX_NOMINATIONS
+		}
+	}
+
+	fn get_quota(balance: Balance) -> u32;
 }
 
 /// A nomination quota that allows up to MAX nominations for all validators.
 pub struct FixedNominationsQuota<const MAX: u32>;
 impl<Balance, const MAX: u32> NominationsQuota<Balance> for FixedNominationsQuota<MAX> {
-    const ABSOLUTE_MAX_NOMINATIONS: u32 = MAX;
+	const ABSOLUTE_MAX_NOMINATIONS: u32 = MAX;
 
-    type AbsoluteMaxNominations = Self;
+	type AbsoluteMaxNominations = Self;
 
-    fn nomination_quota(_: Balance) -> u32 {
-        MAX
-    }
+	fn get_quota(_: Balance) -> u32 {
+		MAX
+	}
 }
 
 impl<const MAX: u32> Get<u32> for FixedNominationsQuota<MAX> {
-    fn get() -> u32 {
-        MAX
-    }
+	fn get() -> u32 {
+		MAX
+	}
+}
+
+pub(crate) struct ElectionSizeTracker<AccountId> {
+	size: usize,
+	limit: Option<usize>,
+	_marker: sp_std::marker::PhantomData<AccountId>,
+}
+
+impl<AccountId> ElectionSizeTracker<AccountId> {
+	pub(crate) fn new(limit: Option<usize>) -> Self {
+		ElectionSizeTracker { size: 0, limit, _marker: Default::default() }
+	}
+
+	// TODO: finish by calculating if current size vote fits in the tracker, result err if not
+	pub(crate) fn try_register_voter(&mut self, votes: usize) -> Result<(), ()> {
+		Ok(self.size = self.size.saturating_add(Self::voter_size(votes)))
+	}
+
+	fn voter_size(votes: usize) -> usize {
+		Self::length_prefix(votes)
+			// and each element
+			.saturating_add(votes * sp_std::mem::size_of::<AccountId>())
+			// 1 vote-weight
+			.saturating_add(sp_std::mem::size_of::<VoteWeight>())
+			// 1 voter account
+			.saturating_add(sp_std::mem::size_of::<AccountId>())
+	}
+
+	/// The length prefix of a vector with the given length.
+	#[inline]
+	pub(crate) fn length_prefix(length: usize) -> usize {
+		use codec::{Compact, CompactLen};
+		let length = length as u32;
+		Compact::<u32>::compact_len(&length)
+	}
+
+	// Final size: size of all internal elements, plus the length prefix.
+	pub(crate) fn final_byte_size_of(&self, length: usize) -> usize {
+		self.size + Self::length_prefix(length)
+	}
 }
 
 /// Means for interacting with a specialized version of the `session` trait.

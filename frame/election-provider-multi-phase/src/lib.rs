@@ -232,7 +232,7 @@
 use codec::{Decode, Encode};
 use frame_election_provider_support::{
 	BoundedSupportsOf, ElectionDataProvider, ElectionProvider, ElectionProviderBase,
-	InstantElectionProvider, NposSolution,
+	InstantElectionProvider, NposSolution, SnapshotBounds,
 };
 use frame_support::{
 	dispatch::DispatchClass,
@@ -670,6 +670,14 @@ pub mod pallet {
 		/// Note: This must always be greater or equal to `T::DataProvider::desired_targets()`.
 		#[pallet::constant]
 		type MaxWinners: Get<u32>;
+
+        // The limits of targets to include in the snapshot per block.
+        #[pallet::constant]
+        type TargetSnapshotBounds: Get<SnapshotBounds>;
+
+        // The limits of voters to include in the snapshot per block.
+        #[pallet::constant]
+        type VoterSnapshotBounds: Get<SnapshotBounds>;
 
 		/// Handler for the slashed deposits.
 		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -1403,6 +1411,9 @@ impl<T: Config> Pallet<T> {
 	) -> Result<(Vec<T::AccountId>, Vec<VoterOf<T>>, u32), ElectionError<T>> {
 		let target_limit = T::MaxElectableTargets::get().saturated_into::<usize>();
 		let voter_limit = T::MaxElectingVoters::get().saturated_into::<usize>();
+
+        let target_bounds = T::TargetSnapshotBounds::get();
+        let voter_bounds = T::VoterSnapshotBounds::get();
 
 		let targets = T::DataProvider::electable_targets(Some(target_limit))
 			.map_err(ElectionError::DataProvider)?;
