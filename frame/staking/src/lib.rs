@@ -805,27 +805,44 @@ impl<const MAX: u32> Get<u32> for FixedNominationsQuota<MAX> {
 	}
 }
 
+/// A static tracker for the election data snapshot.
+///
+/// Computes the (SCALE) encoded byte length of a snapshot based on static rules, without any actual
+/// encoding.
+///
+/// ## Details
+///
+/// The snapshot has a the form `Vec<Voter>` where `Voter = (Account, u64, Vec<Account>)`. For each
+/// voter added to the snapshot, [`try_register_voter`] should be called, with the number of votes
+/// (length of the internal `Vec`).
+///
+/// Whilst doing this, [`size`] will track the entire size of the `Vec<Voter>`, except for the
+/// length prefix of the outer `Vec`. To get the final size at any point, use
+/// [`final_byte_size_of`].
 pub(crate) struct ElectionSizeTracker<AccountId> {
 	size: usize,
 	_marker: sp_std::marker::PhantomData<AccountId>,
 }
 
 impl<AccountId> ElectionSizeTracker<AccountId> {
-	pub(crate) fn new(limit: Option<usize>) -> Self {
+	pub(crate) fn new() -> Self {
 		ElectionSizeTracker { size: 0, _marker: Default::default() }
 	}
 
+	/// Attempts to register a new voter with `votes` for a given election `bounds`. Returns an
+	/// error if the size of the new votes exceed the capacity of the tracker.
 	pub(crate) fn try_register_voter(
 		&mut self,
 		votes: usize,
 		bounds: ElectionBounds,
 	) -> Result<(), ()> {
+		// TODO(gpestana): it is not accurately calculating/setting the size yet, fix
 		let voter_size = Self::voter_size(votes);
-		// refactor
 		if bounds.size_exhausted(Some(self.size.saturating_add(voter_size) as u32)) {
 			Err(())
 		} else {
-			Ok(self.size = self.size.saturating_add(voter_size))
+			self.size = self.size.saturating_add(voter_size);
+			Ok(())
 		}
 	}
 

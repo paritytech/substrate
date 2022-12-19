@@ -693,10 +693,12 @@ impl ElectionBounds {
 		ElectionBounds { count: None, size: None }
 	}
 
+	//  Returns true if `given_count` exhausts `self.count`.
 	pub fn count_exhausted(self, given_count: Option<u32>) -> bool {
 		self.count.map_or(false, |count| given_count.unwrap_or(0) > count)
 	}
 
+	//  Returns true if `given_size` exhausts `self.size`.
 	pub fn size_exhausted(self, given_size: Option<u32>) -> bool {
 		self.size.map_or(false, |count| given_size.unwrap_or(0) > count)
 	}
