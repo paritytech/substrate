@@ -100,12 +100,20 @@ impl pallet_preimage::Config for Test {
 	type BaseDeposit = ();
 	type ByteDeposit = ();
 }
+
+parameter_types! {
+	// We allow the scheduler to have at most 50% overhead.
+	pub MinAvailableTaskWeight: Weight = Perbill::from_percent(50) *
+		MaxWeight::get();
+}
+
 impl pallet_scheduler::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeOrigin = RuntimeOrigin;
 	type PalletsOrigin = OriginCaller;
 	type RuntimeCall = RuntimeCall;
 	type MaximumWeight = MaxWeight;
+	type MinAvailableTaskWeight = MinAvailableTaskWeight;
 	type ScheduleOrigin = EnsureRoot<u64>;
 	type MaxScheduledPerBlock = ConstU32<100>;
 	type WeightInfo = ();

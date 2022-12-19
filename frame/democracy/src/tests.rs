@@ -109,6 +109,9 @@ impl frame_system::Config for Test {
 }
 parameter_types! {
 	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * BlockWeights::get().max_block;
+	// We allow the scheduler to have at most 50% overhead.
+	pub MinAvailableTaskWeight: Weight = Perbill::from_percent(50) *
+		MaximumSchedulerWeight::get();
 }
 
 impl pallet_preimage::Config for Test {
@@ -126,6 +129,7 @@ impl pallet_scheduler::Config for Test {
 	type PalletsOrigin = OriginCaller;
 	type RuntimeCall = RuntimeCall;
 	type MaximumWeight = MaximumSchedulerWeight;
+	type MinAvailableTaskWeight = MinAvailableTaskWeight;
 	type ScheduleOrigin = EnsureRoot<u64>;
 	type MaxScheduledPerBlock = ConstU32<100>;
 	type WeightInfo = ();
