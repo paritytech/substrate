@@ -1382,10 +1382,10 @@ pub(crate) mod tests {
 		// generate 2 blocks, try again expect success
 		let (mut best_block_streams, _) = get_beefy_streams(&mut net, keys);
 		let mut best_block_stream = best_block_streams.drain(..).next().unwrap();
-		net.peer(0).push_blocks(2, false);
-		// finalize 1 and 2 without justifications
-		let hashof1 = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(1)).unwrap();
-		let hashof2 = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(2)).unwrap();
+		let hashes = net.peer(0).push_blocks(2, false);
+		// finalize 1 and 2 without justifications (hashes does not contain genesis)
+		let hashof1 = hashes[0];
+		let hashof2 = hashes[1];
 		backend.finalize_block(hashof1, None).unwrap();
 		backend.finalize_block(hashof2, None).unwrap();
 
