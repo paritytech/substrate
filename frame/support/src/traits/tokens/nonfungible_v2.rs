@@ -33,7 +33,7 @@ use codec::{Decode, Encode};
 use sp_runtime::TokenError;
 use sp_std::prelude::*;
 
-/// Trait for providing an interface to a read-only NFT-like set of items.
+/// Trait for providing an interface to a read-only NFT-like item.
 pub trait Inspect<AccountId> {
 	/// Type for identifying an item.
 	type ItemId;
