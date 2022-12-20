@@ -225,7 +225,7 @@ impl<Block: BlockT> Blockchain<Block> {
 	/// Set an existing block as head.
 	pub fn set_head(&self, hash: Block::Hash) -> sp_blockchain::Result<()> {
 		let header = self
-			.header(BlockId::Hash(hash))?
+			.header(hash)?
 			.ok_or_else(|| sp_blockchain::Error::UnknownBlock(format!("{}", hash)))?;
 
 		self.apply_head(&header)
@@ -336,11 +336,9 @@ impl<Block: BlockT> Blockchain<Block> {
 impl<Block: BlockT> HeaderBackend<Block> for Blockchain<Block> {
 	fn header(
 		&self,
-		id: BlockId<Block>,
+		hash: Block::Hash,
 	) -> sp_blockchain::Result<Option<<Block as BlockT>::Header>> {
-		Ok(self
-			.id(id)
-			.and_then(|hash| self.storage.read().blocks.get(&hash).map(|b| b.header().clone())))
+		Ok(self.storage.read().blocks.get(&hash).map(|b| b.header().clone()))
 	}
 
 	fn info(&self) -> blockchain::Info<Block> {
@@ -387,7 +385,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for Blockchain<Block> {
 		&self,
 		hash: Block::Hash,
 	) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
-		self.header(BlockId::hash(hash))?
+		self.header(hash)?
 			.map(|header| CachedHeaderMetadata::from(&header))
 			.ok_or_else(|| {
 				sp_blockchain::Error::UnknownBlock(format!("header not found: {}", hash))

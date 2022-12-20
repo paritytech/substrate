@@ -22,13 +22,13 @@ libp2p = "0.49.0"
 log = "0.4.17"
 names = { version = "0.13.0", default-features = false }
 parity-scale-codec = "3.0.0"
-rand = "0.7.3"
+rand = "0.8.5"
 regex = "1.6.0"
 rpassword = "7.0.0"
 serde = "1.0.136"
 serde_json = "1.0.85"
 thiserror = "1.0.30"
-tiny-bip39 = "0.8.2"
+tiny-bip39 = "1.0.0"
 tokio = { version = "1.22.0", features = ["signal", "rt-multi-thread", "parking_lot"] }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../db" }

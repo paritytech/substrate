@@ -326,14 +326,9 @@ impl sc_transaction_pool::ChainApi for TestApi {
 
 	fn block_header(
 		&self,
-		at: &BlockId<Self::Block>,
+		hash: <Self::Block as BlockT>::Hash,
 	) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error> {
-		Ok(match at {
-			BlockId::Number(num) =>
-				self.chain.read().block_by_number.get(num).map(|b| b[0].0.header().clone()),
-			BlockId::Hash(hash) =>
-				self.chain.read().block_by_hash.get(hash).map(|b| b.header().clone()),
-		})
+		Ok(self.chain.read().block_by_hash.get(&hash).map(|b| b.header().clone()))
 	}
 
 	fn tree_route(

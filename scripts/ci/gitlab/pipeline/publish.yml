@@ -12,7 +12,7 @@
     DOCKERFILE:                    $PRODUCT.Dockerfile
     IMAGE_NAME:                    docker.io/$IMAGE_PATH
   before_script:
-    - !reference [.job-switcher, before_script]
+    - !reference [.kubernetes-env, before_script]
     - cd ./artifacts/$PRODUCT/
     - VERSION="$(cat ./VERSION)"
     - echo "${PRODUCT} version = ${VERSION}"
