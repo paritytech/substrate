@@ -126,7 +126,7 @@ checksum = "698b65a961a9d730fb45b6b0327e20207810c9f61ee421b082b27ba003f49e2b"
 [[package]]
 name = "ark-bls12-381"
 version = "0.4.0-alpha.1"
-source = "git+https://github.com/w3f/arkworks-curves.git?branch=skalman-bls12-377-wb-hash2curve#72106f750968c581e36574e63fc05ff6936e4c2d"
+source = "git+https://github.com/w3f/arkworks-curves.git#ec2d3ddec8061d60779c5a01932eae26943ec3d4"
 dependencies = [
  "ark-ec",
  "ark-ff",

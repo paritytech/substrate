@@ -63,7 +63,7 @@ ark-ff = { version = "0.4.0-alpha", default-features = false, optional = true }
 ark-ec =  { version = "0.4.0-alpha", default-features = false, optional = true }
 ark-serialize =  { version = "0.4.0-alpha", default-features = false, optional = true }
 ark-std =  { version = "0.4.0-alpha", default-features = false, optional = true }
-ark-bls12-381 = { git = "https://github.com/w3f/arkworks-curves.git", branch = "skalman-bls12-377-wb-hash2curve", optional = true }
+ark-bls12-381 = { git = "https://github.com/w3f/arkworks-curves.git", default-features = false, optional = true, features = ["curve"] }
 sha2 = { version = "0.10.2", default-features = false, optional = true }
 
 [dev-dependencies]
