@@ -457,14 +457,14 @@ pub mod pallet {
 		CollectionMintSettingsUpdated { collection: T::CollectionId },
 		/// Event gets emitted when the `NextCollectionId` gets incremented.
 		NextCollectionIdIncremented { next_id: T::CollectionId },
-		/// The price was set for the instance.
+		/// The price was set for the item.
 		ItemPriceSet {
 			collection: T::CollectionId,
 			item: T::ItemId,
 			price: ItemPrice<T, I>,
 			whitelisted_buyer: Option<T::AccountId>,
 		},
-		/// The price for the instance was removed.
+		/// The price for the item was removed.
 		ItemPriceRemoved { collection: T::CollectionId, item: T::ItemId },
 		/// An item was bought.
 		ItemBought {
