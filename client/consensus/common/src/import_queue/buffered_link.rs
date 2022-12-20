@@ -28,7 +28,7 @@
 //! # use sp_test_primitives::Block;
 //! # struct DummyLink; impl Link<Block> for DummyLink {}
 //! # let mut my_link = DummyLink;
-//! let (mut tx, mut rx) = buffered_link::<Block>();
+//! let (mut tx, mut rx) = buffered_link::<Block>(100_000);
 //! tx.blocks_processed(0, 0, vec![]);
 //!
 //! // Calls `my_link.blocks_processed(0, 0, vec![])` when polled.
