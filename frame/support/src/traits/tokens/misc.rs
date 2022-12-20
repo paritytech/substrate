@@ -63,15 +63,16 @@ pub enum WithdrawConsequence<Balance> {
 impl<Balance: Zero> WithdrawConsequence<Balance> {
 	/// Convert the type into a `Result` with `DispatchError` as the error or the additional
 	/// `Balance` by which the account will be reduced.
-	pub fn into_result(self) -> Result<Balance, DispatchError> {
+	pub fn into_result(self, keep_nonzero: bool) -> Result<Balance, DispatchError> {
 		use WithdrawConsequence::*;
 		match self {
 			BalanceLow => Err(TokenError::FundsUnavailable.into()),
-			WouldDie => Err(TokenError::WouldDie.into()),
+			WouldDie => Err(TokenError::OnlyProvider.into()),
 			UnknownAsset => Err(TokenError::UnknownAsset.into()),
 			Underflow => Err(ArithmeticError::Underflow.into()),
 			Overflow => Err(ArithmeticError::Overflow.into()),
 			Frozen => Err(TokenError::Frozen.into()),
+			ReducedToZero(_) if keep_nonzero => Err(TokenError::UnwantedRemoval.into()),
 			ReducedToZero(result) => Ok(result),
 			Success => Ok(Zero::zero()),
 		}

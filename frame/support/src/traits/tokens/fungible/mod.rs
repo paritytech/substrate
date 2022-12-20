@@ -173,14 +173,15 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		amount: Self::Balance,
 		keep_alive: KeepAlive,
 	) -> Result<Self::Balance, DispatchError> {
-		let liquid = Self::reducible_balance(source, keep_alive, false);
-		ensure!(liquid >= amount, TokenError::FundsUnavailable);
+		let _extra = Self::can_withdraw(source, amount)
+			.into_result(keep_alive != KeepAlive::CanKill)?;
 		Self::can_deposit(dest, amount, false).into_result()?;
-		let actual = Self::decrease_balance(source, amount, true, keep_alive)?;
+		Self::decrease_balance(source, amount, true, keep_alive)?;
 		// This should never fail as we checked `can_deposit` earlier. But we do a best-effort
 		// anyway.
-		let _ = Self::increase_balance(dest, actual, true);
-		Ok(actual)
+		let _ = Self::increase_balance(dest, amount, true);
+		Self::done_transfer(source, dest, amount);
+		Ok(amount)
 	}
 
 	fn done_mint_into(_who: &AccountId, _amount: Self::Balance) {}

@@ -71,7 +71,7 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		}
 		let new_balance = old_balance.checked_sub(&amount).ok_or(TokenError::FundsUnavailable)?;
 		Self::set_balance(who, new_balance)?;
-		Ok(amount)
+		Ok(old_balance.saturating_sub(new_balance))
 	}
 
 	/// Increase the balance of `who` by `amount`.
@@ -99,11 +99,12 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 				Err(TokenError::BelowMinimum.into())
 			}
 		} else {
-			let amount = new_balance.saturating_sub(old_balance);
-			if !amount.is_zero() {
+			if new_balance == old_balance {
+				Ok(Self::Balance::zero())
+			} else {
 				Self::set_balance(who, new_balance)?;
+				Ok(new_balance.saturating_sub(old_balance))
 			}
-			Ok(amount)
 		}
 	}
 

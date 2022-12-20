@@ -195,7 +195,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 		dest: &AccountId,
 		amount: Self::Balance,
 	) -> Result<Self::Balance, DispatchError> {
-		let extra = Self::can_withdraw(asset, &source, amount).into_result()?;
+		let extra = Self::can_withdraw(asset, &source, amount).into_result(false)?;
 		// As we first burn and then mint, we don't need to check if `mint` fits into the supply.
 		// If we can withdraw/burn it, we can also mint it again.
 		Self::can_deposit(asset, dest, amount.saturating_add(extra), false).into_result()?;

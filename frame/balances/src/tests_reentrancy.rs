@@ -157,7 +157,7 @@ fn transfer_dust_removal_tst1_should_work() {
 		assert_eq!(Balances::free_balance(&1), 1050);
 
 		// Verify the events
-		assert_eq!(System::events().len(), 12);
+		assert_eq!(System::events().len(), 14);
 
 		System::assert_has_event(RuntimeEvent::Balances(crate::Event::Transfer {
 			from: 2,
@@ -195,7 +195,7 @@ fn transfer_dust_removal_tst2_should_work() {
 		assert_eq!(Balances::free_balance(&1), 1500);
 
 		// Verify the events
-		assert_eq!(System::events().len(), 10);
+		assert_eq!(System::events().len(), 12);
 
 		System::assert_has_event(RuntimeEvent::Balances(crate::Event::Transfer {
 			from: 2,
@@ -238,14 +238,13 @@ fn repatriating_reserved_balance_dust_removal_should_work() {
 		assert_eq!(Balances::free_balance(1), 1500);
 
 		// Verify the events
-		assert_eq!(System::events().len(), 10);
+		assert_eq!(System::events().len(), 12);
 
 		System::assert_has_event(RuntimeEvent::Balances(crate::Event::Transfer {
 			from: 2,
 			to: 1,
 			amount: 450,
 		}));
-
 		System::assert_has_event(RuntimeEvent::Balances(crate::Event::DustLost {
 			account: 2,
 			amount: 50,

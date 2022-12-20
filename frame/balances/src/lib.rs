@@ -178,7 +178,7 @@ use frame_support::{
 			WithdrawConsequence,
 		},
 		Currency, Defensive, DefensiveSaturating, ExistenceRequirement,
-		ExistenceRequirement::{AllowDeath, KeepAlive},
+		ExistenceRequirement::AllowDeath,
 		Get, Imbalance, LockIdentifier, LockableCurrency, NamedReservableCurrency, OnUnbalanced,
 		ReservableCurrency, SignedImbalance, StoredMap, TryDrop, WithdrawReasons,
 	},
@@ -267,190 +267,6 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
-
-	#[pallet::call]
-	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-		/// Transfer some liquid free balance to another account.
-		///
-		/// `transfer` will set the `FreeBalance` of the sender and receiver.
-		/// If the sender's account is below the existential deposit as a result
-		/// of the transfer, the account will be reaped.
-		///
-		/// The dispatch origin for this call must be `Signed` by the transactor.
-		///
-		/// # <weight>
-		/// - Dependent on arguments but not critical, given proper implementations for input config
-		///   types. See related functions below.
-		/// - It contains a limited number of reads and writes internally and no complex
-		///   computation.
-		///
-		/// Related functions:
-		///
-		///   - `ensure_can_withdraw` is always called internally but has a bounded complexity.
-		///   - Transferring balances to accounts that did not exist before will cause
-		///     `T::OnNewAccount::on_new_account` to be called.
-		///   - Removing enough funds from an account will trigger `T::DustRemoval::on_unbalanced`.
-		///   - `transfer_keep_alive` works the same way as `transfer`, but has an additional check
-		///     that the transfer will not kill the origin account.
-		/// ---------------------------------
-		/// - Origin account is already in memory, so no DB operations for them.
-		/// # </weight>
-		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::transfer())]
-		pub fn transfer(
-			origin: OriginFor<T>,
-			dest: AccountIdLookupOf<T>,
-			#[pallet::compact] value: T::Balance,
-		) -> DispatchResultWithPostInfo {
-			let transactor = ensure_signed(origin)?;
-			let dest = T::Lookup::lookup(dest)?;
-			<Self as Currency<_>>::transfer(
-				&transactor,
-				&dest,
-				value,
-				ExistenceRequirement::AllowDeath,
-			)?;
-			Ok(().into())
-		}
-
-		/// Set the balances of a given account.
-		///
-		/// This will alter `FreeBalance` and `ReservedBalance` in storage. it will
-		/// also alter the total issuance of the system (`TotalIssuance`) appropriately.
-		/// If the new free or reserved balance is below the existential deposit,
-		/// it will reset the account nonce (`frame_system::AccountNonce`).
-		///
-		/// The dispatch origin for this call is `root`.
-		#[pallet::call_index(1)]
-		#[pallet::weight(
-			T::WeightInfo::set_balance_creating() // Creates a new account.
-				.max(T::WeightInfo::set_balance_killing()) // Kills an existing account.
-		)]
-		pub fn set_balance(
-			origin: OriginFor<T>,
-			who: AccountIdLookupOf<T>,
-			#[pallet::compact] new_free: T::Balance,
-		) -> DispatchResultWithPostInfo {
-			ensure_root(origin)?;
-			let who = T::Lookup::lookup(who)?;
-			let existential_deposit = T::ExistentialDeposit::get();
-
-			let wipeout = new_free < existential_deposit;
-			let new_free = if wipeout { Zero::zero() } else { new_free };
-
-			// First we try to modify the account's balance to the forced balance.
-			let old_free = Self::mutate_account(&who, |account| {
-				let old_free = account.free;
-				account.free = new_free;
-				old_free
-			})?;
-
-			// This will adjust the total issuance, which was not done by the `mutate_account`
-			// above.
-			if new_free > old_free {
-				mem::drop(PositiveImbalance::<T, I>::new(new_free - old_free));
-			} else if new_free < old_free {
-				mem::drop(NegativeImbalance::<T, I>::new(old_free - new_free));
-			}
-
-			Self::deposit_event(Event::BalanceSet { who, free: new_free });
-			Ok(().into())
-		}
-
-		/// Exactly as `transfer`, except the origin must be root and the source account may be
-		/// specified.
-		/// # <weight>
-		/// - Same as transfer, but additional read and write because the source account is not
-		///   assumed to be in the overlay.
-		/// # </weight>
-		#[pallet::call_index(2)]
-		#[pallet::weight(T::WeightInfo::force_transfer())]
-		pub fn force_transfer(
-			origin: OriginFor<T>,
-			source: AccountIdLookupOf<T>,
-			dest: AccountIdLookupOf<T>,
-			#[pallet::compact] value: T::Balance,
-		) -> DispatchResultWithPostInfo {
-			ensure_root(origin)?;
-			let source = T::Lookup::lookup(source)?;
-			let dest = T::Lookup::lookup(dest)?;
-			<Self as Currency<_>>::transfer(
-				&source,
-				&dest,
-				value,
-				ExistenceRequirement::AllowDeath,
-			)?;
-			Ok(().into())
-		}
-
-		/// Same as the [`transfer`] call, but with a check that the transfer will not kill the
-		/// origin account.
-		///
-		/// 99% of the time you want [`transfer`] instead.
-		///
-		/// [`transfer`]: struct.Pallet.html#method.transfer
-		#[pallet::call_index(3)]
-		#[pallet::weight(T::WeightInfo::transfer_keep_alive())]
-		pub fn transfer_keep_alive(
-			origin: OriginFor<T>,
-			dest: AccountIdLookupOf<T>,
-			#[pallet::compact] value: T::Balance,
-		) -> DispatchResultWithPostInfo {
-			let transactor = ensure_signed(origin)?;
-			let dest = T::Lookup::lookup(dest)?;
-			<Self as Currency<_>>::transfer(&transactor, &dest, value, KeepAlive)?;
-			Ok(().into())
-		}
-
-		/// Transfer the entire transferable balance from the caller account.
-		///
-		/// NOTE: This function only attempts to transfer _transferable_ balances. This means that
-		/// any locked, reserved, or existential deposits (when `keep_alive` is `true`), will not be
-		/// transferred by this function. To ensure that this function results in a killed account,
-		/// you might need to prepare the account by removing any reference counters, storage
-		/// deposits, etc...
-		///
-		/// The dispatch origin of this call must be Signed.
-		///
-		/// - `dest`: The recipient of the transfer.
-		/// - `keep_alive`: A boolean to determine if the `transfer_all` operation should send all
-		///   of the funds the account has, causing the sender account to be killed (false), or
-		///   transfer everything except at least the existential deposit, which will guarantee to
-		///   keep the sender account alive (true). # <weight>
-		/// - O(1). Just like transfer, but reading the user's transferable balance first.
-		///   #</weight>
-		#[pallet::call_index(4)]
-		#[pallet::weight(T::WeightInfo::transfer_all())]
-		pub fn transfer_all(
-			origin: OriginFor<T>,
-			dest: AccountIdLookupOf<T>,
-			keep_alive: bool,
-		) -> DispatchResult {
-			use fungible::{Inspect, Mutate};
-			let transactor = ensure_signed(origin)?;
-			let keep_alive = if keep_alive { Keep } else { CanKill };
-			let reducible_balance = Self::reducible_balance(&transactor, keep_alive, false);
-			let dest = T::Lookup::lookup(dest)?;
-			<Self as Mutate<_>>::transfer(&transactor, &dest, reducible_balance, keep_alive)?;
-			Ok(())
-		}
-
-		/// Unreserve some balance from a user by force.
-		///
-		/// Can only be called by ROOT.
-		#[pallet::call_index(5)]
-		#[pallet::weight(T::WeightInfo::force_unreserve())]
-		pub fn force_unreserve(
-			origin: OriginFor<T>,
-			who: AccountIdLookupOf<T>,
-			amount: T::Balance,
-		) -> DispatchResult {
-			ensure_root(origin)?;
-			let who = T::Lookup::lookup(who)?;
-			let _leftover = <Self as ReservableCurrency<_>>::unreserve(&who, amount);
-			Ok(())
-		}
-	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -619,6 +435,179 @@ pub mod pallet {
 				assert!(T::AccountStore::insert(who, AccountData { free, ..Default::default() })
 					.is_ok());
 			}
+		}
+	}
+
+	#[pallet::call]
+	impl<T: Config<I>, I: 'static> Pallet<T, I> {
+		/// Transfer some liquid free balance to another account.
+		///
+		/// `transfer` will set the `FreeBalance` of the sender and receiver.
+		/// If the sender's account is below the existential deposit as a result
+		/// of the transfer, the account will be reaped.
+		///
+		/// The dispatch origin for this call must be `Signed` by the transactor.
+		///
+		/// # <weight>
+		/// - Dependent on arguments but not critical, given proper implementations for input config
+		///   types. See related functions below.
+		/// - It contains a limited number of reads and writes internally and no complex
+		///   computation.
+		///
+		/// Related functions:
+		///
+		///   - `ensure_can_withdraw` is always called internally but has a bounded complexity.
+		///   - Transferring balances to accounts that did not exist before will cause
+		///     `T::OnNewAccount::on_new_account` to be called.
+		///   - Removing enough funds from an account will trigger `T::DustRemoval::on_unbalanced`.
+		///   - `transfer_keep_alive` works the same way as `transfer`, but has an additional check
+		///     that the transfer will not kill the origin account.
+		/// ---------------------------------
+		/// - Origin account is already in memory, so no DB operations for them.
+		/// # </weight>
+		#[pallet::call_index(0)]
+		#[pallet::weight(T::WeightInfo::transfer())]
+		pub fn transfer(
+			origin: OriginFor<T>,
+			dest: AccountIdLookupOf<T>,
+			#[pallet::compact] value: T::Balance,
+		) -> DispatchResultWithPostInfo {
+			let source = ensure_signed(origin)?;
+			let dest = T::Lookup::lookup(dest)?;
+			<Self as fungible::Mutate<_>>::transfer(&source, &dest, value, CanKill)?;
+			Ok(().into())
+		}
+
+		/// Set the balances of a given account.
+		///
+		/// This will alter `FreeBalance` and `ReservedBalance` in storage. it will
+		/// also alter the total issuance of the system (`TotalIssuance`) appropriately.
+		/// If the new free or reserved balance is below the existential deposit,
+		/// it will reset the account nonce (`frame_system::AccountNonce`).
+		///
+		/// The dispatch origin for this call is `root`.
+		#[pallet::call_index(1)]
+		#[pallet::weight(
+			T::WeightInfo::set_balance_creating() // Creates a new account.
+				.max(T::WeightInfo::set_balance_killing()) // Kills an existing account.
+		)]
+		pub fn set_balance(
+			origin: OriginFor<T>,
+			who: AccountIdLookupOf<T>,
+			#[pallet::compact] new_free: T::Balance,
+		) -> DispatchResultWithPostInfo {
+			ensure_root(origin)?;
+			let who = T::Lookup::lookup(who)?;
+			let existential_deposit = T::ExistentialDeposit::get();
+
+			let wipeout = new_free < existential_deposit;
+			let new_free = if wipeout { Zero::zero() } else { new_free };
+
+			// First we try to modify the account's balance to the forced balance.
+			let old_free = Self::mutate_account(&who, |account| {
+				let old_free = account.free;
+				account.free = new_free;
+				old_free
+			})?;
+
+			// This will adjust the total issuance, which was not done by the `mutate_account`
+			// above.
+			if new_free > old_free {
+				mem::drop(PositiveImbalance::<T, I>::new(new_free - old_free));
+			} else if new_free < old_free {
+				mem::drop(NegativeImbalance::<T, I>::new(old_free - new_free));
+			}
+
+			Self::deposit_event(Event::BalanceSet { who, free: new_free });
+			Ok(().into())
+		}
+
+		/// Exactly as `transfer`, except the origin must be root and the source account may be
+		/// specified.
+		/// # <weight>
+		/// - Same as transfer, but additional read and write because the source account is not
+		///   assumed to be in the overlay.
+		/// # </weight>
+		#[pallet::call_index(2)]
+		#[pallet::weight(T::WeightInfo::force_transfer())]
+		pub fn force_transfer(
+			origin: OriginFor<T>,
+			source: AccountIdLookupOf<T>,
+			dest: AccountIdLookupOf<T>,
+			#[pallet::compact] value: T::Balance,
+		) -> DispatchResultWithPostInfo {
+			ensure_root(origin)?;
+			let source = T::Lookup::lookup(source)?;
+			let dest = T::Lookup::lookup(dest)?;
+			<Self as fungible::Mutate<_>>::transfer(&source, &dest, value, CanKill)?;
+			Ok(().into())
+		}
+
+		/// Same as the [`transfer`] call, but with a check that the transfer will not kill the
+		/// origin account.
+		///
+		/// 99% of the time you want [`transfer`] instead.
+		///
+		/// [`transfer`]: struct.Pallet.html#method.transfer
+		#[pallet::call_index(3)]
+		#[pallet::weight(T::WeightInfo::transfer_keep_alive())]
+		pub fn transfer_keep_alive(
+			origin: OriginFor<T>,
+			dest: AccountIdLookupOf<T>,
+			#[pallet::compact] value: T::Balance,
+		) -> DispatchResultWithPostInfo {
+			let source = ensure_signed(origin)?;
+			let dest = T::Lookup::lookup(dest)?;
+			<Self as fungible::Mutate<_>>::transfer(&source, &dest, value, Keep)?;
+			Ok(().into())
+		}
+
+		/// Transfer the entire transferable balance from the caller account.
+		///
+		/// NOTE: This function only attempts to transfer _transferable_ balances. This means that
+		/// any locked, reserved, or existential deposits (when `keep_alive` is `true`), will not be
+		/// transferred by this function. To ensure that this function results in a killed account,
+		/// you might need to prepare the account by removing any reference counters, storage
+		/// deposits, etc...
+		///
+		/// The dispatch origin of this call must be Signed.
+		///
+		/// - `dest`: The recipient of the transfer.
+		/// - `keep_alive`: A boolean to determine if the `transfer_all` operation should send all
+		///   of the funds the account has, causing the sender account to be killed (false), or
+		///   transfer everything except at least the existential deposit, which will guarantee to
+		///   keep the sender account alive (true). # <weight>
+		/// - O(1). Just like transfer, but reading the user's transferable balance first.
+		///   #</weight>
+		#[pallet::call_index(4)]
+		#[pallet::weight(T::WeightInfo::transfer_all())]
+		pub fn transfer_all(
+			origin: OriginFor<T>,
+			dest: AccountIdLookupOf<T>,
+			keep_alive: bool,
+		) -> DispatchResult {
+			let transactor = ensure_signed(origin)?;
+			let keep_alive = if keep_alive { Keep } else { CanKill };
+			let reducible_balance = <Self as fungible::Inspect<_>>::reducible_balance(&transactor, keep_alive, false);
+			let dest = T::Lookup::lookup(dest)?;
+			<Self as fungible::Mutate<_>>::transfer(&transactor, &dest, reducible_balance, keep_alive)?;
+			Ok(())
+		}
+
+		/// Unreserve some balance from a user by force.
+		///
+		/// Can only be called by ROOT.
+		#[pallet::call_index(5)]
+		#[pallet::weight(T::WeightInfo::force_unreserve())]
+		pub fn force_unreserve(
+			origin: OriginFor<T>,
+			who: AccountIdLookupOf<T>,
+			amount: T::Balance,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+			let who = T::Lookup::lookup(who)?;
+			let _leftover = <Self as ReservableCurrency<_>>::unreserve(&who, amount);
+			Ok(())
 		}
 	}
 }
@@ -794,9 +783,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			return
 		}
 		a.flags.set_new_logic();
-		if a.free >= T::ExistentialDeposit::get() {
-			system::Pallet::<T>::inc_providers(who);
-		}
 		if !a.reserved.is_zero() {
 			if !system::Pallet::<T>::can_inc_consumer(who) {
 				// Gah!! We have reserves but no provider refs :(

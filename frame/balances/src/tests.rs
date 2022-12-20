@@ -293,7 +293,7 @@ macro_rules! decl_tests {
 					// ext_deposit is 10, value is 9, not satisfies for ext_deposit
 					assert_noop!(
 						Balances::transfer(Some(1).into(), 5, 9),
-						Error::<$test, _>::ExistentialDeposit,
+						TokenError::BelowMinimum,
 					);
 					assert_eq!(Balances::free_balance(1), 100);
 				});
@@ -428,7 +428,7 @@ macro_rules! decl_tests {
 				assert_ok!(Balances::reserve(&1, 69));
 				assert_noop!(
 					Balances::transfer(Some(1).into(), 2, 69),
-					Error::<$test, _>::InsufficientBalance,
+					TokenError::FundsUnavailable,
 				);
 			});
 		}
@@ -678,7 +678,7 @@ macro_rules! decl_tests {
 				let _ = Balances::deposit_creating(&1, 100);
 				assert_noop!(
 					Balances::transfer_keep_alive(Some(1).into(), 2, 100),
-					Error::<$test, _>::KeepAlive
+					TokenError::UnwantedRemoval
 				);
 				assert_eq!(Balances::total_balance(&1), 100);
 				assert_eq!(Balances::total_balance(&2), 0);

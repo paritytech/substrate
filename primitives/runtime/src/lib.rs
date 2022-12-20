@@ -607,8 +607,8 @@ impl From<crate::traits::BadOrigin> for DispatchError {
 pub enum TokenError {
 	/// Funds are unavailable.
 	FundsUnavailable,
-	/// Account that must exist would die.
-	WouldDie,
+	/// Balance is needed to fund a needed provider reference.
+	OnlyProvider,
 	/// Account cannot exist with the funds that would be given.
 	BelowMinimum,
 	/// Account cannot be created.
@@ -621,13 +621,15 @@ pub enum TokenError {
 	Unsupported,
 	/// Account cannot be created for a held balance.
 	CannotCreateHold,
+	/// Withdrawal would cause unwanted loss of account.
+	UnwantedRemoval,
 }
 
 impl From<TokenError> for &'static str {
 	fn from(e: TokenError) -> &'static str {
 		match e {
 			TokenError::FundsUnavailable => "Funds are unavailable",
-			TokenError::WouldDie => "Account that must exist would die",
+			TokenError::OnlyProvider => "Account that must exist would die",
 			TokenError::BelowMinimum => "Account cannot exist with the funds that would be given",
 			TokenError::CannotCreate => "Account cannot be created",
 			TokenError::UnknownAsset => "The asset in question is unknown",
@@ -635,6 +637,7 @@ impl From<TokenError> for &'static str {
 			TokenError::Unsupported => "Operation is not supported by the asset",
 			TokenError::CannotCreateHold =>
 				"Account cannot be created for recording amount on hold",
+			TokenError::UnwantedRemoval => "Account that is desired to remain would die",
 		}
 	}
 }
@@ -1021,7 +1024,7 @@ mod tests {
 			ConsumerRemaining,
 			NoProviders,
 			Token(TokenError::FundsUnavailable),
-			Token(TokenError::WouldDie),
+			Token(TokenError::OnlyProvider),
 			Token(TokenError::BelowMinimum),
 			Token(TokenError::CannotCreate),
 			Token(TokenError::UnknownAsset),
