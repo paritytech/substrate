@@ -163,6 +163,7 @@ pub enum Extrinsic {
 	OffchainIndexSet(Vec<u8>, Vec<u8>),
 	OffchainIndexClear(Vec<u8>),
 	Store(Vec<u8>),
+	EnqueueTxs(u64),
 }
 
 parity_util_mem::malloc_size_of_is_0!(Extrinsic); // non-opaque extrinsic does not need this
@@ -211,6 +212,7 @@ impl BlindCheckable for Extrinsic {
 			Extrinsic::OffchainIndexSet(key, value) => Ok(Extrinsic::OffchainIndexSet(key, value)),
 			Extrinsic::OffchainIndexClear(key) => Ok(Extrinsic::OffchainIndexClear(key)),
 			Extrinsic::Store(data) => Ok(Extrinsic::Store(data)),
+			Extrinsic::EnqueueTxs(data) => Ok(Extrinsic::EnqueueTxs(data)),
 		}
 	}
 }
@@ -717,6 +719,19 @@ cfg_if! {
 
 				fn store_seed(_seed: sp_core::H256){
 				}
+
+				fn can_enqueue_txs() -> bool {
+					true
+				}
+
+
+			  fn create_enqueue_txs_inherent(txs: Vec<<Block as BlockT>::Extrinsic>) -> <Block as BlockT>::Extrinsic{
+				  //just return some garbage
+					Extrinsic::EnqueueTxs(txs.len() as u64)
+			  }
+				fn pop_txs(_count: u64) -> sp_application_crypto::Vec<sp_application_crypto::Vec<u8>> { Default::default() }
+				fn get_previous_block_txs() -> Vec<Vec<u8>>{Default::default()}
+				fn start_prevalidation() {}
 			}
 
 			impl sp_api::Metadata<Block> for Runtime {

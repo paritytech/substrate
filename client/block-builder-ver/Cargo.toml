@@ -14,6 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 
 [dependencies]
+aquamarine = "0.1.12"
 log = "0.4.8"
 sp-state-machine = { version = "0.12.0", path = "../../primitives/state-machine" }
 sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
@@ -22,13 +23,13 @@ sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-core = { version = "6.0.0", path = "../../primitives/core" }
 sp-block-builder = { version = "4.0.0-dev", path = "../../primitives/block-builder" }
 sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
+sp-ver = { version = "4.0.0-dev", path = "../../primitives/ver" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 codec = { package = "parity-scale-codec", version = "3.0.0", features = [
     "derive",
 ] }
 ver-api = { path='../../primitives/ver-api', version='4.0.0-dev' }
 extrinsic-shuffler = { path='../../primitives/shuffler', version='4.0.0-dev' }
-sp-ver = { path='../../primitives/ver', version='4.0.0-dev' }
 
 [dev-dependencies]
 substrate-test-runtime-client = { path = "../../test-utils/runtime/client" }

@@ -21,17 +21,24 @@ serde = { version = "1.0.136", optional = true }
 sp-core = { version = "6.0.0", default-features = false, path = "../core"}
 sp-inherents = { version = "4.0.0-dev", default-features = false , path = "../inherents"}
 sp-runtime = { version = "6.0.0", default-features = false , path = "../runtime"}
+sp-keystore = { version = "0.12.0", path = "../../primitives/keystore", default-features=false , optional=true}
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../std" }
 async-trait = { version = "0.1.50", optional = true }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
+schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated", "u64_backend"], default-features = false}
 
 [features]
+helpers = ["sp-keystore"]
 default = ["std"]
 std = [
 	"codec/std",
+	"scale-info/std",
 	"serde",
 	"sp-core/std",
 	"sp-inherents/std",
+	"sp-keystore/std",
 	"sp-runtime/std",
 	"sp-std/std",
 	"async-trait",
+	"schnorrkel/std",
 ]

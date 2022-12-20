@@ -17,7 +17,7 @@
 
 use crate::*;
 use frame_support::{
-	assert_noop, assert_ok,
+	assert_err, assert_noop, assert_ok,
 	dispatch::PostDispatchInfo,
 	weights::{Pays, WithPostDispatchInfo},
 };
@@ -651,4 +651,135 @@ fn ensure_signed_stuff_works() {
 		let successful_origin: Origin = EnsureSignedBy::<Members, _>::successful_origin();
 		assert_ok!(EnsureSignedBy::<Members, _>::try_origin(successful_origin));
 	}
+}
+
+use std::str::FromStr;
+
+#[test]
+fn ensure_buffered_queue_works() {
+	new_test_ext().execute_with(|| {
+		let input = vec![
+			(Some(0), b"one".to_vec()),
+			(Some(0), b"two".to_vec()),
+			(Some(0), b"three".to_vec()),
+		];
+
+		System::store_txs(input);
+		System::set_block_number(1u32.into());
+		System::set_block_seed(
+			&H256::from_str("0x0876d51dc2c109b2e9bca322e8706879d68984a8031a537d76d0b21693a3dbd0")
+				.unwrap(),
+		);
+
+		assert!(!System::pop_txs(1).is_empty());
+		assert!(!System::pop_txs(1).is_empty());
+		assert!(!System::pop_txs(1).is_empty());
+		assert!(System::pop_txs(1).is_empty());
+	});
+}
+
+#[test]
+fn ensure_buffered_queue_works_when_poping_multiple_txs_at_once() {
+	new_test_ext().execute_with(|| {
+		let input = vec![
+			(Some(0), b"one".to_vec()),
+			(Some(0), b"two".to_vec()),
+			(Some(0), b"three".to_vec()),
+		];
+
+		System::store_txs(input);
+		System::set_block_number(1u32.into());
+		System::set_block_seed(
+			&H256::from_str("0x0876d51dc2c109b2e9bca322e8706879d68984a8031a537d76d0b21693a3dbd0")
+				.unwrap(),
+		);
+
+		assert_eq!(2, System::pop_txs(2).len());
+		assert_eq!(1, System::pop_txs(1).len());
+		assert!(System::pop_txs(1).is_empty());
+	});
+}
+
+#[test]
+fn ensure_buffered_queue_works_when_poping_all_txs_at_once() {
+	new_test_ext().execute_with(|| {
+		let input = vec![
+			(Some(0), b"one".to_vec()),
+			(Some(0), b"two".to_vec()),
+			(Some(0), b"three".to_vec()),
+		];
+
+		System::store_txs(input);
+		System::set_block_number(1u32.into());
+		System::set_block_seed(
+			&H256::from_str("0x0876d51dc2c109b2e9bca322e8706879d68984a8031a537d76d0b21693a3dbd0")
+				.unwrap(),
+		);
+
+		assert!(!System::pop_txs(3).is_empty());
+		assert!(System::pop_txs(1).is_empty());
+	});
+}
+
+#[test]
+fn ensure_buffered_queue_works_when_poping_older_blocks() {
+	new_test_ext().execute_with(|| {
+		let input1 = vec![
+			(Some(0), b"one".to_vec()),
+			(Some(0), b"two".to_vec()),
+			(Some(0), b"three".to_vec()),
+		];
+
+		let input2 = vec![
+			(Some(0), b"four".to_vec()),
+			(Some(0), b"five".to_vec()),
+			(Some(0), b"six".to_vec()),
+		];
+
+		System::store_txs(input1);
+		System::set_block_number(1u32.into());
+		System::set_block_seed(
+			&H256::from_str("0x0876d51dc2c109b2e9bca322e8706879d68984a8031a537d76d0b21693a3dbd0")
+				.unwrap(),
+		);
+
+		System::store_txs(input2);
+		System::set_block_number(2u32.into());
+		System::set_block_seed(
+			&H256::from_str("0x0876d51dc2c109b2e9bca322e8706879d68984a8031a537d76d0b21693a3dbd0")
+				.unwrap(),
+		);
+
+		assert_eq!(6, System::pop_txs(6).len());
+		assert!(System::pop_txs(1).is_empty());
+	});
+}
+
+#[test]
+fn do_not_allow_for_storing_txs_when_queue_is_full() {
+	new_test_ext().execute_with(|| {
+		let dummy_txs = vec![(Some(0), b"blah blah".to_vec())];
+		let dummy_seed =
+			H256::from_str("0x0876d51dc2c109b2e9bca322e8706879d68984a8031a537d76d0b21693a3dbd0")
+				.unwrap();
+
+		for i in 1u32..<StorageQueueLimit as Get<u32>>::get() + 1 {
+			println!("iter");
+			assert!(System::can_enqueue_txs());
+			System::enqueue_txs(Origin::none(), dummy_txs.clone()).unwrap();
+			System::finalize();
+			System::set_block_number(i.into());
+			System::set_block_seed(&dummy_seed);
+		}
+		assert!(!System::can_enqueue_txs());
+		assert_err!(
+			System::enqueue_txs(Origin::none(), dummy_txs.clone()),
+			Error::<Test>::StorageQueueFull
+		);
+
+		assert!(!System::pop_txs(1).is_empty());
+		assert!(System::can_enqueue_txs());
+		System::finalize();
+		System::enqueue_txs(Origin::none(), dummy_txs.clone()).unwrap();
+	});
 }

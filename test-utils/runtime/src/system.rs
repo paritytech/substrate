@@ -251,6 +251,7 @@ fn execute_transaction_backend(utx: &Extrinsic, extrinsic_index: u32) -> ApplyEx
 			Ok(Ok(()))
 		},
 		Extrinsic::Store(data) => execute_store(data.clone()),
+		Extrinsic::EnqueueTxs(_) => Ok(Ok(())),
 	}
 }
 

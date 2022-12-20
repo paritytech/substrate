@@ -18,12 +18,22 @@
 //! Contains the [`OverheadCmd`] as entry point for the CLI to execute
 //! the *overhead* benchmarks.
 
+use crate::extrinsic::bench::BenchmarkVer;
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
+use sc_block_builder_ver::{
+	BlockBuilderApi as BlockBuilderApiVer, BlockBuilderProvider as BlockBuilderProviderVer,
+};
 use sc_cli::{CliConfiguration, ImportParams, Result, SharedParams};
-use sc_client_api::Backend as ClientBackend;
+use sc_client_api::{Backend as ClientBackend, StateBackend};
+use sc_consensus::BlockImport;
 use sc_service::Configuration;
 use sp_api::{ApiExt, ProvideRuntimeApi};
-use sp_runtime::{traits::Block as BlockT, DigestItem, OpaqueExtrinsic};
+use sp_blockchain::HeaderBackend;
+use sp_runtime::{
+	traits::{Block as BlockT, Header as HeaderT},
+	DigestItem, OpaqueExtrinsic,
+};
+use ver_api::VerApi;
 
 use clap::{Args, Parser};
 use log::info;
@@ -114,6 +124,49 @@ impl OverheadCmd {
 		// per-extrinsic execution overhead
 		{
 			let stats = bench.bench_extrinsic(ext_builder)?;
+			info!("Per-extrinsic execution overhead [ns]:\n{:?}", stats);
+			let template = TemplateData::new(BenchmarkType::Extrinsic, &cfg, &self.params, &stats)?;
+			template.write(&self.params.weight.weight_path)?;
+		}
+
+		Ok(())
+	}
+	pub fn run_ver<Block, BA, C>(
+		&self,
+		cfg: Configuration,
+		client: Arc<C>,
+		inherent_data: (sp_inherents::InherentData, sp_inherents::InherentData),
+		ext_builder: &dyn ExtrinsicBuilder,
+	) -> Result<()>
+	where
+		Block: BlockT<Extrinsic = OpaqueExtrinsic>,
+		BA: ClientBackend<Block>,
+		C: BlockBuilderProviderVer<BA, Block, C>,
+		C: ProvideRuntimeApi<Block>,
+		C: BlockImport<
+			Block,
+			Transaction = <BA::State as StateBackend<
+				<<Block as BlockT>::Header as HeaderT>::Hashing,
+			>>::Transaction,
+		>,
+		C: HeaderBackend<Block>,
+		C::Api: ApiExt<Block, StateBackend = BA::State>,
+		C::Api: BlockBuilderApiVer<Block>,
+		C::Api: VerApi<Block>,
+	{
+		let mut bench = BenchmarkVer::new(client, self.params.bench.clone(), inherent_data);
+
+		let count = bench.prepare_benchmark(ext_builder)?;
+		// per-block execution overhead
+		{
+			let stats = bench.bench_block(ext_builder)?;
+			info!("Per-block execution overhead [ns]:\n{:?}", stats);
+			let template = TemplateData::new(BenchmarkType::Block, &cfg, &self.params, &stats)?;
+			template.write(&self.params.weight.weight_path)?;
+		}
+		// per-extrinsic execution overhead
+		{
+			let stats = bench.bench_extrinsic(ext_builder, count)?;
 			info!("Per-extrinsic execution overhead [ns]:\n{:?}", stats);
 			let template = TemplateData::new(BenchmarkType::Extrinsic, &cfg, &self.params, &stats)?;
 			template.write(&self.params.weight.weight_path)?;

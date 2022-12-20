@@ -95,28 +95,17 @@ fn inject_inherents<'a, B: BlockT>(
 	slot_info: &'a mut SlotInfo<B>,
 ) -> Result<(), sp_consensus::Error> {
 	let prev_seed = slot_info.chain_head.seed();
-	let transcript_data = create_shuffling_seed_input_data(&prev_seed);
 
-	if let Ok(Some(signature)) =
-		SyncCryptoStore::sr25519_vrf_sign(&(*keystore), AURA, public, transcript_data)
-	{
-		RandomSeedInherentDataProvider(ShufflingSeed {
-			seed: signature.output.to_bytes().into(),
-			proof: signature.proof.to_bytes().into(),
-		})
+	let seed = sp_ver::calculate_next_seed::<dyn SyncCryptoStore>(&(*keystore), public, prev_seed)
+		.ok_or(sp_consensus::Error::StateUnavailable(String::from("signing seed failure")))?;
+
+	RandomSeedInherentDataProvider(seed)
 		.provide_inherent_data(&mut slot_info.inherent_data)
 		.map_err(|_| {
 			sp_consensus::Error::StateUnavailable(String::from(
 				"cannot inject RandomSeed inherent data",
 			))
 		})?;
-	} else {
-		return Err(sp_consensus::Error::StateUnavailable(String::from("signing seed failure")))
-	};
-
-	// let signature =
-	// 	.map_err(|_| sp_consensus::Error::StateUnavailable(String::from("signing seed failure")))?;
-	//
 
 	Ok(())
 }
