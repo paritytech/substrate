@@ -364,8 +364,8 @@ mod ensure {
 		///     Ok(())
 		/// }
 		///
-		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow.into()));
-		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow.into()));
+		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow));
+		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow));
 		/// ```
 		fn ensure_add(self, v: Self) -> Result<Self, ArithmeticError> {
 			self.checked_add(&v).ok_or_else(|| error::equivalent(v))
@@ -392,8 +392,8 @@ mod ensure {
 		///     Ok(())
 		/// }
 		///
-		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow.into()));
-		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow.into()));
+		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow));
+		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow));
 		/// ```
 		fn ensure_sub(self, v: Self) -> Result<Self, ArithmeticError> {
 			self.checked_sub(&v).ok_or_else(|| error::inverse(v))
@@ -421,8 +421,8 @@ mod ensure {
 		///     Ok(())
 		/// }
 		///
-		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow.into()));
-		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow.into()));
+		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow));
+		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow));
 		/// ```
 		fn ensure_mul(self, v: Self) -> Result<Self, ArithmeticError> {
 			self.checked_mul(&v).ok_or_else(|| error::multiplication(self, v))
@@ -437,7 +437,7 @@ mod ensure {
 		/// Similar to [`CheckedDiv::checked_div()`] but returning an `ArithmeticError` error
 		///
 		/// ```
-		/// use sp_arithmetic::{traits::EnsureDiv, ArithmeticError, FixedI64};
+		/// use sp_arithmetic::{traits::EnsureDiv, ArithmeticError};
 		///
 		/// fn extrinsic_zero() -> Result<(), ArithmeticError> {
 		///     1.ensure_div(0)?;
@@ -445,12 +445,12 @@ mod ensure {
 		/// }
 		///
 		/// fn overflow() -> Result<(), ArithmeticError> {
-		///     FixedI64::from(i64::MIN).ensure_div(FixedI64::from(-1))?;
+		///     i64::MIN.ensure_div(-1)?;
 		///     Ok(())
 		/// }
 		///
-		/// assert_eq!(extrinsic_zero(), Err(ArithmeticError::DivisionByZero.into()));
-		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow.into()));
+		/// assert_eq!(extrinsic_zero(), Err(ArithmeticError::DivisionByZero));
+		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow));
 		/// ```
 		fn ensure_div(self, v: Self) -> Result<Self, ArithmeticError> {
 			self.checked_div(&v).ok_or_else(|| error::division(self, v))
@@ -462,7 +462,7 @@ mod ensure {
 	impl<T: CheckedMul + PartialOrd + Zero + Copy> EnsureMul for T {}
 	impl<T: CheckedDiv + PartialOrd + Zero + Copy> EnsureDiv for T {}
 
-	/// Meta trait that supports all inmutable arithmetic operations
+	/// Meta trait that supports all immutable arithmetic `Ensure*` operations
 	pub trait EnsureOp: EnsureAdd + EnsureSub + EnsureMul + EnsureDiv {}
 	impl<T: EnsureAdd + EnsureSub + EnsureMul + EnsureDiv> EnsureOp for T {}
 
@@ -487,8 +487,8 @@ mod ensure {
 		///     Ok(())
 		/// }
 		///
-		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow.into()));
-		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow.into()));
+		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow));
+		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow));
 		/// ```
 		fn ensure_add_assign(&mut self, v: Self) -> Result<&mut Self, ArithmeticError> {
 			*self = self.ensure_add(v)?;
@@ -517,8 +517,8 @@ mod ensure {
 		///     Ok(())
 		/// }
 		///
-		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow.into()));
-		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow.into()));
+		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow));
+		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow));
 		/// ```
 		fn ensure_sub_assign(&mut self, v: Self) -> Result<&mut Self, ArithmeticError> {
 			*self = self.ensure_sub(v)?;
@@ -547,8 +547,8 @@ mod ensure {
 		///     Ok(())
 		/// }
 		///
-		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow.into()));
-		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow.into()));
+		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow));
+		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow));
 		/// ```
 		fn ensure_mul_assign(&mut self, v: Self) -> Result<&mut Self, ArithmeticError> {
 			*self = self.ensure_mul(v)?;
@@ -577,8 +577,8 @@ mod ensure {
 		///     Ok(())
 		/// }
 		///
-		/// assert_eq!(extrinsic_zero(), Err(ArithmeticError::DivisionByZero.into()));
-		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow.into()));
+		/// assert_eq!(extrinsic_zero(), Err(ArithmeticError::DivisionByZero));
+		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow));
 		/// ```
 		fn ensure_div_assign(&mut self, v: Self) -> Result<&mut Self, ArithmeticError> {
 			*self = self.ensure_div(v)?;
@@ -591,7 +591,7 @@ mod ensure {
 	impl<T: EnsureMul> EnsureMulAssign for T {}
 	impl<T: EnsureDiv> EnsureDivAssign for T {}
 
-	/// Meta trait that supports all assigned arithmetic operations
+	/// Meta trait that supports all assigned arithmetic `Ensure*` operations
 	pub trait EnsureOpAssign:
 		EnsureAddAssign + EnsureSubAssign + EnsureMulAssign + EnsureDivAssign
 	{
@@ -605,7 +605,7 @@ mod ensure {
 	pub trait Ensure: EnsureOp + EnsureOpAssign {}
 	impl<T: EnsureOp + EnsureOpAssign> Ensure for T {}
 
-	/// Extends `FixedPointNumber with` the Ensure family functions.
+	/// Extends `FixedPointNumber` with the Ensure family functions.
 	pub trait EnsureFixedPointNumber: FixedPointNumber {
 		/// Creates `self` from a rational number. Equal to `n / d`.
 		///
@@ -627,8 +627,8 @@ mod ensure {
 		///     Ok(())
 		/// }
 		///
-		/// assert_eq!(extrinsic_zero(), Err(ArithmeticError::DivisionByZero.into()));
-		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow.into()));
+		/// assert_eq!(extrinsic_zero(), Err(ArithmeticError::DivisionByZero));
+		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow));
 		/// ```
 		fn ensure_from_rational<N: FixedPointOperand, D: FixedPointOperand>(
 			n: N,
@@ -642,7 +642,7 @@ mod ensure {
 		///
 		/// Returns `ArithmeticError` if the result does not fit in `N`.
 		///
-		/// Similar to [`FixedPointNumber::checked_mul_int()`] but returning an ArithmeticError
+		/// Similar to [`FixedPointNumber::checked_mul_int()`] but returning an `ArithmeticError`
 		/// error
 		///
 		/// ```
@@ -658,8 +658,8 @@ mod ensure {
 		///     Ok(())
 		/// }
 		///
-		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow.into()));
-		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow.into()));
+		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow));
+		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow));
 		/// ```
 		fn ensure_mul_int<N: FixedPointOperand>(self, n: N) -> Result<N, ArithmeticError> {
 			self.checked_mul_int(n).ok_or_else(|| error::multiplication(self, n))
@@ -685,8 +685,8 @@ mod ensure {
 		///     Ok(())
 		/// }
 		///
-		/// assert_eq!(extrinsic_zero(), Err(ArithmeticError::DivisionByZero.into()));
-		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow.into()));
+		/// assert_eq!(extrinsic_zero(), Err(ArithmeticError::DivisionByZero));
+		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow));
 		/// ```
 		fn ensure_div_int<D: FixedPointOperand>(self, d: D) -> Result<D, ArithmeticError> {
 			self.checked_div_int(d).ok_or_else(|| error::division(self, d))
@@ -716,8 +716,8 @@ mod ensure {
 		///     Ok(())
 		/// }
 		///
-		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow.into()));
-		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow.into()));
+		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow));
+		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow));
 		/// ```
 		fn ensure_from(other: T) -> Result<Self, ArithmeticError> {
 			Self::try_from(other).map_err(|_| error::equivalent(other))
@@ -745,8 +745,8 @@ mod ensure {
 		///     Ok(())
 		/// }
 		///
-		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow.into()));
-		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow.into()));
+		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow));
+		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow));
 		/// ```
 		fn ensure_into(self) -> Result<T, ArithmeticError> {
 			self.try_into().map_err(|_| error::equivalent(self))
