@@ -59,13 +59,12 @@ fn storage_1m_map_one_entry_repeated_read_const() {
 fn storage_1m_map_multiple_entry_repeated_read_single_linear() {
 	let weight = W::storage_1m_map_multiple_entry_repeated_read;
 	let w0 = weight(0).proof_size();
-	assert_eq!(w0, 0, "There is no base weight");
 
-	let w1 = weight(1).proof_size();
+	let w1 = weight(1).proof_size() - w0;
 	assert!(w1 > 0, "Component matters");
 
 	let wm = weight(1000).proof_size();
-	assert_eq!(w1 * 1000, wm, "x scales linearly");
+	assert_eq!(w1 * 1000 + w0, wm, "x scales linearly");
 }
 
 /// Check that reading two maps at once increases the PoV linearly per map.
@@ -73,30 +72,42 @@ fn storage_1m_map_multiple_entry_repeated_read_single_linear() {
 fn storage_map_read_per_component_double_linear() {
 	let weight = W::storage_map_read_per_component;
 	let w00 = weight(0, 0).proof_size();
-	assert_eq!(w00, 0, "There is no base weight");
 
-	let w10 = weight(1, 0).proof_size();
-	let w01 = weight(0, 1).proof_size();
+	let w10 = weight(1, 0).proof_size() - w00;
+	let w01 = weight(0, 1).proof_size() - w00;
 	assert!(w10 > 0 && w01 > 0, "Components matter");
 	assert!(w10 != w01, "Each map has its own component");
 
 	let wm0 = weight(1000, 0).proof_size();
 	let w0m = weight(0, 1000).proof_size();
-	assert_eq!(w10 * 1000, wm0, "x scales linearly");
-	assert_eq!(w01 * 1000, w0m, "y scales linearly");
+	assert_eq!(w00 + w10 * 1000, wm0, "x scales linearly");
+	assert_eq!(w00 + w01 * 1000, w0m, "y scales linearly");
 
 	let wmm = weight(1000, 1000).proof_size();
-	assert_eq!(wmm, wm0 + w0m, "x + y scales linearly");
+	assert_eq!(wmm + w00, wm0 + w0m, "x + y scales linearly");
 }
 
-/// The proof size estimation does not know how many other storage items are in the runtime. This
-/// needs to be provided through a CLI flag. It will therefore return the same value for all.
+/// The proof size estimation takes the measured sizes into account and therefore increases with the
+/// number of layers.
 #[test]
 fn additional_layers_do_not_matter() {
 	let w2 = W::storage_1m_map_read_one_value_two_additional_layers().proof_size();
 	let w3 = W::storage_1m_map_read_one_value_three_additional_layers().proof_size();
 	let w4 = W::storage_1m_map_read_one_value_four_additional_layers().proof_size();
-	assert!(w2 == w3 && w3 == w4, "Additional layers do not matter");
+	assert!(w3 > w2 && w4 > w3, "Additional layers do matter");
+}
+
+/// Check that the measured value size instead of the MEL is used.
+#[test]
+fn linear_measured_size_works() {
+	let weight = W::storage_value_read_linear_size;
+
+	let w0 = weight(0).proof_size();
+	let w1 = weight(1).proof_size() - w0;
+
+	assert_eq!(w1, 1, "x scales with a factor of 1");
+	let wm = weight(1000).proof_size();
+	assert_eq!(w1 * 1000 + w0, wm, "x scales linearly");
 }
 
 /// Although there is no estimation possible, it uses the recorded proof size as best effort.
@@ -113,7 +124,7 @@ fn partial_unbounded_read_best_effort() {
 	let w_bounded = W::storage_value_bounded_read().proof_size();
 	let w_partial = W::storage_value_bounded_and_unbounded_read().proof_size();
 
-	assert_eq!(w_unbounded + w_bounded, w_partial, "The bounded part increases the PoV");
+	assert!(w_partial > w_bounded && w_partial > w_unbounded, "The bounded part increases the PoV");
 }
 
 #[test]

@@ -126,6 +126,14 @@ frame_benchmarking::benchmarks! {
 		});
 	}
 
+	storage_1m_double_map_read_per_component {
+		let n in 0 .. 1024;
+		(0..(1<<10)).for_each(|i| DoubleMap1M::<T>::insert(i, i, i));
+	}: {
+		(0..n).for_each(|i|
+			assert_eq!(DoubleMap1M::<T>::get(i, i), Some(i)));
+	}
+
 	storage_value_bounded_read {
 	}: {
 		assert!(BoundedValue::<T>::get().is_none());
@@ -135,6 +143,14 @@ frame_benchmarking::benchmarks! {
 	storage_value_unbounded_read {
 	}: {
 		assert!(UnboundedValue::<T>::get().is_none());
+	}
+
+	storage_value_read_linear_size {
+		let l in 0 .. 1<<22;
+		let v: sp_runtime::BoundedVec<u8, _> = sp_std::vec![0u8; l as usize].try_into().unwrap();
+		LargeValue::<T>::put(&v);
+	}: {
+		assert!(LargeValue::<T>::get().is_some());
 	}
 
 	// Same as above, but we still expect a mathematical worst case PoV size for the bounded one.

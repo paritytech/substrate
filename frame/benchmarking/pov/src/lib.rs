@@ -54,6 +54,11 @@ pub mod pallet {
 	pub(crate) type BoundedValue<T: Config> =
 		StorageValue<Value = BoundedVec<u8, ConstU32<32>>, QueryKind = OptionQuery>;
 
+	/// 4MiB value.
+	#[pallet::storage]
+	pub(crate) type LargeValue<T: Config> =
+		StorageValue<Value = BoundedVec<u8, ConstU32<{ 1 << 22 }>>, QueryKind = OptionQuery>;
+
 	/// A map with a maximum of 1M entries.
 	#[pallet::storage]
 	pub(crate) type Map1M<T: Config> = StorageMap<
@@ -72,6 +77,17 @@ pub mod pallet {
 		Value = u32,
 		QueryKind = OptionQuery,
 		MaxValues = ConstU32<16_000_000>,
+	>;
+
+	#[pallet::storage]
+	pub(crate) type DoubleMap1M<T: Config> = StorageDoubleMap<
+		Hasher1 = Blake2_256,
+		Hasher2 = Blake2_256,
+		Key1 = u32,
+		Key2 = u32,
+		Value = u32,
+		QueryKind = OptionQuery,
+		MaxValues = ConstU32<1_000_000>,
 	>;
 
 	#[pallet::storage]

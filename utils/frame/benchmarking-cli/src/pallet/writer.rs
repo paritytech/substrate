@@ -18,7 +18,7 @@
 // Outputs benchmark results to Rust files that can be ingested by the runtime.
 
 use std::{
-	collections::{BTreeSet, HashMap, HashSet},
+	collections::{HashMap, HashSet},
 	fs,
 	path::PathBuf,
 };
@@ -54,7 +54,7 @@ struct TemplateData {
 }
 
 // This was the final data we have about each benchmark.
-#[derive(Serialize, Default, Debug, Clone)]
+#[derive(Serialize, Default, Debug, Clone, PartialEq)]
 struct BenchmarkData {
 	name: String,
 	components: Vec<Component>,
@@ -92,6 +92,7 @@ struct CmdData {
 	db_cache: u32,
 	analysis_choice: String,
 	worst_case_map_values: u32,
+	additional_trie_layers: u8,
 }
 
 // This encodes the component name and whether that component is used.
@@ -132,6 +133,7 @@ fn map_results(
 	analysis_choice: &AnalysisChoice,
 	pov_analysis_choice: &AnalysisChoice,
 	worst_case_map_values: u32,
+	additional_trie_layers: u8,
 ) -> Result<HashMap<(String, String), Vec<BenchmarkData>>, std::io::Error> {
 	// Skip if batches is empty.
 	if batches.is_empty() {
@@ -155,6 +157,7 @@ fn map_results(
 			analysis_choice,
 			pov_analysis_choice,
 			worst_case_map_values,
+			additional_trie_layers,
 		);
 		let pallet_benchmarks = all_benchmarks.entry((pallet_string, instance_string)).or_default();
 		pallet_benchmarks.push(benchmark_data);
@@ -182,6 +185,7 @@ fn get_benchmark_data(
 	analysis_choice: &AnalysisChoice,
 	pov_analysis_choice: &AnalysisChoice,
 	worst_case_map_values: u32,
+	additional_trie_layers: u8,
 ) -> BenchmarkData {
 	// Analyze benchmarks to get the linear regression.
 	let analysis_function = match analysis_choice {
@@ -267,58 +271,33 @@ fn get_benchmark_data(
 
 	// We add additional comments showing which storage items were touched.
 	// We find the worst case proof size, and use that as the final proof size result.
-	let mut storage_per_prefix = HashMap::<Vec<u8>, Vec<BenchmarkResult>>::new();
-	let (comments, warnings) = process_storage_results(
-		&mut storage_per_prefix,
+	let (comments, storage_per_prefix) = process_storage_results(
 		&batch.db_results,
 		storage_info,
 		worst_case_map_values,
+		additional_trie_layers,
 	);
-	for warning in warnings {
-		log::warn!("{}", warning);
-	}
 
-	let proof_size_per_components = storage_per_prefix
-		.iter()
-		.map(|(prefix, results)| {
-			let proof_size = analysis_function(results, BenchmarkSelector::ProofSize)
-				.expect("analysis function should return proof sizes for valid inputs");
-			let slope = proof_size
-				.slopes
-				.into_iter()
-				.zip(proof_size.names.iter())
-				.zip(extract_errors(&proof_size.errors))
-				.map(|((slope, name), error)| ComponentSlope { name: name.clone(), slope, error })
-				.collect::<Vec<_>>();
-			(prefix.clone(), slope, proof_size.base)
-		})
-		.collect::<Vec<_>>();
-
-	let mut base_calculated_proof_size = 0;
-	// Sum up the proof sizes per component
-	for (_, slope, base) in proof_size_per_components.iter() {
-		base_calculated_proof_size += base;
-		for component in slope.iter() {
-			let mut found = false;
-			for used_component in used_calculated_proof_size.iter_mut() {
-				if used_component.name == component.name {
-					used_component.slope += component.slope;
-					found = true;
-					break
-				}
-			}
-			if !found && !component.slope.is_zero() {
-				if !used_components.contains(&&component.name) {
-					used_components.push(&component.name);
+	let calculated_proof_size =
+		pov_analysis_function(&storage_per_prefix, BenchmarkSelector::ProofSize)
+			.expect("analysis function should return proof sizes for valid inputs");
+	calculated_proof_size
+		.slopes
+		.into_iter()
+		.zip(calculated_proof_size.names.iter())
+		.zip(extract_errors(&calculated_proof_size.errors))
+		.for_each(|((slope, name), error)| {
+			if !slope.is_zero() {
+				if !used_components.contains(&name) {
+					used_components.push(name);
 				}
 				used_calculated_proof_size.push(ComponentSlope {
-					name: component.name.clone(),
-					slope: component.slope,
-					error: component.error,
+					name: name.clone(),
+					slope,
+					error,
 				});
 			}
-		}
-	}
+		});
 
 	// This puts a marker on any component which is entirely unused in the weight formula.
 	let components = batch.time_results[0]
@@ -342,7 +321,7 @@ fn get_benchmark_data(
 		base_weight: extrinsic_time.base,
 		base_reads: reads.base,
 		base_writes: writes.base,
-		base_calculated_proof_size,
+		base_calculated_proof_size: calculated_proof_size.base,
 		base_recorded_proof_size: recorded_proof_size.base,
 		component_weight: used_extrinsic_time,
 		component_reads: used_reads,
@@ -390,6 +369,13 @@ pub(crate) fn write_results(
 	let pov_analysis_choice: AnalysisChoice =
 		cmd.output_pov_analysis.clone().try_into().map_err(io_error)?;
 
+	if cmd.additional_trie_layers > 4 {
+		println!(
+			"WARNING: `additional_trie_layers` is unexpectedly large. It assumes {} storage items.",
+			16f64.powi(cmd.additional_trie_layers as i32)
+		)
+	}
+
 	// Capture individual args
 	let cmd_data = CmdData {
 		steps: cmd.steps,
@@ -402,6 +388,7 @@ pub(crate) fn write_results(
 		db_cache: cmd.database_cache_size,
 		analysis_choice: format!("{:?}", analysis_choice),
 		worst_case_map_values: cmd.worst_case_map_values,
+		additional_trie_layers: cmd.additional_trie_layers,
 	};
 
 	// New Handlebars instance with helpers.
@@ -419,6 +406,7 @@ pub(crate) fn write_results(
 		&analysis_choice,
 		&pov_analysis_choice,
 		cmd.worst_case_map_values,
+		cmd.additional_trie_layers,
 	)?;
 	let mut created_files = Vec::new();
 
@@ -473,12 +461,13 @@ pub(crate) fn write_results(
 //
 // It returns (comments, warnings) for human consumption.
 pub(crate) fn process_storage_results(
-	storage_per_prefix: &mut HashMap<Vec<u8>, Vec<BenchmarkResult>>,
 	results: &[BenchmarkResult],
 	storage_info: &[StorageInfo],
 	worst_case_map_values: u32,
-) -> (Vec<String>, Vec<String>) {
-	let (mut comments, mut warnings) = (Vec::new(), BTreeSet::new());
+	additional_trie_layers: u8,
+) -> (Vec<String>, Vec<BenchmarkResult>) {
+	let mut comments = Vec::new();
+	let mut storage_per_prefix = Vec::new();
 	let mut storage_info_map = storage_info
 		.iter()
 		.map(|info| (info.prefix.clone(), info))
@@ -511,7 +500,8 @@ pub(crate) fn process_storage_results(
 	// We have to iterate in reverse order to catch the largest values for read/write since the
 	// components start low and then increase and only the first value is used.
 	for result in results.iter().rev() {
-		for (key, reads, writes, whitelisted) in &result.keys {
+		let (mut overhead, mut trie_overhead) = (0, 0);
+		'inner: for (key, reads, writes, whitelisted) in &result.keys {
 			// skip keys which are whitelisted
 			if *whitelisted {
 				continue
@@ -522,25 +512,22 @@ pub(crate) fn process_storage_results(
 			let is_key_identified = identified_key.contains(key);
 			let is_prefix_identified = identified_prefix.contains(&prefix);
 
-			let mut prefix_result = result.clone();
 			let key_info = storage_info_map.get(&prefix);
-			// Use the mathematical worst case, if any. The only case where this is not possible is
-			// for unbounded storage items, for which we use the measured "best effort" value.
-			if let Some(key_info) = key_info {
-				if let Some(max_pov_per_component) = worst_case_pov(
-					key_info.max_values,
-					key_info.max_size,
-					true,
-					worst_case_map_values,
-				) {
-					prefix_result.proof_size = *reads * max_pov_per_component;
-				}
+			let pov_overhead = single_read_pov_overhead(
+				key_info.map(|i| i.max_values).flatten(),
+				worst_case_map_values,
+			);
+			// We add the overhead for a single read each time. In a more advanced version we could
+			// take node re-using into account and over-estimate a bit less.
+			overhead += pov_overhead * *reads;
+			// Add the PoV overhead for every new prefix.
+			if *reads > 0 {
+				trie_overhead = 15 * 33 * additional_trie_layers as u32;
 			}
-			storage_per_prefix.entry(prefix.clone()).or_default().push(prefix_result);
 
 			match (is_key_identified, is_prefix_identified) {
 				// We already did everything, move on...
-				(true, true) => continue,
+				(true, true) => continue 'inner,
 				(false, true) => {
 					// track newly identified key
 					identified_key.insert(key.clone());
@@ -594,7 +581,7 @@ pub(crate) fn process_storage_results(
 						) {
 							Some(new_pov) => {
 								let comment = format!(
-									"Proof: {} {} (max_values: {:?}, max_size: {:?}, added: {})",
+									"Proof: {} {} (values: {:?}, size: {:?}, worst-case: {})",
 									String::from_utf8(key_info.pallet_name.clone())
 										.expect("encoded from string"),
 									String::from_utf8(key_info.storage_name.clone())
@@ -611,14 +598,10 @@ pub(crate) fn process_storage_results(
 								let item = String::from_utf8(key_info.storage_name.clone())
 									.expect("encoded from string");
 								let comment = format!(
-									"Proof Skipped: {} {} (max_values: {:?}, max_size: {:?})",
+									"Proof Skipped: {} {} (values: {:?}, size: {:?})",
 									pallet, item, key_info.max_values, key_info.max_size,
 								);
 								comments.push(comment);
-								warnings.insert(format!(
-									"No worst-case PoV size for unbounded item {}::{}",
-									pallet, item
-								));
 							},
 						}
 					},
@@ -634,9 +617,23 @@ pub(crate) fn process_storage_results(
 				}
 			}
 		}
+		let mut result = result.clone();
+		result.proof_size += overhead + trie_overhead;
+		storage_per_prefix.push(result);
 	}
 
-	(comments, warnings.into_iter().collect())
+	(comments, storage_per_prefix)
+}
+
+/// The PoV overhead when reading a key the first time out of a map with `max_values` entries.
+fn single_read_pov_overhead(max_values: Option<u32>, worst_case_map_values: u32) -> u32 {
+	let max_values = max_values.unwrap_or(worst_case_map_values);
+	let depth: u32 = easy_log_16(max_values);
+	// Normally we have 16 entries of 32 byte hashes per tree layer. In the new trie
+	// layout the hashes are prefixed by their compact length, hence 33 instead. The proof
+	// compaction can compress one node per layer since we send the value itself,
+	// therefore we end up with a size of `15 * 33` per layer.
+	depth * 15 * 33
 }
 
 /// Given the max values and max size of some storage item, calculate the worst
@@ -653,13 +650,7 @@ fn worst_case_pov(
 ) -> Option<u32> {
 	if let Some(max_size) = max_size {
 		let trie_size: u32 = if is_new_prefix {
-			let max_values = max_values.unwrap_or(worst_case_map_values);
-			let depth: u32 = easy_log_16(max_values);
-			// Normally we have 16 entries of 32 byte hashes per tree layer. In the new trie
-			// layout the hashes are prefixed by their compact length, hence 33 instead. The proof
-			// compaction can compress one node per layer since we send the value itself,
-			// therefore we end up with a size of `15 * 33` per layer.
-			depth * 15 * 33
+			single_read_pov_overhead(max_values, worst_case_map_values)
 		} else {
 			0
 		};
@@ -801,6 +792,71 @@ mod test {
 		);
 	}
 
+	/// Check that the measured value size instead of the MEL is used.
+	#[test]
+	fn linear_pov_works() {
+		let mut results = Vec::new();
+		for i in 0..5 {
+			let s = (1u32 << 22).checked_div(i).unwrap_or_default();
+			results.push(BenchmarkResult {
+				components: vec![(BenchmarkParameter::s, s)],
+				extrinsic_time: 0,
+				storage_root_time: 0,
+				reads: 2,
+				repeat_reads: 0,
+				writes: 2,
+				repeat_writes: 0,
+				proof_size: 204 + s,
+				keys: vec![
+					(b"preimageOf".to_vec(), 1, 1, false),
+					(b"statusOf".to_vec(), 1, 1, false),
+				],
+			})
+		}
+
+		let data = BenchmarkBatchSplitResults {
+			pallet: b"scheduler".to_vec(),
+			instance: b"scheduler".to_vec(),
+			benchmark: b"first_benchmark".to_vec(),
+			time_results: results.clone(),
+			db_results: results,
+		};
+
+		let storage_info = vec![
+			StorageInfo {
+				pallet_name: b"scheduler".to_vec(),
+				storage_name: b"preimage".to_vec(),
+				prefix: b"preimageOf".to_vec(),
+				max_values: None,
+				max_size: Some(1 << 22), // MEL is large.
+			},
+			StorageInfo {
+				pallet_name: b"scheduler".to_vec(),
+				storage_name: b"status".to_vec(),
+				prefix: b"statusOf".to_vec(),
+				max_values: None,
+				max_size: Some(91),
+			},
+		];
+
+		let mapped_results = map_results(
+			&[data],
+			&storage_info,
+			&Default::default(),
+			&AnalysisChoice::default(),
+			&AnalysisChoice::MedianSlopes,
+			1_000_000,
+			0,
+		)
+		.unwrap();
+		let result =
+			mapped_results.get(&("scheduler".to_string(), "scheduler".to_string())).unwrap()[0]
+				.clone();
+		let base = result.base_calculated_proof_size;
+		let slope = result.component_calculated_proof_size[0].slope;
+		assert_eq!((base, slope), (5154, 1));
+	}
+
 	#[test]
 	fn map_results_works() {
 		let mapped_results = map_results(
@@ -808,13 +864,14 @@ mod test {
 				test_data(b"first", b"first", BenchmarkParameter::a, 10, 3),
 				test_data(b"first", b"second", BenchmarkParameter::b, 9, 2),
 				test_data(b"second", b"first", BenchmarkParameter::c, 3, 4),
-				test_data(b"bounded", b"bounded", BenchmarkParameter::d, 4, 6),
+				test_data(b"bounded", b"bounded", BenchmarkParameter::d, 0, 1),
 			],
 			&test_storage_info(),
 			&Default::default(),
 			&AnalysisChoice::default(),
 			&AnalysisChoice::MedianSlopes,
 			1_000_000,
+			0,
 		)
 		.unwrap();
 
@@ -839,14 +896,54 @@ mod test {
 		let bounded_pallet_benchmark = &mapped_results
 			.get(&("bounded_pallet".to_string(), "instance".to_string()))
 			.unwrap()[0];
+		dbg!(&bounded_pallet_benchmark);
 		assert_eq!(bounded_pallet_benchmark.name, "bounded_benchmark");
-		check_data(bounded_pallet_benchmark, "d", 4, 6);
-		// (5 * 15 * 33 + 32) * 4 = 10028
-		assert_eq!(bounded_pallet_benchmark.base_calculated_proof_size, 10028);
-		// (5 * 15 * 33 + 32) * 6 = 15042
+		check_data(bounded_pallet_benchmark, "d", 0, 1);
+		assert_eq!(bounded_pallet_benchmark.base_calculated_proof_size, 1024);
+		// 5*15*33 + 1024 = 3499
 		assert_eq!(
 			bounded_pallet_benchmark.component_calculated_proof_size,
-			vec![ComponentSlope { name: "d".into(), slope: 15042, error: 0 }]
+			vec![ComponentSlope { name: "d".into(), slope: 3499, error: 0 }]
+		);
+	}
+
+	#[test]
+	fn additional_trie_layers_work() {
+		let mapped_results = map_results(
+			&[test_data(b"first", b"first", BenchmarkParameter::a, 10, 3)],
+			&test_storage_info(),
+			&Default::default(),
+			&AnalysisChoice::default(),
+			&AnalysisChoice::MedianSlopes,
+			1_000_000,
+			2,
+		)
+		.unwrap();
+		let with_layer = &mapped_results
+			.get(&("first_pallet".to_string(), "instance".to_string()))
+			.unwrap()[0];
+		let mapped_results = map_results(
+			&[test_data(b"first", b"first", BenchmarkParameter::a, 10, 3)],
+			&test_storage_info(),
+			&Default::default(),
+			&AnalysisChoice::default(),
+			&AnalysisChoice::MedianSlopes,
+			1_000_000,
+			0,
+		)
+		.unwrap();
+		let without_layer = &mapped_results
+			.get(&("first_pallet".to_string(), "instance".to_string()))
+			.unwrap()[0];
+
+		assert_eq!(
+			without_layer.base_calculated_proof_size + 2 * 15 * 33,
+			with_layer.base_calculated_proof_size
+		);
+		// The additional trie layers ONLY affect the base weight, not the components.
+		assert_eq!(
+			without_layer.component_calculated_proof_size,
+			with_layer.component_calculated_proof_size
 		);
 	}
 
@@ -863,6 +960,7 @@ mod test {
 			&AnalysisChoice::default(),
 			&AnalysisChoice::MedianSlopes,
 			1_000_000,
+			0,
 		)
 		.unwrap();
 

@@ -176,6 +176,16 @@ pub struct PalletCmd {
 	#[clap(long = "map-size", default_value = "1000000")]
 	pub worst_case_map_values: u32,
 
+	/// Adjust the PoV estimation by adding additional trie layers to it.
+	///
+	/// This should be set to `log16(n)` where `n` is the number of top-level storage items in the
+	/// runtime, eg. `StorageMap`s and `StorageValue`s. A value of 2 to 3 is usually sufficient.
+	/// Each layer will result in an additional 495 bytes PoV per distinct top-level access.
+	/// Therefore multiple `StorageMap` accesses only suffer from this increase once. The exact
+	/// number of storage items depends on the runtime and the deployed pallets.
+	#[clap(long, default_value = "0")]
+	pub additional_trie_layers: u8,
+
 	/// A path to a `.json` file with existing benchmark results generated with `--json` or
 	/// `--json-file`. When specified the benchmarks are not actually executed, and the data for
 	/// the analysis is read from this file.

@@ -534,12 +534,11 @@ impl PalletCmd {
 			}
 
 			if !self.no_storage_info {
-				let mut storage_per_prefix = Default::default();
 				let (comments, _) = writer::process_storage_results(
-					&mut storage_per_prefix,
 					&batch.db_results,
 					storage_info,
 					self.worst_case_map_values,
+					self.additional_trie_layers,
 				);
 				println!("Raw Storage Info\n========");
 				for comment in comments {
