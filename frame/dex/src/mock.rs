@@ -97,6 +97,7 @@ impl pallet_assets::Config<Instance1> for Test {
 	type Balance = u64;
 	type RemoveItemsLimit = ConstU32<1000>;
 	type AssetId = u32;
+	type AssetIdParameter = u32;
 	type Currency = Balances;
 	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<u64>>;
 	type ForceOrigin = frame_system::EnsureRoot<u64>;
@@ -116,6 +117,7 @@ impl pallet_assets::Config<Instance2> for Test {
 	type Balance = u64;
 	type RemoveItemsLimit = ConstU32<1000>;
 	type AssetId = u32;
+	type AssetIdParameter = u32;
 	type Currency = Balances;
 	type CreateOrigin = AsEnsureOriginWithArg<EnsureSignedBy<DexAccount, u64>>;
 	type ForceOrigin = frame_system::EnsureRoot<u64>;

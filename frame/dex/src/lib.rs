@@ -248,6 +248,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Creates an empty liquidity pool and an associated new `lp_token` asset
 		/// (the id of which is returned in the `Event::PoolCreated` event).
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::create_pool())]
 		pub fn create_pool(
 			origin: OriginFor<T>,
@@ -291,6 +292,7 @@ pub mod pallet {
 		/// `keep_alive` true will fail the transaction if in enacting the transaction
 		/// would take the sender's balance below the existential deposit.
 		/// `deadline` is the blocknumber until which you are happy for the transaction to occur.
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::add_liquidity())]
 		pub fn add_liquidity(
 			origin: OriginFor<T>,
@@ -387,6 +389,7 @@ pub mod pallet {
 		/// Allows to remove the liquidity by providing an lp token.
 		/// With the usage of `amount1_min`/`amount2_min` it's possible to control
 		/// the min amount of returned tokens you're happy with.
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::remove_liquidity())]
 		pub fn remove_liquidity(
 			origin: OriginFor<T>,
@@ -458,6 +461,7 @@ pub mod pallet {
 		/// Swap the exact amount of `asset1` into `asset2`.
 		/// `amount_out_min` param allows to specify the min amount of the `asset2`
 		/// you're happy to receive.
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::swap_exact_tokens_for_tokens())]
 		pub fn swap_exact_tokens_for_tokens(
 			origin: OriginFor<T>,
@@ -499,6 +503,7 @@ pub mod pallet {
 		/// Swap any amount of `asset1` to get the exact amount of `asset2`.
 		/// `amount_in_max` param allows to specify the max amount of the `asset1`
 		/// you're happy to provide.
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::swap_tokens_for_exact_tokens())]
 		pub fn swap_tokens_for_exact_tokens(
 			origin: OriginFor<T>,
