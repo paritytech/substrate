@@ -474,6 +474,7 @@ pub mod pallet {
 				amount_in > Zero::zero() && amount_out_min > Zero::zero(),
 				Error::<T>::ZeroAmount
 			);
+			ensure!(path.len() >= 2, Error::<T>::InvalidPath);
 
 			let now = frame_system::Pallet::<T>::block_number();
 			ensure!(deadline >= now, Error::<T>::DeadlinePassed);
@@ -668,7 +669,6 @@ pub mod pallet {
 			amount_in: &AssetBalanceOf<T>,
 			path: &BoundedVec<MultiAssetId<T::AssetId>, T::MaxSwapPathLength>,
 		) -> Result<Vec<AssetBalanceOf<T>>, DispatchError> {
-			ensure!(path.len() >= 2, Error::<T>::InvalidPath);
 			let mut amounts: Vec<AssetBalanceOf<T>> = vec![*amount_in];
 
 			for assets_pair in path.windows(2) {
