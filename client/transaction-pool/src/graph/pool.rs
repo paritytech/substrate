@@ -96,7 +96,7 @@ pub trait ChainApi: Send + Sync {
 	/// Returns a block header given the block id.
 	fn block_header(
 		&self,
-		at: &BlockId<Self::Block>,
+		at: <Self::Block as BlockT>::Hash,
 	) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error>;
 
 	/// Compute a tree-route between two blocks. See [`TreeRoute`] for more details.

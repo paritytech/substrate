@@ -191,6 +191,7 @@ pub mod pallet {
 		/// - `real`: The account that the proxy will make a call on behalf of.
 		/// - `force_proxy_type`: Specify the exact proxy type to be used and checked for this call.
 		/// - `call`: The call to be made by the `real` account.
+		#[pallet::call_index(0)]
 		#[pallet::weight({
 			let di = call.get_dispatch_info();
 			(T::WeightInfo::proxy(T::MaxProxies::get())
@@ -224,6 +225,7 @@ pub mod pallet {
 		/// - `proxy_type`: The permissions allowed for this proxy account.
 		/// - `delay`: The announcement period required of the initial proxy. Will generally be
 		/// zero.
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::add_proxy(T::MaxProxies::get()))]
 		pub fn add_proxy(
 			origin: OriginFor<T>,
@@ -243,6 +245,7 @@ pub mod pallet {
 		/// Parameters:
 		/// - `proxy`: The account that the `caller` would like to remove as a proxy.
 		/// - `proxy_type`: The permissions currently enabled for the removed proxy account.
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::remove_proxy(T::MaxProxies::get()))]
 		pub fn remove_proxy(
 			origin: OriginFor<T>,
@@ -261,6 +264,7 @@ pub mod pallet {
 		///
 		/// WARNING: This may be called on accounts created by `pure`, however if done, then
 		/// the unreserved fees will be inaccessible. **All access to this account will be lost.**
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::remove_proxies(T::MaxProxies::get()))]
 		pub fn remove_proxies(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -288,6 +292,7 @@ pub mod pallet {
 		/// same sender, with the same parameters.
 		///
 		/// Fails if there are insufficient funds to pay for deposit.
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::create_pure(T::MaxProxies::get()))]
 		pub fn create_pure(
 			origin: OriginFor<T>,
@@ -335,6 +340,7 @@ pub mod pallet {
 		///
 		/// Fails with `NoPermission` in case the caller is not a previously created pure
 		/// account whose `pure` call has corresponding parameters.
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::kill_pure(T::MaxProxies::get()))]
 		pub fn kill_pure(
 			origin: OriginFor<T>,
@@ -372,6 +378,7 @@ pub mod pallet {
 		/// Parameters:
 		/// - `real`: The account that the proxy will make a call on behalf of.
 		/// - `call_hash`: The hash of the call to be made by the `real` account.
+		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::announce(T::MaxPending::get(), T::MaxProxies::get()))]
 		pub fn announce(
 			origin: OriginFor<T>,
@@ -421,6 +428,7 @@ pub mod pallet {
 		/// Parameters:
 		/// - `real`: The account that the proxy will make a call on behalf of.
 		/// - `call_hash`: The hash of the call to be made by the `real` account.
+		#[pallet::call_index(7)]
 		#[pallet::weight(T::WeightInfo::remove_announcement(
 			T::MaxPending::get(),
 			T::MaxProxies::get()
@@ -447,6 +455,7 @@ pub mod pallet {
 		/// Parameters:
 		/// - `delegate`: The account that previously announced the call.
 		/// - `call_hash`: The hash of the call to be made.
+		#[pallet::call_index(8)]
 		#[pallet::weight(T::WeightInfo::reject_announcement(
 			T::MaxPending::get(),
 			T::MaxProxies::get()
@@ -476,6 +485,7 @@ pub mod pallet {
 		/// - `real`: The account that the proxy will make a call on behalf of.
 		/// - `force_proxy_type`: Specify the exact proxy type to be used and checked for this call.
 		/// - `call`: The call to be made by the `real` account.
+		#[pallet::call_index(9)]
 		#[pallet::weight({
 			let di = call.get_dispatch_info();
 			(T::WeightInfo::proxy_announced(T::MaxPending::get(), T::MaxProxies::get())

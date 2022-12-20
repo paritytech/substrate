@@ -188,6 +188,7 @@ pub mod pallet {
 		/// - n*log(n) of data size, as all data is pushed to an in-memory trie.
 		/// Additionally contains a DB write.
 		/// # </weight>
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::store(data.len() as u32))]
 		pub fn store(origin: OriginFor<T>, data: Vec<u8>) -> DispatchResult {
 			ensure!(data.len() > 0, Error::<T>::EmptyTransaction);
@@ -236,6 +237,7 @@ pub mod pallet {
 		/// # <weight>
 		/// - Constant.
 		/// # </weight>
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::renew())]
 		pub fn renew(
 			origin: OriginFor<T>,
@@ -281,6 +283,7 @@ pub mod pallet {
 		/// There's a DB read for each transaction.
 		/// Here we assume a maximum of 100 probed transactions.
 		/// # </weight>
+		#[pallet::call_index(2)]
 		#[pallet::weight((T::WeightInfo::check_proof_max(), DispatchClass::Mandatory))]
 		pub fn check_proof(
 			origin: OriginFor<T>,
