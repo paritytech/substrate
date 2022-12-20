@@ -1250,14 +1250,10 @@ async fn warp_sync() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[test]
-fn warp_sync_to_target_block() {
+async fn warp_sync_to_target_block() {
 	sp_tracing::try_init_simple();
-	let runtime = Runtime::new().unwrap();
+	let mut net = TestNet::new(0);
 	// Create 3 synced peers and 1 peer trying to warp sync.
-	let mut net = TestNet::new(runtime.handle().clone(), 3);
-
-	net.peer(0).push_blocks(64, false);
 	net.add_full_peer_with_config(Default::default());
 	net.add_full_peer_with_config(Default::default());
 	net.add_full_peer_with_config(Default::default());
@@ -1266,7 +1262,7 @@ fn warp_sync_to_target_block() {
 	net.peer(2).push_blocks(64, false);
 
 	let info = net.peer(0).client.info();
-	let target_block = net.peer(0).client.header(&BlockId::hash(info.best_hash)).unwrap().unwrap();
+	let target_block = net.peer(0).client.header(info.best_hash).unwrap().unwrap();
 
 	net.add_full_peer_with_config(FullPeerConfig {
 		sync_mode: SyncMode::Warp,
@@ -1274,14 +1270,12 @@ fn warp_sync_to_target_block() {
 		..Default::default()
 	});
 
-	// Wait for peer 1 to sync state.
-	runtime.block_on(net.wait_until_sync());
-	assert!(net.peer(5).client().has_state_at(&BlockId::Number(64)));
+	net.run_until_sync().await;
+	assert!(net.peer(3).client().has_state_at(&BlockId::Number(64)));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[test]
-fn syncs_huge_blocks() {
+async fn syncs_huge_blocks() {
 	use sp_core::storage::well_known_keys::HEAP_PAGES;
 	use sp_runtime::codec::Encode;
 	use substrate_test_runtime_client::BlockBuilderExt;
