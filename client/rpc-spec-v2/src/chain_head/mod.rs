@@ -16,16 +16,25 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Substrate JSON-RPC interface v2.
+//! Substrate chain head API.
 //!
-//! Specification [document](https://paritytech.github.io/json-rpc-interface-spec/).
+//! # Note
+//!
+//! Methods are prefixed by `chainHead`.
 
-#![warn(missing_docs)]
-#![deny(unused_crate_dependencies)]
+#[cfg(test)]
+mod tests;
 
+pub mod api;
 pub mod chain_head;
-pub mod chain_spec;
-pub mod transaction;
+pub mod error;
+pub mod event;
 
-/// Task executor that is being used by RPC subscriptions.
-pub type SubscriptionTaskExecutor = std::sync::Arc<dyn sp_core::traits::SpawnNamed>;
+mod subscription;
+
+pub use api::ChainHeadApiServer;
+pub use chain_head::ChainHead;
+pub use event::{
+	BestBlockChanged, ChainHeadEvent, ChainHeadResult, ErrorEvent, Finalized, FollowEvent,
+	Initialized, NetworkConfig, NewBlock, RuntimeEvent, RuntimeVersionEvent,
+};
