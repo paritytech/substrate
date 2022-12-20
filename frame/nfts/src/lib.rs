@@ -571,7 +571,7 @@ pub mod pallet {
 		WrongDuration,
 		/// The method is disabled by system settings.
 		MethodDisabled,
-		/// The provided is setting can't be set.
+		/// The provided setting can't be set.
 		WrongSetting,
 		/// Item's config already exists and should be equal to the provided one.
 		InconsistentItemConfig,
