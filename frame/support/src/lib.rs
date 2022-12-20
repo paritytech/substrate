@@ -83,7 +83,6 @@ pub mod migrations;
 pub mod traits;
 pub mod weights;
 
-#[macro_use]
 extern crate static_assertions;
 
 #[doc(hidden)]

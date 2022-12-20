@@ -146,6 +146,7 @@ pub fn benchmarks(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 struct UnrolledParams {
 	param_ranges: Vec<TokenStream2>,
 	param_names: Vec<TokenStream2>,
+	param_types: Vec<TokenStream2>,
 }
 
 impl UnrolledParams {
@@ -156,37 +157,57 @@ impl UnrolledParams {
 				let name = Ident::new(&p.name, Span::call_site());
 				let start = p.start;
 				let end = p.end;
-				quote!(#name, #start, #end).into()
+				quote!(#name, #start, #end)
 			})
 			.collect();
 		let param_names: Vec<TokenStream2> = params
 			.iter()
 			.map(|p| {
 				let name = Ident::new(&p.name, Span::call_site());
-				quote!(#name).into()
+				quote!(#name)
 			})
 			.collect();
-		UnrolledParams { param_ranges, param_names }
+		let param_types: Vec<TokenStream2> = params
+			.iter()
+			.map(|p| {
+				let typ = &p.typ;
+				quote!(#typ)
+			})
+			.collect();
+		UnrolledParams { param_ranges, param_names, param_types }
 	}
 }
 
 pub fn benchmark(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
+	// parse attached item as a function def
 	let item_fn = parse_macro_input!(tokens as ItemFn);
+
+	// build a BenchmarkDef from item_fn
 	let benchmark_def = match BenchmarkDef::from(&item_fn) {
 		Ok(def) => def,
 		Err(err) => return err.to_compile_error().into(),
 	};
+
+	// set up variables needed during quoting
 	let name = item_fn.sig.ident;
 	let krate = quote!(::frame_benchmarking);
 	let home = quote!(::frame_support);
 	let setup_stmts = benchmark_def.setup_stmts;
 	let extrinsic_call_stmt = benchmark_def.extrinsic_call_stmt;
 	let verify_stmts = benchmark_def.verify_stmts;
+
+	// unroll params (prepare for quoting)
 	let unrolled = UnrolledParams::from(&benchmark_def.params);
 	let param_names = unrolled.param_names;
 	let param_ranges = unrolled.param_ranges;
+	let param_types = unrolled.param_types;
+
+	// generate final quoted tokens
 	let res = quote! {
-		#home::assert_impl_all!(#home::Linear<0, 1>: #home::ParamRange);
+		// compile-time assertions that each referenced param type implements ParamRange
+		#(
+			#home::assert_impl_all!(#param_types: #home::ParamRange);
+		)*
 
 		#[allow(non_camel_case_types)]
 		struct #name;

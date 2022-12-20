@@ -1,7 +1,7 @@
 #![cfg(any(feature = "runtime-benchmarks", test))]
 
 use super::*;
-use frame_support::benchmark;
+use frame_support::{benchmark, Linear};
 use sp_core::H256;
 
 #[benchmark]
