@@ -131,7 +131,7 @@ where
 	fn is_over_the_limit(&self, length: usize) -> bool {
 		// Only enforce the limit if there's more than one element to make sure
 		// we can always add a new element to the cache.
-		if length == 0 {
+		if length <= 1 {
 			return false
 		}
 
@@ -200,7 +200,7 @@ where
 	fn is_over_the_limit(&self, length: usize) -> bool {
 		// Only enforce the limit if there's more than one element to make sure
 		// we can always add a new element to the cache.
-		if length == 0 {
+		if length <= 1 {
 			return false
 		}
 
