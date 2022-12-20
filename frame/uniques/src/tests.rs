@@ -963,7 +963,7 @@ fn buy_item_should_work() {
 
 		// can't buy for less
 		assert_noop!(
-			Uniques::buy_item(RuntimeOrigin::signed(user_2), collection_id, item_1, 1.into(),
+			Uniques::buy_item(RuntimeOrigin::signed(user_2), collection_id, item_1, 1.into()),
 			Error::<Test>::BidTooLow
 		);
 
