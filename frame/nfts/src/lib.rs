@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Unique (Items) Module
+//! # Nfts Module
 //!
 //! A simple, secure module for dealing with non-fungible items.
 //!
@@ -389,7 +389,7 @@ pub mod pallet {
 		},
 		/// An `item` of a `collection` has been approved by the `owner` for transfer by
 		/// a `delegate`.
-		ApprovedTransfer {
+		TransferApproved {
 			collection: T::CollectionId,
 			item: T::ItemId,
 			owner: T::AccountId,
@@ -413,13 +413,13 @@ pub mod pallet {
 		/// Metadata has been cleared for a `collection`.
 		CollectionMetadataCleared { collection: T::CollectionId },
 		/// New metadata has been set for an item.
-		MetadataSet {
+		ItemMetadataSet {
 			collection: T::CollectionId,
 			item: T::ItemId,
 			data: BoundedVec<u8, T::StringLimit>,
 		},
 		/// Metadata has been cleared for an item.
-		MetadataCleared { collection: T::CollectionId, item: T::ItemId },
+		ItemMetadataCleared { collection: T::CollectionId, item: T::ItemId },
 		/// The deposit for a set of `item`s within a `collection` has been updated.
 		Redeposited { collection: T::CollectionId, successful_items: Vec<T::ItemId> },
 		/// New attribute metadata has been set for a `collection` or `item`.
@@ -1146,7 +1146,7 @@ pub mod pallet {
 		/// - `maybe_deadline`: Optional deadline for the approval. Specified by providing the
 		/// 	number of blocks after which the approval will expire
 		///
-		/// Emits `ApprovedTransfer` on success.
+		/// Emits `TransferApproved` on success.
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::approve_transfer())]
@@ -1416,7 +1416,7 @@ pub mod pallet {
 		/// - `item`: The identifier of the item whose metadata to set.
 		/// - `data`: The general information of this item. Limited in length by `StringLimit`.
 		///
-		/// Emits `MetadataSet`.
+		/// Emits `ItemMetadataSet`.
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::set_metadata())]
@@ -1442,7 +1442,7 @@ pub mod pallet {
 		/// - `collection`: The identifier of the collection whose item's metadata to clear.
 		/// - `item`: The identifier of the item whose metadata to clear.
 		///
-		/// Emits `MetadataCleared`.
+		/// Emits `ItemMetadataCleared`.
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::clear_metadata())]
@@ -1644,8 +1644,8 @@ pub mod pallet {
 		/// - `desired_collection`: The collection of the desired item.
 		/// - `desired_item`: The desired item an owner wants to receive.
 		/// - `maybe_price`: The price an owner is willing to pay or receive for the desired `item`.
-		/// - `maybe_duration`: Optional deadline for the swap. Specified by providing the
-		/// 	number of blocks after which the swap will expire.
+		/// - `duration`: A deadline for the swap. Specified by providing the number of blocks
+		/// 	after which the swap will expire.
 		///
 		/// Emits `SwapCreated` on success.
 		#[pallet::weight(T::WeightInfo::create_swap())]

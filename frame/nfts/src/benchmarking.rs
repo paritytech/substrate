@@ -469,7 +469,7 @@ benchmarks_instance_pallet! {
 		let (item, ..) = mint_item::<T, I>(0);
 	}: _(SystemOrigin::Signed(caller), collection, item, data.clone())
 	verify {
-		assert_last_event::<T, I>(Event::MetadataSet { collection, item, data }.into());
+		assert_last_event::<T, I>(Event::ItemMetadataSet { collection, item, data }.into());
 	}
 
 	clear_metadata {
@@ -478,7 +478,7 @@ benchmarks_instance_pallet! {
 		add_item_metadata::<T, I>(item);
 	}: _(SystemOrigin::Signed(caller), collection, item)
 	verify {
-		assert_last_event::<T, I>(Event::MetadataCleared { collection, item }.into());
+		assert_last_event::<T, I>(Event::ItemMetadataCleared { collection, item }.into());
 	}
 
 	set_collection_metadata {
@@ -506,7 +506,7 @@ benchmarks_instance_pallet! {
 		let deadline = T::BlockNumber::max_value();
 	}: _(SystemOrigin::Signed(caller.clone()), collection, item, delegate_lookup, Some(deadline))
 	verify {
-		assert_last_event::<T, I>(Event::ApprovedTransfer { collection, item, owner: caller, delegate, deadline: Some(deadline) }.into());
+		assert_last_event::<T, I>(Event::TransferApproved { collection, item, owner: caller, delegate, deadline: Some(deadline) }.into());
 	}
 
 	cancel_approval {

@@ -65,7 +65,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			*metadata = Some(ItemMetadata { deposit, data: data.clone() });
 
 			Collection::<T, I>::insert(&collection, &collection_details);
-			Self::deposit_event(Event::MetadataSet { collection, item, data });
+			Self::deposit_event(Event::ItemMetadataSet { collection, item, data });
 			Ok(())
 		})
 	}
@@ -96,7 +96,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			collection_details.owner_deposit.saturating_reduce(deposit);
 
 			Collection::<T, I>::insert(&collection, &collection_details);
-			Self::deposit_event(Event::MetadataCleared { collection, item });
+			Self::deposit_event(Event::ItemMetadataCleared { collection, item });
 			Ok(())
 		})
 	}
