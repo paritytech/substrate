@@ -468,7 +468,6 @@ fn swap_should_work_with_realistic_values() {
 		let user = 1;
 		let dot = MultiAssetId::Native;
 		let usd = MultiAssetId::Asset(2);
-		let pool_id = (dot, usd);
 
 		create_tokens(user, vec![usd]);
 		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), dot, usd));
@@ -497,8 +496,7 @@ fn swap_should_work_with_realistic_values() {
 
 		assert_ok!(Dex::swap_exact_tokens_for_tokens(
 			RuntimeOrigin::signed(user),
-			usd,
-			dot,
+			bvec![usd, dot],
 			input_amount,
 			1,
 			user,
@@ -509,9 +507,7 @@ fn swap_should_work_with_realistic_values() {
 		assert!(dbg!(events()).contains(&Event::<Test>::SwapExecuted {
 			who: user,
 			send_to: user,
-			pool_id,
-			asset1: usd,
-			asset2: dot,
+			path: bvec![usd, dot],
 			amount_in: 10 * UNIT,      // usd
 			amount_out: 1_993_980_120  // About 2 dot after div by UNIT.
 		}));

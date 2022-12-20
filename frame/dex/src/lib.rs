@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! 	# Substrate DEX
+//! # Substrate DEX
 //!
 //! Substrate DEX pallet based on [Uniswap V2](https://github.com/Uniswap/v2-core) logic.
 //!
@@ -64,7 +64,7 @@ pub mod pallet {
 	};
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::{
-		traits::{AccountIdConversion, AtLeast32BitUnsigned, Hash, IntegerSquareRoot, One, Zero},
+		traits::{AtLeast32BitUnsigned, Hash, IntegerSquareRoot, One, Zero},
 		Saturating,
 	};
 	use sp_std::prelude::*;
@@ -603,8 +603,11 @@ pub mod pallet {
 		/// This actually does computation. If you need to keep using it, then make sure you cache
 		/// the value and only call this once.
 		pub fn get_pool_account(pool_id: PoolIdOf<T>) -> T::AccountId {
-			let sub = T::Hashing::hash_of(&pool_id);
-			T::PalletId::get().into_sub_account_truncating(sub)
+			let sub = T::Hashing::hash_of(&(T::PalletId::get(), pool_id)).encode();
+			let account =
+				T::AccountId::decode(&mut sp_runtime::traits::TrailingZeroInput::new(&sub))
+					.expect("All byte sequences are valid `AccountIds`; qed");
+			account
 		}
 
 		fn get_balance(
