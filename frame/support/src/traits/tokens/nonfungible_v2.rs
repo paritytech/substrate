@@ -129,7 +129,7 @@ pub trait Mutate<AccountId, ItemConfig>: Inspect<AccountId> {
 	}
 }
 
-/// Trait for providing a non-fungible set of items which can only be transferred.
+/// Trait for transferring a non-fungible item.
 pub trait Transfer<AccountId>: Inspect<AccountId> {
 	/// Transfer `item` into `destination` account.
 	fn transfer(item: &Self::ItemId, destination: &AccountId) -> DispatchResult;
