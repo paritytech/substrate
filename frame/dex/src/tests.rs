@@ -458,6 +458,62 @@ fn swap_should_work_with_native() {
 }
 
 #[test]
+fn swap_should_work_with_realistic_values() {
+	new_test_ext().execute_with(|| {
+		let user = 1;
+		let dot = MultiAssetId::Native;
+		let usd = MultiAssetId::Asset(2);
+		let pool_id = (dot, usd);
+
+		create_tokens(user, vec![usd]);
+		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), dot, usd));
+
+		const UNIT: u64 = 1_000_000_000;
+
+		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user, 300_000 * UNIT, 0));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 2, user, 1_100_000 * UNIT));
+
+		let liquidity_dot = 200_000 * UNIT; // ratio for a 5$ price
+		let liquidity_usd = 1_000_000 * UNIT;
+		assert_ok!(Dex::add_liquidity(
+			RuntimeOrigin::signed(user),
+			dot,
+			usd,
+			liquidity_dot,
+			liquidity_usd,
+			1,
+			1,
+			user,
+			2,
+			false
+		));
+
+		let input_amount = 10 * UNIT; // usd
+
+		assert_ok!(Dex::swap_exact_tokens_for_tokens(
+			RuntimeOrigin::signed(user),
+			usd,
+			dot,
+			input_amount,
+			1,
+			user,
+			3,
+			false
+		));
+
+		assert!(dbg!(events()).contains(&Event::<Test>::SwapExecuted {
+			who: user,
+			send_to: user,
+			pool_id,
+			asset1: usd,
+			asset2: dot,
+			amount_in: 10 * UNIT,      // usd
+			amount_out: 1_993_980_120  // About 2 dot after div by UNIT.
+		}));
+	});
+}
+
+#[test]
 fn add_liquidity_causes_below_existential_deposit_but_keep_alive_set() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
