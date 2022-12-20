@@ -31,6 +31,7 @@ use frame_support::{
 use pallet_alliance::{IdentityVerifier, ProposalIndex, ProposalProvider};
 use pallet_asset_tx_payment::HandleCredit;
 use sp_std::prelude::*;
+use sp_api::HashT;
 
 pub struct Author;
 impl OnUnbalanced<NegativeImbalance> for Author {
@@ -113,16 +114,10 @@ impl ProposalProvider<AccountId, Hash, RuntimeCall> for AllianceProposalProvider
 
 pub struct Hasher;
 impl pallet_pov_limit::Hasher for Hasher {
-	type Out = ();
+	type Out = sp_core::H256;
 
-	fn hash(_: &[u8]) -> Self::Out {
-		// this calculates factorial. should be replaced by a hashing algorithm
-		// but `Blake2Hasher` cannot be used here since this is no_std.
-		let num: u64 = 20;
-		match num {
-			0 => 1,
-			1.. => (1..num + 1).product(),
-		};
+	fn hash(val: &[u8]) -> Self::Out {
+		<Runtime as frame_system::Config>::Hashing::hash(val)
 	}
 }
 
