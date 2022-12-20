@@ -234,8 +234,8 @@ impl HeaderBackend<Block> for MockClient {
 		self.client.lock().info()
 	}
 
-	fn status(&self, id: BlockId<Block>) -> sc_client_api::blockchain::Result<BlockStatus> {
-		self.client.lock().status(id)
+	fn status(&self, hash: Hash) -> sc_client_api::blockchain::Result<BlockStatus> {
+		self.client.lock().status(hash)
 	}
 
 	fn number(&self, hash: Hash) -> sc_client_api::blockchain::Result<Option<BlockNumber>> {

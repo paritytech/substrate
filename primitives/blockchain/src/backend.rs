@@ -37,7 +37,7 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	/// Get blockchain info.
 	fn info(&self) -> Info<Block>;
 	/// Get block status.
-	fn status(&self, id: BlockId<Block>) -> Result<BlockStatus>;
+	fn status(&self, hash: Block::Hash) -> Result<BlockStatus>;
 	/// Get block number by hash. Returns `None` if the header is not in the chain.
 	fn number(
 		&self,
