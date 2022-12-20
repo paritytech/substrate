@@ -97,7 +97,7 @@ impl ark_std::error::Error for SerializationError {}
 fn g2_from_vec(vec: &[u8]) -> Result<G2Affine, SerializationError> {
 	let serialized: [u8; 96] = vec.try_into().unwrap();
 	let mut cursor = Cursor::new(&serialized[..]);
-	G2Affine::deserialize_with_mode(&mut cursor, Compress::Yes, Validate::No)
+	G2Affine::deserialize_with_mode(&mut cursor, Compress::Yes, Validate::Yes)
 		.map_err(|_| SerializationError::InvalidSignature)
 }
 
@@ -105,7 +105,7 @@ fn g2_from_vec(vec: &[u8]) -> Result<G2Affine, SerializationError> {
 fn g1_from_vec(vec: &[u8]) -> Result<G1Affine, SerializationError> {
 	let serialized: [u8; 48] = vec.try_into().unwrap();
 	let mut cursor = Cursor::new(&serialized[..]);
-	G1Affine::deserialize_with_mode(&mut cursor, Compress::Yes, Validate::No)
+	G1Affine::deserialize_with_mode(&mut cursor, Compress::Yes, Validate::Yes)
 		.map_err(|_| SerializationError::InvalidPK)
 }
 
