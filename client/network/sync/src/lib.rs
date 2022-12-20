@@ -1082,7 +1082,7 @@ where
 				heads.sort();
 				let median = heads[heads.len() / 2];
 				if number + STATE_SYNC_FINALITY_THRESHOLD.saturated_into() >= median {
-					if let Ok(Some(header)) = self.client.header(BlockId::hash(*hash)) {
+					if let Ok(Some(header)) = self.client.header(*hash) {
 						log::debug!(
 							target: "sync",
 							"Starting state sync for #{} ({})",

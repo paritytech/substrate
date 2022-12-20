@@ -33,7 +33,7 @@ use crate::error::{Error, Result};
 /// Blockchain database header backend. Does not perform any validation.
 pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	/// Get block header. Returns `None` if block is not found.
-	fn header(&self, id: BlockId<Block>) -> Result<Option<Block::Header>>;
+	fn header(&self, hash: Block::Hash) -> Result<Option<Block::Header>>;
 	/// Get blockchain info.
 	fn info(&self) -> Info<Block>;
 	/// Get block status.
@@ -63,9 +63,9 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	}
 
 	/// Get block header. Returns `UnknownBlock` error if block is not found.
-	fn expect_header(&self, id: BlockId<Block>) -> Result<Block::Header> {
-		self.header(id)?
-			.ok_or_else(|| Error::UnknownBlock(format!("Expect header: {}", id)))
+	fn expect_header(&self, hash: Block::Hash) -> Result<Block::Header> {
+		self.header(hash)?
+			.ok_or_else(|| Error::UnknownBlock(format!("Expect header: {}", hash)))
 	}
 
 	/// Convert an arbitrary block ID into a block number. Returns `UnknownBlock` error if block is
@@ -201,7 +201,7 @@ pub trait Backend<Block: BlockT>:
 		import_lock: &RwLock<()>,
 	) -> Result<Option<Block::Hash>> {
 		let target_header = {
-			match self.header(BlockId::Hash(target_hash))? {
+			match self.header(target_hash)? {
 				Some(x) => x,
 				// target not in blockchain
 				None => return Ok(None),
@@ -256,7 +256,7 @@ pub trait Backend<Block: BlockT>:
 			if let Some(max_number) = maybe_max_number {
 				loop {
 					let current_header = self
-						.header(BlockId::Hash(current_hash))?
+						.header(current_hash)?
 						.ok_or_else(|| Error::MissingHeader(current_hash.to_string()))?;
 
 					if current_header.number() <= &max_number {
@@ -276,7 +276,7 @@ pub trait Backend<Block: BlockT>:
 				}
 
 				let current_header = self
-					.header(BlockId::Hash(current_hash))?
+					.header(current_hash)?
 					.ok_or_else(|| Error::MissingHeader(current_hash.to_string()))?;
 
 				// stop search in this chain once we go below the target's block number

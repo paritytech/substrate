@@ -412,7 +412,7 @@ where
 			})?;
 
 		// Move up the chain.
-		header = blockchain.expect_header(BlockId::Hash(parent_hash))?;
+		header = blockchain.expect_header(parent_hash)?;
 	};
 
 	aux_schema::write_current_version(backend)?;
