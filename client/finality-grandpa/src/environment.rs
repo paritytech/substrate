@@ -525,7 +525,7 @@ where
 			Some((_, n)) if n > best_block_number => best_block_hash,
 			Some((h, _)) => {
 				// this is the header at which the new set will start
-				let header = self.client.header(BlockId::Hash(h))?.expect(
+				let header = self.client.header(h)?.expect(
 					"got block hash from registered pending change; \
 					 pending changes are only registered on block import; qed.",
 				);
@@ -1171,7 +1171,7 @@ where
 	SelectChain: SelectChainT<Block> + 'static,
 	VotingRule: VotingRuleT<Block, Client>,
 {
-	let base_header = match client.header(BlockId::Hash(block))? {
+	let base_header = match client.header(block)? {
 		Some(h) => h,
 		None => {
 			debug!(
@@ -1197,7 +1197,7 @@ where
 	let result = match select_chain.finality_target(block, None).await {
 		Ok(best_hash) => {
 			let best_header = client
-				.header(BlockId::Hash(best_hash))?
+				.header(best_hash)?
 				.expect("Header known to exist after `finality_target` call; qed");
 
 			// check if our vote is currently being limited due to a pending change
@@ -1221,7 +1221,7 @@ where
 					}
 
 					target_header = client
-						.header(BlockId::Hash(*target_header.parent_hash()))?
+						.header(*target_header.parent_hash())?
 						.expect("Header known to exist after `finality_target` call; qed");
 				}
 

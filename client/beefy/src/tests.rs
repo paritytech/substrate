@@ -448,9 +448,8 @@ async fn wait_for_best_beefy_blocks(
 		wait_for.push(Box::pin(stream.take(len).for_each(move |best_beefy_hash| {
 			let expected = expected.next();
 			async move {
-				let block_id = BlockId::hash(best_beefy_hash);
 				let header =
-					net.lock().peer(i).client().as_client().expect_header(block_id).unwrap();
+					net.lock().peer(i).client().as_client().expect_header(best_beefy_hash).unwrap();
 				let best_beefy = *header.number();
 
 				assert_eq!(expected, Some(best_beefy).as_ref());

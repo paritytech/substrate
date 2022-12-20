@@ -226,8 +226,8 @@ impl HeaderMetadata<Block> for MockClient {
 }
 
 impl HeaderBackend<Block> for MockClient {
-	fn header(&self, id: BlockId<Block>) -> sc_client_api::blockchain::Result<Option<Header>> {
-		self.client.lock().header(&id)
+	fn header(&self, hash: Hash) -> sc_client_api::blockchain::Result<Option<Header>> {
+		self.client.lock().header(hash)
 	}
 
 	fn info(&self) -> Info<Block> {
