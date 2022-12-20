@@ -455,7 +455,7 @@ pub mod pallet {
 		CollectionMaxSupplySet { collection: T::CollectionId, max_supply: u32 },
 		/// Mint settings for a collection had changed.
 		CollectionMintSettingsUpdated { collection: T::CollectionId },
-		/// Event gets emmited when the `NextCollectionId` gets incremented.
+		/// Event gets emitted when the `NextCollectionId` gets incremented.
 		NextCollectionIdIncremented { next_id: T::CollectionId },
 		/// The price was set for the instance.
 		ItemPriceSet {
