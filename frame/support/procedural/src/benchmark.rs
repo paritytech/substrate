@@ -1,8 +1,11 @@
+use derive_syn_parse::Parse;
 use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
 use syn::{
-	parse_macro_input, spanned::Spanned, Error, Expr, FnArg, ItemFn, ItemMod, Pat, Result, Stmt,
-	Type,
+	parse_macro_input,
+	spanned::Spanned,
+	token::{Comma, Gt, Lt},
+	Error, Expr, FnArg, ItemFn, ItemMod, LitInt, Pat, Result, Stmt, Type,
 };
 
 mod keywords {
@@ -16,9 +19,25 @@ fn emit_error<T: Into<TokenStream> + Clone, S: Into<String>>(item: &T, message: 
 	return syn::Error::new(span, message).to_compile_error().into()
 }
 
+#[derive(Debug, Clone, PartialEq)]
+struct ParamDef {
+	name: String,
+	typ: Type,
+	start: u32,
+	end: u32,
+}
+
+#[derive(Parse)]
+struct RangeArgs {
+	_lt_token: Lt,
+	start: LitInt,
+	_comma: Comma,
+	end: LitInt,
+	_gt_token: Gt,
+}
+
 struct BenchmarkDef {
-	//           name,   typ,    A,   B
-	params: Vec<(String, String, u32, u32)>,
+	params: Vec<ParamDef>,
 	setup_stmts: Vec<Stmt>,
 	extrinsic_call_stmt: Stmt,
 	verify_stmts: Vec<Stmt>,
@@ -27,22 +46,41 @@ struct BenchmarkDef {
 impl BenchmarkDef {
 	pub fn from(item_fn: &ItemFn) -> Result<BenchmarkDef> {
 		let mut i = 0; // index of child
-		let params: Vec<(String, String, u32, u32)> = Vec::new();
+		let mut params: Vec<ParamDef> = Vec::new();
 		for arg in &item_fn.sig.inputs {
 			// parse params such as "x: Linear<0, 1>"
 			let mut name: Option<String> = None;
 			let mut typ: Option<&Type> = None;
+			let mut start: Option<u32> = None;
+			let mut end: Option<u32> = None;
 			if let FnArg::Typed(arg) = arg {
 				if let Pat::Ident(ident) = &*arg.pat {
 					name = Some(ident.ident.to_token_stream().to_string());
 				}
-				typ = Some(&*arg.ty);
+				let tmp = &*arg.ty;
+				typ = Some(tmp);
+				if let Type::Path(tpath) = tmp {
+					if let Some(segment) = tpath.path.segments.last() {
+						let args = segment.arguments.to_token_stream().into();
+						if let Ok(args) = syn::parse::<RangeArgs>(args) {
+							if let Ok(start_parsed) = args.start.base10_parse::<u32>() {
+								start = Some(start_parsed);
+							}
+							if let Ok(end_parsed) = args.end.base10_parse::<u32>() {
+								end = Some(end_parsed);
+							}
+						}
+					}
+				}
 			}
-			if let (Some(name), Some(typ)) = (name, typ) {
-				// test
-				println!("name: {:?}", name);
-				println!("type: {:?}", typ);
+			if let (Some(name), Some(typ), Some(start), Some(end)) = (name, typ, start, end) {
+				// if true, this iteration of param extraction was successful
+				params.push(ParamDef { name, typ: typ.clone(), start, end });
 			} else {
+				return Err(Error::new(
+					arg.span(),
+					"Invalid benchmark function param. A valid example would be `x: Linear<5, 10>`.",
+				))
 			}
 		}
 		for child in &item_fn.block.stmts {
