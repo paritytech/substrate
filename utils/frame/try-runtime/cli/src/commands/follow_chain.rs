@@ -153,7 +153,7 @@ where
 			shared
 				.export_proof
 				.as_ref()
-				.map(|path| path.as_path().join(&format!("{}-{}", number, hash))),
+				.map(|path| path.as_path().join(&format!("{}.json", number))),
 		);
 
 		if let Err(why) = result {

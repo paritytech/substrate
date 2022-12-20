@@ -523,7 +523,7 @@ pub struct SharedParams {
 	#[arg(long)]
 	pub heap_pages: Option<u64>,
 
-	/// Path to a file to extract the storage proof
+	/// Path to a file to export the storage proof as JSON format.
 	/// If several blocks are executed, the path is interpreted as a folder
 	/// where one file per block will be written (named `{block_number}-{block_hash}`).
 	#[clap(long)]
@@ -900,9 +900,23 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 		.expect("A recorder was set and thus, a storage proof can be extracted; qed");
 
 	if let Some(path) = maybe_export_proof {
-		let mut file = std::fs::File::create(path)?;
+		let mut file = std::fs::File::create(path).map_err(|e| {
+			log::error!(target: LOG_TARGET, "Failed to create file {}: {:?}", path, e);
+			e
+		})?;
+
+		log::info!(target: LOG_TARGET, "Write storage proof in file: {}", path);
+
 		use std::io::Write as _;
-		file.write_all(storage_proof_to_raw_json(&proof).as_bytes())?;
+		file.write_all(storage_proof_to_raw_json(&proof).as_bytes()).map_err(|e| {
+			log::error!(
+				target: LOG_TARGET,
+				"Failed to write storage proof in file {}: {:?}",
+				path,
+				e
+			);
+			e
+		})?;
 	}
 
 	let proof_size = proof.encoded_size();
@@ -966,6 +980,7 @@ pub(crate) fn rpc_err_handler(error: impl Debug) -> &'static str {
 	"rpc error."
 }
 
+/// Converts a `StorageProof` into a JSON string.
 fn storage_proof_to_raw_json(storage_proof: &sp_state_machine::StorageProof) -> String {
 	serde_json::Value::Object(
 		storage_proof
