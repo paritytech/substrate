@@ -15,6 +15,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! 	# Substrate DEX
+//!
+//! Substrate DEX pallet based on [Uniswap V2](https://github.com/Uniswap/v2-core) logic.
+//!
+//! ## Overview
+//!
+//! This pallet allows to:
+//!
+//!  - create a liquidity pool for 2 assets
+//!  - provide the liquidity and receive back an LP token
+//!  - exchange the LP token back to assets
+//!  - swap 2 assets if there is a pool created
+//!  - query for an exchange price via a new RPC endpoint
 #![cfg_attr(not(feature = "std"), no_std)]
 use frame_support::traits::Incrementable;
 
@@ -34,7 +47,6 @@ pub use pallet::*;
 pub use types::*;
 pub use weights::WeightInfo;
 
-// https://docs.uniswap.org/protocol/V2/concepts/protocol-overview/smart-contracts#minimum-liquidity
 // TODO: make it configurable
 // TODO: more specific error codes.
 pub const MIN_LIQUIDITY: u64 = 1;
@@ -68,6 +80,7 @@ pub mod pallet {
 		type Currency: InspectFungible<Self::AccountId, Balance = Self::AssetBalance>
 			+ TransferFungible<Self::AccountId>;
 
+		/// This must be compatible with Currency at the moment.
 		type AssetBalance: AtLeast32BitUnsigned
 			+ codec::FullCodec
 			+ Copy
@@ -87,6 +100,7 @@ pub mod pallet {
 			+ PartialOrd
 			+ TypeInfo;
 
+		// Asset id to address the lp tokens by.
 		type PoolAssetId: Member
 			+ Parameter
 			+ Copy
@@ -100,6 +114,7 @@ pub mod pallet {
 		type Assets: Inspect<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>
 			+ Transfer<Self::AccountId>;
 
+		// Registry for the lp tokens. Ideally only this pallet should have create permissions on the assets.
 		type PoolAssets: Inspect<Self::AccountId, AssetId = Self::PoolAssetId, Balance = Self::AssetBalance>
 			+ Create<Self::AccountId>
 			+ Mutate<Self::AccountId>
@@ -216,6 +231,8 @@ pub mod pallet {
 	// Pallet's callable functions.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// Creates an empty liquidity pool and an associated new `lp_token` asset
+		/// (the id of which is returned in the `Event::PoolCreated` event).
 		#[pallet::weight(T::WeightInfo::create_pool())]
 		pub fn create_pool(
 			origin: OriginFor<T>,
@@ -250,6 +267,15 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Provide liquidity into the pool of `asset1` and `asset2`.
+		/// NOTE: an optimal amount of asset1 and asset2 will be calculated and
+		/// might be different to provided `amount1_desired`/`amount2_desired`
+		/// thus it's needed to provide the min amount you're happy to provide.
+		/// Params `amount1_min`/`amount2_min` represent that.
+		/// `mint_to` will be sent the liquidity tokens that represent this share of the pool.
+		/// `keep_alive` true will fail the transaction if in enacting the transaction
+		/// would take the sender's balance below the existential deposit.
+		/// `deadline` is the blocknumber until which you are happy for the transaction to occur.
 		#[pallet::weight(T::WeightInfo::add_liquidity())]
 		pub fn add_liquidity(
 			origin: OriginFor<T>,
@@ -343,6 +369,9 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Allows to remove the liquidity by providing an lp token.
+		/// With the usage of `amount1_min`/`amount2_min` it's possible to control
+		/// the min amount of returned tokens you're happy with.
 		#[pallet::weight(T::WeightInfo::remove_liquidity())]
 		pub fn remove_liquidity(
 			origin: OriginFor<T>,
@@ -411,6 +440,9 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Swap the exact amount of `asset1` into `asset2`.
+		/// `amount_out_min` param allows to specify the min amount of the `asset2`
+		/// you're happy to receive.
 		#[pallet::weight(T::WeightInfo::swap_exact_tokens_for_tokens())]
 		pub fn swap_exact_tokens_for_tokens(
 			origin: OriginFor<T>,
@@ -464,6 +496,9 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Swap any amount of `asset1` to get the exact amount of `asset2`.
+		/// `amount_in_max` param allows to specify the max amount of the `asset1`
+		/// you're happy to provide.
 		#[pallet::weight(T::WeightInfo::swap_tokens_for_exact_tokens())]
 		pub fn swap_tokens_for_exact_tokens(
 			origin: OriginFor<T>,
@@ -563,6 +598,7 @@ pub mod pallet {
 			}
 		}
 
+		/// Used by the RPC service to provide current prices.
 		pub fn quote_price(
 			asset1: Option<u32>,
 			asset2: Option<u32>,
