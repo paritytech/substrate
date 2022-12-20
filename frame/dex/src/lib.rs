@@ -605,7 +605,7 @@ pub mod pallet {
 		pub fn get_pool_account(pool_id: PoolIdOf<T>) -> T::AccountId {
 			let sub = T::Hashing::hash_of(&(T::PalletId::get(), pool_id)).encode();
 			let account =
-				T::AccountId::decode(&mut sp_runtime::traits::TrailingZeroInput::new(&sub))
+				T::AccountId::decode(&mut TrailingZeroInput::new(&sub))
 					.expect("All byte sequences are valid `AccountIds`; qed");
 			account
 		}
