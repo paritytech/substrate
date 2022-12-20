@@ -307,14 +307,26 @@ impl<T: Sized> SaturatedConversion for T {}
 ///
 /// This module provide a readable way to do safe arithmetics, turning this:
 ///
-/// ```ignore
-/// self.my_value = self.my_value.checked_sub(other_value).ok_or(ArithmeticError::Overflow)?;
+/// ```
+/// # use sp_arithmetic::{traits::ensure::EnsureSub, ArithmeticError};
+/// # fn foo() -> Result<(), ArithmeticError> {
+/// # let mut my_value = 1;
+/// # let other_value = 1;
+/// my_value = my_value.checked_sub(other_value).ok_or(ArithmeticError::Overflow)?;
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// into this:
 ///
-/// ```ignore
-/// self.my_value.ensure_sub_assign(other_value)?;
+/// ```
+/// # use sp_arithmetic::{traits::ensure::EnsureSub, ArithmeticError};
+/// # fn foo() -> Result<(), ArithmeticError> {
+/// # let mut my_value = 1;
+/// # let other_value = 1;
+/// my_value.ensure_sub_assign(other_value)?;
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// choosing the correct [`ArithmeticError`] it should return in case of fail.
@@ -336,20 +348,19 @@ pub mod ensure {
 		///
 		/// ```
 		/// use sp_arithmetic::{traits::ensure::EnsureAdd, ArithmeticError};
-		/// use sp_runtime::DispatchResult;
 		///
-		/// fn extrinsic_overflow() -> DispatchResult {
+		/// fn overflow() -> Result<(), ArithmeticError> {
 		///     u32::MAX.ensure_add(1)?;
 		///     Ok(())
 		/// }
 		///
-		/// fn extrinsic_underflow() -> DispatchResult {
+		/// fn underflow() -> Result<(), ArithmeticError> {
 		///     i32::MIN.ensure_add(-1)?;
 		///     Ok(())
 		/// }
 		///
-		/// assert_eq!(extrinsic_overflow(), Err(ArithmeticError::Overflow.into()));
-		/// assert_eq!(extrinsic_underflow(), Err(ArithmeticError::Underflow.into()));
+		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow.into()));
+		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow.into()));
 		/// ```
 		fn ensure_add(self, v: Self) -> Result<Self, ArithmeticError> {
 			self.checked_add(&v).ok_or_else(|| error::equivalent(v))
@@ -365,20 +376,19 @@ pub mod ensure {
 		///
 		/// ```
 		/// use sp_arithmetic::{traits::ensure::EnsureSub, ArithmeticError};
-		/// use sp_runtime::DispatchResult;
 		///
-		/// fn extrinsic_underflow() -> DispatchResult {
+		/// fn underflow() -> Result<(), ArithmeticError> {
 		///     0u32.ensure_sub(1)?;
 		///     Ok(())
 		/// }
 		///
-		/// fn extrinsic_overflow() -> DispatchResult {
+		/// fn overflow() -> Result<(), ArithmeticError> {
 		///     i32::MAX.ensure_sub(-1)?;
 		///     Ok(())
 		/// }
 		///
-		/// assert_eq!(extrinsic_underflow(), Err(ArithmeticError::Underflow.into()));
-		/// assert_eq!(extrinsic_overflow(), Err(ArithmeticError::Overflow.into()));
+		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow.into()));
+		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow.into()));
 		/// ```
 		fn ensure_sub(self, v: Self) -> Result<Self, ArithmeticError> {
 			self.checked_sub(&v).ok_or_else(|| error::inverse(v))
@@ -395,20 +405,19 @@ pub mod ensure {
 		///
 		/// ```
 		/// use sp_arithmetic::{traits::ensure::EnsureMul, ArithmeticError};
-		/// use sp_runtime::DispatchResult;
 		///
-		/// fn extrinsic_overflow() -> DispatchResult {
+		/// fn overflow() -> Result<(), ArithmeticError> {
 		///     u32::MAX.ensure_mul(2)?;
 		///     Ok(())
 		/// }
 		///
-		/// fn extrinsic_underflow() -> DispatchResult {
+		/// fn underflow() -> Result<(), ArithmeticError> {
 		///     i32::MAX.ensure_mul(-2)?;
 		///     Ok(())
 		/// }
 		///
-		/// assert_eq!(extrinsic_overflow(), Err(ArithmeticError::Overflow.into()));
-		/// assert_eq!(extrinsic_underflow(), Err(ArithmeticError::Underflow.into()));
+		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow.into()));
+		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow.into()));
 		/// ```
 		fn ensure_mul(self, v: Self) -> Result<Self, ArithmeticError> {
 			self.checked_mul(&v).ok_or_else(|| error::multiplication(self, v))
@@ -424,20 +433,19 @@ pub mod ensure {
 		///
 		/// ```
 		/// use sp_arithmetic::{traits::ensure::EnsureDiv, ArithmeticError, FixedI64};
-		/// use sp_runtime::DispatchResult;
 		///
-		/// fn extrinsic_zero() -> DispatchResult {
+		/// fn extrinsic_zero() -> Result<(), ArithmeticError> {
 		///     1.ensure_div(0)?;
 		///     Ok(())
 		/// }
 		///
-		/// fn extrinsic_overflow() -> DispatchResult {
+		/// fn overflow() -> Result<(), ArithmeticError> {
 		///     FixedI64::from(i64::MIN).ensure_div(FixedI64::from(-1))?;
 		///     Ok(())
 		/// }
 		///
 		/// assert_eq!(extrinsic_zero(), Err(ArithmeticError::DivisionByZero.into()));
-		/// assert_eq!(extrinsic_overflow(), Err(ArithmeticError::Overflow.into()));
+		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow.into()));
 		/// ```
 		fn ensure_div(self, v: Self) -> Result<Self, ArithmeticError> {
 			self.checked_div(&v).ok_or_else(|| error::division(self, v))
@@ -461,22 +469,21 @@ pub mod ensure {
 		///
 		/// ```
 		/// use sp_arithmetic::{traits::ensure::EnsureAddAssign, ArithmeticError};
-		/// use sp_runtime::DispatchResult;
 		///
-		/// fn extrinsic_overflow() -> DispatchResult {
+		/// fn overflow() -> Result<(), ArithmeticError> {
 		///     let mut max = u32::MAX;
 		///     max.ensure_add_assign(1)?;
 		///     Ok(())
 		/// }
 		///
-		/// fn extrinsic_underflow() -> DispatchResult {
+		/// fn underflow() -> Result<(), ArithmeticError> {
 		///     let mut max = i32::MIN;
 		///     max.ensure_add_assign(-1)?;
 		///     Ok(())
 		/// }
 		///
-		/// assert_eq!(extrinsic_overflow(), Err(ArithmeticError::Overflow.into()));
-		/// assert_eq!(extrinsic_underflow(), Err(ArithmeticError::Underflow.into()));
+		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow.into()));
+		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow.into()));
 		/// ```
 		fn ensure_add_assign(&mut self, v: Self) -> Result<&mut Self, ArithmeticError> {
 			*self = self.ensure_add(v)?;
@@ -492,22 +499,21 @@ pub mod ensure {
 		///
 		/// ```
 		/// use sp_arithmetic::{traits::ensure::EnsureSubAssign, ArithmeticError};
-		/// use sp_runtime::DispatchResult;
 		///
-		/// fn extrinsic_underflow() -> DispatchResult {
+		/// fn underflow() -> Result<(), ArithmeticError> {
 		///     let mut zero: u32 = 0;
 		///     zero.ensure_sub_assign(1)?;
 		///     Ok(())
 		/// }
 		///
-		/// fn extrinsic_overflow() -> DispatchResult {
+		/// fn overflow() -> Result<(), ArithmeticError> {
 		///     let mut zero = i32::MAX;
 		///     zero.ensure_sub_assign(-1)?;
 		///     Ok(())
 		/// }
 		///
-		/// assert_eq!(extrinsic_underflow(), Err(ArithmeticError::Underflow.into()));
-		/// assert_eq!(extrinsic_overflow(), Err(ArithmeticError::Overflow.into()));
+		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow.into()));
+		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow.into()));
 		/// ```
 		fn ensure_sub_assign(&mut self, v: Self) -> Result<&mut Self, ArithmeticError> {
 			*self = self.ensure_sub(v)?;
@@ -523,22 +529,21 @@ pub mod ensure {
 		///
 		/// ```
 		/// use sp_arithmetic::{traits::ensure::EnsureMulAssign, ArithmeticError};
-		/// use sp_runtime::DispatchResult;
 		///
-		/// fn extrinsic_overflow() -> DispatchResult {
+		/// fn overflow() -> Result<(), ArithmeticError> {
 		///     let mut max = u32::MAX;
 		///     max.ensure_mul_assign(2)?;
 		///     Ok(())
 		/// }
 		///
-		/// fn extrinsic_underflow() -> DispatchResult {
+		/// fn underflow() -> Result<(), ArithmeticError> {
 		///     let mut max = i32::MAX;
 		///     max.ensure_mul_assign(-2)?;
 		///     Ok(())
 		/// }
 		///
-		/// assert_eq!(extrinsic_overflow(), Err(ArithmeticError::Overflow.into()));
-		/// assert_eq!(extrinsic_underflow(), Err(ArithmeticError::Underflow.into()));
+		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow.into()));
+		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow.into()));
 		/// ```
 		fn ensure_mul_assign(&mut self, v: Self) -> Result<&mut Self, ArithmeticError> {
 			*self = self.ensure_mul(v)?;
@@ -554,22 +559,21 @@ pub mod ensure {
 		///
 		/// ```
 		/// use sp_arithmetic::{traits::ensure::EnsureDivAssign, ArithmeticError, FixedI64};
-		/// use sp_runtime::DispatchResult;
 		///
-		/// fn extrinsic_zero() -> DispatchResult {
+		/// fn extrinsic_zero() -> Result<(), ArithmeticError> {
 		///     let mut one = 1;
 		///     one.ensure_div_assign(0)?;
 		///     Ok(())
 		/// }
 		///
-		/// fn extrinsic_overflow() -> DispatchResult {
+		/// fn overflow() -> Result<(), ArithmeticError> {
 		///     let mut min = FixedI64::from(i64::MIN);
 		///     min.ensure_div_assign(FixedI64::from(-1))?;
 		///     Ok(())
 		/// }
 		///
 		/// assert_eq!(extrinsic_zero(), Err(ArithmeticError::DivisionByZero.into()));
-		/// assert_eq!(extrinsic_overflow(), Err(ArithmeticError::Overflow.into()));
+		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow.into()));
 		/// ```
 		fn ensure_div_assign(&mut self, v: Self) -> Result<&mut Self, ArithmeticError> {
 			*self = self.ensure_div(v)?;
@@ -603,20 +607,19 @@ pub mod ensure {
 		///
 		/// ```
 		/// use sp_arithmetic::{traits::ensure::EnsureFixedPointNumber, ArithmeticError, FixedI64};
-		/// use sp_runtime::DispatchResult;
 		///
-		/// fn extrinsic_zero() -> DispatchResult {
+		/// fn extrinsic_zero() -> Result<(), ArithmeticError> {
 		///     FixedI64::ensure_from_rational(1, 0)?;
 		///     Ok(())
 		/// }
 		///
-		/// fn extrinsic_underflow() -> DispatchResult {
+		/// fn underflow() -> Result<(), ArithmeticError> {
 		///     FixedI64::ensure_from_rational(i64::MAX, -1)?;
 		///     Ok(())
 		/// }
 		///
 		/// assert_eq!(extrinsic_zero(), Err(ArithmeticError::DivisionByZero.into()));
-		/// assert_eq!(extrinsic_underflow(), Err(ArithmeticError::Underflow.into()));
+		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow.into()));
 		/// ```
 		fn ensure_from_rational<N: FixedPointOperand, D: FixedPointOperand>(
 			n: N,
@@ -635,20 +638,19 @@ pub mod ensure {
 		///
 		/// ```
 		/// use sp_arithmetic::{traits::ensure::EnsureFixedPointNumber, ArithmeticError, FixedI64};
-		/// use sp_runtime::DispatchResult;
 		///
-		/// fn extrinsic_overflow() -> DispatchResult {
+		/// fn overflow() -> Result<(), ArithmeticError> {
 		///     FixedI64::from(i64::MAX).ensure_mul_int(2)?;
 		///     Ok(())
 		/// }
 		///
-		/// fn extrinsic_underflow() -> DispatchResult {
+		/// fn underflow() -> Result<(), ArithmeticError> {
 		///     FixedI64::from(i64::MAX).ensure_mul_int(-2)?;
 		///     Ok(())
 		/// }
 		///
-		/// assert_eq!(extrinsic_overflow(), Err(ArithmeticError::Overflow.into()));
-		/// assert_eq!(extrinsic_underflow(), Err(ArithmeticError::Underflow.into()));
+		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow.into()));
+		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow.into()));
 		/// ```
 		fn ensure_mul_int<N: FixedPointOperand>(self, n: N) -> Result<N, ArithmeticError> {
 			self.checked_mul_int(n).ok_or_else(|| error::multiplication(self, n))
@@ -662,21 +664,20 @@ pub mod ensure {
 		/// error
 		///
 		/// ```
-		/// use sp_arithmetic::traits::ensure::{EnsureFixedPointNumber, ArithmeticError, FixedI64};
-		/// use sp_runtime::DispatchResult;
+		/// use sp_arithmetic::{traits::ensure::EnsureFixedPointNumber, ArithmeticError, FixedI64};
 		///
-		/// fn extrinsic_zero() -> DispatchResult {
+		/// fn extrinsic_zero() -> Result<(), ArithmeticError> {
 		///     FixedI64::from(1).ensure_div_int(0)?;
 		///     Ok(())
 		/// }
 		///
-		/// fn extrinsic_overflow() -> DispatchResult {
+		/// fn overflow() -> Result<(), ArithmeticError> {
 		///     FixedI64::from(i64::MIN).ensure_div_int(-1)?;
 		///     Ok(())
 		/// }
 		///
 		/// assert_eq!(extrinsic_zero(), Err(ArithmeticError::DivisionByZero.into()));
-		/// assert_eq!(extrinsic_overflow(), Err(ArithmeticError::Overflow.into()));
+		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow.into()));
 		/// ```
 		fn ensure_div_int<D: FixedPointOperand>(self, d: D) -> Result<D, ArithmeticError> {
 			self.checked_div_int(d).ok_or_else(|| error::division(self, d))
@@ -695,20 +696,19 @@ pub mod ensure {
 		///
 		/// ```
 		/// use sp_arithmetic::{traits::ensure::EnsureFrom, ArithmeticError};
-		/// use sp_runtime::DispatchResult;
 		///
-		/// fn extrinsic_overflow() -> DispatchResult {
+		/// fn overflow() -> Result<(), ArithmeticError> {
 		///     let byte: u8 = u8::ensure_from(256u16)?;
 		///     Ok(())
 		/// }
 		///
-		/// fn extrinsic_underflow() -> DispatchResult {
+		/// fn underflow() -> Result<(), ArithmeticError> {
 		///     let byte: i8 = i8::ensure_from(-129i16)?;
 		///     Ok(())
 		/// }
 		///
-		/// assert_eq!(extrinsic_overflow(), Err(ArithmeticError::Overflow.into()));
-		/// assert_eq!(extrinsic_underflow(), Err(ArithmeticError::Underflow.into()));
+		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow.into()));
+		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow.into()));
 		/// ```
 		fn ensure_from(other: T) -> Result<Self, ArithmeticError> {
 			Self::try_from(other).map_err(|_| error::equivalent(other))
@@ -725,20 +725,19 @@ pub mod ensure {
 		///
 		/// ```
 		/// use sp_arithmetic::{traits::ensure::EnsureInto, ArithmeticError};
-		/// use sp_runtime::DispatchResult;
 		///
-		/// fn extrinsic_overflow() -> DispatchResult {
+		/// fn overflow() -> Result<(), ArithmeticError> {
 		///     let byte: u8 = 256u16.ensure_into()?;
 		///     Ok(())
 		/// }
 		///
-		/// fn extrinsic_underflow() -> DispatchResult {
+		/// fn underflow() -> Result<(), ArithmeticError> {
 		///     let byte: i8 = (-129i16).ensure_into()?;
 		///     Ok(())
 		/// }
 		///
-		/// assert_eq!(extrinsic_overflow(), Err(ArithmeticError::Overflow.into()));
-		/// assert_eq!(extrinsic_underflow(), Err(ArithmeticError::Underflow.into()));
+		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow.into()));
+		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow.into()));
 		/// ```
 		fn ensure_into(self) -> Result<T, ArithmeticError> {
 			self.try_into().map_err(|_| error::equivalent(self))
