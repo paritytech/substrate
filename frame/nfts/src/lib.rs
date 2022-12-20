@@ -929,7 +929,7 @@ pub mod pallet {
 		/// whose existing deposit is less than the refreshed deposit as it would only cost them,
 		/// so it's of little consequence.
 		///
-		/// It will still return an error in the case that the collection is unknown of the signer
+		/// It will still return an error in the case that the collection is unknown or the signer
 		/// is not permitted to call it.
 		///
 		/// Weight: `O(items.len())`
