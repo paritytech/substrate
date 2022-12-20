@@ -1,11 +1,6 @@
 use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
-use syn::{
-	parse::{Parse, ParseStream},
-	parse_macro_input,
-	spanned::Spanned,
-	Block, Expr, ExprCall, FnArg, ItemFn, ItemMod, Pat, Stmt, Type,
-};
+use syn::{parse_macro_input, spanned::Spanned, Expr, FnArg, ItemFn, ItemMod, Pat, Stmt, Type};
 
 mod keywords {
 	syn::custom_keyword!(extrinsic_call);
@@ -23,7 +18,6 @@ struct BenchmarkDef {
 	params: Vec<(String, String, u32, u32)>,
 	setup_stmts: Vec<Stmt>,
 	extrinsic_call_stmt: Stmt,
-	extrinsic_call_fn: ExprCall,
 	verify_stmts: Vec<Stmt>,
 }
 
@@ -64,10 +58,9 @@ impl BenchmarkDef {
 								params,
 								setup_stmts: Vec::from(&item_fn.block.stmts[0..i]),
 								extrinsic_call_stmt: Stmt::Semi(
-									Expr::Call(fn_call_copy.clone()),
+									Expr::Call(fn_call_copy),
 									token.clone(),
 								),
-								extrinsic_call_fn: fn_call_copy,
 								verify_stmts: Vec::from(
 									&item_fn.block.stmts[(i + 1)..item_fn.block.stmts.len()],
 								),
@@ -116,14 +109,14 @@ pub fn benchmark(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 	};
 	let name = item_fn.sig.ident;
 	let krate = quote!(::frame_benchmarking);
+	let support = quote!(::frame_support);
 	let setup_stmts = benchmark_def.setup_stmts;
 	let extrinsic_call_stmt = benchmark_def.extrinsic_call_stmt;
 	let verify_stmts = benchmark_def.verify_stmts;
 	let params = vec![quote!(x, 0, 1)];
 	let param_names = vec![quote!(x)];
 	quote! {
-		use ::frame_support::assert_impl_all;
-		assert_impl_all!(::frame_support::Linear<0, 1>: ::frame_support::ParamRange);
+		#support::assert_impl_all!(#support::Linear<0, 1>: #support::ParamRange);
 
 		#[allow(non_camel_case_types)]
 		struct #name;
