@@ -15,13 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Traits for dealing with a single non-fungible collection of items.
+//! Traits for dealing with a single non-fungible item.
 //!
-//! This assumes a single level namespace identified by `Inspect::ItemId`, and could
-//! reasonably be implemented by pallets which wants to expose a single collection of NFT-like
+//! This assumes a single-level namespace identified by `Inspect::ItemId`, and could
+//! reasonably be implemented by pallets that want to expose a single collection of NFT-like
 //! objects.
 //!
-//! For an NFT API which has dual-level namespacing, the traits in `nonfungibles` are better to
+//! For an NFT API that has dual-level namespacing, the traits in `nonfungibles` are better to
 //! use.
 
 use super::nonfungibles_v2 as nonfungibles;
