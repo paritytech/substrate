@@ -28,7 +28,7 @@
 
 use crate::config::*;
 use codec::{Decode, Encode};
-use futures::{channel::mpsc, prelude::*, stream::FuturesUnordered};
+use futures::{prelude::*, stream::FuturesUnordered};
 use libp2p::{multiaddr, PeerId};
 use log::{debug, trace, warn};
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
