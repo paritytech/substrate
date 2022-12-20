@@ -1527,7 +1527,7 @@ pub mod pallet {
 			Self::do_set_accept_ownership(who, maybe_collection)
 		}
 
-		/// Set the maximum amount of items a collection could have.
+		/// Set the maximum number of items a collection could have.
 		///
 		/// Origin must be either `ForceOrigin` or `Signed` and the sender should be the Owner of
 		/// the `collection`.
