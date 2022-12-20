@@ -514,7 +514,7 @@ pub(crate) fn process_storage_results(
 
 			let key_info = storage_info_map.get(&prefix);
 			let pov_overhead = single_read_pov_overhead(
-				key_info.map(|i| i.max_values).flatten(),
+				key_info.and_then(|i| i.max_values),
 				worst_case_map_values,
 			);
 			// We add the overhead for a single read each time. In a more advanced version we could
