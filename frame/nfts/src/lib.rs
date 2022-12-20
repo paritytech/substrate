@@ -1533,7 +1533,7 @@ pub mod pallet {
 		/// the `collection`.
 		///
 		/// - `collection`: The identifier of the collection to change.
-		/// - `max_supply`: The maximum amount of items a collection could have.
+		/// - `max_supply`: The maximum number of items a collection could have.
 		///
 		/// Emits `CollectionMaxSupplySet` event when successful.
 		#[pallet::weight(T::WeightInfo::set_collection_max_supply())]
