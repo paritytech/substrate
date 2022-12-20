@@ -420,7 +420,7 @@ pub mod pallet {
 		},
 		/// Metadata has been cleared for an item.
 		MetadataCleared { collection: T::CollectionId, item: T::ItemId },
-		/// Metadata has been cleared for an item.
+		/// The deposit for a set of `item`s within a `collection` has been updated.
 		Redeposited { collection: T::CollectionId, successful_items: Vec<T::ItemId> },
 		/// New attribute metadata has been set for a `collection` or `item`.
 		AttributeSet {
