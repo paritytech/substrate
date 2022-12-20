@@ -1,8 +1,7 @@
 #![cfg(any(feature = "runtime-benchmarks", test))]
 
-use super::{Pallet as Grandpa, *};
-use frame_support::{benchmark, Linear};
-use frame_system::RawOrigin;
+use super::*;
+use frame_support::benchmark;
 use sp_core::H256;
 
 #[benchmark]

@@ -1,5 +1,6 @@
 use derive_syn_parse::Parse;
 use proc_macro::TokenStream;
+use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens};
 use syn::{
 	parse_macro_input,
@@ -141,6 +142,34 @@ pub fn benchmarks(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 	.into()
 }
 
+// prepares a `Vec<ParamDef>` to be interpolated by `quote!`
+struct UnrolledParams {
+	param_ranges: Vec<TokenStream2>,
+	param_names: Vec<TokenStream2>,
+}
+
+impl UnrolledParams {
+	fn from(params: &Vec<ParamDef>) -> UnrolledParams {
+		let param_ranges: Vec<TokenStream2> = params
+			.iter()
+			.map(|p| {
+				let name = Ident::new(&p.name, Span::call_site());
+				let start = p.start;
+				let end = p.end;
+				quote!(#name, #start, #end).into()
+			})
+			.collect();
+		let param_names: Vec<TokenStream2> = params
+			.iter()
+			.map(|p| {
+				let name = Ident::new(&p.name, Span::call_site());
+				quote!(#name).into()
+			})
+			.collect();
+		UnrolledParams { param_ranges, param_names }
+	}
+}
+
 pub fn benchmark(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 	let item_fn = parse_macro_input!(tokens as ItemFn);
 	let benchmark_def = match BenchmarkDef::from(&item_fn) {
@@ -153,9 +182,10 @@ pub fn benchmark(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 	let setup_stmts = benchmark_def.setup_stmts;
 	let extrinsic_call_stmt = benchmark_def.extrinsic_call_stmt;
 	let verify_stmts = benchmark_def.verify_stmts;
-	let params = vec![quote!(x, 0, 1)];
-	let param_names = vec![quote!(x)];
-	quote! {
+	let unrolled = UnrolledParams::from(&benchmark_def.params);
+	let param_names = unrolled.param_names;
+	let param_ranges = unrolled.param_ranges;
+	let res = quote! {
 		#support::assert_impl_all!(#support::Linear<0, 1>: #support::ParamRange);
 
 		#[allow(non_camel_case_types)]
@@ -167,7 +197,7 @@ pub fn benchmark(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 			fn components(&self) -> #krate::Vec<(#krate::BenchmarkParameter, u32, u32)> {
 				#krate::vec! [
 					#(
-						(#krate::BenchmarkParameter::#params)
+						(#krate::BenchmarkParameter::#param_ranges)
 					),*
 				]
 			}
@@ -208,6 +238,7 @@ pub fn benchmark(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 				}))
 			}
 		}
-	}
-	.into()
+	};
+	println!("{}", res.to_string());
+	res.into()
 }
