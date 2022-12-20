@@ -252,7 +252,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let price_info =
 			ItemPriceOf::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::NotForSale)?;
 
-			ensure!(bid_price >= price_info.0, Error::<T, I>::BidTooLow);
+		ensure!(bid_price >= price_info.0, Error::<T, I>::BidTooLow);
 
 		if let Some(only_buyer) = price_info.1 {
 			ensure!(only_buyer == buyer, Error::<T, I>::NoPermission);
