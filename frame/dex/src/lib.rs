@@ -64,7 +64,7 @@ pub mod pallet {
 	};
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::{
-		traits::{AtLeast32BitUnsigned, Hash, IntegerSquareRoot, One, Zero},
+		traits::{AtLeast32BitUnsigned, Hash, IntegerSquareRoot, One, TrailingZeroInput, Zero},
 		Saturating,
 	};
 	use sp_std::prelude::*;
