@@ -504,7 +504,7 @@ fn swap_should_work_with_realistic_values() {
 			false
 		));
 
-		assert!(dbg!(events()).contains(&Event::<Test>::SwapExecuted {
+		assert!(events().contains(&Event::<Test>::SwapExecuted {
 			who: user,
 			send_to: user,
 			path: bvec![usd, dot],
