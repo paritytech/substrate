@@ -567,7 +567,7 @@ pub mod pallet {
 		ReachedApprovalLimit,
 		/// The deadline has already expired.
 		DeadlineExpired,
-		/// The duration provided should be less or equal to MaxDeadlineDuration.
+		/// The duration provided should be less than or equal to `MaxDeadlineDuration`.
 		WrongDuration,
 		/// The method is disabled by system settings.
 		MethodDisabled,
