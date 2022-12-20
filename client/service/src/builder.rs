@@ -70,10 +70,7 @@ use sp_consensus::block_validation::{
 };
 use sp_core::traits::{CodeExecutor, SpawnNamed};
 use sp_keystore::{CryptoStore, SyncCryptoStore, SyncCryptoStorePtr};
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, BlockIdTo, NumberFor, Zero},
-};
+use sp_runtime::traits::{Block as BlockT, BlockIdTo, NumberFor, Zero};
 use std::{str::FromStr, sync::Arc, time::SystemTime};
 
 /// Full client type.
@@ -479,7 +476,7 @@ where
 
 	sp_session::generate_initial_session_keys(
 		client.clone(),
-		&BlockId::Hash(chain_info.best_hash),
+		chain_info.best_hash,
 		config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
 	)
 	.map_err(|e| Error::Application(Box::new(e)))?;

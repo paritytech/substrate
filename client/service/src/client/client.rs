@@ -914,7 +914,7 @@ where
 			let header = self
 				.backend
 				.blockchain()
-				.header(BlockId::Hash(block))?
+				.header(block)?
 				.expect("Block to finalize expected to be onchain; qed");
 
 			operation.notify_finalized = Some(FinalizeSummary { header, finalized, stale_heads });
@@ -1050,9 +1050,9 @@ where
 	/// Get block header by id.
 	pub fn header(
 		&self,
-		id: &BlockId<Block>,
+		hash: Block::Hash,
 	) -> sp_blockchain::Result<Option<<Block as BlockT>::Header>> {
-		self.backend.blockchain().header(*id)
+		self.backend.blockchain().header(hash)
 	}
 
 	/// Get block body by id.
@@ -1069,11 +1069,11 @@ where
 		target_hash: Block::Hash,
 		max_generation: NumberFor<Block>,
 	) -> sp_blockchain::Result<Vec<Block::Hash>> {
-		let load_header = |id: Block::Hash| -> sp_blockchain::Result<Block::Header> {
+		let load_header = |hash: Block::Hash| -> sp_blockchain::Result<Block::Header> {
 			self.backend
 				.blockchain()
-				.header(BlockId::Hash(id))?
-				.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id)))
+				.header(hash)?
+				.ok_or_else(|| Error::UnknownBlock(format!("{:?}", hash)))
 		};
 
 		let genesis_hash = self.backend.blockchain().info().genesis_hash;
@@ -1552,7 +1552,7 @@ where
 	) -> sp_blockchain::Result<Vec<Block::Header>> {
 		Ok(Client::uncles(self, target_hash, max_generation)?
 			.into_iter()
-			.filter_map(|hash| Client::header(self, &BlockId::Hash(hash)).unwrap_or(None))
+			.filter_map(|hash| Client::header(self, hash).unwrap_or(None))
 			.collect())
 	}
 }
@@ -1564,8 +1564,8 @@ where
 	Block: BlockT,
 	RA: Send + Sync,
 {
-	fn header(&self, id: BlockId<Block>) -> sp_blockchain::Result<Option<Block::Header>> {
-		self.backend.blockchain().header(id)
+	fn header(&self, hash: Block::Hash) -> sp_blockchain::Result<Option<Block::Header>> {
+		self.backend.blockchain().header(hash)
 	}
 
 	fn info(&self) -> blockchain::Info<Block> {
@@ -1616,8 +1616,8 @@ where
 	Block: BlockT,
 	RA: Send + Sync,
 {
-	fn header(&self, id: BlockId<Block>) -> sp_blockchain::Result<Option<Block::Header>> {
-		self.backend.blockchain().header(id)
+	fn header(&self, hash: Block::Hash) -> sp_blockchain::Result<Option<Block::Header>> {
+		self.backend.blockchain().header(hash)
 	}
 
 	fn info(&self) -> blockchain::Info<Block> {
@@ -1948,15 +1948,13 @@ where
 	}
 
 	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>> {
-		Ok(match self.header(id)? {
-			Some(header) => {
-				let hash = header.hash();
-				match (self.body(hash)?, self.justifications(hash)?) {
-					(Some(extrinsics), justifications) =>
+		Ok(match self.backend.blockchain().block_hash_from_id(id)? {
+			Some(hash) =>
+				match (self.header(hash)?, self.body(hash)?, self.justifications(hash)?) {
+					(Some(header), Some(extrinsics), justifications) =>
 						Some(SignedBlock { block: Block::new(header, extrinsics), justifications }),
 					_ => None,
-				}
-			},
+				},
 			None => None,
 		})
 	}

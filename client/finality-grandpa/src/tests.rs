@@ -1530,10 +1530,13 @@ async fn justification_with_equivocation() {
 	// we create a basic chain with 3 blocks (no forks)
 	net.peer(0).push_blocks(3, false);
 
-	let client = net.peer(0).client().clone();
-	let block1 = client.header(&BlockId::Number(1)).ok().flatten().unwrap();
-	let block2 = client.header(&BlockId::Number(2)).ok().flatten().unwrap();
-	let block3 = client.header(&BlockId::Number(3)).ok().flatten().unwrap();
+	let client = net.peer(0).client().as_client().clone();
+	let hashof1 = client.expect_block_hash_from_id(&BlockId::Number(1)).unwrap();
+	let hashof2 = client.expect_block_hash_from_id(&BlockId::Number(2)).unwrap();
+	let hashof3 = client.expect_block_hash_from_id(&BlockId::Number(3)).unwrap();
+	let block1 = client.expect_header(hashof1).unwrap();
+	let block2 = client.expect_header(hashof2).unwrap();
+	let block3 = client.expect_header(hashof3).unwrap();
 
 	let set_id = 0;
 	let justification = {
@@ -1576,7 +1579,7 @@ async fn justification_with_equivocation() {
 			precommits,
 		};
 
-		GrandpaJustification::from_commit(&client.as_client(), round, commit).unwrap()
+		GrandpaJustification::from_commit(&client, round, commit).unwrap()
 	};
 
 	// the justification should include the minimal necessary vote ancestry and

@@ -1141,13 +1141,22 @@ fn get_block_by_bad_block_hash_returns_none() {
 }
 
 #[test]
-fn get_header_by_block_number_doesnt_panic() {
+fn expect_block_hash_by_block_number_doesnt_panic() {
 	let client = substrate_test_runtime_client::new();
 
 	// backend uses u32 for block numbers, make sure we don't panic when
 	// trying to convert
 	let id = BlockId::<Block>::Number(72340207214430721);
-	client.header(&id).expect_err("invalid block number overflows u32");
+	client.block_hash_from_id(&id).expect_err("invalid block number overflows u32");
+}
+
+#[test]
+fn get_hash_by_block_number_doesnt_panic() {
+	let client = substrate_test_runtime_client::new();
+
+	// backend uses u32 for block numbers, make sure we don't panic when
+	// trying to convert
+	client.hash(72340207214430721).expect_err("invalid block number overflows u32");
 }
 
 #[test]

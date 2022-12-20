@@ -44,7 +44,7 @@ use sp_consensus_babe::{
 use sp_consensus_slots::Slot;
 use sp_inherents::InherentData;
 use sp_runtime::{
-	generic::{BlockId, Digest},
+	generic::Digest,
 	traits::{Block as BlockT, Header},
 	DigestItem,
 };
@@ -108,7 +108,7 @@ where
 		let parent_hash = import_params.header.parent_hash();
 		let parent = self
 			.client
-			.header(BlockId::Hash(*parent_hash))
+			.header(*parent_hash)
 			.ok()
 			.flatten()
 			.ok_or_else(|| format!("header for block {} not found", parent_hash))?;
