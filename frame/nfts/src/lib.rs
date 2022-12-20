@@ -643,9 +643,8 @@ pub mod pallet {
 		/// Unlike `create`, no funds are reserved.
 		///
 		/// - `owner`: The owner of this collection of items. The owner has full superuser
-		///   permissions
-		/// over this item, but may later change and configure the permissions using
-		/// `transfer_ownership` and `set_team`.
+		///   permissions over this item, but may later change and configure the permissions using
+		///   `transfer_ownership` and `set_team`.
 		///
 		/// Emits `ForceCreated` event when successful.
 		///
