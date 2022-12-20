@@ -315,8 +315,8 @@ impl<T: Sized> SaturatedConversion for T {}
 /// ```
 /// # use sp_arithmetic::{traits::EnsureSub, ArithmeticError};
 /// # fn foo() -> Result<(), ArithmeticError> {
-/// # let mut my_value = 1;
-/// # let other_value = 1;
+/// # let mut my_value: i32 = 1;
+/// # let other_value: i32 = 1;
 /// my_value = my_value.checked_sub(other_value).ok_or(ArithmeticError::Overflow)?;
 /// # Ok(())
 /// # }
@@ -325,10 +325,10 @@ impl<T: Sized> SaturatedConversion for T {}
 /// into this:
 ///
 /// ```
-/// # use sp_arithmetic::{traits::EnsureSub, ArithmeticError};
+/// # use sp_arithmetic::{traits::EnsureSubAssign, ArithmeticError};
 /// # fn foo() -> Result<(), ArithmeticError> {
-/// # let mut my_value = 1;
-/// # let other_value = 1;
+/// # let mut my_value: i32 = 1;
+/// # let other_value: i32 = 1;
 /// my_value.ensure_sub_assign(other_value)?;
 /// # Ok(())
 /// # }
