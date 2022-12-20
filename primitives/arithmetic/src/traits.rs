@@ -19,8 +19,9 @@
 
 use codec::HasCompact;
 pub use ensure::{
-	EnsureAdd, EnsureAddAssign, EnsureDiv, EnsureDivAssign, EnsureFixedPointNumber, EnsureFrom,
-	EnsureInto, EnsureMul, EnsureMulAssign, EnsureOp, EnsureOpAssign, EnsureSub, EnsureSubAssign,
+	Ensure, EnsureAdd, EnsureAddAssign, EnsureDiv, EnsureDivAssign, EnsureFixedPointNumber,
+	EnsureFrom, EnsureInto, EnsureMul, EnsureMulAssign, EnsureOp, EnsureOpAssign, EnsureSub,
+	EnsureSubAssign,
 };
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
@@ -339,7 +340,7 @@ impl<T: Sized> SaturatedConversion for T {}
 /// returning an [`ArithmeticError`] instead of `None`.
 ///
 /// [`ArithmeticError`]: crate::ArithmeticError
-pub mod ensure {
+mod ensure {
 	use super::{CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, Zero};
 	use crate::{ArithmeticError, FixedPointNumber, FixedPointOperand};
 
@@ -461,7 +462,7 @@ pub mod ensure {
 	impl<T: CheckedMul + PartialOrd + Zero + Copy> EnsureMul for T {}
 	impl<T: CheckedDiv + PartialOrd + Zero + Copy> EnsureDiv for T {}
 
-	/// Meta trait that supports all arithmetic operations
+	/// Meta trait that supports all inmutable arithmetic operations
 	pub trait EnsureOp: EnsureAdd + EnsureSub + EnsureMul + EnsureDiv {}
 	impl<T: EnsureAdd + EnsureSub + EnsureMul + EnsureDiv> EnsureOp for T {}
 
@@ -599,6 +600,10 @@ pub mod ensure {
 		for T
 	{
 	}
+
+	/// Meta trait that supports all arithmetic operations
+	pub trait Ensure: EnsureOp + EnsureOpAssign {}
+	impl<T: EnsureOp + EnsureOpAssign> Ensure for T {}
 
 	/// Extends `FixedPointNumber with` the Ensure family functions.
 	pub trait EnsureFixedPointNumber: FixedPointNumber {
