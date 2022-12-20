@@ -47,6 +47,7 @@ pub use pallet::*;
 pub use types::*;
 pub use weights::WeightInfo;
 
+// TODO: make it configurable
 // TODO: more specific error codes.
 pub const MIN_LIQUIDITY: u64 = 1;
 
