@@ -22,8 +22,8 @@
 #![warn(missing_docs)]
 
 use crate::{aux_schema, LOG_TARGET};
-use log::{debug, error, info, warn};
-use sc_client_api::{AuxStore, Backend, FinalityNotification};
+use log::{debug, error, warn};
+use sc_client_api::{Backend, FinalityNotification};
 use sc_offchain::OffchainDb;
 use sp_blockchain::{CachedHeaderMetadata, ForkBackend, HeaderBackend, HeaderMetadata};
 use sp_core::offchain::{DbExternalities, StorageKind};
@@ -34,38 +34,14 @@ use sp_runtime::{
 };
 use std::{collections::VecDeque, sync::Arc};
 
-pub(crate) fn load_or_init_best_canonicalized<B, BE>(
-	backend: &BE,
-	first_mmr_block: NumberFor<B>,
-) -> sp_blockchain::Result<NumberFor<B>>
-where
-	BE: AuxStore,
-	B: Block,
-{
-	// Initialize gadget best_canon from AUX DB or from pallet genesis.
-	if let Some(best) = aux_schema::load_persistent::<B, BE>(backend)? {
-		info!(target: LOG_TARGET, "Loading MMR best canonicalized state from db: {:?}.", best);
-		Ok(best)
-	} else {
-		let best = first_mmr_block.saturating_sub(One::one());
-		info!(
-			target: LOG_TARGET,
-			"Loading MMR from pallet genesis on what appears to be the first startup: {:?}.", best
-		);
-		aux_schema::write_current_version(backend)?;
-		aux_schema::write_gadget_state::<B, BE>(backend, &best)?;
-		Ok(best)
-	}
-}
-
 /// `OffchainMMR` exposes MMR offchain canonicalization and pruning logic.
 pub struct OffchainMmr<B: Block, BE: Backend<B>, C> {
-	pub backend: Arc<BE>,
-	pub client: Arc<C>,
-	pub offchain_db: OffchainDb<BE::OffchainStorage>,
-	pub indexing_prefix: Vec<u8>,
-	pub first_mmr_block: NumberFor<B>,
-	pub best_canonicalized: NumberFor<B>,
+	backend: Arc<BE>,
+	client: Arc<C>,
+	offchain_db: OffchainDb<BE::OffchainStorage>,
+	indexing_prefix: Vec<u8>,
+	first_mmr_block: NumberFor<B>,
+	best_canonicalized: NumberFor<B>,
 }
 
 impl<B, BE, C> OffchainMmr<B, BE, C>
@@ -74,12 +50,42 @@ where
 	BE: Backend<B>,
 	B: Block,
 {
+	pub fn new(
+		backend: Arc<BE>,
+		client: Arc<C>,
+		offchain_db: OffchainDb<BE::OffchainStorage>,
+		indexing_prefix: Vec<u8>,
+		first_mmr_block: NumberFor<B>,
+	) -> Option<Self> {
+		let mut best_canonicalized = first_mmr_block.saturating_sub(One::one());
+		best_canonicalized = aux_schema::load_or_init_state::<B, BE>(&*backend, best_canonicalized)
+			.map_err(|e| error!(target: LOG_TARGET, "Error loading state from aux db: {:?}", e))
+			.ok()?;
+
+		Some(Self {
+			backend,
+			client,
+			offchain_db,
+			indexing_prefix,
+			first_mmr_block,
+			best_canonicalized,
+		})
+	}
+
 	fn node_temp_offchain_key(&self, pos: NodeIndex, parent_hash: B::Hash) -> Vec<u8> {
 		NodesUtils::node_temp_offchain_key::<B::Header>(&self.indexing_prefix, pos, parent_hash)
 	}
 
 	fn node_canon_offchain_key(&self, pos: NodeIndex) -> Vec<u8> {
 		NodesUtils::node_canon_offchain_key(&self.indexing_prefix, pos)
+	}
+
+	fn write_gadget_state_or_log(&self) {
+		if let Err(e) =
+			aux_schema::write_gadget_state::<B, BE>(&*self.backend, &self.best_canonicalized)
+		{
+			debug!(target: LOG_TARGET, "error saving state: {:?}", e);
+		}
 	}
 
 	fn header_metadata_or_log(
@@ -231,11 +237,7 @@ where
 			for hash in to_canon.drain(..) {
 				self.canonicalize_branch(hash);
 			}
-			if let Err(e) =
-				aux_schema::write_gadget_state::<B, BE>(&*self.backend, &self.best_canonicalized)
-			{
-				debug!(target: LOG_TARGET, "error saving state: {:?}", e);
-			}
+			self.write_gadget_state_or_log();
 		}
 	}
 
@@ -247,11 +249,7 @@ where
 		for hash in notification.tree_route.iter().chain(std::iter::once(&notification.hash)) {
 			self.canonicalize_branch(*hash);
 		}
-		if let Err(e) =
-			aux_schema::write_gadget_state::<B, BE>(&*self.backend, &self.best_canonicalized)
-		{
-			debug!(target: LOG_TARGET, "error saving state: {:?}", e);
-		}
+		self.write_gadget_state_or_log();
 
 		// Remove offchain MMR nodes for stale forks.
 		let stale_forks = self.client.expand_forks(&notification.stale_heads).unwrap_or_else(
@@ -303,7 +301,7 @@ mod tests {
 			// expected pruned heads because of temp key collision: b1
 			client.assert_pruned(&[&c1, &b1]);
 
-			client.finalize_block(d5.hash(), None);
+			client.finalize_block(d5.hash(), Some(5));
 			tokio::time::sleep(Duration::from_millis(200)).await;
 			// expected finalized heads: d4, d5,
 			client.assert_canonicalized(&[&d4, &d5]);
