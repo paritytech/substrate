@@ -20,10 +20,7 @@
 use super::*;
 use frame_support::{
 	storage::KeyPrefixIterator,
-	traits::{
-		tokens::nonfungibles::{Inspect, Transfer, *},
-		Get,
-	},
+	traits::{tokens::nonfungibles::*, Get},
 	BoundedSlice,
 };
 use sp_runtime::{DispatchError, DispatchResult};

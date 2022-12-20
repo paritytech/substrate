@@ -30,14 +30,8 @@ pub(super) type CollectionDetailsFor<T, I> =
 	CollectionDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>>;
 pub(super) type ItemDetailsFor<T, I> =
 	ItemDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>>;
-pub(super) type BalanceOf<T, I = ()> =
-	<<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-pub(super) type AssetIdOf<T, I = ()> =
-	<<T as Config<I>>::Assets as Inspect<<T as frame_system::Config>::AccountId>>::AssetId;
-pub(super) type AssetBalanceOf<T, I = ()> =
-	<<T as Config<I>>::Assets as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
 pub(super) type ItemPrice<T, I = ()> =
-	BalanceOrAsset<BalanceOf<T, I>, AssetIdOf<T, I>, AssetBalanceOf<T, I>>;
+	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct CollectionDetails<AccountId, DepositBalance> {
@@ -132,54 +126,4 @@ pub struct ItemMetadata<DepositBalance, StringLimit: Get<u32>> {
 	pub(super) data: BoundedVec<u8, StringLimit>,
 	/// Whether the item metadata may be changed by a non Force origin.
 	pub(super) is_frozen: bool,
-}
-
-/// Represents either a System currency or a set of fungible assets.
-#[derive(Encode, Decode, Clone, PartialEq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
-pub enum BalanceOrAsset<Balance, AssetId, AssetBalance> {
-	Balance { amount: Balance },
-	Asset { id: AssetId, amount: AssetBalance },
-}
-
-impl<B, A, AB> From<B> for BalanceOrAsset<B, A, AB> {
-	fn from(amount: B) -> Self {
-		Self::Balance { amount }
-	}
-}
-
-impl<B, A, AB> BalanceOrAsset<B, A, AB>
-where
-	A: core::cmp::PartialEq,
-	B: core::cmp::PartialOrd,
-	AB: core::cmp::PartialOrd,
-{
-	pub fn is_greater_or_equal(&self, other: &Self) -> bool {
-		use BalanceOrAsset::*;
-		match (self, other) {
-			(Balance { amount: a }, Balance { amount: b }) => a >= b,
-			(Asset { amount: a, .. }, Asset { amount: b, .. }) => a >= b,
-			_ => false,
-		}
-	}
-	pub fn is_same_currency(&self, other: &Self) -> bool {
-		use BalanceOrAsset::*;
-		match (self, other) {
-			(Balance { .. }, Balance { .. }) => true,
-			(Asset { id, .. }, Asset { id: id2, .. }) => id == id2,
-			_ => false,
-		}
-	}
-}
-
-impl<B, A, AB> BalanceOrAsset<B, A, AB> {
-	pub fn into_amount<T>(self) -> T
-	where
-		T: From<B>,
-		T: From<AB>,
-	{
-		match self {
-			Self::Balance { amount } => amount.into(),
-			Self::Asset { amount, id: _ } => amount.into(),
-		}
-	}
 }

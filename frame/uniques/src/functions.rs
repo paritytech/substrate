@@ -229,7 +229,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Self::deposit_event(Event::ItemPriceSet {
 				collection,
 				item,
-				price: price.clone(),
+				price: *price,
 				whitelisted_buyer,
 			});
 		} else {
@@ -252,17 +252,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let price_info =
 			ItemPriceOf::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::NotForSale)?;
 
-		ensure!(bid_price.is_same_currency(&price_info.0), Error::<T, I>::WrongCurrency);
-		ensure!(bid_price.is_greater_or_equal(&price_info.0), Error::<T, I>::BidTooLow);
+			ensure!(bid_price >= price_info.0, Error::<T, I>::BidTooLow);
 
 		if let Some(only_buyer) = price_info.1 {
 			ensure!(only_buyer == buyer, Error::<T, I>::NoPermission);
 		}
 
-		Self::currency_transfer(
+		T::Currency::transfer(
 			&buyer,
 			&details.owner,
-			price_info.0.clone(),
+			price_info.0,
 			ExistenceRequirement::KeepAlive,
 		)?;
 
