@@ -538,14 +538,14 @@ pub mod pallet {
 
 				let mut i = 0;
 				let path_len = path.len() as u32;
-				for assets_pair in path.windows(2).rev() {
+				for assets_pair in path.windows(2) {
 					if let &[asset1, asset2] = assets_pair {
 						let pool_id = Self::get_pool_id(asset1, asset2);
-						let (sorted_asset1, sorted_asset2) = pool_id;
 						let pool_account = Self::get_pool_account(pool_id);
 
 						let amount_out =
 							amounts.get((i + 1) as usize).ok_or(Error::<T>::PathError)?;
+
 						let to = if i < path_len - 2 {
 							let asset3 = path.get((i + 2) as usize).ok_or(Error::<T>::PathError)?;
 							Self::get_pool_account(Self::get_pool_id(asset2, *asset3))
@@ -553,9 +553,7 @@ pub mod pallet {
 							send_to.clone()
 						};
 
-						let send_asset =
-							if asset1 == sorted_asset1 { sorted_asset2 } else { sorted_asset1 };
-						Self::transfer(send_asset, &pool_account, &to, *amount_out, false)?;
+						Self::transfer(asset2, &pool_account, &to, *amount_out, false)?;
 					}
 					i.saturating_inc();
 				}

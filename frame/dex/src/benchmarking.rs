@@ -163,64 +163,94 @@ benchmarks! {
 	swap_exact_tokens_for_tokens {
 		let asset1 = MultiAssetId::Native;
 		let asset2 = MultiAssetId::Asset(0.into());
-		let (lp_token, caller, _) = create_asset_and_pool::<T>(asset1, asset2);
+		let asset3 = MultiAssetId::Asset(1.into());
+		let (_, caller, _) = create_asset_and_pool::<T>(asset1, asset2);
+		let (_, _) = create_asset::<T>(asset3);
+		Dex::<T>::create_pool(SystemOrigin::Signed(caller.clone()).into(), asset2, asset3)?;
 		let deadline = T::BlockNumber::max_value();
 		let path: BoundedVec<_, T::MaxSwapPathLength> =
-			BoundedVec::try_from(vec![asset1, asset2]).unwrap();
+			BoundedVec::try_from(vec![asset1, asset2, asset3]).unwrap();
 
 		Dex::<T>::add_liquidity(
 			SystemOrigin::Signed(caller.clone()).into(),
 			asset1,
 			asset2,
-			10.into(),
-			10.into(),
+			10000.into(),
+			200.into(),
 			10.into(),
 			10.into(),
 			caller.clone(),
 			deadline,
 			false,
 		)?;
-	}: _(SystemOrigin::Signed(caller.clone()), path.clone(), 5.into(), 1.into(), caller.clone(), deadline, false)
+		Dex::<T>::add_liquidity(
+			SystemOrigin::Signed(caller.clone()).into(),
+			asset2,
+			asset3,
+			200.into(),
+			2000.into(),
+			10.into(),
+			10.into(),
+			caller.clone(),
+			deadline,
+			false,
+		)?;
+	}: _(SystemOrigin::Signed(caller.clone()), path.clone(), 500.into(), 80.into(), caller.clone(), deadline, false)
 	verify {
 		let pool_id = (asset1, asset2);
 		assert_last_event::<T>(Event::SwapExecuted {
 			who: caller.clone(),
 			send_to: caller.clone(),
 			path,
-			amount_in: 5.into(),
-			amount_out: 3.into(),
+			amount_in: 500.into(),
+			amount_out: 85.into(),
 		}.into());
 	}
 
 	swap_tokens_for_exact_tokens {
 		let asset1 = MultiAssetId::Native;
 		let asset2 = MultiAssetId::Asset(0.into());
-		let (lp_token, caller, _) = create_asset_and_pool::<T>(asset1, asset2);
+		let asset3 = MultiAssetId::Asset(1.into());
+		let (_, caller, _) = create_asset_and_pool::<T>(asset1, asset2);
+		let (_, _) = create_asset::<T>(asset3);
+		Dex::<T>::create_pool(SystemOrigin::Signed(caller.clone()).into(), asset2, asset3)?;
 		let deadline = T::BlockNumber::max_value();
 		let path: BoundedVec<_, T::MaxSwapPathLength> =
-			BoundedVec::try_from(vec![asset1, asset2]).unwrap();
+			BoundedVec::try_from(vec![asset1, asset2, asset3]).unwrap();
 
 		Dex::<T>::add_liquidity(
 			SystemOrigin::Signed(caller.clone()).into(),
 			asset1,
 			asset2,
-			10.into(),
-			10.into(),
+			10000.into(),
+			200.into(),
 			10.into(),
 			10.into(),
 			caller.clone(),
 			deadline,
 			false,
 		)?;
-	}: _(SystemOrigin::Signed(caller.clone()), path.clone(), 3.into(), 8.into(), caller.clone(), deadline, false)
+		Dex::<T>::add_liquidity(
+			SystemOrigin::Signed(caller.clone()).into(),
+			asset2,
+			asset3,
+			200.into(),
+			2000.into(),
+			10.into(),
+			10.into(),
+			caller.clone(),
+			deadline,
+			false,
+		)?;
+	}: _(SystemOrigin::Signed(caller.clone()), path.clone(), 100.into(), 1000.into(), caller.clone(), deadline, false)
 	verify {
 		let pool_id = (asset1, asset2);
 		assert_last_event::<T>(Event::SwapExecuted {
 			who: caller.clone(),
 			send_to: caller.clone(),
 			path,
-			amount_in: 5.into(),
-			amount_out: 3.into(),
+			amount_in: 584.into(),
+			amount_out: 100.into(),
 		}.into());
 	}
 
