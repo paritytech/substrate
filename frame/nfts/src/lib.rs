@@ -553,7 +553,7 @@ pub mod pallet {
 		MaxSupplyReached,
 		/// The max supply is locked and can't be changed.
 		MaxSupplyLocked,
-		/// The provided max supply is less to the amount of items a collection already has.
+		/// The provided max supply is less than the number of items a collection already has.
 		MaxSupplyTooSmall,
 		/// The given item ID is unknown.
 		UnknownItem,
