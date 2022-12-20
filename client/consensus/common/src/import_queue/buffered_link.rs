@@ -52,8 +52,10 @@ use super::BlockImportResult;
 /// Wraps around an unbounded channel from the `futures` crate. The sender implements `Link` and
 /// can be used to buffer commands, and the receiver can be used to poll said commands and transfer
 /// them to another link.
-pub fn buffered_link<B: BlockT>() -> (BufferedLinkSender<B>, BufferedLinkReceiver<B>) {
-	let (tx, rx) = tracing_unbounded("mpsc_buffered_link");
+pub fn buffered_link<B: BlockT>(
+	queue_size_warning: i64,
+) -> (BufferedLinkSender<B>, BufferedLinkReceiver<B>) {
+	let (tx, rx) = tracing_unbounded("mpsc_buffered_link", queue_size_warning);
 	let tx = BufferedLinkSender { tx };
 	let rx = BufferedLinkReceiver { rx: rx.fuse() };
 	(tx, rx)
@@ -175,7 +177,7 @@ mod tests {
 
 	#[test]
 	fn is_closed() {
-		let (tx, rx) = super::buffered_link::<Block>();
+		let (tx, rx) = super::buffered_link::<Block>(1);
 		assert!(!tx.is_closed());
 		drop(rx);
 		assert!(tx.is_closed());

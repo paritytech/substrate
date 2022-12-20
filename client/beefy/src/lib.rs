@@ -265,7 +265,7 @@ where
 	// Subscribe to finality notifications and justifications before waiting for runtime pallet and
 	// reuse the streams, so we don't miss notifications while waiting for pallet to be available.
 	let mut finality_notifications = client.finality_notification_stream().fuse();
-	let block_import_justif = links.from_block_import_justif_stream.subscribe().fuse();
+	let block_import_justif = links.from_block_import_justif_stream.subscribe(100_000).fuse();
 
 	// Wait for BEEFY pallet to be active before starting voter.
 	let persisted_state =

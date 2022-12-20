@@ -98,7 +98,7 @@ mod inner {
 	/// above the warning threshold.
 	pub fn tracing_unbounded<T>(
 		name: &'static str,
-		//queue_size_warning: i64,
+		queue_size_warning: i64,
 	) -> (TracingUnboundedSender<T>, TracingUnboundedReceiver<T>) {
 		let (s, r) = mpsc::unbounded();
 		let queue_size = Arc::new(AtomicI64::new(0));
@@ -106,7 +106,7 @@ mod inner {
 			inner: s,
 			name,
 			queue_size: queue_size.clone(),
-			queue_size_warning: 1,
+			queue_size_warning,
 			warning_fired: Arc::new(AtomicBool::new(false)),
 			creation_backtrace: Arc::new(Backtrace::capture()),
 		};

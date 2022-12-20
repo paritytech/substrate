@@ -208,7 +208,7 @@ where
 			&params.network_config.transport,
 		)?;
 
-		let (to_worker, from_service) = tracing_unbounded("mpsc_network_worker");
+		let (to_worker, from_service) = tracing_unbounded("mpsc_network_worker", 100_000);
 
 		if let Some(path) = &params.network_config.net_config_path {
 			fs::create_dir_all(path)?;
