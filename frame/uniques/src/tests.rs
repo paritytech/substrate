@@ -878,7 +878,7 @@ fn set_price_should_work() {
 			RuntimeOrigin::signed(user_id),
 			collection_id,
 			item_1,
-			Some(1),
+			Some(1.into()),
 			None,
 		));
 
@@ -886,22 +886,22 @@ fn set_price_should_work() {
 			RuntimeOrigin::signed(user_id),
 			collection_id,
 			item_2,
-			Some(2),
+			Some(2.into()),
 			Some(3)
 		));
 
 		let item = ItemPriceOf::<Test>::get(collection_id, item_1).unwrap();
-		assert_eq!(item.0, 1);
+		assert_eq!(item.0, 1.into());
 		assert_eq!(item.1, None);
 
 		let item = ItemPriceOf::<Test>::get(collection_id, item_2).unwrap();
-		assert_eq!(item.0, 2);
+		assert_eq!(item.0, 2.into());
 		assert_eq!(item.1, Some(3));
 
 		assert!(events().contains(&Event::<Test>::ItemPriceSet {
 			collection: collection_id,
 			item: item_1,
-			price: 1,
+			price: 1.into(),
 			whitelisted_buyer: None,
 		}));
 
@@ -949,7 +949,7 @@ fn buy_item_should_work() {
 			RuntimeOrigin::signed(user_1),
 			collection_id,
 			item_1,
-			Some(price_1),
+			Some(price_1.into()),
 			None,
 		));
 
@@ -957,13 +957,13 @@ fn buy_item_should_work() {
 			RuntimeOrigin::signed(user_1),
 			collection_id,
 			item_2,
-			Some(price_2),
+			Some(price_2.into()),
 			Some(user_3),
 		));
 
 		// can't buy for less
 		assert_noop!(
-			Uniques::buy_item(RuntimeOrigin::signed(user_2), collection_id, item_1, 1),
+			Uniques::buy_item(RuntimeOrigin::signed(user_2), collection_id, item_1, 1.into()),
 			Error::<Test>::BidTooLow
 		);
 
@@ -972,7 +972,7 @@ fn buy_item_should_work() {
 			RuntimeOrigin::signed(user_2),
 			collection_id,
 			item_1,
-			price_1 + 1,
+			(price_1 + 1).into(),
 		));
 
 		// validate the new owner & balances
@@ -983,13 +983,13 @@ fn buy_item_should_work() {
 
 		// can't buy from yourself
 		assert_noop!(
-			Uniques::buy_item(RuntimeOrigin::signed(user_1), collection_id, item_2, price_2),
+			Uniques::buy_item(RuntimeOrigin::signed(user_1), collection_id, item_2, price_2.into()),
 			Error::<Test>::NoPermission
 		);
 
 		// can't buy when the item is listed for a specific buyer
 		assert_noop!(
-			Uniques::buy_item(RuntimeOrigin::signed(user_2), collection_id, item_2, price_2),
+			Uniques::buy_item(RuntimeOrigin::signed(user_2), collection_id, item_2, price_2.into()),
 			Error::<Test>::NoPermission
 		);
 
@@ -998,13 +998,13 @@ fn buy_item_should_work() {
 			RuntimeOrigin::signed(user_3),
 			collection_id,
 			item_2,
-			price_2,
+			price_2.into()
 		));
 
 		assert!(events().contains(&Event::<Test>::ItemBought {
 			collection: collection_id,
 			item: item_2,
-			price: price_2,
+			price: price_2.into(),
 			seller: user_1,
 			buyer: user_3,
 		}));
@@ -1014,7 +1014,7 @@ fn buy_item_should_work() {
 
 		// can't buy when item is not for sale
 		assert_noop!(
-			Uniques::buy_item(RuntimeOrigin::signed(user_2), collection_id, item_3, price_2),
+			Uniques::buy_item(RuntimeOrigin::signed(user_2), collection_id, item_3, price_2.into()),
 			Error::<Test>::NotForSale
 		);
 
@@ -1024,7 +1024,7 @@ fn buy_item_should_work() {
 				RuntimeOrigin::signed(user_1),
 				collection_id,
 				item_3,
-				Some(price_1),
+				Some(price_1.into()),
 				None,
 			));
 
@@ -1034,7 +1034,7 @@ fn buy_item_should_work() {
 			let buy_item_call = mock::RuntimeCall::Uniques(crate::Call::<Test>::buy_item {
 				collection: collection_id,
 				item: item_3,
-				bid_price: price_1,
+				bid_price: price_1.into(),
 			});
 			assert_noop!(
 				buy_item_call.dispatch(RuntimeOrigin::signed(user_2)),
@@ -1049,7 +1049,7 @@ fn buy_item_should_work() {
 			let buy_item_call = mock::RuntimeCall::Uniques(crate::Call::<Test>::buy_item {
 				collection: collection_id,
 				item: item_3,
-				bid_price: price_1,
+				bid_price: price_1.into(),
 			});
 			assert_noop!(
 				buy_item_call.dispatch(RuntimeOrigin::signed(user_2)),

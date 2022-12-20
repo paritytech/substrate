@@ -15,20 +15,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test environment for Uniques pallet.
+//! Test environment for Dex pallet.
 
 use super::*;
-use crate as pallet_uniques;
+use crate as pallet_dex;
 
 use frame_support::{
 	construct_runtime,
+	instances::{Instance1, Instance2},
+	parameter_types,
 	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64},
+	PalletId,
 };
+use frame_system::{EnsureSigned, EnsureSignedBy};
 use sp_core::H256;
+use sp_keystore::{testing::KeyStore, KeystoreExt};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
+use std::sync::Arc;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -39,10 +45,11 @@ construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Assets: pallet_assets,
-		Uniques: pallet_uniques::{Pallet, Call, Storage, Event<T>},
+		System: frame_system,
+		Balances: pallet_balances,
+		Assets: pallet_assets::<Instance1>,
+		PoolAssets: pallet_assets::<Instance2>,
+		Dex: pallet_dex,
 	}
 );
 
@@ -85,11 +92,13 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 }
 
-impl pallet_assets::Config for Test {
-	type Event = Event;
+impl pallet_assets::Config<Instance1> for Test {
+	type RuntimeEvent = RuntimeEvent;
 	type Balance = u64;
+	type RemoveItemsLimit = ConstU32<1000>;
 	type AssetId = u32;
 	type Currency = Balances;
+	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<u64>>;
 	type ForceOrigin = frame_system::EnsureRoot<u64>;
 	type AssetDeposit = ConstU64<1>;
 	type AssetAccountDeposit = ConstU64<10>;
@@ -98,38 +107,65 @@ impl pallet_assets::Config for Test {
 	type ApprovalDeposit = ConstU64<1>;
 	type StringLimit = ConstU32<50>;
 	type Freezer = ();
-	type WeightInfo = ();
 	type Extra = ();
+	type WeightInfo = ();
+}
+
+impl pallet_assets::Config<Instance2> for Test {
+	type RuntimeEvent = RuntimeEvent;
+	type Balance = u64;
+	type RemoveItemsLimit = ConstU32<1000>;
+	type AssetId = u32;
+	type Currency = Balances;
+	type CreateOrigin = AsEnsureOriginWithArg<EnsureSignedBy<DexAccount, u64>>;
+	type ForceOrigin = frame_system::EnsureRoot<u64>;
+	type AssetDeposit = ConstU64<0>;
+	type AssetAccountDeposit = ConstU64<0>;
+	type MetadataDepositBase = ConstU64<0>;
+	type MetadataDepositPerByte = ConstU64<0>;
+	type ApprovalDeposit = ConstU64<0>;
+	type StringLimit = ConstU32<50>;
+	type Freezer = ();
+	type Extra = ();
+	type WeightInfo = ();
+}
+
+parameter_types! {
+	pub const DexPalletId: PalletId = PalletId(*b"py/dexer");
+	pub storage AllowMultiAssetPools: bool = true;
+}
+
+frame_support::ord_parameter_types! {
+	pub const DexAccount: u64 = 33; //TODO: this should be DexPalletId
 }
 
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type CollectionId = u32;
-	type ItemId = u32;
+	type Fee = ConstU64<3>;
 	type Currency = Balances;
-	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
-	type Assets = Assets;
+	type AssetBalance = <Self as pallet_balances::Config>::Balance;
 	type AssetId = u32;
-	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<u64>>;
-	type ForceOrigin = frame_system::EnsureRoot<u64>;
-	type Locker = ();
-	type CollectionDeposit = ConstU64<2>;
-	type ItemDeposit = ConstU64<1>;
-	type MetadataDepositBase = ConstU64<1>;
-	type AttributeDepositBase = ConstU64<1>;
-	type DepositPerByte = ConstU64<1>;
-	type StringLimit = ConstU32<50>;
-	type KeyLimit = ConstU32<50>;
-	type ValueLimit = ConstU32<50>;
+	type PoolAssetId = u32;
+	type Assets = Assets;
+	type PoolAssets = PoolAssets;
+	type PalletId = DexPalletId;
 	type WeightInfo = ();
-	#[cfg(feature = "runtime-benchmarks")]
-	type Helper = ();
+	type AllowMultiAssetPools = AllowMultiAssetPools;
+	type MaxSwapPathLength = ConstU32<4>;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
+	pallet_balances::GenesisConfig::<Test> {
+		balances: vec![(1, 1000), (2, 2000), (3, 3000), (4, 4000)],
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
+
+	let keystore = KeyStore::new();
 	let mut ext = sp_io::TestExternalities::new(t);
+	ext.register_extension(KeystoreExt(Arc::new(keystore)));
 	ext.execute_with(|| System::set_block_number(1));
 	ext
 }

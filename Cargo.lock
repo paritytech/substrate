@@ -3080,6 +3080,8 @@ dependencies = [
  "pallet-contracts-primitives",
  "pallet-conviction-voting",
  "pallet-democracy",
+ "pallet-dex",
+ "pallet-dex-rpc-runtime-api",
  "pallet-election-provider-multi-phase",
  "pallet-election-provider-support-benchmarking",
  "pallet-elections-phragmen",
@@ -4222,6 +4224,7 @@ dependencies = [
  "pallet-asset-tx-payment",
  "pallet-assets",
  "pallet-balances",
+ "pallet-dex",
  "pallet-im-online",
  "pallet-timestamp",
  "pallet-transaction-payment",
@@ -4298,6 +4301,7 @@ dependencies = [
  "node-testing",
  "pallet-balances",
  "pallet-contracts",
+ "pallet-dex",
  "pallet-im-online",
  "pallet-root-testing",
  "pallet-sudo",
@@ -4355,6 +4359,7 @@ dependencies = [
  "jsonrpsee",
  "mmr-rpc",
  "node-primitives",
+ "pallet-dex-rpc",
  "pallet-transaction-payment-rpc",
  "sc-chain-spec",
  "sc-client-api",
@@ -4481,6 +4486,7 @@ dependencies = [
  "node-primitives",
  "pallet-asset-tx-payment",
  "pallet-assets",
+ "pallet-dex",
  "pallet-transaction-payment",
  "parity-scale-codec",
  "sc-block-builder",
@@ -5086,6 +5092,48 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+]
+
+[[package]]
+name = "pallet-dex"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-assets",
+ "pallet-balances",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-keystore",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-dex-rpc"
+version = "4.0.0-dev"
+dependencies = [
+ "jsonrpsee",
+ "pallet-dex-rpc-runtime-api",
+ "parity-scale-codec",
+ "sp-api",
+ "sp-blockchain",
+ "sp-core",
+ "sp-rpc",
+ "sp-runtime",
+]
+
+[[package]]
+name = "pallet-dex-rpc-runtime-api"
+version = "4.0.0-dev"
+dependencies = [
+ "pallet-dex",
+ "parity-scale-codec",
+ "sp-api",
+ "sp-runtime",
 ]
 
 [[package]]
@@ -6038,6 +6086,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "log",
+ "pallet-assets",
  "pallet-balances",
  "parity-scale-codec",
  "scale-info",
@@ -9302,7 +9351,7 @@ dependencies = [
 
 [[package]]
 name = "sp-rpc"
-version = "6.0.0"
+version = "7.0.0"
 dependencies = [
  "rustc-hash",
  "serde",

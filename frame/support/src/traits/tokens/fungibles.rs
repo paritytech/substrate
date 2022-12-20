@@ -23,7 +23,7 @@ use super::{
 };
 use crate::dispatch::{DispatchError, DispatchResult};
 use sp_runtime::traits::Saturating;
-use sp_std::vec::Vec;
+use sp_std::prelude::*;
 
 pub mod approvals;
 mod balanced;
