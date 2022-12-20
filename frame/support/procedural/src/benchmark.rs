@@ -1,6 +1,9 @@
 use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
-use syn::{parse_macro_input, spanned::Spanned, Expr, FnArg, ItemFn, ItemMod, Pat, Stmt, Type};
+use syn::{
+	parse_macro_input, spanned::Spanned, Error, Expr, FnArg, ItemFn, ItemMod, Pat, Result, Stmt,
+	Type,
+};
 
 mod keywords {
 	syn::custom_keyword!(extrinsic_call);
@@ -22,7 +25,7 @@ struct BenchmarkDef {
 }
 
 impl BenchmarkDef {
-	pub fn from(item_fn: &ItemFn) -> Option<BenchmarkDef> {
+	pub fn from(item_fn: &ItemFn) -> Result<BenchmarkDef> {
 		let mut i = 0; // index of child
 		let params: Vec<(String, String, u32, u32)> = Vec::new();
 		for arg in &item_fn.sig.inputs {
@@ -54,7 +57,7 @@ impl BenchmarkDef {
 						) {
 							let mut fn_call_copy = fn_call.clone();
 							fn_call_copy.attrs.remove(k); // consume #[extrinsic call]
-							return Some(BenchmarkDef {
+							return Ok(BenchmarkDef {
 								params,
 								setup_stmts: Vec::from(&item_fn.block.stmts[0..i]),
 								extrinsic_call_stmt: Stmt::Semi(
@@ -72,7 +75,10 @@ impl BenchmarkDef {
 			}
 			i += 1;
 		}
-		return None
+		return Err(Error::new(
+			item_fn.block.brace_token.span,
+			"Missing #[extrinsic_call] annotation in benchmark function body.",
+		))
 	}
 }
 
@@ -100,12 +106,8 @@ pub fn benchmarks(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 pub fn benchmark(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 	let item_fn = parse_macro_input!(tokens as ItemFn);
 	let benchmark_def = match BenchmarkDef::from(&item_fn) {
-		Some(def) => def,
-		None =>
-			return emit_error(
-				&item_fn.block.to_token_stream(),
-				"Missing #[extrinsic_call] annotation in benchmark function body.",
-			),
+		Ok(def) => def,
+		Err(err) => return err.to_compile_error().into(),
 	};
 	let name = item_fn.sig.ident;
 	let krate = quote!(::frame_benchmarking);
