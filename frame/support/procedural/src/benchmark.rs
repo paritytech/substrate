@@ -178,7 +178,7 @@ pub fn benchmark(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 	};
 	let name = item_fn.sig.ident;
 	let krate = quote!(::frame_benchmarking);
-	let support = quote!(::frame_support);
+	let home = quote!(::frame_support);
 	let setup_stmts = benchmark_def.setup_stmts;
 	let extrinsic_call_stmt = benchmark_def.extrinsic_call_stmt;
 	let verify_stmts = benchmark_def.verify_stmts;
@@ -186,7 +186,7 @@ pub fn benchmark(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 	let param_names = unrolled.param_names;
 	let param_ranges = unrolled.param_ranges;
 	let res = quote! {
-		#support::assert_impl_all!(#support::Linear<0, 1>: #support::ParamRange);
+		#home::assert_impl_all!(#home::Linear<0, 1>: #home::ParamRange);
 
 		#[allow(non_camel_case_types)]
 		struct #name;
