@@ -610,7 +610,7 @@ where
 		}
 
 		self.client
-			.header(BlockId::Hash(hash))
+			.header(hash)
 			.map(|opt_header| opt_header.map(|h| format!("0x{:?}", HexDisplay::from(&h.encode()))))
 			.map_err(ChainHeadRpcError::FetchBlockHeader)
 			.map_err(Into::into)
