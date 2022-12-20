@@ -18,6 +18,7 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
+/// Either the native asset of the parachain OR an asset from the configured assets pallet.
 #[derive(
 	Decode,
 	Encode,
@@ -33,11 +34,13 @@ use scale_info::TypeInfo;
 	PartialOrd,
 )]
 pub enum MultiAssetId<AssetId> {
+	/// Native asset. For example on statemint this would be dot.
 	#[default]
 	Native,
 	Asset(AssetId),
 }
 
+/// Stores what lp_token a particular pool has.
 #[derive(Decode, Encode, Default, PartialEq, Eq, MaxEncodedLen, TypeInfo)]
 pub struct PoolInfo<PoolAssetId> {
 	/// Liquidity pool asset
