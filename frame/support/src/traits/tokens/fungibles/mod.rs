@@ -159,8 +159,8 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 		force: bool,
 	) -> Result<Self::Balance, DispatchError>;
 
-	/// Attempt to increase the `asset` balance of `who` by `amount`.
-	///
+	/// Attempt to reduce the `asset` balance of `who` by `amount`.
+c	///
 	/// Equivalent to `burn_from`, except with an expectation that within the bounds of some
 	/// universal issuance, the total assets `suspend`ed and `resume`d will be equivalent. The
 	/// implementation may be configured such that the total assets suspended may never be less than
@@ -169,7 +169,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 	///
 	/// Because of this expectation, any metadata associated with the asset is expected to survive
 	/// the suspect-resume cycle.
-	fn suspend(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> DispatchResult {
+	fn shelve(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> DispatchResult {
 		Self::burn_from(asset, who, amount, false, false).map(|_| ())
 	}
 
@@ -183,7 +183,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 	///
 	/// Because of this expectation, any metadata associated with the asset is expected to survive
 	/// the suspect-resume cycle.
-	fn resume(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> DispatchResult {
+	fn restore(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> DispatchResult {
 		Self::mint_into(asset, who, amount)
 	}
 

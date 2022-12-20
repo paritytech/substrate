@@ -167,10 +167,10 @@ impl<T: Config<I>, I: 'static> fungible::Mutate<T::AccountId> for Pallet<T, I> {
 	fn done_burn_from(who: &T::AccountId, amount: Self::Balance) {
 		Self::deposit_event(Event::<T, I>::Burned { who: who.clone(), amount: amount });
 	}
-	fn done_suspend(who: &T::AccountId, amount: Self::Balance) {
+	fn done_shelve(who: &T::AccountId, amount: Self::Balance) {
 		Self::deposit_event(Event::<T, I>::Suspended { who: who.clone(), amount: amount });
 	}
-	fn done_resume(who: &T::AccountId, amount: Self::Balance) {
+	fn done_restore(who: &T::AccountId, amount: Self::Balance) {
 		Self::deposit_event(Event::<T, I>::Restored { who: who.clone(), amount: amount });
 	}
 	fn done_transfer(source: &T::AccountId, dest: &T::AccountId, amount: Self::Balance) {

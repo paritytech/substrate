@@ -138,13 +138,13 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	///
 	/// Because of this expectation, any metadata associated with the asset is expected to survive
 	/// the suspect-resume cycle.
-	fn suspend(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
+	fn shelve(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
 		let actual = Self::reducible_balance(who, KeepAlive::CanKill, false).min(amount);
 		ensure!(actual == amount, TokenError::FundsUnavailable);
 		Self::total_issuance().checked_sub(&actual).ok_or(ArithmeticError::Overflow)?;
 		let actual = Self::decrease_balance(who, actual, true, KeepAlive::CanKill)?;
 		Self::set_total_issuance(Self::total_issuance().saturating_sub(actual));
-		Self::done_suspend(who, actual);
+		Self::done_shelve(who, actual);
 		Ok(actual)
 	}
 
@@ -158,11 +158,11 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	///
 	/// Because of this expectation, any metadata associated with the asset is expected to survive
 	/// the suspect-resume cycle.
-	fn resume(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
+	fn restore(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
 		Self::total_issuance().checked_add(&amount).ok_or(ArithmeticError::Overflow)?;
 		let actual = Self::increase_balance(who, amount, false)?;
 		Self::set_total_issuance(Self::total_issuance().saturating_add(actual));
-		Self::done_resume(who, amount);
+		Self::done_restore(who, amount);
 		Ok(actual)
 	}
 
@@ -186,7 +186,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 
 	fn done_mint_into(_who: &AccountId, _amount: Self::Balance) {}
 	fn done_burn_from(_who: &AccountId, _amount: Self::Balance) {}
-	fn done_suspend(_who: &AccountId, _amount: Self::Balance) {}
-	fn done_resume(_who: &AccountId, _amount: Self::Balance) {}
+	fn done_shelve(_who: &AccountId, _amount: Self::Balance) {}
+	fn done_restore(_who: &AccountId, _amount: Self::Balance) {}
 	fn done_transfer(_source: &AccountId, _dest: &AccountId, _amount: Self::Balance) {}
 }
