@@ -33,7 +33,7 @@ trie-db = { version = "0.24.0", default-features = false }
 trie-root = { version = "0.17.0", default-features = false }
 sp-core = { version = "7.0.0", default-features = false, path = "../core" }
 sp-std = { version = "5.0.0", default-features = false, path = "../std" }
-schnellru = { version = "0.1", optional = true }
+schnellru = { version = "0.1.1", optional = true }
 
 [dev-dependencies]
 array-bytes = "4.1"
