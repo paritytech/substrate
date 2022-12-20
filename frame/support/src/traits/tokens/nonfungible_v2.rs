@@ -135,7 +135,7 @@ pub trait Transfer<AccountId>: Inspect<AccountId> {
 	fn transfer(item: &Self::ItemId, destination: &AccountId) -> DispatchResult;
 }
 
-/// Convert a `fungibles` trait implementation into a `fungible` trait implementation by identifying
+/// Convert a `nonfungibles` trait implementation into a `nonfungible` trait implementation by identifying
 /// a single item.
 pub struct ItemOf<
 	F: nonfungibles::Inspect<AccountId>,
