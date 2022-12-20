@@ -8333,6 +8333,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "pin-project",
  "rand 0.7.3",
+ "sc-utils",
  "serde",
  "serde_json",
  "thiserror",
