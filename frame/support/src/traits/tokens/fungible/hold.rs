@@ -72,7 +72,7 @@ pub trait InspectHold<AccountId>: Inspect<AccountId> {
 		ensure!(Self::hold_available(reason, who), TokenError::CannotCreateHold);
 		ensure!(
 			amount <= Self::reducible_balance(who, KeepAlive::NoKill, false),
-			TokenError::NoFunds
+			TokenError::FundsUnavailable
 		);
 		Ok(())
 	}
@@ -241,7 +241,7 @@ impl<AccountId, U: Unbalanced<AccountId> + UnbalancedHold<AccountId> + InspectHo
 			amount = amount.min(liquid).min(have);
 		} else {
 			ensure!(amount <= liquid, TokenError::Frozen);
-			ensure!(amount <= have, TokenError::NoFunds);
+			ensure!(amount <= have, TokenError::FundsUnavailable);
 		}
 
 		// We want to make sure we can deposit the amount in advance. If we can't then something is

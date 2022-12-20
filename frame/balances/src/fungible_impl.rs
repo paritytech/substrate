@@ -18,7 +18,6 @@
 //! Implementation of `fungible` traits for Balances pallet.
 use super::*;
 use frame_support::traits::{
-	fungible::CreditOf,
 	tokens::KeepAlive::{self, Keep, NoKill},
 };
 
@@ -46,7 +45,7 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 		if !force {
 			// Frozen balance applies to total. Anything on hold therefore gets discounted from the
 			// limit given by the freezes.
-			untouchable = a.fee_frozen.max(a.misc_frozen).saturating_sub(a.reserved);
+			untouchable = a.frozen.saturating_sub(a.reserved);
 		}
 		let is_provider = !a.free.is_zero();
 		let must_remain = !frame_system::Pallet::<T>::can_dec_provider(who) || keep_alive == NoKill;
@@ -59,74 +58,77 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 		a.free.saturating_sub(untouchable)
 	}
 	fn can_deposit(who: &T::AccountId, amount: Self::Balance, mint: bool) -> DepositConsequence {
-		Self::deposit_consequence(who, amount, &Self::account(who), mint)
+		if amount.is_zero() {
+			return DepositConsequence::Success
+		}
+
+		if mint && TotalIssuance::<T, I>::get().checked_add(&amount).is_none() {
+			return DepositConsequence::Overflow
+		}
+
+		let account = Self::account(who);
+		let new_free = match account.free.checked_add(&amount) {
+			None => return DepositConsequence::Overflow,
+			Some(x) if x < T::ExistentialDeposit::get() => return DepositConsequence::BelowMinimum,
+			Some(x) => x,
+		};
+
+		match account.reserved.checked_add(&new_free) {
+			Some(_) => {},
+			None => return DepositConsequence::Overflow,
+		};
+
+		// NOTE: We assume that we are a provider, so don't need to do any checks in the
+		// case of account creation.
+
+		DepositConsequence::Success
 	}
 	fn can_withdraw(
 		who: &T::AccountId,
 		amount: Self::Balance,
 	) -> WithdrawConsequence<Self::Balance> {
-		Self::withdraw_consequence(who, amount, &Self::account(who))
-	}
-}
-
-impl<T: Config<I>, I: 'static> fungible::Mutate<T::AccountId> for Pallet<T, I> {
-	fn mint_into(who: &T::AccountId, amount: Self::Balance) -> DispatchResult {
 		if amount.is_zero() {
-			return Ok(())
+			return WithdrawConsequence::Success
 		}
-		Self::try_mutate_account(who, |account, _is_new| -> DispatchResult {
-			Self::deposit_consequence(who, amount, account, true).into_result()?;
-			account.free += amount;
-			Ok(())
-		})?;
-		TotalIssuance::<T, I>::mutate(|t| *t += amount);
-		Self::deposit_event(Event::Deposit { who: who.clone(), amount });
-		Ok(())
-	}
 
-	fn burn_from(
-		who: &T::AccountId,
-		amount: Self::Balance,
-		// TODO: respect these:
-		best_effort: bool,
-		force: bool,
-	) -> Result<Self::Balance, DispatchError> {
-		if amount.is_zero() {
-			return Ok(Self::Balance::zero())
+		if TotalIssuance::<T, I>::get().checked_sub(&amount).is_none() {
+			return WithdrawConsequence::Underflow
 		}
-		let actual = Self::try_mutate_account(
-			who,
-			|account, _is_new| -> Result<T::Balance, DispatchError> {
-				let extra = Self::withdraw_consequence(who, amount, account).into_result()?;
-				let actual = amount + extra;
-				account.free -= actual;
-				Ok(actual)
-			},
-		)?;
-		TotalIssuance::<T, I>::mutate(|t| *t -= actual);
-		Self::deposit_event(Event::Withdraw { who: who.clone(), amount });
-		Ok(actual)
-	}
-}
 
-impl<T: Config<I>, I: 'static> fungible::Transfer<T::AccountId> for Pallet<T, I> {
-	fn transfer(
-		source: &T::AccountId,
-		dest: &T::AccountId,
-		amount: T::Balance,
-		keep_alive: KeepAlive,
-	) -> Result<T::Balance, DispatchError> {
-		// TODO: Use other impl.
-		let er = if keep_alive == KeepAlive::CanKill { AllowDeath } else { KeepAlive };
-		<Self as Currency<T::AccountId>>::transfer(source, dest, amount, er).map(|_| amount)
-	}
+		let account = Self::account(who);
+		let new_free_balance = match account.free.checked_sub(&amount) {
+			Some(x) => x,
+			None => return WithdrawConsequence::BalanceLow,
+		};
 
-	fn deactivate(amount: Self::Balance) {
-		InactiveIssuance::<T, I>::mutate(|b| b.saturating_accrue(amount));
-	}
+		let liquid = Self::reducible_balance(who, CanKill, false);
+		if amount > liquid {
+			return WithdrawConsequence::Frozen;
+		}
 
-	fn reactivate(amount: Self::Balance) {
-		InactiveIssuance::<T, I>::mutate(|b| b.saturating_reduce(amount));
+		// Provider restriction - total account balance cannot be reduced to zero if it cannot
+		// sustain the loss of a provider reference.
+		// NOTE: This assumes that the pallet is a provider (which is true). Is this ever changes,
+		// then this will need to adapt accordingly.
+		let ed = T::ExistentialDeposit::get();
+		let success = if new_free_balance < ed {
+			if frame_system::Pallet::<T>::can_dec_provider(who) {
+				WithdrawConsequence::ReducedToZero(new_free_balance)
+			} else {
+				return WithdrawConsequence::WouldDie
+			}
+		} else {
+			WithdrawConsequence::Success
+		};
+
+		let new_total_balance = new_free_balance.saturating_add(account.reserved);
+
+		// Eventual free funds must be no less than the frozen balance.
+		if new_total_balance < account.frozen {
+			return WithdrawConsequence::Frozen
+		}
+
+		success
 	}
 }
 
@@ -148,7 +150,35 @@ impl<T: Config<I>, I: 'static> fungible::Unbalanced<T::AccountId> for Pallet<T, 
 	fn set_total_issuance(amount: Self::Balance) {
 		TotalIssuance::<T, I>::mutate(|t| *t = amount);
 	}
+
+	fn deactivate(amount: Self::Balance) {
+		InactiveIssuance::<T, I>::mutate(|b| b.saturating_accrue(amount));
+	}
+
+	fn reactivate(amount: Self::Balance) {
+		InactiveIssuance::<T, I>::mutate(|b| b.saturating_reduce(amount));
+	}
 }
+
+impl<T: Config<I>, I: 'static> fungible::Mutate<T::AccountId> for Pallet<T, I> {
+	fn done_mint_into(who: &T::AccountId, amount: Self::Balance) {
+		Self::deposit_event(Event::<T, I>::Minted { who: who.clone(), amount: amount });
+	}
+	fn done_burn_from(who: &T::AccountId, amount: Self::Balance) {
+		Self::deposit_event(Event::<T, I>::Burned { who: who.clone(), amount: amount });
+	}
+	fn done_suspend(who: &T::AccountId, amount: Self::Balance) {
+		Self::deposit_event(Event::<T, I>::Suspended { who: who.clone(), amount: amount });
+	}
+	fn done_resume(who: &T::AccountId, amount: Self::Balance) {
+		Self::deposit_event(Event::<T, I>::Restored { who: who.clone(), amount: amount });
+	}
+	fn done_transfer(source: &T::AccountId, dest: &T::AccountId, amount: Self::Balance) {
+		Self::deposit_event(Event::<T, I>::Transfer { from: source.clone(), to: dest.clone(), amount });
+	}
+}
+
+// TODO: Events for the other things.
 
 impl<T: Config<I>, I: 'static> fungible::InspectHold<T::AccountId> for Pallet<T, I> {
 	type Reason = T::ReserveIdentifier;
@@ -164,7 +194,7 @@ impl<T: Config<I>, I: 'static> fungible::InspectHold<T::AccountId> for Pallet<T,
 		} else {
 			// The freeze lock applies to the total balance, so we can discount the free balance
 			// from the amount which the total reserved balance must provide to satusfy it.
-			a.fee_frozen.max(a.misc_frozen).saturating_sub(a.free)
+			a.frozen.saturating_sub(a.free)
 		};
 		a.reserved.saturating_sub(unavailable)
 	}

@@ -606,7 +606,7 @@ impl From<crate::traits::BadOrigin> for DispatchError {
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum TokenError {
 	/// Funds are unavailable.
-	NoFunds,
+	FundsUnavailable,
 	/// Account that must exist would die.
 	WouldDie,
 	/// Account cannot exist with the funds that would be given.
@@ -626,7 +626,7 @@ pub enum TokenError {
 impl From<TokenError> for &'static str {
 	fn from(e: TokenError) -> &'static str {
 		match e {
-			TokenError::NoFunds => "Funds are unavailable",
+			TokenError::FundsUnavailable => "Funds are unavailable",
 			TokenError::WouldDie => "Account that must exist would die",
 			TokenError::BelowMinimum => "Account cannot exist with the funds that would be given",
 			TokenError::CannotCreate => "Account cannot be created",
@@ -1020,7 +1020,7 @@ mod tests {
 			Module(ModuleError { index: 2, error: [1, 0, 0, 0], message: None }),
 			ConsumerRemaining,
 			NoProviders,
-			Token(TokenError::NoFunds),
+			Token(TokenError::FundsUnavailable),
 			Token(TokenError::WouldDie),
 			Token(TokenError::BelowMinimum),
 			Token(TokenError::CannotCreate),

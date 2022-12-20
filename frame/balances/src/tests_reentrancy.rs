@@ -31,7 +31,7 @@ use sp_runtime::{testing::Header, traits::IdentityLookup};
 use crate::*;
 use frame_support::{
 	assert_ok,
-	traits::{Currency, ReservableCurrency},
+	traits::Currency,
 };
 use frame_system::RawOrigin;
 use tests_composite::TestId;

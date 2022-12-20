@@ -426,12 +426,12 @@ pub mod pallet {
 			dest: AccountIdLookupOf<T>,
 			keep_alive: bool,
 		) -> DispatchResult {
-			use fungible::{Inspect, Transfer};
+			use fungible::{Inspect, Mutate};
 			let transactor = ensure_signed(origin)?;
 			let keep_alive = if keep_alive { Keep } else { CanKill };
 			let reducible_balance = Self::reducible_balance(&transactor, keep_alive, false);
 			let dest = T::Lookup::lookup(dest)?;
-			<Self as Transfer<_>>::transfer(&transactor, &dest, reducible_balance, keep_alive)?;
+			<Self as Mutate<_>>::transfer(&transactor, &dest, reducible_balance, keep_alive)?;
 			Ok(())
 		}
 
@@ -482,6 +482,14 @@ pub mod pallet {
 		Withdraw { who: T::AccountId, amount: T::Balance },
 		/// Some amount was removed from the account (e.g. for misbehavior).
 		Slashed { who: T::AccountId, amount: T::Balance },
+		/// Some amount was minted into an account.
+		Minted { who: T::AccountId, amount: T::Balance },
+		/// Some amount was burned from an account.
+		Burned { who: T::AccountId, amount: T::Balance },
+		/// Some amount was suspended from an account (it can be restored later).
+		Suspended { who: T::AccountId, amount: T::Balance },
+		/// Some amount was restored into an account.
+		Restored { who: T::AccountId, amount: T::Balance },
 	}
 
 	#[pallet::error]
@@ -688,7 +696,7 @@ pub struct ReserveData<ReserveIdentifier, Balance> {
 
 /// All balance information for an account.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Default, RuntimeDebug, MaxEncodedLen, TypeInfo)]
-pub struct AccountData<Balance> {
+pub struct OldAccountData<Balance> {
 	/// Non-reserved part of the balance. There may still be restrictions on this, but it is the
 	/// total pool what may in principle be transferred, reserved and used for tipping.
 	///
@@ -706,24 +714,58 @@ pub struct AccountData<Balance> {
 	/// The amount that `free` may not drop below when withdrawing for *anything except transaction
 	/// fee payment*.
 	pub misc_frozen: Balance,
+
 	/// The amount that `free` may not drop below when withdrawing specifically for transaction
 	/// fee payment.
 	pub fee_frozen: Balance,
 }
 
-impl<Balance: Saturating + Copy + Ord> AccountData<Balance> {
-	/// How much this account's balance can be reduced for the given `reasons`.
-	fn usable(&self, reasons: Reasons) -> Balance {
-		self.free.saturating_sub(self.frozen(reasons))
+/// All balance information for an account.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, Default, RuntimeDebug, MaxEncodedLen, TypeInfo)]
+pub struct AccountData<Balance> {
+	/// Non-reserved part of the balance. There may still be restrictions on this, but it is the
+	/// total pool what may in principle be transferred, reserved and used for tipping.
+	///
+	/// This is the only balance that matters in terms of most operations on tokens. It
+	/// alone is used to determine the balance when in the contract execution environment.
+	pub free: Balance,
+	/// Balance which is reserved and may not be used at all.
+	///
+	/// This can still get slashed, but gets slashed last of all.
+	///
+	/// This balance is a 'reserve' balance that other subsystems use in order to set aside tokens
+	/// that are still 'owned' by the account holder, but which are suspendable.
+	/// This includes named reserve and unnamed reserve.
+	pub reserved: Balance,
+	/// The amount that `free` may not drop below when withdrawing for *anything except transaction
+	/// fee payment*.
+	pub frozen: Balance,
+	/// Extra information about this account. The MSB is a flag indicating whether the new ref-
+	/// counting logic is in place for this account.
+	pub flags: ExtraFlags,
+}
+
+const IS_NEW_LOGIC: u128 = 0x80000000_00000000_00000000_00000000u128;
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
+pub struct ExtraFlags(u128);
+impl Default for ExtraFlags {
+	fn default() -> Self {
+		Self(IS_NEW_LOGIC)
 	}
-	/// The amount that this account's free balance may not be reduced beyond for the given
-	/// `reasons`.
-	fn frozen(&self, reasons: Reasons) -> Balance {
-		match reasons {
-			Reasons::All => self.misc_frozen.max(self.fee_frozen),
-			Reasons::Misc => self.misc_frozen,
-			Reasons::Fee => self.fee_frozen,
-		}
+}
+impl ExtraFlags {
+	pub fn set_new_logic(&mut self) {
+		self.0 = self.0 | IS_NEW_LOGIC
+	}
+	pub fn is_new_logic(&self) -> bool {
+		(self.0 & IS_NEW_LOGIC) == IS_NEW_LOGIC
+	}
+}
+
+impl<Balance: Saturating + Copy + Ord> AccountData<Balance> {
+	fn usable(&self) -> Balance {
+		self.free.saturating_sub(self.frozen)
 	}
 	/// The total balance in this account including any that is reserved and ignoring any frozen.
 	fn total(&self) -> Balance {
@@ -745,6 +787,30 @@ impl<T: Config<I>, I: 'static> Drop for DustCleaner<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	/// Ensure the account `who` is using the new logic.
+	pub fn ensure_upgraded(who: &T::AccountId) {
+		let mut a = Self::account(who);
+		if a.flags.is_new_logic() {
+			return
+		}
+		a.flags.set_new_logic();
+		if a.free >= T::ExistentialDeposit::get() {
+			system::Pallet::<T>::inc_providers(who);
+		}
+		if !a.reserved.is_zero() {
+			if !system::Pallet::<T>::can_inc_consumer(who) {
+				// Gah!! We have reserves but no provider refs :(
+				// This shouldn't practically happen, but we need a failsafe anyway: let's give
+				// them enough for an ED.
+				a.free = a.free.min(T::ExistentialDeposit::get());
+				system::Pallet::<T>::inc_providers(who);
+			}
+			let _ = system::Pallet::<T>::inc_consumers(who).defensive();
+		}
+		// Should never fail - we're only setting a bit.
+		let _ = Self::mutate_account(who, |account| *account = a);
+	}
+
 	/// Get the free balance of an account.
 	pub fn free_balance(who: impl sp_std::borrow::Borrow<T::AccountId>) -> T::Balance {
 		Self::account(who.borrow()).free
@@ -753,13 +819,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Get the balance of an account that can be used for transfers, reservations, or any other
 	/// non-locking, non-transaction-fee activity. Will be at most `free_balance`.
 	pub fn usable_balance(who: impl sp_std::borrow::Borrow<T::AccountId>) -> T::Balance {
-		Self::account(who.borrow()).usable(Reasons::Misc)
+		// TODO: use fungible::Inspect
+		Self::account(who.borrow()).usable()
 	}
 
 	/// Get the balance of an account that can be used for paying transaction fees (not tipping,
 	/// or any other kind of fees, though). Will be at most `free_balance`.
 	pub fn usable_balance_for_fees(who: impl sp_std::borrow::Borrow<T::AccountId>) -> T::Balance {
-		Self::account(who.borrow()).usable(Reasons::Fee)
+		Self::account(who.borrow()).usable()
 	}
 
 	/// Get the reserved balance of an account.
@@ -795,83 +862,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		} else {
 			(Some(new), None)
 		}
-	}
-
-	fn deposit_consequence(
-		_who: &T::AccountId,
-		amount: T::Balance,
-		account: &AccountData<T::Balance>,
-		mint: bool,
-	) -> DepositConsequence {
-		if amount.is_zero() {
-			return DepositConsequence::Success
-		}
-
-		if mint && TotalIssuance::<T, I>::get().checked_add(&amount).is_none() {
-			return DepositConsequence::Overflow
-		}
-
-		let new_total_balance = match account.total().checked_add(&amount) {
-			Some(x) => x,
-			None => return DepositConsequence::Overflow,
-		};
-
-		if new_total_balance < T::ExistentialDeposit::get() {
-			return DepositConsequence::BelowMinimum
-		}
-
-		// NOTE: We assume that we are a provider, so don't need to do any checks in the
-		// case of account creation.
-
-		DepositConsequence::Success
-	}
-
-	fn withdraw_consequence(
-		who: &T::AccountId,
-		amount: T::Balance,
-		account: &AccountData<T::Balance>,
-	) -> WithdrawConsequence<T::Balance> {
-		if amount.is_zero() {
-			return WithdrawConsequence::Success
-		}
-
-		if TotalIssuance::<T, I>::get().checked_sub(&amount).is_none() {
-			return WithdrawConsequence::Underflow
-		}
-
-		let new_total_balance = match account.total().checked_sub(&amount) {
-			Some(x) => x,
-			None => return WithdrawConsequence::NoFunds,
-		};
-
-		// Provider restriction - total account balance cannot be reduced to zero if it cannot
-		// sustain the loss of a provider reference.
-		// NOTE: This assumes that the pallet is a provider (which is true). Is this ever changes,
-		// then this will need to adapt accordingly.
-		let ed = T::ExistentialDeposit::get();
-		let success = if new_total_balance < ed {
-			if frame_system::Pallet::<T>::can_dec_provider(who) {
-				WithdrawConsequence::ReducedToZero(new_total_balance)
-			} else {
-				return WithdrawConsequence::WouldDie
-			}
-		} else {
-			WithdrawConsequence::Success
-		};
-
-		// Enough free funds to have them be reduced.
-		let new_free_balance = match account.free.checked_sub(&amount) {
-			Some(b) => b,
-			None => return WithdrawConsequence::NoFunds,
-		};
-
-		// Eventual free funds must be no less than the frozen balance.
-		let min_balance = account.frozen(Reasons::All);
-		if new_free_balance < min_balance {
-			return WithdrawConsequence::Frozen
-		}
-
-		success
 	}
 
 	/// Mutate an account to some new value, or delete it entirely with `None`. Will enforce
@@ -996,15 +986,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 		// No way this can fail since we do not alter the existential balances.
 		let res = Self::mutate_account(who, |b| {
-			b.misc_frozen = Zero::zero();
-			b.fee_frozen = Zero::zero();
+			b.frozen = Zero::zero();
 			for l in locks.iter() {
-				if l.reasons == Reasons::All || l.reasons == Reasons::Misc {
-					b.misc_frozen = b.misc_frozen.max(l.amount);
-				}
-				if l.reasons == Reasons::All || l.reasons == Reasons::Fee {
-					b.fee_frozen = b.fee_frozen.max(l.amount);
-				}
+				b.frozen = b.frozen.max(l.amount);
 			}
 		});
 		debug_assert!(res.is_ok());
@@ -1286,15 +1270,15 @@ where
 	}
 
 	fn active_issuance() -> Self::Balance {
-		<Self as fungible::Inspect<T::AccountId>>::active_issuance()
+		<Self as fungible::Inspect<_>>::active_issuance()
 	}
 
 	fn deactivate(amount: Self::Balance) {
-		<Self as fungible::Transfer<T::AccountId>>::deactivate(amount);
+		<Self as fungible::Unbalanced<_>>::deactivate(amount);
 	}
 
 	fn reactivate(amount: Self::Balance) {
-		<Self as fungible::Transfer<T::AccountId>>::reactivate(amount);
+		<Self as fungible::Unbalanced<_>>::reactivate(amount);
 	}
 
 	fn minimum_balance() -> Self::Balance {
@@ -1347,14 +1331,13 @@ where
 	fn ensure_can_withdraw(
 		who: &T::AccountId,
 		amount: T::Balance,
-		reasons: WithdrawReasons,
+		_reasons: WithdrawReasons,
 		new_balance: T::Balance,
 	) -> DispatchResult {
 		if amount.is_zero() {
 			return Ok(())
 		}
-		let min_balance = Self::account(who).frozen(reasons.into());
-		ensure!(new_balance >= min_balance, Error::<T, I>::LiquidityRestrictions);
+		ensure!(new_balance >= Self::account(who).frozen, Error::<T, I>::LiquidityRestrictions);
 		Ok(())
 	}
 

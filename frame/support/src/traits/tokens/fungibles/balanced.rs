@@ -203,7 +203,7 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		if best_effort {
 			amount = amount.min(free);
 		}
-		let new_free = free.checked_sub(&amount).ok_or(TokenError::NoFunds)?;
+		let new_free = free.checked_sub(&amount).ok_or(TokenError::FundsUnavailable)?;
 		Self::set_balance(asset, who, new_free)?;
 		Ok(amount)
 	}
@@ -291,7 +291,7 @@ pub trait UnbalancedHold<AccountId>: InspectHold<AccountId> {
 		if best_effort {
 			amount = amount.min(old_balance);
 		}
-		let new_balance = old_balance.checked_sub(&amount).ok_or(TokenError::NoFunds)?;
+		let new_balance = old_balance.checked_sub(&amount).ok_or(TokenError::FundsUnavailable)?;
 		Self::set_balance_on_hold(asset, reason, who, new_balance)?;
 		Ok(amount)
 	}

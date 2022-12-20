@@ -61,54 +61,6 @@ impl<
 }
 
 impl<
-		F: fungibles::Mutate<AccountId>,
-		A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,
-		AccountId,
-	> Mutate<AccountId> for ItemOf<F, A, AccountId>
-{
-	fn mint_into(who: &AccountId, amount: Self::Balance) -> DispatchResult {
-		<F as fungibles::Mutate<AccountId>>::mint_into(A::get(), who, amount)
-	}
-	fn burn_from(
-		who: &AccountId,
-		amount: Self::Balance,
-		best_effort: bool,
-		force: bool,
-	) -> Result<Self::Balance, DispatchError> {
-		<F as fungibles::Mutate<AccountId>>::burn_from(A::get(), who, amount, best_effort, force)
-	}
-	fn suspend(who: &AccountId, amount: Self::Balance) -> DispatchResult {
-		<F as fungibles::Mutate<AccountId>>::suspend(A::get(), who, amount)
-	}
-
-	fn resume(who: &AccountId, amount: Self::Balance) -> DispatchResult {
-		<F as fungibles::Mutate<AccountId>>::resume(A::get(), who, amount)
-	}
-}
-
-impl<
-		F: fungibles::Transfer<AccountId>,
-		A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,
-		AccountId,
-	> Transfer<AccountId> for ItemOf<F, A, AccountId>
-{
-	fn transfer(
-		source: &AccountId,
-		dest: &AccountId,
-		amount: Self::Balance,
-		keep_alive: KeepAlive,
-	) -> Result<Self::Balance, DispatchError> {
-		<F as fungibles::Transfer<AccountId>>::transfer(A::get(), source, dest, amount, keep_alive)
-	}
-	fn deactivate(amount: Self::Balance) {
-		<F as fungibles::Transfer<AccountId>>::deactivate(A::get(), amount)
-	}
-	fn reactivate(amount: Self::Balance) {
-		<F as fungibles::Transfer<AccountId>>::reactivate(A::get(), amount)
-	}
-}
-
-impl<
 		F: fungibles::InspectHold<AccountId>,
 		A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,
 		AccountId,

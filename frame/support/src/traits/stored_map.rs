@@ -17,9 +17,9 @@
 
 //! Traits and associated datatypes for managing abstract stored values.
 
-use crate::{storage::StorageMap, traits::misc::HandleLifetime};
+use crate::storage::StorageMap;
 use codec::FullCodec;
-use sp_runtime::{traits::Convert, DispatchError};
+use sp_runtime::DispatchError;
 
 /// An abstraction of a value stored within storage, but possibly as part of a larger composite
 /// item.

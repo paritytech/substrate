@@ -1653,10 +1653,6 @@ impl<T: Config> BlockNumberProvider for Pallet<T> {
 	}
 }
 
-fn is_providing<T: Default + Eq>(d: &T) -> bool {
-	d != &T::default()
-}
-
 /// Implement StoredMap for a simple single-item, provide-when-not-default system. This works fine
 /// for storing a single item which allows the account to continue existing as long as it's not
 /// empty/default.
@@ -1675,7 +1671,6 @@ impl<T: Config> StoredMap<T::AccountId, T::AccountData> for Pallet<T> {
 		let was_something = account.data != T::AccountData::default();
 		let mut some_data = if was_something { Some(account.data) } else { None };
 		let result = f(&mut some_data)?;
-		let is_something = some_data.is_some();
 		if Self::providers(k) > 0 {
 			Account::<T>::mutate(k, |a| a.data = some_data.unwrap_or_default());
 		}

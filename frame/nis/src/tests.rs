@@ -388,7 +388,7 @@ fn thaw_respects_transfers() {
 		// Transfering the receipt...
 		assert_noop!(Nis::thaw(RuntimeOrigin::signed(1), 0, None), Error::<Test>::NotOwner);
 		// ...can't be thawed due to missing counterpart
-		assert_noop!(Nis::thaw(RuntimeOrigin::signed(2), 0, None), TokenError::NoFunds);
+		assert_noop!(Nis::thaw(RuntimeOrigin::signed(2), 0, None), TokenError::FundsUnavailable);
 
 		// Transfer the counterpart also...
 		assert_ok!(NisBalances::transfer(RuntimeOrigin::signed(1), 2, 2100000));
@@ -424,7 +424,7 @@ fn thaw_when_issuance_higher_works() {
 		// Transfer counterpart away...
 		assert_ok!(NisBalances::transfer(RuntimeOrigin::signed(1), 2, 250_000));
 		// ...and it's not thawable.
-		assert_noop!(Nis::thaw(RuntimeOrigin::signed(1), 0, None), TokenError::NoFunds);
+		assert_noop!(Nis::thaw(RuntimeOrigin::signed(1), 0, None), TokenError::FundsUnavailable);
 
 		// Transfer counterpart back...
 		assert_ok!(NisBalances::transfer(RuntimeOrigin::signed(2), 1, 250_000));

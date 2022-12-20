@@ -23,10 +23,11 @@ use super::{
 };
 use crate::{
 	dispatch::{DispatchError, DispatchResult},
-	traits::misc::Get,
+	traits::misc::Get, ensure,
 };
 use scale_info::TypeInfo;
-use sp_runtime::traits::Saturating;
+use sp_arithmetic::traits::{CheckedAdd, CheckedSub};
+use sp_runtime::{traits::Saturating, ArithmeticError, TokenError};
 
 mod balanced;
 mod freeze;
@@ -98,10 +99,16 @@ pub trait Inspect<AccountId> {
 }
 
 /// Trait for providing a basic fungible asset.
-pub trait Mutate<AccountId>: Inspect<AccountId> {
+pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	/// Increase the balance of `who` by exactly `amount`, minting new tokens. If that isn't
 	/// possible then an `Err` is returned and nothing is changed.
-	fn mint_into(who: &AccountId, amount: Self::Balance) -> DispatchResult;
+	fn mint_into(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
+		Self::total_issuance().checked_add(&amount).ok_or(ArithmeticError::Overflow)?;
+		let actual = Self::increase_balance(who, amount, false)?;
+		Self::set_total_issuance(Self::total_issuance().saturating_add(actual));
+		Self::done_mint_into(who, amount);
+		Ok(actual)
+	}
 
 	/// Decrease the balance of `who` by at least `amount`, possibly slightly more in the case of
 	/// minimum-balance requirements, burning the tokens. If that isn't possible then an `Err` is
@@ -111,7 +118,15 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 		amount: Self::Balance,
 		best_effort: bool,
 		force: bool,
-	) -> Result<Self::Balance, DispatchError>;
+	) -> Result<Self::Balance, DispatchError> {
+		let actual = Self::reducible_balance(who, KeepAlive::CanKill, force).min(amount);
+		ensure!(actual == amount || best_effort, TokenError::FundsUnavailable);
+		Self::total_issuance().checked_sub(&actual).ok_or(ArithmeticError::Overflow)?;
+		let actual = Self::decrease_balance(who, actual, true, KeepAlive::CanKill)?;
+		Self::set_total_issuance(Self::total_issuance().saturating_sub(actual));
+		Self::done_burn_from(who, actual);
+		Ok(actual)
+	}
 
 	/// Attempt to increase the `asset` balance of `who` by `amount`.
 	///
@@ -123,8 +138,14 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 	///
 	/// Because of this expectation, any metadata associated with the asset is expected to survive
 	/// the suspect-resume cycle.
-	fn suspend(who: &AccountId, amount: Self::Balance) -> DispatchResult {
-		Self::burn_from(who, amount, false, false).map(|_| ())
+	fn suspend(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
+		let actual = Self::reducible_balance(who, KeepAlive::CanKill, false).min(amount);
+		ensure!(actual == amount, TokenError::FundsUnavailable);
+		Self::total_issuance().checked_sub(&actual).ok_or(ArithmeticError::Overflow)?;
+		let actual = Self::decrease_balance(who, actual, true, KeepAlive::CanKill)?;
+		Self::set_total_issuance(Self::total_issuance().saturating_sub(actual));
+		Self::done_suspend(who, actual);
+		Ok(actual)
 	}
 
 	/// Attempt to increase the `asset` balance of `who` by `amount`.
@@ -137,49 +158,34 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 	///
 	/// Because of this expectation, any metadata associated with the asset is expected to survive
 	/// the suspect-resume cycle.
-	fn resume(who: &AccountId, amount: Self::Balance) -> DispatchResult {
-		Self::mint_into(who, amount)
+	fn resume(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
+		Self::total_issuance().checked_add(&amount).ok_or(ArithmeticError::Overflow)?;
+		let actual = Self::increase_balance(who, amount, false)?;
+		Self::set_total_issuance(Self::total_issuance().saturating_add(actual));
+		Self::done_resume(who, amount);
+		Ok(actual)
 	}
 
-	/// Transfer funds from one account into another. The default implementation uses `mint_into`
-	/// and `burn_from` and may generate unwanted events.
-	fn teleport(
-		source: &AccountId,
-		dest: &AccountId,
-		amount: Self::Balance,
-	) -> Result<Self::Balance, DispatchError> {
-		let extra = Self::can_withdraw(&source, amount).into_result()?;
-		// As we first burn and then mint, we don't need to check if `mint` fits into the supply.
-		// If we can withdraw/burn it, we can also mint it again.
-		let actual = amount.saturating_add(extra);
-		Self::can_deposit(dest, actual, false).into_result()?;
-		Self::suspend(source, actual)?;
-		match Self::resume(dest, actual) {
-			Ok(_) => Ok(actual),
-			Err(err) => {
-				debug_assert!(false, "can_deposit returned true previously; qed");
-				// attempt to return the funds back to source
-				let revert = Self::resume(source, actual);
-				debug_assert!(revert.is_ok(), "withdrew funds previously; qed");
-				Err(err)
-			},
-		}
-	}
-}
-
-/// Trait for providing a fungible asset which can only be transferred.
-pub trait Transfer<AccountId>: Inspect<AccountId> {
 	/// Transfer funds from one account into another.
 	fn transfer(
 		source: &AccountId,
 		dest: &AccountId,
 		amount: Self::Balance,
 		keep_alive: KeepAlive,
-	) -> Result<Self::Balance, DispatchError>;
+	) -> Result<Self::Balance, DispatchError> {
+		let liquid = Self::reducible_balance(source, keep_alive, false);
+		ensure!(liquid >= amount, TokenError::FundsUnavailable);
+		Self::can_deposit(dest, amount, false).into_result()?;
+		let actual = Self::decrease_balance(source, amount, true, keep_alive)?;
+		// This should never fail as we checked `can_deposit` earlier. But we do a best-effort
+		// anyway.
+		let _ = Self::increase_balance(dest, actual, true);
+		Ok(actual)
+	}
 
-	/// Reduce the active issuance by some amount.
-	fn deactivate(_: Self::Balance) {}
-
-	/// Increase the active issuance by some amount, up to the outstanding amount reduced.
-	fn reactivate(_: Self::Balance) {}
+	fn done_mint_into(_who: &AccountId, _amount: Self::Balance) {}
+	fn done_burn_from(_who: &AccountId, _amount: Self::Balance) {}
+	fn done_suspend(_who: &AccountId, _amount: Self::Balance) {}
+	fn done_resume(_who: &AccountId, _amount: Self::Balance) {}
+	fn done_transfer(_source: &AccountId, _dest: &AccountId, _amount: Self::Balance) {}
 }

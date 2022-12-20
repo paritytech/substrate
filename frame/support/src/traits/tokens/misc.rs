@@ -38,7 +38,7 @@ pub enum KeepAlive {
 pub enum WithdrawConsequence<Balance> {
 	/// Withdraw could not happen since the amount to be withdrawn is less than the total funds in
 	/// the account.
-	NoFunds,
+	BalanceLow,
 	/// The withdraw would mean the account dying when it needs to exist (usually because it is a
 	/// provider and there are consumer references on it).
 	WouldDie,
@@ -66,7 +66,7 @@ impl<Balance: Zero> WithdrawConsequence<Balance> {
 	pub fn into_result(self) -> Result<Balance, DispatchError> {
 		use WithdrawConsequence::*;
 		match self {
-			NoFunds => Err(TokenError::NoFunds.into()),
+			BalanceLow => Err(TokenError::FundsUnavailable.into()),
 			WouldDie => Err(TokenError::WouldDie.into()),
 			UnknownAsset => Err(TokenError::UnknownAsset.into()),
 			Underflow => Err(ArithmeticError::Underflow.into()),

@@ -69,7 +69,7 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		if best_effort {
 			amount = amount.min(free);
 		}
-		let new_balance = old_balance.checked_sub(&amount).ok_or(TokenError::NoFunds)?;
+		let new_balance = old_balance.checked_sub(&amount).ok_or(TokenError::FundsUnavailable)?;
 		Self::set_balance(who, new_balance)?;
 		Ok(amount)
 	}
@@ -106,6 +106,12 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 			Ok(amount)
 		}
 	}
+
+	/// Reduce the active issuance by some amount.
+	fn deactivate(_: Self::Balance) {}
+
+	/// Increase the active issuance by some amount, up to the outstanding amount reduced.
+	fn reactivate(_: Self::Balance) {}
 }
 
 /// A fungible, holdable token class where the balance on hold can be set arbitrarily.
@@ -154,7 +160,7 @@ pub trait UnbalancedHold<AccountId>: InspectHold<AccountId> {
 		if best_effort {
 			amount = amount.min(old_balance);
 		}
-		let new_balance = old_balance.checked_sub(&amount).ok_or(TokenError::NoFunds)?;
+		let new_balance = old_balance.checked_sub(&amount).ok_or(TokenError::FundsUnavailable)?;
 		Self::set_balance_on_hold(reason, who, new_balance)?;
 		Ok(amount)
 	}

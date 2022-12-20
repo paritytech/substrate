@@ -31,7 +31,7 @@ macro_rules! decl_tests {
 				fungible::{InspectHold, MutateHold},
 				LockableCurrency, LockIdentifier, WithdrawReasons,
 				Currency, ReservableCurrency, ExistenceRequirement::AllowDeath,
-				tokens::KeepAlive::{CanKill, NoKill, Keep},
+				tokens::KeepAlive::CanKill,
 			}
 		};
 		use pallet_transaction_payment::{ChargeTransactionPayment, Multiplier};
@@ -171,7 +171,7 @@ macro_rules! decl_tests {
 		}
 
 		#[test]
-		fn lock_reasons_should_work_reserve() {
+		fn lock_should_work_reserve() {
 			<$ext_builder>::default()
 				.existential_deposit(1)
 				.monied(true)
@@ -196,26 +196,32 @@ macro_rules! decl_tests {
 						&info_from_weight(Weight::from_ref_time(1)),
 						1,
 					).is_err());
-					assert_ok!(<ChargeTransactionPayment<$test> as SignedExtension>::pre_dispatch(
+					assert!(<ChargeTransactionPayment<$test> as SignedExtension>::pre_dispatch(
 						ChargeTransactionPayment::from(0),
 						&1,
 						CALL,
 						&info_from_weight(Weight::from_ref_time(1)),
 						1,
-					));
+					).is_err());
 			});
 		}
 
 		#[test]
-		fn lock_reasons_should_work_tx_fee() {
+		fn lock_should_work_tx_fee() {
 			<$ext_builder>::default()
 				.existential_deposit(1)
 				.monied(true)
 				.build()
 				.execute_with(|| {
 					Balances::set_lock(ID_1, &1, 10, WithdrawReasons::TRANSACTION_PAYMENT);
-					assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
-					assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));
+					assert_noop!(
+						<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath),
+						Error::<$test, _>::LiquidityRestrictions
+					);
+					assert_noop!(
+						<Balances as ReservableCurrency<_>>::reserve(&1, 1),
+						Error::<$test, _>::LiquidityRestrictions,
+					);
 					assert!(<ChargeTransactionPayment<$test> as SignedExtension>::pre_dispatch(
 						ChargeTransactionPayment::from(1),
 						&1,
@@ -1435,7 +1441,7 @@ macro_rules! decl_tests {
 
 				assert_noop!(
 					<Balances as fungible::Unbalanced<_>>::decrease_balance(&1337, 101, false, CanKill),
-					TokenError::NoFunds
+					TokenError::FundsUnavailable
 				);
 				assert_eq!(
 					<Balances as fungible::Unbalanced<_>>::decrease_balance(&1337, 100, false, CanKill),
