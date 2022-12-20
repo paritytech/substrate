@@ -18,6 +18,10 @@
 //! Primitive traits for the runtime arithmetic.
 
 use codec::HasCompact;
+pub use ensure::{
+	EnsureAdd, EnsureAddAssign, EnsureDiv, EnsureDivAssign, EnsureFixedPointNumber, EnsureFrom,
+	EnsureInto, EnsureMul, EnsureMulAssign, EnsureOp, EnsureOpAssign, EnsureSub, EnsureSubAssign,
+};
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
 	checked_pow, Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedRem, CheckedShl,
@@ -308,7 +312,7 @@ impl<T: Sized> SaturatedConversion for T {}
 /// This module provide a readable way to do safe arithmetics, turning this:
 ///
 /// ```
-/// # use sp_arithmetic::{traits::ensure::EnsureSub, ArithmeticError};
+/// # use sp_arithmetic::{traits::EnsureSub, ArithmeticError};
 /// # fn foo() -> Result<(), ArithmeticError> {
 /// # let mut my_value = 1;
 /// # let other_value = 1;
@@ -320,7 +324,7 @@ impl<T: Sized> SaturatedConversion for T {}
 /// into this:
 ///
 /// ```
-/// # use sp_arithmetic::{traits::ensure::EnsureSub, ArithmeticError};
+/// # use sp_arithmetic::{traits::EnsureSub, ArithmeticError};
 /// # fn foo() -> Result<(), ArithmeticError> {
 /// # let mut my_value = 1;
 /// # let other_value = 1;
@@ -347,7 +351,7 @@ pub mod ensure {
 		/// Similar to [`CheckedAdd::checked_add()`] but returning an `ArithmeticError` error
 		///
 		/// ```
-		/// use sp_arithmetic::{traits::ensure::EnsureAdd, ArithmeticError};
+		/// use sp_arithmetic::{traits::EnsureAdd, ArithmeticError};
 		///
 		/// fn overflow() -> Result<(), ArithmeticError> {
 		///     u32::MAX.ensure_add(1)?;
@@ -375,7 +379,7 @@ pub mod ensure {
 		/// Similar to [`CheckedSub::checked_sub()`] but returning an `ArithmeticError` error
 		///
 		/// ```
-		/// use sp_arithmetic::{traits::ensure::EnsureSub, ArithmeticError};
+		/// use sp_arithmetic::{traits::EnsureSub, ArithmeticError};
 		///
 		/// fn underflow() -> Result<(), ArithmeticError> {
 		///     0u32.ensure_sub(1)?;
@@ -404,7 +408,7 @@ pub mod ensure {
 		/// Similar to [`CheckedMul::checked_mul()`] but returning an `ArithmeticError` error
 		///
 		/// ```
-		/// use sp_arithmetic::{traits::ensure::EnsureMul, ArithmeticError};
+		/// use sp_arithmetic::{traits::EnsureMul, ArithmeticError};
 		///
 		/// fn overflow() -> Result<(), ArithmeticError> {
 		///     u32::MAX.ensure_mul(2)?;
@@ -432,7 +436,7 @@ pub mod ensure {
 		/// Similar to [`CheckedDiv::checked_div()`] but returning an `ArithmeticError` error
 		///
 		/// ```
-		/// use sp_arithmetic::{traits::ensure::EnsureDiv, ArithmeticError, FixedI64};
+		/// use sp_arithmetic::{traits::EnsureDiv, ArithmeticError, FixedI64};
 		///
 		/// fn extrinsic_zero() -> Result<(), ArithmeticError> {
 		///     1.ensure_div(0)?;
@@ -468,7 +472,7 @@ pub mod ensure {
 		/// If overflow happens, `ArithmeticError` is returned.
 		///
 		/// ```
-		/// use sp_arithmetic::{traits::ensure::EnsureAddAssign, ArithmeticError};
+		/// use sp_arithmetic::{traits::EnsureAddAssign, ArithmeticError};
 		///
 		/// fn overflow() -> Result<(), ArithmeticError> {
 		///     let mut max = u32::MAX;
@@ -498,7 +502,7 @@ pub mod ensure {
 		/// If overflow happens, `ArithmeticError` is returned.
 		///
 		/// ```
-		/// use sp_arithmetic::{traits::ensure::EnsureSubAssign, ArithmeticError};
+		/// use sp_arithmetic::{traits::EnsureSubAssign, ArithmeticError};
 		///
 		/// fn underflow() -> Result<(), ArithmeticError> {
 		///     let mut zero: u32 = 0;
@@ -528,7 +532,7 @@ pub mod ensure {
 		/// If overflow happens, `ArithmeticError` is returned.
 		///
 		/// ```
-		/// use sp_arithmetic::{traits::ensure::EnsureMulAssign, ArithmeticError};
+		/// use sp_arithmetic::{traits::EnsureMulAssign, ArithmeticError};
 		///
 		/// fn overflow() -> Result<(), ArithmeticError> {
 		///     let mut max = u32::MAX;
@@ -558,7 +562,7 @@ pub mod ensure {
 		/// If overflow happens, `ArithmeticError` is returned.
 		///
 		/// ```
-		/// use sp_arithmetic::{traits::ensure::EnsureDivAssign, ArithmeticError, FixedI64};
+		/// use sp_arithmetic::{traits::EnsureDivAssign, ArithmeticError, FixedI64};
 		///
 		/// fn extrinsic_zero() -> Result<(), ArithmeticError> {
 		///     let mut one = 1;
@@ -606,7 +610,7 @@ pub mod ensure {
 		/// `ArithmeticError` error
 		///
 		/// ```
-		/// use sp_arithmetic::{traits::ensure::EnsureFixedPointNumber, ArithmeticError, FixedI64};
+		/// use sp_arithmetic::{traits::EnsureFixedPointNumber, ArithmeticError, FixedI64};
 		///
 		/// fn extrinsic_zero() -> Result<(), ArithmeticError> {
 		///     FixedI64::ensure_from_rational(1, 0)?;
@@ -637,7 +641,7 @@ pub mod ensure {
 		/// error
 		///
 		/// ```
-		/// use sp_arithmetic::{traits::ensure::EnsureFixedPointNumber, ArithmeticError, FixedI64};
+		/// use sp_arithmetic::{traits::EnsureFixedPointNumber, ArithmeticError, FixedI64};
 		///
 		/// fn overflow() -> Result<(), ArithmeticError> {
 		///     FixedI64::from(i64::MAX).ensure_mul_int(2)?;
@@ -664,7 +668,7 @@ pub mod ensure {
 		/// error
 		///
 		/// ```
-		/// use sp_arithmetic::{traits::ensure::EnsureFixedPointNumber, ArithmeticError, FixedI64};
+		/// use sp_arithmetic::{traits::EnsureFixedPointNumber, ArithmeticError, FixedI64};
 		///
 		/// fn extrinsic_zero() -> Result<(), ArithmeticError> {
 		///     FixedI64::from(1).ensure_div_int(0)?;
@@ -695,7 +699,7 @@ pub mod ensure {
 		/// Similar to [`TryFrom::try_from()`] but returning an `ArithmeticError` error
 		///
 		/// ```
-		/// use sp_arithmetic::{traits::ensure::EnsureFrom, ArithmeticError};
+		/// use sp_arithmetic::{traits::EnsureFrom, ArithmeticError};
 		///
 		/// fn overflow() -> Result<(), ArithmeticError> {
 		///     let byte: u8 = u8::ensure_from(256u16)?;
@@ -724,7 +728,7 @@ pub mod ensure {
 		/// Similar to [`TryInto::try_into()`] but returning an `ArithmeticError` error
 		///
 		/// ```
-		/// use sp_arithmetic::{traits::ensure::EnsureInto, ArithmeticError};
+		/// use sp_arithmetic::{traits::EnsureInto, ArithmeticError};
 		///
 		/// fn overflow() -> Result<(), ArithmeticError> {
 		///     let byte: u8 = 256u16.ensure_into()?;
