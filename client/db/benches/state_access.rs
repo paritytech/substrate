@@ -16,16 +16,21 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, measurement::WallTime, Criterion};
 use rand::{distributions::Uniform, rngs::StdRng, Rng, SeedableRng};
+use rayon::prelude::*;
 use sc_client_api::{Backend as _, BlockImportOperation, NewBlockState, StateBackend};
 use sc_client_db::{Backend, BlocksPruning, DatabaseSettings, DatabaseSource, PruningMode};
-use sp_core::H256;
+use sp_core::{twox_128, H256};
 use sp_runtime::{
 	testing::{Block as RawBlock, ExtrinsicWrapper, Header},
 	StateVersion, Storage,
 };
-use std::time::Duration;
+use std::{
+	ffi::OsString,
+	path::{Path, PathBuf},
+	time::{Duration, Instant},
+};
 use tempfile::TempDir;
 
 pub(crate) type Block = RawBlock<ExtrinsicWrapper<u64>>;
@@ -33,21 +38,40 @@ pub(crate) type Block = RawBlock<ExtrinsicWrapper<u64>>;
 fn get_polkadot_storage_keys() -> Vec<Vec<u8>> {
 	// This is a dump of all of the keys from Polkadot block
 	// `ad2fedfc2e6da47289b41cc24617915d4bce0638ca41bd0c4e4864ebb869f2dd`.
-	let path: std::path::PathBuf = env!("CARGO_MANIFEST_DIR").into();
-	let compressed_blob = std::fs::read(path.join("benches").join("keys.bin.zst")).unwrap();
-	let blob = zstd::bulk::decompress(&compressed_blob, 153917787).unwrap();
+	let compressed_blob = include_bytes!("keys.bin.zst");
+	let blob = zstd::bulk::decompress(&compressed_blob[..], 153917787).unwrap();
 	let keys: Vec<Vec<u8>> = codec::Decode::decode(&mut &blob[..]).unwrap();
 	assert_eq!(keys.len(), 1872246);
 	keys
 }
 
+fn get_account_keys_prefix() -> Vec<u8> {
+	let mut prefix = Vec::new();
+	prefix.extend(twox_128(b"System"));
+	prefix.extend(twox_128(b"Account"));
+
+	assert_eq!(
+		prefix,
+		[
+			0x26, 0xaa, 0x39, 0x4e, 0xea, 0x56, 0x30, 0xe0, 0x7c, 0x48, 0xae, 0x0c, 0x95, 0x58,
+			0xce, 0xf7, 0xb9, 0x9d, 0x88, 0x0e, 0xc6, 0x81, 0x79, 0x9c, 0x0c, 0xf3, 0x0e, 0x88,
+			0x86, 0x37, 0x1d, 0xa9,
+		]
+	);
+
+	prefix
+}
+
 fn get_account_keys(all_keys: &[Vec<u8>]) -> Vec<Vec<u8>> {
-	let prefix = [
-		0x26, 0xaa, 0x39, 0x4e, 0xea, 0x56, 0x30, 0xe0, 0x7c, 0x48, 0xae, 0x0c, 0x95, 0x58, 0xce,
-		0xf7, 0xb9, 0x9d, 0x88, 0x0e, 0xc6, 0x81, 0x79, 0x9c, 0x0c, 0xf3, 0x0e, 0x88, 0x86, 0x37,
-		0x1d, 0xa9,
-	];
-	all_keys.iter().filter(|key| key.starts_with(&prefix)).cloned().collect()
+	let account_prefix = get_account_keys_prefix();
+	let account_keys: Vec<_> = all_keys
+		.iter()
+		.filter(|key| key.starts_with(&account_prefix))
+		.cloned()
+		.collect();
+
+	assert_eq!(account_keys.len(), 1158203);
+	account_keys
 }
 
 fn get_shuffled_keys(all_keys: &[Vec<u8>]) -> Vec<Vec<u8>> {
@@ -137,32 +161,21 @@ fn insert_blocks(db: &Backend<Block>, storage: Vec<(Vec<u8>, Vec<u8>)>) -> H256 
 }
 
 #[derive(Copy, Clone)]
-enum BenchmarkConfig {
+enum CacheConfig {
 	NoCache,
-	TrieNodeCache,
+	WithCache,
 }
 
-#[derive(Copy, Clone)]
-enum AccessType {
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum BenchKind {
 	Storage,
 	StorageHash,
 }
 
-fn create_backend(config: BenchmarkConfig, temp_dir: &TempDir) -> Backend<Block> {
-	// To prevent a "Database file is in use" error, since backend's
-	// deinitialization is not synchronous.
-	//
-	// Technically we could recreate everything for each benchmark,
-	// but that takes forever as we'd have to repopulate the database
-	// on disk from scratch every time. It's a lot faster if we just
-	// wait for it to close and reopen it.
-	std::thread::sleep(Duration::from_millis(1000));
-
-	let path = temp_dir.path().to_owned();
-
+fn create_backend(config: CacheConfig, path: PathBuf) -> Backend<Block> {
 	let trie_cache_maximum_size = match config {
-		BenchmarkConfig::NoCache => None,
-		BenchmarkConfig::TrieNodeCache => Some(2 * 1024 * 1024 * 1024),
+		CacheConfig::WithCache => None,
+		CacheConfig::NoCache => Some(2 * 1024 * 1024 * 1024),
 	};
 
 	let settings = DatabaseSettings {
@@ -173,6 +186,48 @@ fn create_backend(config: BenchmarkConfig, temp_dir: &TempDir) -> Backend<Block>
 	};
 
 	Backend::new(settings, 100).expect("Creates backend")
+}
+
+fn preload_files(root_path: &Path) -> Vec<(OsString, Vec<u8>)> {
+	let mut out = Vec::new();
+	for entry in std::fs::read_dir(root_path).unwrap() {
+		let path = entry.unwrap().path();
+		let filename = path.file_name().unwrap().to_os_string();
+		let data = std::fs::read(path).unwrap();
+		out.push((filename, data));
+	}
+	out
+}
+
+struct TemporaryBackend {
+	backend: Backend<Block>,
+	_temp_dir: TempDir,
+}
+
+impl std::ops::Deref for TemporaryBackend {
+	type Target = Backend<Block>;
+	fn deref(&self) -> &Self::Target {
+		&self.backend
+	}
+}
+
+impl TemporaryBackend {
+	// This copies the database into another directory and creates a fresh backend using it.
+	//
+	// This ensures that we're guaranteed to start in exactly the same state for each benchmark run.
+	//
+	// On drop the copy will be automatically deleted.
+	fn new(config: CacheConfig, files: &[(OsString, Vec<u8>)]) -> Self {
+		let temp_dir =
+			TempDir::new().expect("creating a new temporary dictionary should never fail");
+
+		files.par_iter().for_each(|(filename, data)| {
+			std::fs::write(temp_dir.path().join(filename), data).unwrap();
+		});
+
+		let backend = create_backend(config, temp_dir.path().to_owned());
+		TemporaryBackend { backend, _temp_dir: temp_dir }
+	}
 }
 
 /// Generate the storage that will be used for the benchmark
@@ -208,187 +263,176 @@ fn state_access_benchmarks(c: &mut Criterion) {
 	let account_keys = get_account_keys(&all_keys);
 	let shuffled_keys = get_shuffled_keys(&all_keys);
 
-	let path = TempDir::new().expect("Creates temporary directory");
+	let tmpdir = TempDir::new().expect("Creates temporary directory");
 
 	let block_hash = {
-		let backend = create_backend(BenchmarkConfig::NoCache, &path);
+		let backend = create_backend(CacheConfig::NoCache, tmpdir.path().to_owned());
 		insert_blocks(&backend, storage.clone())
 	};
 
-	let run_benchmark = |group: &mut criterion::BenchmarkGroup<
-		criterion::measurement::WallTime,
-	>,
-	                     config: BenchmarkConfig,
-	                     desc: &str,
-	                     keys: &[Vec<u8>],
-	                     repeat_shared: usize,
-	                     repeat_local: usize,
-	                     kind: AccessType| {
+	// Let the backend fully deinitialize, since it's not synchronous.
+	std::thread::sleep(Duration::from_millis(1000));
+
+	// Load the whole database into memory so that we can quickly
+	// write it back into the filesystem.
+	let database_files = preload_files(&tmpdir.path());
+	std::mem::drop(tmpdir);
+
+	let run = |group: &mut criterion::BenchmarkGroup<WallTime>,
+	           config: CacheConfig,
+	           desc: &str,
+	           keys: &[Vec<u8>],
+	           repeat_shared: usize,
+	           repeat_local: usize,
+	           kind: BenchKind| {
 		group.bench_function(desc, |b| {
-			if repeat_shared == 1 {
-				b.iter_batched(
-					|| {
-						let backend = create_backend(config, &path);
-						backend.state_at(block_hash).expect("Creates state")
-					},
-					|state| {
+			b.iter_custom(|iters| {
+				let mut elapsed = Duration::ZERO;
+				for _ in 0..iters {
+					let backend = TemporaryBackend::new(config, &database_files);
+					for _ in 0..repeat_shared {
+						// This gets us a clear local cache (which will be merged into the shared
+						// cache on drop).
+						let state = backend.state_at(block_hash).expect("Creates state");
+
+						let timestamp = Instant::now();
 						for key in keys.iter().cycle().take(keys.len() * repeat_local) {
 							match kind {
-								AccessType::Storage => {
-									let _ = state.storage(&key).expect("Doesn't fail").unwrap();
+								BenchKind::Storage => {
+									let _ = black_box(
+										state.storage(&key).expect("Doesn't fail").unwrap(),
+									);
 								},
-								AccessType::StorageHash => {
-									let _ =
-										state.storage_hash(&key).expect("Doesn't fail").unwrap();
+								BenchKind::StorageHash => {
+									let _ = black_box(
+										state.storage_hash(&key).expect("Doesn't fail").unwrap(),
+									);
 								},
 							}
 						}
-					},
-					BatchSize::SmallInput,
-				)
-			} else {
-				b.iter_batched(
-					|| create_backend(config, &path),
-					|backend| {
-						for _ in 0..repeat_shared {
-							// This resets the local cache and merges it with the shared cache.
-							let state = backend.state_at(block_hash).expect("Creates state");
 
-							for key in keys.iter().cycle().take(keys.len() * repeat_local) {
-								match kind {
-									AccessType::Storage => {
-										let _ = state.storage(&key).expect("Doesn't fail").unwrap();
-									},
-									AccessType::StorageHash => {
-										let _ = state
-											.storage_hash(&key)
-											.expect("Doesn't fail")
-											.unwrap();
-									},
-								}
-							}
-						}
-					},
-					BatchSize::SmallInput,
-				)
-			}
+						elapsed += timestamp.elapsed();
+					}
+				}
+
+				elapsed
+			})
 		});
 	};
 
-	let run_benchmark_with_and_without_cache =
-		|mut group: criterion::BenchmarkGroup<criterion::measurement::WallTime>,
-		 keys: &[Vec<u8>],
-		 repeat_shared: usize,
-		 repeat_local: usize,
-		 kind: AccessType| {
-			run_benchmark(
-				&mut group,
-				BenchmarkConfig::TrieNodeCache,
-				"with trie node cache",
-				&keys,
-				repeat_shared,
-				repeat_local,
-				kind,
-			);
+	let sample_size = 10;
 
-			run_benchmark(
-				&mut group,
-				BenchmarkConfig::NoCache,
-				"without cache",
-				&keys,
-				repeat_shared,
-				repeat_local,
-				kind,
-			);
-			group.finish();
-		};
+	// To make the invocations below readable.
+	use BenchKind::*;
+	use CacheConfig::*;
 
 	// This tests iterating over the accounts with an empty shared cache.
 	//
 	// This will essentially achieve the best case of what the local cache alone can do
 	// when iterating over unique values since only the very bottom of the trie will
-	// have to be constantly fetched from storage (in other words, all keys have the same prefix).
-	//
-	// The time this takes is linear so there's not much point in going through more than this.
-	let mut group = c.benchmark_group("Read 100000 account keys once");
-	group.sample_size(10);
-	group.measurement_time(Duration::from_secs(20));
-	run_benchmark_with_and_without_cache(group, &account_keys[..100000], 1, 1, AccessType::Storage);
+	// have to be constantly fetched from storage In other words, all keys have the same prefix
+	// since we're only reading keys from the same storage map, so mostly the same trie nodes
+	// will be accessed for each value.
+	let mut g = c.benchmark_group("Read 1000000 account keys");
+	g.sample_size(sample_size);
+	run(&mut g, WithCache, "with cache", &account_keys[..1000000], 1, 1, Storage);
+	run(&mut g, NoCache, "without cache", &account_keys[..1000000], 1, 1, Storage);
+	g.finish();
 
 	// This tests iterating over random keys with an empty shared cache.
 	//
 	// This will essentially achieve the worst-ish case of what the local cache alone can do
 	// when iterating over unique values since more than just the very bottom of the trie will
-	// have to be constantly fetched from the storage (in other words, keys will have different
-	// prefixes).
-	let mut group = c.benchmark_group("Read 10000 shuffled keys once");
-	group.sample_size(10);
-	group.measurement_time(Duration::from_secs(15));
-	run_benchmark_with_and_without_cache(group, &shuffled_keys[..10000], 1, 1, AccessType::Storage);
+	// have to be constantly fetched from the storage In other words, keys will have different
+	// prefixes so each read will most likely access access different trie nodes for each value.
+	//
+	// For example, let's assume that for the previous benchmark where we were reading from
+	// the same storage map we were accessing these keys: (just an example; keys are not real)
+	//
+	//   ABCDEFX
+	//   ABCDEFY
+	//   ABCDEFZ
+	//
+	// As you can see the prefix is the same, so the nodes for `ABCDEF` will be cached, and only
+	// the `X`, `Y` and `Z` will have to be fetched.
+	//
+	// Now here since the keys we are reading are random we'd most likely end up with something
+	// like these: (again, just an example to illustrate the concept; keys are not real)
+	//
+	//   PHYGYEH
+	//   DVQXLHK
+	//   PHSBWOB
+	//
+	// It will still happen that keys will sometimes share a prefix, but it won't be all the time.
+	//
+	// Since most of the keys are account balance keys this will happen more often than not,
+	// so this is technically not a true *the* worst case scenario, but the idea here is to
+	// replicate an access pattern which could convieably happen in normal circumstances.
+	let mut g = c.benchmark_group("Read 100000 shuffled keys");
+	g.sample_size(sample_size);
+	run(&mut g, WithCache, "with cache", &shuffled_keys[..100000], 1, 1, Storage);
+	run(&mut g, NoCache, "without cache", &shuffled_keys[..100000], 1, 1, Storage);
+	g.finish();
 
 	// This tests iterating over random keys with a shared cache.
 	//
 	// The first iteration will be slow, but queries from any subsequent iterations will get
-	// serviced by the shared cache speeding things up significantly.
-	let mut group = c.benchmark_group("Read 10000 shuffled keys multiple times");
-	group.sample_size(10);
-	group.measurement_time(Duration::from_secs(30));
-	run_benchmark_with_and_without_cache(
-		group,
-		&shuffled_keys[..10000],
-		20,
-		1,
-		AccessType::Storage,
-	);
+	// serviced by the shared cache speeding things up significantly, assuming a lot of the
+	// nodes got cached in the shared cache.
+	let mut g = c.benchmark_group("Read 100000 shuffled keys multiple times");
+	g.sample_size(sample_size);
+	run(&mut g, WithCache, "with cache", &shuffled_keys[..100000], 10, 1, Storage);
+	run(&mut g, NoCache, "without cache", &shuffled_keys[..100000], 10, 1, Storage);
+	g.finish();
+
+	let mut g = c.benchmark_group("Read 10000 shuffled keys multiple times");
+	g.sample_size(sample_size);
+	run(&mut g, WithCache, "with cache", &shuffled_keys[..10000], 10, 1, Storage);
+	run(&mut g, NoCache, "without cache", &shuffled_keys[..10000], 10, 1, Storage);
+	g.finish();
+
+	let mut g = c.benchmark_group("Read 1000 shuffled keys multiple times");
+	g.sample_size(sample_size);
+	run(&mut g, WithCache, "with cache", &shuffled_keys[..1000], 10, 1, Storage);
+	run(&mut g, NoCache, "without cache", &shuffled_keys[..1000], 10, 1, Storage);
+	g.finish();
 
 	// Read a single value once. There should be no difference here between the cache and no cache
 	// variants.
-	let mut group = c.benchmark_group("Read a single value once");
-	group.sample_size(20);
-	group.measurement_time(Duration::from_secs(30));
-	run_benchmark_with_and_without_cache(group, &all_keys[..1], 1, 1, AccessType::Storage);
+	let mut g = c.benchmark_group("Read a single value once");
+	g.sample_size(100);
+	run(&mut g, WithCache, "with cache", &all_keys[..1], 1, 1, Storage);
+	run(&mut g, NoCache, "without cache", &all_keys[..1], 1, 1, Storage);
+	g.finish();
 
-	// Read a single value many times, with an empty shared cache but populated local cache (except
-	// the first time).
-	let mut group = c.benchmark_group("Read a single value 1024 times (local cache only)");
-	group.sample_size(20);
-	group.measurement_time(Duration::from_secs(30));
-	run_benchmark_with_and_without_cache(group, &all_keys[..1], 1, 1024, AccessType::Storage);
+	let mut g = c.benchmark_group("Read a single value 256k times");
+	g.sample_size(sample_size);
+	run(&mut g, WithCache, "with local cache", &all_keys[..1], 1, 262144, Storage);
+	run(&mut g, WithCache, "with shared cache", &all_keys[..1], 262144, 1, Storage);
+	run(&mut g, WithCache, "with local and shared cache", &all_keys[..1], 512, 512, Storage);
+	run(&mut g, NoCache, "without cache", &all_keys[..1], 1, 262144, Storage);
+	g.finish();
 
-	// Read a single value many times, with a populated shared cache but empty local cache (except
-	// the first time).
-	let mut group = c.benchmark_group("Read a single value 1024 times (shared cache only)");
-	group.sample_size(20);
-	group.measurement_time(Duration::from_secs(30));
-	run_benchmark_with_and_without_cache(group, &all_keys[..1], 1024, 1, AccessType::Storage);
+	let mut g = c.benchmark_group("Hash a single value once");
+	g.sample_size(100);
+	run(&mut g, WithCache, "with cache", &all_keys[..1], 1, 1, StorageHash);
+	run(&mut g, NoCache, "without cache", &all_keys[..1], 1, 1, StorageHash);
+	g.finish();
 
-	// Read a single value many times, with a populated shared cache and populated local cache
-	// (except the first time).
-	let mut group = c.benchmark_group("Read a single value 1024 times (both caches)");
-	group.sample_size(20);
-	group.measurement_time(Duration::from_secs(30));
-	run_benchmark_with_and_without_cache(group, &all_keys[..1], 32, 32, AccessType::Storage);
+	let mut g = c.benchmark_group("Hash a single value 256k times");
+	g.sample_size(sample_size);
+	run(&mut g, WithCache, "with local cache", &all_keys[..1], 1, 262144, StorageHash);
+	run(&mut g, WithCache, "with shared cache", &all_keys[..1], 262144, 1, StorageHash);
+	run(&mut g, WithCache, "with local and shared cache", &all_keys[..1], 512, 512, StorageHash);
+	run(&mut g, NoCache, "without cache", &all_keys[..1], 1, 262144, StorageHash);
+	g.finish();
 
-	let mut group = c.benchmark_group("Hash a value once");
-	group.sample_size(20);
-	group.measurement_time(Duration::from_secs(30));
-	run_benchmark_with_and_without_cache(group, &all_keys[..1], 1, 1, AccessType::StorageHash);
-
-	let mut group = c.benchmark_group("Hash a value 1024 times");
-	group.sample_size(20);
-	group.measurement_time(Duration::from_secs(30));
-	run_benchmark_with_and_without_cache(group, &all_keys[..1], 1, 1024, AccessType::StorageHash);
-
-	let mut group = c.benchmark_group("Hash `:code`");
-	group.sample_size(20);
-	group.measurement_time(Duration::from_secs(30));
-	run_benchmark_with_and_without_cache(
-		group,
-		&[sp_core::storage::well_known_keys::CODE.to_vec()],
-		1,
-		1,
-		AccessType::StorageHash,
-	);
+	let mut g = c.benchmark_group("Hash `:code`");
+	let code_key = &[sp_core::storage::well_known_keys::CODE.to_vec()];
+	g.sample_size(100);
+	run(&mut g, WithCache, "with cache", &code_key[..], 1, 1, StorageHash);
+	run(&mut g, NoCache, "without cache", &code_key[..], 1, 1, StorageHash);
+	g.finish();
 }
 
 criterion_group!(benches, state_access_benchmarks);
