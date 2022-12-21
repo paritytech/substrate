@@ -209,8 +209,6 @@ pub mod pallet {
 		PoolExists,
 		/// Desired amount can't be zero.
 		WrongDesiredAmount,
-		/// The deadline has already passed.
-		DeadlinePassed,
 		/// The pool doesn't exist.
 		PoolNotFound,
 		/// An overflow happened.
@@ -291,7 +289,6 @@ pub mod pallet {
 		/// `mint_to` will be sent the liquidity tokens that represent this share of the pool.
 		/// `keep_alive` true will fail the transaction if in enacting the transaction
 		/// would take the sender's balance below the existential deposit.
-		/// `deadline` is the blocknumber until which you are happy for the transaction to occur.
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::add_liquidity())]
 		pub fn add_liquidity(
@@ -303,7 +300,6 @@ pub mod pallet {
 			amount1_min: AssetBalanceOf<T>,
 			amount2_min: AssetBalanceOf<T>,
 			mint_to: T::AccountId,
-			deadline: T::BlockNumber,
 			keep_alive: bool,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
@@ -315,9 +311,6 @@ pub mod pallet {
 				amount1_desired > Zero::zero() && amount2_desired > Zero::zero(),
 				Error::<T>::WrongDesiredAmount
 			);
-
-			let now = frame_system::Pallet::<T>::block_number();
-			ensure!(deadline >= now, Error::<T>::DeadlinePassed);
 
 			let maybe_pool = Pools::<T>::get(pool_id);
 			let pool = maybe_pool.as_ref().ok_or(Error::<T>::PoolNotFound)?;
@@ -399,7 +392,6 @@ pub mod pallet {
 			amount1_min_receive: AssetBalanceOf<T>,
 			amount2_min_receive: AssetBalanceOf<T>,
 			withdraw_to: T::AccountId,
-			deadline: T::BlockNumber,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
@@ -407,9 +399,6 @@ pub mod pallet {
 			let (asset1, asset2) = pool_id;
 
 			ensure!(lp_token_burn > Zero::zero(), Error::<T>::ZeroLiquidity);
-
-			let now = frame_system::Pallet::<T>::block_number();
-			ensure!(deadline >= now, Error::<T>::DeadlinePassed);
 
 			let maybe_pool = Pools::<T>::get(pool_id);
 			let pool = maybe_pool.as_ref().ok_or(Error::<T>::PoolNotFound)?;
@@ -469,7 +458,6 @@ pub mod pallet {
 			amount_in: AssetBalanceOf<T>,
 			amount_out_min: AssetBalanceOf<T>,
 			send_to: T::AccountId,
-			deadline: T::BlockNumber,
 			keep_alive: bool,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
@@ -479,9 +467,6 @@ pub mod pallet {
 				Error::<T>::ZeroAmount
 			);
 			ensure!(path.len() >= 2, Error::<T>::InvalidPath);
-
-			let now = frame_system::Pallet::<T>::block_number();
-			ensure!(deadline >= now, Error::<T>::DeadlinePassed);
 
 			let amounts = Self::get_amounts_out(&amount_in, &path)?;
 			let amount_out = *amounts.last().expect("Has always more than 1 element");
@@ -511,7 +496,6 @@ pub mod pallet {
 			amount_out: AssetBalanceOf<T>,
 			amount_in_max: AssetBalanceOf<T>,
 			send_to: T::AccountId,
-			deadline: T::BlockNumber,
 			keep_alive: bool,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
@@ -521,9 +505,6 @@ pub mod pallet {
 				Error::<T>::ZeroAmount
 			);
 			ensure!(path.len() >= 2, Error::<T>::InvalidPath);
-
-			let now = frame_system::Pallet::<T>::block_number();
-			ensure!(deadline >= now, Error::<T>::DeadlinePassed);
 
 			let amounts = Self::get_amounts_in(&amount_out, &path)?;
 			let amount_in = *amounts.first().expect("Always has more than one element");

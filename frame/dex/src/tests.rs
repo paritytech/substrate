@@ -222,7 +222,6 @@ fn add_liquidity_should_work() {
 			10,
 			10,
 			user,
-			2,
 			false
 		));
 
@@ -266,7 +265,6 @@ fn add_tiny_liquidity_leads_to_insufficient_liquidity_minted_error() {
 				1,
 				1,
 				user,
-				2,
 				false
 			),
 			Error::<Test>::InsufficientLiquidityMinted
@@ -298,7 +296,6 @@ fn remove_liquidity_should_work() {
 			10,
 			10,
 			user,
-			2,
 			false
 		));
 
@@ -310,7 +307,6 @@ fn remove_liquidity_should_work() {
 			0,
 			0,
 			user,
-			2
 		));
 
 		assert!(events().contains(&Event::<Test>::LiquidityRemoved {
@@ -356,7 +352,6 @@ fn can_not_redeem_more_lp_tokens_than_were_minted() {
 			10,
 			10,
 			user,
-			2,
 			false
 		));
 
@@ -371,7 +366,6 @@ fn can_not_redeem_more_lp_tokens_than_were_minted() {
 				0,
 				0,
 				user,
-				2
 			),
 			DispatchError::Module(ModuleError {
 				index: 3,
@@ -404,7 +398,6 @@ fn quote_price_should_work() {
 			1,
 			1,
 			user,
-			2,
 			false
 		));
 
@@ -437,7 +430,6 @@ fn swap_should_work_with_native() {
 			1,
 			1,
 			user,
-			2,
 			false
 		));
 
@@ -451,7 +443,6 @@ fn swap_should_work_with_native() {
 			input_amount,
 			1,
 			user,
-			3,
 			false
 		));
 
@@ -488,7 +479,6 @@ fn swap_should_work_with_realistic_values() {
 			1,
 			1,
 			user,
-			2,
 			false
 		));
 
@@ -500,7 +490,6 @@ fn swap_should_work_with_realistic_values() {
 			input_amount,
 			1,
 			user,
-			3,
 			false
 		));
 
@@ -539,7 +528,6 @@ fn add_liquidity_causes_below_existential_deposit_but_keep_alive_set() {
 				1,
 				1,
 				user,
-				2,
 				true // keep_alive set so user account doesn't get reaped.
 			),
 			DispatchError::Module(ModuleError {
@@ -569,7 +557,6 @@ fn can_not_swap_in_pool_with_no_liquidity_added_yet() {
 				10,
 				1,
 				user,
-				3,
 				false
 			),
 			Error::<Test>::PoolNotFound
@@ -602,7 +589,6 @@ fn check_no_panic_when_try_swap_close_to_empty_pool() {
 			1,
 			1,
 			user,
-			2,
 			false
 		));
 
@@ -627,8 +613,7 @@ fn check_no_panic_when_try_swap_close_to_empty_pool() {
 			140,
 			992, // min1
 			19,  // min2
-			user,
-			2
+			user
 		));
 
 		// Now pool should exist but be almost empty.
@@ -641,7 +626,6 @@ fn check_no_panic_when_try_swap_close_to_empty_pool() {
 			20,
 			7,
 			user,
-			3,
 			false
 		));
 
@@ -654,7 +638,6 @@ fn check_no_panic_when_try_swap_close_to_empty_pool() {
 				20,
 				1,
 				user,
-				3,
 				false
 			),
 			Error::<Test>::InsufficientOutputAmount
@@ -686,7 +669,6 @@ fn swap_should_not_work_with_if_too_much_slippage() {
 			1,
 			1,
 			user,
-			2,
 			false
 		));
 
@@ -699,7 +681,6 @@ fn swap_should_not_work_with_if_too_much_slippage() {
 				exchange_amount,
 				333, // amount out min
 				user,
-				3,
 				false
 			),
 			Error::<Test>::InsufficientOutputAmount
@@ -713,7 +694,6 @@ fn swap_tokens_for_exact_tokens_should_work() {
 		let user = 1;
 		let token_1 = MultiAssetId::Native;
 		let token_2 = MultiAssetId::Asset(2);
-		let deadline = 2;
 		let pool_id = (token_1, token_2);
 		let pallet_account = Dex::get_pool_account(pool_id);
 		let base1 = 1000;
@@ -738,7 +718,6 @@ fn swap_tokens_for_exact_tokens_should_work() {
 			1,
 			1,
 			user,
-			deadline,
 			true
 		));
 
@@ -755,7 +734,6 @@ fn swap_tokens_for_exact_tokens_should_work() {
 			exchange_out2, // amount_out
 			100,           // amount_in_max
 			user,
-			3,
 			true
 		));
 
@@ -779,7 +757,6 @@ fn swap_tokens_for_exact_tokens_works_when_user_is_not_liquidity_provider() {
 		let user2 = 2;
 		let token_1 = MultiAssetId::Native;
 		let token_2 = MultiAssetId::Asset(2);
-		let deadline = 2;
 		let pool_id = (token_1, token_2);
 		let pallet_account = Dex::get_pool_account(pool_id);
 		let base1 = 1000;
@@ -807,7 +784,6 @@ fn swap_tokens_for_exact_tokens_works_when_user_is_not_liquidity_provider() {
 			1,
 			1,
 			user2,
-			deadline,
 			false
 		));
 
@@ -824,7 +800,6 @@ fn swap_tokens_for_exact_tokens_works_when_user_is_not_liquidity_provider() {
 			exchange_out2,
 			100, // amount_in_max
 			user,
-			3,
 			true
 		));
 
@@ -853,7 +828,6 @@ fn swap_tokens_for_exact_tokens_works_when_user_is_not_liquidity_provider() {
 			0,
 			0,
 			user2,
-			2
 		));
 
 		// assert_eq!(balance(user2, token_1), 67);
@@ -868,7 +842,6 @@ fn swap_when_existential_deposit_would_cause_reaping_but_keep_alive_set() {
 		let user2 = 2;
 		let token_1 = MultiAssetId::Native;
 		let token_2 = MultiAssetId::Asset(2);
-		let deadline = 2;
 
 		create_tokens(user2, vec![token_2]);
 		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user2), token_1, token_2));
@@ -886,7 +859,6 @@ fn swap_when_existential_deposit_would_cause_reaping_but_keep_alive_set() {
 			1,
 			1,
 			user2,
-			deadline,
 			false
 		));
 
@@ -897,7 +869,6 @@ fn swap_when_existential_deposit_would_cause_reaping_but_keep_alive_set() {
 				1,
 				1, // amount_in_min
 				user,
-				3,
 				true
 			),
 			DispatchError::Module(ModuleError {
@@ -914,7 +885,6 @@ fn swap_when_existential_deposit_would_cause_reaping_but_keep_alive_set() {
 				1,
 				1, // amount_in_min
 				user,
-				3,
 				true
 			),
 			DispatchError::Module(ModuleError {
@@ -927,46 +897,11 @@ fn swap_when_existential_deposit_would_cause_reaping_but_keep_alive_set() {
 }
 
 #[test]
-fn add_liquidity_past_deadline() {
-	new_test_ext().execute_with(|| {
-		let user = 1;
-		let user2 = 2;
-		let token_1 = MultiAssetId::Native;
-		let token_2 = MultiAssetId::Asset(2);
-		let deadline = 0;
-
-		create_tokens(user2, vec![token_2]);
-		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user2), token_1, token_2));
-
-		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user, 100, 0));
-		assert_ok!(Balances::set_balance(RuntimeOrigin::root(), user2, 1000, 0));
-		assert_ok!(Assets::mint(RuntimeOrigin::signed(user2), 2, user2, 1000));
-
-		assert_noop!(
-			Dex::add_liquidity(
-				RuntimeOrigin::signed(user2),
-				token_1,
-				token_2,
-				1000,
-				20,
-				1,
-				1,
-				user2,
-				deadline,
-				false
-			),
-			Error::<Test>::DeadlinePassed
-		);
-	});
-}
-
-#[test]
 fn swap_tokens_for_exact_tokens_should_not_work_if_too_much_slippage() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
 		let token_1 = MultiAssetId::Native;
 		let token_2 = MultiAssetId::Asset(2);
-		let deadline = 2;
 		let base1 = 1000;
 
 		create_tokens(user, vec![token_2]);
@@ -986,7 +921,6 @@ fn swap_tokens_for_exact_tokens_should_not_work_if_too_much_slippage() {
 			1,
 			1,
 			user,
-			deadline,
 			true
 		));
 		let exchange_out2 = 1;
@@ -998,7 +932,6 @@ fn swap_tokens_for_exact_tokens_should_not_work_if_too_much_slippage() {
 				exchange_out2,
 				52, // amount_in_max just greater than slippage.
 				user,
-				3,
 				true
 			),
 			Error::<Test>::ExcessiveInputAmount
@@ -1013,7 +946,6 @@ fn swap_exact_tokens_for_tokens_in_multi_hops() {
 		let token_1 = MultiAssetId::Native;
 		let token_2 = MultiAssetId::Asset(2);
 		let token_3 = MultiAssetId::Asset(3);
-		let deadline = 2;
 		let base1 = 10000;
 
 		create_tokens(user, vec![token_2, token_3]);
@@ -1036,7 +968,6 @@ fn swap_exact_tokens_for_tokens_in_multi_hops() {
 			1,
 			1,
 			user,
-			deadline,
 			true
 		));
 		assert_ok!(Dex::add_liquidity(
@@ -1048,7 +979,6 @@ fn swap_exact_tokens_for_tokens_in_multi_hops() {
 			1,
 			1,
 			user,
-			deadline,
 			true
 		));
 
@@ -1063,7 +993,6 @@ fn swap_exact_tokens_for_tokens_in_multi_hops() {
 			input_amount, // amount_in
 			80,           // amount_out_min
 			user,
-			deadline,
 			true
 		));
 
@@ -1088,7 +1017,6 @@ fn swap_tokens_for_exact_tokens_in_multi_hops() {
 		let token_1 = MultiAssetId::Native;
 		let token_2 = MultiAssetId::Asset(2);
 		let token_3 = MultiAssetId::Asset(3);
-		let deadline = 2;
 		let base1 = 10000;
 
 		create_tokens(user, vec![token_2, token_3]);
@@ -1111,7 +1039,6 @@ fn swap_tokens_for_exact_tokens_in_multi_hops() {
 			1,
 			1,
 			user,
-			deadline,
 			true
 		));
 		assert_ok!(Dex::add_liquidity(
@@ -1123,7 +1050,6 @@ fn swap_tokens_for_exact_tokens_in_multi_hops() {
 			1,
 			1,
 			user,
-			deadline,
 			true
 		));
 
@@ -1137,7 +1063,6 @@ fn swap_tokens_for_exact_tokens_in_multi_hops() {
 			exchange_out3,
 			1000, // amount_in_max
 			user,
-			deadline,
 			true
 		));
 
@@ -1176,7 +1101,6 @@ fn same_asset_swap_should_fail() {
 				1,
 				1,
 				user,
-				2,
 				true
 			),
 			Error::<Test>::PoolNotFound
@@ -1190,7 +1114,6 @@ fn same_asset_swap_should_fail() {
 				exchange_amount,
 				1,
 				user,
-				3,
 				true
 			),
 			Error::<Test>::PoolNotFound
@@ -1203,7 +1126,6 @@ fn same_asset_swap_should_fail() {
 				exchange_amount,
 				1,
 				user,
-				3,
 				true
 			),
 			Error::<Test>::PoolNotFound
