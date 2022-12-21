@@ -241,7 +241,7 @@ mod v4 {
 				match all_schedules.checked_sub(suffix_none_schedules) {
 					Some(0) => {
 						log::info!(
-							"Deleting None-only agenda {} with {} entries",
+							"Deleting None-only agenda {:?} with {} entries",
 							k,
 							all_schedules
 						);
@@ -250,7 +250,7 @@ mod v4 {
 					},
 					Some(ne) if ne > 0 => {
 						log::info!(
-							"Removing {} schedules of {} from agenda {:?}, now {}",
+							"Removing {} schedules of {} from agenda {:?}, now {:?}",
 							suffix_none_schedules,
 							all_schedules,
 							ne,
@@ -267,7 +267,7 @@ mod v4 {
 						);
 					},
 					None => {
-						log::info!("Agenda {} does not have any None suffix schedules", k);
+						log::info!("Agenda {:?} does not have any None suffix schedules", k);
 					},
 				}
 			}
