@@ -198,6 +198,119 @@ pub mod v3 {
 	}
 }
 
+mod v4 {
+	use super::*;
+	use frame_support::pallet_prelude::*;
+
+	/// This migration cleans up empty agendas of the V4 scheduler.
+	///
+	/// This should be run on a scheduler that does not have
+	/// <https://github.com/paritytech/substrate/pull/12989> since it piles up `None`-only agendas. This does not modify the pallet version.
+	pub struct CleanupAgendas<T>(sp_std::marker::PhantomData<T>);
+
+	impl<T: Config> OnRuntimeUpgrade for CleanupAgendas<T> {
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+			assert_eq!(
+				StorageVersion::get::<Pallet<T>>(),
+				4,
+				"Can only cleanup agendas of the V4 scheduler"
+			);
+
+			let agendas = Agenda::<T>::iter_keys().count();
+			let non_empty_agendas =
+				Agenda::<T>::iter_values().filter(|a| a.iter().any(|s| s.is_some())).count();
+			log::info!(
+				target: TARGET,
+				"There are {} total and {} non-empty agendas",
+				agendas,
+				non_empty_agendas
+			);
+
+			Ok((agendas as u32, non_empty_agendas as u32).encode())
+		}
+
+		fn on_runtime_upgrade() -> Weight {
+			let version = StorageVersion::get::<Pallet<T>>();
+			if version != 4 {
+				log::warn!(target: TARGET, "Skipping CleanupAgendas migration since it was run on the wrong version: {:?} != 4", version);
+				return T::DbWeight::get().reads(1)
+			}
+
+			let keys = Agenda::<T>::iter_keys().collect::<Vec<_>>();
+			let mut writes = 0;
+			for k in &keys {
+				let mut schedules = Agenda::<T>::get(k);
+				let all_schedules = schedules.len();
+				let suffix_none_schedules =
+					schedules.iter().rev().take_while(|s| s.is_none()).count();
+
+				match all_schedules.checked_sub(suffix_none_schedules) {
+					Some(0) => {
+						log::info!(
+							"Deleting None-only agenda {:?} with {} entries",
+							k,
+							all_schedules
+						);
+						Agenda::<T>::remove(k);
+						writes.saturating_inc();
+					},
+					Some(ne) if ne > 0 => {
+						log::info!(
+							"Removing {} schedules of {} from agenda {:?}, now {:?}",
+							suffix_none_schedules,
+							all_schedules,
+							ne,
+							k
+						);
+						schedules.truncate(ne);
+						Agenda::<T>::insert(k, schedules);
+						writes.saturating_inc();
+					},
+					Some(_) => {
+						frame_support::defensive!(
+							// Bad but let's not panic.
+							"Cannot have more None suffix schedules that schedules in total"
+						);
+					},
+					None => {
+						log::info!("Agenda {:?} does not have any None suffix schedules", k);
+					},
+				}
+			}
+
+			// We don't modify the pallet version.
+
+			T::DbWeight::get().reads_writes(1 + keys.len().saturating_mul(2) as u64, writes)
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+			assert_eq!(StorageVersion::get::<Pallet<T>>(), 4, "Version must not change");
+
+			let (old_agendas, non_empty_agendas): (u32, u32) =
+				Decode::decode(&mut state.as_ref()).expect("Must decode pre_upgrade state");
+			let new_agendas = Agenda::<T>::iter_keys().count() as u32;
+
+			match old_agendas.checked_sub(new_agendas) {
+				Some(0) => log::warn!(
+					target: TARGET,
+					"Did not clean up any agendas. v4::CleanupAgendas can be removed."
+				),
+				Some(n) =>
+					log::info!(target: TARGET, "Cleaned up {} agendas, now {}", n, new_agendas),
+				None => unreachable!(
+					"Number of agendas cannot increase, old {} new {}",
+					old_agendas, new_agendas
+				),
+			}
+			assert_eq!(new_agendas, non_empty_agendas, "Expected to keep all non-empty agendas");
+
+			Ok(())
+		}
+	}
+}
+
 #[cfg(test)]
 #[cfg(feature = "try-runtime")]
 mod test {
@@ -393,6 +506,64 @@ mod test {
 			assert_eq_uvec!(x, expected);
 
 			assert_eq!(StorageVersion::get::<Scheduler>(), 4);
+		});
+	}
+
+	#[test]
+	fn cleanup_agendas_works() {
+		use sp_core::bounded_vec;
+		new_test_ext().execute_with(|| {
+			StorageVersion::new(4).put::<Scheduler>();
+
+			let call = RuntimeCall::System(frame_system::Call::remark { remark: vec![] });
+			let bounded_call = Preimage::bound(call).unwrap();
+			let some = Some(ScheduledOf::<Test> {
+				maybe_id: None,
+				priority: 1,
+				call: bounded_call,
+				maybe_periodic: None,
+				origin: root(),
+				_phantom: Default::default(),
+			});
+
+			// Put some empty, and some non-empty agendas in there.
+			let test_data: Vec<(
+				BoundedVec<Option<ScheduledOf<Test>>, <Test as Config>::MaxScheduledPerBlock>,
+				Option<
+					BoundedVec<Option<ScheduledOf<Test>>, <Test as Config>::MaxScheduledPerBlock>,
+				>,
+			)> = vec![
+				(bounded_vec![some.clone()], Some(bounded_vec![some.clone()])),
+				(bounded_vec![None, some.clone()], Some(bounded_vec![None, some.clone()])),
+				(bounded_vec![None, some.clone(), None], Some(bounded_vec![None, some.clone()])),
+				(bounded_vec![some.clone(), None, None], Some(bounded_vec![some.clone()])),
+				(bounded_vec![None, None], None),
+				(bounded_vec![None, None, None], None),
+				(bounded_vec![], None),
+			];
+
+			// Insert all the agendas.
+			for (i, test) in test_data.iter().enumerate() {
+				Agenda::<Test>::insert(i as u64, test.0.clone());
+			}
+
+			// Run the migration.
+			let data = v4::CleanupAgendas::<Test>::pre_upgrade().unwrap();
+			let _w = v4::CleanupAgendas::<Test>::on_runtime_upgrade();
+			v4::CleanupAgendas::<Test>::post_upgrade(data).unwrap();
+
+			// Check that the post-state is correct.
+			for (i, test) in test_data.iter().enumerate() {
+				match test.1.clone() {
+					None => assert!(
+						!Agenda::<Test>::contains_key(i as u64),
+						"Agenda {} should be removed",
+						i
+					),
+					Some(new) =>
+						assert_eq!(Agenda::<Test>::get(i as u64), new, "Agenda wrong {}", i),
+				}
+			}
 		});
 	}
 
