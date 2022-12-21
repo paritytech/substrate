@@ -158,12 +158,10 @@ pub fn generate_random_npos_result(
 
 	(
 		match election_type {
-			ElectionType::Phragmen(conf) => {
-				seq_phragmen(to_elect, candidates.clone(), voters.clone(), conf).unwrap()
-			},
-			ElectionType::Phragmms(conf) => {
-				phragmms(to_elect, candidates.clone(), voters.clone(), conf).unwrap()
-			},
+			ElectionType::Phragmen(conf) =>
+				seq_phragmen(to_elect, candidates.clone(), voters.clone(), conf).unwrap(),
+			ElectionType::Phragmms(conf) =>
+				phragmms(to_elect, candidates.clone(), voters.clone(), conf).unwrap(),
 		},
 		candidates,
 		voters,

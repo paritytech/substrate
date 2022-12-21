@@ -245,9 +245,8 @@ impl SyncCryptoStore for LocalKeystore {
 		seed: Option<&str>,
 	) -> std::result::Result<sr25519::Public, TraitError> {
 		let pair = match seed {
-			Some(seed) => {
-				self.0.write().insert_ephemeral_from_seed_by_type::<sr25519::Pair>(seed, id)
-			},
+			Some(seed) =>
+				self.0.write().insert_ephemeral_from_seed_by_type::<sr25519::Pair>(seed, id),
 			None => self.0.write().generate_by_type::<sr25519::Pair>(id),
 		}
 		.map_err(|e| -> TraitError { e.into() })?;
@@ -273,9 +272,8 @@ impl SyncCryptoStore for LocalKeystore {
 		seed: Option<&str>,
 	) -> std::result::Result<ed25519::Public, TraitError> {
 		let pair = match seed {
-			Some(seed) => {
-				self.0.write().insert_ephemeral_from_seed_by_type::<ed25519::Pair>(seed, id)
-			},
+			Some(seed) =>
+				self.0.write().insert_ephemeral_from_seed_by_type::<ed25519::Pair>(seed, id),
 			None => self.0.write().generate_by_type::<ed25519::Pair>(id),
 		}
 		.map_err(|e| -> TraitError { e.into() })?;
@@ -301,9 +299,8 @@ impl SyncCryptoStore for LocalKeystore {
 		seed: Option<&str>,
 	) -> std::result::Result<ecdsa::Public, TraitError> {
 		let pair = match seed {
-			Some(seed) => {
-				self.0.write().insert_ephemeral_from_seed_by_type::<ecdsa::Pair>(seed, id)
-			},
+			Some(seed) =>
+				self.0.write().insert_ephemeral_from_seed_by_type::<ecdsa::Pair>(seed, id),
 			None => self.0.write().generate_by_type::<ecdsa::Pair>(id),
 		}
 		.map_err(|e| -> TraitError { e.into() })?;
@@ -471,13 +468,13 @@ impl KeystoreInner {
 	/// Get the key phrase for a given public key and key type.
 	fn key_phrase_by_type(&self, public: &[u8], key_type: KeyTypeId) -> Result<Option<String>> {
 		if let Some(phrase) = self.get_additional_pair(public, key_type) {
-			return Ok(Some(phrase.clone()));
+			return Ok(Some(phrase.clone()))
 		}
 
 		let path = if let Some(path) = self.key_file_path(public, key_type) {
 			path
 		} else {
-			return Ok(None);
+			return Ok(None)
 		};
 
 		if path.exists() {
@@ -498,7 +495,7 @@ impl KeystoreInner {
 		let phrase = if let Some(p) = self.key_phrase_by_type(public.as_slice(), key_type)? {
 			p
 		} else {
-			return Ok(None);
+			return Ok(None)
 		};
 
 		let pair = Pair::from_string(&phrase, self.password()).map_err(|_| Error::InvalidPhrase)?;
@@ -540,7 +537,7 @@ impl KeystoreInner {
 					match array_bytes::hex2bytes(name) {
 						Ok(ref hex) if hex.len() > 4 => {
 							if hex[0..4] != id.0 {
-								continue;
+								continue
 							}
 							let public = hex[4..].to_vec();
 							public_keys.push(public);

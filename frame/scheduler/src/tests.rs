@@ -627,11 +627,11 @@ fn on_initialize_weight_is_correct() {
 		// Will include the named periodic only
 		assert_eq!(
 			Scheduler::on_initialize(1),
-			TestWeightInfo::service_agendas_base()
-				+ TestWeightInfo::service_agenda_base(1)
-				+ <TestWeightInfo as MarginalWeightInfo>::service_task(None, true, true)
-				+ TestWeightInfo::execute_dispatch_unsigned()
-				+ call_weight + Weight::from_ref_time(4)
+			TestWeightInfo::service_agendas_base() +
+				TestWeightInfo::service_agenda_base(1) +
+				<TestWeightInfo as MarginalWeightInfo>::service_task(None, true, true) +
+				TestWeightInfo::execute_dispatch_unsigned() +
+				call_weight + Weight::from_ref_time(4)
 		);
 		assert_eq!(IncompleteSince::<Test>::get(), None);
 		assert_eq!(logger::log(), vec![(root(), 2600u32)]);
@@ -639,14 +639,14 @@ fn on_initialize_weight_is_correct() {
 		// Will include anon and anon periodic
 		assert_eq!(
 			Scheduler::on_initialize(2),
-			TestWeightInfo::service_agendas_base()
-				+ TestWeightInfo::service_agenda_base(2)
-				+ <TestWeightInfo as MarginalWeightInfo>::service_task(None, false, true)
-				+ TestWeightInfo::execute_dispatch_unsigned()
-				+ call_weight + Weight::from_ref_time(3)
-				+ <TestWeightInfo as MarginalWeightInfo>::service_task(None, false, false)
-				+ TestWeightInfo::execute_dispatch_unsigned()
-				+ call_weight + Weight::from_ref_time(2)
+			TestWeightInfo::service_agendas_base() +
+				TestWeightInfo::service_agenda_base(2) +
+				<TestWeightInfo as MarginalWeightInfo>::service_task(None, false, true) +
+				TestWeightInfo::execute_dispatch_unsigned() +
+				call_weight + Weight::from_ref_time(3) +
+				<TestWeightInfo as MarginalWeightInfo>::service_task(None, false, false) +
+				TestWeightInfo::execute_dispatch_unsigned() +
+				call_weight + Weight::from_ref_time(2)
 		);
 		assert_eq!(IncompleteSince::<Test>::get(), None);
 		assert_eq!(logger::log(), vec![(root(), 2600u32), (root(), 69u32), (root(), 42u32)]);
@@ -654,11 +654,11 @@ fn on_initialize_weight_is_correct() {
 		// Will include named only
 		assert_eq!(
 			Scheduler::on_initialize(3),
-			TestWeightInfo::service_agendas_base()
-				+ TestWeightInfo::service_agenda_base(1)
-				+ <TestWeightInfo as MarginalWeightInfo>::service_task(None, true, false)
-				+ TestWeightInfo::execute_dispatch_unsigned()
-				+ call_weight + Weight::from_ref_time(1)
+			TestWeightInfo::service_agendas_base() +
+				TestWeightInfo::service_agenda_base(1) +
+				<TestWeightInfo as MarginalWeightInfo>::service_task(None, true, false) +
+				TestWeightInfo::execute_dispatch_unsigned() +
+				call_weight + Weight::from_ref_time(1)
 		);
 		assert_eq!(IncompleteSince::<Test>::get(), None);
 		assert_eq!(

@@ -251,8 +251,8 @@ pub mod pallet {
 				description.try_into().map_err(|_| BountiesError::<T>::ReasonTooBig)?;
 			ensure!(value >= T::ChildBountyValueMinimum::get(), BountiesError::<T>::InvalidValue);
 			ensure!(
-				Self::parent_child_bounties(parent_bounty_id)
-					<= T::MaxActiveChildBountyCount::get() as u32,
+				Self::parent_child_bounties(parent_bounty_id) <=
+					T::MaxActiveChildBountyCount::get() as u32,
 				Error::<T>::TooManyChildBounties,
 			);
 
@@ -483,7 +483,7 @@ pub mod pallet {
 					match child_bounty.status {
 						ChildBountyStatus::Added => {
 							// No curator to unassign at this point.
-							return Err(BountiesError::<T>::UnexpectedStatus.into());
+							return Err(BountiesError::<T>::UnexpectedStatus.into())
 						},
 						ChildBountyStatus::CuratorProposed { ref curator } => {
 							// A child-bounty curator has been proposed, but not accepted yet.
@@ -491,8 +491,8 @@ pub mod pallet {
 							// child-bounty curator can unassign the child-bounty curator.
 							ensure!(
 								maybe_sender.map_or(true, |sender| {
-									sender == *curator
-										|| Self::ensure_bounty_active(parent_bounty_id)
+									sender == *curator ||
+										Self::ensure_bounty_active(parent_bounty_id)
 											.map_or(false, |(parent_curator, _)| {
 												sender == parent_curator
 											})
@@ -521,8 +521,8 @@ pub mod pallet {
 								Some(sender) => {
 									let (parent_curator, update_due) =
 										Self::ensure_bounty_active(parent_bounty_id)?;
-									if sender == parent_curator
-										|| update_due < frame_system::Pallet::<T>::block_number()
+									if sender == parent_curator ||
+										update_due < frame_system::Pallet::<T>::block_number()
 									{
 										// Slash the child-bounty curator if
 										// + the call is made by the parent bounty curator.
@@ -531,7 +531,7 @@ pub mod pallet {
 									// Continue to change bounty status below.
 									} else {
 										// Curator has more time to give an update.
-										return Err(BountiesError::<T>::Premature.into());
+										return Err(BountiesError::<T>::Premature.into())
 									}
 								},
 							}
@@ -600,8 +600,8 @@ pub mod pallet {
 						child_bounty.status = ChildBountyStatus::PendingPayout {
 							curator: signer,
 							beneficiary: beneficiary.clone(),
-							unlock_at: frame_system::Pallet::<T>::block_number()
-								+ T::BountyDepositPayoutDelay::get(),
+							unlock_at: frame_system::Pallet::<T>::block_number() +
+								T::BountyDepositPayoutDelay::get(),
 						};
 						Ok(())
 					} else {
@@ -775,7 +775,7 @@ impl<T: Config> Pallet<T> {
 		bounty_fee: &BalanceOf<T>,
 	) -> BalanceOf<T> {
 		if parent_curator == child_curator {
-			return Zero::zero();
+			return Zero::zero()
 		}
 
 		// We just use the same logic from the parent bounties pallet.
@@ -847,7 +847,7 @@ impl<T: Config> Pallet<T> {
 						// child-bounty, it should mean the child-bounty curator
 						// was acting maliciously. So first unassign the
 						// child-bounty curator, slashing their deposit.
-						return Err(BountiesError::<T>::PendingPayout.into());
+						return Err(BountiesError::<T>::PendingPayout.into())
 					},
 				}
 

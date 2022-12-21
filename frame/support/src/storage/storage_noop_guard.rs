@@ -49,7 +49,7 @@ impl Drop for StorageNoopGuard {
 	fn drop(&mut self) {
 		// No need to double panic, eg. inside a test assertion failure.
 		if sp_std::thread::panicking() {
-			return;
+			return
 		}
 		assert_eq!(
 			frame_support::storage_root(frame_support::StateVersion::V1),

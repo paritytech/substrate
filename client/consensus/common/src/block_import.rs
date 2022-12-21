@@ -157,9 +157,9 @@ impl<Block: BlockT, Transaction> StateAction<Block, Transaction> {
 	/// Check if execution checks that require runtime calls should be skipped.
 	pub fn skip_execution_checks(&self) -> bool {
 		match self {
-			StateAction::ApplyChanges(_)
-			| StateAction::Execute
-			| StateAction::ExecuteIfPossible => false,
+			StateAction::ApplyChanges(_) |
+			StateAction::Execute |
+			StateAction::ExecuteIfPossible => false,
 			StateAction::Skip => true,
 		}
 	}
@@ -270,9 +270,8 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 	) -> BlockImportParams<Block, Transaction2> {
 		// Preserve imported state.
 		let state_action = match self.state_action {
-			StateAction::ApplyChanges(StorageChanges::Import(state)) => {
-				StateAction::ApplyChanges(StorageChanges::Import(state))
-			},
+			StateAction::ApplyChanges(StorageChanges::Import(state)) =>
+				StateAction::ApplyChanges(StorageChanges::Import(state)),
 			StateAction::ApplyChanges(StorageChanges::Changes(_)) => StateAction::Skip,
 			StateAction::Execute => StateAction::Execute,
 			StateAction::ExecuteIfPossible => StateAction::ExecuteIfPossible,

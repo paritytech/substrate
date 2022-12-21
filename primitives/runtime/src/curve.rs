@@ -75,7 +75,7 @@ impl<'a> PiecewiseLinear<'a> {
 		let n = n.min(d.clone());
 
 		if self.points.is_empty() {
-			return N::zero();
+			return N::zero()
 		}
 
 		let next_point_index = self.points.iter().position(|p| n < p.0 * d.clone());
@@ -85,11 +85,11 @@ impl<'a> PiecewiseLinear<'a> {
 				(self.points[previous_point_index], self.points[next_point_index])
 			} else {
 				// There is no previous points, take first point ordinate
-				return self.points.first().map(|p| p.1).unwrap_or_else(Perbill::zero) * d;
+				return self.points.first().map(|p| p.1).unwrap_or_else(Perbill::zero) * d
 			}
 		} else {
 			// There is no next points, take last point ordinate
-			return self.points.last().map(|p| p.1).unwrap_or_else(Perbill::zero) * d;
+			return self.points.last().map(|p| p.1).unwrap_or_else(Perbill::zero) * d
 		};
 
 		let delta_y = multiply_by_rational_saturating(

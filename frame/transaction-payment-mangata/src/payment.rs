@@ -98,7 +98,7 @@ where
 		tip: Self::Balance,
 	) -> Result<Self::LiquidityInfo, TransactionValidityError> {
 		if fee.is_zero() {
-			return Ok(None);
+			return Ok(None)
 		}
 
 		let withdraw_reason = if tip.is_zero() {

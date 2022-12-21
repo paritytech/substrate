@@ -87,7 +87,7 @@ where
 	/// Benchmark the execution speed of historic blocks and log the results.
 	pub fn run(&self) -> Result<()> {
 		if self.params.from == 0 {
-			return Err("Cannot benchmark the genesis block".into());
+			return Err("Cannot benchmark the genesis block".into())
 		}
 
 		for i in self.params.from..=self.params.to {

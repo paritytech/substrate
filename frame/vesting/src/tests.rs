@@ -1131,16 +1131,16 @@ fn vested_transfer_less_than_existential_deposit_fails() {
 	ExtBuilder::default().existential_deposit(4 * ED).build().execute_with(|| {
 		// MinVestedTransfer is less the ED.
 		assert!(
-			<Test as Config>::Currency::minimum_balance()
-				> <Test as Config>::MinVestedTransfer::get()
+			<Test as Config>::Currency::minimum_balance() >
+				<Test as Config>::MinVestedTransfer::get()
 		);
 
 		let sched =
 			VestingInfo::new(<Test as Config>::MinVestedTransfer::get() as u64, 1u64, 10u64);
 		// The new account balance with the schedule's locked amount would be less than ED.
 		assert!(
-			Balances::free_balance(&99) + sched.locked()
-				< <Test as Config>::Currency::minimum_balance()
+			Balances::free_balance(&99) + sched.locked() <
+				<Test as Config>::Currency::minimum_balance()
 		);
 
 		// vested_transfer fails.

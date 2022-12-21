@@ -147,18 +147,14 @@ where
 		let request = schema::v1::light::Request::decode(&payload[..])?;
 
 		let response = match &request.request {
-			Some(schema::v1::light::request::Request::RemoteCallRequest(r)) => {
-				self.on_remote_call_request(&peer, r)?
-			},
-			Some(schema::v1::light::request::Request::RemoteReadRequest(r)) => {
-				self.on_remote_read_request(&peer, r)?
-			},
-			Some(schema::v1::light::request::Request::RemoteReadChildRequest(r)) => {
-				self.on_remote_read_child_request(&peer, r)?
-			},
-			None => {
-				return Err(HandleRequestError::BadRequest("Remote request without request data."))
-			},
+			Some(schema::v1::light::request::Request::RemoteCallRequest(r)) =>
+				self.on_remote_call_request(&peer, r)?,
+			Some(schema::v1::light::request::Request::RemoteReadRequest(r)) =>
+				self.on_remote_read_request(&peer, r)?,
+			Some(schema::v1::light::request::Request::RemoteReadChildRequest(r)) =>
+				self.on_remote_read_child_request(&peer, r)?,
+			None =>
+				return Err(HandleRequestError::BadRequest("Remote request without request data.")),
 		};
 
 		let mut data = Vec::new();
@@ -207,7 +203,7 @@ where
 	) -> Result<schema::v1::light::Response, HandleRequestError> {
 		if request.keys.is_empty() {
 			debug!("Invalid remote read request sent by {}.", peer);
-			return Err(HandleRequestError::BadRequest("Remote read request without keys."));
+			return Err(HandleRequestError::BadRequest("Remote read request without keys."))
 		}
 
 		trace!(
@@ -249,7 +245,7 @@ where
 	) -> Result<schema::v1::light::Response, HandleRequestError> {
 		if request.keys.is_empty() {
 			debug!("Invalid remote child read request sent by {}.", peer);
-			return Err(HandleRequestError::BadRequest("Remove read child request without keys."));
+			return Err(HandleRequestError::BadRequest("Remove read child request without keys."))
 		}
 
 		trace!(

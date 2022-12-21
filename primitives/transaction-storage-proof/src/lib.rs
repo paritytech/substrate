@@ -101,7 +101,7 @@ impl sp_inherents::InherentDataProvider for InherentDataProvider {
 		mut error: &[u8],
 	) -> Option<Result<(), Error>> {
 		if *identifier != INHERENT_IDENTIFIER {
-			return None;
+			return None
 		}
 
 		let error = InherentError::decode(&mut error).ok()?;
@@ -160,13 +160,12 @@ pub mod registration {
 			.saturating_sub(DEFAULT_STORAGE_PERIOD.into());
 		if number.is_zero() {
 			// Too early to collect proofs.
-			return Ok(InherentDataProvider::new(None));
+			return Ok(InherentDataProvider::new(None))
 		}
 
 		let proof = match client.block_indexed_body(number)? {
-			Some(transactions) if !transactions.is_empty() => {
-				Some(build_proof(parent.as_ref(), transactions)?)
-			},
+			Some(transactions) if !transactions.is_empty() =>
+				Some(build_proof(parent.as_ref(), transactions)?),
 			Some(_) | None => {
 				// Nothing was indexed in that block.
 				None

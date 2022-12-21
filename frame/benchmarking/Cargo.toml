@@ -29,6 +29,7 @@ sp-runtime = { version = "6.0.0", default-features = false, path = "../../primit
 sp-runtime-interface = { version = "6.0.0", default-features = false, path = "../../primitives/runtime-interface" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 sp-storage = { version = "6.0.0", default-features = false, path = "../../primitives/storage" }
+futures = "0.3.21"
 
 [dev-dependencies]
 array-bytes = "4.1"

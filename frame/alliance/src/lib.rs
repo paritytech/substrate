@@ -1016,9 +1016,9 @@ pub mod pallet {
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Check if the Alliance has been initialized.
 	fn is_initialized() -> bool {
-		Self::has_member(MemberRole::Founder)
-			|| Self::has_member(MemberRole::Fellow)
-			|| Self::has_member(MemberRole::Ally)
+		Self::has_member(MemberRole::Founder) ||
+			Self::has_member(MemberRole::Fellow) ||
+			Self::has_member(MemberRole::Ally)
 	}
 
 	/// Check if a given role has any members.
@@ -1217,7 +1217,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let res = judgement(who);
 		if res.is_err() {
 			if let Some(parent) = T::IdentityVerifier::super_account_id(who) {
-				return judgement(&parent);
+				return judgement(&parent)
 			}
 		}
 		res

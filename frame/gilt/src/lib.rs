@@ -598,7 +598,7 @@ pub mod pallet {
 				QueueTotals::<T>::mutate(|qs| {
 					for duration in (1..=T::QueueCount::get()).rev() {
 						if qs[duration as usize - 1].0 == 0 {
-							continue;
+							continue
 						}
 						let queue_index = duration as usize - 1;
 						let expiry =
@@ -644,14 +644,14 @@ pub mod pallet {
 								bids_taken += 1;
 
 								if remaining.is_zero() || bids_taken == max_bids {
-									break;
+									break
 								}
 							}
 							queues_hit += 1;
 							qs[queue_index].0 = q.len() as u32;
 						});
 						if remaining.is_zero() || bids_taken == max_bids {
-							break;
+							break
 						}
 					}
 				});

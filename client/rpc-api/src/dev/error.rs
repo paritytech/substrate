@@ -51,18 +51,14 @@ impl From<Error> for JsonRpseeError {
 		let msg = e.to_string();
 
 		match e {
-			Error::BlockQueryError(_) => {
-				CallError::Custom(ErrorObject::owned(BASE_ERROR + 1, msg, None::<()>))
-			},
-			Error::BlockExecutionFailed => {
-				CallError::Custom(ErrorObject::owned(BASE_ERROR + 3, msg, None::<()>))
-			},
-			Error::WitnessCompactionFailed => {
-				CallError::Custom(ErrorObject::owned(BASE_ERROR + 4, msg, None::<()>))
-			},
-			Error::ProofExtractionFailed => {
-				CallError::Custom(ErrorObject::owned(BASE_ERROR + 5, msg, None::<()>))
-			},
+			Error::BlockQueryError(_) =>
+				CallError::Custom(ErrorObject::owned(BASE_ERROR + 1, msg, None::<()>)),
+			Error::BlockExecutionFailed =>
+				CallError::Custom(ErrorObject::owned(BASE_ERROR + 3, msg, None::<()>)),
+			Error::WitnessCompactionFailed =>
+				CallError::Custom(ErrorObject::owned(BASE_ERROR + 4, msg, None::<()>)),
+			Error::ProofExtractionFailed =>
+				CallError::Custom(ErrorObject::owned(BASE_ERROR + 5, msg, None::<()>)),
 			Error::UnsafeRpcCalled(e) => e.into(),
 		}
 		.into()

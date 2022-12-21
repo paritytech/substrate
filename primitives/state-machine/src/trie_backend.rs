@@ -619,8 +619,8 @@ pub mod tests {
 			.storage_root(iter::once((&b"new-key"[..], Some(&b"new-value"[..]))), state_version);
 		assert!(!tx.drain().is_empty());
 		assert!(
-			new_root
-				!= test_trie(state_version, None, None)
+			new_root !=
+				test_trie(state_version, None, None)
 					.storage_root(iter::empty(), state_version)
 					.0
 		);

@@ -171,7 +171,7 @@ pub fn extract_type_option(typ: &syn::Type) -> Option<syn::Type> {
 			// Option has only one type argument in angle bracket.
 			if let syn::PathArguments::AngleBracketed(a) = &v.arguments {
 				if let syn::GenericArgument::Type(typ) = a.args.last()? {
-					return Some(typ.clone());
+					return Some(typ.clone())
 				}
 			}
 		}

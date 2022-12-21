@@ -52,7 +52,7 @@ pub fn derive_default_no_bound(input: proc_macro::TokenStream) -> proc_macro::To
 				quote::quote!(Self)
 			},
 		},
-		syn::Data::Enum(enum_) => {
+		syn::Data::Enum(enum_) =>
 			if let Some(first_variant) = enum_.variants.first() {
 				let variant_ident = &first_variant.ident;
 				match &first_variant.fields {
@@ -83,11 +83,10 @@ pub fn derive_default_no_bound(input: proc_macro::TokenStream) -> proc_macro::To
 				}
 			} else {
 				quote::quote!(Self)
-			}
-		},
+			},
 		syn::Data::Union(_) => {
 			let msg = "Union type not supported by `derive(CloneNoBound)`";
-			return syn::Error::new(input.span(), msg).to_compile_error().into();
+			return syn::Error::new(input.span(), msg).to_compile_error().into()
 		},
 	};
 

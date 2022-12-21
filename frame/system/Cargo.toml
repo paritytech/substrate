@@ -24,6 +24,9 @@ sp-runtime = { version = "6.0.0", default-features = false, path = "../../primit
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 sp-version = { version = "5.0.0", default-features = false, path = "../../primitives/version" }
 sp-weights = { version = "4.0.0", default-features = false, path = "../../primitives/weights" }
+sp-ver = { version = "4.0.0-dev", default-features = false, path = "../../primitives/ver" }
+extrinsic-shuffler = { version = "4.0.0-dev", default-features = false, path = "../../primitives/shuffler" }
+
 
 [dev-dependencies]
 criterion = "0.3.3"
@@ -42,8 +45,10 @@ std = [
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"sp-ver/std",
 	"sp-version/std",
 	"sp-weights/std",
+	"extrinsic-shuffler/std",
 ]
 runtime-benchmarks = [
 	"frame-support/runtime-benchmarks",

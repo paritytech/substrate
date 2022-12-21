@@ -316,7 +316,7 @@ where
 			.map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) })
 		},
 		#[cfg(feature = "wasmtime")]
-		WasmExecutionMethod::Compiled { instantiation_strategy } => {
+		WasmExecutionMethod::Compiled { instantiation_strategy } =>
 			sc_executor_wasmtime::create_runtime::<H>(
 				blob,
 				sc_executor_wasmtime::Config {
@@ -332,8 +332,7 @@ where
 					},
 				},
 			)
-			.map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) })
-		},
+			.map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) }),
 	}
 }
 

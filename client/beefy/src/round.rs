@@ -42,7 +42,7 @@ struct RoundTracker {
 impl RoundTracker {
 	fn add_vote(&mut self, vote: (Public, Signature), self_vote: bool) -> bool {
 		if self.votes.contains_key(&vote.0) {
-			return false;
+			return false
 		}
 
 		self.self_vote = self.self_vote || self_vote;
@@ -110,8 +110,8 @@ where
 	}
 
 	pub(crate) fn should_self_vote(&self, round: &(P, NumberFor<B>)) -> bool {
-		Some(round.1) > self.best_done
-			&& self.rounds.get(round).map(|tracker| !tracker.has_self_vote()).unwrap_or(true)
+		Some(round.1) > self.best_done &&
+			self.rounds.get(round).map(|tracker| !tracker.has_self_vote()).unwrap_or(true)
 	}
 
 	pub(crate) fn add_vote(

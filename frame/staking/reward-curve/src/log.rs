@@ -39,7 +39,7 @@ pub fn log2(p: u32, q: u32) -> u32 {
 
 	// log2(1) = 0
 	if p == q {
-		return 0;
+		return 0
 	}
 
 	// find the power of 2 where q * 2^n <= p < q * 2^(n+1)
@@ -59,7 +59,7 @@ pub fn log2(p: u32, q: u32) -> u32 {
 	loop {
 		let term = taylor_term(k, y_num.into(), y_den.into());
 		if term == 0 {
-			break;
+			break
 		}
 
 		res += term;

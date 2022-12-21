@@ -39,6 +39,8 @@ frame-benchmarking = { version = "4.0.0-dev", path = "../../../frame/benchmarkin
 frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
 sc-block-builder = { version = "0.10.0-dev", path = "../../../client/block-builder" }
+sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
+sc-block-builder-ver = { version = "0.10.0-dev", path = "../../../client/block-builder-ver" }
 sc-cli = { version = "0.10.0-dev", default-features = false, path = "../../../client/cli" }
 sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
 sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../../../client/db" }
@@ -56,7 +58,12 @@ sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
 sp-state-machine = { version = "0.12.0", path = "../../../primitives/state-machine" }
 sp-storage = { version = "6.0.0", path = "../../../primitives/storage" }
 sp-trie = { version = "6.0.0", path = "../../../primitives/trie" }
+sp-consensus-aura = { version = "0.10.0-dev", path = "../../../primitives/consensus/aura" }
+sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
+ver-api = { path = "../../../primitives/ver-api"}
+sp-ver = { path = "../../../primitives/ver" , features=["helpers"] }
 gethostname = "0.2.3"
+futures = "0.3.21"
 
 [features]
 default = ["rocksdb"]

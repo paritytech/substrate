@@ -121,9 +121,8 @@ impl PreDigest {
 	pub fn vrf(&self) -> Option<(&VRFOutput, &VRFProof)> {
 		match self {
 			PreDigest::Primary(primary) => Some((&primary.vrf_output, &primary.vrf_proof)),
-			PreDigest::SecondaryVRF(secondary) => {
-				Some((&secondary.vrf_output, &secondary.vrf_proof))
-			},
+			PreDigest::SecondaryVRF(secondary) =>
+				Some((&secondary.vrf_output, &secondary.vrf_proof)),
 			PreDigest::SecondaryPlain(_) => None,
 		}
 	}

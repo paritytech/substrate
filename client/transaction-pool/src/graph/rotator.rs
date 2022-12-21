@@ -88,7 +88,7 @@ impl<Hash: hash::Hash + Eq + Clone> PoolRotator<Hash> {
 		xt: &Transaction<Hash, Ex>,
 	) -> bool {
 		if xt.valid_till > current_block {
-			return false;
+			return false
 		}
 
 		self.ban(now, iter::once(xt.hash.clone()));

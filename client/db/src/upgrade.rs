@@ -163,9 +163,8 @@ fn migrate_3_to_4<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> Upgr
 /// If the file does not exist returns 0.
 fn current_version(path: &Path) -> UpgradeResult<u32> {
 	match fs::File::open(version_file_path(path)) {
-		Err(ref err) if err.kind() == ErrorKind::NotFound => {
-			Err(UpgradeError::MissingDatabaseVersionFile)
-		},
+		Err(ref err) if err.kind() == ErrorKind::NotFound =>
+			Err(UpgradeError::MissingDatabaseVersionFile),
 		Err(_) => Err(UpgradeError::UnknownDatabaseVersion),
 		Ok(mut file) => {
 			let mut s = String::new();

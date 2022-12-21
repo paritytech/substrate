@@ -51,7 +51,7 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 
 			pub use #error_token_unique_id as tt_error_token;
-		};
+		}
 	};
 
 	let error_ident = &error.error;

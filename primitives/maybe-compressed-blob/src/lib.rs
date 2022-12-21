@@ -85,7 +85,7 @@ pub fn decompress(blob: &[u8], bomb_limit: usize) -> Result<Cow<[u8]>, Error> {
 /// able to differentiate it from a compression bomb.
 pub fn compress(blob: &[u8], bomb_limit: usize) -> Option<Vec<u8>> {
 	if blob.len() > bomb_limit {
-		return None;
+		return None
 	}
 
 	let mut buf = ZSTD_PREFIX.to_vec();

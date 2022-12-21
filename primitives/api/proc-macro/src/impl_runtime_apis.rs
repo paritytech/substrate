@@ -366,7 +366,7 @@ fn extend_with_api_version(mut trait_: Path, version: Option<u64>) -> Path {
 		v
 	} else {
 		// nothing to do
-		return trait_;
+		return trait_
 	};
 
 	let trait_name = &mut trait_
@@ -598,7 +598,7 @@ fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
 				"Two traits with the same name detected! \
 					The trait name is used to generate its ID. \
 					Please rename one trait at the declaration!",
-			));
+			))
 		}
 
 		let id: Path = parse_quote!( #path ID );
@@ -681,7 +681,7 @@ fn extract_api_version(attrs: &Vec<Attribute>, span: Span) -> Result<Option<u64>
 				Each runtime API can have only one version.",
 				API_VERSION_ATTRIBUTE
 			),
-		));
+		))
 	}
 
 	// Parse the runtime version if there exists one.

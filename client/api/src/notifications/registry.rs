@@ -183,7 +183,7 @@ impl Registry {
 
 		// early exit if no listeners
 		if !has_wildcard && self.listeners.is_empty() && self.child_listeners.is_empty() {
-			return;
+			return
 		}
 
 		let mut subscribers = self.wildcard_listeners.clone();
@@ -229,7 +229,7 @@ impl Registry {
 
 		// Don't send empty notifications
 		if changes.is_empty() && child_changes.is_empty() {
-			return;
+			return
 		}
 
 		let changes = Arc::<[_]>::from(changes);
@@ -299,7 +299,7 @@ impl Registry {
 			None => {
 				wildcards.remove(&subscriber);
 			},
-			Some(filters) => {
+			Some(filters) =>
 				for key in filters.iter() {
 					let remove_key = match listeners.get_mut(key) {
 						Some(ref mut set) => {
@@ -312,8 +312,7 @@ impl Registry {
 					if remove_key {
 						listeners.remove(key);
 					}
-				}
-			},
+				},
 		}
 	}
 

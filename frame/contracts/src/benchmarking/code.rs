@@ -511,12 +511,10 @@ pub mod body {
 				DynInstr::RandomI32(low, high) => {
 					vec![Instruction::I32Const(rng.gen_range(*low..*high))]
 				},
-				DynInstr::RandomI32Repeated(num) => {
-					(&mut rng).sample_iter(Standard).take(*num).map(Instruction::I32Const).collect()
-				},
-				DynInstr::RandomI64Repeated(num) => {
-					(&mut rng).sample_iter(Standard).take(*num).map(Instruction::I64Const).collect()
-				},
+				DynInstr::RandomI32Repeated(num) =>
+					(&mut rng).sample_iter(Standard).take(*num).map(Instruction::I32Const).collect(),
+				DynInstr::RandomI64Repeated(num) =>
+					(&mut rng).sample_iter(Standard).take(*num).map(Instruction::I64Const).collect(),
 				DynInstr::RandomGetLocal(low, high) => {
 					vec![Instruction::GetLocal(rng.gen_range(*low..*high))]
 				},

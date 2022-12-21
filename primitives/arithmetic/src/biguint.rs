@@ -159,7 +159,7 @@ impl BigUint {
 		// has the ability to cause this. There is nothing to do if the number already has 1
 		// limb only. call it a day and return.
 		if self.len().is_zero() {
-			return;
+			return
 		}
 		let index = self.digits.iter().position(|&elem| elem != 0).unwrap_or(self.len() - 1);
 
@@ -173,7 +173,7 @@ impl BigUint {
 	pub fn lpad(&mut self, size: usize) {
 		let n = self.len();
 		if n >= size {
-			return;
+			return
 		}
 		let pad = size - n;
 		let mut new_digits = (0..pad).map(|_| 0).collect::<Vec<Single>>();
@@ -266,15 +266,15 @@ impl BigUint {
 			if self.get(j) == 0 {
 				// Note: `with_capacity` allocates with 0. Explicitly set j + m to zero if
 				// otherwise.
-				continue;
+				continue
 			}
 
 			let mut k = 0;
 			for i in 0..m {
 				// PROOF: (B−1) × (B−1) + (B−1) + (B−1) = B^2 −1 < B^2. addition is safe.
-				let t = mul_single(self.get(j), other.get(i))
-					+ Double::from(w.get(i + j))
-					+ Double::from(k);
+				let t = mul_single(self.get(j), other.get(i)) +
+					Double::from(w.get(i + j)) +
+					Double::from(k);
 				w.set(i + j, (t % B) as Single);
 				// PROOF: (B^2 - 1) / B < B. conversion is safe.
 				k = (t / B) as Single;
@@ -318,7 +318,7 @@ impl BigUint {
 	/// Taken from "The Art of Computer Programming" by D.E. Knuth, vol 2, chapter 4.
 	pub fn div(self, other: &Self, rem: bool) -> Option<(Self, Self)> {
 		if other.len() <= 1 || other.msb() == 0 || self.msb() == 0 || self.len() <= other.len() {
-			return None;
+			return None
 		}
 		let n = other.len();
 		let m = self.len() - n;
@@ -378,7 +378,7 @@ impl BigUint {
 			test();
 			while (*rhat.borrow() as Double) < B {
 				if !test() {
-					break;
+					break
 				}
 			}
 

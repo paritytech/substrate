@@ -1149,8 +1149,8 @@ fn voter_persists_its_votes() {
 					Pin::new(&mut *round_tx.lock())
 						.start_send(finality_grandpa::Message::Prevote(prevote))
 						.unwrap();
-				} else if state.compare_exchange(1, 2, Ordering::SeqCst, Ordering::SeqCst).unwrap()
-					== 1
+				} else if state.compare_exchange(1, 2, Ordering::SeqCst, Ordering::SeqCst).unwrap() ==
+					1
 				{
 					// the next message we receive should be our own prevote
 					let prevote = match signed.message {
@@ -1164,8 +1164,8 @@ fn voter_persists_its_votes() {
 				// after alice restarts it should send its previous prevote
 				// therefore we won't ever receive it again since it will be a
 				// known message on the gossip layer
-				} else if state.compare_exchange(2, 3, Ordering::SeqCst, Ordering::SeqCst).unwrap()
-					== 2
+				} else if state.compare_exchange(2, 3, Ordering::SeqCst, Ordering::SeqCst).unwrap() ==
+					2
 				{
 					// we then receive a precommit from alice for block 15
 					// even though we casted a prevote for block 30

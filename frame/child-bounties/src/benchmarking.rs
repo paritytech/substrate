@@ -61,8 +61,8 @@ fn setup_bounty<T: Config>(
 	let caller = account("caller", user, SEED);
 	let value: BalanceOf<T> = T::BountyValueMinimum::get().saturating_mul(100u32.into());
 	let fee = value / 2u32.into();
-	let deposit = T::BountyDepositBase::get()
-		+ T::DataDepositPerByte::get() * T::MaximumReasonLength::get().into();
+	let deposit = T::BountyDepositBase::get() +
+		T::DataDepositPerByte::get() * T::MaximumReasonLength::get().into();
 	let _ = T::Currency::make_free_balance_be(&caller, deposit);
 	let curator = account("curator", user, SEED);
 	let _ = T::Currency::make_free_balance_be(&curator, fee / 2u32.into());

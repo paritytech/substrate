@@ -95,28 +95,17 @@ fn inject_inherents<'a, B: BlockT>(
 	slot_info: &'a mut SlotInfo<B>,
 ) -> Result<(), sp_consensus::Error> {
 	let prev_seed = slot_info.chain_head.seed();
-	let transcript_data = create_shuffling_seed_input_data(&prev_seed);
 
-	if let Ok(Some(signature)) =
-		SyncCryptoStore::sr25519_vrf_sign(&(*keystore), AURA, public, transcript_data)
-	{
-		RandomSeedInherentDataProvider(ShufflingSeed {
-			seed: signature.output.to_bytes().into(),
-			proof: signature.proof.to_bytes().into(),
-		})
+	let seed = sp_ver::calculate_next_seed::<dyn SyncCryptoStore>(&(*keystore), public, prev_seed)
+		.ok_or(sp_consensus::Error::StateUnavailable(String::from("signing seed failure")))?;
+
+	RandomSeedInherentDataProvider(seed)
 		.provide_inherent_data(&mut slot_info.inherent_data)
 		.map_err(|_| {
 			sp_consensus::Error::StateUnavailable(String::from(
 				"cannot inject RandomSeed inherent data",
 			))
 		})?;
-	} else {
-		return Err(sp_consensus::Error::StateUnavailable(String::from("signing seed failure")));
-	};
-
-	// let signature =
-	// 	.map_err(|_| sp_consensus::Error::StateUnavailable(String::from("signing seed failure")))?;
-	//
 
 	Ok(())
 }
@@ -267,7 +256,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			Either::Left((Err(err), _)) => {
 				warn!(target: logging_target, "Proposing failed: {}", err);
 
-				return None;
+				return None
 			},
 			Either::Right(_) => {
 				info!(
@@ -287,7 +276,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 					"slot" => *slot,
 				);
 
-				return None;
+				return None
 			},
 		};
 
@@ -314,7 +303,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				"Skipping proposal slot {} since there's no time left to propose", slot,
 			);
 
-			return None;
+			return None
 		} else {
 			Delay::new(proposing_remaining_duration)
 		};
@@ -337,7 +326,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 					"err" => ?err,
 				);
 
-				return None;
+				return None
 			},
 		};
 
@@ -345,9 +334,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 		let authorities_len = self.authorities_len(&aux_data);
 
-		if !self.force_authoring()
-			&& self.sync_oracle().is_offline()
-			&& authorities_len.map(|a| a > 1).unwrap_or(false)
+		if !self.force_authoring() &&
+			self.sync_oracle().is_offline() &&
+			authorities_len.map(|a| a > 1).unwrap_or(false)
 		{
 			debug!(target: logging_target, "Skipping proposal slot. Waiting for the network.");
 			telemetry!(
@@ -357,13 +346,13 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				"authorities_len" => authorities_len,
 			);
 
-			return None;
+			return None
 		}
 
 		let claim = self.claim_slot(&slot_info.chain_head, slot, &aux_data).await?;
 
 		if self.should_backoff(slot, &slot_info.chain_head) {
-			return None;
+			return None
 		}
 
 		debug!(target: logging_target, "Starting authorship at slot: {slot}");
@@ -383,7 +372,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 					"err" => ?err
 				);
 
-				return None;
+				return None
 			},
 		};
 
@@ -410,7 +399,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			Err(err) => {
 				warn!(target: logging_target, "Failed to create block import params: {}", err);
 
-				return None;
+				return None
 			},
 		};
 
@@ -539,13 +528,13 @@ pub async fn start_slot_worker<B, C, W, SO, CIDP, Proof>(
 			Ok(r) => r,
 			Err(e) => {
 				warn!(target: "slots", "Error while polling for next slot: {}", e);
-				return;
+				return
 			},
 		};
 
 		if sync_oracle.is_major_syncing() {
 			debug!(target: "slots", "Skipping proposal slot due to sync.");
-			continue;
+			continue
 		}
 
 		let _ = worker.on_slot(slot_info).await;
@@ -625,7 +614,7 @@ pub fn proposing_remaining_duration<Block: BlockT>(
 
 	// If parent is genesis block, we don't require any lenience factor.
 	if slot_info.chain_head.number().is_zero() {
-		return proposing_duration;
+		return proposing_duration
 	}
 
 	let parent_slot = match parent_slot {
@@ -788,7 +777,7 @@ where
 	) -> bool {
 		// This should not happen, but we want to keep the previous behaviour if it does.
 		if slot_now <= chain_head_slot {
-			return false;
+			return false
 		}
 
 		// There can be race between getting the finalized number and getting the best number.

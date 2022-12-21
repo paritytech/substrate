@@ -94,7 +94,7 @@ where
 		let live = self.live_peers.lock();
 		while let Some(peer) = self.peers_cache.pop_front() {
 			if live.contains(&peer) {
-				return Some(peer);
+				return Some(peer)
 			}
 		}
 		None
@@ -122,7 +122,7 @@ where
 	pub fn request(&mut self, block: NumberFor<B>) {
 		// ignore new requests while there's already one pending
 		if matches!(self.state, State::AwaitingResponse(_, _, _)) {
-			return;
+			return
 		}
 		self.reset_peers_cache_for_block(block);
 
@@ -193,7 +193,7 @@ where
 			State::Idle => {
 				futures::pending!();
 				// Doesn't happen as 'futures::pending!()' is an 'await' barrier that never passes.
-				return None;
+				return None
 			},
 			State::AwaitingResponse(peer, block, receiver) => {
 				let resp = receiver.await;

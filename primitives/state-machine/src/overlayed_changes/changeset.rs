@@ -289,7 +289,7 @@ impl<K: Ord + Hash + Clone, V> OverlayedMap<K, V> {
 	/// Calling this while already inside the runtime will return an error.
 	pub fn enter_runtime(&mut self) -> Result<(), AlreadyInRuntime> {
 		if let ExecutionMode::Runtime = self.execution_mode {
-			return Err(AlreadyInRuntime);
+			return Err(AlreadyInRuntime)
 		}
 		self.execution_mode = ExecutionMode::Runtime;
 		self.num_client_transactions = self.transaction_depth();
@@ -302,7 +302,7 @@ impl<K: Ord + Hash + Clone, V> OverlayedMap<K, V> {
 	/// Calling this while already outside the runtime will return an error.
 	pub fn exit_runtime(&mut self) -> Result<(), NotInRuntime> {
 		if let ExecutionMode::Client = self.execution_mode {
-			return Err(NotInRuntime);
+			return Err(NotInRuntime)
 		}
 		self.execution_mode = ExecutionMode::Client;
 		if self.has_open_runtime_transactions() {
@@ -349,7 +349,7 @@ impl<K: Ord + Hash + Clone, V> OverlayedMap<K, V> {
 		// runtime is not allowed to close transactions started by the client
 		if let ExecutionMode::Runtime = self.execution_mode {
 			if !self.has_open_runtime_transactions() {
-				return Err(NoOpenTransaction);
+				return Err(NoOpenTransaction)
 			}
 		}
 

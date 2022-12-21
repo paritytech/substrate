@@ -244,12 +244,10 @@ impl WasmInstance for WasmtimeInstance {
 
 	fn get_global_const(&mut self, name: &str) -> Result<Option<Value>> {
 		match &mut self.strategy {
-			Strategy::LegacyInstanceReuse { instance_wrapper, .. } => {
-				instance_wrapper.get_global_val(name)
-			},
-			Strategy::RecreateInstance(ref mut instance_creator) => {
-				instance_creator.instantiate()?.get_global_val(name)
-			},
+			Strategy::LegacyInstanceReuse { instance_wrapper, .. } =>
+				instance_wrapper.get_global_val(name),
+			Strategy::RecreateInstance(ref mut instance_creator) =>
+				instance_creator.instantiate()?.get_global_val(name),
 		}
 	}
 
@@ -260,9 +258,8 @@ impl WasmInstance for WasmtimeInstance {
 				// associated with it.
 				None
 			},
-			Strategy::LegacyInstanceReuse { instance_wrapper, .. } => {
-				Some(instance_wrapper.base_ptr())
-			},
+			Strategy::LegacyInstanceReuse { instance_wrapper, .. } =>
+				Some(instance_wrapper.base_ptr()),
 		}
 	}
 }
@@ -669,12 +666,11 @@ where
 						}),
 					)
 				},
-				InstantiationStrategy::Pooling
-				| InstantiationStrategy::PoolingCopyOnWrite
-				| InstantiationStrategy::RecreateInstance
-				| InstantiationStrategy::RecreateInstanceCopyOnWrite => {
-					(module, InternalInstantiationStrategy::Builtin)
-				},
+				InstantiationStrategy::Pooling |
+				InstantiationStrategy::PoolingCopyOnWrite |
+				InstantiationStrategy::RecreateInstance |
+				InstantiationStrategy::RecreateInstanceCopyOnWrite =>
+					(module, InternalInstantiationStrategy::Builtin),
 			}
 		},
 		CodeSupplyMode::Precompiled(compiled_artifact_path) => {

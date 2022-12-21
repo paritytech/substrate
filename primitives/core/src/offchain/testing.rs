@@ -80,9 +80,8 @@ impl TestPersistentOffchainDB {
 		let mut me = self.persistent.write();
 		for ((_prefix, key), value_operation) in changes {
 			match value_operation {
-				OffchainOverlayedChange::SetValue(val) => {
-					me.set(Self::PREFIX, key.as_slice(), val.as_slice())
-				},
+				OffchainOverlayedChange::SetValue(val) =>
+					me.set(Self::PREFIX, key.as_slice(), val.as_slice()),
 				OffchainOverlayedChange::Remove => me.remove(Self::PREFIX, key.as_slice()),
 			}
 		}
@@ -382,12 +381,10 @@ impl offchain::DbExternalities for TestOffchainExt {
 	) -> bool {
 		let mut state = self.0.write();
 		match kind {
-			StorageKind::LOCAL => {
-				state.local_storage.compare_and_set(b"", key, old_value, new_value)
-			},
-			StorageKind::PERSISTENT => {
-				state.persistent_storage.compare_and_set(b"", key, old_value, new_value)
-			},
+			StorageKind::LOCAL =>
+				state.local_storage.compare_and_set(b"", key, old_value, new_value),
+			StorageKind::PERSISTENT =>
+				state.persistent_storage.compare_and_set(b"", key, old_value, new_value),
 		}
 	}
 

@@ -48,9 +48,8 @@ const MALFORMATTED_PEER_ARG_ERROR: i32 = BASE_ERROR + 2;
 impl From<Error> for JsonRpseeError {
 	fn from(e: Error) -> Self {
 		match e {
-			Error::NotHealthy(ref h) => {
-				CallError::Custom(ErrorObject::owned(NOT_HEALTHY_ERROR, e.to_string(), Some(h)))
-			},
+			Error::NotHealthy(ref h) =>
+				CallError::Custom(ErrorObject::owned(NOT_HEALTHY_ERROR, e.to_string(), Some(h))),
 			Error::MalformattedPeerArg(e) => CallError::Custom(ErrorObject::owned(
 				MALFORMATTED_PEER_ARG_ERROR + 2,
 				e,

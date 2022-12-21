@@ -111,7 +111,7 @@ impl ReversibleStorageHasher for Twox64Concat {
 	fn reverse(x: &[u8]) -> &[u8] {
 		if x.len() < 8 {
 			log::error!("Invalid reverse: hash length too short");
-			return &[];
+			return &[]
 		}
 		&x[8..]
 	}
@@ -133,7 +133,7 @@ impl ReversibleStorageHasher for Blake2_128Concat {
 	fn reverse(x: &[u8]) -> &[u8] {
 		if x.len() < 16 {
 			log::error!("Invalid reverse: hash length too short");
-			return &[];
+			return &[]
 		}
 		&x[16..]
 	}

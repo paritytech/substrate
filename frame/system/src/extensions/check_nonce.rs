@@ -80,13 +80,17 @@ where
 		_len: usize,
 	) -> Result<(), TransactionValidityError> {
 		let mut account = crate::Account::<T>::get(who);
+
 		if self.0 != account.nonce {
-			return Err(if self.0 < account.nonce {
-				InvalidTransaction::Stale
+			if self.0 < account.nonce {
+				return Err(InvalidTransaction::Stale.into())
 			} else {
-				InvalidTransaction::Future
+				if crate::TxPrevalidation::<T>::get() {
+					// ignore future txs when prevalidating
+				} else {
+					return Err(InvalidTransaction::Future.into())
+				}
 			}
-			.into());
 		}
 		account.nonce += T::Index::one();
 		crate::Account::<T>::insert(who, account);
@@ -103,7 +107,7 @@ where
 		// check index
 		let account = crate::Account::<T>::get(who);
 		if self.0 < account.nonce {
-			return InvalidTransaction::Stale.into();
+			return InvalidTransaction::Stale.into()
 		}
 
 		let provides = vec![Encode::encode(&(who, self.0))];

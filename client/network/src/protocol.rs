@@ -309,8 +309,8 @@ where
 				out_peers: network_config.default_peers_set.out_peers,
 				bootnodes,
 				reserved_nodes: default_sets_reserved.clone(),
-				reserved_only: network_config.default_peers_set.non_reserved_mode
-					== NonReservedPeerMode::Deny,
+				reserved_only: network_config.default_peers_set.non_reserved_mode ==
+					NonReservedPeerMode::Deny,
 			});
 
 			for set_cfg in &network_config.extra_sets {
@@ -357,8 +357,8 @@ where
 		};
 
 		let block_announce_data_cache = lru::LruCache::new(
-			network_config.default_peers_set.in_peers as usize
-				+ network_config.default_peers_set.out_peers as usize,
+			network_config.default_peers_set.in_peers as usize +
+				network_config.default_peers_set.out_peers as usize,
 		);
 
 		let protocol = Self {
@@ -374,8 +374,8 @@ where
 			default_peers_set_no_slot_connected_peers: HashSet::new(),
 			default_peers_set_num_full: network_config.default_peers_set_num_full as usize,
 			default_peers_set_num_light: {
-				let total = network_config.default_peers_set.out_peers
-					+ network_config.default_peers_set.in_peers;
+				let total = network_config.default_peers_set.out_peers +
+					network_config.default_peers_set.in_peers;
 				total.saturating_sub(network_config.default_peers_set_num_full) as usize
 			},
 			peerset_handle: peerset_handle.clone(),
@@ -530,7 +530,7 @@ where
 			Err(err) => {
 				debug!(target: "sync", "Failed to decode block response from {}: {}", peer_id, err);
 				self.peerset_handle.report_peer(peer_id, rep::BAD_MESSAGE);
-				return CustomMessageOutcome::None;
+				return CustomMessageOutcome::None
 			},
 		};
 
@@ -557,9 +557,8 @@ where
 		if request.fields == BlockAttributes::JUSTIFICATION {
 			match self.chain_sync.on_block_justification(peer_id, block_response) {
 				Ok(OnBlockJustification::Nothing) => CustomMessageOutcome::None,
-				Ok(OnBlockJustification::Import { peer, hash, number, justifications }) => {
-					CustomMessageOutcome::JustificationImport(peer, hash, number, justifications)
-				},
+				Ok(OnBlockJustification::Import { peer, hash, number, justifications }) =>
+					CustomMessageOutcome::JustificationImport(peer, hash, number, justifications),
 				Err(BadPeer(id, repu)) => {
 					self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 					self.peerset_handle.report_peer(id, repu);
@@ -568,12 +567,10 @@ where
 			}
 		} else {
 			match self.chain_sync.on_block_data(&peer_id, Some(request), block_response) {
-				Ok(OnBlockData::Import(origin, blocks)) => {
-					CustomMessageOutcome::BlockImport(origin, blocks)
-				},
-				Ok(OnBlockData::Request(peer, req)) => {
-					prepare_block_request(self.chain_sync.as_ref(), &mut self.peers, peer, req)
-				},
+				Ok(OnBlockData::Import(origin, blocks)) =>
+					CustomMessageOutcome::BlockImport(origin, blocks),
+				Ok(OnBlockData::Request(peer, req)) =>
+					prepare_block_request(self.chain_sync.as_ref(), &mut self.peers, peer, req),
 				Ok(OnBlockData::Continue) => CustomMessageOutcome::None,
 				Err(BadPeer(id, repu)) => {
 					self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
@@ -592,9 +589,8 @@ where
 		response: OpaqueStateResponse,
 	) -> CustomMessageOutcome<B> {
 		match self.chain_sync.on_state_data(&peer_id, response) {
-			Ok(OnStateData::Import(origin, block)) => {
-				CustomMessageOutcome::BlockImport(origin, vec![block])
-			},
+			Ok(OnStateData::Import(origin, block)) =>
+				CustomMessageOutcome::BlockImport(origin, vec![block]),
 			Ok(OnStateData::Continue) => CustomMessageOutcome::None,
 			Err(BadPeer(id, repu)) => {
 				self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
@@ -643,7 +639,7 @@ where
 		if self.peers.contains_key(&who) {
 			error!(target: "sync", "Called on_sync_peer_connected with already connected peer {}", who);
 			debug_assert!(false);
-			return Err(());
+			return Err(())
 		}
 
 		if status.genesis_hash != self.genesis_hash {
@@ -666,7 +662,7 @@ where
 				);
 			}
 
-			return Err(());
+			return Err(())
 		}
 
 		if self.roles.is_light() {
@@ -675,7 +671,7 @@ where
 				debug!(target: "sync", "Peer {} is unable to serve light requests", who);
 				self.peerset_handle.report_peer(who, rep::BAD_ROLE);
 				self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_SYNC);
-				return Err(());
+				return Err(())
 			}
 
 			// we don't interested in peers that are far behind us
@@ -688,31 +684,31 @@ where
 				debug!(target: "sync", "Peer {} is far behind us and will unable to serve light requests", who);
 				self.peerset_handle.report_peer(who, rep::PEER_BEHIND_US_LIGHT);
 				self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_SYNC);
-				return Err(());
+				return Err(())
 			}
 		}
 
 		let no_slot_peer = self.default_peers_set_no_slot_peers.contains(&who);
 		let this_peer_reserved_slot: usize = if no_slot_peer { 1 } else { 0 };
 
-		if status.roles.is_full()
-			&& self.chain_sync.num_peers()
-				>= self.default_peers_set_num_full
-					+ self.default_peers_set_no_slot_connected_peers.len()
-					+ this_peer_reserved_slot
+		if status.roles.is_full() &&
+			self.chain_sync.num_peers() >=
+				self.default_peers_set_num_full +
+					self.default_peers_set_no_slot_connected_peers.len() +
+					this_peer_reserved_slot
 		{
 			debug!(target: "sync", "Too many full nodes, rejecting {}", who);
 			self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_SYNC);
-			return Err(());
+			return Err(())
 		}
 
-		if status.roles.is_light()
-			&& (self.peers.len() - self.chain_sync.num_peers()) >= self.default_peers_set_num_light
+		if status.roles.is_light() &&
+			(self.peers.len() - self.chain_sync.num_peers()) >= self.default_peers_set_num_light
 		{
 			// Make sure that not all slots are occupied by light clients.
 			debug!(target: "sync", "Too many light nodes, rejecting {}", who);
 			self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_SYNC);
-			return Err(());
+			return Err(())
 		}
 
 		let peer = Peer {
@@ -733,7 +729,7 @@ where
 				Err(BadPeer(id, repu)) => {
 					self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 					self.peerset_handle.report_peer(id, repu);
-					return Err(());
+					return Err(())
 				},
 			}
 		} else {
@@ -770,17 +766,17 @@ where
 			Ok(Some(header)) => header,
 			Ok(None) => {
 				warn!("Trying to announce unknown block: {}", hash);
-				return;
+				return
 			},
 			Err(e) => {
 				warn!("Error reading block header {}: {}", hash, e);
-				return;
+				return
 			},
 		};
 
 		// don't announce genesis block since it will be ignored
 		if header.number().is_zero() {
-			return;
+			return
 		}
 
 		let is_best = self.chain.info().best_hash == hash;
@@ -827,7 +823,7 @@ where
 			None => {
 				log::error!(target: "sync", "Received block announce from disconnected peer {}", who);
 				debug_assert!(false);
-				return;
+				return
 			},
 		};
 
@@ -866,9 +862,9 @@ where
 				// AND
 				// 2) parent block is already imported and not pruned.
 				if is_best {
-					return CustomMessageOutcome::PeerNewBest(who, *announce.header.number());
+					return CustomMessageOutcome::PeerNewBest(who, *announce.header.number())
 				} else {
-					return CustomMessageOutcome::None;
+					return CustomMessageOutcome::None
 				}
 			},
 			PollBlockAnnounceValidation::ImportHeader { announce, is_best, who } => {
@@ -888,7 +884,7 @@ where
 				}
 
 				self.report_peer(who, rep::BAD_BLOCK_ANNOUNCEMENT);
-				return CustomMessageOutcome::None;
+				return CustomMessageOutcome::None
 			},
 		};
 
@@ -919,12 +915,10 @@ where
 		}
 
 		match blocks_to_import {
-			Ok(OnBlockData::Import(origin, blocks)) => {
-				CustomMessageOutcome::BlockImport(origin, blocks)
-			},
-			Ok(OnBlockData::Request(peer, req)) => {
-				prepare_block_request(self.chain_sync.as_ref(), &mut self.peers, peer, req)
-			},
+			Ok(OnBlockData::Import(origin, blocks)) =>
+				CustomMessageOutcome::BlockImport(origin, blocks),
+			Ok(OnBlockData::Request(peer, req)) =>
+				prepare_block_request(self.chain_sync.as_ref(), &mut self.peers, peer, req),
 			Ok(OnBlockData::Continue) => CustomMessageOutcome::None,
 			Err(BadPeer(id, repu)) => {
 				self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
@@ -1304,7 +1298,7 @@ where
 		params: &mut impl PollParameters,
 	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
 		if let Some(message) = self.pending_messages.pop_front() {
-			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message));
+			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message))
 		}
 
 		// Check for finished outgoing requests.
@@ -1331,7 +1325,7 @@ where
 											self.peerset_handle.report_peer(*id, rep::BAD_MESSAGE);
 											self.behaviour
 												.disconnect_peer(id, HARDCODED_PEERSETS_SYNC);
-											continue;
+											continue
 										},
 									};
 
@@ -1351,7 +1345,7 @@ where
 											self.peerset_handle.report_peer(*id, rep::BAD_MESSAGE);
 											self.behaviour
 												.disconnect_peer(id, HARDCODED_PEERSETS_SYNC);
-											continue;
+											continue
 										},
 									};
 
@@ -1382,8 +1376,8 @@ where
 								self.peerset_handle.report_peer(*id, rep::REFUSED);
 								self.behaviour.disconnect_peer(id, HARDCODED_PEERSETS_SYNC);
 							},
-							RequestFailure::Network(OutboundFailure::ConnectionClosed)
-							| RequestFailure::NotConnected => {
+							RequestFailure::Network(OutboundFailure::ConnectionClosed) |
+							RequestFailure::NotConnected => {
 								self.behaviour.disconnect_peer(id, HARDCODED_PEERSETS_SYNC);
 							},
 							RequestFailure::UnknownProtocol => {
@@ -1467,28 +1461,24 @@ where
 		}
 
 		if let Some(message) = self.pending_messages.pop_front() {
-			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message));
+			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message))
 		}
 
 		let event = match self.behaviour.poll(cx, params) {
 			Poll::Pending => return Poll::Pending,
 			Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev)) => ev,
-			Poll::Ready(NetworkBehaviourAction::Dial { opts, handler }) => {
-				return Poll::Ready(NetworkBehaviourAction::Dial { opts, handler })
-			},
-			Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) => {
+			Poll::Ready(NetworkBehaviourAction::Dial { opts, handler }) =>
+				return Poll::Ready(NetworkBehaviourAction::Dial { opts, handler }),
+			Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
 				return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 					peer_id,
 					handler,
 					event,
-				})
-			},
-			Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }) => {
-				return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score })
-			},
-			Poll::Ready(NetworkBehaviourAction::CloseConnection { peer_id, connection }) => {
-				return Poll::Ready(NetworkBehaviourAction::CloseConnection { peer_id, connection })
-			},
+				}),
+			Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }) =>
+				return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }),
+			Poll::Ready(NetworkBehaviourAction::CloseConnection { peer_id, connection }) =>
+				return Poll::Ready(NetworkBehaviourAction::CloseConnection { peer_id, connection }),
 		};
 
 		let outcome = match event {
@@ -1590,9 +1580,9 @@ where
 					}
 				}
 			},
-			NotificationsOut::CustomProtocolReplaced { peer_id, notifications_sink, set_id } => {
-				if set_id == HARDCODED_PEERSETS_SYNC
-					|| self.bad_handshake_substreams.contains(&(peer_id, set_id))
+			NotificationsOut::CustomProtocolReplaced { peer_id, notifications_sink, set_id } =>
+				if set_id == HARDCODED_PEERSETS_SYNC ||
+					self.bad_handshake_substreams.contains(&(peer_id, set_id))
 				{
 					CustomMessageOutcome::None
 				} else {
@@ -1601,8 +1591,7 @@ where
 						protocol: self.notification_protocols[usize::from(set_id)].clone(),
 						notifications_sink,
 					}
-				}
-			},
+				},
 			NotificationsOut::CustomProtocolClosed { peer_id, set_id } => {
 				// Set number 0 is hardcoded the default set of peers we sync from.
 				if set_id == HARDCODED_PEERSETS_SYNC {
@@ -1654,9 +1643,8 @@ where
 					);
 					CustomMessageOutcome::None
 				},
-				_ if self.bad_handshake_substreams.contains(&(peer_id, set_id)) => {
-					CustomMessageOutcome::None
-				},
+				_ if self.bad_handshake_substreams.contains(&(peer_id, set_id)) =>
+					CustomMessageOutcome::None,
 				_ => {
 					let protocol_name = self.notification_protocols[usize::from(set_id)].clone();
 					CustomMessageOutcome::NotificationsReceived {
@@ -1668,11 +1656,11 @@ where
 		};
 
 		if !matches!(outcome, CustomMessageOutcome::<B>::None) {
-			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(outcome));
+			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(outcome))
 		}
 
 		if let Some(message) = self.pending_messages.pop_front() {
-			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message));
+			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message))
 		}
 
 		// This block can only be reached if an event was pulled from the behaviour and that

@@ -324,7 +324,7 @@ impl Peerset {
 	fn on_add_reserved_peer(&mut self, set_id: SetId, peer_id: PeerId) {
 		let newly_inserted = self.reserved_nodes[set_id.0].0.insert(peer_id);
 		if !newly_inserted {
-			return;
+			return
 		}
 
 		self.data.add_no_slot_node(set_id.0, peer_id);
@@ -333,14 +333,14 @@ impl Peerset {
 
 	fn on_remove_reserved_peer(&mut self, set_id: SetId, peer_id: PeerId) {
 		if !self.reserved_nodes[set_id.0].0.remove(&peer_id) {
-			return;
+			return
 		}
 
 		self.data.remove_no_slot_node(set_id.0, &peer_id);
 
 		// Nothing more to do if not in reserved-only mode.
 		if !self.reserved_nodes[set_id.0].1 {
-			return;
+			return
 		}
 
 		// If, however, the peerset is in reserved-only mode, then the removed node needs to be
@@ -384,7 +384,7 @@ impl Peerset {
 				self.data.connected_peers(set_id.0).cloned().collect::<Vec<_>>().into_iter()
 			{
 				if self.reserved_nodes[set_id.0].0.contains(&peer_id) {
-					continue;
+					continue
 				}
 
 				let peer = self.data.peer(set_id.0, &peer_id).into_connected().expect(
@@ -417,7 +417,7 @@ impl Peerset {
 	fn on_remove_from_peers_set(&mut self, set_id: SetId, peer_id: PeerId) {
 		// Don't do anything if node is reserved.
 		if self.reserved_nodes[set_id.0].0.contains(&peer_id) {
-			return;
+			return
 		}
 
 		match self.data.peer(set_id.0, &peer_id) {
@@ -442,7 +442,7 @@ impl Peerset {
 			trace!(target: "peerset", "Report {}: {:+} to {}. Reason: {}",
 				peer_id, change.value, reputation.reputation(), change.reason
 			);
-			return;
+			return
 		}
 
 		debug!(target: "peerset", "Report {}: {:+} to {}. Reason: {}, Disconnecting",
@@ -509,7 +509,7 @@ impl Peerset {
 				peer_reputation.set_reputation(after);
 
 				if after != 0 {
-					continue;
+					continue
 				}
 
 				drop(peer_reputation);
@@ -550,7 +550,7 @@ impl Peerset {
 			// remove that check. If necessary, the peerset should be refactored to give more
 			// control over what happens in that situation.
 			if entry.reputation() < BANNED_THRESHOLD {
-				break;
+				break
 			}
 
 			match entry.try_outgoing() {
@@ -574,7 +574,7 @@ impl Peerset {
 
 		// Nothing more to do if we're in reserved mode.
 		if self.reserved_nodes[set_id.0].1 {
-			return;
+			return
 		}
 
 		// Try to grab the next node to attempt to connect to.
@@ -588,7 +588,7 @@ impl Peerset {
 
 			// Don't connect to nodes with an abysmal reputation.
 			if next.reputation() < BANNED_THRESHOLD {
-				break;
+				break
 			}
 
 			match next.try_outgoing() {
@@ -599,7 +599,7 @@ impl Peerset {
 					// This branch can only be entered if there is no free slot, which is
 					// checked above.
 					debug_assert!(false);
-					break;
+					break
 				},
 			}
 		}
@@ -621,7 +621,7 @@ impl Peerset {
 
 		if self.reserved_nodes[set_id.0].1 && !self.reserved_nodes[set_id.0].0.contains(&peer_id) {
 			self.message_queue.push_back(Message::Reject(index));
-			return;
+			return
 		}
 
 		let not_connected = match self.data.peer(set_id.0, &peer_id) {
@@ -636,7 +636,7 @@ impl Peerset {
 
 		if not_connected.reputation() < BANNED_THRESHOLD {
 			self.message_queue.push_back(Message::Reject(index));
-			return;
+			return
 		}
 
 		match not_connected.try_accept_incoming() {
@@ -725,7 +725,7 @@ impl Stream for Peerset {
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		loop {
 			if let Some(message) = self.message_queue.pop_front() {
-				return Poll::Ready(Some(message));
+				return Poll::Ready(Some(message))
 			}
 
 			if Future::poll(Pin::new(&mut self.next_periodic_alloc_slots), cx).is_ready() {
@@ -743,28 +743,21 @@ impl Stream for Peerset {
 			};
 
 			match action {
-				Action::AddReservedPeer(set_id, peer_id) => {
-					self.on_add_reserved_peer(set_id, peer_id)
-				},
-				Action::RemoveReservedPeer(set_id, peer_id) => {
-					self.on_remove_reserved_peer(set_id, peer_id)
-				},
-				Action::SetReservedPeers(set_id, peer_ids) => {
-					self.on_set_reserved_peers(set_id, peer_ids)
-				},
-				Action::SetReservedOnly(set_id, reserved) => {
-					self.on_set_reserved_only(set_id, reserved)
-				},
+				Action::AddReservedPeer(set_id, peer_id) =>
+					self.on_add_reserved_peer(set_id, peer_id),
+				Action::RemoveReservedPeer(set_id, peer_id) =>
+					self.on_remove_reserved_peer(set_id, peer_id),
+				Action::SetReservedPeers(set_id, peer_ids) =>
+					self.on_set_reserved_peers(set_id, peer_ids),
+				Action::SetReservedOnly(set_id, reserved) =>
+					self.on_set_reserved_only(set_id, reserved),
 				Action::ReportPeer(peer_id, score_diff) => self.on_report_peer(peer_id, score_diff),
-				Action::AddToPeersSet(sets_name, peer_id) => {
-					self.add_to_peers_set(sets_name, peer_id)
-				},
-				Action::RemoveFromPeersSet(sets_name, peer_id) => {
-					self.on_remove_from_peers_set(sets_name, peer_id)
-				},
-				Action::PeerReputation(peer_id, pending_response) => {
-					self.on_peer_reputation(peer_id, pending_response)
-				},
+				Action::AddToPeersSet(sets_name, peer_id) =>
+					self.add_to_peers_set(sets_name, peer_id),
+				Action::RemoveFromPeersSet(sets_name, peer_id) =>
+					self.on_remove_from_peers_set(sets_name, peer_id),
+				Action::PeerReputation(peer_id, pending_response) =>
+					self.on_peer_reputation(peer_id, pending_response),
 			}
 		}
 	}

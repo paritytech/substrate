@@ -30,8 +30,10 @@ use codec::{FullCodec, MaxEncodedLen};
 use frame_support::Parameter;
 use mangata_types::{Balance as BalancePrimitive, TokenId};
 use scale_info::TypeInfo;
-use sp_runtime::traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Member};
-use sp_runtime::FixedPointOperand;
+use sp_runtime::{
+	traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Member},
+	FixedPointOperand,
+};
 use sp_std::{fmt::Debug, result};
 
 mod reservable;

@@ -202,7 +202,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 				// remove from `uncached_blocks` if it can cover
 				if *uncached_blocks >= amout {
 					*uncached_blocks -= amout;
-					return;
+					return
 				}
 				// reset `uncached_blocks` and remove remain blocks from `cache`
 				let remain = amout - *uncached_blocks;
@@ -235,7 +235,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 		// return if all blocks already loaded into `cache` and there are no other
 		// blocks in the backend database
 		if *uncached_blocks == 0 {
-			return Ok(());
+			return Ok(())
 		}
 		let start = base + cache.len() as u64;
 		let batch_size = cmp::min(*uncached_blocks, cache_capacity);
@@ -280,7 +280,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 						// because `cache` is a queue of successive `DeathRow`
 						// NOTE: this branch should not be entered because blocks are visited
 						// in successive increasing order, just keeping it for robustness
-						return load_death_row_from_db(db, base + index as u64);
+						return load_death_row_from_db(db, base + index as u64)
 					}
 				}
 				Ok(cache.get(index).cloned())
@@ -309,9 +309,8 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 	/// Return the number of block in the pruning window
 	fn len(&self) -> usize {
 		match self {
-			DeathRowQueue::DbBacked { uncached_blocks, cache, .. } => {
-				cache.len() + *uncached_blocks
-			},
+			DeathRowQueue::DbBacked { uncached_blocks, cache, .. } =>
+				cache.len() + *uncached_blocks,
 			DeathRowQueue::Mem { death_rows, .. } => death_rows.len(),
 		}
 	}
@@ -329,9 +328,8 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 	#[cfg(test)]
 	fn get_db_backed_queue_state(&self) -> Option<(&VecDeque<DeathRow<BlockHash, Key>>, usize)> {
 		match self {
-			DeathRowQueue::DbBacked { cache, uncached_blocks, .. } => {
-				Some((cache, *uncached_blocks))
-			},
+			DeathRowQueue::DbBacked { cache, uncached_blocks, .. } =>
+				Some((cache, *uncached_blocks)),
 			DeathRowQueue::Mem { .. } => None,
 		}
 	}
@@ -434,16 +432,14 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 	/// Get the hash of the next pruning block
 	pub fn next_hash(&mut self) -> Result<Option<BlockHash>, Error<D::Error>> {
 		let res = match &self.queue {
-			DeathRowQueue::DbBacked { cache, .. } => {
+			DeathRowQueue::DbBacked { cache, .. } =>
 				if self.pending_prunings < cache.len() {
 					cache.get(self.pending_prunings).map(|r| r.hash.clone())
 				} else {
 					self.get(self.pending_prunings)?.map(|r| r.hash)
-				}
-			},
-			DeathRowQueue::Mem { death_rows, .. } => {
-				death_rows.get(self.pending_prunings).map(|r| r.hash.clone())
-			},
+				},
+			DeathRowQueue::Mem { death_rows, .. } =>
+				death_rows.get(self.pending_prunings).map(|r| r.hash.clone()),
 		};
 		Ok(res)
 	}
@@ -465,18 +461,18 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 	pub fn have_block(&self, hash: &BlockHash, number: u64) -> HaveBlock {
 		// if the queue is empty or the block number exceed the pruning window, we definitely
 		// do not have this block
-		if self.is_empty()
-			|| number < self.pending()
-			|| number >= self.base + self.queue.len() as u64
+		if self.is_empty() ||
+			number < self.pending() ||
+			number >= self.base + self.queue.len() as u64
 		{
-			return HaveBlock::NotHave;
+			return HaveBlock::NotHave
 		}
 		self.queue.have_block(hash, (number - self.base) as usize)
 	}
 
 	fn get(&mut self, index: usize) -> Result<Option<DeathRow<BlockHash, Key>>, Error<D::Error>> {
 		if index >= self.queue.len() {
-			return Ok(None);
+			return Ok(None)
 		}
 		match self.queue.get(self.base, index)? {
 			None => {
@@ -527,7 +523,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 			// assume that parent was canonicalized
 			self.base = number;
 		} else if (self.base + self.queue.len() as u64) != number {
-			return Err(Error::StateDb(StateDbError::InvalidBlockNumber));
+			return Err(Error::StateDb(StateDbError::InvalidBlockNumber))
 		}
 		trace!(target: "state-db", "Adding to pruning window: {:?} ({} inserted, {} deleted)", hash, commit.data.inserted.len(), commit.data.deleted.len());
 		let inserted = if matches!(self.queue, DeathRowQueue::Mem { .. }) {

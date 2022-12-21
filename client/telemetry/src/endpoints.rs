@@ -65,7 +65,7 @@ fn url_to_multiaddr(url: &str) -> Result<Multiaddr, libp2p::multiaddr::Error> {
 
 	// If not, try the `ws://path/url` format.
 	if let Ok(ma) = libp2p::multiaddr::from_url(url) {
-		return Ok(ma);
+		return Ok(ma)
 	}
 
 	// If we have no clue about the format of that string, assume that we were expecting a

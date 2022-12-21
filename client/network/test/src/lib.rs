@@ -867,12 +867,11 @@ where
 		let (chain_sync, chain_sync_service) = ChainSync::new(
 			match network_config.sync_mode {
 				SyncMode::Full => sc_network_common::sync::SyncMode::Full,
-				SyncMode::Fast { skip_proofs, storage_chain_mode } => {
+				SyncMode::Fast { skip_proofs, storage_chain_mode } =>
 					sc_network_common::sync::SyncMode::LightState {
 						skip_proofs,
 						storage_chain_mode,
-					}
-				},
+					},
 				SyncMode::Warp => sc_network_common::sync::SyncMode::Warp,
 			},
 			client.clone(),
@@ -956,10 +955,10 @@ where
 		let mut highest = None;
 		for peer in self.peers().iter() {
 			if peer.is_major_syncing() || peer.network.num_queued_blocks() != 0 {
-				return Poll::Pending;
+				return Poll::Pending
 			}
 			if peer.network.num_sync_requests() != 0 {
-				return Poll::Pending;
+				return Poll::Pending
 			}
 			match (highest, peer.client.info().best_hash) {
 				(None, b) => highest = Some(b),
@@ -978,10 +977,10 @@ where
 
 		for peer in self.peers().iter() {
 			if peer.is_major_syncing() || peer.network.num_queued_blocks() != 0 {
-				return Poll::Pending;
+				return Poll::Pending
 			}
 			if peer.network.num_sync_requests() != 0 {
-				return Poll::Pending;
+				return Poll::Pending
 			}
 		}
 		Poll::Ready(())
@@ -995,7 +994,7 @@ where
 
 		let num_peers = self.peers().len();
 		if self.peers().iter().all(|p| p.num_peers() == num_peers - 1) {
-			return Poll::Ready(());
+			return Poll::Ready(())
 		}
 
 		Poll::Pending

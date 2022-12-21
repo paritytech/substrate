@@ -164,8 +164,8 @@ impl<N: std::fmt::Debug + PartialEq> BlockImportStatus<N> {
 	/// Returns the imported block number.
 	pub fn number(&self) -> &N {
 		match self {
-			BlockImportStatus::ImportedKnown(n, _)
-			| BlockImportStatus::ImportedUnknown(n, _, _) => n,
+			BlockImportStatus::ImportedKnown(n, _) |
+			BlockImportStatus::ImportedUnknown(n, _, _) => n,
 		}
 	}
 }
@@ -236,7 +236,7 @@ pub(crate) async fn import_single_block_metered<
 			} else {
 				debug!(target: "sync", "Header {} was not provided ", block.hash);
 			}
-			return Err(BlockImportError::IncompleteHeader(peer));
+			return Err(BlockImportError::IncompleteHeader(peer))
 		},
 	};
 
@@ -251,9 +251,8 @@ pub(crate) async fn import_single_block_metered<
 			trace!(target: "sync", "Block already in chain {}: {:?}", number, hash);
 			Ok(BlockImportStatus::ImportedKnown(number, peer))
 		},
-		Ok(ImportResult::Imported(aux)) => {
-			Ok(BlockImportStatus::ImportedUnknown(number, aux, peer))
-		},
+		Ok(ImportResult::Imported(aux)) =>
+			Ok(BlockImportStatus::ImportedUnknown(number, aux, peer)),
 		Ok(ImportResult::MissingState) => {
 			debug!(target: "sync", "Parent state is missing for {}: {:?}, parent: {:?}",
 					number, hash, parent_hash);

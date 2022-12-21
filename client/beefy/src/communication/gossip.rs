@@ -156,18 +156,18 @@ where
 				let known_votes = self.known_votes.read();
 
 				if !known_votes.is_live(&round) {
-					return ValidationResult::Discard;
+					return ValidationResult::Discard
 				}
 
 				if known_votes.is_known(&round, &msg_hash) {
-					return ValidationResult::ProcessAndKeep(self.topic);
+					return ValidationResult::ProcessAndKeep(self.topic)
 				}
 			}
 
 			if BeefyKeystore::verify(&msg.id, &msg.signature, &msg.commitment.encode()) {
 				self.known_votes.write().add_known(&round, msg_hash);
 				self.known_peers.lock().note_vote_for(*sender, round);
-				return ValidationResult::ProcessAndKeep(self.topic);
+				return ValidationResult::ProcessAndKeep(self.topic)
 			} else {
 				// TODO: report peer
 				debug!(target: "beefy", "🥩 Bad signature on message: {:?}, from: {:?}", msg, sender);
@@ -211,7 +211,7 @@ where
 		let known_votes = self.known_votes.read();
 		Box::new(move |_who, intent, _topic, mut data| {
 			if let MessageIntent::PeriodicRebroadcast = intent {
-				return do_rebroadcast;
+				return do_rebroadcast
 			}
 
 			let msg = match VoteMessage::<NumberFor<B>, Public, Signature>::decode(&mut data) {

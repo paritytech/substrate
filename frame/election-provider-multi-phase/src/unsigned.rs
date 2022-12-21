@@ -109,9 +109,8 @@ fn save_solution<T: Config>(call: &Call<T>) -> Result<(), MinerError> {
 	let storage = StorageValueRef::persistent(OFFCHAIN_CACHED_CALL);
 	match storage.mutate::<_, (), _>(|_| Ok(call.clone())) {
 		Ok(_) => Ok(()),
-		Err(MutateStorageError::ConcurrentModification(_)) => {
-			Err(MinerError::FailedToStoreSolution)
-		},
+		Err(MutateStorageError::ConcurrentModification(_)) =>
+			Err(MinerError::FailedToStoreSolution),
 		Err(MutateStorageError::ValueFunctionFailed(_)) => {
 			// this branch should be unreachable according to the definition of
 			// `StorageValueRef::mutate`: that function should only ever `Err` if the closure we
@@ -302,9 +301,8 @@ impl<T: Config> Pallet<T> {
 			|maybe_head: Result<Option<T::BlockNumber>, _>| {
 				match maybe_head {
 					Ok(Some(head)) if now < head => Err("fork."),
-					Ok(Some(head)) if now >= head && now <= head + threshold => {
-						Err("recently executed.")
-					},
+					Ok(Some(head)) if now >= head && now <= head + threshold =>
+						Err("recently executed."),
 					Ok(Some(head)) if now > head + threshold => {
 						// we can run again now. Write the new head.
 						Ok(now)
@@ -321,9 +319,8 @@ impl<T: Config> Pallet<T> {
 			// all good
 			Ok(_) => Ok(()),
 			// failed to write.
-			Err(MutateStorageError::ConcurrentModification(_)) => {
-				Err(MinerError::Lock("failed to write to offchain db (concurrent modification)."))
-			},
+			Err(MutateStorageError::ConcurrentModification(_)) =>
+				Err(MinerError::Lock("failed to write to offchain db (concurrent modification).")),
 			// fork etc.
 			Err(MutateStorageError::ValueFunctionFailed(why)) => Err(MinerError::Lock(why)),
 		}
@@ -347,8 +344,8 @@ impl<T: Config> Pallet<T> {
 
 		// ensure correct number of winners.
 		ensure!(
-			Self::desired_targets().unwrap_or_default()
-				== raw_solution.solution.unique_targets().len() as u32,
+			Self::desired_targets().unwrap_or_default() ==
+				raw_solution.solution.unique_targets().len() as u32,
 			Error::<T>::PreDispatchWrongWinnerCount,
 		);
 
@@ -539,7 +536,7 @@ impl<T: MinerConfig> Miner<T> {
 
 		// not much we can do if assignments are already empty.
 		if high == low {
-			return Ok(());
+			return Ok(())
 		}
 
 		while high - low > 1 {
@@ -550,8 +547,8 @@ impl<T: MinerConfig> Miner<T> {
 				high = test;
 			}
 		}
-		let maximum_allowed_voters = if low < assignments.len()
-			&& encoded_size_of(&assignments[..low + 1])? <= max_allowed_length
+		let maximum_allowed_voters = if low < assignments.len() &&
+			encoded_size_of(&assignments[..low + 1])? <= max_allowed_length
 		{
 			low + 1
 		} else {
@@ -563,8 +560,8 @@ impl<T: MinerConfig> Miner<T> {
 			encoded_size_of(&assignments[..maximum_allowed_voters]).unwrap() <= max_allowed_length
 		);
 		debug_assert!(if maximum_allowed_voters < assignments.len() {
-			encoded_size_of(&assignments[..maximum_allowed_voters + 1]).unwrap()
-				> max_allowed_length
+			encoded_size_of(&assignments[..maximum_allowed_voters + 1]).unwrap() >
+				max_allowed_length
 		} else {
 			true
 		});
@@ -629,7 +626,7 @@ impl<T: MinerConfig> Miner<T> {
 		max_weight: Weight,
 	) -> u32 {
 		if size.voters < 1 {
-			return size.voters;
+			return size.voters
 		}
 
 		let max_voters = size.voters.max(1);

@@ -351,15 +351,15 @@ pub mod pallet {
 			// at most be maximum block weight. Make sure that this can fit in a multiplier without
 			// loss.
 			assert!(
-				<Multiplier as sp_runtime::traits::Bounded>::max_value()
-					>= Multiplier::checked_from_integer::<u128>(
+				<Multiplier as sp_runtime::traits::Bounded>::max_value() >=
+					Multiplier::checked_from_integer::<u128>(
 						T::BlockWeights::get().max_block.ref_time().try_into().unwrap()
 					)
 					.unwrap(),
 			);
 
-			let target = T::FeeMultiplierUpdate::target()
-				* T::BlockWeights::get().get(DispatchClass::Normal).max_total.expect(
+			let target = T::FeeMultiplierUpdate::target() *
+				T::BlockWeights::get().get(DispatchClass::Normal).max_total.expect(
 					"Setting `max_total` for `Normal` dispatch class is not compatible with \
 					`transaction-payment-mangata` pallet.",
 				);
@@ -367,7 +367,7 @@ pub mod pallet {
 			let addition = target / 100;
 			if addition == Weight::zero() {
 				// this is most likely because in a test setup we set everything to ().
-				return;
+				return
 			}
 
 			// We disable this test as our variability is 0, and min multiplier is set to 1.
@@ -1206,8 +1206,8 @@ mod tests {
 					inclusion_fee: Some(InclusionFee {
 						base_fee: 5 * 2,
 						len_fee: len as u64,
-						adjusted_weight_fee: info.weight.min(BlockWeights::get().max_block) as u64
-							* 2 * 3 / 2
+						adjusted_weight_fee: info.weight.min(BlockWeights::get().max_block) as u64 *
+							2 * 3 / 2
 					}),
 					tip: 0,
 				},

@@ -210,7 +210,7 @@ where
 
 		backend.insert_aux(&[(SET_STATE_KEY, set_state.encode().as_slice())], &[])?;
 
-		return Ok(Some((new_set, set_state)));
+		return Ok(Some((new_set, set_state)))
 	}
 
 	Ok(None)
@@ -274,7 +274,7 @@ where
 
 		backend.insert_aux(&[(SET_STATE_KEY, set_state.encode().as_slice())], &[])?;
 
-		return Ok(Some((set, set_state)));
+		return Ok(Some((set, set_state)))
 	}
 
 	Ok(None)
@@ -307,7 +307,7 @@ where
 			},
 		};
 
-		return Ok(Some((new_set, set_state)));
+		return Ok(Some((new_set, set_state)))
 	}
 
 	Ok(None)
@@ -336,7 +336,7 @@ where
 				return Ok(PersistentData {
 					authority_set: new_set.into(),
 					set_state: set_state.into(),
-				});
+				})
 			}
 		},
 		Some(1) => {
@@ -346,7 +346,7 @@ where
 				return Ok(PersistentData {
 					authority_set: new_set.into(),
 					set_state: set_state.into(),
-				});
+				})
 			}
 		},
 		Some(2) => {
@@ -356,7 +356,7 @@ where
 				return Ok(PersistentData {
 					authority_set: new_set.into(),
 					set_state: set_state.into(),
-				});
+				})
 			}
 		},
 		Some(3) => {
@@ -376,18 +376,11 @@ where
 						},
 					};
 
-				return Ok(PersistentData {
-					authority_set: set.into(),
-					set_state: set_state.into(),
-				});
+				return Ok(PersistentData { authority_set: set.into(), set_state: set_state.into() })
 			}
 		},
-		Some(other) => {
-			return Err(ClientError::Backend(format!(
-				"Unsupported GRANDPA DB version: {:?}",
-				other
-			)))
-		},
+		Some(other) =>
+			return Err(ClientError::Backend(format!("Unsupported GRANDPA DB version: {:?}", other))),
 	}
 
 	// genesis.

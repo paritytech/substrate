@@ -71,7 +71,7 @@ impl Stats {
 	/// Calculates statistics and returns them.
 	pub fn new(xs: &Vec<u64>) -> Result<Self> {
 		if xs.is_empty() {
-			return Err("Empty input is invalid".into());
+			return Err("Empty input is invalid".into())
 		}
 		let (avg, stddev) = Self::avg_and_stddev(xs);
 

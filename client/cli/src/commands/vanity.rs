@@ -103,7 +103,7 @@ where
 			best = score;
 			if best >= top {
 				println!("best: {} == top: {}", best, top);
-				return Ok(utils::format_seed::<Pair>(seed.clone()));
+				return Ok(utils::format_seed::<Pair>(seed.clone()))
 			}
 		}
 		done += 1;
@@ -131,7 +131,7 @@ fn next_seed(seed: &mut [u8]) {
 			},
 			_ => {
 				*s += 1;
-				break;
+				break
 			},
 		}
 	}
@@ -144,7 +144,7 @@ fn calculate_score(_desired: &str, key: &str) -> usize {
 		let snip_size = _desired.len() - truncate;
 		let truncated = &_desired[0..snip_size];
 		if let Some(pos) = key.find(truncated) {
-			return (47 - pos) + (snip_size * 48);
+			return (47 - pos) + (snip_size * 48)
 		}
 	}
 	0

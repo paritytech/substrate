@@ -296,9 +296,8 @@ impl RuntimeCosts {
 			ContainsStorage(len) => s
 				.contains_storage
 				.saturating_add(s.contains_storage_per_byte.saturating_mul(len.into())),
-			GetStorage(len) => {
-				s.get_storage.saturating_add(s.get_storage_per_byte.saturating_mul(len.into()))
-			},
+			GetStorage(len) =>
+				s.get_storage.saturating_add(s.get_storage_per_byte.saturating_mul(len.into())),
 			#[cfg(feature = "unstable-interface")]
 			TakeStorage(len) => s
 				.take_storage
@@ -486,11 +485,10 @@ where
 						ReturnFlags::from_bits(flags).ok_or(Error::<E::T>::InvalidCallFlags)?;
 					Ok(ExecReturnValue { flags, data })
 				},
-				TrapReason::Termination => {
-					Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() })
-				},
+				TrapReason::Termination =>
+					Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() }),
 				TrapReason::SupervisorError(error) => return Err(error.into()),
-			};
+			}
 		}
 
 		// Check the exact type of the error.
@@ -505,9 +503,8 @@ where
 			// a trap for now. Eventually, we might want to revisit this.
 			Err(sp_sandbox::Error::Module) => return Err("validation error".into()),
 			// Any other kind of a trap should result in a failure.
-			Err(sp_sandbox::Error::Execution) | Err(sp_sandbox::Error::OutOfBounds) => {
-				return Err(Error::<E::T>::ContractTrapped.into())
-			},
+			Err(sp_sandbox::Error::Execution) | Err(sp_sandbox::Error::OutOfBounds) =>
+				return Err(Error::<E::T>::ContractTrapped.into()),
 		}
 	}
 
@@ -637,14 +634,14 @@ where
 		create_token: impl FnOnce(u32) -> Option<RuntimeCosts>,
 	) -> Result<(), DispatchError> {
 		if allow_skip && out_ptr == SENTINEL {
-			return Ok(());
+			return Ok(())
 		}
 
 		let buf_len = buf.len() as u32;
 		let len: u32 = self.read_sandbox_memory_as(out_len_ptr)?;
 
 		if len < buf_len {
-			return Err(Error::<E::T>::OutputBufferTooSmall.into());
+			return Err(Error::<E::T>::OutputBufferTooSmall.into())
 		}
 
 		if let Some(costs) = create_token(buf_len) {
@@ -742,7 +739,7 @@ where
 		let charged = self
 			.charge_gas(RuntimeCosts::SetStorage { new_bytes: value_len, old_bytes: max_size })?;
 		if value_len > max_size {
-			return Err(Error::<E::T>::ValueTooLarge.into());
+			return Err(Error::<E::T>::ValueTooLarge.into())
 		}
 		let key = self.read_sandbox_memory(key_ptr, key_type.len::<E::T>()?)?;
 		let value = Some(self.read_sandbox_memory(value_ptr, value_len)?);
@@ -869,7 +866,7 @@ where
 			},
 			CallType::DelegateCall { code_hash_ptr } => {
 				if flags.contains(CallFlags::ALLOW_REENTRY) {
-					return Err(Error::<E::T>::InvalidCallFlags.into());
+					return Err(Error::<E::T>::InvalidCallFlags.into())
 				}
 				let code_hash = self.read_sandbox_memory_as(code_hash_ptr)?;
 				self.ext.delegate_call(code_hash, input_data)
@@ -883,7 +880,7 @@ where
 				return Err(TrapReason::Return(ReturnData {
 					flags: return_value.flags.bits(),
 					data: return_value.data,
-				}));
+				}))
 			}
 		}
 
@@ -1810,7 +1807,7 @@ pub mod env {
 	) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::Random)?;
 		if subject_len > ctx.ext.schedule().limits.subject_len {
-			return Err(Error::<E::T>::RandomSubjectTooLong.into());
+			return Err(Error::<E::T>::RandomSubjectTooLong.into())
 		}
 		let subject_buf = ctx.read_sandbox_memory(subject_ptr, subject_len)?;
 		Ok(ctx.write_sandbox_output(
@@ -1854,7 +1851,7 @@ pub mod env {
 	) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::Random)?;
 		if subject_len > ctx.ext.schedule().limits.subject_len {
-			return Err(Error::<E::T>::RandomSubjectTooLong.into());
+			return Err(Error::<E::T>::RandomSubjectTooLong.into())
 		}
 		let subject_buf = ctx.read_sandbox_memory(subject_ptr, subject_len)?;
 		Ok(ctx.write_sandbox_output(
@@ -1992,7 +1989,7 @@ pub mod env {
 			.ok_or("Zero sized topics are not allowed")?;
 		ctx.charge_gas(RuntimeCosts::DepositEvent { num_topic, len: data_len })?;
 		if data_len > ctx.ext.max_value_size() {
-			return Err(Error::<E::T>::ValueTooLarge.into());
+			return Err(Error::<E::T>::ValueTooLarge.into())
 		}
 
 		let mut topics: Vec<TopicOf<<E as Ext>::T>> = match topics_len {
@@ -2002,14 +1999,14 @@ pub mod env {
 
 		// If there are more than `event_topics`, then trap.
 		if topics.len() > ctx.ext.schedule().limits.event_topics as usize {
-			return Err(Error::<E::T>::TooManyTopics.into());
+			return Err(Error::<E::T>::TooManyTopics.into())
 		}
 
 		// Check for duplicate topics. If there are any, then trap.
 		// Complexity O(n * log(n)) and no additional allocations.
 		// This also sorts the topics.
 		if has_duplicates(&mut topics) {
-			return Err(Error::<E::T>::DuplicateTopics.into());
+			return Err(Error::<E::T>::DuplicateTopics.into())
 		}
 
 		let event_data = ctx.read_sandbox_memory(data_ptr, data_len)?;
@@ -2219,7 +2216,7 @@ pub mod env {
 	) -> Result<u32, TrapReason> {
 		use crate::chain_extension::{ChainExtension, Environment, RetVal};
 		if !<E::T as Config>::ChainExtension::enabled() {
-			return Err(Error::<E::T>::NoChainExtension.into());
+			return Err(Error::<E::T>::NoChainExtension.into())
 		}
 		let mut chain_extension = ctx.chain_extension.take().expect(
 			"Constructor initializes with `Some`. This is the only place where it is set to `None`.\
@@ -2228,9 +2225,8 @@ pub mod env {
 		let env = Environment::new(ctx, id, input_ptr, input_len, output_ptr, output_len_ptr);
 		let ret = match chain_extension.call(env)? {
 			RetVal::Converging(val) => Ok(val),
-			RetVal::Diverging { flags, data } => {
-				Err(TrapReason::Return(ReturnData { flags: flags.bits(), data }))
-			},
+			RetVal::Diverging { flags, data } =>
+				Err(TrapReason::Return(ReturnData { flags: flags.bits(), data })),
 		};
 		ctx.chain_extension = Some(chain_extension);
 		ret
@@ -2265,7 +2261,7 @@ pub mod env {
 			let msg =
 				core::str::from_utf8(&data).map_err(|_| <Error<E::T>>::DebugMessageInvalidUTF8)?;
 			ctx.ext.append_debug_buffer(msg);
-			return Ok(ReturnCode::Success);
+			return Ok(ReturnCode::Success)
 		}
 		Ok(ReturnCode::LoggingDisabled)
 	}

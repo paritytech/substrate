@@ -303,7 +303,7 @@ where
 
 			if page_len < PAGE as usize {
 				log::debug!(target: LOG_TARGET, "last page received: {}", page_len);
-				break all_keys;
+				break all_keys
 			} else {
 				let new_last_key =
 					all_keys.last().expect("all_keys is populated; has .last(); qed");
@@ -578,7 +578,7 @@ where
 				Some((ChildType::ParentKeyId, storage_key)) => storage_key,
 				None => {
 					log::error!(target: LOG_TARGET, "invalid key: {:?}", prefixed_top_key);
-					return Err("Invalid child key");
+					return Err("Invalid child key")
 				},
 			};
 
@@ -816,7 +816,7 @@ where
 		for (k, v) in top_kv {
 			// skip writing the child root data.
 			if is_default_child_storage_key(k.as_ref()) {
-				continue;
+				continue
 			}
 			ext.insert(k.0, v.0);
 		}
@@ -956,9 +956,9 @@ mod remote_tests {
 			.into_iter()
 			.map(|d| d.unwrap())
 			.filter(|p| {
-				p.path().file_name().unwrap_or_default() == "offline_else_online_works_data"
-					|| p.path().extension().unwrap_or_default() == "top"
-					|| p.path().extension().unwrap_or_default() == "child"
+				p.path().file_name().unwrap_or_default() == "offline_else_online_works_data" ||
+					p.path().extension().unwrap_or_default() == "top" ||
+					p.path().extension().unwrap_or_default() == "child"
 			})
 			.collect::<Vec<_>>();
 		assert!(to_delete.len() > 0);
@@ -1053,9 +1053,9 @@ mod remote_tests {
 			.into_iter()
 			.map(|d| d.unwrap())
 			.filter(|p| {
-				p.path().file_name().unwrap_or_default() == "can_create_top_snapshot_data"
-					|| p.path().extension().unwrap_or_default() == "top"
-					|| p.path().extension().unwrap_or_default() == "child"
+				p.path().file_name().unwrap_or_default() == "can_create_top_snapshot_data" ||
+					p.path().extension().unwrap_or_default() == "top" ||
+					p.path().extension().unwrap_or_default() == "child"
 			})
 			.collect::<Vec<_>>();
 
@@ -1094,9 +1094,9 @@ mod remote_tests {
 			.into_iter()
 			.map(|d| d.unwrap())
 			.filter(|p| {
-				p.path().file_name().unwrap_or_default() == "can_create_child_snapshot_data"
-					|| p.path().extension().unwrap_or_default() == "top"
-					|| p.path().extension().unwrap_or_default() == "child"
+				p.path().file_name().unwrap_or_default() == "can_create_child_snapshot_data" ||
+					p.path().extension().unwrap_or_default() == "top" ||
+					p.path().extension().unwrap_or_default() == "child"
 			})
 			.collect::<Vec<_>>();
 
@@ -1132,9 +1132,9 @@ mod remote_tests {
 			.into_iter()
 			.map(|d| d.unwrap())
 			.filter(|p| {
-				p.path().file_name().unwrap_or_default() == "can_fetch_all_data"
-					|| p.path().extension().unwrap_or_default() == "top"
-					|| p.path().extension().unwrap_or_default() == "child"
+				p.path().file_name().unwrap_or_default() == "can_fetch_all_data" ||
+					p.path().extension().unwrap_or_default() == "top" ||
+					p.path().extension().unwrap_or_default() == "child"
 			})
 			.collect::<Vec<_>>();
 

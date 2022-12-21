@@ -26,22 +26,21 @@
 
 #![warn(missing_docs)]
 
-use codec::Encode;
+use codec::{Decode, Encode};
 
 use sp_api::{
 	ApiExt, ApiRef, Core, ProvideRuntimeApi, StorageChanges, StorageProof, TransactionOutcome,
 };
-use sp_blockchain::{ApplyExtrinsicFailed, Backend, Error};
+use sp_blockchain::{ApplyExtrinsicFailed, Error};
 use sp_core::ExecutionContext;
 use sp_runtime::{
 	generic::BlockId,
 	legacy,
 	traits::{BlakeTwo256, Block as BlockT, Hash, HashFor, Header as HeaderT, NumberFor, One},
-	Digest, SaturatedConversion,
+	Digest,
 };
 
 pub use sp_block_builder::BlockBuilder as BlockBuilderApi;
-use sp_blockchain::HeaderBackend;
 use ver_api::VerApi;
 
 use sc_client_api::backend;
@@ -169,7 +168,6 @@ pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi<Block>, B> {
 	block_id: BlockId<Block>,
 	parent_hash: Block::Hash,
 	backend: &'a B,
-	previous_block_extrinsics: Option<Vec<<Block as BlockT>::Extrinsic>>,
 	/// The estimated size of the block header.
 	estimated_header_size: usize,
 }
@@ -223,17 +221,84 @@ where
 			api,
 			block_id,
 			backend,
-			previous_block_extrinsics: None,
 			estimated_header_size,
 		})
 	}
 
 	/// temporaily apply extrinsics and record them on the list
-	pub fn build_with_seed<F: FnOnce(&'_ BlockId<Block>, &'_ A::Api) -> Vec<Block::Extrinsic>>(
+	pub fn build_with_seed<
+		F: FnOnce(
+			&'_ BlockId<Block>,
+			&'_ A::Api,
+		) -> Vec<(Option<sp_runtime::AccountId32>, Block::Extrinsic)>,
+	>(
 		mut self,
 		seed: ShufflingSeed,
 		call: F,
 	) -> Result<BuiltBlock<Block, backend::StateBackendFor<B, Block>>, Error> {
+		let block_id = self.block_id;
+
+		let mut valid_txs = if self.api.can_enqueue_txs(&block_id).unwrap() {
+			self.api.execute_in_transaction(|api| {
+				let next_header = api
+					.finalize_block_with_context(&block_id, ExecutionContext::BlockConstruction)
+					.unwrap();
+
+				api.start_prevalidation(&block_id).unwrap();
+
+				// create dummy header just to condider N+1 block extrinsics like new session
+				let header = <<Block as BlockT>::Header as HeaderT>::new(
+					*next_header.number() + One::one(),
+					Default::default(),
+					Default::default(),
+					next_header.hash(),
+					Default::default(),
+				);
+
+				if api.is_storage_migration_scheduled(&self.block_id).unwrap() {
+					log::debug!(target:"block_builder", "storage migration scheduled - ignoring any txs");
+					TransactionOutcome::Rollback(vec![])
+				} else {
+					api.initialize_block_with_context(
+						&self.block_id,
+						ExecutionContext::BlockConstruction,
+						&header,
+					)
+					.unwrap();
+					let txs = call(&self.block_id, &api);
+					TransactionOutcome::Rollback(txs)
+				}
+			})
+		} else {
+			log::info!(target:"block_builder", "storage queue is full, no room for new txs");
+			vec![]
+		};
+
+		// that should be improved at some point
+		if valid_txs.len() > 100 {
+			valid_txs.truncate(valid_txs.len() * 90 / 100);
+		}
+
+		let valid_txs_count = valid_txs.len();
+		let store_txs_inherent = self
+			.api
+			.create_enqueue_txs_inherent(
+				&self.block_id,
+				valid_txs.into_iter().map(|(_, tx)| tx).collect(),
+			)
+			.unwrap();
+
+		apply_transaction_wrapper::<Block, A>(
+			&self.api,
+			&self.block_id,
+			store_txs_inherent.clone(),
+			ExecutionContext::BlockConstruction,
+		)
+		.unwrap()
+		.unwrap()
+		.unwrap();
+
+		// TODO get rid of collect
 		let mut next_header = self
 			.api
 			.finalize_block_with_context(&self.block_id, ExecutionContext::BlockConstruction)?;
@@ -242,48 +307,20 @@ where
 
 		let state = self.backend.state_at(&self.parent_hash)?;
 		let parent_hash = self.parent_hash;
-
-		let valid_txs = self.api.execute_in_transaction(|api| {
-			// create dummy header just to condider N+1 block extrinsics like new session
-			let header = <<Block as BlockT>::Header as HeaderT>::new(
-				*next_header.number() + One::one(),
-				Default::default(),
-				Default::default(),
-				next_header.hash(),
-				Default::default(),
-			);
-
-			if api.is_storage_migration_scheduled(&self.block_id).unwrap() {
-				log::debug!(target:"block_builder", "storage migration scheduled - ignoring any txs");
-				TransactionOutcome::Rollback(vec![])
-			} else {
-				api.initialize_block_with_context(
-					&self.block_id,
-					ExecutionContext::BlockConstruction,
-					&header,
-				)
-				.unwrap();
-				let txs = call(&self.block_id, &api);
-				TransactionOutcome::Rollback(txs)
-			}
-		});
-
 		let storage_changes = self
 			.api
 			.into_storage_changes(&state, parent_hash)
 			.map_err(sp_blockchain::Error::StorageChanges)?;
 
-		log::debug!(target: "block_builder", "consume {} valid transactios", valid_txs.len());
-		self.extrinsics.extend(valid_txs);
+		log::debug!(target: "block_builder", "consume {} valid transactios", valid_txs_count);
 
 		// store hash of all extrinsics include in given bloack
 		//
-		let curr_block_extrinsics_count = self.extrinsics.len() + self.inherents.len();
 		let all_extrinsics: Vec<_> = self
 			.inherents
 			.iter()
 			.chain(self.extrinsics.iter())
-			.chain(self.previous_block_extrinsics.unwrap().iter())
+			.chain(std::iter::once(&store_txs_inherent))
 			.cloned()
 			.collect();
 
@@ -293,7 +330,7 @@ where
 		);
 		next_header.set_extrinsics_root(extrinsics_root);
 		next_header.set_seed(seed);
-		next_header.set_count((curr_block_extrinsics_count as u32).into());
+		next_header.set_count((self.extrinsics.len() as u32).into());
 
 		Ok(BuiltBlock {
 			block: <Block as BlockT>::new(next_header, all_extrinsics),
@@ -318,7 +355,7 @@ where
 			) {
 				Ok(Ok(_)) => {
 					inherents.push(xt);
-					TransactionOutcome::Rollback(Ok(()))
+					TransactionOutcome::Commit(Ok(()))
 				},
 				Ok(Err(tx_validity)) => TransactionOutcome::Rollback(Err(
 					ApplyExtrinsicFailed::Validity(tx_validity).into(),
@@ -331,74 +368,68 @@ where
 	/// fetch previous block and apply it
 	///
 	/// consequence of delayed block execution
-	pub fn apply_previous_block_extrinsics(&mut self, seed: ShufflingSeed) {
-		let parent_hash = self.parent_hash;
+	pub fn apply_previous_block_extrinsics<F>(
+		&mut self,
+		seed: ShufflingSeed,
+		block_size: &mut usize,
+		max_block_size: usize,
+		is_timer_expired: F,
+	) where
+		F: Fn() -> bool,
+	{
 		let block_id = &self.block_id;
 		self.api.store_seed(&block_id, seed.seed).unwrap();
+		let extrinsics = &mut self.extrinsics;
 
-		let previous_block_header =
-			self.backend.blockchain().header(BlockId::Hash(parent_hash)).unwrap().unwrap();
+		let previous_block_txs = self.api.get_previous_block_txs(&block_id).unwrap();
+		let previous_block_txs_count = previous_block_txs.len();
+		log::debug!(target: "block_builder", "previous block enqueued {} txs", previous_block_txs_count);
 
-		let previous_block_extrinsics = self
-			.backend
-			.blockchain()
-			.body(BlockId::Hash(parent_hash))
-			.unwrap()
-			.unwrap_or_default();
+		for tx_bytes in previous_block_txs {
+			if (*block_size + tx_bytes.len()) > max_block_size {
+				break
+			}
 
-		let prev_block_extrinsics_count =
-			previous_block_header.count().clone().saturated_into::<usize>();
-		log::debug!(target: "block_builder", "previous block has {} transactions, {} comming from that block", previous_block_extrinsics.len(), prev_block_extrinsics_count);
+			if let Ok(xt) = <Block as BlockT>::Extrinsic::decode(&mut tx_bytes.as_slice()) {
+				if self.api.execute_in_transaction(|api| { // execute tx to get execution status
+					match apply_transaction_wrapper::<Block, A>(
+						api,
+						block_id,
+						xt.clone(),
+						ExecutionContext::BlockConstruction,
+					) {
 
-		let previous_block_extrinsics = previous_block_extrinsics
-			.iter()
-			.take(prev_block_extrinsics_count)
-			.cloned()
-			.collect::<Vec<_>>();
-
-		// filter out extrinsics only
-		let extrinsics = previous_block_extrinsics
-			.into_iter()
-			.filter(|e| {
-				self.api
-					.execute_in_transaction(|api| match api.get_signer(&self.block_id, e.clone()) {
-						Ok(result) => TransactionOutcome::Rollback(result),
-						Err(_) => TransactionOutcome::Rollback(None),
-					})
-					.is_some()
-			})
-			.collect::<Vec<_>>();
-
-		self.previous_block_extrinsics = Some(extrinsics.clone());
-		let to_be_executed = self
-			.inherents
-			.clone()
-			.into_iter()
-			.chain(extrinsics.into_iter())
-			.collect::<Vec<_>>();
-
-		let shuffled_extrinsics = extrinsic_shuffler::shuffle::<Block, A>(
-			&self.api,
-			&self.block_id,
-			to_be_executed,
-			&seed.seed,
-		);
-
-		for xt in shuffled_extrinsics.iter() {
-			log::debug!(target: "block_builder", "executing extrinsic :{:?}", BlakeTwo256::hash(&xt.encode()));
-			self.api.execute_in_transaction(|api| {
-				match apply_transaction_wrapper::<Block, A>(
-					api,
-					block_id,
-					xt.clone(),
-					ExecutionContext::BlockConstruction,
-				) {
-					Ok(Ok(_)) => TransactionOutcome::Commit(()),
-					Ok(Err(_tx_validity)) => TransactionOutcome::Rollback(()),
-					Err(_e) => TransactionOutcome::Rollback(()),
+						_ if is_timer_expired() => {
+							log::debug!(target: "block_builder", "timer expired no room for other txs from queue");
+							TransactionOutcome::Rollback(false)
+						},
+						Ok(Err(validity_err)) if validity_err.exhausted_resources() => {
+							log::debug!(target: "block_builder", "exhaust resources no room for other txs from queue");
+							TransactionOutcome::Rollback(false)
+						},
+						Ok(Ok(_)) => {TransactionOutcome::Commit(true)}
+						Ok(Err(validity_err)) => {
+							log::warn!(target: "block_builder", "enqueued tx execution {} failed '${}'", BlakeTwo256::hash(&xt.encode()), validity_err);
+							TransactionOutcome::Commit(true)
+						},
+						Err(_e) => {
+							log::warn!(target: "block_builder", "enqueued tx execution {} failed - unknwown execution problem", BlakeTwo256::hash(&xt.encode()));
+							TransactionOutcome::Commit(true)
+						}
+					}
+				}){
+					extrinsics.push(xt);
+					*block_size += tx_bytes.len() + sp_core::H256::len_bytes();
+				}else{
+					break;
 				}
-			})
+			} else {
+				log::warn!(target: "block_builder", "cannot decode tx");
+			}
 		}
+
+		self.api.pop_txs(&block_id, extrinsics.len() as u64).unwrap();
+		log::info!(target: "block_builder", "executed {}/{} previous block transactions", extrinsics.len(), previous_block_txs_count);
 	}
 
 	/// Create the inherents for the block.
@@ -436,7 +467,12 @@ where
 	/// If `include_proof` is `true`, the estimated size of the storage proof will be added
 	/// to the estimation.
 	pub fn estimate_block_size_without_extrinsics(&self, include_proof: bool) -> usize {
-		let size = self.estimated_header_size + self.inherents.encoded_size();
+		let size = self.estimated_header_size +
+			self.inherents.encoded_size() +
+			self.api
+				.create_enqueue_txs_inherent(&self.block_id, Default::default())
+				.unwrap()
+				.encoded_size();
 
 		if include_proof {
 			size + self.api.proof_recorder().map(|pr| pr.estimate_encoded_size()).unwrap_or(0)
@@ -458,11 +494,6 @@ where
 	Api::Api: VerApi<Block>,
 	Api::Api: BlockBuilderApi<Block>,
 {
-	match api.get_signer(at, xt.clone()).unwrap() {
-		Some((who, nonce)) => log::debug!(target: "block_builder",
-			"TX[{:?}] {:?} {} ", BlakeTwo256::hash_of(&xt), who, nonce),
-		_ => {},
-	};
 	api.execute_in_transaction(|api| {
 		match apply_transaction_wrapper::<Block, Api>(
 			api,
@@ -487,35 +518,35 @@ mod tests {
 	use sp_state_machine::Backend;
 	use substrate_test_runtime_client::{DefaultTestClientBuilderExt, TestClientBuilderExt};
 
-	// #[test]
-	// fn block_building_storage_proof_does_not_include_runtime_by_default() {
-	// 	let builder = substrate_test_runtime_client::TestClientBuilder::new();
-	// 	let backend = builder.backend();
-	// 	let client = builder.build();
-	//
-	// 	let block = BlockBuilder::new(
-	// 		&client,
-	// 		client.info().best_hash,
-	// 		client.info().best_number,
-	// 		RecordProof::Yes,
-	// 		Default::default(),
-	// 		&*backend,
-	// 	)
-	// 	.unwrap()
-	// 	.build_with_seed(Default::default())
-	// 	.unwrap();
-	//
-	// 	let proof = block.proof.expect("Proof is build on request");
-	//
-	// 	let backend = sp_state_machine::create_proof_check_backend::<Blake2Hasher>(
-	// 		block.storage_changes.transaction_storage_root,
-	// 		proof,
-	// 	)
-	// 	.unwrap();
-	//
-	// 	assert!(backend
-	// 		.storage(&sp_core::storage::well_known_keys::CODE)
-	// 		.unwrap_err()
-	// 		.contains("Database missing expected key"),);
-	// }
+	#[test]
+	fn block_building_storage_proof_does_not_include_runtime_by_default() {
+		let builder = substrate_test_runtime_client::TestClientBuilder::new();
+		let backend = builder.backend();
+		let client = builder.build();
+
+		let block = BlockBuilder::new(
+			&client,
+			client.info().best_hash,
+			client.info().best_number,
+			RecordProof::Yes,
+			Default::default(),
+			&*backend,
+		)
+		.unwrap()
+		.build_with_seed(Default::default(), |_, _| Default::default())
+		.unwrap();
+
+		let proof = block.proof.expect("Proof is build on request");
+
+		let backend = sp_state_machine::create_proof_check_backend::<Blake2Hasher>(
+			block.storage_changes.transaction_storage_root,
+			proof,
+		)
+		.unwrap();
+
+		assert!(backend
+			.storage(&sp_core::storage::well_known_keys::CODE)
+			.unwrap_err()
+			.contains("Database missing expected key"),);
+	}
 }

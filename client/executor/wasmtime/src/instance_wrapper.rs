@@ -64,12 +64,10 @@ impl EntryPoint {
 		let data_len = u32::from(data_len);
 
 		match self.call_type {
-			EntryPointType::Direct { ref entrypoint } => {
-				entrypoint.call(&mut *store, (data_ptr, data_len))
-			},
-			EntryPointType::Wrapped { func, ref dispatcher } => {
-				dispatcher.call(&mut *store, (func, data_ptr, data_len))
-			},
+			EntryPointType::Direct { ref entrypoint } =>
+				entrypoint.call(&mut *store, (data_ptr, data_len)),
+			EntryPointType::Wrapped { func, ref dispatcher } =>
+				dispatcher.call(&mut *store, (func, data_ptr, data_len)),
 		}
 		.map_err(|trap| {
 			let host_state = store
@@ -339,7 +337,7 @@ impl InstanceWrapper {
 	/// as a side-effect.
 	pub fn decommit(&mut self) {
 		if self.memory.data_size(&self.store) == 0 {
-			return;
+			return
 		}
 
 		cfg_if::cfg_if! {

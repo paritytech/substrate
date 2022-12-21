@@ -307,7 +307,7 @@ where
 			.into_iter()
 			.filter(move |a| {
 				if publish_non_global_ips {
-					return true;
+					return true
 				}
 
 				a.iter().all(|p| match p {
@@ -343,7 +343,7 @@ where
 		).await?.into_iter().map(Into::into).collect::<HashSet<_>>();
 
 		if only_if_changed && keys == self.latest_published_keys {
-			return Ok(());
+			return Ok(())
 		}
 
 		let addresses = serialize_addresses(self.addresses_to_publish());
@@ -515,7 +515,7 @@ where
 					.map_err(Error::EncodingDecodingScale)?;
 
 				if !AuthorityPair::verify(&auth_signature, &record, &authority_id) {
-					return Err(Error::VerifyingDhtPayload);
+					return Err(Error::VerifyingDhtPayload)
 				}
 
 				let addresses: Vec<Multiaddr> = schema::AuthorityRecord::decode(record.as_slice())
@@ -554,10 +554,10 @@ where
 					let signature = Signature { public_key, bytes: peer_signature.signature };
 
 					if !signature.verify(record, &remote_peer_id) {
-						return Err(Error::VerifyingDhtPayload);
+						return Err(Error::VerifyingDhtPayload)
 					}
 				} else if self.strict_record_validation {
-					return Err(Error::MissingPeerIdSignature);
+					return Err(Error::MissingPeerIdSignature)
 				} else {
 					debug!(
 						target: LOG_TARGET,

@@ -288,9 +288,8 @@ mod test {
 	fn metadata() {
 		let metadata = Runtime::metadata();
 		let (pallets, types) = match metadata.1 {
-			frame_support::metadata::RuntimeMetadata::V14(metadata) => {
-				(metadata.pallets, metadata.types)
-			},
+			frame_support::metadata::RuntimeMetadata::V14(metadata) =>
+				(metadata.pallets, metadata.types),
 			_ => unreachable!(),
 		};
 

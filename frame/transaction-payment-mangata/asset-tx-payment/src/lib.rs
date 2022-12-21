@@ -39,8 +39,7 @@ use sp_std::prelude::*;
 
 use codec::{Decode, Encode};
 use frame_support::{
-	dispatch::DispatchResult,
-	dispatch::{DispatchInfo, PostDispatchInfo},
+	dispatch::{DispatchInfo, DispatchResult, PostDispatchInfo},
 	traits::{
 		tokens::{
 			fungibles::{Balanced, CreditOf, Inspect},

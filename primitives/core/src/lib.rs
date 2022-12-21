@@ -118,11 +118,10 @@ impl ExecutionContext {
 			Importing | Syncing | BlockConstruction => offchain::Capabilities::empty(),
 			// Enable keystore, transaction pool and Offchain DB reads by default for offchain
 			// calls.
-			OffchainCall(None) => {
-				offchain::Capabilities::KEYSTORE
-					| offchain::Capabilities::OFFCHAIN_DB_READ
-					| offchain::Capabilities::TRANSACTION_POOL
-			},
+			OffchainCall(None) =>
+				offchain::Capabilities::KEYSTORE |
+					offchain::Capabilities::OFFCHAIN_DB_READ |
+					offchain::Capabilities::TRANSACTION_POOL,
 			OffchainCall(Some((_, capabilities))) => *capabilities,
 		}
 	}

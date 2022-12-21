@@ -119,7 +119,7 @@ mod inner {
 			let mut count = 0;
 			loop {
 				if self.1.is_terminated() {
-					break;
+					break
 				}
 
 				match self.try_next() {

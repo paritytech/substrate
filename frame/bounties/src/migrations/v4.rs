@@ -54,7 +54,7 @@ pub fn migrate<
 			target: "runtime::bounties",
 			"New pallet name is equal to the old prefix. No migration needs to be done.",
 		);
-		return Weight::zero();
+		return Weight::zero()
 	}
 
 	let on_chain_storage_version = <P as GetStorageVersion>::on_chain_storage_version();

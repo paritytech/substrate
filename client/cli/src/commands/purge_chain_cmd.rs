@@ -64,7 +64,7 @@ impl PurgeChainCmd {
 				Some('y') | Some('Y') => {},
 				_ => {
 					println!("Aborted");
-					return Ok(());
+					return Ok(())
 				},
 			}
 		}
