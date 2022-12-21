@@ -316,6 +316,7 @@ benchmarks! {
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		let controller = scenario.origin_controller1.clone();
 		let stash = scenario.origin_stash1;
+		add_slashing_spans::<T>(&stash, s);
 		assert!(T::VoterList::contains(&stash));
 
 		let ed = T::Currency::minimum_balance();
@@ -792,12 +793,10 @@ benchmarks! {
 	}
 
 	get_npos_voters {
-		// number of validator intention.
+		// number of validator intention. we will iterate all of them.
 		let v in (MaxValidators::<T>::get() / 2) .. MaxValidators::<T>::get();
-		// number of nominator intention.
+		// number of nominator intention. we will iterate all of them.
 		let n in (MaxNominators::<T>::get() / 2) .. MaxNominators::<T>::get();
-		// total number of slashing spans. Assigned to validators randomly.
-		let s in 1 .. 20;
 
 		let validators = create_validators_with_nominators_for_era::<T>(
 			v, n, T::MaxNominations::get() as usize, false, None
@@ -806,9 +805,8 @@ benchmarks! {
 		.map(|v| T::Lookup::lookup(v).unwrap())
 		.collect::<Vec<_>>();
 
-		(0..s).for_each(|index| {
-			add_slashing_spans::<T>(&validators[index as usize], 10);
-		});
+		assert_eq!(Validators::<T>::count(), v);
+		assert_eq!(Nominators::<T>::count(), n);
 
 		let num_voters = (v + n) as usize;
 	}: {

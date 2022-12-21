@@ -12,7 +12,7 @@ description = "Shared JSON-RPC client"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-jsonrpsee = { version = "0.15.1", features = ["ws-client"] }
+jsonrpsee = { version = "0.16.2", features = ["ws-client"] }
 sc-rpc-api = { version = "0.10.0-dev", path = "../../../../client/rpc-api" }
 async-trait = "0.1.57"
 serde = "1"

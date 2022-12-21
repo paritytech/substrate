@@ -31,7 +31,7 @@ pub async fn execute<Runtime, Block>(
 	ws_url: String,
 ) where
 	Runtime: crate::RuntimeT<pallet_bags_list::Instance1>,
-	Block: BlockT,
+	Block: BlockT + DeserializeOwned,
 	Block::Header: DeserializeOwned,
 {
 	let mut ext = Builder::<Block>::new()
@@ -39,10 +39,12 @@ pub async fn execute<Runtime, Block>(
 			transport: ws_url.to_string().into(),
 			pallets: vec![pallet_bags_list::Pallet::<Runtime, pallet_bags_list::Instance1>::name()
 				.to_string()],
+			hashed_prefixes: vec![
+				<pallet_staking::Bonded<Runtime>>::prefix_hash(),
+				<pallet_staking::Ledger<Runtime>>::prefix_hash(),
+			],
 			..Default::default()
 		}))
-		.inject_hashed_prefix(&<pallet_staking::Bonded<Runtime>>::prefix_hash())
-		.inject_hashed_prefix(&<pallet_staking::Ledger<Runtime>>::prefix_hash())
 		.build()
 		.await
 		.unwrap();
