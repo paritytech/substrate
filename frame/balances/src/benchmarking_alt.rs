@@ -3,7 +3,7 @@
 use super::*;
 
 use frame_system::RawOrigin;
-use sp_runtime::traits::Bounded;
+//use sp_runtime::traits::Bounded;
 
 use crate::Pallet as Balances;
 
@@ -12,10 +12,10 @@ const SEED: u32 = 0;
 const ED_MULTIPLIER: u32 = 10;
 
 use frame_benchmarking::{account, whitelisted_caller};
-use frame_support::{benchmark, benchmarks, Linear};
+use frame_support::{instance_benchmark, Linear};
 
-#[benchmark]
-fn transfer(x: Linear<0, 1>) {
+#[instance_benchmark]
+fn benchmark_transfer(u: Linear<0, 1_000>) {
 	let existential_deposit = T::ExistentialDeposit::get();
 	let caller = whitelisted_caller();
 

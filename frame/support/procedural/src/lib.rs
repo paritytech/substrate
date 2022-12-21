@@ -487,7 +487,12 @@ pub fn benchmarks(attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 
 #[proc_macro_attribute]
 pub fn benchmark(attrs: TokenStream, tokens: TokenStream) -> TokenStream {
-	benchmark::benchmark(attrs, tokens)
+	benchmark::benchmark(attrs, tokens, false)
+}
+
+#[proc_macro_attribute]
+pub fn instance_benchmark(attrs: TokenStream, tokens: TokenStream) -> TokenStream {
+	benchmark::benchmark(attrs, tokens, true)
 }
 
 /// Execute the annotated function in a new storage transaction.

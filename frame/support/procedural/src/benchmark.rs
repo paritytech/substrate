@@ -4,9 +4,10 @@ use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens};
 use syn::{
 	parse_macro_input,
+	punctuated::Punctuated,
 	spanned::Spanned,
 	token::{Comma, Gt, Lt},
-	Error, Expr, FnArg, ItemFn, ItemMod, LitInt, Pat, Result, Stmt, Type,
+	Error, Expr, ExprCall, FnArg, ItemFn, ItemMod, LitInt, Pat, Result, Stmt, Type,
 };
 
 mod keywords {
@@ -40,7 +41,8 @@ struct RangeArgs {
 struct BenchmarkDef {
 	params: Vec<ParamDef>,
 	setup_stmts: Vec<Stmt>,
-	extrinsic_call_stmt: Stmt,
+	extrinsic_call: ExprCall,
+	origin: Expr,
 	verify_stmts: Vec<Stmt>,
 }
 
@@ -87,22 +89,33 @@ impl BenchmarkDef {
 		for child in &item_fn.block.stmts {
 			// find #[extrinsic_call] annotation and build up the setup, call, and verify
 			// blocks based on the location of this annotation
-			if let Stmt::Semi(Expr::Call(fn_call), token) = child {
+			if let Stmt::Semi(Expr::Call(fn_call), _token) = child {
 				let mut k = 0; // index of attr
 				for attr in &fn_call.attrs {
 					if let Some(segment) = attr.path.segments.last() {
 						if let Ok(_) = syn::parse::<keywords::extrinsic_call>(
 							segment.ident.to_token_stream().into(),
 						) {
-							let mut fn_call_copy = fn_call.clone();
-							fn_call_copy.attrs.remove(k); // consume #[extrinsic call]
+							let mut extrinsic_call = fn_call.clone();
+							extrinsic_call.attrs.remove(k); // consume #[extrinsic call]
+							let origin = match extrinsic_call.args.first() {
+								Some(arg) => arg.clone(),
+								None => return Err(Error::new(
+									extrinsic_call.args.span(),
+									"Extrinsic call must specify its origin as the first argument.",
+								)),
+							};
+							let mut final_args = Punctuated::<Expr, Comma>::new();
+							let args: Vec<&Expr> = extrinsic_call.args.iter().collect();
+							for arg in &args[1..] {
+								final_args.push((*(*arg)).clone());
+							}
+							extrinsic_call.args = final_args;
 							return Ok(BenchmarkDef {
 								params,
 								setup_stmts: Vec::from(&item_fn.block.stmts[0..i]),
-								extrinsic_call_stmt: Stmt::Semi(
-									Expr::Call(fn_call_copy),
-									token.clone(),
-								),
+								extrinsic_call,
+								origin,
 								verify_stmts: Vec::from(
 									&item_fn.block.stmts[(i + 1)..item_fn.block.stmts.len()],
 								),
@@ -178,7 +191,7 @@ impl UnrolledParams {
 	}
 }
 
-pub fn benchmark(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
+pub fn benchmark(_attrs: TokenStream, tokens: TokenStream, is_instance: bool) -> TokenStream {
 	// parse attached item as a function def
 	let item_fn = parse_macro_input!(tokens as ItemFn);
 
@@ -192,8 +205,11 @@ pub fn benchmark(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 	let name = item_fn.sig.ident;
 	let krate = quote!(::frame_benchmarking);
 	let home = quote!(::frame_support);
+	let codec = quote!(#krate::frame_support::codec);
+	let traits = quote!(#krate::frame_support::traits);
 	let setup_stmts = benchmark_def.setup_stmts;
-	let extrinsic_call_stmt = benchmark_def.extrinsic_call_stmt;
+	let mut extrinsic_call = benchmark_def.extrinsic_call;
+	let origin = benchmark_def.origin;
 	let verify_stmts = benchmark_def.verify_stmts;
 
 	// unroll params (prepare for quoting)
@@ -201,6 +217,26 @@ pub fn benchmark(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 	let param_names = unrolled.param_names;
 	let param_ranges = unrolled.param_ranges;
 	let param_types = unrolled.param_types;
+
+	let generics = match is_instance {
+		false => quote!(T),
+		true => quote!(T, I),
+	};
+
+	let full_generics = match is_instance {
+		false => quote!(T: Config),
+		true => quote!(T: Config<I>, I: 'static),
+	};
+
+	// modify extrinsic call to be prefixed with new_call_variant
+	if let Expr::Path(expr_path) = &mut *extrinsic_call.func {
+		if let Some(segment) = expr_path.path.segments.last_mut() {
+			segment.ident = Ident::new(
+				format!("new_call_variant_{}", segment.ident.to_string()).as_str(),
+				Span::call_site(),
+			);
+		} // else handle error?
+	} // else handle error?
 
 	// generate final quoted tokens
 	let res = quote! {
@@ -213,7 +249,7 @@ pub fn benchmark(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 		struct #name;
 
 		#[allow(unused_variables)]
-		impl<T: Config> ::frame_benchmarking::BenchmarkingSetup<T>
+		impl<#full_generics> #krate::BenchmarkingSetup<#generics>
 		for #name {
 			fn components(&self) -> #krate::Vec<(#krate::BenchmarkParameter, u32, u32)> {
 				#krate::vec! [
@@ -247,9 +283,17 @@ pub fn benchmark(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 				#(
 					#setup_stmts
 				)*
-
+				let __call = Call::<#generics>::#extrinsic_call;
+				let __benchmarked_call_encoded = #codec::Encode::encode(&__call);
 				Ok(#krate::Box::new(move || -> Result<(), #krate::BenchmarkError> {
-					#extrinsic_call_stmt
+					let __call_decoded = <Call<#generics> as #codec::Decode>
+						::decode(&mut &__benchmarked_call_encoded[..])
+						.expect("call is encoded above, encoding must be correct");
+					let __origin = #origin.into();
+					<Call<#generics> as #traits::UnfilteredDispatchable>::dispatch_bypass_filter(
+						__call_decoded,
+						__origin,
+					)?;
 					if verify {
 						#(
 							#verify_stmts

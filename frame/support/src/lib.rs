@@ -2753,7 +2753,7 @@ pub mod pallet_macros {
 // Generate a macro that will enable/disable code based on `std` feature being active.
 sp_core::generate_feature_enabled_macro!(std_enabled, feature = "std", $);
 
-pub use frame_support_procedural::{benchmark, benchmarks};
+pub use frame_support_procedural::{benchmark, benchmarks, instance_benchmark};
 
 pub struct Linear<const A: u32, const B: u32>;
 
