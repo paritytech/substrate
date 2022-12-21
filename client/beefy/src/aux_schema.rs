@@ -26,25 +26,25 @@ use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sp_runtime::traits::Block as BlockT;
 
 const VERSION_KEY: &[u8] = b"beefy_auxschema_version";
-const WORKER_STATE: &[u8] = b"beefy_voter_state";
+const WORKER_STATE_KEY: &[u8] = b"beefy_voter_state";
 
-const CURRENT_VERSION: u32 = 1;
+const CURRENT_VERSION: u32 = 2;
 
-pub(crate) fn write_current_version<B: AuxStore>(backend: &B) -> ClientResult<()> {
+pub(crate) fn write_current_version<BE: AuxStore>(backend: &BE) -> ClientResult<()> {
 	info!(target: "beefy", "🥩 write aux schema version {:?}", CURRENT_VERSION);
 	AuxStore::insert_aux(backend, &[(VERSION_KEY, CURRENT_VERSION.encode().as_slice())], &[])
 }
 
 /// Write voter state.
-pub(crate) fn write_voter_state<Block: BlockT, B: AuxStore>(
-	backend: &B,
-	state: &PersistedState<Block>,
+pub(crate) fn write_voter_state<B: BlockT, BE: AuxStore>(
+	backend: &BE,
+	state: &PersistedState<B>,
 ) -> ClientResult<()> {
 	trace!(target: "beefy", "🥩 persisting {:?}", state);
-	backend.insert_aux(&[(WORKER_STATE, state.encode().as_slice())], &[])
+	AuxStore::insert_aux(backend, &[(WORKER_STATE_KEY, state.encode().as_slice())], &[])
 }
 
-fn load_decode<B: AuxStore, T: Decode>(backend: &B, key: &[u8]) -> ClientResult<Option<T>> {
+fn load_decode<BE: AuxStore, T: Decode>(backend: &BE, key: &[u8]) -> ClientResult<Option<T>> {
 	match backend.get_aux(key)? {
 		None => Ok(None),
 		Some(t) => T::decode(&mut &t[..])
@@ -63,13 +63,120 @@ where
 
 	match version {
 		None => (),
-		Some(1) => return load_decode::<_, PersistedState<B>>(backend, WORKER_STATE),
+		Some(1) => return v1::migrate_from_version1::<B, _>(backend),
+		Some(2) => return load_decode::<_, PersistedState<B>>(backend, WORKER_STATE_KEY),
 		other =>
 			return Err(ClientError::Backend(format!("Unsupported BEEFY DB version: {:?}", other))),
 	}
 
 	// No persistent state found in DB.
 	Ok(None)
+}
+
+mod v1 {
+	use super::*;
+	use crate::{round::RoundTracker, worker::PersistedState, Rounds};
+	use beefy_primitives::{
+		crypto::{Public, Signature},
+		Payload, ValidatorSet,
+	};
+	use sp_runtime::traits::NumberFor;
+	use std::collections::{BTreeMap, VecDeque};
+
+	#[derive(Decode)]
+	struct V1RoundTracker {
+		self_vote: bool,
+		votes: BTreeMap<Public, Signature>,
+	}
+
+	impl Into<RoundTracker> for V1RoundTracker {
+		fn into(self) -> RoundTracker {
+			// make the compiler happy by using this deprecated field
+			let _ = self.self_vote;
+			RoundTracker::new(self.votes)
+		}
+	}
+
+	#[derive(Decode)]
+	struct V1Rounds<B: BlockT> {
+		rounds: BTreeMap<(Payload, NumberFor<B>), V1RoundTracker>,
+		session_start: NumberFor<B>,
+		validator_set: ValidatorSet<Public>,
+		mandatory_done: bool,
+		best_done: Option<NumberFor<B>>,
+	}
+
+	impl<B> Into<Rounds<Payload, B>> for V1Rounds<B>
+	where
+		B: BlockT,
+	{
+		fn into(self) -> Rounds<Payload, B> {
+			let rounds = self.rounds.into_iter().map(|it| (it.0, it.1.into())).collect();
+			Rounds::<Payload, B>::new_manual(
+				rounds,
+				self.session_start,
+				self.validator_set,
+				self.mandatory_done,
+				self.best_done,
+			)
+		}
+	}
+
+	#[derive(Decode)]
+	pub(crate) struct V1VoterOracle<B: BlockT> {
+		sessions: VecDeque<V1Rounds<B>>,
+		min_block_delta: u32,
+	}
+
+	#[derive(Decode)]
+	pub(crate) struct V1PersistedState<B: BlockT> {
+		/// Best block we received a GRANDPA finality for.
+		best_grandpa_block_header: <B as BlockT>::Header,
+		/// Best block a BEEFY voting round has been concluded for.
+		best_beefy_block: NumberFor<B>,
+		/// Chooses which incoming votes to accept and which votes to generate.
+		/// Keeps track of voting seen for current and future rounds.
+		voting_oracle: V1VoterOracle<B>,
+	}
+
+	impl<B> TryInto<PersistedState<B>> for V1PersistedState<B>
+	where
+		B: BlockT,
+	{
+		type Error = ();
+		fn try_into(self) -> Result<PersistedState<B>, Self::Error> {
+			let Self { best_grandpa_block_header, best_beefy_block, voting_oracle } = self;
+			let V1VoterOracle { sessions, min_block_delta } = voting_oracle;
+			let sessions = sessions
+				.into_iter()
+				.map(<V1Rounds<B> as Into<Rounds<Payload, B>>>::into)
+				.collect();
+			PersistedState::checked_new(
+				best_grandpa_block_header,
+				best_beefy_block,
+				sessions,
+				min_block_delta,
+			)
+			.ok_or(())
+		}
+	}
+
+	pub(super) fn migrate_from_version1<B: BlockT, BE>(
+		backend: &BE,
+	) -> ClientResult<Option<PersistedState<B>>>
+	where
+		B: BlockT,
+		BE: Backend<B>,
+	{
+		write_current_version(backend)?;
+		if let Some(new_state) = load_decode::<_, V1PersistedState<B>>(backend, WORKER_STATE_KEY)?
+			.and_then(|old_state| old_state.try_into().ok())
+		{
+			write_voter_state(backend, &new_state)?;
+			return Ok(Some(new_state))
+		}
+		Ok(None)
+	}
 }
 
 #[cfg(test)]

@@ -35,6 +35,10 @@ pub(crate) struct RoundTracker {
 }
 
 impl RoundTracker {
+	pub(crate) fn new(votes: BTreeMap<Public, Signature>) -> Self {
+		Self { votes }
+	}
+
 	fn add_vote(&mut self, vote: (Public, Signature)) -> bool {
 		if self.votes.contains_key(&vote.0) {
 			return false
@@ -81,6 +85,16 @@ where
 			mandatory_done: false,
 			best_done: None,
 		}
+	}
+
+	pub(crate) fn new_manual(
+		rounds: BTreeMap<(P, NumberFor<B>), RoundTracker>,
+		session_start: NumberFor<B>,
+		validator_set: ValidatorSet<Public>,
+		mandatory_done: bool,
+		best_done: Option<NumberFor<B>>,
+	) -> Self {
+		Rounds { rounds, session_start, validator_set, mandatory_done, best_done }
 	}
 
 	pub(crate) fn validator_set(&self) -> &ValidatorSet<Public> {
