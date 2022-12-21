@@ -802,7 +802,7 @@ impl<T: Config> Pallet<T> {
 			if let Some(id) = s.maybe_id {
 				Lookup::<T>::remove(id);
 			}
-			if Agenda::<T>::get(when).iter().position(|i| i.is_some()).is_none() {
+			if !Agenda::<T>::get(when).iter().any(|i| i.is_some()) {
 				Agenda::<T>::remove(when);
 			}
 			Self::deposit_event(Event::Canceled { when, index });
@@ -827,7 +827,7 @@ impl<T: Config> Pallet<T> {
 			ensure!(!matches!(task, Some(Scheduled { maybe_id: Some(_), .. })), Error::<T>::Named);
 			task.take().ok_or(Error::<T>::NotFound)
 		})?;
-		if Agenda::<T>::get(when).iter().position(|i| i.is_some()).is_none() {
+		if !Agenda::<T>::get(when).iter().any(|i| i.is_some()) {
 			Agenda::<T>::remove(when);
 		}
 		Self::deposit_event(Event::Canceled { when, index });
@@ -886,7 +886,7 @@ impl<T: Config> Pallet<T> {
 					}
 					Ok(())
 				})?;
-				if Agenda::<T>::get(when).iter().position(|i| i.is_some()).is_none() {
+				if !Agenda::<T>::get(when).iter().any(|i| i.is_some()) {
 					Agenda::<T>::remove(when);
 				}
 				Self::deposit_event(Event::Canceled { when, index });
@@ -914,7 +914,7 @@ impl<T: Config> Pallet<T> {
 			let task = agenda.get_mut(index as usize).ok_or(Error::<T>::NotFound)?;
 			task.take().ok_or(Error::<T>::NotFound)
 		})?;
-		if Agenda::<T>::get(when).iter().position(|i| i.is_some()).is_none() {
+		if !Agenda::<T>::get(when).iter().any(|i| i.is_some()) {
 			Agenda::<T>::remove(when);
 		}
 		Self::deposit_event(Event::Canceled { when, index });
