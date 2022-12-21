@@ -265,6 +265,8 @@ pub enum RuntimeCosts {
 	ReentrantCount,
 	/// Weight of calling `account_reentrance_count`
 	AccountEntranceCount,
+	/// Weight of calling `instantiation_nonce`
+	InstantationNonce,
 }
 
 impl RuntimeCosts {
@@ -344,6 +346,7 @@ impl RuntimeCosts {
 			EcdsaToEthAddress => s.ecdsa_to_eth_address,
 			ReentrantCount => s.reentrance_count,
 			AccountEntranceCount => s.account_reentrance_count,
+			InstantationNonce => s.instantiation_nonce,
 		};
 		RuntimeToken {
 			#[cfg(test)]
@@ -2392,11 +2395,11 @@ pub mod env {
 		str_len: u32,
 	) -> Result<ReturnCode, TrapReason> {
 		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
-		if ctx.ext.append_debug_buffer("") {
+		if ctx.ext.append_debug_buffer("")? {
 			let data = ctx.read_sandbox_memory(memory, str_ptr, str_len)?;
 			let msg =
 				core::str::from_utf8(&data).map_err(|_| <Error<E::T>>::DebugMessageInvalidUTF8)?;
-			ctx.ext.append_debug_buffer(msg);
+			ctx.ext.append_debug_buffer(msg)?;
 			return Ok(ReturnCode::Success)
 		}
 		Ok(ReturnCode::LoggingDisabled)
@@ -2613,5 +2616,15 @@ pub mod env {
 		let account_id: <<E as Ext>::T as frame_system::Config>::AccountId =
 			ctx.read_sandbox_memory_as(memory, account_ptr)?;
 		Ok(ctx.ext.account_reentrance_count(&account_id))
+	}
+
+	/// Returns a nonce that is unique per contract instantiation.
+	///
+	/// The nonce is incremented for each succesful contract instantiation. This is a
+	/// sensible default salt for contract instantiations.
+	#[unstable]
+	fn instantiation_nonce(ctx: _, _memory: _) -> Result<u64, TrapReason> {
+		ctx.charge_gas(RuntimeCosts::InstantationNonce)?;
+		Ok(ctx.ext.nonce())
 	}
 }
