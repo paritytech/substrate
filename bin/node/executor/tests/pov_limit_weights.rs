@@ -31,9 +31,8 @@ fn expected_weight_same_as_actual() {
 	t.execute_with(|| {
 		let expected_weight =
 			PovLimit::on_idle(System::block_number(), Weight::from_parts(200_000_000, 100_000));
-		let avg_ref_time = (expected_weight.ref_time() + actual_weight.ref_time()) / 2;
 		// the tolerance is 5%
-		let tolerance = avg_ref_time / 20;
+		let tolerance = actual_weight.ref_time() / 20;
 
 		let ref_time_delta =
 			i128::abs(actual_weight.ref_time() as i128 - expected_weight.ref_time() as i128);
