@@ -65,6 +65,13 @@ pub struct StorageInfo {
 	pub max_values: Option<u32>,
 	/// The maximum size of key/values in the storage, or none if no maximum specified.
 	pub max_size: Option<u32>,
+	pub proof_size: Option<ProofSizeMode>,
+}
+
+#[derive(codec::Encode, codec::Decode, crate::RuntimeDebug, Eq, PartialEq, Clone)]
+pub enum ProofSizeMode {
+	MaxEncodedLen,
+	Measured,
 }
 
 /// A trait to give information about storage.

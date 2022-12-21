@@ -239,6 +239,7 @@ where
 			prefix: Self::hashed_key().to_vec(),
 			max_values: Some(1),
 			max_size: Some(Value::max_encoded_len().saturated_into()),
+			proof_size: None,
 		}]
 	}
 }
@@ -259,6 +260,7 @@ where
 			prefix: Self::hashed_key().to_vec(),
 			max_values: Some(1),
 			max_size: None,
+			proof_size: None,
 		}]
 	}
 }

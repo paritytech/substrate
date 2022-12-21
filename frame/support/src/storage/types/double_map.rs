@@ -701,6 +701,7 @@ where
 					.saturating_add(Value::max_encoded_len())
 					.saturated_into(),
 			),
+			proof_size: None,
 		}]
 	}
 }
@@ -727,6 +728,7 @@ where
 			prefix: Self::final_prefix().to_vec(),
 			max_values: MaxValues::get(),
 			max_size: None,
+			proof_size: None,
 		}]
 	}
 }
