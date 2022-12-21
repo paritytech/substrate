@@ -121,13 +121,15 @@ pub mod pallet {
 
 			let mut value: u64 = 0;
 			loop {
-				let consumed_weight = Self::read(value);
+				let consumed_proof_size = Self::read(value).proof_size();
 
-				weight = weight.saturating_add(consumed_weight);
-				weight = weight.saturating_add(T::WeightInfo::read());
+				weight = weight.saturating_add(Weight::from_parts(
+					T::WeightInfo::read().ref_time(),
+					consumed_proof_size,
+				));
 
-				let is_over_size_limit = proof_size_limit <
-					weight.proof_size().saturating_add(consumed_weight.proof_size());
+				let is_over_size_limit =
+					proof_size_limit < weight.proof_size().saturating_add(consumed_proof_size);
 
 				let is_over_ref_time_limit = computation_weight_limit <
 					weight.ref_time().saturating_add(T::WeightInfo::read().ref_time());

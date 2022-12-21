@@ -30,8 +30,8 @@ use frame_support::{
 };
 use pallet_alliance::{IdentityVerifier, ProposalIndex, ProposalProvider};
 use pallet_asset_tx_payment::HandleCredit;
-use sp_std::prelude::*;
 use sp_api::HashT;
+use sp_std::prelude::*;
 
 pub struct Author;
 impl OnUnbalanced<NegativeImbalance> for Author {
