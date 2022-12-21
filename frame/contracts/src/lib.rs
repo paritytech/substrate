@@ -388,7 +388,7 @@ pub mod pallet {
 			const MAX_RUNTIME_MEM: u32 = DEFAULT_HEAP_PAGES * PAGE_SIZE;
 			// Memory limits for a single contract
 			const STACK_MAX_SIZE: u32 = 16384 * 64;
-			let heap_max_size = T::Schedule::get().limits.memory_pages * PAGE_SIZE;
+			let heap_max_size = T::Schedule::get().limits.max_memory_size();
 			let stack_height = T::CallStack::size() as u32;
 			// In worst case, the decoded wasm contract code would be x16 times larger than the
 			// encoded one. This is because even a single-byte wasm instruction has 16-byte size in
@@ -411,6 +411,12 @@ pub mod pallet {
 				code_len_limit,
 				T::MaxCodeLen::get(),
 			);
+
+			assert!(
+				T::MaxDebugBufferLen::get() > heap_max_size,
+				"Debug buffer should be large enough to hold at least single message of a maximum size of {}",
+				heap_max_size,
+			)
 		}
 	}
 
