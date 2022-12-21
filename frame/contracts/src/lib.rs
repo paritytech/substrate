@@ -123,6 +123,7 @@ use pallet_contracts_primitives::{
 	StorageDeposit,
 };
 use scale_info::TypeInfo;
+use smallvec::Array;
 use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup};
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
@@ -379,6 +380,37 @@ pub mod pallet {
 			} else {
 				T::WeightInfo::on_process_deletion_queue_batch()
 			}
+		}
+
+		fn integrity_test() {
+			const DEFAULT_HEAP_PAGES: u32 = 2048;
+			const PAGE_SIZE: u32 = 64 * 1024;
+			const MAX_RUNTIME_MEM: u32 = DEFAULT_HEAP_PAGES * PAGE_SIZE;
+			// Memory limits for a single contract
+			const STACK_MAX_SIZE: u32 = 16384 * 64;
+			let heap_max_size = T::Schedule::get().limits.memory_pages * PAGE_SIZE;
+			let stack_height = T::CallStack::size() as u32;
+			// In worst case, the decoded wasm contract code would be x16 times larger than the
+			// encoded one. This is because even a single-byte wasm instruction has 16-byte size in
+			// wasmi. Hence we need to check that with given `MaxCodeLen` and `CallStack`, this
+			// worst case won't break runtime heap memory limit. Not that maximum allowed heap
+			// memory and stack size per each contract (stack frame) should also be counted.
+			//
+			// This gives us the following expression:
+			// (MaxCodeLen * 16 + STACK_MAX_SIZE + heap_max_size) * stack_height < MAX_RUNTIME_MEM
+			let code_len_limit = MAX_RUNTIME_MEM
+				.saturating_div(stack_height)
+				.saturating_sub(heap_max_size)
+				.saturating_sub(STACK_MAX_SIZE)
+				.saturating_div(16);
+
+			assert!(
+				T::MaxCodeLen::get() < code_len_limit,
+				"Given `CallStack` height {:?}, `MaxCodeLen` should be set less than {:?} (current value is {:?}).",
+				stack_height,
+				code_len_limit,
+				T::MaxCodeLen::get(),
+			);
 		}
 	}
 
