@@ -5749,4 +5749,52 @@ mod staking_interface {
 			assert_ok!(<Staking as StakingInterface>::force_unstake(11));
 		});
 	}
+
+	#[test]
+	fn withdraw_unbonded_with_slash_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			let _ = with_storage_layer::<(), _, _>(|| {
+				assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
+				Err(DispatchError::from("revert"))
+			});
+
+			add_slash(&10);
+			let mut current_era = 0;
+			assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
+			let max_unlocking_chunks = <<Test as Config>::MaxUnlockingChunks as Get<u32>>::get();
+
+			// Fill up all unlocking chunks.
+			for i in 0..max_unlocking_chunks - 1 {
+				current_era = i as u32;
+				mock::start_active_era(current_era);
+				assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
+			}
+
+			current_era += 1;
+			mock::start_active_era(current_era);
+
+			// This chunk is locked at `current_era` through `current_era + 2` (because
+			// `BondingDuration` == 3).
+			assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
+			assert_eq!(
+				Staking::ledger(&10).map(|l| l.unlocking.len()).unwrap(),
+				<<Test as Config>::MaxUnlockingChunks as Get<u32>>::get() as usize
+			);
+
+			// even though the number of unlocked chunks is the same as `MaxUnlockingChunks`,
+			// unbonding works as expected.
+			for i in current_era..(current_era + max_unlocking_chunks) - 1 {
+				// There is only 1 chunk per era, so we need to be in a new era to create a chunk.
+				current_era = i as u32;
+				mock::start_active_era(current_era);
+				assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
+			}
+
+			// only slots within last `BondingDuration` are filled.
+			assert_eq!(
+				Staking::ledger(&10).map(|l| l.unlocking.len()).unwrap(),
+				<<Test as Config>::BondingDuration>::get() as usize
+			);
+		})
+	}
 }
