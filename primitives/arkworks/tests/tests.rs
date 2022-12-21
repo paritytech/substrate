@@ -44,13 +44,13 @@ type G1Projective = G1Projective_Host<Host>;
 type G2Projective = G2Projective_Host<Host>;
 
 test_pairing!(pairing; crate::Bls12_381);
-// test_group!(g1; crate::G1Projective; sw);
+test_group!(g1; crate::G1Projective; sw);
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 	#[test]
 	fn bls12_381_msm() {
-		test_var_base_msm::<G1Projective>();
+		// test_var_base_msm::<G1Projective>();
 	}
 }

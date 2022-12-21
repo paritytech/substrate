@@ -23,10 +23,11 @@ ark-bw6-761 = { version = "0.4.0-alpha" }
 ark-ed-on-bls12-381 = { version = "0.4.0-alpha" }
 ark-ed-on-bls12-377 = { version = "0.4.0-alpha" }
 sp-std = { version = "5.0.0", default-features = false, path = "../std" }
+better_any = { version = "0.2.0" }
 
 [dev-dependencies]
-ark-sub-bls12-381 = { git = "https://github.com/achimcc/ark-substrate" }
-ark-algebra-test-templates = { git = "https://github.com/arkworks-rs/algebra", default-features = false }
+ark-sub-bls12-381 = { git = "https://github.com/achimcc/ark-sub-curves", branch = "fork-models" }
+ark-algebra-test-templates = { git = "https://github.com/arkworks-rs/algebra", branch = "release-0.4", default-features = false }
 
 [features]
 default = ["std"]

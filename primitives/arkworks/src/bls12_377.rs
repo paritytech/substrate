@@ -20,11 +20,12 @@
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use ark_bls12_377::{Bls12_377, G1Affine, G1Projective, G2Affine, G2Projective, Parameters};
+use ark_bls12_377::{Bls12_377, Config, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::{
 	models::CurveConfig,
 	pairing::{MillerLoopOutput, Pairing},
-	Group, short_weierstrass::SWCurveConfig,
+	short_weierstrass::SWCurveConfig,
+	Group,
 };
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
@@ -125,7 +126,7 @@ pub fn mul_projective_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 
 	let cursor = Cursor::new(scalar);
 	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
-	let res = <ark_bls12_377::g2::Parameters as SWCurveConfig>::mul_projective(&base, &scalar);
+	let res = <ark_bls12_377::g2::Config as SWCurveConfig>::mul_projective(&base, &scalar);
 	let mut serialized = vec![0; res.serialized_size(Compress::Yes)];
 	let mut cursor = Cursor::new(&mut serialized[..]);
 	res.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
@@ -139,7 +140,7 @@ pub fn mul_projective_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 
 	let cursor = Cursor::new(scalar);
 	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
-	let res = <ark_bls12_377::g1::Parameters as SWCurveConfig>::mul_projective(&base, &scalar);
+	let res = <ark_bls12_377::g1::Config as SWCurveConfig>::mul_projective(&base, &scalar);
 	let mut serialized = vec![0; res.serialized_size(Compress::Yes)];
 	let mut cursor = Cursor::new(&mut serialized[..]);
 	res.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
@@ -153,7 +154,7 @@ pub fn mul_affine_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 
 	let cursor = Cursor::new(scalar);
 	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
-	let res = <ark_bls12_377::g1::Parameters as SWCurveConfig>::mul_affine(&base, &scalar);
+	let res = <ark_bls12_377::g1::Config as SWCurveConfig>::mul_affine(&base, &scalar);
 	let mut serialized = vec![0; res.serialized_size(Compress::Yes)];
 	let mut cursor = Cursor::new(&mut serialized[..]);
 	res.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
@@ -167,7 +168,7 @@ pub fn mul_affine_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 
 	let cursor = Cursor::new(scalar);
 	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
-	let res = <ark_bls12_377::g2::Parameters as SWCurveConfig>::mul_affine(&base, &scalar);
+	let res = <ark_bls12_377::g2::Config as SWCurveConfig>::mul_affine(&base, &scalar);
 	let mut serialized = vec![0; res.serialized_size(Compress::Yes)];
 	let mut cursor = Cursor::new(&mut serialized[..]);
 	res.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
@@ -192,7 +193,7 @@ pub fn msm_g1(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 		.iter()
 		.map(|a| {
 			let cursor = Cursor::new(a);
-			<ark_bls12_377::g1::Parameters as CurveConfig>::ScalarField::deserialize_with_mode(
+			<ark_bls12_377::g1::Config as CurveConfig>::ScalarField::deserialize_with_mode(
 				cursor,
 				Compress::Yes,
 				Validate::No,
@@ -200,7 +201,8 @@ pub fn msm_g1(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 			.unwrap()
 		})
 		.collect();
-	let result = <<Bls12_377 as Pairing>::G1 as ark_ec::VariableBaseMSM>::msm(&bases, &scalars);
+	let result =
+		<<Bls12_377 as Pairing>::G1 as ark_ec::VariableBaseMSM>::msm(&bases, &scalars).unwrap();
 	let mut serialized = vec![0; result.serialized_size(Compress::Yes)];
 	let mut cursor = Cursor::new(&mut serialized[..]);
 	result.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
@@ -225,7 +227,7 @@ pub fn msm_g2(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 		.iter()
 		.map(|a| {
 			let cursor = Cursor::new(a);
-			<ark_bls12_377::g2::Parameters as CurveConfig>::ScalarField::deserialize_with_mode(
+			<ark_bls12_377::g2::Config as CurveConfig>::ScalarField::deserialize_with_mode(
 				cursor,
 				Compress::Yes,
 				Validate::No,
@@ -233,7 +235,8 @@ pub fn msm_g2(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 			.unwrap()
 		})
 		.collect();
-	let result = <<Bls12_377 as Pairing>::G2 as ark_ec::VariableBaseMSM>::msm(&bases, &scalars);
+	let result =
+		<<Bls12_377 as Pairing>::G2 as ark_ec::VariableBaseMSM>::msm(&bases, &scalars).unwrap();
 	let mut serialized = vec![0; result.serialized_size(Compress::Yes)];
 	let mut cursor = Cursor::new(&mut serialized[..]);
 	result.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();

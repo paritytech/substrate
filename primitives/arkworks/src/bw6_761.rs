@@ -20,7 +20,7 @@
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use ark_bw6_761::{G1Affine, G1Projective, G2Affine, G2Projective, Parameters, BW6_761};
+use ark_bw6_761::{Config, G1Affine, G1Projective, G2Affine, G2Projective, BW6_761};
 use ark_ec::{
 	models::CurveConfig,
 	pairing::{MillerLoopOutput, Pairing, PairingOutput},
@@ -125,7 +125,7 @@ pub fn mul_projective_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 
 	let cursor = Cursor::new(scalar);
 	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
-	let mut res = ark_ec::bw6::G2Projective::<Parameters>::zero();
+	let mut res = ark_ec::bw6::G2Projective::<Config>::zero();
 	for b in ark_ff::BitIteratorBE::without_leading_zeros(scalar) {
 		res.double_in_place();
 		if b {
@@ -145,7 +145,7 @@ pub fn mul_projective_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 
 	let cursor = Cursor::new(scalar);
 	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
-	let mut res = ark_ec::bw6::G1Projective::<Parameters>::zero();
+	let mut res = ark_ec::bw6::G1Projective::<Config>::zero();
 	for b in ark_ff::BitIteratorBE::without_leading_zeros(scalar) {
 		res.double_in_place();
 		if b {
@@ -165,7 +165,7 @@ pub fn mul_affine_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 
 	let cursor = Cursor::new(scalar);
 	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
-	let mut res = ark_ec::bw6::G1Projective::<Parameters>::zero();
+	let mut res = ark_ec::bw6::G1Projective::<Config>::zero();
 	for b in ark_ff::BitIteratorBE::without_leading_zeros(scalar) {
 		res.double_in_place();
 		if b {
@@ -185,7 +185,7 @@ pub fn mul_affine_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 
 	let cursor = Cursor::new(scalar);
 	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
-	let mut res = ark_ec::bw6::G2Projective::<Parameters>::zero();
+	let mut res = ark_ec::bw6::G2Projective::<Config>::zero();
 	for b in ark_ff::BitIteratorBE::without_leading_zeros(scalar) {
 		res.double_in_place();
 		if b {
@@ -199,7 +199,7 @@ pub fn mul_affine_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 }
 
 /// Compute a multi scalar multiplication on G! through arkworks
-pub fn msm_bigint_g1(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
+pub fn msm_bigint_g1(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 	let bases: Vec<_> = bases
 		.iter()
 		.map(|a| {
@@ -212,11 +212,11 @@ pub fn msm_bigint_g1(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
 			.unwrap()
 		})
 		.collect();
-	let bigints: Vec<_> = bigints
+	let scalars: Vec<_> = scalars
 		.iter()
 		.map(|a| {
 			let cursor = Cursor::new(a);
-			<<ark_bw6_761::g1::Parameters as CurveConfig>::ScalarField as PrimeField>::BigInt::deserialize_with_mode(
+			<ark_bw6_761::g1::Config as CurveConfig>::ScalarField::deserialize_with_mode(
 				cursor,
 				Compress::Yes,
 				Validate::No,
@@ -225,7 +225,7 @@ pub fn msm_bigint_g1(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
 		})
 		.collect();
 	let result =
-		<<BW6_761 as Pairing>::G1 as ark_ec::VariableBaseMSM>::msm_bigint(&bases, &bigints);
+		<<BW6_761 as Pairing>::G1 as ark_ec::VariableBaseMSM>::msm(&bases, &scalars).unwrap();
 	let mut serialized = vec![0; result.serialized_size(Compress::Yes)];
 	let mut cursor = Cursor::new(&mut serialized[..]);
 	result.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
@@ -233,7 +233,7 @@ pub fn msm_bigint_g1(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
 }
 
 /// Compute a multi scalar multiplication on G! through arkworks
-pub fn msm_bigint_g2(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
+pub fn msm_bigint_g2(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 	let bases: Vec<_> = bases
 		.iter()
 		.map(|a| {
@@ -246,11 +246,11 @@ pub fn msm_bigint_g2(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
 			.unwrap()
 		})
 		.collect();
-	let bigints: Vec<_> = bigints
+	let scalars: Vec<_> = scalars
 		.iter()
 		.map(|a| {
 			let cursor = Cursor::new(a);
-			<<ark_bw6_761::g2::Parameters as CurveConfig>::ScalarField as PrimeField>::BigInt::deserialize_with_mode(
+			<ark_bw6_761::g2::Config as CurveConfig>::ScalarField::deserialize_with_mode(
 				cursor,
 				Compress::Yes,
 				Validate::No,
@@ -259,7 +259,7 @@ pub fn msm_bigint_g2(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
 		})
 		.collect();
 	let result =
-		<<BW6_761 as Pairing>::G2 as ark_ec::VariableBaseMSM>::msm_bigint(&bases, &bigints);
+		<<BW6_761 as Pairing>::G2 as ark_ec::VariableBaseMSM>::msm(&bases, &scalars).unwrap();
 	let mut serialized = vec![0; result.serialized_size(Compress::Yes)];
 	let mut cursor = Cursor::new(&mut serialized[..]);
 	result.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
