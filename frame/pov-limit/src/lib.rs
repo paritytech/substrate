@@ -143,7 +143,7 @@ pub mod pallet {
 			let mut value: u64 = 0;
 			loop {
 				if computation_weight_limit <
-					weight.ref_time().saturating_add(T::WeightInfo::hash_value().ref_time())
+					weight.saturating_add(T::WeightInfo::hash_value()).ref_time()
 				{
 					break
 				}
