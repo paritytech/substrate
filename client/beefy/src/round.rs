@@ -30,24 +30,18 @@ use std::{collections::BTreeMap, hash::Hash};
 ///
 /// Does not do any validation on votes or signatures, layers above need to handle that (gossip).
 #[derive(Debug, Decode, Default, Encode, PartialEq)]
-struct RoundTracker {
-	self_vote: bool,
+pub(crate) struct RoundTracker {
 	votes: BTreeMap<Public, Signature>,
 }
 
 impl RoundTracker {
-	fn add_vote(&mut self, vote: (Public, Signature), self_vote: bool) -> bool {
+	fn add_vote(&mut self, vote: (Public, Signature)) -> bool {
 		if self.votes.contains_key(&vote.0) {
 			return false
 		}
 
-		self.self_vote = self.self_vote || self_vote;
 		self.votes.insert(vote.0, vote.1);
 		true
-	}
-
-	fn has_self_vote(&self) -> bool {
-		self.self_vote
 	}
 
 	fn is_done(&self, threshold: usize) -> bool {
@@ -109,16 +103,10 @@ where
 		self.mandatory_done
 	}
 
-	pub(crate) fn should_self_vote(&self, round: &(P, NumberFor<B>)) -> bool {
-		Some(round.1) > self.best_done &&
-			self.rounds.get(round).map(|tracker| !tracker.has_self_vote()).unwrap_or(true)
-	}
-
 	pub(crate) fn add_vote(
 		&mut self,
 		round: &(P, NumberFor<B>),
 		vote: (Public, Signature),
-		self_vote: bool,
 	) -> bool {
 		let num = round.1;
 		if num < self.session_start || Some(num) <= self.best_done {
@@ -132,7 +120,7 @@ where
 			);
 			false
 		} else {
-			self.rounds.entry(round.clone()).or_default().add_vote(vote, self_vote)
+			self.rounds.entry(round.clone()).or_default().add_vote(vote)
 		}
 	}
 
@@ -195,26 +183,18 @@ mod tests {
 		let bob_vote = (Keyring::Bob.public(), Keyring::Bob.sign(b"I am committed"));
 		let threshold = 2;
 
-		// self vote not added yet
-		assert!(!rt.has_self_vote());
-
 		// adding new vote allowed
-		assert!(rt.add_vote(bob_vote.clone(), false));
+		assert!(rt.add_vote(bob_vote.clone()));
 		// adding existing vote not allowed
-		assert!(!rt.add_vote(bob_vote, false));
-
-		// self vote still not added yet
-		assert!(!rt.has_self_vote());
+		assert!(!rt.add_vote(bob_vote));
 
 		// vote is not done
 		assert!(!rt.is_done(threshold));
 
 		let alice_vote = (Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed"));
 		// adding new vote (self vote this time) allowed
-		assert!(rt.add_vote(alice_vote, true));
+		assert!(rt.add_vote(alice_vote));
 
-		// self vote registered
-		assert!(rt.has_self_vote());
 		// vote is now done
 		assert!(rt.is_done(threshold));
 	}
@@ -269,41 +249,25 @@ mod tests {
 		let session_start = 1u64.into();
 		let mut rounds = Rounds::<H256, Block>::new(session_start, validators);
 
-		// no self vote yet, should self vote
-		assert!(rounds.should_self_vote(&round));
-
 		// add 1st good vote
-		assert!(rounds.add_vote(
-			&round,
-			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed")),
-			true
-		));
+		assert!(rounds
+			.add_vote(&round, (Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed"))));
 		// round not concluded
 		assert!(rounds.should_conclude(&round).is_none());
-		// self vote already present, should not self vote
-		assert!(!rounds.should_self_vote(&round));
 
 		// double voting not allowed
-		assert!(!rounds.add_vote(
-			&round,
-			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed")),
-			true
-		));
+		assert!(!rounds
+			.add_vote(&round, (Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed"))));
 
 		// invalid vote (Dave is not a validator)
-		assert!(!rounds.add_vote(
-			&round,
-			(Keyring::Dave.public(), Keyring::Dave.sign(b"I am committed")),
-			false
-		));
+		assert!(!rounds
+			.add_vote(&round, (Keyring::Dave.public(), Keyring::Dave.sign(b"I am committed")),));
 		assert!(rounds.should_conclude(&round).is_none());
 
 		// add 2nd good vote
-		assert!(rounds.add_vote(
-			&round,
-			(Keyring::Bob.public(), Keyring::Bob.sign(b"I am committed")),
-			false
-		));
+		assert!(
+			rounds.add_vote(&round, (Keyring::Bob.public(), Keyring::Bob.sign(b"I am committed")),)
+		);
 		// round not concluded
 		assert!(rounds.should_conclude(&round).is_none());
 
@@ -311,18 +275,14 @@ mod tests {
 		assert!(rounds.add_vote(
 			&round,
 			(Keyring::Charlie.public(), Keyring::Charlie.sign(b"I am committed")),
-			false
 		));
 		// round concluded
 		assert!(rounds.should_conclude(&round).is_some());
 		rounds.conclude(round.1);
 
 		// Eve is a validator, but round was concluded, adding vote disallowed
-		assert!(!rounds.add_vote(
-			&round,
-			(Keyring::Eve.public(), Keyring::Eve.sign(b"I am committed")),
-			false
-		));
+		assert!(!rounds
+			.add_vote(&round, (Keyring::Eve.public(), Keyring::Eve.sign(b"I am committed")),));
 	}
 
 	#[test]
@@ -341,7 +301,7 @@ mod tests {
 
 		let mut vote = (H256::from_low_u64_le(1), 9);
 		// add vote for previous session, should fail
-		assert!(!rounds.add_vote(&vote, alice.clone(), true));
+		assert!(!rounds.add_vote(&vote, alice.clone()));
 		// no votes present
 		assert!(rounds.rounds.is_empty());
 
@@ -349,15 +309,15 @@ mod tests {
 		rounds.best_done = Some(11);
 		// add votes for current session, but already concluded rounds, should fail
 		vote.1 = 10;
-		assert!(!rounds.add_vote(&vote, alice.clone(), true));
+		assert!(!rounds.add_vote(&vote, alice.clone()));
 		vote.1 = 11;
-		assert!(!rounds.add_vote(&vote, alice.clone(), true));
+		assert!(!rounds.add_vote(&vote, alice.clone()));
 		// no votes present
 		assert!(rounds.rounds.is_empty());
 
 		// add good vote
 		vote.1 = 12;
-		assert!(rounds.add_vote(&vote, alice, true));
+		assert!(rounds.add_vote(&vote, alice));
 		// good vote present
 		assert_eq!(rounds.rounds.len(), 1);
 	}
@@ -384,51 +344,42 @@ mod tests {
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(1), 1),
 			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed")),
-			true,
 		));
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(1), 1),
 			(Keyring::Bob.public(), Keyring::Bob.sign(b"I am committed")),
-			false,
 		));
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(1), 1),
 			(Keyring::Charlie.public(), Keyring::Charlie.sign(b"I am committed")),
-			false,
 		));
 
 		// round 2
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(2), 2),
 			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am again committed")),
-			true,
 		));
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(2), 2),
 			(Keyring::Bob.public(), Keyring::Bob.sign(b"I am again committed")),
-			false,
 		));
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(2), 2),
 			(Keyring::Charlie.public(), Keyring::Charlie.sign(b"I am again committed")),
-			false,
 		));
 
 		// round 3
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(3), 3),
 			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am still committed")),
-			true,
 		));
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(3), 3),
 			(Keyring::Bob.public(), Keyring::Bob.sign(b"I am still committed")),
-			false,
 		));
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(3), 3),
 			(Keyring::Charlie.public(), Keyring::Charlie.sign(b"I am still committed")),
-			false,
 		));
 		assert_eq!(3, rounds.rounds.len());
 

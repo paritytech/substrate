@@ -264,6 +264,8 @@ pub(crate) struct PersistedState<B: Block> {
 	best_grandpa_block_header: <B as Block>::Header,
 	/// Best block a BEEFY voting round has been concluded for.
 	best_beefy_block: NumberFor<B>,
+	/// Best block we voted on.
+	best_voted: NumberFor<B>,
 	/// Chooses which incoming votes to accept and which votes to generate.
 	/// Keeps track of voting seen for current and future rounds.
 	voting_oracle: VoterOracle<B>,
@@ -279,6 +281,7 @@ impl<B: Block> PersistedState<B> {
 		VoterOracle::checked_new(sessions, min_block_delta).map(|voting_oracle| PersistedState {
 			best_grandpa_block_header: grandpa_header,
 			best_beefy_block: best_beefy,
+			best_voted: Zero::zero(),
 			voting_oracle,
 		})
 	}
@@ -550,7 +553,7 @@ where
 			.active_rounds_mut()
 			.ok_or(Error::UninitSession)?;
 
-		if rounds.add_vote(&round, vote, self_vote) {
+		if rounds.add_vote(&round, vote) {
 			if let Some(signatures) = rounds.should_conclude(&round) {
 				self.gossip_validator.conclude_round(round.1);
 
@@ -702,7 +705,9 @@ where
 			.voting_target(self.best_beefy_block(), self.best_grandpa_block())
 		{
 			metric_set!(self, beefy_should_vote_on, target);
-			self.do_vote(target)?;
+			if target > self.persisted_state.best_voted {
+				self.do_vote(target)?;
+			}
 		}
 		Ok(())
 	}
@@ -752,10 +757,6 @@ where
 			.voting_oracle
 			.active_rounds_mut()
 			.ok_or(Error::UninitSession)?;
-		if !rounds.should_self_vote(&(payload.clone(), target_number)) {
-			debug!(target: "beefy", "🥩 Don't double vote for block number: {:?}", target_number);
-			return Ok(())
-		}
 		let (validators, validator_set_id) = (rounds.validators(), rounds.validator_set_id());
 
 		let authority_id = if let Some(id) = self.key_store.authority_id(validators) {
@@ -801,6 +802,8 @@ where
 		}
 
 		self.gossip_engine.gossip_message(topic::<B>(), encoded_message, false);
+		self.persisted_state.best_voted = target_number;
+		metric_set!(self, beefy_best_voted, target_number);
 
 		Ok(())
 	}
@@ -987,7 +990,7 @@ pub(crate) mod tests {
 	use sc_network_test::TestNetFactory;
 	use sp_api::HeaderT;
 	use sp_blockchain::Backend as BlockchainBackendT;
-	use sp_runtime::traits::{One, Zero};
+	use sp_runtime::traits::One;
 	use substrate_test_runtime_client::{
 		runtime::{Block, Digest, DigestItem, Header, H256},
 		Backend,
