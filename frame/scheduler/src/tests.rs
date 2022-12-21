@@ -1755,11 +1755,11 @@ fn cancel_named_last_task_removes_agenda() {
 		.unwrap();
 		// two tasks at agenda.
 		assert!(Agenda::<Test>::get(when).len() == 2);
-		assert_ok!(Scheduler::do_cancel_named(None, [1u8; 32]));
-		// still two tasks at agenda, `None` and `Some`.
-		assert!(Agenda::<Test>::get(when).len() == 2);
-		// cancel last task from `when` agenda.
 		assert_ok!(Scheduler::do_cancel_named(None, [2u8; 32]));
+		// removes trailing `None` and leaves one task.
+		assert!(Agenda::<Test>::get(when).len() == 1);
+		// cancel last task from `when` agenda.
+		assert_ok!(Scheduler::do_cancel_named(None, [1u8; 32]));
 		// if all tasks `None`, agenda fully removed.
 		assert!(Agenda::<Test>::get(when).len() == 0);
 	});
