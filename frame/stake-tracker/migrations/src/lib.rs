@@ -11,7 +11,9 @@ macro_rules! log {
 }
 
 pub mod v2 {}
-//TODO: Introduce try-state
+//TODO: Introduce try-state to the pallet
+//TODO: Decide what to do with new networks, no harm done if this is run on an empty Staking
+// storage
 pub mod v1 {
 	use codec::{Decode, Encode};
 	use frame_election_provider_support::SortedListProvider;
