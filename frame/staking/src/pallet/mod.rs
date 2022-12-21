@@ -355,47 +355,6 @@ pub mod pallet {
 	pub type Nominators<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, Nominations<T>>;
 
-	/// A helper struct with some explicit functions for nominators that are existing in storage, but
-	/// cannot be decoded. See [`Nominators`] for more info.
-	pub struct NominatorsHelper<T>(sp_std::marker::PhantomData<T>);
-	impl<T: Config> NominatorsHelper<T> {
-		/// True IFF nominator exists, and is decodable.
-		pub(crate) fn contains_decodable(who: &T::AccountId) -> bool {
-			Nominators::<T>::get(who).is_some()
-		}
-
-		/// True if the nominator exists, decodable or not.
-		pub(crate) fn contains_any(who: &T::AccountId) -> bool {
-			Nominators::<T>::contains_key(who)
-		}
-
-		/// True IF nominators exists, and is NOT decodable.
-		pub(crate) fn is_undecodable(who: &T::AccountId) -> bool {
-			Self::contains_any(who) && !Self::contains_decodable(who)
-		}
-
-		/// Iterate over all nominators, decodable or not.
-		pub(crate) fn iter_all() -> impl Iterator<Item = (T::AccountId, UnboundedNominations<T>)> {
-			Nominators::<T>::iter_keys().filter_map(|who| {
-				if let Some(u) = Self::get_any(&who) {
-					Some((who, u))
-				} else {
-					frame_support::defensive!(
-						"any nominator that has a key must be unbounded accessible"
-					);
-					None
-				}
-			})
-		}
-
-		/// Get the nominator `who`, decodable or not.
-		pub(crate) fn get_any(who: &T::AccountId) -> Option<UnboundedNominations<T>> {
-			frame_support::storage::unhashed::get::<UnboundedNominations<T>>(
-				&Nominators::<T>::hashed_key_for(who),
-			)
-		}
-	}
-
 	/// The maximum nominator count before we stop allowing new validators to join.
 	///
 	/// When this value is not set, no limits are enforced.

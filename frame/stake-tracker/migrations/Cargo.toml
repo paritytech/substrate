@@ -1,0 +1,34 @@
+[package]
+name = "pallet-stake-tracker-migrations"
+version = "4.0.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "Unlicense"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+description = "FRAME stake tracker migrations submodule"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+pallet-staking = { path = "../../staking", default-features = false }
+pallet-stake-tracker = { path = "../", default-features = false }
+sp-std = { version = "5.0.0", default-features = false, path = "../../../primitives/std" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../../primitives/runtime" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
+frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../../election-provider-support" }
+log = { version = "0.4.17", default-features = false }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
+    "derive",
+] }
+
+
+[features]
+default = ["std"]
+std = [
+    "pallet-staking/std",
+    "pallet-stake-tracker/std",
+]

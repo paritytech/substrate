@@ -41,7 +41,12 @@ pub mod pallet {
 
 	use sp_staking::StakingInterface;
 
+	/// The current storage version.
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
+
 	#[pallet::pallet]
+	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -66,9 +71,9 @@ pub mod pallet {
 	/// to date even if a validator chilled or turned into nominator. Entries from this map are only
 	/// ever removed if the stash is reaped.
 	///
-	/// NOTE: This is currently a [`CountedStorageMap`] for debugging purposes. We might actually want
-	/// to revisit this once this pallet starts populating the actual [`Config::TargetList`] used by
-	/// [`Config::Staking`].
+	/// NOTE: This is currently a [`CountedStorageMap`] for debugging purposes. We might actually
+	/// want to revisit this once this pallet starts populating the actual [`Config::TargetList`]
+	/// used by [`Config::Staking`].
 	#[pallet::storage]
 	#[pallet::getter(fn approval_stake)]
 	pub type ApprovalStake<T: Config> =
@@ -77,7 +82,7 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	/// The total balance that can be slashed from a stash account as of right now.
-	pub(crate) fn slashable_balance_of(who: &T::AccountId) -> BalanceOf<T> {
+	pub fn slashable_balance_of(who: &T::AccountId) -> BalanceOf<T> {
 		// Weight note: consider making the stake accessible through stash.
 		T::Staking::stake(&who).map(|l| l.active).unwrap_or_default()
 	}
