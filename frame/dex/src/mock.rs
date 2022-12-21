@@ -23,7 +23,7 @@ use crate as pallet_dex;
 use frame_support::{
 	construct_runtime,
 	instances::{Instance1, Instance2},
-	parameter_types,
+	ord_parameter_types, parameter_types,
 	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64},
 	PalletId,
 };
@@ -32,7 +32,7 @@ use sp_core::H256;
 use sp_keystore::{testing::KeyStore, KeystoreExt};
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
+	traits::{AccountIdConversion, BlakeTwo256, IdentityLookup},
 };
 use std::sync::Arc;
 
@@ -119,7 +119,7 @@ impl pallet_assets::Config<Instance2> for Test {
 	type AssetId = u32;
 	type AssetIdParameter = u32;
 	type Currency = Balances;
-	type CreateOrigin = AsEnsureOriginWithArg<EnsureSignedBy<DexAccount, u64>>;
+	type CreateOrigin = AsEnsureOriginWithArg<EnsureSignedBy<DexOrigin, u64>>;
 	type ForceOrigin = frame_system::EnsureRoot<u64>;
 	type AssetDeposit = ConstU64<0>;
 	type AssetAccountDeposit = ConstU64<0>;
@@ -137,8 +137,8 @@ parameter_types! {
 	pub storage AllowMultiAssetPools: bool = true;
 }
 
-frame_support::ord_parameter_types! {
-	pub const DexAccount: u64 = 33; //TODO: this should be DexPalletId
+ord_parameter_types! {
+	pub const DexOrigin: u64 = AccountIdConversion::<u64>::into_account_truncating(&DexPalletId::get());
 }
 
 impl Config for Test {
