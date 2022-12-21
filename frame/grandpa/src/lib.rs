@@ -58,7 +58,6 @@ pub mod migrations;
 
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarking;
-mod benchmarking_alt;
 #[cfg(all(feature = "std", test))]
 mod mock;
 #[cfg(all(feature = "std", test))]

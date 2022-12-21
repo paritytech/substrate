@@ -156,6 +156,7 @@
 #[macro_use]
 mod tests;
 mod benchmarking;
+mod benchmarking_alt;
 pub mod migration;
 mod tests_composite;
 mod tests_local;
