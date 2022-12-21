@@ -553,12 +553,8 @@ impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for Blockcha
 		}
 	}
 
-	fn status(&self, id: BlockId<Block>) -> ClientResult<sc_client_api::blockchain::BlockStatus> {
-		let exists = match id {
-			BlockId::Hash(hash) => self.header(hash)?.is_some(),
-			BlockId::Number(n) => n <= self.meta.read().best_number,
-		};
-		match exists {
+	fn status(&self, hash: Block::Hash) -> ClientResult<sc_client_api::blockchain::BlockStatus> {
+		match self.header(hash)?.is_some() {
 			true => Ok(sc_client_api::blockchain::BlockStatus::InChain),
 			false => Ok(sc_client_api::blockchain::BlockStatus::Unknown),
 		}
@@ -1223,7 +1219,7 @@ impl<Block: BlockT> Backend<Block> {
 		}
 
 		let parent_exists =
-			self.blockchain.status(BlockId::Hash(route_to))? == sp_blockchain::BlockStatus::InChain;
+			self.blockchain.status(route_to)? == sp_blockchain::BlockStatus::InChain;
 
 		// Cannot find tree route with empty DB or when imported a detached block.
 		if meta.best_hash != Default::default() && parent_exists {
