@@ -66,26 +66,10 @@ impl frame_system::Config for Test {
 	type MaxConsumers = ConstU32<16>;
 }
 
-impl crate::Hasher for sp_core::Blake2Hasher {
-	type Out = <sp_core::Blake2Hasher as sp_core::Hasher>::Out;
-
-	fn hash(val: &[u8]) -> Self::Out {
-		<sp_core::Blake2Hasher as sp_core::Hasher>::hash(val)
-	}
-}
-
-pub struct StorageUnhashedReader;
-impl crate::Reader for StorageUnhashedReader {
-	fn read<T: Config>(_: &[u8]) -> Weight {
-		// should actually read something.
-		Weight::from_proof_size(5_000)
-	}
-}
-
 impl Config for Test {
-	type Hasher = sp_core::Blake2Hasher;
-	type Reader = StorageUnhashedReader;
 	type RuntimeEvent = RuntimeEvent;
+	type RefTimeWaster = crate::Pallet<Self>;
+	type PovWaster = crate::Pallet<Self>;
 	type WeightInfo = ();
 }
 

@@ -31,7 +31,6 @@ use frame_support::{
 use pallet_alliance::{IdentityVerifier, ProposalIndex, ProposalProvider};
 use pallet_asset_tx_payment::HandleCredit;
 use sp_std::prelude::*;
-use sp_api::HashT;
 
 pub struct Author;
 impl OnUnbalanced<NegativeImbalance> for Author {
@@ -109,23 +108,6 @@ impl ProposalProvider<AccountId, Hash, RuntimeCall> for AllianceProposalProvider
 
 	fn proposal_of(proposal_hash: Hash) -> Option<RuntimeCall> {
 		AllianceMotion::proposal_of(proposal_hash)
-	}
-}
-
-pub struct Hasher;
-impl pallet_pov_limit::Hasher for Hasher {
-	type Out = sp_core::H256;
-
-	fn hash(val: &[u8]) -> Self::Out {
-		<Runtime as frame_system::Config>::Hashing::hash(val)
-	}
-}
-
-pub struct AccountReader;
-impl pallet_pov_limit::Reader for AccountReader {
-	fn read<T: pallet_pov_limit::Config>(_: &[u8]) -> Weight {
-		// should actually read something.
-		Weight::from_proof_size(5_000)
 	}
 }
 

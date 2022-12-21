@@ -21,29 +21,39 @@
 use super::*;
 
 use frame_benchmarking::benchmarks;
+use frame_support::pallet_prelude::*;
 use frame_system::RawOrigin as SystemOrigin;
 
 use crate::Pallet as PovLimit;
 use frame_system::Pallet as System;
 
 benchmarks! {
-	hash_value {
-
+	waste_ref_time {
+		let n in 0 .. 1024;
 	}: {
-		PovLimit::<T>::hash_value(42u64);
+		T::RefTimeWaster::waste_ref_time(n);
 	}
 
-	read {
-
+	waste_proof_size_some {
+		let n in 0 .. 1024;
+		// TODO this needs <https://github.com/paritytech/substrate/pull/11637>.
+		(0..n).for_each(|i| TrashData::<T>::insert(i, i));
 	}: {
-		PovLimit::<T>::read(42u64);
+		TrashData::<T>::get(n);
+	}
+
+	waste_proof_size_none {
+		let n in 0 .. 1024;
+		// TODO this needs <https://github.com/paritytech/substrate/pull/11637>.
+	}: {
+		TrashData::<T>::get(n);
 	}
 
 	on_idle {
 		let _ = PovLimit::<T>::set_compute(SystemOrigin::Root.into(), Perbill::from_percent(100));
 		let _ = PovLimit::<T>::set_storage(SystemOrigin::Root.into(), Perbill::from_percent(100));
 	}: {
-		let weight = PovLimit::<T>::on_idle(System::<T>::block_number(), Weight::from_parts(200_000_000, 100_000));
+		let weight = PovLimit::<T>::on_idle(System::<T>::block_number(), Weight::from_parts(2000, 2000));
 	}
 
 	impl_benchmark_test_suite!(PovLimit, crate::mock::new_test_ext(), crate::mock::Test);

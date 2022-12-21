@@ -32,39 +32,36 @@ mod mock;
 mod tests;
 pub mod weights;
 
-use frame_support::pallet_prelude::*;
-use sp_runtime::Perbill;
+use frame_support::{defensive, pallet_prelude::*, weights::WeightMeter};
+use frame_system::pallet_prelude::*;
+use sp_runtime::{
+	traits::{Hash, Zero},
+	Perbill, Saturating,
+};
+use sp_std::prelude::*;
 
 pub use pallet::*;
 pub use weights::WeightInfo;
 
-pub trait Hasher {
-	/// The output type of the hashing algorithm.
-	type Out;
-
-	/// Hashes a slice of bytes and returns the result.
-	fn hash(_: &[u8]) -> Self::Out;
+pub trait RefTimeWaster {
+	fn waste_ref_time(counter: u32);
 }
 
-pub trait Reader {
-	/// Reads some storage value and returns the weight consumed from reading.
-	fn read<T: crate::Config>(_: &[u8]) -> Weight;
+pub trait PovWaster {
+	fn waste_proof_size(counter: u32) -> Weight;
 }
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_system::pallet_prelude::*;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		/// Type that implements the `Hasher` trait.
-		type Hasher: Hasher;
-
-		/// Type that implements the `Reader` trait.
-		type Reader: Reader;
-
 		type RuntimeEvent: From<Event> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+
+		type RefTimeWaster: RefTimeWaster;
+
+		type PovWaster: PovWaster;
 
 		/// Weight information for this pallet.
 		type WeightInfo: WeightInfo;
@@ -89,6 +86,9 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type Storage<T: Config> = StorageValue<_, Perbill, ValueQuery>;
 
+	#[pallet::storage]
+	pub(super) type TrashData<T: Config> = StorageMap<_, Blake2_128Concat, u32, u32, OptionQuery>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
 		pub compute: Perbill,
@@ -112,45 +112,57 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn integrity_test() {
+			assert!(
+				!T::WeightInfo::waste_ref_time(1).ref_time().is_zero(),
+				"Weight zero; would get stuck in an infinite loop"
+			);
+			// TODO this needs <https://github.com/paritytech/substrate/pull/11637>.
+			//assert!(!T::WeightInfo::waste_proof_size(1).proof_size().is_zero(), "Weight zero;
+			// would get stuck in an infinite loop");
+		}
+
 		fn on_idle(_: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
-			let mut weight = T::DbWeight::get().reads(2);
+			let mut meter = WeightMeter::from_limit(remaining_weight);
+			if !meter.check_accrue(T::DbWeight::get().reads(2)) {
+				return Weight::zero() // TODO maybe benchmark
+			}
 
-			let proof_size_limit = Storage::<T>::get().mul_floor(remaining_weight.proof_size());
+			let proof_size_limit = Storage::<T>::get().mul_floor(meter.remaining().proof_size());
 			let computation_weight_limit =
-				Compute::<T>::get().mul_floor(remaining_weight.ref_time());
+				Compute::<T>::get().mul_floor(meter.remaining().ref_time());
+			let mut meter = WeightMeter::from_limit(Weight::from_parts(
+				computation_weight_limit,
+				proof_size_limit,
+			));
 
-			let mut value: u64 = 0;
-			loop {
-				let consumed_weight = Self::read(value);
-
-				weight = weight.saturating_add(consumed_weight);
-				weight = weight.saturating_add(T::WeightInfo::read());
-
-				let is_over_size_limit = proof_size_limit <
-					weight.proof_size().saturating_add(consumed_weight.proof_size());
-
-				let is_over_ref_time_limit = computation_weight_limit <
-					weight.ref_time().saturating_add(T::WeightInfo::read().ref_time());
-
-				if is_over_size_limit || is_over_ref_time_limit {
+			// First we start by wasting proof size.
+			let mut num_proof_size = 0;
+			while meter.can_accrue(
+				T::WeightInfo::waste_proof_size_some(1)
+					.max(T::WeightInfo::waste_proof_size_none(1)),
+			) {
+				let wasted = T::PovWaster::waste_proof_size(num_proof_size);
+				num_proof_size.saturating_inc();
+				if wasted.is_zero() {
+					// Do not get stuck in an infinite loop if no PoV can be consumed.
 					break
 				}
-				value += 1;
-			}
-
-			let mut value: u64 = 0;
-			loop {
-				if computation_weight_limit <
-					weight.ref_time().saturating_add(T::WeightInfo::hash_value().ref_time())
-				{
+				if !meter.check_accrue(wasted) {
+					defensive!("Could not consume waste_proof_size");
 					break
 				}
-				weight = weight.saturating_add(T::WeightInfo::hash_value());
-				Self::hash_value(value);
-				value += 1;
 			}
 
-			weight
+			// Now we waste ref time.
+			let mut num_ref_time = 0;
+			while meter.can_accrue(T::WeightInfo::waste_ref_time(1)) {
+				T::RefTimeWaster::waste_ref_time(num_ref_time);
+				num_ref_time.saturating_inc();
+				meter.defensive_saturating_accrue(T::WeightInfo::waste_ref_time(1));
+			}
+
+			meter.consumed
 		}
 	}
 
@@ -185,13 +197,20 @@ pub mod pallet {
 		}
 	}
 
-	impl<T: Config> Pallet<T> {
-		pub fn hash_value(value: u64) {
-			T::Hasher::hash(&value.to_le_bytes());
+	impl<T: Config> PovWaster for Pallet<T> {
+		fn waste_proof_size(counter: u32) -> Weight {
+			match TrashData::<T>::get(counter) {
+				Some(_) => T::WeightInfo::waste_proof_size_some(1),
+				None => T::WeightInfo::waste_proof_size_none(1),
+			}
 		}
+	}
 
-		pub fn read(value: u64) -> Weight {
-			T::Reader::read::<T>(&value.to_le_bytes())
+	impl<T: Config> RefTimeWaster for Pallet<T> {
+		fn waste_ref_time(counter: u32) {
+			// TODO this probably does a host call. We should probably run the hash function inside
+			// WASM instead.
+			T::Hashing::hash_of(&counter.encode());
 		}
 	}
 }

@@ -18,9 +18,9 @@
 //! Tests for pov-limit pallet.
 
 use super::*;
-
-use frame_support::{assert_noop, assert_ok};
 use mock::{new_test_ext, PovLimit, RuntimeOrigin, System, Test};
+
+use frame_support::{assert_noop, assert_ok, weights::constants::*};
 
 #[test]
 fn setting_compute_works() {
@@ -73,5 +73,32 @@ fn on_idle_works() {
 		assert_ok!(PovLimit::set_storage(RuntimeOrigin::root(), Perbill::from_percent(100)));
 
 		PovLimit::on_idle(1, Weight::from_ref_time(20_000_000));
+	});
+}
+
+/// Check that the expected is close enough to the consumed weight.
+#[test]
+fn on_idle_weight_is_close_enough_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(PovLimit::set_compute(RuntimeOrigin::root(), Perbill::from_percent(100)));
+		assert_ok!(PovLimit::set_storage(RuntimeOrigin::root(), Perbill::from_percent(100)));
+
+		let should = Weight::from_parts(WEIGHT_REF_TIME_PER_MILLIS * 10, WEIGHT_PROOF_SIZE_PER_MB);
+		let got = PovLimit::on_idle(1, should);
+		assert!(got.all_lte(should), "Consumed too much weight");
+
+		let ratio = Perbill::from_rational(got.proof_size(), should.proof_size());
+		assert!(
+			ratio >= Perbill::from_percent(95),
+			"Too few proof size consumed, was only {:?} of expected",
+			ratio
+		);
+
+		let ratio = Perbill::from_rational(got.ref_time(), should.ref_time());
+		assert!(
+			ratio >= Perbill::from_percent(95),
+			"Too few ref time consumed, was only {:?} of expected",
+			ratio
+		);
 	});
 }
