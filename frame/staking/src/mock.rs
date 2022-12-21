@@ -233,7 +233,6 @@ const THRESHOLDS: [sp_npos_elections::VoteWeight; 9] =
 
 parameter_types! {
 	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
-	pub static MaxNominations: u32 = 16;
 	pub static HistoryDepth: u32 = 80;
 	pub static MaxUnlockingChunks: u32 = 32;
 	pub static RewardOnUnbalanceWasCalled: bool = false;
@@ -283,7 +282,6 @@ impl<T: Config> sp_staking::OnStakerSlash<AccountId, Balance> for OnStakerSlashM
 }
 
 impl crate::pallet::pallet::Config for Test {
-	type NominationsQuota = FixedNominationsQuota<16>;
 	type Currency = Balances;
 	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
 	type UnixTime = Timestamp;
@@ -306,11 +304,38 @@ impl crate::pallet::pallet::Config for Test {
 	// NOTE: consider a macro and use `UseNominatorsAndValidatorsMap<Self>` as well.
 	type VoterList = VoterBagsList;
 	type TargetList = UseValidatorsMap<Self>;
+	type NominationsQuota = WeightedNominationsQuota<16>;
+	//type NominationsQuota = FixedNominationsQuota<16>;
 	type MaxUnlockingChunks = MaxUnlockingChunks;
 	type HistoryDepth = HistoryDepth;
 	type OnStakerSlash = OnStakerSlashMock<Test>;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type WeightInfo = ();
+}
+
+pub struct WeightedNominationsQuota<const MAX: u32>;
+impl<Balance, const MAX: u32> NominationsQuota<Balance> for WeightedNominationsQuota<MAX>
+where
+	u128: From<Balance>,
+{
+	const ABSOLUTE_MAX_NOMINATIONS: u32 = MAX;
+	type AbsoluteMaxNominations = Self;
+
+	fn get_quota(balance: Balance) -> u32 {
+		match balance.into() {
+			// random quota per balance for testing
+			0..=300 => 16,
+			301..=500 => 3,
+			501..=600 => 1,
+			_ => MAX,
+		}
+	}
+}
+
+impl<const MAX: u32> Get<u32> for WeightedNominationsQuota<MAX> {
+	fn get() -> u32 {
+		MAX
+	}
 }
 
 pub(crate) type StakingCall = crate::Call<Test>;

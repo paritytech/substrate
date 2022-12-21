@@ -44,10 +44,10 @@ mod impls;
 pub use impls::*;
 
 use crate::{
-	slashing, weights::WeightInfo, AccountIdLookupOf, ActiveEraInfo, BalanceOf, EraPayout,
-	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations, NominationsQuota,
-	PositiveImbalanceOf, Releases, RewardDestination, SessionInterface, StakingLedger,
-	UnappliedSlash, UnlockChunk, ValidatorPrefs,
+	slashing, weights::WeightInfo, AbsoluteMaxNominationsOf, AccountIdLookupOf, ActiveEraInfo,
+	BalanceOf, EraPayout, EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations,
+	NominationsQuota, PositiveImbalanceOf, Releases, RewardDestination, SessionInterface,
+	StakingLedger, UnappliedSlash, UnlockChunk, ValidatorPrefs,
 };
 
 const STAKING_ID: LockIdentifier = *b"staking ";
@@ -129,8 +129,7 @@ pub mod pallet {
 		/// Something that defines the maximum number of nominations per nominator.
 		type NominationsQuota: NominationsQuota<BalanceOf<Self>>;
 
-		/// Maximum number of nominations per nominator, regardless of the
-		/// `Config::NominationsQuota` Number of eras to keep in history.
+		/// Number of eras to keep in history.
 		///
 		/// Following information is kept for eras in `[current_era -
 		/// HistoryDepth, current_era]`: `ErasStakers`, `ErasStakersClipped`,
@@ -267,6 +266,15 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 	}
 
+	/// Maximum limit of nominations per nominator, regardless of `T::NominationsQuota`.
+	#[pallet::extra_constants]
+	impl<T: Config> Pallet<T> {
+		#[pallet::constant_name(AbsoluteMaxNominations)]
+		fn absolute_max_nominations() -> u32 {
+			<T::NominationsQuota as NominationsQuota<BalanceOf<T>>>::AbsoluteMaxNominations::get()
+		}
+	}
+
 	/// The ideal number of active validators.
 	#[pallet::storage]
 	#[pallet::getter(fn validator_count)]
@@ -335,7 +343,8 @@ pub mod pallet {
 	/// they wish to support.
 	///
 	/// Note that the keys of this storage map might become non-decodable in case the
-	/// [`Config::MaxNominations`] configuration is decreased. In this rare case, these nominators
+	/// account's [`NominationsQuota::ABSOLUTE_MAX_NOMINATIONS`] configuration is decreased.
+	/// In this rare case, these nominators
 	/// are still existent in storage, their key is correct and retrievable (i.e. `contains_key`
 	/// indicates that they exist), but their value cannot be decoded. Therefore, the non-decodable
 	/// nominators will effectively not-exist, until they re-submit their preferences such that it
@@ -792,11 +801,11 @@ pub mod pallet {
 		fn integrity_test() {
 			// ensure that we funnel the correct value to the `DataProvider::MaxVotesPerVoter`;
 			assert_eq!(
-				T::NominationsQuota::get(),
+				AbsoluteMaxNominationsOf::<T>::get(),
 				<Self as ElectionDataProvider>::MaxVotesPerVoter::get()
 			);
 			// and that MaxNominations is always greater than 1, since we count on this.
-			assert!(!T::NominationsQuota::get().is_zero());
+			assert!(!AbsoluteMaxNominationsOf::<T>::get().is_zero());
 
 			// ensure election results are always bounded with the same value
 			assert!(
@@ -1159,8 +1168,7 @@ pub mod pallet {
 
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
 			ensure!(
-				// TODO(gpestana): this is the absolute max nomination, make it more explicit
-				targets.len() <= T::NominationsQuota::get() as usize,
+				targets.len() <= AbsoluteMaxNominationsOf::<T>::get() as usize,
 				Error::<T>::TooManyTargets
 			);
 

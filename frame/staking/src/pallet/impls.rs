@@ -749,8 +749,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
 	pub fn get_npos_voters(voter_bounds: ElectionBounds) -> Vec<VoterOf<Self>> {
-		let mut voters_size_tracker: ElectionSizeTracker<T::AccountId> =
-			ElectionSizeTracker::new(voter_bounds.size.map_or(None, |s| Some(s as usize)));
+		let mut voters_size_tracker: ElectionSizeTracker<T::AccountId> = ElectionSizeTracker::new();
 
 		let max_allowed_len = {
 			let all_voter_count = T::VoterList::count();
@@ -780,6 +779,7 @@ impl<T: Config> Pallet<T> {
 			};
 
 			if let Some(Nominations { targets, .. }) = <Nominators<T>>::get(&voter) {
+				// if this voter is a nominator:
 				let voter_weight = weight_of(&voter);
 				let nominations_quota = T::NominationsQuota::get_quota_capped(voter_weight.into());
 				if !targets.is_empty() {
@@ -787,23 +787,20 @@ impl<T: Config> Pallet<T> {
 						.try_register_voter(nominations_quota as usize, voter_bounds)
 						.is_err()
 					{
-						// no more space left for the election result, stop iterating over the
-						// voters.
+						// no more space left for the election result, stop iterating.
 						break
 					}
-
 					all_voters.push((voter.clone(), voter_weight, targets));
 					nominators_taken.saturating_inc();
 				} else {
 					// Technically should never happen, but not much we can do about it.
 				}
-
 				min_active_stake =
 					if voter_weight < min_active_stake { voter_weight } else { min_active_stake };
 			} else if Validators::<T>::contains_key(&voter) {
 				// if this voter is a validator:
 				if voters_size_tracker.try_register_voter(1, voter_bounds).is_err() {
-					// no more space left for the election result, stop iterating over the voters.
+					// no more space left for the election result, stop iterating over.
 					break
 				}
 				let self_vote = (
@@ -1001,6 +998,14 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 	fn electing_voters(bounds: ElectionBounds) -> data_provider::Result<Vec<VoterOf<Self>>> {
 		// This can never fail -- if `maybe_max_len` is `Some(_)` we handle it.
 		let voters = Self::get_npos_voters(bounds);
+		println!("====");
+		println!("{:?}", bounds);
+		println!("{:?}", voters);
+		println!(
+			"{:?}",
+			bounds.exhausted(Some(voters.len() as u32), Some(voters.encoded_size() as u32))
+		);
+
 		debug_assert!(
 			!bounds.exhausted(Some(voters.len() as u32), Some(voters.encoded_size() as u32))
 		);

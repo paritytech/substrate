@@ -768,7 +768,7 @@ impl<AccountId, Balance: HasCompact + Zero> UnappliedSlash<AccountId, Balance> {
 }
 
 /// Something that defines the maximum number of nominations per nominator.
-pub trait NominationsQuota<Balance>: Get<u32> {
+pub trait NominationsQuota<Balance> {
 	const ABSOLUTE_MAX_NOMINATIONS: u32;
 
 	type AbsoluteMaxNominations: Get<u32>;
@@ -797,8 +797,6 @@ impl<Balance, const MAX: u32> NominationsQuota<Balance> for FixedNominationsQuot
 	}
 }
 
-// TODO(gpestana): temporary -- `Get<u32>` is returning the ABSOLUTE_MAX_NOMINATIONS, make it more
-// explicit (unclear which u32 instance is returning)
 impl<const MAX: u32> Get<u32> for FixedNominationsQuota<MAX> {
 	fn get() -> u32 {
 		MAX
@@ -836,16 +834,19 @@ impl<AccountId> ElectionSizeTracker<AccountId> {
 		votes: usize,
 		bounds: ElectionBounds,
 	) -> Result<(), ()> {
-		// TODO(gpestana): it is not accurately calculating/setting the size yet, fix
 		let voter_size = Self::voter_size(votes);
-		if bounds.size_exhausted(Some(self.size.saturating_add(voter_size) as u32)) {
-			Err(())
-		} else {
-			self.size = self.size.saturating_add(voter_size);
-			Ok(())
+		let size_after = self.size.saturating_add(voter_size);
+
+		match bounds.size_exhausted(Some(size_after as u32)) {
+			true => Err(()),
+			false => {
+				self.size = size_after;
+				Ok(())
+			},
 		}
 	}
 
+	/// Returns the size taken by a voter with `votes`.
 	fn voter_size(votes: usize) -> usize {
 		Self::length_prefix(votes)
 			// and each element
@@ -862,11 +863,6 @@ impl<AccountId> ElectionSizeTracker<AccountId> {
 		use codec::{Compact, CompactLen};
 		let length = length as u32;
 		Compact::<u32>::compact_len(&length)
-	}
-
-	// Final size: size of all internal elements, plus the length prefix.
-	pub(crate) fn final_byte_size_of(&self, length: usize) -> usize {
-		self.size + Self::length_prefix(length)
 	}
 }
 

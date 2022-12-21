@@ -4541,7 +4541,7 @@ mod election_data_provider {
 	}
 
 	#[test]
-	fn respects_snapshot_len_limits() {
+	fn respects_snapshot_count_limits() {
 		ExtBuilder::default()
 			.set_status(41, StakerStatus::Validator)
 			.build_and_execute(|| {
@@ -4550,17 +4550,20 @@ mod election_data_provider {
 
 				let bounds_builder = ElectionBoundsBuilder::new();
 
+				println!("-- 0");
 				// if limits is less..
 				assert_eq!(
 					Staking::electing_voters(bounds_builder.count(Some(1)).build()).unwrap().len(),
 					1
 				);
+				println!("-- 1");
 
 				// if limit is equal..
 				assert_eq!(
 					Staking::electing_voters(bounds_builder.count(Some(5)).build()).unwrap().len(),
 					5
 				);
+				println!("2");
 
 				// if limit is more.
 				assert_eq!(
@@ -4568,6 +4571,7 @@ mod election_data_provider {
 					5
 				);
 
+				println!("3");
 				// if target limit is more..
 				assert_eq!(
 					Staking::electable_targets(bounds_builder.count(Some(6)).build())
@@ -4624,7 +4628,8 @@ mod election_data_provider {
 					vec![61, 71, 81, 11, 21, 31]
 				);
 
-				MaxNominations::set(2);
+				// TODO(gpestana): change this test, no more MaxNominations::set
+				//MaxNominations::set(2);
 
 				// we want 2 voters now, and in maximum we allow 4 iterations. This is what happens:
 				// 61 is pruned;
@@ -5081,15 +5086,17 @@ fn min_commission_works() {
 }
 
 #[test]
-fn change_of_max_nominations() {
+fn nomination_quota_max_changes_decoding() {
 	use frame_election_provider_support::ElectionDataProvider;
 	ExtBuilder::default()
 		.add_staker(60, 61, 10, StakerStatus::Nominator(vec![1]))
 		.add_staker(70, 71, 10, StakerStatus::Nominator(vec![1, 2, 3]))
+		.add_staker(30, 330, 10, StakerStatus::Nominator(vec![1, 2, 3, 4]))
+		.add_staker(50, 550, 10, StakerStatus::Nominator(vec![1, 2, 3, 4]))
 		.balance_factor(10)
 		.build_and_execute(|| {
 			// pre-condition
-			assert_eq!(MaxNominations::get(), 16);
+			assert_eq!(AbsoluteMaxNominationsOf::<Test>::get(), 16);
 
 			let unbonded_election = ElectionBounds::new_unbounded();
 
@@ -5097,83 +5104,15 @@ fn change_of_max_nominations() {
 				Nominators::<Test>::iter()
 					.map(|(k, n)| (k, n.targets.len()))
 					.collect::<Vec<_>>(),
-				vec![(70, 3), (101, 2), (60, 1)]
+				vec![(70, 3), (101, 2), (50, 4), (30, 4), (60, 1)]
 			);
-			// 3 validators and 3 nominators
-			assert_eq!(Staking::electing_voters(unbonded_election).unwrap().len(), 3 + 3);
+			// 4 validators and 4 nominators
+			assert_eq!(Staking::electing_voters(unbonded_election).unwrap().len(), 4 + 4);
 
-			// abrupt change from 16 to 4, everyone should be fine.
-			MaxNominations::set(4);
-
-			assert_eq!(
-				Nominators::<Test>::iter()
-					.map(|(k, n)| (k, n.targets.len()))
-					.collect::<Vec<_>>(),
-				vec![(70, 3), (101, 2), (60, 1)]
-			);
-			assert_eq!(Staking::electing_voters(unbonded_election).unwrap().len(), 3 + 3);
-
-			// abrupt change from 4 to 3, everyone should be fine.
-			MaxNominations::set(3);
-
-			assert_eq!(
-				Nominators::<Test>::iter()
-					.map(|(k, n)| (k, n.targets.len()))
-					.collect::<Vec<_>>(),
-				vec![(70, 3), (101, 2), (60, 1)]
-			);
-			assert_eq!(Staking::electing_voters(unbonded_election).unwrap().len(), 3 + 3);
-
-			// abrupt change from 3 to 2, this should cause some nominators to be non-decodable, and
-			// thus non-existent unless if they update.
-			MaxNominations::set(2);
-
-			assert_eq!(
-				Nominators::<Test>::iter()
-					.map(|(k, n)| (k, n.targets.len()))
-					.collect::<Vec<_>>(),
-				vec![(101, 2), (60, 1)]
-			);
-			// 70 is still in storage..
-			assert!(Nominators::<Test>::contains_key(70));
-			// but its value cannot be decoded and default is returned.
-			assert!(Nominators::<Test>::get(70).is_none());
-
-			assert_eq!(Staking::electing_voters(unbonded_election).unwrap().len(), 3 + 2);
-			assert!(Nominators::<Test>::contains_key(101));
-
-			// abrupt change from 2 to 1, this should cause some nominators to be non-decodable, and
-			// thus non-existent unless if they update.
-			MaxNominations::set(1);
-
-			assert_eq!(
-				Nominators::<Test>::iter()
-					.map(|(k, n)| (k, n.targets.len()))
-					.collect::<Vec<_>>(),
-				vec![(60, 1)]
-			);
-			assert!(Nominators::<Test>::contains_key(70));
-			assert!(Nominators::<Test>::contains_key(60));
-			assert!(Nominators::<Test>::get(70).is_none());
-			assert!(Nominators::<Test>::get(60).is_some());
-			assert_eq!(Staking::electing_voters(unbonded_election).unwrap().len(), 3 + 1);
-
-			// now one of them can revive themselves by re-nominating to a proper value.
-			assert_ok!(Staking::nominate(RuntimeOrigin::signed(71), vec![1]));
-			assert_eq!(
-				Nominators::<Test>::iter()
-					.map(|(k, n)| (k, n.targets.len()))
-					.collect::<Vec<_>>(),
-				vec![(70, 1), (60, 1)]
-			);
-
-			// or they can be chilled by any account.
-			assert!(Nominators::<Test>::contains_key(101));
-			assert!(Nominators::<Test>::get(101).is_none());
-			assert_ok!(Staking::chill_other(RuntimeOrigin::signed(70), 100));
-			assert!(!Nominators::<Test>::contains_key(101));
-			assert!(Nominators::<Test>::get(101).is_none());
-		})
+			// TODO(gpestana): test decoding error when Nominations_quota::ABSOLUTE_MAX_NOMINATIONS
+			// decreases and test the chilling in those cases too (see old test and [`Nominators`]
+			// comments)
+		});
 }
 
 mod sorted_list_provider {

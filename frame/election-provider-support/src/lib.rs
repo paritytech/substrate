@@ -695,6 +695,7 @@ impl ElectionBounds {
 
 	//  Returns true if `given_count` exhausts `self.count`.
 	pub fn count_exhausted(self, given_count: Option<u32>) -> bool {
+		println!("{:?} > {:?}?", given_count, self.count);
 		self.count.map_or(false, |count| given_count.unwrap_or(0) > count)
 	}
 
@@ -767,6 +768,6 @@ impl ElectionBoundsBuilder {
 }
 
 #[cfg(test)]
-mod snapshot_bounds {
+mod elections_bounds {
 	// TODO(gpestana)
 }
