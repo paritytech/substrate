@@ -726,9 +726,11 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			item: T::ItemId,
+			owner: AccountIdLookupOf<T>,
 			witness_data: Option<MintWitness<T::ItemId>>,
 		) -> DispatchResult {
 			let caller = ensure_signed(origin)?;
+			let owner = T::Lookup::lookup(owner)?;
 
 			let collection_config = Self::get_collection_config(&collection)?;
 			let item_settings = collection_config.mint_settings.default_item_settings;
@@ -738,9 +740,15 @@ pub mod pallet {
 				collection,
 				item,
 				caller.clone(),
+				owner.clone(),
 				item_config,
 				false,
 				|collection_details, collection_config| {
+					// Issuer can mint regardless of mint settings
+					if Self::has_role(&collection, &caller, CollectionRole::Issuer) {
+						return Ok(())
+					}
+
 					let mint_settings = collection_config.mint_settings;
 					let now = frame_system::Pallet::<T>::block_number();
 
@@ -752,12 +760,7 @@ pub mod pallet {
 					}
 
 					match mint_settings.mint_type {
-						MintType::Issuer => {
-							ensure!(
-								Self::has_role(&collection, &caller, CollectionRole::Issuer),
-								Error::<T, I>::NoPermission
-							)
-						},
+						MintType::Issuer => return Err(Error::<T, I>::NoPermission.into()),
 						MintType::HolderOf(collection_id) => {
 							let MintWitness { owner_of_item } =
 								witness_data.ok_or(Error::<T, I>::BadWitness)?;
@@ -838,7 +841,7 @@ pub mod pallet {
 					Error::<T, I>::NoPermission
 				);
 			}
-			Self::do_mint(collection, item, owner, item_config, true, |_, _| Ok(()))
+			Self::do_mint(collection, item, owner.clone(), owner, item_config, true, |_, _| Ok(()))
 		}
 
 		/// Destroy a single item.

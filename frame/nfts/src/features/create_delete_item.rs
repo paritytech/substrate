@@ -22,6 +22,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn do_mint(
 		collection: T::CollectionId,
 		item: T::ItemId,
+		caller: T::AccountId,
 		owner: T::AccountId,
 		item_config: ItemConfig,
 		deposit_collection_owner: bool,
@@ -58,7 +59,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				};
 				let deposit_account = match deposit_collection_owner {
 					true => collection_details.owner.clone(),
-					false => owner.clone(),
+					false => caller,
 				};
 
 				let owner = owner.clone();

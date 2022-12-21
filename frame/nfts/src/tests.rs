@@ -146,12 +146,13 @@ fn basic_minting_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), 1, default_collection_config()));
 		assert_eq!(collections(), vec![(1, 0)]);
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 42, None));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 42, 1, None));
 		assert_eq!(items(), vec![(1, 0, 42)]);
 
 		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), 2, default_collection_config()));
 		assert_eq!(collections(), vec![(1, 0), (2, 1)]);
-		assert_ok!(Nfts::force_mint(RuntimeOrigin::signed(2), 1, 69, 1, default_item_config()));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(2), 1, 69, 1, None));
+		// assert_ok!(Nfts::force_mint(RuntimeOrigin::signed(2), 1, 69, 1, default_item_config()));
 		assert_eq!(items(), vec![(1, 0, 42), (1, 1, 69)]);
 	});
 }
@@ -176,7 +177,7 @@ fn lifecycle_should_work() {
 		assert_eq!(Balances::reserved_balance(&1), 6);
 		assert_ok!(Nfts::force_mint(RuntimeOrigin::signed(1), 0, 69, 20, default_item_config()));
 		assert_eq!(Balances::reserved_balance(&1), 7);
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 70, None));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 70, 1, None));
 		assert_eq!(items(), vec![(1, 0, 70), (10, 0, 42), (20, 0, 69)]);
 		assert_eq!(Collection::<Test>::get(0).unwrap().items, 3);
 		assert_eq!(Collection::<Test>::get(0).unwrap().item_metadatas, 0);
@@ -221,7 +222,7 @@ fn destroy_with_bad_witness_should_not_work() {
 		));
 
 		let w = Collection::<Test>::get(0).unwrap().destroy_witness();
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 42, None));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 42, 1, None));
 		assert_noop!(Nfts::destroy(RuntimeOrigin::signed(1), 0, w), Error::<Test>::BadWitness);
 	});
 }
@@ -230,7 +231,7 @@ fn destroy_with_bad_witness_should_not_work() {
 fn mint_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), 1, default_collection_config()));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 42, None));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 42, 1, None));
 		assert_eq!(Nfts::owner(0, 42).unwrap(), 1);
 		assert_eq!(collections(), vec![(1, 0)]);
 		assert_eq!(items(), vec![(1, 0, 42)]);
@@ -239,16 +240,24 @@ fn mint_should_work() {
 		assert_ok!(Nfts::update_mint_settings(
 			RuntimeOrigin::signed(1),
 			0,
-			MintSettings { start_block: Some(2), end_block: Some(3), ..Default::default() }
+			MintSettings {
+				start_block: Some(2),
+				end_block: Some(3),
+				mint_type: MintType::Public,
+				..Default::default()
+			}
 		));
 
 		System::set_block_number(1);
 		assert_noop!(
-			Nfts::mint(RuntimeOrigin::signed(1), 0, 43, None),
+			Nfts::mint(RuntimeOrigin::signed(2), 0, 43, 1, None),
 			Error::<Test>::MintNotStarted
 		);
 		System::set_block_number(4);
-		assert_noop!(Nfts::mint(RuntimeOrigin::signed(1), 0, 43, None), Error::<Test>::MintEnded);
+		assert_noop!(
+			Nfts::mint(RuntimeOrigin::signed(2), 0, 43, 1, None),
+			Error::<Test>::MintEnded
+		);
 
 		// validate price
 		assert_ok!(Nfts::update_mint_settings(
@@ -257,7 +266,7 @@ fn mint_should_work() {
 			MintSettings { mint_type: MintType::Public, price: Some(1), ..Default::default() }
 		));
 		Balances::make_free_balance_be(&2, 100);
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(2), 0, 43, None));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(2), 0, 43, 2, None));
 		assert_eq!(Balances::total_balance(&2), 99);
 
 		// validate types
@@ -267,22 +276,29 @@ fn mint_should_work() {
 			1,
 			MintSettings { mint_type: MintType::HolderOf(0), ..Default::default() }
 		));
-		assert_noop!(Nfts::mint(RuntimeOrigin::signed(3), 1, 42, None), Error::<Test>::BadWitness);
-		assert_noop!(Nfts::mint(RuntimeOrigin::signed(2), 1, 42, None), Error::<Test>::BadWitness);
 		assert_noop!(
-			Nfts::mint(RuntimeOrigin::signed(2), 1, 42, Some(MintWitness { owner_of_item: 42 })),
+			Nfts::mint(RuntimeOrigin::signed(3), 1, 42, 3, None),
+			Error::<Test>::BadWitness
+		);
+		assert_noop!(
+			Nfts::mint(RuntimeOrigin::signed(2), 1, 42, 2, None),
+			Error::<Test>::BadWitness
+		);
+		assert_noop!(
+			Nfts::mint(RuntimeOrigin::signed(2), 1, 42, 2, Some(MintWitness { owner_of_item: 42 })),
 			Error::<Test>::BadWitness
 		);
 		assert_ok!(Nfts::mint(
 			RuntimeOrigin::signed(2),
 			1,
 			42,
+			2,
 			Some(MintWitness { owner_of_item: 43 })
 		));
 
 		// can't mint twice
 		assert_noop!(
-			Nfts::mint(RuntimeOrigin::signed(2), 1, 46, Some(MintWitness { owner_of_item: 43 })),
+			Nfts::mint(RuntimeOrigin::signed(2), 1, 46, 2, Some(MintWitness { owner_of_item: 43 })),
 			Error::<Test>::AlreadyClaimed
 		);
 	});
@@ -327,7 +343,7 @@ fn transfer_should_work() {
 fn locking_transfer_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), 1, default_collection_config()));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 42, None));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 42, 1, None));
 		assert_ok!(Nfts::lock_item_transfer(RuntimeOrigin::signed(1), 0, 42));
 		assert_noop!(Nfts::transfer(RuntimeOrigin::signed(1), 0, 42, 2), Error::<Test>::ItemLocked);
 
@@ -355,7 +371,7 @@ fn locking_transfer_should_work() {
 fn origin_guards_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), 1, default_collection_config()));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 42, None));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 42, 1, None));
 
 		Balances::make_free_balance_be(&2, 100);
 		assert_ok!(Nfts::set_accept_ownership(RuntimeOrigin::signed(2), Some(0)));
@@ -376,7 +392,7 @@ fn origin_guards_should_work() {
 			Error::<Test>::NoPermission
 		);
 		assert_noop!(
-			Nfts::mint(RuntimeOrigin::signed(2), 0, 69, None),
+			Nfts::mint(RuntimeOrigin::signed(2), 0, 69, 2, None),
 			Error::<Test>::NoPermission
 		);
 		assert_noop!(
@@ -421,7 +437,7 @@ fn transfer_owner_should_work() {
 
 		// Mint and set metadata now and make sure that deposit gets transferred back.
 		assert_ok!(Nfts::set_collection_metadata(RuntimeOrigin::signed(2), 0, bvec![0u8; 20]));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 42, None));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 42, 1, None));
 		assert_eq!(Balances::reserved_balance(&1), 1);
 		assert_ok!(Nfts::set_metadata(RuntimeOrigin::signed(2), 0, 42, bvec![0u8; 20]));
 		assert_ok!(Nfts::set_accept_ownership(RuntimeOrigin::signed(3), Some(0)));
@@ -451,7 +467,7 @@ fn set_team_should_work() {
 		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), 1, default_collection_config()));
 		assert_ok!(Nfts::set_team(RuntimeOrigin::signed(1), 0, 2, 3, 4));
 
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(2), 0, 42, None));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(2), 0, 42, 2, None));
 		assert_ok!(Nfts::lock_item_transfer(RuntimeOrigin::signed(4), 0, 42));
 		assert_ok!(Nfts::unlock_item_transfer(RuntimeOrigin::signed(4), 0, 42));
 		assert_ok!(Nfts::transfer(RuntimeOrigin::signed(3), 0, 42, 3));
@@ -545,7 +561,7 @@ fn set_item_metadata_should_work() {
 			1,
 			collection_config_with_all_settings_enabled()
 		));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 42, None));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 42, 1, None));
 		// Cannot add metadata to unowned item
 		assert_noop!(
 			Nfts::set_metadata(RuntimeOrigin::signed(2), 0, 42, bvec![0u8; 20]),
@@ -609,7 +625,7 @@ fn set_collection_owner_attributes_should_work() {
 			1,
 			collection_config_with_all_settings_enabled()
 		));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 0, None));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 0, 1, None));
 
 		assert_ok!(Nfts::set_attribute(
 			RuntimeOrigin::signed(1),
@@ -1009,8 +1025,8 @@ fn set_attribute_should_respect_lock() {
 			1,
 			collection_config_with_all_settings_enabled(),
 		));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 0, None));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 1, None));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 0, 1, None));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 1, 1, None));
 
 		assert_ok!(Nfts::set_attribute(
 			RuntimeOrigin::signed(1),
@@ -1108,8 +1124,8 @@ fn preserve_config_for_frozen_items() {
 			1,
 			collection_config_with_all_settings_enabled()
 		));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 0, None));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 1, None));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 0, 1, None));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 1, 1, None));
 
 		// if the item is not locked/frozen then the config gets deleted on item burn
 		assert_ok!(Nfts::burn(RuntimeOrigin::signed(1), 0, 1, Some(1)));
@@ -1144,7 +1160,7 @@ fn preserve_config_for_frozen_items() {
 				..Default::default()
 			}
 		));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 0, None));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 0, 1, None));
 	});
 }
 
@@ -1158,7 +1174,7 @@ fn force_update_collection_should_work() {
 			1,
 			collection_config_with_all_settings_enabled()
 		));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 42, None));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 42, 1, None));
 		assert_ok!(Nfts::force_mint(RuntimeOrigin::signed(1), 0, 69, 2, default_item_config()));
 		assert_ok!(Nfts::set_collection_metadata(RuntimeOrigin::signed(1), 0, bvec![0; 20]));
 		assert_ok!(Nfts::set_metadata(RuntimeOrigin::signed(1), 0, 42, bvec![0; 20]));
@@ -1171,7 +1187,7 @@ fn force_update_collection_should_work() {
 			0,
 			collection_config_from_disabled_settings(CollectionSetting::DepositRequired.into()),
 		));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 142, None));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 142, 1, None));
 		assert_ok!(Nfts::force_mint(RuntimeOrigin::signed(1), 0, 169, 2, default_item_config()));
 		assert_ok!(Nfts::set_metadata(RuntimeOrigin::signed(1), 0, 142, bvec![0; 20]));
 		assert_ok!(Nfts::set_metadata(RuntimeOrigin::signed(1), 0, 169, bvec![0; 20]));
@@ -1283,7 +1299,7 @@ fn approval_lifecycle_works() {
 			)
 		));
 
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 1, collection_id, None));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 1, collection_id, 1, None));
 
 		assert_noop!(
 			Nfts::approve_transfer(RuntimeOrigin::signed(1), collection_id, 1, 2, None),
@@ -1551,10 +1567,10 @@ fn max_supply_should_work() {
 		);
 
 		// validate we can't mint more to max supply
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_id), collection_id, 0, None));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_id), collection_id, 1, None));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_id), collection_id, 0, user_id, None));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_id), collection_id, 1, user_id, None));
 		assert_noop!(
-			Nfts::mint(RuntimeOrigin::signed(user_id), collection_id, 2, None),
+			Nfts::mint(RuntimeOrigin::signed(user_id), collection_id, 2, user_id, None),
 			Error::<Test>::MaxSupplyReached
 		);
 	});
@@ -1568,7 +1584,13 @@ fn mint_settings_should_work() {
 		let item_id = 0;
 
 		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), user_id, default_collection_config()));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_id), collection_id, item_id, None));
+		assert_ok!(Nfts::mint(
+			RuntimeOrigin::signed(user_id),
+			collection_id,
+			item_id,
+			user_id,
+			None,
+		));
 		assert_eq!(
 			ItemConfigOf::<Test>::get(collection_id, item_id)
 				.unwrap()
@@ -1591,7 +1613,13 @@ fn mint_settings_should_work() {
 				..default_collection_config()
 			}
 		));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_id), collection_id, item_id, None));
+		assert_ok!(Nfts::mint(
+			RuntimeOrigin::signed(user_id),
+			collection_id,
+			item_id,
+			user_id,
+			None,
+		));
 		assert_eq!(
 			ItemConfigOf::<Test>::get(collection_id, item_id)
 				.unwrap()
@@ -1613,8 +1641,20 @@ fn set_price_should_work() {
 
 		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), user_id, default_collection_config()));
 
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_id), collection_id, item_1, None));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_id), collection_id, item_2, None));
+		assert_ok!(Nfts::mint(
+			RuntimeOrigin::signed(user_id),
+			collection_id,
+			item_1,
+			user_id,
+			None,
+		));
+		assert_ok!(Nfts::mint(
+			RuntimeOrigin::signed(user_id),
+			collection_id,
+			item_2,
+			user_id,
+			None,
+		));
 
 		assert_ok!(Nfts::set_price(
 			RuntimeOrigin::signed(user_id),
@@ -1671,7 +1711,13 @@ fn set_price_should_work() {
 			)
 		));
 
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_id), collection_id, item_1, None));
+		assert_ok!(Nfts::mint(
+			RuntimeOrigin::signed(user_id),
+			collection_id,
+			item_1,
+			user_id,
+			None,
+		));
 
 		assert_noop!(
 			Nfts::set_price(RuntimeOrigin::signed(user_id), collection_id, item_1, Some(2), None),
@@ -1700,9 +1746,9 @@ fn buy_item_should_work() {
 
 		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), user_1, default_collection_config()));
 
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_1, None));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_2, None));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_3, None));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_1, user_1, None));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_2, user_1, None));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_3, user_1, None));
 
 		assert_ok!(Nfts::set_price(
 			RuntimeOrigin::signed(user_1),
@@ -1887,8 +1933,20 @@ fn create_cancel_swap_should_work() {
 
 		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), user_id, default_collection_config()));
 
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_id), collection_id, item_1, None,));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_id), collection_id, item_2, None,));
+		assert_ok!(Nfts::mint(
+			RuntimeOrigin::signed(user_id),
+			collection_id,
+			item_1,
+			user_id,
+			None,
+		));
+		assert_ok!(Nfts::mint(
+			RuntimeOrigin::signed(user_id),
+			collection_id,
+			item_2,
+			user_id,
+			None,
+		));
 
 		// validate desired item and the collection exists
 		assert_noop!(
@@ -2028,7 +2086,7 @@ fn claim_swap_should_work() {
 		assert_ok!(Nfts::mint(
 			RuntimeOrigin::signed(user_1),
 			collection_id,
-			item_1,
+			item_1,user_1,
 			None,
 		));
 		assert_ok!(Nfts::force_mint(
@@ -2049,6 +2107,7 @@ fn claim_swap_should_work() {
 			RuntimeOrigin::signed(user_1),
 			collection_id,
 			item_4,
+			user_1,
 			None,
 		));
 		assert_ok!(Nfts::force_mint(
@@ -2300,7 +2359,13 @@ fn pallet_level_feature_flags_should_work() {
 
 		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), user_id, default_collection_config()));
 
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_id), collection_id, item_id, None,));
+		assert_ok!(Nfts::mint(
+			RuntimeOrigin::signed(user_id),
+			collection_id,
+			item_id,
+			user_id,
+			None,
+		));
 
 		// PalletFeature::Trading
 		assert_noop!(
@@ -2374,7 +2439,7 @@ fn add_remove_item_attributes_approval_should_work() {
 		let item_id = 0;
 
 		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), user_1, default_collection_config()));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_id, None));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_id, user_1, None));
 		assert_ok!(Nfts::approve_item_attributes(
 			RuntimeOrigin::signed(user_1),
 			collection_id,

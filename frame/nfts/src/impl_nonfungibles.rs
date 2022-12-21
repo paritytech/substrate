@@ -158,6 +158,7 @@ impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId, ItemConfig
 			*collection,
 			*item,
 			who.clone(),
+			who.clone(),
 			*item_config,
 			deposit_collection_owner,
 			|_, _| Ok(()),
