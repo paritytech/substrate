@@ -218,9 +218,16 @@ mod v4 {
 			);
 
 			let agendas = Agenda::<T>::iter_keys().count();
-			log::info!(target: TARGET, "Checking {} agendas...", agendas);
+			let non_empty_agendas =
+				Agenda::<T>::iter_values().filter(|a| a.iter().any(|s| s.is_some())).count();
+			log::info!(
+				target: TARGET,
+				"There are {} total and {} non-empty agendas",
+				agendas,
+				non_empty_agendas
+			);
 
-			Ok((agendas as u32).encode())
+			Ok((agendas as u32, non_empty_agendas as u32).encode())
 		}
 
 		fn on_runtime_upgrade() -> Weight {
@@ -281,7 +288,7 @@ mod v4 {
 		fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
 			assert_eq!(StorageVersion::get::<Pallet<T>>(), 4, "Version must not change");
 
-			let old_agendas: u32 =
+			let (old_agendas, non_empty_agendas): (u32, u32) =
 				Decode::decode(&mut state.as_ref()).expect("Must decode pre_upgrade state");
 			let new_agendas = Agenda::<T>::iter_keys().count() as u32;
 
@@ -297,6 +304,7 @@ mod v4 {
 					old_agendas, new_agendas
 				),
 			}
+			assert_eq!(new_agendas, non_empty_agendas, "Expected to keep all non-empty agendas");
 
 			Ok(())
 		}
