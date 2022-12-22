@@ -40,12 +40,14 @@ use ark_std::fmt;
 use sha2::Sha256;
 
 /// As per README in: https://github.com/ethereum/bls12-381-tests
+#[cfg(feature = "full_crypto")]
 const DOMAIN: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_";
 
 /// Verify a BLS `signature` on `message` against a `public_key`.
 /// Returns an error if either signature of PK couldn't be deserialized.
 /// Otherwise returns an Ok(result), which is true only if `signature` is valid.
 /// Note that subgroup checks are NOT performed during deserialization.
+#[cfg(feature = "full_crypto")]
 pub fn bls_verify(
 	signature: &[u8],
 	message: &[u8],
@@ -73,6 +75,7 @@ pub fn bls_verify(
 
 /// This is an error that could occur during serialization.
 #[derive(Debug)]
+#[cfg(feature = "full_crypto")]
 pub enum SerializationError {
 	/// The supplied signature couldn't be deserialized.
 	InvalidSignature,
@@ -80,6 +83,7 @@ pub enum SerializationError {
 	InvalidPK,
 }
 
+#[cfg(feature = "full_crypto")]
 impl fmt::Display for SerializationError {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
 		match self {
@@ -91,6 +95,7 @@ impl fmt::Display for SerializationError {
 	}
 }
 
+#[cfg(feature = "full_crypto")]
 impl ark_std::error::Error for SerializationError {}
 
 #[cfg(feature = "full_crypto")]
