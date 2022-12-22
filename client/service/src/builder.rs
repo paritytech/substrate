@@ -309,12 +309,13 @@ where
 	let executor = crate::client::LocalCallExecutor::new(
 		backend.clone(),
 		executor,
-		spawn_handle,
+		spawn_handle.clone(),
 		config.clone(),
 		execution_extensions,
 	)?;
 	crate::client::Client::new(
 		backend,
+		spawn_handle.clone(),
 		executor,
 		genesis_storage,
 		fork_blocks,

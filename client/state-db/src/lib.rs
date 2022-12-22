@@ -187,8 +187,9 @@ impl fmt::Debug for StateDbError {
 			Self::TooManySiblingBlocks => write!(f, "Too many sibling blocks inserted"),
 			Self::BlockAlreadyExists => write!(f, "Block already exists"),
 			Self::Metadata(message) => write!(f, "Invalid metadata: {}", message),
-			Self::BlockUnavailable =>
-				write!(f, "Trying to get a block record from db while it is not commit to db yet"),
+			Self::BlockUnavailable => {
+				write!(f, "Trying to get a block record from db while it is not commit to db yet")
+			},
 			Self::BlockMissing => write!(f, "Block record is missing from the pruning window"),
 		}
 	}
@@ -344,6 +345,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDbSync<BlockHash, Key, D> {
 		if let Some(ref mut pruning) = self.pruning {
 			pruning.note_canonical(hash, number, &mut commit)?;
 		}
+		log::info!(target: "skunert", "Looking to prune block {:?}", hash);
 		self.prune(&mut commit)?;
 		Ok(commit)
 	}
@@ -381,7 +383,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDbSync<BlockHash, Key, D> {
 			(&mut self.pruning, &self.mode)
 		{
 			loop {
-				if pruning.window_size() <= constraints.max_blocks.unwrap_or(0) as u64 {
+				if dbg!(pruning.window_size()) <= dbg!(constraints.max_blocks.unwrap_or(0) as u64) {
 					break
 				}
 

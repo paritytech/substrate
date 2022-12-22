@@ -502,6 +502,12 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// Returns a handle to offchain storage.
 	fn offchain_storage(&self) -> Option<Self::OffchainStorage>;
 
+	/// Pin the block to prevent pruning.
+	fn pin_block(&self, hash: &Block::Hash) -> sp_blockchain::Result<()>;
+
+	/// Unpin the block to allow pruning.
+	fn unpin_block(&self, hash: &Block::Hash) -> sp_blockchain::Result<()>;
+
 	/// Returns true if state for given block is available.
 	fn have_state_at(&self, hash: Block::Hash, _number: NumberFor<Block>) -> bool {
 		self.state_at(hash).is_ok()

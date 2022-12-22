@@ -2398,6 +2398,14 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			PruningMode::ArchiveAll | PruningMode::ArchiveCanonical
 		)
 	}
+
+	fn pin_block(&self, hash: &<Block as BlockT>::Hash) -> sp_blockchain::Result<()> {
+		todo!()
+	}
+
+	fn unpin_block(&self, hash: &<Block as BlockT>::Hash) -> sp_blockchain::Result<()> {
+		todo!()
+	}
 }
 
 impl<Block: BlockT> sc_client_api::backend::LocalBackend<Block> for Backend<Block> {}

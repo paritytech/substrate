@@ -57,10 +57,14 @@ use sp_blockchain::{
 };
 use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError};
 
+use futures::{FutureExt, StreamExt};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
-use sp_core::storage::{
-	well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, Storage, StorageChild, StorageData,
-	StorageKey,
+use sp_core::{
+	storage::{
+		well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, Storage, StorageChild,
+		StorageData, StorageKey,
+	},
+	traits::SpawnNamed,
 };
 #[cfg(feature = "test-helpers")]
 use sp_keystore::SyncCryptoStorePtr;
@@ -88,9 +92,7 @@ use std::{
 
 #[cfg(feature = "test-helpers")]
 use {
-	super::call_executor::LocalCallExecutor,
-	sc_client_api::in_mem,
-	sp_core::traits::{CodeExecutor, SpawnNamed},
+	super::call_executor::LocalCallExecutor, sc_client_api::in_mem, sp_core::traits::CodeExecutor,
 };
 
 type NotificationSinks<T> = Mutex<Vec<TracingUnboundedSender<T>>>;
@@ -116,6 +118,7 @@ where
 	block_rules: BlockRules<Block>,
 	config: ClientConfig<Block>,
 	telemetry: Option<TelemetryHandle>,
+	unpin_worker_sender: futures::channel::mpsc::Sender<Block::Hash>,
 	_phantom: PhantomData<RA>,
 }
 
@@ -239,13 +242,14 @@ where
 	let call_executor = LocalCallExecutor::new(
 		backend.clone(),
 		executor,
-		spawn_handle,
+		spawn_handle.clone(),
 		config.clone(),
 		extensions,
 	)?;
 
 	Client::new(
 		backend,
+		spawn_handle,
 		call_executor,
 		build_genesis_storage,
 		Default::default(),
@@ -341,7 +345,7 @@ where
 
 impl<B, E, Block, RA> Client<B, E, Block, RA>
 where
-	B: backend::Backend<Block>,
+	B: backend::Backend<Block> + 'static,
 	E: CallExecutor<Block>,
 	Block: BlockT,
 	Block::Header: Clone,
@@ -349,6 +353,7 @@ where
 	/// Creates new Substrate Client with given blockchain and code executor.
 	pub fn new(
 		backend: Arc<B>,
+		spawn_handle: Box<dyn SpawnNamed>,
 		executor: E,
 		build_genesis_storage: &dyn BuildStorage,
 		fork_blocks: ForkBlocks<Block>,
@@ -389,6 +394,23 @@ where
 			backend.commit_operation(op)?;
 		}
 
+		let (unpin_worker_sender, mut rx) = futures::channel::mpsc::channel::<Block::Hash>(100);
+		let task_backend = backend.clone();
+		spawn_handle.spawn(
+			"pinning-worker",
+			None,
+			async move {
+				log::info!(target: "db", "Starting worker task for unpinning.");
+				loop {
+					if let Some(message) = rx.next().await {
+						log::info!(target: "db", "Unpinning block {}", message);
+						task_backend.unpin_block(&message);
+					}
+				}
+			}
+			.boxed(),
+		);
+
 		Ok(Client {
 			backend,
 			executor,
@@ -401,6 +423,7 @@ where
 			block_rules: BlockRules::new(fork_blocks, bad_blocks),
 			config,
 			telemetry,
+			unpin_worker_sender,
 			_phantom: Default::default(),
 		})
 	}
@@ -938,6 +961,9 @@ where
 				return Ok(())
 			},
 		};
+
+		log::info!(target: "db", "Finality notification for block {}, pinning block", notification.hash);
+		self.backend.pin_block(&notification.hash);
 
 		telemetry!(
 			self.telemetry;
