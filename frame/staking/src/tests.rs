@@ -5749,4 +5749,30 @@ mod staking_interface {
 			assert_ok!(<Staking as StakingInterface>::force_unstake(11));
 		});
 	}
+
+	#[test]
+	fn do_withdraw_unbonded_with_wrong_slash_spans_works_as_expected() {
+		ExtBuilder::default().build_and_execute(|| {
+			on_offence_now(
+				&[OffenceDetails {
+					offender: (11, Staking::eras_stakers(active_era(), 11)),
+					reporters: vec![],
+				}],
+				&[Perbill::from_percent(100)],
+			);
+
+			assert_eq!(Staking::bonded(&11), Some(10));
+
+			assert_noop!(
+				Staking::withdraw_unbonded(RuntimeOrigin::signed(10), 0),
+				Error::<Test>::IncorrectSlashingSpans
+			);
+
+			let num_slashing_spans = Staking::slashing_spans(&11).map_or(0, |s| s.iter().count());
+			assert_ok!(Staking::withdraw_unbonded(
+				RuntimeOrigin::signed(10),
+				num_slashing_spans as u32
+			));
+		});
+	}
 }
