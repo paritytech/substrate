@@ -1869,7 +1869,7 @@ benchmarks! {
 				Regular(Instruction::I32Const(value_offset as i32)), // value_ptr
 				Regular(Instruction::I32Const(value_len as i32)), // value_len
 				Counter(salt_offset as u32, salt_len as u32), // input_data_ptr
-				Regular(Instruction::I32Const((i * 1024) as i32)), // input_data_ptr_len
+				Regular(Instruction::I32Const((i * 1024) as i32)), // input_data_len
 				Regular(Instruction::I32Const((addr_len_offset + addr_len) as i32)), // address_ptr
 				Regular(Instruction::I32Const(addr_len_offset as i32)), // address_len_ptr
 				Regular(Instruction::I32Const(SENTINEL as i32)), // output_ptr

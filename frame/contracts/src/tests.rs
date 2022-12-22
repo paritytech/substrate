@@ -859,7 +859,7 @@ fn deploy_and_call_other_contract() {
 		let callee_addr = Contracts::contract_address(
 			&caller_addr,
 			&callee_code_hash,
-			&[0, 1, 34, 51, 68, 85, 102, 119],
+			&[0, 1, 34, 51, 68, 85, 102, 119],  // hard coded in wasm
 			&[],
 		);
 
