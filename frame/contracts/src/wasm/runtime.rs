@@ -1230,7 +1230,6 @@ pub mod env {
 	/// # Errors
 	///
 	/// `ReturnCode::KeyNotFound`
-	#[unstable]
 	#[prefixed_alias]
 	fn take_storage(
 		ctx: _,
