@@ -51,7 +51,7 @@ use super::BlockImportResult;
 
 /// Wraps around an unbounded channel from the `futures` crate. The sender implements `Link` and
 /// can be used to buffer commands, and the receiver can be used to poll said commands and transfer
-/// them to another link.
+/// them to another link. `queue_size_warning` sets the warning threshold of the channel queue size.
 pub fn buffered_link<B: BlockT>(
 	queue_size_warning: i64,
 ) -> (BufferedLinkSender<B>, BufferedLinkReceiver<B>) {

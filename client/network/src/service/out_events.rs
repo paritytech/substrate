@@ -50,7 +50,8 @@ use std::{
 
 /// Creates a new channel that can be associated to a [`OutChannels`].
 ///
-/// The name is used in Prometheus reports.
+/// The name is used in Prometheus reports, the queue size threshold is used
+/// to warn if there are too many unprocessed events in the channel.
 pub fn channel(name: &'static str, queue_size_warning: i64) -> (Sender, Receiver) {
 	let (tx, rx) = mpsc::unbounded();
 	let metrics = Arc::new(Mutex::new(None));
