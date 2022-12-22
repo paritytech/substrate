@@ -569,8 +569,8 @@ where
 	}
 }
 
-impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues> crate::traits::StorageInfoTrait
-	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
+impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize> crate::traits::StorageInfoTrait
+	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 where
 	Prefix: StorageInstance,
 	Key: super::key::KeyGenerator + super::key::KeyGeneratorMaxEncodedLen,
@@ -578,6 +578,7 @@ where
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
+	ProofSize: crate::traits::Get<Option<crate::storage::ProofSizeMode>>,
 {
 	fn storage_info() -> Vec<StorageInfo> {
 		vec![StorageInfo {
@@ -590,7 +591,7 @@ where
 					.saturating_add(Value::max_encoded_len())
 					.saturated_into(),
 			),
-			proof_size: None,
+			proof_size: ProofSize::get(),
 		}]
 	}
 }

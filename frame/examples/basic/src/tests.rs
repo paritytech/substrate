@@ -120,6 +120,16 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 #[test]
+fn proof_size() {
+	use frame_support::{storage::ProofSizeMode, traits::StorageInfoTrait};
+	new_test_ext().execute_with(|| {
+		let ps = <Bar::<Test> as StorageInfoTrait>::storage_info();
+		assert_eq!(ps.len(), 1);
+		assert_eq!(ps[0].proof_size, Some(ProofSizeMode::MaxEncodedLen));
+	});
+}
+
+#[test]
 fn it_works_for_optional_value() {
 	new_test_ext().execute_with(|| {
 		// Check that GenesisBuilder works properly.

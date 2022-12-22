@@ -30,25 +30,15 @@ use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_std::prelude::*;
 
-use crate::storage::ProofSizeMode;
-
 /// A type that allow to store a value.
 ///
 /// Each value is stored at:
 /// ```nocompile
 /// Twox128(Prefix::pallet_prefix()) ++ Twox128(Prefix::STORAGE_PREFIX)
 /// ```
-pub struct StorageValue<Prefix, Value, QueryKind = OptionQuery, OnEmpty = GetDefault, ProofSize = MeasureProofSize>(
+pub struct StorageValue<Prefix, Value, QueryKind = OptionQuery, OnEmpty = GetDefault, ProofSize = GetDefault>(
 	core::marker::PhantomData<(Prefix, Value, QueryKind, OnEmpty, ProofSize)>,
 );
-
-pub struct MeasureProofSize;
-
-impl crate::pallet_prelude::Get<Option<ProofSizeMode>> for MeasureProofSize {
-	fn get() -> Option<ProofSizeMode> {
-		None
-	}
-}
 
 impl<Prefix, Value, QueryKind, OnEmpty, ProofSize> crate::storage::generator::StorageValue<Value>
 	for StorageValue<Prefix, Value, QueryKind, OnEmpty, ProofSize>

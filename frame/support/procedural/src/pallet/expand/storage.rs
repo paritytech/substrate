@@ -280,6 +280,8 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 				storage_def.query_kind.as_ref()
 			{
 				args.args.push(syn::GenericArgument::Type(syn::parse_quote!(#error_path)))
+			} else {
+				args.args.push(syn::parse_quote!( OptionQuery ));
 			}
 
 			// Here, we only need to check if OnEmpty is *not* specified, and if so, then we have to
@@ -293,9 +295,16 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 				};
 				let on_empty = default_on_empty(value_ty);
 				args.args.push(syn::GenericArgument::Type(on_empty));
+			} else {
+				args.args.push(syn::parse_quote!( GetDefault ));
 			}
+			match storage_def.metadata {
+				Metadata::Value{..} => (),
+				_ => args.args.push(syn::parse_quote!( GetDefault )),
+			}
+
+			args.args.push(syn::parse_quote!( frame_support::storage::MelProofSize ));
 		}
-		args.args.push(syn::parse_quote!( frame_support::storage::types::MeasureProofSize ));
 	}
 
 	Ok(on_empty_struct_metadata)

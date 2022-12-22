@@ -1296,6 +1296,20 @@ pub enum ProofSizeMode {
 	Measured,
 }
 
+pub struct MelProofSize;
+impl sp_core::Get<Option<ProofSizeMode>> for MelProofSize {
+	fn get() -> Option<ProofSizeMode> {
+		Some(ProofSizeMode::MaxEncodedLen)
+	}
+}
+
+pub struct MeasuredProofSize;
+impl sp_core::Get<Option<ProofSizeMode>> for MeasuredProofSize {
+	fn get() -> Option<ProofSizeMode> {
+		Some(ProofSizeMode::Measured)
+	}
+}
+
 /// Provides `Sealed` trait to prevent implementing trait `StorageAppend` & `StorageDecodeLength`
 /// & `EncodeLikeTuple` outside of this crate.
 mod private {
