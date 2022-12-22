@@ -32,7 +32,6 @@ frame_support::construct_runtime!(
 		System: frame_system,
 		NftFractions: pallet_nft_fractionalisation,
 		Assets: pallet_assets,
-		Uniques: pallet_uniques,
 		Balances: pallet_balances,
 	}
 );

@@ -1,4 +1,23 @@
+// This file is part of Substrate.
+
+// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #![cfg_attr(not(feature = "std"), no_std)]
+
+mod types;
 
 pub use pallet::*;
 
@@ -12,25 +31,27 @@ mod tests;
 // mod benchmarking;
 
 pub use scale_info::Type;
+pub use types::*;
 
-pub type ItemId = <Type as pallet_nfts::Config>::ItemId;
-pub type CollectionId = <Type as pallet_nfts::Config>::CollectionId;
+// pub type ItemId = <Type as pallet_nfts::Config>::ItemId;
+// pub type CollectionId = <Type as pallet_nfts::Config>::CollectionId;
 
 #[frame_support::pallet]
 pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+	use sp_runtime::traits::One;
 
 	use frame_support::{
 		dispatch::DispatchResult,
 		sp_runtime::traits::{
 			AccountIdConversion, AtLeast32BitUnsigned, IntegerSquareRoot, SaturatedConversion,
-			Saturating, StaticLookup, Zero,
+			Saturating, StaticLookup,
 		},
 		traits::{
 			fungibles::{
-				metadata::Mutate as MutateMetadata, Create, Inspect, InspectEnumerable, Mutate,
-				Transfer,
+				metadata::Mutate as MutateMetadata, Create, Destroy, Inspect, InspectEnumerable,
+				Mutate, Transfer,
 			},
 			tokens::nonfungibles_v2::{
 				Inspect as NonFungiblesInspect, Transfer as NonFungiblesTransfer,
@@ -39,8 +60,6 @@ pub mod pallet {
 		},
 		PalletId,
 	};
-
-	pub use pallet_nfts::Incrementable;
 
 	pub type BalanceOf<T> =
 		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -61,46 +80,42 @@ pub mod pallet {
 
 		type Currency: Currency<Self::AccountId>;
 
-		/// Identifier for the collection of item.
-		type CollectionId: Member + Parameter + MaxEncodedLen + Copy + Incrementable;
+		/// Identifier for the collection of nft.
+		type NftCollectionId: Member + Parameter + MaxEncodedLen + Copy;
 
-		/// The type used to identify a unique item within a collection.
-		type ItemId: Member + Parameter + MaxEncodedLen + Copy;
+		/// The type used to identify an nft within a collection.
+		type NftId: Member + Parameter + MaxEncodedLen + Copy;
 
 		type AssetBalance: AtLeast32BitUnsigned
 			+ codec::FullCodec
 			+ Copy
 			+ MaybeSerializeDeserialize
 			+ sp_std::fmt::Debug
-			+ Default
 			+ From<u64>
-			+ IntegerSquareRoot
-			+ Zero
 			+ TypeInfo
 			+ MaxEncodedLen;
 
 		type AssetId: Member
 			+ Parameter
-			+ Default
 			+ Copy
-			+ codec::HasCompact
 			+ From<u32>
 			+ MaybeSerializeDeserialize
 			+ MaxEncodedLen
 			+ PartialOrd
 			+ TypeInfo;
 
+		/// Registry for the minted assets.
 		type Assets: Inspect<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>
 			+ Create<Self::AccountId>
-			+ InspectEnumerable<Self::AccountId>
+			+ Destroy<Self::AccountId>
 			+ Mutate<Self::AccountId>
 			+ MutateMetadata<Self::AccountId>
 			+ Transfer<Self::AccountId>;
 
-		type Items: NonFungiblesInspect<
+		type Nfts: NonFungiblesInspect<
 				Self::AccountId,
-				ItemId = Self::ItemId,
-				CollectionId = Self::CollectionId,
+				ItemId = Self::NftId,
+				CollectionId = Self::NftCollectionId,
 			> + NonFungiblesTransfer<Self::AccountId>;
 
 		#[pallet::constant]
@@ -111,29 +126,38 @@ pub mod pallet {
 	}
 
 	#[pallet::storage]
-	#[pallet::getter(fn assets_minted)]
-	// TODO: query amount minted from pallet assets instead of storing it locally.
-	// Add a public getter function to pallet assets.
-	pub type AssetsMinted<T: Config> =
-		StorageMap<_, Twox64Concat, AssetIdOf<T>, AssetBalanceOf<T>, OptionQuery>;
+	#[pallet::getter(fn nft_to_asset)]
+	pub type NftToAsset<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		(T::NftCollectionId, T::NftId),
+		Details<AssetIdOf<T>, AssetBalanceOf<T>>,
+		OptionQuery,
+	>;
 
-	#[pallet::storage]
-	#[pallet::getter(fn asset_to_nft)]
-	// TODO: store information about Asset ID and the corresponding Collection and Item ID.
-	pub type AssetToNft<T: Config> =
-		StorageMap<_, Twox64Concat, AssetIdOf<T>, (T::CollectionId, T::ItemId), OptionQuery>;
-
+	// Pallet's events.
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		NFTLocked(T::CollectionId, T::ItemId),
-		NFTUnlocked(T::CollectionId, T::ItemId),
+		NftFractionalised {
+			nft_collection: T::NftCollectionId,
+			nft: T::NftId,
+			fractions: AssetBalanceOf<T>,
+			asset: AssetIdOf<T>,
+			beneficiary: T::AccountId,
+		},
+		NftUnFractionalised {
+			nft_collection: T::NftCollectionId,
+			nft: T::NftId,
+			asset: AssetIdOf<T>,
+			beneficiary: T::AccountId,
+		},
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
-		AssetDataNotFound,
-		NFTDataNotFound,
+		DataNotFound,
+		NoPermission,
 	}
 
 	#[pallet::call]
@@ -142,122 +166,97 @@ pub mod pallet {
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(2).ref_time())]
 		/// Pallet's account must be funded before lock is possible!
 		/// 5EYCAe5gjC5dxKPbV2GPQUetETjFNSYZsSwSurVTTXidSLbh
-		pub fn lock_nft_create_asset(
+		pub fn fractionalise(
 			origin: OriginFor<T>,
-			collection_id: T::CollectionId,
-			item_id: T::ItemId,
+			nft_collection_id: T::NftCollectionId,
+			nft_id: T::NftId,
 			asset_id: AssetIdOf<T>,
 			beneficiary: T::AccountId,
-			min_balance: AssetBalanceOf<T>,
-			amount: AssetBalanceOf<T>,
+			fractions: AssetBalanceOf<T>,
 		) -> DispatchResult {
-			let _who = ensure_signed(origin)?;
-			let admin_account_id = Self::pallet_account_id();
+			let who = ensure_signed(origin)?;
+			let nft_owner =
+				T::Nfts::owner(&nft_collection_id, &nft_id).ok_or(Error::<T>::NoPermission)?;
+			ensure!(nft_owner == who, Error::<T>::NoPermission);
 
-			Self::do_lock_nft(collection_id, item_id)?;
-			Self::do_create_asset(asset_id, admin_account_id, min_balance)?;
-			Self::do_mint_asset(asset_id, &beneficiary, amount)?;
+			let pallet_account = Self::get_pallet_account();
 
-			// Mutate this storage item to retain information about the amount minted.
-			<AssetsMinted<T>>::try_mutate(
-				asset_id,
-				|assets_minted| -> Result<(), DispatchError> {
-					match assets_minted.is_some() {
-						true =>
-							*assets_minted = Some(assets_minted.unwrap().saturating_add(amount)),
-						false => *assets_minted = Some(amount),
-					}
+			Self::do_lock_nft(nft_collection_id, nft_id, &pallet_account)?;
+			Self::do_create_asset(asset_id, pallet_account)?;
+			Self::do_mint_asset(asset_id, &beneficiary, fractions)?;
 
-					Ok(())
-				},
-			)?;
+			NftToAsset::<T>::insert(
+				(nft_collection_id, nft_id),
+				Details { asset: asset_id, fractions },
+			);
 
-			// Mutate this storage item to retain information about the asset created.
-			<AssetToNft<T>>::try_mutate(asset_id, |nft_id| -> Result<(), DispatchError> {
-				*nft_id = Some((collection_id, item_id));
-
-				Ok(())
-			})?;
-
-			Self::deposit_event(Event::NFTLocked(collection_id, item_id));
+			Self::deposit_event(Event::NftFractionalised {
+				nft_collection: nft_collection_id,
+				nft: nft_id,
+				fractions,
+				asset: asset_id,
+				beneficiary,
+			});
 
 			Ok(())
 		}
 
-		/// Return and burn a % of the asset, unlock the NFT. Currently 100% is the minimum
-		/// threshold.
+		/// Burn the whole amount of the asset and return back the locked NFT.
 		// TODO: correct weights
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(2).ref_time())]
-		pub fn burn_asset_unlock_nft(
+		pub fn unfractionalise(
 			origin: OriginFor<T>,
+			nft_collection_id: T::NftCollectionId,
+			nft_id: T::NftId,
 			asset_id: AssetIdOf<T>,
-			amount: AssetBalanceOf<T>,
+			beneficiary: T::AccountId,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			ensure!(<AssetToNft<T>>::contains_key(asset_id), Error::<T>::NFTDataNotFound);
-			let (collection_id, item_id) = Self::get_nft_id(asset_id);
-			Self::do_burn_asset(asset_id, &who, amount)?;
+			Details::<T, I>::try_mutate_exists((nft_collection_id, nft_id), |maybe_details| {
+				let details = maybe_details.take().ok_or(Error::<T>::DataNotFound)?;
+				ensure!(details.asset == asset_id, Error::<T>::DataNotFound);
 
-			// Mutate this storage item to retain information about the amount burned.
-			<AssetsMinted<T>>::try_mutate(
-				asset_id,
-				|assets_minted| -> Result<(), DispatchError> {
-					*assets_minted = Some(assets_minted.unwrap().saturating_sub(amount));
-					Ok(())
-				},
-			)?;
+				Self::do_burn_asset(asset_id, &who, details.fractions)?;
+				Self::do_unlock_nft(nft_collection_id, nft_id, &beneficiary)?;
 
-			Self::do_unlock_nft(collection_id, item_id, asset_id, who)?;
-
-			Self::deposit_event(Event::NFTUnlocked(collection_id, item_id));
-
-			Ok(())
+				Self::deposit_event(Event::NftUnFractionalised {
+					nft_collection: nft_collection_id,
+					nft: nft_id,
+					asset: asset_id,
+					beneficiary,
+				});
+				Ok(())
+			})
 		}
 	}
 
 	impl<T: Config> Pallet<T> {
-		fn pallet_account_id() -> T::AccountId {
+		fn get_pallet_account() -> T::AccountId {
 			T::PalletId::get().into_account_truncating()
 		}
 
-		/// Transfer the NFT from the account locking the NFT to the pallet's account.
-		fn do_lock_nft(collection_id: T::CollectionId, item_id: T::ItemId) -> DispatchResult {
-			let admin_account_id = Self::pallet_account_id();
-			T::Items::transfer(&collection_id, &item_id, &admin_account_id)
-		}
-
-		/// Transfer the NFT to the account returning the tokens. Remove the key and value from
-		/// storage.
-		fn do_unlock_nft(
-			collection_id: T::CollectionId,
-			item_id: T::ItemId,
-			asset_id: AssetIdOf<T>,
-			account: T::AccountId,
+		/// Transfer the NFT from the account holding the NFT to the pallet's account.
+		fn do_lock_nft(
+			nft_collection_id: T::NftCollectionId,
+			nft_id: T::NftId,
+			pallet_account: &T::AccountId,
 		) -> DispatchResult {
-			match T::Items::transfer(&collection_id, &item_id, &account) {
-				Ok(()) => {
-					<AssetToNft<T>>::take(asset_id);
-					return Ok(())
-				},
-				Err(e) => return Err(e),
-			}
+			T::Nfts::transfer(&nft_collection_id, &nft_id, pallet_account)
 		}
 
-		/// Assert that the `asset_id` was created by means of locking an NFT and fetch
-		/// its `CollectionId` and `ItemId`.
-		fn get_nft_id(asset_id: AssetIdOf<T>) -> (T::CollectionId, T::ItemId) {
-			// Check for explicit existence of the value in the extrinsic.
-			<AssetToNft<T>>::get(asset_id).unwrap()
+		/// Transfer the NFT to the account returning the tokens.
+		fn do_unlock_nft(
+			nft_collection_id: T::NftCollectionId,
+			nft_id: T::NftId,
+			account: &T::AccountId,
+		) -> DispatchResult {
+			T::Nfts::transfer(&nft_collection_id, &nft_id, account)
 		}
 
 		/// Create the new asset.
-		fn do_create_asset(
-			asset_id: AssetIdOf<T>,
-			admin: T::AccountId,
-			min_balance: AssetBalanceOf<T>,
-		) -> DispatchResult {
-			T::Assets::create(asset_id, admin, true, min_balance)
+		fn do_create_asset(asset_id: AssetIdOf<T>, admin: T::AccountId) -> DispatchResult {
+			T::Assets::create(asset_id, admin, true, One::one())
 		}
 
 		/// Mint the `amount` of tokens with `asset_id` into the beneficiary's account.
@@ -269,30 +268,14 @@ pub mod pallet {
 			T::Assets::mint_into(asset_id, beneficiary, amount)
 		}
 
-		/// If the amount of tokens is enough for the buyback, burn the tokens from the
-		/// account that is returning the tokens.
+		/// Burn tokens from the account.
 		fn do_burn_asset(
 			asset_id: AssetIdOf<T>,
 			account: &T::AccountId,
 			amount: AssetBalanceOf<T>,
-		) -> Result<AssetBalanceOf<T>, DispatchError> {
-			// Assert that the asset exists in storage.
-			ensure!(<AssetsMinted<T>>::contains_key(asset_id), Error::<T>::NFTDataNotFound);
-			Self::check_token_amount(asset_id, amount);
-			T::Assets::burn_from(asset_id, account, amount)
-		}
-
-		/// Assert that the amount of tokens returned is equal to the amount needed to buy
-		/// back the locked NFT.
-		fn check_token_amount(asset_id: AssetIdOf<T>, amount: AssetBalanceOf<T>) -> () {
-			// TODO: create a threshold of tokens to return in order to get back the NFT.
-			// Otherwise one person can hold one token in order not to let others buy back.
-			let buyback_threshold: AssetBalanceOf<T> =
-				T::BuybackThreshold::get().saturated_into::<AssetBalanceOf<T>>();
-			assert_eq!(
-				Some(amount),
-				Some(<AssetsMinted<T>>::get(asset_id).unwrap().saturating_mul(buyback_threshold))
-			);
+		) -> DispatchResult {
+			T::Assets::burn_from(asset_id, account, amount)?;
+			T::Assets::start_destroy(asset_id, None)
 		}
 	}
 }
