@@ -23,7 +23,6 @@ use crate as pallet_nfts;
 use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64},
-	PalletId,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -87,7 +86,6 @@ impl pallet_balances::Config for Test {
 
 parameter_types! {
 	pub storage Features: PalletFeatures = PalletFeatures::all_enabled();
-	pub const NftsPalletId: PalletId = PalletId(*b"py/nfts_");
 }
 
 impl Config for Test {
@@ -112,7 +110,6 @@ impl Config for Test {
 	type MaxDeadlineDuration = ConstU64<10000>;
 	type Features = Features;
 	type WeightInfo = ();
-	type PalletId = NftsPalletId;
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = ();
 }

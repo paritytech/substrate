@@ -1,27 +1,27 @@
 error[E0277]: `<T as pallet::Config>::Bar` doesn't implement `std::fmt::Debug`
-  --> tests/pallet_ui/call_argument_invalid_bound_2.rs:20:36
+  --> tests/pallet_ui/call_argument_invalid_bound_2.rs:21:36
    |
-20 |         pub fn foo(origin: OriginFor<T>, bar: T::Bar) -> DispatchResultWithPostInfo {
-   |                                          ^^^ `<T as pallet::Config>::Bar` cannot be formatted using `{:?}` because it doesn't implement `std::fmt::Debug`
+21 |         pub fn foo(origin: OriginFor<T>, _bar: T::Bar) -> DispatchResultWithPostInfo {
+   |                                          ^^^^ `<T as pallet::Config>::Bar` cannot be formatted using `{:?}` because it doesn't implement `std::fmt::Debug`
    |
    = help: the trait `std::fmt::Debug` is not implemented for `<T as pallet::Config>::Bar`
    = note: required for `&<T as pallet::Config>::Bar` to implement `std::fmt::Debug`
    = note: required for the cast from `&<T as pallet::Config>::Bar` to the object type `dyn std::fmt::Debug`
 
 error[E0277]: the trait bound `<T as pallet::Config>::Bar: Clone` is not satisfied
-  --> tests/pallet_ui/call_argument_invalid_bound_2.rs:20:36
+  --> tests/pallet_ui/call_argument_invalid_bound_2.rs:21:36
    |
-20 |         pub fn foo(origin: OriginFor<T>, bar: T::Bar) -> DispatchResultWithPostInfo {
-   |                                          ^^^ the trait `Clone` is not implemented for `<T as pallet::Config>::Bar`
+21 |         pub fn foo(origin: OriginFor<T>, _bar: T::Bar) -> DispatchResultWithPostInfo {
+   |                                          ^^^^ the trait `Clone` is not implemented for `<T as pallet::Config>::Bar`
 
 error[E0369]: binary operation `==` cannot be applied to type `&<T as pallet::Config>::Bar`
-  --> tests/pallet_ui/call_argument_invalid_bound_2.rs:20:36
+  --> tests/pallet_ui/call_argument_invalid_bound_2.rs:21:36
    |
-20 |         pub fn foo(origin: OriginFor<T>, bar: T::Bar) -> DispatchResultWithPostInfo {
-   |                                          ^^^
+21 |         pub fn foo(origin: OriginFor<T>, _bar: T::Bar) -> DispatchResultWithPostInfo {
+   |                                          ^^^^
 
 error[E0277]: the trait bound `<T as pallet::Config>::Bar: WrapperTypeEncode` is not satisfied
-  --> tests/pallet_ui/call_argument_invalid_bound_2.rs:20:36
+  --> tests/pallet_ui/call_argument_invalid_bound_2.rs:21:36
    |
 1  | / #[frame_support::pallet]
 2  | | mod pallet {
@@ -32,8 +32,8 @@ error[E0277]: the trait bound `<T as pallet::Config>::Bar: WrapperTypeEncode` is
 17 | |     #[pallet::call]
    | |__________________- required by a bound introduced by this call
 ...
-20 |           pub fn foo(origin: OriginFor<T>, bar: T::Bar) -> DispatchResultWithPostInfo {
-   |                                            ^^^ the trait `WrapperTypeEncode` is not implemented for `<T as pallet::Config>::Bar`
+21 |           pub fn foo(origin: OriginFor<T>, _bar: T::Bar) -> DispatchResultWithPostInfo {
+   |                                            ^^^^ the trait `WrapperTypeEncode` is not implemented for `<T as pallet::Config>::Bar`
    |
    = note: required for `<T as pallet::Config>::Bar` to implement `Encode`
 

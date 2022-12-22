@@ -74,7 +74,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			attribute.map_or(AttributeDeposit { account: None, amount: Zero::zero() }, |m| m.1);
 
 		let mut deposit = Zero::zero();
-		if collection_config.is_setting_enabled(CollectionSetting::DepositRequired) {
+		if collection_config.is_setting_enabled(CollectionSetting::DepositRequired) ||
+			namespace != AttributeNamespace::CollectionOwner
+		{
 			deposit = T::DepositPerByte::get()
 				.saturating_mul(((key.len() + value.len()) as u32).into())
 				.saturating_add(T::AttributeDepositBase::get());

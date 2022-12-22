@@ -158,6 +158,7 @@ impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId, ItemConfig
 			*collection,
 			*item,
 			who.clone(),
+			who.clone(),
 			*item_config,
 			deposit_collection_owner,
 			|_, _| Ok(()),
@@ -176,6 +177,64 @@ impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId, ItemConfig
 				}
 			}
 			Ok(())
+		})
+	}
+
+	fn set_attribute(
+		collection: &Self::CollectionId,
+		item: &Self::ItemId,
+		key: &[u8],
+		value: &[u8],
+	) -> DispatchResult {
+		Self::do_force_set_attribute(
+			None,
+			*collection,
+			Some(*item),
+			AttributeNamespace::Pallet,
+			Self::construct_attribute_key(key.to_vec())?,
+			Self::construct_attribute_value(value.to_vec())?,
+		)
+	}
+
+	fn set_typed_attribute<K: Encode, V: Encode>(
+		collection: &Self::CollectionId,
+		item: &Self::ItemId,
+		key: &K,
+		value: &V,
+	) -> DispatchResult {
+		key.using_encoded(|k| {
+			value.using_encoded(|v| {
+				<Self as Mutate<T::AccountId, ItemConfig>>::set_attribute(collection, item, k, v)
+			})
+		})
+	}
+
+	fn set_collection_attribute(
+		collection: &Self::CollectionId,
+		key: &[u8],
+		value: &[u8],
+	) -> DispatchResult {
+		Self::do_force_set_attribute(
+			None,
+			*collection,
+			None,
+			AttributeNamespace::Pallet,
+			Self::construct_attribute_key(key.to_vec())?,
+			Self::construct_attribute_value(value.to_vec())?,
+		)
+	}
+
+	fn set_typed_collection_attribute<K: Encode, V: Encode>(
+		collection: &Self::CollectionId,
+		key: &K,
+		value: &V,
+	) -> DispatchResult {
+		key.using_encoded(|k| {
+			value.using_encoded(|v| {
+				<Self as Mutate<T::AccountId, ItemConfig>>::set_collection_attribute(
+					collection, k, v,
+				)
+			})
 		})
 	}
 }

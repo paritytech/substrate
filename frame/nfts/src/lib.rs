@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Unique (Items) Module
+//! # Nfts Module
 //!
 //! A simple, secure module for dealing with non-fungible items.
 //!
@@ -52,7 +52,7 @@ use frame_support::traits::{
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
 	traits::{Saturating, StaticLookup, Zero},
-	ArithmeticError, RuntimeDebug,
+	RuntimeDebug,
 };
 use sp_std::prelude::*;
 
@@ -65,7 +65,7 @@ type AccountIdLookupOf<T> = <<T as SystemConfig>::Lookup as StaticLookup>::Sourc
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{pallet_prelude::*, traits::ExistenceRequirement, PalletId};
+	use frame_support::{pallet_prelude::*, traits::ExistenceRequirement};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -170,10 +170,6 @@ pub mod pallet {
 		/// Disables some of pallet's features.
 		#[pallet::constant]
 		type Features: Get<PalletFeatures>;
-
-		/// The pallet's id.
-		#[pallet::constant]
-		type PalletId: Get<PalletId>;
 
 		#[cfg(feature = "runtime-benchmarks")]
 		/// A set of helper functions for benchmarking.
@@ -393,7 +389,7 @@ pub mod pallet {
 		},
 		/// An `item` of a `collection` has been approved by the `owner` for transfer by
 		/// a `delegate`.
-		ApprovedTransfer {
+		TransferApproved {
 			collection: T::CollectionId,
 			item: T::ItemId,
 			owner: T::AccountId,
@@ -417,14 +413,14 @@ pub mod pallet {
 		/// Metadata has been cleared for a `collection`.
 		CollectionMetadataCleared { collection: T::CollectionId },
 		/// New metadata has been set for an item.
-		MetadataSet {
+		ItemMetadataSet {
 			collection: T::CollectionId,
 			item: T::ItemId,
 			data: BoundedVec<u8, T::StringLimit>,
 		},
 		/// Metadata has been cleared for an item.
-		MetadataCleared { collection: T::CollectionId, item: T::ItemId },
-		/// Metadata has been cleared for an item.
+		ItemMetadataCleared { collection: T::CollectionId, item: T::ItemId },
+		/// The deposit for a set of `item`s within a `collection` has been updated.
 		Redeposited { collection: T::CollectionId, successful_items: Vec<T::ItemId> },
 		/// New attribute metadata has been set for a `collection` or `item`.
 		AttributeSet {
@@ -459,16 +455,16 @@ pub mod pallet {
 		CollectionMaxSupplySet { collection: T::CollectionId, max_supply: u32 },
 		/// Mint settings for a collection had changed.
 		CollectionMintSettingsUpdated { collection: T::CollectionId },
-		/// Event gets emmited when the `NextCollectionId` gets incremented.
+		/// Event gets emitted when the `NextCollectionId` gets incremented.
 		NextCollectionIdIncremented { next_id: T::CollectionId },
-		/// The price was set for the instance.
+		/// The price was set for the item.
 		ItemPriceSet {
 			collection: T::CollectionId,
 			item: T::ItemId,
 			price: ItemPrice<T, I>,
 			whitelisted_buyer: Option<T::AccountId>,
 		},
-		/// The price for the instance was removed.
+		/// The price for the item was removed.
 		ItemPriceRemoved { collection: T::CollectionId, item: T::ItemId },
 		/// An item was bought.
 		ItemBought {
@@ -557,7 +553,7 @@ pub mod pallet {
 		MaxSupplyReached,
 		/// The max supply is locked and can't be changed.
 		MaxSupplyLocked,
-		/// The provided max supply is less to the amount of items a collection already has.
+		/// The provided max supply is less than the number of items a collection already has.
 		MaxSupplyTooSmall,
 		/// The given item ID is unknown.
 		UnknownItem,
@@ -571,11 +567,11 @@ pub mod pallet {
 		ReachedApprovalLimit,
 		/// The deadline has already expired.
 		DeadlineExpired,
-		/// The duration provided should be less or equal to MaxDeadlineDuration.
+		/// The duration provided should be less than or equal to `MaxDeadlineDuration`.
 		WrongDuration,
 		/// The method is disabled by system settings.
 		MethodDisabled,
-		/// The provided is setting can't be set.
+		/// The provided setting can't be set.
 		WrongSetting,
 		/// Item's config already exists and should be equal to the provided one.
 		InconsistentItemConfig,
@@ -647,9 +643,8 @@ pub mod pallet {
 		/// Unlike `create`, no funds are reserved.
 		///
 		/// - `owner`: The owner of this collection of items. The owner has full superuser
-		///   permissions
-		/// over this item, but may later change and configure the permissions using
-		/// `transfer_ownership` and `set_team`.
+		///   permissions over this item, but may later change and configure the permissions using
+		///   `transfer_ownership` and `set_team`.
 		///
 		/// Emits `ForceCreated` event when successful.
 		///
@@ -720,8 +715,11 @@ pub mod pallet {
 		///
 		/// - `collection`: The collection of the item to be minted.
 		/// - `item`: An identifier of the new item.
+		/// - `mint_to`: Account into which the item will be minted.
 		/// - `witness_data`: When the mint type is `HolderOf(collection_id)`, then the owned
 		///   item_id from that collection needs to be provided within the witness data object.
+		///
+		/// Note: the deposit will be taken from the `origin` and not the `owner` of the `item`.
 		///
 		/// Emits `Issued` event when successful.
 		///
@@ -731,9 +729,11 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			item: T::ItemId,
+			mint_to: AccountIdLookupOf<T>,
 			witness_data: Option<MintWitness<T::ItemId>>,
 		) -> DispatchResult {
 			let caller = ensure_signed(origin)?;
+			let mint_to = T::Lookup::lookup(mint_to)?;
 
 			let collection_config = Self::get_collection_config(&collection)?;
 			let item_settings = collection_config.mint_settings.default_item_settings;
@@ -743,9 +743,15 @@ pub mod pallet {
 				collection,
 				item,
 				caller.clone(),
+				mint_to.clone(),
 				item_config,
 				false,
 				|collection_details, collection_config| {
+					// Issuer can mint regardless of mint settings
+					if Self::has_role(&collection, &caller, CollectionRole::Issuer) {
+						return Ok(())
+					}
+
 					let mint_settings = collection_config.mint_settings;
 					let now = frame_system::Pallet::<T>::block_number();
 
@@ -757,12 +763,7 @@ pub mod pallet {
 					}
 
 					match mint_settings.mint_type {
-						MintType::Issuer => {
-							ensure!(
-								Self::has_role(&collection, &caller, CollectionRole::Issuer),
-								Error::<T, I>::NoPermission
-							)
-						},
+						MintType::Issuer => return Err(Error::<T, I>::NoPermission.into()),
 						MintType::HolderOf(collection_id) => {
 							let MintWitness { owner_of_item } =
 								witness_data.ok_or(Error::<T, I>::BadWitness)?;
@@ -782,7 +783,7 @@ pub mod pallet {
 							let key = (
 								&collection_id,
 								Some(owner_of_item),
-								AttributeNamespace::Pallet(T::PalletId::get()),
+								AttributeNamespace::Pallet,
 								&attribute_key,
 							);
 							let already_claimed = Attribute::<T, I>::contains_key(key.clone());
@@ -818,7 +819,7 @@ pub mod pallet {
 		///
 		/// - `collection`: The collection of the item to be minted.
 		/// - `item`: An identifier of the new item.
-		/// - `owner`: An owner of the minted item.
+		/// - `mint_to`: Account into which the item will be minted.
 		/// - `item_config`: A config of the new item.
 		///
 		/// Emits `Issued` event when successful.
@@ -829,13 +830,13 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			item: T::ItemId,
-			owner: AccountIdLookupOf<T>,
+			mint_to: AccountIdLookupOf<T>,
 			item_config: ItemConfig,
 		) -> DispatchResult {
 			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
-			let owner = T::Lookup::lookup(owner)?;
+			let mint_to = T::Lookup::lookup(mint_to)?;
 
 			if let Some(check_origin) = maybe_check_origin {
 				ensure!(
@@ -843,7 +844,9 @@ pub mod pallet {
 					Error::<T, I>::NoPermission
 				);
 			}
-			Self::do_mint(collection, item, owner, item_config, true, |_, _| Ok(()))
+			Self::do_mint(collection, item, mint_to.clone(), mint_to, item_config, true, |_, _| {
+				Ok(())
+			})
 		}
 
 		/// Destroy a single item.
@@ -933,7 +936,7 @@ pub mod pallet {
 		/// whose existing deposit is less than the refreshed deposit as it would only cost them,
 		/// so it's of little consequence.
 		///
-		/// It will still return an error in the case that the collection is unknown of the signer
+		/// It will still return an error in the case that the collection is unknown or the signer
 		/// is not permitted to call it.
 		///
 		/// Weight: `O(items.len())`
@@ -1151,7 +1154,7 @@ pub mod pallet {
 		/// - `maybe_deadline`: Optional deadline for the approval. Specified by providing the
 		/// 	number of blocks after which the approval will expire
 		///
-		/// Emits `ApprovedTransfer` on success.
+		/// Emits `TransferApproved` on success.
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::approve_transfer())]
@@ -1421,7 +1424,7 @@ pub mod pallet {
 		/// - `item`: The identifier of the item whose metadata to set.
 		/// - `data`: The general information of this item. Limited in length by `StringLimit`.
 		///
-		/// Emits `MetadataSet`.
+		/// Emits `ItemMetadataSet`.
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::set_metadata())]
@@ -1447,7 +1450,7 @@ pub mod pallet {
 		/// - `collection`: The identifier of the collection whose item's metadata to clear.
 		/// - `item`: The identifier of the item whose metadata to clear.
 		///
-		/// Emits `MetadataCleared`.
+		/// Emits `ItemMetadataCleared`.
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::clear_metadata())]
@@ -1531,13 +1534,13 @@ pub mod pallet {
 			Self::do_set_accept_ownership(who, maybe_collection)
 		}
 
-		/// Set the maximum amount of items a collection could have.
+		/// Set the maximum number of items a collection could have.
 		///
 		/// Origin must be either `ForceOrigin` or `Signed` and the sender should be the Owner of
 		/// the `collection`.
 		///
 		/// - `collection`: The identifier of the collection to change.
-		/// - `max_supply`: The maximum amount of items a collection could have.
+		/// - `max_supply`: The maximum number of items a collection could have.
 		///
 		/// Emits `CollectionMaxSupplySet` event when successful.
 		#[pallet::weight(T::WeightInfo::set_collection_max_supply())]
@@ -1649,8 +1652,8 @@ pub mod pallet {
 		/// - `desired_collection`: The collection of the desired item.
 		/// - `desired_item`: The desired item an owner wants to receive.
 		/// - `maybe_price`: The price an owner is willing to pay or receive for the desired `item`.
-		/// - `maybe_duration`: Optional deadline for the swap. Specified by providing the
-		/// 	number of blocks after which the swap will expire.
+		/// - `duration`: A deadline for the swap. Specified by providing the number of blocks
+		/// 	after which the swap will expire.
 		///
 		/// Emits `SwapCreated` on success.
 		#[pallet::weight(T::WeightInfo::create_swap())]

@@ -157,7 +157,7 @@ pub trait Destroy<AccountId>: Inspect<AccountId> {
 	/// * `collection`: The `CollectionId` to be destroyed.
 	/// * `witness`: Any witness data that needs to be provided to complete the operation
 	///   successfully.
-	/// * `maybe_check_owner`: An optional account id that can be used to authorize the destroy
+	/// * `maybe_check_owner`: An optional `AccountId` that can be used to authorize the destroy
 	///   command. If not provided, we will not do any authorization checks before destroying the
 	///   item.
 	///
@@ -246,7 +246,7 @@ pub trait Mutate<AccountId, ItemConfig>: Inspect<AccountId> {
 	}
 }
 
-/// Trait for providing a non-fungible sets of items which can only be transferred.
+/// Trait for transferring non-fungible sets of items.
 pub trait Transfer<AccountId>: Inspect<AccountId> {
 	/// Transfer `item` of `collection` into `destination` account.
 	fn transfer(

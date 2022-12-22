@@ -172,7 +172,7 @@ mod tests {
 	};
 	use beefy_primitives::{known_payloads, Payload, SignedCommitment};
 	use codec::{Decode, Encode};
-	use jsonrpsee::{types::EmptyParams, RpcModule};
+	use jsonrpsee::{types::EmptyServerParams as EmptyParams, RpcModule};
 	use sp_runtime::traits::{BlakeTwo256, Hash};
 	use substrate_test_runtime_client::runtime::Block;
 

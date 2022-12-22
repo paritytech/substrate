@@ -302,48 +302,55 @@ where
 		full: impl Iterator<Item = impl FnOnce(Configuration) -> Result<(F, U), Error>>,
 		authorities: impl Iterator<Item = (String, impl FnOnce(Configuration) -> Result<(F, U), Error>)>,
 	) {
-		let handle = self.runtime.handle().clone();
+		self.runtime.block_on(async {
+			let handle = self.runtime.handle().clone();
 
-		for (key, authority) in authorities {
-			let node_config = node_config(
-				self.nodes,
-				&self.chain_spec,
-				Role::Authority,
-				handle.clone(),
-				Some(key),
-				self.base_port,
-				temp,
-			);
-			let addr = node_config.network.listen_addresses.first().unwrap().clone();
-			let (service, user_data) =
-				authority(node_config).expect("Error creating test node service");
+			for (key, authority) in authorities {
+				let node_config = node_config(
+					self.nodes,
+					&self.chain_spec,
+					Role::Authority,
+					handle.clone(),
+					Some(key),
+					self.base_port,
+					temp,
+				);
+				let addr = node_config.network.listen_addresses.first().unwrap().clone();
+				let (service, user_data) =
+					authority(node_config).expect("Error creating test node service");
 
-			handle.spawn(service.clone().map_err(|_| ()));
-			let addr =
-				MultiaddrWithPeerId { multiaddr: addr, peer_id: service.network().local_peer_id() };
-			self.authority_nodes.push((self.nodes, service, user_data, addr));
-			self.nodes += 1;
-		}
+				handle.spawn(service.clone().map_err(|_| ()));
+				let addr = MultiaddrWithPeerId {
+					multiaddr: addr,
+					peer_id: service.network().local_peer_id(),
+				};
+				self.authority_nodes.push((self.nodes, service, user_data, addr));
+				self.nodes += 1;
+			}
 
-		for full in full {
-			let node_config = node_config(
-				self.nodes,
-				&self.chain_spec,
-				Role::Full,
-				handle.clone(),
-				None,
-				self.base_port,
-				temp,
-			);
-			let addr = node_config.network.listen_addresses.first().unwrap().clone();
-			let (service, user_data) = full(node_config).expect("Error creating test node service");
+			for full in full {
+				let node_config = node_config(
+					self.nodes,
+					&self.chain_spec,
+					Role::Full,
+					handle.clone(),
+					None,
+					self.base_port,
+					temp,
+				);
+				let addr = node_config.network.listen_addresses.first().unwrap().clone();
+				let (service, user_data) =
+					full(node_config).expect("Error creating test node service");
 
-			handle.spawn(service.clone().map_err(|_| ()));
-			let addr =
-				MultiaddrWithPeerId { multiaddr: addr, peer_id: service.network().local_peer_id() };
-			self.full_nodes.push((self.nodes, service, user_data, addr));
-			self.nodes += 1;
-		}
+				handle.spawn(service.clone().map_err(|_| ()));
+				let addr = MultiaddrWithPeerId {
+					multiaddr: addr,
+					peer_id: service.network().local_peer_id(),
+				};
+				self.full_nodes.push((self.nodes, service, user_data, addr));
+				self.nodes += 1;
+			}
+		});
 	}
 }
 

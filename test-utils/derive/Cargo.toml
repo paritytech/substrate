@@ -7,6 +7,7 @@ license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "Substrate test utilities macros"
+publish = false
 
 [dependencies]
 proc-macro-crate = "1.1.3"

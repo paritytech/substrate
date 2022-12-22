@@ -15,13 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Traits for dealing with a single non-fungible collection of items.
+//! Traits for dealing with a single non-fungible item.
 //!
-//! This assumes a single level namespace identified by `Inspect::ItemId`, and could
-//! reasonably be implemented by pallets which wants to expose a single collection of NFT-like
+//! This assumes a single-level namespace identified by `Inspect::ItemId`, and could
+//! reasonably be implemented by pallets that want to expose a single collection of NFT-like
 //! objects.
 //!
-//! For an NFT API which has dual-level namespacing, the traits in `nonfungibles` are better to
+//! For an NFT API that has dual-level namespacing, the traits in `nonfungibles` are better to
 //! use.
 
 use super::nonfungibles_v2 as nonfungibles;
@@ -33,7 +33,7 @@ use codec::{Decode, Encode};
 use sp_runtime::TokenError;
 use sp_std::prelude::*;
 
-/// Trait for providing an interface to a read-only NFT-like set of items.
+/// Trait for providing an interface to a read-only NFT-like item.
 pub trait Inspect<AccountId> {
 	/// Type for identifying an item.
 	type ItemId;
@@ -129,14 +129,14 @@ pub trait Mutate<AccountId, ItemConfig>: Inspect<AccountId> {
 	}
 }
 
-/// Trait for providing a non-fungible set of items which can only be transferred.
+/// Trait for transferring a non-fungible item.
 pub trait Transfer<AccountId>: Inspect<AccountId> {
 	/// Transfer `item` into `destination` account.
 	fn transfer(item: &Self::ItemId, destination: &AccountId) -> DispatchResult;
 }
 
-/// Convert a `fungibles` trait implementation into a `fungible` trait implementation by identifying
-/// a single item.
+/// Convert a `nonfungibles` trait implementation into a `nonfungible` trait implementation by
+/// identifying a single item.
 pub struct ItemOf<
 	F: nonfungibles::Inspect<AccountId>,
 	A: Get<<F as nonfungibles::Inspect<AccountId>>::CollectionId>,

@@ -54,7 +54,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.map_err(|_| Error::<T, I>::ReachedApprovalLimit)?;
 		Item::<T, I>::insert(&collection, &item, &details);
 
-		Self::deposit_event(Event::ApprovedTransfer {
+		Self::deposit_event(Event::TransferApproved {
 			collection,
 			item,
 			owner: details.owner,
