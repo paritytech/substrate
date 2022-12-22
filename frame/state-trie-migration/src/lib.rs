@@ -864,7 +864,7 @@ pub mod pallet {
 		fn transform_child_key(root: &Vec<u8>) -> Option<&[u8]> {
 			use sp_core::storage::{ChildType, PrefixedStorageKey};
 			match ChildType::from_prefixed_key(PrefixedStorageKey::new_ref(root)) {
-				Some((ChildType::ParentKeyId, root)) => Some(root),
+				Some((ChildType::Default, root)) => Some(root),
 				_ => None,
 			}
 		}
@@ -1058,7 +1058,7 @@ mod mock {
 	};
 	use frame_system::{EnsureRoot, EnsureSigned};
 	use sp_core::{
-		storage::{ChildInfo, StateVersion},
+		storage::{DefaultChild, StateVersion},
 		H256,
 	};
 	use sp_runtime::{
@@ -1202,7 +1202,7 @@ mod mock {
 						]
 						.into_iter()
 						.collect(),
-						child_info: ChildInfo::new_default(b"chk1"),
+						info: DefaultChild::new(b"chk1"),
 					},
 				),
 				(
@@ -1214,7 +1214,7 @@ mod mock {
 						]
 						.into_iter()
 						.collect(),
-						child_info: ChildInfo::new_default(b"chk2"),
+						info: DefaultChild::new(b"chk2"),
 					},
 				),
 			]
@@ -1228,7 +1228,7 @@ mod mock {
 							r.clone(),
 							StorageChild {
 								data: vec![(k, v)].into_iter().collect(),
-								child_info: ChildInfo::new_default(&r),
+								info: DefaultChild::new(&r),
 							},
 						)
 					})

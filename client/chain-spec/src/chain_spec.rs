@@ -25,7 +25,7 @@ use sc_telemetry::TelemetryEndpoints;
 use serde::{Deserialize, Serialize};
 use serde_json as json;
 use sp_core::{
-	storage::{ChildInfo, Storage, StorageChild, StorageData, StorageKey},
+	storage::{DefaultChild, Storage, StorageChild, StorageData, StorageKey},
 	Bytes,
 };
 use sp_runtime::BuildStorage;
@@ -115,11 +115,11 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 			Genesis::Raw(RawGenesis { top: map, children_default: children_map }) => {
 				storage.top.extend(map.into_iter().map(|(k, v)| (k.0, v.0)));
 				children_map.into_iter().for_each(|(k, v)| {
-					let child_info = ChildInfo::new_default(k.0.as_slice());
+					let info = DefaultChild::new(&k.0);
 					storage
 						.children_default
 						.entry(k.0)
-						.or_insert_with(|| StorageChild { data: Default::default(), child_info })
+						.or_insert_with(|| StorageChild { data: Default::default(), info })
 						.data
 						.extend(v.into_iter().map(|(k, v)| (k.0, v.0)));
 				});
@@ -141,6 +141,7 @@ pub type GenesisStorage = BTreeMap<StorageKey, StorageData>;
 #[serde(deny_unknown_fields)]
 pub struct RawGenesis {
 	pub top: GenesisStorage,
+	#[serde(default)]
 	pub children_default: BTreeMap<StorageKey, GenesisStorage>,
 }
 

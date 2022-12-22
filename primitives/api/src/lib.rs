@@ -97,8 +97,8 @@ pub use sp_runtime::{
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use sp_state_machine::{
-	backend::AsTrieBackend, Backend as StateBackend, InMemoryBackend, OverlayedChanges,
-	StorageProof, TrieBackend, TrieBackendBuilder,
+	backend::AsTrieBackend, Backend as StateBackend, Changes, InMemoryBackend, StorageProof,
+	TrieBackend, TrieBackendBuilder,
 };
 #[doc(hidden)]
 pub use sp_std::{mem, slice};
@@ -594,7 +594,7 @@ pub struct CallApiAtParams<'a, Block: BlockT, Backend: StateBackend<HashFor<Bloc
 	/// The encoded arguments of the function.
 	pub arguments: Vec<u8>,
 	/// The overlayed changes that are on top of the state.
-	pub overlayed_changes: &'a RefCell<OverlayedChanges>,
+	pub overlayed_changes: &'a RefCell<Changes>,
 	/// The cache for storage transactions.
 	pub storage_transaction_cache: &'a RefCell<StorageTransactionCache<Block, Backend>>,
 	/// The context this function is executed in.

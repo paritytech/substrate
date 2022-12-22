@@ -29,7 +29,7 @@ use sp_core::{
 	hexdisplay::HexDisplay,
 	storage::{
 		well_known_keys::{is_default_child_storage_key, DEFAULT_CHILD_STORAGE_KEY_PREFIX},
-		ChildInfo, ChildType, PrefixedStorageKey, StorageData, StorageKey,
+		ChildType, DefaultChild, PrefixedStorageKey, StorageData, StorageKey,
 	},
 };
 pub use sp_io::TestExternalities;
@@ -48,7 +48,7 @@ use substrate_rpc_client::{
 
 type KeyValue = (StorageKey, StorageData);
 type TopKeyValues = Vec<KeyValue>;
-type ChildKeyValues = Vec<(ChildInfo, Vec<KeyValue>)>;
+type ChildKeyValues = Vec<(DefaultChild, Vec<KeyValue>)>;
 
 const LOG_TARGET: &str = "remote-ext";
 const DEFAULT_WS_ENDPOINT: &str = "wss://rpc.polkadot.io:443";
@@ -700,7 +700,7 @@ where
 
 		enum Message {
 			Terminated,
-			Batch((ChildInfo, Vec<(Vec<u8>, Vec<u8>)>)),
+			Batch((DefaultChild, Vec<(Vec<u8>, Vec<u8>)>)),
 		}
 		let (tx, mut rx) = mpsc::unbounded::<Message>();
 
@@ -730,7 +730,7 @@ where
 
 					let prefixed_top_key = PrefixedStorageKey::new(prefixed_top_key.clone().0);
 					let un_prefixed = match ChildType::from_prefixed_key(&prefixed_top_key) {
-						Some((ChildType::ParentKeyId, storage_key)) => storage_key,
+						Some((ChildType::Default, storage_key)) => storage_key,
 						None => {
 							log::error!(target: LOG_TARGET, "invalid key: {:?}", prefixed_top_key);
 							return Err("Invalid child key")
@@ -739,7 +739,7 @@ where
 
 					thread_sender
 						.unbounded_send(Message::Batch((
-							ChildInfo::new_default(un_prefixed),
+							DefaultChild::new(un_prefixed),
 							child_kv_inner
 								.iter()
 								.cloned()
@@ -747,7 +747,7 @@ where
 								.collect::<Vec<_>>(),
 						)))
 						.unwrap();
-					thread_child_kv.push((ChildInfo::new_default(un_prefixed), child_kv_inner));
+					thread_child_kv.push((DefaultChild::new(un_prefixed), child_kv_inner));
 				}
 
 				thread_sender.unbounded_send(Message::Terminated).unwrap();

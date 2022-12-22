@@ -37,7 +37,7 @@ use sp_runtime::{
 	ConsensusEngineId, Justifications, StateVersion,
 };
 use sp_state_machine::{
-	backend::Backend as _, ExecutionStrategy, InMemoryBackend, OverlayedChanges, StateMachine,
+	backend::Backend as _, Changes, ExecutionStrategy, InMemoryBackend, StateMachine,
 };
 use sp_storage::{ChildInfo, StorageKey};
 use sp_trie::{LayoutV0, TrieConfiguration};
@@ -100,7 +100,7 @@ fn construct_block(
 		digest: Digest { logs: vec![] },
 	};
 	let hash = header.hash();
-	let mut overlay = OverlayedChanges::default();
+	let mut overlay = Changes::default();
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(backend);
 	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
 	let task_executor = Box::new(TaskExecutor::new());
@@ -202,7 +202,7 @@ fn construct_genesis_should_work_with_native() {
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
 	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
 
-	let mut overlay = OverlayedChanges::default();
+	let mut overlay = Changes::default();
 
 	let _ = StateMachine::new(
 		&backend,
@@ -235,7 +235,7 @@ fn construct_genesis_should_work_with_wasm() {
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
 	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
 
-	let mut overlay = OverlayedChanges::default();
+	let mut overlay = Changes::default();
 
 	let _ = StateMachine::new(
 		&backend,
@@ -268,7 +268,7 @@ fn construct_genesis_with_bad_transaction_should_panic() {
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
 	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
 
-	let mut overlay = OverlayedChanges::default();
+	let mut overlay = Changes::default();
 
 	let r = StateMachine::new(
 		&backend,

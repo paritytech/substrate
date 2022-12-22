@@ -204,7 +204,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 		pub struct RuntimeApiImpl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block> + 'static> {
 			call: &'static C,
 			commit_on_success: std::cell::RefCell<bool>,
-			changes: std::cell::RefCell<#crate_::OverlayedChanges>,
+			changes: std::cell::RefCell<#crate_::Changes>,
 			storage_transaction_cache: std::cell::RefCell<
 				#crate_::StorageTransactionCache<Block, C::StateBackend>
 			>,
@@ -221,7 +221,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				&self,
 				call: F,
 			) -> R where Self: Sized {
-				#crate_::OverlayedChanges::start_transaction(&mut std::cell::RefCell::borrow_mut(&self.changes));
+				#crate_::Changes::start_transaction(&mut std::cell::RefCell::borrow_mut(&self.changes));
 				*std::cell::RefCell::borrow_mut(&self.commit_on_success) = false;
 				let res = call(self);
 				*std::cell::RefCell::borrow_mut(&self.commit_on_success) = true;
@@ -286,7 +286,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					.map(|v| #crate_::RuntimeVersion::state_version(&v))
 					.map_err(|e| format!("Failed to get state version: {}", e))?;
 
-				#crate_::OverlayedChanges::into_storage_changes(
+				#crate_::Changes::into_storage_changes(
 					std::cell::RefCell::take(&self.changes),
 					backend,
 					core::cell::RefCell::take(&self.storage_transaction_cache),
@@ -326,11 +326,11 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					transactions; qed";
 				if *std::cell::RefCell::borrow(&self.commit_on_success) {
 					let res = if commit {
-						#crate_::OverlayedChanges::commit_transaction(
+						#crate_::Changes::commit_transaction(
 							&mut std::cell::RefCell::borrow_mut(&self.changes)
 						)
 					} else {
-						#crate_::OverlayedChanges::rollback_transaction(
+						#crate_::Changes::rollback_transaction(
 							&mut std::cell::RefCell::borrow_mut(&self.changes)
 						)
 					};
@@ -430,7 +430,7 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 				fn_name: &dyn Fn(#crate_::RuntimeVersion) -> &'static str,
 			) -> std::result::Result<std::vec::Vec<u8>, #crate_::ApiError> {
 				if *std::cell::RefCell::borrow(&self.commit_on_success) {
-					#crate_::OverlayedChanges::start_transaction(
+					#crate_::Changes::start_transaction(
 						&mut std::cell::RefCell::borrow_mut(&self.changes)
 					);
 				}

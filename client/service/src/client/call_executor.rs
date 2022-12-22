@@ -25,7 +25,7 @@ use sp_api::{ExecutionContext, ProofRecorder, StorageTransactionCache};
 use sp_core::traits::{CodeExecutor, RuntimeCode, SpawnNamed};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_state_machine::{
-	backend::AsTrieBackend, ExecutionStrategy, Ext, OverlayedChanges, StateMachine, StorageProof,
+	backend::AsTrieBackend, Changes, ExecutionStrategy, Ext, StateMachine, StorageProof,
 };
 use std::{cell::RefCell, sync::Arc};
 
@@ -153,7 +153,7 @@ where
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
 	) -> sp_blockchain::Result<Vec<u8>> {
-		let mut changes = OverlayedChanges::default();
+		let mut changes = Changes::default();
 		let at_hash = self.backend.blockchain().expect_block_hash_from_id(at)?;
 		let at_number = self.backend.blockchain().expect_block_number_from_id(at)?;
 		let state = self.backend.state_at(at_hash)?;
@@ -191,7 +191,7 @@ where
 		at: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
-		changes: &RefCell<OverlayedChanges>,
+		changes: &RefCell<Changes>,
 		storage_transaction_cache: Option<&RefCell<StorageTransactionCache<Block, B::State>>>,
 		recorder: &Option<ProofRecorder<Block>>,
 		context: ExecutionContext,
@@ -258,7 +258,7 @@ where
 	}
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
-		let mut overlay = OverlayedChanges::default();
+		let mut overlay = Changes::default();
 
 		let at_hash = self.backend.blockchain().expect_block_hash_from_id(id)?;
 		let state = self.backend.state_at(at_hash)?;

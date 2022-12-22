@@ -32,7 +32,7 @@ pub use self::block_builder_ext::BlockBuilderExt;
 
 use sp_core::{
 	sr25519,
-	storage::{ChildInfo, Storage, StorageChild},
+	storage::{ChildInfo, ChildType, Storage, StorageChild},
 	Pair,
 };
 use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
@@ -140,7 +140,8 @@ impl substrate_test_client::GenesisInit for GenesisParameters {
 					child_content.data.clone().into_iter().collect(),
 					sp_runtime::StateVersion::V1,
 				);
-			let prefixed_storage_key = child_content.child_info.prefixed_storage_key();
+			let prefixed_storage_key =
+				ChildType::Default.new_prefixed_key(&child_content.info.name);
 			(prefixed_storage_key.into_inner(), state_root.encode())
 		});
 		let state_root =
@@ -216,14 +217,11 @@ pub trait TestClientBuilderExt<B>: Sized {
 		let key = key.into();
 		assert!(!storage_key.is_empty());
 		assert!(!key.is_empty());
-		self.genesis_init_mut()
-			.extra_storage
-			.children_default
+		let ChildInfo::Default(info) = child_info;
+		let child_map = &mut self.genesis_init_mut().extra_storage.children_default;
+		child_map
 			.entry(storage_key)
-			.or_insert_with(|| StorageChild {
-				data: Default::default(),
-				child_info: child_info.clone(),
-			})
+			.or_insert_with(|| StorageChild { data: Default::default(), info: info.clone() })
 			.data
 			.insert(key, value.into());
 		self

@@ -175,7 +175,7 @@ impl StorageCmd {
 
 	/// Returns Some if child node and None if regular
 	pub(crate) fn is_child_key(&self, key: Vec<u8>) -> Option<ChildInfo> {
-		if let Some((ChildType::ParentKeyId, storage_key)) =
+		if let Some((ChildType::Default, storage_key)) =
 			ChildType::from_prefixed_key(&PrefixedStorageKey::new(key))
 		{
 			return Some(ChildInfo::new_default(storage_key))

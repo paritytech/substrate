@@ -25,7 +25,7 @@ use crate::{
 };
 use codec::Encode;
 use hash_db::Hasher;
-use sp_core::storage::{ChildInfo, StateVersion, TrackedStorageKey};
+use sp_core::storage::{ChildInfo, DefaultChild, StateVersion, TrackedStorageKey};
 #[cfg(feature = "std")]
 use sp_core::traits::RuntimeCode;
 use sp_std::vec::Vec;
@@ -180,7 +180,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		child_deltas: impl Iterator<
-			Item = (&'a ChildInfo, impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>),
+			Item = (&'a DefaultChild, impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>),
 		>,
 		state_version: StateVersion,
 	) -> (H::Out, Self::Transaction)
@@ -191,8 +191,9 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		let mut child_roots: Vec<_> = Default::default();
 		// child first
 		for (child_info, child_delta) in child_deltas {
+			let child_info = ChildInfo::Default(child_info.clone());
 			let (child_root, empty, child_txs) =
-				self.child_storage_root(child_info, child_delta, state_version);
+				self.child_storage_root(&child_info, child_delta, state_version);
 			let prefixed_storage_key = child_info.prefixed_storage_key();
 			txs.consolidate(child_txs);
 			if empty {

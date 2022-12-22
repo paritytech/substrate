@@ -17,14 +17,9 @@
 
 //! Test implementation for Externalities.
 
-use std::{
-	any::{Any, TypeId},
-	panic::{AssertUnwindSafe, UnwindSafe},
-};
-
 use crate::{
-	backend::Backend, ext::Ext, InMemoryBackend, OverlayedChanges, StorageKey,
-	StorageTransactionCache, StorageValue, TrieBackendBuilder,
+	backend::Backend, ext::Ext, Changes, InMemoryBackend, StorageKey, StorageTransactionCache,
+	StorageValue, TrieBackendBuilder,
 };
 
 use hash_db::Hasher;
@@ -39,6 +34,10 @@ use sp_core::{
 };
 use sp_externalities::{Extension, ExtensionStore, Extensions};
 use sp_trie::StorageProof;
+use std::{
+	any::{Any, TypeId},
+	panic::{AssertUnwindSafe, UnwindSafe},
+};
 
 /// Simple HashMap-based Externalities impl.
 pub struct TestExternalities<H>
@@ -47,7 +46,7 @@ where
 	H::Out: codec::Codec + Ord,
 {
 	/// The overlay changed storage.
-	overlay: OverlayedChanges,
+	overlay: Changes,
 	offchain_db: TestPersistentOffchainDB,
 	storage_transaction_cache:
 		StorageTransactionCache<<InMemoryBackend<H> as Backend<H>>::Transaction, H>,
@@ -113,7 +112,7 @@ where
 		let backend = (storage, state_version).into();
 
 		TestExternalities {
-			overlay: OverlayedChanges::default(),
+			overlay: Changes::default(),
 			offchain_db,
 			extensions,
 			backend,
@@ -123,7 +122,7 @@ where
 	}
 
 	/// Returns the overlayed changes.
-	pub fn overlayed_changes(&self) -> &OverlayedChanges {
+	pub fn overlayed_changes(&self) -> &Changes {
 		&self.overlay
 	}
 
@@ -145,7 +144,12 @@ where
 	/// Insert key/value into backend.
 	///
 	/// This only supports inserting keys in child tries.
-	pub fn insert_child(&mut self, c: sp_core::storage::ChildInfo, k: StorageKey, v: StorageValue) {
+	pub fn insert_child(
+		&mut self,
+		c: sp_core::storage::DefaultChild,
+		k: StorageKey,
+		v: StorageValue,
+	) {
 		self.backend.insert(vec![(Some(c), vec![(k, Some(v))])], self.state_version);
 	}
 
@@ -359,7 +363,7 @@ mod tests {
 		let code = vec![1, 2, 3];
 		ext.set_storage(CODE.to_vec(), code.clone());
 
-		assert_eq!(&ext.storage(CODE).unwrap(), &code);
+		assert_eq!(&ext.storage(CODE, 0, None).unwrap(), &code);
 	}
 
 	#[test]
@@ -375,9 +379,9 @@ mod tests {
 
 		{
 			let mut ext = ext.ext();
-			ext.place_child_storage(&child_info, b"doe".to_vec(), Some(b"reindeer".to_vec()));
-			ext.place_child_storage(&child_info, b"dog".to_vec(), Some(b"puppy".to_vec()));
-			ext.place_child_storage(&child_info, b"dog2".to_vec(), Some(b"puppy2".to_vec()));
+			ext.place_child_storage(&child_info, b"doe", Some(b"reindeer"));
+			ext.place_child_storage(&child_info, b"dog", Some(b"puppy"));
+			ext.place_child_storage(&child_info, b"dog2", Some(b"puppy2"));
 		}
 
 		ext.commit_all().unwrap();
@@ -390,9 +394,9 @@ mod tests {
 				"Should not delete all keys"
 			);
 
-			assert!(ext.child_storage(&child_info, &b"doe"[..]).is_none());
-			assert!(ext.child_storage(&child_info, &b"dog"[..]).is_none());
-			assert!(ext.child_storage(&child_info, &b"dog2"[..]).is_some());
+			assert!(ext.child_storage(&child_info, &b"doe"[..], 0, None).is_none());
+			assert!(ext.child_storage(&child_info, &b"dog"[..], 0, None).is_none());
+			assert!(ext.child_storage(&child_info, &b"dog2"[..], 0, Some(0)).is_some());
 		}
 	}
 

@@ -32,8 +32,8 @@ use sp_std::{boxed::Box, vec::Vec};
 #[cfg(feature = "std")]
 use sp_trie::recorder::Recorder;
 use sp_trie::{
-	child_delta_trie_root, delta_trie_root, empty_child_trie_root, read_child_trie_hash,
-	read_child_trie_value, read_trie_value,
+	child_delta_trie_root, delta_trie_root, read_child_trie_hash, read_child_trie_value,
+	read_trie_value,
 	trie_types::{TrieDBBuilder, TrieError},
 	DBValue, KeySpacedDB, NodeCodec, Trie, TrieCache, TrieDBIterator, TrieDBKeyIterator,
 	TrieRecorder,
@@ -269,15 +269,16 @@ where
 	}
 
 	/// Access the root of the child storage in its parent trie
-	fn child_root(&self, child_info: &ChildInfo) -> Result<Option<H::Out>> {
+	fn default_child_root(&self, name: &[u8]) -> Result<Option<H::Out>> {
 		#[cfg(feature = "std")]
 		{
-			if let Some(result) = self.cache.read().child_root.get(child_info.storage_key()) {
+			if let Some(result) = self.cache.read().child_root.get(name) {
 				return Ok(*result)
 			}
 		}
 
-		let result = self.storage(child_info.prefixed_storage_key().as_slice())?.map(|r| {
+		let parent_key = ChildType::Default.new_prefixed_key(name);
+		let result = self.storage(parent_key.as_slice())?.map(|r| {
 			let mut hash = H::Out::default();
 
 			// root is fetched from DB, not writable by runtime, so it's always valid.
@@ -288,7 +289,7 @@ where
 
 		#[cfg(feature = "std")]
 		{
-			self.cache.write().child_root.insert(child_info.storage_key().to_vec(), result);
+			self.cache.write().child_root.insert(name.to_vec(), result);
 		}
 
 		Ok(result)
@@ -301,7 +302,9 @@ where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageKey>> {
-		let child_root = match self.child_root(child_info)? {
+		let ChildInfo::Default(info) = child_info;
+
+		let child_root = match self.default_child_root(info.name.as_slice())? {
 			Some(child_root) => child_root,
 			None => return Ok(None),
 		};
@@ -383,9 +386,10 @@ where
 
 	/// Returns the hash value
 	pub fn child_storage_hash(&self, child_info: &ChildInfo, key: &[u8]) -> Result<Option<H::Out>> {
-		let child_root = match self.child_root(child_info)? {
-			Some(root) => root,
-			None => return Ok(None),
+		let ChildInfo::Default(info) = child_info;
+
+		let Some(child_root) = self.default_child_root(info.name.as_slice())? else {
+			return Ok(None);
 		};
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
@@ -409,9 +413,10 @@ where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageValue>> {
-		let child_root = match self.child_root(child_info)? {
-			Some(root) => root,
-			None => return Ok(None),
+		let ChildInfo::Default(info) = child_info;
+
+		let Some(child_root) = self.default_child_root(info.name.as_slice())? else {
+			return Ok(None);
 		};
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
@@ -442,7 +447,9 @@ where
 		allow_missing_nodes: bool,
 	) -> Result<bool> {
 		let root = if let Some(child_info) = child_info.as_ref() {
-			match self.child_root(child_info)? {
+			let ChildInfo::Default(info) = child_info;
+
+			match self.default_child_root(info.name.as_slice())? {
 				Some(child_root) => child_root,
 				None => return Ok(true),
 			}
@@ -463,7 +470,9 @@ where
 		f: F,
 	) {
 		let root = if let Some(child_info) = child_info.as_ref() {
-			match self.child_root(child_info) {
+			let ChildInfo::Default(info) = child_info;
+
+			match self.default_child_root(info.name.as_slice()) {
 				Ok(Some(v)) => v,
 				// If the child trie doesn't exist, there is no need to continue.
 				Ok(None) => return,
@@ -486,7 +495,9 @@ where
 		prefix: &[u8],
 		mut f: impl FnMut(&[u8]),
 	) {
-		let root = match self.child_root(child_info) {
+		let ChildInfo::Default(info) = child_info;
+
+		let root = match self.default_child_root(info.name.as_slice()) {
 			Ok(Some(v)) => v,
 			// If the child trie doesn't exist, there is no need to continue.
 			Ok(None) => return,
@@ -704,17 +715,15 @@ where
 
 	/// Returns the child storage root for the child trie `child_info` after applying the given
 	/// `delta`.
-	pub fn child_storage_root<'a>(
+	pub fn default_child_storage_root<'a>(
 		&self,
-		child_info: &ChildInfo,
+		name: &[u8],
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
 	) -> (H::Out, bool, S::Overlay) {
-		let default_root = match child_info.child_type() {
-			ChildType::ParentKeyId => empty_child_trie_root::<sp_trie::LayoutV1<H>>(),
-		};
+		let default_root = crate::trie_backend::default_empty_child_trie_root::<H>(state_version);
 		let mut write_overlay = S::Overlay::default();
-		let child_root = match self.child_root(child_info) {
+		let child_root = match self.default_child_root(name) {
 			Ok(Some(hash)) => hash,
 			Ok(None) => default_root,
 			Err(e) => {
@@ -723,36 +732,47 @@ where
 			},
 		};
 
-		let new_child_root =
-			self.with_recorder_and_cache_for_storage_root(Some(child_root), |recorder, cache| {
-				let mut eph = Ephemeral::new(self.backend_storage(), &mut write_overlay);
-				match match state_version {
-					StateVersion::V0 =>
-						child_delta_trie_root::<sp_trie::LayoutV0<H>, _, _, _, _, _, _>(
-							child_info.keyspace(),
-							&mut eph,
-							child_root,
-							delta,
-							recorder,
-							cache,
-						),
-					StateVersion::V1 =>
-						child_delta_trie_root::<sp_trie::LayoutV1<H>, _, _, _, _, _, _>(
-							child_info.keyspace(),
-							&mut eph,
-							child_root,
-							delta,
-							recorder,
-							cache,
-						),
-				} {
+		let mut eph = Ephemeral::new(self.backend_storage(), &mut write_overlay);
+		let new_child_root = match state_version {
+			StateVersion::V0 => self.with_recorder_and_cache_for_storage_root(
+				Some(child_root),
+				|recorder, cache| match child_delta_trie_root::<
+					sp_trie::LayoutV0<H>,
+					_,
+					_,
+					_,
+					_,
+					_,
+					_,
+				>(name, &mut eph, child_root, delta, recorder, cache)
+				{
 					Ok(ret) => (Some(ret), ret),
 					Err(e) => {
 						warn!(target: "trie", "Failed to write to trie: {}", e);
 						(None, child_root)
 					},
-				}
-			});
+				},
+			),
+			StateVersion::V1 => self.with_recorder_and_cache_for_storage_root(
+				Some(child_root),
+				|recorder, cache| match child_delta_trie_root::<
+					sp_trie::LayoutV1<H>,
+					_,
+					_,
+					_,
+					_,
+					_,
+					_,
+				>(name, &mut eph, child_root, delta, recorder, cache)
+				{
+					Ok(ret) => (Some(ret), ret),
+					Err(e) => {
+						warn!(target: "trie", "Failed to write to trie: {}", e);
+						(None, child_root)
+					},
+				},
+			),
+		};
 
 		let is_default = new_child_root == default_root;
 

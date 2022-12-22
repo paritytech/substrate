@@ -252,7 +252,7 @@ where
 
 		let prefixed_key = PrefixedStorageKey::new_ref(&request.storage_key);
 		let child_info = match ChildType::from_prefixed_key(prefixed_key) {
-			Some((ChildType::ParentKeyId, storage_key)) => Ok(ChildInfo::new_default(storage_key)),
+			Some((ChildType::Default, storage_key)) => Ok(ChildInfo::new_default(storage_key)),
 			None => Err(sp_blockchain::Error::InvalidChildStorageKey),
 		};
 		let response = match child_info.and_then(|child_info| {

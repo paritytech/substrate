@@ -73,6 +73,12 @@ impl AsBytesRef for [u8] {
 	}
 }
 
+impl<'a> AsBytesRef for sp_std::borrow::Cow<'a, [u8]> {
+	fn as_bytes_ref(&self) -> &[u8] {
+		self.as_ref()
+	}
+}
+
 impl AsBytesRef for sp_std::vec::Vec<u8> {
 	fn as_bytes_ref(&self) -> &[u8] {
 		self

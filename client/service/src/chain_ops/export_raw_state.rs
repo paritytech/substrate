@@ -18,7 +18,9 @@
 
 use crate::error::Error;
 use sc_client_api::{StorageProvider, UsageProvider};
-use sp_core::storage::{well_known_keys, ChildInfo, Storage, StorageChild, StorageKey, StorageMap};
+use sp_core::storage::{
+	well_known_keys, ChildInfo, DefaultChild, Storage, StorageChild, StorageKey, StorageMap,
+};
 use sp_runtime::traits::Block as BlockT;
 
 use std::{collections::HashMap, sync::Arc};
@@ -57,7 +59,8 @@ where
 			Ok::<_, Error>(())
 		})?;
 
-		children_default.insert(key.0, StorageChild { child_info, data: pairs });
+		let info = DefaultChild::new(&key.0);
+		children_default.insert(key.0, StorageChild { info, data: pairs });
 	}
 
 	let top = top_storage.into_iter().map(|(k, v)| (k.0, v.0)).collect();
