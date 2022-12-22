@@ -25,7 +25,7 @@ use frame_support::{
 	assert_ok,
 	storage::bounded_vec::BoundedVec,
 	traits::{
-		fungible::Unbalanced,
+		fungible::{Inspect, Unbalanced},
 		fungibles::{Create, Mutate},
 	},
 };
@@ -55,7 +55,7 @@ where
 	let caller: T::AccountId = whitelisted_caller();
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	if let MultiAssetId::Asset(asset_id) = asset {
-		assert_ok!(T::Currency::set_balance(&caller, BalanceOf::<T>::max_value()));
+		assert_ok!(T::Currency::set_balance(&caller, <T::Currency as Inspect<T::AccountId>>::Balance::max_value()));
 		assert_ok!(T::Assets::create(asset_id, caller.clone(), true, 1.into()));
 		assert_ok!(T::Assets::mint_into(asset_id, &caller, INITIAL_ASSET_BALANCE.into()));
 	}
