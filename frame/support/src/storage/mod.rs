@@ -1310,6 +1310,13 @@ impl sp_core::Get<Option<ProofSizeMode>> for MeasuredProofSize {
 	}
 }
 
+pub struct NoneProofSize;
+impl sp_core::Get<Option<ProofSizeMode>> for NoneProofSize {
+	fn get() -> Option<ProofSizeMode> {
+		None
+	}
+}
+
 /// Provides `Sealed` trait to prevent implementing trait `StorageAppend` & `StorageDecodeLength`
 /// & `EncodeLikeTuple` outside of this crate.
 mod private {

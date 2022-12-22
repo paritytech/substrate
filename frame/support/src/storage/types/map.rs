@@ -53,7 +53,18 @@ pub struct StorageMap<
 	OnEmpty = GetDefault,
 	MaxValues = GetDefault,
 	ProofSize = GetDefault,
->(core::marker::PhantomData<(Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize)>);
+>(
+	core::marker::PhantomData<(
+		Prefix,
+		Hasher,
+		Key,
+		Value,
+		QueryKind,
+		OnEmpty,
+		MaxValues,
+		ProofSize,
+	)>,
+);
 
 impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize> Get<u32>
 	for KeyLenOf<StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>>
@@ -399,7 +410,8 @@ where
 	}
 }
 
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize> StorageEntryMetadataBuilder
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
+	StorageEntryMetadataBuilder
 	for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 where
 	Prefix: StorageInstance,
@@ -429,7 +441,8 @@ where
 	}
 }
 
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize> crate::traits::StorageInfoTrait
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
+	crate::traits::StorageInfoTrait
 	for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 where
 	Prefix: StorageInstance,

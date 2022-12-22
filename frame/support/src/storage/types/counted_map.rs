@@ -56,7 +56,18 @@ pub struct CountedStorageMap<
 	OnEmpty = GetDefault,
 	MaxValues = GetDefault,
 	ProofSize = GetDefault,
->(core::marker::PhantomData<(Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize)>);
+>(
+	core::marker::PhantomData<(
+		Prefix,
+		Hasher,
+		Key,
+		Value,
+		QueryKind,
+		OnEmpty,
+		MaxValues,
+		ProofSize,
+	)>,
+);
 
 /// The requirement for an instance of [`CountedStorageMap`].
 pub trait CountedStorageMapInstance: StorageInstance {
@@ -446,7 +457,8 @@ where
 	}
 }
 
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize> StorageEntryMetadataBuilder
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
+	StorageEntryMetadataBuilder
 	for CountedStorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 where
 	Prefix: CountedStorageMapInstance,
@@ -470,7 +482,8 @@ where
 	}
 }
 
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize> crate::traits::StorageInfoTrait
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
+	crate::traits::StorageInfoTrait
 	for CountedStorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 where
 	Prefix: CountedStorageMapInstance,

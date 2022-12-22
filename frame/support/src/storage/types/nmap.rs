@@ -87,7 +87,8 @@ where
 	}
 }
 
-impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize> crate::storage::StoragePrefixedMap<Value>
+impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
+	crate::storage::StoragePrefixedMap<Value>
 	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 where
 	Prefix: StorageInstance,
@@ -598,7 +599,8 @@ where
 }
 
 /// It doesn't require to implement `MaxEncodedLen` and give no information for `max_size`.
-impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize> crate::traits::PartialStorageInfoTrait
+impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
+	crate::traits::PartialStorageInfoTrait
 	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 where
 	Prefix: StorageInstance,

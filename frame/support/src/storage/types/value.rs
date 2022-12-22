@@ -36,9 +36,13 @@ use sp_std::prelude::*;
 /// ```nocompile
 /// Twox128(Prefix::pallet_prefix()) ++ Twox128(Prefix::STORAGE_PREFIX)
 /// ```
-pub struct StorageValue<Prefix, Value, QueryKind = OptionQuery, OnEmpty = GetDefault, ProofSize = GetDefault>(
-	core::marker::PhantomData<(Prefix, Value, QueryKind, OnEmpty, ProofSize)>,
-);
+pub struct StorageValue<
+	Prefix,
+	Value,
+	QueryKind = OptionQuery,
+	OnEmpty = GetDefault,
+	ProofSize = GetDefault,
+>(core::marker::PhantomData<(Prefix, Value, QueryKind, OnEmpty, ProofSize)>);
 
 impl<Prefix, Value, QueryKind, OnEmpty, ProofSize> crate::storage::generator::StorageValue<Value>
 	for StorageValue<Prefix, Value, QueryKind, OnEmpty, ProofSize>
@@ -63,7 +67,8 @@ where
 	}
 }
 
-impl<Prefix, Value, QueryKind, OnEmpty, ProofSize> StorageValue<Prefix, Value, QueryKind, OnEmpty, ProofSize>
+impl<Prefix, Value, QueryKind, OnEmpty, ProofSize>
+	StorageValue<Prefix, Value, QueryKind, OnEmpty, ProofSize>
 where
 	Prefix: StorageInstance,
 	Value: FullCodec,

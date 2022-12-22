@@ -282,13 +282,12 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 			{
 				args.args.push(syn::GenericArgument::Type(syn::parse_quote!(#error_path)))
 			} else {
-				args.args.push(syn::parse_quote!( OptionQuery ));
+				args.args.push(syn::parse_quote!(frame_support::pallet_prelude::OptionQuery));
 			}
 
 			// Here, we only need to check if OnEmpty is *not* specified, and if so, then we have to
 			// generate a default OnEmpty struct for it.
-			if on_empty_idx >= args.args.len()
-			{
+			if on_empty_idx >= args.args.len() {
 				if matches!(storage_def.query_kind.as_ref(), Some(QueryKind::ResultQuery(_, _))) {
 					let value_ty = match args.args[value_idx].clone() {
 						syn::GenericArgument::Type(ty) => ty,
@@ -297,25 +296,27 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 					let on_empty = default_on_empty(value_ty);
 					args.args.push(syn::GenericArgument::Type(on_empty));
 				} else {
-					args.args.push(syn::parse_quote!( GetDefault ));
+					args.args.push(syn::parse_quote!(frame_support::pallet_prelude::GetDefault));
 				}
 			}
 
 			// Add the `MaxValues` generic for everything besides `Value`.
 			match storage_def.metadata {
-				Metadata::Value{..} => (),
-				_ => args.args.push(syn::parse_quote!( GetDefault )),
+				Metadata::Value { .. } => (),
+				_ => args.args.push(syn::parse_quote!(frame_support::pallet_prelude::GetDefault)),
 			}
 
 			// Add the `ProofSize` generic.
-			use crate::pallet::parse::storage::ProofSizeAttribute;
-			match storage_def.proof_size {
-				Some(ProofSizeAttribute::Measured) => args.args.push(syn::parse_quote!( frame_support::storage::MeasuredProofSize )),
-				// Default is MEL
-				None | Some(ProofSizeAttribute::MaxEncodedLen) => args.args.push(syn::parse_quote!( frame_support::storage::MelProofSize )),
-			}
 			
 		}
+		use crate::pallet::parse::storage::ProofSizeAttribute;
+			args.args.push(match storage_def.proof_size {
+				Some(ProofSizeAttribute::Measured) =>
+					syn::parse_quote!(frame_support::storage::MeasuredProofSize),
+				Some(ProofSizeAttribute::MaxEncodedLen) =>
+					syn::parse_quote!(frame_support::storage::MelProofSize),
+				None => syn::parse_quote!(frame_support::storage::NoneProofSize),
+			});
 	}
 
 	Ok(on_empty_struct_metadata)

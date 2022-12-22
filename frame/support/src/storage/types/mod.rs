@@ -37,7 +37,7 @@ pub use key::{
 };
 pub use map::StorageMap;
 pub use nmap::StorageNMap;
-pub use value::{StorageValue};
+pub use value::StorageValue;
 
 /// Trait implementing how the storage optional value is converted into the queried type.
 ///
