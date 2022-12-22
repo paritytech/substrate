@@ -287,17 +287,18 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 
 			// Here, we only need to check if OnEmpty is *not* specified, and if so, then we have to
 			// generate a default OnEmpty struct for it.
-			if on_empty_idx >= args.args.len() &&
-				matches!(storage_def.query_kind.as_ref(), Some(QueryKind::ResultQuery(_, _)))
+			if on_empty_idx >= args.args.len()
 			{
-				let value_ty = match args.args[value_idx].clone() {
-					syn::GenericArgument::Type(ty) => ty,
-					_ => unreachable!(),
-				};
-				let on_empty = default_on_empty(value_ty);
-				args.args.push(syn::GenericArgument::Type(on_empty));
-			} else {
-				args.args.push(syn::parse_quote!( GetDefault ));
+				if 				matches!(storage_def.query_kind.as_ref(), Some(QueryKind::ResultQuery(_, _))) {
+					let value_ty = match args.args[value_idx].clone() {
+						syn::GenericArgument::Type(ty) => ty,
+						_ => unreachable!(),
+					};
+					let on_empty = default_on_empty(value_ty);
+					args.args.push(syn::GenericArgument::Type(on_empty));
+				} else {
+					args.args.push(syn::parse_quote!( GetDefault ));
+				}
 			}
 
 			// Add the `MaxValues` generic for everything besides `Value`.

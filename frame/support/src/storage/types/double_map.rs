@@ -519,8 +519,8 @@ where
 	}
 }
 
-impl<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty, MaxValues>
-	StorageDoubleMap<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty, MaxValues>
+impl<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
+	StorageDoubleMap<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 where
 	Prefix: StorageInstance,
 	Hasher1: crate::hash::StorageHasher + crate::ReversibleStorageHasher,
