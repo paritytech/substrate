@@ -289,7 +289,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 			// generate a default OnEmpty struct for it.
 			if on_empty_idx >= args.args.len()
 			{
-				if 				matches!(storage_def.query_kind.as_ref(), Some(QueryKind::ResultQuery(_, _))) {
+				if matches!(storage_def.query_kind.as_ref(), Some(QueryKind::ResultQuery(_, _))) {
 					let value_ty = match args.args[value_idx].clone() {
 						syn::GenericArgument::Type(ty) => ty,
 						_ => unreachable!(),
