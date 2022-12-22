@@ -572,6 +572,8 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Typically, this is not handled directly by the user, but by higher-level validator-set
 	/// manager logic like `pallet-session`.
+	///
+	/// This doesn't do anything if `authorities` is empty.
 	pub fn enact_epoch_change(
 		authorities: WeakBoundedVec<(AuthorityId, BabeAuthorityWeight), T::MaxAuthorities>,
 		next_authorities: WeakBoundedVec<(AuthorityId, BabeAuthorityWeight), T::MaxAuthorities>,
@@ -579,6 +581,12 @@ impl<T: Config> Pallet<T> {
 		// PRECONDITION: caller has done initialization and is guaranteed
 		// by the session module to be called before this.
 		debug_assert!(Self::initialized().is_some());
+
+		if authorities.is_empty() {
+			log::warn!(target: LOG_TARGET, "Ignoring empty epoch change.");
+
+			return
+		}
 
 		// Update epoch index
 		let epoch_index = EpochIndex::<T>::get()
