@@ -66,6 +66,7 @@ use crate::metrics::MetricsLink as PrometheusMetrics;
 use prometheus_endpoint::Registry as PrometheusRegistry;
 
 use sp_blockchain::{HashAndNumber, TreeRoute};
+use sp_consensus::SyncOracle as SyncOracleT;
 
 type BoxedReadyIterator<Hash, Data> =
 	Box<dyn ReadyTransactions<Item = Arc<graph::base_pool::Transaction<Hash, Data>>> + Send>;
@@ -76,13 +77,15 @@ type ReadyIteratorFor<PoolApi> =
 type PolledIterator<PoolApi> = Pin<Box<dyn Future<Output = ReadyIteratorFor<PoolApi>> + Send>>;
 
 /// A transaction pool for a full node.
-pub type FullPool<Block, Client> = BasicPool<FullChainApi<Client, Block>, Block>;
+pub type FullPool<Block, Client, SyncOracle> =
+	BasicPool<FullChainApi<Client, Block>, Block, SyncOracle>;
 
 /// Basic implementation of transaction pool that can be customized by providing PoolApi.
-pub struct BasicPool<PoolApi, Block>
+pub struct BasicPool<PoolApi, Block, SyncOracle>
 where
 	Block: BlockT,
 	PoolApi: graph::ChainApi<Block = Block>,
+	SyncOracle: SyncOracleT,
 {
 	pool: Arc<graph::Pool<PoolApi>>,
 	api: Arc<PoolApi>,
@@ -91,6 +94,7 @@ where
 	ready_poll: Arc<Mutex<ReadyPoll<ReadyIteratorFor<PoolApi>, Block>>>,
 	metrics: PrometheusMetrics,
 	enactment_state: Arc<Mutex<EnactmentState<Block>>>,
+	sync_oracle: Arc<SyncOracle>,
 }
 
 struct ReadyPoll<T, Block: BlockT> {
@@ -152,16 +156,18 @@ pub enum RevalidationType {
 	Full,
 }
 
-impl<PoolApi, Block> BasicPool<PoolApi, Block>
+impl<PoolApi, Block, SyncOracle> BasicPool<PoolApi, Block, SyncOracle>
 where
 	Block: BlockT,
 	PoolApi: graph::ChainApi<Block = Block> + 'static,
+	SyncOracle: SyncOracleT,
 {
 	/// Create new basic transaction pool with provided api, for tests.
 	pub fn new_test(
 		pool_api: Arc<PoolApi>,
 		best_block_hash: Block::Hash,
 		finalized_hash: Block::Hash,
+		sync_oracle: Arc<SyncOracle>,
 	) -> (Self, Pin<Box<dyn Future<Output = ()> + Send>>) {
 		let pool = Arc::new(graph::Pool::new(Default::default(), true.into(), pool_api.clone()));
 		let (revalidation_queue, background_task) =
@@ -178,6 +184,7 @@ where
 					best_block_hash,
 					finalized_hash,
 				))),
+				sync_oracle,
 			},
 			background_task,
 		)
@@ -195,6 +202,7 @@ where
 		best_block_number: NumberFor<Block>,
 		best_block_hash: Block::Hash,
 		finalized_hash: Block::Hash,
+		sync_oracle: Arc<SyncOracle>,
 	) -> Self {
 		let pool = Arc::new(graph::Pool::new(options, is_validator, pool_api.clone()));
 		let (revalidation_queue, background_task) = match revalidation_type {
@@ -226,6 +234,7 @@ where
 				best_block_hash,
 				finalized_hash,
 			))),
+			sync_oracle,
 		}
 	}
 
@@ -240,10 +249,11 @@ where
 	}
 }
 
-impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
+impl<PoolApi, Block, SyncOracle> TransactionPool for BasicPool<PoolApi, Block, SyncOracle>
 where
 	Block: BlockT,
 	PoolApi: 'static + graph::ChainApi<Block = Block>,
+	SyncOracle: SyncOracleT + std::marker::Send + std::marker::Sync,
 {
 	type Block = PoolApi::Block;
 	type Hash = graph::ExtrinsicHash<PoolApi>;
@@ -358,7 +368,7 @@ where
 	}
 }
 
-impl<Block, Client> FullPool<Block, Client>
+impl<Block, Client, SyncOracle> FullPool<Block, Client, SyncOracle>
 where
 	Block: BlockT,
 	Client: sp_api::ProvideRuntimeApi<Block>
@@ -372,6 +382,7 @@ where
 		+ Sync
 		+ 'static,
 	Client::Api: sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block>,
+	SyncOracle: SyncOracleT + std::marker::Send + std::marker::Sync + 'static,
 {
 	/// Create new basic transaction pool for a full node with the provided api.
 	pub fn new_full(
@@ -380,6 +391,7 @@ where
 		prometheus: Option<&PrometheusRegistry>,
 		spawner: impl SpawnEssentialNamed,
 		client: Arc<Client>,
+		sync_oracle: Arc<SyncOracle>,
 	) -> Arc<Self> {
 		let pool_api = Arc::new(FullChainApi::new(client.clone(), prometheus, &spawner));
 		let pool = Arc::new(Self::with_revalidation_type(
@@ -392,6 +404,7 @@ where
 			client.usage_info().chain.best_number,
 			client.usage_info().chain.best_hash,
 			client.usage_info().chain.finalized_hash,
+			sync_oracle,
 		));
 
 		// make transaction pool available for off-chain runtime calls.
@@ -401,8 +414,8 @@ where
 	}
 }
 
-impl<Block, Client> sc_transaction_pool_api::LocalTransactionPool
-	for BasicPool<FullChainApi<Client, Block>, Block>
+impl<Block, Client, SyncOracle> sc_transaction_pool_api::LocalTransactionPool
+	for BasicPool<FullChainApi<Client, Block>, Block, SyncOracle>
 where
 	Block: BlockT,
 	Client: sp_api::ProvideRuntimeApi<Block>
@@ -412,6 +425,7 @@ where
 		+ sp_blockchain::HeaderMetadata<Block, Error = sp_blockchain::Error>,
 	Client: Send + Sync + 'static,
 	Client::Api: sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block>,
+	SyncOracle: SyncOracleT + std::marker::Send + std::marker::Sync,
 {
 	type Block = Block;
 	type Hash = graph::ExtrinsicHash<FullChainApi<Client, Block>>;
@@ -578,10 +592,11 @@ async fn prune_known_txs_for_block<Block: BlockT, Api: graph::ChainApi<Block = B
 	hashes
 }
 
-impl<PoolApi, Block> BasicPool<PoolApi, Block>
+impl<PoolApi, Block, SyncOracle> BasicPool<PoolApi, Block, SyncOracle>
 where
 	Block: BlockT,
 	PoolApi: 'static + graph::ChainApi<Block = Block>,
+	SyncOracle: SyncOracleT,
 {
 	/// Handles enactment and retraction of blocks, prunes stale transactions
 	/// (that have already been enacted) and resubmits transactions that were
@@ -716,12 +731,18 @@ where
 }
 
 #[async_trait]
-impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
+impl<PoolApi, Block, SyncOracle> MaintainedTransactionPool for BasicPool<PoolApi, Block, SyncOracle>
 where
 	Block: BlockT,
 	PoolApi: 'static + graph::ChainApi<Block = Block>,
+	SyncOracle: SyncOracleT + std::marker::Send + std::marker::Sync,
 {
 	async fn maintain(&self, event: ChainEvent<Self::Block>) {
+		if self.sync_oracle.is_major_syncing() {
+			self.enactment_state.lock().force_update(&event);
+			return
+		}
+
 		let prev_finalized_block = self.enactment_state.lock().recent_finalized_block();
 		let compute_tree_route = |from, to| -> Result<TreeRoute<Block>, String> {
 			match self.api.tree_route(from, to) {
