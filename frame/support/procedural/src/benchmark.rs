@@ -272,13 +272,6 @@ pub fn benchmark(_attrs: TokenStream, tokens: TokenStream, is_instance: bool) ->
 						.1;
 				)*
 
-				// TODO: figure out parameter parsing:
-				// $(
-				// 	let $pre_id : $pre_ty = $pre_ex;
-				// )*
-				// $( $param_instancer ; )*
-				// $( $post )*
-
 				// benchmark setup code (stuff before #[extrinsic_call])
 				#(
 					#setup_stmts
