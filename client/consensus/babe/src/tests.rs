@@ -668,17 +668,17 @@ async fn propose_and_import_blocks<Transaction: Send + 'static>(
 	client: &PeersFullClient,
 	proposer_factory: &mut DummyFactory,
 	block_import: &mut BoxBlockImport<TestBlock, Transaction>,
-	parent_id: BlockId<TestBlock>,
+	parent_hash: Hash,
 	n: usize,
 ) -> Vec<Hash> {
 	let mut hashes = Vec::with_capacity(n);
-	let mut parent_header = client.header(&parent_id).unwrap().unwrap();
+	let mut parent_header = client.header(parent_hash).unwrap().unwrap();
 
 	for _ in 0..n {
 		let block_hash =
 			propose_and_import_block(&parent_header, None, proposer_factory, block_import).await;
 		hashes.push(block_hash);
-		parent_header = client.header(&BlockId::Hash(block_hash)).unwrap().unwrap();
+		parent_header = client.header(block_hash).unwrap().unwrap();
 	}
 
 	hashes
@@ -701,7 +701,7 @@ async fn importing_block_one_sets_genesis_epoch() {
 
 	let mut block_import = data.block_import.lock().take().expect("import set up during init");
 
-	let genesis_header = client.header(&BlockId::Number(0)).unwrap().unwrap();
+	let genesis_header = client.header(client.chain_info().genesis_hash).unwrap().unwrap();
 
 	let block_hash = propose_and_import_block(
 		&genesis_header,
@@ -759,34 +759,19 @@ async fn revert_prunes_epoch_changes_and_removes_weights() {
 		&client,
 		&mut proposer_factory,
 		&mut block_import,
-		BlockId::Number(0),
+		client.chain_info().genesis_hash,
 		21,
 	)
 	.await;
-	let fork1 = propose_and_import_blocks(
-		&client,
-		&mut proposer_factory,
-		&mut block_import,
-		BlockId::Hash(canon[0]),
-		10,
-	)
-	.await;
-	let fork2 = propose_and_import_blocks(
-		&client,
-		&mut proposer_factory,
-		&mut block_import,
-		BlockId::Hash(canon[7]),
-		10,
-	)
-	.await;
-	let fork3 = propose_and_import_blocks(
-		&client,
-		&mut proposer_factory,
-		&mut block_import,
-		BlockId::Hash(canon[11]),
-		8,
-	)
-	.await;
+	let fork1 =
+		propose_and_import_blocks(&client, &mut proposer_factory, &mut block_import, canon[0], 10)
+			.await;
+	let fork2 =
+		propose_and_import_blocks(&client, &mut proposer_factory, &mut block_import, canon[7], 10)
+			.await;
+	let fork3 =
+		propose_and_import_blocks(&client, &mut proposer_factory, &mut block_import, canon[11], 8)
+			.await;
 
 	// We should be tracking a total of 9 epochs in the fork tree
 	assert_eq!(epoch_changes.shared_data().tree().iter().count(), 8);
@@ -850,7 +835,7 @@ async fn revert_not_allowed_for_finalized() {
 		&client,
 		&mut proposer_factory,
 		&mut block_import,
-		BlockId::Number(0),
+		client.chain_info().genesis_hash,
 		3,
 	)
 	.await;
@@ -903,36 +888,21 @@ async fn importing_epoch_change_block_prunes_tree() {
 		&client,
 		&mut proposer_factory,
 		&mut block_import,
-		BlockId::Number(0),
+		client.chain_info().genesis_hash,
 		30,
 	)
 	.await;
 
 	// Create the forks
-	let fork_1 = propose_and_import_blocks(
-		&client,
-		&mut proposer_factory,
-		&mut block_import,
-		BlockId::Hash(canon[0]),
-		10,
-	)
-	.await;
-	let fork_2 = propose_and_import_blocks(
-		&client,
-		&mut proposer_factory,
-		&mut block_import,
-		BlockId::Hash(canon[12]),
-		15,
-	)
-	.await;
-	let fork_3 = propose_and_import_blocks(
-		&client,
-		&mut proposer_factory,
-		&mut block_import,
-		BlockId::Hash(canon[18]),
-		10,
-	)
-	.await;
+	let fork_1 =
+		propose_and_import_blocks(&client, &mut proposer_factory, &mut block_import, canon[0], 10)
+			.await;
+	let fork_2 =
+		propose_and_import_blocks(&client, &mut proposer_factory, &mut block_import, canon[12], 15)
+			.await;
+	let fork_3 =
+		propose_and_import_blocks(&client, &mut proposer_factory, &mut block_import, canon[18], 10)
+			.await;
 
 	// We should be tracking a total of 9 epochs in the fork tree
 	assert_eq!(epoch_changes.shared_data().tree().iter().count(), 9);
@@ -947,7 +917,7 @@ async fn importing_epoch_change_block_prunes_tree() {
 		&client,
 		&mut proposer_factory,
 		&mut block_import,
-		BlockId::Hash(client.chain_info().best_hash),
+		client.chain_info().best_hash,
 		7,
 	)
 	.await;
@@ -967,7 +937,7 @@ async fn importing_epoch_change_block_prunes_tree() {
 		&client,
 		&mut proposer_factory,
 		&mut block_import,
-		BlockId::Hash(client.chain_info().best_hash),
+		client.chain_info().best_hash,
 		8,
 	)
 	.await;
@@ -1001,7 +971,7 @@ async fn verify_slots_are_strictly_increasing() {
 		mutator: Arc::new(|_, _| ()),
 	};
 
-	let genesis_header = client.header(&BlockId::Number(0)).unwrap().unwrap();
+	let genesis_header = client.header(client.chain_info().genesis_hash).unwrap().unwrap();
 
 	// we should have no issue importing this block
 	let b1 = propose_and_import_block(
@@ -1012,7 +982,7 @@ async fn verify_slots_are_strictly_increasing() {
 	)
 	.await;
 
-	let b1 = client.header(&BlockId::Hash(b1)).unwrap().unwrap();
+	let b1 = client.header(b1).unwrap().unwrap();
 
 	// we should fail to import this block since the slot number didn't increase.
 	// we will panic due to the `PanickingBlockImport` defined above.
@@ -1091,7 +1061,7 @@ async fn obsolete_blocks_aux_data_cleanup() {
 		&client,
 		&mut proposer_factory,
 		&mut block_import,
-		BlockId::Number(0),
+		client.chain_info().genesis_hash,
 		4,
 	)
 	.await;
@@ -1099,7 +1069,7 @@ async fn obsolete_blocks_aux_data_cleanup() {
 		&client,
 		&mut proposer_factory,
 		&mut block_import,
-		BlockId::Number(0),
+		client.chain_info().genesis_hash,
 		2,
 	)
 	.await;
@@ -1107,7 +1077,7 @@ async fn obsolete_blocks_aux_data_cleanup() {
 		&client,
 		&mut proposer_factory,
 		&mut block_import,
-		BlockId::Number(3),
+		fork1_hashes[2],
 		2,
 	)
 	.await;

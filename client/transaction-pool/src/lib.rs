@@ -556,7 +556,7 @@ async fn prune_known_txs_for_block<Block: BlockT, Api: graph::ChainApi<Block = B
 
 	log::trace!(target: "txpool", "Pruning transactions: {:?}", hashes);
 
-	let header = match api.block_header(&BlockId::Hash(block_hash)) {
+	let header = match api.block_header(block_hash) {
 		Ok(Some(h)) => h,
 		Ok(None) => {
 			log::debug!(target: "txpool", "Could not find header for {:?}.", block_hash);
