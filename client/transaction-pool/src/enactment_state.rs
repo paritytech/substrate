@@ -611,6 +611,6 @@ mod enactment_state_tests {
 		let mut es = EnactmentState::new(a().hash, a().hash);
 
 		es.force_update(&ChainEvent::Finalized { hash: b1().hash, tree_route: Arc::from([]) });
-		assert_es_eq(&es, a(), b1());
+		assert_es_eq(&es, b1(), b1());
 	}
 }

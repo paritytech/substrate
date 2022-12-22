@@ -723,7 +723,7 @@ where
 {
 	async fn maintain<SO>(&self, event: ChainEvent<Self::Block>, sync_oracle: Arc<SO>)
 	where
-		SO: sp_consensus::SyncOracle + std::marker::Send + std::marker::Sync,
+		SO: sp_consensus::SyncOracle + std::marker::Send + std::marker::Sync + ?Sized,
 	{
 		if sync_oracle.is_major_syncing() {
 			self.enactment_state.lock().force_update(&event);
@@ -783,7 +783,7 @@ pub async fn notification_future<Client, Pool, Block, SyncOracle>(
 	Block: BlockT,
 	Client: sc_client_api::BlockchainEvents<Block>,
 	Pool: MaintainedTransactionPool<Block = Block>,
-	SyncOracle: sp_consensus::SyncOracle + std::marker::Sync + std::marker::Send,
+	SyncOracle: sp_consensus::SyncOracle + std::marker::Sync + std::marker::Send + ?Sized,
 {
 	let import_stream = client
 		.import_notification_stream()

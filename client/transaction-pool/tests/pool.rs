@@ -77,6 +77,16 @@ fn create_basic_pool(test_api: TestApi) -> BasicPool<TestApi, Block> {
 	create_basic_pool_with_genesis(Arc::from(test_api)).0
 }
 
+fn block_on_pool_maintain_with_event<PoolApi, Block>(
+	pool: &BasicPool<PoolApi, Block>,
+	event: ChainEvent<Block>,
+) where
+	PoolApi: sc_transaction_pool::ChainApi<Block = Block> + 'static,
+	Block: sp_runtime::traits::Block,
+{
+	block_on(pool.maintain(event, Arc::new(sp_consensus::NoNetwork)));
+}
+
 const SOURCE: TransactionSource = TransactionSource::External;
 
 #[test]
@@ -165,7 +175,7 @@ fn only_prune_on_new_best() {
 
 	let header = api.push_block(2, vec![uxt], true);
 	let event = ChainEvent::NewBestBlock { hash: header.hash(), tree_route: None };
-	block_on(pool.maintain(event));
+	block_on_pool_maintain_with_event(&pool, event);
 	assert_eq!(pool.status().ready, 0);
 }
 
@@ -236,7 +246,7 @@ fn should_prune_old_during_maintenance() {
 
 	let header = api.push_block(1, vec![xt.clone()], true);
 
-	block_on(pool.maintain(block_event(header)));
+	block_on_pool_maintain_with_event(&pool, block_event(header));
 	assert_eq!(pool.status().ready, 0);
 }
 
@@ -256,7 +266,7 @@ fn should_revalidate_during_maintenance() {
 
 	api.add_invalid(&xt2);
 
-	block_on(pool.maintain(block_event(header)));
+	block_on_pool_maintain_with_event(&pool, block_event(header));
 	assert_eq!(pool.status().ready, 1);
 
 	// test that pool revalidated transaction that left ready and not included in the block
@@ -280,7 +290,7 @@ fn should_resubmit_from_retracted_during_maintenance() {
 
 	let event = block_event_with_retracted(header, fork_header.hash(), pool.api());
 
-	block_on(pool.maintain(event));
+	block_on_pool_maintain_with_event(&pool, event);
 	assert_eq!(pool.status().ready, 1);
 }
 
@@ -298,7 +308,7 @@ fn should_not_resubmit_from_retracted_during_maintenance_if_tx_is_also_in_enacte
 
 	let event = block_event_with_retracted(header, fork_header.hash(), pool.api());
 
-	block_on(pool.maintain(event));
+	block_on_pool_maintain_with_event(&pool, event);
 	assert_eq!(pool.status().ready, 0);
 }
 
@@ -317,7 +327,7 @@ fn should_not_retain_invalid_hashes_from_retracted() {
 	api.add_invalid(&xt);
 
 	let event = block_event_with_retracted(header, fork_header.hash(), pool.api());
-	block_on(pool.maintain(event));
+	block_on_pool_maintain_with_event(&pool, event);
 
 	assert_eq!(
 		futures::executor::block_on_stream(watcher).collect::<Vec<_>>(),
@@ -341,14 +351,14 @@ fn should_revalidate_across_many_blocks() {
 	assert_eq!(pool.status().ready, 2);
 
 	let header = api.push_block(1, vec![], true);
-	block_on(pool.maintain(block_event(header)));
+	block_on_pool_maintain_with_event(&pool, block_event(header));
 
 	block_on(pool.submit_one(&BlockId::number(1), SOURCE, xt3.clone())).expect("1. Imported");
 	assert_eq!(pool.status().ready, 3);
 
 	let header = api.push_block(2, vec![xt1.clone()], true);
 	let block_hash = header.hash();
-	block_on(pool.maintain(block_event(header.clone())));
+	block_on_pool_maintain_with_event(&pool, block_event(header.clone()));
 
 	block_on(
 		watcher1
@@ -391,7 +401,7 @@ fn should_push_watchers_during_maintenance() {
 
 	// clear timer events if any
 	let header = api.push_block(1, vec![], true);
-	block_on(pool.maintain(block_event(header)));
+	block_on_pool_maintain_with_event(&pool, block_event(header));
 
 	// then
 	// hash3 is now invalid
@@ -409,10 +419,10 @@ fn should_push_watchers_during_maintenance() {
 	// when
 	let header = api.push_block(2, vec![tx0, tx1, tx2], true);
 	let header_hash = header.hash();
-	block_on(pool.maintain(block_event(header)));
+	block_on_pool_maintain_with_event(&pool, block_event(header));
 
 	let event = ChainEvent::Finalized { hash: header_hash, tree_route: Arc::from(vec![]) };
-	block_on(pool.maintain(event));
+	block_on_pool_maintain_with_event(&pool, event);
 
 	// then
 	// events for hash0 are: Ready, InBlock
@@ -456,10 +466,10 @@ fn finalization() {
 
 	let header = pool.api().chain().read().block_by_number.get(&2).unwrap()[0].0.header().clone();
 	let event = ChainEvent::NewBestBlock { hash: header.hash(), tree_route: None };
-	block_on(pool.maintain(event));
+	block_on_pool_maintain_with_event(&pool, event);
 
 	let event = ChainEvent::Finalized { hash: header.hash(), tree_route: Arc::from(vec![]) };
-	block_on(pool.maintain(event));
+	block_on_pool_maintain_with_event(&pool, event);
 
 	let mut stream = futures::executor::block_on_stream(watcher);
 	assert_eq!(stream.next(), Some(TransactionStatus::Ready));
@@ -494,7 +504,7 @@ fn fork_aware_finalization() {
 	let c2;
 	let d2;
 
-	block_on(pool.maintain(block_event(a_header)));
+	block_on_pool_maintain_with_event(&pool, block_event(a_header));
 
 	// block B1
 	{
@@ -508,10 +518,10 @@ fn fork_aware_finalization() {
 		log::trace!(target:"txpool", ">> B1: {:?} {:?}", header.hash(), header);
 		let event = ChainEvent::NewBestBlock { hash: header.hash(), tree_route: None };
 		b1 = header.hash();
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 		assert_eq!(pool.status().ready, 0);
 		let event = ChainEvent::Finalized { hash: b1, tree_route: Arc::from(vec![]) };
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 	}
 
 	// block C2
@@ -524,7 +534,7 @@ fn fork_aware_finalization() {
 		log::trace!(target:"txpool", ">> C2: {:?} {:?}", header.hash(), header);
 		let event = ChainEvent::NewBestBlock { hash: header.hash(), tree_route: None };
 		c2 = header.hash();
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 		assert_eq!(pool.status().ready, 0);
 	}
 
@@ -539,7 +549,7 @@ fn fork_aware_finalization() {
 		log::trace!(target:"txpool", ">> D2: {:?} {:?}", header.hash(), header);
 		let event = ChainEvent::NewBestBlock { hash: header.hash(), tree_route: None };
 		d2 = header.hash();
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 		assert_eq!(pool.status().ready, 0);
 	}
 
@@ -554,11 +564,11 @@ fn fork_aware_finalization() {
 		c1 = header.hash();
 		canon_watchers.push((watcher, header.hash()));
 		let event = block_event_with_retracted(header.clone(), d2, pool.api());
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 		assert_eq!(pool.status().ready, 2);
 
 		let event = ChainEvent::Finalized { hash: header.hash(), tree_route: Arc::from(vec![]) };
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 	}
 
 	// block D1
@@ -573,10 +583,10 @@ fn fork_aware_finalization() {
 		canon_watchers.push((w, header.hash()));
 
 		let event = ChainEvent::NewBestBlock { hash: header.hash(), tree_route: None };
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 		assert_eq!(pool.status().ready, 2);
 		let event = ChainEvent::Finalized { hash: d1, tree_route: Arc::from(vec![]) };
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 	}
 
 	let e1;
@@ -587,9 +597,12 @@ fn fork_aware_finalization() {
 		log::trace!(target:"txpool", ">> E1: {:?} {:?}", header.hash(), header);
 		e1 = header.hash();
 		let event = ChainEvent::NewBestBlock { hash: header.hash(), tree_route: None };
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 		assert_eq!(pool.status().ready, 0);
-		block_on(pool.maintain(ChainEvent::Finalized { hash: e1, tree_route: Arc::from(vec![]) }));
+		block_on_pool_maintain_with_event(
+			&pool,
+			ChainEvent::Finalized { hash: e1, tree_route: Arc::from(vec![]) },
+		);
 	}
 
 	for (canon_watcher, h) in canon_watchers {
@@ -646,7 +659,7 @@ fn prune_and_retract_tx_at_same_time() {
 		assert_eq!(pool.status().ready, 1);
 
 		let event = ChainEvent::NewBestBlock { hash: header.hash(), tree_route: None };
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 		assert_eq!(pool.status().ready, 0);
 		header.hash()
 	};
@@ -657,11 +670,11 @@ fn prune_and_retract_tx_at_same_time() {
 		assert_eq!(pool.status().ready, 0);
 
 		let event = block_event_with_retracted(header.clone(), b1, pool.api());
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 		assert_eq!(pool.status().ready, 0);
 
 		let event = ChainEvent::Finalized { hash: header.hash(), tree_route: Arc::from(vec![]) };
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 
 		header.hash()
 	};
@@ -716,7 +729,7 @@ fn resubmit_tx_of_fork_that_is_not_part_of_retracted() {
 
 		let event = ChainEvent::NewBestBlock { hash: header.hash(), tree_route: None };
 		d0 = header.hash();
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 		assert_eq!(pool.status().ready, 0);
 	}
 
@@ -733,7 +746,7 @@ fn resubmit_tx_of_fork_that_is_not_part_of_retracted() {
 		//push new best block
 		let header = pool.api().push_block(2, vec![], true);
 		let event = block_event_with_retracted(header, d0, pool.api());
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 		assert_eq!(pool.status().ready, 2);
 	}
 }
@@ -769,7 +782,7 @@ fn resubmit_from_retracted_fork() {
 		let header = pool.api().push_block(2, vec![tx0.clone()], true);
 		assert_eq!(pool.status().ready, 1);
 
-		block_on(pool.maintain(block_event(header)));
+		block_on_pool_maintain_with_event(&pool, block_event(header));
 		assert_eq!(pool.status().ready, 0);
 	}
 
@@ -778,7 +791,7 @@ fn resubmit_from_retracted_fork() {
 		let _ = block_on(pool.submit_and_watch(&BlockId::number(1), SOURCE, tx1.clone()))
 			.expect("1. Imported");
 		let header = pool.api().push_block(3, vec![tx1.clone()], true);
-		block_on(pool.maintain(block_event(header)));
+		block_on_pool_maintain_with_event(&pool, block_event(header));
 		assert_eq!(pool.status().ready, 0);
 	}
 
@@ -787,7 +800,7 @@ fn resubmit_from_retracted_fork() {
 		let _ = block_on(pool.submit_and_watch(&BlockId::number(1), SOURCE, tx2.clone()))
 			.expect("1. Imported");
 		let header = pool.api().push_block(4, vec![tx2.clone()], true);
-		block_on(pool.maintain(block_event(header.clone())));
+		block_on_pool_maintain_with_event(&pool, block_event(header.clone()));
 		assert_eq!(pool.status().ready, 0);
 		header.hash()
 	};
@@ -826,7 +839,7 @@ fn resubmit_from_retracted_fork() {
 	assert_eq!(expected_ready, ready);
 
 	let event = block_event_with_retracted(f1_header, f0, pool.api());
-	block_on(pool.maintain(event));
+	block_on_pool_maintain_with_event(&pool, event);
 
 	assert_eq!(pool.status().ready, 3);
 	let ready = pool.ready().map(|t| t.data.encode()).collect::<BTreeSet<_>>();
@@ -851,7 +864,7 @@ fn ready_set_should_resolve_after_block_update() {
 	let xt1 = uxt(Alice, 209);
 
 	block_on(pool.submit_one(&BlockId::number(1), SOURCE, xt1.clone())).expect("1. Imported");
-	block_on(pool.maintain(block_event(header)));
+	block_on_pool_maintain_with_event(&pool, block_event(header));
 
 	assert!(pool.ready_at(1).now_or_never().is_some());
 }
@@ -873,7 +886,7 @@ fn ready_set_should_eventually_resolve_when_block_update_arrives() {
 		panic!("Ready set should not be ready before block update!");
 	}
 
-	block_on(pool.maintain(block_event(header)));
+	block_on_pool_maintain_with_event(&pool, block_event(header));
 
 	match ready_set_future.poll_unpin(&mut context) {
 		Poll::Pending => {
@@ -964,7 +977,7 @@ fn import_notification_to_pool_maintain_works() {
 	// Get the notification of the block import and maintain the pool with it,
 	// Now, the pool should not contain any transactions.
 	let evt = import_stream.next().expect("Importing a block leads to an event");
-	block_on(pool.maintain(evt.try_into().expect("Imported as new best block")));
+	block_on_pool_maintain_with_event(&*pool, evt.try_into().expect("Imported as new best block"));
 	assert_eq!(pool.status().ready, 0);
 }
 
@@ -980,7 +993,7 @@ fn pruning_a_transaction_should_remove_it_from_best_transaction() {
 	let header = api.push_block(1, vec![xt1.clone()], true);
 
 	// This will prune `xt1`.
-	block_on(pool.maintain(block_event(header)));
+	block_on_pool_maintain_with_event(&pool, block_event(header));
 
 	assert_eq!(pool.status().ready, 0);
 }
@@ -1015,7 +1028,7 @@ fn stale_transactions_are_pruned() {
 
 	// Import block
 	let header = api.push_block(1, xts, true);
-	block_on(pool.maintain(block_event(header)));
+	block_on_pool_maintain_with_event(&pool, block_event(header));
 	// The imported transactions have a different hash and should not evict our initial
 	// transactions.
 	assert_eq!(pool.status().future, 3);
@@ -1023,7 +1036,7 @@ fn stale_transactions_are_pruned() {
 	// Import enough blocks to make our transactions stale
 	for n in 1..66 {
 		let header = api.push_block(n, vec![], true);
-		block_on(pool.maintain(block_event(header)));
+		block_on_pool_maintain_with_event(&pool, block_event(header));
 	}
 
 	assert_eq!(pool.status().future, 0);
@@ -1045,7 +1058,7 @@ fn finalized_only_handled_correctly() {
 
 	let event =
 		ChainEvent::Finalized { hash: header.clone().hash(), tree_route: Arc::from(vec![]) };
-	block_on(pool.maintain(event));
+	block_on_pool_maintain_with_event(&pool, event);
 
 	assert_eq!(pool.status().ready, 0);
 
@@ -1073,8 +1086,8 @@ fn best_block_after_finalized_handled_correctly() {
 
 	let event =
 		ChainEvent::Finalized { hash: header.clone().hash(), tree_route: Arc::from(vec![]) };
-	block_on(pool.maintain(event));
-	block_on(pool.maintain(block_event(header.clone())));
+	block_on_pool_maintain_with_event(&pool, event);
+	block_on_pool_maintain_with_event(&pool, block_event(header.clone()));
 
 	assert_eq!(pool.status().ready, 0);
 
@@ -1137,13 +1150,13 @@ fn switching_fork_with_finalized_works() {
 
 	{
 		let event = ChainEvent::NewBestBlock { hash: b1_header.hash(), tree_route: None };
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 		assert_eq!(pool.status().ready, 1);
 	}
 
 	{
 		let event = ChainEvent::Finalized { hash: b2_header.hash(), tree_route: Arc::from(vec![]) };
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 	}
 
 	{
@@ -1216,28 +1229,28 @@ fn switching_fork_multiple_times_works() {
 	{
 		// phase-0
 		let event = ChainEvent::NewBestBlock { hash: b1_header.hash(), tree_route: None };
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 		assert_eq!(pool.status().ready, 1);
 	}
 
 	{
 		// phase-1
 		let event = block_event_with_retracted(b2_header.clone(), b1_header.hash(), pool.api());
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 		assert_eq!(pool.status().ready, 0);
 	}
 
 	{
 		// phase-2
 		let event = block_event_with_retracted(b1_header.clone(), b2_header.hash(), pool.api());
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 		assert_eq!(pool.status().ready, 1);
 	}
 
 	{
 		// phase-3
 		let event = ChainEvent::Finalized { hash: b2_header.hash(), tree_route: Arc::from(vec![]) };
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 	}
 
 	{
@@ -1340,13 +1353,13 @@ fn two_blocks_delayed_finalization_works() {
 
 	{
 		let event = ChainEvent::Finalized { hash: a_header.hash(), tree_route: Arc::from(vec![]) };
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 		assert_eq!(pool.status().ready, 3);
 	}
 
 	{
 		let event = ChainEvent::NewBestBlock { hash: d1_header.hash(), tree_route: None };
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 		assert_eq!(pool.status().ready, 0);
 	}
 
@@ -1355,13 +1368,13 @@ fn two_blocks_delayed_finalization_works() {
 			hash: c1_header.hash(),
 			tree_route: Arc::from(vec![b1_header.hash()]),
 		};
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 	}
 
 	// this is to collect events from_charlie_watcher and make sure nothing was retracted
 	{
 		let event = ChainEvent::Finalized { hash: d1_header.hash(), tree_route: Arc::from(vec![]) };
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 	}
 
 	{
@@ -1439,27 +1452,27 @@ fn delayed_finalization_does_not_retract() {
 	{
 		// phase-0
 		let event = ChainEvent::NewBestBlock { hash: b1_header.hash(), tree_route: None };
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 		assert_eq!(pool.status().ready, 1);
 	}
 
 	{
 		// phase-1
 		let event = ChainEvent::NewBestBlock { hash: c1_header.hash(), tree_route: None };
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 		assert_eq!(pool.status().ready, 0);
 	}
 
 	{
 		// phase-2
 		let event = ChainEvent::Finalized { hash: b1_header.hash(), tree_route: Arc::from(vec![]) };
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 	}
 
 	{
 		// phase-3
 		let event = ChainEvent::Finalized { hash: c1_header.hash(), tree_route: Arc::from(vec![]) };
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 	}
 
 	{
@@ -1533,7 +1546,7 @@ fn best_block_after_finalization_does_not_retract() {
 
 	{
 		let event = ChainEvent::Finalized { hash: a_header.hash(), tree_route: Arc::from(vec![]) };
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 	}
 
 	{
@@ -1541,13 +1554,13 @@ fn best_block_after_finalization_does_not_retract() {
 			hash: c1_header.hash(),
 			tree_route: Arc::from(vec![a_header.hash(), b1_header.hash()]),
 		};
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 		assert_eq!(pool.status().ready, 0);
 	}
 
 	{
 		let event = ChainEvent::NewBestBlock { hash: b1_header.hash(), tree_route: None };
-		block_on(pool.maintain(event));
+		block_on_pool_maintain_with_event(&pool, event);
 	}
 
 	{

@@ -309,7 +309,7 @@ pub trait MaintainedTransactionPool: TransactionPool {
 	/// Perform maintenance
 	async fn maintain<SO>(&self, event: ChainEvent<Self::Block>, sync_oracle: Arc<SO>)
 	where
-		SO: sp_consensus::SyncOracle + std::marker::Send + std::marker::Sync;
+		SO: sp_consensus::SyncOracle + std::marker::Send + std::marker::Sync + ?Sized;
 }
 
 /// Transaction pool interface for submitting local transactions that exposes a
