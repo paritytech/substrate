@@ -52,7 +52,7 @@ use frame_support::traits::{
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
 	traits::{Saturating, StaticLookup, Zero},
-	ArithmeticError, RuntimeDebug,
+	RuntimeDebug,
 };
 use sp_std::prelude::*;
 
@@ -715,8 +715,11 @@ pub mod pallet {
 		///
 		/// - `collection`: The collection of the item to be minted.
 		/// - `item`: An identifier of the new item.
+		/// - `mint_to`: Account into which the item will be minted.
 		/// - `witness_data`: When the mint type is `HolderOf(collection_id)`, then the owned
 		///   item_id from that collection needs to be provided within the witness data object.
+		///
+		/// Note: the deposit will be taken from the `origin` and not the `owner` of the `item`.
 		///
 		/// Emits `Issued` event when successful.
 		///
@@ -726,11 +729,11 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			item: T::ItemId,
-			owner: AccountIdLookupOf<T>,
+			mint_to: AccountIdLookupOf<T>,
 			witness_data: Option<MintWitness<T::ItemId>>,
 		) -> DispatchResult {
 			let caller = ensure_signed(origin)?;
-			let owner = T::Lookup::lookup(owner)?;
+			let mint_to = T::Lookup::lookup(mint_to)?;
 
 			let collection_config = Self::get_collection_config(&collection)?;
 			let item_settings = collection_config.mint_settings.default_item_settings;
@@ -740,7 +743,7 @@ pub mod pallet {
 				collection,
 				item,
 				caller.clone(),
-				owner.clone(),
+				mint_to.clone(),
 				item_config,
 				false,
 				|collection_details, collection_config| {
@@ -816,7 +819,7 @@ pub mod pallet {
 		///
 		/// - `collection`: The collection of the item to be minted.
 		/// - `item`: An identifier of the new item.
-		/// - `owner`: An owner of the minted item.
+		/// - `mint_to`: Account into which the item will be minted.
 		/// - `item_config`: A config of the new item.
 		///
 		/// Emits `Issued` event when successful.
@@ -827,13 +830,13 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			item: T::ItemId,
-			owner: AccountIdLookupOf<T>,
+			mint_to: AccountIdLookupOf<T>,
 			item_config: ItemConfig,
 		) -> DispatchResult {
 			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
-			let owner = T::Lookup::lookup(owner)?;
+			let mint_to = T::Lookup::lookup(mint_to)?;
 
 			if let Some(check_origin) = maybe_check_origin {
 				ensure!(
@@ -841,7 +844,9 @@ pub mod pallet {
 					Error::<T, I>::NoPermission
 				);
 			}
-			Self::do_mint(collection, item, owner.clone(), owner, item_config, true, |_, _| Ok(()))
+			Self::do_mint(collection, item, mint_to.clone(), mint_to, item_config, true, |_, _| {
+				Ok(())
+			})
 		}
 
 		/// Destroy a single item.
