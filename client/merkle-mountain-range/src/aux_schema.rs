@@ -45,7 +45,7 @@ pub(crate) fn write_gadget_state<B: Block, BE: AuxStore>(
 	backend.insert_aux(&[(GADGET_STATE, state.encode().as_slice())], &[])
 }
 
-fn load_typed<B: AuxStore, T: Decode>(backend: &B, key: &[u8]) -> ClientResult<Option<T>> {
+fn load_decode<B: AuxStore, T: Decode>(backend: &B, key: &[u8]) -> ClientResult<Option<T>> {
 	match backend.get_aux(key)? {
 		None => Ok(None),
 		Some(t) => T::decode(&mut &t[..])
@@ -60,11 +60,11 @@ where
 	B: Block,
 	BE: AuxStore,
 {
-	let version: Option<u32> = load_typed(backend, VERSION_KEY)?;
+	let version: Option<u32> = load_decode(backend, VERSION_KEY)?;
 
 	match version {
 		None => (),
-		Some(1) => return load_typed::<_, PersistedState<B>>(backend, GADGET_STATE),
+		Some(1) => return load_decode::<_, PersistedState<B>>(backend, GADGET_STATE),
 		other =>
 			return Err(ClientError::Backend(format!("Unsupported MMR aux DB version: {:?}", other))),
 	}
@@ -118,7 +118,7 @@ pub(crate) mod tests {
 		// populate version in db
 		write_current_version(backend).unwrap();
 		// verify correct version is retrieved
-		assert_eq!(load_typed(backend, VERSION_KEY).unwrap(), Some(CURRENT_VERSION));
+		assert_eq!(load_decode(backend, VERSION_KEY).unwrap(), Some(CURRENT_VERSION));
 
 		// version is available in db but state isn't -> None
 		assert_eq!(load_state::<Block, Backend>(backend).unwrap(), None);
@@ -132,7 +132,7 @@ pub(crate) mod tests {
 		let backend = client.backend.clone();
 
 		// version not available in db -> None
-		assert_eq!(load_typed::<Backend, Option<u32>>(&*backend, VERSION_KEY).unwrap(), None);
+		assert_eq!(load_decode::<Backend, Option<u32>>(&*backend, VERSION_KEY).unwrap(), None);
 		// state not available in db -> None
 		assert_eq!(load_state::<Block, Backend>(&*backend).unwrap(), None);
 		// run the gadget while importing and finalizing 3 blocks
@@ -156,7 +156,7 @@ pub(crate) mod tests {
 			|client| async move {
 				let backend = &*client.backend;
 				// check there is both version and best canon available in db before running gadget
-				assert_eq!(load_typed(backend, VERSION_KEY).unwrap(), Some(CURRENT_VERSION));
+				assert_eq!(load_decode(backend, VERSION_KEY).unwrap(), Some(CURRENT_VERSION));
 				assert_eq!(load_state::<Block, Backend>(backend).unwrap(), Some(3));
 			},
 			|client| async move {
