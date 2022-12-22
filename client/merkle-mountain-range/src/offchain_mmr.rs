@@ -243,7 +243,7 @@ where
 		}
 	}
 
-	fn update_first_mmr_block(&mut self, notification: &FinalityNotification<B>) {
+	fn handle_potential_pallet_reset(&mut self, notification: &FinalityNotification<B>) {
 		if let Some(first_mmr_block_num) = self.client.first_mmr_block_num(&notification) {
 			if first_mmr_block_num != self.first_mmr_block {
 				info!(
