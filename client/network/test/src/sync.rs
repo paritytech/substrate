@@ -1101,28 +1101,22 @@ async fn syncs_state() {
 		}
 		let child1 = sp_core::storage::StorageChild {
 			data: child_data.clone(),
-			child_info: sp_core::storage::ChildInfo::new_default(b"child1"),
+			info: sp_core::storage::DefaultChild::new(b"child1"),
 		};
 		let child3 = sp_core::storage::StorageChild {
 			data: child_data.clone(),
-			child_info: sp_core::storage::ChildInfo::new_default(b"child3"),
+			info: sp_core::storage::DefaultChild::new(b"child3"),
 		};
 		for i in 22u8..33 {
 			child_data.insert(vec![i; 5], vec![i; 33]);
 		}
 		let child2 = sp_core::storage::StorageChild {
 			data: child_data.clone(),
-			child_info: sp_core::storage::ChildInfo::new_default(b"child2"),
+			info: sp_core::storage::DefaultChild::new(b"child2"),
 		};
-		genesis_storage
-			.children_default
-			.insert(child1.child_info.storage_key().to_vec(), child1);
-		genesis_storage
-			.children_default
-			.insert(child2.child_info.storage_key().to_vec(), child2);
-		genesis_storage
-			.children_default
-			.insert(child3.child_info.storage_key().to_vec(), child3);
+		genesis_storage.children_default.insert(child1.info.name.clone(), child1);
+		genesis_storage.children_default.insert(child2.info.name.clone(), child2);
+		genesis_storage.children_default.insert(child3.info.name.clone(), child3);
 		let mut config_one = FullPeerConfig::default();
 		config_one.extra_storage = Some(genesis_storage.clone());
 		net.add_full_peer_with_config(config_one);
