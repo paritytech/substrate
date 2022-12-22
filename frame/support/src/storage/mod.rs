@@ -1290,6 +1290,12 @@ pub trait StorageDecodeLength: private::Sealed + codec::DecodeLength {
 	}
 }
 
+#[derive(codec::Encode, codec::Decode, crate::RuntimeDebug, Eq, PartialEq, Clone)]
+pub enum ProofSizeMode {
+	MaxEncodedLen,
+	Measured,
+}
+
 /// Provides `Sealed` trait to prevent implementing trait `StorageAppend` & `StorageDecodeLength`
 /// & `EncodeLikeTuple` outside of this crate.
 mod private {
