@@ -295,6 +295,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 				args.args.push(syn::GenericArgument::Type(on_empty));
 			}
 		}
+		args.args.push(syn::parse_quote!( frame_support::storage::types::MeasureProofSize ));
 	}
 
 	Ok(on_empty_struct_metadata)

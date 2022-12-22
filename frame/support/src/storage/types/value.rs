@@ -211,8 +211,8 @@ where
 	}
 }
 
-impl<Prefix, Value, QueryKind, OnEmpty> StorageEntryMetadataBuilder
-	for StorageValue<Prefix, Value, QueryKind, OnEmpty>
+impl<Prefix, Value, QueryKind, OnEmpty, ProofSize> StorageEntryMetadataBuilder
+	for StorageValue<Prefix, Value, QueryKind, OnEmpty, ProofSize>
 where
 	Prefix: StorageInstance,
 	Value: FullCodec + scale_info::StaticTypeInfo,
@@ -256,8 +256,8 @@ where
 }
 
 /// It doesn't require to implement `MaxEncodedLen` and give no information for `max_size`.
-impl<Prefix, Value, QueryKind, OnEmpty> crate::traits::PartialStorageInfoTrait
-	for StorageValue<Prefix, Value, QueryKind, OnEmpty>
+impl<Prefix, Value, QueryKind, OnEmpty, ProofSize> crate::traits::PartialStorageInfoTrait
+	for StorageValue<Prefix, Value, QueryKind, OnEmpty, ProofSize>
 where
 	Prefix: StorageInstance,
 	Value: FullCodec,
