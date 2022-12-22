@@ -66,6 +66,7 @@ pub fn threshold(authorities: usize) -> usize {
 #[derive(Debug, Decode, Encode, PartialEq)]
 pub(crate) struct Rounds<Payload, B: Block> {
 	rounds: BTreeMap<(Payload, NumberFor<B>), RoundTracker>,
+	equivocations: BTreeMap<(Public, NumberFor<B>), Payload>,
 	session_start: NumberFor<B>,
 	validator_set: ValidatorSet<Public>,
 	mandatory_done: bool,
@@ -80,6 +81,7 @@ where
 	pub(crate) fn new(session_start: NumberFor<B>, validator_set: ValidatorSet<Public>) -> Self {
 		Rounds {
 			rounds: BTreeMap::new(),
+			equivocations: BTreeMap::new(),
 			session_start,
 			validator_set,
 			mandatory_done: false,
@@ -89,12 +91,13 @@ where
 
 	pub(crate) fn new_manual(
 		rounds: BTreeMap<(P, NumberFor<B>), RoundTracker>,
+		equivocations: BTreeMap<(Public, NumberFor<B>), P>,
 		session_start: NumberFor<B>,
 		validator_set: ValidatorSet<Public>,
 		mandatory_done: bool,
 		best_done: Option<NumberFor<B>>,
 	) -> Self {
-		Rounds { rounds, session_start, validator_set, mandatory_done, best_done }
+		Rounds { rounds, equivocations, session_start, validator_set, mandatory_done, best_done }
 	}
 
 	pub(crate) fn validator_set(&self) -> &ValidatorSet<Public> {
@@ -123,6 +126,7 @@ where
 		vote: (Public, Signature),
 	) -> bool {
 		let num = round.1;
+		let equivocation_key = (vote.0.clone(), round.1);
 		if num < self.session_start || Some(num) <= self.best_done {
 			debug!(target: "beefy", "🥩 received vote for old stale round {:?}, ignoring", num);
 			false
@@ -132,6 +136,17 @@ where
 				"🥩 received vote {:?} from validator that is not in the validator set, ignoring",
 				vote
 			);
+			false
+		} else if self
+			.equivocations
+			// is the same public key voting for a different payload?
+			.get(&equivocation_key)
+			.map(|payload| payload != &round.0)
+			.unwrap_or_else(|| {
+				self.equivocations.insert(equivocation_key, round.0.clone());
+				false
+			}) {
+			debug!(target: "beefy", "🥩 detected equivocated vote {:?}", vote);
 			false
 		} else {
 			self.rounds.entry(round.clone()).or_default().add_vote(vote)
@@ -165,6 +180,7 @@ where
 	pub(crate) fn conclude(&mut self, round_num: NumberFor<B>) {
 		// Remove this and older (now stale) rounds.
 		self.rounds.retain(|&(_, number), _| number > round_num);
+		self.equivocations.retain(|&(_, number), _| number > round_num);
 		self.mandatory_done = self.mandatory_done || round_num == self.session_start;
 		self.best_done = self.best_done.max(Some(round_num));
 		debug!(target: "beefy", "🥩 Concluded round #{}", round_num);

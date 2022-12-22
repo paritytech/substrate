@@ -114,6 +114,7 @@ mod v1 {
 			let rounds = self.rounds.into_iter().map(|it| (it.0, it.1.into())).collect();
 			Rounds::<Payload, B>::new_manual(
 				rounds,
+				BTreeMap::new(),
 				self.session_start,
 				self.validator_set,
 				self.mandatory_done,
