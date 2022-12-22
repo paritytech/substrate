@@ -163,17 +163,23 @@ impl PeersClient {
 
 	pub fn header(
 		&self,
-		block: &BlockId<Block>,
+		hash: <Block as BlockT>::Hash,
 	) -> ClientResult<Option<<Block as BlockT>::Header>> {
-		self.client.header(block)
+		self.client.header(hash)
 	}
 
 	pub fn has_state_at(&self, block: &BlockId<Block>) -> bool {
-		let header = match self.header(block).unwrap() {
-			Some(header) => header,
-			None => return false,
+		let (number, hash) = match *block {
+			BlockId::Hash(h) => match self.as_client().number(h) {
+				Ok(Some(n)) => (n, h),
+				_ => return false,
+			},
+			BlockId::Number(n) => match self.as_client().hash(n) {
+				Ok(Some(h)) => (n, h),
+				_ => return false,
+			},
 		};
-		self.backend.have_state_at(header.hash(), *header.number())
+		self.backend.have_state_at(hash, number)
 	}
 
 	pub fn justifications(
@@ -297,7 +303,12 @@ where
 	}
 
 	/// Add blocks to the peer -- edit the block before adding
-	pub fn generate_blocks<F>(&mut self, count: usize, origin: BlockOrigin, edit_block: F) -> H256
+	pub fn generate_blocks<F>(
+		&mut self,
+		count: usize,
+		origin: BlockOrigin,
+		edit_block: F,
+	) -> Vec<H256>
 	where
 		F: FnMut(
 			BlockBuilder<Block, PeersFullClient, substrate_test_runtime_client::Backend>,
@@ -323,7 +334,7 @@ where
 		origin: BlockOrigin,
 		edit_block: F,
 		fork_choice: ForkChoiceStrategy,
-	) -> H256
+	) -> Vec<H256>
 	where
 		F: FnMut(
 			BlockBuilder<Block, PeersFullClient, substrate_test_runtime_client::Backend>,
@@ -354,14 +365,15 @@ where
 		inform_sync_about_new_best_block: bool,
 		announce_block: bool,
 		fork_choice: ForkChoiceStrategy,
-	) -> H256
+	) -> Vec<H256>
 	where
 		F: FnMut(
 			BlockBuilder<Block, PeersFullClient, substrate_test_runtime_client::Backend>,
 		) -> Block,
 	{
+		let mut hashes = Vec::with_capacity(count);
 		let full_client = self.client.as_client();
-		let mut at = full_client.header(&at).unwrap().unwrap().hash();
+		let mut at = full_client.block_hash_from_id(&at).unwrap().unwrap();
 		for _ in 0..count {
 			let builder =
 				full_client.new_block_at(&BlockId::Hash(at), Default::default(), false).unwrap();
@@ -391,33 +403,34 @@ where
 			if announce_block {
 				self.network.service().announce_block(hash, None);
 			}
+			hashes.push(hash);
 			at = hash;
 		}
 
 		if inform_sync_about_new_best_block {
 			self.network.new_best_block_imported(
 				at,
-				*full_client.header(&BlockId::Hash(at)).ok().flatten().unwrap().number(),
+				*full_client.header(at).ok().flatten().unwrap().number(),
 			);
 		}
-		at
+		hashes
 	}
 
 	/// Push blocks to the peer (simplified: with or without a TX)
-	pub fn push_blocks(&mut self, count: usize, with_tx: bool) -> H256 {
+	pub fn push_blocks(&mut self, count: usize, with_tx: bool) -> Vec<H256> {
 		let best_hash = self.client.info().best_hash;
 		self.push_blocks_at(BlockId::Hash(best_hash), count, with_tx)
 	}
 
 	/// Push blocks to the peer (simplified: with or without a TX)
-	pub fn push_headers(&mut self, count: usize) -> H256 {
+	pub fn push_headers(&mut self, count: usize) -> Vec<H256> {
 		let best_hash = self.client.info().best_hash;
 		self.generate_tx_blocks_at(BlockId::Hash(best_hash), count, false, true, true, true)
 	}
 
 	/// Push blocks to the peer (simplified: with or without a TX) starting from
 	/// given hash.
-	pub fn push_blocks_at(&mut self, at: BlockId<Block>, count: usize, with_tx: bool) -> H256 {
+	pub fn push_blocks_at(&mut self, at: BlockId<Block>, count: usize, with_tx: bool) -> Vec<H256> {
 		self.generate_tx_blocks_at(at, count, with_tx, false, true, true)
 	}
 
@@ -429,7 +442,7 @@ where
 		count: usize,
 		with_tx: bool,
 		announce_block: bool,
-	) -> H256 {
+	) -> Vec<H256> {
 		self.generate_tx_blocks_at(at, count, with_tx, false, false, announce_block)
 	}
 
@@ -440,7 +453,7 @@ where
 		at: BlockId<Block>,
 		count: usize,
 		with_tx: bool,
-	) -> H256 {
+	) -> Vec<H256> {
 		self.generate_tx_blocks_at(at, count, with_tx, false, true, false)
 	}
 
@@ -454,7 +467,7 @@ where
 		headers_only: bool,
 		inform_sync_about_new_best_block: bool,
 		announce_block: bool,
-	) -> H256 {
+	) -> Vec<H256> {
 		let mut nonce = 0;
 		if with_tx {
 			self.generate_blocks_at(
@@ -491,7 +504,10 @@ where
 		}
 	}
 
-	pub fn push_authorities_change_block(&mut self, new_authorities: Vec<AuthorityId>) -> H256 {
+	pub fn push_authorities_change_block(
+		&mut self,
+		new_authorities: Vec<AuthorityId>,
+	) -> Vec<H256> {
 		self.generate_blocks(1, BlockOrigin::File, |mut builder| {
 			builder.push(Extrinsic::AuthoritiesChange(new_authorities.clone())).unwrap();
 			builder.build().unwrap().block
@@ -539,7 +555,7 @@ where
 	pub fn has_block(&self, hash: H256) -> bool {
 		self.backend
 			.as_ref()
-			.map(|backend| backend.blockchain().header(BlockId::hash(hash)).unwrap().is_some())
+			.map(|backend| backend.blockchain().header(hash).unwrap().is_some())
 			.unwrap_or(false)
 	}
 
@@ -663,7 +679,7 @@ impl<B: BlockT> WarpSyncProvider<B> for TestWarpSyncProvider<B> {
 		_start: B::Hash,
 	) -> Result<EncodedProof, Box<dyn std::error::Error + Send + Sync>> {
 		let info = self.0.info();
-		let best_header = self.0.header(BlockId::hash(info.best_hash)).unwrap().unwrap();
+		let best_header = self.0.header(info.best_hash).unwrap().unwrap();
 		Ok(EncodedProof(best_header.encode()))
 	}
 	fn verify(

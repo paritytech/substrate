@@ -30,10 +30,7 @@ use sp_consensus_aura::{
 use sp_consensus_babe::BabeApi;
 use sp_consensus_slots::{Slot, SlotDuration};
 use sp_inherents::{InherentData, InherentDataProvider, InherentIdentifier};
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, Zero},
-};
+use sp_runtime::traits::{Block as BlockT, Zero};
 use sp_timestamp::{InherentType, INHERENT_IDENTIFIER};
 use std::{
 	sync::{atomic, Arc},
@@ -109,7 +106,7 @@ impl SlotTimestampProvider {
 		// otherwise we'd be producing blocks for older slots.
 		let time = if info.best_number != Zero::zero() {
 			let header = client
-				.header(BlockId::Hash(info.best_hash))?
+				.header(info.best_hash)?
 				.ok_or_else(|| "best header not found in the db!".to_string())?;
 			let slot = func(header)?;
 			// add the slot duration so there's no collision of slots

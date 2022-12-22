@@ -377,24 +377,27 @@ mod tests {
 		// LocalCallExecutor directly later on
 		let client_config = ClientConfig::default();
 
-		// client is used for the convenience of creating and inserting the genesis block.
-		let _client = substrate_test_runtime_client::client::new_with_backend::<
-			_,
-			_,
-			runtime::Block,
-			_,
-			runtime::RuntimeApi,
-		>(
+		let genesis_block_builder = crate::GenesisBlockBuilder::new(
+			&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
+			!client_config.no_genesis,
 			backend.clone(),
 			executor.clone(),
-			&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
-			None,
-			Box::new(TaskExecutor::new()),
-			None,
-			None,
-			Default::default(),
 		)
-		.expect("Creates a client");
+		.expect("Creates genesis block builder");
+
+		// client is used for the convenience of creating and inserting the genesis block.
+		let _client =
+			crate::client::new_with_backend::<_, _, runtime::Block, _, runtime::RuntimeApi>(
+				backend.clone(),
+				executor.clone(),
+				genesis_block_builder,
+				None,
+				Box::new(TaskExecutor::new()),
+				None,
+				None,
+				Default::default(),
+			)
+			.expect("Creates a client");
 
 		let call_executor = LocalCallExecutor {
 			backend: backend.clone(),
