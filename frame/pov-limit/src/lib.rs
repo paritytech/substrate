@@ -122,8 +122,11 @@ pub mod pallet {
 				"Weight zero; would get stuck in an infinite loop"
 			);
 			// TODO this needs <https://github.com/paritytech/substrate/pull/11637>.
-			//assert!(!T::WeightInfo::waste_proof_size(1).proof_size().is_zero(), "Weight zero;
-			// would get stuck in an infinite loop");
+			assert!(
+				!T::WeightInfo::waste_proof_size_none(1).proof_size().is_zero(),
+				"Weight zero;
+			 would get stuck in an infinite loop"
+			);
 		}
 
 		fn on_idle(_: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
