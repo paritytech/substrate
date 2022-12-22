@@ -99,3 +99,79 @@ impl<T: Future<Output = Result<O, E>>, O, E> Future for FutWithUsize<T> {
 		}
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use libp2p::core::upgrade::{ProtocolName, UpgradeInfo};
+	use sc_network_common::protocol::ProtocolName as ProtoName;
+
+	// TODO: move to mocks
+	mockall::mock! {
+		pub ProtocolUpgrade<T> {}
+
+		impl<T: Clone + ProtocolName> UpgradeInfo for ProtocolUpgrade<T> {
+			type Info = T;
+			type InfoIter = vec::IntoIter<T>;
+			fn protocol_info(&self) -> vec::IntoIter<T>;
+		}
+	}
+
+	#[test]
+	fn protocol_info() {
+		let upgrades = (1..=3)
+			.map(|i| {
+				let mut upgrade = MockProtocolUpgrade::<ProtoNameWithUsize<ProtoName>>::new();
+				upgrade.expect_protocol_info().return_once(move || {
+					vec![ProtoNameWithUsize(ProtoName::from(format!("protocol{i}")), i)].into_iter()
+				});
+				upgrade
+			})
+			.collect::<Vec<_>>();
+
+		let upgrade: UpgradeCollec<_> = upgrades.into_iter().collect::<UpgradeCollec<_>>();
+		let protos = vec![
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol1")), 1), 1),
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol2")), 2), 2),
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol3")), 3), 3),
+		];
+		assert!(std::matches!(upgrade.protocol_info().collect::<Vec<_>>(), protos));
+	}
+
+	#[test]
+	fn nested_protocol_info() {
+		let mut upgrades = (1..=2)
+			.map(|i| {
+				let mut upgrade = MockProtocolUpgrade::<ProtoNameWithUsize<ProtoName>>::new();
+				upgrade.expect_protocol_info().return_once(move || {
+					vec![ProtoNameWithUsize(ProtoName::from(format!("protocol{i}")), i)].into_iter()
+				});
+				upgrade
+			})
+			.collect::<Vec<_>>();
+
+		upgrades.push({
+			let mut upgrade = MockProtocolUpgrade::<ProtoNameWithUsize<ProtoName>>::new();
+			upgrade.expect_protocol_info().return_once(move || {
+				vec![
+					ProtoNameWithUsize(ProtoName::from(format!("protocol22")), 1),
+					ProtoNameWithUsize(ProtoName::from(format!("protocol33")), 2),
+					ProtoNameWithUsize(ProtoName::from(format!("protocol44")), 3),
+				]
+				.into_iter()
+			});
+			upgrade
+		});
+
+		let upgrade: UpgradeCollec<_> = upgrades.into_iter().collect::<UpgradeCollec<_>>();
+		let protos = vec![
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol1")), 1), 1),
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol2")), 2), 2),
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol3")), 3), 3),
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol22")), 1), 4),
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol33")), 2), 5),
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol44")), 3), 6),
+		];
+		assert!(std::matches!(upgrade.protocol_info().collect::<Vec<_>>(), protos));
+	}
+}
