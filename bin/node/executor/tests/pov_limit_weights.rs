@@ -15,9 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frame_support::{pallet_prelude::Weight, traits::Hooks};
+use frame_support::{pallet_prelude::Weight, traits::Hooks, weights::constants::*};
 use kitchensink_runtime::{PovLimit, Runtime, System};
 use pallet_pov_limit::WeightInfo;
+use sp_runtime::Perbill;
 
 pub mod common;
 use self::common::*;
@@ -29,13 +30,23 @@ fn expected_weight_same_as_actual() {
 	let actual_weight = <Runtime as pallet_pov_limit::Config>::WeightInfo::on_idle();
 
 	t.execute_with(|| {
-		let expected_weight =
-			PovLimit::on_idle(System::block_number(), Weight::from_parts(200_000_000, 100_000));
-		// the tolerance is 5%
-		let tolerance = actual_weight.ref_time() / 20;
+		let got = PovLimit::on_idle(
+			System::block_number(),
+			Weight::from_parts(WEIGHT_REF_TIME_PER_MILLIS * 10, WEIGHT_PROOF_SIZE_PER_MB),
+		);
 
-		let ref_time_delta =
-			i128::abs(actual_weight.ref_time() as i128 - expected_weight.ref_time() as i128);
-		assert!(ref_time_delta < tolerance.into());
+		let ratio = Perbill::from_rational(got.proof_size(), actual_weight.proof_size());
+		assert!(
+			ratio >= Perbill::from_percent(95),
+			"Too few proof size consumed, was only {:?} of expected",
+			ratio
+		);
+
+		let ratio = Perbill::from_rational(got.ref_time(), actual_weight.ref_time());
+		assert!(
+			ratio >= Perbill::from_percent(95),
+			"Too few ref time consumed, was only {:?} of expected",
+			ratio
+		);
 	});
 }

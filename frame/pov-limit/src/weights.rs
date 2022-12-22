@@ -58,28 +58,34 @@ pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// The range of component `n` is `[0, 1024]`.
 	fn waste_ref_time(_n: u32, ) -> Weight {
-		// Minimum execution time: 17_000 nanoseconds.
-		Weight::from_ref_time(17_649_899)
+		// Minimum execution time: 16_000 nanoseconds.
+		Weight::from_ref_time(17_479_694)
 	}
 	// Storage: PovLimit TrashData (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
 	fn waste_proof_size_some(n: u32, ) -> Weight {
 		// Minimum execution time: 95_000 nanoseconds.
-		Weight::from_ref_time(176_417_547)
-			// Standard Error: 3_704
-			.saturating_add(Weight::from_ref_time(3_136).saturating_mul(n.into()))
+		Weight::from_ref_time(174_020_461)
+			// Standard Error: 3_618
+			.saturating_add(Weight::from_ref_time(4_761).saturating_mul(n.into()))
 			.saturating_add(T::DbWeight::get().reads(1))
+			.saturating_add(Weight::from_proof_size(5000))
 	}
 	// Storage: PovLimit TrashData (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
 	fn waste_proof_size_none(_n: u32, ) -> Weight {
-		// Minimum execution time: 95_000 nanoseconds.
-		Weight::from_ref_time(96_183_039)
+		// Minimum execution time: 94_000 nanoseconds.
+		Weight::from_ref_time(95_029_483)
 			.saturating_add(T::DbWeight::get().reads(1))
+			.saturating_add(Weight::from_proof_size(5000))
 	}
+	// Storage: PovLimit Storage (r:1 w:0)
+	// Storage: PovLimit Compute (r:1 w:0)
+	// Storage: PovLimit TrashData (r:49 w:0)
 	fn on_idle() -> Weight {
-		// Minimum execution time: 115_000 nanoseconds.
-		Weight::from_ref_time(116_000_000)
+		// Minimum execution time: 6_580_000 nanoseconds.
+		Weight::from_ref_time(6_599_000_000)
+			.saturating_add(T::DbWeight::get().reads(51))
 	}
 }
 
@@ -87,28 +93,33 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 impl WeightInfo for () {
 	/// The range of component `n` is `[0, 1024]`.
 	fn waste_ref_time(_n: u32, ) -> Weight {
-		// Minimum execution time: 17_000 nanoseconds.
-		Weight::from_ref_time(17_649_899)
+		// Minimum execution time: 16_000 nanoseconds.
+		Weight::from_ref_time(17_479_694)
 	}
 	// Storage: PovLimit TrashData (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
 	fn waste_proof_size_some(n: u32, ) -> Weight {
 		// Minimum execution time: 95_000 nanoseconds.
-		Weight::from_ref_time(176_417_547)
-			// Standard Error: 3_704
-			.saturating_add(Weight::from_parts(3_136, 13_000).saturating_mul(n.into()))
+		Weight::from_ref_time(174_020_461)
+			// Standard Error: 3_618
+			.saturating_add(Weight::from_ref_time(4_761).saturating_mul(n.into()))
 			.saturating_add(RocksDbWeight::get().reads(1))
+			.saturating_add(Weight::from_proof_size(5000))
 	}
 	// Storage: PovLimit TrashData (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
-	fn waste_proof_size_none(n: u32, ) -> Weight {
-		// Minimum execution time: 95_000 nanoseconds.
-		Weight::from_ref_time(96_183_039)
-			.saturating_add(Weight::from_proof_size(13_000).saturating_mul(n.into()))
+	fn waste_proof_size_none(_n: u32, ) -> Weight {
+		// Minimum execution time: 94_000 nanoseconds.
+		Weight::from_ref_time(95_029_483)
 			.saturating_add(RocksDbWeight::get().reads(1))
+			.saturating_add(Weight::from_proof_size(5000))
 	}
+	// Storage: PovLimit Storage (r:1 w:0)
+	// Storage: PovLimit Compute (r:1 w:0)
+	// Storage: PovLimit TrashData (r:49 w:0)
 	fn on_idle() -> Weight {
-		// Minimum execution time: 115_000 nanoseconds.
-		Weight::from_ref_time(116_000_000)
+		// Minimum execution time: 6_580_000 nanoseconds.
+		Weight::from_ref_time(6_599_000_000)
+			.saturating_add(RocksDbWeight::get().reads(51))
 	}
 }

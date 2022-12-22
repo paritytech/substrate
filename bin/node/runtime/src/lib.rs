@@ -1780,6 +1780,7 @@ type Migrations = (
 	pallet_nomination_pools::migration::v2::MigrateToV2<Runtime>,
 	pallet_alliance::migration::Migration<Runtime>,
 	pallet_contracts::Migration<Runtime>,
+	pallet_pov_limit::migrations::v1::MigrateToV1<Runtime>,
 );
 
 /// MMR helper types.
