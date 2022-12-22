@@ -654,7 +654,8 @@ fn deploying_wasm_contract_should_work() {
 	let transfer_code = wat::parse_str(CODE_TRANSFER).unwrap();
 	let transfer_ch = <Runtime as frame_system::Config>::Hashing::hash(&transfer_code);
 
-	let addr = pallet_contracts::Pallet::<Runtime>::contract_address(&charlie(), &transfer_ch, &[]);
+	let addr =
+		pallet_contracts::Pallet::<Runtime>::contract_address(&charlie(), &transfer_ch, &[], &[]);
 
 	let time = 42 * 1000;
 	let b = construct_block(
