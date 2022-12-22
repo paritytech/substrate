@@ -18,8 +18,8 @@
 use crate::{
 	gas::GasMeter,
 	storage::{self, Storage, WriteOutcome},
-	AddressGenerator, BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, DebugBufferVec,
-	Determinism, Error, Event, Nonce, Pallet as Contracts, Schedule,
+	BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, DebugBufferVec, Determinism, Error,
+	Event, Nonce, Pallet as Contracts, Schedule,
 };
 use frame_support::{
 	crypto::ecdsa::ECDSAExt,
@@ -745,7 +745,7 @@ where
 					(dest, contract, executable, delegate_caller, ExportedFunction::Call, None)
 				},
 				FrameArgs::Instantiate { sender, nonce, executable, salt, input_data } => {
-					let account_id = T::AddressGenerator::generate_address(
+					let account_id = Contracts::<T>::contract_address(
 						&sender,
 						executable.code_hash(),
 						input_data,
