@@ -21,16 +21,18 @@
 use futures::{future::FutureExt as _, prelude::*, ready, stream::Stream};
 use futures_timer::Delay;
 use log::debug;
-use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::{
 	pin::Pin,
 	task::{Context, Poll},
 	time::Duration,
 };
 
-use super::gossip::{GossipMessage, NeighborPacket};
 use sc_network::PeerId;
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
+
+use super::gossip::{GossipMessage, NeighborPacket};
+use crate::LOG_TARGET;
 
 /// A sender used to send neighbor packets to a background job.
 #[derive(Clone)]
@@ -46,7 +48,7 @@ impl<B: BlockT> NeighborPacketSender<B> {
 		neighbor_packet: NeighborPacket<NumberFor<B>>,
 	) {
 		if let Err(err) = self.0.unbounded_send((who, neighbor_packet)) {
-			debug!(target: "afg", "Failed to send neighbor packet: {:?}", err);
+			debug!(target: LOG_TARGET, "Failed to send neighbor packet: {:?}", err);
 		}
 	}
 }

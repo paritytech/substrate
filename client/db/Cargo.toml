@@ -37,7 +37,7 @@ sp-trie = { version = "7.0.0", path = "../../primitives/trie" }
 [dev-dependencies]
 criterion = "0.3.3"
 kvdb-rocksdb = "0.17.0"
-rand = "0.8.4"
+rand = "0.8.5"
 tempfile = "3.1.0"
 quickcheck = { version = "1.0.3", default-features = false }
 kitchensink-runtime = { path = "../../bin/node/runtime" }

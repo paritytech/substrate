@@ -449,6 +449,7 @@ pub mod pallet {
 		/// Emits `Created` event when successful.
 		///
 		/// Weight: `O(1)`
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::create())]
 		pub fn create(
 			origin: OriginFor<T>,
@@ -485,6 +486,7 @@ pub mod pallet {
 		/// Emits `ForceCreated` event when successful.
 		///
 		/// Weight: `O(1)`
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::force_create())]
 		pub fn force_create(
 			origin: OriginFor<T>,
@@ -520,6 +522,7 @@ pub mod pallet {
 		/// - `n = witness.items`
 		/// - `m = witness.item_metadatas`
 		/// - `a = witness.attributes`
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::destroy(
 			witness.items,
  			witness.item_metadatas,
@@ -555,6 +558,7 @@ pub mod pallet {
 		/// Emits `Issued` event when successful.
 		///
 		/// Weight: `O(1)`
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::mint())]
 		pub fn mint(
 			origin: OriginFor<T>,
@@ -584,6 +588,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		/// Modes: `check_owner.is_some()`.
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::burn())]
 		pub fn burn(
 			origin: OriginFor<T>,
@@ -622,6 +627,7 @@ pub mod pallet {
 		/// Emits `Transferred`.
 		///
 		/// Weight: `O(1)`
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::transfer())]
 		pub fn transfer(
 			origin: OriginFor<T>,
@@ -658,6 +664,7 @@ pub mod pallet {
 		/// is not permitted to call it.
 		///
 		/// Weight: `O(items.len())`
+		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::redeposit(items.len() as u32))]
 		pub fn redeposit(
 			origin: OriginFor<T>,
@@ -718,6 +725,7 @@ pub mod pallet {
 		/// Emits `Frozen`.
 		///
 		/// Weight: `O(1)`
+		#[pallet::call_index(7)]
 		#[pallet::weight(T::WeightInfo::freeze())]
 		pub fn freeze(
 			origin: OriginFor<T>,
@@ -749,6 +757,7 @@ pub mod pallet {
 		/// Emits `Thawed`.
 		///
 		/// Weight: `O(1)`
+		#[pallet::call_index(8)]
 		#[pallet::weight(T::WeightInfo::thaw())]
 		pub fn thaw(
 			origin: OriginFor<T>,
@@ -779,6 +788,7 @@ pub mod pallet {
 		/// Emits `CollectionFrozen`.
 		///
 		/// Weight: `O(1)`
+		#[pallet::call_index(9)]
 		#[pallet::weight(T::WeightInfo::freeze_collection())]
 		pub fn freeze_collection(
 			origin: OriginFor<T>,
@@ -806,6 +816,7 @@ pub mod pallet {
 		/// Emits `CollectionThawed`.
 		///
 		/// Weight: `O(1)`
+		#[pallet::call_index(10)]
 		#[pallet::weight(T::WeightInfo::thaw_collection())]
 		pub fn thaw_collection(
 			origin: OriginFor<T>,
@@ -835,6 +846,7 @@ pub mod pallet {
 		/// Emits `OwnerChanged`.
 		///
 		/// Weight: `O(1)`
+		#[pallet::call_index(11)]
 		#[pallet::weight(T::WeightInfo::transfer_ownership())]
 		pub fn transfer_ownership(
 			origin: OriginFor<T>,
@@ -883,6 +895,7 @@ pub mod pallet {
 		/// Emits `TeamChanged`.
 		///
 		/// Weight: `O(1)`
+		#[pallet::call_index(12)]
 		#[pallet::weight(T::WeightInfo::set_team())]
 		pub fn set_team(
 			origin: OriginFor<T>,
@@ -923,6 +936,7 @@ pub mod pallet {
 		/// Emits `ApprovedTransfer` on success.
 		///
 		/// Weight: `O(1)`
+		#[pallet::call_index(13)]
 		#[pallet::weight(T::WeightInfo::approve_transfer())]
 		pub fn approve_transfer(
 			origin: OriginFor<T>,
@@ -976,6 +990,7 @@ pub mod pallet {
 		/// Emits `ApprovalCancelled` on success.
 		///
 		/// Weight: `O(1)`
+		#[pallet::call_index(14)]
 		#[pallet::weight(T::WeightInfo::cancel_approval())]
 		pub fn cancel_approval(
 			origin: OriginFor<T>,
@@ -1028,6 +1043,7 @@ pub mod pallet {
 		/// Emits `ItemStatusChanged` with the identity of the item.
 		///
 		/// Weight: `O(1)`
+		#[pallet::call_index(15)]
 		#[pallet::weight(T::WeightInfo::force_item_status())]
 		pub fn force_item_status(
 			origin: OriginFor<T>,
@@ -1077,6 +1093,7 @@ pub mod pallet {
 		/// Emits `AttributeSet`.
 		///
 		/// Weight: `O(1)`
+		#[pallet::call_index(16)]
 		#[pallet::weight(T::WeightInfo::set_attribute())]
 		pub fn set_attribute(
 			origin: OriginFor<T>,
@@ -1139,6 +1156,7 @@ pub mod pallet {
 		/// Emits `AttributeCleared`.
 		///
 		/// Weight: `O(1)`
+		#[pallet::call_index(17)]
 		#[pallet::weight(T::WeightInfo::clear_attribute())]
 		pub fn clear_attribute(
 			origin: OriginFor<T>,
@@ -1188,6 +1206,7 @@ pub mod pallet {
 		/// Emits `MetadataSet`.
 		///
 		/// Weight: `O(1)`
+		#[pallet::call_index(18)]
 		#[pallet::weight(T::WeightInfo::set_metadata())]
 		pub fn set_metadata(
 			origin: OriginFor<T>,
@@ -1250,6 +1269,7 @@ pub mod pallet {
 		/// Emits `MetadataCleared`.
 		///
 		/// Weight: `O(1)`
+		#[pallet::call_index(19)]
 		#[pallet::weight(T::WeightInfo::clear_metadata())]
 		pub fn clear_metadata(
 			origin: OriginFor<T>,
@@ -1299,6 +1319,7 @@ pub mod pallet {
 		/// Emits `CollectionMetadataSet`.
 		///
 		/// Weight: `O(1)`
+		#[pallet::call_index(20)]
 		#[pallet::weight(T::WeightInfo::set_collection_metadata())]
 		pub fn set_collection_metadata(
 			origin: OriginFor<T>,
@@ -1356,6 +1377,7 @@ pub mod pallet {
 		/// Emits `CollectionMetadataCleared`.
 		///
 		/// Weight: `O(1)`
+		#[pallet::call_index(21)]
 		#[pallet::weight(T::WeightInfo::clear_collection_metadata())]
 		pub fn clear_collection_metadata(
 			origin: OriginFor<T>,
@@ -1392,6 +1414,7 @@ pub mod pallet {
 		///   ownership transferal.
 		///
 		/// Emits `OwnershipAcceptanceChanged`.
+		#[pallet::call_index(22)]
 		#[pallet::weight(T::WeightInfo::set_accept_ownership())]
 		pub fn set_accept_ownership(
 			origin: OriginFor<T>,
@@ -1428,6 +1451,7 @@ pub mod pallet {
 		/// - `max_supply`: The maximum amount of items a collection could have.
 		///
 		/// Emits `CollectionMaxSupplySet` event when successful.
+		#[pallet::call_index(23)]
 		#[pallet::weight(T::WeightInfo::set_collection_max_supply())]
 		pub fn set_collection_max_supply(
 			origin: OriginFor<T>,
@@ -1467,6 +1491,7 @@ pub mod pallet {
 		///
 		/// Emits `ItemPriceSet` on success if the price is not `None`.
 		/// Emits `ItemPriceRemoved` on success if the price is `None`.
+		#[pallet::call_index(24)]
 		#[pallet::weight(T::WeightInfo::set_price())]
 		pub fn set_price(
 			origin: OriginFor<T>,
@@ -1489,6 +1514,7 @@ pub mod pallet {
 		/// - `bid_price`: The price the sender is willing to pay.
 		///
 		/// Emits `ItemBought` on success.
+		#[pallet::call_index(25)]
 		#[pallet::weight(T::WeightInfo::buy_item())]
 		#[transactional]
 		pub fn buy_item(

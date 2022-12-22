@@ -411,6 +411,7 @@ impl Config for Test {
 	type MaxCodeLen = ConstU32<{ 128 * 1024 }>;
 	type MaxStorageKeyLen = ConstU32<128>;
 	type UnsafeUnstableInterface = UnstableInterface;
+	type MaxDebugBufferLen = ConstU32<{ 2 * 1024 * 1024 }>;
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);
@@ -859,7 +860,7 @@ fn deploy_and_call_other_contract() {
 		let callee_addr = Contracts::contract_address(
 			&caller_addr,
 			&callee_code_hash,
-			&[0, 1, 34, 51, 68, 85, 102, 119],  // hard coded in wasm
+			&[0, 1, 34, 51, 68, 85, 102, 119], // hard coded in wasm
 			&[],
 		);
 

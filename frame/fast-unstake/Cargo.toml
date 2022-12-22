@@ -25,10 +25,7 @@ sp-std = { version = "5.0.0", default-features = false, path = "../../primitives
 sp-staking = { default-features = false, path = "../../primitives/staking" }
 frame-election-provider-support = { default-features = false, path = "../election-provider-support" }
 
-# optional dependencies for cargo features
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
-pallet-staking = { default-features = false, optional = true, path = "../staking" }
-pallet-assets = { default-features = false, optional = true, path = "../assets" }
 
 [dev-dependencies]
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward-curve" }
@@ -38,8 +35,6 @@ sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
 pallet-staking = { path = "../staking" }
 pallet-balances = { path = "../balances" }
 pallet-timestamp = { path = "../timestamp" }
-pallet-assets = { path = "../assets" }
-
 
 [features]
 default = ["std"]
@@ -64,6 +59,5 @@ runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
 	"sp-staking/runtime-benchmarks",
-	"pallet-staking/runtime-benchmarks"
 ]
 try-runtime = ["frame-support/try-runtime"]
