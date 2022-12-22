@@ -79,6 +79,7 @@ fn mint_item<T: Config<I>, I: 'static>(
 		SystemOrigin::Signed(caller.clone()).into(),
 		T::Helper::collection(0),
 		item,
+		caller_lookup.clone(),
 		None,
 	));
 	(item, caller, caller_lookup)
@@ -174,7 +175,7 @@ benchmarks_instance_pallet! {
 		let m in 0 .. 1_000;
 		let a in 0 .. 1_000;
 
-		let (collection, caller, caller_lookup) = create_collection::<T, I>();
+		let (collection, caller, _) = create_collection::<T, I>();
 		add_collection_metadata::<T, I>();
 		for i in 0..n {
 			mint_item::<T, I>(i as u16);
@@ -200,7 +201,7 @@ benchmarks_instance_pallet! {
 	mint {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		let item = T::Helper::item(0);
-	}: _(SystemOrigin::Signed(caller.clone()), collection, item, None)
+	}: _(SystemOrigin::Signed(caller.clone()), collection, item, caller_lookup, None)
 	verify {
 		assert_last_event::<T, I>(Event::Issued { collection, item, owner: caller }.into());
 	}
@@ -222,7 +223,7 @@ benchmarks_instance_pallet! {
 	}
 
 	transfer {
-		let (collection, caller, caller_lookup) = create_collection::<T, I>();
+		let (collection, caller, _) = create_collection::<T, I>();
 		let (item, ..) = mint_item::<T, I>(0);
 
 		let target: T::AccountId = account("target", 0, SEED);
@@ -235,7 +236,7 @@ benchmarks_instance_pallet! {
 
 	redeposit {
 		let i in 0 .. 5_000;
-		let (collection, caller, caller_lookup) = create_collection::<T, I>();
+		let (collection, caller, _) = create_collection::<T, I>();
 		let items = (0..i).map(|x| mint_item::<T, I>(x as u16).0).collect::<Vec<_>>();
 		Nfts::<T, I>::force_collection_config(
 			SystemOrigin::Root.into(),
@@ -248,7 +249,7 @@ benchmarks_instance_pallet! {
 	}
 
 	lock_item_transfer {
-		let (collection, caller, caller_lookup) = create_collection::<T, I>();
+		let (collection, caller, _) = create_collection::<T, I>();
 		let (item, ..) = mint_item::<T, I>(0);
 	}: _(SystemOrigin::Signed(caller.clone()), T::Helper::collection(0), T::Helper::item(0))
 	verify {
@@ -256,7 +257,7 @@ benchmarks_instance_pallet! {
 	}
 
 	unlock_item_transfer {
-		let (collection, caller, caller_lookup) = create_collection::<T, I>();
+		let (collection, caller, _) = create_collection::<T, I>();
 		let (item, ..) = mint_item::<T, I>(0);
 		Nfts::<T, I>::lock_item_transfer(
 			SystemOrigin::Signed(caller.clone()).into(),
@@ -269,7 +270,7 @@ benchmarks_instance_pallet! {
 	}
 
 	lock_collection {
-		let (collection, caller, caller_lookup) = create_collection::<T, I>();
+		let (collection, caller, _) = create_collection::<T, I>();
 		let lock_settings = CollectionSettings::from_disabled(
 			CollectionSetting::TransferableItems |
 				CollectionSetting::UnlockedMetadata |
@@ -324,7 +325,7 @@ benchmarks_instance_pallet! {
 	}
 
 	force_collection_config {
-		let (collection, caller, caller_lookup) = create_collection::<T, I>();
+		let (collection, caller, _) = create_collection::<T, I>();
 		let origin = T::ForceOrigin::successful_origin();
 		let call = Call::<T, I>::force_collection_config {
 			collection,
@@ -336,7 +337,7 @@ benchmarks_instance_pallet! {
 	}
 
 	lock_item_properties {
-		let (collection, caller, caller_lookup) = create_collection::<T, I>();
+		let (collection, caller, _) = create_collection::<T, I>();
 		let (item, ..) = mint_item::<T, I>(0);
 		let lock_metadata = true;
 		let lock_attributes = true;

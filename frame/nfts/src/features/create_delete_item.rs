@@ -22,7 +22,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn do_mint(
 		collection: T::CollectionId,
 		item: T::ItemId,
-		owner: T::AccountId,
+		depositor: T::AccountId,
+		mint_to: T::AccountId,
 		item_config: ItemConfig,
 		deposit_collection_owner: bool,
 		with_details_and_config: impl FnOnce(
@@ -45,9 +46,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					ensure!(collection_details.items < max_supply, Error::<T, I>::MaxSupplyReached);
 				}
 
-				let items =
-					collection_details.items.checked_add(1).ok_or(ArithmeticError::Overflow)?;
-				collection_details.items = items;
+				collection_details.items.saturating_inc();
 
 				let collection_config = Self::get_collection_config(&collection)?;
 				let deposit_amount = match collection_config
@@ -58,11 +57,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				};
 				let deposit_account = match deposit_collection_owner {
 					true => collection_details.owner.clone(),
-					false => owner.clone(),
+					false => depositor,
 				};
 
-				let owner = owner.clone();
-				Account::<T, I>::insert((&owner, &collection, &item), ());
+				let item_owner = mint_to.clone();
+				Account::<T, I>::insert((&item_owner, &collection, &item), ());
 
 				if let Ok(existing_config) = ItemConfigOf::<T, I>::try_get(&collection, &item) {
 					ensure!(existing_config == item_config, Error::<T, I>::InconsistentItemConfig);
@@ -73,14 +72,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				T::Currency::reserve(&deposit_account, deposit_amount)?;
 
 				let deposit = ItemDeposit { account: deposit_account, amount: deposit_amount };
-				let details =
-					ItemDetails { owner, approvals: ApprovalsOf::<T, I>::default(), deposit };
+				let details = ItemDetails {
+					owner: item_owner,
+					approvals: ApprovalsOf::<T, I>::default(),
+					deposit,
+				};
 				Item::<T, I>::insert(&collection, &item, details);
 				Ok(())
 			},
 		)?;
 
-		Self::deposit_event(Event::Issued { collection, item, owner });
+		Self::deposit_event(Event::Issued { collection, item, owner: mint_to });
 		Ok(())
 	}
 
