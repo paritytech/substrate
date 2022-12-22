@@ -81,7 +81,6 @@ macro_rules! log {
 pub mod pallet {
 	use super::*;
 	use crate::types::*;
-	use sp_std::collections::btree_set::BTreeSet;
 	use frame_support::{
 		pallet_prelude::*,
 		traits::{Defensive, ReservableCurrency, StorageVersion},
@@ -92,7 +91,7 @@ pub mod pallet {
 		DispatchResult,
 	};
 	use sp_staking::{EraIndex, StakingInterface};
-	use sp_std::{prelude::*, vec::Vec};
+	use sp_std::{collections::btree_set::BTreeSet, prelude::*, vec::Vec};
 	pub use weights::WeightInfo;
 
 	#[derive(scale_info::TypeInfo, codec::Encode, codec::Decode, codec::MaxEncodedLen)]
@@ -490,7 +489,9 @@ pub mod pallet {
 					},
 				}
 
-				<T as Config>::WeightInfo::on_idle_check(validator_count * eras_checked.len() as u32)
+				<T as Config>::WeightInfo::on_idle_check(
+					validator_count * eras_checked.len() as u32,
+				)
 			}
 		}
 	}
