@@ -1330,14 +1330,29 @@ where
 
 	fn append_debug_buffer(&mut self, msg: &str) -> bool {
 		if let Some(buffer) = &mut self.debug_message {
-			if !msg.is_empty() {
-				if buffer.len() + msg.len() > DebugBufferVec::<T>::bound() {
-					buffer.drain(0..msg.len());
-				}
-				buffer
-					.try_extend(&mut msg.bytes())
-					.expect("Debug buffer has enough space for the message, it's been truncated if needed; qed");
-			}
+			let mut msg = msg.bytes();
+			let num_drain = {
+				let capacity = DebugBufferVec::<T>::bound().checked_sub(buffer.len()).expect(
+					"
+					`buffer` is of type `DebugBufferVec`,
+					`DebugBufferVec` is a `BoundedVec`,
+					`BoundedVec::bound()` <= `BoundedVec::len()`;
+					qed
+				",
+				);
+				msg.len().saturating_sub(capacity).min(buffer.len())
+			};
+			buffer.drain(0..num_drain);
+			buffer
+				.try_extend(&mut msg)
+				.map_err(|_| {
+					log::debug!(
+						target: "runtime::contracts",
+						"Debug message to big (size={}) for debug buffer (bound={})",
+						msg.len(), DebugBufferVec::<T>::bound(),
+					);
+				})
+				.ok();
 			true
 		} else {
 			false
