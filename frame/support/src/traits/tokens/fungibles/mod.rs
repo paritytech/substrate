@@ -160,7 +160,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 	) -> Result<Self::Balance, DispatchError>;
 
 	/// Attempt to reduce the `asset` balance of `who` by `amount`.
-c	///
+	///
 	/// Equivalent to `burn_from`, except with an expectation that within the bounds of some
 	/// universal issuance, the total assets `suspend`ed and `resume`d will be equivalent. The
 	/// implementation may be configured such that the total assets suspended may never be less than
