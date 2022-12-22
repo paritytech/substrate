@@ -165,7 +165,7 @@ pub trait AddressGenerator<T: Config> {
 	fn generate_address(
 		deploying_address: &T::AccountId,
 		code_hash: &CodeHash<T>,
-		constructor_args: &[u8],
+		input_data: &[u8],
 		salt: &[u8],
 	) -> T::AccountId;
 }
@@ -176,19 +176,18 @@ pub trait AddressGenerator<T: Config> {
 /// is only dependant on its inputs. It can therefore be used to reliably predict the
 /// address of a contract. This is akin to the formula of eth's CREATE2 opcode. There
 /// is no CREATE equivalent because CREATE2 is strictly more powerful.
-///
-/// Formula: `hash("contract_addr_v1" ++ deploying_address ++ code_hash ++ constructor_args ++
-/// salt)`
+/// Formula:
+/// `hash("contract_addr_v1" ++ deploying_address ++ code_hash ++ input_data ++ salt)`
 pub struct DefaultAddressGenerator;
 
 impl<T: Config> AddressGenerator<T> for DefaultAddressGenerator {
 	fn generate_address(
 		deploying_address: &T::AccountId,
 		code_hash: &CodeHash<T>,
-		constructor_args: &[u8],
+		input_data: &[u8],
 		salt: &[u8],
 	) -> T::AccountId {
-		let entropy = (b"contract_addr_v1", deploying_address, code_hash, constructor_args, salt)
+		let entropy = (b"contract_addr_v1", deploying_address, code_hash, input_data, salt)
 			.using_encoded(T::Hashing::hash);
 		Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
 			.expect("infinite length input; no invalid inputs for type; qed")
@@ -1068,10 +1067,10 @@ impl<T: Config> Pallet<T> {
 	pub fn contract_address(
 		deploying_address: &T::AccountId,
 		code_hash: &CodeHash<T>,
-		constructor_args: &[u8],
+		input_data: &[u8],
 		salt: &[u8],
 	) -> T::AccountId {
-		T::AddressGenerator::generate_address(deploying_address, code_hash, constructor_args, salt)
+		T::AddressGenerator::generate_address(deploying_address, code_hash, input_data, salt)
 	}
 
 	/// Returns the code hash of the contract specified by `account` ID.
