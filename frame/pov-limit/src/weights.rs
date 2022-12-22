@@ -69,7 +69,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			// Standard Error: 3_618
 			.saturating_add(Weight::from_ref_time(4_761).saturating_mul(n.into()))
 			.saturating_add(T::DbWeight::get().reads(1))
-			.saturating_add(Weight::from_proof_size(5000))
+			.saturating_add(Weight::from_proof_size(50_000))
 	}
 	// Storage: PovLimit TrashData (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
@@ -77,7 +77,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Minimum execution time: 94_000 nanoseconds.
 		Weight::from_ref_time(95_029_483)
 			.saturating_add(T::DbWeight::get().reads(1))
-			.saturating_add(Weight::from_proof_size(5000))
+			.saturating_add(Weight::from_proof_size(50_000))
 	}
 	// Storage: PovLimit Storage (r:1 w:0)
 	// Storage: PovLimit Compute (r:1 w:0)
@@ -104,7 +104,7 @@ impl WeightInfo for () {
 			// Standard Error: 3_618
 			.saturating_add(Weight::from_ref_time(4_761).saturating_mul(n.into()))
 			.saturating_add(RocksDbWeight::get().reads(1))
-			.saturating_add(Weight::from_proof_size(5000))
+			.saturating_add(Weight::from_proof_size(50_000))
 	}
 	// Storage: PovLimit TrashData (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
@@ -112,7 +112,7 @@ impl WeightInfo for () {
 		// Minimum execution time: 94_000 nanoseconds.
 		Weight::from_ref_time(95_029_483)
 			.saturating_add(RocksDbWeight::get().reads(1))
-			.saturating_add(Weight::from_proof_size(5000))
+			.saturating_add(Weight::from_proof_size(50_000))
 	}
 	// Storage: PovLimit Storage (r:1 w:0)
 	// Storage: PovLimit Compute (r:1 w:0)
