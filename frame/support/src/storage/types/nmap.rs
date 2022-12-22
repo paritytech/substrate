@@ -58,11 +58,12 @@ pub struct StorageNMap<
 	QueryKind = OptionQuery,
 	OnEmpty = GetDefault,
 	MaxValues = GetDefault,
->(core::marker::PhantomData<(Prefix, Key, Value, QueryKind, OnEmpty, MaxValues)>);
+	ProofSize = GetDefault,
+>(core::marker::PhantomData<(Prefix, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize)>);
 
-impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
+impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 	crate::storage::generator::StorageNMap<Key, Value>
-	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
+	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 where
 	Prefix: StorageInstance,
 	Key: super::key::KeyGenerator,
@@ -86,8 +87,8 @@ where
 	}
 }
 
-impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues> crate::storage::StoragePrefixedMap<Value>
-	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
+impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize> crate::storage::StoragePrefixedMap<Value>
+	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 where
 	Prefix: StorageInstance,
 	Key: super::key::KeyGenerator,
@@ -104,8 +105,8 @@ where
 	}
 }
 
-impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
-	StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
+impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
+	StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 where
 	Prefix: StorageInstance,
 	Key: super::key::KeyGenerator,
@@ -405,8 +406,8 @@ where
 	}
 }
 
-impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
-	StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
+impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
+	StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 where
 	Prefix: StorageInstance,
 	Key: super::key::ReversibleKeyGenerator,
@@ -540,8 +541,8 @@ where
 	}
 }
 
-impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues> StorageEntryMetadataBuilder
-	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
+impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize> StorageEntryMetadataBuilder
+	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 where
 	Prefix: StorageInstance,
 	Key: super::key::KeyGenerator,
@@ -597,8 +598,8 @@ where
 }
 
 /// It doesn't require to implement `MaxEncodedLen` and give no information for `max_size`.
-impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues> crate::traits::PartialStorageInfoTrait
-	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
+impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize> crate::traits::PartialStorageInfoTrait
+	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 where
 	Prefix: StorageInstance,
 	Key: super::key::KeyGenerator,

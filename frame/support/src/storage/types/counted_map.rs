@@ -499,6 +499,7 @@ where
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
+	ProofSize: crate::traits::Get<Option<crate::storage::ProofSizeMode>>,
 {
 	fn partial_storage_info() -> Vec<StorageInfo> {
 		[<Self as MapWrapper>::Map::partial_storage_info(), CounterFor::<Prefix>::storage_info()]

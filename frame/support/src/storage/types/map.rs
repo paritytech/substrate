@@ -469,6 +469,7 @@ where
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
+	ProofSize: crate::traits::Get<Option<crate::storage::ProofSizeMode>>,
 {
 	fn partial_storage_info() -> Vec<StorageInfo> {
 		vec![StorageInfo {
@@ -477,7 +478,7 @@ where
 			prefix: Self::final_prefix().to_vec(),
 			max_values: MaxValues::get(),
 			max_size: None,
-			proof_size: None,
+			proof_size: ProofSize::get(),
 		}]
 	}
 }

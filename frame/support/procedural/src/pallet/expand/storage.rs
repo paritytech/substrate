@@ -303,7 +303,13 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 				_ => args.args.push(syn::parse_quote!( GetDefault )),
 			}
 
-			args.args.push(syn::parse_quote!( frame_support::storage::MelProofSize ));
+			use crate::pallet::parse::storage::ProofSizeAttribute;
+			match storage_def.proof_size {
+				Some(ProofSizeAttribute::Measured) => args.args.push(syn::parse_quote!( frame_support::storage::MeasuredProofSize )),
+				// Default is MEL
+				None | Some(ProofSizeAttribute::MaxEncodedLen) => args.args.push(syn::parse_quote!( frame_support::storage::MelProofSize )),
+			}
+			
 		}
 	}
 
