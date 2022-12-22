@@ -125,7 +125,7 @@ fn proof_size() {
 	new_test_ext().execute_with(|| {
 		let ps = <Bar::<Test> as StorageInfoTrait>::storage_info();
 		assert_eq!(ps.len(), 1);
-		assert_eq!(ps[0].proof_size, Some(ProofSizeMode::MaxEncodedLen));
+		assert_eq!(ps[0].proof_size, Some(ProofSizeMode::Measured));
 	});
 }
 

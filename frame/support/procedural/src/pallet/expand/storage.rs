@@ -272,6 +272,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 				Metadata::DoubleMap { .. } => (5, 6, 7),
 			};
 
+			// Add the `QueryKind` generic, this default to `OptionQuery`.
 			if query_idx < args.args.len() {
 				if let syn::GenericArgument::Type(query_kind) = args.args.index_mut(query_idx) {
 					set_result_query_type_parameter(query_kind)?;
@@ -298,11 +299,14 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 			} else {
 				args.args.push(syn::parse_quote!( GetDefault ));
 			}
+
+			// Add the `MaxValues` generic for everything besides `Value`.
 			match storage_def.metadata {
 				Metadata::Value{..} => (),
 				_ => args.args.push(syn::parse_quote!( GetDefault )),
 			}
 
+			// Add the `ProofSize` generic.
 			use crate::pallet::parse::storage::ProofSizeAttribute;
 			match storage_def.proof_size {
 				Some(ProofSizeAttribute::Measured) => args.args.push(syn::parse_quote!( frame_support::storage::MeasuredProofSize )),

@@ -29,7 +29,7 @@ mod keyword {
 	syn::custom_keyword!(storage_prefix);
 	syn::custom_keyword!(unbounded);
 	syn::custom_keyword!(whitelist_storage);
-	syn::custom_keyword!(proof_size);
+	syn::custom_keyword!(pov_estimate);
 	syn::custom_keyword!(MaxEncodedLen);
 	syn::custom_keyword!(Measured);
 	syn::custom_keyword!(OptionQuery);
@@ -105,16 +105,16 @@ impl syn::parse::Parse for PalletStorageAttr {
 		} else if lookahead.peek(keyword::whitelist_storage) {
 			content.parse::<keyword::whitelist_storage>()?;
 			Ok(Self::WhitelistStorage(attr_span))
-		} else if lookahead.peek(keyword::proof_size) {
-			content.parse::<keyword::proof_size>()?;
+		} else if lookahead.peek(keyword::pov_estimate) {
+			content.parse::<keyword::pov_estimate>()?;
 			content.parse::<syn::Token![=]>()?;
 			let lookahead = content.lookahead1();
 
 			if lookahead.peek(keyword::MaxEncodedLen) {
-				content.parse::<keyword::MaxEncodedLen>().expect("Checked above");
+				content.parse::<keyword::MaxEncodedLen>().expect("Peeked this");
 				Ok(Self::ProofSize(ProofSizeAttribute::MaxEncodedLen, attr_span))
 			} else if lookahead.peek(keyword::Measured) {
-				content.parse::<keyword::Measured>().expect("Checked above");
+				content.parse::<keyword::Measured>().expect("Peeked this");
 				Ok(Self::ProofSize(ProofSizeAttribute::Measured, attr_span))
 			} else {
 				Err(syn::Error::new(
