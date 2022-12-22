@@ -292,6 +292,11 @@ pub mod pallet {
 			amount: BalanceOf<T, I>,
 			beneficiary: T::AccountId,
 		},
+		/// The inactive funds of the pallet have been updated.
+		UpdatedInactive {
+			reactivated: BalanceOf<T, I>,
+			deactivated: BalanceOf<T, I>,
+		}
 	}
 
 	/// Error for the treasury pallet.
@@ -323,11 +328,13 @@ pub mod pallet {
 			let pot = Self::pot();
 			let deactivated = Inactive::<T, I>::get();
 			if pot != deactivated {
-				match (pot > deactivated, pot.max(deactivated) - pot.min(deactivated)) {
-					(true, delta) => T::Currency::deactivate(delta),
-					(false, delta) => T::Currency::reactivate(delta),
-				}
+				T::Currency::reactivate(deactivated);
+				T::Currency::deactivate(pot);
 				Inactive::<T, I>::put(&pot);
+				Self::deposit_event(Event::<T, I>::UpdatedInactive {
+					reactivated: deactivated,
+					deactivated: pot,
+				});
 			}
 
 			// Check to see if we should spend some funds!
