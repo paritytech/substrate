@@ -8,8 +8,8 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-#[cfg(feature = "runtime-benchmarks")]
-mod benchmarking;
+// #[cfg(feature = "runtime-benchmarks")]
+// mod benchmarking;
 
 pub use scale_info::Type;
 
@@ -133,7 +133,7 @@ pub mod pallet {
 	#[pallet::error]
 	pub enum Error<T> {
 		AssetDataNotFound,
-		NFTDataNotFound
+		NFTDataNotFound,
 	}
 
 	#[pallet::call]
