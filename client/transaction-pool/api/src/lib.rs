@@ -307,7 +307,9 @@ pub enum ChainEvent<B: BlockT> {
 #[async_trait]
 pub trait MaintainedTransactionPool: TransactionPool {
 	/// Perform maintenance
-	async fn maintain(&self, event: ChainEvent<Self::Block>);
+	async fn maintain<SO>(&self, event: ChainEvent<Self::Block>, sync_oracle: Arc<SO>)
+	where
+		SO: sp_consensus::SyncOracle + std::marker::Send + std::marker::Sync;
 }
 
 /// Transaction pool interface for submitting local transactions that exposes a
