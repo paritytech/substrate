@@ -22,7 +22,7 @@ use ark_std::io::Cursor;
 
 #[cfg(feature = "full_crypto")]
 use ark_bls12_381::{
-	g1::Parameters as G1Parameters, g2::Parameters as G2Parameters, Bls12_381, G1Affine, G2Affine,
+	g1::Config as G1Config, g2::Config as G2Config, Bls12_381, G1Affine, G2Affine,
 };
 #[cfg(feature = "full_crypto")]
 use ark_ec::{
@@ -53,16 +53,16 @@ pub fn bls_verify(
 	message: &[u8],
 	public_key: &[u8],
 ) -> Result<bool, SerializationError> {
-	let g1 = G1Parameters::GENERATOR;
+	let g1 = G1Config::GENERATOR;
 
 	let r: G2Affine = g2_from_vec(signature)?;
 
 	let pk: G1Affine = g1_from_vec(public_key)?;
 	// hash the message to G2
 	let g2_mapper = MapToCurveBasedHasher::<
-		Projective<G2Parameters>,
+		Projective<G2Config>,
 		DefaultFieldHasher<Sha256, 128>,
-		WBMap<G2Parameters>,
+		WBMap<G2Config>,
 	>::new(DOMAIN)
 	.unwrap();
 	let q = g2_mapper.hash(message).unwrap();
