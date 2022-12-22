@@ -26,7 +26,6 @@
 
 use crate::{Config, Determinism};
 use frame_support::traits::Get;
-use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::Hash;
 use sp_std::{borrow::ToOwned, prelude::*};
 use wasm_instrument::{
@@ -100,11 +99,7 @@ pub struct ImportedMemory {
 }
 
 impl ImportedMemory {
-	pub fn max<T: Config>() -> Self
-	where
-		T: Config,
-		T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-	{
+	pub fn max<T: Config>() -> Self {
 		let pages = max_pages::<T>();
 		Self { min_pages: pages, max_pages: pages }
 	}
@@ -125,11 +120,7 @@ pub struct WasmModule<T: Config> {
 	pub memory: Option<ImportedMemory>,
 }
 
-impl<T: Config> From<ModuleDefinition> for WasmModule<T>
-where
-	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
+impl<T: Config> From<ModuleDefinition> for WasmModule<T> {
 	fn from(def: ModuleDefinition) -> Self {
 		// internal functions start at that offset.
 		let func_offset = u32::try_from(def.imported_functions.len()).unwrap();
@@ -248,11 +239,7 @@ where
 	}
 }
 
-impl<T: Config> WasmModule<T>
-where
-	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
+impl<T: Config> WasmModule<T> {
 	/// Uses the supplied wasm module and instruments it when requested.
 	pub fn instrumented(code: &[u8], inject_gas: bool) -> Self {
 		let module = {
@@ -519,11 +506,7 @@ pub mod body {
 }
 
 /// The maximum amount of pages any contract is allowed to have according to the current `Schedule`.
-pub fn max_pages<T: Config>() -> u32
-where
-	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
+pub fn max_pages<T: Config>() -> u32 {
 	T::Schedule::get().limits.memory_pages
 }
 

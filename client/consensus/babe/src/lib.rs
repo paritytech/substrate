@@ -1402,7 +1402,7 @@ where
 
 		// early exit if block already in chain, otherwise the check for
 		// epoch changes will error when trying to re-import an epoch change
-		match self.client.status(BlockId::Hash(hash)) {
+		match self.client.status(hash) {
 			Ok(sp_blockchain::BlockStatus::InChain) => {
 				// When re-importing existing block strip away intermediates.
 				let _ = block.remove_intermediate::<BabeIntermediate<Block>>(INTERMEDIATE_KEY);
@@ -1425,7 +1425,7 @@ where
 		let parent_hash = *block.header.parent_hash();
 		let parent_header = self
 			.client
-			.header(BlockId::Hash(parent_hash))
+			.header(parent_hash)
 			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
 			.ok_or_else(|| {
 				ConsensusError::ChainLookup(
@@ -1664,7 +1664,7 @@ where
 
 	let finalized_slot = {
 		let finalized_header = client
-			.header(BlockId::Hash(info.finalized_hash))
+			.header(info.finalized_hash)
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 			.expect(
 				"best finalized hash was given by client; finalized headers must exist in db; qed",
