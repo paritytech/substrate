@@ -216,16 +216,6 @@ impl<'a, T: Config> ContractModule<'a, T> {
 		Ok(ContractModule { module: contract_module, schedule: self.schedule })
 	}
 
-	fn inject_stack_height_metering(self) -> Result<Self, &'static str> {
-		if let Some(limit) = self.schedule.limits.stack_height {
-			let contract_module = wasm_instrument::inject_stack_limiter(self.module, limit)
-				.map_err(|_| "stack height instrumentation failed")?;
-			Ok(ContractModule { module: contract_module, schedule: self.schedule })
-		} else {
-			Ok(ContractModule { module: self.module, schedule: self.schedule })
-		}
-	}
-
 	/// Check that the module has required exported functions. For now
 	/// these are just entrypoints:
 	///
@@ -447,10 +437,7 @@ where
 		let memory_limits =
 			get_memory_limits(contract_module.scan_imports(&disallowed_imports)?, schedule)?;
 
-		let code = contract_module
-			.inject_gas_metering(determinism)?
-			.inject_stack_height_metering()?
-			.into_wasm_code()?;
+		let code = contract_module.inject_gas_metering(determinism)?.into_wasm_code()?;
 
 		Ok((code, memory_limits))
 	})()

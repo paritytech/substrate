@@ -99,23 +99,9 @@ pub struct Limits {
 	/// The maximum number of topics supported by an event.
 	pub event_topics: u32,
 
-	/// Maximum allowed stack height in number of elements.
-	///
-	/// See <https://wiki.parity.io/WebAssembly-StackHeight> to find out
-	/// how the stack frame cost is calculated. Each element can be of one of the
-	/// wasm value types. This means the maximum size per element is 64bit.
-	///
-	/// # Note
-	///
-	/// It is safe to disable (pass `None`) the `stack_height` when the execution engine
-	/// is part of the runtime and hence there can be no indeterminism between different
-	/// client resident execution engines.
-	pub stack_height: Option<u32>,
-
 	/// Maximum number of globals a module is allowed to declare.
 	///
-	/// Globals are not limited through the `stack_height` as locals are. Neither does
-	/// the linear memory limit `memory_pages` applies to them.
+	/// Globals are not limited through the linear memory limit `memory_pages`.
 	pub globals: u32,
 
 	/// Maximum number of locals a function can have.
@@ -532,8 +518,6 @@ impl Default for Limits {
 	fn default() -> Self {
 		Self {
 			event_topics: 4,
-			// No stack limit required because we use a runtime resident execution engine.
-			stack_height: None,
 			globals: 256,
 			locals: 1024,
 			parameters: 128,
