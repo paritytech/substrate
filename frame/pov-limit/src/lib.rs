@@ -124,8 +124,7 @@ pub mod pallet {
 			// TODO this needs <https://github.com/paritytech/substrate/pull/11637>.
 			assert!(
 				!T::WeightInfo::waste_proof_size_none(1).proof_size().is_zero(),
-				"Weight zero;
-			 would get stuck in an infinite loop"
+				"Weight zero; would get stuck in an infinite loop"
 			);
 		}
 
