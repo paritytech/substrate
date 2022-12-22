@@ -26,7 +26,6 @@ use sc_consensus::{
 	IncomingBlock,
 };
 use sp_consensus::BlockOrigin;
-use sp_runtime::generic::BlockId;
 use substrate_test_runtime_client::{
 	self,
 	prelude::*,
@@ -39,7 +38,7 @@ fn prepare_good_block() -> (TestClient, Hash, u64, PeerId, IncomingBlock<Block>)
 	block_on(client.import(BlockOrigin::File, block)).unwrap();
 
 	let (hash, number) = (client.block_hash(1).unwrap().unwrap(), 1);
-	let header = client.header(&BlockId::Number(1)).unwrap();
+	let header = client.header(hash).unwrap();
 	let justifications = client.justifications(hash).unwrap();
 	let peer_id = PeerId::random();
 	(

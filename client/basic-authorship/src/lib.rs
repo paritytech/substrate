@@ -50,7 +50,7 @@
 //!
 //! // From this factory, we create a `Proposer`.
 //! let proposer = proposer_factory.init(
-//! 	&client.header(&BlockId::number(0)).unwrap().unwrap(),
+//! 	&client.header(client.chain_info().genesis_hash).unwrap().unwrap(),
 //! );
 //!
 //! // The proposer is created asynchronously.

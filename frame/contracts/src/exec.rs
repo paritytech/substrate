@@ -32,7 +32,7 @@ use frame_support::{
 use frame_system::RawOrigin;
 use pallet_contracts_primitives::ExecReturnValue;
 use smallvec::{Array, SmallVec};
-use sp_core::{crypto::UncheckedFrom, ecdsa::Public as ECDSAPublic};
+use sp_core::ecdsa::Public as ECDSAPublic;
 use sp_io::{crypto::secp256k1_ecdsa_recover_compressed, hashing::blake2_256};
 use sp_runtime::traits::{Convert, Hash};
 use sp_std::{marker::PhantomData, mem, prelude::*};
@@ -475,6 +475,8 @@ enum FrameArgs<'a, T: Config, E> {
 		executable: E,
 		/// A salt used in the contract address deriviation of the new contract.
 		salt: &'a [u8],
+		/// The input data is used in the contract address deriviation of the new contract.
+		input_data: &'a [u8],
 	},
 }
 
@@ -596,7 +598,6 @@ impl<T: Config> CachedContract<T> {
 impl<'a, T, E> Stack<'a, T, E>
 where
 	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 	E: Executable<T>,
 {
 	/// Create and run a new call stack by calling into `dest`.
@@ -660,6 +661,7 @@ where
 				nonce: <Nonce<T>>::get().wrapping_add(1),
 				executable,
 				salt,
+				input_data: input_data.as_ref(),
 			},
 			origin,
 			gas_meter,
@@ -742,9 +744,13 @@ where
 
 					(dest, contract, executable, delegate_caller, ExportedFunction::Call, None)
 				},
-				FrameArgs::Instantiate { sender, nonce, executable, salt } => {
-					let account_id =
-						<Contracts<T>>::contract_address(&sender, executable.code_hash(), salt);
+				FrameArgs::Instantiate { sender, nonce, executable, salt, input_data } => {
+					let account_id = Contracts::<T>::contract_address(
+						&sender,
+						executable.code_hash(),
+						input_data,
+						salt,
+					);
 					let trie_id = Storage::<T>::generate_trie_id(&account_id, nonce);
 					let contract =
 						Storage::<T>::new_contract(&account_id, trie_id, *executable.code_hash())?;
@@ -1080,7 +1086,6 @@ where
 impl<'a, T, E> Ext for Stack<'a, T, E>
 where
 	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 	E: Executable<T>,
 {
 	type T = T;
@@ -1167,6 +1172,7 @@ where
 				nonce,
 				executable,
 				salt,
+				input_data: input_data.as_ref(),
 			},
 			value,
 			gas_limit,

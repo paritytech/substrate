@@ -752,6 +752,22 @@ impl<T: Config> Pallet<T> {
 		Ok(index)
 	}
 
+	/// Remove trailing `None` items of an agenda at `when`. If all items are `None` remove the
+	/// agenda record entirely.
+	fn cleanup_agenda(when: T::BlockNumber) {
+		let mut agenda = Agenda::<T>::get(when);
+		match agenda.iter().rposition(|i| i.is_some()) {
+			Some(i) if agenda.len() > i + 1 => {
+				agenda.truncate(i + 1);
+				Agenda::<T>::insert(when, agenda);
+			},
+			Some(_) => {},
+			None => {
+				Agenda::<T>::remove(when);
+			},
+		}
+	}
+
 	fn do_schedule(
 		when: DispatchTime<T::BlockNumber>,
 		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
@@ -802,6 +818,7 @@ impl<T: Config> Pallet<T> {
 			if let Some(id) = s.maybe_id {
 				Lookup::<T>::remove(id);
 			}
+			Self::cleanup_agenda(when);
 			Self::deposit_event(Event::Canceled { when, index });
 			Ok(())
 		} else {
@@ -824,6 +841,7 @@ impl<T: Config> Pallet<T> {
 			ensure!(!matches!(task, Some(Scheduled { maybe_id: Some(_), .. })), Error::<T>::Named);
 			task.take().ok_or(Error::<T>::NotFound)
 		})?;
+		Self::cleanup_agenda(when);
 		Self::deposit_event(Event::Canceled { when, index });
 
 		Self::place_task(new_time, task).map_err(|x| x.0)
@@ -880,6 +898,7 @@ impl<T: Config> Pallet<T> {
 					}
 					Ok(())
 				})?;
+				Self::cleanup_agenda(when);
 				Self::deposit_event(Event::Canceled { when, index });
 				Ok(())
 			} else {
@@ -905,6 +924,7 @@ impl<T: Config> Pallet<T> {
 			let task = agenda.get_mut(index as usize).ok_or(Error::<T>::NotFound)?;
 			task.take().ok_or(Error::<T>::NotFound)
 		})?;
+		Self::cleanup_agenda(when);
 		Self::deposit_event(Event::Canceled { when, index });
 		Self::place_task(new_time, task).map_err(|x| x.0)
 	}

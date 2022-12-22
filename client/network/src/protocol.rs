@@ -46,10 +46,7 @@ use sc_network_common::{
 	utils::{interval, LruHashSet},
 };
 use sp_arithmetic::traits::SaturatedConversion;
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, CheckedSub, Header as HeaderT, NumberFor, Zero},
-};
+use sp_runtime::traits::{Block as BlockT, CheckedSub, Header as HeaderT, NumberFor, Zero};
 use std::{
 	collections::{HashMap, HashSet, VecDeque},
 	io, iter,
@@ -627,7 +624,7 @@ where
 	/// In chain-based consensus, we often need to make sure non-best forks are
 	/// at least temporarily synced.
 	pub fn announce_block(&mut self, hash: B::Hash, data: Option<Vec<u8>>) {
-		let header = match self.chain.header(BlockId::Hash(hash)) {
+		let header = match self.chain.header(hash) {
 			Ok(Some(header)) => header,
 			Ok(None) => {
 				warn!("Trying to announce unknown block: {}", hash);
