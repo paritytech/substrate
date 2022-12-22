@@ -50,6 +50,8 @@ use sp_consensus_vrf::schnorrkel;
 
 pub use sp_consensus_babe::{AuthorityId, PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH};
 
+const LOG_TARGET: &str = "runtime::babe";
+
 mod default_weights;
 mod equivocation;
 mod randomness;
@@ -403,6 +405,7 @@ pub mod pallet {
 		/// the equivocation proof and validate the given key ownership proof
 		/// against the extracted offender. If both are valid, the offence will
 		/// be reported.
+		#[pallet::call_index(0)]
 		#[pallet::weight(<T as Config>::WeightInfo::report_equivocation(
 			key_owner_proof.validator_count(),
 		))]
@@ -424,6 +427,7 @@ pub mod pallet {
 		/// block authors will call it (validated in `ValidateUnsigned`), as such
 		/// if the block author is defined it will be defined as the equivocation
 		/// reporter.
+		#[pallet::call_index(1)]
 		#[pallet::weight(<T as Config>::WeightInfo::report_equivocation(
 			key_owner_proof.validator_count(),
 		))]
@@ -445,6 +449,7 @@ pub mod pallet {
 		/// the next call to `enact_epoch_change`. The config will be activated one epoch after.
 		/// Multiple calls to this method will replace any existing planned config change that had
 		/// not been enacted yet.
+		#[pallet::call_index(2)]
 		#[pallet::weight(<T as Config>::WeightInfo::plan_config_change())]
 		pub fn plan_config_change(
 			origin: OriginFor<T>,

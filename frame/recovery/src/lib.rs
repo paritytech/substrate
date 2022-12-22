@@ -374,6 +374,7 @@ pub mod pallet {
 		/// Parameters:
 		/// - `account`: The recovered account you want to make a call on-behalf-of.
 		/// - `call`: The call you want to make with the recovered account.
+		#[pallet::call_index(0)]
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
 			(
@@ -403,6 +404,7 @@ pub mod pallet {
 		/// Parameters:
 		/// - `lost`: The "lost account" to be recovered.
 		/// - `rescuer`: The "rescuer account" which can call as the lost account.
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::set_recovered())]
 		pub fn set_recovered(
 			origin: OriginFor<T>,
@@ -437,6 +439,7 @@ pub mod pallet {
 		///   friends.
 		/// - `delay_period`: The number of blocks after a recovery attempt is initialized that
 		///   needs to pass before the account can be recovered.
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::create_recovery(friends.len() as u32))]
 		pub fn create_recovery(
 			origin: OriginFor<T>,
@@ -488,6 +491,7 @@ pub mod pallet {
 		/// Parameters:
 		/// - `account`: The lost account that you want to recover. This account needs to be
 		///   recoverable (i.e. have a recovery configuration).
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::initiate_recovery())]
 		pub fn initiate_recovery(
 			origin: OriginFor<T>,
@@ -532,6 +536,7 @@ pub mod pallet {
 		///
 		/// The combination of these two parameters must point to an active recovery
 		/// process.
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::vouch_recovery(T::MaxFriends::get()))]
 		pub fn vouch_recovery(
 			origin: OriginFor<T>,
@@ -575,6 +580,7 @@ pub mod pallet {
 		/// Parameters:
 		/// - `account`: The lost account that you want to claim has been successfully recovered by
 		///   you.
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::claim_recovery(T::MaxFriends::get()))]
 		pub fn claim_recovery(
 			origin: OriginFor<T>,
@@ -622,6 +628,7 @@ pub mod pallet {
 		///
 		/// Parameters:
 		/// - `rescuer`: The account trying to rescue this recoverable account.
+		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::close_recovery(T::MaxFriends::get()))]
 		pub fn close_recovery(
 			origin: OriginFor<T>,
@@ -659,6 +666,7 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be _Signed_ and must be a
 		/// recoverable account (i.e. has a recovery configuration).
+		#[pallet::call_index(7)]
 		#[pallet::weight(T::WeightInfo::remove_recovery(T::MaxFriends::get()))]
 		pub fn remove_recovery(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -681,6 +689,7 @@ pub mod pallet {
 		///
 		/// Parameters:
 		/// - `account`: The recovered account you are able to call on-behalf-of.
+		#[pallet::call_index(8)]
 		#[pallet::weight(T::WeightInfo::cancel_recovered())]
 		pub fn cancel_recovered(
 			origin: OriginFor<T>,

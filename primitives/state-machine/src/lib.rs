@@ -532,6 +532,7 @@ mod execution {
 			method,
 			call_data,
 			runtime_code,
+			Default::default(),
 		)
 	}
 
@@ -552,6 +553,7 @@ mod execution {
 		method: &str,
 		call_data: &[u8],
 		runtime_code: &RuntimeCode,
+		extensions: Extensions,
 	) -> Result<(Vec<u8>, StorageProof), Box<dyn Error>>
 	where
 		S: trie_backend_essence::TrieBackendStorage<H>,
@@ -569,7 +571,7 @@ mod execution {
 			exec,
 			method,
 			call_data,
-			Extensions::default(),
+			extensions,
 			runtime_code,
 			spawn_handle,
 		)
@@ -1843,7 +1845,7 @@ mod tests {
 		use rand::{rngs::SmallRng, RngCore, SeedableRng};
 		let mut storage: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>> =
 			Default::default();
-		let mut seed = [0; 16];
+		let mut seed = [0; 32];
 		for i in 0..50u32 {
 			let mut child_infos = Vec::new();
 			let seed_partial = &mut seed[0..4];
@@ -1939,13 +1941,13 @@ mod tests {
 		let (proof, count) =
 			prove_range_read_with_size(remote_backend, None, None, 0, None).unwrap();
 		// Always contains at least some nodes.
-		assert_eq!(proof.into_memory_db::<BlakeTwo256>().drain().len(), 3);
+		assert_eq!(proof.to_memory_db::<BlakeTwo256>().drain().len(), 3);
 		assert_eq!(count, 1);
 
 		let remote_backend = trie_backend::tests::test_trie(state_version, None, None);
 		let (proof, count) =
 			prove_range_read_with_size(remote_backend, None, None, 800, Some(&[])).unwrap();
-		assert_eq!(proof.clone().into_memory_db::<BlakeTwo256>().drain().len(), 9);
+		assert_eq!(proof.to_memory_db::<BlakeTwo256>().drain().len(), 9);
 		assert_eq!(count, 85);
 		let (results, completed) = read_range_proof_check::<BlakeTwo256>(
 			remote_root,
@@ -1968,7 +1970,7 @@ mod tests {
 		let remote_backend = trie_backend::tests::test_trie(state_version, None, None);
 		let (proof, count) =
 			prove_range_read_with_size(remote_backend, None, None, 50000, Some(&[])).unwrap();
-		assert_eq!(proof.clone().into_memory_db::<BlakeTwo256>().drain().len(), 11);
+		assert_eq!(proof.to_memory_db::<BlakeTwo256>().drain().len(), 11);
 		assert_eq!(count, 132);
 		let (results, completed) =
 			read_range_proof_check::<BlakeTwo256>(remote_root, proof, None, None, None, None)
@@ -2053,7 +2055,7 @@ mod tests {
 			)
 			.unwrap();
 			// Always contains at least some nodes.
-			assert!(proof.clone().into_memory_db::<BlakeTwo256>().drain().len() > 0);
+			assert!(proof.to_memory_db::<BlakeTwo256>().drain().len() > 0);
 			assert!(count < 3); // when doing child we include parent and first child key.
 
 			let (result, completed_depth) = read_range_proof_check_with_child::<BlakeTwo256>(

@@ -59,6 +59,8 @@ pub struct CallVariantDef {
 	pub weight: syn::Expr,
 	/// Call index of the dispatchable.
 	pub call_index: u8,
+	/// Whether an explicit call index was specified.
+	pub explicit_call_index: bool,
 	/// Docs, used for metadata.
 	pub docs: Vec<syn::Lit>,
 	/// Attributes annotated at the top of the dispatchable function.
@@ -144,6 +146,7 @@ impl CallDef {
 		attr_span: proc_macro2::Span,
 		index: usize,
 		item: &mut syn::Item,
+		dev_mode: bool,
 	) -> syn::Result<Self> {
 		let item_impl = if let syn::Item::Impl(item) = item {
 			item
@@ -213,6 +216,14 @@ impl CallDef {
 						},
 					);
 
+				if weight_attrs.is_empty() && dev_mode {
+					// inject a default O(1) weight when dev mode is enabled and no weight has
+					// been specified on the call
+					let empty_weight: syn::Expr = syn::parse(quote::quote!(0).into())
+						.expect("we are parsing a quoted string; qed");
+					weight_attrs.push(FunctionAttr::Weight(empty_weight));
+				}
+
 				if weight_attrs.len() != 1 {
 					let msg = if weight_attrs.is_empty() {
 						"Invalid pallet::call, requires weight attribute i.e. `#[pallet::weight($expr)]`"
@@ -234,6 +245,7 @@ impl CallDef {
 					FunctionAttr::CallIndex(idx) => idx,
 					_ => unreachable!("checked during creation of the let binding"),
 				});
+				let explicit_call_index = call_index.is_some();
 
 				let final_index = match call_index {
 					Some(i) => i,
@@ -287,6 +299,7 @@ impl CallDef {
 					name: method.sig.ident.clone(),
 					weight,
 					call_index: final_index,
+					explicit_call_index,
 					args,
 					docs,
 					attrs: method.attrs.clone(),

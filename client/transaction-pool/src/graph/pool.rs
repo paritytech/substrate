@@ -90,13 +90,13 @@ pub trait ChainApi: Send + Sync {
 	/// Returns hash and encoding length of the extrinsic.
 	fn hash_and_length(&self, uxt: &ExtrinsicFor<Self>) -> (ExtrinsicHash<Self>, usize);
 
-	/// Returns a block body given the block id.
-	fn block_body(&self, at: &BlockId<Self::Block>) -> Self::BodyFuture;
+	/// Returns a block body given the block.
+	fn block_body(&self, at: <Self::Block as BlockT>::Hash) -> Self::BodyFuture;
 
 	/// Returns a block header given the block id.
 	fn block_header(
 		&self,
-		at: &BlockId<Self::Block>,
+		at: <Self::Block as BlockT>::Hash,
 	) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error>;
 
 	/// Compute a tree-route between two blocks. See [`TreeRoute`] for more details.
@@ -142,15 +142,6 @@ enum CheckBannedBeforeVerify {
 /// Extrinsics pool that performs validation.
 pub struct Pool<B: ChainApi> {
 	validated_pool: Arc<ValidatedPool<B>>,
-}
-
-impl<B: ChainApi> parity_util_mem::MallocSizeOf for Pool<B>
-where
-	ExtrinsicFor<B>: parity_util_mem::MallocSizeOf,
-{
-	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
-		self.validated_pool.size_of(ops)
-	}
 }
 
 impl<B: ChainApi> Pool<B> {

@@ -21,10 +21,7 @@ use sc_client_db::{DbHash, DbState, DbStateBuilder};
 use sp_api::StateBackend;
 use sp_blockchain::HeaderBackend;
 use sp_database::{ColumnId, Transaction};
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, HashFor, Header as HeaderT},
-};
+use sp_runtime::traits::{Block as BlockT, HashFor, Header as HeaderT};
 use sp_trie::PrefixedMemoryDB;
 
 use log::{info, trace};
@@ -58,7 +55,7 @@ impl StorageCmd {
 		let mut record = BenchRecord::default();
 
 		let best_hash = client.usage_info().chain.best_hash;
-		let header = client.header(BlockId::Hash(best_hash))?.ok_or("Header not found")?;
+		let header = client.header(best_hash)?.ok_or("Header not found")?;
 		let original_root = *header.state_root();
 		let trie = DbStateBuilder::<Block>::new(storage.clone(), original_root).build();
 
@@ -77,7 +74,7 @@ impl StorageCmd {
 			match (self.params.include_child_trees, self.is_child_key(k.to_vec())) {
 				(true, Some(info)) => {
 					let child_keys =
-						client.child_storage_keys_iter(&best_hash, info.clone(), None, None)?;
+						client.child_storage_keys_iter(best_hash, info.clone(), None, None)?;
 					for ck in child_keys {
 						child_nodes.push((ck.clone(), info.clone()));
 					}
@@ -124,7 +121,7 @@ impl StorageCmd {
 
 			for (key, info) in child_nodes {
 				if let Some(original_v) = client
-					.child_storage(&best_hash, &info.clone(), &key)
+					.child_storage(best_hash, &info.clone(), &key)
 					.expect("Checked above to exist")
 				{
 					let mut new_v = vec![0; original_v.0.len()];

@@ -234,7 +234,7 @@ impl BuildStorage for () {
 /// Consensus engine unique ID.
 pub type ConsensusEngineId = [u8; 4];
 
-/// Signature verify that can work with any known signature types..
+/// Signature verify that can work with any known signature types.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Eq, PartialEq, Clone, Encode, Decode, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub enum MultiSignature {
@@ -871,13 +871,6 @@ impl OpaqueExtrinsic {
 	/// Convert an encoded extrinsic to an `OpaqueExtrinsic`.
 	pub fn from_bytes(mut bytes: &[u8]) -> Result<Self, codec::Error> {
 		Self::decode(&mut bytes)
-	}
-}
-
-#[cfg(feature = "std")]
-impl parity_util_mem::MallocSizeOf for OpaqueExtrinsic {
-	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
-		self.0.size_of(ops)
 	}
 }
 

@@ -85,6 +85,7 @@ use sp_runtime::{
 use sp_std::{fmt::Debug, prelude::*};
 
 mod branch;
+pub mod migration;
 mod types;
 pub mod weights;
 
@@ -140,8 +141,12 @@ pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
+	/// The current storage version.
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T, I = ()>(_);
 
 	#[pallet::config]
@@ -249,7 +254,7 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		/// A referendum has being submitted.
+		/// A referendum has been submitted.
 		Submitted {
 			/// Index of the referendum.
 			index: ReferendumIndex,
@@ -342,6 +347,15 @@ pub mod pallet {
 			/// The final tally of votes in this referendum.
 			tally: T::Tally,
 		},
+		/// The submission deposit has been refunded.
+		SubmissionDepositRefunded {
+			/// Index of the referendum.
+			index: ReferendumIndex,
+			/// The account who placed the deposit.
+			who: T::AccountId,
+			/// The amount placed by the account.
+			amount: BalanceOf<T, I>,
+		},
 	}
 
 	#[pallet::error]
@@ -352,7 +366,7 @@ pub mod pallet {
 		HasDeposit,
 		/// The track identifier given was invalid.
 		BadTrack,
-		/// There are already a full complement of referendums in progress for this track.
+		/// There are already a full complement of referenda in progress for this track.
 		Full,
 		/// The queue of the track is empty.
 		QueueEmpty,
@@ -368,6 +382,8 @@ pub mod pallet {
 		NoPermission,
 		/// The deposit cannot be refunded since none was made.
 		NoDeposit,
+		/// The referendum status is invalid for this operation.
+		BadStatus,
 	}
 
 	#[pallet::call]
@@ -381,6 +397,7 @@ pub mod pallet {
 		/// - `enactment_moment`: The moment that the proposal should be enacted.
 		///
 		/// Emits `Submitted`.
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::submit())]
 		pub fn submit(
 			origin: OriginFor<T>,
@@ -428,6 +445,7 @@ pub mod pallet {
 		///   posted.
 		///
 		/// Emits `DecisionDepositPlaced`.
+		#[pallet::call_index(1)]
 		#[pallet::weight(ServiceBranch::max_weight_of_deposit::<T, I>())]
 		pub fn place_decision_deposit(
 			origin: OriginFor<T>,
@@ -455,6 +473,7 @@ pub mod pallet {
 		///   refunded.
 		///
 		/// Emits `DecisionDepositRefunded`.
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::refund_decision_deposit())]
 		pub fn refund_decision_deposit(
 			origin: OriginFor<T>,
@@ -484,6 +503,7 @@ pub mod pallet {
 		/// - `index`: The index of the referendum to be cancelled.
 		///
 		/// Emits `Cancelled`.
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::cancel())]
 		pub fn cancel(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
 			T::CancelOrigin::ensure_origin(origin)?;
@@ -495,7 +515,7 @@ pub mod pallet {
 			Self::deposit_event(Event::<T, I>::Cancelled { index, tally: status.tally });
 			let info = ReferendumInfo::Cancelled(
 				frame_system::Pallet::<T>::block_number(),
-				status.submission_deposit,
+				Some(status.submission_deposit),
 				status.decision_deposit,
 			);
 			ReferendumInfoFor::<T, I>::insert(index, info);
@@ -508,6 +528,7 @@ pub mod pallet {
 		/// - `index`: The index of the referendum to be cancelled.
 		///
 		/// Emits `Killed` and `DepositSlashed`.
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::kill())]
 		pub fn kill(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
 			T::KillOrigin::ensure_origin(origin)?;
@@ -528,6 +549,7 @@ pub mod pallet {
 		///
 		/// - `origin`: must be `Root`.
 		/// - `index`: the referendum to be advanced.
+		#[pallet::call_index(5)]
 		#[pallet::weight(ServiceBranch::max_weight_of_nudge::<T, I>())]
 		pub fn nudge_referendum(
 			origin: OriginFor<T>,
@@ -554,6 +576,7 @@ pub mod pallet {
 		/// `DecidingCount` is not yet updated. This means that we should either:
 		/// - begin deciding another referendum (and leave `DecidingCount` alone); or
 		/// - decrement `DecidingCount`.
+		#[pallet::call_index(6)]
 		#[pallet::weight(OneFewerDecidingBranch::max_weight::<T, I>())]
 		pub fn one_fewer_deciding(
 			origin: OriginFor<T>,
@@ -578,6 +601,37 @@ pub mod pallet {
 					OneFewerDecidingBranch::QueueEmpty
 				};
 			Ok(Some(branch.weight::<T, I>()).into())
+		}
+
+		/// Refund the Submission Deposit for a closed referendum back to the depositor.
+		///
+		/// - `origin`: must be `Signed` or `Root`.
+		/// - `index`: The index of a closed referendum whose Submission Deposit has not yet been
+		///   refunded.
+		///
+		/// Emits `SubmissionDepositRefunded`.
+		#[pallet::call_index(7)]
+		#[pallet::weight(T::WeightInfo::refund_submission_deposit())]
+		pub fn refund_submission_deposit(
+			origin: OriginFor<T>,
+			index: ReferendumIndex,
+		) -> DispatchResult {
+			ensure_signed_or_root(origin)?;
+			let mut info =
+				ReferendumInfoFor::<T, I>::get(index).ok_or(Error::<T, I>::BadReferendum)?;
+			let deposit = info
+				.take_submission_deposit()
+				.map_err(|_| Error::<T, I>::BadStatus)?
+				.ok_or(Error::<T, I>::NoDeposit)?;
+			Self::refund_deposit(Some(deposit.clone()));
+			ReferendumInfoFor::<T, I>::insert(index, info);
+			let e = Event::<T, I>::SubmissionDepositRefunded {
+				index,
+				who: deposit.who,
+				amount: deposit.amount,
+			};
+			Self::deposit_event(e);
+			Ok(())
 		}
 	}
 }
@@ -671,9 +725,9 @@ impl<T: Config<I>, I: 'static> Polling<T::Tally> for Pallet<T, I> {
 		Self::note_one_fewer_deciding(status.track);
 		let now = frame_system::Pallet::<T>::block_number();
 		let info = if approved {
-			ReferendumInfo::Approved(now, status.submission_deposit, status.decision_deposit)
+			ReferendumInfo::Approved(now, Some(status.submission_deposit), status.decision_deposit)
 		} else {
-			ReferendumInfo::Rejected(now, status.submission_deposit, status.decision_deposit)
+			ReferendumInfo::Rejected(now, Some(status.submission_deposit), status.decision_deposit)
 		};
 		ReferendumInfoFor::<T, I>::insert(index, info);
 		Ok(())
@@ -697,6 +751,31 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<ReferendumStatusOf<T, I>, DispatchError> {
 		match ReferendumInfoFor::<T, I>::get(index) {
 			Some(ReferendumInfo::Ongoing(status)) => Ok(status),
+			_ => Err(Error::<T, I>::NotOngoing.into()),
+		}
+	}
+
+	/// Returns whether the referendum is passing.
+	/// Referendum must be ongoing and its track must exist.
+	pub fn is_referendum_passing(ref_index: ReferendumIndex) -> Result<bool, DispatchError> {
+		let info = ReferendumInfoFor::<T, I>::get(ref_index).ok_or(Error::<T, I>::BadReferendum)?;
+		match info {
+			ReferendumInfo::Ongoing(status) => {
+				let track = Self::track(status.track).ok_or(Error::<T, I>::NoTrack)?;
+				let elapsed = if let Some(deciding) = status.deciding {
+					frame_system::Pallet::<T>::block_number().saturating_sub(deciding.since)
+				} else {
+					Zero::zero()
+				};
+				Ok(Self::is_passing(
+					&status.tally,
+					elapsed,
+					track.decision_period,
+					&track.min_support,
+					&track.min_approval,
+					status.track,
+				))
+			},
 			_ => Err(Error::<T, I>::NotOngoing.into()),
 		}
 	}
@@ -730,8 +809,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		when: T::BlockNumber,
 	) -> Option<(T::BlockNumber, ScheduleAddressOf<T, I>)> {
 		let alarm_interval = T::AlarmInterval::get().max(One::one());
-		let when = when.saturating_add(alarm_interval).saturating_sub(One::one()) /
-			(alarm_interval.saturating_mul(alarm_interval)).max(One::one());
+		// Alarm must go off no earlier than `when`.
+		// This rounds `when` upwards to the next multiple of `alarm_interval`.
+		let when = (when.saturating_add(alarm_interval.saturating_sub(One::one())) /
+			alarm_interval)
+			.saturating_mul(alarm_interval);
 		let maybe_result = T::Scheduler::schedule(
 			DispatchTime::At(when),
 			None,
@@ -838,9 +920,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// Set an alarm call for the next block to nudge the track along.
 		let now = frame_system::Pallet::<T>::block_number();
 		let next_block = now + One::one();
-		let alarm_interval = T::AlarmInterval::get().max(One::one());
-		let when = (next_block + alarm_interval - One::one()) / alarm_interval * alarm_interval;
-
 		let call = match T::Preimages::bound(CallOf::<T, I>::from(Call::one_fewer_deciding {
 			track,
 		})) {
@@ -850,19 +929,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				return
 			},
 		};
-		let maybe_result = T::Scheduler::schedule(
-			DispatchTime::At(when),
-			None,
-			128u8,
-			frame_system::RawOrigin::Root.into(),
-			call,
-		);
-		debug_assert!(
-			maybe_result.is_ok(),
-			"Unable to schedule a new alarm at #{:?} (now: #{:?})?!",
-			when,
-			now
-		);
+		Self::set_alarm(call, next_block);
 	}
 
 	/// Ensure that a `service_referendum` alarm happens for the referendum `index` at `alarm`.
@@ -908,7 +975,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// In terms of storage, every call to it is expected to access:
 	/// - The scheduler, either to insert, remove or alter an entry;
-	/// - `TrackQueue`, which should be a `BoundedVec` with a low limit (8-16).
+	/// - `TrackQueue`, which should be a `BoundedVec` with a low limit (8-16);
 	/// - `DecidingCount`.
 	///
 	/// Both of the two storage items will only have as many items as there are different tracks,
@@ -982,7 +1049,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					return (
 						ReferendumInfo::TimedOut(
 							now,
-							status.submission_deposit,
+							Some(status.submission_deposit),
 							status.decision_deposit,
 						),
 						true,
@@ -1014,7 +1081,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							return (
 								ReferendumInfo::Approved(
 									now,
-									status.submission_deposit,
+									Some(status.submission_deposit),
 									status.decision_deposit,
 								),
 								true,
@@ -1039,7 +1106,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						return (
 							ReferendumInfo::Rejected(
 								now,
-								status.submission_deposit,
+								Some(status.submission_deposit),
 								status.decision_deposit,
 							),
 							true,

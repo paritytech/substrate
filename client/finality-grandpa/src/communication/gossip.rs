@@ -99,7 +99,7 @@ use sp_finality_grandpa::AuthorityId;
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
 
 use super::{benefit, cost, Round, SetId, NEIGHBOR_REBROADCAST_PERIOD};
-use crate::{environment, CatchUp, CompactCommit, SignedMessage};
+use crate::{environment, CatchUp, CompactCommit, SignedMessage, LOG_TARGET};
 
 use std::{
 	collections::{HashSet, VecDeque},
@@ -578,8 +578,13 @@ impl<N: Ord> Peers<N> {
 			last_update: Some(now),
 		};
 
-		trace!(target: "afg", "Peer {} updated view. Now at {:?}, {:?}",
-			who, peer.view.round, peer.view.set_id);
+		trace!(
+			target: LOG_TARGET,
+			"Peer {} updated view. Now at {:?}, {:?}",
+			who,
+			peer.view.round,
+			peer.view.set_id
+		);
 
 		Ok(Some(&peer.view))
 	}
@@ -801,8 +806,12 @@ impl<Block: BlockT> Inner<Block> {
 
 			let set_id = local_view.set_id;
 
-			debug!(target: "afg", "Voter {} noting beginning of round {:?} to network.",
-				self.config.name(), (round, set_id));
+			debug!(
+				target: LOG_TARGET,
+				"Voter {} noting beginning of round {:?} to network.",
+				self.config.name(),
+				(round, set_id)
+			);
 
 			local_view.update_round(round);
 
@@ -824,7 +833,7 @@ impl<Block: BlockT> Inner<Block> {
 							authorities.iter().collect::<HashSet<_>>();
 
 						if diff_authorities {
-							debug!(target: "afg",
+							debug!(target: LOG_TARGET,
 								"Gossip validator noted set {:?} twice with different authorities. \
 								Was the authority set hard forked?",
 								set_id,
@@ -912,7 +921,7 @@ impl<Block: BlockT> Inner<Block> {
 
 		// ensure authority is part of the set.
 		if !self.authorities.contains(&full.message.id) {
-			debug!(target: "afg", "Message from unknown voter: {}", full.message.id);
+			debug!(target: LOG_TARGET, "Message from unknown voter: {}", full.message.id);
 			telemetry!(
 				self.config.telemetry;
 				CONSENSUS_DEBUG;
@@ -929,7 +938,7 @@ impl<Block: BlockT> Inner<Block> {
 			full.round.0,
 			full.set_id.0,
 		) {
-			debug!(target: "afg", "Bad message signature {}", full.message.id);
+			debug!(target: LOG_TARGET, "Bad message signature {}", full.message.id);
 			telemetry!(
 				self.config.telemetry;
 				CONSENSUS_DEBUG;
@@ -964,7 +973,7 @@ impl<Block: BlockT> Inner<Block> {
 		if full.message.precommits.len() != full.message.auth_data.len() ||
 			full.message.precommits.is_empty()
 		{
-			debug!(target: "afg", "Malformed compact commit");
+			debug!(target: LOG_TARGET, "Malformed compact commit");
 			telemetry!(
 				self.config.telemetry;
 				CONSENSUS_DEBUG;
@@ -1023,9 +1032,9 @@ impl<Block: BlockT> Inner<Block> {
 			PendingCatchUp::Processing { .. } => {
 				self.pending_catch_up = PendingCatchUp::None;
 			},
-			state => debug!(target: "afg",
-				"Noted processed catch up message when state was: {:?}",
-				state,
+			state => debug!(
+				target: LOG_TARGET,
+				"Noted processed catch up message when state was: {:?}", state,
 			),
 		}
 	}
@@ -1067,7 +1076,9 @@ impl<Block: BlockT> Inner<Block> {
 			return (None, Action::Discard(Misbehavior::OutOfScopeMessage.cost()))
 		}
 
-		trace!(target: "afg", "Replying to catch-up request for round {} from {} with round {}",
+		trace!(
+			target: LOG_TARGET,
+			"Replying to catch-up request for round {} from {} with round {}",
 			request.round.0,
 			who,
 			last_completed_round.number,
@@ -1141,9 +1152,9 @@ impl<Block: BlockT> Inner<Block> {
 				let (catch_up_allowed, catch_up_report) = self.note_catch_up_request(who, &request);
 
 				if catch_up_allowed {
-					debug!(target: "afg", "Sending catch-up request for round {} to {}",
-						   round,
-						   who,
+					debug!(
+						target: LOG_TARGET,
+						"Sending catch-up request for round {} to {}", round, who,
 					);
 
 					catch_up = Some(GossipMessage::<Block>::CatchUpRequest(request));
@@ -1347,7 +1358,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 		let metrics = match prometheus_registry.map(Metrics::register) {
 			Some(Ok(metrics)) => Some(metrics),
 			Some(Err(e)) => {
-				debug!(target: "afg", "Failed to register metrics: {:?}", e);
+				debug!(target: LOG_TARGET, "Failed to register metrics: {:?}", e);
 				None
 			},
 			None => None,
@@ -1466,7 +1477,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 				},
 				Err(e) => {
 					message_name = None;
-					debug!(target: "afg", "Error decoding message: {}", e);
+					debug!(target: LOG_TARGET, "Error decoding message: {}", e);
 					telemetry!(
 						self.telemetry;
 						CONSENSUS_DEBUG;

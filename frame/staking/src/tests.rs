@@ -1350,12 +1350,14 @@ fn bond_extra_and_withdraw_unbonded_works() {
 }
 
 #[test]
-fn too_many_unbond_calls_should_not_work() {
+fn many_unbond_calls_should_work() {
 	ExtBuilder::default().build_and_execute(|| {
 		let mut current_era = 0;
 		// locked at era MaxUnlockingChunks - 1 until 3
 
-		for i in 0..<<Test as Config>::MaxUnlockingChunks as Get<u32>>::get() - 1 {
+		let max_unlocking_chunks = <<Test as Config>::MaxUnlockingChunks as Get<u32>>::get();
+
+		for i in 0..max_unlocking_chunks - 1 {
 			// There is only 1 chunk per era, so we need to be in a new era to create a chunk.
 			current_era = i as u32;
 			mock::start_active_era(current_era);
@@ -1365,27 +1367,57 @@ fn too_many_unbond_calls_should_not_work() {
 		current_era += 1;
 		mock::start_active_era(current_era);
 
-		// This chunk is locked at `current_era` through `current_era + 2` (because BondingDuration
-		// == 3).
+		// This chunk is locked at `current_era` through `current_era + 2` (because
+		// `BondingDuration` == 3).
 		assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
 		assert_eq!(
-			Staking::ledger(&10).unwrap().unlocking.len(),
+			Staking::ledger(&10).map(|l| l.unlocking.len()).unwrap(),
 			<<Test as Config>::MaxUnlockingChunks as Get<u32>>::get() as usize
 		);
-		// can't do more.
-		assert_noop!(Staking::unbond(RuntimeOrigin::signed(10), 1), Error::<Test>::NoMoreChunks);
 
-		current_era += 2;
+		// even though the number of unlocked chunks is the same as `MaxUnlockingChunks`,
+		// unbonding works as expected.
+		for i in current_era..(current_era + max_unlocking_chunks) - 1 {
+			// There is only 1 chunk per era, so we need to be in a new era to create a chunk.
+			current_era = i as u32;
+			mock::start_active_era(current_era);
+			assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
+		}
+
+		// only slots within last `BondingDuration` are filled.
+		assert_eq!(
+			Staking::ledger(&10).map(|l| l.unlocking.len()).unwrap(),
+			<<Test as Config>::BondingDuration>::get() as usize
+		);
+	})
+}
+
+#[test]
+fn auto_withdraw_may_not_unlock_all_chunks() {
+	ExtBuilder::default().build_and_execute(|| {
+		// set `MaxUnlockingChunks` to a low number to test case when the unbonding period
+		// is larger than the number of unlocking chunks available, which may result on a
+		// `Error::NoMoreChunks`, even when the auto-withdraw tries to release locked chunks.
+		MaxUnlockingChunks::set(1);
+
+		let mut current_era = 0;
+
+		// fills the chunking slots for account
+		mock::start_active_era(current_era);
+		assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
+
+		current_era += 1;
 		mock::start_active_era(current_era);
 
+		// unbonding will fail because i) there are no remaining chunks and ii) no filled chunks
+		// can be released because current chunk hasn't stay in the queue for at least
+		// `BondingDuration`
 		assert_noop!(Staking::unbond(RuntimeOrigin::signed(10), 1), Error::<Test>::NoMoreChunks);
-		// free up everything except the most recently added chunk.
-		assert_ok!(Staking::withdraw_unbonded(RuntimeOrigin::signed(10), 0));
-		assert_eq!(Staking::ledger(&10).unwrap().unlocking.len(), 1);
 
-		// Can add again.
+		// fast-forward a few eras for unbond to be successful with implicit withdraw
+		current_era += 10;
+		mock::start_active_era(current_era);
 		assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
-		assert_eq!(Staking::ledger(&10).unwrap().unlocking.len(), 2);
 	})
 }
 
@@ -2845,6 +2877,8 @@ fn deferred_slashes_are_deferred() {
 		assert_eq!(Balances::free_balance(101), 2000);
 		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
 
+		System::reset_events();
+
 		on_offence_now(
 			&[OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
@@ -2852,6 +2886,9 @@ fn deferred_slashes_are_deferred() {
 			}],
 			&[Perbill::from_percent(10)],
 		);
+
+		// nominations are not removed regardless of the deferring.
+		assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
 
 		assert_eq!(Balances::free_balance(11), 1000);
 		assert_eq!(Balances::free_balance(101), 2000);
@@ -2866,8 +2903,6 @@ fn deferred_slashes_are_deferred() {
 		assert_eq!(Balances::free_balance(11), 1000);
 		assert_eq!(Balances::free_balance(101), 2000);
 
-		System::reset_events();
-
 		// at the start of era 4, slashes from era 1 are processed,
 		// after being deferred for at least 2 full eras.
 		mock::start_active_era(4);
@@ -2875,15 +2910,16 @@ fn deferred_slashes_are_deferred() {
 		assert_eq!(Balances::free_balance(11), 900);
 		assert_eq!(Balances::free_balance(101), 2000 - (nominated_value / 10));
 
-		assert_eq!(
-			staking_events_since_last_call(),
-			vec![
-				Event::StakersElected,
-				Event::EraPaid { era_index: 3, validator_payout: 11075, remainder: 33225 },
+		assert!(matches!(
+			staking_events_since_last_call().as_slice(),
+			&[
+				Event::Chilled { stash: 11 },
+				Event::SlashReported { validator: 11, slash_era: 1, .. },
+				..,
 				Event::Slashed { staker: 11, amount: 100 },
 				Event::Slashed { staker: 101, amount: 12 }
 			]
-		);
+		));
 	})
 }
 
@@ -2896,25 +2932,29 @@ fn retroactive_deferred_slashes_two_eras_before() {
 		let exposure_11_at_era1 = Staking::eras_stakers(active_era(), 11);
 
 		mock::start_active_era(3);
+
+		assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
+
+		System::reset_events();
 		on_offence_in_era(
 			&[OffenceDetails { offender: (11, exposure_11_at_era1), reporters: vec![] }],
 			&[Perbill::from_percent(10)],
 			1, // should be deferred for two full eras, and applied at the beginning of era 4.
 			DisableStrategy::Never,
 		);
-		System::reset_events();
 
 		mock::start_active_era(4);
 
-		assert_eq!(
-			staking_events_since_last_call(),
-			vec![
-				Event::StakersElected,
-				Event::EraPaid { era_index: 3, validator_payout: 7100, remainder: 21300 },
+		assert!(matches!(
+			staking_events_since_last_call().as_slice(),
+			&[
+				Event::Chilled { stash: 11 },
+				Event::SlashReported { validator: 11, slash_era: 1, .. },
+				..,
 				Event::Slashed { staker: 11, amount: 100 },
-				Event::Slashed { staker: 101, amount: 12 },
+				Event::Slashed { staker: 101, amount: 12 }
 			]
-		);
+		));
 	})
 }
 
@@ -2932,35 +2972,29 @@ fn retroactive_deferred_slashes_one_before() {
 		assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 100));
 
 		mock::start_active_era(3);
+		System::reset_events();
 		on_offence_in_era(
 			&[OffenceDetails { offender: (11, exposure_11_at_era1), reporters: vec![] }],
 			&[Perbill::from_percent(10)],
 			2, // should be deferred for two full eras, and applied at the beginning of era 5.
 			DisableStrategy::Never,
 		);
-		System::reset_events();
 
 		mock::start_active_era(4);
-		assert_eq!(
-			staking_events_since_last_call(),
-			vec![
-				Event::StakersElected,
-				Event::EraPaid { era_index: 3, validator_payout: 11075, remainder: 33225 }
-			]
-		);
 
 		assert_eq!(Staking::ledger(10).unwrap().total, 1000);
 		// slash happens after the next line.
+
 		mock::start_active_era(5);
-		assert_eq!(
-			staking_events_since_last_call(),
-			vec![
-				Event::StakersElected,
-				Event::EraPaid { era_index: 4, validator_payout: 11075, remainder: 33225 },
+		assert!(matches!(
+			staking_events_since_last_call().as_slice(),
+			&[
+				Event::SlashReported { validator: 11, slash_era: 2, .. },
+				..,
 				Event::Slashed { staker: 11, amount: 100 },
 				Event::Slashed { staker: 101, amount: 12 }
 			]
-		);
+		));
 
 		// their ledger has already been slashed.
 		assert_eq!(Staking::ledger(10).unwrap().total, 900);
@@ -3068,6 +3102,7 @@ fn remove_deferred() {
 		mock::start_active_era(2);
 
 		// reported later, but deferred to start of era 4 as well.
+		System::reset_events();
 		on_offence_in_era(
 			&[OffenceDetails { offender: (11, exposure.clone()), reporters: vec![] }],
 			&[Perbill::from_percent(15)],
@@ -3094,19 +3129,18 @@ fn remove_deferred() {
 
 		// at the start of era 4, slashes from era 1 are processed,
 		// after being deferred for at least 2 full eras.
-		System::reset_events();
 		mock::start_active_era(4);
 
-		// the first slash for 10% was cancelled, but the 15% one
-		assert_eq!(
-			staking_events_since_last_call(),
-			vec![
-				Event::StakersElected,
-				Event::EraPaid { era_index: 3, validator_payout: 11075, remainder: 33225 },
+		// the first slash for 10% was cancelled, but the 15% one not.
+		assert!(matches!(
+			staking_events_since_last_call().as_slice(),
+			&[
+				Event::SlashReported { validator: 11, slash_era: 1, .. },
+				..,
 				Event::Slashed { staker: 11, amount: 50 },
 				Event::Slashed { staker: 101, amount: 7 }
 			]
-		);
+		));
 
 		let slash_10 = Perbill::from_percent(10);
 		let slash_15 = Perbill::from_percent(15);
@@ -3196,6 +3230,9 @@ fn slash_kicks_validators_not_nominators_and_disables_nominator_for_kicked_valid
 		assert_eq!(Balances::free_balance(11), 1000);
 		assert_eq!(Balances::free_balance(101), 2000);
 
+		// 100 has approval for 11 as of now
+		assert!(Staking::nominators(101).unwrap().targets.contains(&11));
+
 		// 11 and 21 both have the support of 100
 		let exposure_11 = Staking::eras_stakers(active_era(), &11);
 		let exposure_21 = Staking::eras_stakers(active_era(), &21);
@@ -3208,23 +3245,29 @@ fn slash_kicks_validators_not_nominators_and_disables_nominator_for_kicked_valid
 			&[Perbill::from_percent(10)],
 		);
 
+		assert_eq!(
+			staking_events_since_last_call(),
+			vec![
+				Event::StakersElected,
+				Event::EraPaid { era_index: 0, validator_payout: 11075, remainder: 33225 },
+				Event::Chilled { stash: 11 },
+				Event::SlashReported {
+					validator: 11,
+					fraction: Perbill::from_percent(10),
+					slash_era: 1
+				},
+				Event::Slashed { staker: 11, amount: 100 },
+				Event::Slashed { staker: 101, amount: 12 },
+			]
+		);
+
 		// post-slash balance
 		let nominator_slash_amount_11 = 125 / 10;
 		assert_eq!(Balances::free_balance(11), 900);
 		assert_eq!(Balances::free_balance(101), 2000 - nominator_slash_amount_11);
 
-		// This is the best way to check that the validator was chilled; `get` will
-		// return default value.
-		for (stash, _) in <Staking as Store>::Validators::iter() {
-			assert!(stash != 11);
-		}
-
-		let nominations = <Staking as Store>::Nominators::get(&101).unwrap();
-
-		// and make sure that the vote will be ignored even if the validator
-		// re-registers.
-		let last_slash = <Staking as Store>::SlashingSpans::get(&11).unwrap().last_nonzero_slash();
-		assert!(nominations.submitted_in < last_slash);
+		// check that validator was chilled.
+		assert!(<Staking as Store>::Validators::iter().all(|(stash, _)| stash != 11));
 
 		// actually re-bond the slashed validator
 		assert_ok!(Staking::validate(RuntimeOrigin::signed(10), Default::default()));
@@ -3233,11 +3276,12 @@ fn slash_kicks_validators_not_nominators_and_disables_nominator_for_kicked_valid
 		let exposure_11 = Staking::eras_stakers(active_era(), &11);
 		let exposure_21 = Staking::eras_stakers(active_era(), &21);
 
-		// 10 is re-elected, but without the support of 100
-		assert_eq!(exposure_11.total, 900);
-
-		// 20 is re-elected, with the (almost) entire support of 100
-		assert_eq!(exposure_21.total, 1000 + 500 - nominator_slash_amount_11);
+		// 11's own expo is reduced. sum of support from 11 is less (448), which is 500
+		// 900 + 146
+		assert!(matches!(exposure_11, Exposure { own: 900, total: 1046, .. }));
+		// 1000 + 342
+		assert!(matches!(exposure_21, Exposure { own: 1000, total: 1342, .. }));
+		assert_eq!(500 - 146 - 342, nominator_slash_amount_11);
 	});
 }
 
@@ -3256,10 +3300,38 @@ fn non_slashable_offence_doesnt_disable_validator() {
 			&[Perbill::zero()],
 		);
 
+		// it does NOT affect the nominator.
+		assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
+
 		// offence that slashes 25% of the bond
 		on_offence_now(
 			&[OffenceDetails { offender: (21, exposure_21.clone()), reporters: vec![] }],
 			&[Perbill::from_percent(25)],
+		);
+
+		// it DOES NOT affect the nominator.
+		assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
+
+		assert_eq!(
+			staking_events_since_last_call(),
+			vec![
+				Event::StakersElected,
+				Event::EraPaid { era_index: 0, validator_payout: 11075, remainder: 33225 },
+				Event::Chilled { stash: 11 },
+				Event::SlashReported {
+					validator: 11,
+					fraction: Perbill::from_percent(0),
+					slash_era: 1
+				},
+				Event::Chilled { stash: 21 },
+				Event::SlashReported {
+					validator: 21,
+					fraction: Perbill::from_percent(25),
+					slash_era: 1
+				},
+				Event::Slashed { staker: 21, amount: 250 },
+				Event::Slashed { staker: 101, amount: 94 }
+			]
 		);
 
 		// the offence for validator 10 wasn't slashable so it wasn't disabled
@@ -3288,12 +3360,40 @@ fn slashing_independent_of_disabling_validator() {
 			DisableStrategy::Always,
 		);
 
+		// nomination remains untouched.
+		assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
+
 		// offence that slashes 25% of the bond, BUT not disabling
 		on_offence_in_era(
 			&[OffenceDetails { offender: (21, exposure_21.clone()), reporters: vec![] }],
 			&[Perbill::from_percent(25)],
 			now,
 			DisableStrategy::Never,
+		);
+
+		// nomination remains untouched.
+		assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
+
+		assert_eq!(
+			staking_events_since_last_call(),
+			vec![
+				Event::StakersElected,
+				Event::EraPaid { era_index: 0, validator_payout: 11075, remainder: 33225 },
+				Event::Chilled { stash: 11 },
+				Event::SlashReported {
+					validator: 11,
+					fraction: Perbill::from_percent(0),
+					slash_era: 1
+				},
+				Event::Chilled { stash: 21 },
+				Event::SlashReported {
+					validator: 21,
+					fraction: Perbill::from_percent(25),
+					slash_era: 1
+				},
+				Event::Slashed { staker: 21, amount: 250 },
+				Event::Slashed { staker: 101, amount: 94 }
+			]
 		);
 
 		// the offence for validator 10 was explicitly disabled
@@ -3370,6 +3470,9 @@ fn disabled_validators_are_kept_disabled_for_whole_era() {
 				&[Perbill::from_percent(25)],
 			);
 
+			// nominations are not updated.
+			assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
+
 			// validator 10 should not be disabled since the offence wasn't slashable
 			assert!(!is_disabled(10));
 			// validator 20 gets disabled since it got slashed
@@ -3386,6 +3489,9 @@ fn disabled_validators_are_kept_disabled_for_whole_era() {
 				&[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
 				&[Perbill::from_percent(25)],
 			);
+
+			// nominations are not updated.
+			assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
 
 			advance_session();
 
@@ -3503,18 +3609,10 @@ fn zero_slash_keeps_nominators() {
 		assert_eq!(Balances::free_balance(11), 1000);
 		assert_eq!(Balances::free_balance(101), 2000);
 
-		// This is the best way to check that the validator was chilled; `get` will
-		// return default value.
-		for (stash, _) in <Staking as Store>::Validators::iter() {
-			assert!(stash != 11);
-		}
-
-		let nominations = <Staking as Store>::Nominators::get(&101).unwrap();
-
-		// and make sure that the vote will not be ignored, because the slash was
-		// zero.
-		let last_slash = <Staking as Store>::SlashingSpans::get(&11).unwrap().last_nonzero_slash();
-		assert!(nominations.submitted_in >= last_slash);
+		// 11 is still removed..
+		assert!(<Staking as Store>::Validators::iter().all(|(stash, _)| stash != 11));
+		// but their nominations are kept.
+		assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
 	});
 }
 
@@ -4365,9 +4463,10 @@ mod election_data_provider {
 	#[test]
 	fn targets_2sec_block() {
 		let mut validators = 1000;
-		while <Test as Config>::WeightInfo::get_npos_targets(validators)
-			.all_lt(2u64 * frame_support::weights::constants::WEIGHT_PER_SECOND)
-		{
+		while <Test as Config>::WeightInfo::get_npos_targets(validators).all_lt(Weight::from_parts(
+			2u64 * frame_support::weights::constants::WEIGHT_REF_TIME_PER_SECOND,
+			u64::MAX,
+		)) {
 			validators += 1;
 		}
 
@@ -4379,13 +4478,14 @@ mod election_data_provider {
 		// we assume a network only wants up to 1000 validators in most cases, thus having 2000
 		// candidates is as high as it gets.
 		let validators = 2000;
-		// we assume the worse case: each validator also has a slashing span.
-		let slashing_spans = validators;
 		let mut nominators = 1000;
 
-		while <Test as Config>::WeightInfo::get_npos_voters(validators, nominators, slashing_spans)
-			.all_lt(2u64 * frame_support::weights::constants::WEIGHT_PER_SECOND)
-		{
+		while <Test as Config>::WeightInfo::get_npos_voters(validators, nominators).all_lt(
+			Weight::from_parts(
+				2u64 * frame_support::weights::constants::WEIGHT_REF_TIME_PER_SECOND,
+				u64::MAX,
+			),
+		) {
 			nominators += 1;
 		}
 
@@ -4393,6 +4493,32 @@ mod election_data_provider {
 			"Can create a snapshot of {} nominators [{} validators, each 1 slashing] in 2sec block",
 			nominators, validators
 		);
+	}
+
+	#[test]
+	fn set_minimum_active_stake_is_correct() {
+		ExtBuilder::default()
+			.nominate(false)
+			.add_staker(61, 60, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
+			.add_staker(71, 70, 10, StakerStatus::<AccountId>::Nominator(vec![21]))
+			.add_staker(81, 80, 50, StakerStatus::<AccountId>::Nominator(vec![21]))
+			.build_and_execute(|| {
+				assert_ok!(<Staking as ElectionDataProvider>::electing_voters(None));
+				assert_eq!(MinimumActiveStake::<Test>::get(), 10);
+
+				// remove staker with lower bond by limiting the number of voters and check
+				// `MinimumActiveStake` again after electing voters.
+				assert_ok!(<Staking as ElectionDataProvider>::electing_voters(Some(5)));
+				assert_eq!(MinimumActiveStake::<Test>::get(), 50);
+			});
+	}
+
+	#[test]
+	fn set_minimum_active_stake_zero_correct() {
+		ExtBuilder::default().has_stakers(false).build_and_execute(|| {
+			assert_ok!(<Staking as ElectionDataProvider>::electing_voters(None));
+			assert_eq!(MinimumActiveStake::<Test>::get(), 0);
+		});
 	}
 
 	#[test]
@@ -4404,49 +4530,6 @@ mod election_data_provider {
 			.unwrap()
 			.into_iter()
 			.any(|(w, _, t)| { v == w && t[0] == w })))
-		})
-	}
-
-	#[test]
-	fn voters_exclude_slashed() {
-		ExtBuilder::default().build_and_execute(|| {
-			assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
-			assert_eq!(
-				<Staking as ElectionDataProvider>::electing_voters(None)
-					.unwrap()
-					.iter()
-					.find(|x| x.0 == 101)
-					.unwrap()
-					.2,
-				vec![11, 21]
-			);
-
-			start_active_era(1);
-			add_slash(&11);
-
-			// 11 is gone.
-			start_active_era(2);
-			assert_eq!(
-				<Staking as ElectionDataProvider>::electing_voters(None)
-					.unwrap()
-					.iter()
-					.find(|x| x.0 == 101)
-					.unwrap()
-					.2,
-				vec![21]
-			);
-
-			// resubmit and it is back
-			assert_ok!(Staking::nominate(RuntimeOrigin::signed(100), vec![11, 21]));
-			assert_eq!(
-				<Staking as ElectionDataProvider>::electing_voters(None)
-					.unwrap()
-					.iter()
-					.find(|x| x.0 == 101)
-					.unwrap()
-					.2,
-				vec![11, 21]
-			);
 		})
 	}
 
@@ -4486,10 +4569,26 @@ mod election_data_provider {
 	fn only_iterates_max_2_times_max_allowed_len() {
 		ExtBuilder::default()
 			.nominate(false)
-			// the other nominators only nominate 21
-			.add_staker(61, 60, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
-			.add_staker(71, 70, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
-			.add_staker(81, 80, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
+			// the best way to invalidate a bunch of nominators is to have them nominate a lot of
+			// ppl, but then lower the MaxNomination limit.
+			.add_staker(
+				61,
+				60,
+				2_000,
+				StakerStatus::<AccountId>::Nominator(vec![21, 22, 23, 24, 25]),
+			)
+			.add_staker(
+				71,
+				70,
+				2_000,
+				StakerStatus::<AccountId>::Nominator(vec![21, 22, 23, 24, 25]),
+			)
+			.add_staker(
+				81,
+				80,
+				2_000,
+				StakerStatus::<AccountId>::Nominator(vec![21, 22, 23, 24, 25]),
+			)
 			.build_and_execute(|| {
 				// all voters ordered by stake,
 				assert_eq!(
@@ -4497,10 +4596,7 @@ mod election_data_provider {
 					vec![61, 71, 81, 11, 21, 31]
 				);
 
-				run_to_block(25);
-
-				// slash 21, the only validator nominated by our first 3 nominators
-				add_slash(&21);
+				MaxNominations::set(2);
 
 				// we want 2 voters now, and in maximum we allow 4 iterations. This is what happens:
 				// 61 is pruned;
@@ -4516,55 +4612,6 @@ mod election_data_provider {
 						.copied()
 						.collect::<Vec<_>>(),
 					vec![11],
-				);
-			});
-	}
-
-	// Even if some of the higher staked nominators are slashed, we still get up to max len voters
-	// by adding more lower staked nominators. In other words, we assert that we keep on adding
-	// valid nominators until we reach max len voters; which is opposed to simply stopping after we
-	// have iterated max len voters, but not adding all of them to voters due to some nominators not
-	// having valid targets.
-	#[test]
-	fn get_max_len_voters_even_if_some_nominators_are_slashed() {
-		ExtBuilder::default()
-			.nominate(false)
-			.add_staker(61, 60, 20, StakerStatus::<AccountId>::Nominator(vec![21]))
-			.add_staker(71, 70, 10, StakerStatus::<AccountId>::Nominator(vec![11, 21]))
-			.add_staker(81, 80, 10, StakerStatus::<AccountId>::Nominator(vec![11, 21]))
-			.build_and_execute(|| {
-				// given our voters ordered by stake,
-				assert_eq!(
-					<Test as Config>::VoterList::iter().collect::<Vec<_>>(),
-					vec![11, 21, 31, 61, 71, 81]
-				);
-
-				// we take 4 voters
-				assert_eq!(
-					Staking::electing_voters(Some(4))
-						.unwrap()
-						.iter()
-						.map(|(stash, _, _)| stash)
-						.copied()
-						.collect::<Vec<_>>(),
-					vec![11, 21, 31, 61],
-				);
-
-				// roll to session 5
-				run_to_block(25);
-
-				// slash 21, the only validator nominated by 61.
-				add_slash(&21);
-
-				// we take 4 voters; 71 and 81 are replacing the ejected ones.
-				assert_eq!(
-					Staking::electing_voters(Some(4))
-						.unwrap()
-						.iter()
-						.map(|(stash, _, _)| stash)
-						.copied()
-						.collect::<Vec<_>>(),
-					vec![11, 31, 71, 81],
 				);
 			});
 	}
@@ -5622,5 +5669,59 @@ fn reducing_max_unlocking_chunks_abrupt() {
 
 		// reset the ledger corruption
 		MaxUnlockingChunks::set(2);
+	})
+}
+
+#[test]
+fn cannot_set_unsupported_validator_count() {
+	ExtBuilder::default().build_and_execute(|| {
+		MaxWinners::set(50);
+		// set validator count works
+		assert_ok!(Staking::set_validator_count(RuntimeOrigin::root(), 30));
+		assert_ok!(Staking::set_validator_count(RuntimeOrigin::root(), 50));
+		// setting validator count above 100 does not work
+		assert_noop!(
+			Staking::set_validator_count(RuntimeOrigin::root(), 51),
+			Error::<Test>::TooManyValidators,
+		);
+	})
+}
+
+#[test]
+fn increase_validator_count_errors() {
+	ExtBuilder::default().build_and_execute(|| {
+		MaxWinners::set(50);
+		assert_ok!(Staking::set_validator_count(RuntimeOrigin::root(), 40));
+
+		// increase works
+		assert_ok!(Staking::increase_validator_count(RuntimeOrigin::root(), 6));
+		assert_eq!(ValidatorCount::<Test>::get(), 46);
+
+		// errors
+		assert_noop!(
+			Staking::increase_validator_count(RuntimeOrigin::root(), 5),
+			Error::<Test>::TooManyValidators,
+		);
+	})
+}
+
+#[test]
+fn scale_validator_count_errors() {
+	ExtBuilder::default().build_and_execute(|| {
+		MaxWinners::set(50);
+		assert_ok!(Staking::set_validator_count(RuntimeOrigin::root(), 20));
+
+		// scale value works
+		assert_ok!(Staking::scale_validator_count(
+			RuntimeOrigin::root(),
+			Percent::from_percent(200)
+		));
+		assert_eq!(ValidatorCount::<Test>::get(), 40);
+
+		// errors
+		assert_noop!(
+			Staking::scale_validator_count(RuntimeOrigin::root(), Percent::from_percent(126)),
+			Error::<Test>::TooManyValidators,
+		);
 	})
 }

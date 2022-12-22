@@ -13,14 +13,14 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-async-std = "1.11.0"
+tokio = "1.22.0"
 async-trait = "0.1.57"
 futures = "0.3.21"
 futures-timer = "3.0.1"
 libp2p = { version = "0.49.0", default-features = false }
 log = "0.4.17"
 parking_lot = "0.12.1"
-rand = "0.7.2"
+rand = "0.8.5"
 sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
 sc-client-api = { version = "4.0.0-dev", path = "../../api" }
 sc-consensus = { version = "0.10.0-dev", path = "../../consensus/common" }
@@ -32,8 +32,8 @@ sc-service = { version = "0.10.0-dev", default-features = false, features = ["te
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
-sp-core = { version = "6.0.0", path = "../../../primitives/core" }
-sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
-sp-tracing = { version = "5.0.0", path = "../../../primitives/tracing" }
+sp-core = { version = "7.0.0", path = "../../../primitives/core" }
+sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
+sp-tracing = { version = "6.0.0", path = "../../../primitives/tracing" }
 substrate-test-runtime = { version = "2.0.0", path = "../../../test-utils/runtime" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }

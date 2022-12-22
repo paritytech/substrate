@@ -101,16 +101,16 @@ impl<T: Ord, S: Get<u32>> InsertSorted<T> for BoundedVec<T, S> {
 pub struct DecidingStatus<BlockNumber> {
 	/// When this referendum began being "decided". If confirming, then the
 	/// end will actually be delayed until the end of the confirmation period.
-	pub(crate) since: BlockNumber,
+	pub since: BlockNumber,
 	/// If `Some`, then the referendum has entered confirmation stage and will end at
 	/// the block number as long as it doesn't lose its approval in the meantime.
-	pub(crate) confirming: Option<BlockNumber>,
+	pub confirming: Option<BlockNumber>,
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct Deposit<AccountId, Balance> {
-	pub(crate) who: AccountId,
-	pub(crate) amount: Balance,
+	pub who: AccountId,
+	pub amount: Balance,
 }
 
 #[derive(Clone, Encode, TypeInfo)]
@@ -171,28 +171,28 @@ pub struct ReferendumStatus<
 	ScheduleAddress: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 > {
 	/// The track of this referendum.
-	pub(crate) track: TrackId,
+	pub track: TrackId,
 	/// The origin for this referendum.
-	pub(crate) origin: RuntimeOrigin,
+	pub origin: RuntimeOrigin,
 	/// The hash of the proposal up for referendum.
-	pub(crate) proposal: Call,
+	pub proposal: Call,
 	/// The time the proposal should be scheduled for enactment.
-	pub(crate) enactment: DispatchTime<Moment>,
-	/// The time of submission. Once `UndecidingTimeout` passes, it may be closed by anyone if it
+	pub enactment: DispatchTime<Moment>,
+	/// The time of submission. Once `UndecidingTimeout` passes, it may be closed by anyone if
 	/// `deciding` is `None`.
-	pub(crate) submitted: Moment,
+	pub submitted: Moment,
 	/// The deposit reserved for the submission of this referendum.
-	pub(crate) submission_deposit: Deposit<AccountId, Balance>,
+	pub submission_deposit: Deposit<AccountId, Balance>,
 	/// The deposit reserved for this referendum to be decided.
-	pub(crate) decision_deposit: Option<Deposit<AccountId, Balance>>,
+	pub decision_deposit: Option<Deposit<AccountId, Balance>>,
 	/// The status of a decision being made. If `None`, it has not entered the deciding period.
-	pub(crate) deciding: Option<DecidingStatus<Moment>>,
+	pub deciding: Option<DecidingStatus<Moment>>,
 	/// The current tally of votes in this referendum.
-	pub(crate) tally: Tally,
+	pub tally: Tally,
 	/// Whether we have been placed in the queue for being decided or not.
-	pub(crate) in_queue: bool,
+	pub in_queue: bool,
 	/// The next scheduled wake-up, if `Some`.
-	pub(crate) alarm: Option<(Moment, ScheduleAddress)>,
+	pub alarm: Option<(Moment, ScheduleAddress)>,
 }
 
 /// Info regarding a referendum, present or past.
@@ -221,13 +221,13 @@ pub enum ReferendumInfo<
 		>,
 	),
 	/// Referendum finished with approval. Submission deposit is held.
-	Approved(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
+	Approved(Moment, Option<Deposit<AccountId, Balance>>, Option<Deposit<AccountId, Balance>>),
 	/// Referendum finished with rejection. Submission deposit is held.
-	Rejected(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
-	/// Referendum finished with cancelation. Submission deposit is held.
-	Cancelled(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
+	Rejected(Moment, Option<Deposit<AccountId, Balance>>, Option<Deposit<AccountId, Balance>>),
+	/// Referendum finished with cancellation. Submission deposit is held.
+	Cancelled(Moment, Option<Deposit<AccountId, Balance>>, Option<Deposit<AccountId, Balance>>),
 	/// Referendum finished and was never decided. Submission deposit is held.
-	TimedOut(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
+	TimedOut(Moment, Option<Deposit<AccountId, Balance>>, Option<Deposit<AccountId, Balance>>),
 	/// Referendum finished with a kill.
 	Killed(Moment),
 }
@@ -254,6 +254,19 @@ impl<
 			Approved(_, _, d) | Rejected(_, _, d) | TimedOut(_, _, d) | Cancelled(_, _, d) =>
 				Ok(d.take()),
 			Killed(_) => Ok(None),
+		}
+	}
+
+	/// Take the Submission Deposit from `self`, if there is one and it's in a valid state to be
+	/// taken. Returns an `Err` if `self` is not in a valid state for the Submission Deposit to be
+	/// refunded.
+	pub fn take_submission_deposit(&mut self) -> Result<Option<Deposit<AccountId, Balance>>, ()> {
+		use ReferendumInfo::*;
+		match self {
+			// Can only refund deposit if it's appoved or cancelled.
+			Approved(_, s, _) | Cancelled(_, s, _) => Ok(s.take()),
+			// Cannot refund deposit if Ongoing as this breaks assumptions.
+			Ongoing(..) | Rejected(..) | TimedOut(..) | Killed(..) => Err(()),
 		}
 	}
 }
@@ -409,7 +422,7 @@ impl Curve {
 	}
 
 	/// Determine the `y` value for the given `x` value.
-	pub(crate) fn threshold(&self, x: Perbill) -> Perbill {
+	pub fn threshold(&self, x: Perbill) -> Perbill {
 		match self {
 			Self::LinearDecreasing { length, floor, ceil } =>
 				*ceil - (x.min(*length).saturating_div(*length, Down) * (*ceil - *floor)),

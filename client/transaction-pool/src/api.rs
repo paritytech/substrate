@@ -126,8 +126,8 @@ where
 		Pin<Box<dyn Future<Output = error::Result<TransactionValidity>> + Send>>;
 	type BodyFuture = Ready<error::Result<Option<Vec<<Self::Block as BlockT>::Extrinsic>>>>;
 
-	fn block_body(&self, id: &BlockId<Self::Block>) -> Self::BodyFuture {
-		ready(self.client.block_body(id).map_err(error::Error::from))
+	fn block_body(&self, hash: Block::Hash) -> Self::BodyFuture {
+		ready(self.client.block_body(hash).map_err(error::Error::from))
 	}
 
 	fn validate_transaction(
@@ -190,9 +190,9 @@ where
 
 	fn block_header(
 		&self,
-		at: &BlockId<Self::Block>,
+		hash: <Self::Block as BlockT>::Hash,
 	) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error> {
-		self.client.header(*at).map_err(Into::into)
+		self.client.header(hash).map_err(Into::into)
 	}
 
 	fn tree_route(

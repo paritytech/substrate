@@ -106,7 +106,7 @@ impl pallet_whitelist::Config for Test {
 	type RuntimeCall = RuntimeCall;
 	type WhitelistOrigin = EnsureRoot<Self::AccountId>;
 	type DispatchWhitelistedOrigin = EnsureRoot<Self::AccountId>;
-	type PreimageProvider = Preimage;
+	type Preimages = Preimage;
 	type WeightInfo = ();
 }
 

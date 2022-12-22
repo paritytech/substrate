@@ -7,7 +7,6 @@ license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "Bag threshold generation script for pallet-bag-list"
-readme = "README.md"
 
 [dependencies]
 # FRAME
@@ -16,10 +15,7 @@ frame-election-provider-support = { version = "4.0.0-dev", path = "../../../fram
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
 pallet-staking = { version = "4.0.0-dev", path = "../../../frame/staking" }
 
-# primitives
-sp-io = { version = "6.0.0", path = "../../../primitives/io" }
-
 # third party
 chrono = { version = "0.4.19" }
 git2 = { version = "0.14.2", default-features = false }
-num-format = { version = "0.4.0" }
+num-format = "0.4.3"

@@ -284,6 +284,7 @@ pub mod pallet {
 		/// - One storage mutation (codec `O(R)`).
 		/// - One event.
 		/// # </weight>
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::add_registrar(T::MaxRegistrars::get()))]
 		pub fn add_registrar(
 			origin: OriginFor<T>,
@@ -329,6 +330,7 @@ pub mod pallet {
 		/// - One storage mutation (codec-read `O(X' + R)`, codec-write `O(X + R)`).
 		/// - One event.
 		/// # </weight>
+		#[pallet::call_index(1)]
 		#[pallet::weight( T::WeightInfo::set_identity(
 			T::MaxRegistrars::get(), // R
 			T::MaxAdditionalFields::get(), // X
@@ -404,6 +406,7 @@ pub mod pallet {
 		// N storage items for N sub accounts. Right now the weight on this function
 		// is a large overestimate due to the fact that it could potentially write
 		// to 2 x T::MaxSubAccounts::get().
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::set_subs_old(T::MaxSubAccounts::get()) // P: Assume max sub accounts removed.
 			.saturating_add(T::WeightInfo::set_subs_new(subs.len() as u32)) // S: Assume all subs are new.
 		)]
@@ -475,6 +478,7 @@ pub mod pallet {
 		/// - `2` storage reads and `S + 2` storage deletions.
 		/// - One event.
 		/// # </weight>
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::clear_identity(
 			T::MaxRegistrars::get(), // R
 			T::MaxSubAccounts::get(), // S
@@ -526,6 +530,7 @@ pub mod pallet {
 		/// - Storage: 1 read `O(R)`, 1 mutate `O(X + R)`.
 		/// - One event.
 		/// # </weight>
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::request_judgement(
 			T::MaxRegistrars::get(), // R
 			T::MaxAdditionalFields::get(), // X
@@ -588,6 +593,7 @@ pub mod pallet {
 		/// - One storage mutation `O(R + X)`.
 		/// - One event
 		/// # </weight>
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::cancel_request(
 			T::MaxRegistrars::get(), // R
 			T::MaxAdditionalFields::get(), // X
@@ -636,6 +642,7 @@ pub mod pallet {
 		/// - One storage mutation `O(R)`.
 		/// - Benchmark: 7.315 + R * 0.329 µs (min squares analysis)
 		/// # </weight>
+		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::set_fee(T::MaxRegistrars::get()))] // R
 		pub fn set_fee(
 			origin: OriginFor<T>,
@@ -674,6 +681,7 @@ pub mod pallet {
 		/// - One storage mutation `O(R)`.
 		/// - Benchmark: 8.823 + R * 0.32 µs (min squares analysis)
 		/// # </weight>
+		#[pallet::call_index(7)]
 		#[pallet::weight(T::WeightInfo::set_account_id(T::MaxRegistrars::get()))] // R
 		pub fn set_account_id(
 			origin: OriginFor<T>,
@@ -713,6 +721,7 @@ pub mod pallet {
 		/// - One storage mutation `O(R)`.
 		/// - Benchmark: 7.464 + R * 0.325 µs (min squares analysis)
 		/// # </weight>
+		#[pallet::call_index(8)]
 		#[pallet::weight(T::WeightInfo::set_fields(T::MaxRegistrars::get()))] // R
 		pub fn set_fields(
 			origin: OriginFor<T>,
@@ -761,6 +770,7 @@ pub mod pallet {
 		/// - Storage: 1 read `O(R)`, 1 mutate `O(R + X)`.
 		/// - One event.
 		/// # </weight>
+		#[pallet::call_index(9)]
 		#[pallet::weight(T::WeightInfo::provide_judgement(
 			T::MaxRegistrars::get(), // R
 			T::MaxAdditionalFields::get(), // X
@@ -834,6 +844,7 @@ pub mod pallet {
 		/// - `S + 2` storage mutations.
 		/// - One event.
 		/// # </weight>
+		#[pallet::call_index(10)]
 		#[pallet::weight(T::WeightInfo::kill_identity(
 			T::MaxRegistrars::get(), // R
 			T::MaxSubAccounts::get(), // S
@@ -874,6 +885,7 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be _Signed_ and the sender must have a registered
 		/// sub identity of `sub`.
+		#[pallet::call_index(11)]
 		#[pallet::weight(T::WeightInfo::add_sub(T::MaxSubAccounts::get()))]
 		pub fn add_sub(
 			origin: OriginFor<T>,
@@ -909,6 +921,7 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be _Signed_ and the sender must have a registered
 		/// sub identity of `sub`.
+		#[pallet::call_index(12)]
 		#[pallet::weight(T::WeightInfo::rename_sub(T::MaxSubAccounts::get()))]
 		pub fn rename_sub(
 			origin: OriginFor<T>,
@@ -930,6 +943,7 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be _Signed_ and the sender must have a registered
 		/// sub identity of `sub`.
+		#[pallet::call_index(13)]
 		#[pallet::weight(T::WeightInfo::remove_sub(T::MaxSubAccounts::get()))]
 		pub fn remove_sub(origin: OriginFor<T>, sub: AccountIdLookupOf<T>) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
@@ -959,6 +973,7 @@ pub mod pallet {
 		///
 		/// NOTE: This should not normally be used, but is provided in the case that the non-
 		/// controller of an account is maliciously registered as a sub-account.
+		#[pallet::call_index(14)]
 		#[pallet::weight(T::WeightInfo::quit_sub(T::MaxSubAccounts::get()))]
 		pub fn quit_sub(origin: OriginFor<T>) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
