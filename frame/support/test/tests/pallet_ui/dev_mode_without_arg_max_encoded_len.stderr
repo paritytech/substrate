@@ -11,13 +11,13 @@ error: use of deprecated struct `pallet::warnings::my_call`:
    |
    = note: `-D deprecated` implied by `-D warnings`
 
-error[E0277]: the trait bound `Vec<u8>: MaxEncodedLen` is not satisfied
+error[E0277]: the trait bound `Vec<u8>: parity_scale_codec::MaxEncodedLen` is not satisfied
   --> tests/pallet_ui/dev_mode_without_arg_max_encoded_len.rs:11:12
    |
 11 |     #[pallet::pallet]
-   |               ^^^^^^ the trait `MaxEncodedLen` is not implemented for `Vec<u8>`
+   |               ^^^^^^ the trait `parity_scale_codec::MaxEncodedLen` is not implemented for `Vec<u8>`
    |
-   = help: the following other types implement trait `MaxEncodedLen`:
+   = help: the following other types implement trait `parity_scale_codec::MaxEncodedLen`:
              ()
              (TupleElement0, TupleElement1)
              (TupleElement0, TupleElement1, TupleElement2)
@@ -27,4 +27,4 @@ error[E0277]: the trait bound `Vec<u8>: MaxEncodedLen` is not satisfied
              (TupleElement0, TupleElement1, TupleElement2, TupleElement3, TupleElement4, TupleElement5, TupleElement6)
              (TupleElement0, TupleElement1, TupleElement2, TupleElement3, TupleElement4, TupleElement5, TupleElement6, TupleElement7)
            and 78 others
-   = note: required for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageMyStorage<T>, Vec<u8>>` to implement `StorageInfoTrait`
+   = note: required for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageMyStorage<T>, Vec<u8>, OptionQuery, GetDefault, NoneProofSize>` to implement `StorageInfoTrait`
