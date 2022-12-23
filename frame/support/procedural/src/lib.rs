@@ -480,9 +480,9 @@ pub fn pallet(attr: TokenStream, item: TokenStream) -> TokenStream {
 	pallet::pallet(attr, item)
 }
 
-#[proc_macro_attribute]
-pub fn benchmarks(attrs: TokenStream, tokens: TokenStream) -> TokenStream {
-	benchmark::benchmarks(attrs, tokens)
+#[proc_macro]
+pub fn benchmarks(tokens: TokenStream) -> TokenStream {
+	benchmark::benchmarks(tokens)
 }
 
 #[proc_macro_attribute]

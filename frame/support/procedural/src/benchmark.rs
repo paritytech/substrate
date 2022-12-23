@@ -157,41 +157,12 @@ impl BenchmarkDef {
 	}
 }
 
-pub fn benchmarks(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
-	let item_mod = parse_macro_input!(tokens as ItemMod);
-	let mut extra_attrs: Vec<TokenStream2> = Vec::new();
-	let mut has_cfg_attr = false;
-	for attr in &item_mod.attrs {
-		if let Some(segment) = attr.path.segments.first() {
-			if let Ok(_) = syn::parse::<keywords::cfg>(segment.ident.to_token_stream().into()) {
-				has_cfg_attr = true;
-				break
-			}
-		}
-	}
-	if !has_cfg_attr {
-		// add a cfg attribute to the module since it doesn't have one
-		extra_attrs.push(quote!(#[cfg(any(feature = "runtime-benchmarks", test))]));
-	}
-	let mod_contents = match item_mod.content {
-		Some(content) => content.1,
-		None =>
-			return emit_error(
-				&item_mod.to_token_stream(),
-				"#[frame_support::benchmarks] can only be applied to a non-empty module.",
-			),
-	};
-	let mod_ident = item_mod.ident;
-	let mod_attrs = item_mod.attrs;
+pub fn benchmarks(tokens: TokenStream) -> TokenStream {
+	let block = parse_macro_input!(tokens as BareBlock);
+	let contents = block.stmts;
 	quote! {
-		#(#mod_attrs)
+		#(#contents)
 		*
-		#(#extra_attrs)
-		*
-		mod #mod_ident {
-			#(#mod_contents)
-			*
-		}
 	}
 	.into()
 }

@@ -2,9 +2,8 @@
 
 use frame_support::benchmarking::benchmarks;
 
-#[benchmarks]
-mod benchmarks {
-	use super::super::*;
+benchmarks! {
+	use super::*;
 
 	use frame_system::RawOrigin;
 	//use sp_runtime::traits::Bounded;
