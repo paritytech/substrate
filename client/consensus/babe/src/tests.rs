@@ -1138,7 +1138,8 @@ async fn allows_skipping_epochs() {
 		&mut block_import,
 		client.chain_info().genesis_hash,
 		epoch_length as usize + 1,
-	).await;
+	)
+	.await;
 
 	// the first block in epoch 0 (#1) announces both epoch 0 and 1 (this is a
 	// special genesis epoch)
@@ -1190,7 +1191,8 @@ async fn allows_skipping_epochs() {
 		Some((epoch_length * 3 + 1).into()),
 		&mut proposer_factory,
 		&mut block_import,
-	).await;
+	)
+	.await;
 
 	// and the first block in epoch 3 (#8) announces epoch 4
 	let epoch4 = epoch_changes
@@ -1266,7 +1268,8 @@ async fn allows_skipping_epochs_on_some_forks() {
 		&mut block_import,
 		client.chain_info().genesis_hash,
 		epoch_length as usize + 1,
-	).await;
+	)
+	.await;
 
 	// we now author a block that belongs to epoch 2, built on top of the last
 	// authored block in epoch 1.
@@ -1277,7 +1280,8 @@ async fn allows_skipping_epochs_on_some_forks() {
 		Some((epoch_length * 2 + 1).into()),
 		&mut proposer_factory,
 		&mut block_import,
-	).await;
+	)
+	.await;
 
 	// if we try to get the epoch data for a slot in epoch 2, we get the data that
 	// was previously announced when epoch 1 started
@@ -1301,7 +1305,8 @@ async fn allows_skipping_epochs_on_some_forks() {
 		Some((epoch_length * 3 + 1).into()),
 		&mut proposer_factory,
 		&mut block_import,
-	).await;
+	)
+	.await;
 
 	// if we try to get the epoch data for a slot in epoch 3
 	let epoch3_ = epoch_changes
