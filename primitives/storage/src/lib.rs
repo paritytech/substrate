@@ -407,6 +407,7 @@ impl ChildTrieParentKeyId {
 /// V0 and V1 uses a same trie implementation, but V1 will write external value node in the trie for
 /// value with size at least `TRIE_VALUE_NODE_THRESHOLD`.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[cfg_attr(feature = "std", derive(Encode, Decode))]
 pub enum StateVersion {
 	/// Old state version, no value nodes.
 	V0 = 0,

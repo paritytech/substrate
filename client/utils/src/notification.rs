@@ -79,8 +79,8 @@ impl<Payload, TK: TracingKeyStr> NotificationStream<Payload, TK> {
 	}
 
 	/// Subscribe to a channel through which the generic payload can be received.
-	pub fn subscribe(&self) -> NotificationReceiver<Payload> {
-		let receiver = self.hub.subscribe(());
+	pub fn subscribe(&self, queue_size_warning: i64) -> NotificationReceiver<Payload> {
+		let receiver = self.hub.subscribe((), queue_size_warning);
 		NotificationReceiver { receiver }
 	}
 }

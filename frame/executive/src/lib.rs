@@ -227,27 +227,71 @@ where
 {
 	/// Execute given block, but don't as strict is the normal block execution.
 	///
-	/// Some consensus related checks such as the state root check can be switched off via
-	/// `try_state_root`. Some additional non-consensus checks can be additionally enabled via
-	/// `try_state`.
+	/// Some checks can be disabled via:
+	///
+	/// - `state_root_check`
+	/// - `signature_check`
 	///
 	/// Should only be used for testing ONLY.
 	pub fn try_execute_block(
 		block: Block,
-		try_state_root: bool,
+		state_root_check: bool,
+		signature_check: bool,
 		select: frame_try_runtime::TryStateSelect,
-	) -> Result<frame_support::weights::Weight, &'static str> {
-		use frame_support::traits::TryState;
+	) -> Result<Weight, &'static str> {
+		frame_support::log::info!(
+			target: "frame::executive",
+			"try-runtime: executing block #{:?} / state root check: {:?} / signature check: {:?} / try-state-select: {:?}",
+			block.header().number(),
+			state_root_check,
+			signature_check,
+			select,
+		);
 
 		Self::initialize_block(block.header());
 		Self::initial_checks(&block);
 
 		let (header, extrinsics) = block.deconstruct();
 
-		Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
+		let try_apply_extrinsic = |uxt: Block::Extrinsic| -> ApplyExtrinsicResult {
+			sp_io::init_tracing();
+			let encoded = uxt.encode();
+			let encoded_len = encoded.len();
 
-		// run the try-state checks of all pallets.
-		<AllPalletsWithSystem as TryState<System::BlockNumber>>::try_state(
+			// skip signature verification.
+			let xt = if signature_check {
+				uxt.check(&Default::default())
+			} else {
+				uxt.unchecked_into_checked_i_know_what_i_am_doing(&Default::default())
+			}?;
+			<frame_system::Pallet<System>>::note_extrinsic(encoded);
+
+			let dispatch_info = xt.get_dispatch_info();
+			let r = Applyable::apply::<UnsignedValidator>(xt, &dispatch_info, encoded_len)?;
+
+			<frame_system::Pallet<System>>::note_applied_extrinsic(&r, dispatch_info);
+
+			Ok(r.map(|_| ()).map_err(|e| e.error))
+		};
+
+		for e in extrinsics {
+			if let Err(err) = try_apply_extrinsic(e.clone()) {
+				frame_support::log::error!(
+					target: "runtime::executive", "executing transaction {:?} failed due to {:?}. Aborting the rest of the block execution.",
+					e,
+					err,
+				);
+				break
+			}
+		}
+
+		// post-extrinsics book-keeping
+		<frame_system::Pallet<System>>::note_finished_extrinsics();
+		Self::idle_and_finalize_hook(*header.number());
+
+		// run the try-state checks of all pallets, ensuring they don't alter any state.
+		let _guard = frame_support::StorageNoopGuard::default();
+		<AllPalletsWithSystem as frame_support::traits::TryState<System::BlockNumber>>::try_state(
 			*header.number(),
 			select,
 		)
@@ -255,6 +299,7 @@ where
 			frame_support::log::error!(target: "runtime::executive", "failure: {:?}", e);
 			e
 		})?;
+		drop(_guard);
 
 		// do some of the checks that would normally happen in `final_checks`, but perhaps skip
 		// the state root check.
@@ -266,7 +311,7 @@ where
 				assert!(header_item == computed_item, "Digest item must match that calculated.");
 			}
 
-			if try_state_root {
+			if state_root_check {
 				let storage_root = new_header.state_root();
 				header.state_root().check_equal(storage_root);
 				assert!(
@@ -286,9 +331,30 @@ where
 
 	/// Execute all `OnRuntimeUpgrade` of this runtime, including the pre and post migration checks.
 	///
-	/// This should only be used for testing.
-	pub fn try_runtime_upgrade() -> Result<frame_support::weights::Weight, &'static str> {
-		let weight = Self::execute_on_runtime_upgrade();
+	/// Runs the try-state code both before and after the migration function if `checks` is set to
+	/// `true`. Also, if set to `true`, it runs the `pre_upgrade` and `post_upgrade` hooks.
+	pub fn try_runtime_upgrade(checks: bool) -> Result<Weight, &'static str> {
+		if checks {
+			let _guard = frame_support::StorageNoopGuard::default();
+			<AllPalletsWithSystem as frame_support::traits::TryState<System::BlockNumber>>::try_state(
+				frame_system::Pallet::<System>::block_number(),
+				frame_try_runtime::TryStateSelect::All,
+			)?;
+		}
+
+		let weight =
+			<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::try_on_runtime_upgrade(
+				checks,
+			)?;
+
+		if checks {
+			let _guard = frame_support::StorageNoopGuard::default();
+			<AllPalletsWithSystem as frame_support::traits::TryState<System::BlockNumber>>::try_state(
+				frame_system::Pallet::<System>::block_number(),
+				frame_try_runtime::TryStateSelect::All,
+			)?;
+		}
+
 		Ok(weight)
 	}
 }
@@ -314,7 +380,7 @@ where
 	UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
 {
 	/// Execute all `OnRuntimeUpgrade` of this runtime, and return the aggregate weight.
-	pub fn execute_on_runtime_upgrade() -> frame_support::weights::Weight {
+	pub fn execute_on_runtime_upgrade() -> Weight {
 		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::on_runtime_upgrade()
 	}
 

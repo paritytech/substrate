@@ -116,9 +116,12 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 		let set_changes = set_changes.iter_from(begin_number).ok_or(Error::MissingData)?;
 
 		for (_, last_block) in set_changes {
-			let header = blockchain.header(BlockId::Number(*last_block))?.expect(
-				"header number comes from previously applied set changes; must exist in db; qed.",
-			);
+			let hash = blockchain.block_hash_from_id(&BlockId::Number(*last_block))?
+				.expect("header number comes from previously applied set changes; corresponding hash must exist in db; qed.");
+
+			let header = blockchain
+				.header(hash)?
+				.expect("header hash obtained from header number exists in db; corresponding header must exist in db too; qed.");
 
 			// the last block in a set is the one that triggers a change to the next set,
 			// therefore the block must have a digest that signals the authority set change
@@ -172,7 +175,7 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 			});
 
 			if let Some(latest_justification) = latest_justification {
-				let header = blockchain.header(BlockId::Hash(latest_justification.target().1))?
+				let header = blockchain.header(latest_justification.target().1)?
 					.expect("header hash corresponds to a justification in db; must exist in db as well; qed.");
 
 				proofs.push(WarpSyncFragment { header, justification: latest_justification })

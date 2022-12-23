@@ -316,6 +316,7 @@ benchmarks! {
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		let controller = scenario.origin_controller1.clone();
 		let stash = scenario.origin_stash1;
+		add_slashing_spans::<T>(&stash, s);
 		assert!(T::VoterList::contains(&stash));
 
 		let ed = T::Currency::minimum_balance();
