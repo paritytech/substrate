@@ -334,7 +334,8 @@ use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_runtime::{
 	traits::{
-		AccountIdConversion, CheckedAdd, CheckedSub, Convert, Saturating, SaturatedConversion, StaticLookup, Zero,
+		AccountIdConversion, CheckedAdd, CheckedSub, Convert, SaturatedConversion, Saturating,
+		StaticLookup, Zero,
 	},
 	FixedPointNumber, Perbill,
 };
