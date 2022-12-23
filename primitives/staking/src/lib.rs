@@ -87,20 +87,17 @@ pub struct Stake<AccountId, Balance> {
 /// The rest of the data can be retrieved by using `StakingInterface`.
 pub trait OnStakingUpdate<AccountId, Balance> {
 	/// Track ledger updates.
-	fn on_update_ledger(
-		who: &AccountId,
-		prev_stake: Option<Stake<AccountId, Balance>>,
-	) -> DispatchResult;
+	fn on_update_ledger(who: &AccountId, prev_stake: Option<Stake<AccountId, Balance>>);
 	/// Track nominators, those reinstated and also new ones.
-	fn on_nominator_add(who: &AccountId, prev_nominations: Vec<AccountId>) -> DispatchResult;
+	fn on_nominator_add(who: &AccountId, prev_nominations: Vec<AccountId>);
 	/// Track validators, those reinstated and new.
-	fn on_validator_add(who: &AccountId) -> DispatchResult;
+	fn on_validator_add(who: &AccountId);
 	/// Track removed validators. Either chilled or those that became nominators instead.
-	fn on_validator_remove(who: &AccountId) -> DispatchResult; // only fire this event when this is an actual Validator
+	fn on_validator_remove(who: &AccountId); // only fire this event when this is an actual Validator
 	/// Track removed nominators.
-	fn on_nominator_remove(who: &AccountId, nominations: Vec<AccountId>) -> DispatchResult; // only fire this if this is an actual Nominator
+	fn on_nominator_remove(who: &AccountId, nominations: Vec<AccountId>); // only fire this if this is an actual Nominator
 	/// Track those participants of staking system that are kicked out for whatever reason.
-	fn on_reaped(who: &AccountId) -> DispatchResult; // -> basically `kill_stash`
+	fn on_reaped(who: &AccountId); // -> basically `kill_stash`
 }
 
 /// A generic representation of a staking implementation.
