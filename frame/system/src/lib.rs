@@ -1501,9 +1501,7 @@ impl<T: Config> Pallet<T> {
 		let events = Self::events();
 		assert!(
 			events.iter().any(|record| record.event == event),
-			"expected event {:?} not found in events {:?}",
-			event,
-			events
+			"expected event {event:?} not found in events {events:?}",
 		);
 	}
 
@@ -1513,8 +1511,7 @@ impl<T: Config> Pallet<T> {
 		let last_event = Self::events().last().expect("events expected").event.clone();
 		assert_eq!(
 			last_event, event,
-			"expected event {:?} is not equal to the last event {:?}",
-			event, last_event
+			"expected event {event:?} is not equal to the last event {last_event:?}",
 		);
 	}
 
