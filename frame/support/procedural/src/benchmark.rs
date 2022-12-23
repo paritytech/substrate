@@ -12,6 +12,7 @@ use syn::{
 
 mod keywords {
 	syn::custom_keyword!(extrinsic_call);
+	syn::custom_keyword!(cfg);
 }
 
 fn emit_error<T: Into<TokenStream> + Clone, S: Into<String>>(item: &T, message: S) -> TokenStream {
@@ -136,7 +137,21 @@ impl BenchmarkDef {
 
 pub fn benchmarks(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 	let item_mod = parse_macro_input!(tokens as ItemMod);
-	let contents = match item_mod.content {
+	let mut extra_attrs: Vec<TokenStream2> = Vec::new();
+	let mut has_cfg_attr = false;
+	for attr in &item_mod.attrs {
+		if let Some(segment) = attr.path.segments.first() {
+			if let Ok(_) = syn::parse::<keywords::cfg>(segment.ident.to_token_stream().into()) {
+				has_cfg_attr = true;
+				break
+			}
+		}
+	}
+	if !has_cfg_attr {
+		// add a cfg attribute to the module since it doesn't have one
+		extra_attrs.push(quote!(#[cfg(any(feature = "runtime-benchmarks", test))]));
+	}
+	let mod_contents = match item_mod.content {
 		Some(content) => content.1,
 		None =>
 			return emit_error(
@@ -145,10 +160,14 @@ pub fn benchmarks(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 			),
 	};
 	let mod_ident = item_mod.ident;
+	let mod_attrs = item_mod.attrs;
 	quote! {
-		#[cfg(any(feature = "runtime-benchmarks", test))]
+		#(#mod_attrs)
+		*
+		#(#extra_attrs)
+		*
 		mod #mod_ident {
-			#(#contents)
+			#(#mod_contents)
 			*
 		}
 	}
