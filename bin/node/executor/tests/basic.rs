@@ -30,7 +30,7 @@ use sp_runtime::{
 use kitchensink_runtime::{
 	constants::{currency::*, time::SLOT_DURATION},
 	Balances, CheckedExtrinsic, Header, Runtime, RuntimeCall, RuntimeEvent, System,
-	TransactionPayment, UncheckedExtrinsic,
+	TransactionPayment, Treasury, UncheckedExtrinsic,
 };
 use node_primitives::{Balance, Hash};
 use node_testing::keyring::*;
@@ -398,6 +398,7 @@ fn full_native_block_import_works() {
 	});
 
 	fees = t.execute_with(|| transfer_fee(&xt()));
+	let pot = t.execute_with(|| Treasury::pot());
 
 	executor_call(&mut t, "Core_execute_block", &block2.0, true).0.unwrap();
 
@@ -408,6 +409,14 @@ fn full_native_block_import_works() {
 		);
 		assert_eq!(Balances::total_balance(&bob()), 179 * DOLLARS - fees);
 		let events = vec![
+			EventRecord {
+				phase: Phase::Initialization,
+				event: RuntimeEvent::Treasury(pallet_treasury::Event::UpdatedInactive {
+					reactivated: 0,
+					deactivated: pot,
+				}),
+				topics: vec![],
+			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: RuntimeEvent::System(frame_system::Event::ExtrinsicSuccess {
