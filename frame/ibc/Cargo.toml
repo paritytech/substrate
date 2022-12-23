@@ -1,0 +1,85 @@
+[package]
+name = 'pallet-ibc'
+version = "4.0.0-dev"
+authors = ['Octopus Network <hi@oct.network>']
+edition = '2021'
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+license = "Apache-2.0"
+description = "An IBC implementation on Substrate."
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+# substate crates
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+scale-info = { version = "2.1.2", default-features = false, features = ["derive"] }
+sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
+sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "5.0.0", default-features = false,  path = "../../primitives/std" }
+sp-tracing = { version = "6.0.0", default-features = false,  path = "../../primitives/tracing" }
+ibc-primitives = { version = "0.1.0", default-features = false, path = "./ibc-primitives" }
+
+## for ibc protocl
+ibc = { version = "0.25.0", default-features = false, git = "https://github.com/octopus-network/ibc-rs.git", branch = "fix-mock", features = ["parity-scale-codec", "mocks-primitives"]}
+ibc-proto = { version = "0.24.0", default-features = false }
+log = { version = "0.4.0", default-features = false }
+serde = { version = "1.0", default-features = false }
+serde_json = { version = "1.0", default-features = false }
+
+## optional
+pallet-timestamp = { version = "4.0.0-dev", default-features = false,  path = "../timestamp", optional = true }
+pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../balances", optional = true }
+
+[dev-dependencies]
+# local crates
+chrono = "0.4.19"
+frame-support = { version = "4.0.0-dev", path = "../support" }
+# thrid party crates
+hex = '0.4.0'
+# ibc protocol crates
+pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
+serde = "1.0"
+sha2 = '0.10.2'
+sp-core = { version = "7.0.0", path = "../../primitives/core" }
+# substrate crates
+sp-io = { version = "7.0.0", path = "../../primitives/io" }
+sp-keyring = { version = "7.0.0", path = "../../primitives/keyring"  }
+sp-runtime = { version = "7.0.0", path = "../../primitives/runtime"  }
+sp-std = { version = "5.0.0",  path = "../../primitives/std" }
+sp-version = { version = "5.0.0", path = "../../primitives/version" }
+
+[features]
+default = ['std']
+std = [
+  "codec/std",
+  "log/std",
+  "scale-info/std",
+  "frame-benchmarking?/std",
+  "frame-support/std",
+  "frame-system/std",
+  "sp-core/std",
+  "sp-runtime/std",
+  "sp-std/std",
+  "sp-io/std",
+  "sp-tracing/std",
+  "ibc/std",
+  "ibc-proto/std",
+  "serde_json/std",
+  "serde/std",
+  "ibc-primitives/std",
+]
+runtime-benchmarks = [
+  "frame-benchmarking/runtime-benchmarks",
+  "frame-system/runtime-benchmarks",
+  "pallet-timestamp/runtime-benchmarks",
+  "pallet-balances/runtime-benchmarks",
+]
+try-runtime = ["frame-support/try-runtime"]

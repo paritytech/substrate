@@ -1,0 +1,25 @@
+[package]
+name = "ibc-primitives"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../../benchmarking" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
+ibc = { version = "0.25.0", default-features = false, git = "https://github.com/octopus-network/ibc-rs.git", branch = "fix-mock", features = ["parity-scale-codec", "mocks-primitives"]}
+ibc-proto = { version = "0.24.0", default-features = false }
+
+[features]
+default = ['std']
+std = [
+    "frame-support/std",
+    "frame-benchmarking?/std",
+    "ibc/std",
+    "ibc-proto/std",
+]
+runtime-benchmarks = [
+    "frame-benchmarking/runtime-benchmarks",
+]
+try-runtime = ["frame-support/try-runtime"]
