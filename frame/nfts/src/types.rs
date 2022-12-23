@@ -167,9 +167,9 @@ pub struct ItemMetadata<DepositBalance, StringLimit: Get<u32>> {
 /// Information about the tip.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct ItemTip<CollectionId, ItemId, AccountId, Amount> {
-	/// A collection of the item.
+	/// The collection of the item.
 	pub(super) collection: CollectionId,
-	/// An item of which the tip is send for.
+	/// An item of which the tip is sent for.
 	pub(super) item: ItemId,
 	/// A sender of the tip.
 	pub(super) receiver: AccountId,
