@@ -199,10 +199,10 @@ pub struct AttributeDeposit<DepositBalance, AccountId> {
 	pub(super) amount: DepositBalance,
 }
 
-/// Specifies whether the tokens will be send or received.
+/// Specifies whether the tokens will be sent or received.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum PriceDirection {
-	/// Tokens will be send.
+	/// Tokens will be sent.
 	Send,
 	/// Tokens will be received.
 	Receive,
