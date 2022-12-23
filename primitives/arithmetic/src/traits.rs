@@ -490,9 +490,9 @@ mod ensure {
 		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow));
 		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow));
 		/// ```
-		fn ensure_add_assign(&mut self, v: Self) -> Result<&mut Self, ArithmeticError> {
+		fn ensure_add_assign(&mut self, v: Self) -> Result<(), ArithmeticError> {
 			*self = self.ensure_add(v)?;
-			Ok(self)
+			Ok(())
 		}
 	}
 
@@ -520,9 +520,9 @@ mod ensure {
 		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow));
 		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow));
 		/// ```
-		fn ensure_sub_assign(&mut self, v: Self) -> Result<&mut Self, ArithmeticError> {
+		fn ensure_sub_assign(&mut self, v: Self) -> Result<(), ArithmeticError> {
 			*self = self.ensure_sub(v)?;
-			Ok(self)
+			Ok(())
 		}
 	}
 
@@ -550,9 +550,9 @@ mod ensure {
 		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow));
 		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow));
 		/// ```
-		fn ensure_mul_assign(&mut self, v: Self) -> Result<&mut Self, ArithmeticError> {
+		fn ensure_mul_assign(&mut self, v: Self) -> Result<(), ArithmeticError> {
 			*self = self.ensure_mul(v)?;
-			Ok(self)
+			Ok(())
 		}
 	}
 
@@ -580,9 +580,9 @@ mod ensure {
 		/// assert_eq!(extrinsic_zero(), Err(ArithmeticError::DivisionByZero));
 		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow));
 		/// ```
-		fn ensure_div_assign(&mut self, v: Self) -> Result<&mut Self, ArithmeticError> {
+		fn ensure_div_assign(&mut self, v: Self) -> Result<(), ArithmeticError> {
 			*self = self.ensure_div(v)?;
-			Ok(self)
+			Ok(())
 		}
 	}
 
