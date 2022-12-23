@@ -139,10 +139,6 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 	}
 
-	pub type BalanceOf<T> = <<T as Config>::Currency as InspectFungible<
-		<T as frame_system::Config>::AccountId,
-	>>::Balance;
-
 	pub type AssetBalanceOf<T> =
 		<<T as Config>::Assets as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
 
