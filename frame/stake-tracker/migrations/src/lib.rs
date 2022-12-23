@@ -10,11 +10,14 @@ macro_rules! log {
 	};
 }
 
+trait Runtime: pallet_stake_tracker::Config + pallet_staking::Config {}
+
 pub mod v2 {}
 //TODO: Introduce try-state to the pallet
 //TODO: Decide what to do with new networks, no harm done if this is run on an empty Staking
 // storage
 pub mod v1 {
+	use crate::Runtime;
 	use codec::{Decode, Encode};
 	use frame_election_provider_support::SortedListProvider;
 	use frame_support::{
@@ -38,16 +41,14 @@ pub mod v1 {
 	}
 
 	#[storage_alias]
-	type MigrationV1StateNominators<T: pallet_staking::Config + pallet_stake_tracker::Config> =
+	type MigrationV1StateNominators<T: Runtime> =
 		StorageValue<Pallet<T>, MigrationState, OptionQuery>;
 
 	#[storage_alias]
-	type MigrationV1StateValidators<T: pallet_staking::Config + pallet_stake_tracker::Config> =
+	type MigrationV1StateValidators<T: Runtime> =
 		StorageValue<Pallet<T>, MigrationState, OptionQuery>;
 
-	impl<T: pallet_staking::Config + pallet_stake_tracker::Config>
-		InjectValidatorsApprovalStakeIntoTargetList<T>
-	{
+	impl<T: Runtime> InjectValidatorsApprovalStakeIntoTargetList<T> {
 		fn nominator_state() -> MigrationState {
 			MigrationV1StateNominators::<T>::get().unwrap_or(MigrationState {
 				last_key: <pallet_staking::Nominators<T>>::map_storage_final_prefix(),
@@ -175,9 +176,7 @@ pub mod v1 {
 		}
 	}
 
-	impl<T: pallet_staking::Config + pallet_stake_tracker::Config> OnRuntimeUpgrade
-		for InjectValidatorsApprovalStakeIntoTargetList<T>
-	{
+	impl<T: Runtime> OnRuntimeUpgrade for InjectValidatorsApprovalStakeIntoTargetList<T> {
 		fn on_runtime_upgrade() -> Weight {
 			// We have to set this manually, because we need this migration to happen in order for
 			// the pallet to get all the data from staking-pallet.
@@ -224,6 +223,10 @@ pub mod v1 {
 
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<(), &'static str> {
+			ensure!(
+				<T as pallet_stake_tracker::Config>::TargetList::count() == 0,
+				"must be run on an empty TargetList instance"
+			);
 			ensure!(StorageVersion::<T>::get() == "0", "must upgrade linearly");
 			Ok(())
 		}
