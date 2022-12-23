@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) 2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,19 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Traits for working with tokens and their associated datastructures.
-
-pub mod currency;
-pub mod fungible;
-pub mod fungibles;
-pub mod imbalance;
-mod misc;
-pub mod nonfungible;
-pub mod nonfungible_v2;
-pub mod nonfungibles;
-pub mod nonfungibles_v2;
-pub use imbalance::Imbalance;
-pub use misc::{
-	AssetId, AttributeNamespace, Balance, BalanceConversion, BalanceStatus, DepositConsequence,
-	ExistenceRequirement, Locker, WithdrawConsequence, WithdrawReasons,
-};
+pub mod approvals;
+pub mod atomic_swap;
+pub mod attributes;
+pub mod buy_sell;
+pub mod create_delete_collection;
+pub mod create_delete_item;
+pub mod lock;
+pub mod metadata;
+pub mod roles;
+pub mod settings;
+pub mod transfer;
