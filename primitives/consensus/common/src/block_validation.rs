@@ -19,18 +19,18 @@
 
 use crate::BlockStatus;
 use futures::FutureExt as _;
-use sp_runtime::{generic::BlockId, traits::Block};
+use sp_runtime::traits::Block;
 use std::{error::Error, future::Future, pin::Pin, sync::Arc};
 
 /// A type which provides access to chain information.
 pub trait Chain<B: Block> {
-	/// Retrieve the status of the block denoted by the given [`BlockId`].
-	fn block_status(&self, id: &BlockId<B>) -> Result<BlockStatus, Box<dyn Error + Send>>;
+	/// Retrieve the status of the block denoted by the given [`hash`].
+	fn block_status(&self, hash: B::Hash) -> Result<BlockStatus, Box<dyn Error + Send>>;
 }
 
 impl<T: Chain<B>, B: Block> Chain<B> for Arc<T> {
-	fn block_status(&self, id: &BlockId<B>) -> Result<BlockStatus, Box<dyn Error + Send>> {
-		(&**self).block_status(id)
+	fn block_status(&self, hash: B::Hash) -> Result<BlockStatus, Box<dyn Error + Send>> {
+		(&**self).block_status(hash)
 	}
 }
 

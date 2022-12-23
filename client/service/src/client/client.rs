@@ -784,7 +784,8 @@ where
 		let parent_hash = import_block.header.parent_hash();
 		let at = BlockId::Hash(*parent_hash);
 		let state_action = std::mem::replace(&mut import_block.state_action, StateAction::Skip);
-		let (enact_state, storage_changes) = match (self.block_status(&at)?, state_action) {
+		let (enact_state, storage_changes) = match (self.block_status(*parent_hash)?, state_action)
+		{
 			(BlockStatus::KnownBad, _) =>
 				return Ok(PrepareStorageChangesResult::Discard(ImportResult::KnownBad)),
 			(
@@ -1025,17 +1026,18 @@ where
 	}
 
 	/// Get block status.
-	pub fn block_status(&self, id: &BlockId<Block>) -> sp_blockchain::Result<BlockStatus> {
+	pub fn block_status(&self, hash: Block::Hash) -> sp_blockchain::Result<BlockStatus> {
 		// this can probably be implemented more efficiently
-		if let BlockId::Hash(ref h) = id {
-			if self.importing_block.read().as_ref().map_or(false, |importing| h == importing) {
-				return Ok(BlockStatus::Queued)
-			}
+		if self
+			.importing_block
+			.read()
+			.as_ref()
+			.map_or(false, |importing| &hash == importing)
+		{
+			return Ok(BlockStatus::Queued)
 		}
-		let hash_and_number = match *id {
-			BlockId::Hash(hash) => self.backend.blockchain().number(hash)?.map(|n| (hash, n)),
-			BlockId::Number(n) => self.backend.blockchain().hash(n)?.map(|hash| (hash, n)),
-		};
+
+		let hash_and_number = self.backend.blockchain().number(hash)?.map(|n| (hash, n));
 		match hash_and_number {
 			Some((hash, number)) =>
 				if self.backend.have_state_at(hash, number) {
@@ -1779,7 +1781,7 @@ where
 		// Own status must be checked first. If the block and ancestry is pruned
 		// this function must return `AlreadyInChain` rather than `MissingState`
 		match self
-			.block_status(&BlockId::Hash(hash))
+			.block_status(hash)
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 		{
 			BlockStatus::InChainWithState | BlockStatus::Queued =>
@@ -1792,7 +1794,7 @@ where
 		}
 
 		match self
-			.block_status(&BlockId::Hash(parent_hash))
+			.block_status(parent_hash)
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 		{
 			BlockStatus::InChainWithState | BlockStatus::Queued => {},
@@ -1947,20 +1949,16 @@ where
 		self.body(hash)
 	}
 
-	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>> {
-		Ok(match self.backend.blockchain().block_hash_from_id(id)? {
-			Some(hash) =>
-				match (self.header(hash)?, self.body(hash)?, self.justifications(hash)?) {
-					(Some(header), Some(extrinsics), justifications) =>
-						Some(SignedBlock { block: Block::new(header, extrinsics), justifications }),
-					_ => None,
-				},
-			None => None,
+	fn block(&self, hash: Block::Hash) -> sp_blockchain::Result<Option<SignedBlock<Block>>> {
+		Ok(match (self.header(hash)?, self.body(hash)?, self.justifications(hash)?) {
+			(Some(header), Some(extrinsics), justifications) =>
+				Some(SignedBlock { block: Block::new(header, extrinsics), justifications }),
+			_ => None,
 		})
 	}
 
-	fn block_status(&self, id: &BlockId<Block>) -> sp_blockchain::Result<BlockStatus> {
-		Client::block_status(self, id)
+	fn block_status(&self, hash: Block::Hash) -> sp_blockchain::Result<BlockStatus> {
+		Client::block_status(self, hash)
 	}
 
 	fn justifications(&self, hash: Block::Hash) -> sp_blockchain::Result<Option<Justifications>> {
@@ -2055,9 +2053,9 @@ where
 {
 	fn block_status(
 		&self,
-		id: &BlockId<B>,
+		hash: B::Hash,
 	) -> Result<BlockStatus, Box<dyn std::error::Error + Send>> {
-		Client::block_status(self, id).map_err(|e| Box::new(e) as Box<_>)
+		Client::block_status(self, hash).map_err(|e| Box::new(e) as Box<_>)
 	}
 }
 

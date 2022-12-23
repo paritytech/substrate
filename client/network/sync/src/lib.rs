@@ -86,7 +86,6 @@ use sp_consensus::{
 	BlockOrigin, BlockStatus,
 };
 use sp_runtime::{
-	generic::BlockId,
 	traits::{
 		Block as BlockT, CheckedSub, Hash, HashFor, Header as HeaderT, NumberFor, One,
 		SaturatedConversion, Zero,
@@ -1865,8 +1864,7 @@ where
 		self.best_queued_number = info.best_number;
 
 		if self.mode == SyncMode::Full &&
-			self.client.block_status(&BlockId::hash(info.best_hash))? !=
-				BlockStatus::InChainWithState
+			self.client.block_status(info.best_hash)? != BlockStatus::InChainWithState
 		{
 			self.import_existing = true;
 			// Latest state is missing, start with the last finalized state or genesis instead.
@@ -1898,7 +1896,7 @@ where
 		if self.queue_blocks.contains(hash) {
 			return Ok(BlockStatus::Queued)
 		}
-		self.client.block_status(&BlockId::Hash(*hash))
+		self.client.block_status(*hash)
 	}
 
 	/// Is the block corresponding to the given hash known?
@@ -2455,9 +2453,7 @@ where
 						if queue.contains(hash) {
 							BlockStatus::Queued
 						} else {
-							client
-								.block_status(&BlockId::Hash(*hash))
-								.unwrap_or(BlockStatus::Unknown)
+							client.block_status(*hash).unwrap_or(BlockStatus::Unknown)
 						}
 					},
 				) {
@@ -3202,6 +3198,7 @@ mod test {
 	};
 	use sp_blockchain::HeaderBackend;
 	use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
+	use sp_runtime::generic::BlockId;
 	use substrate_test_runtime_client::{
 		runtime::{Block, Hash, Header},
 		BlockBuilderExt, ClientBlockImportExt, ClientExt, DefaultTestClientBuilderExt, TestClient,
