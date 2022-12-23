@@ -904,21 +904,13 @@ impl<T: Config> Pallet<T> {
 	/// `Nominators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
 	pub fn do_remove_nominator(who: &T::AccountId) -> bool {
-		let outcome = if let Some(nominations) = Self::nominations(who) {
+		if let Some(nominations) = Self::nominations(who) {
 			Nominators::<T>::remove(who);
 			let _ = T::VoterList::on_remove(who).defensive();
 			let _ = T::EventListener::on_nominator_remove(who, nominations);
-			true
-		} else {
-			false
-		};
-
-		debug_assert_eq!(
-			Nominators::<T>::count() + Validators::<T>::count(),
-			T::VoterList::count()
-		);
-
-		outcome
+			return true
+		}
+		false
 	}
 
 	/// This function will add a validator to the `Validators` storage map.
@@ -1677,7 +1669,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Nominators::<T>::get(who).map(|n| n.targets.into_inner())
 	}
 
-
+	sp_staking::runtime_benchmarks_enabled! {
 		fn add_era_stakers(
 			current_era: &EraIndex,
 			stash: &T::AccountId,
@@ -1690,10 +1682,10 @@ impl<T: Config> StakingInterface for Pallet<T> {
 			let exposure = Exposure { total: Default::default(), own: Default::default(), others };
 			<ErasStakers<T>>::insert(&current_era, &stash, &exposure);
 		}
+	}
 
-		fn set_current_era(era: EraIndex) {
-			CurrentEra::<T>::put(era);
-		}
+	fn set_current_era(era: EraIndex) {
+		CurrentEra::<T>::put(era);
 	}
 
 	type CurrencyToVote = T::CurrencyToVote;
