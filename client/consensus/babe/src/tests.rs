@@ -1111,8 +1111,8 @@ async fn obsolete_blocks_aux_data_cleanup() {
 	assert!(aux_data_check(&fork3_hashes, true));
 }
 
-#[test]
-fn allows_skipping_epochs() {
+#[tokio::test]
+async fn allows_skipping_epochs() {
 	let mut net = BabeTestNet::new(1);
 
 	let peer = net.peer(0);
@@ -1136,9 +1136,9 @@ fn allows_skipping_epochs() {
 		&client,
 		&mut proposer_factory,
 		&mut block_import,
-		BlockId::Number(0),
+		client.chain_info().genesis_hash,
 		epoch_length as usize + 1,
-	);
+	).await;
 
 	// the first block in epoch 0 (#1) announces both epoch 0 and 1 (this is a
 	// special genesis epoch)
@@ -1184,13 +1184,13 @@ fn allows_skipping_epochs() {
 	assert_eq!(epoch2.start_slot, Slot::from(epoch_length * 2 + 1));
 
 	// we now author a block that belongs to epoch 3, thereby skipping epoch 2
-	let last_block = client.expect_header(BlockId::Hash(*blocks.last().unwrap())).unwrap();
+	let last_block = client.expect_header(*blocks.last().unwrap()).unwrap();
 	let block = propose_and_import_block(
 		&last_block,
 		Some((epoch_length * 3 + 1).into()),
 		&mut proposer_factory,
 		&mut block_import,
-	);
+	).await;
 
 	// and the first block in epoch 3 (#8) announces epoch 4
 	let epoch4 = epoch_changes
@@ -1239,8 +1239,8 @@ fn allows_skipping_epochs() {
 	assert_eq!(epoch4, epoch4_);
 }
 
-#[test]
-fn allows_skipping_epochs_on_some_forks() {
+#[tokio::test]
+async fn allows_skipping_epochs_on_some_forks() {
 	let mut net = BabeTestNet::new(1);
 
 	let peer = net.peer(0);
@@ -1264,20 +1264,20 @@ fn allows_skipping_epochs_on_some_forks() {
 		&client,
 		&mut proposer_factory,
 		&mut block_import,
-		BlockId::Number(0),
+		client.chain_info().genesis_hash,
 		epoch_length as usize + 1,
-	);
+	).await;
 
 	// we now author a block that belongs to epoch 2, built on top of the last
 	// authored block in epoch 1.
-	let last_block = client.expect_header(BlockId::Hash(*blocks.last().unwrap())).unwrap();
+	let last_block = client.expect_header(*blocks.last().unwrap()).unwrap();
 
 	let epoch2_block = propose_and_import_block(
 		&last_block,
 		Some((epoch_length * 2 + 1).into()),
 		&mut proposer_factory,
 		&mut block_import,
-	);
+	).await;
 
 	// if we try to get the epoch data for a slot in epoch 2, we get the data that
 	// was previously announced when epoch 1 started
@@ -1301,7 +1301,7 @@ fn allows_skipping_epochs_on_some_forks() {
 		Some((epoch_length * 3 + 1).into()),
 		&mut proposer_factory,
 		&mut block_import,
-	);
+	).await;
 
 	// if we try to get the epoch data for a slot in epoch 3
 	let epoch3_ = epoch_changes
