@@ -24,7 +24,7 @@ use std::{error::Error, future::Future, pin::Pin, sync::Arc};
 
 /// A type which provides access to chain information.
 pub trait Chain<B: Block> {
-	/// Retrieve the status of the block denoted by the given [`hash`].
+	/// Retrieve the status of the block denoted by the given [`Block::hash`].
 	fn block_status(&self, hash: B::Hash) -> Result<BlockStatus, Box<dyn Error + Send>>;
 }
 
@@ -60,7 +60,7 @@ pub trait BlockAnnounceValidator<B: Block> {
 	/// Returning [`Validation::Failure`] will lead to a decrease of the
 	/// peers reputation as it sent us invalid data.
 	///
-	/// The returned future should only resolve to an error iff there was an internal error
+	/// The returned future should only resolve to an error if there was an internal error
 	/// validating the block announcement. If the block announcement itself is invalid, this should
 	/// *always* return [`Validation::Failure`].
 	fn validate(
