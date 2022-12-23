@@ -882,17 +882,13 @@ impl<T: Config> Pallet<T> {
 		let prev_nominations = Self::nominations(who);
 		if !prev_nominations.is_none() {
 			// maybe update sorted list.
+			// TODO: Remove once we start using stake-tracker for this.
 			let _ = T::VoterList::on_insert(who.clone(), Self::weight_of(who))
 				.defensive_unwrap_or_default();
 		}
 		Nominators::<T>::insert(who, nominations);
 		let _ = T::EventListener::on_nominator_add(who, prev_nominations.unwrap_or_default())
 			.defensive();
-
-		debug_assert_eq!(
-			Nominators::<T>::count() + Validators::<T>::count(),
-			T::VoterList::count()
-		);
 	}
 
 	/// This function will remove a nominator from the `Nominators` storage map,
@@ -906,6 +902,7 @@ impl<T: Config> Pallet<T> {
 	pub fn do_remove_nominator(who: &T::AccountId) -> bool {
 		if let Some(nominations) = Self::nominations(who) {
 			Nominators::<T>::remove(who);
+			// TODO: Remove, once we start using stake-tracker for this.
 			let _ = T::VoterList::on_remove(who).defensive();
 			let _ = T::EventListener::on_nominator_remove(who, nominations);
 			return true
@@ -923,16 +920,12 @@ impl<T: Config> Pallet<T> {
 	pub fn do_add_validator(who: &T::AccountId, prefs: ValidatorPrefs) {
 		if !Validators::<T>::contains_key(who) {
 			// maybe update sorted list.
+			// TODO: Remove once we start using stake-tracker for this.
 			let _ = T::VoterList::on_insert(who.clone(), Self::weight_of(who))
 				.defensive_unwrap_or_default();
 			let _ = T::EventListener::on_validator_add(who);
 		}
 		Validators::<T>::insert(who, prefs);
-
-		debug_assert_eq!(
-			Nominators::<T>::count() + Validators::<T>::count(),
-			T::VoterList::count()
-		);
 	}
 
 	/// This function will remove a validator from the `Validators` storage map.
@@ -943,21 +936,14 @@ impl<T: Config> Pallet<T> {
 	/// `Validators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
 	pub fn do_remove_validator(who: &T::AccountId) -> bool {
-		let outcome = if Validators::<T>::contains_key(who) {
+		if Validators::<T>::contains_key(who) {
 			Validators::<T>::remove(who);
+			// TODO: Remove, once we start using stake-tracker for this.
 			let _ = T::VoterList::on_remove(who).defensive();
 			let _ = T::EventListener::on_validator_remove(who);
-			true
-		} else {
-			false
-		};
-
-		debug_assert_eq!(
-			Nominators::<T>::count() + Validators::<T>::count(),
-			T::VoterList::count()
-		);
-
-		outcome
+			return true
+		}
+		false
 	}
 
 	/// Register some amount of weight directly with the system pallet.
