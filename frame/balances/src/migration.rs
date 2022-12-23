@@ -87,7 +87,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for ResetInactive<T, I> {
 			// Set storage version to `0`.
 			StorageVersion::new(0).put::<Pallet<T, I>>();
 
-			log::info!(target: "runtime::balances", "Storage to version 1");
+			log::info!(target: "runtime::balances", "Storage to version 0");
 			T::DbWeight::get().reads_writes(1, 2)
 		} else {
 			log::info!(target: "runtime::balances",  "Migration did not execute. This probably should be removed");
