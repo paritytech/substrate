@@ -25,7 +25,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Item::<T, I>::get(collection, item).map(|i| i.owner)
 	}
 
-	/// Get the owner of the item, if the item exists.
+	/// Get the owner of the collection, if the collection exists.
 	pub fn collection_owner(collection: T::CollectionId) -> Option<T::AccountId> {
 		Collection::<T, I>::get(collection).map(|i| i.owner)
 	}
