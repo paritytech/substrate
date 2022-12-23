@@ -2441,7 +2441,7 @@ pub mod pallet {
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
 
-			bonded_pool.commission.maybe_update_max(max_commission.clone())?;
+			bonded_pool.commission.maybe_update_max(max_commission)?;
 			bonded_pool.put();
 			Self::deposit_event(Event::<T>::PoolMaxCommissionUpdated { pool_id, max_commission });
 			Ok(())
