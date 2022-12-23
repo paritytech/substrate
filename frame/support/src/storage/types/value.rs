@@ -24,7 +24,7 @@ use crate::{
 		types::{OptionQuery, QueryKindTrait, StorageEntryMetadataBuilder},
 		StorageAppend, StorageDecodeLength, StorageTryAppend,
 	},
-	traits::{GetDefault, StorageInfo, StorageInstance},
+	traits::{GetDefault, StorageInfo, StorageInstance, Get},
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use sp_arithmetic::traits::SaturatedConversion;
@@ -46,7 +46,7 @@ where
 	Prefix: StorageInstance,
 	Value: FullCodec,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
-	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
+	OnEmpty: Get<QueryKind::Query> + 'static,
 {
 	type Query = QueryKind::Query;
 	fn module_prefix() -> &'static [u8] {

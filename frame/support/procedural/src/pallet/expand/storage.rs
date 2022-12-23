@@ -130,6 +130,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 		};
 
 		let prefix_ident = prefix_ident(storage_def);
+		// TODO: maybe use a helper function
 		let type_use_gen = if def.config.has_instance {
 			quote::quote_spanned!(storage_def.attr_span => T, I)
 		} else {
@@ -631,11 +632,35 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 		)
 	});
 
+	// aggregated where clause of all storage types and the whole pallet.
 	let mut where_clauses = vec![&def.config.where_clause];
 	where_clauses.extend(def.storages.iter().map(|storage| &storage.where_clause));
 	let completed_where_clause = super::merge_where_clauses(&where_clauses);
 	let type_impl_gen = &def.type_impl_generics(proc_macro2::Span::call_site());
 	let type_use_gen = &def.type_use_generics(proc_macro2::Span::call_site());
+
+	let try_decode_entire_state = {
+		let decode_each = def.storages.iter().map(|storage_def| {
+			let ident = &storage_def.ident;
+			let gen = &def.type_use_generics(storage_def.attr_span);
+			let full_ident = quote::quote_spanned!(storage_def.attr_span => #ident<#gen> );
+			quote::quote!(
+				total_size += <#full_ident as #frame_support::traits::DecodeAll>::decode_all()?;
+			)
+		});
+		quote::quote!(
+			#[cfg(any(feature = "try-runtime", test))]
+			impl<#type_impl_gen> #frame_support::traits::TryDecodeEntireStorage
+				for #pallet_ident<#type_use_gen> #completed_where_clause
+			{
+				fn try_decode_entire_state() -> Result<usize, &'static str> {
+					let mut total_size = 0usize;
+					#(#decode_each)*
+					Ok(total_size)
+				}
+			}
+		)
+	};
 
 	quote::quote!(
 		impl<#type_impl_gen> #pallet_ident<#type_use_gen>
@@ -662,5 +687,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 		#( #getters )*
 		#( #prefix_structs )*
 		#( #on_empty_structs )*
+
+		#try_decode_entire_state
 	)
 }

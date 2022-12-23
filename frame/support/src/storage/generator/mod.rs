@@ -24,10 +24,10 @@
 //!
 //! This is internal api and is subject to change.
 
-mod double_map;
+pub(crate) mod double_map;
 pub(crate) mod map;
-mod nmap;
-mod value;
+pub(crate) mod nmap;
+pub(crate) mod value;
 
 pub use double_map::StorageDoubleMap;
 pub use map::StorageMap;
