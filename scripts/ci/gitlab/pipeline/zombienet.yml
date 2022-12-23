@@ -30,7 +30,7 @@
   after_script:
     - mkdir -p ./zombienet-logs
     - cp /tmp/zombie*/logs/* ./zombienet-logs/
-  allow_failure:                   true
+  allow_failure:                   false
   retry: 2
   tags:
     - zombienet-polkadot-integration-test
