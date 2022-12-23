@@ -50,7 +50,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 	} else {
 		// default.
 		quote::quote! {
-			#frame_support::log::info!(
+			#frame_support::log::debug!(
 				target: #frame_support::LOG_TARGET,
 				"✅ no migration for {}",
 				pallet_name,

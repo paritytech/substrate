@@ -470,6 +470,10 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDbSync<BlockHash, Key, D> {
 		}
 	}
 
+	fn sync(&mut self) {
+		self.non_canonical.sync();
+	}
+
 	pub fn get<DB: NodeDb, Q: ?Sized>(
 		&self,
 		key: &Q,
@@ -571,6 +575,12 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDb<BlockHash, Key, D> {
 	/// Allows pruning of specified block.
 	pub fn unpin(&self, hash: &BlockHash) {
 		self.db.write().unpin(hash)
+	}
+
+	/// Confirm that all changes made to commit sets are on disk. Allows for temporarily pinned
+	/// blocks to be released.
+	pub fn sync(&self) {
+		self.db.write().sync()
 	}
 
 	/// Get a value from non-canonical/pruning overlay or the backing DB.

@@ -87,7 +87,7 @@ where
 			let parent_hash = *block.header().parent_hash();
 			let parent_header = self
 				.client
-				.header(BlockId::Hash(parent_hash))
+				.header(parent_hash)
 				.map_err(|e| Error::BlockQueryError(Box::new(e)))?;
 			if let Some(header) = parent_header {
 				header

@@ -70,6 +70,8 @@ pub use equivocation::{
 
 pub use pallet::*;
 
+const LOG_TARGET: &str = "runtime::grandpa";
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
