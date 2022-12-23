@@ -982,7 +982,8 @@ pub mod pallet {
 			// `BondingDuration` to proceed with the unbonding.
 			let maybe_withdraw_weight = {
 				if unlocking == T::MaxUnlockingChunks::get() as usize {
-					let real_num_slashing_spans = Self::slashing_spans(&controller).iter().count();
+					let real_num_slashing_spans =
+						Self::slashing_spans(&controller).map_or(0, |s| s.iter().count());
 					Some(Self::do_withdraw_unbonded(&controller, real_num_slashing_spans as u32)?)
 				} else {
 					None
