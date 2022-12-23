@@ -16,7 +16,7 @@ mod benchmarks {
 	const ED_MULTIPLIER: u32 = 10;
 
 	use frame_benchmarking::{account, whitelisted_caller};
-	use frame_support::{instance_benchmark, Linear};
+	use frame_support::instance_benchmark;
 
 	#[instance_benchmark]
 	fn transfer() {
