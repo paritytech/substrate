@@ -277,7 +277,7 @@ impl<T: Config> Pallet<T> {
 
 		T::Currency::set_lock(STAKING_ID, &ledger.stash, ledger.total, WithdrawReasons::all());
 		<Ledger<T>>::insert(controller, ledger);
-		let _ = T::EventListener::on_update_ledger(&ledger.stash, prev_ledger);
+		T::EventListener::on_update_ledger(&ledger.stash, prev_ledger);
 	}
 
 	/// Chill a stash account.
@@ -667,7 +667,7 @@ impl<T: Config> Pallet<T> {
 		<Payee<T>>::remove(stash);
 		Self::do_remove_validator(stash);
 		Self::do_remove_nominator(stash);
-		let _ = T::EventListener::on_reaped(stash);
+		T::EventListener::on_reaped(stash);
 
 		frame_system::Pallet::<T>::dec_consumers(stash);
 
@@ -887,8 +887,7 @@ impl<T: Config> Pallet<T> {
 				.defensive_unwrap_or_default();
 		}
 		Nominators::<T>::insert(who, nominations);
-		let _ = T::EventListener::on_nominator_add(who, prev_nominations.unwrap_or_default())
-			.defensive();
+		T::EventListener::on_nominator_add(who, prev_nominations.unwrap_or_default())
 	}
 
 	/// This function will remove a nominator from the `Nominators` storage map,
@@ -904,7 +903,7 @@ impl<T: Config> Pallet<T> {
 			Nominators::<T>::remove(who);
 			// TODO: Remove, once we start using stake-tracker for this.
 			let _ = T::VoterList::on_remove(who).defensive();
-			let _ = T::EventListener::on_nominator_remove(who, nominations);
+			T::EventListener::on_nominator_remove(who, nominations);
 			return true
 		}
 		false
@@ -923,7 +922,7 @@ impl<T: Config> Pallet<T> {
 			// TODO: Remove once we start using stake-tracker for this.
 			let _ = T::VoterList::on_insert(who.clone(), Self::weight_of(who))
 				.defensive_unwrap_or_default();
-			let _ = T::EventListener::on_validator_add(who);
+			T::EventListener::on_validator_add(who);
 		}
 		Validators::<T>::insert(who, prefs);
 	}
@@ -940,7 +939,7 @@ impl<T: Config> Pallet<T> {
 			Validators::<T>::remove(who);
 			// TODO: Remove, once we start using stake-tracker for this.
 			let _ = T::VoterList::on_remove(who).defensive();
-			let _ = T::EventListener::on_validator_remove(who);
+			T::EventListener::on_validator_remove(who);
 			return true
 		}
 		false
@@ -1651,7 +1650,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::nominate(RawOrigin::Signed(ctrl).into(), targets)
 	}
 
-	fn nominations(who: Self::AccountId) -> Option<Vec<T::AccountId>> {
+	fn nominations(who: &Self::AccountId) -> Option<Vec<T::AccountId>> {
 		Nominators::<T>::get(who).map(|n| n.targets.into_inner())
 	}
 
@@ -1668,10 +1667,10 @@ impl<T: Config> StakingInterface for Pallet<T> {
 			let exposure = Exposure { total: Default::default(), own: Default::default(), others };
 			<ErasStakers<T>>::insert(&current_era, &stash, &exposure);
 		}
-	}
 
-	fn set_current_era(era: EraIndex) {
-		CurrentEra::<T>::put(era);
+		fn set_current_era(era: EraIndex) {
+			CurrentEra::<T>::put(era);
+		}
 	}
 
 	type CurrencyToVote = T::CurrencyToVote;

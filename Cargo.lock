@@ -5832,7 +5832,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-stake-tracker-migrations"
+name = "pallet-stake-tracker-initializer"
 version = "4.0.0-dev"
 dependencies = [
  "frame-election-provider-support",
