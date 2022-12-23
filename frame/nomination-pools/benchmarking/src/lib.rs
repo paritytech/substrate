@@ -29,7 +29,7 @@ use frame_support::{assert_ok, ensure, traits::Get};
 use frame_system::RawOrigin as RuntimeOrigin;
 use pallet_nomination_pools::{
 	BalanceOf, BondExtra, BondedPoolInner, BondedPools, Commission, CommissionThrottle,
-	CommissionThrottlePrefs, ConfigOp, MaxPoolMembers, MaxPoolMembersPerPool, MaxPools, Metadata,
+	CommissionChangeRate, ConfigOp, MaxPoolMembers, MaxPoolMembersPerPool, MaxPools, Metadata,
 	MinCreateBond, MinJoinBond, Pallet as Pools, PoolMembers, PoolRoles, PoolState, RewardPools,
 	SubPoolsStorage,
 };
@@ -686,7 +686,7 @@ frame_benchmarking::benchmarks! {
 		// set a max commission
 		Pools::<T>::set_commission_max(RuntimeOrigin::Signed(depositor.clone()).into(), 1u32.into(), Perbill::from_percent(50)).unwrap();
 		// set a commission throttle
-		Pools::<T>::set_commission_throttle(RuntimeOrigin::Signed(depositor.clone()).into(), 1u32.into(), CommissionThrottlePrefs {
+		Pools::<T>::set_commission_throttle(RuntimeOrigin::Signed(depositor.clone()).into(), 1u32.into(), CommissionChangeRate {
 			max_increase: Perbill::from_percent(20),
 			min_delay: 0u32.into(),
 		}).unwrap();
@@ -697,7 +697,7 @@ frame_benchmarking::benchmarks! {
 			current: Some((Perbill::from_percent(20), depositor)),
 			max: Some(Perbill::from_percent(50)),
 			throttle: Some(CommissionThrottle {
-				change_rate: CommissionThrottlePrefs {
+				change_rate: CommissionChangeRate {
 					max_increase: Perbill::from_percent(20),
 					min_delay: 0u32.into()
 				},
@@ -722,7 +722,7 @@ frame_benchmarking::benchmarks! {
 	set_commission_throttle {
 		// Create a pool
 		let (depositor, pool_account) = create_pool_account::<T>(0, Pools::<T>::depositor_min_bond() * 2u32.into(), None);
-	}:_(RuntimeOrigin::Signed(depositor.clone()), 1u32.into(), CommissionThrottlePrefs {
+	}:_(RuntimeOrigin::Signed(depositor.clone()), 1u32.into(), CommissionChangeRate {
 		max_increase: Perbill::from_percent(50),
 		min_delay: 1000u32.into(),
 	})
@@ -732,7 +732,7 @@ frame_benchmarking::benchmarks! {
 			current: None,
 			max: None,
 			throttle: Some(CommissionThrottle {
-				change_rate: CommissionThrottlePrefs {
+				change_rate: CommissionChangeRate {
 					max_increase: Perbill::from_percent(50),
 					min_delay: 1000u32.into(),
 				},

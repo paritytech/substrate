@@ -693,7 +693,7 @@ impl<T: Config> Commission<T> {
 	/// `min_delay` values and decreased `max_increase` values.
 	fn maybe_update_throttle(
 		&mut self,
-		change_rate: CommissionThrottlePrefs<T::BlockNumber>,
+		change_rate: CommissionChangeRate<T::BlockNumber>,
 	) -> DispatchResult {
 		ensure!(
 			&self.throttle.as_ref().map_or(true, |t| t.less_restrictive(&change_rate)),
@@ -729,14 +729,14 @@ impl<T: Config> Commission<T> {
 #[scale_info(skip_type_params(T))]
 pub struct CommissionThrottle<T: Config> {
 	///  The change rate dictates how often and by how much commission can be updated.
-	pub change_rate: CommissionThrottlePrefs<T::BlockNumber>,
+	pub change_rate: CommissionChangeRate<T::BlockNumber>,
 	/// The block the previous commission update took place.
 	pub previous_set_at: Option<T::BlockNumber>,
 }
 
 impl<T: Config> CommissionThrottle<T> {
 	/// Returns `true` if `change_rate` is less restrictive than `self`.
-	fn less_restrictive(&self, change_rate: &CommissionThrottlePrefs<T::BlockNumber>) -> bool {
+	fn less_restrictive(&self, change_rate: &CommissionChangeRate<T::BlockNumber>) -> bool {
 		change_rate.max_increase <= self.change_rate.max_increase &&
 			change_rate.min_delay >= self.change_rate.min_delay
 	}
@@ -755,7 +755,7 @@ impl<T: Config> CommissionThrottle<T> {
 /// Throttle prefs need to be passed and configured together. This struct is
 /// used in the `set_commission_throttle` call as well as in CommissionThrottle.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Copy, Clone)]
-pub struct CommissionThrottlePrefs<BlockNumber> {
+pub struct CommissionChangeRate<BlockNumber> {
 	/// The maximum amount the commission can be updated by per `min_delay` period.
 	pub max_increase: Perbill,
 	/// How often an update can take place.
@@ -1613,7 +1613,7 @@ pub mod pallet {
 		/// A pool's commission throttle has been changed.
 		PoolCommissionThrottleUpdated {
 			pool_id: PoolId,
-			prefs: CommissionThrottlePrefs<T::BlockNumber>,
+			prefs: CommissionChangeRate<T::BlockNumber>,
 		},
 	}
 
@@ -2413,7 +2413,7 @@ pub mod pallet {
 		pub fn set_commission_throttle(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
-			prefs: CommissionThrottlePrefs<T::BlockNumber>,
+			prefs: CommissionChangeRate<T::BlockNumber>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;

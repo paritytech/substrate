@@ -351,7 +351,7 @@ mod bonded_pool {
 			assert_ok!(Pools::set_commission_throttle(
 				RuntimeOrigin::signed(900),
 				1,
-				CommissionThrottlePrefs {
+				CommissionChangeRate {
 					max_increase: Perbill::from_percent(1),
 					min_delay: 2_u64
 				}
@@ -362,7 +362,7 @@ mod bonded_pool {
 					current: Some((Perbill::from_percent(5), 900)),
 					max: None,
 					throttle: Some(CommissionThrottle {
-						change_rate: CommissionThrottlePrefs {
+						change_rate: CommissionChangeRate {
 							max_increase: Perbill::from_percent(1),
 							min_delay: 2_u64
 						},
@@ -399,7 +399,7 @@ mod bonded_pool {
 					current: Some((Perbill::from_percent(6), 900)),
 					max: None,
 					throttle: Some(CommissionThrottle {
-						change_rate: CommissionThrottlePrefs {
+						change_rate: CommissionChangeRate {
 							max_increase: Perbill::from_percent(1),
 							min_delay: 2_u64
 						},
@@ -484,7 +484,7 @@ mod bonded_pool {
 					},
 					Event::PoolCommissionThrottleUpdated {
 						pool_id: 1,
-						prefs: CommissionThrottlePrefs {
+						prefs: CommissionChangeRate {
 							max_increase: Perbill::from_percent(1),
 							min_delay: 2
 						}
@@ -632,7 +632,7 @@ mod bonded_pool {
 				Pools::set_commission_throttle(
 					RuntimeOrigin::signed(900),
 					9999,
-					CommissionThrottlePrefs {
+					CommissionChangeRate {
 						max_increase: Perbill::from_percent(5),
 						min_delay: 1000_u64
 					}
@@ -644,7 +644,7 @@ mod bonded_pool {
 				Pools::set_commission_throttle(
 					RuntimeOrigin::signed(1),
 					1,
-					CommissionThrottlePrefs {
+					CommissionChangeRate {
 						max_increase: Perbill::from_percent(5),
 						min_delay: 1000_u64
 					}
@@ -656,7 +656,7 @@ mod bonded_pool {
 			assert_ok!(Pools::set_commission_throttle(
 				RuntimeOrigin::signed(900),
 				1,
-				CommissionThrottlePrefs {
+				CommissionChangeRate {
 					max_increase: Perbill::from_percent(5),
 					min_delay: 1000_u64
 				}
@@ -664,7 +664,7 @@ mod bonded_pool {
 			assert_eq!(
 				BondedPools::<Runtime>::get(1).unwrap().commission.throttle,
 				Some(CommissionThrottle {
-					change_rate: CommissionThrottlePrefs {
+					change_rate: CommissionChangeRate {
 						max_increase: Perbill::from_percent(5),
 						min_delay: 1000_u64
 					},
@@ -678,7 +678,7 @@ mod bonded_pool {
 				Pools::set_commission_throttle(
 					RuntimeOrigin::signed(900),
 					1,
-					CommissionThrottlePrefs {
+					CommissionChangeRate {
 						max_increase: Perbill::from_percent(5),
 						min_delay: 500_u64
 					}
@@ -692,7 +692,7 @@ mod bonded_pool {
 				Pools::set_commission_throttle(
 					RuntimeOrigin::signed(900),
 					1,
-					CommissionThrottlePrefs {
+					CommissionChangeRate {
 						max_increase: Perbill::from_percent(10),
 						min_delay: 1000_u64
 					}
@@ -704,7 +704,7 @@ mod bonded_pool {
 			assert_ok!(Pools::set_commission_throttle(
 				RuntimeOrigin::signed(900),
 				1,
-				CommissionThrottlePrefs {
+				CommissionChangeRate {
 					max_increase: Perbill::from_percent(5),
 					min_delay: 2000_u64
 				}
@@ -713,7 +713,7 @@ mod bonded_pool {
 			assert_ok!(Pools::set_commission_throttle(
 				RuntimeOrigin::signed(900),
 				1,
-				CommissionThrottlePrefs {
+				CommissionChangeRate {
 					max_increase: Perbill::from_percent(5),
 					min_delay: 2000_u64
 				}
@@ -722,7 +722,7 @@ mod bonded_pool {
 			assert_ok!(Pools::set_commission_throttle(
 				RuntimeOrigin::signed(900),
 				1,
-				CommissionThrottlePrefs {
+				CommissionChangeRate {
 					max_increase: Perbill::from_percent(3),
 					min_delay: 3000_u64
 				}
