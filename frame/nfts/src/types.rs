@@ -66,7 +66,7 @@ pub trait Incrementable {
 }
 impl_incrementable!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
 
-/// Information about the collection.
+/// Information about a collection.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct CollectionDetails<AccountId, DepositBalance> {
 	/// Collection's owner.
