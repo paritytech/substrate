@@ -3,11 +3,12 @@ use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens};
 use syn::{
+	parse::{Parse, ParseStream},
 	parse_macro_input,
 	punctuated::Punctuated,
 	spanned::Spanned,
 	token::{Comma, Gt, Lt},
-	Error, Expr, ExprCall, FnArg, ItemFn, ItemMod, LitInt, Pat, Result, Stmt, Type,
+	Block, Error, Expr, ExprCall, FnArg, ItemFn, ItemMod, LitInt, Pat, Result, Stmt, Type,
 };
 
 mod keywords {
@@ -22,7 +23,19 @@ fn emit_error<T: Into<TokenStream> + Clone, S: Into<String>>(item: &T, message: 
 	return syn::Error::new(span, message).to_compile_error().into()
 }
 
-#[derive(Debug, Clone, PartialEq)]
+struct BareBlock {
+	stmts: Vec<Stmt>,
+}
+
+impl Parse for BareBlock {
+	fn parse(input: ParseStream) -> syn::Result<Self> {
+		match Block::parse_within(input) {
+			Ok(stmts) => Ok(BareBlock { stmts }),
+			Err(e) => Err(e),
+		}
+	}
+}
+
 struct ParamDef {
 	name: String,
 	typ: Type,
