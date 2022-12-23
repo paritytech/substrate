@@ -910,7 +910,7 @@ impl<T: Config> Pallet<T> {
 			let _ = T::EventListener::on_nominator_remove(who, nominations);
 			true
 		} else {
-			true
+			false
 		};
 
 		debug_assert_eq!(
