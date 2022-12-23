@@ -28,8 +28,8 @@ use frame_election_provider_support::SortedListProvider;
 use frame_support::{assert_ok, ensure, traits::Get};
 use frame_system::RawOrigin as RuntimeOrigin;
 use pallet_nomination_pools::{
-	BalanceOf, BondExtra, BondedPoolInner, BondedPools, Commission, CommissionThrottle,
-	CommissionChangeRate, ConfigOp, MaxPoolMembers, MaxPoolMembersPerPool, MaxPools, Metadata,
+	BalanceOf, BondExtra, BondedPoolInner, BondedPools, Commission, CommissionChangeRate,
+	CommissionThrottle, ConfigOp, MaxPoolMembers, MaxPoolMembersPerPool, MaxPools, Metadata,
 	MinCreateBond, MinJoinBond, Pallet as Pools, PoolMembers, PoolRoles, PoolState, RewardPools,
 	SubPoolsStorage,
 };

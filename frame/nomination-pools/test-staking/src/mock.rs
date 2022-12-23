@@ -162,6 +162,13 @@ impl Convert<sp_core::U256, Balance> for U256ToBalance {
 	}
 }
 
+pub struct BlockNumberToU32;
+impl Convert<BlockNumber, u32> for BlockNumberToU32 {
+	fn convert(n: BlockNumber) -> u32 {
+		return n as u32
+	}
+}
+
 parameter_types! {
 	pub const PostUnbondingPoolsWindow: u32 = 10;
 	pub const PoolsPalletId: PalletId = PalletId(*b"py/nopls");
@@ -174,6 +181,7 @@ impl pallet_nomination_pools::Config for Runtime {
 	type RewardCounter = FixedU128;
 	type BalanceToU256 = BalanceToU256;
 	type U256ToBalance = U256ToBalance;
+	type BlockNumberToU32 = BlockNumberToU32;
 	type Staking = Staking;
 	type PostUnbondingPoolsWindow = PostUnbondingPoolsWindow;
 	type MaxMetadataLen = ConstU32<256>;

@@ -212,6 +212,13 @@ impl Convert<U256, Balance> for U256ToBalance {
 	}
 }
 
+pub struct BlockNumberToU32;
+impl Convert<BlockNumber, u32> for BlockNumberToU32 {
+	fn convert(n: BlockNumber) -> u32 {
+		return n as u32
+	}
+}
+
 parameter_types! {
 	pub static PostUnbondingPoolsWindow: u32 = 2;
 	pub static MaxMetadataLen: u32 = 2;
@@ -224,6 +231,7 @@ impl pools::Config for Runtime {
 	type Currency = Balances;
 	type RewardCounter = RewardCounter;
 	type BalanceToU256 = BalanceToU256;
+	type BlockNumberToU32 = BlockNumberToU32;
 	type U256ToBalance = U256ToBalance;
 	type Staking = StakingMock;
 	type PostUnbondingPoolsWindow = PostUnbondingPoolsWindow;

@@ -351,10 +351,7 @@ mod bonded_pool {
 			assert_ok!(Pools::set_commission_throttle(
 				RuntimeOrigin::signed(900),
 				1,
-				CommissionChangeRate {
-					max_increase: Perbill::from_percent(1),
-					min_delay: 2_u64
-				}
+				CommissionChangeRate { max_increase: Perbill::from_percent(1), min_delay: 2_u64 }
 			));
 			assert_eq!(
 				BondedPool::<Runtime>::get(1).unwrap().commission,
@@ -382,7 +379,7 @@ mod bonded_pool {
 				Error::<Runtime>::CommissionChangeThrottled
 			);
 
-			// Run 2 blocks into the future.
+			// Run to block 3
 			run_blocks(2);
 
 			// We now try to increase commission by 1%, and provide an initial payee.
@@ -656,17 +653,14 @@ mod bonded_pool {
 			assert_ok!(Pools::set_commission_throttle(
 				RuntimeOrigin::signed(900),
 				1,
-				CommissionChangeRate {
-					max_increase: Perbill::from_percent(5),
-					min_delay: 1000_u64
-				}
+				CommissionChangeRate { max_increase: Perbill::from_percent(5), min_delay: 10_u64 }
 			));
 			assert_eq!(
 				BondedPools::<Runtime>::get(1).unwrap().commission.throttle,
 				Some(CommissionThrottle {
 					change_rate: CommissionChangeRate {
 						max_increase: Perbill::from_percent(5),
-						min_delay: 1000_u64
+						min_delay: 10_u64
 					},
 					previous_set_at: None
 				})
@@ -680,7 +674,7 @@ mod bonded_pool {
 					1,
 					CommissionChangeRate {
 						max_increase: Perbill::from_percent(5),
-						min_delay: 500_u64
+						min_delay: 5_u64
 					}
 				),
 				Error::<Runtime>::CommissionThrottleNotAllowed
@@ -694,7 +688,7 @@ mod bonded_pool {
 					1,
 					CommissionChangeRate {
 						max_increase: Perbill::from_percent(10),
-						min_delay: 1000_u64
+						min_delay: 10_u64
 					}
 				),
 				Error::<Runtime>::CommissionThrottleNotAllowed
@@ -704,30 +698,121 @@ mod bonded_pool {
 			assert_ok!(Pools::set_commission_throttle(
 				RuntimeOrigin::signed(900),
 				1,
-				CommissionChangeRate {
-					max_increase: Perbill::from_percent(5),
-					min_delay: 2000_u64
-				}
+				CommissionChangeRate { max_increase: Perbill::from_percent(5), min_delay: 20_u64 }
 			));
+
 			// Successful more restrictive change of max_increase with the current min_delay
 			assert_ok!(Pools::set_commission_throttle(
 				RuntimeOrigin::signed(900),
 				1,
-				CommissionChangeRate {
-					max_increase: Perbill::from_percent(5),
-					min_delay: 2000_u64
-				}
+				CommissionChangeRate { max_increase: Perbill::from_percent(5), min_delay: 20_u64 }
 			));
+
 			// Successful more restrictive change of both max_increase and min_delay
 			assert_ok!(Pools::set_commission_throttle(
 				RuntimeOrigin::signed(900),
 				1,
-				CommissionChangeRate {
-					max_increase: Perbill::from_percent(3),
-					min_delay: 3000_u64
-				}
+				CommissionChangeRate { max_increase: Perbill::from_percent(3), min_delay: 30_u64 }
+			));
+
+			// multi duration `min_delay` test.
+			//
+			// set the commission throttle change_rate of 1% per 3000 blocks.
+			assert_ok!(Pools::set_commission_throttle(
+				RuntimeOrigin::signed(900),
+				1,
+				CommissionChangeRate { max_increase: Perbill::from_percent(1), min_delay: 30_u64 }
+			));
+			// pre-requisite: set the commission to 1%.
+			assert_ok!(Pools::set_commission(
+				RuntimeOrigin::signed(900),
+				1,
+				Some(Perbill::from_percent(1)),
+				Some(900),
+			));
+			// Run 90 blocks into the future so we are eligible to update commission
+			// with 3 `min_delay` durations passed.
+			run_blocks(91);
+
+			// we should not be able to increase the commission to 5%: 1% beyond the throttle limit.
+			assert_noop!(
+				Pools::set_commission(
+					RuntimeOrigin::signed(900),
+					1,
+					Some(Perbill::from_percent(5)),
+					Some(900),
+				),
+				Error::<Runtime>::CommissionChangeThrottled
+			);
+
+			// we should however be able to increase the commission to 4%: 1% + (3*1%).
+			assert_ok!(Pools::set_commission(
+				RuntimeOrigin::signed(900),
+				1,
+				Some(Perbill::from_percent(4)),
+				Some(900),
 			));
 		});
+	}
+
+	#[test]
+	fn intervals_since_block_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// some duration to work with
+			let duration = 3_u64;
+
+			// get commission to access `intervals_since_block`
+			let commission = BondedPool::<Runtime>::get(1).unwrap().commission;
+
+			// run 5 durations in the future
+			let block_number = duration * 5;
+			run_to_block(block_number);
+
+			// interval of 14 blocks should result in 4 durations
+			assert_eq!(commission.intervals_since_block(&1, &duration), 4_u32);
+
+			// interval of 13 blocks should result in 4 durations
+			assert_eq!(commission.intervals_since_block(&2, &duration), 4_u32);
+
+			// interval of 12 blocks should result in 4 durations
+			assert_eq!(commission.intervals_since_block(&3, &duration), 4_u32);
+
+			// interval of 11 blocks should result in 3 durations
+			assert_eq!(commission.intervals_since_block(&4, &duration), 3_u32);
+
+			// interval of 10 blocks should result in 3 durations
+			assert_eq!(commission.intervals_since_block(&5, &duration), 3_u32);
+
+			// interval of 9 blocks should result in 3 durations
+			assert_eq!(commission.intervals_since_block(&6, &duration), 3_u32);
+
+			// interval of 8 blocks should result in 2 durations
+			assert_eq!(commission.intervals_since_block(&7, &duration), 2_u32);
+
+			// interval of 7 blocks should result in 2 duration
+			assert_eq!(commission.intervals_since_block(&8, &duration), 2_u32);
+
+			// interval of 6 blocks should result in 2 durations
+			assert_eq!(commission.intervals_since_block(&9, &duration), 2_u32);
+
+			// interval of 5 blocks should result in 1 duration
+			assert_eq!(commission.intervals_since_block(&10, &duration), 1_u32);
+
+			// interval of 4 blocks should result in 1 duration
+			assert_eq!(commission.intervals_since_block(&11, &duration), 1_u32);
+
+			// interval of 3 blocks should result in 1 duration
+			assert_eq!(commission.intervals_since_block(&12, &duration), 1_u32);
+
+			// interval of 2 blocks should result in 0 durations
+			assert_eq!(commission.intervals_since_block(&13, &duration), 0_u32);
+
+			// interval of 1 block should result in 0 durations
+			assert_eq!(commission.intervals_since_block(&14, &duration), 0_u32);
+
+			// interval of 0 block should result in 0 durations
+			assert_eq!(commission.intervals_since_block(&15, &duration), 0_u32);
+		})
 	}
 }
 

@@ -628,15 +628,42 @@ impl<T: Config> Commission<T> {
 	/// Throttling is not applied to commission updates if `current` is still `None`.
 	fn throttling(&self, to: &Perbill) -> bool {
 		if let Some(t) = self.throttle.as_ref() {
-			// check for `min_delay` throttling
-			if t.previous_set_at.map_or(false, |p| {
-				<frame_system::Pallet<T>>::block_number().saturating_sub(p) <
-					t.change_rate.min_delay
-			}) {
+			// factor previously updated block into whether user is throttled.
+			if t.previous_set_at.map_or(
+				// if no `previous_set_at` is set, throttled if the attempted increase
+				// in commission is greater than `max_increase`.
+				(*to).saturating_sub(self.commission_or_zero()) > t.change_rate.max_increase,
+				|p| {
+					// `min_delay` blocks must have been surpassed since last update.
+					if <frame_system::Pallet<T>>::block_number().saturating_sub(p) <
+						t.change_rate.min_delay
+					{
+						return true
+					}
+					// ensure the `max_increase` durations surpassed since the previous
+					// commission update allow the attempted commission increase.
+					//
+					// the attempted increase in commission relative to the current commission.
+					let attempted_increase = (*to).saturating_sub(self.commission_or_zero());
+
+					// the total durations passed since the last commission update.
+					let intervals_passed = self.intervals_since_block(&p, &t.change_rate.min_delay);
+
+					// the maximum allowed increase, where the current `max_increase`
+					// Perbill is converted into a u32 by multiplying itself with 100_u32
+					// and multiplied by durations passed, before being converted back
+					// into a Perbill.
+					let max_allowed_increase = Perbill::from_percent(
+						(t.change_rate.max_increase * 100_u32) * intervals_passed,
+					);
+
+					// throttled (true) if attempted increase is greater than the maximum
+					// allowed increase, as a percentage.
+					attempted_increase > max_allowed_increase
+				},
+			) {
 				return true
 			}
-			// check for `max_increase` throttling
-			return (*to).saturating_sub(self.commission_or_zero()) > t.change_rate.max_increase
 		}
 		false
 	}
@@ -720,6 +747,23 @@ impl<T: Config> Commission<T> {
 			.as_ref()
 			.map(|(commission, payee)| (*commission * *pending_rewards, payee.clone()))
 			.or(None)
+	}
+
+	/// Calculate the amount of intervals that consume a period of blocks.
+	///
+	/// The final number of intervals is returned.
+	pub fn intervals_since_block(
+		&self,
+		start_block: &T::BlockNumber,
+		interval: &T::BlockNumber,
+	) -> u32 {
+		let blocks_passed = <frame_system::Pallet<T>>::block_number().saturating_sub(*start_block);
+
+		// ensure divsion by zero is not possible.
+		if blocks_passed == Zero::zero() {
+			return Zero::zero()
+		}
+		T::BlockNumberToU32::convert(blocks_passed.div(*interval))
 	}
 }
 
@@ -1378,6 +1422,9 @@ pub mod pallet {
 
 		/// The nominating balance.
 		type Currency: Currency<Self::AccountId>;
+
+		/// Convert the block number into u32.
+		type BlockNumberToU32: Convert<Self::BlockNumber, u32>;
 
 		/// The type that is used for reward counter.
 		///
