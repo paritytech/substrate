@@ -334,7 +334,7 @@ use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_runtime::{
 	traits::{
-		AccountIdConversion, CheckedAdd, CheckedSub, Convert, Saturating, StaticLookup, Zero,
+		AccountIdConversion, CheckedAdd, CheckedSub, Convert, Saturating, SaturatedConversion, StaticLookup, Zero,
 	},
 	FixedPointNumber, Perbill,
 };
@@ -763,7 +763,7 @@ impl<T: Config> Commission<T> {
 		if blocks_passed == Zero::zero() {
 			return Zero::zero()
 		}
-		T::BlockNumberToU32::convert(blocks_passed.div(*interval))
+		blocks_passed.div(*interval).saturated_into::<u32>()
 	}
 }
 
@@ -1422,9 +1422,6 @@ pub mod pallet {
 
 		/// The nominating balance.
 		type Currency: Currency<Self::AccountId>;
-
-		/// Convert the block number into u32.
-		type BlockNumberToU32: Convert<Self::BlockNumber, u32>;
 
 		/// The type that is used for reward counter.
 		///
