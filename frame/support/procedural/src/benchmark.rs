@@ -16,6 +16,7 @@ mod keywords {
 	syn::custom_keyword!(cfg);
 }
 
+/// A safe wrapper for easily emitting errors in [`quote!`] calls
 fn emit_error<T: Into<TokenStream> + Clone, S: Into<String>>(item: &T, message: S) -> TokenStream {
 	let item = Into::<TokenStream>::into(item.clone());
 	let message = Into::<String>::into(message);
@@ -23,6 +24,10 @@ fn emit_error<T: Into<TokenStream> + Clone, S: Into<String>>(item: &T, message: 
 	return syn::Error::new(span, message).to_compile_error().into()
 }
 
+/// Represents a "bare" block, that is, a the contents of a [`Block`] minus the curly braces.
+/// Useful for parsing the contents of a decl macro that takes a block, since the curly braces
+/// are not actually included in the input [`TokenStream`] in that scenario. The contents are
+/// parsed as a [`Vec<Stmt>`] called `stmts`. Can be used with [`parse_macro_input!`], etc.
 struct BareBlock {
 	stmts: Vec<Stmt>,
 }
@@ -36,6 +41,7 @@ impl Parse for BareBlock {
 	}
 }
 
+/// This represents the raw parsed data for a param definition such as `x: Linear<10, 20>`.
 struct ParamDef {
 	name: String,
 	typ: Type,
@@ -43,6 +49,7 @@ struct ParamDef {
 	end: u32,
 }
 
+/// Allows easy parsing of the `<10, 20>` component of `x: Linear<10, 20>`.
 #[derive(Parse)]
 struct RangeArgs {
 	_lt_token: Lt,
@@ -52,6 +59,7 @@ struct RangeArgs {
 	_gt_token: Gt,
 }
 
+/// Represents a parsed `#[benchmark]` or `#[instance_banchmark]` item.
 struct BenchmarkDef {
 	params: Vec<ParamDef>,
 	setup_stmts: Vec<Stmt>,
@@ -61,6 +69,7 @@ struct BenchmarkDef {
 }
 
 impl BenchmarkDef {
+	/// Constructs a [`BenchmarkDef`] by traversing an existing [`ItemFn`] node.
 	pub fn from(item_fn: &ItemFn) -> Result<BenchmarkDef> {
 		let mut i = 0; // index of child
 		let mut params: Vec<ParamDef> = Vec::new();
@@ -187,7 +196,8 @@ pub fn benchmarks(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 	.into()
 }
 
-// prepares a `Vec<ParamDef>` to be interpolated by `quote!`
+/// Prepares a [`Vec<ParamDef>`] to be interpolated by [`quote!`] by creating easily-iterable
+/// arrays formatted in such a way that they can be interpolated directly.
 struct UnrolledParams {
 	param_ranges: Vec<TokenStream2>,
 	param_names: Vec<TokenStream2>,
@@ -329,6 +339,6 @@ pub fn benchmark(_attrs: TokenStream, tokens: TokenStream, is_instance: bool) ->
 			}
 		}
 	};
-	println!("{}", res.to_string());
+	// println!("{}", res.to_string());
 	res.into()
 }
