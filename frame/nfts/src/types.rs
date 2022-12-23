@@ -66,12 +66,12 @@ pub trait Incrementable {
 }
 impl_incrementable!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
 
-/// Information about the collection.
+/// Information about a collection.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct CollectionDetails<AccountId, DepositBalance> {
 	/// Collection's owner.
 	pub(super) owner: AccountId,
-	/// The total balance deposited by the owner for the all storage data associated with this
+	/// The total balance deposited by the owner for all the storage data associated with this
 	/// collection. Used by `destroy`.
 	pub(super) owner_deposit: DepositBalance,
 	/// The total number of outstanding items of this collection.
@@ -167,9 +167,9 @@ pub struct ItemMetadata<DepositBalance, StringLimit: Get<u32>> {
 /// Information about the tip.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct ItemTip<CollectionId, ItemId, AccountId, Amount> {
-	/// A collection of the item.
+	/// The collection of the item.
 	pub(super) collection: CollectionId,
-	/// An item of which the tip is send for.
+	/// An item of which the tip is sent for.
 	pub(super) item: ItemId,
 	/// A sender of the tip.
 	pub(super) receiver: AccountId,
@@ -180,9 +180,9 @@ pub struct ItemTip<CollectionId, ItemId, AccountId, Amount> {
 /// Information about the pending swap.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
 pub struct PendingSwap<CollectionId, ItemId, ItemPriceWithDirection, Deadline> {
-	/// A collection of the item user wants to receive.
+	/// The collection that contains the item that the user wants to receive.
 	pub(super) desired_collection: CollectionId,
-	/// An item user wants to receive.
+	/// The item the user wants to receive.
 	pub(super) desired_item: Option<ItemId>,
 	/// A price for the desired `item` with the direction.
 	pub(super) price: Option<ItemPriceWithDirection>,
@@ -199,10 +199,10 @@ pub struct AttributeDeposit<DepositBalance, AccountId> {
 	pub(super) amount: DepositBalance,
 }
 
-/// Specifies whether the tokens will be send or received.
+/// Specifies whether the tokens will be sent or received.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum PriceDirection {
-	/// Tokens will be send.
+	/// Tokens will be sent.
 	Send,
 	/// Tokens will be received.
 	Receive,
