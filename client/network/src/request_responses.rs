@@ -1085,7 +1085,6 @@ mod tests {
 	fn max_response_size_exceeded() {
 		let protocol_name = "/test/req-resp/1";
 		let mut pool = LocalPool::new();
-		let tokio_executor = tokio::runtime::Runtime::new().unwrap();
 
 		// Build swarms whose behaviour is `RequestResponsesBehaviour`.
 		let mut swarms = (0..2)
@@ -1203,7 +1202,6 @@ mod tests {
 		let protocol_name_1 = "/test/req-resp-1/1";
 		let protocol_name_2 = "/test/req-resp-2/1";
 		let mut pool = LocalPool::new();
-		let tokio_executor = tokio::runtime::Runtime::new().unwrap();
 
 		let mut swarm_1 = {
 			let protocol_configs = vec![
