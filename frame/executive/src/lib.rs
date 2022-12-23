@@ -355,7 +355,9 @@ where
 	///
 	/// This should only be used for testing.
 	pub fn try_runtime_upgrade() -> Result<frame_support::weights::Weight, &'static str> {
+		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::pre_upgrade().unwrap();
 		let weight = Self::execute_on_runtime_upgrade();
+		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::post_upgrade().unwrap();
 		Ok(weight)
 	}
 }
