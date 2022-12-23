@@ -246,7 +246,7 @@ pub fn benchmark(_attrs: TokenStream, tokens: TokenStream, is_instance: bool) ->
 	// set up variables needed during quoting
 	let name = item_fn.sig.ident;
 	let krate = quote!(::frame_benchmarking);
-	let home = quote!(::frame_support);
+	let home = quote!(::frame_support::benchmarking);
 	let codec = quote!(#krate::frame_support::codec);
 	let traits = quote!(#krate::frame_support::traits);
 	let setup_stmts = benchmark_def.setup_stmts;

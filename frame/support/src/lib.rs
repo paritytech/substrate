@@ -86,9 +86,6 @@ pub mod weights;
 extern crate static_assertions;
 
 #[doc(hidden)]
-pub use static_assertions::assert_impl_all;
-
-#[doc(hidden)]
 pub mod unsigned {
 	#[doc(hidden)]
 	pub use crate::sp_runtime::traits::ValidateUnsigned;
@@ -2753,21 +2750,33 @@ pub mod pallet_macros {
 // Generate a macro that will enable/disable code based on `std` feature being active.
 sp_core::generate_feature_enabled_macro!(std_enabled, feature = "std", $);
 
-pub use frame_support_procedural::{benchmark, benchmarks, instance_benchmark};
+pub mod benchmarking {
+	pub use frame_support_procedural::{benchmark, benchmarks, instance_benchmark};
 
-pub struct Linear<const A: u32, const B: u32>;
+	#[doc(hidden)]
+	pub use static_assertions::assert_impl_all;
 
-pub trait ParamRange {
-	fn start(&self) -> u32;
-	fn end(&self) -> u32;
-}
+	/// Used by the new benchmarking code to specify that a benchmarking variable is linear
+	/// over some specified range, i.e. `Linear<0, 1_000>` means that the corresponding variable
+	/// is allowed to range from `0` to `1000`, inclusive.
+	pub struct Linear<const A: u32, const B: u32>;
 
-impl<const A: u32, const B: u32> ParamRange for Linear<A, B> {
-	fn start(&self) -> u32 {
-		return A
+	/// Trait that must be implemented by all structs that can be used as parameter range types
+	/// in the new benchmarking code (i.e. `Linear<0, 1_000>`). Right now there is just
+	/// [`Linear`] but this could later be extended to support additional non-linear parameter
+	/// ranges.
+	pub trait ParamRange {
+		fn start(&self) -> u32;
+		fn end(&self) -> u32;
 	}
 
-	fn end(&self) -> u32 {
-		return B
+	impl<const A: u32, const B: u32> ParamRange for Linear<A, B> {
+		fn start(&self) -> u32 {
+			return A
+		}
+
+		fn end(&self) -> u32 {
+			return B
+		}
 	}
 }

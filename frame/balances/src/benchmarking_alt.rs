@@ -1,6 +1,6 @@
 #![cfg(feature = "runtime-benchmarks")]
 
-use frame_support::benchmarks;
+use frame_support::benchmarking::benchmarks;
 
 #[benchmarks]
 mod benchmarks {
@@ -16,7 +16,7 @@ mod benchmarks {
 	const ED_MULTIPLIER: u32 = 10;
 
 	use frame_benchmarking::{account, whitelisted_caller};
-	use frame_support::{instance_benchmark, Linear};
+	use frame_support::benchmarking::*;
 
 	#[instance_benchmark]
 	fn transfer() {
