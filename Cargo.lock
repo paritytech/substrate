@@ -4900,27 +4900,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-asset-tx-payment-mangata"
-version = "4.0.0-dev"
-dependencies = [
- "frame-support",
- "frame-system",
- "pallet-assets",
- "pallet-authorship",
- "pallet-balances",
- "pallet-transaction-payment-mangata",
- "parity-scale-codec",
- "scale-info",
- "serde",
- "serde_json",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
- "sp-storage",
-]
-
-[[package]]
 name = "pallet-assets"
 version = "4.0.0-dev"
 dependencies = [
@@ -6153,23 +6132,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-transaction-payment-mangata"
-version = "4.0.0-dev"
-dependencies = [
- "frame-support",
- "frame-system",
- "pallet-balances",
- "parity-scale-codec",
- "scale-info",
- "serde",
- "serde_json",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
 name = "pallet-transaction-payment-rpc"
 version = "4.0.0-dev"
 dependencies = [
@@ -6184,34 +6146,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-transaction-payment-rpc-mangata"
-version = "4.0.0-dev"
-dependencies = [
- "jsonrpsee",
- "pallet-transaction-payment-rpc-runtime-api-mangata",
- "parity-scale-codec",
- "sp-api",
- "sp-blockchain",
- "sp-core",
- "sp-rpc",
- "sp-runtime",
-]
-
-[[package]]
 name = "pallet-transaction-payment-rpc-runtime-api"
 version = "4.0.0-dev"
 dependencies = [
  "pallet-transaction-payment",
- "parity-scale-codec",
- "sp-api",
- "sp-runtime",
-]
-
-[[package]]
-name = "pallet-transaction-payment-rpc-runtime-api-mangata"
-version = "4.0.0-dev"
-dependencies = [
- "pallet-transaction-payment-mangata",
  "parity-scale-codec",
  "sp-api",
  "sp-runtime",
