@@ -243,6 +243,7 @@ pub mod pallet {
 		/// recorded. This implies that what comes out of iterating this list MIGHT NOT BE AN ACTIVE
 		/// VALIDATOR.
 		type TargetList: SortedListProvider<Self::AccountId, Score = BalanceOf<Self>>;
+
 		/// This is the implementation that's going to maintain approval stake tracking, `VoterList`
 		/// and `TargetList` in near future. Currently running in test mode, which means it's
 		/// maintaining totally detached versions of both lists.
@@ -253,6 +254,7 @@ pub mod pallet {
 		/// `OnRuntimeUpdate` - just a tuple of all sorts of pallets implementing the trait that all
 		/// react to the interface methods being called or ignore them.
 		type EventListener: sp_staking::OnStakingUpdate<Self::AccountId, BalanceOf<Self>>;
+
 		/// The maximum number of `unlocking` chunks a [`StakingLedger`] can
 		/// have. Effectively determines how many unique eras a staker may be
 		/// unbonding in.
