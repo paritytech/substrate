@@ -19,7 +19,7 @@ mod benchmarks {
 	use frame_support::{instance_benchmark, Linear};
 
 	#[instance_benchmark]
-	fn benchmark_transfer() {
+	fn transfer() {
 		let existential_deposit = T::ExistentialDeposit::get();
 		let caller = whitelisted_caller();
 
