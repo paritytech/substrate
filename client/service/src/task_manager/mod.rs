@@ -310,7 +310,8 @@ impl TaskManager {
 		let (signal, on_exit) = exit_future::signal();
 
 		// A side-channel for essential tasks to communicate shutdown.
-		let (essential_failed_tx, essential_failed_rx) = tracing_unbounded("mpsc_essential_tasks");
+		let (essential_failed_tx, essential_failed_rx) =
+			tracing_unbounded("mpsc_essential_tasks", 100);
 
 		let metrics = prometheus_registry.map(Metrics::register).transpose()?;
 

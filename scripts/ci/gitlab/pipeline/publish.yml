@@ -225,12 +225,12 @@ update-node-template:
     - rusty-cachier cache upload
 
 publish-crates:
-  extends:                         .publish-crates-template
+  extends:
+    - .publish-crates-template
+    - .scheduled-crate-publishing-pipeline
   needs:
     - job:                         publish-crates-locally
       artifacts:                   false
-  rules:
-    - if: $CI_COMMIT_REF_NAME == "master"
 
 publish-crates-manual:
   extends:                         .publish-crates-template

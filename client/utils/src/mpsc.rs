@@ -45,71 +45,136 @@ mod inner {
 		stream::{FusedStream, Stream},
 		task::{Context, Poll},
 	};
-	use std::pin::Pin;
+	use log::error;
+	use std::{
+		backtrace::{Backtrace, BacktraceStatus},
+		pin::Pin,
+		sync::{
+			atomic::{AtomicBool, AtomicI64, Ordering},
+			Arc,
+		},
+	};
 
 	/// Wrapper Type around `UnboundedSender` that increases the global
 	/// measure when a message is added
 	#[derive(Debug)]
-	pub struct TracingUnboundedSender<T>(&'static str, UnboundedSender<T>);
+	pub struct TracingUnboundedSender<T> {
+		inner: UnboundedSender<T>,
+		name: &'static str,
+		// To not bother with ordering and possible underflow errors of the unsigned counter
+		// we just use `i64` and `Ordering::Relaxed`, and perceive `queue_size` as approximate.
+		// It can turn < 0 though.
+		queue_size: Arc<AtomicI64>,
+		queue_size_warning: i64,
+		warning_fired: Arc<AtomicBool>,
+		creation_backtrace: Arc<Backtrace>,
+	}
 
 	// Strangely, deriving `Clone` requires that `T` is also `Clone`.
 	impl<T> Clone for TracingUnboundedSender<T> {
 		fn clone(&self) -> Self {
-			Self(self.0, self.1.clone())
+			Self {
+				inner: self.inner.clone(),
+				name: self.name,
+				queue_size: self.queue_size.clone(),
+				queue_size_warning: self.queue_size_warning,
+				warning_fired: self.warning_fired.clone(),
+				creation_backtrace: self.creation_backtrace.clone(),
+			}
 		}
 	}
 
 	/// Wrapper Type around `UnboundedReceiver` that decreases the global
 	/// measure when a message is polled
 	#[derive(Debug)]
-	pub struct TracingUnboundedReceiver<T>(&'static str, UnboundedReceiver<T>);
+	pub struct TracingUnboundedReceiver<T> {
+		inner: UnboundedReceiver<T>,
+		name: &'static str,
+		queue_size: Arc<AtomicI64>,
+	}
 
 	/// Wrapper around `mpsc::unbounded` that tracks the in- and outflow via
-	/// `UNBOUNDED_CHANNELS_COUNTER`
+	/// `UNBOUNDED_CHANNELS_COUNTER` and warns if the message queue grows
+	/// above the warning threshold.
 	pub fn tracing_unbounded<T>(
-		key: &'static str,
+		name: &'static str,
+		queue_size_warning: i64,
 	) -> (TracingUnboundedSender<T>, TracingUnboundedReceiver<T>) {
 		let (s, r) = mpsc::unbounded();
-		(TracingUnboundedSender(key, s), TracingUnboundedReceiver(key, r))
+		let queue_size = Arc::new(AtomicI64::new(0));
+		let sender = TracingUnboundedSender {
+			inner: s,
+			name,
+			queue_size: queue_size.clone(),
+			queue_size_warning,
+			warning_fired: Arc::new(AtomicBool::new(false)),
+			creation_backtrace: Arc::new(Backtrace::capture()),
+		};
+		let receiver = TracingUnboundedReceiver { inner: r, name, queue_size };
+		(sender, receiver)
 	}
 
 	impl<T> TracingUnboundedSender<T> {
 		/// Proxy function to mpsc::UnboundedSender
 		pub fn poll_ready(&self, ctx: &mut Context) -> Poll<Result<(), SendError>> {
-			self.1.poll_ready(ctx)
+			self.inner.poll_ready(ctx)
 		}
 
 		/// Proxy function to mpsc::UnboundedSender
 		pub fn is_closed(&self) -> bool {
-			self.1.is_closed()
+			self.inner.is_closed()
 		}
 
 		/// Proxy function to mpsc::UnboundedSender
 		pub fn close_channel(&self) {
-			self.1.close_channel()
+			self.inner.close_channel()
 		}
 
 		/// Proxy function to mpsc::UnboundedSender
 		pub fn disconnect(&mut self) {
-			self.1.disconnect()
+			self.inner.disconnect()
 		}
 
-		/// Proxy function to mpsc::UnboundedSender
 		pub fn start_send(&mut self, msg: T) -> Result<(), SendError> {
-			self.1.start_send(msg)
+			// The underlying implementation of [`UnboundedSender::start_send`] is the same as
+			// [`UnboundedSender::unbounded_send`], so we just reuse the message counting and
+			// error reporting code from `unbounded_send`.
+			self.unbounded_send(msg).map_err(TrySendError::into_send_error)
 		}
 
 		/// Proxy function to mpsc::UnboundedSender
 		pub fn unbounded_send(&self, msg: T) -> Result<(), TrySendError<T>> {
-			self.1.unbounded_send(msg).map(|s| {
-				UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[self.0, "send"]).inc();
+			self.inner.unbounded_send(msg).map(|s| {
+				UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[self.name, "send"]).inc();
+
+				let queue_size = self.queue_size.fetch_add(1, Ordering::Relaxed);
+				if queue_size == self.queue_size_warning &&
+					!self.warning_fired.load(Ordering::Relaxed)
+				{
+					// `warning_fired` and `queue_size` are not synchronized, so it's possible
+					// that the warning is fired few times before the `warning_fired` is seen
+					// by all threads. This seems better than introducing a mutex guarding them.
+					self.warning_fired.store(true, Ordering::Relaxed);
+					match self.creation_backtrace.status() {
+						BacktraceStatus::Captured => error!(
+							"The number of unprocessed messages in channel `{}` reached {}.\n\
+							 The channel was created at:\n{}",
+							self.name, self.queue_size_warning, self.creation_backtrace,
+						),
+						_ => error!(
+							"The number of unprocessed messages in channel `{}` reached {}.",
+							self.name, self.queue_size_warning,
+						),
+					}
+				}
+
 				s
 			})
 		}
 
 		/// Proxy function to mpsc::UnboundedSender
 		pub fn same_receiver(&self, other: &UnboundedSender<T>) -> bool {
-			self.1.same_receiver(other)
+			self.inner.same_receiver(other)
 		}
 	}
 
@@ -118,7 +183,7 @@ mod inner {
 			// consume all items, make sure to reflect the updated count
 			let mut count = 0;
 			loop {
-				if self.1.is_terminated() {
+				if self.inner.is_terminated() {
 					break
 				}
 
@@ -129,7 +194,9 @@ mod inner {
 			}
 			// and discount the messages
 			if count > 0 {
-				UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[self.0, "dropped"]).inc_by(count);
+				UNBOUNDED_CHANNELS_COUNTER
+					.with_label_values(&[self.name, "dropped"])
+					.inc_by(count);
 			}
 		}
 
@@ -137,15 +204,16 @@ mod inner {
 		/// that consumes all messages first and updates the counter
 		pub fn close(&mut self) {
 			self.consume();
-			self.1.close()
+			self.inner.close()
 		}
 
 		/// Proxy function to mpsc::UnboundedReceiver
 		/// that discounts the messages taken out
 		pub fn try_next(&mut self) -> Result<Option<T>, TryRecvError> {
-			self.1.try_next().map(|s| {
+			self.inner.try_next().map(|s| {
 				if s.is_some() {
-					UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[self.0, "received"]).inc();
+					let _ = self.queue_size.fetch_sub(1, Ordering::Relaxed);
+					UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[self.name, "received"]).inc();
 				}
 				s
 			})
@@ -165,10 +233,11 @@ mod inner {
 
 		fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<T>> {
 			let s = self.get_mut();
-			match Pin::new(&mut s.1).poll_next(cx) {
+			match Pin::new(&mut s.inner).poll_next(cx) {
 				Poll::Ready(msg) => {
 					if msg.is_some() {
-						UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[s.0, "received"]).inc();
+						let _ = s.queue_size.fetch_sub(1, Ordering::Relaxed);
+						UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[s.name, "received"]).inc();
 					}
 					Poll::Ready(msg)
 				},
@@ -179,7 +248,7 @@ mod inner {
 
 	impl<T> FusedStream for TracingUnboundedReceiver<T> {
 		fn is_terminated(&self) -> bool {
-			self.1.is_terminated()
+			self.inner.is_terminated()
 		}
 	}
 
@@ -223,6 +292,10 @@ mod inner {
 		}
 
 		fn poll_close(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+			// The difference with `TracingUnboundedSender` is intentional. The underlying
+			// implementation differs for `UnboundedSender<T>` and `&UnboundedSender<T>`:
+			// the latter closes the channel completely with `close_channel()`, while the former
+			// only closes this specific sender with `disconnect()`.
 			self.close_channel();
 			Poll::Ready(Ok(()))
 		}
