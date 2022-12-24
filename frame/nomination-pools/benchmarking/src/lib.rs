@@ -631,7 +631,7 @@ frame_benchmarking::benchmarks! {
 		ConfigOp::Set(BalanceOf::<T>::max_value()),
 		ConfigOp::Set(u32::MAX),
 		ConfigOp::Set(u32::MAX),
-		ConfigOp::Set(u32::MAX)
+		ConfigOp::Set(u32::MAX),
 		ConfigOp::Set(Perbill::max_value())
 	) verify {
 		assert_eq!(MinJoinBond::<T>::get(), BalanceOf::<T>::max_value());
