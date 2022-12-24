@@ -25,7 +25,7 @@ use frame_support::{
 };
 use sp_runtime::{
 	traits::{Convert, IdentityLookup},
-	FixedU128,Perbill
+	FixedU128, Perbill,
 };
 
 type AccountId = u128;
