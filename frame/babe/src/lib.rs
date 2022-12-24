@@ -588,10 +588,19 @@ impl<T: Config> Pallet<T> {
 			return
 		}
 
-		// Update epoch index
-		let epoch_index = EpochIndex::<T>::get()
-			.checked_add(1)
-			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
+		// Update epoch index.
+		//
+		// NOTE: we figure out the epoch index from the slot, which may not
+		// necessarily be contiguous if the chain was offline for more than
+		// `T::EpochDuration` slots. When skipping from epoch N to e.g. N+4, we
+		// will be using the randomness and authorities for that epoch that had
+		// been previously announced for epoch N+1, and the randomness collected
+		// during the current epoch (N) will be used for epoch N+5.
+		let epoch_index = sp_consensus_babe::epoch_index(
+			CurrentSlot::<T>::get(),
+			GenesisSlot::<T>::get(),
+			T::EpochDuration::get(),
+		);
 
 		EpochIndex::<T>::put(epoch_index);
 		Authorities::<T>::put(authorities);
@@ -638,11 +647,16 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Finds the start slot of the current epoch. only guaranteed to
-	/// give correct results after `initialize` of the first block
-	/// in the chain (as its result is based off of `GenesisSlot`).
+	/// Finds the start slot of the current epoch.
+	///
+	/// Only guaranteed to give correct results after `initialize` of the first
+	/// block in the chain (as its result is based off of `GenesisSlot`).
 	pub fn current_epoch_start() -> Slot {
-		Self::epoch_start(EpochIndex::<T>::get())
+		sp_consensus_babe::epoch_start_slot(
+			EpochIndex::<T>::get(),
+			GenesisSlot::<T>::get(),
+			T::EpochDuration::get(),
+		)
 	}
 
 	/// Produces information about the current epoch.
@@ -666,9 +680,15 @@ impl<T: Config> Pallet<T> {
 			 if u64 is not enough we should crash for safety; qed.",
 		);
 
+		let start_slot = sp_consensus_babe::epoch_start_slot(
+			next_epoch_index,
+			GenesisSlot::<T>::get(),
+			T::EpochDuration::get(),
+		);
+
 		Epoch {
 			epoch_index: next_epoch_index,
-			start_slot: Self::epoch_start(next_epoch_index),
+			start_slot,
 			duration: T::EpochDuration::get(),
 			authorities: NextAuthorities::<T>::get().to_vec(),
 			randomness: NextRandomness::<T>::get(),
@@ -678,17 +698,6 @@ impl<T: Config> Pallet<T> {
 				)
 			}),
 		}
-	}
-
-	fn epoch_start(epoch_index: u64) -> Slot {
-		// (epoch_index * epoch_duration) + genesis_slot
-
-		const PROOF: &str = "slot number is u64; it should relate in some way to wall clock time; \
-							 if u64 is not enough we should crash for safety; qed.";
-
-		let epoch_start = epoch_index.checked_mul(T::EpochDuration::get()).expect(PROOF);
-
-		epoch_start.checked_add(*GenesisSlot::<T>::get()).expect(PROOF).into()
 	}
 
 	fn deposit_consensus<U: Encode>(new: U) {
