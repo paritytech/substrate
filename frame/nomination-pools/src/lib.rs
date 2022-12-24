@@ -791,14 +791,14 @@ impl<T: Config> CommissionThrottle<T> {
 	}
 }
 
-/// Pool commission throttle preferences.
+/// Pool commission change rate preferences.
 ///
-/// A commission throttle consists of 2 values; (1) the maximum allowed
+/// A commission change rate consists of 2 values; (1) the maximum allowed
 /// commission change, and (2) the minimum amount of blocks that must elapse
 /// before commission updates are allowed again.
 ///
-/// Throttle prefs need to be passed and configured together. This struct is
-/// used in the `set_commission_throttle` call as well as in CommissionThrottle.
+/// This struct is used in the `set_commission_throttle` call as well as in
+/// CommissionThrottle.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Copy, Clone)]
 pub struct CommissionChangeRate<BlockNumber> {
 	/// The maximum amount the commission can be updated by per `min_delay` period.
@@ -1667,7 +1667,7 @@ pub mod pallet {
 		/// A pool's commission throttle has been changed.
 		PoolCommissionThrottleUpdated {
 			pool_id: PoolId,
-			prefs: CommissionChangeRate<T::BlockNumber>,
+			change_rate: CommissionChangeRate<T::BlockNumber>,
 		},
 	}
 
@@ -2470,16 +2470,16 @@ pub mod pallet {
 		pub fn set_commission_throttle(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
-			prefs: CommissionChangeRate<T::BlockNumber>,
+			change_rate: CommissionChangeRate<T::BlockNumber>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
 
-			bonded_pool.commission.maybe_update_throttle(prefs)?;
+			bonded_pool.commission.maybe_update_throttle(change_rate)?;
 			bonded_pool.put();
 
-			Self::deposit_event(Event::<T>::PoolCommissionThrottleUpdated { pool_id, prefs });
+			Self::deposit_event(Event::<T>::PoolCommissionThrottleUpdated { pool_id, change_rate });
 			Ok(())
 		}
 	}

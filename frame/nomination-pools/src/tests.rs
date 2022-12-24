@@ -481,7 +481,7 @@ mod bonded_pool {
 					},
 					Event::PoolCommissionThrottleUpdated {
 						pool_id: 1,
-						prefs: CommissionChangeRate {
+						change_rate: CommissionChangeRate {
 							max_increase: Perbill::from_percent(1),
 							min_delay: 2
 						}
