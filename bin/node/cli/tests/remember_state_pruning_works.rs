@@ -34,9 +34,5 @@ async fn remember_state_pruning_works() {
 
 	// Then run again without specifying the state pruning.
 	// This should load state pruning settings from the db.
-	common::run_node_for_a_while(
-		base_path.path(),
-		&["--dev", "--no-hardware-benchmarks"],
-	)
-	.await;
+	common::run_node_for_a_while(base_path.path(), &["--dev", "--no-hardware-benchmarks"]).await;
 }

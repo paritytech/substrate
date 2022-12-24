@@ -28,6 +28,10 @@ pub struct PruningParams {
 	/// This mode specifies when the block's state (ie, storage)
 	/// should be pruned (ie, removed) from the database.
 	///
+	/// This setting can only be set on the first creation of the database. Every subsequent run
+	/// will load the pruning mode from the database and will error if the stored mode doesn't
+	/// match this CLI value. It is fine to drop this CLI flag for subsequent runs.
+	///
 	/// Possible values:
 	///
 	///  - archive:
