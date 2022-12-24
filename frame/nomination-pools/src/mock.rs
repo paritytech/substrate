@@ -260,7 +260,7 @@ impl Default for ExtBuilder {
 			members: Default::default(),
 			max_members: Some(4),
 			max_members_per_pool: Some(3),
-			global_max_commission: Some(Perbill::from_percent(50)),
+			global_max_commission: Some(Perbill::from_percent(90)),
 		}
 	}
 }

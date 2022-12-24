@@ -671,16 +671,20 @@ impl<T: Config> Commission<T> {
 
 	/// Set the pool's commission.
 	///
-	/// Update commission accordingly based on `commission` and `payee`. If
-	/// throttle is present, record the current block as the previously updated
-	/// commission. If the supplied commission is zero, `None` will be inserted
-	/// and `payee` will be ignored.
+	/// Update commission based on `commission` and `payee`. Do not allow a
+	/// commission above global maximum if set. If throttle is present, record the
+	///  current block as the previously updated commission. If the supplied
+	/// commission is zero, `None` will be inserted and `payee` will be ignored.
 	fn maybe_update_current(
 		&mut self,
 		commission: &Perbill,
 		payee: T::AccountId,
 	) -> DispatchResult {
 		ensure!(!self.throttling(&commission), Error::<T>::CommissionChangeThrottled);
+		ensure!(
+			GlobalMaxCommission::<T>::get().map_or(true, |m| commission <= &m),
+			Error::<T>::GlobalMaxCommissionExceeded
+		);
 		ensure!(self.max.map_or(true, |m| commission <= &m), Error::<T>::CommissionExceedsMaximum);
 
 		self.current = Some((*commission, payee));
@@ -695,13 +699,17 @@ impl<T: Config> Commission<T> {
 
 	/// Set the pool's maximum commission.
 	///
-	/// The pool's maximum commission can be set to any value initially, and only
-	/// smaller values thereafter. If larger values are attempted, this function
-	/// will return a dispatch error.
+	/// The pool's maximum commission can initially be set to any value, below
+	/// global maximum if set, and only smaller values thereafter. If larger
+	/// values are attempted, this function will return a dispatch error.
 	///
 	/// If `current.0` is larger than an updated max commission value, then
 	/// `current.0` will also be updated to the new maximum.
 	fn maybe_update_max(&mut self, new_max: Perbill) -> DispatchResult {
+		ensure!(
+			GlobalMaxCommission::<T>::get().map_or(true, |m| new_max <= m),
+			Error::<T>::GlobalMaxCommissionExceeded
+		);
 		if let Some(old) = self.max.as_mut() {
 			if new_max > *old {
 				return Err(Error::<T>::MaxCommissionRestricted.into())
@@ -1728,6 +1736,8 @@ pub mod pallet {
 		NoCommissionSet,
 		/// No account has been set to receive commission.
 		NoCommissionPayeeSet,
+		/// The supplied commission exceeds the global maximum commission.
+		GlobalMaxCommissionExceeded,
 		/// The pool's max commission cannot be set higher than the existing value.
 		MaxCommissionRestricted,
 		/// The supplied commission exceeds the max allowed commission.

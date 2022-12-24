@@ -224,7 +224,7 @@ fn main() {
 		MaxPoolMembers::<T>::set(Some(10_000));
 		MaxPoolMembersPerPool::<T>::set(Some(1000));
 		MaxPools::<T>::set(Some(1_000));
-		GlobalMaxCommission::<T>::set(Some(Perbill::from_percent(50)));
+		GlobalMaxCommission::<T>::set(Some(Perbill::from_percent(90)));
 
 		MinCreateBond::<T>::set(10 * ExistentialDeposit::get());
 		MinJoinBond::<T>::set(5 * ExistentialDeposit::get());
