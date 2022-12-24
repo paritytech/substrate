@@ -195,6 +195,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		max_pools: Some(3),
 		max_members_per_pool: Some(3),
 		max_members: Some(3 * 3),
+		global_max_commission: Some(Perbill::from_percent(500))
 	}
 	.assimilate_storage(&mut storage);
 	sp_io::TestExternalities::from(storage)
