@@ -5107,16 +5107,19 @@ mod set_configs {
 				ConfigOp::Set(3u32),
 				ConfigOp::Set(4u32),
 				ConfigOp::Set(5u32),
+				ConfigOp::Set(Perbill::from_percent(6))
 			));
 			assert_eq!(MinJoinBond::<Runtime>::get(), 1);
 			assert_eq!(MinCreateBond::<Runtime>::get(), 2);
 			assert_eq!(MaxPools::<Runtime>::get(), Some(3));
 			assert_eq!(MaxPoolMembers::<Runtime>::get(), Some(4));
 			assert_eq!(MaxPoolMembersPerPool::<Runtime>::get(), Some(5));
+			assert_eq!(GlobalMaxCommission::<Runtime>::get(), Some(Perbill::from_percent(6)));
 
 			// Noop does nothing
 			assert_storage_noop!(assert_ok!(Pools::set_configs(
 				RuntimeOrigin::root(),
+				ConfigOp::Noop,
 				ConfigOp::Noop,
 				ConfigOp::Noop,
 				ConfigOp::Noop,
@@ -5132,12 +5135,14 @@ mod set_configs {
 				ConfigOp::Remove,
 				ConfigOp::Remove,
 				ConfigOp::Remove,
+				ConfigOp::Remove,
 			));
 			assert_eq!(MinJoinBond::<Runtime>::get(), 0);
 			assert_eq!(MinCreateBond::<Runtime>::get(), 0);
 			assert_eq!(MaxPools::<Runtime>::get(), None);
 			assert_eq!(MaxPoolMembers::<Runtime>::get(), None);
 			assert_eq!(MaxPoolMembersPerPool::<Runtime>::get(), None);
+			assert_eq!(GlobalMaxCommission::<Runtime>::get(), None);
 		});
 	}
 }

@@ -1509,6 +1509,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type MaxPoolMembersPerPool<T: Config> = StorageValue<_, u32, OptionQuery>;
 
+	/// Maximum commission that can be set for all pools.
+	#[pallet::storage]
+	pub type GlobalMaxCommission<T: Config> = StorageValue<_, Perbill, OptionQuery>;
+
 	/// Active members.
 	#[pallet::storage]
 	pub type PoolMembers<T: Config> =
@@ -1555,6 +1559,7 @@ pub mod pallet {
 		pub max_pools: Option<u32>,
 		pub max_members_per_pool: Option<u32>,
 		pub max_members: Option<u32>,
+		pub global_max_commission: Option<Perbill>,
 	}
 
 	#[cfg(feature = "std")]
@@ -1566,6 +1571,7 @@ pub mod pallet {
 				max_pools: Some(16),
 				max_members_per_pool: Some(32),
 				max_members: Some(16 * 32),
+				global_max_commission: None,
 			}
 		}
 	}
@@ -1583,6 +1589,9 @@ pub mod pallet {
 			}
 			if let Some(max_members) = self.max_members {
 				MaxPoolMembers::<T>::put(max_members);
+			}
+			if let Some(global_max_commission) = self.global_max_commission {
+				GlobalMaxCommission::<T>::put(global_max_commission);
 			}
 		}
 	}
@@ -2277,6 +2286,7 @@ pub mod pallet {
 		/// * `max_pools` - Set [`MaxPools`].
 		/// * `max_members` - Set [`MaxPoolMembers`].
 		/// * `max_members_per_pool` - Set [`MaxPoolMembersPerPool`].
+		/// * `global_max_commission` - Set [`GlobalMaxCommission`].
 		#[pallet::call_index(11)]
 		#[pallet::weight(T::WeightInfo::set_configs())]
 		pub fn set_configs(
@@ -2286,6 +2296,7 @@ pub mod pallet {
 			max_pools: ConfigOp<u32>,
 			max_members: ConfigOp<u32>,
 			max_members_per_pool: ConfigOp<u32>,
+			global_max_commission: ConfigOp<Perbill>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
@@ -2304,6 +2315,7 @@ pub mod pallet {
 			config_op_exp!(MaxPools::<T>, max_pools);
 			config_op_exp!(MaxPoolMembers::<T>, max_members);
 			config_op_exp!(MaxPoolMembersPerPool::<T>, max_members_per_pool);
+			config_op_exp!(GlobalMaxCommission::<T>, global_max_commission);
 			Ok(())
 		}
 

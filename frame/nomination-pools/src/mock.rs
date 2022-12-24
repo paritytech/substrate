@@ -251,11 +251,17 @@ pub struct ExtBuilder {
 	members: Vec<(AccountId, Balance)>,
 	max_members: Option<u32>,
 	max_members_per_pool: Option<u32>,
+	global_max_commission: Option<Perbill>,
 }
 
 impl Default for ExtBuilder {
 	fn default() -> Self {
-		Self { members: Default::default(), max_members: Some(4), max_members_per_pool: Some(3) }
+		Self {
+			members: Default::default(),
+			max_members: Some(4),
+			max_members_per_pool: Some(3),
+			global_max_commission: Some(Perbill::from_percent(50)),
+		}
 	}
 }
 
@@ -297,6 +303,11 @@ impl ExtBuilder {
 		self
 	}
 
+	pub fn global_max_commission(mut self, commission: Option<Perbill>) -> Self {
+		self.global_max_commission = commission;
+		self
+	}
+
 	pub fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let mut storage =
@@ -308,6 +319,7 @@ impl ExtBuilder {
 			max_pools: Some(2),
 			max_members_per_pool: self.max_members_per_pool,
 			max_members: self.max_members,
+			global_max_commission: self.global_max_commission,
 		}
 		.assimilate_storage(&mut storage);
 

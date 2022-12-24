@@ -29,9 +29,9 @@ use frame_support::{assert_ok, ensure, traits::Get};
 use frame_system::RawOrigin as RuntimeOrigin;
 use pallet_nomination_pools::{
 	BalanceOf, BondExtra, BondedPoolInner, BondedPools, Commission, CommissionChangeRate,
-	CommissionThrottle, ConfigOp, MaxPoolMembers, MaxPoolMembersPerPool, MaxPools, Metadata,
-	MinCreateBond, MinJoinBond, Pallet as Pools, PoolMembers, PoolRoles, PoolState, RewardPools,
-	SubPoolsStorage,
+	CommissionThrottle, ConfigOp, GlobalMaxCommission, MaxPoolMembers, MaxPoolMembersPerPool,
+	MaxPools, Metadata, MinCreateBond, MinJoinBond, Pallet as Pools, PoolMembers, PoolRoles,
+	PoolState, RewardPools, SubPoolsStorage,
 };
 use sp_runtime::{
 	traits::{Bounded, StaticLookup, Zero},
@@ -632,12 +632,14 @@ frame_benchmarking::benchmarks! {
 		ConfigOp::Set(u32::MAX),
 		ConfigOp::Set(u32::MAX),
 		ConfigOp::Set(u32::MAX)
+		ConfigOp::Set(Perbill::max_value())
 	) verify {
 		assert_eq!(MinJoinBond::<T>::get(), BalanceOf::<T>::max_value());
 		assert_eq!(MinCreateBond::<T>::get(), BalanceOf::<T>::max_value());
 		assert_eq!(MaxPools::<T>::get(), Some(u32::MAX));
 		assert_eq!(MaxPoolMembers::<T>::get(), Some(u32::MAX));
 		assert_eq!(MaxPoolMembersPerPool::<T>::get(), Some(u32::MAX));
+		assert_eq!(GlobalMaxCommission::<T>::get(), Some(Perbill::max_value()));
 	}
 
 	update_roles {
