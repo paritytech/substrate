@@ -77,6 +77,7 @@ pub trait WeightInfo {
 	fn set_staking_configs_all_remove() -> Weight;
 	fn chill_other() -> Weight;
 	fn force_apply_min_commission() -> Weight;
+	fn set_min_commission() -> Weight;
 }
 
 /// Weights for pallet_staking using the Substrate node and recommended hardware.
@@ -488,6 +489,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
+
+	fn set_min_commission() -> Weight {
+		Weight::zero()
+	}
 }
 
 // For backwards compatibility and tests
@@ -897,5 +902,9 @@ impl WeightInfo for () {
 		Weight::from_ref_time(20_639_000)
 			.saturating_add(RocksDbWeight::get().reads(2))
 			.saturating_add(RocksDbWeight::get().writes(1))
+	}
+
+	fn set_min_commission() -> Weight {
+		Weight::zero()
 	}
 }
