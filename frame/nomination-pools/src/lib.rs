@@ -2437,6 +2437,7 @@ pub mod pallet {
 
 			bonded_pool.commission.maybe_update_max(max_commission)?;
 			bonded_pool.put();
+
 			Self::deposit_event(Event::<T>::PoolMaxCommissionUpdated { pool_id, max_commission });
 			Ok(())
 		}
