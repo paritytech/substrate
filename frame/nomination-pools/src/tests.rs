@@ -337,12 +337,6 @@ mod bonded_pool {
 				Error::<Runtime>::GlobalMaxCommissionExceeded
 			);
 
-			// Set a max commission now of 86%. Fails - above global.
-			assert_noop!(
-				Pools::set_commission_max(RuntimeOrigin::signed(900), 1, Perbill::from_percent(86)),
-				Error::<Runtime>::GlobalMaxCommissionExceeded
-			);
-
 			// Succesfully set max commission of 75%
 			assert_ok!(Pools::set_commission_max(
 				RuntimeOrigin::signed(900),
@@ -624,27 +618,8 @@ mod bonded_pool {
 				Error::<Runtime>::DoesNotHavePermission
 			);
 
-			// We attempt to increase the max commission to 100%, but increasing is
-			// disallowed due to global max commission.
-			assert_noop!(
-				Pools::set_commission_max(
-					RuntimeOrigin::signed(900),
-					1,
-					Perbill::from_percent(100)
-				),
-				Error::<Runtime>::GlobalMaxCommissionExceeded
-			);
-
 			// Remove global maximum commission
 			GlobalMaxCommission::<Runtime>::set(None);
-
-			// With global maximum commission removed, we can now set a 100%
-			// commission.
-			assert_ok!(Pools::set_commission_max(
-				RuntimeOrigin::signed(900),
-				1,
-				Perbill::from_percent(100)
-			));
 
 			// Set a max commission commission pool 1 to 80%
 			assert_ok!(Pools::set_commission_max(
@@ -693,10 +668,6 @@ mod bonded_pool {
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::PoolMaxCommissionUpdated {
-						pool_id: 1,
-						max_commission: Perbill::from_percent(100)
-					},
 					Event::PoolMaxCommissionUpdated {
 						pool_id: 1,
 						max_commission: Perbill::from_percent(80)
@@ -878,66 +849,6 @@ mod bonded_pool {
 				Some(900),
 			));
 		});
-	}
-
-	#[test]
-	fn intervals_since_block_works() {
-		ExtBuilder::default().build_and_execute(|| {
-			// some duration to work with
-			let duration = 3_u64;
-
-			// get commission to access `intervals_since_block`
-			let commission = BondedPool::<Runtime>::get(1).unwrap().commission;
-
-			// run 5 durations in the future
-			let block_number = duration * 5;
-			run_to_block(block_number);
-
-			// interval of 14 blocks should result in 4 durations
-			assert_eq!(commission.intervals_since_block(&1, &duration), 4_u32);
-
-			// interval of 13 blocks should result in 4 durations
-			assert_eq!(commission.intervals_since_block(&2, &duration), 4_u32);
-
-			// interval of 12 blocks should result in 4 durations
-			assert_eq!(commission.intervals_since_block(&3, &duration), 4_u32);
-
-			// interval of 11 blocks should result in 3 durations
-			assert_eq!(commission.intervals_since_block(&4, &duration), 3_u32);
-
-			// interval of 10 blocks should result in 3 durations
-			assert_eq!(commission.intervals_since_block(&5, &duration), 3_u32);
-
-			// interval of 9 blocks should result in 3 durations
-			assert_eq!(commission.intervals_since_block(&6, &duration), 3_u32);
-
-			// interval of 8 blocks should result in 2 durations
-			assert_eq!(commission.intervals_since_block(&7, &duration), 2_u32);
-
-			// interval of 7 blocks should result in 2 duration
-			assert_eq!(commission.intervals_since_block(&8, &duration), 2_u32);
-
-			// interval of 6 blocks should result in 2 durations
-			assert_eq!(commission.intervals_since_block(&9, &duration), 2_u32);
-
-			// interval of 5 blocks should result in 1 duration
-			assert_eq!(commission.intervals_since_block(&10, &duration), 1_u32);
-
-			// interval of 4 blocks should result in 1 duration
-			assert_eq!(commission.intervals_since_block(&11, &duration), 1_u32);
-
-			// interval of 3 blocks should result in 1 duration
-			assert_eq!(commission.intervals_since_block(&12, &duration), 1_u32);
-
-			// interval of 2 blocks should result in 0 durations
-			assert_eq!(commission.intervals_since_block(&13, &duration), 0_u32);
-
-			// interval of 1 block should result in 0 durations
-			assert_eq!(commission.intervals_since_block(&14, &duration), 0_u32);
-
-			// interval of 0 block should result in 0 durations
-			assert_eq!(commission.intervals_since_block(&15, &duration), 0_u32);
-		})
 	}
 }
 
