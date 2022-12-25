@@ -5733,10 +5733,7 @@ fn set_min_commission_works_with_admin_origin() {
 		assert_eq!(MinCommission::<Test>::get(), Perbill::from_percent(0));
 
 		// root can set min commission
-		assert_ok!(Staking::set_min_commission(
-			RuntimeOrigin::root(),
-			Perbill::from_percent(10),
-		));
+		assert_ok!(Staking::set_min_commission(RuntimeOrigin::root(), Perbill::from_percent(10),));
 
 		assert_eq!(MinCommission::<Test>::get(), Perbill::from_percent(10));
 
@@ -5753,10 +5750,13 @@ fn set_min_commission_works_with_admin_origin() {
 		));
 
 		// setting commission below min_commission fails
-		assert_noop!(Staking::validate(
-			RuntimeOrigin::signed(10),
-			ValidatorPrefs { commission: Perbill::from_percent(14), blocked: false }
-		), Error::<Test>::CommissionTooLow);
+		assert_noop!(
+			Staking::validate(
+				RuntimeOrigin::signed(10),
+				ValidatorPrefs { commission: Perbill::from_percent(14), blocked: false }
+			),
+			Error::<Test>::CommissionTooLow
+		);
 
 		// setting commission >= min_commission works
 		assert_ok!(Staking::validate(

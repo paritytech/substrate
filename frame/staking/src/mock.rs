@@ -19,11 +19,14 @@
 
 use crate::{self as pallet_staking, *};
 use frame_election_provider_support::{onchain, SequentialPhragmen, VoteWeight};
-use frame_support::{assert_ok, ord_parameter_types, parameter_types, traits::{
-	ConstU32, ConstU64, Currency, FindAuthor, GenesisBuild, Get, Hooks, Imbalance,
-	OnUnbalanced, OneSessionHandler,
-}, weights::constants::RocksDbWeight};
-use frame_support::traits::EitherOfDiverse;
+use frame_support::{
+	assert_ok, ord_parameter_types, parameter_types,
+	traits::{
+		ConstU32, ConstU64, Currency, EitherOfDiverse, FindAuthor, GenesisBuild, Get, Hooks,
+		Imbalance, OnUnbalanced, OneSessionHandler,
+	},
+	weights::constants::RocksDbWeight,
+};
 use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
 use sp_io;
