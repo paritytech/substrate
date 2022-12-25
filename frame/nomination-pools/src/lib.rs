@@ -746,7 +746,7 @@ impl<T: Config> Commission<T> {
 	///
 	/// A zero commission along with a `None` payee is returned in the event a commission has not
 	/// been configured to the pool.
- /// `None` is returned in the event a commission has not been configured to the pool.
+	/// `None` is returned in the event a commission has not been configured to the pool.
 	fn get_commission_and_payee(
 		&self,
 		pending_rewards: &BalanceOf<T>,
