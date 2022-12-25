@@ -604,8 +604,8 @@ pub struct PoolRoles<AccountId> {
 pub struct Commission<T: Config> {
 	/// Optional commission rate of the pool along with the account commission is paid to.
 	pub current: Option<(Perbill, T::AccountId)>,
-	/// Optional maximum commission that can be set by the pool `root`. Once set, this value can only
-	/// be updated to a decreased value.
+	/// Optional maximum commission that can be set by the pool `root`. Once set, this value can
+	/// only be updated to a decreased value.
 	pub max: Option<Perbill>,
 	/// Optional configuration around how often commission can be updated, and when the last
 	/// commission update took place.
@@ -631,8 +631,8 @@ impl<T: Config> Commission<T> {
 		if let Some(t) = self.throttle.as_ref() {
 			// factor previously updated block into whether user is throttled.
 			if t.previous_set_at.map_or(
-				// if no `previous_set_at` is set, throttled if the attempted increase in commission is
-				// greater than `max_increase`.
+				// if no `previous_set_at` is set, throttled if the attempted increase in
+				// commission is greater than `max_increase`.
 				(*to).saturating_sub(self.commission_or_zero()) > t.change_rate.max_increase,
 				|p| {
 					// `min_delay` blocks must have been surpassed since last update.
@@ -641,8 +641,8 @@ impl<T: Config> Commission<T> {
 					{
 						return true
 					}
-					// ensure the `max_increase` durations surpassed since the previous commission update
-					// allow the attempted commission increase.
+					// ensure the `max_increase` durations surpassed since the previous commission
+					// update allow the attempted commission increase.
 					//
 					// the attempted increase in commission relative to the current commission.
 					let attempted_increase = (*to).saturating_sub(self.commission_or_zero());
@@ -656,16 +656,16 @@ impl<T: Config> Commission<T> {
 					} else {
 						blocks_passed.div(t.change_rate.min_delay).saturated_into::<u32>()
 					};
-		
-					// the maximum allowed increase, where the current `max_increase` Perbill is converted
-					// into a u32 by multiplying itself with 100_u32 and multiplied by durations passed,
-					// before being converted back into a Perbill.
+
+					// the maximum allowed increase, where the current `max_increase` Perbill is
+					// converted into a u32 by multiplying itself with 100_u32 and multiplied by
+					// durations passed, before being converted back into a Perbill.
 					let max_allowed_increase = Perbill::from_percent(
 						(t.change_rate.max_increase * 100_u32) * intervals_passed,
 					);
 
-					// throttled (true) if attempted increase is greater than the maximum allowed increase, as
-					// a percentage.
+					// throttled (true) if attempted increase is greater than the maximum allowed
+					// increase, as a percentage.
 					attempted_increase > max_allowed_increase
 				},
 			) {
@@ -681,11 +681,7 @@ impl<T: Config> Commission<T> {
 	/// maximum if set. If throttle is present, record the current block as the previously updated
 	///  commission. If the supplied commission is zero, `None` will be inserted and `payee` will be
 	/// ignored.
-	fn update_current(
-		&mut self,
-		commission: &Perbill,
-		payee: T::AccountId,
-	) -> DispatchResult {
+	fn update_current(&mut self, commission: &Perbill, payee: T::AccountId) -> DispatchResult {
 		ensure!(!self.throttling(&commission), Error::<T>::CommissionChangeThrottled);
 		ensure!(
 			GlobalMaxCommission::<T>::get().map_or(true, |m| commission <= &m),
@@ -705,9 +701,9 @@ impl<T: Config> Commission<T> {
 
 	/// Set the pool's maximum commission.
 	///
-	/// The pool's maximum commission can initially be set to any value, below global maximum if set,
-	/// and only smaller values thereafter. If larger values are attempted, this function will return
-	/// a dispatch error.
+	/// The pool's maximum commission can initially be set to any value, below global maximum if
+	/// set, and only smaller values thereafter. If larger values are attempted, this function will
+	/// return a dispatch error.
 	///
 	/// If `current.0` is larger than an updated max commission value, then `current.0` will also be
 	/// updated to the new maximum.
@@ -748,8 +744,8 @@ impl<T: Config> Commission<T> {
 
 	/// Gets the current commission (if any) and payee to be paid.
 	///
-	/// A zero commission along with a `None` payee is returned in the event a commission has not been
-	/// configured to the pool.
+	/// A zero commission along with a `None` payee is returned in the event a commission has not
+	/// been configured to the pool.
 	fn get_commission_and_payee(
 		&self,
 		pending_rewards: &BalanceOf<T>,
@@ -1535,8 +1531,8 @@ pub mod pallet {
 
 	/// A reverse lookup from the pool's account id to its id.
 	///
-	/// This is only used for slashing. In all other instances, the pool id is used, and the accounts
-	/// are deterministically derived from it.
+	/// This is only used for slashing. In all other instances, the pool id is used, and the
+	/// accounts are deterministically derived from it.
 	#[pallet::storage]
 	pub type ReversePoolIdLookup<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, PoolId, OptionQuery>;
@@ -2381,13 +2377,14 @@ pub mod pallet {
 
 		/// Set the commission of a pool.
 		///
-		/// The dispatch origin of this call must be signed by the `root` role of the pool. If the pool
-		/// has a max commission set, the commission supplied must be less or equal to that value.
+		/// The dispatch origin of this call must be signed by the `root` role of the pool. If the
+		/// pool has a max commission set, the commission supplied must be less or equal to that
+		/// value.
 		///
 		/// If the max commission has not yet been set, then the commission range is not bounded. A
-		/// `payee` must be provided if commission has not yet been set (still `None`). Once commission
-		/// has been set, the `payee` can be omitted in further calls. If a `payee` update is desired,
-		/// the commission must still be passed into the call.
+		/// `payee` must be provided if commission has not yet been set (still `None`). Once
+		/// commission has been set, the `payee` can be omitted in further calls. If a `payee`
+		/// update is desired, the commission must still be passed into the call.
 		#[pallet::call_index(14)]
 		#[pallet::weight(T::WeightInfo::set_commission())]
 		pub fn set_commission(
@@ -2408,9 +2405,7 @@ pub mod pallet {
 				.or(bonded_pool.commission.current.as_ref().map(|(_, p)| p).cloned())
 				.ok_or(Error::<T>::NoCommissionPayeeSet)?;
 
-			bonded_pool
-				.commission
-				.update_current(&final_commission, final_payee.clone())?;
+			bonded_pool.commission.update_current(&final_commission, final_payee.clone())?;
 			bonded_pool.put();
 			Self::deposit_event(Event::<T>::PoolCommissionUpdated {
 				pool_id,
@@ -2422,9 +2417,9 @@ pub mod pallet {
 
 		/// Set the maximum commission of a pool.
 		///
-		/// The dispatch origin of this call must be signed by the `root` role of the pool. If a maximum
-		/// commission already exists prior to this call, then the updated max commission must be lower,
-		/// otherwise this call will fail.
+		/// The dispatch origin of this call must be signed by the `root` role of the pool. If a
+		/// maximum commission already exists prior to this call, then the updated max commission
+		/// must be lower, otherwise this call will fail.
 		///
 		/// This call also updates the pool's current commission to the new maximum if the current
 		/// commission is higher than the maximum supplied.
@@ -2517,8 +2512,8 @@ impl<T: Config> Pallet<T> {
 	/// It is the responsibility of the depositor to put these funds into the pool initially. Upon
 	/// unbond, they can never unbond to a value below this amount.
 	///
-	/// It is essentially `max { MinNominatorBond, MinCreateBond, MinJoinBond }`, where the former is
-	/// coming from the staking pallet and the latter two are configured in this pallet.
+	/// It is essentially `max { MinNominatorBond, MinCreateBond, MinJoinBond }`, where the former
+	/// is coming from the staking pallet and the latter two are configured in this pallet.
 	pub fn depositor_min_bond() -> BalanceOf<T> {
 		T::Staking::minimum_nominator_bond()
 			.max(MinCreateBond::<T>::get())
