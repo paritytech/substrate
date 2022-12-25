@@ -493,8 +493,8 @@ pub mod v4 {
 			);
 
 			if current == 4 && onchain == 3 {
-				GlobalMaxCommission::<T>::set(None);
-				log!(info, "Set initial global max commission of None");
+				GlobalMaxCommission::<T>::set(Some(Perbill::zero()));
+				log!(info, "Set initial global max commission to 0%");
 
 				let mut translated = 0u64;
 				BondedPools::<T>::translate::<OldBondedPoolInner<T>, _>(|_key, old_value| {
