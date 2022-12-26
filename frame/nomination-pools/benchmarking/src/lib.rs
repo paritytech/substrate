@@ -29,9 +29,9 @@ use frame_support::{assert_ok, ensure, traits::Get};
 use frame_system::RawOrigin as RuntimeOrigin;
 use pallet_nomination_pools::{
 	BalanceOf, BondExtra, BondedPoolInner, BondedPools, Commission, CommissionChangeRate,
-	CommissionThrottle, ConfigOp, GlobalMaxCommission, MaxPoolMembers, MaxPoolMembersPerPool,
-	MaxPools, Metadata, MinCreateBond, MinJoinBond, Pallet as Pools, PoolMembers, PoolRoles,
-	PoolState, RewardPools, SubPoolsStorage,
+	CommissionThrottle, ConfigOp, GlobalMaxCommission, LastPoolId, MaxPoolMembers,
+	MaxPoolMembersPerPool, MaxPools, Metadata, MinCreateBond, MinJoinBond, Pallet as Pools,
+	PoolMembers, PoolRoles, PoolState, RewardPools, SubPoolsStorage,
 };
 use sp_runtime::{
 	traits::{Bounded, StaticLookup, Zero},
@@ -88,16 +88,13 @@ fn create_pool_account<T: pallet_nomination_pools::Config>(
 	.unwrap();
 
 	if let Some(c) = commission {
-		let _ = pallet_nomination_pools::BondedPools::<T>::iter()
-			.find(|(_, bonded_pool)| bonded_pool.roles.depositor == pool_creator)
-			.map(|(pool_id, _)| {
-				Pools::<T>::set_commission(
-					RuntimeOrigin::Signed(pool_creator.clone()).into(),
-					pool_id,
-					Some((c, pool_creator.clone())),
-				)
-				.expect("pool commission has been set");
-			});
+		let pool_id = LastPoolId::<T>::get();
+		Pools::<T>::set_commission(
+			RuntimeOrigin::Signed(pool_creator.clone()).into(),
+			pool_id,
+			Some((c, pool_creator.clone())),
+		)
+		.expect("pool just created, commission can be set by root; qed");
 	}
 
 	let pool_account = pallet_nomination_pools::BondedPools::<T>::iter()
@@ -692,7 +689,7 @@ frame_benchmarking::benchmarks! {
 			min_delay: 0u32.into(),
 		}).unwrap();
 
-	}:_(RuntimeOrigin::Signed(depositor.clone()), 1u32.into(), Some(Perbill::from_percent(20)), Some(depositor.clone()))
+	}:_(RuntimeOrigin::Signed(depositor.clone()), 1u32.into(), Some((Perbill::from_percent(20), depositor.clone())))
 	verify {
 		assert_eq!(BondedPools::<T>::get(1).unwrap().commission, Commission {
 			current: Some((Perbill::from_percent(20), depositor)),
