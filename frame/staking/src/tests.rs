@@ -5730,10 +5730,10 @@ fn scale_validator_count_errors() {
 fn set_min_commission_works_with_admin_origin() {
 	ExtBuilder::default().build_and_execute(|| {
 		// no minimum commission set initially
-		assert_eq!(MinCommission::<Test>::get(), Perbill::from_percent(0));
+		assert_eq!(MinCommission::<Test>::get(), Zero::zero());
 
 		// root can set min commission
-		assert_ok!(Staking::set_min_commission(RuntimeOrigin::root(), Perbill::from_percent(10),));
+		assert_ok!(Staking::set_min_commission(RuntimeOrigin::root(), Perbill::from_percent(10)));
 
 		assert_eq!(MinCommission::<Test>::get(), Perbill::from_percent(10));
 

@@ -1798,8 +1798,6 @@ pub mod pallet {
 		///
 		/// This call has lower privilege requirements than `set_staking_config` and can be called
 		/// by the `T::AdminOrigin`. Root can always call this.
-		///
-		/// Weight: `O(1)`
 		#[pallet::call_index(25)]
 		#[pallet::weight(T::WeightInfo::set_min_commission())]
 		pub fn set_min_commission(origin: OriginFor<T>, new: Perbill) -> DispatchResult {
