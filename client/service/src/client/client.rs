@@ -1913,13 +1913,13 @@ where
 {
 	/// Get block import event stream.
 	fn import_notification_stream(&self) -> ImportNotifications<Block> {
-		let (sink, stream) = tracing_unbounded("mpsc_import_notification_stream");
+		let (sink, stream) = tracing_unbounded("mpsc_import_notification_stream", 100_000);
 		self.import_notification_sinks.lock().push(sink);
 		stream
 	}
 
 	fn finality_notification_stream(&self) -> FinalityNotifications<Block> {
-		let (sink, stream) = tracing_unbounded("mpsc_finality_notification_stream");
+		let (sink, stream) = tracing_unbounded("mpsc_finality_notification_stream", 100_000);
 		self.finality_notification_sinks.lock().push(sink);
 		stream
 	}
