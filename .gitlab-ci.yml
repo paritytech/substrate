@@ -213,6 +213,10 @@ default:
     # this job runs only on nightly pipeline with the mentioned variable, against `master` branch
     - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "nightly"
 
+.scheduled-crate-publishing-pipeline:
+  rules:
+    - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "automatic-crate-publishing"
+
 .crates-publishing-template:
   stage:                           test
   extends:                         .docker-env

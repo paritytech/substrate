@@ -208,7 +208,7 @@ where
 			&params.network_config.transport,
 		)?;
 
-		let (to_worker, from_service) = tracing_unbounded("mpsc_network_worker");
+		let (to_worker, from_service) = tracing_unbounded("mpsc_network_worker", 100_000);
 
 		if let Some(path) = &params.network_config.net_config_path {
 			fs::create_dir_all(path)?;
@@ -1003,7 +1003,7 @@ where
 	H: ExHashT,
 {
 	fn event_stream(&self, name: &'static str) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
-		let (tx, rx) = out_events::channel(name);
+		let (tx, rx) = out_events::channel(name, 100_000);
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::EventStream(tx));
 		Box::pin(rx)
 	}
