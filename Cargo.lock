@@ -7998,6 +7998,7 @@ dependencies = [
  "futures",
  "libp2p",
  "log",
+ "parking_lot 0.12.1",
  "rand 0.8.5",
  "sc-utils",
  "serde_json",

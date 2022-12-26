@@ -40,7 +40,7 @@ use sc_network_common::{
 	},
 	request_responses::{IfDisconnected, ProtocolConfig, RequestFailure},
 };
-use sc_peerset::{PeersetHandle, ReputationChange};
+use sc_peerset::{Peerset, ReputationChange};
 use sp_blockchain::HeaderBackend;
 use sp_runtime::traits::Block as BlockT;
 use std::{collections::HashSet, time::Duration};
@@ -189,7 +189,7 @@ where
 		local_public_key: PublicKey,
 		disco_config: DiscoveryConfig,
 		request_response_protocols: Vec<ProtocolConfig>,
-		peerset: PeersetHandle,
+		peerset: Peerset,
 	) -> Result<Self, request_responses::RegisterError> {
 		Ok(Self {
 			substrate,

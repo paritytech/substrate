@@ -63,7 +63,7 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 			.timeout(Duration::from_secs(20))
 			.boxed();
 
-		let (peerset, _) = sc_peerset::Peerset::from_config(sc_peerset::PeersetConfig {
+		let peerset = sc_peerset::Peerset::from_config(sc_peerset::PeersetConfig {
 			sets: vec![sc_peerset::SetConfig {
 				in_peers: 25,
 				out_peers: 25,
