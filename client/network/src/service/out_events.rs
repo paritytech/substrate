@@ -31,13 +31,13 @@
 //! - Send events by calling [`OutChannels::send`]. Events are cloned for each sender in the
 //! collection.
 
+use backtrace::Backtrace;
 use futures::{channel::mpsc, prelude::*, ready, stream::FusedStream};
 use log::error;
 use parking_lot::Mutex;
 use prometheus_endpoint::{register, CounterVec, GaugeVec, Opts, PrometheusError, Registry, U64};
 use sc_network_common::protocol::event::Event;
 use std::{
-	backtrace::{Backtrace, BacktraceStatus},
 	cell::RefCell,
 	fmt,
 	pin::Pin,
@@ -62,7 +62,7 @@ pub fn channel(name: &'static str, queue_size_warning: i64) -> (Sender, Receiver
 		queue_size: queue_size.clone(),
 		queue_size_warning,
 		warning_fired: false,
-		creation_backtrace: Backtrace::capture(),
+		creation_backtrace: Backtrace::new_unresolved(),
 		metrics: metrics.clone(),
 	};
 	let rx = Receiver { inner: rx, name, queue_size, metrics };
@@ -193,17 +193,12 @@ impl OutChannels {
 			let queue_size = sender.queue_size.fetch_add(1, Ordering::Relaxed);
 			if queue_size == sender.queue_size_warning && !sender.warning_fired {
 				sender.warning_fired = true;
-				match sender.creation_backtrace.status() {
-					BacktraceStatus::Captured => error!(
-						"The number of unprocessed events in channel `{}` reached {}.\n\
-						 The channel was created at:\n{}",
-						sender.name, sender.queue_size_warning, sender.creation_backtrace,
-					),
-					_ => error!(
-						"The number of unprocessed events in channel `{}` reached {}.",
-						sender.name, sender.queue_size_warning,
-					),
-				}
+				sender.creation_backtrace.resolve();
+				error!(
+					"The number of unprocessed events in channel `{}` reached {}.\n\
+					 The channel was created at:\n{:?}",
+					sender.name, sender.queue_size_warning, sender.creation_backtrace,
+				);
 			}
 			sender.inner.unbounded_send(event.clone()).is_ok()
 		});
