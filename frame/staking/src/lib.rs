@@ -771,17 +771,18 @@ impl<AccountId, Balance: HasCompact + Zero> UnappliedSlash<AccountId, Balance> {
 pub trait NominationsQuota<Balance> {
 	const ABSOLUTE_MAX_NOMINATIONS: u32;
 
+	/// Maximum number of nominations. The method `get_quota` may return a larger number of
+	/// nominations than `ABSOLUTE_MAX_NOMINATIONS`. However, `get_quota_safe` returns the bounded
+	/// maximum number of nominations.
 	type AbsoluteMaxNominations: Get<u32>;
 
-	fn get_quota_capped(balance: Balance) -> u32 {
-		let quota = Self::get_quota(balance);
-		if quota < Self::ABSOLUTE_MAX_NOMINATIONS {
-			quota
-		} else {
-			Self::ABSOLUTE_MAX_NOMINATIONS
-		}
+	/// Returns the voter's nomination quota within reasonable bounds [`min`, `max`], where `min`
+	/// is 1 and `max` is ABSOLUTE_MAX_NOMINATIONS.
+	fn get_quota_safe(balance: Balance) -> u32 {
+		Self::get_quota(balance).max(1).min(Self::ABSOLUTE_MAX_NOMINATIONS)
 	}
 
+	// Returns the voter's nomination quota based on the quota implementation.
 	fn get_quota(balance: Balance) -> u32;
 }
 

@@ -305,7 +305,6 @@ impl crate::pallet::pallet::Config for Test {
 	type VoterList = VoterBagsList;
 	type TargetList = UseValidatorsMap<Self>;
 	type NominationsQuota = WeightedNominationsQuota<16>;
-	//type NominationsQuota = FixedNominationsQuota<16>;
 	type MaxUnlockingChunks = MaxUnlockingChunks;
 	type HistoryDepth = HistoryDepth;
 	type OnStakerSlash = OnStakerSlashMock<Test>;
@@ -324,9 +323,10 @@ where
 	fn get_quota(balance: Balance) -> u32 {
 		match balance.into() {
 			// random quota per balance for testing
-			0..=300 => 16,
-			301..=500 => 3,
-			501..=600 => 1,
+			0..=110 => MAX,
+			111 => 0,
+			222 => 2,
+			333 => MAX + 10,
 			_ => MAX,
 		}
 	}

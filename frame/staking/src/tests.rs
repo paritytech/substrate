@@ -4550,20 +4550,17 @@ mod election_data_provider {
 
 				let bounds_builder = ElectionBoundsBuilder::new();
 
-				println!("-- 0");
 				// if limits is less..
 				assert_eq!(
 					Staking::electing_voters(bounds_builder.count(Some(1)).build()).unwrap().len(),
 					1
 				);
-				println!("-- 1");
 
 				// if limit is equal..
 				assert_eq!(
 					Staking::electing_voters(bounds_builder.count(Some(5)).build()).unwrap().len(),
 					5
 				);
-				println!("2");
 
 				// if limit is more.
 				assert_eq!(
@@ -4571,7 +4568,6 @@ mod election_data_provider {
 					5
 				);
 
-				println!("3");
 				// if target limit is more..
 				assert_eq!(
 					Staking::electable_targets(bounds_builder.count(Some(6)).build())
@@ -4594,57 +4590,60 @@ mod election_data_provider {
 			});
 	}
 
-	// Tests the criteria that in `ElectionDataProvider::voters` function, we try to get at most
-	// `maybe_max_len` voters, and if some of them end up being skipped, we iterate at most `2 *
-	// maybe_max_len`.
 	#[test]
-	fn only_iterates_max_2_times_max_allowed_len() {
+	fn nominations_quota_truncates() {
 		ExtBuilder::default()
 			.nominate(false)
-			// the best way to invalidate a bunch of nominators is to have them nominate a lot of
-			// ppl, but then lower the MaxNomination limit.
 			.add_staker(
 				61,
 				60,
-				2_000,
+				222, // voters with balance == 222 have nomination quota of 2 nominations.
+				StakerStatus::<AccountId>::Nominator(vec![21, 22, 23, 24, 25]),
+			)
+			.build_and_execute(|| {
+				assert_eq!(
+					Staking::electing_voters(ElectionBounds::new_unbounded())
+						.unwrap()
+						.iter()
+						.map(|(stash, _, targets)| (*stash, targets.len()))
+						.collect::<Vec<_>>(),
+					vec![(11, 1), (21, 1), (31, 1), (61, 2)],
+				);
+				assert_eq!(
+					*staking_events().last().unwrap(),
+					Event::NominationsQuotaExceeded { staker: 61, exceeded_by: 3 }
+				);
+			});
+	}
+
+	#[test]
+	fn nominations_quota_limits() {
+		ExtBuilder::default()
+			.nominate(false)
+			.add_staker(
+				61,
+				60,
+				111, /* voters with balance == 111 have nomination quota of 0 nominations,
+				      * should be rounded to 1. */
 				StakerStatus::<AccountId>::Nominator(vec![21, 22, 23, 24, 25]),
 			)
 			.add_staker(
 				71,
 				70,
-				2_000,
-				StakerStatus::<AccountId>::Nominator(vec![21, 22, 23, 24, 25]),
-			)
-			.add_staker(
-				81,
-				80,
-				2_000,
-				StakerStatus::<AccountId>::Nominator(vec![21, 22, 23, 24, 25]),
+				333, /* voters with balance == 333 have nomination quota of MAX + 10
+				      * nominations, should be rounded to MAX. */
+				StakerStatus::<AccountId>::Nominator(vec![
+					16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1,
+				]),
 			)
 			.build_and_execute(|| {
-				// all voters ordered by stake,
 				assert_eq!(
-					<Test as Config>::VoterList::iter().collect::<Vec<_>>(),
-					vec![61, 71, 81, 11, 21, 31]
-				);
-
-				// TODO(gpestana): change this test, no more MaxNominations::set
-				//MaxNominations::set(2);
-
-				// we want 2 voters now, and in maximum we allow 4 iterations. This is what happens:
-				// 61 is pruned;
-				// 71 is pruned;
-				// 81 is pruned;
-				// 11 is taken;
-				// we finish since the 2x limit is reached.
-				assert_eq!(
-					Staking::electing_voters(ElectionBoundsBuilder::new().count(Some(2)).build())
+					Staking::electing_voters(ElectionBounds::new_unbounded())
 						.unwrap()
 						.iter()
-						.map(|(stash, _, _)| stash)
-						.copied()
+						.map(|(stash, _, targets)| (*stash, targets.len()))
 						.collect::<Vec<_>>(),
-					vec![11],
+					vec![(11, 1), (21, 1), (31, 1), (61, 1), (71, 16)],
 				);
 			});
 	}

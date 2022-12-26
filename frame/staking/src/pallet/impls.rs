@@ -767,9 +767,7 @@ impl<T: Config> Pallet<T> {
 		let mut min_active_stake = u64::MAX;
 
 		let mut sorted_voters = T::VoterList::iter();
-		while all_voters.len() < max_allowed_len as usize &&
-			voters_seen < (NPOS_MAX_ITERATIONS_COEFFICIENT * max_allowed_len as u32)
-		{
+		while all_voters.len() < max_allowed_len as usize {
 			let voter = match sorted_voters.next() {
 				Some(voter) => {
 					voters_seen.saturating_inc();
@@ -778,22 +776,32 @@ impl<T: Config> Pallet<T> {
 				None => break,
 			};
 
-			if let Some(Nominations { targets, .. }) = <Nominators<T>>::get(&voter) {
+			if let Some(Nominations { mut targets, .. }) = <Nominators<T>>::get(&voter) {
 				// if this voter is a nominator:
 				let voter_weight = weight_of(&voter);
-				let nominations_quota = T::NominationsQuota::get_quota_capped(voter_weight.into());
 				if !targets.is_empty() {
-					if voters_size_tracker
-						.try_register_voter(nominations_quota as usize, voter_bounds)
-						.is_err()
+					// select only targets allowed by voter's nomination quota
+					let nominations_quota =
+						T::NominationsQuota::get_quota_safe(voter_weight.into());
+
+					if targets.len() > nominations_quota as usize {
+						Self::deposit_event(Event::<T>::NominationsQuotaExceeded {
+							staker: voter.clone(),
+							exceeded_by: (targets.len() as u32 - nominations_quota).into(),
+						});
+					}
+
+					targets.truncate(nominations_quota as usize);
+					if voters_size_tracker.try_register_voter(targets.len(), voter_bounds).is_err()
 					{
 						// no more space left for the election result, stop iterating.
 						break
 					}
+
 					all_voters.push((voter.clone(), voter_weight, targets));
 					nominators_taken.saturating_inc();
 				} else {
-					// Technically should never happen, but not much we can do about it.
+					// technically should never happen, but not much we can do about it.
 				}
 				min_active_stake =
 					if voter_weight < min_active_stake { voter_weight } else { min_active_stake };
@@ -998,16 +1006,9 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 	fn electing_voters(bounds: ElectionBounds) -> data_provider::Result<Vec<VoterOf<Self>>> {
 		// This can never fail -- if `maybe_max_len` is `Some(_)` we handle it.
 		let voters = Self::get_npos_voters(bounds);
-		println!("====");
-		println!("{:?}", bounds);
-		println!("{:?}", voters);
-		println!(
-			"{:?}",
-			bounds.exhausted(Some(voters.len() as u32), Some(voters.encoded_size() as u32))
-		);
 
 		debug_assert!(
-			!bounds.exhausted(Some(voters.len() as u32), Some(voters.encoded_size() as u32))
+			!bounds.exhausted(Some(voters.encoded_size() as u32), Some(voters.len() as u32))
 		);
 
 		Ok(voters)
@@ -1017,7 +1018,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		let target_count = T::TargetList::count();
 
 		// We can't handle this case yet -- return an error.
-		if bounds.exhausted(Some(target_count as u32), None) {
+		if bounds.exhausted(None, Some(target_count as u32)) {
 			return Err("Target snapshot too big")
 		}
 

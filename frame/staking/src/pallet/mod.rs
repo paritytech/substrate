@@ -717,6 +717,10 @@ pub mod pallet {
 		PayoutStarted { era_index: EraIndex, validator_stash: T::AccountId },
 		/// A validator has set their preferences.
 		ValidatorPrefsSet { stash: T::AccountId, prefs: ValidatorPrefs },
+		/// The number of nominations has exceeded the allowed by the voter's nomination quota.
+		NominationsQuotaExceeded { staker: T::AccountId, exceeded_by: BalanceOf<T> },
+		/// Encapsulates the nomination quota for a given balance.
+		NominationsQuotaForBalance { balance: BalanceOf<T>, nominations_quota: u32 },
 	}
 
 	#[pallet::error]
@@ -1801,6 +1805,23 @@ pub mod pallet {
 					})
 					.ok_or(Error::<T>::NotStash)
 			})?;
+			Ok(())
+		}
+
+		/// Emits an event with the nominations quota for a given balance.
+		#[pallet::call_index(25)]
+		#[pallet::weight(1)] // TODO(gpestana): finish
+		pub fn nominations_quota(
+			origin: OriginFor<T>,
+			#[pallet::compact] balance: BalanceOf<T>,
+		) -> DispatchResult {
+			ensure_signed(origin)?;
+
+			Self::deposit_event(Event::<T>::NominationsQuotaForBalance {
+				balance,
+				nominations_quota:
+					<T::NominationsQuota as NominationsQuota<BalanceOf<T>>>::get_quota_safe(balance),
+			});
 			Ok(())
 		}
 	}
