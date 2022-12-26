@@ -31,7 +31,7 @@ use pallet_nomination_pools::{
 	BalanceOf, BondExtra, BondedPoolInner, BondedPools, Commission, CommissionChangeRate,
 	CommissionThrottle, ConfigOp, GlobalMaxCommission, MaxPoolMembers, MaxPoolMembersPerPool,
 	MaxPools, Metadata, MinCreateBond, MinJoinBond, Pallet as Pools, PoolMembers, PoolRoles,
-	PoolState, RewardPools, SubPoolsStorage,
+	PoolState, RewardPools, SubPoolsStorage, LastPoolId,
 };
 use sp_runtime::{
 	traits::{Bounded, StaticLookup, Zero},
@@ -88,17 +88,14 @@ fn create_pool_account<T: pallet_nomination_pools::Config>(
 	.unwrap();
 
 	if let Some(c) = commission {
-		let _ = pallet_nomination_pools::BondedPools::<T>::iter()
-			.find(|(_, bonded_pool)| bonded_pool.roles.depositor == pool_creator)
-			.map(|(pool_id, _)| {
-				Pools::<T>::set_commission(
-					RuntimeOrigin::Signed(pool_creator.clone()).into(),
-					pool_id,
-					Some(c),
-					Some(pool_creator.clone()),
-				)
-				.expect("pool commission has been set");
-			});
+		let pool_id = LastPoolId::<T>::get();
+		Pools::<T>::set_commission(
+			RuntimeOrigin::Signed(pool_creator.clone()).into(),
+			pool_id,
+			Some(c),
+			Some(pool_creator.clone()),
+		)
+		.expect("pool just created, commission can be set by root; qed");
 	}
 
 	let pool_account = pallet_nomination_pools::BondedPools::<T>::iter()

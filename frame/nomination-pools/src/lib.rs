@@ -335,7 +335,7 @@ use sp_core::U256;
 use sp_runtime::{
 	traits::{
 		AccountIdConversion, CheckedAdd, CheckedSub, Convert, SaturatedConversion, Saturating,
-		StaticLookup, Zero,
+		StaticLookup, Zero, Bounded,
 	},
 	FixedPointNumber, Perbill,
 };
@@ -613,11 +613,15 @@ pub struct Commission<T: Config> {
 }
 
 impl<T: Config> Commission<T> {
-	/// Get the current commission percentage of this pool.
+	/// Get the current commission percentage of this pool, taking into account
+	/// [`GlobalMaxCommission`], if set.
 	///
 	/// Returns zero if commission has not yet been configured.
 	fn commission_or_zero(&self) -> Perbill {
-		self.current.as_ref().map(|(x, _)| *x).unwrap_or(Perbill::zero())
+		self.current
+			.as_ref()
+			.map(|(x, _)| *x.min(&GlobalMaxCommission::<T>::get().unwrap_or(Bounded::max_value())))
+			.unwrap_or(Perbill::zero())
 	}
 
 	/// Returns true if a commission percentage updating to `to` would exhaust the throttle limit.
@@ -2679,8 +2683,8 @@ impl<T: Config> Pallet<T> {
 		member.last_recorded_reward_counter = current_reward_counter;
 		reward_pool.register_claimed_reward(pending_rewards);
 
-		// Gets the commission percentage and payee to be paid if commission has
-		// been set. Otherwise, `None` is returned.
+		// Gets the commission percentage and payee to be paid if commission has been set.
+		// Otherwise, `None` is returned.
 		let maybe_commission = &bonded_pool.commission.get_commission_and_payee(&pending_rewards);
 
 		if let Some((pool_commission, payee)) = maybe_commission {
