@@ -58,7 +58,6 @@ use crate::storage::generator::map::StorageMap;
 ///
 /// For values, this is trivial. For all kinds of maps, it should decode all the values associated
 /// with all keys existing in the map.
-
 pub trait TryDecodeEntireStorage {
 	fn try_decode_entire_state() -> Result<usize, &'static str>;
 }
