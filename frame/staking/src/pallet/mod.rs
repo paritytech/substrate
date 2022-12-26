@@ -745,7 +745,7 @@ pub mod pallet {
 		/// Items are not sorted and unique.
 		NotSortedAndUnique,
 		/// Rewards for this era have already been claimed for this validator.
-		AlreadyClaimed,
+		NothingToClaim,
 		/// Incorrect previous history depth input provided.
 		IncorrectHistoryDepth,
 		/// Incorrect number of slashing spans provided.

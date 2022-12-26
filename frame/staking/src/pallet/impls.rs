@@ -25,7 +25,7 @@ use frame_support::{
 	dispatch::WithPostDispatchInfo,
 	pallet_prelude::*,
 	traits::{
-		Currency, CurrencyToVote, Defensive, DefensiveResult, EstimateNextNewSession, Get,
+		Currency, CurrencyToVote, Defensive, EstimateNextNewSession, Get,
 		Imbalance, LockableCurrency, OnUnbalanced, TryCollect, UnixTime, WithdrawReasons,
 	},
 	weights::Weight,
@@ -43,9 +43,10 @@ use sp_staking::{
 use sp_std::prelude::*;
 
 use crate::{
-	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, Exposure, ExposureOf,
-	Forcing, IndividualExposure, MaxWinnersOf, Nominations, PositiveImbalanceOf, RewardDestination,
-	SessionInterface, StakingLedger, ValidatorPrefs,
+	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, EraRewardPoints,
+	Exposure, ExposureOf, Forcing, IndividualExposure, MaxWinnersOf, Nominations,
+	PositiveImbalanceOf, RewardDestination, SessionInterface, StakingLedger,
+	ValidatorPrefs,
 };
 
 use super::{pallet::*, STAKING_ID};
@@ -147,8 +148,6 @@ impl<T: Config> Pallet<T> {
 				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
 		);
 
-		// Note: if era has no reward to be claimed, era may be future. better not to update
-		// `ledger.claimed_rewards` in this case.
 		let era_payout = <ErasValidatorReward<T>>::get(&era).ok_or_else(|| {
 			Error::<T>::InvalidEraToReward
 				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
@@ -160,27 +159,13 @@ impl<T: Config> Pallet<T> {
 		let mut ledger = <Ledger<T>>::get(&controller).ok_or(Error::<T>::NotController)?;
 
 		ledger
-			.claimed_rewards
-			.retain(|&x| x >= current_era.saturating_sub(history_depth));
-
-		match ledger.claimed_rewards.binary_search(&era) {
-			Ok(_) =>
-				return Err(Error::<T>::AlreadyClaimed
-					.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))),
-			Err(pos) => ledger
-				.claimed_rewards
-				.try_insert(pos, era)
-				// Since we retain era entries in `claimed_rewards` only upto
-				// `HistoryDepth`, following bound is always expected to be
-				// satisfied.
-				.defensive_map_err(|_| Error::<T>::BoundNotMet)?,
-		}
-
-		let exposure = <ErasStakersClipped<T>>::get(&era, &ledger.stash);
+		.claimed_rewards
+		.retain(|&x| x >= current_era.saturating_sub(history_depth));
 
 		// Input data seems good, no errors allowed after this point
-
 		<Ledger<T>>::insert(&controller, &ledger);
+
+		let exposure = <ErasStakersClipped<T>>::get(&era, &ledger.stash);
 
 		// Get Era reward points. It has TOTAL and INDIVIDUAL
 		// Find the fraction of the era reward that belongs to the validator
@@ -189,7 +174,7 @@ impl<T: Config> Pallet<T> {
 		// Then look at the validator, figure out the proportion of their reward
 		// which goes to them and each of their nominators.
 
-		let era_reward_points = <ErasRewardPoints<T>>::get(&era);
+		let era_reward_points = Self::get_era_reward_points(&era, &ledger);
 		let total_reward_points = era_reward_points.total;
 		let validator_reward_points = era_reward_points
 			.individual
@@ -197,10 +182,16 @@ impl<T: Config> Pallet<T> {
 			.copied()
 			.unwrap_or_else(Zero::zero);
 
-		// Nothing to do if they have no reward points.
+		// No reward points to claim. This can also happen if rewards have already been claimed.
 		if validator_reward_points.is_zero() {
-			return Ok(Some(T::WeightInfo::payout_stakers_alive_staked(0)).into())
+			return Err(Error::<T>::NothingToClaim
+				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0)))
 		}
+
+		// drop reward points for the validator so it cannot be claimed again.
+		<ErasRewardPoints<T>>::mutate(&era, |era_rewards| {
+			era_rewards.individual.remove(&ledger.stash);
+		});
 
 		// This is the fraction of the total reward that the validator and the
 		// nominators will get.
@@ -271,6 +262,27 @@ impl<T: Config> Pallet<T> {
 	pub(crate) fn update_ledger(controller: &T::AccountId, ledger: &StakingLedger<T>) {
 		T::Currency::set_lock(STAKING_ID, &ledger.stash, ledger.total, WithdrawReasons::all());
 		<Ledger<T>>::insert(controller, ledger);
+	}
+
+	fn get_era_reward_points(
+		era: &EraIndex,
+		ledger: &StakingLedger<T>,
+	) -> EraRewardPoints<T::AccountId> {
+		let mut era_reward_points = <ErasRewardPoints<T>>::get(&era);
+
+		// In the older version of code, ledger maintained the record of `claimed_rewards`.
+		// Going forward, we don't keep them in the ledger but drop them from
+		// `EraRewardPoints` as they are claimed. Since we maintain `$HistoryDepth` eras in the
+		// `ledger.claimed_rewards`, once `$HistoryDepth` number of eras have passed, this code is
+		// redundant and can be cleaned up, relying solely on `EraRewardPoints` to prevent double
+		// claim.
+		// TODO: Clean up `ledger.claimed_rewards` after 84 eras.
+		if ledger.claimed_rewards.binary_search(&era).is_ok() {
+			// since rewards are already claimed for this era, drop them.
+			era_reward_points.individual.remove(&ledger.stash);
+		}
+
+		era_reward_points
 	}
 
 	/// Chill a stash account.

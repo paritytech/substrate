@@ -19,12 +19,7 @@
 
 use super::{ConfigOp, Event, *};
 use frame_election_provider_support::{ElectionProvider, SortedListProvider, Support};
-use frame_support::{
-	assert_noop, assert_ok, assert_storage_noop, bounded_vec,
-	dispatch::{extract_actual_weight, GetDispatchInfo, WithPostDispatchInfo},
-	pallet_prelude::*,
-	traits::{Currency, Get, ReservableCurrency},
-};
+use frame_support::{assert_err, assert_noop, assert_ok, assert_storage_noop, bounded_vec, dispatch::{extract_actual_weight, GetDispatchInfo, WithPostDispatchInfo}, pallet_prelude::*, traits::{Currency, Get, ReservableCurrency}};
 use mock::*;
 use pallet_balances::Error as BalancesError;
 use sp_runtime::{
@@ -1039,6 +1034,13 @@ fn reward_destination_works() {
 		Pallet::<Test>::reward_by_ids(vec![(11, 1)]);
 
 		mock::start_active_era(1);
+
+		// validator has available reward points to claim
+		assert_eq!(
+			Staking::eras_reward_points(&0).individual.get(&10),
+			None
+		);
+
 		mock::make_all_reward_payment(0);
 
 		// Check that RewardDestination is Staked (default)
@@ -1053,8 +1055,15 @@ fn reward_destination_works() {
 				total: 1000 + total_payout_0,
 				active: 1000 + total_payout_0,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![0],
+				// claimed_rewards are not added to ledger anymore
+				claimed_rewards: Default::default(),
 			})
+		);
+
+		// claimed reward points dropped
+		assert_eq!(
+			Staking::eras_reward_points(&0).individual.get(&10),
+			None
 		);
 
 		// Change RewardDestination to Stash
@@ -1081,8 +1090,14 @@ fn reward_destination_works() {
 				total: 1000 + total_payout_0,
 				active: 1000 + total_payout_0,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![0, 1],
+				claimed_rewards: Default::default(),
 			})
+		);
+
+		// claimed reward points dropped
+		assert_eq!(
+			Staking::eras_reward_points(&1).individual.get(&10),
+			None
 		);
 
 		// Change RewardDestination to Controller
@@ -1110,8 +1125,13 @@ fn reward_destination_works() {
 				total: 1000 + total_payout_0,
 				active: 1000 + total_payout_0,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![0, 1, 2],
+				claimed_rewards: Default::default(),
 			})
+		);
+		// claimed reward points dropped
+		assert_eq!(
+			Staking::eras_reward_points(&2).individual.get(&10),
+			None
 		);
 		// Check that amount in staked account is NOT increased.
 		assert_eq!(Balances::free_balance(11), recorded_stash_balance);
@@ -3569,7 +3589,7 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 		assert_noop!(
 			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 2),
 			// Fail: Double claim
-			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
+			Error::<Test>::NothingToClaim.with_weight(err_weight)
 		);
 		assert_noop!(
 			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, active_era),
@@ -3750,7 +3770,21 @@ fn test_payout_stakers() {
 
 		let pre_payout_total_issuance = Balances::total_issuance();
 		RewardOnUnbalanceWasCalled::set(false);
+		// validator has era points not claimed yet
+		assert_eq!(
+			Staking::eras_reward_points(&1).individual.get(&11),
+			Some(&1)
+		);
+
+		// claim rewards
 		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1));
+
+		// claimed reward points dropped
+		assert_eq!(
+			Staking::eras_reward_points(&1).individual.get(&11),
+			None
+		);
+
 		assert_eq_error_rate!(
 			Balances::total_issuance(),
 			pre_payout_total_issuance + actual_paid_out,
@@ -3768,18 +3802,6 @@ fn test_payout_stakers() {
 		for i in 0..36 {
 			assert_eq!(Balances::free_balance(&(100 + i)), balance + i as Balance);
 		}
-
-		// We track rewards in `claimed_rewards` vec
-		assert_eq!(
-			Staking::ledger(&10),
-			Some(StakingLedger {
-				stash: 11,
-				total: 1000,
-				active: 1000,
-				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![1]
-			})
-		);
 
 		for i in 3..16 {
 			Staking::reward_by_ids(vec![(11, 1)]);
@@ -3800,7 +3822,7 @@ fn test_payout_stakers() {
 			assert!(RewardOnUnbalanceWasCalled::get());
 		}
 
-		// We track rewards in `claimed_rewards` vec
+		// claimed_rewards not used
 		assert_eq!(
 			Staking::ledger(&10),
 			Some(StakingLedger {
@@ -3808,7 +3830,7 @@ fn test_payout_stakers() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: (1..=14).collect::<Vec<_>>().try_into().unwrap()
+				claimed_rewards: Default::default(),
 			})
 		);
 
@@ -3841,7 +3863,7 @@ fn test_payout_stakers() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![expected_start_reward_era, expected_last_reward_era]
+				claimed_rewards: Default::default(),
 			})
 		);
 
@@ -3856,13 +3878,7 @@ fn test_payout_stakers() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![
-					expected_start_reward_era,
-					23,
-					42,
-					69,
-					expected_last_reward_era
-				]
+				claimed_rewards: Default::default(),
 			})
 		);
 	});
@@ -3940,11 +3956,11 @@ fn payout_stakers_handles_basic_errors() {
 		// Can't claim again
 		assert_noop!(
 			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_start_reward_era),
-			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
+			Error::<Test>::NothingToClaim.with_weight(err_weight)
 		);
 		assert_noop!(
 			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_last_reward_era),
-			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
+			Error::<Test>::NothingToClaim.with_weight(err_weight)
 		);
 	});
 }
@@ -4005,10 +4021,8 @@ fn payout_stakers_handles_weight_refund() {
 
 		// Collect payouts for an era where the validator did not receive any points.
 		let call = TestCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 2 });
-		let info = call.get_dispatch_info();
 		let result = call.dispatch(RuntimeOrigin::signed(20));
-		assert_ok!(result);
-		assert_eq!(extract_actual_weight(&result, &info), zero_nom_payouts_weight);
+		assert_err!(result, Error::<Test>::NothingToClaim.with_weight(zero_nom_payouts_weight));
 
 		// Reward the validator and its nominators.
 		Staking::reward_by_ids(vec![(11, 1)]);
@@ -5478,70 +5492,6 @@ fn proportional_ledger_slash_works() {
 }
 
 #[test]
-fn pre_bonding_era_cannot_be_claimed() {
-	// Verifies initial conditions of mock
-	ExtBuilder::default().nominate(false).build_and_execute(|| {
-		let history_depth = HistoryDepth::get();
-		// jump to some era above history_depth
-		let mut current_era = history_depth + 10;
-		let last_reward_era = current_era - 1;
-		let start_reward_era = current_era - history_depth;
-
-		// put some money in stash=3 and controller=4.
-		for i in 3..5 {
-			let _ = Balances::make_free_balance_be(&i, 2000);
-		}
-
-		mock::start_active_era(current_era);
-
-		// add a new candidate for being a validator. account 3 controlled by 4.
-		assert_ok!(Staking::bond(RuntimeOrigin::signed(3), 4, 1500, RewardDestination::Controller));
-
-		let claimed_rewards: BoundedVec<_, _> =
-			(start_reward_era..=last_reward_era).collect::<Vec<_>>().try_into().unwrap();
-		assert_eq!(
-			Staking::ledger(&4).unwrap(),
-			StakingLedger {
-				stash: 3,
-				total: 1500,
-				active: 1500,
-				unlocking: Default::default(),
-				claimed_rewards,
-			}
-		);
-
-		// start next era
-		current_era = current_era + 1;
-		mock::start_active_era(current_era);
-
-		// claiming reward for last era in which validator was active works
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(4), 3, current_era - 1));
-
-		// consumed weight for all payout_stakers dispatches that fail
-		let err_weight = <Test as Config>::WeightInfo::payout_stakers_alive_staked(0);
-		// cannot claim rewards for an era before bonding occured as it is
-		// already marked as claimed.
-		assert_noop!(
-			Staking::payout_stakers(RuntimeOrigin::signed(4), 3, current_era - 2),
-			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
-		);
-
-		// decoding will fail now since Staking Ledger is in corrupt state
-		HistoryDepth::set(history_depth - 1);
-		assert_eq!(Staking::ledger(&4), None);
-
-		// make sure stakers still cannot claim rewards that they are not meant to
-		assert_noop!(
-			Staking::payout_stakers(RuntimeOrigin::signed(4), 3, current_era - 2),
-			Error::<Test>::NotController
-		);
-
-		// fix the corrupted state for post conditions check
-		HistoryDepth::set(history_depth);
-	});
-}
-
-#[test]
 fn reducing_history_depth_abrupt() {
 	// Verifies initial conditions of mock
 	ExtBuilder::default().nominate(false).build_and_execute(|| {
@@ -5576,6 +5526,9 @@ fn reducing_history_depth_abrupt() {
 			}
 		);
 
+		// reward validator
+		Pallet::<Test>::reward_by_ids(vec![(3, 1)]);
+
 		// next era
 		current_era = current_era + 1;
 		mock::start_active_era(current_era);
@@ -5593,7 +5546,7 @@ fn reducing_history_depth_abrupt() {
 		// claiming reward does not work anymore
 		assert_noop!(
 			Staking::payout_stakers(RuntimeOrigin::signed(4), 3, current_era - 1),
-			Error::<Test>::NotController
+			Error::<Test>::NothingToClaim.with_weight(<Test as Config>::WeightInfo::payout_stakers_alive_staked(0))
 		);
 
 		// new stakers can still bond
