@@ -102,7 +102,7 @@ impl pallet_staking::Config for Runtime {
 	type Reward = ();
 	type SessionsPerEra = ();
 	type SlashDeferDuration = ();
-	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
+	type AdminOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type BondingDuration = ConstU32<3>;
 	type SessionInterface = ();
 	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
