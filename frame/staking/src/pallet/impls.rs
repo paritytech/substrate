@@ -182,7 +182,7 @@ impl<T: Config> Pallet<T> {
 			.copied()
 			.unwrap_or_else(Zero::zero);
 
-		// No reward points to claim. This can also happen if rewards have already been claimed.
+		// No reward points to claim. This can also happen if reward has already been claimed.
 		if validator_reward_points.is_zero() {
 			return Err(Error::<T>::NothingToClaim
 				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0)))

@@ -1035,10 +1035,10 @@ fn reward_destination_works() {
 
 		mock::start_active_era(1);
 
-		// validator has available reward points to claim
+		// validator has unclaimed reward points at era 0.
 		assert_eq!(
-			Staking::eras_reward_points(&0).individual.get(&10),
-			None
+			Staking::eras_reward_points(&0).individual.get(&11),
+			Some(&1)
 		);
 
 		mock::make_all_reward_payment(0);
@@ -3770,7 +3770,7 @@ fn test_payout_stakers() {
 
 		let pre_payout_total_issuance = Balances::total_issuance();
 		RewardOnUnbalanceWasCalled::set(false);
-		// validator has era points not claimed yet
+		// validator has unclaimed reward points at era 1.
 		assert_eq!(
 			Staking::eras_reward_points(&1).individual.get(&11),
 			Some(&1)

@@ -744,7 +744,8 @@ pub mod pallet {
 		InvalidNumberOfNominations,
 		/// Items are not sorted and unique.
 		NotSortedAndUnique,
-		/// Rewards for this era have already been claimed for this validator.
+		/// No rewards available to claim for this era. Either validator did not earn any reward or
+		/// has already claimed it previously.
 		NothingToClaim,
 		/// Incorrect previous history depth input provided.
 		IncorrectHistoryDepth,

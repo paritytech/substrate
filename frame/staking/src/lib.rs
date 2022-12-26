@@ -366,17 +366,17 @@ pub struct ActiveEraInfo {
 
 /// Reward points of an era. Used to split era total payout between validators.
 ///
-/// This points will be used to reward validators and their respective nominators. As the rewards
+/// These points will be used to reward validators and their respective nominators. As the rewards
 /// for `individual` validators are paid out, they are removed from the map to prevent a validator
-/// to collect reward for same era twice.
+/// to claim reward for a same era twice.
 #[derive(PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct EraRewardPoints<AccountId: Ord> {
 	/// Total number of points in an era.
 	///
-	/// At insert, this equals the sum of reward points for each validator. As validator cashes out
-	/// their individual reward points, sum of validator reward points reduces but total for an era
-	/// will always remain same. This is important, since we rely on `total` to calculate reward
-	/// payouts for the validator correctly.
+	/// At insert, this equals the sum of reward points for each validator. As a validator claims
+	/// their era reward, individual points are dropped hence sum of individual validator reward
+	/// points reduces but `total` for an era will always remain same. This is important, since we
+	/// rely on `total` to calculate reward payouts for the remaining set of validators correctly.
 	pub total: RewardPoint,
 	/// The reward points earned by a given validator. Deducted as reward points get cashed.
 	pub individual: BTreeMap<AccountId, RewardPoint>,
