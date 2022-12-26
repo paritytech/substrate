@@ -293,7 +293,7 @@ frame_benchmarking::benchmarks! {
 	claim_payout {
 		let origin_weight = Pools::<T>::depositor_min_bond() * 2u32.into();
 		let ed = CurrencyOf::<T>::minimum_balance();
-		let (depositor, pool_account) = create_pool_account::<T>(0, origin_weight, None);
+		let (depositor, pool_account) = create_pool_account::<T>(0, origin_weight, Some(Perbill::from_percent(50)));
 		let reward_account = Pools::<T>::create_reward_account(1);
 
 		// Send funds to the reward account of the pool
