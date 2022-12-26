@@ -689,8 +689,7 @@ impl<T: Config> Commission<T> {
 		if current.is_none() {
 			self.current = None;
 		} else {
-			let (commission, payee) =
-				current.as_ref().ok_or(Error::<T>::NoCommissionSet)?;
+			let (commission, payee) = current.as_ref().ok_or(Error::<T>::NoCommissionSet)?;
 
 			ensure!(!self.throttling(&commission), Error::<T>::CommissionChangeThrottled);
 			ensure!(
