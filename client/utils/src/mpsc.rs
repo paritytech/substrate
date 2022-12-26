@@ -51,7 +51,7 @@ mod inner {
 		pin::Pin,
 		sync::{
 			atomic::{AtomicBool, AtomicI64, Ordering},
-			Arc, Mutex,
+			Arc,
 		},
 	};
 
@@ -67,7 +67,7 @@ mod inner {
 		queue_size: Arc<AtomicI64>,
 		queue_size_warning: i64,
 		warning_fired: Arc<AtomicBool>,
-		creation_backtrace: Arc<Mutex<Backtrace>>,
+		creation_backtrace: Arc<Backtrace>,
 	}
 
 	// Strangely, deriving `Clone` requires that `T` is also `Clone`.
@@ -108,7 +108,7 @@ mod inner {
 			queue_size: queue_size.clone(),
 			queue_size_warning,
 			warning_fired: Arc::new(AtomicBool::new(false)),
-			creation_backtrace: Arc::new(Mutex::new(Backtrace::new_unresolved())),
+			creation_backtrace: Arc::new(Backtrace::new_unresolved()),
 		};
 		let receiver = TracingUnboundedReceiver { inner: r, name, queue_size };
 		(sender, receiver)
@@ -156,12 +156,12 @@ mod inner {
 					// `warning_fired` and `queue_size` are not synchronized, so it's possible
 					// that the warning is fired few times before the `warning_fired` is seen
 					// by all threads. This seems better than introducing a mutex guarding them.
-					let mut bt = self.creation_backtrace.lock().expect("another thread panicked.");
-					bt.resolve();
+					let mut backtrace = (*self.creation_backtrace).clone();
+					backtrace.resolve();
 					error!(
 						"The number of unprocessed messages in channel `{}` reached {}.\n\
 						 The channel was created at:\n{:?}",
-						self.name, self.queue_size_warning, bt,
+						self.name, self.queue_size_warning, backtrace,
 					);
 				}
 
