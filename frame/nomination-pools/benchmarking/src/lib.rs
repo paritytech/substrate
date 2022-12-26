@@ -94,8 +94,7 @@ fn create_pool_account<T: pallet_nomination_pools::Config>(
 				Pools::<T>::set_commission(
 					RuntimeOrigin::Signed(pool_creator.clone()).into(),
 					pool_id,
-					Some(c),
-					Some(pool_creator.clone()),
+					Some((c, pool_creator.clone())),
 				)
 				.expect("pool commission has been set");
 			});

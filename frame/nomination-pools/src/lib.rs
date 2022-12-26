@@ -677,19 +677,29 @@ impl<T: Config> Commission<T> {
 
 	/// Set the pool's commission.
 	///
-	/// Update commission based on `commission` and `payee`. Do not allow a commission above global
-	/// maximum if set. If throttle is present, record the current block as the previously updated
-	///  commission. If the supplied commission is zero, `None` will be inserted and `payee` will be
-	/// ignored.
-	fn update_current(&mut self, commission: &Perbill, payee: T::AccountId) -> DispatchResult {
-		ensure!(!self.throttling(&commission), Error::<T>::CommissionChangeThrottled);
-		ensure!(
-			GlobalMaxCommission::<T>::get().map_or(true, |m| commission <= &m),
-			Error::<T>::GlobalMaxCommissionExceeded
-		);
-		ensure!(self.max.map_or(true, |m| commission <= &m), Error::<T>::CommissionExceedsMaximum);
+	/// Update commission based on `current`. If a `None` current value is supplied, allow the
+	/// commission to be removed in all cases, without any throttling restrictions. Do not allow a
+	/// commission above global maximum if set. If throttle is present, record the current block as
+	///  the previously updated commission. If the supplied commission is zero, `None` will be
+	///  inserted and `payee` will be ignored.
+	fn update_current(&mut self, current: &Option<(Perbill, T::AccountId)>) -> DispatchResult {
+		if current.is_none() {
+			self.current = None;
+		} else {
+			let (commission, payee) =
+				current.as_ref().map(|c| c).ok_or(Error::<T>::NoCommissionSet)?;
 
-		self.current = Some((*commission, payee));
+			ensure!(!self.throttling(&commission), Error::<T>::CommissionChangeThrottled);
+			ensure!(
+				GlobalMaxCommission::<T>::get().map_or(true, |g| commission <= &g),
+				Error::<T>::GlobalMaxCommissionExceeded
+			);
+			ensure!(
+				self.max.map_or(true, |m| commission <= &m),
+				Error::<T>::CommissionExceedsMaximum
+			);
+			self.current = Some((*commission, payee.clone()));
+		}
 
 		// update `throttle.previous_set_at` if a throttle has been configured.
 		let _ = self
@@ -1647,7 +1657,7 @@ pub mod pallet {
 		/// The unbond pool at `era` of pool `pool_id` has been slashed to `balance`.
 		UnbondingPoolSlashed { pool_id: PoolId, era: EraIndex, balance: BalanceOf<T> },
 		/// A pool's commission setting has been changed.
-		PoolCommissionUpdated { pool_id: PoolId, commission: Perbill, payee: T::AccountId },
+		PoolCommissionUpdated { pool_id: PoolId, current: Option<(Perbill, T::AccountId)> },
 		/// A pool's maximum commission setting has been changed.
 		PoolMaxCommissionUpdated { pool_id: PoolId, max_commission: Perbill },
 		/// A pool's commission throttle has been changed.
@@ -2391,28 +2401,15 @@ pub mod pallet {
 		pub fn set_commission(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
-			commission: Option<Perbill>,
-			payee: Option<T::AccountId>,
+			current: Option<(Perbill, T::AccountId)>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
 
-			let final_commission = commission
-				.or(bonded_pool.commission.current.as_ref().map(|(c, _)| c).cloned())
-				.ok_or(Error::<T>::NoCommissionSet)?;
-
-			let final_payee = payee
-				.or(bonded_pool.commission.current.as_ref().map(|(_, p)| p).cloned())
-				.ok_or(Error::<T>::NoCommissionPayeeSet)?;
-
-			bonded_pool.commission.update_current(&final_commission, final_payee.clone())?;
+			bonded_pool.commission.update_current(&current)?;
 			bonded_pool.put();
-			Self::deposit_event(Event::<T>::PoolCommissionUpdated {
-				pool_id,
-				commission: final_commission,
-				payee: final_payee,
-			});
+			Self::deposit_event(Event::<T>::PoolCommissionUpdated { pool_id, current });
 			Ok(())
 		}
 
