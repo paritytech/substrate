@@ -28,10 +28,10 @@ use frame_election_provider_support::SortedListProvider;
 use frame_support::{assert_ok, ensure, traits::Get};
 use frame_system::RawOrigin as RuntimeOrigin;
 use pallet_nomination_pools::{
-	BalanceOf, BondExtra, BondedPoolInner, BondedPools, Commission, CommissionChangeRate,
-	CommissionThrottle, ConfigOp, GlobalMaxCommission, LastPoolId, MaxPoolMembers,
-	MaxPoolMembersPerPool, MaxPools, Metadata, MinCreateBond, MinJoinBond, Pallet as Pools,
-	PoolMembers, PoolRoles, PoolState, RewardPools, SubPoolsStorage,
+	BalanceOf, BondExtra, BondedPoolInner, BondedPools, Commission, CommissionChangeRate, ConfigOp,
+	GlobalMaxCommission, LastPoolId, MaxPoolMembers, MaxPoolMembersPerPool, MaxPools, Metadata,
+	MinCreateBond, MinJoinBond, Pallet as Pools, PoolMembers, PoolRoles, PoolState, RewardPools,
+	SubPoolsStorage,
 };
 use sp_runtime::{
 	traits::{Bounded, StaticLookup, Zero},
@@ -683,8 +683,8 @@ frame_benchmarking::benchmarks! {
 		let (depositor, pool_account) = create_pool_account::<T>(0, Pools::<T>::depositor_min_bond() * 2u32.into(), None);
 		// set a max commission
 		Pools::<T>::set_commission_max(RuntimeOrigin::Signed(depositor.clone()).into(), 1u32.into(), Perbill::from_percent(50)).unwrap();
-		// set a commission throttle
-		Pools::<T>::set_commission_throttle(RuntimeOrigin::Signed(depositor.clone()).into(), 1u32.into(), CommissionChangeRate {
+		// set a change rate
+		Pools::<T>::set_commission_change_rate(RuntimeOrigin::Signed(depositor.clone()).into(), 1u32.into(), CommissionChangeRate {
 			max_increase: Perbill::from_percent(20),
 			min_delay: 0u32.into(),
 		}).unwrap();
@@ -693,13 +693,11 @@ frame_benchmarking::benchmarks! {
 	verify {
 		assert_eq!(BondedPools::<T>::get(1).unwrap().commission, Commission {
 			current: Some((Perbill::from_percent(20), depositor)),
+			last_updated: Some(1u32.into()),
 			max: Some(Perbill::from_percent(50)),
-			throttle: Some(CommissionThrottle {
-				change_rate: CommissionChangeRate {
+			change_rate: Some(CommissionChangeRate {
 					max_increase: Perbill::from_percent(20),
 					min_delay: 0u32.into()
-				},
-				previous_set_at: Some(1u32.into())
 			}),
 		});
 	}
@@ -712,12 +710,13 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(
 			BondedPools::<T>::get(1).unwrap().commission, Commission {
 			current: Some((Perbill::from_percent(50), depositor)),
+			last_updated: Some(0u32.into()),
 			max: Some(Perbill::from_percent(50)),
-			throttle: None,
+			change_rate: None,
 		});
 	}
 
-	set_commission_throttle {
+	set_commission_change_rate {
 		// Create a pool
 		let (depositor, pool_account) = create_pool_account::<T>(0, Pools::<T>::depositor_min_bond() * 2u32.into(), None);
 	}:_(RuntimeOrigin::Signed(depositor.clone()), 1u32.into(), CommissionChangeRate {
@@ -728,13 +727,11 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(
 			BondedPools::<T>::get(1).unwrap().commission, Commission {
 			current: None,
+			last_updated: None,
 			max: None,
-			throttle: Some(CommissionThrottle {
-				change_rate: CommissionChangeRate {
-					max_increase: Perbill::from_percent(50),
-					min_delay: 1000u32.into(),
-				},
-				previous_set_at: None
+			change_rate: Some(CommissionChangeRate {
+				max_increase: Perbill::from_percent(50),
+				min_delay: 1000u32.into(),
 			}),
 		});
 	}

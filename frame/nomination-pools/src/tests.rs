@@ -5426,9 +5426,9 @@ mod commission {
 				Some((Perbill::from_percent(5), 900)),
 			));
 
-			// Throttle test. We will throttle commission to be a +1% commission increase every 2
+			// Change rate test. We will set a change rate to be a +1% commission increase every 2
 			// blocks.
-			assert_ok!(Pools::set_commission_throttle(
+			assert_ok!(Pools::set_commission_change_rate(
 				RuntimeOrigin::signed(900),
 				1,
 				CommissionChangeRate { max_increase: Perbill::from_percent(1), min_delay: 2_u64 }
@@ -5437,13 +5437,11 @@ mod commission {
 				BondedPool::<Runtime>::get(1).unwrap().commission,
 				Commission {
 					current: Some((Perbill::from_percent(5), 900)),
+					last_updated: Some(1),
 					max: None,
-					throttle: Some(CommissionThrottle {
-						change_rate: CommissionChangeRate {
-							max_increase: Perbill::from_percent(1),
-							min_delay: 2_u64
-						},
-						previous_set_at: None,
+					change_rate: Some(CommissionChangeRate {
+						max_increase: Perbill::from_percent(1),
+						min_delay: 2_u64
 					})
 				}
 			);
@@ -5461,8 +5459,8 @@ mod commission {
 			// Run to block 3
 			run_blocks(2);
 
-			// We now try to increase commission by 1%, and provide an initial payee.
-			// This should work, and set the `previous_set_at` field.
+			// We now try to increase commission by 1%, and provide an initial payee. This should
+			// work, and set the `last_updated` field.
 			assert_ok!(Pools::set_commission(
 				RuntimeOrigin::signed(900),
 				1,
@@ -5472,20 +5470,18 @@ mod commission {
 				BondedPool::<Runtime>::get(1).unwrap().commission,
 				Commission {
 					current: Some((Perbill::from_percent(6), 900)),
+					last_updated: Some(3_u64),
 					max: None,
-					throttle: Some(CommissionThrottle {
-						change_rate: CommissionChangeRate {
-							max_increase: Perbill::from_percent(1),
-							min_delay: 2_u64
-						},
-						previous_set_at: Some(3_u64),
+					change_rate: Some(CommissionChangeRate {
+						max_increase: Perbill::from_percent(1),
+						min_delay: 2_u64
 					})
 				}
 			);
 
-			// Attempt to increase the commission an additional 1% (now 2%) again immediately.
-			// this will fail as `previous_set_at` is now the current block, and at least 2
-			// blocks need to pass before we can set commission again.
+			// Attempt to increase the commission an additional 1% (now 2%) again immediately. this
+			// will fail as `last_updated` is now the current block, and at least 2 blocks need to
+			// pass before we can set commission again.
 			assert_noop!(
 				Pools::set_commission(
 					RuntimeOrigin::signed(900),
@@ -5552,7 +5548,7 @@ mod commission {
 						pool_id: 1,
 						current: Some((Perbill::from_percent(5), 900)),
 					},
-					Event::PoolCommissionThrottleUpdated {
+					Event::PoolCommissionChangeRateUpdated {
 						pool_id: 1,
 						change_rate: CommissionChangeRate {
 							max_increase: Perbill::from_percent(1),
@@ -5632,8 +5628,9 @@ mod commission {
 				BondedPools::<Runtime>::get(1).unwrap().commission,
 				Commission {
 					current: Some((Perbill::from_percent(50), 900)),
+					last_updated: Some(1),
 					max: Some(Perbill::from_percent(50)),
-					throttle: None
+					change_rate: None
 				}
 			);
 
@@ -5683,19 +5680,20 @@ mod commission {
 				BondedPools::<Runtime>::get(1).unwrap().commission,
 				Commission {
 					current: Some((Perbill::from_percent(25), 900)),
+					last_updated: Some(1),
 					max: Some(Perbill::from_percent(25)),
-					throttle: None
+					change_rate: None
 				}
 			);
 		})
 	}
 
 	#[test]
-	fn set_commission_throttle_works_with_error_tests() {
+	fn set_commission_change_rate_works_with_error_tests() {
 		ExtBuilder::default().build_and_execute(|| {
 			// Provided pool does not exist
 			assert_noop!(
-				Pools::set_commission_throttle(
+				Pools::set_commission_change_rate(
 					RuntimeOrigin::signed(900),
 					9999,
 					CommissionChangeRate {
@@ -5707,7 +5705,7 @@ mod commission {
 			);
 			// Sender does not have permission to set commission
 			assert_noop!(
-				Pools::set_commission_throttle(
+				Pools::set_commission_change_rate(
 					RuntimeOrigin::signed(1),
 					1,
 					CommissionChangeRate {
@@ -5718,27 +5716,24 @@ mod commission {
 				Error::<Runtime>::DoesNotHavePermission
 			);
 
-			// Set a commission throttle for pool 1
-			assert_ok!(Pools::set_commission_throttle(
+			// Set a commission change rate for pool 1
+			assert_ok!(Pools::set_commission_change_rate(
 				RuntimeOrigin::signed(900),
 				1,
 				CommissionChangeRate { max_increase: Perbill::from_percent(5), min_delay: 10_u64 }
 			));
 			assert_eq!(
-				BondedPools::<Runtime>::get(1).unwrap().commission.throttle,
-				Some(CommissionThrottle {
-					change_rate: CommissionChangeRate {
-						max_increase: Perbill::from_percent(5),
-						min_delay: 10_u64
-					},
-					previous_set_at: None
+				BondedPools::<Runtime>::get(1).unwrap().commission.change_rate,
+				Some(CommissionChangeRate {
+					max_increase: Perbill::from_percent(5),
+					min_delay: 10_u64
 				})
 			);
 
 			// We now try to half the min_delay - this will be disallowed.
 			// A greater delay between commission changes is seen as more restrictive.
 			assert_noop!(
-				Pools::set_commission_throttle(
+				Pools::set_commission_change_rate(
 					RuntimeOrigin::signed(900),
 					1,
 					CommissionChangeRate {
@@ -5746,13 +5741,13 @@ mod commission {
 						min_delay: 5_u64
 					}
 				),
-				Error::<Runtime>::CommissionThrottleNotAllowed
+				Error::<Runtime>::CommissionChangeRateNotAllowed
 			);
 
 			// We now try to increase the allowed max_increase - this will fail.
 			// A smaller allowed commission change is seen as more restrictive.
 			assert_noop!(
-				Pools::set_commission_throttle(
+				Pools::set_commission_change_rate(
 					RuntimeOrigin::signed(900),
 					1,
 					CommissionChangeRate {
@@ -5760,25 +5755,25 @@ mod commission {
 						min_delay: 10_u64
 					}
 				),
-				Error::<Runtime>::CommissionThrottleNotAllowed
+				Error::<Runtime>::CommissionChangeRateNotAllowed
 			);
 
 			// Successful more restrictive change of min_delay with the current max_increase
-			assert_ok!(Pools::set_commission_throttle(
+			assert_ok!(Pools::set_commission_change_rate(
 				RuntimeOrigin::signed(900),
 				1,
 				CommissionChangeRate { max_increase: Perbill::from_percent(5), min_delay: 20_u64 }
 			));
 
 			// Successful more restrictive change of max_increase with the current min_delay
-			assert_ok!(Pools::set_commission_throttle(
+			assert_ok!(Pools::set_commission_change_rate(
 				RuntimeOrigin::signed(900),
 				1,
 				CommissionChangeRate { max_increase: Perbill::from_percent(5), min_delay: 20_u64 }
 			));
 
 			// Successful more restrictive change of both max_increase and min_delay
-			assert_ok!(Pools::set_commission_throttle(
+			assert_ok!(Pools::set_commission_change_rate(
 				RuntimeOrigin::signed(900),
 				1,
 				CommissionChangeRate { max_increase: Perbill::from_percent(3), min_delay: 30_u64 }
@@ -5786,8 +5781,8 @@ mod commission {
 
 			// multi duration `min_delay` test.
 			//
-			// set the commission throttle change_rate of 1% per 3000 blocks.
-			assert_ok!(Pools::set_commission_throttle(
+			// set the commission change_rate of 1% per 3000 blocks.
+			assert_ok!(Pools::set_commission_change_rate(
 				RuntimeOrigin::signed(900),
 				1,
 				CommissionChangeRate { max_increase: Perbill::from_percent(1), min_delay: 30_u64 }
@@ -5802,7 +5797,8 @@ mod commission {
 			// with 3 `min_delay` durations passed.
 			run_blocks(91);
 
-			// we should not be able to increase the commission to 5%: 1% beyond the throttle limit.
+			// we should not be able to increase the commission to 5%: 1% beyond the change rate
+			// limit.
 			assert_noop!(
 				Pools::set_commission(
 					RuntimeOrigin::signed(900),

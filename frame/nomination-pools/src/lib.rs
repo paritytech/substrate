@@ -586,16 +586,16 @@ pub struct PoolRoles<AccountId> {
 /// Pool commission.
 ///
 /// The pool `root` can set commission configuration after pool creation. By default, all commission
-/// values are `None`. Pool `root`s can set `max` and `throttle` configurations before setting an
+/// values are `None`. Pool `root`s can set `max` and `change_rate` configurations before setting an
 /// initial commission `current` value - the commission percentage and payee of commission.
 ///
 /// The `max` commission value can only be decreased after the initial value is set, to prevent
 /// commission from repeatedly increasing.
 ///
-/// An optional commission throttle allows the pool to set strict limits to how much commission can
-/// change in each update, and how often updates can take place. If a `throttle` is set before a
-/// commission `current` is set, the initial commission `current` value will not be subject to
-/// throttling. Subsequent commission updates will be.
+/// An optional commission change_rate allows the pool to set strict limits to how much commission
+/// can change in each update, and how often updates can take place. If a `change_rate` is set
+/// before a commission `current` is set, the initial commission `current` value will not be subject
+/// to throttling. Subsequent commission updates will be.
 #[derive(
 	Encode, Decode, DefaultNoBound, MaxEncodedLen, TypeInfo, DebugNoBound, PartialEq, Copy, Clone,
 )]
@@ -604,12 +604,14 @@ pub struct PoolRoles<AccountId> {
 pub struct Commission<T: Config> {
 	/// Optional commission rate of the pool along with the account commission is paid to.
 	pub current: Option<(Perbill, T::AccountId)>,
+	/// The block the previous commission update took place.
+	pub last_updated: Option<T::BlockNumber>,
 	/// Optional maximum commission that can be set by the pool `root`. Once set, this value can
 	/// only be updated to a decreased value.
 	pub max: Option<Perbill>,
 	/// Optional configuration around how often commission can be updated, and when the last
 	/// commission update took place.
-	pub throttle: Option<CommissionThrottle<T>>,
+	pub change_rate: Option<CommissionChangeRate<T::BlockNumber>>,
 }
 
 impl<T: Config> Commission<T> {
@@ -620,7 +622,8 @@ impl<T: Config> Commission<T> {
 		self.current.as_ref().map(|(x, _)| *x).unwrap_or(Perbill::zero())
 	}
 
-	/// Returns true if a commission percentage updating to `to` would exhaust the throttle limit.
+	/// Returns true if a commission percentage updating to `to` would exhaust the change_rate
+	/// limit.
 	///
 	/// A commission update will be throttled (disallowed) if:
 	/// 1. not enough blocks have passed since the previous commission update took place, and
@@ -628,17 +631,15 @@ impl<T: Config> Commission<T> {
 	///
 	/// Throttling is not applied to commission updates if `current` is still `None`.
 	fn throttling(&self, to: &Perbill) -> bool {
-		if let Some(t) = self.throttle.as_ref() {
+		if let Some(t) = self.change_rate.as_ref() {
 			// factor previously updated block into whether user is throttled.
-			if t.previous_set_at.map_or(
-				// if no `previous_set_at` is set, throttled if the attempted increase in
+			if self.last_updated.map_or(
+				// if no `last_updated` is set, throttled if the attempted increase in
 				// commission is greater than `max_increase`.
-				(*to).saturating_sub(self.commission_or_zero()) > t.change_rate.max_increase,
+				(*to).saturating_sub(self.commission_or_zero()) > t.max_increase,
 				|p| {
 					// `min_delay` blocks must have been surpassed since last update.
-					if <frame_system::Pallet<T>>::block_number().saturating_sub(p) <
-						t.change_rate.min_delay
-					{
+					if <frame_system::Pallet<T>>::block_number().saturating_sub(p) < t.min_delay {
 						return true
 					}
 					// ensure the `max_increase` durations surpassed since the previous commission
@@ -650,19 +651,18 @@ impl<T: Config> Commission<T> {
 					// the total durations passed since the last commission update.
 					let blocks_passed = <frame_system::Pallet<T>>::block_number().saturating_sub(p);
 
-					// calculate intervals passed since last `previous_set_at`
+					// calculate intervals passed since last `last_updated`
 					let intervals_passed = if blocks_passed == Zero::zero() {
 						Zero::zero()
 					} else {
-						blocks_passed.div(t.change_rate.min_delay).saturated_into::<u32>()
+						blocks_passed.div(t.min_delay).saturated_into::<u32>()
 					};
 
 					// the maximum allowed increase, where the current `max_increase` Perbill is
 					// converted into a u32 by multiplying itself with 100_u32 and multiplied by
 					// durations passed, before being converted back into a Perbill.
-					let max_allowed_increase = Perbill::from_percent(
-						(t.change_rate.max_increase * 100_u32) * intervals_passed,
-					);
+					let max_allowed_increase =
+						Perbill::from_percent((t.max_increase * 100_u32) * intervals_passed);
 
 					// throttled (true) if attempted increase is greater than the maximum allowed
 					// increase, as a percentage.
@@ -679,10 +679,13 @@ impl<T: Config> Commission<T> {
 	///
 	/// Update commission based on `current`. If a `None` current value is supplied, allow the
 	/// commission to be removed in all cases, without any throttling restrictions. Do not allow a
-	/// commission above global maximum if set. If throttle is present, record the current block as
-	///  the previously updated commission. If the supplied commission is zero, `None` will be
-	///  inserted and `payee` will be ignored.
-	fn update_current(&mut self, current: &Option<(Perbill, T::AccountId)>) -> DispatchResult {
+	/// commission above global maximum if set. If `change_rate` is present, record the current
+	/// block  as the previously updated commission. If the supplied commission is zero, `None` will
+	/// be  inserted and `payee` will be ignored.
+	fn maybe_update_current(
+		&mut self,
+		current: &Option<(Perbill, T::AccountId)>,
+	) -> DispatchResult {
 		if current.is_none() {
 			self.current = None;
 		} else {
@@ -700,12 +703,7 @@ impl<T: Config> Commission<T> {
 			);
 			self.current = Some((*commission, payee.clone()));
 		}
-
-		// update `throttle.previous_set_at` if a throttle has been configured.
-		let _ = self
-			.throttle
-			.as_mut()
-			.map(|t| t.register_change(<frame_system::Pallet<T>>::block_number()));
+		let _ = self.register_update(<frame_system::Pallet<T>>::block_number());
 		Ok(())
 	}
 
@@ -716,7 +714,8 @@ impl<T: Config> Commission<T> {
 	/// return a dispatch error.
 	///
 	/// If `current.0` is larger than an updated max commission value, then `current.0` will also be
-	/// updated to the new maximum.
+	/// updated to the new maximum. This will also register a `last_updated` update to the
+	/// commission.
 	fn maybe_update_max(&mut self, new_max: Perbill) -> DispatchResult {
 		if let Some(old) = self.max.as_mut() {
 			if new_max > *old {
@@ -726,28 +725,33 @@ impl<T: Config> Commission<T> {
 		} else {
 			self.max = Some(new_max)
 		};
-		let _ = self.current.as_mut().map(|(x, _)| *x = (*x).min(new_max));
+		let updated_current = self
+			.current
+			.as_mut()
+			.map(|(x, _)| {
+				let u = *x > new_max;
+				*x = (*x).min(new_max);
+				u
+			})
+			.unwrap_or(false);
+
+		if updated_current {
+			self.register_update(<frame_system::Pallet<T>>::block_number());
+		}
 		Ok(())
 	}
 
-	/// Set the pool's commission throttle settings.
+	/// Set the pool's commission `change_rate` settings.
 	///
-	/// Once a throttle configuration has been set, only more restrictive values can be set
+	/// Once a change rate configuration has been set, only more restrictive values can be set
 	/// thereafter. These restrictions translate to increased `min_delay` values and decreased
 	/// `max_increase` values.
-	fn maybe_update_throttle(
+	fn maybe_update_change_rate(
 		&mut self,
 		change_rate: CommissionChangeRate<T::BlockNumber>,
 	) -> DispatchResult {
-		ensure!(
-			&self.throttle.as_ref().map_or(true, |t| t.less_restrictive(&change_rate)),
-			Error::<T>::CommissionThrottleNotAllowed
-		);
-
-		self.throttle = Some(CommissionThrottle {
-			change_rate,
-			previous_set_at: self.throttle.as_ref().map_or(None, |t| t.previous_set_at),
-		});
+		ensure!(&self.less_restrictive(&change_rate), Error::<T>::CommissionChangeRateNotAllowed);
+		self.change_rate = Some(change_rate);
 
 		Ok(())
 	}
@@ -765,37 +769,29 @@ impl<T: Config> Commission<T> {
 			.as_ref()
 			.map(|(commission, payee)| (*commission * *pending_rewards, payee.clone()))
 	}
-}
 
-/// The pool root is able to set a commission throttle for their pool.
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DebugNoBound, PartialEq, Copy, Clone)]
-#[codec(mel_bound(T: Config))]
-#[scale_info(skip_type_params(T))]
-pub struct CommissionThrottle<T: Config> {
-	///  The change rate dictates how often and by how much commission can be updated.
-	pub change_rate: CommissionChangeRate<T::BlockNumber>,
-	/// The block the previous commission update took place.
-	pub previous_set_at: Option<T::BlockNumber>,
-}
-
-impl<T: Config> CommissionThrottle<T> {
-	/// Returns `true` if `change_rate` is less restrictive than `self`.
-	fn less_restrictive(&self, change_rate: &CommissionChangeRate<T::BlockNumber>) -> bool {
-		change_rate.max_increase <= self.change_rate.max_increase &&
-			change_rate.min_delay >= self.change_rate.min_delay
+	/// Updates a commission's `last_updated` field.
+	fn register_update(&mut self, now: T::BlockNumber) {
+		self.last_updated = Some(now);
 	}
 
-	fn register_change(&mut self, now: T::BlockNumber) {
-		self.previous_set_at = Some(now);
+	/// Returns `true` if `change_rate` is less restrictive than the currently set change rate, if
+	/// present, or true otherwise.
+	fn less_restrictive(&self, change_rate: &CommissionChangeRate<T::BlockNumber>) -> bool {
+		self.change_rate
+			.as_ref()
+			.map(|t| {
+				change_rate.max_increase <= t.max_increase && change_rate.min_delay >= t.min_delay
+			})
+			.unwrap_or(true)
 	}
 }
 
 /// Pool commission change rate preferences.
 ///
-/// A commission change rate consists of 2 values; (1) the maximum allowed commission change, and
-/// (2) the minimum amount of blocks that must elapse before commission updates are allowed again.
-///
-/// This struct is used in the `set_commission_throttle` call as well as in CommissionThrottle.
+/// The pool root is able to set a commission change rate for their pool. A commission change rate
+/// consists of 2 values; (1) the maximum allowed commission change, and (2) the minimum amount of
+/// blocks that must elapse before commission updates are allowed again.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Copy, Clone)]
 pub struct CommissionChangeRate<BlockNumber> {
 	/// The maximum amount the commission can be updated by per `min_delay` period.
@@ -1660,8 +1656,8 @@ pub mod pallet {
 		PoolCommissionUpdated { pool_id: PoolId, current: Option<(Perbill, T::AccountId)> },
 		/// A pool's maximum commission setting has been changed.
 		PoolMaxCommissionUpdated { pool_id: PoolId, max_commission: Perbill },
-		/// A pool's commission throttle has been changed.
-		PoolCommissionThrottleUpdated {
+		/// A pool's commission `change_rate` has been changed.
+		PoolCommissionChangeRateUpdated {
 			pool_id: PoolId,
 			change_rate: CommissionChangeRate<T::BlockNumber>,
 		},
@@ -1732,8 +1728,8 @@ pub mod pallet {
 		CommissionExceedsMaximum,
 		/// Not enough blocks have surpassed since the last commission update.
 		CommissionChangeThrottled,
-		/// The submitted changes to commission throttle are not allowed.
-		CommissionThrottleNotAllowed,
+		/// The submitted changes to commission change rate are not allowed.
+		CommissionChangeRateNotAllowed,
 		/// Pool id currently in use.
 		PoolIdInUse,
 		/// Pool id provided is not correct/usable.
@@ -2407,7 +2403,7 @@ pub mod pallet {
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
 
-			bonded_pool.commission.update_current(&current)?;
+			bonded_pool.commission.maybe_update_current(&current)?;
 			bonded_pool.put();
 			Self::deposit_event(Event::<T>::PoolCommissionUpdated { pool_id, current });
 			Ok(())
@@ -2439,16 +2435,16 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Set the commission throttle for a pool.
+		/// Set the commission change rate for a pool.
 		///
 		/// The dispatch origin of this call must be signed by the `root` role of the pool. If a
-		/// throttle is already present, this call will only succeed if a more restrictive throttle
-		/// configuration is given.
+		/// change rate is already present, this call will only succeed if a more restrictive change
+		/// rate configuration is given.
 		///
-		/// If a throttle configuration does not yet exist, the provided values are set.
+		/// If a change rate configuration does not yet exist, the provided values are set.
 		#[pallet::call_index(16)]
-		#[pallet::weight(T::WeightInfo::set_commission_throttle())]
-		pub fn set_commission_throttle(
+		#[pallet::weight(T::WeightInfo::set_commission_change_rate())]
+		pub fn set_commission_change_rate(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
 			change_rate: CommissionChangeRate<T::BlockNumber>,
@@ -2457,10 +2453,13 @@ pub mod pallet {
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
 
-			bonded_pool.commission.maybe_update_throttle(change_rate)?;
+			bonded_pool.commission.maybe_update_change_rate(change_rate)?;
 			bonded_pool.put();
 
-			Self::deposit_event(Event::<T>::PoolCommissionThrottleUpdated { pool_id, change_rate });
+			Self::deposit_event(Event::<T>::PoolCommissionChangeRateUpdated {
+				pool_id,
+				change_rate,
+			});
 			Ok(())
 		}
 	}
