@@ -5726,6 +5726,46 @@ fn scale_validator_count_errors() {
 	})
 }
 
+#[test]
+fn set_min_commission_works_with_admin_origin() {
+	ExtBuilder::default().build_and_execute(|| {
+		// no minimum commission set initially
+		assert_eq!(MinCommission::<Test>::get(), Zero::zero());
+
+		// root can set min commission
+		assert_ok!(Staking::set_min_commission(RuntimeOrigin::root(), Perbill::from_percent(10)));
+
+		assert_eq!(MinCommission::<Test>::get(), Perbill::from_percent(10));
+
+		// Non privileged origin can not set min_commission
+		assert_noop!(
+			Staking::set_min_commission(RuntimeOrigin::signed(2), Perbill::from_percent(15)),
+			BadOrigin
+		);
+
+		// Admin Origin can set min commission
+		assert_ok!(Staking::set_min_commission(
+			RuntimeOrigin::signed(1),
+			Perbill::from_percent(15),
+		));
+
+		// setting commission below min_commission fails
+		assert_noop!(
+			Staking::validate(
+				RuntimeOrigin::signed(10),
+				ValidatorPrefs { commission: Perbill::from_percent(14), blocked: false }
+			),
+			Error::<Test>::CommissionTooLow
+		);
+
+		// setting commission >= min_commission works
+		assert_ok!(Staking::validate(
+			RuntimeOrigin::signed(10),
+			ValidatorPrefs { commission: Perbill::from_percent(15), blocked: false }
+		));
+	})
+}
+
 mod staking_interface {
 	use frame_support::storage::with_storage_layer;
 	use sp_staking::StakingInterface;
