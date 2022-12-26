@@ -91,7 +91,8 @@ pub struct Sender {
 	warning_fired: bool,
 	/// Backtrace of a place where the channel was created.
 	creation_backtrace: Backtrace,
-	/// Clone of [`Receiver::metrics`].
+	/// Clone of [`Receiver::metrics`]. Will be initialized when [`Sender`] is added to
+	/// [`OutChannels`] with `OutChannels::push()`.
 	metrics: Arc<Mutex<Option<Arc<Option<Metrics>>>>>,
 }
 
