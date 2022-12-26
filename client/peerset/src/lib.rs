@@ -114,9 +114,7 @@ pub struct Peerset {
 impl Peerset {
 	/// Create PSM.
 	pub fn from_config(config: PeersetConfig) -> Self {
-		Self {
-			inner: Arc::new(Mutex::new(PeersetInner::from_config(config)))
-		}
+		Self { inner: Arc::new(Mutex::new(PeersetInner::from_config(config))) }
 	}
 
 	/// Adds a new reserved peer. The peerset will make an effort to always remain connected to
@@ -473,7 +471,7 @@ impl PeersetInner {
 		}
 	}
 
-	fn peer_reputation(&mut self, peer_id: PeerId) -> i32{
+	fn peer_reputation(&mut self, peer_id: PeerId) -> i32 {
 		self.data.peer_reputation(peer_id).reputation()
 	}
 
