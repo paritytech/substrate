@@ -11,7 +11,7 @@
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANgitY KIND, either express or implied.
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
@@ -364,7 +364,7 @@ impl From<RecoverableSignature> for Signature {
 /// Derive a single hard junction.
 #[cfg(feature = "full_crypto")]
 fn derive_hard_junction(secret_seed: &Seed, cc: &[u8; 32]) -> Seed {
-	("Secp256k1HDKD", secret_seed, cc).using_encoded(sp_core_hashing::keccak_256)
+	("Secp256k1HDKD", secret_seed, cc).using_encoded(sp_core_hashing::blake2_256)
 }
 
 /// An error when deriving a key.
@@ -639,7 +639,7 @@ mod test {
 			).unwrap(),
 		);
 		let message = b"";
-		let signature = array_bytes::hex2array_unchecked("3dde91174bd9359027be59a428b8146513df80a2a3c7eda2194f64de04a69ab97b753169e94db6ffd50921a2668a48b94ca11e3d32c1ff19cfe88890aa7e8f3c00");
+		let signature = array_bytes::hex2array_unchecked("4e1fd58a98bbce5fe948c4e5fec7662d253130a300156c037429dca66f9f6a0728e8b5e8bc55f4bcf445af4b75928a876d54949aaee93a62e3eb1cf12aefb60800");
 		let signature = Signature::from_raw(signature);
 		assert!(pair.sign(&message[..]) == signature);
 		assert!(Pair::verify(&signature, &message[..], &public));
@@ -660,7 +660,7 @@ mod test {
 			).unwrap(),
 		);
 		let message = b"";
-		let signature = array_bytes::hex2array_unchecked("3dde91174bd9359027be59a428b8146513df80a2a3c7eda2194f64de04a69ab97b753169e94db6ffd50921a2668a48b94ca11e3d32c1ff19cfe88890aa7e8f3c00");
+		let signature = array_bytes::hex2array_unchecked("4e1fd58a98bbce5fe948c4e5fec7662d253130a300156c037429dca66f9f6a0728e8b5e8bc55f4bcf445af4b75928a876d54949aaee93a62e3eb1cf12aefb60800");
 		let signature = Signature::from_raw(signature);
 		assert!(pair.sign(&message[..]) == signature);
 		assert!(Pair::verify(&signature, &message[..], &public));
