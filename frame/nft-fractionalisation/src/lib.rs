@@ -15,43 +15,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod types;
 
-pub use pallet::*;
-
+// #[cfg(feature = "runtime-benchmarks")]
+// mod benchmarking;
 #[cfg(test)]
-mod mock;
-
+pub mod mock;
 #[cfg(test)]
 mod tests;
 
-// #[cfg(feature = "runtime-benchmarks")]
-// mod benchmarking;
-
+pub use pallet::*;
 pub use scale_info::Type;
 pub use types::*;
 
-// pub type ItemId = <Type as pallet_nfts::Config>::ItemId;
-// pub type CollectionId = <Type as pallet_nfts::Config>::CollectionId;
-
 #[frame_support::pallet]
 pub mod pallet {
+	use crate::Details;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::traits::One;
 
 	use frame_support::{
 		dispatch::DispatchResult,
-		sp_runtime::traits::{
-			AccountIdConversion, AtLeast32BitUnsigned, IntegerSquareRoot, SaturatedConversion,
-			Saturating, StaticLookup,
-		},
+		sp_runtime::traits::{AccountIdConversion, AtLeast32BitUnsigned, StaticLookup},
 		traits::{
 			fungibles::{
-				metadata::Mutate as MutateMetadata, Create, Destroy, Inspect, InspectEnumerable,
-				Mutate, Transfer,
+				metadata::Mutate as MutateMetadata, Create, Destroy, Inspect, Mutate, Transfer,
 			},
 			tokens::nonfungibles_v2::{
 				Inspect as NonFungiblesInspect, Transfer as NonFungiblesTransfer,
@@ -120,9 +112,6 @@ pub mod pallet {
 
 		#[pallet::constant]
 		type PalletId: Get<PalletId>;
-
-		#[pallet::constant]
-		type BuybackThreshold: Get<u32>;
 	}
 
 	#[pallet::storage]
@@ -163,9 +152,8 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		// TODO: correct weights
+		#[pallet::call_index(0)]
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(2).ref_time())]
-		/// Pallet's account must be funded before lock is possible!
-		/// 5EYCAe5gjC5dxKPbV2GPQUetETjFNSYZsSwSurVTTXidSLbh
 		pub fn fractionalise(
 			origin: OriginFor<T>,
 			nft_collection_id: T::NftCollectionId,
@@ -203,6 +191,7 @@ pub mod pallet {
 
 		/// Burn the whole amount of the asset and return back the locked NFT.
 		// TODO: correct weights
+		#[pallet::call_index(1)]
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(2).ref_time())]
 		pub fn unfractionalise(
 			origin: OriginFor<T>,
@@ -213,7 +202,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			Details::<T, I>::try_mutate_exists((nft_collection_id, nft_id), |maybe_details| {
+			NftToAsset::<T>::try_mutate_exists((nft_collection_id, nft_id), |maybe_details| {
 				let details = maybe_details.take().ok_or(Error::<T>::DataNotFound)?;
 				ensure!(details.asset == asset_id, Error::<T>::DataNotFound);
 
@@ -226,17 +215,22 @@ pub mod pallet {
 					asset: asset_id,
 					beneficiary,
 				});
+
 				Ok(())
 			})
 		}
 	}
 
 	impl<T: Config> Pallet<T> {
+		/// The account ID of the pallet.
+		///
+		/// This actually does computation. If you need to keep using it, then make sure you cache
+		/// the value and only call this once.
 		fn get_pallet_account() -> T::AccountId {
 			T::PalletId::get().into_account_truncating()
 		}
 
-		/// Transfer the NFT from the account holding the NFT to the pallet's account.
+		/// Transfer the NFT from the account holding that NFT to the pallet's account.
 		fn do_lock_nft(
 			nft_collection_id: T::NftCollectionId,
 			nft_id: T::NftId,

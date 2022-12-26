@@ -1,11 +1,30 @@
+// This file is part of Substrate.
+
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! Test environment for Nft fractionalisation pallet.
+
 use crate as pallet_nft_fractionalisation;
 use frame_support::{
 	parameter_types,
-	traits::{AsEnsureOriginWithArg, ConstU128, ConstU16, ConstU32, ConstU64},
+	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64},
 	PalletId,
 };
-use frame_system as system;
-use frame_system::{EnsureRoot, EnsureSigned};
+use frame_system::EnsureSigned;
+use pallet_nfts::PalletFeatures;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -14,13 +33,6 @@ use sp_runtime::{
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
-type Balance = u128;
-type AccountId = u64;
-
-pub const EXISTENTIAL_DEPOSIT: u128 = 500;
-pub const MILLICENTS: Balance = 1_000_000_000;
-pub const CENTS: Balance = 1_000 * MILLICENTS;
-pub const DOLLARS: Balance = 100 * CENTS;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -33,14 +45,13 @@ frame_support::construct_runtime!(
 		NftFractions: pallet_nft_fractionalisation,
 		Assets: pallet_assets,
 		Balances: pallet_balances,
+		Nfts: pallet_nfts,
 	}
 );
-
-impl system::Config for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
-	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type Index = u64;
@@ -52,82 +63,81 @@ impl system::Config for Test {
 	type Header = Header;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
+	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = pallet_balances::AccountData<Balance>;
+	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
-	type SS58Prefix = ConstU16<42>;
+	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 }
 
 impl pallet_balances::Config for Test {
-	type MaxLocks = ConstU32<50>;
-	type MaxReserves = ();
-	type ReserveIdentifier = [u8; 8];
-	/// The type for recording an account's balance.
-	type Balance = Balance;
-	/// The ubiquitous event type.
-	type RuntimeEvent = RuntimeEvent;
+	type Balance = u64;
 	type DustRemoval = ();
-	type ExistentialDeposit = ConstU128<EXISTENTIAL_DEPOSIT>;
+	type RuntimeEvent = RuntimeEvent;
+	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
-	type WeightInfo = pallet_balances::weights::SubstrateWeight<Test>;
-}
-
-parameter_types! {
-	pub const AssetDeposit: Balance = 100 * DOLLARS;
-	pub const ApprovalDeposit: Balance = 1 * DOLLARS;
-	pub const StringLimit: u32 = 50;
-	pub const MetadataDepositBase: Balance = 10 * DOLLARS;
-	pub const MetadataDepositPerByte: Balance = 1 * DOLLARS;
+	type WeightInfo = ();
+	type MaxLocks = ();
+	type MaxReserves = ConstU32<50>;
+	type ReserveIdentifier = [u8; 8];
 }
 
 impl pallet_assets::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Balance = u128;
+	type Balance = u64;
+	type RemoveItemsLimit = ConstU32<1000>;
 	type AssetId = u32;
+	type AssetIdParameter = u32;
 	type Currency = Balances;
-	type ForceOrigin = EnsureRoot<AccountId>;
-	type AssetDeposit = AssetDeposit;
-	type AssetAccountDeposit = ConstU128<DOLLARS>;
-	type MetadataDepositBase = MetadataDepositBase;
-	type MetadataDepositPerByte = MetadataDepositPerByte;
-	type ApprovalDeposit = ApprovalDeposit;
-	type StringLimit = StringLimit;
+	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<u64>>;
+	type ForceOrigin = frame_system::EnsureRoot<u64>;
+	type AssetDeposit = ConstU64<1>;
+	type AssetAccountDeposit = ConstU64<10>;
+	type MetadataDepositBase = ConstU64<1>;
+	type MetadataDepositPerByte = ConstU64<1>;
+	type ApprovalDeposit = ConstU64<1>;
+	type StringLimit = ConstU32<50>;
 	type Freezer = ();
 	type Extra = ();
-	type WeightInfo = pallet_assets::weights::SubstrateWeight<Test>;
+	type CallbackHandle = ();
+	type WeightInfo = ();
+	#[cfg(feature = "runtime-benchmarks")]
+	type BenchmarkHelper = ();
 }
 
 parameter_types! {
-	pub const CollectionDeposit: Balance = 100 * DOLLARS;
-	pub const ItemDeposit: Balance = 1 * DOLLARS;
-	pub const KeyLimit: u32 = 32;
-	pub const ValueLimit: u32 = 256;
+	pub storage Features: PalletFeatures = PalletFeatures::all_enabled();
 }
 
-impl pallet_uniques::Config for Test {
+impl pallet_nfts::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type CollectionId = u32;
 	type ItemId = u32;
 	type Currency = Balances;
-	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
-	type CollectionDeposit = CollectionDeposit;
-	type ItemDeposit = ItemDeposit;
-	type MetadataDepositBase = MetadataDepositBase;
-	type AttributeDepositBase = MetadataDepositBase;
-	type DepositPerByte = MetadataDepositPerByte;
-	type StringLimit = StringLimit;
-	type KeyLimit = KeyLimit;
-	type ValueLimit = ValueLimit;
-	type WeightInfo = pallet_uniques::weights::SubstrateWeight<Test>;
+	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<u64>>;
+	type ForceOrigin = frame_system::EnsureRoot<u64>;
+	type Locker = ();
+	type CollectionDeposit = ConstU64<2>;
+	type ItemDeposit = ConstU64<1>;
+	type MetadataDepositBase = ConstU64<1>;
+	type AttributeDepositBase = ConstU64<1>;
+	type DepositPerByte = ConstU64<1>;
+	type StringLimit = ConstU32<50>;
+	type KeyLimit = ConstU32<50>;
+	type ValueLimit = ConstU32<50>;
+	type ApprovalsLimit = ConstU32<10>;
+	type ItemAttributesApprovalsLimit = ConstU32<2>;
+	type MaxTips = ConstU32<10>;
+	type MaxDeadlineDuration = ConstU64<10000>;
+	type Features = Features;
+	type WeightInfo = ();
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = ();
-	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
-	type Locker = ();
 }
 
 parameter_types! {
@@ -136,14 +146,17 @@ parameter_types! {
 
 impl pallet_nft_fractionalisation::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type PalletId = NftFractionsPalletIdPalletId;
 	type Currency = Balances;
-	type CollectionId = Uniques;
-	type ItemId = Uniques;
-	type AssetId = Assets;
+	type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
+	type NftId = <Self as pallet_nfts::Config>::ItemId;
+	type AssetBalance = <Self as pallet_balances::Config>::Balance;
+	type AssetId = <Self as pallet_assets::Config>::AssetId;
+	type Assets = Assets;
+	type Nfts = Nfts;
+	type PalletId = NftFractionsPalletId;
 }
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
+	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 }
