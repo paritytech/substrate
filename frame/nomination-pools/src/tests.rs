@@ -6078,4 +6078,59 @@ mod commission {
 			);
 		})
 	}
+
+
+	#[test]
+	fn global_max_prevents_100_percent_commission_payout() {
+		ExtBuilder::default().build_and_execute(|| {
+			// Note: GlobalMaxCommission is set at 90%.
+
+			let (mut member, bonded_pool, mut reward_pool) =
+				Pools::get_member_with_pools(&10).unwrap();
+
+			// top up commission payee account to existential deposit
+			let _ = Balances::deposit_creating(&2, 5);
+
+			// Set a commission pool 1 to 100%, with a payee set to `2`
+			assert_ok!(Pools::set_commission(
+				RuntimeOrigin::signed(900),
+				bonded_pool.id,
+				Some((Perbill::from_percent(100), 2)),
+			));
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::PoolCommissionUpdated {
+						pool_id: 1,
+						current: Some((Perbill::from_percent(100), 2))
+					}
+				]
+			);
+
+			// The pool earns 10 points
+			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 10));
+
+			// Ensure the commission equals 90% of the total points.
+			let maybe_commission =
+				&BondedPools::<Runtime>::get(1).unwrap().commission.get_commission_and_payee(&10);
+			assert_eq!(*maybe_commission, Some((9_u128, 2_u128)));
+
+			// execute the payout
+			assert_ok!(Pools::do_reward_payout(
+				&10,
+				&mut member,
+				&mut BondedPool::<Runtime>::get(1).unwrap(),
+				&mut reward_pool
+			));
+
+			// Confirm the commission was only 9 points out of 10 points, and the payout was 1 out of 10
+			// points, reflecting the 90% global max commission.
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 1, commission: 9 },]
+			);
+		})
+	}
 }
