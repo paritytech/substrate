@@ -109,12 +109,12 @@
 //!         fn desired_targets() -> data_provider::Result<u32> {
 //!             Ok(1)
 //!         }
-//!         fn electing_voters(maybe_max_len: Option<usize>)
+//!         fn electing_voters(bounds: DataProviderBounds)
 //!           -> data_provider::Result<Vec<VoterOf<Self>>>
 //!         {
 //!             Ok(Default::default())
 //!         }
-//!         fn electable_targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
+//!         fn electable_targets(bounds: DataProviderBounds) -> data_provider::Result<Vec<AccountId>> {
 //!             Ok(vec![10, 20, 30])
 //!         }
 //!         fn next_election_prediction(now: BlockNumber) -> BlockNumber {
@@ -145,7 +145,7 @@
 //!     impl<T: Config> ElectionProvider for GenericElectionProvider<T> {
 //!         fn ongoing() -> bool { false }
 //!         fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
-//!             Self::DataProvider::electable_targets(None)
+//!             Self::DataProvider::electable_targets(DataProviderBounds::new_unbounded())
 //!                 .map_err(|_| "failed to elect")
 //!                 .map(|t| bounded_vec![(t[0], Support::default())])
 //!         }
@@ -288,7 +288,8 @@ pub trait ElectionDataProvider {
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
-	fn electable_targets(bounds: ElectionBounds) -> data_provider::Result<Vec<Self::AccountId>>;
+	fn electable_targets(bounds: DataProviderBounds)
+		-> data_provider::Result<Vec<Self::AccountId>>;
 
 	/// All the voters that participate in the election, thus "electing".
 	///
@@ -299,7 +300,7 @@ pub trait ElectionDataProvider {
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
-	fn electing_voters(bounds: ElectionBounds) -> data_provider::Result<Vec<VoterOf<Self>>>;
+	fn electing_voters(bounds: DataProviderBounds) -> data_provider::Result<Vec<VoterOf<Self>>>;
 
 	/// The number of targets to elect.
 	///
@@ -420,8 +421,8 @@ pub trait ElectionProvider: ElectionProviderBase {
 /// data provider at runtime via `forced_input_voters_bound` and `forced_input_target_bound`.
 pub trait InstantElectionProvider: ElectionProviderBase {
 	fn instant_elect(
-		forced_input_voters_bound: ElectionBounds,
-		forced_input_target_bound: ElectionBounds,
+		forced_input_voters_bound: DataProviderBounds,
+		forced_input_target_bound: DataProviderBounds,
 	) -> Result<BoundedSupportsOf<Self>, Self::Error>;
 }
 
@@ -463,8 +464,8 @@ where
 	MaxWinners: Get<u32>,
 {
 	fn instant_elect(
-		_: ElectionBounds,
-		_: ElectionBounds,
+		_: DataProviderBounds,
+		_: DataProviderBounds,
 	) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		Err("`NoElection` cannot do anything.")
 	}
@@ -674,55 +675,49 @@ pub type BoundedSupportsOf<E> = BoundedSupports<
 sp_core::generate_feature_enabled_macro!(runtime_benchmarks_enabled, feature = "runtime-benchmarks", $);
 sp_core::generate_feature_enabled_macro!(runtime_benchmarks_or_fuzz_enabled, any(feature = "runtime-benchmarks", feature = "fuzzing"), $);
 
-/// The limits of an election result. The bounds are defined over the count of element of the
-/// election (voters or targets) or the overall datastructure size.
-///
-/// Ordering: when comparing two instances of `ElectionBounds`, the `count` has priority over the
-/// `size`, ie. if `A.count > B.count`, then `A > B` regardless of their relative `size`.
-#[derive(Clone, Copy, RuntimeDebug, scale_info::TypeInfo, Encode, Decode, Eq)]
-pub struct ElectionBounds {
-	/// The bound on number of elements. `None` means unbounded.
+#[derive(Clone, Copy, Eq, Default)]
+pub struct DataProviderBounds {
 	pub count: Option<u32>,
-	/// The bound on size, in bytes. `None` means unbounded.
 	pub size: Option<u32>,
 }
 
-impl ElectionBounds {
-	/// Returns a new instance of self without bounds.
-	pub const fn new_unbounded() -> Self {
-		ElectionBounds { count: None, size: None }
+impl DataProviderBounds {
+	/// Unbonded data provider limit.
+	pub fn new_unbounded() -> Self {
+		DataProviderBounds { count: None, size: None }
 	}
 
-	//  Returns true if `given_count` exhausts `self.count`.
+	///  Returns true if `given_count` exhausts `self.count`.
 	pub fn count_exhausted(self, given_count: Option<u32>) -> bool {
 		self.count.map_or(false, |count| given_count.unwrap_or(0) > count)
 	}
 
-	//  Returns true if `given_size` exhausts `self.size`.
+	///  Returns true if `given_size` exhausts `self.size`.
 	pub fn size_exhausted(self, given_size: Option<u32>) -> bool {
-		self.size.map_or(false, |count| given_size.unwrap_or(0) > count)
+		self.size.map_or(false, |size| given_size.unwrap_or(0) > size)
 	}
 
-	// Returns true if `given_size` or `given_count` exhausts `self.size` or `self_count`
-	// respectively.
+	/// Returns true if `given_size` or `given_count` exhausts `self.size` or `self_count`
+	/// respectively.
 	pub fn exhausted(self, given_size: Option<u32>, given_count: Option<u32>) -> bool {
 		self.count_exhausted(given_count) || self.size_exhausted(given_size)
 	}
 }
 
-impl PartialEq for ElectionBounds {
+impl PartialEq for DataProviderBounds {
 	fn eq(&self, other: &Self) -> bool {
-		self.count == other.count || self.size == self.size
+		self.count == other.count && self.size == self.size
 	}
 }
 
-impl PartialOrd for ElectionBounds {
+impl PartialOrd for DataProviderBounds {
 	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
 		Some(self.cmp(other))
 	}
 }
 
-impl Ord for ElectionBounds {
+// TODO(gpestana): is this correct?
+impl Ord for DataProviderBounds {
 	fn cmp(&self, other: &Self) -> std::cmp::Ordering {
 		if self.count == other.count {
 			self.size.cmp(&other.size)
@@ -732,37 +727,122 @@ impl Ord for ElectionBounds {
 	}
 }
 
+/// The limits of an election result. The bounds are defined over the count of element of the
+/// election (voters or targets) or the overall datastructure size.
+///
+/// Ordering: when comparing two instances of `ElectionBounds`, the `count` has priority over the
+/// `size`, ie. if `A.count > B.count`, then `A > B` regardless of their relative `size`.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone)]
+pub struct ElectionBounds {
+	pub voters: DataProviderBounds,
+	pub targets: DataProviderBounds,
+}
+
 /// Utility builder for [`ElectionBounds`].
 ///
 /// The main purpose of this is to prevent mixing the order of similarly typed arguments (e.g. u32
 /// size and count).
 #[derive(Copy, Clone)]
 pub struct ElectionBoundsBuilder {
-	count: Option<u32>,
-	size: Option<u32>,
+	voters: Option<DataProviderBounds>,
+	targets: Option<DataProviderBounds>,
 }
 
 impl ElectionBoundsBuilder {
 	/// Returns a new election bounds builder
 	pub fn new() -> Self {
-		ElectionBoundsBuilder { count: None, size: None }
+		ElectionBoundsBuilder { voters: None, targets: None }
 	}
 
-	/// Set the count of the snapshot.
-	pub fn count(mut self, count: Option<u32>) -> Self {
-		self.count = count;
+	/// Returns a new election bounds builder from an instance of `ElectionBounds`.
+	pub fn from(bounds: ElectionBounds) -> Self {
+		ElectionBoundsBuilder { voters: Some(bounds.voters), targets: Some(bounds.targets) }
+	}
+
+	// Sets the voters count bounds.
+	pub fn voters_count(mut self, count: Option<u32>) -> Self {
+		self.voters =
+			self.voters
+				.map_or(Some(DataProviderBounds { count, size: None }), |mut bounds| {
+					bounds.count = count;
+					Some(bounds)
+				});
 		self
 	}
 
-	/// Set the size of the snapshot.
-	pub fn size(mut self, size: Option<u32>) -> Self {
-		self.size = size;
+	// Sets the voters size bounds.
+	pub fn voters_size(mut self, size: Option<u32>) -> Self {
+		self.voters =
+			self.voters
+				.map_or(Some(DataProviderBounds { count: None, size }), |mut bounds| {
+					bounds.size = size;
+					Some(bounds)
+				});
+		self
+	}
+
+	// Sets the targets count bounds.
+	pub fn targets_count(mut self, count: Option<u32>) -> Self {
+		self.targets =
+			self.targets
+				.map_or(Some(DataProviderBounds { count, size: None }), |mut bounds| {
+					bounds.count = count;
+					Some(bounds)
+				});
+		self
+	}
+
+	// Sets the targets size bounds.
+	pub fn targets_size(mut self, size: Option<u32>) -> Self {
+		self.targets =
+			self.targets
+				.map_or(Some(DataProviderBounds { count: None, size }), |mut bounds| {
+					bounds.size = size;
+					Some(bounds)
+				});
+		self
+	}
+
+	/// Set the voters bounds.
+	pub fn voters(mut self, bounds: Option<DataProviderBounds>) -> Self {
+		self.voters = bounds;
+		self
+	}
+
+	/// Set the targets bounds.
+	pub fn targets(mut self, bounds: Option<DataProviderBounds>) -> Self {
+		self.targets = bounds;
+		self
+	}
+
+	/// Caps the maximum number of voters.
+	pub fn max_voters(mut self, voters: DataProviderBounds) -> Self {
+		self.voters = self.voters.map_or(None, |v| {
+			Some(DataProviderBounds {
+				count: v.count.max(voters.count),
+				size: v.size.max(voters.size),
+			})
+		});
+		self
+	}
+
+	/// Caps the maximum number of targets.
+	pub fn max_targets(mut self, targets: DataProviderBounds) -> Self {
+		self.targets = self.targets.map_or(None, |t| {
+			Some(DataProviderBounds {
+				count: t.count.max(targets.count),
+				size: t.size.max(targets.size),
+			})
+		});
 		self
 	}
 
 	/// Returns an instance of `ElectionBounds` from the current state.
 	pub fn build(self) -> ElectionBounds {
-		ElectionBounds { count: self.count, size: self.size }
+		ElectionBounds {
+			voters: self.voters.unwrap_or_default(),
+			targets: self.targets.unwrap_or_default(),
+		}
 	}
 }
 

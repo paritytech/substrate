@@ -20,7 +20,7 @@ use crate::{self as multi_phase, unsigned::MinerConfig};
 use frame_election_provider_support::{
 	data_provider,
 	onchain::{self},
-	ElectionBounds, ElectionDataProvider, NposSolution, SequentialPhragmen,
+	DataProviderBounds, ElectionBounds, ElectionDataProvider, NposSolution, SequentialPhragmen,
 };
 pub use frame_support::{assert_noop, assert_ok, pallet_prelude::GetDefault};
 use frame_support::{
@@ -298,8 +298,7 @@ parameter_types! {
 	pub static MaxElectingVoters: VoterIndex = u32::max_value();
 	pub static MaxElectableTargets: TargetIndex = TargetIndex::max_value();
 	pub static MaxWinners: u32 = 200;
-	pub static VotersBounds: ElectionBounds = ElectionBounds::new_unbounded();
-	pub static TargetsBounds: ElectionBounds = ElectionBounds::new_unbounded();
+	pub static ElectionsBounds: ElectionBounds = ElectionBoundsBuilder::new().build();
 
 	pub static EpochLength: u64 = 30;
 	pub static OnChainFallback: bool = true;
@@ -312,8 +311,7 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type DataProvider = StakingMock;
 	type WeightInfo = ();
 	type MaxWinners = MaxWinners;
-	type VotersBounds = VotersBounds;
-	type TargetsBounds = TargetsBounds;
+	type ElectionBounds = ElectionsBounds;
 }
 
 pub struct MockFallback;
@@ -327,8 +325,8 @@ impl ElectionProviderBase for MockFallback {
 
 impl InstantElectionProvider for MockFallback {
 	fn instant_elect(
-		voters_bounds: ElectionBounds,
-		targets_bounds: ElectionBounds,
+		voters_bounds: DataProviderBounds,
+		targets_bounds: DataProviderBounds,
 	) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		if OnChainFallback::get() {
 			onchain::OnChainExecution::<OnChainSeqPhragmen>::instant_elect(
@@ -410,8 +408,7 @@ impl crate::Config for Runtime {
 	type MaxWinners = MaxWinners;
 	type MinerConfig = Self;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
-	type VotersBounds = VotersBounds;
-	type TargetsBounds = TargetsBounds;
+	type ElectionBounds = ElectionsBounds;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime
@@ -439,7 +436,7 @@ impl ElectionDataProvider for StakingMock {
 	type BlockNumber = u64;
 	type MaxVotesPerVoter = MaxNominations;
 
-	fn electable_targets(bounds: ElectionBounds) -> data_provider::Result<Vec<AccountId>> {
+	fn electable_targets(bounds: DataProviderBounds) -> data_provider::Result<Vec<AccountId>> {
 		let targets = Targets::get();
 
 		if !DataProviderAllowBadData::get() &&
@@ -451,7 +448,7 @@ impl ElectionDataProvider for StakingMock {
 		Ok(targets)
 	}
 
-	fn electing_voters(bounds: ElectionBounds) -> data_provider::Result<Vec<VoterOf<Runtime>>> {
+	fn electing_voters(bounds: DataProviderBounds) -> data_provider::Result<Vec<VoterOf<Runtime>>> {
 		let mut voters = Voters::get();
 
 		if !DataProviderAllowBadData::get() {

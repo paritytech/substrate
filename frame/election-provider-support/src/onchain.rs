@@ -20,8 +20,9 @@
 //! careful when using it onchain.
 
 use crate::{
-	BoundedSupportsOf, Debug, ElectionBounds, ElectionDataProvider, ElectionProvider,
-	ElectionProviderBase, InstantElectionProvider, NposSolver, WeightInfo,
+	BoundedSupportsOf, DataProviderBounds, Debug, ElectionBounds, ElectionBoundsBuilder,
+	ElectionDataProvider, ElectionProvider, ElectionProviderBase, InstantElectionProvider,
+	NposSolver, WeightInfo,
 };
 use frame_support::{dispatch::DispatchClass, traits::Get};
 use sp_npos_elections::{
@@ -52,8 +53,8 @@ impl From<sp_npos_elections::Error> for Error {
 /// This implements both `ElectionProvider` and `InstantElectionProvider`.
 ///
 /// This type has some utilities to make it safe. Nonetheless, it should be used with utmost care. A
-/// thoughtful value must be set as [`Config::VotersBound`] and [`Config::TargetsBound`] to ensure
-/// the size of the input is sensible.
+/// thoughtful value must be set as [`Config::ElectionBounds`] to ensure the size of the input is
+/// sensible.
 pub struct OnChainExecution<T: Config>(PhantomData<T>);
 
 #[deprecated(note = "use OnChainExecution, which is bounded by default")]
@@ -85,13 +86,9 @@ pub trait Config {
 	/// always be more than `DataProvider::desired_target`.
 	type MaxWinners: Get<u32>;
 
-	/// Bounds the number of voters, when calling into [`Config::DataProvider`]. It might be
-	/// overwritten in the `InstantElectionProvider` impl.
-	type VotersBounds: Get<ElectionBounds>;
-
-	/// Bounds the number of targets, when calling into [`Config::DataProvider`]. It might be
-	/// overwritten in the `InstantElectionProvider` impl.
-	type TargetsBounds: Get<ElectionBounds>;
+	/// Elections bounds, to use when calling into
+	/// [`Config::DataProvider`]. It might be overwritten in the `InstantElectionProvider` impl.
+	type ElectionBounds: Get<ElectionBounds>;
 }
 
 /// Same as `BoundedSupportsOf` but for `onchain::Config`.
@@ -101,11 +98,11 @@ pub type OnChainBoundedSupportsOf<E> = BoundedSupports<
 >;
 
 fn elect_with_input_bounds<T: Config>(
-	voter_bounds: ElectionBounds,
-	target_bounds: ElectionBounds,
+	bounds: ElectionBounds,
 ) -> Result<OnChainBoundedSupportsOf<T>, Error> {
-	let voters = T::DataProvider::electing_voters(voter_bounds).map_err(Error::DataProvider)?;
-	let targets = T::DataProvider::electable_targets(target_bounds).map_err(Error::DataProvider)?;
+	let voters = T::DataProvider::electing_voters(bounds.voters).map_err(Error::DataProvider)?;
+	let targets =
+		T::DataProvider::electable_targets(bounds.targets).map_err(Error::DataProvider)?;
 	let desired_targets = T::DataProvider::desired_targets().map_err(Error::DataProvider)?;
 
 	if desired_targets > T::MaxWinners::get() {
@@ -158,13 +155,14 @@ impl<T: Config> ElectionProviderBase for OnChainExecution<T> {
 
 impl<T: Config> InstantElectionProvider for OnChainExecution<T> {
 	fn instant_elect(
-		voters_bounds: ElectionBounds,
-		targets_bounds: ElectionBounds,
+		voters_bounds: DataProviderBounds,
+		targets_bounds: DataProviderBounds,
 	) -> Result<BoundedSupportsOf<Self>, Self::Error> {
-		elect_with_input_bounds::<T>(
-			T::VotersBounds::get().min(voters_bounds),
-			T::TargetsBounds::get().min(targets_bounds),
-		)
+		let elections_bounds = ElectionBoundsBuilder::from(T::ElectionBounds::get())
+			.max_voters(voters_bounds)
+			.max_targets(targets_bounds)
+			.build();
+		elect_with_input_bounds::<T>(elections_bounds)
 	}
 }
 
@@ -174,7 +172,8 @@ impl<T: Config> ElectionProvider for OnChainExecution<T> {
 	}
 
 	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
-		elect_with_input_bounds::<T>(T::VotersBounds::get(), T::TargetsBounds::get())
+		let election_bounds = ElectionBoundsBuilder::from(T::ElectionBounds::get()).build();
+		elect_with_input_bounds::<T>(election_bounds)
 	}
 }
 
@@ -182,7 +181,7 @@ impl<T: Config> ElectionProvider for OnChainExecution<T> {
 mod tests {
 	use super::*;
 	use crate::{ElectionProvider, PhragMMS, SequentialPhragmen};
-	use frame_support::{assert_noop, parameter_types, traits::ConstU32};
+	use frame_support::{assert_noop, parameter_types};
 	use sp_npos_elections::Support;
 	use sp_runtime::Perbill;
 	type AccountId = u64;
@@ -235,6 +234,7 @@ mod tests {
 	parameter_types! {
 		pub static MaxWinners: u32 = 10;
 		pub static DesiredTargets: u32 = 2;
+		pub static ElectionBounds: crate::ElectionBounds = ElectionBoundsBuilder::new().voters_count(Some(600)).targets_count(Some(400)).build();
 	}
 
 	impl Config for PhragmenParams {
@@ -243,8 +243,7 @@ mod tests {
 		type DataProvider = mock_data_provider::DataProvider;
 		type WeightInfo = ();
 		type MaxWinners = MaxWinners;
-		type VotersBound = ConstU32<600>;
-		type TargetsBound = ConstU32<400>;
+		type ElectionBounds = ElectionBounds;
 	}
 
 	impl Config for PhragMMSParams {
@@ -253,8 +252,7 @@ mod tests {
 		type DataProvider = mock_data_provider::DataProvider;
 		type WeightInfo = ();
 		type MaxWinners = MaxWinners;
-		type VotersBound = ConstU32<600>;
-		type TargetsBound = ConstU32<400>;
+		type ElectionBounds = ElectionBounds;
 	}
 
 	mod mock_data_provider {
@@ -268,7 +266,7 @@ mod tests {
 			type AccountId = AccountId;
 			type BlockNumber = BlockNumber;
 			type MaxVotesPerVoter = ConstU32<2>;
-			fn electing_voters(_: ElectionBounds) -> data_provider::Result<Vec<VoterOf<Self>>> {
+			fn electing_voters(_: DataProviderBounds) -> data_provider::Result<Vec<VoterOf<Self>>> {
 				Ok(vec![
 					(1, 10, bounded_vec![10, 20]),
 					(2, 20, bounded_vec![30, 20]),
@@ -276,7 +274,7 @@ mod tests {
 				])
 			}
 
-			fn electable_targets(_: ElectionBounds) -> data_provider::Result<Vec<AccountId>> {
+			fn electable_targets(_: DataProviderBounds) -> data_provider::Result<Vec<AccountId>> {
 				Ok(vec![10, 20, 30])
 			}
 

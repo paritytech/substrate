@@ -18,8 +18,8 @@
 //! Implementations for the Staking FRAME Pallet.
 
 use frame_election_provider_support::{
-	data_provider, BoundedSupportsOf, ElectionBounds, ElectionDataProvider, ElectionProvider,
-	ScoreProvider, SortedListProvider, VoteWeight, VoterOf,
+	data_provider, BoundedSupportsOf, DataProviderBounds, ElectionBounds, ElectionDataProvider,
+	ElectionProvider, ScoreProvider, SortedListProvider, VoteWeight, VoterOf,
 };
 use frame_support::{
 	dispatch::WithPostDispatchInfo,
@@ -748,7 +748,7 @@ impl<T: Config> Pallet<T> {
 	/// nominators.
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
-	pub fn get_npos_voters(voter_bounds: ElectionBounds) -> Vec<VoterOf<Self>> {
+	pub fn get_npos_voters(voter_bounds: DataProviderBounds) -> Vec<VoterOf<Self>> {
 		let mut voters_size_tracker: ElectionSizeTracker<T::AccountId> = ElectionSizeTracker::new();
 
 		let max_allowed_len = {
@@ -858,7 +858,7 @@ impl<T: Config> Pallet<T> {
 	/// Get the targets for an upcoming npos election.
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
-	pub fn get_npos_targets(target_bounds: ElectionBounds) -> Vec<T::AccountId> {
+	pub fn get_npos_targets(target_bounds: DataProviderBounds) -> Vec<T::AccountId> {
 		let max_allowed_len = {
 			let all_target_count = T::TargetList::count();
 			target_bounds.count.unwrap_or(all_target_count).min(all_target_count)
@@ -1003,7 +1003,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		Ok(Self::validator_count())
 	}
 
-	fn electing_voters(bounds: ElectionBounds) -> data_provider::Result<Vec<VoterOf<Self>>> {
+	fn electing_voters(bounds: DataProviderBounds) -> data_provider::Result<Vec<VoterOf<Self>>> {
 		// This can never fail -- if `maybe_max_len` is `Some(_)` we handle it.
 		let voters = Self::get_npos_voters(bounds);
 
@@ -1014,7 +1014,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		Ok(voters)
 	}
 
-	fn electable_targets(bounds: ElectionBounds) -> data_provider::Result<Vec<T::AccountId>> {
+	fn electable_targets(bounds: DataProviderBounds) -> data_provider::Result<Vec<T::AccountId>> {
 		let target_count = T::TargetList::count();
 
 		// We can't handle this case yet -- return an error.

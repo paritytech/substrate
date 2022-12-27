@@ -671,13 +671,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxWinners: Get<u32>;
 
-		// The limits of targets to include in the snapshot per block.
-		#[pallet::constant]
-		type TargetsBounds: Get<ElectionBounds>;
-
-		// The limits of voters to include in the snapshot per block.
-		#[pallet::constant]
-		type VotersBounds: Get<ElectionBounds>;
+		type ElectionBounds: Get<ElectionBounds>;
 
 		/// Handler for the slashed deposits.
 		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -1086,13 +1080,18 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 			ensure!(Self::current_phase().is_emergency(), <Error<T>>::CallNotAllowed);
-			let voters_bounds = ElectionBoundsBuilder::new().count(maybe_max_voters).build();
-			let targets_bounds = ElectionBoundsBuilder::new().count(maybe_max_voters).build();
-			let supports = T::GovernanceFallback::instant_elect(voters_bounds, targets_bounds)
-				.map_err(|e| {
-					log!(error, "GovernanceFallback failed: {:?}", e);
-					Error::<T>::FallbackFailed
-				})?;
+			let election_bounds = ElectionBoundsBuilder::new()
+				.voters_count(maybe_max_voters)
+				.targets_count(maybe_max_targets)
+				.build();
+			let supports = T::GovernanceFallback::instant_elect(
+				election_bounds.voters,
+				election_bounds.targets,
+			)
+			.map_err(|e| {
+				log!(error, "GovernanceFallback failed: {:?}", e);
+				Error::<T>::FallbackFailed
+			})?;
 
 			// transform BoundedVec<_, T::GovernanceFallback::MaxWinners> into
 			// `BoundedVec<_, T::MaxWinners>`
@@ -1408,18 +1407,16 @@ impl<T: Config> Pallet<T> {
 	/// Extracted for easier weight calculation.
 	fn create_snapshot_external(
 	) -> Result<(Vec<T::AccountId>, Vec<VoterOf<T>>, u32), ElectionError<T>> {
-		// TODO: do we need T::MaxElect* limits now or can we rely on T::*Bounds?
 		let target_limit = T::MaxElectableTargets::get().saturated_into::<usize>();
 		let voter_limit = T::MaxElectingVoters::get().saturated_into::<usize>();
 
-		let targets_bounds = T::TargetsBounds::get();
-		let voters_bounds = T::VotersBounds::get();
+		let election_bounds = T::ElectionBounds::get();
 
-		let targets = T::DataProvider::electable_targets(targets_bounds)
+		let targets = T::DataProvider::electable_targets(election_bounds.targets)
 			.map_err(ElectionError::DataProvider)?;
 
-		let voters =
-			T::DataProvider::electing_voters(voters_bounds).map_err(ElectionError::DataProvider)?;
+		let voters = T::DataProvider::electing_voters(election_bounds.voters)
+			.map_err(ElectionError::DataProvider)?;
 
 		if targets.len() > target_limit || voters.len() > voter_limit {
 			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
@@ -1601,8 +1598,8 @@ impl<T: Config> Pallet<T> {
 			.ok_or(ElectionError::<T>::NothingQueued)
 			.or_else(|_| {
 				T::Fallback::instant_elect(
-					ElectionBounds::new_unbounded(),
-					ElectionBounds::new_unbounded(),
+					ElectionBoundsBuilder::new().build().voters,
+					ElectionBoundsBuilder::new().build().targets,
 				)
 				.map_err(|fe| ElectionError::Fallback(fe))
 				.and_then(|supports| {
