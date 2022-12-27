@@ -729,9 +729,9 @@ mod ensure {
 	pub trait EnsureInto<T: PartialOrd + Zero + Copy>:
 		TryInto<T> + PartialOrd + Zero + Copy
 	{
-		/// Performs the conversion returning an `ArithmeticError` if fails.
+		/// Performs the conversion returning an [`ArithmeticError`] if fails.
 		///
-		/// Similar to [`TryInto::try_into()`] but returning an `ArithmeticError` error
+		/// Similar to [`TryInto::try_into()`] but returning an [`ArithmeticError`] error
 		///
 		/// ```
 		/// use sp_arithmetic::{traits::EnsureInto, ArithmeticError};
