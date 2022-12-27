@@ -373,7 +373,8 @@ mod ensure {
 		}
 	}
 
-	/// Performs subtraction that returns [`ArithmeticError`] instead of wrapping around on underflow.
+	/// Performs subtraction that returns [`ArithmeticError`] instead of wrapping around on
+	/// underflow.
 	pub trait EnsureSub: CheckedSub + PartialOrd + Zero + Copy {
 		/// Subtracts two numbers, checking for overflow.
 		///
@@ -405,7 +406,7 @@ mod ensure {
 	/// Performs multiplication that returns [`ArithmeticError`] instead of wrapping around on
 	/// overflow.
 	pub trait EnsureMul: CheckedMul + PartialOrd + Zero + Copy {
-		/// Multiplies two numbers, checking for overflow. 
+		/// Multiplies two numbers, checking for overflow.
 		///
 		/// If it fails, [`ArithmeticError`] is returned.
 		///
