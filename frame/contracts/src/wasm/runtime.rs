@@ -2380,11 +2380,11 @@ pub mod env {
 		str_len: u32,
 	) -> Result<ReturnCode, TrapReason> {
 		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
-		if ctx.ext.append_debug_buffer("")? {
+		if ctx.ext.append_debug_buffer("") {
 			let data = ctx.read_sandbox_memory(memory, str_ptr, str_len)?;
 			let msg =
 				core::str::from_utf8(&data).map_err(|_| <Error<E::T>>::DebugMessageInvalidUTF8)?;
-			ctx.ext.append_debug_buffer(msg)?;
+			ctx.ext.append_debug_buffer(msg);
 			return Ok(ReturnCode::Success)
 		}
 		Ok(ReturnCode::LoggingDisabled)
