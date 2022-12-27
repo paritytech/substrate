@@ -563,7 +563,7 @@ mod ensure {
 		}
 	}
 
-	/// Performs self division that returns `ArithmeticError` instead of wrapping around on
+	/// Performs self division that returns [`ArithmeticError`] instead of wrapping around on
 	/// overflow.
 	pub trait EnsureDivAssign: EnsureDiv {
 		/// Divides two numbers overwriting the left hand one, checking for overflow.
