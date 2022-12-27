@@ -501,7 +501,7 @@ mod ensure {
 		}
 	}
 
-	/// Performs self subtraction that returns `ArithmeticError` instead of wrapping around on
+	/// Performs self subtraction that returns [`ArithmeticError`] instead of wrapping around on
 	/// underflow.
 	pub trait EnsureSubAssign: EnsureSub {
 		/// Subtracts two numbers overwriting the left hand one, checking for overflow.
