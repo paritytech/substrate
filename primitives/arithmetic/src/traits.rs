@@ -409,7 +409,7 @@ mod ensure {
 		///
 		/// If it fails, [`ArithmeticError`] is returned.
 		///
-		/// Similar to [`CheckedMul::checked_mul()`] but returning an `ArithmeticError` error
+		/// Similar to [`CheckedMul::checked_mul()`] but returning an [`ArithmeticError`] error.
 		///
 		/// ```
 		/// use sp_arithmetic::{traits::EnsureMul, ArithmeticError};
