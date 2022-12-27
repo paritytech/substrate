@@ -529,8 +529,8 @@ pub mod v4 {
 			ensure!(
 				BondedPools::<T>::iter().all(|(_, inner)| inner.commission.current.is_none() &&
 					inner.commission.max.is_none() &&
-					inner.commission.last_updated.is_none() &&
-					inner.commission.change_rate.is_none()),
+					inner.commission.change_rate.is_none()) &&
+					inner.commission.throttle_from.is_none(),
 				"a commission value has been incorrectly set"
 			);
 			ensure!(Pallet::<T>::on_chain_storage_version() == 4, "wrong storage version");

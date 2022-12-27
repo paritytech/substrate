@@ -693,12 +693,12 @@ frame_benchmarking::benchmarks! {
 	verify {
 		assert_eq!(BondedPools::<T>::get(1).unwrap().commission, Commission {
 			current: Some((Perbill::from_percent(20), depositor)),
-			last_updated: Some(1u32.into()),
 			max: Some(Perbill::from_percent(50)),
 			change_rate: Some(CommissionChangeRate {
 					max_increase: Perbill::from_percent(20),
 					min_delay: 0u32.into()
 			}),
+			throttle_from: Some(1u32.into()),
 		});
 	}
 
@@ -710,9 +710,9 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(
 			BondedPools::<T>::get(1).unwrap().commission, Commission {
 			current: Some((Perbill::from_percent(50), depositor)),
-			last_updated: Some(0u32.into()),
 			max: Some(Perbill::from_percent(50)),
 			change_rate: None,
+			throttle_from: Some(0u32.into()),
 		});
 	}
 
@@ -727,12 +727,12 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(
 			BondedPools::<T>::get(1).unwrap().commission, Commission {
 			current: None,
-			last_updated: None,
 			max: None,
 			change_rate: Some(CommissionChangeRate {
 				max_increase: Perbill::from_percent(50),
 				min_delay: 1000u32.into(),
 			}),
+			throttle_from: None,
 		});
 	}
 

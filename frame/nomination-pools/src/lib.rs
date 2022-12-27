@@ -589,9 +589,9 @@ pub struct PoolRoles<AccountId> {
 /// values are `None`. Pool `root` can also set `max` and `change_rate` configurations before
 /// setting an initial `current` commission.
 ///
-/// `current` is a tuple of the commission percentage and payee of commission. `last_updated` keeps
-/// track of  which block `current` was last updated. A `max` commission value can only be decreased
-/// after the initial value is set, to prevent commission from repeatedly increasing.
+/// `current` is a tuple of the commission percentage and payee of commission. `throttle_from`
+/// keeps track of  which block `current` was last updated. A `max` commission value can only be
+/// decreased after the initial value is set, to prevent commission from repeatedly increasing.
 ///
 /// An optional commission `change_rate` allows the pool to set strict limits to how much commission
 /// can change in each update, and how often updates can take place. If a `change_rate` is set
@@ -605,14 +605,15 @@ pub struct PoolRoles<AccountId> {
 pub struct Commission<T: Config> {
 	/// Optional commission rate of the pool along with the account commission is paid to.
 	pub current: Option<(Perbill, T::AccountId)>,
-	/// The block the previous commission update took place.
-	pub last_updated: Option<T::BlockNumber>,
 	/// Optional maximum commission that can be set by the pool `root`. Once set, this value can
 	/// only be updated to a decreased value.
 	pub max: Option<Perbill>,
 	/// Optional configuration around how often commission can be updated, and when the last
 	/// commission update took place.
 	pub change_rate: Option<CommissionChangeRate<T::BlockNumber>>,
+	/// The block throttling should be checked from. This value will be updated on all commission
+	/// updates and when setting an initial `change_rate`.
+	pub throttle_from: Option<T::BlockNumber>,
 }
 
 impl<T: Config> Commission<T> {
@@ -629,10 +630,11 @@ impl<T: Config> Commission<T> {
 			let commission_as_percent =
 				self.current.as_ref().map(|(x, _)| *x).unwrap_or(Perbill::zero());
 
-			// factor previously updated block into whether user is throttled.
-			if self.last_updated.map_or(
-				// if no `last_updated` is set, throttled if the attempted increase in
-				// commission is greater than `max_increase`.
+			if self.throttle_from.map_or(
+				// if no `throttle_from` exists, commission update is throttled via `max_increase`.
+				//
+				// Note: defensive only. `throttle_from` should always exist where `change_rate`
+				// has already been set, so this scenario should never happen.
 				(*to).saturating_sub(commission_as_percent) > t.max_increase,
 				|p| {
 					// `min_delay` blocks must have been surpassed since last update.
@@ -648,7 +650,7 @@ impl<T: Config> Commission<T> {
 					// the total durations passed since the last commission update.
 					let blocks_passed = <frame_system::Pallet<T>>::block_number().saturating_sub(p);
 
-					// calculate intervals passed since last `last_updated`
+					// calculate intervals passed since last `throttle_from`.
 					let intervals_passed = if blocks_passed == Zero::zero() {
 						Zero::zero()
 					} else {
@@ -704,7 +706,7 @@ impl<T: Config> Commission<T> {
 	/// return a dispatch error.
 	///
 	/// If `current.0` is larger than an updated max commission value, then `current.0` will also be
-	/// updated to the new maximum. This will also register a `last_updated` update to the
+	/// updated to the new maximum. This will also register a `throttle_from` update to the
 	/// commission.
 	fn maybe_update_max(&mut self, new_max: Perbill) -> DispatchResult {
 		if let Some(old) = self.max.as_mut() {
@@ -742,10 +744,10 @@ impl<T: Config> Commission<T> {
 	) -> DispatchResult {
 		ensure!(&self.less_restrictive(&change_rate), Error::<T>::CommissionChangeRateNotAllowed);
 
-		// if this is the first time a change rate is being set, update `last_updated` to the current
-		// block so we can check throttling from this initial block.
+		// if this is the first time a change rate is being set, update `throttle_from` to the
+		// current block so we can check throttling from this initial block.
 		if self.change_rate.is_none() {
-			self.last_updated = Some(<frame_system::Pallet<T>>::block_number());
+			self.throttle_from = Some(<frame_system::Pallet<T>>::block_number());
 		}
 
 		self.change_rate = Some(change_rate);
@@ -770,9 +772,9 @@ impl<T: Config> Commission<T> {
 		})
 	}
 
-	/// Updates a commission's `last_updated` field.
+	/// Updates a commission's `throttle_from` field.
 	fn register_update(&mut self, now: T::BlockNumber) {
-		self.last_updated = Some(now);
+		self.throttle_from = Some(now);
 	}
 
 	/// Returns `true` if `change_rate` is less restrictive than the currently set change rate, if

@@ -5468,12 +5468,12 @@ mod commission {
 				BondedPool::<Runtime>::get(1).unwrap().commission,
 				Commission {
 					current: Some((Perbill::from_percent(5), 900)),
-					last_updated: Some(1),
 					max: None,
 					change_rate: Some(CommissionChangeRate {
 						max_increase: Perbill::from_percent(1),
 						min_delay: 2_u64
-					})
+					}),
+					throttle_from: Some(1),
 				}
 			);
 
@@ -5491,7 +5491,7 @@ mod commission {
 			run_blocks(2);
 
 			// We now try to increase commission by 1%, and provide an initial payee. This should
-			// work, and set the `last_updated` field.
+			// work, and set the `throttle_from` field.
 			assert_ok!(Pools::set_commission(
 				RuntimeOrigin::signed(900),
 				1,
@@ -5501,18 +5501,18 @@ mod commission {
 				BondedPool::<Runtime>::get(1).unwrap().commission,
 				Commission {
 					current: Some((Perbill::from_percent(6), 900)),
-					last_updated: Some(3_u64),
 					max: None,
 					change_rate: Some(CommissionChangeRate {
 						max_increase: Perbill::from_percent(1),
 						min_delay: 2_u64
-					})
+					}),
+					throttle_from: Some(3_u64),
 				}
 			);
 
 			// Attempt to increase the commission an additional 1% (now 2%) again immediately. this
-			// will fail as `last_updated` is now the current block, and at least 2 blocks need to
-			// pass before we can set commission again.
+			// will fail as `throttle_from` is now the current block, and at least 2 blocks
+			// need to pass before we can set commission again.
 			assert_noop!(
 				Pools::set_commission(
 					RuntimeOrigin::signed(900),
@@ -5656,9 +5656,9 @@ mod commission {
 				BondedPools::<Runtime>::get(1).unwrap().commission,
 				Commission {
 					current: Some((Perbill::from_percent(50), 900)),
-					last_updated: Some(1),
 					max: Some(Perbill::from_percent(50)),
-					change_rate: None
+					change_rate: None,
+					throttle_from: Some(1),
 				}
 			);
 
@@ -5708,9 +5708,9 @@ mod commission {
 				BondedPools::<Runtime>::get(1).unwrap().commission,
 				Commission {
 					current: Some((Perbill::from_percent(25), 900)),
-					last_updated: Some(1),
 					max: Some(Perbill::from_percent(25)),
-					change_rate: None
+					change_rate: None,
+					throttle_from: Some(1),
 				}
 			);
 		})
@@ -5815,6 +5815,24 @@ mod commission {
 				1,
 				CommissionChangeRate { max_increase: Perbill::from_percent(1), min_delay: 30_u64 }
 			));
+
+			// sanity check: the current pool Commission.
+			assert_eq!(
+				BondedPools::<Runtime>::get(1).unwrap().commission,
+				Commission {
+					current: None,
+					max: None,
+					change_rate: Some(CommissionChangeRate {
+						max_increase: Perbill::from_percent(1),
+						min_delay: 30
+					}),
+					throttle_from: Some(1),
+				}
+			);
+
+			// run `min_delay` blocks so commission can be set again.
+			run_blocks(30);
+
 			// pre-requisite: set the commission to 1%.
 			assert_ok!(Pools::set_commission(
 				RuntimeOrigin::signed(900),
