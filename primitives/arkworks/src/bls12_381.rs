@@ -85,7 +85,7 @@ pub fn multi_miller_loop(a_vec: Vec<Vec<u8>>, b_vec: Vec<Vec<u8>>) -> Vec<u8> {
 		.iter()
 		.map(|b| {
 			let cursor = Cursor::new(b);
-			<Bls12_381 as Pairing>::G2Affine::deserialize_with_mode(
+			<Bls12_381 as Pairing>::G2Prepared::deserialize_with_mode(
 				cursor,
 				Compress::Yes,
 				Validate::No,

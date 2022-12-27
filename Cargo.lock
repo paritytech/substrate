@@ -193,7 +193,7 @@ version = "0.4.0-alpha.5"
 source = "git+https://github.com/arkworks-rs/algebra/?branch=release-0.4#b1d61ef132d626d079417a5c77834861633f6a9a"
 dependencies = [
  "ark-ff",
- "ark-poly 0.4.0-alpha.5 (git+https://github.com/arkworks-rs/algebra/?branch=release-0.4)",
+ "ark-poly",
  "ark-serialize",
  "ark-std 0.4.0-alpha",
  "derivative",
@@ -268,19 +268,6 @@ dependencies = [
 [[package]]
 name = "ark-poly"
 version = "0.4.0-alpha.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "318c5c9c77aaec90eddac48e4472b4d7802f861c0441eceaf814e56b39a41d60"
-dependencies = [
- "ark-ff",
- "ark-serialize",
- "ark-std 0.4.0-alpha",
- "derivative",
- "hashbrown 0.13.1",
-]
-
-[[package]]
-name = "ark-poly"
-version = "0.4.0-alpha.5"
 source = "git+https://github.com/arkworks-rs/algebra/?branch=release-0.4#b1d61ef132d626d079417a5c77834861633f6a9a"
 dependencies = [
  "ark-ff",
@@ -332,30 +319,13 @@ dependencies = [
 [[package]]
 name = "ark-sub-bls12-381"
 version = "0.4.0"
-source = "git+https://github.com/achimcc/ark-sub-curves?branch=fork-models#bcdca489eed33869e626832d99084aeff95f7db8"
+source = "git+https://github.com/achimcc/ark-sub-curves#2f9e5dbbf97680e9e041dd2978f3b3653e80eb29"
 dependencies = [
+ "ark-bls12-381",
  "ark-ec",
  "ark-ff",
  "ark-serialize",
  "ark-std 0.3.0",
- "ark-sub-models",
-]
-
-[[package]]
-name = "ark-sub-models"
-version = "0.4.0-alpha.5"
-source = "git+https://github.com/achimcc/ark-sub-curves?branch=fork-models#bcdca489eed33869e626832d99084aeff95f7db8"
-dependencies = [
- "ark-ec",
- "ark-ff",
- "ark-poly 0.4.0-alpha.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "ark-serialize",
- "ark-std 0.4.0-alpha",
- "derivative",
- "hashbrown 0.13.1",
- "itertools",
- "num-traits",
- "zeroize",
 ]
 
 [[package]]
@@ -11995,7 +11965,3 @@ dependencies = [
  "cc",
  "libc",
 ]
-
-[[patch.unused]]
-name = "ark-sub-bls12-381"
-version = "0.4.0"

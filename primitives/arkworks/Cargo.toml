@@ -26,7 +26,7 @@ sp-std = { version = "5.0.0", default-features = false, path = "../std" }
 better_any = { version = "0.2.0" }
 
 [dev-dependencies]
-ark-sub-bls12-381 = { git = "https://github.com/achimcc/ark-sub-curves", branch = "fork-models" }
+ark-sub-bls12-381 = { git = "https://github.com/achimcc/ark-sub-curves" }
 ark-algebra-test-templates = { git = "https://github.com/arkworks-rs/algebra", branch = "release-0.4", default-features = false }
 
 [features]

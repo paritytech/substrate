@@ -325,11 +325,11 @@ codegen-units = 1
 ark-serialize = { git = "https://github.com/arkworks-rs/algebra/", branch = "release-0.4"  }
 ark-ff = { git = "https://github.com/arkworks-rs/algebra/", branch = "release-0.4"  }
 ark-ec = { git = "https://github.com/arkworks-rs/algebra/", branch = "release-0.4"  }
+ark-poly = { git = "https://github.com/arkworks-rs/algebra/", branch = "release-0.4"  }
+ark-algebra-test-templates = { git = "https://github.com/arkworks-rs/algebra/", branch = "release-0.4"  }
 ark-std = { git = "https://github.com/arkworks-rs/std" }
 ark-bls12-381 = { git = "https://github.com/arkworks-rs/curves" }
 ark-bls12-377 = { git = "https://github.com/arkworks-rs/curves" }
 ark-bw6-761 = { git = "https://github.com/arkworks-rs/curves" }
 ark-ed-on-bls12-381 = { git = "https://github.com/arkworks-rs/curves" }
 ark-ed-on-bls12-377 = { git = "https://github.com/arkworks-rs/curves" }
-ark-sub-bls12-381 = { path = "../ark-sub-curves/ark_sub_bls12_381" }
-ark-algebra-test-templates = { git = "https://github.com/arkworks-rs/algebra/", branch = "release-0.4"  }
