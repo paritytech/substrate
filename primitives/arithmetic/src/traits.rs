@@ -696,7 +696,7 @@ mod ensure {
 
 	impl<T: FixedPointNumber> EnsureFixedPointNumber for T {}
 
-	/// Similar to [`TryFrom`] but returning an `ArithmeticError` error.
+	/// Similar to [`TryFrom`] but returning an [`ArithmeticError`] error.
 	pub trait EnsureFrom<T: PartialOrd + Zero + Copy>:
 		TryFrom<T> + PartialOrd + Zero + Copy
 	{
