@@ -438,7 +438,7 @@ mod ensure {
 		///
 		/// If it fails, [`ArithmeticError`] is returned.
 		///
-		/// Similar to [`CheckedDiv::checked_div()`] but returning an `ArithmeticError` error
+		/// Similar to [`CheckedDiv::checked_div()`] but returning an [`ArithmeticError`] error.
 		///
 		/// ```
 		/// use sp_arithmetic::{traits::EnsureDiv, ArithmeticError};
