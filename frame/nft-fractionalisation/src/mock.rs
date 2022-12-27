@@ -17,9 +17,11 @@
 
 //! Test environment for Nft fractionalisation pallet.
 
+use super::*;
 use crate as pallet_nft_fractionalisation;
+
 use frame_support::{
-	parameter_types,
+	construct_runtime, parameter_types,
 	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64},
 	PalletId,
 };
@@ -35,7 +37,7 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 // Configure a mock runtime to test the pallet.
-frame_support::construct_runtime!(
+construct_runtime!(
 	pub enum Test where
 		Block = Block,
 		NodeBlock = Block,
@@ -144,7 +146,7 @@ parameter_types! {
 	pub const NftFractionsPalletId: PalletId = PalletId(*b"fraction");
 }
 
-impl pallet_nft_fractionalisation::Config for Test {
+impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
 	type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
@@ -157,6 +159,10 @@ impl pallet_nft_fractionalisation::Config for Test {
 }
 
 // Build genesis storage according to the mock runtime.
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
+pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
+	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+
+	let mut ext = sp_io::TestExternalities::new(t);
+	ext.execute_with(|| System::set_block_number(1));
+	ext
 }

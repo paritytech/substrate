@@ -33,7 +33,7 @@ pub use types::*;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use crate::Details;
+	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::traits::One;
@@ -145,8 +145,12 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
+		/// Information about the fractionalised NFT can't be found.
 		DataNotFound,
+		/// The signing account has no permission to do the operation.
 		NoPermission,
+		/// NFT doesn't exist.
+		NftNotFound,
 	}
 
 	#[pallet::call]
@@ -164,7 +168,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let nft_owner =
-				T::Nfts::owner(&nft_collection_id, &nft_id).ok_or(Error::<T>::NoPermission)?;
+				T::Nfts::owner(&nft_collection_id, &nft_id).ok_or(Error::<T>::NftNotFound)?;
 			ensure!(nft_owner == who, Error::<T>::NoPermission);
 
 			let pallet_account = Self::get_pallet_account();
@@ -226,7 +230,7 @@ pub mod pallet {
 		///
 		/// This actually does computation. If you need to keep using it, then make sure you cache
 		/// the value and only call this once.
-		fn get_pallet_account() -> T::AccountId {
+		pub fn get_pallet_account() -> T::AccountId {
 			T::PalletId::get().into_account_truncating()
 		}
 

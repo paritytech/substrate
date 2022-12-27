@@ -17,19 +17,221 @@
 
 //! Tests for Nft fractionalisation pallet.
 
-use crate::{mock::*, Error};
-use frame_support::{assert_noop, assert_ok, traits::Currency};
+use crate::{mock::*, *};
+use frame_support::{
+	assert_noop, assert_ok,
+	traits::{fungibles::InspectEnumerable, Currency},
+};
+use pallet_nfts::CollectionConfig;
+use sp_runtime::{DispatchError, ModuleError};
+
+fn assets() -> Vec<u32> {
+	let mut s: Vec<_> = <<Test as Config>::Assets>::asset_ids().collect();
+	s.sort();
+	s
+}
+
+fn events() -> Vec<Event<Test>> {
+	let result = System::events()
+		.into_iter()
+		.map(|r| r.event)
+		.filter_map(|e| {
+			if let mock::RuntimeEvent::NftFractions(inner) = e {
+				Some(inner)
+			} else {
+				None
+			}
+		})
+		.collect();
+
+	System::reset_events();
+
+	result
+}
 
 #[test]
-fn address_is_set() {
+fn fractionalise_should_work() {
 	new_test_ext().execute_with(|| {
-		// Dispatch a signed extrinsic.
-		// assert_eq!(NftFractions::pallet_address(), None);
-		// assert_ok!(NftFractions::set_pallet_address(RuntimeOrigin::signed(1)));
-		// assert_eq!(NftFractions::pallet_address(), Some(1u64));
-		// assert_eq!(
-		// 	NftFractions::issuance(),
-		// 	Some(<Balances as Currency<_>>::total_issuance())
-		// )
+		let nft_collection_id = 0;
+		let nft_id = 0;
+		let asset_id = 0;
+		let fractions = 1000;
+		let pallet_account = NftFractions::get_pallet_account();
+
+		Balances::make_free_balance_be(&1, 100);
+		Balances::make_free_balance_be(&2, 100);
+		Balances::make_free_balance_be(&pallet_account, 100);
+
+		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), 1, CollectionConfig::default()));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), nft_collection_id, nft_id, 1, None));
+
+		assert_ok!(NftFractions::fractionalise(
+			RuntimeOrigin::signed(1),
+			nft_collection_id,
+			nft_id,
+			asset_id,
+			2,
+			fractions,
+		));
+		assert_eq!(assets(), vec![asset_id]);
+		assert_eq!(Assets::balance(asset_id, 2), fractions);
+
+		let details = NftToAsset::<Test>::get((&nft_collection_id, &nft_id)).unwrap();
+		assert_eq!(details.asset, asset_id);
+		assert_eq!(details.fractions, fractions);
+
+		assert!(events().contains(&Event::<Test>::NftFractionalised {
+			nft_collection: nft_collection_id,
+			nft: nft_id,
+			fractions,
+			asset: asset_id,
+			beneficiary: 2,
+		}));
+
+		let nft_id = nft_id + 1;
+		assert_noop!(
+			NftFractions::fractionalise(
+				RuntimeOrigin::signed(1),
+				nft_collection_id,
+				nft_id,
+				asset_id,
+				2,
+				fractions,
+			),
+			Error::<Test>::NftNotFound
+		);
+
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), nft_collection_id, nft_id, 2, None));
+		assert_noop!(
+			NftFractions::fractionalise(
+				RuntimeOrigin::signed(1),
+				nft_collection_id,
+				nft_id,
+				asset_id,
+				2,
+				fractions,
+			),
+			Error::<Test>::NoPermission
+		);
+	});
+}
+
+#[test]
+fn unfractionalise_should_work() {
+	new_test_ext().execute_with(|| {
+		let nft_collection_id = 0;
+		let nft_id = 0;
+		let asset_id = 0;
+		let fractions = 1000;
+		let pallet_account = NftFractions::get_pallet_account();
+
+		Balances::make_free_balance_be(&1, 100);
+		Balances::make_free_balance_be(&2, 100);
+		Balances::make_free_balance_be(&pallet_account, 100);
+
+		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), 1, CollectionConfig::default()));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), nft_collection_id, nft_id, 1, None));
+		assert_ok!(NftFractions::fractionalise(
+			RuntimeOrigin::signed(1),
+			nft_collection_id,
+			nft_id,
+			asset_id,
+			2,
+			fractions,
+		));
+
+		assert_noop!(
+			NftFractions::unfractionalise(
+				RuntimeOrigin::signed(2),
+				nft_collection_id + 1,
+				nft_id,
+				asset_id,
+				1,
+			),
+			Error::<Test>::DataNotFound
+		);
+		assert_noop!(
+			NftFractions::unfractionalise(
+				RuntimeOrigin::signed(2),
+				nft_collection_id,
+				nft_id,
+				asset_id + 1,
+				1,
+			),
+			Error::<Test>::DataNotFound
+		);
+
+		// can't un-fractionalise the asset I don't hold
+		assert_noop!(
+			NftFractions::unfractionalise(
+				RuntimeOrigin::signed(1),
+				nft_collection_id,
+				nft_id,
+				asset_id,
+				1,
+			),
+			DispatchError::Module(ModuleError {
+				index: 2,
+				error: [1, 0, 0, 0],
+				message: Some("NoAccount")
+			})
+		);
+
+		assert_ok!(NftFractions::unfractionalise(
+			RuntimeOrigin::signed(2),
+			nft_collection_id,
+			nft_id,
+			asset_id,
+			1,
+		));
+
+		assert_eq!(Assets::balance(asset_id, 2), 0);
+		assert_eq!(Nfts::owner(nft_collection_id, nft_id), Some(1));
+		assert!(!NftToAsset::<Test>::contains_key((&nft_collection_id, &nft_id)));
+
+		assert!(events().contains(&Event::<Test>::NftUnFractionalised {
+			nft_collection: nft_collection_id,
+			nft: nft_id,
+			asset: asset_id,
+			beneficiary: 1,
+		}));
+
+		// validate we need to hold the full balance to un-fractionalise the NFT
+		let asset_id = asset_id + 1;
+		assert_ok!(NftFractions::fractionalise(
+			RuntimeOrigin::signed(1),
+			nft_collection_id,
+			nft_id,
+			asset_id,
+			1,
+			fractions,
+		));
+		assert_ok!(Assets::transfer(RuntimeOrigin::signed(1), asset_id, 2, 1));
+		assert_eq!(Assets::balance(asset_id, 1), fractions - 1);
+		assert_eq!(Assets::balance(asset_id, 2), 1);
+		assert_noop!(
+			NftFractions::unfractionalise(
+				RuntimeOrigin::signed(1),
+				nft_collection_id,
+				nft_id,
+				asset_id,
+				1,
+			),
+			DispatchError::Module(ModuleError {
+				index: 2,
+				error: [0, 0, 0, 0],
+				message: Some("BalanceLow")
+			})
+		);
+
+		assert_ok!(Assets::transfer(RuntimeOrigin::signed(2), asset_id, 1, 1));
+		assert_ok!(NftFractions::unfractionalise(
+			RuntimeOrigin::signed(1),
+			nft_collection_id,
+			nft_id,
+			asset_id,
+			2,
+		));
+		assert_eq!(Nfts::owner(nft_collection_id, nft_id), Some(2));
 	});
 }

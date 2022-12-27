@@ -20,7 +20,7 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
-/// Stores what lp_token a particular pool has.
+/// Stores the details of a fractionalised item.
 #[derive(Decode, Encode, Default, PartialEq, Eq, MaxEncodedLen, TypeInfo)]
 pub struct Details<AssetId, Fractions> {
 	/// Minted asset.
@@ -28,5 +28,4 @@ pub struct Details<AssetId, Fractions> {
 
 	/// Number of fractions minted.
 	pub fractions: Fractions,
-	// deposit
 }
