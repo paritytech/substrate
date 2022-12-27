@@ -405,8 +405,9 @@ mod ensure {
 	/// Performs multiplication that returns [`ArithmeticError`] instead of wrapping around on
 	/// overflow.
 	pub trait EnsureMul: CheckedMul + PartialOrd + Zero + Copy {
-		/// Multiplies two numbers, checking for overflow. If overflow happens,
-		/// `ArithmeticError` is returned.
+		/// Multiplies two numbers, checking for overflow. 
+		///
+		/// If it fails, [`ArithmeticError`] is returned.
 		///
 		/// Similar to [`CheckedMul::checked_mul()`] but returning an `ArithmeticError` error
 		///
