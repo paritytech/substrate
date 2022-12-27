@@ -20,16 +20,14 @@
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use ark_bls12_377::{Bls12_377, Config, G1Affine, G1Projective, G2Affine, G2Projective};
+use ark_bls12_377::{Bls12_377, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::{
 	models::CurveConfig,
 	pairing::{MillerLoopOutput, Pairing},
 	short_weierstrass::SWCurveConfig,
-	Group,
 };
-use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
-use ark_std::{io::Cursor, Zero};
+use ark_std::io::Cursor;
 use sp_std::{vec, vec::Vec};
 
 /// Compute multi pairing through arkworksrk_Bls12_377::G2Projective

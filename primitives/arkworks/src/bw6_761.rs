@@ -23,10 +23,9 @@
 use ark_bw6_761::{Config, G1Affine, G1Projective, G2Affine, G2Projective, BW6_761};
 use ark_ec::{
 	models::CurveConfig,
-	pairing::{MillerLoopOutput, Pairing, PairingOutput},
+	pairing::{MillerLoopOutput, Pairing},
 	Group,
 };
-use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use ark_std::{io::Cursor, Zero};
 use sp_std::{vec, vec::Vec};

@@ -27,7 +27,6 @@ use ark_ec::{
 	short_weierstrass::SWCurveConfig,
 	Group,
 };
-use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use ark_std::{io::Cursor, Zero};
 use sp_std::{vec, vec::Vec};

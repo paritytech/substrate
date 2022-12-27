@@ -21,16 +21,11 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use ark_ec::{
-	models::CurveConfig,
-	pairing::{MillerLoopOutput, Pairing},
-	twisted_edwards,
-	twisted_edwards::TECurveConfig,
-	Group, VariableBaseMSM,
+	models::CurveConfig, twisted_edwards, twisted_edwards::TECurveConfig, VariableBaseMSM,
 };
-use ark_ed_on_bls12_377::{EdwardsAffine, EdwardsConfig, EdwardsProjective};
-use ark_ff::PrimeField;
+use ark_ed_on_bls12_377::{EdwardsConfig, EdwardsProjective};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
-use ark_std::{io::Cursor, Zero};
+use ark_std::io::Cursor;
 use sp_std::{vec, vec::Vec};
 
 /// Compute a scalar multiplication on G2 through arkworks
