@@ -266,6 +266,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "ark-models"
+version = "0.4.0-alpha.5"
+dependencies = [
+ "ark-ec",
+ "ark-ff",
+ "ark-poly",
+ "ark-serialize",
+ "ark-std 0.4.0-alpha",
+ "derivative",
+ "hashbrown 0.13.1",
+ "itertools",
+ "num-traits",
+ "rayon",
+ "zeroize",
+]
+
+[[package]]
 name = "ark-poly"
 version = "0.4.0-alpha.5"
 source = "git+https://github.com/arkworks-rs/algebra/?branch=release-0.4#b1d61ef132d626d079417a5c77834861633f6a9a"
@@ -314,6 +331,20 @@ checksum = "cc5b16d734e9b2e43886ff586755219df7fb9639cc04ab00c7e636708a5ba06a"
 dependencies = [
  "num-traits",
  "rand 0.8.5",
+ "rayon",
+]
+
+[[package]]
+name = "ark-sub-bls12-381"
+version = "0.4.0"
+dependencies = [
+ "ark-bls12-381",
+ "ark-ec",
+ "ark-ff",
+ "ark-models",
+ "ark-serialize",
+ "ark-std 0.4.0-alpha",
+ "sp-io",
 ]
 
 [[package]]
@@ -9298,7 +9329,7 @@ dependencies = [
  "ark-ff",
  "ark-serialize",
  "ark-std 0.4.0-alpha",
- "ark-sub-bls12-381",
+ "ark-sub-bls12-381 0.4.0 (git+https://github.com/achimcc/ark-sub-curves)",
  "better_any",
  "sp-std",
 ]

@@ -1,10 +1,13 @@
-use ark_ec::{
+use ark_models::{
     models::{short_weierstrass::SWCurveConfig, CurveConfig},
     short_weierstrass::Affine,
 };
 use ark_ff::{Field, MontFp, Zero};
+use ark_serialize::{Compress, Validate, CanonicalSerialize};
 
 use crate::g1; 
+
+use ark_std::{io::Cursor, vec::Vec, vec};
 use ark_bls12_381::{Fq, Fq2, Fr};
 
 pub type G2Affine = Affine<Config>;

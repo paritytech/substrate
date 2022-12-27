@@ -1,4 +1,4 @@
-use ark_ec::models::{
+use ark_models::models::{
     short_weierstrass::{Affine as SWAffine, SWCurveConfig},
     twisted_edwards::{
         Affine as TEAffine, MontCurveConfig, Projective as TEProjective, TECurveConfig,
@@ -7,8 +7,10 @@ use ark_ec::models::{
 };
 use ark_ff::{Field, MontFp, Zero};
 use core::ops::Neg;
+use ark_serialize::{Compress, Validate, CanonicalSerialize};
 
-use ark_bls12_381::{Fq, Fr};
+use ark_std::{io::Cursor, vec::Vec, vec};
+use ark_bls12_381::{Fq, Fr, Projective, Affine};
 
 #[derive(Clone, Default, PartialEq, Eq)]
 pub struct Config;
@@ -94,15 +96,10 @@ impl SWCurveConfig for Config {
             })
             .collect();
         let result = sp_io::crypto::bls12_381_msm_g1(bases, scalars);
-        let cursor = Cursor::new(&result[..]);
-        let result = Self::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+        // let cursor = Cursor::new(&result[..]);
+        let result = <self::Config as SWCurveConfig>::deserialize_with_mode(&result[..], Compress::Yes, Validate::No).unwrap();
         Ok(result.into())
     }
-}
-
-fn msm_unchecked(bases: &[Affine<Self>],
-    scalars: &[Self::ScalarField])  {
-    
 }
 
 pub type G1SWAffine = SWAffine<Config>;
