@@ -1501,9 +1501,9 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type MaxPoolMembersPerPool<T: Config> = StorageValue<_, u32, OptionQuery>;
 
-	/// The maximum commission that can be charged by a pool. Used on commission payouts to bound pool
-	/// commissions that are > GlobalMaxCommission, necessary if a future `GlobalMaxCommission` is
-	/// lower than some current pool commissions.
+	/// The maximum commission that can be charged by a pool. Used on commission payouts to bound
+	/// pool commissions that are > GlobalMaxCommission, necessary if a future `GlobalMaxCommission`
+	/// is lower than some current pool commissions.
 	#[pallet::storage]
 	pub type GlobalMaxCommission<T: Config> = StorageValue<_, Perbill, OptionQuery>;
 
@@ -2384,8 +2384,8 @@ pub mod pallet {
 		/// Set the commission of a pool.
 		///
 		/// The dispatch origin of this call must be signed by the `root` role of the pool. Both a
-		/// commission percentage and a commission payee must be provided in the `current` tuple. Where
-		/// a `current` of `None` is provided, any current commission will be removed.
+		/// commission percentage and a commission payee must be provided in the `current` tuple.
+		/// Where a `current` of `None` is provided, any current commission will be removed.
 		#[pallet::call_index(14)]
 		#[pallet::weight(T::WeightInfo::set_commission())]
 		pub fn set_commission(
@@ -2660,8 +2660,8 @@ impl<T: Config> Pallet<T> {
 		member.last_recorded_reward_counter = current_reward_counter;
 		reward_pool.register_claimed_reward(pending_rewards);
 
-		// Gets the commission percentage and payee to be paid if commission has been set. Otherwise,
-		// `None` is returned.
+		// Gets the commission percentage and payee to be paid if commission has been set.
+		// Otherwise, `None` is returned.
 		let maybe_commission = &bonded_pool.commission.get_commission_and_payee(&pending_rewards);
 
 		if let Some((pool_commission, payee)) = maybe_commission {
