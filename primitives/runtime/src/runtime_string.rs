@@ -129,7 +129,7 @@ impl std::fmt::Display for RuntimeString {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl serde::Serialize for RuntimeString {
 	fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
 		match self {
@@ -143,6 +143,13 @@ impl serde::Serialize for RuntimeString {
 impl<'de> serde::Deserialize<'de> for RuntimeString {
 	fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
 		String::deserialize(de).map(Self::Owned)
+	}
+}
+
+#[cfg(all(not(feature = "std"), feature = "serde"))]
+impl<'de> serde::Deserialize<'de> for RuntimeString {
+	fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
+		Vec::<u8>::deserialize(de).map(Self::Owned)
 	}
 }
 

@@ -19,15 +19,20 @@
 //!
 //! Note: `CHAIN_CODE_LENGTH` must be equal to `crate::crypto::JUNCTION_ID_LEN`
 //! for this to work.
-
-#[cfg(feature = "std")]
+#[cfg(any(feature = "full_crypto", feature = "serde"))]
+use crate::crypto::DeriveJunction;
+#[cfg(feature = "serde")]
 use crate::crypto::Ss58Codec;
 #[cfg(feature = "full_crypto")]
-use crate::crypto::{DeriveError, DeriveJunction, Pair as TraitPair, SecretStringError};
+use crate::crypto::{DeriveError, Pair as TraitPair, SecretStringError};
 #[cfg(feature = "full_crypto")]
 use schnorrkel::{
-	derive::{ChainCode, Derivation, CHAIN_CODE_LENGTH},
-	signing_context, ExpansionMode, Keypair, MiniSecretKey, PublicKey, SecretKey,
+	derive::CHAIN_CODE_LENGTH, signing_context, ExpansionMode, Keypair, MiniSecretKey, SecretKey,
+};
+#[cfg(any(feature = "full_crypto", feature = "serde"))]
+use schnorrkel::{
+	derive::{ChainCode, Derivation},
+	PublicKey,
 };
 use sp_std::vec::Vec;
 
@@ -41,9 +46,11 @@ use sp_std::ops::Deref;
 
 #[cfg(feature = "full_crypto")]
 use schnorrkel::keys::{MINI_SECRET_KEY_LENGTH, SECRET_KEY_LENGTH};
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use sp_runtime_interface::pass_by::PassByInner;
+#[cfg(all(not(feature = "std"), feature = "serde"))]
+use sp_std::alloc::{format, string::String};
 
 // signing context
 #[cfg(feature = "full_crypto")]
@@ -176,7 +183,7 @@ impl sp_std::fmt::Debug for Public {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl Serialize for Public {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
@@ -186,7 +193,7 @@ impl Serialize for Public {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl<'de> Deserialize<'de> for Public {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
 	where
@@ -216,7 +223,7 @@ impl TryFrom<&[u8]> for Signature {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl Serialize for Signature {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
@@ -226,7 +233,7 @@ impl Serialize for Signature {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl<'de> Deserialize<'de> for Signature {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
 	where
@@ -339,7 +346,7 @@ impl Derive for Public {
 	/// Derive a child key from a series of given junctions.
 	///
 	/// `None` if there are any hard junctions in there.
-	#[cfg(feature = "std")]
+	#[cfg(feature = "serde")]
 	fn derive<Iter: Iterator<Item = DeriveJunction>>(&self, path: Iter) -> Option<Public> {
 		let mut acc = PublicKey::from_bytes(self.as_ref()).ok()?;
 		for j in path {

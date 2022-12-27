@@ -17,10 +17,12 @@
 
 //! Substrate RPC primitives and utilities.
 
+#![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 
 pub mod list;
 pub mod number;
+#[cfg(feature = "std")]
 pub mod tracing;
 
 /// A util function to assert the result of serialization and deserialization is the same.

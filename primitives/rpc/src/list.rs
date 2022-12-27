@@ -18,6 +18,7 @@
 //! RPC a lenient list or value type.
 
 use serde::{Deserialize, Serialize};
+use sp_std::vec::Vec;
 
 /// RPC list or value wrapper.
 ///
