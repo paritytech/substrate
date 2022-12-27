@@ -493,7 +493,7 @@ pub mod v4 {
 			);
 
 			if current == 4 && onchain == 3 {
-				GlobalMaxCommission::<T>::set(Some(Perbill::zero()));
+				GlobalMaxCommission::<T>::set(Some(Zero::zero()));
 				log!(info, "Set initial global max commission to 0%");
 
 				let mut translated = 0u64;
@@ -504,9 +504,12 @@ pub mod v4 {
 
 				current.put::<Pallet<T>>();
 				log!(info, "Upgraded {} pools, storage to version {:?}", translated, current);
-				T::DbWeight::get().reads_writes(translated + 1, translated + 1)
+
+				// reads: translated + onchain version.
+				// writes: translated + current.put + initial global commission.
+				T::DbWeight::get().reads_writes(translated + 1, translated + 2)
 			} else {
-				log!(info, "Migration did not executed. This probably should be removed");
+				log!(info, "Migration did not execute. This probably should be removed");
 				T::DbWeight::get().reads(1)
 			}
 		}
@@ -522,6 +525,7 @@ pub mod v4 {
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
+			// ensure all BondedPools items now contain an `inner.commission: Commission` field.
 			ensure!(
 				BondedPools::<T>::iter().all(|(_, inner)| inner.commission.current.is_none() &&
 					inner.commission.max.is_none() &&
