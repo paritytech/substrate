@@ -2691,7 +2691,7 @@ impl<T: Config> Pallet<T> {
 				pending_rewards,
 				// defensive: the depositor has put existential deposit into the pool and it stays
 				// untouched, reward account shall not die.
-				ExistenceRequirement::AllowDeath,
+				ExistenceRequirement::KeepAlive,
 			)?;
 		}
 
