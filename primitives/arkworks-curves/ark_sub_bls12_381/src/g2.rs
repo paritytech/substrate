@@ -208,6 +208,26 @@ impl SWCurveConfig for Config {
 		let result = Self::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
 		Ok(result.into())
 	}
+
+    fn mul_projective(base: &Projective<Self>, scalar: &[u64]) -> Projective<Self> {
+        let mut serialized_base = vec![0; base.serialized_size(Compress::Yes)];
+        let mut cursor = Cursor::new(&mut serialized_base[..]);
+        base.serialize_with_mode(&mut cursor, Compress::Yes)
+            .unwrap();
+
+        let mut serialized_scalar = vec![0; scalar.serialized_size(Compress::Yes)];
+        let mut cursor = Cursor::new(&mut serialized_scalar[..]);
+        scalar
+            .serialize_with_mode(&mut cursor, Compress::Yes)
+            .unwrap();
+
+        let result = sp_io::crypto::bls12_381_mul_projective_g2(serialized_base, serialized_scalar);
+
+        let cursor = Cursor::new(&result[..]);
+
+        let result = Self::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+        result.into()
+    }
 }
 
 pub const G2_GENERATOR_X: Fq2 = Fq2::new(G2_GENERATOR_X_C0, G2_GENERATOR_X_C1);
