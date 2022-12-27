@@ -725,7 +725,7 @@ mod ensure {
 		}
 	}
 
-	/// Similar to [`TryInto`] but returning an `ArithmeticError` error.
+	/// Similar to [`TryInto`] but returning an [`ArithmeticError`] error.
 	pub trait EnsureInto<T: PartialOrd + Zero + Copy>:
 		TryInto<T> + PartialOrd + Zero + Copy
 	{
