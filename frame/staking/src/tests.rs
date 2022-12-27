@@ -441,7 +441,7 @@ fn staking_should_work() {
 				total: 1500,
 				active: 1500,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![0],
+				claimed_rewards: Default::default(),
 			})
 		);
 		// e.g. it cannot reserve more than 500 that it has free from the total 2000
@@ -4058,7 +4058,7 @@ fn payout_stakers_handles_weight_refund() {
 }
 
 #[test]
-fn bond_during_era_correctly_populates_claimed_rewards() {
+fn bond_does_not_populate_claimed_rewards() {
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		// Era = None
 		bond_validator(9, 8, 1000);
@@ -4069,7 +4069,7 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![],
+				claimed_rewards: Default::default(),
 			})
 		);
 		mock::start_active_era(5);
@@ -4081,13 +4081,12 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: (0..5).collect::<Vec<_>>().try_into().unwrap(),
+				claimed_rewards: Default::default(),
 			})
 		);
 
 		// make sure only era upto history depth is stored
 		let current_era = 99;
-		let last_reward_era = 99 - HistoryDepth::get();
 		mock::start_active_era(current_era);
 		bond_validator(13, 12, 1000);
 		assert_eq!(
@@ -4097,10 +4096,7 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: (last_reward_era..current_era)
-					.collect::<Vec<_>>()
-					.try_into()
-					.unwrap(),
+				claimed_rewards: Default::default(),
 			})
 		);
 	});
@@ -5484,8 +5480,6 @@ fn reducing_history_depth_abrupt() {
 	ExtBuilder::default().nominate(false).build_and_execute(|| {
 		let original_history_depth = HistoryDepth::get();
 		let mut current_era = original_history_depth + 10;
-		let last_reward_era = current_era - 1;
-		let start_reward_era = current_era - original_history_depth;
 
 		// put some money in (stash, controller)=(3,4),(5,6).
 		for i in 3..7 {
@@ -5498,10 +5492,6 @@ fn reducing_history_depth_abrupt() {
 		// add a new candidate for being a staker. account 3 controlled by 4.
 		assert_ok!(Staking::bond(RuntimeOrigin::signed(3), 4, 1500, RewardDestination::Controller));
 
-		// all previous era before the bonding action should be marked as
-		// claimed.
-		let claimed_rewards: BoundedVec<_, _> =
-			(start_reward_era..=last_reward_era).collect::<Vec<_>>().try_into().unwrap();
 		assert_eq!(
 			Staking::ledger(&4).unwrap(),
 			StakingLedger {
@@ -5509,7 +5499,7 @@ fn reducing_history_depth_abrupt() {
 				total: 1500,
 				active: 1500,
 				unlocking: Default::default(),
-				claimed_rewards,
+				claimed_rewards: Default::default(),
 			}
 		);
 
@@ -5541,10 +5531,6 @@ fn reducing_history_depth_abrupt() {
 		assert_ok!(Staking::bond(RuntimeOrigin::signed(5), 6, 1200, RewardDestination::Controller));
 
 		// new staking ledgers created will be bounded by the current history depth
-		let last_reward_era = current_era - 1;
-		let start_reward_era = current_era - history_depth;
-		let claimed_rewards: BoundedVec<_, _> =
-			(start_reward_era..=last_reward_era).collect::<Vec<_>>().try_into().unwrap();
 		assert_eq!(
 			Staking::ledger(&6).unwrap(),
 			StakingLedger {
@@ -5552,7 +5538,7 @@ fn reducing_history_depth_abrupt() {
 				total: 1200,
 				active: 1200,
 				unlocking: Default::default(),
-				claimed_rewards,
+				claimed_rewards: Default::default(),
 			}
 		);
 
