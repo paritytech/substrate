@@ -402,7 +402,7 @@ mod ensure {
 		}
 	}
 
-	/// Performs multiplication that returns `ArithmeticError` instead of wrapping around on
+	/// Performs multiplication that returns [`ArithmeticError`] instead of wrapping around on
 	/// overflow.
 	pub trait EnsureMul: CheckedMul + PartialOrd + Zero + Copy {
 		/// Multiplies two numbers, checking for overflow. If overflow happens,
