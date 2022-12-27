@@ -182,8 +182,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type SlashDeferDuration: Get<EraIndex>;
 
-		/// The origin which can cancel a deferred slash. Root can always do this.
-		type SlashCancelOrigin: EnsureOrigin<Self::RuntimeOrigin>;
+		/// The origin which can manage less critical staking parameters that does not require root.
+		///
+		/// Supported actions: (1) cancel deferred slash, (2) set minimum commission.
+		type AdminOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Interface for interacting with a session pallet.
 		type SessionInterface: SessionInterface<Self::AccountId>;
@@ -997,7 +999,8 @@ pub mod pallet {
 			// `BondingDuration` to proceed with the unbonding.
 			let maybe_withdraw_weight = {
 				if unlocking == T::MaxUnlockingChunks::get() as usize {
-					let real_num_slashing_spans = Self::slashing_spans(&controller).iter().count();
+					let real_num_slashing_spans =
+						Self::slashing_spans(&controller).map_or(0, |s| s.iter().count());
 					Some(Self::do_withdraw_unbonded(&controller, real_num_slashing_spans as u32)?)
 				} else {
 					None
@@ -1469,7 +1472,7 @@ pub mod pallet {
 
 		/// Cancel enactment of a deferred slash.
 		///
-		/// Can be called by the `T::SlashCancelOrigin`.
+		/// Can be called by the `T::AdminOrigin`.
 		///
 		/// Parameters: era and indices of the slashes for that era to kill.
 		#[pallet::call_index(17)]
@@ -1479,7 +1482,7 @@ pub mod pallet {
 			era: EraIndex,
 			slash_indices: Vec<u32>,
 		) -> DispatchResult {
-			T::SlashCancelOrigin::ensure_origin(origin)?;
+			T::AdminOrigin::ensure_origin(origin)?;
 
 			ensure!(!slash_indices.is_empty(), Error::<T>::EmptyTargets);
 			ensure!(is_sorted_and_unique(&slash_indices), Error::<T>::NotSortedAndUnique);
@@ -1700,7 +1703,6 @@ pub mod pallet {
 			config_op_exp!(MinCommission<T>, min_commission);
 			Ok(())
 		}
-
 		/// Declare a `controller` to stop participating as either a validator or nominator.
 		///
 		/// Effects will be felt at the beginning of the next era.
@@ -1810,8 +1812,20 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Emits an event with the nominations quota for a given balance.
+		/// Sets the minimum amount of commission that each validators must maintain.
+		///
+		/// This call has lower privilege requirements than `set_staking_config` and can be called
+		/// by the `T::AdminOrigin`. Root can always call this.
 		#[pallet::call_index(25)]
+		#[pallet::weight(T::WeightInfo::set_min_commission())]
+		pub fn set_min_commission(origin: OriginFor<T>, new: Perbill) -> DispatchResult {
+			T::AdminOrigin::ensure_origin(origin)?;
+			MinCommission::<T>::put(new);
+			Ok(())
+		}
+
+		/// Emits an event with the nominations quota for a given balance.
+		#[pallet::call_index(26)]
 		#[pallet::weight(1)] // TODO(gpestana): finish
 		pub fn nominations_quota(
 			origin: OriginFor<T>,

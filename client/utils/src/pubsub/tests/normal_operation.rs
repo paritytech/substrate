@@ -27,7 +27,7 @@ fn positive_rx_receives_relevant_messages_and_terminates_upon_hub_drop() {
 		// No subscribers yet. That message is not supposed to get to anyone.
 		hub.send(0);
 
-		let mut rx_01 = hub.subscribe(SubsKey::new());
+		let mut rx_01 = hub.subscribe(SubsKey::new(), 100_000);
 		assert_eq!(hub.subs_count(), 1);
 
 		// That message is sent after subscription. Should be delivered into rx_01.
@@ -49,9 +49,9 @@ fn positive_subs_count_is_correct_upon_drop_of_rxs() {
 		let hub = TestHub::new(TK);
 		assert_eq!(hub.subs_count(), 0);
 
-		let rx_01 = hub.subscribe(SubsKey::new());
+		let rx_01 = hub.subscribe(SubsKey::new(), 100_000);
 		assert_eq!(hub.subs_count(), 1);
-		let rx_02 = hub.subscribe(SubsKey::new());
+		let rx_02 = hub.subscribe(SubsKey::new(), 100_000);
 		assert_eq!(hub.subs_count(), 2);
 
 		std::mem::drop(rx_01);
@@ -69,11 +69,11 @@ fn positive_subs_count_is_correct_upon_drop_of_rxs_on_cloned_hubs() {
 		assert_eq!(hub_01.subs_count(), 0);
 		assert_eq!(hub_02.subs_count(), 0);
 
-		let rx_01 = hub_02.subscribe(SubsKey::new());
+		let rx_01 = hub_02.subscribe(SubsKey::new(), 100_000);
 		assert_eq!(hub_01.subs_count(), 1);
 		assert_eq!(hub_02.subs_count(), 1);
 
-		let rx_02 = hub_02.subscribe(SubsKey::new());
+		let rx_02 = hub_02.subscribe(SubsKey::new(), 100_000);
 		assert_eq!(hub_01.subs_count(), 2);
 		assert_eq!(hub_02.subs_count(), 2);
 

@@ -24,7 +24,7 @@ futures-timer = "3.0.1"
 log = "0.4.17"
 parity-scale-codec = { version = "3.0.0", features = ["derive"] }
 parking_lot = "0.12.1"
-rand = "0.8.4"
+rand = "0.8.5"
 serde_json = "1.0.85"
 thiserror = "1.0"
 fork-tree = { version = "3.0.0", path = "../../utils/fork-tree" }
@@ -33,7 +33,6 @@ sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
 sc-chain-spec = { version = "4.0.0-dev", path = "../../client/chain-spec" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sc-consensus = { version = "0.10.0-dev", path = "../consensus/common" }
-sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
 sc-network-gossip = { version = "0.10.0-dev", path = "../network-gossip" }
 sc-network-common = { version = "0.10.0-dev", path = "../network/common" }

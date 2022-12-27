@@ -222,7 +222,8 @@ where
 			if current > just_block || headers.len() >= MAX_UNKNOWN_HEADERS {
 				break
 			}
-			headers.push(backend.blockchain().expect_header(BlockId::Number(current))?);
+			let hash = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(current))?;
+			headers.push(backend.blockchain().expect_header(hash)?);
 			current += One::one();
 		}
 		headers

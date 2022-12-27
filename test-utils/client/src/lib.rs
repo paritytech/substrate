@@ -203,7 +203,7 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 	)
 	where
 		ExecutorDispatch:
-			sc_client_api::CallExecutor<Block> + sc_executor::RuntimeVersionOf + 'static,
+			sc_client_api::CallExecutor<Block> + sc_executor::RuntimeVersionOf + Clone + 'static,
 		Backend: sc_client_api::backend::Backend<Block>,
 		<Backend as sc_client_api::backend::Backend<Block>>::OffchainStorage: 'static,
 	{
@@ -223,19 +223,29 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 			storage
 		};
 
+		let client_config = ClientConfig {
+			offchain_indexing_api: self.enable_offchain_indexing_api,
+			no_genesis: self.no_genesis,
+			..Default::default()
+		};
+
+		let genesis_block_builder = sc_service::GenesisBlockBuilder::new(
+			&storage,
+			!client_config.no_genesis,
+			self.backend.clone(),
+			executor.clone(),
+		)
+		.expect("Creates genesis block builder");
+
 		let client = client::Client::new(
 			self.backend.clone(),
 			executor,
-			&storage,
+			genesis_block_builder,
 			self.fork_blocks,
 			self.bad_blocks,
 			None,
 			None,
-			ClientConfig {
-				offchain_indexing_api: self.enable_offchain_indexing_api,
-				no_genesis: self.no_genesis,
-				..Default::default()
-			},
+			client_config,
 		)
 		.expect("Creates new client");
 
