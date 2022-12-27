@@ -180,6 +180,34 @@ impl SWCurveConfig for Config {
 			2 * G2_SERIALIZED_SIZE
 		}
 	}
+
+	fn msm(
+		bases: &[Affine<Self>],
+		scalars: &[<Self as CurveConfig>::ScalarField],
+	) -> Result<Projective<Self>, usize> {
+		let bases: Vec<Vec<u8>> = bases
+			.into_iter()
+			.map(|elem| {
+				let mut serialized = vec![0; elem.serialized_size(Compress::Yes)];
+				let mut cursor = Cursor::new(&mut serialized[..]);
+				elem.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
+				serialized
+			})
+			.collect();
+		let scalars: Vec<Vec<u8>> = scalars
+			.into_iter()
+			.map(|elem| {
+				let mut serialized = vec![0; elem.serialized_size(Compress::Yes)];
+				let mut cursor = Cursor::new(&mut serialized[..]);
+				elem.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
+				serialized
+			})
+			.collect();
+		let result = sp_io::crypto::bls12_381_msm_g2(bases, scalars);
+		let cursor = Cursor::new(&result[..]);
+		let result = Self::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+		Ok(result.into())
+	}
 }
 
 pub const G2_GENERATOR_X: Fq2 = Fq2::new(G2_GENERATOR_X_C0, G2_GENERATOR_X_C1);
