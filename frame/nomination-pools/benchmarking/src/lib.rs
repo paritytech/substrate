@@ -732,7 +732,7 @@ frame_benchmarking::benchmarks! {
 				max_increase: Perbill::from_percent(50),
 				min_delay: 1000u32.into(),
 			}),
-			throttle_from: None,
+			throttle_from: Some(1_u32.into()),
 		});
 	}
 

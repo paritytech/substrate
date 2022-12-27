@@ -649,11 +649,16 @@ impl<T: Config> Commission<T> {
 					// the total durations passed since the last commission update.
 					let blocks_passed = <frame_system::Pallet<T>>::block_number().saturating_sub(f);
 
-					// calculate intervals passed since `throttle_from`.
+					// calculate intervals passed since `throttle_from`. If minimum delay is set to 0,
+					// infinite intervals have passed.
 					let intervals_passed = if blocks_passed == Zero::zero() {
 						Zero::zero()
 					} else {
-						blocks_passed.div(t.min_delay).saturated_into::<u32>()
+						if t.min_delay == Zero::zero() {
+							Bounded::max_value()
+						} else {
+							blocks_passed.div(t.min_delay).saturated_into::<u32>()
+						}
 					};
 
 					// calculate maximum allowed increase, where `max_increase` is converted into a
