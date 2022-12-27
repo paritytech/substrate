@@ -532,7 +532,7 @@ mod ensure {
 		}
 	}
 
-	/// Performs self multiplication that returns `ArithmeticError` instead of wrapping around on
+	/// Performs self multiplication that returns [`ArithmeticError`] instead of wrapping around on
 	/// overflow.
 	pub trait EnsureMulAssign: EnsureMul {
 		/// Multiplies two numbers overwriting the left hand one, checking for overflow.
