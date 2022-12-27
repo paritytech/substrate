@@ -347,7 +347,8 @@ mod ensure {
 	/// Performs addition that returns `ArithmeticError` instead of wrapping around on overflow.
 	pub trait EnsureAdd: CheckedAdd + PartialOrd + Zero + Copy {
 		/// Adds two numbers, checking for overflow.
-		/// If overflow happens, `ArithmeticError` is returned.
+		///
+		/// If it fails, [`ArithmeticError`] is returned.
 		///
 		/// Similar to [`CheckedAdd::checked_add()`] but returning an `ArithmeticError` error
 		///
