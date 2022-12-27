@@ -527,10 +527,11 @@ pub mod v4 {
 		fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
 			// ensure all BondedPools items now contain an `inner.commission: Commission` field.
 			ensure!(
-				BondedPools::<T>::iter().all(|(_, inner)| inner.commission.current.is_none() &&
+				BondedPools::<T>::iter().all(|(_, inner)| 
+					inner.commission.current.is_none() &&
 					inner.commission.max.is_none() &&
-					inner.commission.change_rate.is_none()) &&
-					inner.commission.throttle_from.is_none(),
+					inner.commission.change_rate.is_none() &&
+					inner.commission.throttle_from.is_none()),
 				"a commission value has been incorrectly set"
 			);
 			ensure!(Pallet::<T>::on_chain_storage_version() == 4, "wrong storage version");
