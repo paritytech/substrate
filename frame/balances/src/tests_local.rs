@@ -100,6 +100,10 @@ impl Config for Test {
 	type MaxReserves = ConstU32<2>;
 	type ReserveIdentifier = TestId;
 	type WeightInfo = ();
+	type HoldIdentifier = TestId;
+	type FreezeIdentifier = TestId;
+	type MaxFreezes = ConstU32<2>;
+	type MaxHolds = ConstU32<2>;
 }
 
 pub struct ExtBuilder {

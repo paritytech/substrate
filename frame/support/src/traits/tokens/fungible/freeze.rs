@@ -64,7 +64,11 @@ pub trait MutateFreeze<AccountId>: InspectFreeze<AccountId> {
 	/// counteract any pre-existing freezes in place for `who` under the `id`.
 	///
 	/// Note that more funds can be locked than the total balance, if desired.
-	fn extend_freeze(id: &Self::Id, who: &AccountId, amount: Self::Balance) -> Result<(), DispatchError>;
+	fn extend_freeze(
+		id: &Self::Id,
+		who: &AccountId,
+		amount: Self::Balance,
+	) -> Result<(), DispatchError>;
 
 	/// Remove an existing lock.
 	fn thaw(id: &Self::Id, who: &AccountId);

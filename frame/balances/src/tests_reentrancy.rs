@@ -29,10 +29,7 @@ use sp_io;
 use sp_runtime::{testing::Header, traits::IdentityLookup};
 
 use crate::*;
-use frame_support::{
-	assert_ok,
-	traits::Currency,
-};
+use frame_support::{assert_ok, traits::Currency};
 use frame_system::RawOrigin;
 use tests_composite::TestId;
 
@@ -101,6 +98,10 @@ impl Config for Test {
 	type MaxReserves = ConstU32<2>;
 	type ReserveIdentifier = TestId;
 	type WeightInfo = ();
+	type HoldIdentifier = TestId;
+	type FreezeIdentifier = TestId;
+	type MaxFreezes = ConstU32<2>;
+	type MaxHolds = ConstU32<2>;
 }
 
 pub struct ExtBuilder {

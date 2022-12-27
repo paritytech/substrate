@@ -17,9 +17,7 @@
 
 //! Implementation of `fungible` traits for Balances pallet.
 use super::*;
-use frame_support::traits::{
-	tokens::KeepAlive::{self, Keep, NoKill},
-};
+use frame_support::traits::tokens::KeepAlive::{self, Keep, NoKill};
 
 impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> {
 	type Balance = T::Balance;
@@ -103,7 +101,7 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 
 		let liquid = Self::reducible_balance(who, CanKill, false);
 		if amount > liquid {
-			return WithdrawConsequence::Frozen;
+			return WithdrawConsequence::Frozen
 		}
 
 		// Provider restriction - total account balance cannot be reduced to zero if it cannot
@@ -162,19 +160,23 @@ impl<T: Config<I>, I: 'static> fungible::Unbalanced<T::AccountId> for Pallet<T, 
 
 impl<T: Config<I>, I: 'static> fungible::Mutate<T::AccountId> for Pallet<T, I> {
 	fn done_mint_into(who: &T::AccountId, amount: Self::Balance) {
-		Self::deposit_event(Event::<T, I>::Minted { who: who.clone(), amount: amount });
+		Self::deposit_event(Event::<T, I>::Minted { who: who.clone(), amount });
 	}
 	fn done_burn_from(who: &T::AccountId, amount: Self::Balance) {
-		Self::deposit_event(Event::<T, I>::Burned { who: who.clone(), amount: amount });
+		Self::deposit_event(Event::<T, I>::Burned { who: who.clone(), amount });
 	}
 	fn done_shelve(who: &T::AccountId, amount: Self::Balance) {
-		Self::deposit_event(Event::<T, I>::Suspended { who: who.clone(), amount: amount });
+		Self::deposit_event(Event::<T, I>::Suspended { who: who.clone(), amount });
 	}
 	fn done_restore(who: &T::AccountId, amount: Self::Balance) {
-		Self::deposit_event(Event::<T, I>::Restored { who: who.clone(), amount: amount });
+		Self::deposit_event(Event::<T, I>::Restored { who: who.clone(), amount });
 	}
 	fn done_transfer(source: &T::AccountId, dest: &T::AccountId, amount: Self::Balance) {
-		Self::deposit_event(Event::<T, I>::Transfer { from: source.clone(), to: dest.clone(), amount });
+		Self::deposit_event(Event::<T, I>::Transfer {
+			from: source.clone(),
+			to: dest.clone(),
+			amount,
+		});
 	}
 }
 

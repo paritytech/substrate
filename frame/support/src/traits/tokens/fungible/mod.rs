@@ -23,7 +23,8 @@ use super::{
 };
 use crate::{
 	dispatch::{DispatchError, DispatchResult},
-	traits::misc::Get, ensure,
+	ensure,
+	traits::misc::Get,
 };
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::{CheckedAdd, CheckedSub};
@@ -173,8 +174,8 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		amount: Self::Balance,
 		keep_alive: KeepAlive,
 	) -> Result<Self::Balance, DispatchError> {
-		let _extra = Self::can_withdraw(source, amount)
-			.into_result(keep_alive != KeepAlive::CanKill)?;
+		let _extra =
+			Self::can_withdraw(source, amount).into_result(keep_alive != KeepAlive::CanKill)?;
 		Self::can_deposit(dest, amount, false).into_result()?;
 		Self::decrease_balance(source, amount, true, keep_alive)?;
 		// This should never fail as we checked `can_deposit` earlier. But we do a best-effort

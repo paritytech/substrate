@@ -389,7 +389,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		poll_index: PollIndexOf<T, I>,
 		vote: AccountVote<BalanceOf<T, I>>,
 	) -> DispatchResult {
-		ensure!(vote.balance() <= T::Currency::total_balance(who), Error::<T, I>::InsufficientFunds);
+		ensure!(
+			vote.balance() <= T::Currency::total_balance(who),
+			Error::<T, I>::InsufficientFunds
+		);
 		T::Polls::try_access_poll(poll_index, |poll_status| {
 			let (tally, class) = poll_status.ensure_ongoing().ok_or(Error::<T, I>::NotOngoing)?;
 			VotingFor::<T, I>::try_mutate(who, &class, |voting| {
