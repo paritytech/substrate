@@ -695,19 +695,17 @@ impl<T: Config> Commission<T> {
 				if commission == &Zero::zero() { None } else { Some((*commission, payee.clone())) };
 		}
 
-		let _ = self.register_update(<frame_system::Pallet<T>>::block_number());
+		let _ = self.register_update();
 		Ok(())
 	}
 
 	/// Set the pool's maximum commission.
 	///
-	/// The pool's maximum commission can initially be set to any value, below global maximum if
-	/// set, and only smaller values thereafter. If larger values are attempted, this function will
-	/// return a dispatch error.
+	/// The pool's maximum commission can initially be set to any value, and only smaller values
+	/// thereafter. If larger values are attempted, this function will return a dispatch error.
 	///
-	/// If `current.0` is larger than an updated max commission value, then `current.0` will also be
-	/// updated to the new maximum. This will also register a `throttle_from` update to the
-	/// commission.
+	/// If `current.0` is larger than the updated max commission value, `current.0` will also be
+	/// updated to the new maximum. This will also register a `throttle_from` update.
 	fn maybe_update_max(&mut self, new_max: Perbill) -> DispatchResult {
 		if let Some(old) = self.max.as_mut() {
 			if new_max > *old {
@@ -728,37 +726,36 @@ impl<T: Config> Commission<T> {
 			.unwrap_or(false);
 
 		if updated_current {
-			self.register_update(<frame_system::Pallet<T>>::block_number());
+			self.register_update();
 		}
 		Ok(())
 	}
 
-	/// Set the pool's commission `change_rate` settings.
+	/// Set the pool's commission `change_rate`.
 	///
 	/// Once a change rate configuration has been set, only more restrictive values can be set
 	/// thereafter. These restrictions translate to increased `min_delay` values and decreased
 	/// `max_increase` values.
+	///
+	/// Update `throttle_from` to the current block upon setting change rate for the first time, so
+	/// throttling can be checked from this block.
 	fn maybe_update_change_rate(
 		&mut self,
 		change_rate: CommissionChangeRate<T::BlockNumber>,
 	) -> DispatchResult {
-		ensure!(&self.less_restrictive(&change_rate), Error::<T>::CommissionChangeRateNotAllowed);
+		ensure!(&self.more_restrictive(&change_rate), Error::<T>::CommissionChangeRateNotAllowed);
 
-		// if this is the first time a change rate is being set, update `throttle_from` to the
-		// current block so we can check throttling from this initial block.
 		if self.change_rate.is_none() {
 			self.throttle_from = Some(<frame_system::Pallet<T>>::block_number());
 		}
-
 		self.change_rate = Some(change_rate);
 		Ok(())
 	}
 
 	/// Gets the current commission (if any) and payee to be paid.
 	///
-	/// Commission cannot go beyond `GlobalMaxCommission`. A zero commission along with a `None`
-	/// payee is returned in the event a commission has not been configured to the pool. `None` is
-	/// returned in the event a commission has not been configured to the pool.
+	/// A zero commission along with a `None` payee is returned in the event a commission has not
+	/// been configured to the pool. Commission is bounded to `GlobalMaxCommission`.
 	fn get_commission_and_payee(
 		&self,
 		pending_rewards: &BalanceOf<T>,
@@ -772,19 +769,19 @@ impl<T: Config> Commission<T> {
 		})
 	}
 
-	/// Updates a commission's `throttle_from` field.
-	fn register_update(&mut self, now: T::BlockNumber) {
-		self.throttle_from = Some(now);
+	/// Updates a commission's `throttle_from` field to the current block.
+	fn register_update(&mut self) {
+		self.throttle_from = Some(<frame_system::Pallet<T>>::block_number());
 	}
 
-	/// Returns `true` if `change_rate` is less restrictive than the currently set change rate, if
-	/// present, or true otherwise.
-	fn less_restrictive(&self, change_rate: &CommissionChangeRate<T::BlockNumber>) -> bool {
+	/// Checks whether a change rate is less restrictive than the current change rate, if any.
+	///
+	/// Any change rate is more restrictive than no change rate at all, so where no `change_rate` is
+	/// currently set, `true` is returned.
+	fn more_restrictive(&self, new: &CommissionChangeRate<T::BlockNumber>) -> bool {
 		self.change_rate
 			.as_ref()
-			.map(|t| {
-				change_rate.max_increase <= t.max_increase && change_rate.min_delay >= t.min_delay
-			})
+			.map(|c| new.max_increase <= c.max_increase && new.min_delay >= c.min_delay)
 			.unwrap_or(true)
 	}
 }
