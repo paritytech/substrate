@@ -567,7 +567,8 @@ mod ensure {
 	/// overflow.
 	pub trait EnsureDivAssign: EnsureDiv {
 		/// Divides two numbers overwriting the left hand one, checking for overflow.
-		/// If overflow happens, `ArithmeticError` is returned.
+		///
+		/// If it fails, [`ArithmeticError`] is returned.
 		///
 		/// ```
 		/// use sp_arithmetic::{traits::EnsureDivAssign, ArithmeticError, FixedI64};
