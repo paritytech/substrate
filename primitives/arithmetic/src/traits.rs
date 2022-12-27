@@ -668,10 +668,10 @@ mod ensure {
 
 		/// Ensure division for integer type `N`. Equal to `self / d`.
 		///
-		/// Returns `ArithmeticError` if the result does not fit in `N` or `d == 0`.
+		/// Returns [`ArithmeticError`] if the result does not fit in `N` or `d == 0`.
 		///
-		/// Similar to [`FixedPointNumber::checked_div_int()`] but returning an `ArithmeticError`
-		/// error
+		/// Similar to [`FixedPointNumber::checked_div_int()`] but returning an [`ArithmeticError`]
+		/// error.
 		///
 		/// ```
 		/// use sp_arithmetic::{traits::EnsureFixedPointNumber, ArithmeticError, FixedI64};
