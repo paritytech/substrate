@@ -25,8 +25,8 @@ use frame_support::{
 	dispatch::WithPostDispatchInfo,
 	pallet_prelude::*,
 	traits::{
-		Currency, CurrencyToVote, Defensive, EstimateNextNewSession, Get,
-		Imbalance, LockableCurrency, OnUnbalanced, TryCollect, UnixTime, WithdrawReasons,
+		Currency, CurrencyToVote, Defensive, EstimateNextNewSession, Get, Imbalance,
+		LockableCurrency, OnUnbalanced, TryCollect, UnixTime, WithdrawReasons,
 	},
 	weights::Weight,
 };
@@ -45,8 +45,7 @@ use sp_std::prelude::*;
 use crate::{
 	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, EraRewardPoints,
 	Exposure, ExposureOf, Forcing, IndividualExposure, MaxWinnersOf, Nominations,
-	PositiveImbalanceOf, RewardDestination, SessionInterface, StakingLedger,
-	ValidatorPrefs,
+	PositiveImbalanceOf, RewardDestination, SessionInterface, StakingLedger, ValidatorPrefs,
 };
 
 use super::{pallet::*, STAKING_ID};
@@ -159,8 +158,8 @@ impl<T: Config> Pallet<T> {
 		let mut ledger = <Ledger<T>>::get(&controller).ok_or(Error::<T>::NotController)?;
 
 		ledger
-		.claimed_rewards
-		.retain(|&x| x >= current_era.saturating_sub(history_depth));
+			.claimed_rewards
+			.retain(|&x| x >= current_era.saturating_sub(history_depth));
 
 		// Input data seems good, no errors allowed after this point
 		<Ledger<T>>::insert(&controller, &ledger);

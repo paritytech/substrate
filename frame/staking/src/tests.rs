@@ -19,7 +19,12 @@
 
 use super::{ConfigOp, Event, *};
 use frame_election_provider_support::{ElectionProvider, SortedListProvider, Support};
-use frame_support::{assert_err, assert_noop, assert_ok, assert_storage_noop, bounded_vec, dispatch::{extract_actual_weight, GetDispatchInfo, WithPostDispatchInfo}, pallet_prelude::*, traits::{Currency, Get, ReservableCurrency}};
+use frame_support::{
+	assert_err, assert_noop, assert_ok, assert_storage_noop, bounded_vec,
+	dispatch::{extract_actual_weight, GetDispatchInfo, WithPostDispatchInfo},
+	pallet_prelude::*,
+	traits::{Currency, Get, ReservableCurrency},
+};
 use mock::*;
 use pallet_balances::Error as BalancesError;
 use sp_runtime::{
@@ -1036,10 +1041,7 @@ fn reward_destination_works() {
 		mock::start_active_era(1);
 
 		// validator has unclaimed reward points at era 0.
-		assert_eq!(
-			Staking::eras_reward_points(&0).individual.get(&11),
-			Some(&1)
-		);
+		assert_eq!(Staking::eras_reward_points(&0).individual.get(&11), Some(&1));
 
 		mock::make_all_reward_payment(0);
 
@@ -1061,10 +1063,7 @@ fn reward_destination_works() {
 		);
 
 		// claimed reward points dropped
-		assert_eq!(
-			Staking::eras_reward_points(&0).individual.get(&10),
-			None
-		);
+		assert_eq!(Staking::eras_reward_points(&0).individual.get(&10), None);
 
 		// Change RewardDestination to Stash
 		<Payee<Test>>::insert(&11, RewardDestination::Stash);
@@ -1095,10 +1094,7 @@ fn reward_destination_works() {
 		);
 
 		// claimed reward points dropped
-		assert_eq!(
-			Staking::eras_reward_points(&1).individual.get(&10),
-			None
-		);
+		assert_eq!(Staking::eras_reward_points(&1).individual.get(&10), None);
 
 		// Change RewardDestination to Controller
 		<Payee<Test>>::insert(&11, RewardDestination::Controller);
@@ -1129,10 +1125,7 @@ fn reward_destination_works() {
 			})
 		);
 		// claimed reward points dropped
-		assert_eq!(
-			Staking::eras_reward_points(&2).individual.get(&10),
-			None
-		);
+		assert_eq!(Staking::eras_reward_points(&2).individual.get(&10), None);
 		// Check that amount in staked account is NOT increased.
 		assert_eq!(Balances::free_balance(11), recorded_stash_balance);
 	});
@@ -3771,19 +3764,13 @@ fn test_payout_stakers() {
 		let pre_payout_total_issuance = Balances::total_issuance();
 		RewardOnUnbalanceWasCalled::set(false);
 		// validator has unclaimed reward points at era 1.
-		assert_eq!(
-			Staking::eras_reward_points(&1).individual.get(&11),
-			Some(&1)
-		);
+		assert_eq!(Staking::eras_reward_points(&1).individual.get(&11), Some(&1));
 
 		// claim rewards
 		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1));
 
 		// claimed reward points dropped
-		assert_eq!(
-			Staking::eras_reward_points(&1).individual.get(&11),
-			None
-		);
+		assert_eq!(Staking::eras_reward_points(&1).individual.get(&11), None);
 
 		assert_eq_error_rate!(
 			Balances::total_issuance(),
@@ -5546,7 +5533,8 @@ fn reducing_history_depth_abrupt() {
 		// claiming reward does not work anymore
 		assert_noop!(
 			Staking::payout_stakers(RuntimeOrigin::signed(4), 3, current_era - 1),
-			Error::<Test>::NothingToClaim.with_weight(<Test as Config>::WeightInfo::payout_stakers_alive_staked(0))
+			Error::<Test>::NothingToClaim
+				.with_weight(<Test as Config>::WeightInfo::payout_stakers_alive_staked(0))
 		);
 
 		// new stakers can still bond
