@@ -675,7 +675,7 @@ pub type BoundedSupportsOf<E> = BoundedSupports<
 sp_core::generate_feature_enabled_macro!(runtime_benchmarks_enabled, feature = "runtime-benchmarks", $);
 sp_core::generate_feature_enabled_macro!(runtime_benchmarks_or_fuzz_enabled, any(feature = "runtime-benchmarks", feature = "fuzzing"), $);
 
-#[derive(Clone, Copy, Eq, Default)]
+#[derive(Clone, Copy, Eq, Default, Debug)]
 pub struct DataProviderBounds {
 	pub count: Option<u32>,
 	pub size: Option<u32>,
@@ -732,7 +732,7 @@ impl Ord for DataProviderBounds {
 ///
 /// Ordering: when comparing two instances of `ElectionBounds`, the `count` has priority over the
 /// `size`, ie. if `A.count > B.count`, then `A > B` regardless of their relative `size`.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 pub struct ElectionBounds {
 	pub voters: DataProviderBounds,
 	pub targets: DataProviderBounds,
@@ -815,23 +815,25 @@ impl ElectionBoundsBuilder {
 		self
 	}
 
-	/// Caps the maximum number of voters.
-	pub fn max_voters(mut self, voters: DataProviderBounds) -> Self {
+	/// Caps the maximum number of the voters bounds to `voters`. If `voters` bounds are less than
+	/// the current value, keeps it.
+	pub fn clamp_voters(mut self, voters: DataProviderBounds) -> Self {
 		self.voters = self.voters.map_or(None, |v| {
 			Some(DataProviderBounds {
-				count: v.count.max(voters.count),
-				size: v.size.max(voters.size),
+				count: v.count.map(|c| c.clamp(0, voters.count.unwrap_or(u32::MAX)).into()),
+				size: v.size.map(|c| c.clamp(0, voters.size.unwrap_or(u32::MAX)).into()),
 			})
 		});
 		self
 	}
 
-	/// Caps the maximum number of targets.
-	pub fn max_targets(mut self, targets: DataProviderBounds) -> Self {
+	/// Caps the maximum number of the targets to `targets`. If `targets` bounds are less than the
+	/// current value, keeps it.
+	pub fn clamp_targets(mut self, targets: DataProviderBounds) -> Self {
 		self.targets = self.targets.map_or(None, |t| {
 			Some(DataProviderBounds {
-				count: t.count.max(targets.count),
-				size: t.size.max(targets.size),
+				count: t.count.map(|c| c.clamp(0, targets.count.unwrap_or(u32::MAX)).into()),
+				size: t.size.map(|c| c.clamp(0, targets.size.unwrap_or(u32::MAX)).into()),
 			})
 		});
 		self
@@ -844,9 +846,4 @@ impl ElectionBoundsBuilder {
 			targets: self.targets.unwrap_or_default(),
 		}
 	}
-}
-
-#[cfg(test)]
-mod elections_bounds {
-	// TODO(gpestana)
 }

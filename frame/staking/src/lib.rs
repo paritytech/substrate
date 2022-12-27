@@ -819,7 +819,7 @@ impl<const MAX: u32> Get<u32> for FixedNominationsQuota<MAX> {
 /// length prefix of the outer `Vec`. To get the final size at any point, use
 /// [`final_byte_size_of`].
 pub(crate) struct ElectionSizeTracker<AccountId> {
-	size: usize,
+	pub size: usize,
 	_marker: sp_std::marker::PhantomData<AccountId>,
 }
 

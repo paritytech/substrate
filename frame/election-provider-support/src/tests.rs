@@ -452,3 +452,58 @@ fn index_assignments_generate_same_solution_as_plain_assignments() {
 
 	assert_eq!(solution, index_compact);
 }
+
+#[cfg(test)]
+mod elections_bounds {
+	use crate::*;
+
+	#[test]
+	fn data_provider_bounds_unbounded() {
+		let bounds = DataProviderBounds::new_unbounded();
+		assert!(!bounds.exhausted(None, None));
+		assert!(!bounds.exhausted(Some(10_000), Some(10_000)));
+	}
+
+	#[test]
+	fn election_bounds_builder_and_exhausted_bounds() {
+		// voter bounds exhausts if count > 100 or size > 1_000; target bounds exhausts if count >
+		// 200 or size > 2_000.
+		let bounds = ElectionBoundsBuilder::new()
+			.voters_count(100.into())
+			.voters_size(1_000.into())
+			.targets_count(200.into())
+			.targets_size(2_000.into())
+			.build();
+
+		assert!(!bounds.voters.exhausted(None, None));
+		assert!(!bounds.voters.exhausted(10.into(), 10.into()));
+		assert!(!bounds.voters.exhausted(None, 100.into()));
+		assert!(!bounds.voters.exhausted(1_000.into(), None));
+		assert!(bounds.voters.exhausted(None, 101.into()));
+		assert!(bounds.voters.exhausted(1_001.into(), None));
+
+		assert!(!bounds.targets.exhausted(None, None));
+		assert!(!bounds.targets.exhausted(20.into(), 20.into()));
+		assert!(!bounds.targets.exhausted(None, 200.into()));
+		assert!(!bounds.targets.exhausted(2_000.into(), None));
+		assert!(bounds.targets.exhausted(None, 201.into()));
+		assert!(bounds.targets.exhausted(2_001.into(), None));
+	}
+
+	#[test]
+	fn election_bounds_clamp_works() {
+		let bounds = ElectionBoundsBuilder::new()
+			.voters_count(10.into())
+			.voters_size(10.into())
+			.clamp_voters(DataProviderBounds { count: 5.into(), size: 20.into() })
+			.targets_count(20.into())
+			.targets_size(None)
+			.clamp_targets(DataProviderBounds { count: 30.into(), size: 30.into() })
+			.build();
+
+		assert_eq!(bounds.voters.count, 5.into());
+		assert_eq!(bounds.voters.size, 10.into());
+		assert_eq!(bounds.targets.count, 20.into());
+		assert_eq!(bounds.targets.size, None);
+	}
+}

@@ -721,6 +721,8 @@ pub mod pallet {
 		NominationsQuotaExceeded { staker: T::AccountId, exceeded_by: BalanceOf<T> },
 		/// Encapsulates the nomination quota for a given balance.
 		NominationsQuotaForBalance { balance: BalanceOf<T>, nominations_quota: u32 },
+		/// Voters size limit reached due to too many nominations.
+		SnapshotVotersSizeExceeded { size: u32 },
 	}
 
 	#[pallet::error]

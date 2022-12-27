@@ -295,10 +295,9 @@ parameter_types! {
 	pub static MinerMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static MinerMaxLength: u32 = 256;
 	pub static MockWeightInfo: MockedWeightInfo = MockedWeightInfo::Real;
-	pub static MaxElectingVoters: VoterIndex = u32::max_value();
-	pub static MaxElectableTargets: TargetIndex = TargetIndex::max_value();
 	pub static MaxWinners: u32 = 200;
 	pub static ElectionsBounds: ElectionBounds = ElectionBoundsBuilder::new().build();
+	pub static ElectionsBoundsOnChain: ElectionBounds = ElectionBoundsBuilder::new().build();
 
 	pub static EpochLength: u64 = 30;
 	pub static OnChainFallback: bool = true;
@@ -311,7 +310,7 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type DataProvider = StakingMock;
 	type WeightInfo = ();
 	type MaxWinners = MaxWinners;
-	type ElectionBounds = ElectionsBounds;
+	type ElectionBounds = ElectionsBoundsOnChain;
 }
 
 pub struct MockFallback;
@@ -403,8 +402,6 @@ impl crate::Config for Runtime {
 	type GovernanceFallback =
 		frame_election_provider_support::onchain::OnChainExecution<OnChainSeqPhragmen>;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
-	type MaxElectingVoters = MaxElectingVoters;
-	type MaxElectableTargets = MaxElectableTargets;
 	type MaxWinners = MaxWinners;
 	type MinerConfig = Self;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;

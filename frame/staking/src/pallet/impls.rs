@@ -18,8 +18,8 @@
 //! Implementations for the Staking FRAME Pallet.
 
 use frame_election_provider_support::{
-	data_provider, BoundedSupportsOf, DataProviderBounds, ElectionDataProvider,
-	ElectionProvider, ScoreProvider, SortedListProvider, VoteWeight, VoterOf,
+	data_provider, BoundedSupportsOf, DataProviderBounds, ElectionDataProvider, ElectionProvider,
+	ScoreProvider, SortedListProvider, VoteWeight, VoterOf,
 };
 use frame_support::{
 	dispatch::WithPostDispatchInfo,
@@ -795,6 +795,9 @@ impl<T: Config> Pallet<T> {
 					if voters_size_tracker.try_register_voter(targets.len(), voter_bounds).is_err()
 					{
 						// no more space left for the election result, stop iterating.
+						Self::deposit_event(Event::<T>::SnapshotVotersSizeExceeded {
+							size: voters_size_tracker.size as u32,
+						});
 						break
 					}
 
@@ -809,6 +812,9 @@ impl<T: Config> Pallet<T> {
 				// if this voter is a validator:
 				if voters_size_tracker.try_register_voter(1, voter_bounds).is_err() {
 					// no more space left for the election result, stop iterating over.
+					Self::deposit_event(Event::<T>::SnapshotVotersSizeExceeded {
+						size: voters_size_tracker.size as u32,
+					});
 					break
 				}
 				let self_vote = (
@@ -1007,9 +1013,10 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		// This can never fail -- if `maybe_max_len` is `Some(_)` we handle it.
 		let voters = Self::get_npos_voters(bounds);
 
-		debug_assert!(
-			!bounds.exhausted(Some(voters.encoded_size() as u32), Some(voters.len() as u32))
-		);
+		debug_assert!(!bounds.exhausted(
+			(voters.encoded_size().saturating_sub(1) as u32).into(),
+			(voters.len() as u32).into()
+		));
 
 		Ok(voters)
 	}

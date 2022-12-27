@@ -19,7 +19,7 @@
 
 use super::{ConfigOp, Event, *};
 use frame_election_provider_support::{
-	ElectionBounds, ElectionBoundsBuilder, ElectionProvider, SortedListProvider, Support,
+	ElectionBoundsBuilder, ElectionProvider, SortedListProvider, Support,
 };
 use frame_support::{
 	assert_noop, assert_ok, assert_storage_noop, bounded_vec,
@@ -4604,6 +4604,19 @@ mod election_data_provider {
 	}
 
 	#[test]
+	fn respects_snapshot_size_limits() {
+		ExtBuilder::default().build_and_execute(|| {
+			let bounds_builder = ElectionBoundsBuilder::new();
+			assert_eq!(
+				Staking::electing_voters(bounds_builder.voters_size(Some(25)).build().voters)
+					.unwrap()
+					.len(),
+				1
+			);
+		});
+	}
+
+	#[test]
 	fn nominations_quota_truncates() {
 		ExtBuilder::default()
 			.nominate(false)
@@ -4630,7 +4643,7 @@ mod election_data_provider {
 	}
 
 	#[test]
-	fn nominations_quota_limits() {
+	fn nominations_quota_limits_count() {
 		ExtBuilder::default()
 			.nominate(false)
 			.add_staker(
@@ -4657,6 +4670,35 @@ mod election_data_provider {
 						.map(|(stash, _, targets)| (*stash, targets.len()))
 						.collect::<Vec<_>>(),
 					vec![(11, 1), (21, 1), (31, 1), (61, 1), (71, 16)],
+				);
+			});
+	}
+
+	#[test]
+	fn nominations_quota_limits_size() {
+		ExtBuilder::default()
+			.nominate(false)
+			.add_staker(
+				71,
+				70,
+				333,
+				StakerStatus::<AccountId>::Nominator(vec![16, 15, 14, 13, 12, 11, 10]),
+			)
+			.build_and_execute(|| {
+				// nominations of controller 70 won't be added due to voter size limit exceeded.
+				let bounds = ElectionBoundsBuilder::new().voters_size(100.into()).build();
+				assert_eq!(
+					Staking::electing_voters(bounds.voters)
+						.unwrap()
+						.iter()
+						.map(|(stash, _, targets)| (*stash, targets.len()))
+						.collect::<Vec<_>>(),
+					vec![(11, 1), (21, 1), (31, 1)],
+				);
+
+				assert_eq!(
+					*staking_events().last().unwrap(),
+					Event::SnapshotVotersSizeExceeded { size: 75 }
 				);
 			});
 	}
@@ -5705,4 +5747,25 @@ fn scale_validator_count_errors() {
 			Error::<Test>::TooManyValidators,
 		);
 	})
+}
+
+#[cfg(test)]
+mod election_size_tracker {
+	use super::*;
+
+	#[test]
+	pub fn election_size_tracker_works() {
+		let mut size_tracker = ElectionSizeTracker::<AccountId>::new();
+		let voter_bounds = ElectionBoundsBuilder::new().voters_size(1_00.into()).build().voters;
+
+		assert!(size_tracker.try_register_voter(1, voter_bounds).is_ok());
+		assert!(size_tracker.try_register_voter(2, voter_bounds).is_ok());
+		assert!(size_tracker.size > 0 && size_tracker.size < 1_00);
+		let size_before_overflow = size_tracker.size;
+
+		// try many voters that will overflow the tracker's buffer.
+		assert!(size_tracker.try_register_voter(10, voter_bounds).is_err());
+		assert!(size_tracker.size > 0 && size_tracker.size < 1_00);
+		assert_eq!(size_tracker.size, size_before_overflow);
+	}
 }

@@ -654,16 +654,6 @@ pub mod pallet {
 		#[pallet::constant]
 		type SignedDepositWeight: Get<BalanceOf<Self>>;
 
-		/// The maximum number of electing voters to put in the snapshot. At the moment, snapshots
-		/// are only over a single block, but once multi-block elections are introduced they will
-		/// take place over multiple blocks.
-		#[pallet::constant]
-		type MaxElectingVoters: Get<SolutionVoterIndexOf<Self::MinerConfig>>;
-
-		/// The maximum number of electable targets to put in the snapshot.
-		#[pallet::constant]
-		type MaxElectableTargets: Get<SolutionTargetIndexOf<Self::MinerConfig>>;
-
 		/// The maximum number of winners that can be elected by this `ElectionProvider`
 		/// implementation.
 		///
@@ -671,6 +661,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxWinners: Get<u32>;
 
+		/// The maximum number of electing voters and electable targets to put in the snapshot.
+		/// At the moment, snapshots
+		/// are only over a single block, but once multi-block elections are introduced they will
+		/// take place over multiple blocks.
 		type ElectionBounds: Get<ElectionBounds>;
 
 		/// Handler for the slashed deposits.
@@ -1407,10 +1401,11 @@ impl<T: Config> Pallet<T> {
 	/// Extracted for easier weight calculation.
 	fn create_snapshot_external(
 	) -> Result<(Vec<T::AccountId>, Vec<VoterOf<T>>, u32), ElectionError<T>> {
-		let target_limit = T::MaxElectableTargets::get().saturated_into::<usize>();
-		let voter_limit = T::MaxElectingVoters::get().saturated_into::<usize>();
-
 		let election_bounds = T::ElectionBounds::get();
+		let target_limit =
+			election_bounds.targets.count.unwrap_or(u32::MAX).saturated_into::<usize>();
+		let voter_limit =
+			election_bounds.voters.count.unwrap_or(u32::MAX).saturated_into::<usize>();
 
 		let targets = T::DataProvider::electable_targets(election_bounds.targets)
 			.map_err(ElectionError::DataProvider)?;
@@ -2370,6 +2365,10 @@ mod tests {
 	fn snapshot_too_big_failure_onchain_fallback() {
 		// the `MockStaking` is designed such that if it has too many targets, it simply fails.
 		ExtBuilder::default().build_and_execute(|| {
+			// sets bounds on number of targets.
+			let new_bounds = ElectionBoundsBuilder::new().targets_count(1_000.into()).build();
+			crate::mock::ElectionsBounds::set(new_bounds);
+
 			Targets::set((0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>());
 
 			// Signed phase failed to open.
@@ -2398,6 +2397,10 @@ mod tests {
 	fn snapshot_too_big_failure_no_fallback() {
 		// and if the backup mode is nothing, we go into the emergency mode..
 		ExtBuilder::default().onchain_fallback(false).build_and_execute(|| {
+			// sets bounds on number of targets.
+			let new_bounds = ElectionBoundsBuilder::new().targets_count(1_000.into()).build();
+			crate::mock::ElectionsBounds::set(new_bounds);
+
 			crate::mock::Targets::set(
 				(0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>(),
 			);
@@ -2426,7 +2429,8 @@ mod tests {
 			// we have 8 voters in total.
 			assert_eq!(crate::mock::Voters::get().len(), 8);
 			// but we want to take 2.
-			crate::mock::MaxElectingVoters::set(2);
+			let new_bounds = ElectionBoundsBuilder::new().voters_count(2.into()).build();
+			crate::mock::ElectionsBounds::set(new_bounds);
 
 			// Signed phase opens just fine.
 			roll_to_signed();
@@ -2437,7 +2441,7 @@ mod tests {
 				SolutionOrSnapshotSize { voters: 2, targets: 4 }
 			);
 		})
-	}
+	} 
 
 	#[test]
 	fn untrusted_score_verification_is_respected() {

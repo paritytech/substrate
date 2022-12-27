@@ -24,7 +24,8 @@
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::{
-	onchain, BalancingConfig, ElectionDataProvider, SequentialPhragmen, VoteWeight,
+	onchain, BalancingConfig, ElectionBounds, ElectionBoundsBuilder, ElectionDataProvider,
+	SequentialPhragmen, VoteWeight,
 };
 use frame_support::{
 	construct_runtime,
@@ -632,12 +633,10 @@ frame_election_provider_support::generate_solution_type!(
 );
 
 parameter_types! {
+	pub ElectionBounds: ElectionBounds = ElectionBoundsBuilder::new().voters_count(40_000).targets_count(10_000.into()).build();
 	pub MaxNominations: u32 = <NposSolution16 as frame_election_provider_support::NposSolution>::LIMIT as u32;
-	pub MaxElectingVoters: u32 = 40_000;
-	pub MaxElectableTargets: u16 = 10_000;
 	// OnChain values are lower.
-	pub MaxOnChainElectingVoters: u32 = 5000;
-	pub MaxOnChainElectableTargets: u16 = 1250;
+	pub ElectionBoundsOnChain: ElectionBounds = ElectionBoundsBuilder::new().voters_count(5_000).targets_count(1_250.into()).build();
 	// The maximum winners that can be elected by the Election pallet which is equivalent to the
 	// maximum active validators the staking pallet can have.
 	pub MaxActiveValidators: u32 = 1000;
@@ -692,8 +691,7 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type DataProvider = <Runtime as pallet_election_provider_multi_phase::Config>::DataProvider;
 	type WeightInfo = frame_election_provider_support::weights::SubstrateWeight<Runtime>;
 	type MaxWinners = <Runtime as pallet_election_provider_multi_phase::Config>::MaxWinners;
-	type VotersBound = MaxOnChainElectingVoters;
-	type TargetsBound = MaxOnChainElectableTargets;
+	type ElectionBounds = ElectionBoundsOnChain;
 }
 
 impl pallet_election_provider_multi_phase::MinerConfig for Runtime {
@@ -740,9 +738,8 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type GovernanceFallback = onchain::OnChainExecution<OnChainSeqPhragmen>;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Self>, OffchainRandomBalancing>;
 	type ForceOrigin = EnsureRootOrHalfCouncil;
-	type MaxElectableTargets = MaxElectableTargets;
 	type MaxWinners = MaxActiveValidators;
-	type MaxElectingVoters = MaxElectingVoters;
+	type ElectionBounds = ElectionBounds;
 	type BenchmarkingConfig = ElectionProviderBenchmarkConfig;
 	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Self>;
 }
