@@ -85,16 +85,36 @@ impl SWCurveConfig for Config {
         res
     }
 
-    /// Default implementation for multi scalar multiplication
+    /// Overwroite the default implementation for multi scalar multiplication with host function calls
     fn msm(
         bases: &[Affine<Self>],
-        scalars: &[Self::ScalarField],
+        scalars: &[<Self as CurveConfig>::ScalarField],
     ) -> Result<Projective<Self>, usize> {
-        (bases.len() == scalars.len())
-            .then(|| VariableBaseMSM::msm_unchecked(bases, scalars))
-            .ok_or(usize::min(bases.len(), scalars.len()))
+        let bases: Vec<Vec<u8>> = bases
+            .into_iter()
+            .map(|elem| {
+                let mut serialized = vec![0; elem.serialized_size(Compress::Yes)];
+                let mut cursor = Cursor::new(&mut serialized[..]);
+                elem.serialize_with_mode(&mut cursor, Compress::Yes)
+                    .unwrap();
+                serialized
+            })
+            .collect();
+        let scalars: Vec<Vec<u8>> = scalars
+            .into_iter()
+            .map(|elem| {
+                let mut serialized = vec![0; elem.serialized_size(Compress::Yes)];
+                let mut cursor = Cursor::new(&mut serialized[..]);
+                elem.serialize_with_mode(&mut cursor, Compress::Yes)
+                    .unwrap();
+                serialized
+            })
+            .collect();
+        let result = sp_io::crypto::bls12_381_msm_g2(bases, scalars);
+        let cursor = Cursor::new(&result[..]);
+        let result = Self::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+        Ok(result.into())
     }
-
 }
 
 pub const G2_GENERATOR_X: Fq2 = Fq2::new(G2_GENERATOR_X_C0, G2_GENERATOR_X_C1);
