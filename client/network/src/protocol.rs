@@ -162,7 +162,7 @@ pub struct Protocol<B: BlockT, Client> {
 	/// Number of slots to allocate to light nodes.
 	default_peers_set_num_light: usize,
 	/// Used to report reputation changes.
-	peerset: sc_peerset::Peerset,
+	peerset_handle: sc_peerset::PeersetHandle,
 	/// Handles opening the unique substream and sending and receiving raw messages.
 	behaviour: Notifications,
 	/// List of notifications protocols that have been registered.
@@ -214,7 +214,7 @@ where
 		metrics_registry: Option<&Registry>,
 		chain_sync: Box<dyn ChainSync<B>>,
 		block_announces_protocol: sc_network_common::config::NonDefaultSetConfig,
-	) -> error::Result<(Self, sc_peerset::Peerset, Vec<(PeerId, Multiaddr)>)> {
+	) -> error::Result<(Self, sc_peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
 		let info = chain.info();
 
 		let boot_node_ids = {
@@ -255,7 +255,7 @@ where
 
 		let mut known_addresses = Vec::new();
 
-		let peerset = {
+		let (peerset, peerset_handle) = {
 			let mut sets =
 				Vec::with_capacity(NUM_HARDCODED_PEERSETS + network_config.extra_sets.len());
 
@@ -307,7 +307,7 @@ where
 
 		let behaviour = {
 			Notifications::new(
-				peerset.clone(),
+				peerset,
 				// NOTE: Block announcement protocol is still very much hardcoded into `Protocol`.
 				// 	This protocol must be the first notification protocol given to
 				// `Notifications`
@@ -351,7 +351,7 @@ where
 					network_config.default_peers_set.in_peers;
 				total.saturating_sub(network_config.default_peers_set_num_full) as usize
 			},
-			peerset: peerset.clone(),
+			peerset_handle: peerset_handle.clone(),
 			behaviour,
 			notification_protocols: iter::once(block_announces_protocol.notifications_protocol)
 				.chain(network_config.extra_sets.iter().map(|s| s.notifications_protocol.clone()))
@@ -366,7 +366,7 @@ where
 			block_announce_data_cache,
 		};
 
-		Ok((protocol, peerset, known_addresses))
+		Ok((protocol, peerset_handle, known_addresses))
 	}
 
 	/// Returns the list of all the peers we have an open channel to.
@@ -482,7 +482,7 @@ where
 
 	/// Adjusts the reputation of a node.
 	pub fn report_peer(&self, who: PeerId, reputation: sc_peerset::ReputationChange) {
-		self.peerset.report_peer(who, reputation)
+		self.peerset_handle.report_peer(who, reputation)
 	}
 
 	/// Perform time based maintenance.
@@ -517,7 +517,7 @@ where
 				"Peer is on different chain (our genesis: {} theirs: {})",
 				self.genesis_hash, status.genesis_hash
 			);
-			self.peerset.report_peer(who, rep::GENESIS_MISMATCH);
+			self.peerset_handle.report_peer(who, rep::GENESIS_MISMATCH);
 			self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_SYNC);
 
 			if self.boot_node_ids.contains(&who) {
@@ -537,7 +537,7 @@ where
 			// we're not interested in light peers
 			if status.roles.is_light() {
 				debug!(target: "sync", "Peer {} is unable to serve light requests", who);
-				self.peerset.report_peer(who, rep::BAD_ROLE);
+				self.peerset_handle.report_peer(who, rep::BAD_ROLE);
 				self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_SYNC);
 				return Err(())
 			}
@@ -550,7 +550,7 @@ where
 				.saturated_into::<u64>();
 			if blocks_difference > LIGHT_MAXIMAL_BLOCKS_DIFFERENCE {
 				debug!(target: "sync", "Peer {} is far behind us and will unable to serve light requests", who);
-				self.peerset.report_peer(who, rep::PEER_BEHIND_US_LIGHT);
+				self.peerset_handle.report_peer(who, rep::PEER_BEHIND_US_LIGHT);
 				self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_SYNC);
 				return Err(())
 			}
@@ -595,7 +595,7 @@ where
 				Ok(req) => req,
 				Err(BadPeer(id, repu)) => {
 					self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
-					self.peerset.report_peer(id, repu);
+					self.peerset_handle.report_peer(id, repu);
 					return Err(())
 				},
 			}
@@ -788,33 +788,33 @@ where
 
 	/// Set whether the syncing peers set is in reserved-only mode.
 	pub fn set_reserved_only(&self, reserved_only: bool) {
-		self.peerset.set_reserved_only(HARDCODED_PEERSETS_SYNC, reserved_only);
+		self.peerset_handle.set_reserved_only(HARDCODED_PEERSETS_SYNC, reserved_only);
 	}
 
 	/// Removes a `PeerId` from the list of reserved peers for syncing purposes.
 	pub fn remove_reserved_peer(&self, peer: PeerId) {
-		self.peerset.remove_reserved_peer(HARDCODED_PEERSETS_SYNC, peer);
+		self.peerset_handle.remove_reserved_peer(HARDCODED_PEERSETS_SYNC, peer);
 	}
 
 	/// Returns the list of reserved peers.
-	pub fn reserved_peers(&self) -> Vec<PeerId> {
+	pub fn reserved_peers(&self) -> impl Iterator<Item = &PeerId> {
 		self.behaviour.reserved_peers(HARDCODED_PEERSETS_SYNC)
 	}
 
 	/// Adds a `PeerId` to the list of reserved peers for syncing purposes.
 	pub fn add_reserved_peer(&self, peer: PeerId) {
-		self.peerset.add_reserved_peer(HARDCODED_PEERSETS_SYNC, peer);
+		self.peerset_handle.add_reserved_peer(HARDCODED_PEERSETS_SYNC, peer);
 	}
 
 	/// Sets the list of reserved peers for syncing purposes.
 	pub fn set_reserved_peers(&self, peers: HashSet<PeerId>) {
-		self.peerset.set_reserved_peers(HARDCODED_PEERSETS_SYNC, peers);
+		self.peerset_handle.set_reserved_peers(HARDCODED_PEERSETS_SYNC, peers);
 	}
 
 	/// Sets the list of reserved peers for the given protocol/peerset.
 	pub fn set_reserved_peerset_peers(&self, protocol: ProtocolName, peers: HashSet<PeerId>) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.peerset.set_reserved_peers(sc_peerset::SetId::from(index), peers);
+			self.peerset_handle.set_reserved_peers(sc_peerset::SetId::from(index), peers);
 		} else {
 			error!(
 				target: "sub-libp2p",
@@ -827,7 +827,7 @@ where
 	/// Removes a `PeerId` from the list of reserved peers.
 	pub fn remove_set_reserved_peer(&self, protocol: ProtocolName, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.peerset.remove_reserved_peer(sc_peerset::SetId::from(index), peer);
+			self.peerset_handle.remove_reserved_peer(sc_peerset::SetId::from(index), peer);
 		} else {
 			error!(
 				target: "sub-libp2p",
@@ -840,7 +840,7 @@ where
 	/// Adds a `PeerId` to the list of reserved peers.
 	pub fn add_set_reserved_peer(&self, protocol: ProtocolName, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.peerset.add_reserved_peer(sc_peerset::SetId::from(index), peer);
+			self.peerset_handle.add_reserved_peer(sc_peerset::SetId::from(index), peer);
 		} else {
 			error!(
 				target: "sub-libp2p",
@@ -855,14 +855,14 @@ where
 	/// Can be called multiple times with the same `PeerId`s.
 	pub fn add_default_set_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
 		for peer_id in peer_ids {
-			self.peerset.add_to_peers_set(HARDCODED_PEERSETS_SYNC, peer_id);
+			self.peerset_handle.add_to_peers_set(HARDCODED_PEERSETS_SYNC, peer_id);
 		}
 	}
 
 	/// Add a peer to a peers set.
 	pub fn add_to_peers_set(&self, protocol: ProtocolName, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.peerset.add_to_peers_set(sc_peerset::SetId::from(index), peer);
+			self.peerset_handle.add_to_peers_set(sc_peerset::SetId::from(index), peer);
 		} else {
 			error!(
 				target: "sub-libp2p",
@@ -875,7 +875,7 @@ where
 	/// Remove a peer from a peers set.
 	pub fn remove_from_peers_set(&self, protocol: ProtocolName, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.peerset.remove_from_peers_set(sc_peerset::SetId::from(index), peer);
+			self.peerset_handle.remove_from_peers_set(sc_peerset::SetId::from(index), peer);
 		} else {
 			error!(
 				target: "sub-libp2p",
@@ -1092,7 +1092,7 @@ where
 								peer_id,
 								msg,
 							);
-							self.peerset.report_peer(peer_id, rep::BAD_MESSAGE);
+							self.peerset_handle.report_peer(peer_id, rep::BAD_MESSAGE);
 							CustomMessageOutcome::None
 						},
 						Err(err) => {
@@ -1115,7 +1115,7 @@ where
 										err,
 										err2,
 									);
-									self.peerset.report_peer(peer_id, rep::BAD_MESSAGE);
+									self.peerset_handle.report_peer(peer_id, rep::BAD_MESSAGE);
 									CustomMessageOutcome::None
 								},
 							}
@@ -1150,7 +1150,7 @@ where
 							debug!(target: "sync", "Failed to parse remote handshake: {}", err);
 							self.bad_handshake_substreams.insert((peer_id, set_id));
 							self.behaviour.disconnect_peer(&peer_id, set_id);
-							self.peerset.report_peer(peer_id, rep::BAD_MESSAGE);
+							self.peerset_handle.report_peer(peer_id, rep::BAD_MESSAGE);
 							CustomMessageOutcome::None
 						},
 					}

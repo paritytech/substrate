@@ -257,7 +257,6 @@ async fn build_network_future<
 					sc_rpc::system::Request::NetworkReservedPeers(sender) => {
 						let reserved_peers = network.reserved_peers();
 						let reserved_peers = reserved_peers
-							.iter()
 							.map(|peer_id| peer_id.to_base58())
 							.collect();
 

@@ -550,7 +550,7 @@ impl Notifications {
 	}
 
 	/// Returns the list of reserved peers.
-	pub fn reserved_peers(&self, set_id: sc_peerset::SetId) -> Vec<PeerId> {
+	pub fn reserved_peers(&self, set_id: sc_peerset::SetId) -> impl Iterator<Item = &PeerId> {
 		self.peerset.reserved_peers(set_id)
 	}
 

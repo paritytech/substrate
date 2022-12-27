@@ -47,7 +47,7 @@ fn test_once() {
 	// Nodes that we have reserved. Always a subset of `known_nodes`.
 	let mut reserved_nodes = HashSet::<PeerId>::new();
 
-	let mut peerset = Peerset::from_config(PeersetConfig {
+	let (mut peerset, peerset_handle) = Peerset::from_config(PeersetConfig {
 		sets: vec![SetConfig {
 			bootnodes: (0..Uniform::new_inclusive(0, 4).sample(&mut rng))
 				.map(|_| {
@@ -122,7 +122,7 @@ fn test_once() {
 				2 =>
 					if let Some(id) = known_nodes.iter().choose(&mut rng) {
 						let val = Uniform::new_inclusive(i32::MIN, i32::MAX).sample(&mut rng);
-						peerset.report_peer(*id, ReputationChange::new(val, ""));
+						peerset_handle.report_peer(*id, ReputationChange::new(val, ""));
 					},
 
 				// If we generate 3, disconnect from a random node.
@@ -149,22 +149,22 @@ fn test_once() {
 				},
 
 				// 5 and 6 are the reserved-only mode.
-				5 => peerset.set_reserved_only(SetId::from(0), true),
-				6 => peerset.set_reserved_only(SetId::from(0), false),
+				5 => peerset_handle.set_reserved_only(SetId::from(0), true),
+				6 => peerset_handle.set_reserved_only(SetId::from(0), false),
 
 				// 7 and 8 are about switching a random node in or out of reserved mode.
 				7 => {
 					if let Some(id) =
 						known_nodes.iter().filter(|n| !reserved_nodes.contains(*n)).choose(&mut rng)
 					{
-						peerset.add_reserved_peer(SetId::from(0), *id);
+						peerset_handle.add_reserved_peer(SetId::from(0), *id);
 						reserved_nodes.insert(*id);
 					}
 				},
 				8 =>
 					if let Some(id) = reserved_nodes.iter().choose(&mut rng).cloned() {
 						reserved_nodes.remove(&id);
-						peerset.remove_reserved_peer(SetId::from(0), id);
+						peerset_handle.remove_reserved_peer(SetId::from(0), id);
 					},
 
 				_ => unreachable!(),

@@ -71,7 +71,7 @@ use sc_network_common::{
 	sync::SyncStatus,
 	ExHashT,
 };
-use sc_peerset::Peerset;
+use sc_peerset::PeersetHandle;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain::HeaderBackend;
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
@@ -116,7 +116,7 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	bandwidth: Arc<transport::BandwidthSinks>,
 	/// Peerset manager (PSM); manages the reputation of nodes and indicates the network which
 	/// nodes it should be connected to or not.
-	peerset: Peerset,
+	peerset: PeersetHandle,
 	/// Channel that sends messages to the actual worker.
 	to_worker: TracingUnboundedSender<ServiceToWorkerMsg<B>>,
 	/// Interface that can be used to delegate calls to `ChainSync`
@@ -675,7 +675,7 @@ where
 	}
 
 	/// Returns the list of reserved peers.
-	pub fn reserved_peers(&self) -> Vec<PeerId> {
+	pub fn reserved_peers(&self) -> impl Iterator<Item = &PeerId> {
 		self.network_service.behaviour().user_protocol().reserved_peers()
 	}
 }

@@ -743,7 +743,7 @@ pub enum DropReason {
 	/// Substream or connection has been explicitly refused by the target. In other words, the
 	/// peer doesn't actually belong to this set.
 	///
-	/// This has the side effect of calling [`Peerset::remove_from_peers_set`].
+	/// This has the side effect of calling [`PeersetHandle::remove_from_peers_set`].
 	Refused,
 }
 
@@ -787,9 +787,9 @@ mod tests {
 			}],
 		};
 
-		let peerset = Peerset::from_config(config);
-		peerset.add_reserved_peer(SetId::from(0), reserved_peer);
-		peerset.add_reserved_peer(SetId::from(0), reserved_peer2);
+		let (peerset, handle) = Peerset::from_config(config);
+		handle.add_reserved_peer(SetId::from(0), reserved_peer);
+		handle.add_reserved_peer(SetId::from(0), reserved_peer2);
 
 		assert_messages(
 			peerset,
@@ -820,7 +820,7 @@ mod tests {
 			}],
 		};
 
-		let peerset = Peerset::from_config(config);
+		let (mut peerset, _handle) = Peerset::from_config(config);
 		peerset.incoming(SetId::from(0), incoming, ii);
 		peerset.incoming(SetId::from(0), incoming, ii4);
 		peerset.incoming(SetId::from(0), incoming2, ii2);
@@ -851,7 +851,7 @@ mod tests {
 			}],
 		};
 
-		let peerset = Peerset::from_config(config);
+		let (mut peerset, _) = Peerset::from_config(config);
 		peerset.incoming(SetId::from(0), incoming, ii);
 
 		assert_messages(peerset, vec![Message::Reject(ii)]);
@@ -872,7 +872,7 @@ mod tests {
 			}],
 		};
 
-		let peerset = Peerset::from_config(config);
+		let (mut peerset, _handle) = Peerset::from_config(config);
 		peerset.add_to_peers_set(SetId::from(0), discovered);
 		peerset.add_to_peers_set(SetId::from(0), discovered);
 		peerset.add_to_peers_set(SetId::from(0), discovered2);
@@ -888,7 +888,7 @@ mod tests {
 
 	#[test]
 	fn test_peerset_banned() {
-		let mut peerset = Peerset::from_config(PeersetConfig {
+		let (mut peerset, handle) = Peerset::from_config(PeersetConfig {
 			sets: vec![SetConfig {
 				in_peers: 25,
 				out_peers: 25,
@@ -900,7 +900,7 @@ mod tests {
 
 		// We ban a node by setting its reputation under the threshold.
 		let peer_id = PeerId::random();
-		peerset.report_peer(peer_id, ReputationChange::new(BANNED_THRESHOLD - 1, ""));
+		handle.report_peer(peer_id, ReputationChange::new(BANNED_THRESHOLD - 1, ""));
 
 		let fut = futures::future::poll_fn(move |cx| {
 			// We need one polling for the message to be processed.
@@ -931,7 +931,7 @@ mod tests {
 
 	#[test]
 	fn test_relloc_after_banned() {
-		let mut peerset = Peerset::from_config(PeersetConfig {
+		let (mut peerset, handle) = Peerset::from_config(PeersetConfig {
 			sets: vec![SetConfig {
 				in_peers: 25,
 				out_peers: 25,
@@ -943,7 +943,7 @@ mod tests {
 
 		// We ban a node by setting its reputation under the threshold.
 		let peer_id = PeerId::random();
-		peerset.report_peer(peer_id, ReputationChange::new(BANNED_THRESHOLD - 1, ""));
+		handle.report_peer(peer_id, ReputationChange::new(BANNED_THRESHOLD - 1, ""));
 
 		let fut = futures::future::poll_fn(move |cx| {
 			// We need one polling for the message to be processed.
