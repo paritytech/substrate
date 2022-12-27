@@ -674,10 +674,9 @@ impl<T: Config> Commission<T> {
 	/// Set the pool's commission.
 	///
 	/// Update commission based on `current`. If a `None` current value is supplied, allow the
-	/// commission to be removed in all cases, without any throttling restrictions. Do not allow a
-	/// commission above global maximum if set. If `change_rate` is present, record the current
-	/// block  as the previously updated commission. If the supplied commission is zero, `None` will
-	/// be  inserted and `payee` will be ignored.
+	/// commission to be removed in all cases, without any throttling restrictions. If `change_rate`
+	/// is present, record the current block  as the previously updated commission. If the supplied
+	/// commission is zero, `None` will be  inserted and `payee` will be ignored.
 	fn maybe_update_current(
 		&mut self,
 		current: &Option<(Perbill, T::AccountId)>,
@@ -686,12 +685,7 @@ impl<T: Config> Commission<T> {
 			self.current = None;
 		} else {
 			let (commission, payee) = current.as_ref().ok_or(Error::<T>::NoCommissionSet)?;
-
 			ensure!(!self.throttling(&commission), Error::<T>::CommissionChangeThrottled);
-			ensure!(
-				GlobalMaxCommission::<T>::get().map_or(true, |g| commission <= &g),
-				Error::<T>::GlobalMaxCommissionExceeded
-			);
 			ensure!(
 				self.max.map_or(true, |m| commission <= &m),
 				Error::<T>::CommissionExceedsMaximum
@@ -1501,9 +1495,9 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type MaxPoolMembersPerPool<T: Config> = StorageValue<_, u32, OptionQuery>;
 
-	/// The maximum commission that can be charged. Checked on pool commission updates. Also applied
-	/// to payouts as to bound commissions that are > GlobalMaxCommission, necessary if a future
-	/// `GlobalMaxCommission` is lower than some current pool commissions.
+	/// The maximum commission that can be charged. Used on commissions on payouts to bound pool
+	/// commissions that are > GlobalMaxCommission, necessary if a future `GlobalMaxCommission` is
+	/// lower than some current pool commissions.
 	#[pallet::storage]
 	pub type GlobalMaxCommission<T: Config> = StorageValue<_, Perbill, OptionQuery>;
 
@@ -1721,8 +1715,6 @@ pub mod pallet {
 		NoCommissionSet,
 		/// No account has been set to receive commission.
 		NoCommissionPayeeSet,
-		/// The supplied commission exceeds the global maximum commission.
-		GlobalMaxCommissionExceeded,
 		/// The pool's max commission cannot be set higher than the existing value.
 		MaxCommissionRestricted,
 		/// The supplied commission exceeds the max allowed commission.

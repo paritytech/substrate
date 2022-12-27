@@ -5373,9 +5373,6 @@ mod commission {
 	#[test]
 	fn global_max_commission_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			// Remove 90% global maximum commission
-			GlobalMaxCommission::<Runtime>::set(None);
-
 			// With global maximum commission removed, we can now set a 100%
 			// commission.
 			assert_ok!(Pools::set_commission(
@@ -5390,20 +5387,6 @@ mod commission {
 				1,
 				Some((Perbill::from_percent(95), 900))
 			));
-
-			// Bring back global max commission, this time of 80%
-			GlobalMaxCommission::<Runtime>::set(Some(Perbill::from_percent(80)));
-
-			// Attempting to set a commission of 85% will now fail, even though it is
-			// more restrictive than the current commission of 95%
-			assert_noop!(
-				Pools::set_commission(
-					RuntimeOrigin::signed(900),
-					1,
-					Some((Perbill::from_percent(85), 900))
-				),
-				Error::<Runtime>::GlobalMaxCommissionExceeded
-			);
 
 			// Succesfully set max commission of 75%
 			assert_ok!(Pools::set_commission_max(
@@ -5465,17 +5448,6 @@ mod commission {
 					Some((Perbill::from_percent(5), 900)),
 				),
 				Error::<Runtime>::DoesNotHavePermission
-			);
-
-			// We attempt to increase the commission to 100%, which is disallowed due
-			// to global max commission of 90%.
-			assert_noop!(
-				Pools::set_commission(
-					RuntimeOrigin::signed(900),
-					1,
-					Some((Perbill::from_percent(100), 900))
-				),
-				Error::<Runtime>::GlobalMaxCommissionExceeded
 			);
 
 			// Set the initial commission to 5%.
@@ -5648,9 +5620,6 @@ mod commission {
 				Pools::set_commission_max(RuntimeOrigin::signed(1), 1, Perbill::from_percent(5)),
 				Error::<Runtime>::DoesNotHavePermission
 			);
-
-			// Remove global maximum commission
-			GlobalMaxCommission::<Runtime>::set(None);
 
 			// Set a max commission commission pool 1 to 80%
 			assert_ok!(Pools::set_commission_max(
