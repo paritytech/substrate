@@ -620,7 +620,7 @@ mod ensure {
 		/// Returns [`ArithmeticError`] if `d == 0` or `n / d` exceeds accuracy.
 		///
 		/// Similar to [`FixedPointNumber::checked_from_rational()`] but returning an
-		/// `ArithmeticError` error
+		/// [`ArithmeticError`] error.
 		///
 		/// ```
 		/// use sp_arithmetic::{traits::EnsureFixedPointNumber, ArithmeticError, FixedI64};
