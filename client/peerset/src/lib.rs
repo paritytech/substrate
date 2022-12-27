@@ -107,16 +107,11 @@ impl ReputationChange {
 
 /// Shared handle to the peer set manager (PSM). Distributed around the code.
 #[derive(Debug, Clone)]
-pub struct Peerset {
+pub struct PeersetHandle {
 	inner: Arc<Mutex<PeersetInner>>,
 }
 
-impl Peerset {
-	/// Create PSM.
-	pub fn from_config(config: PeersetConfig) -> Self {
-		Self { inner: Arc::new(Mutex::new(PeersetInner::from_config(config))) }
-	}
-
+impl PeersetHandle {
 	/// Adds a new reserved peer. The peerset will make an effort to always remain connected to
 	/// this peer.
 	///
@@ -166,6 +161,22 @@ impl Peerset {
 		// TODO: refactor into sync function.
 		future::ready(Ok(self.inner.lock().peer_reputation(peer_id)))
 	}
+}
+
+/// Side of the peer set manager owned by the network. In other words, the "receiving" side.
+///
+/// Implements the `Stream` trait and can be polled for messages. The `Stream` never ends and never
+/// errors.
+pub struct Peerset {
+	inner: Arc<Mutex<PeersetInner>>,
+}
+
+impl Peerset {
+	/// Builds a new peerset from the given configuration.
+	pub fn from_config(config: PeersetConfig) -> (Self, PeersetHandle) {
+		let inner = Arc::new(Mutex::new(PeersetInner::from_config(config)));
+		(Self { inner: inner.clone() }, PeersetHandle { inner })
+	}
 
 	/// Notify PSM that we recived incoming connection. Will be answered either with
 	/// a corresponding `Accept` or `Reject`, except if we were already connected to this peer.
@@ -181,11 +192,6 @@ impl Peerset {
 		self.inner.lock().dropped(set_id, peer_id, reason);
 	}
 
-	/// Produces a JSON object containing the state of the peerset manager, for debugging purposes.
-	pub fn debug_info(&self) -> serde_json::Value {
-		self.inner.lock().debug_info()
-	}
-
 	/// Returns the list of reserved peers.
 	pub fn reserved_peers(&self, set_id: SetId) -> Vec<PeerId> {
 		self.inner.lock().reserved_peers(set_id)
@@ -194,6 +200,11 @@ impl Peerset {
 	/// Returns the number of peers that we have discovered.
 	pub fn num_discovered_peers(&self) -> usize {
 		self.inner.lock().num_discovered_peers()
+	}
+
+	/// Produces a JSON object containing the state of the peerset manager, for debugging purposes.
+	pub fn debug_info(&self) -> serde_json::Value {
+		self.inner.lock().debug_info()
 	}
 }
 
@@ -264,12 +275,9 @@ pub struct SetConfig {
 	pub reserved_only: bool,
 }
 
-/// Side of the peer set manager owned by the network. In other words, the "receiving" side.
-///
-/// Implements the `Stream` trait and can be polled for messages. The `Stream` never ends and never
-/// errors.
+/// Internal PSM data hidden behind `Arc<Mutex<>>` in [`PeersetHandle`] and [`Peerset`].
 #[derive(Debug)]
-pub struct PeersetInner {
+struct PeersetInner {
 	/// Underlying data structure for the nodes's states.
 	data: peersstate::PeersState,
 	/// For each set, lists of nodes that don't occupy slots and that we should try to always be
@@ -872,10 +880,10 @@ mod tests {
 			}],
 		};
 
-		let (mut peerset, _handle) = Peerset::from_config(config);
-		peerset.add_to_peers_set(SetId::from(0), discovered);
-		peerset.add_to_peers_set(SetId::from(0), discovered);
-		peerset.add_to_peers_set(SetId::from(0), discovered2);
+		let (mut peerset, handle) = Peerset::from_config(config);
+		handle.add_to_peers_set(SetId::from(0), discovered);
+		handle.add_to_peers_set(SetId::from(0), discovered);
+		handle.add_to_peers_set(SetId::from(0), discovered2);
 
 		assert_messages(
 			peerset,

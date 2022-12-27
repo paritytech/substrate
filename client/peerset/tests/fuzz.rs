@@ -115,7 +115,7 @@ fn test_once() {
 				1 => {
 					let new_id = PeerId::random();
 					known_nodes.insert(new_id);
-					peerset.add_to_peers_set(SetId::from(0), new_id);
+					peerset_handle.add_to_peers_set(SetId::from(0), new_id);
 				},
 
 				// If we generate 2, adjust a random reputation.
