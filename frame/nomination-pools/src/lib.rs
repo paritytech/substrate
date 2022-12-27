@@ -1501,7 +1501,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type MaxPoolMembersPerPool<T: Config> = StorageValue<_, u32, OptionQuery>;
 
-	/// The maximum commission that can be charged. Used on commissions on payouts to bound pool
+	/// The maximum commission that can be charged by a pool. Used on commission payouts to bound pool
 	/// commissions that are > GlobalMaxCommission, necessary if a future `GlobalMaxCommission` is
 	/// lower than some current pool commissions.
 	#[pallet::storage]
@@ -2383,14 +2383,9 @@ pub mod pallet {
 
 		/// Set the commission of a pool.
 		///
-		/// The dispatch origin of this call must be signed by the `root` role of the pool. If the
-		/// pool has a max commission set, the commission supplied must be less or equal to that
-		/// value.
-		///
-		/// If the max commission has not yet been set, then the commission range is not bounded. A
-		/// `payee` must be provided if commission has not yet been set (still `None`). Once
-		/// commission has been set, the `payee` can be omitted in further calls. If a `payee`
-		/// update is desired, the commission must still be passed into the call.
+		/// The dispatch origin of this call must be signed by the `root` role of the pool. Both a
+		/// commission percentage and a commission payee must be provided in the `current` tuple. Where
+		/// a `current` of `None` is provided, any current commission will be removed.
 		#[pallet::call_index(14)]
 		#[pallet::weight(T::WeightInfo::set_commission())]
 		pub fn set_commission(
@@ -2410,12 +2405,7 @@ pub mod pallet {
 
 		/// Set the maximum commission of a pool.
 		///
-		/// The dispatch origin of this call must be signed by the `root` role of the pool. If a
-		/// maximum commission already exists prior to this call, then the updated max commission
-		/// must be lower, otherwise this call will fail.
-		///
-		/// This call also updates the pool's current commission to the new maximum if the current
-		/// commission is higher than the maximum supplied.
+		/// The dispatch origin of this call must be signed by the `root` role of the pool.
 		#[pallet::call_index(15)]
 		#[pallet::weight(T::WeightInfo::set_commission_max())]
 		pub fn set_commission_max(
@@ -2436,11 +2426,7 @@ pub mod pallet {
 
 		/// Set the commission change rate for a pool.
 		///
-		/// The dispatch origin of this call must be signed by the `root` role of the pool. If a
-		/// change rate is already present, this call will only succeed if a more restrictive change
-		/// rate configuration is given.
-		///
-		/// If a change rate configuration does not yet exist, the provided values are set.
+		/// The dispatch origin of this call must be signed by the `root` role of the pool.
 		#[pallet::call_index(16)]
 		#[pallet::weight(T::WeightInfo::set_commission_change_rate())]
 		pub fn set_commission_change_rate(
@@ -2674,8 +2660,8 @@ impl<T: Config> Pallet<T> {
 		member.last_recorded_reward_counter = current_reward_counter;
 		reward_pool.register_claimed_reward(pending_rewards);
 
-		// Gets the commission percentage and payee to be paid if commission has
-		// been set. Otherwise, `None` is returned.
+		// Gets the commission percentage and payee to be paid if commission has been set. Otherwise,
+		// `None` is returned.
 		let maybe_commission = &bonded_pool.commission.get_commission_and_payee(&pending_rewards);
 
 		if let Some((pool_commission, payee)) = maybe_commission {
