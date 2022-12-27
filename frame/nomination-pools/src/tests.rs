@@ -6079,7 +6079,6 @@ mod commission {
 		})
 	}
 
-
 	#[test]
 	fn global_max_prevents_100_percent_commission_payout() {
 		ExtBuilder::default().build_and_execute(|| {
@@ -6125,8 +6124,8 @@ mod commission {
 				&mut reward_pool
 			));
 
-			// Confirm the commission was only 9 points out of 10 points, and the payout was 1 out of 10
-			// points, reflecting the 90% global max commission.
+			// Confirm the commission was only 9 points out of 10 points, and the payout was 1 out
+			// of 10 points, reflecting the 90% global max commission.
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 1, commission: 9 },]

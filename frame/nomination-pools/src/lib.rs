@@ -2682,8 +2682,8 @@ impl<T: Config> Pallet<T> {
 
 		// Transfer remaining payout to the member.
 		//
-		// In scenarios where commission is 100%, `pending_rewards` will be zero. We therefore check if
-		// there is a non-zero payout to be transferred.
+		// In scenarios where commission is 100%, `pending_rewards` will be zero. We therefore check
+		// if there is a non-zero payout to be transferred.
 		if pending_rewards > Zero::zero() {
 			T::Currency::transfer(
 				&bonded_pool.reward_account(),
