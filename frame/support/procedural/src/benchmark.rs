@@ -157,6 +157,7 @@ pub fn benchmarks(tokens: TokenStream) -> TokenStream {
 	let mut block = parse_macro_input!(tokens as BareBlock);
 	let mut expanded_stmts: Vec<TokenStream2> = Vec::new();
 	let mut benchmark_defs: Vec<BenchmarkDef> = Vec::new();
+	let mut benchmark_names: Vec<Ident> = Vec::new();
 	for stmt in &mut block.stmts {
 		let mut found_item: Option<(ItemFn, bool)> = None;
 		if let Stmt::Item(stmt) = stmt {
@@ -196,6 +197,7 @@ pub fn benchmarks(tokens: TokenStream) -> TokenStream {
 
 			// expand benchmark_def
 			let expanded = expand_benchmark(benchmark_def.clone(), &item_fn.sig.ident, is_instance);
+			benchmark_names.push(item_fn.sig.ident.clone());
 
 			expanded_stmts.push(expanded);
 			benchmark_defs.push(benchmark_def);
@@ -205,11 +207,17 @@ pub fn benchmarks(tokens: TokenStream) -> TokenStream {
 		}
 	}
 
-	// TODO: we can now do outer macro pattern stuff with benchmark_defs here
+	// TODO: components() after SelectedBenchmark
 
 	let res = quote! {
 		#(#expanded_stmts)
 		*
+
+		#[allow(non_camel_case_types)]
+		enum SelectedBenchmark {
+			#(#benchmark_names),
+			*
+		}
 	};
 	println!("{}", res.to_string());
 	res.into()
