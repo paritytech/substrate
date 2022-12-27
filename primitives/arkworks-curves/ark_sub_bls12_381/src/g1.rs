@@ -5,7 +5,7 @@ use ark_models::{
 	bls12,
 	bls12::Bls12Config,
 	models::CurveConfig,
-	short_weierstrass::{Affine, SWCurveConfig},
+	short_weierstrass::{Affine, Projective, SWCurveConfig},
 	AffineRepr, Group,
 };
 use ark_serialize::{Compress, SerializationError};
