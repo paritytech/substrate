@@ -39,6 +39,45 @@ impl SWCurveConfig for Config {
     fn mul_by_a(_: Self::BaseField) -> Self::BaseField {
         Self::BaseField::zero()
     }
+
+    /// Default implementation of group multiplication for projective
+    /// coordinates
+    fn mul_projective(base: &Projective<Self>, scalar: &[u64]) -> Projective<Self> {
+        let mut res = Projective::<Self>::zero();
+        for b in ark_ff::BitIteratorBE::without_leading_zeros(scalar) {
+            res.double_in_place();
+            if b {
+                res += base;
+            }
+        }
+
+        res
+    }
+
+    /// Default implementation of group multiplication for affine
+    /// coordinates.
+    fn mul_affine(base: &Affine<Self>, scalar: &[u64]) -> Projective<Self> {
+        let mut res = Projective::<Self>::zero();
+        for b in ark_ff::BitIteratorBE::without_leading_zeros(scalar) {
+            res.double_in_place();
+            if b {
+                res += base
+            }
+        }
+
+        res
+    }
+
+    /// Default implementation for multi scalar multiplication
+    fn msm(
+        bases: &[Affine<Self>],
+        scalars: &[Self::ScalarField],
+    ) -> Result<Projective<Self>, usize> {
+        (bases.len() == scalars.len())
+            .then(|| VariableBaseMSM::msm_unchecked(bases, scalars))
+            .ok_or(usize::min(bases.len(), scalars.len()))
+    }
+
 }
 
 pub type G1SWAffine = SWAffine<Config>;
