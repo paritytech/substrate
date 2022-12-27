@@ -300,7 +300,7 @@ pub mod weights;
 mod pallet;
 
 use codec::{Decode, Encode, HasCompact, MaxEncodedLen};
-use frame_election_provider_support::{DataProviderBounds, ElectionBounds, VoteWeight};
+use frame_election_provider_support::{DataProviderBounds, VoteWeight};
 use frame_support::{
 	traits::{Currency, Defensive, Get},
 	weights::Weight,

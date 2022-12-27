@@ -19,12 +19,13 @@
 
 use crate::{self as pallet_babe, Config, CurrentSlot};
 use codec::Encode;
-use frame_election_provider_support::{onchain, SequentialPhragmen};
+use frame_election_provider_support::{onchain, SequentialPhragmen, ElectionBoundsBuilder, ElectionBounds};
 use frame_support::{
 	parameter_types,
 	traits::{ConstU128, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem, OnInitialize},
 };
 use pallet_session::historical as pallet_session_historical;
+use pallet_staking::FixedNominationsQuota;
 use sp_consensus_babe::{AuthorityId, AuthorityPair, Slot};
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sp_core::{
@@ -170,6 +171,7 @@ parameter_types! {
 	pub const SlashDeferDuration: EraIndex = 0;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(16);
+	pub static ElectionsBounds: ElectionBounds = ElectionBoundsBuilder::new().build();
 }
 
 pub struct OnChainSeqPhragmen;
@@ -179,12 +181,10 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type DataProvider = Staking;
 	type WeightInfo = ();
 	type MaxWinners = ConstU32<100>;
-	type VotersBounds = ElectionBounds::new_unbounded();
-	type TargetsBounds = ElectionBounds::new_unbounded();
+	type ElectionBounds = ElectionsBounds;
 }
 
 impl pallet_staking::Config for Test {
-	type MaxNominations = ConstU32<16>;
 	type RewardRemainder = ();
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type RuntimeEvent = RuntimeEvent;
@@ -211,6 +211,7 @@ impl pallet_staking::Config for Test {
 	type OnStakerSlash = ();
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
+	type NominationsQuota = FixedNominationsQuota<16>;
 }
 
 impl pallet_offences::Config for Test {
