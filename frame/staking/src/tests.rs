@@ -4506,14 +4506,14 @@ mod election_data_provider {
 			.add_staker(81, 80, 50, StakerStatus::<AccountId>::Nominator(vec![21]))
 			.build_and_execute(|| {
 				assert_ok!(<Staking as ElectionDataProvider>::electing_voters(
-					ElectionBounds::new_unbounded()
+					DataProviderBounds::new_unbounded()
 				));
 				assert_eq!(MinimumActiveStake::<Test>::get(), 10);
 
 				// remove staker with lower bond by limiting the number of voters and check
 				// `MinimumActiveStake` again after electing voters.
-				let bounds = ElectionBoundsBuilder::new().count(Some(5)).build();
-				assert_ok!(<Staking as ElectionDataProvider>::electing_voters(bounds));
+				let bounds = ElectionBoundsBuilder::new().voters_count(Some(5)).build();
+				assert_ok!(<Staking as ElectionDataProvider>::electing_voters(bounds.voters));
 				assert_eq!(MinimumActiveStake::<Test>::get(), 50);
 			});
 	}
@@ -4522,7 +4522,7 @@ mod election_data_provider {
 	fn set_minimum_active_stake_zero_correct() {
 		ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 			assert_ok!(<Staking as ElectionDataProvider>::electing_voters(
-				ElectionBounds::new_unbounded()
+				DataProviderBounds::new_unbounded()
 			));
 			assert_eq!(MinimumActiveStake::<Test>::get(), 0);
 		});
@@ -4532,7 +4532,7 @@ mod election_data_provider {
 	fn voters_include_self_vote() {
 		ExtBuilder::default().nominate(false).build_and_execute(|| {
 			assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| Staking::electing_voters(
-				ElectionBounds::new_unbounded()
+				DataProviderBounds::new_unbounded()
 			)
 			.unwrap()
 			.into_iter()
@@ -4552,39 +4552,52 @@ mod election_data_provider {
 
 				// if limits is less..
 				assert_eq!(
-					Staking::electing_voters(bounds_builder.count(Some(1)).build()).unwrap().len(),
+					Staking::electing_voters(bounds_builder.voters_count(Some(1)).build().voters)
+						.unwrap()
+						.len(),
 					1
 				);
 
 				// if limit is equal..
 				assert_eq!(
-					Staking::electing_voters(bounds_builder.count(Some(5)).build()).unwrap().len(),
+					Staking::electing_voters(bounds_builder.voters_count(Some(5)).build().voters)
+						.unwrap()
+						.len(),
 					5
 				);
 
 				// if limit is more.
 				assert_eq!(
-					Staking::electing_voters(bounds_builder.count(Some(55)).build()).unwrap().len(),
+					Staking::electing_voters(bounds_builder.voters_count(Some(55)).build().voters)
+						.unwrap()
+						.len(),
 					5
 				);
 
 				// if target limit is more..
 				assert_eq!(
-					Staking::electable_targets(bounds_builder.count(Some(6)).build())
-						.unwrap()
-						.len(),
+					Staking::electable_targets(
+						bounds_builder.targets_count(Some(6)).build().targets
+					)
+					.unwrap()
+					.len(),
 					4
 				);
 				assert_eq!(
-					Staking::electable_targets(bounds_builder.count(Some(4)).build())
-						.unwrap()
-						.len(),
+					Staking::electable_targets(
+						bounds_builder.targets_count(Some(4)).build().targets
+					)
+					.unwrap()
+					.len(),
 					4
 				);
 
 				// if target limit is less, then we return an error.
 				assert_eq!(
-					Staking::electable_targets(bounds_builder.count(Some(1)).build()).unwrap_err(),
+					Staking::electable_targets(
+						bounds_builder.targets_count(Some(1)).build().targets
+					)
+					.unwrap_err(),
 					"Target snapshot too big"
 				);
 			});
@@ -4602,7 +4615,7 @@ mod election_data_provider {
 			)
 			.build_and_execute(|| {
 				assert_eq!(
-					Staking::electing_voters(ElectionBounds::new_unbounded())
+					Staking::electing_voters(DataProviderBounds::new_unbounded())
 						.unwrap()
 						.iter()
 						.map(|(stash, _, targets)| (*stash, targets.len()))
@@ -4638,7 +4651,7 @@ mod election_data_provider {
 			)
 			.build_and_execute(|| {
 				assert_eq!(
-					Staking::electing_voters(ElectionBounds::new_unbounded())
+					Staking::electing_voters(DataProviderBounds::new_unbounded())
 						.unwrap()
 						.iter()
 						.map(|(stash, _, targets)| (*stash, targets.len()))
@@ -5097,7 +5110,7 @@ fn nomination_quota_max_changes_decoding() {
 			// pre-condition
 			assert_eq!(AbsoluteMaxNominationsOf::<Test>::get(), 16);
 
-			let unbonded_election = ElectionBounds::new_unbounded();
+			let unbonded_election = DataProviderBounds::new_unbounded();
 
 			assert_eq!(
 				Nominators::<Test>::iter()

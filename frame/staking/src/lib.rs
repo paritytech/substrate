@@ -300,7 +300,7 @@ pub mod weights;
 mod pallet;
 
 use codec::{Decode, Encode, HasCompact, MaxEncodedLen};
-use frame_election_provider_support::{ElectionBounds, VoteWeight};
+use frame_election_provider_support::{DataProviderBounds, ElectionBounds, VoteWeight};
 use frame_support::{
 	traits::{Currency, Defensive, Get},
 	weights::Weight,
@@ -833,7 +833,7 @@ impl<AccountId> ElectionSizeTracker<AccountId> {
 	pub(crate) fn try_register_voter(
 		&mut self,
 		votes: usize,
-		bounds: ElectionBounds,
+		bounds: DataProviderBounds,
 	) -> Result<(), ()> {
 		let voter_size = Self::voter_size(votes);
 		let size_after = self.size.saturating_add(voter_size);
