@@ -379,7 +379,7 @@ mod ensure {
 		///
 		/// If it fails, [`ArithmeticError`] is returned.
 		///
-		/// Similar to [`CheckedSub::checked_sub()`] but returning an `ArithmeticError` error
+		/// Similar to [`CheckedSub::checked_sub()`] but returning an [`ArithmeticError`] error.
 		///
 		/// ```
 		/// use sp_arithmetic::{traits::EnsureSub, ArithmeticError};
