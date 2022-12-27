@@ -2670,7 +2670,7 @@ impl<T: Config> Pallet<T> {
 			pending_rewards = pending_rewards.saturating_sub(*pool_commission);
 
 			// Send any non-zero `pool_commission` to the commission `payee`.
-			if pool_commission != &BalanceOf::<T>::zero() {
+			if pool_commission > &Zero::zero() {
 				T::Currency::transfer(
 					&bonded_pool.reward_account(),
 					&payee,
@@ -2681,14 +2681,19 @@ impl<T: Config> Pallet<T> {
 		}
 
 		// Transfer remaining payout to the member.
-		T::Currency::transfer(
-			&bonded_pool.reward_account(),
-			&member_account,
-			pending_rewards,
-			// defensive: the depositor has put existential deposit into the pool and it stays
-			// untouched, reward account shall not die.
-			ExistenceRequirement::AllowDeath,
-		)?;
+		//
+		// In scenarios where commission is 100%, `pending_rewards` will be zero. We therefore check if
+		// there is a non-zero payout to be transferred.
+		if pending_rewards > Zero::zero() {
+			T::Currency::transfer(
+				&bonded_pool.reward_account(),
+				&member_account,
+				pending_rewards,
+				// defensive: the depositor has put existential deposit into the pool and it stays
+				// untouched, reward account shall not die.
+				ExistenceRequirement::AllowDeath,
+			)?;
+		}
 
 		Self::deposit_event(Event::<T>::PaidOut {
 			member: member_account.clone(),
