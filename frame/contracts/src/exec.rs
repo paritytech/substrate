@@ -1342,7 +1342,7 @@ where
 					"
 					`buffer` is of type `DebugBufferVec`,
 					`DebugBufferVec` is a `BoundedVec`,
-					`BoundedVec::bound()` <= `BoundedVec::len()`;
+					`BoundedVec::len()` <= `BoundedVec::bound()`;
 					qed
 				",
 				);
