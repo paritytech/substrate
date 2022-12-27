@@ -617,7 +617,7 @@ mod ensure {
 	pub trait EnsureFixedPointNumber: FixedPointNumber {
 		/// Creates `self` from a rational number. Equal to `n / d`.
 		///
-		/// Returns `ArithmeticError` if `d == 0` or `n / d` exceeds accuracy.
+		/// Returns [`ArithmeticError`] if `d == 0` or `n / d` exceeds accuracy.
 		///
 		/// Similar to [`FixedPointNumber::checked_from_rational()`] but returning an
 		/// `ArithmeticError` error
