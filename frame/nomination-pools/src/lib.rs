@@ -586,13 +586,14 @@ pub struct PoolRoles<AccountId> {
 /// Pool commission.
 ///
 /// The pool `root` can set commission configuration after pool creation. By default, all commission
-/// values are `None`. Pool `root`s can set `max` and `change_rate` configurations before setting an
-/// initial commission `current` value - the commission percentage and payee of commission.
+/// values are `None`. Pool `root` can also set `max` and `change_rate` configurations before
+/// setting an initial `current` commission.
 ///
-/// The `max` commission value can only be decreased after the initial value is set, to prevent
-/// commission from repeatedly increasing.
+/// `current` is a tuple of the commission percentage and payee of commission. `last_updated` keeps
+/// track of  which block `current` was last updated. A `max` commission value can only be decreased
+/// after the initial value is set, to prevent commission from repeatedly increasing.
 ///
-/// An optional commission change_rate allows the pool to set strict limits to how much commission
+/// An optional commission `change_rate` allows the pool to set strict limits to how much commission
 /// can change in each update, and how often updates can take place. If a `change_rate` is set
 /// before a commission `current` is set, the initial commission `current` value will not be subject
 /// to throttling. Subsequent commission updates will be.
@@ -740,8 +741,14 @@ impl<T: Config> Commission<T> {
 		change_rate: CommissionChangeRate<T::BlockNumber>,
 	) -> DispatchResult {
 		ensure!(&self.less_restrictive(&change_rate), Error::<T>::CommissionChangeRateNotAllowed);
-		self.change_rate = Some(change_rate);
 
+		// if this is the first time a change rate is being set, update `last_updated` to the current
+		// block so we can check throttling from this initial block.
+		if self.change_rate.is_none() {
+			self.last_updated = Some(<frame_system::Pallet<T>>::block_number());
+		}
+
+		self.change_rate = Some(change_rate);
 		Ok(())
 	}
 
