@@ -72,11 +72,6 @@ pub struct ModuleDefinition {
 	pub aux_body: Option<FuncBody>,
 	/// The amount of I64 arguments the aux function should have.
 	pub aux_arg_num: u32,
-	/// If set to true the stack height limiter is injected into the the module. This is
-	/// needed for instruction debugging because the cost of executing the stack height
-	/// instrumentation should be included in the costs for the individual instructions
-	/// that cause more metering code (only call).
-	pub inject_stack_metering: bool,
 	/// Create a table containing function pointers.
 	pub table: Option<TableSegment>,
 	/// Create a section named "dummy" of the specified size. This is useful in order to
@@ -238,13 +233,7 @@ impl<T: Config> From<ModuleDefinition> for WasmModule<T> {
 			)));
 		}
 
-		let mut code = contract.build();
-
-		if def.inject_stack_metering {
-			code = inject_stack_metering::<T>(code);
-		}
-
-		let code = code.into_bytes().unwrap();
+		let code = contract.build().into_bytes().unwrap();
 		let hash = T::Hashing::hash(&code);
 		Self { code: code.into(), hash, memory: def.memory }
 	}
@@ -252,14 +241,11 @@ impl<T: Config> From<ModuleDefinition> for WasmModule<T> {
 
 impl<T: Config> WasmModule<T> {
 	/// Uses the supplied wasm module and instruments it when requested.
-	pub fn instrumented(code: &[u8], inject_gas: bool, inject_stack: bool) -> Self {
+	pub fn instrumented(code: &[u8], inject_gas: bool) -> Self {
 		let module = {
 			let mut module = Module::from_bytes(code).unwrap();
 			if inject_gas {
 				module = inject_gas_metering::<T>(module);
-			}
-			if inject_stack {
-				module = inject_stack_metering::<T>(module);
 			}
 			module
 		};
@@ -529,12 +515,4 @@ fn inject_gas_metering<T: Config>(module: Module) -> Module {
 	let gas_rules = schedule.rules(&module, Determinism::Deterministic);
 	let backend = gas_metering::host_function::Injector::new("seal0", "gas");
 	gas_metering::inject(module, backend, &gas_rules).unwrap()
-}
-
-fn inject_stack_metering<T: Config>(module: Module) -> Module {
-	if let Some(height) = T::Schedule::get().limits.stack_height {
-		wasm_instrument::inject_stack_limiter(module, height).unwrap()
-	} else {
-		module
-	}
 }
