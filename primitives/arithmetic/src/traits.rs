@@ -470,7 +470,7 @@ mod ensure {
 	pub trait EnsureOp: EnsureAdd + EnsureSub + EnsureMul + EnsureDiv {}
 	impl<T: EnsureAdd + EnsureSub + EnsureMul + EnsureDiv> EnsureOp for T {}
 
-	/// Performs self addition that returns `ArithmeticError` instead of wrapping around on
+	/// Performs self addition that returns [`ArithmeticError`] instead of wrapping around on
 	/// overflow.
 	pub trait EnsureAddAssign: EnsureAdd {
 		/// Adds two numbers overwriting the left hand one, checking for overflow.
