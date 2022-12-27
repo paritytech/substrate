@@ -350,7 +350,7 @@ mod ensure {
 		///
 		/// If it fails, [`ArithmeticError`] is returned.
 		///
-		/// Similar to [`CheckedAdd::checked_add()`] but returning an `ArithmeticError` error
+		/// Similar to [`CheckedAdd::checked_add()`] but returning an [`ArithmeticError`] error.
 		///
 		/// ```
 		/// use sp_arithmetic::{traits::EnsureAdd, ArithmeticError};
