@@ -432,7 +432,7 @@ mod ensure {
 		}
 	}
 
-	/// Performs division that returns `ArithmeticError` instead of wrapping around on overflow.
+	/// Performs division that returns [`ArithmeticError`] instead of wrapping around on overflow.
 	pub trait EnsureDiv: CheckedDiv + PartialOrd + Zero + Copy {
 		/// Divides two numbers, checking for overflow.
 		/// If overflow happens, `ArithmeticError` is returned.
