@@ -334,8 +334,8 @@ use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_runtime::{
 	traits::{
-		AccountIdConversion, CheckedAdd, CheckedSub, Convert, SaturatedConversion, Saturating,
-		StaticLookup, Zero,
+		AccountIdConversion, Bounded, CheckedAdd, CheckedSub, Convert, SaturatedConversion,
+		Saturating, StaticLookup, Zero,
 	},
 	FixedPointNumber, Perbill,
 };
@@ -757,16 +757,20 @@ impl<T: Config> Commission<T> {
 
 	/// Gets the current commission (if any) and payee to be paid.
 	///
-	/// A zero commission along with a `None` payee is returned in the event a commission has not
-	/// been configured to the pool.
-	/// `None` is returned in the event a commission has not been configured to the pool.
+	/// Commission cannot go beyond `GlobalMaxCommission`. A zero commission along with a `None`
+	/// payee is returned in the event a commission has not been configured to the pool. `None` is
+	/// returned in the event a commission has not been configured to the pool.
 	fn get_commission_and_payee(
 		&self,
 		pending_rewards: &BalanceOf<T>,
 	) -> Option<(BalanceOf<T>, T::AccountId)> {
-		self.current
-			.as_ref()
-			.map(|(commission, payee)| (*commission * *pending_rewards, payee.clone()))
+		self.current.as_ref().map(|(commission, payee)| {
+			(
+				*commission.min(&GlobalMaxCommission::<T>::get().unwrap_or(Bounded::max_value())) *
+					*pending_rewards,
+				payee.clone(),
+			)
+		})
 	}
 
 	/// Updates a commission's `last_updated` field.
@@ -1501,7 +1505,9 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type MaxPoolMembersPerPool<T: Config> = StorageValue<_, u32, OptionQuery>;
 
-	/// Maximum commission that can be set for all pools.
+	/// The maximum commission that can be charged. Checked on pool commission updates. Also applied
+	/// to payouts as to bound commissions that are > GlobalMaxCommission, necessary if a future
+	/// `GlobalMaxCommission` is lower than some current pool commissions.
 	#[pallet::storage]
 	pub type GlobalMaxCommission<T: Config> = StorageValue<_, Perbill, OptionQuery>;
 
