@@ -5945,6 +5945,27 @@ mod commission {
 	}
 
 	#[test]
+	fn set_commission_max_to_zero_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// 0% max commission test.
+			//
+			// set commission max 0%.
+			assert_ok!(Pools::set_commission_max(RuntimeOrigin::signed(900), 1, Zero::zero()));
+
+			// a max commission of 0% essentially freezes the current commission, even when None.
+			// All commission update attempts will fail.
+			assert_noop!(
+				Pools::set_commission(
+					RuntimeOrigin::signed(900),
+					1,
+					Some((Perbill::from_percent(1), 900))
+				),
+				Error::<Runtime>::CommissionExceedsMaximum
+			);
+		})
+	}
+
+	#[test]
 	fn set_commission_change_rate_zero_max_increase_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			// 0% max increase test.
