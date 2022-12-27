@@ -1,5 +1,5 @@
 use crate::*;
-use ark_bls12_381::{Fq, Fq2, Fr};
+use ark_bls12_381::{Fq, Fr};
 use ark_ff::{Field, MontFp, PrimeField, Zero};
 use ark_models::{
 	bls12,
