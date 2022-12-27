@@ -5539,13 +5539,11 @@ mod commission {
 			//
 			// attempt to set a commission at 101%.
 
-			assert_ok!(
-				Pools::set_commission_max(
-					RuntimeOrigin::signed(900),
-					1,
-					Perbill::from_percent(101)
-				)
-			);
+			assert_ok!(Pools::set_commission_max(
+				RuntimeOrigin::signed(900),
+				1,
+				Perbill::from_percent(101)
+			));
 			// ensure max commission actually set was at 100%.
 			assert_eq!(
 				BondedPool::<Runtime>::get(1).unwrap().commission,
