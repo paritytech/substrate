@@ -472,8 +472,10 @@ pub struct StakingLedger<T: Config> {
 	/// (assuming it doesn't get slashed first). It is assumed that this will be treated as a first
 	/// in, first out queue where the new (higher value) eras get pushed on the back.
 	pub unlocking: BoundedVec<UnlockChunk<BalanceOf<T>>, T::MaxUnlockingChunks>,
-	/// List of eras for which the stakers behind a validator have claimed rewards. Only updated
-	/// for validators.
+	/// Earlier used as a list of eras for which the stakers behind a validator have claimed
+	/// rewards. Since v14, it should only be used to read historic `claimed_rewards` and never for
+	/// newer data. After `$HistoryDepth` eras have passed since v14, this can be cleaned up in a
+	/// migration.
 	pub claimed_rewards: BoundedVec<EraIndex, T::HistoryDepth>,
 }
 
