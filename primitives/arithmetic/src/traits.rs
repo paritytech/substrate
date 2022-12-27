@@ -648,10 +648,10 @@ mod ensure {
 
 		/// Ensure multiplication for integer type `N`. Equal to `self * n`.
 		///
-		/// Returns `ArithmeticError` if the result does not fit in `N`.
+		/// Returns [`ArithmeticError`] if the result does not fit in `N`.
 		///
-		/// Similar to [`FixedPointNumber::checked_mul_int()`] but returning an `ArithmeticError`
-		/// error
+		/// Similar to [`FixedPointNumber::checked_mul_int()`] but returning an [`ArithmeticError`]
+		/// error.
 		///
 		/// ```
 		/// use sp_arithmetic::{traits::EnsureFixedPointNumber, ArithmeticError, FixedI64};
