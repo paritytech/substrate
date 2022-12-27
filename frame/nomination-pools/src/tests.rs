@@ -5346,6 +5346,27 @@ mod commission {
 			// remove the commission for pool 1.
 			assert_ok!(Pools::set_commission(RuntimeOrigin::signed(900), 1, None));
 
+			// test whether supplying a 0% commission along with a payee results in a None `current`
+			// being inserted.
+			//
+			// set an initial commission of 10%
+			assert_ok!(Pools::set_commission(
+				RuntimeOrigin::signed(900),
+				1,
+				Some((Perbill::from_percent(10), 900))
+			));
+			// set the commission again to 0%
+			assert_ok!(Pools::set_commission(
+				RuntimeOrigin::signed(900),
+				1,
+				Some((Perbill::from_percent(0), 900))
+			));
+			// commssion current should now be None, and `throttle_from` the current block.
+			assert_eq!(
+				BondedPool::<Runtime>::get(1).unwrap().commission,
+				Commission { current: None, max: None, change_rate: None, throttle_from: Some(1) }
+			);
+
 			// Commission change events triggered successfully
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -5364,7 +5385,15 @@ mod commission {
 						pool_id: 1,
 						current: Some((Perbill::from_percent(25), 901))
 					},
-					Event::PoolCommissionUpdated { pool_id: 1, current: None }
+					Event::PoolCommissionUpdated { pool_id: 1, current: None },
+					Event::PoolCommissionUpdated {
+						pool_id: 1,
+						current: Some((Perbill::from_percent(10), 900))
+					},
+					Event::PoolCommissionUpdated {
+						pool_id: 1,
+						current: Some((Perbill::from_percent(0), 900))
+					}
 				]
 			);
 		});

@@ -673,10 +673,10 @@ impl<T: Config> Commission<T> {
 
 	/// Set the pool's commission.
 	///
-	/// Update commission based on `current`. If a `None` current value is supplied, allow the
-	/// commission to be removed in all cases, without any throttling restrictions. If `change_rate`
-	/// is present, record the current block  as the previously updated commission. If the supplied
-	/// commission is zero, `None` will be  inserted and `payee` will be ignored.
+	/// Update commission based on `current`. If a `None` is supplied, allow the commission to be
+	/// removed without any change rate restrictions. If `change_rate` is present, update
+	/// `throttle_from` to the current block. If the supplied commission is zero, `None` will be
+	/// inserted and `payee` will be ignored.
 	fn maybe_update_current(
 		&mut self,
 		current: &Option<(Perbill, T::AccountId)>,
@@ -690,8 +690,11 @@ impl<T: Config> Commission<T> {
 				self.max.map_or(true, |m| commission <= &m),
 				Error::<T>::CommissionExceedsMaximum
 			);
-			self.current = Some((*commission, payee.clone()));
+
+			self.current =
+				if commission == &Zero::zero() { None } else { Some((*commission, payee.clone())) };
 		}
+
 		let _ = self.register_update(<frame_system::Pallet<T>>::block_number());
 		Ok(())
 	}
