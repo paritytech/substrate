@@ -344,7 +344,7 @@ mod ensure {
 	use super::{CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, Zero};
 	use crate::{ArithmeticError, FixedPointNumber, FixedPointOperand};
 
-	/// Performs addition that returns `ArithmeticError` instead of wrapping around on overflow.
+	/// Performs addition that returns [`ArithmeticError`] instead of wrapping around on overflow.
 	pub trait EnsureAdd: CheckedAdd + PartialOrd + Zero + Copy {
 		/// Adds two numbers, checking for overflow.
 		///
