@@ -8,7 +8,7 @@ use ark_ec::models::{
 use ark_ff::{Field, MontFp, Zero};
 use core::ops::Neg;
 
-use crate::{Fq, Fr};
+use ark_bls12_381::{Fq, Fr};
 
 #[derive(Clone, Default, PartialEq, Eq)]
 pub struct Config;

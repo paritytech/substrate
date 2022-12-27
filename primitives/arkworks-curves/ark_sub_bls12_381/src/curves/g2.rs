@@ -4,7 +4,8 @@ use ark_ec::{
 };
 use ark_ff::{Field, MontFp, Zero};
 
-use crate::{g1, Fq, Fq2, Fr};
+use crate::g1; 
+use ark_bls12_381::{Fq, Fq2, Fr};
 
 pub type G2Affine = Affine<Config>;
 #[derive(Clone, Default, PartialEq, Eq)]

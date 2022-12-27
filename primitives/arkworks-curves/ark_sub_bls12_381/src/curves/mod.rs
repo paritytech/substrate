@@ -14,16 +14,15 @@ mod tests;
 pub struct Config;
 
 impl Bls12Config for Config {
-    const X: &'static [u64] = &[0x8508c00000000001];
-    /// `x` is positive.
-    const X_IS_NEGATIVE: bool = false;
-    const TWIST_TYPE: TwistType = TwistType::D;
+    const X: &'static [u64] = &[0xd201000000010000];
+    const X_IS_NEGATIVE: bool = true;
+    const TWIST_TYPE: TwistType = TwistType::M;
     type Fp = Fq;
     type Fp2Config = Fq2Config;
     type Fp6Config = Fq6Config;
     type Fp12Config = Fq12Config;
-    type G1Config = g1::Config;
-    type G2Config = g2::Config;
+    type G1Config = self::g1::Config;
+    type G2Config = self::g2::Config;
 
     fn multi_miller_loop(
         a: impl IntoIterator<Item = impl Into<G1Prepared<Self>>>,
@@ -81,7 +80,7 @@ impl Bls12Config for Config {
     }
 }
 
-pub type Bls12_377 = Bls12<Config>;
+pub type Bls12_381 = Bls12<Config>;
 
 pub type G1Affine = bls12::G1Affine<Config>;
 pub type G1Projective = bls12::G1Projective<Config>;
