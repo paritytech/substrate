@@ -744,7 +744,7 @@ impl<T: Config> Commission<T> {
 		&mut self,
 		change_rate: CommissionChangeRate<T::BlockNumber>,
 	) -> DispatchResult {
-		ensure!(&self.more_restrictive(&change_rate), Error::<T>::CommissionChangeRateNotAllowed);
+		ensure!(!&self.less_restrictive(&change_rate), Error::<T>::CommissionChangeRateNotAllowed);
 
 		if self.change_rate.is_none() {
 			self.throttle_from = Some(<frame_system::Pallet<T>>::block_number());
@@ -777,13 +777,13 @@ impl<T: Config> Commission<T> {
 
 	/// Checks whether a change rate is less restrictive than the current change rate, if any.
 	///
-	/// Any change rate is more restrictive than no change rate at all, so where no `change_rate` is
-	/// currently set, `true` is returned.
-	fn more_restrictive(&self, new: &CommissionChangeRate<T::BlockNumber>) -> bool {
+	/// No change rate will always be less restrictive than some change rate, so where no
+	/// `change_rate` is currently set, `false` is returned.
+	fn less_restrictive(&self, new: &CommissionChangeRate<T::BlockNumber>) -> bool {
 		self.change_rate
 			.as_ref()
-			.map(|c| new.max_increase <= c.max_increase && new.min_delay >= c.min_delay)
-			.unwrap_or(true)
+			.map(|c| new.max_increase > c.max_increase || new.min_delay < c.min_delay)
+			.unwrap_or(false)
 	}
 }
 
