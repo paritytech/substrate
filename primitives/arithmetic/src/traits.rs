@@ -613,7 +613,7 @@ mod ensure {
 	pub trait Ensure: EnsureOp + EnsureOpAssign {}
 	impl<T: EnsureOp + EnsureOpAssign> Ensure for T {}
 
-	/// Extends `FixedPointNumber` with the Ensure family functions.
+	/// Extends [`FixedPointNumber`] with the Ensure family functions.
 	pub trait EnsureFixedPointNumber: FixedPointNumber {
 		/// Creates `self` from a rational number. Equal to `n / d`.
 		///
