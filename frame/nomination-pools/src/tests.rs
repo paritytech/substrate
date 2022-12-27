@@ -5320,8 +5320,14 @@ mod commission {
 				Some((Perbill::from_percent(50), 900))
 			));
 
-			let commission = BondedPool::<Runtime>::get(1).unwrap().commission;
-			assert_eq!(commission.commission_or_zero(), Perbill::from_percent(50));
+			let commission_as_percent = BondedPool::<Runtime>::get(1)
+				.unwrap()
+				.commission
+				.current
+				.as_ref()
+				.map(|(x, _)| *x)
+				.unwrap_or(Perbill::zero());
+			assert_eq!(commission_as_percent, Perbill::from_percent(50));
 
 			// update commission only.
 			assert_ok!(Pools::set_commission(
