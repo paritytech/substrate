@@ -8,20 +8,14 @@ use syn::{
 	punctuated::Punctuated,
 	spanned::Spanned,
 	token::{Comma, Gt, Lt},
-	Block, Error, Expr, ExprCall, FnArg, ItemFn, ItemMod, LitInt, Pat, Result, Stmt, Type,
+	Block, Error, Expr, ExprCall, FnArg, Item, ItemFn, LitInt, Pat, Result, Stmt, Type,
 };
 
 mod keywords {
 	syn::custom_keyword!(extrinsic_call);
 	syn::custom_keyword!(cfg);
-}
-
-/// A safe wrapper for easily emitting errors in [`quote!`] calls
-fn emit_error<T: Into<TokenStream> + Clone, S: Into<String>>(item: &T, message: S) -> TokenStream {
-	let item = Into::<TokenStream>::into(item.clone());
-	let message = Into::<String>::into(message);
-	let span = proc_macro2::TokenStream::from(item).span();
-	return syn::Error::new(span, message).to_compile_error().into()
+	syn::custom_keyword!(benchmark);
+	syn::custom_keyword!(instance_benchmark);
 }
 
 /// Represents a "bare" block, that is, a the contents of a [`Block`] minus the curly braces.
@@ -42,6 +36,7 @@ impl Parse for BareBlock {
 }
 
 /// This represents the raw parsed data for a param definition such as `x: Linear<10, 20>`.
+#[derive(Clone)]
 struct ParamDef {
 	name: String,
 	typ: Type,
@@ -60,6 +55,7 @@ struct RangeArgs {
 }
 
 /// Represents a parsed `#[benchmark]` or `#[instance_banchmark]` item.
+#[derive(Clone)]
 struct BenchmarkDef {
 	params: Vec<ParamDef>,
 	setup_stmts: Vec<Stmt>,
@@ -158,13 +154,65 @@ impl BenchmarkDef {
 }
 
 pub fn benchmarks(tokens: TokenStream) -> TokenStream {
-	let block = parse_macro_input!(tokens as BareBlock);
-	let contents = block.stmts;
-	quote! {
-		#(#contents)
-		*
+	let mut block = parse_macro_input!(tokens as BareBlock);
+	let mut expanded_stmts: Vec<TokenStream2> = Vec::new();
+	let mut benchmark_defs: Vec<BenchmarkDef> = Vec::new();
+	for stmt in &mut block.stmts {
+		let mut found_item: Option<(ItemFn, bool)> = None;
+		if let Stmt::Item(stmt) = stmt {
+			if let Item::Fn(func) = stmt {
+				let mut i = 0;
+				for attr in &func.attrs.clone() {
+					let mut consumed = false;
+					if let Some(seg) = attr.path.segments.last() {
+						if let Ok(_) =
+							syn::parse::<keywords::benchmark>(seg.ident.to_token_stream().into())
+						{
+							consumed = true;
+							func.attrs.remove(i);
+							found_item = Some((func.clone(), false));
+						} else if let Ok(_) = syn::parse::<keywords::instance_benchmark>(
+							seg.ident.to_token_stream().into(),
+						) {
+							consumed = true;
+							func.attrs.remove(i);
+							found_item = Some((func.clone(), true));
+						}
+					}
+					if !consumed {
+						i += 1;
+					}
+				}
+			}
+		}
+		if let Some((item_fn, is_instance)) = found_item {
+			// this item is a #[benchmark] or #[instance_benchmark]
+
+			// build a BenchmarkDef from item_fn
+			let benchmark_def = match BenchmarkDef::from(&item_fn) {
+				Ok(def) => def,
+				Err(err) => return err.to_compile_error().into(),
+			};
+
+			// expand benchmark_def
+			let expanded = expand_benchmark(benchmark_def.clone(), &item_fn.sig.ident, is_instance);
+
+			expanded_stmts.push(expanded);
+			benchmark_defs.push(benchmark_def);
+		} else {
+			// this is not a benchmark item, copy it in verbatim
+			expanded_stmts.push(stmt.to_token_stream());
+		}
 	}
-	.into()
+
+	// TODO: we can now do outer macro pattern stuff with benchmark_defs here
+
+	let res = quote! {
+		#(#expanded_stmts)
+		*
+	};
+	println!("{}", res.to_string());
+	res.into()
 }
 
 /// Prepares a [`Vec<ParamDef>`] to be interpolated by [`quote!`] by creating easily-iterable
@@ -204,18 +252,8 @@ impl UnrolledParams {
 	}
 }
 
-pub fn benchmark(_attrs: TokenStream, tokens: TokenStream, is_instance: bool) -> TokenStream {
-	// parse attached item as a function def
-	let item_fn = parse_macro_input!(tokens as ItemFn);
-
-	// build a BenchmarkDef from item_fn
-	let benchmark_def = match BenchmarkDef::from(&item_fn) {
-		Ok(def) => def,
-		Err(err) => return err.to_compile_error().into(),
-	};
-
+fn expand_benchmark(benchmark_def: BenchmarkDef, name: &Ident, is_instance: bool) -> TokenStream2 {
 	// set up variables needed during quoting
-	let name = item_fn.sig.ident;
 	let krate = quote!(::frame_benchmarking);
 	let home = quote!(::frame_support::benchmarking);
 	let codec = quote!(#krate::frame_support::codec);
@@ -310,6 +348,18 @@ pub fn benchmark(_attrs: TokenStream, tokens: TokenStream, is_instance: bool) ->
 			}
 		}
 	};
-	// println!("{}", res.to_string());
-	res.into()
+	res
+}
+
+pub fn benchmark(_attrs: TokenStream, tokens: TokenStream, is_instance: bool) -> TokenStream {
+	// parse attached item as a function def
+	let item_fn = parse_macro_input!(tokens as ItemFn);
+
+	// build a BenchmarkDef from item_fn
+	let benchmark_def = match BenchmarkDef::from(&item_fn) {
+		Ok(def) => def,
+		Err(err) => return err.to_compile_error().into(),
+	};
+
+	expand_benchmark(benchmark_def, &item_fn.sig.ident, is_instance).into()
 }
