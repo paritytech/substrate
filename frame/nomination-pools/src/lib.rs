@@ -617,54 +617,51 @@ pub struct Commission<T: Config> {
 }
 
 impl<T: Config> Commission<T> {
-	/// Returns true if a commission percentage updating to `to` would exhaust the change_rate
-	/// limit.
+	/// Returns true if the current commission updating to `to` would exhaust the change rate
+	/// limits.
 	///
 	/// A commission update will be throttled (disallowed) if:
-	/// 1. not enough blocks have passed since the previous commission update took place, and
-	/// 2. the new commission is larger than the maximum allowed increase.
-	///
-	/// Throttling is not applied to commission updates if `current` is still `None`.
+	/// 1. not enough blocks have passed since the `throttle_from` block, if exists, or
+	/// 2. the new commission is greater than the maximum allowed increase.
 	fn throttling(&self, to: &Perbill) -> bool {
 		if let Some(t) = self.change_rate.as_ref() {
 			let commission_as_percent =
 				self.current.as_ref().map(|(x, _)| *x).unwrap_or(Perbill::zero());
 
+			// the attempted increase in commission relative to the current commission.
+			let attempted_increase = (*to).saturating_sub(commission_as_percent);
+
 			if self.throttle_from.map_or(
-				// if no `throttle_from` exists, commission update is throttled via `max_increase`.
-				//
 				// Note: defensive only. `throttle_from` should always exist where `change_rate`
 				// has already been set, so this scenario should never happen.
-				(*to).saturating_sub(commission_as_percent) > t.max_increase,
-				|p| {
-					// `min_delay` blocks must have been surpassed since last update.
-					if <frame_system::Pallet<T>>::block_number().saturating_sub(p) < t.min_delay {
+				//
+				// if no `throttle_from` exists. Therefore, the commission update is throttled via
+				// `max_increase` only.
+				attempted_increase > t.max_increase,
+				|f| {
+					// `min_delay` blocks must have been passed since `throttle_from`.
+					if <frame_system::Pallet<T>>::block_number().saturating_sub(f) < t.min_delay {
 						return true
 					}
-					// ensure the `max_increase` durations surpassed since the previous commission
+					// ensure the `max_increase` durations passed since the previous commission
 					// update allow the attempted commission increase.
 					//
-					// the attempted increase in commission relative to the current commission.
-					let attempted_increase = (*to).saturating_sub(commission_as_percent);
-
 					// the total durations passed since the last commission update.
-					let blocks_passed = <frame_system::Pallet<T>>::block_number().saturating_sub(p);
+					let blocks_passed = <frame_system::Pallet<T>>::block_number().saturating_sub(f);
 
-					// calculate intervals passed since last `throttle_from`.
+					// calculate intervals passed since `throttle_from`.
 					let intervals_passed = if blocks_passed == Zero::zero() {
 						Zero::zero()
 					} else {
 						blocks_passed.div(t.min_delay).saturated_into::<u32>()
 					};
 
-					// the maximum allowed increase, where the current `max_increase` Perbill is
-					// converted into a u32 by multiplying itself with 100_u32 and multiplied by
-					// durations passed, before being converted back into a Perbill.
+					// calculate maximum allowed increase, where `max_increase` is converted into a
+					// u32 by multiplying itself with 100_u32, then multiplied by durations passed,
+					// before being converted back into a Perbill.
 					let max_allowed_increase =
 						Perbill::from_percent((t.max_increase * 100_u32) * intervals_passed);
 
-					// throttled (true) if attempted increase is greater than the maximum allowed
-					// increase, as a percentage.
 					attempted_increase > max_allowed_increase
 				},
 			) {
