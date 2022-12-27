@@ -828,7 +828,7 @@ mod tests {
 			}],
 		};
 
-		let (mut peerset, _handle) = Peerset::from_config(config);
+		let (peerset, _handle) = Peerset::from_config(config);
 		peerset.incoming(SetId::from(0), incoming, ii);
 		peerset.incoming(SetId::from(0), incoming, ii4);
 		peerset.incoming(SetId::from(0), incoming2, ii2);
@@ -859,7 +859,7 @@ mod tests {
 			}],
 		};
 
-		let (mut peerset, _) = Peerset::from_config(config);
+		let (peerset, _) = Peerset::from_config(config);
 		peerset.incoming(SetId::from(0), incoming, ii);
 
 		assert_messages(peerset, vec![Message::Reject(ii)]);
@@ -880,7 +880,7 @@ mod tests {
 			}],
 		};
 
-		let (mut peerset, handle) = Peerset::from_config(config);
+		let (peerset, handle) = Peerset::from_config(config);
 		handle.add_to_peers_set(SetId::from(0), discovered);
 		handle.add_to_peers_set(SetId::from(0), discovered);
 		handle.add_to_peers_set(SetId::from(0), discovered2);

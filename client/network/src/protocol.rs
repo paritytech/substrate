@@ -797,7 +797,7 @@ where
 	}
 
 	/// Returns the list of reserved peers.
-	pub fn reserved_peers(&self) -> impl Iterator<Item = &PeerId> {
+	pub fn reserved_peers(&self) -> Vec<PeerId> {
 		self.behaviour.reserved_peers(HARDCODED_PEERSETS_SYNC)
 	}
 
