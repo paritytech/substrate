@@ -5826,7 +5826,7 @@ mod commission {
 			assert_ok!(Pools::set_commission_change_rate(
 				RuntimeOrigin::signed(900),
 				1,
-				CommissionChangeRate { max_increase: Perbill::from_percent(5), min_delay: 20_u64 }
+				CommissionChangeRate { max_increase: Perbill::from_percent(4), min_delay: 20_u64 }
 			));
 
 			// Successful more restrictive change of both max_increase and min_delay
@@ -5838,7 +5838,7 @@ mod commission {
 
 			// multi duration `min_delay` test.
 			//
-			// set the commission change_rate of 1% per 3000 blocks.
+			// set the commission change_rate of 1% per 30 blocks.
 			assert_ok!(Pools::set_commission_change_rate(
 				RuntimeOrigin::signed(900),
 				1,
@@ -5853,14 +5853,14 @@ mod commission {
 					max: None,
 					change_rate: Some(CommissionChangeRate {
 						max_increase: Perbill::from_percent(1),
-						min_delay: 30
+						min_delay: 30_u64
 					}),
 					throttle_from: Some(1),
 				}
 			);
 
 			// run `min_delay` blocks so commission can be set again.
-			run_blocks(30);
+			run_blocks(30_u64);
 
 			// pre-requisite: set the commission to 1%.
 			assert_ok!(Pools::set_commission(
@@ -5868,6 +5868,7 @@ mod commission {
 				1,
 				Some((Perbill::from_percent(1), 900)),
 			));
+
 			// Run 90 blocks into the future so we are eligible to update commission
 			// with 3 `min_delay` durations passed.
 			run_blocks(91);
@@ -5889,6 +5890,165 @@ mod commission {
 				1,
 				Some((Perbill::from_percent(4), 900))
 			));
+
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::PoolCommissionChangeRateUpdated {
+						pool_id: 1,
+						change_rate: CommissionChangeRate {
+							max_increase: Perbill::from_percent(5),
+							min_delay: 10
+						}
+					},
+					Event::PoolCommissionChangeRateUpdated {
+						pool_id: 1,
+						change_rate: CommissionChangeRate {
+							max_increase: Perbill::from_percent(5),
+							min_delay: 20
+						}
+					},
+					Event::PoolCommissionChangeRateUpdated {
+						pool_id: 1,
+						change_rate: CommissionChangeRate {
+							max_increase: Perbill::from_percent(4),
+							min_delay: 20
+						}
+					},
+					Event::PoolCommissionChangeRateUpdated {
+						pool_id: 1,
+						change_rate: CommissionChangeRate {
+							max_increase: Perbill::from_percent(3),
+							min_delay: 30
+						}
+					},
+					Event::PoolCommissionChangeRateUpdated {
+						pool_id: 1,
+						change_rate: CommissionChangeRate {
+							max_increase: Perbill::from_percent(1),
+							min_delay: 30
+						}
+					},
+					Event::PoolCommissionUpdated {
+						pool_id: 1,
+						current: Some((Perbill::from_percent(1), 900))
+					},
+					Event::PoolCommissionUpdated {
+						pool_id: 1,
+						current: Some((Perbill::from_percent(4), 900))
+					}
+				]
+			);
 		});
+	}
+
+	#[test]
+	fn set_commission_change_rate_zero_max_increase_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// 0% max increase test.
+			//
+			// set commission change rate to 0% per 10 blocks
+			assert_ok!(Pools::set_commission_change_rate(
+				RuntimeOrigin::signed(900),
+				1,
+				CommissionChangeRate { max_increase: Perbill::from_percent(0), min_delay: 10_u64 }
+			));
+
+			// even though there is a min delay of 10 blocks, a max increase of 0% essentially
+			// freezes the commission. All commission update attempts will fail.
+			assert_noop!(
+				Pools::set_commission(
+					RuntimeOrigin::signed(900),
+					1,
+					Some((Perbill::from_percent(1), 900))
+				),
+				Error::<Runtime>::CommissionChangeThrottled
+			);
+		})
+	}
+
+	#[test]
+	fn set_commission_change_rate_zero_min_delay_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// 0% min delay test.
+			//
+			// set commission change rate to 1% with a 0 block min_delay.
+			assert_ok!(Pools::set_commission_change_rate(
+				RuntimeOrigin::signed(900),
+				1,
+				CommissionChangeRate { max_increase: Perbill::from_percent(1), min_delay: 0_u64 }
+			));
+			assert_eq!(
+				BondedPools::<Runtime>::get(1).unwrap().commission,
+				Commission {
+					current: None,
+					max: None,
+					change_rate: Some(CommissionChangeRate {
+						max_increase: Perbill::from_percent(1),
+						min_delay: 0
+					}),
+					throttle_from: Some(1)
+				}
+			);
+
+			// since there is no min delay, we should be able to immediately set the commission.
+			assert_ok!(Pools::set_commission(
+				RuntimeOrigin::signed(900),
+				1,
+				Some((Perbill::from_percent(1), 900))
+			));
+
+			// sanity check: increasing again to more than +1% will fail.
+			assert_noop!(
+				Pools::set_commission(
+					RuntimeOrigin::signed(900),
+					1,
+					Some((Perbill::from_percent(3), 900))
+				),
+				Error::<Runtime>::CommissionChangeThrottled
+			);
+		})
+	}
+
+	#[test]
+	fn set_commission_change_rate_zero_value_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// Check zero values play nice. 0 `min_delay` and 0% max_increase test.
+			//
+			// set commission change rate to 0% per 0 blocks
+			assert_ok!(Pools::set_commission_change_rate(
+				RuntimeOrigin::signed(900),
+				1,
+				CommissionChangeRate { max_increase: Perbill::from_percent(0), min_delay: 0_u64 }
+			));
+
+			// even though there is no min delay, a max increase of 0% essentially freezes the
+			// commission. All commission update attempts will fail.
+			assert_noop!(
+				Pools::set_commission(
+					RuntimeOrigin::signed(900),
+					1,
+					Some((Perbill::from_percent(1), 900))
+				),
+				Error::<Runtime>::CommissionChangeThrottled
+			);
+
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::PoolCommissionChangeRateUpdated {
+						pool_id: 1,
+						change_rate: CommissionChangeRate {
+							max_increase: Perbill::from_percent(0),
+							min_delay: 0_u64
+						}
+					}
+				]
+			);
+		})
 	}
 }

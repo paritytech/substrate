@@ -649,20 +649,16 @@ impl<T: Config> Commission<T> {
 					// the total durations passed since the last commission update.
 					let blocks_passed = <frame_system::Pallet<T>>::block_number().saturating_sub(f);
 
-					// calculate intervals passed since `throttle_from`. If minimum delay is set to 0,
-					// infinite intervals have passed.
-					let intervals_passed = if blocks_passed == Zero::zero() {
-						Zero::zero()
+					// calculate intervals passed since `throttle_from`. If min delay is set to 0,
+					// set intervals passed to 1 as to only allow 1 * max_increase.
+					let intervals_passed = if t.min_delay == Zero::zero() {
+						1_u32
 					} else {
-						if t.min_delay == Zero::zero() {
-							Bounded::max_value()
-						} else {
-							blocks_passed.div(t.min_delay).saturated_into::<u32>()
-						}
+						blocks_passed.div(t.min_delay).saturated_into::<u32>()
 					};
 
 					// calculate maximum allowed increase, where `max_increase` is converted into a
-					// u32 by multiplying itself with 100_u32, then multiplied by durations passed,
+					// u32 by multiplying itself with 100_u32, then multiplied by intervals passed,
 					// before being converted back into a Perbill.
 					let max_allowed_increase =
 						Perbill::from_percent((t.max_increase * 100_u32) * intervals_passed);
