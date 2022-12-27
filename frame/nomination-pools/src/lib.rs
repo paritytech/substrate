@@ -615,13 +615,6 @@ pub struct Commission<T: Config> {
 }
 
 impl<T: Config> Commission<T> {
-	/// Get the current commission percentage of this pool.
-	///
-	/// Returns zero if commission has not yet been configured.
-	fn commission_or_zero(&self) -> Perbill {
-		self.current.as_ref().map(|(x, _)| *x).unwrap_or(Perbill::zero())
-	}
-
 	/// Returns true if a commission percentage updating to `to` would exhaust the change_rate
 	/// limit.
 	///
@@ -632,11 +625,14 @@ impl<T: Config> Commission<T> {
 	/// Throttling is not applied to commission updates if `current` is still `None`.
 	fn throttling(&self, to: &Perbill) -> bool {
 		if let Some(t) = self.change_rate.as_ref() {
+			let commission_as_percent =
+				self.current.as_ref().map(|(x, _)| *x).unwrap_or(Perbill::zero());
+
 			// factor previously updated block into whether user is throttled.
 			if self.last_updated.map_or(
 				// if no `last_updated` is set, throttled if the attempted increase in
 				// commission is greater than `max_increase`.
-				(*to).saturating_sub(self.commission_or_zero()) > t.max_increase,
+				(*to).saturating_sub(commission_as_percent) > t.max_increase,
 				|p| {
 					// `min_delay` blocks must have been surpassed since last update.
 					if <frame_system::Pallet<T>>::block_number().saturating_sub(p) < t.min_delay {
@@ -646,7 +642,7 @@ impl<T: Config> Commission<T> {
 					// update allow the attempted commission increase.
 					//
 					// the attempted increase in commission relative to the current commission.
-					let attempted_increase = (*to).saturating_sub(self.commission_or_zero());
+					let attempted_increase = (*to).saturating_sub(commission_as_percent);
 
 					// the total durations passed since the last commission update.
 					let blocks_passed = <frame_system::Pallet<T>>::block_number().saturating_sub(p);
