@@ -700,9 +700,9 @@ mod ensure {
 	pub trait EnsureFrom<T: PartialOrd + Zero + Copy>:
 		TryFrom<T> + PartialOrd + Zero + Copy
 	{
-		/// Performs the conversion returning an `ArithmeticError` if fails.
+		/// Performs the conversion returning an [`ArithmeticError`] if fails.
 		///
-		/// Similar to [`TryFrom::try_from()`] but returning an `ArithmeticError` error
+		/// Similar to [`TryFrom::try_from()`] but returning an [`ArithmeticError`] error.
 		///
 		/// ```
 		/// use sp_arithmetic::{traits::EnsureFrom, ArithmeticError};
