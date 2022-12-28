@@ -909,12 +909,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 
 		use std::io::Write as _;
 		file.write_all(storage_proof_to_raw_json(&proof).as_bytes()).map_err(|e| {
-			log::error!(
-				target: LOG_TARGET,
-				"Failed to write storage proof to {}: {:?}",
-				path,
-				e
-			);
+			log::error!(target: LOG_TARGET, "Failed to write storage proof to {}: {:?}", path, e);
 			e
 		})?;
 	}
