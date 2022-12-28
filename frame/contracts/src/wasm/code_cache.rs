@@ -41,7 +41,6 @@ use frame_support::{
 	traits::{Get, ReservableCurrency},
 	WeakBoundedVec,
 };
-use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::BadOrigin;
 use sp_std::vec;
 
@@ -49,10 +48,7 @@ use sp_std::vec;
 ///
 /// Increments the refcount of the in-storage `prefab_module` if it already exists in storage
 /// under the specified `code_hash`.
-pub fn store<T: Config>(mut module: PrefabWasmModule<T>, instantiated: bool) -> DispatchResult
-where
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
+pub fn store<T: Config>(mut module: PrefabWasmModule<T>, instantiated: bool) -> DispatchResult {
 	let code_hash = sp_std::mem::take(&mut module.code_hash);
 	<CodeStorage<T>>::mutate(&code_hash, |existing| match existing {
 		Some(existing) => {
@@ -135,10 +131,7 @@ pub fn increment_refcount<T: Config>(code_hash: CodeHash<T>) -> Result<(), Dispa
 }
 
 /// Try to remove code together with all associated information.
-pub fn try_remove<T: Config>(origin: &T::AccountId, code_hash: CodeHash<T>) -> DispatchResult
-where
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
+pub fn try_remove<T: Config>(origin: &T::AccountId, code_hash: CodeHash<T>) -> DispatchResult {
 	<OwnerInfoOf<T>>::try_mutate_exists(&code_hash, |existing| {
 		if let Some(owner_info) = existing {
 			ensure!(owner_info.refcount == 0, <Error<T>>::CodeInUse);
@@ -164,10 +157,7 @@ pub fn load<T: Config>(
 	code_hash: CodeHash<T>,
 	schedule: &Schedule<T>,
 	gas_meter: &mut GasMeter<T>,
-) -> Result<PrefabWasmModule<T>, DispatchError>
-where
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
+) -> Result<PrefabWasmModule<T>, DispatchError> {
 	let max_code_len = T::MaxCodeLen::get();
 	let charged = gas_meter.charge(CodeToken::Load(max_code_len))?;
 
@@ -192,10 +182,7 @@ where
 pub fn reinstrument<T: Config>(
 	prefab_module: &mut PrefabWasmModule<T>,
 	schedule: &Schedule<T>,
-) -> Result<u32, DispatchError>
-where
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
+) -> Result<u32, DispatchError> {
 	let original_code =
 		<PristineCode<T>>::get(&prefab_module.code_hash).ok_or(Error::<T>::CodeNotFound)?;
 	let original_code_len = original_code.len();

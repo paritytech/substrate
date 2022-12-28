@@ -46,7 +46,7 @@ use crate::offchain_mmr::OffchainMmr;
 use beefy_primitives::MmrRootHash;
 use futures::StreamExt;
 use log::{debug, error, trace, warn};
-use sc_client_api::{Backend, BlockchainEvents, FinalityNotifications};
+use sc_client_api::{Backend, BlockchainEvents, FinalityNotification, FinalityNotifications};
 use sc_offchain::OffchainDb;
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
@@ -59,6 +59,62 @@ use std::{marker::PhantomData, sync::Arc};
 
 /// Logging target for the mmr gadget.
 pub const LOG_TARGET: &str = "mmr";
+
+/// A convenience MMR client trait that defines all the type bounds a MMR client
+/// has to satisfy and defines some helper methods.
+pub trait MmrClient<B, BE>:
+	BlockchainEvents<B> + HeaderBackend<B> + HeaderMetadata<B> + ProvideRuntimeApi<B>
+where
+	B: Block,
+	BE: Backend<B>,
+	Self::Api: MmrApi<B, MmrRootHash, NumberFor<B>>,
+{
+	/// Get the block number where the mmr pallet was added to the runtime.
+	fn first_mmr_block_num(&self, notification: &FinalityNotification<B>) -> Option<NumberFor<B>> {
+		let best_block = *notification.header.number();
+		match self.runtime_api().mmr_leaf_count(&BlockId::number(best_block)) {
+			Ok(Ok(mmr_leaf_count)) => {
+				match utils::first_mmr_block_num::<B::Header>(best_block, mmr_leaf_count) {
+					Ok(first_mmr_block) => {
+						debug!(
+							target: LOG_TARGET,
+							"pallet-mmr detected at block {:?} with genesis at block {:?}",
+							best_block,
+							first_mmr_block
+						);
+						Some(first_mmr_block)
+					},
+					Err(e) => {
+						error!(
+							target: LOG_TARGET,
+							"Error calculating the first mmr block: {:?}", e
+						);
+						None
+					},
+				}
+			},
+			_ => {
+				trace!(
+					target: LOG_TARGET,
+					"pallet-mmr not detected at block {:?} ... (best finalized {:?})",
+					best_block,
+					notification.header.number()
+				);
+				None
+			},
+		}
+	}
+}
+
+impl<B, BE, T> MmrClient<B, BE> for T
+where
+	B: Block,
+	BE: Backend<B>,
+	T: BlockchainEvents<B> + HeaderBackend<B> + HeaderMetadata<B> + ProvideRuntimeApi<B>,
+	T::Api: MmrApi<B, MmrRootHash, NumberFor<B>>,
+{
+	// empty
+}
 
 struct OffchainMmrBuilder<B: Block, BE: Backend<B>, C> {
 	backend: Arc<BE>,
@@ -73,7 +129,7 @@ impl<B, BE, C> OffchainMmrBuilder<B, BE, C>
 where
 	B: Block,
 	BE: Backend<B>,
-	C: ProvideRuntimeApi<B> + HeaderBackend<B> + HeaderMetadata<B>,
+	C: MmrClient<B, BE>,
 	C::Api: MmrApi<B, MmrRootHash, NumberFor<B>>,
 {
 	async fn try_build(
@@ -81,66 +137,21 @@ where
 		finality_notifications: &mut FinalityNotifications<B>,
 	) -> Option<OffchainMmr<B, BE, C>> {
 		while let Some(notification) = finality_notifications.next().await {
-			let best_block = *notification.header.number();
-			match self.client.runtime_api().mmr_leaf_count(&BlockId::number(best_block)) {
-				Ok(Ok(mmr_leaf_count)) => {
-					debug!(
-						target: LOG_TARGET,
-						"pallet-mmr detected at block {:?} with mmr size {:?}",
-						best_block,
-						mmr_leaf_count
-					);
-					match utils::first_mmr_block_num::<B::Header>(best_block, mmr_leaf_count) {
-						Ok(first_mmr_block) => {
-							debug!(
-								target: LOG_TARGET,
-								"pallet-mmr genesis computed at block {:?}", first_mmr_block,
-							);
-							let best_canonicalized =
-								match offchain_mmr::load_or_init_best_canonicalized::<B, BE>(
-									&*self.backend,
-									first_mmr_block,
-								) {
-									Ok(best) => best,
-									Err(e) => {
-										error!(
-											target: LOG_TARGET,
-											"Error loading state from aux db: {:?}", e
-										);
-										return None
-									},
-								};
-							let mut offchain_mmr = OffchainMmr {
-								backend: self.backend,
-								client: self.client,
-								offchain_db: self.offchain_db,
-								indexing_prefix: self.indexing_prefix,
-								first_mmr_block,
-								best_canonicalized,
-							};
-							// We need to make sure all blocks leading up to current notification
-							// have also been canonicalized.
-							offchain_mmr.canonicalize_catch_up(&notification);
-							// We have to canonicalize and prune the blocks in the finality
-							// notification that lead to building the offchain-mmr as well.
-							offchain_mmr.canonicalize_and_prune(notification);
-							return Some(offchain_mmr)
-						},
-						Err(e) => {
-							error!(
-								target: LOG_TARGET,
-								"Error calculating the first mmr block: {:?}", e
-							);
-						},
-					}
-				},
-				_ => {
-					trace!(
-						target: LOG_TARGET,
-						"Waiting for MMR pallet to become available... (best finalized {:?})",
-						notification.header.number()
-					);
-				},
+			if let Some(first_mmr_block_num) = self.client.first_mmr_block_num(&notification) {
+				let mut offchain_mmr = OffchainMmr::new(
+					self.backend,
+					self.client,
+					self.offchain_db,
+					self.indexing_prefix,
+					first_mmr_block_num,
+				)?;
+				// We need to make sure all blocks leading up to current notification
+				// have also been canonicalized.
+				offchain_mmr.canonicalize_catch_up(&notification);
+				// We have to canonicalize and prune the blocks in the finality
+				// notification that lead to building the offchain-mmr as well.
+				offchain_mmr.canonicalize_and_prune(notification);
+				return Some(offchain_mmr)
 			}
 		}
 
@@ -165,7 +176,7 @@ where
 	B: Block,
 	<B::Header as Header>::Number: Into<LeafIndex>,
 	BE: Backend<B>,
-	C: BlockchainEvents<B> + HeaderBackend<B> + HeaderMetadata<B> + ProvideRuntimeApi<B>,
+	C: MmrClient<B, BE>,
 	C::Api: MmrApi<B, MmrRootHash, NumberFor<B>>,
 {
 	async fn run(mut self, builder: OffchainMmrBuilder<B, BE, C>) {

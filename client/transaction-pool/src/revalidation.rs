@@ -291,7 +291,7 @@ where
 		pool: Arc<Pool<Api>>,
 		interval: Duration,
 	) -> (Self, Pin<Box<dyn Future<Output = ()> + Send>>) {
-		let (to_worker, from_queue) = tracing_unbounded("mpsc_revalidation_queue");
+		let (to_worker, from_queue) = tracing_unbounded("mpsc_revalidation_queue", 100_000);
 
 		let worker = RevalidationWorker::new(api.clone(), pool.clone());
 
