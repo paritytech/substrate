@@ -5853,7 +5853,7 @@ mod commission {
 	}
 
 	#[test]
-	fn max_increase_does_not_apply_to_decreasing_commission() {
+	fn change_rate_does_not_apply_to_decreasing_commission() {
 		ExtBuilder::default().build_and_execute(|| {
 			// set initial commission of the pool to 10%.
 			assert_ok!(Pools::set_commission(
