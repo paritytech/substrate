@@ -523,7 +523,7 @@ pub struct SharedParams {
 	#[arg(long)]
 	pub heap_pages: Option<u64>,
 
-	/// Path to a file to export the storage proof as JSON format.
+	/// Path to a file to export the storage proof into (as a JSON).
 	/// If several blocks are executed, the path is interpreted as a folder
 	/// where one file per block will be written (named `{block_number}-{block_hash}`).
 	#[clap(long)]
