@@ -6181,7 +6181,7 @@ mod commission {
 			// top up commission payee account to existential deposit
 			let _ = Balances::deposit_creating(&2, 5);
 
-			// Set a commission pool 1 to 100%, with a payee set to `2`
+			// Set commission of pool 1 to 100%, with a payee set to `2`
 			assert_ok!(Pools::set_commission(
 				RuntimeOrigin::signed(900),
 				bonded_pool.id,
