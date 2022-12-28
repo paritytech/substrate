@@ -6200,7 +6200,7 @@ mod commission {
 				]
 			);
 
-			// The pool earns 10 points
+			// Pool earns 10 points
 			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 10));
 
 			// Ensure the commission equals the total amount of points.
