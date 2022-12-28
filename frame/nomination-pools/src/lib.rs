@@ -640,14 +640,14 @@ impl<T: Config> Commission<T> {
 				attempted_increase > t.max_increase,
 				|f| {
 					// `min_delay` blocks must have been passed since `throttle_from`.
-					if <frame_system::Pallet<T>>::block_number().saturating_sub(f) < t.min_delay {
+                                         // the total durations passed since the last commission update.
+					let blocks_passed = <frame_system::Pallet<T>>::block_number().saturating_sub(f);
+					// `min_delay` blocks must have been passed since `throttle_from`.
+					if blocks_passed < t.min_delay {
 						return true
 					}
-					// ensure the `max_increase` durations passed since the previous commission
-					// update allow the attempted commission increase.
-					//
-					// the total durations passed since the last commission update.
-					let blocks_passed = <frame_system::Pallet<T>>::block_number().saturating_sub(f);
+					
+					
 
 					// calculate intervals passed since `throttle_from`. If min delay is set to 0,
 					// set intervals passed to 1 as to only allow 1 * max_increase.
