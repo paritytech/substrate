@@ -334,7 +334,8 @@ impl<T: Sized> SaturatedConversion for T {}
 /// # }
 /// ```
 ///
-/// choosing the correct [`ArithmeticError`](crate::ArithmeticError) it should return in case of fail.
+/// choosing the correct [`ArithmeticError`](crate::ArithmeticError) it should return in case of
+/// fail.
 ///
 /// The *EnsureOps* family functions follows the same behavior as *CheckedOps* but
 /// returning an [`ArithmeticError`](crate::ArithmeticError) instead of `None`.
