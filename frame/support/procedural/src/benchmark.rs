@@ -158,6 +158,7 @@ pub fn benchmarks(tokens: TokenStream) -> TokenStream {
 	let mut expanded_stmts: Vec<TokenStream2> = Vec::new();
 	let mut benchmark_defs: Vec<BenchmarkDef> = Vec::new();
 	let mut benchmark_names: Vec<Ident> = Vec::new();
+	let mut any_instance = false;
 	for stmt in &mut block.stmts {
 		let mut found_item: Option<(ItemFn, bool)> = None;
 		if let Stmt::Item(stmt) = stmt {
@@ -178,6 +179,7 @@ pub fn benchmarks(tokens: TokenStream) -> TokenStream {
 							consumed = true;
 							func.attrs.remove(i);
 							found_item = Some((func.clone(), true));
+							any_instance = true;
 						}
 					}
 					if !consumed {
@@ -209,6 +211,16 @@ pub fn benchmarks(tokens: TokenStream) -> TokenStream {
 
 	// TODO: components() after SelectedBenchmark
 
+	let generics = match any_instance {
+		false => quote!(T),
+		true => quote!(T, I),
+	};
+	let full_generics = match any_instance {
+		false => quote!(T: Config),
+		true => quote!(T: Config<I>, I: 'static),
+	};
+	let krate = quote!(::frame_benchmarking);
+
 	let res = quote! {
 		#(#expanded_stmts)
 		*
@@ -217,6 +229,19 @@ pub fn benchmarks(tokens: TokenStream) -> TokenStream {
 		enum SelectedBenchmark {
 			#(#benchmark_names),
 			*
+		}
+
+		impl<#full_generics> #krate::BenchmarkingSetup<#generics> for SelectedBenchmark {
+			fn components(&self) -> #krate::Vec<(#krate::BenchmarkParameter, u32, u32)> {
+				match self {
+					#(
+						Self::#benchmark_names => {
+							<#benchmark_names as #krate::BenchmarkingSetup<#generics>>::components(&#benchmark_names)
+						}
+					)
+					*
+				}
+			}
 		}
 	};
 	println!("{}", res.to_string());
