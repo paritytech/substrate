@@ -6042,7 +6042,7 @@ mod commission {
 	#[test]
 	fn set_commission_change_rate_zero_value_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			// Check zero values play nice: 0 `min_delay` and 0% max_increase test.
+			// Check zero values play nice. 0 `min_delay` and 0% max_increase test.
 			//
 			// Set commission change rate to 0% per 0 blocks.
 			assert_ok!(Pools::set_commission_change_rate(
