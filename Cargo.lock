@@ -314,7 +314,7 @@ dependencies = [
 [[package]]
 name = "ark-r1cs-std"
 version = "0.4.0-alpha.3"
-source = "git+https://github.com/arkworks-rs/r1cs-std/?branch=release-0.4#93b7f195ea72a1553db4f8d3f4c5c2bab6b59eb5"
+source = "git+https://github.com/arkworks-rs/r1cs-std/#054969fbcee949b9030bbc166865cba1d527517e"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -12071,3 +12071,8 @@ dependencies = [
  "cc",
  "libc",
 ]
+
+[[patch.unused]]
+name = "ark-algebra-test-templates"
+version = "0.4.0-alpha.6"
+source = "git+https://github.com/arkworks-rs/algebra/#32201cb5d223af7a63375a641c10c018ac1a67a9"
