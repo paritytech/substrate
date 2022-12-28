@@ -720,9 +720,9 @@ impl<T: Config> Commission<T> {
 		let updated_current = self
 			.current
 			.as_mut()
-			.map(|(x, _)| {
-				let u = *x > new_max;
-				*x = (*x).min(new_max);
+			.map(|(c, _)| {
+				let u = *c > new_max;
+				*c = (*c).min(new_max);
 				u
 			})
 			.unwrap_or(false);
@@ -756,8 +756,8 @@ impl<T: Config> Commission<T> {
 
 	/// Gets the current commission (if any) and payee to be paid.
 	///
-	/// A zero commission along with a `None` payee is returned in the event a commission has not
-	/// been configured to the pool. Commission is bounded to `GlobalMaxCommission`.
+	/// /// `None` is returned if a commission has not been set. Commission is bounded to
+	/// `GlobalMaxCommission`.
 	fn maybe_commission_and_payee(
 		&self,
 		pending_rewards: &BalanceOf<T>,
@@ -2393,15 +2393,18 @@ pub mod pallet {
 		pub fn set_commission(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
-			current: Option<(Perbill, T::AccountId)>,
+			new_commission: Option<(Perbill, T::AccountId)>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
 
-			bonded_pool.commission.try_update_current(&current)?;
+			bonded_pool.commission.try_update_current(&new_commission)?;
 			bonded_pool.put();
-			Self::deposit_event(Event::<T>::PoolCommissionUpdated { pool_id, current });
+			Self::deposit_event(Event::<T>::PoolCommissionUpdated {
+				pool_id,
+				current: new_commission,
+			});
 			Ok(())
 		}
 
