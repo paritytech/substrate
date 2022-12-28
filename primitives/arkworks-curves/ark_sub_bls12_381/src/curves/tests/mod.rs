@@ -7,7 +7,7 @@ use ark_std::{rand::Rng, test_rng, vec};
 use crate::{Bls12_381, Fq, Fq2, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 
 test_group!(g1; G1Projective; sw);
-// test_group!(g2; G2Projective; sw);
+test_group!(g2; G2Projective; sw);
 test_group!(pairing_output; PairingOutput<Bls12_381>; msm);
 test_pairing!(pairing; crate::Bls12_381);
 

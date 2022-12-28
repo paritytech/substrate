@@ -419,9 +419,6 @@ dependencies = [
  "ark-serialize",
  "ark-std 0.4.0-alpha",
  "hex",
- "serde",
- "serde_derive",
- "serde_json",
  "sp-io",
 ]
 
