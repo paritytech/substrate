@@ -6137,7 +6137,7 @@ mod commission {
 				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 11, commission: 6 },]
 			);
 
-			// The pool earns 50 points
+			// Pool earns 50 points
 			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 50));
 			assert_ok!(Pools::do_reward_payout(
 				&10,
