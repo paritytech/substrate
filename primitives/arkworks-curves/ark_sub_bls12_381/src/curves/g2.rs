@@ -1,4 +1,4 @@
-use ark_std::ops::Neg;
+use ark_std::{io::Cursor, ops::Neg, vec, vec::Vec};
 
 use ark_bls12_381::{Fq, Fq2, Fr};
 use ark_ff::{Field, MontFp, Zero};
@@ -9,7 +9,7 @@ use ark_models::{
 	short_weierstrass::{Affine, Projective, SWCurveConfig},
 	AffineRepr, CurveGroup, Group,
 };
-use ark_serialize::{Compress, SerializationError};
+use ark_serialize::{CanonicalSerialize, Compress, SerializationError, Validate};
 
 use super::util::{serialize_fq, EncodingFlags, G2_SERIALIZED_SIZE};
 use crate::{

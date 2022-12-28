@@ -1,4 +1,3 @@
-use crate::*;
 use ark_bls12_381::{Fq, Fr};
 use ark_ff::{Field, MontFp, PrimeField, Zero};
 use ark_models::{
@@ -8,8 +7,8 @@ use ark_models::{
 	short_weierstrass::{Affine, Projective, SWCurveConfig},
 	AffineRepr, Group,
 };
-use ark_serialize::{Compress, SerializationError};
-use ark_std::{ops::Neg, One};
+use ark_serialize::{CanonicalSerialize, Compress, SerializationError, Validate};
+use ark_std::{io::Cursor, ops::Neg, vec, vec::Vec, One};
 
 use crate::util::{
 	read_g1_compressed, read_g1_uncompressed, serialize_fq, EncodingFlags, G1_SERIALIZED_SIZE,

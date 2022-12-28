@@ -21,6 +21,11 @@ ark-bls12-381 = { git = "https://github.com/arkworks-rs/curves" }
 ark-models = { path = "../../arkworks-models" }
 sp-io = { path = "../../io" }
 
+[dev-dependencies]
+ark-algebra-test-templates = { version = "0.4.0-alpha", default-features = false }
+ark-algebra-bench-templates = { version = "0.4.0-alpha", default-features = false }
+hex = "^0.4.0"
+
 [features]
 default = [ "curve" ]
 std = [ "ark-std/std", "ark-ff/std", "ark-ec/std" ]
