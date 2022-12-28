@@ -980,7 +980,7 @@ pub(crate) fn rpc_err_handler(error: impl Debug) -> &'static str {
 	"rpc error."
 }
 
-/// Converts a `StorageProof` into a JSON string.
+/// Converts a [`sp_state_machine::StorageProof`] into a JSON string.
 fn storage_proof_to_raw_json(storage_proof: &sp_state_machine::StorageProof) -> String {
 	serde_json::Value::Object(
 		storage_proof
