@@ -12,8 +12,8 @@ pub mod g1;
 pub mod g2;
 pub(crate) mod util;
 
-// #[cfg(test)]
-// mod tests;
+#[cfg(test)]
+mod tests;
 
 pub struct Config;
 
