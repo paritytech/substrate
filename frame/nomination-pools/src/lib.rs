@@ -594,9 +594,7 @@ pub struct PoolRoles<AccountId> {
 /// decreased after the initial value is set, to prevent commission from repeatedly increasing.
 ///
 /// An optional commission `change_rate` allows the pool to set strict limits to how much commission
-/// can change in each update, and how often updates can take place. If a `change_rate` is set
-/// before a commission `current` is set, the initial commission `current` value will not be subject
-/// to throttling. Subsequent commission updates will be.
+/// can change in each update, and how often updates can take place.
 #[derive(
 	Encode, Decode, DefaultNoBound, MaxEncodedLen, TypeInfo, DebugNoBound, PartialEq, Copy, Clone,
 )]
@@ -679,10 +677,7 @@ impl<T: Config> Commission<T> {
 	/// removed without any change rate restrictions. If `change_rate` is present, update
 	/// `throttle_from` to the current block. If the supplied commission is zero, `None` will be
 	/// inserted and `payee` will be ignored.
-	fn maybe_update_current(
-		&mut self,
-		current: &Option<(Perbill, T::AccountId)>,
-	) -> DispatchResult {
+	fn try_update_current(&mut self, current: &Option<(Perbill, T::AccountId)>) -> DispatchResult {
 		if current.is_none() {
 			self.current = None;
 		} else {
@@ -708,7 +703,7 @@ impl<T: Config> Commission<T> {
 	///
 	/// If `current.0` is larger than the updated max commission value, `current.0` will also be
 	/// updated to the new maximum. This will also register a `throttle_from` update.
-	fn maybe_update_max(&mut self, new_max: Perbill) -> DispatchResult {
+	fn try_update_max(&mut self, new_max: Perbill) -> DispatchResult {
 		if let Some(old) = self.max.as_mut() {
 			if new_max > *old {
 				return Err(Error::<T>::MaxCommissionRestricted.into())
@@ -741,7 +736,7 @@ impl<T: Config> Commission<T> {
 	///
 	/// Update `throttle_from` to the current block upon setting change rate for the first time, so
 	/// throttling can be checked from this block.
-	fn maybe_update_change_rate(
+	fn try_update_change_rate(
 		&mut self,
 		change_rate: CommissionChangeRate<T::BlockNumber>,
 	) -> DispatchResult {
@@ -758,7 +753,7 @@ impl<T: Config> Commission<T> {
 	///
 	/// A zero commission along with a `None` payee is returned in the event a commission has not
 	/// been configured to the pool. Commission is bounded to `GlobalMaxCommission`.
-	fn get_commission_and_payee(
+	fn maybe_commission_and_payee(
 		&self,
 		pending_rewards: &BalanceOf<T>,
 	) -> Option<(BalanceOf<T>, T::AccountId)> {
@@ -2399,7 +2394,7 @@ pub mod pallet {
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
 
-			bonded_pool.commission.maybe_update_current(&current)?;
+			bonded_pool.commission.try_update_current(&current)?;
 			bonded_pool.put();
 			Self::deposit_event(Event::<T>::PoolCommissionUpdated { pool_id, current });
 			Ok(())
@@ -2419,7 +2414,7 @@ pub mod pallet {
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
 
-			bonded_pool.commission.maybe_update_max(max_commission)?;
+			bonded_pool.commission.try_update_max(max_commission)?;
 			bonded_pool.put();
 
 			Self::deposit_event(Event::<T>::PoolMaxCommissionUpdated { pool_id, max_commission });
@@ -2440,7 +2435,7 @@ pub mod pallet {
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
 
-			bonded_pool.commission.maybe_update_change_rate(change_rate)?;
+			bonded_pool.commission.try_update_change_rate(change_rate)?;
 			bonded_pool.put();
 
 			Self::deposit_event(Event::<T>::PoolCommissionChangeRateUpdated {
@@ -2664,7 +2659,7 @@ impl<T: Config> Pallet<T> {
 
 		// Gets the commission percentage and payee to be paid if commission has been set.
 		// Otherwise, `None` is returned.
-		let maybe_commission = &bonded_pool.commission.get_commission_and_payee(&pending_rewards);
+		let maybe_commission = &bonded_pool.commission.maybe_commission_and_payee(&pending_rewards);
 
 		if let Some((pool_commission, payee)) = maybe_commission {
 			// Deduct any outstanding commission from the reward being claimed.
