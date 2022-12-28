@@ -5853,6 +5853,92 @@ mod commission {
 	}
 
 	#[test]
+	fn change_rate_does_not_apply_to_decreasing_commission() {
+		ExtBuilder::default().build_and_execute(|| {
+			// set initial commission of the pool to 10%.
+			assert_ok!(Pools::set_commission(
+				RuntimeOrigin::signed(900),
+				1,
+				Some((Perbill::from_percent(10), 900))
+			));
+
+			// Set a commission change rate for pool 1, 1% every 10 blocks
+			assert_ok!(Pools::set_commission_change_rate(
+				RuntimeOrigin::signed(900),
+				1,
+				CommissionChangeRate { max_increase: Perbill::from_percent(1), min_delay: 10_u64 }
+			));
+			assert_eq!(
+				BondedPools::<Runtime>::get(1).unwrap().commission.change_rate,
+				Some(CommissionChangeRate {
+					max_increase: Perbill::from_percent(1),
+					min_delay: 10_u64
+				})
+			);
+
+			// run `min_delay` blocks to allow a commission update.
+			run_blocks(10_u64);
+
+			// Attempt to decrease the commission by 5%. Should succeed.
+			assert_ok!(Pools::set_commission(
+				RuntimeOrigin::signed(900),
+				1,
+				Some((Perbill::from_percent(5), 900))
+			));
+
+			// run `min_delay` blocks to allow a commission update.
+			run_blocks(10_u64);
+
+			// Attempt to *increase* the commission by 5%. Should fail.
+			assert_noop!(
+				Pools::set_commission(
+					RuntimeOrigin::signed(900),
+					1,
+					Some((Perbill::from_percent(10), 900))
+				),
+				Error::<Runtime>::CommissionChangeThrottled
+			);
+
+			// sanity check: the current pool Commission state.
+			assert_eq!(
+				BondedPools::<Runtime>::get(1).unwrap().commission,
+				Commission {
+					current: Some((Perbill::from_percent(5), 900)),
+					max: None,
+					change_rate: Some(CommissionChangeRate {
+						max_increase: Perbill::from_percent(1),
+						min_delay: 10_u64
+					}),
+					throttle_from: Some(11),
+				}
+			);
+
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::PoolCommissionUpdated {
+						pool_id: 1,
+						current: Some((Perbill::from_percent(10), 900))
+					},
+					Event::PoolCommissionChangeRateUpdated {
+						pool_id: 1,
+						change_rate: CommissionChangeRate {
+							max_increase: Perbill::from_percent(1),
+							min_delay: 10
+						}
+					},
+					Event::PoolCommissionUpdated {
+						pool_id: 1,
+						current: Some((Perbill::from_percent(5), 900))
+					}
+				]
+			);
+		});
+	}
+
+	#[test]
 	fn set_commission_max_to_zero_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			// 0% max commission test.
@@ -6106,8 +6192,10 @@ mod commission {
 			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 10));
 
 			// Ensure the commission equals the total amount of points.
-			let maybe_commission =
-				&BondedPools::<Runtime>::get(1).unwrap().commission.get_commission_and_payee(&10);
+			let maybe_commission = &BondedPools::<Runtime>::get(1)
+				.unwrap()
+				.commission
+				.maybe_commission_and_payee(&10);
 			assert_eq!(*maybe_commission, Some((10_u128, 2_u128)));
 
 			// execute the payout
@@ -6159,8 +6247,10 @@ mod commission {
 			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 10));
 
 			// Ensure the commission equals 90% of the total points.
-			let maybe_commission =
-				&BondedPools::<Runtime>::get(1).unwrap().commission.get_commission_and_payee(&10);
+			let maybe_commission = &BondedPools::<Runtime>::get(1)
+				.unwrap()
+				.commission
+				.maybe_commission_and_payee(&10);
 			assert_eq!(*maybe_commission, Some((9_u128, 2_u128)));
 
 			// execute the payout
