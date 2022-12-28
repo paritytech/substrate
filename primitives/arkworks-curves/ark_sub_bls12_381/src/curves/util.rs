@@ -1,5 +1,5 @@
-use ark_ec::{short_weierstrass::Affine, AffineRepr};
 use ark_ff::{BigInteger384, PrimeField};
+use ark_models::{short_weierstrass::Affine, AffineRepr};
 use ark_serialize::SerializationError;
 
 use crate::{g1::Config as G1Config, g2::Config as G2Config, G1Affine, G2Affine};

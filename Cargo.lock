@@ -387,7 +387,6 @@ name = "ark-sub-bls12-377"
 version = "0.4.0-alpha.1"
 dependencies = [
  "ark-bls12-377",
- "ark-ec",
  "ark-ff",
  "ark-models",
  "ark-r1cs-std",
@@ -403,7 +402,6 @@ dependencies = [
  "ark-algebra-bench-templates",
  "ark-algebra-test-templates",
  "ark-bls12-381",
- "ark-ec",
  "ark-ff",
  "ark-models",
  "ark-serialize",

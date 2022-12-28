@@ -1,9 +1,9 @@
 use ark_bls12_381::{Fq, Fq12Config, Fq2Config, Fq6Config};
-use ark_ec::pairing::{MillerLoopOutput, Pairing, PairingOutput};
 use ark_ff::Fp12;
 use ark_models::{
 	bls12,
 	bls12::{Bls12, Bls12Config, G1Prepared, G2Prepared, TwistType},
+	pairing::{MillerLoopOutput, Pairing, PairingOutput},
 };
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use ark_std::{io::Cursor, vec, vec::Vec};

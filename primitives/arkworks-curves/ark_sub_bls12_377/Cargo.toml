@@ -14,7 +14,6 @@ edition = "2021"
 
 [dependencies]
 ark-ff = { version="0.4.0-alpha", default-features = false }
-ark-ec = { version="0.4.0-alpha", default-features = false }
 ark-r1cs-std = { version="0.4.0-alpha", default-features = false, optional = true }
 ark-std = { version = "0.4.0-alpha", default-features = false }
 ark-serialize = { version = "0.4.0-alpha", default-features = false }
@@ -26,7 +25,7 @@ sp-io = { path = "../../io" }
 
 [features]
 default = [ "curve" ]
-std = [ "ark-std/std", "ark-ff/std", "ark-ec/std" ]
+std = [ "ark-std/std", "ark-ff/std", "ark-models/std" ]
 
 curve = [ "scalar_field", "base_field" ]
 scalar_field = []

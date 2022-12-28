@@ -14,7 +14,6 @@ edition = "2021"
 
 [dependencies]
 ark-ff = { git = "https://github.com/arkworks-rs/algebra", branch = "release-0.4", default-features = false }
-ark-ec = { git = "https://github.com/arkworks-rs/algebra", branch = "release-0.4", default-features = false }
 ark-std = { version = "0.4.0-alpha", default-features = false }
 ark-serialize = { git = "https://github.com/arkworks-rs/algebra", branch = "release-0.4", default-features = false }
 ark-bls12-381 = { git = "https://github.com/arkworks-rs/curves" }
@@ -28,7 +27,7 @@ hex = "^0.4.0"
 
 [features]
 default = [ "curve" ]
-std = [ "ark-std/std", "ark-ff/std", "ark-ec/std" ]
+std = [ "ark-std/std", "ark-ff/std", "ark-models/std" ]
 
 curve = [ "scalar_field", "base_field" ]
 scalar_field = []

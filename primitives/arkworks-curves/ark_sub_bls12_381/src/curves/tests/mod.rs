@@ -1,6 +1,6 @@
 use ark_algebra_test_templates::*;
-use ark_ec::{AffineRepr, CurveGroup, Group};
 use ark_ff::{fields::Field, One, UniformRand, Zero};
+use ark_models::{pairing::PairingOutput, AffineRepr, CurveGroup, Group};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use ark_std::{rand::Rng, test_rng, vec};
 
@@ -8,7 +8,7 @@ use crate::{Bls12_381, Fq, Fq2, Fr, G1Affine, G1Projective, G2Affine, G2Projecti
 
 test_group!(g1; G1Projective; sw);
 test_group!(g2; G2Projective; sw);
-test_group!(pairing_output; ark_ec::pairing::PairingOutput<Bls12_381>; msm);
+test_group!(pairing_output; PairingOutput<Bls12_381>; msm);
 test_pairing!(pairing; crate::Bls12_381);
 
 #[test]
