@@ -590,7 +590,7 @@ pub struct PoolRoles<AccountId> {
 /// setting an initial `current` commission.
 ///
 /// `current` is a tuple of the commission percentage and payee of commission. `throttle_from`
-/// keeps track of  which block `current` was last updated. A `max` commission value can only be
+/// keeps track of which block `current` was last updated. A `max` commission value can only be
 /// decreased after the initial value is set, to prevent commission from repeatedly increasing.
 ///
 /// An optional commission `change_rate` allows the pool to set strict limits to how much commission
