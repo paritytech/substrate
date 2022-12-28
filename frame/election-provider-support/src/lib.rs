@@ -675,7 +675,7 @@ pub type BoundedSupportsOf<E> = BoundedSupports<
 sp_core::generate_feature_enabled_macro!(runtime_benchmarks_enabled, feature = "runtime-benchmarks", $);
 sp_core::generate_feature_enabled_macro!(runtime_benchmarks_or_fuzz_enabled, any(feature = "runtime-benchmarks", feature = "fuzzing"), $);
 
-#[derive(Clone, Copy, Eq, Default, Debug)]
+#[derive(Clone, Copy, Default, Debug)]
 pub struct DataProviderBounds {
 	pub count: Option<u32>,
 	pub size: Option<u32>,
@@ -704,35 +704,9 @@ impl DataProviderBounds {
 	}
 }
 
-impl PartialEq for DataProviderBounds {
-	fn eq(&self, other: &Self) -> bool {
-		self.count == other.count && self.size == self.size
-	}
-}
-
-impl PartialOrd for DataProviderBounds {
-	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-		Some(self.cmp(other))
-	}
-}
-
-// TODO(gpestana): is this correct?
-impl Ord for DataProviderBounds {
-	fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-		if self.count == other.count {
-			self.size.cmp(&other.size)
-		} else {
-			self.count.cmp(&other.count)
-		}
-	}
-}
-
 /// The limits of an election result. The bounds are defined over the count of element of the
 /// election (voters or targets) or the overall datastructure size.
-///
-/// Ordering: when comparing two instances of `ElectionBounds`, the `count` has priority over the
-/// `size`, ie. if `A.count > B.count`, then `A > B` regardless of their relative `size`.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct ElectionBounds {
 	pub voters: DataProviderBounds,
 	pub targets: DataProviderBounds,
