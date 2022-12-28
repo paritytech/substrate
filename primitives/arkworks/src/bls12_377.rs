@@ -18,7 +18,6 @@
 //! Hashing Functions.
 
 #![warn(missing_docs)]
-#![cfg_attr(not(feature = "std"), no_std)]
 
 use ark_bls12_377::{Bls12_377, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::{

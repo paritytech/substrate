@@ -1,4 +1,3 @@
-use crate::*;
 use ark_bls12_381::{Fq, Fr};
 use ark_ff::{Field, MontFp, PrimeField, Zero};
 use ark_models::{
@@ -229,8 +228,8 @@ pub fn endomorphism(p: &Affine<Config>) -> Affine<Config> {
 
 #[cfg(test)]
 mod test {
-
 	use super::*;
+	use crate::*;
 	use ark_std::{rand::Rng, UniformRand};
 
 	fn sample_unchecked() -> Affine<g1::Config> {

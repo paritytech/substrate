@@ -18,7 +18,6 @@
 //! Hashing Functions.
 
 #![warn(missing_docs)]
-#![cfg_attr(not(feature = "std"), no_std)]
 
 use ark_bw6_761::{Config, G1Affine, G1Projective, G2Affine, G2Projective, BW6_761};
 use ark_ec::{
