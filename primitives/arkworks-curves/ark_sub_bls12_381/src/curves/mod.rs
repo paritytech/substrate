@@ -56,7 +56,7 @@ impl Bls12Config for Config {
 		let res = sp_io::crypto::bls12_381_multi_miller_loop(a, b);
 		let cursor = Cursor::new(&res[..]);
 		let f: <Bls12<Self> as Pairing>::TargetField =
-			Fp12::deserialize_with_mode(cursor, Compress::Yes, ark_serialize::Validate::No)
+			Fp12::deserialize_with_mode(cursor, Compress::Yes, Validate::No)
 				.unwrap();
 		MillerLoopOutput(f)
 	}
@@ -74,7 +74,7 @@ impl Bls12Config for Config {
 		let res = PairingOutput::<Bls12<Self>>::deserialize_with_mode(
 			cursor,
 			Compress::Yes,
-			ark_serialize::Validate::No,
+			Validate::No,
 		)
 		.unwrap();
 
