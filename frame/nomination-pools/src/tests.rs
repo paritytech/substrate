@@ -6229,7 +6229,7 @@ mod commission {
 	#[test]
 	fn global_max_prevents_100_percent_commission_payout() {
 		ExtBuilder::default().build_and_execute(|| {
-			// Note: GlobalMaxCommission is set to 90%.
+			// Note: GlobalMaxCommission is set at 90%.
 
 			let (mut member, bonded_pool, mut reward_pool) =
 				Pools::get_member_with_pools(&10).unwrap();
