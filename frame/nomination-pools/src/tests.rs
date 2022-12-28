@@ -6210,7 +6210,7 @@ mod commission {
 				.maybe_commission_and_payee(&10);
 			assert_eq!(*maybe_commission, Some((10_u128, 2_u128)));
 
-			// Execute the payout
+			// execute the payout
 			assert_ok!(Pools::do_reward_payout(
 				&10,
 				&mut member,
