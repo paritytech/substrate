@@ -90,6 +90,24 @@ impl SWCurveConfig for Config {
 				.unwrap();
 		result.into()
 	}
+
+    fn mul_affine(base: &SWAffine<Self>, scalar: &[u64]) -> Projective<Self> {
+		let mut serialized_base = vec![0; base.serialized_size(Compress::Yes)];
+		let mut cursor = Cursor::new(&mut serialized_base[..]);
+		base.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
+
+		let mut serialized_scalar = vec![0; scalar.serialized_size(Compress::Yes)];
+		let mut cursor = Cursor::new(&mut serialized_scalar[..]);
+		scalar.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
+
+		let serialized_result =
+			sp_io::crypto::bls12_377_mul_affine_g1(serialized_base, serialized_scalar);
+
+		let cursor = Cursor::new(&serialized_result[..]);
+
+		let result = <Config as SWCurveConfig>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+		result.into()
+	}
 }
 
 pub type G1SWAffine = SWAffine<Config>;
