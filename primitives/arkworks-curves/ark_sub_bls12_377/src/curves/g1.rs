@@ -1,14 +1,14 @@
 use ark_ff::{Field, MontFp, Zero};
 use ark_models::models::{
-	short_weierstrass::{Affine as SWAffine, SWCurveConfig, Projective},
+	short_weierstrass::{Affine as SWAffine, Projective, SWCurveConfig},
 	twisted_edwards::{
 		Affine as TEAffine, MontCurveConfig, Projective as TEProjective, TECurveConfig,
 	},
 	CurveConfig,
 };
-use core::ops::Neg;
-use ark_std::{vec::Vec, vec, io::Cursor};
 use ark_serialize::{CanonicalSerialize, Compress, Validate};
+use ark_std::{io::Cursor, vec, vec::Vec};
+use core::ops::Neg;
 
 use crate::{Fq, Fr};
 
@@ -42,7 +42,7 @@ impl SWCurveConfig for Config {
 		Self::BaseField::zero()
 	}
 
-    fn msm(
+	fn msm(
 		bases: &[SWAffine<Self>],
 		scalars: &[<Self as CurveConfig>::ScalarField],
 	) -> Result<Projective<Self>, usize> {
@@ -66,8 +66,29 @@ impl SWCurveConfig for Config {
 			.collect();
 		let result = sp_io::crypto::bls12_381_msm_g1(bases, scalars);
 		let cursor = Cursor::new(&result[..]);
-		let result = <Config as SWCurveConfig>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+		let result =
+			<Config as SWCurveConfig>::deserialize_with_mode(cursor, Compress::Yes, Validate::No)
+				.unwrap();
 		Ok(result.into())
+	}
+
+	fn mul_projective(base: &Projective<Self>, scalar: &[u64]) -> Projective<Self> {
+		let mut serialized_base = vec![0; base.serialized_size(Compress::Yes)];
+		let mut cursor = Cursor::new(&mut serialized_base[..]);
+		base.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
+
+		let mut serialized_scalar = vec![0; scalar.serialized_size(Compress::Yes)];
+		let mut cursor = Cursor::new(&mut serialized_scalar[..]);
+		scalar.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
+
+		let result = sp_io::crypto::bls12_377_mul_projective_g1(serialized_base, serialized_scalar);
+
+		let cursor = Cursor::new(&result[..]);
+
+		let result =
+			<Config as SWCurveConfig>::deserialize_with_mode(cursor, Compress::Yes, Validate::No)
+				.unwrap();
+		result.into()
 	}
 }
 
@@ -139,7 +160,6 @@ impl TECurveConfig for Config {
 	fn mul_by_a(elem: Self::BaseField) -> Self::BaseField {
 		elem.neg()
 	}
-
 }
 
 // BLS12-377::G1 also has a Montgomery form.

@@ -1,10 +1,13 @@
 use ark_ff::{Field, MontFp, Zero};
 use ark_models::{
-	models::{short_weierstrass::{SWCurveConfig, Projective}, CurveConfig},
+	models::{
+		short_weierstrass::{Projective, SWCurveConfig},
+		CurveConfig,
+	},
 	short_weierstrass::Affine,
 };
-use ark_std::{vec::Vec, vec, io::Cursor};
 use ark_serialize::{CanonicalSerialize, Compress, Validate};
+use ark_std::{io::Cursor, vec, vec::Vec};
 
 use crate::{g1, Fq, Fq2, Fr};
 
@@ -59,7 +62,7 @@ impl SWCurveConfig for Config {
 		Self::BaseField::zero()
 	}
 
-    fn msm(
+	fn msm(
 		bases: &[Affine<Self>],
 		scalars: &[<Self as CurveConfig>::ScalarField],
 	) -> Result<Projective<Self>, usize> {
@@ -83,8 +86,27 @@ impl SWCurveConfig for Config {
 			.collect();
 		let result = sp_io::crypto::bls12_381_msm_g2(bases, scalars);
 		let cursor = Cursor::new(&result[..]);
-		let result = <Config as SWCurveConfig>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+		let result =
+			<Config as SWCurveConfig>::deserialize_with_mode(cursor, Compress::Yes, Validate::No)
+				.unwrap();
 		Ok(result.into())
+	}
+
+	fn mul_projective(base: &Projective<Self>, scalar: &[u64]) -> Projective<Self> {
+		let mut serialized_base = vec![0; base.serialized_size(Compress::Yes)];
+		let mut cursor = Cursor::new(&mut serialized_base[..]);
+		base.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
+
+		let mut serialized_scalar = vec![0; scalar.serialized_size(Compress::Yes)];
+		let mut cursor = Cursor::new(&mut serialized_scalar[..]);
+		scalar.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
+
+		let result = sp_io::crypto::bls12_377_mul_projective_g2(serialized_base, serialized_scalar);
+
+		let cursor = Cursor::new(&result[..]);
+
+		let result = Self::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+		result.into()
 	}
 }
 
