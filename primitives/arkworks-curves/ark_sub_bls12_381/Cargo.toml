@@ -21,9 +21,12 @@ ark-models = { path = "../../arkworks-models" }
 sp-io = { path = "../../io" }
 
 [dev-dependencies]
-ark-algebra-test-templates = { version = "0.4.0-alpha", default-features = false }
-ark-algebra-bench-templates = { version = "0.4.0-alpha", default-features = false }
+ark-algebra-test-templates = { git = "https://github.com/arkworks-rs/algebra", branch = "release-0.4", default-features = false }
+ark-ec = { git = "https://github.com/arkworks-rs/algebra", branch = "release-0.4", default-features = false }
 hex = "^0.4.0"
+serde = "1.0"
+serde_json = "1.0"
+serde_derive = "1.0"
 
 [features]
 default = [ "curve" ]

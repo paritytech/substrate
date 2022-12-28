@@ -84,7 +84,7 @@ impl SWCurveConfig for Config {
 				serialized
 			})
 			.collect();
-		let result = sp_io::crypto::bls12_381_msm_g2(bases, scalars);
+		let result = sp_io::crypto::bls12_377_msm_g2(bases, scalars);
 		let cursor = Cursor::new(&result[..]);
 		let result =
 			<Config as SWCurveConfig>::deserialize_with_mode(cursor, Compress::Yes, Validate::No)
