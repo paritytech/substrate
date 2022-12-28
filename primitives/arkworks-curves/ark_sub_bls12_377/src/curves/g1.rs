@@ -91,7 +91,7 @@ impl SWCurveConfig for Config {
 		result.into()
 	}
 
-    fn mul_affine(base: &SWAffine<Self>, scalar: &[u64]) -> Projective<Self> {
+	fn mul_affine(base: &SWAffine<Self>, scalar: &[u64]) -> Projective<Self> {
 		let mut serialized_base = vec![0; base.serialized_size(Compress::Yes)];
 		let mut cursor = Cursor::new(&mut serialized_base[..]);
 		base.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
@@ -105,7 +105,9 @@ impl SWCurveConfig for Config {
 
 		let cursor = Cursor::new(&serialized_result[..]);
 
-		let result = <Config as SWCurveConfig>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+		let result =
+			<Config as SWCurveConfig>::deserialize_with_mode(cursor, Compress::Yes, Validate::No)
+				.unwrap();
 		result.into()
 	}
 }
