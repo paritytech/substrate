@@ -242,6 +242,29 @@ pub fn benchmarks(tokens: TokenStream) -> TokenStream {
 					*
 				}
 			}
+
+			fn instance(
+				&self,
+				components: &[(#krate::BenchmarkParameter, u32)],
+				verify: bool,
+			) -> Result<
+				#krate::Box<
+					dyn FnOnce() -> Result<(), #krate::BenchmarkError>,
+				>,
+				#krate::BenchmarkError,
+			> {
+				match self {
+					#(
+						Self::#benchmark_names => {
+							<#benchmark_names as #krate::BenchmarkingSetup<
+								T,
+								I,
+							>>::instance(&#benchmark_names, components, verify)
+						}
+					)
+					*
+				}
+			}
 		}
 	};
 	println!("{}", res.to_string());
