@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![deny(
-    warnings,
-    unused,
+    // warnings,
+    // unused,
     future_incompatible,
     nonstandard_style,
     rust_2018_idioms
@@ -29,12 +29,11 @@
 #[cfg(feature = "curve")]
 mod curves;
 
-mod fields;
 
 #[cfg(feature = "r1cs")]
 pub mod constraints;
 
 #[cfg(feature = "curve")]
 pub use curves::*;
+pub use ark_bls12_377::{Fq2Config, Fq6Config, Fq12Config, Fq, Fq2, Fr};
 
-pub use fields::*;
