@@ -175,6 +175,7 @@ members = [
 	"primitives/arithmetic/fuzzer",
 	"primitives/arkworks",
 	"primitives/arkworks-curves/ark_sub_bls12_381",
+	"primitives/arkworks-curves/ark_sub_bls12_377",
 	"primitives/arkworks-models",
 	"primitives/authority-discovery",
 	"primitives/authorship",
@@ -330,6 +331,7 @@ ark-ff = { git = "https://github.com/arkworks-rs/algebra/", branch = "release-0.
 ark-ec = { git = "https://github.com/arkworks-rs/algebra/", branch = "release-0.4"  }
 ark-poly = { git = "https://github.com/arkworks-rs/algebra/", branch = "release-0.4"  }
 ark-algebra-test-templates = { git = "https://github.com/arkworks-rs/algebra/", branch = "release-0.4"  }
+ark-r1cs-std = { git = "https://github.com/arkworks-rs/r1cs-std/", branch = "release-0.4" }
 ark-bls12-381 = { git = "https://github.com/arkworks-rs/curves" }
 ark-bls12-377 = { git = "https://github.com/arkworks-rs/curves" }
 ark-bw6-761 = { git = "https://github.com/arkworks-rs/curves" }

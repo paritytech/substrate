@@ -210,7 +210,7 @@ dependencies = [
 [[package]]
 name = "ark-ec"
 version = "0.4.0-alpha.5"
-source = "git+https://github.com/arkworks-rs/algebra/?branch=release-0.4#b1d61ef132d626d079417a5c77834861633f6a9a"
+source = "git+https://github.com/arkworks-rs/algebra/?branch=release-0.4#7f931fe334ad6644b68d4c4617d31e42c845c635"
 dependencies = [
  "ark-ff",
  "ark-poly",
@@ -248,7 +248,7 @@ dependencies = [
 [[package]]
 name = "ark-ff"
 version = "0.4.0-alpha.5"
-source = "git+https://github.com/arkworks-rs/algebra/?branch=release-0.4#b1d61ef132d626d079417a5c77834861633f6a9a"
+source = "git+https://github.com/arkworks-rs/algebra/?branch=release-0.4#7f931fe334ad6644b68d4c4617d31e42c845c635"
 dependencies = [
  "ark-ff-asm",
  "ark-ff-macros",
@@ -267,7 +267,7 @@ dependencies = [
 [[package]]
 name = "ark-ff-asm"
 version = "0.4.0-alpha.5"
-source = "git+https://github.com/arkworks-rs/algebra/?branch=release-0.4#b1d61ef132d626d079417a5c77834861633f6a9a"
+source = "git+https://github.com/arkworks-rs/algebra/?branch=release-0.4#7f931fe334ad6644b68d4c4617d31e42c845c635"
 dependencies = [
  "quote",
  "syn",
@@ -276,7 +276,7 @@ dependencies = [
 [[package]]
 name = "ark-ff-macros"
 version = "0.4.0-alpha.5"
-source = "git+https://github.com/arkworks-rs/algebra/?branch=release-0.4#b1d61ef132d626d079417a5c77834861633f6a9a"
+source = "git+https://github.com/arkworks-rs/algebra/?branch=release-0.4#7f931fe334ad6644b68d4c4617d31e42c845c635"
 dependencies = [
  "num-bigint",
  "num-traits",
@@ -305,7 +305,7 @@ dependencies = [
 [[package]]
 name = "ark-poly"
 version = "0.4.0-alpha.5"
-source = "git+https://github.com/arkworks-rs/algebra/?branch=release-0.4#b1d61ef132d626d079417a5c77834861633f6a9a"
+source = "git+https://github.com/arkworks-rs/algebra/?branch=release-0.4#7f931fe334ad6644b68d4c4617d31e42c845c635"
 dependencies = [
  "ark-ff",
  "ark-serialize",
@@ -315,19 +315,47 @@ dependencies = [
 ]
 
 [[package]]
+name = "ark-r1cs-std"
+version = "0.4.0-alpha.1"
+source = "git+https://github.com/arkworks-rs/r1cs-std/?branch=release-0.4#bdffd136f955ccb437183862964612d235148615"
+dependencies = [
+ "ark-ec",
+ "ark-ff",
+ "ark-relations",
+ "ark-std 0.4.0-alpha",
+ "derivative",
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+ "tracing",
+]
+
+[[package]]
+name = "ark-relations"
+version = "0.4.0-alpha.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8fcbb7957519f1fd4de397d22360b236840c3e426f39999e34c63be9dfe7d1b"
+dependencies = [
+ "ark-ff",
+ "ark-std 0.4.0-alpha",
+ "tracing",
+]
+
+[[package]]
 name = "ark-serialize"
 version = "0.4.0-alpha.5"
-source = "git+https://github.com/arkworks-rs/algebra/?branch=release-0.4#b1d61ef132d626d079417a5c77834861633f6a9a"
+source = "git+https://github.com/arkworks-rs/algebra/?branch=release-0.4#7f931fe334ad6644b68d4c4617d31e42c845c635"
 dependencies = [
  "ark-serialize-derive",
  "ark-std 0.4.0-alpha",
  "digest 0.10.6",
+ "num-bigint",
 ]
 
 [[package]]
 name = "ark-serialize-derive"
 version = "0.4.0-alpha.5"
-source = "git+https://github.com/arkworks-rs/algebra/?branch=release-0.4#b1d61ef132d626d079417a5c77834861633f6a9a"
+source = "git+https://github.com/arkworks-rs/algebra/?branch=release-0.4#7f931fe334ad6644b68d4c4617d31e42c845c635"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -352,6 +380,16 @@ dependencies = [
  "num-traits",
  "rand 0.8.5",
  "rayon",
+]
+
+[[package]]
+name = "ark-sub-bls12-377"
+version = "0.4.0-alpha.1"
+dependencies = [
+ "ark-ec",
+ "ark-ff",
+ "ark-r1cs-std",
+ "ark-std 0.4.0-alpha",
 ]
 
 [[package]]
