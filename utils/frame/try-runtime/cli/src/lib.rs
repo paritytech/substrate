@@ -900,16 +900,26 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 		.expect("A recorder was set and thus, a storage proof can be extracted; qed");
 
 	if let Some(path) = maybe_export_proof {
-		let mut file = std::fs::File::create(path).map_err(|e| {
-			log::error!(target: LOG_TARGET, "Failed to create file {}: {:?}", path, e);
+		let mut file = std::fs::File::create(&path).map_err(|e| {
+			log::error!(
+				target: LOG_TARGET,
+				"Failed to create file {}: {:?}",
+				path.to_string_lossy(),
+				e
+			);
 			e
 		})?;
 
-		log::info!(target: LOG_TARGET, "Writing storage proof to {}", path);
+		log::info!(target: LOG_TARGET, "Writing storage proof to {}", path.to_string_lossy());
 
 		use std::io::Write as _;
 		file.write_all(storage_proof_to_raw_json(&proof).as_bytes()).map_err(|e| {
-			log::error!(target: LOG_TARGET, "Failed to write storage proof to {}: {:?}", path, e);
+			log::error!(
+				target: LOG_TARGET,
+				"Failed to write storage proof to {}: {:?}",
+				path.to_string_lossy(),
+				e
+			);
 			e
 		})?;
 	}
