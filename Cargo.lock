@@ -7280,6 +7280,7 @@ dependencies = [
  "sp-keystore",
  "sp-panic-handler",
  "sp-runtime",
+ "sp-tracing",
  "sp-version",
  "tempfile",
  "thiserror",
