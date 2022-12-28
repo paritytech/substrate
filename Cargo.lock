@@ -389,8 +389,11 @@ dependencies = [
  "ark-bls12-377",
  "ark-ec",
  "ark-ff",
+ "ark-models",
  "ark-r1cs-std",
+ "ark-serialize",
  "ark-std 0.4.0-alpha",
+ "sp-io",
 ]
 
 [[package]]

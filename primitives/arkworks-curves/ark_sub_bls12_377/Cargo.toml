@@ -17,7 +17,12 @@ ark-ff = { version="0.4.0-alpha", default-features = false }
 ark-ec = { version="0.4.0-alpha", default-features = false }
 ark-r1cs-std = { version="0.4.0-alpha", default-features = false, optional = true }
 ark-std = { version = "0.4.0-alpha", default-features = false }
+ark-serialize = { version = "0.4.0-alpha", default-features = false }
+
 ark-bls12-377 = { git = "https://github.com/arkworks-rs/curves" }
+ark-models = { path = "../../arkworks-models" }
+sp-io = { path = "../../io" }
+
 
 [features]
 default = [ "curve" ]

@@ -18,8 +18,7 @@
 //!
 //! Curve information:
 //! * Base field: q = 258664426012969094010652733694893533536393512754914660539884262666720468348340822774968888139573360124440321458177
-//! * Scalar field: r =
-//!   8444461749428370424248824938781546531375899335154063827935233455917409239041
+//! * Scalar field: r = 8444461749428370424248824938781546531375899335154063827935233455917409239041
 //! * valuation(q - 1, 2) = 46
 //! * valuation(r - 1, 2) = 47
 //! * G1 curve equation: y^2 = x^3 + 1
@@ -29,11 +28,9 @@
 #[cfg(feature = "curve")]
 mod curves;
 
-
 #[cfg(feature = "r1cs")]
 pub mod constraints;
 
+pub use ark_bls12_377::{Fq, Fq12Config, Fq2, Fq2Config, Fq6Config, Fr};
 #[cfg(feature = "curve")]
 pub use curves::*;
-pub use ark_bls12_377::{Fq2Config, Fq6Config, Fq12Config, Fq, Fq2, Fr};
-

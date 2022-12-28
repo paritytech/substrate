@@ -1,8 +1,8 @@
-use ark_ec::{
-    models::{short_weierstrass::SWCurveConfig, CurveConfig},
-    short_weierstrass::Affine,
-};
 use ark_ff::{Field, MontFp, Zero};
+use ark_models::{
+	models::{short_weierstrass::SWCurveConfig, CurveConfig},
+	short_weierstrass::Affine,
+};
 
 use crate::{g1, Fq, Fq2, Fr};
 
@@ -11,13 +11,13 @@ pub type G2Affine = Affine<Config>;
 pub struct Config;
 
 impl CurveConfig for Config {
-    type BaseField = Fq2;
-    type ScalarField = Fr;
+	type BaseField = Fq2;
+	type ScalarField = Fr;
 
-    /// COFACTOR =
-    /// 7923214915284317143930293550643874566881017850177945424769256759165301436616933228209277966774092486467289478618404761412630691835764674559376407658497
+	/// COFACTOR =
+	/// 7923214915284317143930293550643874566881017850177945424769256759165301436616933228209277966774092486467289478618404761412630691835764674559376407658497
     #[rustfmt::skip]
-    const COFACTOR: &'static [u64] = &[
+	const COFACTOR: &'static [u64] = &[
         0x0000000000000001,
         0x452217cc90000000,
         0xa0f3622fba094800,
@@ -28,34 +28,34 @@ impl CurveConfig for Config {
         0x26ba558ae9562a,
     ];
 
-    /// COFACTOR_INV = COFACTOR^{-1} mod r
-    /// = 6764900296503390671038341982857278410319949526107311149686707033187604810669
-    const COFACTOR_INV: Fr =
-        MontFp!("6764900296503390671038341982857278410319949526107311149686707033187604810669");
+	/// COFACTOR_INV = COFACTOR^{-1} mod r
+	/// = 6764900296503390671038341982857278410319949526107311149686707033187604810669
+	const COFACTOR_INV: Fr =
+		MontFp!("6764900296503390671038341982857278410319949526107311149686707033187604810669");
 }
 
 impl SWCurveConfig for Config {
-    /// COEFF_A = [0, 0]
-    const COEFF_A: Fq2 = Fq2::new(g1::Config::COEFF_A, g1::Config::COEFF_A);
+	/// COEFF_A = [0, 0]
+	const COEFF_A: Fq2 = Fq2::new(g1::Config::COEFF_A, g1::Config::COEFF_A);
 
-    // As per https://eprint.iacr.org/2012/072.pdf,
-    // this curve has b' = b/i, where b is the COEFF_B of G1, and x^6 -i is
-    // the irreducible poly used to extend from Fp2 to Fp12.
-    // In our case, i = u (App A.3, T_6).
-    /// COEFF_B = [0,
-    /// 155198655607781456406391640216936120121836107652948796323930557600032281009004493664981332883744016074664192874906]
-    const COEFF_B: Fq2 = Fq2::new(
+	// As per https://eprint.iacr.org/2012/072.pdf,
+	// this curve has b' = b/i, where b is the COEFF_B of G1, and x^6 -i is
+	// the irreducible poly used to extend from Fp2 to Fp12.
+	// In our case, i = u (App A.3, T_6).
+	/// COEFF_B = [0,
+	/// 155198655607781456406391640216936120121836107652948796323930557600032281009004493664981332883744016074664192874906]
+	const COEFF_B: Fq2 = Fq2::new(
         Fq::ZERO,
         MontFp!("155198655607781456406391640216936120121836107652948796323930557600032281009004493664981332883744016074664192874906"),
     );
 
-    /// AFFINE_GENERATOR_COEFFS = (G2_GENERATOR_X, G2_GENERATOR_Y)
-    const GENERATOR: G2Affine = G2Affine::new_unchecked(G2_GENERATOR_X, G2_GENERATOR_Y);
+	/// AFFINE_GENERATOR_COEFFS = (G2_GENERATOR_X, G2_GENERATOR_Y)
+	const GENERATOR: G2Affine = G2Affine::new_unchecked(G2_GENERATOR_X, G2_GENERATOR_Y);
 
-    #[inline(always)]
-    fn mul_by_a(_: Self::BaseField) -> Self::BaseField {
-        Self::BaseField::zero()
-    }
+	#[inline(always)]
+	fn mul_by_a(_: Self::BaseField) -> Self::BaseField {
+		Self::BaseField::zero()
+	}
 }
 
 pub const G2_GENERATOR_X: Fq2 = Fq2::new(G2_GENERATOR_X_C0, G2_GENERATOR_X_C1);

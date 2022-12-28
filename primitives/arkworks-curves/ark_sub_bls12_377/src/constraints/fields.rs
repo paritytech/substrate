@@ -14,19 +14,19 @@ pub type Fq12Var = Fp12Var<Fq12Config>;
 
 #[test]
 fn bls12_377_field_test() {
-    use super::*;
-    use crate::{Fq, Fq12, Fq2, Fq6};
-    use ark_curve_constraint_tests::fields::*;
+	use super::*;
+	use crate::{Fq, Fq12, Fq2, Fq6};
+	use ark_curve_constraint_tests::fields::*;
 
-    field_test::<_, _, FqVar>().unwrap();
-    frobenius_tests::<Fq, _, FqVar>(13).unwrap();
+	field_test::<_, _, FqVar>().unwrap();
+	frobenius_tests::<Fq, _, FqVar>(13).unwrap();
 
-    field_test::<_, _, Fq2Var>().unwrap();
-    frobenius_tests::<Fq2, _, Fq2Var>(13).unwrap();
+	field_test::<_, _, Fq2Var>().unwrap();
+	frobenius_tests::<Fq2, _, Fq2Var>(13).unwrap();
 
-    field_test::<_, _, Fq6Var>().unwrap();
-    frobenius_tests::<Fq6, _, Fq6Var>(13).unwrap();
+	field_test::<_, _, Fq6Var>().unwrap();
+	frobenius_tests::<Fq6, _, Fq6Var>(13).unwrap();
 
-    field_test::<_, _, Fq12Var>().unwrap();
-    frobenius_tests::<Fq12, _, Fq12Var>(13).unwrap();
+	field_test::<_, _, Fq12Var>().unwrap();
+	frobenius_tests::<Fq12, _, Fq12Var>(13).unwrap();
 }
