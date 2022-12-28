@@ -793,6 +793,8 @@ impl<T: Config> Commission<T> {
 /// The pool root is able to set a commission change rate for their pool. A commission change rate
 /// consists of 2 values; (1) the maximum allowed commission change, and (2) the minimum amount of
 /// blocks that must elapse before commission updates are allowed again.
+/// 
+/// Commission change rates are not applied to decreases in commission.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Copy, Clone)]
 pub struct CommissionChangeRate<BlockNumber> {
 	/// The maximum amount the commission can be updated by per `min_delay` period.
