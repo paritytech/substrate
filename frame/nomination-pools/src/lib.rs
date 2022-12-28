@@ -626,6 +626,11 @@ impl<T: Config> Commission<T> {
 			let commission_as_percent =
 				self.current.as_ref().map(|(x, _)| *x).unwrap_or(Perbill::zero());
 
+			// do not throttle if `to` is the same or a decrease in commission.
+			if *to <= commission_as_percent {
+				return false
+			}
+
 			// the attempted increase in commission relative to the current commission.
 			let attempted_increase = (*to).saturating_sub(commission_as_percent);
 
