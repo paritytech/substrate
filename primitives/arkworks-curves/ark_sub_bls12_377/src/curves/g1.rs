@@ -1,12 +1,14 @@
 use ark_ff::{Field, MontFp, Zero};
 use ark_models::models::{
-	short_weierstrass::{Affine as SWAffine, SWCurveConfig},
+	short_weierstrass::{Affine as SWAffine, SWCurveConfig, Projective},
 	twisted_edwards::{
 		Affine as TEAffine, MontCurveConfig, Projective as TEProjective, TECurveConfig,
 	},
 	CurveConfig,
 };
 use core::ops::Neg;
+use ark_std::{vec::Vec, vec, io::Cursor};
+use ark_serialize::{CanonicalSerialize, Compress, Validate};
 
 use crate::{Fq, Fr};
 
@@ -38,6 +40,34 @@ impl SWCurveConfig for Config {
 	#[inline(always)]
 	fn mul_by_a(_: Self::BaseField) -> Self::BaseField {
 		Self::BaseField::zero()
+	}
+
+    fn msm(
+		bases: &[SWAffine<Self>],
+		scalars: &[<Self as CurveConfig>::ScalarField],
+	) -> Result<Projective<Self>, usize> {
+		let bases: Vec<Vec<u8>> = bases
+			.into_iter()
+			.map(|elem| {
+				let mut serialized = vec![0; elem.serialized_size(Compress::Yes)];
+				let mut cursor = Cursor::new(&mut serialized[..]);
+				elem.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
+				serialized
+			})
+			.collect();
+		let scalars: Vec<Vec<u8>> = scalars
+			.into_iter()
+			.map(|elem| {
+				let mut serialized = vec![0; elem.serialized_size(Compress::Yes)];
+				let mut cursor = Cursor::new(&mut serialized[..]);
+				elem.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
+				serialized
+			})
+			.collect();
+		let result = sp_io::crypto::bls12_381_msm_g1(bases, scalars);
+		let cursor = Cursor::new(&result[..]);
+		let result = <Config as SWCurveConfig>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+		Ok(result.into())
 	}
 }
 
@@ -109,6 +139,7 @@ impl TECurveConfig for Config {
 	fn mul_by_a(elem: Self::BaseField) -> Self::BaseField {
 		elem.neg()
 	}
+
 }
 
 // BLS12-377::G1 also has a Montgomery form.
