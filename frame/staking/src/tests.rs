@@ -5475,6 +5475,65 @@ fn proportional_ledger_slash_works() {
 }
 
 #[test]
+fn legacy_claimed_reward_checked_before_claim() {
+	// Verifies initial conditions of mock
+	ExtBuilder::default().nominate(false).build_and_execute(|| {
+		// put some money in stash=3 and controller=4.
+		for i in 3..5 {
+			let _ = Balances::make_free_balance_be(&i, 2000);
+		}
+		mock::start_active_era(2);
+		// add a new candidate for being a validator. account 3 controlled by 4.
+		assert_ok!(Staking::bond(RuntimeOrigin::signed(3), 4, 1500, RewardDestination::Controller));
+		assert_eq!(
+			Staking::ledger(&4).unwrap(),
+			StakingLedger {
+				stash: 3,
+				total: 1500,
+				active: 1500,
+				unlocking: Default::default(),
+				claimed_rewards: Default::default(),
+			}
+		);
+		// go forward few eras rewarding the validator for each era
+		for e in 3..10 {
+			mock::start_active_era(e);
+			Pallet::<Test>::reward_by_ids(vec![(3, 1)]);
+		}
+		let zero_weight = <Test as Config>::WeightInfo::payout_stakers_alive_staked(0);
+		// fake that validator has already claimed rewards for even eras (4, 6, 8) that is recorded
+		// in the staking leger (legacy way).
+		Ledger::<Test>::insert(
+			4,
+			StakingLedger {
+				stash: 3,
+				total: 1500,
+				active: 1500,
+				unlocking: Default::default(),
+				claimed_rewards: bounded_vec![4, 6, 8],
+			},
+		);
+
+		// moving to next era
+		mock::start_active_era(10);
+
+		// then verify validators can claim only unclaimed eras
+		for e in 3..10 {
+			if e % 2 != 0 {
+				// validator can claim rewards for odd eras
+				assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(4), 3, e));
+			} else {
+				// cannot claim rewards for even eras.
+				assert_noop!(
+					Staking::payout_stakers(RuntimeOrigin::signed(4), 3, e),
+					Error::<Test>::NothingToClaim.with_weight(zero_weight)
+				);
+			}
+		}
+	});
+}
+
+#[test]
 fn reducing_history_depth_abrupt() {
 	// Verifies initial conditions of mock
 	ExtBuilder::default().nominate(false).build_and_execute(|| {
