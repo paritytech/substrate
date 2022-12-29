@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Tests for Nft fractionalisation pallet.
+//! Tests for Nft fractionalization pallet.
 
 use crate::{mock::*, *};
 use frame_support::{
@@ -50,7 +50,7 @@ fn events() -> Vec<Event<Test>> {
 }
 
 #[test]
-fn fractionalise_should_work() {
+fn fractionalize_should_work() {
 	new_test_ext().execute_with(|| {
 		let nft_collection_id = 0;
 		let nft_id = 0;
@@ -65,7 +65,7 @@ fn fractionalise_should_work() {
 		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), 1, CollectionConfig::default()));
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), nft_collection_id, nft_id, 1, None));
 
-		assert_ok!(NftFractions::fractionalise(
+		assert_ok!(NftFractions::fractionalize(
 			RuntimeOrigin::signed(1),
 			nft_collection_id,
 			nft_id,
@@ -80,7 +80,7 @@ fn fractionalise_should_work() {
 		assert_eq!(details.asset, asset_id);
 		assert_eq!(details.fractions, fractions);
 
-		assert!(events().contains(&Event::<Test>::NftFractionalised {
+		assert!(events().contains(&Event::<Test>::NftFractionalized {
 			nft_collection: nft_collection_id,
 			nft: nft_id,
 			fractions,
@@ -90,7 +90,7 @@ fn fractionalise_should_work() {
 
 		let nft_id = nft_id + 1;
 		assert_noop!(
-			NftFractions::fractionalise(
+			NftFractions::fractionalize(
 				RuntimeOrigin::signed(1),
 				nft_collection_id,
 				nft_id,
@@ -103,7 +103,7 @@ fn fractionalise_should_work() {
 
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), nft_collection_id, nft_id, 2, None));
 		assert_noop!(
-			NftFractions::fractionalise(
+			NftFractions::fractionalize(
 				RuntimeOrigin::signed(1),
 				nft_collection_id,
 				nft_id,
@@ -117,7 +117,7 @@ fn fractionalise_should_work() {
 }
 
 #[test]
-fn unfractionalise_should_work() {
+fn unify_should_work() {
 	new_test_ext().execute_with(|| {
 		let nft_collection_id = 0;
 		let nft_id = 0;
@@ -131,7 +131,7 @@ fn unfractionalise_should_work() {
 
 		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), 1, CollectionConfig::default()));
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), nft_collection_id, nft_id, 1, None));
-		assert_ok!(NftFractions::fractionalise(
+		assert_ok!(NftFractions::fractionalize(
 			RuntimeOrigin::signed(1),
 			nft_collection_id,
 			nft_id,
@@ -141,7 +141,7 @@ fn unfractionalise_should_work() {
 		));
 
 		assert_noop!(
-			NftFractions::unfractionalise(
+			NftFractions::unify(
 				RuntimeOrigin::signed(2),
 				nft_collection_id + 1,
 				nft_id,
@@ -151,7 +151,7 @@ fn unfractionalise_should_work() {
 			Error::<Test>::DataNotFound
 		);
 		assert_noop!(
-			NftFractions::unfractionalise(
+			NftFractions::unify(
 				RuntimeOrigin::signed(2),
 				nft_collection_id,
 				nft_id,
@@ -161,15 +161,9 @@ fn unfractionalise_should_work() {
 			Error::<Test>::DataNotFound
 		);
 
-		// can't un-fractionalise the asset I don't hold
+		// can't unify the asset a user doesn't hold
 		assert_noop!(
-			NftFractions::unfractionalise(
-				RuntimeOrigin::signed(1),
-				nft_collection_id,
-				nft_id,
-				asset_id,
-				1,
-			),
+			NftFractions::unify(RuntimeOrigin::signed(1), nft_collection_id, nft_id, asset_id, 1,),
 			DispatchError::Module(ModuleError {
 				index: 2,
 				error: [1, 0, 0, 0],
@@ -177,7 +171,7 @@ fn unfractionalise_should_work() {
 			})
 		);
 
-		assert_ok!(NftFractions::unfractionalise(
+		assert_ok!(NftFractions::unify(
 			RuntimeOrigin::signed(2),
 			nft_collection_id,
 			nft_id,
@@ -189,16 +183,16 @@ fn unfractionalise_should_work() {
 		assert_eq!(Nfts::owner(nft_collection_id, nft_id), Some(1));
 		assert!(!NftToAsset::<Test>::contains_key((&nft_collection_id, &nft_id)));
 
-		assert!(events().contains(&Event::<Test>::NftUnFractionalised {
+		assert!(events().contains(&Event::<Test>::NftUnified {
 			nft_collection: nft_collection_id,
 			nft: nft_id,
 			asset: asset_id,
 			beneficiary: 1,
 		}));
 
-		// validate we need to hold the full balance to un-fractionalise the NFT
+		// validate we need to hold the full balance to un-fractionalize the NFT
 		let asset_id = asset_id + 1;
-		assert_ok!(NftFractions::fractionalise(
+		assert_ok!(NftFractions::fractionalize(
 			RuntimeOrigin::signed(1),
 			nft_collection_id,
 			nft_id,
@@ -210,13 +204,7 @@ fn unfractionalise_should_work() {
 		assert_eq!(Assets::balance(asset_id, 1), fractions - 1);
 		assert_eq!(Assets::balance(asset_id, 2), 1);
 		assert_noop!(
-			NftFractions::unfractionalise(
-				RuntimeOrigin::signed(1),
-				nft_collection_id,
-				nft_id,
-				asset_id,
-				1,
-			),
+			NftFractions::unify(RuntimeOrigin::signed(1), nft_collection_id, nft_id, asset_id, 1,),
 			DispatchError::Module(ModuleError {
 				index: 2,
 				error: [0, 0, 0, 0],
@@ -225,7 +213,7 @@ fn unfractionalise_should_work() {
 		);
 
 		assert_ok!(Assets::transfer(RuntimeOrigin::signed(2), asset_id, 1, 1));
-		assert_ok!(NftFractions::unfractionalise(
+		assert_ok!(NftFractions::unify(
 			RuntimeOrigin::signed(1),
 			nft_collection_id,
 			nft_id,

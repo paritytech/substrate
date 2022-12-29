@@ -3093,7 +3093,7 @@ dependencies = [
  "pallet-message-queue",
  "pallet-mmr",
  "pallet-multisig",
- "pallet-nft-fractionalisation",
+ "pallet-nft-fractionalization",
  "pallet-nfts",
  "pallet-nis",
  "pallet-nomination-pools",
@@ -5381,7 +5381,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-nft-fractionalisation"
+name = "pallet-nft-fractionalization"
 version = "4.0.0-dev"
 dependencies = [
  "frame-benchmarking",

@@ -15,12 +15,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Various basic types for use in the Nft fractionalisation pallet.
+//! Various basic types for use in the Nft fractionalization pallet.
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
-/// Stores the details of a fractionalised item.
+/// Stores the details of a fractionalized item.
 #[derive(Decode, Encode, Default, PartialEq, Eq, MaxEncodedLen, TypeInfo)]
 pub struct Details<AssetId, Fractions> {
 	/// Minted asset.

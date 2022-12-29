@@ -128,14 +128,14 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		NftFractionalised {
+		NftFractionalized {
 			nft_collection: T::NftCollectionId,
 			nft: T::NftId,
 			fractions: AssetBalanceOf<T>,
 			asset: AssetIdOf<T>,
 			beneficiary: T::AccountId,
 		},
-		NftUnFractionalised {
+		NftUnified {
 			nft_collection: T::NftCollectionId,
 			nft: T::NftId,
 			asset: AssetIdOf<T>,
@@ -145,7 +145,7 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// Information about the fractionalised NFT can't be found.
+		/// Information about the fractionalized NFT can't be found.
 		DataNotFound,
 		/// The signing account has no permission to do the operation.
 		NoPermission,
@@ -158,7 +158,7 @@ pub mod pallet {
 		// TODO: correct weights
 		#[pallet::call_index(0)]
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(2).ref_time())]
-		pub fn fractionalise(
+		pub fn fractionalize(
 			origin: OriginFor<T>,
 			nft_collection_id: T::NftCollectionId,
 			nft_id: T::NftId,
@@ -182,7 +182,7 @@ pub mod pallet {
 				Details { asset: asset_id, fractions },
 			);
 
-			Self::deposit_event(Event::NftFractionalised {
+			Self::deposit_event(Event::NftFractionalized {
 				nft_collection: nft_collection_id,
 				nft: nft_id,
 				fractions,
@@ -197,7 +197,7 @@ pub mod pallet {
 		// TODO: correct weights
 		#[pallet::call_index(1)]
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(2).ref_time())]
-		pub fn unfractionalise(
+		pub fn unify(
 			origin: OriginFor<T>,
 			nft_collection_id: T::NftCollectionId,
 			nft_id: T::NftId,
@@ -213,7 +213,7 @@ pub mod pallet {
 				Self::do_burn_asset(asset_id, &who, details.fractions)?;
 				Self::do_unlock_nft(nft_collection_id, nft_id, &beneficiary)?;
 
-				Self::deposit_event(Event::NftUnFractionalised {
+				Self::deposit_event(Event::NftUnified {
 					nft_collection: nft_collection_id,
 					nft: nft_id,
 					asset: asset_id,

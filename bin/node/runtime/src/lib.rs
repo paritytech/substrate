@@ -93,7 +93,7 @@ pub use pallet_sudo::Call as SudoCall;
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 
-pub use pallet_nft_fractionalisation;
+pub use pallet_nft_fractionalization;
 
 /// Implementations of some helper traits passed into runtime modules as associated types.
 pub mod impls;
@@ -1594,7 +1594,7 @@ parameter_types! {
 	pub const BuybackThreshold: u32 = 1;
 }
 
-impl pallet_nft_fractionalisation::Config for Runtime {
+impl pallet_nft_fractionalization::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type PalletId = NftFractionsPalletId;
 	type Currency = Balances;
@@ -1762,7 +1762,7 @@ construct_runtime!(
 		Nis: pallet_nis,
 		Uniques: pallet_uniques,
 		Nfts: pallet_nfts,
-		NftFractions: pallet_nft_fractionalisation,
+		NftFractions: pallet_nft_fractionalization,
 		TransactionStorage: pallet_transaction_storage,
 		VoterList: pallet_bags_list::<Instance1>,
 		StateTrieMigration: pallet_state_trie_migration,

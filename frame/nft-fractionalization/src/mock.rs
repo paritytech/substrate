@@ -15,10 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test environment for Nft fractionalisation pallet.
+//! Test environment for Nft fractionalization pallet.
 
 use super::*;
-use crate as pallet_nft_fractionalisation;
+use crate as pallet_nft_fractionalization;
 
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -44,7 +44,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		NftFractions: pallet_nft_fractionalisation,
+		NftFractions: pallet_nft_fractionalization,
 		Assets: pallet_assets,
 		Balances: pallet_balances,
 		Nfts: pallet_nfts,
