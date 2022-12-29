@@ -37,7 +37,7 @@ use sp_std::prelude::*;
 /// A wrapper around a `StorageNMap` and a `StorageValue<Value=u32>` to keep track of how many items
 /// are in a map, without needing to iterate over all of the values.
 ///
-/// This storage item has additional storage read and write overhead when manipulating values
+/// This storage item has some additional storage read and write overhead when manipulating values
 /// compared to a regular storage map.
 ///
 /// For functions where we only add or remove a value, a single storage read is needed to check if
