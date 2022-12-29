@@ -20,10 +20,10 @@
 #![warn(missing_docs)]
 
 use ark_ec::{
-	models::CurveConfig, short_weierstrass, twisted_edwards, twisted_edwards::TECurveConfig,
+	models::CurveConfig, short_weierstrass::{self, SWCurveConfig}, twisted_edwards, twisted_edwards::TECurveConfig,
 	VariableBaseMSM,
 };
-use ark_ed_on_bls12_381::{EdwardsProjective, JubjubConfig, SWProjective};
+use ark_ed_on_bls12_381::{JubjubConfig, SWProjective};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use ark_std::io::Cursor;
 use sp_std::{vec, vec::Vec};
@@ -31,7 +31,7 @@ use sp_std::{vec, vec::Vec};
 /// Compute a scalar multiplication on G2 through arkworks
 pub fn mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	let cursor = Cursor::new(base);
-	let base = twisted_edwards::Projective::<JubjubConfig>::deserialize_with_mode(
+	let base = short_weierstrass::Projective::<JubjubConfig>::deserialize_with_mode(
 		cursor,
 		Compress::Yes,
 		Validate::No,
@@ -39,7 +39,7 @@ pub fn mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	.unwrap();
 	let cursor = Cursor::new(scalar);
 	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
-	let res = <JubjubConfig as TECurveConfig>::mul_projective(&base, &scalar);
+	let res = <JubjubConfig as SWCurveConfig>::mul_projective(&base, &scalar);
 	let mut serialized = vec![0; res.serialized_size(Compress::Yes)];
 	let mut cursor = Cursor::new(&mut serialized[..]);
 	res.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
