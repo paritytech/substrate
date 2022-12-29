@@ -232,6 +232,7 @@ pub fn benchmarks(tokens: TokenStream) -> TokenStream {
 
 	// TODO: components() after SelectedBenchmark
 
+	// generics
 	let generics = match any_instance {
 		false => quote!(T),
 		true => quote!(T, I),
@@ -240,11 +241,23 @@ pub fn benchmarks(tokens: TokenStream) -> TokenStream {
 		false => quote!(T: Config),
 		true => quote!(T: Config<I>, I: 'static),
 	};
+
 	let krate = quote!(::frame_benchmarking);
+
+	// benchmark name variables
 	let benchmark_names_str: Vec<String> = benchmark_names.iter().map(|n| n.to_string()).collect();
 	let extra_benchmark_names_str: Vec<String> =
 		extra_benchmark_names.iter().map(|n| n.to_string()).collect();
+	let mut selected_benchmark_mappings: Vec<TokenStream2> = Vec::new();
+	for i in 0..benchmark_names.len() {
+		let name_ident = &benchmark_names[i];
+		let name_str = &benchmark_names_str[i];
+		selected_benchmark_mappings.push(quote!(#name_str => SelectedBenchmark::#name_ident))
+	}
+	println!("benchmark_names: {:?}", benchmark_names);
+	println!("selected_benchmark_mappings: {:?}", selected_benchmark_mappings);
 
+	// emit final quoted tokens
 	let res = quote! {
 		#(#expanded_stmts)
 		*
@@ -291,13 +304,13 @@ pub fn benchmarks(tokens: TokenStream) -> TokenStream {
 			}
 		}
 		#[cfg(any(feature = "runtime-benchmarks", test))]
-		impl<T: Config<I>, I: 'static> ::frame_benchmarking::Benchmarking for Pallet<T, I>
+		impl<#full_generics> #krate::Benchmarking for Pallet<#generics>
 		where
 			T: frame_system::Config,
 		{
 			fn benchmarks(
 				extra: bool,
-			) -> ::frame_benchmarking::Vec<::frame_benchmarking::BenchmarkMetadata> {
+			) -> #krate::Vec<#krate::BenchmarkMetadata> {
 				let mut all_names = #krate::vec![
 					#(#benchmark_names_str),
 					*
@@ -309,6 +322,18 @@ pub fn benchmarks(tokens: TokenStream) -> TokenStream {
 					];
 					all_names.retain(|x| !extra.contains(x));
 				}
+				all_names.into_iter().map(|benchmark| {
+					let selected_benchmark = match benchmark {
+						#(#selected_benchmark_mappings),
+						*,
+						_ => panic!("all benchmarks should be selectable")
+					};
+					let components = <SelectedBenchmark as #krate::BenchmarkingSetup<#generics>>::components(&selected_benchmark);
+					#krate::BenchmarkMetadata {
+						name: benchmark.as_bytes().to_vec(),
+						components,
+					}
+				}).collect::<#krate::Vec<_>>()
 			}
 		}
 	};
