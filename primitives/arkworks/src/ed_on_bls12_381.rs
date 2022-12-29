@@ -20,9 +20,10 @@
 #![warn(missing_docs)]
 
 use ark_ec::{
-	models::CurveConfig, twisted_edwards, twisted_edwards::TECurveConfig, VariableBaseMSM,
+	models::CurveConfig, short_weierstrass, twisted_edwards, twisted_edwards::TECurveConfig,
+	VariableBaseMSM,
 };
-use ark_ed_on_bls12_381::{EdwardsProjective, JubjubConfig};
+use ark_ed_on_bls12_381::{EdwardsProjective, JubjubConfig, SWProjective};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use ark_std::io::Cursor;
 use sp_std::{vec, vec::Vec};
@@ -69,7 +70,7 @@ pub fn msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 		.iter()
 		.map(|a| {
 			let cursor = Cursor::new(a);
-			twisted_edwards::Affine::<JubjubConfig>::deserialize_with_mode(
+			short_weierstrass::Affine::<JubjubConfig>::deserialize_with_mode(
 				cursor,
 				Compress::Yes,
 				Validate::No,
@@ -90,7 +91,7 @@ pub fn msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 		})
 		.collect();
 
-	let result = <EdwardsProjective as VariableBaseMSM>::msm(&bases, &scalars).unwrap();
+	let result = <SWProjective as VariableBaseMSM>::msm(&bases, &scalars).unwrap();
 	let mut serialized = vec![0; result.serialized_size(Compress::Yes)];
 	let mut cursor = Cursor::new(&mut serialized[..]);
 	result.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();

@@ -1,11 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![deny(
-    // warnings,
-    // unused,
-    future_incompatible,
-    nonstandard_style,
-    rust_2018_idioms
-)]
+#![deny(warnings, unused, future_incompatible, nonstandard_style, rust_2018_idioms)]
 #![forbid(unsafe_code)]
 
 //! This library implements the BLS12_377 curve generated in [\[BCGMMW20, “Zexe”\]](https://eprint.iacr.org/2018/962).

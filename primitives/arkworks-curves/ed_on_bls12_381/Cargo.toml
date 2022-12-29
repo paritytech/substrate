@@ -14,7 +14,6 @@ edition = "2021"
 
 [dependencies]
 ark-ff = { version = "0.4.0-alpha", default-features = false }
-ark-ec = { version = "0.4.0-alpha", default-features = false }
 ark-std = { version = "0.4.0-alpha", default-features = false }
 ark-r1cs-std = { version = "0.4.0-alpha", default-features = false, optional = true }
 ark-serialize = { version = "0.4.0-alpha", default-features = false }
@@ -24,12 +23,12 @@ ark-models = { path = "../../arkworks-models" }
 sp-io = { path = "../../io" }
 
 [dev-dependencies]
-ark-relations = { version = "0.4.0-alpha", default-features = false }
-ark-algebra-test-templates = { version = "0.4.0-alpha", default-features = false }
-ark-algebra-bench-templates = { version = "0.4.0-alpha", default-features = false }
+ark-relations = { git = "https://github.com/arkworks-rs/snark", default-features = false }
+ark-algebra-test-templates = { git = "https://github.com/arkworks-rs/algebra", branch = "release-0.4", default-features = false }
 ark-curve-constraint-tests = { path = "../curve-constraint-tests", default-features = false }
+ark-ec = { git = "https://github.com/arkworks-rs/algebra", branch = "release-0.4", default-features = false }
 
 [features]
 default = []
-std = [ "ark-std/std", "ark-ff/std", "ark-ec/std", "ark-sub-bls12-381/std" ]
+std = [ "ark-std/std", "ark-ff/std", "ark-models/std", "ark-sub-bls12-381/std" ]
 r1cs = ["ark-r1cs-std"]
