@@ -25,7 +25,7 @@
 //!    * d = 3021
 
 #[cfg(feature = "r1cs")]
-pub mod constraints;
+pub use ark_ed_on_bls12_377::constraints::*;
 mod curves;
 
 pub use curves::*;
