@@ -1211,50 +1211,50 @@ pub trait Crypto {
 		sp_arkworks::bls12_377::msm_g2(bases, scalars)
 	}
 
-	// /// Compute a multi pairing
-	// fn bw6_761_multi_pairing(a: Vec<Vec<u8>>, b: Vec<Vec<u8>>) -> Vec<u8> {
-	// 	sp_arkworks::bw6_761::multi_pairing(a, b)
-	// }
+	/// Compute a multi pairing
+	fn bw6_761_multi_pairing(a: Vec<Vec<u8>>, b: Vec<Vec<u8>>) -> Vec<u8> {
+		sp_arkworks::bw6_761::multi_pairing(a, b)
+	}
 
-	// /// Compute a multi Miller loop
-	// fn bw6_761_multi_miller_loop(a: Vec<Vec<u8>>, b: Vec<Vec<u8>>) -> Vec<u8> {
-	// 	sp_arkworks::bw6_761::multi_miller_loop(a, b)
-	// }
+	/// Compute a multi Miller loop
+	fn bw6_761_multi_miller_loop(a: Vec<Vec<u8>>, b: Vec<Vec<u8>>) -> Vec<u8> {
+		sp_arkworks::bw6_761::multi_miller_loop(a, b)
+	}
 
-	// /// Compute a final exponentiation
-	// fn bw6_761_final_exponentiation(f12: &[u8]) -> Vec<u8> {
-	// 	sp_arkworks::bw6_761::final_exponentiation(f12)
-	// }
+	/// Compute a final exponentiation
+	fn bw6_761_final_exponentiation(f12: &[u8]) -> Vec<u8> {
+		sp_arkworks::bw6_761::final_exponentiation(f12)
+	}
 
-	// /// Compute a bigint_msm on G2
-	// fn bw6_761_mul_projective_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-	// 	sp_arkworks::bw6_761::mul_projective_g2(base, scalar)
-	// }
+	/// Compute a bigint_msm on G2
+	fn bw6_761_mul_projective_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
+		sp_arkworks::bw6_761::mul_projective_g2(base, scalar)
+	}
 
-	// /// Compute a bigint_msm on G2
-	// fn bw6_761_mul_affine_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-	// 	sp_arkworks::bw6_761::mul_affine_g2(base, scalar)
-	// }
+	/// Compute a bigint_msm on G2
+	fn bw6_761_mul_affine_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
+		sp_arkworks::bw6_761::mul_affine_g2(base, scalar)
+	}
 
-	// /// Compute a bigint_msm on G2
-	// fn bw6_761_mul_projective_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-	// 	sp_arkworks::bw6_761::mul_projective_g1(base, scalar)
-	// }
+	/// Compute a bigint_msm on G2
+	fn bw6_761_mul_projective_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
+		sp_arkworks::bw6_761::mul_projective_g1(base, scalar)
+	}
 
-	// /// Compute a bigint_msm on G2
-	// fn bw6_761_mul_affine_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-	// 	sp_arkworks::bw6_761::mul_affine_g1(base, scalar)
-	// }
+	/// Compute a bigint_msm on G2
+	fn bw6_761_mul_affine_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
+		sp_arkworks::bw6_761::mul_affine_g1(base, scalar)
+	}
 
-	// /// Compute a bigint_msm on G1
-	// fn bw6_761_bigint_msm_g1(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
-	// 	sp_arkworks::bw6_761::msm_bigint_g1(bases, bigints)
-	// }
+	/// Compute a bigint_msm on G1
+	fn bw6_761_bigint_msm_g1(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
+		sp_arkworks::bw6_761::msm_bigint_g1(bases, bigints)
+	}
 
-	// /// Compute a bigint_msm on G2
-	// fn bw6_761_bigint_msm_g2(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
-	// 	sp_arkworks::bw6_761::msm_bigint_g2(bases, bigints)
-	// }
+	/// Compute a bigint_msm on G2
+	fn bw6_761_bigint_msm_g2(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
+		sp_arkworks::bw6_761::msm_bigint_g2(bases, bigints)
+	}
 
 	/// Compute affine multiplication on ed_on_bls12_381
 	fn ed_on_bls12_381_sw_mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
