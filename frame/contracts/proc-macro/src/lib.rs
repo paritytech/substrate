@@ -383,17 +383,15 @@ fn is_valid_special_arg(idx: usize, arg: &FnArg) -> bool {
 	matches!(*pat.ty, syn::Type::Infer(_))
 }
 
-/// Expands documentation
+/// Expands documentation for host functions.
 fn expand_docs(def: &mut EnvDef) -> TokenStream2 {
 	let mut modules = def.host_funcs.iter().map(|f| {
 		f.module.clone()
 	}).collect::<Vec<_>>();
-
 	modules.sort();
 	modules.dedup();
 
 	let doc_selector = |a: &syn::Attribute| a.path.is_ident("doc");
-
 	let docs = modules.iter().map(|m| {
 		let funcs = def.host_funcs.iter_mut().map(|f| {
 			if *m == f.module {
@@ -416,11 +414,13 @@ fn expand_docs(def: &mut EnvDef) -> TokenStream2 {
 		let module = Ident::new(m, Span::call_site());
 
 		quote! {
-			pub mod #module {
-			  use crate::wasm::runtime::{TrapReason, ReturnCode};
-			  pub trait Docs {
-				  #( #funcs )*
-			  }
+			/// Documentation for the seal module host functions.
+			mod #module {
+				use crate::wasm::runtime::{TrapReason, ReturnCode};
+				/// Dumb trait for generating host functions docs.
+				trait Docs {
+					#( #funcs )*
+				}
 			}
 		}
 	});
@@ -627,6 +627,17 @@ fn expand_functions(
 ///
 /// The implementation on `()` can be used in places where no `Ext` exists, yet. This is useful
 /// when only checking whether a code can be instantiated without actually executing any code.
+///
+/// # Generating Documentation
+///
+/// Passing `doc` attribute to the macro (like `#[define_env(doc)]`) will make it also expand additional `pallet_contracts::wasm::runtime::seal0`, `pallet_contracts::wasm::runtime::seal1`, `...` modules
+/// each having its `Doc` trait containing methods holding documentation for every defined host function.
+///
+/// To build up these docs, run:
+///
+/// ```nocompile
+///	cargo doc --no-deps --document-private-items
+/// ```
 #[proc_macro_attribute]
 pub fn define_env(attr: TokenStream, item: TokenStream) -> TokenStream {
 	if !attr.is_empty() && !(attr.to_string() == "doc".to_string()) {
