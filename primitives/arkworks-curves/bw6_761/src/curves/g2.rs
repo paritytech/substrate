@@ -3,6 +3,8 @@ use ark_models::{
 	models::{short_weierstrass::SWCurveConfig, CurveConfig},
 	short_weierstrass::{Affine, Projective},
 };
+use ark_serialize::{CanonicalSerialize, Compress, Validate};
+use ark_std::{io::Cursor, vec, vec::Vec};
 
 use crate::{Fq, Fr};
 
@@ -47,6 +49,69 @@ impl SWCurveConfig for Config {
 	fn mul_by_a(_elem: Self::BaseField) -> Self::BaseField {
 		use ark_ff::Zero;
 		Self::BaseField::zero()
+	}
+
+	fn msm(
+		bases: &[Affine<Self>],
+		scalars: &[<Self as CurveConfig>::ScalarField],
+	) -> Result<Projective<Self>, usize> {
+		let bases: Vec<Vec<u8>> = bases
+			.into_iter()
+			.map(|elem| {
+				let mut serialized = vec![0; elem.serialized_size(Compress::Yes)];
+				let mut cursor = Cursor::new(&mut serialized[..]);
+				elem.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
+				serialized
+			})
+			.collect();
+		let scalars: Vec<Vec<u8>> = scalars
+			.into_iter()
+			.map(|elem| {
+				let mut serialized = vec![0; elem.serialized_size(Compress::Yes)];
+				let mut cursor = Cursor::new(&mut serialized[..]);
+				elem.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
+				serialized
+			})
+			.collect();
+		let result = sp_io::crypto::bw6_761_msm_g2(bases, scalars);
+		let cursor = Cursor::new(&result[..]);
+		let result = Self::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+		Ok(result.into())
+	}
+
+	fn mul_projective(base: &Projective<Self>, scalar: &[u64]) -> Projective<Self> {
+		let mut serialized_base = vec![0; base.serialized_size(Compress::Yes)];
+		let mut cursor = Cursor::new(&mut serialized_base[..]);
+		base.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
+
+		let mut serialized_scalar = vec![0; scalar.serialized_size(Compress::Yes)];
+		let mut cursor = Cursor::new(&mut serialized_scalar[..]);
+		scalar.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
+
+		let result = sp_io::crypto::bw6_761_mul_projective_g2(serialized_base, serialized_scalar);
+
+		let cursor = Cursor::new(&result[..]);
+
+		let result = Self::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+		result.into()
+	}
+
+	fn mul_affine(base: &Affine<Self>, scalar: &[u64]) -> Projective<Self> {
+		let mut serialized_base = vec![0; base.serialized_size(Compress::Yes)];
+		let mut cursor = Cursor::new(&mut serialized_base[..]);
+		base.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
+
+		let mut serialized_scalar = vec![0; scalar.serialized_size(Compress::Yes)];
+		let mut cursor = Cursor::new(&mut serialized_scalar[..]);
+		scalar.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
+
+		let serialized_result =
+			sp_io::crypto::bw6_761_mul_affine_g2(serialized_base, serialized_scalar);
+
+		let cursor = Cursor::new(&serialized_result[..]);
+
+		let result = Self::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+		result.into()
 	}
 }
 

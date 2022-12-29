@@ -29,40 +29,6 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate
 use ark_std::io::Cursor;
 use sp_std::{vec, vec::Vec};
 
-/// Compute multi pairing through arkworksrk_BW6_761::G2Projective
-pub fn multi_pairing(vec_a: Vec<Vec<u8>>, vec_b: Vec<Vec<u8>>) -> Vec<u8> {
-	let g1: Vec<_> = vec_a
-		.iter()
-		.map(|a| {
-			let cursor = Cursor::new(a);
-			<BW6_761 as Pairing>::G1Prepared::deserialize_with_mode(
-				cursor,
-				Compress::Yes,
-				Validate::No,
-			)
-			.unwrap()
-		})
-		.collect();
-	let g2: Vec<_> = vec_b
-		.iter()
-		.map(|b| {
-			let cursor = Cursor::new(b);
-			<BW6_761 as Pairing>::G2Affine::deserialize_with_mode(
-				cursor,
-				Compress::Yes,
-				Validate::No,
-			)
-			.unwrap()
-		})
-		.collect();
-	let res = BW6_761::multi_pairing(g1, g2);
-	// serialize the result
-	let mut res_bytes = vec![0u8; res.serialized_size(Compress::Yes)];
-	let mut cursor = Cursor::new(&mut res_bytes[..]);
-	res.0.serialize_compressed(&mut cursor).unwrap();
-	res_bytes.to_vec()
-}
-
 /// Compute multi miller loop through arkworks
 pub fn multi_miller_loop(a_vec: Vec<Vec<u8>>, b_vec: Vec<Vec<u8>>) -> Vec<u8> {
 	let g1: Vec<_> = a_vec
@@ -173,7 +139,7 @@ pub fn mul_affine_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 }
 
 /// Compute a multi scalar multiplication on G! through arkworks
-pub fn msm_bigint_g1(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
+pub fn msm_g1(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 	let bases: Vec<_> = bases
 		.iter()
 		.map(|a| {
@@ -207,7 +173,7 @@ pub fn msm_bigint_g1(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 }
 
 /// Compute a multi scalar multiplication on G! through arkworks
-pub fn msm_bigint_g2(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
+pub fn msm_g2(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 	let bases: Vec<_> = bases
 		.iter()
 		.map(|a| {

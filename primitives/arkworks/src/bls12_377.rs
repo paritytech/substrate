@@ -29,40 +29,6 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate
 use ark_std::io::Cursor;
 use sp_std::{vec, vec::Vec};
 
-/// Compute multi pairing through arkworksrk_Bls12_377::G2Projective
-pub fn multi_pairing(vec_a: Vec<Vec<u8>>, vec_b: Vec<Vec<u8>>) -> Vec<u8> {
-	let g1: Vec<_> = vec_a
-		.iter()
-		.map(|a| {
-			let cursor = Cursor::new(a);
-			<Bls12_377 as Pairing>::G1Prepared::deserialize_with_mode(
-				cursor,
-				Compress::Yes,
-				Validate::No,
-			)
-			.unwrap()
-		})
-		.collect();
-	let g2: Vec<_> = vec_b
-		.iter()
-		.map(|b| {
-			let cursor = Cursor::new(b);
-			<Bls12_377 as Pairing>::G2Affine::deserialize_with_mode(
-				cursor,
-				Compress::Yes,
-				Validate::No,
-			)
-			.unwrap()
-		})
-		.collect();
-	let res = Bls12_377::multi_pairing(g1, g2);
-	// serialize the result
-	let mut res_bytes = vec![0u8; res.0.serialized_size(Compress::Yes)];
-	let mut cursor = Cursor::new(&mut res_bytes[..]);
-	res.0.serialize_compressed(&mut cursor).unwrap();
-	res_bytes.to_vec()
-}
-
 /// Compute multi miller loop through arkworks
 pub fn multi_miller_loop(a_vec: Vec<Vec<u8>>, b_vec: Vec<Vec<u8>>) -> Vec<u8> {
 	let g1: Vec<_> = a_vec
