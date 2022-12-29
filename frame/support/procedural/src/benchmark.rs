@@ -12,10 +12,13 @@ use syn::{
 };
 
 mod keywords {
-	syn::custom_keyword!(extrinsic_call);
-	syn::custom_keyword!(cfg);
-	syn::custom_keyword!(benchmark);
-	syn::custom_keyword!(instance_benchmark);
+	use syn::custom_keyword;
+
+	custom_keyword!(extrinsic_call);
+	custom_keyword!(cfg);
+	custom_keyword!(benchmark);
+	custom_keyword!(instance_benchmark);
+	custom_keyword!(extra);
 }
 
 /// Represents a "bare" block, that is, a the contents of a [`Block`] minus the curly braces.
@@ -62,6 +65,7 @@ struct BenchmarkDef {
 	extrinsic_call: ExprCall,
 	origin: Expr,
 	verify_stmts: Vec<Stmt>,
+	extra: bool,
 }
 
 impl BenchmarkDef {
@@ -69,6 +73,16 @@ impl BenchmarkDef {
 	pub fn from(item_fn: &ItemFn) -> Result<BenchmarkDef> {
 		let mut i = 0; // index of child
 		let mut params: Vec<ParamDef> = Vec::new();
+		let mut extra = false;
+		for attr in &item_fn.attrs {
+			if let Some(segment) = attr.path.segments.last() {
+				if let Ok(_) =
+					syn::parse::<keywords::extrinsic_call>(segment.ident.to_token_stream().into())
+				{
+					extra = true;
+				}
+			}
+		}
 		for arg in &item_fn.sig.inputs {
 			// parse params such as "x: Linear<0, 1>"
 			let mut name: Option<String> = None;
@@ -138,6 +152,7 @@ impl BenchmarkDef {
 								verify_stmts: Vec::from(
 									&item_fn.block.stmts[(i + 1)..item_fn.block.stmts.len()],
 								),
+								extra,
 							})
 						}
 					}
@@ -158,6 +173,7 @@ pub fn benchmarks(tokens: TokenStream) -> TokenStream {
 	let mut expanded_stmts: Vec<TokenStream2> = Vec::new();
 	let mut benchmark_defs: Vec<BenchmarkDef> = Vec::new();
 	let mut benchmark_names: Vec<Ident> = Vec::new();
+	let mut extra_benchmark_names: Vec<Ident> = Vec::new();
 	let mut any_instance = false;
 	for stmt in &mut block.stmts {
 		let mut found_item: Option<(ItemFn, bool)> = None;
@@ -199,7 +215,12 @@ pub fn benchmarks(tokens: TokenStream) -> TokenStream {
 
 			// expand benchmark_def
 			let expanded = expand_benchmark(benchmark_def.clone(), &item_fn.sig.ident, is_instance);
+
+			// record benchmark name
 			benchmark_names.push(item_fn.sig.ident.clone());
+			if benchmark_def.extra {
+				extra_benchmark_names.push(item_fn.sig.ident.clone());
+			}
 
 			expanded_stmts.push(expanded);
 			benchmark_defs.push(benchmark_def);
@@ -220,6 +241,9 @@ pub fn benchmarks(tokens: TokenStream) -> TokenStream {
 		true => quote!(T: Config<I>, I: 'static),
 	};
 	let krate = quote!(::frame_benchmarking);
+	let benchmark_names_str: Vec<String> = benchmark_names.iter().map(|n| n.to_string()).collect();
+	let extra_benchmark_names_str: Vec<String> =
+		extra_benchmark_names.iter().map(|n| n.to_string()).collect();
 
 	let res = quote! {
 		#(#expanded_stmts)
@@ -263,6 +287,27 @@ pub fn benchmarks(tokens: TokenStream) -> TokenStream {
 						}
 					)
 					*
+				}
+			}
+		}
+		#[cfg(any(feature = "runtime-benchmarks", test))]
+		impl<T: Config<I>, I: 'static> ::frame_benchmarking::Benchmarking for Pallet<T, I>
+		where
+			T: frame_system::Config,
+		{
+			fn benchmarks(
+				extra: bool,
+			) -> ::frame_benchmarking::Vec<::frame_benchmarking::BenchmarkMetadata> {
+				let mut all_names = #krate::vec![
+					#(#benchmark_names_str),
+					*
+				];
+				if !extra {
+					let extra = [
+						#(#extra_benchmark_names_str),
+						*
+					];
+					all_names.retain(|x| !extra.contains(x));
 				}
 			}
 		}
