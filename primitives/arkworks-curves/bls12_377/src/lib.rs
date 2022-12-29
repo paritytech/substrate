@@ -25,6 +25,6 @@ mod curves;
 #[cfg(feature = "r1cs")]
 pub mod constraints;
 
-pub use ark_bls12_377::{Fq, Fq12Config, Fq2, Fq2Config, Fq6Config, Fr};
+pub use ark_bls12_377::{Fq, Fq12Config, Fq2, Fq2Config, Fq6Config, Fr, FrConfig};
 #[cfg(feature = "curve")]
 pub use curves::*;

@@ -177,6 +177,7 @@ members = [
 	"primitives/arkworks-curves/bls12_381",
 	"primitives/arkworks-curves/bls12_377",
 	"primitives/arkworks-curves/ed_on_bls12_381",
+	"primitives/arkworks-curves/ed_on_bls12_377",
 	"primitives/arkworks-models",
 	"primitives/authority-discovery",
 	"primitives/authorship",
