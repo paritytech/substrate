@@ -17,9 +17,8 @@
 //!    * d = -(10240/10241)
 
 #[cfg(feature = "r1cs")]
-pub mod constraints;
+pub use ark_ed_on_bls12_381::constraints::*;
 mod curves;
-mod fields;
 
 pub use curves::*;
-pub use fields::*;
+pub use ark_ed_on_bls12_381::{Fr, FrConfig, Fq, FqConfig};
