@@ -20,7 +20,8 @@
 #![warn(missing_docs)]
 
 use ark_ec::{
-	models::CurveConfig, short_weierstrass::{self, SWCurveConfig}, twisted_edwards, twisted_edwards::TECurveConfig,
+	models::CurveConfig,
+	short_weierstrass::{self, Affine as SWAffine, Projective as SWProjective, SWCurveConfig},
 	VariableBaseMSM,
 };
 use ark_ed_on_bls12_381::{JubjubConfig, SWProjective};
@@ -31,12 +32,9 @@ use sp_std::{vec, vec::Vec};
 /// Compute a scalar multiplication on G2 through arkworks
 pub fn mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	let cursor = Cursor::new(base);
-	let base = short_weierstrass::Projective::<JubjubConfig>::deserialize_with_mode(
-		cursor,
-		Compress::Yes,
-		Validate::No,
-	)
-	.unwrap();
+	let base =
+		SWProjective::<JubjubConfig>::deserialize_with_mode(cursor, Compress::Yes, Validate::No)
+			.unwrap();
 	let cursor = Cursor::new(scalar);
 	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
 	let res = <JubjubConfig as SWCurveConfig>::mul_projective(&base, &scalar);
@@ -49,15 +47,11 @@ pub fn mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 /// Compute a scalar multiplication through arkworks
 pub fn mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	let cursor = Cursor::new(base);
-	let base = twisted_edwards::Affine::<JubjubConfig>::deserialize_with_mode(
-		cursor,
-		Compress::Yes,
-		Validate::No,
-	)
-	.unwrap();
+	let base = SWAffine::<JubjubConfig>::deserialize_with_mode(cursor, Compress::Yes, Validate::No)
+		.unwrap();
 	let cursor = Cursor::new(scalar);
 	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
-	let res = <JubjubConfig as TECurveConfig>::mul_affine(&base, &scalar);
+	let res = <JubjubConfig as SWCurveConfig>::mul_affine(&base, &scalar);
 	let mut serialized = vec![0; res.serialized_size(Compress::Yes)];
 	let mut cursor = Cursor::new(&mut serialized[..]);
 	res.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
@@ -70,12 +64,8 @@ pub fn msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 		.iter()
 		.map(|a| {
 			let cursor = Cursor::new(a);
-			short_weierstrass::Affine::<JubjubConfig>::deserialize_with_mode(
-				cursor,
-				Compress::Yes,
-				Validate::No,
-			)
-			.unwrap()
+			SWAffine::<JubjubConfig>::deserialize_with_mode(cursor, Compress::Yes, Validate::No)
+				.unwrap()
 		})
 		.collect();
 	let scalars: Vec<_> = scalars
