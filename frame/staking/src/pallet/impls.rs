@@ -340,6 +340,7 @@ impl<T: Config> Pallet<T> {
 				matches!(ForceEra::<T>::get(), Forcing::ForceNew)
 			{
 				ForceEra::<T>::put(Forcing::NotForcing);
+				Self::deposit_event(Event::<T>::ForceEra { mode: Forcing::NotForcing });
 			}
 
 			maybe_new_era_validators
@@ -721,7 +722,10 @@ impl<T: Config> Pallet<T> {
 	pub(crate) fn ensure_new_era() {
 		match ForceEra::<T>::get() {
 			Forcing::ForceAlways | Forcing::ForceNew => (),
-			_ => ForceEra::<T>::put(Forcing::ForceNew),
+			_ => {
+				ForceEra::<T>::put(Forcing::ForceNew);
+				Self::deposit_event(Event::<T>::ForceEra { mode: Forcing::ForceNew });
+			},
 		}
 	}
 

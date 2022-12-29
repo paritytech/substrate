@@ -931,6 +931,7 @@ pub mod pallet {
 			<QueuedSolution<T>>::put(ready);
 			Self::deposit_event(Event::SolutionStored {
 				compute: ElectionCompute::Unsigned,
+				account_id: None,
 				prev_ejected: ejected_a_solution,
 			});
 
@@ -983,6 +984,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::SolutionStored {
 				compute: ElectionCompute::Emergency,
+				account_id: None,
 				prev_ejected: QueuedSolution::<T>::exists(),
 			});
 
@@ -1060,6 +1062,7 @@ pub mod pallet {
 			signed_submissions.put();
 			Self::deposit_event(Event::SolutionStored {
 				compute: ElectionCompute::Signed,
+				account_id: Some(who),
 				prev_ejected: ejected_a_solution,
 			});
 			Ok(())
@@ -1102,6 +1105,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::SolutionStored {
 				compute: ElectionCompute::Fallback,
+				account_id: None,
 				prev_ejected: QueuedSolution::<T>::exists(),
 			});
 
@@ -1118,8 +1122,14 @@ pub mod pallet {
 		/// If the solution is signed, this means that it hasn't yet been processed. If the
 		/// solution is unsigned, this means that it has also been processed.
 		///
-		/// The `bool` is `true` when a previous solution was ejected to make room for this one.
-		SolutionStored { compute: ElectionCompute, prev_ejected: bool },
+		/// If `account_id` is `None` if the solution is stored during the unsigned phase or by
+		/// `T::ForceOrigin`. The `bool` is `true` when a previous solution was ejected to make
+		/// room for this one.
+		SolutionStored {
+			compute: ElectionCompute,
+			account_id: Option<T::AccountId>,
+			prev_ejected: bool,
+		},
 		/// The election has been finalized, with the given computation and score.
 		ElectionFinalized { compute: ElectionCompute, score: ElectionScore },
 		/// An election failed.
@@ -1134,6 +1144,10 @@ pub mod pallet {
 		SignedPhaseStarted { round: u32 },
 		/// The unsigned phase of the given round has started.
 		UnsignedPhaseStarted { round: u32 },
+		/// The `Phase::Off` of the given round has started.
+		OffPhaseStarted { round: u32 },
+		/// The emergency phase has started in the given round.
+		EmergencyPhaseStarted { round: u32 },
 	}
 
 	/// Error of the pallet that can be returned in response to dispatches.
@@ -1573,6 +1587,8 @@ impl<T: Config> Pallet<T> {
 		// Phase is off now.
 		<CurrentPhase<T>>::put(Phase::Off);
 
+		Self::deposit_event(Event::OffPhaseStarted { round: Self::round() });
+
 		// Kill snapshots.
 		Self::kill_snapshot();
 	}
@@ -1653,6 +1669,7 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 			Err(why) => {
 				log!(error, "Entering emergency mode: {:?}", why);
 				<CurrentPhase<T>>::put(Phase::Emergency);
+				Self::deposit_event(Event::EmergencyPhaseStarted { round: Self::round() });
 				Err(why)
 			},
 		}
@@ -1959,6 +1976,7 @@ mod tests {
 							sum_stake_squared: 0
 						}
 					},
+					Event::OffPhaseStarted { round: 2 },
 					Event::SignedPhaseStarted { round: 2 },
 					Event::UnsignedPhaseStarted { round: 2 }
 				]
@@ -1998,7 +2016,8 @@ mod tests {
 							sum_stake: 0,
 							sum_stake_squared: 0
 						}
-					}
+					},
+					Event::OffPhaseStarted { round: 2 },
 				]
 			);
 		});
@@ -2036,7 +2055,8 @@ mod tests {
 							sum_stake: 0,
 							sum_stake_squared: 0
 						}
-					}
+					},
+					Event::OffPhaseStarted { round: 2 },
 				]
 			)
 		});
@@ -2064,10 +2084,17 @@ mod tests {
 
 			assert_eq!(
 				multi_phase_events(),
-				vec![Event::ElectionFinalized {
-					compute: ElectionCompute::Fallback,
-					score: ElectionScore { minimal_stake: 0, sum_stake: 0, sum_stake_squared: 0 }
-				}]
+				vec![
+					Event::ElectionFinalized {
+						compute: ElectionCompute::Fallback,
+						score: ElectionScore {
+							minimal_stake: 0,
+							sum_stake: 0,
+							sum_stake_squared: 0
+						}
+					},
+					Event::OffPhaseStarted { round: 2 },
+				]
 			);
 		});
 	}
@@ -2094,7 +2121,8 @@ mod tests {
 					Event::ElectionFinalized {
 						compute: ElectionCompute::Fallback,
 						score: Default::default()
-					}
+					},
+					Event::OffPhaseStarted { round: 2 },
 				],
 			);
 			// All storage items must be cleared.
@@ -2145,11 +2173,31 @@ mod tests {
 				multi_phase_events(),
 				vec![
 					Event::SignedPhaseStarted { round: 1 },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						account_id: Some(99),
+						prev_ejected: false
+					},
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						account_id: Some(99),
+						prev_ejected: false
+					},
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						account_id: Some(99),
+						prev_ejected: false
+					},
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						account_id: Some(99),
+						prev_ejected: false
+					},
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						account_id: Some(99),
+						prev_ejected: false
+					},
 					Event::Slashed { account: 99, value: 5 },
 					Event::Slashed { account: 99, value: 5 },
 					Event::Slashed { account: 99, value: 5 },
@@ -2162,7 +2210,8 @@ mod tests {
 							sum_stake: 0,
 							sum_stake_squared: 0
 						}
-					}
+					},
+					Event::OffPhaseStarted { round: 2 },
 				]
 			);
 		})
@@ -2187,7 +2236,11 @@ mod tests {
 				multi_phase_events(),
 				vec![
 					Event::SignedPhaseStarted { round: 1 },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						account_id: Some(99),
+						prev_ejected: false
+					},
 					Event::Rewarded { account: 99, value: 7 },
 					Event::UnsignedPhaseStarted { round: 1 },
 					Event::ElectionFinalized {
@@ -2197,7 +2250,8 @@ mod tests {
 							sum_stake: 100,
 							sum_stake_squared: 5200
 						}
-					}
+					},
+					Event::OffPhaseStarted { round: 2 },
 				],
 			);
 		})
@@ -2234,6 +2288,7 @@ mod tests {
 					Event::UnsignedPhaseStarted { round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Unsigned,
+						account_id: None,
 						prev_ejected: false
 					},
 					Event::ElectionFinalized {
@@ -2243,7 +2298,8 @@ mod tests {
 							sum_stake: 100,
 							sum_stake_squared: 5200
 						}
-					}
+					},
+					Event::OffPhaseStarted { round: 2 },
 				],
 			);
 		})
@@ -2279,7 +2335,8 @@ mod tests {
 							sum_stake: 0,
 							sum_stake_squared: 0
 						}
-					}
+					},
+					Event::OffPhaseStarted { round: 2 },
 				]
 			);
 		});
@@ -2301,7 +2358,8 @@ mod tests {
 				vec![
 					Event::SignedPhaseStarted { round: 1 },
 					Event::UnsignedPhaseStarted { round: 1 },
-					Event::ElectionFailed
+					Event::ElectionFailed,
+					Event::EmergencyPhaseStarted { round: 1 },
 				]
 			);
 		})
@@ -2342,14 +2400,17 @@ mod tests {
 					Event::SignedPhaseStarted { round: 1 },
 					Event::UnsignedPhaseStarted { round: 1 },
 					Event::ElectionFailed,
+					Event::EmergencyPhaseStarted { round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Fallback,
+						account_id: None,
 						prev_ejected: false
 					},
 					Event::ElectionFinalized {
 						compute: ElectionCompute::Fallback,
 						score: Default::default()
-					}
+					},
+					Event::OffPhaseStarted { round: 2 },
 				]
 			);
 		})
@@ -2375,10 +2436,17 @@ mod tests {
 
 			assert_eq!(
 				multi_phase_events(),
-				vec![Event::ElectionFinalized {
-					compute: ElectionCompute::Fallback,
-					score: ElectionScore { minimal_stake: 0, sum_stake: 0, sum_stake_squared: 0 }
-				}]
+				vec![
+					Event::ElectionFinalized {
+						compute: ElectionCompute::Fallback,
+						score: ElectionScore {
+							minimal_stake: 0,
+							sum_stake: 0,
+							sum_stake_squared: 0
+						}
+					},
+					Event::OffPhaseStarted { round: 2 },
+				]
 			);
 		});
 	}
@@ -2404,7 +2472,10 @@ mod tests {
 			assert_eq!(err, ElectionError::Fallback("NoFallback."));
 			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
 
-			assert_eq!(multi_phase_events(), vec![Event::ElectionFailed]);
+			assert_eq!(
+				multi_phase_events(),
+				vec![Event::ElectionFailed, Event::EmergencyPhaseStarted { round: 1 }]
+			);
 		});
 	}
 

@@ -1325,6 +1325,7 @@ mod tests {
 					Event::UnsignedPhaseStarted { round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Unsigned,
+						account_id: None,
 						prev_ejected: false
 					}
 				]

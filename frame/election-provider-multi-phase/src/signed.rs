@@ -621,7 +621,11 @@ mod tests {
 				multi_phase_events(),
 				vec![
 					Event::SignedPhaseStarted { round: 1 },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false }
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						account_id: Some(99),
+						prev_ejected: false
+					}
 				]
 			);
 		})
@@ -646,7 +650,11 @@ mod tests {
 				multi_phase_events(),
 				vec![
 					Event::SignedPhaseStarted { round: 1 },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						account_id: Some(99),
+						prev_ejected: false
+					},
 					Event::Rewarded { account: 99, value: 7 }
 				]
 			);
@@ -677,7 +685,11 @@ mod tests {
 				multi_phase_events(),
 				vec![
 					Event::SignedPhaseStarted { round: 1 },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						account_id: Some(99),
+						prev_ejected: false
+					},
 					Event::Slashed { account: 99, value: 5 }
 				]
 			);
@@ -714,8 +726,16 @@ mod tests {
 				multi_phase_events(),
 				vec![
 					Event::SignedPhaseStarted { round: 1 },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						account_id: Some(99),
+						prev_ejected: false
+					},
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						account_id: Some(999),
+						prev_ejected: false
+					},
 					Event::Rewarded { account: 99, value: 7 }
 				]
 			);
@@ -789,11 +809,31 @@ mod tests {
 				multi_phase_events(),
 				vec![
 					Event::SignedPhaseStarted { round: 1 },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						account_id: Some(99),
+						prev_ejected: false
+					},
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						account_id: Some(100),
+						prev_ejected: false
+					},
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						account_id: Some(101),
+						prev_ejected: false
+					},
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						account_id: Some(102),
+						prev_ejected: false
+					},
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						account_id: Some(103),
+						prev_ejected: false
+					},
 					Event::Rewarded { account: 99, value: 7 },
 					Event::ElectionFinalized {
 						compute: ElectionCompute::Signed,
@@ -859,10 +899,12 @@ mod tests {
 						Event::SignedPhaseStarted { round: 1 },
 						Event::SolutionStored {
 							compute: ElectionCompute::Signed,
+							account_id: Some(99),
 							prev_ejected: false
 						},
 						Event::SolutionStored {
 							compute: ElectionCompute::Signed,
+							account_id: Some(99),
 							prev_ejected: true
 						}
 					]
@@ -1113,9 +1155,21 @@ mod tests {
 				multi_phase_events(),
 				vec![
 					Event::SignedPhaseStarted { round: 1 },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						account_id: Some(100),
+						prev_ejected: false
+					},
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						account_id: Some(101),
+						prev_ejected: false
+					},
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						account_id: Some(102),
+						prev_ejected: false
+					},
 					Event::Rewarded { account: 100, value: 7 },
 					Event::UnsignedPhaseStarted { round: 1 }
 				]
@@ -1171,9 +1225,21 @@ mod tests {
 				multi_phase_events(),
 				vec![
 					Event::SignedPhaseStarted { round: 1 },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						account_id: Some(99),
+						prev_ejected: false
+					},
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						account_id: Some(999),
+						prev_ejected: false
+					},
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						account_id: Some(9999),
+						prev_ejected: false
+					},
 					Event::Slashed { account: 999, value: 5 },
 					Event::Rewarded { account: 99, value: 7 }
 				]
@@ -1305,7 +1371,11 @@ mod tests {
 				multi_phase_events(),
 				vec![
 					Event::SignedPhaseStarted { round: 1 },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored {
+						compute: ElectionCompute::Signed,
+						account_id: Some(99),
+						prev_ejected: false
+					},
 					Event::Rewarded { account: 99, value: 7 }
 				]
 			);

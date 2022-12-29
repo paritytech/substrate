@@ -2914,7 +2914,10 @@ fn deferred_slashes_are_deferred() {
 			staking_events_since_last_call().as_slice(),
 			&[
 				Event::Chilled { stash: 11 },
+				Event::ForceEra { mode: Forcing::ForceNew },
 				Event::SlashReported { validator: 11, slash_era: 1, .. },
+				Event::StakersElected,
+				Event::ForceEra { mode: Forcing::NotForcing },
 				..,
 				Event::Slashed { staker: 11, amount: 100 },
 				Event::Slashed { staker: 101, amount: 12 }
@@ -2949,6 +2952,7 @@ fn retroactive_deferred_slashes_two_eras_before() {
 			staking_events_since_last_call().as_slice(),
 			&[
 				Event::Chilled { stash: 11 },
+				Event::ForceEra { mode: Forcing::ForceNew },
 				Event::SlashReported { validator: 11, slash_era: 1, .. },
 				..,
 				Event::Slashed { staker: 11, amount: 100 },
@@ -3251,6 +3255,7 @@ fn slash_kicks_validators_not_nominators_and_disables_nominator_for_kicked_valid
 				Event::StakersElected,
 				Event::EraPaid { era_index: 0, validator_payout: 11075, remainder: 33225 },
 				Event::Chilled { stash: 11 },
+				Event::ForceEra { mode: Forcing::ForceNew },
 				Event::SlashReported {
 					validator: 11,
 					fraction: Perbill::from_percent(10),
@@ -3318,6 +3323,7 @@ fn non_slashable_offence_doesnt_disable_validator() {
 				Event::StakersElected,
 				Event::EraPaid { era_index: 0, validator_payout: 11075, remainder: 33225 },
 				Event::Chilled { stash: 11 },
+				Event::ForceEra { mode: Forcing::ForceNew },
 				Event::SlashReported {
 					validator: 11,
 					fraction: Perbill::from_percent(0),
@@ -3380,6 +3386,7 @@ fn slashing_independent_of_disabling_validator() {
 				Event::StakersElected,
 				Event::EraPaid { era_index: 0, validator_payout: 11075, remainder: 33225 },
 				Event::Chilled { stash: 11 },
+				Event::ForceEra { mode: Forcing::ForceNew },
 				Event::SlashReported {
 					validator: 11,
 					fraction: Perbill::from_percent(0),
@@ -4662,8 +4669,15 @@ mod election_data_provider {
 			MinimumValidatorCount::<Test>::put(2);
 			run_to_block(55);
 			assert_eq!(Staking::next_election_prediction(System::block_number()), 55 + 25);
-			assert_eq!(staking_events().len(), 6);
-			assert_eq!(*staking_events().last().unwrap(), Event::StakersElected);
+			assert_eq!(staking_events().len(), 10);
+			assert_eq!(
+				*staking_events().last().unwrap(),
+				Event::ForceEra { mode: Forcing::NotForcing }
+			);
+			assert_eq!(
+				*staking_events().get(staking_events().len() - 2).unwrap(),
+				Event::StakersElected
+			);
 			// The new era has been planned, forcing is changed from `ForceNew` to `NotForcing`.
 			assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
 		})
