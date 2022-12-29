@@ -598,7 +598,7 @@ where
 	///
 	/// By returning `None` from `f` for an element, you'll remove it from the map.
 	///
-	/// NOTE: If a value fail to decode because storage is corrupted then it is skipped.
+	/// NOTE: If a value can't be decoded because the storage is corrupted, then it is skipped.
 	pub fn translate<O: Decode, F: FnMut(Key::Key, O) -> Option<Value>>(mut f: F) {
 		<Self as MapWrapper>::Map::translate(|key, old_value| {
 			let res = f(key, old_value);
