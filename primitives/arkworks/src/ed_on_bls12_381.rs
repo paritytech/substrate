@@ -21,7 +21,7 @@
 
 use ark_ec::{
 	models::CurveConfig,
-	short_weierstrass::{self, Affine as SWAffine, Projective as SWProjective, SWCurveConfig},
+	short_weierstrass::{self, Affine as SWAffine, SWCurveConfig},
 	VariableBaseMSM,
 };
 use ark_ed_on_bls12_381::{JubjubConfig, SWProjective};
@@ -33,7 +33,7 @@ use sp_std::{vec, vec::Vec};
 pub fn mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	let cursor = Cursor::new(base);
 	let base =
-		SWProjective::<JubjubConfig>::deserialize_with_mode(cursor, Compress::Yes, Validate::No)
+		short_weierstrass::Projective::<JubjubConfig>::deserialize_with_mode(cursor, Compress::Yes, Validate::No)
 			.unwrap();
 	let cursor = Cursor::new(scalar);
 	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
