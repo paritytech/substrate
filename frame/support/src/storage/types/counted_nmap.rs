@@ -35,7 +35,7 @@ use sp_runtime::traits::Saturating;
 use sp_std::prelude::*;
 
 /// A wrapper around a `StorageNMap` and a `StorageValue<Value=u32>` to keep track of how many items
-/// are in a map, without needing to iterate all the values.
+/// are in a map, without needing to iterate over all of the values.
 ///
 /// This storage item has additional storage read and write overhead when manipulating values
 /// compared to a regular storage map.
