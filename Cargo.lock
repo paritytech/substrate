@@ -577,6 +577,7 @@ dependencies = [
  "ark-serialize 0.4.0-alpha.6 (git+https://github.com/arkworks-rs/algebra/?branch=release-0.4)",
  "ark-std 0.4.0-alpha",
  "ark-sub-bls12-381 0.4.0",
+ "sp-io",
 ]
 
 [[package]]

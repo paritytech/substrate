@@ -17,12 +17,13 @@ ark-ff = { version = "0.4.0-alpha", default-features = false }
 ark-ec = { version = "0.4.0-alpha", default-features = false }
 ark-std = { version = "0.4.0-alpha", default-features = false }
 ark-r1cs-std = { version = "0.4.0-alpha", default-features = false, optional = true }
+ark-serialize = { version = "0.4.0-alpha", default-features = false }
 ark-sub-bls12-381 = { version = "0.4.0-alpha", path = "../ark_sub_bls12_381", default-features = false, features = [ "scalar_field" ] }
 ark-models = { path = "../../arkworks-models" }
+sp-io = { path = "../../io" }
 
 [dev-dependencies]
 ark-relations = { version = "0.4.0-alpha", default-features = false }
-ark-serialize = { version = "0.4.0-alpha", default-features = false }
 ark-algebra-test-templates = { version = "0.4.0-alpha", default-features = false }
 ark-algebra-bench-templates = { version = "0.4.0-alpha", default-features = false }
 ark-curve-constraint-tests = { path = "../curve-constraint-tests", default-features = false }
