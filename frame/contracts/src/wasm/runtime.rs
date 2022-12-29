@@ -996,7 +996,7 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 // Any input that leads to a out of bound error (reading or writing) or failing to decode
 // data passed to the supervisor will lead to a trap. This is not documented explicitly
 // for every function.
-#[define_env]
+#[define_env(doc)]
 pub mod env {
 	/// Account for used gas. Traps if gas used is greater than gas limit.
 	///

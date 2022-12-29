@@ -30,9 +30,9 @@ use alloc::{
 	vec::Vec,
 };
 use proc_macro::TokenStream;
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{TokenStream as TokenStream2, Span};
 use quote::{quote, quote_spanned, ToTokens};
-use syn::{parse_macro_input, spanned::Spanned, Data, DeriveInput, FnArg, Ident};
+use syn::{parse_macro_input, spanned::Spanned, Data, DeriveInput, FnArg, Ident, punctuated::Punctuated, token::Comma};
 
 /// This derives `Debug` for a struct where each field must be of some numeric type.
 /// It interprets each field as its represents some weight and formats it as times so that
@@ -383,16 +383,64 @@ fn is_valid_special_arg(idx: usize, arg: &FnArg) -> bool {
 	matches!(*pat.ty, syn::Type::Infer(_))
 }
 
+/// Expands documentation
+fn expand_docs(def: &mut EnvDef) -> TokenStream2 {
+	let mut modules = def.host_funcs.iter().map(|f| {
+		f.module.clone()
+	}).collect::<Vec<_>>();
+
+	modules.sort();
+	modules.dedup();
+
+	let doc_selector = |a: &syn::Attribute| a.path.is_ident("doc");
+
+	let docs = modules.iter().map(|m| {
+		let funcs = def.host_funcs.iter_mut().map(|f| {
+			if *m == f.module {
+				// Remove auxiliary args: `ctx: _` and `memory: _`
+				let args = f.item.sig.inputs.iter().skip(2).map(|p| p.clone()).collect::<Punctuated<FnArg, Comma>>();
+				f.item.sig.inputs = args;
+				let func_decl = f.item.sig.to_token_stream();
+				let func_docs = f.item.attrs.iter().filter(|a| doc_selector(a)).map(|d| {
+					let docs = d.to_token_stream();
+					quote! { #docs }
+				});
+				quote! {
+					#( #func_docs )*
+					#func_decl;
+				}
+			} else {
+				quote! { }
+			}
+		});
+
+		let mut name = String::from("Docs_");
+		name.push_str(m);
+		let module = Ident::new(&name, Span::call_site());
+
+		quote! {
+			trait #module {
+				#( #funcs )*
+			}
+		}
+	});
+	quote! {
+			#( #docs )*
+	}
+}
+
 /// Expands environment definiton.
 /// Should generate source code for:
 ///  - implementations of the host functions to be added to the wasm runtime environment (see
 ///    `expand_impls()`).
-fn expand_env(def: &mut EnvDef) -> TokenStream2 {
+fn expand_env(def: &mut EnvDef, docs: bool) -> TokenStream2 {
 	let impls = expand_impls(def);
+	let docs = docs.then_some(expand_docs(def)).unwrap_or(TokenStream2::new());
 
 	quote! {
 		pub struct Env;
 		#impls
+		#docs
 	}
 }
 
@@ -581,8 +629,10 @@ fn expand_functions(
 /// when only checking whether a code can be instantiated without actually executing any code.
 #[proc_macro_attribute]
 pub fn define_env(attr: TokenStream, item: TokenStream) -> TokenStream {
-	if !attr.is_empty() {
-		let msg = "Invalid `define_env` attribute macro: expected no attributes: `#[define_env]`.";
+	if !attr.is_empty() && !(attr.to_string() == "doc".to_string()) {
+		let msg = r#"Invalid `define_env` attribute macro: expected either no attributes or a single `doc` attibute:
+					 - `#[define_env]`
+					 - `#[define_env(doc)]`"#;
 		let span = TokenStream2::from(attr).span();
 		return syn::Error::new(span, msg).to_compile_error().into()
 	}
@@ -590,7 +640,8 @@ pub fn define_env(attr: TokenStream, item: TokenStream) -> TokenStream {
 	let item = syn::parse_macro_input!(item as syn::ItemMod);
 
 	match EnvDef::try_from(item) {
-		Ok(mut def) => expand_env(&mut def).into(),
+		Ok(mut def) =>
+			expand_env(&mut def, !attr.is_empty()).into(),
 		Err(e) => e.to_compile_error().into(),
 	}
 }
