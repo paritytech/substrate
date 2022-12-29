@@ -10,7 +10,7 @@ pub type SWVar = ProjectiveVar<JubjubConfig, FqVar>;
 
 #[test]
 fn test() {
-    ark_curve_constraint_tests::curves::te_test::<_, EdwardsVar>().unwrap();
-    ark_curve_constraint_tests::curves::sw_test::<_, SWVar>().unwrap();
-    ark_curve_constraint_tests::curves::group_test::<_, Fq, EdwardsVar>().unwrap();
+	ark_curve_constraint_tests::curves::te_test::<_, EdwardsVar>().unwrap();
+	ark_curve_constraint_tests::curves::sw_test::<_, SWVar>().unwrap();
+	ark_curve_constraint_tests::curves::group_test::<_, Fq, EdwardsVar>().unwrap();
 }
