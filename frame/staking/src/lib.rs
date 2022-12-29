@@ -474,9 +474,8 @@ pub struct StakingLedger<T: Config> {
 	/// in, first out queue where the new (higher value) eras get pushed on the back.
 	pub unlocking: BoundedVec<UnlockChunk<BalanceOf<T>>, T::MaxUnlockingChunks>,
 	/// Legacy field. Used as a list of eras for which the stakers behind a validator have claimed
-	/// rewards. It should only be used to read old `claimed_rewards` and a new entry should not be
-	/// added to it.
-	/// FIXME: Clean up after `T::HistoryDepth` eras.
+	/// rewards. It should only be used for reading old state.
+	/// TODO: Clean up after `T::HistoryDepth` eras.
 	/// Tracker: <https://github.com/paritytech/substrate/issues/13034>
 	pub legacy_claimed_rewards: BoundedVec<EraIndex, T::HistoryDepth>,
 }

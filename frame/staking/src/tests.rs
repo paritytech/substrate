@@ -3809,7 +3809,6 @@ fn test_payout_stakers() {
 			assert!(RewardOnUnbalanceWasCalled::get());
 		}
 
-		// claimed_rewards not used
 		assert_eq!(
 			Staking::ledger(&10),
 			Some(StakingLedger {

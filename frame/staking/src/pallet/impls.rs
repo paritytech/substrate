@@ -269,13 +269,12 @@ impl<T: Config> Pallet<T> {
 	) -> EraRewardPoints<T::AccountId> {
 		let mut era_reward_points = <ErasRewardPoints<T>>::get(&era);
 
-		// In the older version of code, ledger maintained the record of `claimed_rewards`.
+		// In the older version of code, ledger maintained the record of `legacy_claimed_rewards`.
 		// Going forward, we don't keep them in the ledger but drop them from
 		// `EraRewardPoints` as they are claimed. Since we maintain `$HistoryDepth` eras in the
-		// `ledger.claimed_rewards`, once `$HistoryDepth` number of eras have passed, this code is
+		// `ledger.legacy_claimed_rewards`, once `$HistoryDepth` number of eras have passed, this code is
 		// redundant and can be cleaned up, relying solely on `EraRewardPoints` to prevent double
 		// claim.
-		// TODO: Clean up `ledger.claimed_rewards` after 84 eras.
 		if ledger.legacy_claimed_rewards.binary_search(&era).is_ok() {
 			// since rewards are already claimed for this era, drop them.
 			era_reward_points.individual.remove(&ledger.stash);

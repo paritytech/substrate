@@ -681,7 +681,7 @@ benchmarks! {
 			active: T::Currency::minimum_balance() - One::one(),
 			total: T::Currency::minimum_balance() - One::one(),
 			unlocking: Default::default(),
-			claimed_rewards: Default::default(),
+			legacy_claimed_rewards: Default::default(),
 		};
 		Ledger::<T>::insert(&controller, l);
 

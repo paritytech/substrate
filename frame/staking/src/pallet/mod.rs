@@ -135,7 +135,7 @@ pub mod pallet {
 		/// HistoryDepth, current_era]`: `ErasStakers`, `ErasStakersClipped`,
 		/// `ErasValidatorPrefs`, `ErasValidatorReward`, `ErasRewardPoints`,
 		/// `ErasTotalStake`, `ErasStartSessionIndex`,
-		/// `StakingLedger.claimed_rewards`.
+		/// `StakingLedger.legacy_claimed_rewards`.
 		///
 		/// Must be more than the number of eras delayed by session.
 		/// I.e. active era must always be in history. I.e. `active_era >
@@ -145,7 +145,7 @@ pub mod pallet {
 		/// this should be set to same value or greater as in storage.
 		///
 		/// Note: `HistoryDepth` is used as the upper bound for the `BoundedVec`
-		/// item `StakingLedger.claimed_rewards`. Setting this value lower than
+		/// item `StakingLedger.legacy_claimed_rewards`. Setting this value lower than
 		/// the existing value can lead to inconsistencies in the
 		/// `StakingLedger` and will need to be handled properly in a migration.
 		/// The test `reducing_history_depth_abrupt` shows this effect.
