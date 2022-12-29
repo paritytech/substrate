@@ -30,5 +30,5 @@
 
 mod curves;
 
+pub use ark_bw6_761::{fq, fq3, fq6, fr, Fq, Fq3Config, Fq6Config, Fr};
 pub use curves::*;
-pub use ark_bw6_761::{fr, fq, fq3, fq6, Fq, Fr, Fq3Config, Fq6Config};

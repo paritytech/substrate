@@ -446,6 +446,7 @@ dependencies = [
  "ark-serialize",
  "ark-std 0.4.0-alpha",
  "ark-sub-bls12-377",
+ "sp-io",
 ]
 
 [[package]]

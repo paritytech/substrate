@@ -124,13 +124,7 @@ pub fn mul_projective_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 
 	let cursor = Cursor::new(scalar);
 	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
-	let mut res = ark_ec::bls12::G2Projective::<Config>::zero();
-	for b in ark_ff::BitIteratorBE::without_leading_zeros(scalar) {
-		res.double_in_place();
-		if b {
-			res += base;
-		}
-	}
+	let res = <ark_bls12_381::g2::Config as SWCurveConfig>::mul_projective(&base, &scalar);
 	let mut serialized = vec![0; res.serialized_size(Compress::Yes)];
 	let mut cursor = Cursor::new(&mut serialized[..]);
 	res.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
@@ -144,13 +138,7 @@ pub fn mul_projective_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 
 	let cursor = Cursor::new(scalar);
 	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
-	let mut res = ark_ec::bls12::G1Projective::<Config>::zero();
-	for b in ark_ff::BitIteratorBE::without_leading_zeros(scalar) {
-		res.double_in_place();
-		if b {
-			res += base;
-		}
-	}
+	let res = <ark_bls12_381::g1::Config as SWCurveConfig>::mul_projective(&base, &scalar);
 	let mut serialized = vec![0; res.serialized_size(Compress::Yes)];
 	let mut cursor = Cursor::new(&mut serialized[..]);
 	res.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();

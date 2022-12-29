@@ -1,8 +1,8 @@
-use ark_models::{
-    models::{short_weierstrass::SWCurveConfig, CurveConfig},
-    short_weierstrass::{Affine, Projective},
-};
 use ark_ff::{Field, MontFp};
+use ark_models::{
+	models::{short_weierstrass::SWCurveConfig, CurveConfig},
+	short_weierstrass::{Affine, Projective},
+};
 
 use crate::{Fq, Fr};
 
@@ -13,13 +13,13 @@ pub type G2Projective = Projective<Config>;
 pub struct Config;
 
 impl CurveConfig for Config {
-    type BaseField = Fq;
-    type ScalarField = Fr;
+	type BaseField = Fq;
+	type ScalarField = Fr;
 
-    /// COFACTOR =
-    /// 26642435879335816683987677701488073867751118270052650655942102502312977592501693353047140953112195348280268661194869
+	/// COFACTOR =
+	/// 26642435879335816683987677701488073867751118270052650655942102502312977592501693353047140953112195348280268661194869
     #[rustfmt::skip]
-    const COFACTOR: &'static [u64] = &[
+	const COFACTOR: &'static [u64] = &[
         0x3de5800000000075,
         0x832ba4061000003b,
         0xc61c554757551c0c,
@@ -28,26 +28,26 @@ impl CurveConfig for Config {
         0xad1972339049ce76,
     ];
 
-    /// COFACTOR^(-1) mod r =
-    /// 214911522365886453591244899095480747723790054550866810551297776298664428889000553861210287833206024638187939842124
-    const COFACTOR_INV: Fr = MontFp!("214911522365886453591244899095480747723790054550866810551297776298664428889000553861210287833206024638187939842124");
+	/// COFACTOR^(-1) mod r =
+	/// 214911522365886453591244899095480747723790054550866810551297776298664428889000553861210287833206024638187939842124
+	const COFACTOR_INV: Fr = MontFp!("214911522365886453591244899095480747723790054550866810551297776298664428889000553861210287833206024638187939842124");
 }
 
 impl SWCurveConfig for Config {
-    /// COEFF_A = 0
-    const COEFF_A: Fq = Fq::ZERO;
+	/// COEFF_A = 0
+	const COEFF_A: Fq = Fq::ZERO;
 
-    /// COEFF_B = 4
-    const COEFF_B: Fq = MontFp!("4");
+	/// COEFF_B = 4
+	const COEFF_B: Fq = MontFp!("4");
 
-    /// AFFINE_GENERATOR_COEFFS = (G2_GENERATOR_X, G2_GENERATOR_Y)
-    const GENERATOR: G2Affine = G2Affine::new_unchecked(G2_GENERATOR_X, G2_GENERATOR_Y);
+	/// AFFINE_GENERATOR_COEFFS = (G2_GENERATOR_X, G2_GENERATOR_Y)
+	const GENERATOR: G2Affine = G2Affine::new_unchecked(G2_GENERATOR_X, G2_GENERATOR_Y);
 
-    #[inline(always)]
-    fn mul_by_a(_elem: Self::BaseField) -> Self::BaseField {
-        use ark_ff::Zero;
-        Self::BaseField::zero()
-    }
+	#[inline(always)]
+	fn mul_by_a(_elem: Self::BaseField) -> Self::BaseField {
+		use ark_ff::Zero;
+		Self::BaseField::zero()
+	}
 }
 
 /// G2_GENERATOR_X =
