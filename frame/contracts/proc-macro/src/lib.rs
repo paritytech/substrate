@@ -398,8 +398,7 @@ fn expand_docs(def: &mut EnvDef) -> TokenStream2 {
 		let funcs = def.host_funcs.iter_mut().map(|f| {
 			if *m == f.module {
 				// Remove auxiliary args: `ctx: _` and `memory: _`
-				let args = f.item.sig.inputs.iter().skip(2).map(|p| p.clone()).collect::<Punctuated<FnArg, Comma>>();
-				f.item.sig.inputs = args;
+				f.item.sig.inputs = f.item.sig.inputs.iter().skip(2).map(|p| p.clone()).collect::<Punctuated<FnArg, Comma>>();
 				let func_decl = f.item.sig.to_token_stream();
 				let func_docs = f.item.attrs.iter().filter(|a| doc_selector(a)).map(|d| {
 					let docs = d.to_token_stream();
@@ -414,19 +413,20 @@ fn expand_docs(def: &mut EnvDef) -> TokenStream2 {
 			}
 		});
 
-		let mut name = String::from("Docs_");
-		name.push_str(m);
-		let module = Ident::new(&name, Span::call_site());
+		let module = Ident::new(m, Span::call_site());
 
 		quote! {
-			trait #module {
-				#( #funcs )*
+			pub mod #module {
+			  use crate::wasm::runtime::{TrapReason, ReturnCode};
+			  pub trait Docs {
+				  #( #funcs )*
+			  }
 			}
 		}
 	});
 	quote! {
 			#( #docs )*
-	}
+		}
 }
 
 /// Expands environment definiton.
