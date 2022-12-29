@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![deny(
-    warnings,
-    unused,
+    // warnings,
+    // unused,
     future_incompatible,
     nonstandard_style,
     rust_2018_idioms
@@ -29,7 +29,6 @@
 //! * B = 4
 
 mod curves;
-mod fields;
 
 pub use curves::*;
-pub use fields::*;
+pub use ark_bw6_761::{fr, fq, fq3, fq6, Fq, Fr, Fq3Config, Fq6Config};

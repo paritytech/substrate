@@ -435,6 +435,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "ark-sub-bw6-761"
+version = "0.4.0-alpha.1"
+dependencies = [
+ "ark-algebra-test-templates",
+ "ark-bw6-761",
+ "ark-ec",
+ "ark-ff",
+ "ark-models",
+ "ark-serialize",
+ "ark-std 0.4.0-alpha",
+ "ark-sub-bls12-377",
+]
+
+[[package]]
 name = "ark-sub-ed-on-bls12-377"
 version = "0.4.0-alpha.1"
 dependencies = [

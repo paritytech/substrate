@@ -1,4 +1,4 @@
-use ark_ec::{
+use ark_models::{
     models::{short_weierstrass::SWCurveConfig, CurveConfig},
     short_weierstrass::{Affine, Projective},
 };

@@ -1,4 +1,4 @@
-use ark_ec::{
+use ark_models::{
     bw6,
     bw6::{BW6Config, TwistType, BW6},
 };

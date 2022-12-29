@@ -1,5 +1,5 @@
 [package]
-name = "ark-bw6-761"
+name = "ark-sub-bw6-761"
 version = "0.4.0-alpha.1"
 authors = [ "arkworks contributors" ]
 description = "The BW6-761 pairing-friendly elliptic curve"
@@ -14,20 +14,17 @@ edition = "2021"
 
 [dependencies]
 ark-ff = { version="0.4.0-alpha", default-features = false }
-ark-ec = { version="0.4.0-alpha", default-features = false }
 ark-std = { version = "0.4.0-alpha", default-features = false }
+ark-bw6-761 = { git = "https://github.com/arkworks-rs/curves" }
 ark-sub-bls12-377 = { version = "0.4.0-alpha", path = "../bls12_377", default-features = false, features = [ "base_field" ] }
+ark-models = { path = "../../arkworks-models" }
 
 [dev-dependencies]
 ark-serialize = { version = "0.4.0-alpha", default-features = false }
-ark-algebra-test-templates = { version = "0.4.0-alpha", default-features = false }
-ark-algebra-bench-templates = { version = "0.4.0-alpha", default-features = false }
+ark-algebra-test-templates = { git = "https://github.com/arkworks-rs/algebra", branch = "release-0.4", default-features = false }
+ark-ec = { git = "https://github.com/arkworks-rs/algebra", branch = "release-0.4", default-features = false }
 
 [features]
 default = []
 std = [ "ark-std/std", "ark-ff/std", "ark-ec/std", "ark-sub-bls12-377/std" ]
 
-[[bench]]
-name = "bw6_761"
-path = "benches/bw6_761.rs"
-harness = false
