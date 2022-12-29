@@ -73,7 +73,7 @@ where
 }
 
 /// Groups a `ProtocolName` with a `usize`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ProtoNameWithUsize<T>(T, usize);
 
 impl<T: ProtocolName> ProtocolName for ProtoNameWithUsize<T> {
@@ -131,11 +131,13 @@ mod tests {
 
 		let upgrade: UpgradeCollec<_> = upgrades.into_iter().collect::<UpgradeCollec<_>>();
 		let protos = vec![
-			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol1")), 1), 1),
-			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol2")), 2), 2),
-			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol3")), 3), 3),
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol1")), 1), 0),
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol2")), 2), 1),
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol3")), 3), 2),
 		];
-		assert!(std::matches!(upgrade.protocol_info().collect::<Vec<_>>(), protos));
+		let upgrades = upgrade.protocol_info().collect::<Vec<_>>();
+
+		assert_eq!(upgrades, protos,);
 	}
 
 	#[test]
@@ -165,13 +167,13 @@ mod tests {
 
 		let upgrade: UpgradeCollec<_> = upgrades.into_iter().collect::<UpgradeCollec<_>>();
 		let protos = vec![
-			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol1")), 1), 1),
-			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol2")), 2), 2),
-			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol3")), 3), 3),
-			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol22")), 1), 4),
-			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol33")), 2), 5),
-			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol44")), 3), 6),
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol1")), 1), 0),
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol2")), 2), 1),
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol22")), 1), 2),
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol33")), 2), 2),
+			ProtoNameWithUsize(ProtoNameWithUsize(ProtoName::from(format!("protocol44")), 3), 2),
 		];
-		assert!(std::matches!(upgrade.protocol_info().collect::<Vec<_>>(), protos));
+		let upgrades = upgrade.protocol_info().collect::<Vec<_>>();
+		assert_eq!(upgrades, protos,);
 	}
 }
