@@ -170,7 +170,7 @@ impl ChainApi for TestApi {
 
 	fn block_header(
 		&self,
-		_: &BlockId<Self::Block>,
+		_: <Self::Block as BlockT>::Hash,
 	) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error> {
 		Ok(None)
 	}

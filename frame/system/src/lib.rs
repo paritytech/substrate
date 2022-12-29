@@ -88,7 +88,7 @@ use frame_support::{
 		extract_actual_pays_fee, extract_actual_weight, DispatchClass, DispatchInfo,
 		DispatchResult, DispatchResultWithPostInfo, PerDispatchClass,
 	},
-	storage,
+	storage::{self, StorageStreamIter},
 	traits::{
 		ConstU32, Contains, EnsureOrigin, Get, HandleLifetime, OnKilledAccount, OnNewAccount,
 		OriginTrait, PalletInfo, SortedMembers, StoredMap, TypedGet,
@@ -1444,15 +1444,16 @@ impl<T: Config> Pallet<T> {
 	pub fn events() -> Vec<EventRecord<T::RuntimeEvent, T::Hash>> {
 		// Dereferencing the events here is fine since we are not in the
 		// memory-restricted runtime.
-		Self::read_events_no_consensus().into_iter().map(|e| *e).collect()
+		Self::read_events_no_consensus().map(|e| *e).collect()
 	}
 
 	/// Get the current events deposited by the runtime.
 	///
 	/// Should only be called if you know what you are doing and outside of the runtime block
 	/// execution else it can have a large impact on the PoV size of a block.
-	pub fn read_events_no_consensus() -> Vec<Box<EventRecord<T::RuntimeEvent, T::Hash>>> {
-		Events::<T>::get()
+	pub fn read_events_no_consensus(
+	) -> impl sp_std::iter::Iterator<Item = Box<EventRecord<T::RuntimeEvent, T::Hash>>> {
+		Events::<T>::stream_iter()
 	}
 
 	/// Set the block number to something in particular. Can be used as an alternative to

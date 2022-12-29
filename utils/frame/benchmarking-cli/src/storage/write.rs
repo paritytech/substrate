@@ -21,10 +21,7 @@ use sc_client_db::{DbHash, DbState, DbStateBuilder};
 use sp_api::StateBackend;
 use sp_blockchain::HeaderBackend;
 use sp_database::{ColumnId, Transaction};
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, HashFor, Header as HeaderT},
-};
+use sp_runtime::traits::{Block as BlockT, HashFor, Header as HeaderT};
 use sp_trie::PrefixedMemoryDB;
 
 use log::{info, trace};
@@ -58,7 +55,7 @@ impl StorageCmd {
 		let mut record = BenchRecord::default();
 
 		let best_hash = client.usage_info().chain.best_hash;
-		let header = client.header(BlockId::Hash(best_hash))?.ok_or("Header not found")?;
+		let header = client.header(best_hash)?.ok_or("Header not found")?;
 		let original_root = *header.state_root();
 		let trie = DbStateBuilder::<Block>::new(storage.clone(), original_root).build();
 

@@ -81,6 +81,15 @@ default:
     paths:
       - artifacts/
 
+.prepare-env:
+  before_script:
+    # TODO: remove unset invocation when we'll be free from 'ENV RUSTC_WRAPPER=sccache' & sccache
+    # itself in all images
+    - unset RUSTC_WRAPPER
+    # $WASM_BUILD_WORKSPACE_HINT enables wasm-builder to find the Cargo.lock from within generated
+    # packages
+    - export WASM_BUILD_WORKSPACE_HINT="$PWD"
+
 .job-switcher:
   before_script:
     - if echo "$CI_DISABLED_JOBS" | grep -xF "$CI_JOB_NAME"; then echo "The job has been cancelled in CI settings"; exit 0; fi
@@ -89,6 +98,7 @@ default:
   image:                           "${CI_IMAGE}"
   before_script:
     - !reference [.job-switcher, before_script]
+    - !reference [.prepare-env, before_script]
   tags:
     - kubernetes-parity-build
 
@@ -115,9 +125,8 @@ default:
 .docker-env:
   image:                           "${CI_IMAGE}"
   before_script:
-    # TODO: remove unset invocation when we'll be free from 'ENV RUSTC_WRAPPER=sccache' & sccache itself in all images
-    - unset RUSTC_WRAPPER
     - !reference [.job-switcher, before_script]
+    - !reference [.prepare-env, before_script]
     - !reference [.rust-info-script, script]
     - !reference [.rusty-cachier, before_script]
     - !reference [.pipeline-stopper-vars, script]
@@ -203,6 +212,10 @@ default:
   rules:
     # this job runs only on nightly pipeline with the mentioned variable, against `master` branch
     - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "nightly"
+
+.scheduled-crate-publishing-pipeline:
+  rules:
+    - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "automatic-crate-publishing"
 
 .crates-publishing-template:
   stage:                           test
