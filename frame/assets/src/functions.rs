@@ -563,8 +563,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 
 			// Check admin rights.
-			if let Some(need_admin) = maybe_need_admin {
-				ensure!(Some(need_admin) == details.admin, Error::<T, I>::NoPermission);
+			if maybe_need_admin.is_some() {
+				ensure!(maybe_need_admin == details.admin, Error::<T, I>::NoPermission);
 			}
 
 			// Skip if source == dest
