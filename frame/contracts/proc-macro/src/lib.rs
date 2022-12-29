@@ -30,9 +30,12 @@ use alloc::{
 	vec::Vec,
 };
 use proc_macro::TokenStream;
-use proc_macro2::{TokenStream as TokenStream2, Span};
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned, ToTokens};
-use syn::{parse_macro_input, spanned::Spanned, Data, DeriveInput, FnArg, Ident, punctuated::Punctuated, token::Comma};
+use syn::{
+	parse_macro_input, punctuated::Punctuated, spanned::Spanned, token::Comma, Data, DeriveInput,
+	FnArg, Ident,
+};
 
 /// This derives `Debug` for a struct where each field must be of some numeric type.
 /// It interprets each field as its represents some weight and formats it as times so that
@@ -385,9 +388,7 @@ fn is_valid_special_arg(idx: usize, arg: &FnArg) -> bool {
 
 /// Expands documentation for host functions.
 fn expand_docs(def: &mut EnvDef) -> TokenStream2 {
-	let mut modules = def.host_funcs.iter().map(|f| {
-		f.module.clone()
-	}).collect::<Vec<_>>();
+	let mut modules = def.host_funcs.iter().map(|f| f.module.clone()).collect::<Vec<_>>();
 	modules.sort();
 	modules.dedup();
 
@@ -396,7 +397,14 @@ fn expand_docs(def: &mut EnvDef) -> TokenStream2 {
 		let funcs = def.host_funcs.iter_mut().map(|f| {
 			if *m == f.module {
 				// Remove auxiliary args: `ctx: _` and `memory: _`
-				f.item.sig.inputs = f.item.sig.inputs.iter().skip(2).map(|p| p.clone()).collect::<Punctuated<FnArg, Comma>>();
+				f.item.sig.inputs = f
+					.item
+					.sig
+					.inputs
+					.iter()
+					.skip(2)
+					.map(|p| p.clone())
+					.collect::<Punctuated<FnArg, Comma>>();
 				let func_decl = f.item.sig.to_token_stream();
 				let func_docs = f.item.attrs.iter().filter(|a| doc_selector(a)).map(|d| {
 					let docs = d.to_token_stream();
@@ -407,7 +415,7 @@ fn expand_docs(def: &mut EnvDef) -> TokenStream2 {
 					#func_decl;
 				}
 			} else {
-				quote! { }
+				quote! {}
 			}
 		});
 
@@ -425,8 +433,8 @@ fn expand_docs(def: &mut EnvDef) -> TokenStream2 {
 		}
 	});
 	quote! {
-			#( #docs )*
-		}
+		#( #docs )*
+	}
 }
 
 /// Expands environment definiton.
@@ -630,13 +638,15 @@ fn expand_functions(
 ///
 /// # Generating Documentation
 ///
-/// Passing `doc` attribute to the macro (like `#[define_env(doc)]`) will make it also expand additional `pallet_contracts::wasm::runtime::seal0`, `pallet_contracts::wasm::runtime::seal1`, `...` modules
-/// each having its `Doc` trait containing methods holding documentation for every defined host function.
+/// Passing `doc` attribute to the macro (like `#[define_env(doc)]`) will make it also expand
+/// additional `pallet_contracts::wasm::runtime::seal0`, `pallet_contracts::wasm::runtime::seal1`,
+/// `...` modules each having its `Doc` trait containing methods holding documentation for every
+/// defined host function.
 ///
 /// To build up these docs, run:
 ///
 /// ```nocompile
-///	cargo doc --no-deps --document-private-items
+/// 	cargo doc --no-deps --document-private-items
 /// ```
 #[proc_macro_attribute]
 pub fn define_env(attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -651,8 +661,7 @@ pub fn define_env(attr: TokenStream, item: TokenStream) -> TokenStream {
 	let item = syn::parse_macro_input!(item as syn::ItemMod);
 
 	match EnvDef::try_from(item) {
-		Ok(mut def) =>
-			expand_env(&mut def, !attr.is_empty()).into(),
+		Ok(mut def) => expand_env(&mut def, !attr.is_empty()).into(),
 		Err(e) => e.to_compile_error().into(),
 	}
 }
