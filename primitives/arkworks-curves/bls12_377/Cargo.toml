@@ -21,8 +21,8 @@ sp-io = { path = "../../io" }
 
 [dev-dependencies]
 ark-relations = { git = "https://github.com/arkworks-rs/snark", default-features = false }
-ark-ec = { git = "https://github.com/arkworks-rs/algebra", branch = "release-0.4", default-features = false }
-ark-algebra-test-templates = { git = "https://github.com/arkworks-rs/algebra", branch = "release-0.4", default-features = false }
+ark-ec = { git = "https://github.com/arkworks-rs/algebra", branch = "releases", default-features = false }
+ark-algebra-test-templates = { git = "https://github.com/arkworks-rs/algebra", branch = "releases", default-features = false }
 ark-curve-constraint-tests = { path = "../curve-constraint-tests", default-features = false }
 
 

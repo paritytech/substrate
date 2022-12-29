@@ -109,7 +109,7 @@ impl TECurveConfig for JubjubConfig {
 				serialized
 			})
 			.collect();
-		let result = sp_io::crypto::ed_on_bls12_381_msm(bases, scalars);
+		let result = sp_io::crypto::ed_on_bls12_381_te_msm(bases, scalars);
 		let cursor = Cursor::new(&result[..]);
 		let result = <JubjubConfig as TECurveConfig>::deserialize_with_mode(
 			cursor,
@@ -209,7 +209,7 @@ impl SWCurveConfig for JubjubConfig {
 				serialized
 			})
 			.collect();
-		let result = sp_io::crypto::ed_on_bls12_381_msm(bases, scalars);
+		let result = sp_io::crypto::ed_on_bls12_381_sw_msm(bases, scalars);
 		let cursor = Cursor::new(&result[..]);
 		let result =
 			SWProjective::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();

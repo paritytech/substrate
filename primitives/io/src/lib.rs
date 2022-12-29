@@ -1262,8 +1262,13 @@ pub trait Crypto {
 	}
 
 	/// Compute msm on ed_on_bls12_381
-	fn ed_on_bls12_381_msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
-		sp_arkworks::ed_on_bls12_381::msm(bases, scalars)
+	fn ed_on_bls12_381_te_msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
+		sp_arkworks::ed_on_bls12_381::te_msm(bases, scalars)
+	}
+
+	/// Compute msm on ed_on_bls12_381
+	fn ed_on_bls12_381_sw_msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
+		sp_arkworks::ed_on_bls12_381::sw_msm(bases, scalars)
 	}
 
 	/// Compute affine multiplication on ed_on_bls12_377
