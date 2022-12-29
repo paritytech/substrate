@@ -35,7 +35,3 @@ scalar_field = []
 base_field = []
 r1cs = [ "base_field", "ark-r1cs-std" ]
 
-[[bench]]
-name = "bls12_377"
-path = "benches/bls12_377.rs"
-harness = false
