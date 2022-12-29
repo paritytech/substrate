@@ -1,11 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![deny(
-    // warnings,
-    // unused,
-    future_incompatible,
-    nonstandard_style,
-    rust_2018_idioms
-)]
+#![deny(warnings, unused, future_incompatible, nonstandard_style, rust_2018_idioms)]
 #![forbid(unsafe_code)]
 
 //! This library implements the BW6_761 curve generated in [\[EG20\]](https://eprint.iacr.org/2020/351).

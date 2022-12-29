@@ -1,11 +1,8 @@
 [package]
 name = "ark-sub-ed-on-bls12-381"
 version = "0.4.0-alpha.1"
-authors = [ "arkworks contributors" ]
-description = "A Twisted Edwards curve defined over the scalar field of the BLS12-381 curve"
-homepage = "https://arkworks.rs"
-repository = "https://github.com/arkworks-rs/curves"
-documentation = "https://docs.rs/ark-ed-on-bls12-381/"
+authors = [ "achimcc, arkworks contributors" ]
+description = "A Twisted Edwards curve defined over the scalar field of the BLS12-381 curve, optimized for Substrate"
 keywords = ["cryptography", "finite-fields", "elliptic-curves" ]
 categories = ["cryptography"]
 include = ["Cargo.toml", "src", "README.md", "LICENSE-APACHE", "LICENSE-MIT"]

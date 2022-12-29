@@ -1,11 +1,8 @@
 [package]
 name = "ark-sub-bw6-761"
 version = "0.4.0-alpha.1"
-authors = [ "arkworks contributors" ]
-description = "The BW6-761 pairing-friendly elliptic curve"
-homepage = "https://arkworks.rs"
-repository = "https://github.com/arkworks-rs/curves"
-documentation = "https://docs.rs/ark-bw6-761/"
+authors = [ "achimcc, arkworks contributors" ]
+description = "The BW6-761 pairing-friendly elliptic curve, optimized for Substrate"
 keywords = ["cryptography", "finite-fields", "elliptic-curves" ]
 categories = ["cryptography"]
 include = ["Cargo.toml", "src", "README.md", "LICENSE-APACHE", "LICENSE-MIT"]

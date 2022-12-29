@@ -87,6 +87,39 @@ impl TECurveConfig for JubjubConfig {
 		-elem
 	}
 
+	fn msm(
+		bases: &[Affine<Self>],
+		scalars: &[<Self as CurveConfig>::ScalarField],
+	) -> Result<Projective<Self>, usize> {
+		let bases: Vec<Vec<u8>> = bases
+			.into_iter()
+			.map(|elem| {
+				let mut serialized = vec![0; elem.serialized_size(Compress::Yes)];
+				let mut cursor = Cursor::new(&mut serialized[..]);
+				elem.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
+				serialized
+			})
+			.collect();
+		let scalars: Vec<Vec<u8>> = scalars
+			.into_iter()
+			.map(|elem| {
+				let mut serialized = vec![0; elem.serialized_size(Compress::Yes)];
+				let mut cursor = Cursor::new(&mut serialized[..]);
+				elem.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
+				serialized
+			})
+			.collect();
+		let result = sp_io::crypto::ed_on_bls12_381_msm(bases, scalars);
+		let cursor = Cursor::new(&result[..]);
+		let result = <JubjubConfig as TECurveConfig>::deserialize_with_mode(
+			cursor,
+			Compress::Yes,
+			Validate::No,
+		)
+		.unwrap();
+		Ok(result.into())
+	}
+
 	fn mul_projective(base: &Projective<Self>, scalar: &[u64]) -> Projective<Self> {
 		let mut serialized_base = vec![0; base.serialized_size(Compress::Yes)];
 		let mut cursor = Cursor::new(&mut serialized_base[..]);

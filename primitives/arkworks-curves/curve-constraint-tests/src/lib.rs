@@ -184,10 +184,10 @@ pub mod fields {
 			let cs = ConstraintSystem::<ConstraintF>::new_ref();
 			let mut rng = test_rng();
 			for i in 0..=maxpower {
-				let mut a = F::rand(&mut rng);
+				let a = F::rand(&mut rng);
 				let mut a_gadget = AF::new_variable(ark_relations::ns!(cs, "a"), || Ok(a), mode)?;
 				a_gadget.frobenius_map_in_place(i)?;
-				a.frobenius_map(i);
+				let _ = a.frobenius_map(i);
 
 				assert_eq!(a_gadget.value()?, a);
 			}

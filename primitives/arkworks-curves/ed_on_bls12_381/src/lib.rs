@@ -1,8 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![deny(
-    // warnings, 
-    // unused, 
-    future_incompatible, nonstandard_style, rust_2018_idioms)]
+#![deny(warnings, unused, future_incompatible, nonstandard_style, rust_2018_idioms)]
 #![forbid(unsafe_code)]
 
 //! This library implements a twisted Edwards curve whose base field is the
