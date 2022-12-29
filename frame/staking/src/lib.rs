@@ -368,17 +368,18 @@ pub struct ActiveEraInfo {
 ///
 /// These points will be used to reward validators and their respective nominators. As the rewards
 /// for `individual` validators are paid out, they are removed from the map to prevent a validator
-/// to claim reward for a same era twice.
+/// to claim reward for the same era twice.
 #[derive(PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct EraRewardPoints<AccountId: Ord> {
 	/// Total number of points in an era.
 	///
-	/// At insert, this equals the sum of reward points for each validator. As a validator claims
-	/// their era reward, individual points are dropped hence sum of individual validator reward
-	/// points reduces but `total` for an era will always remain same. This is important, since we
-	/// rely on `total` to calculate reward payouts for the remaining set of validators correctly.
+	/// For an active era, this always equals the sum of reward points for each validator. As a
+	/// validator claims their era reward in the succeeding eras, individual points are dropped
+	/// hence sum of individual validator reward points reduces but `total` for an era will always
+	/// remain same. This is important, since we rely on `total` to calculate reward payouts for
+	/// the remaining set of validators correctly.
 	pub total: RewardPoint,
-	/// The reward points earned by a given validator. Deducted as reward points get cashed.
+	/// The reward points earned by a given validator. Dropped as reward points get claimed.
 	pub individual: BTreeMap<AccountId, RewardPoint>,
 }
 
@@ -472,11 +473,12 @@ pub struct StakingLedger<T: Config> {
 	/// (assuming it doesn't get slashed first). It is assumed that this will be treated as a first
 	/// in, first out queue where the new (higher value) eras get pushed on the back.
 	pub unlocking: BoundedVec<UnlockChunk<BalanceOf<T>>, T::MaxUnlockingChunks>,
-	/// Earlier used as a list of eras for which the stakers behind a validator have claimed
-	/// rewards. Since v14, it should only be used to read historic `claimed_rewards` and never for
-	/// newer data. After `$HistoryDepth` eras have passed since v14, this can be cleaned up in a
-	/// migration.
-	pub claimed_rewards: BoundedVec<EraIndex, T::HistoryDepth>,
+	/// Legacy field. Used as a list of eras for which the stakers behind a validator have claimed
+	/// rewards. It should only be used to read old `claimed_rewards` and a new entry should not be
+	/// added to it.
+	/// FIXME: Clean up after `T::HistoryDepth` eras.
+	/// Tracker: <https://github.com/paritytech/substrate/issues/13034>
+	pub legacy_claimed_rewards: BoundedVec<EraIndex, T::HistoryDepth>,
 }
 
 impl<T: Config> StakingLedger<T> {
@@ -487,7 +489,7 @@ impl<T: Config> StakingLedger<T> {
 			total: Zero::zero(),
 			active: Zero::zero(),
 			unlocking: Default::default(),
-			claimed_rewards: Default::default(),
+			legacy_claimed_rewards: Default::default(),
 		}
 	}
 
@@ -517,7 +519,7 @@ impl<T: Config> StakingLedger<T> {
 			total,
 			active: self.active,
 			unlocking,
-			claimed_rewards: self.claimed_rewards,
+			legacy_claimed_rewards: self.legacy_claimed_rewards,
 		}
 	}
 

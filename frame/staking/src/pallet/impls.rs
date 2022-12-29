@@ -158,7 +158,7 @@ impl<T: Config> Pallet<T> {
 		let mut ledger = <Ledger<T>>::get(&controller).ok_or(Error::<T>::NotController)?;
 
 		ledger
-			.claimed_rewards
+			.legacy_claimed_rewards
 			.retain(|&x| x >= current_era.saturating_sub(history_depth));
 
 		// Input data seems good, no errors allowed after this point
@@ -276,7 +276,7 @@ impl<T: Config> Pallet<T> {
 		// redundant and can be cleaned up, relying solely on `EraRewardPoints` to prevent double
 		// claim.
 		// TODO: Clean up `ledger.claimed_rewards` after 84 eras.
-		if ledger.claimed_rewards.binary_search(&era).is_ok() {
+		if ledger.legacy_claimed_rewards.binary_search(&era).is_ok() {
 			// since rewards are already claimed for this era, drop them.
 			era_reward_points.individual.remove(&ledger.stash);
 		}
@@ -1055,7 +1055,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 				active: stake,
 				total: stake,
 				unlocking: Default::default(),
-				claimed_rewards: Default::default(),
+				legacy_claimed_rewards: Default::default(),
 			},
 		);
 
@@ -1073,7 +1073,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 				active: stake,
 				total: stake,
 				unlocking: Default::default(),
-				claimed_rewards: Default::default(),
+				legacy_claimed_rewards: Default::default(),
 			},
 		);
 		Self::do_add_validator(
@@ -1114,7 +1114,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 					active: stake,
 					total: stake,
 					unlocking: Default::default(),
-					claimed_rewards: Default::default(),
+					legacy_claimed_rewards: Default::default(),
 				},
 			);
 			Self::do_add_validator(
@@ -1135,7 +1135,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 					active: stake,
 					total: stake,
 					unlocking: Default::default(),
-					claimed_rewards: Default::default(),
+					legacy_claimed_rewards: Default::default(),
 				},
 			);
 			Self::do_add_nominator(

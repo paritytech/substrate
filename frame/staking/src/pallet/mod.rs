@@ -883,7 +883,7 @@ pub mod pallet {
 				total: value,
 				active: value,
 				unlocking: Default::default(),
-				claimed_rewards: Default::default(),
+				legacy_claimed_rewards: Default::default(),
 			};
 			Self::update_ledger(&controller, &item);
 			Ok(())
