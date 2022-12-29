@@ -340,7 +340,7 @@ macro_rules! log {
 pub type MaxWinnersOf<T> = <<T as Config>::ElectionProvider as frame_election_provider_support::ElectionProviderBase>::MaxWinners;
 
 /// Absolute maximum number of nominations per nominator.
-type AbsoluteMaxNominationsOf<T> =
+pub type AbsoluteMaxNominationsOf<T> =
 	<<T as Config>::NominationsQuota as NominationsQuota<BalanceOf<T>>>::AbsoluteMaxNominations;
 
 /// Counter for the number of "reward" points earned by a given validator.
