@@ -2,6 +2,7 @@ use ark_ff::{BitIteratorBE, Field};
 use ark_serialize::*;
 use ark_std::vec::Vec;
 use num_traits::One;
+use derivative::Derivative;
 
 use crate::{
     bw6::{BW6Config, TwistType},
