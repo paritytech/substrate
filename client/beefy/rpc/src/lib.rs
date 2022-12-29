@@ -35,7 +35,9 @@ use jsonrpsee::{
 };
 use log::warn;
 
-use beefy_gadget::notification::{BeefyBestBlockStream, BeefyVersionedFinalityProofStream};
+use beefy_gadget::communication::notification::{
+	BeefyBestBlockStream, BeefyVersionedFinalityProofStream,
+};
 
 mod notification;
 
@@ -82,7 +84,7 @@ impl From<Error> for JsonRpseeError {
 // Provides RPC methods for interacting with BEEFY.
 #[rpc(client, server)]
 pub trait BeefyApi<Notification, Hash> {
-	/// Returns the block most recently finalized by BEEFY, alongside side its justification.
+	/// Returns the block most recently finalized by BEEFY, alongside its justification.
 	#[subscription(
 		name = "beefy_subscribeJustifications" => "beefy_justifications",
 		unsubscribe = "beefy_unsubscribeJustifications",
@@ -118,7 +120,7 @@ where
 	) -> Result<Self, Error> {
 		let beefy_best_block = Arc::new(RwLock::new(None));
 
-		let stream = best_block_stream.subscribe();
+		let stream = best_block_stream.subscribe(100_000);
 		let closure_clone = beefy_best_block.clone();
 		let future = stream.for_each(move |best_beefy| {
 			let async_clone = closure_clone.clone();
@@ -139,7 +141,7 @@ where
 	fn subscribe_justifications(&self, mut sink: SubscriptionSink) -> SubscriptionResult {
 		let stream = self
 			.finality_proof_stream
-			.subscribe()
+			.subscribe(100_000)
 			.map(|vfp| notification::EncodedVersionedFinalityProof::new::<Block>(vfp));
 
 		let fut = async move {
@@ -165,12 +167,12 @@ mod tests {
 	use super::*;
 
 	use beefy_gadget::{
+		communication::notification::BeefyVersionedFinalityProofSender,
 		justification::BeefyVersionedFinalityProof,
-		notification::{BeefyBestBlockStream, BeefyVersionedFinalityProofSender},
 	};
-	use beefy_primitives::{known_payload_ids, Payload, SignedCommitment};
+	use beefy_primitives::{known_payloads, Payload, SignedCommitment};
 	use codec::{Decode, Encode};
-	use jsonrpsee::{types::EmptyParams, RpcModule};
+	use jsonrpsee::{types::EmptyServerParams as EmptyParams, RpcModule};
 	use sp_runtime::traits::{BlakeTwo256, Hash};
 	use substrate_test_runtime_client::runtime::Block;
 
@@ -264,7 +266,8 @@ mod tests {
 	}
 
 	fn create_finality_proof() -> BeefyVersionedFinalityProof<Block> {
-		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
+		let payload =
+			Payload::from_single_entry(known_payloads::MMR_ROOT_ID, "Hello World!".encode());
 		BeefyVersionedFinalityProof::<Block>::V1(SignedCommitment {
 			commitment: beefy_primitives::Commitment {
 				payload,

@@ -76,7 +76,7 @@ impl frame_system::Config for Runtime {
 	type BlockWeights = ();
 	type BlockLength = BlockLength;
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type RuntimeCall = RuntimeCall;

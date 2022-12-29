@@ -20,10 +20,12 @@
 use crate::dispatch::{DispatchResultWithPostInfo, Parameter, RawOrigin};
 use codec::MaxEncodedLen;
 use sp_runtime::{
-	traits::{BadOrigin, Member, Morph, TryMorph},
+	traits::{BadOrigin, Get, Member, Morph, TryMorph},
 	Either,
 };
-use sp_std::marker::PhantomData;
+use sp_std::{cmp::Ordering, marker::PhantomData};
+
+use super::misc;
 
 /// Some sort of check on the origin is performed by this object.
 pub trait EnsureOrigin<OuterOrigin> {
@@ -59,7 +61,7 @@ pub trait EnsureOrigin<OuterOrigin> {
 	}
 }
 
-/// `EnsureOrigin` implementation that always fails.
+/// [`EnsureOrigin`] implementation that always fails.
 pub struct NeverEnsureOrigin<Success>(sp_std::marker::PhantomData<Success>);
 impl<OO, Success> EnsureOrigin<OO> for NeverEnsureOrigin<Success> {
 	type Success = Success;
@@ -69,6 +71,90 @@ impl<OO, Success> EnsureOrigin<OO> for NeverEnsureOrigin<Success> {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<OO, ()> {
 		Err(())
+	}
+}
+
+/// [`EnsureOrigin`] implementation that checks that an origin has equal or higher privilege
+/// compared to the expected `Origin`.
+///
+/// It will take the shortcut of comparing the incoming origin with the expected `Origin` and if
+/// both are the same the origin is accepted.
+///
+/// # Example
+///
+/// ```rust
+/// # use frame_support::traits::{EnsureOriginEqualOrHigherPrivilege, PrivilegeCmp, EnsureOrigin as _};
+/// # use sp_runtime::traits::{parameter_types, Get};
+/// # use sp_std::cmp::Ordering;
+///
+/// #[derive(Eq, PartialEq, Debug)]
+/// pub enum Origin {
+///     Root,
+///     SomethingBelowRoot,
+///     NormalUser,
+/// }
+///
+/// struct OriginPrivilegeCmp;
+///
+/// impl PrivilegeCmp<Origin> for OriginPrivilegeCmp {
+///     fn cmp_privilege(left: &Origin, right: &Origin) -> Option<Ordering> {
+///         match (left, right) {
+///             (Origin::Root, Origin::Root) => Some(Ordering::Equal),
+///             (Origin::Root, _) => Some(Ordering::Greater),
+///             (Origin::SomethingBelowRoot, Origin::SomethingBelowRoot) => Some(Ordering::Equal),
+///             (Origin::SomethingBelowRoot, Origin::Root) => Some(Ordering::Less),
+///             (Origin::SomethingBelowRoot, Origin::NormalUser) => Some(Ordering::Greater),
+///             (Origin::NormalUser, Origin::NormalUser) => Some(Ordering::Equal),
+///             (Origin::NormalUser, _) => Some(Ordering::Less),
+///         }
+///     }
+/// }
+///
+/// parameter_types! {
+///     pub const ExpectedOrigin: Origin = Origin::SomethingBelowRoot;
+/// }
+///
+/// type EnsureOrigin = EnsureOriginEqualOrHigherPrivilege<ExpectedOrigin, OriginPrivilegeCmp>;
+///
+/// // `Root` has an higher privilege as our expected origin.
+/// assert!(EnsureOrigin::ensure_origin(Origin::Root).is_ok());
+/// // `SomethingBelowRoot` is exactly the expected origin.
+/// assert!(EnsureOrigin::ensure_origin(Origin::SomethingBelowRoot).is_ok());
+/// // The `NormalUser` origin is not allowed.
+/// assert!(EnsureOrigin::ensure_origin(Origin::NormalUser).is_err());
+/// ```
+pub struct EnsureOriginEqualOrHigherPrivilege<Origin, PrivilegeCmp>(
+	sp_std::marker::PhantomData<(Origin, PrivilegeCmp)>,
+);
+
+impl<OuterOrigin, Origin, PrivilegeCmp> EnsureOrigin<OuterOrigin>
+	for EnsureOriginEqualOrHigherPrivilege<Origin, PrivilegeCmp>
+where
+	Origin: Get<OuterOrigin>,
+	OuterOrigin: Eq,
+	PrivilegeCmp: misc::PrivilegeCmp<OuterOrigin>,
+{
+	type Success = ();
+
+	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
+		let expected_origin = Origin::get();
+
+		// If this is the expected origin, it has the same privilege.
+		if o == expected_origin {
+			return Ok(())
+		}
+
+		let cmp = PrivilegeCmp::cmp_privilege(&o, &expected_origin);
+
+		match cmp {
+			Some(Ordering::Equal) | Some(Ordering::Greater) => Ok(()),
+			None | Some(Ordering::Less) => Err(o),
+		}
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn try_successful_origin() -> Result<OuterOrigin, ()> {
+		Ok(Origin::get())
 	}
 }
 
@@ -229,24 +315,32 @@ impl<
 /// Implemented for pallet dispatchable type by `decl_module` and for runtime dispatchable by
 /// `construct_runtime`.
 pub trait UnfilteredDispatchable {
-	/// The origin type of the runtime, (i.e. `frame_system::Config::Origin`).
-	type Origin;
+	/// The origin type of the runtime, (i.e. `frame_system::Config::RuntimeOrigin`).
+	type RuntimeOrigin;
 
 	/// Dispatch this call but do not check the filter in origin.
-	fn dispatch_bypass_filter(self, origin: Self::Origin) -> DispatchResultWithPostInfo;
+	fn dispatch_bypass_filter(self, origin: Self::RuntimeOrigin) -> DispatchResultWithPostInfo;
 }
 
-/// Methods available on `frame_system::Config::Origin`.
+/// The trait implemented by the overarching enumeration of the different pallets' origins.
+/// Unlike `OriginTrait` impls, this does not include any kind of dispatch/call filter. Also, this
+/// trait is more flexible in terms of how it can be used: it is a `Parameter` and `Member`, so it
+/// can be used as dispatchable parameters as well as in storage items.
+pub trait CallerTrait<AccountId>: Parameter + Member + From<RawOrigin<AccountId>> {
+	/// Extract the signer from the message if it is a `Signed` origin.
+	fn into_system(self) -> Option<RawOrigin<AccountId>>;
+
+	/// Extract a reference to the system-level `RawOrigin` if it is that.
+	fn as_system_ref(&self) -> Option<&RawOrigin<AccountId>>;
+}
+
+/// Methods available on `frame_system::Config::RuntimeOrigin`.
 pub trait OriginTrait: Sized {
 	/// Runtime call type, as in `frame_system::Config::Call`
 	type Call;
 
 	/// The caller origin, overarching type of all pallets origins.
-	type PalletsOrigin: Parameter
-		+ Member
-		+ Into<Self>
-		+ From<RawOrigin<Self::AccountId>>
-		+ MaxEncodedLen;
+	type PalletsOrigin: Into<Self> + CallerTrait<Self::AccountId> + MaxEncodedLen;
 
 	/// The AccountId used across the system.
 	type AccountId;
@@ -266,8 +360,11 @@ pub trait OriginTrait: Sized {
 	/// For root origin caller, the filters are bypassed and true is returned.
 	fn filter_call(&self, call: &Self::Call) -> bool;
 
-	/// Get the caller.
+	/// Get a reference to the caller (`CallerTrait` impl).
 	fn caller(&self) -> &Self::PalletsOrigin;
+
+	/// Consume `self` and return the caller.
+	fn into_caller(self) -> Self::PalletsOrigin;
 
 	/// Do something with the caller, consuming self but returning it if the caller was unused.
 	fn try_with_caller<R>(
@@ -285,7 +382,20 @@ pub trait OriginTrait: Sized {
 	fn signed(by: Self::AccountId) -> Self;
 
 	/// Extract the signer from the message if it is a `Signed` origin.
-	fn as_signed(self) -> Option<Self::AccountId>;
+	fn as_signed(self) -> Option<Self::AccountId> {
+		self.into_caller().into_system().and_then(|s| {
+			if let RawOrigin::Signed(who) = s {
+				Some(who)
+			} else {
+				None
+			}
+		})
+	}
+
+	/// Extract a reference to the sytsem origin, if that's what the caller is.
+	fn as_system_ref(&self) -> Option<&RawOrigin<Self::AccountId>> {
+		self.caller().as_system_ref()
+	}
 }
 
 #[cfg(test)]

@@ -18,17 +18,16 @@
 //! Test utilities
 
 use crate::{self as pallet_staking, *};
-use frame_election_provider_support::{
-	onchain, SequentialPhragmen, SortedListProvider, VoteWeight,
-};
+use frame_election_provider_support::{onchain, SequentialPhragmen, VoteWeight};
 use frame_support::{
-	assert_ok, parameter_types,
+	assert_ok, ord_parameter_types, parameter_types,
 	traits::{
-		ConstU32, ConstU64, Currency, FindAuthor, GenesisBuild, Get, Hooks, Imbalance,
-		OnUnbalanced, OneSessionHandler,
+		ConstU32, ConstU64, Currency, EitherOfDiverse, FindAuthor, GenesisBuild, Get, Hooks,
+		Imbalance, OnUnbalanced, OneSessionHandler,
 	},
 	weights::constants::RocksDbWeight,
 };
+use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
 use sp_io;
 use sp_runtime::{
@@ -99,7 +98,7 @@ frame_support::construct_runtime!(
 		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 		Historical: pallet_session::historical::{Pallet, Storage},
-		BagsList: pallet_bags_list::{Pallet, Call, Storage, Event<T>},
+		VoterBagsList: pallet_bags_list::<Instance1>::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -117,7 +116,7 @@ impl FindAuthor<AccountId> for Author11 {
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(
-			frame_support::weights::constants::WEIGHT_PER_SECOND * 2
+			Weight::from_parts(frame_support::weights::constants::WEIGHT_REF_TIME_PER_SECOND * 2, u64::MAX),
 		);
 	pub static SessionsPerEra: SessionIndex = 3;
 	pub static ExistentialDeposit: Balance = 1;
@@ -131,7 +130,7 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = RocksDbWeight;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = AccountIndex;
 	type BlockNumber = BlockNumber;
 	type RuntimeCall = RuntimeCall;
@@ -236,13 +235,18 @@ const THRESHOLDS: [sp_npos_elections::VoteWeight; 9] =
 parameter_types! {
 	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
 	pub static MaxNominations: u32 = 16;
+	pub static HistoryDepth: u32 = 80;
+	pub static MaxUnlockingChunks: u32 = 32;
 	pub static RewardOnUnbalanceWasCalled: bool = false;
 	pub static LedgerSlashPerEra: (BalanceOf<Test>, BTreeMap<EraIndex, BalanceOf<Test>>) = (Zero::zero(), BTreeMap::new());
+	pub static MaxWinners: u32 = 100;
 }
 
-impl pallet_bags_list::Config for Test {
+type VoterBagsListInstance = pallet_bags_list::Instance1;
+impl pallet_bags_list::Config<VoterBagsListInstance> for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
+	// Staking is the source of truth for voter bags list, since they are not kept up to date.
 	type ScoreProvider = Staking;
 	type BagThresholds = BagThresholds;
 	type Score = VoteWeight;
@@ -254,6 +258,9 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type Solver = SequentialPhragmen<AccountId, Perbill>;
 	type DataProvider = Staking;
 	type WeightInfo = ();
+	type MaxWinners = MaxWinners;
+	type VotersBound = ConstU32<{ u32::MAX }>;
+	type TargetsBound = ConstU32<{ u32::MAX }>;
 }
 
 pub struct MockReward {}
@@ -286,18 +293,20 @@ impl crate::pallet::pallet::Config for Test {
 	type Reward = MockReward;
 	type SessionsPerEra = SessionsPerEra;
 	type SlashDeferDuration = SlashDeferDuration;
-	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
+	type AdminOrigin = EnsureOneOrRoot;
 	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;
 	type EraPayout = ConvertCurve<RewardCurve>;
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
-	type ElectionProvider = onchain::UnboundedExecution<OnChainSeqPhragmen>;
+	type ElectionProvider = onchain::OnChainExecution<OnChainSeqPhragmen>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	// NOTE: consider a macro and use `UseNominatorsAndValidatorsMap<Self>` as well.
-	type VoterList = BagsList;
-	type MaxUnlockingChunks = ConstU32<32>;
+	type VoterList = VoterBagsList;
+	type TargetList = UseValidatorsMap<Self>;
+	type MaxUnlockingChunks = MaxUnlockingChunks;
+	type HistoryDepth = HistoryDepth;
 	type OnStakerSlash = OnStakerSlashMock<Test>;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type WeightInfo = ();
@@ -542,108 +551,10 @@ impl ExtBuilder {
 		sp_tracing::try_init_simple();
 		let mut ext = self.build();
 		ext.execute_with(test);
-		ext.execute_with(post_conditions);
-	}
-}
-
-fn post_conditions() {
-	check_nominators();
-	check_exposures();
-	check_ledgers();
-	check_count();
-}
-
-fn check_count() {
-	let nominator_count = Nominators::<Test>::iter_keys().count() as u32;
-	let validator_count = Validators::<Test>::iter().count() as u32;
-	assert_eq!(nominator_count, Nominators::<Test>::count());
-	assert_eq!(validator_count, Validators::<Test>::count());
-
-	// the voters that the `VoterList` list is storing for us.
-	let external_voters = <Test as Config>::VoterList::count();
-	assert_eq!(external_voters, nominator_count + validator_count);
-}
-
-fn check_ledgers() {
-	// check the ledger of all stakers.
-	Bonded::<Test>::iter().for_each(|(_, ctrl)| assert_ledger_consistent(ctrl))
-}
-
-fn check_exposures() {
-	// a check per validator to ensure the exposure struct is always sane.
-	let era = active_era();
-	ErasStakers::<Test>::iter_prefix_values(era).for_each(|expo| {
-		assert_eq!(
-			expo.total as u128,
-			expo.own as u128 + expo.others.iter().map(|e| e.value as u128).sum::<u128>(),
-			"wrong total exposure.",
-		);
-	})
-}
-
-fn check_nominators() {
-	// a check per nominator to ensure their entire stake is correctly distributed. Will only kick-
-	// in if the nomination was submitted before the current era.
-	let era = active_era();
-	<Nominators<Test>>::iter()
-		.filter_map(
-			|(nominator, nomination)| {
-				if nomination.submitted_in > era {
-					Some(nominator)
-				} else {
-					None
-				}
-			},
-		)
-		.for_each(|nominator| {
-			// must be bonded.
-			assert_is_stash(nominator);
-			let mut sum = 0;
-			Session::validators()
-				.iter()
-				.map(|v| Staking::eras_stakers(era, v))
-				.for_each(|e| {
-					let individual =
-						e.others.iter().filter(|e| e.who == nominator).collect::<Vec<_>>();
-					let len = individual.len();
-					match len {
-						0 => { /* not supporting this validator at all. */ },
-						1 => sum += individual[0].value,
-						_ => panic!("nominator cannot back a validator more than once."),
-					};
-				});
-
-			let nominator_stake = Staking::slashable_balance_of(&nominator);
-			// a nominator cannot over-spend.
-			assert!(
-				nominator_stake >= sum,
-				"failed: Nominator({}) stake({}) >= sum divided({})",
-				nominator,
-				nominator_stake,
-				sum,
-			);
-
-			let diff = nominator_stake - sum;
-			assert!(diff < 100);
+		ext.execute_with(|| {
+			Staking::do_try_state(System::block_number()).unwrap();
 		});
-}
-
-fn assert_is_stash(acc: AccountId) {
-	assert!(Staking::bonded(&acc).is_some(), "Not a stash.");
-}
-
-fn assert_ledger_consistent(ctrl: AccountId) {
-	// ensures ledger.total == ledger.active + sum(ledger.unlocking).
-	let ledger = Staking::ledger(ctrl).expect("Not a controller.");
-	let real_total: Balance = ledger.unlocking.iter().fold(ledger.active, |a, c| a + c.value);
-	assert_eq!(real_total, ledger.total);
-	assert!(
-		ledger.active >= Balances::minimum_balance() || ledger.active == 0,
-		"{}: active ledger amount ({}) must be greater than ED {}",
-		ctrl,
-		ledger.active,
-		Balances::minimum_balance()
-	);
+	}
 }
 
 pub(crate) fn active_era() -> EraIndex {
@@ -657,13 +568,22 @@ pub(crate) fn current_era() -> EraIndex {
 pub(crate) fn bond(stash: AccountId, ctrl: AccountId, val: Balance) {
 	let _ = Balances::make_free_balance_be(&stash, val);
 	let _ = Balances::make_free_balance_be(&ctrl, val);
-	assert_ok!(Staking::bond(Origin::signed(stash), ctrl, val, RewardDestination::Controller));
+	assert_ok!(Staking::bond(
+		RuntimeOrigin::signed(stash),
+		ctrl,
+		val,
+		RewardDestination::Controller
+	));
 }
 
 pub(crate) fn bond_validator(stash: AccountId, ctrl: AccountId, val: Balance) {
 	bond(stash, ctrl, val);
-	assert_ok!(Staking::validate(Origin::signed(ctrl), ValidatorPrefs::default()));
-	assert_ok!(Session::set_keys(Origin::signed(ctrl), SessionKeys { other: ctrl.into() }, vec![]));
+	assert_ok!(Staking::validate(RuntimeOrigin::signed(ctrl), ValidatorPrefs::default()));
+	assert_ok!(Session::set_keys(
+		RuntimeOrigin::signed(ctrl),
+		SessionKeys { other: ctrl.into() },
+		vec![]
+	));
 }
 
 pub(crate) fn bond_nominator(
@@ -673,7 +593,7 @@ pub(crate) fn bond_nominator(
 	target: Vec<AccountId>,
 ) {
 	bond(stash, ctrl, val);
-	assert_ok!(Staking::nominate(Origin::signed(ctrl), target));
+	assert_ok!(Staking::nominate(RuntimeOrigin::signed(ctrl), target));
 }
 
 /// Progress to the given block, triggering session and era changes as we progress.
@@ -843,7 +763,7 @@ pub(crate) fn make_all_reward_payment(era: EraIndex) {
 	// reward validators
 	for validator_controller in validators_with_reward.iter().filter_map(Staking::bonded) {
 		let ledger = <Ledger<Test>>::get(&validator_controller).unwrap();
-		assert_ok!(Staking::payout_stakers(Origin::signed(1337), ledger.stash, era));
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), ledger.stash, era));
 	}
 }
 
@@ -878,6 +798,11 @@ pub(crate) fn staking_events() -> Vec<crate::Event<Test>> {
 parameter_types! {
 	static StakingEventsIndex: usize = 0;
 }
+ord_parameter_types! {
+	pub const One: u64 = 1;
+}
+
+type EnsureOneOrRoot = EitherOfDiverse<EnsureRoot<AccountId>, EnsureSignedBy<One, AccountId>>;
 
 pub(crate) fn staking_events_since_last_call() -> Vec<crate::Event<Test>> {
 	let all: Vec<_> = System::events()

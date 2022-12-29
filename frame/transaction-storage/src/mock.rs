@@ -51,7 +51,7 @@ impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -116,7 +116,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 pub fn run_to_block(n: u64, f: impl Fn() -> Option<TransactionStorageProof>) {
 	while System::block_number() < n {
 		if let Some(proof) = f() {
-			TransactionStorage::check_proof(Origin::none(), proof).unwrap();
+			TransactionStorage::check_proof(RuntimeOrigin::none(), proof).unwrap();
 		}
 		TransactionStorage::on_finalize(System::block_number());
 		System::on_finalize(System::block_number());

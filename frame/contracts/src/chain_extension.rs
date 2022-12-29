@@ -83,7 +83,6 @@ use sp_std::{marker::PhantomData, vec::Vec};
 pub use crate::{exec::Ext, Config};
 pub use frame_system::Config as SysConfig;
 pub use pallet_contracts_primitives::ReturnFlags;
-pub use sp_core::crypto::UncheckedFrom;
 
 /// Result that returns a [`DispatchError`] on error.
 pub type Result<T> = sp_std::result::Result<T, DispatchError>;
@@ -114,10 +113,7 @@ pub trait ChainExtension<C: Config> {
 	/// In case of `Err` the contract execution is immediately suspended and the passed error
 	/// is returned to the caller. Otherwise the value of [`RetVal`] determines the exit
 	/// behaviour.
-	fn call<E>(&mut self, env: Environment<E, InitState>) -> Result<RetVal>
-	where
-		E: Ext<T = C>,
-		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>;
+	fn call<E: Ext<T = C>>(&mut self, env: Environment<E, InitState>) -> Result<RetVal>;
 
 	/// Determines whether chain extensions are enabled for this chain.
 	///
@@ -153,11 +149,7 @@ pub trait RegisteredChainExtension<C: Config>: ChainExtension<C> {
 #[impl_trait_for_tuples::impl_for_tuples(10)]
 #[tuple_types_custom_trait_bound(RegisteredChainExtension<C>)]
 impl<C: Config> ChainExtension<C> for Tuple {
-	fn call<E>(&mut self, mut env: Environment<E, InitState>) -> Result<RetVal>
-	where
-		E: Ext<T = C>,
-		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
-	{
+	fn call<E: Ext<T = C>>(&mut self, mut env: Environment<E, InitState>) -> Result<RetVal> {
 		for_tuples!(
 			#(
 				if (Tuple::ID == env.ext_id()) && Tuple::enabled() {
@@ -205,10 +197,7 @@ pub struct Environment<'a, 'b, E: Ext, S: State> {
 }
 
 /// Functions that are available in every state of this type.
-impl<'a, 'b, E: Ext, S: State> Environment<'a, 'b, E, S>
-where
-	<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
-{
+impl<'a, 'b, E: Ext, S: State> Environment<'a, 'b, E, S> {
 	/// The function id within the `id` passed by a contract.
 	///
 	/// It returns the two least significant bytes of the `id` passed by a contract as the other
@@ -270,6 +259,7 @@ impl<'a, 'b, E: Ext> Environment<'a, 'b, E, InitState> {
 	/// ever create this type. Chain extensions merely consume it.
 	pub(crate) fn new(
 		runtime: &'a mut Runtime<'b, E>,
+		memory: &'a mut [u8],
 		id: u32,
 		input_ptr: u32,
 		input_len: u32,
@@ -277,7 +267,7 @@ impl<'a, 'b, E: Ext> Environment<'a, 'b, E, InitState> {
 		output_len_ptr: u32,
 	) -> Self {
 		Environment {
-			inner: Inner { runtime, id, input_ptr, input_len, output_ptr, output_len_ptr },
+			inner: Inner { runtime, memory, id, input_ptr, input_len, output_ptr, output_len_ptr },
 			phantom: PhantomData,
 		}
 	}
@@ -325,10 +315,7 @@ impl<'a, 'b, E: Ext, S: PrimOut> Environment<'a, 'b, E, S> {
 }
 
 /// Functions to use the input arguments as pointer to a buffer.
-impl<'a, 'b, E: Ext, S: BufIn> Environment<'a, 'b, E, S>
-where
-	<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
-{
+impl<'a, 'b, E: Ext, S: BufIn> Environment<'a, 'b, E, S> {
 	/// Reads `min(max_len, in_len)` from contract memory.
 	///
 	/// This does **not** charge any weight. The caller must make sure that the an
@@ -338,9 +325,11 @@ where
 	/// charge the overall costs either using `max_len` (worst case approximation) or using
 	/// [`in_len()`](Self::in_len).
 	pub fn read(&self, max_len: u32) -> Result<Vec<u8>> {
-		self.inner
-			.runtime
-			.read_sandbox_memory(self.inner.input_ptr, self.inner.input_len.min(max_len))
+		self.inner.runtime.read_sandbox_memory(
+			self.inner.memory,
+			self.inner.input_ptr,
+			self.inner.input_len.min(max_len),
+		)
 	}
 
 	/// Reads `min(buffer.len(), in_len) from contract memory.
@@ -354,7 +343,11 @@ where
 			let buffer = core::mem::take(buffer);
 			&mut buffer[..len.min(self.inner.input_len as usize)]
 		};
-		self.inner.runtime.read_sandbox_memory_into_buf(self.inner.input_ptr, sliced)?;
+		self.inner.runtime.read_sandbox_memory_into_buf(
+			self.inner.memory,
+			self.inner.input_ptr,
+			sliced,
+		)?;
 		*buffer = sliced;
 		Ok(())
 	}
@@ -366,14 +359,20 @@ where
 	/// weight of the chain extension. This should usually be the case when fixed input types
 	/// are used.
 	pub fn read_as<T: Decode + MaxEncodedLen>(&mut self) -> Result<T> {
-		self.inner.runtime.read_sandbox_memory_as(self.inner.input_ptr)
+		self.inner
+			.runtime
+			.read_sandbox_memory_as(self.inner.memory, self.inner.input_ptr)
 	}
 
 	/// Reads and decodes a type with a dynamic size from contract memory.
 	///
 	/// Make sure to include `len` in your weight calculations.
 	pub fn read_as_unbounded<T: Decode>(&mut self, len: u32) -> Result<T> {
-		self.inner.runtime.read_sandbox_memory_as_unbounded(self.inner.input_ptr, len)
+		self.inner.runtime.read_sandbox_memory_as_unbounded(
+			self.inner.memory,
+			self.inner.input_ptr,
+			len,
+		)
 	}
 
 	/// The length of the input as passed in as `input_len`.
@@ -388,10 +387,7 @@ where
 }
 
 /// Functions to use the output arguments as pointer to a buffer.
-impl<'a, 'b, E: Ext, S: BufOut> Environment<'a, 'b, E, S>
-where
-	<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
-{
+impl<'a, 'b, E: Ext, S: BufOut> Environment<'a, 'b, E, S> {
 	/// Write the supplied buffer to contract memory.
 	///
 	/// If the contract supplied buffer is smaller than the passed `buffer` an `Err` is returned.
@@ -406,6 +402,7 @@ where
 		weight_per_byte: Option<Weight>,
 	) -> Result<()> {
 		self.inner.runtime.write_sandbox_output(
+			self.inner.memory,
 			self.inner.output_ptr,
 			self.inner.output_len_ptr,
 			buffer,
@@ -426,6 +423,8 @@ where
 struct Inner<'a, 'b, E: Ext> {
 	/// The runtime contains all necessary functions to interact with the running contract.
 	runtime: &'a mut Runtime<'b, E>,
+	/// Reference to the contracts memory.
+	memory: &'a mut [u8],
 	/// Verbatim argument passed to `seal_call_chain_extension`.
 	id: u32,
 	/// Verbatim argument passed to `seal_call_chain_extension`.

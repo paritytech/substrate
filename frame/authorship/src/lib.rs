@@ -237,6 +237,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Provide a set of uncles.
+		#[pallet::call_index(0)]
 		#[pallet::weight((0, DispatchClass::Mandatory))]
 		pub fn set_uncles(origin: OriginFor<T>, new_uncles: Vec<T::Header>) -> DispatchResult {
 			ensure_none(origin)?;
@@ -468,7 +469,7 @@ mod tests {
 		type BlockWeights = ();
 		type BlockLength = ();
 		type DbWeight = ();
-		type Origin = Origin;
+		type RuntimeOrigin = RuntimeOrigin;
 		type Index = u64;
 		type BlockNumber = u64;
 		type RuntimeCall = RuntimeCall;
@@ -738,7 +739,7 @@ mod tests {
 				System::reset_events();
 				System::initialize(&current_depth, &parent_hash, &Default::default());
 				Authorship::on_initialize(current_depth);
-				Authorship::set_uncles(Origin::none(), uncles).unwrap();
+				Authorship::set_uncles(RuntimeOrigin::none(), uncles).unwrap();
 				Authorship::on_finalize(current_depth);
 				max_item_count =
 					std::cmp::max(max_item_count, <Authorship as Store>::Uncles::get().len());

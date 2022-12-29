@@ -30,7 +30,7 @@ use sp_runtime::{
 use kitchensink_runtime::{
 	constants::{currency::*, time::SLOT_DURATION},
 	Balances, CheckedExtrinsic, Header, Runtime, RuntimeCall, RuntimeEvent, System,
-	TransactionPayment, UncheckedExtrinsic,
+	TransactionPayment, Treasury, UncheckedExtrinsic,
 };
 use node_primitives::{Balance, Hash};
 use node_testing::keyring::*;
@@ -311,10 +311,19 @@ fn full_native_block_import_works() {
 	let mut alice_last_known_balance: Balance = Default::default();
 	let mut fees = t.execute_with(|| transfer_fee(&xt()));
 
-	let transfer_weight = default_transfer_call().get_dispatch_info().weight;
+	let transfer_weight = default_transfer_call().get_dispatch_info().weight.saturating_add(
+		<Runtime as frame_system::Config>::BlockWeights::get()
+			.get(DispatchClass::Normal)
+			.base_extrinsic,
+	);
 	let timestamp_weight = pallet_timestamp::Call::set::<Runtime> { now: Default::default() }
 		.get_dispatch_info()
-		.weight;
+		.weight
+		.saturating_add(
+			<Runtime as frame_system::Config>::BlockWeights::get()
+				.get(DispatchClass::Mandatory)
+				.base_extrinsic,
+		);
 
 	executor_call(&mut t, "Core_execute_block", &block1.0, true).0.unwrap();
 
@@ -389,6 +398,7 @@ fn full_native_block_import_works() {
 	});
 
 	fees = t.execute_with(|| transfer_fee(&xt()));
+	let pot = t.execute_with(|| Treasury::pot());
 
 	executor_call(&mut t, "Core_execute_block", &block2.0, true).0.unwrap();
 
@@ -399,6 +409,14 @@ fn full_native_block_import_works() {
 		);
 		assert_eq!(Balances::total_balance(&bob()), 179 * DOLLARS - fees);
 		let events = vec![
+			EventRecord {
+				phase: Phase::Initialization,
+				event: RuntimeEvent::Treasury(pallet_treasury::Event::UpdatedInactive {
+					reactivated: 0,
+					deactivated: pot,
+				}),
+				topics: vec![],
+			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: RuntimeEvent::System(frame_system::Event::ExtrinsicSuccess {
@@ -645,7 +663,8 @@ fn deploying_wasm_contract_should_work() {
 	let transfer_code = wat::parse_str(CODE_TRANSFER).unwrap();
 	let transfer_ch = <Runtime as frame_system::Config>::Hashing::hash(&transfer_code);
 
-	let addr = pallet_contracts::Pallet::<Runtime>::contract_address(&charlie(), &transfer_ch, &[]);
+	let addr =
+		pallet_contracts::Pallet::<Runtime>::contract_address(&charlie(), &transfer_ch, &[], &[]);
 
 	let time = 42 * 1000;
 	let b = construct_block(

@@ -34,7 +34,8 @@ use crate::{
 	import_queue::{
 		buffered_link::{self, BufferedLinkReceiver, BufferedLinkSender},
 		import_single_block_metered, BlockImportError, BlockImportStatus, BoxBlockImport,
-		BoxJustificationImport, ImportQueue, IncomingBlock, Link, Origin, Verifier,
+		BoxJustificationImport, ImportQueue, ImportQueueService, IncomingBlock, Link,
+		RuntimeOrigin, Verifier, LOG_TARGET,
 	},
 	metrics::Metrics,
 };
@@ -42,10 +43,8 @@ use crate::{
 /// Interface to a basic block import queue that is importing blocks sequentially in a separate
 /// task, with plugable verification.
 pub struct BasicQueue<B: BlockT, Transaction> {
-	/// Channel to send justification import messages to the background task.
-	justification_sender: TracingUnboundedSender<worker_messages::ImportJustification<B>>,
-	/// Channel to send block import messages to the background task.
-	block_import_sender: TracingUnboundedSender<worker_messages::ImportBlocks<B>>,
+	/// Handle for sending justification and block import messages to the background task.
+	handle: BasicQueueHandle<B>,
 	/// Results coming from the worker task.
 	result_port: BufferedLinkReceiver<B>,
 	_phantom: PhantomData<Transaction>,
@@ -54,8 +53,7 @@ pub struct BasicQueue<B: BlockT, Transaction> {
 impl<B: BlockT, Transaction> Drop for BasicQueue<B, Transaction> {
 	fn drop(&mut self) {
 		// Flush the queue and close the receiver to terminate the future.
-		self.justification_sender.close_channel();
-		self.block_import_sender.close_channel();
+		self.handle.close();
 		self.result_port.close();
 	}
 }
@@ -71,7 +69,7 @@ impl<B: BlockT, Transaction: Send + 'static> BasicQueue<B, Transaction> {
 		spawner: &impl sp_core::traits::SpawnEssentialNamed,
 		prometheus_registry: Option<&Registry>,
 	) -> Self {
-		let (result_sender, result_port) = buffered_link::buffered_link();
+		let (result_sender, result_port) = buffered_link::buffered_link(100_000);
 
 		let metrics = prometheus_registry.and_then(|r| {
 			Metrics::register(r)
@@ -95,24 +93,50 @@ impl<B: BlockT, Transaction: Send + 'static> BasicQueue<B, Transaction> {
 			future.boxed(),
 		);
 
-		Self { justification_sender, block_import_sender, result_port, _phantom: PhantomData }
+		Self {
+			handle: BasicQueueHandle::new(justification_sender, block_import_sender),
+			result_port,
+			_phantom: PhantomData,
+		}
 	}
 }
 
-impl<B: BlockT, Transaction: Send> ImportQueue<B> for BasicQueue<B, Transaction> {
+#[derive(Clone)]
+struct BasicQueueHandle<B: BlockT> {
+	/// Channel to send justification import messages to the background task.
+	justification_sender: TracingUnboundedSender<worker_messages::ImportJustification<B>>,
+	/// Channel to send block import messages to the background task.
+	block_import_sender: TracingUnboundedSender<worker_messages::ImportBlocks<B>>,
+}
+
+impl<B: BlockT> BasicQueueHandle<B> {
+	pub fn new(
+		justification_sender: TracingUnboundedSender<worker_messages::ImportJustification<B>>,
+		block_import_sender: TracingUnboundedSender<worker_messages::ImportBlocks<B>>,
+	) -> Self {
+		Self { justification_sender, block_import_sender }
+	}
+
+	pub fn close(&mut self) {
+		self.justification_sender.close_channel();
+		self.block_import_sender.close_channel();
+	}
+}
+
+impl<B: BlockT> ImportQueueService<B> for BasicQueueHandle<B> {
 	fn import_blocks(&mut self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>) {
 		if blocks.is_empty() {
 			return
 		}
 
-		trace!(target: "sync", "Scheduling {} blocks for import", blocks.len());
+		trace!(target: LOG_TARGET, "Scheduling {} blocks for import", blocks.len());
 		let res = self
 			.block_import_sender
 			.unbounded_send(worker_messages::ImportBlocks(origin, blocks));
 
 		if res.is_err() {
 			log::error!(
-				target: "sync",
+				target: LOG_TARGET,
 				"import_blocks: Background import task is no longer alive"
 			);
 		}
@@ -120,7 +144,7 @@ impl<B: BlockT, Transaction: Send> ImportQueue<B> for BasicQueue<B, Transaction>
 
 	fn import_justifications(
 		&mut self,
-		who: Origin,
+		who: RuntimeOrigin,
 		hash: B::Hash,
 		number: NumberFor<B>,
 		justifications: Justifications,
@@ -132,16 +156,46 @@ impl<B: BlockT, Transaction: Send> ImportQueue<B> for BasicQueue<B, Transaction>
 
 			if res.is_err() {
 				log::error!(
-					target: "sync",
+					target: LOG_TARGET,
 					"import_justification: Background import task is no longer alive"
 				);
 			}
 		}
 	}
+}
 
+#[async_trait::async_trait]
+impl<B: BlockT, Transaction: Send> ImportQueue<B> for BasicQueue<B, Transaction> {
+	/// Get handle to [`ImportQueueService`].
+	fn service(&self) -> Box<dyn ImportQueueService<B>> {
+		Box::new(self.handle.clone())
+	}
+
+	/// Get a reference to the handle to [`ImportQueueService`].
+	fn service_ref(&mut self) -> &mut dyn ImportQueueService<B> {
+		&mut self.handle
+	}
+
+	/// Poll actions from network.
 	fn poll_actions(&mut self, cx: &mut Context, link: &mut dyn Link<B>) {
 		if self.result_port.poll_actions(cx, link).is_err() {
-			log::error!(target: "sync", "poll_actions: Background import task is no longer alive");
+			log::error!(
+				target: LOG_TARGET,
+				"poll_actions: Background import task is no longer alive"
+			);
+		}
+	}
+
+	/// Start asynchronous runner for import queue.
+	///
+	/// Takes an object implementing [`Link`] which allows the import queue to
+	/// influece the synchronization process.
+	async fn run(mut self, mut link: Box<dyn Link<B>>) {
+		loop {
+			if let Err(_) = self.result_port.next_action(&mut *link).await {
+				log::error!(target: "sync", "poll_actions: Background import task is no longer alive");
+				return
+			}
 		}
 	}
 }
@@ -152,7 +206,7 @@ mod worker_messages {
 
 	pub struct ImportBlocks<B: BlockT>(pub BlockOrigin, pub Vec<IncomingBlock<B>>);
 	pub struct ImportJustification<B: BlockT>(
-		pub Origin,
+		pub RuntimeOrigin,
 		pub B::Hash,
 		pub NumberFor<B>,
 		pub Justification,
@@ -180,7 +234,7 @@ async fn block_import_process<B: BlockT, Transaction: Send + 'static>(
 			Some(blocks) => blocks,
 			None => {
 				log::debug!(
-					target: "block-import",
+					target: LOG_TARGET,
 					"Stopping block import because the import channel was closed!",
 				);
 				return
@@ -222,10 +276,10 @@ impl<B: BlockT> BlockImportWorker<B> {
 		use worker_messages::*;
 
 		let (justification_sender, mut justification_port) =
-			tracing_unbounded("mpsc_import_queue_worker_justification");
+			tracing_unbounded("mpsc_import_queue_worker_justification", 100_000);
 
 		let (block_import_sender, block_import_port) =
-			tracing_unbounded("mpsc_import_queue_worker_blocks");
+			tracing_unbounded("mpsc_import_queue_worker_blocks", 100_000);
 
 		let mut worker = BlockImportWorker { result_sender, justification_import, metrics };
 
@@ -254,7 +308,7 @@ impl<B: BlockT> BlockImportWorker<B> {
 				// down and we should end this future.
 				if worker.result_sender.is_closed() {
 					log::debug!(
-						target: "block-import",
+						target: LOG_TARGET,
 						"Stopping block import because result channel was closed!",
 					);
 					return
@@ -267,7 +321,7 @@ impl<B: BlockT> BlockImportWorker<B> {
 							worker.import_justification(who, hash, number, justification).await,
 						None => {
 							log::debug!(
-								target: "block-import",
+								target: LOG_TARGET,
 								"Stopping block import because justification channel was closed!",
 							);
 							return
@@ -289,7 +343,7 @@ impl<B: BlockT> BlockImportWorker<B> {
 
 	async fn import_justification(
 		&mut self,
-		who: Origin,
+		who: RuntimeOrigin,
 		hash: B::Hash,
 		number: NumberFor<B>,
 		justification: Justification,
@@ -302,7 +356,7 @@ impl<B: BlockT> BlockImportWorker<B> {
 				.await
 				.map_err(|e| {
 					debug!(
-						target: "sync",
+						target: LOG_TARGET,
 						"Justification import failed for hash = {:?} with number = {:?} coming from node = {:?} with error: {}",
 						hash,
 						number,
@@ -356,7 +410,7 @@ async fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction: Send + 'stat
 		_ => Default::default(),
 	};
 
-	trace!(target: "sync", "Starting import of {} blocks {}", count, blocks_range);
+	trace!(target: LOG_TARGET, "Starting import of {} blocks {}", count, blocks_range);
 
 	let mut imported = 0;
 	let mut results = vec![];
@@ -396,7 +450,7 @@ async fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction: Send + 'stat
 
 		if import_result.is_ok() {
 			trace!(
-				target: "sync",
+				target: LOG_TARGET,
 				"Block imported successfully {:?} ({})",
 				block_number,
 				block_hash,
@@ -530,7 +584,7 @@ mod tests {
 
 		fn justification_imported(
 			&mut self,
-			_who: Origin,
+			_who: RuntimeOrigin,
 			hash: &Hash,
 			_number: BlockNumber,
 			_success: bool,
@@ -541,7 +595,7 @@ mod tests {
 
 	#[test]
 	fn prioritizes_finality_work_over_block_import() {
-		let (result_sender, mut result_port) = buffered_link::buffered_link();
+		let (result_sender, mut result_port) = buffered_link::buffered_link(100_000);
 
 		let (worker, mut finality_sender, mut block_import_sender) =
 			BlockImportWorker::new(result_sender, (), Box::new(()), Some(Box::new(())), None);

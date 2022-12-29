@@ -114,8 +114,8 @@
 //! If we reach the end of both phases (i.e. call to [`ElectionProvider::elect`] happens) and no
 //! good solution is queued, then the fallback strategy [`pallet::Config::Fallback`] is used to
 //! determine what needs to be done. The on-chain election is slow, and contains no balancing or
-//! reduction post-processing. [`NoFallback`] does nothing and enables [`Phase::Emergency`], which
-//! is a more *fail-safe* approach.
+//! reduction post-processing. If [`pallet::Config::Fallback`] fails, the next phase
+//! [`Phase::Emergency`] is enabled, which is a more *fail-safe* approach.
 //!
 //! ### Emergency Phase
 //!
@@ -231,22 +231,25 @@
 
 use codec::{Decode, Encode};
 use frame_election_provider_support::{
-	ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolution,
+	BoundedSupportsOf, ElectionDataProvider, ElectionProvider, ElectionProviderBase,
+	InstantElectionProvider, NposSolution,
 };
 use frame_support::{
 	dispatch::DispatchClass,
 	ensure,
-	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
+	traits::{Currency, DefensiveResult, Get, OnUnbalanced, ReservableCurrency},
 	weights::Weight,
+	DefaultNoBound, EqNoBound, PartialEqNoBound,
 };
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use scale_info::TypeInfo;
 use sp_arithmetic::{
-	traits::{Bounded, CheckedAdd, Zero},
+	traits::{CheckedAdd, Zero},
 	UpperOf,
 };
 use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized, ElectionScore, EvaluateSupport, Supports, VoteWeight,
+	assignment_ratio_to_staked_normalized, BoundedSupports, ElectionScore, EvaluateSupport,
+	Supports, VoteWeight,
 };
 use sp_runtime::{
 	transaction_validity::{
@@ -266,6 +269,7 @@ pub mod helpers;
 
 const LOG_TARGET: &str = "runtime::election-provider";
 
+pub mod migrations;
 pub mod signed;
 pub mod unsigned;
 pub mod weights;
@@ -289,7 +293,7 @@ pub type SolutionTargetIndexOf<T> = <SolutionOf<T> as NposSolution>::TargetIndex
 pub type SolutionAccuracyOf<T> =
 	<SolutionOf<<T as crate::Config>::MinerConfig> as NposSolution>::Accuracy;
 /// The fallback election type.
-pub type FallbackErrorOf<T> = <<T as crate::Config>::Fallback as ElectionProvider>::Error;
+pub type FallbackErrorOf<T> = <<T as crate::Config>::Fallback as ElectionProviderBase>::Error;
 
 /// Configuration for the benchmarks of the pallet.
 pub trait BenchmarkingConfig {
@@ -307,27 +311,6 @@ pub trait BenchmarkingConfig {
 	const MINER_MAXIMUM_VOTERS: u32;
 	/// Maximum number of targets expected. This is used only for memory-benchmarking.
 	const MAXIMUM_TARGETS: u32;
-}
-
-/// A fallback implementation that transitions the pallet to the emergency phase.
-pub struct NoFallback<T>(sp_std::marker::PhantomData<T>);
-
-impl<T: Config> ElectionProvider for NoFallback<T> {
-	type AccountId = T::AccountId;
-	type BlockNumber = T::BlockNumber;
-	type DataProvider = T::DataProvider;
-	type Error = &'static str;
-
-	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
-		// Do nothing, this will enable the emergency phase.
-		Err("NoFallback.")
-	}
-}
-
-impl<T: Config> InstantElectionProvider for NoFallback<T> {
-	fn elect_with_bounds(_: usize, _: usize) -> Result<Supports<T::AccountId>, Self::Error> {
-		Err("NoFallback.")
-	}
 }
 
 /// Current phase of the pallet.
@@ -437,13 +420,23 @@ impl<C: Default> Default for RawSolution<C> {
 }
 
 /// A checked solution, ready to be enacted.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default, TypeInfo)]
-pub struct ReadySolution<A> {
+#[derive(
+	PartialEqNoBound,
+	EqNoBound,
+	Clone,
+	Encode,
+	Decode,
+	RuntimeDebug,
+	DefaultNoBound,
+	scale_info::TypeInfo,
+)]
+#[scale_info(skip_type_params(T))]
+pub struct ReadySolution<T: Config> {
 	/// The final supports of the solution.
 	///
 	/// This is target-major vector, storing each winners, total backing, and each individual
 	/// backer.
-	pub supports: Supports<A>,
+	pub supports: BoundedSupports<T::AccountId, T::MaxWinners>,
 	/// The score of the solution.
 	///
 	/// This is needed to potentially challenge the solution.
@@ -457,7 +450,6 @@ pub struct ReadySolution<A> {
 ///
 /// These are stored together because they are often accessed together.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default, TypeInfo)]
-#[codec(mel_bound())]
 #[scale_info(skip_type_params(T))]
 pub struct RoundSnapshot<T: Config> {
 	/// All of the voters.
@@ -553,6 +545,12 @@ pub enum FeasibilityError {
 	InvalidRound,
 	/// Comparison against `MinimumUntrustedScore` failed.
 	UntrustedScoreTooLow,
+	/// Data Provider returned too many desired targets
+	TooManyDesiredTargets,
+	/// Conversion into bounded types failed.
+	///
+	/// Should never happen under correct configurations.
+	BoundedConversionFailed,
 }
 
 impl From<sp_npos_elections::Error> for FeasibilityError {
@@ -666,6 +664,13 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxElectableTargets: Get<SolutionTargetIndexOf<Self::MinerConfig>>;
 
+		/// The maximum number of winners that can be elected by this `ElectionProvider`
+		/// implementation.
+		///
+		/// Note: This must always be greater or equal to `T::DataProvider::desired_targets()`.
+		#[pallet::constant]
+		type MaxWinners: Get<u32>;
+
 		/// Handler for the slashed deposits.
 		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
@@ -683,6 +688,7 @@ pub mod pallet {
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
 			DataProvider = Self::DataProvider,
+			MaxWinners = Self::MaxWinners,
 		>;
 
 		/// Configuration of the governance-only fallback.
@@ -693,6 +699,7 @@ pub mod pallet {
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
 			DataProvider = Self::DataProvider,
+			MaxWinners = Self::MaxWinners,
 		>;
 
 		/// OCW election solution miner algorithm implementation.
@@ -700,7 +707,7 @@ pub mod pallet {
 
 		/// Origin that can control this pallet. Note that any action taken by this origin (such)
 		/// as providing an emergency solution is not checked. Thus, it must be a trusted origin.
-		type ForceOrigin: EnsureOrigin<Self::Origin>;
+		type ForceOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The configuration of benchmarking.
 		type BenchmarkingConfig: BenchmarkingConfig;
@@ -885,6 +892,7 @@ pub mod pallet {
 		/// putting their authoring reward at risk.
 		///
 		/// No deposit or reward is associated with this submission.
+		#[pallet::call_index(0)]
 		#[pallet::weight((
 			T::WeightInfo::submit_unsigned(
 				witness.voters,
@@ -934,6 +942,7 @@ pub mod pallet {
 		/// Dispatch origin must be aligned with `T::ForceOrigin`.
 		///
 		/// This check can be turned off by setting the value to `None`.
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::DbWeight::get().writes(1))]
 		pub fn set_minimum_untrusted_score(
 			origin: OriginFor<T>,
@@ -952,6 +961,7 @@ pub mod pallet {
 		/// The solution is not checked for any feasibility and is assumed to be trustworthy, as any
 		/// feasibility check itself can in principle cause the election process to fail (due to
 		/// memory/weight constrains).
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn set_emergency_election_result(
 			origin: OriginFor<T>,
@@ -960,9 +970,11 @@ pub mod pallet {
 			T::ForceOrigin::ensure_origin(origin)?;
 			ensure!(Self::current_phase().is_emergency(), <Error<T>>::CallNotAllowed);
 
+			// bound supports with T::MaxWinners
+			let supports = supports.try_into().map_err(|_| Error::<T>::TooManyWinners)?;
+
 			// Note: we don't `rotate_round` at this point; the next call to
 			// `ElectionProvider::elect` will succeed and take care of that.
-
 			let solution = ReadySolution {
 				supports,
 				score: Default::default(),
@@ -987,6 +999,7 @@ pub mod pallet {
 		///
 		/// A deposit is reserved and recorded for the solution. Based on the outcome, the solution
 		/// might be rewarded, slashed, or get all or a part of the deposit back.
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::submit())]
 		pub fn submit(
 			origin: OriginFor<T>,
@@ -1056,6 +1069,7 @@ pub mod pallet {
 		///
 		/// This can only be called when [`Phase::Emergency`] is enabled, as an alternative to
 		/// calling [`Call::set_emergency_election_result`].
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn governance_fallback(
 			origin: OriginFor<T>,
@@ -1065,17 +1079,20 @@ pub mod pallet {
 			T::ForceOrigin::ensure_origin(origin)?;
 			ensure!(Self::current_phase().is_emergency(), <Error<T>>::CallNotAllowed);
 
-			let maybe_max_voters = maybe_max_voters.map(|x| x as usize);
-			let maybe_max_targets = maybe_max_targets.map(|x| x as usize);
+			let supports =
+				T::GovernanceFallback::instant_elect(maybe_max_voters, maybe_max_targets).map_err(
+					|e| {
+						log!(error, "GovernanceFallback failed: {:?}", e);
+						Error::<T>::FallbackFailed
+					},
+				)?;
 
-			let supports = T::GovernanceFallback::elect_with_bounds(
-				maybe_max_voters.unwrap_or(Bounded::max_value()),
-				maybe_max_targets.unwrap_or(Bounded::max_value()),
-			)
-			.map_err(|e| {
-				log!(error, "GovernanceFallback failed: {:?}", e);
-				Error::<T>::FallbackFailed
-			})?;
+			// transform BoundedVec<_, T::GovernanceFallback::MaxWinners> into
+			// `BoundedVec<_, T::MaxWinners>`
+			let supports: BoundedVec<_, T::MaxWinners> = supports
+				.into_inner()
+				.try_into()
+				.defensive_map_err(|_| Error::<T>::BoundNotMet)?;
 
 			let solution = ReadySolution {
 				supports,
@@ -1146,6 +1163,10 @@ pub mod pallet {
 		CallNotAllowed,
 		/// The fallback failed
 		FallbackFailed,
+		/// Some bound not met
+		BoundNotMet,
+		/// Submitted solution has too many winners
+		TooManyWinners,
 	}
 
 	#[pallet::validate_unsigned]
@@ -1219,7 +1240,7 @@ pub mod pallet {
 	/// Current best solution, signed or unsigned, queued to be returned upon `elect`.
 	#[pallet::storage]
 	#[pallet::getter(fn queued_solution)]
-	pub type QueuedSolution<T: Config> = StorageValue<_, ReadySolution<T::AccountId>>;
+	pub type QueuedSolution<T: Config> = StorageValue<_, ReadySolution<T>>;
 
 	/// Snapshot data of the round.
 	///
@@ -1258,8 +1279,8 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type SignedSubmissionNextIndex<T: Config> = StorageValue<_, u32, ValueQuery>;
 
-	/// A sorted, bounded set of `(score, index)`, where each `index` points to a value in
-	/// `SignedSubmissions`.
+	/// A sorted, bounded vector of `(score, block_number, index)`, where each `index` points to a
+	/// value in `SignedSubmissions`.
 	///
 	/// We never need to process more than a single signed submission at a time. Signed submissions
 	/// can be quite large, so we're willing to pay the cost of multiple database accesses to access
@@ -1289,9 +1310,14 @@ pub mod pallet {
 	#[pallet::getter(fn minimum_untrusted_score)]
 	pub type MinimumUntrustedScore<T: Config> = StorageValue<_, ElectionScore>;
 
+	/// The current storage version.
+	///
+	/// v1: https://github.com/paritytech/substrate/pull/12237/
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::without_storage_info]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(PhantomData<T>);
 }
 
@@ -1380,31 +1406,28 @@ impl<T: Config> Pallet<T> {
 
 		let targets = T::DataProvider::electable_targets(Some(target_limit))
 			.map_err(ElectionError::DataProvider)?;
+
 		let voters = T::DataProvider::electing_voters(Some(voter_limit))
 			.map_err(ElectionError::DataProvider)?;
-		let mut desired_targets =
-			T::DataProvider::desired_targets().map_err(ElectionError::DataProvider)?;
 
-		// Defensive-only.
 		if targets.len() > target_limit || voters.len() > voter_limit {
-			debug_assert!(false, "Snapshot limit has not been respected.");
 			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
 		}
 
+		let mut desired_targets = <Pallet<T> as ElectionProviderBase>::desired_targets_checked()
+			.map_err(|e| ElectionError::DataProvider(e))?;
+
 		// If `desired_targets` > `targets.len()`, cap `desired_targets` to that level and emit a
 		// warning
-		let max_len = targets
-			.len()
-			.try_into()
-			.map_err(|_| ElectionError::DataProvider("Failed to convert usize"))?;
-		if desired_targets > max_len {
+		let max_desired_targets: u32 = targets.len() as u32;
+		if desired_targets > max_desired_targets {
 			log!(
 				warn,
 				"desired_targets: {} > targets.len(): {}, capping desired_targets",
 				desired_targets,
-				max_len
+				max_desired_targets
 			);
-			desired_targets = max_len;
+			desired_targets = max_desired_targets;
 		}
 
 		Ok((targets, voters, desired_targets))
@@ -1453,7 +1476,7 @@ impl<T: Config> Pallet<T> {
 	pub fn feasibility_check(
 		raw_solution: RawSolution<SolutionOf<T::MinerConfig>>,
 		compute: ElectionCompute,
-	) -> Result<ReadySolution<T::AccountId>, FeasibilityError> {
+	) -> Result<ReadySolution<T>, FeasibilityError> {
 		let RawSolution { solution, score, round } = raw_solution;
 
 		// First, check round.
@@ -1466,6 +1489,11 @@ impl<T: Config> Pallet<T> {
 			Self::desired_targets().ok_or(FeasibilityError::SnapshotUnavailable)?;
 
 		ensure!(winners.len() as u32 == desired_targets, FeasibilityError::WrongWinnerCount);
+		// Fail early if targets requested by data provider exceed maximum winners supported.
+		ensure!(
+			desired_targets <= <T as pallet::Config>::MaxWinners::get(),
+			FeasibilityError::TooManyDesiredTargets
+		);
 
 		// Ensure that the solution's score can pass absolute min-score.
 		let submitted_score = raw_solution.score;
@@ -1526,6 +1554,10 @@ impl<T: Config> Pallet<T> {
 		let known_score = supports.evaluate();
 		ensure!(known_score == score, FeasibilityError::InvalidScore);
 
+		// Size of winners in miner solution is equal to `desired_targets` <= `MaxWinners`.
+		let supports = supports
+			.try_into()
+			.defensive_map_err(|_| FeasibilityError::BoundedConversionFailed)?;
 		Ok(ReadySolution { supports, compute, score })
 	}
 
@@ -1545,7 +1577,7 @@ impl<T: Config> Pallet<T> {
 		Self::kill_snapshot();
 	}
 
-	fn do_elect() -> Result<Supports<T::AccountId>, ElectionError<T>> {
+	fn do_elect() -> Result<BoundedSupportsOf<Self>, ElectionError<T>> {
 		// We have to unconditionally try finalizing the signed phase here. There are only two
 		// possibilities:
 		//
@@ -1557,13 +1589,15 @@ impl<T: Config> Pallet<T> {
 		<QueuedSolution<T>>::take()
 			.ok_or(ElectionError::<T>::NothingQueued)
 			.or_else(|_| {
-				T::Fallback::elect()
-					.map(|supports| ReadySolution {
-						supports,
-						score: Default::default(),
-						compute: ElectionCompute::Fallback,
-					})
+				T::Fallback::instant_elect(None, None)
 					.map_err(|fe| ElectionError::Fallback(fe))
+					.and_then(|supports| {
+						Ok(ReadySolution {
+							supports,
+							score: Default::default(),
+							compute: ElectionCompute::Fallback,
+						})
+					})
 			})
 			.map(|ReadySolution { compute, score, supports }| {
 				Self::deposit_event(Event::ElectionFinalized { compute, score });
@@ -1592,13 +1626,23 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> ElectionProvider for Pallet<T> {
+impl<T: Config> ElectionProviderBase for Pallet<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = T::BlockNumber;
 	type Error = ElectionError<T>;
+	type MaxWinners = T::MaxWinners;
 	type DataProvider = T::DataProvider;
+}
 
-	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
+impl<T: Config> ElectionProvider for Pallet<T> {
+	fn ongoing() -> bool {
+		match Self::current_phase() {
+			Phase::Off => false,
+			_ => true,
+		}
+	}
+
+	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		match Self::do_elect() {
 			Ok(supports) => {
 				// All went okay, record the weight, put sign to be Off, clean snapshot, etc.
@@ -1827,13 +1871,12 @@ mod tests {
 	use super::*;
 	use crate::{
 		mock::{
-			multi_phase_events, raw_solution, roll_to, AccountId, ExtBuilder, MockWeightInfo,
-			MockedWeightInfo, MultiPhase, Origin, Runtime, SignedMaxSubmissions, System,
-			TargetIndex, Targets,
+			multi_phase_events, raw_solution, roll_to, roll_to_signed, roll_to_unsigned, AccountId,
+			ExtBuilder, MockWeightInfo, MockedWeightInfo, MultiPhase, Runtime, RuntimeOrigin,
+			SignedMaxSubmissions, System, TargetIndex, Targets,
 		},
 		Phase,
 	};
-	use frame_election_provider_support::ElectionProvider;
 	use frame_support::{assert_noop, assert_ok};
 	use sp_npos_elections::{BalancingConfig, Support};
 
@@ -1853,7 +1896,7 @@ mod tests {
 			assert!(MultiPhase::snapshot().is_none());
 			assert_eq!(MultiPhase::round(), 1);
 
-			roll_to(15);
+			roll_to_signed();
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 			assert!(MultiPhase::snapshot().is_some());
@@ -1864,7 +1907,7 @@ mod tests {
 			assert!(MultiPhase::snapshot().is_some());
 			assert_eq!(MultiPhase::round(), 1);
 
-			roll_to(25);
+			roll_to_unsigned();
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 			assert_eq!(
 				multi_phase_events(),
@@ -1897,11 +1940,29 @@ mod tests {
 			roll_to(44);
 			assert!(MultiPhase::current_phase().is_off());
 
-			roll_to(45);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			roll_to(55);
 			assert!(MultiPhase::current_phase().is_unsigned_open_at(55));
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::UnsignedPhaseStarted { round: 1 },
+					Event::ElectionFinalized {
+						compute: ElectionCompute::Fallback,
+						score: ElectionScore {
+							minimal_stake: 0,
+							sum_stake: 0,
+							sum_stake_squared: 0
+						}
+					},
+					Event::SignedPhaseStarted { round: 2 },
+					Event::UnsignedPhaseStarted { round: 2 }
+				]
+			);
 		})
 	}
 
@@ -1925,6 +1986,21 @@ mod tests {
 
 			assert!(MultiPhase::current_phase().is_off());
 			assert!(MultiPhase::snapshot().is_none());
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::UnsignedPhaseStarted { round: 1 },
+					Event::ElectionFinalized {
+						compute: ElectionCompute::Fallback,
+						score: ElectionScore {
+							minimal_stake: 0,
+							sum_stake: 0,
+							sum_stake_squared: 0
+						}
+					}
+				]
+			);
 		});
 	}
 
@@ -1937,7 +2013,7 @@ mod tests {
 			roll_to(19);
 			assert!(MultiPhase::current_phase().is_off());
 
-			roll_to(20);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 			assert!(MultiPhase::snapshot().is_some());
 
@@ -1948,6 +2024,21 @@ mod tests {
 
 			assert!(MultiPhase::current_phase().is_off());
 			assert!(MultiPhase::snapshot().is_none());
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::ElectionFinalized {
+						compute: ElectionCompute::Fallback,
+						score: ElectionScore {
+							minimal_stake: 0,
+							sum_stake: 0,
+							sum_stake_squared: 0
+						}
+					}
+				]
+			)
 		});
 	}
 
@@ -1970,6 +2061,14 @@ mod tests {
 			assert_ok!(MultiPhase::elect());
 
 			assert!(MultiPhase::current_phase().is_off());
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![Event::ElectionFinalized {
+					compute: ElectionCompute::Fallback,
+					score: ElectionScore { minimal_stake: 0, sum_stake: 0, sum_stake_squared: 0 }
+				}]
+			);
 		});
 	}
 
@@ -1978,16 +2077,13 @@ mod tests {
 		// An early termination in the signed phase, with no queued solution.
 		ExtBuilder::default().build_and_execute(|| {
 			// Signed phase started at block 15 and will end at 25.
-			roll_to(14);
-			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
-			roll_to(15);
+			roll_to_signed();
 			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 			assert_eq!(MultiPhase::round(), 1);
 
 			// An unexpected call to elect.
-			roll_to(20);
 			assert_ok!(MultiPhase::elect());
 
 			// We surely can't have any feasible solutions. This will cause an on-chain election.
@@ -2016,10 +2112,8 @@ mod tests {
 		// an early termination in the signed phase, with no queued solution.
 		ExtBuilder::default().build_and_execute(|| {
 			// signed phase started at block 15 and will end at 25.
-			roll_to(14);
-			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
-			roll_to(15);
+			roll_to_signed();
 			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 			assert_eq!(MultiPhase::round(), 1);
@@ -2030,11 +2124,13 @@ mod tests {
 					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
 					..Default::default()
 				};
-				assert_ok!(MultiPhase::submit(crate::mock::Origin::signed(99), Box::new(solution)));
+				assert_ok!(MultiPhase::submit(
+					crate::mock::RuntimeOrigin::signed(99),
+					Box::new(solution)
+				));
 			}
 
 			// an unexpected call to elect.
-			roll_to(20);
 			assert_ok!(MultiPhase::elect());
 
 			// all storage items must be cleared.
@@ -2044,20 +2140,45 @@ mod tests {
 			assert!(MultiPhase::desired_targets().is_none());
 			assert!(MultiPhase::queued_solution().is_none());
 			assert!(MultiPhase::signed_submissions().is_empty());
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::Slashed { account: 99, value: 5 },
+					Event::Slashed { account: 99, value: 5 },
+					Event::Slashed { account: 99, value: 5 },
+					Event::Slashed { account: 99, value: 5 },
+					Event::Slashed { account: 99, value: 5 },
+					Event::ElectionFinalized {
+						compute: ElectionCompute::Fallback,
+						score: ElectionScore {
+							minimal_stake: 0,
+							sum_stake: 0,
+							sum_stake_squared: 0
+						}
+					}
+				]
+			);
 		})
 	}
 
 	#[test]
 	fn check_events_with_compute_signed() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(14);
-			assert_eq!(MultiPhase::current_phase(), Phase::Off);
-
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			let solution = raw_solution();
-			assert_ok!(MultiPhase::submit(crate::mock::Origin::signed(99), Box::new(solution)));
+			assert_ok!(MultiPhase::submit(
+				crate::mock::RuntimeOrigin::signed(99),
+				Box::new(solution)
+			));
 
 			roll_to(30);
 			assert_ok!(MultiPhase::elect());
@@ -2085,7 +2206,7 @@ mod tests {
 	#[test]
 	fn check_events_with_compute_unsigned() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(25);
+			roll_to_unsigned();
 			assert!(MultiPhase::current_phase().is_unsigned());
 
 			// ensure we have snapshots in place.
@@ -2098,13 +2219,12 @@ mod tests {
 			// ensure this solution is valid.
 			assert!(MultiPhase::queued_solution().is_none());
 			assert_ok!(MultiPhase::submit_unsigned(
-				crate::mock::Origin::none(),
+				crate::mock::RuntimeOrigin::none(),
 				Box::new(solution),
 				witness
 			));
 			assert!(MultiPhase::queued_solution().is_some());
 
-			roll_to(30);
 			assert_ok!(MultiPhase::elect());
 
 			assert_eq!(
@@ -2132,7 +2252,7 @@ mod tests {
 	#[test]
 	fn fallback_strategy_works() {
 		ExtBuilder::default().onchain_fallback(true).build_and_execute(|| {
-			roll_to(25);
+			roll_to_unsigned();
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 
 			// Zilch solutions thus far, but we get a result.
@@ -2145,11 +2265,27 @@ mod tests {
 					(30, Support { total: 40, voters: vec![(2, 5), (4, 5), (30, 30)] }),
 					(40, Support { total: 60, voters: vec![(2, 5), (3, 10), (4, 5), (40, 40)] })
 				]
-			)
+			);
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::UnsignedPhaseStarted { round: 1 },
+					Event::ElectionFinalized {
+						compute: ElectionCompute::Fallback,
+						score: ElectionScore {
+							minimal_stake: 0,
+							sum_stake: 0,
+							sum_stake_squared: 0
+						}
+					}
+				]
+			);
 		});
 
 		ExtBuilder::default().onchain_fallback(false).build_and_execute(|| {
-			roll_to(25);
+			roll_to_unsigned();
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 
 			// Zilch solutions thus far.
@@ -2157,13 +2293,24 @@ mod tests {
 			assert_eq!(MultiPhase::elect().unwrap_err(), ElectionError::Fallback("NoFallback."));
 			// phase is now emergency.
 			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
+			// snapshot is still there until election finalizes.
+			assert!(MultiPhase::snapshot().is_some());
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::UnsignedPhaseStarted { round: 1 },
+					Event::ElectionFailed
+				]
+			);
 		})
 	}
 
 	#[test]
 	fn governance_fallback_works() {
 		ExtBuilder::default().onchain_fallback(false).build_and_execute(|| {
-			roll_to(25);
+			roll_to_unsigned();
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 
 			// Zilch solutions thus far.
@@ -2173,15 +2320,16 @@ mod tests {
 			// phase is now emergency.
 			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
 			assert!(MultiPhase::queued_solution().is_none());
+			assert!(MultiPhase::snapshot().is_some());
 
 			// no single account can trigger this
 			assert_noop!(
-				MultiPhase::governance_fallback(Origin::signed(99), None, None),
+				MultiPhase::governance_fallback(RuntimeOrigin::signed(99), None, None),
 				DispatchError::BadOrigin
 			);
 
 			// only root can
-			assert_ok!(MultiPhase::governance_fallback(Origin::root(), None, None));
+			assert_ok!(MultiPhase::governance_fallback(RuntimeOrigin::root(), None, None));
 			// something is queued now
 			assert!(MultiPhase::queued_solution().is_some());
 			// next election call with fix everything.;
@@ -2222,9 +2370,16 @@ mod tests {
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
 			// On-chain backup works though.
-			roll_to(29);
 			let supports = MultiPhase::elect().unwrap();
 			assert!(supports.len() > 0);
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![Event::ElectionFinalized {
+					compute: ElectionCompute::Fallback,
+					score: ElectionScore { minimal_stake: 0, sum_stake: 0, sum_stake_squared: 0 }
+				}]
+			);
 		});
 	}
 
@@ -2248,6 +2403,8 @@ mod tests {
 			let err = MultiPhase::elect().unwrap_err();
 			assert_eq!(err, ElectionError::Fallback("NoFallback."));
 			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
+
+			assert_eq!(multi_phase_events(), vec![Event::ElectionFailed]);
 		});
 	}
 
@@ -2261,7 +2418,7 @@ mod tests {
 			crate::mock::MaxElectingVoters::set(2);
 
 			// Signed phase opens just fine.
-			roll_to(15);
+			roll_to_signed();
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 
 			assert_eq!(
@@ -2274,7 +2431,7 @@ mod tests {
 	#[test]
 	fn untrusted_score_verification_is_respected() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 
 			// set the solution balancing to get the desired score.

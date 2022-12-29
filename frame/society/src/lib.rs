@@ -421,10 +421,10 @@ pub mod pallet {
 		type MaxLockDuration: Get<Self::BlockNumber>;
 
 		/// The origin that is allowed to call `found`.
-		type FounderSetOrigin: EnsureOrigin<Self::Origin>;
+		type FounderSetOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The origin that is allowed to make suspension judgements.
-		type SuspensionJudgementOrigin: EnsureOrigin<Self::Origin>;
+		type SuspensionJudgementOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The number of blocks between membership challenges.
 		#[pallet::constant]
@@ -711,6 +711,7 @@ pub mod pallet {
 		///
 		/// Total Complexity: O(M + B + C + logM + logB + X)
 		/// # </weight>
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn bid(origin: OriginFor<T>, value: BalanceOf<T, I>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -750,6 +751,7 @@ pub mod pallet {
 		///
 		/// Total Complexity: O(B + X)
 		/// # </weight>
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn unbid(origin: OriginFor<T>, pos: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -822,6 +824,7 @@ pub mod pallet {
 		///
 		/// Total Complexity: O(M + B + C + logM + logB + X)
 		/// # </weight>
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn vouch(
 			origin: OriginFor<T>,
@@ -873,6 +876,7 @@ pub mod pallet {
 		///
 		/// Total Complexity: O(B)
 		/// # </weight>
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn unvouch(origin: OriginFor<T>, pos: u32) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
@@ -914,6 +918,7 @@ pub mod pallet {
 		///
 		/// Total Complexity: O(M + logM + C)
 		/// # </weight>
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn vote(
 			origin: OriginFor<T>,
@@ -950,6 +955,7 @@ pub mod pallet {
 		///
 		/// Total Complexity: O(M + logM)
 		/// # </weight>
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn defender_vote(origin: OriginFor<T>, approve: bool) -> DispatchResult {
 			let voter = ensure_signed(origin)?;
@@ -984,6 +990,7 @@ pub mod pallet {
 		///
 		/// Total Complexity: O(M + logM + P + X)
 		/// # </weight>
+		#[pallet::call_index(6)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn payout(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -1026,6 +1033,7 @@ pub mod pallet {
 		///
 		/// Total Complexity: O(1)
 		/// # </weight>
+		#[pallet::call_index(7)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn found(
 			origin: OriginFor<T>,
@@ -1060,6 +1068,7 @@ pub mod pallet {
 		///
 		/// Total Complexity: O(1)
 		/// # </weight>
+		#[pallet::call_index(8)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn unfound(origin: OriginFor<T>) -> DispatchResult {
 			let founder = ensure_signed(origin)?;
@@ -1105,6 +1114,7 @@ pub mod pallet {
 		///
 		/// Total Complexity: O(M + logM + B)
 		/// # </weight>
+		#[pallet::call_index(9)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn judge_suspended_member(
 			origin: OriginFor<T>,
@@ -1182,6 +1192,7 @@ pub mod pallet {
 		///
 		/// Total Complexity: O(M + logM + B + X)
 		/// # </weight>
+		#[pallet::call_index(10)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn judge_suspended_candidate(
 			origin: OriginFor<T>,
@@ -1255,6 +1266,7 @@ pub mod pallet {
 		///
 		/// Total Complexity: O(1)
 		/// # </weight>
+		#[pallet::call_index(11)]
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn set_max_members(origin: OriginFor<T>, max: u32) -> DispatchResult {
 			ensure_root(origin)?;
@@ -1268,19 +1280,19 @@ pub mod pallet {
 
 /// Simple ensure origin struct to filter for the founder account.
 pub struct EnsureFounder<T>(sp_std::marker::PhantomData<T>);
-impl<T: Config> EnsureOrigin<T::Origin> for EnsureFounder<T> {
+impl<T: Config> EnsureOrigin<T::RuntimeOrigin> for EnsureFounder<T> {
 	type Success = T::AccountId;
-	fn try_origin(o: T::Origin) -> Result<Self::Success, T::Origin> {
+	fn try_origin(o: T::RuntimeOrigin) -> Result<Self::Success, T::RuntimeOrigin> {
 		o.into().and_then(|o| match (o, Founder::<T>::get()) {
 			(frame_system::RawOrigin::Signed(ref who), Some(ref f)) if who == f => Ok(who.clone()),
-			(r, _) => Err(T::Origin::from(r)),
+			(r, _) => Err(T::RuntimeOrigin::from(r)),
 		})
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn try_successful_origin() -> Result<T::Origin, ()> {
+	fn try_successful_origin() -> Result<T::RuntimeOrigin, ()> {
 		let founder = Founder::<T>::get().ok_or(())?;
-		Ok(T::Origin::from(frame_system::RawOrigin::Signed(founder)))
+		Ok(T::RuntimeOrigin::from(frame_system::RawOrigin::Signed(founder)))
 	}
 }
 

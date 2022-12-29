@@ -17,7 +17,7 @@
 
 use frame_support::{
 	parameter_types,
-	traits::{ConstU32, ConstU64, GenesisBuild},
+	traits::{ConstU32, ConstU64, GenesisBuild, WithdrawReasons},
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -67,7 +67,7 @@ impl frame_system::Config for Test {
 	type OnNewAccount = ();
 	type OnSetCode = ();
 	type MaxConsumers = frame_support::traits::ConstU32<16>;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type PalletInfo = PalletInfo;
 	type SS58Prefix = ();
 	type SystemWeightInfo = ();
@@ -87,6 +87,8 @@ impl pallet_balances::Config for Test {
 }
 parameter_types! {
 	pub const MinVestedTransfer: u64 = 256 * 2;
+	pub UnvestedFundsAllowedWithdrawReasons: WithdrawReasons =
+		WithdrawReasons::except(WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE);
 	pub static ExistentialDeposit: u64 = 0;
 }
 impl Config for Test {
@@ -96,6 +98,7 @@ impl Config for Test {
 	const MAX_VESTING_SCHEDULES: u32 = 3;
 	type MinVestedTransfer = MinVestedTransfer;
 	type WeightInfo = ();
+	type UnvestedFundsAllowedWithdrawReasons = UnvestedFundsAllowedWithdrawReasons;
 }
 
 pub struct ExtBuilder {

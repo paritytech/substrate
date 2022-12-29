@@ -365,26 +365,48 @@ fn create_project_cargo_toml(
 	);
 }
 
-/// Find a package by the given `manifest_path` in the metadata.
+/// Find a package by the given `manifest_path` in the metadata. In case it can't be found by its
+/// manifest_path, fallback to finding it by name; this is necessary during publish because the
+/// package's manifest path will be *generated* within a specific packaging directory, thus it won't
+/// be found by its original path anymore.
 ///
 /// Panics if the package could not be found.
 fn find_package_by_manifest_path<'a>(
+	pkg_name: &str,
 	manifest_path: &Path,
 	crate_metadata: &'a cargo_metadata::Metadata,
 ) -> &'a cargo_metadata::Package {
-	crate_metadata
+	if let Some(pkg) = crate_metadata.packages.iter().find(|p| p.manifest_path == manifest_path) {
+		return pkg
+	}
+
+	let pkgs_by_name = crate_metadata
 		.packages
 		.iter()
-		.find(|p| p.manifest_path == manifest_path)
-		.expect("Wasm project exists in its own metadata; qed")
+		.filter(|p| p.name == pkg_name)
+		.collect::<Vec<_>>();
+
+	if let Some(pkg) = pkgs_by_name.first() {
+		if pkgs_by_name.len() > 1 {
+			panic!(
+				"Found multiple packages matching the name {pkg_name} ({manifest_path:?}): {:?}",
+				pkgs_by_name
+			);
+		} else {
+			return pkg
+		}
+	} else {
+		panic!("Failed to find entry for package {pkg_name} ({manifest_path:?}).");
+	}
 }
 
 /// Get a list of enabled features for the project.
 fn project_enabled_features(
+	pkg_name: &str,
 	cargo_manifest: &Path,
 	crate_metadata: &cargo_metadata::Metadata,
 ) -> Vec<String> {
-	let package = find_package_by_manifest_path(cargo_manifest, crate_metadata);
+	let package = find_package_by_manifest_path(pkg_name, cargo_manifest, crate_metadata);
 
 	let std_enabled = package.features.get("std");
 
@@ -427,10 +449,11 @@ fn project_enabled_features(
 
 /// Returns if the project has the `runtime-wasm` feature
 fn has_runtime_wasm_feature_declared(
+	pkg_name: &str,
 	cargo_manifest: &Path,
 	crate_metadata: &cargo_metadata::Metadata,
 ) -> bool {
-	let package = find_package_by_manifest_path(cargo_manifest, crate_metadata);
+	let package = find_package_by_manifest_path(pkg_name, cargo_manifest, crate_metadata);
 
 	package.features.keys().any(|k| k == "runtime-wasm")
 }
@@ -455,9 +478,10 @@ fn create_project(
 	fs::create_dir_all(wasm_project_folder.join("src"))
 		.expect("Wasm project dir create can not fail; qed");
 
-	let mut enabled_features = project_enabled_features(project_cargo_toml, crate_metadata);
+	let mut enabled_features =
+		project_enabled_features(&crate_name, project_cargo_toml, crate_metadata);
 
-	if has_runtime_wasm_feature_declared(project_cargo_toml, crate_metadata) {
+	if has_runtime_wasm_feature_declared(&crate_name, project_cargo_toml, crate_metadata) {
 		enabled_features.push("runtime-wasm".into());
 	}
 
@@ -656,50 +680,39 @@ fn compact_wasm_file(
 	project: &Path,
 	profile: Profile,
 	cargo_manifest: &Path,
-	wasm_binary_name: Option<String>,
+	out_name: Option<String>,
 ) -> (Option<WasmBinary>, Option<WasmBinary>, WasmBinaryBloaty) {
-	let default_wasm_binary_name = get_wasm_binary_name(cargo_manifest);
-	let wasm_file = project
+	let default_out_name = get_wasm_binary_name(cargo_manifest);
+	let out_name = out_name.unwrap_or_else(|| default_out_name.clone());
+	let in_path = project
 		.join("target/wasm32-unknown-unknown")
 		.join(profile.directory())
-		.join(format!("{}.wasm", default_wasm_binary_name));
+		.join(format!("{}.wasm", default_out_name));
 
-	let wasm_compact_file = if profile.wants_compact() {
-		let wasm_compact_file = project.join(format!(
-			"{}.compact.wasm",
-			wasm_binary_name.clone().unwrap_or_else(|| default_wasm_binary_name.clone()),
-		));
-		wasm_gc::garbage_collect_file(&wasm_file, &wasm_compact_file)
+	let (wasm_compact_path, wasm_compact_compressed_path) = if profile.wants_compact() {
+		let wasm_compact_path = project.join(format!("{}.compact.wasm", out_name,));
+		wasm_opt::OptimizationOptions::new_opt_level_0()
+			.mvp_features_only()
+			.debug_info(true)
+			.add_pass(wasm_opt::Pass::StripDwarf)
+			.run(&in_path, &wasm_compact_path)
 			.expect("Failed to compact generated WASM binary.");
-		Some(WasmBinary(wasm_compact_file))
-	} else {
-		None
-	};
 
-	let wasm_compact_compressed_file = wasm_compact_file.as_ref().and_then(|compact_binary| {
-		let file_name =
-			wasm_binary_name.clone().unwrap_or_else(|| default_wasm_binary_name.clone());
-
-		let wasm_compact_compressed_file =
-			project.join(format!("{}.compact.compressed.wasm", file_name));
-
-		if compress_wasm(&compact_binary.0, &wasm_compact_compressed_file) {
-			Some(WasmBinary(wasm_compact_compressed_file))
+		let wasm_compact_compressed_path =
+			project.join(format!("{}.compact.compressed.wasm", out_name));
+		if compress_wasm(&wasm_compact_path, &wasm_compact_compressed_path) {
+			(Some(WasmBinary(wasm_compact_path)), Some(WasmBinary(wasm_compact_compressed_path)))
 		} else {
-			None
+			(Some(WasmBinary(wasm_compact_path)), None)
 		}
-	});
-
-	let bloaty_file_name = if let Some(name) = wasm_binary_name {
-		format!("{}.wasm", name)
 	} else {
-		format!("{}.wasm", default_wasm_binary_name)
+		(None, None)
 	};
 
-	let bloaty_file = project.join(bloaty_file_name);
-	fs::copy(wasm_file, &bloaty_file).expect("Copying the bloaty file to the project dir.");
+	let bloaty_path = project.join(format!("{}.wasm", out_name));
+	fs::copy(in_path, &bloaty_path).expect("Copying the bloaty file to the project dir.");
 
-	(wasm_compact_file, wasm_compact_compressed_file, WasmBinaryBloaty(bloaty_file))
+	(wasm_compact_path, wasm_compact_compressed_path, WasmBinaryBloaty(bloaty_path))
 }
 
 fn compress_wasm(wasm_binary_path: &Path, compressed_binary_out_path: &Path) -> bool {

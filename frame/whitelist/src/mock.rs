@@ -58,7 +58,7 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -96,7 +96,6 @@ impl pallet_preimage::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
 	type ManagerOrigin = EnsureRoot<Self::AccountId>;
-	type MaxSize = ConstU32<{ 4096 * 1024 }>; // PreimageMaxSize Taken from Polkadot as reference.
 	type BaseDeposit = ConstU64<1>;
 	type ByteDeposit = ConstU64<1>;
 	type WeightInfo = ();
@@ -107,7 +106,7 @@ impl pallet_whitelist::Config for Test {
 	type RuntimeCall = RuntimeCall;
 	type WhitelistOrigin = EnsureRoot<Self::AccountId>;
 	type DispatchWhitelistedOrigin = EnsureRoot<Self::AccountId>;
-	type PreimageProvider = Preimage;
+	type Preimages = Preimage;
 	type WeightInfo = ();
 }
 
