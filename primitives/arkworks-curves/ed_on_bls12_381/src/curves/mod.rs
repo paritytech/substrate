@@ -86,6 +86,44 @@ impl TECurveConfig for JubjubConfig {
 	fn mul_by_a(elem: Self::BaseField) -> Self::BaseField {
 		-elem
 	}
+
+	fn mul_projective(base: &Projective<Self>, scalar: &[u64]) -> Projective<Self> {
+		let mut serialized_base = vec![0; base.serialized_size(Compress::Yes)];
+		let mut cursor = Cursor::new(&mut serialized_base[..]);
+		base.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
+
+		let mut serialized_scalar = vec![0; scalar.serialized_size(Compress::Yes)];
+		let mut cursor = Cursor::new(&mut serialized_scalar[..]);
+		scalar.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
+
+		let result =
+			sp_io::crypto::ed_on_bls12_381_te_mul_projective(serialized_base, serialized_scalar);
+
+		let cursor = Cursor::new(&result[..]);
+
+		let result =
+			Projective::<Self>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+		result.into()
+	}
+
+	fn mul_affine(base: &Affine<Self>, scalar: &[u64]) -> Projective<Self> {
+		let mut serialized_base = vec![0; base.serialized_size(Compress::Yes)];
+		let mut cursor = Cursor::new(&mut serialized_base[..]);
+		base.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
+
+		let mut serialized_scalar = vec![0; scalar.serialized_size(Compress::Yes)];
+		let mut cursor = Cursor::new(&mut serialized_scalar[..]);
+		scalar.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
+
+		let result =
+			sp_io::crypto::ed_on_bls12_381_te_mul_affine(serialized_base, serialized_scalar);
+
+		let cursor = Cursor::new(&result[..]);
+
+		let result =
+			Projective::<Self>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+		result.into()
+	}
 }
 
 impl MontCurveConfig for JubjubConfig {
@@ -155,7 +193,7 @@ impl SWCurveConfig for JubjubConfig {
 		scalar.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
 
 		let result =
-			sp_io::crypto::ed_on_bls12_381_mul_projective(serialized_base, serialized_scalar);
+			sp_io::crypto::ed_on_bls12_381_sw_mul_projective(serialized_base, serialized_scalar);
 
 		let cursor = Cursor::new(&result[..]);
 
@@ -173,7 +211,8 @@ impl SWCurveConfig for JubjubConfig {
 		let mut cursor = Cursor::new(&mut serialized_scalar[..]);
 		scalar.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
 
-		let result = sp_io::crypto::ed_on_bls12_381_mul_affine(serialized_base, serialized_scalar);
+		let result =
+			sp_io::crypto::ed_on_bls12_381_sw_mul_affine(serialized_base, serialized_scalar);
 
 		let cursor = Cursor::new(&result[..]);
 

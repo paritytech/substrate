@@ -1257,13 +1257,23 @@ pub trait Crypto {
 	// }
 
 	/// Compute affine multiplication on ed_on_bls12_381
-	fn ed_on_bls12_381_mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-		sp_arkworks::ed_on_bls12_381::mul_affine(base, scalar)
+	fn ed_on_bls12_381_sw_mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
+		sp_arkworks::ed_on_bls12_381::sw_mul_affine(base, scalar)
 	}
 
 	/// Compute projective multiplication on ed_on_bls12_381
-	fn ed_on_bls12_381_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-		sp_arkworks::ed_on_bls12_381::mul_projective(base, scalar)
+	fn ed_on_bls12_381_te_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
+		sp_arkworks::ed_on_bls12_381::te_mul_projective(base, scalar)
+	}
+
+	/// Compute affine multiplication on ed_on_bls12_381
+	fn ed_on_bls12_381_te_mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
+		sp_arkworks::ed_on_bls12_381::te_mul_affine(base, scalar)
+	}
+
+	/// Compute projective multiplication on ed_on_bls12_381
+	fn ed_on_bls12_381_sw_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
+		sp_arkworks::ed_on_bls12_381::sw_mul_projective(base, scalar)
 	}
 
 	/// Compute msm on ed_on_bls12_381

@@ -22,6 +22,8 @@
 use ark_ec::{
 	models::CurveConfig,
 	short_weierstrass::{self, Affine as SWAffine, SWCurveConfig},
+	twisted_edwards,
+	twisted_edwards::{Affine as TEAffine, TECurveConfig},
 	VariableBaseMSM,
 };
 use ark_ed_on_bls12_381::{JubjubConfig, SWProjective};
@@ -30,11 +32,14 @@ use ark_std::io::Cursor;
 use sp_std::{vec, vec::Vec};
 
 /// Compute a scalar multiplication on G2 through arkworks
-pub fn mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
+pub fn sw_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	let cursor = Cursor::new(base);
-	let base =
-		short_weierstrass::Projective::<JubjubConfig>::deserialize_with_mode(cursor, Compress::Yes, Validate::No)
-			.unwrap();
+	let base = short_weierstrass::Projective::<JubjubConfig>::deserialize_with_mode(
+		cursor,
+		Compress::Yes,
+		Validate::No,
+	)
+	.unwrap();
 	let cursor = Cursor::new(scalar);
 	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
 	let res = <JubjubConfig as SWCurveConfig>::mul_projective(&base, &scalar);
@@ -45,13 +50,45 @@ pub fn mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 }
 
 /// Compute a scalar multiplication through arkworks
-pub fn mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
+pub fn sw_mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	let cursor = Cursor::new(base);
 	let base = SWAffine::<JubjubConfig>::deserialize_with_mode(cursor, Compress::Yes, Validate::No)
 		.unwrap();
 	let cursor = Cursor::new(scalar);
 	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
 	let res = <JubjubConfig as SWCurveConfig>::mul_affine(&base, &scalar);
+	let mut serialized = vec![0; res.serialized_size(Compress::Yes)];
+	let mut cursor = Cursor::new(&mut serialized[..]);
+	res.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
+	serialized
+}
+
+/// Compute a scalar multiplication on G2 through arkworks
+pub fn te_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
+	let cursor = Cursor::new(base);
+	let base = twisted_edwards::Projective::<JubjubConfig>::deserialize_with_mode(
+		cursor,
+		Compress::Yes,
+		Validate::No,
+	)
+	.unwrap();
+	let cursor = Cursor::new(scalar);
+	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+	let res = <JubjubConfig as TECurveConfig>::mul_projective(&base, &scalar);
+	let mut serialized = vec![0; res.serialized_size(Compress::Yes)];
+	let mut cursor = Cursor::new(&mut serialized[..]);
+	res.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
+	serialized
+}
+
+/// Compute a scalar multiplication through arkworks
+pub fn te_mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
+	let cursor = Cursor::new(base);
+	let base = TEAffine::<JubjubConfig>::deserialize_with_mode(cursor, Compress::Yes, Validate::No)
+		.unwrap();
+	let cursor = Cursor::new(scalar);
+	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
+	let res = <JubjubConfig as TECurveConfig>::mul_affine(&base, &scalar);
 	let mut serialized = vec![0; res.serialized_size(Compress::Yes)];
 	let mut cursor = Cursor::new(&mut serialized[..]);
 	res.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
