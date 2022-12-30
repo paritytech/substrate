@@ -1436,7 +1436,7 @@ where
 		state_request_protocol_name: ProtocolName,
 		warp_sync_protocol_name: Option<ProtocolName>,
 	) -> Result<(Self, ChainSyncInterfaceHandle<B>, NonDefaultSetConfig), ClientError> {
-		let (tx, service_rx) = tracing_unbounded("mpsc_chain_sync");
+		let (tx, service_rx) = tracing_unbounded("mpsc_chain_sync", 100_000);
 		let block_announce_config = Self::get_block_announce_proto_config(
 			protocol_id,
 			fork_id,

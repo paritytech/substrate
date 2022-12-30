@@ -404,11 +404,7 @@ fn expand_impls(def: &mut EnvDef) -> TokenStream2 {
 	let dummy_impls = expand_functions(def, false, quote! { () });
 
 	quote! {
-		impl<'a, E> crate::wasm::Environment<crate::wasm::runtime::Runtime<'a, E>> for Env
-		where
-			E: Ext,
-			<E::T as ::frame_system::Config>::AccountId:
-				::sp_core::crypto::UncheckedFrom<<E::T as ::frame_system::Config>::Hash> + ::core::convert::AsRef<[::core::primitive::u8]>,
+		impl<'a, E: Ext> crate::wasm::Environment<crate::wasm::runtime::Runtime<'a, E>> for Env
 		{
 			fn define(store: &mut ::wasmi::Store<crate::wasm::Runtime<E>>, linker: &mut ::wasmi::Linker<crate::wasm::Runtime<E>>, allow_unstable: bool) -> Result<(), ::wasmi::errors::LinkerError> {
 				#impls

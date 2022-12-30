@@ -1569,7 +1569,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	}
 
 	fn force_unstake(who: Self::AccountId) -> sp_runtime::DispatchResult {
-		let num_slashing_spans = Self::slashing_spans(&who).iter().count() as u32;
+		let num_slashing_spans = Self::slashing_spans(&who).map_or(0, |s| s.iter().count() as u32);
 		Self::force_unstake(RawOrigin::Root.into(), who.clone(), num_slashing_spans)
 	}
 

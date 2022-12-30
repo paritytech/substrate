@@ -40,6 +40,7 @@ use futures::{channel::mpsc, prelude::*};
 use libp2p::Multiaddr;
 use log::{error, warn};
 use parking_lot::Mutex;
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use serde::Serialize;
 use std::{
 	collections::{
@@ -147,8 +148,8 @@ pub struct SysInfo {
 pub struct TelemetryWorker {
 	message_receiver: mpsc::Receiver<TelemetryMessage>,
 	message_sender: mpsc::Sender<TelemetryMessage>,
-	register_receiver: mpsc::UnboundedReceiver<Register>,
-	register_sender: mpsc::UnboundedSender<Register>,
+	register_receiver: TracingUnboundedReceiver<Register>,
+	register_sender: TracingUnboundedSender<Register>,
 	id_counter: Arc<atomic::AtomicU64>,
 }
 
@@ -163,7 +164,8 @@ impl TelemetryWorker {
 		// error as early as possible.
 		let _transport = initialize_transport()?;
 		let (message_sender, message_receiver) = mpsc::channel(buffer_size);
-		let (register_sender, register_receiver) = mpsc::unbounded();
+		let (register_sender, register_receiver) =
+			tracing_unbounded("mpsc_telemetry_register", 10_000);
 
 		Ok(Self {
 			message_receiver,
@@ -360,7 +362,7 @@ impl TelemetryWorker {
 #[derive(Debug, Clone)]
 pub struct TelemetryWorkerHandle {
 	message_sender: mpsc::Sender<TelemetryMessage>,
-	register_sender: mpsc::UnboundedSender<Register>,
+	register_sender: TracingUnboundedSender<Register>,
 	id_counter: Arc<atomic::AtomicU64>,
 }
 
@@ -386,7 +388,7 @@ impl TelemetryWorkerHandle {
 #[derive(Debug)]
 pub struct Telemetry {
 	message_sender: mpsc::Sender<TelemetryMessage>,
-	register_sender: mpsc::UnboundedSender<Register>,
+	register_sender: TracingUnboundedSender<Register>,
 	id: Id,
 	connection_notifier: TelemetryConnectionNotifier,
 	endpoints: Option<TelemetryEndpoints>,
@@ -460,7 +462,7 @@ impl TelemetryHandle {
 /// (re-)establishes.
 #[derive(Clone, Debug)]
 pub struct TelemetryConnectionNotifier {
-	register_sender: mpsc::UnboundedSender<Register>,
+	register_sender: TracingUnboundedSender<Register>,
 	addresses: Vec<Multiaddr>,
 }
 
