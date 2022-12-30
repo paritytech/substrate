@@ -205,7 +205,7 @@ impl SyncEventStream for TestSync {
 
 impl NetworkBlock<Hash, NumberFor<Block>> for TestSync {
 	fn announce_block(&self, _hash: Hash, _data: Option<Vec<u8>>) {
-		todo!();
+		unimplemented!();
 	}
 
 	fn new_best_block_imported(&self, _hash: Hash, _number: NumberFor<Block>) {
