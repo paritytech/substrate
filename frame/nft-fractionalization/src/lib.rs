@@ -42,11 +42,9 @@ pub mod pallet {
 		dispatch::DispatchResult,
 		sp_runtime::traits::{AccountIdConversion, AtLeast32BitUnsigned, StaticLookup},
 		traits::{
-			fungibles::{
-				metadata::Mutate as MutateMetadata, Create, Destroy, Inspect, Mutate, Transfer,
-			},
+			fungibles::{metadata::Mutate as MutateMetadata, Create, Destroy, Inspect, Mutate},
 			tokens::nonfungibles_v2::{
-				Inspect as NonFungiblesInspect, Transfer as NonFungiblesTransfer,
+				Inspect as NonFungiblesInspect, LockableNonfungible, Transfer,
 			},
 			Currency,
 		},
@@ -101,14 +99,15 @@ pub mod pallet {
 			+ Create<Self::AccountId>
 			+ Destroy<Self::AccountId>
 			+ Mutate<Self::AccountId>
-			+ MutateMetadata<Self::AccountId>
-			+ Transfer<Self::AccountId>;
+			+ MutateMetadata<Self::AccountId>;
 
 		type Nfts: NonFungiblesInspect<
 				Self::AccountId,
 				ItemId = Self::NftId,
 				CollectionId = Self::NftCollectionId,
-			> + NonFungiblesTransfer<Self::AccountId>;
+			> + Transfer<Self::AccountId>;
+
+		type NftsLocker: LockableNonfungible<Self::NftCollectionId, Self::NftId>;
 
 		#[pallet::constant]
 		type PalletId: Get<PalletId>;
@@ -173,7 +172,7 @@ pub mod pallet {
 
 			let pallet_account = Self::get_pallet_account();
 
-			Self::do_lock_nft(nft_collection_id, nft_id, &pallet_account)?;
+			Self::do_lock_nft(nft_collection_id, nft_id)?;
 			Self::do_create_asset(asset_id, pallet_account)?;
 			Self::do_mint_asset(asset_id, &beneficiary, fractions)?;
 
@@ -230,17 +229,13 @@ pub mod pallet {
 		///
 		/// This actually does computation. If you need to keep using it, then make sure you cache
 		/// the value and only call this once.
-		pub fn get_pallet_account() -> T::AccountId {
+		fn get_pallet_account() -> T::AccountId {
 			T::PalletId::get().into_account_truncating()
 		}
 
 		/// Transfer the NFT from the account holding that NFT to the pallet's account.
-		fn do_lock_nft(
-			nft_collection_id: T::NftCollectionId,
-			nft_id: T::NftId,
-			pallet_account: &T::AccountId,
-		) -> DispatchResult {
-			T::Nfts::transfer(&nft_collection_id, &nft_id, pallet_account)
+		fn do_lock_nft(nft_collection_id: T::NftCollectionId, nft_id: T::NftId) -> DispatchResult {
+			T::NftsLocker::lock(&nft_collection_id, &nft_id)
 		}
 
 		/// Transfer the NFT to the account returning the tokens.
@@ -249,6 +244,7 @@ pub mod pallet {
 			nft_id: T::NftId,
 			account: &T::AccountId,
 		) -> DispatchResult {
+			T::NftsLocker::unlock(&nft_collection_id, &nft_id)?;
 			T::Nfts::transfer(&nft_collection_id, &nft_id, account)
 		}
 

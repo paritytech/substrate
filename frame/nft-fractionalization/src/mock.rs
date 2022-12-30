@@ -22,15 +22,22 @@ use crate as pallet_nft_fractionalization;
 
 use frame_support::{
 	construct_runtime, parameter_types,
-	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64},
+	traits::{
+		tokens::{
+			nonfungibles_v2::{Inspect, LockableNonfungible, Mutate},
+			AttributeNamespace,
+		},
+		AsEnsureOriginWithArg, ConstU32, ConstU64, Locker,
+	},
 	PalletId,
 };
 use frame_system::EnsureSigned;
-use pallet_nfts::PalletFeatures;
+use pallet_nfts::{ItemConfig, PalletFeatures};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	DispatchResult,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -116,6 +123,15 @@ parameter_types! {
 	pub storage Features: PalletFeatures = PalletFeatures::all_enabled();
 }
 
+const LOCKED_NFT_KEY: &[u8; 6] = b"locked";
+
+pub struct TestLocker;
+impl Locker<u32, u32> for TestLocker {
+	fn is_locked(collection: u32, item: u32) -> bool {
+		Nfts::attribute(&collection, &item, &AttributeNamespace::Pallet, LOCKED_NFT_KEY).is_some()
+	}
+}
+
 impl pallet_nfts::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type CollectionId = u32;
@@ -123,7 +139,7 @@ impl pallet_nfts::Config for Test {
 	type Currency = Balances;
 	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<u64>>;
 	type ForceOrigin = frame_system::EnsureRoot<u64>;
-	type Locker = ();
+	type Locker = TestLocker;
 	type CollectionDeposit = ConstU64<2>;
 	type ItemDeposit = ConstU64<1>;
 	type MetadataDepositBase = ConstU64<1>;
@@ -146,6 +162,25 @@ parameter_types! {
 	pub const NftFractionsPalletId: PalletId = PalletId(*b"fraction");
 }
 
+pub struct TestLockableNonfungible;
+impl LockableNonfungible<u32, u32> for TestLockableNonfungible {
+	fn lock(collection: &u32, item: &u32) -> DispatchResult {
+		<Nfts as Mutate<<Test as frame_system::Config>::AccountId, ItemConfig>>::set_attribute(
+			collection,
+			item,
+			LOCKED_NFT_KEY,
+			&[1],
+		)
+	}
+	fn unlock(collection: &u32, item: &u32) -> DispatchResult {
+		<Nfts as Mutate<<Test as frame_system::Config>::AccountId, ItemConfig>>::clear_attribute(
+			collection,
+			item,
+			LOCKED_NFT_KEY,
+		)
+	}
+}
+
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
@@ -156,6 +191,7 @@ impl Config for Test {
 	type Assets = Assets;
 	type Nfts = Nfts;
 	type PalletId = NftFractionsPalletId;
+	type NftsLocker = TestLockableNonfungible;
 }
 
 // Build genesis storage according to the mock runtime.

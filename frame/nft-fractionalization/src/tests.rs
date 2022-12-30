@@ -56,11 +56,9 @@ fn fractionalize_should_work() {
 		let nft_id = 0;
 		let asset_id = 0;
 		let fractions = 1000;
-		let pallet_account = NftFractions::get_pallet_account();
 
 		Balances::make_free_balance_be(&1, 100);
 		Balances::make_free_balance_be(&2, 100);
-		Balances::make_free_balance_be(&pallet_account, 100);
 
 		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), 1, CollectionConfig::default()));
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), nft_collection_id, nft_id, 1, None));
@@ -75,6 +73,15 @@ fn fractionalize_should_work() {
 		));
 		assert_eq!(assets(), vec![asset_id]);
 		assert_eq!(Assets::balance(asset_id, 2), fractions);
+		assert_eq!(Nfts::owner(nft_collection_id, nft_id), Some(1));
+		assert_noop!(
+			Nfts::transfer(RuntimeOrigin::signed(1), nft_collection_id, nft_id, 2),
+			DispatchError::Module(ModuleError {
+				index: 4,
+				error: [12, 0, 0, 0],
+				message: Some("ItemLocked")
+			})
+		);
 
 		let details = NftToAsset::<Test>::get((&nft_collection_id, &nft_id)).unwrap();
 		assert_eq!(details.asset, asset_id);
@@ -123,11 +130,9 @@ fn unify_should_work() {
 		let nft_id = 0;
 		let asset_id = 0;
 		let fractions = 1000;
-		let pallet_account = NftFractions::get_pallet_account();
 
 		Balances::make_free_balance_be(&1, 100);
 		Balances::make_free_balance_be(&2, 100);
-		Balances::make_free_balance_be(&pallet_account, 100);
 
 		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), 1, CollectionConfig::default()));
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), nft_collection_id, nft_id, 1, None));
@@ -163,7 +168,7 @@ fn unify_should_work() {
 
 		// can't unify the asset a user doesn't hold
 		assert_noop!(
-			NftFractions::unify(RuntimeOrigin::signed(1), nft_collection_id, nft_id, asset_id, 1,),
+			NftFractions::unify(RuntimeOrigin::signed(1), nft_collection_id, nft_id, asset_id, 1),
 			DispatchError::Module(ModuleError {
 				index: 2,
 				error: [1, 0, 0, 0],
@@ -204,7 +209,7 @@ fn unify_should_work() {
 		assert_eq!(Assets::balance(asset_id, 1), fractions - 1);
 		assert_eq!(Assets::balance(asset_id, 2), 1);
 		assert_noop!(
-			NftFractions::unify(RuntimeOrigin::signed(1), nft_collection_id, nft_id, asset_id, 1,),
+			NftFractions::unify(RuntimeOrigin::signed(1), nft_collection_id, nft_id, asset_id, 1),
 			DispatchError::Module(ModuleError {
 				index: 2,
 				error: [0, 0, 0, 0],
