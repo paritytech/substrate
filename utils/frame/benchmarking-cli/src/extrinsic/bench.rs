@@ -255,7 +255,7 @@ where
 
 	/// Benchmark a block that does not include any new extrinsics but needs to shuffle previous one
 	pub fn bench_block(&mut self, ext_builder: &dyn ExtrinsicBuilder) -> Result<Stats> {
-		let block = self.build_second_block(ext_builder, 0)?;
+		let block = self.build_second_block(ext_builder, 0, false)?;
 		let record = self.measure_block(&block.block, BlockId::Number(One::one()))?;
 		Stats::new(&record)
 	}
@@ -271,7 +271,7 @@ where
 		ext_builder: &dyn ExtrinsicBuilder,
 		count: usize,
 	) -> Result<Stats> {
-		let block = self.build_second_block(ext_builder, count)?;
+		let block = self.build_second_block(ext_builder, count, true)?;
 		let num_ext = block.block.extrinsics().len();
 		let mut records = self.measure_block(&block.block.clone(), BlockId::Number(One::one()))?;
 
@@ -363,6 +363,7 @@ where
 		&mut self,
 		ext_builder: &dyn ExtrinsicBuilder,
 		txs_count: usize,
+		apply_previous_block_extrinsics: bool,
 	) -> Result<sc_block_builder_ver::BuiltBlock<Block, BA::State>> {
 		// Return early if we just want a block with inherents and no additional extrinsics.
 
@@ -374,7 +375,9 @@ where
 			builder.push(inherent)?;
 		}
 
-		builder.apply_previous_block_extrinsics(seed.clone(), &mut 0, usize::MAX, || false);
+		builder.apply_previous_block_extrinsics(seed.clone(), &mut 0, usize::MAX, || {
+			!apply_previous_block_extrinsics
+		});
 
 		let block = builder.build_with_seed(seed, |_, _| {
 			(txs_count..(txs_count * 2))
