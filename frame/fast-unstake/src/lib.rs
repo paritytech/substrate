@@ -91,7 +91,7 @@ pub mod pallet {
 		DispatchResult,
 	};
 	use sp_staking::{EraIndex, StakingInterface};
-	use sp_std::{prelude::*, vec::Vec};
+	use sp_std::{collections::btree_set::BTreeSet, prelude::*, vec::Vec};
 	pub use weights::WeightInfo;
 
 	#[derive(scale_info::TypeInfo, codec::Encode, codec::Decode, codec::MaxEncodedLen)]
@@ -429,9 +429,9 @@ pub mod pallet {
 				}
 			};
 
-			let check_stash = |stash, deposit, eras_checked: &mut u32| {
+			let check_stash = |stash, deposit, eras_checked: &mut BTreeSet<EraIndex>| {
 				let is_exposed = unchecked_eras_to_check.iter().any(|e| {
-					eras_checked.saturating_inc();
+					eras_checked.insert(*e);
 					T::Staking::is_exposed_in_era(&stash, e)
 				});
 
@@ -452,7 +452,7 @@ pub mod pallet {
 				<T as Config>::WeightInfo::on_idle_unstake()
 			} else {
 				// eras checked so far.
-				let mut eras_checked = 0u32;
+				let mut eras_checked = BTreeSet::<EraIndex>::new();
 
 				let pre_length = stashes.len();
 				let stashes: BoundedVec<(T::AccountId, BalanceOf<T>), T::BatchSize> = stashes
@@ -468,7 +468,7 @@ pub mod pallet {
 				log!(
 					debug,
 					"checked {:?} eras, pre stashes: {:?}, post: {:?}",
-					eras_checked,
+					eras_checked.len(),
 					pre_length,
 					post_length,
 				);
@@ -489,7 +489,9 @@ pub mod pallet {
 					},
 				}
 
-				<T as Config>::WeightInfo::on_idle_check(validator_count * eras_checked)
+				<T as Config>::WeightInfo::on_idle_check(
+					validator_count * eras_checked.len() as u32,
+				)
 			}
 		}
 	}
