@@ -22,7 +22,6 @@ proc-macro2 = "1.0.37"
 quote = "1.0.10"
 syn = { version = "1.0.98", features = ["full"] }
 frame-support-procedural-tools = { version = "4.0.0-dev", path = "./tools" }
-log = { version = "0.4.17", default-features = false }
 
 [features]
 default = ["std"]
