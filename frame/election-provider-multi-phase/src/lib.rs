@@ -315,11 +315,19 @@ pub trait BenchmarkingConfig {
 
 /// Current phase of the pallet.
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
-pub enum Phase<Bn> {
+pub enum Phase<AccountId, Bn> {
 	/// Nothing, the election is not happening.
 	Off,
-	/// Signed phase is open.
-	Signed,
+	/// Umbrella phase for all the commit-reveal phases (i.e `Commit`, `Reveal` and
+	/// `FallbackReveal`).
+	CommitReveal,
+	/// Commitment phase is open.
+	Commit,
+	/// Dedicated reveal phase is open until `block` for committer `AccountId`.
+	Reveal((AccountId, Bn)),
+	/// Fallback reveal phase is open.
+	FallbackReveal,
+	Signed, // TODO(gpestana): delete
 	/// Unsigned phase. First element is whether it is active or not, second the starting block
 	/// number.
 	///
@@ -337,21 +345,45 @@ pub enum Phase<Bn> {
 	Emergency,
 }
 
-impl<Bn> Default for Phase<Bn> {
+impl<AccountId, Bn> Default for Phase<AccountId, Bn> {
 	fn default() -> Self {
 		Phase::Off
 	}
 }
 
-impl<Bn: PartialEq + Eq> Phase<Bn> {
+impl<AccountId, Bn: PartialEq + Eq> Phase<AccountId, Bn>
+where
+	AccountId: sp_std::cmp::PartialEq,
+{
 	/// Whether the phase is emergency or not.
 	pub fn is_emergency(&self) -> bool {
 		matches!(self, Phase::Emergency)
 	}
 
+	// TODO(gpestana): remove
 	/// Whether the phase is signed or not.
 	pub fn is_signed(&self) -> bool {
 		matches!(self, Phase::Signed)
+	}
+
+	/// Whether the phase is part of the commit-reveal flow or not.
+	pub fn is_commit_reveal(&self) -> bool {
+		matches!(self, Phase::CommitReveal)
+	}
+
+	/// Whether the phase is commit or not.
+	pub fn is_commit(&self) -> bool {
+		matches!(self, Phase::Commit)
+	}
+
+	/// Whether the phase is dedicated reveal and assigned to a specific `account_id`.
+	pub fn is_dedicated_reveal(&self, account_id: AccountId) -> bool {
+		matches!(self, Phase::Reveal((set_account_id, _)) if *set_account_id == account_id)
+	}
+
+	/// Whether the phase is fallback reveal or not.
+	pub fn is_fallback_reveal(&self) -> bool {
+		matches!(&self, Phase::FallbackReveal)
 	}
 
 	/// Whether the phase is unsigned or not.
@@ -582,9 +614,26 @@ pub mod pallet {
 		/// Duration of the unsigned phase.
 		#[pallet::constant]
 		type UnsignedPhase: Get<Self::BlockNumber>;
+
 		/// Duration of the signed phase.
 		#[pallet::constant]
-		type SignedPhase: Get<Self::BlockNumber>;
+		type SignedPhase: Get<Self::BlockNumber>; // TODO(gpestana): replace by `CommitReveal`
+
+		/// Duration of the commit reveal phase.
+		#[pallet::constant]
+		type CommitReveal: Get<Self::BlockNumber>;
+
+		/// Duration of the commit phase.
+		#[pallet::constant]
+		type CommitPhase: Get<Self::BlockNumber>;
+
+		/// Duration of a dedicated reveal slot phase.
+		#[pallet::constant]
+		type RevealSlot: Get<Self::BlockNumber>;
+
+		/// Number of dedicated reveal slots per commit-reveal phase.
+		#[pallet::constant]
+		type NumberRevealSlots: Get<u32>;
 
 		/// The minimum amount of improvement to the solution score that defines a solution as
 		/// "better" in the Signed phase.
@@ -758,7 +807,7 @@ pub mod pallet {
 					// NOTE: if signed-phase length is zero, second part of the if-condition fails.
 					match Self::create_snapshot() {
 						Ok(_) => {
-							Self::phase_transition(Phase::Signed);
+							Self::phase_transition(Phase::CommitReveal);
 							T::WeightInfo::on_initialize_open_signed()
 						},
 						Err(why) => {
@@ -1140,7 +1189,11 @@ pub mod pallet {
 		/// An account has been slashed for submitting an invalid signed submission.
 		Slashed { account: <T as frame_system::Config>::AccountId, value: BalanceOf<T> },
 		/// There was a phase transition in a given round.
-		PhaseTransitioned { from: Phase<T::BlockNumber>, to: Phase<T::BlockNumber>, round: u32 },
+		PhaseTransitioned {
+			from: Phase<T::AccountId, T::BlockNumber>,
+			to: Phase<T::AccountId, T::BlockNumber>,
+			round: u32,
+		},
 	}
 
 	/// Error of the pallet that can be returned in response to dispatches.
@@ -1242,7 +1295,8 @@ pub mod pallet {
 	/// Current phase.
 	#[pallet::storage]
 	#[pallet::getter(fn current_phase)]
-	pub type CurrentPhase<T: Config> = StorageValue<_, Phase<T::BlockNumber>, ValueQuery>;
+	pub type CurrentPhase<T: Config> =
+		StorageValue<_, Phase<T::AccountId, T::BlockNumber>, ValueQuery>;
 
 	/// Current best solution, signed or unsigned, queued to be returned upon `elect`.
 	#[pallet::storage]
@@ -1284,7 +1338,7 @@ pub mod pallet {
 	/// capacity, it will simply saturate. We can't just iterate over `SignedSubmissionsMap`,
 	/// because iteration is slow. Instead, we store the value here.
 	#[pallet::storage]
-	pub type SignedSubmissionNextIndex<T: Config> = StorageValue<_, u32, ValueQuery>;
+	pub type SignedSubmissionNextIndex<T: Config> = StorageValue<_, u32, ValueQuery>; // TODO(gpestana): delete
 
 	/// A sorted, bounded vector of `(score, block_number, index)`, where each `index` points to a
 	/// value in `SignedSubmissions`.
@@ -1294,7 +1348,7 @@ pub mod pallet {
 	/// them one at a time instead of reading and decoding all of them at once.
 	#[pallet::storage]
 	pub type SignedSubmissionIndices<T: Config> =
-		StorageValue<_, SubmissionIndicesOf<T>, ValueQuery>;
+		StorageValue<_, SubmissionIndicesOf<T>, ValueQuery>; // TODO(gpestana): delete
 
 	/// Unchecked, signed solutions.
 	///
@@ -1305,7 +1359,15 @@ pub mod pallet {
 	/// affect; we shouldn't need a cryptographically secure hasher.
 	#[pallet::storage]
 	pub type SignedSubmissionsMap<T: Config> =
-		StorageMap<_, Twox64Concat, u32, SignedSubmissionOf<T>, OptionQuery>;
+		StorageMap<_, Twox64Concat, u32, SignedSubmissionOf<T>, OptionQuery>; // TODO(gpestana): delete
+
+	/// Solution commitments.
+	///
+	/// Stores a bounded set of `ElectionScore`, indexed by the score.
+	#[pallet::storage]
+	#[pallet::getter(fn commitments)]
+	pub type CommitmentsMap<T: Config> =
+		StorageMap<_, Twox64Concat, ElectionScore, T::AccountId, OptionQuery>;
 
 	// `SignedSubmissions` items end here.
 
@@ -1357,11 +1419,14 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Phase transition helper.
-	pub(crate) fn phase_transition(to: Phase<T::BlockNumber>) {
+	pub(crate) fn phase_transition(to: Phase<T::AccountId, T::BlockNumber>) {
+		// select next phase of the commit-reveal flow.
+		if to.is_commit_reveal() {}
+
 		log!(info, "Starting phase {:?}, round {}.", to, Self::round());
 		Self::deposit_event(Event::PhaseTransitioned {
 			from: <CurrentPhase<T>>::get(),
-			to,
+			to: to.clone(),
 			round: Self::round(),
 		});
 		<CurrentPhase<T>>::put(to);
