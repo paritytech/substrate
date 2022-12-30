@@ -331,7 +331,7 @@ where
 		)?;
 
 		let block_announce_protocol_name = block_announce_config.notifications_protocol.clone();
-		let (tx, service_rx) = tracing_unbounded("mpsc_chain_sync");
+		let (tx, service_rx) = tracing_unbounded("mpsc_chain_sync", 100_000);
 		let num_connected = Arc::new(AtomicUsize::new(0));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 		let genesis_hash = client
@@ -526,7 +526,7 @@ where
 	/// In chain-based consensus, we often need to make sure non-best forks are
 	/// at least temporarily synced.
 	pub fn announce_block(&mut self, hash: B::Hash, data: Option<Vec<u8>>) {
-		let header = match self.client.header(BlockId::Hash(hash)) {
+		let header = match self.client.header(hash) {
 			Ok(Some(header)) => header,
 			Ok(None) => {
 				log::warn!(target: "sync", "Trying to announce unknown block: {}", hash);

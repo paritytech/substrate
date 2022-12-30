@@ -464,7 +464,7 @@ where
 				.map(|hash| {
 					backend
 						.blockchain()
-						.expect_header(BlockId::hash(*hash))
+						.expect_header(*hash)
 						.expect("just finalized block should be available; qed.")
 				})
 				.chain(std::iter::once(header.clone()))
@@ -717,16 +717,25 @@ where
 		let target_header = if target_number == self.best_grandpa_block() {
 			self.persisted_state.best_grandpa_block_header.clone()
 		} else {
-			self.backend
+			let hash = self
+				.backend
 				.blockchain()
-				.expect_header(BlockId::Number(target_number))
+				.expect_block_hash_from_id(&BlockId::Number(target_number))
 				.map_err(|err| {
 					let err_msg = format!(
-						"Couldn't get header for block #{:?} (error: {:?}), skipping vote..",
+						"Couldn't get hash for block #{:?} (error: {:?}), skipping vote..",
 						target_number, err
 					);
 					Error::Backend(err_msg)
-				})?
+				})?;
+
+			self.backend.blockchain().expect_header(hash).map_err(|err| {
+				let err_msg = format!(
+					"Couldn't get header for block #{:?} ({:?}) (error: {:?}), skipping vote..",
+					target_number, hash, err
+				);
+				Error::Backend(err_msg)
+			})?
 		};
 		let target_hash = target_header.hash();
 
@@ -982,7 +991,6 @@ pub(crate) mod tests {
 		runtime::{Block, Digest, DigestItem, Header},
 		Backend,
 	};
-	use tokio::runtime::Runtime;
 
 	impl<B: super::Block> PersistedState<B> {
 		pub fn voting_oracle(&self) -> &VoterOracle<B> {
@@ -1051,8 +1059,10 @@ pub(crate) mod tests {
 			"/beefy/justifs/1".into(),
 			known_peers,
 		);
-		let at = BlockId::number(Zero::zero());
-		let genesis_header = backend.blockchain().expect_header(at).unwrap();
+		let genesis_header = backend
+			.blockchain()
+			.expect_header(backend.blockchain().info().genesis_hash)
+			.unwrap();
 		let persisted_state = PersistedState::checked_new(
 			genesis_header,
 			Zero::zero(),
@@ -1295,12 +1305,11 @@ pub(crate) mod tests {
 		assert_eq!(extracted, Some(validator_set));
 	}
 
-	#[test]
-	fn keystore_vs_validator_set() {
+	#[tokio::test]
+	async fn keystore_vs_validator_set() {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-		let runtime = Runtime::new().unwrap();
-		let mut net = BeefyTestNet::new(runtime.handle().clone(), 1);
+		let mut net = BeefyTestNet::new(1);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
 
 		// keystore doesn't contain other keys than validators'
@@ -1319,12 +1328,11 @@ pub(crate) mod tests {
 		assert_eq!(worker.verify_validator_set(&1, &validator_set), expected_err);
 	}
 
-	#[test]
-	fn should_finalize_correctly() {
+	#[tokio::test]
+	async fn should_finalize_correctly() {
 		let keys = [Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(&keys), 0).unwrap();
-		let runtime = Runtime::new().unwrap();
-		let mut net = BeefyTestNet::new(runtime.handle().clone(), 1);
+		let mut net = BeefyTestNet::new(1);
 		let backend = net.peer(0).client().as_backend();
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
 		// remove default session, will manually add custom one.
@@ -1347,11 +1355,12 @@ pub(crate) mod tests {
 
 		// no 'best beefy block' or finality proofs
 		assert_eq!(worker.best_beefy_block(), 0);
-		runtime.block_on(poll_fn(move |cx| {
+		poll_fn(move |cx| {
 			assert_eq!(best_block_stream.poll_next_unpin(cx), Poll::Pending);
 			assert_eq!(finality_proof.poll_next_unpin(cx), Poll::Pending);
 			Poll::Ready(())
-		}));
+		})
+		.await;
 
 		// unknown hash for block #1
 		let (mut best_block_streams, mut finality_proofs) =
@@ -1368,7 +1377,7 @@ pub(crate) mod tests {
 		worker.finalize(justif.clone()).unwrap();
 		// verify block finalized
 		assert_eq!(worker.best_beefy_block(), 1);
-		runtime.block_on(poll_fn(move |cx| {
+		poll_fn(move |cx| {
 			// unknown hash -> nothing streamed
 			assert_eq!(best_block_stream.poll_next_unpin(cx), Poll::Pending);
 			// commitment streamed
@@ -1378,15 +1387,16 @@ pub(crate) mod tests {
 				v => panic!("unexpected value: {:?}", v),
 			}
 			Poll::Ready(())
-		}));
+		})
+		.await;
 
 		// generate 2 blocks, try again expect success
 		let (mut best_block_streams, _) = get_beefy_streams(&mut net, keys);
 		let mut best_block_stream = best_block_streams.drain(..).next().unwrap();
-		net.peer(0).push_blocks(2, false);
-		// finalize 1 and 2 without justifications
-		let hashof1 = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(1)).unwrap();
-		let hashof2 = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(2)).unwrap();
+		let hashes = net.peer(0).push_blocks(2, false);
+		// finalize 1 and 2 without justifications (hashes does not contain genesis)
+		let hashof1 = hashes[0];
+		let hashof2 = hashes[1];
 		backend.finalize_block(hashof1, None).unwrap();
 		backend.finalize_block(hashof2, None).unwrap();
 
@@ -1400,7 +1410,7 @@ pub(crate) mod tests {
 		assert_eq!(worker.active_rounds().unwrap().session_start(), 2);
 		// verify block finalized
 		assert_eq!(worker.best_beefy_block(), 2);
-		runtime.block_on(poll_fn(move |cx| {
+		poll_fn(move |cx| {
 			match best_block_stream.poll_next_unpin(cx) {
 				// expect Some(hash-of-block-2)
 				Poll::Ready(Some(hash)) => {
@@ -1410,19 +1420,19 @@ pub(crate) mod tests {
 				v => panic!("unexpected value: {:?}", v),
 			}
 			Poll::Ready(())
-		}));
+		})
+		.await;
 
 		// check BEEFY justifications are also appended to backend
 		let justifs = backend.blockchain().justifications(hashof2).unwrap().unwrap();
 		assert!(justifs.get(BEEFY_ENGINE_ID).is_some())
 	}
 
-	#[test]
-	fn should_init_session() {
+	#[tokio::test]
+	async fn should_init_session() {
 		let keys = &[Keyring::Alice, Keyring::Bob];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-		let runtime = Runtime::new().unwrap();
-		let mut net = BeefyTestNet::new(runtime.handle().clone(), 1);
+		let mut net = BeefyTestNet::new(1);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
 
 		let worker_rounds = worker.active_rounds().unwrap();
@@ -1449,12 +1459,11 @@ pub(crate) mod tests {
 		assert_eq!(rounds.validator_set_id(), new_validator_set.id());
 	}
 
-	#[test]
-	fn should_triage_votes_and_process_later() {
+	#[tokio::test]
+	async fn should_triage_votes_and_process_later() {
 		let keys = &[Keyring::Alice, Keyring::Bob];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-		let runtime = Runtime::new().unwrap();
-		let mut net = BeefyTestNet::new(runtime.handle().clone(), 1);
+		let mut net = BeefyTestNet::new(1);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
 		// remove default session, will manually add custom one.
 		worker.persisted_state.voting_oracle.sessions.clear();

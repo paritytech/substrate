@@ -210,7 +210,7 @@ impl<B: BlockT> Link<B> for SyncingService<B> {
 impl<B: BlockT> SyncEventStream for SyncingService<B> {
 	/// Get syncing event stream.
 	fn event_stream(&self, name: &'static str) -> Pin<Box<dyn Stream<Item = SyncEvent> + Send>> {
-		let (tx, rx) = tracing_unbounded(name);
+		let (tx, rx) = tracing_unbounded(name, 100_000);
 		let _ = self.tx.unbounded_send(ToServiceCommand::EventStream(tx));
 		Box::pin(rx)
 	}

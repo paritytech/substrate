@@ -39,6 +39,28 @@ use sc_network_common::{
 	sync::message::BlockAnnouncesHandshake,
 };
 use sp_runtime::traits::{Block as BlockT, NumberFor};
+// ||||||| 9772209ee9
+// 	sync::{
+// 		message::{BlockAnnounce, BlockAnnouncesHandshake, BlockData, BlockResponse, BlockState},
+// 		BadPeer, ChainSync, PollBlockAnnounceValidation, SyncStatus,
+// 	},
+// 	utils::{interval, LruHashSet},
+// };
+// use sp_arithmetic::traits::SaturatedConversion;
+// use sp_runtime::{
+// 	generic::BlockId,
+// 	traits::{Block as BlockT, CheckedSub, Header as HeaderT, NumberFor, Zero},
+// };
+// =======
+// 	sync::{
+// 		message::{BlockAnnounce, BlockAnnouncesHandshake, BlockData, BlockResponse, BlockState},
+// 		BadPeer, ChainSync, PollBlockAnnounceValidation, SyncStatus,
+// 	},
+// 	utils::{interval, LruHashSet},
+// };
+// use sp_arithmetic::traits::SaturatedConversion;
+// use sp_runtime::traits::{Block as BlockT, CheckedSub, Header as HeaderT, NumberFor, Zero};
+// >>>>>>> origin/master
 use std::{
 	collections::{HashMap, HashSet, VecDeque},
 	io, iter,

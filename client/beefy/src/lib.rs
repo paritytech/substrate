@@ -275,7 +275,7 @@ pub async fn start_beefy_gadget<B, BE, C, N, P, R, S>(
 	// Subscribe to finality notifications and justifications before waiting for runtime pallet and
 	// reuse the streams, so we don't miss notifications while waiting for pallet to be available.
 	let mut finality_notifications = client.finality_notification_stream().fuse();
-	let block_import_justif = links.from_block_import_justif_stream.subscribe().fuse();
+	let block_import_justif = links.from_block_import_justif_stream.subscribe(100_000).fuse();
 
 	// Wait for BEEFY pallet to be active before starting voter.
 	let persisted_state =
@@ -422,7 +422,7 @@ where
 			})?;
 
 		// Move up the chain.
-		header = blockchain.expect_header(BlockId::Hash(parent_hash))?;
+		header = blockchain.expect_header(parent_hash)?;
 	};
 
 	aux_schema::write_current_version(backend)?;

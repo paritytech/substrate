@@ -622,3 +622,49 @@ macro_rules! bounded_btree_map {
 		}
 	};
 }
+
+/// Generates a macro for checking if a certain feature is enabled.
+///
+/// These feature checking macros can be used to conditionally enable/disable code in a dependent
+/// crate based on a feature in the crate where the macro is called.
+#[macro_export]
+// We need to skip formatting this macro because of this bug:
+// https://github.com/rust-lang/rustfmt/issues/5283
+#[rustfmt::skip]
+macro_rules! generate_feature_enabled_macro {
+	( $macro_name:ident, $feature_name:meta, $d:tt ) => {
+		/// Enable/disable the given code depending on
+		#[doc = concat!("`", stringify!($feature_name), "`")]
+		/// being enabled for the crate or not.
+		///
+		/// # Example
+		///
+		/// ```nocompile
+		/// // Will add the code depending on the feature being enabled or not.
+		#[doc = concat!(stringify!($macro_name), "!( println!(\"Hello\") )")]
+		/// ```
+		#[cfg($feature_name)]
+		#[macro_export]
+		macro_rules! $macro_name {
+			( $d ( $d input:tt )* ) => {
+				$d ( $d input )*
+			}
+		}
+
+		/// Enable/disable the given code depending on
+		#[doc = concat!("`", stringify!($feature_name), "`")]
+		/// being enabled for the crate or not.
+		///
+		/// # Example
+		///
+		/// ```nocompile
+		/// // Will add the code depending on the feature being enabled or not.
+		#[doc = concat!(stringify!($macro_name), "!( println!(\"Hello\") )")]
+		/// ```
+		#[cfg(not($feature_name))]
+		#[macro_export]
+		macro_rules! $macro_name {
+			( $d ( $d input:tt )* ) => {};
+		}
+	};
+}

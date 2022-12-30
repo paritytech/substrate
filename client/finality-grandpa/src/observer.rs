@@ -43,7 +43,7 @@ use crate::{
 	environment, global_communication,
 	notification::GrandpaJustificationSender,
 	ClientForGrandpa, CommandOrError, CommunicationIn, Config, Error, LinkHalf, VoterCommand,
-	VoterSetState,
+	VoterSetState, LOG_TARGET,
 };
 
 struct ObserverChain<'a, Block: BlockT, Client> {
@@ -145,7 +145,7 @@ where
 			// proceed processing with new finalized block number
 			future::ok(finalized_number)
 		} else {
-			debug!(target: "afg", "Received invalid commit: ({:?}, {:?})", round, commit);
+			debug!(target: LOG_TARGET, "Received invalid commit: ({:?}, {:?})", round, commit);
 
 			finality_grandpa::process_commit_validation_result(validation_result, callback);
 
@@ -321,7 +321,7 @@ where
 		// update it on-disk in case we restart as validator in the future.
 		self.persistent_data.set_state = match command {
 			VoterCommand::Pause(reason) => {
-				info!(target: "afg", "Pausing old validator set: {}", reason);
+				info!(target: LOG_TARGET, "Pausing old validator set: {}", reason);
 
 				let completed_rounds = self.persistent_data.set_state.read().completed_rounds();
 				let set_state = VoterSetState::Paused { completed_rounds };
@@ -442,7 +442,7 @@ mod tests {
 			aux_schema::load_persistent(&*backend, client.info().genesis_hash, 0, || Ok(voters))
 				.unwrap();
 
-		let (_tx, voter_command_rx) = tracing_unbounded("");
+		let (_tx, voter_command_rx) = tracing_unbounded("test_mpsc_voter_command", 100_000);
 
 		let observer = ObserverWork::new(
 			client,

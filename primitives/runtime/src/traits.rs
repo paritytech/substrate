@@ -33,8 +33,10 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sp_application_crypto::AppKey;
 pub use sp_arithmetic::traits::{
 	AtLeast32Bit, AtLeast32BitUnsigned, Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedShl,
-	CheckedShr, CheckedSub, IntegerSquareRoot, One, SaturatedConversion, Saturating,
-	UniqueSaturatedFrom, UniqueSaturatedInto, Zero,
+	CheckedShr, CheckedSub, Ensure, EnsureAdd, EnsureAddAssign, EnsureDiv, EnsureDivAssign,
+	EnsureFixedPointNumber, EnsureFrom, EnsureInto, EnsureMul, EnsureMulAssign, EnsureOp,
+	EnsureOpAssign, EnsureSub, EnsureSubAssign, IntegerSquareRoot, One, SaturatedConversion,
+	Saturating, UniqueSaturatedFrom, UniqueSaturatedInto, Zero,
 };
 use sp_core::{self, storage::StateVersion, Hasher, RuntimeDebug, TypeId};
 #[doc(hidden)]
@@ -990,6 +992,20 @@ pub trait Checkable<Context>: Sized {
 
 	/// Check self, given an instance of Context.
 	fn check(self, c: &Context) -> Result<Self::Checked, TransactionValidityError>;
+
+	/// Blindly check self.
+	///
+	/// ## WARNING
+	///
+	/// DO NOT USE IN PRODUCTION. This is only meant to be used in testing environments. A runtime
+	/// compiled with `try-runtime` should never be in production. Moreover, the name of this
+	/// function is deliberately chosen to prevent developers from ever calling it in consensus
+	/// code-paths.
+	#[cfg(feature = "try-runtime")]
+	fn unchecked_into_checked_i_know_what_i_am_doing(
+		self,
+		c: &Context,
+	) -> Result<Self::Checked, TransactionValidityError>;
 }
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
@@ -1010,6 +1026,14 @@ impl<T: BlindCheckable, Context> Checkable<Context> for T {
 
 	fn check(self, _c: &Context) -> Result<Self::Checked, TransactionValidityError> {
 		BlindCheckable::check(self)
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn unchecked_into_checked_i_know_what_i_am_doing(
+		self,
+		_: &Context,
+	) -> Result<Self::Checked, TransactionValidityError> {
+		unreachable!();
 	}
 }
 

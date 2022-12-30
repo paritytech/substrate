@@ -60,7 +60,7 @@ use crate::{
 	until_imported::UntilVoteTargetImported,
 	voting_rule::VotingRule as VotingRuleT,
 	ClientForGrandpa, CommandOrError, Commit, Config, Error, NewAuthoritySet, Precommit, Prevote,
-	PrimaryPropose, SignedMessage, VoterCommand,
+	PrimaryPropose, SignedMessage, VoterCommand, LOG_TARGET,
 };
 
 type HistoricalVotes<Block> = finality_grandpa::HistoricalVotes<
@@ -536,7 +536,7 @@ where
 			Some((_, n)) if n > best_block_number => best_block_hash,
 			Some((h, _)) => {
 				// this is the header at which the new set will start
-				let header = self.client.header(BlockId::Hash(h))?.expect(
+				let header = self.client.header(h)?.expect(
 					"got block hash from registered pending change; \
 					 pending changes are only registered on block import; qed.",
 				);
@@ -562,7 +562,10 @@ where
 		{
 			Some(proof) => proof,
 			None => {
-				debug!(target: "afg", "Equivocation offender is not part of the authority set.");
+				debug!(
+					target: LOG_TARGET,
+					"Equivocation offender is not part of the authority set."
+				);
 				return Ok(())
 			},
 		};
@@ -621,8 +624,13 @@ where
 	let tree_route = match tree_route_res {
 		Ok(tree_route) => tree_route,
 		Err(e) => {
-			debug!(target: "afg", "Encountered error computing ancestry between block {:?} and base {:?}: {}",
-				   block, base, e);
+			debug!(
+				target: LOG_TARGET,
+				"Encountered error computing ancestry between block {:?} and base {:?}: {}",
+				block,
+				base,
+				e
+			);
 
 			return Err(GrandpaError::NotDescendent)
 		},
@@ -968,7 +976,8 @@ where
 		historical_votes: &HistoricalVotes<Block>,
 	) -> Result<(), Self::Error> {
 		debug!(
-			target: "afg", "Voter {} completed round {} in set {}. Estimate = {:?}, Finalized in round = {:?}",
+			target: LOG_TARGET,
+			"Voter {} completed round {} in set {}. Estimate = {:?}, Finalized in round = {:?}",
 			self.config.name(),
 			round,
 			self.set_id,
@@ -1029,7 +1038,8 @@ where
 		historical_votes: &HistoricalVotes<Block>,
 	) -> Result<(), Self::Error> {
 		debug!(
-			target: "afg", "Voter {} concluded round {} in set {}. Estimate = {:?}, Finalized in round = {:?}",
+			target: LOG_TARGET,
+			"Voter {} concluded round {} in set {}. Estimate = {:?}, Finalized in round = {:?}",
 			self.config.name(),
 			round,
 			self.set_id,
@@ -1115,9 +1125,12 @@ where
 			Self::Signature,
 		>,
 	) {
-		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
+		warn!(
+			target: LOG_TARGET,
+			"Detected prevote equivocation in the finality worker: {:?}", equivocation
+		);
 		if let Err(err) = self.report_equivocation(equivocation.into()) {
-			warn!(target: "afg", "Error reporting prevote equivocation: {}", err);
+			warn!(target: LOG_TARGET, "Error reporting prevote equivocation: {}", err);
 		}
 	}
 
@@ -1130,9 +1143,12 @@ where
 			Self::Signature,
 		>,
 	) {
-		warn!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
+		warn!(
+			target: LOG_TARGET,
+			"Detected precommit equivocation in the finality worker: {:?}", equivocation
+		);
 		if let Err(err) = self.report_equivocation(equivocation.into()) {
-			warn!(target: "afg", "Error reporting precommit equivocation: {}", err);
+			warn!(target: LOG_TARGET, "Error reporting precommit equivocation: {}", err);
 		}
 	}
 }
@@ -1168,10 +1184,11 @@ where
 	SelectChain: SelectChainT<Block> + 'static,
 	VotingRule: VotingRuleT<Block, Client>,
 {
-	let base_header = match client.header(BlockId::Hash(block))? {
+	let base_header = match client.header(block)? {
 		Some(h) => h,
 		None => {
-			debug!(target: "afg",
+			debug!(
+				target: LOG_TARGET,
 				"Encountered error finding best chain containing {:?}: couldn't find base block",
 				block,
 			);
@@ -1185,12 +1202,15 @@ where
 	// proceed onwards. most of the time there will be no pending transition.  the limit, if any, is
 	// guaranteed to be higher than or equal to the given base number.
 	let limit = authority_set.current_limit(*base_header.number());
-	debug!(target: "afg", "Finding best chain containing block {:?} with number limit {:?}", block, limit);
+	debug!(
+		target: LOG_TARGET,
+		"Finding best chain containing block {:?} with number limit {:?}", block, limit
+	);
 
 	let result = match select_chain.finality_target(block, None).await {
 		Ok(best_hash) => {
 			let best_header = client
-				.header(BlockId::Hash(best_hash))?
+				.header(best_hash)?
 				.expect("Header known to exist after `finality_target` call; qed");
 
 			// check if our vote is currently being limited due to a pending change
@@ -1214,7 +1234,7 @@ where
 					}
 
 					target_header = client
-						.header(BlockId::Hash(*target_header.parent_hash()))?
+						.header(*target_header.parent_hash())?
 						.expect("Header known to exist after `finality_target` call; qed");
 				}
 
@@ -1247,7 +1267,10 @@ where
 				.or_else(|| Some((target_header.hash(), *target_header.number())))
 		},
 		Err(e) => {
-			warn!(target: "afg", "Encountered error finding best chain containing {:?}: {}", block, e);
+			warn!(
+				target: LOG_TARGET,
+				"Encountered error finding best chain containing {:?}: {}", block, e
+			);
 			None
 		},
 	};
@@ -1286,7 +1309,7 @@ where
 		// This can happen after a forced change (triggered manually from the runtime when
 		// finality is stalled), since the voter will be restarted at the median last finalized
 		// block, which can be lower than the local best finalized block.
-		warn!(target: "afg", "Re-finalized block #{:?} ({:?}) in the canonical chain, current best finalized is #{:?}",
+		warn!(target: LOG_TARGET, "Re-finalized block #{:?} ({:?}) in the canonical chain, current best finalized is #{:?}",
 				hash,
 				number,
 				status.finalized_number,
@@ -1316,7 +1339,10 @@ where
 		) {
 			if let Some(sender) = justification_sender {
 				if let Err(err) = sender.notify(justification) {
-					warn!(target: "afg", "Error creating justification for subscriber: {}", err);
+					warn!(
+						target: LOG_TARGET,
+						"Error creating justification for subscriber: {}", err
+					);
 				}
 			}
 		}
@@ -1367,11 +1393,16 @@ where
 		client
 			.apply_finality(import_op, hash, persisted_justification, true)
 			.map_err(|e| {
-				warn!(target: "afg", "Error applying finality to block {:?}: {}", (hash, number), e);
+				warn!(
+					target: LOG_TARGET,
+					"Error applying finality to block {:?}: {}",
+					(hash, number),
+					e
+				);
 				e
 			})?;
 
-		debug!(target: "afg", "Finalizing blocks up to ({:?}, {})", number, hash);
+		debug!(target: LOG_TARGET, "Finalizing blocks up to ({:?}, {})", number, hash);
 
 		telemetry!(
 			telemetry;
@@ -1389,13 +1420,17 @@ where
 			let (new_id, set_ref) = authority_set.current();
 
 			if set_ref.len() > 16 {
-				afg_log!(
+				grandpa_log!(
 					initial_sync,
 					"👴 Applying GRANDPA set change to new set with {} authorities",
 					set_ref.len(),
 				);
 			} else {
-				afg_log!(initial_sync, "👴 Applying GRANDPA set change to new set {:?}", set_ref);
+				grandpa_log!(
+					initial_sync,
+					"👴 Applying GRANDPA set change to new set {:?}",
+					set_ref
+				);
 			}
 
 			telemetry!(
@@ -1424,8 +1459,11 @@ where
 			);
 
 			if let Err(e) = write_result {
-				warn!(target: "afg", "Failed to write updated authority set to disk. Bailing.");
-				warn!(target: "afg", "Node is in a potentially inconsistent state.");
+				warn!(
+					target: LOG_TARGET,
+					"Failed to write updated authority set to disk. Bailing."
+				);
+				warn!(target: LOG_TARGET, "Node is in a potentially inconsistent state.");
 
 				return Err(e.into())
 			}
