@@ -2086,6 +2086,7 @@ dependencies = [
  "cfg-expr",
  "frame-support-procedural-tools",
  "itertools",
+ "log",
  "proc-macro2",
  "quote",
  "syn",

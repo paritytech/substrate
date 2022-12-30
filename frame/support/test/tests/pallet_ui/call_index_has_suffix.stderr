@@ -1,0 +1,8 @@
+error: Invalid `pallet::call_index`, please remove the suffix, 
+                       suffix: "something"
+ --> tests/pallet_ui/call_index_has_suffix.rs:1:1
+  |
+1 | #[frame_support::pallet]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the attribute macro `frame_support::pallet` (in Nightly builds, run with -Z macro-backtrace for more info)
