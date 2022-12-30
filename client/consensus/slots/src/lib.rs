@@ -292,6 +292,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		Self: Sync,
 	{
 		let slot = slot_info.slot;
+		let keystore = self.keystore().clone();
 		let telemetry = self.telemetry();
 		let logging_target = self.logging_target();
 
@@ -350,6 +351,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		}
 
 		let claim = self.claim_slot(&slot_info.chain_head, slot, &aux_data).await?;
+
+		let key = self.get_key(&claim);
+		inject_inherents(keystore, &key, &mut slot_info).ok()?;
 
 		if self.should_backoff(slot, &slot_info.chain_head) {
 			return None
