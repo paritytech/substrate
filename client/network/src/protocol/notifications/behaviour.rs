@@ -2176,7 +2176,7 @@ mod tests {
 	}
 
 	#[test]
-	fn disconnect_disconnected_peer() {
+	fn disconnect_backoff_peer() {
 		let (mut notif, _peerset) = development_notifs();
 
 		let peer = PeerId::random();
@@ -2190,8 +2190,13 @@ mod tests {
 			notif.peers.get(&(peer, 0.into())),
 			Some(PeerState::Backoff { timer: DelayId(0), .. })
 		));
+	}
 
+	#[test]
+	fn disconnect_pending_request() {
+		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
+
 		notif.peers.insert(
 			(peer, 0.into()),
 			PeerState::PendingRequest { timer: DelayId(0), timer_deadline: Instant::now() },
@@ -2202,13 +2207,22 @@ mod tests {
 			notif.peers.get(&(peer, 0.into())),
 			Some(PeerState::PendingRequest { timer: DelayId(0), .. })
 		));
+	}
+
+	#[test]
+	fn disconnect_requested_peer() {
+		let (mut notif, _peerset) = development_notifs();
 
 		let peer = PeerId::random();
 		notif.peers.insert((peer, 0.into()), PeerState::Requested);
 		notif.disconnect_peer(&peer, 0.into());
 
 		assert!(std::matches!(notif.peers.get(&(peer, 0.into())), Some(PeerState::Requested)));
+	}
 
+	#[test]
+	fn disconnect_disabled_peer() {
+		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
 		notif.peers.insert(
 			(peer, 0.into()),
@@ -2939,7 +2953,7 @@ mod tests {
 	}
 
 	#[test]
-	fn inject_connection_closed_disable_pending_enable_two_connections() {
+	fn peer_is_backed_off_if_both_connections_get_closed_while_peer_is_disabled() {
 		let (mut notif, _peerset) = development_notifs();
 		let set_id = sc_peerset::SetId::from(0);
 		let peer = PeerId::random();
@@ -3028,7 +3042,7 @@ mod tests {
 	}
 
 	#[test]
-	fn inject_connection_closed_incoming_with_two_connections_inactive_connection_closed() {
+	fn two_connections_inactive_connection_gets_closed_peer_state_is_still_incoming() {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
 		let conn1 = ConnectionId::new(0usize);
@@ -3088,7 +3102,7 @@ mod tests {
 	}
 
 	#[test]
-	fn inject_connection_closed_incoming_with_two_connections_active_connection_closed() {
+	fn two_connections_active_connection_gets_closed_peer_state_is_disabled() {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
 		let conn1 = ConnectionId::new(0usize);
@@ -3319,8 +3333,6 @@ mod tests {
 		};
 
 		notif.inject_connection_established(&peer, &conn, &connected, None, 0usize);
-		// assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Disabled { ..
-		// })));
 
 		if let Some(&mut PeerState::Disabled { ref mut backoff_until, .. }) =
 			notif.peers.get_mut(&(peer, 0.into()))

@@ -57,8 +57,6 @@
 //! It is illegal to send a [`NotifsHandlerIn::Open`] before a previously-emitted
 //! [`NotifsHandlerIn::Open`] has gotten an answer.
 
-#![allow(warnings)]
-
 use crate::protocol::notifications::upgrade::{
 	NotificationsHandshakeError, NotificationsIn, NotificationsInSubstream, NotificationsOut,
 	NotificationsOutSubstream, UpgradeCollec,
