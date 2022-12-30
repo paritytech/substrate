@@ -42,6 +42,9 @@ use sp_runtime::{
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
+type AccountId = <Test as frame_system::Config>::AccountId;
+type ItemId = <Test as pallet_nfts::Config>::ItemId;
+type CollectionId = <Test as pallet_nfts::Config>::CollectionId;
 
 // Configure a mock runtime to test the pallet.
 construct_runtime!(
@@ -126,8 +129,8 @@ parameter_types! {
 const LOCKED_NFT_KEY: &[u8; 6] = b"locked";
 
 pub struct TestLocker;
-impl Locker<u32, u32> for TestLocker {
-	fn is_locked(collection: u32, item: u32) -> bool {
+impl Locker<CollectionId, ItemId> for TestLocker {
+	fn is_locked(collection: CollectionId, item: ItemId) -> bool {
 		Nfts::attribute(&collection, &item, &AttributeNamespace::Pallet, LOCKED_NFT_KEY).is_some()
 	}
 }
@@ -163,21 +166,17 @@ parameter_types! {
 }
 
 pub struct TestLockableNonfungible;
-impl LockableNonfungible<u32, u32> for TestLockableNonfungible {
-	fn lock(collection: &u32, item: &u32) -> DispatchResult {
-		<Nfts as Mutate<<Test as frame_system::Config>::AccountId, ItemConfig>>::set_attribute(
+impl LockableNonfungible<CollectionId, ItemId> for TestLockableNonfungible {
+	fn lock(collection: &CollectionId, item: &ItemId) -> DispatchResult {
+		<Nfts as Mutate<AccountId, ItemConfig>>::set_attribute(
 			collection,
 			item,
 			LOCKED_NFT_KEY,
 			&[1],
 		)
 	}
-	fn unlock(collection: &u32, item: &u32) -> DispatchResult {
-		<Nfts as Mutate<<Test as frame_system::Config>::AccountId, ItemConfig>>::clear_attribute(
-			collection,
-			item,
-			LOCKED_NFT_KEY,
-		)
+	fn unlock(collection: &CollectionId, item: &ItemId) -> DispatchResult {
+		<Nfts as Mutate<AccountId, ItemConfig>>::clear_attribute(collection, item, LOCKED_NFT_KEY)
 	}
 }
 

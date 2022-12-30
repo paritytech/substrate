@@ -104,7 +104,15 @@ use impls::{AllianceProposalProvider, Author, CreditToBlockAuthor};
 /// Constant values used within the runtime.
 pub mod constants;
 use constants::{currency::*, time::*};
-use sp_runtime::generic::Era;
+use frame_support::traits::{
+	tokens::{
+		nonfungibles_v2::{Inspect, LockableNonfungible, Mutate},
+		AttributeNamespace,
+	},
+	Locker,
+};
+use pallet_nfts::ItemConfig;
+use sp_runtime::{generic::Era, DispatchResult};
 
 /// Generated voter bag information.
 mod voter_bags;
@@ -1563,6 +1571,17 @@ parameter_types! {
 	pub Features: PalletFeatures = PalletFeatures::all_enabled();
 }
 
+const LOCKED_NFT_KEY: &[u8; 6] = b"locked";
+type ItemId = <Runtime as pallet_nfts::Config>::ItemId;
+type CollectionId = <Runtime as pallet_nfts::Config>::CollectionId;
+
+pub struct NftLocker;
+impl Locker<CollectionId, ItemId> for NftLocker {
+	fn is_locked(collection: CollectionId, item: ItemId) -> bool {
+		Nfts::attribute(&collection, &item, &AttributeNamespace::Pallet, LOCKED_NFT_KEY).is_some()
+	}
+}
+
 impl pallet_nfts::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type CollectionId = u32;
@@ -1586,25 +1605,39 @@ impl pallet_nfts::Config for Runtime {
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = ();
 	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
-	type Locker = ();
+	type Locker = NftLocker;
 }
 
 parameter_types! {
 	pub const NftFractionsPalletId: PalletId = PalletId(*b"fraction");
-	pub const BuybackThreshold: u32 = 1;
+}
+
+pub struct RuntimeLockableNonfungible;
+impl LockableNonfungible<CollectionId, ItemId> for RuntimeLockableNonfungible {
+	fn lock(collection: &CollectionId, item: &ItemId) -> DispatchResult {
+		<Nfts as Mutate<AccountId, ItemConfig>>::set_attribute(
+			collection,
+			item,
+			LOCKED_NFT_KEY,
+			&[1],
+		)
+	}
+	fn unlock(collection: &CollectionId, item: &ItemId) -> DispatchResult {
+		<Nfts as Mutate<AccountId, ItemConfig>>::clear_attribute(collection, item, LOCKED_NFT_KEY)
+	}
 }
 
 impl pallet_nft_fractionalization::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type PalletId = NftFractionsPalletId;
 	type Currency = Balances;
-	type BuybackThreshold = BuybackThreshold;
-	type CollectionId = <Self as pallet_nfts::Config>::CollectionId;
-	type ItemId = <Self as pallet_nfts::Config>::ItemId;
+	type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
+	type NftId = <Self as pallet_nfts::Config>::ItemId;
 	type AssetBalance = <Self as pallet_balances::Config>::Balance;
-	type Assets = Assets;
-	type Items = Nfts;
 	type AssetId = <Self as pallet_assets::Config>::AssetId;
+	type Assets = Assets;
+	type Nfts = Nfts;
+	type NftsLocker = RuntimeLockableNonfungible;
 }
 
 impl pallet_transaction_storage::Config for Runtime {
