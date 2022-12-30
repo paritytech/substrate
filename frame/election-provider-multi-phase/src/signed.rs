@@ -623,7 +623,7 @@ mod tests {
 					Event::SignedPhaseStarted { round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
-						account_id: Some(99),
+						origin: RawOrigin::Signed(99),
 						prev_ejected: false
 					}
 				]
@@ -652,7 +652,7 @@ mod tests {
 					Event::SignedPhaseStarted { round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
-						account_id: Some(99),
+						origin: RawOrigin::Signed(99),
 						prev_ejected: false
 					},
 					Event::Rewarded { account: 99, value: 7 }
@@ -687,7 +687,7 @@ mod tests {
 					Event::SignedPhaseStarted { round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
-						account_id: Some(99),
+						origin: RawOrigin::Signed(99),
 						prev_ejected: false
 					},
 					Event::Slashed { account: 99, value: 5 }
@@ -728,12 +728,12 @@ mod tests {
 					Event::SignedPhaseStarted { round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
-						account_id: Some(99),
+						origin: RawOrigin::Signed(99),
 						prev_ejected: false
 					},
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
-						account_id: Some(999),
+						origin: RawOrigin::Signed(999),
 						prev_ejected: false
 					},
 					Event::Rewarded { account: 99, value: 7 }
@@ -811,27 +811,27 @@ mod tests {
 					Event::SignedPhaseStarted { round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
-						account_id: Some(99),
+						origin: RawOrigin::Signed(99),
 						prev_ejected: false
 					},
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
-						account_id: Some(100),
+						origin: RawOrigin::Signed(100),
 						prev_ejected: false
 					},
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
-						account_id: Some(101),
+						origin: RawOrigin::Signed(101),
 						prev_ejected: false
 					},
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
-						account_id: Some(102),
+						origin: RawOrigin::Signed(102),
 						prev_ejected: false
 					},
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
-						account_id: Some(103),
+						origin: RawOrigin::Signed(103),
 						prev_ejected: false
 					},
 					Event::Rewarded { account: 99, value: 7 },
@@ -899,12 +899,12 @@ mod tests {
 						Event::SignedPhaseStarted { round: 1 },
 						Event::SolutionStored {
 							compute: ElectionCompute::Signed,
-							account_id: Some(99),
+							origin: RawOrigin::Signed(99),
 							prev_ejected: false
 						},
 						Event::SolutionStored {
 							compute: ElectionCompute::Signed,
-							account_id: Some(99),
+							origin: RawOrigin::Signed(99),
 							prev_ejected: true
 						}
 					]
@@ -1157,17 +1157,17 @@ mod tests {
 					Event::SignedPhaseStarted { round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
-						account_id: Some(100),
+						origin: RawOrigin::Signed(100),
 						prev_ejected: false
 					},
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
-						account_id: Some(101),
+						origin: RawOrigin::Signed(101),
 						prev_ejected: false
 					},
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
-						account_id: Some(102),
+						origin: RawOrigin::Signed(102),
 						prev_ejected: false
 					},
 					Event::Rewarded { account: 100, value: 7 },
@@ -1227,17 +1227,17 @@ mod tests {
 					Event::SignedPhaseStarted { round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
-						account_id: Some(99),
+						origin: RawOrigin::Signed(99),
 						prev_ejected: false
 					},
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
-						account_id: Some(999),
+						origin: RawOrigin::Signed(999),
 						prev_ejected: false
 					},
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
-						account_id: Some(9999),
+						origin: RawOrigin::Signed(9999),
 						prev_ejected: false
 					},
 					Event::Slashed { account: 999, value: 5 },
@@ -1373,7 +1373,7 @@ mod tests {
 					Event::SignedPhaseStarted { round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
-						account_id: Some(99),
+						origin: RawOrigin::Signed(99),
 						prev_ejected: false
 					},
 					Event::Rewarded { account: 99, value: 7 }

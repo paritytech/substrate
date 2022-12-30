@@ -241,7 +241,7 @@ use frame_support::{
 	weights::Weight,
 	DefaultNoBound, EqNoBound, PartialEqNoBound,
 };
-use frame_system::{ensure_none, offchain::SendTransactionTypes};
+use frame_system::{ensure_none, offchain::SendTransactionTypes, RawOrigin};
 use scale_info::TypeInfo;
 use sp_arithmetic::{
 	traits::{CheckedAdd, Zero},
@@ -931,7 +931,7 @@ pub mod pallet {
 			<QueuedSolution<T>>::put(ready);
 			Self::deposit_event(Event::SolutionStored {
 				compute: ElectionCompute::Unsigned,
-				account_id: None,
+				origin: RawOrigin::None,
 				prev_ejected: ejected_a_solution,
 			});
 
@@ -968,7 +968,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			supports: Supports<T::AccountId>,
 		) -> DispatchResult {
-			T::ForceOrigin::ensure_origin(origin)?;
+			T::ForceOrigin::ensure_origin(origin.clone())?;
 			ensure!(Self::current_phase().is_emergency(), <Error<T>>::CallNotAllowed);
 
 			// bound supports with T::MaxWinners
@@ -984,7 +984,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::SolutionStored {
 				compute: ElectionCompute::Emergency,
-				account_id: None,
+				origin: RawOrigin::Root,
 				prev_ejected: QueuedSolution::<T>::exists(),
 			});
 
@@ -1062,7 +1062,7 @@ pub mod pallet {
 			signed_submissions.put();
 			Self::deposit_event(Event::SolutionStored {
 				compute: ElectionCompute::Signed,
-				account_id: Some(who),
+				origin: RawOrigin::Signed(who),
 				prev_ejected: ejected_a_solution,
 			});
 			Ok(())
@@ -1105,7 +1105,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::SolutionStored {
 				compute: ElectionCompute::Fallback,
-				account_id: None,
+				origin: RawOrigin::Root,
 				prev_ejected: QueuedSolution::<T>::exists(),
 			});
 
@@ -1119,15 +1119,14 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// A solution was stored with the given compute.
 		///
-		/// If the solution is signed, this means that it hasn't yet been processed. If the
-		/// solution is unsigned, this means that it has also been processed.
-		///
-		/// If `account_id` is `None` if the solution is stored during the unsigned phase or by
+		/// The `origin` indicates the origin of the solution. If the origin is `Signed`, the
+		/// solution was stored during `Phase::Signed`. If the origin is `Unsigned`, the solution
+		/// was stored during the `Phase::Unsigned`. `Root` signals that the solution was stored by
 		/// `T::ForceOrigin`. The `bool` is `true` when a previous solution was ejected to make
 		/// room for this one.
 		SolutionStored {
 			compute: ElectionCompute,
-			account_id: Option<T::AccountId>,
+			origin: RawOrigin<T::AccountId>,
 			prev_ejected: bool,
 		},
 		/// The election has been finalized, with the given computation and score.
@@ -2175,27 +2174,27 @@ mod tests {
 					Event::SignedPhaseStarted { round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
-						account_id: Some(99),
+						origin: RawOrigin::Signed(99),
 						prev_ejected: false
 					},
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
-						account_id: Some(99),
+						origin: RawOrigin::Signed(99),
 						prev_ejected: false
 					},
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
-						account_id: Some(99),
+						origin: RawOrigin::Signed(99),
 						prev_ejected: false
 					},
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
-						account_id: Some(99),
+						origin: RawOrigin::Signed(99),
 						prev_ejected: false
 					},
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
-						account_id: Some(99),
+						origin: RawOrigin::Signed(99),
 						prev_ejected: false
 					},
 					Event::Slashed { account: 99, value: 5 },
@@ -2238,7 +2237,7 @@ mod tests {
 					Event::SignedPhaseStarted { round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
-						account_id: Some(99),
+						origin: RawOrigin::Signed(99),
 						prev_ejected: false
 					},
 					Event::Rewarded { account: 99, value: 7 },
@@ -2288,7 +2287,7 @@ mod tests {
 					Event::UnsignedPhaseStarted { round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Unsigned,
-						account_id: None,
+						origin: RawOrigin::None,
 						prev_ejected: false
 					},
 					Event::ElectionFinalized {
@@ -2403,7 +2402,7 @@ mod tests {
 					Event::EmergencyPhaseStarted { round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Fallback,
-						account_id: None,
+						origin: RawOrigin::Root,
 						prev_ejected: false
 					},
 					Event::ElectionFinalized {
