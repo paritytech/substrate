@@ -230,8 +230,6 @@ pub fn benchmarks(tokens: TokenStream) -> TokenStream {
 		}
 	}
 
-	// TODO: components() after SelectedBenchmark
-
 	// generics
 	let generics = match any_instance {
 		false => quote!(T),
@@ -243,6 +241,7 @@ pub fn benchmarks(tokens: TokenStream) -> TokenStream {
 	};
 
 	let krate = quote!(::frame_benchmarking);
+	let support = quote!(#krate::frame_support);
 
 	// benchmark name variables
 	let benchmark_names_str: Vec<String> = benchmark_names.iter().map(|n| n.to_string()).collect();
@@ -334,6 +333,37 @@ pub fn benchmarks(tokens: TokenStream) -> TokenStream {
 						components,
 					}
 				}).collect::<#krate::Vec<_>>()
+			}
+
+			fn run_benchmark(
+				extrinsic: &[u8],
+				c: &[(#krate::BenchmarkParameter, u32)],
+				whitelist: &[#krate::TrackedStorageKey],
+				verify: bool,
+				internal_repeats: u32,
+			) -> Result<#krate::Vec<#krate::BenchmarkResult>, #krate::BenchmarkError> {
+				let extrinsic = #krate::str::from_utf8(extrinsic).map_err(|_| "`extrinsic` is not a valid utf-8 string!")?;
+				let selected_benchmark = match extrinsic {
+					#(#selected_benchmark_mappings),
+					*,
+					_ => return Err("Could not find extrinsic.".into()),
+				};
+				let mut whitelist = whitelist.to_vec();
+				let whitelisted_caller_key = <frame_system::Account<
+					T,
+				> as #support::storage::StorageMap<
+					_,
+					_,
+				>>::hashed_key_for(
+					#krate::whitelisted_caller::<T::AccountId>(),
+				);
+				whitelist.push(whitelisted_caller_key.into());
+				let transactional_layer_key = #krate::TrackedStorageKey::new(
+					#support::storage::transactional::TRANSACTION_LEVEL_KEY.into(),
+				);
+				whitelist.push(transactional_layer_key);
+				#krate::benchmarking::set_whitelist(whitelist);
+
 			}
 		}
 	};
