@@ -94,12 +94,8 @@ impl syn::parse::Parse for FunctionAttr {
 			syn::parenthesized!(call_index_content in content);
 			let index = call_index_content.parse::<syn::LitInt>()?;
 			if !index.suffix().is_empty() {
-				let msg = format!(
-					"Invalid `pallet::call_index`, please remove the suffix, \
-				suffix: {:?}",
-					index.suffix()
-				);
-				return Err(syn::Error::new(input.span(), msg))
+				let msg = format!("invalid suffix `{:?}` for number literal", index.suffix());
+				return Err(syn::Error::new(lookahead.error().span(), msg))
 			}
 			Ok(FunctionAttr::CallIndex(index.base10_parse()?))
 		} else {
