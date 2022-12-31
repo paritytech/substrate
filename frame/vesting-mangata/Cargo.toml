@@ -27,8 +27,8 @@ log = { version = "0.4.0", default-features = false  }
 [dev-dependencies]
 sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
 sp-core = { version = "6.0.0", path = "../../primitives/core" }
-orml-traits = { git = "https://github.com/mangata-finance//open-runtime-module-library", branch = "mangata-dev-v0.9.31" }
-orml-tokens = { git = "https://github.com/mangata-finance//open-runtime-module-library", branch = "mangata-dev-v0.9.31" }
+orml-traits = { git = "https://github.com/mangata-finance//open-runtime-module-library", branch = "mangata-dev" }
+orml-tokens = { git = "https://github.com/mangata-finance//open-runtime-module-library", branch = "mangata-dev" }
 
 [features]
 default = ["std"]
