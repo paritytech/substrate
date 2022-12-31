@@ -143,32 +143,13 @@ checksum = "29d47fbf90d5149a107494b15a7dc8d69b351be2db3bb9691740e88ec17fd880"
 
 [[package]]
 name = "ark-algebra-test-templates"
-version = "0.4.0-alpha.6"
-source = "git+https://github.com/arkworks-rs/algebra?branch=release-0.4#ca06b2ba0edd5bad0fa8d1e24eb295948c6cfdbb"
-dependencies = [
- "ark-ec 0.4.0-alpha.6",
- "ark-ff 0.4.0-alpha.6",
- "ark-serialize 0.4.0-alpha.6",
- "ark-std 0.4.0-alpha",
- "hex",
- "num-bigint",
- "num-integer",
- "num-traits",
- "serde",
- "serde_derive",
- "serde_json",
- "sha2 0.10.6",
-]
-
-[[package]]
-name = "ark-algebra-test-templates"
 version = "0.4.0-alpha.7"
 source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#667ec3e82e86d168b5a4ba67bd97cacdc963a2f3"
 dependencies = [
- "ark-ec 0.4.0-alpha.7",
- "ark-ff 0.4.0-alpha.7",
- "ark-serialize 0.4.0-alpha.7",
- "ark-std 0.4.0-alpha",
+ "ark-ec",
+ "ark-ff",
+ "ark-serialize",
+ "ark-std",
  "hex",
  "num-bigint",
  "num-integer",
@@ -184,9 +165,9 @@ name = "ark-bls12-377"
 version = "0.4.0-alpha.1"
 source = "git+https://github.com/arkworks-rs/curves#cba0c7ef0d72458b6e20796f02dfe423b9d7a84c"
 dependencies = [
- "ark-ec 0.4.0-alpha.7",
- "ark-ff 0.4.0-alpha.7",
- "ark-std 0.4.0-alpha",
+ "ark-ec",
+ "ark-ff",
+ "ark-std",
 ]
 
 [[package]]
@@ -194,10 +175,10 @@ name = "ark-bls12-381"
 version = "0.4.0-alpha.1"
 source = "git+https://github.com/arkworks-rs/curves#cba0c7ef0d72458b6e20796f02dfe423b9d7a84c"
 dependencies = [
- "ark-ec 0.4.0-alpha.7",
- "ark-ff 0.4.0-alpha.7",
- "ark-serialize 0.4.0-alpha.7",
- "ark-std 0.4.0-alpha",
+ "ark-ec",
+ "ark-ff",
+ "ark-serialize",
+ "ark-std",
 ]
 
 [[package]]
@@ -206,37 +187,21 @@ version = "0.4.0-alpha.1"
 source = "git+https://github.com/arkworks-rs/curves#cba0c7ef0d72458b6e20796f02dfe423b9d7a84c"
 dependencies = [
  "ark-bls12-377",
- "ark-ec 0.4.0-alpha.7",
- "ark-ff 0.4.0-alpha.7",
- "ark-std 0.4.0-alpha",
+ "ark-ec",
+ "ark-ff",
+ "ark-std",
 ]
 
 [[package]]
 name = "ark-curve-constraint-tests"
 version = "0.4.0-alpha.1"
 dependencies = [
- "ark-ec 0.4.0-alpha.7",
- "ark-ff 0.4.0-alpha.7",
+ "ark-ec",
+ "ark-ff",
  "ark-r1cs-std",
  "ark-relations 0.4.0-alpha.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "ark-serialize 0.4.0-alpha.7",
- "ark-std 0.4.0-alpha",
-]
-
-[[package]]
-name = "ark-ec"
-version = "0.4.0-alpha.6"
-source = "git+https://github.com/arkworks-rs/algebra?branch=release-0.4#ca06b2ba0edd5bad0fa8d1e24eb295948c6cfdbb"
-dependencies = [
- "ark-ff 0.4.0-alpha.6",
- "ark-poly 0.4.0-alpha.6",
- "ark-serialize 0.4.0-alpha.6",
- "ark-std 0.4.0-alpha",
- "derivative",
- "hashbrown 0.13.1",
- "itertools",
- "num-traits",
- "zeroize",
+ "ark-serialize",
+ "ark-std",
 ]
 
 [[package]]
@@ -244,10 +209,10 @@ name = "ark-ec"
 version = "0.4.0-alpha.7"
 source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#667ec3e82e86d168b5a4ba67bd97cacdc963a2f3"
 dependencies = [
- "ark-ff 0.4.0-alpha.7",
- "ark-poly 0.4.0-alpha.7",
- "ark-serialize 0.4.0-alpha.7",
- "ark-std 0.4.0-alpha",
+ "ark-ff",
+ "ark-poly",
+ "ark-serialize",
+ "ark-std",
  "derivative",
  "hashbrown 0.13.1",
  "itertools",
@@ -261,9 +226,9 @@ version = "0.4.0-alpha.1"
 source = "git+https://github.com/arkworks-rs/curves#cba0c7ef0d72458b6e20796f02dfe423b9d7a84c"
 dependencies = [
  "ark-bls12-377",
- "ark-ec 0.4.0-alpha.7",
- "ark-ff 0.4.0-alpha.7",
- "ark-std 0.4.0-alpha",
+ "ark-ec",
+ "ark-ff",
+ "ark-std",
 ]
 
 [[package]]
@@ -272,28 +237,9 @@ version = "0.4.0-alpha.1"
 source = "git+https://github.com/arkworks-rs/curves#cba0c7ef0d72458b6e20796f02dfe423b9d7a84c"
 dependencies = [
  "ark-bls12-381",
- "ark-ec 0.4.0-alpha.7",
- "ark-ff 0.4.0-alpha.7",
- "ark-std 0.4.0-alpha",
-]
-
-[[package]]
-name = "ark-ff"
-version = "0.4.0-alpha.6"
-source = "git+https://github.com/arkworks-rs/algebra?branch=release-0.4#ca06b2ba0edd5bad0fa8d1e24eb295948c6cfdbb"
-dependencies = [
- "ark-ff-asm 0.4.0-alpha.6",
- "ark-ff-macros 0.4.0-alpha.6",
- "ark-serialize 0.4.0-alpha.6",
- "ark-std 0.4.0-alpha",
- "derivative",
- "digest 0.10.6",
- "itertools",
- "num-bigint",
- "num-traits",
- "paste",
- "rustc_version 0.4.0",
- "zeroize",
+ "ark-ec",
+ "ark-ff",
+ "ark-std",
 ]
 
 [[package]]
@@ -301,10 +247,10 @@ name = "ark-ff"
 version = "0.4.0-alpha.7"
 source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#667ec3e82e86d168b5a4ba67bd97cacdc963a2f3"
 dependencies = [
- "ark-ff-asm 0.4.0-alpha.7",
- "ark-ff-macros 0.4.0-alpha.7",
- "ark-serialize 0.4.0-alpha.7",
- "ark-std 0.4.0-alpha",
+ "ark-ff-asm",
+ "ark-ff-macros",
+ "ark-serialize",
+ "ark-std",
  "derivative",
  "digest 0.10.6",
  "itertools",
@@ -317,30 +263,9 @@ dependencies = [
 
 [[package]]
 name = "ark-ff-asm"
-version = "0.4.0-alpha.6"
-source = "git+https://github.com/arkworks-rs/algebra?branch=release-0.4#ca06b2ba0edd5bad0fa8d1e24eb295948c6cfdbb"
-dependencies = [
- "quote",
- "syn",
-]
-
-[[package]]
-name = "ark-ff-asm"
 version = "0.4.0-alpha.7"
 source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#667ec3e82e86d168b5a4ba67bd97cacdc963a2f3"
 dependencies = [
- "quote",
- "syn",
-]
-
-[[package]]
-name = "ark-ff-macros"
-version = "0.4.0-alpha.6"
-source = "git+https://github.com/arkworks-rs/algebra?branch=release-0.4#ca06b2ba0edd5bad0fa8d1e24eb295948c6cfdbb"
-dependencies = [
- "num-bigint",
- "num-traits",
- "proc-macro2",
  "quote",
  "syn",
 ]
@@ -361,11 +286,11 @@ dependencies = [
 name = "ark-models"
 version = "0.4.0-alpha.5"
 dependencies = [
- "ark-ec 0.4.0-alpha.7",
- "ark-ff 0.4.0-alpha.7",
- "ark-poly 0.4.0-alpha.7",
- "ark-serialize 0.4.0-alpha.7",
- "ark-std 0.4.0-alpha",
+ "ark-ec",
+ "ark-ff",
+ "ark-poly",
+ "ark-serialize",
+ "ark-std",
  "derivative",
  "hashbrown 0.13.1",
  "itertools",
@@ -376,24 +301,12 @@ dependencies = [
 
 [[package]]
 name = "ark-poly"
-version = "0.4.0-alpha.6"
-source = "git+https://github.com/arkworks-rs/algebra?branch=release-0.4#ca06b2ba0edd5bad0fa8d1e24eb295948c6cfdbb"
-dependencies = [
- "ark-ff 0.4.0-alpha.6",
- "ark-serialize 0.4.0-alpha.6",
- "ark-std 0.4.0-alpha",
- "derivative",
- "hashbrown 0.13.1",
-]
-
-[[package]]
-name = "ark-poly"
 version = "0.4.0-alpha.7"
 source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#667ec3e82e86d168b5a4ba67bd97cacdc963a2f3"
 dependencies = [
- "ark-ff 0.4.0-alpha.7",
- "ark-serialize 0.4.0-alpha.7",
- "ark-std 0.4.0-alpha",
+ "ark-ff",
+ "ark-serialize",
+ "ark-std",
  "derivative",
  "hashbrown 0.13.1",
 ]
@@ -403,10 +316,10 @@ name = "ark-r1cs-std"
 version = "0.4.0-alpha.3"
 source = "git+https://github.com/arkworks-rs/r1cs-std/#054969fbcee949b9030bbc166865cba1d527517e"
 dependencies = [
- "ark-ec 0.4.0-alpha.7",
- "ark-ff 0.4.0-alpha.7",
+ "ark-ec",
+ "ark-ff",
  "ark-relations 0.4.0-alpha.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "ark-std 0.4.0-alpha",
+ "ark-std",
  "derivative",
  "num-bigint",
  "num-integer",
@@ -420,10 +333,10 @@ version = "0.4.0-alpha.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8fcbb7957519f1fd4de397d22360b236840c3e426f39999e34c63be9dfe7d1b"
 dependencies = [
- "ark-ff 0.4.0-alpha.7",
- "ark-std 0.4.0-alpha",
+ "ark-ff",
+ "ark-std",
  "tracing",
- "tracing-subscriber",
+ "tracing-subscriber 0.2.25",
 ]
 
 [[package]]
@@ -431,41 +344,20 @@ name = "ark-relations"
 version = "0.4.0-alpha.1"
 source = "git+https://github.com/arkworks-rs/snark#7106dc87b35620173c67d5cbab81f3255599dffd"
 dependencies = [
- "ark-ff 0.4.0-alpha.7",
- "ark-std 0.4.0-alpha",
+ "ark-ff",
+ "ark-std",
  "tracing",
 ]
 
 [[package]]
 name = "ark-serialize"
-version = "0.4.0-alpha.6"
-source = "git+https://github.com/arkworks-rs/algebra?branch=release-0.4#ca06b2ba0edd5bad0fa8d1e24eb295948c6cfdbb"
-dependencies = [
- "ark-serialize-derive 0.4.0-alpha.6",
- "ark-std 0.4.0-alpha",
- "digest 0.10.6",
- "num-bigint",
-]
-
-[[package]]
-name = "ark-serialize"
 version = "0.4.0-alpha.7"
 source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#667ec3e82e86d168b5a4ba67bd97cacdc963a2f3"
 dependencies = [
- "ark-serialize-derive 0.4.0-alpha.7",
- "ark-std 0.4.0-alpha",
+ "ark-serialize-derive",
+ "ark-std",
  "digest 0.10.6",
  "num-bigint",
-]
-
-[[package]]
-name = "ark-serialize-derive"
-version = "0.4.0-alpha.6"
-source = "git+https://github.com/arkworks-rs/algebra?branch=release-0.4#ca06b2ba0edd5bad0fa8d1e24eb295948c6cfdbb"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -476,15 +368,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "ark-std"
-version = "0.3.0"
-source = "git+https://github.com/arkworks-rs/std#7019830e89b69aca059ce7848e53bd99a09efbab"
-dependencies = [
- "num-traits",
- "rand 0.8.5",
 ]
 
 [[package]]
@@ -502,16 +385,16 @@ dependencies = [
 name = "ark-sub-bls12-377"
 version = "0.4.0-alpha.1"
 dependencies = [
- "ark-algebra-test-templates 0.4.0-alpha.7",
+ "ark-algebra-test-templates",
  "ark-bls12-377",
  "ark-curve-constraint-tests",
- "ark-ec 0.4.0-alpha.7",
- "ark-ff 0.4.0-alpha.7",
+ "ark-ec",
+ "ark-ff",
  "ark-models",
  "ark-r1cs-std",
  "ark-relations 0.4.0-alpha.1 (git+https://github.com/arkworks-rs/snark)",
- "ark-serialize 0.4.0-alpha.7",
- "ark-std 0.4.0-alpha",
+ "ark-serialize",
+ "ark-std",
  "sp-io",
 ]
 
@@ -519,40 +402,28 @@ dependencies = [
 name = "ark-sub-bls12-381"
 version = "0.4.0"
 dependencies = [
- "ark-algebra-test-templates 0.4.0-alpha.7",
+ "ark-algebra-test-templates",
  "ark-bls12-381",
- "ark-ec 0.4.0-alpha.7",
- "ark-ff 0.4.0-alpha.7",
+ "ark-ec",
+ "ark-ff",
  "ark-models",
- "ark-serialize 0.4.0-alpha.7",
- "ark-std 0.4.0-alpha",
+ "ark-serialize",
+ "ark-std",
  "hex",
  "sp-io",
-]
-
-[[package]]
-name = "ark-sub-bls12-381"
-version = "0.4.0"
-source = "git+https://github.com/achimcc/ark-sub-curves#2f9e5dbbf97680e9e041dd2978f3b3653e80eb29"
-dependencies = [
- "ark-bls12-381",
- "ark-ec 0.4.0-alpha.6",
- "ark-ff 0.4.0-alpha.6",
- "ark-serialize 0.4.0-alpha.6",
- "ark-std 0.3.0",
 ]
 
 [[package]]
 name = "ark-sub-bw6-761"
 version = "0.4.0-alpha.1"
 dependencies = [
- "ark-algebra-test-templates 0.4.0-alpha.7",
+ "ark-algebra-test-templates",
  "ark-bw6-761",
- "ark-ec 0.4.0-alpha.7",
- "ark-ff 0.4.0-alpha.7",
+ "ark-ec",
+ "ark-ff",
  "ark-models",
- "ark-serialize 0.4.0-alpha.7",
- "ark-std 0.4.0-alpha",
+ "ark-serialize",
+ "ark-std",
  "ark-sub-bls12-377",
  "sp-io",
 ]
@@ -561,16 +432,16 @@ dependencies = [
 name = "ark-sub-ed-on-bls12-377"
 version = "0.4.0-alpha.1"
 dependencies = [
- "ark-algebra-test-templates 0.4.0-alpha.7",
+ "ark-algebra-test-templates",
  "ark-curve-constraint-tests",
- "ark-ec 0.4.0-alpha.7",
+ "ark-ec",
  "ark-ed-on-bls12-377",
- "ark-ff 0.4.0-alpha.7",
+ "ark-ff",
  "ark-models",
  "ark-r1cs-std",
  "ark-relations 0.4.0-alpha.1 (git+https://github.com/arkworks-rs/snark)",
- "ark-serialize 0.4.0-alpha.7",
- "ark-std 0.4.0-alpha",
+ "ark-serialize",
+ "ark-std",
  "ark-sub-bls12-377",
  "sp-io",
 ]
@@ -579,17 +450,17 @@ dependencies = [
 name = "ark-sub-ed-on-bls12-381"
 version = "0.4.0-alpha.1"
 dependencies = [
- "ark-algebra-test-templates 0.4.0-alpha.7",
+ "ark-algebra-test-templates",
  "ark-curve-constraint-tests",
- "ark-ec 0.4.0-alpha.7",
+ "ark-ec",
  "ark-ed-on-bls12-381",
- "ark-ff 0.4.0-alpha.7",
+ "ark-ff",
  "ark-models",
  "ark-r1cs-std",
  "ark-relations 0.4.0-alpha.1 (git+https://github.com/arkworks-rs/snark)",
- "ark-serialize 0.4.0-alpha.7",
- "ark-std 0.4.0-alpha",
- "ark-sub-bls12-381 0.4.0",
+ "ark-serialize",
+ "ark-std",
+ "ark-sub-bls12-381",
  "sp-io",
 ]
 
@@ -849,15 +720,12 @@ dependencies = [
  "async-trait",
  "fnv",
  "futures",
- "futures-timer",
  "log",
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "sc-block-builder",
- "sc-chain-spec",
  "sc-client-api",
  "sc-consensus",
- "sc-finality-grandpa",
  "sc-keystore",
  "sc-network",
  "sc-network-common",
@@ -898,7 +766,6 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "sc-rpc",
- "sc-utils",
  "serde",
  "serde_json",
  "sp-beefy",
@@ -1391,9 +1258,9 @@ dependencies = [
 
 [[package]]
 name = "comfy-table"
-version = "6.1.3"
+version = "6.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e621e7e86c46fd8a14c32c6ae3cb95656621b4743a27d0cffedb831d46e7ad21"
+checksum = "6e7b787b0dc42e8111badfdbe4c3059158ccb2db8780352fa1b01e8ccf45cc4d"
 dependencies = [
  "strum",
  "strum_macros",
@@ -2389,16 +2256,13 @@ dependencies = [
  "frame-system",
  "gethostname",
  "handlebars",
- "hash-db",
  "itertools",
- "kvdb",
  "lazy_static",
  "linked-hash-map",
  "log",
- "memory-db",
  "parity-scale-codec",
  "rand 0.8.5",
- "rand_pcg 0.3.1",
+ "rand_pcg",
  "sc-block-builder",
  "sc-cli",
  "sc-client-api",
@@ -2408,7 +2272,6 @@ dependencies = [
  "sc-sysinfo",
  "serde",
  "serde_json",
- "serde_nanos",
  "sp-api",
  "sp-blockchain",
  "sp-core",
@@ -2421,7 +2284,6 @@ dependencies = [
  "sp-std",
  "sp-storage",
  "sp-trie",
- "tempfile",
  "thiserror",
  "thousands",
 ]
@@ -2450,7 +2312,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "parity-scale-codec",
- "rand 0.7.3",
+ "rand 0.8.5",
  "scale-info",
  "sp-arithmetic",
  "sp-core",
@@ -2514,19 +2376,18 @@ dependencies = [
 name = "frame-remote-externalities"
 version = "0.10.0-dev"
 dependencies = [
- "env_logger",
  "frame-support",
+ "futures",
  "log",
  "pallet-elections-phragmen",
  "parity-scale-codec",
  "serde",
- "serde_json",
  "sp-core",
  "sp-io",
  "sp-runtime",
- "sp-version",
  "substrate-rpc-client",
  "tokio",
+ "tracing-subscriber 0.3.16",
 ]
 
 [[package]]
@@ -2860,7 +2721,6 @@ dependencies = [
  "git2",
  "num-format",
  "pallet-staking",
- "sp-io",
 ]
 
 [[package]]
@@ -2899,10 +2759,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fc3cb4d91f53b50155bdcfd23f6a4c39ae1969c2ae85982b135750cccaf5fce"
 dependencies = [
  "cfg-if",
- "js-sys",
  "libc",
  "wasi 0.9.0+wasi-snapshot-preview1",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -3662,6 +3520,7 @@ dependencies = [
  "pallet-message-queue",
  "pallet-mmr",
  "pallet-multisig",
+ "pallet-nfts",
  "pallet-nis",
  "pallet-nomination-pools",
  "pallet-nomination-pools-benchmarking",
@@ -4358,6 +4217,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "matchers"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8263075bb86c5a1b1427b5ae862e8889656f126e9f77c484496e8b47cf5c5558"
+dependencies = [
+ "regex-automata",
+]
+
+[[package]]
 name = "matches"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4485,7 +4353,6 @@ dependencies = [
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
- "sp-io",
  "sp-mmr-primitives",
  "sp-runtime",
  "sp-tracing",
@@ -4762,7 +4629,7 @@ dependencies = [
  "node-primitives",
  "node-testing",
  "parity-db",
- "rand 0.7.3",
+ "rand 0.8.5",
  "sc-basic-authorship",
  "sc-client-api",
  "sc-transaction-pool",
@@ -4848,6 +4715,7 @@ dependencies = [
  "sp-core",
  "sp-finality-grandpa",
  "sp-inherents",
+ "sp-io",
  "sp-keyring",
  "sp-keystore",
  "sp-runtime",
@@ -5004,6 +4872,7 @@ dependencies = [
  "sp-core",
  "sp-finality-grandpa",
  "sp-inherents",
+ "sp-io",
  "sp-keyring",
  "sp-runtime",
  "sp-timestamp",
@@ -5106,6 +4975,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61807f77802ff30975e01f4f071c8ba10c022052f98b3294119f3e615d13e5be"
 
 [[package]]
+name = "nu-ansi-term"
+version = "0.46.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77a8165726e8236064dbb45459242600304b42a5ea24ee2948e18e023bf7ba84"
+dependencies = [
+ "overload",
+ "winapi",
+]
+
+[[package]]
 name = "num-bigint"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5200,9 +5079,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.16.0"
+version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86f0b0d4bf799edbc74508c1e8bf170ff5f41238e5f8225603ca7caaae2b7860"
+checksum = "6f61fba1741ea2b3d6a1e3178721804bb716a68a6aeba1149b5d52e3d464ea66"
 
 [[package]]
 name = "oorandom"
@@ -5242,6 +5121,12 @@ checksum = "628223faebab4e3e40667ee0b2336d34a5b960ff60ea743ddfdbcf7770bcfb66"
 dependencies = [
  "winapi",
 ]
+
+[[package]]
+name = "overload"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
 
 [[package]]
 name = "packed_simd_2"
@@ -5586,7 +5471,7 @@ dependencies = [
  "parity-scale-codec",
  "pretty_assertions",
  "rand 0.8.5",
- "rand_pcg 0.3.1",
+ "rand_pcg",
  "scale-info",
  "serde",
  "smallvec",
@@ -5674,7 +5559,7 @@ dependencies = [
  "pallet-election-provider-support-benchmarking",
  "parity-scale-codec",
  "parking_lot 0.12.1",
- "rand 0.7.3",
+ "rand 0.8.5",
  "scale-info",
  "sp-arithmetic",
  "sp-core",
@@ -5683,7 +5568,6 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "sp-tracing",
- "static_assertions",
  "strum",
 ]
 
@@ -5939,6 +5823,24 @@ dependencies = [
 name = "pallet-multisig"
 version = "4.0.0-dev"
 dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log",
+ "pallet-balances",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-nfts"
+version = "4.0.0-dev"
+dependencies = [
+ "enumflags2",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -6356,7 +6258,7 @@ dependencies = [
  "pallet-staking-reward-curve",
  "pallet-timestamp",
  "parity-scale-codec",
- "rand 0.7.3",
+ "rand 0.8.5",
  "scale-info",
  "sp-core",
  "sp-io",
@@ -6795,20 +6697,20 @@ checksum = "d01a5bd0424d00070b0098dd17ebca6f961a959dead1dbcbbbc1d1cd8d3deeba"
 
 [[package]]
 name = "pbkdf2"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "216eaa586a190f0a738f2f918511eecfa90f13295abec0e457cdebcceda80cbd"
-dependencies = [
- "crypto-mac 0.8.0",
-]
-
-[[package]]
-name = "pbkdf2"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d95f5254224e617595d2cc3cc73ff0a5eaf2637519e25f03388154e9378b6ffa"
 dependencies = [
  "crypto-mac 0.11.1",
+]
+
+[[package]]
+name = "pbkdf2"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83a0692ec44e4cf1ef28ca317f14f8f07da2d95ec3fa01f86e4467b725e60917"
+dependencies = [
+ "digest 0.10.6",
 ]
 
 [[package]]
@@ -7016,9 +6918,9 @@ checksum = "5b40af805b3121feab8a3c29f04d8ad262fa8e0561883e7653e024ae4479e6de"
 
 [[package]]
 name = "predicates"
-version = "2.1.4"
+version = "2.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f54fc5dc63ed3bbf19494623db4f3af16842c0d975818e469022d09e53f0aa05"
+checksum = "59230a63c37f3e18569bdb90e4a89cbf5bf8b06fea0b84e65ea10cc4df47addd"
 dependencies = [
  "difflib",
  "float-cmp",
@@ -7289,7 +7191,6 @@ dependencies = [
  "rand_chacha 0.2.2",
  "rand_core 0.5.1",
  "rand_hc",
- "rand_pcg 0.2.1",
 ]
 
 [[package]]
@@ -7356,15 +7257,6 @@ name = "rand_hc"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca3129af7b92a17112d59ad498c6f81eaf463253766b90396d39ea7a39d6613c"
-dependencies = [
- "rand_core 0.5.1",
-]
-
-[[package]]
-name = "rand_pcg"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16abd0c1b639e9eb4d7c50c0b8100b0d0f849be2349829c740fe8e6eb4816429"
 dependencies = [
  "rand_core 0.5.1",
 ]
@@ -7748,7 +7640,7 @@ dependencies = [
  "prost",
  "prost-build",
  "quickcheck",
- "rand 0.7.3",
+ "rand 0.8.5",
  "sc-client-api",
  "sc-network-common",
  "sp-api",
@@ -7808,9 +7700,7 @@ dependencies = [
 name = "sc-chain-spec"
 version = "4.0.0-dev"
 dependencies = [
- "impl-trait-for-tuples",
  "memmap2",
- "parity-scale-codec",
  "sc-chain-spec-derive",
  "sc-network-common",
  "sc-telemetry",
@@ -7844,7 +7734,7 @@ dependencies = [
  "log",
  "names",
  "parity-scale-codec",
- "rand 0.7.3",
+ "rand 0.8.5",
  "regex",
  "rpassword",
  "sc-client-api",
@@ -7864,6 +7754,7 @@ dependencies = [
  "sp-keystore",
  "sp-panic-handler",
  "sp-runtime",
+ "sp-tracing",
  "sp-version",
  "tempfile",
  "thiserror",
@@ -7877,7 +7768,6 @@ version = "4.0.0-dev"
 dependencies = [
  "fnv",
  "futures",
- "hash-db",
  "log",
  "parity-scale-codec",
  "parking_lot 0.12.1",
@@ -7895,7 +7785,6 @@ dependencies = [
  "sp-state-machine",
  "sp-storage",
  "sp-test-primitives",
- "sp-trie",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime",
  "thiserror",
@@ -8020,7 +7909,6 @@ dependencies = [
  "sc-network-test",
  "sc-telemetry",
  "schnorrkel",
- "serde",
  "sp-api",
  "sp-application-crypto",
  "sp-block-builder",
@@ -8031,13 +7919,11 @@ dependencies = [
  "sp-consensus-vrf",
  "sp-core",
  "sp-inherents",
- "sp-io",
  "sp-keyring",
  "sp-keystore",
  "sp-runtime",
  "sp-timestamp",
  "sp-tracing",
- "sp-version",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "thiserror",
@@ -8166,7 +8052,6 @@ dependencies = [
  "sp-runtime",
  "sp-state-machine",
  "substrate-test-runtime-client",
- "thiserror",
 ]
 
 [[package]]
@@ -8212,7 +8097,7 @@ dependencies = [
  "substrate-test-runtime",
  "tempfile",
  "tracing",
- "tracing-subscriber",
+ "tracing-subscriber 0.2.25",
  "wasmi 0.13.2",
  "wat",
 ]
@@ -8284,7 +8169,6 @@ dependencies = [
  "sc-chain-spec",
  "sc-client-api",
  "sc-consensus",
- "sc-keystore",
  "sc-network",
  "sc-network-common",
  "sc-network-gossip",
@@ -8324,7 +8208,6 @@ dependencies = [
  "sc-finality-grandpa",
  "sc-rpc",
  "serde",
- "serde_json",
  "sp-blockchain",
  "sp-core",
  "sp-finality-grandpa",
@@ -8345,7 +8228,6 @@ dependencies = [
  "log",
  "sc-client-api",
  "sc-network-common",
- "sc-transaction-pool-api",
  "sp-blockchain",
  "sp-runtime",
 ]
@@ -8373,25 +8255,20 @@ dependencies = [
  "assert_matches",
  "async-trait",
  "asynchronous-codec",
- "bitflags",
+ "backtrace",
  "bytes",
- "cid",
  "either",
  "fnv",
- "fork-tree",
  "futures",
  "futures-timer",
  "ip_network",
  "libp2p",
- "linked-hash-map",
- "linked_hash_set",
  "log",
  "lru",
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "pin-project",
- "prost",
- "rand 0.7.3",
+ "rand 0.8.5",
  "sc-block-builder",
  "sc-client-api",
  "sc-consensus",
@@ -8444,7 +8321,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "unsigned-varint",
- "void",
 ]
 
 [[package]]
@@ -8559,7 +8435,7 @@ dependencies = [
  "libp2p",
  "log",
  "parking_lot 0.12.1",
- "rand 0.7.3",
+ "rand 0.8.5",
  "sc-block-builder",
  "sc-client-api",
  "sc-consensus",
@@ -8585,13 +8461,13 @@ version = "0.10.0-dev"
 dependencies = [
  "array-bytes",
  "futures",
- "hex",
  "libp2p",
  "log",
  "parity-scale-codec",
  "pin-project",
  "sc-network-common",
  "sc-peerset",
+ "sc-utils",
  "sp-consensus",
  "sp-runtime",
  "substrate-prometheus-endpoint",
@@ -8614,7 +8490,7 @@ dependencies = [
  "once_cell",
  "parity-scale-codec",
  "parking_lot 0.12.1",
- "rand 0.7.3",
+ "rand 0.8.5",
  "sc-block-builder",
  "sc-client-api",
  "sc-client-db",
@@ -8642,7 +8518,7 @@ dependencies = [
  "futures",
  "libp2p",
  "log",
- "rand 0.7.3",
+ "rand 0.8.5",
  "sc-utils",
  "serde_json",
  "wasm-timer",
@@ -8663,9 +8539,7 @@ dependencies = [
  "assert_matches",
  "env_logger",
  "futures",
- "hash-db",
  "jsonrpsee",
- "lazy_static",
  "log",
  "parity-scale-codec",
  "parking_lot 0.12.1",
@@ -8699,11 +8573,8 @@ dependencies = [
 name = "sc-rpc-api"
 version = "0.10.0-dev"
 dependencies = [
- "futures",
  "jsonrpsee",
- "log",
  "parity-scale-codec",
- "parking_lot 0.12.1",
  "sc-chain-spec",
  "sc-transaction-pool-api",
  "scale-info",
@@ -8712,7 +8583,6 @@ dependencies = [
  "sp-core",
  "sp-rpc",
  "sp-runtime",
- "sp-tracing",
  "sp-version",
  "thiserror",
 ]
@@ -8721,7 +8591,6 @@ dependencies = [
 name = "sc-rpc-server"
 version = "4.0.0-dev"
 dependencies = [
- "futures",
  "http",
  "jsonrpsee",
  "log",
@@ -8736,20 +8605,33 @@ dependencies = [
 name = "sc-rpc-spec-v2"
 version = "0.10.0-dev"
 dependencies = [
+ "array-bytes",
+ "assert_matches",
  "futures",
+ "futures-util",
  "hex",
  "jsonrpsee",
+ "log",
  "parity-scale-codec",
+ "parking_lot 0.12.1",
+ "sc-block-builder",
  "sc-chain-spec",
+ "sc-client-api",
  "sc-transaction-pool-api",
  "serde",
  "serde_json",
  "sp-api",
  "sp-blockchain",
+ "sp-consensus",
  "sp-core",
+ "sp-maybe-compressed-blob",
  "sp-runtime",
+ "sp-version",
+ "substrate-test-runtime",
+ "substrate-test-runtime-client",
  "thiserror",
  "tokio",
+ "tokio-stream",
 ]
 
 [[package]]
@@ -8772,13 +8654,12 @@ dependencies = [
  "exit-future",
  "futures",
  "futures-timer",
- "hash-db",
  "jsonrpsee",
  "log",
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "pin-project",
- "rand 0.7.3",
+ "rand 0.8.5",
  "sc-block-builder",
  "sc-chain-spec",
  "sc-client-api",
@@ -8806,19 +8687,15 @@ dependencies = [
  "serde",
  "serde_json",
  "sp-api",
- "sp-application-crypto",
- "sp-block-builder",
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
  "sp-externalities",
- "sp-inherents",
  "sp-keystore",
  "sp-runtime",
  "sp-session",
  "sp-state-machine",
  "sp-storage",
- "sp-tracing",
  "sp-transaction-pool",
  "sp-transaction-storage-proof",
  "sp-trie",
@@ -8857,9 +8734,7 @@ dependencies = [
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
- "sp-externalities",
  "sp-io",
- "sp-panic-handler",
  "sp-runtime",
  "sp-state-machine",
  "sp-storage",
@@ -8878,7 +8753,6 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "parking_lot 0.12.1",
- "sc-client-api",
  "sp-core",
 ]
 
@@ -8907,8 +8781,8 @@ dependencies = [
  "futures",
  "libc",
  "log",
- "rand 0.7.3",
- "rand_pcg 0.2.1",
+ "rand 0.8.5",
+ "rand_pcg",
  "regex",
  "sc-telemetry",
  "serde",
@@ -8929,7 +8803,8 @@ dependencies = [
  "log",
  "parking_lot 0.12.1",
  "pin-project",
- "rand 0.7.3",
+ "rand 0.8.5",
+ "sc-utils",
  "serde",
  "serde_json",
  "thiserror",
@@ -8964,7 +8839,7 @@ dependencies = [
  "thiserror",
  "tracing",
  "tracing-log",
- "tracing-subscriber",
+ "tracing-subscriber 0.2.25",
 ]
 
 [[package]]
@@ -9028,6 +8903,7 @@ dependencies = [
 name = "sc-utils"
 version = "4.0.0-dev"
 dependencies = [
+ "backtrace",
  "futures",
  "futures-timer",
  "lazy_static",
@@ -9248,15 +9124,6 @@ checksum = "877c235533714907a8c2464236f5c4b2a17262ef1bd71f38f35ea592c8da6883"
 dependencies = [
  "itoa 1.0.5",
  "ryu",
- "serde",
-]
-
-[[package]]
-name = "serde_nanos"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e44969a61f5d316be20a42ff97816efb3b407a924d06824c3d8a49fa8450de0e"
-dependencies = [
  "serde",
 ]
 
@@ -9530,11 +9397,10 @@ dependencies = [
  "num-traits",
  "parity-scale-codec",
  "primitive-types",
- "rand 0.7.3",
+ "rand 0.8.5",
  "scale-info",
  "serde",
  "sp-core",
- "sp-debug-derive",
  "sp-std",
  "static_assertions",
 ]
@@ -9553,17 +9419,15 @@ dependencies = [
 name = "sp-arkworks"
 version = "0.0.1"
 dependencies = [
- "ark-algebra-test-templates 0.4.0-alpha.6",
  "ark-bls12-377",
  "ark-bls12-381",
  "ark-bw6-761",
- "ark-ec 0.4.0-alpha.7",
+ "ark-ec",
  "ark-ed-on-bls12-377",
  "ark-ed-on-bls12-381",
- "ark-ff 0.4.0-alpha.7",
- "ark-serialize 0.4.0-alpha.7",
- "ark-std 0.4.0-alpha",
- "ark-sub-bls12-381 0.4.0 (git+https://github.com/achimcc/ark-sub-curves)",
+ "ark-ff",
+ "ark-serialize",
+ "ark-std",
  "better_any",
  "sp-std",
 ]
@@ -9643,7 +9507,6 @@ version = "0.10.0-dev"
 dependencies = [
  "async-trait",
  "futures",
- "futures-timer",
  "log",
  "parity-scale-codec",
  "sp-core",
@@ -9713,8 +9576,6 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-arithmetic",
- "sp-runtime",
  "sp-std",
  "sp-timestamp",
 ]
@@ -9739,7 +9600,6 @@ dependencies = [
  "base58",
  "bitflags",
  "blake2",
- "byteorder",
  "criterion",
  "dyn-clonable",
  "ed25519-zebra",
@@ -9751,11 +9611,10 @@ dependencies = [
  "libsecp256k1",
  "log",
  "merlin",
- "num-traits",
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "primitive-types",
- "rand 0.7.3",
+ "rand 0.8.5",
  "regex",
  "scale-info",
  "schnorrkel",
@@ -9775,7 +9634,6 @@ dependencies = [
  "substrate-bip39",
  "thiserror",
  "tiny-bip39",
- "wasmi 0.13.2",
  "zeroize",
 ]
 
@@ -9865,13 +9723,12 @@ name = "sp-io"
 version = "7.0.0"
 dependencies = [
  "bytes",
+ "ed25519",
  "ed25519-dalek",
  "futures",
- "hash-db",
  "libsecp256k1",
  "log",
  "parity-scale-codec",
- "parking_lot 0.12.1",
  "secp256k1",
  "sp-arkworks",
  "sp-core",
@@ -9882,7 +9739,6 @@ dependencies = [
  "sp-std",
  "sp-tracing",
  "sp-trie",
- "sp-wasm-interface",
  "tracing",
  "tracing-core",
 ]
@@ -9946,7 +9802,7 @@ name = "sp-npos-elections"
 version = "4.0.0-dev"
 dependencies = [
  "parity-scale-codec",
- "rand 0.7.3",
+ "rand 0.8.5",
  "scale-info",
  "serde",
  "sp-arithmetic",
@@ -10007,7 +9863,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "paste",
- "rand 0.7.3",
+ "rand 0.8.5",
  "scale-info",
  "serde",
  "serde_json",
@@ -10137,11 +9993,10 @@ dependencies = [
  "assert_matches",
  "hash-db",
  "log",
- "num-traits",
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "pretty_assertions",
- "rand 0.7.3",
+ "rand 0.8.5",
  "smallvec",
  "sp-core",
  "sp-externalities",
@@ -10152,7 +10007,6 @@ dependencies = [
  "thiserror",
  "tracing",
  "trie-db",
- "trie-root",
 ]
 
 [[package]]
@@ -10190,7 +10044,6 @@ dependencies = [
  "futures-timer",
  "log",
  "parity-scale-codec",
- "sp-api",
  "sp-inherents",
  "sp-runtime",
  "sp-std",
@@ -10205,7 +10058,7 @@ dependencies = [
  "sp-std",
  "tracing",
  "tracing-core",
- "tracing-subscriber",
+ "tracing-subscriber 0.2.25",
 ]
 
 [[package]]
@@ -10301,7 +10154,6 @@ dependencies = [
 name = "sp-weights"
 version = "4.0.0"
 dependencies = [
- "impl-trait-for-tuples",
  "parity-scale-codec",
  "scale-info",
  "serde",
@@ -10476,7 +10328,6 @@ version = "3.0.0"
 dependencies = [
  "frame-support",
  "frame-system",
- "futures",
  "jsonrpsee",
  "parity-scale-codec",
  "sc-rpc-api",
@@ -10498,11 +10349,9 @@ dependencies = [
  "jsonrpsee",
  "log",
  "parity-scale-codec",
- "sc-client-api",
  "sc-rpc-api",
  "sc-transaction-pool",
  "sc-transaction-pool-api",
- "serde_json",
  "sp-api",
  "sp-block-builder",
  "sp-blockchain",
@@ -10517,7 +10366,6 @@ dependencies = [
 name = "substrate-prometheus-endpoint"
 version = "0.10.0-dev"
 dependencies = [
- "futures-util",
  "hyper",
  "log",
  "prometheus",
@@ -10552,10 +10400,8 @@ dependencies = [
  "serde",
  "serde_json",
  "sp-core",
- "sp-io",
  "sp-runtime",
  "sp-state-machine",
- "sp-std",
  "sp-trie",
  "trie-db",
 ]
@@ -10879,17 +10725,17 @@ dependencies = [
 
 [[package]]
 name = "tiny-bip39"
-version = "0.8.2"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ffc59cb9dfc85bb312c3a78fd6aa8a8582e310b0fa885d5bb877f6dcc601839d"
+checksum = "62cc94d358b5a1e84a5cb9109f559aa3c4d634d2b1b4de3d0fa4adc7c78e2861"
 dependencies = [
  "anyhow",
- "hmac 0.8.1",
+ "hmac 0.12.1",
  "once_cell",
- "pbkdf2 0.4.0",
- "rand 0.7.3",
+ "pbkdf2 0.11.0",
+ "rand 0.8.5",
  "rustc-hash",
- "sha2 0.9.9",
+ "sha2 0.10.6",
  "thiserror",
  "unicode-normalization",
  "wasm-bindgen",
@@ -10981,6 +10827,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite 0.2.9",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]
@@ -11135,7 +10982,7 @@ dependencies = [
  "ansi_term",
  "chrono",
  "lazy_static",
- "matchers",
+ "matchers 0.0.1",
  "parking_lot 0.11.2",
  "regex",
  "serde",
@@ -11147,6 +10994,24 @@ dependencies = [
  "tracing-core",
  "tracing-log",
  "tracing-serde",
+]
+
+[[package]]
+name = "tracing-subscriber"
+version = "0.3.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a6176eae26dd70d0c919749377897b54a9276bd7061339665dd68777926b5a70"
+dependencies = [
+ "matchers 0.1.0",
+ "nu-ansi-term",
+ "once_cell",
+ "regex",
+ "sharded-slab",
+ "smallvec",
+ "thread_local",
+ "tracing",
+ "tracing-core",
+ "tracing-log",
 ]
 
 [[package]]
@@ -11255,17 +11120,21 @@ dependencies = [
  "clap 4.0.32",
  "frame-remote-externalities",
  "frame-try-runtime",
+ "hex",
  "log",
  "parity-scale-codec",
- "sc-chain-spec",
  "sc-cli",
  "sc-executor",
  "sc-service",
  "serde",
+ "serde_json",
+ "sp-api",
  "sp-core",
+ "sp-debug-derive",
  "sp-externalities",
  "sp-io",
  "sp-keystore",
+ "sp-rpc",
  "sp-runtime",
  "sp-state-machine",
  "sp-version",

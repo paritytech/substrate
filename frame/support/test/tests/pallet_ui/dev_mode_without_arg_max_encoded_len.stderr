@@ -1,3 +1,16 @@
+error: use of deprecated struct `pallet::warnings::my_call`:
+                   Implicit call indices are deprecated in favour of explicit ones.
+                   Please ensure that all calls have the `pallet::call_index` attribute or that the
+                   `dev-mode` of the pallet is enabled. For more info see:
+                   <https://github.com/paritytech/substrate/pull/12891> and
+                   <https://github.com/paritytech/substrate/pull/11381>.
+  --> tests/pallet_ui/dev_mode_without_arg_max_encoded_len.rs:25:10
+   |
+25 |         pub fn my_call(_origin: OriginFor<T>) -> DispatchResult {
+   |                ^^^^^^^
+   |
+   = note: `-D deprecated` implied by `-D warnings`
+
 error[E0277]: the trait bound `Vec<u8>: MaxEncodedLen` is not satisfied
   --> tests/pallet_ui/dev_mode_without_arg_max_encoded_len.rs:11:12
    |
@@ -13,5 +26,5 @@ error[E0277]: the trait bound `Vec<u8>: MaxEncodedLen` is not satisfied
              (TupleElement0, TupleElement1, TupleElement2, TupleElement3, TupleElement4, TupleElement5)
              (TupleElement0, TupleElement1, TupleElement2, TupleElement3, TupleElement4, TupleElement5, TupleElement6)
              (TupleElement0, TupleElement1, TupleElement2, TupleElement3, TupleElement4, TupleElement5, TupleElement6, TupleElement7)
-           and 78 others
+           and 79 others
    = note: required for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageMyStorage<T>, Vec<u8>>` to implement `StorageInfoTrait`

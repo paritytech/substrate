@@ -1350,12 +1350,14 @@ fn bond_extra_and_withdraw_unbonded_works() {
 }
 
 #[test]
-fn too_many_unbond_calls_should_not_work() {
+fn many_unbond_calls_should_work() {
 	ExtBuilder::default().build_and_execute(|| {
 		let mut current_era = 0;
 		// locked at era MaxUnlockingChunks - 1 until 3
 
-		for i in 0..<<Test as Config>::MaxUnlockingChunks as Get<u32>>::get() - 1 {
+		let max_unlocking_chunks = <<Test as Config>::MaxUnlockingChunks as Get<u32>>::get();
+
+		for i in 0..max_unlocking_chunks - 1 {
 			// There is only 1 chunk per era, so we need to be in a new era to create a chunk.
 			current_era = i as u32;
 			mock::start_active_era(current_era);
@@ -1365,27 +1367,57 @@ fn too_many_unbond_calls_should_not_work() {
 		current_era += 1;
 		mock::start_active_era(current_era);
 
-		// This chunk is locked at `current_era` through `current_era + 2` (because BondingDuration
-		// == 3).
+		// This chunk is locked at `current_era` through `current_era + 2` (because
+		// `BondingDuration` == 3).
 		assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
 		assert_eq!(
-			Staking::ledger(&10).unwrap().unlocking.len(),
+			Staking::ledger(&10).map(|l| l.unlocking.len()).unwrap(),
 			<<Test as Config>::MaxUnlockingChunks as Get<u32>>::get() as usize
 		);
-		// can't do more.
-		assert_noop!(Staking::unbond(RuntimeOrigin::signed(10), 1), Error::<Test>::NoMoreChunks);
 
-		current_era += 2;
+		// even though the number of unlocked chunks is the same as `MaxUnlockingChunks`,
+		// unbonding works as expected.
+		for i in current_era..(current_era + max_unlocking_chunks) - 1 {
+			// There is only 1 chunk per era, so we need to be in a new era to create a chunk.
+			current_era = i as u32;
+			mock::start_active_era(current_era);
+			assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
+		}
+
+		// only slots within last `BondingDuration` are filled.
+		assert_eq!(
+			Staking::ledger(&10).map(|l| l.unlocking.len()).unwrap(),
+			<<Test as Config>::BondingDuration>::get() as usize
+		);
+	})
+}
+
+#[test]
+fn auto_withdraw_may_not_unlock_all_chunks() {
+	ExtBuilder::default().build_and_execute(|| {
+		// set `MaxUnlockingChunks` to a low number to test case when the unbonding period
+		// is larger than the number of unlocking chunks available, which may result on a
+		// `Error::NoMoreChunks`, even when the auto-withdraw tries to release locked chunks.
+		MaxUnlockingChunks::set(1);
+
+		let mut current_era = 0;
+
+		// fills the chunking slots for account
+		mock::start_active_era(current_era);
+		assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
+
+		current_era += 1;
 		mock::start_active_era(current_era);
 
+		// unbonding will fail because i) there are no remaining chunks and ii) no filled chunks
+		// can be released because current chunk hasn't stay in the queue for at least
+		// `BondingDuration`
 		assert_noop!(Staking::unbond(RuntimeOrigin::signed(10), 1), Error::<Test>::NoMoreChunks);
-		// free up everything except the most recently added chunk.
-		assert_ok!(Staking::withdraw_unbonded(RuntimeOrigin::signed(10), 0));
-		assert_eq!(Staking::ledger(&10).unwrap().unlocking.len(), 1);
 
-		// Can add again.
+		// fast-forward a few eras for unbond to be successful with implicit withdraw
+		current_era += 10;
+		mock::start_active_era(current_era);
 		assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
-		assert_eq!(Staking::ledger(&10).unwrap().unlocking.len(), 2);
 	})
 }
 
@@ -4464,6 +4496,32 @@ mod election_data_provider {
 	}
 
 	#[test]
+	fn set_minimum_active_stake_is_correct() {
+		ExtBuilder::default()
+			.nominate(false)
+			.add_staker(61, 60, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
+			.add_staker(71, 70, 10, StakerStatus::<AccountId>::Nominator(vec![21]))
+			.add_staker(81, 80, 50, StakerStatus::<AccountId>::Nominator(vec![21]))
+			.build_and_execute(|| {
+				assert_ok!(<Staking as ElectionDataProvider>::electing_voters(None));
+				assert_eq!(MinimumActiveStake::<Test>::get(), 10);
+
+				// remove staker with lower bond by limiting the number of voters and check
+				// `MinimumActiveStake` again after electing voters.
+				assert_ok!(<Staking as ElectionDataProvider>::electing_voters(Some(5)));
+				assert_eq!(MinimumActiveStake::<Test>::get(), 50);
+			});
+	}
+
+	#[test]
+	fn set_minimum_active_stake_zero_correct() {
+		ExtBuilder::default().has_stakers(false).build_and_execute(|| {
+			assert_ok!(<Staking as ElectionDataProvider>::electing_voters(None));
+			assert_eq!(MinimumActiveStake::<Test>::get(), 0);
+		});
+	}
+
+	#[test]
 	fn voters_include_self_vote() {
 		ExtBuilder::default().nominate(false).build_and_execute(|| {
 			assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| Staking::electing_voters(
@@ -5666,4 +5724,95 @@ fn scale_validator_count_errors() {
 			Error::<Test>::TooManyValidators,
 		);
 	})
+}
+
+#[test]
+fn set_min_commission_works_with_admin_origin() {
+	ExtBuilder::default().build_and_execute(|| {
+		// no minimum commission set initially
+		assert_eq!(MinCommission::<Test>::get(), Zero::zero());
+
+		// root can set min commission
+		assert_ok!(Staking::set_min_commission(RuntimeOrigin::root(), Perbill::from_percent(10)));
+
+		assert_eq!(MinCommission::<Test>::get(), Perbill::from_percent(10));
+
+		// Non privileged origin can not set min_commission
+		assert_noop!(
+			Staking::set_min_commission(RuntimeOrigin::signed(2), Perbill::from_percent(15)),
+			BadOrigin
+		);
+
+		// Admin Origin can set min commission
+		assert_ok!(Staking::set_min_commission(
+			RuntimeOrigin::signed(1),
+			Perbill::from_percent(15),
+		));
+
+		// setting commission below min_commission fails
+		assert_noop!(
+			Staking::validate(
+				RuntimeOrigin::signed(10),
+				ValidatorPrefs { commission: Perbill::from_percent(14), blocked: false }
+			),
+			Error::<Test>::CommissionTooLow
+		);
+
+		// setting commission >= min_commission works
+		assert_ok!(Staking::validate(
+			RuntimeOrigin::signed(10),
+			ValidatorPrefs { commission: Perbill::from_percent(15), blocked: false }
+		));
+	})
+}
+
+mod staking_interface {
+	use frame_support::storage::with_storage_layer;
+	use sp_staking::StakingInterface;
+
+	use super::*;
+
+	#[test]
+	fn force_unstake_with_slash_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// without slash
+			let _ = with_storage_layer::<(), _, _>(|| {
+				// bond an account, can unstake
+				assert_eq!(Staking::bonded(&11), Some(10));
+				assert_ok!(<Staking as StakingInterface>::force_unstake(11));
+				Err(DispatchError::from("revert"))
+			});
+
+			// bond again and add a slash, still can unstake.
+			assert_eq!(Staking::bonded(&11), Some(10));
+			add_slash(&11);
+			assert_ok!(<Staking as StakingInterface>::force_unstake(11));
+		});
+	}
+
+	#[test]
+	fn do_withdraw_unbonded_with_wrong_slash_spans_works_as_expected() {
+		ExtBuilder::default().build_and_execute(|| {
+			on_offence_now(
+				&[OffenceDetails {
+					offender: (11, Staking::eras_stakers(active_era(), 11)),
+					reporters: vec![],
+				}],
+				&[Perbill::from_percent(100)],
+			);
+
+			assert_eq!(Staking::bonded(&11), Some(10));
+
+			assert_noop!(
+				Staking::withdraw_unbonded(RuntimeOrigin::signed(10), 0),
+				Error::<Test>::IncorrectSlashingSpans
+			);
+
+			let num_slashing_spans = Staking::slashing_spans(&11).map_or(0, |s| s.iter().count());
+			assert_ok!(Staking::withdraw_unbonded(
+				RuntimeOrigin::signed(10),
+				num_slashing_spans as u32
+			));
+		});
+	}
 }
