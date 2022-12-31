@@ -91,7 +91,8 @@ pub mod pallet {
 	/// The module configuration trait.
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Identifier for the collection of item.
 		type CollectionId: Member + Parameter + MaxEncodedLen + Copy;
@@ -104,12 +105,12 @@ pub mod pallet {
 
 		/// The origin which may forcibly create or destroy an item or otherwise alter privileged
 		/// attributes.
-		type ForceOrigin: EnsureOrigin<Self::Origin>;
+		type ForceOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Standard collection creation is only allowed if the origin attempting it and the
 		/// collection are in this set.
 		type CreateOrigin: EnsureOriginWithArg<
-			Self::Origin,
+			Self::RuntimeOrigin,
 			Self::CollectionId,
 			Success = Self::AccountId,
 		>;

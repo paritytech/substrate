@@ -446,13 +446,13 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// Origin that can control the configurations of this pallet.
-		type ControlOrigin: frame_support::traits::EnsureOrigin<Self::Origin>;
+		type ControlOrigin: frame_support::traits::EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Filter on which origin that trigger the manual migrations.
-		type SignedFilter: EnsureOrigin<Self::Origin, Success = Self::AccountId>;
+		type SignedFilter: EnsureOrigin<Self::RuntimeOrigin, Success = Self::AccountId>;
 
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The currency provider type.
 		type Currency: Currency<Self::AccountId>;
@@ -964,7 +964,7 @@ mod benchmarks {
 			);
 
 			frame_system::Pallet::<T>::assert_last_event(
-				<T as Config>::Event::from(crate::Event::Slashed {
+				<T as Config>::RuntimeEvent::from(crate::Event::Slashed {
 					who: caller.clone(),
 					amount: T::SignedDepositBase::get()
 						.saturating_add(T::SignedDepositPerItem::get().saturating_mul(1u32.into())),
@@ -1084,8 +1084,8 @@ mod mock {
 		type BaseCallFilter = frame_support::traits::Everything;
 		type BlockWeights = ();
 		type BlockLength = ();
-		type Origin = Origin;
-		type Call = Call;
+		type RuntimeOrigin = RuntimeOrigin;
+		type RuntimeCall = RuntimeCall;
 		type Index = u64;
 		type BlockNumber = u32;
 		type Hash = H256;
@@ -1093,7 +1093,7 @@ mod mock {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = sp_runtime::generic::Header<Self::BlockNumber, BlakeTwo256>;
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ConstU32<250>;
 		type DbWeight = ();
 		type Version = ();
@@ -1115,7 +1115,7 @@ mod mock {
 
 	impl pallet_balances::Config for Test {
 		type Balance = u64;
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type DustRemoval = ();
 		type ExistentialDeposit = ConstU64<1>;
 		type AccountStore = System;
@@ -1153,7 +1153,7 @@ mod mock {
 	}
 
 	impl pallet_state_trie_migration::Config for Test {
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type ControlOrigin = EnsureRoot<u64>;
 		type Currency = Balances;
 		type MaxKeyLen = MigrationMaxKeyLen;
@@ -1293,7 +1293,7 @@ mod test {
 
 			// fails if the top key is too long.
 			frame_support::assert_ok!(StateTrieMigration::continue_migrate(
-				Origin::signed(1),
+				RuntimeOrigin::signed(1),
 				MigrationLimits { item: 50, size: 1 << 20 },
 				Bounded::max_value(),
 				MigrationProcess::<Test>::get()
@@ -1328,7 +1328,7 @@ mod test {
 
 			// fails if the top key is too long.
 			frame_support::assert_ok!(StateTrieMigration::continue_migrate(
-				Origin::signed(1),
+				RuntimeOrigin::signed(1),
 				MigrationLimits { item: 50, size: 1 << 20 },
 				Bounded::max_value(),
 				MigrationProcess::<Test>::get()
@@ -1457,7 +1457,7 @@ mod test {
 			// can't submit if limit is too high.
 			frame_support::assert_err!(
 				StateTrieMigration::continue_migrate(
-					Origin::signed(1),
+					RuntimeOrigin::signed(1),
 					MigrationLimits { item: 5, size: sp_runtime::traits::Bounded::max_value() },
 					Bounded::max_value(),
 					MigrationProcess::<Test>::get()
@@ -1468,7 +1468,7 @@ mod test {
 			// can't submit if poor.
 			frame_support::assert_err!(
 				StateTrieMigration::continue_migrate(
-					Origin::signed(2),
+					RuntimeOrigin::signed(2),
 					MigrationLimits { item: 5, size: 100 },
 					100,
 					MigrationProcess::<Test>::get()
@@ -1479,7 +1479,7 @@ mod test {
 			// can't submit with bad witness.
 			frame_support::assert_err_ignore_postinfo!(
 				StateTrieMigration::continue_migrate(
-					Origin::signed(1),
+					RuntimeOrigin::signed(1),
 					MigrationLimits { item: 5, size: 100 },
 					100,
 					MigrationTask {
@@ -1500,7 +1500,7 @@ mod test {
 				assert!(result.is_ok());
 
 				frame_support::assert_ok!(StateTrieMigration::continue_migrate(
-					Origin::signed(1),
+					RuntimeOrigin::signed(1),
 					StateTrieMigration::signed_migration_max_limits().unwrap(),
 					task.dyn_size,
 					MigrationProcess::<Test>::get()
@@ -1523,7 +1523,7 @@ mod test {
 		let correct_witness = 3 + sp_core::storage::TRIE_VALUE_NODE_THRESHOLD * 3 + 1 + 2 + 3;
 		new_test_ext(StateVersion::V0, true, None, None).execute_with(|| {
 			frame_support::assert_ok!(StateTrieMigration::migrate_custom_top(
-				Origin::signed(1),
+				RuntimeOrigin::signed(1),
 				vec![b"key1".to_vec(), b"key2".to_vec(), b"key3".to_vec()],
 				correct_witness,
 			));
@@ -1536,7 +1536,7 @@ mod test {
 		new_test_ext(StateVersion::V0, true, None, None).execute_with(|| {
 			// works if the witness is an overestimate
 			frame_support::assert_ok!(StateTrieMigration::migrate_custom_top(
-				Origin::signed(1),
+				RuntimeOrigin::signed(1),
 				vec![b"key1".to_vec(), b"key2".to_vec(), b"key3".to_vec()],
 				correct_witness + 99,
 			));
@@ -1551,7 +1551,7 @@ mod test {
 
 			// note that we don't expect this to be a noop -- we do slash.
 			frame_support::assert_ok!(StateTrieMigration::migrate_custom_top(
-				Origin::signed(1),
+				RuntimeOrigin::signed(1),
 				vec![b"key1".to_vec(), b"key2".to_vec(), b"key3".to_vec()],
 				correct_witness - 1,
 			),);
@@ -1569,7 +1569,7 @@ mod test {
 	fn custom_migrate_child_works() {
 		new_test_ext(StateVersion::V0, true, None, None).execute_with(|| {
 			frame_support::assert_ok!(StateTrieMigration::migrate_custom_child(
-				Origin::signed(1),
+				RuntimeOrigin::signed(1),
 				StateTrieMigration::childify("chk1"),
 				vec![b"key1".to_vec(), b"key2".to_vec()],
 				55 + 66,
@@ -1585,7 +1585,7 @@ mod test {
 
 			// note that we don't expect this to be a noop -- we do slash.
 			frame_support::assert_ok!(StateTrieMigration::migrate_custom_child(
-				Origin::signed(1),
+				RuntimeOrigin::signed(1),
 				StateTrieMigration::childify("chk1"),
 				vec![b"key1".to_vec(), b"key2".to_vec()],
 				999999, // wrong witness
@@ -1640,13 +1640,12 @@ pub(crate) mod remote_tests {
 	///
 	/// This will print some very useful statistics, make sure [`crate::LOG_TARGET`] is enabled.
 	#[allow(dead_code)]
-	pub(crate) async fn run_with_limits<
+	pub(crate) async fn run_with_limits<Runtime, Block>(limits: MigrationLimits, mode: Mode<Block>)
+	where
 		Runtime: crate::Config<Hash = H256>,
-		Block: BlockT<Hash = H256> + serde::de::DeserializeOwned,
-	>(
-		limits: MigrationLimits,
-		mode: Mode<Block>,
-	) {
+		Block: BlockT<Hash = H256>,
+		Block::Header: serde::de::DeserializeOwned,
+	{
 		let mut ext = remote_externalities::Builder::<Block>::new()
 			.mode(mode)
 			.state_version(sp_core::storage::StateVersion::V0)

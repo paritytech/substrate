@@ -28,7 +28,7 @@ use sp_runtime::traits::Bounded;
 const SEED: u32 = 0;
 const DEFAULT_DELAY: u32 = 0;
 
-fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
+fn assert_last_event<T: Config>(generic_event: <T as Config>::RuntimeEvent) {
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
@@ -107,7 +107,7 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 		let recovered_account: T::AccountId = account("recovered_account", 0, SEED);
 		let recovered_account_lookup = T::Lookup::unlookup(recovered_account.clone());
-		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![] }.into();
+		let call: <T as Config>::RuntimeCall = frame_system::Call::<T>::remark { remark: vec![] }.into();
 
 		Proxy::<T>::insert(&caller, &recovered_account);
 	}: _(

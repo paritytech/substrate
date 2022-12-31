@@ -27,22 +27,18 @@ use std::{
 	marker::PhantomData,
 	panic::{AssertUnwindSafe, UnwindSafe},
 	path::PathBuf,
-	result,
 	sync::{
 		atomic::{AtomicU64, Ordering},
 		mpsc, Arc,
 	},
 };
 
-use codec::{Decode, Encode};
+use codec::Encode;
 use sc_executor_common::{
 	runtime_blob::RuntimeBlob,
 	wasm_runtime::{AllocationStats, InvokeMethod, WasmInstance, WasmModule},
 };
-use sp_core::{
-	traits::{CodeExecutor, Externalities, RuntimeCode, RuntimeSpawn, RuntimeSpawnExt},
-	NativeOrEncoded,
-};
+use sp_core::traits::{CodeExecutor, Externalities, RuntimeCode, RuntimeSpawn, RuntimeSpawnExt};
 use sp_externalities::ExternalitiesExt as _;
 use sp_tasks::new_async_externalities;
 use sp_version::{GetNativeVersion, NativeVersion, RuntimeVersion};
@@ -339,18 +335,14 @@ where
 {
 	type Error = Error;
 
-	fn call<
-		R: Decode + Encode + PartialEq,
-		NC: FnOnce() -> result::Result<R, Box<dyn std::error::Error + Send + Sync>> + UnwindSafe,
-	>(
+	fn call(
 		&self,
 		ext: &mut dyn Externalities,
 		runtime_code: &RuntimeCode,
 		method: &str,
 		data: &[u8],
 		_use_native: bool,
-		_native_call: Option<NC>,
-	) -> (Result<NativeOrEncoded<R>>, bool) {
+	) -> (Result<Vec<u8>>, bool) {
 		tracing::trace!(
 			target: "executor",
 			%method,
@@ -363,7 +355,7 @@ where
 			|module, mut instance, _onchain_version, mut ext| {
 				with_externalities_safe(&mut **ext, move || {
 					preregister_builtin_ext(module.clone());
-					instance.call_export(method, data).map(NativeOrEncoded::Encoded)
+					instance.call_export(method, data)
 				})
 			},
 		);
@@ -594,18 +586,14 @@ fn preregister_builtin_ext(module: Arc<dyn WasmModule>) {
 impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecutor<D> {
 	type Error = Error;
 
-	fn call<
-		R: Decode + Encode + PartialEq,
-		NC: FnOnce() -> result::Result<R, Box<dyn std::error::Error + Send + Sync>> + UnwindSafe,
-	>(
+	fn call(
 		&self,
 		ext: &mut dyn Externalities,
 		runtime_code: &RuntimeCode,
 		method: &str,
 		data: &[u8],
 		use_native: bool,
-		native_call: Option<NC>,
-	) -> (Result<NativeOrEncoded<R>>, bool) {
+	) -> (Result<Vec<u8>>, bool) {
 		tracing::trace!(
 			target: "executor",
 			function = %method,
@@ -623,49 +611,31 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecut
 				let can_call_with =
 					onchain_version.can_call_with(&self.native_version.runtime_version);
 
-				match (use_native, can_call_with, native_call) {
-					(_, false, _) | (false, _, _) => {
-						if !can_call_with {
-							tracing::trace!(
-								target: "executor",
-								native = %self.native_version.runtime_version,
-								chain = %onchain_version,
-								"Request for native execution failed",
-							);
-						}
+				if use_native && can_call_with {
+					tracing::trace!(
+						target: "executor",
+						native = %self.native_version.runtime_version,
+						chain = %onchain_version,
+						"Request for native execution succeeded",
+					);
 
-						with_externalities_safe(&mut **ext, move || {
-							preregister_builtin_ext(module.clone());
-							instance.call_export(method, data).map(NativeOrEncoded::Encoded)
-						})
-					},
-					(true, true, Some(call)) => {
+					used_native = true;
+					Ok(with_externalities_safe(&mut **ext, move || D::dispatch(method, data))?
+						.ok_or_else(|| Error::MethodNotFound(method.to_owned())))
+				} else {
+					if !can_call_with {
 						tracing::trace!(
 							target: "executor",
 							native = %self.native_version.runtime_version,
 							chain = %onchain_version,
-							"Request for native execution with native call succeeded"
+							"Request for native execution failed",
 						);
+					}
 
-						used_native = true;
-						let res = with_externalities_safe(&mut **ext, move || (call)())
-							.and_then(|r| r.map(NativeOrEncoded::Native).map_err(Error::ApiError));
-
-						Ok(res)
-					},
-					_ => {
-						tracing::trace!(
-							target: "executor",
-							native = %self.native_version.runtime_version,
-							chain = %onchain_version,
-							"Request for native execution succeeded",
-						);
-
-						used_native = true;
-						Ok(with_externalities_safe(&mut **ext, move || D::dispatch(method, data))?
-							.map(NativeOrEncoded::Encoded)
-							.ok_or_else(|| Error::MethodNotFound(method.to_owned())))
-					},
+					with_externalities_safe(&mut **ext, move || {
+						preregister_builtin_ext(module.clone());
+						instance.call_export(method, data)
+					})
 				}
 			},
 		);

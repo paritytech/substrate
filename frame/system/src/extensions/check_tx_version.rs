@@ -54,7 +54,7 @@ impl<T: Config + Send + Sync> CheckTxVersion<T> {
 
 impl<T: Config + Send + Sync> SignedExtension for CheckTxVersion<T> {
 	type AccountId = T::AccountId;
-	type Call = <T as Config>::Call;
+	type Call = <T as Config>::RuntimeCall;
 	type AdditionalSigned = u32;
 	type Pre = ();
 	const IDENTIFIER: &'static str = "CheckTxVersion";

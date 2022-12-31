@@ -34,6 +34,7 @@ pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 [features]
 default = ["std"]
 std = [
+	"frame-benchmarking?/std",
 	"codec/std",
 	"frame-support/std",
 	"frame-system/std",

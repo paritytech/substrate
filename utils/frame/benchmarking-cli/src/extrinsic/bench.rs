@@ -41,6 +41,7 @@ use sp_runtime::{
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
 	Digest, DigestItem, OpaqueExtrinsic,
 };
+use std::{cell::RefCell, rc::Rc};
 use ver_api::VerApi;
 
 use clap::Args;
@@ -55,17 +56,17 @@ use crate::shared::{StatSelect, Stats};
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
 pub struct BenchmarkParams {
 	/// Rounds of warmups before measuring.
-	#[clap(long, default_value = "10")]
+	#[arg(long, default_value_t = 10)]
 	pub warmup: u32,
 
 	/// How many times the benchmark should be repeated.
-	#[clap(long, default_value = "100")]
+	#[arg(long, default_value_t = 100)]
 	pub repeat: u32,
 
 	/// Maximal number of extrinsics that should be put into a block.
 	///
 	/// Only useful for debugging.
-	#[clap(long)]
+	#[arg(long)]
 	pub max_ext_per_block: Option<u32>,
 }
 
@@ -82,7 +83,7 @@ pub(crate) struct Benchmark<Block, BA, C> {
 }
 
 pub(crate) struct BenchmarkVer<Block, BA, C> {
-	client: Arc<C>,
+	client: Rc<RefCell<C>>,
 	params: BenchmarkParams,
 	inherent_data: (sp_inherents::InherentData, sp_inherents::InherentData),
 	_p: PhantomData<(Block, BA)>,
@@ -239,7 +240,7 @@ where
 {
 	/// Create a new [`Self`] from the arguments.
 	pub fn new(
-		client: Arc<C>,
+		client: Rc<RefCell<C>>,
 		params: BenchmarkParams,
 		inherent_data: (sp_inherents::InherentData, sp_inherents::InherentData),
 	) -> Self {
@@ -299,13 +300,11 @@ where
 			StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(block.storage_changes));
 		params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
-		let mut c = self.client.clone();
-		unsafe {
-			let mut_c = Arc::<C>::get_mut_unchecked(&mut c);
-			futures::executor::block_on(mut_c.import_block(params, Default::default()))
-				.expect("importing a block doesn't fail");
-		}
-		info!("best number: {} ", c.info().best_number);
+		futures::executor::block_on(
+			self.client.borrow_mut().import_block(params, Default::default()),
+		)
+		.expect("importing a block doesn't fail");
+		info!("best number: {} ", self.client.borrow().info().best_number);
 	}
 
 	/// Builds a block that enqueues maximum possible amount of extrinsics
@@ -314,8 +313,13 @@ where
 		ext_builder: &dyn ExtrinsicBuilder,
 	) -> Result<sc_block_builder_ver::BuiltBlock<Block, BA::State>> {
 		let digest = self.create_digest(1_u64);
-		let mut builder = self.client.new_block(digest)?;
-		// Create and insert the inherents.
+		info!("creating remarks");
+		let remarks = (0..self.max_ext_per_block())
+			.map(|nonce| ext_builder.build(nonce).expect("remark txs creation should not fail"))
+			.collect::<Vec<_>>();
+
+		let client = self.client.borrow();
+		let mut builder = client.new_block(digest)?;
 
 		info!("creating inherents");
 		let (seed, inherents) = builder.create_inherents(self.inherent_data.0.clone()).unwrap();
@@ -335,8 +339,7 @@ where
 		let block = builder.build_with_seed(seed, |at, api| {
 			let mut valid_txs: Vec<(Option<sp_runtime::AccountId32>, Block::Extrinsic)> =
 				Default::default();
-			for nonce in 0..self.max_ext_per_block() {
-				let remark = ext_builder.build(nonce).expect("remark txs creation should not fail");
+			for remark in remarks {
 				match validate_transaction::<Block, C>(at, &api, remark.clone()) {
 					Ok(()) => {
 						valid_txs.push((None, remark));
@@ -356,6 +359,10 @@ where
 			valid_txs
 		})?;
 		info!("Extrinsics per block: {}", txs_count);
+
+		if txs_count >= self.max_ext_per_block() as u64 {
+			panic!("fully filled block should not consume more than half of pregenrated extrinsics .. consider increasing --max-ext-per-block paramter value");
+		}
 		Ok(block)
 	}
 
@@ -366,9 +373,15 @@ where
 		apply_previous_block_extrinsics: bool,
 	) -> Result<sc_block_builder_ver::BuiltBlock<Block, BA::State>> {
 		// Return early if we just want a block with inherents and no additional extrinsics.
+		let remarks = (txs_count..(txs_count * 2))
+			.map(|nonce| {
+				ext_builder.build(nonce as u32).expect("remark txs creation should not fail")
+			})
+			.collect::<Vec<_>>();
 
 		let digest = self.create_digest(3_u64);
-		let mut builder = self.client.new_block(digest)?;
+		let client = self.client.borrow();
+		let mut builder = client.new_block(digest)?;
 		let (seed, inherents) = builder.create_inherents(self.inherent_data.1.clone()).unwrap();
 		info!("pushing inherents");
 		for inherent in inherents {
@@ -380,16 +393,14 @@ where
 		});
 
 		let block = builder.build_with_seed(seed, |_, _| {
-			(txs_count..(txs_count * 2))
-				.map(|nonce| {
-					let remark = ext_builder
-						.build(nonce as u32)
-						.expect("remark txs creation should not fail");
-					(None, remark)
-				})
-				.collect::<Vec<_>>()
+			remarks.into_iter().map(|remark| (None, remark)).collect::<Vec<_>>()
 		})?;
 
+		info!(
+			"created block #{} with {} extrinsics",
+			block.block.header().number(),
+			block.block.extrinsics().len()
+		);
 		debug!("created block {:?}", block.block.clone());
 		Ok(block)
 	}
@@ -401,6 +412,7 @@ where
 		info!("Running {} warmups...", self.params.warmup);
 		for _ in 0..self.params.warmup {
 			self.client
+				.borrow()
 				.runtime_api()
 				.execute_block(&block_id, block.clone())
 				.map_err(|e| Error::Client(RuntimeApiError(e)))?;
@@ -411,7 +423,8 @@ where
 		// Execute a block multiple times and record each execution time.
 		for _ in 0..self.params.repeat {
 			let block = block.clone();
-			let runtime_api = self.client.runtime_api();
+			let client = self.client.borrow();
+			let runtime_api = client.runtime_api();
 			let start = Instant::now();
 
 			runtime_api

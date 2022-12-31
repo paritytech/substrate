@@ -30,7 +30,6 @@ use sp_runtime::{
 	testing::{Header, UintAuthorityId},
 	traits::IdentityLookup,
 };
-use sp_std::cell::RefCell;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -57,16 +56,16 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -86,18 +85,17 @@ impl pallet_timestamp::Config for Test {
 	type WeightInfo = ();
 }
 
-thread_local! {
-	static DISABLED_VALIDATORS: RefCell<Vec<AuthorityIndex>> = RefCell::new(Default::default());
+parameter_types! {
+	static DisabledValidatorTestValue: Vec<AuthorityIndex> = Default::default();
 }
 
 pub struct MockDisabledValidators;
 
 impl MockDisabledValidators {
 	pub fn disable_validator(index: AuthorityIndex) {
-		DISABLED_VALIDATORS.with(|v| {
-			let mut disabled = v.borrow_mut();
-			if let Err(i) = disabled.binary_search(&index) {
-				disabled.insert(i, index);
+		DisabledValidatorTestValue::mutate(|v| {
+			if let Err(i) = v.binary_search(&index) {
+				v.insert(i, index);
 			}
 		})
 	}
@@ -105,7 +103,7 @@ impl MockDisabledValidators {
 
 impl DisabledValidators for MockDisabledValidators {
 	fn is_disabled(index: AuthorityIndex) -> bool {
-		DISABLED_VALIDATORS.with(|v| v.borrow().binary_search(&index).is_ok())
+		DisabledValidatorTestValue::get().binary_search(&index).is_ok()
 	}
 }
 

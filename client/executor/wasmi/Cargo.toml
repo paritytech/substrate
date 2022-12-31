@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 log = "0.4.17"
-wasmi = "0.9.1"
+wasmi = "0.13"
 sc-allocator = { version = "4.1.0-dev", path = "../../allocator" }
 sc-executor-common = { version = "0.10.0-dev", path = "../common" }
 sp-runtime-interface = { version = "6.0.0", path = "../../../primitives/runtime-interface" }

@@ -27,4 +27,6 @@ sp-storage = { version = "6.0.0", path = "../../../../primitives/storage" }
 scale-info = "2.1.1"
 jsonrpsee = { version = "0.15.1", features = ["ws-client", "jsonrpsee-types"] }
 tokio = "1.17.0"
+sp-core = { version = "6.0.0", path = "../../../../primitives/core" }
+sp-runtime = { version = "6.0.0", path = "../../../../primitives/runtime" }
 frame-system = { version = "4.0.0-dev", path = "../../../../frame/system" }

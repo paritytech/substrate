@@ -542,7 +542,6 @@ mod tests {
 	use super::*;
 	use codec::{Compact, Decode, Encode};
 	use hash_db::{HashDB, Hasher};
-	use hex_literal::hex;
 	use sp_core::Blake2Hasher;
 	use trie_db::{DBValue, NodeCodec as NodeCodecT, Trie, TrieMut};
 	use trie_standardmap::{Alphabet, StandardMap, ValueMode};
@@ -845,8 +844,14 @@ mod tests {
 	}
 	fn iterator_works_inner<Layout: TrieConfiguration>() {
 		let pairs = vec![
-			(hex!("0103000000000000000464").to_vec(), hex!("0400000000").to_vec()),
-			(hex!("0103000000000000000469").to_vec(), hex!("0401000000").to_vec()),
+			(
+				array_bytes::hex2bytes_unchecked("0103000000000000000464"),
+				array_bytes::hex2bytes_unchecked("0400000000"),
+			),
+			(
+				array_bytes::hex2bytes_unchecked("0103000000000000000469"),
+				array_bytes::hex2bytes_unchecked("0401000000"),
+			),
 		];
 
 		let mut mdb = MemoryDB::default();
@@ -859,7 +864,7 @@ mod tests {
 		let mut iter_pairs = Vec::new();
 		for pair in iter {
 			let (key, value) = pair.unwrap();
-			iter_pairs.push((key, value.to_vec()));
+			iter_pairs.push((key, value));
 		}
 
 		assert_eq!(pairs, iter_pairs);
@@ -868,15 +873,15 @@ mod tests {
 	#[test]
 	fn proof_non_inclusion_works() {
 		let pairs = vec![
-			(hex!("0102").to_vec(), hex!("01").to_vec()),
-			(hex!("0203").to_vec(), hex!("0405").to_vec()),
+			(array_bytes::hex2bytes_unchecked("0102"), array_bytes::hex2bytes_unchecked("01")),
+			(array_bytes::hex2bytes_unchecked("0203"), array_bytes::hex2bytes_unchecked("0405")),
 		];
 
 		let mut memdb = MemoryDB::default();
 		let mut root = Default::default();
 		populate_trie::<LayoutV1>(&mut memdb, &mut root, &pairs);
 
-		let non_included_key: Vec<u8> = hex!("0909").to_vec();
+		let non_included_key: Vec<u8> = array_bytes::hex2bytes_unchecked("0909");
 		let proof =
 			generate_trie_proof::<LayoutV1, _, _, _>(&memdb, root, &[non_included_key.clone()])
 				.unwrap();
@@ -893,7 +898,7 @@ mod tests {
 		assert!(verify_trie_proof::<LayoutV1, _, _, Vec<u8>>(
 			&root,
 			&proof,
-			&[(non_included_key, Some(hex!("1010").to_vec()))],
+			&[(non_included_key, Some(array_bytes::hex2bytes_unchecked("1010")))],
 		)
 		.is_err());
 	}
@@ -901,8 +906,8 @@ mod tests {
 	#[test]
 	fn proof_inclusion_works() {
 		let pairs = vec![
-			(hex!("0102").to_vec(), hex!("01").to_vec()),
-			(hex!("0203").to_vec(), hex!("0405").to_vec()),
+			(array_bytes::hex2bytes_unchecked("0102"), array_bytes::hex2bytes_unchecked("01")),
+			(array_bytes::hex2bytes_unchecked("0203"), array_bytes::hex2bytes_unchecked("0405")),
 		];
 
 		let mut memdb = MemoryDB::default();
@@ -932,7 +937,7 @@ mod tests {
 		assert!(verify_trie_proof::<LayoutV1, _, _, _>(
 			&root,
 			&proof,
-			&[(hex!("4242").to_vec(), Some(pairs[0].1.clone()))]
+			&[(array_bytes::hex2bytes_unchecked("4242"), Some(pairs[0].1.clone()))]
 		)
 		.is_err());
 

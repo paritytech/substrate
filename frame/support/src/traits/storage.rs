@@ -17,7 +17,9 @@
 
 //! Traits for encoding data related to pallet's storage items.
 
+use crate::sp_std::collections::btree_set::BTreeSet;
 use impl_trait_for_tuples::impl_for_tuples;
+pub use sp_core::storage::TrackedStorageKey;
 use sp_std::prelude::*;
 
 /// An instance of a pallet in the storage.
@@ -89,4 +91,30 @@ impl StorageInfoTrait for Tuple {
 /// implement some bounds.
 pub trait PartialStorageInfoTrait {
 	fn partial_storage_info() -> Vec<StorageInfo>;
+}
+
+/// Allows a pallet to specify storage keys to whitelist during benchmarking.
+/// This means those keys will be excluded from the benchmarking performance
+/// calculation.
+pub trait WhitelistedStorageKeys {
+	/// Returns a [`Vec<TrackedStorageKey>`] indicating the storage keys that
+	/// should be whitelisted during benchmarking. This means that those keys
+	/// will be excluded from the benchmarking performance calculation.
+	fn whitelisted_storage_keys() -> Vec<TrackedStorageKey>;
+}
+
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
+impl WhitelistedStorageKeys for Tuple {
+	fn whitelisted_storage_keys() -> Vec<TrackedStorageKey> {
+		// de-duplicate the storage keys
+		let mut combined_keys: BTreeSet<TrackedStorageKey> = BTreeSet::new();
+		for_tuples!( #(
+			for storage_key in Tuple::whitelisted_storage_keys() {
+				combined_keys.insert(storage_key);
+			}
+		 )* );
+		combined_keys.into_iter().collect::<Vec<_>>()
+	}
 }

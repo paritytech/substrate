@@ -28,10 +28,7 @@ use parity_scale_codec::Encode;
 use sc_network::{config::Role, Multiaddr, PeerId, ReputationChange};
 use sc_network_common::{
 	config::MultiaddrWithPeerId,
-	protocol::{
-		event::{Event as NetworkEvent, ObservedRole},
-		ProtocolName,
-	},
+	protocol::{event::Event as NetworkEvent, role::ObservedRole, ProtocolName},
 	service::{
 		NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
 		NetworkSyncForkRequest, NotificationSender, NotificationSenderError,
@@ -646,7 +643,7 @@ fn grandpa_protocol_name() {
 
 	// Create protocol name using random genesis hash.
 	let genesis_hash = sp_core::H256::random();
-	let expected = format!("/{}/grandpa/1", hex::encode(genesis_hash));
+	let expected = format!("/{}/grandpa/1", array_bytes::bytes2hex("", genesis_hash.as_ref()));
 	let proto_name = grandpa_protocol_name::standard_name(&genesis_hash, &chain_spec);
 	assert_eq!(proto_name.to_string(), expected);
 

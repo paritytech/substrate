@@ -15,12 +15,12 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 ahash = "0.7.6"
+array-bytes = "4.1"
 async-trait = "0.1.57"
 dyn-clone = "1.0"
 finality-grandpa = { version = "0.16.0", features = ["derive-codec"] }
 futures = "0.3.21"
 futures-timer = "3.0.1"
-hex = "0.4.2"
 log = "0.4.17"
 parity-scale-codec = { version = "3.0.0", features = ["derive"] }
 parking_lot = "0.12.1"
