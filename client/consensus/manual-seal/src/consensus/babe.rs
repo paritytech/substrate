@@ -30,7 +30,7 @@ use sc_consensus_epochs::{
 	descendent_query, EpochHeader, SharedEpochChanges, ViableEpochDescriptor,
 };
 use sp_keystore::SyncCryptoStorePtr;
-use std::{borrow::Cow, marker::PhantomData, sync::Arc};
+use std::{marker::PhantomData, sync::Arc};
 
 use sc_consensus::{BlockImportParams, ForkChoiceStrategy, Verifier};
 use sp_api::{ProvideRuntimeApi, TransactionFor};
@@ -125,10 +125,8 @@ where
 		// drop the lock
 		drop(epoch_changes);
 
-		import_params.intermediates.insert(
-			Cow::from(INTERMEDIATE_KEY),
-			Box::new(BabeIntermediate::<B> { epoch_descriptor }) as Box<_>,
-		);
+		import_params
+			.insert_intermediate(INTERMEDIATE_KEY, BabeIntermediate::<B> { epoch_descriptor });
 
 		Ok((import_params, None))
 	}
@@ -315,10 +313,7 @@ where
 			};
 		}
 
-		params.intermediates.insert(
-			Cow::from(INTERMEDIATE_KEY),
-			Box::new(BabeIntermediate::<B> { epoch_descriptor }) as Box<_>,
-		);
+		params.insert_intermediate(INTERMEDIATE_KEY, BabeIntermediate::<B> { epoch_descriptor });
 
 		Ok(())
 	}

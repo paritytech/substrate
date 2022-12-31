@@ -69,10 +69,11 @@ pub fn generate_protocol_config<Hash: AsRef<[u8]>>(
 
 /// Generate the state protocol name from the genesis hash and fork id.
 fn generate_protocol_name<Hash: AsRef<[u8]>>(genesis_hash: Hash, fork_id: Option<&str>) -> String {
+	let genesis_hash = genesis_hash.as_ref();
 	if let Some(fork_id) = fork_id {
-		format!("/{}/{}/state/2", hex::encode(genesis_hash), fork_id)
+		format!("/{}/{}/state/2", array_bytes::bytes2hex("", genesis_hash), fork_id)
 	} else {
-		format!("/{}/state/2", hex::encode(genesis_hash))
+		format!("/{}/state/2", array_bytes::bytes2hex("", genesis_hash))
 	}
 }
 

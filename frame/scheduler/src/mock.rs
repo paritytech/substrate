@@ -39,15 +39,14 @@ use sp_runtime::{
 #[frame_support::pallet]
 pub mod logger {
 	use super::{OriginCaller, OriginTrait};
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, parameter_types};
 	use frame_system::pallet_prelude::*;
-	use std::cell::RefCell;
 
-	thread_local! {
-		static LOG: RefCell<Vec<(OriginCaller, u32)>> = RefCell::new(Vec::new());
+	parameter_types! {
+		static Log: Vec<(OriginCaller, u32)> = Vec::new();
 	}
 	pub fn log() -> Vec<(OriginCaller, u32)> {
-		LOG.with(|log| log.borrow().clone())
+		Log::get().clone()
 	}
 
 	#[pallet::pallet]
@@ -59,7 +58,7 @@ pub mod logger {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
 	#[pallet::event]
@@ -71,13 +70,13 @@ pub mod logger {
 	#[pallet::call]
 	impl<T: Config> Pallet<T>
 	where
-		<T as frame_system::Config>::Origin: OriginTrait<PalletsOrigin = OriginCaller>,
+		<T as frame_system::Config>::RuntimeOrigin: OriginTrait<PalletsOrigin = OriginCaller>,
 	{
 		#[pallet::weight(*weight)]
 		pub fn log(origin: OriginFor<T>, i: u32, weight: Weight) -> DispatchResult {
 			Self::deposit_event(Event::Logged(i, weight));
-			LOG.with(|log| {
-				log.borrow_mut().push((origin.caller().clone(), i));
+			Log::mutate(|log| {
+				log.push((origin.caller().clone(), i));
 			});
 			Ok(())
 		}
@@ -85,8 +84,8 @@ pub mod logger {
 		#[pallet::weight(*weight)]
 		pub fn log_without_filter(origin: OriginFor<T>, i: u32, weight: Weight) -> DispatchResult {
 			Self::deposit_event(Event::Logged(i, weight));
-			LOG.with(|log| {
-				log.borrow_mut().push((origin.caller().clone(), i));
+			Log::mutate(|log| {
+				log.push((origin.caller().clone(), i));
 			});
 			Ok(())
 		}
@@ -111,23 +110,25 @@ frame_support::construct_runtime!(
 
 // Scheduler must dispatch with root and no filter, this tests base filter is indeed not used.
 pub struct BaseFilter;
-impl Contains<Call> for BaseFilter {
-	fn contains(call: &Call) -> bool {
-		!matches!(call, Call::Logger(LoggerCall::log { .. }))
+impl Contains<RuntimeCall> for BaseFilter {
+	fn contains(call: &RuntimeCall) -> bool {
+		!matches!(call, RuntimeCall::Logger(LoggerCall::log { .. }))
 	}
 }
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(Weight::from_ref_time(2_000_000_000_000));
+		frame_system::limits::BlockWeights::simple_max(
+			Weight::from_ref_time(2_000_000_000_000).set_proof_size(u64::MAX),
+		);
 }
 impl system::Config for Test {
 	type BaseCallFilter = BaseFilter;
-	type BlockWeights = ();
+	type BlockWeights = BlockWeights;
 	type BlockLength = ();
 	type DbWeight = RocksDbWeight;
-	type Origin = Origin;
-	type Call = Call;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -135,7 +136,7 @@ impl system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -148,38 +149,76 @@ impl system::Config for Test {
 	type MaxConsumers = ConstU32<16>;
 }
 impl logger::Config for Test {
-	type Event = Event;
-}
-parameter_types! {
-	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * BlockWeights::get().max_block;
-	pub const NoPreimagePostponement: Option<u64> = Some(2);
+	type RuntimeEvent = RuntimeEvent;
 }
 ord_parameter_types! {
 	pub const One: u64 = 1;
 }
 
 impl pallet_preimage::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
 	type Currency = ();
 	type ManagerOrigin = EnsureRoot<u64>;
-	type MaxSize = ConstU32<1024>;
 	type BaseDeposit = ();
 	type ByteDeposit = ();
 }
 
+pub struct TestWeightInfo;
+impl WeightInfo for TestWeightInfo {
+	fn service_agendas_base() -> Weight {
+		Weight::from_ref_time(0b0000_0001)
+	}
+	fn service_agenda_base(i: u32) -> Weight {
+		Weight::from_ref_time((i << 8) as u64 + 0b0000_0010)
+	}
+	fn service_task_base() -> Weight {
+		Weight::from_ref_time(0b0000_0100)
+	}
+	fn service_task_periodic() -> Weight {
+		Weight::from_ref_time(0b0000_1100)
+	}
+	fn service_task_named() -> Weight {
+		Weight::from_ref_time(0b0001_0100)
+	}
+	fn service_task_fetched(s: u32) -> Weight {
+		Weight::from_ref_time((s << 8) as u64 + 0b0010_0100)
+	}
+	fn execute_dispatch_signed() -> Weight {
+		Weight::from_ref_time(0b0100_0000)
+	}
+	fn execute_dispatch_unsigned() -> Weight {
+		Weight::from_ref_time(0b1000_0000)
+	}
+	fn schedule(_s: u32) -> Weight {
+		Weight::from_ref_time(50)
+	}
+	fn cancel(_s: u32) -> Weight {
+		Weight::from_ref_time(50)
+	}
+	fn schedule_named(_s: u32) -> Weight {
+		Weight::from_ref_time(50)
+	}
+	fn cancel_named(_s: u32) -> Weight {
+		Weight::from_ref_time(50)
+	}
+}
+parameter_types! {
+	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) *
+		BlockWeights::get().max_block;
+}
+
 impl Config for Test {
-	type Event = Event;
-	type Origin = Origin;
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeOrigin = RuntimeOrigin;
 	type PalletsOrigin = OriginCaller;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type MaximumWeight = MaximumSchedulerWeight;
 	type ScheduleOrigin = EitherOfDiverse<EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
 	type MaxScheduledPerBlock = ConstU32<10>;
-	type WeightInfo = ();
+	type WeightInfo = TestWeightInfo;
 	type OriginPrivilegeCmp = EqualPrivilegeOnly;
-	type PreimageProvider = Preimage;
-	type NoPreimagePostponement = NoPreimagePostponement;
+	type Preimages = Preimage;
 }
 
 pub type LoggerCall = logger::Call<Test>;

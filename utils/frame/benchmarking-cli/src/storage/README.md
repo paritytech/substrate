@@ -97,6 +97,7 @@ write: 71_347 * constants::WEIGHT_PER_NANOS,
 - [`--weight-path`](../shared/README.md#arguments)
 - `--json-read-path` Write the raw 'read' results to this file or directory.
 - `--json-write-path` Write the raw 'write' results to this file or directory.
+- [`--header`](../shared/README.md#arguments)
 
 License: Apache-2.0
 

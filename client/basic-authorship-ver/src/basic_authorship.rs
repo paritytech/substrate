@@ -546,7 +546,7 @@ where
 					let pending_tx = if let Some(pending_tx) = pending_iterator.next() {
 						pending_tx
 					} else {
-						break EndProposingReason::NoMoreTransactions
+						break EndProposingReason::NoMoreTransactions;
 					};
 					let now = (self.now)();
 					if now > deadline {
@@ -554,7 +554,7 @@ where
 							"Consensus deadline reached when pushing block transactions, \
 							proceeding with proposing."
 						);
-						break EndProposingReason::HitDeadline
+						break EndProposingReason::HitDeadline;
 					}
 
 					let pending_tx_data = pending_tx.data().clone();
@@ -572,17 +572,17 @@ where
 								 but will try {} more transactions before quitting.",
 								MAX_SKIPPED_TRANSACTIONS - skipped,
 							);
-							continue
+							continue;
 						} else if now < soft_deadline {
 							debug!(target: "block_builder",
 								"Transaction would overflow the block size limit, \
 								 but we still have time before the soft deadline, so \
 								 we will try a bit more."
 							);
-							continue
+							continue;
 						} else {
 							debug!(target: "block_builder","Reached block size limit, proceeding with proposing.");
-							break EndProposingReason::HitBlockSizeLimit
+							break EndProposingReason::HitBlockSizeLimit;
 						}
 					}
 
@@ -615,7 +615,7 @@ where
 								trace!(target:"block_builder", "soft_deadline : {:?}", soft_deadline.saturating_duration_since(now).as_secs_f64());
 								debug!(target: "block_builder",
 								"Reached block weight limit, proceeding with proposing.");
-								break EndProposingReason::HitBlockWeightLimit
+								break EndProposingReason::HitBlockWeightLimit;
 							}
 						},
 						Err(e) if skipped > 0 => {

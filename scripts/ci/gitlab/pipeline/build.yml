@@ -62,7 +62,7 @@ build-linux-substrate:
     - !reference [.rusty-cachier, before_script]
   script:
     - rusty-cachier snapshot create
-    - WASM_BUILD_NO_COLOR=1 time cargo build --release --verbose
+    - WASM_BUILD_NO_COLOR=1 time cargo build --locked --release --verbose
     - mv $CARGO_TARGET_DIR/release/substrate ./artifacts/substrate/.
     - echo -n "Substrate version = "
     - if [ "${CI_COMMIT_TAG}" ]; then
@@ -95,7 +95,7 @@ build-linux-substrate:
   script:
     - rusty-cachier snapshot create
     - cd ./bin/utils/subkey
-    - SKIP_WASM_BUILD=1 time cargo build --release --verbose
+    - SKIP_WASM_BUILD=1 time cargo build --locked --release --verbose
     - cd -
     - mv $CARGO_TARGET_DIR/release/subkey ./artifacts/subkey/.
     - echo -n "Subkey version = "
@@ -117,7 +117,7 @@ build-subkey-macos:
     - mkdir -p ./artifacts/subkey
   script:
     - cd ./bin/utils/subkey
-    - SKIP_WASM_BUILD=1 time cargo build --release --verbose
+    - SKIP_WASM_BUILD=1 time cargo build --locked --release --verbose
     - cd -
     - mv ./target/release/subkey ./artifacts/subkey/.
     - echo -n "Subkey version = "
@@ -149,7 +149,7 @@ build-rustdoc:
     - ./crate-docs/
   script:
     - rusty-cachier snapshot create
-    - time cargo +nightly doc --workspace --all-features --verbose --no-deps
+    - time cargo +nightly doc --locked --workspace --all-features --verbose --no-deps
     - rm -f $CARGO_TARGET_DIR/doc/.lock
     - mv $CARGO_TARGET_DIR/doc ./crate-docs
     # FIXME: remove me after CI image gets nonroot

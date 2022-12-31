@@ -79,8 +79,8 @@ impl<Storage: OffchainStorage> offchain::DbExternalities for Db<Storage> {
 		tracing::debug!(
 			target: "offchain-worker::storage",
 			?kind,
-			key = ?hex::encode(key),
-			value = ?hex::encode(value),
+			key = ?array_bytes::bytes2hex("", key),
+			value = ?array_bytes::bytes2hex("", value),
 			"Write",
 		);
 		match kind {
@@ -93,7 +93,7 @@ impl<Storage: OffchainStorage> offchain::DbExternalities for Db<Storage> {
 		tracing::debug!(
 			target: "offchain-worker::storage",
 			?kind,
-			key = ?hex::encode(key),
+			key = ?array_bytes::bytes2hex("", key),
 			"Clear",
 		);
 		match kind {
@@ -112,9 +112,9 @@ impl<Storage: OffchainStorage> offchain::DbExternalities for Db<Storage> {
 		tracing::debug!(
 			target: "offchain-worker::storage",
 			?kind,
-			key = ?hex::encode(key),
-			new_value = ?hex::encode(new_value),
-			old_value = ?old_value.as_ref().map(hex::encode),
+			key = ?array_bytes::bytes2hex("", key),
+			new_value = ?array_bytes::bytes2hex("", new_value),
+			old_value = ?old_value.as_ref().map(|s| array_bytes::bytes2hex("", s)),
 			"CAS",
 		);
 		match kind {
@@ -132,8 +132,8 @@ impl<Storage: OffchainStorage> offchain::DbExternalities for Db<Storage> {
 		tracing::debug!(
 			target: "offchain-worker::storage",
 			?kind,
-			key = ?hex::encode(key),
-			result = ?result.as_ref().map(hex::encode),
+			key = ?array_bytes::bytes2hex("", key),
+			result = ?result.as_ref().map(|s| array_bytes::bytes2hex("", s)),
 			"Read",
 		);
 		result

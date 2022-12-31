@@ -63,11 +63,11 @@ use sp_runtime::{
 use sp_std::prelude::*;
 
 use frame_support::{
-	dispatch::DispatchResult,
-	traits::{EstimateCallFee, Get},
-	weights::{
-		DispatchClass, DispatchInfo, GetDispatchInfo, Pays, PostDispatchInfo, Weight, WeightToFee,
+	dispatch::{
+		DispatchClass, DispatchInfo, DispatchResult, GetDispatchInfo, Pays, PostDispatchInfo,
 	},
+	traits::{EstimateCallFee, Get},
+	weights::{Weight, WeightToFee},
 };
 
 mod payment;
@@ -127,12 +127,14 @@ type BalanceOf<T> = <<T as Config>::OnChargeTransaction as OnChargeTransaction<T
 ///
 /// More info can be found at:
 /// <https://research.web3.foundation/en/latest/polkadot/overview/2-token-economics.html>
-pub struct TargetedFeeAdjustment<T, S, V, M>(sp_std::marker::PhantomData<(T, S, V, M)>);
+pub struct TargetedFeeAdjustment<T, S, V, M, X>(sp_std::marker::PhantomData<(T, S, V, M, X)>);
 
 /// Something that can convert the current multiplier to the next one.
 pub trait MultiplierUpdate: Convert<Multiplier, Multiplier> {
-	/// Minimum multiplier
+	/// Minimum multiplier. Any outcome of the `convert` function should be at least this.
 	fn min() -> Multiplier;
+	/// Maximum multiplier. Any outcome of the `convert` function should be less or equal this.
+	fn max() -> Multiplier;
 	/// Target block saturation level
 	fn target() -> Perquintill;
 	/// Variability factor
@@ -143,6 +145,9 @@ impl MultiplierUpdate for () {
 	fn min() -> Multiplier {
 		Default::default()
 	}
+	fn max() -> Multiplier {
+		<Multiplier as sp_runtime::traits::Bounded>::max_value()
+	}
 	fn target() -> Perquintill {
 		Default::default()
 	}
@@ -151,15 +156,19 @@ impl MultiplierUpdate for () {
 	}
 }
 
-impl<T, S, V, M> MultiplierUpdate for TargetedFeeAdjustment<T, S, V, M>
+impl<T, S, V, M, X> MultiplierUpdate for TargetedFeeAdjustment<T, S, V, M, X>
 where
 	T: frame_system::Config,
 	S: Get<Perquintill>,
 	V: Get<Multiplier>,
 	M: Get<Multiplier>,
+	X: Get<Multiplier>,
 {
 	fn min() -> Multiplier {
 		M::get()
+	}
+	fn max() -> Multiplier {
+		X::get()
 	}
 	fn target() -> Perquintill {
 		S::get()
@@ -169,18 +178,20 @@ where
 	}
 }
 
-impl<T, S, V, M> Convert<Multiplier, Multiplier> for TargetedFeeAdjustment<T, S, V, M>
+impl<T, S, V, M, X> Convert<Multiplier, Multiplier> for TargetedFeeAdjustment<T, S, V, M, X>
 where
 	T: frame_system::Config,
 	S: Get<Perquintill>,
 	V: Get<Multiplier>,
 	M: Get<Multiplier>,
+	X: Get<Multiplier>,
 {
 	fn convert(previous: Multiplier) -> Multiplier {
 		// Defensive only. The multiplier in storage should always be at most positive. Nonetheless
 		// we recover here in case of errors, because any value below this would be stale and can
 		// never change.
 		let min_multiplier = M::get();
+		let max_multiplier = X::get();
 		let previous = previous.max(min_multiplier);
 
 		let weights = T::BlockWeights::get();
@@ -217,12 +228,39 @@ where
 
 		if positive {
 			let excess = first_term.saturating_add(second_term).saturating_mul(previous);
-			previous.saturating_add(excess).max(min_multiplier)
+			previous.saturating_add(excess).clamp(min_multiplier, max_multiplier)
 		} else {
 			// Defensive-only: first_term > second_term. Safe subtraction.
 			let negative = first_term.saturating_sub(second_term).saturating_mul(previous);
-			previous.saturating_sub(negative).max(min_multiplier)
+			previous.saturating_sub(negative).clamp(min_multiplier, max_multiplier)
 		}
+	}
+}
+
+/// A struct to make the fee multiplier a constant
+pub struct ConstFeeMultiplier<M: Get<Multiplier>>(sp_std::marker::PhantomData<M>);
+
+impl<M: Get<Multiplier>> MultiplierUpdate for ConstFeeMultiplier<M> {
+	fn min() -> Multiplier {
+		M::get()
+	}
+	fn max() -> Multiplier {
+		M::get()
+	}
+	fn target() -> Perquintill {
+		Default::default()
+	}
+	fn variability() -> Multiplier {
+		Default::default()
+	}
+}
+
+impl<M> Convert<Multiplier, Multiplier> for ConstFeeMultiplier<M>
+where
+	M: Get<Multiplier>,
+{
+	fn convert(_previous: Multiplier) -> Multiplier {
+		Self::min()
 	}
 }
 
@@ -258,7 +296,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Handler for withdrawing, refunding and depositing the transaction fee.
 		/// Transaction fees are withdrawn before the transaction is executed.
@@ -371,7 +409,8 @@ pub mod pallet {
 			// add 1 percent;
 			let addition = target / 100;
 			if addition == Weight::zero() {
-				// this is most likely because in a test setup we set everything to ().
+				// this is most likely because in a test setup we set everything to ()
+				// or to `ConstFeeMultiplier`.
 				return
 			}
 
@@ -417,7 +456,7 @@ where
 		len: u32,
 	) -> RuntimeDispatchInfo<BalanceOf<T>>
 	where
-		T::Call: Dispatchable<Info = DispatchInfo>,
+		T::RuntimeCall: Dispatchable<Info = DispatchInfo>,
 	{
 		// NOTE: we can actually make it understand `ChargeTransactionPayment`, but would be some
 		// hassle for sure. We have to make it aware of the index of `ChargeTransactionPayment` in
@@ -444,7 +483,7 @@ where
 		len: u32,
 	) -> FeeDetails<BalanceOf<T>>
 	where
-		T::Call: Dispatchable<Info = DispatchInfo>,
+		T::RuntimeCall: Dispatchable<Info = DispatchInfo>,
 	{
 		let dispatch_info = <Extrinsic as GetDispatchInfo>::get_dispatch_info(&unchecked_extrinsic);
 
@@ -459,11 +498,11 @@ where
 	}
 
 	/// Query information of a dispatch class, weight, and fee of a given encoded `Call`.
-	pub fn query_call_info(call: T::Call, len: u32) -> RuntimeDispatchInfo<BalanceOf<T>>
+	pub fn query_call_info(call: T::RuntimeCall, len: u32) -> RuntimeDispatchInfo<BalanceOf<T>>
 	where
-		T::Call: Dispatchable<Info = DispatchInfo> + GetDispatchInfo,
+		T::RuntimeCall: Dispatchable<Info = DispatchInfo> + GetDispatchInfo,
 	{
-		let dispatch_info = <T::Call as GetDispatchInfo>::get_dispatch_info(&call);
+		let dispatch_info = <T::RuntimeCall as GetDispatchInfo>::get_dispatch_info(&call);
 		let DispatchInfo { weight, class, .. } = dispatch_info;
 
 		RuntimeDispatchInfo {
@@ -474,20 +513,24 @@ where
 	}
 
 	/// Query fee details of a given encoded `Call`.
-	pub fn query_call_fee_details(call: T::Call, len: u32) -> FeeDetails<BalanceOf<T>>
+	pub fn query_call_fee_details(call: T::RuntimeCall, len: u32) -> FeeDetails<BalanceOf<T>>
 	where
-		T::Call: Dispatchable<Info = DispatchInfo> + GetDispatchInfo,
+		T::RuntimeCall: Dispatchable<Info = DispatchInfo> + GetDispatchInfo,
 	{
-		let dispatch_info = <T::Call as GetDispatchInfo>::get_dispatch_info(&call);
+		let dispatch_info = <T::RuntimeCall as GetDispatchInfo>::get_dispatch_info(&call);
 		let tip = 0u32.into();
 
 		Self::compute_fee_details(len, &dispatch_info, tip)
 	}
 
 	/// Compute the final fee value for a particular transaction.
-	pub fn compute_fee(len: u32, info: &DispatchInfoOf<T::Call>, tip: BalanceOf<T>) -> BalanceOf<T>
+	pub fn compute_fee(
+		len: u32,
+		info: &DispatchInfoOf<T::RuntimeCall>,
+		tip: BalanceOf<T>,
+	) -> BalanceOf<T>
 	where
-		T::Call: Dispatchable<Info = DispatchInfo>,
+		T::RuntimeCall: Dispatchable<Info = DispatchInfo>,
 	{
 		Self::compute_fee_details(len, info, tip).final_fee()
 	}
@@ -495,11 +538,11 @@ where
 	/// Compute the fee details for a particular transaction.
 	pub fn compute_fee_details(
 		len: u32,
-		info: &DispatchInfoOf<T::Call>,
+		info: &DispatchInfoOf<T::RuntimeCall>,
 		tip: BalanceOf<T>,
 	) -> FeeDetails<BalanceOf<T>>
 	where
-		T::Call: Dispatchable<Info = DispatchInfo>,
+		T::RuntimeCall: Dispatchable<Info = DispatchInfo>,
 	{
 		Self::compute_fee_raw(len, info.weight, tip, info.pays_fee, info.class)
 	}
@@ -510,12 +553,12 @@ where
 	/// weight is used for the weight fee calculation.
 	pub fn compute_actual_fee(
 		len: u32,
-		info: &DispatchInfoOf<T::Call>,
-		post_info: &PostDispatchInfoOf<T::Call>,
+		info: &DispatchInfoOf<T::RuntimeCall>,
+		post_info: &PostDispatchInfoOf<T::RuntimeCall>,
 		tip: BalanceOf<T>,
 	) -> BalanceOf<T>
 	where
-		T::Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
+		T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 	{
 		Self::compute_actual_fee_details(len, info, post_info, tip).final_fee()
 	}
@@ -523,12 +566,12 @@ where
 	/// Compute the actual post dispatch fee details for a particular transaction.
 	pub fn compute_actual_fee_details(
 		len: u32,
-		info: &DispatchInfoOf<T::Call>,
-		post_info: &PostDispatchInfoOf<T::Call>,
+		info: &DispatchInfoOf<T::RuntimeCall>,
+		post_info: &PostDispatchInfoOf<T::RuntimeCall>,
 		tip: BalanceOf<T>,
 	) -> FeeDetails<BalanceOf<T>>
 	where
-		T::Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
+		T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 	{
 		Self::compute_fee_raw(
 			len,
@@ -609,7 +652,7 @@ pub struct ChargeTransactionPayment<T: Config>(#[codec(compact)] BalanceOf<T>);
 
 impl<T: Config> ChargeTransactionPayment<T>
 where
-	T::Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
+	T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 	BalanceOf<T>: Send + Sync + FixedPointOperand,
 {
 	/// utility constructor. Used only in client/factory code.
@@ -617,7 +660,7 @@ where
 		Self(fee)
 	}
 
-	/// Returns the tip as being choosen by the transaction sender.
+	/// Returns the tip as being chosen by the transaction sender.
 	pub fn tip(&self) -> BalanceOf<T> {
 		self.0
 	}
@@ -625,8 +668,8 @@ where
 	fn withdraw_fee(
 		&self,
 		who: &T::AccountId,
-		call: &T::Call,
-		info: &DispatchInfoOf<T::Call>,
+		call: &T::RuntimeCall,
+		info: &DispatchInfoOf<T::RuntimeCall>,
 		len: usize,
 	) -> Result<
 		(
@@ -658,7 +701,7 @@ where
 	/// state of-the-art blockchains, number of per-block transactions is expected to be in a
 	/// range reasonable enough to not saturate the `Balance` type while multiplying by the tip.
 	pub fn get_priority(
-		info: &DispatchInfoOf<T::Call>,
+		info: &DispatchInfoOf<T::RuntimeCall>,
 		len: usize,
 		tip: BalanceOf<T>,
 		final_fee: BalanceOf<T>,
@@ -672,8 +715,8 @@ where
 		let max_block_weight = max_block_weight.ref_time();
 		let info_weight = info.weight.ref_time();
 
-		let bounded_weight = info_weight.max(1).min(max_block_weight);
-		let bounded_length = (len as u64).max(1).min(max_block_length);
+		let bounded_weight = info_weight.clamp(1, max_block_weight);
+		let bounded_length = (len as u64).clamp(1, max_block_length);
 
 		let max_tx_per_block_weight = max_block_weight / bounded_weight;
 		let max_tx_per_block_length = max_block_length / bounded_length;
@@ -732,11 +775,11 @@ impl<T: Config> sp_std::fmt::Debug for ChargeTransactionPayment<T> {
 impl<T: Config> SignedExtension for ChargeTransactionPayment<T>
 where
 	BalanceOf<T>: Send + Sync + From<u64> + FixedPointOperand,
-	T::Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
+	T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 {
 	const IDENTIFIER: &'static str = "ChargeTransactionPayment";
 	type AccountId = T::AccountId;
-	type Call = T::Call;
+	type Call = T::RuntimeCall;
 	type AdditionalSigned = ();
 	type Pre = (
 		// tip
@@ -798,7 +841,7 @@ impl<T: Config, AnyCall: GetDispatchInfo + Encode> EstimateCallFee<AnyCall, Bala
 	for Pallet<T>
 where
 	BalanceOf<T>: FixedPointOperand,
-	T::Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
+	T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 {
 	fn estimate_call_fee(call: &AnyCall, post_info: PostDispatchInfo) -> BalanceOf<T> {
 		let len = call.encoded_size() as u32;
@@ -812,8 +855,6 @@ mod tests {
 	use super::*;
 	use crate as pallet_transaction_payment;
 
-	use std::cell::RefCell;
-
 	use codec::Encode;
 
 	use sp_core::H256;
@@ -824,12 +865,11 @@ mod tests {
 	};
 
 	use frame_support::{
-		assert_noop, assert_ok, parameter_types,
+		assert_noop, assert_ok,
+		dispatch::{DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo},
+		parameter_types,
 		traits::{ConstU32, ConstU64, Currency, GenesisBuild, Imbalance, OnUnbalanced},
-		weights::{
-			DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo, Weight,
-			WeightToFee as WeightToFeeT,
-		},
+		weights::{Weight, WeightToFee as WeightToFeeT},
 	};
 	use frame_system as system;
 	use pallet_balances::Call as BalancesCall;
@@ -849,11 +889,11 @@ mod tests {
 		}
 	);
 
-	const CALL: &<Runtime as frame_system::Config>::Call =
-		&Call::Balances(BalancesCall::transfer { dest: 2, value: 69 });
+	const CALL: &<Runtime as frame_system::Config>::RuntimeCall =
+		&RuntimeCall::Balances(BalancesCall::transfer { dest: 2, value: 69 });
 
-	thread_local! {
-		static EXTRINSIC_BASE_WEIGHT: RefCell<Weight> = RefCell::new(Weight::zero());
+	parameter_types! {
+		static ExtrinsicBaseWeight: Weight = Weight::zero();
 	}
 
 	pub struct BlockWeights;
@@ -862,10 +902,10 @@ mod tests {
 			frame_system::limits::BlockWeights::builder()
 				.base_block(Weight::zero())
 				.for_class(DispatchClass::all(), |weights| {
-					weights.base_extrinsic = EXTRINSIC_BASE_WEIGHT.with(|v| *v.borrow()).into();
+					weights.base_extrinsic = ExtrinsicBaseWeight::get().into();
 				})
 				.for_class(DispatchClass::non_mandatory(), |weights| {
-					weights.max_total = Weight::from_ref_time(1024).into();
+					weights.max_total = Weight::from_ref_time(1024).set_proof_size(u64::MAX).into();
 				})
 				.build_or_panic()
 		}
@@ -882,16 +922,16 @@ mod tests {
 		type BlockWeights = BlockWeights;
 		type BlockLength = ();
 		type DbWeight = ();
-		type Origin = Origin;
+		type RuntimeOrigin = RuntimeOrigin;
 		type Index = u64;
 		type BlockNumber = u64;
-		type Call = Call;
+		type RuntimeCall = RuntimeCall;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ConstU64<250>;
 		type Version = ();
 		type PalletInfo = PalletInfo;
@@ -906,7 +946,7 @@ mod tests {
 
 	impl pallet_balances::Config for Runtime {
 		type Balance = u64;
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type DustRemoval = ();
 		type ExistentialDeposit = ConstU64<1>;
 		type AccountStore = System;
@@ -934,9 +974,9 @@ mod tests {
 		}
 	}
 
-	thread_local! {
-		static TIP_UNBALANCED_AMOUNT: RefCell<u64> = RefCell::new(0);
-		static FEE_UNBALANCED_AMOUNT: RefCell<u64> = RefCell::new(0);
+	parameter_types! {
+		static TipUnbalancedAmount: u64 = 0;
+		static FeeUnbalancedAmount: u64 = 0;
 	}
 
 	pub struct DealWithFees;
@@ -945,16 +985,16 @@ mod tests {
 			mut fees_then_tips: impl Iterator<Item = pallet_balances::NegativeImbalance<Runtime>>,
 		) {
 			if let Some(fees) = fees_then_tips.next() {
-				FEE_UNBALANCED_AMOUNT.with(|a| *a.borrow_mut() += fees.peek());
+				FeeUnbalancedAmount::mutate(|a| *a += fees.peek());
 				if let Some(tips) = fees_then_tips.next() {
-					TIP_UNBALANCED_AMOUNT.with(|a| *a.borrow_mut() += tips.peek());
+					TipUnbalancedAmount::mutate(|a| *a += tips.peek());
 				}
 			}
 		}
 	}
 
 	impl Config for Runtime {
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type OnChargeTransaction = CurrencyAdapter<Balances, DealWithFees>;
 		type OperationalFeeMultiplier = OperationalFeeMultiplier;
 		type WeightToFee = WeightToFee;
@@ -1004,7 +1044,7 @@ mod tests {
 			self
 		}
 		fn set_constants(&self) {
-			EXTRINSIC_BASE_WEIGHT.with(|v| *v.borrow_mut() = self.base_weight);
+			ExtrinsicBaseWeight::mutate(|v| *v = self.base_weight);
 			TRANSACTION_BYTE_FEE.with(|v| *v.borrow_mut() = self.byte_fee);
 			WEIGHT_TO_FEE.with(|v| *v.borrow_mut() = self.weight_to_fee);
 		}
@@ -1076,10 +1116,10 @@ mod tests {
 					&Ok(())
 				));
 				assert_eq!(Balances::free_balance(1), 100 - 5 - 5 - 10);
-				assert_eq!(FEE_UNBALANCED_AMOUNT.with(|a| *a.borrow()), 5 + 5 + 10);
-				assert_eq!(TIP_UNBALANCED_AMOUNT.with(|a| *a.borrow()), 0);
+				assert_eq!(FeeUnbalancedAmount::get(), 5 + 5 + 10);
+				assert_eq!(TipUnbalancedAmount::get(), 0);
 
-				FEE_UNBALANCED_AMOUNT.with(|a| *a.borrow_mut() = 0);
+				FeeUnbalancedAmount::mutate(|a| *a = 0);
 
 				let pre = ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
 					.pre_dispatch(&2, CALL, &info_from_weight(Weight::from_ref_time(100)), len)
@@ -1094,8 +1134,8 @@ mod tests {
 					&Ok(())
 				));
 				assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 50 - 5);
-				assert_eq!(FEE_UNBALANCED_AMOUNT.with(|a| *a.borrow()), 5 + 10 + 50);
-				assert_eq!(TIP_UNBALANCED_AMOUNT.with(|a| *a.borrow()), 5);
+				assert_eq!(FeeUnbalancedAmount::get(), 5 + 10 + 50);
+				assert_eq!(TipUnbalancedAmount::get(), 5);
 			});
 	}
 
@@ -1217,7 +1257,7 @@ mod tests {
 
 	#[test]
 	fn query_info_and_fee_details_works() {
-		let call = Call::Balances(BalancesCall::transfer { dest: 2, value: 69 });
+		let call = RuntimeCall::Balances(BalancesCall::transfer { dest: 2, value: 69 });
 		let origin = 111111;
 		let extra = ();
 		let xt = TestXt::new(call.clone(), Some((origin, extra)));
@@ -1280,7 +1320,7 @@ mod tests {
 
 	#[test]
 	fn query_call_info_and_fee_details_works() {
-		let call = Call::Balances(BalancesCall::transfer { dest: 2, value: 69 });
+		let call = RuntimeCall::Balances(BalancesCall::transfer { dest: 2, value: 69 });
 		let info = call.get_dispatch_info();
 		let encoded_call = call.encode();
 		let len = encoded_call.len() as u32;
@@ -1474,13 +1514,11 @@ mod tests {
 				));
 				assert_eq!(Balances::free_balance(2), 0);
 				// Transfer Event
-				System::assert_has_event(Event::Balances(pallet_balances::Event::Transfer {
-					from: 2,
-					to: 3,
-					amount: 80,
-				}));
+				System::assert_has_event(RuntimeEvent::Balances(
+					pallet_balances::Event::Transfer { from: 2, to: 3, amount: 80 },
+				));
 				// Killed Event
-				System::assert_has_event(Event::System(system::Event::KilledAccount {
+				System::assert_has_event(RuntimeEvent::System(system::Event::KilledAccount {
 					account: 2,
 				}));
 			});
@@ -1539,7 +1577,7 @@ mod tests {
 				));
 				assert_eq!(Balances::total_balance(&user), 0);
 				// TransactionFeePaid Event
-				System::assert_has_event(Event::TransactionPayment(
+				System::assert_has_event(RuntimeEvent::TransactionPayment(
 					pallet_transaction_payment::Event::TransactionFeePaid {
 						who: user,
 						actual_fee: 0,

@@ -32,7 +32,7 @@ sp-storage = { version = "6.0.0", default-features = false, path = "../../primit
 futures = "0.3.21"
 
 [dev-dependencies]
-hex-literal = "0.3.4"
+array-bytes = "4.1"
 rusty-fork = { version = "0.3.0", default-features = false }
 sp-keystore = { version = "0.12.0", path = "../../primitives/keystore" }
 
@@ -55,4 +55,6 @@ std = [
 	"sp-std/std",
 	"sp-storage/std",
 ]
-runtime-benchmarks = []
+runtime-benchmarks = [
+	"frame-system/runtime-benchmarks",
+]

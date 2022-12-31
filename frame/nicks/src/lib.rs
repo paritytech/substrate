@@ -58,7 +58,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The currency trait.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -71,7 +71,7 @@ pub mod pallet {
 		type Slashed: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 		/// The origin which may forcibly set or remove a name. Root can always do this.
-		type ForceOrigin: EnsureOrigin<Self::Origin>;
+		type ForceOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The minimum length a name may be.
 		#[pallet::constant]
@@ -140,7 +140,7 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 
 			let bounded_name: BoundedVec<_, _> =
-				name.try_into().map_err(|()| Error::<T>::TooLong)?;
+				name.try_into().map_err(|_| Error::<T>::TooLong)?;
 			ensure!(bounded_name.len() >= T::MinLength::get() as usize, Error::<T>::TooShort);
 
 			let deposit = if let Some((_, deposit)) = <NameOf<T>>::get(&sender) {
@@ -229,7 +229,7 @@ pub mod pallet {
 			T::ForceOrigin::ensure_origin(origin)?;
 
 			let bounded_name: BoundedVec<_, _> =
-				name.try_into().map_err(|()| Error::<T>::TooLong)?;
+				name.try_into().map_err(|_| Error::<T>::TooLong)?;
 			let target = T::Lookup::lookup(target)?;
 			let deposit = <NameOf<T>>::get(&target).map(|x| x.1).unwrap_or_else(Zero::zero);
 			<NameOf<T>>::insert(&target, (bounded_name, deposit));
@@ -280,16 +280,16 @@ mod tests {
 		type BlockWeights = ();
 		type BlockLength = ();
 		type DbWeight = ();
-		type Origin = Origin;
+		type RuntimeOrigin = RuntimeOrigin;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
-		type Call = Call;
+		type RuntimeCall = RuntimeCall;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ConstU64<250>;
 		type Version = ();
 		type PalletInfo = PalletInfo;
@@ -307,7 +307,7 @@ mod tests {
 		type MaxReserves = ();
 		type ReserveIdentifier = [u8; 8];
 		type Balance = u64;
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type DustRemoval = ();
 		type ExistentialDeposit = ConstU64<1>;
 		type AccountStore = System;
@@ -318,7 +318,7 @@ mod tests {
 		pub const One: u64 = 1;
 	}
 	impl Config for Test {
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type Currency = Balances;
 		type ReservationFee = ConstU64<2>;
 		type Slashed = ();
@@ -338,9 +338,9 @@ mod tests {
 	#[test]
 	fn kill_name_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Nicks::set_name(Origin::signed(2), b"Dave".to_vec()));
+			assert_ok!(Nicks::set_name(RuntimeOrigin::signed(2), b"Dave".to_vec()));
 			assert_eq!(Balances::total_balance(&2), 10);
-			assert_ok!(Nicks::kill_name(Origin::signed(1), 2));
+			assert_ok!(Nicks::kill_name(RuntimeOrigin::signed(1), 2));
 			assert_eq!(Balances::total_balance(&2), 8);
 			assert_eq!(<NameOf<Test>>::get(2), None);
 		});
@@ -350,17 +350,21 @@ mod tests {
 	fn force_name_should_work() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(
-				Nicks::set_name(Origin::signed(2), b"Dr. David Brubeck, III".to_vec()),
+				Nicks::set_name(RuntimeOrigin::signed(2), b"Dr. David Brubeck, III".to_vec()),
 				Error::<Test>::TooLong,
 			);
 
-			assert_ok!(Nicks::set_name(Origin::signed(2), b"Dave".to_vec()));
+			assert_ok!(Nicks::set_name(RuntimeOrigin::signed(2), b"Dave".to_vec()));
 			assert_eq!(Balances::reserved_balance(2), 2);
 			assert_noop!(
-				Nicks::force_name(Origin::signed(1), 2, b"Dr. David Brubeck, III".to_vec()),
+				Nicks::force_name(RuntimeOrigin::signed(1), 2, b"Dr. David Brubeck, III".to_vec()),
 				Error::<Test>::TooLong,
 			);
-			assert_ok!(Nicks::force_name(Origin::signed(1), 2, b"Dr. Brubeck, III".to_vec()));
+			assert_ok!(Nicks::force_name(
+				RuntimeOrigin::signed(1),
+				2,
+				b"Dr. Brubeck, III".to_vec()
+			));
 			assert_eq!(Balances::reserved_balance(2), 2);
 			let (name, amount) = <NameOf<Test>>::get(2).unwrap();
 			assert_eq!(name, b"Dr. Brubeck, III".to_vec());
@@ -371,17 +375,17 @@ mod tests {
 	#[test]
 	fn normal_operation_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Nicks::set_name(Origin::signed(1), b"Gav".to_vec()));
+			assert_ok!(Nicks::set_name(RuntimeOrigin::signed(1), b"Gav".to_vec()));
 			assert_eq!(Balances::reserved_balance(1), 2);
 			assert_eq!(Balances::free_balance(1), 8);
 			assert_eq!(<NameOf<Test>>::get(1).unwrap().0, b"Gav".to_vec());
 
-			assert_ok!(Nicks::set_name(Origin::signed(1), b"Gavin".to_vec()));
+			assert_ok!(Nicks::set_name(RuntimeOrigin::signed(1), b"Gavin".to_vec()));
 			assert_eq!(Balances::reserved_balance(1), 2);
 			assert_eq!(Balances::free_balance(1), 8);
 			assert_eq!(<NameOf<Test>>::get(1).unwrap().0, b"Gavin".to_vec());
 
-			assert_ok!(Nicks::clear_name(Origin::signed(1)));
+			assert_ok!(Nicks::clear_name(RuntimeOrigin::signed(1)));
 			assert_eq!(Balances::reserved_balance(1), 0);
 			assert_eq!(Balances::free_balance(1), 10);
 		});
@@ -390,24 +394,27 @@ mod tests {
 	#[test]
 	fn error_catching_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_noop!(Nicks::clear_name(Origin::signed(1)), Error::<Test>::Unnamed);
+			assert_noop!(Nicks::clear_name(RuntimeOrigin::signed(1)), Error::<Test>::Unnamed);
 
 			assert_noop!(
-				Nicks::set_name(Origin::signed(3), b"Dave".to_vec()),
+				Nicks::set_name(RuntimeOrigin::signed(3), b"Dave".to_vec()),
 				pallet_balances::Error::<Test, _>::InsufficientBalance
 			);
 
 			assert_noop!(
-				Nicks::set_name(Origin::signed(1), b"Ga".to_vec()),
+				Nicks::set_name(RuntimeOrigin::signed(1), b"Ga".to_vec()),
 				Error::<Test>::TooShort
 			);
 			assert_noop!(
-				Nicks::set_name(Origin::signed(1), b"Gavin James Wood, Esquire".to_vec()),
+				Nicks::set_name(RuntimeOrigin::signed(1), b"Gavin James Wood, Esquire".to_vec()),
 				Error::<Test>::TooLong
 			);
-			assert_ok!(Nicks::set_name(Origin::signed(1), b"Dave".to_vec()));
-			assert_noop!(Nicks::kill_name(Origin::signed(2), 1), BadOrigin);
-			assert_noop!(Nicks::force_name(Origin::signed(2), 1, b"Whatever".to_vec()), BadOrigin);
+			assert_ok!(Nicks::set_name(RuntimeOrigin::signed(1), b"Dave".to_vec()));
+			assert_noop!(Nicks::kill_name(RuntimeOrigin::signed(2), 1), BadOrigin);
+			assert_noop!(
+				Nicks::force_name(RuntimeOrigin::signed(2), 1, b"Whatever".to_vec()),
+				BadOrigin
+			);
 		});
 	}
 }

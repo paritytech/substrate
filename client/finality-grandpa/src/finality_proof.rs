@@ -380,8 +380,13 @@ mod tests {
 			precommits: Vec::new(),
 		};
 
-		let grandpa_just =
-			GrandpaJustification::<Block> { round: 8, votes_ancestries: Vec::new(), commit };
+		let grandpa_just: GrandpaJustification<Block> =
+			sp_finality_grandpa::GrandpaJustification::<Header> {
+				round: 8,
+				votes_ancestries: Vec::new(),
+				commit,
+			}
+			.into();
 
 		let finality_proof = FinalityProof {
 			block: header(2).hash(),

@@ -17,7 +17,7 @@
 
 use crate::Config;
 use codec::{Decode, Encode};
-use frame_support::weights::DispatchInfo;
+use frame_support::dispatch::DispatchInfo;
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{DispatchInfoOf, Dispatchable, One, SignedExtension},
@@ -60,10 +60,10 @@ impl<T: Config> sp_std::fmt::Debug for CheckNonce<T> {
 
 impl<T: Config> SignedExtension for CheckNonce<T>
 where
-	T::Call: Dispatchable<Info = DispatchInfo>,
+	T::RuntimeCall: Dispatchable<Info = DispatchInfo>,
 {
 	type AccountId = T::AccountId;
-	type Call = T::Call;
+	type Call = T::RuntimeCall;
 	type AdditionalSigned = ();
 	type Pre = ();
 	const IDENTIFIER: &'static str = "CheckNonce";

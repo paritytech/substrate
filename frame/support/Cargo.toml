@@ -27,11 +27,12 @@ sp-core = { version = "6.0.0", default-features = false, path = "../../primitive
 sp-arithmetic = { version = "5.0.0", default-features = false, path = "../../primitives/arithmetic" }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
+sp-weights = { version = "4.0.0", default-features = false, path = "../../primitives/weights" }
 tt-call = "1.0.8"
 frame-support-procedural = { version = "4.0.0-dev", default-features = false, path = "./procedural" }
 paste = "1.0"
 once_cell = { version = "1", default-features = false, optional = true }
-sp-state-machine = { version = "0.12.0", optional = true, path = "../../primitives/state-machine" }
+sp-state-machine = { version = "0.12.0", default-features = false, optional = true, path = "../../primitives/state-machine" }
 bitflags = "1.3"
 impl-trait-for-tuples = "0.2.2"
 smallvec = "1.8.0"
@@ -44,11 +45,13 @@ serde_json = "1.0.85"
 assert_matches = "1.3.0"
 pretty_assertions = "1.2.1"
 frame-system = { version = "4.0.0-dev", path = "../system" }
-parity-util-mem = { version = "0.11.0", default-features = false, features = ["primitive-types"] }
+parity-util-mem = { version = "0.12.0", default-features = false, features = ["primitive-types"] }
 
 [features]
 default = ["std"]
 std = [
+	"sp-core/std",
+	"k256/std",
 	"once_cell",
 	"serde",
 	"sp-api/std",
@@ -62,7 +65,8 @@ std = [
 	"frame-metadata/std",
 	"sp-inherents/std",
 	"sp-staking/std",
-	"sp-state-machine",
+	"sp-state-machine/std",
+	"sp-weights/std",
 	"frame-support-procedural/std",
 	"log/std",
 ]

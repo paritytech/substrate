@@ -67,7 +67,6 @@
 #![warn(missing_docs)]
 
 use std::{
-	borrow::Cow,
 	collections::{HashMap, HashSet},
 	future::Future,
 	pin::Pin,
@@ -115,8 +114,7 @@ use sp_blockchain::{
 	Backend as _, Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult,
 };
 use sp_consensus::{
-	BlockOrigin, CacheKeyId, CanAuthorWith, Environment, Error as ConsensusError, Proposer,
-	SelectChain,
+	BlockOrigin, CacheKeyId, Environment, Error as ConsensusError, Proposer, SelectChain,
 };
 use sp_consensus_babe::inherents::BabeInherentData;
 use sp_consensus_slots::Slot;
@@ -370,7 +368,7 @@ where
 }
 
 /// Parameters for BABE.
-pub struct BabeParams<B: BlockT, C, SC, E, I, SO, L, CIDP, BS, CAW> {
+pub struct BabeParams<B: BlockT, C, SC, E, I, SO, L, CIDP, BS> {
 	/// The keystore that manages the keys of the node.
 	pub keystore: SyncCryptoStorePtr,
 
@@ -406,9 +404,6 @@ pub struct BabeParams<B: BlockT, C, SC, E, I, SO, L, CIDP, BS, CAW> {
 	/// The source of timestamps for relative slots
 	pub babe_link: BabeLink<B>,
 
-	/// Checks if the current native implementation can author with a runtime at a given block.
-	pub can_author_with: CAW,
-
 	/// The proportion of the slot dedicated to proposing.
 	///
 	/// The block proposing will be limited to this proportion of the slot from the starting of the
@@ -425,7 +420,7 @@ pub struct BabeParams<B: BlockT, C, SC, E, I, SO, L, CIDP, BS, CAW> {
 }
 
 /// Start the babe worker.
-pub fn start_babe<B, C, SC, E, I, SO, CIDP, BS, CAW, L, Error>(
+pub fn start_babe<B, C, SC, E, I, SO, CIDP, BS, L, Error>(
 	BabeParams {
 		keystore,
 		client,
@@ -438,11 +433,10 @@ pub fn start_babe<B, C, SC, E, I, SO, CIDP, BS, CAW, L, Error>(
 		force_authoring,
 		backoff_authoring_blocks,
 		babe_link,
-		can_author_with,
 		block_proposal_slot_portion,
 		max_block_proposal_slot_portion,
 		telemetry,
-	}: BabeParams<B, C, SC, E, I, SO, L, CIDP, BS, CAW>,
+	}: BabeParams<B, C, SC, E, I, SO, L, CIDP, BS>,
 ) -> Result<BabeWorker<B>, sp_consensus::Error>
 where
 	B: BlockT,
@@ -468,7 +462,6 @@ where
 	CIDP: CreateInherentDataProviders<B, ()> + Send + Sync + 'static,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
-	CAW: CanAuthorWith<B> + Send + Sync + 'static,
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 {
 	const HANDLE_BUFFER_SIZE: usize = 1024;
@@ -500,7 +493,6 @@ where
 		sc_consensus_slots::SimpleSlotWorkerToSlotWorker(worker),
 		sync_oracle,
 		create_inherent_data_providers,
-		can_author_with,
 	);
 
 	let (worker_tx, worker_rx) = channel(HANDLE_BUFFER_SIZE);
@@ -737,7 +729,6 @@ where
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Sync,
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 {
-	type EpochData = ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>;
 	type Claim = (PreDigest, AuthorityId);
 	type SyncOracle = SO;
 	type JustificationSyncLink = L;
@@ -745,6 +736,7 @@ where
 		Pin<Box<dyn Future<Output = Result<E::Proposer, sp_consensus::Error>> + Send + 'static>>;
 	type Proposer = E::Proposer;
 	type BlockImport = I;
+	type AuxData = ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>;
 
 	fn logging_target(&self) -> &'static str {
 		"babe"
@@ -754,11 +746,7 @@ where
 		&mut self.block_import
 	}
 
-	fn epoch_data(
-		&self,
-		parent: &B::Header,
-		slot: Slot,
-	) -> Result<Self::EpochData, ConsensusError> {
+	fn aux_data(&self, parent: &B::Header, slot: Slot) -> Result<Self::AuxData, ConsensusError> {
 		self.epoch_changes
 			.shared_data()
 			.epoch_descriptor_for_child_of(
@@ -771,7 +759,7 @@ where
 			.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)
 	}
 
-	fn authorities_len(&self, epoch_descriptor: &Self::EpochData) -> Option<usize> {
+	fn authorities_len(&self, epoch_descriptor: &Self::AuxData) -> Option<usize> {
 		self.epoch_changes
 			.shared_data()
 			.viable_epoch(epoch_descriptor, |slot| Epoch::genesis(&self.config, slot))
@@ -831,7 +819,7 @@ where
 		body: Vec<B::Extrinsic>,
 		storage_changes: StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
 		(_, public): Self::Claim,
-		epoch_descriptor: Self::EpochData,
+		epoch_descriptor: Self::AuxData,
 	) -> Result<
 		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
 		sp_consensus::Error,
@@ -864,10 +852,8 @@ where
 		import_block.body = Some(body);
 		import_block.state_action =
 			StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(storage_changes));
-		import_block.intermediates.insert(
-			Cow::from(INTERMEDIATE_KEY),
-			Box::new(BabeIntermediate::<B> { epoch_descriptor }) as Box<_>,
-		);
+		import_block
+			.insert_intermediate(INTERMEDIATE_KEY, BabeIntermediate::<B> { epoch_descriptor });
 
 		Ok(import_block)
 	}
@@ -1017,23 +1003,21 @@ impl<Block: BlockT> BabeLink<Block> {
 }
 
 /// A verifier for Babe blocks.
-pub struct BabeVerifier<Block: BlockT, Client, SelectChain, CAW, CIDP> {
+pub struct BabeVerifier<Block: BlockT, Client, SelectChain, CIDP> {
 	client: Arc<Client>,
 	select_chain: SelectChain,
 	create_inherent_data_providers: CIDP,
 	config: BabeConfiguration,
 	epoch_changes: SharedEpochChanges<Block, Epoch>,
-	can_author_with: CAW,
 	telemetry: Option<TelemetryHandle>,
 }
 
-impl<Block, Client, SelectChain, CAW, CIDP> BabeVerifier<Block, Client, SelectChain, CAW, CIDP>
+impl<Block, Client, SelectChain, CIDP> BabeVerifier<Block, Client, SelectChain, CIDP>
 where
 	Block: BlockT,
 	Client: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block> + ProvideRuntimeApi<Block>,
 	Client::Api: BlockBuilderApi<Block> + BabeApi<Block>,
 	SelectChain: sp_consensus::SelectChain<Block>,
-	CAW: CanAuthorWith<Block>,
 	CIDP: CreateInherentDataProviders<Block, ()>,
 {
 	async fn check_inherents(
@@ -1044,16 +1028,6 @@ where
 		create_inherent_data_providers: CIDP::InherentDataProviders,
 		execution_context: ExecutionContext,
 	) -> Result<(), Error<Block>> {
-		if let Err(e) = self.can_author_with.can_author_with(&block_id) {
-			debug!(
-				target: "babe",
-				"Skipping `check_inherents` as authoring version is not compatible: {}",
-				e,
-			);
-
-			return Ok(())
-		}
-
 		let inherent_res = self
 			.client
 			.runtime_api()
@@ -1158,8 +1132,8 @@ type BlockVerificationResult<Block> =
 	Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String>;
 
 #[async_trait::async_trait]
-impl<Block, Client, SelectChain, CAW, CIDP> Verifier<Block>
-	for BabeVerifier<Block, Client, SelectChain, CAW, CIDP>
+impl<Block, Client, SelectChain, CIDP> Verifier<Block>
+	for BabeVerifier<Block, Client, SelectChain, CIDP>
 where
 	Block: BlockT,
 	Client: HeaderMetadata<Block, Error = sp_blockchain::Error>
@@ -1170,7 +1144,6 @@ where
 		+ AuxStore,
 	Client::Api: BlockBuilderApi<Block> + BabeApi<Block>,
 	SelectChain: sp_consensus::SelectChain<Block>,
-	CAW: CanAuthorWith<Block> + Send + Sync,
 	CIDP: CreateInherentDataProviders<Block, ()> + Send + Sync,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send + Sync,
 {
@@ -1265,24 +1238,26 @@ where
 					warn!(target: "babe", "Error checking/reporting BABE equivocation: {}", err);
 				}
 
-				// if the body is passed through, we need to use the runtime
-				// to check that the internally-set timestamp in the inherents
-				// actually matches the slot set in the seal.
 				if let Some(inner_body) = block.body {
-					let mut inherent_data = create_inherent_data_providers
-						.create_inherent_data()
-						.map_err(Error::<Block>::CreateInherents)?;
-					inherent_data.babe_replace_inherent_data(slot);
 					let new_block = Block::new(pre_header.clone(), inner_body);
+					if !block.state_action.skip_execution_checks() {
+						// if the body is passed through and the block was executed,
+						// we need to use the runtime to check that the internally-set
+						// timestamp in the inherents actually matches the slot set in the seal.
+						let mut inherent_data = create_inherent_data_providers
+							.create_inherent_data()
+							.map_err(Error::<Block>::CreateInherents)?;
+						inherent_data.babe_replace_inherent_data(slot);
 
-					self.check_inherents(
-						new_block.clone(),
-						BlockId::Hash(parent_hash),
-						inherent_data,
-						create_inherent_data_providers,
-						block.origin.into(),
-					)
-					.await?;
+						self.check_inherents(
+							new_block.clone(),
+							BlockId::Hash(parent_hash),
+							inherent_data,
+							create_inherent_data_providers,
+							block.origin.into(),
+						)
+						.await?;
+					}
 
 					let (_, inner_body) = new_block.deconstruct();
 					block.body = Some(inner_body);
@@ -1298,9 +1273,9 @@ where
 
 				block.header = pre_header;
 				block.post_digests.push(verified_info.seal);
-				block.intermediates.insert(
-					Cow::from(INTERMEDIATE_KEY),
-					Box::new(BabeIntermediate::<Block> { epoch_descriptor }) as Box<_>,
+				block.insert_intermediate(
+					INTERMEDIATE_KEY,
+					BabeIntermediate::<Block> { epoch_descriptor },
 				);
 				block.post_hash = Some(hash);
 
@@ -1452,7 +1427,7 @@ where
 		match self.client.status(BlockId::Hash(hash)) {
 			Ok(sp_blockchain::BlockStatus::InChain) => {
 				// When re-importing existing block strip away intermediates.
-				let _ = block.take_intermediate::<BabeIntermediate<Block>>(INTERMEDIATE_KEY);
+				let _ = block.remove_intermediate::<BabeIntermediate<Block>>(INTERMEDIATE_KEY);
 				block.fork_choice = Some(ForkChoiceStrategy::Custom(false));
 				return self.inner.import_block(block, new_cache).await.map_err(Into::into)
 			},
@@ -1521,7 +1496,7 @@ where
 				};
 
 				let intermediate =
-					block.take_intermediate::<BabeIntermediate<Block>>(INTERMEDIATE_KEY)?;
+					block.remove_intermediate::<BabeIntermediate<Block>>(INTERMEDIATE_KEY)?;
 
 				let epoch_descriptor = intermediate.epoch_descriptor;
 				let first_in_epoch = parent_slot < epoch_descriptor.start_slot();
@@ -1781,7 +1756,7 @@ where
 ///
 /// The block import object provided must be the `BabeBlockImport` or a wrapper
 /// of it, otherwise crucial import logic will be omitted.
-pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW, CIDP>(
+pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CIDP>(
 	babe_link: BabeLink<Block>,
 	block_import: Inner,
 	justification_import: Option<BoxJustificationImport<Block>>,
@@ -1790,7 +1765,6 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW, CIDP>(
 	create_inherent_data_providers: CIDP,
 	spawner: &impl sp_core::traits::SpawnEssentialNamed,
 	registry: Option<&Registry>,
-	can_author_with: CAW,
 	telemetry: Option<TelemetryHandle>,
 ) -> ClientResult<DefaultImportQueue<Block, Client>>
 where
@@ -1810,7 +1784,6 @@ where
 		+ 'static,
 	Client::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block>,
 	SelectChain: sp_consensus::SelectChain<Block> + 'static,
-	CAW: CanAuthorWith<Block> + Send + Sync + 'static,
 	CIDP: CreateInherentDataProviders<Block, ()> + Send + Sync + 'static,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send + Sync,
 {
@@ -1819,7 +1792,6 @@ where
 		create_inherent_data_providers,
 		config: babe_link.config,
 		epoch_changes: babe_link.epoch_changes,
-		can_author_with,
 		telemetry,
 		client,
 	};

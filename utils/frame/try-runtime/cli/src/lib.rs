@@ -132,20 +132,20 @@
 //! added, given the right flag:
 //!
 //! ```ignore
+//! 
 //! #[cfg(feature = try-runtime)]
-//! fn pre_upgrade() -> Result<(), &'static str> {}
+//! fn pre_upgrade() -> Result<Vec<u8>, &'static str> {}
 //!
 //! #[cfg(feature = try-runtime)]
-//! fn post_upgrade() -> Result<(), &'static str> {}
+//! fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {}
 //! ```
 //!
 //! (The pallet macro syntax will support this simply as a part of `#[pallet::hooks]`).
 //!
 //! These hooks allow you to execute some code, only within the `on-runtime-upgrade` command, before
-//! and after the migration. If any data needs to be temporarily stored between the pre/post
-//! migration hooks, `OnRuntimeUpgradeHelpersExt` can help with that. Note that you should be
-//! mindful with any mutable storage ops in the pre/post migration checks, as you almost certainly
-//! will not want to mutate any of the storage that is to be migrated.
+//! and after the migration. Moreover, `pre_upgrade` can return a `Vec<u8>` that contains arbitrary
+//! encoded data (usually some pre-upgrade state) which will be passed to `post_upgrade` after
+//! upgrading and used for post checking.
 //!
 //! #### Logging
 //!
@@ -267,8 +267,7 @@
 
 use parity_scale_codec::Decode;
 use remote_externalities::{
-	rpc_api::RpcService, Builder, Mode, OfflineConfig, OnlineConfig, SnapshotConfig,
-	TestExternalities,
+	Builder, Mode, OfflineConfig, OnlineConfig, SnapshotConfig, TestExternalities,
 };
 use sc_chain_spec::ChainSpec;
 use sc_cli::{
@@ -297,6 +296,7 @@ use sp_runtime::{
 use sp_state_machine::{OverlayedChanges, StateMachine, TrieBackendBuilder};
 use sp_version::StateVersion;
 use std::{fmt::Debug, path::PathBuf, str::FromStr};
+use substrate_rpc_client::{ws_client, StateApi};
 
 mod commands;
 pub(crate) mod parse;
@@ -385,6 +385,7 @@ pub enum Command {
 
 /// Shared parameters of the `try-runtime` commands
 #[derive(Debug, Clone, clap::Parser)]
+#[group(skip)]
 pub struct SharedParams {
 	/// Shared parameters of substrate cli.
 	#[allow(missing_docs)]
@@ -392,41 +393,41 @@ pub struct SharedParams {
 	pub shared_params: sc_cli::SharedParams,
 
 	/// The execution strategy that should be used.
-	#[clap(long, value_name = "STRATEGY", arg_enum, ignore_case = true, default_value = "wasm")]
+	#[arg(long, value_name = "STRATEGY", value_enum, ignore_case = true, default_value_t = ExecutionStrategy::Wasm)]
 	pub execution: ExecutionStrategy,
 
 	/// Type of wasm execution used.
-	#[clap(
+	#[arg(
 		long = "wasm-execution",
 		value_name = "METHOD",
-		possible_values = WasmExecutionMethod::variants(),
+		value_enum,
 		ignore_case = true,
-		default_value = DEFAULT_WASM_EXECUTION_METHOD,
+		default_value_t = DEFAULT_WASM_EXECUTION_METHOD,
 	)]
 	pub wasm_method: WasmExecutionMethod,
 
 	/// The WASM instantiation method to use.
 	///
 	/// Only has an effect when `wasm-execution` is set to `compiled`.
-	#[clap(
+	#[arg(
 		long = "wasm-instantiation-strategy",
 		value_name = "STRATEGY",
 		default_value_t = DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
-		arg_enum,
+		value_enum,
 	)]
 	pub wasmtime_instantiation_strategy: WasmtimeInstantiationStrategy,
 
 	/// The number of 64KB pages to allocate for Wasm execution. Defaults to
 	/// [`sc_service::Configuration.default_heap_pages`].
-	#[clap(long)]
+	#[arg(long)]
 	pub heap_pages: Option<u64>,
 
-	/// When enabled, the spec name check will not panic, and instead only show a warning.
-	#[clap(long)]
-	pub no_spec_name_check: bool,
+	/// When enabled, the spec check will not panic, and instead only show a warning.
+	#[arg(long)]
+	pub no_spec_check_panic: bool,
 
 	/// State version that is used by the chain.
-	#[clap(long, default_value = "1", parse(try_from_str = parse::state_version))]
+	#[arg(long, default_value_t = StateVersion::V1, value_parser = parse::state_version)]
 	pub state_version: StateVersion,
 }
 
@@ -438,7 +439,7 @@ pub struct TryRuntimeCmd {
 	#[clap(flatten)]
 	pub shared: SharedParams,
 
-	#[clap(subcommand)]
+	#[command(subcommand)]
 	pub command: Command,
 }
 
@@ -449,17 +450,17 @@ pub enum State {
 	///
 	/// This can be crated by passing a value to [`State::Live::snapshot_path`].
 	Snap {
-		#[clap(short, long)]
+		#[arg(short, long)]
 		snapshot_path: PathBuf,
 	},
 
 	/// Use a live chain as the source of runtime state.
 	Live {
 		/// The url to connect to.
-		#[clap(
+		#[arg(
 			short,
 			long,
-			parse(try_from_str = parse::url),
+			value_parser = parse::url,
 		)]
 		uri: String,
 
@@ -467,21 +468,20 @@ pub enum State {
 		///
 		/// If non provided, then the latest finalized head is used. This is particularly useful
 		/// for [`Command::OnRuntimeUpgrade`].
-		#[clap(
+		#[arg(
 			short,
 			long,
-			multiple_values = false,
-			parse(try_from_str = parse::hash),
+			value_parser = parse::hash,
 		)]
 		at: Option<String>,
 
 		/// An optional state snapshot file to WRITE to. Not written if set to `None`.
-		#[clap(short, long)]
+		#[arg(short, long)]
 		snapshot_path: Option<PathBuf>,
 
 		/// A pallet to scrape. Can be provided multiple times. If empty, entire chain state will
 		/// be scraped.
-		#[clap(short, long, multiple_values = true)]
+		#[arg(short, long, num_args = 1..)]
 		pallet: Vec<String>,
 
 		/// Fetch the child-keys as well.
@@ -489,7 +489,7 @@ pub enum State {
 		/// Default is `false`, if specific `--pallets` are specified, `true` otherwise. In other
 		/// words, if you scrape the whole state the child tree data is included out of the box.
 		/// Otherwise, it must be enabled explicitly using this flag.
-		#[clap(long)]
+		#[arg(long)]
 		child_tree: bool,
 	},
 }
@@ -633,9 +633,8 @@ pub(crate) async fn ensure_matching_spec<Block: BlockT + DeserializeOwned>(
 	expected_spec_version: u32,
 	relaxed: bool,
 ) {
-	let rpc_service = RpcService::new(uri.clone(), false).await.unwrap();
-	match rpc_service
-		.get_runtime_version::<Block>(None)
+	let rpc = ws_client(&uri).await.unwrap();
+	match StateApi::<Block::Hash>::runtime_version(&rpc, None)
 		.await
 		.map(|version| (String::from(version.spec_name.clone()), version.spec_version))
 		.map(|(spec_name, spec_version)| (spec_name.to_lowercase(), spec_version))

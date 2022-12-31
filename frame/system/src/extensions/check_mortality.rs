@@ -56,7 +56,7 @@ impl<T: Config + Send + Sync> sp_std::fmt::Debug for CheckMortality<T> {
 
 impl<T: Config + Send + Sync> SignedExtension for CheckMortality<T> {
 	type AccountId = T::AccountId;
-	type Call = T::Call;
+	type Call = T::RuntimeCall;
 	type AdditionalSigned = T::Hash;
 	type Pre = ();
 	const IDENTIFIER: &'static str = "CheckMortality";
@@ -101,7 +101,10 @@ impl<T: Config + Send + Sync> SignedExtension for CheckMortality<T> {
 mod tests {
 	use super::*;
 	use crate::mock::{new_test_ext, System, Test, CALL};
-	use frame_support::weights::{DispatchClass, DispatchInfo, Pays, Weight};
+	use frame_support::{
+		dispatch::{DispatchClass, DispatchInfo, Pays},
+		weights::Weight,
+	};
 	use sp_core::H256;
 
 	#[test]

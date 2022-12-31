@@ -46,7 +46,6 @@ sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
 
 [features]
 wasmtime = ["sc-executor/wasmtime"]
-wasmi-errno = ["sc-executor/wasmi-errno"]
 stress-test = []
 
 [[bench]]

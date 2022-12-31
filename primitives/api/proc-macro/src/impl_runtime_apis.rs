@@ -211,19 +211,6 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			recorder: std::option::Option<#crate_::ProofRecorder<Block>>,
 		}
 
-		// `RuntimeApi` itself is not threadsafe. However, an instance is only available in a
-		// `ApiRef` object and `ApiRef` also has an associated lifetime. This lifetimes makes it
-		// impossible to move `RuntimeApi` into another thread.
-		#[cfg(any(feature = "std", test))]
-		unsafe impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> Send
-			for RuntimeApiImpl<Block, C>
-		{}
-
-		#[cfg(any(feature = "std", test))]
-		unsafe impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> Sync
-			for RuntimeApiImpl<Block, C>
-		{}
-
 		#[cfg(any(feature = "std", test))]
 		impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> #crate_::ApiExt<Block> for
 			RuntimeApiImpl<Block, C>
@@ -449,28 +436,30 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 				}
 
 				let res = (|| {
-				let version = #crate_::CallApiAt::<__SR_API_BLOCK__>::runtime_version_at(self.call, at)?;
+					let version = #crate_::CallApiAt::<__SR_API_BLOCK__>::runtime_version_at(
+						self.call,
+						at,
+					)?;
 
-				let params = #crate_::CallApiAtParams::<_, fn() -> _, _> {
-					at,
-					function: (*fn_name)(version),
-					native_call: None,
-					arguments: params,
-					overlayed_changes: &self.changes,
-					storage_transaction_cache: &self.storage_transaction_cache,
-					context,
-					recorder: &self.recorder,
-				};
+					let params = #crate_::CallApiAtParams {
+						at,
+						function: (*fn_name)(version),
+						arguments: params,
+						overlayed_changes: &self.changes,
+						storage_transaction_cache: &self.storage_transaction_cache,
+						context,
+						recorder: &self.recorder,
+					};
 
-				#crate_::CallApiAt::<__SR_API_BLOCK__>::call_api_at::<#crate_::NeverNativeValue, _>(
-					self.call,
-					params,
-				)
-			})();
+					#crate_::CallApiAt::<__SR_API_BLOCK__>::call_api_at(
+						self.call,
+						params,
+					)
+				})();
 
 				self.commit_or_rollback(std::result::Result::is_ok(&res));
 
-				res.map(#crate_::NativeOrEncoded::into_encoded)
+				res
 			}
 		});
 
@@ -512,6 +501,8 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 			RuntimeApiImplCall::StateBackend:
 				#crate_::StateBackend<#crate_::HashFor<__SR_API_BLOCK__>>
 		});
+
+		where_clause.predicates.push(parse_quote! { &'static RuntimeApiImplCall: Send });
 
 		// Require that all types used in the function signatures are unwind safe.
 		extract_all_signature_types(&input.items).iter().for_each(|i| {

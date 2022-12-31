@@ -52,6 +52,7 @@ frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
 [features]
 default = ["std"]
 std = [
+	"pallet-election-provider-support-benchmarking?/std",
 	"codec/std",
 	"scale-info/std",
 	"log/std",
@@ -68,7 +69,7 @@ std = [
 	"frame-election-provider-support/std",
 	"log/std",
 
-	"frame-benchmarking/std",
+	"frame-benchmarking?/std",
 	"rand/std",
 	"strum/std",
 ]

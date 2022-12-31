@@ -198,12 +198,11 @@ fn format_allowed_hosts(addrs: &[SocketAddr]) -> Vec<String> {
 
 fn build_rpc_api<M: Send + Sync + 'static>(mut rpc_api: RpcModule<M>) -> RpcModule<M> {
 	let mut available_methods = rpc_api.method_names().collect::<Vec<_>>();
-	available_methods.sort_unstable();
+	available_methods.sort();
 
 	rpc_api
 		.register_method("rpc_methods", move |_, _| {
 			Ok(serde_json::json!({
-				"version": 1,
 				"methods": available_methods,
 			}))
 		})

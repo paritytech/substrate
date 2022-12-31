@@ -109,7 +109,7 @@ impl<H: Hasher> Recorder<H> {
 	/// Returns the [`StorageProof`].
 	pub fn to_storage_proof(&self) -> StorageProof {
 		let recorder = self.inner.lock();
-		StorageProof::new(recorder.accessed_nodes.iter().map(|(_, v)| v.clone()))
+		StorageProof::new(recorder.accessed_nodes.values().cloned())
 	}
 
 	/// Returns the estimated encoded size of the proof.

@@ -38,7 +38,7 @@ use ver_api::VerApi;
 use clap::{Args, Parser};
 use log::info;
 use serde::Serialize;
-use std::{fmt::Debug, sync::Arc};
+use std::{fmt::Debug, path::PathBuf, sync::Arc};
 
 use crate::{
 	extrinsic::{
@@ -79,6 +79,18 @@ pub struct OverheadParams {
 	#[allow(missing_docs)]
 	#[clap(flatten)]
 	pub hostinfo: HostInfoParams,
+
+	/// Add a header to the generated weight output file.
+	///
+	/// Good for adding LICENSE headers.
+	#[arg(long, value_name = "PATH")]
+	pub header: Option<PathBuf>,
+
+	/// Enable the Trie cache.
+	///
+	/// This should only be used for performance analysis and not for final results.
+	#[arg(long)]
+	pub enable_trie_cache: bool,
 }
 
 /// Type of a benchmark.
@@ -202,5 +214,13 @@ impl CliConfiguration for OverheadCmd {
 
 	fn import_params(&self) -> Option<&ImportParams> {
 		Some(&self.import_params)
+	}
+
+	fn trie_cache_maximum_size(&self) -> Result<Option<usize>> {
+		if self.params.enable_trie_cache {
+			Ok(self.import_params().map(|x| x.trie_cache_maximum_size()).unwrap_or_default())
+		} else {
+			Ok(None)
+		}
 	}
 }

@@ -16,7 +16,7 @@
 // limitations under the License.
 
 // Feature gated since it can panic.
-#![cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
+#![cfg(any(feature = "std", feature = "runtime-benchmarks", feature = "try-runtime", test))]
 
 //! Contains the [`crate::StorageNoopGuard`] for conveniently asserting
 //! that no storage mutation has been made by a whole code block.
