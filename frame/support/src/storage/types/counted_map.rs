@@ -133,6 +133,7 @@ where
 	}
 
 	/// Store or remove the value to be associated with `key` so that `get` returns the `query`.
+	/// It decrements the counter when the value is removed
 	pub fn set<KeyArg: EncodeLike<Key>>(key: KeyArg, query: QueryKind::Query) {
 		let option = QueryKind::from_query_to_optional_value(query);
 		if option.is_none() {

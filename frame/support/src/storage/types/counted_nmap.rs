@@ -170,6 +170,7 @@ where
 	}
 
 	/// Store or remove the value to be associated with `key` so that `get` returns the `query`.
+	/// It decrements the counter when the value is removed.
 	pub fn set<KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter>(
 		key: KArg,
 		query: QueryKind::Query,
