@@ -1102,7 +1102,7 @@ mod tests {
 
 			// signed
 			roll_to_signed();
-			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+			assert!(MultiPhase::current_phase().is_signed());
 			assert!(matches!(
 				<MultiPhase as ValidateUnsigned>::validate_unsigned(
 					TransactionSource::Local,

@@ -105,7 +105,7 @@ pub fn roll_to_unsigned() {
 	}
 }
 pub fn roll_to_signed() {
-	while !matches!(MultiPhase::current_phase(), Phase::Signed) {
+	while !matches!(MultiPhase::current_phase(), Phase::Signed(_)) {
 		roll_to(System::block_number() + 1);
 	}
 }
@@ -281,6 +281,7 @@ parameter_types! {
 	pub static DesiredTargets: u32 = 2;
 	pub static SignedPhase: BlockNumber = 10;
 	pub static UnsignedPhase: BlockNumber = 5;
+	pub static MinSignedPhaseDuration: BlockNumber = 3;
 	pub static SignedMaxSubmissions: u32 = 5;
 	pub static SignedMaxRefunds: u32 = 1;
 	pub static SignedDepositBase: Balance = 5;
@@ -380,6 +381,7 @@ impl crate::Config for Runtime {
 	type EstimateCallFee = frame_support::traits::ConstU32<8>;
 	type SignedPhase = SignedPhase;
 	type UnsignedPhase = UnsignedPhase;
+	type MinSignedPhaseDuration = MinSignedPhaseDuration;
 	type BetterUnsignedThreshold = BetterUnsignedThreshold;
 	type BetterSignedThreshold = BetterSignedThreshold;
 	type OffchainRepeat = OffchainRepeat;

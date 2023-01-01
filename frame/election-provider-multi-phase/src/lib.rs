@@ -318,8 +318,8 @@ pub trait BenchmarkingConfig {
 pub enum Phase<Bn> {
 	/// Nothing, the election is not happening.
 	Off,
-	/// Signed phase is open.
-	Signed,
+	/// Signed phase is open and block number corresponding to when it started.
+	Signed(Bn),
 	/// Unsigned phase. First element is whether it is active or not, second the starting block
 	/// number.
 	///
@@ -351,7 +351,7 @@ impl<Bn: PartialEq + Eq> Phase<Bn> {
 
 	/// Whether the phase is signed or not.
 	pub fn is_signed(&self) -> bool {
-		matches!(self, Phase::Signed)
+		matches!(self, Phase::Signed(_))
 	}
 
 	/// Whether the phase is unsigned or not.
@@ -585,6 +585,10 @@ pub mod pallet {
 		/// Duration of the signed phase.
 		#[pallet::constant]
 		type SignedPhase: Get<Self::BlockNumber>;
+		/// Minimum duration of the signed phase before entering in `Phase::Emergency` in case of
+		/// election error.
+		#[pallet::constant]
+		type MinSignedPhaseDuration: Get<Self::BlockNumber>;
 
 		/// The minimum amount of improvement to the solution score that defines a solution as
 		/// "better" in the Signed phase.
@@ -758,7 +762,7 @@ pub mod pallet {
 					// NOTE: if signed-phase length is zero, second part of the if-condition fails.
 					match Self::create_snapshot() {
 						Ok(_) => {
-							Self::on_initialize_open_signed();
+							Self::on_initialize_open_signed(now);
 							T::WeightInfo::on_initialize_open_signed()
 						},
 						Err(why) => {
@@ -768,12 +772,12 @@ pub mod pallet {
 						},
 					}
 				},
-				Phase::Signed | Phase::Off
+				Phase::Signed(_) | Phase::Off
 					if remaining <= unsigned_deadline && remaining > Zero::zero() =>
 				{
 					// our needs vary according to whether or not the unsigned phase follows a
 					// signed phase
-					let (need_snapshot, enabled) = if current_phase == Phase::Signed {
+					let (need_snapshot, enabled) = if current_phase.is_signed() {
 						// there was previously a signed phase: close the signed phase, no need for
 						// snapshot.
 						//
@@ -1134,6 +1138,9 @@ pub mod pallet {
 		SignedPhaseStarted { round: u32 },
 		/// The unsigned phase of the given round has started.
 		UnsignedPhaseStarted { round: u32 },
+		/// The election failed but the emergency phase did not start because there was not enough
+		/// time to prepare the election results.
+		EmergencyPhaseThrottled,
 	}
 
 	/// Error of the pallet that can be returned in response to dispatches.
@@ -1350,9 +1357,9 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Logic for `<Pallet as Hooks>::on_initialize` when signed phase is being opened.
-	pub fn on_initialize_open_signed() {
+	pub fn on_initialize_open_signed(now: T::BlockNumber) {
 		log!(info, "Starting signed phase round {}.", Self::round());
-		<CurrentPhase<T>>::put(Phase::Signed);
+		<CurrentPhase<T>>::put(Phase::Signed(now));
 		Self::deposit_event(Event::SignedPhaseStarted { round: Self::round() });
 	}
 
@@ -1651,9 +1658,24 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 				Ok(supports)
 			},
 			Err(why) => {
-				log!(error, "Entering emergency mode: {:?}", why);
-				<CurrentPhase<T>>::put(Phase::Emergency);
-				Err(why)
+				// if `elect()` was called during `Phase::Off` or too early since the beginning of
+				// the signed phase, do not enter in emergency mode since there was no enough time
+				// to reach a solution.
+				match CurrentPhase::<T>::get() {
+					Phase::Off => Err(why),
+					Phase::Signed(started_at)
+						if (started_at + T::MinSignedPhaseDuration::get()) >
+							frame_system::Pallet::<T>::block_number() =>
+					{
+						Self::deposit_event(Event::EmergencyPhaseThrottled);
+						Err(why)
+					},
+					_ => {
+						log!(error, "Entering emergency mode: {:?}", why);
+						<CurrentPhase<T>>::put(Phase::Emergency);
+						Err(why)
+					},
+				}
 			},
 		}
 	}
@@ -1897,13 +1919,13 @@ mod tests {
 			assert_eq!(MultiPhase::round(), 1);
 
 			roll_to_signed();
-			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+			assert!(MultiPhase::current_phase().is_signed());
 			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 			assert!(MultiPhase::snapshot().is_some());
 			assert_eq!(MultiPhase::round(), 1);
 
 			roll_to(24);
-			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+			assert!(MultiPhase::current_phase().is_signed());
 			assert!(MultiPhase::snapshot().is_some());
 			assert_eq!(MultiPhase::round(), 1);
 
@@ -2080,7 +2102,7 @@ mod tests {
 
 			roll_to_signed();
 			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
-			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+			assert!(MultiPhase::current_phase().is_signed());
 			assert_eq!(MultiPhase::round(), 1);
 
 			// An unexpected call to elect.
@@ -2115,7 +2137,7 @@ mod tests {
 
 			roll_to_signed();
 			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
-			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+			assert!(MultiPhase::current_phase().is_signed());
 			assert_eq!(MultiPhase::round(), 1);
 
 			// fill the queue with signed submissions
@@ -2402,7 +2424,7 @@ mod tests {
 			roll_to(29);
 			let err = MultiPhase::elect().unwrap_err();
 			assert_eq!(err, ElectionError::Fallback("NoFallback."));
-			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
 			assert_eq!(multi_phase_events(), vec![Event::ElectionFailed]);
 		});
@@ -2419,7 +2441,7 @@ mod tests {
 
 			// Signed phase opens just fine.
 			roll_to_signed();
-			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+			assert!(MultiPhase::current_phase().is_signed());
 
 			assert_eq!(
 				MultiPhase::snapshot_metadata().unwrap(),
@@ -2432,7 +2454,7 @@ mod tests {
 	fn untrusted_score_verification_is_respected() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to_signed();
-			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+			assert!(MultiPhase::current_phase().is_signed());
 
 			// set the solution balancing to get the desired score.
 			crate::mock::Balancing::set(Some(BalancingConfig { iterations: 2, tolerance: 0 }));
