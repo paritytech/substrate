@@ -13,7 +13,7 @@ mod pallet {
 	impl<T: Config> Pallet<T> {
 		#[pallet::call_index(0)]
         #[pallet::weight(10_000something)]
-		pub fn foo(origin: OriginFor<T>) -> DispatchResultWithPostInfo { Ok(()) }
+		pub fn foo(origin: OriginFor<T>) -> DispatchResult { Ok(()) }
 	}
 }
 
