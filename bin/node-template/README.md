@@ -161,7 +161,8 @@ To get all the correct dependencies, activate direnv `direnv allow` and lorri `l
 First, install [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/).
 
 Then run the following command to start a single node development chain.
-If you get that tcp port 9944 is already in use then run `lsof -i:9944` to show services using that port and close the program using it, or simply change to an available host port in docker-compose.yml.
+
+> If you get an error that tcp port address is already in use then find an available port to use for the host port in docker-compose.yml (i.e. "<HOST_PORT>:9944").
 
 ```sh
 ./scripts/docker_run.sh
