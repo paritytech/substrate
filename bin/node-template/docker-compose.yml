@@ -1,10 +1,10 @@
-version: "3.2"
+version: "3.8"
 
 services:
   dev:
     container_name: node-template
     image: paritytech/ci-linux:production
-    working_dir: /var/www/node-template
+    working_dir: /var/www/node-template/node
     ports:
       - "9944:9944"
     environment:
@@ -12,6 +12,24 @@ services:
     volumes:
       - .:/var/www/node-template
       - type: bind
+        source: ../../.git
+        target: /var/www/node-template/.git
+      - type: bind
+        source: ../../frame
+        target: /var/frame
+      - type: bind
+        source: ../../utils
+        target: /var/utils
+      - type: bind
+        source: ../../client
+        target: /var/client
+      - type: bind
+        source: ../../primitives
+        target: /var/primitives
+      - type: bind
+        source: ./.cargo/registry
+        target: /root/.cargo/registry
+      - type: bind
         source: ./.local
         target: /root/.local
-    command: bash -c "cargo build --release && ./target/release/node-template --dev --ws-external"
+    command: bash -c "cargo build --release --manifest-path Cargo.toml && ./target/release/node-template --dev --ws-external"
