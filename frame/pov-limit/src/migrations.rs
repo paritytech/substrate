@@ -19,6 +19,7 @@
 
 use super::*;
 use frame_support::{pallet_prelude::StorageVersion, traits::OnRuntimeUpgrade};
+use sp_std::vec::Vec;
 
 pub mod v1 {
 	use super::*;

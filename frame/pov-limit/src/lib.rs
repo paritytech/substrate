@@ -43,11 +43,17 @@ use sp_runtime::{
 pub use pallet::*;
 pub use weights::WeightInfo;
 
+/// Interface for wasting `ref_time`. The `waste_ref_time` function should be
+/// computation heavy.
 pub trait RefTimeWaster {
+	/// Wastes some `ref_time`. Receives a counter as an argument.
 	fn waste_ref_time(counter: u32);
 }
 
+/// Interface for wasting `proof_size`. The `waste_proof_size` should increase
+/// the size of the PoV block.
 pub trait PovWaster {
+	/// Wastes some `proof_size`. Receives a counter as an argument.
 	fn waste_proof_size(counter: u32) -> Weight;
 }
 
@@ -59,8 +65,10 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		type RuntimeEvent: From<Event> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
+		/// Type that implements the `RefTimeWaster` trait.
 		type RefTimeWaster: RefTimeWaster;
 
+		/// Type that implements the `PovWaster` trait.
 		type PovWaster: PovWaster;
 
 		/// Weight information for this pallet.
