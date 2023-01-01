@@ -1662,7 +1662,10 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 				// the signed phase, do not enter in emergency mode since there was no enough time
 				// to reach a solution.
 				match CurrentPhase::<T>::get() {
-					Phase::Off => Err(why),
+					Phase::Off => {
+						Self::deposit_event(Event::EmergencyPhaseThrottled);
+						Err(why)
+					},
 					Phase::Signed(started_at)
 						if (started_at + T::MinSignedPhaseDuration::get()) >
 							frame_system::Pallet::<T>::block_number() =>
@@ -2426,7 +2429,10 @@ mod tests {
 			assert_eq!(err, ElectionError::Fallback("NoFallback."));
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
-			assert_eq!(multi_phase_events(), vec![Event::ElectionFailed]);
+			assert_eq!(
+				multi_phase_events(),
+				vec![Event::ElectionFailed, Event::EmergencyPhaseThrottled]
+			);
 		});
 	}
 
