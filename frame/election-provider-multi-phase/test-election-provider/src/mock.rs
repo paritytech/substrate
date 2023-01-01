@@ -15,18 +15,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frame_support::{bounded_vec, parameter_types, traits, traits::Hooks, BoundedVec};
+#![allow(dead_code)] // TODO(gpestana): remove when ready
+
+use frame_support::{
+	parameter_types, traits,
+	traits::{GenesisBuild, Hooks},
+};
 use frame_system::EnsureRoot;
-use sp_core::{ConstU32, H256};
+use sp_core::{ConstU32, Get, H256};
 use sp_npos_elections::{BalancingConfig, VoteWeight};
-use sp_runtime::{testing, traits::IdentityLookup, transaction_validity, PerU16, Perbill};
+use sp_runtime::{
+	testing,
+	traits::{IdentityLookup, Zero},
+	transaction_validity, PerU16, Perbill,
+};
+use sp_staking::{EraIndex, SessionIndex};
 use sp_std::prelude::*;
+use std::collections::BTreeMap;
 
 use frame_election_provider_support::{onchain, SequentialPhragmen, Weight};
-use pallet_election_provider_multi_phase::{
-	unsigned::{MinerConfig, VoterOf},
-	SolutionAccuracyOf,
-};
+use pallet_election_provider_multi_phase::{unsigned::MinerConfig, SolutionAccuracyOf};
+use pallet_staking::StakerStatus;
+
+pub const INIT_TIMESTAMP: u64 = 30_000;
+pub const BLOCK_TIME: u64 = 1000;
 
 type Block = frame_system::mocking::MockBlock<Runtime>;
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
@@ -44,6 +56,8 @@ frame_support::construct_runtime!(
 		Balances: pallet_balances,
 		BagsList: pallet_bags_list,
 		Session: pallet_session,
+		Historical: pallet_session::historical,
+		Timestamp: pallet_timestamp,
 	}
 );
 
@@ -102,17 +116,9 @@ parameter_types! {
 	pub static CapturedMoment: Option<Moment> = None;
 }
 
-// TOOD(gpestana) needed or can we set Timestamp::OnTimestampSet = ()?
-pub struct MockOnTimestampSet;
-impl traits::OnTimestampSet<Moment> for MockOnTimestampSet {
-	fn on_timestamp_set(moment: Moment) {
-		CapturedMoment::mutate(|x| *x = Some(moment));
-	}
-}
-
 impl pallet_timestamp::Config for Runtime {
 	type Moment = Moment;
-	type OnTimestampSet = MockOnTimestampSet;
+	type OnTimestampSet = ();
 	type MinimumPeriod = traits::ConstU64<5>;
 	type WeightInfo = ();
 }
@@ -218,7 +224,7 @@ const THRESHOLDS: [VoteWeight; 9] = [10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_00
 
 parameter_types! {
 	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
-	pub const SessionsPerEra: sp_staking::SessionIndex = 1;
+	pub const SessionsPerEra: sp_staking::SessionIndex = 2;
 	pub const BondingDuration: sp_staking::EraIndex = 28;
 	pub const SlashDeferDuration: sp_staking::EraIndex = 7; // 1/4 the bonding duration.
 	pub const MaxNominatorRewardedPerValidator: u32 = 256;
@@ -238,7 +244,7 @@ impl pallet_staking::Config for Runtime {
 	type MaxNominations = MaxNominations;
 	type Currency = Balances;
 	type CurrencyBalance = Balance;
-	type UnixTime = pallet_timestamp::Pallet<Self>;
+	type UnixTime = Timestamp;
 	type CurrencyToVote = traits::SaturatingCurrencyToVote;
 	type RewardRemainder = ();
 	type RuntimeEvent = RuntimeEvent;
@@ -335,41 +341,41 @@ impl sp_runtime::BoundToRuntimeAppPublic for OtherSessionHandler {
 	type Public = testing::UintAuthorityId;
 }
 
-#[derive(Default)]
-pub struct ExtBuilder;
-
-pub mod agents {
-	use super::AccountId;
-
-	pub const ACCOUNT_0: AccountId = 0;
-	pub const ACCOUNT_1: AccountId = 1;
-	pub const ACCOUNT_2: AccountId = 2;
-	pub const ACCOUNT_3: AccountId = 3;
-	pub const ACCOUNT_4: AccountId = 4;
-	pub const ACCOUNT_5: AccountId = 5;
-	pub const ACCOUNT_6: AccountId = 6;
-	pub const ACCOUNT_7: AccountId = 7;
-	pub const ACCOUNT_8: AccountId = 8;
-	pub const ACCOUNT_9: AccountId = 9;
-	pub const ACCOUNT_10: AccountId = 10;
+pub struct ExtBuilder {
+	nominate: bool,
+	validator_count: u32,
+	minimum_validator_count: u32,
+	invulnerables: Vec<AccountId>,
+	has_stakers: bool,
+	initialize_first_session: bool,
+	pub min_nominator_bond: Balance,
+	min_validator_bond: Balance,
+	balance_factor: Balance,
+	status: BTreeMap<AccountId, StakerStatus<AccountId>>,
+	stakes: BTreeMap<AccountId, Balance>,
+	stakers: Vec<(AccountId, AccountId, Balance, StakerStatus<AccountId>)>,
 }
 
-use agents::*;
-
-parameter_types! {
-	pub static Targets: Vec<AccountId> = vec![ACCOUNT_0, ACCOUNT_1, ACCOUNT_2, ACCOUNT_3];
-	pub static Voters: Vec<VoterOf<Runtime>> = vec![
-		(ACCOUNT_0, 10, bounded_vec![ACCOUNT_9, ACCOUNT_10]),
-		(ACCOUNT_1, 10, bounded_vec![ACCOUNT_0, ACCOUNT_2]),
-		(ACCOUNT_2, 10, bounded_vec![ACCOUNT_0]),
-		(ACCOUNT_3, 10, bounded_vec![ACCOUNT_7, ACCOUNT_8, ACCOUNT_9, ACCOUNT_10]),
-		// self votes.
-		(ACCOUNT_10, 10, bounded_vec![ACCOUNT_10]),
-		(ACCOUNT_9, 20, bounded_vec![ACCOUNT_9]),
-		(ACCOUNT_8, 30, bounded_vec![ACCOUNT_8]),
-		(ACCOUNT_7, 40, bounded_vec![ACCOUNT_7]),
-	];
+impl Default for ExtBuilder {
+	fn default() -> Self {
+		Self {
+			nominate: true,
+			validator_count: 2,
+			minimum_validator_count: 0,
+			balance_factor: 1,
+			invulnerables: vec![],
+			has_stakers: true,
+			initialize_first_session: true,
+			min_nominator_bond: ExistentialDeposit::get(),
+			min_validator_bond: ExistentialDeposit::get(),
+			status: Default::default(),
+			stakes: Default::default(),
+			stakers: Default::default(),
+		}
+	}
 }
+
+parameter_types! {}
 
 impl ExtBuilder {
 	pub fn build(self) -> sp_io::TestExternalities {
@@ -379,53 +385,195 @@ impl ExtBuilder {
 
 		let _ = pallet_balances::GenesisConfig::<Runtime> {
 			balances: vec![
-				(ACCOUNT_0, 100),
-				(ACCOUNT_1, 100),
-				(ACCOUNT_2, 100),
-				(ACCOUNT_3, 100),
-				(ACCOUNT_4, 100),
-				(ACCOUNT_5, 100),
-				(ACCOUNT_6, 100),
-				(ACCOUNT_7, 100),
-				(ACCOUNT_8, 100),
-				(ACCOUNT_9, 100),
-				(ACCOUNT_10, 100),
+				(1, 10 * self.balance_factor),
+				(2, 20 * self.balance_factor),
+				(3, 300 * self.balance_factor),
+				(4, 400 * self.balance_factor),
+				// controllers
+				(10, self.balance_factor),
+				(20, self.balance_factor),
+				(30, self.balance_factor),
+				(40, self.balance_factor),
+				(50, self.balance_factor),
+				// stashes
+				(11, self.balance_factor * 1000),
+				(21, self.balance_factor * 2000),
+				(31, self.balance_factor * 2000),
+				(41, self.balance_factor * 2000),
+				(51, self.balance_factor * 2000),
+				// optional nominator
+				(100, self.balance_factor * 2000),
+				(101, self.balance_factor * 2000),
+				// aux accounts
+				(60, self.balance_factor),
+				(61, self.balance_factor * 2000),
+				(70, self.balance_factor),
+				(71, self.balance_factor * 2000),
+				(80, self.balance_factor),
+				(81, self.balance_factor * 2000),
+				// This allows us to have a total_payout different from 0.
+				(999, 1_000_000_000_000),
 			],
 		}
 		.assimilate_storage(&mut storage);
 
-		sp_io::TestExternalities::from(storage)
-	}
+		let mut stakers = vec![];
+		if self.has_stakers {
+			stakers = vec![
+				// (stash, ctrl, stake, status)
+				// these two will be elected in the default test where we elect 2.
+				(11, 10, self.balance_factor * 1000, StakerStatus::<AccountId>::Validator),
+				(21, 20, self.balance_factor * 1000, StakerStatus::<AccountId>::Validator),
+				// a loser validator
+				(31, 30, self.balance_factor * 500, StakerStatus::<AccountId>::Validator),
+				// an idle validator
+				(41, 40, self.balance_factor * 1000, StakerStatus::<AccountId>::Idle),
+			];
+			// optionally add a nominator
+			if self.nominate {
+				stakers.push((
+					101,
+					100,
+					self.balance_factor * 500,
+					StakerStatus::<AccountId>::Nominator(vec![11, 21]),
+				))
+			}
+			// replace any of the status if needed.
+			self.status.into_iter().for_each(|(stash, status)| {
+				let (_, _, _, ref mut prev_status) = stakers
+					.iter_mut()
+					.find(|s| s.0 == stash)
+					.expect("set_status staker should exist; qed");
+				*prev_status = status;
+			});
+			// replaced any of the stakes if needed.
+			self.stakes.into_iter().for_each(|(stash, stake)| {
+				let (_, _, ref mut prev_stake, _) = stakers
+					.iter_mut()
+					.find(|s| s.0 == stash)
+					.expect("set_stake staker should exits; qed.");
+				*prev_stake = stake;
+			});
+			// extend stakers if needed.
+			stakers.extend(self.stakers)
+		}
 
+		let _ = pallet_staking::GenesisConfig::<Runtime> {
+			stakers: stakers.clone(),
+			validator_count: self.validator_count,
+			minimum_validator_count: self.minimum_validator_count,
+			invulnerables: self.invulnerables,
+			slash_reward_fraction: Perbill::from_percent(10),
+			min_nominator_bond: self.min_nominator_bond,
+			min_validator_bond: self.min_validator_bond,
+			..Default::default()
+		}
+		.assimilate_storage(&mut storage);
+
+		let _ = pallet_session::GenesisConfig::<Runtime> {
+			keys: if self.has_stakers {
+				// set the keys for the first session.
+				stakers
+					.into_iter()
+					.map(|(id, ..)| (id, id, SessionKeys { other: (id as u64).into() }))
+					.collect()
+			} else {
+				// set some dummy validators in genesis.
+				(0..self.validator_count as u128)
+					.map(|id| (id, id, SessionKeys { other: (id as u64).into() }))
+					.collect()
+			},
+		}
+		.assimilate_storage(&mut storage);
+
+		let mut ext = sp_io::TestExternalities::from(storage);
+
+		if self.initialize_first_session {
+			// We consider all test to start after timestamp is initialized This must be ensured by
+			// having `timestamp::on_initialize` called before `staking::on_initialize`. Also, if
+			// session length is 1, then it is already triggered.
+			ext.execute_with(|| {
+				System::set_block_number(1);
+				Session::on_initialize(1);
+				<Staking as Hooks<u64>>::on_initialize(1);
+				Timestamp::set_timestamp(INIT_TIMESTAMP);
+			});
+		}
+
+		ext
+	}
+	pub fn balance_factor(mut self, factor: Balance) -> Self {
+		self.balance_factor = factor;
+		self
+	}
+	pub fn initialize_first_session(mut self, init: bool) -> Self {
+		self.initialize_first_session = init;
+		self
+	}
 	pub fn phases(self, signed: BlockNumber, unsigned: BlockNumber) -> Self {
 		<SignedPhase>::set(signed);
 		<UnsignedPhase>::set(unsigned);
 		self
 	}
-
-	pub fn add_voter(
-		self,
-		who: AccountId,
-		stake: Balance,
-		targets: BoundedVec<AccountId, MaxNominations>,
-	) -> Self {
-		VOTERS.with(|v| v.borrow_mut().push((who, stake, targets)));
-		self
-	}
-
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		self.build().execute_with(test)
 	}
 }
 
-// Fast forward `n` blocks.
+// Progress to given block, triggering session and era changes as we progress.
 pub fn roll_to(n: BlockNumber) {
-	let now = System::block_number();
-	for i in now + 1..=n {
-		System::set_block_number(i);
-		ElectionProviderMultiPhase::on_initialize(i);
-		Staking::on_initialize(i);
+	for b in (System::block_number()) + 1..=n {
+		System::set_block_number(b);
+		Session::on_initialize(b);
+		Staking::on_initialize(b);
+		ElectionProviderMultiPhase::on_initialize(b);
+		Timestamp::set_timestamp(System::block_number() * BLOCK_TIME + INIT_TIMESTAMP);
+		if b != n {
+			Staking::on_finalize(System::block_number());
+		}
 	}
+}
+
+/// Progresses from the current block number (whatever that may be) to the `P * session_index + 1`.
+pub(crate) fn start_session(session_index: SessionIndex) {
+	let end: u64 = if Offset::get().is_zero() {
+		(session_index as u64) * Period::get()
+	} else {
+		Offset::get() + (session_index.saturating_sub(1) as u64) * Period::get()
+	};
+
+	roll_to(end);
+	// session must have progressed properly.
+	assert_eq!(
+		Session::current_index(),
+		session_index,
+		"current session index = {}, expected = {}",
+		Session::current_index(),
+		session_index,
+	);
+}
+
+/// Go one session forward.
+pub(crate) fn advance_session() {
+	let current_index = Session::current_index();
+	start_session(current_index + 1);
+}
+
+/// Progress until the given era.
+pub(crate) fn start_active_era(era_index: EraIndex) {
+	start_session((era_index * <SessionsPerEra as Get<u32>>::get()).into());
+	assert_eq!(active_era(), era_index);
+	// One way or another, current_era must have changed before the active era, so they must match
+	// at this point.
+	assert_eq!(current_era(), active_era());
+}
+
+pub(crate) fn active_era() -> EraIndex {
+	Staking::active_era().unwrap().index
+}
+
+pub(crate) fn current_era() -> EraIndex {
+	Staking::current_era().unwrap()
 }
 
 // Fast forward until EPM signed phase.
@@ -454,7 +602,7 @@ parameter_types! {
 	static StakingEventsIndex: usize = 0;
 }
 
-// TODO(gpestana): refactor to events_sinve_last_call() -> Vec<_>
+// TODO(gpestana): macro this
 pub fn epm_events_since_last_call() -> Vec<pallet_election_provider_multi_phase::Event<Runtime>> {
 	let all: Vec<_> = System::events()
 		.into_iter()
@@ -471,7 +619,7 @@ pub fn epm_events_since_last_call() -> Vec<pallet_election_provider_multi_phase:
 	all.into_iter().skip(seen).collect()
 }
 
-// TODO(gpestana): refactor to events_sinve_last_call() -> Vec<_>
+// TODO(gpestana): macro this
 pub fn session_events_since_last_call() -> Vec<pallet_session::Event> {
 	let all: Vec<_> = System::events()
 		.into_iter()

@@ -18,34 +18,54 @@
 #![cfg(test)]
 mod mock;
 
-use frame_support::bounded_vec;
-use mock::{agents::*, *};
+pub(crate) const LOG_TARGET: &str = "tests::epm";
+
+use mock::*;
+use sp_core::Get;
+
+// syntactic sugar for logging.
+#[macro_export]
+macro_rules! log {
+	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
+		log::$level!(
+			target: crate::LOG_TARGET,
+			concat!("🛠️  ", $patter)  $(, $values)*
+        )
+    };
+}
+
+fn log_current_time() {
+	log!(
+		trace,
+		"block: {:?}, session: {:?}, era: {:?}, EPM phase: {:?} ts: {:?}",
+		System::block_number(),
+		Session::current_index(),
+		Staking::current_era(),
+		ElectionProviderMultiPhase::current_phase(),
+		Timestamp::now()
+	);
+}
 
 #[test]
-fn test_extbuilder_and_helpers() {
-	ExtBuilder.phases(5, 5).build_and_execute(|| {
-		assert_eq!(Balances::free_balance(ACCOUNT_1), 100);
+fn block_session_and_era_advances_helpers() {
+	ExtBuilder::default().initialize_first_session(true).build_and_execute(|| {
+		let advance_by = 6;
+		for _ in 1..=advance_by {
+			log_current_time();
+			advance_session();
+		}
 
-		assert_eq!(System::block_number(), 0);
-		assert!(ElectionProviderMultiPhase::current_phase().is_off());
-
-		roll_to_signed();
-		assert!(ElectionProviderMultiPhase::current_phase().is_signed());
-		assert_eq!(System::block_number(), 5);
-
-		roll_to_unsigned();
-		assert!(ElectionProviderMultiPhase::current_phase().is_unsigned());
-		assert_eq!(System::block_number(), 10);
+		// each session has `Period` blocks.
+		assert_eq!(System::block_number(), advance_by * Period::get());
+		// each era has `SessionsPerEra` sessions.
+		assert_eq!(
+			Staking::current_era().unwrap(),
+			Session::current_index() / <SessionsPerEra as Get<u32>>::get()
+		);
 	});
-
-	ExtBuilder
-		.add_voter(ACCOUNT_0, 100, bounded_vec![ACCOUNT_0, ACCOUNT_1])
-		.build_and_execute(|| {
-			// TODO: add staking genesis init in extbuilder
-
-			roll_to_unsigned();
-			let _snapshot = ElectionProviderMultiPhase::snapshot();
-
-			// TODO: check snapshot
-		});
 }
+
+#[test]
+/// Replicates the [Kusama incident](https://hackmd.io/Dt1L-JMtRc2y5FiOQik88A) of 8th Dec 2022.
+///
+fn enters_emergency_phase_after_forcing_before_elect() {}
