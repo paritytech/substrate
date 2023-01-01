@@ -19,6 +19,7 @@ mod keywords {
 	custom_keyword!(benchmark);
 	custom_keyword!(instance_benchmark);
 	custom_keyword!(extra);
+	custom_keyword!(skip_meta);
 }
 
 /// Represents a "bare" block, that is, a the contents of a [`Block`] minus the curly braces.
@@ -66,6 +67,7 @@ struct BenchmarkDef {
 	origin: Expr,
 	verify_stmts: Vec<Stmt>,
 	extra: bool,
+	skip_meta: bool,
 }
 
 impl BenchmarkDef {
@@ -74,12 +76,16 @@ impl BenchmarkDef {
 		let mut i = 0; // index of child
 		let mut params: Vec<ParamDef> = Vec::new();
 		let mut extra = false;
+		let mut skip_meta = false;
 		for attr in &item_fn.attrs {
 			if let Some(segment) = attr.path.segments.last() {
-				if let Ok(_) =
-					syn::parse::<keywords::extrinsic_call>(segment.ident.to_token_stream().into())
+				if let Ok(_) = syn::parse::<keywords::extra>(segment.ident.to_token_stream().into())
 				{
 					extra = true;
+				} else if let Ok(_) =
+					syn::parse::<keywords::skip_meta>(segment.ident.to_token_stream().into())
+				{
+					skip_meta = true;
 				}
 			}
 		}
@@ -153,6 +159,7 @@ impl BenchmarkDef {
 									&item_fn.block.stmts[(i + 1)..item_fn.block.stmts.len()],
 								),
 								extra,
+								skip_meta,
 							})
 						}
 					}
@@ -174,6 +181,7 @@ pub fn benchmarks(tokens: TokenStream) -> TokenStream {
 	let mut benchmark_defs: Vec<BenchmarkDef> = Vec::new();
 	let mut benchmark_names: Vec<Ident> = Vec::new();
 	let mut extra_benchmark_names: Vec<Ident> = Vec::new();
+	let mut skip_meta_benchmark_names: Vec<Ident> = Vec::new();
 	let mut any_instance = false;
 	for stmt in &mut block.stmts {
 		let mut found_item: Option<(ItemFn, bool)> = None;
@@ -217,9 +225,13 @@ pub fn benchmarks(tokens: TokenStream) -> TokenStream {
 			let expanded = expand_benchmark(benchmark_def.clone(), &item_fn.sig.ident, is_instance);
 
 			// record benchmark name
-			benchmark_names.push(item_fn.sig.ident.clone());
+			let name = item_fn.sig.ident;
+			benchmark_names.push(name.clone());
 			if benchmark_def.extra {
-				extra_benchmark_names.push(item_fn.sig.ident.clone());
+				extra_benchmark_names.push(name.clone());
+			}
+			if benchmark_def.skip_meta {
+				skip_meta_benchmark_names.push(name.clone())
 			}
 
 			expanded_stmts.push(expanded);
@@ -247,14 +259,14 @@ pub fn benchmarks(tokens: TokenStream) -> TokenStream {
 	let benchmark_names_str: Vec<String> = benchmark_names.iter().map(|n| n.to_string()).collect();
 	let extra_benchmark_names_str: Vec<String> =
 		extra_benchmark_names.iter().map(|n| n.to_string()).collect();
+	let skip_meta_benchmark_names_str: Vec<String> =
+		skip_meta_benchmark_names.iter().map(|n| n.to_string()).collect();
 	let mut selected_benchmark_mappings: Vec<TokenStream2> = Vec::new();
 	for i in 0..benchmark_names.len() {
 		let name_ident = &benchmark_names[i];
 		let name_str = &benchmark_names_str[i];
 		selected_benchmark_mappings.push(quote!(#name_str => SelectedBenchmark::#name_ident))
 	}
-	println!("benchmark_names: {:?}", benchmark_names);
-	println!("selected_benchmark_mappings: {:?}", selected_benchmark_mappings);
 
 	// emit final quoted tokens
 	let res = quote! {
@@ -284,9 +296,7 @@ pub fn benchmarks(tokens: TokenStream) -> TokenStream {
 				components: &[(#krate::BenchmarkParameter, u32)],
 				verify: bool,
 			) -> Result<
-				#krate::Box<
-					dyn FnOnce() -> Result<(), #krate::BenchmarkError>,
-				>,
+				#krate::Box<dyn FnOnce() -> Result<(), #krate::BenchmarkError>>,
 				#krate::BenchmarkError,
 			> {
 				match self {
@@ -351,11 +361,8 @@ pub fn benchmarks(tokens: TokenStream) -> TokenStream {
 				let mut whitelist = whitelist.to_vec();
 				let whitelisted_caller_key = <frame_system::Account<
 					T,
-				> as #support::storage::StorageMap<
-					_,
-					_,
-				>>::hashed_key_for(
-					#krate::whitelisted_caller::<T::AccountId>(),
+				> as #support::storage::StorageMap<_, _,>>::hashed_key_for(
+					#krate::whitelisted_caller::<T::AccountId>()
 				);
 				whitelist.push(whitelisted_caller_key.into());
 				let transactional_layer_key = #krate::TrackedStorageKey::new(
@@ -363,7 +370,93 @@ pub fn benchmarks(tokens: TokenStream) -> TokenStream {
 				);
 				whitelist.push(transactional_layer_key);
 				#krate::benchmarking::set_whitelist(whitelist);
+				let mut results: #krate::Vec<#krate::BenchmarkResult> = #krate::Vec::new();
 
+				// Always do at least one internal repeat...
+				for _ in 0 .. internal_repeats.max(1) {
+					// Always reset the state after the benchmark.
+					#krate::defer!(#krate::benchmarking::wipe_db());
+
+					// Set up the externalities environment for the setup we want to
+					// benchmark.
+					let closure_to_benchmark = <
+						SelectedBenchmark as #krate::BenchmarkingSetup<#generics>
+					>::instance(&selected_benchmark, c, verify)?;
+
+					// Set the block number to at least 1 so events are deposited.
+					if #krate::Zero::is_zero(&frame_system::Pallet::<T>::block_number()) {
+						frame_system::Pallet::<T>::set_block_number(1u32.into());
+					}
+
+					// Commit the externalities to the database, flushing the DB cache.
+					// This will enable worst case scenario for reading from the database.
+					#krate::benchmarking::commit_db();
+
+					// Reset the read/write counter so we don't count operations in the setup process.
+					#krate::benchmarking::reset_read_write_count();
+
+					// Time the extrinsic logic.
+					#krate::log::trace!(
+						target: "benchmark",
+						"Start Benchmark: {} ({:?})",
+						extrinsic,
+						c
+					);
+
+					let start_pov = #krate::benchmarking::proof_size();
+					let start_extrinsic = #krate::benchmarking::current_time();
+
+					closure_to_benchmark()?;
+
+					let finish_extrinsic = #krate::benchmarking::current_time();
+					let end_pov = #krate::benchmarking::proof_size();
+
+					// Calculate the diff caused by the benchmark.
+					let elapsed_extrinsic = finish_extrinsic.saturating_sub(start_extrinsic);
+					let diff_pov = match (start_pov, end_pov) {
+						(Some(start), Some(end)) => end.saturating_sub(start),
+						_ => Default::default(),
+					};
+
+					// Commit the changes to get proper write count
+					#krate::benchmarking::commit_db();
+					#krate::log::trace!(
+						target: "benchmark",
+						"End Benchmark: {} ns", elapsed_extrinsic
+					);
+					let read_write_count = #krate::benchmarking::read_write_count();
+					#krate::log::trace!(
+						target: "benchmark",
+						"Read/Write Count {:?}", read_write_count
+					);
+
+					// Time the storage root recalculation.
+					let start_storage_root = #krate::benchmarking::current_time();
+					#krate::storage_root(#krate::StateVersion::V1);
+					let finish_storage_root = #krate::benchmarking::current_time();
+					let elapsed_storage_root = finish_storage_root - start_storage_root;
+
+					let skip_meta = [ #(#skip_meta_benchmark_names_str),* ];
+					let read_and_written_keys = if skip_meta.contains(&extrinsic) {
+						#krate::vec![(b"Skipped Metadata".to_vec(), 0, 0, false)]
+					} else {
+						#krate::benchmarking::get_read_and_written_keys()
+					};
+
+					results.push(#krate::BenchmarkResult {
+						components: c.to_vec(),
+						extrinsic_time: elapsed_extrinsic,
+						storage_root_time: elapsed_storage_root,
+						reads: read_write_count.0,
+						repeat_reads: read_write_count.1,
+						writes: read_write_count.2,
+						repeat_writes: read_write_count.3,
+						proof_size: diff_pov,
+						keys: read_and_written_keys,
+					});
+				}
+
+				return Ok(results);
 			}
 		}
 	};
