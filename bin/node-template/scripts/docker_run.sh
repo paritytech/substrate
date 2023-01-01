@@ -2,7 +2,7 @@
 # This script is meant to be run on Unix/Linux based systems
 set -e
 
-echo "*** Start Substrate node template ***\n"
+printf "*** Start Substrate node template ***\n"
 
 SCRIPT_DIR=$(realpath "$(dirname "${BASH_SOURCE[0]}")")
 PARENT_DIR=$(dirname "$SCRIPT_DIR")
