@@ -16,6 +16,7 @@
 // limitations under the License.
 
 use crate::{build_executor, state_machine_call_with_proof, SharedParams, State, LOG_TARGET};
+use frame_try_runtime::UpgradeCheckSelect;
 use parity_scale_codec::{Decode, Encode};
 use sc_executor::sp_wasm_interface::HostFunctions;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
@@ -29,12 +30,16 @@ pub struct OnRuntimeUpgradeCmd {
 	#[command(subcommand)]
 	pub state: State,
 
-	/// Execute `try_state`, `pre_upgrade` and `post_upgrade` checks as well.
+	/// Select which optional checks to perform:
 	///
-	/// This will perform more checks, but it will also makes the reported PoV/Weight be
-	/// inaccurate.
-	#[clap(long)]
-	pub checks: bool,
+	/// - `all`: Perform all checks (default).
+	/// - `pre-and-post`: Perform pre- and post-upgrade checks.
+	/// - `try-state`: Perform the try-state checks.
+	/// - `none`: Perform no checks.
+	///
+	/// Performing any checks will potentially invalidate the measured PoV/Weight.
+	#[clap(long, default_value = "All", verbatim_doc_comment)]
+	pub checks: UpgradeCheckSelect,
 }
 
 pub(crate) async fn on_runtime_upgrade<Block, HostFns>(
