@@ -32,7 +32,6 @@ pub mod weights;
 use frame_system::Config as SystemConfig;
 pub use pallet::*;
 pub use scale_info::Type;
-use sp_runtime::traits::StaticLookup;
 pub use types::*;
 pub use weights::WeightInfo;
 
