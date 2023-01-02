@@ -29,7 +29,10 @@ use sp_runtime::{
 	traits::{IdentityLookup, Zero},
 	transaction_validity, PerU16, Perbill,
 };
-use sp_staking::{EraIndex, SessionIndex};
+use sp_staking::{
+	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
+	EraIndex, SessionIndex,
+};
 use sp_std::prelude::*;
 use std::collections::BTreeMap;
 
@@ -162,7 +165,7 @@ frame_election_provider_support::generate_solution_type!(
 
 parameter_types! {
 	pub static SignedPhase: BlockNumber = 10;
-	pub static UnsignedPhase: BlockNumber = 5;
+	pub static UnsignedPhase: BlockNumber = 1;
 	pub static MaxElectingVoters: VoterIndex = 1000;
 	pub static MaxElectableTargets: TargetIndex = 1000;
 	pub static MaxActiveValidators: u32 = 1000;
@@ -197,7 +200,8 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type SlashHandler = ();
 	type RewardHandler = ();
 	type DataProvider = Staking;
-	type Fallback = onchain::OnChainExecution<OnChainSeqPhragmen>;
+	type Fallback =
+		frame_election_provider_support::NoElection<(AccountId, BlockNumber, Staking, MaxWinners)>;
 	type GovernanceFallback = onchain::OnChainExecution<OnChainSeqPhragmen>;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 	type ForceOrigin = EnsureRoot<AccountId>;
@@ -228,7 +232,7 @@ parameter_types! {
 	pub const BondingDuration: sp_staking::EraIndex = 28;
 	pub const SlashDeferDuration: sp_staking::EraIndex = 7; // 1/4 the bonding duration.
 	pub const MaxNominatorRewardedPerValidator: u32 = 256;
-	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
+	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(10);
 	pub HistoryDepth: u32 = 84;
 }
 
@@ -534,6 +538,11 @@ pub fn roll_to(n: BlockNumber) {
 	}
 }
 
+// Progress one block.
+pub fn roll_one() {
+	roll_to(System::block_number() + 1);
+}
+
 /// Progresses from the current block number (whatever that may be) to the `P * session_index + 1`.
 pub(crate) fn start_session(session_index: SessionIndex) {
 	let end: u64 = if Offset::get().is_zero() {
@@ -559,6 +568,14 @@ pub(crate) fn advance_session() {
 	start_session(current_index + 1);
 }
 
+/// Advances `n` sessions forward.
+pub(crate) fn advance_n_sessions(n: u32) {
+	let current_index = Session::current_index();
+	for i in 0..n {
+		start_session(current_index + i);
+	}
+}
+
 /// Progress until the given era.
 pub(crate) fn start_active_era(era_index: EraIndex) {
 	start_session((era_index * <SessionsPerEra as Get<u32>>::get()).into());
@@ -566,6 +583,10 @@ pub(crate) fn start_active_era(era_index: EraIndex) {
 	// One way or another, current_era must have changed before the active era, so they must match
 	// at this point.
 	assert_eq!(current_era(), active_era());
+}
+
+pub(crate) fn start_next_active_era() {
+	start_active_era(active_era() + 1)
 }
 
 pub(crate) fn active_era() -> EraIndex {
@@ -577,7 +598,7 @@ pub(crate) fn current_era() -> EraIndex {
 }
 
 // Fast forward until EPM signed phase.
-pub fn roll_to_signed() {
+pub fn roll_to_epm_signed() {
 	while !matches!(
 		ElectionProviderMultiPhase::current_phase(),
 		pallet_election_provider_multi_phase::Phase::Signed
@@ -587,7 +608,7 @@ pub fn roll_to_signed() {
 }
 
 // Fast forward until EPM unsigned phase.
-pub fn roll_to_unsigned() {
+pub fn roll_to_epm_unsigned() {
 	while !matches!(
 		ElectionProviderMultiPhase::current_phase(),
 		pallet_election_provider_multi_phase::Phase::Unsigned(_)
@@ -596,47 +617,38 @@ pub fn roll_to_unsigned() {
 	}
 }
 
-parameter_types! {
-	static EPMEventsIndex: usize = 0;
-	static SessionEventsIndex: usize = 0;
-	static StakingEventsIndex: usize = 0;
+// Fast forward until EPM off.
+pub fn roll_to_epm_off() {
+	while !matches!(
+		ElectionProviderMultiPhase::current_phase(),
+		pallet_election_provider_multi_phase::Phase::Off
+	) {
+		roll_to(System::block_number() + 1);
+	}
 }
 
-// TODO(gpestana): macro this
-pub fn epm_events_since_last_call() -> Vec<pallet_election_provider_multi_phase::Event<Runtime>> {
-	let all: Vec<_> = System::events()
-		.into_iter()
-		.filter_map(|r| {
-			if let RuntimeEvent::ElectionProviderMultiPhase(inner) = r.event {
-				Some(inner)
-			} else {
-				None
-			}
-		})
-		.collect();
-	let seen = EPMEventsIndex::get();
-	EPMEventsIndex::set(all.len());
-	all.into_iter().skip(seen).collect()
+pub(crate) fn on_offence_now(
+	offenders: &[OffenceDetails<
+		AccountId,
+		pallet_session::historical::IdentificationTuple<Runtime>,
+	>],
+	slash_fraction: &[Perbill],
+) {
+	let now = Staking::active_era().unwrap().index;
+	let _ = Staking::on_offence(
+		offenders,
+		slash_fraction,
+		Staking::eras_start_session_index(now).unwrap(),
+		DisableStrategy::WhenSlashed,
+	);
 }
 
-// TODO(gpestana): macro this
-pub fn session_events_since_last_call() -> Vec<pallet_session::Event> {
-	let all: Vec<_> = System::events()
-		.into_iter()
-		.filter_map(|r| if let RuntimeEvent::Session(inner) = r.event { Some(inner) } else { None })
-		.collect();
-	let seen = SessionEventsIndex::get();
-	SessionEventsIndex::set(all.len());
-	all.into_iter().skip(seen).collect()
-}
-
-// TODO(gpestana): refactor to events_sinve_last_call() -> Vec<_>
-pub fn staking_events_since_last_call() -> Vec<pallet_staking::Event<Runtime>> {
-	let all: Vec<_> = System::events()
-		.into_iter()
-		.filter_map(|r| if let RuntimeEvent::Staking(inner) = r.event { Some(inner) } else { None })
-		.collect();
-	let seen = StakingEventsIndex::get();
-	StakingEventsIndex::set(all.len());
-	all.into_iter().skip(seen).collect()
+pub(crate) fn add_slash(who: &AccountId) {
+	on_offence_now(
+		&[OffenceDetails {
+			offender: (*who, Staking::eras_stakers(active_era(), *who)),
+			reporters: vec![],
+		}],
+		&[Perbill::from_percent(10)],
+	);
 }

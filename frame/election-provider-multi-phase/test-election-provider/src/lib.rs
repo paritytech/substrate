@@ -22,6 +22,9 @@ pub(crate) const LOG_TARGET: &str = "tests::epm";
 
 use mock::*;
 use sp_core::Get;
+use sp_npos_elections::{to_supports, StakedAssignment};
+
+use crate::mock::RuntimeOrigin;
 
 // syntactic sugar for logging.
 #[macro_export]
@@ -47,25 +50,72 @@ fn log_current_time() {
 }
 
 #[test]
-fn block_session_and_era_advances_helpers() {
+/// Replicates the Kusama incident of 8th Dec 2022 and its resolution through the governance
+/// fallback.
+///
+/// After enough slashes to exceed the `Staking::OffendingValidatorsThreshold`, the staking pallet
+/// set `Forcing::ForceNew`. When a new session starts, staking will start to force a new era and
+/// calls <EPM as election_provider>::elect(). If at this point EPM and the staking miners did not
+/// have enough time to queue a new solution (snapshot + solution submission), the election request
+/// fails. If there is no election fallback mechanism in place, EPM enters in emergency mode.
+/// Recovery: Once EPM is in emergency mode, subsequent calls to `elect()` will fail until a new
+/// solution is added to EPM's `QueuedSolution` queue. This can be achieved through
+/// `Call::set_emergency_election_result` or `Call::governance_fallback` dispatchables. Once a new
+/// solution is added to the queue, EPM phase transitions to `Phase::Off` and the election flow
+/// restarts.
+fn enters_emergency_phase_after_forcing_before_elect() {
 	ExtBuilder::default().initialize_first_session(true).build_and_execute(|| {
-		let advance_by = 6;
-		for _ in 1..=advance_by {
-			log_current_time();
-			advance_session();
-		}
-
-		// each session has `Period` blocks.
-		assert_eq!(System::block_number(), advance_by * Period::get());
-		// each era has `SessionsPerEra` sessions.
-		assert_eq!(
-			Staking::current_era().unwrap(),
-			Session::current_index() / <SessionsPerEra as Get<u32>>::get()
+		log!(
+			trace,
+			"current validators (staking): {:?}",
+			<Runtime as pallet_staking::SessionInterface<AccountId>>::validators()
 		);
+		let session_validators_before = Session::validators();
+
+		roll_to_epm_off();
+		assert!(ElectionProviderMultiPhase::current_phase().is_off());
+
+		assert_eq!(pallet_staking::ForceEra::<Runtime>::get(), pallet_staking::Forcing::NotForcing);
+		// slashes until staking gets into `Forcing::ForceNew`.
+		add_slash(&11);
+
+		assert_eq!(pallet_staking::ForceEra::<Runtime>::get(), pallet_staking::Forcing::ForceNew);
+
+		advance_session();
+		assert!(ElectionProviderMultiPhase::current_phase().is_emergency());
+
+		// try to advance 2 eras.
+		advance_n_sessions(<SessionsPerEra as Get<u32>>::get().into());
+		advance_n_sessions(<SessionsPerEra as Get<u32>>::get().into());
+
+		// EPM is still in emergency phase.
+		assert!(ElectionProviderMultiPhase::current_phase().is_emergency());
+
+		// session validator set remains the same.
+		assert_eq!(Session::validators(), session_validators_before);
+
+		// performs recovery through the set emergency result.
+		let supports = to_supports(&vec![
+			StakedAssignment { who: 21, distribution: vec![(21, 10)] },
+			StakedAssignment { who: 31, distribution: vec![(21, 10), (31, 10)] },
+			StakedAssignment { who: 41, distribution: vec![(41, 10)] },
+		]);
+		assert!(ElectionProviderMultiPhase::set_emergency_election_result(
+			RuntimeOrigin::root(),
+			supports
+		)
+		.is_ok());
+
+		// EPM can now roll to signed phase to proceed with elections. The validator set is the
+		// expected (ie. set through `set_emergency_election_result`).
+		roll_to_epm_signed();
+		assert!(ElectionProviderMultiPhase::current_phase().is_signed());
+		assert_eq!(Session::validators(), vec![21, 31, 41]);
 	});
 }
 
 #[test]
-/// Replicates the [Kusama incident](https://hackmd.io/Dt1L-JMtRc2y5FiOQik88A) of 8th Dec 2022.
-///
-fn enters_emergency_phase_after_forcing_before_elect() {}
+/// Continously slash validators in the validator set while in emergency phase.
+fn continuous_slashes_in_emergency() {
+	// TODO(gpestana)
+}
