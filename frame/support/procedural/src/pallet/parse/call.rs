@@ -93,6 +93,10 @@ impl syn::parse::Parse for FunctionAttr {
 			let call_index_content;
 			syn::parenthesized!(call_index_content in content);
 			let index = call_index_content.parse::<syn::LitInt>()?;
+			if !index.suffix().is_empty() {
+				let msg = "Number literal must not have a suffix";
+				return Err(syn::Error::new(index.span(), msg))
+			}
 			Ok(FunctionAttr::CallIndex(index.base10_parse()?))
 		} else {
 			Err(lookahead.error())

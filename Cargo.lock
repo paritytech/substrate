@@ -10684,6 +10684,7 @@ dependencies = [
  "sc-executor",
  "sc-service",
  "serde",
+ "serde_json",
  "sp-api",
  "sp-core",
  "sp-debug-derive",
