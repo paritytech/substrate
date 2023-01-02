@@ -373,11 +373,12 @@ pub struct ActiveEraInfo {
 pub struct EraRewardPoints<AccountId: Ord> {
 	/// Total number of points in an era.
 	///
-	/// For an active era, this always equals the sum of reward points for each validator. As a
-	/// validator claims their era reward in the succeeding eras, individual points are dropped
-	/// hence sum of individual validator reward points reduces but `total` for an era will always
-	/// remain same. This is important, since we rely on `total` to calculate reward payouts for
-	/// the remaining set of validators correctly.
+	/// For an active era, `total` is strictly equal to the sum of reward points for each
+	/// validator. For any `era < active_era`, `total >= sum(individual)`. As a validator claims
+	/// their era reward in the succeeding eras, individual points are dropped hence sum of
+	/// individual validator reward points reduces but `total` for an era will always remain same.
+	/// This is important, since we rely on `total` to calculate reward payouts for the remaining
+	/// set of validators correctly.
 	pub total: RewardPoint,
 	/// The reward points earned by a given validator. Dropped as reward points get claimed.
 	pub individual: BTreeMap<AccountId, RewardPoint>,
