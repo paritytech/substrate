@@ -223,4 +223,12 @@ benchmarks! {
 		assert!(Balances::<T, I>::reserved_balance(&user).is_zero());
 		assert_eq!(Balances::<T, I>::free_balance(&user), balance);
 	}
+
+	// use frame_benchmarking::impl_benchmark_test_suite;
+
+	// impl_benchmark_test_suite!(
+	// 	Balances,
+	// 	crate::tests_composite::ExtBuilder::default().build(),
+	// 	crate::tests_composite::Test,
+	// );
 }
