@@ -344,7 +344,7 @@ mod ensure {
 	use crate::{ArithmeticError, FixedPointNumber, FixedPointOperand};
 
 	/// Performs addition that returns [`ArithmeticError`] instead of wrapping around on overflow.
-	pub trait EnsureAdd: CheckedAdd + PartialOrd + Zero + Copy {
+	pub trait EnsureAdd: EnsureAddAssign {
 		/// Adds two numbers, checking for overflow.
 		///
 		/// If it fails, [`ArithmeticError`] is returned.
@@ -368,13 +368,13 @@ mod ensure {
 		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow));
 		/// ```
 		fn ensure_add(self, v: Self) -> Result<Self, ArithmeticError> {
-			self.checked_add(&v).ok_or_else(|| error::equivalent(v))
+			self.checked_add(&v).ok_or_else(|| error::equivalent(&v))
 		}
 	}
 
 	/// Performs subtraction that returns [`ArithmeticError`] instead of wrapping around on
 	/// underflow.
-	pub trait EnsureSub: CheckedSub + PartialOrd + Zero + Copy {
+	pub trait EnsureSub: CheckedSub + PartialOrd + Zero {
 		/// Subtracts two numbers, checking for overflow.
 		///
 		/// If it fails, [`ArithmeticError`] is returned.
@@ -398,13 +398,13 @@ mod ensure {
 		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow));
 		/// ```
 		fn ensure_sub(self, v: Self) -> Result<Self, ArithmeticError> {
-			self.checked_sub(&v).ok_or_else(|| error::inverse(v))
+			self.checked_sub(&v).ok_or_else(|| error::inverse(&v))
 		}
 	}
 
 	/// Performs multiplication that returns [`ArithmeticError`] instead of wrapping around on
 	/// overflow.
-	pub trait EnsureMul: CheckedMul + PartialOrd + Zero + Copy {
+	pub trait EnsureMul: CheckedMul + PartialOrd + Zero {
 		/// Multiplies two numbers, checking for overflow.
 		///
 		/// If it fails, [`ArithmeticError`] is returned.
@@ -428,12 +428,12 @@ mod ensure {
 		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow));
 		/// ```
 		fn ensure_mul(self, v: Self) -> Result<Self, ArithmeticError> {
-			self.checked_mul(&v).ok_or_else(|| error::multiplication(self, v))
+			self.checked_mul(&v).ok_or_else(|| error::multiplication(&self, &v))
 		}
 	}
 
 	/// Performs division that returns [`ArithmeticError`] instead of wrapping around on overflow.
-	pub trait EnsureDiv: CheckedDiv + PartialOrd + Zero + Copy {
+	pub trait EnsureDiv: CheckedDiv + PartialOrd + Zero {
 		/// Divides two numbers, checking for overflow.
 		///
 		/// If it fails, [`ArithmeticError`] is returned.
@@ -457,14 +457,14 @@ mod ensure {
 		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow));
 		/// ```
 		fn ensure_div(self, v: Self) -> Result<Self, ArithmeticError> {
-			self.checked_div(&v).ok_or_else(|| error::division(self, v))
+			self.checked_div(&v).ok_or_else(|| error::division(&self, &v))
 		}
 	}
 
-	impl<T: CheckedAdd + PartialOrd + Zero + Copy> EnsureAdd for T {}
-	impl<T: CheckedSub + PartialOrd + Zero + Copy> EnsureSub for T {}
-	impl<T: CheckedMul + PartialOrd + Zero + Copy> EnsureMul for T {}
-	impl<T: CheckedDiv + PartialOrd + Zero + Copy> EnsureDiv for T {}
+	impl<T: CheckedAdd + PartialOrd + Zero> EnsureAdd for T {}
+	impl<T: CheckedSub + PartialOrd + Zero> EnsureSub for T {}
+	impl<T: CheckedMul + PartialOrd + Zero> EnsureMul for T {}
+	impl<T: CheckedDiv + PartialOrd + Zero> EnsureDiv for T {}
 
 	/// Meta trait that supports all immutable arithmetic `Ensure*` operations
 	pub trait EnsureOp: EnsureAdd + EnsureSub + EnsureMul + EnsureDiv {}
@@ -472,7 +472,7 @@ mod ensure {
 
 	/// Performs self addition that returns [`ArithmeticError`] instead of wrapping around on
 	/// overflow.
-	pub trait EnsureAddAssign: EnsureAdd {
+	pub trait EnsureAddAssign: CheckedAdd + PartialOrd + Zero {
 		/// Adds two numbers overwriting the left hand one, checking for overflow.
 		///
 		/// If it fails, [`ArithmeticError`] is returned.
@@ -496,14 +496,14 @@ mod ensure {
 		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow));
 		/// ```
 		fn ensure_add_assign(&mut self, v: Self) -> Result<(), ArithmeticError> {
-			*self = self.ensure_add(v)?;
+			*self = self.checked_add(&v).ok_or_else(|| error::equivalent(&v))?;
 			Ok(())
 		}
 	}
 
 	/// Performs self subtraction that returns [`ArithmeticError`] instead of wrapping around on
 	/// underflow.
-	pub trait EnsureSubAssign: EnsureSub {
+	pub trait EnsureSubAssign: CheckedSub + PartialOrd + Zero {
 		/// Subtracts two numbers overwriting the left hand one, checking for overflow.
 		///
 		/// If it fails, [`ArithmeticError`] is returned.
@@ -527,14 +527,14 @@ mod ensure {
 		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow));
 		/// ```
 		fn ensure_sub_assign(&mut self, v: Self) -> Result<(), ArithmeticError> {
-			*self = self.ensure_sub(v)?;
+			self.checked_sub(&v).ok_or_else(|| error::inverse(&v))?;
 			Ok(())
 		}
 	}
 
 	/// Performs self multiplication that returns [`ArithmeticError`] instead of wrapping around on
 	/// overflow.
-	pub trait EnsureMulAssign: EnsureMul {
+	pub trait EnsureMulAssign: CheckedMul + PartialOrd + Zero {
 		/// Multiplies two numbers overwriting the left hand one, checking for overflow.
 		///
 		/// If it fails, [`ArithmeticError`] is returned.
@@ -558,14 +558,14 @@ mod ensure {
 		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow));
 		/// ```
 		fn ensure_mul_assign(&mut self, v: Self) -> Result<(), ArithmeticError> {
-			*self = self.ensure_mul(v)?;
+			self.checked_mul(&v).ok_or_else(|| error::multiplication(self, &v))?;
 			Ok(())
 		}
 	}
 
 	/// Performs self division that returns [`ArithmeticError`] instead of wrapping around on
 	/// overflow.
-	pub trait EnsureDivAssign: EnsureDiv {
+	pub trait EnsureDivAssign: CheckedDiv + PartialOrd + Zero {
 		/// Divides two numbers overwriting the left hand one, checking for overflow.
 		///
 		/// If it fails, [`ArithmeticError`] is returned.
@@ -589,7 +589,7 @@ mod ensure {
 		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow));
 		/// ```
 		fn ensure_div_assign(&mut self, v: Self) -> Result<(), ArithmeticError> {
-			*self = self.ensure_div(v)?;
+			self.checked_div(&v).ok_or_else(|| error::division(self, &v))?;
 			Ok(())
 		}
 	}
@@ -643,7 +643,7 @@ mod ensure {
 			d: D,
 		) -> Result<Self, ArithmeticError> {
 			<Self as FixedPointNumber>::checked_from_rational(n, d)
-				.ok_or_else(|| error::division(n, d))
+				.ok_or_else(|| error::division(&n, &d))
 		}
 
 		/// Ensure multiplication for integer type `N`. Equal to `self * n`.
@@ -670,7 +670,7 @@ mod ensure {
 		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow));
 		/// ```
 		fn ensure_mul_int<N: FixedPointOperand>(self, n: N) -> Result<N, ArithmeticError> {
-			self.checked_mul_int(n).ok_or_else(|| error::multiplication(self, n))
+			self.checked_mul_int(n).ok_or_else(|| error::multiplication(&self, &n))
 		}
 
 		/// Ensure division for integer type `N`. Equal to `self / d`.
@@ -697,7 +697,7 @@ mod ensure {
 		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow));
 		/// ```
 		fn ensure_div_int<D: FixedPointOperand>(self, d: D) -> Result<D, ArithmeticError> {
-			self.checked_div_int(d).ok_or_else(|| error::division(self, d))
+			self.checked_div_int(d).ok_or_else(|| error::division(&self, &d))
 		}
 	}
 
@@ -728,7 +728,7 @@ mod ensure {
 		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow));
 		/// ```
 		fn ensure_from(other: T) -> Result<Self, ArithmeticError> {
-			Self::try_from(other).map_err(|_| error::equivalent(other))
+			Self::try_from(other).map_err(|_| error::equivalent(&other))
 		}
 	}
 
@@ -757,7 +757,7 @@ mod ensure {
 		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow));
 		/// ```
 		fn ensure_into(self) -> Result<T, ArithmeticError> {
-			self.try_into().map_err(|_| error::equivalent(self))
+			self.try_into().map_err(|_| error::equivalent(&self))
 		}
 	}
 
@@ -773,9 +773,9 @@ mod ensure {
 			Positive,
 		}
 
-		impl<T: PartialOrd + Zero> From<T> for Signum {
-			fn from(value: T) -> Self {
-				if value < Zero::zero() {
+		impl<T: PartialOrd + Zero> From<&T> for Signum {
+			fn from(value: &T) -> Self {
+				if value < &Zero::zero() {
 					Signum::Negative
 				} else {
 					Signum::Positive
@@ -795,23 +795,23 @@ mod ensure {
 			}
 		}
 
-		pub fn equivalent<R: PartialOrd + Zero + Copy>(r: R) -> ArithmeticError {
+		pub fn equivalent<R: PartialOrd + Zero>(r: &R) -> ArithmeticError {
 			match Signum::from(r) {
 				Signum::Negative => ArithmeticError::Underflow,
 				Signum::Positive => ArithmeticError::Overflow,
 			}
 		}
 
-		pub fn inverse<R: PartialOrd + Zero + Copy>(r: R) -> ArithmeticError {
+		pub fn inverse<R: PartialOrd + Zero>(r: &R) -> ArithmeticError {
 			match Signum::from(r) {
 				Signum::Negative => ArithmeticError::Overflow,
 				Signum::Positive => ArithmeticError::Underflow,
 			}
 		}
 
-		pub fn multiplication<L: PartialOrd + Zero + Copy, R: PartialOrd + Zero + Copy>(
-			l: L,
-			r: R,
+		pub fn multiplication<L: PartialOrd + Zero, R: PartialOrd + Zero>(
+			l: &L,
+			r: &R,
 		) -> ArithmeticError {
 			match Signum::from(l) * Signum::from(r) {
 				Signum::Negative => ArithmeticError::Underflow,
@@ -819,9 +819,9 @@ mod ensure {
 			}
 		}
 
-		pub fn division<N: PartialOrd + Zero + Copy, D: PartialOrd + Zero + Copy>(
-			n: N,
-			d: D,
+		pub fn division<N: PartialOrd + Zero, D: PartialOrd + Zero>(
+			n: &N,
+			d: &D,
 		) -> ArithmeticError {
 			if d.is_zero() {
 				ArithmeticError::DivisionByZero
