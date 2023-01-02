@@ -704,9 +704,7 @@ mod ensure {
 	impl<T: FixedPointNumber> EnsureFixedPointNumber for T {}
 
 	/// Similar to [`TryFrom`] but returning an [`ArithmeticError`] error.
-	pub trait EnsureFrom<T: PartialOrd + Zero + Copy>:
-		TryFrom<T> + PartialOrd + Zero + Copy
-	{
+	pub trait EnsureFrom<T: PartialOrd + Zero>: TryFrom<T> + PartialOrd + Zero {
 		/// Performs the conversion returning an [`ArithmeticError`] if fails.
 		///
 		/// Similar to [`TryFrom::try_from()`] but returning an [`ArithmeticError`] error.
@@ -728,14 +726,13 @@ mod ensure {
 		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow));
 		/// ```
 		fn ensure_from(other: T) -> Result<Self, ArithmeticError> {
-			Self::try_from(other).map_err(|_| error::equivalent(&other))
+			let err = error::equivalent(&other);
+			Self::try_from(other).map_err(|_| err)
 		}
 	}
 
 	/// Similar to [`TryInto`] but returning an [`ArithmeticError`] error.
-	pub trait EnsureInto<T: PartialOrd + Zero + Copy>:
-		TryInto<T> + PartialOrd + Zero + Copy
-	{
+	pub trait EnsureInto<T: PartialOrd + Zero>: TryInto<T> + PartialOrd + Zero {
 		/// Performs the conversion returning an [`ArithmeticError`] if fails.
 		///
 		/// Similar to [`TryInto::try_into()`] but returning an [`ArithmeticError`] error
@@ -757,12 +754,13 @@ mod ensure {
 		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow));
 		/// ```
 		fn ensure_into(self) -> Result<T, ArithmeticError> {
-			self.try_into().map_err(|_| error::equivalent(&self))
+			let err = error::equivalent(&self);
+			self.try_into().map_err(|_| err)
 		}
 	}
 
-	impl<T: TryFrom<S> + PartialOrd + Zero + Copy, S: PartialOrd + Zero + Copy> EnsureFrom<S> for T {}
-	impl<T: TryInto<S> + PartialOrd + Zero + Copy, S: PartialOrd + Zero + Copy> EnsureInto<S> for T {}
+	impl<T: TryFrom<S> + PartialOrd + Zero, S: PartialOrd + Zero> EnsureFrom<S> for T {}
+	impl<T: TryInto<S> + PartialOrd + Zero, S: PartialOrd + Zero> EnsureInto<S> for T {}
 
 	mod error {
 		use super::{ArithmeticError, Zero};
