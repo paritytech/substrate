@@ -144,7 +144,12 @@ benchmarks! {
 		assert_eq!(Balances::<T, I>::free_balance(&recipient), transfer_amount);
 	}
 
+
+	// This benchmark performs the same operation as `transfer` in the worst case scenario,
+	// but additionally introduces many new users into the storage, increasing the the merkle
+	// trie and PoV size.
 	#[instance_benchmark]
+	#[extra]
 	fn transfer_increasing_users(u: Linear<0, 1_000>) {
 		// 1_000 is not very much, but this upper bound can be controlled by the CLI.
 		let existential_deposit = T::ExistentialDeposit::get();
