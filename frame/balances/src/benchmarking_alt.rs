@@ -180,4 +180,25 @@ benchmarks! {
 		assert_eq!(Balances::<T, I>::free_balance(&caller), Zero::zero());
 		assert_eq!(Balances::<T, I>::free_balance(&recipient), transfer_amount);
 	}
+
+	// Benchmark `transfer_all` with the worst possible condition:
+	// * The recipient account is created
+	// * The sender is killed
+	#[instance_benchmark]
+	fn transfer_all() {
+		let caller = whitelisted_caller();
+		let recipient: T::AccountId = account("recipient", 0, SEED);
+		let recipient_lookup = T::Lookup::unlookup(recipient.clone());
+
+		// Give some multiple of the existential deposit
+		let existential_deposit = T::ExistentialDeposit::get();
+		let balance = existential_deposit.saturating_mul(ED_MULTIPLIER.into());
+		let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&caller, balance);
+
+		#[extrinsic_call]
+		transfer_all(RawOrigin::Signed(caller.clone()), recipient_lookup, false);
+
+		assert!(Balances::<T, I>::free_balance(&caller).is_zero());
+		assert_eq!(Balances::<T, I>::free_balance(&recipient), balance);
+	}
 }
