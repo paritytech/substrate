@@ -59,6 +59,7 @@ where
 		"TryRuntime_on_runtime_upgrade",
 		command.checks.encode().as_ref(),
 		Default::default(), // we don't really need any extensions here.
+		shared.export_proof,
 	)?;
 
 	let (weight, total_weight) = <(Weight, Weight) as Decode>::decode(&mut &*encoded_result)

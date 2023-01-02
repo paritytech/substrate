@@ -588,9 +588,9 @@ mod tests {
 		fn gas_meter(&mut self) -> &mut GasMeter<Self::T> {
 			&mut self.gas_meter
 		}
-		fn append_debug_buffer(&mut self, msg: &str) -> Result<bool, DispatchError> {
+		fn append_debug_buffer(&mut self, msg: &str) -> bool {
 			self.debug_buffer.extend(msg.as_bytes());
-			Ok(true)
+			true
 		}
 		fn call_runtime(
 			&self,

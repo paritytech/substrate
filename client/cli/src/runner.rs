@@ -152,10 +152,38 @@ impl<C: SubstrateCli> Runner<C> {
 		//
 		// This is important to be done before we instruct the tokio runtime to shutdown. Otherwise
 		// the tokio runtime will wait the full 60 seconds for all tasks to stop.
-		drop(task_manager);
+		let task_registry = task_manager.into_task_registry();
 
 		// Give all futures 60 seconds to shutdown, before tokio "leaks" them.
-		self.tokio_runtime.shutdown_timeout(Duration::from_secs(60));
+		let shutdown_timeout = Duration::from_secs(60);
+		self.tokio_runtime.shutdown_timeout(shutdown_timeout);
+
+		let running_tasks = task_registry.running_tasks();
+
+		if !running_tasks.is_empty() {
+			log::error!("Detected running(potentially stalled) tasks on shutdown:");
+			running_tasks.iter().for_each(|(task, count)| {
+				let instances_desc =
+					if *count > 1 { format!("with {} instances ", count) } else { "".to_string() };
+
+				if task.is_default_group() {
+					log::error!(
+						"Task \"{}\" was still running {}after waiting {} seconds to finish.",
+						task.name,
+						instances_desc,
+						shutdown_timeout.as_secs(),
+					);
+				} else {
+					log::error!(
+						"Task \"{}\" (Group: {}) was still running {}after waiting {} seconds to finish.",
+						task.name,
+						task.group,
+						instances_desc,
+						shutdown_timeout.as_secs(),
+					);
+				}
+			});
+		}
 
 		res.map_err(Into::into)
 	}
@@ -388,34 +416,75 @@ mod tests {
 		assert!((count as u128) < (Duration::from_secs(30).as_millis() / 50));
 	}
 
+	fn run_test_in_another_process(
+		test_name: &str,
+		test_body: impl FnOnce(),
+	) -> Option<std::process::Output> {
+		if std::env::var("RUN_FORKED_TEST").is_ok() {
+			test_body();
+			None
+		} else {
+			let output = std::process::Command::new(std::env::current_exe().unwrap())
+				.arg(test_name)
+				.env("RUN_FORKED_TEST", "1")
+				.output()
+				.unwrap();
+
+			assert!(output.status.success());
+			Some(output)
+		}
+	}
+
 	/// This test ensures that `run_node_until_exit` aborts waiting for "stuck" tasks after 60
 	/// seconds, aka doesn't wait until they are finished (which may never happen).
 	#[test]
 	fn ensure_run_until_exit_is_not_blocking_indefinitely() {
-		let runner = create_runner();
+		let output = run_test_in_another_process(
+			"ensure_run_until_exit_is_not_blocking_indefinitely",
+			|| {
+				sp_tracing::try_init_simple();
 
-		runner
-			.run_node_until_exit(move |cfg| async move {
-				let task_manager = TaskManager::new(cfg.tokio_handle.clone(), None).unwrap();
-				let (sender, receiver) = futures::channel::oneshot::channel();
+				let runner = create_runner();
 
-				// We need to use `spawn_blocking` here so that we get a dedicated thread for our
-				// future. This future is more blocking code that will never end.
-				task_manager.spawn_handle().spawn_blocking("test", None, async move {
-					let _ = sender.send(());
-					loop {
-						std::thread::sleep(Duration::from_secs(30));
-					}
-				});
+				runner
+					.run_node_until_exit(move |cfg| async move {
+						let task_manager =
+							TaskManager::new(cfg.tokio_handle.clone(), None).unwrap();
+						let (sender, receiver) = futures::channel::oneshot::channel();
 
-				task_manager.spawn_essential_handle().spawn_blocking("test2", None, async {
-					// Let's stop this essential task directly when our other task started.
-					// It will signal that the task manager should end.
-					let _ = receiver.await;
-				});
+						// We need to use `spawn_blocking` here so that we get a dedicated thread
+						// for our future. This future is more blocking code that will never end.
+						task_manager.spawn_handle().spawn_blocking("test", None, async move {
+							let _ = sender.send(());
+							loop {
+								std::thread::sleep(Duration::from_secs(30));
+							}
+						});
 
-				Ok::<_, sc_service::Error>(task_manager)
-			})
-			.unwrap_err();
+						task_manager.spawn_essential_handle().spawn_blocking(
+							"test2",
+							None,
+							async {
+								// Let's stop this essential task directly when our other task
+								// started. It will signal that the task manager should end.
+								let _ = receiver.await;
+							},
+						);
+
+						Ok::<_, sc_service::Error>(task_manager)
+					})
+					.unwrap_err();
+			},
+		);
+
+		let Some(output) = output else { return } ;
+
+		let stderr = dbg!(String::from_utf8(output.stderr).unwrap());
+
+		assert!(
+			stderr.contains("Task \"test\" was still running after waiting 60 seconds to finish.")
+		);
+		assert!(!stderr
+			.contains("Task \"test2\" was still running after waiting 60 seconds to finish."));
 	}
 }

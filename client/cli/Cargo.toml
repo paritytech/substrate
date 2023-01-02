@@ -50,6 +50,7 @@ sp-version = { version = "5.0.0", path = "../../primitives/version" }
 [dev-dependencies]
 tempfile = "3.1.0"
 futures-timer = "3.0.1"
+sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
 
 [features]
 default = ["rocksdb"]
