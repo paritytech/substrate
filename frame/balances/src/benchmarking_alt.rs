@@ -102,6 +102,23 @@ benchmarks! {
 		assert_eq!(Balances::<T, I>::reserved_balance(&user), balance_amount);
 	}
 
+	// Benchmark `set_balance` coming from ROOT account. This always kills an account.
+	#[instance_benchmark]
+	fn set_balance_killing() {
+		let user: T::AccountId = account("user", 0, SEED);
+		let user_lookup = T::Lookup::unlookup(user.clone());
+
+		// Give the user some initial balance.
+		let existential_deposit = T::ExistentialDeposit::get();
+		let balance_amount = existential_deposit.saturating_mul(ED_MULTIPLIER.into());
+		let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&user, balance_amount);
+
+		#[extrinsic_call]
+		set_balance(RawOrigin::Root, user_lookup, Zero::zero(), Zero::zero());
+
+		assert!(Balances::<T, I>::free_balance(&user).is_zero());
+	}
+
 	#[instance_benchmark]
 	fn transfer_increasing_users(u: Linear<0, 1_000>) {
 		// 1_000 is not very much, but this upper bound can be controlled by the CLI.
