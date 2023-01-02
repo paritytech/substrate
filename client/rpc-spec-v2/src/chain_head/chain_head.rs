@@ -573,7 +573,7 @@ where
 				return
 			}
 
-			let event = match client.block(&BlockId::Hash(hash)) {
+			let event = match client.block(hash) {
 				Ok(Some(signed_block)) => {
 					let extrinsics = signed_block.block.extrinsics();
 					let result = format!("0x{:?}", HexDisplay::from(&extrinsics.encode()));
