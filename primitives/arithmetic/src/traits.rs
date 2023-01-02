@@ -57,6 +57,7 @@ pub trait BaseArithmetic:
 	+ CheckedMul
 	+ CheckedDiv
 	+ CheckedRem
+	+ Ensure
 	+ Saturating
 	+ PartialOrd<Self>
 	+ Ord
@@ -113,6 +114,7 @@ impl<
 			+ CheckedMul
 			+ CheckedDiv
 			+ CheckedRem
+			+ Ensure
 			+ Saturating
 			+ PartialOrd<Self>
 			+ Ord
@@ -340,7 +342,7 @@ impl<T: Sized> SaturatedConversion for T {}
 /// The *EnsureOps* family functions follows the same behavior as *CheckedOps* but
 /// returning an [`ArithmeticError`](crate::ArithmeticError) instead of `None`.
 mod ensure {
-	use super::{BaseArithmetic, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, Zero};
+	use super::{CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, Zero};
 	use crate::{ArithmeticError, FixedPointNumber, FixedPointOperand};
 
 	/// Performs addition that returns [`ArithmeticError`] instead of wrapping around on overflow.
@@ -614,7 +616,7 @@ mod ensure {
 	}
 
 	pub trait Ensure: EnsureOp + EnsureOpAssign {}
-	impl<T: BaseArithmetic> Ensure for T {}
+	impl<T: EnsureOp + EnsureOpAssign> Ensure for T {}
 
 	/// Extends [`FixedPointNumber`] with the Ensure family functions.
 	pub trait EnsureFixedPointNumber: FixedPointNumber {
