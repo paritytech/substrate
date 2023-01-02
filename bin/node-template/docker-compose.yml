@@ -32,5 +32,4 @@ services:
       - type: bind
         source: ./.local
         target: /root/.local
-    command: >
-      bash -c "cargo build --release && ./target/release/node-template --dev --ws-external"
+    command: bash -c "cargo build --release && ./target/release/node-template --dev --ws-external"
