@@ -533,7 +533,7 @@ mod ensure {
 		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow));
 		/// ```
 		fn ensure_sub_assign(&mut self, v: Self) -> Result<(), ArithmeticError> {
-			self.checked_sub(&v).ok_or_else(|| error::inverse(&v))?;
+			*self = self.checked_sub(&v).ok_or_else(|| error::inverse(&v))?;
 			Ok(())
 		}
 	}
@@ -564,7 +564,7 @@ mod ensure {
 		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow));
 		/// ```
 		fn ensure_mul_assign(&mut self, v: Self) -> Result<(), ArithmeticError> {
-			self.checked_mul(&v).ok_or_else(|| error::multiplication(self, &v))?;
+			*self = self.checked_mul(&v).ok_or_else(|| error::multiplication(self, &v))?;
 			Ok(())
 		}
 	}
@@ -595,7 +595,7 @@ mod ensure {
 		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow));
 		/// ```
 		fn ensure_div_assign(&mut self, v: Self) -> Result<(), ArithmeticError> {
-			self.checked_div(&v).ok_or_else(|| error::division(self, &v))?;
+			*self = self.checked_div(&v).ok_or_else(|| error::division(self, &v))?;
 			Ok(())
 		}
 	}
