@@ -353,6 +353,17 @@ mod ensure {
 		///
 		/// Similar to [`CheckedAdd::checked_add()`] but returning an [`ArithmeticError`] error.
 		///
+		/// # Examples
+		///
+		/// ```
+		/// use sp_arithmetic::traits::EnsureAdd;
+		///
+		/// let a: i32 = 10;
+		/// let b: i32 = 20;
+		///
+		/// assert_eq!(a.ensure_add(b), Ok(30));
+		/// ```
+		///
 		/// ```
 		/// use sp_arithmetic::{traits::EnsureAdd, ArithmeticError};
 		///
@@ -383,6 +394,17 @@ mod ensure {
 		/// If it fails, [`ArithmeticError`] is returned.
 		///
 		/// Similar to [`CheckedSub::checked_sub()`] but returning an [`ArithmeticError`] error.
+		///
+		/// # Examples
+		///
+		/// ```
+		/// use sp_arithmetic::traits::EnsureSub;
+		///
+		/// let a: i32 = 10;
+		/// let b: i32 = 20;
+		///
+		/// assert_eq!(a.ensure_sub(b), Ok(-10));
+		/// ```
 		///
 		/// ```
 		/// use sp_arithmetic::{traits::EnsureSub, ArithmeticError};
@@ -415,6 +437,17 @@ mod ensure {
 		///
 		/// Similar to [`CheckedMul::checked_mul()`] but returning an [`ArithmeticError`] error.
 		///
+		/// # Examples
+		///
+		/// ```
+		/// use sp_arithmetic::traits::EnsureMul;
+		///
+		/// let a: i32 = 10;
+		/// let b: i32 = 20;
+		///
+		/// assert_eq!(a.ensure_mul(b), Ok(200));
+		/// ```
+		///
 		/// ```
 		/// use sp_arithmetic::{traits::EnsureMul, ArithmeticError};
 		///
@@ -444,6 +477,17 @@ mod ensure {
 		/// If it fails, [`ArithmeticError`] is returned.
 		///
 		/// Similar to [`CheckedDiv::checked_div()`] but returning an [`ArithmeticError`] error.
+		///
+		/// # Examples
+		///
+		/// ```
+		/// use sp_arithmetic::traits::EnsureDiv;
+		///
+		/// let a: i32 = 20;
+		/// let b: i32 = 10;
+		///
+		/// assert_eq!(a.ensure_div(b), Ok(2));
+		/// ```
 		///
 		/// ```
 		/// use sp_arithmetic::{traits::EnsureDiv, ArithmeticError};
@@ -483,6 +527,18 @@ mod ensure {
 		///
 		/// If it fails, [`ArithmeticError`] is returned.
 		///
+		/// # Examples
+		///
+		/// ```
+		/// use sp_arithmetic::traits::EnsureAddAssign;
+		///
+		/// let mut a: i32 = 10;
+		/// let b: i32 = 20;
+		///
+		/// a.ensure_add_assign(b).unwrap();
+		/// assert_eq!(a, 30);
+		/// ```
+		///
 		/// ```
 		/// use sp_arithmetic::{traits::EnsureAddAssign, ArithmeticError};
 		///
@@ -513,6 +569,18 @@ mod ensure {
 		/// Subtracts two numbers overwriting the left hand one, checking for overflow.
 		///
 		/// If it fails, [`ArithmeticError`] is returned.
+		///
+		/// # Examples
+		///
+		/// ```
+		/// use sp_arithmetic::traits::EnsureSubAssign;
+		///
+		/// let mut a: i32 = 10;
+		/// let b: i32 = 20;
+		///
+		/// a.ensure_sub_assign(b).unwrap();
+		/// assert_eq!(a, -10);
+		/// ```
 		///
 		/// ```
 		/// use sp_arithmetic::{traits::EnsureSubAssign, ArithmeticError};
@@ -545,6 +613,18 @@ mod ensure {
 		///
 		/// If it fails, [`ArithmeticError`] is returned.
 		///
+		/// # Examples
+		///
+		/// ```
+		/// use sp_arithmetic::traits::EnsureMulAssign;
+		///
+		/// let mut a: i32 = 10;
+		/// let b: i32 = 20;
+		///
+		/// a.ensure_mul_assign(b).unwrap();
+		/// assert_eq!(a, 200);
+		/// ```
+		///
 		/// ```
 		/// use sp_arithmetic::{traits::EnsureMulAssign, ArithmeticError};
 		///
@@ -575,6 +655,18 @@ mod ensure {
 		/// Divides two numbers overwriting the left hand one, checking for overflow.
 		///
 		/// If it fails, [`ArithmeticError`] is returned.
+		///
+		/// # Examples
+		///
+		/// ```
+		/// use sp_arithmetic::traits::EnsureDivAssign;
+		///
+		/// let mut a: i32 = 20;
+		/// let b: i32 = 10;
+		///
+		/// a.ensure_div_assign(b).unwrap();
+		/// assert_eq!(a, 2);
+		/// ```
 		///
 		/// ```
 		/// use sp_arithmetic::{traits::EnsureDivAssign, ArithmeticError, FixedI64};
