@@ -37,6 +37,7 @@ mod inner {
 mod inner {
 	// tracing implementation
 	use crate::metrics::UNBOUNDED_CHANNELS_COUNTER;
+	use backtrace::Backtrace;
 	use futures::{
 		channel::mpsc::{
 			self, SendError, TryRecvError, TrySendError, UnboundedReceiver, UnboundedSender,
@@ -47,7 +48,6 @@ mod inner {
 	};
 	use log::error;
 	use std::{
-		backtrace::{Backtrace, BacktraceStatus},
 		pin::Pin,
 		sync::{
 			atomic::{AtomicBool, AtomicI64, Ordering},
@@ -108,7 +108,7 @@ mod inner {
 			queue_size: queue_size.clone(),
 			queue_size_warning,
 			warning_fired: Arc::new(AtomicBool::new(false)),
-			creation_backtrace: Arc::new(Backtrace::capture()),
+			creation_backtrace: Arc::new(Backtrace::new_unresolved()),
 		};
 		let receiver = TracingUnboundedReceiver { inner: r, name, queue_size };
 		(sender, receiver)
@@ -149,23 +149,20 @@ mod inner {
 
 				let queue_size = self.queue_size.fetch_add(1, Ordering::Relaxed);
 				if queue_size == self.queue_size_warning &&
-					!self.warning_fired.load(Ordering::Relaxed)
+					self.warning_fired
+						.compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
+						.is_ok()
 				{
 					// `warning_fired` and `queue_size` are not synchronized, so it's possible
 					// that the warning is fired few times before the `warning_fired` is seen
 					// by all threads. This seems better than introducing a mutex guarding them.
-					self.warning_fired.store(true, Ordering::Relaxed);
-					match self.creation_backtrace.status() {
-						BacktraceStatus::Captured => error!(
-							"The number of unprocessed messages in channel `{}` reached {}.\n\
-							 The channel was created at:\n{}",
-							self.name, self.queue_size_warning, self.creation_backtrace,
-						),
-						_ => error!(
-							"The number of unprocessed messages in channel `{}` reached {}.",
-							self.name, self.queue_size_warning,
-						),
-					}
+					let mut backtrace = (*self.creation_backtrace).clone();
+					backtrace.resolve();
+					error!(
+						"The number of unprocessed messages in channel `{}` reached {}.\n\
+						 The channel was created at:\n{:?}",
+						self.name, self.queue_size_warning, backtrace,
+					);
 				}
 
 				s
