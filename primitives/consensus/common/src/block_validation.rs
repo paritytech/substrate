@@ -24,7 +24,7 @@ use std::{error::Error, future::Future, pin::Pin, sync::Arc};
 
 /// A type which provides access to chain information.
 pub trait Chain<B: Block> {
-	/// Retrieve the status of the block denoted by the given [`Block::hash`].
+	/// Retrieve the status of the block denoted by the given [`Block::Hash`].
 	fn block_status(&self, hash: B::Hash) -> Result<BlockStatus, Box<dyn Error + Send>>;
 }
 
