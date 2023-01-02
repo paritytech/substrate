@@ -367,14 +367,15 @@ mod ensure {
 		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow));
 		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow));
 		/// ```
-		fn ensure_add(self, v: Self) -> Result<Self, ArithmeticError> {
-			self.checked_add(&v).ok_or_else(|| error::equivalent(&v))
+		fn ensure_add(mut self, v: Self) -> Result<Self, ArithmeticError> {
+			self.ensure_add_assign(v)?;
+			Ok(self)
 		}
 	}
 
 	/// Performs subtraction that returns [`ArithmeticError`] instead of wrapping around on
 	/// underflow.
-	pub trait EnsureSub: CheckedSub + PartialOrd + Zero {
+	pub trait EnsureSub: EnsureSubAssign {
 		/// Subtracts two numbers, checking for overflow.
 		///
 		/// If it fails, [`ArithmeticError`] is returned.
@@ -397,14 +398,15 @@ mod ensure {
 		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow));
 		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow));
 		/// ```
-		fn ensure_sub(self, v: Self) -> Result<Self, ArithmeticError> {
-			self.checked_sub(&v).ok_or_else(|| error::inverse(&v))
+		fn ensure_sub(mut self, v: Self) -> Result<Self, ArithmeticError> {
+			self.ensure_sub_assign(v)?;
+			Ok(self)
 		}
 	}
 
 	/// Performs multiplication that returns [`ArithmeticError`] instead of wrapping around on
 	/// overflow.
-	pub trait EnsureMul: CheckedMul + PartialOrd + Zero {
+	pub trait EnsureMul: EnsureMulAssign {
 		/// Multiplies two numbers, checking for overflow.
 		///
 		/// If it fails, [`ArithmeticError`] is returned.
@@ -427,13 +429,14 @@ mod ensure {
 		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow));
 		/// assert_eq!(underflow(), Err(ArithmeticError::Underflow));
 		/// ```
-		fn ensure_mul(self, v: Self) -> Result<Self, ArithmeticError> {
-			self.checked_mul(&v).ok_or_else(|| error::multiplication(&self, &v))
+		fn ensure_mul(mut self, v: Self) -> Result<Self, ArithmeticError> {
+			self.ensure_mul_assign(v)?;
+			Ok(self)
 		}
 	}
 
 	/// Performs division that returns [`ArithmeticError`] instead of wrapping around on overflow.
-	pub trait EnsureDiv: CheckedDiv + PartialOrd + Zero {
+	pub trait EnsureDiv: EnsureDivAssign {
 		/// Divides two numbers, checking for overflow.
 		///
 		/// If it fails, [`ArithmeticError`] is returned.
@@ -456,15 +459,16 @@ mod ensure {
 		/// assert_eq!(extrinsic_zero(), Err(ArithmeticError::DivisionByZero));
 		/// assert_eq!(overflow(), Err(ArithmeticError::Overflow));
 		/// ```
-		fn ensure_div(self, v: Self) -> Result<Self, ArithmeticError> {
-			self.checked_div(&v).ok_or_else(|| error::division(&self, &v))
+		fn ensure_div(mut self, v: Self) -> Result<Self, ArithmeticError> {
+			self.ensure_div_assign(v)?;
+			Ok(self)
 		}
 	}
 
-	impl<T: CheckedAdd + PartialOrd + Zero> EnsureAdd for T {}
-	impl<T: CheckedSub + PartialOrd + Zero> EnsureSub for T {}
-	impl<T: CheckedMul + PartialOrd + Zero> EnsureMul for T {}
-	impl<T: CheckedDiv + PartialOrd + Zero> EnsureDiv for T {}
+	impl<T: EnsureAddAssign> EnsureAdd for T {}
+	impl<T: EnsureSubAssign> EnsureSub for T {}
+	impl<T: EnsureMulAssign> EnsureMul for T {}
+	impl<T: EnsureDivAssign> EnsureDiv for T {}
 
 	/// Meta trait that supports all immutable arithmetic `Ensure*` operations
 	pub trait EnsureOp: EnsureAdd + EnsureSub + EnsureMul + EnsureDiv {}
@@ -594,10 +598,10 @@ mod ensure {
 		}
 	}
 
-	impl<T: EnsureAdd> EnsureAddAssign for T {}
-	impl<T: EnsureSub> EnsureSubAssign for T {}
-	impl<T: EnsureMul> EnsureMulAssign for T {}
-	impl<T: EnsureDiv> EnsureDivAssign for T {}
+	impl<T: CheckedAdd + PartialOrd + Zero> EnsureAddAssign for T {}
+	impl<T: CheckedSub + PartialOrd + Zero> EnsureSubAssign for T {}
+	impl<T: CheckedMul + PartialOrd + Zero> EnsureMulAssign for T {}
+	impl<T: CheckedDiv + PartialOrd + Zero> EnsureDivAssign for T {}
 
 	/// Meta trait that supports all assigned arithmetic `Ensure*` operations
 	pub trait EnsureOpAssign:
