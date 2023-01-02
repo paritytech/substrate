@@ -40,6 +40,30 @@ benchmarks! {
 		assert_eq!(Balances::<T, I>::free_balance(&recipient), transfer_amount);
 	}
 
+	// Benchmark `transfer` with the best possible condition:
+	// * Both accounts exist and will continue to exist.
+	#[instance_benchmark]
+	#[extra]
+	fn transfer_best_case() {
+		let caller = whitelisted_caller();
+		let recipient: T::AccountId = account("recipient", 0, SEED);
+		let recipient_lookup = T::Lookup::unlookup(recipient.clone());
+
+		// Give the sender account max funds for transfer (their account will never reasonably be killed).
+		let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&caller, T::Balance::max_value());
+
+		// Give the recipient account existential deposit (thus their account already exists).
+		let existential_deposit = T::ExistentialDeposit::get();
+		let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&recipient, existential_deposit);
+		let transfer_amount = existential_deposit.saturating_mul(ED_MULTIPLIER.into());
+
+		#[extrinsic_call]
+		transfer(RawOrigin::Signed(caller.clone()), recipient_lookup, transfer_amount);
+
+		assert!(!Balances::<T, I>::free_balance(&caller).is_zero());
+		assert!(!Balances::<T, I>::free_balance(&recipient).is_zero());
+	}
+
 	#[instance_benchmark]
 	fn transfer_increasing_users(u: Linear<0, 1_000>) {
 		// 1_000 is not very much, but this upper bound can be controlled by the CLI.

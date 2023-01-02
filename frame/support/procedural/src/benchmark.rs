@@ -460,7 +460,7 @@ pub fn benchmarks(tokens: TokenStream) -> TokenStream {
 			}
 		}
 	};
-	println!("{}", res.to_string());
+	// println!("{}", res.to_string());
 	res.into()
 }
 
