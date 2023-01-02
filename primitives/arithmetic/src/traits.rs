@@ -19,9 +19,9 @@
 
 use codec::HasCompact;
 pub use ensure::{
-	Ensure, EnsureAdd, EnsureAddAssign, EnsureDiv, EnsureDivAssign, EnsureFixedPointNumber,
-	EnsureFrom, EnsureInto, EnsureMul, EnsureMulAssign, EnsureOp, EnsureOpAssign, EnsureSub,
-	EnsureSubAssign,
+	ensure_pow, Ensure, EnsureAdd, EnsureAddAssign, EnsureDiv, EnsureDivAssign,
+	EnsureFixedPointNumber, EnsureFrom, EnsureInto, EnsureMul, EnsureMulAssign, EnsureOp,
+	EnsureOpAssign, EnsureSub, EnsureSubAssign,
 };
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
@@ -340,7 +340,7 @@ impl<T: Sized> SaturatedConversion for T {}
 /// The *EnsureOps* family functions follows the same behavior as *CheckedOps* but
 /// returning an [`ArithmeticError`](crate::ArithmeticError) instead of `None`.
 mod ensure {
-	use super::{CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, Zero};
+	use super::{checked_pow, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, One, Zero};
 	use crate::{ArithmeticError, FixedPointNumber, FixedPointOperand};
 
 	/// Performs addition that returns [`ArithmeticError`] instead of wrapping around on overflow.
@@ -459,6 +459,24 @@ mod ensure {
 		fn ensure_div(self, v: Self) -> Result<Self, ArithmeticError> {
 			self.checked_div(&v).ok_or_else(|| error::division(self, v))
 		}
+	}
+
+	/// Raises a value to the power of exp, returning `ArithmeticError` if an overflow occurred.
+	///
+	/// Check [`checked_pow`] for more info about border cases.
+	///
+	/// ```
+	/// use sp_arithmetic::{traits::ensure_pow, ArithmeticError};
+	///
+	/// fn overflow() -> Result<(), ArithmeticError> {
+	///     ensure_pow(2u64, 64)?;
+	///     Ok(())
+	/// }
+	///
+	/// assert_eq!(overflow(), Err(ArithmeticError::Overflow));
+	/// ```
+	pub fn ensure_pow<T: One + EnsureMul>(base: T, exp: usize) -> Result<T, ArithmeticError> {
+		checked_pow(base, exp).ok_or(ArithmeticError::Overflow)
 	}
 
 	impl<T: CheckedAdd + PartialOrd + Zero + Copy> EnsureAdd for T {}
