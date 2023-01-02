@@ -258,6 +258,7 @@ runtime-benchmarks = [
 	"pallet-utility/runtime-benchmarks",
 	"pallet-uniques/runtime-benchmarks",
 	"pallet-nfts/runtime-benchmarks",
+	"pallet-nft-fractionalization/runtime-benchmarks",
 	"pallet-vesting/runtime-benchmarks",
 	"pallet-whitelist/runtime-benchmarks",
 	"frame-system-benchmarking/runtime-benchmarks",
