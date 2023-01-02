@@ -70,6 +70,7 @@ impl<B: BlockT> NeighborPacketWorker<B> {
 	pub(super) fn new(rebroadcast_period: Duration) -> (Self, NeighborPacketSender<B>) {
 		let (tx, rx) = tracing_unbounded::<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>(
 			"mpsc_grandpa_neighbor_packet_worker",
+			100_000,
 		);
 		let delay = Delay::new(rebroadcast_period);
 

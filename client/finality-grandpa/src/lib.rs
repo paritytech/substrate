@@ -566,7 +566,8 @@ where
 			}
 		})?;
 
-	let (voter_commands_tx, voter_commands_rx) = tracing_unbounded("mpsc_grandpa_voter_command");
+	let (voter_commands_tx, voter_commands_rx) =
+		tracing_unbounded("mpsc_grandpa_voter_command", 100_000);
 
 	let (justification_sender, justification_stream) = GrandpaJustificationStream::channel();
 

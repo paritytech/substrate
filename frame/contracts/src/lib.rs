@@ -857,9 +857,6 @@ pub mod pallet {
 		CodeRejected,
 		/// An indetermistic code was used in a context where this is not permitted.
 		Indeterministic,
-		/// The debug buffer size used during contract execution exceeded the limit determined by
-		/// the `MaxDebugBufferLen` pallet config parameter.
-		DebugBufferExhausted,
 	}
 
 	/// A mapping from an original code hash to the original code, untouched by instrumentation.
