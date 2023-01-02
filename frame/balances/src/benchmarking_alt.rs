@@ -119,6 +119,31 @@ benchmarks! {
 		assert!(Balances::<T, I>::free_balance(&user).is_zero());
 	}
 
+	// Benchmark `force_transfer` extrinsic with the worst possible conditions:
+	// * Transfer will kill the sender account.
+	// * Transfer will create the recipient account.
+	#[instance_benchmark]
+	fn force_transfer() {
+		let existential_deposit = T::ExistentialDeposit::get();
+		let source: T::AccountId = account("source", 0, SEED);
+		let source_lookup = T::Lookup::unlookup(source.clone());
+
+		// Give some multiple of the existential deposit
+		let balance = existential_deposit.saturating_mul(ED_MULTIPLIER.into());
+		let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&source, balance);
+
+		// Transfer `e - 1` existential deposits + 1 unit, which guarantees to create one account, and reap this user.
+		let recipient: T::AccountId = account("recipient", 0, SEED);
+		let recipient_lookup = T::Lookup::unlookup(recipient.clone());
+		let transfer_amount = existential_deposit.saturating_mul((ED_MULTIPLIER - 1).into()) + 1u32.into();
+
+		#[extrinsic_call]
+		force_transfer(RawOrigin::Root, source_lookup, recipient_lookup, transfer_amount);
+
+		assert_eq!(Balances::<T, I>::free_balance(&source), Zero::zero());
+		assert_eq!(Balances::<T, I>::free_balance(&recipient), transfer_amount);
+	}
+
 	#[instance_benchmark]
 	fn transfer_increasing_users(u: Linear<0, 1_000>) {
 		// 1_000 is not very much, but this upper bound can be controlled by the CLI.
