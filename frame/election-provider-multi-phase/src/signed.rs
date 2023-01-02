@@ -539,6 +539,7 @@ mod tests {
 	use super::*;
 	use crate::{mock::*, ElectionCompute, ElectionError, Error, Event, Perbill, Phase};
 	use frame_support::{assert_noop, assert_ok, assert_storage_noop};
+	use frame_system::RawOrigin;
 
 	#[test]
 	fn cannot_submit_too_early() {
@@ -620,7 +621,7 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
+					Event::PhaseTransition { from: Phase::Off, to: Phase::Signed, round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
 						origin: RawOrigin::Signed(99),
@@ -649,7 +650,7 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
+					Event::PhaseTransition { from: Phase::Off, to: Phase::Signed, round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
 						origin: RawOrigin::Signed(99),
@@ -684,7 +685,7 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
+					Event::PhaseTransition { from: Phase::Off, to: Phase::Signed, round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
 						origin: RawOrigin::Signed(99),
@@ -725,7 +726,7 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
+					Event::PhaseTransition { from: Phase::Off, to: Phase::Signed, round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
 						origin: RawOrigin::Signed(99),
@@ -808,7 +809,7 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
+					Event::PhaseTransition { from: Phase::Off, to: Phase::Signed, round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
 						origin: RawOrigin::Signed(99),
@@ -896,7 +897,7 @@ mod tests {
 				assert_eq!(
 					multi_phase_events(),
 					vec![
-						Event::SignedPhaseStarted { round: 1 },
+						Event::PhaseTransition { from: Phase::Off, to: Phase::Signed, round: 1 },
 						Event::SolutionStored {
 							compute: ElectionCompute::Signed,
 							origin: RawOrigin::Signed(99),
@@ -1154,7 +1155,7 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
+					Event::PhaseTransition { from: Phase::Off, to: Phase::Signed, round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
 						origin: RawOrigin::Signed(100),
@@ -1171,7 +1172,11 @@ mod tests {
 						prev_ejected: false
 					},
 					Event::Rewarded { account: 100, value: 7 },
-					Event::UnsignedPhaseStarted { round: 1 }
+					Event::PhaseTransition {
+						from: Phase::Signed,
+						to: Phase::Unsigned((true, 25)),
+						round: 1
+					},
 				]
 			);
 		})
@@ -1224,7 +1229,7 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
+					Event::PhaseTransition { from: Phase::Off, to: Phase::Signed, round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
 						origin: RawOrigin::Signed(99),
@@ -1370,7 +1375,7 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
+					Event::PhaseTransition { from: Phase::Off, to: Phase::Signed, round: 1 },
 					Event::SolutionStored {
 						compute: ElectionCompute::Signed,
 						origin: RawOrigin::Signed(99),

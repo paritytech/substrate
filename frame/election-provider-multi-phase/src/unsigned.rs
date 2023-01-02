@@ -1064,6 +1064,7 @@ mod tests {
 	use frame_support::{
 		assert_noop, assert_ok, bounded_vec, dispatch::Dispatchable, traits::OffchainWorker,
 	};
+	use frame_system::RawOrigin;
 	use sp_npos_elections::ElectionScore;
 	use sp_runtime::{
 		offchain::storage_lock::{BlockAndTime, StorageLock},
@@ -1321,8 +1322,12 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
-					Event::UnsignedPhaseStarted { round: 1 },
+					Event::PhaseTransition { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::PhaseTransition {
+						from: Phase::Signed,
+						to: Phase::Unsigned((true, 25)),
+						round: 1
+					},
 					Event::SolutionStored {
 						compute: ElectionCompute::Unsigned,
 						origin: RawOrigin::None,
@@ -1674,8 +1679,12 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted { round: 1 },
-					Event::UnsignedPhaseStarted { round: 1 },
+					Event::PhaseTransition { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::PhaseTransition {
+						from: Phase::Signed,
+						to: Phase::Unsigned((true, 25)),
+						round: 1
+					},
 					Event::ElectionFinalized {
 						compute: ElectionCompute::Fallback,
 						score: ElectionScore {
