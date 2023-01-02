@@ -1621,69 +1621,13 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Bond pending rewards of `member_account` into the pool they already belong.
-		///
-		/// Note: `member_account` must pass `RewardClaim::Permissionless` to `set_reward_claim`,
-		/// making this call permissionless.
-		#[pallet::call_index(2)]
-		#[pallet::weight(
-			T::WeightInfo::bond_extra_transfer()
-			.max(T::WeightInfo::bond_extra_reward())
-		)]
-		pub fn bond_extra_pending_rewards_other(
-			origin: OriginFor<T>,
-			member_account: AccountIdLookupOf<T>,
-		) -> DispatchResult {
-			ensure_signed(origin)?;
-			let member_account = T::Lookup::lookup(member_account)?;
-			let (mut member, mut bonded_pool, mut reward_pool) =
-				Self::get_member_with_pools(&member_account)?;
-
-			ensure!(
-				RewardClaimPermission::<T>::get(&member_account) == RewardClaim::Permissionless,
-				Error::<T>::DoesNotHavePermission
-			);
-
-			reward_pool.update_records(bonded_pool.id, bonded_pool.points)?;
-			ensure!(!member.active_points().is_zero(), Error::<T>::FullyUnbonding);
-
-			let current_reward_counter =
-				reward_pool.current_reward_counter(bonded_pool.id, bonded_pool.points)?;
-			let pending_rewards = member.pending_rewards(current_reward_counter)?;
-
-			if !pending_rewards.is_zero() {
-				member.last_recorded_reward_counter = current_reward_counter;
-				reward_pool.register_claimed_reward(pending_rewards);
-			}
-
-			let points_issued = bonded_pool.try_bond_funds(
-				&bonded_pool.reward_account(),
-				pending_rewards,
-				BondType::Later,
-			)?;
-
-			bonded_pool.ok_to_be_open()?;
-			member.points = member.points.saturating_add(points_issued);
-
-			Self::deposit_event(Event::<T>::Bonded {
-				member: member_account.clone(),
-				pool_id: member.pool_id,
-				bonded: pending_rewards,
-				joined: false,
-			});
-
-			Self::put_member_with_pools(&member_account, member, bonded_pool, reward_pool);
-
-			Ok(())
-		}
-
 		/// A bonded member can use this to claim their payout based on the rewards that the pool
 		/// has accumulated since their last claimed payout (OR since joining if this is there first
 		/// time claiming rewards). The payout will be transferred to the member's account.
 		///
 		/// The member will earn rewards pro rata based on the members stake vs the sum of the
 		/// members in the pools stake. Rewards do not "expire".
-		#[pallet::call_index(3)]
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::claim_payout())]
 		pub fn claim_payout(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -1726,7 +1670,7 @@ pub mod pallet {
 		/// are available). However, it may not be possible to release the current unlocking chunks,
 		/// in which case, the result of this call will likely be the `NoMoreChunks` error from the
 		/// staking system.
-		#[pallet::call_index(4)]
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::unbond())]
 		pub fn unbond(
 			origin: OriginFor<T>,
@@ -1803,7 +1747,7 @@ pub mod pallet {
 		/// can be cleared by withdrawing. In the case there are too many unlocking chunks, the user
 		/// would probably see an error like `NoMoreChunks` emitted from the staking system when
 		/// they attempt to unbond.
-		#[pallet::call_index(5)]
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::pool_withdraw_unbonded(*num_slashing_spans))]
 		pub fn pool_withdraw_unbonded(
 			origin: OriginFor<T>,
@@ -1838,7 +1782,7 @@ pub mod pallet {
 		/// # Note
 		///
 		/// If the target is the depositor, the pool will be destroyed.
-		#[pallet::call_index(6)]
+		#[pallet::call_index(5)]
 		#[pallet::weight(
 			T::WeightInfo::withdraw_unbonded_kill(*num_slashing_spans)
 		)]
@@ -1960,7 +1904,7 @@ pub mod pallet {
 		///
 		/// In addition to `amount`, the caller will transfer the existential deposit; so the caller
 		/// needs at have at least `amount + existential_deposit` transferrable.
-		#[pallet::call_index(7)]
+		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::create())]
 		pub fn create(
 			origin: OriginFor<T>,
@@ -1985,7 +1929,7 @@ pub mod pallet {
 		///
 		/// same as `create` with the inclusion of
 		/// * `pool_id` - `A valid PoolId.
-		#[pallet::call_index(8)]
+		#[pallet::call_index(7)]
 		#[pallet::weight(T::WeightInfo::create())]
 		pub fn create_with_pool_id(
 			origin: OriginFor<T>,
@@ -2010,7 +1954,7 @@ pub mod pallet {
 		///
 		/// This directly forward the call to the staking pallet, on behalf of the pool bonded
 		/// account.
-		#[pallet::call_index(9)]
+		#[pallet::call_index(8)]
 		#[pallet::weight(T::WeightInfo::nominate(validators.len() as u32))]
 		pub fn nominate(
 			origin: OriginFor<T>,
@@ -2033,7 +1977,7 @@ pub mod pallet {
 		/// 1. signed by the state toggler, or the root role of the pool,
 		/// 2. if the pool conditions to be open are NOT met (as described by `ok_to_be_open`), and
 		///    then the state of the pool can be permissionlessly changed to `Destroying`.
-		#[pallet::call_index(10)]
+		#[pallet::call_index(9)]
 		#[pallet::weight(T::WeightInfo::set_state())]
 		pub fn set_state(
 			origin: OriginFor<T>,
@@ -2062,7 +2006,7 @@ pub mod pallet {
 		///
 		/// The dispatch origin of this call must be signed by the state toggler, or the root role
 		/// of the pool.
-		#[pallet::call_index(11)]
+		#[pallet::call_index(10)]
 		#[pallet::weight(T::WeightInfo::set_metadata(metadata.len() as u32))]
 		pub fn set_metadata(
 			origin: OriginFor<T>,
@@ -2094,7 +2038,7 @@ pub mod pallet {
 		/// * `max_pools` - Set [`MaxPools`].
 		/// * `max_members` - Set [`MaxPoolMembers`].
 		/// * `max_members_per_pool` - Set [`MaxPoolMembersPerPool`].
-		#[pallet::call_index(12)]
+		#[pallet::call_index(11)]
 		#[pallet::weight(T::WeightInfo::set_configs())]
 		pub fn set_configs(
 			origin: OriginFor<T>,
@@ -2131,7 +2075,7 @@ pub mod pallet {
 		///
 		/// It emits an event, notifying UIs of the role change. This event is quite relevant to
 		/// most pool members and they should be informed of changes to pool roles.
-		#[pallet::call_index(13)]
+		#[pallet::call_index(12)]
 		#[pallet::weight(T::WeightInfo::update_roles())]
 		pub fn update_roles(
 			origin: OriginFor<T>,
@@ -2184,13 +2128,69 @@ pub mod pallet {
 		///
 		/// This directly forward the call to the staking pallet, on behalf of the pool bonded
 		/// account.
-		#[pallet::call_index(14)]
+		#[pallet::call_index(13)]
 		#[pallet::weight(T::WeightInfo::chill())]
 		pub fn chill(origin: OriginFor<T>, pool_id: PoolId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_nominate(&who), Error::<T>::NotNominator);
 			T::Staking::chill(&bonded_pool.bonded_account())
+		}
+
+		/// Bond pending rewards of `member_account` into the pool they already belong.
+		///
+		/// Note: `member_account` must pass `RewardClaim::Permissionless` to `set_reward_claim`,
+		/// making this call permissionless.
+		#[pallet::call_index(14)]
+		#[pallet::weight(
+			T::WeightInfo::bond_extra_transfer()
+			.max(T::WeightInfo::bond_extra_reward())
+		)]
+		pub fn bond_extra_pending_rewards_other(
+			origin: OriginFor<T>,
+			member_account: AccountIdLookupOf<T>,
+		) -> DispatchResult {
+			ensure_signed(origin)?;
+			let member_account = T::Lookup::lookup(member_account)?;
+			let (mut member, mut bonded_pool, mut reward_pool) =
+				Self::get_member_with_pools(&member_account)?;
+
+			ensure!(
+				RewardClaimPermission::<T>::get(&member_account) == RewardClaim::Permissionless,
+				Error::<T>::DoesNotHavePermission
+			);
+
+			reward_pool.update_records(bonded_pool.id, bonded_pool.points)?;
+			ensure!(!member.active_points().is_zero(), Error::<T>::FullyUnbonding);
+
+			let current_reward_counter =
+				reward_pool.current_reward_counter(bonded_pool.id, bonded_pool.points)?;
+			let pending_rewards = member.pending_rewards(current_reward_counter)?;
+
+			if !pending_rewards.is_zero() {
+				member.last_recorded_reward_counter = current_reward_counter;
+				reward_pool.register_claimed_reward(pending_rewards);
+			}
+
+			let points_issued = bonded_pool.try_bond_funds(
+				&bonded_pool.reward_account(),
+				pending_rewards,
+				BondType::Later,
+			)?;
+
+			bonded_pool.ok_to_be_open()?;
+			member.points = member.points.saturating_add(points_issued);
+
+			Self::deposit_event(Event::<T>::Bonded {
+				member: member_account.clone(),
+				pool_id: member.pool_id,
+				bonded: pending_rewards,
+				joined: false,
+			});
+
+			Self::put_member_with_pools(&member_account, member, bonded_pool, reward_pool);
+
+			Ok(())
 		}
 
 		/// Set reward claim permission.
