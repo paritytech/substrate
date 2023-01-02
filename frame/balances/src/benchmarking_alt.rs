@@ -84,6 +84,24 @@ benchmarks! {
 		assert_eq!(Balances::<T, I>::free_balance(&recipient), transfer_amount);
 	}
 
+	// Benchmark `set_balance` coming from ROOT account. This always creates an account.
+	#[instance_benchmark]
+	fn set_balance_creating() {
+		let user: T::AccountId = account("user", 0, SEED);
+		let user_lookup = T::Lookup::unlookup(user.clone());
+
+		// Give the user some initial balance.
+		let existential_deposit = T::ExistentialDeposit::get();
+		let balance_amount = existential_deposit.saturating_mul(ED_MULTIPLIER.into());
+		let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&user, balance_amount);
+
+		#[extrinsic_call]
+		set_balance(RawOrigin::Root, user_lookup, balance_amount, balance_amount);
+
+		assert_eq!(Balances::<T, I>::free_balance(&user), balance_amount);
+		assert_eq!(Balances::<T, I>::reserved_balance(&user), balance_amount);
+	}
+
 	#[instance_benchmark]
 	fn transfer_increasing_users(u: Linear<0, 1_000>) {
 		// 1_000 is not very much, but this upper bound can be controlled by the CLI.
