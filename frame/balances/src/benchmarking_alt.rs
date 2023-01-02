@@ -201,4 +201,26 @@ benchmarks! {
 		assert!(Balances::<T, I>::free_balance(&caller).is_zero());
 		assert_eq!(Balances::<T, I>::free_balance(&recipient), balance);
 	}
+
+	#[instance_benchmark]
+	fn force_unreserve() {
+		let user: T::AccountId = account("user", 0, SEED);
+		let user_lookup = T::Lookup::unlookup(user.clone());
+
+		// Give some multiple of the existential deposit
+		let existential_deposit = T::ExistentialDeposit::get();
+		let balance = existential_deposit.saturating_mul(ED_MULTIPLIER.into());
+		let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&user, balance);
+
+		// Reserve the balance
+		<Balances<T, I> as ReservableCurrency<_>>::reserve(&user, balance)?;
+		assert_eq!(Balances::<T, I>::reserved_balance(&user), balance);
+		assert!(Balances::<T, I>::free_balance(&user).is_zero());
+
+		#[extrinsic_call]
+		force_unreserve(RawOrigin::Root, user_lookup, balance);
+
+		assert!(Balances::<T, I>::reserved_balance(&user).is_zero());
+		assert_eq!(Balances::<T, I>::free_balance(&user), balance);
+	}
 }
