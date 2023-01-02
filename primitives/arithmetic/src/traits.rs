@@ -834,3 +834,106 @@ mod ensure {
 		}
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::ArithmeticError;
+	use rand::{seq::SliceRandom, thread_rng, Rng};
+
+	#[test]
+	fn ensure_add_works() {
+		test_ensure(values(), &EnsureAdd::ensure_add, &CheckedAdd::checked_add);
+	}
+
+	#[test]
+	fn ensure_sub_works() {
+		test_ensure(values(), &EnsureSub::ensure_sub, &CheckedSub::checked_sub);
+	}
+
+	#[test]
+	fn ensure_mul_works() {
+		test_ensure(values(), &EnsureMul::ensure_mul, &CheckedMul::checked_mul);
+	}
+
+	#[test]
+	fn ensure_div_works() {
+		test_ensure(values(), &EnsureDiv::ensure_div, &CheckedDiv::checked_div);
+	}
+
+	#[test]
+	fn ensure_add_assign_works() {
+		test_ensure_assign(values(), &EnsureAddAssign::ensure_add_assign, &EnsureAdd::ensure_add);
+	}
+
+	#[test]
+	fn ensure_sub_assign_works() {
+		test_ensure_assign(values(), &EnsureSubAssign::ensure_sub_assign, &EnsureSub::ensure_sub);
+	}
+
+	#[test]
+	fn ensure_mul_assign_works() {
+		test_ensure_assign(values(), &EnsureMulAssign::ensure_mul_assign, &&EnsureMul::ensure_mul);
+	}
+
+	#[test]
+	fn ensure_div_assign_works() {
+		test_ensure_assign(values(), &EnsureDivAssign::ensure_div_assign, &EnsureDiv::ensure_div);
+	}
+
+	/// Test that the ensured function returns the expected un-ensured value.
+	fn test_ensure<V, E, P>(pairs: Vec<(V, V)>, ensured: E, unensured: P)
+	where
+		V: Ensure + core::fmt::Debug + Copy,
+		E: Fn(V, V) -> Result<V, ArithmeticError>,
+		P: Fn(&V, &V) -> Option<V>,
+	{
+		for (a, b) in pairs.into_iter() {
+			match ensured(a, b) {
+				Ok(c) => {
+					assert_eq!(unensured(&a, &b), Some(c))
+				},
+				Err(_) => {
+					assert!(unensured(&a, &b).is_none());
+				},
+			}
+		}
+	}
+
+	/// Test that the ensured function modifies `self` to the expected un-ensured value.
+	fn test_ensure_assign<V, E, P>(pairs: Vec<(V, V)>, ensured: E, unensured: P)
+	where
+		V: Ensure + std::panic::RefUnwindSafe + std::panic::UnwindSafe + core::fmt::Debug + Copy,
+		E: Fn(&mut V, V) -> Result<(), ArithmeticError>,
+		P: Fn(V, V) -> Result<V, ArithmeticError> + std::panic::RefUnwindSafe,
+	{
+		for (mut a, b) in pairs.into_iter() {
+			let old_a = a;
+
+			match ensured(&mut a, b) {
+				Ok(()) => {
+					assert_eq!(unensured(old_a, b), Ok(a));
+				},
+				Err(err) => {
+					assert_eq!(a, old_a, "A stays unmodified in the error case");
+					assert_eq!(unensured(old_a, b), Err(err));
+				},
+			}
+		}
+	}
+
+	/// Generates some good values for testing integer arithmetic.
+	fn values() -> Vec<(i32, i32)> {
+		let mut rng = thread_rng();
+		let mut one_dimension = || {
+			let mut ret = vec![0i32; 1007];
+			// Some hard-coded interesting values.
+			ret[..7].copy_from_slice(&[-1, 0, 1, i32::MIN, i32::MAX, i32::MAX - 1, i32::MIN + 1]);
+			// … and some random ones.
+			rng.fill(&mut ret[7..]);
+			ret.shuffle(&mut rng);
+			ret
+		};
+		one_dimension().into_iter().zip(one_dimension().into_iter()).collect()
+	}
+}
