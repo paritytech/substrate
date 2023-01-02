@@ -162,6 +162,18 @@ impl MockClient {
 		client.finalize_block(hash, None).unwrap();
 	}
 
+	pub fn undo_block_canonicalization(&self, mmr_block: &MmrBlock) {
+		let mut offchain_db = self.offchain_db();
+		for node in NodesUtils::right_branch_ending_in_leaf(mmr_block.leaf_idx.unwrap()) {
+			let canon_key = mmr_block.get_offchain_key(node, OffchainKeyType::Canon);
+			let val = offchain_db.local_storage_get(StorageKind::PERSISTENT, &canon_key).unwrap();
+			offchain_db.local_storage_clear(StorageKind::PERSISTENT, &canon_key);
+
+			let temp_key = mmr_block.get_offchain_key(node, OffchainKeyType::Temp);
+			offchain_db.local_storage_set(StorageKind::PERSISTENT, &temp_key, &val);
+		}
+	}
+
 	pub fn check_offchain_storage<F>(
 		&self,
 		key_type: OffchainKeyType,
@@ -226,16 +238,16 @@ impl HeaderMetadata<Block> for MockClient {
 }
 
 impl HeaderBackend<Block> for MockClient {
-	fn header(&self, id: BlockId<Block>) -> sc_client_api::blockchain::Result<Option<Header>> {
-		self.client.lock().header(&id)
+	fn header(&self, hash: Hash) -> sc_client_api::blockchain::Result<Option<Header>> {
+		self.client.lock().header(hash)
 	}
 
 	fn info(&self) -> Info<Block> {
 		self.client.lock().info()
 	}
 
-	fn status(&self, id: BlockId<Block>) -> sc_client_api::blockchain::Result<BlockStatus> {
-		self.client.lock().status(id)
+	fn status(&self, hash: Hash) -> sc_client_api::blockchain::Result<BlockStatus> {
+		self.client.lock().status(hash)
 	}
 
 	fn number(&self, hash: Hash) -> sc_client_api::blockchain::Result<Option<BlockNumber>> {

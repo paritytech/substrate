@@ -134,6 +134,7 @@ where
 		"TryRuntime_execute_block",
 		&payload,
 		full_extensions(),
+		shared.export_proof,
 	)?;
 
 	Ok(())

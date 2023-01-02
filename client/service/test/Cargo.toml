@@ -33,8 +33,6 @@ sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-core = { version = "7.0.0", path = "../../../primitives/core" }
-sp-externalities = { version = "0.13.0", path = "../../../primitives/externalities" }
-sp-panic-handler = { version = "5.0.0", path = "../../../primitives/panic-handler" }
 sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
 sp-state-machine = { version = "0.13.0", path = "../../../primitives/state-machine" }
 sp-storage = { version = "7.0.0", path = "../../../primitives/storage" }
