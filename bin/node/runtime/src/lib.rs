@@ -32,10 +32,14 @@ use frame_support::{
 	pallet_prelude::Get,
 	parameter_types,
 	traits::{
-		fungible::ItemOf, AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32,
-		Currency, EitherOfDiverse, EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter,
-		KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote,
-		WithdrawReasons,
+		fungible::ItemOf,
+		tokens::{
+			nonfungibles_v2::{Inspect, LockableNonfungible, Mutate},
+			AttributeNamespace,
+		},
+		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32, Currency, EitherOfDiverse,
+		EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter, KeyOwnerProofSystem,
+		LockIdentifier, Locker, Nothing, OnUnbalanced, U128CurrencyToVote, WithdrawReasons,
 	},
 	weights::{
 		constants::{
@@ -56,7 +60,7 @@ use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
-use pallet_nfts::PalletFeatures;
+use pallet_nfts::{ItemConfig, PalletFeatures};
 use pallet_nis::WithMaximumOf;
 use pallet_session::historical::{self as pallet_session_historical};
 pub use pallet_transaction_payment::{CurrencyAdapter, Multiplier, TargetedFeeAdjustment};
@@ -74,7 +78,8 @@ use sp_runtime::{
 		SaturatedConversion, StaticLookup,
 	},
 	transaction_validity::{TransactionPriority, TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult, FixedPointNumber, FixedU128, Perbill, Percent, Permill, Perquintill,
+	ApplyExtrinsicResult, DispatchResult, FixedPointNumber, FixedU128, Perbill, Percent, Permill,
+	Perquintill,
 };
 use sp_std::prelude::*;
 #[cfg(any(feature = "std", test))]
@@ -104,15 +109,7 @@ use impls::{AllianceProposalProvider, Author, CreditToBlockAuthor};
 /// Constant values used within the runtime.
 pub mod constants;
 use constants::{currency::*, time::*};
-use frame_support::traits::{
-	tokens::{
-		nonfungibles_v2::{Inspect, LockableNonfungible, Mutate},
-		AttributeNamespace,
-	},
-	Locker,
-};
-use pallet_nfts::ItemConfig;
-use sp_runtime::{generic::Era, DispatchResult};
+use sp_runtime::generic::Era;
 
 /// Generated voter bag information.
 mod voter_bags;
@@ -1637,7 +1634,8 @@ impl pallet_nft_fractionalization::Config for Runtime {
 	type AssetId = <Self as pallet_assets::Config>::AssetId;
 	type Assets = Assets;
 	type Nfts = Nfts;
-	type NftsLocker = RuntimeLockableNonfungible;
+	type NftLocker = RuntimeLockableNonfungible;
+	type WeightInfo = pallet_nft_fractionalization::weights::SubstrateWeight<Runtime>;
 }
 
 impl pallet_transaction_storage::Config for Runtime {
@@ -1928,6 +1926,7 @@ mod benches {
 		[pallet_treasury, Treasury]
 		[pallet_uniques, Uniques]
 		[pallet_nfts, Nfts]
+		[pallet_nft_fractionalization, NftFractions]
 		[pallet_utility, Utility]
 		[pallet_vesting, Vesting]
 		[pallet_whitelist, Whitelist]

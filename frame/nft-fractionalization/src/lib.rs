@@ -20,16 +20,21 @@
 
 mod types;
 
-// #[cfg(feature = "runtime-benchmarks")]
-// mod benchmarking;
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 #[cfg(test)]
 pub mod mock;
 #[cfg(test)]
 mod tests;
 
+pub mod weights;
+
+use frame_system::Config as SystemConfig;
 pub use pallet::*;
 pub use scale_info::Type;
+use sp_runtime::traits::StaticLookup;
 pub use types::*;
+pub use weights::WeightInfo;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -51,14 +56,11 @@ pub mod pallet {
 		PalletId,
 	};
 
-	pub type BalanceOf<T> =
-		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 	pub type AssetIdOf<T> =
-		<<T as Config>::Assets as Inspect<<T as frame_system::Config>::AccountId>>::AssetId;
+		<<T as Config>::Assets as Inspect<<T as SystemConfig>::AccountId>>::AssetId;
 	pub type AssetBalanceOf<T> =
-		<<T as Config>::Assets as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
-
-	pub type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
+		<<T as Config>::Assets as Inspect<<T as SystemConfig>::AccountId>>::Balance;
+	pub type AccountIdLookupOf<T> = <<T as SystemConfig>::Lookup as StaticLookup>::Source;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -66,8 +68,10 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
+		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
+		/// The currency mechanism, used for paying for deposits.
 		type Currency: Currency<Self::AccountId>;
 
 		/// Identifier for the collection of nft.
@@ -76,6 +80,7 @@ pub mod pallet {
 		/// The type used to identify an nft within a collection.
 		type NftId: Member + Parameter + MaxEncodedLen + Copy;
 
+		/// The type used to describe the amount of fractions converted into assets.
 		type AssetBalance: AtLeast32BitUnsigned
 			+ codec::FullCodec
 			+ Copy
@@ -85,6 +90,7 @@ pub mod pallet {
 			+ TypeInfo
 			+ MaxEncodedLen;
 
+		/// The type used to identify the assets created during fractionalization.
 		type AssetId: Member
 			+ Parameter
 			+ Copy
@@ -101,18 +107,25 @@ pub mod pallet {
 			+ Mutate<Self::AccountId>
 			+ MutateMetadata<Self::AccountId>;
 
+		/// Registry for minted nfts.
 		type Nfts: NonFungiblesInspect<
 				Self::AccountId,
 				ItemId = Self::NftId,
 				CollectionId = Self::NftCollectionId,
 			> + Transfer<Self::AccountId>;
 
-		type NftsLocker: LockableNonfungible<Self::NftCollectionId, Self::NftId>;
+		/// Locker trait to enable Nft Locking.
+		type NftLocker: LockableNonfungible<Self::NftCollectionId, Self::NftId>;
 
+		/// The pallet's id, used for deriving its sovereign account ID.
 		#[pallet::constant]
 		type PalletId: Get<PalletId>;
+
+		/// Weight information for extrinsics in this pallet.
+		type WeightInfo: WeightInfo;
 	}
 
+	/// Stores the information about the fractionalized NFTs.
 	#[pallet::storage]
 	#[pallet::getter(fn nft_to_asset)]
 	pub type NftToAsset<T: Config> = StorageMap<
@@ -123,10 +136,10 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	// Pallet's events.
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
+		/// An NFT was successfully fractionalized.
 		NftFractionalized {
 			nft_collection: T::NftCollectionId,
 			nft: T::NftId,
@@ -134,6 +147,7 @@ pub mod pallet {
 			asset: AssetIdOf<T>,
 			beneficiary: T::AccountId,
 		},
+		/// An NFT was successfully returned back.
 		NftUnified {
 			nft_collection: T::NftCollectionId,
 			nft: T::NftId,
@@ -154,18 +168,19 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		// TODO: correct weights
 		#[pallet::call_index(0)]
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(2).ref_time())]
+		#[pallet::weight(T::WeightInfo::fractionalize())]
 		pub fn fractionalize(
 			origin: OriginFor<T>,
 			nft_collection_id: T::NftCollectionId,
 			nft_id: T::NftId,
 			asset_id: AssetIdOf<T>,
-			beneficiary: T::AccountId,
+			beneficiary: AccountIdLookupOf<T>,
 			fractions: AssetBalanceOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let beneficiary = T::Lookup::lookup(beneficiary)?;
+
 			let nft_owner =
 				T::Nfts::owner(&nft_collection_id, &nft_id).ok_or(Error::<T>::NftNotFound)?;
 			ensure!(nft_owner == who, Error::<T>::NoPermission);
@@ -193,17 +208,17 @@ pub mod pallet {
 		}
 
 		/// Burn the whole amount of the asset and return back the locked NFT.
-		// TODO: correct weights
 		#[pallet::call_index(1)]
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(2).ref_time())]
+		#[pallet::weight(T::WeightInfo::unify())]
 		pub fn unify(
 			origin: OriginFor<T>,
 			nft_collection_id: T::NftCollectionId,
 			nft_id: T::NftId,
 			asset_id: AssetIdOf<T>,
-			beneficiary: T::AccountId,
+			beneficiary: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let beneficiary = T::Lookup::lookup(beneficiary)?;
 
 			NftToAsset::<T>::try_mutate_exists((nft_collection_id, nft_id), |maybe_details| {
 				let details = maybe_details.take().ok_or(Error::<T>::DataNotFound)?;
@@ -235,7 +250,7 @@ pub mod pallet {
 
 		/// Transfer the NFT from the account holding that NFT to the pallet's account.
 		fn do_lock_nft(nft_collection_id: T::NftCollectionId, nft_id: T::NftId) -> DispatchResult {
-			T::NftsLocker::lock(&nft_collection_id, &nft_id)
+			T::NftLocker::lock(&nft_collection_id, &nft_id)
 		}
 
 		/// Transfer the NFT to the account returning the tokens.
@@ -244,7 +259,7 @@ pub mod pallet {
 			nft_id: T::NftId,
 			account: &T::AccountId,
 		) -> DispatchResult {
-			T::NftsLocker::unlock(&nft_collection_id, &nft_id)?;
+			T::NftLocker::unlock(&nft_collection_id, &nft_id)?;
 			T::Nfts::transfer(&nft_collection_id, &nft_id, account)
 		}
 

@@ -118,8 +118,9 @@ impl pallet_assets::Config for Test {
 	type Extra = ();
 	type CallbackHandle = ();
 	type WeightInfo = ();
-	#[cfg(feature = "runtime-benchmarks")]
-	type BenchmarkHelper = ();
+	pallet_assets::runtime_benchmarks_enabled! {
+		type BenchmarkHelper = ();
+	}
 }
 
 parameter_types! {
@@ -157,8 +158,9 @@ impl pallet_nfts::Config for Test {
 	type MaxDeadlineDuration = ConstU64<10000>;
 	type Features = Features;
 	type WeightInfo = ();
-	#[cfg(feature = "runtime-benchmarks")]
-	type Helper = ();
+	pallet_nfts::runtime_benchmarks_enabled! {
+		type Helper = ();
+	}
 }
 
 parameter_types! {
@@ -190,7 +192,8 @@ impl Config for Test {
 	type Assets = Assets;
 	type Nfts = Nfts;
 	type PalletId = NftFractionsPalletId;
-	type NftsLocker = TestLockableNonfungible;
+	type NftLocker = TestLockableNonfungible;
+	type WeightInfo = ();
 }
 
 // Build genesis storage according to the mock runtime.

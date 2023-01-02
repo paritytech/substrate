@@ -315,11 +315,11 @@ pub enum PalletAttributes<CollectionId> {
 )]
 pub struct CollectionConfig<Price, BlockNumber, CollectionId> {
 	/// Collection's settings.
-	pub(super) settings: CollectionSettings,
+	pub settings: CollectionSettings,
 	/// Collection's max supply.
-	pub(super) max_supply: Option<u32>,
+	pub max_supply: Option<u32>,
 	/// Default settings each item will get during the mint.
-	pub(super) mint_settings: MintSettings<Price, BlockNumber, CollectionId>,
+	pub mint_settings: MintSettings<Price, BlockNumber, CollectionId>,
 }
 
 impl<Price, BlockNumber, CollectionId> CollectionConfig<Price, BlockNumber, CollectionId> {
