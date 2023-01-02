@@ -38,13 +38,13 @@ use crate::Pallet as NftFractions;
 type BalanceOf<T> =
 	<<T as Config>::Currency as InspectFungible<<T as SystemConfig>::AccountId>>::Balance;
 
-type CollectionConfigFor<T> = CollectionConfig<
+type CollectionConfigOf<T> = CollectionConfig<
 	BalanceOf<T>,
 	<T as SystemConfig>::BlockNumber,
 	<T as Config>::NftCollectionId,
 >;
 
-fn default_collection_config<T: Config>() -> CollectionConfigFor<T>
+fn default_collection_config<T: Config>() -> CollectionConfigOf<T>
 where
 	T::Currency: InspectFungible<T::AccountId>,
 {
