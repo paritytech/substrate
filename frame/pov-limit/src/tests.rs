@@ -23,6 +23,28 @@ use mock::{new_test_ext, PovLimit, RuntimeOrigin, System, Test};
 use frame_support::{assert_noop, assert_ok, weights::constants::*};
 
 #[test]
+fn initialize_pallet_works() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(TrashData::<Test>::get(0), None);
+
+		assert_noop!(
+			PovLimit::initialize_pallet(RuntimeOrigin::signed(1), 3),
+			DispatchError::BadOrigin
+		);
+		assert_noop!(
+			PovLimit::initialize_pallet(RuntimeOrigin::none(), 3),
+			DispatchError::BadOrigin
+		);
+
+		assert_ok!(PovLimit::initialize_pallet(RuntimeOrigin::root(), 2));
+
+		assert_eq!(TrashData::<Test>::get(0), Some(0));
+		assert_eq!(TrashData::<Test>::get(1), Some(1));
+		assert_eq!(TrashData::<Test>::get(2), None);
+	});
+}
+
+#[test]
 fn setting_compute_works() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(Compute::<Test>::get(), Perbill::from_percent(50));

@@ -81,6 +81,8 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event {
+		/// The pallet has been initialized by root.
+		PalletInitialized,
 		/// The computation limit has been updated by root.
 		ComputationLimitSet { compute: Perbill },
 		/// The storage limit has been updated by root.
@@ -177,11 +179,26 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// Initializes the pallet by writing into `TrashData`.
+		///
+		/// Only callable by Root.
+		#[pallet::call_index(0)]
+		#[pallet::weight(T::DbWeight::get().writes((*trash_count).into()))]
+		pub fn initialize_pallet(origin: OriginFor<T>, trash_count: u32) -> DispatchResult {
+			ensure_root(origin)?;
+
+			// Fill up the `TrashData` storage item.
+			(0..trash_count).for_each(|i| TrashData::<T>::insert(i, i));
+
+			Self::deposit_event(Event::PalletInitialized);
+			Ok(())
+		}
+
 		/// Set the `Compute` storage value that determines how much of the
 		/// block's weight to use during `on_initialize`.
 		///
 		/// Only callable by Root.
-		#[pallet::call_index(0)]
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::DbWeight::get().writes(1))]
 		pub fn set_compute(origin: OriginFor<T>, compute: Perbill) -> DispatchResult {
 			ensure_root(origin)?;
@@ -195,7 +212,7 @@ pub mod pallet {
 		/// for each block.
 		///
 		/// Only callable by Root.
-		#[pallet::call_index(1)]
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::DbWeight::get().writes(1))]
 		pub fn set_storage(origin: OriginFor<T>, storage: Perbill) -> DispatchResult {
 			ensure_root(origin)?;
