@@ -22,6 +22,7 @@
 
 pub mod middleware;
 
+use http::header::HeaderValue;
 use jsonrpsee::{
 	server::{
 		middleware::proxy_get_request::ProxyGetRequestLayer, AllowHosts, ServerBuilder,
@@ -29,9 +30,8 @@ use jsonrpsee::{
 	},
 	RpcModule,
 };
-use http::header::HeaderValue;
-use tower_http::cors::{AllowOrigin, CorsLayer};
 use std::{error::Error as StdError, net::SocketAddr};
+use tower_http::cors::{AllowOrigin, CorsLayer};
 
 pub use crate::middleware::RpcMetrics;
 pub use jsonrpsee::core::{
