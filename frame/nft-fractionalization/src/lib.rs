@@ -40,17 +40,21 @@ pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::traits::One;
+	use sp_runtime::traits::{One, Zero};
+	use std::fmt::Display;
 
 	use frame_support::{
 		dispatch::DispatchResult,
 		sp_runtime::traits::{AccountIdConversion, AtLeast32BitUnsigned, StaticLookup},
 		traits::{
-			fungibles::{metadata::Mutate as MutateMetadata, Create, Destroy, Inspect, Mutate},
+			fungibles::{
+				metadata::{CalcMetadataDeposit, Mutate as MutateMetadata},
+				Create, Destroy, Inspect, Mutate,
+			},
 			tokens::nonfungibles_v2::{
 				Inspect as NonFungiblesInspect, LockableNonfungible, Transfer,
 			},
-			Currency,
+			Currency, ExistenceRequirement,
 		},
 		PalletId,
 	};
@@ -73,11 +77,11 @@ pub mod pallet {
 		/// The currency mechanism, used for paying for deposits.
 		type Currency: Currency<Self::AccountId>;
 
-		/// Identifier for the collection of nft.
-		type NftCollectionId: Member + Parameter + MaxEncodedLen + Copy;
+		/// Identifier for the collection of NFT.
+		type NftCollectionId: Member + Parameter + MaxEncodedLen + Copy + Display;
 
-		/// The type used to identify an nft within a collection.
-		type NftId: Member + Parameter + MaxEncodedLen + Copy;
+		/// The type used to identify an NFT within a collection.
+		type NftId: Member + Parameter + MaxEncodedLen + Copy + Display;
 
 		/// The type used to describe the amount of fractions converted into assets.
 		type AssetBalance: AtLeast32BitUnsigned
@@ -104,16 +108,17 @@ pub mod pallet {
 			+ Create<Self::AccountId>
 			+ Destroy<Self::AccountId>
 			+ Mutate<Self::AccountId>
-			+ MutateMetadata<Self::AccountId>;
+			+ MutateMetadata<Self::AccountId>
+			+ CalcMetadataDeposit<<Self::Currency as Currency<Self::AccountId>>::Balance>;
 
-		/// Registry for minted nfts.
+		/// Registry for minted NFTs.
 		type Nfts: NonFungiblesInspect<
 				Self::AccountId,
 				ItemId = Self::NftId,
 				CollectionId = Self::NftCollectionId,
 			> + Transfer<Self::AccountId>;
 
-		/// Locker trait to enable Nft Locking.
+		/// Locker trait to enable NFT's locking.
 		type NftLocker: LockableNonfungible<Self::NftCollectionId, Self::NftId>;
 
 		/// The pallet's id, used for deriving its sovereign account ID.
@@ -185,10 +190,10 @@ pub mod pallet {
 			ensure!(nft_owner == who, Error::<T>::NoPermission);
 
 			let pallet_account = Self::get_pallet_account();
-
 			Self::do_lock_nft(nft_collection_id, nft_id)?;
-			Self::do_create_asset(asset_id, pallet_account)?;
+			Self::do_create_asset(asset_id, pallet_account.clone())?;
 			Self::do_mint_asset(asset_id, &beneficiary, fractions)?;
+			Self::do_set_metadata(asset_id, &who, &pallet_account, &nft_collection_id, &nft_id)?;
 
 			NftToAsset::<T>::insert(
 				(nft_collection_id, nft_id),
@@ -284,6 +289,28 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::Assets::burn_from(asset_id, account, amount)?;
 			T::Assets::start_destroy(asset_id, None)
+		}
+
+		/// Set the metadata for the newly created asset.
+		fn do_set_metadata(
+			asset_id: AssetIdOf<T>,
+			depositor: &T::AccountId,
+			pallet_account: &T::AccountId,
+			nft_collection_id: &T::NftCollectionId,
+			nft_id: &T::NftId,
+		) -> DispatchResult {
+			let symbol = "FRAC";
+			let name = format!("Frac {nft_collection_id}-{nft_id}");
+			let deposit = T::Assets::calc(&name.clone().into(), &symbol.into());
+			if deposit != Zero::zero() {
+				T::Currency::transfer(
+					&depositor,
+					&pallet_account,
+					deposit,
+					ExistenceRequirement::KeepAlive,
+				)?;
+			}
+			T::Assets::set(asset_id, &pallet_account, name.into(), symbol.into(), 0)
 		}
 	}
 }

@@ -167,8 +167,8 @@ parameter_types! {
 	pub const NftFractionsPalletId: PalletId = PalletId(*b"fraction");
 }
 
-pub struct TestLockableNonfungible;
-impl LockableNonfungible<CollectionId, ItemId> for TestLockableNonfungible {
+pub struct MockLockableNonfungible;
+impl LockableNonfungible<CollectionId, ItemId> for MockLockableNonfungible {
 	fn lock(collection: &CollectionId, item: &ItemId) -> DispatchResult {
 		<Nfts as Mutate<AccountId, ItemConfig>>::set_attribute(
 			collection,
@@ -192,7 +192,7 @@ impl Config for Test {
 	type Assets = Assets;
 	type Nfts = Nfts;
 	type PalletId = NftFractionsPalletId;
-	type NftLocker = TestLockableNonfungible;
+	type NftLocker = MockLockableNonfungible;
 	type WeightInfo = ();
 }
 
