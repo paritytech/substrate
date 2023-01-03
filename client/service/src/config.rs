@@ -20,9 +20,7 @@
 
 pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionStrategy};
 pub use sc_client_db::{BlocksPruning, Database, DatabaseSource, PruningMode};
-pub use sc_executor::WasmExecutionMethod;
-#[cfg(feature = "wasmtime")]
-pub use sc_executor::WasmtimeInstantiationStrategy;
+pub use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 pub use sc_network::{
 	config::{NetworkConfiguration, NodeKeyConfig, Role},
 	Multiaddr,
@@ -36,6 +34,7 @@ pub use sc_network_common::{
 
 use prometheus_endpoint::Registry;
 use sc_chain_spec::ChainSpec;
+use sc_network::config::SyncMode;
 pub use sc_telemetry::TelemetryEndpoints;
 pub use sc_transaction_pool::Options as TransactionPoolOptions;
 use sp_core::crypto::SecretString;
@@ -231,6 +230,22 @@ impl Configuration {
 			},
 		};
 		ProtocolId::from(protocol_id_full)
+	}
+
+	/// Returns true if the genesis state writting will be skipped while initializing the genesis
+	/// block.
+	pub fn no_genesis(&self) -> bool {
+		matches!(self.network.sync_mode, SyncMode::Fast { .. } | SyncMode::Warp { .. })
+	}
+
+	/// Returns the database config for creating the backend.
+	pub fn db_config(&self) -> sc_client_db::DatabaseSettings {
+		sc_client_db::DatabaseSettings {
+			trie_cache_maximum_size: self.trie_cache_maximum_size,
+			state_pruning: self.state_pruning.clone(),
+			source: self.database.clone(),
+			blocks_pruning: self.blocks_pruning,
+		}
 	}
 }
 

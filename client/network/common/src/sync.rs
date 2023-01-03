@@ -24,14 +24,14 @@ pub mod warp;
 
 use libp2p::PeerId;
 use message::{BlockAnnounce, BlockData, BlockRequest, BlockResponse};
-use sc_consensus::{BlockImportError, BlockImportStatus, IncomingBlock};
+use sc_consensus::{import_queue::RuntimeOrigin, IncomingBlock};
 use sp_consensus::BlockOrigin;
 use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
 	Justifications,
 };
 use std::{any::Any, fmt, fmt::Formatter, task::Poll};
-use warp::{EncodedProof, WarpProofRequest, WarpSyncProgress};
+use warp::WarpSyncProgress;
 
 /// The sync status of a peer we are trying to sync with
 #[derive(Debug)]
@@ -70,7 +70,7 @@ pub struct StateDownloadProgress {
 }
 
 /// Syncing status and statistics.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct SyncStatus<Block: BlockT> {
 	/// Current global sync state.
 	pub state: SyncState<NumberFor<Block>>,
@@ -123,13 +123,27 @@ pub enum OnBlockJustification<Block: BlockT> {
 	},
 }
 
-/// Result of [`ChainSync::on_state_data`].
+/// Result of `ChainSync::on_state_data`.
 #[derive(Debug)]
 pub enum OnStateData<Block: BlockT> {
 	/// The block and state that should be imported.
 	Import(BlockOrigin, IncomingBlock<Block>),
 	/// A new state request needs to be made to the given peer.
 	Continue,
+}
+
+/// Block or justification request polled from `ChainSync`
+#[derive(Debug)]
+pub enum ImportResult<B: BlockT> {
+	BlockImport(BlockOrigin, Vec<IncomingBlock<B>>),
+	JustificationImport(RuntimeOrigin, B::Hash, NumberFor<B>, Justifications),
+}
+
+/// Value polled from `ChainSync`
+#[derive(Debug)]
+pub enum PollResult<B: BlockT> {
+	Import(ImportResult<B>),
+	Announce(PollBlockAnnounceValidation<B::Header>),
 }
 
 /// Result of [`ChainSync::poll_block_announce_validation`].
@@ -184,6 +198,13 @@ pub struct Metrics {
 	pub queued_blocks: u32,
 	pub fork_targets: u32,
 	pub justifications: metrics::Metrics,
+}
+
+#[derive(Debug)]
+pub enum PeerRequest<B: BlockT> {
+	Block(BlockRequest<B>),
+	State,
+	WarpProof,
 }
 
 /// Wrapper for implementation-specific state request.
@@ -250,6 +271,9 @@ pub trait ChainSync<Block: BlockT>: Send {
 	/// Returns the current number of peers stored within this state machine.
 	fn num_peers(&self) -> usize;
 
+	/// Returns the number of peers we're connected to and that are being queried.
+	fn num_active_peers(&self) -> usize;
+
 	/// Handle a new connected peer.
 	///
 	/// Call this method whenever we connect to a new peer.
@@ -277,22 +301,6 @@ pub trait ChainSync<Block: BlockT>: Send {
 		number: NumberFor<Block>,
 	);
 
-	/// Get an iterator over all scheduled justification requests.
-	fn justification_requests<'a>(
-		&'a mut self,
-	) -> Box<dyn Iterator<Item = (PeerId, BlockRequest<Block>)> + 'a>;
-
-	/// Get an iterator over all block requests of all peers.
-	fn block_requests<'a>(
-		&'a mut self,
-	) -> Box<dyn Iterator<Item = (PeerId, BlockRequest<Block>)> + 'a>;
-
-	/// Get a state request, if any.
-	fn state_request(&mut self) -> Option<(PeerId, OpaqueStateRequest)>;
-
-	/// Get a warp sync request, if any.
-	fn warp_sync_request(&mut self) -> Option<(PeerId, WarpProofRequest<Block>)>;
-
 	/// Handle a response from the remote to a block request that we made.
 	///
 	/// `request` must be the original request that triggered `response`.
@@ -307,15 +315,11 @@ pub trait ChainSync<Block: BlockT>: Send {
 		response: BlockResponse<Block>,
 	) -> Result<OnBlockData<Block>, BadPeer>;
 
-	/// Handle a response from the remote to a state request that we made.
-	fn on_state_data(
+	/// Procss received block data.
+	fn process_block_response_data(
 		&mut self,
-		who: &PeerId,
-		response: OpaqueStateResponse,
-	) -> Result<OnStateData<Block>, BadPeer>;
-
-	/// Handle a response from the remote to a warp proof request that we made.
-	fn on_warp_sync_data(&mut self, who: &PeerId, response: EncodedProof) -> Result<(), BadPeer>;
+		blocks_to_import: Result<OnBlockData<Block>, BadPeer>,
+	);
 
 	/// Handle a response from the remote to a justification request that we made.
 	///
@@ -325,17 +329,6 @@ pub trait ChainSync<Block: BlockT>: Send {
 		who: PeerId,
 		response: BlockResponse<Block>,
 	) -> Result<OnBlockJustification<Block>, BadPeer>;
-
-	/// A batch of blocks have been processed, with or without errors.
-	///
-	/// Call this when a batch of blocks have been processed by the import
-	/// queue, with or without errors.
-	fn on_blocks_processed(
-		&mut self,
-		imported: usize,
-		count: usize,
-		results: Vec<(Result<BlockImportStatus<NumberFor<Block>>, BlockImportError>, Block::Hash)>,
-	) -> Box<dyn Iterator<Item = Result<(PeerId, BlockRequest<Block>), BadPeer>>>;
 
 	/// Call this when a justification has been processed by the import queue,
 	/// with or without errors.
@@ -378,19 +371,10 @@ pub trait ChainSync<Block: BlockT>: Send {
 	/// Call when a peer has disconnected.
 	/// Canceled obsolete block request may result in some blocks being ready for
 	/// import, so this functions checks for such blocks and returns them.
-	fn peer_disconnected(&mut self, who: &PeerId) -> Option<OnBlockData<Block>>;
+	fn peer_disconnected(&mut self, who: &PeerId);
 
 	/// Return some key metrics.
 	fn metrics(&self) -> Metrics;
-
-	/// Create implementation-specific block request.
-	fn create_opaque_block_request(&self, request: &BlockRequest<Block>) -> OpaqueBlockRequest;
-
-	/// Encode implementation-specific block request.
-	fn encode_block_request(&self, request: &OpaqueBlockRequest) -> Result<Vec<u8>, String>;
-
-	/// Decode implementation-specific block response.
-	fn decode_block_response(&self, response: &[u8]) -> Result<OpaqueBlockResponse, String>;
 
 	/// Access blocks from implementation-specific block response.
 	fn block_response_into_blocks(
@@ -398,12 +382,6 @@ pub trait ChainSync<Block: BlockT>: Send {
 		request: &BlockRequest<Block>,
 		response: OpaqueBlockResponse,
 	) -> Result<Vec<BlockData<Block>>, String>;
-
-	/// Encode implementation-specific state request.
-	fn encode_state_request(&self, request: &OpaqueStateRequest) -> Result<Vec<u8>, String>;
-
-	/// Decode implementation-specific state response.
-	fn decode_state_response(&self, response: &[u8]) -> Result<OpaqueStateResponse, String>;
 
 	/// Advance the state of `ChainSync`
 	///
@@ -414,4 +392,7 @@ pub trait ChainSync<Block: BlockT>: Send {
 		&mut self,
 		cx: &mut std::task::Context,
 	) -> Poll<PollBlockAnnounceValidation<Block::Header>>;
+
+	/// Send block request to peer
+	fn send_block_request(&mut self, who: PeerId, request: BlockRequest<Block>);
 }

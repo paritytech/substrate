@@ -57,7 +57,10 @@ pub use self::{
 		new_full_parts, spawn_tasks, BuildNetworkParams, KeystoreContainer, NetworkStarter,
 		SpawnTasksParams, TFullBackend, TFullCallExecutor, TFullClient,
 	},
-	client::{ClientConfig, LocalCallExecutor},
+	client::{
+		genesis::{BuildGenesisBlock, GenesisBlockBuilder},
+		resolve_state_version_from_wasm, ClientConfig, LocalCallExecutor,
+	},
 	error::Error,
 };
 pub use config::{
@@ -80,7 +83,7 @@ pub use sc_transaction_pool::Options as TransactionPoolOptions;
 pub use sc_transaction_pool_api::{error::IntoPoolError, InPoolTransaction, TransactionPool};
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
-pub use task_manager::{SpawnTaskHandle, TaskManager, DEFAULT_GROUP_NAME};
+pub use task_manager::{SpawnTaskHandle, Task, TaskManager, TaskRegistry, DEFAULT_GROUP_NAME};
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 

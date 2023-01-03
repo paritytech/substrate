@@ -195,7 +195,6 @@ where
 						&method,
 						&call_data,
 						self.client.execution_extensions().strategies().other,
-						None,
 					)
 					.map(Into::into)
 			})

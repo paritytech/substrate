@@ -20,6 +20,8 @@
 
 #![warn(missing_docs)]
 
+pub mod middleware;
+
 use jsonrpsee::{
 	server::{
 		middleware::proxy_get_request::ProxyGetRequestLayer, AllowHosts, ServerBuilder,
@@ -27,33 +29,29 @@ use jsonrpsee::{
 	},
 	RpcModule,
 };
+use http::header::HeaderValue;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use std::{error::Error as StdError, net::SocketAddr};
 
 pub use crate::middleware::RpcMetrics;
-use http::header::HeaderValue;
 pub use jsonrpsee::core::{
 	id_providers::{RandomIntegerIdProvider, RandomStringIdProvider},
 	traits::IdProvider,
 };
-use tower_http::cors::{AllowOrigin, CorsLayer};
-
-const MEGABYTE: u32 = 1024 * 1024;
-
-/// Maximal payload accepted by JSON-RPC servers.
-pub const RPC_MAX_PAYLOAD_DEFAULT: u32 = 15 * MEGABYTE;
 
 /// Default maximum number of connections for JSON-RPC servers.
 const RPC_MAX_CONNECTIONS: u32 = 100;
-
 /// Default maximum number subscriptions per connection for JSON-RPC servers.
 const RPC_MAX_SUBS_PER_CONN: u32 = 1024;
-
-pub mod middleware;
+const MEGABYTE: u32 = 1024 * 1024;
 
 /// Type alias for the JSON-RPC server.
 pub type Server = ServerHandle;
 
-/// Server config.
+/// Maximal payload accepted by JSON-RPC servers.
+pub const RPC_MAX_PAYLOAD_DEFAULT: u32 = 15 * MEGABYTE;
+
+/// RPC server configuration.
 #[derive(Debug)]
 pub struct Config<'a, M: Send + Sync + 'static> {
 	/// Socket addresses.
@@ -78,7 +76,7 @@ pub struct Config<'a, M: Send + Sync + 'static> {
 	pub tokio_handle: tokio::runtime::Handle,
 }
 
-/// Start WS server listening on given address.
+/// Start RPC server listening on given address.
 pub async fn start_server<'a, M: Send + Sync + 'static>(
 	config: Config<'a, M>,
 ) -> Result<ServerHandle, Box<dyn StdError + Send + Sync>> {
@@ -97,22 +95,10 @@ pub async fn start_server<'a, M: Send + Sync + 'static>(
 
 	let host_filter = hosts_filtering(cors.is_some(), &addrs);
 
-	let cors = {
-		if let Some(cors) = cors {
-			let mut list = Vec::new();
-			for origin in cors {
-				list.push(HeaderValue::from_str(origin.as_str())?);
-			}
-			CorsLayer::new().allow_origin(AllowOrigin::list(list))
-		} else {
-			CorsLayer::permissive()
-		}
-	};
-
 	let middleware = tower::ServiceBuilder::new()
 		// Proxy `GET /health` requests to internal `system_health` method.
 		.layer(ProxyGetRequestLayer::new("/health", "system_health")?)
-		.layer(cors.clone());
+		.layer(try_into_cors(cors)?);
 
 	let mut builder = ServerBuilder::new()
 		.max_request_body_size(payload_size_or_default(max_payload_in_mb))
@@ -134,8 +120,7 @@ pub async fn start_server<'a, M: Send + Sync + 'static>(
 
 	let rpc_api = build_rpc_api(rpc_api);
 	let (handle, addr) = if let Some(metrics) = metrics {
-		let builder = builder.set_logger(metrics);
-		let server = builder.build(&addrs[..]).await?;
+		let server = builder.set_logger(metrics).build(&addrs[..]).await?;
 		let addr = server.local_addr();
 		(server.start(rpc_api)?, addr)
 	} else {
@@ -145,9 +130,9 @@ pub async fn start_server<'a, M: Send + Sync + 'static>(
 	};
 
 	log::info!(
-		"Running JSON-RPC server: addr={}, cors={:?}",
+		"Running JSON-RPC server: addr={}, allowed origins={}",
 		addr.map_or_else(|_| "unknown".to_string(), |a| a.to_string()),
-		cors
+		format_cors(cors)
 	);
 
 	Ok(handle)
@@ -184,4 +169,27 @@ fn build_rpc_api<M: Send + Sync + 'static>(mut rpc_api: RpcModule<M>) -> RpcModu
 
 fn payload_size_or_default(size_mb: Option<usize>) -> u32 {
 	size_mb.map_or(RPC_MAX_PAYLOAD_DEFAULT, |mb| (mb as u32).saturating_mul(MEGABYTE))
+}
+
+fn try_into_cors(
+	maybe_cors: Option<&Vec<String>>,
+) -> Result<CorsLayer, Box<dyn StdError + Send + Sync>> {
+	if let Some(cors) = maybe_cors {
+		let mut list = Vec::new();
+		for origin in cors {
+			list.push(HeaderValue::from_str(origin)?);
+		}
+		Ok(CorsLayer::new().allow_origin(AllowOrigin::list(list)))
+	} else {
+		// allow all cors
+		Ok(CorsLayer::permissive())
+	}
+}
+
+fn format_cors(maybe_cors: Option<&Vec<String>>) -> String {
+	if let Some(cors) = maybe_cors {
+		format!("{:?}", cors)
+	} else {
+		format!("{:?}", ["*"])
+	}
 }

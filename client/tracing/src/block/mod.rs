@@ -195,10 +195,9 @@ where
 	pub fn trace_block(&self) -> TraceBlockResult<TraceBlockResponse> {
 		tracing::debug!(target: "state_tracing", "Tracing block: {}", self.block);
 		// Prepare the block
-		let id = BlockId::Hash(self.block);
 		let mut header = self
 			.client
-			.header(id)
+			.header(self.block)
 			.map_err(Error::InvalidBlockId)?
 			.ok_or_else(|| Error::MissingBlockComponent("Header not found".to_string()))?;
 		let extrinsics = self
@@ -269,17 +268,15 @@ where
 			.collect();
 		tracing::debug!(target: "state_tracing", "Captured {} spans and {} events", spans.len(), events.len());
 
-		let response = TraceBlockResponse::BlockTrace(BlockTrace {
-			block_hash: block_id_as_string(id),
+		Ok(TraceBlockResponse::BlockTrace(BlockTrace {
+			block_hash: block_id_as_string(BlockId::<Block>::Hash(self.block)),
 			parent_hash: block_id_as_string(parent_id),
 			tracing_targets: targets.to_string(),
 			storage_keys: self.storage_keys.clone().unwrap_or_default(),
 			methods: self.methods.clone().unwrap_or_default(),
 			spans,
 			events,
-		});
-
-		Ok(response)
+		}))
 	}
 }
 

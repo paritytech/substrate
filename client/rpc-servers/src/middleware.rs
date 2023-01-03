@@ -202,9 +202,10 @@ impl Logger for RpcMetrics {
 			.inc();
 	}
 
-	fn on_response(&self, _result: &str, started_at: Self::Instant, transport: TransportProtocol) {
+	fn on_response(&self, result: &str, started_at: Self::Instant, transport: TransportProtocol) {
 		let transport_label = transport_label_str(transport);
 		log::trace!(target: "rpc_metrics", "[{}] on_response started_at={:?}", transport_label, started_at);
+		log::trace!(target: "rpc_metrics::extra", "[{}] result={:?}", transport_label, result);
 		self.requests_finished.with_label_values(&[transport_label]).inc();
 	}
 
