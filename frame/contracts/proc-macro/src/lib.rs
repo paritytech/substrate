@@ -420,7 +420,10 @@ fn expand_docs(def: &mut EnvDef) -> TokenStream2 {
 		});
 
 		let module = Ident::new(m, Span::call_site());
-		let module_doc = format!("Documentation of the API available to contracts by importing `{}` module.", module);
+		let module_doc = format!(
+			"Documentation of the API available to contracts by importing `{}` module.",
+			module
+		);
 
 		quote! {
 			#[doc = #module_doc]
@@ -435,17 +438,7 @@ fn expand_docs(def: &mut EnvDef) -> TokenStream2 {
 		}
 	});
 	quote! {
-	  pub use docs as api_doc;
-	  /// Contains the documentation of the API available to contracts.
-	  ///
-	  /// This module is not meant to be used by code. It is meant to be consumed by humans through rustdoc.
-	  ///
-	  /// Every function described in this module's sub module's traits uses this sub module's identifier
-	  /// as its imported module name. The identifier of the function is the function's imported name.
-	  /// According to the [WASM spec of imports](https://webassembly.github.io/spec/core/text/modules.html#text-import).
-	  pub mod docs {
 		  #( #docs )*
-	  }
 	}
 }
 
@@ -460,7 +453,20 @@ fn expand_env(def: &mut EnvDef, docs: bool) -> TokenStream2 {
 	quote! {
 		pub struct Env;
 		#impls
-		#docs
+		pub use docs as api_doc;
+		/// Contains the documentation of the API available to contracts.
+		///
+		/// In order to generate this documentation, pass `doc` attribute to the [`#[define_env]`][`macro@define_env`] macro:
+		/// `#[define_env(doc)]`, and then run `cargo doc --no-deps`.
+		///
+		/// This module is not meant to be used by any code. Rather, it is meant to be consumed by humans through rustdoc.
+		///
+		/// Every function described in this module's sub module's traits uses this sub module's identifier
+		/// as its imported module name. The identifier of the function is the function's imported name.
+		/// According to the [WASM spec of imports](https://webassembly.github.io/spec/core/text/modules.html#text-import).
+		pub mod docs {
+			#docs
+		}
 	}
 }
 
@@ -651,14 +657,14 @@ fn expand_functions(
 /// # Generating Documentation
 ///
 /// Passing `doc` attribute to the macro (like `#[define_env(doc)]`) will make it also expand
-/// additional `pallet_contracts::wasm::runtime::seal0`, `pallet_contracts::wasm::runtime::seal1`,
-/// `...` modules each having its `Doc` trait containing methods holding documentation for every
-/// defined host function.
+/// additional `pallet_contracts::api_doc::seal0`, `pallet_contracts::api_doc::seal1`,
+/// `...` modules each having its `Api` trait containing functions holding documentation for every
+/// host function defined by the macro.
 ///
 /// To build up these docs, run:
 ///
 /// ```nocompile
-/// 	cargo doc --no-deps --document-private-items
+/// cargo doc --no-deps
 /// ```
 #[proc_macro_attribute]
 pub fn define_env(attr: TokenStream, item: TokenStream) -> TokenStream {

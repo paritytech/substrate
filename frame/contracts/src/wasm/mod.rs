@@ -26,9 +26,8 @@ mod runtime;
 pub use crate::wasm::code_cache::reinstrument;
 pub use crate::wasm::{
 	prepare::TryInstantiate,
-	runtime::{CallFlags, Environment, ReturnCode, Runtime, RuntimeCosts},
+	runtime::{api_doc, CallFlags, Environment, ReturnCode, Runtime, RuntimeCosts},
 };
-pub use crate::wasm::runtime::api_doc;
 
 use crate::{
 	exec::{ExecResult, Executable, ExportedFunction, Ext},
