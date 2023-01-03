@@ -899,7 +899,7 @@ fn forcing_new_era_works() {
 		assert_eq!(active_era(), 1);
 
 		// no era change.
-		ForceEra::<Test>::put(Forcing::ForceNone);
+		Staking::set_force_era(Forcing::ForceNone);
 
 		start_session(4);
 		assert_eq!(active_era(), 1);
@@ -915,7 +915,7 @@ fn forcing_new_era_works() {
 
 		// back to normal.
 		// this immediately starts a new session.
-		ForceEra::<Test>::put(Forcing::NotForcing);
+		Staking::set_force_era(Forcing::NotForcing);
 
 		start_session(8);
 		assert_eq!(active_era(), 1);
@@ -923,7 +923,7 @@ fn forcing_new_era_works() {
 		start_session(9);
 		assert_eq!(active_era(), 2);
 		// forceful change
-		ForceEra::<Test>::put(Forcing::ForceAlways);
+		Staking::set_force_era(Forcing::ForceAlways);
 
 		start_session(10);
 		assert_eq!(active_era(), 2);
@@ -935,7 +935,7 @@ fn forcing_new_era_works() {
 		assert_eq!(active_era(), 4);
 
 		// just one forceful change
-		ForceEra::<Test>::put(Forcing::ForceNew);
+		Staking::set_force_era(Forcing::ForceNew);
 		start_session(13);
 		assert_eq!(active_era(), 5);
 		assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
@@ -2303,7 +2303,7 @@ fn era_is_always_same_length() {
 		);
 
 		let session = Session::current_index();
-		ForceEra::<Test>::put(Forcing::ForceNew);
+		Staking::set_force_era(Forcing::ForceNew);
 		advance_session();
 		advance_session();
 		assert_eq!(current_era(), 3);

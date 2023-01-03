@@ -1375,8 +1375,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::force_no_eras())]
 		pub fn force_no_eras(origin: OriginFor<T>) -> DispatchResult {
 			ensure_root(origin)?;
-			ForceEra::<T>::put(Forcing::ForceNone);
-			Self::deposit_event(Event::<T>::ForceEra { mode: Forcing::ForceNone });
+			Self::set_force_era(Forcing::ForceNone);
 			Ok(())
 		}
 
@@ -1400,8 +1399,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::force_new_era())]
 		pub fn force_new_era(origin: OriginFor<T>) -> DispatchResult {
 			ensure_root(origin)?;
-			ForceEra::<T>::put(Forcing::ForceNew);
-			Self::deposit_event(Event::<T>::ForceEra { mode: Forcing::ForceNew });
+			Self::set_force_era(Forcing::ForceNew);
 			Ok(())
 		}
 
@@ -1452,8 +1450,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::force_new_era_always())]
 		pub fn force_new_era_always(origin: OriginFor<T>) -> DispatchResult {
 			ensure_root(origin)?;
-			ForceEra::<T>::put(Forcing::ForceAlways);
-			Self::deposit_event(Event::<T>::ForceEra { mode: Forcing::ForceAlways });
+			Self::set_force_era(Forcing::ForceAlways);
 			Ok(())
 		}
 

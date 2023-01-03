@@ -1055,7 +1055,7 @@ mod tests {
 			Runtime, RuntimeCall, RuntimeOrigin, System, TestNposSolution, TrimHelpers,
 			UnsignedPhase,
 		},
-		CurrentPhase, Event, InvalidTransaction, Phase, QueuedSolution, TransactionSource,
+		Event, InvalidTransaction, Phase, QueuedSolution, TransactionSource,
 		TransactionValidityError,
 	};
 	use codec::Decode;
@@ -1128,7 +1128,7 @@ mod tests {
 			assert!(<MultiPhase as ValidateUnsigned>::pre_dispatch(&call).is_ok());
 
 			// unsigned -- but not enabled.
-			<CurrentPhase<Runtime>>::put(Phase::Unsigned((false, 25)));
+			MultiPhase::phase_transition(Phase::Unsigned((false, 25)));
 			assert!(MultiPhase::current_phase().is_unsigned());
 			assert!(matches!(
 				<MultiPhase as ValidateUnsigned>::validate_unsigned(
@@ -1666,7 +1666,7 @@ mod tests {
 
 			let current_block = block_plus(offchain_repeat * 2 + 2);
 			// force the unsigned phase to start on the current block.
-			CurrentPhase::<Runtime>::set(Phase::Unsigned((true, current_block)));
+			MultiPhase::phase_transition(Phase::Unsigned((true, current_block)));
 
 			// clear the cache and create a solution since we are on the first block of the unsigned
 			// phase.
@@ -1691,7 +1691,12 @@ mod tests {
 							sum_stake: 0,
 							sum_stake_squared: 0
 						}
-					}
+					},
+					Event::PhaseTransitioned {
+						from: Phase::Unsigned((true, 25)),
+						to: Phase::Unsigned((true, 37)),
+						round: 1
+					},
 				]
 			);
 		})

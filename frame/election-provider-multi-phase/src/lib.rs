@@ -1356,27 +1356,25 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Logic for `<Pallet as Hooks>::on_initialize` when signed phase is being opened.
-	pub fn on_initialize_open_signed() {
-		log!(info, "Starting signed phase round {}.", Self::round());
+	/// Phase transition helper.
+	pub fn phase_transition(to: Phase<T::BlockNumber>) {
+		log!(info, "Starting phase {:?}, round {}.", to, Self::round());
 		Self::deposit_event(Event::PhaseTransitioned {
 			from: <CurrentPhase<T>>::get(),
-			to: Phase::Signed,
+			to,
 			round: Self::round(),
 		});
-		<CurrentPhase<T>>::put(Phase::Signed);
+		<CurrentPhase<T>>::put(to);
+	}
+
+	/// Logic for `<Pallet as Hooks>::on_initialize` when signed phase is being opened.
+	pub fn on_initialize_open_signed() {
+		Self::phase_transition(Phase::Signed);
 	}
 
 	/// Logic for `<Pallet as Hooks<T>>::on_initialize` when unsigned phase is being opened.
 	pub fn on_initialize_open_unsigned(enabled: bool, now: T::BlockNumber) {
-		let round = Self::round();
-		log!(info, "Starting unsigned phase round {} enabled {}.", round, enabled);
-		Self::deposit_event(Event::PhaseTransitioned {
-			from: <CurrentPhase<T>>::get(),
-			to: Phase::Unsigned((enabled, now)),
-			round: Self::round(),
-		});
-		<CurrentPhase<T>>::put(Phase::Unsigned((enabled, now)));
+		Self::phase_transition(Phase::Unsigned((enabled, now)));
 	}
 
 	/// Parts of [`create_snapshot`] that happen inside of this pallet.
@@ -1586,12 +1584,7 @@ impl<T: Config> Pallet<T> {
 		<Round<T>>::mutate(|r| *r += 1);
 
 		// Phase is off now.
-		Self::deposit_event(Event::PhaseTransitioned {
-			from: <CurrentPhase<T>>::get(),
-			to: Phase::Off,
-			round: Self::round(),
-		});
-		<CurrentPhase<T>>::put(Phase::Off);
+		Self::phase_transition(Phase::Off);
 
 		// Kill snapshots.
 		Self::kill_snapshot();
@@ -1672,12 +1665,7 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 			},
 			Err(why) => {
 				log!(error, "Entering emergency mode: {:?}", why);
-				Self::deposit_event(Event::PhaseTransitioned {
-					from: <CurrentPhase<T>>::get(),
-					to: Phase::Emergency,
-					round: Self::round(),
-				});
-				<CurrentPhase<T>>::put(Phase::Emergency);
+				Self::phase_transition(Phase::Emergency);
 				Err(why)
 			},
 		}
