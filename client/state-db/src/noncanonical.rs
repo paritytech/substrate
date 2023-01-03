@@ -283,7 +283,12 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		};
 
 		if level.blocks.len() >= MAX_BLOCKS_PER_LEVEL as usize {
-			return Err(StateDbError::TooManySiblingBlocks)
+			trace!(
+				target: "state-db",
+				"Too many sibling blocks at #{number}: {:?}",
+				level.blocks.iter().map(|b| &b.hash).collect::<Vec<_>>()
+			);
+			return Err(StateDbError::TooManySiblingBlocks { number })
 		}
 		if level.blocks.iter().any(|b| b.hash == *hash) {
 			return Err(StateDbError::BlockAlreadyExists)
