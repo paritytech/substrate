@@ -1584,6 +1584,18 @@ impl<T: Config> Pallet<T> {
 		Self::kill_snapshot();
 	}
 
+	// Returns `true` if signed phase has been running for at least
+	// `T::MinSignedBlocksBeforeEmergency`.
+	fn minimum_blocks_signed_phase() -> bool {
+		match CurrentPhase::<T>::get() {
+			Phase::Off => false,
+			Phase::Signed(started_at) =>
+				(frame_system::Pallet::<T>::block_number() - started_at) >
+					T::MinSignedBlocksBeforeEmergency::get() * T::SignedPhase::get(),
+			_ => true,
+		}
+	}
+
 	fn do_elect() -> Result<BoundedSupportsOf<Self>, ElectionError<T>> {
 		// We have to unconditionally try finalizing the signed phase here. There are only two
 		// possibilities:
@@ -1592,19 +1604,30 @@ impl<T: Config> Pallet<T> {
 		//   system
 		// - signed phase was complete or not started, in which case finalization is idempotent and
 		//   inexpensive (1 read of an empty vector).
+		//
+		// If there is no queued solution, there are two possibilities:
+		//
+		// - EPM has been in `Phase::Signed` for long enough blocks, try the fallback election.
+		// - EPM is in `Phase::Off` or not enough blocks have passed since the transition to the
+		//   signed phase, return an election error without trying the fallback election.
+		//
 		let _ = Self::finalize_signed_phase();
 		<QueuedSolution<T>>::take()
 			.ok_or(ElectionError::<T>::NothingQueued)
-			.or_else(|_| {
-				T::Fallback::instant_elect(None, None)
-					.map_err(|fe| ElectionError::Fallback(fe))
-					.and_then(|supports| {
-						Ok(ReadySolution {
-							supports,
-							score: Default::default(),
-							compute: ElectionCompute::Fallback,
+			.or_else(|err| {
+				if Self::minimum_blocks_signed_phase() {
+					T::Fallback::instant_elect(None, None)
+						.map_err(|fe| ElectionError::Fallback(fe))
+						.and_then(|supports| {
+							Ok(ReadySolution {
+								supports,
+								score: Default::default(),
+								compute: ElectionCompute::Fallback,
+							})
 						})
-					})
+				} else {
+					Err(err)
+				}
 			})
 			.map(|ReadySolution { compute, score, supports }| {
 				Self::deposit_event(Event::ElectionFinalized { compute, score });
@@ -1658,27 +1681,14 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 				Ok(supports)
 			},
 			Err(why) => {
-				// if `elect()` was called during `Phase::Off` or too early since the beginning of
-				// the signed phase, do not enter in emergency mode since there was no enough time
-				// to reach a solution.
-				match CurrentPhase::<T>::get() {
-					Phase::Off => {
-						Self::deposit_event(Event::EmergencyPhaseThrottled);
-						Err(why)
-					},
-					Phase::Signed(started_at)
-						if (started_at + T::MinSignedPhaseDuration::get()) >
-							frame_system::Pallet::<T>::block_number() =>
-					{
-						Self::deposit_event(Event::EmergencyPhaseThrottled);
-						Err(why)
-					},
-					_ => {
-						log!(error, "Entering emergency mode: {:?}", why);
-						<CurrentPhase<T>>::put(Phase::Emergency);
-						Err(why)
-					},
-				}
+				// Enters in emergency phase only if election failed and the signed phase has been
+				// active for at least `T::MinSignedBlocksBeforeEmergency`.
+				if Self::minimum_blocks_signed_phase() {
+					log!(error, "Entering emergency mode: {:?}", why);
+					<CurrentPhase<T>>::put(Phase::Emergency);
+				};
+
+				Err(why)
 			},
 		}
 	}
