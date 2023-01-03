@@ -31,7 +31,7 @@ sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-core = { version = "7.0.0", path = "../../primitives/core" }
 sp-keystore = { version = "0.13.0", path = "../../primitives/keystore" }
 sp-offchain = { version = "4.0.0-dev", path = "../../primitives/offchain" }
-sp-rpc = { version = "7.0.0", path = "../../primitives/rpc" }
+sp-rpc = { version = "6.0.0", path = "../../primitives/rpc" }
 sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
 sp-session = { version = "4.0.0-dev", path = "../../primitives/session" }
 sp-version = { version = "5.0.0", path = "../../primitives/version" }

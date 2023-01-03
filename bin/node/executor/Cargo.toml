@@ -39,7 +39,6 @@ pallet-sudo = { version = "4.0.0-dev", path = "../../../frame/sudo" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../../frame/timestamp" }
 pallet-treasury = { version = "4.0.0-dev", path = "../../../frame/treasury" }
 pallet-transaction-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment" }
-pallet-dex = { version = "4.0.0-dev", path = "../../../frame/dex" }
 sp-application-crypto = { version = "7.0.0", path = "../../../primitives/application-crypto" }
 pallet-root-testing = { version = "1.0.0-dev", path = "../../../frame/root-testing" }
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
