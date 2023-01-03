@@ -4300,7 +4300,6 @@ dependencies = [
  "node-testing",
  "pallet-balances",
  "pallet-contracts",
- "pallet-dex",
  "pallet-im-online",
  "pallet-root-testing",
  "pallet-sudo",
@@ -9325,7 +9324,7 @@ dependencies = [
 
 [[package]]
 name = "sp-rpc"
-version = "7.0.0"
+version = "6.0.0"
 dependencies = [
  "rustc-hash",
  "serde",

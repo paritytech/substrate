@@ -21,7 +21,7 @@ sp-externalities = { version = "0.13.0", path = "../../../../primitives/external
 sp-io = { version = "7.0.0", path = "../../../../primitives/io" }
 sp-keystore = { version = "0.13.0", path = "../../../../primitives/keystore" }
 sp-runtime = { version = "7.0.0", path = "../../../../primitives/runtime" }
-sp-rpc = { version = "7.0.0", path = "../../../../primitives/rpc" }
+sp-rpc = { version = "6.0.0", path = "../../../../primitives/rpc" }
 sp-state-machine = { version = "0.13.0", path = "../../../../primitives/state-machine" }
 sp-version = { version = "5.0.0", path = "../../../../primitives/version" }
 sp-debug-derive = { path = "../../../../primitives/debug-derive" }

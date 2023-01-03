@@ -34,7 +34,7 @@ sc-tracing-proc-macro = { version = "4.0.0-dev", path = "./proc-macro" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-core = { version = "7.0.0", path = "../../primitives/core" }
-sp-rpc = { version = "7.0.0", path = "../../primitives/rpc" }
+sp-rpc = { version = "6.0.0", path = "../../primitives/rpc" }
 sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
 sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
 
