@@ -51,11 +51,18 @@ benchmarks! {
 
 	on_idle {
 		// We have to run the migration so that `TrashData` is not emtpy.
-		let _ = crate::migrations::v1::MigrateToV1::<T>::on_runtime_upgrade();
+		(0..5000).for_each(|i| TrashData::<T>::insert(i, i));
 		let _ = PovLimit::<T>::set_compute(SystemOrigin::Root.into(), Perbill::from_percent(100));
 		let _ = PovLimit::<T>::set_storage(SystemOrigin::Root.into(), Perbill::from_percent(100));
 	}: {
 		let weight = PovLimit::<T>::on_idle(System::<T>::block_number(), Weight::from_parts(WEIGHT_REF_TIME_PER_MILLIS * 10, WEIGHT_PROOF_SIZE_PER_MB));
+	}
+
+	empty_on_idle {
+		let _ = PovLimit::<T>::set_compute(SystemOrigin::Root.into(), Perbill::from_percent(100));
+		let _ = PovLimit::<T>::set_storage(SystemOrigin::Root.into(), Perbill::from_percent(100));
+	}: {
+		let weight = PovLimit::<T>::on_idle(System::<T>::block_number(), Weight::from_parts(1_000, 1_000));
 	}
 
 	impl_benchmark_test_suite!(PovLimit, crate::mock::new_test_ext(), crate::mock::Test);

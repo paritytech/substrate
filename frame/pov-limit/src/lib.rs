@@ -139,7 +139,7 @@ pub mod pallet {
 		fn on_idle(_: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			let mut meter = WeightMeter::from_limit(remaining_weight);
 			if !meter.check_accrue(T::DbWeight::get().reads(2)) {
-				return Weight::zero() // TODO maybe benchmark
+				return T::WeightInfo::empty_on_idle()
 			}
 
 			let proof_size_limit = Storage::<T>::get().mul_floor(meter.remaining().proof_size());
