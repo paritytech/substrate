@@ -161,7 +161,7 @@ struct HostFn {
 	name: String,
 	returns: HostFnReturn,
 	is_stable: bool,
-	alias_to: String,
+	alias_to: Option<String>,
 }
 
 enum HostFnReturn {
@@ -205,7 +205,7 @@ impl HostFn {
 		attrs.retain(|a| !a.path.is_ident("doc"));
 		let mut maybe_module = None;
 		let mut is_stable = true;
-		let mut alias_to = String::new();
+		let mut alias_to = None;
 		while let Some(attr) = attrs.pop() {
 			let ident = attr.path.get_ident().ok_or(err(span, msg))?.to_string();
 			match ident.as_str() {
@@ -224,7 +224,7 @@ impl HostFn {
 					is_stable = false;
 				},
 				"prefixed_alias" => {
-					alias_to = item.sig.ident.to_string();
+					alias_to = Some(item.sig.ident.to_string());
 					item.sig.ident = syn::Ident::new(
 						&format!("seal_{}", &item.sig.ident.to_string()),
 						item.sig.ident.span(),
@@ -412,18 +412,19 @@ fn expand_docs(def: &mut EnvDef) -> TokenStream2 {
 					.map(|p| p.clone())
 					.collect::<Punctuated<FnArg, Comma>>();
 				let func_decl = f.item.sig.to_token_stream();
-				let func_doc = if f.alias_to.is_empty() {
+				let func_doc = if let Some(origin_fn) = &f.alias_to {
+					let alias_doc = format!(
+						"This is just an alias function to [`{0}()`][`Self::{0}`] with backwards-compatible prefixed identifier.",
+						origin_fn,
+					);
+					quote! { #[doc = #alias_doc] }
+
+				} else {
 					let func_docs = f.item.attrs.iter().filter(|a| doc_selector(a)).map(|d| {
 						let docs = d.to_token_stream();
 						quote! { #docs }
 					});
 					quote! { #( #func_docs )* }
-				} else {
-					let alias_doc = format!(
-						"This is just an alias function to [`{0}()`][`Self::{0}`] with backwards-compatible prefixed identifier.",
-						f.alias_to
-					);
-					quote! { #[doc = #alias_doc] }
 				};
 				quote! {
 					#func_doc
