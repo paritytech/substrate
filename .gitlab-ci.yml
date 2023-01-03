@@ -96,7 +96,7 @@ default:
 
 .timestamp:
   before_script:
-    - if ! [ -z ${TIMESTAMP_DISABLED} ]; then source scripts/ci/gitlab/timestamp.sh; fi
+    - if [ -z ${TIMESTAMP_DISABLED} ]; then source scripts/ci/gitlab/timestamp.sh; fi
 
 .kubernetes-env:
   image:                           "${CI_IMAGE}"
