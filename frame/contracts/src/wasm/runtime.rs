@@ -1606,7 +1606,7 @@ pub mod env {
 	/// This function never returns as it stops execution of the caller.
 	/// This is the only way to return a data buffer to the caller. Returning from
 	/// execution without calling this function is equivalent to calling:
-	/// ```
+	/// ```nocompile
 	/// seal_return(0, 0, 0);
 	/// ```
 	///

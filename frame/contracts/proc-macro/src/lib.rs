@@ -161,6 +161,7 @@ struct HostFn {
 	name: String,
 	returns: HostFnReturn,
 	is_stable: bool,
+	alias_to: String,
 }
 
 enum HostFnReturn {
@@ -190,7 +191,7 @@ impl ToTokens for HostFn {
 }
 
 impl HostFn {
-	pub fn try_from(item: syn::ItemFn) -> syn::Result<Self> {
+	pub fn try_from(mut item: syn::ItemFn) -> syn::Result<Self> {
 		let err = |span, msg| {
 			let msg = format!("Invalid host function definition. {}", msg);
 			syn::Error::new(span, msg)
@@ -201,10 +202,10 @@ impl HostFn {
 			"only #[version(<u8>)], #[unstable] and #[prefixed_alias] attributes are allowed.";
 		let span = item.span();
 		let mut attrs = item.attrs.clone();
-		attrs.retain(|a| !(a.path.is_ident("doc") || a.path.is_ident("prefixed_alias")));
-		let name = item.sig.ident.to_string();
+		attrs.retain(|a| !a.path.is_ident("doc"));
 		let mut maybe_module = None;
 		let mut is_stable = true;
+		let mut alias_to = String::new();
 		while let Some(attr) = attrs.pop() {
 			let ident = attr.path.get_ident().ok_or(err(span, msg))?.to_string();
 			match ident.as_str() {
@@ -222,9 +223,17 @@ impl HostFn {
 					}
 					is_stable = false;
 				},
+				"prefixed_alias" => {
+					alias_to = item.sig.ident.to_string();
+					item.sig.ident = syn::Ident::new(
+						&format!("seal_{}", &item.sig.ident.to_string()),
+						item.sig.ident.span(),
+					);
+				},
 				_ => return Err(err(span, msg)),
 			}
 		}
+		let name = item.sig.ident.to_string();
 
 		// process arguments: The first and second arg are treated differently (ctx, memory)
 		// they must exist and be `ctx: _` and `memory: _`.
@@ -320,6 +329,7 @@ impl HostFn {
 							name,
 							returns,
 							is_stable,
+							alias_to,
 						})
 					},
 					_ => Err(err(span, &msg)),
@@ -351,19 +361,15 @@ impl EnvDef {
 			.iter()
 			.filter_map(extract_fn)
 			.filter(|i| i.attrs.iter().any(selector))
-			.map(|mut i| {
-				i.attrs.retain(|i| !selector(i));
-				i.sig.ident = syn::Ident::new(
-					&format!("seal_{}", &i.sig.ident.to_string()),
-					i.sig.ident.span(),
-				);
-				i
-			})
 			.map(|i| HostFn::try_from(i));
 
 		let host_funcs = items
 			.iter()
 			.filter_map(extract_fn)
+			.map(|mut i| {
+				i.attrs.retain(|i| !selector(i));
+				i
+			})
 			.map(|i| HostFn::try_from(i))
 			.chain(aliases)
 			.collect::<Result<Vec<_>, _>>()?;
@@ -406,12 +412,21 @@ fn expand_docs(def: &mut EnvDef) -> TokenStream2 {
 					.map(|p| p.clone())
 					.collect::<Punctuated<FnArg, Comma>>();
 				let func_decl = f.item.sig.to_token_stream();
-				let func_docs = f.item.attrs.iter().filter(|a| doc_selector(a)).map(|d| {
-					let docs = d.to_token_stream();
-					quote! { #docs }
-				});
+				let func_doc = if f.alias_to.is_empty() {
+					let func_docs = f.item.attrs.iter().filter(|a| doc_selector(a)).map(|d| {
+						let docs = d.to_token_stream();
+						quote! { #docs }
+					});
+					quote! { #( #func_docs )* }
+				} else {
+					let alias_doc = format!(
+						"This is just an alias function to [`{0}()`][`Self::{0}`] with backwards-compatibile prefixed identifier.",
+						f.alias_to
+					);
+					quote! { #[doc = #alias_doc] }
+				};
 				quote! {
-					#( #func_docs )*
+					#func_doc
 					#func_decl;
 				}
 			} else {
@@ -429,8 +444,11 @@ fn expand_docs(def: &mut EnvDef) -> TokenStream2 {
 			#[doc = #module_doc]
 			pub mod #module {
 				use crate::wasm::runtime::{TrapReason, ReturnCode};
-				/// Every function in this trait represents one function that can be imported by a contract.
+				/// Every function in this trait represents (at least) one function that can be imported by a contract.
+				///
 				/// The function's identifier is to be set as the name in the import definition.
+				/// Where it is specifically indicated, an _alias_ function having `seal_`-prefixed identifier and
+				/// just the same signature and body, is also available (for backwards-compatibility purposes).
 				pub trait Api {
 					#( #funcs )*
 				}
