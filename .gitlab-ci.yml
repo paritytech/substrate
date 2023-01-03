@@ -97,6 +97,7 @@ default:
 .kubernetes-env:
   image:                           "${CI_IMAGE}"
   before_script:
+    - source scripts/ci/gitlab/timestamp.sh
     - !reference [.job-switcher, before_script]
     - !reference [.prepare-env, before_script]
   tags:
@@ -125,6 +126,7 @@ default:
 .docker-env:
   image:                           "${CI_IMAGE}"
   before_script:
+    - source scripts/ci/gitlab/timestamp.sh
     - !reference [.job-switcher, before_script]
     - !reference [.prepare-env, before_script]
     - !reference [.rust-info-script, script]
