@@ -71,3 +71,4 @@ else
 fi
 
 printf "Error: Unable to detect any docker compose installation.\n"
+exit 1
