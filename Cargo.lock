@@ -3081,7 +3081,6 @@ dependencies = [
  "pallet-conviction-voting",
  "pallet-democracy",
  "pallet-dex",
- "pallet-dex-rpc-runtime-api",
  "pallet-election-provider-multi-phase",
  "pallet-election-provider-support-benchmarking",
  "pallet-elections-phragmen",
@@ -4359,7 +4358,6 @@ dependencies = [
  "jsonrpsee",
  "mmr-rpc",
  "node-primitives",
- "pallet-dex-rpc",
  "pallet-transaction-payment-rpc",
  "sc-chain-spec",
  "sc-client-api",
@@ -5105,35 +5103,12 @@ dependencies = [
  "pallet-balances",
  "parity-scale-codec",
  "scale-info",
+ "sp-api",
  "sp-core",
  "sp-io",
  "sp-keystore",
  "sp-runtime",
  "sp-std",
-]
-
-[[package]]
-name = "pallet-dex-rpc"
-version = "4.0.0-dev"
-dependencies = [
- "jsonrpsee",
- "pallet-dex-rpc-runtime-api",
- "parity-scale-codec",
- "sp-api",
- "sp-blockchain",
- "sp-core",
- "sp-rpc",
- "sp-runtime",
-]
-
-[[package]]
-name = "pallet-dex-rpc-runtime-api"
-version = "4.0.0-dev"
-dependencies = [
- "pallet-dex",
- "parity-scale-codec",
- "sp-api",
- "sp-runtime",
 ]
 
 [[package]]
