@@ -186,6 +186,11 @@ where
 		&mut self,
 		mut block: BlockImportParams<B, ()>,
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+		if block.with_state() {
+			// When importing whole state we don't verify the seal as the state is not available.
+			return Ok((block, Default::default()))
+		}
+
 		let hash = block.header.hash();
 		let parent_hash = *block.header.parent_hash();
 		let authorities = authorities(
