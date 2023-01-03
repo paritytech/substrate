@@ -26,7 +26,6 @@
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
-pub mod migrations;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -75,12 +74,8 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 	}
 
-	/// The current storage version.
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
-
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::event]

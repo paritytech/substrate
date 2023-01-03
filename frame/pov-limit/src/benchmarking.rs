@@ -21,7 +21,7 @@
 use super::*;
 
 use frame_benchmarking::benchmarks;
-use frame_support::{pallet_prelude::*, traits::OnRuntimeUpgrade, weights::constants::*};
+use frame_support::{pallet_prelude::*, weights::constants::*};
 use frame_system::RawOrigin as SystemOrigin;
 
 use crate::Pallet as PovLimit;
@@ -62,7 +62,7 @@ benchmarks! {
 		let _ = PovLimit::<T>::set_compute(SystemOrigin::Root.into(), Perbill::from_percent(100));
 		let _ = PovLimit::<T>::set_storage(SystemOrigin::Root.into(), Perbill::from_percent(100));
 	}: {
-		let weight = PovLimit::<T>::on_idle(System::<T>::block_number(), Weight::from_parts(1_000, 1_000));
+		let weight = PovLimit::<T>::on_idle(System::<T>::block_number(), T::DbWeight::get().reads(1));
 	}
 
 	impl_benchmark_test_suite!(PovLimit, crate::mock::new_test_ext(), crate::mock::Test);
