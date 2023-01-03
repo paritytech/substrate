@@ -16,6 +16,7 @@
 // limitations under the License.
 
 use crate::{build_executor, state_machine_call_with_proof, SharedParams, State, LOG_TARGET};
+use frame_try_runtime::UpgradeCheckSelect;
 use parity_scale_codec::{Decode, Encode};
 use sc_executor::sp_wasm_interface::HostFunctions;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
@@ -29,37 +30,16 @@ pub struct OnRuntimeUpgradeCmd {
 	#[command(subcommand)]
 	pub state: State,
 
-	/// Select which optional checks to perform.
+	/// Select which optional checks to perform:
+	///
+	/// - `all`: Perform all checks (default).
+	/// - `pre-and-post`: Perform pre- and post-upgrade checks.
+	/// - `try-state`: Perform the try-state checks.
+	/// - `none`: Perform no checks.
 	///
 	/// Performing any checks will potentially invalidate the measured PoV/Weight.
-	#[clap(long, value_enum, default_value_t = UpgradeCheckSelect::All)]
+	#[clap(long, default_value = "All", verbatim_doc_comment)]
 	pub checks: UpgradeCheckSelect,
-}
-
-/// This is an adapter for [`frame_try_runtime::UpgradeCheckSelect`] since that does not implement
-/// `clap::ValueEnum`.
-#[derive(clap::ValueEnum, Debug, Clone, Copy)]
-#[value(rename_all = "kebab-case")]
-pub enum UpgradeCheckSelect {
-	/// Perform no checks.
-	None,
-	/// Perform all checks.
-	All,
-	/// Perform pre- and post-upgrade checks.
-	PreAndPost,
-	/// Perform the try-state checks.
-	TryState,
-}
-
-impl From<UpgradeCheckSelect> for frame_try_runtime::UpgradeCheckSelect {
-	fn from(x: UpgradeCheckSelect) -> Self {
-		match x {
-			UpgradeCheckSelect::None => Self::None,
-			UpgradeCheckSelect::All => Self::All,
-			UpgradeCheckSelect::PreAndPost => Self::PreAndPost,
-			UpgradeCheckSelect::TryState => Self::TryState,
-		}
-	}
 }
 
 pub(crate) async fn on_runtime_upgrade<Block, HostFns>(
@@ -77,13 +57,12 @@ where
 {
 	let executor = build_executor(&shared);
 	let ext = command.state.into_ext::<Block, HostFns>(&shared, &executor, None).await?;
-	let checks: frame_try_runtime::UpgradeCheckSelect = command.checks.into();
 
 	let (_, encoded_result) = state_machine_call_with_proof::<Block, HostFns>(
 		&ext,
 		&executor,
 		"TryRuntime_on_runtime_upgrade",
-		checks.encode().as_ref(),
+		command.checks.encode().as_ref(),
 		Default::default(), // we don't really need any extensions here.
 		shared.export_proof,
 	)?;
