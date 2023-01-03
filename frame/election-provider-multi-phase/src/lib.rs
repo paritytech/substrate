@@ -585,10 +585,10 @@ pub mod pallet {
 		/// Duration of the signed phase.
 		#[pallet::constant]
 		type SignedPhase: Get<Self::BlockNumber>;
-		/// Minimum duration of the signed phase before entering in `Phase::Emergency` in case of
-		/// election error.
+		/// Minimum duration of the signed phase before trying `T::Fallback` election and
+		/// potentially entering in `Phase::Emergency` in case of election error.
 		#[pallet::constant]
-		type MinSignedPhaseDuration: Get<Self::BlockNumber>;
+		type MinSignedBlocksBeforeEmergency: Get<Perbill>;
 
 		/// The minimum amount of improvement to the solution score that defines a solution as
 		/// "better" in the Signed phase.
