@@ -92,6 +92,7 @@ mod schedule;
 mod storage;
 mod wasm;
 
+pub use wasm::api_doc;
 pub mod chain_extension;
 pub mod weights;
 

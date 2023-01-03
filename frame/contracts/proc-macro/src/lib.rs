@@ -420,22 +420,32 @@ fn expand_docs(def: &mut EnvDef) -> TokenStream2 {
 		});
 
 		let module = Ident::new(m, Span::call_site());
+		let module_doc = format!("Documentation of the API available to contracts by importing `{}` module.", module);
 
 		quote! {
-			/// Documentation of the API that can be imported by contracts setting `#module` as module
-			/// name for an import definition. 
-			mod #module {
+			#[doc = #module_doc]
+			pub mod #module {
 				use crate::wasm::runtime::{TrapReason, ReturnCode};
 				/// Every function in this trait represents one function that can be imported by a contract.
-				/// The functions identifier is to be set as the name in the import definition.
-				trait Api {
+				/// The function's identifier is to be set as the name in the import definition.
+				pub trait Api {
 					#( #funcs )*
 				}
 			}
 		}
 	});
 	quote! {
-		#( #docs )*
+	  pub use docs as api_doc;
+	  /// Contains the documentation of the API available to contracts.
+	  ///
+	  /// This module is not meant to be used by code. It is meant to be consumed by humans through rustdoc.
+	  ///
+	  /// Every function described in this module's sub module's traits uses this sub module's identifier
+	  /// as its imported module name. The identifier of the function is the function's imported name.
+	  /// According to the [WASM spec of imports](https://webassembly.github.io/spec/core/text/modules.html#text-import).
+	  pub mod docs {
+		  #( #docs )*
+	  }
 	}
 }
 

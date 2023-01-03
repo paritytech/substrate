@@ -462,7 +462,7 @@ enum FrameArgs<'a, T: Config, E> {
 		/// If `None` the contract info needs to be reloaded from storage.
 		cached_info: Option<ContractInfo<T>>,
 		/// This frame was created by `seal_delegate_call` and hence uses different code than
-		/// what is stored at [`Self::dest`]. Its caller ([`Frame::delegated_caller`]) is the
+		/// what is stored at [`Self::Call::dest`]. Its caller ([`DelegatedCall::caller`]) is the
 		/// account which called the caller contract
 		delegated_call: Option<DelegatedCall<T, E>>,
 	},

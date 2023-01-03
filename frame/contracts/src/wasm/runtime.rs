@@ -52,7 +52,7 @@ pub trait Environment<HostState> {
 /// Type of a storage key.
 #[allow(dead_code)]
 enum KeyType {
-	/// Deprecated fix sized key [0;32].
+	/// Deprecated fix sized key `[u8;32]`.
 	Fix,
 	/// Variable sized key used in transparent hashing,
 	/// cannot be larger than MaxStorageKeyLen.
@@ -996,7 +996,7 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 // Any input that leads to a out of bound error (reading or writing) or failing to decode
 // data passed to the supervisor will lead to a trap. This is not documented explicitly
 // for every function.
-#[define_env]
+#[define_env(doc)]
 pub mod env {
 	/// Account for used gas. Traps if gas used is greater than gas limit.
 	///
@@ -1323,7 +1323,7 @@ pub mod env {
 	///
 	/// # Parameters
 	///
-	/// - flags: See [`CallFlags`] for a documenation of the supported flags.
+	/// - flags: See `crate::wasm::runtime::CallFlags` for a documenation of the supported flags.
 	/// - callee_ptr: a pointer to the address of the callee contract. Should be decodable as an
 	///   `T::AccountId`. Traps otherwise.
 	/// - gas: how much gas to devote to the execution.
@@ -1377,7 +1377,7 @@ pub mod env {
 	///
 	/// # Parameters
 	///
-	/// - flags: See [`CallFlags`] for a documentation of the supported flags.
+	/// - flags: See `crate::wasm::runtime::CallFlags` for a documentation of the supported flags.
 	/// - code_hash: a pointer to the hash of the code to be called.
 	/// - input_data_ptr: a pointer to a buffer to be used as input data to the callee.
 	/// - input_data_len: length of the input data buffer.
