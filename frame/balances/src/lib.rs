@@ -155,7 +155,7 @@
 
 #[macro_use]
 mod tests;
-pub mod benchmarking;
+mod benchmarking;
 pub mod migration;
 mod tests_composite;
 mod tests_local;
