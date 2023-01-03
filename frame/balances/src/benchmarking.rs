@@ -21,21 +21,21 @@
 
 use frame_support::benchmarking::benchmarks;
 
+use super::*;
+
+use frame_system::RawOrigin;
+//use sp_runtime::traits::Bounded;
+
+use crate::Pallet as Balances;
+
+const SEED: u32 = 0;
+// existential deposit multiplier
+const ED_MULTIPLIER: u32 = 10;
+
+use frame_benchmarking::{account, whitelisted_caller};
+use frame_support::benchmarking::*;
+
 benchmarks! {
-	use super::*;
-
-	use frame_system::RawOrigin;
-	//use sp_runtime::traits::Bounded;
-
-	use crate::Pallet as Balances;
-
-	const SEED: u32 = 0;
-	// existential deposit multiplier
-	const ED_MULTIPLIER: u32 = 10;
-
-	use frame_benchmarking::{account, whitelisted_caller};
-	use frame_support::benchmarking::*;
-
 	#[instance_benchmark]
 	fn transfer() {
 		let existential_deposit = T::ExistentialDeposit::get();
