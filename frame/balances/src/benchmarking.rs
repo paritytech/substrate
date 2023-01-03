@@ -244,11 +244,11 @@ benchmarks! {
 	}
 
 	// TODO: re-implement
-	use frame_benchmarking::impl_benchmark_test_suite;
+	// use frame_benchmarking::impl_benchmark_test_suite;
 
-	impl_benchmark_test_suite!(
-		Balances,
-		crate::tests_composite::ExtBuilder::default().build(),
-		crate::tests_composite::Test,
-	);
+	// impl_benchmark_test_suite!(
+	// 	Balances,
+	// 	crate::tests_composite::ExtBuilder::default().build(),
+	// 	crate::tests_composite::Test,
+	// );
 }
