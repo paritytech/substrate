@@ -422,11 +422,13 @@ fn expand_docs(def: &mut EnvDef) -> TokenStream2 {
 		let module = Ident::new(m, Span::call_site());
 
 		quote! {
-			/// Documentation for the seal module host functions.
+			/// Documentation of the API that can be imported by contracts setting `#module` as module
+			/// name for an import definition. 
 			mod #module {
 				use crate::wasm::runtime::{TrapReason, ReturnCode};
-				/// Dumb trait for generating host functions docs.
-				trait Docs {
+				/// Every function in this trait represents one function that can be imported by a contract.
+				/// The functions identifier is to be set as the name in the import definition.
+				trait Api {
 					#( #funcs )*
 				}
 			}
