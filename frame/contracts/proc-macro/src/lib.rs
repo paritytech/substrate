@@ -420,7 +420,7 @@ fn expand_docs(def: &mut EnvDef) -> TokenStream2 {
 					quote! { #( #func_docs )* }
 				} else {
 					let alias_doc = format!(
-						"This is just an alias function to [`{0}()`][`Self::{0}`] with backwards-compatibile prefixed identifier.",
+						"This is just an alias function to [`{0}()`][`Self::{0}`] with backwards-compatible prefixed identifier.",
 						f.alias_to
 					);
 					quote! { #[doc = #alias_doc] }
@@ -436,7 +436,7 @@ fn expand_docs(def: &mut EnvDef) -> TokenStream2 {
 
 		let module = Ident::new(m, Span::call_site());
 		let module_doc = format!(
-			"Documentation of the API available to contracts by importing `{}` module.",
+			"Documentation of the API available to contracts by importing `{}` WASM module.",
 			module
 		);
 
@@ -475,7 +475,7 @@ fn expand_env(def: &mut EnvDef, docs: bool) -> TokenStream2 {
 		/// Contains the documentation of the API available to contracts.
 		///
 		/// In order to generate this documentation, pass `doc` attribute to the [`#[define_env]`][`macro@define_env`] macro:
-		/// `#[define_env(doc)]`, and then run `cargo doc --no-deps`.
+		/// `#[define_env(doc)]`, and then run `cargo doc`.
 		///
 		/// This module is not meant to be used by any code. Rather, it is meant to be consumed by humans through rustdoc.
 		///
@@ -682,7 +682,7 @@ fn expand_functions(
 /// To build up these docs, run:
 ///
 /// ```nocompile
-/// cargo doc --no-deps
+/// cargo doc
 /// ```
 #[proc_macro_attribute]
 pub fn define_env(attr: TokenStream, item: TokenStream) -> TokenStream {
