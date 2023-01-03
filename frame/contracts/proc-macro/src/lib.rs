@@ -424,7 +424,18 @@ fn expand_docs(def: &mut EnvDef) -> TokenStream2 {
 						let docs = d.to_token_stream();
 						quote! { #docs }
 					});
-					quote! { #( #func_docs )* }
+					let unstable_notice = if !f.is_stable {
+						let warning = "\n # Unstable\n\n \
+									    This function is unstable and it is a subject to change (or removal) in the future.\n \
+									    Do not deploy a contract using it to a production chain.";
+						quote! { #[doc = #warning] }
+					} else {
+						quote! {}
+					};
+					quote! {
+						#( #func_docs )*
+						#unstable_notice
+					}
 				};
 				quote! {
 					#func_doc
