@@ -106,21 +106,6 @@ impl UpgradeCheckSelect {
 	}
 }
 
-#[cfg(feature = "std")]
-impl core::str::FromStr for UpgradeCheckSelect {
-	type Err = &'static str;
-
-	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		match s.to_lowercase().as_str() {
-			"none" => Ok(Self::None),
-			"all" => Ok(Self::All),
-			"pre-and-post" => Ok(Self::PreAndPost),
-			"try-state" => Ok(Self::TryState),
-			_ => Err("Invalid CheckSelector"),
-		}
-	}
-}
-
 /// Execute some checks to ensure the internal state of a pallet is consistent.
 ///
 /// Usually, these checks should check all of the invariants that are expected to be held on all of
