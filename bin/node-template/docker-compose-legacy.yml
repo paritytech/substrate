@@ -1,20 +1,21 @@
 # version and services fields are not supported
-dev:
-  container_name: node-template
-  image: paritytech/ci-linux:production
-  working_dir: /var/www/node-template/node
-  ports:
-    - "9944:9944"
-  environment:
-    - CARGO_HOME=/var/www/node-template/.cargo
-  volumes:
-    # volume config short syntax format with path source since bind mount is not supported
-    - .:/var/www/node-template
-    - ./.cargo/registry:/root/.cargo/registry
-    - ./.local:/root/.local
-    - ../../.git:/var/www/node-template/.git
-    - ../../frame:/var/frame
-    - ../../utils:/var/utils
-    - ../../client:/var/client
-    - ../../primitives:/var/primitives
-  command: bash -c "cargo build --release && ./target/release/node-template --dev --ws-external"
+# services:
+  dev:
+    container_name: node-template
+    image: paritytech/ci-linux:production
+    working_dir: /var/www/node-template/node
+    ports:
+      - "9944:9944"
+    environment:
+      - CARGO_HOME=/var/www/node-template/.cargo
+    volumes:
+      # volume config short syntax format with path source since bind mount is not supported
+      - .:/var/www/node-template
+      - ./.cargo/registry:/root/.cargo/registry
+      - ./.local:/root/.local
+      - ../../.git:/var/www/node-template/.git
+      - ../../frame:/var/frame
+      - ../../utils:/var/utils
+      - ../../client:/var/client
+      - ../../primitives:/var/primitives
+    command: bash -c "cargo build --release && ./target/release/node-template --dev --ws-external"
