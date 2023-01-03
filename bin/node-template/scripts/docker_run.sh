@@ -5,8 +5,6 @@ set -e
 printf "*** Start Substrate node template ***\n"
 SCRIPT_DIR=$(realpath "$(dirname "${BASH_SOURCE[0]}")")
 PARENT_DIR=$(dirname "$SCRIPT_DIR")
-mkdir -p "$PARENT_DIR/.local"
-mkdir -p "$PARENT_DIR/.cargo/registry"
 cd $(dirname ${BASH_SOURCE[0]})/..
 
 modify_first_line_of_docker_compose() {
