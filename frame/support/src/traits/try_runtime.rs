@@ -82,7 +82,7 @@ impl sp_std::str::FromStr for Select {
 }
 
 /// Select which checks should be run when trying a runtime upgrade upgrade.
-#[derive(codec::Encode, codec::Decode, Clone, Debug)]
+#[derive(codec::Encode, codec::Decode, Clone, Debug, Copy)]
 pub enum UpgradeCheckSelect {
 	/// Run no checks.
 	None,
