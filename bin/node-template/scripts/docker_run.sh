@@ -32,8 +32,8 @@ else
         set -e
 
         printf "Detected legacy docker-compose version 1.x. Using Compose File Format 1.\n"
-        docker-compose --verbose -f docker-compose-legacy.yml down --remove-orphans
-        docker-compose --verbose -f docker-compose-legacy.yml run --rm --service-ports dev $@
+        docker-compose -f docker-compose-legacy.yml down --remove-orphans
+        docker-compose -f docker-compose-legacy.yml run --rm --service-ports dev $@
         exit
     fi
 
@@ -47,8 +47,8 @@ else
         set -e
 
         printf "Detected legacy docker-compose version 2.x. Using Compose File Format 2+.\n"
-        docker-compose compose --verbose down --remove-orphans
-        docker-compose compose --verbose run --rm --service-ports dev $@
+        docker-compose compose down --remove-orphans
+        docker-compose compose run --rm --service-ports dev $@
         exit
     fi
 
@@ -70,8 +70,8 @@ else
         set -e
 
         printf "Detected docker compose subcommand.\n"
-        docker compose --verbose down --remove-orphans
-        docker compose --verbose run --rm --service-ports dev $@
+        docker compose down --remove-orphans
+        docker compose run --rm --service-ports dev $@
     else
         printf "Skipping docker since docker executable subcommand not supported.\n"
     fi
