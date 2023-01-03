@@ -4617,59 +4617,54 @@ mod election_data_provider {
 	}
 
 	#[test]
-	fn nominations_quota_truncates() {
-		ExtBuilder::default()
-			.nominate(false)
-			.add_staker(
-				61,
-				60,
-				222, // voters with balance == 222 have nomination quota of 2 nominations.
-				StakerStatus::<AccountId>::Nominator(vec![21, 22, 23, 24, 25]),
-			)
-			.build_and_execute(|| {
-				assert_eq!(
-					Staking::electing_voters(DataProviderBounds::new_unbounded())
-						.unwrap()
-						.iter()
-						.map(|(stash, _, targets)| (*stash, targets.len()))
-						.collect::<Vec<_>>(),
-					vec![(11, 1), (21, 1), (31, 1), (61, 2)],
-				);
-				assert_eq!(
-					*staking_events().last().unwrap(),
-					Event::NominationsQuotaExceeded { staker: 61, exceeded_by: 3 }
-				);
-			});
+	fn nominate_above_quota_fails() {
+		ExtBuilder::default().nominate(false).build_and_execute(|| {
+			// stash bond of 222 has a nomination quota of 2 targets.
+			bond(61, 60, 222);
+
+			// nominating with targets below the nomination quota works.
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(60), vec![11]));
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(60), vec![11, 12]));
+
+			// nominating with targets above the nomination quota returns error.
+			assert_noop!(
+				Staking::nominate(RuntimeOrigin::signed(60), vec![11, 12, 13]),
+				Error::<Test>::TooManyTargets
+			);
+		});
 	}
 
 	#[test]
-	fn nominations_quota_limits_count() {
+	fn lazy_quota_npos_voters_works_above_quota() {
 		ExtBuilder::default()
 			.nominate(false)
 			.add_staker(
 				61,
 				60,
-				111, /* voters with balance == 111 have nomination quota of 0 nominations,
-				      * should be rounded to 1. */
+				100, // voters with balance == 100 have nomination quota of 16 targets.
 				StakerStatus::<AccountId>::Nominator(vec![21, 22, 23, 24, 25]),
 			)
-			.add_staker(
-				71,
-				70,
-				333, /* voters with balance == 333 have nomination quota of MAX + 10
-				      * nominations, should be rounded to MAX. */
-				StakerStatus::<AccountId>::Nominator(vec![
-					16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1,
-				]),
-			)
 			.build_and_execute(|| {
+				// set stash balance to 222, where the nomination quota is 2 targets.
+				let _ = Balances::make_free_balance_be(&60, 100);
+				let _ = Balances::make_free_balance_be(&61, 100);
+
+				// even through 61 has nomination quota of 2, all the nominations (5) will be
+				// accepted and an event `NominationsQuotaExceeded` emitted.
 				assert_eq!(
 					Staking::electing_voters(DataProviderBounds::new_unbounded())
 						.unwrap()
 						.iter()
 						.map(|(stash, _, targets)| (*stash, targets.len()))
 						.collect::<Vec<_>>(),
-					vec![(11, 1), (21, 1), (31, 1), (61, 1), (71, 16)],
+					vec![(11, 1), (21, 1), (31, 1), (61, 5)],
+				);
+
+				// `Event::NominationsQuotaExceeded` is emitted, even though all votes are
+				// are considered.
+				assert_eq!(
+					*staking_events().last().unwrap(),
+					Event::NominationsQuotaExceeded { staker: 61, exceeded_by: 3 }
 				);
 			});
 	}

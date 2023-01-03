@@ -776,7 +776,7 @@ impl<T: Config> Pallet<T> {
 				None => break,
 			};
 
-			if let Some(Nominations { mut targets, .. }) = <Nominators<T>>::get(&voter) {
+			if let Some(Nominations { targets, .. }) = <Nominators<T>>::get(&voter) {
 				// if this voter is a nominator:
 				let voter_weight = weight_of(&voter);
 				if !targets.is_empty() {
@@ -791,7 +791,6 @@ impl<T: Config> Pallet<T> {
 						});
 					}
 
-					targets.truncate(nominations_quota as usize);
 					if voters_size_tracker.try_register_voter(targets.len(), voter_bounds).is_err()
 					{
 						// no more space left for the election result, stop iterating.
