@@ -32,13 +32,13 @@ pub struct OnRuntimeUpgradeCmd {
 
 	/// Select which optional checks to perform:
 	///
-	/// - `all`: Perform all checks (default).
+	/// - `none`: Perform no checks (default).
+	/// - `all`: Perform all checks.
 	/// - `pre-and-post`: Perform pre- and post-upgrade checks.
 	/// - `try-state`: Perform the try-state checks.
-	/// - `none`: Perform no checks.
 	///
 	/// Performing any checks will potentially invalidate the measured PoV/Weight.
-	#[clap(long, default_value = "All", verbatim_doc_comment)]
+	#[clap(long, default_value = "None", verbatim_doc_comment)]
 	pub checks: UpgradeCheckSelect,
 }
 
