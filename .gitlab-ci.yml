@@ -94,10 +94,14 @@ default:
   before_script:
     - if echo "$CI_DISABLED_JOBS" | grep -xF "$CI_JOB_NAME"; then echo "The job has been cancelled in CI settings"; exit 0; fi
 
+.timestamp:
+  before_script:
+    - if ! [ -z ${TIMESTAMP_DISABLED} ]; then source scripts/ci/gitlab/timestamp.sh; fi
+
 .kubernetes-env:
   image:                           "${CI_IMAGE}"
   before_script:
-    - source scripts/ci/gitlab/timestamp.sh
+    - !reference [.timestamp, before_script]
     - !reference [.job-switcher, before_script]
     - !reference [.prepare-env, before_script]
   tags:
@@ -126,7 +130,7 @@ default:
 .docker-env:
   image:                           "${CI_IMAGE}"
   before_script:
-    - source scripts/ci/gitlab/timestamp.sh
+    - !reference [.timestamp, before_script]
     - !reference [.job-switcher, before_script]
     - !reference [.prepare-env, before_script]
     - !reference [.rust-info-script, script]
