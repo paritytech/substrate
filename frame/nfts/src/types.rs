@@ -272,15 +272,15 @@ pub enum MintType<CollectionId> {
 #[derive(Clone, Copy, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct MintSettings<Price, BlockNumber, CollectionId> {
 	/// Whether anyone can mint or if minters are restricted to some subset.
-	pub(super) mint_type: MintType<CollectionId>,
+	pub mint_type: MintType<CollectionId>,
 	/// An optional price per mint.
-	pub(super) price: Option<Price>,
+	pub price: Option<Price>,
 	/// When the mint starts.
-	pub(super) start_block: Option<BlockNumber>,
+	pub start_block: Option<BlockNumber>,
 	/// When the mint ends.
-	pub(super) end_block: Option<BlockNumber>,
+	pub end_block: Option<BlockNumber>,
 	/// Default settings each item will get during the mint.
-	pub(super) default_item_settings: ItemSettings,
+	pub default_item_settings: ItemSettings,
 }
 
 impl<Price, BlockNumber, CollectionId> Default for MintSettings<Price, BlockNumber, CollectionId> {
