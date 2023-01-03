@@ -203,7 +203,7 @@ pub mod pallet {
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::DbWeight::get().writes(1))]
 		pub fn set_storage(origin: OriginFor<T>, storage: Perbill) -> DispatchResult {
-			let _ = ensure_root(origin)?;
+			ensure_root(origin)?;
 			Storage::<T>::set(storage);
 
 			Self::deposit_event(Event::StorageLimitSet { storage });
