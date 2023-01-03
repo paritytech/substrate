@@ -1,5 +1,5 @@
-# version and services fields are not supported
-# services:
+services:
+# first line of this file must be reserved for use by ./scripts/docker_run.sh
   dev:
     container_name: node-template
     image: paritytech/ci-linux:production
@@ -9,7 +9,6 @@
     environment:
       - CARGO_HOME=/var/www/node-template/.cargo
     volumes:
-      # volume config short syntax format with path source since bind mount is not supported
       - .:/var/www/node-template
       - ./.cargo/registry:/root/.cargo/registry
       - ./.local:/root/.local
