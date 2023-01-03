@@ -2133,7 +2133,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl pallet_dex_rpc_runtime_api::DexApi<
+	impl pallet_dex::DexApi<
 		Block,
 		Balance,
 	> for Runtime

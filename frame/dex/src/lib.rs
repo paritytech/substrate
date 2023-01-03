@@ -27,7 +27,16 @@
 //!  - provide the liquidity and receive back an LP token
 //!  - exchange the LP token back to assets
 //!  - swap 2 assets if there is a pool created
-//!  - query for an exchange price via a new RPC endpoint
+//!  - query for an exchange price via a new runtime call endpoint
+//!
+//! Here is an example `state_call` that asks for a quote of a pool of native versus asset 1:
+//!
+//! ```
+//! curl -sS -H "Content-Type: application/json" -d
+//! '{"id":1, "jsonrpc":"2.0", "method": "state_call", "params": ["DexApi_quote_price", "0x0101000000000000000000000011"]}'
+//! http://localhost:9933/
+//! ```
+
 #![cfg_attr(not(feature = "std"), no_std)]
 use frame_support::traits::Incrementable;
 
@@ -43,7 +52,9 @@ mod tests;
 #[cfg(test)]
 mod mock;
 
+use codec::Codec;
 pub use pallet::*;
+use sp_runtime::traits::MaybeDisplay;
 pub use types::*;
 pub use weights::WeightInfo;
 
@@ -832,5 +843,13 @@ pub mod pallet {
 		pub fn get_next_pool_asset_id() -> T::PoolAssetId {
 			NextPoolAssetId::<T>::get().unwrap_or(T::PoolAssetId::initial_value())
 		}
+	}
+}
+
+sp_api::decl_runtime_apis! {
+	pub trait DexApi<Balance> where
+		Balance: Codec + MaybeDisplay,
+	{
+		fn quote_price(asset1: Option<u32>, asset2: Option<u32>, amount: u64) -> Option<Balance>;
 	}
 }
