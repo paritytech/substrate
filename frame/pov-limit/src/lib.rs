@@ -189,7 +189,7 @@ pub mod pallet {
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::DbWeight::get().writes(1))]
 		pub fn set_compute(origin: OriginFor<T>, compute: Perbill) -> DispatchResult {
-			let _ = ensure_root(origin)?;
+			ensure_root(origin)?;
 			Compute::<T>::set(compute);
 
 			Self::deposit_event(Event::ComputationLimitSet { compute });
