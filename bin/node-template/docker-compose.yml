@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   dev:
     container_name: node-template

@@ -12,30 +12,70 @@ mkdir -p "$PARENT_DIR/.cargo/registry"
 cd $(dirname ${BASH_SOURCE[0]})/..
 
 printf "Searching for docker-compose executable...\n"
-# docker/compose v1
+
 if ! [ -x "$(command -v docker-compose)" ]; then
     printf "Skipping docker-compose since executable is not installed.\n"
 else
     printf "Detected docker-compose executable.\n"
-    docker-compose down --remove-orphans
-    docker-compose run --rm --service-ports dev $@
-    exit
+
+    # turn off errors temporarily to continue even if subcommand `docker-compose version` not exist
+    set +e
+
+    exit_code=$(docker-compose version; status=$?; echo $status)
+    # get the last character captured by $? since it may also include command output first
+    last_char=${exit_code: -1}
+
+    # prefix last char with random character incase last char is 0 but not an exit code
+    if [[ "x${last_char}" == "x0" && "$(docker-compose version)" =~ " 1." ]]; then
+
+        # turn on errors again
+        set -e
+
+        printf "Detected legacy docker-compose version 1.x. Using Compose File Format 1.\n"
+        docker-compose --verbose -f docker-compose-legacy.yml down --remove-orphans
+        docker-compose --verbose -f docker-compose-legacy.yml run --rm --service-ports dev $@
+        exit
+    fi
+
+    set +e
+
+    exit_code=$(docker-compose compose version; status=$?; echo $status)
+    last_char=${exit_code: -1}
+
+    if [[ "x${last_char}" == "x0" && "$(docker-compose compose version)" =~ " v2." ]]; then
+
+        set -e
+
+        printf "Detected legacy docker-compose version 2.x. Using Compose File Format 2+.\n"
+        docker-compose compose --verbose down --remove-orphans
+        docker-compose compose --verbose run --rm --service-ports dev $@
+        exit
+    fi
+
+    printf "Unknown or unsupported version of docker-compose. Skipping...\n"
 fi
 
-# docker/compose v2
 if ! [ -x "$(command -v docker)" ]; then
     printf "Skipping docker since docker executable is not installed.\n"
 else
     printf "Detected docker executable.\n"
-    exit_code=$(docker compose version &> /dev/null && echo $?)
-    if [ $exit_code == "0" ]; then
+
+    set +e
+
+    exit_code=$(docker compose version; status=$?; echo $status)
+    last_char=${exit_code: -1}
+
+    if [[ "x${last_char}" == "x0" ]]; then
+
+        set -e
+
         printf "Detected docker compose subcommand.\n"
-        docker compose down --remove-orphans
-        docker compose run --rm --service-ports dev $@
+        docker compose --verbose down --remove-orphans
+        docker compose --verbose run --rm --service-ports dev $@
     else
         printf "Skipping docker since docker executable subcommand not supported.\n"
     fi
     exit
 fi
 
-printf "Error: Unable to detect docker compose installation."
+printf "Error: Unable to detect any docker compose installation.\n"
