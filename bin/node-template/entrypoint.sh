@@ -1,8 +1,6 @@
 #!/bin/bash
 
 set -e
-# set -x
-# trap read debug
 
 args=$@
 cargo build --release
