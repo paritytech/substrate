@@ -17,13 +17,5 @@ services:
       - ../../utils:/var/utils
       - ../../client:/var/client
       - ../../primitives:/var/primitives
-    command: >
-      bash -c "cargo build --locked --release && \
-        cp /var/www/node-template/target/release/node-template /usr/local/bin && \
-        useradd -o -m -u 1000 -U -s /bin/sh -d /var/www/node-template node-dev && \
-        mkdir -p /data /var/www/node-template/.local/share && \
-        chown -R node-dev:node-dev /data && \
-        ln -s /data /var/www/node-template/.local/share/node-template && \
-        rm -rf /usr/bin /usr/sbin && \
-        /usr/local/bin/node-template --version && \
-        /usr/local/bin/node-template --dev --ws-external"
+      - ./entrypoint.sh:/entrypoint.sh
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
