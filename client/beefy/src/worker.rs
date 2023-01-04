@@ -26,12 +26,12 @@ use crate::{
 	keystore::BeefyKeystore,
 	metric_inc, metric_set,
 	metrics::Metrics,
-	round::Rounds,
+	round::{Rounds, VoteImportResult},
 	BeefyVoterLinks,
 };
 use beefy_primitives::{
 	crypto::{AuthorityId, Signature},
-	Commitment, ConsensusLog, Payload, PayloadProvider, SignedCommitment, ValidatorSet,
+	Commitment, ConsensusLog, PayloadProvider, SignedCommitment, ValidatorSet,
 	VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
 };
 use codec::{Codec, Decode, Encode};
@@ -55,6 +55,7 @@ use std::{
 	marker::PhantomData,
 	sync::Arc,
 };
+
 /// Bound for the number of buffered future voting rounds.
 const MAX_BUFFERED_VOTE_ROUNDS: usize = 600;
 /// Bound for the number of buffered votes per round number.
@@ -83,17 +84,14 @@ pub(crate) struct VoterOracle<B: Block> {
 	/// 3. lagging behind GRANDPA: queue has [1, N] elements, where all `mandatory_done == false`.
 	///    In this state, everytime a session gets its mandatory block BEEFY finalized, it's
 	///    popped off the queue, eventually getting to state `2. up-to-date`.
-	sessions: VecDeque<Rounds<Payload, B>>,
+	sessions: VecDeque<Rounds<B>>,
 	/// Min delta in block numbers between two blocks, BEEFY should vote on.
 	min_block_delta: u32,
 }
 
 impl<B: Block> VoterOracle<B> {
 	/// Verify provided `sessions` satisfies requirements, then build `VoterOracle`.
-	pub fn checked_new(
-		sessions: VecDeque<Rounds<Payload, B>>,
-		min_block_delta: u32,
-	) -> Option<Self> {
+	pub fn checked_new(sessions: VecDeque<Rounds<B>>, min_block_delta: u32) -> Option<Self> {
 		let mut prev_start = Zero::zero();
 		let mut prev_validator_id = None;
 		// verifies the
@@ -136,13 +134,13 @@ impl<B: Block> VoterOracle<B> {
 
 	// Return reference to rounds pertaining to first session in the queue.
 	// Voting will always happen at the head of the queue.
-	fn active_rounds(&self) -> Option<&Rounds<Payload, B>> {
+	fn active_rounds(&self) -> Option<&Rounds<B>> {
 		self.sessions.front()
 	}
 
 	// Return mutable reference to rounds pertaining to first session in the queue.
 	// Voting will always happen at the head of the queue.
-	fn active_rounds_mut(&mut self) -> Option<&mut Rounds<Payload, B>> {
+	fn active_rounds_mut(&mut self) -> Option<&mut Rounds<B>> {
 		self.sessions.front_mut()
 	}
 
@@ -157,7 +155,7 @@ impl<B: Block> VoterOracle<B> {
 	}
 
 	/// Add new observed session to the Oracle.
-	pub fn add_session(&mut self, rounds: Rounds<Payload, B>) {
+	pub fn add_session(&mut self, rounds: Rounds<B>) {
 		self.sessions.push_back(rounds);
 		// Once we add a new session we can drop/prune previous session if it's been finalized.
 		self.try_prune();
@@ -275,7 +273,7 @@ impl<B: Block> PersistedState<B> {
 	pub fn checked_new(
 		grandpa_header: <B as Block>::Header,
 		best_beefy: NumberFor<B>,
-		sessions: VecDeque<Rounds<Payload, B>>,
+		sessions: VecDeque<Rounds<B>>,
 		min_block_delta: u32,
 	) -> Option<Self> {
 		VoterOracle::checked_new(sessions, min_block_delta).map(|voting_oracle| PersistedState {
@@ -384,7 +382,7 @@ where
 		&self.persisted_state.voting_oracle
 	}
 
-	fn active_rounds(&mut self) -> Option<&Rounds<Payload, B>> {
+	fn active_rounds(&mut self) -> Option<&Rounds<B>> {
 		self.persisted_state.voting_oracle.active_rounds()
 	}
 
@@ -487,12 +485,9 @@ where
 	) -> Result<(), Error> {
 		let block_num = vote.commitment.block_number;
 		let best_grandpa = self.best_grandpa_block();
+		self.gossip_validator.note_round(block_num);
 		match self.voting_oracle().triage_round(block_num, best_grandpa)? {
-			RoundAction::Process => self.handle_vote(
-				(vote.commitment.payload, vote.commitment.block_number),
-				(vote.id, vote.signature),
-				false,
-			)?,
+			RoundAction::Process => self.handle_vote(vote, false)?,
 			RoundAction::Enqueue => {
 				debug!(target: "beefy", "🥩 Buffer vote for round: {:?}.", block_num);
 				if self.pending_votes.len() < MAX_BUFFERED_VOTE_ROUNDS {
@@ -541,44 +536,43 @@ where
 
 	fn handle_vote(
 		&mut self,
-		round: (Payload, NumberFor<B>),
-		vote: (AuthorityId, Signature),
+		vote: VoteMessage<NumberFor<B>, AuthorityId, Signature>,
 		self_vote: bool,
 	) -> Result<(), Error> {
-		self.gossip_validator.note_round(round.1);
-
 		let rounds = self
 			.persisted_state
 			.voting_oracle
 			.active_rounds_mut()
 			.ok_or(Error::UninitSession)?;
 
-		if rounds.add_vote(&round, vote) {
-			if let Some(signatures) = rounds.should_conclude(&round) {
-				self.gossip_validator.conclude_round(round.1);
+		let number = vote.commitment.block_number;
+		let round = (vote.commitment.payload.clone(), number);
 
-				let block_num = round.1;
+		match rounds.add_vote(vote) {
+			VoteImportResult::OkRoundConcluded(signatures) => {
+				self.gossip_validator.conclude_round(number);
+
 				let commitment = Commitment {
 					payload: round.0,
-					block_number: block_num,
+					block_number: number,
 					validator_set_id: rounds.validator_set_id(),
 				};
-
 				let finality_proof =
 					VersionedFinalityProof::V1(SignedCommitment { commitment, signatures });
 
-				metric_set!(self, beefy_round_concluded, block_num);
+				metric_set!(self, beefy_round_concluded, number);
 
-				info!(target: "beefy", "🥩 Round #{} concluded, finality_proof: {:?}.", round.1, finality_proof);
+				info!(target: "beefy", "🥩 Round #{} concluded, finality_proof: {:?}.", number, finality_proof);
 
 				// We created the `finality_proof` and know to be valid.
 				// New state is persisted after finalization.
 				self.finalize(finality_proof)?;
-			} else {
+			},
+			VoteImportResult::OkRoundInProgress => {
 				let mandatory_round = self
 					.voting_oracle()
 					.mandatory_pending()
-					.map(|p| p.0 == round.1)
+					.map(|(mandatory_num, _)| mandatory_num == number)
 					.unwrap_or(false);
 				// Persist state after handling self vote to avoid double voting in case
 				// of voter restarts.
@@ -587,8 +581,10 @@ where
 					crate::aux_schema::write_voter_state(&*self.backend, &self.persisted_state)
 						.map_err(|e| Error::Backend(e.to_string()))?;
 				}
-			}
-		}
+			},
+			VoteImportResult::Equivocation => unimplemented!(),
+			VoteImportResult::Invalid | VoteImportResult::Stale => (),
+		};
 		Ok(())
 	}
 
@@ -684,11 +680,7 @@ where
 			for (num, votes) in votes_to_handle.into_iter() {
 				debug!(target: "beefy", "🥩 Handle buffered votes for: {:?}.", num);
 				for v in votes.into_iter() {
-					if let Err(err) = self.handle_vote(
-						(v.commitment.payload, v.commitment.block_number),
-						(v.id, v.signature),
-						false,
-					) {
+					if let Err(err) = self.handle_vote(v, false) {
 						error!(target: "beefy", "🥩 Error handling buffered vote: {}", err);
 					};
 				}
@@ -793,11 +785,7 @@ where
 
 		debug!(target: "beefy", "🥩 Sent vote message: {:?}", message);
 
-		if let Err(err) = self.handle_vote(
-			(message.commitment.payload, message.commitment.block_number),
-			(message.id, message.signature),
-			true,
-		) {
+		if let Err(err) = self.handle_vote(message, true) {
 			error!(target: "beefy", "🥩 Error handling self vote: {}", err);
 		}
 
@@ -1001,7 +989,7 @@ pub(crate) mod tests {
 			&self.voting_oracle
 		}
 
-		pub fn active_round(&self) -> Option<&Rounds<Payload, B>> {
+		pub fn active_round(&self) -> Option<&Rounds<B>> {
 			self.voting_oracle.active_rounds()
 		}
 
@@ -1015,7 +1003,7 @@ pub(crate) mod tests {
 	}
 
 	impl<B: super::Block> VoterOracle<B> {
-		pub fn sessions(&self) -> &VecDeque<Rounds<Payload, B>> {
+		pub fn sessions(&self) -> &VecDeque<Rounds<B>> {
 			&self.sessions
 		}
 	}

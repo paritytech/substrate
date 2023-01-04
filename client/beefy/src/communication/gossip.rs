@@ -120,7 +120,7 @@ where
 
 	/// Note a voting round.
 	///
-	/// Noting round will start a live `round`.
+	/// Noting round will track gossiped votes for `round`.
 	pub(crate) fn note_round(&self, round: NumberFor<B>) {
 		debug!(target: "beefy", "🥩 About to note gossip round #{}", round);
 		self.known_votes.write().insert(round);

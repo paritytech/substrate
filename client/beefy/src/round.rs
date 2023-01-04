@@ -17,13 +17,13 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use beefy_primitives::{
-	crypto::{Public, Signature},
-	ValidatorSet, ValidatorSetId,
+	crypto::{AuthorityId, Public, Signature},
+	Commitment, Payload, ValidatorSet, ValidatorSetId, VoteMessage,
 };
 use codec::{Decode, Encode};
-use log::{debug, trace};
+use log::debug;
 use sp_runtime::traits::{Block, NumberFor};
-use std::{collections::BTreeMap, hash::Hash};
+use std::collections::BTreeMap;
 
 /// Tracks for each round which validators have voted/signed and
 /// whether the local `self` validator has voted/signed.
@@ -59,13 +59,22 @@ pub fn threshold(authorities: usize) -> usize {
 	authorities - faulty
 }
 
+#[derive(Debug, PartialEq)]
+pub enum VoteImportResult {
+	Invalid,
+	Stale,
+	Equivocation,
+	OkRoundInProgress,
+	OkRoundConcluded(Vec<Option<Signature>>),
+}
+
 /// Keeps track of all voting rounds (block numbers) within a session.
 /// Only round numbers > `best_done` are of interest, all others are considered stale.
 ///
 /// Does not do any validation on votes or signatures, layers above need to handle that (gossip).
 #[derive(Debug, Decode, Encode, PartialEq)]
-pub(crate) struct Rounds<Payload, B: Block> {
-	rounds: BTreeMap<(Payload, NumberFor<B>), RoundTracker>,
+pub(crate) struct Rounds<B: Block> {
+	rounds: BTreeMap<Commitment<NumberFor<B>>, RoundTracker>,
 	equivocations: BTreeMap<(Public, NumberFor<B>), Payload>,
 	session_start: NumberFor<B>,
 	validator_set: ValidatorSet<Public>,
@@ -73,9 +82,8 @@ pub(crate) struct Rounds<Payload, B: Block> {
 	best_done: Option<NumberFor<B>>,
 }
 
-impl<P, B> Rounds<P, B>
+impl<B> Rounds<B>
 where
-	P: Ord + Hash + Clone,
 	B: Block,
 {
 	pub(crate) fn new(session_start: NumberFor<B>, validator_set: ValidatorSet<Public>) -> Self {
@@ -90,8 +98,8 @@ where
 	}
 
 	pub(crate) fn new_manual(
-		rounds: BTreeMap<(P, NumberFor<B>), RoundTracker>,
-		equivocations: BTreeMap<(Public, NumberFor<B>), P>,
+		rounds: BTreeMap<Commitment<NumberFor<B>>, RoundTracker>,
+		equivocations: BTreeMap<(Public, NumberFor<B>), Payload>,
 		session_start: NumberFor<B>,
 		validator_set: ValidatorSet<Public>,
 		mandatory_done: bool,
@@ -122,64 +130,61 @@ where
 
 	pub(crate) fn add_vote(
 		&mut self,
-		round: &(P, NumberFor<B>),
-		vote: (Public, Signature),
-	) -> bool {
-		let num = round.1;
-		let equivocation_key = (vote.0.clone(), round.1);
+		vote: VoteMessage<NumberFor<B>, AuthorityId, Signature>,
+	) -> VoteImportResult {
+		let num = vote.commitment.block_number;
+		let equivocation_key = (vote.id.clone(), num);
 		if num < self.session_start || Some(num) <= self.best_done {
 			debug!(target: "beefy", "🥩 received vote for old stale round {:?}, ignoring", num);
-			false
-		} else if !self.validators().iter().any(|id| vote.0 == *id) {
+			VoteImportResult::Stale
+		} else if vote.commitment.validator_set_id != self.validator_set_id() {
+			debug!(
+				target: "beefy", "🥩 expected set_id {:?}, ignoring vote {:?}.",
+				self.validator_set_id(), vote,
+			);
+			VoteImportResult::Invalid
+		} else if !self.validators().iter().any(|id| &vote.id == id) {
 			debug!(
 				target: "beefy",
 				"🥩 received vote {:?} from validator that is not in the validator set, ignoring",
 				vote
 			);
-			false
+			VoteImportResult::Invalid
 		} else if self
 			.equivocations
 			// is the same public key voting for a different payload?
 			.get(&equivocation_key)
-			.map(|payload| payload != &round.0)
+			.map(|payload| payload != &vote.commitment.payload)
 			.unwrap_or_else(|| {
-				self.equivocations.insert(equivocation_key, round.0.clone());
+				// this is the first vote done by `id` for `num`
+				self.equivocations.insert(equivocation_key, vote.commitment.payload.clone());
+				// no equivocation
 				false
 			}) {
 			debug!(target: "beefy", "🥩 detected equivocated vote {:?}", vote);
-			false
+			VoteImportResult::Equivocation
 		} else {
-			self.rounds.entry(round.clone()).or_default().add_vote(vote)
-		}
-	}
-
-	pub(crate) fn should_conclude(
-		&mut self,
-		round: &(P, NumberFor<B>),
-	) -> Option<Vec<Option<Signature>>> {
-		let done = self
-			.rounds
-			.get(round)
-			.map(|tracker| tracker.is_done(threshold(self.validator_set.len())))
-			.unwrap_or(false);
-		trace!(target: "beefy", "🥩 Round #{} done: {}", round.1, done);
-
-		if done {
-			let signatures = self.rounds.remove(round)?.votes;
-			Some(
-				self.validators()
-					.iter()
-					.map(|authority_id| signatures.get(authority_id).cloned())
-					.collect(),
-			)
-		} else {
-			None
+			let round = self.rounds.entry(vote.commitment.clone()).or_default();
+			if round.add_vote((vote.id, vote.signature)) &&
+				round.is_done(threshold(self.validator_set.len()))
+			{
+				if let Some(round) = self.rounds.remove(&vote.commitment) {
+					let votes = round.votes;
+					let signatures = self
+						.validators()
+						.iter()
+						.map(|authority_id| votes.get(authority_id).cloned())
+						.collect();
+					return VoteImportResult::OkRoundConcluded(signatures)
+				}
+			}
+			VoteImportResult::OkRoundInProgress
 		}
 	}
 
 	pub(crate) fn conclude(&mut self, round_num: NumberFor<B>) {
 		// Remove this and older (now stale) rounds.
-		self.rounds.retain(|&(_, number), _| number > round_num);
+		self.rounds.retain(|commitment, _| commitment.block_number > round_num);
 		self.equivocations.retain(|&(_, number), _| number > round_num);
 		self.mandatory_done = self.mandatory_done || round_num == self.session_start;
 		self.best_done = self.best_done.max(Some(round_num));

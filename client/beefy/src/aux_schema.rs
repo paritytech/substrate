@@ -106,14 +106,16 @@ mod v1 {
 		best_done: Option<NumberFor<B>>,
 	}
 
-	impl<B> Into<Rounds<Payload, B>> for V1Rounds<B>
+	impl<B> Into<Rounds<B>> for V1Rounds<B>
 	where
 		B: BlockT,
 	{
-		fn into(self) -> Rounds<Payload, B> {
-			let rounds = self.rounds.into_iter().map(|it| (it.0, it.1.into())).collect();
-			Rounds::<Payload, B>::new_manual(
-				rounds,
+		fn into(self) -> Rounds<B> {
+			// FIXME
+			// let rounds = self.rounds.into_iter().map(|it| (it.0, it.1.into())).collect();
+			Rounds::<B>::new_manual(
+				// FIXME
+				BTreeMap::new(),
 				BTreeMap::new(),
 				self.session_start,
 				self.validator_set,
@@ -148,10 +150,8 @@ mod v1 {
 		fn try_into(self) -> Result<PersistedState<B>, Self::Error> {
 			let Self { best_grandpa_block_header, best_beefy_block, voting_oracle } = self;
 			let V1VoterOracle { sessions, min_block_delta } = voting_oracle;
-			let sessions = sessions
-				.into_iter()
-				.map(<V1Rounds<B> as Into<Rounds<Payload, B>>>::into)
-				.collect();
+			let sessions =
+				sessions.into_iter().map(<V1Rounds<B> as Into<Rounds<B>>>::into).collect();
 			PersistedState::checked_new(
 				best_grandpa_block_header,
 				best_beefy_block,
