@@ -571,13 +571,8 @@ impl<T: Config> Pallet<T> {
 			total_stake = total_stake.saturating_add(exposure.total);
 			<ErasStakers<T>>::insert(new_planned_era, &stash, &exposure);
 
-			// split exposure into T::ExposurePageSize chunks
-			let paged_exposure: BoundedVec<
-				Exposure<T::AccountId, BalanceOf<T>>,
-				T::ExposureMaxPages,
-			> = Self::get_paged_exposure(exposure);
-
-			paged_exposure.iter().enumerate().for_each(|page, exposure| {
+			// store paged exposure
+			Self::get_paged_exposure(exposure).iter().enumerate().for_each(|page, exposure| {
 				<PagedErasStakers<T>>::insert((new_planned_era, &stash, page), &exposure);
 			});
 
@@ -616,10 +611,12 @@ impl<T: Config> Pallet<T> {
 		elected_stashes
 	}
 
+
 	fn get_paged_exposure<T: Config>(
 		exposure: Exposure<T::AccountId, BalanceOf<T>>,
 	) -> BoundedVec<Exposure<T::AccountId, BalanceOf<T>>, T::ExposureMaxPages> {
 		let page_size = T::ExposurePageSize::get();
+		// clip exposure if exceeds max_pages
 		let max_pages = T::ExposureMaxPages::get();
 
 		todo!()
