@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! All benchmarks in this file are just for debugging the PoV calculation logic, they are unused.
+
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
@@ -148,6 +150,13 @@ frame_benchmarking::benchmarks! {
 		assert!(UnboundedValue::<T>::get().is_none());
 	}
 
+	// Same as above, but we still expect a mathematical worst case PoV size for the bounded one.
+	storage_value_bounded_and_unbounded_read {
+	}: {
+		assert!(UnboundedValue::<T>::get().is_none());
+		assert!(BoundedValue::<T>::get().is_none());
+	}
+
 	#[pov_mode = Measured]
 	measured_storage_value_read_linear_size {
 		let l in 0 .. 1<<22;
@@ -166,16 +175,76 @@ frame_benchmarking::benchmarks! {
 		assert!(LargeValue::<T>::get().is_some());
 	}
 
-	// Same as above, but we still expect a mathematical worst case PoV size for the bounded one.
-	storage_value_bounded_and_unbounded_read {
+	#[pov_mode = Measured]
+	measured_storage_double_value_read_linear_size {
+		let l in 0 .. 1<<22;
+		let v: sp_runtime::BoundedVec<u8, _> = sp_std::vec![0u8; l as usize].try_into().unwrap();
+		LargeValue::<T>::put(&v);
+		LargeValue2::<T>::put(&v);
 	}: {
-		assert!(UnboundedValue::<T>::get().is_none());
-		assert!(BoundedValue::<T>::get().is_none());
+		assert!(LargeValue::<T>::get().is_some());
+		assert!(LargeValue2::<T>::get().is_some());
 	}
 
-	storage_map_unbounded_read {
+	#[pov_mode = MaxEncodedLen]
+	mel_storage_double_value_read_linear_size {
+		let l in 0 .. 1<<22;
+		let v: sp_runtime::BoundedVec<u8, _> = sp_std::vec![0u8; l as usize].try_into().unwrap();
+		LargeValue::<T>::put(&v);
+		LargeValue2::<T>::put(&v);
 	}: {
-		assert!(UnboundedMap::<T>::get(0).is_none());
+		assert!(LargeValue::<T>::get().is_some());
+		assert!(LargeValue2::<T>::get().is_some());
+	}
+
+	#[pov_mode = MaxEncodedLen {
+		Pov::LargeValue2: Measured
+	}]
+	mel_mixed_storage_double_value_read_linear_size {
+		let l in 0 .. 1<<22;
+		let v: sp_runtime::BoundedVec<u8, _> = sp_std::vec![0u8; l as usize].try_into().unwrap();
+		LargeValue::<T>::put(&v);
+		LargeValue2::<T>::put(&v);
+	}: {
+		assert!(LargeValue::<T>::get().is_some());
+		assert!(LargeValue2::<T>::get().is_some());
+	}
+
+	#[pov_mode = Measured {
+		Pov::LargeValue2: MaxEncodedLen
+	}]
+	measured_mixed_storage_double_value_read_linear_size {
+		let l in 0 .. 1<<22;
+		let v: sp_runtime::BoundedVec<u8, _> = sp_std::vec![0u8; l as usize].try_into().unwrap();
+		LargeValue::<T>::put(&v);
+		LargeValue2::<T>::put(&v);
+	}: {
+		assert!(LargeValue::<T>::get().is_some());
+		assert!(LargeValue2::<T>::get().is_some());
+	}
+
+	#[pov_mode = Measured]
+	storage_map_unbounded_both_measured_read {
+		let i in 0 .. 1000;
+		
+		UnboundedMap::<T>::insert(i, sp_std::vec![0; i as usize]);
+		UnboundedMap2::<T>::insert(i, sp_std::vec![0; i as usize]);
+	}: {
+		assert!(UnboundedMap::<T>::get(i).is_some());
+		assert!(UnboundedMap2::<T>::get(i).is_some());
+	}
+
+	#[pov_mode = MaxEncodedLen {
+		Pov::UnboundedMap: Measured
+	}]
+	storage_map_partial_unbounded_read {
+		let i in 0 .. 1000;
+
+		Map1M::<T>::insert(i, 0);
+		UnboundedMap::<T>::insert(i, sp_std::vec![0; i as usize]);
+	}: {
+		assert!(Map1M::<T>::get(i).is_some());
+		assert!(UnboundedMap::<T>::get(i).is_some());
 	}
 
 	// Emitting an event will not incur any PoV.

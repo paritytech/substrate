@@ -602,7 +602,7 @@ pub(crate) fn process_storage_results(
 					PovEstimationMode::MaxEncodedLen
 				},
 				(Some(PovEstimationMode::MaxEncodedLen), None, _) => {
-					panic!("Type does not have MEL bound but MEL PoV estimation mode was specified.");
+					panic!("Key does not have MEL bound but MEL PoV estimation mode was specified {:?}", &key);
 				},
 			};
 			// Add the additional trie layer overhead for every new prefix.

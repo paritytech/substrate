@@ -59,6 +59,10 @@ pub mod pallet {
 	pub(crate) type LargeValue<T: Config> =
 		StorageValue<Value = BoundedVec<u8, ConstU32<{ 1 << 22 }>>, QueryKind = OptionQuery>;
 
+	#[pallet::storage]
+	pub(crate) type LargeValue2<T: Config> =
+		StorageValue<Value = BoundedVec<u8, ConstU32<{ 1 << 22 }>>, QueryKind = OptionQuery>;
+
 	/// A map with a maximum of 1M entries.
 	#[pallet::storage]
 	pub(crate) type Map1M<T: Config> = StorageMap<
@@ -93,8 +97,13 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::unbounded]
 	pub(crate) type UnboundedMap<T: Config> =
-		StorageMap<Hasher = Blake2_256, Key = u32, Value = u32, QueryKind = OptionQuery>;
+		StorageMap<Hasher = Blake2_256, Key = u32, Value = Vec<u32>, QueryKind = OptionQuery>;
 
+	#[pallet::storage]
+	#[pallet::unbounded]
+	pub(crate) type UnboundedMap2<T: Config> =
+			StorageMap<Hasher = Blake2_256, Key = u32, Value = Vec<u32>, QueryKind = OptionQuery>;
+	
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
