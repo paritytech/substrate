@@ -2751,7 +2751,7 @@ pub mod pallet_macros {
 sp_core::generate_feature_enabled_macro!(std_enabled, feature = "std", $);
 
 pub mod benchmarking {
-	pub use frame_support_procedural::{benchmark, benchmarks, instance_benchmark};
+	pub use frame_support_procedural::{benchmark, benchmarks, instance_benchmarks};
 
 	#[doc(hidden)]
 	pub use static_assertions::assert_impl_all;

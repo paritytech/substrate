@@ -17,7 +17,6 @@ mod keywords {
 	custom_keyword!(extrinsic_call);
 	custom_keyword!(cfg);
 	custom_keyword!(benchmark);
-	custom_keyword!(instance_benchmark);
 	custom_keyword!(extra);
 	custom_keyword!(skip_meta);
 }
@@ -175,44 +174,32 @@ impl BenchmarkDef {
 	}
 }
 
-pub fn benchmarks(tokens: TokenStream) -> TokenStream {
+pub fn benchmarks(tokens: TokenStream, instance: bool) -> TokenStream {
 	let mut block = parse_macro_input!(tokens as BareBlock);
 	let mut expanded_stmts: Vec<TokenStream2> = Vec::new();
 	let mut benchmark_defs: Vec<BenchmarkDef> = Vec::new();
 	let mut benchmark_names: Vec<Ident> = Vec::new();
 	let mut extra_benchmark_names: Vec<Ident> = Vec::new();
 	let mut skip_meta_benchmark_names: Vec<Ident> = Vec::new();
-	let mut any_instance = false;
 	for stmt in &mut block.stmts {
-		let mut found_item: Option<(ItemFn, bool)> = None;
+		let mut found_item: Option<ItemFn> = None;
 		if let Stmt::Item(stmt) = stmt {
 			if let Item::Fn(func) = stmt {
 				let mut i = 0;
 				for attr in &func.attrs.clone() {
-					let mut consumed = false;
 					if let Some(seg) = attr.path.segments.last() {
 						if let Ok(_) =
 							syn::parse::<keywords::benchmark>(seg.ident.to_token_stream().into())
 						{
-							consumed = true;
 							func.attrs.remove(i);
-							found_item = Some((func.clone(), false));
-						} else if let Ok(_) = syn::parse::<keywords::instance_benchmark>(
-							seg.ident.to_token_stream().into(),
-						) {
-							consumed = true;
-							func.attrs.remove(i);
-							found_item = Some((func.clone(), true));
-							any_instance = true;
+							found_item = Some(func.clone());
+							i += 1;
 						}
-					}
-					if !consumed {
-						i += 1;
 					}
 				}
 			}
 		}
-		if let Some((item_fn, is_instance)) = found_item {
+		if let Some(item_fn) = found_item {
 			// this item is a #[benchmark] or #[instance_benchmark]
 
 			// build a BenchmarkDef from item_fn
@@ -222,7 +209,7 @@ pub fn benchmarks(tokens: TokenStream) -> TokenStream {
 			};
 
 			// expand benchmark_def
-			let expanded = expand_benchmark(benchmark_def.clone(), &item_fn.sig.ident, is_instance);
+			let expanded = expand_benchmark(benchmark_def.clone(), &item_fn.sig.ident, instance);
 
 			// record benchmark name
 			let name = item_fn.sig.ident;
@@ -243,11 +230,11 @@ pub fn benchmarks(tokens: TokenStream) -> TokenStream {
 	}
 
 	// generics
-	let generics = match any_instance {
+	let generics = match instance {
 		false => quote!(T),
 		true => quote!(T, I),
 	};
-	let full_generics = match any_instance {
+	let full_generics = match instance {
 		false => quote!(T: Config),
 		true => quote!(T: Config<I>, I: 'static),
 	};

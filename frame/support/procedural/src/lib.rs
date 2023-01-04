@@ -482,7 +482,12 @@ pub fn pallet(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 #[proc_macro]
 pub fn benchmarks(tokens: TokenStream) -> TokenStream {
-	benchmark::benchmarks(tokens)
+	benchmark::benchmarks(tokens, false)
+}
+
+#[proc_macro]
+pub fn instance_benchmarks(tokens: TokenStream) -> TokenStream {
+	benchmark::benchmarks(tokens, true)
 }
 
 #[proc_macro_attribute]

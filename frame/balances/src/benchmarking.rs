@@ -19,8 +19,6 @@
 
 #![cfg(feature = "runtime-benchmarks")]
 
-use frame_support::benchmarking::benchmarks;
-
 use super::*;
 
 use frame_system::RawOrigin;
@@ -35,8 +33,8 @@ const ED_MULTIPLIER: u32 = 10;
 use frame_benchmarking::{account, whitelisted_caller};
 use frame_support::benchmarking::*;
 
-benchmarks! {
-	#[instance_benchmark]
+instance_benchmarks! {
+	#[benchmark]
 	fn transfer() {
 		let existential_deposit = T::ExistentialDeposit::get();
 		let caller = whitelisted_caller();
@@ -61,7 +59,7 @@ benchmarks! {
 
 	// Benchmark `transfer` with the best possible condition:
 	// * Both accounts exist and will continue to exist.
-	#[instance_benchmark]
+	#[benchmark]
 	#[extra]
 	fn transfer_best_case() {
 		let caller = whitelisted_caller();
@@ -85,7 +83,7 @@ benchmarks! {
 
 	// Benchmark `transfer_keep_alive` with the worst possible condition:
 	// * The recipient account is created.
-	#[instance_benchmark]
+	#[benchmark]
 	fn transfer_keep_alive() {
 		let caller = whitelisted_caller();
 		let recipient: T::AccountId = account("recipient", 0, SEED);
@@ -104,7 +102,7 @@ benchmarks! {
 	}
 
 	// Benchmark `set_balance` coming from ROOT account. This always creates an account.
-	#[instance_benchmark]
+	#[benchmark]
 	fn set_balance_creating() {
 		let user: T::AccountId = account("user", 0, SEED);
 		let user_lookup = T::Lookup::unlookup(user.clone());
@@ -122,7 +120,7 @@ benchmarks! {
 	}
 
 	// Benchmark `set_balance` coming from ROOT account. This always kills an account.
-	#[instance_benchmark]
+	#[benchmark]
 	fn set_balance_killing() {
 		let user: T::AccountId = account("user", 0, SEED);
 		let user_lookup = T::Lookup::unlookup(user.clone());
@@ -141,7 +139,7 @@ benchmarks! {
 	// Benchmark `force_transfer` extrinsic with the worst possible conditions:
 	// * Transfer will kill the sender account.
 	// * Transfer will create the recipient account.
-	#[instance_benchmark]
+	#[benchmark]
 	fn force_transfer() {
 		let existential_deposit = T::ExistentialDeposit::get();
 		let source: T::AccountId = account("source", 0, SEED);
@@ -168,7 +166,7 @@ benchmarks! {
 	// but additionally introduces many new users into the storage, increasing the the merkle
 	// trie and PoV size.
 	#[extra]
-	#[instance_benchmark]
+	#[benchmark]
 	fn transfer_increasing_users(u: Linear<0, 1_000>) {
 		// 1_000 is not very much, but this upper bound can be controlled by the CLI.
 		let existential_deposit = T::ExistentialDeposit::get();
@@ -203,7 +201,7 @@ benchmarks! {
 	// Benchmark `transfer_all` with the worst possible condition:
 	// * The recipient account is created
 	// * The sender is killed
-	#[instance_benchmark]
+	#[benchmark]
 	fn transfer_all() {
 		let caller = whitelisted_caller();
 		let recipient: T::AccountId = account("recipient", 0, SEED);
@@ -221,7 +219,7 @@ benchmarks! {
 		assert_eq!(Balances::<T, I>::free_balance(&recipient), balance);
 	}
 
-	#[instance_benchmark]
+	#[benchmark]
 	fn force_unreserve() {
 		let user: T::AccountId = account("user", 0, SEED);
 		let user_lookup = T::Lookup::unlookup(user.clone());
