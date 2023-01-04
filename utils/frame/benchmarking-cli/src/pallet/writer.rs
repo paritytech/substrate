@@ -960,7 +960,7 @@ mod test {
 				writes: 888,
 				repeat_writes: 999,
 				proof_size: i * 1024,
-				keys: vec![(format!("mel").as_bytes().to_vec(), i, 1, false)],
+				keys: vec![(format!("mel").to_string(), i, 1, false)],
 			})
 		}
 
@@ -1017,7 +1017,7 @@ mod test {
 				writes: 888,
 				repeat_writes: 999,
 				proof_size: 1024,
-				keys: vec![(format!("measured").as_bytes().to_vec(), 1, 1, false)],
+				keys: vec![(format!("measured").to_string(), 1, 1, false)],
 			})
 		}
 
@@ -1072,7 +1072,7 @@ mod test {
 				writes: 888,
 				repeat_writes: 999,
 				proof_size: i * 1024,
-				keys: vec![(format!("measured").as_bytes().to_vec(), i, 1, false)],
+				keys: vec![(format!("measured").to_string(), i, 1, false)],
 			})
 		}
 
