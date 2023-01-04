@@ -42,7 +42,7 @@ async fn remember_state_pruning_works() {
 async fn remember_blocks_pruning_works() {
 	let base_path = tempdir().expect("could not create a temp dir");
 
-	// First run with `--state-pruning=archive`.
+	// First run with `--blocks-pruning=archive`.
 	common::run_node_for_a_while(
 		base_path.path(),
 		&["--dev", "--blocks-pruning=archive", "--no-hardware-benchmarks"],
