@@ -220,13 +220,14 @@ pub mod pallet {
 		///
 		/// The changes to nominators are reported to this. Moreover, each validator's self-vote is
 		/// also reported as one independent vote.
+		/// NOTE: Staking relies on it's event listeners to make changes to this list.
 		///
 		/// To keep the load off the chain as much as possible, changes made to the staked amount
 		/// via rewards and slashes are not reported and thus need to be manually fixed by the
 		/// staker. In case of `bags-list`, this always means using `rebag` and `putInFrontOf`.
 		///
 		/// Invariant: what comes out of this list will always be a nominator.
-		type VoterList: SortedListProvider<Self::AccountId, Score = VoteWeight>;
+		type VoterList: ReadOnlySortedListProvider<Self::AccountId, Score = VoteWeight>;
 
 		/// WIP: This is a noop as of now, the actual business logic that's described below is going
 		/// to be introduced in a follow-up PR.
@@ -943,13 +944,7 @@ pub mod pallet {
 					Error::<T>::InsufficientBond
 				);
 
-				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 				Self::update_ledger(&controller, &ledger);
-				// update this staker in the sorted list, if they exist in it.
-				if T::VoterList::contains(&stash) {
-					let _ =
-						T::VoterList::on_update(&stash, Self::weight_of(&ledger.stash)).defensive();
-				}
 
 				Self::deposit_event(Event::<T>::Bonded { stash, amount: extra });
 			}
@@ -1046,14 +1041,7 @@ pub mod pallet {
 						.try_push(UnlockChunk { value, era })
 						.map_err(|_| Error::<T>::NoMoreChunks)?;
 				};
-				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 				Self::update_ledger(&controller, &ledger);
-
-				// update this staker in the sorted list, if they exist in it.
-				if T::VoterList::contains(&ledger.stash) {
-					let _ = T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash))
-						.defensive();
-				}
 
 				Self::deposit_event(Event::<T>::Unbonded { stash: ledger.stash, amount: value });
 			}
@@ -1553,12 +1541,7 @@ pub mod pallet {
 				amount: rebonded_value,
 			});
 
-			// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 			Self::update_ledger(&controller, &ledger);
-			if T::VoterList::contains(&ledger.stash) {
-				let _ = T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash))
-					.defensive();
-			}
 
 			let removed_chunks = 1u32 // for the case where the last iterated chunk is not removed
 				.saturating_add(initial_unlocking)

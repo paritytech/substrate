@@ -880,12 +880,6 @@ impl<T: Config> Pallet<T> {
 	/// wrong.
 	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T>) {
 		let prev_nominations = Self::nominations(who);
-		if !prev_nominations.is_none() {
-			// maybe update sorted list.
-			// TODO: Remove once we start using stake-tracker for this.
-			let _ = T::VoterList::on_insert(who.clone(), Self::weight_of(who))
-				.defensive_unwrap_or_default();
-		}
 		Nominators::<T>::insert(who, nominations);
 		T::EventListener::on_nominator_add(who, prev_nominations.unwrap_or_default())
 	}
@@ -901,8 +895,6 @@ impl<T: Config> Pallet<T> {
 	pub fn do_remove_nominator(who: &T::AccountId) -> bool {
 		if let Some(nominations) = Self::nominations(who) {
 			Nominators::<T>::remove(who);
-			// TODO: Remove, once we start using stake-tracker for this.
-			let _ = T::VoterList::on_remove(who).defensive();
 			T::EventListener::on_nominator_remove(who, nominations);
 			return true
 		}
@@ -918,10 +910,6 @@ impl<T: Config> Pallet<T> {
 	/// wrong.
 	pub fn do_add_validator(who: &T::AccountId, prefs: ValidatorPrefs) {
 		if !Validators::<T>::contains_key(who) {
-			// maybe update sorted list.
-			// TODO: Remove once we start using stake-tracker for this.
-			let _ = T::VoterList::on_insert(who.clone(), Self::weight_of(who))
-				.defensive_unwrap_or_default();
 			T::EventListener::on_validator_add(who);
 		}
 		Validators::<T>::insert(who, prefs);
@@ -937,8 +925,6 @@ impl<T: Config> Pallet<T> {
 	pub fn do_remove_validator(who: &T::AccountId) -> bool {
 		if Validators::<T>::contains_key(who) {
 			Validators::<T>::remove(who);
-			// TODO: Remove, once we start using stake-tracker for this.
-			let _ = T::VoterList::on_remove(who).defensive();
 			T::EventListener::on_validator_remove(who);
 			return true
 		}
@@ -1073,7 +1059,9 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		#[allow(deprecated)]
 		<Nominators<T>>::remove_all();
 
-		T::VoterList::unsafe_clear();
+		// TODO: This is a hack, implement `clear` for EventListener instead and call
+		// here.
+		<T::VoterList as SortedListProvider<_>>::unsafe_clear();
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
