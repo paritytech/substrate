@@ -54,8 +54,8 @@ fn load_decode<B: AuxStore, T: Decode>(backend: &B, key: &[u8]) -> ClientResult<
 	}
 }
 
-/// Load or initialize persistent data from backend.
-pub(crate) fn load_persistent<B, BE>(backend: &BE) -> ClientResult<Option<PersistedState<B>>>
+/// Load persistent data from backend.
+pub(crate) fn load_state<B, BE>(backend: &BE) -> ClientResult<Option<PersistedState<B>>>
 where
 	B: Block,
 	BE: AuxStore,
@@ -73,15 +73,36 @@ where
 	Ok(None)
 }
 
+/// Load or initialize persistent data from backend.
+pub(crate) fn load_or_init_state<B, BE>(
+	backend: &BE,
+	default: NumberFor<B>,
+) -> sp_blockchain::Result<NumberFor<B>>
+where
+	B: Block,
+	BE: AuxStore,
+{
+	// Initialize gadget best_canon from AUX DB or from pallet genesis.
+	if let Some(best) = load_state::<B, BE>(backend)? {
+		info!(target: LOG_TARGET, "Loading MMR best canonicalized state from db: {:?}.", best);
+		Ok(best)
+	} else {
+		info!(
+			target: LOG_TARGET,
+			"Loading MMR from pallet genesis on what appears to be the first startup: {:?}.",
+			default
+		);
+		write_current_version(backend)?;
+		write_gadget_state::<B, BE>(backend, &default)?;
+		Ok(default)
+	}
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
 	use super::*;
-	use crate::test_utils::{
-		run_test_with_mmr_gadget_pre_post_using_client, MmrBlock, MockClient, OffchainKeyType,
-	};
+	use crate::test_utils::{run_test_with_mmr_gadget_pre_post_using_client, MmrBlock, MockClient};
 	use parking_lot::Mutex;
-	use sp_core::offchain::{DbExternalities, StorageKind};
-	use sp_mmr_primitives::utils::NodesUtils;
 	use sp_runtime::generic::BlockId;
 	use std::{sync::Arc, time::Duration};
 	use substrate_test_runtime_client::{runtime::Block, Backend};
@@ -92,7 +113,7 @@ pub(crate) mod tests {
 		let backend = &*client.backend;
 
 		// version not available in db -> None
-		assert_eq!(load_persistent::<Block, Backend>(backend).unwrap(), None);
+		assert_eq!(load_state::<Block, Backend>(backend).unwrap(), None);
 
 		// populate version in db
 		write_current_version(backend).unwrap();
@@ -100,7 +121,7 @@ pub(crate) mod tests {
 		assert_eq!(load_decode(backend, VERSION_KEY).unwrap(), Some(CURRENT_VERSION));
 
 		// version is available in db but state isn't -> None
-		assert_eq!(load_persistent::<Block, Backend>(backend).unwrap(), None);
+		assert_eq!(load_state::<Block, Backend>(backend).unwrap(), None);
 	}
 
 	#[test]
@@ -113,7 +134,7 @@ pub(crate) mod tests {
 		// version not available in db -> None
 		assert_eq!(load_decode::<Backend, Option<u32>>(&*backend, VERSION_KEY).unwrap(), None);
 		// state not available in db -> None
-		assert_eq!(load_persistent::<Block, Backend>(&*backend).unwrap(), None);
+		assert_eq!(load_state::<Block, Backend>(&*backend).unwrap(), None);
 		// run the gadget while importing and finalizing 3 blocks
 		run_test_with_mmr_gadget_pre_post_using_client(
 			client.clone(),
@@ -136,7 +157,7 @@ pub(crate) mod tests {
 				let backend = &*client.backend;
 				// check there is both version and best canon available in db before running gadget
 				assert_eq!(load_decode(backend, VERSION_KEY).unwrap(), Some(CURRENT_VERSION));
-				assert_eq!(load_persistent::<Block, Backend>(backend).unwrap(), Some(3));
+				assert_eq!(load_state::<Block, Backend>(backend).unwrap(), Some(3));
 			},
 			|client| async move {
 				let a4 = client.import_block(&BlockId::Number(3), b"a4", Some(3)).await;
@@ -148,7 +169,7 @@ pub(crate) mod tests {
 				// a4, a5, a6 were canonicalized
 				client.assert_canonicalized(&[&a4, &a5, &a6]);
 				// check persisted best canon was updated
-				assert_eq!(load_persistent::<Block, Backend>(&*client.backend).unwrap(), Some(6));
+				assert_eq!(load_state::<Block, Backend>(&*client.backend).unwrap(), Some(6));
 			},
 		);
 	}
@@ -177,19 +198,8 @@ pub(crate) mod tests {
 				client.assert_canonicalized(&slice);
 
 				// now manually move them back to non-canon/temp location
-				let mut offchain_db = client.offchain_db();
 				for mmr_block in slice {
-					for node in NodesUtils::right_branch_ending_in_leaf(mmr_block.leaf_idx.unwrap())
-					{
-						let canon_key = mmr_block.get_offchain_key(node, OffchainKeyType::Canon);
-						let val = offchain_db
-							.local_storage_get(StorageKind::PERSISTENT, &canon_key)
-							.unwrap();
-						offchain_db.local_storage_clear(StorageKind::PERSISTENT, &canon_key);
-
-						let temp_key = mmr_block.get_offchain_key(node, OffchainKeyType::Temp);
-						offchain_db.local_storage_set(StorageKind::PERSISTENT, &temp_key, &val);
-					}
+					client.undo_block_canonicalization(mmr_block)
 				}
 			},
 		);
@@ -203,7 +213,7 @@ pub(crate) mod tests {
 				let slice: Vec<&MmrBlock> = blocks.iter().collect();
 
 				// verify persisted state says a1, a2, a3 were canonicalized,
-				assert_eq!(load_persistent::<Block, Backend>(&*client.backend).unwrap(), Some(3));
+				assert_eq!(load_state::<Block, Backend>(&*client.backend).unwrap(), Some(3));
 				// but actually they are NOT canon (we manually reverted them earlier).
 				client.assert_not_canonicalized(&slice);
 			},
@@ -221,7 +231,7 @@ pub(crate) mod tests {
 				// but a4, a5, a6 were canonicalized
 				client.assert_canonicalized(&[&a4, &a5, &a6]);
 				// check persisted best canon was updated
-				assert_eq!(load_persistent::<Block, Backend>(&*client.backend).unwrap(), Some(6));
+				assert_eq!(load_state::<Block, Backend>(&*client.backend).unwrap(), Some(6));
 			},
 		);
 	}

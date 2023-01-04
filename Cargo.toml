@@ -122,6 +122,7 @@ members = [
 	"frame/preimage",
 	"frame/proxy",
 	"frame/message-queue",
+	"frame/nfts",
 	"frame/nomination-pools",
 	"frame/nomination-pools/fuzzer",
 	"frame/nomination-pools/benchmarking",

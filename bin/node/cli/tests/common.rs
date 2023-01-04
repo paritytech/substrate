@@ -161,6 +161,7 @@ pub fn find_ws_url_from_output(read: impl Read + Send) -> (String, String) {
 			let line =
 				line.expect("failed to obtain next line from stdout for WS address discovery");
 			data.push_str(&line);
+			data.push_str("\n");
 
 			// does the line contain our port (we expect this specific output from substrate).
 			let sock_addr = match line.split_once("Running JSON-RPC WS server: addr=") {
@@ -170,7 +171,10 @@ pub fn find_ws_url_from_output(read: impl Read + Send) -> (String, String) {
 
 			Some(format!("ws://{}", sock_addr))
 		})
-		.expect("We should get a WebSocket address");
+		.unwrap_or_else(|| {
+			eprintln!("Observed node output:\n{}", data);
+			panic!("We should get a WebSocket address")
+		});
 
 	(ws_url, data)
 }
