@@ -16,8 +16,6 @@ jobs:
   fmt:
     runs-on: ubuntu-latest
     steps:
-      - name: Install Protoc
-        uses: arduino/setup-protoc@v1
       - uses: actions/checkout@v2
       - name: Install ${{ env.TOOLCHAIN }}
         uses: actions-rs/toolchain@v1
@@ -56,8 +54,6 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - name: Install Protoc
-        uses: arduino/setup-protoc@v1
       - uses: actions/checkout@v2
       - name: Install ${{ env.TOOLCHAIN }}
         uses: actions-rs/toolchain@v1
