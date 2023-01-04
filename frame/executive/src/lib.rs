@@ -52,7 +52,7 @@
 //! `Executive` type declaration from the node template.
 //!
 //! ```
-//!
+//! 
 //! # use sp_runtime::generic;
 //! # use frame_executive as executive;
 //! # pub struct UncheckedExtrinsic {};
@@ -357,7 +357,10 @@ where
 	pub fn try_runtime_upgrade() -> Result<frame_support::weights::Weight, &'static str> {
 		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::pre_upgrade().unwrap();
 		let weight = Self::execute_on_runtime_upgrade();
-		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::post_upgrade(Vec::<u8>::new()).unwrap();
+		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::post_upgrade(
+			Vec::<u8>::new(),
+		)
+		.unwrap();
 		Ok(weight)
 	}
 }
@@ -796,7 +799,7 @@ mod tests {
 	use frame_system::{Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
 	use pallet_balances::Call as BalancesCall;
 	use pallet_transaction_payment::CurrencyAdapter;
-	use sp_core::{crypto::key_types::AURA};
+	use sp_core::crypto::key_types::AURA;
 	use sp_keystore::{
 		vrf::{VRFTranscriptData, VRFTranscriptValue},
 		SyncCryptoStore,
