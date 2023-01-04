@@ -44,7 +44,7 @@ use super::bench::{Benchmark, BenchmarkParams};
 /// And wait some time to let it produce 3 blocks. Then benchmark them with:
 ///
 /// $ substrate benchmark-block --from 1 --to 3 --dev -d /tmp/my-dev
-///   --execution wasm --wasm-execution compiled --pruning archive
+///   --execution wasm --wasm-execution compiled --pruning archive --keep-blocks archive
 ///
 /// The output will be similar to this:
 ///

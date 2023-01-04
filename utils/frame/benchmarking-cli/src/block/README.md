@@ -87,7 +87,7 @@ You should see after some seconds that it started to produce blocks:
 ```
 You can now kill the node with `Ctrl+C`. Then measure how long it takes to execute these blocks:  
 ```sh
-cargo run --profile=production -- benchmark block --from 1 --to 1 --dev -d /tmp/dev --pruning archive
+cargo run --profile=production -- benchmark block --from 1 --to 1 --dev -d /tmp/dev --pruning archive --keep-blocks archive
 ```
 This will benchmark the first block. If you killed the node at a later point, you can measure multiple blocks.
 ```pre
@@ -105,6 +105,7 @@ Since this block is empty, its not very interesting.
 - `--repeat` How often each block should be measured.
 - [`--db`]
 - [`--pruning`]
+- [`--keep-blocks`]
 
 License: Apache-2.0
 
@@ -116,3 +117,4 @@ License: Apache-2.0
 
 [`--db`]: ../shared/README.md#arguments
 [`--pruning`]: ../shared/README.md#arguments
+[`--keep-blocks`]: ../shared/README.md#arguments
