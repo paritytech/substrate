@@ -36,7 +36,7 @@ use sp_runtime::{
 	traits::{CheckedSub, SaturatedConversion, StaticLookup, Zero},
 	ArithmeticError, Perbill, Percent,
 };
-use sp_staking::{EraIndex, SessionIndex};
+use sp_staking::{EraIndex, PageIndex, SessionIndex};
 use sp_std::prelude::*;
 
 mod impls;
@@ -209,6 +209,12 @@ pub mod pallet {
 		/// claim their reward. This used to limit the i/o cost for the nominator payout.
 		#[pallet::constant]
 		type MaxNominatorRewardedPerValidator: Get<u32>;
+
+		#[pallet::constant]
+		type ExposurePageSize: Get<u32>;
+
+		#[pallet::constant]
+		type ExposureMaxPages: Get<u32>;
 
 		/// The fraction of the validator set that is safe to be offending.
 		/// After the threshold is reached a new era will be forced.
@@ -416,7 +422,7 @@ pub mod pallet {
 	///
 	/// This is keyed fist by the era index to allow bulk deletion and then the stash account.
 	///
-	/// Is it removed after `HISTORY_DEPTH` eras.
+	/// It is removed after `HISTORY_DEPTH` eras.
 	/// If stakers hasn't been set or has been removed then empty exposure is returned.
 	#[pallet::storage]
 	#[pallet::unbounded]
@@ -427,6 +433,27 @@ pub mod pallet {
 		EraIndex,
 		Twox64Concat,
 		T::AccountId,
+		Exposure<T::AccountId, BalanceOf<T>>,
+		ValueQuery,
+	>;
+
+	/// Paginated exposure of a validator at given era.
+	///
+	/// This is keyed first by the era index to allow bulk deletion, then the stash account and
+	/// finally the page.
+	///
+	/// It is removed after `HISTORY_DEPTH` eras.
+	/// If stakers hasn't been set or has been removed then empty exposure is returned.
+	#[pallet::storage]
+	#[pallet::getter(fn paged_eras_stakers)]
+	#[pallet::unbounded]
+	pub type PagedErasStakers<T: Config> = StorageNMap<
+		_,
+		(
+			NMapKey<Twox64Concat, EraIndex>,
+			NMapKey<Twox64Concat, T::AccountId>,
+			NMapKey<Twox64Concat, PageIndex>,
+		),
 		Exposure<T::AccountId, BalanceOf<T>>,
 		ValueQuery,
 	>;

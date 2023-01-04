@@ -319,6 +319,7 @@ use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 pub use weights::WeightInfo;
 
 pub use pallet::{pallet::*, *};
+use sp_core::ConstU32;
 
 pub(crate) const LOG_TARGET: &str = "runtime::staking";
 
@@ -955,6 +956,6 @@ pub struct TestBenchmarkingConfig;
 
 #[cfg(feature = "std")]
 impl BenchmarkingConfig for TestBenchmarkingConfig {
-	type MaxValidators = frame_support::traits::ConstU32<100>;
-	type MaxNominators = frame_support::traits::ConstU32<100>;
+	type MaxValidators = ConstU32<100>;
+	type MaxNominators = ConstU32<100>;
 }
