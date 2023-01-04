@@ -968,7 +968,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			supports: Supports<T::AccountId>,
 		) -> DispatchResult {
-			T::ForceOrigin::ensure_origin(origin.clone())?;
+			T::ForceOrigin::ensure_origin(origin)?;
 			ensure!(Self::current_phase().is_emergency(), <Error<T>>::CallNotAllowed);
 
 			// bound supports with T::MaxWinners
