@@ -78,7 +78,6 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	/// The total balance that can be slashed from a stash account as of right now.
 	pub fn slashable_balance_of(who: &T::AccountId) -> BalanceOf<T> {
 		// Weight note: consider making the stake accessible through stash.
 		T::Staking::stake(&who).map(|l| l.active).unwrap_or_default()
