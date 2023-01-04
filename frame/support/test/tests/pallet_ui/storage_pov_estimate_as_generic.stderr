@@ -1,0 +1,5 @@
+error: Invalid pallet::storage, Unexpected generic `ProofSize` for `StorageValue`. `StorageValue` expect generics `Value`, and optional generics `QueryKind`, `OnEmpty`.
+  --> tests/pallet_ui/storage_pov_estimate_as_generic.rs:15:49
+   |
+15 |     type Foo<T: Config> = StorageValue<Value = u8, ProofSize = frame_support::storage::MeasuredProofSize>;
+   |                                                    ^^^^^^^^^

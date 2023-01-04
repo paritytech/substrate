@@ -52,10 +52,22 @@ pub struct StorageMap<
 	QueryKind = OptionQuery,
 	OnEmpty = GetDefault,
 	MaxValues = GetDefault,
->(core::marker::PhantomData<(Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues)>);
+	ProofSize = GetDefault,
+>(
+	core::marker::PhantomData<(
+		Prefix,
+		Hasher,
+		Key,
+		Value,
+		QueryKind,
+		OnEmpty,
+		MaxValues,
+		ProofSize,
+	)>,
+);
 
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> Get<u32>
-	for KeyLenOf<StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>>
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize> Get<u32>
+	for KeyLenOf<StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>>
 where
 	Prefix: StorageInstance,
 	Hasher: crate::hash::StorageHasher,
@@ -69,9 +81,9 @@ where
 	}
 }
 
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 	crate::storage::generator::StorageMap<Key, Value>
-	for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+	for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 where
 	Prefix: StorageInstance,
 	Hasher: crate::hash::StorageHasher,
@@ -97,8 +109,8 @@ where
 	}
 }
 
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> StoragePrefixedMap<Value>
-	for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize> StoragePrefixedMap<Value>
+	for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 where
 	Prefix: StorageInstance,
 	Hasher: crate::hash::StorageHasher,
@@ -116,8 +128,8 @@ where
 	}
 }
 
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
-	StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
+	StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 where
 	Prefix: StorageInstance,
 	Hasher: crate::hash::StorageHasher,
@@ -340,8 +352,8 @@ where
 	}
 }
 
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
-	StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
+	StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 where
 	Prefix: StorageInstance,
 	Hasher: crate::hash::StorageHasher + crate::ReversibleStorageHasher,
@@ -398,8 +410,9 @@ where
 	}
 }
 
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> StorageEntryMetadataBuilder
-	for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
+	StorageEntryMetadataBuilder
+	for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 where
 	Prefix: StorageInstance,
 	Hasher: crate::hash::StorageHasher,
@@ -428,8 +441,9 @@ where
 	}
 }
 
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> crate::traits::StorageInfoTrait
-	for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
+	crate::traits::StorageInfoTrait
+	for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 where
 	Prefix: StorageInstance,
 	Hasher: crate::hash::StorageHasher,
@@ -438,6 +452,7 @@ where
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
+	ProofSize: crate::traits::Get<Option<crate::storage::ProofSizeMode>>,
 {
 	fn storage_info() -> Vec<StorageInfo> {
 		vec![StorageInfo {
@@ -450,14 +465,15 @@ where
 					.saturating_add(Value::max_encoded_len())
 					.saturated_into(),
 			),
+			proof_size: ProofSize::get(),
 		}]
 	}
 }
 
 /// It doesn't require to implement `MaxEncodedLen` and give no information for `max_size`.
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 	crate::traits::PartialStorageInfoTrait
-	for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+	for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 where
 	Prefix: StorageInstance,
 	Hasher: crate::hash::StorageHasher,
@@ -466,6 +482,7 @@ where
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
+	ProofSize: crate::traits::Get<Option<crate::storage::ProofSizeMode>>,
 {
 	fn partial_storage_info() -> Vec<StorageInfo> {
 		vec![StorageInfo {
@@ -474,6 +491,7 @@ where
 			prefix: Self::final_prefix().to_vec(),
 			max_values: MaxValues::get(),
 			max_size: None,
+			proof_size: ProofSize::get(),
 		}]
 	}
 }

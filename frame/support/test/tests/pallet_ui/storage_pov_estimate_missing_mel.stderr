@@ -1,8 +1,8 @@
-error[E0277]: the trait bound `Bar: parity_scale_codec::MaxEncodedLen` is not satisfied
- --> tests/pallet_ui/storage_info_unsatisfied.rs:9:12
+error[E0277]: the trait bound `Vec<u8>: parity_scale_codec::MaxEncodedLen` is not satisfied
+ --> tests/pallet_ui/storage_pov_estimate_missing_mel.rs:8:12
   |
-9 |     #[pallet::pallet]
-  |               ^^^^^^ the trait `parity_scale_codec::MaxEncodedLen` is not implemented for `Bar`
+8 |     #[pallet::pallet]
+  |               ^^^^^^ the trait `parity_scale_codec::MaxEncodedLen` is not implemented for `Vec<u8>`
   |
   = help: the following other types implement trait `parity_scale_codec::MaxEncodedLen`:
             ()
@@ -14,4 +14,4 @@ error[E0277]: the trait bound `Bar: parity_scale_codec::MaxEncodedLen` is not sa
             (TupleElement0, TupleElement1, TupleElement2, TupleElement3, TupleElement4, TupleElement5, TupleElement6)
             (TupleElement0, TupleElement1, TupleElement2, TupleElement3, TupleElement4, TupleElement5, TupleElement6, TupleElement7)
           and 78 others
-  = note: required for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar, OptionQuery, GetDefault, NoneProofSize>` to implement `StorageInfoTrait`
+  = note: required for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Vec<u8>, OptionQuery, GetDefault, MelProofSize>` to implement `StorageInfoTrait`

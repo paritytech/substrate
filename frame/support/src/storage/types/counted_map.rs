@@ -55,7 +55,19 @@ pub struct CountedStorageMap<
 	QueryKind = OptionQuery,
 	OnEmpty = GetDefault,
 	MaxValues = GetDefault,
->(core::marker::PhantomData<(Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues)>);
+	ProofSize = GetDefault,
+>(
+	core::marker::PhantomData<(
+		Prefix,
+		Hasher,
+		Key,
+		Value,
+		QueryKind,
+		OnEmpty,
+		MaxValues,
+		ProofSize,
+	)>,
+);
 
 /// The requirement for an instance of [`CountedStorageMap`].
 pub trait CountedStorageMapInstance: StorageInstance {
@@ -68,10 +80,10 @@ trait MapWrapper {
 	type Map;
 }
 
-impl<P: CountedStorageMapInstance, H, K, V, Q, O, M> MapWrapper
-	for CountedStorageMap<P, H, K, V, Q, O, M>
+impl<P: CountedStorageMapInstance, H, K, V, Q, O, M, S> MapWrapper
+	for CountedStorageMap<P, H, K, V, Q, O, M, S>
 {
-	type Map = StorageMap<P, H, K, V, Q, O, M>;
+	type Map = StorageMap<P, H, K, V, Q, O, M, S>;
 }
 
 type CounterFor<P> = StorageValue<<P as CountedStorageMapInstance>::CounterPrefix, u32, ValueQuery>;
@@ -88,8 +100,8 @@ impl<Prefix: CountedStorageMapInstance> crate::storage::PrefixIteratorOnRemoval
 	}
 }
 
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
-	CountedStorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
+	CountedStorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 where
 	Prefix: CountedStorageMapInstance,
 	Hasher: crate::hash::StorageHasher,
@@ -387,8 +399,8 @@ where
 	}
 }
 
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
-	CountedStorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
+	CountedStorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 where
 	Prefix: CountedStorageMapInstance,
 	Hasher: crate::hash::StorageHasher + crate::ReversibleStorageHasher,
@@ -445,8 +457,9 @@ where
 	}
 }
 
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> StorageEntryMetadataBuilder
-	for CountedStorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
+	StorageEntryMetadataBuilder
+	for CountedStorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 where
 	Prefix: CountedStorageMapInstance,
 	Hasher: crate::hash::StorageHasher,
@@ -469,8 +482,9 @@ where
 	}
 }
 
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> crate::traits::StorageInfoTrait
-	for CountedStorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
+	crate::traits::StorageInfoTrait
+	for CountedStorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 where
 	Prefix: CountedStorageMapInstance,
 	Hasher: crate::hash::StorageHasher,
@@ -479,6 +493,7 @@ where
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
+	ProofSize: crate::traits::Get<Option<crate::storage::ProofSizeMode>>,
 {
 	fn storage_info() -> Vec<StorageInfo> {
 		[<Self as MapWrapper>::Map::storage_info(), CounterFor::<Prefix>::storage_info()].concat()
@@ -486,9 +501,9 @@ where
 }
 
 /// It doesn't require to implement `MaxEncodedLen` and give no information for `max_size`.
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 	crate::traits::PartialStorageInfoTrait
-	for CountedStorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+	for CountedStorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues, ProofSize>
 where
 	Prefix: CountedStorageMapInstance,
 	Hasher: crate::hash::StorageHasher,
@@ -497,6 +512,7 @@ where
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
+	ProofSize: crate::traits::Get<Option<crate::storage::ProofSizeMode>>,
 {
 	fn partial_storage_info() -> Vec<StorageInfo> {
 		[<Self as MapWrapper>::Map::partial_storage_info(), CounterFor::<Prefix>::storage_info()]

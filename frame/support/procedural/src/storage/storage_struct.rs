@@ -281,6 +281,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 										>::storage_value_final_key().to_vec(),
 										max_values: Some(1),
 										max_size: Some(max_size),
+										proof_size: None,
 									}
 								]
 							}
@@ -325,6 +326,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 										>::final_prefix().to_vec(),
 										max_values: #max_values,
 										max_size: Some(max_size),
+										proof_size: None,
 									}
 								]
 							}
@@ -375,6 +377,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 										>::final_prefix().to_vec(),
 										max_values: #max_values,
 										max_size: Some(max_size),
+										proof_size: None,
 									}
 								]
 							}
@@ -418,6 +421,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 										>::final_prefix().to_vec(),
 										max_values: #max_values,
 										max_size: Some(max_size),
+										proof_size: None,
 									}
 								]
 							}
@@ -451,6 +455,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 										>::storage_value_final_key().to_vec(),
 										max_values: Some(1),
 										max_size: None,
+										proof_size: None,
 									}
 								]
 							}
@@ -482,6 +487,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 										>::final_prefix().to_vec(),
 										max_values: #max_values,
 										max_size: None,
+										proof_size: None,
 									}
 								]
 							}
@@ -513,6 +519,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 										>::final_prefix().to_vec(),
 										max_values: #max_values,
 										max_size: None,
+										proof_size: None,
 									}
 								]
 							}
@@ -544,6 +551,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 										>::final_prefix().to_vec(),
 										max_values: #max_values,
 										max_size: None,
+										proof_size: None,
 									}
 								]
 							}

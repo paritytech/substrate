@@ -380,6 +380,7 @@ mod tests {
 					prefix: prefix(b"TestStorage", b"U32").to_vec(),
 					max_values: Some(1),
 					max_size: Some(4),
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -387,6 +388,7 @@ mod tests {
 					prefix: prefix(b"TestStorage", b"PUBU32").to_vec(),
 					max_values: Some(1),
 					max_size: Some(4),
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -394,6 +396,7 @@ mod tests {
 					prefix: prefix(b"TestStorage", b"U32MYDEF").to_vec(),
 					max_values: Some(1),
 					max_size: Some(4),
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -401,6 +404,7 @@ mod tests {
 					prefix: prefix(b"TestStorage", b"PUBU32MYDEF").to_vec(),
 					max_values: Some(1),
 					max_size: Some(4),
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -408,6 +412,7 @@ mod tests {
 					prefix: prefix(b"TestStorage", b"GETU32").to_vec(),
 					max_values: Some(1),
 					max_size: Some(4),
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -415,6 +420,7 @@ mod tests {
 					prefix: prefix(b"TestStorage", b"PUBGETU32").to_vec(),
 					max_values: Some(1),
 					max_size: Some(4),
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -422,6 +428,7 @@ mod tests {
 					prefix: prefix(b"TestStorage", b"GETU32WITHCONFIG").to_vec(),
 					max_values: Some(1),
 					max_size: Some(4),
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -429,6 +436,7 @@ mod tests {
 					prefix: prefix(b"TestStorage", b"PUBGETU32WITHCONFIG").to_vec(),
 					max_values: Some(1),
 					max_size: Some(4),
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -436,6 +444,7 @@ mod tests {
 					prefix: prefix(b"TestStorage", b"GETU32MYDEF").to_vec(),
 					max_values: Some(1),
 					max_size: Some(4),
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -443,6 +452,7 @@ mod tests {
 					prefix: prefix(b"TestStorage", b"PUBGETU32MYDEF").to_vec(),
 					max_values: Some(1),
 					max_size: Some(4),
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -450,6 +460,7 @@ mod tests {
 					prefix: prefix(b"TestStorage", b"GETU32WITHCONFIGMYDEF").to_vec(),
 					max_values: Some(1),
 					max_size: Some(4),
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -457,6 +468,7 @@ mod tests {
 					prefix: prefix(b"TestStorage", b"PUBGETU32WITHCONFIGMYDEF").to_vec(),
 					max_values: Some(1),
 					max_size: Some(4),
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -464,6 +476,7 @@ mod tests {
 					prefix: prefix(b"TestStorage", b"PUBGETU32WITHCONFIGMYDEFOPT").to_vec(),
 					max_values: Some(1),
 					max_size: Some(4),
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -471,6 +484,7 @@ mod tests {
 					prefix: prefix(b"TestStorage", b"GetU32WithBuilder").to_vec(),
 					max_values: Some(1),
 					max_size: Some(4),
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -478,6 +492,7 @@ mod tests {
 					prefix: prefix(b"TestStorage", b"GetOptU32WithBuilderSome").to_vec(),
 					max_values: Some(1),
 					max_size: Some(4),
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -485,6 +500,7 @@ mod tests {
 					prefix: prefix(b"TestStorage", b"GetOptU32WithBuilderNone").to_vec(),
 					max_values: Some(1),
 					max_size: Some(4),
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -492,6 +508,7 @@ mod tests {
 					prefix: prefix(b"TestStorage", b"MAPU32").to_vec(),
 					max_values: Some(3),
 					max_size: Some(8 + 16),
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -499,6 +516,7 @@ mod tests {
 					prefix: prefix(b"TestStorage", b"PUBMAPU32").to_vec(),
 					max_values: None,
 					max_size: Some(8 + 16),
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -506,6 +524,7 @@ mod tests {
 					prefix: prefix(b"TestStorage", b"GETMAPU32").to_vec(),
 					max_values: None,
 					max_size: Some(8 + 16),
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -513,6 +532,7 @@ mod tests {
 					prefix: prefix(b"TestStorage", b"PUBGETMAPU32").to_vec(),
 					max_values: None,
 					max_size: Some(8 + 16),
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -520,6 +540,7 @@ mod tests {
 					prefix: prefix(b"TestStorage", b"GETMAPU32MYDEF").to_vec(),
 					max_values: None,
 					max_size: Some(8 + 16),
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -527,6 +548,7 @@ mod tests {
 					prefix: prefix(b"TestStorage", b"PUBGETMAPU32MYDEF").to_vec(),
 					max_values: None,
 					max_size: Some(8 + 16),
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -534,6 +556,7 @@ mod tests {
 					prefix: prefix(b"TestStorage", b"DOUBLEMAP").to_vec(),
 					max_values: Some(3),
 					max_size: Some(12 + 16 + 16),
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -541,6 +564,7 @@ mod tests {
 					prefix: prefix(b"TestStorage", b"DOUBLEMAP2").to_vec(),
 					max_values: None,
 					max_size: Some(12 + 16 + 16),
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -548,6 +572,7 @@ mod tests {
 					prefix: prefix(b"TestStorage", b"COMPLEXTYPE1").to_vec(),
 					max_values: Some(1),
 					max_size: Some(5),
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -555,6 +580,7 @@ mod tests {
 					prefix: prefix(b"TestStorage", b"COMPLEXTYPE2").to_vec(),
 					max_values: Some(1),
 					max_size: Some(1156),
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -562,6 +588,7 @@ mod tests {
 					prefix: prefix(b"TestStorage", b"COMPLEXTYPE3").to_vec(),
 					max_values: Some(1),
 					max_size: Some(100),
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -569,6 +596,7 @@ mod tests {
 					prefix: prefix(b"TestStorage", b"NMAP").to_vec(),
 					max_values: None,
 					max_size: Some(16 + 4 + 8 + 2 + 1),
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -576,6 +604,7 @@ mod tests {
 					prefix: prefix(b"TestStorage", b"NMAP2").to_vec(),
 					max_values: None,
 					max_size: Some(16 + 4 + 1),
+					proof_size: None,
 				},
 			],
 		);
@@ -662,6 +691,7 @@ mod test2 {
 					prefix: prefix(b"TestStorage", b"SingleDef").to_vec(),
 					max_values: Some(1),
 					max_size: None,
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -669,6 +699,7 @@ mod test2 {
 					prefix: prefix(b"TestStorage", b"PairDef").to_vec(),
 					max_values: Some(1),
 					max_size: None,
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -676,6 +707,7 @@ mod test2 {
 					prefix: prefix(b"TestStorage", b"Single").to_vec(),
 					max_values: Some(1),
 					max_size: None,
+					proof_size: None,
 				},
 				StorageInfo {
 					pallet_name: b"TestStorage".to_vec(),
@@ -683,6 +715,7 @@ mod test2 {
 					prefix: prefix(b"TestStorage", b"Pair").to_vec(),
 					max_values: Some(1),
 					max_size: None,
+					proof_size: None,
 				},
 			],
 		);

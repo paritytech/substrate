@@ -1,0 +1,5 @@
+error: Invalid attribute: Duplicate attribute
+  --> tests/pallet_ui/storage_multiple_pov_estimate.rs:16:3
+   |
+16 |     #[pallet::pov_estimate = MaxEncodedLen]
+   |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

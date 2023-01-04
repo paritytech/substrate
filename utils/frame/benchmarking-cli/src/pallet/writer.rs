@@ -525,6 +525,7 @@ pub(crate) fn process_storage_results(
 		prefix: b"Skipped Metadata".to_vec(),
 		max_values: None,
 		max_size: None,
+		proof_size: None,
 	};
 	storage_info_map.insert(skip_storage_info.prefix.clone(), &skip_storage_info);
 
@@ -535,6 +536,7 @@ pub(crate) fn process_storage_results(
 		prefix: b"Benchmark Override".to_vec(),
 		max_values: None,
 		max_size: None,
+		proof_size: None,
 	};
 	storage_info_map.insert(benchmark_override.prefix.clone(), &benchmark_override);
 

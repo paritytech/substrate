@@ -36,12 +36,16 @@ use sp_std::prelude::*;
 /// ```nocompile
 /// Twox128(Prefix::pallet_prefix()) ++ Twox128(Prefix::STORAGE_PREFIX)
 /// ```
-pub struct StorageValue<Prefix, Value, QueryKind = OptionQuery, OnEmpty = GetDefault>(
-	core::marker::PhantomData<(Prefix, Value, QueryKind, OnEmpty)>,
-);
+pub struct StorageValue<
+	Prefix,
+	Value,
+	QueryKind = OptionQuery,
+	OnEmpty = GetDefault,
+	ProofSize = GetDefault,
+>(core::marker::PhantomData<(Prefix, Value, QueryKind, OnEmpty, ProofSize)>);
 
-impl<Prefix, Value, QueryKind, OnEmpty> crate::storage::generator::StorageValue<Value>
-	for StorageValue<Prefix, Value, QueryKind, OnEmpty>
+impl<Prefix, Value, QueryKind, OnEmpty, ProofSize> crate::storage::generator::StorageValue<Value>
+	for StorageValue<Prefix, Value, QueryKind, OnEmpty, ProofSize>
 where
 	Prefix: StorageInstance,
 	Value: FullCodec,
@@ -63,7 +67,8 @@ where
 	}
 }
 
-impl<Prefix, Value, QueryKind, OnEmpty> StorageValue<Prefix, Value, QueryKind, OnEmpty>
+impl<Prefix, Value, QueryKind, OnEmpty, ProofSize>
+	StorageValue<Prefix, Value, QueryKind, OnEmpty, ProofSize>
 where
 	Prefix: StorageInstance,
 	Value: FullCodec,
@@ -201,8 +206,8 @@ where
 	}
 }
 
-impl<Prefix, Value, QueryKind, OnEmpty> StorageEntryMetadataBuilder
-	for StorageValue<Prefix, Value, QueryKind, OnEmpty>
+impl<Prefix, Value, QueryKind, OnEmpty, ProofSize> StorageEntryMetadataBuilder
+	for StorageValue<Prefix, Value, QueryKind, OnEmpty, ProofSize>
 where
 	Prefix: StorageInstance,
 	Value: FullCodec + scale_info::StaticTypeInfo,
@@ -224,13 +229,14 @@ where
 	}
 }
 
-impl<Prefix, Value, QueryKind, OnEmpty> crate::traits::StorageInfoTrait
-	for StorageValue<Prefix, Value, QueryKind, OnEmpty>
+impl<Prefix, Value, QueryKind, OnEmpty, ProofSize> crate::traits::StorageInfoTrait
+	for StorageValue<Prefix, Value, QueryKind, OnEmpty, ProofSize>
 where
 	Prefix: StorageInstance,
 	Value: FullCodec + MaxEncodedLen,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
+	ProofSize: crate::traits::Get<Option<crate::storage::ProofSizeMode>>,
 {
 	fn storage_info() -> Vec<StorageInfo> {
 		vec![StorageInfo {
@@ -239,13 +245,14 @@ where
 			prefix: Self::hashed_key().to_vec(),
 			max_values: Some(1),
 			max_size: Some(Value::max_encoded_len().saturated_into()),
+			proof_size: ProofSize::get(),
 		}]
 	}
 }
 
 /// It doesn't require to implement `MaxEncodedLen` and give no information for `max_size`.
-impl<Prefix, Value, QueryKind, OnEmpty> crate::traits::PartialStorageInfoTrait
-	for StorageValue<Prefix, Value, QueryKind, OnEmpty>
+impl<Prefix, Value, QueryKind, OnEmpty, ProofSize> crate::traits::PartialStorageInfoTrait
+	for StorageValue<Prefix, Value, QueryKind, OnEmpty, ProofSize>
 where
 	Prefix: StorageInstance,
 	Value: FullCodec,
@@ -259,6 +266,7 @@ where
 			prefix: Self::hashed_key().to_vec(),
 			max_values: Some(1),
 			max_size: None,
+			proof_size: None,
 		}]
 	}
 }

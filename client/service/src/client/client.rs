@@ -552,9 +552,9 @@ where
 			CoreApi<Block> + ApiExt<Block, StateBackend = B::State>,
 	{
 		let parent_hash = *import_headers.post().parent_hash();
-		let status = self.backend.blockchain().status(BlockId::Hash(hash))?;
-		let parent_exists = self.backend.blockchain().status(BlockId::Hash(parent_hash))? ==
-			blockchain::BlockStatus::InChain;
+		let status = self.backend.blockchain().status(hash)?;
+		let parent_exists =
+			self.backend.blockchain().status(parent_hash)? == blockchain::BlockStatus::InChain;
 		match (import_existing, status) {
 			(false, blockchain::BlockStatus::InChain) => return Ok(ImportResult::AlreadyInChain),
 			(false, blockchain::BlockStatus::Unknown) => {},
@@ -1572,8 +1572,8 @@ where
 		self.backend.blockchain().info()
 	}
 
-	fn status(&self, id: BlockId<Block>) -> sp_blockchain::Result<blockchain::BlockStatus> {
-		self.backend.blockchain().status(id)
+	fn status(&self, hash: Block::Hash) -> sp_blockchain::Result<blockchain::BlockStatus> {
+		self.backend.blockchain().status(hash)
 	}
 
 	fn number(
@@ -1624,8 +1624,8 @@ where
 		self.backend.blockchain().info()
 	}
 
-	fn status(&self, id: BlockId<Block>) -> sp_blockchain::Result<blockchain::BlockStatus> {
-		(**self).status(id)
+	fn status(&self, hash: Block::Hash) -> sp_blockchain::Result<blockchain::BlockStatus> {
+		(**self).status(hash)
 	}
 
 	fn number(

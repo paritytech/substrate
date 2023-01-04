@@ -1290,6 +1290,33 @@ pub trait StorageDecodeLength: private::Sealed + codec::DecodeLength {
 	}
 }
 
+#[derive(codec::Encode, codec::Decode, crate::RuntimeDebug, Eq, PartialEq, Clone)]
+pub enum ProofSizeMode {
+	MaxEncodedLen,
+	Measured,
+}
+
+pub struct MelProofSize;
+impl sp_core::Get<Option<ProofSizeMode>> for MelProofSize {
+	fn get() -> Option<ProofSizeMode> {
+		Some(ProofSizeMode::MaxEncodedLen)
+	}
+}
+
+pub struct MeasuredProofSize;
+impl sp_core::Get<Option<ProofSizeMode>> for MeasuredProofSize {
+	fn get() -> Option<ProofSizeMode> {
+		Some(ProofSizeMode::Measured)
+	}
+}
+
+pub struct NoneProofSize;
+impl sp_core::Get<Option<ProofSizeMode>> for NoneProofSize {
+	fn get() -> Option<ProofSizeMode> {
+		None
+	}
+}
+
 /// Provides `Sealed` trait to prevent implementing trait `StorageAppend` & `StorageDecodeLength`
 /// & `EncodeLikeTuple` outside of this crate.
 mod private {
