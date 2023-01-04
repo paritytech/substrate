@@ -198,7 +198,7 @@ pub mod v3 {
 	}
 }
 
-mod v4 {
+pub mod v4 {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 
