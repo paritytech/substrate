@@ -307,9 +307,12 @@ pub mod v9 {
 				let weight_of_cached = Pallet::<T>::weight_of_fn();
 				for (v, _) in Validators::<T>::iter() {
 					let weight = weight_of_cached(&v);
-					let _ = T::VoterList::on_insert(v.clone(), weight).map_err(|err| {
-						log!(warn, "failed to insert {:?} into VoterList: {:?}", v, err)
-					});
+					// NOTE: This migration has been changed retroactively as the VoterList is now
+					// ReadOnly.
+					let _ = <T::VoterList as SortedListProvider<_>>::on_insert(v.clone(), weight)
+						.map_err(|err| {
+							log!(warn, "failed to insert {:?} into VoterList: {:?}", v, err)
+						});
 				}
 
 				log!(
@@ -383,7 +386,8 @@ pub mod v8 {
 		if StorageVersion::<T>::get() == ObsoleteReleases::V7_0_0 {
 			crate::log!(info, "migrating staking to ObsoleteReleases::V8_0_0");
 
-			// NOTE: This migration has been changed retroactively as the `VoterList` is now RO.
+			// NOTE: This migration has been changed retroactively as the `VoterList` is now
+			// ReadOnly.
 			let migrated = <T::VoterList as SortedListProvider<_>>::unsafe_regenerate(
 				Nominators::<T>::iter().map(|(id, _)| id),
 				Pallet::<T>::weight_of_fn(),
