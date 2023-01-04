@@ -489,8 +489,8 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 					.expect("`TrapReason` is the only type we use to encode host errors; qed");
 				match reason {
 					Return(ReturnData { flags, data }) => {
-						let flags =
-							ReturnFlags::from_bits(*flags).ok_or(Error::<E::T>::InvalidCallFlags)?;
+						let flags = ReturnFlags::from_bits(*flags)
+							.ok_or(Error::<E::T>::InvalidCallFlags)?;
 						Ok(ExecReturnValue { flags, data: data.clone() })
 					},
 					Termination =>
