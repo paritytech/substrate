@@ -1,5 +1,0 @@
-error: Invalid value for the proof_size attribute: Error("expected `MaxEncodedLen` or `Measured`")
-  --> tests/pallet_ui/storage_invalid_pov_estimate.rs:13:3
-   |
-13 |     #[pallet::pov_estimate = Wrong]
-   |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

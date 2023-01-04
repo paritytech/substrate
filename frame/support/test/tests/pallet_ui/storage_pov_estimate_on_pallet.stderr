@@ -1,5 +1,0 @@
-error: expected one of: `generate_store`, `without_storage_info`, `storage_version`
- --> tests/pallet_ui/storage_pov_estimate_on_pallet.rs:9:12
-  |
-9 |     #[pallet::pov_estimate = MaxEncodedLen]
-  |               ^^^^^^^^^^^^

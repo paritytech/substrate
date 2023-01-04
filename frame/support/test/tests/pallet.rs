@@ -20,7 +20,7 @@ use frame_support::{
 		DispatchClass, DispatchInfo, GetDispatchInfo, Parameter, Pays, UnfilteredDispatchable,
 	},
 	pallet_prelude::ValueQuery,
-	storage::{ProofSizeMode, unhashed},
+	storage::unhashed,
 	traits::{
 		ConstU32, GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize,
 		OnRuntimeUpgrade, PalletError, PalletInfoAccess, StorageVersion,
@@ -369,28 +369,6 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::unbounded]
 	pub type Unbounded<T> = StorageValue<Value = Vec<u8>>;
-
-	#[pallet::storage]
-	pub type GenericPovEstimateNone<T> = StorageValue<Value = u8>;
-
-	#[pallet::storage]
-	#[pallet::pov_estimate = MaxEncodedLen]
-	pub type GenericPovEstimateMEL<T> = StorageValue<Value = u8>;
-
-	#[pallet::storage]
-	#[pallet::pov_estimate = Measured]
-	pub type GenericPovEstimateMeasured<T> = StorageValue<Value = u8>;
-
-	#[pallet::storage]
-	pub type PovEstimateNone<T> = StorageValue<_, u8>;
-
-	#[pallet::storage]
-	#[pallet::pov_estimate = MaxEncodedLen]
-	pub type PovEstimateMEL<T> = StorageValue<_, u8>;
-
-	#[pallet::storage]
-	#[pallet::pov_estimate = Measured]
-	pub type PovEstimateMeasured<T> = StorageValue<_, u8>;
 
 	#[pallet::genesis_config]
 	#[derive(Default)]
@@ -1473,48 +1451,6 @@ fn metadata() {
 						default: vec![0],
 						docs: vec![],
 					},
-					StorageEntryMetadata {
-						name: "GenericPovEstimateNone",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Plain(meta_type::<u8>()),
-						default: vec![0],
-						docs: vec![],
-					},
-					StorageEntryMetadata {
-						name: "GenericPovEstimateMEL",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Plain(meta_type::<u8>()),
-						default: vec![0],
-						docs: vec![],
-					},
-					StorageEntryMetadata {
-						name: "GenericPovEstimateMeasured",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Plain(meta_type::<u8>()),
-						default: vec![0],
-						docs: vec![],
-					},
-					StorageEntryMetadata {
-						name: "PovEstimateNone",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Plain(meta_type::<u8>()),
-						default: vec![0],
-						docs: vec![],
-					},
-					StorageEntryMetadata {
-						name: "PovEstimateMEL",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Plain(meta_type::<u8>()),
-						default: vec![0],
-						docs: vec![],
-					},
-					StorageEntryMetadata {
-						name: "PovEstimateMeasured",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Plain(meta_type::<u8>()),
-						default: vec![0],
-						docs: vec![],
-					},
 				],
 			}),
 			calls: Some(meta_type::<pallet::Call<Runtime>>().into()),
@@ -1674,15 +1610,15 @@ fn test_storage_info() {
 
 	// Storage max size is calculated by adding up all the hasher size, the key type size and the
 	// value type size
-	let got = Example::storage_info();
-	let want = vec![
+	assert_eq!(
+		Example::storage_info(),
+		vec![
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
 				storage_name: b"ValueWhereClause".to_vec(),
 				prefix: prefix(b"Example", b"ValueWhereClause").to_vec(),
 				max_values: Some(1),
 				max_size: Some(8),
-				proof_size: None,
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
@@ -1690,7 +1626,6 @@ fn test_storage_info() {
 				prefix: prefix(b"Example", b"Value").to_vec(),
 				max_values: Some(1),
 				max_size: Some(4),
-				proof_size: None,
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
@@ -1698,7 +1633,6 @@ fn test_storage_info() {
 				prefix: prefix(b"Example", b"Value2").to_vec(),
 				max_values: Some(1),
 				max_size: Some(8),
-				proof_size: None,
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
@@ -1706,7 +1640,6 @@ fn test_storage_info() {
 				prefix: prefix(b"Example", b"Map").to_vec(),
 				max_values: None,
 				max_size: Some(16 + 1 + 2),
-				proof_size: None,
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
@@ -1714,7 +1647,6 @@ fn test_storage_info() {
 				prefix: prefix(b"Example", b"Map2").to_vec(),
 				max_values: Some(3),
 				max_size: Some(8 + 2 + 4),
-				proof_size: None,
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
@@ -1722,7 +1654,6 @@ fn test_storage_info() {
 				prefix: prefix(b"Example", b"Map3").to_vec(),
 				max_values: None,
 				max_size: Some(16 + 4 + 8),
-				proof_size: None,
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
@@ -1730,7 +1661,6 @@ fn test_storage_info() {
 				prefix: prefix(b"Example", b"DoubleMap").to_vec(),
 				max_values: None,
 				max_size: Some(16 + 1 + 8 + 2 + 4),
-				proof_size: None,
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
@@ -1738,7 +1668,6 @@ fn test_storage_info() {
 				prefix: prefix(b"Example", b"DoubleMap2").to_vec(),
 				max_values: Some(5),
 				max_size: Some(8 + 2 + 16 + 4 + 8),
-				proof_size: None,
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
@@ -1746,7 +1675,6 @@ fn test_storage_info() {
 				prefix: prefix(b"Example", b"DoubleMap3").to_vec(),
 				max_values: None,
 				max_size: Some(16 + 4 + 8 + 8 + 16),
-				proof_size: None,
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
@@ -1754,7 +1682,6 @@ fn test_storage_info() {
 				prefix: prefix(b"Example", b"NMap").to_vec(),
 				max_values: None,
 				max_size: Some(16 + 1 + 4),
-				proof_size: None,
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
@@ -1762,7 +1689,6 @@ fn test_storage_info() {
 				prefix: prefix(b"Example", b"NMap2").to_vec(),
 				max_values: Some(11),
 				max_size: Some(8 + 2 + 16 + 4 + 8),
-				proof_size: None,
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
@@ -1770,7 +1696,6 @@ fn test_storage_info() {
 				prefix: prefix(b"Example", b"NMap3").to_vec(),
 				max_values: None,
 				max_size: Some(16 + 1 + 8 + 2 + 16),
-				proof_size: None,
 			},
 			#[cfg(feature = "frame-feature-testing")]
 			{
@@ -1780,7 +1705,6 @@ fn test_storage_info() {
 					prefix: prefix(b"Example", b"ConditionalValue").to_vec(),
 					max_values: Some(1),
 					max_size: Some(4),
-					proof_size: None,
 				}
 			},
 			#[cfg(feature = "frame-feature-testing")]
@@ -1791,7 +1715,6 @@ fn test_storage_info() {
 					prefix: prefix(b"Example", b"ConditionalMap").to_vec(),
 					max_values: Some(12),
 					max_size: Some(8 + 2 + 4),
-					proof_size: None,
 				}
 			},
 			#[cfg(feature = "frame-feature-testing")]
@@ -1802,7 +1725,6 @@ fn test_storage_info() {
 					prefix: prefix(b"Example", b"ConditionalDoubleMap").to_vec(),
 					max_values: None,
 					max_size: Some(16 + 1 + 8 + 2 + 4),
-					proof_size: None,
 				}
 			},
 			#[cfg(feature = "frame-feature-testing")]
@@ -1813,7 +1735,6 @@ fn test_storage_info() {
 					prefix: prefix(b"Example", b"ConditionalNMap").to_vec(),
 					max_values: None,
 					max_size: Some(16 + 1 + 8 + 2 + 4),
-					proof_size: None,
 				}
 			},
 			StorageInfo {
@@ -1822,7 +1743,6 @@ fn test_storage_info() {
 				prefix: prefix(b"Example", b"RenamedCountedMap").to_vec(),
 				max_values: None,
 				max_size: Some(8 + 1 + 4),
-				proof_size: None,
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
@@ -1830,7 +1750,6 @@ fn test_storage_info() {
 				prefix: prefix(b"Example", b"CounterForRenamedCountedMap").to_vec(),
 				max_values: Some(1),
 				max_size: Some(4),
-				proof_size: None,
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
@@ -1838,61 +1757,9 @@ fn test_storage_info() {
 				prefix: prefix(b"Example", b"Unbounded").to_vec(),
 				max_values: Some(1),
 				max_size: None,
-				proof_size: None,
 			},
-			StorageInfo {
-				pallet_name: b"Example".to_vec(),
-				storage_name: b"GenericPovEstimateNone".to_vec(),
-				prefix: prefix(b"Example", b"GenericPovEstimateNone").to_vec(),
-				max_values: Some(1),
-				max_size: Some(1),
-				proof_size: None,
-			},
-			StorageInfo {
-				pallet_name: b"Example".to_vec(),
-				storage_name: b"GenericPovEstimateMEL".to_vec(),
-				prefix: prefix(b"Example", b"GenericPovEstimateMEL").to_vec(),
-				max_values: Some(1),
-				max_size: Some(1),
-				proof_size: Some(ProofSizeMode::MaxEncodedLen),
-			},
-			StorageInfo {
-				pallet_name: b"Example".to_vec(),
-				storage_name: b"GenericPovEstimateMeasured".to_vec(),
-				prefix: prefix(b"Example", b"GenericPovEstimateMeasured").to_vec(),
-				max_values: Some(1),
-				max_size: Some(1),
-				proof_size: Some(ProofSizeMode::Measured),
-			},
-			StorageInfo {
-				pallet_name: b"Example".to_vec(),
-				storage_name: b"PovEstimateNone".to_vec(),
-				prefix: prefix(b"Example", b"PovEstimateNone").to_vec(),
-				max_values: Some(1),
-				max_size: Some(1),
-				proof_size: None,
-			},
-			StorageInfo {
-				pallet_name: b"Example".to_vec(),
-				storage_name: b"PovEstimateMEL".to_vec(),
-				prefix: prefix(b"Example", b"PovEstimateMEL").to_vec(),
-				max_values: Some(1),
-				max_size: Some(1),
-				proof_size: Some(ProofSizeMode::MaxEncodedLen),
-			},
-			StorageInfo {
-				pallet_name: b"Example".to_vec(),
-				storage_name: b"PovEstimateMeasured".to_vec(),
-				prefix: prefix(b"Example", b"PovEstimateMeasured").to_vec(),
-				max_values: Some(1),
-				max_size: Some(1),
-				proof_size: Some(ProofSizeMode::Measured),
-			},
-		];
-	assert_eq!(got.len(), want.len());
-	for (i, (got, want)) in got.iter().zip(want.iter()).enumerate() {
-		assert_eq!(got, want, "Mismatch at index {i}: {}", String::from_utf8_lossy(&got.storage_name));
-	}
+		],
+	);
 
 	assert_eq!(
 		Example2::storage_info(),
@@ -1903,7 +1770,6 @@ fn test_storage_info() {
 				prefix: prefix(b"Example2", b"SomeValue").to_vec(),
 				max_values: Some(1),
 				max_size: None,
-				proof_size: None,
 			},
 			StorageInfo {
 				pallet_name: b"Example2".to_vec(),
@@ -1911,7 +1777,6 @@ fn test_storage_info() {
 				prefix: prefix(b"Example2", b"SomeCountedStorageMap").to_vec(),
 				max_values: None,
 				max_size: None,
-				proof_size: None,
 			},
 			StorageInfo {
 				pallet_name: b"Example2".to_vec(),
@@ -1919,7 +1784,6 @@ fn test_storage_info() {
 				prefix: prefix(b"Example2", b"CounterForSomeCountedStorageMap").to_vec(),
 				max_values: Some(1),
 				max_size: Some(4),
-				proof_size: None,
 			},
 		],
 	);
