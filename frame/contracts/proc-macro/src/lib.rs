@@ -483,7 +483,6 @@ fn expand_env(def: &mut EnvDef, docs: bool) -> TokenStream2 {
 	quote! {
 		pub struct Env;
 		#impls
-		pub use docs as api_doc;
 		/// Contains the documentation of the API available to contracts.
 		///
 		/// In order to generate this documentation, pass `doc` attribute to the [`#[define_env]`][`macro@define_env`] macro:
@@ -494,7 +493,7 @@ fn expand_env(def: &mut EnvDef, docs: bool) -> TokenStream2 {
 		/// Every function described in this module's sub module's traits uses this sub module's identifier
 		/// as its imported module name. The identifier of the function is the function's imported name.
 		/// According to the [WASM spec of imports](https://webassembly.github.io/spec/core/text/modules.html#text-import).
-		pub mod docs {
+		pub mod api_doc {
 			#docs
 		}
 	}

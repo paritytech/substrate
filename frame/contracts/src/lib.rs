@@ -92,7 +92,6 @@ mod schedule;
 mod storage;
 mod wasm;
 
-pub use wasm::api_doc;
 pub mod chain_extension;
 pub mod weights;
 
@@ -132,7 +131,7 @@ pub use crate::{
 	migration::Migration,
 	pallet::*,
 	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
-	wasm::Determinism,
+	wasm::{api_doc, Determinism},
 };
 
 type CodeHash<T> = <T as frame_system::Config>::Hash;
