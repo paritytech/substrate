@@ -55,9 +55,9 @@ benchmarks! {
 
 		let equivocation_proof2 = equivocation_proof1.clone();
 	}: {
-		sp_finality_grandpa::check_equivocation_proof(equivocation_proof1);
+		sp_finality_grandpa::check_equivocation_proof(equivocation_proof1, "grandpa");
 	} verify {
-		assert!(sp_finality_grandpa::check_equivocation_proof(equivocation_proof2));
+		assert!(sp_finality_grandpa::check_equivocation_proof(equivocation_proof2, "grandpa"));
 	}
 
 	note_stalled {

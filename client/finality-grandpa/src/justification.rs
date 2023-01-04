@@ -28,7 +28,7 @@ use sp_blockchain::{Error as ClientError, HeaderBackend};
 use sp_finality_grandpa::AuthorityId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 
-use crate::{AuthorityList, Commit, Error};
+use crate::{AuthorityList, Commit, Error, LOG_TARGET};
 
 /// A GRANDPA justification for block finality, it includes a commit message and
 /// an ancestry proof including all headers routing all precommit target blocks
@@ -212,6 +212,7 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 				self.justification.round,
 				set_id,
 				&mut buf,
+				LOG_TARGET,
 			) {
 				return Err(ClientError::BadJustification(
 					"invalid signature for precommit in grandpa justification".to_string(),

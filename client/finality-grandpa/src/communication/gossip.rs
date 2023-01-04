@@ -937,6 +937,7 @@ impl<Block: BlockT> Inner<Block> {
 			&full.message.signature,
 			full.round.0,
 			full.set_id.0,
+			LOG_TARGET,
 		) {
 			debug!(target: LOG_TARGET, "Bad message signature {}", full.message.id);
 			telemetry!(

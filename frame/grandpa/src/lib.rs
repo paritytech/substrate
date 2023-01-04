@@ -542,7 +542,7 @@ impl<T: Config> Pallet<T> {
 
 		// validate equivocation proof (check votes are different and
 		// signatures are valid).
-		if !sp_finality_grandpa::check_equivocation_proof(equivocation_proof) {
+		if !sp_finality_grandpa::check_equivocation_proof(equivocation_proof, LOG_TARGET) {
 			return Err(Error::<T>::InvalidEquivocationProof.into())
 		}
 
