@@ -4635,6 +4635,39 @@ mod election_data_provider {
 	}
 
 	#[test]
+	fn lazy_quota_npos_voters_works_above_quota() {
+		ExtBuilder::default()
+			.nominate(false)
+			.add_staker(
+				61,
+				60,
+				300, // 300 bond has 16 nomination quota.
+				StakerStatus::<AccountId>::Nominator(vec![21, 22, 23, 24, 25]),
+			)
+			.build_and_execute(|| {
+				// unbond 78 from stash 60 so that it's bonded balance is 222, which has a lower
+				// nomination quota than at nomination time (max 2 targets).
+				assert_ok!(Staking::unbond(RuntimeOrigin::signed(60), 78));
+
+				// even through 61 has nomination quota of 2 at the time of the election, all the
+				// nominations (5) will be used and an `Event::NominationsQuotaExceeded` emitted.
+				assert_eq!(
+					Staking::electing_voters(DataProviderBounds::new_unbounded())
+						.unwrap()
+						.iter()
+						.map(|(stash, _, targets)| (*stash, targets.len()))
+						.collect::<Vec<_>>(),
+					vec![(11, 1), (21, 1), (31, 1), (61, 5)],
+				);
+
+				assert_eq!(
+					*staking_events().last().unwrap(),
+					Event::NominationsQuotaExceeded { staker: 61, exceeded_by: 3 }
+				);
+			});
+	}
+
+	#[test]
 	fn nominations_quota_limits_size() {
 		ExtBuilder::default()
 			.nominate(false)
