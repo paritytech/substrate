@@ -383,7 +383,8 @@ pub mod v8 {
 		if StorageVersion::<T>::get() == ObsoleteReleases::V7_0_0 {
 			crate::log!(info, "migrating staking to ObsoleteReleases::V8_0_0");
 
-			let migrated = T::VoterList::unsafe_regenerate(
+			// NOTE: This migration has been changed retroactively as the `VoterList` is now RO.
+			let migrated = <T::VoterList as SortedListProvider<_>>::unsafe_regenerate(
 				Nominators::<T>::iter().map(|(id, _)| id),
 				Pallet::<T>::weight_of_fn(),
 			);
