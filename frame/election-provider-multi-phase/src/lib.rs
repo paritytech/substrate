@@ -1108,6 +1108,48 @@ pub mod pallet {
 			<QueuedSolution<T>>::put(solution);
 			Ok(())
 		}
+
+		#[pallet::call_index(5)]
+		#[pallet::weight(10_000)]
+		pub fn force_transition_phase(
+			origin: OriginFor<T>,
+			phase: Phase<T::BlockNumber>,
+		) -> DispatchResult {
+			T::ForceOrigin::ensure_origin(origin)?;
+
+			match phase {
+				Phase::Off => {
+					Self::rotate_round();
+				},
+				Phase::Signed => {
+					Self::on_initialize_open_signed();
+				},
+				Phase::Unsigned((enabled, _)) => {
+					let need_snapshot = if Self::current_phase() == Phase::Signed {
+						let _ = Self::finalize_signed_phase();
+						false
+					} else {
+						true
+					};
+
+					let now = <frame_system::Pallet<T>>::block_number();
+					if need_snapshot {
+						match Self::create_snapshot() {
+							Ok(_) => Self::on_initialize_open_unsigned(enabled, now),
+							Err(why) =>
+								log!(warn, "failed to open unsigned phase due to {:?}", why),
+						}
+					} else {
+						Self::on_initialize_open_unsigned(enabled, now);
+					}
+				},
+				Phase::Emergency => {
+					<CurrentPhase<T>>::put(Phase::Emergency);
+				},
+			}
+
+			Ok(())
+		}
 	}
 
 	#[pallet::event]
@@ -1891,7 +1933,7 @@ mod tests {
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 			assert_eq!(MultiPhase::round(), 1);
 
-			roll_to(4);
+			roll_to(14);
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 			assert!(MultiPhase::snapshot().is_none());
 			assert_eq!(MultiPhase::round(), 1);
@@ -1963,6 +2005,39 @@ mod tests {
 					Event::UnsignedPhaseStarted { round: 2 }
 				]
 			);
+		})
+	}
+
+	#[test]
+	fn force_transition_phase_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(System::block_number(), 0);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+			assert_eq!(MultiPhase::round(), 1);
+
+			assert_ok!(MultiPhase::force_transition_phase(
+				crate::mock::RuntimeOrigin::root(),
+				Phase::Emergency
+			));
+			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
+
+			assert_ok!(MultiPhase::force_transition_phase(
+				crate::mock::RuntimeOrigin::root(),
+				Phase::Signed
+			));
+			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+
+			assert_ok!(MultiPhase::force_transition_phase(
+				crate::mock::RuntimeOrigin::root(),
+				Phase::Unsigned((true, 0))
+			));
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 0)));
+
+			assert_ok!(MultiPhase::force_transition_phase(
+				crate::mock::RuntimeOrigin::root(),
+				Phase::Off
+			));
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 		})
 	}
 
