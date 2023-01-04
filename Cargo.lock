@@ -4204,7 +4204,7 @@ dependencies = [
 [[package]]
 name = "mangata-types"
 version = "0.1.0"
-source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v0.9.31#c2f636752b38a5e5a183968fdb09b79e02e604e3"
+source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev#902813c21e6d784fe5e3b67772d3a176afe643ff"
 dependencies = [
  "parity-scale-codec",
  "scale-info",
@@ -4796,12 +4796,12 @@ checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 [[package]]
 name = "orml-tokens"
 version = "0.4.1-dev"
-source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev-v0.9.31#dd9d7e6eec8e514a1492e4d477c78593e31ffa6f"
+source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev#ba84c87dc39d8ff299e3dd3f5bd5636bef046a77"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "mangata-types 0.1.0 (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v0.9.31)",
+ "mangata-types 0.1.0 (git+https://github.com/mangata-finance/substrate?branch=mangata-dev)",
  "orml-traits",
  "parity-scale-codec",
  "scale-info",
@@ -4813,7 +4813,7 @@ dependencies = [
 [[package]]
 name = "orml-traits"
 version = "0.4.1-dev"
-source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev-v0.9.31#dd9d7e6eec8e514a1492e4d477c78593e31ffa6f"
+source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev#ba84c87dc39d8ff299e3dd3f5bd5636bef046a77"
 dependencies = [
  "frame-support",
  "impl-trait-for-tuples",
@@ -4831,7 +4831,7 @@ dependencies = [
 [[package]]
 name = "orml-utilities"
 version = "0.4.1-dev"
-source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev-v0.9.31#dd9d7e6eec8e514a1492e4d477c78593e31ffa6f"
+source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev#ba84c87dc39d8ff299e3dd3f5bd5636bef046a77"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
