@@ -174,7 +174,7 @@ where
 #[async_trait::async_trait]
 impl<B: BlockT, C, P, CIDP> Verifier<B> for AuraVerifier<C, P, CIDP, NumberFor<B>>
 where
-	C: ProvideRuntimeApi<B> + Send + Sync + sc_client_api::backend::AuxStore,
+	C: ProvideRuntimeApi<B> + Send + Sync + sc_client_api::backend::AuxStore + HeaderBackend<B>,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + 'static,
@@ -186,8 +186,22 @@ where
 		&mut self,
 		mut block: BlockImportParams<B, ()>,
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+		// When importing whole state we don't verify the seal as the state is not available.
 		if block.with_state() {
-			// When importing whole state we don't verify the seal as the state is not available.
+			return Ok((block, Default::default()))
+		}
+
+		let info = self.client.info();
+
+		// If we are importing a block in the gap, we skip all checks.
+		//
+		// It is expected that the block after the gap was checked/chosen properly, e.g. by warp
+		// syncing to this block.
+		if info
+			.block_gap
+			.map(|(start, end)| start <= *block.header.number() && *block.header.number() <= end)
+			.unwrap_or(false)
+		{
 			return Ok((block, Default::default()))
 		}
 
