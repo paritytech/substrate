@@ -574,8 +574,8 @@ pub(crate) fn process_storage_results(
 						// .. or for the storage prefix?
 						pov_modes.get(&(pallet_name, "ALL".to_string())).or(
 							// .. or for the benchmark?
-							pov_modes.get(&("ALL".to_string(), "ALL".to_string()))
-						)
+							pov_modes.get(&("ALL".to_string(), "ALL".to_string())),
+						),
 					)
 				},
 				None => None,
