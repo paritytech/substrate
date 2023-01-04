@@ -741,7 +741,7 @@ fn worst_case_pov(
 	}
 }
 
-// A simple match statement which outputs the log 16 of some value.
+/// A simple match statement which outputs the log 16 of some value.
 fn easy_log_16(i: u32) -> u32 {
 	match i {
 		i if i == 0 => 0,
@@ -832,7 +832,7 @@ mod test {
 		}
 	}
 
-	fn test_storage_info() -> Vec<StorageInfo> {
+	fn test_storage_info(pov_modes: Option<PovEstimationMode>) -> Vec<StorageInfo> {
 		vec![StorageInfo {
 			pallet_name: b"bounded".to_vec(),
 			storage_name: b"bounded".to_vec(),
@@ -840,6 +840,17 @@ mod test {
 			max_values: Some(1 << 20),
 			max_size: Some(32),
 		}]
+	}
+
+	fn test_pov_mode() -> PovModesMap {
+		let mut map = PovModesMap::new();
+		map.entry((b"scheduler".to_vec(), b"first_benchmark".to_vec()))
+			.or_default()
+			.insert(("scheduler".into(), "mel".into()), PovEstimationMode::MaxEncodedLen);
+		map.entry((b"scheduler".to_vec(), b"first_benchmark".to_vec()))
+			.or_default()
+			.insert(("scheduler".into(), "measured".into()), PovEstimationMode::Measured);
+		map
 	}
 
 	fn check_data(benchmark: &BenchmarkData, component: &str, base: u128, slope: u128) {
@@ -872,57 +883,46 @@ mod test {
 		);
 	}
 
-	/// Check that the measured value size instead of the MEL is used.
+	/// We measure a linear proof size but select `pov_mode = MEL` with a present MEL bound for the
+	/// type. This should result in the measured PoV being ignored and the MEL used instead.
 	#[test]
-	fn linear_pov_works() {
+	fn pov_mode_mel_constant_works() {
 		let mut results = Vec::new();
 		for i in 0..5 {
-			let s = (1u32 << 22).checked_div(i).unwrap_or_default();
 			results.push(BenchmarkResult {
-				components: vec![(BenchmarkParameter::s, s)],
+				components: vec![(BenchmarkParameter::s, i)],
 				extrinsic_time: 0,
 				storage_root_time: 0,
-				reads: 2,
-				repeat_reads: 0,
-				writes: 2,
-				repeat_writes: 0,
-				proof_size: 204 + s,
-				keys: vec![
-					(b"preimageOf".to_vec(), 1, 1, false),
-					(b"statusOf".to_vec(), 1, 1, false),
-				],
+				reads: 1,
+				repeat_reads: 777,
+				writes: 888,
+				repeat_writes: 999,
+				proof_size: i * 1024,
+				keys: vec![(b"mel".to_vec(), 1, 1, false)],
 			})
 		}
 
 		let data = BenchmarkBatchSplitResults {
 			pallet: b"scheduler".to_vec(),
-			instance: b"scheduler".to_vec(),
+			instance: b"instance".to_vec(),
 			benchmark: b"first_benchmark".to_vec(),
 			time_results: results.clone(),
 			db_results: results,
 		};
 
-		let storage_info = vec![
-			StorageInfo {
-				pallet_name: b"scheduler".to_vec(),
-				storage_name: b"preimage".to_vec(),
-				prefix: b"preimageOf".to_vec(),
-				max_values: None,
-				max_size: Some(1 << 22), // MEL is large.
-			},
-			StorageInfo {
-				pallet_name: b"scheduler".to_vec(),
-				storage_name: b"status".to_vec(),
-				prefix: b"statusOf".to_vec(),
-				max_values: None,
-				max_size: Some(91),
-			},
-		];
+		let storage_info = vec![StorageInfo {
+			pallet_name: b"scheduler".to_vec(),
+			storage_name: b"mel".to_vec(),
+			prefix: b"mel".to_vec(),
+			max_values: None,
+			max_size: Some(1 << 22), // MEL of 4 MiB
+		}];
 
 		let mapped_results = map_results(
 			&[data],
 			&storage_info,
 			&Default::default(),
+			Default::default(),
 			&AnalysisChoice::default(),
 			&AnalysisChoice::MedianSlopes,
 			1_000_000,
@@ -930,11 +930,181 @@ mod test {
 		)
 		.unwrap();
 		let result =
-			mapped_results.get(&("scheduler".to_string(), "scheduler".to_string())).unwrap()[0]
+			mapped_results.get(&("scheduler".to_string(), "instance".to_string())).unwrap()[0]
 				.clone();
+
 		let base = result.base_calculated_proof_size;
-		let slope = result.component_calculated_proof_size[0].slope;
-		assert_eq!((base, slope), (5154, 1));
+		assert!(result.component_calculated_proof_size.is_empty(), "There is no slope");
+		// It's a map with 5 layers overhead:
+		assert_eq!(base, (1 << 22) + 15 * 33 * 5);
+	}
+
+	/// Record a small linear proof size but since MEL is selected and available it should be used
+	/// instead.
+	#[test]
+	fn pov_mode_mel_linear_works() {
+		let mut results = Vec::new();
+		for i in 0..5 {
+			results.push(BenchmarkResult {
+				components: vec![(BenchmarkParameter::s, i)],
+				extrinsic_time: 0,
+				storage_root_time: 0,
+				reads: 123,
+				repeat_reads: 777,
+				writes: 888,
+				repeat_writes: 999,
+				proof_size: i * 1024,
+				keys: vec![(format!("mel").as_bytes().to_vec(), i, 1, false)],
+			})
+		}
+
+		let data = BenchmarkBatchSplitResults {
+			pallet: b"scheduler".to_vec(),
+			instance: b"instance".to_vec(),
+			benchmark: b"first_benchmark".to_vec(),
+			time_results: results.clone(),
+			db_results: results,
+		};
+
+		let storage_info = vec![StorageInfo {
+			pallet_name: b"scheduler".to_vec(),
+			storage_name: b"mel".to_vec(),
+			prefix: b"mel".to_vec(),
+			max_values: None,
+			max_size: Some(1 << 22), // MEL of 4 MiB
+		}];
+
+		let mapped_results = map_results(
+			&[data],
+			&storage_info,
+			&Default::default(),
+			Default::default(),
+			&AnalysisChoice::default(),
+			&AnalysisChoice::MedianSlopes,
+			1_000_000,
+			0,
+		)
+		.unwrap();
+		let result =
+			mapped_results.get(&("scheduler".to_string(), "instance".to_string())).unwrap()[0]
+				.clone();
+
+		let base = result.base_calculated_proof_size;
+		assert_eq!(result.component_calculated_proof_size.len(), 1, "There is a slope");
+		let slope = result.component_calculated_proof_size[0].clone().slope;
+		assert_eq!(base, 0);
+		// It's a map with 5 layers overhead:
+		assert_eq!(slope, (1 << 22) + 15 * 33 * 5);
+	}
+
+	#[test]
+	fn pov_mode_measured_const_works() {
+		let mut results = Vec::new();
+		for i in 0..5 {
+			results.push(BenchmarkResult {
+				components: vec![(BenchmarkParameter::s, i)],
+				extrinsic_time: 0,
+				storage_root_time: 0,
+				reads: 123,
+				repeat_reads: 777,
+				writes: 888,
+				repeat_writes: 999,
+				proof_size: 1024,
+				keys: vec![(format!("measured").as_bytes().to_vec(), 1, 1, false)],
+			})
+		}
+
+		let data = BenchmarkBatchSplitResults {
+			pallet: b"scheduler".to_vec(),
+			instance: b"instance".to_vec(),
+			benchmark: b"first_benchmark".to_vec(),
+			time_results: results.clone(),
+			db_results: results,
+		};
+
+		let storage_info = vec![StorageInfo {
+			pallet_name: b"scheduler".to_vec(),
+			storage_name: b"measured".to_vec(),
+			prefix: b"measured".to_vec(),
+			max_values: None,
+			max_size: Some(1 << 22), // MEL of 4 MiB
+		}];
+
+		let mapped_results = map_results(
+			&[data],
+			&storage_info,
+			&Default::default(),
+			test_pov_mode(),
+			&AnalysisChoice::default(),
+			&AnalysisChoice::MedianSlopes,
+			1_000_000,
+			0,
+		)
+		.unwrap();
+		let result =
+			mapped_results.get(&("scheduler".to_string(), "instance".to_string())).unwrap()[0]
+				.clone();
+
+		let base = result.base_calculated_proof_size;
+		assert!(result.component_calculated_proof_size.is_empty(), "There is no slope");
+		// 5 Trie layers overhead because of the 1M max elements in that map:
+		assert_eq!(base, 1024 + 15 * 33 * 5);
+	}
+
+	#[test]
+	fn pov_mode_measured_linear_works() {
+		let mut results = Vec::new();
+		for i in 0..5 {
+			results.push(BenchmarkResult {
+				components: vec![(BenchmarkParameter::s, i)],
+				extrinsic_time: 0,
+				storage_root_time: 0,
+				reads: 123,
+				repeat_reads: 777,
+				writes: 888,
+				repeat_writes: 999,
+				proof_size: i * 1024,
+				keys: vec![(format!("measured").as_bytes().to_vec(), i, 1, false)],
+			})
+		}
+
+		let data = BenchmarkBatchSplitResults {
+			pallet: b"scheduler".to_vec(),
+			instance: b"instance".to_vec(),
+			benchmark: b"first_benchmark".to_vec(),
+			time_results: results.clone(),
+			db_results: results,
+		};
+
+		let storage_info = vec![StorageInfo {
+			pallet_name: b"scheduler".to_vec(),
+			storage_name: b"measured".to_vec(),
+			prefix: b"measured".to_vec(),
+			max_values: None,
+			max_size: Some(1 << 22), // MEL of 4 MiB
+		}];
+
+		let mapped_results = map_results(
+			&[data],
+			&storage_info,
+			&Default::default(),
+			test_pov_mode(),
+			&AnalysisChoice::default(),
+			&AnalysisChoice::MedianSlopes,
+			1_000_000,
+			0,
+		)
+		.unwrap();
+		let result =
+			mapped_results.get(&("scheduler".to_string(), "instance".to_string())).unwrap()[0]
+				.clone();
+
+		let base = result.base_calculated_proof_size;
+		assert_eq!(result.component_calculated_proof_size.len(), 1, "There is a slope");
+		let slope = result.component_calculated_proof_size[0].clone().slope;
+		assert_eq!(base, 0);
+		// It's a map with 5 layers overhead:
+		assert_eq!(slope, 1024 + 15 * 33 * 5);
 	}
 
 	#[test]
@@ -944,10 +1114,11 @@ mod test {
 				test_data(b"first", b"first", BenchmarkParameter::a, 10, 3),
 				test_data(b"first", b"second", BenchmarkParameter::b, 9, 2),
 				test_data(b"second", b"first", BenchmarkParameter::c, 3, 4),
-				test_data(b"bounded", b"bounded", BenchmarkParameter::d, 0, 1),
+				test_data(b"bounded", b"bounded", BenchmarkParameter::d, 4, 6),
 			],
-			&test_storage_info(),
+			&test_storage_info(Some(PovEstimationMode::MaxEncodedLen)),
 			&Default::default(),
+			Default::default(),
 			&AnalysisChoice::default(),
 			&AnalysisChoice::MedianSlopes,
 			1_000_000,
@@ -976,14 +1147,14 @@ mod test {
 		let bounded_pallet_benchmark = &mapped_results
 			.get(&("bounded_pallet".to_string(), "instance".to_string()))
 			.unwrap()[0];
-		dbg!(&bounded_pallet_benchmark);
 		assert_eq!(bounded_pallet_benchmark.name, "bounded_benchmark");
-		check_data(bounded_pallet_benchmark, "d", 0, 1);
-		assert_eq!(bounded_pallet_benchmark.base_calculated_proof_size, 1024);
-		// 5*15*33 + 1024 = 3499
+		check_data(bounded_pallet_benchmark, "d", 4, 6);
+		// (5 * 15 * 33 + 32) * 4 = 10028
+		assert_eq!(bounded_pallet_benchmark.base_calculated_proof_size, 10028);
+		// (5 * 15 * 33 + 32) * 6 = 15042
 		assert_eq!(
 			bounded_pallet_benchmark.component_calculated_proof_size,
-			vec![ComponentSlope { name: "d".into(), slope: 3499, error: 0 }]
+			vec![ComponentSlope { name: "d".into(), slope: 15042, error: 0 }]
 		);
 	}
 
@@ -991,8 +1162,9 @@ mod test {
 	fn additional_trie_layers_work() {
 		let mapped_results = map_results(
 			&[test_data(b"first", b"first", BenchmarkParameter::a, 10, 3)],
-			&test_storage_info(),
+			&test_storage_info(Some(PovEstimationMode::MaxEncodedLen)),
 			&Default::default(),
+			Default::default(),
 			&AnalysisChoice::default(),
 			&AnalysisChoice::MedianSlopes,
 			1_000_000,
@@ -1004,8 +1176,9 @@ mod test {
 			.unwrap()[0];
 		let mapped_results = map_results(
 			&[test_data(b"first", b"first", BenchmarkParameter::a, 10, 3)],
-			&test_storage_info(),
+			&test_storage_info(Some(PovEstimationMode::MaxEncodedLen)),
 			&Default::default(),
+			Default::default(),
 			&AnalysisChoice::default(),
 			&AnalysisChoice::MedianSlopes,
 			1_000_000,
@@ -1035,8 +1208,9 @@ mod test {
 				test_data(b"first", b"second", BenchmarkParameter::b, 9, 2),
 				test_data(b"second", b"first", BenchmarkParameter::c, 3, 4),
 			],
-			&[],
+			&test_storage_info(Some(PovEstimationMode::Measured)),
 			&Default::default(),
+			Default::default(),
 			&AnalysisChoice::default(),
 			&AnalysisChoice::MedianSlopes,
 			1_000_000,
