@@ -38,6 +38,7 @@ pub struct OnRuntimeUpgradeCmd {
 	/// - `try-state`: Perform the try-state checks.
 	///
 	/// Performing any checks will potentially invalidate the measured PoV/Weight.
+	// NOTE: The clap attributes make it backwards compatible with the previous `--checks` flag.
 	#[clap(long,
 		default_value = "None",
 		default_missing_value = "All",
