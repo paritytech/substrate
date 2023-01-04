@@ -27,7 +27,11 @@ use inflector::Inflector;
 use itertools::Itertools;
 use serde::Serialize;
 
-use crate::{pallet::command::ComponentRange, shared::UnderscoreHelper, PalletCmd};
+use crate::{
+	pallet::command::{ComponentRange, PovEstimationMode, PovModesMap},
+	shared::UnderscoreHelper,
+	PalletCmd,
+};
 use frame_benchmarking::{
 	Analysis, AnalysisChoice, BenchmarkBatchSplitResults, BenchmarkResult, BenchmarkSelector,
 };
@@ -130,6 +134,7 @@ fn map_results(
 	batches: &[BenchmarkBatchSplitResults],
 	storage_info: &[StorageInfo],
 	component_ranges: &HashMap<(Vec<u8>, Vec<u8>), Vec<ComponentRange>>,
+	pov_modes: PovModesMap,
 	analysis_choice: &AnalysisChoice,
 	pov_analysis_choice: &AnalysisChoice,
 	worst_case_map_values: u32,
@@ -154,6 +159,7 @@ fn map_results(
 			batch,
 			storage_info,
 			&component_ranges,
+			pov_modes.clone(),
 			analysis_choice,
 			pov_analysis_choice,
 			worst_case_map_values,
@@ -182,6 +188,7 @@ fn get_benchmark_data(
 	storage_info: &[StorageInfo],
 	// Per extrinsic component ranges.
 	component_ranges: &HashMap<(Vec<u8>, Vec<u8>), Vec<ComponentRange>>,
+	pov_modes: PovModesMap,
 	analysis_choice: &AnalysisChoice,
 	pov_analysis_choice: &AnalysisChoice,
 	worst_case_map_values: u32,
@@ -271,33 +278,61 @@ fn get_benchmark_data(
 
 	// We add additional comments showing which storage items were touched.
 	// We find the worst case proof size, and use that as the final proof size result.
-	let (comments, storage_per_prefix) = process_storage_results(
+	let mut storage_per_prefix = HashMap::<Vec<u8>, Vec<BenchmarkResult>>::new();
+	let pov_mode = pov_modes
+		.get(&(batch.pallet.clone(), batch.benchmark.clone()))
+		.cloned()
+		.unwrap_or_default();
+	let comments = process_storage_results(
+		&mut storage_per_prefix,
 		&batch.db_results,
 		storage_info,
+		&pov_mode,
 		worst_case_map_values,
 		additional_trie_layers,
 	);
 
-	let calculated_proof_size =
-		pov_analysis_function(&storage_per_prefix, BenchmarkSelector::ProofSize)
-			.expect("analysis function should return proof sizes for valid inputs");
-	calculated_proof_size
-		.slopes
-		.into_iter()
-		.zip(calculated_proof_size.names.iter())
-		.zip(extract_errors(&calculated_proof_size.errors))
-		.for_each(|((slope, name), error)| {
-			if !slope.is_zero() {
-				if !used_components.contains(&name) {
-					used_components.push(name);
+	let proof_size_per_components = storage_per_prefix
+		.iter()
+		.map(|(prefix, results)| {
+			let proof_size = analysis_function(results, BenchmarkSelector::ProofSize)
+				.expect("analysis function should return proof sizes for valid inputs");
+			let slope = proof_size
+				.slopes
+				.into_iter()
+				.zip(proof_size.names.iter())
+				.zip(extract_errors(&proof_size.errors))
+				.map(|((slope, name), error)| ComponentSlope { name: name.clone(), slope, error })
+				.collect::<Vec<_>>();
+			(prefix.clone(), slope, proof_size.base)
+		})
+		.collect::<Vec<_>>();
+
+	let mut base_calculated_proof_size = 0;
+	// Sum up the proof sizes per component
+	for (_, slope, base) in proof_size_per_components.iter() {
+		base_calculated_proof_size += base;
+		for component in slope.iter() {
+			let mut found = false;
+			for used_component in used_calculated_proof_size.iter_mut() {
+				if used_component.name == component.name {
+					used_component.slope += component.slope;
+					found = true;
+					break
+				}
+			}
+			if !found && !component.slope.is_zero() {
+				if !used_components.contains(&&component.name) {
+					used_components.push(&component.name);
 				}
 				used_calculated_proof_size.push(ComponentSlope {
-					name: name.clone(),
-					slope,
-					error,
+					name: component.name.clone(),
+					slope: component.slope,
+					error: component.error,
 				});
 			}
-		});
+		}
+	}
 
 	// This puts a marker on any component which is entirely unused in the weight formula.
 	let components = batch.time_results[0]
@@ -321,7 +356,7 @@ fn get_benchmark_data(
 		base_weight: extrinsic_time.base,
 		base_reads: reads.base,
 		base_writes: writes.base,
-		base_calculated_proof_size: calculated_proof_size.base,
+		base_calculated_proof_size,
 		base_recorded_proof_size: recorded_proof_size.base,
 		component_weight: used_extrinsic_time,
 		component_reads: used_reads,
@@ -339,6 +374,7 @@ pub(crate) fn write_results(
 	batches: &[BenchmarkBatchSplitResults],
 	storage_info: &[StorageInfo],
 	component_ranges: &HashMap<(Vec<u8>, Vec<u8>), Vec<ComponentRange>>,
+	pov_modes: PovModesMap,
 	path: &PathBuf,
 	cmd: &PalletCmd,
 ) -> Result<(), std::io::Error> {
@@ -403,6 +439,7 @@ pub(crate) fn write_results(
 		batches,
 		storage_info,
 		component_ranges,
+		pov_modes,
 		&analysis_choice,
 		&pov_analysis_choice,
 		cmd.worst_case_map_values,
@@ -455,19 +492,20 @@ pub(crate) fn write_results(
 	Ok(())
 }
 
-// This function looks at the keys touched during the benchmark, and the storage info we collected
-// from the pallets, and creates comments with information about the storage keys touched during
-// each benchmark.
-//
-// It returns (comments, warnings) for human consumption.
+/// This function looks at the keys touched during the benchmark, and the storage info we collected
+/// from the pallets, and creates comments with information about the storage keys touched during
+/// each benchmark.
+///
+/// It returns informational comments for human consumption.
 pub(crate) fn process_storage_results(
+	storage_per_prefix: &mut HashMap<Vec<u8>, Vec<BenchmarkResult>>,
 	results: &[BenchmarkResult],
 	storage_info: &[StorageInfo],
+	pov_modes: &HashMap<(String, String), PovEstimationMode>,
 	worst_case_map_values: u32,
 	additional_trie_layers: u8,
-) -> (Vec<String>, Vec<BenchmarkResult>) {
+) -> Vec<String> {
 	let mut comments = Vec::new();
-	let mut storage_per_prefix = Vec::new();
 	let mut storage_info_map = storage_info
 		.iter()
 		.map(|info| (info.prefix.clone(), info))
@@ -497,11 +535,14 @@ pub(crate) fn process_storage_results(
 	let mut identified_prefix = HashSet::<Vec<u8>>::new();
 	let mut identified_key = HashSet::<Vec<u8>>::new();
 
+	// Benchmark-wide overwrite for the PoV estimation mode. Default is `None`.
+	let pov_mode_default = pov_modes.get(&("ALL".to_string(), "ALL".to_string()));
+	// TODO Emit a warning for unused `pov_mode` attributes.
+
 	// We have to iterate in reverse order to catch the largest values for read/write since the
 	// components start low and then increase and only the first value is used.
 	for result in results.iter().rev() {
-		let (mut overhead, mut trie_overhead) = (0, 0);
-		'inner: for (key, reads, writes, whitelisted) in &result.keys {
+		for (key, reads, writes, whitelisted) in &result.keys {
 			// skip keys which are whitelisted
 			if *whitelisted {
 				continue
@@ -512,22 +553,62 @@ pub(crate) fn process_storage_results(
 			let is_key_identified = identified_key.contains(key);
 			let is_prefix_identified = identified_prefix.contains(&prefix);
 
+			let mut prefix_result = result.clone();
 			let key_info = storage_info_map.get(&prefix);
+			let max_size = key_info.map(|k| k.max_size).flatten();
+
+			let desired_pov_mode = match key_info {
+				Some(StorageInfo { pallet_name, storage_name, .. }) => {
+					let pallet_name =
+						String::from_utf8(pallet_name.clone()).expect("encoded from string");
+					let storage_name =
+						String::from_utf8(storage_name.clone()).expect("encoded from string");
+					// Is there a PoV-mode override for this storage item?
+					pov_modes.get(&(pallet_name.clone(), storage_name)).or(
+						// .. or just for the pallet prefix?
+						pov_modes.get(&(pallet_name, "ALL".to_string())).or(
+							// .. or none at all?
+							pov_mode_default,
+						),
+					)
+				},
+				None => pov_mode_default,
+			};
+
 			let pov_overhead = single_read_pov_overhead(
 				key_info.and_then(|i| i.max_values),
 				worst_case_map_values,
 			);
-			// We add the overhead for a single read each time. In a more advanced version we could
-			// take node re-using into account and over-estimate a bit less.
-			overhead += pov_overhead * *reads;
-			// Add the PoV overhead for every new prefix.
-			if *reads > 0 {
-				trie_overhead = 15 * 33 * additional_trie_layers as u32;
-			}
+
+			let used_pov_mode = match (desired_pov_mode, max_size) {
+				(None, None) | (Some(PovEstimationMode::Measured), _) => {
+					// We add the overhead for a single read each time. In a more advanced version
+					// we could take node re-using into account and over-estimate a bit less.
+					prefix_result.proof_size += pov_overhead * *reads;
+					// Add the additional trie layer overhead for every new prefix.
+					if *reads > 0 {
+						prefix_result.proof_size += 15 * 33 * additional_trie_layers as u32;
+					}
+					PovEstimationMode::Measured
+				},
+				(None, Some(max_size)) |
+				(Some(PovEstimationMode::MaxEncodedLen), Some(max_size)) => {
+					prefix_result.proof_size = (pov_overhead + max_size) * *reads;
+
+					if *reads > 0 {
+						prefix_result.proof_size += 15 * 33 * additional_trie_layers as u32;
+					}
+					PovEstimationMode::MaxEncodedLen
+				},
+				(Some(PovEstimationMode::MaxEncodedLen), None) => {
+					panic!("Need MEL bound when selecting PoV estimation mode: MEL");
+				},
+			};
+			storage_per_prefix.entry(prefix.clone()).or_default().push(prefix_result);
 
 			match (is_key_identified, is_prefix_identified) {
 				// We already did everything, move on...
-				(true, true) => continue 'inner,
+				(true, true) => continue,
 				(false, true) => {
 					// track newly identified key
 					identified_key.insert(key.clone());
@@ -581,7 +662,7 @@ pub(crate) fn process_storage_results(
 						) {
 							Some(new_pov) => {
 								let comment = format!(
-									"Proof: {} {} (values: {:?}, size: {:?}, worst-case: {})",
+									"Proof: {} {} (max_values: {:?}, max_size: {:?}, added: {}, mode: {:?})",
 									String::from_utf8(key_info.pallet_name.clone())
 										.expect("encoded from string"),
 									String::from_utf8(key_info.storage_name.clone())
@@ -589,6 +670,7 @@ pub(crate) fn process_storage_results(
 									key_info.max_values,
 									key_info.max_size,
 									new_pov,
+									used_pov_mode,
 								);
 								comments.push(comment)
 							},
@@ -598,8 +680,9 @@ pub(crate) fn process_storage_results(
 								let item = String::from_utf8(key_info.storage_name.clone())
 									.expect("encoded from string");
 								let comment = format!(
-									"Proof Skipped: {} {} (values: {:?}, size: {:?})",
+									"Proof Skipped: {} {} (max_values: {:?}, max_size: {:?}, mode: {:?})",
 									pallet, item, key_info.max_values, key_info.max_size,
+									used_pov_mode,
 								);
 								comments.push(comment);
 							},
@@ -617,12 +700,9 @@ pub(crate) fn process_storage_results(
 				}
 			}
 		}
-		let mut result = result.clone();
-		result.proof_size += overhead + trie_overhead;
-		storage_per_prefix.push(result);
 	}
 
-	(comments, storage_per_prefix)
+	comments
 }
 
 /// The PoV overhead when reading a key the first time out of a map with `max_values` entries.
