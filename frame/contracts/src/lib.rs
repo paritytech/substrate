@@ -368,6 +368,9 @@ pub mod pallet {
 			} else {
 				T::WeightInfo::on_process_deletion_queue_batch()
 			}
+
+			// TODO: If new feature flag is introduced, we should increment return weight by `1 DB read` to account
+			// for check whether calls should be enabled
 		}
 	}
 
@@ -698,6 +701,33 @@ pub mod pallet {
 				T::WeightInfo::instantiate(data_len, salt_len),
 			)
 		}
+
+		// TODO: This call is only useful if we have a migration to do.
+		// So perhaps this call should be included only if a new `migration` flag is enabled?
+
+		/// Executes storage migration if it is applicable.
+		///
+		/// Migration will keep going until it consumes more weight than the specified limit.
+		/// In case no limit is specified by the caller, a predefined max limit is used.
+		/// In case user specified limit is greater than predefined max limit, latter will be used.
+		#[pallet::call_index(99)]
+		#[pallet::weight({
+            let max_allowed_call_weight = migration::MigrationHelper::<T>::max_call_weight();
+            weight_limit
+                .unwrap_or(max_allowed_call_weight)
+                .min(max_allowed_call_weight)
+        })]
+		pub fn migrate_storage(
+			origin: OriginFor<T>,
+			weight_limit: Option<Weight>,
+			version: u32,
+		) -> DispatchResultWithPostInfo {
+			ensure_signed(origin)?;
+
+			let consumed_weight = Migration::<T>::migration_step(weight_limit, version);
+
+			Ok(Some(consumed_weight).into())
+		}
 	}
 
 	#[pallet::event]
@@ -771,6 +801,10 @@ pub mod pallet {
 			/// The code hash that was delegate called.
 			code_hash: CodeHash<T>,
 		},
+
+		/// TODO: should we have something like this or should I remove it? It's nice to have this
+		/// to see the actual effect of the migration but perhaps it's just bloating the enum.
+		ItemsMigrated { migrated_values: u32 },
 	}
 
 	#[pallet::error]

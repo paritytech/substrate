@@ -16,17 +16,19 @@
 // limitations under the License.
 
 use crate::{BalanceOf, CodeHash, Config, Pallet, TrieId, Weight};
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, FullCodec};
 use frame_support::{
 	codec,
 	pallet_prelude::*,
-	storage::migration,
+	storage::{generator::StorageMap, migration, unhashed},
 	storage_alias,
 	traits::{Get, OnRuntimeUpgrade},
-	Identity, Twox64Concat,
+	Identity, Twox64Concat, WeakBoundedVec,
 };
 use sp_runtime::traits::Saturating;
 use sp_std::{marker::PhantomData, prelude::*};
+
+const LOG_TARGET: &str = "pallet-contracts::storage-migration";
 
 /// Performs all necessary migrations based on `StorageVersion`.
 pub struct Migration<T: Config>(PhantomData<T>);
@@ -80,6 +82,59 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
 		let version = Decode::decode(&mut state.as_ref()).map_err(|_| "Cannot decode version")?;
 		post_checks::post_upgrade::<T>(version)
+	}
+}
+
+impl<T: Config> Migration<T> {
+	pub(crate) fn migration_step(weight_limit: Option<Weight>, version: u32) -> Weight {
+		let max_allowed_call_weight = <MigrationHelper<T>>::max_call_weight();
+		let weight_limit =
+			weight_limit.unwrap_or(max_allowed_call_weight).min(max_allowed_call_weight);
+
+		match version {
+			9 => v9::migration_step::<T>(weight_limit),
+			_ => Weight::zero(),
+		}
+	}
+}
+
+// Helper for common migration operations
+pub struct MigrationHelper<T: Config>(PhantomData<T>);
+impl<T: Config> MigrationHelper<T> {
+	/// Max allowed weight that migration should be allowed to consume
+	pub(crate) fn max_call_weight() -> Weight {
+		// 50% of block should be fine
+		T::BlockWeights::get().max_block / 2
+	}
+
+	/// Used to translate a single value in the DB
+	/// Returns conservative weight estimate of the operation, even in case translation fails.
+	///
+	/// TODO: add such functions to StorageMap, DoubleStorageMap & StorageNMap
+	fn translate<O: FullCodec + MaxEncodedLen, V: FullCodec, F: FnMut(O) -> Option<V>>(
+		key: &[u8],
+		mut f: F,
+	) -> Weight {
+		let value = match unhashed::get::<O>(key) {
+			Some(value) => value,
+			None =>
+				return Weight::from_parts(
+					T::DbWeight::get().reads(1).ref_time(),
+					O::max_encoded_len() as u64,
+				),
+		};
+
+		let mut proof_size = value.using_encoded(|o| o.len() as u64);
+
+		match f(value) {
+			Some(new) => {
+				proof_size.saturating_accrue(new.using_encoded(|n| n.len() as u64));
+				unhashed::put::<V>(key, &new);
+			},
+			None => unhashed::kill(key),
+		}
+
+		Weight::from_parts(T::DbWeight::get().reads_writes(1, 1).ref_time(), proof_size)
 	}
 }
 
@@ -183,6 +238,8 @@ mod v5 {
 mod v6 {
 	use super::*;
 
+	type RelaxedCodeVec<T> = WeakBoundedVec<u8, <T as Config>::MaxCodeLen>;
+
 	#[derive(Encode, Decode)]
 	struct OldPrefabWasmModule {
 		#[codec(compact)]
@@ -198,15 +255,15 @@ mod v6 {
 		original_code_len: u32,
 	}
 
-	#[derive(Encode, Decode)]
-	pub struct PrefabWasmModule {
+	#[derive(Encode, Decode, MaxEncodedLen)]
+	pub struct PrefabWasmModule<T: Config> {
 		#[codec(compact)]
 		pub instruction_weights_version: u32,
 		#[codec(compact)]
 		pub initial: u32,
 		#[codec(compact)]
 		pub maximum: u32,
-		pub code: Vec<u8>,
+		pub code: RelaxedCodeVec<T>,
 	}
 
 	use v5::ContractInfo as OldContractInfo;
@@ -238,7 +295,7 @@ mod v6 {
 	>;
 
 	#[storage_alias]
-	type CodeStorage<T: Config> = StorageMap<Pallet<T>, Identity, CodeHash<T>, PrefabWasmModule>;
+	type CodeStorage<T: Config> = StorageMap<Pallet<T>, Identity, CodeHash<T>, PrefabWasmModule<T>>;
 
 	#[storage_alias]
 	type OwnerInfoOf<T: Config> = StorageMap<Pallet<T>, Identity, CodeHash<T>, OwnerInfo<T>>;
@@ -270,7 +327,7 @@ mod v6 {
 				instruction_weights_version: old.instruction_weights_version,
 				initial: old.initial,
 				maximum: old.maximum,
-				code: old.code,
+				code: WeakBoundedVec::force_from(old.code, None),
 			})
 		});
 	}
@@ -371,25 +428,27 @@ mod v9 {
 	use crate::Determinism;
 	use v6::PrefabWasmModule as OldPrefabWasmModule;
 
+	type RelaxedCodeVec<T> = WeakBoundedVec<u8, <T as Config>::MaxCodeLen>;
+
 	#[derive(Encode, Decode)]
-	pub struct PrefabWasmModule {
+	pub struct PrefabWasmModule<T: Config> {
 		#[codec(compact)]
 		pub instruction_weights_version: u32,
 		#[codec(compact)]
 		pub initial: u32,
 		#[codec(compact)]
 		pub maximum: u32,
-		pub code: Vec<u8>,
+		pub code: RelaxedCodeVec<T>,
 		pub determinism: Determinism,
 	}
 
 	#[storage_alias]
-	type CodeStorage<T: Config> = StorageMap<Pallet<T>, Identity, CodeHash<T>, PrefabWasmModule>;
+	type CodeStorage<T: Config> = StorageMap<Pallet<T>, Identity, CodeHash<T>, PrefabWasmModule<T>>;
 
 	pub fn migrate<T: Config>(weight: &mut Weight) {
-		<CodeStorage<T>>::translate_values(|old: OldPrefabWasmModule| {
+		<CodeStorage<T>>::translate_values(|old: OldPrefabWasmModule<T>| {
 			weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
-			Some(PrefabWasmModule {
+			Some(PrefabWasmModule::<T> {
 				instruction_weights_version: old.instruction_weights_version,
 				initial: old.initial,
 				maximum: old.maximum,
@@ -397,6 +456,119 @@ mod v9 {
 				determinism: Determinism::Deterministic,
 			})
 		});
+	}
+
+	/// Used to keep track of migration state from `v8` to `v9`
+	#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, MaxEncodedLen)]
+	pub enum MigrationState {
+		/// No migration in progress
+		NotInProgress,
+		/// In the middle of `CodeStorage` migration. The const for max size is an overestimate but
+		/// that's fine.
+		CodeStorage(Option<WeakBoundedVec<u8, ConstU32<1000>>>),
+	}
+
+	impl Default for MigrationState {
+		fn default() -> Self {
+			MigrationState::NotInProgress
+		}
+	}
+
+	impl MigrationState {
+		/// Convert `self` into value applicable for iteration
+		fn for_iteration(self) -> Self {
+			if self == Self::NotInProgress {
+				Self::CodeStorage(None)
+			} else {
+				self
+			}
+		}
+	}
+
+	#[storage_alias]
+	pub(super) type MigrationStateV9Storage<T: Config> =
+		StorageValue<Pallet<T>, MigrationState, ValueQuery>;
+
+	/// Executes storage migration from `v8` to `v9`, consuming limited amount of weight.
+	///
+	/// Migration will keep going until it consumes more weight than the specified limit.
+	pub fn migration_step<T: Config>(weight_limit: Weight) -> Weight {
+		let version = <Pallet<T>>::on_chain_storage_version();
+		let mut consumed_weight = T::DbWeight::get().reads(1);
+
+		if version != 8 {
+			log::trace!(
+				target: LOG_TARGET,
+				"Current version is {:?} but expected is 8. Skipping migration procedures.",
+				version,
+			);
+			// TODO: should we add function for depositing events without index?
+			// <Pallet<T>>::deposit_event(crate::Event::<T>::ItemsMigrated{migrated_values: 0});
+			return consumed_weight
+		}
+
+		log::trace!(target: LOG_TARGET, "v9 migration weight limit will be {:?}.", weight_limit,);
+
+		let migration_state = <MigrationStateV9Storage<T>>::get().for_iteration();
+		consumed_weight.saturating_accrue(T::DbWeight::get().reads(1));
+
+		if let MigrationState::CodeStorage(last_processed_key) = migration_state {
+			let key_iter = if let Some(previous_key) = last_processed_key {
+				CodeStorage::<T>::iter_keys_from(previous_key.into_inner())
+			} else {
+				CodeStorage::<T>::iter_keys()
+			};
+
+			let mut counter = 0_u32;
+
+			for key in key_iter {
+				let key_as_vec = CodeStorage::<T>::storage_map_final_key(key);
+				let used_weight =
+					<MigrationHelper<T>>::translate(&key_as_vec, |old: OldPrefabWasmModule<T>| {
+						Some(PrefabWasmModule::<T> {
+							instruction_weights_version: old.instruction_weights_version,
+							initial: old.initial,
+							maximum: old.maximum,
+							code: old.code,
+							determinism: Determinism::Deterministic,
+						})
+					});
+
+				// Increment total consumed weight.
+				consumed_weight.saturating_accrue(used_weight);
+				counter += 1;
+
+				// Check if we've consumed enough weight already.
+				if consumed_weight.any_gt(weight_limit) {
+					log::trace!(
+							target: LOG_TARGET,
+							"v9 CodeStorage migration stopped after consuming {:?} weight and after processing {:?} DB entries.", consumed_weight, counter,
+						);
+					<MigrationStateV9Storage<T>>::put(MigrationState::CodeStorage(Some(
+						WeakBoundedVec::force_from(key_as_vec, None),
+					)));
+					consumed_weight.saturating_accrue(T::DbWeight::get().writes(1));
+
+					// Self::deposit_event(Event::<T>::ContractsMigrated(counter)); // TODO
+
+					// we want `try-runtime` to execute the entire migration, hence the recursion
+					if cfg!(feature = "try-runtime") {
+						return migration_step::<T>(weight_limit).saturating_add(consumed_weight)
+					} else {
+						return consumed_weight
+					}
+				}
+			}
+
+			log::trace!(target: LOG_TARGET, "v9 CodeStorage migration finished.",);
+			// Self::deposit_event(Event::<T>::ContractsMigrated(counter)); // TODO
+
+			MigrationStateV9Storage::<T>::kill();
+			StorageVersion::new(9).put::<Pallet<T>>();
+			consumed_weight.saturating_accrue(T::DbWeight::get().writes(2));
+		}
+
+		consumed_weight
 	}
 }
 
@@ -412,7 +584,7 @@ mod post_checks {
 	use v9::PrefabWasmModule;
 
 	#[storage_alias]
-	type CodeStorage<T: Config> = StorageMap<Pallet<T>, Identity, CodeHash<T>, PrefabWasmModule>;
+	type CodeStorage<T: Config> = StorageMap<Pallet<T>, Identity, CodeHash<T>, PrefabWasmModule<T>>;
 
 	#[storage_alias]
 	type ContractInfoOf<T: Config, V> =
@@ -468,6 +640,17 @@ mod post_checks {
 				"All pre-existing codes need to be deterministic."
 			);
 		}
+
+		ensure!(
+			!v9::MigrationStateV9Storage::<T>::exists(),
+			"MigrationStateStorage has to be killed at the end of migration."
+		);
+
+		ensure!(
+			<Pallet<T>>::on_chain_storage_version() == 9,
+			"pallet-contracts storage version must be 9 at the end of migration"
+		);
+
 		Ok(())
 	}
 }
