@@ -23,8 +23,8 @@
 //! While both BEEFY and Merkle Mountain Range (MMR) can be used separately,
 //! these tools were designed to work together in unison.
 //!
-//! The pallet provides a standardized MMR Leaf format that is can be used
-//! to bridge BEEFY+MMR-based networks (both standalone and polkadot-like).
+//! The pallet provides a standardized MMR Leaf format that can be used
+//! to bridge BEEFY+MMR-based networks (both standalone and Polkadot-like).
 //!
 //! The MMR leaf contains:
 //! 1. Block number and parent block hash.
