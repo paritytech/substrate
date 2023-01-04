@@ -2133,6 +2133,12 @@ impl_runtime_apis! {
 		}
 	}
 
+	impl pallet_staking_rpc_runtime_api::StakingApi<Block, Balance> for Runtime {
+		fn query_nominations_quota(balance: Balance) -> u32 {
+			Staking::query_nominations_quota(balance)
+		}
+	}
+
 	impl pallet_mmr::primitives::MmrApi<
 		Block,
 		mmr::Hash,

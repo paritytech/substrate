@@ -1,0 +1,24 @@
+[package]
+name = "pallet-staking-rpc"
+version = "4.0.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "Apache-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+description = "RPC interface for the staking pallet."
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "3.0.0" }
+jsonrpsee = { version = "0.16.2", features = ["client-core", "server", "macros"] }
+pallet-staking-rpc-runtime-api = { version = "4.0.0-dev", path = "./runtime-api" }
+sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
+sp-core = { version = "7.0.0", path = "../../../primitives/core" }
+sp-rpc = { version = "6.0.0", path = "../../../primitives/rpc" }
+sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
+sp-weights = { version = "4.0.0", path = "../../../primitives/weights" }

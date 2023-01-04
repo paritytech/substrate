@@ -141,6 +141,8 @@ members = [
 	"frame/staking",
 	"frame/staking/reward-curve",
 	"frame/staking/reward-fn",
+	"frame/staking/rpc",
+	"frame/staking/rpc/runtime-api",
 	"frame/state-trie-migration",
 	"frame/sudo",
 	"frame/root-offences",
