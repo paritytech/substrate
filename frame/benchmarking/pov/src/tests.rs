@@ -100,7 +100,7 @@ fn additional_layers_do_not_matter() {
 /// Check that the measured value size instead of the MEL is used.
 #[test]
 fn linear_measured_size_works() {
-	let weight = W::storage_value_read_linear_size;
+	let weight = W::measured_storage_value_read_linear_size;
 
 	let w0 = weight(0).proof_size();
 	let w1 = weight(1).proof_size() - w0;
@@ -108,6 +108,16 @@ fn linear_measured_size_works() {
 	assert_eq!(w1, 1, "x scales with a factor of 1");
 	let wm = weight(1000).proof_size();
 	assert_eq!(w1 * 1000 + w0, wm, "x scales linearly");
+}
+
+// vice-versa of above `linear_measured_size_works`.
+#[test]
+fn linear_mel_size_works() {
+	let weight = W::mel_storage_value_read_linear_size;
+
+	let w1 = weight(1).proof_size();
+	let wm = weight(1000).proof_size();
+	assert_eq!(w1, wm, "PoV size is const");
 }
 
 /// Although there is no estimation possible, it uses the recorded proof size as best effort.

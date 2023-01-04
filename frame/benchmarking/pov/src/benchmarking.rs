@@ -58,6 +58,7 @@ frame_benchmarking::benchmarks! {
 	// created. Then the one value is read from the map. This demonstrates that the number of other
 	// nodes in the Trie influences the proof size. The number of inserted nodes can be interpreted
 	// as the number of `StorageMap`/`StorageValue` in the whole runtime.
+	#[pov_mode = Measured]
 	storage_1m_map_read_one_value_two_additional_layers {
 		(0..(1<<10)).for_each(|i| Map1M::<T>::insert(i, i));
 		// Assume there are 16-256 other storage items.
@@ -69,6 +70,7 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(Map1M::<T>::get(1<<9), Some(1<<9));
 	}
 
+	#[pov_mode = Measured]
 	storage_1m_map_read_one_value_three_additional_layers {
 		(0..(1<<10)).for_each(|i| Map1M::<T>::insert(i, i));
 		// Assume there are 256-4096 other storage items.
@@ -80,6 +82,7 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(Map1M::<T>::get(1<<9), Some(1<<9));
 	}
 
+	#[pov_mode = Measured]
 	storage_1m_map_read_one_value_four_additional_layers {
 		(0..(1<<10)).for_each(|i| Map1M::<T>::insert(i, i));
 		// Assume there are 4096-65536 other storage items.
@@ -145,7 +148,17 @@ frame_benchmarking::benchmarks! {
 		assert!(UnboundedValue::<T>::get().is_none());
 	}
 
-	storage_value_read_linear_size {
+	#[pov_mode = Measured]
+	measured_storage_value_read_linear_size {
+		let l in 0 .. 1<<22;
+		let v: sp_runtime::BoundedVec<u8, _> = sp_std::vec![0u8; l as usize].try_into().unwrap();
+		LargeValue::<T>::put(&v);
+	}: {
+		assert!(LargeValue::<T>::get().is_some());
+	}
+
+	#[pov_mode = MaxEncodedLen]
+	mel_storage_value_read_linear_size {
 		let l in 0 .. 1<<22;
 		let v: sp_runtime::BoundedVec<u8, _> = sp_std::vec![0u8; l as usize].try_into().unwrap();
 		LargeValue::<T>::put(&v);
