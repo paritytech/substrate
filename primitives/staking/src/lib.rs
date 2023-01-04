@@ -31,6 +31,9 @@ pub type SessionIndex = u32;
 /// Counter for the number of eras that have passed.
 pub type EraIndex = u32;
 
+/// Counter for paged storage items.
+pub type PageIndex = u32;
+
 /// Trait describing something that implements a hook for any operations to perform when a staker is
 /// slashed.
 pub trait OnStakerSlash<AccountId, Balance> {

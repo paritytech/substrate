@@ -561,20 +561,27 @@ impl<T: Config> Pallet<T> {
 		>,
 		new_planned_era: EraIndex,
 	) -> BoundedVec<T::AccountId, MaxWinnersOf<T>> {
-		let elected_stashes: BoundedVec<_, MaxWinnersOf<T>> = exposures
-			.iter()
-			.cloned()
-			.map(|(x, _)| x)
-			.collect::<Vec<_>>()
-			.try_into()
-			.expect("since we only map through exposures, size of elected_stashes is always same as exposures; qed");
-
-		// Populate stakers, exposures, and the snapshot of validator prefs.
+		// Populate elected stash, stakers, exposures, and the snapshot of validator prefs.
 		let mut total_stake: BalanceOf<T> = Zero::zero();
+		let mut elected_stashes = Vec::with_capacity(exposures.len());
 		exposures.into_iter().for_each(|(stash, exposure)| {
+			// build elected stash
+			elected_stashes.push(stash);
+
 			total_stake = total_stake.saturating_add(exposure.total);
 			<ErasStakers<T>>::insert(new_planned_era, &stash, &exposure);
 
+			// split exposure into T::ExposurePageSize chunks
+			let paged_exposure: BoundedVec<
+				Exposure<T::AccountId, BalanceOf<T>>,
+				T::ExposureMaxPages,
+			> = Self::get_paged_exposure(exposure);
+
+			paged_exposure.iter().enumerate().for_each(|page, exposure| {
+				<PagedErasStakers<T>>::insert((new_planned_era, &stash, page), &exposure);
+			});
+
+			// fixme: get rid of clipped exposure someday
 			let mut exposure_clipped = exposure;
 			let clipped_max_len = T::MaxNominatorRewardedPerValidator::get() as usize;
 			if exposure_clipped.others.len() > clipped_max_len {
@@ -583,6 +590,10 @@ impl<T: Config> Pallet<T> {
 			}
 			<ErasStakersClipped<T>>::insert(&new_planned_era, &stash, exposure_clipped);
 		});
+
+		let elected_stashes: BoundedVec<_, MaxWinnersOf<T>> = elected_stashes
+			.try_into()
+			.expect("elected_stashes.len() always equal to exposures.len(); qed");
 
 		// Insert current era staking information
 		<ErasTotalStake<T>>::insert(&new_planned_era, total_stake);
@@ -605,6 +616,14 @@ impl<T: Config> Pallet<T> {
 		elected_stashes
 	}
 
+	fn get_paged_exposure<T: Config>(
+		exposure: Exposure<T::AccountId, BalanceOf<T>>,
+	) -> BoundedVec<Exposure<T::AccountId, BalanceOf<T>>, T::ExposureMaxPages> {
+		let page_size = T::ExposurePageSize::get();
+		let max_pages = T::ExposureMaxPages::get();
+
+		todo!()
+	}
 	/// Consume a set of [`BoundedSupports`] from [`sp_npos_elections`] and collect them into a
 	/// [`Exposure`].
 	fn collect_exposures(
