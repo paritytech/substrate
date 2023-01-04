@@ -193,6 +193,74 @@ pub struct VoteMessage<Number, Id, Signature> {
 	pub signature: Signature,
 }
 
+/// An equivocation (double-vote) in a given round.
+#[derive(Debug, Encode, Decode, TypeInfo)]
+pub struct Equivocation<Number, Id, Signature> {
+	/// The round number equivocated in
+	pub round_number: Number,
+	/// Node authority id
+	pub id: Id,
+	/// The first vote in the equivocation
+	pub first: VoteMessage<Number, Id, Signature>,
+	/// The second vote in the equivocation
+	pub second: VoteMessage<Number, Id, Signature>,
+}
+
+/// Proof of voter misbehavior on a given set id. Misbehavior/equivocation in
+/// BEEFY happens when a voter votes on the same round/block for different payloads.
+/// Proving is achieved by collecting the signed commitments of conflicting votes.
+#[derive(Debug, Decode, Encode, TypeInfo)]
+pub struct EquivocationProof<Number, Id, Signature> {
+	set_id: ValidatorSetId,
+	equivocation: Equivocation<Number, Id, Signature>,
+}
+
+/// Check a commitment signature by encoding the commitment and
+/// verifying the provided signature using the expected authority id.
+pub fn check_commitment_signature<Number, Id, Signature, MsgHash>(
+	commitment: &Commitment<Number>,
+	authority_id: &Id,
+	signature: &Signature,
+) -> bool
+where
+	Id: BeefyAuthorityId,
+	Signature: BeefyVerify<MsgHash, Signer = Id>,
+	Number: Clone + Encode + PartialEq,
+	MsgHash: Hash,
+{
+	let encoded_commitment = commitment.encode();
+	BeefyVerify::<MsgHash>::verify(signature, &encoded_commitment, authority_id)
+}
+
+/// Verifies the equivocation proof by making sure that both votes target
+/// different blocks and that its signatures are valid.
+pub fn check_equivocation_proof<Number, Id, Signature, MsgHash>(
+	report: EquivocationProof<Number, Id, Signature>,
+) -> bool
+where
+	Id: BeefyAuthorityId + PartialEq,
+	Signature: BeefyVerify<MsgHash, Signer = Id>,
+	Number: Clone + Encode + PartialEq,
+	MsgHash: Hash,
+{
+	let first = &report.equivocation.first;
+	let second = &report.equivocation.second;
+
+	// if votes come from different authorities,
+	// or both votes have the same commitment,
+	// --> the equivocation is invalid.
+	if first.id != second.id || first.commitment == second.commitment {
+		return false
+	}
+
+	// check signatures on both votes are valid
+	let valid_first = check_commitment_signature(&first.commitment, &first.id, &first.signature);
+	let valid_second =
+		check_commitment_signature(&second.commitment, &second.id, &second.signature);
+
+	return valid_first && valid_second
+}
+
 /// New BEEFY validator set notification hook.
 pub trait OnNewValidatorSet<AuthorityId> {
 	/// Function called by the pallet when BEEFY validator set changes.
