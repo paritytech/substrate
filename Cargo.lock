@@ -5608,6 +5608,7 @@ dependencies = [
 name = "pallet-pov-limit"
 version = "4.0.0-dev"
 dependencies = [
+ "blake2",
  "frame-benchmarking",
  "frame-support",
  "frame-system",

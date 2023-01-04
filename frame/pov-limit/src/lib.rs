@@ -32,12 +32,10 @@ mod mock;
 mod tests;
 pub mod weights;
 
+use blake2::{Blake2b512, Digest};
 use frame_support::{defensive, pallet_prelude::*, weights::WeightMeter};
 use frame_system::pallet_prelude::*;
-use sp_runtime::{
-	traits::{Hash, Zero},
-	Perbill, Saturating,
-};
+use sp_runtime::{traits::Zero, Perbill, Saturating};
 
 pub use pallet::*;
 pub use weights::WeightInfo;
@@ -234,9 +232,13 @@ pub mod pallet {
 
 	impl<T: Config> RefTimeWaster for Pallet<T> {
 		fn waste_ref_time(counter: u32) {
-			// TODO this probably does a host call. We should probably run the hash function inside
-			// WASM instead.
-			T::Hashing::hash_of(&counter.encode());
+			let mut hasher = Blake2b512::new();
+			// Blake2 has a very high speed of hashing so we make multiple
+			// hashes with it to waste more `ref_time` at once.
+			(0..50).for_each(|i: u32| {
+				hasher.update((counter & i).to_le_bytes());
+				let _ = hasher.clone().finalize();
+			});
 		}
 	}
 }
