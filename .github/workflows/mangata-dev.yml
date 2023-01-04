@@ -9,7 +9,7 @@ on:
 name: CI
 
 env:
-  TOOLCHAIN: nightly-2022-05-11
+  TOOLCHAIN: nightly-2022-09-19
 
 
 jobs:
