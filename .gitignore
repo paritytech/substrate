@@ -13,6 +13,7 @@ bin/node/runtime/wasm/target/
 polkadot.*
 .DS_Store
 .idea/
+.cache/
 nohup.out
 rls*.log
 *.orig
@@ -22,6 +23,10 @@ rls*.log
 **/hfuzz_target/
 **/hfuzz_workspace/
 .cargo-remote.toml
+.bash_logout
+.bashrc
+.profile
 *.bin
 *.iml
 scripts/ci/node-template-release/Cargo.lock
+bin/node-template/Cargo.lock
