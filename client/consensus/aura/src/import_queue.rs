@@ -196,7 +196,7 @@ where
 		// If we are importing a block in the gap, we skip all checks.
 		//
 		// It is expected that the block after the gap was checked/chosen properly, e.g. by warp
-		// syncing to this block.
+		// syncing to this block using a finality proof.
 		if info
 			.block_gap
 			.map(|(start, end)| start <= *block.header.number() && *block.header.number() <= end)
