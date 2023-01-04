@@ -281,7 +281,6 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 										>::storage_value_final_key().to_vec(),
 										max_values: Some(1),
 										max_size: Some(max_size),
-										proof_size,
 									}
 								]
 							}
