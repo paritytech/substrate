@@ -20,9 +20,9 @@
 
 use crate::keyring::*;
 use kitchensink_runtime::{
-	constants::currency::*, wasm_binary_unwrap, AccountId, BabeConfig, BalancesConfig,
-	GenesisConfig, GrandpaConfig, IndicesConfig, SessionConfig, SocietyConfig, StakerStatus,
-	StakingConfig, SystemConfig, BABE_GENESIS_EPOCH_CONFIG,
+	constants::currency::*, wasm_binary_unwrap, AccountId, AssetsConfig, BabeConfig,
+	BalancesConfig, GenesisConfig, GrandpaConfig, IndicesConfig, SessionConfig, SocietyConfig,
+	StakerStatus, StakingConfig, SystemConfig, BABE_GENESIS_EPOCH_CONFIG,
 };
 use sp_keyring::{Ed25519Keyring, Sr25519Keyring};
 use sp_runtime::Perbill;
@@ -88,8 +88,7 @@ pub fn config_endowed(code: Option<&[u8]>, extra_endowed: Vec<AccountId>) -> Gen
 		treasury: Default::default(),
 		society: SocietyConfig { members: vec![alice(), bob()], pot: 0, max_members: 999 },
 		vesting: Default::default(),
-		assets: Default::default(),
-		gilt: Default::default(),
+		assets: AssetsConfig { assets: vec![(9, alice(), true, 1)], ..Default::default() },
 		transaction_storage: Default::default(),
 		transaction_payment: Default::default(),
 		alliance: Default::default(),

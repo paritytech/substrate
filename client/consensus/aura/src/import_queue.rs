@@ -20,6 +20,7 @@
 
 use crate::{
 	aura_err, authorities, find_pre_digest, slot_author, AuthorityId, CompatibilityMode, Error,
+	LOG_TARGET,
 };
 use codec::{Codec, Decode, Encode};
 use log::{debug, info, trace};
@@ -88,7 +89,7 @@ where
 						.map_err(Error::Client)?
 				{
 					info!(
-						target: "aura",
+						target: LOG_TARGET,
 						"Slot author is equivocating at slot {} with headers {:?} and {:?}",
 						slot,
 						equivocation_proof.first_header.hash(),
@@ -185,6 +186,19 @@ where
 		&mut self,
 		mut block: BlockImportParams<B, ()>,
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+		// When importing whole state we don't verify the seal as the state is not available.
+		if block.with_state() {
+			return Ok((block, Default::default()))
+		}
+
+		// Skip checks that include execution, if being told so.
+		//
+		// This is done for example when gap syncing and it is expected that the block after the gap
+		// was checked/chosen properly, e.g. by warp syncing to this block using a finality proof.
+		if block.state_action.skip_execution_checks() {
+			return Ok((block, Default::default()))
+		}
+
 		let hash = block.header.hash();
 		let parent_hash = *block.header.parent_hash();
 		let authorities = authorities(
@@ -256,7 +270,7 @@ where
 					block.body = Some(inner_body);
 				}
 
-				trace!(target: "aura", "Checked {:?}; importing.", pre_header);
+				trace!(target: LOG_TARGET, "Checked {:?}; importing.", pre_header);
 				telemetry!(
 					self.telemetry;
 					CONSENSUS_TRACE;
@@ -272,7 +286,7 @@ where
 				Ok((block, None))
 			},
 			CheckedHeader::Deferred(a, b) => {
-				debug!(target: "aura", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
+				debug!(target: LOG_TARGET, "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
 				telemetry!(
 					self.telemetry;
 					CONSENSUS_DEBUG;

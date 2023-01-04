@@ -1291,40 +1291,6 @@ fn scheduler_v3_anon_reschedule_works() {
 	});
 }
 
-/// Cancelling a call and then scheduling a second call for the same
-/// block results in different addresses.
-#[test]
-fn scheduler_v3_anon_schedule_does_not_resuse_addr() {
-	use frame_support::traits::schedule::v3::Anon;
-	new_test_ext().execute_with(|| {
-		let call =
-			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
-
-		// Schedule both calls.
-		let addr_1 = <Scheduler as Anon<_, _, _>>::schedule(
-			DispatchTime::At(4),
-			None,
-			127,
-			root(),
-			Preimage::bound(call.clone()).unwrap(),
-		)
-		.unwrap();
-		// Cancel the call.
-		assert_ok!(<Scheduler as Anon<_, _, _>>::cancel(addr_1));
-		let addr_2 = <Scheduler as Anon<_, _, _>>::schedule(
-			DispatchTime::At(4),
-			None,
-			127,
-			root(),
-			Preimage::bound(call).unwrap(),
-		)
-		.unwrap();
-
-		// Should not re-use the address.
-		assert!(addr_1 != addr_2);
-	});
-}
-
 #[test]
 fn scheduler_v3_anon_next_schedule_time_works() {
 	use frame_support::traits::schedule::v3::Anon;
@@ -1531,45 +1497,6 @@ fn scheduler_v3_anon_reschedule_fills_holes() {
 	});
 }
 
-/// Re-scheduling into the same block produces a different address
-/// if there is still space in the agenda.
-#[test]
-fn scheduler_v3_anon_reschedule_does_not_resuse_addr_if_agenda_not_full() {
-	use frame_support::traits::schedule::v3::Anon;
-	let max: u32 = <Test as Config>::MaxScheduledPerBlock::get();
-	assert!(max > 1, "This test only makes sense for MaxScheduledPerBlock > 1");
-
-	new_test_ext().execute_with(|| {
-		let call =
-			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
-
-		// Schedule both calls.
-		let addr_1 = <Scheduler as Anon<_, _, _>>::schedule(
-			DispatchTime::At(4),
-			None,
-			127,
-			root(),
-			Preimage::bound(call.clone()).unwrap(),
-		)
-		.unwrap();
-		// Cancel the call.
-		assert_ok!(<Scheduler as Anon<_, _, _>>::cancel(addr_1));
-		let addr_2 = <Scheduler as Anon<_, _, _>>::schedule(
-			DispatchTime::At(5),
-			None,
-			127,
-			root(),
-			Preimage::bound(call).unwrap(),
-		)
-		.unwrap();
-		// Re-schedule `call` to block 4.
-		let addr_3 = <Scheduler as Anon<_, _, _>>::reschedule(addr_2, DispatchTime::At(4)).unwrap();
-
-		// Should not re-use the address.
-		assert!(addr_1 != addr_3);
-	});
-}
-
 /// The scheduler can be used as `v3::Named` trait.
 #[test]
 fn scheduler_v3_named_basic_works() {
@@ -1765,5 +1692,151 @@ fn scheduler_v3_named_next_schedule_time_works() {
 			<Scheduler as Anon<_, _, _>>::next_dispatch_time(address),
 			DispatchError::Unavailable
 		);
+	});
+}
+
+#[test]
+fn cancel_last_task_removes_agenda() {
+	new_test_ext().execute_with(|| {
+		let when = 4;
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let address = Scheduler::do_schedule(
+			DispatchTime::At(when),
+			None,
+			127,
+			root(),
+			Preimage::bound(call.clone()).unwrap(),
+		)
+		.unwrap();
+		let address2 = Scheduler::do_schedule(
+			DispatchTime::At(when),
+			None,
+			127,
+			root(),
+			Preimage::bound(call).unwrap(),
+		)
+		.unwrap();
+		// two tasks at agenda.
+		assert!(Agenda::<Test>::get(when).len() == 2);
+		assert_ok!(Scheduler::do_cancel(None, address));
+		// still two tasks at agenda, `None` and `Some`.
+		assert!(Agenda::<Test>::get(when).len() == 2);
+		// cancel last task from `when` agenda.
+		assert_ok!(Scheduler::do_cancel(None, address2));
+		// if all tasks `None`, agenda fully removed.
+		assert!(Agenda::<Test>::get(when).len() == 0);
+	});
+}
+
+#[test]
+fn cancel_named_last_task_removes_agenda() {
+	new_test_ext().execute_with(|| {
+		let when = 4;
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		Scheduler::do_schedule_named(
+			[1u8; 32],
+			DispatchTime::At(when),
+			None,
+			127,
+			root(),
+			Preimage::bound(call.clone()).unwrap(),
+		)
+		.unwrap();
+		Scheduler::do_schedule_named(
+			[2u8; 32],
+			DispatchTime::At(when),
+			None,
+			127,
+			root(),
+			Preimage::bound(call).unwrap(),
+		)
+		.unwrap();
+		// two tasks at agenda.
+		assert!(Agenda::<Test>::get(when).len() == 2);
+		assert_ok!(Scheduler::do_cancel_named(None, [2u8; 32]));
+		// removes trailing `None` and leaves one task.
+		assert!(Agenda::<Test>::get(when).len() == 1);
+		// cancel last task from `when` agenda.
+		assert_ok!(Scheduler::do_cancel_named(None, [1u8; 32]));
+		// if all tasks `None`, agenda fully removed.
+		assert!(Agenda::<Test>::get(when).len() == 0);
+	});
+}
+
+#[test]
+fn reschedule_last_task_removes_agenda() {
+	new_test_ext().execute_with(|| {
+		let when = 4;
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let address = Scheduler::do_schedule(
+			DispatchTime::At(when),
+			None,
+			127,
+			root(),
+			Preimage::bound(call.clone()).unwrap(),
+		)
+		.unwrap();
+		let address2 = Scheduler::do_schedule(
+			DispatchTime::At(when),
+			None,
+			127,
+			root(),
+			Preimage::bound(call).unwrap(),
+		)
+		.unwrap();
+		// two tasks at agenda.
+		assert!(Agenda::<Test>::get(when).len() == 2);
+		assert_ok!(Scheduler::do_cancel(None, address));
+		// still two tasks at agenda, `None` and `Some`.
+		assert!(Agenda::<Test>::get(when).len() == 2);
+		// reschedule last task from `when` agenda.
+		assert_eq!(
+			Scheduler::do_reschedule(address2, DispatchTime::At(when + 1)).unwrap(),
+			(when + 1, 0)
+		);
+		// if all tasks `None`, agenda fully removed.
+		assert!(Agenda::<Test>::get(when).len() == 0);
+	});
+}
+
+#[test]
+fn reschedule_named_last_task_removes_agenda() {
+	new_test_ext().execute_with(|| {
+		let when = 4;
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		Scheduler::do_schedule_named(
+			[1u8; 32],
+			DispatchTime::At(when),
+			None,
+			127,
+			root(),
+			Preimage::bound(call.clone()).unwrap(),
+		)
+		.unwrap();
+		Scheduler::do_schedule_named(
+			[2u8; 32],
+			DispatchTime::At(when),
+			None,
+			127,
+			root(),
+			Preimage::bound(call).unwrap(),
+		)
+		.unwrap();
+		// two tasks at agenda.
+		assert!(Agenda::<Test>::get(when).len() == 2);
+		assert_ok!(Scheduler::do_cancel_named(None, [1u8; 32]));
+		// still two tasks at agenda, `None` and `Some`.
+		assert!(Agenda::<Test>::get(when).len() == 2);
+		// reschedule last task from `when` agenda.
+		assert_eq!(
+			Scheduler::do_reschedule_named([2u8; 32], DispatchTime::At(when + 1)).unwrap(),
+			(when + 1, 0)
+		);
+		// if all tasks `None`, agenda fully removed.
+		assert!(Agenda::<Test>::get(when).len() == 0);
 	});
 }

@@ -8,14 +8,12 @@ homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "Types and traits for interfacing between the host and the wasm runtime."
 documentation = "https://docs.rs/sp-wasm-interface"
-readme = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
-impl-trait-for-tuples = "0.2.2"
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 serde = { version = "1.0.136", optional = true, features = ["derive"] }
 smallvec = "1.8.0"

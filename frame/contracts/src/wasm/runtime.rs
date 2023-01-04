@@ -29,7 +29,6 @@ use codec::{Decode, DecodeLimit, Encode, MaxEncodedLen};
 use frame_support::{dispatch::DispatchError, ensure, traits::Get, weights::Weight, RuntimeDebug};
 use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 use pallet_contracts_proc_macro::define_env;
-use sp_core::crypto::UncheckedFrom;
 use sp_io::hashing::{blake2_128, blake2_256, keccak_256, sha2_256};
 use sp_runtime::traits::{Bounded, Zero};
 use sp_std::{fmt, prelude::*};
@@ -265,14 +264,12 @@ pub enum RuntimeCosts {
 	ReentrantCount,
 	/// Weight of calling `account_reentrance_count`
 	AccountEntranceCount,
+	/// Weight of calling `instantiation_nonce`
+	InstantationNonce,
 }
 
 impl RuntimeCosts {
-	fn token<T>(&self, s: &HostFnWeights<T>) -> RuntimeToken
-	where
-		T: Config,
-		T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-	{
+	fn token<T: Config>(&self, s: &HostFnWeights<T>) -> RuntimeToken {
 		use self::RuntimeCosts::*;
 		let weight = match *self {
 			MeteringBlock(amount) => s.gas.saturating_add(amount),
@@ -322,7 +319,7 @@ impl RuntimeCosts {
 			CallInputCloned(len) => s.call_per_cloned_byte.saturating_mul(len.into()),
 			InstantiateBase { input_data_len, salt_len } => s
 				.instantiate
-				.saturating_add(s.return_per_byte.saturating_mul(input_data_len.into()))
+				.saturating_add(s.instantiate_per_input_byte.saturating_mul(input_data_len.into()))
 				.saturating_add(s.instantiate_per_salt_byte.saturating_mul(salt_len.into())),
 			InstantiateSurchargeTransfer => s.instantiate_transfer_surcharge,
 			HashSha256(len) => s
@@ -344,6 +341,7 @@ impl RuntimeCosts {
 			EcdsaToEthAddress => s.ecdsa_to_eth_address,
 			ReentrantCount => s.reentrance_count,
 			AccountEntranceCount => s.account_reentrance_count,
+			InstantationNonce => s.instantiation_nonce,
 		};
 		RuntimeToken {
 			#[cfg(test)]
@@ -372,11 +370,7 @@ struct RuntimeToken {
 	weight: Weight,
 }
 
-impl<T> Token<T> for RuntimeToken
-where
-	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
+impl<T: Config> Token<T> for RuntimeToken {
 	fn weight(&self) -> Weight {
 		self.weight
 	}
@@ -460,12 +454,7 @@ pub struct Runtime<'a, E: Ext + 'a> {
 	chain_extension: Option<Box<<E::T as Config>::ChainExtension>>,
 }
 
-impl<'a, E> Runtime<'a, E>
-where
-	E: Ext + 'a,
-	<E::T as frame_system::Config>::AccountId:
-		UncheckedFrom<<E::T as frame_system::Config>::Hash> + AsRef<[u8]>,
-{
+impl<'a, E: Ext + 'a> Runtime<'a, E> {
 	pub fn new(ext: &'a mut E, input_data: Vec<u8>) -> Self {
 		Runtime {
 			ext,
@@ -1227,7 +1216,6 @@ pub mod env {
 	/// # Errors
 	///
 	/// `ReturnCode::KeyNotFound`
-	#[unstable]
 	#[prefixed_alias]
 	fn take_storage(
 		ctx: _,
@@ -2613,5 +2601,15 @@ pub mod env {
 		let account_id: <<E as Ext>::T as frame_system::Config>::AccountId =
 			ctx.read_sandbox_memory_as(memory, account_ptr)?;
 		Ok(ctx.ext.account_reentrance_count(&account_id))
+	}
+
+	/// Returns a nonce that is unique per contract instantiation.
+	///
+	/// The nonce is incremented for each succesful contract instantiation. This is a
+	/// sensible default salt for contract instantiations.
+	#[unstable]
+	fn instantiation_nonce(ctx: _, _memory: _) -> Result<u64, TrapReason> {
+		ctx.charge_gas(RuntimeCosts::InstantationNonce)?;
+		Ok(ctx.ext.nonce())
 	}
 }

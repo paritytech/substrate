@@ -163,6 +163,7 @@ struct HostFn {
 enum HostFnReturn {
 	Unit,
 	U32,
+	U64,
 	ReturnCode,
 }
 
@@ -171,6 +172,7 @@ impl HostFnReturn {
 		let ok = match self {
 			Self::Unit => quote! { () },
 			Self::U32 | Self::ReturnCode => quote! { ::core::primitive::u32 },
+			Self::U64 => quote! { ::core::primitive::u64 },
 		};
 		quote! {
 			::core::result::Result<#ok, ::wasmi::core::Trap>
@@ -241,6 +243,7 @@ impl HostFn {
 		let msg = r#"Should return one of the following:
 				- Result<(), TrapReason>,
 				- Result<ReturnCode, TrapReason>,
+				- Result<u64, TrapReason>,
 				- Result<u32, TrapReason>"#;
 		let ret_ty = match item.clone().sig.output {
 			syn::ReturnType::Type(_, ty) => Ok(ty.clone()),
@@ -303,6 +306,7 @@ impl HostFn {
 						let returns = match ok_ty_str.as_str() {
 							"()" => Ok(HostFnReturn::Unit),
 							"u32" => Ok(HostFnReturn::U32),
+							"u64" => Ok(HostFnReturn::U64),
 							"ReturnCode" => Ok(HostFnReturn::ReturnCode),
 							_ => Err(err(arg1.span(), &msg)),
 						}?;
@@ -400,11 +404,7 @@ fn expand_impls(def: &mut EnvDef) -> TokenStream2 {
 	let dummy_impls = expand_functions(def, false, quote! { () });
 
 	quote! {
-		impl<'a, E> crate::wasm::Environment<crate::wasm::runtime::Runtime<'a, E>> for Env
-		where
-			E: Ext,
-			<E::T as ::frame_system::Config>::AccountId:
-				::sp_core::crypto::UncheckedFrom<<E::T as ::frame_system::Config>::Hash> + ::core::convert::AsRef<[::core::primitive::u8]>,
+		impl<'a, E: Ext> crate::wasm::Environment<crate::wasm::runtime::Runtime<'a, E>> for Env
 		{
 			fn define(store: &mut ::wasmi::Store<crate::wasm::Runtime<E>>, linker: &mut ::wasmi::Linker<crate::wasm::Runtime<E>>, allow_unstable: bool) -> Result<(), ::wasmi::errors::LinkerError> {
 				#impls

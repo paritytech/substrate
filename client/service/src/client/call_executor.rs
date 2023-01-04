@@ -387,24 +387,31 @@ mod tests {
 
 		let backend = Arc::new(in_mem::Backend::<runtime::Block>::new());
 
-		// client is used for the convenience of creating and inserting the genesis block.
-		let _client = substrate_test_runtime_client::client::new_with_backend::<
-			_,
-			_,
-			runtime::Block,
-			_,
-			runtime::RuntimeApi,
-		>(
+		// wasm_runtime_overrides is `None` here because we construct the
+		// LocalCallExecutor directly later on
+		let client_config = ClientConfig::default();
+
+		let genesis_block_builder = crate::GenesisBlockBuilder::new(
+			&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
+			!client_config.no_genesis,
 			backend.clone(),
 			executor.clone(),
-			&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
-			None,
-			Box::new(TaskExecutor::new()),
-			None,
-			None,
-			Default::default(),
 		)
-		.expect("Creates a client");
+		.expect("Creates genesis block builder");
+
+		// client is used for the convenience of creating and inserting the genesis block.
+		let _client =
+			crate::client::new_with_backend::<_, _, runtime::Block, _, runtime::RuntimeApi>(
+				backend.clone(),
+				executor.clone(),
+				genesis_block_builder,
+				None,
+				Box::new(TaskExecutor::new()),
+				None,
+				None,
+				client_config,
+			)
+			.expect("Creates a client");
 
 		let call_executor = LocalCallExecutor {
 			backend: backend.clone(),
@@ -455,29 +462,32 @@ mod tests {
 		)
 		.unwrap();
 
-		let client_config = substrate_test_runtime_client::client::ClientConfig {
+		let client_config = crate::client::ClientConfig {
 			wasm_runtime_substitutes: vec![(0, substitute)].into_iter().collect::<HashMap<_, _>>(),
 			..Default::default()
 		};
 
-		// client is used for the convenience of creating and inserting the genesis block.
-		let client = substrate_test_runtime_client::client::new_with_backend::<
-			_,
-			_,
-			runtime::Block,
-			_,
-			runtime::RuntimeApi,
-		>(
+		let genesis_block_builder = crate::GenesisBlockBuilder::new(
+			&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
+			!client_config.no_genesis,
 			backend.clone(),
 			executor.clone(),
-			&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
-			None,
-			Box::new(TaskExecutor::new()),
-			None,
-			None,
-			client_config,
 		)
-		.expect("Creates a client");
+		.expect("Creates genesis block builder");
+
+		// client is used for the convenience of creating and inserting the genesis block.
+		let client =
+			crate::client::new_with_backend::<_, _, runtime::Block, _, runtime::RuntimeApi>(
+				backend.clone(),
+				executor.clone(),
+				genesis_block_builder,
+				None,
+				Box::new(TaskExecutor::new()),
+				None,
+				None,
+				client_config,
+			)
+			.expect("Creates a client");
 
 		let version = client.runtime_version_at(&BlockId::Number(0)).unwrap();
 
