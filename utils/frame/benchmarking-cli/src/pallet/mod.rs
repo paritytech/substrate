@@ -107,6 +107,10 @@ pub struct PalletCmd {
 	#[arg(long, default_value("median-slopes"))]
 	pub output_pov_analysis: Option<String>,
 
+	/// The PoV estimation mode of a benchmark if no `pov_mode` attribute is present.
+	#[arg(long, default_value("max-encoded-len"), value_enum)]
+	pub default_pov_mode: command::PovEstimationMode,
+
 	/// Set the heap pages while running benchmarks. If not set, the default value from the client
 	/// is used.
 	#[arg(long)]

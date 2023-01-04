@@ -135,6 +135,7 @@ fn map_results(
 	storage_info: &[StorageInfo],
 	component_ranges: &HashMap<(Vec<u8>, Vec<u8>), Vec<ComponentRange>>,
 	pov_modes: PovModesMap,
+	default_pov_mode: PovEstimationMode,
 	analysis_choice: &AnalysisChoice,
 	pov_analysis_choice: &AnalysisChoice,
 	worst_case_map_values: u32,
@@ -160,6 +161,7 @@ fn map_results(
 			storage_info,
 			&component_ranges,
 			pov_modes.clone(),
+			default_pov_mode,
 			analysis_choice,
 			pov_analysis_choice,
 			worst_case_map_values,
@@ -189,6 +191,7 @@ fn get_benchmark_data(
 	// Per extrinsic component ranges.
 	component_ranges: &HashMap<(Vec<u8>, Vec<u8>), Vec<ComponentRange>>,
 	pov_modes: PovModesMap,
+	default_pov_mode: PovEstimationMode,
 	analysis_choice: &AnalysisChoice,
 	pov_analysis_choice: &AnalysisChoice,
 	worst_case_map_values: u32,
@@ -288,6 +291,7 @@ fn get_benchmark_data(
 		&batch.db_results,
 		storage_info,
 		&pov_mode,
+		default_pov_mode,
 		worst_case_map_values,
 		additional_trie_layers,
 	);
@@ -375,6 +379,7 @@ pub(crate) fn write_results(
 	storage_info: &[StorageInfo],
 	component_ranges: &HashMap<(Vec<u8>, Vec<u8>), Vec<ComponentRange>>,
 	pov_modes: PovModesMap,
+	default_pov_mode: PovEstimationMode,
 	path: &PathBuf,
 	cmd: &PalletCmd,
 ) -> Result<(), std::io::Error> {
@@ -440,6 +445,7 @@ pub(crate) fn write_results(
 		storage_info,
 		component_ranges,
 		pov_modes,
+		default_pov_mode,
 		&analysis_choice,
 		&pov_analysis_choice,
 		cmd.worst_case_map_values,
@@ -502,6 +508,7 @@ pub(crate) fn process_storage_results(
 	results: &[BenchmarkResult],
 	storage_info: &[StorageInfo],
 	pov_modes: &HashMap<(String, String), PovEstimationMode>,
+	default_pov_mode: PovEstimationMode,
 	worst_case_map_values: u32,
 	additional_trie_layers: u8,
 ) -> Vec<String> {
@@ -535,8 +542,6 @@ pub(crate) fn process_storage_results(
 	let mut identified_prefix = HashSet::<Vec<u8>>::new();
 	let mut identified_key = HashSet::<Vec<u8>>::new();
 
-	// Benchmark-wide overwrite for the PoV estimation mode. Default is `None`.
-	let pov_mode_default = pov_modes.get(&("ALL".to_string(), "ALL".to_string()));
 	// TODO Emit a warning for unused `pov_mode` attributes.
 
 	// We have to iterate in reverse order to catch the largest values for read/write since the
@@ -557,22 +562,23 @@ pub(crate) fn process_storage_results(
 			let key_info = storage_info_map.get(&prefix);
 			let max_size = key_info.map(|k| k.max_size).flatten();
 
-			let desired_pov_mode = match key_info {
+			let override_pov_mode = match key_info {
 				Some(StorageInfo { pallet_name, storage_name, .. }) => {
 					let pallet_name =
 						String::from_utf8(pallet_name.clone()).expect("encoded from string");
 					let storage_name =
 						String::from_utf8(storage_name.clone()).expect("encoded from string");
-					// Is there a PoV-mode override for this storage item?
+
+					// Is there an override for the storage key?
 					pov_modes.get(&(pallet_name.clone(), storage_name)).or(
-						// .. or just for the pallet prefix?
+						// .. or for the storage prefix?
 						pov_modes.get(&(pallet_name, "ALL".to_string())).or(
-							// .. or none at all?
-							pov_mode_default,
-						),
+							// .. or for the benchmark?
+							pov_modes.get(&("ALL".to_string(), "ALL".to_string()))
+						)
 					)
 				},
-				None => pov_mode_default,
+				None => None,
 			};
 
 			let pov_overhead = single_read_pov_overhead(
@@ -580,30 +586,29 @@ pub(crate) fn process_storage_results(
 				worst_case_map_values,
 			);
 
-			let used_pov_mode = match (desired_pov_mode, max_size) {
-				(None, None) | (Some(PovEstimationMode::Measured), _) => {
+			let used_pov_mode = match (override_pov_mode, max_size, default_pov_mode) {
+				(Some(PovEstimationMode::Measured), _, _)|
+				(None, _, PovEstimationMode::Measured) |
+				// Use best effort in this case since failing would be really annoying.
+				(None, None, PovEstimationMode::MaxEncodedLen) => {
 					// We add the overhead for a single read each time. In a more advanced version
 					// we could take node re-using into account and over-estimate a bit less.
 					prefix_result.proof_size += pov_overhead * *reads;
-					// Add the additional trie layer overhead for every new prefix.
-					if *reads > 0 {
-						prefix_result.proof_size += 15 * 33 * additional_trie_layers as u32;
-					}
 					PovEstimationMode::Measured
 				},
-				(None, Some(max_size)) |
-				(Some(PovEstimationMode::MaxEncodedLen), Some(max_size)) => {
+				(Some(PovEstimationMode::MaxEncodedLen), Some(max_size), _) |
+				(None, Some(max_size), PovEstimationMode::MaxEncodedLen) => {
 					prefix_result.proof_size = (pov_overhead + max_size) * *reads;
-
-					if *reads > 0 {
-						prefix_result.proof_size += 15 * 33 * additional_trie_layers as u32;
-					}
 					PovEstimationMode::MaxEncodedLen
 				},
-				(Some(PovEstimationMode::MaxEncodedLen), None) => {
-					panic!("Need MEL bound when selecting PoV estimation mode: MEL");
+				(Some(PovEstimationMode::MaxEncodedLen), None, _) => {
+					panic!("Type does not have MEL bound but MEL PoV estimation mode was specified.");
 				},
 			};
+			// Add the additional trie layer overhead for every new prefix.
+			if *reads > 0 {
+				prefix_result.proof_size += 15 * 33 * additional_trie_layers as u32;
+			}
 			storage_per_prefix.entry(prefix.clone()).or_default().push(prefix_result);
 
 			match (is_key_identified, is_prefix_identified) {
@@ -832,7 +837,7 @@ mod test {
 		}
 	}
 
-	fn test_storage_info(pov_modes: Option<PovEstimationMode>) -> Vec<StorageInfo> {
+	fn test_storage_info() -> Vec<StorageInfo> {
 		vec![StorageInfo {
 			pallet_name: b"bounded".to_vec(),
 			storage_name: b"bounded".to_vec(),
@@ -922,7 +927,8 @@ mod test {
 			&[data],
 			&storage_info,
 			&Default::default(),
-			Default::default(),
+			test_pov_mode(),
+			PovEstimationMode::MaxEncodedLen,
 			&AnalysisChoice::default(),
 			&AnalysisChoice::MedianSlopes,
 			1_000_000,
@@ -978,7 +984,8 @@ mod test {
 			&[data],
 			&storage_info,
 			&Default::default(),
-			Default::default(),
+			test_pov_mode(),
+			PovEstimationMode::MaxEncodedLen,
 			&AnalysisChoice::default(),
 			&AnalysisChoice::MedianSlopes,
 			1_000_000,
@@ -1035,6 +1042,7 @@ mod test {
 			&storage_info,
 			&Default::default(),
 			test_pov_mode(),
+			PovEstimationMode::MaxEncodedLen,
 			&AnalysisChoice::default(),
 			&AnalysisChoice::MedianSlopes,
 			1_000_000,
@@ -1089,6 +1097,7 @@ mod test {
 			&storage_info,
 			&Default::default(),
 			test_pov_mode(),
+			PovEstimationMode::MaxEncodedLen,
 			&AnalysisChoice::default(),
 			&AnalysisChoice::MedianSlopes,
 			1_000_000,
@@ -1116,9 +1125,10 @@ mod test {
 				test_data(b"second", b"first", BenchmarkParameter::c, 3, 4),
 				test_data(b"bounded", b"bounded", BenchmarkParameter::d, 4, 6),
 			],
-			&test_storage_info(Some(PovEstimationMode::MaxEncodedLen)),
+			&test_storage_info(),
 			&Default::default(),
 			Default::default(),
+			PovEstimationMode::MaxEncodedLen,
 			&AnalysisChoice::default(),
 			&AnalysisChoice::MedianSlopes,
 			1_000_000,
@@ -1162,9 +1172,10 @@ mod test {
 	fn additional_trie_layers_work() {
 		let mapped_results = map_results(
 			&[test_data(b"first", b"first", BenchmarkParameter::a, 10, 3)],
-			&test_storage_info(Some(PovEstimationMode::MaxEncodedLen)),
+			&test_storage_info(),
 			&Default::default(),
 			Default::default(),
+			PovEstimationMode::MaxEncodedLen,
 			&AnalysisChoice::default(),
 			&AnalysisChoice::MedianSlopes,
 			1_000_000,
@@ -1176,9 +1187,10 @@ mod test {
 			.unwrap()[0];
 		let mapped_results = map_results(
 			&[test_data(b"first", b"first", BenchmarkParameter::a, 10, 3)],
-			&test_storage_info(Some(PovEstimationMode::MaxEncodedLen)),
+			&test_storage_info(),
 			&Default::default(),
 			Default::default(),
+			PovEstimationMode::MaxEncodedLen,
 			&AnalysisChoice::default(),
 			&AnalysisChoice::MedianSlopes,
 			1_000_000,
@@ -1208,9 +1220,10 @@ mod test {
 				test_data(b"first", b"second", BenchmarkParameter::b, 9, 2),
 				test_data(b"second", b"first", BenchmarkParameter::c, 3, 4),
 			],
-			&test_storage_info(Some(PovEstimationMode::Measured)),
+			&test_storage_info(),
 			&Default::default(),
 			Default::default(),
+			PovEstimationMode::MaxEncodedLen,
 			&AnalysisChoice::default(),
 			&AnalysisChoice::MedianSlopes,
 			1_000_000,

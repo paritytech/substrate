@@ -55,7 +55,7 @@ pub(crate) struct ComponentRange {
 }
 
 /// How the PoV size of a storage item should be estimated.
-#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+#[derive(clap::ValueEnum, Debug, Eq, PartialEq, Clone, Copy)]
 pub enum PovEstimationMode {
 	/// Use the maximal encoded length as provided by [`codec::MaxEncodedLen`].
 	MaxEncodedLen,
@@ -503,6 +503,7 @@ impl PalletCmd {
 				&storage_info,
 				&component_ranges,
 				pov_modes,
+				self.default_pov_mode,
 				output_path,
 				self,
 			)?;
@@ -602,6 +603,7 @@ impl PalletCmd {
 					&batch.db_results,
 					storage_info,
 					&pov_mode,
+					self.default_pov_mode,
 					self.worst_case_map_values,
 					self.additional_trie_layers,
 				);
