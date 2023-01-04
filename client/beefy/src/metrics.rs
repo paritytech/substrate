@@ -60,6 +60,8 @@ pub struct Metrics {
 	pub beefy_successful_justification_respond_request: Counter<U64>,
 	/// Number of Failed Justification respond request
 	pub beefy_failed_justification_respond_request: Counter<U64>,
+	/// Number of On demand justification when there is no peer to request from
+	pub beefy_on_demand_justification_no_peer_to_request_from: Counter<U64>,
 }
 
 impl Metrics {
@@ -175,6 +177,10 @@ impl Metrics {
 			)?,
 			beefy_failed_justification_respond_request: register(
 				Counter::new("substrate_beefy_failed_justification_respond_request", "Number of Failed Justification respond request")?,
+				registry,
+			)?,
+			beefy_on_demand_justification_no_peer_to_request_from: register(
+				Counter::new("substrate_beefy_on_demand_justification_no_peer_to_request_from", "Number of on demand justification when there is no peer to request from")?,
 				registry,
 			)?,
 		})

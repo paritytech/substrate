@@ -261,13 +261,6 @@ where
 		None,
 	);
 
-	// The `GossipValidator` adds and removes known peers based on valid votes and network events.
-	let on_demand_justifications = OnDemandJustificationsEngine::new(
-		network.clone(),
-		justifications_protocol_name,
-		known_peers,
-	);
-
 	let metrics =
 		prometheus_registry.as_ref().map(metrics::Metrics::register).and_then(
 			|result| match result {
@@ -281,6 +274,14 @@ where
 				},
 			},
 		);
+
+	// The `GossipValidator` adds and removes known peers based on valid votes and network events.
+	let on_demand_justifications = OnDemandJustificationsEngine::new(
+		network.clone(),
+		justifications_protocol_name,
+		known_peers,
+		metrics.clone()
+	);
 
 	// Subscribe to finality notifications and justifications before waiting for runtime pallet and
 	// reuse the streams, so we don't miss notifications while waiting for pallet to be available.

@@ -1059,6 +1059,7 @@ pub(crate) mod tests {
 			network.clone(),
 			"/beefy/justifs/1".into(),
 			known_peers,
+			metrics: None,
 		);
 		let at = BlockId::number(Zero::zero());
 		let genesis_header = backend.blockchain().expect_header(at).unwrap();

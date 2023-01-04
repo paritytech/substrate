@@ -36,6 +36,7 @@ use crate::{
 	justification::{decode_and_verify_finality_proof, BeefyVersionedFinalityProof},
 	KnownPeers,
 };
+use crate::{metrics::Metrics, metric_inc, metric_set};
 
 /// Response type received from network.
 type Response = Result<Vec<u8>, RequestFailure>;
@@ -61,6 +62,7 @@ pub struct OnDemandJustificationsEngine<B: Block> {
 	peers_cache: VecDeque<PeerId>,
 
 	state: State<B>,
+	metrics: Option<Metrics>,
 }
 
 impl<B: Block> OnDemandJustificationsEngine<B> {
@@ -68,6 +70,7 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 		network: Arc<dyn NetworkRequest + Send + Sync>,
 		protocol_name: ProtocolName,
 		live_peers: Arc<Mutex<KnownPeers<B>>>,
+		metrics: Option<Metrics>
 	) -> Self {
 		Self {
 			network,
@@ -75,6 +78,7 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 			live_peers,
 			peers_cache: VecDeque::new(),
 			state: State::Idle,
+			metrics
 		}
 	}
 
@@ -132,6 +136,7 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 		if let Some(peer) = self.try_next_peer() {
 			self.request_from_peer(peer, RequestInfo { block, active_set });
 		} else {
+			metric_inc!(self, beefy_on_demand_justification_no_peer_to_request_from);
 			debug!(target: "beefy::sync", "🥩 no good peers to request justif #{:?} from", block);
 		}
 	}
