@@ -560,7 +560,7 @@ pub(crate) fn process_storage_results(
 
 			let mut prefix_result = result.clone();
 			let key_info = storage_info_map.get(&prefix);
-			let max_size = key_info.map(|k| k.max_size).flatten();
+			let max_size = key_info.and_then(|k| k.max_size);
 
 			let override_pov_mode = match key_info {
 				Some(StorageInfo { pallet_name, storage_name, .. }) => {
