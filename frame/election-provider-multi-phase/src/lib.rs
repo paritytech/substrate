@@ -758,7 +758,7 @@ pub mod pallet {
 					// NOTE: if signed-phase length is zero, second part of the if-condition fails.
 					match Self::create_snapshot() {
 						Ok(_) => {
-							Self::on_initialize_open_signed();
+							Self::phase_transition(Phase::Signed);
 							T::WeightInfo::on_initialize_open_signed()
 						},
 						Err(why) => {
@@ -797,7 +797,7 @@ pub mod pallet {
 					if need_snapshot {
 						match Self::create_snapshot() {
 							Ok(_) => {
-								Self::on_initialize_open_unsigned(enabled, now);
+								Self::phase_transition(Phase::Unsigned((enabled, now)));
 								T::WeightInfo::on_initialize_open_unsigned()
 							},
 							Err(why) => {
@@ -806,7 +806,7 @@ pub mod pallet {
 							},
 						}
 					} else {
-						Self::on_initialize_open_unsigned(enabled, now);
+						Self::phase_transition(Phase::Unsigned((enabled, now)));
 						T::WeightInfo::on_initialize_open_unsigned()
 					}
 				},
@@ -1357,7 +1357,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Phase transition helper.
-	pub fn phase_transition(to: Phase<T::BlockNumber>) {
+	pub(crate) fn phase_transition(to: Phase<T::BlockNumber>) {
 		log!(info, "Starting phase {:?}, round {}.", to, Self::round());
 		Self::deposit_event(Event::PhaseTransitioned {
 			from: <CurrentPhase<T>>::get(),
@@ -1365,16 +1365,6 @@ impl<T: Config> Pallet<T> {
 			round: Self::round(),
 		});
 		<CurrentPhase<T>>::put(to);
-	}
-
-	/// Logic for `<Pallet as Hooks>::on_initialize` when signed phase is being opened.
-	pub fn on_initialize_open_signed() {
-		Self::phase_transition(Phase::Signed);
-	}
-
-	/// Logic for `<Pallet as Hooks<T>>::on_initialize` when unsigned phase is being opened.
-	pub fn on_initialize_open_unsigned(enabled: bool, now: T::BlockNumber) {
-		Self::phase_transition(Phase::Unsigned((enabled, now)));
 	}
 
 	/// Parts of [`create_snapshot`] that happen inside of this pallet.
