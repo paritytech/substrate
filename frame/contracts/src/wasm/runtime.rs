@@ -484,8 +484,7 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 				// Otherwise the trap came from the contract.
 				let reason: &TrapReason = trap
 					.downcast_ref::<TrapReason>()
-					.ok_or(Error::<E::T>::ContractTrapped)?
-					.expect("`TrapReason` is the only type we use to encode host errors; qed");
+					.ok_or(Error::<E::T>::ContractTrapped)?;
 				match reason {
 					Return(ReturnData { flags, data }) => {
 						let flags = ReturnFlags::from_bits(*flags)
