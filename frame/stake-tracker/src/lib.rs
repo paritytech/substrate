@@ -165,7 +165,7 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 			update_approval_stake(&nomination, new_stake);
 		}
 		let _ =
-			T::VoterList::on_insert(who.clone(), Self::to_vote(Self::slashable_balance_of(who)))
+			T::VoterList::on_insert(who, Self::to_vote(Self::slashable_balance_of(who)))
 				.defensive();
 	}
 
