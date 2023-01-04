@@ -46,7 +46,7 @@ pub use impls::*;
 use crate::{
 	slashing, weights::WeightInfo, AccountIdLookupOf, ActiveEraInfo, BalanceOf, EraPayout,
 	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations, PositiveImbalanceOf,
-	Releases, RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
+	RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
 	ValidatorPrefs,
 };
 
@@ -64,8 +64,12 @@ pub mod pallet {
 
 	use super::*;
 
+	/// The current storage version.
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(13);
+
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	/// Possible operations on the configuration values of this pallet.
@@ -561,13 +565,6 @@ pub mod pallet {
 	#[pallet::getter(fn offending_validators)]
 	pub type OffendingValidators<T: Config> = StorageValue<_, Vec<(u32, bool)>, ValueQuery>;
 
-	/// True if network has been upgraded to this version.
-	/// Storage version of the pallet.
-	///
-	/// This is set to v7.0.0 for new networks.
-	#[pallet::storage]
-	pub(crate) type StorageVersion<T: Config> = StorageValue<_, Releases, ValueQuery>;
-
 	/// The threshold for when users can start calling `chill_other` for other validators /
 	/// nominators. The threshold is compared to the actual number of validators / nominators
 	/// (`CountFor*`) in the system compared to the configured max (`Max*Count`).
@@ -618,7 +615,6 @@ pub mod pallet {
 			ForceEra::<T>::put(self.force_era);
 			CanceledSlashPayout::<T>::put(self.canceled_payout);
 			SlashRewardFraction::<T>::put(self.slash_reward_fraction);
-			StorageVersion::<T>::put(Releases::V7_0_0);
 			MinNominatorBond::<T>::put(self.min_nominator_bond);
 			MinValidatorBond::<T>::put(self.min_validator_bond);
 			if let Some(x) = self.max_validator_count {
