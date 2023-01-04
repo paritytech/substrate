@@ -93,9 +93,9 @@ pub use sp_arithmetic::biguint;
 pub use sp_arithmetic::helpers_128bit;
 /// Re-export top-level arithmetic stuff.
 pub use sp_arithmetic::{
-	traits::SaturatedConversion, FixedI128, FixedI64, FixedPointNumber, FixedPointOperand,
-	FixedU128, InnerOf, PerThing, PerU16, Perbill, Percent, Permill, Perquintill, Rational128,
-	Rounding, UpperOf,
+	traits::SaturatedConversion, ArithmeticError, FixedI128, FixedI64, FixedPointNumber,
+	FixedPointOperand, FixedU128, InnerOf, PerThing, PerU16, Perbill, Percent, Permill,
+	Perquintill, Rational128, Rounding, UpperOf,
 };
 
 pub use either::Either;
@@ -234,7 +234,7 @@ impl BuildStorage for () {
 /// Consensus engine unique ID.
 pub type ConsensusEngineId = [u8; 4];
 
-/// Signature verify that can work with any known signature types..
+/// Signature verify that can work with any known signature types.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Eq, PartialEq, Clone, Encode, Decode, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub enum MultiSignature {
@@ -641,28 +641,6 @@ impl From<TokenError> for DispatchError {
 	}
 }
 
-/// Arithmetic errors.
-#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub enum ArithmeticError {
-	/// Underflow.
-	Underflow,
-	/// Overflow.
-	Overflow,
-	/// Division by zero.
-	DivisionByZero,
-}
-
-impl From<ArithmeticError> for &'static str {
-	fn from(e: ArithmeticError) -> &'static str {
-		match e {
-			ArithmeticError::Underflow => "An underflow would occur",
-			ArithmeticError::Overflow => "An overflow would occur",
-			ArithmeticError::DivisionByZero => "Division by zero",
-		}
-	}
-}
-
 impl From<ArithmeticError> for DispatchError {
 	fn from(e: ArithmeticError) -> DispatchError {
 		Self::Arithmetic(e)
@@ -871,13 +849,6 @@ impl OpaqueExtrinsic {
 	/// Convert an encoded extrinsic to an `OpaqueExtrinsic`.
 	pub fn from_bytes(mut bytes: &[u8]) -> Result<Self, codec::Error> {
 		Self::decode(&mut bytes)
-	}
-}
-
-#[cfg(feature = "std")]
-impl parity_util_mem::MallocSizeOf for OpaqueExtrinsic {
-	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
-		self.0.size_of(ops)
 	}
 }
 

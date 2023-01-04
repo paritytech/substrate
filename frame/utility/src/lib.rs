@@ -124,7 +124,7 @@ pub mod pallet {
 	// Align the call size to 1KB. As we are currently compiling the runtime for native/wasm
 	// the `size_of` of the `Call` can be different. To ensure that this don't leads to
 	// mismatches between native/wasm or to different metadata for the same runtime, we
-	// algin the call size. The value is choosen big enough to hopefully never reach it.
+	// algin the call size. The value is chosen big enough to hopefully never reach it.
 	const CALL_ALIGN: u32 = 1024;
 
 	#[pallet::extra_constants]
@@ -164,13 +164,13 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Send a batch of dispatch calls.
 		///
-		/// May be called from any origin.
+		/// May be called from any origin except `None`.
 		///
 		/// - `calls`: The calls to be dispatched from the same origin. The number of call must not
 		///   exceed the constant: `batched_calls_limit` (available in constant metadata).
 		///
-		/// If origin is root then call are dispatch without checking origin filter. (This includes
-		/// bypassing `frame_system::Config::BaseCallFilter`).
+		/// If origin is root then the calls are dispatched without checking origin filter. (This
+		/// includes bypassing `frame_system::Config::BaseCallFilter`).
 		///
 		/// # <weight>
 		/// - Complexity: O(C) where C is the number of calls to be batched.
@@ -181,6 +181,7 @@ pub mod pallet {
 		/// `BatchInterrupted` event is deposited, along with the number of successful calls made
 		/// and the error of the failed call. If all were successful, then the `BatchCompleted`
 		/// event is deposited.
+		#[pallet::call_index(0)]
 		#[pallet::weight({
 			let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
 			let dispatch_weight = dispatch_infos.iter()
@@ -254,6 +255,7 @@ pub mod pallet {
 		/// NOTE: Prior to version *12, this was called `as_limited_sub`.
 		///
 		/// The dispatch origin for this call must be _Signed_.
+		#[pallet::call_index(1)]
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
 			(
@@ -291,17 +293,18 @@ pub mod pallet {
 		/// Send a batch of dispatch calls and atomically execute them.
 		/// The whole transaction will rollback and fail if any of the calls failed.
 		///
-		/// May be called from any origin.
+		/// May be called from any origin except `None`.
 		///
 		/// - `calls`: The calls to be dispatched from the same origin. The number of call must not
 		///   exceed the constant: `batched_calls_limit` (available in constant metadata).
 		///
-		/// If origin is root then call are dispatch without checking origin filter. (This includes
-		/// bypassing `frame_system::Config::BaseCallFilter`).
+		/// If origin is root then the calls are dispatched without checking origin filter. (This
+		/// includes bypassing `frame_system::Config::BaseCallFilter`).
 		///
 		/// # <weight>
 		/// - Complexity: O(C) where C is the number of calls to be batched.
 		/// # </weight>
+		#[pallet::call_index(2)]
 		#[pallet::weight({
 			let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
 			let dispatch_weight = dispatch_infos.iter()
@@ -377,6 +380,7 @@ pub mod pallet {
 		/// - One DB write (event).
 		/// - Weight of derivative `call` execution + T::WeightInfo::dispatch_as().
 		/// # </weight>
+		#[pallet::call_index(3)]
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
 			(
@@ -403,17 +407,18 @@ pub mod pallet {
 		/// Send a batch of dispatch calls.
 		/// Unlike `batch`, it allows errors and won't interrupt.
 		///
-		/// May be called from any origin.
+		/// May be called from any origin except `None`.
 		///
 		/// - `calls`: The calls to be dispatched from the same origin. The number of call must not
 		///   exceed the constant: `batched_calls_limit` (available in constant metadata).
 		///
-		/// If origin is root then call are dispatch without checking origin filter. (This includes
-		/// bypassing `frame_system::Config::BaseCallFilter`).
+		/// If origin is root then the calls are dispatch without checking origin filter. (This
+		/// includes bypassing `frame_system::Config::BaseCallFilter`).
 		///
 		/// # <weight>
 		/// - Complexity: O(C) where C is the number of calls to be batched.
 		/// # </weight>
+		#[pallet::call_index(4)]
 		#[pallet::weight({
 			let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
 			let dispatch_weight = dispatch_infos.iter()
@@ -473,6 +478,24 @@ pub mod pallet {
 			}
 			let base_weight = T::WeightInfo::batch(calls_len as u32);
 			Ok(Some(base_weight.saturating_add(weight)).into())
+		}
+
+		/// Dispatch a function call with a specified weight.
+		///
+		/// This function does not check the weight of the call, and instead allows the
+		/// Root origin to specify the weight of the call.
+		///
+		/// The dispatch origin for this call must be _Root_.
+		#[pallet::call_index(5)]
+		#[pallet::weight((*_weight, call.get_dispatch_info().class))]
+		pub fn with_weight(
+			origin: OriginFor<T>,
+			call: Box<<T as Config>::RuntimeCall>,
+			_weight: Weight,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
+			res.map(|_| ()).map_err(|e| e.error)
 		}
 	}
 }

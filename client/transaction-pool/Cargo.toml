@@ -13,12 +13,12 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+async-trait = "0.1.57"
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 futures = "0.3.21"
 futures-timer = "3.0.2"
 linked-hash-map = "0.5.4"
 log = "0.4.17"
-parity-util-mem = { version = "0.12.0", default-features = false, features = ["primitive-types"] }
 parking_lot = "0.12.1"
 serde = { version = "1.0.136", features = ["derive"] }
 thiserror = "1.0.30"
@@ -28,9 +28,9 @@ sc-transaction-pool-api = { version = "4.0.0-dev", path = "./api" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
-sp-core = { version = "6.0.0", path = "../../primitives/core" }
-sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
-sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
+sp-core = { version = "7.0.0", path = "../../primitives/core" }
+sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
+sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
 sp-transaction-pool = { version = "4.0.0-dev", path = "../../primitives/transaction-pool" }
 
 [dev-dependencies]

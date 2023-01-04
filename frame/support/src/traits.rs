@@ -22,12 +22,12 @@
 pub mod tokens;
 pub use tokens::{
 	currency::{
-		Currency, LockIdentifier, LockableCurrency, NamedReservableCurrency, ReservableCurrency,
-		TotalIssuanceOf, VestingSchedule,
+		ActiveIssuanceOf, Currency, LockIdentifier, LockableCurrency, NamedReservableCurrency,
+		ReservableCurrency, TotalIssuanceOf, VestingSchedule,
 	},
 	fungible, fungibles,
 	imbalance::{Imbalance, OnUnbalanced, SignedImbalance},
-	BalanceStatus, ExistenceRequirement, Locker, WithdrawReasons,
+	nonfungible, nonfungibles, BalanceStatus, ExistenceRequirement, Locker, WithdrawReasons,
 };
 
 mod members;
@@ -56,10 +56,11 @@ mod misc;
 pub use misc::{
 	defensive_prelude::{self, *},
 	Backing, ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128, ConstU16,
-	ConstU32, ConstU64, ConstU8, DefensiveSaturating, EnsureInherentsAreFirst, EqualPrivilegeOnly,
-	EstimateCallFee, ExecuteBlock, ExtrinsicCall, Get, GetBacking, GetDefault, HandleLifetime,
-	IsSubType, IsType, Len, OffchainWorker, OnKilledAccount, OnNewAccount, PrivilegeCmp,
-	SameOrOther, Time, TryCollect, TryDrop, TypedGet, UnixTime, WrapperKeepOpaque, WrapperOpaque,
+	ConstU32, ConstU64, ConstU8, DefensiveMax, DefensiveMin, DefensiveSaturating,
+	DefensiveTruncateFrom, EnsureInherentsAreFirst, EqualPrivilegeOnly, EstimateCallFee,
+	ExecuteBlock, ExtrinsicCall, Get, GetBacking, GetDefault, HandleLifetime, IsSubType, IsType,
+	Len, OffchainWorker, OnKilledAccount, OnNewAccount, PrivilegeCmp, SameOrOther, Time,
+	TryCollect, TryDrop, TypedGet, UnixTime, WrapperKeepOpaque, WrapperOpaque,
 };
 #[allow(deprecated)]
 pub use misc::{PreimageProvider, PreimageRecipient};
@@ -98,8 +99,8 @@ mod dispatch;
 pub use dispatch::EnsureOneOf;
 pub use dispatch::{
 	AsEnsureOriginWithArg, CallerTrait, EitherOf, EitherOfDiverse, EnsureOrigin,
-	EnsureOriginWithArg, MapSuccess, NeverEnsureOrigin, OriginTrait, TryMapSuccess,
-	UnfilteredDispatchable,
+	EnsureOriginEqualOrHigherPrivilege, EnsureOriginWithArg, MapSuccess, NeverEnsureOrigin,
+	OriginTrait, TryMapSuccess, UnfilteredDispatchable,
 };
 
 mod voting;
@@ -110,6 +111,12 @@ pub use voting::{
 
 mod preimages;
 pub use preimages::{Bounded, BoundedInline, FetchResult, Hash, QueryPreimage, StorePreimage};
+
+mod messages;
+pub use messages::{
+	EnqueueMessage, ExecuteOverweightError, Footprint, ProcessMessage, ProcessMessageError,
+	ServiceQueues,
+};
 
 #[cfg(feature = "try-runtime")]
 mod try_runtime;

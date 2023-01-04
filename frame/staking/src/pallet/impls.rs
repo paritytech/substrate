@@ -18,15 +18,15 @@
 //! Implementations for the Staking FRAME Pallet.
 
 use frame_election_provider_support::{
-	data_provider, ElectionDataProvider, ElectionProvider, ScoreProvider, SortedListProvider,
-	Supports, VoteWeight, VoterOf,
+	data_provider, BoundedSupportsOf, ElectionDataProvider, ElectionProvider, ScoreProvider,
+	SortedListProvider, VoteWeight, VoterOf,
 };
 use frame_support::{
 	dispatch::WithPostDispatchInfo,
 	pallet_prelude::*,
 	traits::{
 		Currency, CurrencyToVote, Defensive, DefensiveResult, EstimateNextNewSession, Get,
-		Imbalance, LockableCurrency, OnUnbalanced, UnixTime, WithdrawReasons,
+		Imbalance, LockableCurrency, OnUnbalanced, TryCollect, UnixTime, WithdrawReasons,
 	},
 	weights::Weight,
 };
@@ -38,13 +38,13 @@ use sp_runtime::{
 };
 use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
-	EraIndex, SessionIndex, StakingInterface,
+	EraIndex, SessionIndex, Stake, StakingInterface,
 };
-use sp_std::{collections::btree_map::BTreeMap, prelude::*};
+use sp_std::prelude::*;
 
 use crate::{
 	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, Exposure, ExposureOf,
-	Forcing, IndividualExposure, Nominations, PositiveImbalanceOf, RewardDestination,
+	Forcing, IndividualExposure, MaxWinnersOf, Nominations, PositiveImbalanceOf, RewardDestination,
 	SessionInterface, StakingLedger, ValidatorPrefs,
 };
 
@@ -90,6 +90,45 @@ impl<T: Config> Pallet<T> {
 	pub fn weight_of(who: &T::AccountId) -> VoteWeight {
 		let issuance = T::Currency::total_issuance();
 		Self::slashable_balance_of_vote_weight(who, issuance)
+	}
+
+	pub(super) fn do_withdraw_unbonded(
+		controller: &T::AccountId,
+		num_slashing_spans: u32,
+	) -> Result<Weight, DispatchError> {
+		let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+		let (stash, old_total) = (ledger.stash.clone(), ledger.total);
+		if let Some(current_era) = Self::current_era() {
+			ledger = ledger.consolidate_unlocked(current_era)
+		}
+
+		let used_weight =
+			if ledger.unlocking.is_empty() && ledger.active < T::Currency::minimum_balance() {
+				// This account must have called `unbond()` with some value that caused the active
+				// portion to fall below existential deposit + will have no more unlocking chunks
+				// left. We can now safely remove all staking-related information.
+				Self::kill_stash(&stash, num_slashing_spans)?;
+				// Remove the lock.
+				T::Currency::remove_lock(STAKING_ID, &stash);
+
+				T::WeightInfo::withdraw_unbonded_kill(num_slashing_spans)
+			} else {
+				// This was the consequence of a partial unbond. just update the ledger and move on.
+				Self::update_ledger(&controller, &ledger);
+
+				// This is only an update, so we use less overall weight.
+				T::WeightInfo::withdraw_unbonded_update(num_slashing_spans)
+			};
+
+		// `old_total` should never be less than the new total because
+		// `consolidate_unlocked` strictly subtracts balance.
+		if ledger.total < old_total {
+			// Already checked that this won't overflow by entry condition.
+			let value = old_total - ledger.total;
+			Self::deposit_event(Event::<T>::Withdrawn { stash, amount: value });
+		}
+
+		Ok(used_weight)
 	}
 
 	pub(super) fn do_payout_stakers(
@@ -267,7 +306,10 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Plan a new session potentially trigger a new era.
-	fn new_session(session_index: SessionIndex, is_genesis: bool) -> Option<Vec<T::AccountId>> {
+	fn new_session(
+		session_index: SessionIndex,
+		is_genesis: bool,
+	) -> Option<BoundedVec<T::AccountId, MaxWinnersOf<T>>> {
 		if let Some(current_era) = Self::current_era() {
 			// Initial era has been set.
 			let current_era_start_session_index = Self::eras_start_session_index(current_era)
@@ -348,6 +390,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
+	/// Start a new era. It does:
 	///
 	/// * Increment `active_era.index`,
 	/// * reset `active_era.start`,
@@ -426,8 +469,11 @@ impl<T: Config> Pallet<T> {
 	/// Returns the new validator set.
 	pub fn trigger_new_era(
 		start_session_index: SessionIndex,
-		exposures: Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>,
-	) -> Vec<T::AccountId> {
+		exposures: BoundedVec<
+			(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>),
+			MaxWinnersOf<T>,
+		>,
+	) -> BoundedVec<T::AccountId, MaxWinnersOf<T>> {
 		// Increment or set current era.
 		let new_planned_era = CurrentEra::<T>::mutate(|s| {
 			*s = Some(s.map(|s| s + 1).unwrap_or(0));
@@ -453,19 +499,26 @@ impl<T: Config> Pallet<T> {
 	pub(crate) fn try_trigger_new_era(
 		start_session_index: SessionIndex,
 		is_genesis: bool,
-	) -> Option<Vec<T::AccountId>> {
-		let election_result = if is_genesis {
-			T::GenesisElectionProvider::elect().map_err(|e| {
+	) -> Option<BoundedVec<T::AccountId, MaxWinnersOf<T>>> {
+		let election_result: BoundedVec<_, MaxWinnersOf<T>> = if is_genesis {
+			let result = <T::GenesisElectionProvider>::elect().map_err(|e| {
 				log!(warn, "genesis election provider failed due to {:?}", e);
 				Self::deposit_event(Event::StakingElectionFailed);
-			})
+			});
+
+			result
+				.ok()?
+				.into_inner()
+				.try_into()
+				// both bounds checked in integrity test to be equal
+				.defensive_unwrap_or_default()
 		} else {
-			T::ElectionProvider::elect().map_err(|e| {
+			let result = <T::ElectionProvider>::elect().map_err(|e| {
 				log!(warn, "election provider failed due to {:?}", e);
 				Self::deposit_event(Event::StakingElectionFailed);
-			})
-		}
-		.ok()?;
+			});
+			result.ok()?
+		};
 
 		let exposures = Self::collect_exposures(election_result);
 		if (exposures.len() as u32) < Self::minimum_validator_count().max(1) {
@@ -502,10 +555,19 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Store staking information for the new planned era
 	pub fn store_stakers_info(
-		exposures: Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>,
+		exposures: BoundedVec<
+			(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>),
+			MaxWinnersOf<T>,
+		>,
 		new_planned_era: EraIndex,
-	) -> Vec<T::AccountId> {
-		let elected_stashes = exposures.iter().cloned().map(|(x, _)| x).collect::<Vec<_>>();
+	) -> BoundedVec<T::AccountId, MaxWinnersOf<T>> {
+		let elected_stashes: BoundedVec<_, MaxWinnersOf<T>> = exposures
+			.iter()
+			.cloned()
+			.map(|(x, _)| x)
+			.collect::<Vec<_>>()
+			.try_into()
+			.expect("since we only map through exposures, size of elected_stashes is always same as exposures; qed");
 
 		// Populate stakers, exposures, and the snapshot of validator prefs.
 		let mut total_stake: BalanceOf<T> = Zero::zero();
@@ -543,11 +605,11 @@ impl<T: Config> Pallet<T> {
 		elected_stashes
 	}
 
-	/// Consume a set of [`Supports`] from [`sp_npos_elections`] and collect them into a
+	/// Consume a set of [`BoundedSupports`] from [`sp_npos_elections`] and collect them into a
 	/// [`Exposure`].
 	fn collect_exposures(
-		supports: Supports<T::AccountId>,
-	) -> Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)> {
+		supports: BoundedSupportsOf<T::ElectionProvider>,
+	) -> BoundedVec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>), MaxWinnersOf<T>> {
 		let total_issuance = T::Currency::total_issuance();
 		let to_currency = |e: frame_election_provider_support::ExtendedBalance| {
 			T::CurrencyToVote::to_currency(e, total_issuance)
@@ -576,7 +638,8 @@ impl<T: Config> Pallet<T> {
 				let exposure = Exposure { own, others, total };
 				(validator, exposure)
 			})
-			.collect::<Vec<(T::AccountId, Exposure<_, _>)>>()
+			.try_collect()
+			.expect("we only map through support vector which cannot change the size; qed")
 	}
 
 	/// Remove all associated data of a stash account from the staking system.
@@ -680,12 +743,10 @@ impl<T: Config> Pallet<T> {
 	///
 	/// `maybe_max_len` can imposes a cap on the number of voters returned;
 	///
+	/// Sets `MinimumActiveStake` to the minimum active nominator stake in the returned set of
+	/// nominators.
+	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
-	///
-	/// ### Slashing
-	///
-	/// All votes that have been submitted before the last non-zero slash of the corresponding
-	/// target are *auto-chilled*, but still count towards the limit imposed by `maybe_max_len`.
 	pub fn get_npos_voters(maybe_max_len: Option<usize>) -> Vec<VoterOf<Self>> {
 		let max_allowed_len = {
 			let all_voter_count = T::VoterList::count() as usize;
@@ -696,11 +757,11 @@ impl<T: Config> Pallet<T> {
 
 		// cache a few things.
 		let weight_of = Self::weight_of_fn();
-		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
 
 		let mut voters_seen = 0u32;
 		let mut validators_taken = 0u32;
 		let mut nominators_taken = 0u32;
+		let mut min_active_stake = u64::MAX;
 
 		let mut sorted_voters = T::VoterList::iter();
 		while all_voters.len() < max_allowed_len &&
@@ -714,19 +775,16 @@ impl<T: Config> Pallet<T> {
 				None => break,
 			};
 
-			if let Some(Nominations { submitted_in, mut targets, suppressed: _ }) =
-				<Nominators<T>>::get(&voter)
-			{
-				// if this voter is a nominator:
-				targets.retain(|stash| {
-					slashing_spans
-						.get(stash)
-						.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
-				});
-				if !targets.len().is_zero() {
-					all_voters.push((voter.clone(), weight_of(&voter), targets));
+			if let Some(Nominations { targets, .. }) = <Nominators<T>>::get(&voter) {
+				let voter_weight = weight_of(&voter);
+				if !targets.is_empty() {
+					all_voters.push((voter.clone(), voter_weight, targets));
 					nominators_taken.saturating_inc();
+				} else {
+					// Technically should never happen, but not much we can do about it.
 				}
+				min_active_stake =
+					if voter_weight < min_active_stake { voter_weight } else { min_active_stake };
 			} else if Validators::<T>::contains_key(&voter) {
 				// if this voter is a validator:
 				let self_vote = (
@@ -748,18 +806,19 @@ impl<T: Config> Pallet<T> {
 					warn,
 					"DEFENSIVE: invalid item in `VoterList`: {:?}, this nominator probably has too many nominations now",
 					voter
-				)
+				);
 			}
 		}
 
 		// all_voters should have not re-allocated.
 		debug_assert!(all_voters.capacity() == max_allowed_len);
 
-		Self::register_weight(T::WeightInfo::get_npos_voters(
-			validators_taken,
-			nominators_taken,
-			slashing_spans.len() as u32,
-		));
+		Self::register_weight(T::WeightInfo::get_npos_voters(validators_taken, nominators_taken));
+
+		let min_active_stake: T::CurrencyBalance =
+			if all_voters.len() == 0 { 0u64.into() } else { min_active_stake.into() };
+
+		MinimumActiveStake::<T>::put(min_active_stake);
 
 		log!(
 			info,
@@ -925,7 +984,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 	}
 
 	fn electable_targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>> {
-		let target_count = Validators::<T>::count();
+		let target_count = T::TargetList::count();
 
 		// We can't handle this case yet -- return an error.
 		if maybe_max_len.map_or(false, |max_len| target_count > max_len as u32) {
@@ -1085,12 +1144,12 @@ impl<T: Config> pallet_session::SessionManager<T::AccountId> for Pallet<T> {
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		log!(trace, "planning new session {}", new_index);
 		CurrentPlannedSession::<T>::put(new_index);
-		Self::new_session(new_index, false)
+		Self::new_session(new_index, false).map(|v| v.into_inner())
 	}
 	fn new_session_genesis(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		log!(trace, "planning new session {} at genesis", new_index);
 		CurrentPlannedSession::<T>::put(new_index);
-		Self::new_session(new_index, true)
+		Self::new_session(new_index, true).map(|v| v.into_inner())
 	}
 	fn start_session(start_index: SessionIndex) {
 		log!(trace, "starting session {}", start_index);
@@ -1262,6 +1321,12 @@ where
 				disable_strategy,
 			});
 
+			Self::deposit_event(Event::<T>::SlashReported {
+				validator: stash.clone(),
+				fraction: *slash_fraction,
+				slash_era,
+			});
+
 			if let Some(mut unapplied) = unapplied {
 				let nominators_len = unapplied.others.len() as u64;
 				let reporters_len = details.reporters.len() as u64;
@@ -1315,7 +1380,7 @@ impl<T: Config> ScoreProvider<T::AccountId> for Pallet<T> {
 		Self::weight_of(who)
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", feature = "fuzz"))]
+	#[cfg(feature = "runtime-benchmarks")]
 	fn set_score_of(who: &T::AccountId, weight: Self::Score) {
 		// this will clearly results in an inconsistent state, but it should not matter for a
 		// benchmark.
@@ -1482,12 +1547,42 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 	}
 }
 
+// NOTE: in this entire impl block, the assumption is that `who` is a stash account.
 impl<T: Config> StakingInterface for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Balance = BalanceOf<T>;
 
-	fn minimum_bond() -> Self::Balance {
+	fn minimum_nominator_bond() -> Self::Balance {
 		MinNominatorBond::<T>::get()
+	}
+
+	fn minimum_validator_bond() -> Self::Balance {
+		MinValidatorBond::<T>::get()
+	}
+
+	fn desired_validator_count() -> u32 {
+		ValidatorCount::<T>::get()
+	}
+
+	fn election_ongoing() -> bool {
+		T::ElectionProvider::ongoing()
+	}
+
+	fn force_unstake(who: Self::AccountId) -> sp_runtime::DispatchResult {
+		let num_slashing_spans = Self::slashing_spans(&who).map_or(0, |s| s.iter().count() as u32);
+		Self::force_unstake(RawOrigin::Root.into(), who.clone(), num_slashing_spans)
+	}
+
+	fn stash_by_ctrl(controller: &Self::AccountId) -> Result<Self::AccountId, DispatchError> {
+		Self::ledger(controller)
+			.map(|l| l.stash)
+			.ok_or(Error::<T>::NotController.into())
+	}
+
+	fn is_exposed_in_era(who: &Self::AccountId, era: &EraIndex) -> bool {
+		ErasStakers::<T>::iter_prefix(era).any(|(validator, exposures)| {
+			validator == *who || exposures.others.iter().any(|i| i.who == *who)
+		})
 	}
 
 	fn bonding_duration() -> EraIndex {
@@ -1498,68 +1593,93 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::current_era().unwrap_or(Zero::zero())
 	}
 
-	fn active_stake(controller: &Self::AccountId) -> Option<Self::Balance> {
-		Self::ledger(controller).map(|l| l.active)
+	fn stake(who: &Self::AccountId) -> Result<Stake<Self>, DispatchError> {
+		Self::bonded(who)
+			.and_then(|c| Self::ledger(c))
+			.map(|l| Stake { stash: l.stash, total: l.total, active: l.active })
+			.ok_or(Error::<T>::NotStash.into())
 	}
 
-	fn total_stake(controller: &Self::AccountId) -> Option<Self::Balance> {
-		Self::ledger(controller).map(|l| l.total)
+	fn bond_extra(who: &Self::AccountId, extra: Self::Balance) -> DispatchResult {
+		Self::bond_extra(RawOrigin::Signed(who.clone()).into(), extra)
 	}
 
-	fn bond_extra(stash: Self::AccountId, extra: Self::Balance) -> DispatchResult {
-		Self::bond_extra(RawOrigin::Signed(stash).into(), extra)
+	fn unbond(who: &Self::AccountId, value: Self::Balance) -> DispatchResult {
+		let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
+		Self::unbond(RawOrigin::Signed(ctrl).into(), value)
+			.map_err(|with_post| with_post.error)
+			.map(|_| ())
 	}
 
-	fn unbond(controller: Self::AccountId, value: Self::Balance) -> DispatchResult {
-		Self::unbond(RawOrigin::Signed(controller).into(), value)
-	}
-
-	fn chill(controller: Self::AccountId) -> DispatchResult {
-		Self::chill(RawOrigin::Signed(controller).into())
+	fn chill(who: &Self::AccountId) -> DispatchResult {
+		// defensive-only: any account bonded via this interface has the stash set as the
+		// controller, but we have to be sure. Same comment anywhere else that we read this.
+		let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
+		Self::chill(RawOrigin::Signed(ctrl).into())
 	}
 
 	fn withdraw_unbonded(
-		controller: Self::AccountId,
+		who: Self::AccountId,
 		num_slashing_spans: u32,
 	) -> Result<bool, DispatchError> {
-		Self::withdraw_unbonded(RawOrigin::Signed(controller.clone()).into(), num_slashing_spans)
-			.map(|_| !Ledger::<T>::contains_key(&controller))
+		let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
+		Self::withdraw_unbonded(RawOrigin::Signed(ctrl.clone()).into(), num_slashing_spans)
+			.map(|_| !Ledger::<T>::contains_key(&ctrl))
 			.map_err(|with_post| with_post.error)
 	}
 
 	fn bond(
-		stash: Self::AccountId,
-		controller: Self::AccountId,
+		who: &Self::AccountId,
 		value: Self::Balance,
-		payee: Self::AccountId,
+		payee: &Self::AccountId,
 	) -> DispatchResult {
 		Self::bond(
-			RawOrigin::Signed(stash).into(),
-			T::Lookup::unlookup(controller),
+			RawOrigin::Signed(who.clone()).into(),
+			T::Lookup::unlookup(who.clone()),
 			value,
-			RewardDestination::Account(payee),
+			RewardDestination::Account(payee.clone()),
 		)
 	}
 
-	fn nominate(controller: Self::AccountId, targets: Vec<Self::AccountId>) -> DispatchResult {
+	fn nominate(who: &Self::AccountId, targets: Vec<Self::AccountId>) -> DispatchResult {
+		let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
 		let targets = targets.into_iter().map(T::Lookup::unlookup).collect::<Vec<_>>();
-		Self::nominate(RawOrigin::Signed(controller).into(), targets)
+		Self::nominate(RawOrigin::Signed(ctrl).into(), targets)
 	}
 
-	#[cfg(feature = "runtime-benchmarks")]
-	fn nominations(who: Self::AccountId) -> Option<Vec<T::AccountId>> {
-		Nominators::<T>::get(who).map(|n| n.targets.into_inner())
+	sp_staking::runtime_benchmarks_enabled! {
+		fn nominations(who: Self::AccountId) -> Option<Vec<T::AccountId>> {
+			Nominators::<T>::get(who).map(|n| n.targets.into_inner())
+		}
+
+		fn add_era_stakers(
+			current_era: &EraIndex,
+			stash: &T::AccountId,
+			exposures: Vec<(Self::AccountId, Self::Balance)>,
+		) {
+			let others = exposures
+				.iter()
+				.map(|(who, value)| IndividualExposure { who: who.clone(), value: value.clone() })
+				.collect::<Vec<_>>();
+			let exposure = Exposure { total: Default::default(), own: Default::default(), others };
+			<ErasStakers<T>>::insert(&current_era, &stash, &exposure);
+		}
+
+		fn set_current_era(era: EraIndex) {
+			CurrentEra::<T>::put(era);
+		}
 	}
 }
 
-#[cfg(feature = "try-runtime")]
+#[cfg(any(test, feature = "try-runtime"))]
 impl<T: Config> Pallet<T> {
 	pub(crate) fn do_try_state(_: BlockNumberFor<T>) -> Result<(), &'static str> {
 		ensure!(
-			T::VoterList::iter().all(|x| <Nominators<T>>::contains_key(&x)),
-			"VoterList contains non-nominators"
+			T::VoterList::iter()
+				.all(|x| <Nominators<T>>::contains_key(&x) || <Validators<T>>::contains_key(&x)),
+			"VoterList contains non-staker"
 		);
-		T::VoterList::try_state()?;
+
 		Self::check_nominators()?;
 		Self::check_exposures()?;
 		Self::check_ledgers()?;
@@ -1571,6 +1691,15 @@ impl<T: Config> Pallet<T> {
 			<T as Config>::VoterList::count() ==
 				Nominators::<T>::count() + Validators::<T>::count(),
 			"wrong external count"
+		);
+		ensure!(
+			<T as Config>::TargetList::count() == Validators::<T>::count(),
+			"wrong external count"
+		);
+		ensure!(
+			ValidatorCount::<T>::get() <=
+				<T::ElectionProvider as frame_election_provider_support::ElectionProviderBase>::MaxWinners::get(),
+			"validator count exceeded election max winners"
 		);
 		Ok(())
 	}
@@ -1607,7 +1736,7 @@ impl<T: Config> Pallet<T> {
 		<Nominators<T>>::iter()
 			.filter_map(
 				|(nominator, nomination)| {
-					if nomination.submitted_in > era {
+					if nomination.submitted_in < era {
 						Some(nominator)
 					} else {
 						None

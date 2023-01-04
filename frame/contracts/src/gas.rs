@@ -23,7 +23,6 @@ use frame_support::{
 	weights::Weight,
 	DefaultNoBound,
 };
-use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::Zero;
 use sp_std::marker::PhantomData;
 
@@ -86,10 +85,7 @@ pub struct GasMeter<T: Config> {
 	tokens: Vec<ErasedToken>,
 }
 
-impl<T: Config> GasMeter<T>
-where
-	T::AccountId: UncheckedFrom<<T as frame_system::Config>::Hash> + AsRef<[u8]>,
-{
+impl<T: Config> GasMeter<T> {
 	pub fn new(gas_limit: Weight) -> Self {
 		GasMeter {
 			gas_limit,
@@ -109,7 +105,7 @@ where
 	pub fn nested(&mut self, amount: Weight) -> Result<Self, DispatchError> {
 		// NOTE that it is ok to allocate all available gas since it still ensured
 		// by `charge` that it doesn't reach zero.
-		let amount = Weight::from_components(
+		let amount = Weight::from_parts(
 			if amount.ref_time().is_zero() {
 				self.gas_left().ref_time()
 			} else {

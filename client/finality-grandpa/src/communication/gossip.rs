@@ -35,7 +35,8 @@
 //! impolite to send messages about r+1 or later. "future-round" messages can
 //!  be dropped and ignored.
 //!
-//! It is impolite to send a neighbor packet which moves backwards in protocol state.
+//! It is impolite to send a neighbor packet which moves backwards or does not progress
+//! protocol state.
 //!
 //! This is beneficial if it conveys some progress in the protocol state of the peer.
 //!
@@ -97,8 +98,8 @@ use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnbound
 use sp_finality_grandpa::AuthorityId;
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
 
-use super::{benefit, cost, Round, SetId};
-use crate::{environment, CatchUp, CompactCommit, SignedMessage};
+use super::{benefit, cost, Round, SetId, NEIGHBOR_REBROADCAST_PERIOD};
+use crate::{environment, CatchUp, CompactCommit, SignedMessage, LOG_TARGET};
 
 use std::{
 	collections::{HashSet, VecDeque},
@@ -148,14 +149,15 @@ enum Consider {
 /// A view of protocol state.
 #[derive(Debug)]
 struct View<N> {
-	round: Round,           // the current round we are at.
-	set_id: SetId,          // the current voter set id.
-	last_commit: Option<N>, // commit-finalized block height, if any.
+	round: Round,                 // the current round we are at.
+	set_id: SetId,                // the current voter set id.
+	last_commit: Option<N>,       // commit-finalized block height, if any.
+	last_update: Option<Instant>, // last time we heard from peer, used for spamming detection.
 }
 
 impl<N> Default for View<N> {
 	fn default() -> Self {
-		View { round: Round(1), set_id: SetId(0), last_commit: None }
+		View { round: Round(1), set_id: SetId(0), last_commit: None, last_update: None }
 	}
 }
 
@@ -225,7 +227,12 @@ impl<N> LocalView<N> {
 	/// Converts the local view to a `View` discarding round and set id
 	/// information about the last commit.
 	fn as_view(&self) -> View<&N> {
-		View { round: self.round, set_id: self.set_id, last_commit: self.last_commit_height() }
+		View {
+			round: self.round,
+			set_id: self.set_id,
+			last_commit: self.last_commit_height(),
+			last_update: None,
+		}
 	}
 
 	/// Update the set ID. implies a reset to round 1.
@@ -417,6 +424,8 @@ pub(super) struct FullCatchUpMessage<Block: BlockT> {
 pub(super) enum Misbehavior {
 	// invalid neighbor message, considering the last one.
 	InvalidViewChange,
+	// duplicate neighbor message.
+	DuplicateNeighborMessage,
 	// could not decode neighbor message. bytes-length of the packet.
 	UndecodablePacket(i32),
 	// Bad catch up message (invalid signatures).
@@ -438,6 +447,7 @@ impl Misbehavior {
 
 		match *self {
 			InvalidViewChange => cost::INVALID_VIEW_CHANGE,
+			DuplicateNeighborMessage => cost::DUPLICATE_NEIGHBOR_MESSAGE,
 			UndecodablePacket(bytes) => ReputationChange::new(
 				bytes.saturating_mul(cost::PER_UNDECODABLE_BYTE),
 				"Grandpa: Bad packet",
@@ -488,20 +498,22 @@ struct Peers<N> {
 	second_stage_peers: HashSet<PeerId>,
 	/// The randomly picked set of `LUCKY_PEERS` light clients we'll gossip commit messages to.
 	lucky_light_peers: HashSet<PeerId>,
+	/// Neighbor packet rebroadcast period --- we reduce the reputation of peers sending duplicate
+	/// packets too often.
+	neighbor_rebroadcast_period: Duration,
 }
 
-impl<N> Default for Peers<N> {
-	fn default() -> Self {
+impl<N: Ord> Peers<N> {
+	fn new(neighbor_rebroadcast_period: Duration) -> Self {
 		Peers {
 			inner: Default::default(),
 			first_stage_peers: Default::default(),
 			second_stage_peers: Default::default(),
 			lucky_light_peers: Default::default(),
+			neighbor_rebroadcast_period,
 		}
 	}
-}
 
-impl<N: Ord> Peers<N> {
 	fn new_peer(&mut self, who: PeerId, role: ObservedRole) {
 		match role {
 			ObservedRole::Authority if self.first_stage_peers.len() < LUCKY_PEERS => {
@@ -547,14 +559,32 @@ impl<N: Ord> Peers<N> {
 			return Err(Misbehavior::InvalidViewChange)
 		}
 
+		let now = Instant::now();
+		let duplicate_packet = (update.set_id, update.round, Some(&update.commit_finalized_height)) ==
+			(peer.view.set_id, peer.view.round, peer.view.last_commit.as_ref());
+
+		if duplicate_packet {
+			if let Some(last_update) = peer.view.last_update {
+				if now < last_update + self.neighbor_rebroadcast_period / 2 {
+					return Err(Misbehavior::DuplicateNeighborMessage)
+				}
+			}
+		}
+
 		peer.view = View {
 			round: update.round,
 			set_id: update.set_id,
 			last_commit: Some(update.commit_finalized_height),
+			last_update: Some(now),
 		};
 
-		trace!(target: "afg", "Peer {} updated view. Now at {:?}, {:?}",
-			who, peer.view.round, peer.view.set_id);
+		trace!(
+			target: LOG_TARGET,
+			"Peer {} updated view. Now at {:?}, {:?}",
+			who,
+			peer.view.round,
+			peer.view.set_id
+		);
 
 		Ok(Some(&peer.view))
 	}
@@ -748,7 +778,7 @@ impl<Block: BlockT> Inner<Block> {
 
 		Inner {
 			local_view: None,
-			peers: Peers::default(),
+			peers: Peers::new(NEIGHBOR_REBROADCAST_PERIOD),
 			live_topics: KeepTopics::new(),
 			next_rebroadcast: Instant::now() + REBROADCAST_AFTER,
 			authorities: Vec::new(),
@@ -758,13 +788,16 @@ impl<Block: BlockT> Inner<Block> {
 		}
 	}
 
-	/// Note a round in the current set has started.
+	/// Note a round in the current set has started. Does nothing if the last
+	/// call to the function was with the same `round`.
 	fn note_round(&mut self, round: Round) -> MaybeMessage<Block> {
 		{
 			let local_view = match self.local_view {
 				None => return None,
 				Some(ref mut v) =>
 					if v.round == round {
+						// Do not send neighbor packets out if `round` has not changed ---
+						// such behavior is punishable.
 						return None
 					} else {
 						v
@@ -773,8 +806,12 @@ impl<Block: BlockT> Inner<Block> {
 
 			let set_id = local_view.set_id;
 
-			debug!(target: "afg", "Voter {} noting beginning of round {:?} to network.",
-				self.config.name(), (round, set_id));
+			debug!(
+				target: LOG_TARGET,
+				"Voter {} noting beginning of round {:?} to network.",
+				self.config.name(),
+				(round, set_id)
+			);
 
 			local_view.update_round(round);
 
@@ -796,13 +833,15 @@ impl<Block: BlockT> Inner<Block> {
 							authorities.iter().collect::<HashSet<_>>();
 
 						if diff_authorities {
-							debug!(target: "afg",
+							debug!(target: LOG_TARGET,
 								"Gossip validator noted set {:?} twice with different authorities. \
 								Was the authority set hard forked?",
 								set_id,
 							);
 							self.authorities = authorities;
 						}
+						// Do not send neighbor packets out if the `set_id` has not changed ---
+						// such behavior is punishable.
 						return None
 					} else {
 						v
@@ -816,7 +855,9 @@ impl<Block: BlockT> Inner<Block> {
 		self.multicast_neighbor_packet()
 	}
 
-	/// Note that we've imported a commit finalizing a given block.
+	/// Note that we've imported a commit finalizing a given block. Does nothing if the last
+	/// call to the function was with the same or higher `finalized` number.
+	/// `set_id` & `round` are the ones the commit message is from.
 	fn note_commit_finalized(
 		&mut self,
 		round: Round,
@@ -880,7 +921,7 @@ impl<Block: BlockT> Inner<Block> {
 
 		// ensure authority is part of the set.
 		if !self.authorities.contains(&full.message.id) {
-			debug!(target: "afg", "Message from unknown voter: {}", full.message.id);
+			debug!(target: LOG_TARGET, "Message from unknown voter: {}", full.message.id);
 			telemetry!(
 				self.config.telemetry;
 				CONSENSUS_DEBUG;
@@ -897,7 +938,7 @@ impl<Block: BlockT> Inner<Block> {
 			full.round.0,
 			full.set_id.0,
 		) {
-			debug!(target: "afg", "Bad message signature {}", full.message.id);
+			debug!(target: LOG_TARGET, "Bad message signature {}", full.message.id);
 			telemetry!(
 				self.config.telemetry;
 				CONSENSUS_DEBUG;
@@ -932,7 +973,7 @@ impl<Block: BlockT> Inner<Block> {
 		if full.message.precommits.len() != full.message.auth_data.len() ||
 			full.message.precommits.is_empty()
 		{
-			debug!(target: "afg", "Malformed compact commit");
+			debug!(target: LOG_TARGET, "Malformed compact commit");
 			telemetry!(
 				self.config.telemetry;
 				CONSENSUS_DEBUG;
@@ -991,9 +1032,9 @@ impl<Block: BlockT> Inner<Block> {
 			PendingCatchUp::Processing { .. } => {
 				self.pending_catch_up = PendingCatchUp::None;
 			},
-			state => debug!(target: "afg",
-				"Noted processed catch up message when state was: {:?}",
-				state,
+			state => debug!(
+				target: LOG_TARGET,
+				"Noted processed catch up message when state was: {:?}", state,
 			),
 		}
 	}
@@ -1035,7 +1076,9 @@ impl<Block: BlockT> Inner<Block> {
 			return (None, Action::Discard(Misbehavior::OutOfScopeMessage.cost()))
 		}
 
-		trace!(target: "afg", "Replying to catch-up request for round {} from {} with round {}",
+		trace!(
+			target: LOG_TARGET,
+			"Replying to catch-up request for round {} from {} with round {}",
 			request.round.0,
 			who,
 			last_completed_round.number,
@@ -1109,9 +1152,9 @@ impl<Block: BlockT> Inner<Block> {
 				let (catch_up_allowed, catch_up_report) = self.note_catch_up_request(who, &request);
 
 				if catch_up_allowed {
-					debug!(target: "afg", "Sending catch-up request for round {} to {}",
-						   round,
-						   who,
+					debug!(
+						target: LOG_TARGET,
+						"Sending catch-up request for round {} to {}", round, who,
 					);
 
 					catch_up = Some(GossipMessage::<Block>::CatchUpRequest(request));
@@ -1315,13 +1358,13 @@ impl<Block: BlockT> GossipValidator<Block> {
 		let metrics = match prometheus_registry.map(Metrics::register) {
 			Some(Ok(metrics)) => Some(metrics),
 			Some(Err(e)) => {
-				debug!(target: "afg", "Failed to register metrics: {:?}", e);
+				debug!(target: LOG_TARGET, "Failed to register metrics: {:?}", e);
 				None
 			},
 			None => None,
 		};
 
-		let (tx, rx) = tracing_unbounded("mpsc_grandpa_gossip_validator");
+		let (tx, rx) = tracing_unbounded("mpsc_grandpa_gossip_validator", 100_000);
 		let val = GossipValidator {
 			inner: parking_lot::RwLock::new(Inner::new(config)),
 			set_state,
@@ -1357,6 +1400,8 @@ impl<Block: BlockT> GossipValidator<Block> {
 	}
 
 	/// Note that we've imported a commit finalizing a given block.
+	/// `set_id` & `round` are the ones the commit message is from and not necessarily
+	/// the latest set ID & round started.
 	pub(super) fn note_commit_finalized<F>(
 		&self,
 		round: Round,
@@ -1432,7 +1477,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 				},
 				Err(e) => {
 					message_name = None;
-					debug!(target: "afg", "Error decoding message: {}", e);
+					debug!(target: LOG_TARGET, "Error decoding message: {}", e);
 					telemetry!(
 						self.telemetry;
 						CONSENSUS_DEBUG;
@@ -1647,11 +1692,12 @@ pub(super) struct PeerReport {
 
 #[cfg(test)]
 mod tests {
-	use super::{environment::SharedVoterSetState, *};
+	use super::{super::NEIGHBOR_REBROADCAST_PERIOD, environment::SharedVoterSetState, *};
 	use crate::communication;
 	use sc_network::config::Role;
 	use sc_network_gossip::Validator as GossipValidatorT;
 	use sp_core::{crypto::UncheckedFrom, H256};
+	use std::time::Instant;
 	use substrate_test_runtime_client::runtime::{Block, Header};
 
 	// some random config (not really needed)
@@ -1684,7 +1730,12 @@ mod tests {
 
 	#[test]
 	fn view_vote_rules() {
-		let view = View { round: Round(100), set_id: SetId(1), last_commit: Some(1000u64) };
+		let view = View {
+			round: Round(100),
+			set_id: SetId(1),
+			last_commit: Some(1000u64),
+			last_update: None,
+		};
 
 		assert_eq!(view.consider_vote(Round(98), SetId(1)), Consider::RejectPast);
 		assert_eq!(view.consider_vote(Round(1), SetId(0)), Consider::RejectPast);
@@ -1701,7 +1752,12 @@ mod tests {
 
 	#[test]
 	fn view_global_message_rules() {
-		let view = View { round: Round(100), set_id: SetId(2), last_commit: Some(1000u64) };
+		let view = View {
+			round: Round(100),
+			set_id: SetId(2),
+			last_commit: Some(1000u64),
+			last_update: None,
+		};
 
 		assert_eq!(view.consider_global(SetId(3), 1), Consider::RejectFuture);
 		assert_eq!(view.consider_global(SetId(3), 1000), Consider::RejectFuture);
@@ -1719,7 +1775,7 @@ mod tests {
 
 	#[test]
 	fn unknown_peer_cannot_be_updated() {
-		let mut peers = Peers::default();
+		let mut peers = Peers::new(NEIGHBOR_REBROADCAST_PERIOD);
 		let id = PeerId::random();
 
 		let update =
@@ -1750,27 +1806,35 @@ mod tests {
 		let update4 =
 			NeighborPacket { round: Round(3), set_id: SetId(11), commit_finalized_height: 80 };
 
-		let mut peers = Peers::default();
+		// Use shorter rebroadcast period to safely roll the clock back in the last test
+		// and don't hit the system boot time on systems with unsigned time.
+		const SHORT_NEIGHBOR_REBROADCAST_PERIOD: Duration = Duration::from_secs(1);
+		let mut peers = Peers::new(SHORT_NEIGHBOR_REBROADCAST_PERIOD);
 		let id = PeerId::random();
 
 		peers.new_peer(id, ObservedRole::Authority);
 
-		let mut check_update = move |update: NeighborPacket<_>| {
+		let check_update = |peers: &mut Peers<_>, update: NeighborPacket<_>| {
 			let view = peers.update_peer_state(&id, update.clone()).unwrap().unwrap();
 			assert_eq!(view.round, update.round);
 			assert_eq!(view.set_id, update.set_id);
 			assert_eq!(view.last_commit, Some(update.commit_finalized_height));
 		};
 
-		check_update(update1);
-		check_update(update2);
-		check_update(update3);
-		check_update(update4);
+		check_update(&mut peers, update1);
+		check_update(&mut peers, update2);
+		check_update(&mut peers, update3);
+		check_update(&mut peers, update4.clone());
+
+		// Allow duplicate neighbor packets if enough time has passed.
+		peers.inner.get_mut(&id).unwrap().view.last_update =
+			Some(Instant::now() - SHORT_NEIGHBOR_REBROADCAST_PERIOD);
+		check_update(&mut peers, update4);
 	}
 
 	#[test]
 	fn invalid_view_change() {
-		let mut peers = Peers::default();
+		let mut peers = Peers::new(NEIGHBOR_REBROADCAST_PERIOD);
 
 		let id = PeerId::random();
 		peers.new_peer(id, ObservedRole::Authority);
@@ -1783,29 +1847,41 @@ mod tests {
 			.unwrap()
 			.unwrap();
 
-		let mut check_update = move |update: NeighborPacket<_>| {
+		let mut check_update = move |update: NeighborPacket<_>, misbehavior| {
 			let err = peers.update_peer_state(&id, update.clone()).unwrap_err();
-			assert_eq!(err, Misbehavior::InvalidViewChange);
+			assert_eq!(err, misbehavior);
 		};
 
 		// round moves backwards.
-		check_update(NeighborPacket {
-			round: Round(9),
-			set_id: SetId(10),
-			commit_finalized_height: 10,
-		});
-		// commit finalized height moves backwards.
-		check_update(NeighborPacket {
-			round: Round(10),
-			set_id: SetId(10),
-			commit_finalized_height: 9,
-		});
+		check_update(
+			NeighborPacket { round: Round(9), set_id: SetId(10), commit_finalized_height: 10 },
+			Misbehavior::InvalidViewChange,
+		);
 		// set ID moves backwards.
-		check_update(NeighborPacket {
-			round: Round(10),
-			set_id: SetId(9),
-			commit_finalized_height: 10,
-		});
+		check_update(
+			NeighborPacket { round: Round(10), set_id: SetId(9), commit_finalized_height: 10 },
+			Misbehavior::InvalidViewChange,
+		);
+		// commit finalized height moves backwards.
+		check_update(
+			NeighborPacket { round: Round(10), set_id: SetId(10), commit_finalized_height: 9 },
+			Misbehavior::InvalidViewChange,
+		);
+		// duplicate packet without grace period.
+		check_update(
+			NeighborPacket { round: Round(10), set_id: SetId(10), commit_finalized_height: 10 },
+			Misbehavior::DuplicateNeighborMessage,
+		);
+		// commit finalized height moves backwards while round moves forward.
+		check_update(
+			NeighborPacket { round: Round(11), set_id: SetId(10), commit_finalized_height: 9 },
+			Misbehavior::InvalidViewChange,
+		);
+		// commit finalized height moves backwards while set ID moves forward.
+		check_update(
+			NeighborPacket { round: Round(10), set_id: SetId(11), commit_finalized_height: 9 },
+			Misbehavior::InvalidViewChange,
+		);
 	}
 
 	#[test]

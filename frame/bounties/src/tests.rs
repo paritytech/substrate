@@ -106,6 +106,8 @@ parameter_types! {
 	pub static Burn: Permill = Permill::from_percent(50);
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 	pub const TreasuryPalletId2: PalletId = PalletId(*b"py/trsr2");
+	pub static SpendLimit: Balance = u64::MAX;
+	pub static SpendLimit1: Balance = u64::MAX;
 }
 
 impl pallet_treasury::Config for Test {
@@ -124,7 +126,7 @@ impl pallet_treasury::Config for Test {
 	type WeightInfo = ();
 	type SpendFunds = Bounties;
 	type MaxApprovals = ConstU32<100>;
-	type SpendOrigin = frame_support::traits::NeverEnsureOrigin<u64>;
+	type SpendOrigin = frame_system::EnsureRootWithSuccess<Self::AccountId, SpendLimit>;
 }
 
 impl pallet_treasury::Config<Instance1> for Test {
@@ -143,7 +145,7 @@ impl pallet_treasury::Config<Instance1> for Test {
 	type WeightInfo = ();
 	type SpendFunds = Bounties1;
 	type MaxApprovals = ConstU32<100>;
-	type SpendOrigin = frame_support::traits::NeverEnsureOrigin<u64>;
+	type SpendOrigin = frame_system::EnsureRootWithSuccess<Self::AccountId, SpendLimit1>;
 }
 
 parameter_types! {
@@ -185,6 +187,7 @@ impl Config<Instance1> for Test {
 }
 
 type TreasuryError = pallet_treasury::Error<Test>;
+type TreasuryError1 = pallet_treasury::Error<Test, Instance1>;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext: sp_io::TestExternalities = GenesisConfig {
@@ -1136,6 +1139,8 @@ fn accept_curator_handles_different_deposit_calculations() {
 		System::set_block_number(1);
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
 		Balances::make_free_balance_be(&user, 100);
+		// Allow for a larger spend limit:
+		SpendLimit::set(value);
 		assert_ok!(Bounties::propose_bounty(RuntimeOrigin::signed(0), value, b"12345".to_vec()));
 		assert_ok!(Bounties::approve_bounty(RuntimeOrigin::root(), bounty_index));
 
@@ -1182,6 +1187,8 @@ fn accept_curator_handles_different_deposit_calculations() {
 		Balances::make_free_balance_be(&user, starting_balance);
 		Balances::make_free_balance_be(&0, starting_balance);
 
+		// Allow for a larger spend limit:
+		SpendLimit::set(value);
 		assert_ok!(Bounties::propose_bounty(RuntimeOrigin::signed(0), value, b"12345".to_vec()));
 		assert_ok!(Bounties::approve_bounty(RuntimeOrigin::root(), bounty_index));
 
@@ -1209,16 +1216,98 @@ fn approve_bounty_works_second_instance() {
 		assert_eq!(Balances::free_balance(&Treasury::account_id()), 101);
 		assert_eq!(Balances::free_balance(&Treasury1::account_id()), 201);
 
-		assert_ok!(Bounties1::propose_bounty(RuntimeOrigin::signed(0), 50, b"12345".to_vec()));
+		assert_ok!(Bounties1::propose_bounty(RuntimeOrigin::signed(0), 10, b"12345".to_vec()));
 		assert_ok!(Bounties1::approve_bounty(RuntimeOrigin::root(), 0));
 		<Treasury as OnInitialize<u64>>::on_initialize(2);
 		<Treasury1 as OnInitialize<u64>>::on_initialize(2);
 
 		// Bounties 1 is funded... but from where?
-		assert_eq!(Balances::free_balance(Bounties1::bounty_account_id(0)), 50);
+		assert_eq!(Balances::free_balance(Bounties1::bounty_account_id(0)), 10);
 		// Treasury 1 unchanged
 		assert_eq!(Balances::free_balance(&Treasury::account_id()), 101);
 		// Treasury 2 has funds removed
-		assert_eq!(Balances::free_balance(&Treasury1::account_id()), 201 - 50);
+		assert_eq!(Balances::free_balance(&Treasury1::account_id()), 201 - 10);
+	});
+}
+
+#[test]
+fn approve_bounty_insufficient_spend_limit_errors() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		assert_eq!(Treasury::pot(), 100);
+
+		assert_ok!(Bounties::propose_bounty(RuntimeOrigin::signed(0), 51, b"123".to_vec()));
+		// 51 will not work since the limit is 50.
+		SpendLimit::set(50);
+		assert_noop!(
+			Bounties::approve_bounty(RuntimeOrigin::root(), 0),
+			TreasuryError::InsufficientPermission
+		);
+	});
+}
+
+#[test]
+fn approve_bounty_instance1_insufficient_spend_limit_errors() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+
+		Balances::make_free_balance_be(&Treasury1::account_id(), 101);
+		assert_eq!(Treasury1::pot(), 100);
+
+		assert_ok!(Bounties1::propose_bounty(RuntimeOrigin::signed(0), 51, b"123".to_vec()));
+		// 51 will not work since the limit is 50.
+		SpendLimit1::set(50);
+		assert_noop!(
+			Bounties1::approve_bounty(RuntimeOrigin::root(), 0),
+			TreasuryError1::InsufficientPermission
+		);
+	});
+}
+
+#[test]
+fn propose_curator_insufficient_spend_limit_errors() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+
+		// Temporarily set a larger spend limit;
+		SpendLimit::set(51);
+		assert_ok!(Bounties::propose_bounty(RuntimeOrigin::signed(0), 51, b"12345".to_vec()));
+		assert_ok!(Bounties::approve_bounty(RuntimeOrigin::root(), 0));
+
+		System::set_block_number(2);
+		<Treasury as OnInitialize<u64>>::on_initialize(2);
+
+		SpendLimit::set(50);
+		// 51 will not work since the limit is 50.
+		assert_noop!(
+			Bounties::propose_curator(RuntimeOrigin::root(), 0, 0, 0),
+			TreasuryError::InsufficientPermission
+		);
+	});
+}
+
+#[test]
+fn propose_curator_instance1_insufficient_spend_limit_errors() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+
+		// Temporarily set a larger spend limit;
+		SpendLimit1::set(11);
+		assert_ok!(Bounties1::propose_bounty(RuntimeOrigin::signed(0), 11, b"12345".to_vec()));
+		assert_ok!(Bounties1::approve_bounty(RuntimeOrigin::root(), 0));
+
+		System::set_block_number(2);
+		<Treasury1 as OnInitialize<u64>>::on_initialize(2);
+
+		SpendLimit1::set(10);
+		// 11 will not work since the limit is 10.
+		assert_noop!(
+			Bounties1::propose_curator(RuntimeOrigin::root(), 0, 0, 0),
+			TreasuryError1::InsufficientPermission
+		);
 	});
 }
