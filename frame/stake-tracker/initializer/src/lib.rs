@@ -1,4 +1,4 @@
-pub(crate) const LOG_TARGET: &str = "runtime::stake-tracker";
+pub(crate) const LOG_TARGET: &str = "runtime::stake-tracker-initializer";
 
 #[macro_export]
 macro_rules! log {
@@ -10,7 +10,7 @@ macro_rules! log {
 	};
 }
 
-trait Runtime: pallet_stake_tracker::Config + pallet_staking::Config {}
+pub trait Runtime: pallet_stake_tracker::Config + pallet_staking::Config {}
 
 pub mod v2 {}
 //TODO: Introduce try-state to the pallet
