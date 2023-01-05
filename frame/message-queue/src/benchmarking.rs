@@ -46,7 +46,9 @@ benchmarks! {
 		assert_ring::<T>(&[0.into(), 2.into()]);
 
 		#[extrinsic_call]
-		let neighbours = MessageQueue::<T>::ready_ring_knit(&mid).ok();
+		let neighbours = MessageQueue::<T>::ready_ring_knit(&mid);
+
+		neighbors.ok();
 
 		// The neighbours needs to be modified manually.
 		BookStateFor::<T>::mutate(&mid, |b| { b.ready_neighbours = neighbours });
@@ -187,8 +189,9 @@ benchmarks! {
 		BookStateFor::<T>::insert(&origin, &book);
 
 		#[extrinsic_call]
-		MessageQueue::<T>::execute_overweight(RawOrigin::Signed(whitelisted_caller()).into(), 0u32.into(), 0u32, ((msgs - 1) as u32).into(), Weight::MAX).unwrap();
+		let call = MessageQueue::<T>::execute_overweight(RawOrigin::Signed(whitelisted_caller()).into(), 0u32.into(), 0u32, ((msgs - 1) as u32).into(), Weight::MAX);
 
+		call.unwrap();
 		assert_last_event::<T>(Event::Processed {
 			hash: T::Hashing::hash(&((msgs - 1) as u32).encode()), origin: 0.into(),
 			weight_used: Weight::from_parts(1, 1), success: true
@@ -210,8 +213,9 @@ benchmarks! {
 		BookStateFor::<T>::insert(&origin, &book);
 
 		#[extrinsic_call]
-		MessageQueue::<T>::execute_overweight(RawOrigin::Signed(whitelisted_caller()).into(), 0u32.into(), 0u32, ((msgs - 1) as u32).into(), Weight::MAX).unwrap();
+		let call = MessageQueue::<T>::execute_overweight(RawOrigin::Signed(whitelisted_caller()).into(), 0u32.into(), 0u32, ((msgs - 1) as u32).into(), Weight::MAX);
 
+		call.unwrap();
 		assert_last_event::<T>(Event::Processed {
 			hash: T::Hashing::hash(&((msgs - 1) as u32).encode()), origin: 0.into(),
 			weight_used: Weight::from_parts(1, 1), success: true
