@@ -756,7 +756,7 @@ impl<T: Config> Commission<T> {
 
 	/// Gets the current commission (if any) and payee to be paid.
 	///
-	/// /// `None` is returned if a commission has not been set. Commission is bounded to
+	/// `None` is returned if a commission has not been set. Commission is bounded to
 	/// `GlobalMaxCommission`.
 	fn maybe_commission_and_payee(
 		&self,
