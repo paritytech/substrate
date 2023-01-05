@@ -78,7 +78,7 @@ mod v1 {
 	use crate::{round::RoundTracker, worker::PersistedState, Rounds};
 	use beefy_primitives::{
 		crypto::{Public, Signature},
-		Payload, ValidatorSet,
+		Commitment, Payload, ValidatorSet,
 	};
 	use sp_runtime::traits::NumberFor;
 	use std::collections::{BTreeMap, VecDeque};
@@ -111,11 +111,16 @@ mod v1 {
 		B: BlockT,
 	{
 		fn into(self) -> Rounds<B> {
-			// FIXME
-			// let rounds = self.rounds.into_iter().map(|it| (it.0, it.1.into())).collect();
+			let validator_set_id = self.validator_set.id();
+			let rounds = self
+				.rounds
+				.into_iter()
+				.map(|((payload, block_number), v1_tracker)| {
+					(Commitment { payload, block_number, validator_set_id }, v1_tracker.into())
+				})
+				.collect();
 			Rounds::<B>::new_manual(
-				// FIXME
-				BTreeMap::new(),
+				rounds,
 				BTreeMap::new(),
 				self.session_start,
 				self.validator_set,
