@@ -43,7 +43,7 @@ use frame_support::{
 	traits::{
 		tokens::{
 			fungibles::{Balanced, CreditOf, Inspect},
-			WithdrawConsequence,
+			BalanceConversion, WithdrawConsequence,
 		},
 		IsType,
 	},
@@ -52,7 +52,7 @@ use frame_support::{
 use pallet_transaction_payment::OnChargeTransaction;
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{DispatchInfoOf, Dispatchable, PostDispatchInfoOf, SignedExtension, Zero},
+	traits::{DispatchInfoOf, Dispatchable, One, PostDispatchInfoOf, SignedExtension, Zero},
 	transaction_validity::{
 		InvalidTransaction, TransactionValidity, TransactionValidityError, ValidTransaction,
 	},
@@ -119,6 +119,12 @@ pub mod pallet {
 		type Fungibles: Balanced<Self::AccountId>;
 		/// The actual transaction charging logic that charges the fees.
 		type OnChargeAssetTransaction: OnChargeAssetTransaction<Self>;
+		/// Type that implements the `BalanceConversion` trait.
+		type BalanceToAsset: BalanceConversion<
+			BalanceOf<Self>,
+			AssetIdOf<Self>,
+			AssetBalanceOf<Self>,
+		>;
 	}
 
 	#[pallet::pallet]
@@ -132,8 +138,8 @@ pub mod pallet {
 		/// has been paid by `who` in an asset `asset_id`.
 		AssetTxFeePaid {
 			who: T::AccountId,
-			actual_fee: BalanceOf<T>,
-			tip: BalanceOf<T>,
+			actual_fee: AssetBalanceOf<T>,
+			tip: AssetBalanceOf<T>,
 			asset_id: Option<ChargeAssetIdOf<T>>,
 		},
 	}
@@ -282,18 +288,34 @@ where
 					let actual_fee = pallet_transaction_payment::Pallet::<T>::compute_actual_fee(
 						len as u32, info, post_info, tip,
 					);
+
+					let min_converted_fee =
+						if actual_fee.is_zero() { Zero::zero() } else { One::one() };
+					let converted_actual_fee =
+						T::BalanceToAsset::to_asset_balance(actual_fee, already_withdrawn.asset())
+							.map_err(|_| -> TransactionValidityError {
+								InvalidTransaction::Payment.into()
+							})?
+							.max(min_converted_fee);
+
+					let converted_tip =
+						T::BalanceToAsset::to_asset_balance(tip, already_withdrawn.asset())
+							.map_err(|_| -> TransactionValidityError {
+								InvalidTransaction::Payment.into()
+							})?;
+
 					T::OnChargeAssetTransaction::correct_and_deposit_fee(
 						&who,
 						info,
 						post_info,
-						actual_fee.into(),
-						tip.into(),
+						converted_actual_fee,
+						converted_tip,
 						already_withdrawn.into(),
 					)?;
 					Pallet::<T>::deposit_event(Event::<T>::AssetTxFeePaid {
 						who,
-						actual_fee,
-						tip,
+						actual_fee: converted_actual_fee,
+						tip: converted_tip,
 						asset_id,
 					});
 				},

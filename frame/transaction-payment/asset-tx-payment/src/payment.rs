@@ -70,8 +70,8 @@ pub trait OnChargeAssetTransaction<T: Config> {
 		who: &T::AccountId,
 		dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
 		post_info: &PostDispatchInfoOf<T::RuntimeCall>,
-		corrected_fee: Self::Balance,
-		tip: Self::Balance,
+		corrected_fee: AssetBalanceOf<T>,
+		tip: AssetBalanceOf<T>,
 		already_withdrawn: Self::LiquidityInfo,
 	) -> Result<(), TransactionValidityError>;
 }
@@ -144,17 +144,12 @@ where
 		who: &T::AccountId,
 		_dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
 		_post_info: &PostDispatchInfoOf<T::RuntimeCall>,
-		corrected_fee: Self::Balance,
-		_tip: Self::Balance,
+		corrected_fee: AssetBalanceOf<T>,
+		_tip: AssetBalanceOf<T>,
 		paid: Self::LiquidityInfo,
 	) -> Result<(), TransactionValidityError> {
-		let min_converted_fee = if corrected_fee.is_zero() { Zero::zero() } else { One::one() };
-		// Convert the corrected fee into the asset used for payment.
-		let converted_fee = CON::to_asset_balance(corrected_fee, paid.asset())
-			.map_err(|_| -> TransactionValidityError { InvalidTransaction::Payment.into() })?
-			.max(min_converted_fee);
 		// Calculate how much refund we should return.
-		let (final_fee, refund) = paid.split(converted_fee);
+		let (final_fee, refund) = paid.split(corrected_fee);
 		// Refund to the account that paid the fees. If this fails, the account might have dropped
 		// below the existential balance. In that case we don't refund anything.
 		let _ = <T::Fungibles as Balanced<T::AccountId>>::resolve(who, refund);

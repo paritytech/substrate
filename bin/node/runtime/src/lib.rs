@@ -475,6 +475,7 @@ impl pallet_asset_tx_payment::Config for Runtime {
 		pallet_assets::BalanceToAssetBalance<Balances, Runtime, ConvertInto>,
 		CreditToBlockAuthor,
 	>;
+	type BalanceToAsset = pallet_assets::BalanceToAssetBalance<Balances, Runtime, ConvertInto>;
 }
 
 parameter_types! {
