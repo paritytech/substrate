@@ -9,6 +9,7 @@ use syn::{
 	spanned::Spanned,
 	token::{Comma, Gt, Lt},
 	Block, Error, Expr, ExprCall, FnArg, Item, ItemFn, LitInt, Pat, Result, Stmt, Type,
+	WhereClause,
 };
 
 mod keywords {
@@ -708,4 +709,9 @@ pub fn benchmark(_attrs: TokenStream, tokens: TokenStream, is_instance: bool) ->
 	};
 
 	expand_benchmark(benchmark_def, &item_fn.sig.ident, is_instance).into()
+}
+
+pub fn where_clause(tokens: TokenStream) -> TokenStream {
+	let _clause = parse_macro_input!(tokens as WhereClause);
+	quote!().into()
 }
