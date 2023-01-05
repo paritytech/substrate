@@ -16,7 +16,6 @@
 // limitations under the License.
 
 //! Contains the root [`BenchmarkCmd`] command and exports its sub-commands.
-#![feature(get_mut_unchecked)]
 
 mod block;
 mod extrinsic;

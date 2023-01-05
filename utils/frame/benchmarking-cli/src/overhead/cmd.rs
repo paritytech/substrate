@@ -33,6 +33,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT},
 	DigestItem, OpaqueExtrinsic,
 };
+use std::{cell::RefCell, rc::Rc};
 use ver_api::VerApi;
 
 use clap::{Args, Parser};
@@ -146,7 +147,7 @@ impl OverheadCmd {
 	pub fn run_ver<Block, BA, C>(
 		&self,
 		cfg: Configuration,
-		client: Arc<C>,
+		client: Rc<RefCell<C>>,
 		inherent_data: (sp_inherents::InherentData, sp_inherents::InherentData),
 		ext_builder: &dyn ExtrinsicBuilder,
 	) -> Result<()>
