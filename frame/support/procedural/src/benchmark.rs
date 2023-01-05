@@ -259,7 +259,7 @@ pub fn benchmarks(tokens: TokenStream, instance: bool) -> TokenStream {
 		let name_str = &benchmark_names_str[i];
 		let test_ident = &test_idents[i];
 		selected_benchmark_mappings.push(quote!(#name_str => SelectedBenchmark::#name_ident));
-		benchmarks_by_name_mappings.push(quote!(#name_str => Self::#test_ident))
+		benchmarks_by_name_mappings.push(quote!(#name_str => Self::#test_ident()))
 	}
 
 	// emit final quoted tokens
@@ -477,7 +477,7 @@ pub fn benchmarks(tokens: TokenStream, instance: bool) -> TokenStream {
 			}
 		}
 	};
-	println!("{}", res.to_string());
+	// println!("{}", res.to_string());
 	res.into()
 }
 
