@@ -11,10 +11,9 @@ homepage = "https://substrate.io"
 [dependencies]
 array-bytes = { version = "4.1", optional = true }
 log = { version = "0.4", default-features = false, optional = true }
-
-beefy-primitives = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/beefy", package = "sp-beefy" }
-sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/api" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../../primitives/runtime" }
+tiny-keccak = { version = "2.0.2", features = ["keccak"] }
+hash-db = { version = "0.15.2", default-features = false }
+hash256-std-hasher = { version = "0.15.2", default-features = false }
 
 [dev-dependencies]
 array-bytes = "4.1"
@@ -24,7 +23,6 @@ env_logger = "0.9"
 debug = ["array-bytes", "log"]
 default = ["debug", "std"]
 std = [
-	"beefy-primitives/std",
-	"sp-api/std",
-	"sp-runtime/std"
+	"hash-db/std",
+	"hash256-std-hasher/std",
 ]

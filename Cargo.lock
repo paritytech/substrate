@@ -530,10 +530,10 @@ version = "4.0.0-dev"
 dependencies = [
  "array-bytes",
  "env_logger",
+ "hash-db",
+ "hash256-std-hasher",
  "log",
- "sp-api",
- "sp-beefy",
- "sp-runtime",
+ "tiny-keccak",
 ]
 
 [[package]]
@@ -5450,6 +5450,7 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
+ "sp-api",
  "sp-beefy",
  "sp-core",
  "sp-io",
