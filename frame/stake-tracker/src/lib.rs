@@ -17,12 +17,10 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_election_provider_support::{
-	ReadOnlySortedListProvider, ScoreProvider, SortedListProvider, VoteWeight,
-};
+use frame_election_provider_support::{SortedListProvider, VoteWeight};
 use frame_support::traits::{Currency, CurrencyToVote, Defensive};
 pub use pallet::*;
-use sp_runtime::Saturating;
+
 use sp_staking::{OnStakingUpdate, Stake, StakingInterface};
 
 use sp_std::vec::Vec;
@@ -34,7 +32,7 @@ pub type BalanceOf<T> = <<T as Config>::Staking as StakingInterface>::Balance;
 pub mod pallet {
 	use crate::*;
 	use frame_election_provider_support::{SortedListProvider, VoteWeight};
-	use frame_support::{pallet_prelude::*, Twox64Concat};
+	use frame_support::pallet_prelude::*;
 
 	use sp_staking::StakingInterface;
 
@@ -108,7 +106,7 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 		let _ = T::VoterList::on_remove(who).defensive();
 	}
 
-	fn on_nominator_remove(who: &T::AccountId, nominations: Vec<T::AccountId>) {
+	fn on_nominator_remove(who: &T::AccountId, _nominations: Vec<T::AccountId>) {
 		let _ = T::VoterList::on_remove(who).defensive();
 	}
 
