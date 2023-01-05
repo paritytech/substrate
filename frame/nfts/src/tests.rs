@@ -1012,6 +1012,22 @@ fn validate_deposit_required_setting() {
 		assert_eq!(Balances::reserved_balance(1), 0);
 		assert_eq!(Balances::reserved_balance(2), 3);
 		assert_eq!(Balances::reserved_balance(3), 3);
+
+		assert_ok!(
+			<Nfts as Mutate<<Test as SystemConfig>::AccountId, ItemConfig>>::clear_attribute(
+				&0,
+				&0,
+				&[3],
+			)
+		);
+		assert_eq!(
+			attributes(0),
+			vec![
+				(Some(0), AttributeNamespace::CollectionOwner, bvec![0], bvec![0]),
+				(Some(0), AttributeNamespace::ItemOwner, bvec![1], bvec![0]),
+				(Some(0), AttributeNamespace::Account(3), bvec![2], bvec![0]),
+			]
+		);
 	});
 }
 
