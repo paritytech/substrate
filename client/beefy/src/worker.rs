@@ -31,7 +31,7 @@ use crate::{
 };
 use beefy_primitives::{
 	crypto::{AuthorityId, Signature},
-	Commitment, ConsensusLog, PayloadProvider, SignedCommitment, ValidatorSet,
+	Commitment, ConsensusLog, EquivocationProof, PayloadProvider, SignedCommitment, ValidatorSet,
 	VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
 };
 use codec::{Codec, Decode, Encode};
@@ -73,7 +73,7 @@ pub(crate) enum RoundAction {
 /// Responsible for the voting strategy.
 /// It chooses which incoming votes to accept and which votes to generate.
 /// Keeps track of voting seen for current and future rounds.
-#[derive(Debug, Decode, Encode, PartialEq)]
+#[derive(Debug, Decode, Encode)]
 pub(crate) struct VoterOracle<B: Block> {
 	/// Queue of known sessions. Keeps track of voting rounds (block numbers) within each session.
 	///
@@ -256,7 +256,7 @@ pub(crate) struct WorkerParams<B: Block, BE, P, N> {
 	pub persisted_state: PersistedState<B>,
 }
 
-#[derive(Debug, Decode, Encode, PartialEq)]
+#[derive(Debug, Decode, Encode)]
 pub(crate) struct PersistedState<B: Block> {
 	/// Best block we received a GRANDPA finality for.
 	best_grandpa_block_header: <B as Block>::Header,
@@ -549,7 +549,7 @@ where
 		let round = (vote.commitment.payload.clone(), number);
 
 		match rounds.add_vote(vote) {
-			VoteImportResult::OkRoundConcluded(signatures) => {
+			VoteImportResult::RoundConcluded(signatures) => {
 				self.gossip_validator.conclude_round(number);
 
 				let commitment = Commitment {
@@ -568,7 +568,7 @@ where
 				// New state is persisted after finalization.
 				self.finalize(finality_proof)?;
 			},
-			VoteImportResult::OkRoundInProgress => {
+			VoteImportResult::Ok => {
 				let mandatory_round = self
 					.voting_oracle()
 					.mandatory_pending()
@@ -582,7 +582,9 @@ where
 						.map_err(|e| Error::Backend(e.to_string()))?;
 				}
 			},
-			VoteImportResult::Equivocation => unimplemented!(),
+			VoteImportResult::Equivocation(proof) => {
+				self.report_equivocation(proof)?;
+			},
 			VoteImportResult::Invalid | VoteImportResult::Stale => (),
 		};
 		Ok(())
@@ -900,6 +902,18 @@ where
 				},
 			}
 		}
+	}
+
+	/// Report the given equivocation to the BEEFY runtime module. This method
+	/// generates a session membership proof of the offender and then submits an
+	/// extrinsic to report the equivocation. In particular, the session membership
+	/// proof must be generated at the block at which the given set was active which
+	/// isn't necessarily the best block if there are pending authority set changes.
+	pub(crate) fn report_equivocation(
+		&self,
+		_proof: EquivocationProof<NumberFor<B>, AuthorityId, Signature>,
+	) -> Result<(), Error> {
+		todo!()
 	}
 }
 
