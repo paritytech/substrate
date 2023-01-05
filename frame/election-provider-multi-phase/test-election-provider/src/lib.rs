@@ -74,6 +74,7 @@ fn enters_emergency_phase_after_forcing_before_elect() {
 
 		roll_to_epm_off();
 		assert!(ElectionProviderMultiPhase::current_phase().is_off());
+		log_current_time();
 
 		assert_eq!(pallet_staking::ForceEra::<Runtime>::get(), pallet_staking::Forcing::NotForcing);
 		// slashes until staking gets into `Forcing::ForceNew`.
@@ -83,6 +84,7 @@ fn enters_emergency_phase_after_forcing_before_elect() {
 
 		advance_session();
 		assert!(ElectionProviderMultiPhase::current_phase().is_emergency());
+		log_current_time();
 
 		// try to advance 2 eras.
 		advance_n_sessions(<SessionsPerEra as Get<u32>>::get().into());
@@ -109,13 +111,50 @@ fn enters_emergency_phase_after_forcing_before_elect() {
 		// EPM can now roll to signed phase to proceed with elections. The validator set is the
 		// expected (ie. set through `set_emergency_election_result`).
 		roll_to_epm_signed();
+		log_current_time();
 		assert!(ElectionProviderMultiPhase::current_phase().is_signed());
 		assert_eq!(Session::validators(), vec![21, 31, 41]);
 	});
 }
 
 #[test]
-/// Continously slash validators in the validator set while in emergency phase.
-fn continuous_slashes_in_emergency() {
-	// TODO(gpestana)
+/// Continously slash 10% of the active validators per era, even during the emergency phase.
+fn continous_slashes() {
+	ExtBuilder::default()
+		.initialize_first_session(true)
+		.validator_count(10)
+		.build_and_execute(|| {
+			assert_eq!(Session::validators().len(), 10);
+
+			roll_to_epm_off();
+			assert!(ElectionProviderMultiPhase::current_phase().is_off());
+
+			println!(
+				"slashing 11, set: {:?} - {:?}",
+				Session::validators(),
+				ElectionProviderMultiPhase::current_phase()
+			);
+			add_slash(&11);
+			advance_n_sessions(<SessionsPerEra as Get<u32>>::get().into());
+			assert_eq!(
+				pallet_staking::ForceEra::<Runtime>::get(),
+				pallet_staking::Forcing::NotForcing
+			);
+
+			println!(
+				"slashing 12, set: {:?} - {:?}",
+				Session::validators(),
+				ElectionProviderMultiPhase::current_phase()
+			);
+			add_slash(&12);
+			advance_n_sessions(<SessionsPerEra as Get<u32>>::get().into());
+			assert_eq!(
+				pallet_staking::ForceEra::<Runtime>::get(),
+				pallet_staking::Forcing::NotForcing
+			);
+		});
 }
+
+#[test]
+/// Continously slash 10% of the active validators per era while in emergency phase.
+fn continuous_slashes_in_emergency() {}

@@ -15,11 +15,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(dead_code)] // TODO(gpestana): remove when ready
+#![allow(dead_code)]
 
 use frame_support::{
 	parameter_types, traits,
 	traits::{GenesisBuild, Hooks},
+	weights::constants,
 };
 use frame_system::EnsureRoot;
 use sp_core::{ConstU32, Get, H256};
@@ -74,7 +75,7 @@ pub(crate) type Moment = u64;
 
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = traits::Everything;
-	type BlockWeights = ();
+	type BlockWeights = BlockWeights;
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
@@ -99,8 +100,14 @@ impl frame_system::Config for Runtime {
 	type MaxConsumers = traits::ConstU32<16>;
 }
 
+const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
 parameter_types! {
 	pub static ExistentialDeposit: Balance = 1;
+	pub BlockWeights: frame_system::limits::BlockWeights = frame_system::limits::BlockWeights
+		::with_sensible_defaults(
+			Weight::from_parts(2u64 * constants::WEIGHT_REF_TIME_PER_SECOND, u64::MAX),
+			NORMAL_DISPATCH_RATIO,
+		);
 }
 
 impl pallet_balances::Config for Runtime {
@@ -165,7 +172,7 @@ frame_election_provider_support::generate_solution_type!(
 
 parameter_types! {
 	pub static SignedPhase: BlockNumber = 10;
-	pub static UnsignedPhase: BlockNumber = 1;
+	pub static UnsignedPhase: BlockNumber = 5;
 	pub static MaxElectingVoters: VoterIndex = 1000;
 	pub static MaxElectableTargets: TargetIndex = 1000;
 	pub static MaxActiveValidators: u32 = 1000;
@@ -173,6 +180,8 @@ parameter_types! {
 	pub static BetterSignedThreshold: Perbill = Perbill::zero();
 	pub static BetterUnsignedThreshold: Perbill = Perbill::zero();
 	pub static OffchainRepeat: u32 = 5;
+	pub static MinerMaxLength: u32 = 256;
+	pub static MinerMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static TransactionPriority: transaction_validity::TransactionPriority = 1;
 	pub static MaxWinners: u32 = 100;
 	pub static MaxVotesPerVoter: u32 = 16;
@@ -216,10 +225,10 @@ impl MinerConfig for Runtime {
 	type AccountId = AccountId;
 	type Solution = MockNposSolution;
 	type MaxVotesPerVoter = MaxNominations;
-	type MaxLength = ();
-	type MaxWeight = ();
+	type MaxLength = MinerMaxLength;
+	type MaxWeight = MinerMaxWeight;
 
-	fn solution_weight(_voters: u32, _targets: u32, _active_voters: u32, _degree: u32) -> Weight {
+	fn solution_weight(_v: u32, _t: u32, _a: u32, _d: u32) -> Weight {
 		Weight::zero()
 	}
 }
@@ -232,7 +241,7 @@ parameter_types! {
 	pub const BondingDuration: sp_staking::EraIndex = 28;
 	pub const SlashDeferDuration: sp_staking::EraIndex = 7; // 1/4 the bonding duration.
 	pub const MaxNominatorRewardedPerValidator: u32 = 256;
-	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(10);
+	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(40);
 	pub HistoryDepth: u32 = 84;
 }
 
@@ -346,7 +355,6 @@ impl sp_runtime::BoundToRuntimeAppPublic for OtherSessionHandler {
 }
 
 pub struct ExtBuilder {
-	nominate: bool,
 	validator_count: u32,
 	minimum_validator_count: u32,
 	invulnerables: Vec<AccountId>,
@@ -363,7 +371,6 @@ pub struct ExtBuilder {
 impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
-			nominate: true,
 			validator_count: 2,
 			minimum_validator_count: 0,
 			balance_factor: 1,
@@ -399,22 +406,24 @@ impl ExtBuilder {
 				(30, self.balance_factor),
 				(40, self.balance_factor),
 				(50, self.balance_factor),
+				(60, self.balance_factor),
+				(70, self.balance_factor),
+				(80, self.balance_factor),
+				(90, self.balance_factor),
+				(100, self.balance_factor),
+				(200, self.balance_factor),
 				// stashes
 				(11, self.balance_factor * 1000),
 				(21, self.balance_factor * 2000),
-				(31, self.balance_factor * 2000),
-				(41, self.balance_factor * 2000),
-				(51, self.balance_factor * 2000),
-				// optional nominator
-				(100, self.balance_factor * 2000),
-				(101, self.balance_factor * 2000),
-				// aux accounts
-				(60, self.balance_factor),
-				(61, self.balance_factor * 2000),
-				(70, self.balance_factor),
-				(71, self.balance_factor * 2000),
-				(80, self.balance_factor),
-				(81, self.balance_factor * 2000),
+				(31, self.balance_factor * 3000),
+				(41, self.balance_factor * 4000),
+				(51, self.balance_factor * 5000),
+				(61, self.balance_factor * 6000),
+				(71, self.balance_factor * 7000),
+				(81, self.balance_factor * 8000),
+				(91, self.balance_factor * 9000),
+				(101, self.balance_factor * 10000),
+				(201, self.balance_factor * 20000),
 				// This allows us to have a total_payout different from 0.
 				(999, 1_000_000_000_000),
 			],
@@ -428,20 +437,18 @@ impl ExtBuilder {
 				// these two will be elected in the default test where we elect 2.
 				(11, 10, self.balance_factor * 1000, StakerStatus::<AccountId>::Validator),
 				(21, 20, self.balance_factor * 1000, StakerStatus::<AccountId>::Validator),
-				// a loser validator
+				// loser validatos if validator_count() is default.
 				(31, 30, self.balance_factor * 500, StakerStatus::<AccountId>::Validator),
+				(41, 40, self.balance_factor * 500, StakerStatus::<AccountId>::Validator),
+				(51, 50, self.balance_factor * 500, StakerStatus::<AccountId>::Validator),
+				(61, 60, self.balance_factor * 500, StakerStatus::<AccountId>::Validator),
+				(71, 70, self.balance_factor * 500, StakerStatus::<AccountId>::Validator),
+				(81, 80, self.balance_factor * 500, StakerStatus::<AccountId>::Validator),
+				(91, 90, self.balance_factor * 500, StakerStatus::<AccountId>::Validator),
+				(101, 100, self.balance_factor * 500, StakerStatus::<AccountId>::Validator),
 				// an idle validator
-				(41, 40, self.balance_factor * 1000, StakerStatus::<AccountId>::Idle),
+				(201, 200, self.balance_factor * 1000, StakerStatus::<AccountId>::Idle),
 			];
-			// optionally add a nominator
-			if self.nominate {
-				stakers.push((
-					101,
-					100,
-					self.balance_factor * 500,
-					StakerStatus::<AccountId>::Nominator(vec![11, 21]),
-				))
-			}
 			// replace any of the status if needed.
 			self.status.into_iter().for_each(|(stash, status)| {
 				let (_, _, _, ref mut prev_status) = stakers
@@ -517,6 +524,10 @@ impl ExtBuilder {
 	pub fn phases(self, signed: BlockNumber, unsigned: BlockNumber) -> Self {
 		<SignedPhase>::set(signed);
 		<UnsignedPhase>::set(unsigned);
+		self
+	}
+	pub fn validator_count(mut self, n: u32) -> Self {
+		self.validator_count = n;
 		self
 	}
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
