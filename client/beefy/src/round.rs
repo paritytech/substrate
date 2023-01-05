@@ -59,7 +59,7 @@ pub fn threshold(authorities: usize) -> usize {
 	authorities - faulty
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum VoteImportResult<B: Block> {
 	Ok,
 	RoundConcluded(Vec<Option<Signature>>),
@@ -72,7 +72,7 @@ pub enum VoteImportResult<B: Block> {
 /// Only round numbers > `best_done` are of interest, all others are considered stale.
 ///
 /// Does not do any validation on votes or signatures, layers above need to handle that (gossip).
-#[derive(Debug, Decode, Encode)]
+#[derive(Debug, Decode, Encode, PartialEq)]
 pub(crate) struct Rounds<B: Block> {
 	rounds: BTreeMap<Commitment<NumberFor<B>>, RoundTracker>,
 	equivocations: BTreeMap<(Public, NumberFor<B>), VoteMessage<NumberFor<B>, Public, Signature>>,
@@ -208,16 +208,16 @@ where
 #[cfg(test)]
 mod tests {
 	use sc_network_test::Block;
-	use sp_core::H256;
 
-	use beefy_primitives::{crypto::Public, ValidatorSet};
+	use beefy_primitives::{
+		crypto::Public, known_payloads::MMR_ROOT_ID, Commitment, Payload, ValidatorSet, VoteMessage,
+	};
 
-	use super::{threshold, Block as BlockT, Hash, RoundTracker, Rounds};
-	use crate::keystore::tests::Keyring;
+	use super::{threshold, Block as BlockT, RoundTracker, Rounds};
+	use crate::{keystore::tests::Keyring, round::VoteImportResult};
 
-	impl<P, B> Rounds<P, B>
+	impl<B> Rounds<B>
 	where
-		P: Ord + Hash + Clone,
 		B: BlockT,
 	{
 		pub(crate) fn test_set_mandatory_done(&mut self, done: bool) {
@@ -268,7 +268,7 @@ mod tests {
 		.unwrap();
 
 		let session_start = 1u64.into();
-		let rounds = Rounds::<H256, Block>::new(session_start, validators);
+		let rounds = Rounds::<Block>::new(session_start, validators);
 
 		assert_eq!(42, rounds.validator_set_id());
 		assert_eq!(1, rounds.session_start());
@@ -292,45 +292,53 @@ mod tests {
 			Default::default(),
 		)
 		.unwrap();
-		let round = (H256::from_low_u64_le(1), 1);
+		let validator_set_id = validators.id();
 
 		let session_start = 1u64.into();
-		let mut rounds = Rounds::<H256, Block>::new(session_start, validators);
+		let mut rounds = Rounds::<Block>::new(session_start, validators);
 
+		let payload = Payload::from_single_entry(MMR_ROOT_ID, vec![]);
+		let block_number = 1;
+		let commitment = Commitment { block_number, payload, validator_set_id };
+		let mut vote = VoteMessage {
+			id: Keyring::Alice.public(),
+			commitment,
+			signature: Keyring::Alice.sign(b"I am committed"),
+		};
 		// add 1st good vote
-		assert!(rounds
-			.add_vote(&round, (Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed"))));
-		// round not concluded
-		assert!(rounds.should_conclude(&round).is_none());
+		assert_eq!(rounds.add_vote(vote.clone()), VoteImportResult::Ok);
 
-		// double voting not allowed
-		assert!(!rounds
-			.add_vote(&round, (Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed"))));
+		// double voting (same vote), ok, no effect
+		assert_eq!(rounds.add_vote(vote.clone()), VoteImportResult::Ok);
 
+		vote.id = Keyring::Dave.public();
+		vote.signature = Keyring::Dave.sign(b"I am committed");
 		// invalid vote (Dave is not a validator)
-		assert!(!rounds
-			.add_vote(&round, (Keyring::Dave.public(), Keyring::Dave.sign(b"I am committed")),));
-		assert!(rounds.should_conclude(&round).is_none());
+		assert_eq!(rounds.add_vote(vote.clone()), VoteImportResult::Invalid);
 
+		vote.id = Keyring::Bob.public();
+		vote.signature = Keyring::Bob.sign(b"I am committed");
 		// add 2nd good vote
-		assert!(
-			rounds.add_vote(&round, (Keyring::Bob.public(), Keyring::Bob.sign(b"I am committed")),)
+		assert_eq!(rounds.add_vote(vote.clone()), VoteImportResult::Ok);
+
+		vote.id = Keyring::Charlie.public();
+		vote.signature = Keyring::Charlie.sign(b"I am committed");
+		// add 3rd good vote -> round concluded -> signatures present
+		assert_eq!(
+			rounds.add_vote(vote.clone()),
+			VoteImportResult::RoundConcluded(vec![
+				Some(Keyring::Alice.sign(b"I am committed")),
+				Some(Keyring::Bob.sign(b"I am committed")),
+				Some(Keyring::Charlie.sign(b"I am committed")),
+				None,
+			])
 		);
-		// round not concluded
-		assert!(rounds.should_conclude(&round).is_none());
+		rounds.conclude(block_number);
 
-		// add 3rd good vote
-		assert!(rounds.add_vote(
-			&round,
-			(Keyring::Charlie.public(), Keyring::Charlie.sign(b"I am committed")),
-		));
-		// round concluded
-		assert!(rounds.should_conclude(&round).is_some());
-		rounds.conclude(round.1);
-
+		vote.id = Keyring::Eve.public();
+		vote.signature = Keyring::Eve.sign(b"I am committed");
 		// Eve is a validator, but round was concluded, adding vote disallowed
-		assert!(!rounds
-			.add_vote(&round, (Keyring::Eve.public(), Keyring::Eve.sign(b"I am committed")),));
+		assert_eq!(rounds.add_vote(vote), VoteImportResult::Stale);
 	}
 
 	#[test]
@@ -342,30 +350,39 @@ mod tests {
 			42,
 		)
 		.unwrap();
-		let alice = (Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed"));
+		let validator_set_id = validators.id();
 
+		// active rounds starts at block 10
 		let session_start = 10u64.into();
-		let mut rounds = Rounds::<H256, Block>::new(session_start, validators);
+		let mut rounds = Rounds::<Block>::new(session_start, validators);
 
-		let mut vote = (H256::from_low_u64_le(1), 9);
+		// vote on round 9
+		let block_number = 9;
+		let payload = Payload::from_single_entry(MMR_ROOT_ID, vec![]);
+		let commitment = Commitment { block_number, payload, validator_set_id };
+		let mut vote = VoteMessage {
+			id: Keyring::Alice.public(),
+			commitment,
+			signature: Keyring::Alice.sign(b"I am committed"),
+		};
 		// add vote for previous session, should fail
-		assert!(!rounds.add_vote(&vote, alice.clone()));
+		assert_eq!(rounds.add_vote(vote.clone()), VoteImportResult::Stale);
 		// no votes present
 		assert!(rounds.rounds.is_empty());
 
 		// simulate 11 was concluded
 		rounds.best_done = Some(11);
 		// add votes for current session, but already concluded rounds, should fail
-		vote.1 = 10;
-		assert!(!rounds.add_vote(&vote, alice.clone()));
-		vote.1 = 11;
-		assert!(!rounds.add_vote(&vote, alice.clone()));
+		vote.commitment.block_number = 10;
+		assert_eq!(rounds.add_vote(vote.clone()), VoteImportResult::Stale);
+		vote.commitment.block_number = 11;
+		assert_eq!(rounds.add_vote(vote.clone()), VoteImportResult::Stale);
 		// no votes present
 		assert!(rounds.rounds.is_empty());
 
-		// add good vote
-		vote.1 = 12;
-		assert!(rounds.add_vote(&vote, alice));
+		// add vote for active round 12
+		vote.commitment.block_number = 12;
+		assert_eq!(rounds.add_vote(vote), VoteImportResult::Ok);
 		// good vote present
 		assert_eq!(rounds.rounds.len(), 1);
 	}
@@ -375,79 +392,70 @@ mod tests {
 		sp_tracing::try_init_simple();
 
 		let validators = ValidatorSet::<Public>::new(
-			vec![
-				Keyring::Alice.public(),
-				Keyring::Bob.public(),
-				Keyring::Charlie.public(),
-				Keyring::Dave.public(),
-			],
+			vec![Keyring::Alice.public(), Keyring::Bob.public(), Keyring::Charlie.public()],
 			Default::default(),
 		)
 		.unwrap();
+		let validator_set_id = validators.id();
 
 		let session_start = 1u64.into();
-		let mut rounds = Rounds::<H256, Block>::new(session_start, validators);
+		let mut rounds = Rounds::<Block>::new(session_start, validators);
 
-		// round 1
-		assert!(rounds.add_vote(
-			&(H256::from_low_u64_le(1), 1),
-			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed")),
-		));
-		assert!(rounds.add_vote(
-			&(H256::from_low_u64_le(1), 1),
-			(Keyring::Bob.public(), Keyring::Bob.sign(b"I am committed")),
-		));
-		assert!(rounds.add_vote(
-			&(H256::from_low_u64_le(1), 1),
-			(Keyring::Charlie.public(), Keyring::Charlie.sign(b"I am committed")),
-		));
+		let payload = Payload::from_single_entry(MMR_ROOT_ID, vec![]);
+		let commitment = Commitment { block_number: 1, payload, validator_set_id };
+		let mut alice_vote = VoteMessage {
+			id: Keyring::Alice.public(),
+			commitment: commitment.clone(),
+			signature: Keyring::Alice.sign(b"I am committed"),
+		};
+		let mut bob_vote = VoteMessage {
+			id: Keyring::Bob.public(),
+			commitment: commitment.clone(),
+			signature: Keyring::Bob.sign(b"I am committed"),
+		};
+		let mut charlie_vote = VoteMessage {
+			id: Keyring::Charlie.public(),
+			commitment,
+			signature: Keyring::Charlie.sign(b"I am committed"),
+		};
+		let expected_signatures = vec![
+			Some(Keyring::Alice.sign(b"I am committed")),
+			Some(Keyring::Bob.sign(b"I am committed")),
+			Some(Keyring::Charlie.sign(b"I am committed")),
+		];
 
-		// round 2
-		assert!(rounds.add_vote(
-			&(H256::from_low_u64_le(2), 2),
-			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am again committed")),
-		));
-		assert!(rounds.add_vote(
-			&(H256::from_low_u64_le(2), 2),
-			(Keyring::Bob.public(), Keyring::Bob.sign(b"I am again committed")),
-		));
-		assert!(rounds.add_vote(
-			&(H256::from_low_u64_le(2), 2),
-			(Keyring::Charlie.public(), Keyring::Charlie.sign(b"I am again committed")),
-		));
-
-		// round 3
-		assert!(rounds.add_vote(
-			&(H256::from_low_u64_le(3), 3),
-			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am still committed")),
-		));
-		assert!(rounds.add_vote(
-			&(H256::from_low_u64_le(3), 3),
-			(Keyring::Bob.public(), Keyring::Bob.sign(b"I am still committed")),
-		));
-		assert!(rounds.add_vote(
-			&(H256::from_low_u64_le(3), 3),
-			(Keyring::Charlie.public(), Keyring::Charlie.sign(b"I am still committed")),
-		));
-		assert_eq!(3, rounds.rounds.len());
-
-		// conclude unknown round
-		assert!(rounds.should_conclude(&(H256::from_low_u64_le(5), 5)).is_none());
-		assert_eq!(3, rounds.rounds.len());
-
-		// conclude round 2
-		let signatures = rounds.should_conclude(&(H256::from_low_u64_le(2), 2)).unwrap();
-		rounds.conclude(2);
+		// round 1 - only 2 out of 3 vote
+		assert_eq!(rounds.add_vote(alice_vote.clone()), VoteImportResult::Ok);
+		assert_eq!(rounds.add_vote(charlie_vote.clone()), VoteImportResult::Ok);
+		// should be 1 active round
 		assert_eq!(1, rounds.rounds.len());
 
+		// round 2 - only Charlie votes
+		charlie_vote.commitment.block_number = 2;
+		assert_eq!(rounds.add_vote(charlie_vote.clone()), VoteImportResult::Ok);
+		// should be 2 active rounds
+		assert_eq!(2, rounds.rounds.len());
+
+		// round 3 - all validators vote -> round is concluded
+		alice_vote.commitment.block_number = 3;
+		bob_vote.commitment.block_number = 3;
+		charlie_vote.commitment.block_number = 3;
+		assert_eq!(rounds.add_vote(alice_vote.clone()), VoteImportResult::Ok);
+		assert_eq!(rounds.add_vote(bob_vote.clone()), VoteImportResult::Ok);
 		assert_eq!(
-			signatures,
-			vec![
-				Some(Keyring::Alice.sign(b"I am again committed")),
-				Some(Keyring::Bob.sign(b"I am again committed")),
-				Some(Keyring::Charlie.sign(b"I am again committed")),
-				None
-			]
+			rounds.add_vote(charlie_vote.clone()),
+			VoteImportResult::RoundConcluded(expected_signatures)
 		);
+		// should be only 2 active since this one auto-concluded
+		assert_eq!(2, rounds.rounds.len());
+
+		// conclude round 2
+		rounds.conclude(2);
+		// should be no more active rounds since 2 was officially concluded and round "1" is stale
+		assert!(rounds.rounds.is_empty());
+
+		// conclude round 3
+		rounds.conclude(3);
+		assert!(rounds.equivocations.is_empty());
 	}
 }

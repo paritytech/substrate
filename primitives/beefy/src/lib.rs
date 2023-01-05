@@ -183,7 +183,7 @@ pub enum ConsensusLog<AuthorityId: Codec> {
 ///
 /// A vote message is a direct vote created by a BEEFY node on every voting round
 /// and is gossiped to its peers.
-#[derive(Clone, Debug, Decode, Encode, TypeInfo)]
+#[derive(Clone, Debug, Decode, Encode, PartialEq, TypeInfo)]
 pub struct VoteMessage<Number, Id, Signature> {
 	/// Commit to information extracted from a finalized block
 	pub commitment: Commitment<Number>,
@@ -194,7 +194,7 @@ pub struct VoteMessage<Number, Id, Signature> {
 }
 
 /// An equivocation (double-vote) in a given round.
-#[derive(Debug, Encode, Decode, TypeInfo)]
+#[derive(Debug, Encode, Decode, PartialEq, TypeInfo)]
 pub struct Equivocation<Number, Id, Signature> {
 	/// The round number equivocated in
 	pub round_number: Number,
@@ -209,7 +209,7 @@ pub struct Equivocation<Number, Id, Signature> {
 /// Proof of voter misbehavior on a given set id. Misbehavior/equivocation in
 /// BEEFY happens when a voter votes on the same round/block for different payloads.
 /// Proving is achieved by collecting the signed commitments of conflicting votes.
-#[derive(Debug, Decode, Encode, TypeInfo)]
+#[derive(Debug, Decode, Encode, PartialEq, TypeInfo)]
 pub struct EquivocationProof<Number, Id, Signature> {
 	/// BEEFY validator set id active during this equivocation.
 	pub set_id: ValidatorSetId,

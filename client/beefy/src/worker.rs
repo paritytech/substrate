@@ -73,7 +73,7 @@ pub(crate) enum RoundAction {
 /// Responsible for the voting strategy.
 /// It chooses which incoming votes to accept and which votes to generate.
 /// Keeps track of voting seen for current and future rounds.
-#[derive(Debug, Decode, Encode)]
+#[derive(Debug, Decode, Encode, PartialEq)]
 pub(crate) struct VoterOracle<B: Block> {
 	/// Queue of known sessions. Keeps track of voting rounds (block numbers) within each session.
 	///
@@ -256,7 +256,7 @@ pub(crate) struct WorkerParams<B: Block, BE, P, N> {
 	pub persisted_state: PersistedState<B>,
 }
 
-#[derive(Debug, Decode, Encode)]
+#[derive(Debug, Decode, Encode, PartialEq)]
 pub(crate) struct PersistedState<B: Block> {
 	/// Best block we received a GRANDPA finality for.
 	best_grandpa_block_header: <B as Block>::Header,
@@ -984,7 +984,7 @@ pub(crate) mod tests {
 		},
 		BeefyRPCLinks, KnownPeers,
 	};
-	use beefy_primitives::{known_payloads, mmr::MmrRootProvider};
+	use beefy_primitives::{known_payloads, mmr::MmrRootProvider, Payload};
 	use futures::{future::poll_fn, task::Poll};
 	use parking_lot::Mutex;
 	use sc_client_api::{Backend as BackendT, HeaderBackend};
