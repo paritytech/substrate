@@ -249,10 +249,17 @@ pub fn benchmarks(tokens: TokenStream, instance: bool) -> TokenStream {
 	let skip_meta_benchmark_names_str: Vec<String> =
 		skip_meta_benchmark_names.iter().map(|n| n.to_string()).collect();
 	let mut selected_benchmark_mappings: Vec<TokenStream2> = Vec::new();
+	let mut benchmarks_by_name_mappings: Vec<TokenStream2> = Vec::new();
+	let test_idents: Vec<Ident> = benchmark_names_str
+		.iter()
+		.map(|n| Ident::new(format!("test_{}", n).as_str(), Span::call_site()))
+		.collect();
 	for i in 0..benchmark_names.len() {
 		let name_ident = &benchmark_names[i];
 		let name_str = &benchmark_names_str[i];
-		selected_benchmark_mappings.push(quote!(#name_str => SelectedBenchmark::#name_ident))
+		let test_ident = &test_idents[i];
+		selected_benchmark_mappings.push(quote!(#name_str => SelectedBenchmark::#name_ident));
+		benchmarks_by_name_mappings.push(quote!(#name_str => Self::#test_ident))
 	}
 
 	// emit final quoted tokens
@@ -446,8 +453,31 @@ pub fn benchmarks(tokens: TokenStream, instance: bool) -> TokenStream {
 				return Ok(results);
 			}
 		}
+
+		#[cfg(test)]
+		impl<#full_generics> Pallet<#generics> where T: ::frame_system::Config {
+			/// Test a particular benchmark by name.
+			///
+			/// This isn't called `test_benchmark_by_name` just in case some end-user eventually
+			/// writes a benchmark, itself called `by_name`; the function would be shadowed in
+			/// that case.
+			///
+			/// This is generally intended to be used by child test modules such as those created
+			/// by the `impl_benchmark_test_suite` macro. However, it is not an error if a pallet
+			/// author chooses not to implement benchmarks.
+			#[allow(unused)]
+			fn test_bench_by_name(name: &[u8]) -> Result<(), #krate::BenchmarkError> {
+				let name = #krate::str::from_utf8(name)
+					.map_err(|_| -> #krate::BenchmarkError { "`name` is not a valid utf8 string!".into() })?;
+				match name {
+					#(#benchmarks_by_name_mappings),
+					*,
+					_ => Err("Could not find test for requested benchmark.".into()),
+				}
+			}
+		}
 	};
-	// println!("{}", res.to_string());
+	println!("{}", res.to_string());
 	res.into()
 }
 
@@ -498,6 +528,7 @@ fn expand_benchmark(benchmark_def: BenchmarkDef, name: &Ident, is_instance: bool
 	let mut extrinsic_call = benchmark_def.extrinsic_call;
 	let origin = benchmark_def.origin;
 	let verify_stmts = benchmark_def.verify_stmts;
+	let test_ident = Ident::new(format!("test_{}", name.to_string()).as_str(), Span::call_site());
 
 	// unroll params (prepare for quoting)
 	let unrolled = UnrolledParams::from(&benchmark_def.params);
@@ -581,6 +612,87 @@ fn expand_benchmark(benchmark_def: BenchmarkDef, name: &Ident, is_instance: bool
 					}
 					Ok(())
 				}))
+			}
+		}
+
+		#[cfg(test)]
+		impl<#full_generics> Pallet<#generics> where T: ::frame_system::Config {
+			#[allow(unused)]
+			fn #test_ident() -> Result<(), #krate::BenchmarkError> {
+				let selected_benchmark = SelectedBenchmark::#name;
+				let components = <
+					SelectedBenchmark as #krate::BenchmarkingSetup<T, _>
+				>::components(&selected_benchmark);
+				let execute_benchmark = |
+					c: #krate::Vec<(#krate::BenchmarkParameter, u32)>
+				| -> Result<(), #krate::BenchmarkError> {
+					// Always reset the state after the benchmark.
+					#krate::defer!(#krate::benchmarking::wipe_db());
+
+					// Set up the benchmark, return execution + verification function.
+					let closure_to_verify = <
+						SelectedBenchmark as #krate::BenchmarkingSetup<T, _>
+					>::instance(&selected_benchmark, &c, true)?;
+
+					// Set the block number to at least 1 so events are deposited.
+					if #krate::Zero::is_zero(&frame_system::Pallet::<T>::block_number()) {
+						frame_system::Pallet::<T>::set_block_number(1u32.into());
+					}
+
+					// Run execution + verification
+					closure_to_verify()
+				};
+
+				if components.is_empty() {
+					execute_benchmark(Default::default())?;
+				} else {
+					let num_values: u32 = if let Ok(ev) = std::env::var("VALUES_PER_COMPONENT") {
+						ev.parse().map_err(|_| {
+							#krate::BenchmarkError::Stop(
+								"Could not parse env var `VALUES_PER_COMPONENT` as u32."
+							)
+						})?
+					} else {
+						6
+					};
+
+					if num_values < 2 {
+						return Err("`VALUES_PER_COMPONENT` must be at least 2".into());
+					}
+
+					for (name, low, high) in components.clone().into_iter() {
+						// Test the lowest, highest (if its different from the lowest)
+						// and up to num_values-2 more equidistant values in between.
+						// For 0..10 and num_values=6 this would mean: [0, 2, 4, 6, 8, 10]
+
+						let mut values = #krate::vec![low];
+						let diff = (high - low).min(num_values - 1);
+						let slope = (high - low) as f32 / diff as f32;
+
+						for i in 1..=diff {
+							let value = ((low as f32 + slope * i as f32) as u32)
+											.clamp(low, high);
+							values.push(value);
+						}
+
+						for component_value in values {
+							// Select the max value for all the other components.
+							let c: #krate::Vec<(#krate::BenchmarkParameter, u32)> = components
+								.iter()
+								.map(|(n, _, h)|
+									if *n == name {
+										(*n, component_value)
+									} else {
+										(*n, *h)
+									}
+								)
+								.collect();
+
+							execute_benchmark(c)?;
+						}
+					}
+				}
+				return Ok(());
 			}
 		}
 	};

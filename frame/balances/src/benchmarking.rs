@@ -30,7 +30,7 @@ const SEED: u32 = 0;
 // existential deposit multiplier
 const ED_MULTIPLIER: u32 = 10;
 
-use frame_benchmarking::{account, whitelisted_caller};
+use frame_benchmarking::{account, impl_benchmark_test_suite, whitelisted_caller};
 use frame_support::benchmarking::*;
 
 instance_benchmarks! {
@@ -241,12 +241,9 @@ instance_benchmarks! {
 		assert_eq!(Balances::<T, I>::free_balance(&user), balance);
 	}
 
-	// TODO: re-implement
-	// use frame_benchmarking::impl_benchmark_test_suite;
-
-	// impl_benchmark_test_suite!(
-	// 	Balances,
-	// 	crate::tests_composite::ExtBuilder::default().build(),
-	// 	crate::tests_composite::Test,
-	// );
+	impl_benchmark_test_suite!(
+		Balances,
+		crate::tests_composite::ExtBuilder::default().build(),
+		crate::tests_composite::Test,
+	);
 }
