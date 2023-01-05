@@ -1,0 +1,7 @@
+error[E0369]: binary operation `!=` cannot be applied to type `NoStorageVersionSet`
+  --> tests/pallet_ui/compare_unset_storage_version.rs:15:39
+   |
+15 |             if Self::current_storage_version() != Self::on_chain_storage_version() {
+   |                ------------------------------- ^^ -------------------------------- StorageVersion
+   |                |
+   |                NoStorageVersionSet

@@ -28,6 +28,7 @@ trybuild = { version = "1.0.74", features = [ "diff" ] }
 pretty_assertions = "1.2.1"
 rustversion = "1.0.6"
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
+frame-executive = { version = "4.0.0-dev", default-features = false, path = "../../executive" }
 # The "std" feature for this pallet is never activated on purpose, in order to test construct_runtime error message
 test-pallet = { package = "frame-support-test-pallet", default-features = false, path = "pallet" }
 
@@ -38,6 +39,7 @@ std = [
 	"codec/std",
 	"scale-info/std",
 	"frame-benchmarking/std",
+	"frame-executive/std",
 	"frame-support/std",
 	"frame-system/std",
 	"sp-core/std",
@@ -48,7 +50,11 @@ std = [
 	"sp-arithmetic/std",
 	"sp-version/std",
 ]
-try-runtime = ["frame-support/try-runtime"]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-system/try-runtime",
+	"frame-executive/try-runtime",
+]
 # WARNING:
 # Only CI runs with this feature enabled. This feature is for testing stuff related to the FRAME macros
 # in conjunction with rust features.

@@ -222,7 +222,7 @@ test-linux-stable:
                              --locked
                              --release
                              --verbose
-                             --features runtime-benchmarks
+                             --features runtime-benchmarks,try-runtime
                              --manifest-path ./bin/node/cli/Cargo.toml
                              --exclude node-cli
                              --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
