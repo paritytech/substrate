@@ -269,7 +269,7 @@ pub mod pallet {
 
 		/// Create the new asset.
 		fn do_create_asset(asset_id: AssetIdOf<T>, admin: T::AccountId) -> DispatchResult {
-			T::Assets::create(asset_id, admin, true, One::one())
+			T::Assets::create(asset_id, admin, false, One::one())
 		}
 
 		/// Mint the `amount` of tokens with `asset_id` into the beneficiary's account.
