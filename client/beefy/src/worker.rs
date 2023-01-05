@@ -31,7 +31,7 @@ use crate::{
 };
 use beefy_primitives::{
 	crypto::{AuthorityId, Signature},
-	Commitment, ConsensusLog, EquivocationProof, PayloadProvider, SignedCommitment, ValidatorSet,
+	Commitment, ConsensusLog, EquivocationProof, PayloadProvider, ValidatorSet,
 	VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
 };
 use codec::{Codec, Decode, Encode};
@@ -545,25 +545,17 @@ where
 			.active_rounds_mut()
 			.ok_or(Error::UninitSession)?;
 
-		let number = vote.commitment.block_number;
-		let round = (vote.commitment.payload.clone(), number);
-
+		let block_number = vote.commitment.block_number;
 		match rounds.add_vote(vote) {
-			VoteImportResult::RoundConcluded(signatures) => {
-				self.gossip_validator.conclude_round(number);
+			VoteImportResult::RoundConcluded(signed_commitment) => {
+				self.gossip_validator.conclude_round(block_number);
+				metric_set!(self, beefy_round_concluded, block_number);
 
-				let commitment = Commitment {
-					payload: round.0,
-					block_number: number,
-					validator_set_id: rounds.validator_set_id(),
-				};
-				let finality_proof =
-					VersionedFinalityProof::V1(SignedCommitment { commitment, signatures });
-
-				metric_set!(self, beefy_round_concluded, number);
-
-				info!(target: "beefy", "🥩 Round #{} concluded, finality_proof: {:?}.", number, finality_proof);
-
+				let finality_proof = VersionedFinalityProof::V1(signed_commitment);
+				info!(
+					target: "beefy", "🥩 Round #{} concluded, finality_proof: {:?}.",
+					block_number, finality_proof
+				);
 				// We created the `finality_proof` and know to be valid.
 				// New state is persisted after finalization.
 				self.finalize(finality_proof)?;
@@ -572,7 +564,7 @@ where
 				let mandatory_round = self
 					.voting_oracle()
 					.mandatory_pending()
-					.map(|(mandatory_num, _)| mandatory_num == number)
+					.map(|(mandatory_num, _)| mandatory_num == block_number)
 					.unwrap_or(false);
 				// Persist state after handling self vote to avoid double voting in case
 				// of voter restarts.
@@ -984,7 +976,7 @@ pub(crate) mod tests {
 		},
 		BeefyRPCLinks, KnownPeers,
 	};
-	use beefy_primitives::{known_payloads, mmr::MmrRootProvider, Payload};
+	use beefy_primitives::{known_payloads, mmr::MmrRootProvider, Payload, SignedCommitment};
 	use futures::{future::poll_fn, task::Poll};
 	use parking_lot::Mutex;
 	use sc_client_api::{Backend as BackendT, HeaderBackend};

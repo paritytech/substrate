@@ -18,7 +18,8 @@
 
 use beefy_primitives::{
 	crypto::{AuthorityId, Public, Signature},
-	Commitment, Equivocation, EquivocationProof, ValidatorSet, ValidatorSetId, VoteMessage,
+	Commitment, Equivocation, EquivocationProof, SignedCommitment, ValidatorSet, ValidatorSetId,
+	VoteMessage,
 };
 use codec::{Decode, Encode};
 use log::debug;
@@ -62,7 +63,7 @@ pub fn threshold(authorities: usize) -> usize {
 #[derive(Debug, PartialEq)]
 pub enum VoteImportResult<B: Block> {
 	Ok,
-	RoundConcluded(Vec<Option<Signature>>),
+	RoundConcluded(SignedCommitment<NumberFor<B>, Signature>),
 	Equivocation(EquivocationProof<NumberFor<B>, Public, Signature>),
 	Invalid,
 	Stale,
@@ -182,17 +183,24 @@ where
 		if round.add_vote((vote.id, vote.signature)) &&
 			round.is_done(threshold(self.validator_set.len()))
 		{
-			if let Some(round) = self.rounds.remove(&vote.commitment) {
-				let votes = round.votes;
-				let signatures = self
-					.validators()
-					.iter()
-					.map(|authority_id| votes.get(authority_id).cloned())
-					.collect();
-				return VoteImportResult::RoundConcluded(signatures)
+			if let Some(round) = self.rounds.remove_entry(&vote.commitment) {
+				return VoteImportResult::RoundConcluded(self.signed_commitment(round))
 			}
 		}
 		VoteImportResult::Ok
+	}
+
+	fn signed_commitment(
+		&mut self,
+		round: (Commitment<NumberFor<B>>, RoundTracker),
+	) -> SignedCommitment<NumberFor<B>, Signature> {
+		let votes = round.1.votes;
+		let signatures = self
+			.validators()
+			.iter()
+			.map(|authority_id| votes.get(authority_id).cloned())
+			.collect();
+		SignedCommitment { commitment: round.0, signatures }
 	}
 
 	pub(crate) fn conclude(&mut self, round_num: NumberFor<B>) {
@@ -210,7 +218,8 @@ mod tests {
 	use sc_network_test::Block;
 
 	use beefy_primitives::{
-		crypto::Public, known_payloads::MMR_ROOT_ID, Commitment, Payload, ValidatorSet, VoteMessage,
+		crypto::Public, known_payloads::MMR_ROOT_ID, Commitment, Payload, SignedCommitment,
+		ValidatorSet, VoteMessage,
 	};
 
 	use super::{threshold, Block as BlockT, RoundTracker, Rounds};
@@ -302,7 +311,7 @@ mod tests {
 		let commitment = Commitment { block_number, payload, validator_set_id };
 		let mut vote = VoteMessage {
 			id: Keyring::Alice.public(),
-			commitment,
+			commitment: commitment.clone(),
 			signature: Keyring::Alice.sign(b"I am committed"),
 		};
 		// add 1st good vote
@@ -326,12 +335,15 @@ mod tests {
 		// add 3rd good vote -> round concluded -> signatures present
 		assert_eq!(
 			rounds.add_vote(vote.clone()),
-			VoteImportResult::RoundConcluded(vec![
-				Some(Keyring::Alice.sign(b"I am committed")),
-				Some(Keyring::Bob.sign(b"I am committed")),
-				Some(Keyring::Charlie.sign(b"I am committed")),
-				None,
-			])
+			VoteImportResult::RoundConcluded(SignedCommitment {
+				commitment,
+				signatures: vec![
+					Some(Keyring::Alice.sign(b"I am committed")),
+					Some(Keyring::Bob.sign(b"I am committed")),
+					Some(Keyring::Charlie.sign(b"I am committed")),
+					None,
+				]
+			})
 		);
 		rounds.conclude(block_number);
 
@@ -444,7 +456,10 @@ mod tests {
 		assert_eq!(rounds.add_vote(bob_vote.clone()), VoteImportResult::Ok);
 		assert_eq!(
 			rounds.add_vote(charlie_vote.clone()),
-			VoteImportResult::RoundConcluded(expected_signatures)
+			VoteImportResult::RoundConcluded(SignedCommitment {
+				commitment: charlie_vote.commitment,
+				signatures: expected_signatures
+			})
 		);
 		// should be only 2 active since this one auto-concluded
 		assert_eq!(2, rounds.rounds.len());
