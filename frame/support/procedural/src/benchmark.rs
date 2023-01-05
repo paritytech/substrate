@@ -63,6 +63,7 @@ struct BenchmarkDef {
 	params: Vec<ParamDef>,
 	setup_stmts: Vec<Stmt>,
 	extrinsic_call: ExprCall,
+	extrinsic_call_lhs_var_name: Option<Ident>,
 	origin: Expr,
 	verify_stmts: Vec<Stmt>,
 	extra: bool,
@@ -127,7 +128,9 @@ impl BenchmarkDef {
 		for child in &item_fn.block.stmts {
 			// find #[extrinsic_call] annotation and build up the setup, call, and verify
 			// blocks based on the location of this annotation
-			if let Stmt::Semi(Expr::Call(fn_call), _token) = child {
+			let mut lhs_var_name: Option<Ident> = None;
+			let mut expr_call: Option<ExprCall> = None;
+			if let Stmt::Semi(Expr::Call(fn_call), _semi) = child {
 				let mut k = 0; // index of attr
 				for attr in &fn_call.attrs {
 					if let Some(segment) = attr.path.segments.last() {
@@ -136,34 +139,61 @@ impl BenchmarkDef {
 						) {
 							let mut extrinsic_call = fn_call.clone();
 							extrinsic_call.attrs.remove(k); // consume #[extrinsic call]
-							let origin = match extrinsic_call.args.first() {
-								Some(arg) => arg.clone(),
-								None => return Err(Error::new(
-									extrinsic_call.args.span(),
-									"Extrinsic call must specify its origin as the first argument.",
-								)),
-							};
-							let mut final_args = Punctuated::<Expr, Comma>::new();
-							let args: Vec<&Expr> = extrinsic_call.args.iter().collect();
-							for arg in &args[1..] {
-								final_args.push((*(*arg)).clone());
-							}
-							extrinsic_call.args = final_args;
-							return Ok(BenchmarkDef {
-								params,
-								setup_stmts: Vec::from(&item_fn.block.stmts[0..i]),
-								extrinsic_call,
-								origin,
-								verify_stmts: Vec::from(
-									&item_fn.block.stmts[(i + 1)..item_fn.block.stmts.len()],
-								),
-								extra,
-								skip_meta,
-							})
+							expr_call = Some(extrinsic_call);
 						}
 					}
 					k += 1;
 				}
+			} else if let Stmt::Local(local) = child {
+				let mut k = 0; // index of attr
+				for attr in &local.attrs {
+					if let Some(segment) = attr.path.segments.last() {
+						if let Ok(_) = syn::parse::<keywords::extrinsic_call>(
+							segment.ident.to_token_stream().into(),
+						) {
+							if let Some((_, boxed)) = &local.init {
+								if let Expr::Call(call) = &**boxed {
+									// found let-style extrinsic call
+									let mut local = local.clone();
+									local.attrs.remove(k); // consume #[extrinsic_call]
+									expr_call = Some(call.clone());
+									if let Pat::Ident(ident) = local.pat {
+										lhs_var_name = Some(ident.ident.clone());
+									}
+								}
+							}
+						}
+					}
+					k += 1;
+				}
+			}
+			if let Some(mut expr_call) = expr_call {
+				let origin = match expr_call.args.first() {
+					Some(arg) => arg.clone(),
+					None =>
+						return Err(Error::new(
+							expr_call.args.span(),
+							"Extrinsic call must specify its origin as the first argument.",
+						)),
+				};
+				let mut final_args = Punctuated::<Expr, Comma>::new();
+				let args: Vec<&Expr> = expr_call.args.iter().collect();
+				for arg in &args[1..] {
+					final_args.push((*(*arg)).clone());
+				}
+				expr_call.args = final_args;
+				return Ok(BenchmarkDef {
+					params,
+					setup_stmts: Vec::from(&item_fn.block.stmts[0..i]),
+					extrinsic_call: expr_call,
+					extrinsic_call_lhs_var_name: lhs_var_name,
+					origin,
+					verify_stmts: Vec::from(
+						&item_fn.block.stmts[(i + 1)..item_fn.block.stmts.len()],
+					),
+					extra,
+					skip_meta,
+				})
 			}
 			i += 1;
 		}
@@ -555,6 +585,13 @@ fn expand_benchmark(benchmark_def: BenchmarkDef, name: &Ident, is_instance: bool
 		} // else handle error?
 	} // else handle error?
 
+	let final_call = match benchmark_def.extrinsic_call_lhs_var_name {
+		Some(var) => quote!(let #var = Call::<#generics>::#extrinsic_call;),
+		None => quote!(let __call = Call::<#generics>::#extrinsic_call;),
+	};
+
+	println!("\nfinal_call: {}\n", final_call.to_string());
+
 	// generate final quoted tokens
 	let res = quote! {
 		// compile-time assertions that each referenced param type implements ParamRange
@@ -593,7 +630,7 @@ fn expand_benchmark(benchmark_def: BenchmarkDef, name: &Ident, is_instance: bool
 				#(
 					#setup_stmts
 				)*
-				let __call = Call::<#generics>::#extrinsic_call;
+				#final_call // extrinsic call
 				let __benchmarked_call_encoded = #codec::Encode::encode(&__call);
 				Ok(#krate::Box::new(move || -> Result<(), #krate::BenchmarkError> {
 					let __call_decoded = <Call<#generics> as #codec::Decode>
