@@ -20,18 +20,15 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-
-use frame_system::RawOrigin;
-//use sp_runtime::traits::Bounded;
-
 use crate::Pallet as Balances;
+
+use frame_benchmarking::{account, impl_benchmark_test_suite, whitelisted_caller};
+use frame_support::benchmarking::*;
+use frame_system::RawOrigin;
 
 const SEED: u32 = 0;
 // existential deposit multiplier
 const ED_MULTIPLIER: u32 = 10;
-
-use frame_benchmarking::{account, impl_benchmark_test_suite, whitelisted_caller};
-use frame_support::benchmarking::*;
 
 instance_benchmarks! {
 	#[benchmark]

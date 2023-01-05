@@ -15,7 +15,6 @@ mod keywords {
 	use syn::custom_keyword;
 
 	custom_keyword!(extrinsic_call);
-	custom_keyword!(cfg);
 	custom_keyword!(benchmark);
 	custom_keyword!(extra);
 	custom_keyword!(skip_meta);
@@ -477,7 +476,6 @@ pub fn benchmarks(tokens: TokenStream, instance: bool) -> TokenStream {
 			}
 		}
 	};
-	// println!("{}", res.to_string());
 	res.into()
 }
 
