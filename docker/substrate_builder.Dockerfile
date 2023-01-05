@@ -24,10 +24,10 @@ RUN useradd -m -u 1000 -U -s /bin/sh -d /substrate substrate && \
 	mkdir -p /data /substrate/.local/share/substrate && \
 	chown -R substrate:substrate /data && \
 	ln -s /data /substrate/.local/share/substrate && \
-# unclutter and minimize the attack surface
-	rm -rf /usr/bin /usr/sbin && \
 # Sanity checks
 	ldd /usr/local/bin/substrate && \
+# unclutter and minimize the attack surface
+	rm -rf /usr/bin /usr/sbin && \
 	/usr/local/bin/substrate --version
 
 USER substrate
