@@ -131,8 +131,11 @@ pub use crate::{
 	migration::Migration,
 	pallet::*,
 	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
-	wasm::{api_doc, Determinism},
+	wasm::Determinism,
 };
+
+#[cfg(doc)]
+pub use crate::wasm::api_doc;
 
 type CodeHash<T> = <T as frame_system::Config>::Hash;
 type TrieId = BoundedVec<u8, ConstU32<128>>;

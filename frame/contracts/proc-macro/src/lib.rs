@@ -493,6 +493,7 @@ fn expand_env(def: &mut EnvDef, docs: bool) -> TokenStream2 {
 		/// Every function described in this module's sub module's traits uses this sub module's identifier
 		/// as its imported module name. The identifier of the function is the function's imported name.
 		/// According to the [WASM spec of imports](https://webassembly.github.io/spec/core/text/modules.html#text-import).
+		#[cfg(doc)]
 		pub mod api_doc {
 			#docs
 		}
