@@ -34,8 +34,10 @@ use sp_std::prelude::*;
 
 const SEED: u32 = 0;
 
+pub trait Runtime: Config + pallet_stake_tracker::Config {}
+
 /// This function removes all validators and nominators from storage.
-pub fn clear_validators_and_nominators<T: Config>() {
+pub fn clear_validators_and_nominators<T: Runtime>() {
 	#[allow(deprecated)]
 	Validators::<T>::remove_all();
 
@@ -44,7 +46,7 @@ pub fn clear_validators_and_nominators<T: Config>() {
 	Nominators::<T>::remove_all();
 
 	// NOTE: safe to call outside block production
-	T::VoterList::unsafe_clear();
+	<T as pallet_stake_tracker::Config>::VoterList::unsafe_clear();
 }
 
 /// Grab a funded user.
@@ -130,7 +132,7 @@ pub fn create_stash_and_dead_controller<T: Config>(
 }
 
 /// create `max` validators.
-pub fn create_validators<T: Config>(
+pub fn create_validators<T: Runtime>(
 	max: u32,
 	balance_factor: u32,
 ) -> Result<Vec<AccountIdLookupOf<T>>, &'static str> {
@@ -171,7 +173,7 @@ pub fn create_validators_with_seed<T: Config>(
 ///   them are considered and `edge_per_nominator` random validators are voted for.
 ///
 /// Return the validators chosen to be nominated.
-pub fn create_validators_with_nominators_for_era<T: Config>(
+pub fn create_validators_with_nominators_for_era<T: Runtime>(
 	validators: u32,
 	nominators: u32,
 	edge_per_nominator: usize,

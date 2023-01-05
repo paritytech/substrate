@@ -87,8 +87,7 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 
 	fn on_nominator_add(who: &T::AccountId, _prev_nominations: Vec<T::AccountId>) {
 		let _ =
-			T::VoterList::on_insert(who.clone(), Self::to_vote(Self::slashable_balance_of(who)))
-				.defensive();
+			T::VoterList::on_insert(who.clone(), Self::to_vote(Self::slashable_balance_of(who)));
 	}
 
 	/// This should only be called if that stash isn't already a validator. Note, that if we want to

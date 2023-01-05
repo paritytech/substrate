@@ -48,6 +48,7 @@ substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
 frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
 rand_chacha = { version = "0.2" }
+pallet-stake-tracker = { version = "4.0.0-dev", path = "../stake-tracker" }
 
 [features]
 default = ["std"]

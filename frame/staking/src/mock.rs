@@ -99,6 +99,7 @@ frame_support::construct_runtime!(
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 		Historical: pallet_session::historical::{Pallet, Storage},
 		VoterBagsList: pallet_bags_list::<Instance1>::{Pallet, Call, Storage, Event<T>},
+		StakeTracker: pallet_stake_tracker::{Pallet, Storage},
 	}
 );
 
@@ -310,6 +311,13 @@ impl crate::pallet::pallet::Config for Test {
 	type OnStakerSlash = OnStakerSlashMock<Test>;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type WeightInfo = ();
+	type EventListener = StakeTracker;
+}
+
+impl pallet_stake_tracker::Config for Test {
+	type Currency = Balances;
+	type Staking = Staking;
+	type VoterList = VoterBagsList;
 }
 
 pub(crate) type StakingCall = crate::Call<Test>;

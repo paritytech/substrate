@@ -18,7 +18,9 @@
 //! Tests for the module.
 
 use super::{ConfigOp, Event, *};
-use frame_election_provider_support::{ElectionProvider, SortedListProvider, Support};
+use frame_election_provider_support::{
+	ElectionProvider, ReadOnlySortedListProvider, SortedListProvider, Support,
+};
 use frame_support::{
 	assert_noop, assert_ok, assert_storage_noop, bounded_vec,
 	dispatch::{extract_actual_weight, GetDispatchInfo, WithPostDispatchInfo},
@@ -5140,6 +5142,8 @@ fn change_of_max_nominations() {
 			// or they can be chilled by any account.
 			assert!(Nominators::<Test>::contains_key(101));
 			assert!(Nominators::<Test>::get(101).is_none());
+			// TODO: This test now fails, because we don't want to be checking for un-decodables
+			// anymore as previously discussed. Shall we remove it?
 			assert_ok!(Staking::chill_other(RuntimeOrigin::signed(70), 100));
 			assert!(!Nominators::<Test>::contains_key(101));
 			assert!(Nominators::<Test>::get(101).is_none());

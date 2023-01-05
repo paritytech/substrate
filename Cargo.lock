@@ -5886,6 +5886,7 @@ dependencies = [
  "pallet-bags-list",
  "pallet-balances",
  "pallet-session",
+ "pallet-stake-tracker",
  "pallet-staking-reward-curve",
  "pallet-timestamp",
  "parity-scale-codec",
