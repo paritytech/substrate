@@ -244,6 +244,45 @@ pub trait Mutate<AccountId, ItemConfig>: Inspect<AccountId> {
 			value.using_encoded(|v| Self::set_collection_attribute(collection, k, v))
 		})
 	}
+
+	/// Clear attribute of `item` of `collection`'s `key`.
+	///
+	/// By default, this is not a supported operation.
+	fn clear_attribute(
+		_collection: &Self::CollectionId,
+		_item: &Self::ItemId,
+		_key: &[u8],
+	) -> DispatchResult {
+		Err(TokenError::Unsupported.into())
+	}
+
+	/// Attempt to clear the strongly-typed attribute of `item` of `collection`'s `key`.
+	///
+	/// By default this just attempts to use `clear_attribute`.
+	fn clear_typed_attribute<K: Encode>(
+		collection: &Self::CollectionId,
+		item: &Self::ItemId,
+		key: &K,
+	) -> DispatchResult {
+		key.using_encoded(|k| Self::clear_attribute(collection, item, k))
+	}
+
+	/// Clear attribute of `collection`'s `key`.
+	///
+	/// By default, this is not a supported operation.
+	fn clear_collection_attribute(_collection: &Self::CollectionId, _key: &[u8]) -> DispatchResult {
+		Err(TokenError::Unsupported.into())
+	}
+
+	/// Attempt to clear the strongly-typed attribute of `collection`'s `key`.
+	///
+	/// By default this just attempts to use `clear_attribute`.
+	fn clear_typed_collection_attribute<K: Encode>(
+		collection: &Self::CollectionId,
+		key: &K,
+	) -> DispatchResult {
+		key.using_encoded(|k| Self::clear_collection_attribute(collection, k))
+	}
 }
 
 /// Trait for transferring non-fungible sets of items.
