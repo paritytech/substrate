@@ -32,6 +32,7 @@ pub mod client;
 #[cfg(not(feature = "test-helpers"))]
 mod client;
 mod metrics;
+mod storage_monitor;
 mod task_manager;
 
 use std::{collections::HashMap, net::SocketAddr};

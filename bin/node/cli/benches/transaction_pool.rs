@@ -106,6 +106,7 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		base_path: Some(base_path),
 		informant_output_format: Default::default(),
 		wasm_runtime_overrides: None,
+		available_storage_theshold: 1000,
 	};
 
 	node_cli::service::new_full_base(config, false, |_, _| ()).expect("Creates node")

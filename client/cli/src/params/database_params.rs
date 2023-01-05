@@ -19,7 +19,7 @@
 use crate::arg_enums::Database;
 use clap::Args;
 
-/// Parameters for block import.
+/// Parameters for database
 #[derive(Debug, Clone, PartialEq, Args)]
 pub struct DatabaseParams {
 	/// Select database backend to use.
@@ -29,10 +29,16 @@ pub struct DatabaseParams {
 	/// Limit the memory the database cache can use.
 	#[arg(long = "db-cache", value_name = "MiB")]
 	pub database_cache_size: Option<usize>,
+
+	/// Required available space on database storage. If available space for DB storage drops below
+	/// the given threshold, node will be gracefully terminated. If `0` is given monitoring will be
+	/// disabled.
+	#[arg(long = "db-storage-threshold", value_name = "MB", default_value_t = 1000)]
+	pub database_storage_threshold: u64,
 }
 
 impl DatabaseParams {
-	/// Limit the memory the database cache can use.
+	/// Database backend
 	pub fn database(&self) -> Option<Database> {
 		self.database
 	}
@@ -40,5 +46,10 @@ impl DatabaseParams {
 	/// Limit the memory the database cache can use.
 	pub fn database_cache_size(&self) -> Option<usize> {
 		self.database_cache_size
+	}
+
+	/// Available storage space threshold
+	pub fn database_storage_threshold(&self) -> u64 {
+		self.database_storage_threshold
 	}
 }

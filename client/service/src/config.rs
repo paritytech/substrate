@@ -149,6 +149,9 @@ pub struct Configuration {
 	pub informant_output_format: sc_informant::OutputFormat,
 	/// Maximum number of different runtime versions that can be cached.
 	pub runtime_cache_size: u8,
+	/// Threshold (in megabytes) for available storage space associated with `base_path`. `0` means
+	/// no storage monitoring.
+	pub available_storage_theshold: u64,
 }
 
 /// Type for tasks spawned by the executor.
