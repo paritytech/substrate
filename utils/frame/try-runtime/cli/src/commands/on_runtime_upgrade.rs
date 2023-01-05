@@ -16,6 +16,7 @@
 // limitations under the License.
 
 use crate::{build_executor, state_machine_call_with_proof, SharedParams, State, LOG_TARGET};
+use frame_try_runtime::UpgradeCheckSelect;
 use parity_scale_codec::{Decode, Encode};
 use sc_executor::sp_wasm_interface::HostFunctions;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
@@ -29,12 +30,22 @@ pub struct OnRuntimeUpgradeCmd {
 	#[command(subcommand)]
 	pub state: State,
 
-	/// Execute `try_state`, `pre_upgrade` and `post_upgrade` checks as well.
+	/// Select which optional checks to perform. Selects all when no value is given.
 	///
-	/// This will perform more checks, but it will also makes the reported PoV/Weight be
-	/// inaccurate.
-	#[clap(long)]
-	pub checks: bool,
+	/// - `none`: Perform no checks (default when the arg is not present).
+	/// - `all`: Perform all checks (default when the arg is present).
+	/// - `pre-and-post`: Perform pre- and post-upgrade checks.
+	/// - `try-state`: Perform the try-state checks.
+	///
+	/// Performing any checks will potentially invalidate the measured PoV/Weight.
+	// NOTE: The clap attributes make it backwards compatible with the previous `--checks` flag.
+	#[clap(long,
+		default_value = "None",
+		default_missing_value = "All",
+		num_args = 0..=1,
+		require_equals = true,
+		verbatim_doc_comment)]
+	pub checks: UpgradeCheckSelect,
 }
 
 pub(crate) async fn on_runtime_upgrade<Block, HostFns>(
