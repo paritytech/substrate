@@ -645,7 +645,7 @@ pub(crate) fn process_storage_results(
 					},
 					None => {
 						let comment = format!(
-							"Storage: unknown [0x{}] (r:{} w:{})",
+							"Storage: unknown `0x{}` (r:{} w:{})",
 							HexDisplay::from(key),
 							reads,
 							writes,
@@ -695,7 +695,7 @@ pub(crate) fn process_storage_results(
 					},
 					None => {
 						let comment = format!(
-							"Proof Skipped: unknown [0x{}] (r:{} w:{})",
+							"Proof Skipped: unknown `0x{}` (r:{} w:{})",
 							HexDisplay::from(key),
 							reads,
 							writes,

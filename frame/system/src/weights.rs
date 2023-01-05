@@ -81,8 +81,8 @@ impl<T: crate::Config> WeightInfo for SubstrateWeight<T> {
 	}
 	/// Storage: System Digest (r:1 w:1)
 	/// Proof Skipped: System Digest (max_values: Some(1), max_size: None, mode: Measured)
-	/// Storage: unknown [0x3a686561707061676573] (r:0 w:1)
-	/// Proof Skipped: unknown [0x3a686561707061676573] (r:0 w:1)
+	/// Storage: unknown `0x3a686561707061676573` (r:0 w:1)
+	/// Proof Skipped: unknown `0x3a686561707061676573` (r:0 w:1)
 	fn set_heap_pages() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
@@ -158,8 +158,8 @@ impl WeightInfo for () {
 	}
 	/// Storage: System Digest (r:1 w:1)
 	/// Proof Skipped: System Digest (max_values: Some(1), max_size: None, mode: Measured)
-	/// Storage: unknown [0x3a686561707061676573] (r:0 w:1)
-	/// Proof Skipped: unknown [0x3a686561707061676573] (r:0 w:1)
+	/// Storage: unknown `0x3a686561707061676573` (r:0 w:1)
+	/// Proof Skipped: unknown `0x3a686561707061676573` (r:0 w:1)
 	fn set_heap_pages() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`

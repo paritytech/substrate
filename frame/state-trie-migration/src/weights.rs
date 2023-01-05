@@ -90,8 +90,8 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Minimum execution time: 8_632 nanoseconds.
 		Weight::from_ref_time(8_817_000)
 	}
-	/// Storage: unknown [0x666f6f] (r:1 w:1)
-	/// Proof Skipped: unknown [0x666f6f] (r:1 w:1)
+	/// Storage: unknown `0x666f6f` (r:1 w:1)
+	/// Proof Skipped: unknown `0x666f6f` (r:1 w:1)
 	fn migrate_custom_top_fail() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `144`
@@ -108,8 +108,8 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Minimum execution time: 8_839 nanoseconds.
 		Weight::from_ref_time(9_142_000)
 	}
-	/// Storage: unknown [0x666f6f] (r:1 w:1)
-	/// Proof Skipped: unknown [0x666f6f] (r:1 w:1)
+	/// Storage: unknown `0x666f6f` (r:1 w:1)
+	/// Proof Skipped: unknown `0x666f6f` (r:1 w:1)
 	fn migrate_custom_child_fail() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `136`
@@ -119,8 +119,8 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
-	/// Storage: unknown [0x6b6579] (r:1 w:1)
-	/// Proof Skipped: unknown [0x6b6579] (r:1 w:1)
+	/// Storage: unknown `0x6b6579` (r:1 w:1)
+	/// Proof Skipped: unknown `0x6b6579` (r:1 w:1)
 	/// The range of component `v` is `[1, 4194304]`.
 	fn process_top_key(v: u32, ) -> Weight {
 		// Proof Size summary in bytes:
@@ -168,8 +168,8 @@ impl WeightInfo for () {
 		// Minimum execution time: 8_632 nanoseconds.
 		Weight::from_ref_time(8_817_000)
 	}
-	/// Storage: unknown [0x666f6f] (r:1 w:1)
-	/// Proof Skipped: unknown [0x666f6f] (r:1 w:1)
+	/// Storage: unknown `0x666f6f` (r:1 w:1)
+	/// Proof Skipped: unknown `0x666f6f` (r:1 w:1)
 	fn migrate_custom_top_fail() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `144`
@@ -186,8 +186,8 @@ impl WeightInfo for () {
 		// Minimum execution time: 8_839 nanoseconds.
 		Weight::from_ref_time(9_142_000)
 	}
-	/// Storage: unknown [0x666f6f] (r:1 w:1)
-	/// Proof Skipped: unknown [0x666f6f] (r:1 w:1)
+	/// Storage: unknown `0x666f6f` (r:1 w:1)
+	/// Proof Skipped: unknown `0x666f6f` (r:1 w:1)
 	fn migrate_custom_child_fail() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `136`
@@ -197,8 +197,8 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
-	/// Storage: unknown [0x6b6579] (r:1 w:1)
-	/// Proof Skipped: unknown [0x6b6579] (r:1 w:1)
+	/// Storage: unknown `0x6b6579` (r:1 w:1)
+	/// Proof Skipped: unknown `0x6b6579` (r:1 w:1)
 	/// The range of component `v` is `[1, 4194304]`.
 	fn process_top_key(v: u32, ) -> Weight {
 		// Proof Size summary in bytes:
