@@ -27,7 +27,7 @@
 //! More information about `honggfuzz` can be found
 //! [here](https://docs.rs/honggfuzz/).
 
-use frame_election_provider_support::{SortedListProvider, VoteWeight};
+use frame_election_provider_support::{ReadOnlySortedListProvider, SortedListProvider, VoteWeight};
 use honggfuzz::fuzz;
 use pallet_bags_list::mock::{AccountId, BagsList, ExtBuilder};
 

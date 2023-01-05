@@ -18,8 +18,8 @@
 //! Implementations for the Staking FRAME Pallet.
 
 use frame_election_provider_support::{
-	data_provider, BoundedSupportsOf, ElectionDataProvider, ElectionProvider, ScoreProvider,
-	SortedListProvider, VoteWeight, VoterOf,
+	data_provider, BoundedSupportsOf, ElectionDataProvider, ElectionProvider,
+	ReadOnlySortedListProvider, ScoreProvider, SortedListProvider, VoteWeight, VoterOf,
 };
 use frame_support::{
 	dispatch::WithPostDispatchInfo,
@@ -38,7 +38,7 @@ use sp_runtime::{
 };
 use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
-	EraIndex, SessionIndex, Stake, StakingInterface,
+	EraIndex, OnStakingUpdate, SessionIndex, Stake, StakingInterface,
 };
 use sp_std::prelude::*;
 
@@ -269,8 +269,14 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This will also update the stash lock.
 	pub(crate) fn update_ledger(controller: &T::AccountId, ledger: &StakingLedger<T>) {
+		let prev_ledger = Self::ledger(controller).map(|l| Stake {
+			stash: l.stash,
+			total: l.total,
+			active: l.active,
+		});
 		T::Currency::set_lock(STAKING_ID, &ledger.stash, ledger.total, WithdrawReasons::all());
 		<Ledger<T>>::insert(controller, ledger);
+		T::EventListener::on_update_ledger(&ledger.stash, prev_ledger);
 	}
 
 	/// Chill a stash account.
@@ -662,6 +668,7 @@ impl<T: Config> Pallet<T> {
 		Self::do_remove_nominator(stash);
 
 		frame_system::Pallet::<T>::dec_consumers(stash);
+		T::EventListener::on_reaped(stash);
 
 		Ok(())
 	}
@@ -871,17 +878,9 @@ impl<T: Config> Pallet<T> {
 	/// to `Nominators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
 	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T>) {
-		if !Nominators::<T>::contains_key(who) {
-			// maybe update sorted list.
-			let _ = T::VoterList::on_insert(who.clone(), Self::weight_of(who))
-				.defensive_unwrap_or_default();
-		}
+		let prev_nominations = Self::nominations(who);
 		Nominators::<T>::insert(who, nominations);
-
-		debug_assert_eq!(
-			Nominators::<T>::count() + Validators::<T>::count(),
-			T::VoterList::count()
-		);
+		T::EventListener::on_nominator_add(who, prev_nominations.unwrap_or_default());
 	}
 
 	/// This function will remove a nominator from the `Nominators` storage map,
@@ -890,23 +889,14 @@ impl<T: Config> Pallet<T> {
 	/// Returns true if `who` was removed from `Nominators`, otherwise false.
 	///
 	/// NOTE: you must ALWAYS use this function to remove a nominator from the system. Any access to
-	/// `Nominators` or `VoterList` outside of this function is almost certainly
-	/// wrong.
+	/// `Nominators` outside of this function is almost certainly wrong.
 	pub fn do_remove_nominator(who: &T::AccountId) -> bool {
-		let outcome = if Nominators::<T>::contains_key(who) {
+		if let Some(nominations) = Self::nominations(who) {
 			Nominators::<T>::remove(who);
-			let _ = T::VoterList::on_remove(who).defensive();
-			true
-		} else {
-			false
-		};
-
-		debug_assert_eq!(
-			Nominators::<T>::count() + Validators::<T>::count(),
-			T::VoterList::count()
-		);
-
-		outcome
+			T::EventListener::on_nominator_remove(who, nominations);
+			return true
+		}
+		false
 	}
 
 	/// This function will add a validator to the `Validators` storage map.
@@ -918,16 +908,9 @@ impl<T: Config> Pallet<T> {
 	/// wrong.
 	pub fn do_add_validator(who: &T::AccountId, prefs: ValidatorPrefs) {
 		if !Validators::<T>::contains_key(who) {
-			// maybe update sorted list.
-			let _ = T::VoterList::on_insert(who.clone(), Self::weight_of(who))
-				.defensive_unwrap_or_default();
+			T::EventListener::on_validator_add(who);
 		}
 		Validators::<T>::insert(who, prefs);
-
-		debug_assert_eq!(
-			Nominators::<T>::count() + Validators::<T>::count(),
-			T::VoterList::count()
-		);
 	}
 
 	/// This function will remove a validator from the `Validators` storage map.
@@ -935,23 +918,14 @@ impl<T: Config> Pallet<T> {
 	/// Returns true if `who` was removed from `Validators`, otherwise false.
 	///
 	/// NOTE: you must ALWAYS use this function to remove a validator from the system. Any access to
-	/// `Validators` or `VoterList` outside of this function is almost certainly
-	/// wrong.
+	/// `Validators` outside of this function is almost certainly wrong.
 	pub fn do_remove_validator(who: &T::AccountId) -> bool {
-		let outcome = if Validators::<T>::contains_key(who) {
+		if Validators::<T>::contains_key(who) {
 			Validators::<T>::remove(who);
-			let _ = T::VoterList::on_remove(who).defensive();
-			true
-		} else {
-			false
-		};
-
-		debug_assert_eq!(
-			Nominators::<T>::count() + Validators::<T>::count(),
-			T::VoterList::count()
-		);
-
-		outcome
+			T::EventListener::on_validator_remove(who);
+			return true
+		}
+		false
 	}
 
 	/// Register some amount of weight directly with the system pallet.
@@ -1081,8 +1055,8 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		<Validators<T>>::remove_all();
 		#[allow(deprecated)]
 		<Nominators<T>>::remove_all();
-
-		T::VoterList::unsafe_clear();
+		// TODO: sort it out some other way
+		// T::VoterList::unsafe_clear();
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -1408,9 +1382,9 @@ impl<T: Config> ScoreProvider<T::AccountId> for Pallet<T> {
 /// does not provide validators in sorted order. If you desire nominators in a sorted order take
 /// a look at [`pallet-bags-list`].
 pub struct UseValidatorsMap<T>(sp_std::marker::PhantomData<T>);
-impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
-	type Score = BalanceOf<T>;
+impl<T: Config> ReadOnlySortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 	type Error = ();
+	type Score = BalanceOf<T>;
 
 	/// Returns iterator over voter list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
@@ -1432,13 +1406,20 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 	fn contains(id: &T::AccountId) -> bool {
 		Validators::<T>::contains_key(id)
 	}
+	fn get_score(id: &T::AccountId) -> Result<Self::Score, Self::Error> {
+		Ok(Pallet::<T>::weight_of(id).into())
+	}
+	fn try_state() -> Result<(), &'static str> {
+		Ok(())
+	}
+}
+
+impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 	fn on_insert(_: T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
 		// nothing to do on insert.
 		Ok(())
 	}
-	fn get_score(id: &T::AccountId) -> Result<Self::Score, Self::Error> {
-		Ok(Pallet::<T>::weight_of(id).into())
-	}
+
 	fn on_update(_: &T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
 		// nothing to do on update.
 		Ok(())
@@ -1454,9 +1435,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 		// nothing to do upon regenerate.
 		0
 	}
-	fn try_state() -> Result<(), &'static str> {
-		Ok(())
-	}
+
 	fn unsafe_clear() {
 		#[allow(deprecated)]
 		Validators::<T>::remove_all();
@@ -1472,7 +1451,8 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 /// does not provided nominators in sorted ordered. If you desire nominators in a sorted order take
 /// a look at [`pallet-bags-list].
 pub struct UseNominatorsAndValidatorsMap<T>(sp_std::marker::PhantomData<T>);
-impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsMap<T> {
+
+impl<T: Config> ReadOnlySortedListProvider<T::AccountId> for UseNominatorsAndValidatorsMap<T> {
 	type Error = ();
 	type Score = VoteWeight;
 
@@ -1506,13 +1486,20 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 	fn contains(id: &T::AccountId) -> bool {
 		Nominators::<T>::contains_key(id) || Validators::<T>::contains_key(id)
 	}
+	fn get_score(id: &T::AccountId) -> Result<Self::Score, Self::Error> {
+		Ok(Pallet::<T>::weight_of(id))
+	}
+	fn try_state() -> Result<(), &'static str> {
+		Ok(())
+	}
+}
+
+impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsMap<T> {
 	fn on_insert(_: T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
 		// nothing to do on insert.
 		Ok(())
 	}
-	fn get_score(id: &T::AccountId) -> Result<Self::Score, Self::Error> {
-		Ok(Pallet::<T>::weight_of(id))
-	}
+
 	fn on_update(_: &T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
 		// nothing to do on update.
 		Ok(())
@@ -1527,9 +1514,6 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 	) -> u32 {
 		// nothing to do upon regenerate.
 		0
-	}
-	fn try_state() -> Result<(), &'static str> {
-		Ok(())
 	}
 
 	fn unsafe_clear() {
@@ -1593,7 +1577,9 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::current_era().unwrap_or(Zero::zero())
 	}
 
-	fn stake(who: &Self::AccountId) -> Result<Stake<Self>, DispatchError> {
+	fn stake(
+		who: &Self::AccountId,
+	) -> Result<Stake<Self::AccountId, Self::Balance>, DispatchError> {
 		Self::bonded(who)
 			.and_then(|c| Self::ledger(c))
 			.map(|l| Stake { stash: l.stash, total: l.total, active: l.active })
@@ -1647,11 +1633,11 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::nominate(RawOrigin::Signed(ctrl).into(), targets)
 	}
 
-	sp_staking::runtime_benchmarks_enabled! {
-		fn nominations(who: Self::AccountId) -> Option<Vec<T::AccountId>> {
-			Nominators::<T>::get(who).map(|n| n.targets.into_inner())
-		}
+	fn nominations(who: &Self::AccountId) -> Option<Vec<T::AccountId>> {
+		Nominators::<T>::get(who).map(|n| n.targets.into_inner())
+	}
 
+	sp_staking::runtime_benchmarks_enabled! {
 		fn add_era_stakers(
 			current_era: &EraIndex,
 			stash: &T::AccountId,
@@ -1668,6 +1654,12 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		fn set_current_era(era: EraIndex) {
 			CurrentEra::<T>::put(era);
 		}
+	}
+
+	type CurrencyToVote = T::CurrencyToVote;
+
+	fn is_validator(who: &Self::AccountId) -> bool {
+		Validators::<T>::contains_key(who)
 	}
 }
 

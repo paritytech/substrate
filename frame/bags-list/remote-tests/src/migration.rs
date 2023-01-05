@@ -17,6 +17,7 @@
 //! Test to check the migration of the voter bag.
 
 use crate::{RuntimeT, LOG_TARGET};
+use frame_election_provider_support::ReadOnlySortedListProvider;
 use frame_support::traits::PalletInfoAccess;
 use pallet_staking::Nominators;
 use remote_externalities::{Builder, Mode, OnlineConfig};

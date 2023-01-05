@@ -22,7 +22,7 @@ use crate::{ConfigOp, Pallet as Staking};
 use testing_utils::*;
 
 use codec::Decode;
-use frame_election_provider_support::SortedListProvider;
+use frame_election_provider_support::{ReadOnlySortedListProvider, SortedListProvider};
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	pallet_prelude::*,
@@ -189,8 +189,11 @@ impl<T: Config> ListScenario<T> {
 		)?;
 
 		// find a destination weight that will trigger the worst case scenario
-		let dest_weight_as_vote =
-			T::VoterList::score_update_worst_case(&origin_stash1, is_increase);
+		// TODO: This is a hack, might be great to implement this differently.
+		let dest_weight_as_vote = <T::VoterList as SortedListProvider<_>>::score_update_worst_case(
+			&origin_stash1,
+			is_increase,
+		);
 
 		let total_issuance = T::Currency::total_issuance();
 

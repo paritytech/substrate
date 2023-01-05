@@ -20,10 +20,15 @@
 //! A crate which contains primitives that are useful for implementation that uses staking
 //! approaches in general. Definitions related to sessions, slashing, etc go here.
 
-use sp_runtime::{DispatchError, DispatchResult};
-use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
+use crate::currency_to_vote::CurrencyToVote;
+use codec::{Encode, EncodeLike, FullCodec, MaxEncodedLen};
+use scale_info::TypeInfo;
+use sp_runtime::{DispatchError, DispatchResult, Saturating};
+use sp_std::{collections::btree_map::BTreeMap, ops::Sub, vec::Vec};
 
 pub mod offence;
+
+pub mod currency_to_vote;
 
 /// Simple index type with which we can count sessions.
 pub type SessionIndex = u32;
@@ -57,9 +62,10 @@ impl<AccountId, Balance> OnStakerSlash<AccountId, Balance> for () {
 
 /// A struct that reflects stake that an account has in the staking system. Provides a set of
 /// methods to operate on it's properties. Aimed at making `StakingInterface` more concise.
-pub struct Stake<T: StakingInterface + ?Sized> {
+#[derive(Default)]
+pub struct Stake<AccountId, Balance> {
 	/// The stash account whose balance is actually locked and at stake.
-	pub stash: T::AccountId,
+	pub stash: AccountId,
 	/// The total stake that `stash` has in the staking system. This includes the
 	/// `active` stake, and any funds currently in the process of unbonding via
 	/// [`StakingInterface::unbond`].
@@ -69,10 +75,29 @@ pub struct Stake<T: StakingInterface + ?Sized> {
 	/// This is only guaranteed to reflect the amount locked by the staking system. If there are
 	/// non-staking locks on the bonded pair's balance this amount is going to be larger in
 	/// reality.
-	pub total: T::Balance,
+	pub total: Balance,
 	/// The total amount of the stash's balance that will be at stake in any forthcoming
 	/// rounds.
-	pub active: T::Balance,
+	pub active: Balance,
+}
+
+/// A generic staking event listener. Currently used for implementations involved in stake tracking.
+/// Note that the interface is designed in a way that the events are fired post-action, so any
+/// pre-action data that is needed needs to be passed to interface methods.
+/// The rest of the data can be retrieved by using `StakingInterface`.
+pub trait OnStakingUpdate<AccountId, Balance> {
+	/// Track ledger updates.
+	fn on_update_ledger(who: &AccountId, prev_stake: Option<Stake<AccountId, Balance>>);
+	/// Track nominators, those reinstated and also new ones.
+	fn on_nominator_add(who: &AccountId, prev_nominations: Vec<AccountId>);
+	/// Track validators, those reinstated and new.
+	fn on_validator_add(who: &AccountId);
+	/// Track removed validators. Either chilled or those that became nominators instead.
+	fn on_validator_remove(who: &AccountId); // only fire this event when this is an actual Validator
+	/// Track removed nominators.
+	fn on_nominator_remove(who: &AccountId, nominations: Vec<AccountId>); // only fire this if this is an actual Nominator
+	/// Track those participants of staking system that are kicked out for whatever reason.
+	fn on_reaped(who: &AccountId); // -> basically `kill_stash`
 }
 
 /// A generic representation of a staking implementation.
@@ -81,10 +106,21 @@ pub struct Stake<T: StakingInterface + ?Sized> {
 /// implementations as well.
 pub trait StakingInterface {
 	/// Balance type used by the staking system.
-	type Balance: PartialEq;
+	type Balance: Sub<Output = Self::Balance>
+		+ Ord
+		+ PartialEq
+		+ Default
+		+ Copy
+		+ MaxEncodedLen
+		+ FullCodec
+		+ TypeInfo
+		+ Saturating;
 
 	/// AccountId type used by the staking system
 	type AccountId;
+
+	/// whatever
+	type CurrencyToVote: CurrencyToVote<Self::Balance>;
 
 	/// The minimum amount required to bond in order to set nomination intentions. This does not
 	/// necessarily mean the nomination will be counted in an election, but instead just enough to
@@ -112,7 +148,8 @@ pub trait StakingInterface {
 	fn current_era() -> EraIndex;
 
 	/// Returns the stake of `who`.
-	fn stake(who: &Self::AccountId) -> Result<Stake<Self>, DispatchError>;
+	fn stake(who: &Self::AccountId)
+		-> Result<Stake<Self::AccountId, Self::Balance>, DispatchError>;
 
 	fn total_stake(who: &Self::AccountId) -> Result<Self::Balance, DispatchError> {
 		Self::stake(who).map(|s| s.total)
@@ -176,9 +213,11 @@ pub trait StakingInterface {
 	/// Checks whether an account `staker` has been exposed in an era.
 	fn is_exposed_in_era(who: &Self::AccountId, era: &EraIndex) -> bool;
 
+	/// Checks whether or not this is a validator account.
+	fn is_validator(who: &Self::AccountId) -> bool;
+
 	/// Get the nominations of a stash, if they are a nominator, `None` otherwise.
-	#[cfg(feature = "runtime-benchmarks")]
-	fn nominations(who: Self::AccountId) -> Option<Vec<Self::AccountId>>;
+	fn nominations(who: &Self::AccountId) -> Option<Vec<Self::AccountId>>;
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add_era_stakers(

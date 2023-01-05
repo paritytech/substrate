@@ -58,7 +58,7 @@ pub(crate) const SPECULATIVE_NUM_SPANS: u32 = 32;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_election_provider_support::ElectionDataProvider;
+	use frame_election_provider_support::{ElectionDataProvider, ReadOnlySortedListProvider};
 
 	use crate::BenchmarkingConfig;
 
@@ -225,7 +225,10 @@ pub mod pallet {
 		/// staker. In case of `bags-list`, this always means using `rebag` and `putInFrontOf`.
 		///
 		/// Invariant: what comes out of this list will always be a nominator.
-		type VoterList: SortedListProvider<Self::AccountId, Score = VoteWeight>;
+		///
+		/// NOTE: Staking does not maintain this list, it merely reads from it. The list is
+		/// maintained by `EventListener` implementors.
+		type VoterList: ReadOnlySortedListProvider<Self::AccountId, Score = VoteWeight>;
 
 		/// WIP: This is a noop as of now, the actual business logic that's described below is going
 		/// to be introduced in a follow-up PR.
@@ -248,6 +251,13 @@ pub mod pallet {
 		/// recorded. This implies that what comes out of iterating this list MIGHT NOT BE AN ACTIVE
 		/// VALIDATOR.
 		type TargetList: SortedListProvider<Self::AccountId, Score = BalanceOf<Self>>;
+
+		/// Something that listens to staking updates and performs actions based on the data it
+		/// receives.
+		/// NOTE: Once we have more implementors of EventListener - this could be done similarly to
+		/// `OnRuntimeUpdate` - just a tuple of all sorts of pallets implementing the trait that all
+		/// react to the interface methods being called or ignore them.
+		type EventListener: sp_staking::OnStakingUpdate<Self::AccountId, BalanceOf<Self>>;
 
 		/// The maximum number of `unlocking` chunks a [`StakingLedger`] can
 		/// have. Effectively determines how many unique eras a staker may be
@@ -933,11 +943,6 @@ pub mod pallet {
 
 				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 				Self::update_ledger(&controller, &ledger);
-				// update this staker in the sorted list, if they exist in it.
-				if T::VoterList::contains(&stash) {
-					let _ =
-						T::VoterList::on_update(&stash, Self::weight_of(&ledger.stash)).defensive();
-				}
 
 				Self::deposit_event(Event::<T>::Bonded { stash, amount: extra });
 			}
@@ -1036,12 +1041,6 @@ pub mod pallet {
 				};
 				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 				Self::update_ledger(&controller, &ledger);
-
-				// update this staker in the sorted list, if they exist in it.
-				if T::VoterList::contains(&ledger.stash) {
-					let _ = T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash))
-						.defensive();
-				}
 
 				Self::deposit_event(Event::<T>::Unbonded { stash: ledger.stash, amount: value });
 			}
@@ -1543,10 +1542,6 @@ pub mod pallet {
 
 			// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 			Self::update_ledger(&controller, &ledger);
-			if T::VoterList::contains(&ledger.stash) {
-				let _ = T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash))
-					.defensive();
-			}
 
 			let removed_chunks = 1u32 // for the case where the last iterated chunk is not removed
 				.saturating_add(initial_unlocking)

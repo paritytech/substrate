@@ -54,7 +54,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::FullCodec;
-use frame_election_provider_support::{ScoreProvider, SortedListProvider};
+use frame_election_provider_support::{
+	ReadOnlySortedListProvider, ScoreProvider, SortedListProvider,
+};
 use frame_system::ensure_signed;
 use sp_runtime::traits::{AtLeast32BitUnsigned, Bounded, StaticLookup};
 use sp_std::prelude::*;
@@ -299,7 +301,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 }
 
-impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I> {
+impl<T: Config<I>, I: 'static> ReadOnlySortedListProvider<T::AccountId> for Pallet<T, I> {
 	type Error = ListError;
 	type Score = T::Score;
 
@@ -321,13 +323,17 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 	fn contains(id: &T::AccountId) -> bool {
 		List::<T, I>::contains(id)
 	}
-
-	fn on_insert(id: T::AccountId, score: T::Score) -> Result<(), ListError> {
-		List::<T, I>::insert(id, score)
-	}
-
 	fn get_score(id: &T::AccountId) -> Result<T::Score, ListError> {
 		List::<T, I>::get_score(id)
+	}
+	fn try_state() -> Result<(), &'static str> {
+		List::<T, I>::try_state()
+	}
+}
+
+impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I> {
+	fn on_insert(id: T::AccountId, score: T::Score) -> Result<(), ListError> {
+		List::<T, I>::insert(id, score)
 	}
 
 	fn on_update(id: &T::AccountId, new_score: T::Score) -> Result<(), ListError> {
@@ -346,10 +352,6 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 		// I.e. because it can lead to many storage accesses.
 		// So it is ok to call it as caller must ensure the conditions.
 		List::<T, I>::unsafe_regenerate(all, score_of)
-	}
-
-	fn try_state() -> Result<(), &'static str> {
-		List::<T, I>::try_state()
 	}
 
 	fn unsafe_clear() {
@@ -384,7 +386,7 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 }
 
 impl<T: Config<I>, I: 'static> ScoreProvider<T::AccountId> for Pallet<T, I> {
-	type Score = <Pallet<T, I> as SortedListProvider<T::AccountId>>::Score;
+	type Score = <Pallet<T, I> as ReadOnlySortedListProvider<T::AccountId>>::Score;
 
 	fn score(id: &T::AccountId) -> T::Score {
 		Node::<T, I>::get(id).map(|node| node.score()).unwrap_or_default()

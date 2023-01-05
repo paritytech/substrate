@@ -18,6 +18,7 @@ scale-info = { version = "2.1.1", default-features = false, features = ["derive"
 sp-core = { version = "7.0.0", default-features = false, path = "../core" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../runtime" }
 sp-std = { version = "5.0.0", default-features = false, path = "../std" }
+sp-arithmetic = { version = "6.0.0", default-features = false, path = "../arithmetic" }
 
 [features]
 default = ["std"]
@@ -27,5 +28,6 @@ std = [
 	"sp-core/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"sp-arithmetic/std"
 ]
 runtime-benchmarks = []
