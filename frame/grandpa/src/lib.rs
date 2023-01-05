@@ -37,7 +37,7 @@ use codec::{self as codec, Decode, Encode, MaxEncodedLen};
 pub use fg_primitives::{AuthorityId, AuthorityList, AuthorityWeight, VersionedAuthorityList};
 use fg_primitives::{
 	ConsensusLog, EquivocationProof, ScheduledChange, SetId, GRANDPA_AUTHORITIES_KEY,
-	GRANDPA_ENGINE_ID,
+	GRANDPA_ENGINE_ID, RUNTIME_LOG_TARGET as LOG_TARGET,
 };
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, Pays},
@@ -69,8 +69,6 @@ pub use equivocation::{
 };
 
 pub use pallet::*;
-
-const LOG_TARGET: &str = "runtime::grandpa";
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -542,7 +540,7 @@ impl<T: Config> Pallet<T> {
 
 		// validate equivocation proof (check votes are different and
 		// signatures are valid).
-		if !sp_finality_grandpa::check_equivocation_proof(equivocation_proof, LOG_TARGET) {
+		if !sp_finality_grandpa::check_equivocation_proof(equivocation_proof) {
 			return Err(Error::<T>::InvalidEquivocationProof.into())
 		}
 

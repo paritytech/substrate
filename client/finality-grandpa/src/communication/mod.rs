@@ -849,7 +849,6 @@ fn check_compact_commit<Block: BlockT>(
 			round.0,
 			set_id.0,
 			&mut buf,
-			LOG_TARGET,
 		) {
 			debug!(target: LOG_TARGET, "Bad commit message signature {}", id);
 			telemetry!(
@@ -936,7 +935,7 @@ fn check_catch_up<Block: BlockT>(
 			signatures_checked += 1;
 
 			if !sp_finality_grandpa::check_message_signature_with_buffer(
-				&msg, id, sig, round, set_id, buf, LOG_TARGET,
+				&msg, id, sig, round, set_id, buf,
 			) {
 				debug!(target: LOG_TARGET, "Bad catch up message signature {}", id);
 				telemetry!(
