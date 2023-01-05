@@ -21,7 +21,7 @@
 use sp_consensus::BlockOrigin;
 use sp_core::storage::StorageKey;
 use sp_runtime::{
-	generic::{BlockId, SignedBlock},
+	generic::SignedBlock,
 	traits::{Block as BlockT, NumberFor},
 	Justifications,
 };
@@ -120,14 +120,13 @@ pub trait BlockBackend<Block: BlockT> {
 	/// that are indexed by the runtime with `storage_index_transaction`.
 	fn block_indexed_body(&self, hash: Block::Hash) -> sp_blockchain::Result<Option<Vec<Vec<u8>>>>;
 
-	/// Get full block by id.
-	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>>;
+	/// Get full block by hash.
+	fn block(&self, hash: Block::Hash) -> sp_blockchain::Result<Option<SignedBlock<Block>>>;
 
-	/// Get block status.
-	fn block_status(&self, id: &BlockId<Block>)
-		-> sp_blockchain::Result<sp_consensus::BlockStatus>;
+	/// Get block status by block hash.
+	fn block_status(&self, hash: Block::Hash) -> sp_blockchain::Result<sp_consensus::BlockStatus>;
 
-	/// Get block justifications for the block with the given id.
+	/// Get block justifications for the block with the given hash.
 	fn justifications(&self, hash: Block::Hash) -> sp_blockchain::Result<Option<Justifications>>;
 
 	/// Get block hash by number.
