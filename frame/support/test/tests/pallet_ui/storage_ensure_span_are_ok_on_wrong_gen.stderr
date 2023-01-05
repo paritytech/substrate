@@ -28,7 +28,7 @@ error[E0277]: the trait bound `Bar: EncodeLike` is not satisfied
              <&[(T,)] as EncodeLike<BinaryHeap<LikeT>>>
              <&[(T,)] as EncodeLike<LinkedList<LikeT>>>
              <&[T] as EncodeLike<Vec<U>>>
-           and 281 others
+           and $N others
    = note: required for `Bar` to implement `FullEncode`
    = note: required for `Bar` to implement `FullCodec`
    = note: required for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar>` to implement `PartialStorageInfoTrait`
@@ -48,7 +48,7 @@ error[E0277]: the trait bound `Bar: WrapperTypeEncode` is not satisfied
              Rc<T>
              Vec<T>
              bytes::bytes::Bytes
-           and 3 others
+           and $N others
    = note: required for `Bar` to implement `Encode`
    = note: required for `Bar` to implement `FullEncode`
    = note: required for `Bar` to implement `FullCodec`
@@ -69,7 +69,7 @@ error[E0277]: the trait bound `Bar: TypeInfo` is not satisfied
              (A, B, C, D)
              (A, B, C, D, E)
              (A, B, C, D, E, F)
-           and 163 others
+           and $N others
    = note: required for `Bar` to implement `StaticTypeInfo`
    = note: required for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar>` to implement `StorageEntryMetadataBuilder`
 
@@ -103,7 +103,7 @@ error[E0277]: the trait bound `Bar: EncodeLike` is not satisfied
              <&[(T,)] as EncodeLike<BinaryHeap<LikeT>>>
              <&[(T,)] as EncodeLike<LinkedList<LikeT>>>
              <&[T] as EncodeLike<Vec<U>>>
-           and 281 others
+           and $N others
    = note: required for `Bar` to implement `FullEncode`
    = note: required for `Bar` to implement `FullCodec`
    = note: required for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar>` to implement `StorageEntryMetadataBuilder`
@@ -123,7 +123,7 @@ error[E0277]: the trait bound `Bar: WrapperTypeEncode` is not satisfied
              Rc<T>
              Vec<T>
              bytes::bytes::Bytes
-           and 3 others
+           and $N others
    = note: required for `Bar` to implement `Encode`
    = note: required for `Bar` to implement `FullEncode`
    = note: required for `Bar` to implement `FullCodec`
