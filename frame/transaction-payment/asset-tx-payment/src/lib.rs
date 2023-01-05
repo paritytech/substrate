@@ -291,13 +291,14 @@ where
 
 					let min_converted_fee =
 						if actual_fee.is_zero() { Zero::zero() } else { One::one() };
+					// Convert the actual fee into the asset used for payment.
 					let converted_actual_fee =
 						T::BalanceToAsset::to_asset_balance(actual_fee, already_withdrawn.asset())
 							.map_err(|_| -> TransactionValidityError {
 								InvalidTransaction::Payment.into()
 							})?
 							.max(min_converted_fee);
-
+					// Also convert the tip into the asset used for payment.
 					let converted_tip =
 						T::BalanceToAsset::to_asset_balance(tip, already_withdrawn.asset())
 							.map_err(|_| -> TransactionValidityError {
