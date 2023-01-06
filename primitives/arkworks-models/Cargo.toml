@@ -23,12 +23,12 @@ derivative = { version = "2", features = ["use_core"] }
 num-traits = { version = "0.2", default-features = false }
 rayon = { version = "1", optional = true }
 zeroize = { version = "1", default-features = false, features = ["zeroize_derive"] }
-hashbrown = "0.13.1"
+hashbrown = { version = "0.13.1", default-features = false }
 itertools = { version = "0.10", default-features = false }
 
 [dev-dependencies]
 
 [features]
 default = []
-std = [ "ark-std/std", "ark-ff/std", "ark-serialize/std", "ark-ec/std", "ark-poly/std", "num-traits/std", "zeroize/std" ]
+std = [ "ark-std/std", "ark-ff/std", "ark-serialize/std", "ark-ec/std", "ark-poly/std", "num-traits/std", "zeroize/std", "hashbrown/std" ]
 parallel = [ "std", "rayon", "ark-std/parallel" ]
