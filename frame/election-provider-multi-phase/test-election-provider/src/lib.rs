@@ -55,8 +55,13 @@ fn setup_works() {
 
 		start_next_active_era();
 		start_next_active_era();
-		start_next_active_era();
-		start_next_active_era();
+		assert_eq!(active_era(), 2);
+
+		// if the solution is delayed, EPM will end up in emergency mode and eras won't progress.
+		start_next_active_era_delayed_solution();
+		start_next_active_era_delayed_solution();
+		assert!(ElectionProviderMultiPhase::current_phase().is_emergency());
+		assert_eq!(active_era(), 3);
 	});
 }
 
@@ -88,8 +93,8 @@ fn enters_emergency_phase_after_forcing_before_elect() {
 		log_current_time();
 
 		assert_eq!(pallet_staking::ForceEra::<Runtime>::get(), pallet_staking::Forcing::NotForcing);
-		// slashes until staking gets into `Forcing::ForceNew`.
-		add_slash(&11);
+		// slashes so that staking goes into `Forcing::ForceNew`.
+		slash_through_offending_threshold();
 
 		assert_eq!(pallet_staking::ForceEra::<Runtime>::get(), pallet_staking::Forcing::ForceNew);
 

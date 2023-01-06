@@ -548,7 +548,7 @@ pub fn roll_to(n: BlockNumber, delay_solution: bool) {
 		Timestamp::set_timestamp(System::block_number() * BLOCK_TIME + INIT_TIMESTAMP);
 
 		// if EPM is in off phase, there's no solution and the solution should not be delayed, try
-		// minining and queue a solution.
+		// "minining" and queue a solution.
 		if ElectionProviderMultiPhase::snapshot().is_none() &&
 			ElectionProviderMultiPhase::current_phase().is_off() &&
 			!delay_solution
@@ -685,6 +685,7 @@ pub(crate) fn on_offence_now(
 	);
 }
 
+// Add offence to validator, slash it.
 pub(crate) fn add_slash(who: &AccountId) {
 	on_offence_now(
 		&[OffenceDetails {
@@ -693,4 +694,19 @@ pub(crate) fn add_slash(who: &AccountId) {
 		}],
 		&[Perbill::from_percent(10)],
 	);
+}
+
+// Slashes enough validators to cross the `Staking::OffendingValidatorsThreshold`.
+pub(crate) fn slash_through_offending_threshold() {
+	let validators = Session::validators();
+	let mut remaining_slashes =
+		<Runtime as pallet_staking::Config>::OffendingValidatorsThreshold::get() *
+			validators.len() as u32;
+
+	for v in validators.into_iter() {
+		if remaining_slashes != 0 {
+			add_slash(&v);
+			remaining_slashes -= 1;
+		}
+	}
 }
