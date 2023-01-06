@@ -5766,6 +5766,40 @@ fn set_min_commission_works_with_admin_origin() {
 	})
 }
 
+#[test]
+fn can_page_exposure() {
+	let mut others: Vec<IndividualExposure<AccountId, Balance>> = vec![];
+	let mut total_stake: Balance = 0;
+	// 19 nominators
+	for i in 1..20 {
+		let individual_stake: Balance = 100 * i as Balance;
+		others.push(IndividualExposure { who: i, value: individual_stake });
+		total_stake += individual_stake;
+	}
+	let own_stake: Balance = 500;
+	total_stake += own_stake;
+	assert_eq!(total_stake, 19_500);
+	// build full exposure set
+	let exposure: Exposure<AccountId, Balance> =
+		Exposure { total: total_stake, own: own_stake, others };
+
+	// when
+	let paged_exposures: Vec<Exposure<AccountId, Balance>> = exposure.clone().in_chunks_of(3);
+
+	// then
+	assert_eq!(paged_exposures.len(), (19 / 3) + 1);
+	// first page stake = 500 (own) + 100 + 200 + 300
+	assert!(matches!(paged_exposures[0], Exposure { total: 1100, own: 500, .. }));
+	// second page stake = 0 + 400 + 500 + 600
+	assert!(matches!(paged_exposures[1], Exposure { total: 1500, own: 0, .. }));
+	// verify total stake is same as in the original exposure.
+	assert_eq!(paged_exposures.iter().map(|a| a.total).reduce(|a, b| a + b).unwrap(), 19_500);
+	// verify own stake is same as in the original exposure.
+	assert_eq!(paged_exposures.iter().map(|a| a.own).reduce(|a, b| a + b).unwrap(), 500);
+	// verify number of nominators are same as in the original exposure.
+	assert_eq!(paged_exposures.iter().map(|a| a.others.len()).reduce(|a, b| a + b).unwrap(), 19);
+}
+
 mod staking_interface {
 	use frame_support::storage::with_storage_layer;
 	use sp_staking::StakingInterface;
