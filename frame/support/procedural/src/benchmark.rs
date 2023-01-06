@@ -8,8 +8,8 @@ use syn::{
 	punctuated::Punctuated,
 	spanned::Spanned,
 	token::{Comma, Gt, Lt},
-	Error, Expr, ExprCall, FnArg, Item, ItemFn, ItemMod, LitInt, Pat, Result, Stmt, Type,
-	WhereClause,
+	Error, Expr, ExprBlock, ExprCall, FnArg, Item, ItemFn, ItemMod, LitInt, Pat, Result, Stmt,
+	Type, WhereClause,
 };
 
 mod keywords {
@@ -40,14 +40,19 @@ struct RangeArgs {
 	_gt_token: Gt,
 }
 
+#[derive(Clone)]
+enum ExtrinsicCallDef {
+	Encoded { origin: Expr, expr_call: ExprCall }, // no block, just an extrinsic call
+	Block(ExprBlock),                              /* something in a block, we don't care what
+	                                                * it is */
+}
+
 /// Represents a parsed `#[benchmark]` or `#[instance_banchmark]` item.
 #[derive(Clone)]
 struct BenchmarkDef {
 	params: Vec<ParamDef>,
 	setup_stmts: Vec<Stmt>,
-	extrinsic_call: ExprCall,
-	extrinsic_call_lhs_var_name: Option<Ident>,
-	origin: Expr,
+	extrinsic_call: ExtrinsicCallDef,
 	verify_stmts: Vec<Stmt>,
 	extra: bool,
 	skip_meta: bool,
@@ -109,68 +114,67 @@ impl BenchmarkDef {
 			}
 		}
 		for child in &item_fn.block.stmts {
-			// find #[extrinsic_call] annotation and build up the setup, call, and verify
-			// blocks based on the location of this annotation
-			let mut lhs_var_name: Option<Ident> = None;
-			let mut expr_call: Option<ExprCall> = None;
-			if let Stmt::Semi(Expr::Call(fn_call), _semi) = child {
+			let mut extrinsic_call: Option<ExtrinsicCallDef> = None;
+
+			// #[extrinsic_call] handling for the non-block (single item) case
+			if let Stmt::Semi(Expr::Call(expr_call), _semi) = child {
 				let mut k = 0; // index of attr
-				for attr in &fn_call.attrs {
+				for attr in &expr_call.attrs {
 					if let Some(segment) = attr.path.segments.last() {
 						if let Ok(_) = syn::parse::<keywords::extrinsic_call>(
 							segment.ident.to_token_stream().into(),
 						) {
-							let mut extrinsic_call = fn_call.clone();
-							extrinsic_call.attrs.remove(k); // consume #[extrinsic call]
-							expr_call = Some(extrinsic_call);
+							let mut expr_call = expr_call.clone();
+
+							// consume #[extrinsic_call] tokens
+							expr_call.attrs.remove(k);
+
+							// extract origin from expr_call
+							let origin = match expr_call.args.first() {
+								Some(arg) => arg.clone(),
+								None =>
+									return Err(Error::new(
+										expr_call.args.span(),
+										"Single-item extrinsic calls must specify their origin as the first argument.",
+									)),
+							};
+
+							// remove first arg from expr_call
+							let mut final_args = Punctuated::<Expr, Comma>::new();
+							let args: Vec<&Expr> = expr_call.args.iter().collect();
+							for arg in &args[1..] {
+								final_args.push((*(*arg)).clone());
+							}
+							expr_call.args = final_args;
+
+							extrinsic_call = Some(ExtrinsicCallDef::Encoded { origin, expr_call });
 						}
 					}
 					k += 1;
 				}
-			} else if let Stmt::Local(local) = child {
+			} else if let Stmt::Expr(Expr::Block(block)) = child {
 				let mut k = 0; // index of attr
-				for attr in &local.attrs {
+				for attr in &block.attrs {
 					if let Some(segment) = attr.path.segments.last() {
 						if let Ok(_) = syn::parse::<keywords::extrinsic_call>(
 							segment.ident.to_token_stream().into(),
 						) {
-							if let Some((_, boxed)) = &local.init {
-								if let Expr::Call(call) = &**boxed {
-									// found let-style extrinsic call
-									let mut local = local.clone();
-									local.attrs.remove(k); // consume #[extrinsic_call]
-									expr_call = Some(call.clone());
-									if let Pat::Ident(ident) = local.pat {
-										lhs_var_name = Some(ident.ident.clone());
-									}
-								}
-							}
+							let mut block = block.clone();
+
+							// consume #[extrinsic_call] tokens
+							block.attrs.remove(k);
+
+							extrinsic_call = Some(ExtrinsicCallDef::Block(block));
 						}
 					}
 					k += 1;
 				}
 			}
-			if let Some(mut expr_call) = expr_call {
-				let origin = match expr_call.args.first() {
-					Some(arg) => arg.clone(),
-					None =>
-						return Err(Error::new(
-							expr_call.args.span(),
-							"Extrinsic call must specify its origin as the first argument.",
-						)),
-				};
-				let mut final_args = Punctuated::<Expr, Comma>::new();
-				let args: Vec<&Expr> = expr_call.args.iter().collect();
-				for arg in &args[1..] {
-					final_args.push((*(*arg)).clone());
-				}
-				expr_call.args = final_args;
+			if let Some(extrinsic_call) = extrinsic_call {
 				return Ok(BenchmarkDef {
 					params,
 					setup_stmts: Vec::from(&item_fn.block.stmts[0..i]),
-					extrinsic_call: expr_call,
-					extrinsic_call_lhs_var_name: lhs_var_name,
-					origin,
+					extrinsic_call,
 					verify_stmts: Vec::from(
 						&item_fn.block.stmts[(i + 1)..item_fn.block.stmts.len()],
 					),
@@ -182,7 +186,7 @@ impl BenchmarkDef {
 		}
 		return Err(Error::new(
 			item_fn.block.brace_token.span,
-			"Missing #[extrinsic_call] annotation in benchmark function body.",
+			"No valid #[extrinsic_call] annotation found in benchmark function body.",
 		))
 	}
 }
