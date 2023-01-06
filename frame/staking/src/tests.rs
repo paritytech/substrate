@@ -3582,7 +3582,7 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 		assert_noop!(
 			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 2),
 			// Fail: Double claim
-			Error::<Test>::NothingToClaim.with_weight(err_weight)
+			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
 		);
 		assert_noop!(
 			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, active_era),
@@ -3942,11 +3942,11 @@ fn payout_stakers_handles_basic_errors() {
 		// Can't claim again
 		assert_noop!(
 			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_start_reward_era),
-			Error::<Test>::NothingToClaim.with_weight(err_weight)
+			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
 		);
 		assert_noop!(
 			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_last_reward_era),
-			Error::<Test>::NothingToClaim.with_weight(err_weight)
+			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
 		);
 	});
 }
@@ -4008,7 +4008,7 @@ fn payout_stakers_handles_weight_refund() {
 		// Collect payouts for an era where the validator did not receive any points.
 		let call = TestCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 2 });
 		let result = call.dispatch(RuntimeOrigin::signed(20));
-		assert_err!(result, Error::<Test>::NothingToClaim.with_weight(zero_nom_payouts_weight));
+		assert_err!(result, Error::<Test>::AlreadyClaimed.with_weight(zero_nom_payouts_weight));
 
 		// Reward the validator and its nominators.
 		Staking::reward_by_ids(vec![(11, 1)]);
@@ -5525,7 +5525,7 @@ fn legacy_claimed_reward_checked_before_claim() {
 				// cannot claim rewards for even eras.
 				assert_noop!(
 					Staking::payout_stakers(RuntimeOrigin::signed(4), 3, e),
-					Error::<Test>::NothingToClaim.with_weight(zero_weight)
+					Error::<Test>::AlreadyClaimed.with_weight(zero_weight)
 				);
 			}
 		}
@@ -5581,7 +5581,7 @@ fn reducing_history_depth_abrupt() {
 		// claiming reward does not work anymore
 		assert_noop!(
 			Staking::payout_stakers(RuntimeOrigin::signed(4), 3, current_era - 1),
-			Error::<Test>::NothingToClaim
+			Error::<Test>::AlreadyClaimed
 				.with_weight(<Test as Config>::WeightInfo::payout_stakers_alive_staked(0))
 		);
 
