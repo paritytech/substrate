@@ -86,6 +86,8 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 	}
 
 	fn on_nominator_add(who: &T::AccountId, _prev_nominations: Vec<T::AccountId>) {
+		// NOTE: We ignore the result here, because this method can be called when the nominator is
+		// already in the list, just changing their nominations.
 		let _ =
 			T::VoterList::on_insert(who.clone(), Self::to_vote(Self::slashable_balance_of(who)));
 	}
