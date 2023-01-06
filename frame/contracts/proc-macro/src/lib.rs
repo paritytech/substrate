@@ -30,9 +30,12 @@ use alloc::{
 	vec::Vec,
 };
 use proc_macro::TokenStream;
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned, ToTokens};
-use syn::{parse_macro_input, spanned::Spanned, Data, DeriveInput, FnArg, Ident};
+use syn::{
+	parse_macro_input, punctuated::Punctuated, spanned::Spanned, token::Comma, Data, DeriveInput,
+	FnArg, Ident,
+};
 
 /// This derives `Debug` for a struct where each field must be of some numeric type.
 /// It interprets each field as its represents some weight and formats it as times so that
@@ -158,6 +161,7 @@ struct HostFn {
 	name: String,
 	returns: HostFnReturn,
 	is_stable: bool,
+	alias_to: Option<String>,
 }
 
 enum HostFnReturn {
@@ -187,7 +191,7 @@ impl ToTokens for HostFn {
 }
 
 impl HostFn {
-	pub fn try_from(item: syn::ItemFn) -> syn::Result<Self> {
+	pub fn try_from(mut item: syn::ItemFn) -> syn::Result<Self> {
 		let err = |span, msg| {
 			let msg = format!("Invalid host function definition. {}", msg);
 			syn::Error::new(span, msg)
@@ -198,10 +202,10 @@ impl HostFn {
 			"only #[version(<u8>)], #[unstable] and #[prefixed_alias] attributes are allowed.";
 		let span = item.span();
 		let mut attrs = item.attrs.clone();
-		attrs.retain(|a| !(a.path.is_ident("doc") || a.path.is_ident("prefixed_alias")));
-		let name = item.sig.ident.to_string();
+		attrs.retain(|a| !a.path.is_ident("doc"));
 		let mut maybe_module = None;
 		let mut is_stable = true;
+		let mut alias_to = None;
 		while let Some(attr) = attrs.pop() {
 			let ident = attr.path.get_ident().ok_or(err(span, msg))?.to_string();
 			match ident.as_str() {
@@ -219,9 +223,17 @@ impl HostFn {
 					}
 					is_stable = false;
 				},
+				"prefixed_alias" => {
+					alias_to = Some(item.sig.ident.to_string());
+					item.sig.ident = syn::Ident::new(
+						&format!("seal_{}", &item.sig.ident.to_string()),
+						item.sig.ident.span(),
+					);
+				},
 				_ => return Err(err(span, msg)),
 			}
 		}
+		let name = item.sig.ident.to_string();
 
 		// process arguments: The first and second arg are treated differently (ctx, memory)
 		// they must exist and be `ctx: _` and `memory: _`.
@@ -317,6 +329,7 @@ impl HostFn {
 							name,
 							returns,
 							is_stable,
+							alias_to,
 						})
 					},
 					_ => Err(err(span, &msg)),
@@ -348,19 +361,15 @@ impl EnvDef {
 			.iter()
 			.filter_map(extract_fn)
 			.filter(|i| i.attrs.iter().any(selector))
-			.map(|mut i| {
-				i.attrs.retain(|i| !selector(i));
-				i.sig.ident = syn::Ident::new(
-					&format!("seal_{}", &i.sig.ident.to_string()),
-					i.sig.ident.span(),
-				);
-				i
-			})
 			.map(|i| HostFn::try_from(i));
 
 		let host_funcs = items
 			.iter()
 			.filter_map(extract_fn)
+			.map(|mut i| {
+				i.attrs.retain(|i| !selector(i));
+				i
+			})
 			.map(|i| HostFn::try_from(i))
 			.chain(aliases)
 			.collect::<Result<Vec<_>, _>>()?;
@@ -383,16 +392,111 @@ fn is_valid_special_arg(idx: usize, arg: &FnArg) -> bool {
 	matches!(*pat.ty, syn::Type::Infer(_))
 }
 
+/// Expands documentation for host functions.
+fn expand_docs(def: &mut EnvDef) -> TokenStream2 {
+	let mut modules = def.host_funcs.iter().map(|f| f.module.clone()).collect::<Vec<_>>();
+	modules.sort();
+	modules.dedup();
+
+	let doc_selector = |a: &syn::Attribute| a.path.is_ident("doc");
+	let docs = modules.iter().map(|m| {
+		let funcs = def.host_funcs.iter_mut().map(|f| {
+			if *m == f.module {
+				// Remove auxiliary args: `ctx: _` and `memory: _`
+				f.item.sig.inputs = f
+					.item
+					.sig
+					.inputs
+					.iter()
+					.skip(2)
+					.map(|p| p.clone())
+					.collect::<Punctuated<FnArg, Comma>>();
+				let func_decl = f.item.sig.to_token_stream();
+				let func_doc = if let Some(origin_fn) = &f.alias_to {
+					let alias_doc = format!(
+						"This is just an alias function to [`{0}()`][`Self::{0}`] with backwards-compatible prefixed identifier.",
+						origin_fn,
+					);
+					quote! { #[doc = #alias_doc] }
+
+				} else {
+					let func_docs = f.item.attrs.iter().filter(|a| doc_selector(a)).map(|d| {
+						let docs = d.to_token_stream();
+						quote! { #docs }
+					});
+					let unstable_notice = if !f.is_stable {
+						let warning = "\n # Unstable\n\n \
+									    This function is unstable and it is a subject to change (or removal) in the future.\n \
+									    Do not deploy a contract using it to a production chain.";
+						quote! { #[doc = #warning] }
+					} else {
+						quote! {}
+					};
+					quote! {
+						#( #func_docs )*
+						#unstable_notice
+					}
+				};
+				quote! {
+					#func_doc
+					#func_decl;
+				}
+			} else {
+				quote! {}
+			}
+		});
+
+		let module = Ident::new(m, Span::call_site());
+		let module_doc = format!(
+			"Documentation of the API available to contracts by importing `{}` WASM module.",
+			module
+		);
+
+		quote! {
+			#[doc = #module_doc]
+			pub mod #module {
+				use crate::wasm::runtime::{TrapReason, ReturnCode};
+				/// Every function in this trait represents (at least) one function that can be imported by a contract.
+				///
+				/// The function's identifier is to be set as the name in the import definition.
+				/// Where it is specifically indicated, an _alias_ function having `seal_`-prefixed identifier and
+				/// just the same signature and body, is also available (for backwards-compatibility purposes).
+				pub trait Api {
+					#( #funcs )*
+				}
+			}
+		}
+	});
+	quote! {
+		  #( #docs )*
+	}
+}
+
 /// Expands environment definiton.
 /// Should generate source code for:
 ///  - implementations of the host functions to be added to the wasm runtime environment (see
 ///    `expand_impls()`).
-fn expand_env(def: &mut EnvDef) -> TokenStream2 {
+fn expand_env(def: &mut EnvDef, docs: bool) -> TokenStream2 {
 	let impls = expand_impls(def);
+	let docs = docs.then_some(expand_docs(def)).unwrap_or(TokenStream2::new());
 
 	quote! {
 		pub struct Env;
 		#impls
+		/// Contains the documentation of the API available to contracts.
+		///
+		/// In order to generate this documentation, pass `doc` attribute to the [`#[define_env]`][`macro@define_env`] macro:
+		/// `#[define_env(doc)]`, and then run `cargo doc`.
+		///
+		/// This module is not meant to be used by any code. Rather, it is meant to be consumed by humans through rustdoc.
+		///
+		/// Every function described in this module's sub module's traits uses this sub module's identifier
+		/// as its imported module name. The identifier of the function is the function's imported name.
+		/// According to the [WASM spec of imports](https://webassembly.github.io/spec/core/text/modules.html#text-import).
+		#[cfg(doc)]
+		pub mod api_doc {
+			#docs
+		}
 	}
 }
 
@@ -579,10 +683,25 @@ fn expand_functions(
 ///
 /// The implementation on `()` can be used in places where no `Ext` exists, yet. This is useful
 /// when only checking whether a code can be instantiated without actually executing any code.
+///
+/// # Generating Documentation
+///
+/// Passing `doc` attribute to the macro (like `#[define_env(doc)]`) will make it also expand
+/// additional `pallet_contracts::api_doc::seal0`, `pallet_contracts::api_doc::seal1`,
+/// `...` modules each having its `Api` trait containing functions holding documentation for every
+/// host function defined by the macro.
+///
+/// To build up these docs, run:
+///
+/// ```nocompile
+/// cargo doc
+/// ```
 #[proc_macro_attribute]
 pub fn define_env(attr: TokenStream, item: TokenStream) -> TokenStream {
-	if !attr.is_empty() {
-		let msg = "Invalid `define_env` attribute macro: expected no attributes: `#[define_env]`.";
+	if !attr.is_empty() && !(attr.to_string() == "doc".to_string()) {
+		let msg = r#"Invalid `define_env` attribute macro: expected either no attributes or a single `doc` attibute:
+					 - `#[define_env]`
+					 - `#[define_env(doc)]`"#;
 		let span = TokenStream2::from(attr).span();
 		return syn::Error::new(span, msg).to_compile_error().into()
 	}
@@ -590,7 +709,7 @@ pub fn define_env(attr: TokenStream, item: TokenStream) -> TokenStream {
 	let item = syn::parse_macro_input!(item as syn::ItemMod);
 
 	match EnvDef::try_from(item) {
-		Ok(mut def) => expand_env(&mut def).into(),
+		Ok(mut def) => expand_env(&mut def, !attr.is_empty()).into(),
 		Err(e) => e.to_compile_error().into(),
 	}
 }
