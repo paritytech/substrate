@@ -500,11 +500,6 @@ pub fn instance_benchmark(attrs: TokenStream, tokens: TokenStream) -> TokenStrea
 	benchmark::benchmark(attrs, tokens, true)
 }
 
-#[proc_macro]
-pub fn where_clause(tokens: TokenStream) -> TokenStream {
-	benchmark::where_clause(tokens)
-}
-
 /// Execute the annotated function in a new storage transaction.
 ///
 /// The return type of the annotated function must be `Result`. All changes to storage performed

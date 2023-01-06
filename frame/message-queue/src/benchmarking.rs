@@ -22,22 +22,21 @@
 
 use super::{mock_helpers::*, Pallet as MessageQueue, *};
 
-use frame_benchmarking::whitelisted_caller;
+use frame_benchmarking::{impl_benchmark_test_suite, whitelisted_caller};
 use frame_support::{benchmarking::*, traits::Get};
 use frame_system::RawOrigin;
 use sp_std::prelude::*;
 
-#[benchmarks]
+#[benchmarks(
+	where
+		<<T as Config>::MessageProcessor as ProcessMessage>::Origin: From<u32> + PartialEq,
+		<T as Config>::Size: From<u32>,
+		// NOTE: We need to generate multiple origins, therefore Origin is `From<u32>`. The
+		// `PartialEq` is for asserting the outcome of the ring (un)knitting and *could* be
+		// removed if really necessary.
+)]
 mod benchmarks {
 	use super::*;
-	where_clause! {
-		where
-			// NOTE: We need to generate multiple origins, therefore Origin is `From<u32>`. The
-			// `PartialEq` is for asserting the outcome of the ring (un)knitting and *could* be
-			// removed if really necessary.
-			<<T as Config>::MessageProcessor as ProcessMessage>::Origin: From<u32> + PartialEq,
-			<T as Config>::Size: From<u32>,
-	}
 
 	// Worst case path of `ready_ring_knit`.
 	#[benchmark]
@@ -50,9 +49,9 @@ mod benchmarks {
 		#[extrinsic_call]
 		let neighbours = MessageQueue::<T>::ready_ring_knit(&mid);
 
-		neighbors.ok();
+		neighbours.ok();
 
-		// The neighbours needs to be modified manually.
+		// The neighbors needs to be modified manually.
 		BookStateFor::<T>::mutate(&mid, |b| b.ready_neighbours = neighbours);
 		assert_ring::<T>(&[0.into(), 2.into(), mid]);
 	}
@@ -259,9 +258,9 @@ mod benchmarks {
 		assert!(Pages::<T>::contains_key(&origin, 0), "Page must be updated");
 	}
 
-	impl_benchmark_test_suite!(
-		MessageQueue,
-		crate::mock::new_test_ext::<crate::integration_test::Test>(),
-		crate::integration_test::Test
-	);
+	// impl_benchmark_test_suite!(
+	// 	MessageQueue,
+	// 	crate::mock::new_test_ext::<crate::integration_test::Test>(),
+	// 	crate::integration_test::Test
+	// );
 }

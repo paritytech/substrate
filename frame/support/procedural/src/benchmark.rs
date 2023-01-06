@@ -3,6 +3,7 @@ use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens};
 use syn::{
+	parse::Nothing,
 	parse_macro_input,
 	punctuated::Punctuated,
 	spanned::Spanned,
@@ -186,8 +187,12 @@ impl BenchmarkDef {
 	}
 }
 
-pub fn benchmarks(_attrs: TokenStream, tokens: TokenStream, instance: bool) -> TokenStream {
+pub fn benchmarks(attrs: TokenStream, tokens: TokenStream, instance: bool) -> TokenStream {
 	let module = parse_macro_input!(tokens as ItemMod);
+	let where_clause = match syn::parse::<Nothing>(attrs.clone()) {
+		Ok(_) => quote!(),
+		Err(_) => parse_macro_input!(attrs as WhereClause).predicates.to_token_stream(),
+	};
 	let mod_vis = module.vis;
 	let mod_name = module.ident;
 	let mut expanded_stmts: Vec<TokenStream2> = Vec::new();
@@ -218,8 +223,14 @@ pub fn benchmarks(_attrs: TokenStream, tokens: TokenStream, instance: bool) -> T
 					Ok(def) => def,
 					Err(err) => return err.to_compile_error().into(),
 				};
-				let expanded =
-					expand_benchmark(benchmark_def.clone(), &item_fn.sig.ident, instance);
+
+				// expand benchmark
+				let expanded = expand_benchmark(
+					benchmark_def.clone(),
+					&item_fn.sig.ident,
+					instance,
+					where_clause.clone(),
+				);
 
 				// record benchmark name
 				let name = item_fn.sig.ident;
@@ -285,7 +296,7 @@ pub fn benchmarks(_attrs: TokenStream, tokens: TokenStream, instance: bool) -> T
 				*
 			}
 
-			impl<#full_generics> #krate::BenchmarkingSetup<#generics> for SelectedBenchmark {
+			impl<#full_generics> #krate::BenchmarkingSetup<#generics> for SelectedBenchmark where #where_clause {
 				fn components(&self) -> #krate::Vec<(#krate::BenchmarkParameter, u32, u32)> {
 					match self {
 						#(
@@ -309,8 +320,7 @@ pub fn benchmarks(_attrs: TokenStream, tokens: TokenStream, instance: bool) -> T
 						#(
 							Self::#benchmark_names => {
 								<#benchmark_names as #krate::BenchmarkingSetup<
-									T,
-									I,
+									#generics
 								>>::instance(&#benchmark_names, components, verify)
 							}
 						)
@@ -320,8 +330,7 @@ pub fn benchmarks(_attrs: TokenStream, tokens: TokenStream, instance: bool) -> T
 			}
 			#[cfg(any(feature = "runtime-benchmarks", test))]
 			impl<#full_generics> #krate::Benchmarking for Pallet<#generics>
-			where
-				T: frame_system::Config,
+			where T: frame_system::Config, #where_clause
 			{
 				fn benchmarks(
 					extra: bool,
@@ -467,7 +476,7 @@ pub fn benchmarks(_attrs: TokenStream, tokens: TokenStream, instance: bool) -> T
 			}
 
 			#[cfg(test)]
-			impl<#full_generics> Pallet<#generics> where T: ::frame_system::Config {
+			impl<#full_generics> Pallet<#generics> where T: ::frame_system::Config, #where_clause {
 				/// Test a particular benchmark by name.
 				///
 				/// This isn't called `test_benchmark_by_name` just in case some end-user eventually
@@ -531,7 +540,12 @@ impl UnrolledParams {
 	}
 }
 
-fn expand_benchmark(benchmark_def: BenchmarkDef, name: &Ident, is_instance: bool) -> TokenStream2 {
+fn expand_benchmark(
+	benchmark_def: BenchmarkDef,
+	name: &Ident,
+	is_instance: bool,
+	where_clause: TokenStream2,
+) -> TokenStream2 {
 	// set up variables needed during quoting
 	let krate = quote!(::frame_benchmarking);
 	let home = quote!(::frame_support::benchmarking);
@@ -570,7 +584,10 @@ fn expand_benchmark(benchmark_def: BenchmarkDef, name: &Ident, is_instance: bool
 	} // else handle error?
 
 	let final_call = match benchmark_def.extrinsic_call_lhs_var_name {
-		Some(var) => quote!(let #var = Call::<#generics>::#extrinsic_call;),
+		Some(var) => quote! {
+			let #var = Call::<#generics>::#extrinsic_call;
+			let __call = #var;
+		},
 		None => quote!(let __call = Call::<#generics>::#extrinsic_call;),
 	};
 
@@ -634,7 +651,7 @@ fn expand_benchmark(benchmark_def: BenchmarkDef, name: &Ident, is_instance: bool
 		}
 
 		#[cfg(test)]
-		impl<#full_generics> Pallet<#generics> where T: ::frame_system::Config {
+		impl<#full_generics> Pallet<#generics> where T: ::frame_system::Config, #where_clause {
 			#[allow(unused)]
 			fn #test_ident() -> Result<(), #krate::BenchmarkError> {
 				let selected_benchmark = SelectedBenchmark::#name;
@@ -727,10 +744,5 @@ pub fn benchmark(_attrs: TokenStream, tokens: TokenStream, is_instance: bool) ->
 		Err(err) => return err.to_compile_error().into(),
 	};
 
-	expand_benchmark(benchmark_def, &item_fn.sig.ident, is_instance).into()
-}
-
-pub fn where_clause(tokens: TokenStream) -> TokenStream {
-	let _clause = parse_macro_input!(tokens as WhereClause);
-	quote!().into()
+	expand_benchmark(benchmark_def, &item_fn.sig.ident, is_instance, quote!()).into()
 }
