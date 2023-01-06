@@ -156,7 +156,7 @@
 #[macro_use]
 mod tests;
 mod benchmarking;
-mod fungible_impl;
+mod impl_fungible;
 mod impl_currency;
 pub mod migration;
 mod tests_composite;
@@ -178,10 +178,9 @@ use frame_support::{
 			KeepAlive::{CanKill, Keep},
 			WithdrawConsequence,
 		},
-		Currency, Defensive, DefensiveSaturating, ExistenceRequirement,
-		ExistenceRequirement::AllowDeath,
-		Get, Imbalance, LockIdentifier, LockableCurrency, NamedReservableCurrency, OnUnbalanced,
-		ReservableCurrency, SignedImbalance, StoredMap, TryDrop, WithdrawReasons,
+		Currency, Defensive, ExistenceRequirement,
+		Get, Imbalance, NamedReservableCurrency, OnUnbalanced,
+		ReservableCurrency, StoredMap,
 	},
 	WeakBoundedVec,
 };
@@ -195,8 +194,8 @@ use sp_runtime::{
 	},
 	ArithmeticError, DispatchError, FixedPointOperand, RuntimeDebug,
 };
-use sp_std::{cmp, fmt::Debug, mem, ops::BitOr, prelude::*, result};
-pub use types::{AccountData, BalanceLock, IdAmount, Reasons, ReserveData};
+use sp_std::{cmp, fmt::Debug, mem, prelude::*, result};
+pub use types::{AccountData, BalanceLock, IdAmount, Reasons, ReserveData, DustCleaner};
 pub use weights::WeightInfo;
 
 pub use pallet::*;
@@ -335,6 +334,8 @@ pub mod pallet {
 		DeadAccount,
 		/// Number of named reserves exceed MaxReserves
 		TooManyReserves,
+		/// Number of named reserves exceed MaxHolds
+		TooManyHolds,
 	}
 
 	/// The total units issued in the system.
@@ -417,7 +418,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		WeakBoundedVec<IdAmount<T::FreezeIdentifier, T::Balance>, T::MaxFreezes>,
+		BoundedVec<IdAmount<T::FreezeIdentifier, T::Balance>, T::MaxFreezes>,
 		ValueQuery,
 	>;
 
@@ -464,6 +465,23 @@ pub mod pallet {
 				assert!(T::AccountStore::insert(who, AccountData { free, ..Default::default() })
 					.is_ok());
 			}
+		}
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config<I>, I: 'static> GenesisConfig<T, I> {
+		/// Direct implementation of `GenesisBuild::build_storage`.
+		///
+		/// Kept in order not to break dependency.
+		pub fn build_storage(&self) -> Result<sp_runtime::Storage, String> {
+			<Self as GenesisBuild<T, I>>::build_storage(self)
+		}
+
+		/// Direct implementation of `GenesisBuild::assimilate_storage`.
+		///
+		/// Kept in order not to break dependency.
+		pub fn assimilate_storage(&self, storage: &mut sp_runtime::Storage) -> Result<(), String> {
+			<Self as GenesisBuild<T, I>>::assimilate_storage(self, storage)
 		}
 	}
 
@@ -647,36 +665,28 @@ pub mod pallet {
 	}
 }
 
-#[cfg(feature = "std")]
-impl<T: Config<I>, I: 'static> GenesisConfig<T, I> {
-	/// Direct implementation of `GenesisBuild::build_storage`.
-	///
-	/// Kept in order not to break dependency.
-	pub fn build_storage(&self) -> Result<sp_runtime::Storage, String> {
-		<Self as GenesisBuild<T, I>>::build_storage(self)
-	}
-
-	/// Direct implementation of `GenesisBuild::assimilate_storage`.
-	///
-	/// Kept in order not to break dependency.
-	pub fn assimilate_storage(&self, storage: &mut sp_runtime::Storage) -> Result<(), String> {
-		<Self as GenesisBuild<T, I>>::assimilate_storage(self, storage)
-	}
-}
-pub struct DustCleaner<T: Config<I>, I: 'static = ()>(
-	Option<(T::AccountId, NegativeImbalance<T, I>)>,
-);
-
-impl<T: Config<I>, I: 'static> Drop for DustCleaner<T, I> {
-	fn drop(&mut self) {
-		if let Some((who, dust)) = self.0.take() {
-			Pallet::<T, I>::deposit_event(Event::DustLost { account: who, amount: dust.peek() });
-			T::DustRemoval::on_unbalanced(dust);
-		}
-	}
-}
-
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	/// Ensure the account `who` is using the new logic.
+	pub fn ensure_upgraded(who: &T::AccountId) {
+		let mut a = Self::account(who);
+		if a.flags.is_new_logic() {
+			return
+		}
+		a.flags.set_new_logic();
+		if !a.reserved.is_zero() {
+			if !system::Pallet::<T>::can_inc_consumer(who) {
+				// Gah!! We have a non-zero reserve balance but no provider refs :(
+				// This shouldn't practically happen, but we need a failsafe anyway: let's give
+				// them enough for an ED.
+				a.free = a.free.min(T::ExistentialDeposit::get());
+				system::Pallet::<T>::inc_providers(who);
+			}
+			let _ = system::Pallet::<T>::inc_consumers(who).defensive();
+		}
+		// Should never fail - we're only setting a bit.
+		let _ = Self::mutate_account(who, |account| *account = a);
+	}
+
 	/// Get the free balance of an account.
 	pub fn free_balance(who: impl sp_std::borrow::Borrow<T::AccountId>) -> T::Balance {
 		Self::account(who.borrow()).free
@@ -850,10 +860,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				A runtime configuration adjustment may be needed."
 			);
 		}
+		let freezes = Freezes::<T, I>::get(who);
 		// No way this can fail since we do not alter the existential balances.
 		let res = Self::mutate_account(who, |b| {
 			b.frozen = Zero::zero();
 			for l in locks.iter() {
+				b.frozen = b.frozen.max(l.amount);
+			}
+			for l in freezes.iter() {
 				b.frozen = b.frozen.max(l.amount);
 			}
 		});
