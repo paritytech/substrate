@@ -30,6 +30,7 @@ use frame_support::{
 	},
 	weights::Weight,
 };
+use frame_support::traits::Len;
 use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use pallet_session::historical;
 use sp_runtime::{
@@ -566,17 +567,22 @@ impl<T: Config> Pallet<T> {
 		let mut elected_stashes = Vec::with_capacity(exposures.len());
 		exposures.into_iter().for_each(|(stash, exposure)| {
 			// build elected stash
-			elected_stashes.push(stash);
+			elected_stashes.push(stash.clone());
 
 			total_stake = total_stake.saturating_add(exposure.total);
 			<ErasStakers<T>>::insert(new_planned_era, &stash, &exposure);
 
 			// store paged exposure
-			Self::get_paged_exposure(exposure).iter().enumerate().for_each(|page, exposure| {
-				<PagedErasStakers<T>>::insert((new_planned_era, &stash, page), &exposure);
-			});
+			Self::get_paged_exposure(&exposure, T::ExposurePageSize::get() as usize).iter().enumerate().for_each(
+				|(page, paged_exposure)| {
+					<PagedErasStakers<T>>::insert(
+						(new_planned_era, &stash, page as u32),
+						&paged_exposure,
+					);
+				},
+			);
 
-			// fixme: get rid of clipped exposure someday
+			// fixme: get rid of clipped exposure
 			let mut exposure_clipped = exposure;
 			let clipped_max_len = T::MaxNominatorRewardedPerValidator::get() as usize;
 			if exposure_clipped.others.len() > clipped_max_len {
@@ -611,16 +617,33 @@ impl<T: Config> Pallet<T> {
 		elected_stashes
 	}
 
+	/// Takes a full set of exposure and splits it into `page_size` individual exposures.
+	fn get_paged_exposure(
+		exposure: &Exposure<T::AccountId, BalanceOf<T>>,
+		page_size: usize,
+	) -> Vec<Exposure<T::AccountId, BalanceOf<T>>> {
+		let individual_chunks = exposure.others.chunks(page_size);
+		let mut paged_exposure: Vec<Exposure<T::AccountId, BalanceOf<T>>> = Vec::with_capacity(Len::len(&individual_chunks));
 
-	fn get_paged_exposure<T: Config>(
-		exposure: Exposure<T::AccountId, BalanceOf<T>>,
-	) -> BoundedVec<Exposure<T::AccountId, BalanceOf<T>>, T::ExposureMaxPages> {
-		let page_size = T::ExposurePageSize::get();
-		// clip exposure if exceeds max_pages
-		let max_pages = T::ExposureMaxPages::get();
+		// own balance that has not been accounted for in the paged exposure
+		let mut own_left = exposure.own;
 
-		todo!()
+		for chunk in individual_chunks {
+			let own = own_left;
+			let mut total: BalanceOf<T> = own;
+			for individual in chunk.iter() {
+				total = total.saturating_add(individual.value);
+			}
+
+			paged_exposure.push(Exposure { total, own, others: chunk.into() });
+
+			// subtract own that has been accounted
+			own_left = own_left.saturating_sub(own);
+		}
+
+		paged_exposure
 	}
+
 	/// Consume a set of [`BoundedSupports`] from [`sp_npos_elections`] and collect them into a
 	/// [`Exposure`].
 	fn collect_exposures(

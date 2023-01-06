@@ -213,9 +213,6 @@ pub mod pallet {
 		#[pallet::constant]
 		type ExposurePageSize: Get<u32>;
 
-		#[pallet::constant]
-		type ExposureMaxPages: Get<u32>;
-
 		/// The fraction of the validator set that is safe to be offending.
 		/// After the threshold is reached a new era will be forced.
 		type OffendingValidatorsThreshold: Get<Perbill>;
