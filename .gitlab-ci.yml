@@ -219,7 +219,7 @@ default:
 
 .manual-crate-publishing-pipeline:
   rules:
-    - if: $CI_COMMIT_REF_NAME == "master" && $CI_JOB_MANUAL == "true" && $PIPELINE == "crate-publishing"
+    - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "web" && $PIPELINE == "crate-publishing"
 
 .crates-publishing-template:
   stage:                           test
