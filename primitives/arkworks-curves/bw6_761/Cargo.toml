@@ -16,8 +16,8 @@ ark-std = { version = "0.4.0-alpha", default-features = false }
 ark-bw6-761 = { git = "https://github.com/arkworks-rs/curves", default-features = false }
 ark-serialize = { git = "https://github.com/arkworks-rs/algebra", branch = "releases", default-features = false }
 sp-ark-bls12-377 = { version = "0.4.0-alpha", path = "../bls12_377", default-features = false, features = [ "base_field" ] }
-ark-models = { path = "../../arkworks-models" }
-sp-io = { path = "../../io" }
+ark-models = { path = "../../arkworks-models", default-features = false }
+sp-io = { path = "../../io", default-features = false }
 
 [dev-dependencies]
 ark-algebra-test-templates = { git = "https://github.com/arkworks-rs/algebra", branch = "releases", default-features = false }
@@ -25,5 +25,5 @@ ark-ec = { git = "https://github.com/arkworks-rs/algebra", branch = "releases", 
 
 [features]
 default = []
-std = [ "ark-std/std", "ark-ff/std", "ark-ec/std", "sp-ark-bls12-377/std", "ark-bw6-761/std" ]
+std = [ "ark-std/std", "ark-ff/std", "ark-ec/std", "sp-ark-bls12-377/std", "ark-bw6-761/std", "ark-models/std", "sp-io/std" ]
 

@@ -16,8 +16,8 @@ ark-r1cs-std = { version="0.4.0-alpha", default-features = false, optional = tru
 ark-std = { version = "0.4.0-alpha", default-features = false }
 ark-serialize = { version = "0.4.0-alpha", default-features = false }
 ark-bls12-377 = { git = "https://github.com/arkworks-rs/curves", default-features = false }
-ark-models = { path = "../../arkworks-models" }
-sp-io = { path = "../../io" }
+ark-models = { path = "../../arkworks-models", default-features = false }
+sp-io = { path = "../../io", default-features = false }
 
 [dev-dependencies]
 ark-relations = { git = "https://github.com/arkworks-rs/snark", default-features = false }
@@ -28,7 +28,7 @@ ark-curve-constraint-tests = { path = "../curve-constraint-tests", default-featu
 
 [features]
 default = [ "curve" ]
-std = [ "ark-std/std", "ark-ff/std", "ark-models/std", "ark-bls12-377/std" ]
+std = [ "ark-std/std", "ark-ff/std", "ark-models/std", "ark-bls12-377/std", "sp-io/std" ]
 
 curve = [ "scalar_field", "base_field" ]
 scalar_field = []
