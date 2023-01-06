@@ -382,89 +382,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ark-sub-bls12-377"
-version = "0.4.0-alpha.1"
-dependencies = [
- "ark-algebra-test-templates",
- "ark-bls12-377",
- "ark-curve-constraint-tests",
- "ark-ec",
- "ark-ff",
- "ark-models",
- "ark-r1cs-std",
- "ark-relations 0.4.0-alpha.1 (git+https://github.com/arkworks-rs/snark)",
- "ark-serialize",
- "ark-std",
- "sp-io",
-]
-
-[[package]]
-name = "ark-sub-bls12-381"
-version = "0.4.0"
-dependencies = [
- "ark-algebra-test-templates",
- "ark-bls12-381",
- "ark-ec",
- "ark-ff",
- "ark-models",
- "ark-serialize",
- "ark-std",
- "hex",
- "sp-io",
-]
-
-[[package]]
-name = "ark-sub-bw6-761"
-version = "0.4.0-alpha.1"
-dependencies = [
- "ark-algebra-test-templates",
- "ark-bw6-761",
- "ark-ec",
- "ark-ff",
- "ark-models",
- "ark-serialize",
- "ark-std",
- "ark-sub-bls12-377",
- "sp-io",
-]
-
-[[package]]
-name = "ark-sub-ed-on-bls12-377"
-version = "0.4.0-alpha.1"
-dependencies = [
- "ark-algebra-test-templates",
- "ark-curve-constraint-tests",
- "ark-ec",
- "ark-ed-on-bls12-377",
- "ark-ff",
- "ark-models",
- "ark-r1cs-std",
- "ark-relations 0.4.0-alpha.1 (git+https://github.com/arkworks-rs/snark)",
- "ark-serialize",
- "ark-std",
- "ark-sub-bls12-377",
- "sp-io",
-]
-
-[[package]]
-name = "ark-sub-ed-on-bls12-381"
-version = "0.4.0-alpha.1"
-dependencies = [
- "ark-algebra-test-templates",
- "ark-curve-constraint-tests",
- "ark-ec",
- "ark-ed-on-bls12-381",
- "ark-ff",
- "ark-models",
- "ark-r1cs-std",
- "ark-relations 0.4.0-alpha.1 (git+https://github.com/arkworks-rs/snark)",
- "ark-serialize",
- "ark-std",
- "ark-sub-bls12-381",
- "sp-io",
-]
-
-[[package]]
 name = "array-bytes"
 version = "4.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9413,6 +9330,89 @@ dependencies = [
  "num-bigint",
  "primitive-types",
  "sp-arithmetic",
+]
+
+[[package]]
+name = "sp-ark-bls12-377"
+version = "0.4.0-alpha.1"
+dependencies = [
+ "ark-algebra-test-templates",
+ "ark-bls12-377",
+ "ark-curve-constraint-tests",
+ "ark-ec",
+ "ark-ff",
+ "ark-models",
+ "ark-r1cs-std",
+ "ark-relations 0.4.0-alpha.1 (git+https://github.com/arkworks-rs/snark)",
+ "ark-serialize",
+ "ark-std",
+ "sp-io",
+]
+
+[[package]]
+name = "sp-ark-bls12-381"
+version = "0.4.0"
+dependencies = [
+ "ark-algebra-test-templates",
+ "ark-bls12-381",
+ "ark-ec",
+ "ark-ff",
+ "ark-models",
+ "ark-serialize",
+ "ark-std",
+ "hex",
+ "sp-io",
+]
+
+[[package]]
+name = "sp-ark-bw6-761"
+version = "0.4.0-alpha.1"
+dependencies = [
+ "ark-algebra-test-templates",
+ "ark-bw6-761",
+ "ark-ec",
+ "ark-ff",
+ "ark-models",
+ "ark-serialize",
+ "ark-std",
+ "sp-ark-bls12-377",
+ "sp-io",
+]
+
+[[package]]
+name = "sp-ark-ed-on-bls12-377"
+version = "0.4.0-alpha.1"
+dependencies = [
+ "ark-algebra-test-templates",
+ "ark-curve-constraint-tests",
+ "ark-ec",
+ "ark-ed-on-bls12-377",
+ "ark-ff",
+ "ark-models",
+ "ark-r1cs-std",
+ "ark-relations 0.4.0-alpha.1 (git+https://github.com/arkworks-rs/snark)",
+ "ark-serialize",
+ "ark-std",
+ "sp-ark-bls12-377",
+ "sp-io",
+]
+
+[[package]]
+name = "sp-ark-ed-on-bls12-381"
+version = "0.4.0-alpha.1"
+dependencies = [
+ "ark-algebra-test-templates",
+ "ark-curve-constraint-tests",
+ "ark-ec",
+ "ark-ed-on-bls12-381",
+ "ark-ff",
+ "ark-models",
+ "ark-r1cs-std",
+ "ark-relations 0.4.0-alpha.1 (git+https://github.com/arkworks-rs/snark)",
+ "ark-serialize",
+ "ark-std",
+ "sp-ark-bls12-381",
+ "sp-io",
 ]
 
 [[package]]
