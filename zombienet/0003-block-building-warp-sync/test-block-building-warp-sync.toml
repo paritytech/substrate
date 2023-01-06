@@ -7,7 +7,7 @@ default_image = "{{ZOMBIENET_INTEGRATION_TEST_IMAGE}}"
 default_command = "/home/miszka/parity/07-fs-monitor/substrate/target/release/substrate"
 
 chain = "gen-db"
-chain_spec_path = "zombienet/0001-basic-warp-sync/chain-spec.json"
+chain_spec_path = "zombienet/0003-block-building-warp-sync/chain-spec.json"
 
   [[relaychain.nodes]]
   name = "alice"
