@@ -198,9 +198,6 @@ update-node-template:
 
 .publish-crates-template:
   stage:                           publish
-  needs:
-    - job:                         publish-crates-locally
-      artifacts:                   false
   extends:                         .crates-publishing-template
   # We don't want multiple jobs racing to publish crates as it's redundant and they might overwrite
   # the releases of one another. Use resource_group to ensure that at most one instance of this job
@@ -231,6 +228,9 @@ publish-crates:
   extends:
     - .publish-crates-template
     - .scheduled-crate-publishing-pipeline
+  needs:
+    - job:                         publish-crates-locally
+      artifacts:                   false
 
 publish-crates-manual:
   extends:                         .publish-crates-template
