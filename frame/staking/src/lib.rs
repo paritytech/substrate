@@ -734,7 +734,7 @@ impl<AccountId, Balance: Default + HasCompact> Default for Exposure<AccountId, B
 }
 
 impl<AccountId: Clone, Balance: Default + HasCompact + sp_runtime::traits::AtLeast32BitUnsigned + Copy> Exposure<AccountId, Balance> {
-	fn paged(&self, page_size: usize) -> Vec<Self> {
+	fn in_chunks_of(&self, page_size: usize) -> Vec<Self> {
 		let individual_chunks = self.others.chunks(page_size);
 		let mut paged_exposure: Vec<Self> = Vec::with_capacity(individual_chunks.len());
 

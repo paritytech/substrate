@@ -573,7 +573,7 @@ impl<T: Config> Pallet<T> {
 
 			// store paged exposure
 			exposure
-				.paged(T::ExposurePageSize::get() as usize)
+				.in_chunks_of(T::ExposurePageSize::get() as usize)
 				.iter()
 				.enumerate()
 				.for_each(|(page, paged_exposure)| {
