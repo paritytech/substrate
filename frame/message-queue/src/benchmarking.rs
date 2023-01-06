@@ -45,19 +45,19 @@ mod benchmarks {
 		build_ring::<T>(&[0.into(), mid.clone(), 2.into()]);
 		unknit::<T>(&mid);
 		assert_ring::<T>(&[0.into(), 2.into()]);
+		let mut neighbours = None;
 
 		#[extrinsic_call]
-		let neighbours = MessageQueue::<T>::ready_ring_knit(&mid);
+		{
+			neighbours = MessageQueue::<T>::ready_ring_knit(&mid).ok();
+		}
 
-		neighbours.ok();
-
-		// The neighbors needs to be modified manually.
+		// The neighbours needs to be modified manually.
 		BookStateFor::<T>::mutate(&mid, |b| b.ready_neighbours = neighbours);
 		assert_ring::<T>(&[0.into(), 2.into(), mid]);
 	}
 
 	// Worst case path of `ready_ring_unknit`.
-	#[benchmark]
 	fn ready_ring_unknit() {
 		build_ring::<T>(&[0.into(), 1.into(), 2.into()]);
 		assert_ring::<T>(&[0.into(), 1.into(), 2.into()]);
@@ -65,20 +65,22 @@ mod benchmarks {
 		let neighbours = BookStateFor::<T>::get(&o).ready_neighbours.unwrap();
 
 		#[extrinsic_call]
-		MessageQueue::<T>::ready_ring_unknit(&o, neighbours);
+		{
+			MessageQueue::<T>::ready_ring_unknit(&o, neighbours);
+		}
 
 		assert_ring::<T>(&[1.into(), 2.into()]);
 	}
 
 	// `service_queues` without any queue processing.
-	#[benchmark]
 	fn service_queue_base() {
 		#[extrinsic_call]
-		MessageQueue::<T>::service_queue(0.into(), &mut WeightMeter::max_limit(), Weight::MAX);
+		{
+			MessageQueue::<T>::service_queue(0.into(), &mut WeightMeter::max_limit(), Weight::MAX);
+		}
 	}
 
 	// `service_page` without any message processing but with page completion.
-	#[benchmark]
 	fn service_page_base_completion() {
 		let origin: MessageOriginOf<T> = 0.into();
 		let page = PageOf::<T>::default();
@@ -88,11 +90,12 @@ mod benchmarks {
 		let limit = Weight::MAX;
 
 		#[extrinsic_call]
-		MessageQueue::<T>::service_page(&origin, &mut book_state, &mut meter, limit);
+		{
+			MessageQueue::<T>::service_page(&origin, &mut book_state, &mut meter, limit);
+		}
 	}
 
 	// `service_page` without any message processing and without page completion.
-	#[benchmark]
 	fn service_page_base_no_completion() {
 		let origin: MessageOriginOf<T> = 0.into();
 		let mut page = PageOf::<T>::default();
@@ -105,11 +108,12 @@ mod benchmarks {
 		let limit = Weight::MAX;
 
 		#[extrinsic_call]
-		MessageQueue::<T>::service_page(&origin, &mut book_state, &mut meter, limit);
+		{
+			MessageQueue::<T>::service_page(&origin, &mut book_state, &mut meter, limit);
+		}
 	}
 
 	// Processing a single message from a page.
-	#[benchmark]
 	fn service_page_item() {
 		let msg = vec![1u8; MaxMessageLenOf::<T>::get() as usize];
 		let mut page = page::<T>(&msg.clone());
@@ -118,16 +122,17 @@ mod benchmarks {
 		let mut weight = WeightMeter::max_limit();
 
 		#[extrinsic_call]
-		let status = MessageQueue::<T>::service_page_item(
-			&0u32.into(),
-			0,
-			&mut book,
-			&mut page,
-			&mut weight,
-			Weight::MAX,
-		);
-
-		assert_eq!(status, ItemExecutionStatus::Executed(true));
+		{
+			let status = MessageQueue::<T>::service_page_item(
+				&0u32.into(),
+				0,
+				&mut book,
+				&mut page,
+				&mut weight,
+				Weight::MAX,
+			);
+			assert_eq!(status, ItemExecutionStatus::Executed(true));
+		}
 
 		// Check that it was processed.
 		assert_last_event::<T>(
@@ -145,19 +150,19 @@ mod benchmarks {
 	}
 
 	// Worst case for calling `bump_service_head`.
-	#[benchmark]
 	fn bump_service_head() {
 		setup_bump_service_head::<T>(0.into(), 10.into());
 		let mut weight = WeightMeter::max_limit();
 
 		#[extrinsic_call]
-		MessageQueue::<T>::bump_service_head(&mut weight);
+		{
+			MessageQueue::<T>::bump_service_head(&mut weight);
+		}
 
 		assert_eq!(ServiceHead::<T>::get().unwrap(), 10u32.into());
 		assert_eq!(weight.consumed, T::WeightInfo::bump_service_head());
 	}
 
-	#[benchmark]
 	fn reap_page() {
 		// Mock the storage to get a *cullable* but not *reapable* page.
 		let origin: MessageOriginOf<T> = 0.into();
@@ -188,7 +193,6 @@ mod benchmarks {
 	//
 	// The worst case occurs when executing the last message in a page of which all are skipped
 	// since it is using `peek_index` which has linear complexities.
-	#[benchmark]
 	fn execute_overweight_page_removed() {
 		let origin: MessageOriginOf<T> = 0.into();
 		let (mut page, msgs) = full_page::<T>();
@@ -202,15 +206,17 @@ mod benchmarks {
 		BookStateFor::<T>::insert(&origin, &book);
 
 		#[extrinsic_call]
-		let call = MessageQueue::<T>::execute_overweight(
-			RawOrigin::Signed(whitelisted_caller()).into(),
-			0u32.into(),
-			0u32,
-			((msgs - 1) as u32).into(),
-			Weight::MAX,
-		);
+		{
+			MessageQueue::<T>::execute_overweight(
+				RawOrigin::Signed(whitelisted_caller()).into(),
+				0u32.into(),
+				0u32,
+				((msgs - 1) as u32).into(),
+				Weight::MAX,
+			)
+			.unwrap();
+		}
 
-		call.unwrap();
 		assert_last_event::<T>(
 			Event::Processed {
 				hash: T::Hashing::hash(&((msgs - 1) as u32).encode()),
@@ -224,7 +230,6 @@ mod benchmarks {
 	}
 
 	// Worst case for `execute_overweight` where the page is updated.
-	#[benchmark]
 	fn execute_overweight_page_updated() {
 		let origin: MessageOriginOf<T> = 0.into();
 		let (mut page, msgs) = full_page::<T>();
@@ -237,15 +242,17 @@ mod benchmarks {
 		BookStateFor::<T>::insert(&origin, &book);
 
 		#[extrinsic_call]
-		let call = MessageQueue::<T>::execute_overweight(
-			RawOrigin::Signed(whitelisted_caller()).into(),
-			0u32.into(),
-			0u32,
-			((msgs - 1) as u32).into(),
-			Weight::MAX,
-		);
+		{
+			MessageQueue::<T>::execute_overweight(
+				RawOrigin::Signed(whitelisted_caller()).into(),
+				0u32.into(),
+				0u32,
+				((msgs - 1) as u32).into(),
+				Weight::MAX,
+			)
+			.unwrap();
+		}
 
-		call.unwrap();
 		assert_last_event::<T>(
 			Event::Processed {
 				hash: T::Hashing::hash(&((msgs - 1) as u32).encode()),
