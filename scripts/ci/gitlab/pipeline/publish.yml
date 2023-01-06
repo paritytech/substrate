@@ -198,6 +198,9 @@ update-node-template:
 
 .publish-crates-template:
   stage:                           publish
+  needs:
+    - job:                         publish-crates-locally
+      artifacts:                   false
   extends:                         .crates-publishing-template
   # We don't want multiple jobs racing to publish crates as it's redundant and they might overwrite
   # the releases of one another. Use resource_group to ensure that at most one instance of this job
@@ -214,7 +217,7 @@ update-node-template:
   timeout:                         9h
   # A custom publishing environment is used for us to be able to set up protected secrets
   # specifically for it
-  environment: publish-crates
+  environment:                     publish-crates
   script:
     - rusty-cachier snapshot create
     - git clone
@@ -228,11 +231,8 @@ publish-crates:
   extends:
     - .publish-crates-template
     - .scheduled-crate-publishing-pipeline
-  needs:
-    - job:                         publish-crates-locally
-      artifacts:                   false
 
 publish-crates-manual:
-  extends:                         .publish-crates-template
-  when:                            manual
-  allow_failure:                   true
+  extends:
+    - .publish-crates-template
+    - .manual-crate-publishing-pipeline

@@ -217,6 +217,10 @@ default:
   rules:
     - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "automatic-crate-publishing"
 
+.manual-crate-publishing-pipeline:
+  rules:
+    - if: $CI_COMMIT_REF_NAME == "master" && $CI_JOB_MANUAL == "true" && $PIPELINE == "crate-publishing"
+
 .crates-publishing-template:
   stage:                           test
   extends:                         .docker-env
