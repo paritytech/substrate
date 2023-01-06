@@ -91,7 +91,7 @@ pub mod pallet {
 		DispatchResult,
 	};
 	use sp_staking::{EraIndex, StakingInterface};
-	use sp_std::{prelude::*, vec::Vec};
+	use sp_std::{collections::btree_set::BTreeSet, prelude::*, vec::Vec};
 	pub use weights::WeightInfo;
 
 	#[derive(scale_info::TypeInfo, codec::Encode, codec::Decode, codec::MaxEncodedLen)]
@@ -228,6 +228,7 @@ pub mod pallet {
 		/// If the check fails, the stash remains chilled and waiting for being unbonded as in with
 		/// the normal staking system, but they lose part of their unbonding chunks due to consuming
 		/// the chain's resources.
+		#[pallet::call_index(0)]
 		#[pallet::weight(<T as Config>::WeightInfo::register_fast_unstake())]
 		pub fn register_fast_unstake(origin: OriginFor<T>) -> DispatchResult {
 			let ctrl = ensure_signed(origin)?;
@@ -257,6 +258,7 @@ pub mod pallet {
 		/// Note that the associated stash is still fully unbonded and chilled as a consequence of
 		/// calling `register_fast_unstake`. This should probably be followed by a call to
 		/// `Staking::rebond`.
+		#[pallet::call_index(1)]
 		#[pallet::weight(<T as Config>::WeightInfo::deregister())]
 		pub fn deregister(origin: OriginFor<T>) -> DispatchResult {
 			let ctrl = ensure_signed(origin)?;
@@ -282,6 +284,7 @@ pub mod pallet {
 		/// Control the operation of this pallet.
 		///
 		/// Dispatch origin must be signed by the [`Config::ControlOrigin`].
+		#[pallet::call_index(2)]
 		#[pallet::weight(<T as Config>::WeightInfo::control())]
 		pub fn control(origin: OriginFor<T>, unchecked_eras_to_check: EraIndex) -> DispatchResult {
 			let _ = T::ControlOrigin::ensure_origin(origin)?;
@@ -426,9 +429,9 @@ pub mod pallet {
 				}
 			};
 
-			let check_stash = |stash, deposit, eras_checked: &mut u32| {
+			let check_stash = |stash, deposit, eras_checked: &mut BTreeSet<EraIndex>| {
 				let is_exposed = unchecked_eras_to_check.iter().any(|e| {
-					eras_checked.saturating_inc();
+					eras_checked.insert(*e);
 					T::Staking::is_exposed_in_era(&stash, e)
 				});
 
@@ -449,7 +452,7 @@ pub mod pallet {
 				<T as Config>::WeightInfo::on_idle_unstake()
 			} else {
 				// eras checked so far.
-				let mut eras_checked = 0u32;
+				let mut eras_checked = BTreeSet::<EraIndex>::new();
 
 				let pre_length = stashes.len();
 				let stashes: BoundedVec<(T::AccountId, BalanceOf<T>), T::BatchSize> = stashes
@@ -465,7 +468,7 @@ pub mod pallet {
 				log!(
 					debug,
 					"checked {:?} eras, pre stashes: {:?}, post: {:?}",
-					eras_checked,
+					eras_checked.len(),
 					pre_length,
 					post_length,
 				);
@@ -486,7 +489,9 @@ pub mod pallet {
 					},
 				}
 
-				<T as Config>::WeightInfo::on_idle_check(validator_count * eras_checked)
+				<T as Config>::WeightInfo::on_idle_check(
+					validator_count * eras_checked.len() as u32,
+				)
 			}
 		}
 	}

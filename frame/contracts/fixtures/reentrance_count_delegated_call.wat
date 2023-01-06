@@ -4,7 +4,7 @@
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "seal0" "seal_set_storage" (func $seal_set_storage (param i32 i32 i32)))
 	(import "seal0" "seal_delegate_call" (func $seal_delegate_call (param i32 i32 i32 i32 i32 i32) (result i32)))
-	(import "__unstable__" "reentrance_count" (func $reentrance_count (result i32)))
+	(import "seal0" "reentrance_count" (func $reentrance_count (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0, 32) buffer where code hash is copied

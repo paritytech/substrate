@@ -69,6 +69,7 @@ mod mock_democracy {
 
 		#[pallet::call]
 		impl<T: Config> Pallet<T> {
+			#[pallet::call_index(0)]
 			#[pallet::weight(0)]
 			pub fn external_propose_majority(origin: OriginFor<T>) -> DispatchResult {
 				T::ExternalMajorityOrigin::ensure_origin(origin)?;
