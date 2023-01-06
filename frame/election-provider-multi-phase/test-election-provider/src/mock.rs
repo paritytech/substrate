@@ -38,8 +38,12 @@ use sp_std::prelude::*;
 use std::collections::BTreeMap;
 
 use frame_election_provider_support::{onchain, SequentialPhragmen, Weight};
-use pallet_election_provider_multi_phase::{unsigned::MinerConfig, SolutionAccuracyOf};
+use pallet_election_provider_multi_phase::{
+	unsigned::MinerConfig, ElectionCompute, QueuedSolution, SolutionAccuracyOf,
+};
 use pallet_staking::StakerStatus;
+
+use crate::log_current_time;
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
 pub const BLOCK_TIME: u64 = 1000;
@@ -535,34 +539,48 @@ impl ExtBuilder {
 	}
 }
 
-// Progress to given block, triggering session and era changes as we progress.
-pub fn roll_to(n: BlockNumber) {
+// Progress to given block, triggering session and era changes as we progress and ensuring that
+// there is a solution queued when expected.
+pub fn roll_to(n: BlockNumber, delay_solution: bool) {
 	for b in (System::block_number()) + 1..=n {
 		System::set_block_number(b);
 		Session::on_initialize(b);
-		Staking::on_initialize(b);
-		ElectionProviderMultiPhase::on_initialize(b);
 		Timestamp::set_timestamp(System::block_number() * BLOCK_TIME + INIT_TIMESTAMP);
+
+		// if EPM is in off phase, there's no solution and the solution should not be delayed, try
+		// minining and queue a solution.
+		if ElectionProviderMultiPhase::snapshot().is_none() &&
+			ElectionProviderMultiPhase::current_phase().is_off() &&
+			!delay_solution
+		{
+			ElectionProviderMultiPhase::on_initialize(n);
+			let _ = try_queue_solution(ElectionCompute::Signed);
+		} else {
+			ElectionProviderMultiPhase::on_initialize(n);
+		};
+		Staking::on_initialize(b);
 		if b != n {
 			Staking::on_finalize(System::block_number());
 		}
 	}
+	log_current_time();
 }
 
 // Progress one block.
-pub fn roll_one() {
-	roll_to(System::block_number() + 1);
+pub fn roll_one(delay_solution: bool) {
+	roll_to(System::block_number() + 1, delay_solution);
 }
 
 /// Progresses from the current block number (whatever that may be) to the `P * session_index + 1`.
-pub(crate) fn start_session(session_index: SessionIndex) {
+pub(crate) fn start_session(session_index: SessionIndex, delay_solution: bool) {
 	let end: u64 = if Offset::get().is_zero() {
 		(session_index as u64) * Period::get()
 	} else {
 		Offset::get() + (session_index.saturating_sub(1) as u64) * Period::get()
 	};
 
-	roll_to(end);
+	roll_to(end, delay_solution);
+
 	// session must have progressed properly.
 	assert_eq!(
 		Session::current_index(),
@@ -576,28 +594,31 @@ pub(crate) fn start_session(session_index: SessionIndex) {
 /// Go one session forward.
 pub(crate) fn advance_session() {
 	let current_index = Session::current_index();
-	start_session(current_index + 1);
+	start_session(current_index + 1, false);
 }
 
-/// Advances `n` sessions forward.
-pub(crate) fn advance_n_sessions(n: u32) {
+pub(crate) fn advance_session_delayed_solution() {
 	let current_index = Session::current_index();
-	for i in 0..n {
-		start_session(current_index + i);
-	}
+	start_session(current_index + 1, true);
 }
 
 /// Progress until the given era.
-pub(crate) fn start_active_era(era_index: EraIndex) {
-	start_session((era_index * <SessionsPerEra as Get<u32>>::get()).into());
-	assert_eq!(active_era(), era_index);
-	// One way or another, current_era must have changed before the active era, so they must match
-	// at this point.
-	assert_eq!(current_era(), active_era());
+pub(crate) fn start_active_era(era_index: EraIndex, delay_solution: bool) {
+	start_session((era_index * <SessionsPerEra as Get<u32>>::get()).into(), delay_solution);
+
+	// if the solution was not delayed, era should have progressed.
+	if !delay_solution {
+		assert_eq!(active_era(), era_index);
+		assert_eq!(current_era(), active_era());
+	}
 }
 
 pub(crate) fn start_next_active_era() {
-	start_active_era(active_era() + 1)
+	start_active_era(active_era() + 1, false)
+}
+
+pub(crate) fn start_next_active_era_delayed_solution() {
+	start_active_era(active_era() + 1, true)
 }
 
 pub(crate) fn active_era() -> EraIndex {
@@ -614,7 +635,7 @@ pub fn roll_to_epm_signed() {
 		ElectionProviderMultiPhase::current_phase(),
 		pallet_election_provider_multi_phase::Phase::Signed
 	) {
-		roll_to(System::block_number() + 1);
+		roll_to(System::block_number() + 1, false);
 	}
 }
 
@@ -624,7 +645,7 @@ pub fn roll_to_epm_unsigned() {
 		ElectionProviderMultiPhase::current_phase(),
 		pallet_election_provider_multi_phase::Phase::Unsigned(_)
 	) {
-		roll_to(System::block_number() + 1);
+		roll_to(System::block_number() + 1, false);
 	}
 }
 
@@ -634,8 +655,18 @@ pub fn roll_to_epm_off() {
 		ElectionProviderMultiPhase::current_phase(),
 		pallet_election_provider_multi_phase::Phase::Off
 	) {
-		roll_to(System::block_number() + 1);
+		roll_to(System::block_number() + 1, false);
 	}
+}
+
+// Queue a solution based on the current snapshot.
+pub(crate) fn try_queue_solution(when: ElectionCompute) -> Result<(), ()> {
+	let raw_solution = ElectionProviderMultiPhase::mine_solution().map_err(|_| ())?;
+	ElectionProviderMultiPhase::feasibility_check(raw_solution.0, when)
+		.map(|ready| {
+			QueuedSolution::<Runtime>::put(ready);
+		})
+		.map_err(|_| ())
 }
 
 pub(crate) fn on_offence_now(

@@ -21,7 +21,6 @@ mod mock;
 pub(crate) const LOG_TARGET: &str = "tests::epm";
 
 use mock::*;
-use sp_core::Get;
 use sp_npos_elections::{to_supports, StakedAssignment};
 
 use crate::mock::RuntimeOrigin;
@@ -47,6 +46,18 @@ fn log_current_time() {
 		ElectionProviderMultiPhase::current_phase(),
 		Timestamp::now()
 	);
+}
+
+#[test]
+fn setup_works() {
+	ExtBuilder::default().initialize_first_session(true).build_and_execute(|| {
+		assert_eq!(active_era(), 0);
+
+		start_next_active_era();
+		start_next_active_era();
+		start_next_active_era();
+		start_next_active_era();
+	});
 }
 
 #[test]
@@ -82,13 +93,13 @@ fn enters_emergency_phase_after_forcing_before_elect() {
 
 		assert_eq!(pallet_staking::ForceEra::<Runtime>::get(), pallet_staking::Forcing::ForceNew);
 
-		advance_session();
+		advance_session_delayed_solution();
 		assert!(ElectionProviderMultiPhase::current_phase().is_emergency());
 		log_current_time();
 
-		// try to advance 2 eras.
-		advance_n_sessions(<SessionsPerEra as Get<u32>>::get().into());
-		advance_n_sessions(<SessionsPerEra as Get<u32>>::get().into());
+		// try to advance 2 eras with a delayed solution.
+		start_next_active_era_delayed_solution();
+		start_next_active_era_delayed_solution();
 
 		// EPM is still in emergency phase.
 		assert!(ElectionProviderMultiPhase::current_phase().is_emergency());
@@ -135,7 +146,7 @@ fn continous_slashes() {
 				ElectionProviderMultiPhase::current_phase()
 			);
 			add_slash(&11);
-			advance_n_sessions(<SessionsPerEra as Get<u32>>::get().into());
+			start_next_active_era();
 			assert_eq!(
 				pallet_staking::ForceEra::<Runtime>::get(),
 				pallet_staking::Forcing::NotForcing
@@ -147,14 +158,10 @@ fn continous_slashes() {
 				ElectionProviderMultiPhase::current_phase()
 			);
 			add_slash(&12);
-			advance_n_sessions(<SessionsPerEra as Get<u32>>::get().into());
+			start_next_active_era();
 			assert_eq!(
 				pallet_staking::ForceEra::<Runtime>::get(),
 				pallet_staking::Forcing::NotForcing
 			);
 		});
 }
-
-#[test]
-/// Continously slash 10% of the active validators per era while in emergency phase.
-fn continuous_slashes_in_emergency() {}
