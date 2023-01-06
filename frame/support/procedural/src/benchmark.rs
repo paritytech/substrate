@@ -43,8 +43,7 @@ struct RangeArgs {
 #[derive(Clone)]
 enum ExtrinsicCallDef {
 	Encoded { origin: Expr, expr_call: ExprCall }, // no block, just an extrinsic call
-	Block(ExprBlock),                              /* something in a block, we don't care what
-	                                                * it is */
+	Block(ExprBlock),                              // call is somewhere in the block
 }
 
 /// Represents a parsed `#[benchmark]` or `#[instance_banchmark]` item.
@@ -138,15 +137,6 @@ impl BenchmarkDef {
 										"Single-item extrinsic calls must specify their origin as the first argument.",
 									)),
 							};
-
-							// remove first arg from expr_call
-							let mut final_args = Punctuated::<Expr, Comma>::new();
-							let args: Vec<&Expr> = expr_call.args.iter().collect();
-							for arg in &args[1..] {
-								final_args.push((*(*arg)).clone());
-							}
-							expr_call.args = final_args;
-
 							extrinsic_call = Some(ExtrinsicCallDef::Encoded { origin, expr_call });
 						}
 					}
@@ -556,8 +546,6 @@ fn expand_benchmark(
 	let codec = quote!(#krate::frame_support::codec);
 	let traits = quote!(#krate::frame_support::traits);
 	let setup_stmts = benchmark_def.setup_stmts;
-	let mut extrinsic_call = benchmark_def.extrinsic_call;
-	let origin = benchmark_def.origin;
 	let verify_stmts = benchmark_def.verify_stmts;
 	let test_ident = Ident::new(format!("test_{}", name.to_string()).as_str(), Span::call_site());
 
@@ -577,22 +565,45 @@ fn expand_benchmark(
 		true => quote!(T: Config<I>, I: 'static),
 	};
 
-	// modify extrinsic call to be prefixed with new_call_variant
-	if let Expr::Path(expr_path) = &mut *extrinsic_call.func {
-		if let Some(segment) = expr_path.path.segments.last_mut() {
-			segment.ident = Ident::new(
-				format!("new_call_variant_{}", segment.ident.to_string()).as_str(),
-				Span::call_site(),
-			);
-		} // else handle error?
-	} // else handle error?
+	let (final_call, post_call) = match benchmark_def.extrinsic_call {
+		ExtrinsicCallDef::Encoded { origin, expr_call } => {
+			let mut expr_call = expr_call.clone();
 
-	let final_call = match benchmark_def.extrinsic_call_lhs_var_name {
-		Some(var) => quote! {
-			let #var = Call::<#generics>::#extrinsic_call;
-			let __call = #var;
+			// remove first arg from expr_call
+			let mut final_args = Punctuated::<Expr, Comma>::new();
+			let args: Vec<&Expr> = expr_call.args.iter().collect();
+			for arg in &args[1..] {
+				final_args.push((*(*arg)).clone());
+			}
+			expr_call.args = final_args;
+
+			// modify extrinsic call to be prefixed with new_call_variant
+			if let Expr::Path(expr_path) = &mut *expr_call.func {
+				if let Some(segment) = expr_path.path.segments.last_mut() {
+					segment.ident = Ident::new(
+						format!("new_call_variant_{}", segment.ident.to_string()).as_str(),
+						Span::call_site(),
+					);
+				}
+			}
+			(
+				quote! {
+					let __call = Call::<#generics>::#expr_call;
+					let __benchmarked_call_encoded = #codec::Encode::encode(&__call);
+				},
+				quote! {
+					let __call_decoded = <Call<#generics> as #codec::Decode>
+						::decode(&mut &__benchmarked_call_encoded[..])
+						.expect("call is encoded above, encoding must be correct");
+					let __origin = #origin.into();
+					<Call<#generics> as #traits::UnfilteredDispatchable>::dispatch_bypass_filter(
+						__call_decoded,
+						__origin,
+					)?;
+				},
+			)
 		},
-		None => quote!(let __call = Call::<#generics>::#extrinsic_call;),
+		ExtrinsicCallDef::Block(block) => (quote!(#block), quote!()),
 	};
 
 	// generate final quoted tokens
@@ -634,16 +645,8 @@ fn expand_benchmark(
 					#setup_stmts
 				)*
 				#final_call // extrinsic call
-				let __benchmarked_call_encoded = #codec::Encode::encode(&__call);
 				Ok(#krate::Box::new(move || -> Result<(), #krate::BenchmarkError> {
-					let __call_decoded = <Call<#generics> as #codec::Decode>
-						::decode(&mut &__benchmarked_call_encoded[..])
-						.expect("call is encoded above, encoding must be correct");
-					let __origin = #origin.into();
-					<Call<#generics> as #traits::UnfilteredDispatchable>::dispatch_bypass_filter(
-						__call_decoded,
-						__origin,
-					)?;
+					#post_call
 					if verify {
 						#(
 							#verify_stmts
