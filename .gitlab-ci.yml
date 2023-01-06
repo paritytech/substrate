@@ -61,12 +61,10 @@ variables:
 # - https://gitlab.com/gitlab-org/gitlab/-/issues/194023
 # Thus we work around that limitation by using conditional includes.
 include:
+  - local: ./scripts/ci/gitlab/default-pipeline.yml
   - local: ./scripts/ci/gitlab/crate-publishing-pipeline.yml
     rules:
       - if: $PIPELINE == "automatic-crate-publishing" || $PIPELINE == "crate-publishing"
-  - local: ./scripts/ci/gitlab/default-pipeline.yml
-    rules:
-      - if: $PIPELINE != "automatic-crate-publishing" && $PIPELINE != "crate-publishing"
 
 .collect-artifacts:
   artifacts:
