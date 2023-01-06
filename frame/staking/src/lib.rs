@@ -733,6 +733,31 @@ impl<AccountId, Balance: Default + HasCompact> Default for Exposure<AccountId, B
 	}
 }
 
+impl<AccountId: Clone, Balance: Default + HasCompact + sp_runtime::traits::AtLeast32BitUnsigned + Copy> Exposure<AccountId, Balance> {
+	fn paged(&self, page_size: usize) -> Vec<Self> {
+		let individual_chunks = self.others.chunks(page_size);
+		let mut paged_exposure: Vec<Self> = Vec::with_capacity(individual_chunks.len());
+
+		// own balance that has not been accounted for in the paged exposure
+		let mut own_left = self.own;
+
+		for chunk in individual_chunks {
+			let own = own_left;
+			let mut total = own;
+			for individual in chunk.iter() {
+				total = total.saturating_add(individual.value);
+			}
+
+			paged_exposure.push(Exposure { total, own, others: chunk.iter().map(|c| IndividualExposure { who: c.who.clone(), value: c.value}).collect() });
+
+			// subtract own that has been accounted
+			own_left = own_left.saturating_sub(own);
+		}
+
+		paged_exposure
+	}
+}
+
 /// A pending slash record. The value of the slash has been computed but not applied yet,
 /// rather deferred for several eras.
 #[derive(Encode, Decode, RuntimeDebug, TypeInfo)]
