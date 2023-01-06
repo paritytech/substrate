@@ -230,15 +230,6 @@ variables:
     REPO_OWNER: paritytech
     SPUB_TMP: artifacts
 
-.default-template: &default-template
-  retry:
-    max: 2
-    when:
-      - runner_system_failure
-      - unknown_failure
-      - api_failure
-  cache: {}
-
 #### stage:                       .pre
 
 skip-if-draft:
