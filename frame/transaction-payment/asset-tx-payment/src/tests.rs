@@ -215,7 +215,6 @@ impl Config for Runtime {
 		pallet_assets::BalanceToAssetBalance<Balances, Runtime, ConvertInto>,
 		CreditToBlockAuthor,
 	>;
-	type BalanceToAsset = pallet_assets::BalanceToAssetBalance<Balances, Runtime, ConvertInto>;
 }
 
 pub struct ExtBuilder {
