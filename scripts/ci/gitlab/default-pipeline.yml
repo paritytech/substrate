@@ -1,6 +1,3 @@
-include:
-  - local: scripts/ci/gitlab/common-pipeline.yml
-
 default:
   <<: *default-template
   interruptible: true

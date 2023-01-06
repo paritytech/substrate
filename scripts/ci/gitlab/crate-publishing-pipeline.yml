@@ -1,6 +1,3 @@
-include:
-  - local: scripts/ci/gitlab/common-pipeline.yml
-
 default:
   <<: *default-template
   # The crate-publishing pipeline should not be interruptible so that we'll be able to run the
