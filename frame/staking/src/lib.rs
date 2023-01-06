@@ -319,7 +319,7 @@ use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 pub use weights::WeightInfo;
 
 pub use pallet::{pallet::*, *};
-use sp_core::ConstU32;
+use frame_support::traits::ConstU32;
 
 pub(crate) const LOG_TARGET: &str = "runtime::staking";
 
