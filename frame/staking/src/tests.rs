@@ -5055,6 +5055,9 @@ fn min_commission_works() {
 }
 
 #[test]
+#[ignore]
+// TODO: This test should go away as we've decided that we don't cater for max_nominations decrease.
+// If this ever happens it should be accompanied by a migration that fixes the storage.
 fn change_of_max_nominations() {
 	use frame_election_provider_support::ElectionDataProvider;
 	ExtBuilder::default()
