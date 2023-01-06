@@ -21,7 +21,7 @@
 //! approaches in general. Definitions related to sessions, slashing, etc go here.
 
 use crate::currency_to_vote::CurrencyToVote;
-use codec::{Encode, EncodeLike, FullCodec, MaxEncodedLen};
+use codec::{FullCodec, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::{DispatchError, DispatchResult, Saturating};
 use sp_std::{collections::btree_map::BTreeMap, ops::Sub, vec::Vec};
@@ -98,6 +98,32 @@ pub trait OnStakingUpdate<AccountId, Balance> {
 	fn on_nominator_remove(who: &AccountId, nominations: Vec<AccountId>); // only fire this if this is an actual Nominator
 	/// Track those participants of staking system that are kicked out for whatever reason.
 	fn on_reaped(who: &AccountId); // -> basically `kill_stash`
+}
+
+impl<AccountId, Balance> OnStakingUpdate<AccountId, Balance> for () {
+	fn on_update_ledger(_: &AccountId, _: Option<Stake<AccountId, Balance>>) {
+		// stub
+	}
+
+	fn on_nominator_add(_: &AccountId, _: Vec<AccountId>) {
+		// stub
+	}
+
+	fn on_validator_add(_: &AccountId) {
+		// stub
+	}
+
+	fn on_validator_remove(_: &AccountId) {
+		// stub
+	}
+
+	fn on_nominator_remove(_: &AccountId, _: Vec<AccountId>) {
+		// stub
+	}
+
+	fn on_reaped(_: &AccountId) {
+		// stub
+	}
 }
 
 /// A generic representation of a staking implementation.

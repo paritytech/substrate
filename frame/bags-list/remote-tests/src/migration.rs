@@ -51,7 +51,7 @@ pub async fn execute<Runtime, Block>(
 
 		use frame_election_provider_support::SortedListProvider;
 		// run the actual migration
-		let moved = <Runtime as pallet_staking::Config>::VoterList::unsafe_regenerate(
+		let moved = <Runtime as pallet_stake_tracker::Config>::VoterList::unsafe_regenerate(
 			pallet_staking::Nominators::<Runtime>::iter().map(|(n, _)| n),
 			pallet_staking::Pallet::<Runtime>::weight_of_fn(),
 		);

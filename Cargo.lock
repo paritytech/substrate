@@ -4898,6 +4898,7 @@ dependencies = [
  "frame-system",
  "log",
  "pallet-bags-list",
+ "pallet-stake-tracker",
  "pallet-staking",
  "sp-core",
  "sp-runtime",

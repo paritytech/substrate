@@ -183,6 +183,7 @@ impl pallet_staking::Config for Test {
 	type OnStakerSlash = ();
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
+	type EventListener = ();
 }
 
 impl crate::Config for Test {}

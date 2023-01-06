@@ -108,7 +108,7 @@ impl sp_staking::StakingInterface for StakingMock {
 		Ok(())
 	}
 
-	fn nominations(_: Self::AccountId) -> Option<Vec<Self::AccountId>> {
+	fn nominations(_: &Self::AccountId) -> Option<Vec<Self::AccountId>> {
 		Nominations::get()
 	}
 
