@@ -565,7 +565,7 @@ mod tests {
 	use finality_grandpa::Precommit;
 	use futures::future::Either;
 	use futures_timer::Delay;
-	use sc_client_api::BlockImportNotification;
+	use sc_client_api::{BlockImportNotification, UnpinHandle};
 	use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 	use sp_consensus::BlockOrigin;
 	use sp_core::crypto::UncheckedFrom;
@@ -602,6 +602,7 @@ mod tests {
 					header,
 					is_new_best: false,
 					tree_route: None,
+					_unpin_handle: todo!(),
 				})
 				.unwrap();
 		}

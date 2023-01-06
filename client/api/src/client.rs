@@ -18,6 +18,7 @@
 
 //! A set of APIs supported by the client along with their primitives.
 
+use futures::channel::mpsc::Sender;
 use sp_consensus::BlockOrigin;
 use sp_core::storage::StorageKey;
 use sp_runtime::{
@@ -265,6 +266,26 @@ impl fmt::Display for UsageInfo {
 	}
 }
 
+#[derive(Debug)]
+pub struct UnpinHandle<Block: BlockT> {
+	hash: Block::Hash,
+	unpin_worker_sender: Sender<Block::Hash>,
+}
+
+impl<Block: BlockT> UnpinHandle<Block> {
+	pub fn new(hash: Block::Hash, unpin_worker_sender: Sender<Block::Hash>) -> Self {
+		Self { hash, unpin_worker_sender }
+	}
+}
+
+impl<Block: BlockT> Drop for UnpinHandle<Block> {
+	fn drop(&mut self) {
+		if let Err(err) = self.unpin_worker_sender.try_send(self.hash) {
+			log::error!(target: "db", "Unable to unpin block with hash: {}, error: {:?}", self.hash, err);
+		};
+	}
+}
+
 /// Summary of an imported block
 #[derive(Clone, Debug)]
 pub struct BlockImportNotification<Block: BlockT> {
@@ -280,6 +301,8 @@ pub struct BlockImportNotification<Block: BlockT> {
 	///
 	/// If `None`, there was no re-org while importing.
 	pub tree_route: Option<Arc<sp_blockchain::TreeRoute<Block>>>,
+	/// Handle to unpin the block this notification is for
+	_unpin_handle: Arc<UnpinHandle<Block>>,
 }
 
 /// Summary of a finalized block.
@@ -295,6 +318,8 @@ pub struct FinalityNotification<Block: BlockT> {
 	pub tree_route: Arc<[Block::Hash]>,
 	/// Stale branches heads.
 	pub stale_heads: Arc<[Block::Hash]>,
+	/// Handle to unpin the block this notification is for
+	_unpin_handle: Arc<UnpinHandle<Block>>,
 }
 
 impl<B: BlockT> TryFrom<BlockImportNotification<B>> for ChainEvent<B> {
@@ -315,26 +340,37 @@ impl<B: BlockT> From<FinalityNotification<B>> for ChainEvent<B> {
 	}
 }
 
-impl<B: BlockT> From<FinalizeSummary<B>> for FinalityNotification<B> {
-	fn from(mut summary: FinalizeSummary<B>) -> Self {
+impl<Block: BlockT> FinalityNotification<Block> {
+	/// Create finality notification from finality summary.
+	pub fn from_summary(
+		mut summary: FinalizeSummary<Block>,
+		unpin_worker_sender: Sender<Block::Hash>,
+	) -> FinalityNotification<Block> {
 		let hash = summary.finalized.pop().unwrap_or_default();
 		FinalityNotification {
 			hash,
 			header: summary.header,
 			tree_route: Arc::from(summary.finalized),
 			stale_heads: Arc::from(summary.stale_heads),
+			_unpin_handle: Arc::new(UnpinHandle { hash, unpin_worker_sender }),
 		}
 	}
 }
 
-impl<B: BlockT> From<ImportSummary<B>> for BlockImportNotification<B> {
-	fn from(summary: ImportSummary<B>) -> Self {
+impl<Block: BlockT> BlockImportNotification<Block> {
+	/// Create finality notification from finality summary.
+	pub fn from_summary(
+		summary: ImportSummary<Block>,
+		unpin_worker_sender: Sender<Block::Hash>,
+	) -> BlockImportNotification<Block> {
+		let hash = summary.hash;
 		BlockImportNotification {
-			hash: summary.hash,
+			hash,
 			origin: summary.origin,
 			header: summary.header,
 			is_new_best: summary.is_new_best,
 			tree_route: summary.tree_route.map(Arc::new),
+			_unpin_handle: Arc::new(UnpinHandle { hash, unpin_worker_sender }),
 		}
 	}
 }

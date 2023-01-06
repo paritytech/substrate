@@ -57,7 +57,6 @@ use sp_blockchain::{
 };
 use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError};
 
-use futures::{FutureExt, StreamExt};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_core::{
 	storage::{
@@ -177,6 +176,7 @@ where
 	new_with_backend(
 		Arc::new(in_mem::Backend::new()),
 		executor,
+		todo!(),
 		genesis_storage,
 		keystore,
 		spawn_handle,
@@ -220,6 +220,7 @@ impl<Block: BlockT> Default for ClientConfig<Block> {
 pub fn new_with_backend<B, E, Block, S, RA>(
 	backend: Arc<B>,
 	executor: E,
+	unpin_worker_sender: futures::channel::mpsc::Sender<Block::Hash>,
 	build_genesis_storage: &S,
 	keystore: Option<SyncCryptoStorePtr>,
 	spawn_handle: Box<dyn SpawnNamed>,
@@ -249,8 +250,8 @@ where
 
 	Client::new(
 		backend,
-		spawn_handle,
 		call_executor,
+		unpin_worker_sender,
 		build_genesis_storage,
 		Default::default(),
 		Default::default(),
@@ -293,11 +294,20 @@ where
 
 			let ClientImportOperation { mut op, notify_imported, notify_finalized } = op;
 
-			let finality_notification = notify_finalized.map(|summary| summary.into());
+			let finality_notification = notify_finalized.map(|summary| {
+				FinalityNotification::from_summary(summary, self.unpin_worker_sender.clone())
+			});
+
 			let (import_notification, storage_changes) = match notify_imported {
 				Some(mut summary) => {
 					let storage_changes = summary.storage_changes.take();
-					(Some(summary.into()), storage_changes)
+					(
+						Some(BlockImportNotification::from_summary(
+							summary,
+							self.unpin_worker_sender.clone(),
+						)),
+						storage_changes,
+					)
 				},
 				None => (None, None),
 			};
@@ -314,6 +324,23 @@ where
 			}
 
 			self.backend.commit_operation(op)?;
+
+			match (&import_notification, &finality_notification) {
+				(Some(ref fin), Some(ref imp)) if fin.hash == imp.hash => {
+					self.backend.pin_block(&fin.hash);
+				},
+				(Some(ref fin), Some(ref imp)) => {
+					self.backend.pin_block(&fin.hash);
+					self.backend.pin_block(&imp.hash);
+				},
+				(None, Some(ref imp)) => {
+					self.backend.pin_block(&imp.hash);
+				},
+				(Some(ref fin), None) => {
+					self.backend.pin_block(&fin.hash);
+				},
+				(_, _) => {},
+			}
 
 			self.notify_finalized(finality_notification)?;
 			self.notify_imported(import_notification, storage_changes)?;
@@ -345,7 +372,7 @@ where
 
 impl<B, E, Block, RA> Client<B, E, Block, RA>
 where
-	B: backend::Backend<Block> + 'static,
+	B: backend::Backend<Block>,
 	E: CallExecutor<Block>,
 	Block: BlockT,
 	Block::Header: Clone,
@@ -353,8 +380,8 @@ where
 	/// Creates new Substrate Client with given blockchain and code executor.
 	pub fn new(
 		backend: Arc<B>,
-		spawn_handle: Box<dyn SpawnNamed>,
 		executor: E,
+		unpin_worker_sender: futures::channel::mpsc::Sender<Block::Hash>,
 		build_genesis_storage: &dyn BuildStorage,
 		fork_blocks: ForkBlocks<Block>,
 		bad_blocks: BadBlocks<Block>,
@@ -393,23 +420,6 @@ where
 			)?;
 			backend.commit_operation(op)?;
 		}
-
-		let (unpin_worker_sender, mut rx) = futures::channel::mpsc::channel::<Block::Hash>(100);
-		let task_backend = backend.clone();
-		spawn_handle.spawn(
-			"pinning-worker",
-			None,
-			async move {
-				log::info!(target: "db", "Starting worker task for unpinning.");
-				loop {
-					if let Some(message) = rx.next().await {
-						log::info!(target: "db", "Unpinning block {}", message);
-						task_backend.unpin_block(&message);
-					}
-				}
-			}
-			.boxed(),
-		);
 
 		Ok(Client {
 			backend,
@@ -961,9 +971,6 @@ where
 				return Ok(())
 			},
 		};
-
-		log::info!(target: "db", "Finality notification for block {}, pinning block", notification.hash);
-		self.backend.pin_block(&notification.hash);
 
 		telemetry!(
 			self.telemetry;

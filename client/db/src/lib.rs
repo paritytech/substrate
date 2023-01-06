@@ -1041,6 +1041,7 @@ impl<T: Clone> FrozenForDuration<T> {
 /// Disk backend keeps data in a key-value store. In archive mode, trie nodes are kept from all
 /// blocks. Otherwise, trie nodes are kept only from some recent blocks.
 pub struct Backend<Block: BlockT> {
+	pinned_block_store: RwLock<HashSet<Block::Hash>>,
 	storage: Arc<StorageDb<Block>>,
 	offchain_storage: offchain::LocalStorage,
 	blockchain: BlockchainDb<Block>,
@@ -1155,6 +1156,7 @@ impl<Block: BlockT> Backend<Block> {
 		let offchain_storage = offchain::LocalStorage::new(db.clone());
 
 		let backend = Backend {
+			pinned_block_store: RwLock::new(HashSet::new()),
 			storage: Arc::new(storage_db),
 			offchain_storage,
 			blockchain,
@@ -2400,11 +2402,20 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	}
 
 	fn pin_block(&self, hash: &<Block as BlockT>::Hash) -> sp_blockchain::Result<()> {
-		todo!()
+		let mut handle = self.pinned_block_store.write();
+		handle.insert(*hash);
+		log::info!(target: "db", "Pinning block in backend, hash: {}, num_pinned_blocks: {}", hash, handle.len());
+		log::info!(target: "skunert", "Pinned_block_contents: {:?}", handle);
+		let hint = || false;
+		self.storage.state_db.pin(hash, number, hint);
+		Ok(())
 	}
 
 	fn unpin_block(&self, hash: &<Block as BlockT>::Hash) -> sp_blockchain::Result<()> {
-		todo!()
+		log::info!(target: "db", "Unpinning block in backend, hash: {}", hash);
+		let mut handle = self.pinned_block_store.write();
+		handle.remove(hash);
+		Ok(())
 	}
 }
 

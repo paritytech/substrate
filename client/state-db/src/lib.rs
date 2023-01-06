@@ -345,7 +345,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDbSync<BlockHash, Key, D> {
 		if let Some(ref mut pruning) = self.pruning {
 			pruning.note_canonical(hash, number, &mut commit)?;
 		}
-		log::info!(target: "skunert", "Looking to prune block {:?}", hash);
+		log::info!(target: "skunert", "Looking to canonicalize block {:?}", hash);
 		self.prune(&mut commit)?;
 		Ok(commit)
 	}

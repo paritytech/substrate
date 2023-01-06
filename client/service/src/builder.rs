@@ -30,8 +30,9 @@ use log::info;
 use prometheus_endpoint::Registry;
 use sc_chain_spec::get_extension;
 use sc_client_api::{
-	execution_extensions::ExecutionExtensions, proof_provider::ProofProvider, BadBlocks,
-	BlockBackend, BlockchainEvents, ExecutorProvider, ForkBlocks, StorageProvider, UsageProvider,
+	execution_extensions::ExecutionExtensions, proof_provider::ProofProvider, Backend as BackendT,
+	BadBlocks, BlockBackend, BlockchainEvents, ExecutorProvider, ForkBlocks, StorageProvider,
+	UsageProvider,
 };
 use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
@@ -313,10 +314,26 @@ where
 		config.clone(),
 		execution_extensions,
 	)?;
+
+	let (unpin_worker_sender, mut rx) = futures::channel::mpsc::channel::<Block::Hash>(100);
+	let task_backend = backend.clone();
+	spawn_handle.spawn(
+		"pinning-worker",
+		None,
+		async move {
+			log::info!(target: "db", "Starting worker task for unpinning.");
+			loop {
+				if let Some(message) = rx.next().await {
+					task_backend.unpin_block(&message);
+				}
+			}
+		}
+		.boxed(),
+	);
 	crate::client::Client::new(
 		backend,
-		spawn_handle.clone(),
 		executor,
+		unpin_worker_sender,
 		genesis_storage,
 		fork_blocks,
 		bad_blocks,
