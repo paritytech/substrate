@@ -27,7 +27,9 @@ use frame_support::{benchmarking::*, traits::Get};
 use frame_system::RawOrigin;
 use sp_std::prelude::*;
 
-benchmarks! {
+#[benchmarks]
+mod benchmarks {
+	use super::*;
 	where_clause! {
 		where
 			// NOTE: We need to generate multiple origins, therefore Origin is `From<u32>`. The
@@ -40,7 +42,7 @@ benchmarks! {
 	// Worst case path of `ready_ring_knit`.
 	#[benchmark]
 	fn ready_ring_knit() {
-		let mid: MessageOriginOf::<T> = 1.into();
+		let mid: MessageOriginOf<T> = 1.into();
 		build_ring::<T>(&[0.into(), mid.clone(), 2.into()]);
 		unknit::<T>(&mid);
 		assert_ring::<T>(&[0.into(), 2.into()]);
@@ -51,7 +53,7 @@ benchmarks! {
 		neighbors.ok();
 
 		// The neighbours needs to be modified manually.
-		BookStateFor::<T>::mutate(&mid, |b| { b.ready_neighbours = neighbours });
+		BookStateFor::<T>::mutate(&mid, |b| b.ready_neighbours = neighbours);
 		assert_ring::<T>(&[0.into(), 2.into(), mid]);
 	}
 
@@ -60,7 +62,7 @@ benchmarks! {
 	fn ready_ring_unknit() {
 		build_ring::<T>(&[0.into(), 1.into(), 2.into()]);
 		assert_ring::<T>(&[0.into(), 1.into(), 2.into()]);
-		let o: MessageOriginOf::<T> = 0.into();
+		let o: MessageOriginOf<T> = 0.into();
 		let neighbours = BookStateFor::<T>::get(&o).ready_neighbours.unwrap();
 
 		#[extrinsic_call]
@@ -117,15 +119,27 @@ benchmarks! {
 		let mut weight = WeightMeter::max_limit();
 
 		#[extrinsic_call]
-		let status = MessageQueue::<T>::service_page_item(&0u32.into(), 0, &mut book, &mut page, &mut weight, Weight::MAX);
+		let status = MessageQueue::<T>::service_page_item(
+			&0u32.into(),
+			0,
+			&mut book,
+			&mut page,
+			&mut weight,
+			Weight::MAX,
+		);
 
 		assert_eq!(status, ItemExecutionStatus::Executed(true));
 
 		// Check that it was processed.
-		assert_last_event::<T>(Event::Processed {
-			hash: T::Hashing::hash(&msg), origin: 0.into(),
-			weight_used: 1.into_weight(), success: true
-		}.into());
+		assert_last_event::<T>(
+			Event::Processed {
+				hash: T::Hashing::hash(&msg),
+				origin: 0.into(),
+				weight_used: 1.into_weight(),
+				success: true,
+			}
+			.into(),
+		);
 		let (_, processed, _) = page.peek_index(0).unwrap();
 		assert!(processed);
 		assert_eq!(book.message_count, 0);
@@ -151,7 +165,7 @@ benchmarks! {
 		let mut book = single_page_book::<T>();
 		let (page, msgs) = full_page::<T>();
 
-		for p in 0 .. T::MaxStale::get() * T::MaxStale::get() {
+		for p in 0..T::MaxStale::get() * T::MaxStale::get() {
 			if p == 0 {
 				Pages::<T>::insert(&origin, p, &page);
 			}
@@ -167,7 +181,7 @@ benchmarks! {
 		#[extrinsic_call]
 		reap_page(RawOrigin::Signed(whitelisted_caller()), 0u32.into(), 0);
 
-		assert_last_event::<T>(Event::PageReaped{ origin: 0.into(), index: 0 }.into());
+		assert_last_event::<T>(Event::PageReaped { origin: 0.into(), index: 0 }.into());
 		assert!(!Pages::<T>::contains_key(&origin, 0));
 	}
 
@@ -189,13 +203,24 @@ benchmarks! {
 		BookStateFor::<T>::insert(&origin, &book);
 
 		#[extrinsic_call]
-		let call = MessageQueue::<T>::execute_overweight(RawOrigin::Signed(whitelisted_caller()).into(), 0u32.into(), 0u32, ((msgs - 1) as u32).into(), Weight::MAX);
+		let call = MessageQueue::<T>::execute_overweight(
+			RawOrigin::Signed(whitelisted_caller()).into(),
+			0u32.into(),
+			0u32,
+			((msgs - 1) as u32).into(),
+			Weight::MAX,
+		);
 
 		call.unwrap();
-		assert_last_event::<T>(Event::Processed {
-			hash: T::Hashing::hash(&((msgs - 1) as u32).encode()), origin: 0.into(),
-			weight_used: Weight::from_parts(1, 1), success: true
-		}.into());
+		assert_last_event::<T>(
+			Event::Processed {
+				hash: T::Hashing::hash(&((msgs - 1) as u32).encode()),
+				origin: 0.into(),
+				weight_used: Weight::from_parts(1, 1),
+				success: true,
+			}
+			.into(),
+		);
 		assert!(!Pages::<T>::contains_key(&origin, 0), "Page must be removed");
 	}
 
@@ -213,15 +238,30 @@ benchmarks! {
 		BookStateFor::<T>::insert(&origin, &book);
 
 		#[extrinsic_call]
-		let call = MessageQueue::<T>::execute_overweight(RawOrigin::Signed(whitelisted_caller()).into(), 0u32.into(), 0u32, ((msgs - 1) as u32).into(), Weight::MAX);
+		let call = MessageQueue::<T>::execute_overweight(
+			RawOrigin::Signed(whitelisted_caller()).into(),
+			0u32.into(),
+			0u32,
+			((msgs - 1) as u32).into(),
+			Weight::MAX,
+		);
 
 		call.unwrap();
-		assert_last_event::<T>(Event::Processed {
-			hash: T::Hashing::hash(&((msgs - 1) as u32).encode()), origin: 0.into(),
-			weight_used: Weight::from_parts(1, 1), success: true
-		}.into());
+		assert_last_event::<T>(
+			Event::Processed {
+				hash: T::Hashing::hash(&((msgs - 1) as u32).encode()),
+				origin: 0.into(),
+				weight_used: Weight::from_parts(1, 1),
+				success: true,
+			}
+			.into(),
+		);
 		assert!(Pages::<T>::contains_key(&origin, 0), "Page must be updated");
 	}
 
-	impl_benchmark_test_suite!(MessageQueue, crate::mock::new_test_ext::<crate::integration_test::Test>(), crate::integration_test::Test);
+	impl_benchmark_test_suite!(
+		MessageQueue,
+		crate::mock::new_test_ext::<crate::integration_test::Test>(),
+		crate::integration_test::Test
+	);
 }

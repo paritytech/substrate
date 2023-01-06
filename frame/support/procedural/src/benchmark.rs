@@ -3,12 +3,11 @@ use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens};
 use syn::{
-	parse::{Parse, ParseStream},
 	parse_macro_input,
 	punctuated::Punctuated,
 	spanned::Spanned,
 	token::{Comma, Gt, Lt},
-	Block, Error, Expr, ExprCall, FnArg, Item, ItemFn, LitInt, Pat, Result, Stmt, Type,
+	Error, Expr, ExprCall, FnArg, Item, ItemFn, ItemMod, LitInt, Pat, Result, Stmt, Type,
 	WhereClause,
 };
 
@@ -19,23 +18,6 @@ mod keywords {
 	custom_keyword!(benchmark);
 	custom_keyword!(extra);
 	custom_keyword!(skip_meta);
-}
-
-/// Represents a "bare" block, that is, a the contents of a [`Block`] minus the curly braces.
-/// Useful for parsing the contents of a decl macro that takes a block, since the curly braces
-/// are not actually included in the input [`TokenStream`] in that scenario. The contents are
-/// parsed as a [`Vec<Stmt>`] called `stmts`. Can be used with [`parse_macro_input!`], etc.
-struct BareBlock {
-	stmts: Vec<Stmt>,
-}
-
-impl Parse for BareBlock {
-	fn parse(input: ParseStream) -> syn::Result<Self> {
-		match Block::parse_within(input) {
-			Ok(stmts) => Ok(BareBlock { stmts }),
-			Err(e) => Err(e),
-		}
-	}
 }
 
 /// This represents the raw parsed data for a param definition such as `x: Linear<10, 20>`.
@@ -204,16 +186,18 @@ impl BenchmarkDef {
 	}
 }
 
-pub fn benchmarks(tokens: TokenStream, instance: bool) -> TokenStream {
-	let mut block = parse_macro_input!(tokens as BareBlock);
+pub fn benchmarks(_attrs: TokenStream, tokens: TokenStream, instance: bool) -> TokenStream {
+	let module = parse_macro_input!(tokens as ItemMod);
+	let mod_vis = module.vis;
+	let mod_name = module.ident;
 	let mut expanded_stmts: Vec<TokenStream2> = Vec::new();
 	let mut benchmark_defs: Vec<BenchmarkDef> = Vec::new();
 	let mut benchmark_names: Vec<Ident> = Vec::new();
 	let mut extra_benchmark_names: Vec<Ident> = Vec::new();
 	let mut skip_meta_benchmark_names: Vec<Ident> = Vec::new();
-	for stmt in &mut block.stmts {
-		let mut found_item: Option<ItemFn> = None;
-		if let Stmt::Item(stmt) = stmt {
+	if let Some(mut content) = module.content {
+		for stmt in &mut content.1 {
+			let mut found_item: Option<ItemFn> = None;
 			if let Item::Fn(func) = stmt {
 				let mut i = 0;
 				for attr in &func.attrs.clone() {
@@ -228,34 +212,31 @@ pub fn benchmarks(tokens: TokenStream, instance: bool) -> TokenStream {
 					}
 				}
 			}
-		}
-		if let Some(item_fn) = found_item {
-			// this item is a #[benchmark] or #[instance_benchmark]
+			if let Some(item_fn) = found_item {
+				// this item is a #[benchmark] or #[instance_benchmark]
+				let benchmark_def = match BenchmarkDef::from(&item_fn) {
+					Ok(def) => def,
+					Err(err) => return err.to_compile_error().into(),
+				};
+				let expanded =
+					expand_benchmark(benchmark_def.clone(), &item_fn.sig.ident, instance);
 
-			// build a BenchmarkDef from item_fn
-			let benchmark_def = match BenchmarkDef::from(&item_fn) {
-				Ok(def) => def,
-				Err(err) => return err.to_compile_error().into(),
-			};
+				// record benchmark name
+				let name = item_fn.sig.ident;
+				benchmark_names.push(name.clone());
+				if benchmark_def.extra {
+					extra_benchmark_names.push(name.clone());
+				}
+				if benchmark_def.skip_meta {
+					skip_meta_benchmark_names.push(name.clone())
+				}
 
-			// expand benchmark_def
-			let expanded = expand_benchmark(benchmark_def.clone(), &item_fn.sig.ident, instance);
-
-			// record benchmark name
-			let name = item_fn.sig.ident;
-			benchmark_names.push(name.clone());
-			if benchmark_def.extra {
-				extra_benchmark_names.push(name.clone());
+				expanded_stmts.push(expanded);
+				benchmark_defs.push(benchmark_def);
+			} else {
+				// this is not a benchmark item, copy it in verbatim
+				expanded_stmts.push(stmt.to_token_stream());
 			}
-			if benchmark_def.skip_meta {
-				skip_meta_benchmark_names.push(name.clone())
-			}
-
-			expanded_stmts.push(expanded);
-			benchmark_defs.push(benchmark_def);
-		} else {
-			// this is not a benchmark item, copy it in verbatim
-			expanded_stmts.push(stmt.to_token_stream());
 		}
 	}
 
@@ -294,218 +275,221 @@ pub fn benchmarks(tokens: TokenStream, instance: bool) -> TokenStream {
 
 	// emit final quoted tokens
 	let res = quote! {
-		#(#expanded_stmts)
-		*
-
-		#[allow(non_camel_case_types)]
-		enum SelectedBenchmark {
-			#(#benchmark_names),
+		#mod_vis mod #mod_name {
+			#(#expanded_stmts)
 			*
-		}
 
-		impl<#full_generics> #krate::BenchmarkingSetup<#generics> for SelectedBenchmark {
-			fn components(&self) -> #krate::Vec<(#krate::BenchmarkParameter, u32, u32)> {
-				match self {
-					#(
-						Self::#benchmark_names => {
-							<#benchmark_names as #krate::BenchmarkingSetup<#generics>>::components(&#benchmark_names)
-						}
-					)
-					*
-				}
+			#[allow(non_camel_case_types)]
+			enum SelectedBenchmark {
+				#(#benchmark_names),
+				*
 			}
 
-			fn instance(
-				&self,
-				components: &[(#krate::BenchmarkParameter, u32)],
-				verify: bool,
-			) -> Result<
-				#krate::Box<dyn FnOnce() -> Result<(), #krate::BenchmarkError>>,
-				#krate::BenchmarkError,
-			> {
-				match self {
-					#(
-						Self::#benchmark_names => {
-							<#benchmark_names as #krate::BenchmarkingSetup<
-								T,
-								I,
-							>>::instance(&#benchmark_names, components, verify)
-						}
-					)
-					*
+			impl<#full_generics> #krate::BenchmarkingSetup<#generics> for SelectedBenchmark {
+				fn components(&self) -> #krate::Vec<(#krate::BenchmarkParameter, u32, u32)> {
+					match self {
+						#(
+							Self::#benchmark_names => {
+								<#benchmark_names as #krate::BenchmarkingSetup<#generics>>::components(&#benchmark_names)
+							}
+						)
+						*
+					}
+				}
+
+				fn instance(
+					&self,
+					components: &[(#krate::BenchmarkParameter, u32)],
+					verify: bool,
+				) -> Result<
+					#krate::Box<dyn FnOnce() -> Result<(), #krate::BenchmarkError>>,
+					#krate::BenchmarkError,
+				> {
+					match self {
+						#(
+							Self::#benchmark_names => {
+								<#benchmark_names as #krate::BenchmarkingSetup<
+									T,
+									I,
+								>>::instance(&#benchmark_names, components, verify)
+							}
+						)
+						*
+					}
 				}
 			}
-		}
-		#[cfg(any(feature = "runtime-benchmarks", test))]
-		impl<#full_generics> #krate::Benchmarking for Pallet<#generics>
-		where
-			T: frame_system::Config,
-		{
-			fn benchmarks(
-				extra: bool,
-			) -> #krate::Vec<#krate::BenchmarkMetadata> {
-				let mut all_names = #krate::vec![
-					#(#benchmark_names_str),
-					*
-				];
-				if !extra {
-					let extra = [
-						#(#extra_benchmark_names_str),
+			#[cfg(any(feature = "runtime-benchmarks", test))]
+			impl<#full_generics> #krate::Benchmarking for Pallet<#generics>
+			where
+				T: frame_system::Config,
+			{
+				fn benchmarks(
+					extra: bool,
+				) -> #krate::Vec<#krate::BenchmarkMetadata> {
+					let mut all_names = #krate::vec![
+						#(#benchmark_names_str),
 						*
 					];
-					all_names.retain(|x| !extra.contains(x));
+					if !extra {
+						let extra = [
+							#(#extra_benchmark_names_str),
+							*
+						];
+						all_names.retain(|x| !extra.contains(x));
+					}
+					all_names.into_iter().map(|benchmark| {
+						let selected_benchmark = match benchmark {
+							#(#selected_benchmark_mappings),
+							*,
+							_ => panic!("all benchmarks should be selectable")
+						};
+						let components = <SelectedBenchmark as #krate::BenchmarkingSetup<#generics>>::components(&selected_benchmark);
+						#krate::BenchmarkMetadata {
+							name: benchmark.as_bytes().to_vec(),
+							components,
+						}
+					}).collect::<#krate::Vec<_>>()
 				}
-				all_names.into_iter().map(|benchmark| {
-					let selected_benchmark = match benchmark {
+
+				fn run_benchmark(
+					extrinsic: &[u8],
+					c: &[(#krate::BenchmarkParameter, u32)],
+					whitelist: &[#krate::TrackedStorageKey],
+					verify: bool,
+					internal_repeats: u32,
+				) -> Result<#krate::Vec<#krate::BenchmarkResult>, #krate::BenchmarkError> {
+					let extrinsic = #krate::str::from_utf8(extrinsic).map_err(|_| "`extrinsic` is not a valid utf-8 string!")?;
+					let selected_benchmark = match extrinsic {
 						#(#selected_benchmark_mappings),
 						*,
-						_ => panic!("all benchmarks should be selectable")
+						_ => return Err("Could not find extrinsic.".into()),
 					};
-					let components = <SelectedBenchmark as #krate::BenchmarkingSetup<#generics>>::components(&selected_benchmark);
-					#krate::BenchmarkMetadata {
-						name: benchmark.as_bytes().to_vec(),
-						components,
+					let mut whitelist = whitelist.to_vec();
+					let whitelisted_caller_key = <frame_system::Account<
+						T,
+					> as #support::storage::StorageMap<_, _,>>::hashed_key_for(
+						#krate::whitelisted_caller::<T::AccountId>()
+					);
+					whitelist.push(whitelisted_caller_key.into());
+					let transactional_layer_key = #krate::TrackedStorageKey::new(
+						#support::storage::transactional::TRANSACTION_LEVEL_KEY.into(),
+					);
+					whitelist.push(transactional_layer_key);
+					#krate::benchmarking::set_whitelist(whitelist);
+					let mut results: #krate::Vec<#krate::BenchmarkResult> = #krate::Vec::new();
+
+					// Always do at least one internal repeat...
+					for _ in 0 .. internal_repeats.max(1) {
+						// Always reset the state after the benchmark.
+						#krate::defer!(#krate::benchmarking::wipe_db());
+
+						// Set up the externalities environment for the setup we want to
+						// benchmark.
+						let closure_to_benchmark = <
+							SelectedBenchmark as #krate::BenchmarkingSetup<#generics>
+						>::instance(&selected_benchmark, c, verify)?;
+
+						// Set the block number to at least 1 so events are deposited.
+						if #krate::Zero::is_zero(&frame_system::Pallet::<T>::block_number()) {
+							frame_system::Pallet::<T>::set_block_number(1u32.into());
+						}
+
+						// Commit the externalities to the database, flushing the DB cache.
+						// This will enable worst case scenario for reading from the database.
+						#krate::benchmarking::commit_db();
+
+						// Reset the read/write counter so we don't count operations in the setup process.
+						#krate::benchmarking::reset_read_write_count();
+
+						// Time the extrinsic logic.
+						#krate::log::trace!(
+							target: "benchmark",
+							"Start Benchmark: {} ({:?})",
+							extrinsic,
+							c
+						);
+
+						let start_pov = #krate::benchmarking::proof_size();
+						let start_extrinsic = #krate::benchmarking::current_time();
+
+						closure_to_benchmark()?;
+
+						let finish_extrinsic = #krate::benchmarking::current_time();
+						let end_pov = #krate::benchmarking::proof_size();
+
+						// Calculate the diff caused by the benchmark.
+						let elapsed_extrinsic = finish_extrinsic.saturating_sub(start_extrinsic);
+						let diff_pov = match (start_pov, end_pov) {
+							(Some(start), Some(end)) => end.saturating_sub(start),
+							_ => Default::default(),
+						};
+
+						// Commit the changes to get proper write count
+						#krate::benchmarking::commit_db();
+						#krate::log::trace!(
+							target: "benchmark",
+							"End Benchmark: {} ns", elapsed_extrinsic
+						);
+						let read_write_count = #krate::benchmarking::read_write_count();
+						#krate::log::trace!(
+							target: "benchmark",
+							"Read/Write Count {:?}", read_write_count
+						);
+
+						// Time the storage root recalculation.
+						let start_storage_root = #krate::benchmarking::current_time();
+						#krate::storage_root(#krate::StateVersion::V1);
+						let finish_storage_root = #krate::benchmarking::current_time();
+						let elapsed_storage_root = finish_storage_root - start_storage_root;
+
+						let skip_meta = [ #(#skip_meta_benchmark_names_str),* ];
+						let read_and_written_keys = if skip_meta.contains(&extrinsic) {
+							#krate::vec![(b"Skipped Metadata".to_vec(), 0, 0, false)]
+						} else {
+							#krate::benchmarking::get_read_and_written_keys()
+						};
+
+						results.push(#krate::BenchmarkResult {
+							components: c.to_vec(),
+							extrinsic_time: elapsed_extrinsic,
+							storage_root_time: elapsed_storage_root,
+							reads: read_write_count.0,
+							repeat_reads: read_write_count.1,
+							writes: read_write_count.2,
+							repeat_writes: read_write_count.3,
+							proof_size: diff_pov,
+							keys: read_and_written_keys,
+						});
 					}
-				}).collect::<#krate::Vec<_>>()
-			}
 
-			fn run_benchmark(
-				extrinsic: &[u8],
-				c: &[(#krate::BenchmarkParameter, u32)],
-				whitelist: &[#krate::TrackedStorageKey],
-				verify: bool,
-				internal_repeats: u32,
-			) -> Result<#krate::Vec<#krate::BenchmarkResult>, #krate::BenchmarkError> {
-				let extrinsic = #krate::str::from_utf8(extrinsic).map_err(|_| "`extrinsic` is not a valid utf-8 string!")?;
-				let selected_benchmark = match extrinsic {
-					#(#selected_benchmark_mappings),
-					*,
-					_ => return Err("Could not find extrinsic.".into()),
-				};
-				let mut whitelist = whitelist.to_vec();
-				let whitelisted_caller_key = <frame_system::Account<
-					T,
-				> as #support::storage::StorageMap<_, _,>>::hashed_key_for(
-					#krate::whitelisted_caller::<T::AccountId>()
-				);
-				whitelist.push(whitelisted_caller_key.into());
-				let transactional_layer_key = #krate::TrackedStorageKey::new(
-					#support::storage::transactional::TRANSACTION_LEVEL_KEY.into(),
-				);
-				whitelist.push(transactional_layer_key);
-				#krate::benchmarking::set_whitelist(whitelist);
-				let mut results: #krate::Vec<#krate::BenchmarkResult> = #krate::Vec::new();
-
-				// Always do at least one internal repeat...
-				for _ in 0 .. internal_repeats.max(1) {
-					// Always reset the state after the benchmark.
-					#krate::defer!(#krate::benchmarking::wipe_db());
-
-					// Set up the externalities environment for the setup we want to
-					// benchmark.
-					let closure_to_benchmark = <
-						SelectedBenchmark as #krate::BenchmarkingSetup<#generics>
-					>::instance(&selected_benchmark, c, verify)?;
-
-					// Set the block number to at least 1 so events are deposited.
-					if #krate::Zero::is_zero(&frame_system::Pallet::<T>::block_number()) {
-						frame_system::Pallet::<T>::set_block_number(1u32.into());
-					}
-
-					// Commit the externalities to the database, flushing the DB cache.
-					// This will enable worst case scenario for reading from the database.
-					#krate::benchmarking::commit_db();
-
-					// Reset the read/write counter so we don't count operations in the setup process.
-					#krate::benchmarking::reset_read_write_count();
-
-					// Time the extrinsic logic.
-					#krate::log::trace!(
-						target: "benchmark",
-						"Start Benchmark: {} ({:?})",
-						extrinsic,
-						c
-					);
-
-					let start_pov = #krate::benchmarking::proof_size();
-					let start_extrinsic = #krate::benchmarking::current_time();
-
-					closure_to_benchmark()?;
-
-					let finish_extrinsic = #krate::benchmarking::current_time();
-					let end_pov = #krate::benchmarking::proof_size();
-
-					// Calculate the diff caused by the benchmark.
-					let elapsed_extrinsic = finish_extrinsic.saturating_sub(start_extrinsic);
-					let diff_pov = match (start_pov, end_pov) {
-						(Some(start), Some(end)) => end.saturating_sub(start),
-						_ => Default::default(),
-					};
-
-					// Commit the changes to get proper write count
-					#krate::benchmarking::commit_db();
-					#krate::log::trace!(
-						target: "benchmark",
-						"End Benchmark: {} ns", elapsed_extrinsic
-					);
-					let read_write_count = #krate::benchmarking::read_write_count();
-					#krate::log::trace!(
-						target: "benchmark",
-						"Read/Write Count {:?}", read_write_count
-					);
-
-					// Time the storage root recalculation.
-					let start_storage_root = #krate::benchmarking::current_time();
-					#krate::storage_root(#krate::StateVersion::V1);
-					let finish_storage_root = #krate::benchmarking::current_time();
-					let elapsed_storage_root = finish_storage_root - start_storage_root;
-
-					let skip_meta = [ #(#skip_meta_benchmark_names_str),* ];
-					let read_and_written_keys = if skip_meta.contains(&extrinsic) {
-						#krate::vec![(b"Skipped Metadata".to_vec(), 0, 0, false)]
-					} else {
-						#krate::benchmarking::get_read_and_written_keys()
-					};
-
-					results.push(#krate::BenchmarkResult {
-						components: c.to_vec(),
-						extrinsic_time: elapsed_extrinsic,
-						storage_root_time: elapsed_storage_root,
-						reads: read_write_count.0,
-						repeat_reads: read_write_count.1,
-						writes: read_write_count.2,
-						repeat_writes: read_write_count.3,
-						proof_size: diff_pov,
-						keys: read_and_written_keys,
-					});
+					return Ok(results);
 				}
-
-				return Ok(results);
 			}
-		}
 
-		#[cfg(test)]
-		impl<#full_generics> Pallet<#generics> where T: ::frame_system::Config {
-			/// Test a particular benchmark by name.
-			///
-			/// This isn't called `test_benchmark_by_name` just in case some end-user eventually
-			/// writes a benchmark, itself called `by_name`; the function would be shadowed in
-			/// that case.
-			///
-			/// This is generally intended to be used by child test modules such as those created
-			/// by the `impl_benchmark_test_suite` macro. However, it is not an error if a pallet
-			/// author chooses not to implement benchmarks.
-			#[allow(unused)]
-			fn test_bench_by_name(name: &[u8]) -> Result<(), #krate::BenchmarkError> {
-				let name = #krate::str::from_utf8(name)
-					.map_err(|_| -> #krate::BenchmarkError { "`name` is not a valid utf8 string!".into() })?;
-				match name {
-					#(#benchmarks_by_name_mappings),
-					*,
-					_ => Err("Could not find test for requested benchmark.".into()),
+			#[cfg(test)]
+			impl<#full_generics> Pallet<#generics> where T: ::frame_system::Config {
+				/// Test a particular benchmark by name.
+				///
+				/// This isn't called `test_benchmark_by_name` just in case some end-user eventually
+				/// writes a benchmark, itself called `by_name`; the function would be shadowed in
+				/// that case.
+				///
+				/// This is generally intended to be used by child test modules such as those created
+				/// by the `impl_benchmark_test_suite` macro. However, it is not an error if a pallet
+				/// author chooses not to implement benchmarks.
+				#[allow(unused)]
+				fn test_bench_by_name(name: &[u8]) -> Result<(), #krate::BenchmarkError> {
+					let name = #krate::str::from_utf8(name)
+						.map_err(|_| -> #krate::BenchmarkError { "`name` is not a valid utf8 string!".into() })?;
+					match name {
+						#(#benchmarks_by_name_mappings),
+						*,
+						_ => Err("Could not find test for requested benchmark.".into()),
+					}
 				}
 			}
 		}
+		#mod_vis use #mod_name::*;
 	};
 	res.into()
 }
