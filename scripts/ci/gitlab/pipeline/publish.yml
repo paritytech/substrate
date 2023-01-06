@@ -233,6 +233,9 @@ publish-crates:
     - .scheduled-crate-publishing-pipeline
 
 publish-crates-manual:
-  extends:
-    - .publish-crates-template
-    - .manual-crate-publishing-pipeline
+  extends:                         .publish-crates-template
+  rules:
+    # `$CI_COMMIT_REF_NAME == "master"` according to publish-crates' rule
+    - if: $CI_COMMIT_REF_NAME == "master"
+  when:                            manual
+  allow_failure:                   true

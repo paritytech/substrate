@@ -205,11 +205,8 @@ variables:
 
 .scheduled-crate-publishing-pipeline:
   rules:
+    # `$CI_COMMIT_REF_NAME == "master"` according to publish-crates-manual's rule
     - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "automatic-crate-publishing"
-
-.manual-crate-publishing-pipeline:
-  rules:
-    - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "web" && $PIPELINE == "crate-publishing"
 
 .crates-publishing-template:
   stage:                           test
@@ -264,10 +261,10 @@ include:
   # Thus we work around that limitation by using conditional includes.
   - local: scripts/ci/gitlab/crate-publishing-pipeline.yml
     rules:
-      - if: $PIPELINE == "automatic-crate-publishing" || $PIPELINE == "crate-publishing"
+      - if: $PIPELINE == "automatic-crate-publishing"
   - local: scripts/ci/gitlab/default-pipeline.yml
     rules:
-      - if: $PIPELINE != "automatic-crate-publishing" && $PIPELINE != "crate-publishing"
+      - if: $PIPELINE != "automatic-crate-publishing"
 
 #### stage:                        deploy
 
