@@ -16,7 +16,7 @@ ark-std = { version = "0.4.0-alpha", default-features = false }
 ark-serialize = { git = "https://github.com/arkworks-rs/algebra", branch = "releases", default-features = false }
 ark-bls12-381 = { git = "https://github.com/arkworks-rs/curves", default-features = false, features = ["curve"] }
 ark-models = { path = "../../arkworks-models", default-features = false }
-sp-io = { path = "../../io", default-features = false }
+sp-io = { path = "../../io" }
 
 [dev-dependencies]
 ark-algebra-test-templates = { git = "https://github.com/arkworks-rs/algebra", branch = "releases", default-features = false }
