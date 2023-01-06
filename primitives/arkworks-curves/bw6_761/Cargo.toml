@@ -2,6 +2,7 @@
 name = "sp-ark-bw6-761"
 version = "0.4.0-alpha.1"
 authors = [ "achimcc, arkworks contributors" ]
+repository = "https://github.com/paritytech/substrate/"
 description = "The BW6-761 pairing-friendly elliptic curve, optimized for Substrate"
 keywords = ["cryptography", "finite-fields", "elliptic-curves" ]
 categories = ["cryptography"]

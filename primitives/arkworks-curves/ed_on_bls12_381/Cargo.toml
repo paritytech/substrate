@@ -2,6 +2,7 @@
 name = "sp-ark-ed-on-bls12-381"
 version = "0.4.0-alpha.1"
 authors = [ "achimcc, arkworks contributors" ]
+repository = "https://github.com/paritytech/substrate/"
 description = "A Twisted Edwards curve defined over the scalar field of the BLS12-381 curve, optimized for Substrate"
 keywords = ["cryptography", "finite-fields", "elliptic-curves" ]
 categories = ["cryptography"]
