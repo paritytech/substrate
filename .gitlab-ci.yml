@@ -62,7 +62,7 @@ default:
       - runner_system_failure
       - unknown_failure
       - api_failure
-  interruptible:                   true
+  interruptible: $PIPELINE != "automatic-crate-publishing" && $PIPELINE != "crate-publishing"
   cache:                           {}
 
 .collect-artifacts:
