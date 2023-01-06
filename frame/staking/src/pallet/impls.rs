@@ -272,9 +272,9 @@ impl<T: Config> Pallet<T> {
 		// In the older version of code, ledger maintained the record of `legacy_claimed_rewards`.
 		// Going forward, we don't keep them in the ledger but drop them from
 		// `EraRewardPoints` as they are claimed. Since we maintain `$HistoryDepth` eras in the
-		// `ledger.legacy_claimed_rewards`, once `$HistoryDepth` number of eras have passed, this code is
-		// redundant and can be cleaned up, relying solely on `EraRewardPoints` to prevent double
-		// claim.
+		// `ledger.legacy_claimed_rewards`, once `$HistoryDepth` number of eras have passed, this
+		// code is redundant and can be cleaned up, relying solely on `EraRewardPoints` to prevent
+		// double claim.
 		if ledger.legacy_claimed_rewards.binary_search(&era).is_ok() {
 			// since rewards are already claimed for this era, drop them.
 			era_reward_points.individual.remove(&ledger.stash);
