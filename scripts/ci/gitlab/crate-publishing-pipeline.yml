@@ -1,0 +1,5 @@
+include: "./common-pipeline.yml"
+
+default:
+  extends: .default
+  interruptible: false

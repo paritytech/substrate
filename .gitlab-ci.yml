@@ -55,15 +55,20 @@ variables:
   RUSTY_CACHIER_COMPRESSION_METHOD: zstd
   ZOMBIENET_IMAGE:                 "docker.io/paritytech/zombienet:v1.3.22"
 
-default:
-  retry:
-    max: 2
-    when:
-      - runner_system_failure
-      - unknown_failure
-      - api_failure
-  interruptible: $PIPELINE != "automatic-crate-publishing" && $PIPELINE != "crate-publishing"
-  cache:                           {}
+# The crate-publishing pipeline should not be interruptible so that we'll be able to run the
+# publishing automation jobs despite the "Auto-cancel redundant pipelines" CI setting (relevant
+# because the crate-publishing pipeline runs on `master`, so future pipelines on `master` might
+# cancel it). Unfortunately `interruptible` can't currently be conditional as per:
+# - https://gitlab.com/gitlab-org/gitlab/-/issues/38349
+# - https://gitlab.com/gitlab-org/gitlab/-/issues/194023
+# Thus we work around that limitation by using conditional includes.
+include:
+  - local: ./scripts/ci/gitlab/crate-publishing-pipeline.yml
+    rules:
+      - if: $PIPELINE == "automatic-crate-publishing" || $PIPELINE == "crate-publishing"
+  - local: ./scripts/ci/gitlab/default-pipeline.yml
+    rules:
+      - if: $PIPELINE != "automatic-crate-publishing" && $PIPELINE != "crate-publishing"
 
 .collect-artifacts:
   artifacts:
