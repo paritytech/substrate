@@ -66,6 +66,8 @@ pub trait OnChargeAssetTransaction<T: Config> {
 	/// the corrected amount.
 	///
 	/// Note: The `fee` already includes the `tip`.
+	///
+	/// Returns the fee and tip in the asset used for payment as (fee, tip).
 	fn correct_and_deposit_fee(
 		who: &T::AccountId,
 		dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
@@ -140,6 +142,8 @@ where
 	/// Since the predicted fee might have been too high, parts of the fee may be refunded.
 	///
 	/// Note: The `corrected_fee` already includes the `tip`.
+	///
+	/// Returns the fee and tip in the asset used for payment as (fee, tip).
 	fn correct_and_deposit_fee(
 		who: &T::AccountId,
 		_dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
