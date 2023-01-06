@@ -156,7 +156,7 @@ impl sp_staking::StakingInterface for StakingMock {
 		unimplemented!("method currently not used in testing")
 	}
 
-	fn is_validator(who: &Self::AccountId) -> bool {
+	fn is_validator(_: &Self::AccountId) -> bool {
 		unimplemented!("method currently not used in testing")
 	}
 }
