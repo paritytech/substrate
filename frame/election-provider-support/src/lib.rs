@@ -503,6 +503,20 @@ pub trait ReadOnlySortedListProvider<AccountId> {
 
 	/// Check internal state of list. Only meant for debugging.
 	fn try_state() -> Result<(), &'static str>;
+
+	/// Remove all items from the list.
+	///
+	/// ## WARNING
+	///
+	/// This function should never be called in production settings because it can lead to an
+	/// unbounded amount of storage accesses.
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn unsafe_clear();
+
+	/// If `who` changes by the returned amount they are guaranteed to have a worst case change
+	/// in their list position.
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn score_update_worst_case(_who: &AccountId, _is_increase: bool) -> Self::Score;
 }
 
 /// A utility trait for something to implement `ElectionDataProvider` in a sensible way.
@@ -566,19 +580,6 @@ pub trait SortedListProvider<AccountId>: ReadOnlySortedListProvider<AccountId> {
 		all: impl IntoIterator<Item = AccountId>,
 		score_of: Box<dyn Fn(&AccountId) -> Self::Score>,
 	) -> u32;
-
-	/// Remove all items from the list.
-	///
-	/// ## WARNING
-	///
-	/// This function should never be called in production settings because it can lead to an
-	/// unbounded amount of storage accesses.
-	fn unsafe_clear();
-
-	/// If `who` changes by the returned amount they are guaranteed to have a worst case change
-	/// in their list position.
-	#[cfg(feature = "runtime-benchmarks")]
-	fn score_update_worst_case(_who: &AccountId, _is_increase: bool) -> Self::Score;
 }
 
 /// Something that can provide the `Score` of an account. Similar to [`ElectionProvider`] and
@@ -684,3 +685,4 @@ pub type BoundedSupportsOf<E> = BoundedSupports<
 
 sp_core::generate_feature_enabled_macro!(runtime_benchmarks_enabled, feature = "runtime-benchmarks", $);
 sp_core::generate_feature_enabled_macro!(runtime_benchmarks_or_fuzz_enabled, any(feature = "runtime-benchmarks", feature = "fuzzing"), $);
+sp_core::generate_feature_enabled_macro!(runtime_benchmarks_or_test_enabled, any(feature = "runtime-benchmarks", test), $);

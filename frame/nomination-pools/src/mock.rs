@@ -47,6 +47,7 @@ impl StakingMock {
 impl sp_staking::StakingInterface for StakingMock {
 	type Balance = Balance;
 	type AccountId = AccountId;
+	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 
 	fn minimum_nominator_bond() -> Self::Balance {
 		StakingMinBond::get()
@@ -107,7 +108,6 @@ impl sp_staking::StakingInterface for StakingMock {
 		Ok(())
 	}
 
-	#[cfg(feature = "runtime-benchmarks")]
 	fn nominations(_: Self::AccountId) -> Option<Vec<Self::AccountId>> {
 		Nominations::get()
 	}
@@ -116,7 +116,9 @@ impl sp_staking::StakingInterface for StakingMock {
 		unimplemented!("method currently not used in testing")
 	}
 
-	fn stake(who: &Self::AccountId) -> Result<Stake<Self>, DispatchError> {
+	fn stake(
+		who: &Self::AccountId,
+	) -> Result<Stake<Self::AccountId, Self::Balance>, DispatchError> {
 		match (
 			UnbondingBalanceMap::get().get(who).map(|v| *v),
 			BondedBalanceMap::get().get(who).map(|v| *v),
@@ -151,6 +153,10 @@ impl sp_staking::StakingInterface for StakingMock {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_current_era(_era: EraIndex) {
+		unimplemented!("method currently not used in testing")
+	}
+
+	fn is_validator(who: &Self::AccountId) -> bool {
 		unimplemented!("method currently not used in testing")
 	}
 }

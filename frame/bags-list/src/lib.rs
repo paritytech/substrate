@@ -329,6 +329,36 @@ impl<T: Config<I>, I: 'static> ReadOnlySortedListProvider<T::AccountId> for Pall
 	fn try_state() -> Result<(), &'static str> {
 		List::<T, I>::try_state()
 	}
+
+	frame_election_provider_support::runtime_benchmarks_or_test_enabled! {
+		fn unsafe_clear() {
+			// NOTE: This call is unsafe for the same reason as SortedListProvider::unsafe_clear.
+			// I.e. because it can lead to many storage accesses.
+			// So it is ok to call it as caller must ensure the conditions.
+			List::<T, I>::unsafe_clear()
+		}
+
+		fn score_update_worst_case(who: &T::AccountId, is_increase: bool) -> Self::Score {
+			use frame_support::traits::Get as _;
+			let thresholds = T::BagThresholds::get();
+			let node = list::Node::<T, I>::get(who).unwrap();
+			let current_bag_idx = thresholds
+				.iter()
+				.chain(sp_std::iter::once(&T::Score::max_value()))
+				.position(|w| w == &node.bag_upper)
+				.unwrap();
+
+			if is_increase {
+				let next_threshold_idx = current_bag_idx + 1;
+				assert!(thresholds.len() > next_threshold_idx);
+				thresholds[next_threshold_idx]
+			} else {
+				assert!(current_bag_idx != 0);
+				let prev_threshold_idx = current_bag_idx - 1;
+				thresholds[prev_threshold_idx]
+			}
+		}
+	}
 }
 
 impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I> {
@@ -352,36 +382,6 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 		// I.e. because it can lead to many storage accesses.
 		// So it is ok to call it as caller must ensure the conditions.
 		List::<T, I>::unsafe_regenerate(all, score_of)
-	}
-
-	fn unsafe_clear() {
-		// NOTE: This call is unsafe for the same reason as SortedListProvider::unsafe_clear.
-		// I.e. because it can lead to many storage accesses.
-		// So it is ok to call it as caller must ensure the conditions.
-		List::<T, I>::unsafe_clear()
-	}
-
-	frame_election_provider_support::runtime_benchmarks_enabled! {
-		fn score_update_worst_case(who: &T::AccountId, is_increase: bool) -> Self::Score {
-			use frame_support::traits::Get as _;
-			let thresholds = T::BagThresholds::get();
-			let node = list::Node::<T, I>::get(who).unwrap();
-			let current_bag_idx = thresholds
-				.iter()
-				.chain(sp_std::iter::once(&T::Score::max_value()))
-				.position(|w| w == &node.bag_upper)
-				.unwrap();
-
-			if is_increase {
-				let next_threshold_idx = current_bag_idx + 1;
-				assert!(thresholds.len() > next_threshold_idx);
-				thresholds[next_threshold_idx]
-			} else {
-				assert!(current_bag_idx != 0);
-				let prev_threshold_idx = current_bag_idx - 1;
-				thresholds[prev_threshold_idx]
-			}
-		}
 	}
 }
 

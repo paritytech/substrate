@@ -27,17 +27,15 @@ use rand_chacha::{
 };
 use sp_io::hashing::blake2_256;
 
-use frame_election_provider_support::SortedListProvider;
+use frame_election_provider_support::{ReadOnlySortedListProvider, SortedListProvider};
 use frame_support::{pallet_prelude::*, traits::Currency};
 use sp_runtime::{traits::StaticLookup, Perbill};
 use sp_std::prelude::*;
 
 const SEED: u32 = 0;
 
-pub trait Runtime: Config + pallet_stake_tracker::Config {}
-
 /// This function removes all validators and nominators from storage.
-pub fn clear_validators_and_nominators<T: Runtime>() {
+pub fn clear_validators_and_nominators<T: Config>() {
 	#[allow(deprecated)]
 	Validators::<T>::remove_all();
 
@@ -45,8 +43,10 @@ pub fn clear_validators_and_nominators<T: Runtime>() {
 	#[allow(deprecated)]
 	Nominators::<T>::remove_all();
 
-	// NOTE: safe to call outside block production
-	<T as pallet_stake_tracker::Config>::VoterList::unsafe_clear();
+	frame_election_provider_support::runtime_benchmarks_or_test_enabled! {
+		// NOTE: safe to call outside block production
+		T::VoterList::unsafe_clear();
+	}
 }
 
 /// Grab a funded user.
@@ -132,7 +132,7 @@ pub fn create_stash_and_dead_controller<T: Config>(
 }
 
 /// create `max` validators.
-pub fn create_validators<T: Runtime>(
+pub fn create_validators<T: Config>(
 	max: u32,
 	balance_factor: u32,
 ) -> Result<Vec<AccountIdLookupOf<T>>, &'static str> {
@@ -173,7 +173,7 @@ pub fn create_validators_with_seed<T: Config>(
 ///   them are considered and `edge_per_nominator` random validators are voted for.
 ///
 /// Return the validators chosen to be nominated.
-pub fn create_validators_with_nominators_for_era<T: Runtime>(
+pub fn create_validators_with_nominators_for_era<T: Config>(
 	validators: u32,
 	nominators: u32,
 	edge_per_nominator: usize,

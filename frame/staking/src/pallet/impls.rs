@@ -1412,6 +1412,17 @@ impl<T: Config> ReadOnlySortedListProvider<T::AccountId> for UseValidatorsMap<T>
 	fn try_state() -> Result<(), &'static str> {
 		Ok(())
 	}
+
+	frame_election_provider_support::runtime_benchmarks_or_test_enabled! {
+		fn unsafe_clear() {
+			#[allow(deprecated)]
+			Validators::<T>::remove_all();
+		}
+
+		fn score_update_worst_case(_who: &T::AccountId, _is_increase: bool) -> Self::Score {
+			unimplemented!()
+		}
+	}
 }
 
 impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
@@ -1434,16 +1445,6 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 	) -> u32 {
 		// nothing to do upon regenerate.
 		0
-	}
-
-	fn unsafe_clear() {
-		#[allow(deprecated)]
-		Validators::<T>::remove_all();
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn score_update_worst_case(_who: &T::AccountId, _is_increase: bool) -> Self::Score {
-		unimplemented!()
 	}
 }
 
@@ -1492,6 +1493,21 @@ impl<T: Config> ReadOnlySortedListProvider<T::AccountId> for UseNominatorsAndVal
 	fn try_state() -> Result<(), &'static str> {
 		Ok(())
 	}
+
+	frame_election_provider_support::runtime_benchmarks_or_test_enabled! {
+		fn unsafe_clear() {
+			// NOTE: Caller must ensure this doesn't lead to too many storage accesses. This is a
+			// condition of SortedListProvider::unsafe_clear.
+			#[allow(deprecated)]
+			Nominators::<T>::remove_all();
+			#[allow(deprecated)]
+			Validators::<T>::remove_all();
+		}
+
+		fn score_update_worst_case(_who: &T::AccountId, _is_increase: bool) -> Self::Score {
+			unimplemented!()
+		}
+	}
 }
 
 impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsMap<T> {
@@ -1514,20 +1530,6 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 	) -> u32 {
 		// nothing to do upon regenerate.
 		0
-	}
-
-	fn unsafe_clear() {
-		// NOTE: Caller must ensure this doesn't lead to too many storage accesses. This is a
-		// condition of SortedListProvider::unsafe_clear.
-		#[allow(deprecated)]
-		Nominators::<T>::remove_all();
-		#[allow(deprecated)]
-		Validators::<T>::remove_all();
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn score_update_worst_case(_who: &T::AccountId, _is_increase: bool) -> Self::Score {
-		unimplemented!()
 	}
 }
 
