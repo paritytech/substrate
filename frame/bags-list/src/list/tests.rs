@@ -20,7 +20,7 @@ use crate::{
 	mock::{test_utils::*, *},
 	ListBags, ListNodes,
 };
-use frame_election_provider_support::{ReadOnlySortedListProvider, SortedListProvider, VoteWeight};
+use frame_election_provider_support::{ReadOnlySortedListProvider, VoteWeight};
 use frame_support::{assert_ok, assert_storage_noop};
 
 fn node(

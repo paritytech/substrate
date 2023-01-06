@@ -57,7 +57,6 @@ pub fn display_and_check_bags<Runtime: RuntimeT<Instance1>>(
 	currency_unit: u64,
 	currency_name: &'static str,
 ) {
-	use frame_election_provider_support::SortedListProvider;
 	use frame_support::traits::Get;
 
 	let min_nominator_bond = <pallet_staking::MinNominatorBond<Runtime>>::get();

@@ -17,7 +17,6 @@
 //! Storage migrations for the Staking pallet.
 
 use super::*;
-use frame_election_provider_support::SortedListProvider;
 use frame_support::{
 	dispatch::GetStorageVersion, pallet_prelude::ValueQuery, storage_alias,
 	traits::OnRuntimeUpgrade,

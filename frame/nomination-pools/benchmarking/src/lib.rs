@@ -24,7 +24,7 @@
 mod mock;
 
 use frame_benchmarking::{account, frame_support::traits::Currency, vec, whitelist_account, Vec};
-use frame_election_provider_support::SortedListProvider;
+use frame_election_provider_support::ReadOnlySortedListProvider;
 use frame_support::{assert_ok, ensure, traits::Get};
 use frame_system::RawOrigin as RuntimeOrigin;
 use pallet_nomination_pools::{
@@ -644,12 +644,12 @@ frame_benchmarking::benchmarks! {
 			.collect();
 
 		assert_ok!(T::Staking::nominate(&pool_account, validators));
-		assert!(T::Staking::nominations(Pools::<T>::create_bonded_account(1)).is_some());
+		assert!(T::Staking::nominations(&Pools::<T>::create_bonded_account(1)).is_some());
 
 		whitelist_account!(depositor);
 	}:_(RuntimeOrigin::Signed(depositor.clone()), 1)
 	verify {
-		assert!(T::Staking::nominations(Pools::<T>::create_bonded_account(1)).is_none());
+		assert!(T::Staking::nominations(&Pools::<T>::create_bonded_account(1)).is_none());
 	}
 
 	impl_benchmark_test_suite!(
