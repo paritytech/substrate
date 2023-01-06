@@ -134,6 +134,9 @@ pub use crate::{
 	wasm::Determinism,
 };
 
+#[cfg(doc)]
+pub use crate::wasm::api_doc;
+
 type CodeHash<T> = <T as frame_system::Config>::Hash;
 type TrieId = BoundedVec<u8, ConstU32<128>>;
 type BalanceOf<T> =

@@ -20,7 +20,7 @@ array-bytes = "4.1"
 async-trait = "0.1.58"
 codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive"] }
 futures = "0.3.21"
-libp2p = "0.49.0"
+libp2p = "0.50.0"
 log = "0.4.17"
 lru = "0.8.1"
 mockall = "0.11.2"
