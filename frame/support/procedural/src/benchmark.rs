@@ -603,7 +603,7 @@ fn expand_benchmark(
 
 		#[allow(unused_variables)]
 		impl<#full_generics> #krate::BenchmarkingSetup<#generics>
-		for #name {
+		for #name where #where_clause {
 			fn components(&self) -> #krate::Vec<(#krate::BenchmarkParameter, u32, u32)> {
 				#krate::vec! [
 					#(
