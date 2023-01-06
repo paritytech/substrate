@@ -23,7 +23,7 @@ sp-runtime = { version = "7.0.0", default-features = false, path = "../../../pri
 sp-core = { version = "7.0.0", default-features = false, path = "../../../primitives/core" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../../primitives/std" }
 sp-version = { version = "5.0.0", default-features = false, path = "../../../primitives/version" }
-trybuild = { version = "1.0.60", features = [ "diff" ] }
+trybuild = { version = "1.0.74", features = [ "diff" ] }
 pretty_assertions = "1.2.1"
 rustversion = "1.0.6"
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }

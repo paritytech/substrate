@@ -37,7 +37,6 @@ pub struct LocalCallExecutor<Block: BlockT, B, E> {
 	wasm_override: Arc<Option<WasmOverride>>,
 	wasm_substitutes: WasmSubstitutes<Block, E, B>,
 	spawn_handle: Box<dyn SpawnNamed>,
-	client_config: ClientConfig<Block>,
 	execution_extensions: Arc<ExecutionExtensions<Block>>,
 }
 
@@ -61,7 +60,7 @@ where
 			.transpose()?;
 
 		let wasm_substitutes = WasmSubstitutes::new(
-			client_config.wasm_runtime_substitutes.clone(),
+			client_config.wasm_runtime_substitutes,
 			executor.clone(),
 			backend.clone(),
 		)?;
@@ -71,7 +70,6 @@ where
 			executor,
 			wasm_override: Arc::new(wasm_override),
 			spawn_handle,
-			client_config,
 			wasm_substitutes,
 			execution_extensions: Arc::new(execution_extensions),
 		})
@@ -84,34 +82,55 @@ where
 		&'a self,
 		onchain_code: RuntimeCode<'a>,
 		id: &BlockId<Block>,
-	) -> sp_blockchain::Result<RuntimeCode<'a>>
+	) -> sp_blockchain::Result<(RuntimeCode<'a>, RuntimeVersion)>
 	where
 		Block: BlockT,
 		B: backend::Backend<Block>,
 	{
-		let spec = CallExecutor::runtime_version(self, id)?;
-		let code =
-			if let Some(d) =
-				self.wasm_override.as_ref().as_ref().and_then(|o| {
-					o.get(&spec.spec_version, onchain_code.heap_pages, &spec.spec_name)
-				}) {
-				log::debug!(target: "wasm_overrides", "using WASM override for block {}", id);
-				d
-			} else if let Some(s) =
-				self.wasm_substitutes.get(spec.spec_version, onchain_code.heap_pages, id)
-			{
-				log::debug!(target: "wasm_substitutes", "Using WASM substitute for block {:?}", id);
-				s
-			} else {
-				log::debug!(
-					target: "wasm_overrides",
-					"No WASM override available for block {}, using onchain code",
-					id
-				);
-				onchain_code
-			};
+		let on_chain_version = self.on_chain_runtime_version(id)?;
+		let code_and_version = if let Some(d) = self.wasm_override.as_ref().as_ref().and_then(|o| {
+			o.get(
+				&on_chain_version.spec_version,
+				onchain_code.heap_pages,
+				&on_chain_version.spec_name,
+			)
+		}) {
+			log::debug!(target: "wasm_overrides", "using WASM override for block {}", id);
+			d
+		} else if let Some(s) =
+			self.wasm_substitutes
+				.get(on_chain_version.spec_version, onchain_code.heap_pages, id)
+		{
+			log::debug!(target: "wasm_substitutes", "Using WASM substitute for block {:?}", id);
+			s
+		} else {
+			log::debug!(
+				target: "wasm_overrides",
+				"Neither WASM override nor substitute available for block {id}, using onchain code",
+			);
+			(onchain_code, on_chain_version)
+		};
 
-		Ok(code)
+		Ok(code_and_version)
+	}
+
+	/// Returns the on chain runtime version.
+	fn on_chain_runtime_version(
+		&self,
+		id: &BlockId<Block>,
+	) -> sp_blockchain::Result<RuntimeVersion> {
+		let mut overlay = OverlayedChanges::default();
+
+		let at_hash = self.backend.blockchain().expect_block_hash_from_id(id)?;
+		let state = self.backend.state_at(at_hash)?;
+		let mut cache = StorageTransactionCache::<Block, B::State>::default();
+		let mut ext = Ext::new(&mut overlay, &mut cache, &state, None);
+		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
+		let runtime_code =
+			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
+		self.executor
+			.runtime_version(&mut ext, &runtime_code)
+			.map_err(|e| sp_blockchain::Error::VersionInvalid(e.to_string()))
 	}
 }
 
@@ -125,7 +144,6 @@ where
 			executor: self.executor.clone(),
 			wasm_override: self.wasm_override.clone(),
 			spawn_handle: self.spawn_handle.clone(),
-			client_config: self.client_config.clone(),
 			wasm_substitutes: self.wasm_substitutes.clone(),
 			execution_extensions: self.execution_extensions.clone(),
 		}
@@ -162,7 +180,7 @@ where
 		let runtime_code =
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
 
-		let runtime_code = self.check_override(runtime_code, at)?;
+		let runtime_code = self.check_override(runtime_code, at)?.0;
 
 		let extensions = self.execution_extensions.extensions(
 			at_hash,
@@ -214,7 +232,7 @@ where
 
 		let runtime_code =
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
-		let runtime_code = self.check_override(runtime_code, at)?;
+		let runtime_code = self.check_override(runtime_code, at)?.0;
 
 		match recorder {
 			Some(recorder) => {
@@ -258,18 +276,13 @@ where
 	}
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
-		let mut overlay = OverlayedChanges::default();
-
 		let at_hash = self.backend.blockchain().expect_block_hash_from_id(id)?;
 		let state = self.backend.state_at(at_hash)?;
-		let mut cache = StorageTransactionCache::<Block, B::State>::default();
-		let mut ext = Ext::new(&mut overlay, &mut cache, &state, None);
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
+
 		let runtime_code =
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
-		self.executor
-			.runtime_version(&mut ext, &runtime_code)
-			.map_err(|e| sp_blockchain::Error::VersionInvalid(e.to_string()))
+		self.check_override(runtime_code, id).map(|(_, v)| v)
 	}
 
 	fn prove_execution(
@@ -287,7 +300,7 @@ where
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(trie_backend);
 		let runtime_code =
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
-		let runtime_code = self.check_override(runtime_code, at)?;
+		let runtime_code = self.check_override(runtime_code, at)?.0;
 
 		sp_state_machine::prove_execution_on_trie_backend(
 			trie_backend,
@@ -352,6 +365,7 @@ mod tests {
 		testing::TaskExecutor,
 		traits::{FetchRuntimeCode, WrappedRuntimeCode},
 	};
+	use std::collections::HashMap;
 	use substrate_test_runtime_client::{runtime, GenesisInit, LocalExecutorDispatch};
 
 	#[test]
@@ -395,7 +409,7 @@ mod tests {
 				Box::new(TaskExecutor::new()),
 				None,
 				None,
-				Default::default(),
+				client_config,
 			)
 			.expect("Creates a client");
 
@@ -404,7 +418,6 @@ mod tests {
 			executor: executor.clone(),
 			wasm_override: Arc::new(Some(overrides)),
 			spawn_handle: Box::new(TaskExecutor::new()),
-			client_config,
 			wasm_substitutes: WasmSubstitutes::new(
 				Default::default(),
 				executor.clone(),
@@ -420,8 +433,64 @@ mod tests {
 
 		let check = call_executor
 			.check_override(onchain_code, &BlockId::Number(Default::default()))
-			.expect("RuntimeCode override");
+			.expect("RuntimeCode override")
+			.0;
 
 		assert_eq!(Some(vec![2, 2, 2, 2, 2, 2, 2, 2]), check.fetch_runtime_code().map(Into::into));
+	}
+
+	#[test]
+	fn returns_runtime_version_from_substitute() {
+		const SUBSTITUTE_SPEC_NAME: &str = "substitute-spec-name-cool";
+
+		let executor = NativeElseWasmExecutor::<LocalExecutorDispatch>::new(
+			WasmExecutionMethod::Interpreted,
+			Some(128),
+			1,
+			2,
+		);
+
+		let backend = Arc::new(in_mem::Backend::<runtime::Block>::new());
+
+		// Let's only override the `spec_name` for our testing purposes.
+		let substitute = sp_version::embed::embed_runtime_version(
+			&substrate_test_runtime::WASM_BINARY_BLOATY.unwrap(),
+			sp_version::RuntimeVersion {
+				spec_name: SUBSTITUTE_SPEC_NAME.into(),
+				..substrate_test_runtime::VERSION
+			},
+		)
+		.unwrap();
+
+		let client_config = crate::client::ClientConfig {
+			wasm_runtime_substitutes: vec![(0, substitute)].into_iter().collect::<HashMap<_, _>>(),
+			..Default::default()
+		};
+
+		let genesis_block_builder = crate::GenesisBlockBuilder::new(
+			&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
+			!client_config.no_genesis,
+			backend.clone(),
+			executor.clone(),
+		)
+		.expect("Creates genesis block builder");
+
+		// client is used for the convenience of creating and inserting the genesis block.
+		let client =
+			crate::client::new_with_backend::<_, _, runtime::Block, _, runtime::RuntimeApi>(
+				backend.clone(),
+				executor.clone(),
+				genesis_block_builder,
+				None,
+				Box::new(TaskExecutor::new()),
+				None,
+				None,
+				client_config,
+			)
+			.expect("Creates a client");
+
+		let version = client.runtime_version_at(&BlockId::Number(0)).unwrap();
+
+		assert_eq!(SUBSTITUTE_SPEC_NAME, &*version.spec_name);
 	}
 }
