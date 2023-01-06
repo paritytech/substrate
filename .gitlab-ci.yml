@@ -269,7 +269,6 @@ include:
     rules:
       - if: $PIPELINE != "automatic-crate-publishing" && $PIPELINE != "crate-publishing"
 
-
 #### stage:                        deploy
 
 deploy-prometheus-alerting-rules:

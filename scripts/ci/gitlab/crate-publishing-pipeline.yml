@@ -1,9 +1,10 @@
+include:
+  - local: scripts/ci/gitlab/common-pipeline.yml
+
 default:
-  retry:
-    max: 2
-    when:
-      - runner_system_failure
-      - unknown_failure
-      - api_failure
-  cache: {}
-  interruptible: true
+  <<: *default-template
+  # The crate-publishing pipeline should not be interruptible so that we'll be able to run the
+  # publishing automation jobs despite the "Auto-cancel redundant pipelines" CI setting (relevant
+  # because the crate-publishing pipeline runs on `master`, so future pipelines on `master` might
+  # cancel it).
+  interruptible: false

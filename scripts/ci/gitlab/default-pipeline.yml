@@ -1,9 +1,6 @@
+include:
+  - local: scripts/ci/gitlab/common-pipeline.yml
+
 default:
-  retry:
-    max: 2
-    when:
-      - runner_system_failure
-      - unknown_failure
-      - api_failure
-  cache: {}
+  <<: *default-template
   interruptible: true
