@@ -590,8 +590,6 @@ fn expand_benchmark(benchmark_def: BenchmarkDef, name: &Ident, is_instance: bool
 		None => quote!(let __call = Call::<#generics>::#extrinsic_call;),
 	};
 
-	println!("\nfinal_call: {}\n", final_call.to_string());
-
 	// generate final quoted tokens
 	let res = quote! {
 		// compile-time assertions that each referenced param type implements ParamRange
