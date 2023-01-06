@@ -1,4 +1,4 @@
-include: common-pipeline.yml
+include: scripts/ci/gitlab/common-pipeline.yml
 
 default:
   extends: .default
