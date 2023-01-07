@@ -617,36 +617,7 @@ impl<T: Config> Pallet<T> {
 
 		elected_stashes
 	}
-
-	// fixme : remove this
-	// /// Takes a full set of exposure and splits it into `page_size` individual exposures.
-	// fn get_paged_exposure(
-	// 	exposure: &Exposure<T::AccountId, BalanceOf<T>>,
-	// 	page_size: usize,
-	// ) -> Vec<Exposure<T::AccountId, BalanceOf<T>>> {
-	// 	let individual_chunks = exposure.others.chunks(page_size);
-	// 	let mut paged_exposure: Vec<Exposure<T::AccountId, BalanceOf<T>>> =
-	// 		Vec::with_capacity(Len::len(&individual_chunks));
-	//
-	// 	// own balance that has not been accounted for in the paged exposure
-	// 	let mut own_left = exposure.own;
-	//
-	// 	for chunk in individual_chunks {
-	// 		let own = own_left;
-	// 		let mut total: BalanceOf<T> = own;
-	// 		for individual in chunk.iter() {
-	// 			total = total.saturating_add(individual.value);
-	// 		}
-	//
-	// 		paged_exposure.push(Exposure { total, own, others: chunk.into() });
-	//
-	// 		// subtract own that has been accounted
-	// 		own_left = own_left.saturating_sub(own);
-	// 	}
-	//
-	// 	paged_exposure
-	// }
-
+	
 	/// Consume a set of [`BoundedSupports`] from [`sp_npos_elections`] and collect them into a
 	/// [`Exposure`].
 	fn collect_exposures(
