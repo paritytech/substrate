@@ -617,7 +617,7 @@ impl<T: Config> Pallet<T> {
 
 		elected_stashes
 	}
-	
+
 	/// Consume a set of [`BoundedSupports`] from [`sp_npos_elections`] and collect them into a
 	/// [`Exposure`].
 	fn collect_exposures(
