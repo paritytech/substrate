@@ -565,7 +565,7 @@ fn expand_benchmark(
 		true => quote!(T: Config<I>, I: 'static),
 	};
 
-	let (final_call, post_call) = match benchmark_def.extrinsic_call {
+	let (pre_call, post_call) = match benchmark_def.extrinsic_call {
 		ExtrinsicCallDef::Encoded { origin, expr_call } => {
 			let mut expr_call = expr_call.clone();
 
@@ -603,7 +603,7 @@ fn expand_benchmark(
 				},
 			)
 		},
-		ExtrinsicCallDef::Block(block) => (quote!(#block), quote!()),
+		ExtrinsicCallDef::Block(block) => (quote!(), quote!(#block)),
 	};
 
 	// generate final quoted tokens
@@ -644,7 +644,7 @@ fn expand_benchmark(
 				#(
 					#setup_stmts
 				)*
-				#final_call // extrinsic call
+				#pre_call
 				Ok(#krate::Box::new(move || -> Result<(), #krate::BenchmarkError> {
 					#post_call
 					if verify {
