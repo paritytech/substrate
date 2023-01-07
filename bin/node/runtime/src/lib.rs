@@ -59,6 +59,7 @@ use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use pallet_nfts::PalletFeatures;
 use pallet_nis::WithMaximumOf;
 use pallet_session::historical::{self as pallet_session_historical};
+use pallet_staking::Nominators;
 pub use pallet_transaction_payment::{CurrencyAdapter, Multiplier, TargetedFeeAdjustment};
 use pallet_transaction_payment::{FeeDetails, RuntimeDispatchInfo};
 use sp_api::impl_runtime_apis;
@@ -2130,6 +2131,16 @@ impl_runtime_apis! {
 		fn query_call_fee_details(call: RuntimeCall, len: u32) -> FeeDetails<Balance> {
 			TransactionPayment::query_call_fee_details(call, len)
 		}
+	}
+
+	impl pallet_staking_rpc_runtime_api::StakingApi<Block, Balance> for Runtime {
+		fn query_nominations_quota() -> u32 {
+			Staking::query_nominations_quota()
+		}
+
+        fn query_points_to_balance(pool_id: u32) -> Result<u32, ()> {
+            NominationPools::query_points_to_balance(pool_id)
+        }
 	}
 
 	impl pallet_mmr::primitives::MmrApi<
