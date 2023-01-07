@@ -191,6 +191,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 		}
 
+		#[cfg(feature = "std")]
 		impl<#type_impl_gen>
 			#frame_support::traits::IntegrityTest
 			for #pallet_ident<#type_use_gen> #where_clause
