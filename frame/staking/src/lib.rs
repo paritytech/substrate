@@ -733,7 +733,7 @@ impl<AccountId, Balance: Default + HasCompact> Default for Exposure<AccountId, B
 	}
 }
 
-impl<AccountId: Clone, Balance: Default + HasCompact + AtLeast32BitUnsigned + Copy>
+impl<AccountId: Clone, Balance: HasCompact + AtLeast32BitUnsigned + Copy>
 	Exposure<AccountId, Balance>
 {
 	fn in_chunks_of(&self, page_size: usize) -> Vec<Self> {
