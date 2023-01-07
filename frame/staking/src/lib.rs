@@ -318,8 +318,8 @@ use sp_staking::{
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 pub use weights::WeightInfo;
 
-pub use pallet::{pallet::*, *};
 use frame_support::traits::ConstU32;
+pub use pallet::{pallet::*, *};
 
 pub(crate) const LOG_TARGET: &str = "runtime::staking";
 
@@ -733,7 +733,11 @@ impl<AccountId, Balance: Default + HasCompact> Default for Exposure<AccountId, B
 	}
 }
 
-impl<AccountId: Clone, Balance: Default + HasCompact + sp_runtime::traits::AtLeast32BitUnsigned + Copy> Exposure<AccountId, Balance> {
+impl<
+		AccountId: Clone,
+		Balance: Default + HasCompact + sp_runtime::traits::AtLeast32BitUnsigned + Copy,
+	> Exposure<AccountId, Balance>
+{
 	fn in_chunks_of(&self, page_size: usize) -> Vec<Self> {
 		let individual_chunks = self.others.chunks(page_size);
 		let mut paged_exposure: Vec<Self> = Vec::with_capacity(individual_chunks.len());
@@ -748,7 +752,14 @@ impl<AccountId: Clone, Balance: Default + HasCompact + sp_runtime::traits::AtLea
 				total = total.saturating_add(individual.value);
 			}
 
-			paged_exposure.push(Exposure { total, own, others: chunk.iter().map(|c| IndividualExposure { who: c.who.clone(), value: c.value}).collect() });
+			paged_exposure.push(Exposure {
+				total,
+				own,
+				others: chunk
+					.iter()
+					.map(|c| IndividualExposure { who: c.who.clone(), value: c.value })
+					.collect(),
+			});
 
 			// subtract own that has been accounted
 			own_left = own_left.saturating_sub(own);
