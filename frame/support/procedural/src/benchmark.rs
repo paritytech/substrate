@@ -1,3 +1,22 @@
+// This file is part of Substrate.
+
+// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! Home of the parsing and expansion code for the new pallet benchmarking syntax
+
 use derive_syn_parse::Parse;
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
@@ -40,6 +59,7 @@ struct RangeArgs {
 	_gt_token: Gt,
 }
 
+/// Represents the parsed extrinsic call for a benchmark
 #[derive(Clone)]
 enum ExtrinsicCallDef {
 	Encoded { origin: Expr, expr_call: ExprCall }, // no block, just an extrinsic call
@@ -64,6 +84,8 @@ impl BenchmarkDef {
 		let mut params: Vec<ParamDef> = Vec::new();
 		let mut extra = false;
 		let mut skip_meta = false;
+
+		// detect extra and skip_meta attributes
 		for attr in &item_fn.attrs {
 			if let Some(segment) = attr.path.segments.last() {
 				if let Ok(_) = syn::parse::<keywords::extra>(segment.ident.to_token_stream().into())
@@ -76,8 +98,9 @@ impl BenchmarkDef {
 				}
 			}
 		}
+
+		// parse params such as "x: Linear<0, 1>"
 		for arg in &item_fn.sig.inputs {
-			// parse params such as "x: Linear<0, 1>"
 			let mut name: Option<String> = None;
 			let mut typ: Option<&Type> = None;
 			let mut start: Option<u32> = None;
@@ -112,11 +135,12 @@ impl BenchmarkDef {
 				))
 			}
 		}
+
+		// #[extrinsic_call] handling
 		for child in &item_fn.block.stmts {
 			let mut extrinsic_call: Option<ExtrinsicCallDef> = None;
-
-			// #[extrinsic_call] handling for the non-block (single item) case
 			if let Stmt::Semi(Expr::Call(expr_call), _semi) = child {
+				// non-block (encoded) case
 				let mut k = 0; // index of attr
 				for attr in &expr_call.attrs {
 					if let Some(segment) = attr.path.segments.last() {
@@ -143,6 +167,7 @@ impl BenchmarkDef {
 					k += 1;
 				}
 			} else if let Stmt::Expr(Expr::Block(block)) = child {
+				// block case
 				let mut k = 0; // index of attr
 				for attr in &block.attrs {
 					if let Some(segment) = attr.path.segments.last() {
@@ -160,6 +185,8 @@ impl BenchmarkDef {
 					k += 1;
 				}
 			}
+
+			// return parsed BenchmarkDef
 			if let Some(extrinsic_call) = extrinsic_call {
 				return Ok(BenchmarkDef {
 					params,
@@ -176,11 +203,12 @@ impl BenchmarkDef {
 		}
 		return Err(Error::new(
 			item_fn.block.brace_token.span,
-			"No valid #[extrinsic_call] annotation found in benchmark function body.",
+			"No valid #[extrinsic_call] annotation could be found in benchmark function body.",
 		))
 	}
 }
 
+/// Parses and expands a `#[benchmarks]` or `#[instance_benchmarks]` invocation
 pub fn benchmarks(attrs: TokenStream, tokens: TokenStream, instance: bool) -> TokenStream {
 	let module = parse_macro_input!(tokens as ItemMod);
 	let where_clause = match syn::parse::<Nothing>(attrs.clone()) {
@@ -506,6 +534,7 @@ struct UnrolledParams {
 }
 
 impl UnrolledParams {
+	/// Constructs an [`UnrolledParams`] from a [`Vec<ParamDef>`]
 	fn from(params: &Vec<ParamDef>) -> UnrolledParams {
 		let param_ranges: Vec<TokenStream2> = params
 			.iter()
@@ -534,6 +563,7 @@ impl UnrolledParams {
 	}
 }
 
+/// Performs expansion of an already-parsed [`BenchmarkDef`].
 fn expand_benchmark(
 	benchmark_def: BenchmarkDef,
 	name: &Ident,
@@ -586,6 +616,7 @@ fn expand_benchmark(
 					);
 				}
 			}
+			// (pre_call, post_call):
 			(
 				quote! {
 					let __call = Call::<#generics>::#expr_call;
@@ -741,6 +772,7 @@ fn expand_benchmark(
 	res
 }
 
+/// Performs macro parsing and expansion for an individual `#[benchmark]` invocation
 pub fn benchmark(_attrs: TokenStream, tokens: TokenStream, is_instance: bool) -> TokenStream {
 	// parse attached item as a function def
 	let item_fn = parse_macro_input!(tokens as ItemFn);
@@ -751,5 +783,6 @@ pub fn benchmark(_attrs: TokenStream, tokens: TokenStream, is_instance: bool) ->
 		Err(err) => return err.to_compile_error().into(),
 	};
 
+	// perform expansion
 	expand_benchmark(benchmark_def, &item_fn.sig.ident, is_instance, quote!()).into()
 }
