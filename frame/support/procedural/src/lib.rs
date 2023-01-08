@@ -503,17 +503,11 @@ pub fn instance_benchmarks(attr: TokenStream, tokens: TokenStream) -> TokenStrea
 ///
 /// See `frame_support::benchmarking` for more info.
 #[proc_macro_attribute]
-pub fn benchmark(attrs: TokenStream, tokens: TokenStream) -> TokenStream {
-	benchmark::benchmark(attrs, tokens, false)
-}
-
-/// An attribute macro used to declare an instance benchmark within a benchmarking module. Must
-/// be attached to a function definition containing an `#[extrinsic_call]` attribute.
-///
-/// See `frame_support::benchmarking` for more info.
-#[proc_macro_attribute]
-pub fn instance_benchmark(attrs: TokenStream, tokens: TokenStream) -> TokenStream {
-	benchmark::benchmark(attrs, tokens, true)
+pub fn benchmark(_attrs: TokenStream, _tokens: TokenStream) -> TokenStream {
+	quote!(compile_error!(
+		"`#[benchmark]` must be in a module labeled with #[benchmarks] or #[instance_benchmarks]."
+	))
+	.into()
 }
 
 /// Execute the annotated function in a new storage transaction.

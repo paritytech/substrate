@@ -771,18 +771,3 @@ fn expand_benchmark(
 	};
 	res
 }
-
-/// Performs macro parsing and expansion for an individual `#[benchmark]` invocation
-pub fn benchmark(_attrs: TokenStream, tokens: TokenStream, is_instance: bool) -> TokenStream {
-	// parse attached item as a function def
-	let item_fn = parse_macro_input!(tokens as ItemFn);
-
-	// build a BenchmarkDef from item_fn
-	let benchmark_def = match BenchmarkDef::from(&item_fn) {
-		Ok(def) => def,
-		Err(err) => return err.to_compile_error().into(),
-	};
-
-	// perform expansion
-	expand_benchmark(benchmark_def, &item_fn.sig.ident, is_instance, quote!()).into()
-}
