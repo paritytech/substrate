@@ -474,6 +474,8 @@ where
 /// A trait that defines a set of functions that allow read access to the underlying storage
 /// and the types those functions depend upon.
 ///
+/// The scores (see [`Self::Score`]) are ascending, the higher, the better.
+///
 /// Initially a part of [`SortedListProvider`], it allows for restricting a consumer to read-only
 /// operations. This is particularly useful in case the list is populated by one entity and
 /// read by another.
@@ -523,8 +525,6 @@ pub trait ReadOnlySortedListProvider<AccountId> {
 ///
 /// This is generic over `AccountId` and it can represent a validator, a nominator, or any other
 /// entity.
-///
-/// The scores (see [`Self::Score`]) are ascending, the higher, the better.
 ///
 /// Something that implements this trait will do a best-effort sort over ids, and thus can be
 /// used on the implementing side of [`ElectionDataProvider`].
