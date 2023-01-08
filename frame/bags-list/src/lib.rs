@@ -20,7 +20,7 @@
 //! A semi-sorted list, where items hold an `AccountId` based on some `Score`. The
 //! `AccountId` (`id` for short) might be synonym to a `voter` or `nominator` in some context, and
 //! `Score` signifies the chance of each id being included in the final
-//! [`SortedListProvider::iter`].
+//! [`ReadOnlySortedListProvider::iter`].
 //!
 //! It implements [`frame_election_provider_support::SortedListProvider`] to provide a semi-sorted
 //! list of accounts to another pallet. It needs some other pallet to give it some information about
