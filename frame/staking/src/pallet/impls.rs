@@ -33,6 +33,7 @@ use frame_support::{
 use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use pallet_session::historical;
 use sp_runtime::{
+	generic::Era,
 	traits::{Bounded, Convert, One, SaturatedConversion, Saturating, StaticLookup, Zero},
 	Perbill,
 };
@@ -564,41 +565,21 @@ impl<T: Config> Pallet<T> {
 		// Populate elected stash, stakers, exposures, and the snapshot of validator prefs.
 		let mut total_stake: BalanceOf<T> = Zero::zero();
 		let mut elected_stashes = Vec::with_capacity(exposures.len());
+
 		exposures.into_iter().for_each(|(stash, exposure)| {
 			// build elected stash
 			elected_stashes.push(stash.clone());
-
+			// accumulate total stake
 			total_stake = total_stake.saturating_add(exposure.total);
-			<ErasStakers<T>>::insert(new_planned_era, &stash, &exposure);
-
-			// store paged exposure
-			exposure
-				.in_chunks_of(T::ExposurePageSize::get() as usize)
-				.iter()
-				.enumerate()
-				.for_each(|(page, paged_exposure)| {
-					<PagedErasStakers<T>>::insert(
-						(new_planned_era, &stash, page as u32),
-						&paged_exposure,
-					);
-				});
-
-			// fixme: get rid of clipped exposure
-			let mut exposure_clipped = exposure;
-			let clipped_max_len = T::MaxNominatorRewardedPerValidator::get() as usize;
-			if exposure_clipped.others.len() > clipped_max_len {
-				exposure_clipped.others.sort_by(|a, b| a.value.cmp(&b.value).reverse());
-				exposure_clipped.others.truncate(clipped_max_len);
-			}
-			<ErasStakersClipped<T>>::insert(&new_planned_era, &stash, exposure_clipped);
+			// store staker exposure for this era
+			EraInfo::<T>::set_validator_exposure(new_planned_era, &stash, exposure);
 		});
 
 		let elected_stashes: BoundedVec<_, MaxWinnersOf<T>> = elected_stashes
 			.try_into()
 			.expect("elected_stashes.len() always equal to exposures.len(); qed");
 
-		// Insert current era staking information
-		<ErasTotalStake<T>>::insert(&new_planned_era, total_stake);
+		EraInfo::<T>::set_total_stake(new_planned_era, total_stake);
 
 		// Collect the pref of all winners.
 		for stash in &elected_stashes {

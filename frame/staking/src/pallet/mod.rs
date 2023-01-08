@@ -450,9 +450,9 @@ pub mod pallet {
 	/// It is removed after `HISTORY_DEPTH` eras.
 	/// If stakers hasn't been set or has been removed then empty exposure is returned.
 	#[pallet::storage]
-	#[pallet::getter(fn paged_eras_stakers)]
+	#[pallet::getter(fn eras_stakers_paged)]
 	#[pallet::unbounded]
-	pub type PagedErasStakers<T: Config> = StorageNMap<
+	pub type ErasStakersPaged<T: Config> = StorageNMap<
 		_,
 		(
 			NMapKey<Twox64Concat, EraIndex>,
@@ -460,6 +460,26 @@ pub mod pallet {
 			NMapKey<Twox64Concat, PageIndex>,
 		),
 		Exposure<T::AccountId, BalanceOf<T>>,
+		ValueQuery,
+	>;
+
+	/// History of rewards claimed by validator by era and page.
+	///
+	/// This is keyed by era and validator stash which maps to the set of page indexes which have
+	/// been claimed.
+	///
+	/// It is removed after `HISTORY_DEPTH` eras.
+	#[pallet::storage]
+	#[pallet::getter(fn claimed_rewards)]
+	#[pallet::unbounded]
+	pub type ClaimedRewards<T: Config> = StorageDoubleMap<
+		_,
+		Twox64Concat,
+		EraIndex,
+		Twox64Concat,
+		// Validator stash
+		T::AccountId,
+		Vec<PageIndex>,
 		ValueQuery,
 	>;
 
@@ -582,6 +602,58 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn current_planned_session)]
 	pub type CurrentPlannedSession<T> = StorageValue<_, SessionIndex, ValueQuery>;
+
+	/// Wrapper struct for `ErasRewards`, `ClaimedRewards`, `ErasRewardsClipped`,
+	/// `ErasRewardsPaged`, `ErasTotalStake`.
+	pub(crate) struct EraInfo<T>(sp_std::marker::PhantomData<T>);
+	impl<T: Config> EraInfo<T> {
+		pub(crate) fn is_rewards_claimed(
+			era: EraIndex,
+			validator: T::AccountId,
+			page: PageIndex,
+		) -> bool {
+			ClaimedRewards::<T>::get(era, validator).iter().find(|&&p| page == p).is_some()
+		}
+
+		pub(crate) fn set_rewards_as_claimed(
+			era: EraIndex,
+			validator: T::AccountId,
+			page: PageIndex,
+		) {
+			ClaimedRewards::<T>::mutate(era, validator, |pages| {
+				pages.push(page);
+			})
+		}
+
+		pub(crate) fn set_validator_exposure(
+			era: EraIndex,
+			validator: &T::AccountId,
+			exposure: Exposure<T::AccountId, BalanceOf<T>>,
+		) {
+			<ErasStakers<T>>::insert(era, &validator, &exposure);
+
+			exposure
+				.in_chunks_of(T::ExposurePageSize::get() as usize)
+				.iter()
+				.enumerate()
+				.for_each(|(page, paged_exposure)| {
+					<ErasStakersPaged<T>>::insert((era, &validator, page as u32), &paged_exposure);
+				});
+
+			// FIXME: get rid of clipped exposure
+			let mut exposure_clipped = exposure;
+			let clipped_max_len = T::MaxNominatorRewardedPerValidator::get() as usize;
+			if exposure_clipped.others.len() > clipped_max_len {
+				exposure_clipped.others.sort_by(|a, b| a.value.cmp(&b.value).reverse());
+				exposure_clipped.others.truncate(clipped_max_len);
+			}
+			<ErasStakersClipped<T>>::insert(era, &validator, exposure_clipped);
+		}
+
+		pub(crate) fn set_total_stake(era: EraIndex, total_stake: BalanceOf<T>) {
+			<ErasTotalStake<T>>::insert(era, total_stake);
+		}
+	}
 
 	/// Indices of validators that have offended in the active era and whether they are currently
 	/// disabled.
