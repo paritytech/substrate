@@ -480,21 +480,37 @@ pub fn pallet(attr: TokenStream, item: TokenStream) -> TokenStream {
 	pallet::pallet(attr, item)
 }
 
+/// An attribute macro that can be attached to a (non-empty) module declaration. Doing so will
+/// designate that module as a benchmarking module.
+///
+/// See `frame_support::benchmarking` for more info.
 #[proc_macro_attribute]
 pub fn benchmarks(attr: TokenStream, tokens: TokenStream) -> TokenStream {
 	benchmark::benchmarks(attr, tokens, false)
 }
 
+// An attribute macro that can be attached to a (non-empty) module declaration. Doing so will
+// designate that module as an instance benchmarking module.
+//
+// See `frame_support::benchmarking` for more info.
 #[proc_macro_attribute]
 pub fn instance_benchmarks(attr: TokenStream, tokens: TokenStream) -> TokenStream {
 	benchmark::benchmarks(attr, tokens, true)
 }
 
+/// An attribute macro used to declare a benchmark within a benchmarking module. Must be
+/// attached to a function definition containing an `#[extrinsic_call]` attribute.
+///
+/// See `frame_support::benchmarking` for more info.
 #[proc_macro_attribute]
 pub fn benchmark(attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 	benchmark::benchmark(attrs, tokens, false)
 }
 
+/// An attribute macro used to declare an instance benchmark within a benchmarking module. Must
+/// be attached to a function definition containing an `#[extrinsic_call]` attribute.
+///
+/// See `frame_support::benchmarking` for more info.
 #[proc_macro_attribute]
 pub fn instance_benchmark(attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 	benchmark::benchmark(attrs, tokens, true)
