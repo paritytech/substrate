@@ -607,17 +607,26 @@ pub mod pallet {
 	/// `ErasRewardsPaged`, `ErasTotalStake`.
 	pub(crate) struct EraInfo<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> EraInfo<T> {
-		pub(crate) fn is_rewards_claimed(
+
+		// TODO: Clean up in 84 eras
+		// looks at ledger for older non paged rewards, and `ClaimedRewards` for newer paged rewards.
+		pub(crate) fn temp_is_rewards_claimed(
 			era: EraIndex,
-			validator: T::AccountId,
+			ledger: &StakingLedger<T>,
+			validator: &T::AccountId,
 			page: PageIndex,
 		) -> bool {
+			ledger.claimed_rewards.binary_search(&era).is_ok() &&
+				Self::is_rewards_claimed(era, validator, page)
+		}
+
+		fn is_rewards_claimed(era: EraIndex, validator: &T::AccountId, page: PageIndex) -> bool {
 			ClaimedRewards::<T>::get(era, validator).iter().find(|&&p| page == p).is_some()
 		}
 
 		pub(crate) fn set_rewards_as_claimed(
 			era: EraIndex,
-			validator: T::AccountId,
+			validator: &T::AccountId,
 			page: PageIndex,
 		) {
 			ClaimedRewards::<T>::mutate(era, validator, |pages| {

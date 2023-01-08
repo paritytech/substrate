@@ -160,28 +160,34 @@ impl<T: Config> Pallet<T> {
 		})?;
 		let mut ledger = <Ledger<T>>::get(&controller).ok_or(Error::<T>::NotController)?;
 
+		// clean up older claimed rewards
 		ledger
 			.claimed_rewards
 			.retain(|&x| x >= current_era.saturating_sub(history_depth));
+		<Ledger<T>>::insert(&controller, &ledger);
 
-		match ledger.claimed_rewards.binary_search(&era) {
-			Ok(_) =>
-				return Err(Error::<T>::AlreadyClaimed
-					.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))),
-			Err(pos) => ledger
-				.claimed_rewards
-				.try_insert(pos, era)
-				// Since we retain era entries in `claimed_rewards` only upto
-				// `HistoryDepth`, following bound is always expected to be
-				// satisfied.
-				.defensive_map_err(|_| Error::<T>::BoundNotMet)?,
+		// todo(ank4n): remove
+		// match ledger.claimed_rewards.binary_search(&era) {
+		// 	Ok(_) =>
+		// 		return Err(Error::<T>::AlreadyClaimed
+		// 			.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))),
+		// 	Err(pos) => ledger
+		// 		.claimed_rewards
+		// 		.try_insert(pos, era)
+		// 		// Since we retain era entries in `claimed_rewards` only upto
+		// 		// `HistoryDepth`, following bound is always expected to be
+		// 		// satisfied.
+		// 		.defensive_map_err(|_| Error::<T>::BoundNotMet)?,
+		// }
+
+		if EraInfo::<T>::temp_is_rewards_claimed(era, &ledger, &ledger.stash, 0) {
+			return Err(Error::<T>::AlreadyClaimed
+				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0)))
+		} else {
+			EraInfo::<T>::set_rewards_as_claimed(era, &ledger.stash, 0);
 		}
 
-		let exposure = <ErasStakersClipped<T>>::get(&era, &ledger.stash);
-
 		// Input data seems good, no errors allowed after this point
-
-		<Ledger<T>>::insert(&controller, &ledger);
 
 		// Get Era reward points. It has TOTAL and INDIVIDUAL
 		// Find the fraction of the era reward that belongs to the validator
@@ -189,6 +195,8 @@ impl<T: Config> Pallet<T> {
 		//
 		// Then look at the validator, figure out the proportion of their reward
 		// which goes to them and each of their nominators.
+
+		let exposure = <ErasStakersClipped<T>>::get(&era, &ledger.stash);
 
 		let era_reward_points = <ErasRewardPoints<T>>::get(&era);
 		let total_reward_points = era_reward_points.total;
