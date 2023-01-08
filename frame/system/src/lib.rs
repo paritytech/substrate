@@ -360,6 +360,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		#[cfg(feature = "std")]
 		fn integrity_test() {
 			sp_io::TestExternalities::default().execute_with(|| {
 				T::BlockWeights::get().validate().expect("The weights are invalid.");
