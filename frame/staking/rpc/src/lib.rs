@@ -94,14 +94,20 @@ where
         let api = self.client.runtime_api();
 		let at = BlockId::hash(self.client.info().best_hash);
 
-		let runtime_api_result = api.query_points_to_balance(&at, pool_id);
-
-	    runtime_api_result.map_err(|e| {
+		api.query_points_to_balance(&at, pool_id).map_err(|e| {
 			CallError::Custom(ErrorObject::owned(
 				Error::RuntimeError.into(),
 				"Unable to query the points to balance conversion for pool.",
 				Some(e.to_string()),
 			))
-		})?
+		}).and_then(|r| {
+            r.map_err(|e| {
+                CallError::Custom(ErrorObject::owned(
+                    Error::RuntimeError.into(),
+                    "Unable to query the points to balance conversion for pool.",
+                    Some(e.to_string()),
+                ))
+            })?
+        })
     }
 }
