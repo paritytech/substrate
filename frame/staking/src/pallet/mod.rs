@@ -59,6 +59,7 @@ pub(crate) const SPECULATIVE_NUM_SPANS: u32 = 32;
 #[frame_support::pallet]
 pub mod pallet {
 	use frame_election_provider_support::ElectionDataProvider;
+	use frame_support::metadata::StorageEntryModifier::Default;
 
 	use crate::BenchmarkingConfig;
 
@@ -460,7 +461,7 @@ pub mod pallet {
 			NMapKey<Twox64Concat, PageIndex>,
 		),
 		Exposure<T::AccountId, BalanceOf<T>>,
-		ValueQuery,
+		OptionQuery,
 	>;
 
 	/// History of rewards claimed by validator by era and page.
@@ -607,9 +608,9 @@ pub mod pallet {
 	/// `ErasRewardsPaged`, `ErasTotalStake`.
 	pub(crate) struct EraInfo<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> EraInfo<T> {
-
-		// TODO: Clean up in 84 eras
-		// looks at ledger for older non paged rewards, and `ClaimedRewards` for newer paged rewards.
+		// TODO(ank4n): doc and clean up in 84 eras
+		// looks at ledger for older non paged rewards, and `ClaimedRewards` for newer paged
+		// rewards.
 		pub(crate) fn temp_is_rewards_claimed(
 			era: EraIndex,
 			ledger: &StakingLedger<T>,
@@ -622,6 +623,19 @@ pub mod pallet {
 
 		fn is_rewards_claimed(era: EraIndex, validator: &T::AccountId, page: PageIndex) -> bool {
 			ClaimedRewards::<T>::get(era, validator).iter().find(|&&p| page == p).is_some()
+		}
+
+		pub(crate) fn get_validator_exposure(
+			era: EraIndex,
+			validator: &T::AccountId,
+			page: PageIndex,
+		) -> Exposure<T::AccountId, BalanceOf<T>> {
+			return match <ErasStakersPaged<T>>::get((era, validator, page)) {
+				Some(paged_exposure) => paged_exposure,
+				// only return clipped exposure if page zero and no paged exposure entry
+				None if page == 0 => <ErasStakersClipped<T>>::get(&era, &ledger.stash),
+				_ => Default::Default(),
+			}
 		}
 
 		pub(crate) fn set_rewards_as_claimed(
@@ -649,7 +663,7 @@ pub mod pallet {
 					<ErasStakersPaged<T>>::insert((era, &validator, page as u32), &paged_exposure);
 				});
 
-			// FIXME: get rid of clipped exposure
+			// fixme(ank4n): no need to keep storing new clipped exposure
 			let mut exposure_clipped = exposure;
 			let clipped_max_len = T::MaxNominatorRewardedPerValidator::get() as usize;
 			if exposure_clipped.others.len() > clipped_max_len {
@@ -1612,6 +1626,8 @@ pub mod pallet {
 		///   NOTE: weights are assuming that payouts are made to alive stash account (Staked).
 		///   Paying even a dead controller is cheaper weight-wise. We don't do any refunds here.
 		/// # </weight>
+		// todo(ank4n): fix weights and breaking change. But leaving it will add to confusion and
+		// missed rewards.
 		#[pallet::call_index(18)]
 		#[pallet::weight(T::WeightInfo::payout_stakers_alive_staked(
 			T::MaxNominatorRewardedPerValidator::get()
@@ -1620,9 +1636,10 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			validator_stash: T::AccountId,
 			era: EraIndex,
+			page: PageIndex,
 		) -> DispatchResultWithPostInfo {
 			ensure_signed(origin)?;
-			Self::do_payout_stakers(validator_stash, era)
+			Self::do_payout_stakers(validator_stash, era, page)
 		}
 
 		/// Rebond a portion of the stash scheduled to be unlocked.
