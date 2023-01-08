@@ -2750,9 +2750,11 @@ pub mod pallet_macros {
 // Generate a macro that will enable/disable code based on `std` feature being active.
 sp_core::generate_feature_enabled_macro!(std_enabled, feature = "std", $);
 
+/// Contains macros, structs, and traits associated with v2 of the pallet benchmarking syntax.
 pub mod benchmarking {
 	pub use frame_support_procedural::{benchmark, benchmarks, instance_benchmarks};
 
+	// Used in #[benchmark] to ensure that benchmark function arguments implement [`ParamRange`].
 	#[doc(hidden)]
 	pub use static_assertions::assert_impl_all;
 
@@ -2766,7 +2768,10 @@ pub mod benchmarking {
 	/// [`Linear`] but this could later be extended to support additional non-linear parameter
 	/// ranges.
 	pub trait ParamRange {
+		/// Represents the (inclusive) starting number of this [`ParamRange`].
 		fn start(&self) -> u32;
+
+		/// Represents the (inclusive) ending number of this [`ParamRange`]
 		fn end(&self) -> u32;
 	}
 
