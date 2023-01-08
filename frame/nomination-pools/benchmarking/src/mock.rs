@@ -112,14 +112,20 @@ impl pallet_staking::Config for Runtime {
 	type ElectionProvider =
 		frame_election_provider_support::NoElection<(AccountId, BlockNumber, Staking, ())>;
 	type GenesisElectionProvider = Self::ElectionProvider;
-	type VoterList = VoterList;
+	type VoterList = <Runtime as pallet_stake_tracker::Config>::VoterList;
 	type TargetList = pallet_staking::UseValidatorsMap<Self>;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type HistoryDepth = ConstU32<84>;
 	type OnStakerSlash = Pools;
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
-	type EventListener = ();
+	type EventListener = StakeTracker;
+}
+
+impl pallet_stake_tracker::Config for Runtime {
+	type Currency = Balances;
+	type Staking = Staking;
+	type VoterList = VoterList;
 }
 
 parameter_types! {
@@ -185,6 +191,7 @@ frame_support::construct_runtime!(
 		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
 		VoterList: pallet_bags_list::<Instance1>::{Pallet, Call, Storage, Event<T>},
 		Pools: pallet_nomination_pools::{Pallet, Call, Storage, Event<T>},
+		StakeTracker: pallet_stake_tracker::{Pallet, Storage},
 	}
 );
 

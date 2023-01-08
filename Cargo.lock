@@ -5499,6 +5499,7 @@ dependencies = [
  "pallet-bags-list",
  "pallet-balances",
  "pallet-nomination-pools",
+ "pallet-stake-tracker",
  "pallet-staking",
  "pallet-staking-reward-curve",
  "pallet-timestamp",
