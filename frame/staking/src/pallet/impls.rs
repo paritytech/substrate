@@ -37,10 +37,7 @@ use sp_runtime::{
 	traits::{Bounded, Convert, One, SaturatedConversion, Saturating, StaticLookup, Zero},
 	Perbill,
 };
-use sp_staking::{
-	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
-	EraIndex, SessionIndex, Stake, StakingInterface,
-};
+use sp_staking::{offence::{DisableStrategy, OffenceDetails, OnOffenceHandler}, EraIndex, SessionIndex, Stake, StakingInterface, PageIndex};
 use sp_std::prelude::*;
 
 use crate::{
@@ -135,6 +132,7 @@ impl<T: Config> Pallet<T> {
 	pub(super) fn do_payout_stakers(
 		validator_stash: T::AccountId,
 		era: EraIndex,
+		page: PageIndex,
 	) -> DispatchResultWithPostInfo {
 		// Validate input data
 		let current_era = CurrentEra::<T>::get().ok_or_else(|| {
@@ -180,11 +178,11 @@ impl<T: Config> Pallet<T> {
 		// 		.defensive_map_err(|_| Error::<T>::BoundNotMet)?,
 		// }
 
-		if EraInfo::<T>::temp_is_rewards_claimed(era, &ledger, &ledger.stash, 0) {
+		if EraInfo::<T>::temp_is_rewards_claimed(era, &ledger, &ledger.stash, page) {
 			return Err(Error::<T>::AlreadyClaimed
 				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0)))
 		} else {
-			EraInfo::<T>::set_rewards_as_claimed(era, &ledger.stash, 0);
+			EraInfo::<T>::set_rewards_as_claimed(era, &ledger.stash, page);
 		}
 
 		// Input data seems good, no errors allowed after this point
@@ -196,7 +194,8 @@ impl<T: Config> Pallet<T> {
 		// Then look at the validator, figure out the proportion of their reward
 		// which goes to them and each of their nominators.
 
-		let exposure = <ErasStakersClipped<T>>::get(&era, &ledger.stash);
+		let exposure = EraInfo::<T>::get_validator_exposure(era, &ledger.stash, page);
+		// let exposure = EraInfo::<T>::get_validator_exposure(&era, &ledger.stash, page);
 
 		let era_reward_points = <ErasRewardPoints<T>>::get(&era);
 		let total_reward_points = era_reward_points.total;
