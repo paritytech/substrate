@@ -1,5 +1,5 @@
 [package]
-name = "pallet-election-provider-test"
+name = "pallet-election-provider-e2e-test"
 version = "1.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
