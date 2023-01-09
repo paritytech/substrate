@@ -29,6 +29,7 @@ use std::{
 const LOG_TARGET: &str = "storage-monitor";
 const THROTTLE_PERIOD: std::time::Duration = Duration::from_secs(2);
 
+/// Storage monitor service: checks the available space for the filesystem for fiven path.
 pub struct StorageMonitorService {
 	/// watched path
 	path: PathBuf,
@@ -43,7 +44,7 @@ pub struct StorageMonitorService {
 }
 
 impl StorageMonitorService {
-	/// creates new StorageMonitorService for given client config
+	/// Creates new StorageMonitorService for given client config
 	pub fn new_for_config(config: &Configuration) -> Result<Option<Self>, Error> {
 		Ok(match (config.available_storage_threshold, config.database.path()) {
 			(0, _) => {
@@ -94,7 +95,8 @@ impl StorageMonitorService {
 		})
 	}
 
-	/// main monitoring loop, intended to be spawn as essential task
+	/// Main monitoring loop, intended to be spawned as essential task. Quits if free space drop
+	/// below threshold.
 	pub async fn run(mut self) {
 		while let Some(watch_event) = self.stream.next().await {
 			match watch_event {
@@ -112,15 +114,15 @@ impl StorageMonitorService {
 		}
 	}
 
-	// returns free space in MB
+	/// Returns free space in MB, or error if statvfs failed.
 	fn free_space(path: &Path) -> Result<u64, Errno> {
 		let fs_stats = statvfs(path);
 		fs_stats.map(|stats| stats.blocks_available() * stats.block_size() / 1_000_000)
 	}
 
-	// Checks if the amount of free space for given `path` is below given `threshold`.
-	// If it dropped below, error is returned.
-	// System errors are silently ignored.
+	/// Checks if the amount of free space for given `path` is below given `threshold`.
+	/// If it dropped below, error is returned.
+	/// System errors are silently ignored.
 	fn check_free_space(path: &Path, threshold: u64) -> Result<(), Error> {
 		match StorageMonitorService::free_space(path.as_ref()) {
 			Ok(available_space) => {
