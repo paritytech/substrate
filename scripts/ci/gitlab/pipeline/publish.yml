@@ -235,6 +235,6 @@ publish-crates:
 publish-crates-manual:
   extends:                         .publish-crates-template
   rules:
-    - !reference [.crate-publishing-pipeline-rules, ref]
+    - !reference [.crate-publishing-pipeline, rules]
   when:                            manual
   allow_failure:                   true
