@@ -24,7 +24,6 @@ use frame_election_provider_support::{onchain, SequentialPhragmen};
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64},
-	weights::{constants::WEIGHT_REF_TIME_PER_SECOND, Weight},
 };
 use frame_system as system;
 use pallet_session::historical as pallet_session_historical;
@@ -37,13 +36,6 @@ type AccountId = u64;
 type AccountIndex = u32;
 type BlockNumber = u64;
 type Balance = u64;
-
-parameter_types! {
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(
-			Weight::from_parts(2u64 * WEIGHT_REF_TIME_PER_SECOND, u64::MAX)
-		);
-}
 
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
