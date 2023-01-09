@@ -225,9 +225,8 @@ pub mod pallet {
 		/// staker. In case of `bags-list`, this always means using `rebag` and `putInFrontOf`.
 		///
 		/// Invariant: what comes out of this list will always be a nominator.
-		///
-		/// NOTE: Staking does not maintain this list, it merely reads from it. The list is
-		/// maintained by `EventListener` implementors.
+		// NOTE: Staking does not maintain this list, it merely reads from it. The list is
+		// maintained by `EventListener` implementors.
 		type VoterList: ReadOnlySortedListProvider<Self::AccountId, Score = VoteWeight>;
 
 		/// WIP: This is a noop as of now, the actual business logic that's described below is going
