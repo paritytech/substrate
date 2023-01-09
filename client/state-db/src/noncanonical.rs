@@ -534,9 +534,6 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 							trace!(target: "state-db-pin", "Discarding unpinned non-canon block: {:?}", hash);
 							discard_values(&mut self.values, inserted);
 							self.parents.remove(&hash);
-							true
-						} else {
-							false
 						}
 					},
 					Entry::Vacant(_) => break,
