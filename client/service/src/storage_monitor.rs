@@ -100,6 +100,9 @@ impl StorageMonitorService {
 	pub async fn run(mut self) {
 		while let Some(watch_event) = self.stream.next().await {
 			match watch_event {
+				Ok( Event { kind: notify::EventKind::Access(_), .. } ) => {
+					//skip non mutating events
+				},
 				Ok(_) =>
 					if self.recent_check.elapsed() >= THROTTLE_PERIOD {
 						self.recent_check = Instant::now();
