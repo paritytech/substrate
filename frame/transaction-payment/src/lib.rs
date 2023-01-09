@@ -607,11 +607,11 @@ where
 		}
 	}
 
-	fn length_to_fee(length: u32) -> BalanceOf<T> {
+	pub fn length_to_fee(length: u32) -> BalanceOf<T> {
 		T::LengthToFee::weight_to_fee(&Weight::from_ref_time(length as u64))
 	}
 
-	fn weight_to_fee(weight: Weight) -> BalanceOf<T> {
+	pub fn weight_to_fee(weight: Weight) -> BalanceOf<T> {
 		// cap the weight to the maximum defined in runtime, otherwise it will be the
 		// `Bounded` maximum of its data type, which is not desired.
 		let capped_weight = weight.min(T::BlockWeights::get().max_block);
