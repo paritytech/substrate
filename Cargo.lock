@@ -12876,13 +12876,3 @@ dependencies = [
  "cc",
  "libc",
 ]
-
-[[patch.unused]]
-name = "ark-algebra-test-templates"
-version = "0.4.0-alpha.7"
-source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#667ec3e82e86d168b5a4ba67bd97cacdc963a2f3"
-
-[[patch.unused]]
-name = "ark-r1cs-std"
-version = "0.4.0-alpha.3"
-source = "git+https://github.com/arkworks-rs/r1cs-std/#054969fbcee949b9030bbc166865cba1d527517e"
