@@ -253,9 +253,6 @@ pub mod pallet {
 
 		/// Something that listens to staking updates and performs actions based on the data it
 		/// receives.
-		/// NOTE: Once we have more implementors of EventListener - this could be done similarly to
-		/// `OnRuntimeUpdate` - just a tuple of all sorts of pallets implementing the trait that all
-		/// react to the interface methods being called or ignore them.
 		type EventListener: sp_staking::OnStakingUpdate<Self::AccountId, BalanceOf<Self>>;
 
 		/// The maximum number of `unlocking` chunks a [`StakingLedger`] can
