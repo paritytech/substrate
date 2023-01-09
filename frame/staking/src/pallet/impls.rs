@@ -276,7 +276,7 @@ impl<T: Config> Pallet<T> {
 		});
 		T::Currency::set_lock(STAKING_ID, &ledger.stash, ledger.total, WithdrawReasons::all());
 		<Ledger<T>>::insert(controller, ledger);
-		T::EventListener::on_update_ledger(&ledger.stash, prev_ledger);
+		T::EventListener::on_stake_update(&ledger.stash, prev_ledger);
 	}
 
 	/// Chill a stash account.
@@ -668,7 +668,7 @@ impl<T: Config> Pallet<T> {
 		Self::do_remove_nominator(stash);
 
 		frame_system::Pallet::<T>::dec_consumers(stash);
-		T::EventListener::on_reaped(stash);
+		T::EventListener::on_unstake(stash);
 
 		Ok(())
 	}
@@ -880,7 +880,7 @@ impl<T: Config> Pallet<T> {
 	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T>) {
 		let prev_nominations = Self::nominations(who);
 		Nominators::<T>::insert(who, nominations);
-		T::EventListener::on_nominator_add(who, prev_nominations.unwrap_or_default());
+		T::EventListener::on_nominator_update(who, prev_nominations.unwrap_or_default());
 	}
 
 	/// This function will remove a nominator from the `Nominators` storage map,

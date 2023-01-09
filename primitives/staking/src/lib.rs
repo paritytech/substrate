@@ -81,21 +81,23 @@ pub struct Stake<AccountId, Balance> {
 	pub active: Balance,
 }
 
-/// A generic staking event listener. 
-/// 
+/// A generic staking event listener.
+///
 /// Note that the interface is designed in a way that the events are fired post-action, so any
 /// pre-action data that is needed needs to be passed to interface methods.
 /// The rest of the data can be retrieved by using `StakingInterface`.
 pub trait OnStakingUpdate<AccountId, Balance> {
 	/// Fired when the stake amount of someone updates.
 	///
-	/// Also called when someone stakes for the first time. (TODO: is it? this is why we need unit tests for this pallet alone). 
-	/// 
-	/// This is effectively any changes to the bond amount, such as bonding more funds, and unbonding. 
+	/// Also called when someone stakes for the first time. (TODO: is it? this is why we need unit
+	/// tests for this pallet alone).
+	///
+	/// This is effectively any changes to the bond amount, such as bonding more funds, and
+	/// unbonding.
 	fn on_stake_update(who: &AccountId, prev_stake: Option<Stake<AccountId, Balance>>);
 	/// Fired when someone sets their intention to nominate, either new, or existing one.
 	fn on_nominator_update(who: &AccountId, prev_nominations: Vec<AccountId>);
-	/// Fired when someone sets their intention to validate, either new, or existing one. 
+	/// Fired when someone sets their intention to validate, either new, or existing one.
 	fn on_validator_add(who: &AccountId);
 	/// Fired when someone removes their intention to validate, either due to chill or nominating.
 	fn on_validator_remove(who: &AccountId); // only fire this event when this is an actual Validator
@@ -107,11 +109,11 @@ pub trait OnStakingUpdate<AccountId, Balance> {
 
 #[cfg(feature = "std")]
 impl<AccountId, Balance> OnStakingUpdate<AccountId, Balance> for () {
-	fn on_update_ledger(_: &AccountId, _: Option<Stake<AccountId, Balance>>) {
+	fn on_stake_update(_: &AccountId, _: Option<Stake<AccountId, Balance>>) {
 		// stub
 	}
 
-	fn on_nominator_add(_: &AccountId, _: Vec<AccountId>) {
+	fn on_nominator_update(_: &AccountId, _: Vec<AccountId>) {
 		// stub
 	}
 
@@ -127,7 +129,7 @@ impl<AccountId, Balance> OnStakingUpdate<AccountId, Balance> for () {
 		// stub
 	}
 
-	fn on_reaped(_: &AccountId) {
+	fn on_unstake(_: &AccountId) {
 		// stub
 	}
 }

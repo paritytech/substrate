@@ -69,7 +69,7 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
-	fn on_update_ledger(who: &T::AccountId, _: Option<Stake<T::AccountId, BalanceOf<T>>>) {
+	fn on_stake_update(who: &T::AccountId, _: Option<Stake<T::AccountId, BalanceOf<T>>>) {
 		let current_stake = T::Staking::stake(who).unwrap();
 		let current_active = current_stake.active;
 
@@ -85,7 +85,7 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 		}
 	}
 
-	fn on_nominator_add(who: &T::AccountId, _prev_nominations: Vec<T::AccountId>) {
+	fn on_nominator_update(who: &T::AccountId, _prev_nominations: Vec<T::AccountId>) {
 		// NOTE: We ignore the result here, because this method can be called when the nominator is
 		// already in the list, just changing their nominations.
 		let _ =
@@ -111,5 +111,5 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 		let _ = T::VoterList::on_remove(who).defensive();
 	}
 
-	fn on_reaped(_who: &T::AccountId) {}
+	fn on_unstake(_who: &T::AccountId) {}
 }
