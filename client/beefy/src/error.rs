@@ -22,12 +22,14 @@
 
 use std::fmt::Debug;
 
-#[derive(Debug, thiserror::Error, PartialEq)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
 	#[error("Backend: {0}")]
 	Backend(String),
 	#[error("Keystore error: {0}")]
 	Keystore(String),
+	#[error("Runtime api error: {0}")]
+	RuntimeApi(sp_api::ApiError),
 	#[error("Signature error: {0}")]
 	Signature(String),
 	#[error("Session uninitialized")]

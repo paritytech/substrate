@@ -903,9 +903,65 @@ where
 	/// isn't necessarily the best block if there are pending authority set changes.
 	pub(crate) fn report_equivocation(
 		&self,
-		_proof: EquivocationProof<NumberFor<B>, AuthorityId, Signature>,
+		proof: EquivocationProof<NumberFor<B>, AuthorityId, Signature>,
 	) -> Result<(), Error> {
-		todo!()
+		let rounds =
+			self.persisted_state.voting_oracle.active_rounds().ok_or(Error::UninitSession)?;
+		let (validators, validator_set_id) = (rounds.validators(), rounds.validator_set_id());
+
+		if proof.set_id != validator_set_id {
+			debug!(target: "beefy", "🥩 Skip equivocation report for old set id: {:?}", proof.set_id);
+			return Ok(())
+		} else if let Some(local_id) = self.key_store.authority_id(validators) {
+			if proof.equivocation.id == local_id {
+				debug!(target: "beefy", "🥩 Skip equivocation report for own equivocation");
+				return Ok(())
+			}
+		}
+
+		let number = proof.equivocation.round_number;
+		let hash = self
+			.backend
+			.blockchain()
+			.expect_block_hash_from_id(&BlockId::Number(number))
+			.map_err(|err| {
+				let err_msg = format!(
+					"Couldn't get hash for block #{:?} (error: {:?}), skipping equivocation..",
+					number, err
+				);
+				error!(target: "beefy", "🥩 {}", err_msg);
+				Error::Backend(err_msg)
+			})?;
+		// generate key ownership proof at that block
+		// let key_owner_proof = match self
+		// 	.runtime
+		// 	.runtime_api()
+		// 	.generate_key_ownership_proof(
+		// 		&BlockId::Hash(hash),
+		// 		validator_set_id,
+		// 		proof.equivocation.id.clone(),
+		// 	)
+		// 	.map_err(Error::RuntimeApi)?
+		// {
+		// 	Some(proof) => proof,
+		// 	None => {
+		// 		debug!(target: "beefy", "🥩 Equivocation offender not part of the authority set.");
+		// 		return Ok(())
+		// 	},
+		// };
+
+		// submit equivocation report at **best** block
+		let best_block_hash = self.backend.blockchain().info().best_hash;
+		// self.client
+		// 	.runtime_api()
+		// 	.submit_report_equivocation_unsigned_extrinsic(
+		// 		&BlockId::Hash(best_block_hash),
+		// 		proof,
+		// 		key_owner_proof,
+		// 	)
+		// 	.map_err(Error::RuntimeApi)?;
+
+		Ok(())
 	}
 }
 
