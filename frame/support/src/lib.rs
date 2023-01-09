@@ -2851,17 +2851,12 @@ pub mod pallet_macros {
 /// not been stabilized yet—`#[extrinsic_call]` is parsed and consumed as part of the benchmark
 /// definition parsing code so it never expands as its own macro.
 ///
-/// ### `#[extra]`
+/// ### Optional Attributes
 ///
-/// The optional `#[extra]` attribute can be applied to benchmark function definitions. This
-/// attribute follows the semantics and behavior it did in the old benchmarking syntax in
-/// `frame_benchmarking`.
-///
-/// ## `#[skip_meta]`
-///
-/// The optional `#[skip_meta]` attribute can be applied to benchmark function definitions.
-/// This attribute follows the semantics and behavior it did in the old benchmarking syntax in
-/// `frame_benchmarking`.
+/// The keywords `extra` and `skip_meta` can be provided as optional arguments to the
+/// `#[benchmark]` attribute, i.e. `#[benchmark(extra, skip_meta)]`. Including either of these
+/// will enable the `extra` or `skip_meta` option, respectively. These options enable the same
+/// behavior they did in the old benchmarking syntax in `frame_benchmarking`.
 ///
 /// ## Where Clause
 ///
