@@ -146,13 +146,11 @@ async fn run<Block: BlockT, HostFns: HostFunctions>(
 		full_extensions(),
 	)?;
 
-	let storage_changes = changes
-		.drain_storage_changes(
-			&externalities.backend,
-			&mut Default::default(),
-			externalities.state_version,
-		)
-		.unwrap();
+	let storage_changes = changes.drain_storage_changes(
+		&externalities.backend,
+		&mut Default::default(),
+		externalities.state_version,
+	)?;
 
 	externalities
 		.backend
