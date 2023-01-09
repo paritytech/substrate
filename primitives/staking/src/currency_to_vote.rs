@@ -17,6 +17,7 @@
 
 use sp_arithmetic::traits::{UniqueSaturatedFrom, UniqueSaturatedInto};
 use sp_runtime::SaturatedConversion;
+
 /// A trait similar to `Convert` to convert values from `B` an abstract balance type
 /// into u64 and back from u128. (This conversion is used in election and other places where complex
 /// calculation over balance type is needed)
