@@ -233,7 +233,7 @@ variables:
     SPUB_TMP: artifacts
 
 .default-template: &default-template
-  retry:
+    retry:
       max: 2
       when:
         - runner_system_failure
