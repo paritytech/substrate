@@ -2856,7 +2856,19 @@ pub mod pallet_macros {
 /// The keywords `extra` and `skip_meta` can be provided as optional arguments to the
 /// `#[benchmark]` attribute, i.e. `#[benchmark(extra, skip_meta)]`. Including either of these
 /// will enable the `extra` or `skip_meta` option, respectively. These options enable the same
-/// behavior they did in the old benchmarking syntax in `frame_benchmarking`.
+/// behavior they did in the old benchmarking syntax in `frame_benchmarking`, namely:
+///
+/// #### `extra`
+///
+/// Specifies that this benchmark should not normally run. To run benchmarks marked with
+/// `extra`, you will need to invoke the `frame-benchmarking-cli` with `--extra`.
+///
+/// #### `skip_meta`
+///
+/// Specifies that the benchmarking framework should not analyze the storage keys that
+/// benchmarked code read or wrote. This useful to suppress the prints in the form of unknown
+/// 0x… in case a storage key that does not have metadata. Note that this skips the analysis
+/// of all accesses, not just ones without metadata.
 ///
 /// ## Where Clause
 ///
