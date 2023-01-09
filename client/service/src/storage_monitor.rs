@@ -35,7 +35,7 @@ pub struct StorageMonitorService {
 	path: PathBuf,
 	/// notify's events receiver
 	stream: TracingUnboundedReceiver<Result<Event, notify::Error>>,
-	/// number of bytes that shall be free and available on the filesystem for watched path
+	/// number of megabytes that shall be free and available on the filesystem for watched path
 	threshold: u64,
 	/// timestamp of the most recent check
 	recent_check: Instant,
