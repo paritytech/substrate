@@ -525,18 +525,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "beefy-merkle-tree"
-version = "4.0.0-dev"
-dependencies = [
- "array-bytes",
- "env_logger",
- "hash-db",
- "hash256-std-hasher",
- "log",
- "tiny-keccak",
-]
-
-[[package]]
 name = "bincode"
 version = "1.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4320,6 +4308,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8452105ba047068f40ff7093dd1d9da90898e63dd61736462e9cdda6a90ad3c3"
 
 [[package]]
+name = "merkle-tree"
+version = "4.0.0-dev"
+dependencies = [
+ "array-bytes",
+ "env_logger",
+ "hash-db",
+ "hash256-std-hasher",
+ "log",
+ "tiny-keccak",
+]
+
+[[package]]
 name = "merlin"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5440,10 +5440,10 @@ name = "pallet-beefy-mmr"
 version = "4.0.0-dev"
 dependencies = [
  "array-bytes",
- "beefy-merkle-tree",
  "frame-support",
  "frame-system",
  "log",
+ "merkle-tree",
  "pallet-beefy",
  "pallet-mmr",
  "pallet-session",
