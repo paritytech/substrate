@@ -203,8 +203,15 @@ pub mod pallet {
 		#[pallet::constant]
 		type PalletId: Get<LockIdentifier>;
 
+		/// This will come from the outer runtime, and it will be the amalgamated lock ids.
+		type RuntimeLockIds: From<crate::pallet::LockIds>;
+
 		/// The currency that people are electing with.
-		type Currency: LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>
+		type Currency: LockableCurrency<
+			Self::AccountId,
+			Moment = Self::BlockNumber,
+			LockId = Self::RuntimeLockId
+		>
 			+ ReservableCurrency<Self::AccountId>;
 
 		/// What to do when the members change.
@@ -361,9 +368,20 @@ pub mod pallet {
 				},
 			};
 
+			// local lock id.
+			#[pallet::composite]
+			enum LockId {
+				CouncilVoting,
+				OtherReason,
+			}
+
+			let id: T::RuntimeLockIds = LockId::CouncilVoting.into();
+
 			// Amount to be locked up.
 			let locked_stake = value.min(T::Currency::free_balance(&who));
-			T::Currency::set_lock(T::PalletId::get(), &who, locked_stake, WithdrawReasons::all());
+			// TODO: the currency implementations, whatever it might be, will know if this lock/hold
+			// operation is going to collide with collide with other existing locks or not.
+			T::Currency::set_lock(id, &who, locked_stake, WithdrawReasons::all());
 
 			Voting::<T>::insert(&who, Voter { votes, deposit: new_deposit, stake: locked_stake });
 			Ok(None::<Weight>.into())

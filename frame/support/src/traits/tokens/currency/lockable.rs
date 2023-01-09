@@ -29,6 +29,10 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	/// The quantity used to denote time; usually just a `BlockNumber`.
 	type Moment;
 
+	/// Opaque Identifier for lock.
+	// TODO: can already be ported to master with LockIdentifier used everywhere.
+	type LockId;
+
 	/// The maximum number of locks a user should have on their account.
 	type MaxLocks: Get<u32>;
 
@@ -39,7 +43,7 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	///
 	/// If the lock `id` already exists, this will update it.
 	fn set_lock(
-		id: LockIdentifier,
+		id: Self::LockId,
 		who: &AccountId,
 		amount: Self::Balance,
 		reasons: WithdrawReasons,
@@ -54,7 +58,7 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	/// - maximum `amount`
 	/// - bitwise mask of all `reasons`
 	fn extend_lock(
-		id: LockIdentifier,
+		id: Self::LockId,
 		who: &AccountId,
 		amount: Self::Balance,
 		reasons: WithdrawReasons,
