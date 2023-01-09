@@ -100,6 +100,7 @@ pub trait OnStakingUpdate<AccountId, Balance> {
 	fn on_reaped(who: &AccountId); // -> basically `kill_stash`
 }
 
+#[cfg(feature = "std")]
 impl<AccountId, Balance> OnStakingUpdate<AccountId, Balance> for () {
 	fn on_update_ledger(_: &AccountId, _: Option<Stake<AccountId, Balance>>) {
 		// stub
