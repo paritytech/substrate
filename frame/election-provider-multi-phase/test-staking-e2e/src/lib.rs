@@ -54,13 +54,13 @@ fn setup_works() {
 	ExtBuilder::default().initialize_first_session(true).build_and_execute(|| {
 		assert_eq!(active_era(), 0);
 
-		start_next_active_era();
-		start_next_active_era();
+		assert!(start_next_active_era().is_ok());
+		assert!(start_next_active_era().is_ok());
 		assert_eq!(active_era(), 2);
 
 		// if the solution is delayed, EPM will end up in emergency mode and eras won't progress.
-		start_next_active_era_delayed_solution();
-		start_next_active_era_delayed_solution();
+		assert!(start_next_active_era_delayed_solution().is_ok());
+		assert!(start_next_active_era_delayed_solution().is_ok());
 		assert!(ElectionProviderMultiPhase::current_phase().is_emergency());
 		assert_eq!(active_era(), 3);
 	});
@@ -104,8 +104,8 @@ fn enters_emergency_phase_after_forcing_before_elect() {
 		log_current_time();
 
 		// try to advance 2 eras with a delayed solution.
-		start_next_active_era_delayed_solution();
-		start_next_active_era_delayed_solution();
+		assert!(start_next_active_era_delayed_solution().is_ok());
+		assert!(start_next_active_era_delayed_solution().is_ok());
 
 		// EPM is still in emergency phase.
 		assert!(ElectionProviderMultiPhase::current_phase().is_emergency());
@@ -135,8 +135,16 @@ fn enters_emergency_phase_after_forcing_before_elect() {
 }
 
 #[test]
-/// Continously slash 10% of the active validators per era, even during the emergency phase.
-fn continous_slashes() {
+/// Continously slash 10% of the active validators per era.
+///
+/// Since the `OffendingValidatorsThreshold` is only checked per era staking does not force a new
+/// era even as the number of active validators is decreasing across eras. When processing a new
+/// slash, staking calculates the offending threshold based on the lenght of the current list of
+/// active validators. Thus, slashing a percentage of the current validators that is lower than
+/// `OffendingValidatorsThreshold` will never force a new era. However, as the slashes progress, if
+/// the subsequent elections do not meet the minimum election untrusted score, the election will
+/// fail and enter in emenergency mode.
+fn continous_slashes_below_offending_threshold() {
 	ExtBuilder::default()
 		.initialize_first_session(true)
 		.validator_count(10)
@@ -144,16 +152,23 @@ fn continous_slashes() {
 			assert_eq!(Session::validators().len(), 10);
 			let mut active_validator_set = Session::validators();
 
-			// slash 10% of the active validators and progress era.
-			while active_validator_set.len() != 0 {
+			// set a minimum election score.
+			assert!(set_minimum_election_score(500, 1000, 500).is_ok());
+
+			// slash 10% of the active validators and progress era until the minimum trusted score
+			// is reached.
+			while active_validator_set.len() > 0 {
 				let slashed = slash_percentage(Perbill::from_percent(10));
 				assert_eq!(slashed.len(), 1);
-				start_next_active_era();
 
-				let _ = slashed
-					.iter()
-					.map(|s| active_validator_set.retain(|x| x != s))
-					.collect::<Vec<_>>();
+				// break loop when era does not progress; EPM is in emergency phase as election
+				// failed due to election minimum score.
+				if start_next_active_era().is_err() {
+					assert!(ElectionProviderMultiPhase::current_phase().is_emergency());
+					break
+				}
+
+				active_validator_set = Session::validators();
 
 				log!(
 					trace,

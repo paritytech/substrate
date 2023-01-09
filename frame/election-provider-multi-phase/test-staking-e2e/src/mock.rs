@@ -17,6 +17,7 @@
 
 #![allow(dead_code)]
 
+use _feps::ExtendedBalance;
 use frame_support::{
 	parameter_types, traits,
 	traits::{GenesisBuild, Hooks},
@@ -24,7 +25,7 @@ use frame_support::{
 };
 use frame_system::EnsureRoot;
 use sp_core::{ConstU32, Get, H256};
-use sp_npos_elections::{BalancingConfig, VoteWeight};
+use sp_npos_elections::{BalancingConfig, ElectionScore, VoteWeight};
 use sp_runtime::{
 	testing,
 	traits::{IdentityLookup, Zero},
@@ -603,21 +604,22 @@ pub(crate) fn advance_session_delayed_solution() {
 }
 
 /// Progress until the given era.
-pub(crate) fn start_active_era(era_index: EraIndex, delay_solution: bool) {
+pub(crate) fn start_active_era(era_index: EraIndex, delay_solution: bool) -> Result<(), ()> {
 	start_session((era_index * <SessionsPerEra as Get<u32>>::get()).into(), delay_solution);
 
 	// if the solution was not delayed, era should have progressed.
-	if !delay_solution {
-		assert_eq!(active_era(), era_index);
-		assert_eq!(current_era(), active_era());
+	if !delay_solution && (active_era() != era_index || current_era() != active_era()) {
+		Err(())
+	} else {
+		Ok(())
 	}
 }
 
-pub(crate) fn start_next_active_era() {
+pub(crate) fn start_next_active_era() -> Result<(), ()> {
 	start_active_era(active_era() + 1, false)
 }
 
-pub(crate) fn start_next_active_era_delayed_solution() {
+pub(crate) fn start_next_active_era_delayed_solution() -> Result<(), ()> {
 	start_active_era(active_era() + 1, true)
 }
 
@@ -726,4 +728,18 @@ pub(crate) fn slash_percentage(percentage: Perbill) -> Vec<u128> {
 		}
 	}
 	slashed
+}
+
+pub(crate) fn set_minimum_election_score(
+	minimal_stake: ExtendedBalance,
+	sum_stake: ExtendedBalance,
+	sum_stake_squared: ExtendedBalance,
+) -> Result<(), ()> {
+	let election_score = ElectionScore { minimal_stake, sum_stake, sum_stake_squared };
+	ElectionProviderMultiPhase::set_minimum_untrusted_score(
+		RuntimeOrigin::root(),
+		Some(election_score),
+	)
+	.map(|_| ())
+	.map_err(|_| ())
 }
