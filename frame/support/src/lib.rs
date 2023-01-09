@@ -2765,7 +2765,7 @@ pub mod pallet_macros {
 ///
 /// ## General Syntax
 ///
-/// ```no_run
+/// ```ignore
 /// #![cfg(feature = "runtime-benchmarks")]
 ///
 /// use super::{mock_helpers::*, Pallet as MyPallet};
@@ -2877,7 +2877,7 @@ pub mod pallet_macros {
 /// clause as the (only) argument to the `#[benchmarks]` or `#[instance_benchmarks]` attribute
 /// macros. Below is an example of this taken from the `message-queue` pallet.
 ///
-/// ```no_run
+/// ```ignore
 /// #[benchmarks(
 /// 	where
 /// 		<<T as Config>::MessageProcessor as ProcessMessage>::Origin: From<u32> + PartialEq,
@@ -2895,7 +2895,7 @@ pub mod pallet_macros {
 /// including the `frame_benchmarking::impl_benchmark_test_suite` macro.
 ///
 /// An example is shown below (taken from the `message-queue` pallet's `benchmarking` module):
-/// ```no_run
+/// ```ignore
 /// #[benchmarks]
 /// mod benchmarks {
 /// 	use super::*;
