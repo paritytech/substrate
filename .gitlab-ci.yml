@@ -42,6 +42,29 @@ workflow:
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH
 
+.shared-default: &shared-default
+    retry:
+      max: 2
+      when:
+        - runner_system_failure
+        - unknown_failure
+        - api_failure
+    cache: {}
+
+.default-pipeline-definitions:
+  default:
+    <<: *shared-default
+    interruptible: true
+
+.crate-publishing-pipeline-definitions:
+  default:
+    <<: *shared-default
+    # The crate-publishing pipeline should not be interruptible so that we'll be able to run the
+    # publishing automation jobs to completion despite the "Auto-cancel redundant pipelines" CI
+    # setting (relevant because the crate-publishing pipeline runs on `master`, so future pipelines
+    # on `master` might cancel it before the publishing jobs run to completion).
+    interruptible: false
+
 variables:
   GIT_STRATEGY:                    fetch
   GIT_DEPTH:                       100
@@ -231,29 +254,6 @@ variables:
     REPO: substrate
     REPO_OWNER: paritytech
     SPUB_TMP: artifacts
-
-.shared-default: &shared-default
-    retry:
-      max: 2
-      when:
-        - runner_system_failure
-        - unknown_failure
-        - api_failure
-    cache: {}
-
-.default-pipeline-definitions:
-  default:
-    <<: *shared-default
-    interruptible: true
-
-.crate-publishing-pipeline-definitions:
-  default:
-    <<: *shared-default
-    # The crate-publishing pipeline should not be interruptible so that we'll be able to run the
-    # publishing automation jobs to completion despite the "Auto-cancel redundant pipelines" CI
-    # setting (relevant because the crate-publishing pipeline runs on `master`, so future pipelines
-    # on `master` might cancel it before the publishing jobs run to completion).
-    interruptible: false
 
 #### stage:                       .pre
 
