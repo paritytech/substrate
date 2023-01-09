@@ -339,7 +339,7 @@ impl<T: Config> Pallet<T> {
 			if maybe_new_era_validators.is_some() &&
 				matches!(ForceEra::<T>::get(), Forcing::ForceNew)
 			{
-				ForceEra::<T>::put(Forcing::NotForcing);
+				Self::set_force_era(Forcing::NotForcing);
 			}
 
 			maybe_new_era_validators
@@ -717,11 +717,18 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
+	/// Helper to set a new `ForceEra` mode.
+	pub(crate) fn set_force_era(mode: Forcing) {
+		log!(info, "Setting force era mode {:?}.", mode);
+		ForceEra::<T>::put(mode);
+		Self::deposit_event(Event::<T>::ForceEra { mode });
+	}
+
 	/// Ensures that at the end of the current session there will be a new era.
 	pub(crate) fn ensure_new_era() {
 		match ForceEra::<T>::get() {
 			Forcing::ForceAlways | Forcing::ForceNew => (),
-			_ => ForceEra::<T>::put(Forcing::ForceNew),
+			_ => Self::set_force_era(Forcing::ForceNew),
 		}
 	}
 
