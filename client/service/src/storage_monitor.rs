@@ -39,7 +39,7 @@ pub struct StorageMonitorService {
 impl StorageMonitorService {
 	/// creates new StorageMonitorService for given client config
 	pub fn new_for_config(config: &Configuration) -> Result<Option<Self>, Error> {
-		Ok(match (config.available_storage_theshold, config.database.path()) {
+		Ok(match (config.available_storage_threshold, config.database.path()) {
 			(0, _) => {
 				log::info!(
 					target: LOG_TARGET,
@@ -96,7 +96,7 @@ impl StorageMonitorService {
 						break
 					},
 				Err(e) => {
-					println!("watch error: {:?}", e);
+					log::error!(target: LOG_TARGET, "watch error: {:?}", e);
 				},
 			}
 		}

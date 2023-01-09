@@ -367,7 +367,7 @@ mod tests {
 				base_path: None,
 				informant_output_format: Default::default(),
 				runtime_cache_size: 2,
-				available_storage_theshold: 1000,
+				available_storage_threshold: 1000,
 			},
 			runtime,
 		)

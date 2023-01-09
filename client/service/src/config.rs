@@ -151,7 +151,7 @@ pub struct Configuration {
 	pub runtime_cache_size: u8,
 	/// Threshold (in megabytes) for available storage space associated with `base_path`. `0` means
 	/// no storage monitoring.
-	pub available_storage_theshold: u64,
+	pub available_storage_threshold: u64,
 }
 
 /// Type for tasks spawned by the executor.

@@ -265,7 +265,7 @@ fn node_config<
 		base_path: Some(BasePath::new(root)),
 		informant_output_format: Default::default(),
 		runtime_cache_size: 2,
-		available_storage_theshold: 1000,
+		available_storage_threshold: 1000,
 	}
 }
 

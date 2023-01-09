@@ -572,7 +572,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			base_path: Some(base_path),
 			informant_output_format: Default::default(),
 			runtime_cache_size,
-			available_storage_theshold: self.database_storage_threshold()?,
+			available_storage_threshold: self.database_storage_threshold()?,
 		})
 	}
 
