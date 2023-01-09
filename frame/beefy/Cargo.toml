@@ -17,6 +17,7 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../su
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-session = { version = "4.0.0-dev", default-features = false, path = "../session" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-session = { version = "4.0.0-dev", default-features = false, path = "../../primitives/session" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
@@ -35,6 +36,7 @@ std = [
 	"scale-info/std",
 	"serde",
 	"sp-runtime/std",
+	"sp-session/std",
 	"sp-std/std",
 ]
 try-runtime = ["frame-support/try-runtime"]

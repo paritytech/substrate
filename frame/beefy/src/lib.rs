@@ -20,21 +20,25 @@
 use codec::{Encode, MaxEncodedLen};
 
 use frame_support::{
+	dispatch::{DispatchResultWithPostInfo, Pays},
 	log,
 	traits::{Get, OneSessionHandler},
+	weights::Weight,
 	BoundedSlice, BoundedVec, Parameter,
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 
 use sp_runtime::{
 	generic::DigestItem,
 	traits::{IsMember, Member},
-	RuntimeAppPublic,
+	KeyTypeId, RuntimeAppPublic,
 };
+use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_std::prelude::*;
 
 use beefy_primitives::{
-	AuthorityIndex, ConsensusLog, OnNewValidatorSet, ValidatorSet, BEEFY_ENGINE_ID,
-	GENESIS_AUTHORITY_SET_ID,
+	AuthorityIndex, ConsensusLog, EquivocationProof, OnNewValidatorSet, OpaqueKeyOwnershipProof,
+	ValidatorSet, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
 };
 
 #[cfg(test)]
@@ -45,10 +49,13 @@ mod tests;
 
 pub use pallet::*;
 
+const LOG_TARGET: &str = "runtime::beefy";
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, traits::KeyOwnerProofSystem};
+	use frame_system::{ensure_signed, pallet_prelude::OriginFor};
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -59,6 +66,22 @@ pub mod pallet {
 			+ MaybeSerializeDeserialize
 			+ MaxEncodedLen;
 
+		/// The proof of key ownership, used for validating equivocation reports
+		/// The proof must include the session index and validator count of the
+		/// session at which the equivocation occurred.
+		type KeyOwnerProof: Parameter + GetSessionNumber + GetValidatorCount;
+
+		/// The identification of a key owner, used when reporting equivocations.
+		type KeyOwnerIdentification: Parameter;
+
+		/// A system for proving ownership of keys, i.e. that a given key was part
+		/// of a validator set, needed for validating equivocation reports.
+		type KeyOwnerProofSystem: KeyOwnerProofSystem<
+			(KeyTypeId, Self::BeefyId),
+			Proof = Self::KeyOwnerProof,
+			IdentificationTuple = Self::KeyOwnerIdentification,
+		>;
+
 		/// The maximum number of authorities that can be added.
 		type MaxAuthorities: Get<u32>;
 
@@ -68,6 +91,9 @@ pub mod pallet {
 		/// externally apart from having it in the storage. For instance you might cache a light
 		/// weight MMR root over validators and make it available for Light Clients.
 		type OnNewValidatorSet: OnNewValidatorSet<<Self as Config>::BeefyId>;
+
+		/// Weights for this pallet.
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -112,6 +138,58 @@ pub mod pallet {
 				.expect("Authorities vec too big");
 		}
 	}
+
+	#[pallet::error]
+	pub enum Error<T> {
+		/// A key ownership proof provided as part of an equivocation report is invalid.
+		InvalidKeyOwnershipProof,
+		/// An equivocation proof provided as part of an equivocation report is invalid.
+		InvalidEquivocationProof,
+		/// A given equivocation report is valid but already previously reported.
+		DuplicateOffenceReport,
+	}
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
+		/// Report voter equivocation/misbehavior. This method will verify the
+		/// equivocation proof and validate the given key ownership proof
+		/// against the extracted offender. If both are valid, the offence
+		/// will be reported.
+		#[pallet::call_index(0)]
+		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count()))]
+		pub fn report_equivocation(
+			origin: OriginFor<T>,
+			equivocation_proof: Box<
+				EquivocationProof<
+					BlockNumberFor<T>,
+					T::BeefyId,
+					<T::BeefyId as RuntimeAppPublic>::Signature,
+				>,
+			>,
+			key_owner_proof: T::KeyOwnerProof,
+		) -> DispatchResultWithPostInfo {
+			let reporter = ensure_signed(origin)?;
+
+			Self::do_report_equivocation(Some(reporter), *equivocation_proof, key_owner_proof)
+		}
+
+		/// TODO
+		#[pallet::call_index(1)]
+		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count()))]
+		pub fn report_equivocation_unsigned(
+			origin: OriginFor<T>,
+			equivocation_proof: Box<
+				EquivocationProof<
+					BlockNumberFor<T>,
+					T::BeefyId,
+					<T::BeefyId as RuntimeAppPublic>::Signature,
+				>,
+			>,
+			key_owner_proof: T::KeyOwnerProof,
+		) -> DispatchResultWithPostInfo {
+			todo!()
+		}
+	}
 }
 
 impl<T: Config> Pallet<T> {
@@ -120,6 +198,33 @@ impl<T: Config> Pallet<T> {
 		let validators: BoundedVec<T::BeefyId, T::MaxAuthorities> = Self::authorities();
 		let id: beefy_primitives::ValidatorSetId = Self::validator_set_id();
 		ValidatorSet::<T::BeefyId>::new(validators, id)
+	}
+
+	/// Submits an extrinsic to report an equivocation. This method will create
+	/// an unsigned extrinsic with a call to `report_equivocation_unsigned` and
+	/// will push the transaction to the pool. Only useful in an offchain context.
+	pub fn submit_unsigned_equivocation_report(
+		equivocation_proof: EquivocationProof<
+			BlockNumberFor<T>,
+			T::BeefyId,
+			<T::BeefyId as RuntimeAppPublic>::Signature,
+		>,
+		key_owner_proof: OpaqueKeyOwnershipProof,
+	) -> Option<()> {
+		// TODO:
+		// use frame_system::offchain::SubmitTransaction;
+		//
+		// let call = Call::report_equivocation_unsigned {
+		// 	equivocation_proof: Box::new(equivocation_proof),
+		// 	key_owner_proof,
+		// };
+		//
+		// match SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {
+		// 	Ok(()) => log::info!(target: LOG_TARGET, "Submitted BEEFY equivocation report."),
+		// 	Err(e) => log::error!(target: LOG_TARGET, "Error submitting equivocation: {:?}", e),
+		// }
+
+		Some(())
 	}
 
 	fn change_authorities(
@@ -182,6 +287,21 @@ impl<T: Config> Pallet<T> {
 		}
 		Ok(())
 	}
+
+	fn do_report_equivocation(
+		reporter: Option<T::AccountId>,
+		equivocation_proof: EquivocationProof<
+			BlockNumberFor<T>,
+			T::BeefyId,
+			<T::BeefyId as RuntimeAppPublic>::Signature,
+		>,
+		key_owner_proof: T::KeyOwnerProof,
+	) -> DispatchResultWithPostInfo {
+		todo!();
+
+		// waive the fee since the report is valid and beneficial
+		Ok(Pays::No.into())
+	}
 }
 
 impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T> {
@@ -208,9 +328,10 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		let next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
 		if next_authorities.len() as u32 > T::MaxAuthorities::get() {
 			log::error!(
-				target: "runtime::beefy",
+				target: LOG_TARGET,
 				"authorities list {:?} truncated to length {}",
-				next_authorities, T::MaxAuthorities::get(),
+				next_authorities,
+				T::MaxAuthorities::get(),
 			);
 		}
 		let bounded_next_authorities =
@@ -219,9 +340,10 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		let next_queued_authorities = queued_validators.map(|(_, k)| k).collect::<Vec<_>>();
 		if next_queued_authorities.len() as u32 > T::MaxAuthorities::get() {
 			log::error!(
-				target: "runtime::beefy",
+				target: LOG_TARGET,
 				"queued authorities list {:?} truncated to length {}",
-				next_queued_authorities, T::MaxAuthorities::get(),
+				next_queued_authorities,
+				T::MaxAuthorities::get(),
 			);
 		}
 		let bounded_next_queued_authorities =
@@ -246,4 +368,8 @@ impl<T: Config> IsMember<T::BeefyId> for Pallet<T> {
 	fn is_member(authority_id: &T::BeefyId) -> bool {
 		Self::authorities().iter().any(|id| id == authority_id)
 	}
+}
+
+pub trait WeightInfo {
+	fn report_equivocation(validator_count: u32) -> Weight;
 }
