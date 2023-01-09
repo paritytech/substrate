@@ -512,7 +512,7 @@ where
 	) -> Result<(), fork_tree::Error<D::Error>> {
 		if self.gap.is_some() {
 			// Do not remove any node while a gap is present.
-			// Tree nodes may be still required while we importing gap blocks.
+			// Tree nodes may be required while importing gap blocks.
 			return Ok(())
 		}
 
@@ -677,7 +677,7 @@ where
 			})
 		});
 		if stop_search {
-			// Stop the lookup if the slot is within the bounds of a the found epoch entry.
+			// Stop the lookup if slot is within the bounds of the found epoch entry.
 			// A slot may be out of bounds only in case of skipped epochs.
 			return Ok(gap_entry)
 		}
