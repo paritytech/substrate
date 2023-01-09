@@ -21,9 +21,13 @@ use futures::StreamExt;
 use nix::{errno::Errno, sys::statvfs::statvfs};
 use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
-use std::path::{Path, PathBuf};
+use std::{
+	path::{Path, PathBuf},
+	time::{Duration, Instant},
+};
 
 const LOG_TARGET: &str = "storage-monitor";
+const THROTTLE_PERIOD: std::time::Duration = Duration::from_secs(2);
 
 pub struct StorageMonitorService {
 	/// watched path
@@ -32,6 +36,8 @@ pub struct StorageMonitorService {
 	stream: TracingUnboundedReceiver<Result<Event, notify::Error>>,
 	/// number of bytes that shall be free and available on the filesystem for watched path
 	threshold: u64,
+	/// timestamp of the most recent check
+	recent_check: Instant,
 	/// keeps the ref for file system watcher
 	_watcher: RecommendedWatcher,
 }
@@ -81,6 +87,7 @@ impl StorageMonitorService {
 					path: path.to_path_buf(),
 					stream,
 					threshold,
+					recent_check: Instant::now(),
 					_watcher: watcher,
 				})
 			},
@@ -92,8 +99,11 @@ impl StorageMonitorService {
 		while let Some(watch_event) = self.stream.next().await {
 			match watch_event {
 				Ok(_) =>
-					if Self::check_free_space(&self.path, self.threshold).is_err() {
-						break
+					if self.recent_check.elapsed() >= THROTTLE_PERIOD {
+						self.recent_check = Instant::now();
+						if Self::check_free_space(&self.path, self.threshold).is_err() {
+							break
+						}
 					},
 				Err(e) => {
 					log::error!(target: LOG_TARGET, "watch error: {:?}", e);
@@ -108,8 +118,8 @@ impl StorageMonitorService {
 		fs_stats.map(|stats| stats.blocks_available() * stats.block_size() / 1_000_000)
 	}
 
-	// checks if the free space for given `path` is below given `threshold`.
-	// If not error is returned.
+	// Checks if the amount of free space for given `path` is below given `threshold`.
+	// If it dropped below, error is returned.
 	// System errors are silently ignored.
 	fn check_free_space(path: &Path, threshold: u64) -> Result<(), Error> {
 		match StorageMonitorService::free_space(path.as_ref()) {
