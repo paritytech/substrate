@@ -232,7 +232,7 @@ variables:
     REPO_OWNER: paritytech
     SPUB_TMP: artifacts
 
-.default-template: &default-template
+.shared-default: &shared-default
     retry:
       max: 2
       when:
@@ -243,16 +243,16 @@ variables:
 
 .default-pipeline-definitions:
   default:
-    <<: *default-template
+    <<: *shared-default
     interruptible: true
 
 .crate-publishing-pipeline-definitions:
   default:
-    <<: *default-template
+    <<: *shared-default
     # The crate-publishing pipeline should not be interruptible so that we'll be able to run the
-    # publishing automation jobs despite the "Auto-cancel redundant pipelines" CI setting (relevant
-    # because the crate-publishing pipeline runs on `master`, so future pipelines on `master` might
-    # cancel it).
+    # publishing automation jobs to completion despite the "Auto-cancel redundant pipelines" CI
+    # setting (relevant because the crate-publishing pipeline runs on `master`, so future pipelines
+    # on `master` might cancel it before the publishing jobs run to completion).
     interruptible: false
 
 #### stage:                       .pre
