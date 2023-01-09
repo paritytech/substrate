@@ -50,7 +50,7 @@ where
 	I: IntoIterator,
 	I::Item: AsRef<[u8]>,
 {
-	let iter = leaves.into_iter().map(|l| <H as HashT>::hash(<H as HashT>::hash(l.as_ref()).as_ref()));
+	let iter = leaves.into_iter().map(|l| <H as HashT>::hash(l.as_ref()));
 	merkelize::<H, _, _>(iter, &mut ()).into()
 }
 
@@ -149,7 +149,7 @@ where
 {
 	let mut leaf = None;
 	let iter = leaves.into_iter().enumerate().map(|(idx, l)| {
-		let hash = <H as HashT>::hash(<H as HashT>::hash(l.as_ref()).as_ref());
+		let hash = <H as HashT>::hash(l.as_ref());
 		if idx == leaf_index {
 			leaf = Some(l);
 		}
@@ -251,7 +251,7 @@ where
 	}
 
 	let leaf_hash = match leaf.into() {
-		Leaf::Value(content) => <H as HashT>::hash(<H as HashT>::hash(content).as_ref()),
+		Leaf::Value(content) => <H as HashT>::hash(content),
 		Leaf::Hash(hash) => hash,
 	};
 
@@ -396,7 +396,7 @@ mod tests {
 		// then
 		assert_eq!(
 			array_bytes::bytes2hex("", out.as_ref()),
-			"3c137409c513c2a370698ff7e042154c00ce1d1a2f98dc630366637a798bbb76"
+			"aeb47a269393297f4b0a3c9c9cfd00c7a4195255274cf39d83dabc2fcc9ff3d7"
 		);
 	}
 
@@ -415,7 +415,7 @@ mod tests {
 		// then
 		assert_eq!(
 			array_bytes::bytes2hex("", out.as_ref()),
-			"4f54979717a78e07c0730c45f96ce77a3d9f4d55ab3bcdbbd8d8daf58932daa8"
+			"697ea2a8fe5b03468548a7a413424a6292ab44a82a6f5cc594c3fa7dda7ce402"
 		);
 	}
 
@@ -430,22 +430,22 @@ mod tests {
 		};
 
 		test(
-			"ec5728bad90d3185989eddaae1e83be5f3e03ad9f48bd743df58dad4b7625505",
+			"5842148bc6ebeb52af882a317c765fccd3ae80589b21a9b8cbf21abb630e46a7",
 			vec!["a", "b", "c"],
 		);
 
 		test(
-			"9e0a460a09c8bec16bd24a3a88e7c4a0c63a1a0e83146d0b1c261b5197095bfc",
+			"7b84bec68b13c39798c6c50e9e40a0b268e3c1634db8f4cb97314eb243d4c514",
 			vec!["a", "b", "a"],
 		);
 
 		test(
-			"0eddd6bcda73a09e07b81108e219f13ed34ab0a9bee6f9477dc99b0e0f760e07",
+			"dc8e73fe6903148ff5079baecc043983625c23b39f31537e322cd0deee09fa9c",
 			vec!["a", "b", "a", "b"],
 		);
 
 		test(
-			"65db6ad4efda46af046d7ecfe41dc4f29012e2968cbdac705e07b7fb1e14bd12",
+			"cc50382cfd3c9a617741e9a85efee8752b8feb95a2cbecd6365fb21366ce0c8c",
 			vec!["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
 		);
 	}
@@ -763,7 +763,7 @@ mod tests {
 			"0xc26B34D375533fFc4c5276282Fa5D660F3d8cbcB",
 		];
 		let root: H256 = array_bytes::hex2array_unchecked(
-			"9ecb057963d989c798e96adbc3279e639d26fed5e2d85d36222d4902ca38dceb",
+			"7b2c6eebec6e85b2e272325a11c31af71df52bc0534d2d4f903e0ced191f022e",
 		)
 		.into();
 
@@ -800,19 +800,19 @@ mod tests {
 				root,
 				proof: vec![
 					array_bytes::hex2array_unchecked(
-						"4b30a34ddaf2c978393cfaaff86b63a70dd528a1206720a72cc4f1e7c4b868ba"
+						"340bcb1d49b2d82802ddbcf5b85043edb3427b65d09d7f758fbc76932ad2da2f"
 					)
 					.into(),
 					array_bytes::hex2array_unchecked(
-						"841ab2af60ad43be1d28693431012681cba4ac997900d67c7cb228da59a9a91a"
+						"ba0580e5bd530bc93d61276df7969fb5b4ae8f1864b4a28c280249575198ff1f"
 					)
 					.into(),
 					array_bytes::hex2array_unchecked(
-						"b1316e36d2b5bda678ad074255653bcc29b68273dc4d0693c922533fd71fe09d"
+						"1fad92ed8d0504ef6c0231bbbeeda960a40693f297c64e87b582beb92ecfb00f"
 					)
 					.into(),
 					array_bytes::hex2array_unchecked(
-						"8e5deae2101af5e99a1e1e447e66afa51a0a71605b4112897962b5e66720e648"
+						"0b84c852cbcf839d562d826fd935e1b37975ccaa419e1def8d219df4b83dcbf4"
 					)
 					.into(),
 				],
