@@ -42,6 +42,19 @@ workflow:
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH
 
+variables:
+  GIT_STRATEGY:                    fetch
+  GIT_DEPTH:                       100
+  CARGO_INCREMENTAL:               0
+  DOCKER_OS:                       "debian:stretch"
+  ARCH:                            "x86_64"
+  CI_IMAGE:                        "paritytech/ci-linux:production"
+  BUILDAH_IMAGE:                   "quay.io/buildah/stable:v1.27"
+  RUSTY_CACHIER_SINGLE_BRANCH:     master
+  RUSTY_CACHIER_DONT_OPERATE_ON_MAIN_BRANCH: "true"
+  RUSTY_CACHIER_COMPRESSION_METHOD: zstd
+  ZOMBIENET_IMAGE:                 "docker.io/paritytech/zombienet:v1.3.22"
+
 .shared-default: &shared-default
     retry:
       max: 2
@@ -64,19 +77,6 @@ workflow:
     # setting (relevant because the crate-publishing pipeline runs on `master`, so future pipelines
     # on `master` might cancel it before the publishing jobs run to completion).
     interruptible: false
-
-variables:
-  GIT_STRATEGY:                    fetch
-  GIT_DEPTH:                       100
-  CARGO_INCREMENTAL:               0
-  DOCKER_OS:                       "debian:stretch"
-  ARCH:                            "x86_64"
-  CI_IMAGE:                        "paritytech/ci-linux:production"
-  BUILDAH_IMAGE:                   "quay.io/buildah/stable:v1.27"
-  RUSTY_CACHIER_SINGLE_BRANCH:     master
-  RUSTY_CACHIER_DONT_OPERATE_ON_MAIN_BRANCH: "true"
-  RUSTY_CACHIER_COMPRESSION_METHOD: zstd
-  ZOMBIENET_IMAGE:                 "docker.io/paritytech/zombienet:v1.3.22"
 
 .collect-artifacts:
   artifacts:
