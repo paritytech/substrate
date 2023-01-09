@@ -710,3 +710,20 @@ pub(crate) fn slash_through_offending_threshold() {
 		}
 	}
 }
+
+// Slashes a percentage of the active nominators that haven't been slashed yet, with
+// a minimum of 1 validator slash.
+pub(crate) fn slash_percentage(percentage: Perbill) -> Vec<u128> {
+	let validators = Session::validators();
+	let mut remaining_slashes = (percentage * validators.len() as u32).max(1);
+	let mut slashed = vec![];
+
+	for v in validators.into_iter() {
+		if remaining_slashes != 0 {
+			add_slash(&v);
+			slashed.push(v);
+			remaining_slashes -= 1;
+		}
+	}
+	slashed
+}

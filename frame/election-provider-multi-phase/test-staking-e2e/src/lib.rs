@@ -22,6 +22,7 @@ pub(crate) const LOG_TARGET: &str = "tests::epm";
 
 use mock::*;
 use sp_npos_elections::{to_supports, StakedAssignment};
+use sp_runtime::Perbill;
 
 use crate::mock::RuntimeOrigin;
 
@@ -141,32 +142,25 @@ fn continous_slashes() {
 		.validator_count(10)
 		.build_and_execute(|| {
 			assert_eq!(Session::validators().len(), 10);
+			let mut active_validator_set = Session::validators();
 
-			roll_to_epm_off();
-			assert!(ElectionProviderMultiPhase::current_phase().is_off());
+			// slash 10% of the active validators and progress era.
+			while active_validator_set.len() != 0 {
+				let slashed = slash_percentage(Perbill::from_percent(10));
+				assert_eq!(slashed.len(), 1);
+				start_next_active_era();
 
-			println!(
-				"slashing 11, set: {:?} - {:?}",
-				Session::validators(),
-				ElectionProviderMultiPhase::current_phase()
-			);
-			add_slash(&11);
-			start_next_active_era();
-			assert_eq!(
-				pallet_staking::ForceEra::<Runtime>::get(),
-				pallet_staking::Forcing::NotForcing
-			);
+				let _ = slashed
+					.iter()
+					.map(|s| active_validator_set.retain(|x| x != s))
+					.collect::<Vec<_>>();
 
-			println!(
-				"slashing 12, set: {:?} - {:?}",
-				Session::validators(),
-				ElectionProviderMultiPhase::current_phase()
-			);
-			add_slash(&12);
-			start_next_active_era();
-			assert_eq!(
-				pallet_staking::ForceEra::<Runtime>::get(),
-				pallet_staking::Forcing::NotForcing
-			);
+				log!(
+					trace,
+					"slashed 10% of active validators ({:?}). After slash: {:?}",
+					slashed,
+					active_validator_set
+				);
+			}
 		});
 }
