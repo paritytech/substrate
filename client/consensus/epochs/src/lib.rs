@@ -344,36 +344,31 @@ where
 		&self,
 		slot: E::Slot,
 	) -> Option<(Hash, Number, EpochHeader<E>, EpochIdentifierPosition)> {
+		if let Some((h, n, epoch_n)) = &self.next {
+			if epoch_n.start_slot() <= slot {
+				return Some((*h, *n, epoch_n.into(), EpochIdentifierPosition::Regular))
+			}
+		}
+
 		match &self.current {
-			(_, _, PersistedEpoch::Genesis(epoch_0, _))
-				if slot >= epoch_0.start_slot() && slot < epoch_0.end_slot() =>
-				return Some((
-					self.current.0,
-					self.current.1,
-					epoch_0.into(),
-					EpochIdentifierPosition::Genesis0,
-				)),
-			(_, _, PersistedEpoch::Genesis(_, epoch_1))
-				if slot >= epoch_1.start_slot() && slot < epoch_1.end_slot() =>
-				return Some((
-					self.current.0,
-					self.current.1,
-					epoch_1.into(),
-					EpochIdentifierPosition::Genesis1,
-				)),
-			(_, _, PersistedEpoch::Regular(epoch_n))
-				if slot >= epoch_n.start_slot() && slot < epoch_n.end_slot() =>
-				return Some((
-					self.current.0,
-					self.current.1,
-					epoch_n.into(),
-					EpochIdentifierPosition::Regular,
-				)),
-			_ => {},
-		};
-		match &self.next {
-			Some((h, n, epoch_n)) if slot >= epoch_n.start_slot() && slot < epoch_n.end_slot() =>
-				Some((*h, *n, epoch_n.into(), EpochIdentifierPosition::Regular)),
+			(_, _, PersistedEpoch::Regular(epoch_n)) if epoch_n.start_slot() <= slot => Some((
+				self.current.0,
+				self.current.1,
+				epoch_n.into(),
+				EpochIdentifierPosition::Regular,
+			)),
+			(_, _, PersistedEpoch::Genesis(_, epoch_1)) if epoch_1.start_slot() <= slot => Some((
+				self.current.0,
+				self.current.1,
+				epoch_1.into(),
+				EpochIdentifierPosition::Genesis1,
+			)),
+			(_, _, PersistedEpoch::Genesis(epoch_0, _)) if epoch_0.start_slot() <= slot => Some((
+				self.current.0,
+				self.current.1,
+				epoch_0.into(),
+				EpochIdentifierPosition::Genesis0,
+			)),
 			_ => None,
 		}
 	}
@@ -515,6 +510,12 @@ where
 		number: Number,
 		slot: E::Slot,
 	) -> Result<(), fork_tree::Error<D::Error>> {
+		if self.gap.is_some() {
+			// Do not remove any node while a gap is present.
+			// Tree nodes may be still required while we importing gap blocks.
+			return Ok(())
+		}
+
 		let is_descendent_of = descendent_of_builder.build_is_descendent_of(None);
 
 		let predicate = |epoch: &PersistedEpochHeader<E>| match *epoch {
@@ -661,17 +662,24 @@ where
 		slot: E::Slot,
 	) -> Result<Option<ViableEpochDescriptor<Hash, Number, E>>, fork_tree::Error<D::Error>> {
 		if parent_number == Zero::zero() {
-			// need to insert the genesis epoch.
+			// Need to insert the genesis epoch.
 			return Ok(Some(ViableEpochDescriptor::UnimportedGenesis(slot)))
 		}
 
-		if let Some(gap) = &self.gap {
-			if let Some((hash, number, hdr, position)) = gap.matches(slot) {
-				return Ok(Some(ViableEpochDescriptor::Signaled(
-					EpochIdentifier { position, hash, number },
-					hdr,
-				)))
-			}
+		let mut stop_search = false;
+		let gap_entry = self.gap.as_ref().and_then(|gap| {
+			gap.matches(slot).map(|(hash, number, hdr, position)| {
+				if slot < hdr.end_slot {
+					// The slot is within the epoch
+					stop_search = true;
+				}
+				ViableEpochDescriptor::Signaled(EpochIdentifier { position, hash, number }, hdr)
+			})
+		});
+		if stop_search {
+			// Stop the lookup if the slot is within the bounds of a the found epoch entry.
+			// A slot may be out of bounds only in case of skipped epochs.
+			return Ok(gap_entry)
 		}
 
 		// find_node_where will give you the node in the fork-tree which is an ancestor
@@ -707,13 +715,12 @@ where
 							// Ok, we found our node.
 							// and here we figure out which of the internal epochs
 							// of a genesis node to use based on their start slot.
-							PersistedEpochHeader::Genesis(ref epoch_0, ref epoch_1) => {
+							PersistedEpochHeader::Genesis(ref epoch_0, ref epoch_1) =>
 								if epoch_1.start_slot <= slot {
 									(EpochIdentifierPosition::Genesis1, epoch_1.clone())
 								} else {
 									(EpochIdentifierPosition::Genesis0, epoch_0.clone())
-								}
-							},
+								},
 							PersistedEpochHeader::Regular(ref epoch_n) =>
 								(EpochIdentifierPosition::Regular, epoch_n.clone()),
 						},
@@ -726,6 +733,7 @@ where
 						header,
 					)
 				})
+				.or(gap_entry)
 			})
 	}
 
