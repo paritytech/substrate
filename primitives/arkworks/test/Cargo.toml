@@ -1,5 +1,5 @@
 [package]
-name = "sp-ark-bls12-377"
+name = "sp-arkworks-test"
 version = "0.4.0-alpha.1"
 authors = [ "arkworks contributors" ]
 repository = "https://github.com/paritytech/substrate/"
@@ -15,20 +15,21 @@ ark-ff = { version="0.4.0-alpha", default-features = false }
 ark-r1cs-std = { version="0.4.0-alpha", default-features = false, optional = true }
 ark-std = { version = "0.4.0-alpha", default-features = false }
 ark-serialize = { version = "0.4.0-alpha", default-features = false }
-ark-bls12-377 = { git = "https://github.com/arkworks-rs/curves", default-features = false }
-ark-models = { path = "../../arkworks-models", default-features = false }
-sp-io = { path = "../../io", default-features = false }
+ark-bls12-377 = { git = "https://github.com/arkworks-rs/curves", default-features = false, features = ["curve"] }
+ark-models = { package = "ark-models", version = "0.4.0-alpha.5", path = "../../models", default-features = false }
+sp-ark-bls12-377 = { git = "https://github.com/achimcc/ark-substrate/branches" }
 
 [dev-dependencies]
 ark-relations = { git = "https://github.com/arkworks-rs/snark", default-features = false }
 ark-ec = { git = "https://github.com/arkworks-rs/algebra", branch = "releases", default-features = false }
 ark-algebra-test-templates = { git = "https://github.com/arkworks-rs/algebra", branch = "releases", default-features = false }
 ark-curve-constraint-tests = { path = "../curve-constraint-tests", default-features = false }
+sp-io =  { version = "7.0.0", git = "https://github.com/paritytech/substrate.git", branch = "achimcc/arkworks-integration" }
 
 
 [features]
 default = [ "curve" ]
-std = [ "ark-std/std", "ark-ff/std", "ark-models/std", "ark-bls12-377/std", "sp-io/std" ]
+std = [ "ark-std/std", "ark-ff/std", "ark-models/std", "ark-bls12-377/std" ]
 
 curve = [ "scalar_field", "base_field" ]
 scalar_field = []
