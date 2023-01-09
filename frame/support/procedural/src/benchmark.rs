@@ -185,8 +185,7 @@ impl BenchmarkDef {
 			let mut extrinsic_call: Option<ExtrinsicCallDef> = None;
 			if let Stmt::Semi(Expr::Call(expr_call), _semi) = child {
 				// non-block (encoded) case
-				let mut k = 0; // index of attr
-				for attr in &expr_call.attrs {
+				for (k, attr) in (&expr_call.attrs).iter().enumerate() {
 					if let Some(segment) = attr.path.segments.last() {
 						if let Ok(_) = syn::parse::<keywords::extrinsic_call>(
 							segment.ident.to_token_stream().into(),
@@ -208,12 +207,10 @@ impl BenchmarkDef {
 							extrinsic_call = Some(ExtrinsicCallDef::Encoded { origin, expr_call });
 						}
 					}
-					k += 1;
 				}
 			} else if let Stmt::Expr(Expr::Block(block)) = child {
 				// block case
-				let mut k = 0; // index of attr
-				for attr in &block.attrs {
+				for (k, attr) in (&block.attrs).iter().enumerate() {
 					if let Some(segment) = attr.path.segments.last() {
 						if let Ok(_) = syn::parse::<keywords::extrinsic_call>(
 							segment.ident.to_token_stream().into(),
@@ -226,7 +223,6 @@ impl BenchmarkDef {
 							extrinsic_call = Some(ExtrinsicCallDef::Block(block));
 						}
 					}
-					k += 1;
 				}
 			}
 
