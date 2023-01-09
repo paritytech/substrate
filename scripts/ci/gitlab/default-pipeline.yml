@@ -1,11 +1,3 @@
 default:
+  <<: *default-template
   interruptible: true
-
-  # From this line onwards the properties are shared with ./crate-publishing-pipeline.yml
-  retry:
-    max: 2
-    when:
-      - runner_system_failure
-      - unknown_failure
-      - api_failure
-  cache: {}

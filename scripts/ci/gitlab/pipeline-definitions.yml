@@ -1,0 +1,8 @@
+.default-template: &default-template
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - unknown_failure
+      - api_failure
+  cache: {}
