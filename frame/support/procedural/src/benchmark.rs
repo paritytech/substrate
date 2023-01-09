@@ -22,13 +22,14 @@ use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens};
 use syn::{
-	parse::Nothing,
+	parenthesized,
+	parse::{Nothing, ParseStream},
 	parse_macro_input,
 	punctuated::Punctuated,
 	spanned::Spanned,
-	token::{Comma, Gt, Lt},
+	token::{Comma, Gt, Lt, Paren},
 	Error, Expr, ExprBlock, ExprCall, FnArg, Item, ItemFn, ItemMod, LitInt, Pat, Result, Stmt,
-	Type, WhereClause,
+	Token, Type, WhereClause,
 };
 
 mod keywords {
@@ -59,6 +60,65 @@ struct RangeArgs {
 	_gt_token: Gt,
 }
 
+#[derive(Clone, Debug)]
+struct BenchmarkAttrs {
+	skip_meta: bool,
+	extra: bool,
+}
+
+/// Represents a single benchmark option
+enum BenchmarkAttrKeyword {
+	Extra,
+	SkipMeta,
+}
+
+impl syn::parse::Parse for BenchmarkAttrKeyword {
+	fn parse(input: ParseStream) -> Result<Self> {
+		let lookahead = input.lookahead1();
+		if lookahead.peek(keywords::extra) {
+			let _extra: keywords::extra = input.parse()?;
+			return Ok(BenchmarkAttrKeyword::Extra)
+		} else if lookahead.peek(keywords::skip_meta) {
+			let _skip_meta: keywords::skip_meta = input.parse()?;
+			return Ok(BenchmarkAttrKeyword::SkipMeta)
+		} else {
+			return Err(lookahead.error())
+		}
+	}
+}
+
+impl syn::parse::Parse for BenchmarkAttrs {
+	fn parse(input: ParseStream) -> syn::Result<Self> {
+		let lookahead = input.lookahead1();
+		if !lookahead.peek(Paren) {
+			let _nothing: Nothing = input.parse()?;
+			return Ok(BenchmarkAttrs { skip_meta: false, extra: false })
+		}
+		let content;
+		let _paren: Paren = parenthesized!(content in input);
+		let mut extra = false;
+		let mut skip_meta = false;
+		let args = Punctuated::<BenchmarkAttrKeyword, Token![,]>::parse_terminated(&content)?;
+		for arg in args.into_iter() {
+			match arg {
+				BenchmarkAttrKeyword::Extra => {
+					if extra {
+						return Err(content.error("`extra` can only be specified once"))
+					}
+					extra = true;
+				},
+				BenchmarkAttrKeyword::SkipMeta => {
+					if skip_meta {
+						return Err(content.error("`skip_meta` can only be specified once"))
+					}
+					skip_meta = true;
+				},
+			}
+		}
+		Ok(BenchmarkAttrs { extra, skip_meta })
+	}
+}
+
 /// Represents the parsed extrinsic call for a benchmark
 #[derive(Clone)]
 enum ExtrinsicCallDef {
@@ -79,25 +139,9 @@ struct BenchmarkDef {
 
 impl BenchmarkDef {
 	/// Constructs a [`BenchmarkDef`] by traversing an existing [`ItemFn`] node.
-	pub fn from(item_fn: &ItemFn) -> Result<BenchmarkDef> {
+	pub fn from(item_fn: &ItemFn, extra: bool, skip_meta: bool) -> Result<BenchmarkDef> {
 		let mut i = 0; // index of child
 		let mut params: Vec<ParamDef> = Vec::new();
-		let mut extra = false;
-		let mut skip_meta = false;
-
-		// detect extra and skip_meta attributes
-		for attr in &item_fn.attrs {
-			if let Some(segment) = attr.path.segments.last() {
-				if let Ok(_) = syn::parse::<keywords::extra>(segment.ident.to_token_stream().into())
-				{
-					extra = true;
-				} else if let Ok(_) =
-					syn::parse::<keywords::skip_meta>(segment.ident.to_token_stream().into())
-				{
-					skip_meta = true;
-				}
-			}
-		}
 
 		// parse params such as "x: Linear<0, 1>"
 		for arg in &item_fn.sig.inputs {
@@ -222,6 +266,7 @@ pub fn benchmarks(attrs: TokenStream, tokens: TokenStream, instance: bool) -> To
 	let mut benchmark_names: Vec<Ident> = Vec::new();
 	let mut extra_benchmark_names: Vec<Ident> = Vec::new();
 	let mut skip_meta_benchmark_names: Vec<Ident> = Vec::new();
+	let mut args: Option<BenchmarkAttrs> = None;
 	if let Some(mut content) = module.content {
 		for stmt in &mut content.1 {
 			let mut found_item: Option<ItemFn> = None;
@@ -232,6 +277,8 @@ pub fn benchmarks(attrs: TokenStream, tokens: TokenStream, instance: bool) -> To
 						if let Ok(_) =
 							syn::parse::<keywords::benchmark>(seg.ident.to_token_stream().into())
 						{
+							let tokens = attr.tokens.to_token_stream().into();
+							args = Some(parse_macro_input!(tokens as BenchmarkAttrs));
 							func.attrs.remove(i);
 							found_item = Some(func.clone());
 							i += 1;
@@ -239,9 +286,9 @@ pub fn benchmarks(attrs: TokenStream, tokens: TokenStream, instance: bool) -> To
 					}
 				}
 			}
-			if let Some(item_fn) = found_item {
+			if let (Some(item_fn), Some(args)) = (found_item, &args) {
 				// this item is a #[benchmark] or #[instance_benchmark]
-				let benchmark_def = match BenchmarkDef::from(&item_fn) {
+				let benchmark_def = match BenchmarkDef::from(&item_fn, args.extra, args.skip_meta) {
 					Ok(def) => def,
 					Err(err) => return err.to_compile_error().into(),
 				};
