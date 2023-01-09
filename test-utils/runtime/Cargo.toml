@@ -59,7 +59,7 @@ substrate-test-runtime-client = { version = "2.0.0", path = "./client" }
 futures = "0.3.21"
 
 [build-dependencies]
-substrate-wasm-builder = { version = "5.0.0-dev", path = "../../utils/wasm-builder" }
+substrate-wasm-builder = { version = "5.0.0-dev", path = "../../utils/wasm-builder", optional = true }
 
 [features]
 default = [
@@ -101,6 +101,7 @@ std = [
 	"sp-trie/std",
 	"sp-transaction-pool/std",
 	"trie-db/std",
+	"substrate-wasm-builder",
 ]
 # Special feature to disable logging
 disable-logging = [ "sp-api/disable-logging" ]
