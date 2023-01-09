@@ -200,10 +200,9 @@ impl<T: Config> Pallet<T> {
 			.map(T::BeefyAuthorityToMerkleLeaf::convert)
 			.collect::<Vec<_>>();
 		let len = beefy_addresses.len() as u32;
-		let root = merkle_tree::merkle_root::<<T as pallet_mmr::Config>::Hashing, _>(
-			beefy_addresses,
-		)
-		.into();
+		let root =
+			merkle_tree::merkle_root::<<T as pallet_mmr::Config>::Hashing, _>(beefy_addresses)
+				.into();
 		BeefyAuthoritySet { id, len, root }
 	}
 }
