@@ -28,6 +28,6 @@ sp_api::decl_runtime_apis! {
 		Balance: Codec + MaybeDisplay,
 	{
 		fn query_nominations_quota() -> u32;
-        fn query_points_to_balance(pool_id: u32) -> Result<u32, ()>;
+		fn query_points_to_balance(points: Balance, pool_id: u32) -> Result<Balance, ()>;
 	}
 }

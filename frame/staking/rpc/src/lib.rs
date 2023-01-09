@@ -39,8 +39,8 @@ pub use pallet_staking_rpc_runtime_api::StakingApi as StakingRuntimeApi;
 pub trait StakingApi<Balance> {
 	#[method(name = "staking_nominationsQuota")]
 	fn query_nominations_quota(&self) -> RpcResult<u32>;
-    #[method(name = "nominationPools_pointsToBalance")]
-	fn query_points_to_balance(&self, pool_id: u32) -> RpcResult<u32>;
+	#[method(name = "nominationPools_pointsToBalance")]
+	fn query_points_to_balance(&self, balance: Balance, pool_id: u32) -> RpcResult<Balance>;
 }
 
 pub struct Staking<C, P> {
@@ -55,15 +55,15 @@ impl<C, P> Staking<C, P> {
 }
 
 /// Error type of this RPC api.
-pub enum Error {
+pub enum ApiError {
 	/// The call to runtime failed.
 	RuntimeError,
 }
 
-impl From<Error> for i32 {
-	fn from(e: Error) -> i32 {
+impl From<ApiError> for i32 {
+	fn from(e: ApiError) -> i32 {
 		match e {
-			Error::RuntimeError => 1,
+			ApiError::RuntimeError => 1,
 		}
 	}
 }
@@ -83,31 +83,31 @@ where
 
 		Ok(runtime_api_result.map_err(|e| {
 			CallError::Custom(ErrorObject::owned(
-				Error::RuntimeError.into(),
+				ApiError::RuntimeError.into(),
 				"Unable to query the nominations quota.",
 				Some(e.to_string()),
 			))
 		})?)
 	}
 
-    fn query_points_to_balance(&self, pool_id: u32) -> RpcResult<u32> {
-        let api = self.client.runtime_api();
+	fn query_points_to_balance(&self, balance: Balance, pool_id: u32) -> RpcResult<Balance> {
+		let api = self.client.runtime_api();
 		let at = BlockId::hash(self.client.info().best_hash);
 
-		api.query_points_to_balance(&at, pool_id).map_err(|e| {
+		let result = api.query_points_to_balance(&at, balance, pool_id).map_err(|e| {
 			CallError::Custom(ErrorObject::owned(
-				Error::RuntimeError.into(),
+				ApiError::RuntimeError.into(),
 				"Unable to query the points to balance conversion for pool.",
 				Some(e.to_string()),
 			))
-		}).and_then(|r| {
-            r.map_err(|e| {
-                CallError::Custom(ErrorObject::owned(
-                    Error::RuntimeError.into(),
-                    "Unable to query the points to balance conversion for pool.",
-                    Some(e.to_string()),
-                ))
-            })?
-        })
-    }
+		})?;
+
+		Ok(result.map_err(|_| {
+			CallError::Custom(ErrorObject::owned(
+				ApiError::RuntimeError.into(),
+				"Pool ID not found",
+				None::<String>,
+			))
+		})?)
+	}
 }

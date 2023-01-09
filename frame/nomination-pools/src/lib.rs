@@ -2140,11 +2140,14 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-    // Query points to balance for a given pool. Used for custom RPC call.
-    pub fn query_points_to_balance(pool_id: u32) -> Result<u32, ()> {
-        // TODO(gpestana): finish
-        Ok(0)
-    }
+	// Query points to balance for a given pool. Used for custom RPC call.
+	pub fn query_points_to_balance(points: BalanceOf<T>, pool_id: u32) -> Result<BalanceOf<T>, ()> {
+		if let Some(pool) = BondedPool::<T>::get(pool_id).defensive() {
+			Ok(pool.points_to_balance(points))
+		} else {
+			Err(())
+		}
+	}
 
 	/// Returns the pending rewards for the specified `member_account`.
 	///
