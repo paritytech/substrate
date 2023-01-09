@@ -87,18 +87,22 @@ pub struct Stake<AccountId, Balance> {
 /// pre-action data that is needed needs to be passed to interface methods.
 /// The rest of the data can be retrieved by using `StakingInterface`.
 pub trait OnStakingUpdate<AccountId, Balance> {
-	/// Track ledger updates.
-	fn on_update_ledger(who: &AccountId, prev_stake: Option<Stake<AccountId, Balance>>);
-	/// Track nominators, those reinstated and also new ones.
-	fn on_nominator_add(who: &AccountId, prev_nominations: Vec<AccountId>);
-	/// Track validators, those reinstated and new.
+	/// Fired when the stake amount of someone updates.
+	///
+	/// Also called when someone stakes for the first time. (TODO: is it? this is why we need unit tests for this pallet alone). 
+	/// 
+	/// This is effectively any changes to the bond amount, such as bonding more funds, and unbonding. 
+	fn on_stake_update(who: &AccountId, prev_stake: Option<Stake<AccountId, Balance>>);
+	/// Fired when someone sets their intention to nominate, either new, or existing one.
+	fn on_nominator_update(who: &AccountId, prev_nominations: Vec<AccountId>);
+	/// Fired when someone sets their intention to validate, either new, or existing one. 
 	fn on_validator_add(who: &AccountId);
-	/// Track removed validators. Either chilled or those that became nominators instead.
+	/// Fired when someone removes their intention to validate, either due to chill or nominating.
 	fn on_validator_remove(who: &AccountId); // only fire this event when this is an actual Validator
-	/// Track removed nominators.
+	/// Fired when someone removes their intention to nominate, either due to chill or validating.
 	fn on_nominator_remove(who: &AccountId, nominations: Vec<AccountId>); // only fire this if this is an actual Nominator
-	/// Track those participants of staking system that are kicked out for whatever reason.
-	fn on_reaped(who: &AccountId); // -> basically `kill_stash`
+	/// fired when someone is fully unstakes.
+	fn on_unstake(who: &AccountId); // -> basically `kill_stash`
 }
 
 #[cfg(feature = "std")]
