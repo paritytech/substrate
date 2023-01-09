@@ -714,6 +714,8 @@ pub mod pallet {
 		PayoutStarted { era_index: EraIndex, validator_stash: T::AccountId },
 		/// A validator has set their preferences.
 		ValidatorPrefsSet { stash: T::AccountId, prefs: ValidatorPrefs },
+		/// A new force era mode was set.
+		ForceEra { mode: Forcing },
 	}
 
 	#[pallet::error]
@@ -1377,7 +1379,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::force_no_eras())]
 		pub fn force_no_eras(origin: OriginFor<T>) -> DispatchResult {
 			ensure_root(origin)?;
-			ForceEra::<T>::put(Forcing::ForceNone);
+			Self::set_force_era(Forcing::ForceNone);
 			Ok(())
 		}
 
@@ -1401,7 +1403,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::force_new_era())]
 		pub fn force_new_era(origin: OriginFor<T>) -> DispatchResult {
 			ensure_root(origin)?;
-			ForceEra::<T>::put(Forcing::ForceNew);
+			Self::set_force_era(Forcing::ForceNew);
 			Ok(())
 		}
 
@@ -1452,7 +1454,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::force_new_era_always())]
 		pub fn force_new_era_always(origin: OriginFor<T>) -> DispatchResult {
 			ensure_root(origin)?;
-			ForceEra::<T>::put(Forcing::ForceAlways);
+			Self::set_force_era(Forcing::ForceAlways);
 			Ok(())
 		}
 
