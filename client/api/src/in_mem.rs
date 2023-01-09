@@ -791,7 +791,7 @@ where
 		false
 	}
 
-	fn pin_block(&self, hash: &<Block as BlockT>::Hash) -> blockchain::Result<()> {
+	fn pin_block(&self, hash: &<Block as BlockT>::Hash, number: u64) -> blockchain::Result<()> {
 		todo!()
 	}
 

@@ -294,10 +294,14 @@ where
 
 			let ClientImportOperation { mut op, notify_imported, notify_finalized } = op;
 
+			let finality_num =
+				notify_finalized.as_ref().map(|summary| summary.header.number().clone());
 			let finality_notification = notify_finalized.map(|summary| {
 				FinalityNotification::from_summary(summary, self.unpin_worker_sender.clone())
 			});
 
+			let import_num =
+				notify_imported.as_ref().map(|summary| summary.header.number().clone());
 			let (import_notification, storage_changes) = match notify_imported {
 				Some(mut summary) => {
 					let storage_changes = summary.storage_changes.take();
@@ -325,19 +329,34 @@ where
 
 			self.backend.commit_operation(op)?;
 
-			match (&import_notification, &finality_notification) {
+			match (&finality_notification, &import_notification) {
 				(Some(ref fin), Some(ref imp)) if fin.hash == imp.hash => {
-					self.backend.pin_block(&fin.hash);
+					self.backend.pin_block(
+						&fin.hash,
+						finality_num.expect("Should work").saturated_into::<u64>(),
+					);
 				},
 				(Some(ref fin), Some(ref imp)) => {
-					self.backend.pin_block(&fin.hash);
-					self.backend.pin_block(&imp.hash);
+					self.backend.pin_block(
+						&fin.hash,
+						finality_num.expect("Should work").saturated_into::<u64>(),
+					);
+					self.backend.pin_block(
+						&imp.hash,
+						import_num.expect("Should work").saturated_into::<u64>(),
+					);
 				},
 				(None, Some(ref imp)) => {
-					self.backend.pin_block(&imp.hash);
+					self.backend.pin_block(
+						&imp.hash,
+						import_num.expect("Should work").saturated_into::<u64>(),
+					);
 				},
 				(Some(ref fin), None) => {
-					self.backend.pin_block(&fin.hash);
+					self.backend.pin_block(
+						&fin.hash,
+						finality_num.expect("Should work").saturated_into::<u64>(),
+					);
 				},
 				(_, _) => {},
 			}

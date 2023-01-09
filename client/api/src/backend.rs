@@ -503,7 +503,7 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	fn offchain_storage(&self) -> Option<Self::OffchainStorage>;
 
 	/// Pin the block to prevent pruning.
-	fn pin_block(&self, hash: &Block::Hash) -> sp_blockchain::Result<()>;
+	fn pin_block(&self, hash: &Block::Hash, number: u64) -> sp_blockchain::Result<()>;
 
 	/// Unpin the block to allow pruning.
 	fn unpin_block(&self, hash: &Block::Hash) -> sp_blockchain::Result<()>;

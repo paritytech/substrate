@@ -2401,13 +2401,14 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		)
 	}
 
-	fn pin_block(&self, hash: &<Block as BlockT>::Hash) -> sp_blockchain::Result<()> {
+	fn pin_block(&self, hash: &<Block as BlockT>::Hash, number: u64) -> sp_blockchain::Result<()> {
 		let mut handle = self.pinned_block_store.write();
 		handle.insert(*hash);
-		log::info!(target: "db", "Pinning block in backend, hash: {}, num_pinned_blocks: {}", hash, handle.len());
+		log::info!(target: "db", "Pinning block in backend, hash: {}, number: {}, num_pinned_blocks: {}", hash, number, handle.len());
 		log::info!(target: "skunert", "Pinned_block_contents: {:?}", handle);
 		let hint = || false;
 		self.storage.state_db.pin(hash, number, hint);
+		self.storage..pin(hash, number, hint);
 		Ok(())
 	}
 
@@ -2415,6 +2416,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		log::info!(target: "db", "Unpinning block in backend, hash: {}", hash);
 		let mut handle = self.pinned_block_store.write();
 		handle.remove(hash);
+		self.storage.state_db.unpin(hash);
 		Ok(())
 	}
 }
