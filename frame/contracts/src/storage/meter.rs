@@ -29,7 +29,6 @@ use frame_support::{
 	DefaultNoBound, RuntimeDebugNoBound,
 };
 use pallet_contracts_primitives::StorageDeposit as Deposit;
-use sp_core::crypto::UncheckedFrom;
 use sp_runtime::{
 	traits::{Saturating, Zero},
 	FixedPointNumber, FixedU128,
@@ -255,7 +254,6 @@ impl<T: Config> Default for Contribution<T> {
 impl<T, E, S> RawMeter<T, E, S>
 where
 	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 	E: Ext<T>,
 	S: State,
 {
@@ -325,7 +323,6 @@ where
 impl<T, E> RawMeter<T, E, Root>
 where
 	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 	E: Ext<T>,
 {
 	/// Create new storage meter for the specified `origin` and `limit`.
@@ -361,7 +358,6 @@ where
 impl<T, E> RawMeter<T, E, Nested>
 where
 	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 	E: Ext<T>,
 {
 	/// Try to charge the `diff` from the meter. Fails if this would exceed the original limit.
@@ -441,11 +437,7 @@ where
 	}
 }
 
-impl<T> Ext<T> for ReservingExt
-where
-	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
+impl<T: Config> Ext<T> for ReservingExt {
 	fn check_limit(
 		origin: &T::AccountId,
 		limit: Option<BalanceOf<T>>,

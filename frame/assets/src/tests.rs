@@ -24,6 +24,7 @@ use frame_support::{
 	traits::{fungibles::InspectEnumerable, Currency},
 };
 use pallet_balances::Error as BalancesError;
+use sp_io::storage;
 use sp_runtime::{traits::ConvertInto, TokenError};
 
 fn asset_ids() -> Vec<u32> {
@@ -1192,5 +1193,34 @@ fn querying_roles_should_work() {
 		assert_eq!(Assets::issuer(0), Some(2));
 		assert_eq!(Assets::admin(0), Some(3));
 		assert_eq!(Assets::freezer(0), Some(4));
+	});
+}
+
+#[test]
+fn normal_asset_create_and_destroy_callbacks_should_work() {
+	new_test_ext().execute_with(|| {
+		assert!(storage::get(b"asset_created").is_none());
+		assert!(storage::get(b"asset_destroyed").is_none());
+
+		Balances::make_free_balance_be(&1, 100);
+		assert_ok!(Assets::create(RuntimeOrigin::signed(1), 0, 1, 1));
+		assert!(storage::get(b"asset_created").is_some());
+		assert!(storage::get(b"asset_destroyed").is_none());
+
+		assert_ok!(Assets::start_destroy(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Assets::destroy_accounts(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Assets::destroy_approvals(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Assets::finish_destroy(RuntimeOrigin::signed(1), 0));
+		assert!(storage::get(b"asset_destroyed").is_some());
+	});
+}
+
+#[test]
+fn root_asset_create_should_work() {
+	new_test_ext().execute_with(|| {
+		assert!(storage::get(b"asset_created").is_none());
+		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
+		assert!(storage::get(b"asset_created").is_some());
+		assert!(storage::get(b"asset_destroyed").is_none());
 	});
 }

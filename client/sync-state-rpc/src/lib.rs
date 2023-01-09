@@ -48,10 +48,7 @@ use jsonrpsee::{
 };
 use sc_client_api::StorageData;
 use sp_blockchain::HeaderBackend;
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, NumberFor},
-};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::sync::Arc;
 
 type SharedAuthoritySet<TBl> =
@@ -164,7 +161,7 @@ where
 		let finalized_hash = self.client.info().finalized_hash;
 		let finalized_header = self
 			.client
-			.header(BlockId::Hash(finalized_hash))?
+			.header(finalized_hash)?
 			.ok_or_else(|| sp_blockchain::Error::MissingHeader(finalized_hash.to_string()))?;
 
 		let finalized_block_weight =

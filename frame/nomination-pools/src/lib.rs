@@ -1277,6 +1277,8 @@ pub mod pallet {
 	pub type MaxPoolMembersPerPool<T: Config> = StorageValue<_, u32, OptionQuery>;
 
 	/// Active members.
+	///
+	/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
 	#[pallet::storage]
 	pub type PoolMembers<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, PoolMember<T>>;
@@ -1644,9 +1646,12 @@ pub mod pallet {
 		/// # Note
 		///
 		/// If there are too many unlocking chunks to unbond with the pool account,
-		/// [`Call::pool_withdraw_unbonded`] can be called to try and minimize unlocking chunks. If
-		/// there are too many unlocking chunks, the result of this call will likely be the
-		/// `NoMoreChunks` error from the staking system.
+		/// [`Call::pool_withdraw_unbonded`] can be called to try and minimize unlocking chunks.
+		/// The [`StakingInterface::unbond`] will implicitly call [`Call::pool_withdraw_unbonded`]
+		/// to try to free chunks if necessary (ie. if unbound was called and no unlocking chunks
+		/// are available). However, it may not be possible to release the current unlocking chunks,
+		/// in which case, the result of this call will likely be the `NoMoreChunks` error from the
+		/// staking system.
 		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::unbond())]
 		pub fn unbond(
@@ -2467,12 +2472,17 @@ impl<T: Config> Pallet<T> {
 
 		for id in reward_pools {
 			let account = Self::create_reward_account(id);
-			assert!(
-				T::Currency::free_balance(&account) >= T::Currency::minimum_balance(),
-				"reward pool of {id}: {:?} (ed = {:?})",
-				T::Currency::free_balance(&account),
-				T::Currency::minimum_balance()
-			);
+			if T::Currency::free_balance(&account) < T::Currency::minimum_balance() {
+				log!(
+					warn,
+					"reward pool of {:?}: {:?} (ed = {:?}), should only happen because ED has \
+					changed recently. Pool operators should be notified to top up the reward \
+					account",
+					id,
+					T::Currency::free_balance(&account),
+					T::Currency::minimum_balance(),
+				)
+			}
 		}
 
 		let mut pools_members = BTreeMap::<PoolId, u32>::new();

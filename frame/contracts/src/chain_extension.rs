@@ -83,7 +83,6 @@ use sp_std::{marker::PhantomData, vec::Vec};
 pub use crate::{exec::Ext, Config};
 pub use frame_system::Config as SysConfig;
 pub use pallet_contracts_primitives::ReturnFlags;
-pub use sp_core::crypto::UncheckedFrom;
 
 /// Result that returns a [`DispatchError`] on error.
 pub type Result<T> = sp_std::result::Result<T, DispatchError>;
@@ -114,10 +113,7 @@ pub trait ChainExtension<C: Config> {
 	/// In case of `Err` the contract execution is immediately suspended and the passed error
 	/// is returned to the caller. Otherwise the value of [`RetVal`] determines the exit
 	/// behaviour.
-	fn call<E>(&mut self, env: Environment<E, InitState>) -> Result<RetVal>
-	where
-		E: Ext<T = C>,
-		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>;
+	fn call<E: Ext<T = C>>(&mut self, env: Environment<E, InitState>) -> Result<RetVal>;
 
 	/// Determines whether chain extensions are enabled for this chain.
 	///
@@ -153,11 +149,7 @@ pub trait RegisteredChainExtension<C: Config>: ChainExtension<C> {
 #[impl_trait_for_tuples::impl_for_tuples(10)]
 #[tuple_types_custom_trait_bound(RegisteredChainExtension<C>)]
 impl<C: Config> ChainExtension<C> for Tuple {
-	fn call<E>(&mut self, mut env: Environment<E, InitState>) -> Result<RetVal>
-	where
-		E: Ext<T = C>,
-		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
-	{
+	fn call<E: Ext<T = C>>(&mut self, mut env: Environment<E, InitState>) -> Result<RetVal> {
 		for_tuples!(
 			#(
 				if (Tuple::ID == env.ext_id()) && Tuple::enabled() {
@@ -205,10 +197,7 @@ pub struct Environment<'a, 'b, E: Ext, S: State> {
 }
 
 /// Functions that are available in every state of this type.
-impl<'a, 'b, E: Ext, S: State> Environment<'a, 'b, E, S>
-where
-	<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
-{
+impl<'a, 'b, E: Ext, S: State> Environment<'a, 'b, E, S> {
 	/// The function id within the `id` passed by a contract.
 	///
 	/// It returns the two least significant bytes of the `id` passed by a contract as the other
@@ -326,10 +315,7 @@ impl<'a, 'b, E: Ext, S: PrimOut> Environment<'a, 'b, E, S> {
 }
 
 /// Functions to use the input arguments as pointer to a buffer.
-impl<'a, 'b, E: Ext, S: BufIn> Environment<'a, 'b, E, S>
-where
-	<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
-{
+impl<'a, 'b, E: Ext, S: BufIn> Environment<'a, 'b, E, S> {
 	/// Reads `min(max_len, in_len)` from contract memory.
 	///
 	/// This does **not** charge any weight. The caller must make sure that the an
@@ -401,10 +387,7 @@ where
 }
 
 /// Functions to use the output arguments as pointer to a buffer.
-impl<'a, 'b, E: Ext, S: BufOut> Environment<'a, 'b, E, S>
-where
-	<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
-{
+impl<'a, 'b, E: Ext, S: BufOut> Environment<'a, 'b, E, S> {
 	/// Write the supplied buffer to contract memory.
 	///
 	/// If the contract supplied buffer is smaller than the passed `buffer` an `Err` is returned.
