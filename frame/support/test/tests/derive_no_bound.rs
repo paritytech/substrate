@@ -215,7 +215,7 @@ fn test_enum() {
 	);
 	assert_eq!(
 		format!("{:?}", variant_1),
-		String::from("Enum::VariantNamed { a: 1, b: 2, c: 3, phantom: PhantomData }"),
+		String::from("Enum::VariantNamed { a: 1, b: 2, c: 3, phantom: PhantomData<(derive_no_bound::ImplNone, derive_no_bound::ImplNone)> }"),
 	);
 	assert_eq!(format!("{:?}", variant_2), String::from("Enum::VariantUnit"));
 	assert_eq!(format!("{:?}", variant_3), String::from("Enum::VariantUnit2"));
