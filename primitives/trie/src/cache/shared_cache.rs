@@ -67,6 +67,9 @@ where
 
 	#[inline]
 	fn is_over_the_limit(&self, _length: usize) -> bool {
+		// Once we hit the limit of max items evicted this will return `false` and prevent
+		// any further evictions, but this is fine because the outer loop which inserts
+		// items into this cache will just detect this and stop inserting new items.
 		self.items_evicted <= self.max_items_evicted && self.heap_size > self.max_heap_size
 	}
 
@@ -713,7 +716,7 @@ impl<H: Hasher> SharedTrieCache<H> {
 	/// This will temporarily lock the shared cache for reading.
 	///
 	/// This doesn't reorder any of the elements in the internal [`LruMap`].
-	pub fn peek_value(
+	pub fn peek_value_by_hash(
 		&self,
 		hash: ValueCacheKeyHash,
 		storage_root: &H::Out,
@@ -764,6 +767,9 @@ impl<H: Hasher> SharedTrieCache<H> {
 
 	/// Returns the write locked inner.
 	pub(super) fn write_lock_inner(&self) -> Option<RwLockWriteGuard<'_, SharedTrieCacheInner<H>>> {
+		// This should never happen, but we *really* don't want to deadlock. So let's have it
+		// timeout, just in case. At worst it'll do nothing, and at best it'll avert a catastrophe
+		// and notify us that there's a problem.
 		self.inner.try_write_for(super::SHARED_CACHE_WRITE_LOCK_TIMEOUT)
 	}
 }

@@ -357,7 +357,7 @@ impl<H: Hasher> LocalTrieCache<H> {
 			storage_root,
 			local_value_cache: self.value_cache.lock(),
 			shared_value_cache_access: self.shared_value_cache_access.lock(),
-			last_value_from_shared_cache: None,
+			buffered_value: None,
 		};
 
 		TrieCache {
@@ -429,7 +429,10 @@ enum ValueCache<'a, H: Hasher> {
 		shared_value_cache_access: MutexGuard<'a, ValueAccessSet>,
 		local_value_cache: MutexGuard<'a, ValueCacheMap<H::Out>>,
 		storage_root: H::Out,
-		last_value_from_shared_cache: Option<CachedValue<H::Out>>,
+		// The shared value cache needs to be temporarily locked when reading from it
+		// so we need to clone the value that is returned, but we need to be able to
+		// return a reference to the value, so we just buffer it here.
+		buffered_value: Option<CachedValue<H::Out>>,
 	},
 }
 
@@ -455,7 +458,7 @@ impl<H: Hasher> ValueCache<'_, H> {
 				local_value_cache,
 				shared_value_cache_access,
 				storage_root,
-				last_value_from_shared_cache,
+				buffered_value,
 			} => {
 				// We first need to look up in the local cache and then the shared cache.
 				// It can happen that some value is cached in the shared cache, but the
@@ -477,11 +480,11 @@ impl<H: Hasher> ValueCache<'_, H> {
 				}
 
 				stats.shared_fetch_attempts.fetch_add(1, Ordering::Relaxed);
-				if let Some(value) = shared_cache.peek_value(hash, storage_root, key) {
+				if let Some(value) = shared_cache.peek_value_by_hash(hash, storage_root, key) {
 					stats.shared_hits.fetch_add(1, Ordering::Relaxed);
 					shared_value_cache_access.insert(hash, ());
-					*last_value_from_shared_cache = Some(value.clone());
-					return last_value_from_shared_cache.as_ref()
+					*buffered_value = Some(value.clone());
+					return buffered_value.as_ref()
 				}
 
 				None
