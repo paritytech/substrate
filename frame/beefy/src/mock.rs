@@ -17,20 +17,25 @@
 
 use std::vec;
 
+use beefy_primitives::crypto::AuthorityId;
+use frame_election_provider_support::{onchain, SequentialPhragmen};
 use frame_support::{
 	construct_runtime, parameter_types,
 	sp_io::TestExternalities,
-	traits::{ConstU16, ConstU32, ConstU64, GenesisBuild},
+	traits::{ConstU16, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem},
 	BasicExternalities,
 };
-use sp_core::H256;
+use pallet_session::historical as pallet_session_historical;
+use sp_core::{crypto::KeyTypeId, ConstU128, H256};
 use sp_runtime::{
 	app_crypto::ecdsa::Public,
+	curve::PiecewiseLinear,
 	impl_opaque_keys,
-	testing::Header,
+	testing::{Header, TestXt},
 	traits::{BlakeTwo256, ConvertInto, IdentityLookup, OpaqueKeys},
 	Perbill,
 };
+use sp_staking::{EraIndex, SessionIndex};
 
 use crate as pallet_beefy;
 
@@ -52,8 +57,14 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Beefy: pallet_beefy::{Pallet, Config<T>, Storage},
+		Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
+		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Beefy: pallet_beefy::{Pallet, Call, Config<T>, Storage},
+		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
+		Offences: pallet_offences::{Pallet, Storage, Event},
+		Historical: pallet_session_historical::{Pallet},
 	}
 );
 
@@ -75,7 +86,7 @@ impl frame_system::Config for Test {
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = ();
+	type AccountData = pallet_balances::AccountData<u128>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
@@ -84,10 +95,34 @@ impl frame_system::Config for Test {
 	type MaxConsumers = ConstU32<16>;
 }
 
+impl<C> frame_system::offchain::SendTransactionTypes<C> for Test
+where
+	RuntimeCall: From<C>,
+{
+	type OverarchingCall = RuntimeCall;
+	type Extrinsic = TestXt<RuntimeCall, ()>;
+}
+
+parameter_types! {
+	pub const Period: u64 = 1;
+	pub const ReportLongevity: u64 =
+		BondingDuration::get() as u64 * SessionsPerEra::get() as u64 * Period::get();
+}
+
 impl pallet_beefy::Config for Test {
 	type BeefyId = BeefyId;
+	type KeyOwnerProofSystem = Historical;
+	type KeyOwnerProof =
+		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, AuthorityId)>>::Proof;
+	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
+		KeyTypeId,
+		AuthorityId,
+	)>>::IdentificationTuple;
+	type HandleEquivocation =
+		super::EquivocationHandler<u64, Self::KeyOwnerIdentification, Offences, ReportLongevity>;
 	type MaxAuthorities = ConstU32<100>;
 	type OnNewValidatorSet = ();
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -104,6 +139,102 @@ impl pallet_session::Config for Test {
 	type SessionHandler = <MockSessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = MockSessionKeys;
 	type WeightInfo = ();
+}
+
+impl pallet_session::historical::Config for Test {
+	type FullIdentification = pallet_staking::Exposure<u64, u128>;
+	type FullIdentificationOf = pallet_staking::ExposureOf<Self>;
+}
+
+impl pallet_authorship::Config for Test {
+	type FindAuthor = ();
+	type UncleGenerations = ConstU64<0>;
+	type FilterUncle = ();
+	type EventHandler = ();
+}
+
+impl pallet_balances::Config for Test {
+	type MaxLocks = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
+	type Balance = u128;
+	type DustRemoval = ();
+	type RuntimeEvent = RuntimeEvent;
+	type ExistentialDeposit = ConstU128<1>;
+	type AccountStore = System;
+	type WeightInfo = ();
+}
+
+impl pallet_timestamp::Config for Test {
+	type Moment = u64;
+	type OnTimestampSet = ();
+	type MinimumPeriod = ConstU64<3>;
+	type WeightInfo = ();
+}
+
+pallet_staking_reward_curve::build! {
+	const REWARD_CURVE: PiecewiseLinear<'static> = curve!(
+		min_inflation: 0_025_000u64,
+		max_inflation: 0_100_000,
+		ideal_stake: 0_500_000,
+		falloff: 0_050_000,
+		max_piece_count: 40,
+		test_precision: 0_005_000,
+	);
+}
+
+parameter_types! {
+	pub const SessionsPerEra: SessionIndex = 3;
+	pub const BondingDuration: EraIndex = 3;
+	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
+	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
+}
+
+pub struct OnChainSeqPhragmen;
+impl onchain::Config for OnChainSeqPhragmen {
+	type System = Test;
+	type Solver = SequentialPhragmen<u64, Perbill>;
+	type DataProvider = Staking;
+	type WeightInfo = ();
+	type MaxWinners = ConstU32<100>;
+	type VotersBound = ConstU32<{ u32::MAX }>;
+	type TargetsBound = ConstU32<{ u32::MAX }>;
+}
+
+impl pallet_staking::Config for Test {
+	type MaxNominations = ConstU32<16>;
+	type RewardRemainder = ();
+	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
+	type RuntimeEvent = RuntimeEvent;
+	type Currency = Balances;
+	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
+	type Slash = ();
+	type Reward = ();
+	type SessionsPerEra = SessionsPerEra;
+	type BondingDuration = BondingDuration;
+	type SlashDeferDuration = ();
+	type AdminOrigin = frame_system::EnsureRoot<Self::AccountId>;
+	type SessionInterface = Self;
+	type UnixTime = pallet_timestamp::Pallet<Test>;
+	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
+	type MaxNominatorRewardedPerValidator = ConstU32<64>;
+	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
+	type NextNewSession = Session;
+	type ElectionProvider = onchain::OnChainExecution<OnChainSeqPhragmen>;
+	type GenesisElectionProvider = Self::ElectionProvider;
+	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
+	type TargetList = pallet_staking::UseValidatorsMap<Self>;
+	type MaxUnlockingChunks = ConstU32<32>;
+	type HistoryDepth = ConstU32<84>;
+	type OnStakerSlash = ();
+	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
+	type WeightInfo = ();
+}
+
+impl pallet_offences::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
+	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
+	type OnOffenceHandler = Staking;
 }
 
 pub struct MockSessionManager;

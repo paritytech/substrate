@@ -23,6 +23,12 @@ sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../pr
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
+frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
+pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+pallet-offences = { version = "4.0.0-dev", path = "../offences" }
+pallet-staking = { version = "4.0.0-dev", path = "../staking" }
+pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward-curve" }
+pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
 sp-core = { version = "7.0.0", path = "../../primitives/core" }
 sp-io = { version = "7.0.0", path = "../../primitives/io" }
 sp-staking = { version = "4.0.0-dev", path = "../../primitives/staking" }
