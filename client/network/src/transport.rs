@@ -56,8 +56,10 @@ pub fn build_transport(
 	let transport = if !memory_only {
 		let tcp_config = tcp::Config::new().nodelay(true);
 		let desktop_trans = tcp::tokio::Transport::new(tcp_config.clone());
-		let desktop_trans = websocket::WsConfig::new(desktop_trans)
-			.or_transport(tcp::tokio::Transport::new(tcp_config.clone()));
+		let mut ws_trans = websocket::WsConfig::new(desktop_trans);
+		// Configure support for secure Websocket connections.
+		ws_trans.set_tls_config(gen_tls_config());
+		let desktop_trans = ws_trans.or_transport(tcp::tokio::Transport::new(tcp_config.clone()));
 		let dns_init = dns::TokioDnsConfig::system(desktop_trans);
 		EitherTransport::Left(if let Ok(dns) = dns_init {
 			EitherTransport::Left(dns)
@@ -120,4 +122,24 @@ pub fn build_transport(
 		.boxed();
 
 	(transport, bandwidth)
+}
+
+/// Generates an ephemeral self-signed x509 certificate and returns a new TLS config with that
+/// certificate.
+///
+/// # Panics
+///
+/// Panics if `rcgen` fails to generate a certificate.
+fn gen_tls_config() -> websocket::tls::Config {
+	// TODO: use `public_addresses` to fill alt names.
+	let cert =
+		rcgen::generate_simple_self_signed(vec!["parity.io".to_string(), "localhost".to_string()])
+			.expect("rcgen certificate generation to work");
+	websocket::tls::Config::new(
+		websocket::tls::PrivateKey::new(cert.serialize_private_key_der()),
+		vec![websocket::tls::Certificate::new(
+			cert.serialize_der().expect("rcgen certificate serialization to work"),
+		)],
+	)
+	.expect("tls::Config builder to always succeed")
 }

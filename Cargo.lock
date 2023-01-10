@@ -8450,6 +8450,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "pin-project",
  "rand 0.8.5",
+ "rcgen 0.10.0",
  "sc-block-builder",
  "sc-client-api",
  "sc-consensus",
