@@ -36,7 +36,8 @@ pub mod type_value;
 pub mod validate_unsigned;
 
 use frame_support_procedural_tools::generate_crate_access_2018;
-use syn::spanned::Spanned;
+use quote::ToTokens;
+use syn::{spanned::Spanned, Item, ItemEnum};
 
 /// Parsed definition of a pallet.
 pub struct Def {
@@ -57,6 +58,7 @@ pub struct Def {
 	pub validate_unsigned: Option<validate_unsigned::ValidateUnsignedDef>,
 	pub extra_constants: Option<extra_constants::ExtraConstantsDef>,
 	pub type_values: Vec<type_value::TypeValueDef>,
+	pub composites: Vec<ItemEnum>,
 	pub frame_system: syn::Ident,
 	pub frame_support: syn::Ident,
 	pub dev_mode: bool,
@@ -91,6 +93,7 @@ impl Def {
 		let mut extra_constants = None;
 		let mut storages = vec![];
 		let mut type_values = vec![];
+		let mut composites = vec![];
 
 		for (index, item) in items.iter_mut().enumerate() {
 			let pallet_attr: Option<PalletAttr> = helper::take_first_item_pallet_attr(item)?;
@@ -132,6 +135,12 @@ impl Def {
 				},
 				Some(PalletAttr::TypeValue(span)) =>
 					type_values.push(type_value::TypeValueDef::try_from(span, index, item)?),
+				Some(PalletAttr::Composite(_)) =>
+					if let Item::Enum(item) = item {
+						composites.push(item.clone().into());
+					} else {
+						syn::parse::<ItemEnum>(item.to_token_stream().into())?;
+					},
 				Some(PalletAttr::ExtraConstants(_)) =>
 					extra_constants =
 						Some(extra_constants::ExtraConstantsDef::try_from(index, item)?),
@@ -174,6 +183,7 @@ impl Def {
 			type_values,
 			frame_system,
 			frame_support,
+			composites,
 			dev_mode,
 		};
 
@@ -385,6 +395,7 @@ mod keyword {
 	syn::custom_keyword!(generate_store);
 	syn::custom_keyword!(Store);
 	syn::custom_keyword!(extra_constants);
+	syn::custom_keyword!(composite);
 }
 
 /// Parse attributes for item in pallet module
@@ -404,6 +415,7 @@ enum PalletAttr {
 	ValidateUnsigned(proc_macro2::Span),
 	TypeValue(proc_macro2::Span),
 	ExtraConstants(proc_macro2::Span),
+	Composite(proc_macro2::Span),
 }
 
 impl PalletAttr {
@@ -423,6 +435,7 @@ impl PalletAttr {
 			Self::ValidateUnsigned(span) => *span,
 			Self::TypeValue(span) => *span,
 			Self::ExtraConstants(span) => *span,
+			Self::Composite(span) => *span,
 		}
 	}
 }
@@ -464,6 +477,8 @@ impl syn::parse::Parse for PalletAttr {
 			Ok(PalletAttr::TypeValue(content.parse::<keyword::type_value>()?.span()))
 		} else if lookahead.peek(keyword::extra_constants) {
 			Ok(PalletAttr::ExtraConstants(content.parse::<keyword::extra_constants>()?.span()))
+		} else if lookahead.peek(keyword::composite) {
+			Ok(PalletAttr::Composite(content.parse::<keyword::composite>()?.span()))
 		} else {
 			Err(lookahead.error())
 		}
