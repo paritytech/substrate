@@ -330,7 +330,7 @@ fn state_access_benchmarks(c: &mut Criterion) {
 	//
 	// This will essentially achieve the best case of what the local cache alone can do
 	// when iterating over unique values since only the very bottom of the trie will
-	// have to be constantly fetched from storage In other words, all keys have the same prefix
+	// have to be constantly fetched from storage. In other words, all keys have the same prefix
 	// since we're only reading keys from the same storage map, so mostly the same trie nodes
 	// will be accessed for each value.
 	let mut g = c.benchmark_group("Read 1000000 account keys");
