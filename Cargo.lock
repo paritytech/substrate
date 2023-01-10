@@ -3479,6 +3479,7 @@ dependencies = [
  "pallet-society",
  "pallet-staking",
  "pallet-staking-reward-curve",
+ "pallet-staking-runtime-api",
  "pallet-state-trie-migration",
  "pallet-sudo",
  "pallet-timestamp",
@@ -6393,6 +6394,14 @@ version = "4.0.0-dev"
 dependencies = [
  "log",
  "sp-arithmetic",
+]
+
+[[package]]
+name = "pallet-staking-runtime-api"
+version = "4.0.0-dev"
+dependencies = [
+ "parity-scale-codec",
+ "sp-api",
 ]
 
 [[package]]

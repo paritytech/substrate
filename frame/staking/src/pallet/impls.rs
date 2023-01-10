@@ -59,6 +59,13 @@ use super::{pallet::*, STAKING_ID};
 const NPOS_MAX_ITERATIONS_COEFFICIENT: u32 = 2;
 
 impl<T: Config> Pallet<T> {
+	/// Returns the current nominations quota for nominators.
+	///
+	/// Used by runtime API.
+	pub fn api_nominations_quota() -> u32 {
+		T::MaxNominations::get()
+	}
+
 	/// The total balance that can be slashed from a stash account as of right now.
 	pub fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
 		// Weight note: consider making the stake accessible through stash.

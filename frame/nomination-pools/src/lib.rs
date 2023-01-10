@@ -2144,8 +2144,8 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	/// Returns the pending rewards for the specified `member_account`.
 	///
-	/// In the case of error, `None` is returned.
-	pub fn pending_rewards(member_account: T::AccountId) -> Option<BalanceOf<T>> {
+	/// In the case of error, `None` is returned. Used by runtime API.
+	pub fn api_pending_rewards(member_account: T::AccountId) -> Option<BalanceOf<T>> {
 		if let Some(pool_member) = PoolMembers::<T>::get(member_account) {
 			if let Some((reward_pool, bonded_pool)) = RewardPools::<T>::get(pool_member.pool_id)
 				.zip(BondedPools::<T>::get(pool_member.pool_id))
@@ -2158,6 +2158,30 @@ impl<T: Config> Pallet<T> {
 		}
 
 		None
+	}
+
+	/// Returns the points to balance conversion for a specified pool.
+	///
+	/// If the pool ID does not exist, return an error. Used by runtime API.
+	pub fn api_points_to_balance(pool_id: u32) -> Result<BalanceOf<T>, ()> {
+		if let Some(pool) = BondedPool::<T>::get(pool_id) {
+			Ok(pool.points_to_balance(pool.points))
+		} else {
+			Err(())
+		}
+	}
+
+	/// Returns the equivalent `new_funds` balance to point conversion for a specified pool.
+	///
+	/// If the pool ID does not exist, return an error. Used by runtime API.
+	pub fn api_balance_to_point(pool_id: u32, new_funds: BalanceOf<T>) -> Result<BalanceOf<T>, ()> {
+		if let Some(pool) = BondedPool::<T>::get(pool_id) {
+			let bonded_balance =
+				T::Staking::active_stake(&pool.bonded_account()).unwrap_or(Zero::zero());
+			Ok(Pallet::<T>::balance_to_point(bonded_balance, pool.points, new_funds))
+		} else {
+			Err(())
+		}
 	}
 
 	/// The amount of bond that MUST REMAIN IN BONDED in ALL POOLS.

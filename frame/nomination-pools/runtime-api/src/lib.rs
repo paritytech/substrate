@@ -24,10 +24,19 @@ use codec::Codec;
 
 sp_api::decl_runtime_apis! {
 	/// Runtime api for accessing information about nomination pools.
+	#[api_version(1)]
 	pub trait NominationPoolsApi<AccountId, Balance>
-		where AccountId: Codec, Balance: Codec
+		where
+			AccountId: Codec,
+			Balance: Codec,
 	{
 		/// Returns the pending rewards for the member that the AccountId was given for.
 		fn pending_rewards(member: AccountId) -> Balance;
+
+		/// Returns the points to balance conversion for a given pool.
+		fn points_to_balance(pool_id: u32) -> Result<Balance, ()>;
+
+		/// Returns the equivalent points of `new_funds` for a given pool
+		fn balance_to_point(pool_id: u32, new_funds: Balance) -> Result<Balance, ()>;
 	}
 }
