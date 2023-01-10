@@ -119,7 +119,7 @@ pub fn migrate_voters_to_recorded_deposit<V: V2ToV3, T: Config>(old_deposit: V::
 		Some(Voter { votes, stake, deposit: old_deposit })
 	});
 
-	log::info!(target: LOG_TARGET, "migrated {} voter accounts.", <Voting<V, T>>::iter().count(),);
+	log::info!(target: LOG_TARGET, "migrated {} voter accounts.", <Voting<V, T>>::iter().count());
 }
 
 /// Migrate all candidates to recorded deposit.
