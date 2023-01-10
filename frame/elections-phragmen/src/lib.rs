@@ -791,7 +791,7 @@ impl<T: Config> Pallet<T> {
 				} else {
 					// overlap. This can never happen. If so, it seems like our intended replacement
 					// is already a member, so not much more to do.
-					log::error!(target: LOG_TARGET, "A member seems to also be a runner-up.",);
+					log::error!(target: LOG_TARGET, "A member seems to also be a runner-up.");
 				}
 				next_best
 			});
