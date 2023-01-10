@@ -140,8 +140,6 @@ use sp_std::{
 pub use pallet::*;
 pub use weights::WeightInfo;
 
-pub const LOG_TARGET: &str = "runtime::session_historical";
-
 /// Decides whether the session should be ended.
 pub trait ShouldEndSession<BlockNumber> {
 	/// Return `true` if the session should be ended.

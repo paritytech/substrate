@@ -18,7 +18,6 @@
 use sp_io::hashing::twox_128;
 use sp_std::str;
 
-use super::super::LOG_TARGET;
 use frame_support::{
 	storage::{generator::StorageValue, StoragePrefixedMap},
 	traits::{
@@ -29,6 +28,8 @@ use frame_support::{
 };
 
 use crate::historical as pallet_session_historical;
+
+const LOG_TARGET: &str = "runtime::session_historical";
 
 const OLD_PREFIX: &str = "Session";
 
