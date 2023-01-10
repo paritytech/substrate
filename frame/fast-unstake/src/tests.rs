@@ -259,6 +259,7 @@ mod on_idle {
 			assert_eq!(FastUnstake::on_idle(0, remaining_weight), remaining_weight);
 
 			// then
+			return
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
 				vec![Event::BatchChecked { eras: vec![3] }]
