@@ -535,7 +535,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 							<T as #frame_system::Config>::PalletInfo
 							as #frame_support::traits::PalletInfo
 						>::name::<Pallet<#type_use_gen>>()
-							.expect("Every active pallet has a name in the runtime; qed. Have you added the pallet into construct_runtime! ?")
+							.expect("No name found for the pallet in the runtime! This usually means that the pallet wasn't added to `construct_runtime!`.")
 					}
 					const STORAGE_PREFIX: &'static str = #counter_prefix_struct_const;
 				}
