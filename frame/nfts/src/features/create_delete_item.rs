@@ -22,10 +22,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn do_mint(
 		collection: T::CollectionId,
 		item: T::ItemId,
-		depositor: T::AccountId,
+		maybe_depositor: Option<T::AccountId>,
 		mint_to: T::AccountId,
 		item_config: ItemConfig,
-		deposit_collection_owner: bool,
 		with_details_and_config: impl FnOnce(
 			&CollectionDetailsFor<T, I>,
 			&CollectionConfigFor<T, I>,
@@ -55,9 +54,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					true => T::ItemDeposit::get(),
 					false => Zero::zero(),
 				};
-				let deposit_account = match deposit_collection_owner {
-					true => collection_details.owner.clone(),
-					false => depositor,
+				let deposit_account = match maybe_depositor {
+					None => collection_details.owner.clone(),
+					Some(depositor) => depositor,
 				};
 
 				let item_owner = mint_to.clone();

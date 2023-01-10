@@ -746,10 +746,9 @@ pub mod pallet {
 			Self::do_mint(
 				collection,
 				item,
-				caller.clone(),
+				Some(caller.clone()),
 				mint_to.clone(),
 				item_config,
-				false,
 				|collection_details, collection_config| {
 					// Issuer can mint regardless of mint settings
 					if Self::has_role(&collection, &caller, CollectionRole::Issuer) {
@@ -849,9 +848,7 @@ pub mod pallet {
 					Error::<T, I>::NoPermission
 				);
 			}
-			Self::do_mint(collection, item, mint_to.clone(), mint_to, item_config, true, |_, _| {
-				Ok(())
-			})
+			Self::do_mint(collection, item, None, mint_to, item_config, |_, _| Ok(()))
 		}
 
 		/// Destroy a single item.
