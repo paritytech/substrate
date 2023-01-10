@@ -358,23 +358,31 @@ mod tests {
 			pair.as_inner_ref().sign_prehashed(&blake2_256(msg)).into();
 
 		// Verification works if same hashing function is used when signing and verifying.
-		assert!(BeefyVerify::<Keccak256>::verify(&keccak_256_signature, msg, &pair.public()));
-		assert!(BeefyVerify::<BlakeTwo256>::verify(&blake2_256_signature, msg, &pair.public()));
+		assert!(BeefyAuthorityId::<Keccak256>::verify(&pair.public(), &keccak_256_signature, msg));
+		assert!(BeefyAuthorityId::<BlakeTwo256>::verify(
+			&pair.public(),
+			&blake2_256_signature,
+			msg
+		));
 		// Verification fails if distinct hashing functions are used when signing and verifying.
-		assert!(!BeefyVerify::<Keccak256>::verify(&blake2_256_signature, msg, &pair.public()));
-		assert!(!BeefyVerify::<BlakeTwo256>::verify(&keccak_256_signature, msg, &pair.public()));
+		assert!(!BeefyAuthorityId::<Keccak256>::verify(&pair.public(), &blake2_256_signature, msg));
+		assert!(!BeefyAuthorityId::<BlakeTwo256>::verify(
+			&pair.public(),
+			&keccak_256_signature,
+			msg
+		));
 
 		// Other public key doesn't work
 		let (other_pair, _) = crypto::Pair::generate();
-		assert!(!BeefyVerify::<Keccak256>::verify(
+		assert!(!BeefyAuthorityId::<Keccak256>::verify(
+			&other_pair.public(),
 			&keccak_256_signature,
 			msg,
-			&other_pair.public()
 		));
-		assert!(!BeefyVerify::<BlakeTwo256>::verify(
+		assert!(!BeefyAuthorityId::<BlakeTwo256>::verify(
+			&other_pair.public(),
 			&blake2_256_signature,
 			msg,
-			&other_pair.public()
 		));
 	}
 }
