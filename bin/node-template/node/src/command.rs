@@ -8,12 +8,16 @@ use frame_benchmarking_cli::{BenchmarkCmd, ExtrinsicFactory, SUBSTRATE_REFERENCE
 use node_template_runtime::{Block, EXISTENTIAL_DEPOSIT};
 use sc_cli::{ChainSpec, RuntimeVersion, SubstrateCli};
 use sc_service::PartialComponents;
-use sp_consensus_aura::{Slot, SlotDuration, AURA_ENGINE_ID};
-use sp_core::Encode;
-use sp_inherents::InherentData;
 use sp_keyring::Sr25519Keyring;
-use sp_runtime::{Digest, DigestItem};
-use sp_timestamp::TimestampInherentData;
+
+#[cfg(feature = "try-runtime")]
+use {
+	sp_consensus_aura::{Slot, SlotDuration, AURA_ENGINE_ID},
+	sp_core::Encode,
+	sp_inherents::InherentData,
+	sp_runtime::{Digest, DigestItem},
+	sp_timestamp::TimestampInherentData,
+};
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> String {
