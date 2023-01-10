@@ -38,38 +38,7 @@ use alloc::vec;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 
-/// Supported hashing output size.
-///
-/// The size is restricted to 32 bytes to allow for a more optimised implementation.
-pub type Hash = [u8; 32];
 use hash_db::Hasher;
-
-mod keccak256 {
-	use tiny_keccak::{Hasher as _, Keccak};
-	/// Keccak256 hasher implementation.
-	pub struct Keccak256;
-	impl Keccak256 {
-		/// Hash given data.
-		pub fn hash(data: &[u8]) -> super::Hash {
-			<Keccak256 as super::Hasher>::hash(data)
-		}
-	}
-
-	impl super::Hasher for Keccak256 {
-		type Out = super::Hash;
-		type StdHasher = hash256_std_hasher::Hash256StdHasher;
-		const LENGTH: usize = 32;
-
-		fn hash(data: &[u8]) -> super::Hash {
-			let mut keccak = Keccak::v256();
-			keccak.update(data);
-			let mut output = [0_u8; 32];
-			keccak.finalize(&mut output);
-			output
-		}
-	}
-}
-pub use keccak256::Keccak256;
 
 /// Construct a root hash of a Binary Merkle Tree created from given leaves.
 ///
@@ -175,7 +144,7 @@ impl<T> Visitor<T> for () {
 pub fn merkle_proof<H, I, T>(leaves: I, leaf_index: usize) -> MerkleProof<H::Out, T>
 where
 	H: Hasher,
-	H::Out: Default + Copy + AsRef<[u8]> + PartialOrd,	
+	H::Out: Default + Copy + AsRef<[u8]> + PartialOrd,
 	I: IntoIterator<Item = T>,
 	I::IntoIter: ExactSizeIterator,
 	T: AsRef<[u8]>,
@@ -383,6 +352,8 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use sp_core::H256;
+	use sp_runtime::traits::Keccak256;
 
 	#[test]
 	fn should_generate_empty_root() {

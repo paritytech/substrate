@@ -1,5 +1,5 @@
 [package]
-name = "merkle-tree"
+name = "binary-merkle-tree"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
@@ -11,18 +11,15 @@ homepage = "https://substrate.io"
 [dependencies]
 array-bytes = { version = "4.1", optional = true }
 log = { version = "0.4", default-features = false, optional = true }
-tiny-keccak = { version = "2.0.2", features = ["keccak"] }
 hash-db = { version = "0.15.2", default-features = false }
-hash256-std-hasher = { version = "0.15.2", default-features = false }
 
 [dev-dependencies]
 array-bytes = "4.1"
 env_logger = "0.9"
+sp-core = { version = "7.0.0", path = "../../primitives/core" }
+sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
 
 [features]
 debug = ["array-bytes", "log"]
 default = ["debug", "std"]
-std = [
-	"hash-db/std",
-	"hash256-std-hasher/std",
-]
+std = []
