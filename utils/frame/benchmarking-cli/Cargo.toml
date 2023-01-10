@@ -19,20 +19,15 @@ clap = { version = "4.0.9", features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 comfy-table = { version = "6.0.0", default-features = false }
 handlebars = "4.2.2"
-hash-db = "0.15.2"
 Inflector = "0.11.4"
 itertools = "0.10.3"
-kvdb = "0.13.0"
 lazy_static = "1.4.0"
 linked-hash-map = "0.5.4"
 log = "0.4.17"
-memory-db = "0.31.0"
 rand = { version = "0.8.4", features = ["small_rng"] }
 rand_pcg = "0.3.1"
 serde = "1.0.136"
 serde_json = "1.0.85"
-serde_nanos = "0.1.2"
-tempfile = "3.2.0"
 thiserror = "1.0.30"
 thousands = "0.2.0"
 frame-benchmarking = { version = "4.0.0-dev", path = "../../../frame/benchmarking" }

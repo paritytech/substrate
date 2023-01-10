@@ -1137,17 +1137,26 @@ fn get_block_by_bad_block_hash_returns_none() {
 	let client = substrate_test_runtime_client::new();
 
 	let hash = H256::from_low_u64_be(5);
-	assert!(client.block(&BlockId::Hash(hash)).unwrap().is_none());
+	assert!(client.block(hash).unwrap().is_none());
 }
 
 #[test]
-fn get_header_by_block_number_doesnt_panic() {
+fn expect_block_hash_by_block_number_doesnt_panic() {
 	let client = substrate_test_runtime_client::new();
 
 	// backend uses u32 for block numbers, make sure we don't panic when
 	// trying to convert
 	let id = BlockId::<Block>::Number(72340207214430721);
-	client.header(&id).expect_err("invalid block number overflows u32");
+	client.block_hash_from_id(&id).expect_err("invalid block number overflows u32");
+}
+
+#[test]
+fn get_hash_by_block_number_doesnt_panic() {
+	let client = substrate_test_runtime_client::new();
+
+	// backend uses u32 for block numbers, make sure we don't panic when
+	// trying to convert
+	client.hash(72340207214430721).expect_err("invalid block number overflows u32");
 }
 
 #[test]
@@ -1488,10 +1497,7 @@ fn returns_status_for_pruned_blocks() {
 		block_on(client.check_block(check_block_a1.clone())).unwrap(),
 		ImportResult::imported(false),
 	);
-	assert_eq!(
-		client.block_status(&BlockId::hash(check_block_a1.hash)).unwrap(),
-		BlockStatus::Unknown,
-	);
+	assert_eq!(client.block_status(check_block_a1.hash).unwrap(), BlockStatus::Unknown);
 
 	block_on(client.import_as_final(BlockOrigin::Own, a1.clone())).unwrap();
 
@@ -1499,10 +1505,7 @@ fn returns_status_for_pruned_blocks() {
 		block_on(client.check_block(check_block_a1.clone())).unwrap(),
 		ImportResult::AlreadyInChain,
 	);
-	assert_eq!(
-		client.block_status(&BlockId::hash(check_block_a1.hash)).unwrap(),
-		BlockStatus::InChainWithState,
-	);
+	assert_eq!(client.block_status(check_block_a1.hash).unwrap(), BlockStatus::InChainWithState);
 
 	let a2 = client
 		.new_block_at(&BlockId::Hash(a1.hash()), Default::default(), false)
@@ -1525,18 +1528,12 @@ fn returns_status_for_pruned_blocks() {
 		block_on(client.check_block(check_block_a1.clone())).unwrap(),
 		ImportResult::AlreadyInChain,
 	);
-	assert_eq!(
-		client.block_status(&BlockId::hash(check_block_a1.hash)).unwrap(),
-		BlockStatus::InChainPruned,
-	);
+	assert_eq!(client.block_status(check_block_a1.hash).unwrap(), BlockStatus::InChainPruned);
 	assert_eq!(
 		block_on(client.check_block(check_block_a2.clone())).unwrap(),
 		ImportResult::AlreadyInChain,
 	);
-	assert_eq!(
-		client.block_status(&BlockId::hash(check_block_a2.hash)).unwrap(),
-		BlockStatus::InChainWithState,
-	);
+	assert_eq!(client.block_status(check_block_a2.hash).unwrap(), BlockStatus::InChainWithState);
 
 	let a3 = client
 		.new_block_at(&BlockId::Hash(a2.hash()), Default::default(), false)
@@ -1560,26 +1557,17 @@ fn returns_status_for_pruned_blocks() {
 		block_on(client.check_block(check_block_a1.clone())).unwrap(),
 		ImportResult::AlreadyInChain,
 	);
-	assert_eq!(
-		client.block_status(&BlockId::hash(check_block_a1.hash)).unwrap(),
-		BlockStatus::InChainPruned,
-	);
+	assert_eq!(client.block_status(check_block_a1.hash).unwrap(), BlockStatus::InChainPruned);
 	assert_eq!(
 		block_on(client.check_block(check_block_a2.clone())).unwrap(),
 		ImportResult::AlreadyInChain,
 	);
-	assert_eq!(
-		client.block_status(&BlockId::hash(check_block_a2.hash)).unwrap(),
-		BlockStatus::InChainPruned,
-	);
+	assert_eq!(client.block_status(check_block_a2.hash).unwrap(), BlockStatus::InChainPruned);
 	assert_eq!(
 		block_on(client.check_block(check_block_a3.clone())).unwrap(),
 		ImportResult::AlreadyInChain,
 	);
-	assert_eq!(
-		client.block_status(&BlockId::hash(check_block_a3.hash)).unwrap(),
-		BlockStatus::InChainWithState,
-	);
+	assert_eq!(client.block_status(check_block_a3.hash).unwrap(), BlockStatus::InChainWithState);
 
 	let mut check_block_b1 = BlockCheckParams {
 		hash: b1.hash(),
@@ -1756,17 +1744,30 @@ fn storage_keys_iter_works() {
 fn cleans_up_closed_notification_sinks_on_block_import() {
 	use substrate_test_runtime_client::GenesisInit;
 
+	let backend = Arc::new(sc_client_api::in_mem::Backend::new());
+	let executor = substrate_test_runtime_client::new_native_executor();
+	let client_config = sc_service::ClientConfig::default();
+
+	let genesis_block_builder = sc_service::GenesisBlockBuilder::new(
+		&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
+		!client_config.no_genesis,
+		backend.clone(),
+		executor.clone(),
+	)
+	.unwrap();
+
 	// NOTE: we need to build the client here instead of using the client
 	// provided by test_runtime_client otherwise we can't access the private
 	// `import_notification_sinks` and `finality_notification_sinks` fields.
 	let mut client = new_in_mem::<_, Block, _, RuntimeApi>(
-		substrate_test_runtime_client::new_native_executor(),
-		&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
+		backend,
+		executor,
+		genesis_block_builder,
 		None,
 		None,
 		None,
 		Box::new(TaskExecutor::new()),
-		Default::default(),
+		client_config,
 	)
 	.unwrap();
 

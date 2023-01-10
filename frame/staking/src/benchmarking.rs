@@ -316,6 +316,7 @@ benchmarks! {
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		let controller = scenario.origin_controller1.clone();
 		let stash = scenario.origin_stash1;
+		add_slashing_spans::<T>(&stash, s);
 		assert!(T::VoterList::contains(&stash));
 
 		let ed = T::Currency::minimum_balance();
@@ -919,6 +920,13 @@ benchmarks! {
 			Validators::<T>::get(&stash),
 			ValidatorPrefs { commission: Perbill::from_percent(75), ..Default::default() }
 		);
+	}
+
+	set_min_commission {
+		let min_commission = Perbill::max_value();
+	}: _(RawOrigin::Root, min_commission)
+	verify {
+		assert_eq!(MinCommission::<T>::get(), Perbill::from_percent(100));
 	}
 
 	impl_benchmark_test_suite!(

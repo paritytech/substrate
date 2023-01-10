@@ -49,6 +49,8 @@ pub use self::{
 use sc_transaction_pool_api::TransactionPool;
 use sp_api::{ProvideRuntimeApi, TransactionFor};
 
+const LOG_TARGET: &str = "manual-seal";
+
 /// The `ConsensusEngineId` of Manual Seal.
 pub const MANUAL_SEAL_ENGINE_ID: ConsensusEngineId = [b'm', b'a', b'n', b'l'];
 
@@ -358,7 +360,7 @@ mod tests {
 		let (client, select_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
 		let spawner = sp_core::testing::TaskExecutor::new();
-		let genesis_hash = client.header(&BlockId::Number(0)).unwrap().unwrap().hash();
+		let genesis_hash = client.info().genesis_hash;
 		let pool = Arc::new(BasicPool::with_revalidation_type(
 			Options::default(),
 			true.into(),
@@ -422,7 +424,8 @@ mod tests {
 			}
 		);
 		// assert that there's a new block in the db.
-		assert!(client.header(&BlockId::Number(1)).unwrap().is_some())
+		assert!(client.header(created_block.hash).unwrap().is_some());
+		assert_eq!(client.header(created_block.hash).unwrap().unwrap().number, 1)
 	}
 
 	#[tokio::test]
@@ -431,7 +434,7 @@ mod tests {
 		let (client, select_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
 		let spawner = sp_core::testing::TaskExecutor::new();
-		let genesis_hash = client.header(&BlockId::Number(0)).unwrap().unwrap().hash();
+		let genesis_hash = client.info().genesis_hash;
 		let pool = Arc::new(BasicPool::with_revalidation_type(
 			Options::default(),
 			true.into(),
@@ -492,7 +495,7 @@ mod tests {
 			}
 		);
 		// assert that there's a new block in the db.
-		let header = client.header(&BlockId::Number(1)).unwrap().unwrap();
+		let header = client.header(created_block.hash).unwrap().unwrap();
 		let (tx, rx) = futures::channel::oneshot::channel();
 		sink.send(EngineCommand::FinalizeBlock {
 			sender: Some(tx),
@@ -516,7 +519,7 @@ mod tests {
 			&sp_core::testing::TaskExecutor::new(),
 		));
 		let spawner = sp_core::testing::TaskExecutor::new();
-		let genesis_hash = client.header(&BlockId::Number(0)).unwrap().unwrap().hash();
+		let genesis_hash = client.info().genesis_hash;
 		let pool = Arc::new(BasicPool::with_revalidation_type(
 			Options::default(),
 			true.into(),
@@ -580,7 +583,8 @@ mod tests {
 
 		assert!(pool.submit_one(&BlockId::Number(1), SOURCE, uxt(Alice, 1)).await.is_ok());
 
-		let header = client.header(&BlockId::Number(1)).expect("db error").expect("imported above");
+		let header = client.header(created_block.hash).expect("db error").expect("imported above");
+		assert_eq!(header.number, 1);
 		pool.maintain(sc_transaction_pool_api::ChainEvent::NewBestBlock {
 			hash: header.hash(),
 			tree_route: None,
@@ -612,7 +616,7 @@ mod tests {
 			.is_ok());
 		let imported = rx2.await.unwrap().unwrap();
 		// assert that fork block is in the db
-		assert!(client.header(&BlockId::Hash(imported.hash)).unwrap().is_some())
+		assert!(client.header(imported.hash).unwrap().is_some())
 	}
 
 	#[tokio::test]
@@ -621,7 +625,7 @@ mod tests {
 		let (client, select_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
 		let spawner = sp_core::testing::TaskExecutor::new();
-		let genesis_hash = client.header(&BlockId::Number(0)).unwrap().unwrap().hash();
+		let genesis_hash = client.header(client.info().genesis_hash).unwrap().unwrap().hash();
 		let pool = Arc::new(BasicPool::with_revalidation_type(
 			Options::default(),
 			true.into(),
@@ -663,7 +667,7 @@ mod tests {
 		let created_block = rx.await.unwrap().unwrap();
 
 		// assert that the background task returned the actual header hash
-		let header = client.header(&BlockId::Number(1)).unwrap().unwrap();
-		assert_eq!(header.hash(), created_block.hash);
+		let header = client.header(created_block.hash).unwrap().unwrap();
+		assert_eq!(header.number, 1);
 	}
 }

@@ -18,8 +18,6 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 serde = { version = "1", features = ["derive"] }
 log = { version = "0.4.17", default-features = false }
 
-sp-std = { path = "../../../../primitives/std" }
-sp-io = { path = "../../../../primitives/io" }
 sp-core = { path = "../../../../primitives/core" }
 sp-state-machine = { path = "../../../../primitives/state-machine" }
 sp-trie = { path = "../../../../primitives/trie" }

@@ -96,7 +96,7 @@ pub trait ChainApi: Send + Sync {
 	/// Returns a block header given the block id.
 	fn block_header(
 		&self,
-		at: &BlockId<Self::Block>,
+		at: <Self::Block as BlockT>::Hash,
 	) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error>;
 
 	/// Compute a tree-route between two blocks. See [`TreeRoute`] for more details.
@@ -271,14 +271,23 @@ impl<B: ChainApi> Pool<B> {
 				// if it's not found in the pool query the runtime at parent block
 				// to get validity info and tags that the extrinsic provides.
 				None => {
-					let validity = self
-						.validated_pool
-						.api()
-						.validate_transaction(parent, TransactionSource::InBlock, extrinsic.clone())
-						.await;
+					// Avoid validating block txs if the pool is empty
+					if !self.validated_pool.status().is_empty() {
+						let validity = self
+							.validated_pool
+							.api()
+							.validate_transaction(
+								parent,
+								TransactionSource::InBlock,
+								extrinsic.clone(),
+							)
+							.await;
 
-					if let Ok(Ok(validity)) = validity {
-						future_tags.extend(validity.provides);
+						if let Ok(Ok(validity)) = validity {
+							future_tags.extend(validity.provides);
+						}
+					} else {
+						log::trace!(target: "txpool", "txpool is empty, skipping validation for block {at:?}");
 					}
 				},
 			}
