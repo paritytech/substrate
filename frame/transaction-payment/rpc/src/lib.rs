@@ -48,20 +48,6 @@ pub trait TransactionPaymentApi<BlockHash, ResponseType> {
 		encoded_xt: Bytes,
 		at: Option<BlockHash>,
 	) -> RpcResult<FeeDetails<NumberOrHex>>;
-
-	#[method(name = "payment_weightToFee")]
-	fn query_weight_to_fee(
-		&self,
-		weight: sp_weights::Weight,
-		at: Option<BlockHash>,
-	) -> RpcResult<NumberOrHex>;
-
-	#[method(name = "payment_lengthToFee")]
-	fn query_length_to_fee(
-		&self,
-		length: u32,
-		at: Option<BlockHash>,
-	) -> RpcResult<NumberOrHex>;
 }
 
 /// Provides RPC methods to query a dispatchable's class, weight and fee.
@@ -207,59 +193,5 @@ where
 			},
 			tip: Default::default(),
 		})
-	}
-
-	fn query_weight_to_fee(
-		&self,
-		weight: sp_weights::Weight,
-		at: Option<Block::Hash>,
-	) -> RpcResult<NumberOrHex> {
-		let api = self.client.runtime_api();
-		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
-
-		let fee = api.query_weight_to_fee(&at, weight).map_err(|e| {
-			CallError::Custom(ErrorObject::owned(
-				Error::RuntimeError.into(),
-				"Unable to query weight_to_fee.",
-				Some(e.to_string()),
-			))
-		})?;
-
-		let fee = fee.try_into().map_err(|_| {
-			CallError::Custom(ErrorObject::owned(
-				Error::RuntimeError.into(),
-				"Balance not convertible",
-				Some("Balance could not be converted to NumberOrHex"),
-			))
-		})?;
-
-		Ok(fee)
-	}
-
-	fn query_length_to_fee(
-		&self,
-		length: u32,
-		at: Option<Block::Hash>,
-	) -> RpcResult<NumberOrHex> {
-		let api = self.client.runtime_api();
-		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
-
-		let fee = api.query_length_to_fee(&at, length).map_err(|e| {
-			CallError::Custom(ErrorObject::owned(
-				Error::RuntimeError.into(),
-				"Unable to query length_to_fee.",
-				Some(e.to_string()),
-			))
-		})?;
-
-		let fee = fee.try_into().map_err(|_| {
-			CallError::Custom(ErrorObject::owned(
-				Error::RuntimeError.into(),
-				"Balance not convertible",
-				Some("Balance could not be converted to NumberOrHex"),
-			))
-		})?;
-
-		Ok(fee)
 	}
 }
