@@ -103,7 +103,7 @@ fn test_struct_unnamed() {
 	assert_eq!(a_2.1, 2);
 	assert_eq!(a_2.2, 3);
 	assert_eq!(a_2, a_1);
-	assert_eq!(format!("{:?}", a_1), String::from("StructUnnamed(1, 2, 3, PhantomData)"));
+	assert_eq!(format!("{:?}", a_1), String::from("StructUnnamed(1, 2, 3, PhantomData<(derive_no_bound::ImplNone, derive_no_bound::ImplNone)>)"));
 
 	let b = StructUnnamed::<Runtime, ImplNone, ImplNone>(1, 2, 4, Default::default());
 
