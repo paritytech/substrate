@@ -34,7 +34,6 @@ use sp_runtime::{
 	KeyTypeId, RuntimeAppPublic,
 };
 use sp_session::{GetSessionNumber, GetValidatorCount};
-use sp_staking::offence::ReportOffence;
 use sp_std::prelude::*;
 
 use beefy_primitives::{
@@ -42,11 +41,13 @@ use beefy_primitives::{
 	OpaqueKeyOwnershipProof, ValidatorSet, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
 };
 
+mod equivocation;
 #[cfg(test)]
 mod mock;
-
 #[cfg(test)]
 mod tests;
+
+use crate::equivocation::{BeefyOffence, HandleEquivocation};
 
 pub use pallet::*;
 
@@ -83,6 +84,14 @@ pub mod pallet {
 			Proof = Self::KeyOwnerProof,
 			IdentificationTuple = Self::KeyOwnerIdentification,
 		>;
+
+		/// The equivocation handling subsystem, defines methods to report an
+		/// offence (after the equivocation has been validated) and for submitting a
+		/// transaction to report an equivocation (from an offchain context).
+		/// NOTE: when enabling equivocation handling (i.e. this type isn't set to
+		/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
+		/// definition.
+		type HandleEquivocation: HandleEquivocation<Self>;
 
 		/// The maximum number of authorities that can be added.
 		type MaxAuthorities: Get<u32>;
@@ -321,8 +330,20 @@ impl<T: Config> Pallet<T> {
 			return Err(Error::<T>::InvalidEquivocationProof.into())
 		}
 
-		// todo: ReportOffence
-		todo!();
+		// todo: cross-check session index with equivocation report
+
+		// report to the offences module rewarding the sender.
+		T::HandleEquivocation::report_offence(
+			reporter.into_iter().collect(),
+			<T::HandleEquivocation as HandleEquivocation<T>>::Offence::new(
+				session_index,
+				validator_count,
+				offender,
+				set_id,
+				round,
+			),
+		)
+		.map_err(|_| Error::<T>::DuplicateOffenceReport)?;
 
 		// waive the fee since the report is valid and beneficial
 		Ok(Pays::No.into())
