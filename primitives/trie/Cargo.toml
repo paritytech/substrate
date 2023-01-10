@@ -18,7 +18,7 @@ name = "bench"
 harness = false
 
 [dependencies]
-ahash = { version = "0.7.6", optional = true }
+ahash = { version = "0.8.2", optional = true }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
 hashbrown = { version = "0.12.3", optional = true }
 hash-db = { version = "0.15.2", default-features = false }
