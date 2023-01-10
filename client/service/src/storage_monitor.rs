@@ -100,7 +100,7 @@ impl StorageMonitorService {
 	pub async fn run(mut self) {
 		while let Some(watch_event) = self.stream.next().await {
 			match watch_event {
-				Ok( Event { kind: notify::EventKind::Access(_), .. } ) => {
+				Ok(Event { kind: notify::EventKind::Access(_), .. }) => {
 					//skip non mutating events
 				},
 				Ok(_) =>
