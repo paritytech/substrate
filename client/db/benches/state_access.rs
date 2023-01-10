@@ -367,7 +367,7 @@ fn state_access_benchmarks(c: &mut Criterion) {
 	//
 	// Since most of the keys are account balance keys this will happen more often than not,
 	// so this is technically not a true *the* worst case scenario, but the idea here is to
-	// replicate an access pattern which could convieably happen in normal circumstances.
+	// replicate an access pattern which could conceivably happen in normal circumstances.
 	let mut g = c.benchmark_group("Read 100000 shuffled keys");
 	g.sample_size(sample_size);
 	run(&mut g, WithCache, "with cache", &shuffled_keys[..100000], 1, 1, Storage);
