@@ -22,14 +22,20 @@ use crate::{
 	service::{new_partial, FullClient},
 	Cli, Subcommand,
 };
+use codec::Encode;
 use frame_benchmarking_cli::*;
-use kitchensink_runtime::{ExistentialDeposit, RuntimeApi};
+use kitchensink_runtime::{constants::time::SLOT_DURATION, ExistentialDeposit, RuntimeApi};
 use node_executor::ExecutorDispatch;
-use node_primitives::Block;
+use node_primitives::{Block, Header};
 use sc_cli::{ChainSpec, Result, RuntimeVersion, SubstrateCli};
 use sc_service::PartialComponents;
+use sp_consensus_babe::{Slot, SlotDuration, BABE_ENGINE_ID};
 use sp_keyring::Sr25519Keyring;
 
+use sc_consensus_babe::{PreDigest, SecondaryPlainPreDigest};
+use sp_inherents::InherentData;
+use sp_runtime::{Digest, DigestItem};
+use sp_timestamp::TimestampInherentData;
 use std::sync::Arc;
 
 impl SubstrateCli for Cli {
@@ -237,11 +243,43 @@ pub fn run() -> Result<()> {
 					sc_service::TaskManager::new(config.tokio_handle.clone(), registry)
 						.map_err(|e| sc_cli::Error::Service(sc_service::Error::Prometheus(e)))?;
 
+				let info_provider = |_, maybe_prev_info: Option<(InherentData, Digest)>| async {
+					let uncles_idp = sp_authorship::InherentDataProvider::<Header>::new(vec![]);
+
+					let timestamp_idp = match maybe_prev_info {
+						Some((inherent_data, _)) => sp_timestamp::InherentDataProvider::new(
+							inherent_data.timestamp_inherent_data().unwrap().unwrap() +
+								SLOT_DURATION,
+						),
+						None => sp_timestamp::InherentDataProvider::from_system_time(),
+					};
+
+					let slot = Slot::from_timestamp(
+						*timestamp_idp,
+						SlotDuration::from_millis(SLOT_DURATION),
+					);
+					let slot_idp = sp_consensus_babe::inherents::InherentDataProvider::new(slot);
+
+					let storage_proof_idp =
+						sp_transaction_storage_proof::InherentDataProvider::new(None);
+
+					let digest = vec![DigestItem::PreRuntime(
+						BABE_ENGINE_ID,
+						PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
+							slot,
+							authority_index: 0,
+						})
+						.encode(),
+					)];
+
+					Ok(((slot_idp, timestamp_idp, uncles_idp, storage_proof_idp), digest))
+				};
+
 				Ok((
 					cmd.run::<Block, ExtendedHostFunctions<
 						sp_io::SubstrateHostFunctions,
 						<ExecutorDispatch as NativeExecutionDispatch>::ExtendHostFunctions,
-					>>(),
+					>, _>(Some(info_provider)),
 					task_manager,
 				))
 			})

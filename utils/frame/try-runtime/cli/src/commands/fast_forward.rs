@@ -31,7 +31,6 @@ pub struct FastForwardCmd {
 	/// The ws uri from which to fetch the block.
 	///
 	/// If `state` is `Live`, this is ignored. Otherwise, it must not be empty.
-	// todo: make use of clap's arg groups
 	#[arg(long, value_parser = crate::parse::url)]
 	block_ws_uri: Option<String>,
 
@@ -66,7 +65,7 @@ impl FastForwardCmd {
 /// `ExtraArgs` generic parameter.
 ///
 /// This module already provides some convenience implementation of this trait for closures. So, it
-/// should not be required to implement
+/// should not be required to implement it directly.
 #[async_trait::async_trait]
 pub trait BlockBuildingInfoProvider<Block: BlockT, ExtraArgs = ()> {
 	type InherentDataProviders: InherentDataProvider;
