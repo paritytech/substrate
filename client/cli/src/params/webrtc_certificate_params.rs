@@ -35,7 +35,7 @@ pub struct WebRTCCertificateParams {
 	/// The contents of the file are parsed as follows:
 	///
 	///   The file must contain an ASCII PEM encoded
-	///   [`webrtc::peer_connection::certificate::RTCCertificate`].
+	///   `webrtc::peer_connection::certificate::RTCCertificate`.
 	///
 	/// If the file does not exist, it is created with a newly generated certificate.
 	#[clap(long, value_name = "FILE")]
@@ -52,7 +52,7 @@ pub struct WebRTCCertificateParams {
 }
 
 impl WebRTCCertificateParams {
-	/// Create a `WebRTCConfig` from the given `WebRTCCertificateParams` in the context
+	/// Create a `WebRTCConfig` from the given [`WebRTCCertificateParams`] in the context
 	/// of an optional base config storage directory.
 	pub fn webrtc_certificate(&self, config_dir: &PathBuf) -> error::Result<WebRTCConfig> {
 		if let Some(true) = self.webrtc_certificate_ephemeral {
