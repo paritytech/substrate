@@ -18,6 +18,7 @@
 use sp_io::hashing::twox_128;
 use sp_std::str;
 
+use super::super::LOG_TARGET;
 use frame_support::{
 	storage::{generator::StorageValue, StoragePrefixedMap},
 	traits::{
@@ -44,7 +45,7 @@ pub fn migrate<T: pallet_session_historical::Config, P: GetStorageVersion + Pall
 
 	if new_pallet_name == OLD_PREFIX {
 		log::info!(
-			target: "runtime::session_historical",
+			target: LOG_TARGET,
 			"New pallet name is equal to the old prefix. No migration needs to be done.",
 		);
 		return Weight::zero()
@@ -52,7 +53,7 @@ pub fn migrate<T: pallet_session_historical::Config, P: GetStorageVersion + Pall
 
 	let on_chain_storage_version = <P as GetStorageVersion>::on_chain_storage_version();
 	log::info!(
-		target: "runtime::session_historical",
+		target: LOG_TARGET,
 		"Running migration to v1 for session_historical with storage version {:?}",
 		on_chain_storage_version,
 	);
@@ -78,7 +79,7 @@ pub fn migrate<T: pallet_session_historical::Config, P: GetStorageVersion + Pall
 		<T as frame_system::Config>::BlockWeights::get().max_block
 	} else {
 		log::warn!(
-			target: "runtime::session_historical",
+			target: LOG_TARGET,
 			"Attempted to apply migration to v1 but failed because storage version is {:?}",
 			on_chain_storage_version,
 		);
@@ -184,7 +185,7 @@ pub fn post_migrate<
 
 fn log_migration(stage: &str, storage_prefix: &[u8], old_pallet_name: &str, new_pallet_name: &str) {
 	log::info!(
-		target: "runtime::session_historical",
+		target: LOG_TARGET,
 		"{} prefix of storage '{}': '{}' ==> '{}'",
 		stage,
 		str::from_utf8(storage_prefix).unwrap_or("<Invalid UTF8>"),

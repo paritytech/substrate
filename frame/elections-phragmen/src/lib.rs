@@ -122,6 +122,8 @@ pub use weights::WeightInfo;
 /// All migrations.
 pub mod migrations;
 
+const LOG_TARGET: &str = "runtime::elections-phragmen";
+
 /// The maximum votes allowed per voter.
 pub const MAXIMUM_VOTE: usize = 16;
 
@@ -790,7 +792,7 @@ impl<T: Config> Pallet<T> {
 					// overlap. This can never happen. If so, it seems like our intended replacement
 					// is already a member, so not much more to do.
 					log::error!(
-						target: "runtime::elections-phragmen",
+						target: LOG_TARGET,
 						"A member seems to also be a runner-up.",
 					);
 				}
@@ -939,7 +941,7 @@ impl<T: Config> Pallet<T> {
 			Ok(_) => (),
 			Err(_) => {
 				log::error!(
-					target: "runtime::elections-phragmen",
+					target: LOG_TARGET,
 					"Failed to run election. Number of voters exceeded",
 				);
 				Self::deposit_event(Event::ElectionError);
@@ -1104,7 +1106,7 @@ impl<T: Config> Pallet<T> {
 				})
 				.map_err(|e| {
 					log::error!(
-						target: "runtime::elections-phragmen",
+						target: LOG_TARGET,
 						"Failed to run election [{:?}].",
 						e,
 					);
