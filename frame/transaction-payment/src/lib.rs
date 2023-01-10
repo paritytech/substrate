@@ -127,12 +127,14 @@ type BalanceOf<T> = <<T as Config>::OnChargeTransaction as OnChargeTransaction<T
 ///
 /// More info can be found at:
 /// <https://research.web3.foundation/en/latest/polkadot/overview/2-token-economics.html>
-pub struct TargetedFeeAdjustment<T, S, V, M>(sp_std::marker::PhantomData<(T, S, V, M)>);
+pub struct TargetedFeeAdjustment<T, S, V, M, X>(sp_std::marker::PhantomData<(T, S, V, M, X)>);
 
 /// Something that can convert the current multiplier to the next one.
 pub trait MultiplierUpdate: Convert<Multiplier, Multiplier> {
-	/// Minimum multiplier
+	/// Minimum multiplier. Any outcome of the `convert` function should be at least this.
 	fn min() -> Multiplier;
+	/// Maximum multiplier. Any outcome of the `convert` function should be less or equal this.
+	fn max() -> Multiplier;
 	/// Target block saturation level
 	fn target() -> Perquintill;
 	/// Variability factor
@@ -143,6 +145,9 @@ impl MultiplierUpdate for () {
 	fn min() -> Multiplier {
 		Default::default()
 	}
+	fn max() -> Multiplier {
+		<Multiplier as sp_runtime::traits::Bounded>::max_value()
+	}
 	fn target() -> Perquintill {
 		Default::default()
 	}
@@ -151,15 +156,19 @@ impl MultiplierUpdate for () {
 	}
 }
 
-impl<T, S, V, M> MultiplierUpdate for TargetedFeeAdjustment<T, S, V, M>
+impl<T, S, V, M, X> MultiplierUpdate for TargetedFeeAdjustment<T, S, V, M, X>
 where
 	T: frame_system::Config,
 	S: Get<Perquintill>,
 	V: Get<Multiplier>,
 	M: Get<Multiplier>,
+	X: Get<Multiplier>,
 {
 	fn min() -> Multiplier {
 		M::get()
+	}
+	fn max() -> Multiplier {
+		X::get()
 	}
 	fn target() -> Perquintill {
 		S::get()
@@ -169,18 +178,20 @@ where
 	}
 }
 
-impl<T, S, V, M> Convert<Multiplier, Multiplier> for TargetedFeeAdjustment<T, S, V, M>
+impl<T, S, V, M, X> Convert<Multiplier, Multiplier> for TargetedFeeAdjustment<T, S, V, M, X>
 where
 	T: frame_system::Config,
 	S: Get<Perquintill>,
 	V: Get<Multiplier>,
 	M: Get<Multiplier>,
+	X: Get<Multiplier>,
 {
 	fn convert(previous: Multiplier) -> Multiplier {
 		// Defensive only. The multiplier in storage should always be at most positive. Nonetheless
 		// we recover here in case of errors, because any value below this would be stale and can
 		// never change.
 		let min_multiplier = M::get();
+		let max_multiplier = X::get();
 		let previous = previous.max(min_multiplier);
 
 		let weights = T::BlockWeights::get();
@@ -217,11 +228,11 @@ where
 
 		if positive {
 			let excess = first_term.saturating_add(second_term).saturating_mul(previous);
-			previous.saturating_add(excess).max(min_multiplier)
+			previous.saturating_add(excess).clamp(min_multiplier, max_multiplier)
 		} else {
 			// Defensive-only: first_term > second_term. Safe subtraction.
 			let negative = first_term.saturating_sub(second_term).saturating_mul(previous);
-			previous.saturating_sub(negative).max(min_multiplier)
+			previous.saturating_sub(negative).clamp(min_multiplier, max_multiplier)
 		}
 	}
 }
@@ -231,6 +242,9 @@ pub struct ConstFeeMultiplier<M: Get<Multiplier>>(sp_std::marker::PhantomData<M>
 
 impl<M: Get<Multiplier>> MultiplierUpdate for ConstFeeMultiplier<M> {
 	fn min() -> Multiplier {
+		M::get()
+	}
+	fn max() -> Multiplier {
 		M::get()
 	}
 	fn target() -> Perquintill {
@@ -644,7 +658,7 @@ where
 		Self(fee)
 	}
 
-	/// Returns the tip as being choosen by the transaction sender.
+	/// Returns the tip as being chosen by the transaction sender.
 	pub fn tip(&self) -> BalanceOf<T> {
 		self.0
 	}
@@ -699,8 +713,8 @@ where
 		let max_block_weight = max_block_weight.ref_time();
 		let info_weight = info.weight.ref_time();
 
-		let bounded_weight = info_weight.max(1).min(max_block_weight);
-		let bounded_length = (len as u64).max(1).min(max_block_length);
+		let bounded_weight = info_weight.clamp(1, max_block_weight);
+		let bounded_length = (len as u64).clamp(1, max_block_length);
 
 		let max_tx_per_block_weight = max_block_weight / bounded_weight;
 		let max_tx_per_block_length = max_block_length / bounded_length;
@@ -889,7 +903,7 @@ mod tests {
 					weights.base_extrinsic = ExtrinsicBaseWeight::get().into();
 				})
 				.for_class(DispatchClass::non_mandatory(), |weights| {
-					weights.max_total = Weight::from_ref_time(1024).into();
+					weights.max_total = Weight::from_ref_time(1024).set_proof_size(u64::MAX).into();
 				})
 				.build_or_panic()
 		}
@@ -906,7 +920,7 @@ mod tests {
 		type BlockWeights = BlockWeights;
 		type BlockLength = ();
 		type DbWeight = ();
-		type Origin = Origin;
+		type RuntimeOrigin = RuntimeOrigin;
 		type Index = u64;
 		type BlockNumber = u64;
 		type RuntimeCall = RuntimeCall;

@@ -51,16 +51,12 @@ frame_support::construct_runtime!(
 	}
 );
 
-parameter_types! {
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
-}
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -134,10 +130,10 @@ fn it_aggregates_the_price() {
 	sp_io::TestExternalities::default().execute_with(|| {
 		assert_eq!(Example::average_price(), None);
 
-		assert_ok!(Example::submit_price(Origin::signed(test_pub()), 27));
+		assert_ok!(Example::submit_price(RuntimeOrigin::signed(test_pub()), 27));
 		assert_eq!(Example::average_price(), Some(27));
 
-		assert_ok!(Example::submit_price(Origin::signed(test_pub()), 43));
+		assert_ok!(Example::submit_price(RuntimeOrigin::signed(test_pub()), 43));
 		assert_eq!(Example::average_price(), Some(35));
 	});
 }

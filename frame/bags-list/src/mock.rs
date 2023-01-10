@@ -40,7 +40,7 @@ impl frame_election_provider_support::ScoreProvider<AccountId> for StakingMock {
 		*NextVoteWeightMap::get().get(id).unwrap_or(&NextVoteWeight::get())
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", test))]
+	#[cfg(any(feature = "runtime-benchmarks", feature = "fuzz", test))]
 	fn set_score_of(id: &AccountId, weight: Self::Score) {
 		NEXT_VOTE_WEIGHT_MAP.with(|m| m.borrow_mut().insert(*id, weight));
 	}
@@ -49,7 +49,7 @@ impl frame_election_provider_support::ScoreProvider<AccountId> for StakingMock {
 impl frame_system::Config for Runtime {
 	type SS58Prefix = ();
 	type BaseCallFilter = frame_support::traits::Everything;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type RuntimeCall = RuntimeCall;
@@ -108,6 +108,7 @@ pub struct ExtBuilder {
 	skip_genesis_ids: bool,
 }
 
+#[cfg(any(feature = "runtime-benchmarks", feature = "fuzz", test))]
 impl ExtBuilder {
 	/// Skip adding the default genesis ids to the list.
 	#[cfg(test)]

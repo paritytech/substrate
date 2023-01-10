@@ -21,7 +21,7 @@
 //! systems such as the Referenda pallet. Members each have a rank, with zero being the lowest.
 //! There is no complexity limitation on either the number of members at a rank or the number of
 //! ranks in the system thus allowing potentially public membership. A member of at least a given
-//! rank can be selected at random in O(1) time, allowing for various games to constructed using
+//! rank can be selected at random in O(1) time, allowing for various games to be constructed using
 //! this as a primitive. Members may only be promoted and demoted by one rank at a time, however
 //! all operations (save one) are O(1) in complexity. The only operation which is not O(1) is the
 //! `remove_member` since they must be removed from all ranks from the present down to zero.
@@ -33,7 +33,7 @@
 //!
 //! Two `Config` trait items control these "rank privileges": `MinRankOfClass` and `VoteWeight`.
 //! The first controls which ranks are allowed to vote on a particular class of poll. The second
-//! controls the weight of a vote given the voters rank compared to the minimum rank of the poll.
+//! controls the weight of a vote given the voter's rank compared to the minimum rank of the poll.
 //!
 //! An origin control, `EnsureRank`, ensures that the origin is a member of the collective of at
 //! least a particular rank.
@@ -199,11 +199,11 @@ impl Convert<Rank, Votes> for Unit {
 /// Vote-weight scheme where all voters get one vote plus an additional vote for every excess rank
 /// they have. I.e.:
 ///
-/// - Each member with no excess rank gets 1 vote;
+/// - Each member with an excess rank of 0 gets 1 vote;
 /// - ...with an excess rank of 1 gets 2 votes;
-/// - ...with an excess rank of 2 gets 2 votes;
-/// - ...with an excess rank of 3 gets 3 votes;
-/// - ...with an excess rank of 4 gets 4 votes.
+/// - ...with an excess rank of 2 gets 3 votes;
+/// - ...with an excess rank of 3 gets 4 votes;
+/// - ...with an excess rank of 4 gets 5 votes.
 pub struct Linear;
 impl Convert<Rank, Votes> for Linear {
 	fn convert(r: Rank) -> Votes {
@@ -214,11 +214,11 @@ impl Convert<Rank, Votes> for Linear {
 /// Vote-weight scheme where all voters get one vote plus additional votes for every excess rank
 /// they have incrementing by one vote for each excess rank. I.e.:
 ///
-/// - Each member with no excess rank gets 1 vote;
-/// - ...with an excess rank of 1 gets 2 votes;
-/// - ...with an excess rank of 2 gets 3 votes;
-/// - ...with an excess rank of 3 gets 6 votes;
-/// - ...with an excess rank of 4 gets 10 votes.
+/// - Each member with an excess rank of 0 gets 1 vote;
+/// - ...with an excess rank of 1 gets 3 votes;
+/// - ...with an excess rank of 2 gets 6 votes;
+/// - ...with an excess rank of 3 gets 10 votes;
+/// - ...with an excess rank of 4 gets 15 votes.
 pub struct Geometric;
 impl Convert<Rank, Votes> for Geometric {
 	fn convert(r: Rank) -> Votes {
@@ -241,12 +241,12 @@ impl<T: Config<I>, I: 'static> GetMaxVoters for Pallet<T, I> {
 /// Guard to ensure that the given origin is a member of the collective. The rank of the member is
 /// the `Success` value.
 pub struct EnsureRanked<T, I, const MIN_RANK: u16>(PhantomData<(T, I)>);
-impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
+impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigin>
 	for EnsureRanked<T, I, MIN_RANK>
 {
 	type Success = Rank;
 
-	fn try_origin(o: T::Origin) -> Result<Self::Success, T::Origin> {
+	fn try_origin(o: T::RuntimeOrigin) -> Result<Self::Success, T::RuntimeOrigin> {
 		let who = frame_system::EnsureSigned::try_origin(o)?;
 		match Members::<T, I>::get(&who) {
 			Some(MemberRecord { rank, .. }) if rank >= MIN_RANK => Ok(rank),
@@ -255,13 +255,13 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn try_successful_origin() -> Result<T::Origin, ()> {
+	fn try_successful_origin() -> Result<T::RuntimeOrigin, ()> {
 		let who = IndexToId::<T, I>::get(MIN_RANK, 0).ok_or(())?;
 		Ok(frame_system::RawOrigin::Signed(who).into())
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> T::Origin {
+	fn successful_origin() -> T::RuntimeOrigin {
 		match Self::try_successful_origin() {
 			Ok(o) => o,
 			Err(()) => {
@@ -277,12 +277,12 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
 /// Guard to ensure that the given origin is a member of the collective. The account ID of the
 /// member is the `Success` value.
 pub struct EnsureMember<T, I, const MIN_RANK: u16>(PhantomData<(T, I)>);
-impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
+impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigin>
 	for EnsureMember<T, I, MIN_RANK>
 {
 	type Success = T::AccountId;
 
-	fn try_origin(o: T::Origin) -> Result<Self::Success, T::Origin> {
+	fn try_origin(o: T::RuntimeOrigin) -> Result<Self::Success, T::RuntimeOrigin> {
 		let who = frame_system::EnsureSigned::try_origin(o)?;
 		match Members::<T, I>::get(&who) {
 			Some(MemberRecord { rank, .. }) if rank >= MIN_RANK => Ok(who),
@@ -291,13 +291,13 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn try_successful_origin() -> Result<T::Origin, ()> {
+	fn try_successful_origin() -> Result<T::RuntimeOrigin, ()> {
 		let who = IndexToId::<T, I>::get(MIN_RANK, 0).ok_or(())?;
 		Ok(frame_system::RawOrigin::Signed(who).into())
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> T::Origin {
+	fn successful_origin() -> T::RuntimeOrigin {
 		match Self::try_successful_origin() {
 			Ok(o) => o,
 			Err(()) => {
@@ -310,15 +310,15 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
 	}
 }
 
-/// Guard to ensure that the given origin is a member of the collective. The pair of including both
-/// the account ID and the rank of the member is the `Success` value.
+/// Guard to ensure that the given origin is a member of the collective. The pair of both the
+/// account ID and the rank of the member is the `Success` value.
 pub struct EnsureRankedMember<T, I, const MIN_RANK: u16>(PhantomData<(T, I)>);
-impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
+impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigin>
 	for EnsureRankedMember<T, I, MIN_RANK>
 {
 	type Success = (T::AccountId, Rank);
 
-	fn try_origin(o: T::Origin) -> Result<Self::Success, T::Origin> {
+	fn try_origin(o: T::RuntimeOrigin) -> Result<Self::Success, T::RuntimeOrigin> {
 		let who = frame_system::EnsureSigned::try_origin(o)?;
 		match Members::<T, I>::get(&who) {
 			Some(MemberRecord { rank, .. }) if rank >= MIN_RANK => Ok((who, rank)),
@@ -327,13 +327,13 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn try_successful_origin() -> Result<T::Origin, ()> {
+	fn try_successful_origin() -> Result<T::RuntimeOrigin, ()> {
 		let who = IndexToId::<T, I>::get(MIN_RANK, 0).ok_or(())?;
 		Ok(frame_system::RawOrigin::Signed(who).into())
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> T::Origin {
+	fn successful_origin() -> T::RuntimeOrigin {
 		match Self::try_successful_origin() {
 			Ok(o) => o,
 			Err(()) => {
@@ -361,17 +361,17 @@ pub mod pallet {
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 
-		/// The outer event type.
+		/// The runtime event type.
 		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The origin required to add or promote a mmember. The success value indicates the
 		/// maximum rank *to which* the promotion may be.
-		type PromoteOrigin: EnsureOrigin<Self::Origin, Success = Rank>;
+		type PromoteOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Rank>;
 
 		/// The origin required to demote or remove a member. The success value indicates the
 		/// maximum rank *from which* the demotion/removal may be.
-		type DemoteOrigin: EnsureOrigin<Self::Origin, Success = Rank>;
+		type DemoteOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Rank>;
 
 		/// The polling system used for our voting.
 		type Polls: Polling<TallyOf<Self, I>, Votes = Votes, Moment = Self::BlockNumber>;
@@ -430,7 +430,7 @@ pub mod pallet {
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// A member `who` has been added.
 		MemberAdded { who: T::AccountId },
-		/// The member `who`'s rank has been changed to the given `rank`.
+		/// The member `who`se rank has been changed to the given `rank`.
 		RankChanged { who: T::AccountId, rank: Rank },
 		/// The member `who` of given `rank` has been removed from the collective.
 		MemberRemoved { who: T::AccountId, rank: Rank },
@@ -470,6 +470,7 @@ pub mod pallet {
 		/// - `rank`: The rank to give the new member.
 		///
 		/// Weight: `O(1)`
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::add_member())]
 		pub fn add_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			let _ = T::PromoteOrigin::ensure_origin(origin)?;
@@ -483,6 +484,7 @@ pub mod pallet {
 		/// - `who`: Account of existing member.
 		///
 		/// Weight: `O(1)`
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::promote_member(0))]
 		pub fn promote_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			let max_rank = T::PromoteOrigin::ensure_origin(origin)?;
@@ -497,6 +499,7 @@ pub mod pallet {
 		/// - `who`: Account of existing member of rank greater than zero.
 		///
 		/// Weight: `O(1)`, less if the member's index is highest in its rank.
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::demote_member(0))]
 		pub fn demote_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			let max_rank = T::DemoteOrigin::ensure_origin(origin)?;
@@ -528,6 +531,7 @@ pub mod pallet {
 		/// - `min_rank`: The rank of the member or greater.
 		///
 		/// Weight: `O(min_rank)`.
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::remove_member(*min_rank as u32))]
 		pub fn remove_member(
 			origin: OriginFor<T>,
@@ -562,6 +566,7 @@ pub mod pallet {
 		/// fee.
 		///
 		/// Weight: `O(1)`, less if there was no previous vote on the poll by the member.
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::vote())]
 		pub fn vote(
 			origin: OriginFor<T>,
@@ -618,6 +623,7 @@ pub mod pallet {
 		/// Transaction fees are waived if the operation is successful.
 		///
 		/// Weight `O(max)` (less if there are fewer items to remove than `max`).
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::cleanup_poll(*max))]
 		pub fn cleanup_poll(
 			origin: OriginFor<T>,

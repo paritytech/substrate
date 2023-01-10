@@ -104,7 +104,7 @@ fn transfer_index_on_accounts_should_work() {
 fn force_transfer_index_on_preowned_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Indices::claim(Some(1).into(), 0));
-		assert_ok!(Indices::force_transfer(Origin::root(), Id(3), 0, false));
+		assert_ok!(Indices::force_transfer(RuntimeOrigin::root(), Id(3), 0, false));
 		assert_eq!(Balances::reserved_balance(1), 0);
 		assert_eq!(Balances::reserved_balance(3), 0);
 		assert_eq!(Indices::lookup_index(0), Some(3));
@@ -114,7 +114,7 @@ fn force_transfer_index_on_preowned_should_work() {
 #[test]
 fn force_transfer_index_on_free_should_work() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Indices::force_transfer(Origin::root(), Id(3), 0, false));
+		assert_ok!(Indices::force_transfer(RuntimeOrigin::root(), Id(3), 0, false));
 		assert_eq!(Balances::reserved_balance(3), 0);
 		assert_eq!(Indices::lookup_index(0), Some(3));
 	});

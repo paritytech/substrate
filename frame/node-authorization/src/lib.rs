@@ -18,7 +18,7 @@
 //! # Node authorization pallet
 //!
 //! This pallet manages a configurable set of nodes for a permissioned network.
-//! Each node is dentified by a PeerId (i.e. Vec<u8>). It provides two ways to
+//! Each node is dentified by a PeerId (i.e. `Vec<u8>`). It provides two ways to
 //! authorize a node,
 //!
 //! - a set of well known nodes across different organizations in which the
@@ -82,16 +82,16 @@ pub mod pallet {
 		type MaxAdditionalConnections: Get<u32>;
 
 		/// The origin which can add a well known node.
-		type AddOrigin: EnsureOrigin<Self::Origin>;
+		type AddOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The origin which can remove a well known node.
-		type RemoveOrigin: EnsureOrigin<Self::Origin>;
+		type RemoveOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The origin which can swap the well known nodes.
-		type SwapOrigin: EnsureOrigin<Self::Origin>;
+		type SwapOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The origin which can reset the well known nodes.
-		type ResetOrigin: EnsureOrigin<Self::Origin>;
+		type ResetOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -276,6 +276,7 @@ pub mod pallet {
 		/// May only be called from `T::AddOrigin`.
 		///
 		/// - `node`: identifier of the node.
+		#[pallet::call_index(0)]
 		#[pallet::weight((T::WeightInfo::add_well_known_node(), DispatchClass::Operational))]
 		pub fn add_well_known_node(
 			origin: OriginFor<T>,
@@ -303,6 +304,7 @@ pub mod pallet {
 		/// May only be called from `T::RemoveOrigin`.
 		///
 		/// - `node`: identifier of the node.
+		#[pallet::call_index(1)]
 		#[pallet::weight((T::WeightInfo::remove_well_known_node(), DispatchClass::Operational))]
 		pub fn remove_well_known_node(origin: OriginFor<T>, node: PeerId) -> DispatchResult {
 			T::RemoveOrigin::ensure_origin(origin)?;
@@ -328,6 +330,7 @@ pub mod pallet {
 		///
 		/// - `remove`: the node which will be moved out from the list.
 		/// - `add`: the node which will be put in the list.
+		#[pallet::call_index(2)]
 		#[pallet::weight((T::WeightInfo::swap_well_known_node(), DispatchClass::Operational))]
 		pub fn swap_well_known_node(
 			origin: OriginFor<T>,
@@ -368,6 +371,7 @@ pub mod pallet {
 		/// May only be called from `T::ResetOrigin`.
 		///
 		/// - `nodes`: the new nodes for the allow list.
+		#[pallet::call_index(3)]
 		#[pallet::weight((T::WeightInfo::reset_well_known_nodes(), DispatchClass::Operational))]
 		pub fn reset_well_known_nodes(
 			origin: OriginFor<T>,
@@ -384,6 +388,7 @@ pub mod pallet {
 		/// PeerId, so claim it right away!
 		///
 		/// - `node`: identifier of the node.
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::claim_node())]
 		pub fn claim_node(origin: OriginFor<T>, node: PeerId) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
@@ -401,6 +406,7 @@ pub mod pallet {
 		/// needs to reach consensus among the network participants.
 		///
 		/// - `node`: identifier of the node.
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::remove_claim())]
 		pub fn remove_claim(origin: OriginFor<T>, node: PeerId) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
@@ -421,6 +427,7 @@ pub mod pallet {
 		///
 		/// - `node`: identifier of the node.
 		/// - `owner`: new owner of the node.
+		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::transfer_node())]
 		pub fn transfer_node(
 			origin: OriginFor<T>,
@@ -444,6 +451,7 @@ pub mod pallet {
 		///
 		/// - `node`: identifier of the node.
 		/// - `connections`: additonal nodes from which the connections are allowed.
+		#[pallet::call_index(7)]
 		#[pallet::weight(T::WeightInfo::add_connections())]
 		pub fn add_connections(
 			origin: OriginFor<T>,
@@ -480,6 +488,7 @@ pub mod pallet {
 		///
 		/// - `node`: identifier of the node.
 		/// - `connections`: additonal nodes from which the connections are not allowed anymore.
+		#[pallet::call_index(8)]
 		#[pallet::weight(T::WeightInfo::remove_connections())]
 		pub fn remove_connections(
 			origin: OriginFor<T>,

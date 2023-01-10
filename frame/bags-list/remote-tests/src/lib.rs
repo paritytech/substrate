@@ -18,6 +18,7 @@
 //! Utilities for remote-testing pallet-bags-list.
 
 use frame_election_provider_support::ScoreProvider;
+use pallet_bags_list::Instance1;
 use sp_std::prelude::*;
 
 /// A common log target to use.
@@ -30,18 +31,26 @@ pub mod try_state;
 /// A wrapper for a runtime that the functions of this crate expect.
 ///
 /// For example, this can be the `Runtime` type of the Polkadot runtime.
-pub trait RuntimeT:
-	pallet_staking::Config + pallet_bags_list::Config + frame_system::Config
+pub trait RuntimeT<I: 'static>:
+	pallet_staking::Config + pallet_bags_list::Config<I> + frame_system::Config
 {
 }
-impl<T: pallet_staking::Config + pallet_bags_list::Config + frame_system::Config> RuntimeT for T {}
+impl<
+		I: 'static,
+		T: pallet_staking::Config + pallet_bags_list::Config<I> + frame_system::Config,
+	> RuntimeT<I> for T
+{
+}
 
 fn percent(portion: u32, total: u32) -> f64 {
 	(portion as f64 / total as f64) * 100f64
 }
 
 /// Display the number of nodes in each bag, while identifying those that need a rebag.
-pub fn display_and_check_bags<Runtime: RuntimeT>(currency_unit: u64, currency_name: &'static str) {
+pub fn display_and_check_bags<Runtime: RuntimeT<Instance1>>(
+	currency_unit: u64,
+	currency_name: &'static str,
+) {
 	use frame_election_provider_support::SortedListProvider;
 	use frame_support::traits::Get;
 
@@ -55,7 +64,8 @@ pub fn display_and_check_bags<Runtime: RuntimeT>(currency_unit: u64, currency_na
 	let mut seen_in_bags = 0;
 	let mut rebaggable = 0;
 	let mut active_bags = 0;
-	for vote_weight_thresh in <Runtime as pallet_bags_list::Config>::BagThresholds::get() {
+	for vote_weight_thresh in <Runtime as pallet_bags_list::Config<Instance1>>::BagThresholds::get()
+	{
 		let vote_weight_thresh_u64: u64 = (*vote_weight_thresh)
 			.try_into()
 			.map_err(|_| "runtime must configure score to at most u64 to use this test")
@@ -64,7 +74,9 @@ pub fn display_and_check_bags<Runtime: RuntimeT>(currency_unit: u64, currency_na
 		let vote_weight_thresh_as_unit = vote_weight_thresh_u64 as f64 / currency_unit as f64;
 		let pretty_thresh = format!("Threshold: {}. {}", vote_weight_thresh_as_unit, currency_name);
 
-		let bag = match pallet_bags_list::Pallet::<Runtime>::list_bags_get(*vote_weight_thresh) {
+		let bag = match pallet_bags_list::Pallet::<Runtime, Instance1>::list_bags_get(
+			*vote_weight_thresh,
+		) {
 			Some(bag) => bag,
 			None => {
 				log::info!(target: LOG_TARGET, "{} NO VOTERS.", pretty_thresh);
@@ -75,7 +87,8 @@ pub fn display_and_check_bags<Runtime: RuntimeT>(currency_unit: u64, currency_na
 		active_bags += 1;
 
 		for id in bag.std_iter().map(|node| node.std_id().clone()) {
-			let vote_weight = <Runtime as pallet_bags_list::Config>::ScoreProvider::score(&id);
+			let vote_weight =
+				<Runtime as pallet_bags_list::Config<Instance1>>::ScoreProvider::score(&id);
 			let vote_weight_thresh_u64: u64 = (*vote_weight_thresh)
 				.try_into()
 				.map_err(|_| "runtime must configure score to at most u64 to use this test")
@@ -92,8 +105,8 @@ pub fn display_and_check_bags<Runtime: RuntimeT>(currency_unit: u64, currency_na
 				);
 			}
 
-			let node =
-				pallet_bags_list::Node::<Runtime>::get(&id).expect("node in bag must exist.");
+			let node = pallet_bags_list::Node::<Runtime, Instance1>::get(&id)
+				.expect("node in bag must exist.");
 			if node.is_misplaced(vote_weight) {
 				rebaggable += 1;
 				let notional_bag = pallet_bags_list::notional_bag_for::<Runtime, _>(vote_weight);
@@ -141,7 +154,7 @@ pub fn display_and_check_bags<Runtime: RuntimeT>(currency_unit: u64, currency_na
 		"a total of {} nodes are in {} active bags [{} total bags], {} of which can be rebagged.",
 		voter_list_count,
 		active_bags,
-		<Runtime as pallet_bags_list::Config>::BagThresholds::get().len(),
+		<Runtime as pallet_bags_list::Config<Instance1>>::BagThresholds::get().len(),
 		rebaggable,
 	);
 }

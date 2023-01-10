@@ -133,7 +133,14 @@ where
 		.add_directive(
 			parse_default_directive("cranelift_wasm=warn").expect("provided directive is valid"),
 		)
-		.add_directive(parse_default_directive("hyper=warn").expect("provided directive is valid"));
+		.add_directive(parse_default_directive("hyper=warn").expect("provided directive is valid"))
+		.add_directive(
+			parse_default_directive("trust_dns_proto=off").expect("provided directive is valid"),
+		)
+		.add_directive(
+			parse_default_directive("libp2p_mdns::behaviour::iface=off")
+				.expect("provided directive is valid"),
+		);
 
 	if let Ok(lvl) = std::env::var("RUST_LOG") {
 		if lvl != "" {
@@ -370,7 +377,7 @@ mod tests {
 	fn test_logger_filters() {
 		run_test_in_another_process("test_logger_filters", || {
 			let test_directives =
-				"afg=debug,sync=trace,client=warn,telemetry,something-with-dash=error";
+				"grandpa=debug,sync=trace,client=warn,telemetry,something-with-dash=error";
 			init_logger(&test_directives);
 
 			tracing::dispatcher::get_default(|dispatcher| {
@@ -395,9 +402,9 @@ mod tests {
 					dispatcher.enabled(&metadata)
 				};
 
-				assert!(test_filter("afg", Level::INFO));
-				assert!(test_filter("afg", Level::DEBUG));
-				assert!(!test_filter("afg", Level::TRACE));
+				assert!(test_filter("grandpa", Level::INFO));
+				assert!(test_filter("grandpa", Level::DEBUG));
+				assert!(!test_filter("grandpa", Level::TRACE));
 
 				assert!(test_filter("sync", Level::TRACE));
 				assert!(test_filter("client", Level::WARN));

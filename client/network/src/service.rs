@@ -29,28 +29,24 @@
 
 use crate::{
 	behaviour::{self, Behaviour, BehaviourOut},
-	config::{Params, TransportConfig},
+	config::Params,
 	discovery::DiscoveryConfig,
-	error::Error,
 	network_state::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
-	protocol::{
-		self, message::generic::Roles, NotificationsSink, NotifsHandlerError, PeerInfo, Protocol,
-		Ready,
-	},
-	transactions, transport, ExHashT, ReputationChange,
+	protocol::{self, NotificationsSink, NotifsHandlerError, PeerInfo, Protocol, Ready},
+	transport, ChainSyncInterface, ReputationChange,
 };
 
-use codec::Encode as _;
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{
-	core::{either::EitherError, upgrade, ConnectedPoint, Executor},
+	core::{either::EitherError, upgrade, ConnectedPoint},
+	identify::Info as IdentifyInfo,
 	kad::record::Key as KademliaKey,
 	multiaddr,
 	ping::Failure as PingFailure,
 	swarm::{
-		AddressScore, ConnectionError, ConnectionLimits, DialError, NetworkBehaviour,
+		AddressScore, ConnectionError, ConnectionLimits, DialError, Executor, NetworkBehaviour,
 		PendingConnectionError, Swarm, SwarmBuilder, SwarmEvent,
 	},
 	Multiaddr, PeerId,
@@ -58,9 +54,9 @@ use libp2p::{
 use log::{debug, error, info, trace, warn};
 use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
-use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_network_common::{
-	config::MultiaddrWithPeerId,
+	config::{MultiaddrWithPeerId, TransportConfig},
+	error::Error,
 	protocol::{
 		event::{DhtEvent, Event},
 		ProtocolName,
@@ -72,12 +68,13 @@ use sc_network_common::{
 		NotificationSender as NotificationSenderT, NotificationSenderError,
 		NotificationSenderReady as NotificationSenderReadyT, Signature, SigningError,
 	},
-	sync::{SyncState, SyncStatus},
+	sync::SyncStatus,
+	ExHashT,
 };
 use sc_peerset::PeersetHandle;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain::HeaderBackend;
-use sp_runtime::traits::{Block as BlockT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
 use std::{
 	cmp,
 	collections::{HashMap, HashSet},
@@ -101,7 +98,7 @@ mod out_events;
 mod tests;
 
 pub use libp2p::identity::{error::DecodingError, Keypair, PublicKey};
-use sc_network_common::service::{NetworkBlock, NetworkRequest, NetworkTransaction};
+use sc_network_common::service::{NetworkBlock, NetworkRequest};
 
 /// Substrate network service. Handles network IO and manages connectivity.
 pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
@@ -121,7 +118,9 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	/// nodes it should be connected to or not.
 	peerset: PeersetHandle,
 	/// Channel that sends messages to the actual worker.
-	to_worker: TracingUnboundedSender<ServiceToWorkerMsg<B, H>>,
+	to_worker: TracingUnboundedSender<ServiceToWorkerMsg<B>>,
+	/// Interface that can be used to delegate calls to `ChainSync`
+	chain_sync_service: Box<dyn ChainSyncInterface<B>>,
 	/// For each peer and protocol combination, an object that allows sending notifications to
 	/// that peer. Updated by the [`NetworkWorker`].
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ProtocolName), NotificationsSink>>>,
@@ -144,11 +143,16 @@ where
 	/// Returns a `NetworkWorker` that implements `Future` and must be regularly polled in order
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
-	pub fn new(mut params: Params<B, H, Client>) -> Result<Self, Error> {
+	pub fn new(mut params: Params<B, Client>) -> Result<Self, Error> {
 		// Private and public keys configuration.
 		let local_identity = params.network_config.node_key.clone().into_keypair()?;
 		let local_public = local_identity.public();
 		let local_peer_id = local_public.to_peer_id();
+
+		params
+			.network_config
+			.request_response_protocols
+			.extend(params.request_response_protocol_configs);
 
 		params.network_config.boot_nodes = params
 			.network_config
@@ -204,26 +208,11 @@ where
 			&params.network_config.transport,
 		)?;
 
-		let (to_worker, from_service) = tracing_unbounded("mpsc_network_worker");
+		let (to_worker, from_service) = tracing_unbounded("mpsc_network_worker", 100_000);
 
 		if let Some(path) = &params.network_config.net_config_path {
 			fs::create_dir_all(path)?;
 		}
-
-		let transactions_handler_proto = transactions::TransactionsHandlerPrototype::new(
-			params.protocol_id.clone(),
-			params
-				.chain
-				.hash(0u32.into())
-				.ok()
-				.flatten()
-				.expect("Genesis block exists; qed"),
-			params.fork_id.clone(),
-		);
-		params
-			.network_config
-			.extra_sets
-			.insert(0, transactions_handler_proto.set_config());
 
 		info!(
 			target: "sub-libp2p",
@@ -231,22 +220,13 @@ where
 			local_peer_id.to_base58(),
 		);
 
-		let default_notif_handshake_message = Roles::from(&params.role).encode();
-
 		let (protocol, peerset_handle, mut known_addresses) = Protocol::new(
 			From::from(&params.role),
 			params.chain.clone(),
-			params.protocol_id.clone(),
-			&params.fork_id,
 			&params.network_config,
-			iter::once(Vec::new())
-				.chain(
-					(0..params.network_config.extra_sets.len() - 1)
-						.map(|_| default_notif_handshake_message.clone()),
-				)
-				.collect(),
 			params.metrics_registry.as_ref(),
 			params.chain_sync,
+			params.block_announce_config,
 		)?;
 
 		// List of multiaddresses that we know in the network.
@@ -295,7 +275,13 @@ where
 				config.discovery_limit(
 					u64::from(params.network_config.default_peers_set.out_peers) + 15,
 				);
-				config.add_protocol(params.protocol_id.clone());
+				let genesis_hash = params
+					.chain
+					.hash(Zero::zero())
+					.ok()
+					.flatten()
+					.expect("Genesis block exists; qed");
+				config.with_kademlia(genesis_hash, params.fork_id.as_deref(), &params.protocol_id);
 				config.with_dht_random_walk(params.network_config.enable_dht_random_walk);
 				config.allow_non_globals_in_dht(params.network_config.allow_non_globals_in_dht);
 				config.use_kademlia_disjoint_query_paths(
@@ -373,10 +359,6 @@ where
 					user_agent,
 					local_public,
 					discovery_config,
-					params.block_request_protocol_config,
-					params.state_request_protocol_config,
-					params.warp_sync_protocol_config,
-					params.light_client_request_protocol_config,
 					params.network_config.request_response_protocols,
 					peerset_handle.clone(),
 				);
@@ -388,7 +370,21 @@ where
 				}
 			};
 
-			let mut builder = SwarmBuilder::new(transport, behaviour, local_peer_id)
+			let builder = {
+				struct SpawnImpl<F>(F);
+				impl<F: Fn(Pin<Box<dyn Future<Output = ()> + Send>>)> Executor for SpawnImpl<F> {
+					fn exec(&self, f: Pin<Box<dyn Future<Output = ()> + Send>>) {
+						(self.0)(f)
+					}
+				}
+				SwarmBuilder::with_executor(
+					transport,
+					behaviour,
+					local_peer_id,
+					SpawnImpl(params.executor),
+				)
+			};
+			let builder = builder
 				.connection_limits(
 					ConnectionLimits::default()
 						.with_max_established_per_peer(Some(crate::MAX_CONNECTIONS_PER_PEER as u32))
@@ -400,15 +396,7 @@ where
 				.notify_handler_buffer_size(NonZeroUsize::new(32).expect("32 != 0; qed"))
 				.connection_event_buffer_size(1024)
 				.max_negotiating_inbound_streams(2048);
-			if let Some(spawner) = params.executor {
-				struct SpawnImpl<F>(F);
-				impl<F: Fn(Pin<Box<dyn Future<Output = ()> + Send>>)> Executor for SpawnImpl<F> {
-					fn exec(&self, f: Pin<Box<dyn Future<Output = ()> + Send>>) {
-						(self.0)(f)
-					}
-				}
-				builder = builder.executor(Box::new(SpawnImpl(spawner)));
-			}
+
 			(builder.build(), bandwidth)
 		};
 
@@ -453,6 +441,7 @@ where
 			local_peer_id,
 			local_identity,
 			to_worker,
+			chain_sync_service: params.chain_sync_service,
 			peers_notifications_sinks: peers_notifications_sinks.clone(),
 			notifications_sizes_metric: metrics
 				.as_ref()
@@ -460,26 +449,18 @@ where
 			_marker: PhantomData,
 		});
 
-		let (tx_handler, tx_handler_controller) = transactions_handler_proto.build(
-			service.clone(),
-			params.transaction_pool,
-			params.metrics_registry.as_ref(),
-		)?;
-		(params.transactions_handler_executor)(tx_handler.run().boxed());
-
 		Ok(NetworkWorker {
 			external_addresses,
 			num_connected,
 			is_major_syncing,
 			network_service: swarm,
 			service,
-			import_queue: params.import_queue,
 			from_service,
 			event_streams: out_events::OutChannels::new(params.metrics_registry.as_ref())?,
 			peers_notifications_sinks,
-			tx_handler_controller,
 			metrics,
 			boot_node_ids,
+			_marker: Default::default(),
 		})
 	}
 
@@ -771,13 +752,11 @@ impl<B: BlockT, H: ExHashT> sc_consensus::JustificationSyncLink<B> for NetworkSe
 	/// On success, the justification will be passed to the import queue that was part at
 	/// initialization as part of the configuration.
 	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
-		let _ = self
-			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::RequestJustification(*hash, number));
+		let _ = self.chain_sync_service.request_justification(hash, number);
 	}
 
 	fn clear_justification_requests(&self) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::ClearJustificationRequests);
+		let _ = self.chain_sync_service.clear_justification_requests();
 	}
 }
 
@@ -841,7 +820,7 @@ where
 	/// a stale fork missing.
 	/// Passing empty `peers` set effectively removes the sync request.
 	fn set_sync_fork_request(&self, peers: Vec<PeerId>, hash: B::Hash, number: NumberFor<B>) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::SyncFork(peers, hash, number));
+		self.chain_sync_service.set_sync_fork_request(peers, hash, number);
 	}
 }
 
@@ -1030,7 +1009,7 @@ where
 	H: ExHashT,
 {
 	fn event_stream(&self, name: &'static str) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
-		let (tx, rx) = out_events::channel(name);
+		let (tx, rx) = out_events::channel(name, 100_000);
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::EventStream(tx));
 		Box::pin(rx)
 	}
@@ -1144,20 +1123,6 @@ where
 	}
 }
 
-impl<B, H> NetworkTransaction<H> for NetworkService<B, H>
-where
-	B: BlockT + 'static,
-	H: ExHashT,
-{
-	fn trigger_repropagate(&self) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::PropagateTransactions);
-	}
-
-	fn propagate_transaction(&self, hash: H) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::PropagateTransaction(hash));
-	}
-}
-
 impl<B, H> NetworkBlock<B::Hash, NumberFor<B>> for NetworkService<B, H>
 where
 	B: BlockT + 'static,
@@ -1244,11 +1209,7 @@ impl<'a> NotificationSenderReadyT for NotificationSenderReady<'a> {
 /// Messages sent from the `NetworkService` to the `NetworkWorker`.
 ///
 /// Each entry corresponds to a method of `NetworkService`.
-enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
-	PropagateTransaction(H),
-	PropagateTransactions,
-	RequestJustification(B::Hash, NumberFor<B>),
-	ClearJustificationRequests,
+enum ServiceToWorkerMsg<B: BlockT> {
 	AnnounceBlock(B::Hash, Option<Vec<u8>>),
 	GetValue(KademliaKey),
 	PutValue(KademliaKey, Vec<u8>),
@@ -1262,7 +1223,6 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	RemoveSetReserved(ProtocolName, PeerId),
 	AddToPeersSet(ProtocolName, PeerId),
 	RemoveFromPeersSet(ProtocolName, PeerId),
-	SyncFork(Vec<PeerId>, B::Hash, NumberFor<B>),
 	EventStream(out_events::Sender),
 	Request {
 		target: PeerId,
@@ -1301,10 +1261,8 @@ where
 	service: Arc<NetworkService<B, H>>,
 	/// The *actual* network.
 	network_service: Swarm<Behaviour<B, Client>>,
-	/// The import queue that was passed at initialization.
-	import_queue: Box<dyn ImportQueue<B>>,
 	/// Messages from the [`NetworkService`] that must be processed.
-	from_service: TracingUnboundedReceiver<ServiceToWorkerMsg<B, H>>,
+	from_service: TracingUnboundedReceiver<ServiceToWorkerMsg<B>>,
 	/// Senders for events that happen on the network.
 	event_streams: out_events::OutChannels,
 	/// Prometheus network metrics.
@@ -1314,8 +1272,9 @@ where
 	/// For each peer and protocol combination, an object that allows sending notifications to
 	/// that peer. Shared with the [`NetworkService`].
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ProtocolName), NotificationsSink>>>,
-	/// Controller for the handler of incoming and outgoing transactions.
-	tx_handler_controller: transactions::TransactionsHandlerController<H>,
+	/// Marker to pin the `H` generic. Serves no purpose except to not break backwards
+	/// compatibility.
+	_marker: PhantomData<H>,
 }
 
 impl<B, H, Client> Future for NetworkWorker<B, H, Client>
@@ -1328,10 +1287,6 @@ where
 
 	fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context) -> Poll<Self::Output> {
 		let this = &mut *self;
-
-		// Poll the import queue for actions to perform.
-		this.import_queue
-			.poll_actions(cx, &mut NetworkLink { protocol: &mut this.network_service });
 
 		// At the time of writing of this comment, due to a high volume of messages, the network
 		// worker sometimes takes a long time to process the loop below. When that happens, the
@@ -1361,20 +1316,6 @@ where
 					.behaviour_mut()
 					.user_protocol_mut()
 					.announce_block(hash, data),
-				ServiceToWorkerMsg::RequestJustification(hash, number) => this
-					.network_service
-					.behaviour_mut()
-					.user_protocol_mut()
-					.request_justification(&hash, number),
-				ServiceToWorkerMsg::ClearJustificationRequests => this
-					.network_service
-					.behaviour_mut()
-					.user_protocol_mut()
-					.clear_justification_requests(),
-				ServiceToWorkerMsg::PropagateTransaction(hash) =>
-					this.tx_handler_controller.propagate_transaction(hash),
-				ServiceToWorkerMsg::PropagateTransactions =>
-					this.tx_handler_controller.propagate_transactions(),
 				ServiceToWorkerMsg::GetValue(key) =>
 					this.network_service.behaviour_mut().get_value(key),
 				ServiceToWorkerMsg::PutValue(key, value) =>
@@ -1426,11 +1367,6 @@ where
 					.behaviour_mut()
 					.user_protocol_mut()
 					.remove_from_peers_set(protocol, peer_id),
-				ServiceToWorkerMsg::SyncFork(peer_ids, hash, number) => this
-					.network_service
-					.behaviour_mut()
-					.user_protocol_mut()
-					.set_sync_fork_request(peer_ids, &hash, number),
 				ServiceToWorkerMsg::EventStream(sender) => this.event_streams.push(sender),
 				ServiceToWorkerMsg::Request {
 					target,
@@ -1483,23 +1419,6 @@ where
 
 			match poll_value {
 				Poll::Pending => break,
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::BlockImport(origin, blocks))) => {
-					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.import_queue_blocks_submitted.inc();
-					}
-					this.import_queue.import_blocks(origin, blocks);
-				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::JustificationImport(
-					origin,
-					hash,
-					nb,
-					justifications,
-				))) => {
-					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.import_queue_justifications_submitted.inc();
-					}
-					this.import_queue.import_justifications(origin, hash, nb, justifications);
-				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::InboundRequest {
 					protocol,
 					result,
@@ -1575,14 +1494,51 @@ where
 							},
 						}
 					},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted(
-					protocol,
-				))) =>
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::ReputationChanges {
+					peer,
+					changes,
+				})) =>
+					for change in changes {
+						this.network_service.behaviour().user_protocol().report_peer(peer, change);
+					},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::PeerIdentify {
+					peer_id,
+					info:
+						IdentifyInfo {
+							protocol_version,
+							agent_version,
+							mut listen_addrs,
+							protocols,
+							..
+						},
+				})) => {
+					if listen_addrs.len() > 30 {
+						debug!(
+							target: "sub-libp2p",
+							"Node {:?} has reported more than 30 addresses; it is identified by {:?} and {:?}",
+							peer_id, protocol_version, agent_version
+						);
+						listen_addrs.truncate(30);
+					}
+					for addr in listen_addrs {
+						this.network_service
+							.behaviour_mut()
+							.add_self_reported_address_to_dht(&peer_id, &protocols, addr);
+					}
+					this.network_service
+						.behaviour_mut()
+						.user_protocol_mut()
+						.add_default_set_discovered_nodes(iter::once(peer_id));
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::Discovered(peer_id))) => {
+					this.network_service
+						.behaviour_mut()
+						.user_protocol_mut()
+						.add_default_set_discovered_nodes(iter::once(peer_id));
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted)) =>
 					if let Some(metrics) = this.metrics.as_ref() {
-						metrics
-							.kademlia_random_queries_total
-							.with_label_values(&[protocol.as_ref()])
-							.inc();
+						metrics.kademlia_random_queries_total.inc();
 					},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::NotificationStreamOpened {
 					remote,
@@ -1702,6 +1658,9 @@ where
 					}
 
 					this.event_streams.send(Event::Dht(event));
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::None)) => {
+					// Ignored event from lower layers.
 				},
 				Poll::Ready(SwarmEvent::ConnectionEstablished {
 					peer_id,
@@ -1911,39 +1870,32 @@ where
 			*this.external_addresses.lock() = external_addresses;
 		}
 
-		let is_major_syncing =
-			match this.network_service.behaviour_mut().user_protocol_mut().sync_state().state {
-				SyncState::Idle => false,
-				SyncState::Downloading => true,
-			};
-
-		this.tx_handler_controller.set_gossip_enabled(!is_major_syncing);
+		let is_major_syncing = this
+			.network_service
+			.behaviour_mut()
+			.user_protocol_mut()
+			.sync_state()
+			.state
+			.is_major_syncing();
 
 		this.is_major_syncing.store(is_major_syncing, Ordering::Relaxed);
 
 		if let Some(metrics) = this.metrics.as_ref() {
-			for (proto, buckets) in this.network_service.behaviour_mut().num_entries_per_kbucket() {
+			if let Some(buckets) = this.network_service.behaviour_mut().num_entries_per_kbucket() {
 				for (lower_ilog2_bucket_bound, num_entries) in buckets {
 					metrics
 						.kbuckets_num_nodes
-						.with_label_values(&[proto.as_ref(), &lower_ilog2_bucket_bound.to_string()])
+						.with_label_values(&[&lower_ilog2_bucket_bound.to_string()])
 						.set(num_entries as u64);
 				}
 			}
-			for (proto, num_entries) in this.network_service.behaviour_mut().num_kademlia_records()
-			{
-				metrics
-					.kademlia_records_count
-					.with_label_values(&[proto.as_ref()])
-					.set(num_entries as u64);
+			if let Some(num_entries) = this.network_service.behaviour_mut().num_kademlia_records() {
+				metrics.kademlia_records_count.set(num_entries as u64);
 			}
-			for (proto, num_entries) in
+			if let Some(num_entries) =
 				this.network_service.behaviour_mut().kademlia_records_total_size()
 			{
-				metrics
-					.kademlia_records_sizes_total
-					.with_label_values(&[proto.as_ref()])
-					.set(num_entries as u64);
+				metrics.kademlia_records_sizes_total.set(num_entries as u64);
 			}
 			metrics
 				.peerset_num_discovered
@@ -1965,51 +1917,6 @@ where
 	H: ExHashT,
 	Client: HeaderBackend<B> + 'static,
 {
-}
-
-// Implementation of `import_queue::Link` trait using the available local variables.
-struct NetworkLink<'a, B, Client>
-where
-	B: BlockT,
-	Client: HeaderBackend<B> + 'static,
-{
-	protocol: &'a mut Swarm<Behaviour<B, Client>>,
-}
-
-impl<'a, B, Client> Link<B> for NetworkLink<'a, B, Client>
-where
-	B: BlockT,
-	Client: HeaderBackend<B> + 'static,
-{
-	fn blocks_processed(
-		&mut self,
-		imported: usize,
-		count: usize,
-		results: Vec<(Result<BlockImportStatus<NumberFor<B>>, BlockImportError>, B::Hash)>,
-	) {
-		self.protocol
-			.behaviour_mut()
-			.user_protocol_mut()
-			.on_blocks_processed(imported, count, results)
-	}
-	fn justification_imported(
-		&mut self,
-		who: PeerId,
-		hash: &B::Hash,
-		number: NumberFor<B>,
-		success: bool,
-	) {
-		self.protocol
-			.behaviour_mut()
-			.user_protocol_mut()
-			.justification_import_result(who, *hash, number, success);
-	}
-	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		self.protocol
-			.behaviour_mut()
-			.user_protocol_mut()
-			.request_justification(hash, number)
-	}
 }
 
 fn ensure_addresses_consistent_with_transport<'a>(

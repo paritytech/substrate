@@ -446,10 +446,10 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// Origin that can control the configurations of this pallet.
-		type ControlOrigin: frame_support::traits::EnsureOrigin<Self::Origin>;
+		type ControlOrigin: frame_support::traits::EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Filter on which origin that trigger the manual migrations.
-		type SignedFilter: EnsureOrigin<Self::Origin, Success = Self::AccountId>;
+		type SignedFilter: EnsureOrigin<Self::RuntimeOrigin, Success = Self::AccountId>;
 
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -546,6 +546,7 @@ pub mod pallet {
 		/// Control the automatic migration.
 		///
 		/// The dispatch origin of this call must be [`Config::ControlOrigin`].
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn control_auto_migration(
 			origin: OriginFor<T>,
@@ -577,6 +578,7 @@ pub mod pallet {
 		/// Based on the documentation of [`MigrationTask::migrate_until_exhaustion`], the
 		/// recommended way of doing this is to pass a `limit` that only bounds `count`, as the
 		/// `size` limit can always be overwritten.
+		#[pallet::call_index(1)]
 		#[pallet::weight(
 			// the migration process
 			Pallet::<T>::dynamic_weight(limits.item, * real_size_upper)
@@ -648,6 +650,7 @@ pub mod pallet {
 		///
 		/// This does not affect the global migration process tracker ([`MigrationProcess`]), and
 		/// should only be used in case any keys are leftover due to a bug.
+		#[pallet::call_index(2)]
 		#[pallet::weight(
 			T::WeightInfo::migrate_custom_top_success()
 				.max(T::WeightInfo::migrate_custom_top_fail())
@@ -704,6 +707,7 @@ pub mod pallet {
 		///
 		/// This does not affect the global migration process tracker ([`MigrationProcess`]), and
 		/// should only be used in case any keys are leftover due to a bug.
+		#[pallet::call_index(3)]
 		#[pallet::weight(
 			T::WeightInfo::migrate_custom_child_success()
 				.max(T::WeightInfo::migrate_custom_child_fail())
@@ -764,6 +768,7 @@ pub mod pallet {
 		}
 
 		/// Set the maximum limit of the signed migration.
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn set_signed_max_limits(
 			origin: OriginFor<T>,
@@ -783,6 +788,7 @@ pub mod pallet {
 		///
 		/// In case you mess things up, you can also, in principle, use this to reset the migration
 		/// process.
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn force_set_progress(
 			origin: OriginFor<T>,
@@ -1084,7 +1090,7 @@ mod mock {
 		type BaseCallFilter = frame_support::traits::Everything;
 		type BlockWeights = ();
 		type BlockLength = ();
-		type Origin = Origin;
+		type RuntimeOrigin = RuntimeOrigin;
 		type RuntimeCall = RuntimeCall;
 		type Index = u64;
 		type BlockNumber = u32;
@@ -1293,7 +1299,7 @@ mod test {
 
 			// fails if the top key is too long.
 			frame_support::assert_ok!(StateTrieMigration::continue_migrate(
-				Origin::signed(1),
+				RuntimeOrigin::signed(1),
 				MigrationLimits { item: 50, size: 1 << 20 },
 				Bounded::max_value(),
 				MigrationProcess::<Test>::get()
@@ -1328,7 +1334,7 @@ mod test {
 
 			// fails if the top key is too long.
 			frame_support::assert_ok!(StateTrieMigration::continue_migrate(
-				Origin::signed(1),
+				RuntimeOrigin::signed(1),
 				MigrationLimits { item: 50, size: 1 << 20 },
 				Bounded::max_value(),
 				MigrationProcess::<Test>::get()
@@ -1457,7 +1463,7 @@ mod test {
 			// can't submit if limit is too high.
 			frame_support::assert_err!(
 				StateTrieMigration::continue_migrate(
-					Origin::signed(1),
+					RuntimeOrigin::signed(1),
 					MigrationLimits { item: 5, size: sp_runtime::traits::Bounded::max_value() },
 					Bounded::max_value(),
 					MigrationProcess::<Test>::get()
@@ -1468,7 +1474,7 @@ mod test {
 			// can't submit if poor.
 			frame_support::assert_err!(
 				StateTrieMigration::continue_migrate(
-					Origin::signed(2),
+					RuntimeOrigin::signed(2),
 					MigrationLimits { item: 5, size: 100 },
 					100,
 					MigrationProcess::<Test>::get()
@@ -1479,7 +1485,7 @@ mod test {
 			// can't submit with bad witness.
 			frame_support::assert_err_ignore_postinfo!(
 				StateTrieMigration::continue_migrate(
-					Origin::signed(1),
+					RuntimeOrigin::signed(1),
 					MigrationLimits { item: 5, size: 100 },
 					100,
 					MigrationTask {
@@ -1500,7 +1506,7 @@ mod test {
 				assert!(result.is_ok());
 
 				frame_support::assert_ok!(StateTrieMigration::continue_migrate(
-					Origin::signed(1),
+					RuntimeOrigin::signed(1),
 					StateTrieMigration::signed_migration_max_limits().unwrap(),
 					task.dyn_size,
 					MigrationProcess::<Test>::get()
@@ -1523,7 +1529,7 @@ mod test {
 		let correct_witness = 3 + sp_core::storage::TRIE_VALUE_NODE_THRESHOLD * 3 + 1 + 2 + 3;
 		new_test_ext(StateVersion::V0, true, None, None).execute_with(|| {
 			frame_support::assert_ok!(StateTrieMigration::migrate_custom_top(
-				Origin::signed(1),
+				RuntimeOrigin::signed(1),
 				vec![b"key1".to_vec(), b"key2".to_vec(), b"key3".to_vec()],
 				correct_witness,
 			));
@@ -1536,7 +1542,7 @@ mod test {
 		new_test_ext(StateVersion::V0, true, None, None).execute_with(|| {
 			// works if the witness is an overestimate
 			frame_support::assert_ok!(StateTrieMigration::migrate_custom_top(
-				Origin::signed(1),
+				RuntimeOrigin::signed(1),
 				vec![b"key1".to_vec(), b"key2".to_vec(), b"key3".to_vec()],
 				correct_witness + 99,
 			));
@@ -1551,7 +1557,7 @@ mod test {
 
 			// note that we don't expect this to be a noop -- we do slash.
 			frame_support::assert_ok!(StateTrieMigration::migrate_custom_top(
-				Origin::signed(1),
+				RuntimeOrigin::signed(1),
 				vec![b"key1".to_vec(), b"key2".to_vec(), b"key3".to_vec()],
 				correct_witness - 1,
 			),);
@@ -1569,7 +1575,7 @@ mod test {
 	fn custom_migrate_child_works() {
 		new_test_ext(StateVersion::V0, true, None, None).execute_with(|| {
 			frame_support::assert_ok!(StateTrieMigration::migrate_custom_child(
-				Origin::signed(1),
+				RuntimeOrigin::signed(1),
 				StateTrieMigration::childify("chk1"),
 				vec![b"key1".to_vec(), b"key2".to_vec()],
 				55 + 66,
@@ -1585,7 +1591,7 @@ mod test {
 
 			// note that we don't expect this to be a noop -- we do slash.
 			frame_support::assert_ok!(StateTrieMigration::migrate_custom_child(
-				Origin::signed(1),
+				RuntimeOrigin::signed(1),
 				StateTrieMigration::childify("chk1"),
 				vec![b"key1".to_vec(), b"key2".to_vec()],
 				999999, // wrong witness
@@ -1606,7 +1612,6 @@ mod test {
 pub(crate) mod remote_tests {
 	use crate::{AutoLimits, MigrationLimits, Pallet as StateTrieMigration, LOG_TARGET};
 	use codec::Encode;
-	use frame_benchmarking::Zero;
 	use frame_support::{
 		traits::{Get, Hooks},
 		weights::Weight,
@@ -1614,7 +1619,10 @@ pub(crate) mod remote_tests {
 	use frame_system::Pallet as System;
 	use remote_externalities::Mode;
 	use sp_core::H256;
-	use sp_runtime::traits::{Block as BlockT, HashFor, Header as _, One};
+	use sp_runtime::{
+		traits::{Block as BlockT, HashFor, Header as _, One, Zero},
+		DeserializeOwned,
+	};
 	use thousands::Separable;
 
 	#[allow(dead_code)]
@@ -1640,16 +1648,15 @@ pub(crate) mod remote_tests {
 	///
 	/// This will print some very useful statistics, make sure [`crate::LOG_TARGET`] is enabled.
 	#[allow(dead_code)]
-	pub(crate) async fn run_with_limits<
+	pub(crate) async fn run_with_limits<Runtime, Block>(limits: MigrationLimits, mode: Mode<Block>)
+	where
 		Runtime: crate::Config<Hash = H256>,
-		Block: BlockT<Hash = H256> + serde::de::DeserializeOwned,
-	>(
-		limits: MigrationLimits,
-		mode: Mode<Block>,
-	) {
+		Block: BlockT<Hash = H256> + DeserializeOwned,
+		Block::Header: serde::de::DeserializeOwned,
+	{
 		let mut ext = remote_externalities::Builder::<Block>::new()
 			.mode(mode)
-			.state_version(sp_core::storage::StateVersion::V0)
+			.overwrite_state_version(sp_core::storage::StateVersion::V0)
 			.build()
 			.await
 			.unwrap();
@@ -1664,18 +1671,20 @@ pub(crate) mod remote_tests {
 		// set the version to 1, as if the upgrade happened.
 		ext.state_version = sp_core::storage::StateVersion::V1;
 
-		let (top_left, child_left) =
+		let status =
 			substrate_state_trie_migration_rpc::migration_status(&ext.as_backend()).unwrap();
 		assert!(
-			top_left > 0,
+			status.top_remaining_to_migrate > 0,
 			"no node needs migrating, this probably means that state was initialized with `StateVersion::V1`",
 		);
 
 		log::info!(
 			target: LOG_TARGET,
-			"initial check: top_left: {}, child_left: {}",
-			top_left.separate_with_commas(),
-			child_left.separate_with_commas(),
+			"initial check: top_left: {}, child_left: {}, total_top {}, total_child {}",
+			status.top_remaining_to_migrate.separate_with_commas(),
+			status.child_remaining_to_migrate.separate_with_commas(),
+			status.total_top.separate_with_commas(),
+			status.total_child.separate_with_commas(),
 		);
 
 		loop {
@@ -1723,17 +1732,17 @@ pub(crate) mod remote_tests {
 			)
 		});
 
-		let (top_left, child_left) =
+		let status =
 			substrate_state_trie_migration_rpc::migration_status(&ext.as_backend()).unwrap();
-		assert_eq!(top_left, 0);
-		assert_eq!(child_left, 0);
+		assert_eq!(status.top_remaining_to_migrate, 0);
+		assert_eq!(status.child_remaining_to_migrate, 0);
 	}
 }
 
 #[cfg(all(test, feature = "remote-test"))]
 mod remote_tests_local {
 	use super::{
-		mock::{Call as MockCall, *},
+		mock::{RuntimeCall as MockCall, *},
 		remote_tests::run_with_limits,
 		*,
 	};

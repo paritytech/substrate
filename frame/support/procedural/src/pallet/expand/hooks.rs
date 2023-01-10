@@ -26,7 +26,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			let has_runtime_upgrade = hooks.has_runtime_upgrade;
 			(where_clause, span, has_runtime_upgrade)
 		},
-		None => (None, def.pallet_struct.attr_span, false),
+		None => (def.config.where_clause.clone(), def.pallet_struct.attr_span, false),
 	};
 
 	let frame_support = &def.frame_support;
@@ -50,7 +50,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 	} else {
 		// default.
 		quote::quote! {
-			#frame_support::log::info!(
+			#frame_support::log::debug!(
 				target: #frame_support::LOG_TARGET,
 				"✅ no migration for {}",
 				pallet_name,
@@ -160,7 +160,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn pre_upgrade() -> Result<(), &'static str> {
+			fn pre_upgrade() -> Result<#frame_support::sp_std::vec::Vec<u8>, &'static str> {
 				<
 					Self
 					as
@@ -169,12 +169,12 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn post_upgrade() -> Result<(), &'static str> {
+			fn post_upgrade(state: #frame_support::sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
 				<
 					Self
 					as
 					#frame_support::traits::Hooks<<T as #frame_system::Config>::BlockNumber>
-				>::post_upgrade()
+				>::post_upgrade(state)
 			}
 		}
 

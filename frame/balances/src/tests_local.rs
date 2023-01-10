@@ -48,7 +48,9 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
+		frame_system::limits::BlockWeights::simple_max(
+			frame_support::weights::Weight::from_ref_time(1024).set_proof_size(u64::MAX),
+		);
 	pub static ExistentialDeposit: u64 = 0;
 }
 impl frame_system::Config for Test {
@@ -56,7 +58,7 @@ impl frame_system::Config for Test {
 	type BlockWeights = BlockWeights;
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type RuntimeCall = RuntimeCall;

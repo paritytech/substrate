@@ -203,7 +203,7 @@ where
 	Pair: sp_core::Pair,
 	Pair::Public: Into<MultiSigner>,
 {
-	let public = decode_hex(public_str)?;
+	let public = array_bytes::hex2bytes(public_str)?;
 
 	let public_key = Pair::Public::try_from(&public)
 		.map_err(|_| "Failed to construct public key from given hex")?;
@@ -273,26 +273,17 @@ where
 	format!("0x{}", HexDisplay::from(&public_key.into().into_account().as_ref()))
 }
 
-/// helper method for decoding hex
-pub fn decode_hex<T: AsRef<[u8]>>(message: T) -> Result<Vec<u8>, Error> {
-	let mut message = message.as_ref();
-	if message[..2] == [b'0', b'x'] {
-		message = &message[2..]
-	}
-	Ok(hex::decode(message)?)
-}
-
 /// checks if message is Some, otherwise reads message from stdin and optionally decodes hex
 pub fn read_message(msg: Option<&String>, should_decode: bool) -> Result<Vec<u8>, Error> {
 	let mut message = vec![];
 	match msg {
 		Some(m) => {
-			message = decode_hex(m)?;
+			message = array_bytes::hex2bytes(m.as_str())?;
 		},
 		None => {
 			std::io::stdin().lock().read_to_end(&mut message)?;
 			if should_decode {
-				message = decode_hex(&message)?;
+				message = array_bytes::hex2bytes(array_bytes::hex_bytes2hex_str(&message)?)?;
 			}
 		},
 	}

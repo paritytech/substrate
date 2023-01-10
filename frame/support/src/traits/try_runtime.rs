@@ -17,47 +17,11 @@
 
 //! Try-runtime specific traits and types.
 
-use super::*;
 use impl_trait_for_tuples::impl_for_tuples;
 use sp_arithmetic::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
 
-/// Prefix to be used (optionally) for implementing [`OnRuntimeUpgradeHelpersExt::storage_key`].
-const ON_RUNTIME_UPGRADE_PREFIX: &[u8] = b"__ON_RUNTIME_UPGRADE__";
-
-/// Some helper functions for [`OnRuntimeUpgrade`] during `try-runtime` testing.
-pub trait OnRuntimeUpgradeHelpersExt {
-	/// Generate a storage key unique to this runtime upgrade.
-	///
-	/// This can be used to communicate data from pre-upgrade to post-upgrade state and check
-	/// them. See [`Self::set_temp_storage`] and [`Self::get_temp_storage`].
-	fn storage_key(ident: &str) -> [u8; 32] {
-		crate::storage::storage_prefix(ON_RUNTIME_UPGRADE_PREFIX, ident.as_bytes())
-	}
-
-	/// Get temporary storage data written by [`Self::set_temp_storage`].
-	///
-	/// Returns `None` if either the data is unavailable or un-decodable.
-	///
-	/// A `at` storage identifier must be provided to indicate where the storage is being read from.
-	fn get_temp_storage<T: codec::Decode>(at: &str) -> Option<T> {
-		sp_io::storage::get(&Self::storage_key(at))
-			.and_then(|bytes| codec::Decode::decode(&mut &*bytes).ok())
-	}
-
-	/// Write some temporary data to a specific storage that can be read (potentially in
-	/// post-upgrade hook) via [`Self::get_temp_storage`].
-	///
-	/// A `at` storage identifier must be provided to indicate where the storage is being written
-	/// to.
-	fn set_temp_storage<T: codec::Encode>(data: T, at: &str) {
-		sp_io::storage::set(&Self::storage_key(at), &data.encode());
-	}
-}
-
-impl<U: OnRuntimeUpgrade> OnRuntimeUpgradeHelpersExt for U {}
-
-// Which state tests to execute.
+/// Which state tests to execute.
 #[derive(codec::Encode, codec::Decode, Clone)]
 pub enum Select {
 	/// None of them.
@@ -68,7 +32,7 @@ pub enum Select {
 	RoundRobin(u32),
 	/// Run only pallets who's name matches the given list.
 	///
-	/// Pallet names are obtained from [`PalletInfoAccess`].
+	/// Pallet names are obtained from [`super::PalletInfoAccess`].
 	Only(Vec<Vec<u8>>),
 }
 
@@ -117,10 +81,52 @@ impl sp_std::str::FromStr for Select {
 	}
 }
 
+/// Select which checks should be run when trying a runtime upgrade upgrade.
+#[derive(codec::Encode, codec::Decode, Clone, Debug, Copy)]
+pub enum UpgradeCheckSelect {
+	/// Run no checks.
+	None,
+	/// Run the `try_state`, `pre_upgrade` and `post_upgrade` checks.
+	All,
+	/// Run the `pre_upgrade` and `post_upgrade` checks.
+	PreAndPost,
+	/// Run the `try_state` checks.
+	TryState,
+}
+
+impl UpgradeCheckSelect {
+	/// Whether the pre- and post-upgrade checks are selected.
+	pub fn pre_and_post(&self) -> bool {
+		matches!(self, Self::All | Self::PreAndPost)
+	}
+
+	/// Whether the try-state checks are selected.
+	pub fn try_state(&self) -> bool {
+		matches!(self, Self::All | Self::TryState)
+	}
+}
+
+#[cfg(feature = "std")]
+impl core::str::FromStr for UpgradeCheckSelect {
+	type Err = &'static str;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		match s.to_lowercase().as_str() {
+			"none" => Ok(Self::None),
+			"all" => Ok(Self::All),
+			"pre-and-post" => Ok(Self::PreAndPost),
+			"try-state" => Ok(Self::TryState),
+			_ => Err("Invalid CheckSelector"),
+		}
+	}
+}
+
 /// Execute some checks to ensure the internal state of a pallet is consistent.
 ///
 /// Usually, these checks should check all of the invariants that are expected to be held on all of
 /// the storage items of your pallet.
+///
+/// This hook should not alter any storage.
 pub trait TryState<BlockNumber> {
 	/// Execute the state checks.
 	fn try_state(_: BlockNumber, _: Select) -> Result<(), &'static str>;

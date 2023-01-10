@@ -32,7 +32,6 @@ use sp_runtime::{
 	DigestItem,
 };
 use std::{
-	borrow::Cow,
 	collections::HashMap,
 	pin::Pin,
 	sync::{
@@ -42,7 +41,7 @@ use std::{
 	time::Duration,
 };
 
-use crate::{PowAlgorithm, PowIntermediate, Seal, INTERMEDIATE_KEY, POW_ENGINE_ID};
+use crate::{PowAlgorithm, PowIntermediate, Seal, INTERMEDIATE_KEY, LOG_TARGET, POW_ENGINE_ID};
 
 /// Mining metadata. This is the information needed to start an actual mining loop.
 #[derive(Clone, Eq, PartialEq)]
@@ -160,26 +159,16 @@ where
 			) {
 				Ok(true) => (),
 				Ok(false) => {
-					warn!(
-						target: "pow",
-						"Unable to import mined block: seal is invalid",
-					);
+					warn!(target: LOG_TARGET, "Unable to import mined block: seal is invalid",);
 					return false
 				},
 				Err(err) => {
-					warn!(
-						target: "pow",
-						"Unable to import mined block: {}",
-						err,
-					);
+					warn!(target: LOG_TARGET, "Unable to import mined block: {}", err,);
 					return false
 				},
 			}
 		} else {
-			warn!(
-				target: "pow",
-				"Unable to import mined block: metadata does not exist",
-			);
+			warn!(target: LOG_TARGET, "Unable to import mined block: metadata does not exist",);
 			return false
 		}
 
@@ -193,10 +182,7 @@ where
 		} {
 			build
 		} else {
-			warn!(
-				target: "pow",
-				"Unable to import mined block: build does not exist",
-			);
+			warn!(target: LOG_TARGET, "Unable to import mined block: build does not exist",);
 			return false
 		};
 
@@ -212,10 +198,7 @@ where
 		let intermediate = PowIntermediate::<Algorithm::Difficulty> {
 			difficulty: Some(build.metadata.difficulty),
 		};
-
-		import_block
-			.intermediates
-			.insert(Cow::from(INTERMEDIATE_KEY), Box::new(intermediate) as Box<_>);
+		import_block.insert_intermediate(INTERMEDIATE_KEY, intermediate);
 
 		let header = import_block.post_header();
 		let mut block_import = self.block_import.lock();
@@ -229,18 +212,13 @@ where
 				);
 
 				info!(
-					target: "pow",
-					"✅ Successfully mined block on top of: {}",
-					build.metadata.best_hash
+					target: LOG_TARGET,
+					"✅ Successfully mined block on top of: {}", build.metadata.best_hash
 				);
 				true
 			},
 			Err(err) => {
-				warn!(
-					target: "pow",
-					"Unable to import mined block: {}",
-					err,
-				);
+				warn!(target: LOG_TARGET, "Unable to import mined block: {}", err,);
 				false
 			},
 		}

@@ -20,7 +20,7 @@ use frame_support::{
 	assert_noop, assert_ok,
 	dispatch::{Pays, PostDispatchInfo, WithPostDispatchInfo},
 };
-use mock::{Origin, *};
+use mock::{RuntimeOrigin, *};
 use sp_core::H256;
 use sp_runtime::{
 	traits::{BlakeTwo256, Header},
@@ -29,8 +29,8 @@ use sp_runtime::{
 
 #[test]
 fn origin_works() {
-	let o = Origin::from(RawOrigin::<u64>::Signed(1u64));
-	let x: Result<RawOrigin<u64>, Origin> = o.into();
+	let o = RuntimeOrigin::from(RawOrigin::<u64>::Signed(1u64));
+	let x: Result<RawOrigin<u64>, RuntimeOrigin> = o.into();
 	assert_eq!(x.unwrap(), RawOrigin::<u64>::Signed(1u64));
 }
 
@@ -169,6 +169,10 @@ fn deposit_event_should_work() {
 			}]
 		);
 
+		let normal_base = <Test as crate::Config>::BlockWeights::get()
+			.get(DispatchClass::Normal)
+			.base_extrinsic;
+
 		System::reset_events();
 		System::initialize(&2, &[0u8; 32].into(), &Default::default());
 		System::deposit_event(SysEvent::NewAccount { account: 32 });
@@ -194,14 +198,17 @@ fn deposit_event_should_work() {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: SysEvent::ExtrinsicSuccess { dispatch_info: Default::default() }.into(),
+					event: SysEvent::ExtrinsicSuccess {
+						dispatch_info: DispatchInfo { weight: normal_base, ..Default::default() }
+					}
+					.into(),
 					topics: vec![]
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
 					event: SysEvent::ExtrinsicFailed {
 						dispatch_error: DispatchError::BadOrigin.into(),
-						dispatch_info: Default::default()
+						dispatch_info: DispatchInfo { weight: normal_base, ..Default::default() }
 					}
 					.into(),
 					topics: vec![]
@@ -223,6 +230,9 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 		System::initialize(&1, &[0u8; 32].into(), &Default::default());
 		System::note_finished_initialize();
 
+		let normal_base = <Test as crate::Config>::BlockWeights::get()
+			.get(DispatchClass::Normal)
+			.base_extrinsic;
 		let pre_info = DispatchInfo { weight: Weight::from_ref_time(1000), ..Default::default() };
 		System::note_applied_extrinsic(&Ok(Some(300).into()), pre_info);
 		System::note_applied_extrinsic(&Ok(Some(1000).into()), pre_info);
@@ -267,144 +277,168 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 			}),
 			pre_info,
 		);
+		// Also works for operational.
+		let operational_base = <Test as crate::Config>::BlockWeights::get()
+			.get(DispatchClass::Operational)
+			.base_extrinsic;
+		assert!(normal_base != operational_base, "Test pre-condition violated");
+		let pre_info = DispatchInfo {
+			weight: Weight::from_ref_time(1000),
+			class: DispatchClass::Operational,
+			..Default::default()
+		};
+		System::note_applied_extrinsic(&Ok(Some(300).into()), pre_info);
 
-		assert_eq!(
-			System::events(),
-			vec![
-				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: SysEvent::ExtrinsicSuccess {
-						dispatch_info: DispatchInfo {
-							weight: Weight::from_ref_time(300),
-							..Default::default()
-						},
-					}
-					.into(),
-					topics: vec![]
-				},
-				EventRecord {
-					phase: Phase::ApplyExtrinsic(1),
-					event: SysEvent::ExtrinsicSuccess {
-						dispatch_info: DispatchInfo {
-							weight: Weight::from_ref_time(1000),
-							..Default::default()
-						},
-					}
-					.into(),
-					topics: vec![]
-				},
-				EventRecord {
-					phase: Phase::ApplyExtrinsic(2),
-					event: SysEvent::ExtrinsicSuccess {
-						dispatch_info: DispatchInfo {
-							weight: Weight::from_ref_time(1000),
-							..Default::default()
-						},
-					}
-					.into(),
-					topics: vec![]
-				},
-				EventRecord {
-					phase: Phase::ApplyExtrinsic(3),
-					event: SysEvent::ExtrinsicSuccess {
-						dispatch_info: DispatchInfo {
-							weight: Weight::from_ref_time(1000),
-							pays_fee: Pays::Yes,
-							..Default::default()
-						},
-					}
-					.into(),
-					topics: vec![]
-				},
-				EventRecord {
-					phase: Phase::ApplyExtrinsic(4),
-					event: SysEvent::ExtrinsicSuccess {
-						dispatch_info: DispatchInfo {
-							weight: Weight::from_ref_time(1000),
-							pays_fee: Pays::No,
-							..Default::default()
-						},
-					}
-					.into(),
-					topics: vec![]
-				},
-				EventRecord {
-					phase: Phase::ApplyExtrinsic(5),
-					event: SysEvent::ExtrinsicSuccess {
-						dispatch_info: DispatchInfo {
-							weight: Weight::from_ref_time(1000),
-							pays_fee: Pays::No,
-							..Default::default()
-						},
-					}
-					.into(),
-					topics: vec![]
-				},
-				EventRecord {
-					phase: Phase::ApplyExtrinsic(6),
-					event: SysEvent::ExtrinsicSuccess {
-						dispatch_info: DispatchInfo {
-							weight: Weight::from_ref_time(500),
-							pays_fee: Pays::No,
-							..Default::default()
-						},
-					}
-					.into(),
-					topics: vec![]
-				},
-				EventRecord {
-					phase: Phase::ApplyExtrinsic(7),
-					event: SysEvent::ExtrinsicFailed {
-						dispatch_error: DispatchError::BadOrigin.into(),
-						dispatch_info: DispatchInfo {
-							weight: Weight::from_ref_time(999),
-							..Default::default()
-						},
-					}
-					.into(),
-					topics: vec![]
-				},
-				EventRecord {
-					phase: Phase::ApplyExtrinsic(8),
-					event: SysEvent::ExtrinsicFailed {
-						dispatch_error: DispatchError::BadOrigin.into(),
-						dispatch_info: DispatchInfo {
-							weight: Weight::from_ref_time(1000),
-							pays_fee: Pays::Yes,
-							..Default::default()
-						},
-					}
-					.into(),
-					topics: vec![]
-				},
-				EventRecord {
-					phase: Phase::ApplyExtrinsic(9),
-					event: SysEvent::ExtrinsicFailed {
-						dispatch_error: DispatchError::BadOrigin.into(),
-						dispatch_info: DispatchInfo {
-							weight: Weight::from_ref_time(800),
-							pays_fee: Pays::Yes,
-							..Default::default()
-						},
-					}
-					.into(),
-					topics: vec![]
-				},
-				EventRecord {
-					phase: Phase::ApplyExtrinsic(10),
-					event: SysEvent::ExtrinsicFailed {
-						dispatch_error: DispatchError::BadOrigin.into(),
-						dispatch_info: DispatchInfo {
-							weight: Weight::from_ref_time(800),
-							pays_fee: Pays::No,
-							..Default::default()
-						},
-					}
-					.into(),
-					topics: vec![]
-				},
-			]
-		);
+		let got = System::events();
+		let want = vec![
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
+				event: SysEvent::ExtrinsicSuccess {
+					dispatch_info: DispatchInfo {
+						weight: Weight::from_ref_time(300).saturating_add(normal_base),
+						..Default::default()
+					},
+				}
+				.into(),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(1),
+				event: SysEvent::ExtrinsicSuccess {
+					dispatch_info: DispatchInfo {
+						weight: Weight::from_ref_time(1000).saturating_add(normal_base),
+						..Default::default()
+					},
+				}
+				.into(),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(2),
+				event: SysEvent::ExtrinsicSuccess {
+					dispatch_info: DispatchInfo {
+						weight: Weight::from_ref_time(1000).saturating_add(normal_base),
+						..Default::default()
+					},
+				}
+				.into(),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(3),
+				event: SysEvent::ExtrinsicSuccess {
+					dispatch_info: DispatchInfo {
+						weight: Weight::from_ref_time(1000).saturating_add(normal_base),
+						pays_fee: Pays::Yes,
+						..Default::default()
+					},
+				}
+				.into(),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(4),
+				event: SysEvent::ExtrinsicSuccess {
+					dispatch_info: DispatchInfo {
+						weight: Weight::from_ref_time(1000).saturating_add(normal_base),
+						pays_fee: Pays::No,
+						..Default::default()
+					},
+				}
+				.into(),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(5),
+				event: SysEvent::ExtrinsicSuccess {
+					dispatch_info: DispatchInfo {
+						weight: Weight::from_ref_time(1000).saturating_add(normal_base),
+						pays_fee: Pays::No,
+						..Default::default()
+					},
+				}
+				.into(),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(6),
+				event: SysEvent::ExtrinsicSuccess {
+					dispatch_info: DispatchInfo {
+						weight: Weight::from_ref_time(500).saturating_add(normal_base),
+						pays_fee: Pays::No,
+						..Default::default()
+					},
+				}
+				.into(),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(7),
+				event: SysEvent::ExtrinsicFailed {
+					dispatch_error: DispatchError::BadOrigin.into(),
+					dispatch_info: DispatchInfo {
+						weight: Weight::from_ref_time(999).saturating_add(normal_base),
+						..Default::default()
+					},
+				}
+				.into(),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(8),
+				event: SysEvent::ExtrinsicFailed {
+					dispatch_error: DispatchError::BadOrigin.into(),
+					dispatch_info: DispatchInfo {
+						weight: Weight::from_ref_time(1000).saturating_add(normal_base),
+						pays_fee: Pays::Yes,
+						..Default::default()
+					},
+				}
+				.into(),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(9),
+				event: SysEvent::ExtrinsicFailed {
+					dispatch_error: DispatchError::BadOrigin.into(),
+					dispatch_info: DispatchInfo {
+						weight: Weight::from_ref_time(800).saturating_add(normal_base),
+						pays_fee: Pays::Yes,
+						..Default::default()
+					},
+				}
+				.into(),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(10),
+				event: SysEvent::ExtrinsicFailed {
+					dispatch_error: DispatchError::BadOrigin.into(),
+					dispatch_info: DispatchInfo {
+						weight: Weight::from_ref_time(800).saturating_add(normal_base),
+						pays_fee: Pays::No,
+						..Default::default()
+					},
+				}
+				.into(),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(11),
+				event: SysEvent::ExtrinsicSuccess {
+					dispatch_info: DispatchInfo {
+						weight: Weight::from_ref_time(300).saturating_add(operational_base),
+						class: DispatchClass::Operational,
+						..Default::default()
+					},
+				}
+				.into(),
+				topics: vec![],
+			},
+		];
+		for (i, event) in want.into_iter().enumerate() {
+			assert_eq!(got[i], event, "Event mismatch at index {}", i);
+		}
 	});
 }
 
@@ -638,16 +672,16 @@ fn ensure_signed_stuff_works() {
 		}
 	}
 
-	let signed_origin = Origin::signed(0u64);
+	let signed_origin = RuntimeOrigin::signed(0u64);
 	assert_ok!(EnsureSigned::try_origin(signed_origin.clone()));
 	assert_ok!(EnsureSignedBy::<Members, _>::try_origin(signed_origin));
 
 	#[cfg(feature = "runtime-benchmarks")]
 	{
-		let successful_origin: Origin = EnsureSigned::successful_origin();
+		let successful_origin: RuntimeOrigin = EnsureSigned::successful_origin();
 		assert_ok!(EnsureSigned::try_origin(successful_origin));
 
-		let successful_origin: Origin = EnsureSignedBy::<Members, _>::successful_origin();
+		let successful_origin: RuntimeOrigin = EnsureSignedBy::<Members, _>::successful_origin();
 		assert_ok!(EnsureSignedBy::<Members, _>::try_origin(successful_origin));
 	}
 }

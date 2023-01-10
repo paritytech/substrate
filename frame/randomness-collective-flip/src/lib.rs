@@ -186,8 +186,6 @@ mod tests {
 	);
 
 	parameter_types! {
-		pub BlockWeights: limits::BlockWeights = limits::BlockWeights
-			::simple_max(Weight::from_ref_time(1024));
 		pub BlockLength: limits::BlockLength = limits::BlockLength
 			::max(2 * 1024);
 	}
@@ -197,7 +195,7 @@ mod tests {
 		type BlockWeights = ();
 		type BlockLength = BlockLength;
 		type DbWeight = ();
-		type Origin = Origin;
+		type RuntimeOrigin = RuntimeOrigin;
 		type Index = u64;
 		type BlockNumber = u64;
 		type RuntimeCall = RuntimeCall;

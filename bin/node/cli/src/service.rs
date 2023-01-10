@@ -223,7 +223,7 @@ pub fn new_partial(
 			let uncles =
 				sp_authorship::InherentDataProvider::<<Block as BlockT>::Header>::check_inherents();
 
-			Ok((timestamp, slot, uncles))
+			Ok((slot, timestamp, uncles))
 		},
 		&task_manager.spawn_essential_handle(),
 		config.prometheus_registry(),
@@ -354,7 +354,7 @@ pub fn new_full_base(
 		Vec::default(),
 	));
 
-	let (network, system_rpc_tx, network_starter) =
+	let (network, system_rpc_tx, tx_handler_controller, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
 			config: &config,
 			client: client.clone(),
@@ -392,6 +392,7 @@ pub fn new_full_base(
 		transaction_pool: transaction_pool.clone(),
 		task_manager: &mut task_manager,
 		system_rpc_tx,
+		tx_handler_controller,
 		telemetry: telemetry.as_mut(),
 	})?;
 
@@ -453,7 +454,7 @@ pub fn new_full_base(
 							&parent,
 						)?;
 
-					Ok((timestamp, slot, uncles, storage_proof))
+					Ok((slot, timestamp, uncles, storage_proof))
 				}
 			},
 			force_authoring,
@@ -587,7 +588,7 @@ mod tests {
 		RuntimeAppPublic,
 	};
 	use sp_timestamp;
-	use std::{borrow::Cow, sync::Arc};
+	use std::sync::Arc;
 
 	type AccountPublic = <Signature as Verify>::Signer;
 
@@ -639,9 +640,8 @@ mod tests {
 				Ok((node, setup_handles.unwrap()))
 			},
 			|service, &mut (ref mut block_import, ref babe_link)| {
-				let parent_id = BlockId::number(service.client().chain_info().best_number);
-				let parent_header = service.client().header(&parent_id).unwrap().unwrap();
-				let parent_hash = parent_header.hash();
+				let parent_hash = service.client().chain_info().best_hash;
+				let parent_header = service.client().header(parent_hash).unwrap().unwrap();
 				let parent_number = *parent_header.number();
 
 				futures::executor::block_on(service.transaction_pool().maintain(
@@ -691,14 +691,16 @@ mod tests {
 					slot += 1;
 				};
 
-				let inherent_data = (
-					sp_timestamp::InherentDataProvider::new(
-						std::time::Duration::from_millis(SLOT_DURATION * slot).into(),
-					),
-					sp_consensus_babe::inherents::InherentDataProvider::new(slot.into()),
+				let inherent_data = futures::executor::block_on(
+					(
+						sp_timestamp::InherentDataProvider::new(
+							std::time::Duration::from_millis(SLOT_DURATION * slot).into(),
+						),
+						sp_consensus_babe::inherents::InherentDataProvider::new(slot.into()),
+					)
+						.create_inherent_data(),
 				)
-					.create_inherent_data()
-					.expect("Creates inherent data");
+				.expect("Creates inherent data");
 
 				digest.push(<DigestItem as CompatibleDigestItem>::babe_pre_digest(babe_pre_digest));
 
@@ -733,9 +735,9 @@ mod tests {
 				let mut params = BlockImportParams::new(BlockOrigin::File, new_header);
 				params.post_digests.push(item);
 				params.body = Some(new_body);
-				params.intermediates.insert(
-					Cow::from(INTERMEDIATE_KEY),
-					Box::new(BabeIntermediate::<Block> { epoch_descriptor }) as Box<_>,
+				params.insert_intermediate(
+					INTERMEDIATE_KEY,
+					BabeIntermediate::<Block> { epoch_descriptor },
 				);
 				params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 

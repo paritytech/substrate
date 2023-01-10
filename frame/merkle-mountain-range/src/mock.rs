@@ -29,7 +29,6 @@ use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup, Keccak256},
 };
-use sp_std::prelude::*;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -47,7 +46,7 @@ frame_support::construct_runtime!(
 
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;

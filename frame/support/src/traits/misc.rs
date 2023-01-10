@@ -21,7 +21,8 @@ use crate::dispatch::Parameter;
 use codec::{CompactLen, Decode, DecodeLimit, Encode, EncodeLike, Input, MaxEncodedLen};
 use impl_trait_for_tuples::impl_for_tuples;
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
-use sp_arithmetic::traits::{CheckedAdd, CheckedMul, CheckedSub, Saturating};
+use sp_arithmetic::traits::{CheckedAdd, CheckedMul, CheckedSub, One, Saturating};
+use sp_core::bounded::bounded_vec::TruncateFrom;
 #[doc(hidden)]
 pub use sp_runtime::traits::{
 	ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128, ConstU16, ConstU32,
@@ -347,17 +348,25 @@ impl<T> DefensiveOption<T> for Option<T> {
 /// A variant of [`Defensive`] with the same rationale, for the arithmetic operations where in
 /// case an infallible operation fails, it saturates.
 pub trait DefensiveSaturating {
-	/// Add `self` and `other` defensively.
+	/// Return `self` plus `other` defensively.
 	fn defensive_saturating_add(self, other: Self) -> Self;
-	/// Subtract `other` from `self` defensively.
+	/// Return `self` minus `other` defensively.
 	fn defensive_saturating_sub(self, other: Self) -> Self;
-	/// Multiply `self` and `other` defensively.
+	/// Return the product of `self` and `other` defensively.
 	fn defensive_saturating_mul(self, other: Self) -> Self;
+	/// Increase `self` by `other` defensively.
+	fn defensive_saturating_accrue(&mut self, other: Self);
+	/// Reduce `self` by `other` defensively.
+	fn defensive_saturating_reduce(&mut self, other: Self);
+	/// Increment `self` by one defensively.
+	fn defensive_saturating_inc(&mut self);
+	/// Decrement `self` by one defensively.
+	fn defensive_saturating_dec(&mut self);
 }
 
 // NOTE: A bit unfortunate, since T has to be bound by all the traits needed. Could make it
 // `DefensiveSaturating<T>` to mitigate.
-impl<T: Saturating + CheckedAdd + CheckedMul + CheckedSub> DefensiveSaturating for T {
+impl<T: Saturating + CheckedAdd + CheckedMul + CheckedSub + One> DefensiveSaturating for T {
 	fn defensive_saturating_add(self, other: Self) -> Self {
 		self.checked_add(&other).defensive_unwrap_or_else(|| self.saturating_add(other))
 	}
@@ -366,6 +375,185 @@ impl<T: Saturating + CheckedAdd + CheckedMul + CheckedSub> DefensiveSaturating f
 	}
 	fn defensive_saturating_mul(self, other: Self) -> Self {
 		self.checked_mul(&other).defensive_unwrap_or_else(|| self.saturating_mul(other))
+	}
+	fn defensive_saturating_accrue(&mut self, other: Self) {
+		// Use `replace` here since `take` would require `T: Default`.
+		*self = sp_std::mem::replace(self, One::one()).defensive_saturating_add(other);
+	}
+	fn defensive_saturating_reduce(&mut self, other: Self) {
+		// Use `replace` here since `take` would require `T: Default`.
+		*self = sp_std::mem::replace(self, One::one()).defensive_saturating_sub(other);
+	}
+	fn defensive_saturating_inc(&mut self) {
+		self.defensive_saturating_accrue(One::one());
+	}
+	fn defensive_saturating_dec(&mut self) {
+		self.defensive_saturating_reduce(One::one());
+	}
+}
+
+/// Construct an object by defensively truncating an input if the `TryFrom` conversion fails.
+pub trait DefensiveTruncateFrom<T> {
+	/// Use `TryFrom` first and defensively fall back to truncating otherwise.
+	///
+	/// # Example
+	///
+	/// ```
+	/// use frame_support::{BoundedVec, traits::DefensiveTruncateFrom};
+	/// use sp_runtime::traits::ConstU32;
+	///
+	/// let unbound = vec![1, 2];
+	/// let bound = BoundedVec::<u8, ConstU32<2>>::defensive_truncate_from(unbound);
+	///
+	/// assert_eq!(bound, vec![1, 2]);
+	/// ```
+	fn defensive_truncate_from(unbound: T) -> Self;
+}
+
+impl<T, U> DefensiveTruncateFrom<U> for T
+where
+	// NOTE: We use the fact that `BoundedVec` and
+	// `BoundedSlice` use `Self` as error type. We could also
+	// require a `Clone` bound and use `unbound.clone()` in the
+	// error case.
+	T: TruncateFrom<U> + TryFrom<U, Error = U>,
+{
+	fn defensive_truncate_from(unbound: U) -> Self {
+		unbound.try_into().map_or_else(
+			|err| {
+				defensive!("DefensiveTruncateFrom truncating");
+				T::truncate_from(err)
+			},
+			|bound| bound,
+		)
+	}
+}
+
+/// Defensively calculates the minimum of two values.
+///
+/// Can be used in contexts where we assume the receiver value to be (strictly) smaller.
+pub trait DefensiveMin<T> {
+	/// Returns the minimum and defensively checks that `self` is not larger than `other`.
+	///
+	/// # Example
+	///
+	/// ```
+	/// use frame_support::traits::DefensiveMin;
+	/// // min(3, 4) is 3.
+	/// assert_eq!(3, 3_u32.defensive_min(4_u32));
+	/// // min(4, 4) is 4.
+	/// assert_eq!(4, 4_u32.defensive_min(4_u32));
+	/// ```
+	///
+	/// ```#[cfg_attr(debug_assertions, should_panic)]
+	/// use frame_support::traits::DefensiveMin;
+	/// // min(4, 3) panics.
+	/// 4_u32.defensive_min(3_u32);
+	/// ```
+	fn defensive_min(self, other: T) -> Self;
+
+	/// Returns the minimum and defensively checks that `self` is smaller than `other`.
+	///
+	/// # Example
+	///
+	/// ```
+	/// use frame_support::traits::DefensiveMin;
+	/// // min(3, 4) is 3.
+	/// assert_eq!(3, 3_u32.defensive_strict_min(4_u32));
+	/// ```
+	///
+	/// ```#[cfg_attr(debug_assertions, should_panic)]
+	/// use frame_support::traits::DefensiveMin;
+	/// // min(4, 4) panics.
+	/// 4_u32.defensive_strict_min(4_u32);
+	/// ```
+	fn defensive_strict_min(self, other: T) -> Self;
+}
+
+impl<T> DefensiveMin<T> for T
+where
+	T: sp_std::cmp::PartialOrd<T>,
+{
+	fn defensive_min(self, other: T) -> Self {
+		if self <= other {
+			self
+		} else {
+			defensive!("DefensiveMin");
+			other
+		}
+	}
+
+	fn defensive_strict_min(self, other: T) -> Self {
+		if self < other {
+			self
+		} else {
+			defensive!("DefensiveMin strict");
+			other
+		}
+	}
+}
+
+/// Defensively calculates the maximum of two values.
+///
+/// Can be used in contexts where we assume the receiver value to be (strictly) larger.
+pub trait DefensiveMax<T> {
+	/// Returns the maximum and defensively asserts that `other` is not larger than `self`.
+	///
+	/// # Example
+	///
+	/// ```
+	/// use frame_support::traits::DefensiveMax;
+	/// // max(4, 3) is 4.
+	/// assert_eq!(4, 4_u32.defensive_max(3_u32));
+	/// // max(4, 4) is 4.
+	/// assert_eq!(4, 4_u32.defensive_max(4_u32));
+	/// ```
+	///
+	/// ```#[cfg_attr(debug_assertions, should_panic)]
+	/// use frame_support::traits::DefensiveMax;
+	/// // max(4, 5) panics.
+	/// 4_u32.defensive_max(5_u32);
+	/// ```
+	fn defensive_max(self, other: T) -> Self;
+
+	/// Returns the maximum and defensively asserts that `other` is smaller than `self`.
+	///
+	/// # Example
+	///
+	/// ```
+	/// use frame_support::traits::DefensiveMax;
+	/// // y(4, 3) is 4.
+	/// assert_eq!(4, 4_u32.defensive_strict_max(3_u32));
+	/// ```
+	///
+	/// ```#[cfg_attr(debug_assertions, should_panic)]
+	/// use frame_support::traits::DefensiveMax;
+	/// // max(4, 4) panics.
+	/// 4_u32.defensive_strict_max(4_u32);
+	/// ```
+	fn defensive_strict_max(self, other: T) -> Self;
+}
+
+impl<T> DefensiveMax<T> for T
+where
+	T: sp_std::cmp::PartialOrd<T>,
+{
+	fn defensive_max(self, other: T) -> Self {
+		if self >= other {
+			self
+		} else {
+			defensive!("DefensiveMax");
+			other
+		}
+	}
+
+	fn defensive_strict_max(self, other: T) -> Self {
+		if self > other {
+			self
+		} else {
+			defensive!("DefensiveMax strict");
+			other
+		}
 	}
 }
 
@@ -932,7 +1120,7 @@ pub trait PreimageRecipient<Hash>: PreimageProvider<Hash> {
 	/// Maximum size of a preimage.
 	type MaxSize: Get<u32>;
 
-	/// Store the bytes of a preimage on chain.
+	/// Store the bytes of a preimage on chain infallible due to the bounded type.
 	fn note_preimage(bytes: crate::BoundedVec<u8, Self::MaxSize>);
 
 	/// Clear a previously noted preimage. This is infallible and should be treated more like a
@@ -950,7 +1138,144 @@ impl<Hash> PreimageRecipient<Hash> for () {
 #[cfg(test)]
 mod test {
 	use super::*;
+	use sp_core::bounded::{BoundedSlice, BoundedVec};
 	use sp_std::marker::PhantomData;
+
+	#[test]
+	#[cfg(not(debug_assertions))]
+	fn defensive_saturating_accrue_works() {
+		let mut v = 1_u32;
+		v.defensive_saturating_accrue(2);
+		assert_eq!(v, 3);
+		v.defensive_saturating_accrue(u32::MAX);
+		assert_eq!(v, u32::MAX);
+		v.defensive_saturating_accrue(1);
+		assert_eq!(v, u32::MAX);
+	}
+
+	#[test]
+	#[cfg(debug_assertions)]
+	#[should_panic(expected = "Defensive")]
+	fn defensive_saturating_accrue_panics() {
+		let mut v = u32::MAX;
+		v.defensive_saturating_accrue(1); // defensive failure
+	}
+
+	#[test]
+	#[cfg(not(debug_assertions))]
+	fn defensive_saturating_reduce_works() {
+		let mut v = u32::MAX;
+		v.defensive_saturating_reduce(3);
+		assert_eq!(v, u32::MAX - 3);
+		v.defensive_saturating_reduce(u32::MAX);
+		assert_eq!(v, 0);
+		v.defensive_saturating_reduce(1);
+		assert_eq!(v, 0);
+	}
+
+	#[test]
+	#[cfg(debug_assertions)]
+	#[should_panic(expected = "Defensive")]
+	fn defensive_saturating_reduce_panics() {
+		let mut v = 0_u32;
+		v.defensive_saturating_reduce(1); // defensive failure
+	}
+
+	#[test]
+	#[cfg(not(debug_assertions))]
+	fn defensive_saturating_inc_works() {
+		let mut v = 0_u32;
+		for i in 1..10 {
+			v.defensive_saturating_inc();
+			assert_eq!(v, i);
+		}
+		v += u32::MAX - 10;
+		v.defensive_saturating_inc();
+		assert_eq!(v, u32::MAX);
+		v.defensive_saturating_inc();
+		assert_eq!(v, u32::MAX);
+	}
+
+	#[test]
+	#[cfg(debug_assertions)]
+	#[should_panic(expected = "Defensive")]
+	fn defensive_saturating_inc_panics() {
+		let mut v = u32::MAX;
+		v.defensive_saturating_inc(); // defensive failure
+	}
+
+	#[test]
+	#[cfg(not(debug_assertions))]
+	fn defensive_saturating_dec_works() {
+		let mut v = u32::MAX;
+		for i in 1..10 {
+			v.defensive_saturating_dec();
+			assert_eq!(v, u32::MAX - i);
+		}
+		v -= u32::MAX - 10;
+		v.defensive_saturating_dec();
+		assert_eq!(v, 0);
+		v.defensive_saturating_dec();
+		assert_eq!(v, 0);
+	}
+
+	#[test]
+	#[cfg(debug_assertions)]
+	#[should_panic(expected = "Defensive")]
+	fn defensive_saturating_dec_panics() {
+		let mut v = 0_u32;
+		v.defensive_saturating_dec(); // defensive failure
+	}
+
+	#[test]
+	#[cfg(not(debug_assertions))]
+	fn defensive_truncating_from_vec_defensive_works() {
+		let unbound = vec![1u32, 2];
+		let bound = BoundedVec::<u32, ConstU32<1>>::defensive_truncate_from(unbound);
+		assert_eq!(bound, vec![1u32]);
+	}
+
+	#[test]
+	#[cfg(not(debug_assertions))]
+	fn defensive_truncating_from_slice_defensive_works() {
+		let unbound = &[1u32, 2];
+		let bound = BoundedSlice::<u32, ConstU32<1>>::defensive_truncate_from(unbound);
+		assert_eq!(bound, &[1u32][..]);
+	}
+
+	#[test]
+	#[cfg(debug_assertions)]
+	#[should_panic(
+		expected = "Defensive failure has been triggered!: \"DefensiveTruncateFrom truncating\""
+	)]
+	fn defensive_truncating_from_vec_defensive_panics() {
+		let unbound = vec![1u32, 2];
+		let _ = BoundedVec::<u32, ConstU32<1>>::defensive_truncate_from(unbound);
+	}
+
+	#[test]
+	#[cfg(debug_assertions)]
+	#[should_panic(
+		expected = "Defensive failure has been triggered!: \"DefensiveTruncateFrom truncating\""
+	)]
+	fn defensive_truncating_from_slice_defensive_panics() {
+		let unbound = &[1u32, 2];
+		let _ = BoundedSlice::<u32, ConstU32<1>>::defensive_truncate_from(unbound);
+	}
+
+	#[test]
+	fn defensive_truncate_from_vec_works() {
+		let unbound = vec![1u32, 2, 3];
+		let bound = BoundedVec::<u32, ConstU32<3>>::defensive_truncate_from(unbound.clone());
+		assert_eq!(bound, unbound);
+	}
+
+	#[test]
+	fn defensive_truncate_from_slice_works() {
+		let unbound = [1u32, 2, 3];
+		let bound = BoundedSlice::<u32, ConstU32<3>>::defensive_truncate_from(&unbound);
+		assert_eq!(bound, &unbound[..]);
+	}
 
 	#[derive(Encode, Decode)]
 	enum NestedType {
@@ -1019,5 +1344,57 @@ mod test {
 		let decoded = WrapperKeepOpaque::<u32>::decode(&mut &data[..]).unwrap();
 		let data = decoded.encode();
 		WrapperOpaque::<u32>::decode(&mut &data[..]).unwrap();
+	}
+
+	#[test]
+	fn defensive_min_works() {
+		assert_eq!(10, 10_u32.defensive_min(11_u32));
+		assert_eq!(10, 10_u32.defensive_min(10_u32));
+	}
+
+	#[test]
+	#[cfg(debug_assertions)]
+	#[should_panic(expected = "Defensive failure has been triggered!: \"DefensiveMin\"")]
+	fn defensive_min_panics() {
+		10_u32.defensive_min(9_u32);
+	}
+
+	#[test]
+	fn defensive_strict_min_works() {
+		assert_eq!(10, 10_u32.defensive_strict_min(11_u32));
+		assert_eq!(9, 9_u32.defensive_strict_min(10_u32));
+	}
+
+	#[test]
+	#[cfg(debug_assertions)]
+	#[should_panic(expected = "Defensive failure has been triggered!: \"DefensiveMin strict\"")]
+	fn defensive_strict_min_panics() {
+		9_u32.defensive_strict_min(9_u32);
+	}
+
+	#[test]
+	fn defensive_max_works() {
+		assert_eq!(11, 11_u32.defensive_max(10_u32));
+		assert_eq!(10, 10_u32.defensive_max(10_u32));
+	}
+
+	#[test]
+	#[cfg(debug_assertions)]
+	#[should_panic(expected = "Defensive failure has been triggered!: \"DefensiveMax\"")]
+	fn defensive_max_panics() {
+		9_u32.defensive_max(10_u32);
+	}
+
+	#[test]
+	fn defensive_strict_max_works() {
+		assert_eq!(11, 11_u32.defensive_strict_max(10_u32));
+		assert_eq!(10, 10_u32.defensive_strict_max(9_u32));
+	}
+
+	#[test]
+	#[cfg(debug_assertions)]
+	#[should_panic(expected = "Defensive failure has been triggered!: \"DefensiveMax strict\"")]
+	fn defensive_strict_max_panics() {
+		9_u32.defensive_strict_max(9_u32);
 	}
 }

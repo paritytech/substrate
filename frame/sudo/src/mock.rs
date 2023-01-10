@@ -19,12 +19,7 @@
 
 use super::*;
 use crate as sudo;
-use frame_support::{
-	parameter_types,
-	traits::{ConstU32, ConstU64, Contains, GenesisBuild},
-	weights::Weight,
-};
-use frame_system::limits;
+use frame_support::traits::{ConstU32, ConstU64, Contains, GenesisBuild};
 use sp_core::H256;
 use sp_io;
 use sp_runtime::{
@@ -49,6 +44,7 @@ pub mod logger {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		#[pallet::call_index(0)]
 		#[pallet::weight(*weight)]
 		pub fn privileged_i32_log(
 			origin: OriginFor<T>,
@@ -62,6 +58,7 @@ pub mod logger {
 			Ok(().into())
 		}
 
+		#[pallet::call_index(1)]
 		#[pallet::weight(*weight)]
 		pub fn non_privileged_log(
 			origin: OriginFor<T>,
@@ -109,10 +106,6 @@ frame_support::construct_runtime!(
 	}
 );
 
-parameter_types! {
-	pub BlockWeights: limits::BlockWeights = limits::BlockWeights::simple_max(Weight::from_ref_time(1024));
-}
-
 pub struct BlockEverything;
 impl Contains<RuntimeCall> for BlockEverything {
 	fn contains(_: &RuntimeCall) -> bool {
@@ -125,7 +118,7 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;

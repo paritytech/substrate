@@ -5,6 +5,10 @@
 
 .check-dependent-project:
   stage:                           build
+  # DAG: this is artificial dependency
+  needs:
+    - job:                         cargo-clippy
+      artifacts:                   false
   extends:
     - .docker-env
     - .test-refs-no-trigger-prs-only
@@ -58,11 +62,15 @@ build-linux-substrate:
     - job:                         test-linux-stable
       artifacts:                   false
   before_script:
+    - !reference [.job-switcher, before_script]
     - mkdir -p ./artifacts/substrate/
     - !reference [.rusty-cachier, before_script]
+    # tldr: we need to checkout the branch HEAD explicitly because of our dynamic versioning approach while building the substrate binary
+    # see https://github.com/paritytech/ci_cd/issues/682#issuecomment-1340953589
+    - git checkout -B "$CI_COMMIT_REF_NAME" "$CI_COMMIT_SHA"
   script:
     - rusty-cachier snapshot create
-    - WASM_BUILD_NO_COLOR=1 time cargo build --release --verbose
+    - WASM_BUILD_NO_COLOR=1 time cargo build --locked --release --verbose
     - mv $CARGO_TARGET_DIR/release/substrate ./artifacts/substrate/.
     - echo -n "Substrate version = "
     - if [ "${CI_COMMIT_TAG}" ]; then
@@ -82,20 +90,18 @@ build-linux-substrate:
   extends:
     - .collect-artifacts
     - .docker-env
-    - .build-refs
+    - .publish-refs
   variables:
     # this variable gets overriden by "rusty-cachier environment inject", use the value as default
     CARGO_TARGET_DIR:              "$CI_PROJECT_DIR/target"
-  needs:
-    - job:                         cargo-check-subkey
-      artifacts:                   false
   before_script:
+    - !reference [.job-switcher, before_script]
     - mkdir -p ./artifacts/subkey
     - !reference [.rusty-cachier, before_script]
   script:
     - rusty-cachier snapshot create
     - cd ./bin/utils/subkey
-    - SKIP_WASM_BUILD=1 time cargo build --release --verbose
+    - SKIP_WASM_BUILD=1 time cargo build --locked --release --verbose
     - cd -
     - mv $CARGO_TARGET_DIR/release/subkey ./artifacts/subkey/.
     - echo -n "Subkey version = "
@@ -114,10 +120,11 @@ build-subkey-macos:
   # duplicating before_script & script sections from .build-subkey hidden job
   # to overwrite rusty-cachier integration as it doesn't work on macos
   before_script:
+    - !reference [.job-switcher, before_script]
     - mkdir -p ./artifacts/subkey
   script:
     - cd ./bin/utils/subkey
-    - SKIP_WASM_BUILD=1 time cargo build --release --verbose
+    - SKIP_WASM_BUILD=1 time cargo build --locked --release --verbose
     - cd -
     - mv ./target/release/subkey ./artifacts/subkey/.
     - echo -n "Subkey version = "
@@ -147,9 +154,13 @@ build-rustdoc:
     expire_in:                     7 days
     paths:
     - ./crate-docs/
+  # DAG: this is artificial dependency
+  needs:
+    - job:                         cargo-clippy
+      artifacts:                   false
   script:
     - rusty-cachier snapshot create
-    - time cargo +nightly doc --workspace --all-features --verbose --no-deps
+    - time cargo +nightly doc --locked --workspace --all-features --verbose --no-deps
     - rm -f $CARGO_TARGET_DIR/doc/.lock
     - mv $CARGO_TARGET_DIR/doc ./crate-docs
     # FIXME: remove me after CI image gets nonroot

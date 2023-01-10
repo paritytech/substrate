@@ -133,19 +133,56 @@ pub trait OnRuntimeUpgrade {
 		Weight::zero()
 	}
 
+	/// Same as `on_runtime_upgrade`, but perform the optional `pre_upgrade` and `post_upgrade` as
+	/// well.
+	#[cfg(feature = "try-runtime")]
+	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, &'static str> {
+		let maybe_state = if checks {
+			let _guard = frame_support::StorageNoopGuard::default();
+			let state = Self::pre_upgrade()?;
+			Some(state)
+		} else {
+			None
+		};
+
+		let weight = Self::on_runtime_upgrade();
+
+		if let Some(state) = maybe_state {
+			let _guard = frame_support::StorageNoopGuard::default();
+			// we want to panic if any checks fail right here right now.
+			Self::post_upgrade(state)?
+		}
+
+		Ok(weight)
+	}
+
 	/// Execute some pre-checks prior to a runtime upgrade.
 	///
+	/// Return a `Vec<u8>` that can contain arbitrary encoded data (usually some pre-upgrade state),
+	/// which will be passed to `post_upgrade` after upgrading for post-check. An empty vector
+	/// should be returned if there is no such need.
+	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
+	///
+	/// This hook must not write to any state, as it would make the main `on_runtime_upgrade` path
+	/// inaccurate.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<(), &'static str> {
-		Ok(())
+	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+		Ok(Vec::new())
 	}
 
 	/// Execute some post-checks after a runtime upgrade.
 	///
+	/// The `state` parameter is the `Vec<u8>` returned by `pre_upgrade` before upgrading, which
+	/// can be used for post-check. NOTE: if `pre_upgrade` is not implemented an empty vector will
+	/// be passed in, in such case `post_upgrade` should ignore it.
+	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
+	///
+	/// This hook must not write to any state, as it would make the main `on_runtime_upgrade` path
+	/// inaccurate.
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade() -> Result<(), &'static str> {
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
 		Ok(())
 	}
 }
@@ -161,17 +198,13 @@ impl OnRuntimeUpgrade for Tuple {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<(), &'static str> {
-		let mut result = Ok(());
-		for_tuples!( #( result = result.and(Tuple::pre_upgrade()); )* );
-		result
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn post_upgrade() -> Result<(), &'static str> {
-		let mut result = Ok(());
-		for_tuples!( #( result = result.and(Tuple::post_upgrade()); )* );
-		result
+	/// We are executing pre- and post-checks sequentially in order to be able to test several
+	/// consecutive migrations for the same pallet without errors. Therefore pre and post upgrade
+	/// hooks for tuples are a noop.
+	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, &'static str> {
+		let mut weight = Weight::zero();
+		for_tuples!( #( weight = weight.saturating_add(Tuple::try_on_runtime_upgrade(checks)?); )* );
+		Ok(weight)
 	}
 }
 
@@ -236,6 +269,8 @@ pub trait Hooks<BlockNumber> {
 	///
 	/// It should focus on certain checks to ensure that the state is sensible. This is never
 	/// executed in a consensus code-path, therefore it can consume as much weight as it needs.
+	///
+	/// This hook should not alter any storage.
 	#[cfg(feature = "try-runtime")]
 	fn try_state(_n: BlockNumber) -> Result<(), &'static str> {
 		Ok(())
@@ -243,17 +278,25 @@ pub trait Hooks<BlockNumber> {
 
 	/// Execute some pre-checks prior to a runtime upgrade.
 	///
+	/// Return a `Vec<u8>` that can contain arbitrary encoded data (usually some pre-upgrade state),
+	/// which will be passed to `post_upgrade` after upgrading for post-check. An empty vector
+	/// should be returned if there is no such need.
+	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<(), &'static str> {
-		Ok(())
+	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+		Ok(Vec::new())
 	}
 
 	/// Execute some post-checks after a runtime upgrade.
 	///
+	/// The `state` parameter is the `Vec<u8>` returned by `pre_upgrade` before upgrading, which
+	/// can be used for post-check. NOTE: if `pre_upgrade` is not implemented an empty vector will
+	/// be passed in, in such case `post_upgrade` should ignore it.
+	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade() -> Result<(), &'static str> {
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
 		Ok(())
 	}
 
@@ -319,7 +362,9 @@ mod tests {
 
 	#[test]
 	fn on_initialize_and_on_runtime_upgrade_weight_merge_works() {
+		use sp_io::TestExternalities;
 		struct Test;
+
 		impl OnInitialize<u8> for Test {
 			fn on_initialize(_n: u8) -> Weight {
 				Weight::from_ref_time(10)
@@ -331,8 +376,10 @@ mod tests {
 			}
 		}
 
-		assert_eq!(<(Test, Test)>::on_initialize(0), Weight::from_ref_time(20));
-		assert_eq!(<(Test, Test)>::on_runtime_upgrade(), Weight::from_ref_time(40));
+		TestExternalities::default().execute_with(|| {
+			assert_eq!(<(Test, Test)>::on_initialize(0), Weight::from_ref_time(20));
+			assert_eq!(<(Test, Test)>::on_runtime_upgrade(), Weight::from_ref_time(40));
+		});
 	}
 
 	#[test]

@@ -226,8 +226,6 @@ mod tests {
 	parameter_types! {
 		pub const Period: BlockNumber = 1;
 		pub const Offset: BlockNumber = 0;
-		pub BlockWeights: frame_system::limits::BlockWeights =
-			frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
 	}
 
 	impl frame_system::Config for Test {
@@ -235,7 +233,7 @@ mod tests {
 		type BlockWeights = ();
 		type BlockLength = ();
 		type DbWeight = ();
-		type Origin = Origin;
+		type RuntimeOrigin = RuntimeOrigin;
 		type Index = u64;
 		type BlockNumber = BlockNumber;
 		type RuntimeCall = RuntimeCall;

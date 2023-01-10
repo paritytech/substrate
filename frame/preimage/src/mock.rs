@@ -15,13 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Scheduler test environment.
+//! # Preimage test environment.
 
 use super::*;
 
 use crate as pallet_preimage;
 use frame_support::{
-	ord_parameter_types, parameter_types,
+	ord_parameter_types,
 	traits::{ConstU32, ConstU64, Everything},
 	weights::constants::RocksDbWeight,
 };
@@ -30,7 +30,6 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	Perbill,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -48,16 +47,12 @@ frame_support::construct_runtime!(
 	}
 );
 
-parameter_types! {
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(Weight::from_ref_time(2_000_000_000_000));
-}
 impl frame_system::Config for Test {
 	type BaseCallFilter = Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = RocksDbWeight;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -91,11 +86,6 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 }
 
-parameter_types! {
-	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * BlockWeights::get().max_block;
-	pub const MaxScheduledPerBlock: u32 = 10;
-}
-
 ord_parameter_types! {
 	pub const One: u64 = 1;
 }
@@ -105,7 +95,6 @@ impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
 	type ManagerOrigin = EnsureSignedBy<One, u64>;
-	type MaxSize = ConstU32<1024>;
 	type BaseDeposit = ConstU64<2>;
 	type ByteDeposit = ConstU64<1>;
 }

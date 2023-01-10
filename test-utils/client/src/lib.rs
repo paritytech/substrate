@@ -26,7 +26,7 @@ pub use sc_client_api::{
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
 	BadBlocks, ForkBlocks,
 };
-pub use sc_client_db::{self, Backend};
+pub use sc_client_db::{self, Backend, BlocksPruning};
 pub use sc_executor::{self, NativeElseWasmExecutor, WasmExecutionMethod};
 pub use sc_service::{client, RpcHandlers};
 pub use sp_consensus;
@@ -102,7 +102,8 @@ impl<Block: BlockT, ExecutorDispatch, G: GenesisInit>
 
 	/// Create new `TestClientBuilder` with default backend and storage chain mode
 	pub fn with_tx_storage(blocks_pruning: u32) -> Self {
-		let backend = Arc::new(Backend::new_test_with_tx_storage(blocks_pruning, 0));
+		let backend =
+			Arc::new(Backend::new_test_with_tx_storage(BlocksPruning::Some(blocks_pruning), 0));
 		Self::with_backend(backend)
 	}
 }
@@ -202,7 +203,7 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 	)
 	where
 		ExecutorDispatch:
-			sc_client_api::CallExecutor<Block> + sc_executor::RuntimeVersionOf + 'static,
+			sc_client_api::CallExecutor<Block> + sc_executor::RuntimeVersionOf + Clone + 'static,
 		Backend: sc_client_api::backend::Backend<Block>,
 		<Backend as sc_client_api::backend::Backend<Block>>::OffchainStorage: 'static,
 	{
@@ -222,24 +223,29 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 			storage
 		};
 
+		let client_config = ClientConfig {
+			offchain_indexing_api: self.enable_offchain_indexing_api,
+			no_genesis: self.no_genesis,
+			..Default::default()
+		};
+
+		let genesis_block_builder = sc_service::GenesisBlockBuilder::new(
+			&storage,
+			!client_config.no_genesis,
+			self.backend.clone(),
+			executor.clone(),
+		)
+		.expect("Creates genesis block builder");
+
 		let client = client::Client::new(
 			self.backend.clone(),
 			executor,
-			&storage,
+			genesis_block_builder,
 			self.fork_blocks,
 			self.bad_blocks,
-			ExecutionExtensions::new(
-				self.execution_strategies,
-				self.keystore,
-				sc_offchain::OffchainDb::factory_from_backend(&*self.backend),
-			),
 			None,
 			None,
-			ClientConfig {
-				offchain_indexing_api: self.enable_offchain_indexing_api,
-				no_genesis: self.no_genesis,
-				..Default::default()
-			},
+			client_config,
 		)
 		.expect("Creates new client");
 
@@ -284,6 +290,11 @@ impl<Block: BlockT, D, Backend, G: GenesisInit>
 			executor,
 			Box::new(sp_core::testing::TaskExecutor::new()),
 			Default::default(),
+			ExecutionExtensions::new(
+				self.execution_strategies.clone(),
+				self.keystore.clone(),
+				sc_offchain::OffchainDb::factory_from_backend(&*self.backend),
+			),
 		)
 		.expect("Creates LocalCallExecutor");
 
@@ -346,7 +357,7 @@ impl RpcHandlersExt for RpcHandlers {
 						"params": ["0x{}"],
 						"id": 0
 					}}"#,
-				hex::encode(extrinsic.encode())
+				array_bytes::bytes2hex("", &extrinsic.encode())
 			))
 			.await
 			.expect("valid JSON-RPC request object; qed");

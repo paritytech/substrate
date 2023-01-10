@@ -21,7 +21,7 @@
 
 use super::*;
 
-use frame_benchmarking::{account, benchmarks_instance_pallet, whitelisted_caller};
+use frame_benchmarking::{account, benchmarks_instance_pallet, whitelisted_caller, BenchmarkError};
 use frame_system::RawOrigin;
 use sp_runtime::traits::Bounded;
 
@@ -31,13 +31,14 @@ use pallet_treasury::Pallet as Treasury;
 const SEED: u32 = 0;
 
 // Create bounties that are approved for use in `on_initialize`.
-fn create_approved_bounties<T: Config<I>, I: 'static>(n: u32) -> Result<(), &'static str> {
+fn create_approved_bounties<T: Config<I>, I: 'static>(n: u32) -> Result<(), BenchmarkError> {
 	for i in 0..n {
 		let (caller, _curator, _fee, value, reason) =
 			setup_bounty::<T, I>(i, T::MaximumReasonLength::get());
 		Bounties::<T, I>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 		let bounty_id = BountyCount::<T, I>::get() - 1;
-		let approve_origin = T::ApproveOrigin::successful_origin();
+		let approve_origin =
+			T::SpendOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		Bounties::<T, I>::approve_bounty(approve_origin, bounty_id)?;
 	}
 	ensure!(BountyApprovals::<T, I>::get().len() == n as usize, "Not all bounty approved");
@@ -62,13 +63,14 @@ fn setup_bounty<T: Config<I>, I: 'static>(
 }
 
 fn create_bounty<T: Config<I>, I: 'static>(
-) -> Result<(AccountIdLookupOf<T>, BountyIndex), &'static str> {
+) -> Result<(AccountIdLookupOf<T>, BountyIndex), BenchmarkError> {
 	let (caller, curator, fee, value, reason) =
 		setup_bounty::<T, I>(0, T::MaximumReasonLength::get());
 	let curator_lookup = T::Lookup::unlookup(curator.clone());
 	Bounties::<T, I>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 	let bounty_id = BountyCount::<T, I>::get() - 1;
-	let approve_origin = T::ApproveOrigin::successful_origin();
+	let approve_origin =
+		T::SpendOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 	Bounties::<T, I>::approve_bounty(approve_origin.clone(), bounty_id)?;
 	Treasury::<T, I>::on_initialize(T::BlockNumber::zero());
 	Bounties::<T, I>::propose_curator(approve_origin, bounty_id, curator_lookup.clone(), fee)?;
@@ -97,8 +99,8 @@ benchmarks_instance_pallet! {
 		let (caller, curator, fee, value, reason) = setup_bounty::<T, I>(0, T::MaximumReasonLength::get());
 		Bounties::<T, I>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 		let bounty_id = BountyCount::<T, I>::get() - 1;
-		let approve_origin = T::ApproveOrigin::successful_origin();
-	}: _<T::Origin>(approve_origin, bounty_id)
+		let approve_origin = T::SpendOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+	}: _<T::RuntimeOrigin>(approve_origin, bounty_id)
 
 	propose_curator {
 		setup_pot_account::<T, I>();
@@ -106,11 +108,10 @@ benchmarks_instance_pallet! {
 		let curator_lookup = T::Lookup::unlookup(curator);
 		Bounties::<T, I>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 		let bounty_id = BountyCount::<T, I>::get() - 1;
-		let approve_origin = T::ApproveOrigin::successful_origin();
-		Bounties::<T, I>::approve_bounty(approve_origin, bounty_id)?;
+		let approve_origin = T::SpendOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+		Bounties::<T, I>::approve_bounty(approve_origin.clone(), bounty_id)?;
 		Treasury::<T, I>::on_initialize(T::BlockNumber::zero());
-		let approve_origin = T::ApproveOrigin::successful_origin();
-	}: _<T::Origin>(approve_origin, bounty_id, curator_lookup, fee)
+	}: _<T::RuntimeOrigin>(approve_origin, bounty_id, curator_lookup, fee)
 
 	// Worst case when curator is inactive and any sender unassigns the curator.
 	unassign_curator {
@@ -128,7 +129,7 @@ benchmarks_instance_pallet! {
 		let curator_lookup = T::Lookup::unlookup(curator.clone());
 		Bounties::<T, I>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 		let bounty_id = BountyCount::<T, I>::get() - 1;
-		let approve_origin = T::ApproveOrigin::successful_origin();
+		let approve_origin = T::SpendOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		Bounties::<T, I>::approve_bounty(approve_origin.clone(), bounty_id)?;
 		Treasury::<T, I>::on_initialize(T::BlockNumber::zero());
 		Bounties::<T, I>::propose_curator(approve_origin, bounty_id, curator_lookup, fee)?;
@@ -171,7 +172,7 @@ benchmarks_instance_pallet! {
 		Bounties::<T, I>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 		let bounty_id = BountyCount::<T, I>::get() - 1;
 		let approve_origin = T::ApproveOrigin::successful_origin();
-	}: close_bounty<T::Origin>(approve_origin, bounty_id)
+	}: close_bounty<T::RuntimeOrigin>(approve_origin, bounty_id)
 
 	close_bounty_active {
 		setup_pot_account::<T, I>();
@@ -179,7 +180,7 @@ benchmarks_instance_pallet! {
 		Treasury::<T, I>::on_initialize(T::BlockNumber::zero());
 		let bounty_id = BountyCount::<T, I>::get() - 1;
 		let approve_origin = T::ApproveOrigin::successful_origin();
-	}: close_bounty<T::Origin>(approve_origin, bounty_id)
+	}: close_bounty<T::RuntimeOrigin>(approve_origin, bounty_id)
 	verify {
 		assert_last_event::<T, I>(Event::BountyCanceled { index: bounty_id }.into())
 	}
@@ -197,7 +198,7 @@ benchmarks_instance_pallet! {
 	}
 
 	spend_funds {
-		let b in 1 .. 100;
+		let b in 0 .. 100;
 		setup_pot_account::<T, I>();
 		create_approved_bounties::<T, I>(b)?;
 
@@ -214,9 +215,13 @@ benchmarks_instance_pallet! {
 		);
 	}
 	verify {
-		ensure!(budget_remaining < BalanceOf::<T, I>::max_value(), "Budget not used");
 		ensure!(missed_any == false, "Missed some");
-		assert_last_event::<T, I>(Event::BountyBecameActive { index: b - 1 }.into())
+		if b > 0 {
+			ensure!(budget_remaining < BalanceOf::<T, I>::max_value(), "Budget not used");
+			assert_last_event::<T, I>(Event::BountyBecameActive { index: b - 1 }.into())
+		} else {
+			ensure!(budget_remaining == BalanceOf::<T, I>::max_value(), "Budget used");
+		}
 	}
 
 	impl_benchmark_test_suite!(Bounties, crate::tests::new_test_ext(), crate::tests::Test)

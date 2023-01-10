@@ -111,15 +111,10 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	result.execute_with(|| {
 		for i in 1..=6 {
 			System::inc_providers(&i);
-			assert_eq!(Session::set_keys(Origin::signed(i), (i - 1).into(), vec![]), Ok(()));
+			assert_eq!(Session::set_keys(RuntimeOrigin::signed(i), (i - 1).into(), vec![]), Ok(()));
 		}
 	});
 	result
-}
-
-parameter_types! {
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
 }
 
 impl frame_system::Config for Runtime {
@@ -127,7 +122,7 @@ impl frame_system::Config for Runtime {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type RuntimeCall = RuntimeCall;
