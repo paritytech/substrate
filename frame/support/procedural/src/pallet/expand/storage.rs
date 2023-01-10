@@ -328,8 +328,6 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 	let frame_system = &def.frame_system;
 	let pallet_ident = &def.pallet_struct.pallet;
 
-  let err_msg = "Every active pallet has a name in the runtime; qed. Have you added the pallet into construct_runtime! ?";
-
 	let entries_builder = def.storages.iter().map(|storage| {
 		let no_docs = vec![];
 		let docs = if cfg!(feature = "no-metadata-docs") { &no_docs } else { &storage.docs };
@@ -537,7 +535,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 							<T as #frame_system::Config>::PalletInfo
 							as #frame_support::traits::PalletInfo
 						>::name::<Pallet<#type_use_gen>>()
-							.expect(err_msg)
+							.expect("Every active pallet has a name in the runtime; qed. Have you added the pallet into construct_runtime! ?")
 					}
 					const STORAGE_PREFIX: &'static str = #counter_prefix_struct_const;
 				}
@@ -571,7 +569,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						<T as #frame_system::Config>::PalletInfo
 						as #frame_support::traits::PalletInfo
 					>::name::<Pallet<#type_use_gen>>()
-						.expect(err_msg)
+						.expect("Every active pallet has a name in the runtime; qed. Have you added the pallet into construct_runtime! ?")
 				}
 				const STORAGE_PREFIX: &'static str = #prefix_struct_const;
 			}
@@ -650,7 +648,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						<T as #frame_system::Config>::PalletInfo as
 						#frame_support::traits::PalletInfo
 					>::name::<#pallet_ident<#type_use_gen>>()
-						.expect(err_msg),
+						.expect("Every active pallet has a name in the runtime; qed. Have you added the pallet into construct_runtime! ?"),
 					entries: {
 						#[allow(unused_mut)]
 						let mut entries = #frame_support::sp_std::vec![];
