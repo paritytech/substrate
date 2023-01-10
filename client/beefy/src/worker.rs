@@ -31,7 +31,7 @@ use crate::{
 };
 use beefy_primitives::{
 	crypto::{AuthorityId, Signature},
-	Commitment, ConsensusLog, EquivocationProof, PayloadProvider, ValidatorSet,
+	BeefyApi, Commitment, ConsensusLog, EquivocationProof, PayloadProvider, ValidatorSet,
 	VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
 };
 use codec::{Codec, Decode, Encode};
@@ -41,7 +41,7 @@ use sc_client_api::{Backend, FinalityNotification, FinalityNotifications, Header
 use sc_network_common::service::{NetworkEventStream, NetworkRequest};
 use sc_network_gossip::GossipEngine;
 use sc_utils::notification::NotificationReceiver;
-use sp_api::BlockId;
+use sp_api::{BlockId, ProvideRuntimeApi};
 use sp_arithmetic::traits::{AtLeast32Bit, Saturating};
 use sp_consensus::SyncOracle;
 use sp_runtime::{
@@ -243,9 +243,10 @@ impl<B: Block> VoterOracle<B> {
 	}
 }
 
-pub(crate) struct WorkerParams<B: Block, BE, P, N> {
+pub(crate) struct WorkerParams<B: Block, BE, P, R, N> {
 	pub backend: Arc<BE>,
 	pub payload_provider: P,
+	pub runtime: Arc<R>,
 	pub network: N,
 	pub key_store: BeefyKeystore,
 	pub gossip_engine: GossipEngine<B>,
@@ -294,10 +295,11 @@ impl<B: Block> PersistedState<B> {
 }
 
 /// A BEEFY worker plays the BEEFY protocol
-pub(crate) struct BeefyWorker<B: Block, BE, P, N> {
+pub(crate) struct BeefyWorker<B: Block, BE, P, RuntimeApi, N> {
 	// utilities
 	backend: Arc<BE>,
 	payload_provider: P,
+	runtime: Arc<RuntimeApi>,
 	network: N,
 	key_store: BeefyKeystore,
 
@@ -327,11 +329,13 @@ pub(crate) struct BeefyWorker<B: Block, BE, P, N> {
 	persisted_state: PersistedState<B>,
 }
 
-impl<B, BE, P, N> BeefyWorker<B, BE, P, N>
+impl<B, BE, P, R, N> BeefyWorker<B, BE, P, R, N>
 where
 	B: Block + Codec,
 	BE: Backend<B>,
 	P: PayloadProvider<B>,
+	R: ProvideRuntimeApi<B>,
+	R::Api: BeefyApi<B>,
 	N: NetworkEventStream + NetworkRequest + SyncOracle + Send + Sync + Clone + 'static,
 {
 	/// Return a new BEEFY worker instance.
@@ -340,10 +344,11 @@ where
 	/// BEEFY pallet has been deployed on-chain.
 	///
 	/// The BEEFY pallet is needed in order to keep track of the BEEFY authority set.
-	pub(crate) fn new(worker_params: WorkerParams<B, BE, P, N>) -> Self {
+	pub(crate) fn new(worker_params: WorkerParams<B, BE, P, R, N>) -> Self {
 		let WorkerParams {
 			backend,
 			payload_provider,
+			runtime,
 			key_store,
 			network,
 			gossip_engine,
@@ -357,6 +362,7 @@ where
 		BeefyWorker {
 			backend,
 			payload_provider,
+			runtime,
 			network,
 			key_store,
 			gossip_engine,
@@ -932,34 +938,33 @@ where
 				error!(target: "beefy", "🥩 {}", err_msg);
 				Error::Backend(err_msg)
 			})?;
+
+		let runtime_api = self.runtime.runtime_api();
 		// generate key ownership proof at that block
-		// let key_owner_proof = match self
-		// 	.runtime
-		// 	.runtime_api()
-		// 	.generate_key_ownership_proof(
-		// 		&BlockId::Hash(hash),
-		// 		validator_set_id,
-		// 		proof.equivocation.id.clone(),
-		// 	)
-		// 	.map_err(Error::RuntimeApi)?
-		// {
-		// 	Some(proof) => proof,
-		// 	None => {
-		// 		debug!(target: "beefy", "🥩 Equivocation offender not part of the authority set.");
-		// 		return Ok(())
-		// 	},
-		// };
+		let key_owner_proof = match runtime_api
+			.generate_key_ownership_proof(
+				&BlockId::Hash(hash),
+				validator_set_id,
+				proof.equivocation.id.clone(),
+			)
+			.map_err(Error::RuntimeApi)?
+		{
+			Some(proof) => proof,
+			None => {
+				debug!(target: "beefy", "🥩 Equivocation offender not part of the authority set.");
+				return Ok(())
+			},
+		};
 
 		// submit equivocation report at **best** block
 		let best_block_hash = self.backend.blockchain().info().best_hash;
-		// self.client
-		// 	.runtime_api()
-		// 	.submit_report_equivocation_unsigned_extrinsic(
-		// 		&BlockId::Hash(best_block_hash),
-		// 		proof,
-		// 		key_owner_proof,
-		// 	)
-		// 	.map_err(Error::RuntimeApi)?;
+		runtime_api
+			.submit_report_equivocation_unsigned_extrinsic(
+				&BlockId::Hash(best_block_hash),
+				proof,
+				key_owner_proof,
+			)
+			.map_err(Error::RuntimeApi)?;
 
 		Ok(())
 	}
