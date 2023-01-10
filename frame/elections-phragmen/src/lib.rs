@@ -791,10 +791,7 @@ impl<T: Config> Pallet<T> {
 				} else {
 					// overlap. This can never happen. If so, it seems like our intended replacement
 					// is already a member, so not much more to do.
-					log::error!(
-						target: LOG_TARGET,
-						"A member seems to also be a runner-up.",
-					);
+					log::error!(target: LOG_TARGET, "A member seems to also be a runner-up.",);
 				}
 				next_best
 			});
@@ -1105,11 +1102,7 @@ impl<T: Config> Pallet<T> {
 					<ElectionRounds<T>>::mutate(|v| *v += 1);
 				})
 				.map_err(|e| {
-					log::error!(
-						target: LOG_TARGET,
-						"Failed to run election [{:?}].",
-						e,
-					);
+					log::error!(target: LOG_TARGET, "Failed to run election [{:?}].", e,);
 					Self::deposit_event(Event::ElectionError);
 				});
 

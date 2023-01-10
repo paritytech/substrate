@@ -193,7 +193,7 @@ pub use weights::WeightInfo;
 
 pub use pallet::*;
 
-const LOG_TARGET:&str = "runtime::balances";
+const LOG_TARGET: &str = "runtime::balances";
 
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 

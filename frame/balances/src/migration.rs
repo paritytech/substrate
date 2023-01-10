@@ -43,7 +43,10 @@ fn migrate_v0_to_v1<T: Config<I>, I: 'static>(accounts: &[T::AccountId]) -> Weig
 		log::info!(target: LOG_TARGET, "Storage to version 1");
 		T::DbWeight::get().reads_writes(2 + accounts.len() as u64, 3)
 	} else {
-		log::info!(target: LOG_TARGET,  "Migration did not execute. This probably should be removed");
+		log::info!(
+			target: LOG_TARGET,
+			"Migration did not execute. This probably should be removed"
+		);
 		T::DbWeight::get().reads(1)
 	}
 }
@@ -90,7 +93,10 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for ResetInactive<T, I> {
 			log::info!(target: LOG_TARGET, "Storage to version 0");
 			T::DbWeight::get().reads_writes(1, 2)
 		} else {
-			log::info!(target: LOG_TARGET,  "Migration did not execute. This probably should be removed");
+			log::info!(
+				target: LOG_TARGET,
+				"Migration did not execute. This probably should be removed"
+			);
 			T::DbWeight::get().reads(1)
 		}
 	}
