@@ -16,7 +16,7 @@ use sp_runtime::{
 use std::{fmt::Debug, str::FromStr};
 use substrate_rpc_client::{ws_client, ChainApi};
 
-/// Configurations of the [`Command::FastForward`].
+/// Configurations of the [`crate::Command::FastForward`].
 #[derive(Debug, Clone, clap::Parser)]
 pub struct FastForwardCmd {
 	/// How many blocks should be processed. If `None`, then blocks will be produced and processed
