@@ -48,7 +48,7 @@ use sp_std::marker::PhantomData;
 /// Weight functions needed for pallet_fast_unstake.
 pub trait WeightInfo {
 	fn on_idle_unstake() -> Weight;
-	fn on_idle_check(x: u32, ) -> Weight;
+	fn on_idle_check(u: u32, v: u32) -> Weight;
 	fn register_fast_unstake() -> Weight;
 	fn deregister() -> Weight;
 	fn control() -> Weight;
@@ -85,14 +85,8 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Staking CurrentEra (r:1 w:0)
 	// Storage: Staking ErasStakers (r:1344 w:0)
 	/// The range of component `x` is `[672, 86016]`.
-	fn on_idle_check(x: u32, ) -> Weight {
-		// Minimum execution time: 13_932_777 nanoseconds.
-		Weight::from_ref_time(13_996_029_000 as u64)
-			// Standard Error: 16_878
-			.saturating_add(Weight::from_ref_time(18_113_540 as u64).saturating_mul(x as u64))
-			.saturating_add(T::DbWeight::get().reads(345 as u64))
-			.saturating_add(T::DbWeight::get().reads((1 as u64).saturating_mul(x as u64)))
-			.saturating_add(T::DbWeight::get().writes(3 as u64))
+	fn on_idle_check(_: u32, _: u32) -> Weight {
+		Weight::from_ref_time(0)
 	}
 	// Storage: FastUnstake ErasToCheckPerBlock (r:1 w:0)
 	// Storage: Staking Ledger (r:1 w:1)
@@ -163,14 +157,8 @@ impl WeightInfo for () {
 	// Storage: Staking CurrentEra (r:1 w:0)
 	// Storage: Staking ErasStakers (r:1344 w:0)
 	/// The range of component `x` is `[672, 86016]`.
-	fn on_idle_check(x: u32, ) -> Weight {
-		// Minimum execution time: 13_932_777 nanoseconds.
-		Weight::from_ref_time(13_996_029_000 as u64)
-			// Standard Error: 16_878
-			.saturating_add(Weight::from_ref_time(18_113_540 as u64).saturating_mul(x as u64))
-			.saturating_add(RocksDbWeight::get().reads(345 as u64))
-			.saturating_add(RocksDbWeight::get().reads((1 as u64).saturating_mul(x as u64)))
-			.saturating_add(RocksDbWeight::get().writes(3 as u64))
+	fn on_idle_check(_: u32, _: u32) -> Weight {
+		Weight::from_ref_time(0)
 	}
 	// Storage: FastUnstake ErasToCheckPerBlock (r:1 w:0)
 	// Storage: Staking Ledger (r:1 w:1)

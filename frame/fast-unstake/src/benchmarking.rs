@@ -32,7 +32,8 @@ use sp_std::prelude::*;
 
 const USER_SEED: u32 = 0;
 const DEFAULT_BACKER_PER_VALIDATOR: u32 = 128;
-const MAX_VALIDATORS: u32 = 128;
+const MAX_VALIDATORS: u32 = 16;
+const BONDING_DURATION: u32 = 16;
 
 type CurrencyOf<T> = <T as Config>::Currency;
 
@@ -127,18 +128,19 @@ benchmarks! {
 		));
 	}
 
-	// on_idle, when we check some number of eras,
+	// on_idle, when we check some number of eras.
 	on_idle_check {
-		// number of eras multiplied by validators in that era.
-		let x in (T::Staking::bonding_duration() * 1) .. (T::Staking::bonding_duration() * MAX_VALIDATORS);
-
-		let u = T::Staking::bonding_duration();
-		let v = x / u;
+		// both of these can be fetched from `T::Staking`, but the values might be unnecessarily
+		// large and make the benchmarks too slow. We know the complexity is linear, a small range
+		// should be enough.
+		let u in 1 .. BONDING_DURATION;
+		let v in 1 .. MAX_VALIDATORS;
 
 		ErasToCheckPerBlock::<T>::put(u);
 		T::Staking::set_current_era(u);
 
 		// setup staking with v validators and u eras of data (0..=u)
+		log!(info, "setting up u {} v {}", u, v);
 		setup_staking::<T>(v, u);
 
 		let stashes = create_unexposed_nominators::<T>().into_iter().map(|s| {
@@ -150,9 +152,11 @@ benchmarks! {
 
 		// no one is queued thus far.
 		assert_eq!(Head::<T>::get(), None);
+		log!(info, "running");
 	}
 	: {
 		on_idle_full_block::<T>();
+		log!(info, "done");
 	}
 	verify {
 		let checked = (1..=u).rev().collect::<Vec<EraIndex>>();

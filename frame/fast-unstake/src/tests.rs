@@ -253,7 +253,7 @@ mod on_idle {
 			// when: call fast unstake with not enough weight to process the whole thing, just one
 			// era.
 			let remaining_weight = <T as Config>::WeightInfo::on_idle_check(
-				pallet_staking::ValidatorCount::<T>::get() * 1,
+				1, pallet_staking::ValidatorCount::<T>::get(),
 			);
 			assert_eq!(FastUnstake::on_idle(0, remaining_weight), remaining_weight);
 
@@ -272,7 +272,7 @@ mod on_idle {
 
 			// when: another 1 era.
 			let remaining_weight = <T as Config>::WeightInfo::on_idle_check(
-				pallet_staking::ValidatorCount::<T>::get() * 1,
+				1, pallet_staking::ValidatorCount::<T>::get(),
 			);
 			assert_eq!(FastUnstake::on_idle(0, remaining_weight), remaining_weight);
 
@@ -291,13 +291,13 @@ mod on_idle {
 
 			// when: then 5 eras, we only need 2 more.
 			let remaining_weight = <T as Config>::WeightInfo::on_idle_check(
-				pallet_staking::ValidatorCount::<T>::get() * 5,
+				5, pallet_staking::ValidatorCount::<T>::get(),
 			);
 			assert_eq!(
 				FastUnstake::on_idle(0, remaining_weight),
 				// note the amount of weight consumed: 2 eras worth of weight.
 				<T as Config>::WeightInfo::on_idle_check(
-					pallet_staking::ValidatorCount::<T>::get() * 2,
+					2, pallet_staking::ValidatorCount::<T>::get(),
 				)
 			);
 
@@ -332,7 +332,7 @@ mod on_idle {
 			// when: enough weight to get over at least one iteration: then we are unblocked and can
 			// unstake.
 			let remaining_weight = <T as Config>::WeightInfo::on_idle_check(
-				pallet_staking::ValidatorCount::<T>::get() * 1,
+				1, pallet_staking::ValidatorCount::<T>::get(),
 			);
 			assert_eq!(
 				FastUnstake::on_idle(0, remaining_weight),
