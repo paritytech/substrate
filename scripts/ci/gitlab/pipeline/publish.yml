@@ -214,7 +214,7 @@ update-node-template:
   timeout:                         9h
   # A custom publishing environment is used for us to be able to set up protected secrets
   # specifically for it
-  environment: publish-crates
+  environment:                     publish-crates
   script:
     - rusty-cachier snapshot create
     - git clone
@@ -234,5 +234,6 @@ publish-crates:
 
 publish-crates-manual:
   extends:                         .publish-crates-template
+  rules:                           !reference [.crate-publishing-pipeline, rules]
   when:                            manual
   allow_failure:                   true

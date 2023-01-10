@@ -28,6 +28,10 @@ pub use crate::wasm::{
 	prepare::TryInstantiate,
 	runtime::{CallFlags, Environment, ReturnCode, Runtime, RuntimeCosts},
 };
+
+#[cfg(doc)]
+pub use crate::wasm::runtime::api_doc;
+
 use crate::{
 	exec::{ExecResult, Executable, ExportedFunction, Ext},
 	gas::GasMeter,
@@ -144,7 +148,7 @@ impl<T: Config> PrefabWasmModule<T> {
 	/// Create the module by checking and instrumenting `original_code`.
 	///
 	/// This does **not** store the module. For this one need to either call [`Self::store`]
-	/// or [`<Self as Executable>::execute`].
+	/// or [`<Self as Executable>::execute`][`Executable::execute`].
 	pub fn from_code(
 		original_code: Vec<u8>,
 		schedule: &Schedule<T>,
@@ -164,7 +168,8 @@ impl<T: Config> PrefabWasmModule<T> {
 
 	/// Store the code without instantiating it.
 	///
-	/// Otherwise the code is stored when [`<Self as Executable>::execute`] is called.
+	/// Otherwise the code is stored when [`<Self as Executable>::execute`][`Executable::execute`]
+	/// is called.
 	pub fn store(self) -> DispatchResult {
 		code_cache::store(self, false)
 	}
