@@ -962,7 +962,7 @@ where
 	);
 	spawn_handle.spawn("import-queue", None, import_queue.run(Box::new(chain_sync_service)));
 
-	let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc");
+	let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc", 10_000);
 
 	let future = build_network_future(
 		config.role.clone(),

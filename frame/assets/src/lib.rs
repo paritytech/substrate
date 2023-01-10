@@ -116,6 +116,11 @@
 //!
 //! Please refer to the [`Pallet`] struct for details on publicly available functions.
 //!
+//! ### Callbacks
+//!
+//! Using `CallbackHandle` associated type, user can configure custom callback functions which are
+//! executed when new asset is created or an existing asset is destroyed.
+//!
 //! ## Related Modules
 //!
 //! * [`System`](../frame_system/index.html)
@@ -170,6 +175,18 @@ pub use pallet::*;
 pub use weights::WeightInfo;
 
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
+
+/// Trait with callbacks that are executed after successfull asset creation or destruction.
+pub trait AssetsCallback<AssetId, AccountId> {
+	/// Indicates that asset with `id` was successfully created by the `owner`
+	fn created(_id: &AssetId, _owner: &AccountId) {}
+
+	/// Indicates that asset with `id` has just been destroyed
+	fn destroyed(_id: &AssetId) {}
+}
+
+/// Empty implementation in case no callbacks are required.
+impl<AssetId, AccountId> AssetsCallback<AssetId, AccountId> for () {}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -282,6 +299,9 @@ pub mod pallet {
 
 		/// Additional data to be stored with an account's asset balance.
 		type Extra: Member + Parameter + Default + MaxEncodedLen;
+
+		/// Callback methods for asset state change (e.g. asset created or destroyed)
+		type CallbackHandle: AssetsCallback<Self::AssetId, Self::AccountId>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -598,7 +618,14 @@ pub mod pallet {
 					status: AssetStatus::Live,
 				},
 			);
-			Self::deposit_event(Event::Created { asset_id: id, creator: owner, owner: admin });
+
+			Self::deposit_event(Event::Created {
+				asset_id: id,
+				creator: owner.clone(),
+				owner: admin,
+			});
+			T::CallbackHandle::created(&id, &owner);
+
 			Ok(())
 		}
 

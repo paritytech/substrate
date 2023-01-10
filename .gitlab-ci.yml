@@ -48,11 +48,13 @@ variables:
   CARGO_INCREMENTAL:               0
   DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
-  # staging image with rust 1.65 and nightly-2022-11-16
-  CI_IMAGE:                        "paritytech/ci-linux@sha256:786869e731963b3cc0a4aa9deb83367ed9e87a6ae48b6eb029d62b0cab4d87c1"
+  CI_IMAGE:                        "paritytech/ci-linux:production"
   BUILDAH_IMAGE:                   "quay.io/buildah/stable:v1.27"
   RUSTY_CACHIER_SINGLE_BRANCH:     master
   RUSTY_CACHIER_DONT_OPERATE_ON_MAIN_BRANCH: "true"
+  RUSTY_CACHIER_COMPRESSION_METHOD: zstd
+  NEXTEST_FAILURE_OUTPUT:          immediate-final
+  NEXTEST_SUCCESS_OUTPUT:          final
   ZOMBIENET_IMAGE:                 "docker.io/paritytech/zombienet:v1.3.22"
 
 default:
@@ -212,6 +214,10 @@ default:
   rules:
     # this job runs only on nightly pipeline with the mentioned variable, against `master` branch
     - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "nightly"
+
+.scheduled-crate-publishing-pipeline:
+  rules:
+    - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "automatic-crate-publishing"
 
 .crates-publishing-template:
   stage:                           test

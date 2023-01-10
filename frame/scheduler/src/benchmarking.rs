@@ -244,13 +244,17 @@ benchmarks! {
 	}: _<SystemOrigin<T>>(schedule_origin, when, 0)
 	verify {
 		ensure!(
-			Lookup::<T>::get(u32_to_name(0)).is_none(),
-			"didn't remove from lookup"
+			s == 1 || Lookup::<T>::get(u32_to_name(0)).is_none(),
+			"didn't remove from lookup if more than 1 task scheduled for `when`"
 		);
 		// Removed schedule is NONE
 		ensure!(
-			Agenda::<T>::get(when)[0].is_none(),
-			"didn't remove from schedule"
+			s == 1 || Agenda::<T>::get(when)[0].is_none(),
+			"didn't remove from schedule if more than 1 task scheduled for `when`"
+		);
+		ensure!(
+			s > 1 || Agenda::<T>::get(when).len() == 0,
+			"remove from schedule if only 1 task scheduled for `when`"
 		);
 	}
 
@@ -280,13 +284,17 @@ benchmarks! {
 	}: _(RawOrigin::Root, u32_to_name(0))
 	verify {
 		ensure!(
-			Lookup::<T>::get(u32_to_name(0)).is_none(),
-			"didn't remove from lookup"
+			s == 1 || Lookup::<T>::get(u32_to_name(0)).is_none(),
+			"didn't remove from lookup if more than 1 task scheduled for `when`"
 		);
 		// Removed schedule is NONE
 		ensure!(
-			Agenda::<T>::get(when)[0].is_none(),
-			"didn't remove from schedule"
+			s == 1 || Agenda::<T>::get(when)[0].is_none(),
+			"didn't remove from schedule if more than 1 task scheduled for `when`"
+		);
+		ensure!(
+			s > 1 || Agenda::<T>::get(when).len() == 0,
+			"remove from schedule if only 1 task scheduled for `when`"
 		);
 	}
 

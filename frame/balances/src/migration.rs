@@ -69,3 +69,29 @@ impl<T: Config<I>, A: Get<Vec<T::AccountId>>, I: 'static> OnRuntimeUpgrade
 		migrate_v0_to_v1::<T, I>(&A::get())
 	}
 }
+
+pub struct ResetInactive<T, I = ()>(PhantomData<(T, I)>);
+impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for ResetInactive<T, I> {
+	fn on_runtime_upgrade() -> Weight {
+		let onchain_version = Pallet::<T, I>::on_chain_storage_version();
+
+		if onchain_version == 1 {
+			// Remove the old `StorageVersion` type.
+			frame_support::storage::unhashed::kill(&frame_support::storage::storage_prefix(
+				Pallet::<T, I>::name().as_bytes(),
+				"StorageVersion".as_bytes(),
+			));
+
+			InactiveIssuance::<T, I>::kill();
+
+			// Set storage version to `0`.
+			StorageVersion::new(0).put::<Pallet<T, I>>();
+
+			log::info!(target: "runtime::balances", "Storage to version 0");
+			T::DbWeight::get().reads_writes(1, 2)
+		} else {
+			log::info!(target: "runtime::balances",  "Migration did not execute. This probably should be removed");
+			T::DbWeight::get().reads(1)
+		}
+	}
+}
