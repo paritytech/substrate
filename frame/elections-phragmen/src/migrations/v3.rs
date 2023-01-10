@@ -136,7 +136,7 @@ pub fn migrate_candidates_to_recorded_deposit<V: V2ToV3, T: Config>(old_deposit:
 pub fn migrate_members_to_recorded_deposit<V: V2ToV3, T: Config>(old_deposit: V::Balance) {
 	let _ = <Members<V, T>>::translate::<Vec<(V::AccountId, V::Balance)>, _>(|maybe_old_members| {
 		maybe_old_members.map(|old_members| {
-			log::info!(target: LOG_TARGET, "migrated {} member accounts.", old_members.len(),);
+			log::info!(target: LOG_TARGET, "migrated {} member accounts.", old_members.len());
 			old_members
 				.into_iter()
 				.map(|(who, stake)| SeatHolder { who, stake, deposit: old_deposit })
