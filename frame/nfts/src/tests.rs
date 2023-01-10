@@ -608,7 +608,7 @@ fn set_item_metadata_should_work() {
 		);
 		assert_noop!(
 			Nfts::clear_metadata(RuntimeOrigin::signed(1), 1, 42),
-			Error::<Test>::UnknownCollection,
+			Error::<Test>::MetadataNotFound,
 		);
 		assert_ok!(Nfts::clear_metadata(RuntimeOrigin::root(), 0, 42));
 		assert!(!ItemMetadataOf::<Test>::contains_key(0, 42));

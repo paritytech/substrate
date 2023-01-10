@@ -159,6 +159,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 
 			if let Some(check_owner) = &maybe_check_owner {
+				// deposit.account.is_none(); maybe_check_owner.is_some()
 				if deposit.account != maybe_check_owner {
 					ensure!(
 						Self::is_valid_namespace(

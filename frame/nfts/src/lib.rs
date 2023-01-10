@@ -263,7 +263,7 @@ pub mod pallet {
 		T::CollectionId,
 		Blake2_128Concat,
 		T::ItemId,
-		ItemMetadata<DepositBalanceOf<T, I>, T::StringLimit>,
+		ItemMetadata<ItemMetadataDepositOf<T, I>, T::StringLimit>,
 		OptionQuery,
 	>;
 
@@ -559,6 +559,8 @@ pub mod pallet {
 		UnknownItem,
 		/// Swap doesn't exist.
 		UnknownSwap,
+		/// The given item has no metadata set.
+		MetadataNotFound,
 		/// Item is not for sale.
 		NotForSale,
 		/// The provided bid is too low.
@@ -1359,7 +1361,7 @@ pub mod pallet {
 		/// Clear an attribute for a collection or item.
 		///
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
-		/// `collection`.
+		/// attribute.
 		///
 		/// Any deposit is freed for the collection's owner.
 		///
@@ -1461,13 +1463,13 @@ pub mod pallet {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
-			Self::do_set_item_metadata(maybe_check_owner, collection, item, data)
+			Self::do_set_item_metadata(maybe_check_owner, collection, item, data, None)
 		}
 
 		/// Clear the metadata for an item.
 		///
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
-		/// `collection`.
+		/// metadata.
 		///
 		/// Any deposit is freed for the collection's owner.
 		///
