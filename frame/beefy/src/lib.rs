@@ -41,14 +41,16 @@ use beefy_primitives::{
 	ValidatorSet, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
 };
 
+mod default_weights;
 mod equivocation;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
 
-use crate::equivocation::{BeefyOffence, HandleEquivocation};
-
+pub use crate::equivocation::{
+	BeefyEquivocationOffence, BeefyOffence, BeefyTimeSlot, EquivocationHandler, HandleEquivocation,
+};
 pub use pallet::*;
 
 const LOG_TARGET: &str = "runtime::beefy";
