@@ -356,7 +356,7 @@ fn state_access_benchmarks(c: &mut Criterion) {
 	// As you can see the prefix is the same, so the nodes for `ABCDEF` will be cached, and only
 	// the `X`, `Y` and `Z` will have to be fetched.
 	//
-	// Now here since the keys we are reading are random we'd most likely end up with something
+	// Now here, since the keys we are reading are random, we'd most likely end up with something
 	// like these: (again, just an example to illustrate the concept; keys are not real)
 	//
 	//   PHYGYEH
