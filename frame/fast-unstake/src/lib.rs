@@ -492,9 +492,7 @@ pub mod pallet {
 					},
 				}
 
-				<T as Config>::WeightInfo::on_idle_check(
-					eras_checked.len() as u32, validator_count
-				)
+				<T as Config>::WeightInfo::on_idle_check(eras_checked.len() as u32, validator_count)
 			}
 		}
 	}
