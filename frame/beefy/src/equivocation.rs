@@ -224,7 +224,6 @@ impl<T: Config> Pallet<T> {
 						target: LOG_TARGET,
 						"rejecting unsigned report equivocation transaction because it is not local/in-block."
 					);
-
 					return InvalidTransaction::Call.into()
 				},
 			}

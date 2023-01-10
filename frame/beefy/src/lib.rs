@@ -38,7 +38,7 @@ use sp_std::prelude::*;
 
 use beefy_primitives::{
 	AuthorityIndex, BeefyAuthorityId, ConsensusLog, EquivocationProof, OnNewValidatorSet,
-	OpaqueKeyOwnershipProof, ValidatorSet, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
+	ValidatorSet, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
 };
 
 mod equivocation;
@@ -57,14 +57,14 @@ const LOG_TARGET: &str = "runtime::beefy";
 pub mod pallet {
 	use super::*;
 	use frame_support::{pallet_prelude::*, traits::KeyOwnerProofSystem};
-	use frame_system::{ensure_signed, pallet_prelude::OriginFor};
+	use frame_system::{ensure_none, ensure_signed, pallet_prelude::OriginFor};
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// Authority identifier type
 		type BeefyId: Member
 			+ Parameter
-			// todo: use custom hashing type
+			// todo: use custom signature hashing type
 			+ BeefyAuthorityId<sp_runtime::traits::Keccak256>
 			+ MaybeSerializeDeserialize
 			+ MaxEncodedLen;
@@ -184,7 +184,15 @@ pub mod pallet {
 			Self::do_report_equivocation(Some(reporter), *equivocation_proof, key_owner_proof)
 		}
 
-		/// TODO
+		/// Report voter equivocation/misbehavior. This method will verify the
+		/// equivocation proof and validate the given key ownership proof
+		/// against the extracted offender. If both are valid, the offence
+		/// will be reported.
+		///
+		/// This extrinsic must be called unsigned and it is expected that only
+		/// block authors will call it (validated in `ValidateUnsigned`), as such
+		/// if the block author is defined it will be defined as the equivocation
+		/// reporter.
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count()))]
 		pub fn report_equivocation_unsigned(
@@ -198,7 +206,24 @@ pub mod pallet {
 			>,
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
-			todo!()
+			ensure_none(origin)?;
+
+			Self::do_report_equivocation(
+				T::HandleEquivocation::block_author(),
+				*equivocation_proof,
+				key_owner_proof,
+			)
+		}
+	}
+
+	#[pallet::validate_unsigned]
+	impl<T: Config> ValidateUnsigned for Pallet<T> {
+		type Call = Call<T>;
+		fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
+			Self::pre_dispatch(call)
+		}
+		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+			Self::validate_unsigned(source, call)
 		}
 	}
 }
@@ -220,22 +245,13 @@ impl<T: Config> Pallet<T> {
 			T::BeefyId,
 			<T::BeefyId as RuntimeAppPublic>::Signature,
 		>,
-		key_owner_proof: OpaqueKeyOwnershipProof,
+		key_owner_proof: T::KeyOwnerProof,
 	) -> Option<()> {
-		// TODO:
-		// use frame_system::offchain::SubmitTransaction;
-		//
-		// let call = Call::report_equivocation_unsigned {
-		// 	equivocation_proof: Box::new(equivocation_proof),
-		// 	key_owner_proof,
-		// };
-		//
-		// match SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {
-		// 	Ok(()) => log::info!(target: LOG_TARGET, "Submitted BEEFY equivocation report."),
-		// 	Err(e) => log::error!(target: LOG_TARGET, "Error submitting equivocation: {:?}", e),
-		// }
-
-		Some(())
+		T::HandleEquivocation::submit_unsigned_equivocation_report(
+			equivocation_proof,
+			key_owner_proof,
+		)
+		.ok()
 	}
 
 	fn change_authorities(
