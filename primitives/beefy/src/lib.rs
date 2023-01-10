@@ -49,20 +49,14 @@ use sp_std::prelude::*;
 /// Key type for BEEFY module.
 pub const KEY_TYPE: sp_application_crypto::KeyTypeId = sp_application_crypto::KeyTypeId(*b"beef");
 
-/// Trait representing BEEFY authority id.
-pub trait BeefyAuthorityId: RuntimeAppPublic {}
-
-/// Means of verification for a BEEFY authority signature.
+/// Trait representing BEEFY authority id, including custom signature verification.
 ///
 /// Accepts custom hashing fn for the message and custom convertor fn for the signer.
-pub trait BeefyVerify<MsgHash: Hash> {
-	/// Type of the signer.
-	type Signer: BeefyAuthorityId;
-
+pub trait BeefyAuthorityId<MsgHash: Hash>: RuntimeAppPublic {
 	/// Verify a signature.
 	///
-	/// Return `true` if signature is valid for the value.
-	fn verify(&self, msg: &[u8], signer: &Self::Signer) -> bool;
+	/// Return `true` if signature over `msg` is valid for this id.
+	fn verify(&self, signature: &<Self as RuntimeAppPublic>::Signature, msg: &[u8]) -> bool;
 }
 
 /// BEEFY cryptographic types
@@ -78,7 +72,7 @@ pub trait BeefyVerify<MsgHash: Hash> {
 /// The current underlying crypto scheme used is ECDSA. This can be changed,
 /// without affecting code restricted against the above listed crypto types.
 pub mod crypto {
-	use super::{BeefyAuthorityId, BeefyVerify, Hash};
+	use super::{BeefyAuthorityId, Hash, RuntimeAppPublic};
 	use sp_application_crypto::{app_crypto, ecdsa};
 	use sp_core::crypto::Wraps;
 	app_crypto!(ecdsa, crate::KEY_TYPE);
@@ -89,21 +83,17 @@ pub mod crypto {
 	/// Signature for a BEEFY authority using ECDSA as its crypto.
 	pub type AuthoritySignature = Signature;
 
-	impl BeefyAuthorityId for AuthorityId {}
-
-	impl<MsgHash: Hash> BeefyVerify<MsgHash> for AuthoritySignature
+	impl<MsgHash: Hash> BeefyAuthorityId<MsgHash> for AuthorityId
 	where
 		<MsgHash as Hash>::Output: Into<[u8; 32]>,
 	{
-		type Signer = AuthorityId;
-
-		fn verify(&self, msg: &[u8], signer: &Self::Signer) -> bool {
+		fn verify(&self, signature: &<Self as RuntimeAppPublic>::Signature, msg: &[u8]) -> bool {
 			let msg_hash = <MsgHash as Hash>::hash(msg).into();
 			match sp_io::crypto::secp256k1_ecdsa_recover_compressed(
-				self.as_inner_ref().as_ref(),
+				signature.as_inner_ref().as_ref(),
 				&msg_hash,
 			) {
-				Ok(raw_pubkey) => raw_pubkey.as_ref() == AsRef::<[u8]>::as_ref(signer),
+				Ok(raw_pubkey) => raw_pubkey.as_ref() == AsRef::<[u8]>::as_ref(self),
 				_ => false,
 			}
 		}
@@ -219,29 +209,27 @@ pub struct EquivocationProof<Number, Id, Signature> {
 
 /// Check a commitment signature by encoding the commitment and
 /// verifying the provided signature using the expected authority id.
-pub fn check_commitment_signature<Number, Id, Signature, MsgHash>(
+pub fn check_commitment_signature<Number, Id, MsgHash>(
 	commitment: &Commitment<Number>,
 	authority_id: &Id,
-	signature: &Signature,
+	signature: &<Id as RuntimeAppPublic>::Signature,
 ) -> bool
 where
-	Id: BeefyAuthorityId,
-	Signature: BeefyVerify<MsgHash, Signer = Id>,
+	Id: BeefyAuthorityId<MsgHash>,
 	Number: Clone + Encode + PartialEq,
 	MsgHash: Hash,
 {
 	let encoded_commitment = commitment.encode();
-	BeefyVerify::<MsgHash>::verify(signature, &encoded_commitment, authority_id)
+	BeefyAuthorityId::<MsgHash>::verify(authority_id, signature, &encoded_commitment)
 }
 
 /// Verifies the equivocation proof by making sure that both votes target
 /// different blocks and that its signatures are valid.
-pub fn check_equivocation_proof<Number, Id, Signature, MsgHash>(
-	report: EquivocationProof<Number, Id, Signature>,
+pub fn check_equivocation_proof<Number, Id, MsgHash>(
+	report: EquivocationProof<Number, Id, <Id as RuntimeAppPublic>::Signature>,
 ) -> bool
 where
-	Id: BeefyAuthorityId + PartialEq,
-	Signature: BeefyVerify<MsgHash, Signer = Id>,
+	Id: BeefyAuthorityId<MsgHash> + PartialEq,
 	Number: Clone + Encode + PartialEq,
 	MsgHash: Hash,
 {

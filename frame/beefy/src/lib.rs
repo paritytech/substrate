@@ -22,7 +22,7 @@ use codec::{Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, Pays},
 	log,
-	traits::{Get, OneSessionHandler},
+	traits::{Get, KeyOwnerProofSystem, OneSessionHandler},
 	weights::Weight,
 	BoundedSlice, BoundedVec, Parameter,
 };
@@ -34,11 +34,12 @@ use sp_runtime::{
 	KeyTypeId, RuntimeAppPublic,
 };
 use sp_session::{GetSessionNumber, GetValidatorCount};
+use sp_staking::offence::ReportOffence;
 use sp_std::prelude::*;
 
 use beefy_primitives::{
-	AuthorityIndex, ConsensusLog, EquivocationProof, OnNewValidatorSet, OpaqueKeyOwnershipProof,
-	ValidatorSet, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
+	AuthorityIndex, BeefyAuthorityId, ConsensusLog, EquivocationProof, OnNewValidatorSet,
+	OpaqueKeyOwnershipProof, ValidatorSet, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
 };
 
 #[cfg(test)]
@@ -62,7 +63,8 @@ pub mod pallet {
 		/// Authority identifier type
 		type BeefyId: Member
 			+ Parameter
-			+ RuntimeAppPublic
+			// todo: use custom hashing type
+			+ BeefyAuthorityId<sp_runtime::traits::Keccak256>
 			+ MaybeSerializeDeserialize
 			+ MaxEncodedLen;
 
@@ -297,6 +299,29 @@ impl<T: Config> Pallet<T> {
 		>,
 		key_owner_proof: T::KeyOwnerProof,
 	) -> DispatchResultWithPostInfo {
+		// We check the equivocation within the context of its set id (and
+		// associated session) and round. We also need to know the validator
+		// set count at the time of the offence since it is required to calculate
+		// the slash amount.
+		let set_id = equivocation_proof.set_id;
+		let round = equivocation_proof.equivocation.round_number;
+		let offender_id = equivocation_proof.equivocation.id.clone();
+		let session_index = key_owner_proof.session();
+		let validator_count = key_owner_proof.validator_count();
+
+		// validate the key ownership proof extracting the id of the offender.
+		let offender = T::KeyOwnerProofSystem::check_proof(
+			(beefy_primitives::KEY_TYPE, offender_id),
+			key_owner_proof,
+		)
+		.ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
+
+		// validate equivocation proof (check votes are different and signatures are valid).
+		if !beefy_primitives::check_equivocation_proof(equivocation_proof) {
+			return Err(Error::<T>::InvalidEquivocationProof.into())
+		}
+
+		// todo: ReportOffence
 		todo!();
 
 		// waive the fee since the report is valid and beneficial
