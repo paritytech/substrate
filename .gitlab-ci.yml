@@ -55,29 +55,29 @@ variables:
   RUSTY_CACHIER_COMPRESSION_METHOD: zstd
   ZOMBIENET_IMAGE:                 "docker.io/paritytech/zombienet:v1.3.22"
 
-.shared-default: &shared-default
+.shared-default:                   &shared-default
   retry:
     max: 2
     when:
       - runner_system_failure
       - unknown_failure
       - api_failure
-  cache: {}
+  cache:                           {}
 
 .default-pipeline-definitions:
   default:
-    <<: *shared-default
-    interruptible: true
+    <<:                            *shared-default
+    interruptible:                 true
 
 .crate-publishing-pipeline-definitions:
   default:
-    <<: *shared-default
+    <<:                            *shared-default
     # The crate-publishing pipeline defaults to `interruptible: false` so that we'll be able to
     # reach and run the publishing jobs despite the "Auto-cancel redundant pipelines" CI setting.
     # The setting is relevant because the crate-publishing pipeline runs on `master`, thus future
     # pipelines on `master` (e.g. created for new commits or other schedules) might unintendedly
     # cancel the publishing jobs or its dependencies before we get to actually publish the crates.
-    interruptible: false
+    interruptible:                 false
 
 .collect-artifacts:
   artifacts:
