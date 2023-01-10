@@ -134,7 +134,7 @@ pub enum StateDbError {
 	/// Invalid pruning mode specified. Contains expected mode.
 	IncompatiblePruningModes { stored: PruningMode, requested: PruningMode },
 	/// Too many unfinalized sibling blocks inserted.
-	TooManySiblingBlocks,
+	TooManySiblingBlocks { number: u64 },
 	/// Trying to insert existing block.
 	BlockAlreadyExists,
 	/// Invalid metadata
@@ -184,7 +184,8 @@ impl fmt::Debug for StateDbError {
 				"Incompatible pruning modes [stored: {:?}; requested: {:?}]",
 				stored, requested
 			),
-			Self::TooManySiblingBlocks => write!(f, "Too many sibling blocks inserted"),
+			Self::TooManySiblingBlocks { number } =>
+				write!(f, "Too many sibling blocks at #{number} inserted"),
 			Self::BlockAlreadyExists => write!(f, "Block already exists"),
 			Self::Metadata(message) => write!(f, "Invalid metadata: {}", message),
 			Self::BlockUnavailable => {
@@ -283,6 +284,17 @@ fn to_meta_key<S: Codec>(suffix: &[u8], data: &S) -> Vec<u8> {
 	buffer
 }
 
+/// Status information about the last canonicalized block.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum LastCanonicalized {
+	/// Not yet have canonicalized any block.
+	None,
+	/// The given block number is the last canonicalized block.
+	Block(u64),
+	/// No canonicalization is happening (pruning mode is archive all).
+	NotCanonicalizing,
+}
+
 pub struct StateDbSync<BlockHash: Hash, Key: Hash, D: MetaDb> {
 	mode: PruningMode,
 	non_canonical: NonCanonicalOverlay<BlockHash, Key>,
@@ -350,15 +362,28 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDbSync<BlockHash, Key, D> {
 		Ok(commit)
 	}
 
-	fn best_canonical(&self) -> Option<u64> {
-		self.non_canonical.last_canonicalized_block_number()
+	/// Returns the block number of the last canonicalized block.
+	fn last_canonicalized(&self) -> LastCanonicalized {
+		if self.mode == PruningMode::ArchiveAll {
+			LastCanonicalized::NotCanonicalizing
+		} else {
+			self.non_canonical
+				.last_canonicalized_block_number()
+				.map(LastCanonicalized::Block)
+				.unwrap_or_else(|| LastCanonicalized::None)
+		}
 	}
 
 	fn is_pruned(&self, hash: &BlockHash, number: u64) -> IsPruned {
 		match self.mode {
 			PruningMode::ArchiveAll => IsPruned::NotPruned,
 			PruningMode::ArchiveCanonical | PruningMode::Constrained(_) => {
-				if self.best_canonical().map(|c| number > c).unwrap_or(true) {
+				if self
+					.non_canonical
+					.last_canonicalized_block_number()
+					.map(|c| number > c)
+					.unwrap_or(true)
+				{
 					if self.non_canonical.have_block(hash) {
 						IsPruned::NotPruned
 					} else {
@@ -472,6 +497,10 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDbSync<BlockHash, Key, D> {
 		}
 	}
 
+	fn sync(&mut self) {
+		self.non_canonical.sync();
+	}
+
 	pub fn get<DB: NodeDb, Q: ?Sized>(
 		&self,
 		key: &Q,
@@ -575,6 +604,12 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDb<BlockHash, Key, D> {
 		self.db.write().unpin(hash)
 	}
 
+	/// Confirm that all changes made to commit sets are on disk. Allows for temporarily pinned
+	/// blocks to be released.
+	pub fn sync(&self) {
+		self.db.write().sync()
+	}
+
 	/// Get a value from non-canonical/pruning overlay or the backing DB.
 	pub fn get<DB: NodeDb, Q: ?Sized>(
 		&self,
@@ -602,9 +637,9 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDb<BlockHash, Key, D> {
 		self.db.write().remove(hash)
 	}
 
-	/// Returns last finalized block number.
-	pub fn best_canonical(&self) -> Option<u64> {
-		return self.db.read().best_canonical()
+	/// Returns last canonicalized block.
+	pub fn last_canonicalized(&self) -> LastCanonicalized {
+		self.db.read().last_canonicalized()
 	}
 
 	/// Check if block is pruned away.

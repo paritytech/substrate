@@ -671,3 +671,6 @@ pub type BoundedSupportsOf<E> = BoundedSupports<
 	<E as ElectionProviderBase>::AccountId,
 	<E as ElectionProviderBase>::MaxWinners,
 >;
+
+sp_core::generate_feature_enabled_macro!(runtime_benchmarks_enabled, feature = "runtime-benchmarks", $);
+sp_core::generate_feature_enabled_macro!(runtime_benchmarks_or_fuzz_enabled, any(feature = "runtime-benchmarks", feature = "fuzzing"), $);
