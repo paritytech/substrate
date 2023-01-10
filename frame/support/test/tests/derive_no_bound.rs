@@ -72,7 +72,7 @@ fn test_struct_named() {
 	assert_eq!(a_2, a_1);
 	assert_eq!(
 		format!("{:?}", a_1),
-		String::from("StructNamed { a: 1, b: 2, c: 3, phantom: PhantomData }")
+		String::from("StructNamed { a: 1, b: 2, c: 3, phantom: PhantomData<(derive_no_bound::ImplNone, derive_no_bound::ImplNone)> }")
 	);
 
 	let b = StructNamed::<Runtime, ImplNone, ImplNone> {
