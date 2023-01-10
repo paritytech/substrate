@@ -377,10 +377,11 @@ pub mod pallet {
 
 			log!(
 				debug,
-				"checking {:?} stashes, eras_to_check_per_block = {:?}, remaining_weight = {:?}",
+				"checking {:?} stashes, eras_to_check_per_block = {:?}, remaining_weight = {:?}, checked {:?}",
 				stashes.len(),
 				eras_to_check_per_block,
-				remaining_weight
+				remaining_weight,
+				checked
 			);
 
 			// the range that we're allowed to check in this round.
