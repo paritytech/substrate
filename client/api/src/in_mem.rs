@@ -791,12 +791,12 @@ where
 		false
 	}
 
-	fn pin_block(&self, hash: &<Block as BlockT>::Hash, number: u64) -> blockchain::Result<()> {
-		todo!()
+	fn pin_block(&self, _: &<Block as BlockT>::Hash, _: u64) -> blockchain::Result<()> {
+		unimplemented!()
 	}
 
-	fn unpin_block(&self, hash: &<Block as BlockT>::Hash) {
-		todo!()
+	fn unpin_block(&self, _: &<Block as BlockT>::Hash) {
+		unimplemented!()
 	}
 }
 

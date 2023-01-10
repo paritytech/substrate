@@ -266,6 +266,7 @@ impl fmt::Display for UsageInfo {
 	}
 }
 
+/// Sends a message to the pinning-worker once dropped to unpin a block in the backend.
 #[derive(Debug)]
 pub struct UnpinHandle<Block: BlockT> {
 	hash: Block::Hash,
@@ -273,6 +274,7 @@ pub struct UnpinHandle<Block: BlockT> {
 }
 
 impl<Block: BlockT> UnpinHandle<Block> {
+	/// Create a new UnpinHandle
 	pub fn new(hash: Block::Hash, unpin_worker_sender: Sender<Block::Hash>) -> Self {
 		Self { hash, unpin_worker_sender }
 	}

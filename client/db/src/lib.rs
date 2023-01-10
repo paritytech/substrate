@@ -42,6 +42,7 @@ mod utils;
 
 use linked_hash_map::LinkedHashMap;
 use log::{debug, trace, warn};
+use lru::LruCache;
 use parking_lot::{Mutex, RwLock};
 use std::{
 	collections::{HashMap, HashSet},
@@ -110,6 +111,8 @@ pub type DbStateBuilder<B> = sp_state_machine::TrieBackendBuilder<
 
 /// Length of a [`DbHash`].
 const DB_HASH_LEN: usize = 32;
+
+const PINNING_CACHE_SIZE: usize = 256;
 
 /// Hash type that this backend uses for the database.
 pub type DbHash = sp_core::H256;
@@ -475,14 +478,18 @@ fn cache_header<Hash: std::cmp::Eq + std::hash::Hash, Header>(
 	}
 }
 
-pub struct PinnedBlockCache<Block: BlockT> {
-	body_cache: RwLock<HashMap<Block::Hash, Option<Vec<Block::Extrinsic>>>>,
-	justification_cache: RwLock<HashMap<Block::Hash, Option<Justifications>>>,
+struct PinnedBlockCache<Block: BlockT> {
+	body_cache: RwLock<LruCache<Block::Hash, (u32, Option<Vec<Block::Extrinsic>>)>>,
+	justification_cache: RwLock<LruCache<Block::Hash, (u32, Option<Justifications>)>>,
 }
 
 impl<Block: BlockT> PinnedBlockCache<Block> {
 	pub fn new() -> Self {
-		Self { body_cache: HashMap::new().into(), justification_cache: HashMap::new().into() }
+		Self {
+			body_cache: LruCache::new(NonZeroUsize::new(PINNING_CACHE_SIZE).unwrap()).into(),
+			justification_cache: LruCache::new(NonZeroUsize::new(PINNING_CACHE_SIZE).unwrap())
+				.into(),
+		}
 	}
 
 	pub fn insert(
@@ -492,26 +499,48 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 		justifications: Option<Justifications>,
 	) {
 		let mut body_cache = self.body_cache.write();
-		body_cache.insert(hash, extrinsics);
+		if let Some(mut entry) = body_cache.get_mut(&hash) {
+			entry.0 += 1;
+			entry.1 = extrinsics;
+		} else {
+			body_cache.put(hash, (1, extrinsics));
+		}
+
 		let mut justification_cache = self.justification_cache.write();
-		justification_cache.insert(hash, justifications);
+		if let Some(mut entry) = justification_cache.get_mut(&hash) {
+			entry.0 += 1;
+			entry.1 = justifications;
+		} else {
+			justification_cache.put(hash, (1, justifications));
+		}
 	}
 
 	pub fn remove(&self, hash: &Block::Hash) {
 		let mut body_cache = self.body_cache.write();
-		body_cache.remove(hash);
+		if let Some(mut entry) = body_cache.peek_mut(hash) {
+			entry.0 -= 1;
+			if entry.0 == 0 {
+				body_cache.pop(hash);
+			}
+		}
+
 		let mut justification_cache = self.justification_cache.write();
-		justification_cache.remove(hash);
+		if let Some(mut entry) = justification_cache.peek_mut(hash) {
+			entry.0 -= 1;
+			if entry.0 == 0 {
+				justification_cache.pop(hash);
+			}
+		}
 	}
 
 	pub fn justification(&self, hash: &Block::Hash) -> Option<Option<Justifications>> {
 		let justification_cache = self.justification_cache.read();
-		justification_cache.get(hash).cloned()
+		justification_cache.peek(hash).map(|element| element.1.clone())
 	}
 
 	pub fn body(&self, hash: &Block::Hash) -> Option<Option<Vec<Block::Extrinsic>>> {
 		let body_cache = self.body_cache.read();
-		body_cache.get(hash).cloned()
+		body_cache.peek(hash).map(|element| element.1.clone())
 	}
 }
 
@@ -633,6 +662,7 @@ impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for Blockcha
 impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<Block> {
 	fn body(&self, hash: Block::Hash) -> ClientResult<Option<Vec<Block::Extrinsic>>> {
 		if let Some(result) = self.pinned_blocks_cache.body(&hash) {
+			log::info!(target: "skunert", "Found block data for {:?} in pinned cache.", hash);
 			return Ok(result)
 		}
 
@@ -702,6 +732,7 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 
 	fn justifications(&self, hash: Block::Hash) -> ClientResult<Option<Justifications>> {
 		if let Some(result) = self.pinned_blocks_cache.justification(&hash) {
+			log::info!(target: "skunert", "Found justification data for {:?} in pinned cache.", hash);
 			return Ok(result)
 		}
 
