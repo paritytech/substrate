@@ -604,8 +604,8 @@ pub mod pallet {
 	#[pallet::getter(fn current_planned_session)]
 	pub type CurrentPlannedSession<T> = StorageValue<_, SessionIndex, ValueQuery>;
 
-	/// Wrapper struct for `ErasRewards`, `ClaimedRewards`, `ErasRewardsClipped`,
-	/// `ErasRewardsPaged`, `ErasTotalStake`.
+	/// Wrapper struct for `ErasStakers`, `ClaimedRewards`, `ErasStakersClipped`,
+	/// `ErasStakersPaged`, `ErasTotalStake`.
 	pub(crate) struct EraInfo<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> EraInfo<T> {
 		// TODO(ank4n): doc and clean up in 84 eras
