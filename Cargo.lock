@@ -9076,6 +9076,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sp-blockchain",
+ "sp-consensus",
  "sp-runtime",
  "thiserror",
 ]

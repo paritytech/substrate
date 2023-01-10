@@ -591,6 +591,11 @@ where
 		let pool = self.pool.clone();
 		let api = self.api.clone();
 
+		// do not process maintain txpool if node is out of sync
+		if tree_route.enacted().len() > 20 {
+			return
+		}
+
 		let (hash, block_number) = match tree_route.last() {
 			Some(HashAndNumber { hash, number }) => (hash, number),
 			None => {
