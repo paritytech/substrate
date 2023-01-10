@@ -22,21 +22,27 @@ use crate::{
 	service::{new_partial, FullClient},
 	Cli, Subcommand,
 };
-use codec::Encode;
 use frame_benchmarking_cli::*;
-use kitchensink_runtime::{constants::time::SLOT_DURATION, ExistentialDeposit, RuntimeApi};
+use kitchensink_runtime::{ExistentialDeposit, RuntimeApi};
 use node_executor::ExecutorDispatch;
-use node_primitives::{Block, Header};
+use node_primitives::Block;
 use sc_cli::{ChainSpec, Result, RuntimeVersion, SubstrateCli};
 use sc_service::PartialComponents;
-use sp_consensus_babe::{Slot, SlotDuration, BABE_ENGINE_ID};
 use sp_keyring::Sr25519Keyring;
 
-use sc_consensus_babe::{PreDigest, SecondaryPlainPreDigest};
-use sp_inherents::InherentData;
-use sp_runtime::{Digest, DigestItem};
-use sp_timestamp::TimestampInherentData;
 use std::sync::Arc;
+
+#[cfg(feature = "try-runtime")]
+use {
+	codec::Encode,
+	kitchensink_runtime::constants::time::SLOT_DURATION,
+	node_primitives::Header,
+	sc_consensus_babe::{PreDigest, SecondaryPlainPreDigest},
+	sp_consensus_babe::{Slot, SlotDuration, BABE_ENGINE_ID},
+	sp_inherents::InherentData,
+	sp_runtime::{Digest, DigestItem},
+	sp_timestamp::TimestampInherentData,
+};
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> String {
