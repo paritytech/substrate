@@ -56,13 +56,13 @@ variables:
   ZOMBIENET_IMAGE:                 "docker.io/paritytech/zombienet:v1.3.22"
 
 .shared-default: &shared-default
-    retry:
-      max: 2
-      when:
-        - runner_system_failure
-        - unknown_failure
-        - api_failure
-    cache: {}
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - unknown_failure
+      - api_failure
+  cache: {}
 
 .default-pipeline-definitions:
   default:
