@@ -343,7 +343,7 @@ fn state_access_benchmarks(c: &mut Criterion) {
 	//
 	// This will essentially achieve the worst-ish case of what the local cache alone can do
 	// when iterating over unique values since more than just the very bottom of the trie will
-	// have to be constantly fetched from the storage In other words, keys will have different
+	// have to be constantly fetched from the storage. In other words, keys will have different
 	// prefixes so each read will most likely access access different trie nodes for each value.
 	//
 	// For example, let's assume that for the previous benchmark where we were reading from
