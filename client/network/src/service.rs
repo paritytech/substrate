@@ -38,7 +38,7 @@ use crate::{
 	transport, ChainSyncInterface, ReputationChange,
 };
 
-use futures::{channel::oneshot, executor::ThreadPoolBuilder, prelude::*};
+use futures::{channel::oneshot, prelude::*};
 use libp2p::{
 	core::{either::EitherError, upgrade, ConnectedPoint},
 	identify::Info as IdentifyInfo,

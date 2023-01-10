@@ -77,8 +77,11 @@ mod tests {
 
 	#[test]
 	fn test_webrtc_certificate_file() {
-		fn load_cert_and_assert_eq(file: PathBuf, cert: &WebRTCCertificate) {
-			let params = WebRTCCertificateParams { webrtc_certificate_file: Some(file) };
+		fn load_cert_and_assert_eq(file: PathBuf, cert: WebRTCCertificate) {
+			let params = WebRTCCertificateParams {
+				webrtc_certificate_file: Some(file),
+				webrtc_certificate_ephemeral: None,
+			};
 
 			let loaded_cert = params
 				.webrtc_certificate(&PathBuf::from("not-used"))
@@ -95,15 +98,15 @@ mod tests {
 		let cert = WebRTCCertificate::generate(&mut thread_rng()).expect("Generates certificate");
 
 		fs::write(&file, cert.serialize_pem().as_bytes()).expect("Writes certificate");
-		load_cert_and_assert_eq(file.clone(), &cert);
+		load_cert_and_assert_eq(file.clone(), cert);
 	}
 
 	#[test]
 	fn test_webrtc_certificate_ephemeral() {
 		let filepath = PathBuf::from("not-used");
 		let params = WebRTCCertificateParams {
+			webrtc_certificate_file: Some(filepath.clone()),
 			webrtc_certificate_ephemeral: Some(true),
-			webrtc_certificate_file: Some(&filepath),
 		};
 
 		let _loaded_cert = params
