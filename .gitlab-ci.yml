@@ -57,15 +57,29 @@ variables:
   NEXTEST_SUCCESS_OUTPUT:          final
   ZOMBIENET_IMAGE:                 "docker.io/paritytech/zombienet:v1.3.22"
 
-default:
+.shared-default:                   &shared-default
   retry:
     max: 2
     when:
       - runner_system_failure
       - unknown_failure
       - api_failure
-  interruptible:                   true
   cache:                           {}
+
+.default-pipeline-definitions:
+  default:
+    <<:                            *shared-default
+    interruptible:                 true
+
+.crate-publishing-pipeline-definitions:
+  default:
+    <<:                            *shared-default
+    # The crate-publishing pipeline defaults to `interruptible: false` so that we'll be able to
+    # reach and run the publishing jobs despite the "Auto-cancel redundant pipelines" CI setting.
+    # The setting is relevant because the crate-publishing pipeline runs on `master`, thus future
+    # pipelines on `master` (e.g. created for new commits or other schedules) might unintendedly
+    # cancel the publishing jobs or its dependencies before we get to actually publish the crates.
+    interruptible:                 false
 
 .collect-artifacts:
   artifacts:
@@ -215,9 +229,15 @@ default:
     # this job runs only on nightly pipeline with the mentioned variable, against `master` branch
     - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "nightly"
 
+.crate-publishing-pipeline:
+  rules:
+    - if: $CI_COMMIT_REF_NAME != "master"
+      when: never
+
 .scheduled-crate-publishing-pipeline:
   rules:
-    - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "automatic-crate-publishing"
+    - !reference [.crate-publishing-pipeline, rules]
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "automatic-crate-publishing"
 
 .crates-publishing-template:
   stage:                           test
@@ -265,6 +285,22 @@ include:
   - scripts/ci/gitlab/pipeline/publish.yml
   # zombienet jobs
   - scripts/ci/gitlab/pipeline/zombienet.yml
+  # The crate-publishing pipeline requires a customized `interruptible` configuration. Unfortunately
+  # `interruptible` can't currently be dynamically set based on variables as per:
+  # - https://gitlab.com/gitlab-org/gitlab/-/issues/38349
+  # - https://gitlab.com/gitlab-org/gitlab/-/issues/194023
+  # Thus we work around that limitation by using conditional includes.
+  # For crate-publishing pipelines: run it with defaults + `interruptible: false`. The WHOLE
+  # pipeline is made uninterruptible to ensure that test jobs also get a chance to run to
+  # completion, because the publishing jobs depends on them AS INTENDED: crates should not be
+  # published before their source code is checked.
+  - local: scripts/ci/gitlab/crate-publishing-pipeline.yml
+    rules:
+      - if: $PIPELINE == "automatic-crate-publishing"
+  # For normal pipelines: run it with defaults + `interruptible: true`
+  - local: scripts/ci/gitlab/default-pipeline.yml
+    rules:
+      - if: $PIPELINE != "automatic-crate-publishing"
 
 #### stage:                        deploy
 
