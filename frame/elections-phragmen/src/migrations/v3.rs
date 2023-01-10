@@ -119,14 +119,14 @@ pub fn migrate_voters_to_recorded_deposit<V: V2ToV3, T: Config>(old_deposit: V::
 		Some(Voter { votes, stake, deposit: old_deposit })
 	});
 
-	log::info!(target: LOG_TARGET, "migrated {} voter accounts.", <Voting<V, T>>::iter().count(),);
+	log::info!(target: LOG_TARGET, "migrated {} voter accounts.", <Voting<V, T>>::iter().count());
 }
 
 /// Migrate all candidates to recorded deposit.
 pub fn migrate_candidates_to_recorded_deposit<V: V2ToV3, T: Config>(old_deposit: V::Balance) {
 	let _ = <Candidates<V, T>>::translate::<Vec<V::AccountId>, _>(|maybe_old_candidates| {
 		maybe_old_candidates.map(|old_candidates| {
-			log::info!(target: LOG_TARGET, "migrated {} candidate accounts.", old_candidates.len(),);
+			log::info!(target: LOG_TARGET, "migrated {} candidate accounts.", old_candidates.len());
 			old_candidates.into_iter().map(|c| (c, old_deposit)).collect::<Vec<_>>()
 		})
 	});
@@ -136,7 +136,7 @@ pub fn migrate_candidates_to_recorded_deposit<V: V2ToV3, T: Config>(old_deposit:
 pub fn migrate_members_to_recorded_deposit<V: V2ToV3, T: Config>(old_deposit: V::Balance) {
 	let _ = <Members<V, T>>::translate::<Vec<(V::AccountId, V::Balance)>, _>(|maybe_old_members| {
 		maybe_old_members.map(|old_members| {
-			log::info!(target: LOG_TARGET, "migrated {} member accounts.", old_members.len(),);
+			log::info!(target: LOG_TARGET, "migrated {} member accounts.", old_members.len());
 			old_members
 				.into_iter()
 				.map(|(who, stake)| SeatHolder { who, stake, deposit: old_deposit })
