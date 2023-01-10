@@ -795,7 +795,7 @@ where
 		todo!()
 	}
 
-	fn unpin_block(&self, hash: &<Block as BlockT>::Hash) -> blockchain::Result<()> {
+	fn unpin_block(&self, hash: &<Block as BlockT>::Hash) {
 		todo!()
 	}
 }

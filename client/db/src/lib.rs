@@ -46,6 +46,7 @@ use parking_lot::{Mutex, RwLock};
 use std::{
 	collections::{HashMap, HashSet},
 	io,
+	num::NonZeroUsize,
 	path::{Path, PathBuf},
 	sync::Arc,
 };
@@ -474,6 +475,46 @@ fn cache_header<Hash: std::cmp::Eq + std::hash::Hash, Header>(
 	}
 }
 
+pub struct PinnedBlockCache<Block: BlockT> {
+	body_cache: RwLock<HashMap<Block::Hash, Option<Vec<Block::Extrinsic>>>>,
+	justification_cache: RwLock<HashMap<Block::Hash, Option<Justifications>>>,
+}
+
+impl<Block: BlockT> PinnedBlockCache<Block> {
+	pub fn new() -> Self {
+		Self { body_cache: HashMap::new().into(), justification_cache: HashMap::new().into() }
+	}
+
+	pub fn insert(
+		&self,
+		hash: Block::Hash,
+		extrinsics: Option<Vec<Block::Extrinsic>>,
+		justifications: Option<Justifications>,
+	) {
+		let mut body_cache = self.body_cache.write();
+		body_cache.insert(hash, extrinsics);
+		let mut justification_cache = self.justification_cache.write();
+		justification_cache.insert(hash, justifications);
+	}
+
+	pub fn remove(&self, hash: &Block::Hash) {
+		let mut body_cache = self.body_cache.write();
+		body_cache.remove(hash);
+		let mut justification_cache = self.justification_cache.write();
+		justification_cache.remove(hash);
+	}
+
+	pub fn justification(&self, hash: &Block::Hash) -> Option<Option<Justifications>> {
+		let justification_cache = self.justification_cache.read();
+		justification_cache.get(hash).cloned()
+	}
+
+	pub fn body(&self, hash: &Block::Hash) -> Option<Option<Vec<Block::Extrinsic>>> {
+		let body_cache = self.body_cache.read();
+		body_cache.get(hash).cloned()
+	}
+}
+
 /// Block database
 pub struct BlockchainDb<Block: BlockT> {
 	db: Arc<dyn Database<DbHash>>,
@@ -481,6 +522,7 @@ pub struct BlockchainDb<Block: BlockT> {
 	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
 	header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
 	header_cache: Mutex<LinkedHashMap<Block::Hash, Option<Block::Header>>>,
+	pinned_blocks_cache: Arc<PinnedBlockCache<Block>>,
 }
 
 impl<Block: BlockT> BlockchainDb<Block> {
@@ -493,6 +535,7 @@ impl<Block: BlockT> BlockchainDb<Block> {
 			meta: Arc::new(RwLock::new(meta)),
 			header_metadata_cache: Arc::new(HeaderMetadataCache::default()),
 			header_cache: Default::default(),
+			pinned_blocks_cache: Arc::new(PinnedBlockCache::new()),
 		})
 	}
 
@@ -520,6 +563,17 @@ impl<Block: BlockT> BlockchainDb<Block> {
 	fn update_block_gap(&self, gap: Option<(NumberFor<Block>, NumberFor<Block>)>) {
 		let mut meta = self.meta.write();
 		meta.block_gap = gap;
+	}
+
+	fn pin(&self, hash: Block::Hash) -> ClientResult<()> {
+		let justifications = self.justifications(hash)?;
+		let body = self.body(hash)?;
+		self.pinned_blocks_cache.insert(hash, body, justifications);
+		Ok(())
+	}
+
+	fn unpin(&self, hash: &Block::Hash) {
+		self.pinned_blocks_cache.remove(hash);
 	}
 }
 
@@ -578,6 +632,10 @@ impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for Blockcha
 
 impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<Block> {
 	fn body(&self, hash: Block::Hash) -> ClientResult<Option<Vec<Block::Extrinsic>>> {
+		if let Some(result) = self.pinned_blocks_cache.body(&hash) {
+			return Ok(result)
+		}
+
 		if let Some(body) =
 			read_db(&*self.db, columns::KEY_LOOKUP, columns::BODY, BlockId::Hash::<Block>(hash))?
 		{
@@ -643,6 +701,10 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 	}
 
 	fn justifications(&self, hash: Block::Hash) -> ClientResult<Option<Justifications>> {
+		if let Some(result) = self.pinned_blocks_cache.justification(&hash) {
+			return Ok(result)
+		}
+
 		match read_db(
 			&*self.db,
 			columns::KEY_LOOKUP,
@@ -1772,6 +1834,11 @@ impl<Block: BlockT> Backend<Block> {
 				let id = BlockId::<Block>::hash(hash);
 				match self.blockchain.header(id)? {
 					Some(header) => {
+						let pinned_block_store = self.pinned_block_store.read();
+						if pinned_block_store.contains(&hash) {
+							self.blockchain.pin(hash)?;
+						}
+
 						self.prune_block(transaction, id)?;
 						number = header.number().saturating_sub(One::one());
 						hash = *header.parent_hash();
@@ -2407,17 +2474,18 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		log::info!(target: "db", "Pinning block in backend, hash: {}, number: {}, num_pinned_blocks: {}", hash, number, handle.len());
 		log::info!(target: "skunert", "Pinned_block_contents: {:?}", handle);
 		let hint = || false;
-		self.storage.state_db.pin(hash, number, hint);
-		self.storage..pin(hash, number, hint);
+		self.storage.state_db.pin(hash, number, hint).map_err(|_| {
+			sp_blockchain::Error::UnknownBlock(format!("State already discarded for {:?}", hash))
+		})?;
 		Ok(())
 	}
 
-	fn unpin_block(&self, hash: &<Block as BlockT>::Hash) -> sp_blockchain::Result<()> {
+	fn unpin_block(&self, hash: &<Block as BlockT>::Hash) {
 		log::info!(target: "db", "Unpinning block in backend, hash: {}", hash);
 		let mut handle = self.pinned_block_store.write();
 		handle.remove(hash);
 		self.storage.state_db.unpin(hash);
-		Ok(())
+		self.blockchain.unpin(hash);
 	}
 }
 
