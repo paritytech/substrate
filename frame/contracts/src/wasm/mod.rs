@@ -28,6 +28,10 @@ pub use crate::wasm::{
 	prepare::TryInstantiate,
 	runtime::{CallFlags, Environment, ReturnCode, Runtime, RuntimeCosts},
 };
+
+#[cfg(doc)]
+pub use crate::wasm::runtime::api_doc;
+
 use crate::{
 	exec::{ExecResult, Executable, ExportedFunction, Ext},
 	gas::GasMeter,
@@ -36,7 +40,7 @@ use crate::{
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::dispatch::{DispatchError, DispatchResult};
-use sp_core::crypto::UncheckedFrom;
+use sp_core::Get;
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
 #[cfg(test)]
@@ -140,14 +144,11 @@ impl ExportedFunction {
 	}
 }
 
-impl<T: Config> PrefabWasmModule<T>
-where
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
+impl<T: Config> PrefabWasmModule<T> {
 	/// Create the module by checking and instrumenting `original_code`.
 	///
 	/// This does **not** store the module. For this one need to either call [`Self::store`]
-	/// or [`<Self as Executable>::execute`].
+	/// or [`<Self as Executable>::execute`][`Executable::execute`].
 	pub fn from_code(
 		original_code: Vec<u8>,
 		schedule: &Schedule<T>,
@@ -167,7 +168,8 @@ where
 
 	/// Store the code without instantiating it.
 	///
-	/// Otherwise the code is stored when [`<Self as Executable>::execute`] is called.
+	/// Otherwise the code is stored when [`<Self as Executable>::execute`][`Executable::execute`]
+	/// is called.
 	pub fn store(self) -> DispatchResult {
 		code_cache::store(self, false)
 	}
@@ -218,7 +220,7 @@ where
 		let module = Module::new(&engine, code)?;
 		let mut store = Store::new(&engine, host_state);
 		let mut linker = Linker::new();
-		E::define(&mut store, &mut linker)?;
+		E::define(&mut store, &mut linker, T::UnsafeUnstableInterface::get())?;
 		let memory = Memory::new(&mut store, MemoryType::new(memory.0, Some(memory.1))?).expect(
 			"The limits defined in our `Schedule` limit the amount of memory well below u32::MAX; qed",
 		);
@@ -263,10 +265,7 @@ impl<T: Config> OwnerInfo<T> {
 	}
 }
 
-impl<T: Config> Executable<T> for PrefabWasmModule<T>
-where
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
+impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 	fn from_storage(
 		code_hash: CodeHash<T>,
 		schedule: &Schedule<T>,
@@ -476,7 +475,7 @@ mod tests {
 				salt: salt.to_vec(),
 			});
 			Ok((
-				Contracts::<Test>::contract_address(&ALICE, &code_hash, salt),
+				Contracts::<Test>::contract_address(&ALICE, &code_hash, &data, salt),
 				ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() },
 			))
 		}
@@ -625,12 +624,22 @@ mod tests {
 		fn account_reentrance_count(&self, _account_id: &AccountIdOf<Self::T>) -> u32 {
 			12
 		}
+		fn nonce(&mut self) -> u64 {
+			995
+		}
 	}
 
-	fn execute<E: BorrowMut<MockExt>>(wat: &str, input_data: Vec<u8>, mut ext: E) -> ExecResult {
+	fn execute_internal<E: BorrowMut<MockExt>>(
+		wat: &str,
+		input_data: Vec<u8>,
+		mut ext: E,
+		unstable_interface: bool,
+	) -> ExecResult {
+		type RuntimeConfig = <MockExt as Ext>::T;
+		RuntimeConfig::set_unstable_interface(unstable_interface);
 		let wasm = wat::parse_str(wat).unwrap();
 		let schedule = crate::Schedule::default();
-		let executable = PrefabWasmModule::<<MockExt as Ext>::T>::from_code(
+		let executable = PrefabWasmModule::<RuntimeConfig>::from_code(
 			wasm,
 			&schedule,
 			ALICE,
@@ -639,6 +648,19 @@ mod tests {
 		)
 		.map_err(|err| err.0)?;
 		executable.execute(ext.borrow_mut(), &ExportedFunction::Call, input_data)
+	}
+
+	fn execute<E: BorrowMut<MockExt>>(wat: &str, input_data: Vec<u8>, ext: E) -> ExecResult {
+		execute_internal(wat, input_data, ext, true)
+	}
+
+	#[cfg(not(feature = "runtime-benchmarks"))]
+	fn execute_no_unstable<E: BorrowMut<MockExt>>(
+		wat: &str,
+		input_data: Vec<u8>,
+		ext: E,
+	) -> ExecResult {
+		execute_internal(wat, input_data, ext, false)
 	}
 
 	const CODE_TRANSFER: &str = r#"
@@ -741,7 +763,6 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn contract_delegate_call() {
 		const CODE: &str = r#"
 (module
@@ -2274,7 +2295,6 @@ mod tests {
 		);
 	}
 
-	#[cfg(feature = "unstable-interface")]
 	const CODE_CALL_RUNTIME: &str = r#"
 (module
 	(import "seal0" "call_runtime" (func $call_runtime (param i32 i32) (result i32)))
@@ -2311,7 +2331,6 @@ mod tests {
 "#;
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn call_runtime_works() {
 		let call =
 			RuntimeCall::System(frame_system::Call::remark { remark: b"Hello World".to_vec() });
@@ -2323,7 +2342,6 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn call_runtime_panics_on_invalid_call() {
 		let mut ext = MockExt::default();
 		let result = execute(CODE_CALL_RUNTIME, vec![0x42], &mut ext);
@@ -2586,7 +2604,6 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn take_storage_works() {
 		const CODE: &str = r#"
 (module
@@ -2822,7 +2839,6 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn caller_is_origin_works() {
 		const CODE_CALLER_IS_ORIGIN: &str = r#"
 ;; This runs `caller_is_origin` check on zero account address
@@ -2894,7 +2910,6 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn reentrance_count_works() {
 		const CODE: &str = r#"
 (module
@@ -2927,7 +2942,6 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn account_reentrance_count_works() {
 		const CODE: &str = r#"
 (module
@@ -2957,5 +2971,51 @@ mod tests {
 
 		let mut mock_ext = MockExt::default();
 		execute(CODE, vec![], &mut mock_ext).unwrap();
+	}
+
+	#[test]
+	fn instantiation_nonce_works() {
+		const CODE: &str = r#"
+(module
+	(import "seal0" "instantiation_nonce" (func $nonce (result i64)))
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+	(func (export "call")
+		(call $assert
+			(i64.eq (call $nonce) (i64.const 995))
+		)
+	)
+	(func (export "deploy"))
+)
+"#;
+
+		let mut mock_ext = MockExt::default();
+		execute(CODE, vec![], &mut mock_ext).unwrap();
+	}
+
+	/// This test check that an unstable interface cannot be deployed. In case of runtime
+	/// benchmarks we always allow unstable interfaces. This is why this test does not
+	/// work when this feature is enabled.
+	#[cfg(not(feature = "runtime-benchmarks"))]
+	#[test]
+	fn cannot_deploy_unstable() {
+		const CANNOT_DEPLOY_UNSTABLE: &str = r#"
+(module
+	(import "seal0" "reentrance_count" (func $reentrance_count (result i32)))
+	(func (export "call"))
+	(func (export "deploy"))
+)
+"#;
+		assert_err!(
+			execute_no_unstable(CANNOT_DEPLOY_UNSTABLE, vec![], MockExt::default()),
+			<Error<Test>>::CodeRejected,
+		);
+		assert_ok!(execute(CANNOT_DEPLOY_UNSTABLE, vec![], MockExt::default()));
 	}
 }

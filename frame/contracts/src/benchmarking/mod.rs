@@ -63,8 +63,6 @@ struct Contract<T: Config> {
 
 impl<T: Config> Contract<T>
 where
-	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 	<BalanceOf<T> as HasCompact>::Type: Clone + Eq + PartialEq + Debug + TypeInfo + Encode,
 {
 	/// Create new contract and use a default account id as instantiator.
@@ -90,7 +88,7 @@ where
 		let value = Pallet::<T>::min_balance();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let salt = vec![0xff];
-		let addr = Contracts::<T>::contract_address(&caller, &module.hash, &salt);
+		let addr = Contracts::<T>::contract_address(&caller, &module.hash, &data, &salt);
 
 		Contracts::<T>::store_code_raw(module.code, caller.clone())?;
 		Contracts::<T>::instantiate(
@@ -203,8 +201,6 @@ macro_rules! load_benchmark {
 
 benchmarks! {
 	where_clause { where
-		T::AccountId: UncheckedFrom<T::Hash>,
-		T::AccountId: AsRef<[u8]>,
 		<BalanceOf<T> as codec::HasCompact>::Type: Clone + Eq + PartialEq + sp_std::fmt::Debug + scale_info::TypeInfo + codec::Encode,
 	}
 
@@ -270,6 +266,7 @@ benchmarks! {
 	// a code of that size into the sandbox.
 	//
 	// `c`: Size of the code in kilobytes.
+	// `i`: Size of the input in kilobytes.
 	// `s`: Size of the salt in kilobytes.
 	//
 	// # Note
@@ -278,15 +275,17 @@ benchmarks! {
 	// to be larger than the maximum size **after instrumentation**.
 	instantiate_with_code {
 		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::MaxCodeLen::get());
+		let i in 0 .. code::max_pages::<T>() * 64 * 1024;
 		let s in 0 .. code::max_pages::<T>() * 64 * 1024;
+		let input = vec![42u8; i as usize];
 		let salt = vec![42u8; s as usize];
 		let value = Pallet::<T>::min_balance();
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c, Location::Call);
 		let origin = RawOrigin::Signed(caller.clone());
-		let addr = Contracts::<T>::contract_address(&caller, &hash, &salt);
-	}: _(origin, value, Weight::MAX, None, code, vec![], salt)
+		let addr = Contracts::<T>::contract_address(&caller, &hash, &input, &salt);
+	}: _(origin, value, Weight::MAX, None, code, input, salt)
 	verify {
 		// the contract itself does not trigger any reserves
 		let deposit = T::Currency::reserved_balance(&addr);
@@ -303,18 +302,21 @@ benchmarks! {
 	}
 
 	// Instantiate uses a dummy contract constructor to measure the overhead of the instantiate.
+	// `i`: Size of the input in kilobytes.
 	// `s`: Size of the salt in kilobytes.
 	instantiate {
+		let i in 0 .. code::max_pages::<T>() * 64 * 1024;
 		let s in 0 .. code::max_pages::<T>() * 64 * 1024;
+		let input = vec![42u8; i as usize];
 		let salt = vec![42u8; s as usize];
 		let value = Pallet::<T>::min_balance();
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy();
 		let origin = RawOrigin::Signed(caller.clone());
-		let addr = Contracts::<T>::contract_address(&caller, &hash, &salt);
+		let addr = Contracts::<T>::contract_address(&caller, &hash, &input, &salt);
 		Contracts::<T>::store_code_raw(code, caller.clone())?;
-	}: _(origin, value, Weight::MAX, None, hash, vec![], salt)
+	}: _(origin, value, Weight::MAX, None, hash, input, salt)
 	verify {
 		// the contract itself does not trigger any reserves
 		let deposit = T::Currency::reserved_balance(&addr);
@@ -1779,7 +1781,7 @@ benchmarks! {
 		let addresses = hashes
 			.iter()
 			.map(|hash| Contracts::<T>::contract_address(
-				&instance.account_id, hash, &[],
+				&instance.account_id, hash, &[], &[],
 			))
 			.collect::<Vec<_>>();
 
@@ -1796,8 +1798,9 @@ benchmarks! {
 		}
 	}
 
-	seal_instantiate_per_transfer_salt_kb {
+	seal_instantiate_per_transfer_input_salt_kb {
 		let t in 0 .. 1;
+		let i in 0 .. (code::max_pages::<T>() - 1) * 64;
 		let s in 0 .. (code::max_pages::<T>() - 1) * 64;
 		let callee_code = WasmModule::<T>::dummy();
 		let hash = callee_code.hash;
@@ -1865,14 +1868,14 @@ benchmarks! {
 				Regular(Instruction::I64Const(0)), // gas
 				Regular(Instruction::I32Const(value_offset as i32)), // value_ptr
 				Regular(Instruction::I32Const(value_len as i32)), // value_len
-				Regular(Instruction::I32Const(0)), // input_data_ptr
-				Regular(Instruction::I32Const(0)), // input_data_len
+				Counter(salt_offset as u32, salt_len as u32), // input_data_ptr
+				Regular(Instruction::I32Const((i * 1024) as i32)), // input_data_len
 				Regular(Instruction::I32Const((addr_len_offset + addr_len) as i32)), // address_ptr
 				Regular(Instruction::I32Const(addr_len_offset as i32)), // address_len_ptr
 				Regular(Instruction::I32Const(SENTINEL as i32)), // output_ptr
 				Regular(Instruction::I32Const(0)), // output_len_ptr
 				Counter(salt_offset as u32, salt_len as u32), // salt_ptr
-				Regular(Instruction::I32Const((s * 1024).max(salt_len as u32) as i32)), // salt_len
+				Regular(Instruction::I32Const((s * 1024) as i32)), // salt_len
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::I32Eqz),
 				Regular(Instruction::If(BlockType::NoResult)),
@@ -2138,6 +2141,26 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	seal_instantiation_nonce {
+		let r in 0 .. API_BENCHMARK_BATCHES;
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "seal0",
+				name: "instantiation_nonce",
+				params: vec![],
+				return_type: Some(ValueType::I64),
+			}],
+			call_body: Some(body::repeated(r * API_BENCHMARK_BATCH_SIZE, &[
+				Instruction::Call(0),
+				Instruction::Drop,
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
 	// We make the assumption that pushing a constant and dropping a value takes roughly
 	// the same amount of time. We follow that `t.load` and `drop` both have the weight
 	// of this benchmark / 2. We need to make this assumption because there is no way
@@ -2361,7 +2384,6 @@ benchmarks! {
 			call_body: Some(body::repeated(r * INSTR_BENCHMARK_BATCH_SIZE, &[
 				Instruction::Call(2), // call aux
 			])),
-			inject_stack_metering: true,
 			.. Default::default()
 		}));
 	}: {
@@ -2385,7 +2407,6 @@ benchmarks! {
 				RandomI32(0, num_elements as i32),
 				Regular(Instruction::CallIndirect(0, 0)), // we only have one sig: 0
 			])),
-			inject_stack_metering: true,
 			table: Some(TableSegment {
 				num_elements,
 				function_index: 2, // aux
@@ -2418,7 +2439,6 @@ benchmarks! {
 				RandomI32(0, num_elements as i32),
 				Regular(Instruction::CallIndirect(p.min(1), 0)), // aux signature: 1 or 0
 			])),
-			inject_stack_metering: true,
 			table: Some(TableSegment {
 				num_elements,
 				function_index: 2, // aux
@@ -2429,10 +2449,28 @@ benchmarks! {
 		sbox.invoke();
 	}
 
+	// w_per_local = w_bench
+	instr_call_per_local {
+		let l in 0 .. T::Schedule::get().limits.locals;
+		let mut aux_body = body::plain(vec![
+			Instruction::End,
+		]);
+		body::inject_locals(&mut aux_body, l);
+		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
+			aux_body: Some(aux_body),
+			call_body: Some(body::repeated(INSTR_BENCHMARK_BATCH_SIZE, &[
+				Instruction::Call(2), // call aux
+			])),
+			.. Default::default()
+		}));
+	}: {
+		sbox.invoke();
+	}
+
 	// w_local_get = w_bench - 1 * w_param
 	instr_local_get {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
-		let max_locals = T::Schedule::get().limits.stack_height.unwrap_or(512);
+		let max_locals = T::Schedule::get().limits.locals;
 		let mut call_body = body::repeated_dyn(r * INSTR_BENCHMARK_BATCH_SIZE, vec![
 			RandomGetLocal(0, max_locals),
 			Regular(Instruction::Drop),
@@ -2449,7 +2487,7 @@ benchmarks! {
 	// w_local_set = w_bench - 1 * w_param
 	instr_local_set {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
-		let max_locals = T::Schedule::get().limits.stack_height.unwrap_or(512);
+		let max_locals = T::Schedule::get().limits.locals;
 		let mut call_body = body::repeated_dyn(r * INSTR_BENCHMARK_BATCH_SIZE, vec![
 			RandomI64Repeated(1),
 			RandomSetLocal(0, max_locals),
@@ -2466,7 +2504,7 @@ benchmarks! {
 	// w_local_tee = w_bench - 2 * w_param
 	instr_local_tee {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
-		let max_locals = T::Schedule::get().limits.stack_height.unwrap_or(512);
+		let max_locals = T::Schedule::get().limits.locals;
 		let mut call_body = body::repeated_dyn(r * INSTR_BENCHMARK_BATCH_SIZE, vec![
 			RandomI64Repeated(1),
 			RandomTeeLocal(0, max_locals),
@@ -2927,7 +2965,7 @@ benchmarks! {
 			new.encode()
 		};
 		let instance = Contract::<T>::new(
-			WasmModule::instrumented(code, gas_metering, true), data,
+			WasmModule::instrumented(code, gas_metering), data,
 		)?;
 		let data = {
 			let transfer: ([u8; 4], AccountIdOf<T>, BalanceOf<T>) = (
@@ -2974,7 +3012,7 @@ benchmarks! {
 			new.encode()
 		};
 		let instance = Contract::<T>::with_caller(
-			caller, WasmModule::instrumented(code, gas_metering, true), data,
+			caller, WasmModule::instrumented(code, gas_metering), data,
 		)?;
 		balance[0] = 1;
 		let data = {

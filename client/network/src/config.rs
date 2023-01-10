@@ -42,7 +42,6 @@ use libp2p::{
 	Multiaddr,
 };
 use prometheus_endpoint::Registry;
-use sc_consensus::ImportQueue;
 use sc_network_common::{
 	config::{MultiaddrWithPeerId, NonDefaultSetConfig, SetConfig, TransportConfig},
 	sync::ChainSync,
@@ -68,9 +67,8 @@ where
 	/// Assigned role for our node (full, light, ...).
 	pub role: Role,
 
-	/// How to spawn background tasks. If you pass `None`, then a threads pool will be used by
-	/// default.
-	pub executor: Option<Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>>,
+	/// How to spawn background tasks.
+	pub executor: Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>,
 
 	/// Network layer configuration.
 	pub network_config: NetworkConfiguration,
@@ -84,12 +82,6 @@ where
 	/// Fork ID to distinguish protocols of different hard forks. Part of the standard protocol
 	/// name on the wire.
 	pub fork_id: Option<String>,
-
-	/// Import queue to use.
-	///
-	/// The import queue is the component that verifies that blocks received from other nodes are
-	/// valid.
-	pub import_queue: Box<dyn ImportQueue<B>>,
 
 	/// Instance of chain sync implementation.
 	pub chain_sync: Box<dyn ChainSync<B>>,

@@ -135,6 +135,7 @@ pub mod pallet {
 		/// - One storage read/write.
 		/// - One event.
 		/// # </weight>
+		#[pallet::call_index(0)]
 		#[pallet::weight(50_000_000)]
 		pub fn set_name(origin: OriginFor<T>, name: Vec<u8>) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
@@ -167,6 +168,7 @@ pub mod pallet {
 		/// - One storage read/write.
 		/// - One event.
 		/// # </weight>
+		#[pallet::call_index(1)]
 		#[pallet::weight(70_000_000)]
 		pub fn clear_name(origin: OriginFor<T>) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
@@ -193,6 +195,7 @@ pub mod pallet {
 		/// - One storage read/write.
 		/// - One event.
 		/// # </weight>
+		#[pallet::call_index(2)]
 		#[pallet::weight(70_000_000)]
 		pub fn kill_name(origin: OriginFor<T>, target: AccountIdLookupOf<T>) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
@@ -220,6 +223,7 @@ pub mod pallet {
 		/// - One storage read/write.
 		/// - One event.
 		/// # </weight>
+		#[pallet::call_index(3)]
 		#[pallet::weight(70_000_000)]
 		pub fn force_name(
 			origin: OriginFor<T>,
@@ -246,7 +250,7 @@ mod tests {
 	use crate as pallet_nicks;
 
 	use frame_support::{
-		assert_noop, assert_ok, ord_parameter_types, parameter_types,
+		assert_noop, assert_ok, ord_parameter_types,
 		traits::{ConstU32, ConstU64},
 	};
 	use frame_system::EnsureSignedBy;
@@ -271,10 +275,6 @@ mod tests {
 		}
 	);
 
-	parameter_types! {
-		pub BlockWeights: frame_system::limits::BlockWeights =
-			frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
-	}
 	impl frame_system::Config for Test {
 		type BaseCallFilter = frame_support::traits::Everything;
 		type BlockWeights = ();

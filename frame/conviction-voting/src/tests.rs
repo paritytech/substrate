@@ -22,7 +22,6 @@ use std::collections::BTreeMap;
 use frame_support::{
 	assert_noop, assert_ok, parameter_types,
 	traits::{ConstU32, ConstU64, Contains, Polling, VoteTally},
-	weights::Weight,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -56,10 +55,6 @@ impl Contains<RuntimeCall> for BaseFilter {
 	}
 }
 
-parameter_types! {
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(Weight::from_ref_time(1_000_000));
-}
 impl frame_system::Config for Test {
 	type BaseCallFilter = BaseFilter;
 	type BlockWeights = ();
@@ -237,6 +232,14 @@ fn nay(amount: u64, conviction: u8) -> AccountVote<u64> {
 	AccountVote::Standard { vote, balance: amount }
 }
 
+fn split(aye: u64, nay: u64) -> AccountVote<u64> {
+	AccountVote::Split { aye, nay }
+}
+
+fn split_abstain(aye: u64, nay: u64, abstain: u64) -> AccountVote<u64> {
+	AccountVote::SplitAbstain { aye, nay, abstain }
+}
+
 fn tally(index: u8) -> TallyOf<Test> {
 	<TestPolls as Polling<TallyOf<Test>>>::as_ongoing(index).expect("No poll").0
 }
@@ -292,6 +295,49 @@ fn basic_voting_works() {
 
 		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), class(3), 1));
 		assert_eq!(Balances::usable_balance(1), 10);
+	});
+}
+
+#[test]
+fn split_voting_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, split(10, 0)));
+		assert_eq!(tally(3), Tally::from_parts(1, 0, 10));
+		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, split(5, 5)));
+		assert_eq!(tally(3), Tally::from_parts(0, 0, 5));
+		assert_eq!(Balances::usable_balance(1), 0);
+
+		assert_ok!(Voting::remove_vote(RuntimeOrigin::signed(1), None, 3));
+		assert_eq!(tally(3), Tally::from_parts(0, 0, 0));
+
+		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), class(3), 1));
+		assert_eq!(Balances::usable_balance(1), 10);
+	});
+}
+
+#[test]
+fn abstain_voting_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, split_abstain(0, 0, 10)));
+		assert_eq!(tally(3), Tally::from_parts(0, 0, 10));
+		assert_ok!(Voting::vote(RuntimeOrigin::signed(2), 3, split_abstain(0, 0, 20)));
+		assert_eq!(tally(3), Tally::from_parts(0, 0, 30));
+		assert_ok!(Voting::vote(RuntimeOrigin::signed(2), 3, split_abstain(10, 0, 10)));
+		assert_eq!(tally(3), Tally::from_parts(1, 0, 30));
+		assert_eq!(Balances::usable_balance(1), 0);
+		assert_eq!(Balances::usable_balance(2), 0);
+
+		assert_ok!(Voting::remove_vote(RuntimeOrigin::signed(1), None, 3));
+		assert_eq!(tally(3), Tally::from_parts(1, 0, 20));
+
+		assert_ok!(Voting::remove_vote(RuntimeOrigin::signed(2), None, 3));
+		assert_eq!(tally(3), Tally::from_parts(0, 0, 0));
+
+		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), class(3), 1));
+		assert_eq!(Balances::usable_balance(1), 10);
+
+		assert_ok!(Voting::unlock(RuntimeOrigin::signed(2), class(3), 2));
+		assert_eq!(Balances::usable_balance(2), 20);
 	});
 }
 

@@ -237,6 +237,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Provide a set of uncles.
+		#[pallet::call_index(0)]
 		#[pallet::weight((0, DispatchClass::Mandatory))]
 		pub fn set_uncles(origin: OriginFor<T>, new_uncles: Vec<T::Header>) -> DispatchResult {
 			ensure_none(origin)?;
@@ -433,7 +434,6 @@ mod tests {
 	use super::*;
 	use crate as pallet_authorship;
 	use frame_support::{
-		parameter_types,
 		traits::{ConstU32, ConstU64, OnFinalize, OnInitialize},
 		ConsensusEngineId,
 	};
@@ -457,11 +457,6 @@ mod tests {
 			Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
 		}
 	);
-
-	parameter_types! {
-		pub BlockWeights: frame_system::limits::BlockWeights =
-			frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
-	}
 
 	impl frame_system::Config for Test {
 		type BaseCallFilter = frame_support::traits::Everything;

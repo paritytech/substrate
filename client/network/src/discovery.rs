@@ -61,7 +61,7 @@ use libp2p::{
 		GetClosestPeersError, GetRecordOk, Kademlia, KademliaBucketInserts, KademliaConfig,
 		KademliaEvent, QueryId, QueryResult, Quorum, Record,
 	},
-	mdns::{async_io::Behaviour as Mdns, Config as MdnsConfig, Event as MdnsEvent},
+	mdns::{self, tokio::Behaviour as TokioMdns},
 	multiaddr::Protocol,
 	swarm::{
 		behaviour::{
@@ -234,7 +234,7 @@ impl DiscoveryConfig {
 			allow_private_ipv4,
 			discovery_only_if_under_num,
 			mdns: if enable_mdns {
-				match Mdns::new(MdnsConfig::default()) {
+				match TokioMdns::new(mdns::Config::default()) {
 					Ok(mdns) => Some(mdns),
 					Err(err) => {
 						warn!(target: "sub-libp2p", "Failed to initialize mDNS: {:?}", err);
@@ -249,7 +249,7 @@ impl DiscoveryConfig {
 				NonZeroUsize::new(MAX_KNOWN_EXTERNAL_ADDRESSES)
 					.expect("value is a constant; constant is non-zero; qed."),
 			),
-			outbound_query_records: Vec::new(),
+			records_to_publish: Default::default(),
 		}
 	}
 }
@@ -266,7 +266,7 @@ pub struct DiscoveryBehaviour {
 	/// it's always enabled in `NetworkWorker::new()`.
 	kademlia: Toggle<Kademlia<MemoryStore>>,
 	/// Discovers nodes on the local network.
-	mdns: Option<Mdns>,
+	mdns: Option<TokioMdns>,
 	/// Stream that fires when we need to perform the next random Kademlia query. `None` if
 	/// random walking is disabled.
 	next_kad_random_query: Option<Delay>,
@@ -287,8 +287,12 @@ pub struct DiscoveryBehaviour {
 	allow_non_globals_in_dht: bool,
 	/// A cache of discovered external addresses. Only used for logging purposes.
 	known_external_addresses: LruHashSet<Multiaddr>,
-	/// A cache of outbound query records.
-	outbound_query_records: Vec<(record::Key, Vec<u8>)>,
+	/// Records to publish per QueryId.
+	///
+	/// After finishing a Kademlia query, libp2p will return us a list of the closest peers that
+	/// did not return the record(in `FinishedWithNoAdditionalRecord`). We will then put the record
+	/// to these peers.
+	records_to_publish: HashMap<QueryId, Record>,
 }
 
 impl DiscoveryBehaviour {
@@ -544,8 +548,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			FromSwarm::ListenerClosed(e) => {
 				self.kademlia.on_swarm_event(FromSwarm::ListenerClosed(e));
 			},
-			FromSwarm::ListenFailure(_) => {
-				// NetworkBehaviour::inject_listen_failure on Kademlia<MemoryStore> does nothing.
+			FromSwarm::ListenFailure(e) => {
+				self.kademlia.on_swarm_event(FromSwarm::ListenFailure(e));
 			},
 			FromSwarm::ListenerError(e) => {
 				self.kademlia.on_swarm_event(FromSwarm::ListenerError(e));
@@ -692,33 +696,57 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 					KademliaEvent::OutboundQueryProgressed {
 						result: QueryResult::GetRecord(res),
 						stats,
-						step,
+						id,
 						..
 					} => {
 						let ev = match res {
-							Ok(ok) =>
-								if let GetRecordOk::FoundRecord(r) = ok {
-									self.outbound_query_records
-										.push((r.record.key, r.record.value));
-									continue
-								} else {
-									debug!(
-										target: "sub-libp2p",
-										"Libp2p => Query progressed to {:?} step (last: {:?})",
-										step.count,
-										step.last,
-									);
-									if step.last {
-										let records =
-											self.outbound_query_records.drain(..).collect();
-										DiscoveryOut::ValueFound(
-											records,
-											stats.duration().unwrap_or_default(),
-										)
-									} else {
+							Ok(GetRecordOk::FoundRecord(r)) => {
+								debug!(
+									target: "sub-libp2p",
+									"Libp2p => Found record ({:?}) with value: {:?}",
+									r.record.key,
+									r.record.value,
+								);
+
+								// Let's directly finish the query, as we are only interested in a
+								// quorum of 1.
+								if let Some(kad) = self.kademlia.as_mut() {
+									if let Some(mut query) = kad.query_mut(&id) {
+										query.finish();
+									}
+								}
+
+								// Will be removed below when we receive
+								// `FinishedWithNoAdditionalRecord`.
+								self.records_to_publish.insert(id, r.record.clone());
+
+								DiscoveryOut::ValueFound(
+									vec![(r.record.key, r.record.value)],
+									stats.duration().unwrap_or_default(),
+								)
+							},
+							Ok(GetRecordOk::FinishedWithNoAdditionalRecord {
+								cache_candidates,
+							}) => {
+								// We always need to remove the record to not leak any data!
+								if let Some(record) = self.records_to_publish.remove(&id) {
+									if cache_candidates.is_empty() {
 										continue
 									}
-								},
+
+									// Put the record to the `cache_candidates` that are nearest to
+									// the record key from our point of view of the network.
+									if let Some(kad) = self.kademlia.as_mut() {
+										kad.put_record_to(
+											record,
+											cache_candidates.into_iter().map(|v| v.1),
+											Quorum::One,
+										);
+									}
+								}
+
+								continue
+							},
 							Err(e @ libp2p::kad::GetRecordError::NotFound { .. }) => {
 								trace!(
 									target: "sub-libp2p",
@@ -812,7 +840,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			while let Poll::Ready(ev) = mdns.poll(cx, params) {
 				match ev {
 					NetworkBehaviourAction::GenerateEvent(event) => match event {
-						MdnsEvent::Discovered(list) => {
+						mdns::Event::Discovered(list) => {
 							if self.num_connections >= self.discovery_only_if_under_num {
 								continue
 							}
@@ -823,7 +851,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 								return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
 							}
 						},
-						MdnsEvent::Expired(_) => {},
+						mdns::Event::Expired(_) => {},
 					},
 					NetworkBehaviourAction::Dial { .. } => {
 						unreachable!("mDNS never dials!");
@@ -878,12 +906,19 @@ mod tests {
 		},
 		identity::{ed25519, Keypair},
 		noise,
-		swarm::{Swarm, SwarmEvent},
+		swarm::{Executor, Swarm, SwarmEvent},
 		yamux, Multiaddr,
 	};
 	use sc_network_common::config::ProtocolId;
 	use sp_core::hash::H256;
-	use std::{collections::HashSet, task::Poll};
+	use std::{collections::HashSet, pin::Pin, task::Poll};
+
+	struct TokioExecutor(tokio::runtime::Runtime);
+	impl Executor for TokioExecutor {
+		fn exec(&self, f: Pin<Box<dyn Future<Output = ()> + Send>>) {
+			let _ = self.0.spawn(f);
+		}
+	}
 
 	#[test]
 	fn discovery_working() {
@@ -920,10 +955,12 @@ mod tests {
 					config.finish()
 				};
 
-				let mut swarm = Swarm::with_threadpool_executor(
+				let runtime = tokio::runtime::Runtime::new().unwrap();
+				let mut swarm = Swarm::with_executor(
 					transport,
 					behaviour,
 					keypair.public().to_peer_id(),
+					TokioExecutor(runtime),
 				);
 				let listen_addr: Multiaddr =
 					format!("/memory/{}", rand::random::<u64>()).parse().unwrap();

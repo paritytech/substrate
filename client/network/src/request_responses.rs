@@ -344,13 +344,21 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 						)
 					}
 				},
-			FromSwarm::DialFailure(DialFailure { peer_id, error, .. }) =>
-				for (p, _) in self.protocols.values_mut() {
-					let handler = p.new_handler();
-					NetworkBehaviour::on_swarm_event(
-						p,
-						FromSwarm::DialFailure(DialFailure { peer_id, handler, error }),
-					);
+			FromSwarm::DialFailure(DialFailure { peer_id, error, handler }) =>
+				for (p_name, p_handler) in handler.into_iter() {
+					if let Some((proto, _)) = self.protocols.get_mut(p_name.as_str()) {
+						proto.on_swarm_event(FromSwarm::DialFailure(DialFailure {
+							peer_id,
+							handler: p_handler,
+							error,
+						}));
+					} else {
+						log::error!(
+						  target: "sub-libp2p",
+						  "on_swarm_event/dial_failure: no request-response instance registered for protocol {:?}",
+						  p_name,
+						)
+					}
 				},
 			FromSwarm::ListenerClosed(e) =>
 				for (p, _) in self.protocols.values_mut() {
@@ -414,9 +422,11 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 			return proto.on_connection_handler_event(peer_id, connection_id, event)
 		}
 
-		log::warn!(target: "sub-libp2p",
-      "on_connection_handler_event: no request-response instance registered for protocol {:?}",
-      p_name)
+		log::warn!(
+			target: "sub-libp2p",
+			"on_connection_handler_event: no request-response instance registered for protocol {:?}",
+			p_name
+		);
 	}
 
 	fn poll(
@@ -910,11 +920,18 @@ mod tests {
 		},
 		identity::Keypair,
 		noise,
-		swarm::{Swarm, SwarmEvent},
+		swarm::{Executor, Swarm, SwarmEvent},
 		Multiaddr,
 	};
 	use sc_peerset::{Peerset, PeersetConfig, SetConfig};
 	use std::{iter, time::Duration};
+
+	struct TokioExecutor(tokio::runtime::Runtime);
+	impl Executor for TokioExecutor {
+		fn exec(&self, f: Pin<Box<dyn Future<Output = ()> + Send>>) {
+			let _ = self.0.spawn(f);
+		}
+	}
 
 	fn build_swarm(
 		list: impl Iterator<Item = ProtocolConfig>,
@@ -944,8 +961,13 @@ mod tests {
 
 		let behaviour = RequestResponsesBehaviour::new(list, handle).unwrap();
 
-		let mut swarm =
-			Swarm::with_threadpool_executor(transport, behaviour, keypair.public().to_peer_id());
+		let runtime = tokio::runtime::Runtime::new().unwrap();
+		let mut swarm = Swarm::with_executor(
+			transport,
+			behaviour,
+			keypair.public().to_peer_id(),
+			TokioExecutor(runtime),
+		);
 		let listen_addr: Multiaddr = format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
 
 		swarm.listen_on(listen_addr.clone()).unwrap();
