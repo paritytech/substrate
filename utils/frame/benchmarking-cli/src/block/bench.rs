@@ -94,9 +94,9 @@ where
 			let block_num = BlockId::Number(i.into());
 			let parent_num = BlockId::Number(((i - 1) as u32).into());
 			let consumed = self.consumed_weight(&block_num)?;
+			let hash = self.client.expect_block_hash_from_id(&block_num)?;
 
-			let block =
-				self.client.block(&block_num)?.ok_or(format!("Block {} not found", block_num))?;
+			let block = self.client.block(hash)?.ok_or(format!("Block {} not found", block_num))?;
 			let block = self.unsealed(block.block);
 			let took = self.measure_block(&block, &parent_num)?;
 

@@ -899,7 +899,7 @@ fn forcing_new_era_works() {
 		assert_eq!(active_era(), 1);
 
 		// no era change.
-		ForceEra::<Test>::put(Forcing::ForceNone);
+		Staking::set_force_era(Forcing::ForceNone);
 
 		start_session(4);
 		assert_eq!(active_era(), 1);
@@ -915,7 +915,7 @@ fn forcing_new_era_works() {
 
 		// back to normal.
 		// this immediately starts a new session.
-		ForceEra::<Test>::put(Forcing::NotForcing);
+		Staking::set_force_era(Forcing::NotForcing);
 
 		start_session(8);
 		assert_eq!(active_era(), 1);
@@ -923,7 +923,7 @@ fn forcing_new_era_works() {
 		start_session(9);
 		assert_eq!(active_era(), 2);
 		// forceful change
-		ForceEra::<Test>::put(Forcing::ForceAlways);
+		Staking::set_force_era(Forcing::ForceAlways);
 
 		start_session(10);
 		assert_eq!(active_era(), 2);
@@ -935,7 +935,7 @@ fn forcing_new_era_works() {
 		assert_eq!(active_era(), 4);
 
 		// just one forceful change
-		ForceEra::<Test>::put(Forcing::ForceNew);
+		Staking::set_force_era(Forcing::ForceNew);
 		start_session(13);
 		assert_eq!(active_era(), 5);
 		assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
@@ -2303,7 +2303,7 @@ fn era_is_always_same_length() {
 		);
 
 		let session = Session::current_index();
-		ForceEra::<Test>::put(Forcing::ForceNew);
+		Staking::set_force_era(Forcing::ForceNew);
 		advance_session();
 		advance_session();
 		assert_eq!(current_era(), 3);
@@ -2914,7 +2914,10 @@ fn deferred_slashes_are_deferred() {
 			staking_events_since_last_call().as_slice(),
 			&[
 				Event::Chilled { stash: 11 },
+				Event::ForceEra { mode: Forcing::ForceNew },
 				Event::SlashReported { validator: 11, slash_era: 1, .. },
+				Event::StakersElected,
+				Event::ForceEra { mode: Forcing::NotForcing },
 				..,
 				Event::Slashed { staker: 11, amount: 100 },
 				Event::Slashed { staker: 101, amount: 12 }
@@ -2949,6 +2952,7 @@ fn retroactive_deferred_slashes_two_eras_before() {
 			staking_events_since_last_call().as_slice(),
 			&[
 				Event::Chilled { stash: 11 },
+				Event::ForceEra { mode: Forcing::ForceNew },
 				Event::SlashReported { validator: 11, slash_era: 1, .. },
 				..,
 				Event::Slashed { staker: 11, amount: 100 },
@@ -3251,6 +3255,7 @@ fn slash_kicks_validators_not_nominators_and_disables_nominator_for_kicked_valid
 				Event::StakersElected,
 				Event::EraPaid { era_index: 0, validator_payout: 11075, remainder: 33225 },
 				Event::Chilled { stash: 11 },
+				Event::ForceEra { mode: Forcing::ForceNew },
 				Event::SlashReported {
 					validator: 11,
 					fraction: Perbill::from_percent(10),
@@ -3318,6 +3323,7 @@ fn non_slashable_offence_doesnt_disable_validator() {
 				Event::StakersElected,
 				Event::EraPaid { era_index: 0, validator_payout: 11075, remainder: 33225 },
 				Event::Chilled { stash: 11 },
+				Event::ForceEra { mode: Forcing::ForceNew },
 				Event::SlashReported {
 					validator: 11,
 					fraction: Perbill::from_percent(0),
@@ -3380,6 +3386,7 @@ fn slashing_independent_of_disabling_validator() {
 				Event::StakersElected,
 				Event::EraPaid { era_index: 0, validator_payout: 11075, remainder: 33225 },
 				Event::Chilled { stash: 11 },
+				Event::ForceEra { mode: Forcing::ForceNew },
 				Event::SlashReported {
 					validator: 11,
 					fraction: Perbill::from_percent(0),
@@ -4662,8 +4669,15 @@ mod election_data_provider {
 			MinimumValidatorCount::<Test>::put(2);
 			run_to_block(55);
 			assert_eq!(Staking::next_election_prediction(System::block_number()), 55 + 25);
-			assert_eq!(staking_events().len(), 6);
-			assert_eq!(*staking_events().last().unwrap(), Event::StakersElected);
+			assert_eq!(staking_events().len(), 10);
+			assert_eq!(
+				*staking_events().last().unwrap(),
+				Event::ForceEra { mode: Forcing::NotForcing }
+			);
+			assert_eq!(
+				*staking_events().get(staking_events().len() - 2).unwrap(),
+				Event::StakersElected
+			);
 			// The new era has been planned, forcing is changed from `ForceNew` to `NotForcing`.
 			assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
 		})
@@ -5724,4 +5738,95 @@ fn scale_validator_count_errors() {
 			Error::<Test>::TooManyValidators,
 		);
 	})
+}
+
+#[test]
+fn set_min_commission_works_with_admin_origin() {
+	ExtBuilder::default().build_and_execute(|| {
+		// no minimum commission set initially
+		assert_eq!(MinCommission::<Test>::get(), Zero::zero());
+
+		// root can set min commission
+		assert_ok!(Staking::set_min_commission(RuntimeOrigin::root(), Perbill::from_percent(10)));
+
+		assert_eq!(MinCommission::<Test>::get(), Perbill::from_percent(10));
+
+		// Non privileged origin can not set min_commission
+		assert_noop!(
+			Staking::set_min_commission(RuntimeOrigin::signed(2), Perbill::from_percent(15)),
+			BadOrigin
+		);
+
+		// Admin Origin can set min commission
+		assert_ok!(Staking::set_min_commission(
+			RuntimeOrigin::signed(1),
+			Perbill::from_percent(15),
+		));
+
+		// setting commission below min_commission fails
+		assert_noop!(
+			Staking::validate(
+				RuntimeOrigin::signed(10),
+				ValidatorPrefs { commission: Perbill::from_percent(14), blocked: false }
+			),
+			Error::<Test>::CommissionTooLow
+		);
+
+		// setting commission >= min_commission works
+		assert_ok!(Staking::validate(
+			RuntimeOrigin::signed(10),
+			ValidatorPrefs { commission: Perbill::from_percent(15), blocked: false }
+		));
+	})
+}
+
+mod staking_interface {
+	use frame_support::storage::with_storage_layer;
+	use sp_staking::StakingInterface;
+
+	use super::*;
+
+	#[test]
+	fn force_unstake_with_slash_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// without slash
+			let _ = with_storage_layer::<(), _, _>(|| {
+				// bond an account, can unstake
+				assert_eq!(Staking::bonded(&11), Some(10));
+				assert_ok!(<Staking as StakingInterface>::force_unstake(11));
+				Err(DispatchError::from("revert"))
+			});
+
+			// bond again and add a slash, still can unstake.
+			assert_eq!(Staking::bonded(&11), Some(10));
+			add_slash(&11);
+			assert_ok!(<Staking as StakingInterface>::force_unstake(11));
+		});
+	}
+
+	#[test]
+	fn do_withdraw_unbonded_with_wrong_slash_spans_works_as_expected() {
+		ExtBuilder::default().build_and_execute(|| {
+			on_offence_now(
+				&[OffenceDetails {
+					offender: (11, Staking::eras_stakers(active_era(), 11)),
+					reporters: vec![],
+				}],
+				&[Perbill::from_percent(100)],
+			);
+
+			assert_eq!(Staking::bonded(&11), Some(10));
+
+			assert_noop!(
+				Staking::withdraw_unbonded(RuntimeOrigin::signed(10), 0),
+				Error::<Test>::IncorrectSlashingSpans
+			);
+
+			let num_slashing_spans = Staking::slashing_spans(&11).map_or(0, |s| s.iter().count());
+			assert_ok!(Staking::withdraw_unbonded(
+				RuntimeOrigin::signed(10),
+				num_slashing_spans as u32
+			));
+		});
+	}
 }
