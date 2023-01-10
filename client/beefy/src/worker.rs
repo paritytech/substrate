@@ -1084,6 +1084,7 @@ pub(crate) mod tests {
 		Block,
 		Backend,
 		MmrRootProvider<Block, TestApi>,
+		TestApi,
 		Arc<NetworkService<Block, H256>>,
 	> {
 		let keystore = create_beefy_keystore(*key);
@@ -1128,10 +1129,11 @@ pub(crate) mod tests {
 			min_block_delta,
 		)
 		.unwrap();
-		let payload_provider = MmrRootProvider::new(api);
+		let payload_provider = MmrRootProvider::new(api.clone());
 		let worker_params = crate::worker::WorkerParams {
 			backend,
 			payload_provider,
+			runtime: api,
 			key_store: Some(keystore).into(),
 			links,
 			gossip_engine,
@@ -1141,7 +1143,7 @@ pub(crate) mod tests {
 			on_demand_justifications,
 			persisted_state,
 		};
-		BeefyWorker::<_, _, _, _>::new(worker_params)
+		BeefyWorker::<_, _, _, _, _>::new(worker_params)
 	}
 
 	#[test]
