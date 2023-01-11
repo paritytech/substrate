@@ -91,6 +91,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		with_details: impl FnOnce(&ItemDetailsFor<T, I>) -> DispatchResult,
 	) -> DispatchResult {
 		ensure!(!T::Locker::is_locked(collection, item), Error::<T, I>::ItemLocked);
+		let item_config = Self::get_item_config(&collection, &item)?;
 		let owner = Collection::<T, I>::try_mutate(
 			&collection,
 			|maybe_collection_details| -> Result<T::AccountId, DispatchError> {
@@ -103,6 +104,24 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				// Return the deposit.
 				T::Currency::unreserve(&details.deposit.account, details.deposit.amount);
 				collection_details.items.saturating_dec();
+
+				// Clear the metadata if it's not locked.
+				if item_config.is_setting_enabled(ItemSetting::UnlockedMetadata) {
+					if let Some(metadata) = ItemMetadataOf::<T, I>::take(&collection, &item) {
+						let depositor_account =
+							metadata.deposit.account.unwrap_or(collection_details.owner.clone());
+
+						T::Currency::unreserve(&depositor_account, metadata.deposit.amount.clone());
+						collection_details.item_metadatas.saturating_dec();
+
+						if depositor_account == collection_details.owner {
+							collection_details
+								.owner_deposit
+								.saturating_reduce(metadata.deposit.amount);
+						}
+					}
+				}
+
 				Ok(details.owner)
 			},
 		)?;
@@ -115,8 +134,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		// NOTE: if item's settings are not empty (e.g. item's metadata is locked)
 		// then we keep the record and don't remove it
-		let config = Self::get_item_config(&collection, &item)?;
-		if !config.has_disabled_settings() {
+		if !item_config.has_disabled_settings() {
 			ItemConfigOf::<T, I>::remove(&collection, &item);
 		}
 

@@ -1267,7 +1267,7 @@ fn burn_works() {
 
 		assert_noop!(
 			Nfts::burn(RuntimeOrigin::signed(5), 0, 42, Some(5)),
-			Error::<Test>::UnknownCollection
+			Error::<Test>::UnknownItem
 		);
 
 		assert_ok!(Nfts::force_mint(RuntimeOrigin::signed(2), 0, 42, 5, default_item_config()));
