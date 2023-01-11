@@ -166,48 +166,42 @@ impl BenchmarkDef {
 
 		// #[extrinsic_call] handling
 		for child in &item_fn.block.stmts {
-			let mut extrinsic_call: Option<ExtrinsicCallDef> = None;
-			if let Stmt::Semi(Expr::Call(expr_call), _semi) = child {
-				// non-block (encoded) case
-				for (k, attr) in (&expr_call.attrs).iter().enumerate() {
-					if let Some(segment) = attr.path.segments.last() {
-						if let Ok(_) = syn::parse::<keywords::extrinsic_call>(
-							segment.ident.to_token_stream().into(),
-						) {
-							let mut expr_call = expr_call.clone();
+			let mut extrinsic_call = None;
+			match child {
+				Stmt::Semi(Expr::Call(expr_call), _semi) => {
+					// non-block (encoded) case
+					for (k, attr) in (&expr_call.attrs).iter().enumerate() {
+						let Some(segment) = attr.path.segments.last() else { continue; };
+						let Ok(_) = syn::parse::<keywords::extrinsic_call>(segment.ident.to_token_stream().into()) else { continue; };
+						let mut expr_call = expr_call.clone();
 
-							// consume #[extrinsic_call] tokens
-							expr_call.attrs.remove(k);
+						// consume #[extrinsic_call] tokens
+						expr_call.attrs.remove(k);
 
-							// extract origin from expr_call
-							let origin = match expr_call.args.first() {
-								Some(arg) => arg.clone(),
-								None =>
-									return Err(Error::new(
-										expr_call.args.span(),
-										"Single-item extrinsic calls must specify their origin as the first argument.",
-									)),
-							};
-							extrinsic_call = Some(ExtrinsicCallDef::Encoded { origin, expr_call });
-						}
+						// extract origin from expr_call
+						let origin = match expr_call.args.first() {
+							Some(arg) => arg.clone(),
+							None => return Err(Error::new(expr_call.args.span(), "Single-item extrinsic calls must specify their origin as the first argument.")),
+						};
+						extrinsic_call = Some(ExtrinsicCallDef::Encoded { origin, expr_call });
+						break
 					}
-				}
-			} else if let Stmt::Expr(Expr::Block(block)) = child {
-				// block case
-				for (k, attr) in (&block.attrs).iter().enumerate() {
-					if let Some(segment) = attr.path.segments.last() {
-						if let Ok(_) = syn::parse::<keywords::extrinsic_call>(
-							segment.ident.to_token_stream().into(),
-						) {
-							let mut block = block.clone();
+				},
+				Stmt::Expr(Expr::Block(block)) => {
+					// block case
+					for (k, attr) in (&block.attrs).iter().enumerate() {
+						let Some(segment) = attr.path.segments.last() else { continue; };
+						let Ok(_) = syn::parse::<keywords::extrinsic_call>(segment.ident.to_token_stream().into()) else { continue; };
+						let mut block = block.clone();
 
-							// consume #[extrinsic_call] tokens
-							block.attrs.remove(k);
+						// consume #[extrinsic_call] tokens
+						block.attrs.remove(k);
 
-							extrinsic_call = Some(ExtrinsicCallDef::Block(block));
-						}
+						extrinsic_call = Some(ExtrinsicCallDef::Block(block));
+						break
 					}
-				}
+				},
+				_ => (),
 			}
 
 			// return parsed BenchmarkDef
