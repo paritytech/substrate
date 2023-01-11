@@ -1414,8 +1414,9 @@ where
 			.status(hash)
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
 
-		// Early exit if block already in chain or importing blocks during initial sync,
-		// otherwise the check for epoch changes will error when trying to re-import an epoch change
+		// Skip babe logic if block already in chain or importing blocks during initial sync,
+		// otherwise the check for epoch changes will error because trying to re-import an
+		// epoch change or because of missing epoch data in the tree, respectivelly.
 		if (block.origin == BlockOrigin::NetworkInitialSync && number < info.finalized_number) ||
 			block_status == BlockStatus::InChain
 		{
