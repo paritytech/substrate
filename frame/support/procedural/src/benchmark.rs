@@ -145,39 +145,23 @@ impl BenchmarkDef {
 
 		// parse params such as "x: Linear<0, 1>"
 		for arg in &item_fn.sig.inputs {
-			let mut name: Option<String> = None;
-			let mut typ: Option<&Type> = None;
-			let mut start: Option<u32> = None;
-			let mut end: Option<u32> = None;
-			if let FnArg::Typed(arg) = arg {
-				if let Pat::Ident(ident) = &*arg.pat {
-					name = Some(ident.ident.to_token_stream().to_string());
-				}
-				let tmp = &*arg.ty;
-				typ = Some(tmp);
-				if let Type::Path(tpath) = tmp {
-					if let Some(segment) = tpath.path.segments.last() {
-						let args = segment.arguments.to_token_stream().into();
-						if let Ok(args) = syn::parse::<RangeArgs>(args) {
-							if let Ok(start_parsed) = args.start.base10_parse::<u32>() {
-								start = Some(start_parsed);
-							}
-							if let Ok(end_parsed) = args.end.base10_parse::<u32>() {
-								end = Some(end_parsed);
-							}
-						}
-					}
-				}
-			}
-			if let (Some(name), Some(typ), Some(start), Some(end)) = (name, typ, start, end) {
-				// if true, this iteration of param extraction was successful
-				params.push(ParamDef { name, typ: typ.clone(), start, end });
-			} else {
-				return Err(Error::new(
-					arg.span(),
-					"Invalid benchmark function param. A valid example would be `x: Linear<5, 10>`.",
-				))
-			}
+			let span = arg.span();
+			let invalid_param = || {
+				return Err(Error::new(span, "Invalid benchmark function param. A valid example would be `x: Linear<5, 10>`.", ))
+			};
+
+			let FnArg::Typed(arg) = arg else { return invalid_param() };
+			let Pat::Ident(ident) = &*arg.pat else { return invalid_param() };
+			let name = ident.ident.to_token_stream().to_string();
+			let typ = &*arg.ty;
+			let Type::Path(tpath) = typ else { return invalid_param() };
+			let Some(segment) = tpath.path.segments.last() else { return invalid_param() };
+			let args = segment.arguments.to_token_stream().into();
+			let Ok(args) = syn::parse::<RangeArgs>(args) else { return invalid_param() };
+			let Ok(start) = args.start.base10_parse::<u32>() else { return invalid_param() };
+			let Ok(end) = args.end.base10_parse::<u32>() else { return invalid_param() };
+
+			params.push(ParamDef { name, typ: typ.clone(), start, end });
 		}
 
 		// #[extrinsic_call] handling
