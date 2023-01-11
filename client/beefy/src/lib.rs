@@ -44,7 +44,7 @@ pub mod communication;
 pub mod import;
 pub mod justification;
 
-#[cfg(notest)]
+#[cfg(test)]
 mod tests;
 
 use crate::{

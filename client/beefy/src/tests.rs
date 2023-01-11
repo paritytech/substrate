@@ -37,7 +37,7 @@ use sc_network_test::{
 use sc_utils::notification::NotificationReceiver;
 
 use beefy_primitives::{
-	ecdsa_crypto::{AuthorityId, Signature, self},
+	ecdsa_crypto::{AuthorityId, Signature, self, Pair as ECDSAKeyPair},
 	mmr::MmrRootProvider,
 	BeefyApi, ConsensusLog, MmrRootHash, ValidatorSet, VersionedFinalityProof, BEEFY_ENGINE_ID,
 	KEY_TYPE as BeefyKeyType,
@@ -66,9 +66,9 @@ use crate::{
 	},
 	gossip_protocol_name,
 	justification::*,
-	keystore::tests::ECDSAKeyring as BeefyKeyring,
+	keystore::tests::{Keyring, GenericKeyring, SimpleKeyPair},
 	BeefyRPCLinks, BeefyVoterLinks,
-	keystore::BeefyECDSAKeystore,
+	keystore::{BeefyECDSAKeystore, BeefyBLSnECDSAKeystore},
 };
 
 const GENESIS_HASH: H256 = H256::zero();
@@ -79,18 +79,18 @@ fn beefy_gossip_proto_name() -> ProtocolName {
 const GOOD_MMR_ROOT: MmrRootHash = MmrRootHash::repeat_byte(0xbf);
 const BAD_MMR_ROOT: MmrRootHash = MmrRootHash::repeat_byte(0x42);
 
-type BeefyBlockImport = crate::BeefyBlockImport<
+type BeefyBlockImport<AuthId, TSignature, TBeefyKeystore> = crate::BeefyBlockImport<
 	Block,
-	substrate_test_runtime_client::Backend,
+	substrate_test_runtime_client::Backend, 
 	two_validators::TestApi,
-	BlockImportAdapter<PeersClient, sp_api::TransactionFor<two_validators::TestApi, Block>>,
-	ecdsa_crypto::AuthorityId,
-	ecdsa_crypto::Signature,
-	BeefyECDSAKeystore,
+    BlockImportAdapter<PeersClient, sp_api::TransactionFor<two_validators::TestApi, Block>>,
+    AuthId,
+    TSignature,
+    TBeefyKeystore,
 >;
 
-pub(crate) type BeefyValidatorSet = ValidatorSet<AuthorityId>;
-pub(crate) type BeefyPeer<TSignature> = Peer<PeerData<TSignature>, BeefyBlockImport>;
+pub(crate) type BeefyValidatorSet<AuthId> = ValidatorSet<AuthId>;
+pub(crate) type BeefyPeer<AuthId, TSignature, TBeefyKeystore> = Peer<PeerData<TSignature>, BeefyBlockImport<AuthId, TSignature, TBeefyKeystore>>;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Genesis(std::collections::BTreeMap<String, String>);
@@ -103,7 +103,7 @@ impl BuildStorage for Genesis {
 	}
 }
 
-#[derive(Default)]
+//#[derive(Default)] can not derive due to generic
 pub(crate) struct PeerData<TSignature> where
 	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
 {
@@ -113,14 +113,41 @@ pub(crate) struct PeerData<TSignature> where
 		Mutex<Option<BeefyJustifsRequestHandler<Block, PeersFullClient>>>,
 }
 
-#[derive(Default)]
-pub(crate) struct BeefyTestNet<TSignature> where
-	TSignature: Encode + Decode + Debug + Clone + Sync + Send,{
-	peers: Vec<BeefyPeer<TSignature>>,
+impl<TSignature> Default for PeerData<TSignature> where
+    TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+{
+    fn default() -> Self {
+        Self {
+	    ..Default::default()
+        }
+    }
 }
 
-impl<TSignature> BeefyTestNet<TSignature> where
-	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+// #[derive(Default)] can not derive due to generic
+pub(crate) struct BeefyTestNet<AuthId, TSignature, TBeefyKeystore> where
+    AuthId: Encode + Decode + Debug + Ord + Sync + Send,
+    TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+    TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
+{
+	peers: Vec<BeefyPeer<AuthId, TSignature, TBeefyKeystore>>,
+}
+
+impl<AuthId, TSignature, TBeefyKeystore> Default for BeefyTestNet<AuthId, TSignature, TBeefyKeystore> where
+    AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send,
+    TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+    TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
+{
+    fn default() -> Self {
+        Self {
+            ..Default::default()
+        }
+    }
+}
+
+impl<AuthId, TSignature, TBeefyKeystore> BeefyTestNet<AuthId, TSignature, TBeefyKeystore> where
+    AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
+    TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
+    TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
 {
 	pub(crate) fn new(n_authority: usize) -> Self {
 		let mut net = BeefyTestNet { peers: Vec::with_capacity(n_authority) };
@@ -156,7 +183,7 @@ impl<TSignature> BeefyTestNet<TSignature> where
 		&mut self,
 		count: usize,
 		session_length: u64,
-		validator_set: &BeefyValidatorSet,
+		validator_set: &BeefyValidatorSet<AuthId>,
 		include_mmr_digest: bool,
 	) {
 		self.peer(0).generate_blocks(count, BlockOrigin::File, |builder| {
@@ -179,11 +206,13 @@ impl<TSignature> BeefyTestNet<TSignature> where
 	}
 }
 
-impl<TSignature> TestNetFactory for BeefyTestNet<TSignature> where
-    TSignature: Encode + Decode + Debug + Clone + Sync + Send + Default,
+impl<AuthId, TSignature, TBeefyKeystore> TestNetFactory for BeefyTestNet<AuthId, TSignature, TBeefyKeystore> where
+    AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
+    TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
+    TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>+ 'static,
 {
 	type Verifier = PassThroughVerifier;
-	type BlockImport = BeefyBlockImport;
+	type BlockImport = BeefyBlockImport<AuthId, TSignature, TBeefyKeystore>;
 	type PeerData = PeerData<TSignature>;
 
 	fn make_verifier(&self, _client: PeersClient, _: &PeerData<TSignature>) -> Self::Verifier {
@@ -204,7 +233,7 @@ impl<TSignature> TestNetFactory for BeefyTestNet<TSignature> where
 			client.as_backend(),
 			Arc::new(two_validators::TestApi {}),
 		);
-		let peer_data = PeerData {
+		let peer_data = PeerData::<TSignature> {
 			beefy_rpc_links: Mutex::new(Some(rpc_links)),
 			beefy_voter_links: Mutex::new(Some(voter_links)),
 			..Default::default()
@@ -212,15 +241,15 @@ impl<TSignature> TestNetFactory for BeefyTestNet<TSignature> where
 		(BlockImportAdapter::new(block_import), None, peer_data)
 	}
 
-	fn peer(&mut self, i: usize) -> &mut BeefyPeer<TSignature> {
+	fn peer(&mut self, i: usize) -> &mut BeefyPeer<AuthId, TSignature, TBeefyKeystore> {
 		&mut self.peers[i]
 	}
 
-	fn peers(&self) -> &Vec<BeefyPeer<TSignature>> {
+	fn peers(&self) -> &Vec<BeefyPeer<AuthId, TSignature, TBeefyKeystore>> {
 		&self.peers
 	}
 
-	fn mut_peers<F: FnOnce(&mut Vec<BeefyPeer<TSignature>>)>(&mut self, closure: F) {
+	fn mut_peers<F: FnOnce(&mut Vec<BeefyPeer<AuthId, TSignature, TBeefyKeystore>>)>(&mut self, closure: F) {
 		closure(&mut self.peers);
 	}
 
@@ -251,13 +280,15 @@ macro_rules! create_test_api {
 				}
 			}
 			sp_api::mock_impl_runtime_apis! {
-				impl BeefyApi<Block, ecdsa_crypto::AuthorityId> for RuntimeApi {
-					fn validator_set() -> Option<BeefyValidatorSet> {
-						BeefyValidatorSet::new(make_beefy_ids(&[$($inits),+]), 0)
+			    impl<AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker> BeefyApi<Block, AuthId> for RuntimeApi
+				where
+			    {
+					fn validator_set() -> Option<BeefyValidatorSet<AuthId>> {
+						BeefyValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(&[$($inits),+]), 0)
 					}
 				}
 
-				impl MmrApi<Block, MmrRootHash, NumberFor<Block>> for RuntimeApi {
+			    impl MmrApi<Block, MmrRootHash, NumberFor<Block>> for RuntimeApi {
 					fn generate_proof(_block_number: u64)
 						-> Result<(EncodableOpaqueLeaf, Proof<MmrRootHash>), MmrError> {
 						unimplemented!()
@@ -308,23 +339,25 @@ macro_rules! create_test_api {
 	};
 }
 
-create_test_api!(two_validators, mmr_root: GOOD_MMR_ROOT, BeefyKeyring::Alice, BeefyKeyring::Bob);
-create_test_api!(
-	four_validators,
-	mmr_root: GOOD_MMR_ROOT,
-	BeefyKeyring::Alice,
-	BeefyKeyring::Bob,
-	BeefyKeyring::Charlie,
-	BeefyKeyring::Dave
-);
-create_test_api!(
-	bad_four_validators,
-	mmr_root: BAD_MMR_ROOT,
-	BeefyKeyring::Alice,
-	BeefyKeyring::Bob,
-	BeefyKeyring::Charlie,
-	BeefyKeyring::Dave
-);
+create_test_api!(two_validators,  mmr_root: GOOD_MMR_ROOT, Keyring::Alice, Keyring::Bob);
+// create_test_api!(
+//     four_validators,
+//     ECDSAKeyPair,
+// 	mmr_root: GOOD_MMR_ROOT,
+// 	Keyring::Alice,
+// 	Keyring::Bob,
+// 	Keyring::Charlie,
+// 	Keyring::Dave
+// );
+// create_test_api!(
+//     bad_four_validators,
+//     ECDSAKeyPair,
+// 	mmr_root: BAD_MMR_ROOT,
+// 	Keyring::Alice,
+// 	Keyring::Bob,
+// 	Keyring::Charlie,
+// 	Keyring::Dave
+// );
 
 fn add_mmr_digest(header: &mut Header, mmr_hash: MmrRootHash) {
 	header.digest_mut().push(DigestItem::Consensus(
@@ -333,20 +366,31 @@ fn add_mmr_digest(header: &mut Header, mmr_hash: MmrRootHash) {
 	));
 }
 
-fn add_auth_change_digest(header: &mut Header, new_auth_set: BeefyValidatorSet) {
+fn add_auth_change_digest<AuthId>(header: &mut Header, new_auth_set: BeefyValidatorSet<AuthId>) where
+    AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send,
+{
 	header.digest_mut().push(DigestItem::Consensus(
 		BEEFY_ENGINE_ID,
-		ConsensusLog::<AuthorityId>::AuthoritiesChange(new_auth_set).encode(),
+		ConsensusLog::<AuthId>::AuthoritiesChange(new_auth_set).encode(),
 	));
 }
 
-pub(crate) fn make_beefy_ids(keys: &[BeefyKeyring]) -> Vec<AuthorityId> {
-	keys.iter().map(|&key| key.public().into()).collect()
+pub(crate) trait BeefyAuthIdMaker : Clone + Encode + Decode + Debug + Ord + Sync + Send {
+    
+     fn make_beefy_ids(keys: &[Keyring]) -> Vec<Self>;
 }
 
-pub(crate) fn create_beefy_keystore(authority: BeefyKeyring) -> SyncCryptoStorePtr {
+impl BeefyAuthIdMaker for ecdsa_crypto::AuthorityId 
+{
+     fn make_beefy_ids(keys: &[Keyring]) -> Vec<Self> {
+	 keys.iter().map(|&key| <Keyring as GenericKeyring<ecdsa_crypto::Pair>>::public(key).into()).collect()
+	     
+    }
+}
+
+pub(crate) fn create_beefy_keystore<TKeyPair: SimpleKeyPair>(authority: Keyring) -> SyncCryptoStorePtr {    
 	let keystore = Arc::new(LocalKeystore::in_memory());
-	SyncCryptoStore::ecdsa_generate_new(&*keystore, BeefyKeyType, Some(&authority.to_seed()))
+	SyncCryptoStore::ecdsa_generate_new(&*keystore, BeefyKeyType, Some(&<Keyring as GenericKeyring<TKeyPair>>::to_seed(authority)))
 		.expect("Creates authority key");
 	keystore
 }
@@ -354,16 +398,16 @@ pub(crate) fn create_beefy_keystore(authority: BeefyKeyring) -> SyncCryptoStoreP
 use crate::keystore::BeefyKeystore;
 // Spawns beefy voters. Returns a future to spawn on the runtime.
 fn initialize_beefy<API, AuthId, TSignature, BKS, TKeyPair>(
-	net: &mut BeefyTestNet<TSignature>,
-	peers: Vec<(usize, &BeefyKeyring, Arc<API>)>,
+	net: &mut BeefyTestNet<AuthId, TSignature, BKS>,
+	peers: Vec<(usize, &Keyring, Arc<API>)>,
 	min_block_delta: u32,
 ) -> impl Future<Output = ()>
 where
 	API: ProvideRuntimeApi<Block> + Default + Sync + Send,
     API::Api: BeefyApi<Block, AuthId> + MmrApi<Block, MmrRootHash, NumberFor<Block>>,
     TSignature: Encode + Decode + Debug + Clone + Sync + Send + Default + 'static,
-    TKeyPair: Debug + Ord + Sync + Send,
-    AuthId: Encode + Decode + Debug + Ord + std::hash::Hash + Sync + Send + 'static,
+    TKeyPair: Debug + Ord + Sync + Send + SimpleKeyPair,
+    AuthId: Clone + Encode + Decode + Debug + Ord + BeefyAuthIdMaker + std::hash::Hash + Sync + Send + 'static,
     BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
 {
 	let tasks = FuturesUnordered::new();
@@ -371,7 +415,7 @@ where
 	for (peer_id, key, api) in peers.into_iter() {
 		let peer = &net.peers[peer_id];
 
-		let keystore = create_beefy_keystore(key.clone());
+		let keystore = create_beefy_keystore::<TKeyPair>(key.clone());
 
 		let (_, _, peer_data) = net.make_block_import(peer.client().clone());
 		let PeerData { beefy_rpc_links, beefy_voter_links, .. } = peer_data;
@@ -415,7 +459,13 @@ where
 	tasks.for_each(|_| async move {})
 }
 
-fn block_until(future: impl Future + Unpin, net: &Arc<Mutex<BeefyTestNet<ecdsa_crypto::Signature>>>, runtime: &mut Runtime) {
+fn block_until<AuthId, TSignature, BKS>(future: impl Future + Unpin, net: &Arc<Mutex<BeefyTestNet<AuthId, TSignature, BKS>>>, runtime: &mut Runtime) where
+    AuthId: Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
+    TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
+    BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
+
+
+{
 	let drive_to_completion = futures::future::poll_fn(|cx| {
 		net.lock().poll(cx);
 		Poll::<()>::Pending
@@ -423,16 +473,25 @@ fn block_until(future: impl Future + Unpin, net: &Arc<Mutex<BeefyTestNet<ecdsa_c
 	runtime.block_on(future::select(future, drive_to_completion));
 }
 
-fn run_for(duration: Duration, net: &Arc<Mutex<BeefyTestNet<ecdsa_crypto::Signature>>>, runtime: &mut Runtime) {
+fn run_for<AuthId, TSignature, BKS>(duration: Duration, net: &Arc<Mutex<BeefyTestNet<AuthId, TSignature, BKS>>>, runtime: &mut Runtime) where
+    AuthId: Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
+    TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
+    BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
+
+{
 	let sleep = runtime.spawn(async move { tokio::time::sleep(duration).await });
 	block_until(sleep, net, runtime);
 }
 
-pub(crate) fn get_beefy_streams(
-	net: &mut BeefyTestNet<ecdsa_crypto::Signature>,
+pub(crate) fn get_beefy_streams<AuthId, TSignature, BKS>(
+	net: &mut BeefyTestNet<AuthId, TSignature, BKS>,
 	// peer index and key
-	peers: impl Iterator<Item = (usize, BeefyKeyring)>,
-) -> (Vec<NotificationReceiver<H256>>, Vec<NotificationReceiver<BeefyVersionedFinalityProof<Block, ecdsa_crypto::Signature>>>)
+	peers: impl Iterator<Item = (usize, Keyring)>,
+) -> (Vec<NotificationReceiver<H256>>, Vec<NotificationReceiver<BeefyVersionedFinalityProof<Block, TSignature>>>)
+where
+    AuthId: Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
+    TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
+    BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
 {
 	let mut best_block_streams = Vec::new();
 	let mut versioned_finality_proof_streams = Vec::new();
@@ -446,12 +505,16 @@ pub(crate) fn get_beefy_streams(
 	(best_block_streams, versioned_finality_proof_streams)
 }
 
-fn wait_for_best_beefy_blocks(
+fn wait_for_best_beefy_blocks<AuthId, TSignature, BKS>(
 	streams: Vec<NotificationReceiver<H256>>,
-	net: &Arc<Mutex<BeefyTestNet<ecdsa_crypto::Signature>>>,
+	net: &Arc<Mutex<BeefyTestNet<AuthId, TSignature, BKS>>>,
 	runtime: &mut Runtime,
 	expected_beefy_blocks: &[u64],
-) {
+) where
+    AuthId: Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
+    TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
+    BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
+{
 	let mut wait_for = Vec::new();
 	let len = expected_beefy_blocks.len();
 	streams.into_iter().enumerate().for_each(|(i, stream)| {
@@ -472,12 +535,16 @@ fn wait_for_best_beefy_blocks(
 	block_until(wait_for, net, runtime);
 }
 
-fn wait_for_beefy_signed_commitments(
-	streams: Vec<NotificationReceiver<BeefyVersionedFinalityProof<Block, ecdsa_crypto::Signature>>>,
-	net: &Arc<Mutex<BeefyTestNet<ecdsa_crypto::Signature>>>,
+fn wait_for_beefy_signed_commitments<AuthId, TSignature, BKS>(
+	streams: Vec<NotificationReceiver<BeefyVersionedFinalityProof<Block, TSignature>>>,
+	net: &Arc<Mutex<BeefyTestNet<AuthId, TSignature, BKS>>>,
 	runtime: &mut Runtime,
 	expected_commitment_block_nums: &[u64],
-) {
+) where
+    AuthId: Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
+    TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
+    BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
+{
 	let mut wait_for = Vec::new();
 	let len = expected_commitment_block_nums.len();
 	streams.into_iter().for_each(|stream| {
@@ -498,14 +565,17 @@ fn wait_for_beefy_signed_commitments(
 	block_until(wait_for, net, runtime);
 }
 
-fn streams_empty_after_timeout<T>(
+fn streams_empty_after_timeout<T, AuthId, TSignature, BKS>(
 	streams: Vec<NotificationReceiver<T>>,
-	net: &Arc<Mutex<BeefyTestNet<ecdsa_crypto::Signature>>>,
+	net: &Arc<Mutex<BeefyTestNet<AuthId, TSignature, BKS>>>,
 	runtime: &mut Runtime,
 	timeout: Option<Duration>,
 ) where
-	T: std::fmt::Debug,
-	T: std::cmp::PartialEq,
+    T: std::fmt::Debug,
+    T: std::cmp::PartialEq,
+    AuthId: Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
+    TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
+    BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
 {
 	if let Some(timeout) = timeout {
 		run_for(timeout, net, runtime);
@@ -518,14 +588,18 @@ fn streams_empty_after_timeout<T>(
 	});
 }
 
-fn finalize_block_and_wait_for_beefy(
-	net: &Arc<Mutex<BeefyTestNet<ecdsa_crypto::Signature>>>,
+fn finalize_block_and_wait_for_beefy<AuthId, TSignature, BKS>(
+	net: &Arc<Mutex<BeefyTestNet<AuthId, TSignature, BKS>>>,
 	// peer index and key
-	peers: impl Iterator<Item = (usize, BeefyKeyring)> + Clone,
+	peers: impl Iterator<Item = (usize, Keyring)> + Clone,
 	runtime: &mut Runtime,
 	finalize_targets: &[u64],
 	expected_beefy: &[u64],
-) {
+) where
+    AuthId: Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
+    TSignature: Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq + 'static,
+    BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
+{
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
 
 	for block in finalize_targets {
@@ -557,7 +631,7 @@ fn finalize_block_and_wait_for_beefy(
 // 	sp_tracing::try_init_simple();
 
 // 	let mut runtime = Runtime::new().unwrap();
-// 	let peers = [BeefyKeyring::Alice, BeefyKeyring::Bob];
+// 	let peers = [Keyring::Alice, Keyring::Bob];
 // 	let validator_set = ValidatorSet::new(make_beefy_ids(&peers), 0).unwrap();
 // 	let session_len = 10;
 // 	let min_block_delta = 4;
@@ -597,7 +671,7 @@ fn finalize_block_and_wait_for_beefy(
 // 	sp_tracing::try_init_simple();
 
 // 	let mut runtime = Runtime::new().unwrap();
-// 	let peers = [BeefyKeyring::Alice, BeefyKeyring::Bob];
+// 	let peers = [Keyring::Alice, Keyring::Bob];
 // 	let validator_set = ValidatorSet::new(make_beefy_ids(&peers), 0).unwrap();
 // 	let session_len = 30;
 // 	let min_block_delta = 1;
@@ -668,7 +742,7 @@ fn finalize_block_and_wait_for_beefy(
 // 	sp_tracing::try_init_simple();
 
 // 	let mut runtime = Runtime::new().unwrap();
-// 	let peers = [BeefyKeyring::Alice, BeefyKeyring::Bob, BeefyKeyring::Charlie, BeefyKeyring::Dave];
+// 	let peers = [Keyring::Alice, Keyring::Bob, Keyring::Charlie, Keyring::Dave];
 // 	let validator_set = ValidatorSet::new(make_beefy_ids(&peers), 0).unwrap();
 // 	let session_len = 20;
 // 	let min_block_delta = 2;
@@ -677,7 +751,7 @@ fn finalize_block_and_wait_for_beefy(
 
 // 	// Alice, Bob, Charlie will vote on good payloads
 // 	let good_api = Arc::new(four_validators::TestApi {});
-// 	let good_peers = [BeefyKeyring::Alice, BeefyKeyring::Bob, BeefyKeyring::Charlie]
+// 	let good_peers = [Keyring::Alice, Keyring::Bob, Keyring::Charlie]
 // 		.iter()
 // 		.enumerate()
 // 		.map(|(id, key)| (id, key, good_api.clone()))
@@ -686,7 +760,7 @@ fn finalize_block_and_wait_for_beefy(
 
 // 	// Dave will vote on bad mmr roots
 // 	let bad_api = Arc::new(bad_four_validators::TestApi {});
-// 	let bad_peers = vec![(3, &BeefyKeyring::Dave, bad_api)];
+// 	let bad_peers = vec![(3, &Keyring::Dave, bad_api)];
 // 	runtime.spawn(initialize_beefy(&mut net, bad_peers, min_block_delta));
 
 // 	// push 12 blocks
@@ -698,7 +772,7 @@ fn finalize_block_and_wait_for_beefy(
 // 	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[10], &[1, 9]);
 
 // 	let (best_blocks, versioned_finality_proof) =
-// 		get_beefy_streams(&mut net.lock(), [(0, BeefyKeyring::Alice)].into_iter());
+// 		get_beefy_streams(&mut net.lock(), [(0, Keyring::Alice)].into_iter());
 
 // 	// now 2 good validators and 1 bad one are voting
 // 	net.lock()
@@ -727,7 +801,7 @@ fn finalize_block_and_wait_for_beefy(
 
 // 	// 3rd good validator catches up and votes as well
 // 	let (best_blocks, versioned_finality_proof) =
-// 		get_beefy_streams(&mut net.lock(), [(0, BeefyKeyring::Alice)].into_iter());
+// 		get_beefy_streams(&mut net.lock(), [(0, Keyring::Alice)].into_iter());
 // 	net.lock()
 // 		.peer(2)
 // 		.client()
@@ -794,7 +868,7 @@ fn finalize_block_and_wait_for_beefy(
 // 	// Import with valid justification.
 // 	let parent_id = BlockId::Number(1);
 // 	let block_num = 2;
-// 	let keys = &[BeefyKeyring::Alice, BeefyKeyring::Bob];
+// 	let keys = &[Keyring::Alice, Keyring::Bob];
 // 	let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 // 	let proof = crate::justification::tests::new_finality_proof(block_num, &validator_set, keys);
 // 	let versioned_proof: VersionedFinalityProof<NumberFor<Block>, Signature> = proof.into();
@@ -829,7 +903,7 @@ fn finalize_block_and_wait_for_beefy(
 // 	// Import with invalid justification (incorrect validator set).
 // 	let parent_id = BlockId::Number(2);
 // 	let block_num = 3;
-// 	let keys = &[BeefyKeyring::Alice];
+// 	let keys = &[Keyring::Alice];
 // 	let validator_set = ValidatorSet::new(make_beefy_ids(keys), 1).unwrap();
 // 	let proof = crate::justification::tests::new_finality_proof(block_num, &validator_set, keys);
 // 	let versioned_proof: VersionedFinalityProof<NumberFor<Block>, Signature> = proof.into();
@@ -867,7 +941,7 @@ fn finalize_block_and_wait_for_beefy(
 // 	// after waiting for BEEFY pallet availability.
 
 // 	let mut runtime = Runtime::new().unwrap();
-// 	let peers = [BeefyKeyring::Alice, BeefyKeyring::Bob];
+// 	let peers = [Keyring::Alice, Keyring::Bob];
 // 	let validator_set = ValidatorSet::new(make_beefy_ids(&peers), 0).unwrap();
 // 	let session_len = 5;
 // 	// Should vote on all mandatory blocks no matter the `min_block_delta`.
@@ -900,7 +974,7 @@ fn finalize_block_and_wait_for_beefy(
 
 // 	let mut runtime = Runtime::new().unwrap();
 // 	let all_peers =
-// 		[BeefyKeyring::Alice, BeefyKeyring::Bob, BeefyKeyring::Charlie, BeefyKeyring::Dave];
+// 		[Keyring::Alice, Keyring::Bob, Keyring::Charlie, Keyring::Dave];
 // 	let validator_set = ValidatorSet::new(make_beefy_ids(&all_peers), 0).unwrap();
 // 	let session_len = 5;
 // 	let min_block_delta = 5;
@@ -909,14 +983,14 @@ fn finalize_block_and_wait_for_beefy(
 
 // 	// Alice, Bob, Charlie start first and make progress through voting.
 // 	let api = Arc::new(four_validators::TestApi {});
-// 	let fast_peers = [BeefyKeyring::Alice, BeefyKeyring::Bob, BeefyKeyring::Charlie];
+// 	let fast_peers = [Keyring::Alice, Keyring::Bob, Keyring::Charlie];
 // 	let voting_peers =
 // 		fast_peers.iter().enumerate().map(|(id, key)| (id, key, api.clone())).collect();
 // 	runtime.spawn(initialize_beefy(&mut net, voting_peers, min_block_delta));
 
 // 	// Dave will start late and have to catch up using on-demand justification requests (since
 // 	// in this test there is no block import queue to automatically import justifications).
-// 	let dave = vec![(3, &BeefyKeyring::Dave, api)];
+// 	let dave = vec![(3, &Keyring::Dave, api)];
 // 	// Instantiate but don't run Dave, yet.
 // 	let dave_task = initialize_beefy(&mut net, dave, min_block_delta);
 // 	let dave_index = 3;
@@ -942,7 +1016,7 @@ fn finalize_block_and_wait_for_beefy(
 // 	run_for(Duration::from_millis(400), &net, &mut runtime);
 
 // 	let (dave_best_blocks, _) =
-// 		get_beefy_streams(&mut net.lock(), [(dave_index, BeefyKeyring::Dave)].into_iter());
+// 		get_beefy_streams(&mut net.lock(), [(dave_index, Keyring::Dave)].into_iter());
 // 	net.lock()
 // 		.peer(dave_index)
 // 		.client()
@@ -964,7 +1038,7 @@ fn finalize_block_and_wait_for_beefy(
 // 	// then verify Dave catches up through on-demand justification requests.
 // 	finalize_block_and_wait_for_beefy(
 // 		&net,
-// 		[(dave_index, BeefyKeyring::Dave)].into_iter(),
+// 		[(dave_index, Keyring::Dave)].into_iter(),
 // 		&mut runtime,
 // 		&[6, 10, 17, 24, 26],
 // 		&[5, 10, 15, 20, 25],
