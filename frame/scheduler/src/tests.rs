@@ -973,7 +973,7 @@ fn migration_to_v4_works() {
 		}
 		assert_eq_uvec!(x, expected);
 
-		assert_eq!(Scheduler::current_storage_version(), 3);
+		assert_eq!(Scheduler::on_chain_storage_version(), 4);
 	});
 }
 
