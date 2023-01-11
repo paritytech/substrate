@@ -379,15 +379,8 @@ impl ExternalitiesExt for &mut dyn Externalities {
 	}
 }
 
-/// Utility to extract range from accessed value.
-pub fn result_from_slice(
-	value: Option<&[u8]>,
-	start: u32,
-	limit: Option<u32>,
-) -> Option<Cow<[u8]>> {
-	range_slice(value, start, limit).map(|s| s.into())
-}
-
+/// Utility to extract a slice with range externality logic: bound check for start, largest for
+/// end.
 pub fn range_slice(value: Option<&[u8]>, start: u32, limit: Option<u32>) -> Option<&[u8]> {
 	value.map(|value| {
 		let start = start as usize;
@@ -406,6 +399,15 @@ pub fn range_slice(value: Option<&[u8]>, start: u32, limit: Option<u32>) -> Opti
 			&value[0..0]
 		}
 	})
+}
+
+/// Utility to extract range from accessed value.
+pub fn result_from_slice(
+	value: Option<&[u8]>,
+	start: u32,
+	limit: Option<u32>,
+) -> Option<Cow<[u8]>> {
+	range_slice(value, start, limit).map(|s| s.into())
 }
 
 /// Utility to extract range from accessed value.
