@@ -670,20 +670,21 @@ impl<T: Config> Commission<T> {
 	/// `throttle_from` to the current block. If the supplied commission is zero, `None` will be
 	/// inserted and `payee` will be ignored.
 	fn try_update_current(&mut self, current: &Option<(Perbill, T::AccountId)>) -> DispatchResult {
-		if current.is_none() {
-			self.current = None;
-		} else {
-			let (commission, payee) = current.as_ref().ok_or(Error::<T>::NoCommissionSet)?;
-			ensure!(!self.throttling(&commission), Error::<T>::CommissionChangeThrottled);
-			ensure!(
-				self.max.map_or(true, |m| commission <= &m),
-				Error::<T>::CommissionExceedsMaximum
-			);
-
-			self.current =
-				if commission == &Zero::zero() { None } else { Some((*commission, payee.clone())) };
-		}
-
+		self.current = match current {
+			None => None,
+			Some((commission, payee)) => {
+				ensure!(!self.throttling(&commission), Error::<T>::CommissionChangeThrottled);
+				ensure!(
+					self.max.map_or(true, |m| commission <= &m),
+					Error::<T>::CommissionExceedsMaximum
+				);
+				if commission.is_zero() {
+					None
+				} else {
+					Some((*commission, payee.clone()))
+				}
+			},
+		};
 		let _ = self.register_update();
 		Ok(())
 	}
