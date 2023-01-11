@@ -58,16 +58,19 @@ pub fn build_transport(
 	// Build the base layer of the transport.
 	let transport = if !memory_only {
 		let tcp_config = tcp::Config::new().nodelay(true);
-		let desktop_trans = tcp::tokio::Transport::new(tcp_config.clone());
-		let desktop_trans = websocket::WsConfig::new(desktop_trans)
-			.or_transport(tcp::tokio::Transport::new(tcp_config.clone()));
+		let tcp_trans = tcp::tokio::Transport::new(tcp_config.clone());
+		// NOTE: The order is important here. Preference is given to the regular TCP transport.
+		let desktop_trans = tcp::tokio::Transport::new(tcp_config.clone())
+			.or_transport(websocket::WsConfig::new(tcp_trans));
+
 		let dns_init = dns::TokioDnsConfig::system(desktop_trans);
 		EitherTransport::Left(if let Ok(dns) = dns_init {
 			EitherTransport::Left(dns)
 		} else {
-			let desktop_trans = tcp::tokio::Transport::new(tcp_config.clone());
-			let desktop_trans = websocket::WsConfig::new(desktop_trans)
-				.or_transport(tcp::tokio::Transport::new(tcp_config));
+			let tcp_trans = tcp::tokio::Transport::new(tcp_config.clone());
+			// NOTE: The order is important here. Preference is given to the regular TCP transport.
+			let desktop_trans = tcp::tokio::Transport::new(tcp_config)
+				.or_transport(websocket::WsConfig::new(tcp_trans));
 			EitherTransport::Right(desktop_trans.map_err(dns::DnsErr::Transport))
 		})
 	} else {
@@ -124,7 +127,9 @@ pub fn build_transport(
 	if !memory_only {
 		let webrtc_transport = WebRTCTransport::new(keypair, webrtc_cert);
 
-		let transport = OrTransport::new(webrtc_transport, transport)
+		// NOTE: The order is important here. Preference is given to the regular TCP+Websocket
+		// transport.
+		let transport = OrTransport::new(transport, webrtc_transport)
 			.map(|either_output, _| match either_output {
 				EitherOutput::First((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
 				EitherOutput::Second((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
