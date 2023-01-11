@@ -632,8 +632,8 @@ impl<T: Config> Commission<T> {
 			}
 			// Test for `max_increase` throttling.
 			//
-			// The attempted increase in commission relative to the current commission if throttled if
-			// greater than `max_increase`.
+			// The attempted increase in commission relative to the current commission if throttled
+			// if greater than `max_increase`.
 			if (*to).saturating_sub(commission_as_percent) > t.max_increase {
 				return true
 			}
