@@ -110,7 +110,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(is_root || !is_locked, Error::<T, I>::LockedItemMetadata);
 
 		collection_details.item_metadatas.saturating_dec();
-		T::Currency::unreserve(&depositor_account, metadata.deposit.amount.clone());
+		T::Currency::unreserve(&depositor_account, metadata.deposit.amount);
 
 		if depositor_account == collection_details.owner {
 			collection_details.owner_deposit.saturating_reduce(metadata.deposit.amount);
