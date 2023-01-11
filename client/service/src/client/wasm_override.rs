@@ -62,16 +62,16 @@ struct WasmBlob {
 	hash: Vec<u8>,
 	/// The path where this blob was found.
 	path: PathBuf,
-	/// The `spec_name` found in the runtime version of this blob.
-	spec_name: String,
+	/// The runtime version of this blob.
+	version: RuntimeVersion,
 	/// When was the last time we have warned about the wasm blob having
 	/// a wrong `spec_name`?
 	last_warn: parking_lot::Mutex<Option<Instant>>,
 }
 
 impl WasmBlob {
-	fn new(code: Vec<u8>, hash: Vec<u8>, path: PathBuf, spec_name: String) -> Self {
-		Self { code, hash, path, spec_name, last_warn: Default::default() }
+	fn new(code: Vec<u8>, hash: Vec<u8>, path: PathBuf, version: RuntimeVersion) -> Self {
+		Self { code, hash, path, version, last_warn: Default::default() }
 	}
 
 	fn runtime_code(&self, heap_pages: Option<u64>) -> RuntimeCode {
@@ -141,10 +141,10 @@ impl WasmOverride {
 		spec: &u32,
 		pages: Option<u64>,
 		spec_name: &str,
-	) -> Option<RuntimeCode<'a>> {
+	) -> Option<(RuntimeCode<'a>, RuntimeVersion)> {
 		self.overrides.get(spec).and_then(|w| {
-			if spec_name == w.spec_name {
-				Some(w.runtime_code(pages))
+			if spec_name == &*w.version.spec_name {
+				Some((w.runtime_code(pages), w.version.clone()))
 			} else {
 				let mut last_warn = w.last_warn.lock();
 				let now = Instant::now();
@@ -155,7 +155,7 @@ impl WasmOverride {
 					tracing::warn!(
 						target = "wasm_overrides",
 						on_chain_spec_name = %spec_name,
-						override_spec_name = %w.spec_name,
+						override_spec_name = %w.version,
 						spec_version = %spec,
 						wasm_file = %w.path.display(),
 						"On chain and override `spec_name` do not match! Ignoring override.",
@@ -197,8 +197,7 @@ impl WasmOverride {
 					"Found wasm override.",
 				);
 
-				let wasm =
-					WasmBlob::new(code, code_hash, path.clone(), version.spec_name.to_string());
+				let wasm = WasmBlob::new(code, code_hash, path.clone(), version.clone());
 
 				if let Some(other) = overrides.insert(version.spec_version, wasm) {
 					tracing::info!(
@@ -246,19 +245,19 @@ impl WasmOverride {
 /// Returns a WasmOverride struct filled with dummy data for testing.
 #[cfg(test)]
 pub fn dummy_overrides() -> WasmOverride {
+	let version = RuntimeVersion { spec_name: "test".into(), ..Default::default() };
 	let mut overrides = HashMap::new();
 	overrides.insert(
 		0,
-		WasmBlob::new(vec![0, 0, 0, 0, 0, 0, 0, 0], vec![0], PathBuf::new(), "test".into()),
+		WasmBlob::new(vec![0, 0, 0, 0, 0, 0, 0, 0], vec![0], PathBuf::new(), version.clone()),
 	);
 	overrides.insert(
 		1,
-		WasmBlob::new(vec![1, 1, 1, 1, 1, 1, 1, 1], vec![1], PathBuf::new(), "test".into()),
+		WasmBlob::new(vec![1, 1, 1, 1, 1, 1, 1, 1], vec![1], PathBuf::new(), version.clone()),
 	);
-	overrides.insert(
-		2,
-		WasmBlob::new(vec![2, 2, 2, 2, 2, 2, 2, 2], vec![2], PathBuf::new(), "test".into()),
-	);
+	overrides
+		.insert(2, WasmBlob::new(vec![2, 2, 2, 2, 2, 2, 2, 2], vec![2], PathBuf::new(), version));
+
 	WasmOverride { overrides }
 }
 

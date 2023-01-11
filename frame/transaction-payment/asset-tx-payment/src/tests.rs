@@ -171,6 +171,7 @@ impl pallet_assets::Config for Runtime {
 	type StringLimit = ConstU32<20>;
 	type Freezer = ();
 	type Extra = ();
+	type CallbackHandle = ();
 	type WeightInfo = ();
 	type RemoveItemsLimit = ConstU32<1000>;
 	pallet_assets::runtime_benchmarks_enabled! {

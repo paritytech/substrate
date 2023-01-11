@@ -178,6 +178,18 @@ impl TestApi {
 
 		let mut chain = self.chain.write();
 		chain.block_by_hash.insert(hash, block.clone());
+
+		if is_best_block {
+			chain
+				.block_by_number
+				.entry(*block_number)
+				.or_default()
+				.iter_mut()
+				.for_each(|x| {
+					x.1 = IsBestBlock::No;
+				});
+		}
+
 		chain
 			.block_by_number
 			.entry(*block_number)

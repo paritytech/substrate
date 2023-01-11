@@ -76,7 +76,7 @@ fn test_set_storage() {
 	let mut ext = call_wasm_method::<HostFunctions>(wasm_binary_unwrap(), "test_set_storage");
 
 	let expected = "world";
-	assert_eq!(expected.as_bytes(), &ext.ext().storage("hello".as_bytes()).unwrap()[..]);
+	assert_eq!(expected.as_bytes(), &ext.ext().storage("hello".as_bytes(), 0, None).unwrap()[..]);
 }
 
 #[test]

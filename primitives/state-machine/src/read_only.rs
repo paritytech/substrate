@@ -21,7 +21,7 @@ use crate::{Backend, StorageKey, StorageValue};
 use codec::Encode;
 use hash_db::Hasher;
 use sp_core::{
-	storage::{ChildInfo, ChildType, StateVersion, TrackedStorageKey},
+	storage::{ChildInfo, StateVersion, TrackedStorageKey},
 	traits::Externalities,
 };
 use sp_externalities::{result_from_vec, MultiRemovalResults};

@@ -106,13 +106,13 @@ pub fn executor_call(
 ) -> (Result<Vec<u8>>, bool) {
 	let mut t = t.ext();
 
-	let code = t.storage(sp_core::storage::well_known_keys::CODE).unwrap();
-	let heap_pages = t.storage(sp_core::storage::well_known_keys::HEAP_PAGES);
-	let runtime_code = RuntimeCode {
-		code_fetcher: &sp_core::traits::WrappedRuntimeCode(code.as_slice().into()),
-		hash: sp_core::blake2_256(&code).to_vec(),
-		heap_pages: heap_pages.and_then(|hp| Decode::decode(&mut &hp[..]).ok()),
-	};
+	let code = t.storage(sp_core::storage::well_known_keys::CODE, 0, None).unwrap();
+	let hash = sp_core::blake2_256(&code).to_vec();
+	let code_fetcher = &sp_core::traits::WrappedRuntimeCode(code.into_owned().into());
+	let heap_pages = t
+		.storage(sp_core::storage::well_known_keys::HEAP_PAGES, 0, None)
+		.and_then(|hp| Decode::decode(&mut &hp[..]).ok());
+	let runtime_code = RuntimeCode { code_fetcher, hash, heap_pages };
 	sp_tracing::try_init_simple();
 	executor().call(&mut t, &runtime_code, method, data, use_native)
 }

@@ -1364,7 +1364,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 			None => None,
 		};
 
-		let (tx, rx) = tracing_unbounded("mpsc_grandpa_gossip_validator");
+		let (tx, rx) = tracing_unbounded("mpsc_grandpa_gossip_validator", 100_000);
 		let val = GossipValidator {
 			inner: parking_lot::RwLock::new(Inner::new(config)),
 			set_state,
