@@ -77,9 +77,9 @@ mod tests {
 
 	#[test]
 	fn test_webrtc_certificate_file() {
-		fn load_cert_and_assert_eq(file: PathBuf, cert: WebRTCCertificate) {
+		fn load_cert_and_assert_eq(cert_file: PathBuf, expected: WebRTCCertificate) {
 			let params = WebRTCCertificateParams {
-				webrtc_certificate_file: Some(file),
+				webrtc_certificate_file: Some(cert_file),
 				webrtc_certificate_ephemeral: None,
 			};
 
@@ -89,33 +89,35 @@ mod tests {
 				.into_certificate()
 				.expect("Creates certificate");
 
-			assert_eq!(cert, loaded_cert, "expected the same certificate");
+			assert_eq!(loaded_cert, expected, "expected the same certificate");
 		}
 
 		let tmp = tempfile::Builder::new().prefix("alice").tempdir().expect("Creates tempfile");
-		let file = tmp.path().join("mycertificate").to_path_buf();
+		let cert_file = tmp.path().join("mycertificate").to_path_buf();
 
 		let cert = WebRTCCertificate::generate(&mut thread_rng()).expect("Generates certificate");
+		fs::write(&cert_file, cert.serialize_pem().as_bytes()).expect("Writes certificate");
 
-		fs::write(&file, cert.serialize_pem().as_bytes()).expect("Writes certificate");
-		load_cert_and_assert_eq(file.clone(), cert);
+		load_cert_and_assert_eq(cert_file, cert);
 	}
 
 	#[test]
 	fn test_webrtc_certificate_ephemeral() {
-		let filepath = PathBuf::from("not-used");
+		let config_dir = PathBuf::from("not-used");
+		let cert_file = config_dir.join(WEBRTC_CERTIFICATE_FILENAME);
+
 		let params = WebRTCCertificateParams {
-			webrtc_certificate_file: Some(filepath.clone()),
+			webrtc_certificate_file: Some(cert_file.clone()),
 			webrtc_certificate_ephemeral: Some(true),
 		};
 
 		let _loaded_cert = params
-			.webrtc_certificate(&filepath)
+			.webrtc_certificate(&config_dir)
 			.expect("Creates certificate config")
 			.into_certificate()
 			.expect("Creates certificate");
 
-		assert!(!filepath.exists(), "Does not create a file");
-		assert!(!filepath.join(WEBRTC_CERTIFICATE_FILENAME).exists(), "Does not create a file");
+		assert!(!config_dir.exists(), "Does not create a directory");
+		assert!(!cert_file.exists(), "Does not create a file");
 	}
 }
