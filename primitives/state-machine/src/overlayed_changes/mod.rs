@@ -368,20 +368,21 @@ impl Changes {
 	/// Any changes made during that transaction are discarded. Returns an error if
 	/// there is no open transaction that can be rolled back.
 	pub fn rollback_transaction(&mut self) -> Result<(), NoOpenTransaction> {
+		let start_depth = self.context.transaction_depth();
 		self.context.rollback_transaction()?;
 
-		self.top.rollback_transaction()?;
+		self.top.rollback_transaction(start_depth)?;
 		retain_map(&mut self.children, |_, child| {
 			child
 				.changes
-				.rollback_transaction()
+				.rollback_transaction(start_depth)
 				.expect("Top and children changesets are started in lockstep; qed");
 			!child.changes.is_empty()
 		});
 
 		self.offchain
 			.overlay_mut()
-			.rollback_transaction()
+			.rollback_transaction(start_depth)
 			.expect("Top and offchain changesets are started in lockstep; qed");
 		Ok(())
 	}
@@ -391,18 +392,19 @@ impl Changes {
 	/// Any changes made during that transaction are committed. Returns an error if there
 	/// is no open transaction that can be committed.
 	pub fn commit_transaction(&mut self) -> Result<(), NoOpenTransaction> {
+		let start_depth = self.context.transaction_depth();
 		self.context.commit_transaction()?;
-		self.top.commit_transaction()?;
+		self.top.commit_transaction(start_depth)?;
 		for (_, child) in self.children.iter_mut() {
 			child
 				.changes
-				.commit_transaction()
+				.commit_transaction(start_depth)
 				.expect("Top and children changesets are started in lockstep; qed");
 		}
 
 		self.offchain
 			.overlay_mut()
-			.commit_transaction()
+			.commit_transaction(start_depth)
 			.expect("Top and offchain changesets are started in lockstep; qed");
 		Ok(())
 	}
@@ -619,13 +621,32 @@ impl Changes {
 
 /// Storage transaction layers support.
 pub trait Transactional {
+	/// Should start transaction be call.
+	const REQUIRE_START_TRANSACTION: bool;
+
+	/// Start a new nested transaction.
+	///
+	/// This allows to either commit or roll back all changes that were made while this
+	/// transaction was open. Any transaction must be closed by either `commit_transaction`
+	/// or `rollback_transaction` before this overlay can be converted into storage changes.
+	///
+	/// Changes made without any open transaction are committed immediately.
+	fn start_transaction(&mut self);
+
+	/// Commit the last transaction started by `start_transaction`.
+	///
+	/// Any changes made during that transaction are committed. Returns an error if
+	/// there is no open transaction that can be committed.
+	fn commit_transaction(&mut self, transaction_depth: usize) -> Result<(), NoOpenTransaction>;
+
 	/// Rollback the last transaction started by `start_transaction`.
 	///
 	/// Any changes made during that transaction are discarded. Returns an error if
 	/// there is no open transaction that can be rolled back.
 	/// Returns `true` if no remaining content (no overlay and content same as initial one).
 	#[must_use = "When empty returned, the object need to be acted upon."]
-	fn rollback_transaction(&mut self) -> Result<bool, NoOpenTransaction>;
+	fn rollback_transaction(&mut self, transaction_depth: usize)
+		-> Result<bool, NoOpenTransaction>;
 }
 
 #[cfg(feature = "std")]

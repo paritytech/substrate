@@ -230,26 +230,12 @@ impl<K: Ord + Hash + Clone, V> OverlayedMap<K, V> {
 		self.dirty_keys.len()
 	}
 
-	/// Start a new nested transaction.
-	///
-	/// This allows to either commit or roll back all changes that were made while this
-	/// transaction was open. Any transaction must be closed by either `commit_transaction`
-	/// or `rollback_transaction` before this overlay can be converted into storage changes.
-	///
-	/// Changes made without any open transaction are committed immediately.
-	pub fn start_transaction(&mut self) {
-		self.dirty_keys.push(Default::default());
-	}
-
-	/// Commit the last transaction started by `start_transaction`.
-	///
-	/// Any changes made during that transaction are committed. Returns an error if
-	/// there is no open transaction that can be committed.
-	pub fn commit_transaction(&mut self) -> Result<(), NoOpenTransaction> {
-		self.close_transaction(false)
-	}
-
-	fn close_transaction(&mut self, rollback: bool) -> Result<(), NoOpenTransaction> {
+	fn close_transaction(
+		&mut self,
+		rollback: bool,
+		transaction_depth: usize,
+	) -> Result<(), NoOpenTransaction> {
+		debug_assert!(transaction_depth == self.dirty_keys.len());
 		for key in self.dirty_keys.pop().ok_or(NoOpenTransaction)? {
 			let overlayed = self.changes.get_mut(&key).expect(
 				"\
@@ -292,8 +278,18 @@ impl<K: Ord + Hash + Clone, V> OverlayedMap<K, V> {
 }
 
 impl<K: Ord + Hash + Clone, V> Transactional for OverlayedMap<K, V> {
-	fn rollback_transaction(&mut self) -> Result<bool, NoOpenTransaction> {
-		self.close_transaction(true)?;
+	const REQUIRE_START_TRANSACTION: bool = true;
+
+	fn start_transaction(&mut self) {
+		self.dirty_keys.push(Default::default());
+	}
+
+	fn commit_transaction(&mut self, depth: usize) -> Result<(), NoOpenTransaction> {
+		self.close_transaction(false, depth)
+	}
+
+	fn rollback_transaction(&mut self, depth: usize) -> Result<bool, NoOpenTransaction> {
+		self.close_transaction(true, depth)?;
 		Ok(self.changes.is_empty())
 	}
 }
@@ -315,6 +311,9 @@ impl OverlayedContext {
 	///
 	/// This protects all existing transactions from being removed by the runtime.
 	/// Calling this while already inside the runtime will return an error.
+	///
+	/// This assume current transaction layer is empty (a new transaction
+	/// has been open or no rollback is needed).
 	pub fn enter_runtime(&mut self) -> Result<(), AlreadyInRuntime> {
 		if let ExecutionMode::Runtime = self.execution_mode {
 			return Err(AlreadyInRuntime)
@@ -530,14 +529,14 @@ mod test {
 		assert_eq!(changeset.transaction_depth(), 3);
 		changeset.start_transaction();
 		assert_eq!(changeset.transaction_depth(), 4);
-		changeset.rollback_transaction().unwrap();
+		changeset.rollback_transaction(4).unwrap();
 		assert_eq!(changeset.transaction_depth(), 3);
-		changeset.commit_transaction().unwrap();
+		changeset.commit_transaction(3).unwrap();
 		assert_eq!(changeset.transaction_depth(), 2);
 		assert_changes(&changeset, &all_changes);
 
 		// roll back our first transactions that actually contains something
-		changeset.rollback_transaction().unwrap();
+		changeset.rollback_transaction(2).unwrap();
 		assert_eq!(changeset.transaction_depth(), 1);
 
 		let rolled_back: Changes = vec![
@@ -548,7 +547,7 @@ mod test {
 		];
 		assert_changes(&changeset, &rolled_back);
 
-		changeset.commit_transaction().unwrap();
+		changeset.commit_transaction(1).unwrap();
 		assert_eq!(changeset.transaction_depth(), 0);
 		assert_changes(&changeset, &rolled_back);
 
@@ -593,18 +592,18 @@ mod test {
 		assert_eq!(changeset.transaction_depth(), 3);
 		changeset.start_transaction();
 		assert_eq!(changeset.transaction_depth(), 4);
-		changeset.rollback_transaction().unwrap();
+		changeset.rollback_transaction(4).unwrap();
 		assert_eq!(changeset.transaction_depth(), 3);
-		changeset.commit_transaction().unwrap();
+		changeset.commit_transaction(3).unwrap();
 		assert_eq!(changeset.transaction_depth(), 2);
 		assert_changes(&changeset, &all_changes);
 
-		changeset.commit_transaction().unwrap();
+		changeset.commit_transaction(2).unwrap();
 		assert_eq!(changeset.transaction_depth(), 1);
 
 		assert_changes(&changeset, &all_changes);
 
-		changeset.rollback_transaction().unwrap();
+		changeset.rollback_transaction(1).unwrap();
 		assert_eq!(changeset.transaction_depth(), 0);
 
 		let rolled_back: Changes = vec![(b"key0", Some(b"val0-1")), (b"key1", Some(b"val1"))];
@@ -653,11 +652,11 @@ mod test {
 			(b"key3", Some(b"valinit-modified")),
 		];
 		assert_changes(&changeset, &all_changes);
-		changeset.commit_transaction().unwrap();
+		changeset.commit_transaction(2).unwrap();
 		assert_eq!(changeset.transaction_depth(), 1);
 		assert_changes(&changeset, &all_changes);
 
-		changeset.rollback_transaction().unwrap();
+		changeset.rollback_transaction(1).unwrap();
 		assert_eq!(changeset.transaction_depth(), 0);
 		let rolled_back: Changes =
 			vec![(b"key0", Some(b"val0")), (b"key1", None), (b"key3", Some(b"valinit-modified"))];
@@ -688,7 +687,7 @@ mod test {
 			],
 		);
 
-		changeset.rollback_transaction().unwrap();
+		changeset.rollback_transaction(1).unwrap();
 
 		assert_changes(
 			&changeset,
@@ -742,7 +741,7 @@ mod test {
 		);
 		assert_eq!(changeset.changes_after(b"key4").next(), None);
 
-		changeset.rollback_transaction().unwrap();
+		changeset.rollback_transaction(1).unwrap();
 
 		assert_eq!(changeset.changes_after(b"key0").next().unwrap().0, b"key1");
 		assert_eq!(
@@ -768,22 +767,22 @@ mod test {
 	fn no_open_tx_commit_errors() {
 		let mut changeset = OverlayedChangeSet::default();
 		assert_eq!(changeset.transaction_depth(), 0);
-		assert_eq!(changeset.commit_transaction(), Err(NoOpenTransaction));
+		assert_eq!(changeset.commit_transaction(0), Err(NoOpenTransaction));
 	}
 
 	#[test]
 	fn no_open_tx_rollback_errors() {
 		let mut changeset = OverlayedChangeSet::default();
 		assert_eq!(changeset.transaction_depth(), 0);
-		assert_eq!(changeset.rollback_transaction(), Err(NoOpenTransaction));
+		assert_eq!(changeset.rollback_transaction(0), Err(NoOpenTransaction));
 	}
 
 	#[test]
 	fn unbalanced_transactions_errors() {
 		let mut changeset = OverlayedChangeSet::default();
 		changeset.start_transaction();
-		changeset.commit_transaction().unwrap();
-		assert_eq!(changeset.commit_transaction(), Err(NoOpenTransaction));
+		changeset.commit_transaction(1).unwrap();
+		assert_eq!(changeset.commit_transaction(0), Err(NoOpenTransaction));
 	}
 
 	#[test]
