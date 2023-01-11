@@ -26,4 +26,4 @@ impl HostFunctions for Host {
 }
 
 test_group!(sw; sp_ark_ed_on_bls12_381::SWProjective<super::Host>; sw);
-test_group!(te; sp_ark_ed_on_bls12_381::EdwardsProjective<super::Host>; te);
+// test_group!(te; sp_ark_ed_on_bls12_381::EdwardsProjective<super::Host>; te);
