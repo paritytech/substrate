@@ -1,11 +1,11 @@
 use ark_algebra_test_templates::*;
 use ark_ff::{fields::Field, One, UniformRand, Zero};
-use ark_models::{pairing::*, AffineRepr, CurveGroup, Group};
+use ark_models::{AffineRepr, CurveGroup, Group};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use ark_std::{rand::Rng, test_rng, vec, vec::Vec};
 
-use crate::{
-    Bls12_381 as Bls12_381_Host, Fq, Fq2, Fr, G1Affine as G1Affine_Host,
+use sp_ark_bls12_381::{
+    Fq, Fq2, Fr, G1Affine as G1Affine_Host,
     G1Projective as G1Projective_Host, G2Affine as G2Affine_Host,
     G2Projective as G2Projective_Host, HostFunctions,
 };
@@ -39,10 +39,10 @@ impl HostFunctions for Host {
     }
 }
 
-test_group!(g1; crate::G1Projective<super::Host>; sw);
-test_group!(g2; crate::G2Projective<super::Host>; sw);
-test_group!(pairing_output; PairingOutput<crate::Bls12_381<super::Host>>; msm);
-test_pairing!(pairing; crate::Bls12_381<super::Host>);
+test_group!(g1; sp_ark_bls12_381::G1Projective<super::Host>; sw);
+test_group!(g2; sp_ark_bls12_381::G2Projective<super::Host>; sw);
+test_group!(pairing_output; ark_ec::pairing::PairingOutput<sp_ark_bls12_381::Bls12_381<super::Host>>; msm);
+test_pairing!(pairing; sp_ark_bls12_381::Bls12_381<super::Host>);
 
 type G1Projective = G1Projective_Host<Host>;
 type G1Affine = G1Affine_Host<Host>;
@@ -51,7 +51,7 @@ type G2Affine = G2Affine_Host<Host>;
 
 #[test]
 fn test_g1_endomorphism_beta() {
-    assert!(crate::g1::BETA.pow(&[3u64]).is_one());
+    assert!(sp_ark_bls12_381::g1::BETA.pow(&[3u64]).is_one());
 }
 
 #[test]
@@ -69,7 +69,7 @@ fn test_g1_subgroup_non_membership_via_endomorphism() {
         let greatest = rng.gen();
 
         if let Some(p) = G1Affine::get_point_from_x_unchecked(x, greatest) {
-            if !<ark_ec::short_weierstrass::Projective<crate::g1::Config<Host>> as ark_std::Zero>::is_zero(&p.mul_bigint(Fr::characteristic())) {
+            if !<ark_ec::short_weierstrass::Projective<sp_ark_bls12_381::g1::Config<Host>> as ark_std::Zero>::is_zero(&p.mul_bigint(Fr::characteristic())) {
                 assert!(!p.is_in_correct_subgroup_assuming_on_curve());
                 return;
             }
@@ -92,7 +92,7 @@ fn test_g2_subgroup_non_membership_via_endomorphism() {
         let greatest = rng.gen();
 
         if let Some(p) = G2Affine::get_point_from_x_unchecked(x, greatest) {
-            if !<ark_ec::short_weierstrass::Projective<crate::g2::Config::<Host>> as ark_std::Zero>::is_zero(&p.mul_bigint(Fr::characteristic())) {
+            if !<ark_ec::short_weierstrass::Projective<sp_ark_bls12_381::g2::Config::<Host>> as ark_std::Zero>::is_zero(&p.mul_bigint(Fr::characteristic())) {
                 assert!(!p.is_in_correct_subgroup_assuming_on_curve());
                 return;
             }

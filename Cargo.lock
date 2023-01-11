@@ -203,6 +203,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bddcadddf5e9015d310179a59bb28c4d4b9920ad0f11e8e14dbadf654890c9a6"
 
 [[package]]
+name = "ark-algebra-test-templates"
+version = "0.4.0-alpha.7"
+source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#667ec3e82e86d168b5a4ba67bd97cacdc963a2f3"
+dependencies = [
+ "ark-ec",
+ "ark-ff",
+ "ark-serialize",
+ "ark-std",
+ "hex",
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "sha2 0.10.6",
+]
+
+[[package]]
 name = "ark-bls12-377"
 version = "0.4.0-alpha.1"
 source = "git+https://github.com/arkworks-rs/curves#69a9c3513bfe94ebd03efaa0ac49d63ea4afbc3a"
@@ -313,6 +332,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "ark-models"
+version = "0.3.0"
+source = "git+https://github.com/achimcc/ark-substrate#f419ff8c6933f0d35d06dec4b4623dab68318b61"
+dependencies = [
+ "ark-ec",
+ "ark-ff",
+ "ark-serialize",
+ "ark-std",
+ "derivative",
+ "getrandom 0.2.8",
+ "itertools",
+ "num-traits",
+ "zeroize",
+]
+
+[[package]]
 name = "ark-poly"
 version = "0.4.0-alpha.7"
 source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#667ec3e82e86d168b5a4ba67bd97cacdc963a2f3"
@@ -322,6 +357,44 @@ dependencies = [
  "ark-std",
  "derivative",
  "hashbrown 0.13.1",
+]
+
+[[package]]
+name = "ark-r1cs-std"
+version = "0.4.0-alpha.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ccffa53ace7907d7b0e6852f5d1738daaadae44f1e7c75d0fb2aa4d26a0fa7a3"
+dependencies = [
+ "ark-ec",
+ "ark-ff",
+ "ark-relations 0.4.0-alpha.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ark-std",
+ "derivative",
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+ "tracing",
+]
+
+[[package]]
+name = "ark-relations"
+version = "0.4.0-alpha.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8fcbb7957519f1fd4de397d22360b236840c3e426f39999e34c63be9dfe7d1b"
+dependencies = [
+ "ark-ff",
+ "ark-std",
+ "tracing",
+]
+
+[[package]]
+name = "ark-relations"
+version = "0.4.0-alpha.1"
+source = "git+https://github.com/arkworks-rs/snark#a14e0ed6c601523b8878bf9d41f68077d75a4d00"
+dependencies = [
+ "ark-ff",
+ "ark-std",
+ "tracing",
 ]
 
 [[package]]
@@ -2862,8 +2935,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c05aeb6a22b8f62540c194aac980f2115af067bfe15a0734d7277a768d396b31"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -9827,6 +9902,70 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-ark-bls12-377"
+version = "0.4.0-alpha.1"
+source = "git+https://github.com/achimcc/ark-substrate#f419ff8c6933f0d35d06dec4b4623dab68318b61"
+dependencies = [
+ "ark-bls12-377",
+ "ark-ff",
+ "ark-models",
+ "ark-serialize",
+ "ark-std",
+]
+
+[[package]]
+name = "sp-ark-bls12-381"
+version = "0.4.0-alpha"
+source = "git+https://github.com/achimcc/ark-substrate#f419ff8c6933f0d35d06dec4b4623dab68318b61"
+dependencies = [
+ "ark-bls12-381",
+ "ark-ec",
+ "ark-ff",
+ "ark-models",
+ "ark-serialize",
+ "ark-std",
+]
+
+[[package]]
+name = "sp-ark-bw6-761"
+version = "0.4.0-alpha.1"
+source = "git+https://github.com/achimcc/ark-substrate#f419ff8c6933f0d35d06dec4b4623dab68318b61"
+dependencies = [
+ "ark-bw6-761",
+ "ark-ff",
+ "ark-models",
+ "ark-serialize",
+ "ark-std",
+ "sp-ark-bls12-377",
+]
+
+[[package]]
+name = "sp-ark-ed-on-bls12-377"
+version = "0.4.0-alpha.1"
+source = "git+https://github.com/achimcc/ark-substrate#f419ff8c6933f0d35d06dec4b4623dab68318b61"
+dependencies = [
+ "ark-ed-on-bls12-377",
+ "ark-ff",
+ "ark-models",
+ "ark-serialize",
+ "ark-std",
+ "sp-ark-bls12-377",
+]
+
+[[package]]
+name = "sp-ark-ed-on-bls12-381"
+version = "0.4.0-alpha.1"
+source = "git+https://github.com/achimcc/ark-substrate#f419ff8c6933f0d35d06dec4b4623dab68318b61"
+dependencies = [
+ "ark-ed-on-bls12-381",
+ "ark-ff",
+ "ark-models",
+ "ark-serialize",
+ "ark-std",
+ "sp-ark-bls12-381",
+]
+
+[[package]]
 name = "sp-arkworks"
 version = "0.0.1"
 dependencies = [
@@ -9841,6 +9980,27 @@ dependencies = [
  "ark-std",
  "better_any",
  "sp-std",
+]
+
+[[package]]
+name = "sp-arkworks-test"
+version = "0.4.0-alpha.1"
+dependencies = [
+ "ark-algebra-test-templates",
+ "ark-bls12-377",
+ "ark-ec",
+ "ark-ff",
+ "ark-models",
+ "ark-r1cs-std",
+ "ark-relations 0.4.0-alpha.1 (git+https://github.com/arkworks-rs/snark)",
+ "ark-serialize",
+ "ark-std",
+ "sp-ark-bls12-377",
+ "sp-ark-bls12-381",
+ "sp-ark-bw6-761",
+ "sp-ark-ed-on-bls12-377",
+ "sp-ark-ed-on-bls12-381",
+ "sp-io",
 ]
 
 [[package]]

@@ -175,6 +175,7 @@ members = [
 	"primitives/arithmetic",
 	"primitives/arithmetic/fuzzer",
 	"primitives/arkworks",
+	"primitives/arkworks/test",
 	"primitives/authority-discovery",
 	"primitives/authorship",
 	"primitives/beefy",
