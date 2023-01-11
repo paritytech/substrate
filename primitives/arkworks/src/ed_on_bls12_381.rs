@@ -40,6 +40,7 @@ pub fn sw_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 		Validate::No,
 	)
 	.unwrap();
+	let base: SWProjective = base.into();
 	let cursor = Cursor::new(scalar);
 	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
 	let res = <JubjubConfig as SWCurveConfig>::mul_projective(&base, &scalar);
