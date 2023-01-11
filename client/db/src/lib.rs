@@ -45,7 +45,7 @@ use log::{debug, trace, warn};
 use lru::LruCache;
 use parking_lot::{Mutex, RwLock};
 use std::{
-	collections::{HashMap, HashSet},
+	collections::{hash_map::Entry, HashMap, HashSet},
 	io,
 	num::NonZeroUsize,
 	path::{Path, PathBuf},
@@ -498,27 +498,49 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 		extrinsics: Option<Vec<Block::Extrinsic>>,
 		justifications: Option<Justifications>,
 	) {
+		self.insert_with_ref(hash, extrinsics, justifications, 1);
+	}
+
+	pub fn bump_ref(&self, hash: Block::Hash) {
 		let mut body_cache = self.body_cache.write();
 		if let Some(mut entry) = body_cache.get_mut(&hash) {
 			entry.0 += 1;
-			entry.1 = extrinsics;
-		} else {
-			body_cache.put(hash, (1, extrinsics));
 		}
 
 		let mut justification_cache = self.justification_cache.write();
 		if let Some(mut entry) = justification_cache.get_mut(&hash) {
 			entry.0 += 1;
+		}
+	}
+
+	pub fn insert_with_ref(
+		&self,
+		hash: Block::Hash,
+		extrinsics: Option<Vec<Block::Extrinsic>>,
+		justifications: Option<Justifications>,
+		ref_count: u32,
+	) {
+		let mut body_cache = self.body_cache.write();
+		if let Some(mut entry) = body_cache.get_mut(&hash) {
+			entry.0 += ref_count;
+			entry.1 = extrinsics;
+		} else {
+			body_cache.put(hash, (ref_count, extrinsics));
+		}
+
+		let mut justification_cache = self.justification_cache.write();
+		if let Some(mut entry) = justification_cache.get_mut(&hash) {
+			entry.0 += ref_count;
 			entry.1 = justifications;
 		} else {
-			justification_cache.put(hash, (1, justifications));
+			justification_cache.put(hash, (ref_count, justifications));
 		}
 	}
 
 	pub fn remove(&self, hash: &Block::Hash) {
 		let mut body_cache = self.body_cache.write();
 		if let Some(mut entry) = body_cache.peek_mut(hash) {
-			entry.0 -= 1;
+			entry.0 = entry.0.saturating_sub(1);
 			if entry.0 == 0 {
 				body_cache.pop(hash);
 			}
@@ -526,7 +548,7 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 
 		let mut justification_cache = self.justification_cache.write();
 		if let Some(mut entry) = justification_cache.peek_mut(hash) {
-			entry.0 -= 1;
+			entry.0 = entry.0.saturating_sub(1);
 			if entry.0 == 0 {
 				justification_cache.pop(hash);
 			}
@@ -552,10 +574,11 @@ pub struct BlockchainDb<Block: BlockT> {
 	header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
 	header_cache: Mutex<LinkedHashMap<Block::Hash, Option<Block::Header>>>,
 	pinned_blocks_cache: Arc<PinnedBlockCache<Block>>,
+	pinning_enabled: bool,
 }
 
 impl<Block: BlockT> BlockchainDb<Block> {
-	fn new(db: Arc<dyn Database<DbHash>>) -> ClientResult<Self> {
+	fn new(db: Arc<dyn Database<DbHash>>, pinning_enabled: bool) -> ClientResult<Self> {
 		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
 		let leaves = LeafSet::read_from_db(&*db, columns::META, meta_keys::LEAF_PREFIX)?;
 		Ok(BlockchainDb {
@@ -565,6 +588,7 @@ impl<Block: BlockT> BlockchainDb<Block> {
 			header_metadata_cache: Arc::new(HeaderMetadataCache::default()),
 			header_cache: Default::default(),
 			pinned_blocks_cache: Arc::new(PinnedBlockCache::new()),
+			pinning_enabled,
 		})
 	}
 
@@ -594,7 +618,29 @@ impl<Block: BlockT> BlockchainDb<Block> {
 		meta.block_gap = gap;
 	}
 
+	fn pin_with_ref(&self, hash: Block::Hash, ref_count: u32) -> ClientResult<()> {
+		if !self.pinning_enabled {
+			return Ok(())
+		}
+
+		let justifications = self.justifications(hash)?;
+		let body = self.body(hash)?;
+		self.pinned_blocks_cache.insert_with_ref(hash, body, justifications, ref_count);
+		Ok(())
+	}
+
+	fn bump_ref(&self, hash: Block::Hash) {
+		if !self.pinning_enabled {
+			return
+		}
+		self.pinned_blocks_cache.bump_ref(hash);
+	}
+
 	fn pin(&self, hash: Block::Hash) -> ClientResult<()> {
+		if !self.pinning_enabled {
+			return Ok(())
+		}
+
 		let justifications = self.justifications(hash)?;
 		let body = self.body(hash)?;
 		self.pinned_blocks_cache.insert(hash, body, justifications);
@@ -602,6 +648,10 @@ impl<Block: BlockT> BlockchainDb<Block> {
 	}
 
 	fn unpin(&self, hash: &Block::Hash) {
+		if !self.pinning_enabled {
+			return
+		}
+
 		self.pinned_blocks_cache.remove(hash);
 	}
 }
@@ -1133,7 +1183,7 @@ impl<T: Clone> FrozenForDuration<T> {
 /// Disk backend keeps data in a key-value store. In archive mode, trie nodes are kept from all
 /// blocks. Otherwise, trie nodes are kept only from some recent blocks.
 pub struct Backend<Block: BlockT> {
-	pinned_block_store: RwLock<HashSet<Block::Hash>>,
+	pinned_block_store: RwLock<HashMap<Block::Hash, u32>>,
 	storage: Arc<StorageDb<Block>>,
 	offchain_storage: offchain::LocalStorage,
 	blockchain: BlockchainDb<Block>,
@@ -1240,7 +1290,8 @@ impl<Block: BlockT> Backend<Block> {
 
 		let state_pruning_used = state_db.pruning_mode();
 		let is_archive_pruning = state_pruning_used.is_archive();
-		let blockchain = BlockchainDb::new(db.clone())?;
+		let blockchain =
+			BlockchainDb::new(db.clone(), config.blocks_pruning != BlocksPruning::KeepAll)?;
 
 		let storage_db =
 			StorageDb { db: db.clone(), state_db, prefix_keys: !db.supports_ref_counting() };
@@ -1248,7 +1299,7 @@ impl<Block: BlockT> Backend<Block> {
 		let offchain_storage = offchain::LocalStorage::new(db.clone());
 
 		let backend = Backend {
-			pinned_block_store: RwLock::new(HashSet::new()),
+			pinned_block_store: RwLock::new(HashMap::new()),
 			storage: Arc::new(storage_db),
 			offchain_storage,
 			blockchain,
@@ -1822,6 +1873,14 @@ impl<Block: BlockT> Backend<Block> {
 				let keep = std::cmp::max(blocks_pruning, 1);
 				if finalized >= keep.into() {
 					let number = finalized.saturating_sub(keep.into());
+
+					let pinned_block_store = self.pinned_block_store.read();
+					if let Some(hash) = self.blockchain.hash(number)? {
+						if let Some(ref_count) = pinned_block_store.get(&hash) {
+							self.blockchain.pin_with_ref(hash, *ref_count)?;
+						}
+					};
+
 					self.prune_block(transaction, BlockId::<Block>::number(number))?;
 				}
 				self.prune_displaced_branches(transaction, finalized, displaced)?;
@@ -1851,8 +1910,8 @@ impl<Block: BlockT> Backend<Block> {
 				match self.blockchain.header(hash)? {
 					Some(header) => {
 						let pinned_block_store = self.pinned_block_store.read();
-						if pinned_block_store.contains(&hash) {
-							self.blockchain.pin(hash)?;
+						if let Some(ref_count) = pinned_block_store.get(&hash) {
+							self.blockchain.pin_with_ref(hash, *ref_count)?;
 						}
 
 						self.prune_block(transaction, BlockId::<Block>::hash(hash))?;
@@ -2484,21 +2543,35 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	}
 
 	fn pin_block(&self, hash: &<Block as BlockT>::Hash, number: u64) -> sp_blockchain::Result<()> {
-		let mut handle = self.pinned_block_store.write();
-		handle.insert(*hash);
-		log::info!(target: "db", "Pinning block in backend, hash: {}, number: {}, num_pinned_blocks: {}", hash, number, handle.len());
-		log::info!(target: "skunert", "Pinned_block_contents: {:?}", handle);
+		let mut pin_store_guard = self.pinned_block_store.write();
+		match pin_store_guard.entry(*hash) {
+			Entry::Occupied(mut entry) => {
+				*entry.get_mut() += 1;
+			},
+			Entry::Vacant(v) => {
+				v.insert(1);
+			},
+		};
+		//handle.insert(*hash, );
+		log::info!(target: "db", "Pinning block in backend, hash: {}, number: {}, num_pinned_blocks: {}", hash, number, pin_store_guard.len());
+		log::info!(target: "skunert", "Pinned_block_contents: {:?}", pin_store_guard);
 		let hint = || false;
 		self.storage.state_db.pin(hash, number, hint).map_err(|_| {
 			sp_blockchain::Error::UnknownBlock(format!("State already discarded for {:?}", hash))
 		})?;
+		self.blockchain.bump_ref(*hash);
 		Ok(())
 	}
 
 	fn unpin_block(&self, hash: &<Block as BlockT>::Hash) {
 		log::info!(target: "db", "Unpinning block in backend, hash: {}", hash);
-		let mut handle = self.pinned_block_store.write();
-		handle.remove(hash);
+		let mut pin_store_guard = self.pinned_block_store.write();
+		if let Entry::Occupied(mut entry) = pin_store_guard.entry(*hash) {
+			*entry.get_mut() -= 1;
+			if *entry.get() == 0 {
+				entry.remove();
+			}
+		};
 		self.storage.state_db.unpin(hash);
 		self.blockchain.unpin(hash);
 	}
@@ -4128,5 +4201,175 @@ pub(crate) mod tests {
 			assert_eq!(block3, backend.blockchain().hash(3).unwrap().unwrap());
 			assert_eq!(block4, backend.blockchain().hash(4).unwrap().unwrap());
 		}
+	}
+
+	#[test]
+	fn test_pinned_blocks_on_finalize() {
+		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::Some(1), 10);
+		let mut blocks = Vec::new();
+		let mut prev_hash = Default::default();
+
+		// Block tree:
+		//   0 -> 1 -> 2 -> 3 -> 4
+		for i in 0..5 {
+			let hash = insert_block(
+				&backend,
+				i,
+				prev_hash,
+				None,
+				Default::default(),
+				vec![i.into()],
+				None,
+			)
+			.unwrap();
+			blocks.push(hash);
+
+			// Avoid block pruning.
+			backend.pin_block(&blocks[i as usize], i).unwrap();
+
+			prev_hash = hash;
+		}
+		// Block 1 gets pinned twice
+		backend.pin_block(&blocks[1], 1).unwrap();
+
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, blocks[4]).unwrap();
+		for i in 1..5 {
+			op.mark_finalized(blocks[i], None).unwrap();
+		}
+		backend.commit_operation(op).unwrap();
+
+		let bc = backend.blockchain();
+		// Block 0, 1, 2, 3 are pinned and pruning is delayed,
+		// while block 4 is never delayed for pruning as it is finalized.
+		assert_eq!(Some(vec![0.into()]), bc.body(blocks[0]).unwrap());
+		assert_eq!(Some(vec![1.into()]), bc.body(blocks[1]).unwrap());
+		assert_eq!(Some(vec![2.into()]), bc.body(blocks[2]).unwrap());
+		assert_eq!(Some(vec![3.into()]), bc.body(blocks[3]).unwrap());
+		assert_eq!(Some(vec![4.into()]), bc.body(blocks[4]).unwrap());
+
+		// Unpin all blocks.
+		for block in &blocks {
+			backend.unpin_block(&block);
+		}
+
+		assert!(bc.body(blocks[0]).unwrap().is_none());
+		// Block 1 was pinned twice, we expect it to be in-memory
+		assert!(bc.body(blocks[1]).unwrap().is_some());
+		assert!(bc.body(blocks[2]).unwrap().is_none());
+		assert!(bc.body(blocks[3]).unwrap().is_none());
+
+		// After this second unpin, block 1 should be removed
+		backend.unpin_block(&blocks[1]);
+		assert!(bc.body(blocks[1]).unwrap().is_none());
+
+		// Block 4 is inside the pruning window and still kept
+		assert!(bc.body(blocks[4]).unwrap().is_some());
+
+		// Block tree:
+		//   0 -> 1 -> 2 -> 3 -> 4 -> 5
+		let hash =
+			insert_block(&backend, 5, prev_hash, None, Default::default(), vec![5.into()], None)
+				.unwrap();
+		blocks.push(hash);
+
+		// Mark block 5 as finalized.
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, blocks[5]).unwrap();
+		op.mark_finalized(blocks[5], None).unwrap();
+		backend.commit_operation(op).unwrap();
+
+		assert!(bc.body(blocks[0]).unwrap().is_none());
+		assert!(bc.body(blocks[1]).unwrap().is_none());
+		assert!(bc.body(blocks[2]).unwrap().is_none());
+		assert!(bc.body(blocks[3]).unwrap().is_none());
+
+		// Block 4 was unpinned before pruning, it must also get pruned.
+		assert!(bc.body(blocks[4]).unwrap().is_none());
+		assert_eq!(Some(vec![5.into()]), bc.body(blocks[5]).unwrap());
+	}
+
+	#[test]
+	fn test_pinned_blocks_on_finalize_with_fork() {
+		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::Some(1), 10);
+		let mut blocks = Vec::new();
+		let mut prev_hash = Default::default();
+
+		// Block tree:
+		//   0 -> 1 -> 2 -> 3 -> 4
+		for i in 0..5 {
+			let hash = insert_block(
+				&backend,
+				i,
+				prev_hash,
+				None,
+				Default::default(),
+				vec![i.into()],
+				None,
+			)
+			.unwrap();
+			blocks.push(hash);
+
+			// Avoid block pruning.
+			backend.pin_block(&blocks[i as usize], i).unwrap();
+
+			prev_hash = hash;
+		}
+
+		// Insert a fork at the second block.
+		// Block tree:
+		//   0 -> 1 -> 2 -> 3 -> 4
+		//        \ -> 2 -> 3
+		let fork_hash_root =
+			insert_block(&backend, 2, blocks[1], None, H256::random(), vec![2.into()], None)
+				.unwrap();
+		let fork_hash_3 = insert_block(
+			&backend,
+			3,
+			fork_hash_root,
+			None,
+			H256::random(),
+			vec![3.into(), 11.into()],
+			None,
+		)
+		.unwrap();
+
+		// Do not prune the fork hash.
+		backend.pin_block(&fork_hash_3, 3).unwrap();
+
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, blocks[4]).unwrap();
+		op.mark_head(blocks[4]).unwrap();
+		backend.commit_operation(op).unwrap();
+
+		for i in 1..5 {
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, blocks[4]).unwrap();
+			op.mark_finalized(blocks[i], None).unwrap();
+			backend.commit_operation(op).unwrap();
+		}
+
+		let bc = backend.blockchain();
+		assert_eq!(Some(vec![0.into()]), bc.body(blocks[0]).unwrap());
+		assert_eq!(Some(vec![1.into()]), bc.body(blocks[1]).unwrap());
+		assert_eq!(Some(vec![2.into()]), bc.body(blocks[2]).unwrap());
+		assert_eq!(Some(vec![3.into()]), bc.body(blocks[3]).unwrap());
+		assert_eq!(Some(vec![4.into()]), bc.body(blocks[4]).unwrap());
+		// Check the fork hashes.
+		assert_eq!(None, bc.body(fork_hash_root).unwrap());
+		assert_eq!(Some(vec![3.into(), 11.into()]), bc.body(fork_hash_3).unwrap());
+
+		// Unpin all blocks, except the forked one.
+		for block in &blocks {
+			backend.unpin_block(&block);
+		}
+		assert!(bc.body(blocks[0]).unwrap().is_none());
+		assert!(bc.body(blocks[1]).unwrap().is_none());
+		assert!(bc.body(blocks[2]).unwrap().is_none());
+		assert!(bc.body(blocks[3]).unwrap().is_none());
+
+		assert!(bc.body(fork_hash_3).unwrap().is_some());
+		backend.unpin_block(&fork_hash_3);
+		assert!(bc.body(fork_hash_3).unwrap().is_none());
 	}
 }

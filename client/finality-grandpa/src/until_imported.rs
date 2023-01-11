@@ -593,17 +593,17 @@ mod tests {
 		fn import_header(&self, header: Header) {
 			let hash = header.hash();
 			let number = *header.number();
-
+			let (tx, rx) = futures::channel::mpsc::channel(100);
 			self.known_blocks.lock().insert(hash, number);
 			self.sender
-				.unbounded_send(BlockImportNotification {
+				.unbounded_send(BlockImportNotification::<Block>::new(
 					hash,
-					origin: BlockOrigin::File,
+					BlockOrigin::File,
 					header,
-					is_new_best: false,
-					tree_route: None,
-					_unpin_handle: todo!(),
-				})
+					false,
+					None,
+					tx,
+				))
 				.unwrap();
 		}
 	}

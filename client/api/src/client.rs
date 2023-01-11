@@ -306,6 +306,26 @@ pub struct BlockImportNotification<Block: BlockT> {
 	_unpin_handle: Arc<UnpinHandle<Block>>,
 }
 
+impl<Block: BlockT> BlockImportNotification<Block> {
+	pub fn new(
+		hash: Block::Hash,
+		origin: BlockOrigin,
+		header: Block::Header,
+		is_new_best: bool,
+		tree_route: Option<Arc<sp_blockchain::TreeRoute<Block>>>,
+		unpin_worker_sender: Sender<Block::Hash>,
+	) -> Self {
+		Self {
+			hash,
+			origin,
+			header,
+			is_new_best,
+			tree_route,
+			_unpin_handle: Arc::new(UnpinHandle::new(hash, unpin_worker_sender)),
+		}
+	}
+}
+
 /// Summary of a finalized block.
 #[derive(Clone, Debug)]
 pub struct FinalityNotification<Block: BlockT> {

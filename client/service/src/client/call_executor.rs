@@ -399,11 +399,13 @@ mod tests {
 		)
 		.expect("Creates genesis block builder");
 
+		let (unpin_worker_sender, _rx) = futures::channel::mpsc::channel(100);
 		// client is used for the convenience of creating and inserting the genesis block.
 		let _client =
 			crate::client::new_with_backend::<_, _, runtime::Block, _, runtime::RuntimeApi>(
 				backend.clone(),
 				executor.clone(),
+				unpin_worker_sender,
 				genesis_block_builder,
 				None,
 				Box::new(TaskExecutor::new()),
@@ -475,11 +477,13 @@ mod tests {
 		)
 		.expect("Creates genesis block builder");
 
+		let (unpin_worker_sender, _rx) = futures::channel::mpsc::channel(100);
 		// client is used for the convenience of creating and inserting the genesis block.
 		let client =
 			crate::client::new_with_backend::<_, _, runtime::Block, _, runtime::RuntimeApi>(
 				backend.clone(),
 				executor.clone(),
+				unpin_worker_sender,
 				genesis_block_builder,
 				None,
 				Box::new(TaskExecutor::new()),

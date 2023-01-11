@@ -237,10 +237,11 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 		)
 		.expect("Creates genesis block builder");
 
+		let (tx, _rx) = futures::channel::mpsc::channel(100);
 		let client = client::Client::new(
 			self.backend.clone(),
 			executor,
-			todo!(),
+			tx,
 			genesis_block_builder,
 			self.fork_blocks,
 			self.bad_blocks,

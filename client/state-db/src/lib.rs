@@ -408,7 +408,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDbSync<BlockHash, Key, D> {
 			(&mut self.pruning, &self.mode)
 		{
 			loop {
-				if dbg!(pruning.window_size()) <= dbg!(constraints.max_blocks.unwrap_or(0) as u64) {
+				if pruning.window_size() <= constraints.max_blocks.unwrap_or(0) as u64 {
 					break
 				}
 
