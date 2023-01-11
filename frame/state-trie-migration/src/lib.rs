@@ -1063,7 +1063,7 @@ mod mock {
 	};
 	use sp_runtime::{
 		traits::{BlakeTwo256, Header as _, IdentityLookup},
-		StorageChild,
+		StorageDefaultChild,
 	};
 
 	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -1195,7 +1195,7 @@ mod mock {
 			children_default: vec![
 				(
 					b"chk1".to_vec(), // 63686b31
-					StorageChild {
+					StorageDefaultChild {
 						data: vec![
 							(b"key1".to_vec(), vec![1u8; 55]),
 							(b"key2".to_vec(), vec![2u8; 66]),
@@ -1207,7 +1207,7 @@ mod mock {
 				),
 				(
 					b"chk2".to_vec(),
-					StorageChild {
+					StorageDefaultChild {
 						data: vec![
 							(b"key1".to_vec(), vec![1u8; 54]),
 							(b"key2".to_vec(), vec![2u8; 64]),
@@ -1226,7 +1226,7 @@ mod mock {
 					.map(|(r, k, v)| {
 						(
 							r.clone(),
-							StorageChild {
+							StorageDefaultChild {
 								data: vec![(k, v)].into_iter().collect(),
 								info: DefaultChild::new(&r),
 							},

@@ -25,7 +25,7 @@ use sc_telemetry::TelemetryEndpoints;
 use serde::{Deserialize, Serialize};
 use serde_json as json;
 use sp_core::{
-	storage::{DefaultChild, Storage, StorageChild, StorageData, StorageKey},
+	storage::{DefaultChild, Storage, StorageData, StorageDefaultChild, StorageKey},
 	Bytes,
 };
 use sp_runtime::BuildStorage;
@@ -119,7 +119,7 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 					storage
 						.children_default
 						.entry(k.0)
-						.or_insert_with(|| StorageChild { data: Default::default(), info })
+						.or_insert_with(|| StorageDefaultChild { data: Default::default(), info })
 						.data
 						.extend(v.into_iter().map(|(k, v)| (k.0, v.0)));
 				});

@@ -154,10 +154,10 @@ pub struct StorageData(
 #[cfg(feature = "std")]
 pub type StorageMap = std::collections::BTreeMap<Vec<u8>, Vec<u8>>;
 
-/// Child trie storage data.
+/// Default child trie storage data.
 #[cfg(feature = "std")]
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct StorageChild {
+pub struct StorageDefaultChild {
 	/// Child data for storage.
 	pub data: StorageMap,
 	/// Associated default child trie info.
@@ -172,7 +172,7 @@ pub struct Storage {
 	pub top: StorageMap,
 	/// Children trie storage data. Key does not include prefix, only for the `default` trie kind,
 	/// of `ChildType::Default` type.
-	pub children_default: std::collections::HashMap<Vec<u8>, StorageChild>,
+	pub children_default: std::collections::HashMap<Vec<u8>, StorageDefaultChild>,
 }
 
 /// Storage change set

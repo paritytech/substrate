@@ -59,8 +59,8 @@ use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError};
 
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_core::storage::{
-	well_known_keys, ChildInfo, ChildType, DefaultChild, PrefixedStorageKey, Storage, StorageChild,
-	StorageData, StorageKey,
+	well_known_keys, ChildInfo, ChildType, DefaultChild, PrefixedStorageKey, Storage, StorageData,
+	StorageDefaultChild, StorageKey,
 };
 #[cfg(feature = "test-helpers")]
 use sp_keystore::SyncCryptoStorePtr;
@@ -620,7 +620,7 @@ where
 											let entry = storage
 												.children_default
 												.entry(storage_key.to_vec())
-												.or_insert_with(|| StorageChild {
+												.or_insert_with(|| StorageDefaultChild {
 													data: Default::default(),
 													info: DefaultChild::new(storage_key),
 												});

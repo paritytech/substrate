@@ -32,7 +32,7 @@ pub use self::block_builder_ext::BlockBuilderExt;
 
 use sp_core::{
 	sr25519,
-	storage::{ChildInfo, ChildType, Storage, StorageChild},
+	storage::{ChildInfo, ChildType, Storage, StorageDefaultChild},
 	Pair,
 };
 use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
@@ -221,7 +221,7 @@ pub trait TestClientBuilderExt<B>: Sized {
 		let child_map = &mut self.genesis_init_mut().extra_storage.children_default;
 		child_map
 			.entry(storage_key)
-			.or_insert_with(|| StorageChild { data: Default::default(), info: info.clone() })
+			.or_insert_with(|| StorageDefaultChild { data: Default::default(), info: info.clone() })
 			.data
 			.insert(key, value.into());
 		self

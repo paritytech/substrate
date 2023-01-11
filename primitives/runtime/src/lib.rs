@@ -40,7 +40,7 @@ pub use sp_application_crypto as app_crypto;
 
 pub use sp_core::storage::StateVersion;
 #[cfg(feature = "std")]
-pub use sp_core::storage::{Storage, StorageChild};
+pub use sp_core::storage::{Storage, StorageDefaultChild};
 
 use sp_core::{
 	crypto::{self, ByteArray},

@@ -1099,18 +1099,18 @@ async fn syncs_state() {
 		for i in 0u8..16 {
 			child_data.insert(vec![i; 5], vec![i; 33]);
 		}
-		let child1 = sp_core::storage::StorageChild {
+		let child1 = sp_core::storage::StorageDefaultChild {
 			data: child_data.clone(),
 			info: sp_core::storage::DefaultChild::new(b"child1"),
 		};
-		let child3 = sp_core::storage::StorageChild {
+		let child3 = sp_core::storage::StorageDefaultChild {
 			data: child_data.clone(),
 			info: sp_core::storage::DefaultChild::new(b"child3"),
 		};
 		for i in 22u8..33 {
 			child_data.insert(vec![i; 5], vec![i; 33]);
 		}
-		let child2 = sp_core::storage::StorageChild {
+		let child2 = sp_core::storage::StorageDefaultChild {
 			data: child_data.clone(),
 			info: sp_core::storage::DefaultChild::new(b"child2"),
 		};

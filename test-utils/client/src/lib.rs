@@ -34,7 +34,7 @@ pub use sp_keyring::{
 	ed25519::Keyring as Ed25519Keyring, sr25519::Keyring as Sr25519Keyring, AccountKeyring,
 };
 pub use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
-pub use sp_runtime::{Storage, StorageChild};
+pub use sp_runtime::{Storage, StorageDefaultChild};
 pub use sp_state_machine::ExecutionStrategy;
 
 use futures::{future::Future, stream::StreamExt};
@@ -67,7 +67,7 @@ pub struct TestClientBuilder<Block: BlockT, ExecutorDispatch, Backend, G: Genesi
 	genesis_init: G,
 	/// The key is an unprefixed storage key, this only contains
 	/// default child trie content.
-	child_storage_extension: HashMap<Vec<u8>, StorageChild>,
+	child_storage_extension: HashMap<Vec<u8>, StorageDefaultChild>,
 	backend: Arc<Backend>,
 	_executor: std::marker::PhantomData<ExecutorDispatch>,
 	keystore: Option<SyncCryptoStorePtr>,
@@ -150,10 +150,10 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 		key: impl AsRef<[u8]>,
 		value: impl AsRef<[u8]>,
 	) -> Self {
-		let entry = self
-			.child_storage_extension
-			.entry(child_info.name.clone())
-			.or_insert_with(|| StorageChild { data: Default::default(), info: child_info.clone() });
+		let entry =
+			self.child_storage_extension.entry(child_info.name.clone()).or_insert_with(|| {
+				StorageDefaultChild { data: Default::default(), info: child_info.clone() }
+			});
 		entry.data.insert(key.as_ref().to_vec(), value.as_ref().to_vec());
 		self
 	}
@@ -213,7 +213,7 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 			for (key, child_content) in self.child_storage_extension {
 				storage.children_default.insert(
 					key,
-					StorageChild {
+					StorageDefaultChild {
 						data: child_content.data.into_iter().collect(),
 						info: child_content.info,
 					},
