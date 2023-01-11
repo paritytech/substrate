@@ -103,7 +103,7 @@ pub trait OnStakingUpdate<AccountId, Balance> {
 	fn on_validator_remove(who: &AccountId); // only fire this event when this is an actual Validator
 	/// Fired when someone removes their intention to nominate, either due to chill or validating.
 	fn on_nominator_remove(who: &AccountId, nominations: Vec<AccountId>); // only fire this if this is an actual Nominator
-	/// fired when someone is fully unstakes.
+	/// fired when someone is fully unstaked.
 	fn on_unstake(who: &AccountId); // -> basically `kill_stash`
 }
 

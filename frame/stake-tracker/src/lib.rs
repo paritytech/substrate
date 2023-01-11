@@ -17,6 +17,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(test)]
+mod mock;
+
 use frame_election_provider_support::{SortedListProvider, VoteWeight};
 use frame_support::traits::{Currency, CurrencyToVote, Defensive};
 pub use pallet::*;
