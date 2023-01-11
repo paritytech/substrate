@@ -1116,9 +1116,7 @@ async fn syncs_state() {
 		};
 		genesis_storage.children_default.insert(child1.info.name.clone(), child1);
 		genesis_storage.children_default.insert(child2.info.name.clone(), child2);
-		genesis_storage
-			.children_default
-			.insert(child3.info.name.clone().to_vec(), child3);
+		genesis_storage.children_default.insert(child3.info.name.clone(), child3);
 		let mut config_one = FullPeerConfig::default();
 		config_one.extra_storage = Some(genesis_storage.clone());
 		net.add_full_peer_with_config(config_one);
