@@ -642,20 +642,23 @@ impl<T: Config> Commission<T> {
 			//
 			// Note: matching `None` is defensive only. `throttle_from` should always exist where
 			// `change_rate` has already been set, so this scenario should never happen.
-			return match self.throttle_from {
-				Some(f) => {
+			return self.throttle_from.map_or_else(
+				|| {
+					defensive!("throttle_from should exist if change_rate is set");
+					false
+				},
+				|f| {
 					// if `min_delay` is zero (no delay), not throttling.
 					if t.min_delay == Zero::zero() {
-						false
+						return false
 					} else {
 						// throttling if blocks passed is less than `min_delay`.
 						let blocks_surpassed =
 							<frame_system::Pallet<T>>::block_number().saturating_sub(f);
-						blocks_surpassed < t.min_delay
+						return blocks_surpassed < t.min_delay
 					}
 				},
-				_ => false,
-			}
+			)
 		}
 		false
 	}
