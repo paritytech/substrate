@@ -159,7 +159,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 
 			if let Some(check_owner) = &maybe_check_owner {
-				// deposit.account.is_none(); maybe_check_owner.is_some()
+				// validate provided namespace when it's not a root call and the caller is not the
+				// same as the `deposit.account` (e.g. the deposit was paid by different account)
 				if deposit.account != maybe_check_owner {
 					ensure!(
 						Self::is_valid_namespace(
