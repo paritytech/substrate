@@ -75,4 +75,7 @@ runtime-benchmarks = [
 	"rand_chacha",
 	"sp-staking/runtime-benchmarks",
 ]
+fuzz = [
+	"frame-election-provider-support/fuzz"
+]
 try-runtime = ["frame-support/try-runtime"]

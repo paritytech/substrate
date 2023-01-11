@@ -37,6 +37,7 @@ pallet-balances = { path = "../balances" }
 pallet-timestamp = { path = "../timestamp" }
 sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elections" }
 pallet-bags-list = { version = "4.0.0-dev", path = "../bags-list" }
+frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
 
 
 

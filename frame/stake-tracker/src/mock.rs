@@ -103,6 +103,12 @@ impl ScoreProvider<AccountId> for StakingMock {
 	fn score(_id: &AccountId) -> Self::Score {
 		VoteWeight::default()
 	}
+
+	frame_election_provider_support::runtime_benchmarks_or_test_enabled! {
+		fn set_score_of(_: &AccountId, _: Self::Score) {
+			// not use yet.
+		}
+	}
 }
 
 impl StakingInterface for StakingMock {
@@ -118,7 +124,7 @@ impl StakingInterface for StakingMock {
 		unimplemented!("Currently not used.")
 	}
 
-	fn stash_by_ctrl(controller: &Self::AccountId) -> Result<Self::AccountId, DispatchError> {
+	fn stash_by_ctrl(_: &Self::AccountId) -> Result<Self::AccountId, DispatchError> {
 		unimplemented!("Currently not used.")
 	}
 
@@ -137,34 +143,27 @@ impl StakingInterface for StakingMock {
 		unimplemented!("Currently not used.")
 	}
 
-	fn bond(
-		who: &Self::AccountId,
-		value: Self::Balance,
-		payee: &Self::AccountId,
-	) -> DispatchResult {
+	fn bond(_: &Self::AccountId, _: Self::Balance, _: &Self::AccountId) -> DispatchResult {
 		unimplemented!("Currently not used.")
 	}
 
-	fn nominate(who: &Self::AccountId, validators: Vec<Self::AccountId>) -> DispatchResult {
+	fn nominate(_: &Self::AccountId, _: Vec<Self::AccountId>) -> DispatchResult {
 		unimplemented!("Currently not used.")
 	}
 
-	fn chill(who: &Self::AccountId) -> DispatchResult {
+	fn chill(_: &Self::AccountId) -> DispatchResult {
 		unimplemented!("Currently not used.")
 	}
 
-	fn bond_extra(who: &Self::AccountId, extra: Self::Balance) -> DispatchResult {
+	fn bond_extra(_: &Self::AccountId, _: Self::Balance) -> DispatchResult {
 		unimplemented!("Currently not used.")
 	}
 
-	fn unbond(stash: &Self::AccountId, value: Self::Balance) -> DispatchResult {
+	fn unbond(_: &Self::AccountId, _: Self::Balance) -> DispatchResult {
 		unimplemented!("Currently not used.")
 	}
 
-	fn withdraw_unbonded(
-		stash: Self::AccountId,
-		num_slashing_spans: u32,
-	) -> Result<bool, DispatchError> {
+	fn withdraw_unbonded(_: Self::AccountId, _: u32) -> Result<bool, DispatchError> {
 		unimplemented!("Currently not used.")
 	}
 
@@ -176,11 +175,11 @@ impl StakingInterface for StakingMock {
 		unimplemented!("Currently not used.")
 	}
 
-	fn force_unstake(who: Self::AccountId) -> DispatchResult {
+	fn force_unstake(_: Self::AccountId) -> DispatchResult {
 		unimplemented!("Currently not used.")
 	}
 
-	fn is_exposed_in_era(who: &Self::AccountId, era: &EraIndex) -> bool {
+	fn is_exposed_in_era(_: &Self::AccountId, _: &EraIndex) -> bool {
 		unimplemented!("Currently not used.")
 	}
 
@@ -196,15 +195,15 @@ impl StakingInterface for StakingMock {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add_era_stakers(
-		current_era: &EraIndex,
-		stash: &Self::AccountId,
-		exposures: Vec<(Self::AccountId, Self::Balance)>,
+		_: &EraIndex,
+		_: &Self::AccountId,
+		_: Vec<(Self::AccountId, Self::Balance)>,
 	) {
 		unimplemented!("Currently not used.")
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_current_era(era: EraIndex) {
+	fn set_current_era(_: EraIndex) {
 		unimplemented!("Currently not used.")
 	}
 }
