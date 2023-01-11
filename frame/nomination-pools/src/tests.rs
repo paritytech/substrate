@@ -5654,7 +5654,7 @@ mod commission {
 	}
 
 	#[test]
-	fn set_commission_change_rate_works_with_error_tests() {
+	fn set_commission_change_rate_works_with_errors() {
 		ExtBuilder::default().build_and_execute(|| {
 			// Provided pool does not exist
 			assert_noop!(
@@ -5744,61 +5744,6 @@ mod commission {
 				CommissionChangeRate { max_increase: Perbill::from_percent(3), min_delay: 30_u64 }
 			));
 
-			// multi duration `min_delay` test.
-			//
-			// set the commission change_rate of 1% per 30 blocks.
-			assert_ok!(Pools::set_commission_change_rate(
-				RuntimeOrigin::signed(900),
-				1,
-				CommissionChangeRate { max_increase: Perbill::from_percent(1), min_delay: 30_u64 }
-			));
-
-			// sanity check: the current pool Commission.
-			assert_eq!(
-				BondedPools::<Runtime>::get(1).unwrap().commission,
-				Commission {
-					current: None,
-					max: None,
-					change_rate: Some(CommissionChangeRate {
-						max_increase: Perbill::from_percent(1),
-						min_delay: 30_u64
-					}),
-					throttle_from: Some(1),
-				}
-			);
-
-			// run `min_delay` blocks so commission can be set again.
-			run_blocks(30_u64);
-
-			// pre-requisite: set the commission to 1%.
-			assert_ok!(Pools::set_commission(
-				RuntimeOrigin::signed(900),
-				1,
-				Some((Perbill::from_percent(1), 900)),
-			));
-
-			// Run 90 blocks into the future so we are eligible to update commission
-			// with 3 `min_delay` durations passed.
-			run_blocks(91);
-
-			// we should not be able to increase the commission to 5%: 1% beyond the change rate
-			// limit.
-			assert_noop!(
-				Pools::set_commission(
-					RuntimeOrigin::signed(900),
-					1,
-					Some((Perbill::from_percent(5), 900))
-				),
-				Error::<Runtime>::CommissionChangeThrottled
-			);
-
-			// we should however be able to increase the commission to 4%: 1% + (3*1%).
-			assert_ok!(Pools::set_commission(
-				RuntimeOrigin::signed(900),
-				1,
-				Some((Perbill::from_percent(4), 900))
-			));
-
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
@@ -5831,21 +5776,6 @@ mod commission {
 							max_increase: Perbill::from_percent(3),
 							min_delay: 30
 						}
-					},
-					Event::PoolCommissionChangeRateUpdated {
-						pool_id: 1,
-						change_rate: CommissionChangeRate {
-							max_increase: Perbill::from_percent(1),
-							min_delay: 30
-						}
-					},
-					Event::PoolCommissionUpdated {
-						pool_id: 1,
-						current: Some((Perbill::from_percent(1), 900))
-					},
-					Event::PoolCommissionUpdated {
-						pool_id: 1,
-						current: Some((Perbill::from_percent(4), 900))
 					}
 				]
 			);
@@ -6001,7 +5931,7 @@ mod commission {
 		ExtBuilder::default().build_and_execute(|| {
 			// 0% min delay test.
 			//
-			// set commission change rate to 1% with a 0 block min_delay.
+			// set commission change rate to 1% with a 0 block `min_delay`.
 			assert_ok!(Pools::set_commission_change_rate(
 				RuntimeOrigin::signed(900),
 				1,

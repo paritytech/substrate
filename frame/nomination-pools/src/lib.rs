@@ -334,8 +334,8 @@ use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_runtime::{
 	traits::{
-		AccountIdConversion, Bounded, CheckedAdd, CheckedSub, Convert, SaturatedConversion,
-		Saturating, StaticLookup, Zero,
+		AccountIdConversion, Bounded, CheckedAdd, CheckedSub, Convert, Saturating, StaticLookup,
+		Zero,
 	},
 	FixedPointNumber, Perbill,
 };
@@ -630,47 +630,31 @@ impl<T: Config> Commission<T> {
 			if *to <= commission_as_percent {
 				return false
 			}
-
-			// the attempted increase in commission relative to the current commission.
-			let attempted_increase = (*to).saturating_sub(commission_as_percent);
-
-			if self.throttle_from.map_or(
-				// Note: defensive only. `throttle_from` should always exist where `change_rate`
-				// has already been set, so this scenario should never happen.
-				//
-				// if no `throttle_from` exists. Therefore, the commission update is throttled via
-				// `max_increase` only.
-				attempted_increase > t.max_increase,
-				|f| {
-					// ensure the `max_increase` durations passed since the previous commission
-					// update allow the attempted commission increase.
-					//
-					// the total durations passed since the last commission update.
-					let blocks_passed = <frame_system::Pallet<T>>::block_number().saturating_sub(f);
-
-					// `min_delay` blocks must have been passed since `throttle_from`.
-					if blocks_passed < t.min_delay {
-						return true
-					}
-
-					// calculate intervals passed since `throttle_from`. If min delay is set to 0,
-					// set intervals passed to 1 as to only allow 1 * max_increase.
-					let intervals_passed = if t.min_delay == Zero::zero() {
-						1_u32
-					} else {
-						blocks_passed.div(t.min_delay).saturated_into::<u32>()
-					};
-
-					// calculate maximum allowed increase, where `max_increase` is converted into a
-					// u32 by multiplying itself with 100_u32, then multiplied by intervals passed,
-					// before being converted back into a Perbill.
-					let max_allowed_increase =
-						Perbill::from_percent((t.max_increase * 100_u32) * intervals_passed);
-
-					attempted_increase > max_allowed_increase
-				},
-			) {
+			// Test for `max_increase` throttling.
+			//
+			// The attempted increase in commission relative to the current commission if throttled if
+			// greater than `max_increase`.
+			if (*to).saturating_sub(commission_as_percent) > t.max_increase {
 				return true
+			}
+
+			// Test for `min_delay` throttling.
+			//
+			// Note: matching `None` is defensive only. `throttle_from` should always exist where
+			// `change_rate` has already been set, so this scenario should never happen.
+			return match self.throttle_from {
+				Some(f) => {
+					// if `min_delay` is zero (no delay), not throttling.
+					if t.min_delay == Zero::zero() {
+						false
+					} else {
+						// throttling if blocks passed is less than `min_delay`.
+						let blocks_surpassed =
+							<frame_system::Pallet<T>>::block_number().saturating_sub(f);
+						blocks_surpassed < t.min_delay
+					}
+				},
+				_ => false,
 			}
 		}
 		false
