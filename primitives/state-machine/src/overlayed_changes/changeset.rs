@@ -23,7 +23,7 @@ use crate::stats::StateMachineStats;
 use smallvec::SmallVec;
 use sp_externalities::range_slice;
 #[cfg(not(feature = "std"))]
-use sp_std::collections::{btree_map::BTreeMap as Map, btree_set::BTreeSet as Set};
+use sp_std::collections::btree_set::BTreeSet as Set;
 use sp_std::{collections::btree_map::BTreeMap, hash::Hash};
 #[cfg(feature = "std")]
 use std::collections::HashSet as Set;
