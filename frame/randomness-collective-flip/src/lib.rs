@@ -186,8 +186,6 @@ mod tests {
 	);
 
 	parameter_types! {
-		pub BlockWeights: limits::BlockWeights = limits::BlockWeights
-			::simple_max(Weight::from_ref_time(1024));
 		pub BlockLength: limits::BlockLength = limits::BlockLength
 			::max(2 * 1024);
 	}
