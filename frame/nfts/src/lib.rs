@@ -561,6 +561,8 @@ pub mod pallet {
 		UnknownSwap,
 		/// The given item has no metadata set.
 		MetadataNotFound,
+		/// The provided attribute can't be found.
+		AttributeNotFound,
 		/// Item is not for sale.
 		NotForSale,
 		/// The provided bid is too low.
