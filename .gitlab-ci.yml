@@ -33,6 +33,7 @@ stages:
   - test
   - build
   - publish
+  - zombienet
   - deploy
   - notify
 
@@ -47,21 +48,38 @@ variables:
   CARGO_INCREMENTAL:               0
   DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
-  # staging image with rust 1.65 and nightly-2022-11-16
-  CI_IMAGE:                        "paritytech/ci-linux@sha256:786869e731963b3cc0a4aa9deb83367ed9e87a6ae48b6eb029d62b0cab4d87c1"
+  CI_IMAGE:                        "paritytech/ci-linux@sha256:9140bc3c843a8b12a3bcf6f5886346536092795bbadfd7f1836362cb28dfcc71"
   BUILDAH_IMAGE:                   "quay.io/buildah/stable:v1.27"
   RUSTY_CACHIER_SINGLE_BRANCH:     master
   RUSTY_CACHIER_DONT_OPERATE_ON_MAIN_BRANCH: "true"
+  RUSTY_CACHIER_COMPRESSION_METHOD: zstd
+  NEXTEST_FAILURE_OUTPUT:          immediate-final
+  NEXTEST_SUCCESS_OUTPUT:          final
+  ZOMBIENET_IMAGE:                 "docker.io/paritytech/zombienet:v1.3.22"
 
-default:
+.shared-default:                   &shared-default
   retry:
     max: 2
     when:
       - runner_system_failure
       - unknown_failure
       - api_failure
-  interruptible:                   true
   cache:                           {}
+
+.default-pipeline-definitions:
+  default:
+    <<:                            *shared-default
+    interruptible:                 true
+
+.crate-publishing-pipeline-definitions:
+  default:
+    <<:                            *shared-default
+    # The crate-publishing pipeline defaults to `interruptible: false` so that we'll be able to
+    # reach and run the publishing jobs despite the "Auto-cancel redundant pipelines" CI setting.
+    # The setting is relevant because the crate-publishing pipeline runs on `master`, thus future
+    # pipelines on `master` (e.g. created for new commits or other schedules) might unintendedly
+    # cancel the publishing jobs or its dependencies before we get to actually publish the crates.
+    interruptible:                 false
 
 .collect-artifacts:
   artifacts:
@@ -79,8 +97,24 @@ default:
     paths:
       - artifacts/
 
+.prepare-env:
+  before_script:
+    # TODO: remove unset invocation when we'll be free from 'ENV RUSTC_WRAPPER=sccache' & sccache
+    # itself in all images
+    - unset RUSTC_WRAPPER
+    # $WASM_BUILD_WORKSPACE_HINT enables wasm-builder to find the Cargo.lock from within generated
+    # packages
+    - export WASM_BUILD_WORKSPACE_HINT="$PWD"
+
+.job-switcher:
+  before_script:
+    - if echo "$CI_DISABLED_JOBS" | grep -xF "$CI_JOB_NAME"; then echo "The job has been cancelled in CI settings"; exit 0; fi
+
 .kubernetes-env:
   image:                           "${CI_IMAGE}"
+  before_script:
+    - !reference [.job-switcher, before_script]
+    - !reference [.prepare-env, before_script]
   tags:
     - kubernetes-parity-build
 
@@ -93,6 +127,7 @@ default:
 
 .pipeline-stopper-vars:
   script:
+    - !reference [.job-switcher, before_script]
     - echo "Collecting env variables for the cancel-pipeline job"
     - echo "FAILED_JOB_URL=${CI_JOB_URL}" > pipeline-stopper.env
     - echo "FAILED_JOB_NAME=${CI_JOB_NAME}" >> pipeline-stopper.env
@@ -106,8 +141,8 @@ default:
 .docker-env:
   image:                           "${CI_IMAGE}"
   before_script:
-    # TODO: remove unset invocation when we'll be free from 'ENV RUSTC_WRAPPER=sccache' & sccache itself in all images
-    - unset RUSTC_WRAPPER
+    - !reference [.job-switcher, before_script]
+    - !reference [.prepare-env, before_script]
     - !reference [.rust-info-script, script]
     - !reference [.rusty-cachier, before_script]
     - !reference [.pipeline-stopper-vars, script]
@@ -166,27 +201,7 @@ default:
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
 
-.test-refs-wasmer-sandbox:
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "web"
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-    - if: $CI_COMMIT_REF_NAME == "master"
-      changes:
-        - client/executor/**/*
-        - frame/contracts/**/*
-        - primitives/sandbox/**/*
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
-      changes:
-        - client/executor/**/*
-        - frame/contracts/**/*
-        - primitives/sandbox/**/*
-    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
-      changes:
-        - client/executor/**/*
-        - frame/contracts/**/*
-        - primitives/sandbox/**/*
-
-.build-refs:
+.publish-refs:
   rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
@@ -195,10 +210,53 @@ default:
     - if: $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
 
+.build-refs:
+  # publish-refs + PRs
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+
+.zombienet-refs:
+  extends: .build-refs
+
 .nightly-pipeline:
   rules:
     # this job runs only on nightly pipeline with the mentioned variable, against `master` branch
     - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "nightly"
+
+.crate-publishing-pipeline:
+  rules:
+    - if: $CI_COMMIT_REF_NAME != "master"
+      when: never
+
+.scheduled-crate-publishing-pipeline:
+  rules:
+    - !reference [.crate-publishing-pipeline, rules]
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "automatic-crate-publishing"
+
+.crates-publishing-template:
+  stage:                           test
+  extends:                         .docker-env
+  # collect artifacts even on failure so that we know how the crates were generated (they'll be
+  # generated to the artifacts folder according to SPUB_TMP further down)
+  artifacts:
+    name:                          "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}"
+    when:                          always
+    expire_in:                     7 days
+    paths:
+      - artifacts/
+  variables:
+    CRATESIO_API: https://crates.io/api
+    CRATESIO_CRATES_OWNER: parity-crate-owner
+    GH_API: https://api.github.com
+    REPO: substrate
+    REPO_OWNER: paritytech
+    SPUB_TMP: artifacts
 
 #### stage:                       .pre
 
@@ -225,6 +283,24 @@ include:
   - scripts/ci/gitlab/pipeline/build.yml
   # publish jobs
   - scripts/ci/gitlab/pipeline/publish.yml
+  # zombienet jobs
+  - scripts/ci/gitlab/pipeline/zombienet.yml
+  # The crate-publishing pipeline requires a customized `interruptible` configuration. Unfortunately
+  # `interruptible` can't currently be dynamically set based on variables as per:
+  # - https://gitlab.com/gitlab-org/gitlab/-/issues/38349
+  # - https://gitlab.com/gitlab-org/gitlab/-/issues/194023
+  # Thus we work around that limitation by using conditional includes.
+  # For crate-publishing pipelines: run it with defaults + `interruptible: false`. The WHOLE
+  # pipeline is made uninterruptible to ensure that test jobs also get a chance to run to
+  # completion, because the publishing jobs depends on them AS INTENDED: crates should not be
+  # published before their source code is checked.
+  - local: scripts/ci/gitlab/crate-publishing-pipeline.yml
+    rules:
+      - if: $PIPELINE == "automatic-crate-publishing"
+  # For normal pipelines: run it with defaults + `interruptible: true`
+  - local: scripts/ci/gitlab/default-pipeline.yml
+    rules:
+      - if: $PIPELINE != "automatic-crate-publishing"
 
 #### stage:                        deploy
 
@@ -283,7 +359,6 @@ rusty-cachier-notify:
     PR_NUM:                        "${PR_NUM}"
   trigger:
     project:                       "parity/infrastructure/ci_cd/pipeline-stopper"
-    branch:                        "as-improve"
 
 remove-cancel-pipeline-message:
   stage: .post

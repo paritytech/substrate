@@ -30,9 +30,6 @@ pub enum Error {
 	#[error(transparent)]
 	Wasmi(#[from] wasmi::Error),
 
-	#[error("Sandbox error: {0}")]
-	Sandbox(String),
-
 	#[error("Error calling api function: {0}")]
 	ApiError(Box<dyn std::error::Error + Send + Sync>),
 

@@ -28,7 +28,6 @@ use std::time::Instant;
 
 use super::base_pool::Transaction;
 
-#[derive(parity_util_mem::MallocSizeOf)]
 /// Transaction with partially satisfied dependencies.
 pub struct WaitingTransaction<Hash, Ex> {
 	/// Transaction details.
@@ -108,7 +107,7 @@ impl<Hash, Ex> WaitingTransaction<Hash, Ex> {
 ///
 /// Contains transactions that are still awaiting for some other transactions that
 /// could provide a tag that they require.
-#[derive(Debug, parity_util_mem::MallocSizeOf)]
+#[derive(Debug)]
 pub struct FutureTransactions<Hash: hash::Hash + Eq, Ex> {
 	/// tags that are not yet provided by any transaction and we await for them
 	wanted_tags: HashMap<Tag, HashSet<Hash>>,
@@ -249,35 +248,5 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 	/// Returns sum of encoding lengths of all transactions in this queue.
 	pub fn bytes(&self) -> usize {
 		self.waiting.values().fold(0, |acc, tx| acc + tx.transaction.bytes)
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use sp_runtime::transaction_validity::TransactionSource;
-
-	#[test]
-	fn can_track_heap_size() {
-		let mut future = FutureTransactions::default();
-		future.import(WaitingTransaction {
-			transaction: Transaction {
-				data: vec![0u8; 1024],
-				bytes: 1,
-				hash: 1,
-				priority: 1,
-				valid_till: 2,
-				requires: vec![vec![1], vec![2]],
-				provides: vec![vec![3], vec![4]],
-				propagate: true,
-				source: TransactionSource::External,
-			}
-			.into(),
-			missing_tags: vec![vec![1u8], vec![2u8]].into_iter().collect(),
-			imported_at: std::time::Instant::now(),
-		});
-
-		// data is at least 1024!
-		assert!(parity_util_mem::malloc_size(&future) > 1024);
 	}
 }
