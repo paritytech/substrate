@@ -99,11 +99,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let depositor_account =
 			metadata.deposit.account.unwrap_or(collection_details.owner.clone());
 
-		if !is_root {
-			ensure!(
-				Some(depositor_account.clone()) == maybe_check_owner,
-				Error::<T, I>::NoPermission
-			);
+		if let Some(check_owner) = &maybe_check_owner {
+			ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
 		}
 
 		// NOTE: if the item was previously burned, the ItemConfigOf record might not exist

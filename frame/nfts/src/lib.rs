@@ -1469,7 +1469,7 @@ pub mod pallet {
 		/// Clear the metadata for an item.
 		///
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
-		/// metadata.
+		/// `collection`.
 		///
 		/// Any deposit is freed for the collection's owner.
 		///
