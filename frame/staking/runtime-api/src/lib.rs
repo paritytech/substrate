@@ -19,10 +19,15 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use codec::Codec;
+
 sp_api::decl_runtime_apis! {
 	#[api_version(1)]
-	pub trait StakingApi {
-		/// Returns the current nominations quota for nominators.
-		fn nominations_quota() -> u32;
+	pub trait StakingApi<Balance>
+		where
+			Balance: Codec,
+	{
+		/// Returns the nominations quota for a nominator with a given balance.
+		fn nominations_quota(balance: Balance) -> u32;
 	}
 }
