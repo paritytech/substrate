@@ -21,7 +21,7 @@ mod changeset;
 mod offchain;
 
 use self::changeset::OverlayedChangeSet;
-use crate::{backend::Backend, stats::StateMachineStats, DefaultError};
+use crate::{backend::Backend, stats::StateMachineStats, warn, DefaultError};
 use codec::Encode;
 use hash_db::Hasher;
 pub use offchain::OffchainChanges;
@@ -424,6 +424,12 @@ impl Changes {
 	/// Calling this while outside the runtime will return an error.
 	pub fn exit_runtime(&mut self) -> Result<(), NotInRuntime> {
 		let nb_open = self.context.exit_runtime()?;
+		if nb_open > 0 {
+			warn!(
+				"{} storage transactions are left open by the runtime. Those will be rolled back.",
+				nb_open,
+			);
+		}
 		for _ in 0..nb_open {
 			self.rollback_transaction().expect("counted above");
 		}
@@ -449,6 +455,7 @@ impl Changes {
 	) {
 		self.context.guard_drain_committed();
 		use sp_std::mem::take;
+		self.context = Default::default(); // Return to client (legacy behavior).
 		(
 			take(&mut self.top).drain_committed(),
 			take(&mut self.children)
