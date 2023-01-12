@@ -34,6 +34,9 @@ const ED_MULTIPLIER: u32 = 10;
 mod benchmarks {
 	use super::*;
 
+	// Benchmark `transfer` extrinsic with the worst possible conditions:
+	// * Transfer will kill the sender account.
+	// * Transfer will create the recipient account.
 	#[benchmark]
 	fn transfer() {
 		let existential_deposit = T::ExistentialDeposit::get();
