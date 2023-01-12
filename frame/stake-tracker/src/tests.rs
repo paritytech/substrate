@@ -23,6 +23,16 @@ mod on_stake_update {
 	}
 
 	#[test]
+	#[should_panic]
+	fn panics_when_not_bonded() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+			// user without stake
+			assert_storage_noop!(StakeTracker::on_stake_update(&30, None));
+		});
+	}
+
+	#[test]
 	fn noop_when_not_validator_or_nominator() {
 		ExtBuilder::default().build_and_execute(|| {
 			VoterList::on_insert(1, 10000).unwrap();
@@ -46,6 +56,176 @@ mod on_stake_update {
 					VoterList::get_score(id).unwrap(),
 					Pallet::<Runtime>::to_vote(Staking::stake(id).map(|s| s.active).unwrap())
 				);
+			}
+		});
+	}
+}
+
+mod on_nominator_update {
+	use super::*;
+	#[test]
+	fn noop_when_in_the_list() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+
+			// usual user, validator, nominator
+			for (idx, id) in [1, 10, 20].iter().enumerate() {
+				let _ = VoterList::on_insert(*id, 1000);
+				assert_storage_noop!(StakeTracker::on_nominator_update(id, Vec::new()));
+			}
+		});
+	}
+
+	#[test]
+	#[should_panic]
+	fn panics_when_not_bonded() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+			// user without stake
+			assert_storage_noop!(StakeTracker::on_nominator_update(&30, Vec::new()));
+		});
+	}
+
+	#[test]
+	// It is the caller's problem to make sure `on_nominator_update` is called in the right context.
+	fn works_for_everyone() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+
+			// usual user, validator, nominator
+			for id in [1, 10, 20] {
+				StakeTracker::on_nominator_update(&id, Vec::new());
+				assert_eq!(
+					VoterList::get_score(&id).unwrap(),
+					Pallet::<Runtime>::to_vote(Staking::stake(&id).map(|s| s.active).unwrap())
+				);
+			}
+		});
+	}
+}
+
+mod on_validator_add {
+	use super::*;
+	#[test]
+	fn noop_when_in_the_list() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+
+			// usual user, validator, nominator
+			for id in [1, 10, 20] {
+				let _ = VoterList::on_insert(id, 1000);
+				assert_storage_noop!(StakeTracker::on_validator_add(&id));
+			}
+		});
+	}
+
+	#[test]
+	#[should_panic]
+	fn panics_when_not_bonded() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+			// user without stake
+			assert_storage_noop!(StakeTracker::on_validator_add(&30));
+		});
+	}
+
+	#[test]
+	// It is the caller's problem to make sure `on_validator_add` is called in the right context.
+	fn works_for_everyone() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+
+			// usual user, validator, nominator
+			for id in [1, 10, 20] {
+				StakeTracker::on_validator_add(&id);
+				assert_eq!(
+					VoterList::get_score(&id).unwrap(),
+					Pallet::<Runtime>::to_vote(Staking::stake(&id).map(|s| s.active).unwrap())
+				);
+			}
+		});
+	}
+}
+
+mod on_validator_remove {
+	use super::*;
+	#[test]
+	fn noop_when_not_in_the_list() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+
+			// usual user, validator, nominator, not bonded
+			for id in [1, 10, 20, 30] {
+				assert_storage_noop!(StakeTracker::on_validator_remove(&id));
+			}
+		});
+	}
+
+	#[test]
+	// It is the caller's problem to make sure `on_validator_remove` is called in the right context.
+	fn works_for_everyone_also_unbonded() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+
+			// usual user, validator, nominator
+			for id in [1, 10, 20, 30] {
+				let _ = VoterList::on_insert(id, 100);
+				assert_eq!(VoterList::count(), 1);
+				StakeTracker::on_validator_remove(&id);
+				assert_eq!(VoterList::count(), 0);
+			}
+		});
+	}
+}
+
+mod on_nominator_remove {
+	use super::*;
+	#[test]
+	fn noop_when_not_in_the_list() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+
+			// usual user, validator, nominator, not bonded
+			for id in [1, 10, 20, 30] {
+				assert_storage_noop!(StakeTracker::on_nominator_remove(&id, Vec::new()));
+			}
+		});
+	}
+
+	#[test]
+	// It is the caller's problem to make sure `on_nominator_remove` is called in the right context.
+	fn works_for_everyone_also_unbonded() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+
+			// usual user, validator, nominator
+			for id in [1, 10, 20, 30] {
+				let _ = VoterList::on_insert(id, 100);
+				assert_eq!(VoterList::count(), 1);
+				StakeTracker::on_nominator_remove(&id, Vec::new());
+				assert_eq!(VoterList::count(), 0);
+			}
+		});
+	}
+}
+
+mod on_unstake {
+	use super::*;
+
+	#[test]
+	fn noop() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(VoterList::count(), 0);
+
+			// usual user, validator, nominator, not bonded
+			for id in [1, 10, 20, 30] {
+				assert_storage_noop!(StakeTracker::on_unstake(&id));
+			}
+
+			// usual user, validator, nominator, not bonded
+			for id in [1, 10, 20, 30] {
+				VoterList::on_insert(id, 100);
+				assert_storage_noop!(StakeTracker::on_unstake(&id));
 			}
 		});
 	}

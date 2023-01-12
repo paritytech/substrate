@@ -140,6 +140,9 @@ impl StakingInterface for StakingMock {
 	fn stake(
 		who: &Self::AccountId,
 	) -> Result<Stake<Self::AccountId, Self::Balance>, DispatchError> {
+		if *who >= 30 {
+			return Err(DispatchError::Other("not bonded"))
+		}
 		let stake = <Runtime as pallet_stake_tracker::Config>::Currency::total_balance(who);
 		Ok(Stake {
 			stash: *who,
