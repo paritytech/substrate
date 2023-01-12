@@ -9,7 +9,7 @@ impl HostFunctions for Host {
 		sp_io::crypto::ed_on_bls12_381_sw_mul_affine(base, scalar)
 	}
 	fn ed_on_bls12_381_te_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
-		sp_io::crypto::ed_on_bls12_381_sw_mul_projective(base, scalar)
+		sp_io::crypto::ed_on_bls12_381_te_mul_projective(base, scalar)
 	}
 	fn ed_on_bls12_381_te_mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 		sp_io::crypto::ed_on_bls12_381_te_mul_affine(base, scalar)
@@ -26,4 +26,4 @@ impl HostFunctions for Host {
 }
 
 test_group!(sw; sp_ark_ed_on_bls12_381::SWProjective<super::Host>; sw);
-// test_group!(te; sp_ark_ed_on_bls12_381::EdwardsProjective<super::Host>; te);
+test_group!(te; sp_ark_ed_on_bls12_381::EdwardsProjective<super::Host>; te);
