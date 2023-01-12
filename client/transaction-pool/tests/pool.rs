@@ -211,14 +211,18 @@ fn block_event(header: Header) -> ChainEvent<Block> {
 }
 
 fn block_event_with_retracted(
-	header: Header,
+	new_best_block_header: Header,
 	retracted_start: Hash,
 	api: &TestApi,
 ) -> ChainEvent<Block> {
-	let tree_route =
-		api.tree_route(retracted_start, header.parent_hash).expect("Tree route exists");
+	let tree_route = api
+		.tree_route(retracted_start, new_best_block_header.parent_hash)
+		.expect("Tree route exists");
 
-	ChainEvent::NewBestBlock { hash: header.hash(), tree_route: Some(Arc::new(tree_route)) }
+	ChainEvent::NewBestBlock {
+		hash: new_best_block_header.hash(),
+		tree_route: Some(Arc::new(tree_route)),
+	}
 }
 
 #[test]
@@ -272,7 +276,7 @@ fn should_resubmit_from_retracted_during_maintenance() {
 	assert_eq!(pool.status().ready, 1);
 
 	let header = api.push_block(1, vec![], true);
-	let fork_header = api.push_block(1, vec![], false);
+	let fork_header = api.push_block(1, vec![], true);
 
 	let event = block_event_with_retracted(header, fork_header.hash(), pool.api());
 
@@ -290,7 +294,7 @@ fn should_not_resubmit_from_retracted_during_maintenance_if_tx_is_also_in_enacte
 	assert_eq!(pool.status().ready, 1);
 
 	let header = api.push_block(1, vec![xt.clone()], true);
-	let fork_header = api.push_block(1, vec![xt], false);
+	let fork_header = api.push_block(1, vec![xt], true);
 
 	let event = block_event_with_retracted(header, fork_header.hash(), pool.api());
 
@@ -309,7 +313,7 @@ fn should_not_retain_invalid_hashes_from_retracted() {
 	assert_eq!(pool.status().ready, 1);
 
 	let header = api.push_block(1, vec![], true);
-	let fork_header = api.push_block(1, vec![xt.clone()], false);
+	let fork_header = api.push_block(1, vec![xt.clone()], true);
 	api.add_invalid(&xt);
 
 	let event = block_event_with_retracted(header, fork_header.hash(), pool.api());
@@ -649,7 +653,7 @@ fn prune_and_retract_tx_at_same_time() {
 
 	// Block B2
 	let b2 = {
-		let header = pool.api().push_block(2, vec![from_alice.clone()], false);
+		let header = pool.api().push_block(2, vec![from_alice.clone()], true);
 		assert_eq!(pool.status().ready, 0);
 
 		let event = block_event_with_retracted(header.clone(), b1, pool.api());
@@ -726,7 +730,8 @@ fn resubmit_tx_of_fork_that_is_not_part_of_retracted() {
 
 	// Block D2
 	{
-		let header = pool.api().push_block(2, vec![], false);
+		//push new best block
+		let header = pool.api().push_block(2, vec![], true);
 		let event = block_event_with_retracted(header, d0, pool.api());
 		block_on(pool.maintain(event));
 		assert_eq!(pool.status().ready, 2);
@@ -1036,7 +1041,7 @@ fn finalized_only_handled_correctly() {
 		.expect("1. Imported");
 	assert_eq!(pool.status().ready, 1);
 
-	let header = api.push_block(1, vec![xt], false);
+	let header = api.push_block(1, vec![xt], true);
 
 	let event =
 		ChainEvent::Finalized { hash: header.clone().hash(), tree_route: Arc::from(vec![]) };

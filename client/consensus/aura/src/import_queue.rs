@@ -186,6 +186,19 @@ where
 		&mut self,
 		mut block: BlockImportParams<B, ()>,
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+		// When importing whole state we don't verify the seal as the state is not available.
+		if block.with_state() {
+			return Ok((block, Default::default()))
+		}
+
+		// Skip checks that include execution, if being told so.
+		//
+		// This is done for example when gap syncing and it is expected that the block after the gap
+		// was checked/chosen properly, e.g. by warp syncing to this block using a finality proof.
+		if block.state_action.skip_execution_checks() {
+			return Ok((block, Default::default()))
+		}
+
 		let hash = block.header.hash();
 		let parent_hash = *block.header.parent_hash();
 		let authorities = authorities(
@@ -233,14 +246,14 @@ where
 
 					// skip the inherents verification if the runtime API is old or not expected to
 					// exist.
-					if !block.state_action.skip_execution_checks() &&
-						self.client
-							.runtime_api()
-							.has_api_with::<dyn BlockBuilderApi<B>, _>(
-								&BlockId::Hash(parent_hash),
-								|v| v >= 2,
-							)
-							.map_err(|e| e.to_string())?
+					if self
+						.client
+						.runtime_api()
+						.has_api_with::<dyn BlockBuilderApi<B>, _>(
+							&BlockId::Hash(parent_hash),
+							|v| v >= 2,
+						)
+						.map_err(|e| e.to_string())?
 					{
 						self.check_inherents(
 							new_block.clone(),
