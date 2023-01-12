@@ -646,6 +646,7 @@ mod tests {
 
 				futures::executor::block_on(service.transaction_pool().maintain(
 					ChainEvent::NewBestBlock { hash: parent_header.hash(), tree_route: None },
+					Arc::new(sp_consensus::NoNetwork),
 				));
 
 				let mut proposer_factory = sc_basic_authorship::ProposerFactory::new(

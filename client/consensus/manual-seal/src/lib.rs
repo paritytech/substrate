@@ -585,10 +585,13 @@ mod tests {
 
 		let header = client.header(created_block.hash).expect("db error").expect("imported above");
 		assert_eq!(header.number, 1);
-		pool.maintain(sc_transaction_pool_api::ChainEvent::NewBestBlock {
-			hash: header.hash(),
-			tree_route: None,
-		})
+		pool.maintain(
+			sc_transaction_pool_api::ChainEvent::NewBestBlock {
+				hash: header.hash(),
+				tree_route: None,
+			},
+			Arc::new(sp_consensus::NoNetwork),
+		)
 		.await;
 
 		let (tx1, rx1) = futures::channel::oneshot::channel();
