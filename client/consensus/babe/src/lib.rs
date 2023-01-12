@@ -1133,10 +1133,10 @@ where
 		let hash = block.header.hash();
 		let parent_hash = *block.header.parent_hash();
 
-		let finalized_number = self.client.info().finalized_number;
+		let info = self.client.info()
 		let number = *block.header.number();
 
-		if (block.origin == BlockOrigin::NetworkInitialSync && number < finalized_number) ||
+		if info.block_gap.map_or(false, |(s, e)| s <= number && number <= e)  ||
 			block.with_state()
 		{
 			// Verification for imported blocks is skipped in two cases:
@@ -1417,7 +1417,7 @@ where
 		// Skip babe logic if block already in chain or importing blocks during initial sync,
 		// otherwise the check for epoch changes will error because trying to re-import an
 		// epoch change or because of missing epoch data in the tree, respectivelly.
-		if (block.origin == BlockOrigin::NetworkInitialSync && number < info.finalized_number) ||
+		if info.block_gap.map_or(false, |(s, e)| s <= number && number <= e) ||
 			block_status == BlockStatus::InChain
 		{
 			// When re-importing existing block strip away intermediates.
