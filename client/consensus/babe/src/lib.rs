@@ -1133,12 +1133,10 @@ where
 		let hash = block.header.hash();
 		let parent_hash = *block.header.parent_hash();
 
-		let info = self.client.info()
+		let info = self.client.info();
 		let number = *block.header.number();
 
-		if info.block_gap.map_or(false, |(s, e)| s <= number && number <= e)  ||
-			block.with_state()
-		{
+		if info.block_gap.map_or(false, |(s, e)| s <= number && number <= e) || block.with_state() {
 			// Verification for imported blocks is skipped in two cases:
 			// 1. When importing blocks below the last finalized block during network initial
 			//    synchronization.
