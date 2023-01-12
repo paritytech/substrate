@@ -86,24 +86,16 @@ where
 	/// Updates the state according to the given `ChainEvent`, returning
 	/// `Some(tree_route)` with a tree route including the blocks that need to
 	/// be enacted/retracted. If no enactment is needed then `None` is returned.
-	pub fn update<TreeRouteF, IsMajorSyncF, BlockNumberF>(
+	pub fn update<TreeRouteF, BlockNumberF>(
 		&mut self,
 		event: &ChainEvent<Block>,
 		tree_route: &TreeRouteF,
 		hash_to_number: &BlockNumberF,
-		is_major_syncing: &IsMajorSyncF,
 	) -> Result<EnactmentAction<Block>, String>
 	where
 		TreeRouteF: Fn(Block::Hash, Block::Hash) -> Result<TreeRoute<Block>, String>,
 		BlockNumberF: Fn(Block::Hash) -> Result<Option<NumberFor<Block>>, String>,
-		IsMajorSyncF: Fn() -> bool,
 	{
-		if is_major_syncing() {
-			log::info!(target: "txpool", "skip maintain: major syncing");
-			self.force_update(event);
-			return Ok(EnactmentAction::Skip)
-		}
-
 		let (new_hash, finalized) = match event {
 			ChainEvent::NewBestBlock { hash, .. } => (*hash, false),
 			ChainEvent::Finalized { hash, .. } => (*hash, true),
@@ -187,10 +179,7 @@ where
 	pub fn force_update(&mut self, event: &ChainEvent<Block>) {
 		match event {
 			ChainEvent::NewBestBlock { hash, .. } => self.recent_best_block = *hash,
-			ChainEvent::Finalized { hash, .. } => {
-				self.recent_best_block = *hash;
-				self.recent_finalized_block = *hash;
-			},
+			ChainEvent::Finalized { hash, .. } => self.recent_finalized_block = *hash,
 		};
 		log::debug!(target: "txpool", "forced update: {:?}, {:?}", self.recent_best_block, self.recent_finalized_block);
 	}
@@ -447,11 +436,10 @@ mod enactment_state_tests {
 		}
 	}
 
-	fn trigger_new_best_block_with_major_sync(
+	fn trigger_new_best_block(
 		state: &mut EnactmentState<Block>,
 		from: HashAndNumber<Block>,
 		acted_on: HashAndNumber<Block>,
-		major_sync: bool,
 	) -> EnactmentAction<Block> {
 		let (from, acted_on) = (from.hash, acted_on.hash);
 
@@ -465,16 +453,14 @@ mod enactment_state_tests {
 				},
 				&tree_route,
 				&block_hash_to_block_number,
-				&|| major_sync,
 			)
 			.unwrap()
 	}
 
-	fn trigger_finalized_with_major_sync(
+	fn trigger_finalized(
 		state: &mut EnactmentState<Block>,
 		from: HashAndNumber<Block>,
 		acted_on: HashAndNumber<Block>,
-		major_sync: bool,
 	) -> EnactmentAction<Block> {
 		let (from, acted_on) = (from.hash, acted_on.hash);
 
@@ -490,25 +476,8 @@ mod enactment_state_tests {
 				&ChainEvent::Finalized { hash: acted_on, tree_route: v.into() },
 				&tree_route,
 				&block_hash_to_block_number,
-				&|| major_sync,
 			)
 			.unwrap()
-	}
-
-	fn trigger_new_best_block(
-		state: &mut EnactmentState<Block>,
-		from: HashAndNumber<Block>,
-		acted_on: HashAndNumber<Block>,
-	) -> EnactmentAction<Block> {
-		trigger_new_best_block_with_major_sync(state, from, acted_on, false)
-	}
-
-	fn trigger_finalized(
-		state: &mut EnactmentState<Block>,
-		from: HashAndNumber<Block>,
-		acted_on: HashAndNumber<Block>,
-	) -> EnactmentAction<Block> {
-		trigger_finalized_with_major_sync(state, from, acted_on, false)
 	}
 
 	fn assert_es_eq(
@@ -703,22 +672,7 @@ mod enactment_state_tests {
 		let mut es = EnactmentState::new(a().hash, a().hash);
 
 		es.force_update(&ChainEvent::Finalized { hash: b1().hash, tree_route: Arc::from([]) });
-		assert_es_eq(&es, b1(), b1());
-	}
-
-	#[test]
-	fn test_enactment_skip_major_sync() {
-		sp_tracing::try_init_simple();
-		let mut es = EnactmentState::new(a().hash, a().hash);
-
-		// A-B1-C1-..-X1
-		let result = trigger_new_best_block_with_major_sync(&mut es, a(), c1(), true);
-		assert!(matches!(result, EnactmentAction::Skip));
-		assert_es_eq(&es, c1(), a());
-
-		let result = trigger_finalized_with_major_sync(&mut es, a(), x1(), true);
-		assert!(matches!(result, EnactmentAction::Skip));
-		assert_es_eq(&es, x1(), x1());
+		assert_es_eq(&es, a(), b1());
 	}
 
 	#[test]

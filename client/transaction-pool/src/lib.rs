@@ -76,7 +76,8 @@ type ReadyIteratorFor<PoolApi> =
 type PolledIterator<PoolApi> = Pin<Box<dyn Future<Output = ReadyIteratorFor<PoolApi>> + Send>>;
 
 /// A transaction pool for a full node.
-pub type FullPool<Block, Client> = BasicPool<FullChainApi<Client, Block>, Block>;
+pub type FullPool<Block, Client> =
+	BasicPool<FullChainApi<Client, Block>, Block>;
 
 /// Basic implementation of transaction pool that can be customized by providing PoolApi.
 pub struct BasicPool<PoolApi, Block>
@@ -721,10 +722,7 @@ where
 	Block: BlockT,
 	PoolApi: 'static + graph::ChainApi<Block = Block>,
 {
-	async fn maintain<SO>(&self, event: ChainEvent<Self::Block>, sync_oracle: Arc<SO>)
-	where
-		SO: sp_consensus::SyncOracle + std::marker::Send + std::marker::Sync + ?Sized,
-	{
+	async fn maintain(&self, event: ChainEvent<Self::Block>) {
 		let prev_finalized_block = self.enactment_state.lock().recent_finalized_block();
 		let compute_tree_route = |from, to| -> Result<TreeRoute<Block>, String> {
 			match self.api.tree_route(from, to) {
@@ -735,7 +733,6 @@ where
 					)),
 			}
 		};
-		let is_major_syncing = || sync_oracle.is_major_syncing();
 		let block_id_to_number =
 			|hash| self.api.block_id_to_number(&BlockId::Hash(hash)).map_err(|e| format!("{}", e));
 
@@ -743,7 +740,6 @@ where
 			&event,
 			&compute_tree_route,
 			&block_id_to_number,
-			&is_major_syncing,
 		);
 
 		match result {
@@ -779,15 +775,11 @@ where
 }
 
 /// Inform the transaction pool about imported and finalized blocks.
-pub async fn notification_future<Client, Pool, Block, SyncOracle>(
-	client: Arc<Client>,
-	txpool: Arc<Pool>,
-	sync_oracle: Arc<SyncOracle>,
-) where
+pub async fn notification_future<Client, Pool, Block>(client: Arc<Client>, txpool: Arc<Pool>)
+where
 	Block: BlockT,
 	Client: sc_client_api::BlockchainEvents<Block>,
 	Pool: MaintainedTransactionPool<Block = Block>,
-	SyncOracle: sp_consensus::SyncOracle + std::marker::Sync + std::marker::Send + ?Sized,
 {
 	let import_stream = client
 		.import_notification_stream()
@@ -796,6 +788,6 @@ pub async fn notification_future<Client, Pool, Block, SyncOracle>(
 	let finality_stream = client.finality_notification_stream().map(Into::into).fuse();
 
 	futures::stream::select(import_stream, finality_stream)
-		.for_each(|evt| txpool.maintain(evt, sync_oracle.clone()))
+		.for_each(|evt| txpool.maintain(evt))
 		.await
 }

@@ -615,14 +615,11 @@ mod tests {
 			.unwrap();
 
 		block_on(
-			txpool.maintain(
-				chain_event(
-					client
-						.expect_header(client.info().genesis_hash)
-						.expect("there should be header"),
-				),
-				Arc::new(sp_consensus::NoNetwork),
-			),
+			txpool.maintain(chain_event(
+				client
+					.expect_header(client.info().genesis_hash)
+					.expect("there should be header"),
+			)),
 		);
 
 		let mut proposer_factory =
@@ -711,14 +708,11 @@ mod tests {
 		block_on(txpool.submit_at(&BlockId::number(0), SOURCE, vec![extrinsic(0)])).unwrap();
 
 		block_on(
-			txpool.maintain(
-				chain_event(
-					client
-						.expect_header(client.info().genesis_hash)
-						.expect("there should be header"),
-				),
-				Arc::new(sp_consensus::NoNetwork),
-			),
+			txpool.maintain(chain_event(
+				client
+					.expect_header(client.info().genesis_hash)
+					.expect("there should be header"),
+			)),
 		);
 
 		let mut proposer_factory =
@@ -815,14 +809,11 @@ mod tests {
 		};
 
 		block_on(
-			txpool.maintain(
-				chain_event(
-					client
-						.expect_header(client.info().genesis_hash)
-						.expect("there should be header"),
-				),
-				Arc::new(sp_consensus::NoNetwork),
-			),
+			txpool.maintain(chain_event(
+				client
+					.expect_header(client.info().genesis_hash)
+					.expect("there should be header"),
+			)),
 		);
 		assert_eq!(txpool.ready().count(), 7);
 
@@ -831,10 +822,11 @@ mod tests {
 		let hashof1 = block.hash();
 		block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
-		block_on(txpool.maintain(
-			chain_event(client.expect_header(hashof1).expect("there should be header")),
-			Arc::new(sp_consensus::NoNetwork),
-		));
+		block_on(
+			txpool.maintain(chain_event(
+				client.expect_header(hashof1).expect("there should be header"),
+			)),
+		);
 		assert_eq!(txpool.ready().count(), 5);
 
 		// now let's make sure that we can still make some progress
@@ -880,9 +872,7 @@ mod tests {
 
 		block_on(txpool.submit_at(&BlockId::number(0), SOURCE, extrinsics)).unwrap();
 
-		block_on(
-			txpool.maintain(chain_event(genesis_header.clone()), Arc::new(sp_consensus::NoNetwork)),
-		);
+		block_on(txpool.maintain(chain_event(genesis_header.clone())));
 
 		let mut proposer_factory =
 			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
@@ -968,14 +958,11 @@ mod tests {
 		.unwrap();
 
 		block_on(
-			txpool.maintain(
-				chain_event(
-					client
-						.expect_header(client.info().genesis_hash)
-						.expect("there should be header"),
-				),
-				Arc::new(sp_consensus::NoNetwork),
-			),
+			txpool.maintain(chain_event(
+				client
+					.expect_header(client.info().genesis_hash)
+					.expect("there should be header"),
+			)),
 		);
 		assert_eq!(txpool.ready().count(), MAX_SKIPPED_TRANSACTIONS * 3);
 
@@ -1033,14 +1020,11 @@ mod tests {
 		.unwrap();
 
 		block_on(
-			txpool.maintain(
-				chain_event(
-					client
-						.expect_header(client.info().genesis_hash)
-						.expect("there should be header"),
-				),
-				Arc::new(sp_consensus::NoNetwork),
-			),
+			txpool.maintain(chain_event(
+				client
+					.expect_header(client.info().genesis_hash)
+					.expect("there should be header"),
+			)),
 		);
 		assert_eq!(txpool.ready().count(), MAX_SKIPPED_TRANSACTIONS * 2 + 2);
 
