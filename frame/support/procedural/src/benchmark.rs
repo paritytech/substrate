@@ -27,9 +27,9 @@ use syn::{
 	parse_macro_input,
 	punctuated::Punctuated,
 	spanned::Spanned,
-	token::{Comma, Gt, Lt, Paren},
-	Error, Expr, ExprBlock, ExprCall, FnArg, Item, ItemFn, ItemMod, LitInt, Pat, Result, Stmt,
-	Token, Type, WhereClause,
+	token::{Colon2, Comma, Gt, Lt, Paren},
+	Error, Expr, ExprBlock, ExprCall, ExprPath, FnArg, Item, ItemFn, ItemMod, LitInt, Pat, Path,
+	PathArguments, PathSegment, Result, Stmt, Token, Type, WhereClause,
 };
 
 mod keywords {
@@ -181,6 +181,7 @@ impl BenchmarkDef {
 							Some(arg) => arg.clone(),
 							None => return Some(Err(Error::new(expr_call.args.span(), "Single-item extrinsic calls must specify their origin as the first argument."))),
 						};
+
 						Some(Ok((i, BenchmarkCallDef::ExtrinsicCall { origin, expr_call })))
 					})
 				},
@@ -616,18 +617,38 @@ fn expand_benchmark(
 			}
 			expr_call.args = final_args;
 
-			// modify extrinsic call to be prefixed with new_call_variant
+			// determine call name (handles `_` and normal call syntax)
 			let expr_span = expr_call.span();
 			let call_err = || {
-				quote_spanned!(expr_span=> "Extrinsic call must be a function call".to_compile_error()).into()
+				quote_spanned!(expr_span=> "Extrinsic call must be a function call or `_`".to_compile_error()).into()
 			};
-			let Expr::Path(expr_path) = &mut *expr_call.func else { return call_err(); };
-			let Some(segment) = expr_path.path.segments.last_mut() else { return call_err(); };
-			segment.ident = Ident::new(
-				// mutation occurs here
-				format!("new_call_variant_{}", segment.ident.to_string()).as_str(),
-				Span::call_site(),
-			);
+			let call_name = match *expr_call.func {
+				Expr::Path(expr_path) => {
+					// normal function call
+					let Some(segment) = expr_path.path.segments.last() else { return call_err(); };
+					segment.ident.to_string()
+				},
+				Expr::Verbatim(tokens) => {
+					// `_` style
+					// replace `_` with fn name
+					let Ok(_) = syn::parse::<Token![_]>(tokens.to_token_stream().into()) else { return call_err(); };
+					name.to_string()
+				},
+				_ => return call_err(),
+			};
+
+			// modify extrinsic call to be prefixed with "new_call_variant"
+			let call_name = format!("new_call_variant_{}", call_name);
+			let mut punct: Punctuated<PathSegment, Colon2> = Punctuated::new();
+			punct.push(PathSegment {
+				arguments: PathArguments::None,
+				ident: Ident::new(call_name.as_str(), Span::call_site()),
+			});
+			*expr_call.func = Expr::Path(ExprPath {
+				attrs: vec![],
+				qself: None,
+				path: Path { leading_colon: None, segments: punct },
+			});
 
 			(
 				// (pre_call, post_call):

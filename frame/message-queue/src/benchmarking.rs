@@ -190,7 +190,7 @@ mod benchmarks {
 		assert!(Pages::<T>::contains_key(&origin, 0));
 
 		#[extrinsic_call]
-		reap_page(RawOrigin::Signed(whitelisted_caller()), 0u32.into(), 0);
+		_(RawOrigin::Signed(whitelisted_caller()), 0u32.into(), 0);
 
 		assert_last_event::<T>(Event::PageReaped { origin: 0.into(), index: 0 }.into());
 		assert!(!Pages::<T>::contains_key(&origin, 0));
