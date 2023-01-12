@@ -18,9 +18,12 @@
 
 //! Substrate transaction pool implementation.
 
+use num_traits::CheckedSub;
 use sc_transaction_pool_api::ChainEvent;
 use sp_blockchain::TreeRoute;
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::{Block as BlockT, NumberFor};
+
+const SKIP_MAINTAINANCE_THRESHOLD: u16 = 20;
 
 /// Helper struct for keeping track of the current state of processed new best
 /// block and finalized events. The main purpose of keeping track of this state
@@ -54,6 +57,12 @@ where
 	recent_finalized_block: Block::Hash,
 }
 
+pub enum EnactmentAction<Block: BlockT> {
+	Skip,
+	HandleEnactment(TreeRoute<Block>),
+	HandleFinalization,
+}
+
 impl<Block> EnactmentState<Block>
 where
 	Block: BlockT,
@@ -68,31 +77,65 @@ where
 		self.recent_finalized_block
 	}
 
+	/// Returns the recently finalized block.
+	pub fn recent_best_block(&self) -> Block::Hash {
+		self.recent_best_block
+	}
+
 	/// Updates the state according to the given `ChainEvent`, returning
 	/// `Some(tree_route)` with a tree route including the blocks that need to
 	/// be enacted/retracted. If no enactment is needed then `None` is returned.
-	pub fn update<F>(
+	pub fn update<TreeRouteF, IsMajorSyncF, BlockNumberF>(
 		&mut self,
 		event: &ChainEvent<Block>,
-		tree_route: &F,
-	) -> Result<Option<TreeRoute<Block>>, String>
+		tree_route: &TreeRouteF,
+		is_major_syncing: &IsMajorSyncF,
+		hash_to_number: &BlockNumberF,
+	) -> Result<EnactmentAction<Block>, String>
 	where
-		F: Fn(Block::Hash, Block::Hash) -> Result<TreeRoute<Block>, String>,
+		TreeRouteF: Fn(Block::Hash, Block::Hash) -> Result<TreeRoute<Block>, String>,
+		IsMajorSyncF: Fn() -> bool,
+		BlockNumberF: Fn(Block::Hash) -> Result<Option<NumberFor<Block>>, String>,
 	{
+		if is_major_syncing() {
+			log::info!(target: "txpool", "skip: major");
+			self.force_update(event);
+			return Ok(EnactmentAction::Skip)
+		}
+
 		let (new_hash, finalized) = match event {
 			ChainEvent::NewBestBlock { hash, .. } => (*hash, false),
 			ChainEvent::Finalized { hash, .. } => (*hash, true),
 		};
 
+		let distance = match (hash_to_number(new_hash), hash_to_number(self.recent_best_block())) {
+			(Ok(Some(notified)), Ok(Some(current))) => notified.checked_sub(&current),
+			_ => None,
+		};
+
+		// do not process maintain txpool if node is out of sync
+		if Some(SKIP_MAINTAINANCE_THRESHOLD.into()) < distance {
+			log::info!(target: "txpool", "skip: long");
+			self.force_update(event);
+			return Ok(EnactmentAction::Skip)
+		}
+
 		// block was already finalized
 		if self.recent_finalized_block == new_hash {
 			log::debug!(target: "txpool", "handle_enactment: block already finalized");
-			return Ok(None)
+			return Ok(EnactmentAction::Skip) //Ok(None)
 		}
 
 		// compute actual tree route from best_block to notified block, and use
 		// it instead of tree_route provided with event
 		let tree_route = tree_route(self.recent_best_block, new_hash)?;
+
+		// do not process maintain txpool if node is out of sync
+		if tree_route.enacted().len() > SKIP_MAINTAINANCE_THRESHOLD.into() {
+			log::info!(target: "txpool", "skip: enacted too long");
+			self.force_update(event);
+			return Ok(EnactmentAction::Skip)
+		}
 
 		log::debug!(
 			target: "txpool",
@@ -109,7 +152,7 @@ where
 				"Recently finalized block {} would be retracted by ChainEvent {}, skipping",
 				self.recent_finalized_block, new_hash
 			);
-			return Ok(None)
+			return Ok(EnactmentAction::Skip) //Ok(None)
 		}
 
 		if finalized {
@@ -124,7 +167,7 @@ where
 					target: "txpool",
 					"handle_enactment: no newly enacted blocks since recent best block"
 				);
-				return Ok(None)
+				return Ok(EnactmentAction::HandleFinalization)
 			}
 
 			// otherwise enacted finalized block becomes best block...
@@ -132,7 +175,7 @@ where
 
 		self.recent_best_block = new_hash;
 
-		Ok(Some(tree_route))
+		Ok(EnactmentAction::HandleEnactment(tree_route))
 	}
 
 	/// Forces update of the state according to the given `ChainEvent`. Intended to be used as a
@@ -151,7 +194,7 @@ where
 
 #[cfg(test)]
 mod enactment_state_tests {
-	use super::EnactmentState;
+	use super::{EnactmentAction, EnactmentState};
 	use sc_transaction_pool_api::ChainEvent;
 	use sp_blockchain::{HashAndNumber, TreeRoute};
 	use std::sync::Arc;
@@ -395,8 +438,11 @@ mod enactment_state_tests {
 				},
 				&tree_route,
 			)
+			.map(|s| match s {
+				EnactmentAction::HandleEnactment(_) => true,
+				_ => false,
+			})
 			.unwrap()
-			.is_some()
 	}
 
 	fn trigger_finalized(
@@ -415,8 +461,11 @@ mod enactment_state_tests {
 
 		state
 			.update(&ChainEvent::Finalized { hash: acted_on, tree_route: v.into() }, &tree_route)
+			.map(|s| match s {
+				EnactmentAction::HandleEnactment(_) => true,
+				_ => false,
+			})
 			.unwrap()
-			.is_some()
 	}
 
 	fn assert_es_eq(

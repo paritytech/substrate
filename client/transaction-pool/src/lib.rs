@@ -33,7 +33,7 @@ mod tests;
 
 pub use crate::api::FullChainApi;
 use async_trait::async_trait;
-use enactment_state::EnactmentState;
+use enactment_state::{EnactmentAction, EnactmentState};
 use futures::{
 	channel::oneshot,
 	future::{self, ready},
@@ -591,11 +591,6 @@ where
 		let pool = self.pool.clone();
 		let api = self.api.clone();
 
-		// do not process maintain txpool if node is out of sync
-		if tree_route.enacted().len() > 20 {
-			return
-		}
-
 		let (hash, block_number) = match tree_route.last() {
 			Some(HashAndNumber { hash, number }) => (hash, number),
 			None => {
@@ -730,11 +725,6 @@ where
 	where
 		SO: sp_consensus::SyncOracle + std::marker::Send + std::marker::Sync + ?Sized,
 	{
-		if sync_oracle.is_major_syncing() {
-			self.enactment_state.lock().force_update(&event);
-			return
-		}
-
 		let prev_finalized_block = self.enactment_state.lock().recent_finalized_block();
 		let compute_tree_route = |from, to| -> Result<TreeRoute<Block>, String> {
 			match self.api.tree_route(from, to) {
@@ -746,15 +736,25 @@ where
 			}
 		};
 
-		let result = self.enactment_state.lock().update(&event, &compute_tree_route);
+		let is_major_syncing = || sync_oracle.is_major_syncing();
+		let block_id_to_number =
+			|hash| self.api.block_id_to_number(&BlockId::Hash(hash)).map_err(|e| format!("{}", e));
+
+		let result = self.enactment_state.lock().update(
+			&event,
+			&compute_tree_route,
+			&is_major_syncing,
+			&block_id_to_number,
+		);
 
 		match result {
 			Err(msg) => {
 				log::debug!(target: "txpool", "{msg}");
 				self.enactment_state.lock().force_update(&event);
 			},
-			Ok(None) => {},
-			Ok(Some(tree_route)) => {
+			Ok(EnactmentAction::Skip) => return,
+			Ok(EnactmentAction::HandleFinalization) => {},
+			Ok(EnactmentAction::HandleEnactment(tree_route)) => {
 				self.handle_enactment(tree_route).await;
 			},
 		};
