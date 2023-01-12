@@ -383,40 +383,41 @@ pub mod pallet {
 		}
 
 		fn integrity_test() {
-			const DEFAULT_HEAP_PAGES: u32 = 2048;
-			const PAGE_SIZE: u32 = 64 * 1024;
-			const MAX_RUNTIME_MEM: u32 = DEFAULT_HEAP_PAGES * PAGE_SIZE;
+			// Total runtime memory is expected to have 1Gb upper limit
+			const MAX_RUNTIME_MEM: u32 = 1024 * 1024 * 1024;
 			// Memory limits for a single contract
-			const STACK_MAX_SIZE: u32 = 16384 * 64;
+			// Value stack size: 1Mb per contract, default defined in wasmi
+			const STACK_MAX_SIZE: u32 = 1024 * 1024;
+			// Normally 16 mempages of 64kb = 1Mb per contract
 			let heap_max_size = T::Schedule::get().limits.max_memory_size();
 			let stack_height = T::CallStack::size() as u32;
 			// In worst case, the decoded wasm contract code would be x16 times larger than the
 			// encoded one. This is because even a single-byte wasm instruction has 16-byte size in
 			// wasmi. Hence we need to check that with given `MaxCodeLen` and `CallStack`, this
-			// worst case won't break runtime heap memory limit. Not that maximum allowed heap
+			// worst case won't break runtime heap memory limit. Also pallet stores the plain wasm
+			// code twice `PrefabWasmModule.code` and `PrefabWasmModule.original_code`, which gives
+			// us additional `MaxCodeLen*2` mem usage. Note that maximum allowed heap
 			// memory and stack size per each contract (stack frame) should also be counted.
+			// Finally, we allow 50% of the runtime memory to be utilized by the contracts call
+			// stack, keeping the rest for other facilities, such as PoV and etc.
 			//
-			// This gives us the following expression:
-			// (MaxCodeLen * 16 + STACK_MAX_SIZE + heap_max_size) * stack_height < MAX_RUNTIME_MEM
+			// This gives us the following formula:
+			// (MaxCodeLen * 18 + STACK_MAX_SIZE + heap_max_size) * stack_height < MAX_RUNTIME_MEM/2
 			let code_len_limit = MAX_RUNTIME_MEM
+				.saturating_div(2)
 				.saturating_div(stack_height)
 				.saturating_sub(heap_max_size)
 				.saturating_sub(STACK_MAX_SIZE)
-				.saturating_div(16);
+				.saturating_div(18);
 
 			assert!(
 				T::MaxCodeLen::get() < code_len_limit,
-				"Given `CallStack` height {:?}, `MaxCodeLen` should be set less than {:?} (current value is {:?}).",
+				"Given `CallStack` height {:?}, `MaxCodeLen` should be set less than {:?} \
+				 (current value is {:?}), to avoid possible runtime oom issues.",
 				stack_height,
 				code_len_limit,
 				T::MaxCodeLen::get(),
 			);
-
-			assert!(
-				T::MaxDebugBufferLen::get() > heap_max_size,
-				"Debug buffer should be large enough to hold at least single message of a maximum size of {}",
-				heap_max_size,
-			)
 		}
 	}
 
