@@ -20,7 +20,7 @@
 use derive_syn_parse::Parse;
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
-use quote::{quote, ToTokens};
+use quote::{quote, quote_spanned, ToTokens};
 use syn::{
 	parenthesized,
 	parse::{Nothing, ParseStream},
@@ -227,6 +227,7 @@ impl BenchmarkDef {
 /// Parses and expands a `#[benchmarks]` or `#[instance_benchmarks]` invocation
 pub fn benchmarks(attrs: TokenStream, tokens: TokenStream, instance: bool) -> TokenStream {
 	let module = parse_macro_input!(tokens as ItemMod);
+	let mod_span = module.span().clone();
 	let where_clause = match syn::parse::<Nothing>(attrs.clone()) {
 		Ok(_) => quote!(),
 		Err(_) => parse_macro_input!(attrs as WhereClause).predicates.to_token_stream(),
@@ -238,57 +239,54 @@ pub fn benchmarks(attrs: TokenStream, tokens: TokenStream, instance: bool) -> To
 	let mut benchmark_names: Vec<Ident> = Vec::new();
 	let mut extra_benchmark_names: Vec<Ident> = Vec::new();
 	let mut skip_meta_benchmark_names: Vec<Ident> = Vec::new();
-	let mut args: Option<BenchmarkAttrs> = None;
-	if let Some(mut content) = module.content {
-		for stmt in &mut content.1 {
-			let mut found_item: Option<ItemFn> = None;
-			if let Item::Fn(func) = stmt {
-				let mut i = 0;
-				for attr in &func.attrs.clone() {
-					if let Some(seg) = attr.path.segments.last() {
-						if let Ok(_) =
-							syn::parse::<keywords::benchmark>(seg.ident.to_token_stream().into())
-						{
-							let tokens = attr.tokens.to_token_stream().into();
-							args = Some(parse_macro_input!(tokens as BenchmarkAttrs));
-							func.attrs.remove(i);
-							found_item = Some(func.clone());
-							i += 1;
-						}
-					}
-				}
+	let Some(mut content) = module.content else {
+		// this will compile error already because attributes attached to empty modules are unstable
+		// but including error anyway to make this future-proof
+		return quote_spanned!(mod_span=> "Module cannot be empty!".to_compile_error()).into()
+	};
+	for stmt in &mut content.1 {
+		let mut push_stmt = || {
+			expanded_stmts.push(stmt.to_token_stream());
+		};
+		let Item::Fn(mut func) = stmt.clone() else { push_stmt(); continue; };
+		for (i, attr) in (&func.attrs.clone()).iter().enumerate() {
+			let Some(seg) = attr.path.segments.last() else { push_stmt(); continue; };
+			let Ok(_) = syn::parse::<keywords::benchmark>(seg.ident.to_token_stream().into()) else { push_stmt(); continue; };
+			let tokens = attr.tokens.to_token_stream().into();
+			let args = parse_macro_input!(tokens as BenchmarkAttrs);
+
+			// consume #[benchmark] attr
+			func.attrs.remove(i);
+
+			// parse benchmark def
+			let benchmark_def = match BenchmarkDef::from(&func, args.extra, args.skip_meta) {
+				Ok(def) => def,
+				Err(err) => return err.to_compile_error().into(),
+			};
+
+			// expand benchmark
+			let expanded = expand_benchmark(
+				benchmark_def.clone(),
+				&func.sig.ident,
+				instance,
+				where_clause.clone(),
+			);
+
+			// record benchmark name
+			let name = func.sig.ident;
+
+			// process name vecs
+			benchmark_names.push(name.clone());
+			if benchmark_def.extra {
+				extra_benchmark_names.push(name.clone());
 			}
-			if let (Some(item_fn), Some(args)) = (found_item, &args) {
-				// this item is a #[benchmark] or #[instance_benchmark]
-				let benchmark_def = match BenchmarkDef::from(&item_fn, args.extra, args.skip_meta) {
-					Ok(def) => def,
-					Err(err) => return err.to_compile_error().into(),
-				};
-
-				// expand benchmark
-				let expanded = expand_benchmark(
-					benchmark_def.clone(),
-					&item_fn.sig.ident,
-					instance,
-					where_clause.clone(),
-				);
-
-				// record benchmark name
-				let name = item_fn.sig.ident;
-				benchmark_names.push(name.clone());
-				if benchmark_def.extra {
-					extra_benchmark_names.push(name.clone());
-				}
-				if benchmark_def.skip_meta {
-					skip_meta_benchmark_names.push(name.clone())
-				}
-
-				expanded_stmts.push(expanded);
-				benchmark_defs.push(benchmark_def);
-			} else {
-				// this is not a benchmark item, copy it in verbatim
-				expanded_stmts.push(stmt.to_token_stream());
+			if benchmark_def.skip_meta {
+				skip_meta_benchmark_names.push(name.clone())
 			}
+
+			expanded_stmts.push(expanded);
+			benchmark_defs.push(benchmark_def);
+			break
 		}
 	}
 
