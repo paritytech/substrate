@@ -334,9 +334,10 @@ use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_runtime::{
 	traits::{
-		AccountIdConversion, CheckedAdd, CheckedSub, Convert, Saturating, StaticLookup, Zero,
+		AccountIdConversion, Bounded, CheckedAdd, CheckedSub, Convert, Saturating, StaticLookup,
+		Zero,
 	},
-	FixedPointNumber,
+	FixedPointNumber, Perbill,
 };
 use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, ops::Div, vec::Vec};
@@ -582,25 +583,234 @@ pub struct PoolRoles<AccountId> {
 	pub state_toggler: Option<AccountId>,
 }
 
+/// Pool commission.
+///
+/// The pool `root` can set commission configuration after pool creation. By default, all commission
+/// values are `None`. Pool `root` can also set `max` and `change_rate` configurations before
+/// setting an initial `current` commission.
+///
+/// `current` is a tuple of the commission percentage and payee of commission. `throttle_from`
+/// keeps track of which block `current` was last updated. A `max` commission value can only be
+/// decreased after the initial value is set, to prevent commission from repeatedly increasing.
+///
+/// An optional commission `change_rate` allows the pool to set strict limits to how much commission
+/// can change in each update, and how often updates can take place.
+#[derive(
+	Encode, Decode, DefaultNoBound, MaxEncodedLen, TypeInfo, DebugNoBound, PartialEq, Copy, Clone,
+)]
+#[codec(mel_bound(T: Config))]
+#[scale_info(skip_type_params(T))]
+pub struct Commission<T: Config> {
+	/// Optional commission rate of the pool along with the account commission is paid to.
+	pub current: Option<(Perbill, T::AccountId)>,
+	/// Optional maximum commission that can be set by the pool `root`. Once set, this value can
+	/// only be updated to a decreased value.
+	pub max: Option<Perbill>,
+	/// Optional configuration around how often commission can be updated, and when the last
+	/// commission update took place.
+	pub change_rate: Option<CommissionChangeRate<T::BlockNumber>>,
+	/// The block throttling should be checked from. This value will be updated on all commission
+	/// updates and when setting an initial `change_rate`.
+	pub throttle_from: Option<T::BlockNumber>,
+}
+
+impl<T: Config> Commission<T> {
+	/// Returns true if the current commission updating to `to` would exhaust the change rate
+	/// limits.
+	///
+	/// A commission update will be throttled (disallowed) if:
+	/// 1. not enough blocks have passed since the `throttle_from` block, if exists, or
+	/// 2. the new commission is greater than the maximum allowed increase.
+	fn throttling(&self, to: &Perbill) -> bool {
+		if let Some(t) = self.change_rate.as_ref() {
+			let commission_as_percent =
+				self.current.as_ref().map(|(x, _)| *x).unwrap_or(Perbill::zero());
+
+			// do not throttle if `to` is the same or a decrease in commission.
+			if *to <= commission_as_percent {
+				return false
+			}
+			// Test for `max_increase` throttling.
+			//
+			// Throttled if the attempted increase in commission is greater than `max_increase`.
+			if (*to).saturating_sub(commission_as_percent) > t.max_increase {
+				return true
+			}
+
+			// Test for `min_delay` throttling.
+			//
+			// Note: matching `None` is defensive only. `throttle_from` should always exist where
+			// `change_rate` has already been set, so this scenario should never happen.
+			return self.throttle_from.map_or_else(
+				|| {
+					defensive!("throttle_from should exist if change_rate is set");
+					false
+				},
+				|f| {
+					// if `min_delay` is zero (no delay), not throttling.
+					if t.min_delay == Zero::zero() {
+						return false
+					} else {
+						// throttling if blocks passed is less than `min_delay`.
+						let blocks_surpassed =
+							<frame_system::Pallet<T>>::block_number().saturating_sub(f);
+						return blocks_surpassed < t.min_delay
+					}
+				},
+			)
+		}
+		false
+	}
+
+	/// Set the pool's commission.
+	///
+	/// Update commission based on `current`. If a `None` is supplied, allow the commission to be
+	/// removed without any change rate restrictions. If `change_rate` is present, update
+	/// `throttle_from` to the current block. If the supplied commission is zero, `None` will be
+	/// inserted and `payee` will be ignored.
+	fn try_update_current(&mut self, current: &Option<(Perbill, T::AccountId)>) -> DispatchResult {
+		self.current = match current {
+			None => None,
+			Some((commission, payee)) => {
+				ensure!(!self.throttling(&commission), Error::<T>::CommissionChangeThrottled);
+				ensure!(
+					self.max.map_or(true, |m| commission <= &m),
+					Error::<T>::CommissionExceedsMaximum
+				);
+				if commission.is_zero() {
+					None
+				} else {
+					Some((*commission, payee.clone()))
+				}
+			},
+		};
+		let _ = self.register_update();
+		Ok(())
+	}
+
+	/// Set the pool's maximum commission.
+	///
+	/// The pool's maximum commission can initially be set to any value, and only smaller values
+	/// thereafter. If larger values are attempted, this function will return a dispatch error.
+	///
+	/// If `current.0` is larger than the updated max commission value, `current.0` will also be
+	/// updated to the new maximum. This will also register a `throttle_from` update.
+	fn try_update_max(&mut self, new_max: Perbill) -> DispatchResult {
+		if let Some(old) = self.max.as_mut() {
+			if new_max > *old {
+				return Err(Error::<T>::MaxCommissionRestricted.into())
+			}
+			*old = new_max;
+		} else {
+			self.max = Some(new_max)
+		};
+		let updated_current = self
+			.current
+			.as_mut()
+			.map(|(c, _)| {
+				let u = *c > new_max;
+				*c = (*c).min(new_max);
+				u
+			})
+			.unwrap_or(false);
+
+		if updated_current {
+			self.register_update();
+		}
+		Ok(())
+	}
+
+	/// Set the pool's commission `change_rate`.
+	///
+	/// Once a change rate configuration has been set, only more restrictive values can be set
+	/// thereafter. These restrictions translate to increased `min_delay` values and decreased
+	/// `max_increase` values.
+	///
+	/// Update `throttle_from` to the current block upon setting change rate for the first time, so
+	/// throttling can be checked from this block.
+	fn try_update_change_rate(
+		&mut self,
+		change_rate: CommissionChangeRate<T::BlockNumber>,
+	) -> DispatchResult {
+		ensure!(!&self.less_restrictive(&change_rate), Error::<T>::CommissionChangeRateNotAllowed);
+
+		if self.change_rate.is_none() {
+			self.throttle_from = Some(<frame_system::Pallet<T>>::block_number());
+		}
+		self.change_rate = Some(change_rate);
+		Ok(())
+	}
+
+	/// Gets the current commission (if any) and payee to be paid.
+	///
+	/// `None` is returned if a commission has not been set. Commission is bounded to
+	/// `GlobalMaxCommission`.
+	fn maybe_commission_and_payee(
+		&self,
+		pending_rewards: &BalanceOf<T>,
+	) -> Option<(BalanceOf<T>, T::AccountId)> {
+		self.current.as_ref().map(|(commission, payee)| {
+			(
+				*commission.min(&GlobalMaxCommission::<T>::get().unwrap_or(Bounded::max_value())) *
+					*pending_rewards,
+				payee.clone(),
+			)
+		})
+	}
+
+	/// Updates a commission's `throttle_from` field to the current block.
+	fn register_update(&mut self) {
+		self.throttle_from = Some(<frame_system::Pallet<T>>::block_number());
+	}
+
+	/// Checks whether a change rate is less restrictive than the current change rate, if any.
+	///
+	/// No change rate will always be less restrictive than some change rate, so where no
+	/// `change_rate` is currently set, `false` is returned.
+	fn less_restrictive(&self, new: &CommissionChangeRate<T::BlockNumber>) -> bool {
+		self.change_rate
+			.as_ref()
+			.map(|c| new.max_increase > c.max_increase || new.min_delay < c.min_delay)
+			.unwrap_or(false)
+	}
+}
+
+/// Pool commission change rate preferences.
+///
+/// The pool root is able to set a commission change rate for their pool. A commission change rate
+/// consists of 2 values; (1) the maximum allowed commission change, and (2) the minimum amount of
+/// blocks that must elapse before commission updates are allowed again.
+///
+/// Commission change rates are not applied to decreases in commission.
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Copy, Clone)]
+pub struct CommissionChangeRate<BlockNumber> {
+	/// The maximum amount the commission can be updated by per `min_delay` period.
+	pub max_increase: Perbill,
+	/// How often an update can take place.
+	pub min_delay: BlockNumber,
+}
+
 /// Pool permissions and state
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DebugNoBound, PartialEq, Clone)]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct BondedPoolInner<T: Config> {
-	/// Total points of all the members in the pool who are actively bonded.
-	pub points: BalanceOf<T>,
-	/// The current state of the pool.
-	pub state: PoolState,
+	/// The commission rate of the pool.
+	pub commission: Commission<T>,
 	/// Count of members that belong to the pool.
 	pub member_counter: u32,
+	/// Total points of all the members in the pool who are actively bonded.
+	pub points: BalanceOf<T>,
 	/// See [`PoolRoles`].
 	pub roles: PoolRoles<T::AccountId>,
+	/// The current state of the pool.
+	pub state: PoolState,
 }
 
 /// A wrapper for bonded pools, with utility functions.
 ///
-/// The main purpose of this is to wrap a [`BondedPoolInner`], with the account + id of the pool,
-/// for easier access.
+/// The main purpose of this is to wrap a [`BondedPoolInner`], with the account
+/// + id of the pool, for easier access.
 #[derive(RuntimeDebugNoBound)]
 #[cfg_attr(feature = "std", derive(Clone, PartialEq))]
 pub struct BondedPool<T: Config> {
@@ -629,10 +839,11 @@ impl<T: Config> BondedPool<T> {
 		Self {
 			id,
 			inner: BondedPoolInner {
+				commission: Commission::default(),
+				member_counter: Zero::zero(),
+				points: Zero::zero(),
 				roles,
 				state: PoolState::Open,
-				points: Zero::zero(),
-				member_counter: Zero::zero(),
 			},
 		}
 	}
@@ -760,6 +971,10 @@ impl<T: Config> BondedPool<T> {
 
 	fn can_set_metadata(&self, who: &T::AccountId) -> bool {
 		self.is_root(who) || self.is_state_toggler(who)
+	}
+
+	fn can_set_commission(&self, who: &T::AccountId) -> bool {
+		self.is_root(who)
 	}
 
 	fn is_destroying(&self) -> bool {
@@ -1171,9 +1386,10 @@ pub mod pallet {
 	use super::*;
 	use frame_support::traits::StorageVersion;
 	use frame_system::{ensure_signed, pallet_prelude::*};
+	use sp_runtime::Perbill;
 
 	/// The current storage version.
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(3);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
@@ -1276,6 +1492,12 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type MaxPoolMembersPerPool<T: Config> = StorageValue<_, u32, OptionQuery>;
 
+	/// The maximum commission that can be charged by a pool. Used on commission payouts to bound
+	/// pool commissions that are > GlobalMaxCommission, necessary if a future `GlobalMaxCommission`
+	/// is lower than some current pool commissions.
+	#[pallet::storage]
+	pub type GlobalMaxCommission<T: Config> = StorageValue<_, Perbill, OptionQuery>;
+
 	/// Active members.
 	///
 	/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
@@ -1289,13 +1511,13 @@ pub mod pallet {
 	pub type BondedPools<T: Config> =
 		CountedStorageMap<_, Twox64Concat, PoolId, BondedPoolInner<T>>;
 
-	/// Reward pools. This is where there rewards for each pool accumulate. When a members payout
-	/// is claimed, the balance comes out fo the reward pool. Keyed by the bonded pools account.
+	/// Reward pools. This is where there rewards for each pool accumulate. When a members payout is
+	/// claimed, the balance comes out fo the reward pool. Keyed by the bonded pools account.
 	#[pallet::storage]
 	pub type RewardPools<T: Config> = CountedStorageMap<_, Twox64Concat, PoolId, RewardPool<T>>;
 
-	/// Groups of unbonding pools. Each group of unbonding pools belongs to a bonded pool,
-	/// hence the name sub-pools. Keyed by the bonded pools account.
+	/// Groups of unbonding pools. Each group of unbonding pools belongs to a
+	/// bonded pool, hence the name sub-pools. Keyed by the bonded pools account.
 	#[pallet::storage]
 	pub type SubPoolsStorage<T: Config> = CountedStorageMap<_, Twox64Concat, PoolId, SubPools<T>>;
 
@@ -1323,6 +1545,7 @@ pub mod pallet {
 		pub max_pools: Option<u32>,
 		pub max_members_per_pool: Option<u32>,
 		pub max_members: Option<u32>,
+		pub global_max_commission: Option<Perbill>,
 	}
 
 	#[cfg(feature = "std")]
@@ -1334,6 +1557,7 @@ pub mod pallet {
 				max_pools: Some(16),
 				max_members_per_pool: Some(32),
 				max_members: Some(16 * 32),
+				global_max_commission: None,
 			}
 		}
 	}
@@ -1352,6 +1576,9 @@ pub mod pallet {
 			if let Some(max_members) = self.max_members {
 				MaxPoolMembers::<T>::put(max_members);
 			}
+			if let Some(global_max_commission) = self.global_max_commission {
+				GlobalMaxCommission::<T>::put(global_max_commission);
+			}
 		}
 	}
 
@@ -1364,7 +1591,12 @@ pub mod pallet {
 		/// A member has became bonded in a pool.
 		Bonded { member: T::AccountId, pool_id: PoolId, bonded: BalanceOf<T>, joined: bool },
 		/// A payout has been made to a member.
-		PaidOut { member: T::AccountId, pool_id: PoolId, payout: BalanceOf<T> },
+		PaidOut {
+			member: T::AccountId,
+			pool_id: PoolId,
+			payout: BalanceOf<T>,
+			commission: BalanceOf<T>,
+		},
 		/// A member has unbonded from their pool.
 		///
 		/// - `balance` is the corresponding balance of the number of points that has been
@@ -1414,6 +1646,15 @@ pub mod pallet {
 		PoolSlashed { pool_id: PoolId, balance: BalanceOf<T> },
 		/// The unbond pool at `era` of pool `pool_id` has been slashed to `balance`.
 		UnbondingPoolSlashed { pool_id: PoolId, era: EraIndex, balance: BalanceOf<T> },
+		/// A pool's commission setting has been changed.
+		PoolCommissionUpdated { pool_id: PoolId, current: Option<(Perbill, T::AccountId)> },
+		/// A pool's maximum commission setting has been changed.
+		PoolMaxCommissionUpdated { pool_id: PoolId, max_commission: Perbill },
+		/// A pool's commission `change_rate` has been changed.
+		PoolCommissionChangeRateUpdated {
+			pool_id: PoolId,
+			change_rate: CommissionChangeRate<T::BlockNumber>,
+		},
 	}
 
 	#[pallet::error]
@@ -1469,6 +1710,18 @@ pub mod pallet {
 		Defensive(DefensiveError),
 		/// Partial unbonding now allowed permissionlessly.
 		PartialUnbondNotAllowedPermissionlessly,
+		/// No commission has been set.
+		NoCommissionSet,
+		/// No account has been set to receive commission.
+		NoCommissionPayeeSet,
+		/// The pool's max commission cannot be set higher than the existing value.
+		MaxCommissionRestricted,
+		/// The supplied commission exceeds the max allowed commission.
+		CommissionExceedsMaximum,
+		/// Not enough blocks have surpassed since the last commission update.
+		CommissionChangeThrottled,
+		/// The submitted changes to commission change rate are not allowed.
+		CommissionChangeRateNotAllowed,
 		/// Pool id currently in use.
 		PoolIdInUse,
 		/// Pool id provided is not correct/usable.
@@ -1604,7 +1857,7 @@ pub mod pallet {
 		}
 
 		/// A bonded member can use this to claim their payout based on the rewards that the pool
-		/// has accumulated since their last claimed payout (OR since joining if this is there first
+		/// has accumulated since their last claimed payout (OR since joining if this is their first
 		/// time claiming rewards). The payout will be transferred to the member's account.
 		///
 		/// The member will earn rewards pro rata based on the members stake vs the sum of the
@@ -2019,6 +2272,7 @@ pub mod pallet {
 		/// * `max_pools` - Set [`MaxPools`].
 		/// * `max_members` - Set [`MaxPoolMembers`].
 		/// * `max_members_per_pool` - Set [`MaxPoolMembersPerPool`].
+		/// * `global_max_commission` - Set [`GlobalMaxCommission`].
 		#[pallet::call_index(11)]
 		#[pallet::weight(T::WeightInfo::set_configs())]
 		pub fn set_configs(
@@ -2028,6 +2282,7 @@ pub mod pallet {
 			max_pools: ConfigOp<u32>,
 			max_members: ConfigOp<u32>,
 			max_members_per_pool: ConfigOp<u32>,
+			global_max_commission: ConfigOp<Perbill>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
@@ -2046,6 +2301,7 @@ pub mod pallet {
 			config_op_exp!(MaxPools::<T>, max_pools);
 			config_op_exp!(MaxPoolMembers::<T>, max_members);
 			config_op_exp!(MaxPoolMembersPerPool::<T>, max_members_per_pool);
+			config_op_exp!(GlobalMaxCommission::<T>, global_max_commission);
 			Ok(())
 		}
 
@@ -2116,6 +2372,76 @@ pub mod pallet {
 			let bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_nominate(&who), Error::<T>::NotNominator);
 			T::Staking::chill(&bonded_pool.bonded_account())
+		}
+
+		/// Set the commission of a pool.
+		///
+		/// The dispatch origin of this call must be signed by the `root` role of the pool. Both a
+		/// commission percentage and a commission payee must be provided in the `current` tuple.
+		/// Where a `current` of `None` is provided, any current commission will be removed.
+		#[pallet::call_index(14)]
+		#[pallet::weight(T::WeightInfo::set_commission())]
+		pub fn set_commission(
+			origin: OriginFor<T>,
+			pool_id: PoolId,
+			new_commission: Option<(Perbill, T::AccountId)>,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
+
+			bonded_pool.commission.try_update_current(&new_commission)?;
+			bonded_pool.put();
+			Self::deposit_event(Event::<T>::PoolCommissionUpdated {
+				pool_id,
+				current: new_commission,
+			});
+			Ok(())
+		}
+
+		/// Set the maximum commission of a pool.
+		///
+		/// The dispatch origin of this call must be signed by the `root` role of the pool.
+		#[pallet::call_index(15)]
+		#[pallet::weight(T::WeightInfo::set_commission_max())]
+		pub fn set_commission_max(
+			origin: OriginFor<T>,
+			pool_id: PoolId,
+			max_commission: Perbill,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
+
+			bonded_pool.commission.try_update_max(max_commission)?;
+			bonded_pool.put();
+
+			Self::deposit_event(Event::<T>::PoolMaxCommissionUpdated { pool_id, max_commission });
+			Ok(())
+		}
+
+		/// Set the commission change rate for a pool.
+		///
+		/// The dispatch origin of this call must be signed by the `root` role of the pool.
+		#[pallet::call_index(16)]
+		#[pallet::weight(T::WeightInfo::set_commission_change_rate())]
+		pub fn set_commission_change_rate(
+			origin: OriginFor<T>,
+			pool_id: PoolId,
+			change_rate: CommissionChangeRate<T::BlockNumber>,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
+
+			bonded_pool.commission.try_update_change_rate(change_rate)?;
+			bonded_pool.put();
+
+			Self::deposit_event(Event::<T>::PoolCommissionChangeRateUpdated {
+				pool_id,
+				change_rate,
+			});
+			Ok(())
 		}
 	}
 
@@ -2320,7 +2646,7 @@ impl<T: Config> Pallet<T> {
 
 		let current_reward_counter =
 			reward_pool.current_reward_counter(bonded_pool.id, bonded_pool.points)?;
-		let pending_rewards = member.pending_rewards(current_reward_counter)?;
+		let mut pending_rewards = member.pending_rewards(current_reward_counter)?;
 
 		if pending_rewards.is_zero() {
 			return Ok(pending_rewards)
@@ -2330,20 +2656,45 @@ impl<T: Config> Pallet<T> {
 		member.last_recorded_reward_counter = current_reward_counter;
 		reward_pool.register_claimed_reward(pending_rewards);
 
-		// Transfer payout to the member.
-		T::Currency::transfer(
-			&bonded_pool.reward_account(),
-			&member_account,
-			pending_rewards,
-			// defensive: the depositor has put existential deposit into the pool and it stays
-			// untouched, reward account shall not die.
-			ExistenceRequirement::AllowDeath,
-		)?;
+		// Gets the commission percentage and payee to be paid if commission has been set.
+		// Otherwise, `None` is returned.
+		let maybe_commission = &bonded_pool.commission.maybe_commission_and_payee(&pending_rewards);
+
+		if let Some((pool_commission, payee)) = maybe_commission {
+			// Deduct any outstanding commission from the reward being claimed.
+			pending_rewards = pending_rewards.saturating_sub(*pool_commission);
+
+			// Send any non-zero `pool_commission` to the commission `payee`.
+			if pool_commission > &Zero::zero() {
+				T::Currency::transfer(
+					&bonded_pool.reward_account(),
+					&payee,
+					*pool_commission,
+					ExistenceRequirement::KeepAlive,
+				)?;
+			}
+		}
+
+		// Transfer remaining payout to the member.
+		//
+		// In scenarios where commission is 100%, `pending_rewards` will be zero. We therefore check
+		// if there is a non-zero payout to be transferred.
+		if pending_rewards > Zero::zero() {
+			T::Currency::transfer(
+				&bonded_pool.reward_account(),
+				&member_account,
+				pending_rewards,
+				// defensive: the depositor has put existential deposit into the pool and it stays
+				// untouched, reward account shall not die.
+				ExistenceRequirement::KeepAlive,
+			)?;
+		}
 
 		Self::deposit_event(Event::<T>::PaidOut {
 			member: member_account.clone(),
 			pool_id: member.pool_id,
 			payout: pending_rewards,
+			commission: maybe_commission.as_ref().map(|(c, _)| *c).unwrap_or(Zero::zero()),
 		});
 
 		Ok(pending_rewards)

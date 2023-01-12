@@ -251,11 +251,17 @@ pub struct ExtBuilder {
 	members: Vec<(AccountId, Balance)>,
 	max_members: Option<u32>,
 	max_members_per_pool: Option<u32>,
+	global_max_commission: Option<Perbill>,
 }
 
 impl Default for ExtBuilder {
 	fn default() -> Self {
-		Self { members: Default::default(), max_members: Some(4), max_members_per_pool: Some(3) }
+		Self {
+			members: Default::default(),
+			max_members: Some(4),
+			max_members_per_pool: Some(3),
+			global_max_commission: Some(Perbill::from_percent(90)),
+		}
 	}
 }
 
@@ -297,6 +303,11 @@ impl ExtBuilder {
 		self
 	}
 
+	pub fn global_max_commission(mut self, commission: Option<Perbill>) -> Self {
+		self.global_max_commission = commission;
+		self
+	}
+
 	pub fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let mut storage =
@@ -308,6 +319,7 @@ impl ExtBuilder {
 			max_pools: Some(2),
 			max_members_per_pool: self.max_members_per_pool,
 			max_members: self.max_members,
+			global_max_commission: self.global_max_commission,
 		}
 		.assimilate_storage(&mut storage);
 
@@ -352,6 +364,23 @@ pub fn unsafe_set_state(pool_id: PoolId, state: PoolState) {
 parameter_types! {
 	storage PoolsEvents: u32 = 0;
 	storage BalancesEvents: u32 = 0;
+}
+
+/// Helper to run a specified amount of blocks.
+pub fn run_blocks(n: u64) {
+	let current_block = System::block_number();
+	run_to_block(n + current_block);
+}
+
+/// Helper to run to a specific block.
+pub fn run_to_block(n: u64) {
+	let current_block = System::block_number();
+	assert!(n > current_block);
+	while System::block_number() < n {
+		Pools::on_finalize(System::block_number());
+		System::set_block_number(System::block_number() + 1);
+		Pools::on_initialize(System::block_number());
+	}
 }
 
 /// All events of this pallet.
