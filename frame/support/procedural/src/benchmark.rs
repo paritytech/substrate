@@ -165,7 +165,7 @@ impl BenchmarkDef {
 		}
 
 		// #[extrinsic_call] / #[block] handling
-		let Some(Ok((i, call_def))) = (&item_fn.block.stmts).iter().enumerate().find_map(|(i, child)| {
+		let Some(Ok((i, call_def))) = item_fn.block.stmts.iter().enumerate().find_map(|(i, child)| {
 			match child {
 				Stmt::Semi(Expr::Call(expr_call), _semi) => { // #[extrinsic_call] case
 					(&expr_call.attrs).iter().enumerate().find_map(|(k, attr)| {
@@ -185,7 +185,7 @@ impl BenchmarkDef {
 					})
 				},
 				Stmt::Expr(Expr::Block(block)) => { // #[block] case
-					(&block.attrs).iter().enumerate().find_map(|(k, attr)| {
+					block.attrs.iter().enumerate().find_map(|(k, attr)| {
 						let Some(segment) = attr.path.segments.last() else { return None; };
 						let Ok(_) = syn::parse::<keywords::block>(segment.ident.to_token_stream().into()) else { return None; };
 						let mut block = block.clone();
