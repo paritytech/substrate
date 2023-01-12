@@ -608,7 +608,7 @@ fn set_item_metadata_should_work() {
 		);
 		assert_noop!(
 			Nfts::clear_metadata(RuntimeOrigin::signed(1), 1, 42),
-			Error::<Test>::UnknownCollection,
+			Error::<Test>::MetadataNotFound,
 		);
 		assert_ok!(Nfts::clear_metadata(RuntimeOrigin::root(), 0, 42));
 		assert!(!ItemMetadataOf::<Test>::contains_key(0, 42));
@@ -1012,6 +1012,22 @@ fn validate_deposit_required_setting() {
 		assert_eq!(Balances::reserved_balance(1), 0);
 		assert_eq!(Balances::reserved_balance(2), 3);
 		assert_eq!(Balances::reserved_balance(3), 3);
+
+		assert_ok!(
+			<Nfts as Mutate<<Test as SystemConfig>::AccountId, ItemConfig>>::clear_attribute(
+				&0,
+				&0,
+				&[3],
+			)
+		);
+		assert_eq!(
+			attributes(0),
+			vec![
+				(Some(0), AttributeNamespace::CollectionOwner, bvec![0], bvec![0]),
+				(Some(0), AttributeNamespace::ItemOwner, bvec![1], bvec![0]),
+				(Some(0), AttributeNamespace::Account(3), bvec![2], bvec![0]),
+			]
+		);
 	});
 }
 
@@ -1251,7 +1267,7 @@ fn burn_works() {
 
 		assert_noop!(
 			Nfts::burn(RuntimeOrigin::signed(5), 0, 42, Some(5)),
-			Error::<Test>::UnknownCollection
+			Error::<Test>::UnknownItem
 		);
 
 		assert_ok!(Nfts::force_mint(RuntimeOrigin::signed(2), 0, 42, 5, default_item_config()));
