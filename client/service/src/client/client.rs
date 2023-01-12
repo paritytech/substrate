@@ -627,7 +627,6 @@ where
 											for (key, value) in state.key_values.into_iter() {
 												entry.data.insert(key, value);
 											}
-											break
 										},
 										None =>
 											return Err(Error::Backend(
