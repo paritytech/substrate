@@ -2918,7 +2918,9 @@ pub mod pallet_macros {
 /// }
 /// ```
 pub mod benchmarking {
-	pub use frame_support_procedural::{benchmark, benchmarks, instance_benchmarks};
+	pub use frame_support_procedural::{
+		benchmark, benchmarks, extrinsic_call, instance_benchmarks,
+	};
 
 	// Used in #[benchmark] implementation to ensure that benchmark function arguments
 	// implement [`ParamRange`].

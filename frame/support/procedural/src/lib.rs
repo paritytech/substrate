@@ -511,6 +511,19 @@ pub fn benchmark(_attrs: TokenStream, _tokens: TokenStream) -> TokenStream {
 	.into()
 }
 
+/// An attribute macro used to specify the extrinsic call inside a benchmark function, and also
+/// used as a boundary designating where the benchmark setup code ends, and the benchmark
+/// verification code begins.
+///
+/// See `frame_support::benchmarking` for more info.
+#[proc_macro_attribute]
+pub fn extrinsic_call(_attrs: TokenStream, _tokens: TokenStream) -> TokenStream {
+	quote!(compile_error!(
+		"`#[extrinsic_call]` must be in a module labeled with #[benchmarks] or #[instance_benchmarks]."
+	))
+	.into()
+}
+
 /// Execute the annotated function in a new storage transaction.
 ///
 /// The return type of the annotated function must be `Result`. All changes to storage performed
