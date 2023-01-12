@@ -34,7 +34,7 @@ use sp_std::{vec, vec::Vec};
 /// Compute a scalar multiplication on G2 through arkworks
 pub fn sw_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	let cursor = Cursor::new(base);
-	let base = SWProjective::deserialize_with_mode(
+	let base = ark_ec::short_weierstrass::Projective::<JubjubConfig>::deserialize_with_mode(
 		cursor,
 		Compress::Yes,
 		Validate::No,
