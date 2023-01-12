@@ -263,7 +263,7 @@ dependencies = [
  "ark-serialize",
  "ark-std",
  "derivative",
- "hashbrown 0.13.1",
+ "hashbrown 0.13.2",
  "itertools",
  "num-traits",
  "zeroize",
@@ -334,7 +334,7 @@ dependencies = [
 [[package]]
 name = "ark-models"
 version = "0.3.0"
-source = "git+https://github.com/achimcc/ark-substrate#f419ff8c6933f0d35d06dec4b4623dab68318b61"
+source = "git+https://github.com/achimcc/ark-substrate#02cee73d0a98a8b7d5a1da70a242ca58c9228679"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -356,7 +356,7 @@ dependencies = [
  "ark-serialize",
  "ark-std",
  "derivative",
- "hashbrown 0.13.1",
+ "hashbrown 0.13.2",
 ]
 
 [[package]]
@@ -3086,9 +3086,9 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.13.1"
+version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33ff8ae62cd3a9102e5637afc8452c55acf3844001bd5374e0b0bd7b6616c038"
+checksum = "43a3c133739dddd0d2990f9a4bdf8eb4b21ef50e4851ca85ab661199821d510e"
 dependencies = [
  "ahash 0.8.2",
 ]
@@ -7005,7 +7005,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3742b2c103b9f06bc9fff0a37ff4912935851bee6d36f3c02bcc755bcfec228f"
 dependencies = [
  "lock_api",
- "parking_lot_core 0.9.5",
+ "parking_lot_core 0.9.6",
 ]
 
 [[package]]
@@ -7024,9 +7024,9 @@ dependencies = [
 
 [[package]]
 name = "parking_lot_core"
-version = "0.9.5"
+version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ff9f3fef3968a3ec5945535ed654cb38ff72d7495a25619e2247fb15a2ed9ba"
+checksum = "ba1ef8814b5c993410bb3adfad7a5ed269563e4a2f90c41f5d85be7fb47133bf"
 dependencies = [
  "cfg-if",
  "libc",
@@ -7067,9 +7067,9 @@ checksum = "19b17cddbe7ec3f8bc800887bab5e717348c95ea2ca0b1bf0837fb964dc67099"
 
 [[package]]
 name = "pem"
-version = "1.1.0"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03c64931a1a212348ec4f3b4362585eca7159d0d09cbdf4a7f74f02173596fd4"
+checksum = "a8835c273a76a90455d7344889b0964598e3316e2a79ede8e36f16bdcf2228b8"
 dependencies = [
  "base64 0.13.1",
 ]
@@ -7091,9 +7091,9 @@ checksum = "478c572c3d73181ff3c2539045f6eb99e5491218eae919370993b890cdbdd98e"
 
 [[package]]
 name = "pest"
-version = "2.5.2"
+version = "2.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f6e86fb9e7026527a0d46bc308b841d73170ef8f443e1807f6ef88526a816d4"
+checksum = "4257b4a04d91f7e9e6290be5d3da4804dd5784fafde3a497d73eb2b4a158c30a"
 dependencies = [
  "thiserror",
  "ucd-trie",
@@ -7101,9 +7101,9 @@ dependencies = [
 
 [[package]]
 name = "pest_derive"
-version = "2.5.2"
+version = "2.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96504449aa860c8dcde14f9fba5c58dc6658688ca1fe363589d6327b8662c603"
+checksum = "241cda393b0cdd65e62e07e12454f1f25d57017dcc514b1514cd3c4645e3a0a6"
 dependencies = [
  "pest",
  "pest_generator",
@@ -7111,9 +7111,9 @@ dependencies = [
 
 [[package]]
 name = "pest_generator"
-version = "2.5.2"
+version = "2.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "798e0220d1111ae63d66cb66a5dcb3fc2d986d520b98e49e1852bfdb11d7c5e7"
+checksum = "46b53634d8c8196302953c74d5352f33d0c512a9499bd2ce468fc9f4128fa27c"
 dependencies = [
  "pest",
  "pest_meta",
@@ -7124,13 +7124,13 @@ dependencies = [
 
 [[package]]
 name = "pest_meta"
-version = "2.5.2"
+version = "2.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "984298b75898e30a843e278a9f2452c31e349a073a0ce6fd950a12a74464e065"
+checksum = "0ef4f1332a8d4678b41966bb4cc1d0676880e84183a1ecc3f4b69f03e99c7a51"
 dependencies = [
  "once_cell",
  "pest",
- "sha1",
+ "sha2 0.10.6",
 ]
 
 [[package]]
@@ -9627,17 +9627,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sha1"
-version = "0.10.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f04293dc80c3993519f2d7f6f511707ee7094fe0c6d3406feb330cdb3540eba3"
-dependencies = [
- "cfg-if",
- "cpufeatures",
- "digest 0.10.6",
-]
-
-[[package]]
 name = "sha2"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9904,7 +9893,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bls12-377"
 version = "0.4.0-alpha.1"
-source = "git+https://github.com/achimcc/ark-substrate#f419ff8c6933f0d35d06dec4b4623dab68318b61"
+source = "git+https://github.com/achimcc/ark-substrate#02cee73d0a98a8b7d5a1da70a242ca58c9228679"
 dependencies = [
  "ark-bls12-377",
  "ark-ff",
@@ -9916,7 +9905,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bls12-381"
 version = "0.4.0-alpha"
-source = "git+https://github.com/achimcc/ark-substrate#f419ff8c6933f0d35d06dec4b4623dab68318b61"
+source = "git+https://github.com/achimcc/ark-substrate#02cee73d0a98a8b7d5a1da70a242ca58c9228679"
 dependencies = [
  "ark-bls12-381",
  "ark-ec",
@@ -9929,7 +9918,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bw6-761"
 version = "0.4.0-alpha.1"
-source = "git+https://github.com/achimcc/ark-substrate#f419ff8c6933f0d35d06dec4b4623dab68318b61"
+source = "git+https://github.com/achimcc/ark-substrate#02cee73d0a98a8b7d5a1da70a242ca58c9228679"
 dependencies = [
  "ark-bw6-761",
  "ark-ff",
@@ -9942,7 +9931,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-ed-on-bls12-377"
 version = "0.4.0-alpha.1"
-source = "git+https://github.com/achimcc/ark-substrate#f419ff8c6933f0d35d06dec4b4623dab68318b61"
+source = "git+https://github.com/achimcc/ark-substrate#02cee73d0a98a8b7d5a1da70a242ca58c9228679"
 dependencies = [
  "ark-ed-on-bls12-377",
  "ark-ff",
@@ -9955,7 +9944,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-ed-on-bls12-381"
 version = "0.4.0-alpha.1"
-source = "git+https://github.com/achimcc/ark-substrate#f419ff8c6933f0d35d06dec4b4623dab68318b61"
+source = "git+https://github.com/achimcc/ark-substrate#02cee73d0a98a8b7d5a1da70a242ca58c9228679"
 dependencies = [
  "ark-ed-on-bls12-381",
  "ark-ff",
