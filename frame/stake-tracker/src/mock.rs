@@ -7,6 +7,7 @@ use sp_runtime::{
 	DispatchError, DispatchResult,
 };
 use sp_staking::{EraIndex, Stake, StakingInterface};
+use Currency;
 
 pub(crate) type AccountId = u64;
 pub(crate) type AccountIndex = u64;
@@ -136,11 +137,15 @@ impl StakingInterface for StakingMock {
 		unimplemented!("Currently not used.")
 	}
 
-	// TODO: Impl
 	fn stake(
 		who: &Self::AccountId,
 	) -> Result<Stake<Self::AccountId, Self::Balance>, DispatchError> {
-		unimplemented!("Currently not used.")
+		let stake = <Runtime as pallet_stake_tracker::Config>::Currency::total_balance(who);
+		Ok(Stake {
+			stash: *who,
+			active: stake.saturating_sub(ExistentialDeposit::get()),
+			total: stake,
+		})
 	}
 
 	fn bond(_: &Self::AccountId, _: Self::Balance, _: &Self::AccountId) -> DispatchResult {
@@ -183,14 +188,16 @@ impl StakingInterface for StakingMock {
 		unimplemented!("Currently not used.")
 	}
 
-	// TODO: implement
 	fn is_validator(who: &Self::AccountId) -> bool {
-		unimplemented!("Currently not used.")
+		*who >= 10 && *who <= 14
 	}
 
-	// TODO: implement
 	fn nominations(who: &Self::AccountId) -> Option<Vec<Self::AccountId>> {
-		unimplemented!("Currently not used.")
+		if *who >= 20 && *who <= 24 {
+			Some(Vec::new())
+		} else {
+			None
+		}
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -205,5 +212,51 @@ impl StakingInterface for StakingMock {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_current_era(_: EraIndex) {
 		unimplemented!("Currently not used.")
+	}
+}
+
+#[derive(Default)]
+pub struct ExtBuilder {}
+
+impl ExtBuilder {
+	fn build(self) -> sp_io::TestExternalities {
+		sp_tracing::try_init_simple();
+
+		let mut storage =
+			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+
+		let _ = pallet_balances::GenesisConfig::<Runtime> {
+			balances: vec![
+				// Random users, used to test some edge-cases, where we don't want the user to be
+				// neither a nominator nor validator.
+				(1, 10),
+				(2, 20),
+				(3, 30),
+				// Validator stashes, for simplicity we assume stash == controller as StakeTracker
+				// really does not care.
+				(10, 10),
+				(11, 20),
+				(12, 30),
+				(13, 40),
+				(14, 50),
+				// nominators
+				(20, 10),
+				(21, 20),
+				(22, 30),
+				(23, 40),
+				(24, 50),
+			],
+		}
+		.assimilate_storage(&mut storage);
+
+		let mut ext = sp_io::TestExternalities::from(storage);
+
+		ext
+	}
+
+	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
+		sp_tracing::try_init_simple();
+		let mut ext = self.build();
+		ext.execute_with(test);
 	}
 }

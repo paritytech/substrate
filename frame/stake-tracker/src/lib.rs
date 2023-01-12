@@ -18,7 +18,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(test)]
-mod mock;
+pub(crate) mod mock;
+#[cfg(test)]
+mod tests;
 
 use frame_election_provider_support::{SortedListProvider, VoteWeight};
 use frame_support::traits::{Currency, CurrencyToVote, Defensive};
@@ -78,13 +80,11 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 
 		// if this is a nominator
 		if let Some(_) = T::Staking::nominations(&current_stake.stash) {
-			let _ = T::VoterList::on_update(&current_stake.stash, Self::to_vote(current_active))
-				.defensive_proof("any nominator should have an entry in the voter list.");
+			let _ = T::VoterList::on_update(&current_stake.stash, Self::to_vote(current_active));
 		}
 
 		if T::Staking::is_validator(&current_stake.stash) {
-			let _ = T::VoterList::on_update(&current_stake.stash, Self::to_vote(current_active))
-				.defensive_proof("any validator should have an entry in the voter list.");
+			let _ = T::VoterList::on_update(&current_stake.stash, Self::to_vote(current_active));
 		}
 	}
 
@@ -103,15 +103,15 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 	fn on_validator_add(who: &T::AccountId) {
 		let self_stake = Self::slashable_balance_of(who);
 		// maybe update sorted list.
-		let _ = T::VoterList::on_insert(who.clone(), Self::to_vote(self_stake)).defensive();
+		let _ = T::VoterList::on_insert(who.clone(), Self::to_vote(self_stake));
 	}
 
 	fn on_validator_remove(who: &T::AccountId) {
-		let _ = T::VoterList::on_remove(who).defensive();
+		let _ = T::VoterList::on_remove(who);
 	}
 
 	fn on_nominator_remove(who: &T::AccountId, _nominations: Vec<T::AccountId>) {
-		let _ = T::VoterList::on_remove(who).defensive();
+		let _ = T::VoterList::on_remove(who);
 	}
 
 	fn on_unstake(_who: &T::AccountId) {}
