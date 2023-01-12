@@ -22,7 +22,7 @@ use super::{
 	block_rules::{BlockRules, LookupResult as BlockLookupResult},
 	genesis::BuildGenesisBlock,
 };
-use log::{info, trace, warn};
+use log::{error, info, trace, warn};
 use parking_lot::{Mutex, RwLock};
 use prometheus_endpoint::Registry;
 use rand::Rng;
@@ -337,36 +337,28 @@ where
 
 			self.backend.commit_operation(op)?;
 
-			match (&finality_notification, &import_notification) {
-				(Some(ref fin), Some(ref imp)) if fin.hash == imp.hash => {
-					self.backend.pin_block(
-						&fin.hash,
-						finality_num.expect("Should work").saturated_into::<u64>(),
+			if let Some(ref notification) = finality_notification {
+				if let Err(err) = self.backend.pin_block(
+					&notification.hash,
+					finality_num.expect("Should work").saturated_into::<u64>(),
+				) {
+					error!(
+						"Unable to pin block for finality notification. hash: {}, Error: {}",
+						notification.hash, err
 					);
-				},
-				(Some(ref fin), Some(ref imp)) => {
-					self.backend.pin_block(
-						&fin.hash,
-						finality_num.expect("Should work").saturated_into::<u64>(),
+				};
+			}
+
+			if let Some(ref notification) = import_notification {
+				if let Err(err) = self.backend.pin_block(
+					&notification.hash,
+					import_num.expect("Should work").saturated_into::<u64>(),
+				) {
+					error!(
+						"Unable to pin block for import notification. hash: {}, Error: {}",
+						notification.hash, err
 					);
-					self.backend.pin_block(
-						&imp.hash,
-						import_num.expect("Should work").saturated_into::<u64>(),
-					);
-				},
-				(None, Some(ref imp)) => {
-					self.backend.pin_block(
-						&imp.hash,
-						import_num.expect("Should work").saturated_into::<u64>(),
-					);
-				},
-				(Some(ref fin), None) => {
-					self.backend.pin_block(
-						&fin.hash,
-						finality_num.expect("Should work").saturated_into::<u64>(),
-					);
-				},
-				(_, _) => {},
+				};
 			}
 
 			self.notify_finalized(finality_notification)?;

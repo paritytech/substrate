@@ -541,17 +541,12 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 	}
 
 	pub fn insert_body(&self, hash: Block::Hash, extrinsics: Option<Vec<Block::Extrinsic>>) {
-		println!("Inserting value for hash {}, body: {:?}", hash, extrinsics);
 		let mut body_cache = self.body_cache.write();
 		let mut entry = body_cache.get_or_insert_mut(hash, Default::default);
 		entry.value = Some(extrinsics);
 	}
 
 	pub fn insert_justifications(&self, hash: Block::Hash, justifications: Option<Justifications>) {
-		println!(
-			"Inserting justifications for hash {}, justifications: {:?}",
-			hash, justifications
-		);
 		let mut justification_cache = self.justification_cache.write();
 		let mut entry = justification_cache.get_or_insert_mut(hash, Default::default);
 		entry.value = Some(justifications);
@@ -562,7 +557,6 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 		if let Some(entry) = body_cache.peek_mut(hash) {
 			entry.decrease_ref();
 			if entry.has_no_references() {
-				println!("Removing value for hash {}, ref count zero", hash);
 				body_cache.pop(hash);
 			}
 		}
@@ -579,10 +573,6 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 	pub fn justification(&self, hash: &Block::Hash) -> Option<Option<Justifications>> {
 		let justification_cache = self.justification_cache.read();
 		if let Some(cache_entry) = justification_cache.peek(hash) {
-			println!(
-				"Returning cached justification for hash {}, justifications: {:?}",
-				hash, cache_entry.value
-			);
 			return cache_entry.value.clone()
 		};
 		None
@@ -591,7 +581,6 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 	pub fn body(&self, hash: &Block::Hash) -> Option<Option<Vec<Block::Extrinsic>>> {
 		let body_cache = self.body_cache.read();
 		if let Some(cache_entry) = body_cache.peek(hash) {
-			println!("Returning cached body for hash {}, body: {:?}", hash, cache_entry.value);
 			return cache_entry.value.clone()
 		};
 		None
@@ -1482,7 +1471,6 @@ impl<Block: BlockT> Backend<Block> {
 				&utils::number_and_hash_to_lookup_key(number, hash)?,
 				Justifications::from(justification.clone()).encode(),
 			);
-			println!("\tFinaliztion: adding justification to map for {}", hash);
 			seen_justifications.insert(hash, justification);
 		}
 		Ok(MetaUpdate { hash, number, is_best: false, is_finalized: true, with_state })
@@ -1918,19 +1906,11 @@ impl<Block: BlockT> Backend<Block> {
 				if finalized_number >= keep.into() {
 					let number = finalized_number.saturating_sub(keep.into());
 
-					println!("\tFinaliztion: Pruning block number {}", number);
-					println!("\tFinaliztion: Finalized block number {}", finalized_number);
 					if let Some(hash) = self.blockchain.hash(number)? {
 						self.blockchain.insert_persisted_body_if_pinned(hash)?;
-						println!("\tFinaliztion: checking seen justifications for {}", hash);
 						if let Some(justification) = seen_justifications.remove(&hash) {
-							println!("\tFinaliztion: found justification in map for {}", hash);
 							self.blockchain.insert_justifications_if_pinned(hash, justification);
 						} else {
-							println!(
-								"\tFinaliztion: did not find justification in map for {}",
-								hash
-							);
 							self.blockchain.insert_persisted_justifications_if_pinned(hash)?;
 						}
 					};
@@ -4267,7 +4247,6 @@ pub(crate) mod tests {
 			)
 			.unwrap();
 			blocks.push(hash);
-			println!("Block {}: {}", i, hash);
 			// Avoid block pruning.
 			backend.pin_block(&blocks[i as usize], i).unwrap();
 
