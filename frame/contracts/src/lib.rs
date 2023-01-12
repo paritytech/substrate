@@ -377,30 +377,45 @@ pub mod pallet {
 		fn integrity_test() {
 			// Total runtime memory is expected to have 1Gb upper limit
 			const MAX_RUNTIME_MEM: u32 = 1024 * 1024 * 1024;
-			// Memory limits for a single contract
+			// Memory limits for a single contract:
 			// Value stack size: 1Mb per contract, default defined in wasmi
 			const STACK_MAX_SIZE: u32 = 1024 * 1024;
-			// Normally 16 mempages of 64kb = 1Mb per contract
+			// Heap limit is normally 16 mempages of 64kb each = 1Mb per contract
 			let heap_max_size = T::Schedule::get().limits.max_memory_size();
 			let stack_height = T::CallStack::size() as u32;
-			// In worst case, the decoded wasm contract code would be x16 times larger than the
+			// Check that given configured `MaxCodeLen`, runtime heap memory limit can't be broken.
+			//
+			// In worst case, the decoded wasm contract code would be `x16` times larger than the
 			// encoded one. This is because even a single-byte wasm instruction has 16-byte size in
-			// wasmi. Hence we need to check that with given `MaxCodeLen` and `CallStack`, this
-			// worst case won't break runtime heap memory limit. Also pallet stores the plain wasm
-			// code twice `PrefabWasmModule.code` and `PrefabWasmModule.original_code`, which gives
-			// us additional `MaxCodeLen*2` mem usage. Note that maximum allowed heap
-			// memory and stack size per each contract (stack frame) should also be counted.
+			// wasmi. This gives us `MaxCodeLen*16` safety margin.
+			//
+			// Next, the pallet keeps both the original and instrumented wasm blobs for each
+			// contract, hence we add up `MaxCodeLen*2` more to the safety margin.
+			//
+			// Finally, the inefficiencies of the freeing-bump allocator
+			// being used in the client for the runtime memory allocations, could lead to possible
+			// memory grow up to `MaxCodeLen*4` for some contracts in extreme cases, wich should be
+			// taken into account as well.
+			//
+			// That being said, for every contract executed in runtime, at least `MaxCodeLen*22`
+			// memory should be avaiable. Note that maximum allowed heap memory and stack size per
+			// each contract (stack frame) should also be counted.
+			//
 			// Finally, we allow 50% of the runtime memory to be utilized by the contracts call
-			// stack, keeping the rest for other facilities, such as PoV and etc.
+			// stack, keeping the rest for other facilities, such as PoV, etc.
 			//
 			// This gives us the following formula:
-			// (MaxCodeLen * 18 + STACK_MAX_SIZE + heap_max_size) * stack_height < MAX_RUNTIME_MEM/2
+			//
+			// `(MaxCodeLen * 22 + STACK_MAX_SIZE + heap_max_size) * stack_height <
+			// MAX_RUNTIME_MEM/2`
+			//
+			// Hence the upper limit for the `MaxCodeLen` can be defined as follows:
 			let code_len_limit = MAX_RUNTIME_MEM
 				.saturating_div(2)
 				.saturating_div(stack_height)
 				.saturating_sub(heap_max_size)
 				.saturating_sub(STACK_MAX_SIZE)
-				.saturating_div(18);
+				.saturating_div(22);
 
 			assert!(
 				T::MaxCodeLen::get() < code_len_limit,
