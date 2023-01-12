@@ -2794,14 +2794,14 @@ pub mod pallet_macros {
 /// 		// setup code
 /// 		let caller = whitelisted_caller();
 ///
-/// 		#[extrinsic_call]
+/// 		#[block]
 /// 		{
 /// 			something(some, thing);
 /// 			my_extrinsic(RawOrigin::Signed(caller), some, argument);
 /// 			something_else(foo, bar);
 /// 		}
 ///
-/// 		// verification_code
+/// 		// verification code
 /// 		assert_eq!(MyPallet::<T>::something(), 37);
 /// 	}
 /// }
@@ -2827,29 +2827,39 @@ pub mod pallet_macros {
 /// definition as well as the return type are not used for any purpose and are discarded by the
 /// expansion code.
 ///
-/// ### `#[extrinsic_call]`
+/// Also note that the `// setup code` and `// verification code` comments shown above are not
+/// required and are included simply for demonstration purposes.
 ///
-/// Within the benchmark function body, an `#[extrinsic_call]` annotation is required. This
-/// attribute should be attached to a block (shown in `bench_name_2` above) or a one-line
-/// function call (shown in `bench_name_1` above, in `syn` parlance this should be an
-/// `ExprCall`). The block syntax can contain any code but should have an extrinsic call
-/// somewhere inside it. The one-line, `ExprCall` syntax must consist of a function call to an
-/// extrinsic, where the first argument is the origin. If `#[extrinsic_call]` is attached to an
-/// item that doesn't meet these requirements, a compiler error will be emitted.
+/// ### `#[extrinsic_call]` and `#[block]`
 ///
-/// The `#[extrinsic_call]` attribute also serves the purpose of designating the boundary
-/// between the setup code portion of the benchmark (everything before the `#[extrinsic_call]`)
-/// and the verification stage (everything after the item that `#[extrinsic_call]`) is attached
-/// to. The setup code section should contain any code that needs to execute before the
-/// measured portion of the benchmark executes. The verification section is where you can
+/// Within the benchmark function body, either an `#[extrinsic_call]` or a `#[block]`
+/// annotation is required. These attributes should be attached to a block (shown in
+/// `bench_name_2` above) or a one-line function call (shown in `bench_name_1` above, in `syn`
+/// parlance this should be an `ExprCall`), respectively.
+///
+/// The `#[block]` syntax is broad and will benchmark any code contained within the block the
+/// attribute is attached to. If `#[block]` is attached to something other than a block, a
+/// compiler error will be emitted.
+///
+/// The one-line `#[extrinsic_call]` syntax must consist of a function call to an extrinsic,
+/// where the first argument is the origin. If `#[extrinsic_call]` is attached to an item that
+/// doesn't meet these requirements, a compiler error will be emitted.
+///
+/// Regardless of whether `#[extrinsic_call]` or `#[block]` is used, this attribute also serves
+/// the purpose of designating the boundary between the setup code portion of the benchmark
+/// (everything before the `#[extrinsic_call]` or `#[block]` attribute) and the verification
+/// stage (everything after the item that the `#[extrinsic_call]` or `#[block]` attribute is
+/// attached to). The setup code section should contain any code that needs to execute before
+/// the measured portion of the benchmark executes. The verification section is where you can
 /// perform assertions to verify that the extrinsic call (or whatever is happening in your
-/// `#[extrinsic_call]` block, if you used a block) executed successfully.
+/// block, if you used the `#[block]` syntax) executed successfully.
 ///
-/// Note that `#[extrinsic_call]` is not a real attribute macro and is consumed by the outer
-/// macro pattern as part of the enclosing benchmark function definition. This is why we are
-/// able to use `#[extrinsic_call]` within a function definition even though this behavior has
-/// not been stabilized yet—`#[extrinsic_call]` is parsed and consumed as part of the benchmark
-/// definition parsing code so it never expands as its own macro.
+/// Note that neither `#[extrinsic_call]` nor `#[block]` are real attribute macros and are
+/// instead consumed by the outer macro pattern as part of the enclosing benchmark function
+/// definition. This is why we are able to use `#[extrinsic_call]` and `#[block]` within a
+/// function definition even though this behavior has not been stabilized
+/// yet—`#[extrinsic_call]` and `#[block]` are parsed and consumed as part of the benchmark
+/// definition parsing code, so they never expand as their own attribute macros.
 ///
 /// ### Optional Attributes
 ///

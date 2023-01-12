@@ -684,7 +684,7 @@ fn expand_benchmark(
 						.1;
 				)*
 
-				// benchmark setup code (stuff before #[extrinsic_call])
+				// benchmark setup code
 				#(
 					#setup_stmts
 				)*

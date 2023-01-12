@@ -499,7 +499,8 @@ pub fn instance_benchmarks(attr: TokenStream, tokens: TokenStream) -> TokenStrea
 }
 
 /// An attribute macro used to declare a benchmark within a benchmarking module. Must be
-/// attached to a function definition containing an `#[extrinsic_call]` attribute.
+/// attached to a function definition containing an `#[extrinsic_call]` or `#[block]`
+/// attribute.
 ///
 /// See `frame_support::benchmarking` for more info.
 #[proc_macro_attribute]
