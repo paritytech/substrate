@@ -76,8 +76,7 @@ type ReadyIteratorFor<PoolApi> =
 type PolledIterator<PoolApi> = Pin<Box<dyn Future<Output = ReadyIteratorFor<PoolApi>> + Send>>;
 
 /// A transaction pool for a full node.
-pub type FullPool<Block, Client> =
-	BasicPool<FullChainApi<Client, Block>, Block>;
+pub type FullPool<Block, Client> = BasicPool<FullChainApi<Client, Block>, Block>;
 
 /// Basic implementation of transaction pool that can be customized by providing PoolApi.
 pub struct BasicPool<PoolApi, Block>
@@ -736,11 +735,10 @@ where
 		let block_id_to_number =
 			|hash| self.api.block_id_to_number(&BlockId::Hash(hash)).map_err(|e| format!("{}", e));
 
-		let result = self.enactment_state.lock().update(
-			&event,
-			&compute_tree_route,
-			&block_id_to_number,
-		);
+		let result =
+			self.enactment_state
+				.lock()
+				.update(&event, &compute_tree_route, &block_id_to_number);
 
 		match result {
 			Err(msg) => {

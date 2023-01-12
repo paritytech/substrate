@@ -23,11 +23,12 @@ use sc_transaction_pool_api::ChainEvent;
 use sp_blockchain::TreeRoute;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
-const SKIP_MAINTAINANCE_THRESHOLD: u16 = 20;
+const SKIP_MAINTENANCE_THRESHOLD: u16 = 20;
 
 /// Helper struct for keeping track of the current state of processed new best
 /// block and finalized events. The main purpose of keeping track of this state
-/// is to figure out if a transaction pool enactment is needed or not.
+/// is to figure out which phases (enactment / finalization) of transaction pool
+/// maintenance are needed.
 ///
 /// Given the following chain:
 ///
@@ -57,10 +58,14 @@ where
 	recent_finalized_block: Block::Hash,
 }
 
+/// Enactment action that should be performed after processing the `ChainEvent`
 #[derive(Debug)]
 pub enum EnactmentAction<Block: BlockT> {
+	/// Both phases of maintenance shall be skipped
 	Skip,
+	/// Both phases of maintenance shall be performed
 	HandleEnactment(TreeRoute<Block>),
+	/// Enactment phase of maintenance shall be skipped
 	HandleFinalization,
 }
 
@@ -76,11 +81,6 @@ where
 	/// Returns the recently finalized block.
 	pub fn recent_finalized_block(&self) -> Block::Hash {
 		self.recent_finalized_block
-	}
-
-	/// Returns the recently finalized block.
-	pub fn recent_best_block(&self) -> Block::Hash {
-		self.recent_best_block
 	}
 
 	/// Updates the state according to the given `ChainEvent`, returning
@@ -103,9 +103,9 @@ where
 
 		// do not proceed with txpool maintain if block distance is to high
 		let skip_maintenance =
-			match (hash_to_number(new_hash), hash_to_number(self.recent_best_block())) {
+			match (hash_to_number(new_hash), hash_to_number(self.recent_best_block)) {
 				(Ok(Some(notified)), Ok(Some(current))) =>
-					notified.checked_sub(&current) > Some(SKIP_MAINTAINANCE_THRESHOLD.into()),
+					notified.checked_sub(&current) > Some(SKIP_MAINTENANCE_THRESHOLD.into()),
 				_ => true,
 			};
 
@@ -127,7 +127,7 @@ where
 
 		log::info!(target: "txpool", "skip maintain: enacted: {:?}", tree_route.enacted().len());
 		// do not proceed with txpool maintain if enacted path is too long
-		if tree_route.enacted().len() > SKIP_MAINTAINANCE_THRESHOLD.into() {
+		if tree_route.enacted().len() > SKIP_MAINTENANCE_THRESHOLD.into() {
 			log::info!(target: "txpool", "skip maintain: enacted too long");
 			self.force_update(event);
 			return Ok(EnactmentAction::Skip)
