@@ -122,9 +122,9 @@ impl syn::parse::Parse for BenchmarkAttrs {
 
 /// Represents the parsed extrinsic call for a benchmark
 #[derive(Clone)]
-enum ExtrinsicCallDef {
-	Encoded { origin: Expr, expr_call: ExprCall }, // no block, just an extrinsic call
-	Block(ExprBlock),                              // call is somewhere in the block
+enum BenchmarkCallDef {
+	ExtrinsicCall { origin: Expr, expr_call: ExprCall }, // #[extrinsic_call]
+	Block(ExprBlock),                                    // #[block]
 }
 
 /// Represents a parsed `#[benchmark]` or `#[instance_banchmark]` item.
@@ -132,7 +132,7 @@ enum ExtrinsicCallDef {
 struct BenchmarkDef {
 	params: Vec<ParamDef>,
 	setup_stmts: Vec<Stmt>,
-	extrinsic_call: ExtrinsicCallDef,
+	call_def: BenchmarkCallDef,
 	verify_stmts: Vec<Stmt>,
 	extra: bool,
 	skip_meta: bool,
@@ -164,8 +164,8 @@ impl BenchmarkDef {
 			params.push(ParamDef { name, typ: typ.clone(), start, end });
 		}
 
-		// #[extrinsic_call] handling
-		let Some(Ok((i, extrinsic_call))) = (&item_fn.block.stmts).iter().enumerate().find_map(|(i, child)| {
+		// #[extrinsic_call] / #[block] handling
+		let Some(Ok((i, call_def))) = (&item_fn.block.stmts).iter().enumerate().find_map(|(i, child)| {
 			match child {
 				Stmt::Semi(Expr::Call(expr_call), _semi) => { // #[extrinsic_call] case
 					(&expr_call.attrs).iter().enumerate().find_map(|(k, attr)| {
@@ -181,7 +181,7 @@ impl BenchmarkDef {
 							Some(arg) => arg.clone(),
 							None => return Some(Err(Error::new(expr_call.args.span(), "Single-item extrinsic calls must specify their origin as the first argument."))),
 						};
-						Some(Ok((i, ExtrinsicCallDef::Encoded { origin, expr_call })))
+						Some(Ok((i, BenchmarkCallDef::ExtrinsicCall { origin, expr_call })))
 					})
 				},
 				Stmt::Expr(Expr::Block(block)) => { // #[block] case
@@ -193,7 +193,7 @@ impl BenchmarkDef {
 						// consume #[block] tokens
 						block.attrs.remove(k);
 
-						Some(Ok((i, ExtrinsicCallDef::Block(block))))
+						Some(Ok((i, BenchmarkCallDef::Block(block))))
 					})
 				},
 				_ => None
@@ -208,7 +208,7 @@ impl BenchmarkDef {
 		Ok(BenchmarkDef {
 			params,
 			setup_stmts: Vec::from(&item_fn.block.stmts[0..i]),
-			extrinsic_call,
+			call_def,
 			verify_stmts: Vec::from(&item_fn.block.stmts[(i + 1)..item_fn.block.stmts.len()]),
 			extra,
 			skip_meta,
@@ -604,8 +604,8 @@ fn expand_benchmark(
 		true => quote!(T: Config<I>, I: 'static),
 	};
 
-	let (pre_call, post_call) = match benchmark_def.extrinsic_call {
-		ExtrinsicCallDef::Encoded { origin, expr_call } => {
+	let (pre_call, post_call) = match benchmark_def.call_def {
+		BenchmarkCallDef::ExtrinsicCall { origin, expr_call } => {
 			let mut expr_call = expr_call.clone();
 
 			// remove first arg from expr_call
@@ -647,7 +647,7 @@ fn expand_benchmark(
 				},
 			)
 		},
-		ExtrinsicCallDef::Block(block) => (quote!(), quote!(#block)),
+		BenchmarkCallDef::Block(block) => (quote!(), quote!(#block)),
 	};
 
 	// generate final quoted tokens
