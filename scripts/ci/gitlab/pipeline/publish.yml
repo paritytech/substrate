@@ -11,6 +11,7 @@
     GIT_STRATEGY:                  none
     DOCKERFILE:                    $PRODUCT.Dockerfile
     IMAGE_NAME:                    docker.io/$IMAGE_PATH
+    TIMESTAMP_DISABLED:            "true"
   before_script:
     - !reference [.kubernetes-env, before_script]
     - cd ./artifacts/$PRODUCT/

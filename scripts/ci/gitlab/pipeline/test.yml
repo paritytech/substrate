@@ -308,7 +308,7 @@ test-linux-stable-int:
     WASM_BUILD_RUSTFLAGS:          "-Cdebug-assertions=y -Dwarnings"
     # Ensure we run the UI tests.
     RUN_UI_TESTS:                  1
-    TIMESTAMP_DISABLED:            "true"
+    # TIMESTAMP_DISABLED:            "true"
   script:
     - rusty-cachier snapshot create
     - WASM_BUILD_NO_COLOR=1
