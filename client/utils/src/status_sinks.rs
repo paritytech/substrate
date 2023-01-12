@@ -58,7 +58,7 @@ impl<T> Default for StatusSinks<T> {
 impl<T> StatusSinks<T> {
 	/// Builds a new empty collection.
 	pub fn new() -> StatusSinks<T> {
-		let (entries_tx, entries_rx) = tracing_unbounded("status-sinks-entries");
+		let (entries_tx, entries_rx) = tracing_unbounded("status-sinks-entries", 100_000);
 
 		StatusSinks {
 			inner: Mutex::new(Inner { entries: stream::FuturesUnordered::new(), entries_rx }),
@@ -196,7 +196,7 @@ mod tests {
 
 		let status_sinks = StatusSinks::new();
 
-		let (tx, rx) = tracing_unbounded("test");
+		let (tx, rx) = tracing_unbounded("test", 100_000);
 		status_sinks.push(Duration::from_millis(100), tx);
 
 		let mut val_order = 5;

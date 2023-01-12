@@ -330,7 +330,16 @@ where
 		let mut blocks = Vec::new();
 
 		let mut total_size: usize = 0;
-		while let Some(header) = self.client.header(block_id).unwrap_or_default() {
+
+		let client_header_from_block_id =
+			|block_id: BlockId<B>| -> Result<Option<B::Header>, HandleRequestError> {
+				if let Some(hash) = self.client.block_hash_from_id(&block_id)? {
+					return self.client.header(hash).map_err(Into::into)
+				}
+				Ok(None)
+			};
+
+		while let Some(header) = client_header_from_block_id(block_id).unwrap_or_default() {
 			let number = *header.number();
 			let hash = header.hash();
 			let parent_hash = *header.parent_hash();
