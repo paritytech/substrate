@@ -67,6 +67,7 @@ pub mod pallet {
 	use super::*;
 	use frame_support::{pallet_prelude::*, traits::ExistenceRequirement};
 	use frame_system::pallet_prelude::*;
+	use sp_runtime::traits::{IdentifyAccount, Verify};
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -170,6 +171,16 @@ pub mod pallet {
 		/// Disables some of pallet's features.
 		#[pallet::constant]
 		type Features: Get<PalletFeatures>;
+
+		/// A signature used to pre-sign some data.
+		type Signature: Verify<Signer = Self::PublicKey> + Encode + Decode + Parameter;
+
+		/// The public key of the signer.
+		type PublicKey: IdentifyAccount<AccountId = Self::PublicKey>
+			+ AsRef<[u8]>
+			+ Encode
+			+ Decode
+			+ Parameter;
 
 		#[cfg(feature = "runtime-benchmarks")]
 		/// A set of helper functions for benchmarking.
@@ -591,6 +602,14 @@ pub mod pallet {
 		AlreadyClaimed,
 		/// The provided data is incorrect.
 		IncorrectData,
+		/// The extrinsic should be sent by another origin.
+		WrongOrigin,
+		/// Unable to get the account id from the provided public key.
+		WrongPublic,
+		/// The provided signature is incorrect.
+		WrongSignature,
+		/// The provided metadata might be too long.
+		IncorrectMetadata,
 	}
 
 	#[pallet::call]
@@ -742,10 +761,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let caller = ensure_signed(origin)?;
 			let mint_to = T::Lookup::lookup(mint_to)?;
-
-			let collection_config = Self::get_collection_config(&collection)?;
-			let item_settings = collection_config.mint_settings.default_item_settings;
-			let item_config = ItemConfig { settings: item_settings };
+			let item_config =
+				ItemConfig { settings: Self::get_default_item_settings(&collection)? };
 
 			Self::do_mint(
 				collection,
@@ -1766,6 +1783,55 @@ pub mod pallet {
 				receive_collection,
 				receive_item,
 				witness_price,
+			)
+		}
+
+		#[pallet::call_index(37)]
+		#[pallet::weight(0)]
+		pub fn mint_pre_signed(
+			origin: OriginFor<T>,
+			data: PreSignedMintOf<T, I>,
+			signature: T::Signature,
+			signer: T::PublicKey,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			let msg = Encode::encode(&data);
+			ensure!(signature.verify(&*msg, &signer), Error::<T, I>::WrongSignature);
+
+			let signer_account = Self::public_to_account(signer)?;
+			log::info!("signer_account {:?}", &signer_account);
+
+			let PreSignedMint { collection, item, metadata, deadline, only_account } = data;
+			let metadata = Self::construct_metadata(metadata)?;
+
+			if let Some(account) = only_account {
+				ensure!(account == origin, Error::<T, I>::WrongOrigin);
+			}
+
+			let now = frame_system::Pallet::<T>::block_number();
+			ensure!(deadline >= now, Error::<T, I>::DeadlineExpired);
+
+			let collection_details =
+				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
+			ensure!(collection_details.owner == signer_account, Error::<T, I>::NoPermission);
+
+			let item_config =
+				ItemConfig { settings: Self::get_default_item_settings(&collection)? };
+			Self::do_mint(
+				collection,
+				item,
+				Some(origin.clone()),
+				origin.clone(),
+				item_config,
+				|_, _| Ok(()),
+			)?;
+
+			Self::do_set_item_metadata(
+				Some(collection_details.owner),
+				collection,
+				item,
+				metadata,
+				Some(origin),
 			)
 		}
 	}

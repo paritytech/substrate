@@ -28,7 +28,7 @@ use frame_support::{
 	},
 };
 use pallet_balances::Error as BalancesError;
-use sp_core::bounded::BoundedVec;
+use sp_core::{bounded::BoundedVec, Pair};
 use sp_std::prelude::*;
 
 fn items() -> Vec<(u64, u32, u32)> {
@@ -2496,5 +2496,46 @@ fn add_remove_item_attributes_approval_should_work() {
 			CancelAttributesApprovalWitness { account_attributes: 1 },
 		));
 		assert_eq!(item_attributes_approvals(collection_id, item_id), vec![user_3]);
+	})
+}
+
+#[test]
+fn pre_signed_mints_should_work() {
+	new_test_ext().execute_with(|| {
+		let user1_pair = sp_core::sr25519::Pair::from_string("//Alice///password", None).unwrap();
+		let user1 = Nfts::public_to_account(user1_pair.public()).unwrap();
+		let mint_data = PreSignedMint {
+			collection: 0,
+			item: 0,
+			metadata: bvec![0],
+			only_account: None,
+			deadline: 1,
+		};
+		let signature = user1_pair.sign(&Encode::encode(&mint_data));
+		dbg!(user1);
+
+		let user2 = 2;
+
+		Balances::make_free_balance_be(&user1, 100);
+		Balances::make_free_balance_be(&user2, 100);
+		assert_ok!(Nfts::create(
+			RuntimeOrigin::signed(user1),
+			user1,
+			collection_config_with_all_settings_enabled()
+		));
+		assert_ok!(Nfts::mint_pre_signed(
+			RuntimeOrigin::signed(user2),
+			mint_data,
+			signature,
+			user1_pair.public()
+		));
+		assert_eq!(items(), vec![(user2, 0, 0)]);
+		// validate metadata (ok and not ok)
+		// validate balances
+		// validate signature
+		// validate deadline
+		// validate balance on burn
+		// validate collection owner
+		// validate wrong collection's and item's ids
 	})
 }

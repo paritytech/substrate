@@ -109,6 +109,8 @@ impl Config for Test {
 	type MaxTips = ConstU32<10>;
 	type MaxDeadlineDuration = ConstU64<10000>;
 	type Features = Features;
+	type Signature = sp_core::sr25519::Signature;
+	type PublicKey = sp_core::sr25519::Public;
 	type WeightInfo = ();
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = ();

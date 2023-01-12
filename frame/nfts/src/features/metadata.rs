@@ -191,4 +191,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Ok(())
 		})
 	}
+
+	/// A helper method to construct metadata.
+	pub fn construct_metadata(
+		metadata: Vec<u8>,
+	) -> Result<BoundedVec<u8, T::StringLimit>, DispatchError> {
+		Ok(BoundedVec::try_from(metadata).map_err(|_| Error::<T, I>::IncorrectMetadata)?)
+	}
 }

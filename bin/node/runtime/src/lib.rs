@@ -1579,6 +1579,8 @@ impl pallet_nfts::Config for Runtime {
 	type MaxTips = MaxTips;
 	type MaxDeadlineDuration = MaxDeadlineDuration;
 	type Features = Features;
+	type Signature = Signature; //sp_core::sr25519::Signature;
+	type PublicKey = <Signature as traits::Verify>::Signer; //sp_core::sr25519::Public;
 	type WeightInfo = pallet_nfts::weights::SubstrateWeight<Runtime>;
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = ();
