@@ -574,11 +574,10 @@ pub struct BlockchainDb<Block: BlockT> {
 	header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
 	header_cache: Mutex<LinkedHashMap<Block::Hash, Option<Block::Header>>>,
 	pinned_blocks_cache: Arc<PinnedBlockCache<Block>>,
-	pinning_enabled: bool,
 }
 
 impl<Block: BlockT> BlockchainDb<Block> {
-	fn new(db: Arc<dyn Database<DbHash>>, pinning_enabled: bool) -> ClientResult<Self> {
+	fn new(db: Arc<dyn Database<DbHash>>) -> ClientResult<Self> {
 		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
 		let leaves = LeafSet::read_from_db(&*db, columns::META, meta_keys::LEAF_PREFIX)?;
 		Ok(BlockchainDb {
@@ -588,7 +587,6 @@ impl<Block: BlockT> BlockchainDb<Block> {
 			header_metadata_cache: Arc::new(HeaderMetadataCache::default()),
 			header_cache: Default::default(),
 			pinned_blocks_cache: Arc::new(PinnedBlockCache::new()),
-			pinning_enabled,
 		})
 	}
 
@@ -619,10 +617,6 @@ impl<Block: BlockT> BlockchainDb<Block> {
 	}
 
 	fn pin_with_ref(&self, hash: Block::Hash, ref_count: u32) -> ClientResult<()> {
-		if !self.pinning_enabled {
-			return Ok(())
-		}
-
 		let justifications = self.justifications(hash)?;
 		let body = self.body(hash)?;
 		self.pinned_blocks_cache.insert_with_ref(hash, body, justifications, ref_count);
@@ -630,17 +624,10 @@ impl<Block: BlockT> BlockchainDb<Block> {
 	}
 
 	fn bump_ref(&self, hash: Block::Hash) {
-		if !self.pinning_enabled {
-			return
-		}
 		self.pinned_blocks_cache.bump_ref(hash);
 	}
 
 	fn pin(&self, hash: Block::Hash) -> ClientResult<()> {
-		if !self.pinning_enabled {
-			return Ok(())
-		}
-
 		let justifications = self.justifications(hash)?;
 		let body = self.body(hash)?;
 		self.pinned_blocks_cache.insert(hash, body, justifications);
@@ -648,10 +635,6 @@ impl<Block: BlockT> BlockchainDb<Block> {
 	}
 
 	fn unpin(&self, hash: &Block::Hash) {
-		if !self.pinning_enabled {
-			return
-		}
-
 		self.pinned_blocks_cache.remove(hash);
 	}
 }
@@ -1290,8 +1273,7 @@ impl<Block: BlockT> Backend<Block> {
 
 		let state_pruning_used = state_db.pruning_mode();
 		let is_archive_pruning = state_pruning_used.is_archive();
-		let blockchain =
-			BlockchainDb::new(db.clone(), config.blocks_pruning != BlocksPruning::KeepAll)?;
+		let blockchain = BlockchainDb::new(db.clone())?;
 
 		let storage_db =
 			StorageDb { db: db.clone(), state_db, prefix_keys: !db.supports_ref_counting() };
@@ -2555,7 +2537,16 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		//handle.insert(*hash, );
 		log::info!(target: "db", "Pinning block in backend, hash: {}, number: {}, num_pinned_blocks: {}", hash, number, pin_store_guard.len());
 		log::info!(target: "skunert", "Pinned_block_contents: {:?}", pin_store_guard);
-		let hint = || false;
+		let hint = || {
+			let header_metadata = self.blockchain.header_metadata(*hash);
+			header_metadata
+				.map(|hdr| {
+					sc_state_db::NodeDb::get(self.storage.as_ref(), hdr.state_root.as_ref())
+						.unwrap_or(None)
+						.is_some()
+				})
+				.unwrap_or(false)
+		};
 		self.storage.state_db.pin(hash, number, hint).map_err(|_| {
 			sp_blockchain::Error::UnknownBlock(format!("State already discarded for {:?}", hash))
 		})?;

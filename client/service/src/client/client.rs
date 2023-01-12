@@ -177,10 +177,11 @@ where
 			BlockImportOperation = <in_mem::Backend<Block> as backend::Backend<Block>>::BlockImportOperation,
 		>,
 {
+	let (tx, rx) = futures::channel::mpsc::channel(100);
 	new_with_backend(
 		backend,
 		executor,
-		todo!(),
+		tx,
 		genesis_block_builder,
 		keystore,
 		spawn_handle,
