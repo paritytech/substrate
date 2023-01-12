@@ -607,15 +607,15 @@ where
 					},
 					sc_consensus::StorageChanges::Import(changes) => {
 						let mut storage = sp_storage::Storage::default();
-						for state in changes.state.0.into_iter() {
+						for mut state in changes.state.0.into_iter() {
 							if state.parent_storage_keys.is_empty() && state.state_root.is_empty() {
 								for (key, value) in state.key_values.into_iter() {
 									storage.top.insert(key, value);
 								}
 							} else {
-								// No multiple level child state, look only first level.
-								if let Some(parent_storage) =
-									state.parent_storage_keys.into_iter().next()
+								let nb = state.parent_storage_keys.len();
+								for (i, parent_storage) in
+									state.parent_storage_keys.into_iter().enumerate()
 								{
 									let storage_key = PrefixedStorageKey::new_ref(&parent_storage);
 									match ChildType::from_prefixed_key(&storage_key) {
@@ -627,7 +627,12 @@ where
 													data: Default::default(),
 													info: DefaultChild::new(storage_key),
 												});
-											for (key, value) in state.key_values.into_iter() {
+											let key_values = if i + 1 == nb {
+												std::mem::take(&mut state.key_values)
+											} else {
+												state.key_values.clone()
+											};
+											for (key, value) in key_values.into_iter() {
 												entry.data.insert(key, value);
 											}
 										},
