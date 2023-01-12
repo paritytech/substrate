@@ -47,7 +47,7 @@ mod benchmarks {
 		assert_ring::<T>(&[0.into(), 2.into()]);
 		let mut neighbours = None;
 
-		#[extrinsic_call]
+		#[block]
 		{
 			neighbours = MessageQueue::<T>::ready_ring_knit(&mid).ok();
 		}
@@ -65,7 +65,7 @@ mod benchmarks {
 		let o: MessageOriginOf<T> = 0.into();
 		let neighbours = BookStateFor::<T>::get(&o).ready_neighbours.unwrap();
 
-		#[extrinsic_call]
+		#[block]
 		{
 			MessageQueue::<T>::ready_ring_unknit(&o, neighbours);
 		}
@@ -76,7 +76,7 @@ mod benchmarks {
 	// `service_queues` without any queue processing.
 	#[benchmark]
 	fn service_queue_base() {
-		#[extrinsic_call]
+		#[block]
 		{
 			MessageQueue::<T>::service_queue(0.into(), &mut WeightMeter::max_limit(), Weight::MAX);
 		}
@@ -92,7 +92,7 @@ mod benchmarks {
 		let mut meter = WeightMeter::max_limit();
 		let limit = Weight::MAX;
 
-		#[extrinsic_call]
+		#[block]
 		{
 			MessageQueue::<T>::service_page(&origin, &mut book_state, &mut meter, limit);
 		}
@@ -111,7 +111,7 @@ mod benchmarks {
 		let mut meter = WeightMeter::max_limit();
 		let limit = Weight::MAX;
 
-		#[extrinsic_call]
+		#[block]
 		{
 			MessageQueue::<T>::service_page(&origin, &mut book_state, &mut meter, limit);
 		}
@@ -126,7 +126,7 @@ mod benchmarks {
 		assert!(page.peek_first().is_some(), "There is one message");
 		let mut weight = WeightMeter::max_limit();
 
-		#[extrinsic_call]
+		#[block]
 		{
 			let status = MessageQueue::<T>::service_page_item(
 				&0u32.into(),
@@ -160,7 +160,7 @@ mod benchmarks {
 		setup_bump_service_head::<T>(0.into(), 10.into());
 		let mut weight = WeightMeter::max_limit();
 
-		#[extrinsic_call]
+		#[block]
 		{
 			MessageQueue::<T>::bump_service_head(&mut weight);
 		}
@@ -213,7 +213,7 @@ mod benchmarks {
 		Pages::<T>::insert(&origin, 0, &page);
 		BookStateFor::<T>::insert(&origin, &book);
 
-		#[extrinsic_call]
+		#[block]
 		{
 			MessageQueue::<T>::execute_overweight(
 				RawOrigin::Signed(whitelisted_caller()).into(),
@@ -250,7 +250,7 @@ mod benchmarks {
 		Pages::<T>::insert(&origin, 0, &page);
 		BookStateFor::<T>::insert(&origin, &book);
 
-		#[extrinsic_call]
+		#[block]
 		{
 			MessageQueue::<T>::execute_overweight(
 				RawOrigin::Signed(whitelisted_caller()).into(),

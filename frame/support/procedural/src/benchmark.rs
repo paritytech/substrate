@@ -35,9 +35,10 @@ use syn::{
 mod keywords {
 	use syn::custom_keyword;
 
-	custom_keyword!(extrinsic_call);
 	custom_keyword!(benchmark);
+	custom_keyword!(block);
 	custom_keyword!(extra);
+	custom_keyword!(extrinsic_call);
 	custom_keyword!(skip_meta);
 }
 
@@ -186,10 +187,10 @@ impl BenchmarkDef {
 				Stmt::Expr(Expr::Block(block)) => { // #[block] case
 					(&block.attrs).iter().enumerate().find_map(|(k, attr)| {
 						let Some(segment) = attr.path.segments.last() else { return None; };
-						let Ok(_) = syn::parse::<keywords::extrinsic_call>(segment.ident.to_token_stream().into()) else { return None; };
+						let Ok(_) = syn::parse::<keywords::block>(segment.ident.to_token_stream().into()) else { return None; };
 						let mut block = block.clone();
 
-						// consume #[extrinsic_call] tokens
+						// consume #[block] tokens
 						block.attrs.remove(k);
 
 						Some(Ok((i, ExtrinsicCallDef::Block(block))))
@@ -200,7 +201,7 @@ impl BenchmarkDef {
 		}) else {
 			return Err(Error::new(
 				item_fn.block.brace_token.span,
-				"No valid #[extrinsic_call] annotation could be found in benchmark function body.",
+				"No valid #[extrinsic_call] or #[block] annotation could be found in benchmark function body.",
 			))
 		};
 
