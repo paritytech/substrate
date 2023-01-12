@@ -83,8 +83,6 @@ pub mod migrations;
 pub mod traits;
 pub mod weights;
 
-extern crate static_assertions;
-
 #[doc(hidden)]
 pub mod unsigned {
 	#[doc(hidden)]
