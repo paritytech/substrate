@@ -123,7 +123,7 @@ impl StorageMonitorService {
 		fs_stats.map(|stats| stats.blocks_available() * stats.block_size() / 1_000_000)
 	}
 
-	/// Checks if the amount of free space for given `path` is below given `threshold`.
+	/// Checks if the amount of free space for given `path` is above given `threshold`.
 	/// If it dropped below, error is returned.
 	/// System errors are silently ignored.
 	fn check_free_space(path: &Path, threshold: u64) -> Result<(), Error> {
