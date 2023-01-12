@@ -247,9 +247,9 @@ mod benchmarks {
 		assert_eq!(Balances::<T, I>::free_balance(&user), balance);
 	}
 
-	impl_benchmark_test_suite!(
+	impl_benchmark_test_suite! {
 		Balances,
 		crate::tests_composite::ExtBuilder::default().build(),
 		crate::tests_composite::Test,
-	);
+	}
 }

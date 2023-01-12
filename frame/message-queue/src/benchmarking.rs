@@ -274,9 +274,9 @@ mod benchmarks {
 		assert!(Pages::<T>::contains_key(&origin, 0), "Page must be updated");
 	}
 
-	impl_benchmark_test_suite!(
+	impl_benchmark_test_suite! {
 		MessageQueue,
 		crate::mock::new_test_ext::<crate::integration_test::Test>(),
 		crate::integration_test::Test
-	);
+	}
 }
