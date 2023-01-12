@@ -1012,7 +1012,7 @@ parameter_types! {
 	// The ElectionsPalletId parameter name was changed along with the renaming of the elections
 	// pallet, but we keep the same lock ID to prevent a migration from current runtimes.
 	// Related to https://github.com/paritytech/substrate/issues/8250
-	pub const ElectionsPhragmenPalletId: LockIdentifier = *b"phrelect";
+	pub const ElectionsPalletId: LockIdentifier = *b"phrelect";
 }
 
 // Make sure that there are no more than `MaxMembers` members elected via elections-phragmen.
