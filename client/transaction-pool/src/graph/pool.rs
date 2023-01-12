@@ -272,7 +272,7 @@ impl<B: ChainApi> Pool<B> {
 				// to get validity info and tags that the extrinsic provides.
 				None => {
 					// Avoid validating block txs if the pool is empty
-					if true || !self.validated_pool.status().is_empty() {
+					if !self.validated_pool.status().is_empty() {
 						let validity = self
 							.validated_pool
 							.api()
@@ -282,8 +282,6 @@ impl<B: ChainApi> Pool<B> {
 								extrinsic.clone(),
 							)
 							.await;
-
-						log::trace!(target: "txpool", "validating {:?}", validity);
 
 						if let Ok(Ok(validity)) = validity {
 							future_tags.extend(validity.provides);

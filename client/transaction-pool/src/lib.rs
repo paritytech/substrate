@@ -50,7 +50,6 @@ use std::{
 	sync::Arc,
 };
 
-
 use graph::{ExtrinsicHash, IsValidator};
 use sc_transaction_pool_api::{
 	error::Error as TxPoolError, ChainEvent, ImportNotificationStream, MaintainedTransactionPool,
