@@ -394,14 +394,14 @@ where
 
 		let mut result = Vec::<StorageKey>::with_capacity(count as usize);
 		let mut forward_backend = true;
-		let mut last_remove: Option<&[u8]> = None;
+		let mut last_skipped: Option<&[u8]> = None;
 		let mut forward_overlay = true;
 		let mut next_backend_key = None;
 		let mut next_overlay = None;
 
 		while result.len() < count as usize {
 			if forward_backend {
-				let from = if let Some(key) = last_remove.as_ref().take() {
+				let from = if let Some(key) = last_skipped.take() {
 					key
 				} else {
 					result.last().map(|r| r.as_slice()).unwrap_or(key)
@@ -411,7 +411,7 @@ where
 					.next_child_storage_key(child_info, from)
 					.expect(EXT_NOT_ALLOWED_TO_FAIL);
 				forward_backend = false;
-				last_remove = None;
+				last_skipped = None;
 			}
 
 			if forward_overlay {
@@ -440,7 +440,7 @@ where
 							forward_backend = true;
 							forward_overlay = true;
 							if overlay_key.1.value().is_none() {
-								last_remove = Some(overlay_key.0);
+								last_skipped = Some(overlay_key.0);
 							}
 							overlay_key.1.value().map(|_| overlay_key.0.to_vec())
 						},

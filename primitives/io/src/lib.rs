@@ -497,8 +497,7 @@ pub trait DefaultChildStorage {
 	fn next_key(&mut self, storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
 		let child_info = ChildInfo::new_default(storage_key);
 		self.next_child_storage_key(&child_info, key, 1)
-			.map(|mut nexts| nexts.get_mut(0).map(|v| sp_std::mem::take(v)))
-			.flatten()
+			.and_then(|mut nexts| nexts.get_mut(0).map(|v| sp_std::mem::take(v)))
 	}
 }
 
