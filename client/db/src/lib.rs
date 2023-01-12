@@ -45,7 +45,7 @@ use log::{debug, trace, warn};
 use lru::LruCache;
 use parking_lot::{Mutex, RwLock};
 use std::{
-	collections::{hash_map::Entry, HashMap, HashSet},
+	collections::{HashMap, HashSet},
 	io,
 	num::NonZeroUsize,
 	path::{Path, PathBuf},
@@ -478,9 +478,35 @@ fn cache_header<Hash: std::cmp::Eq + std::hash::Hash, Header>(
 	}
 }
 
+struct PinnedBlockCacheEntry<V> {
+	ref_count: u32,
+	pub value: Option<V>,
+}
+
+impl<V> Default for PinnedBlockCacheEntry<V> {
+	fn default() -> Self {
+		Self { ref_count: 0, value: None }
+	}
+}
+
+impl<V> PinnedBlockCacheEntry<V> {
+	pub fn decrease_ref(&mut self) {
+		self.ref_count = self.ref_count.saturating_sub(1);
+	}
+
+	pub fn increase_ref(&mut self) {
+		self.ref_count = self.ref_count.saturating_add(1);
+	}
+
+	pub fn has_no_references(&self) -> bool {
+		self.ref_count == 0
+	}
+}
+
 struct PinnedBlockCache<Block: BlockT> {
-	body_cache: RwLock<LruCache<Block::Hash, (u32, Option<Option<Vec<Block::Extrinsic>>>)>>,
-	justification_cache: RwLock<LruCache<Block::Hash, (u32, Option<Option<Justifications>>)>>,
+	body_cache: RwLock<LruCache<Block::Hash, PinnedBlockCacheEntry<Option<Vec<Block::Extrinsic>>>>>,
+	justification_cache:
+		RwLock<LruCache<Block::Hash, PinnedBlockCacheEntry<Option<Justifications>>>>,
 }
 
 impl<Block: BlockT> PinnedBlockCache<Block> {
@@ -494,12 +520,12 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 
 	pub fn bump_ref(&self, hash: Block::Hash) {
 		let mut body_cache = self.body_cache.write();
-		let mut entry = body_cache.get_or_insert_mut(hash, || (0, None));
-		entry.0 += 1;
+		let entry = body_cache.get_or_insert_mut(hash, Default::default);
+		entry.increase_ref();
 
 		let mut justification_cache = self.justification_cache.write();
-		let mut entry = justification_cache.get_or_insert_mut(hash, || (0, None));
-		entry.0 += 1;
+		let entry = justification_cache.get_or_insert_mut(hash, Default::default);
+		entry.increase_ref();
 	}
 
 	pub fn contains(&self, hash: &Block::Hash) -> bool {
@@ -514,27 +540,27 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 		justifications: Option<Justifications>,
 	) {
 		let mut body_cache = self.body_cache.write();
-		let mut entry = body_cache.get_or_insert_mut(hash, || (0, None));
-		entry.1 = Some(extrinsics);
+		let mut entry = body_cache.get_or_insert_mut(hash, Default::default);
+		entry.value = Some(extrinsics);
 
 		let mut justification_cache = self.justification_cache.write();
-		let mut entry = justification_cache.get_or_insert_mut(hash, || (0, None));
-		entry.1 = Some(justifications);
+		let mut entry = justification_cache.get_or_insert_mut(hash, Default::default);
+		entry.value = Some(justifications);
 	}
 
 	pub fn remove(&self, hash: &Block::Hash) {
 		let mut body_cache = self.body_cache.write();
-		if let Some(mut entry) = body_cache.peek_mut(hash) {
-			entry.0 = entry.0.saturating_sub(1);
-			if entry.0 == 0 {
+		if let Some(entry) = body_cache.peek_mut(hash) {
+			entry.decrease_ref();
+			if entry.has_no_references() {
 				body_cache.pop(hash);
 			}
 		}
 
 		let mut justification_cache = self.justification_cache.write();
-		if let Some(mut entry) = justification_cache.peek_mut(hash) {
-			entry.0 = entry.0.saturating_sub(1);
-			if entry.0 == 0 {
+		if let Some(entry) = justification_cache.peek_mut(hash) {
+			entry.decrease_ref();
+			if entry.has_no_references() {
 				justification_cache.pop(hash);
 			}
 		}
@@ -542,16 +568,16 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 
 	pub fn justification(&self, hash: &Block::Hash) -> Option<Option<Justifications>> {
 		let justification_cache = self.justification_cache.read();
-		if let Some(result) = justification_cache.peek(hash) {
-			return result.1.clone()
+		if let Some(cache_entry) = justification_cache.peek(hash) {
+			return cache_entry.value.clone()
 		};
 		None
 	}
 
 	pub fn body(&self, hash: &Block::Hash) -> Option<Option<Vec<Block::Extrinsic>>> {
 		let body_cache = self.body_cache.read();
-		if let Some(result) = body_cache.peek(hash) {
-			return result.1.clone()
+		if let Some(cache_entry) = body_cache.peek(hash) {
+			return cache_entry.value.clone()
 		};
 		None
 	}
@@ -4180,7 +4206,8 @@ pub(crate) mod tests {
 
 			prev_hash = hash;
 		}
-		// Block 1 gets pinned twice
+		// Block 1 gets pinned three times
+		backend.pin_block(&blocks[1], 1).unwrap();
 		backend.pin_block(&blocks[1], 1).unwrap();
 
 		let mut op = backend.begin_operation().unwrap();
@@ -4210,7 +4237,9 @@ pub(crate) mod tests {
 		assert!(bc.body(blocks[2]).unwrap().is_none());
 		assert!(bc.body(blocks[3]).unwrap().is_none());
 
-		// After this second unpin, block 1 should be removed
+		// After these unpins, block 1 should be removed
+		backend.unpin_block(&blocks[1]);
+		assert!(bc.body(blocks[1]).unwrap().is_some());
 		backend.unpin_block(&blocks[1]);
 		assert!(bc.body(blocks[1]).unwrap().is_none());
 
