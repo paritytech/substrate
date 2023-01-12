@@ -33,7 +33,7 @@ mod tests;
 
 pub use crate::api::FullChainApi;
 use async_trait::async_trait;
-use enactment_state::{EnactmentAction, EnactmentState};
+use enactment_state::EnactmentState;
 use futures::{
 	channel::oneshot,
 	future::{self, ready},
@@ -42,12 +42,14 @@ use futures::{
 pub use graph::{
 	base_pool::Limit as PoolLimit, ChainApi, Options, Pool, Transaction, ValidatedTransaction,
 };
+use num_traits::CheckedSub;
 use parking_lot::Mutex;
 use std::{
 	collections::{HashMap, HashSet},
 	pin::Pin,
 	sync::Arc,
 };
+
 
 use graph::{ExtrinsicHash, IsValidator};
 use sc_transaction_pool_api::{
@@ -66,6 +68,8 @@ use crate::metrics::MetricsLink as PrometheusMetrics;
 use prometheus_endpoint::Registry as PrometheusRegistry;
 
 use sp_blockchain::{HashAndNumber, TreeRoute};
+
+const SKIP_MAINTAINANCE_THRESHOLD: u16 = 20;
 
 type BoxedReadyIterator<Hash, Data> =
 	Box<dyn ReadyTransactions<Item = Arc<graph::base_pool::Transaction<Hash, Data>>> + Send>;
@@ -725,6 +729,32 @@ where
 	where
 		SO: sp_consensus::SyncOracle + std::marker::Send + std::marker::Sync + ?Sized,
 	{
+		if sync_oracle.is_major_syncing() {
+			log::info!(target: "txpool", "skip maintain: major syncing");
+			self.enactment_state.lock().force_update(&event);
+			return
+		}
+
+		// do not maintain txpool if block distance is to high
+		let skip_maintanance = match event {
+			ChainEvent::Finalized { hash, .. } | ChainEvent::NewBestBlock { hash, .. } => match (
+				self.api.block_id_to_number(&BlockId::Hash(hash)),
+				self.api.block_id_to_number(&BlockId::Hash(
+					self.enactment_state.lock().recent_best_block(),
+				)),
+			) {
+				(Ok(Some(notified)), Ok(Some(current))) =>
+					Some(SKIP_MAINTAINANCE_THRESHOLD.into()) < notified.checked_sub(&current),
+				_ => true,
+			},
+		};
+
+		if skip_maintanance {
+			log::info!(target: "txpool", "skip maintain: tree_route would be too long");
+			self.enactment_state.lock().force_update(&event);
+			return
+		}
+
 		let prev_finalized_block = self.enactment_state.lock().recent_finalized_block();
 		let compute_tree_route = |from, to| -> Result<TreeRoute<Block>, String> {
 			match self.api.tree_route(from, to) {
@@ -736,25 +766,21 @@ where
 			}
 		};
 
-		let is_major_syncing = || sync_oracle.is_major_syncing();
-		let block_id_to_number =
-			|hash| self.api.block_id_to_number(&BlockId::Hash(hash)).map_err(|e| format!("{}", e));
-
-		let result = self.enactment_state.lock().update(
-			&event,
-			&compute_tree_route,
-			&is_major_syncing,
-			&block_id_to_number,
-		);
+		let result = self.enactment_state.lock().update(&event, &compute_tree_route);
 
 		match result {
 			Err(msg) => {
 				log::debug!(target: "txpool", "{msg}");
 				self.enactment_state.lock().force_update(&event);
 			},
-			Ok(EnactmentAction::Skip) => return,
-			Ok(EnactmentAction::HandleFinalization) => {},
-			Ok(EnactmentAction::HandleEnactment(tree_route)) => {
+			Ok(None) => {},
+			Ok(Some(tree_route)) => {
+				// do not maintain txpool if enacted path is too long
+				if tree_route.enacted().len() > SKIP_MAINTAINANCE_THRESHOLD.into() {
+					log::info!(target: "txpool", "skip maintain: enacted too long");
+					return
+				}
+
 				self.handle_enactment(tree_route).await;
 			},
 		};
