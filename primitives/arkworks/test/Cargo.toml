@@ -28,6 +28,7 @@ sp-ark-bls12-381 = { git = "https://github.com/achimcc/ark-substrate" }
 sp-ark-bw6-761 = { git = "https://github.com/achimcc/ark-substrate" }
 sp-ark-ed-on-bls12-377 = { git = "https://github.com/achimcc/ark-substrate" }
 sp-ark-ed-on-bls12-381 = { git = "https://github.com/achimcc/ark-substrate" }
+frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
 
 
 

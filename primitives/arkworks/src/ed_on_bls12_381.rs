@@ -21,23 +21,24 @@
 
 use ark_ec::{
 	models::CurveConfig,
-	short_weierstrass::{self, Affine as SWAffine, SWCurveConfig},
+	short_weierstrass::{Affine as SWAffine, SWCurveConfig, Projective as SWProjective},
 	twisted_edwards,
 	twisted_edwards::{Affine as TEAffine, TECurveConfig},
 	VariableBaseMSM,
 };
-use ark_ed_on_bls12_381::{EdwardsProjective, JubjubConfig, SWProjective};
+use ark_ed_on_bls12_381::{EdwardsProjective, JubjubConfig};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use ark_std::io::Cursor;
 use sp_std::{vec, vec::Vec};
 
 /// Compute a scalar multiplication on G2 through arkworks
 pub fn sw_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
+	println!("{:?}", base);
 	let cursor = Cursor::new(base);
-	let base = ark_ec::short_weierstrass::Projective::<JubjubConfig>::deserialize_with_mode(
+	let base = SWProjective::<JubjubConfig>::deserialize_with_mode(
 		cursor,
-		Compress::Yes,
-		Validate::No,
+		Compress::No,
+		Validate::Yes,
 	)
 	.unwrap();
 	let cursor = Cursor::new(scalar);
@@ -148,7 +149,7 @@ pub fn sw_msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 		})
 		.collect();
 
-	let result = <SWProjective as VariableBaseMSM>::msm(&bases, &scalars).unwrap();
+	let result = <SWProjective::<JubjubConfig> as VariableBaseMSM>::msm(&bases, &scalars).unwrap();
 	let mut serialized = vec![0; result.serialized_size(Compress::Yes)];
 	let mut cursor = Cursor::new(&mut serialized[..]);
 	result.serialize_with_mode(&mut cursor, Compress::Yes).unwrap();
