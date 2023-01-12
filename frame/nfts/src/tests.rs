@@ -29,6 +29,7 @@ use frame_support::{
 };
 use pallet_balances::Error as BalancesError;
 use sp_core::{bounded::BoundedVec, Pair};
+use sp_runtime::{MultiSignature, MultiSigner};
 use sp_std::prelude::*;
 
 fn items() -> Vec<(u64, u32, u32)> {
@@ -2503,7 +2504,8 @@ fn add_remove_item_attributes_approval_should_work() {
 fn pre_signed_mints_should_work() {
 	new_test_ext().execute_with(|| {
 		let user1_pair = sp_core::sr25519::Pair::from_string("//Alice///password", None).unwrap();
-		let user1 = Nfts::public_to_account(user1_pair.public()).unwrap();
+		let user1_signer = MultiSigner::Sr25519(user1_pair.public());
+		let user1 = Nfts::signer_to_account(user1_signer.clone()).unwrap();
 		let mint_data = PreSignedMint {
 			collection: 0,
 			item: 0,
@@ -2511,7 +2513,7 @@ fn pre_signed_mints_should_work() {
 			only_account: None,
 			deadline: 1,
 		};
-		let signature = user1_pair.sign(&Encode::encode(&mint_data));
+		let signature = MultiSignature::Sr25519(user1_pair.sign(&Encode::encode(&mint_data)));
 		dbg!(user1);
 
 		let user2 = 2;
@@ -2527,7 +2529,7 @@ fn pre_signed_mints_should_work() {
 			RuntimeOrigin::signed(user2),
 			mint_data,
 			signature,
-			user1_pair.public()
+			user1_signer
 		));
 		assert_eq!(items(), vec![(user2, 0, 0)]);
 		// validate metadata (ok and not ok)

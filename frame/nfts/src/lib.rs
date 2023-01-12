@@ -52,7 +52,7 @@ use frame_support::traits::{
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
 	traits::{Saturating, StaticLookup, Zero},
-	RuntimeDebug,
+	MultiSignature, MultiSigner, RuntimeDebug,
 };
 use sp_std::prelude::*;
 
@@ -171,16 +171,6 @@ pub mod pallet {
 		/// Disables some of pallet's features.
 		#[pallet::constant]
 		type Features: Get<PalletFeatures>;
-
-		/// A signature used to pre-sign some data.
-		type Signature: Verify<Signer = Self::PublicKey> + Encode + Decode + Parameter;
-
-		/// The public key of the signer.
-		type PublicKey: IdentifyAccount<AccountId = Self::PublicKey>
-			+ AsRef<[u8]>
-			+ Encode
-			+ Decode
-			+ Parameter;
 
 		#[cfg(feature = "runtime-benchmarks")]
 		/// A set of helper functions for benchmarking.
@@ -1791,14 +1781,17 @@ pub mod pallet {
 		pub fn mint_pre_signed(
 			origin: OriginFor<T>,
 			data: PreSignedMintOf<T, I>,
-			signature: T::Signature,
-			signer: T::PublicKey,
+			signature: MultiSignature,
+			signer: MultiSigner,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let msg = Encode::encode(&data);
-			ensure!(signature.verify(&*msg, &signer), Error::<T, I>::WrongSignature);
+			ensure!(
+				signature.verify(&*msg, &signer.clone().into_account()),
+				Error::<T, I>::WrongSignature
+			);
 
-			let signer_account = Self::public_to_account(signer)?;
+			let signer_account = Self::signer_to_account(signer)?;
 			log::info!("signer_account {:?}", &signer_account);
 
 			let PreSignedMint { collection, item, metadata, deadline, only_account } = data;

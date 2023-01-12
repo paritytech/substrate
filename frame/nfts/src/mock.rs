@@ -28,6 +28,7 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	MultiSignature,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -87,7 +88,7 @@ impl pallet_balances::Config for Test {
 parameter_types! {
 	pub storage Features: PalletFeatures = PalletFeatures::all_enabled();
 }
-
+pub type Signature = MultiSignature;
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type CollectionId = u32;
@@ -109,8 +110,6 @@ impl Config for Test {
 	type MaxTips = ConstU32<10>;
 	type MaxDeadlineDuration = ConstU64<10000>;
 	type Features = Features;
-	type Signature = sp_core::sr25519::Signature;
-	type PublicKey = sp_core::sr25519::Public;
 	type WeightInfo = ();
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = ();

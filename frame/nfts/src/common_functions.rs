@@ -19,6 +19,7 @@
 
 use crate::*;
 use frame_support::pallet_prelude::*;
+use sp_runtime::traits::IdentifyAccount;
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Get the owner of the item, if the item exists.
@@ -31,9 +32,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Collection::<T, I>::get(collection).map(|i| i.owner)
 	}
 
-	/// Convert public key to account id.
-	pub fn public_to_account(public: T::PublicKey) -> Result<T::AccountId, DispatchError> {
-		Ok(T::AccountId::decode(&mut public.as_ref()).map_err(|_| Error::<T, I>::WrongPublic)?)
+	/// Convert signer into account id.
+	pub fn signer_to_account(signer: MultiSigner) -> Result<T::AccountId, DispatchError> {
+		Ok(T::AccountId::decode(&mut signer.into_account().as_ref())
+			.map_err(|_| Error::<T, I>::WrongPublic)?)
 	}
 
 	#[cfg(any(test, feature = "runtime-benchmarks"))]
