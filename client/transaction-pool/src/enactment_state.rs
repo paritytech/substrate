@@ -96,18 +96,17 @@ where
 		TreeRouteF: Fn(Block::Hash, Block::Hash) -> Result<TreeRoute<Block>, String>,
 		BlockNumberF: Fn(Block::Hash) -> Result<Option<NumberFor<Block>>, String>,
 	{
-		let (new_hash, finalized) = match event {
-			ChainEvent::NewBestBlock { hash, .. } => (*hash, false),
-			ChainEvent::Finalized { hash, .. } => (*hash, true),
+		let (new_hash, current_hash, finalized) = match event {
+			ChainEvent::NewBestBlock { hash, .. } => (*hash, self.recent_best_block, false),
+			ChainEvent::Finalized { hash, .. } => (*hash, self.recent_finalized_block, true),
 		};
 
 		// do not proceed with txpool maintain if block distance is to high
-		let skip_maintenance =
-			match (hash_to_number(new_hash), hash_to_number(self.recent_best_block)) {
-				(Ok(Some(notified)), Ok(Some(current))) =>
-					notified.checked_sub(&current) > Some(SKIP_MAINTENANCE_THRESHOLD.into()),
-				_ => true,
-			};
+		let skip_maintenance = match (hash_to_number(new_hash), hash_to_number(current_hash)) {
+			(Ok(Some(new)), Ok(Some(current))) =>
+				new.checked_sub(&current) > Some(SKIP_MAINTENANCE_THRESHOLD.into()),
+			_ => true,
+		};
 
 		if skip_maintenance {
 			log::info!(target: "txpool", "skip maintain: tree_route would be too long");
@@ -124,14 +123,6 @@ where
 		// compute actual tree route from best_block to notified block, and use
 		// it instead of tree_route provided with event
 		let tree_route = tree_route(self.recent_best_block, new_hash)?;
-
-		log::info!(target: "txpool", "skip maintain: enacted: {:?}", tree_route.enacted().len());
-		// do not proceed with txpool maintain if enacted path is too long
-		if tree_route.enacted().len() > SKIP_MAINTENANCE_THRESHOLD.into() {
-			log::info!(target: "txpool", "skip maintain: enacted too long");
-			self.force_update(event);
-			return Ok(EnactmentAction::Skip)
-		}
 
 		log::debug!(
 			target: "txpool",
