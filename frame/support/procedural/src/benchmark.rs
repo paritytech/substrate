@@ -140,7 +140,6 @@ struct BenchmarkDef {
 impl BenchmarkDef {
 	/// Constructs a [`BenchmarkDef`] by traversing an existing [`ItemFn`] node.
 	pub fn from(item_fn: &ItemFn, extra: bool, skip_meta: bool) -> Result<BenchmarkDef> {
-		let mut i = 0; // index of child
 		let mut params: Vec<ParamDef> = Vec::new();
 
 		// parse params such as "x: Linear<0, 1>"
@@ -165,14 +164,12 @@ impl BenchmarkDef {
 		}
 
 		// #[extrinsic_call] handling
-		for child in &item_fn.block.stmts {
-			let mut extrinsic_call = None;
+		let Some(Ok((i, extrinsic_call))) = (&item_fn.block.stmts).iter().enumerate().find_map(|(i, child)| {
 			match child {
-				Stmt::Semi(Expr::Call(expr_call), _semi) => {
-					// non-block (encoded) case
-					for (k, attr) in (&expr_call.attrs).iter().enumerate() {
-						let Some(segment) = attr.path.segments.last() else { continue; };
-						let Ok(_) = syn::parse::<keywords::extrinsic_call>(segment.ident.to_token_stream().into()) else { continue; };
+				Stmt::Semi(Expr::Call(expr_call), _semi) => { // #[extrinsic_call] case
+					(&expr_call.attrs).iter().enumerate().find_map(|(k, attr)| {
+						let Some(segment) = attr.path.segments.last() else { return None; };
+						let Ok(_) = syn::parse::<keywords::extrinsic_call>(segment.ident.to_token_stream().into()) else { return None; };
 						let mut expr_call = expr_call.clone();
 
 						// consume #[extrinsic_call] tokens
@@ -181,46 +178,40 @@ impl BenchmarkDef {
 						// extract origin from expr_call
 						let origin = match expr_call.args.first() {
 							Some(arg) => arg.clone(),
-							None => return Err(Error::new(expr_call.args.span(), "Single-item extrinsic calls must specify their origin as the first argument.")),
+							None => return Some(Err(Error::new(expr_call.args.span(), "Single-item extrinsic calls must specify their origin as the first argument."))),
 						};
-						extrinsic_call = Some(ExtrinsicCallDef::Encoded { origin, expr_call });
-						break
-					}
+						Some(Ok((i, ExtrinsicCallDef::Encoded { origin, expr_call })))
+					})
 				},
-				Stmt::Expr(Expr::Block(block)) => {
-					// block case
-					for (k, attr) in (&block.attrs).iter().enumerate() {
-						let Some(segment) = attr.path.segments.last() else { continue; };
-						let Ok(_) = syn::parse::<keywords::extrinsic_call>(segment.ident.to_token_stream().into()) else { continue; };
+				Stmt::Expr(Expr::Block(block)) => { // #[block] case
+					(&block.attrs).iter().enumerate().find_map(|(k, attr)| {
+						let Some(segment) = attr.path.segments.last() else { return None; };
+						let Ok(_) = syn::parse::<keywords::extrinsic_call>(segment.ident.to_token_stream().into()) else { return None; };
 						let mut block = block.clone();
 
 						// consume #[extrinsic_call] tokens
 						block.attrs.remove(k);
 
-						extrinsic_call = Some(ExtrinsicCallDef::Block(block));
-						break
-					}
+						Some(Ok((i, ExtrinsicCallDef::Block(block))))
+					})
 				},
-				_ => (),
+				_ => None
 			}
-			let Some(extrinsic_call) = extrinsic_call else {
-				i += 1;
-				continue;
-			};
+		}) else {
+			return Err(Error::new(
+				item_fn.block.brace_token.span,
+				"No valid #[extrinsic_call] annotation could be found in benchmark function body.",
+			))
+		};
 
-			return Ok(BenchmarkDef {
-				params,
-				setup_stmts: Vec::from(&item_fn.block.stmts[0..i]),
-				extrinsic_call,
-				verify_stmts: Vec::from(&item_fn.block.stmts[(i + 1)..item_fn.block.stmts.len()]),
-				extra,
-				skip_meta,
-			})
-		}
-		return Err(Error::new(
-			item_fn.block.brace_token.span,
-			"No valid #[extrinsic_call] annotation could be found in benchmark function body.",
-		))
+		Ok(BenchmarkDef {
+			params,
+			setup_stmts: Vec::from(&item_fn.block.stmts[0..i]),
+			extrinsic_call,
+			verify_stmts: Vec::from(&item_fn.block.stmts[(i + 1)..item_fn.block.stmts.len()]),
+			extra,
+			skip_meta,
+		})
 	}
 }
 
@@ -625,16 +616,20 @@ fn expand_benchmark(
 			expr_call.args = final_args;
 
 			// modify extrinsic call to be prefixed with new_call_variant
-			if let Expr::Path(expr_path) = &mut *expr_call.func {
-				if let Some(segment) = expr_path.path.segments.last_mut() {
-					segment.ident = Ident::new(
-						format!("new_call_variant_{}", segment.ident.to_string()).as_str(),
-						Span::call_site(),
-					);
-				}
-			}
-			// (pre_call, post_call):
+			let expr_span = expr_call.span().clone();
+			let call_err = || {
+				quote_spanned!(expr_span=> "Extrinsic call must be a function call".to_compile_error()).into()
+			};
+			let Expr::Path(expr_path) = &mut *expr_call.func else { return call_err(); };
+			let Some(segment) = expr_path.path.segments.last_mut() else { return call_err(); };
+			segment.ident = Ident::new(
+				// mutation occurs here
+				format!("new_call_variant_{}", segment.ident.to_string()).as_str(),
+				Span::call_site(),
+			);
+
 			(
+				// (pre_call, post_call):
 				quote! {
 					let __call = Call::<#generics>::#expr_call;
 					let __benchmarked_call_encoded = #codec::Encode::encode(&__call);
