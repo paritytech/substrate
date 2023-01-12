@@ -479,8 +479,8 @@ fn cache_header<Hash: std::cmp::Eq + std::hash::Hash, Header>(
 }
 
 struct PinnedBlockCache<Block: BlockT> {
-	body_cache: RwLock<LruCache<Block::Hash, (u32, Option<Vec<Block::Extrinsic>>)>>,
-	justification_cache: RwLock<LruCache<Block::Hash, (u32, Option<Justifications>)>>,
+	body_cache: RwLock<LruCache<Block::Hash, (u32, Option<Option<Vec<Block::Extrinsic>>>)>>,
+	justification_cache: RwLock<LruCache<Block::Hash, (u32, Option<Option<Justifications>>)>>,
 }
 
 impl<Block: BlockT> PinnedBlockCache<Block> {
@@ -492,49 +492,34 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 		}
 	}
 
-	pub fn insert(
-		&self,
-		hash: Block::Hash,
-		extrinsics: Option<Vec<Block::Extrinsic>>,
-		justifications: Option<Justifications>,
-	) {
-		self.insert_with_ref(hash, extrinsics, justifications, 1);
-	}
-
 	pub fn bump_ref(&self, hash: Block::Hash) {
 		let mut body_cache = self.body_cache.write();
-		if let Some(mut entry) = body_cache.get_mut(&hash) {
-			entry.0 += 1;
-		}
+		let mut entry = body_cache.get_or_insert_mut(hash, || (0, None));
+		entry.0 += 1;
 
 		let mut justification_cache = self.justification_cache.write();
-		if let Some(mut entry) = justification_cache.get_mut(&hash) {
-			entry.0 += 1;
-		}
+		let mut entry = justification_cache.get_or_insert_mut(hash, || (0, None));
+		entry.0 += 1;
 	}
 
-	pub fn insert_with_ref(
+	pub fn contains(&self, hash: &Block::Hash) -> bool {
+		let body_cache = self.body_cache.read();
+		body_cache.contains(hash)
+	}
+
+	pub fn insert_value(
 		&self,
 		hash: Block::Hash,
 		extrinsics: Option<Vec<Block::Extrinsic>>,
 		justifications: Option<Justifications>,
-		ref_count: u32,
 	) {
 		let mut body_cache = self.body_cache.write();
-		if let Some(mut entry) = body_cache.get_mut(&hash) {
-			entry.0 += ref_count;
-			entry.1 = extrinsics;
-		} else {
-			body_cache.put(hash, (ref_count, extrinsics));
-		}
+		let mut entry = body_cache.get_or_insert_mut(hash, || (0, None));
+		entry.1 = Some(extrinsics);
 
 		let mut justification_cache = self.justification_cache.write();
-		if let Some(mut entry) = justification_cache.get_mut(&hash) {
-			entry.0 += ref_count;
-			entry.1 = justifications;
-		} else {
-			justification_cache.put(hash, (ref_count, justifications));
-		}
+		let mut entry = justification_cache.get_or_insert_mut(hash, || (0, None));
+		entry.1 = Some(justifications);
 	}
 
 	pub fn remove(&self, hash: &Block::Hash) {
@@ -557,12 +542,18 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 
 	pub fn justification(&self, hash: &Block::Hash) -> Option<Option<Justifications>> {
 		let justification_cache = self.justification_cache.read();
-		justification_cache.peek(hash).map(|element| element.1.clone())
+		if let Some(result) = justification_cache.peek(hash) {
+			return result.1.clone()
+		};
+		None
 	}
 
 	pub fn body(&self, hash: &Block::Hash) -> Option<Option<Vec<Block::Extrinsic>>> {
 		let body_cache = self.body_cache.read();
-		body_cache.peek(hash).map(|element| element.1.clone())
+		if let Some(result) = body_cache.peek(hash) {
+			return result.1.clone()
+		};
+		None
 	}
 }
 
@@ -616,22 +607,19 @@ impl<Block: BlockT> BlockchainDb<Block> {
 		meta.block_gap = gap;
 	}
 
-	fn pin_with_ref(&self, hash: Block::Hash, ref_count: u32) -> ClientResult<()> {
+	fn pin_value(&self, hash: Block::Hash) -> ClientResult<()> {
+		if !self.pinned_blocks_cache.contains(&hash) {
+			return Ok(())
+		}
+
 		let justifications = self.justifications(hash)?;
 		let body = self.body(hash)?;
-		self.pinned_blocks_cache.insert_with_ref(hash, body, justifications, ref_count);
+		self.pinned_blocks_cache.insert_value(hash, body, justifications);
 		Ok(())
 	}
 
 	fn bump_ref(&self, hash: Block::Hash) {
 		self.pinned_blocks_cache.bump_ref(hash);
-	}
-
-	fn pin(&self, hash: Block::Hash) -> ClientResult<()> {
-		let justifications = self.justifications(hash)?;
-		let body = self.body(hash)?;
-		self.pinned_blocks_cache.insert(hash, body, justifications);
-		Ok(())
 	}
 
 	fn unpin(&self, hash: &Block::Hash) {
@@ -1166,7 +1154,6 @@ impl<T: Clone> FrozenForDuration<T> {
 /// Disk backend keeps data in a key-value store. In archive mode, trie nodes are kept from all
 /// blocks. Otherwise, trie nodes are kept only from some recent blocks.
 pub struct Backend<Block: BlockT> {
-	pinned_block_store: RwLock<HashMap<Block::Hash, u32>>,
 	storage: Arc<StorageDb<Block>>,
 	offchain_storage: offchain::LocalStorage,
 	blockchain: BlockchainDb<Block>,
@@ -1281,7 +1268,6 @@ impl<Block: BlockT> Backend<Block> {
 		let offchain_storage = offchain::LocalStorage::new(db.clone());
 
 		let backend = Backend {
-			pinned_block_store: RwLock::new(HashMap::new()),
 			storage: Arc::new(storage_db),
 			offchain_storage,
 			blockchain,
@@ -1856,11 +1842,8 @@ impl<Block: BlockT> Backend<Block> {
 				if finalized >= keep.into() {
 					let number = finalized.saturating_sub(keep.into());
 
-					let pinned_block_store = self.pinned_block_store.read();
 					if let Some(hash) = self.blockchain.hash(number)? {
-						if let Some(ref_count) = pinned_block_store.get(&hash) {
-							self.blockchain.pin_with_ref(hash, *ref_count)?;
-						}
+						self.blockchain.pin_value(hash)?;
 					};
 
 					self.prune_block(transaction, BlockId::<Block>::number(number))?;
@@ -1891,10 +1874,7 @@ impl<Block: BlockT> Backend<Block> {
 			while self.blockchain.hash(number)? != Some(hash) {
 				match self.blockchain.header(hash)? {
 					Some(header) => {
-						let pinned_block_store = self.pinned_block_store.read();
-						if let Some(ref_count) = pinned_block_store.get(&hash) {
-							self.blockchain.pin_with_ref(hash, *ref_count)?;
-						}
+						self.blockchain.pin_value(hash)?;
 
 						self.prune_block(transaction, BlockId::<Block>::hash(hash))?;
 						number = header.number().saturating_sub(One::one());
@@ -2525,18 +2505,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	}
 
 	fn pin_block(&self, hash: &<Block as BlockT>::Hash, number: u64) -> sp_blockchain::Result<()> {
-		let mut pin_store_guard = self.pinned_block_store.write();
-		match pin_store_guard.entry(*hash) {
-			Entry::Occupied(mut entry) => {
-				*entry.get_mut() += 1;
-			},
-			Entry::Vacant(v) => {
-				v.insert(1);
-			},
-		};
-		//handle.insert(*hash, );
-		log::info!(target: "db", "Pinning block in backend, hash: {}, number: {}, num_pinned_blocks: {}", hash, number, pin_store_guard.len());
-		log::info!(target: "skunert", "Pinned_block_contents: {:?}", pin_store_guard);
 		let hint = || {
 			let header_metadata = self.blockchain.header_metadata(*hash);
 			header_metadata
@@ -2555,14 +2523,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	}
 
 	fn unpin_block(&self, hash: &<Block as BlockT>::Hash) {
-		log::info!(target: "db", "Unpinning block in backend, hash: {}", hash);
-		let mut pin_store_guard = self.pinned_block_store.write();
-		if let Entry::Occupied(mut entry) = pin_store_guard.entry(*hash) {
-			*entry.get_mut() -= 1;
-			if *entry.get() == 0 {
-				entry.remove();
-			}
-		};
 		self.storage.state_db.unpin(hash);
 		self.blockchain.unpin(hash);
 	}
