@@ -219,7 +219,7 @@ impl BenchmarkDef {
 /// Parses and expands a `#[benchmarks]` or `#[instance_benchmarks]` invocation
 pub fn benchmarks(attrs: TokenStream, tokens: TokenStream, instance: bool) -> TokenStream {
 	let module = parse_macro_input!(tokens as ItemMod);
-	let mod_span = module.span().clone();
+	let mod_span = module.span();
 	let where_clause = match syn::parse::<Nothing>(attrs.clone()) {
 		Ok(_) => quote!(),
 		Err(_) => parse_macro_input!(attrs as WhereClause).predicates.to_token_stream(),
@@ -617,7 +617,7 @@ fn expand_benchmark(
 			expr_call.args = final_args;
 
 			// modify extrinsic call to be prefixed with new_call_variant
-			let expr_span = expr_call.span().clone();
+			let expr_span = expr_call.span();
 			let call_err = || {
 				quote_spanned!(expr_span=> "Extrinsic call must be a function call".to_compile_error()).into()
 			};
