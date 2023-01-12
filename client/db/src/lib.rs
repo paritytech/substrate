@@ -533,16 +533,18 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 		body_cache.contains(hash)
 	}
 
-	pub fn insert_value(
-		&self,
-		hash: Block::Hash,
-		extrinsics: Option<Vec<Block::Extrinsic>>,
-		justifications: Option<Justifications>,
-	) {
+	pub fn insert_body(&self, hash: Block::Hash, extrinsics: Option<Vec<Block::Extrinsic>>) {
+		println!("Inserting value for hash {}, body: {:?}", hash, extrinsics);
 		let mut body_cache = self.body_cache.write();
 		let mut entry = body_cache.get_or_insert_mut(hash, Default::default);
 		entry.value = Some(extrinsics);
+	}
 
+	pub fn insert_justifications(&self, hash: Block::Hash, justifications: Option<Justifications>) {
+		println!(
+			"Inserting justifications for hash {}, justifications: {:?}",
+			hash, justifications
+		);
 		let mut justification_cache = self.justification_cache.write();
 		let mut entry = justification_cache.get_or_insert_mut(hash, Default::default);
 		entry.value = Some(justifications);
@@ -553,6 +555,7 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 		if let Some(entry) = body_cache.peek_mut(hash) {
 			entry.decrease_ref();
 			if entry.has_no_references() {
+				println!("Removing value for hash {}, ref count zero", hash);
 				body_cache.pop(hash);
 			}
 		}
@@ -569,6 +572,10 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 	pub fn justification(&self, hash: &Block::Hash) -> Option<Option<Justifications>> {
 		let justification_cache = self.justification_cache.read();
 		if let Some(cache_entry) = justification_cache.peek(hash) {
+			println!(
+				"Returning cached justification for hash {}, justifications: {:?}",
+				hash, cache_entry.value
+			);
 			return cache_entry.value.clone()
 		};
 		None
@@ -577,6 +584,7 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 	pub fn body(&self, hash: &Block::Hash) -> Option<Option<Vec<Block::Extrinsic>>> {
 		let body_cache = self.body_cache.read();
 		if let Some(cache_entry) = body_cache.peek(hash) {
+			println!("Returning cached body for hash {}, body: {:?}", hash, cache_entry.value);
 			return cache_entry.value.clone()
 		};
 		None
@@ -633,14 +641,22 @@ impl<Block: BlockT> BlockchainDb<Block> {
 		meta.block_gap = gap;
 	}
 
-	fn pin_value(&self, hash: Block::Hash) -> ClientResult<()> {
+	fn insert_justifications_if_pinned(&self, hash: Block::Hash) -> ClientResult<()> {
+		if !self.pinned_blocks_cache.contains(&hash) {
+			return Ok(())
+		}
+		let justifications = self.justifications(hash)?;
+		self.pinned_blocks_cache.insert_justifications(hash, justifications);
+		Ok(())
+	}
+
+	fn insert_body_if_pinned(&self, hash: Block::Hash) -> ClientResult<()> {
 		if !self.pinned_blocks_cache.contains(&hash) {
 			return Ok(())
 		}
 
-		let justifications = self.justifications(hash)?;
 		let body = self.body(hash)?;
-		self.pinned_blocks_cache.insert_value(hash, body, justifications);
+		self.pinned_blocks_cache.insert_body(hash, body);
 		Ok(())
 	}
 
@@ -1857,7 +1873,7 @@ impl<Block: BlockT> Backend<Block> {
 	fn prune_blocks(
 		&self,
 		transaction: &mut Transaction<DbHash>,
-		finalized: NumberFor<Block>,
+		finalized_number: NumberFor<Block>,
 		displaced: &FinalizationOutcome<Block::Hash, NumberFor<Block>>,
 	) -> ClientResult<()> {
 		match self.blocks_pruning {
@@ -1865,19 +1881,21 @@ impl<Block: BlockT> Backend<Block> {
 			BlocksPruning::Some(blocks_pruning) => {
 				// Always keep the last finalized block
 				let keep = std::cmp::max(blocks_pruning, 1);
-				if finalized >= keep.into() {
-					let number = finalized.saturating_sub(keep.into());
+				if finalized_number >= keep.into() {
+					let number = finalized_number.saturating_sub(keep.into());
 
+					println!("Finaliztion: Pruning block number {}", number);
 					if let Some(hash) = self.blockchain.hash(number)? {
-						self.blockchain.pin_value(hash)?;
+						self.blockchain.insert_body_if_pinned(hash)?;
+						self.blockchain.insert_justifications_if_pinned(hash)?;
 					};
 
 					self.prune_block(transaction, BlockId::<Block>::number(number))?;
 				}
-				self.prune_displaced_branches(transaction, finalized, displaced)?;
+				self.prune_displaced_branches(transaction, finalized_number, displaced)?;
 			},
 			BlocksPruning::KeepFinalized => {
-				self.prune_displaced_branches(transaction, finalized, displaced)?;
+				self.prune_displaced_branches(transaction, finalized_number, displaced)?;
 			},
 		}
 		Ok(())
@@ -1900,7 +1918,7 @@ impl<Block: BlockT> Backend<Block> {
 			while self.blockchain.hash(number)? != Some(hash) {
 				match self.blockchain.header(hash)? {
 					Some(header) => {
-						self.blockchain.pin_value(hash)?;
+						self.blockchain.insert_body_if_pinned(hash)?;
 
 						self.prune_block(transaction, BlockId::<Block>::hash(hash))?;
 						number = header.number().saturating_sub(One::one());
@@ -4186,6 +4204,7 @@ pub(crate) mod tests {
 		let mut blocks = Vec::new();
 		let mut prev_hash = Default::default();
 
+		let build_justification = |i: u64| ([0, 0, 0, 0], vec![i.try_into().unwrap()]);
 		// Block tree:
 		//   0 -> 1 -> 2 -> 3 -> 4
 		for i in 0..5 {
@@ -4200,7 +4219,7 @@ pub(crate) mod tests {
 			)
 			.unwrap();
 			blocks.push(hash);
-
+			println!("Block {}: {}", i, hash);
 			// Avoid block pruning.
 			backend.pin_block(&blocks[i as usize], i).unwrap();
 
@@ -4213,7 +4232,8 @@ pub(crate) mod tests {
 		let mut op = backend.begin_operation().unwrap();
 		backend.begin_state_operation(&mut op, blocks[4]).unwrap();
 		for i in 1..5 {
-			op.mark_finalized(blocks[i], None).unwrap();
+			op.mark_finalized(blocks[i], Some(build_justification(i.try_into().unwrap())))
+				.unwrap();
 		}
 		backend.commit_operation(op).unwrap();
 
@@ -4221,10 +4241,18 @@ pub(crate) mod tests {
 		// Block 0, 1, 2, 3 are pinned and pruning is delayed,
 		// while block 4 is never delayed for pruning as it is finalized.
 		assert_eq!(Some(vec![0.into()]), bc.body(blocks[0]).unwrap());
+
 		assert_eq!(Some(vec![1.into()]), bc.body(blocks[1]).unwrap());
+
 		assert_eq!(Some(vec![2.into()]), bc.body(blocks[2]).unwrap());
+
 		assert_eq!(Some(vec![3.into()]), bc.body(blocks[3]).unwrap());
+
 		assert_eq!(Some(vec![4.into()]), bc.body(blocks[4]).unwrap());
+		assert_eq!(
+			Some(Justifications::from(build_justification(4))),
+			bc.justifications(blocks[4]).unwrap()
+		);
 
 		// Unpin all blocks.
 		for block in &blocks {
@@ -4244,7 +4272,11 @@ pub(crate) mod tests {
 		assert!(bc.body(blocks[1]).unwrap().is_none());
 
 		// Block 4 is inside the pruning window and still kept
-		assert!(bc.body(blocks[4]).unwrap().is_some());
+		assert_eq!(Some(vec![4.into()]), bc.body(blocks[4]).unwrap());
+		assert_eq!(
+			Some(Justifications::from(build_justification(4))),
+			bc.justifications(blocks[4]).unwrap()
+		);
 
 		// Block tree:
 		//   0 -> 1 -> 2 -> 3 -> 4 -> 5
@@ -4253,6 +4285,7 @@ pub(crate) mod tests {
 				.unwrap();
 		blocks.push(hash);
 
+		backend.pin_block(&blocks[4], 4).unwrap();
 		// Mark block 5 as finalized.
 		let mut op = backend.begin_operation().unwrap();
 		backend.begin_state_operation(&mut op, blocks[5]).unwrap();
@@ -4265,8 +4298,16 @@ pub(crate) mod tests {
 		assert!(bc.body(blocks[3]).unwrap().is_none());
 
 		// Block 4 was unpinned before pruning, it must also get pruned.
-		assert!(bc.body(blocks[4]).unwrap().is_none());
+		assert_eq!(Some(vec![4.into()]), bc.body(blocks[4]).unwrap());
+		assert_eq!(
+			Some(Justifications::from(build_justification(4))),
+			bc.justifications(blocks[4]).unwrap()
+		);
 		assert_eq!(Some(vec![5.into()]), bc.body(blocks[5]).unwrap());
+
+		backend.unpin_block(&blocks[4]);
+		assert!(bc.body(blocks[4]).unwrap().is_none());
+		assert!(bc.justifications(blocks[4]).unwrap().is_none());
 	}
 
 	#[test]
