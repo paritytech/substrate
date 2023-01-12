@@ -203,21 +203,19 @@ impl BenchmarkDef {
 				},
 				_ => (),
 			}
+			let Some(extrinsic_call) = extrinsic_call else {
+				i += 1;
+				continue;
+			};
 
-			// return parsed BenchmarkDef
-			if let Some(extrinsic_call) = extrinsic_call {
-				return Ok(BenchmarkDef {
-					params,
-					setup_stmts: Vec::from(&item_fn.block.stmts[0..i]),
-					extrinsic_call,
-					verify_stmts: Vec::from(
-						&item_fn.block.stmts[(i + 1)..item_fn.block.stmts.len()],
-					),
-					extra,
-					skip_meta,
-				})
-			}
-			i += 1;
+			return Ok(BenchmarkDef {
+				params,
+				setup_stmts: Vec::from(&item_fn.block.stmts[0..i]),
+				extrinsic_call,
+				verify_stmts: Vec::from(&item_fn.block.stmts[(i + 1)..item_fn.block.stmts.len()]),
+				extra,
+				skip_meta,
+			})
 		}
 		return Err(Error::new(
 			item_fn.block.brace_token.span,
