@@ -613,7 +613,10 @@ where
 									storage.top.insert(key, value);
 								}
 							} else {
-								for parent_storage in state.parent_storage_keys {
+								// No multiple level child state, look only first level.
+								if let Some(parent_storage) =
+									state.parent_storage_keys.into_iter().next()
+								{
 									let storage_key = PrefixedStorageKey::new_ref(&parent_storage);
 									match ChildType::from_prefixed_key(&storage_key) {
 										Some((ChildType::Default, storage_key)) => {
