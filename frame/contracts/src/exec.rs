@@ -1336,7 +1336,7 @@ where
 
 	fn append_debug_buffer(&mut self, msg: &str) -> bool {
 		if let Some(buffer) = &mut self.debug_message {
-			let err_msg = format!(
+			let err_msg = scale_info::prelude::format!(
 				"Debug message too big (size={}) for debug buffer (bound={})",
 				msg.len(),
 				DebugBufferVec::<T>::bound(),
