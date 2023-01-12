@@ -117,7 +117,7 @@ where
 				_ => true,
 			};
 
-		if skip_maintanance {
+		if skip_maintenance {
 			log::info!(target: "txpool", "skip maintain: tree_route would be too long");
 			self.force_update(event);
 			return Ok(EnactmentAction::Skip)
