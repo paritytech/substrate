@@ -54,7 +54,7 @@ mod benchmarks {
 			existential_deposit.saturating_mul((ED_MULTIPLIER - 1).into()) + 1u32.into();
 
 		#[extrinsic_call]
-		transfer(RawOrigin::Signed(caller.clone()), recipient_lookup, transfer_amount);
+		_(RawOrigin::Signed(caller.clone()), recipient_lookup, transfer_amount);
 
 		assert_eq!(Balances::<T, I>::free_balance(&caller), Zero::zero());
 		assert_eq!(Balances::<T, I>::free_balance(&recipient), transfer_amount);
@@ -101,7 +101,7 @@ mod benchmarks {
 		let transfer_amount = existential_deposit.saturating_mul(ED_MULTIPLIER.into());
 
 		#[extrinsic_call]
-		transfer_keep_alive(RawOrigin::Signed(caller.clone()), recipient_lookup, transfer_amount);
+		_(RawOrigin::Signed(caller.clone()), recipient_lookup, transfer_amount);
 
 		assert!(!Balances::<T, I>::free_balance(&caller).is_zero());
 		assert_eq!(Balances::<T, I>::free_balance(&recipient), transfer_amount);
@@ -163,7 +163,7 @@ mod benchmarks {
 			existential_deposit.saturating_mul((ED_MULTIPLIER - 1).into()) + 1u32.into();
 
 		#[extrinsic_call]
-		force_transfer(RawOrigin::Root, source_lookup, recipient_lookup, transfer_amount);
+		_(RawOrigin::Root, source_lookup, recipient_lookup, transfer_amount);
 
 		assert_eq!(Balances::<T, I>::free_balance(&source), Zero::zero());
 		assert_eq!(Balances::<T, I>::free_balance(&recipient), transfer_amount);
@@ -219,7 +219,7 @@ mod benchmarks {
 		let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&caller, balance);
 
 		#[extrinsic_call]
-		transfer_all(RawOrigin::Signed(caller.clone()), recipient_lookup, false);
+		_(RawOrigin::Signed(caller.clone()), recipient_lookup, false);
 
 		assert!(Balances::<T, I>::free_balance(&caller).is_zero());
 		assert_eq!(Balances::<T, I>::free_balance(&recipient), balance);
@@ -241,7 +241,7 @@ mod benchmarks {
 		assert!(Balances::<T, I>::free_balance(&user).is_zero());
 
 		#[extrinsic_call]
-		force_unreserve(RawOrigin::Root, user_lookup, balance);
+		_(RawOrigin::Root, user_lookup, balance);
 
 		assert!(Balances::<T, I>::reserved_balance(&user).is_zero());
 		assert_eq!(Balances::<T, I>::free_balance(&user), balance);
