@@ -2163,24 +2163,24 @@ impl<T: Config> Pallet<T> {
 	/// Returns the points to balance conversion for a specified pool.
 	///
 	/// If the pool ID does not exist, it returns an error. Used by runtime API.
-	pub fn api_points_to_balance(pool_id: u32) -> Result<BalanceOf<T>, ()> {
+	pub fn api_points_to_balance(pool_id: u32) -> BalanceOf<T> {
 		if let Some(pool) = BondedPool::<T>::get(pool_id) {
-			Ok(pool.points_to_balance(pool.points))
+			pool.points_to_balance(pool.points)
 		} else {
-			Err(())
+			Zero::zero()
 		}
 	}
 
 	/// Returns the equivalent `new_funds` balance to point conversion for a specified pool.
 	///
 	/// If the pool ID does not exist, it returns an error. Used by runtime API.
-	pub fn api_balance_to_point(pool_id: u32, new_funds: BalanceOf<T>) -> Result<BalanceOf<T>, ()> {
+	pub fn api_balance_to_points(pool_id: u32, new_funds: BalanceOf<T>) -> BalanceOf<T> {
 		if let Some(pool) = BondedPool::<T>::get(pool_id) {
 			let bonded_balance =
 				T::Staking::active_stake(&pool.bonded_account()).unwrap_or(Zero::zero());
-			Ok(Pallet::<T>::balance_to_point(bonded_balance, pool.points, new_funds))
+			Pallet::<T>::balance_to_point(bonded_balance, pool.points, new_funds)
 		} else {
-			Err(())
+			Zero::zero()
 		}
 	}
 
