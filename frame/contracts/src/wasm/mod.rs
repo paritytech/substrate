@@ -1988,6 +1988,52 @@ mod tests {
 		assert!(mock_ext.gas_meter.gas_left().ref_time() > 0);
 	}
 
+	const CODE_DEPOSIT_EVENT_DUPLICATES: &str = r#"
+(module
+	(import "seal0" "seal_deposit_event" (func $seal_deposit_event (param i32 i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func (export "call")
+		(call $seal_deposit_event
+			(i32.const 32) ;; Pointer to the start of topics buffer
+			(i32.const 129) ;; The length of the topics buffer.
+			(i32.const 8) ;; Pointer to the start of the data buffer
+			(i32.const 13) ;; Length of the buffer
+		)
+	)
+	(func (export "deploy"))
+
+	(data (i32.const 8) "\00\01\2A\00\00\00\00\00\00\00\E5\14\00")
+
+	;; Encoded Vec<TopicOf<T>>, the buffer has length of 129 bytes.
+	(data (i32.const 32) "\10"
+"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+"\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02"
+"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+"\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04")
+)
+"#;
+
+	/// Checks that the runtime allows duplicate topics.
+	#[test]
+	fn deposit_event_duplicates_allowed() {
+		let mut mock_ext = MockExt::default();
+		assert_ok!(execute(CODE_DEPOSIT_EVENT_DUPLICATES, vec![], &mut mock_ext,));
+
+		assert_eq!(
+			mock_ext.events,
+			vec![(
+				vec![
+					H256::repeat_byte(0x01),
+					H256::repeat_byte(0x02),
+					H256::repeat_byte(0x01),
+					H256::repeat_byte(0x04)
+				],
+				vec![0x00, 0x01, 0x2a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe5, 0x14, 0x00]
+			)]
+		);
+	}
+
 	const CODE_DEPOSIT_EVENT_MAX_TOPICS: &str = r#"
 (module
 	(import "seal0" "seal_deposit_event" (func $seal_deposit_event (param i32 i32 i32 i32)))
@@ -2022,44 +2068,6 @@ mod tests {
 			execute(CODE_DEPOSIT_EVENT_MAX_TOPICS, vec![], MockExt::default(),),
 			Err(ExecError {
 				error: Error::<Test>::TooManyTopics.into(),
-				origin: ErrorOrigin::Caller,
-			})
-		);
-	}
-
-	const CODE_DEPOSIT_EVENT_DUPLICATES: &str = r#"
-(module
-	(import "seal0" "seal_deposit_event" (func $seal_deposit_event (param i32 i32 i32 i32)))
-	(import "env" "memory" (memory 1 1))
-
-	(func (export "call")
-		(call $seal_deposit_event
-			(i32.const 32) ;; Pointer to the start of topics buffer
-			(i32.const 129) ;; The length of the topics buffer.
-			(i32.const 8) ;; Pointer to the start of the data buffer
-			(i32.const 13) ;; Length of the buffer
-		)
-	)
-	(func (export "deploy"))
-
-	(data (i32.const 8) "\00\01\2A\00\00\00\00\00\00\00\E5\14\00")
-
-	;; Encoded Vec<TopicOf<T>>, the buffer has length of 129 bytes.
-	(data (i32.const 32) "\10"
-"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
-"\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02"
-"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
-"\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04")
-)
-"#;
-
-	/// Checks that the runtime traps if there are duplicates.
-	#[test]
-	fn deposit_event_duplicates() {
-		assert_eq!(
-			execute(CODE_DEPOSIT_EVENT_DUPLICATES, vec![], MockExt::default(),),
-			Err(ExecError {
-				error: Error::<Test>::DuplicateTopics.into(),
 				origin: ErrorOrigin::Caller,
 			})
 		);

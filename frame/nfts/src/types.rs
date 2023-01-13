@@ -43,6 +43,8 @@ pub(super) type ItemDepositOf<T, I> =
 	ItemDeposit<DepositBalanceOf<T, I>, <T as SystemConfig>::AccountId>;
 pub(super) type AttributeDepositOf<T, I> =
 	AttributeDeposit<DepositBalanceOf<T, I>, <T as SystemConfig>::AccountId>;
+pub(super) type ItemMetadataDepositOf<T, I> =
+	ItemMetadataDeposit<DepositBalanceOf<T, I>, <T as SystemConfig>::AccountId>;
 pub(super) type ItemDetailsFor<T, I> =
 	ItemDetails<<T as SystemConfig>::AccountId, ItemDepositOf<T, I>, ApprovalsOf<T, I>>;
 pub(super) type BalanceOf<T, I = ()> =
@@ -137,12 +139,12 @@ pub struct ItemDeposit<DepositBalance, AccountId> {
 /// Information about the collection's metadata.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(StringLimit))]
-#[codec(mel_bound(DepositBalance: MaxEncodedLen))]
-pub struct CollectionMetadata<DepositBalance, StringLimit: Get<u32>> {
+#[codec(mel_bound(Deposit: MaxEncodedLen))]
+pub struct CollectionMetadata<Deposit, StringLimit: Get<u32>> {
 	/// The balance deposited for this metadata.
 	///
 	/// This pays for the data stored in this struct.
-	pub(super) deposit: DepositBalance,
+	pub(super) deposit: Deposit,
 	/// General information concerning this collection. Limited in length by `StringLimit`. This
 	/// will generally be either a JSON dump or the hash of some JSON which can be found on a
 	/// hash-addressable global publication system such as IPFS.
@@ -152,12 +154,11 @@ pub struct CollectionMetadata<DepositBalance, StringLimit: Get<u32>> {
 /// Information about the item's metadata.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(StringLimit))]
-#[codec(mel_bound(DepositBalance: MaxEncodedLen))]
-pub struct ItemMetadata<DepositBalance, StringLimit: Get<u32>> {
+pub struct ItemMetadata<Deposit, StringLimit: Get<u32>> {
 	/// The balance deposited for this metadata.
 	///
 	/// This pays for the data stored in this struct.
-	pub(super) deposit: DepositBalance,
+	pub(super) deposit: Deposit,
 	/// General information concerning this item. Limited in length by `StringLimit`. This will
 	/// generally be either a JSON dump or the hash of some JSON which can be found on a
 	/// hash-addressable global publication system such as IPFS.
@@ -194,6 +195,15 @@ pub struct PendingSwap<CollectionId, ItemId, ItemPriceWithDirection, Deadline> {
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct AttributeDeposit<DepositBalance, AccountId> {
 	/// A depositor account.
+	pub(super) account: Option<AccountId>,
+	/// An amount that gets reserved.
+	pub(super) amount: DepositBalance,
+}
+
+/// Information about the reserved item's metadata deposit.
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub struct ItemMetadataDeposit<DepositBalance, AccountId> {
+	/// A depositor account, None means the deposit is collection's owner.
 	pub(super) account: Option<AccountId>,
 	/// An amount that gets reserved.
 	pub(super) amount: DepositBalance,

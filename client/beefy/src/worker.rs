@@ -498,7 +498,7 @@ where
 						warn!(target: "beefy", "🥩 Buffer vote dropped for round: {:?}", block_num)
 					}
 				} else {
-					error!(target: "beefy", "🥩 Buffer justification dropped for round: {:?}.", block_num);
+					warn!(target: "beefy", "🥩 Buffer vote dropped for round: {:?}.", block_num);
 				}
 			},
 			RoundAction::Drop => (),
@@ -528,7 +528,7 @@ where
 				if self.pending_justifications.len() < MAX_BUFFERED_JUSTIFICATIONS {
 					self.pending_justifications.entry(block_num).or_insert(justification);
 				} else {
-					error!(target: "beefy", "🥩 Buffer justification dropped for round: {:?}.", block_num);
+					warn!(target: "beefy", "🥩 Buffer justification dropped for round: {:?}.", block_num);
 				}
 			},
 			RoundAction::Drop => (),
