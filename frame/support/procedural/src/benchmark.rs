@@ -172,6 +172,13 @@ impl BenchmarkDef {
 			let Ok(start) = args.start.base10_parse::<u32>() else { return invalid_param() };
 			let Ok(end) = args.end.base10_parse::<u32>() else { return invalid_param() };
 
+			if end < start {
+				return Err(Error::new(
+					span,
+					"The start of a `ParamRange` must be less than or equal to the end",
+				))
+			}
+
 			params.push(ParamDef { name, typ: typ.clone(), start, end });
 		}
 
