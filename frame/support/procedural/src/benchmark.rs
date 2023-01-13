@@ -18,6 +18,7 @@
 //! Home of the parsing and expansion code for the new pallet benchmarking syntax
 
 use derive_syn_parse::Parse;
+use frame_support_procedural_tools::generate_crate_access_2018;
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned, ToTokens};
@@ -293,7 +294,10 @@ pub fn benchmarks(attrs: TokenStream, tokens: TokenStream, instance: bool) -> To
 		true => quote!(T: Config<I>, I: 'static),
 	};
 
-	let krate = quote!(::frame_benchmarking);
+	let krate = match generate_crate_access_2018("frame_benchmarking") {
+		Ok(ident) => ident,
+		Err(err) => return err.to_compile_error().into(),
+	};
 	let support = quote!(#krate::frame_support);
 
 	// benchmark name variables
@@ -581,8 +585,11 @@ fn expand_benchmark(
 	where_clause: TokenStream2,
 ) -> TokenStream2 {
 	// set up variables needed during quoting
-	let krate = quote!(::frame_benchmarking);
-	let home = quote!(::frame_support::benchmarking);
+	let krate = match generate_crate_access_2018("frame_benchmarking") {
+		Ok(ident) => ident,
+		Err(err) => return err.to_compile_error().into(),
+	};
+	let home = quote!(#krate::frame_support::benchmarking);
 	let codec = quote!(#krate::frame_support::codec);
 	let traits = quote!(#krate::frame_support::traits);
 	let setup_stmts = benchmark_def.setup_stmts;
