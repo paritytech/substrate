@@ -55,17 +55,20 @@ pub fn build_transport(
 	// Build the base layer of the transport.
 	let transport = if !memory_only {
 		let tcp_config = tcp::Config::new().nodelay(true);
-		let desktop_trans = tcp::tokio::Transport::new(tcp_config.clone());
-		let desktop_trans = websocket::WsConfig::new(desktop_trans)
+		let tcp_trans = tcp::tokio::Transport::new(tcp_config.clone());
+		let desktop_trans = websocket::WsConfig::new(tcp_trans)
 			.or_transport(tcp::tokio::Transport::new(tcp_config.clone()));
 		let dns_init = dns::TokioDnsConfig::system(desktop_trans);
 		EitherTransport::Left(if let Ok(dns) = dns_init {
-			EitherTransport::Left(dns)
+			// Secure Websocket transport needs unresolved addresses, so we join DNS transport with
+			// yet another instance of Websocket transport.
+			let tcp_trans = tcp::tokio::Transport::new(tcp_config.clone());
+			EitherTransport::Left(dns.or_transport(websocket::WsConfig::new(tcp_trans)))
 		} else {
-			let desktop_trans = tcp::tokio::Transport::new(tcp_config.clone());
-			let desktop_trans = websocket::WsConfig::new(desktop_trans)
+			let tcp_trans = tcp::tokio::Transport::new(tcp_config.clone());
+			let desktop_trans = websocket::WsConfig::new(tcp_trans)
 				.or_transport(tcp::tokio::Transport::new(tcp_config));
-			EitherTransport::Right(desktop_trans.map_err(dns::DnsErr::Transport))
+			EitherTransport::Right(desktop_trans)
 		})
 	} else {
 		EitherTransport::Right(OptionalTransport::some(
