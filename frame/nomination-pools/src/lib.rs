@@ -735,7 +735,7 @@ impl<T: Config> Commission<T> {
 		ensure!(!&self.less_restrictive(&change_rate), Error::<T>::CommissionChangeRateNotAllowed);
 
 		if self.change_rate.is_none() {
-			self.throttle_from = Some(<frame_system::Pallet<T>>::block_number());
+			self.register_update();
 		}
 		self.change_rate = Some(change_rate);
 		Ok(())
