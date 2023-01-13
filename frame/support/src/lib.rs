@@ -2914,7 +2914,7 @@ pub mod pallet_macros {
 /// including the `frame_benchmarking::impl_benchmark_test_suite` macro.
 ///
 /// An example is shown below (taken from the `message-queue` pallet's `benchmarking` module):
-/// ```
+/// ```ignore
 /// #[benchmarks]
 /// mod benchmarks {
 /// 	use super::*;
