@@ -124,8 +124,18 @@ impl syn::parse::Parse for BenchmarkAttrs {
 /// Represents the parsed extrinsic call for a benchmark
 #[derive(Clone)]
 enum BenchmarkCallDef {
-	ExtrinsicCall { origin: Expr, expr_call: ExprCall }, // #[extrinsic_call]
-	Block(ExprBlock),                                    // #[block]
+	ExtrinsicCall { origin: Expr, expr_call: ExprCall, attr_span: Span }, // #[extrinsic_call]
+	Block { block: ExprBlock, attr_span: Span },                          // #[block]
+}
+
+impl BenchmarkCallDef {
+	/// Returns the `span()` for attribute
+	fn attr_span(&self) -> Span {
+		match self {
+			BenchmarkCallDef::ExtrinsicCall { origin: _, expr_call: _, attr_span } => *attr_span,
+			BenchmarkCallDef::Block { block: _, attr_span } => *attr_span,
+		}
+	}
 }
 
 /// Represents a parsed `#[benchmark]` or `#[instance_banchmark]` item.
@@ -166,7 +176,7 @@ impl BenchmarkDef {
 		}
 
 		// #[extrinsic_call] / #[block] handling
-		let maybe_call_def = item_fn.block.stmts.iter().enumerate().find_map(|(i, child)| {
+		let call_defs = item_fn.block.stmts.iter().enumerate().filter_map(|(i, child)| {
 			match child {
 				Stmt::Semi(Expr::Call(expr_call), _semi) => { // #[extrinsic_call] case
 					expr_call.attrs.iter().enumerate().find_map(|(k, attr)| {
@@ -183,7 +193,7 @@ impl BenchmarkDef {
 							None => return Some(Err(Error::new(expr_call.args.span(), "Single-item extrinsic calls must specify their origin as the first argument."))),
 						};
 
-						Some(Ok((i, BenchmarkCallDef::ExtrinsicCall { origin, expr_call })))
+						Some(Ok((i, BenchmarkCallDef::ExtrinsicCall { origin, expr_call, attr_span: attr.span() })))
 					})
 				},
 				Stmt::Expr(Expr::Block(block)) => { // #[block] case
@@ -195,17 +205,22 @@ impl BenchmarkDef {
 						// consume #[block] tokens
 						block.attrs.remove(k);
 
-						Some(Ok((i, BenchmarkCallDef::Block(block))))
+						Some(Ok((i, BenchmarkCallDef::Block { block, attr_span: attr.span() })))
 					})
 				},
 				_ => None
 			}
-		});
-		let Some((i, call_def)) = maybe_call_def.transpose()? else {
-			return Err(Error::new(
+		}).collect::<Result<Vec<_>>>()?;
+		let (i, call_def) = match &call_defs[..] {
+			[(i, call_def)] => (*i, call_def.clone()), // = 1
+			[] => return Err(Error::new( // = 0
 				item_fn.block.brace_token.span,
-				"No valid #[extrinsic_call] or #[block] annotation could be found in benchmark function body.",
-			))
+				"No valid #[extrinsic_call] or #[block] annotation could be found in benchmark function body."
+			)),
+			_ => return Err(Error::new( // > 1
+				call_defs[1].1.attr_span(),
+				"Only one #[extrinsic_call] or #[block] attribute is allowed per benchmark."
+			)),
 		};
 
 		Ok(BenchmarkDef {
@@ -614,7 +629,7 @@ fn expand_benchmark(
 	};
 
 	let (pre_call, post_call) = match benchmark_def.call_def {
-		BenchmarkCallDef::ExtrinsicCall { origin, expr_call } => {
+		BenchmarkCallDef::ExtrinsicCall { origin, expr_call, attr_span: _ } => {
 			let mut expr_call = expr_call.clone();
 
 			// remove first arg from expr_call
@@ -676,7 +691,7 @@ fn expand_benchmark(
 				},
 			)
 		},
-		BenchmarkCallDef::Block(block) => (quote!(), quote!(#block)),
+		BenchmarkCallDef::Block { block, attr_span: _ } => (quote!(), quote!(#block)),
 	};
 
 	// generate final quoted tokens
