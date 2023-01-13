@@ -23,6 +23,10 @@ use sc_transaction_pool_api::ChainEvent;
 use sp_blockchain::TreeRoute;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
+/// The threshold since the last update where we will skip any maintenance for blocks.
+/// 
+/// This includes tracking re-orgs and sending out certain notifications. In general this shouldn't happen
+/// and may only happen when the node is doing a full sync.
 const SKIP_MAINTENANCE_THRESHOLD: u16 = 20;
 
 /// Helper struct for keeping track of the current state of processed new best
