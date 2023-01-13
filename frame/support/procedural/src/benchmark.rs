@@ -166,7 +166,7 @@ impl BenchmarkDef {
 		}
 
 		// #[extrinsic_call] / #[block] handling
-		let (i, call_def) = match item_fn.block.stmts.iter().enumerate().find_map(|(i, child)| {
+		let maybe_call_def = item_fn.block.stmts.iter().enumerate().find_map(|(i, child)| {
 			match child {
 				Stmt::Semi(Expr::Call(expr_call), _semi) => { // #[extrinsic_call] case
 					(&expr_call.attrs).iter().enumerate().find_map(|(k, attr)| {
@@ -200,15 +200,12 @@ impl BenchmarkDef {
 				},
 				_ => None
 			}
-		}) {
-			Some(Ok((i, call_def))) => (i, call_def),
-			Some(Err(err)) => return Err(err),
-			_ => {
-				return Err(Error::new(
-					item_fn.block.brace_token.span,
-					"No valid #[extrinsic_call] or #[block] annotation could be found in benchmark function body.",
-				))
-			}
+		});
+		let Some((i, call_def)) = maybe_call_def.transpose()? else {
+			return Err(Error::new(
+				item_fn.block.brace_token.span,
+				"No valid #[extrinsic_call] or #[block] annotation could be found in benchmark function body.",
+			))
 		};
 
 		Ok(BenchmarkDef {
