@@ -885,7 +885,7 @@ mod on_idle {
 				vec![
 					Event::BatchChecked { eras: vec![3, 2] },
 					Event::Slashed { stash: exposed, amount: Deposit::get() },
-					Event::BatchFinished { size: 1 }
+					Event::BatchFinished { size: 0 }
 				]
 			);
 		});
