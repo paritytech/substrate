@@ -197,7 +197,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 			config: &config,
 			client: client.clone(),
 			transaction_pool: transaction_pool.clone(),
-			spawn_handle: task_manager.spawn_handle(),
+			spawn_handle: Box::new(task_manager.spawn_essential_handle()),
 			import_queue,
 			block_announce_validator_builder: None,
 			warp_sync_params: Some(WarpSyncParams::WithProvider(warp_sync)),

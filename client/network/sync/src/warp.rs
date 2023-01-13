@@ -23,7 +23,7 @@ use crate::{
 	schema::v1::{StateRequest, StateResponse},
 	state::{ImportResult, StateSync},
 };
-use futures::FutureExt;
+use futures::{executor::block_on, FutureExt};
 use log::error;
 use sc_client_api::ProofProvider;
 use sc_network_common::sync::{
@@ -112,7 +112,13 @@ where
 			if let Poll::Ready(Ok(target_block)) = target_block.poll_unpin(cx) {
 				Some(Phase::TargetBlock(target_block))
 			} else if let Poll::Ready(Err(e)) = target_block.poll_unpin(cx) {
-				error!(target: "sync", "Failed to get target block. Error: {:?}",e);
+				block_on(async move {
+					error!(target: "sync", "Failed to get target block. Error: {:?}",e);
+					// This `return` might seem unnecessary, but we don't want to make it look like
+					// everything is working as normal even though the target block failed to be
+					// retrieved
+					return
+				});
 				None
 			} else {
 				None
