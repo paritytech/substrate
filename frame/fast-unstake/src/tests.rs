@@ -1213,21 +1213,19 @@ mod batched {
 	}
 }
 
-// #[test]
-// fn kusama_estimate() {
-// 	use crate::WeightInfo;
-// 	let block_time = frame_support::weights::Weight::from_ref_time(frame_support::weights::constants::WEIGHT_REF_TIME_PER_SECOND * 2).ref_time() as f32;
-// 	let on_idle = crate::weights::SubstrateWeight::<T>::on_idle_check(1 * 1000, 1).ref_time() as f32;
-// 	dbg!(block_time, on_idle, on_idle / block_time);
-// 	panic!();
-// }
+#[test]
+fn kusama_estimate() {
+	use crate::WeightInfo;
+	let block_time = frame_support::weights::Weight::from_ref_time(frame_support::weights::constants::WEIGHT_REF_TIME_PER_SECOND * 2).ref_time() as f32;
+	let on_idle = crate::weights::SubstrateWeight::<T>::on_idle_check(1 * 1000, 64).ref_time() as f32;
+	dbg!(block_time, on_idle, on_idle / block_time);
+}
 
 
-// #[test]
-// fn polkadot_estimate() {
-// 	use crate::WeightInfo;
-// 	let block_time = frame_support::weights::Weight::from_ref_time(frame_support::weights::constants::WEIGHT_REF_TIME_PER_SECOND * 2).ref_time() as f32;
-// 	let on_idle = crate::weights::SubstrateWeight::<T>::on_idle_check(1 * 300, 1).ref_time() as f32;
-// 	dbg!(block_time, on_idle, on_idle / block_time);
-// 	panic!();
-// }
+#[test]
+fn polkadot_estimate() {
+	use crate::WeightInfo;
+	let block_time = frame_support::weights::Weight::from_ref_time(frame_support::weights::constants::WEIGHT_REF_TIME_PER_SECOND * 2).ref_time() as f32;
+	let on_idle = crate::weights::SubstrateWeight::<T>::on_idle_check(1 * 300, 64).ref_time() as f32;
+	dbg!(block_time, on_idle, on_idle / block_time);
+}
