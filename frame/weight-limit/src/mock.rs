@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use super::*;
-use crate as pallet_pov_limit;
+use crate as pallet_weight_limit;
 
 use frame_support::traits::{ConstU32, ConstU64};
 use sp_core::H256;
@@ -35,7 +35,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		PovLimit: pallet_pov_limit::{Pallet, Event},
+		WeightLimit: pallet_weight_limit::{Pallet, Event},
 	}
 );
 

@@ -15,10 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Pov Limit Pallet
+//! # Weight Limit Pallet
 //!
-//! Pallet that controls compute usage and PoV size usage. The parameters for
-//! the usage are configured by root and are stored as `StorageValue`s.
+//! Pallet that consumes `ref_time` and `proof_size` of a block. Based on the
+//! `Compute` and `Storage` parameters the pallet consumes the adequate amount
+//! of weight.
 //!
 //! NOTE: This is only meant to be used for testing.
 
@@ -98,7 +99,9 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
+		/// The initial percentage of the `ref_time` to waste.
 		pub compute: Perbill,
+		/// The initial percentage of the `proof_size` to consume.
 		pub storage: Perbill,
 	}
 
@@ -224,7 +227,7 @@ pub mod pallet {
 	impl<T: Config> PovWaster for Pallet<T> {
 		fn waste_proof_size(counter: u32) -> Weight {
 			if TrashData::<T>::get(counter).is_some() {
-				T::WeightInfo::waste_proof_size_some(1) 
+				T::WeightInfo::waste_proof_size_some(1)
 			} else {
 				T::WeightInfo::waste_proof_size_none(1)
 			}

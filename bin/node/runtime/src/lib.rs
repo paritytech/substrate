@@ -362,11 +362,11 @@ impl pallet_scheduler::Config for Runtime {
 	type Preimages = Preimage;
 }
 
-impl pallet_pov_limit::Config for Runtime {
+impl pallet_weight_limit::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type RefTimeWaster = pallet_pov_limit::Pallet<Self>;
-	type PovWaster = pallet_pov_limit::Pallet<Self>;
-	type WeightInfo = pallet_pov_limit::weights::SubstrateWeight<Runtime>;
+	type RefTimeWaster = pallet_weight_limit::Pallet<Self>;
+	type PovWaster = pallet_weight_limit::Pallet<Self>;
+	type WeightInfo = pallet_weight_limit::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
@@ -1738,7 +1738,7 @@ construct_runtime!(
 		Recovery: pallet_recovery,
 		Vesting: pallet_vesting,
 		Scheduler: pallet_scheduler,
-		PovLimit: pallet_pov_limit,
+		WeightLimit: pallet_weight_limit,
 		Preimage: pallet_preimage,
 		Proxy: pallet_proxy,
 		Multisig: pallet_multisig,
@@ -1872,7 +1872,7 @@ mod benches {
 		[pallet_recovery, Recovery]
 		[pallet_remark, Remark]
 		[pallet_scheduler, Scheduler]
-		[pallet_pov_limit, PovLimit]
+		[pallet_weight_limit, WeightLimit]
 		[pallet_session, SessionBench::<Runtime>]
 		[pallet_staking, Staking]
 		[pallet_state_trie_migration, StateTrieMigration]
