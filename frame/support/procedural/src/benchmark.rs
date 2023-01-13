@@ -233,7 +233,7 @@ pub fn benchmarks(attrs: TokenStream, tokens: TokenStream, instance: bool) -> To
 	let mut benchmark_names: Vec<Ident> = Vec::new();
 	let mut extra_benchmark_names: Vec<Ident> = Vec::new();
 	let mut skip_meta_benchmark_names: Vec<Ident> = Vec::new();
-	let Some(mut content) = module.content else {
+	let Some((_brace, mut content)) = module.content else {
 		// this will compile error already because attributes attached to empty modules are unstable
 		// but including error anyway to make this future-proof
 		return quote_spanned!(mod_span=> "Module cannot be empty!".to_compile_error()).into()
