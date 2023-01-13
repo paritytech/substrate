@@ -36,6 +36,8 @@ pub mod weights;
 pub use pallet::*;
 pub use weights::WeightInfo;
 
+const LOG_TARGET: &str = "runtime::membership";
+
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]

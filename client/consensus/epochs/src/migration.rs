@@ -64,7 +64,7 @@ where
 			header
 		});
 
-		EpochChanges { inner, epochs, gap: None }
+		EpochChanges { inner, epochs }
 	}
 }
 
@@ -75,6 +75,6 @@ where
 {
 	/// Migrate the type into current epoch changes definition.
 	pub fn migrate(self) -> EpochChanges<Hash, Number, E> {
-		EpochChanges { inner: self.inner, epochs: self.epochs, gap: None }
+		EpochChanges { inner: self.inner, epochs: self.epochs }
 	}
 }
