@@ -342,9 +342,9 @@ pub mod pallet {
 
 			// determine the number of eras to check. This is based on both `ErasToCheckPerBlock`
 			// and `remaining_weight` passed on to us from the runtime executive.
-			let max_weight = |v, u, b| {
+			let max_weight = |v, u: u32, b| {
 				// NOTE: this potentially under-counts by up to `BatchSize` reads from the queue.
-				<T as Config>::WeightInfo::on_idle_check(u, v, b)
+				<T as Config>::WeightInfo::on_idle_check(u.saturating_mul(v), b)
 					.max(<T as Config>::WeightInfo::on_idle_unstake(b))
 					.saturating_add(T::DbWeight::get().reads(T::BatchSize::get() as u64))
 			};
@@ -391,11 +391,11 @@ pub mod pallet {
 
 			log!(
 				debug,
-				"checking {:?} stashes, eras_to_check_per_block = {:?}, remaining_weight = {:?}, checked {:?}",
+				"checking {:?} stashes, eras_to_check_per_block = {:?}, checked {:?}, remaining_weight = {:?}",
 				stashes.len(),
 				eras_to_check_per_block,
+				checked,
 				remaining_weight,
-				checked
 			);
 
 			// the range that we're allowed to check in this round.
@@ -508,8 +508,7 @@ pub mod pallet {
 				}
 
 				<T as Config>::WeightInfo::on_idle_check(
-					eras_checked.len() as u32,
-					validator_count,
+					(eras_checked.len() as u32).saturating_mul(validator_count),
 					pre_length as u32,
 				)
 				.saturating_add(unaccounted_weight)

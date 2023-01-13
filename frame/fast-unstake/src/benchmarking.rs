@@ -132,18 +132,21 @@ benchmarks! {
 
 	// on_idle, when we check some number of eras and when we need to build the queue.
 	on_idle_check {
-		// both of these can be fetched from `T::Staking`, but the values might be unnecessarily
-		// large and make the benchmarks too slow. We know the complexity is linear, a small range
-		// should be enough.
-		let u in 1 .. MAX_BONDING_DURATION.min(T::Staking::bonding_duration());
-		let v in 1 .. MAX_VALIDATORS;
+		let x in (MAX_BONDING_DURATION * 1) .. (MAX_BONDING_DURATION * MAX_VALIDATORS);
 		let b in 1 .. T::BatchSize::get();
 
-		ErasToCheckPerBlock::<T>::put(1);
-		T::Staking::set_current_era(u + 1);
+		// both of these can be fetched from `T::Staking`, but the values might be unnecessarily
+		// large and make the benchmarks too slow. We know the complexity is linear, a small range
+		// should be enough. Also, we use the multiplied version because this helps the benchmarking
+		// tool establish the fact that we have a total of `uv` reads in total.
+		let u = (x / MAX_BONDING_DURATION).min(T::Staking::bonding_duration());
+		let v = x / u;
 
-		// setup staking with v validators and u eras of data (0..=u)
-		setup_staking::<T>(v, u + 1);
+		ErasToCheckPerBlock::<T>::put(u);
+		T::Staking::set_current_era(u);
+
+		// setup staking with v validators and u eras of data (0..=u+1)
+		setup_staking::<T>(v, u);
 
 		let stashes = create_unexposed_batch::<T>().into_iter().take(b as usize).map(|s| {
 			assert_ok!(FastUnstake::<T>::register_fast_unstake(
@@ -155,10 +158,7 @@ benchmarks! {
 		// no one is queued thus far.
 		assert_eq!(Head::<T>::get(), None);
 
-		// run for 1 era, this helps us bring
-		on_idle_full_block::<T>();
-		// then set for all the leftover `u` eras.
-		ErasToCheckPerBlock::<T>::put(u);
+		Head::<T>::put(UnstakeRequest { stashes: stashes.clone().try_into().unwrap(), checked: Default::default() });
 
 		assert!(Head::<T>::get().is_some());
 	}
@@ -166,7 +166,7 @@ benchmarks! {
 		on_idle_full_block::<T>();
 	}
 	verify {
-		let checked = (1..=u+1).rev().collect::<Vec<EraIndex>>();
+		let checked = (1..=u).rev().collect::<Vec<EraIndex>>();
 		let request = Head::<T>::get().unwrap();
 		assert_eq!(checked, request.checked.into_inner());
 		assert!(matches!(
