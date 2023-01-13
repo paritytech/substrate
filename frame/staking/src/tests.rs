@@ -5054,8 +5054,8 @@ fn min_commission_works() {
 
 #[test]
 #[ignore]
-// TODO: This test should go away as we've decided that we don't cater for max_nominations decrease.
-// If this ever happens it should be accompanied by a migration that fixes the storage.
+// TODO: We can't chill un-decodable nominators as we need to take into account every validator they
+// were backing.
 fn change_of_max_nominations() {
 	use frame_election_provider_support::ElectionDataProvider;
 	ExtBuilder::default()
@@ -5143,8 +5143,7 @@ fn change_of_max_nominations() {
 			// or they can be chilled by any account.
 			assert!(Nominators::<Test>::contains_key(101));
 			assert!(Nominators::<Test>::get(101).is_none());
-			// TODO: This test now fails, because we don't want to be checking for un-decodables
-			// anymore as previously discussed. Shall we remove it?
+
 			assert_ok!(Staking::chill_other(RuntimeOrigin::signed(70), 100));
 			assert!(!Nominators::<Test>::contains_key(101));
 			assert!(Nominators::<Test>::get(101).is_none());

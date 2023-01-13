@@ -1730,6 +1730,8 @@ pub mod pallet {
 			//
 			// Otherwise, if caller is the same as the controller, this is just like `chill`.
 
+			// TODO: This no longer works, we need nominations to be decodable, because we pass
+			// nominations to EventHandler for processing.
 			if Nominators::<T>::contains_key(&stash) && Nominators::<T>::get(&stash).is_none() {
 				Self::chill_stash(&stash);
 				return Ok(())
