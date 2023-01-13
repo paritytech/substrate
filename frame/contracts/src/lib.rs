@@ -273,6 +273,9 @@ pub mod pallet {
 		/// The allowed depth is `CallStack::size() + 1`.
 		/// Therefore a size of `0` means that a contract cannot use call or instantiate.
 		/// In other words only the origin called "root contract" is allowed to execute then.
+		///
+		/// This setting along with [`MaxCodeLen`](#associatedtype.MaxCodeLen) directly affects
+		/// memory usage of your runtime.
 		type CallStack: smallvec::Array<Item = Frame<Self>>;
 
 		/// The maximum number of contracts that can be pending for deletion.
@@ -324,6 +327,10 @@ pub mod pallet {
 		/// The maximum length of a contract code in bytes. This limit applies to the instrumented
 		/// version of the code. Therefore `instantiate_with_code` can fail even when supplying
 		/// a wasm binary below this maximum size.
+		///
+		/// The value should be chosen carefully taking into the account the overall memory limit
+		/// your runtime has, as well as the [maximum allowed callstack
+		/// depth](#associatedtype.CallStack). Look into the `integrity_test()` for some insights.
 		#[pallet::constant]
 		type MaxCodeLen: Get<u32>;
 
