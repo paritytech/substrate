@@ -372,7 +372,7 @@ pub fn testnet_genesis(
 			min_join_bond: 1 * DOLLARS,
 			..Default::default()
 		},
-		weight_limit: GluttonConfig {
+		glutton: GluttonConfig {
 			compute: Perbill::from_percent(100),
 			storage: Perbill::from_percent(100),
 		},

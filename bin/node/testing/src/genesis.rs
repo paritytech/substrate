@@ -94,7 +94,7 @@ pub fn config_endowed(code: Option<&[u8]>, extra_endowed: Vec<AccountId>) -> Gen
 		alliance: Default::default(),
 		alliance_motion: Default::default(),
 		nomination_pools: Default::default(),
-		weight_limit: GluttonConfig {
+		glutton: GluttonConfig {
 			compute: Perbill::from_percent(100),
 			storage: Perbill::from_percent(100),
 		},

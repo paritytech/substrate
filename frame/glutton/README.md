@@ -1,4 +1,4 @@
-# Weight Limit Pallet
+# Glutton Pallet
 
 Pallet that consumes `ref_time` and `proof_size` of a block. Based on the
 `Compute` and `Storage` parameters the pallet consumes the adequate amount
