@@ -709,7 +709,7 @@ where
 		let max_block_weight = T::BlockWeights::get().max_block;
 		let max_block_length = *T::BlockLength::get().max.get(info.class) as u64;
 
-		// FAIL-CI TODO: Take into account all dimensions of weight
+		// TODO: Take into account all dimensions of weight
 		let max_block_weight = max_block_weight.ref_time();
 		let info_weight = info.weight.ref_time();
 
