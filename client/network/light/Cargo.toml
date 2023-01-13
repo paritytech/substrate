@@ -21,7 +21,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0", features = [
     "derive",
 ] }
 futures = "0.3.21"
-libp2p = "0.49.0"
+libp2p = "0.50.0"
 log = "0.4.16"
 prost = "0.11"
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }

@@ -20,6 +20,7 @@
 
 use super::*;
 use assert_matches::assert_matches;
+use async_trait::async_trait;
 use environment::HasVoted;
 use futures_timer::Delay;
 use parking_lot::{Mutex, RwLock};
@@ -33,8 +34,7 @@ use sc_network_test::{
 	PeersFullClient, TestClient, TestNetFactory,
 };
 use sp_api::{ApiRef, ProvideRuntimeApi};
-use sp_blockchain::Result;
-use sp_consensus::BlockOrigin;
+use sp_consensus::{BlockOrigin, Error as ConsensusError, SelectChain};
 use sp_core::H256;
 use sp_finality_grandpa::{
 	AuthorityList, EquivocationProof, GrandpaApi, OpaqueKeyOwnershipProof, GRANDPA_ENGINE_ID,
@@ -200,8 +200,47 @@ sp_api::mock_impl_runtime_apis! {
 }
 
 impl GenesisAuthoritySetProvider<Block> for TestApi {
-	fn get(&self) -> Result<AuthorityList> {
+	fn get(&self) -> sp_blockchain::Result<AuthorityList> {
 		Ok(self.genesis_authorities.clone())
+	}
+}
+
+/// A mock `SelectChain` that allows the user to set the return values for each
+/// method. After the `SelectChain` methods are called the pending value is
+/// discarded and another call to set new values must be performed.
+#[derive(Clone, Default)]
+struct MockSelectChain {
+	leaves: Arc<Mutex<Option<Vec<Hash>>>>,
+	best_chain: Arc<Mutex<Option<<Block as BlockT>::Header>>>,
+	finality_target: Arc<Mutex<Option<Hash>>>,
+}
+
+impl MockSelectChain {
+	fn set_best_chain(&self, best: <Block as BlockT>::Header) {
+		*self.best_chain.lock() = Some(best);
+	}
+
+	fn set_finality_target(&self, target: Hash) {
+		*self.finality_target.lock() = Some(target);
+	}
+}
+
+#[async_trait]
+impl SelectChain<Block> for MockSelectChain {
+	async fn leaves(&self) -> Result<Vec<Hash>, ConsensusError> {
+		Ok(self.leaves.lock().take().unwrap())
+	}
+
+	async fn best_chain(&self) -> Result<<Block as BlockT>::Header, ConsensusError> {
+		Ok(self.best_chain.lock().take().unwrap())
+	}
+
+	async fn finality_target(
+		&self,
+		_target_hash: Hash,
+		_maybe_max_number: Option<NumberFor<Block>>,
+	) -> Result<Hash, ConsensusError> {
+		Ok(self.finality_target.lock().take().unwrap())
 	}
 }
 
@@ -627,14 +666,18 @@ async fn sync_justifications_on_change_blocks() {
 	net.peer(0).push_blocks(20, false);
 
 	// at block 21 we do add a transition which is instant
-	let hashof21 = net.peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
-		let mut block = builder.build().unwrap().block;
-		add_scheduled_change(
-			&mut block,
-			ScheduledChange { next_authorities: make_ids(peers_b), delay: 0 },
-		);
-		block
-	});
+	let hashof21 = net
+		.peer(0)
+		.generate_blocks(1, BlockOrigin::File, |builder| {
+			let mut block = builder.build().unwrap().block;
+			add_scheduled_change(
+				&mut block,
+				ScheduledChange { next_authorities: make_ids(peers_b), delay: 0 },
+			);
+			block
+		})
+		.pop()
+		.unwrap();
 
 	// add more blocks on top of it (until we have 25)
 	net.peer(0).push_blocks(4, false);
@@ -1287,21 +1330,16 @@ async fn voter_catches_up_to_latest_round_when_behind() {
 	future::select(test, drive_to_completion).await;
 }
 
-type TestEnvironment<N, VR> = Environment<
-	substrate_test_runtime_client::Backend,
-	Block,
-	TestClient,
-	N,
-	LongestChain<substrate_test_runtime_client::Backend, Block>,
-	VR,
->;
+type TestEnvironment<N, SC, VR> =
+	Environment<substrate_test_runtime_client::Backend, Block, TestClient, N, SC, VR>;
 
-fn test_environment<N, VR>(
+fn test_environment_with_select_chain<N, VR, SC>(
 	link: &TestLinkHalf,
 	keystore: Option<SyncCryptoStorePtr>,
 	network_service: N,
+	select_chain: SC,
 	voting_rule: VR,
-) -> TestEnvironment<N, VR>
+) -> TestEnvironment<N, SC, VR>
 where
 	N: NetworkT<Block>,
 	VR: VotingRule<Block, TestClient>,
@@ -1326,7 +1364,7 @@ where
 		authority_set: authority_set.clone(),
 		config: config.clone(),
 		client: link.client.clone(),
-		select_chain: link.select_chain.clone(),
+		select_chain,
 		set_id: authority_set.set_id(),
 		voter_set_state: set_state.clone(),
 		voters: Arc::new(authority_set.current_authorities()),
@@ -1337,6 +1375,25 @@ where
 		telemetry: None,
 		_phantom: PhantomData,
 	}
+}
+
+fn test_environment<N, VR>(
+	link: &TestLinkHalf,
+	keystore: Option<SyncCryptoStorePtr>,
+	network_service: N,
+	voting_rule: VR,
+) -> TestEnvironment<N, LongestChain<substrate_test_runtime_client::Backend, Block>, VR>
+where
+	N: NetworkT<Block>,
+	VR: VotingRule<Block, TestClient>,
+{
+	test_environment_with_select_chain(
+		link,
+		keystore,
+		network_service,
+		link.select_chain.clone(),
+		voting_rule,
+	)
 }
 
 #[tokio::test]
@@ -1352,7 +1409,7 @@ async fn grandpa_environment_respects_voting_rules() {
 	let link = peer.data.lock().take().unwrap();
 
 	// add 21 blocks
-	peer.push_blocks(21, false);
+	let hashes = peer.push_blocks(21, false);
 
 	// create an environment with no voting rule restrictions
 	let unrestricted_env = test_environment(&link, None, network_service.clone(), ());
@@ -1408,12 +1465,7 @@ async fn grandpa_environment_respects_voting_rules() {
 	);
 
 	// we finalize block 19 with block 21 being the best block
-	let hashof19 = peer
-		.client()
-		.as_client()
-		.expect_block_hash_from_id(&BlockId::Number(19))
-		.unwrap();
-	peer.client().finalize_block(hashof19, None, false).unwrap();
+	peer.client().finalize_block(hashes[18], None, false).unwrap();
 
 	// the 3/4 environment should propose block 21 for voting
 	assert_eq!(
@@ -1439,11 +1491,7 @@ async fn grandpa_environment_respects_voting_rules() {
 	);
 
 	// we finalize block 21 with block 21 being the best block
-	let hashof21 = peer
-		.client()
-		.as_client()
-		.expect_block_hash_from_id(&BlockId::Number(21))
-		.unwrap();
+	let hashof21 = hashes[20];
 	peer.client().finalize_block(hashof21, None, false).unwrap();
 
 	// even though the default environment will always try to not vote on the
@@ -1457,6 +1505,77 @@ async fn grandpa_environment_respects_voting_rules() {
 			.unwrap()
 			.1,
 		21,
+	);
+}
+
+#[tokio::test]
+async fn grandpa_environment_passes_actual_best_block_to_voting_rules() {
+	// NOTE: this is a "regression" test since initially we were not passing the
+	// best block to the voting rules
+	use finality_grandpa::voter::Environment;
+
+	let peers = &[Ed25519Keyring::Alice];
+	let voters = make_ids(peers);
+
+	let mut net = GrandpaTestNet::new(TestApi::new(voters), 1, 0);
+	let peer = net.peer(0);
+	let network_service = peer.network_service().clone();
+	let link = peer.data.lock().take().unwrap();
+	let client = peer.client().as_client().clone();
+	let select_chain = MockSelectChain::default();
+
+	// add 42 blocks
+	peer.push_blocks(42, false);
+
+	// create an environment with a voting rule that always restricts votes to
+	// before the best block by 5 blocks
+	let env = test_environment_with_select_chain(
+		&link,
+		None,
+		network_service.clone(),
+		select_chain.clone(),
+		voting_rule::BeforeBestBlockBy(5),
+	);
+
+	// both best block and finality target are pointing to the same latest block,
+	// therefore we must restrict our vote on top of the given target (#21)
+	let hashof21 = client.expect_block_hash_from_id(&BlockId::Number(21)).unwrap();
+	select_chain.set_best_chain(client.expect_header(hashof21).unwrap());
+	select_chain.set_finality_target(client.expect_header(hashof21).unwrap().hash());
+
+	assert_eq!(
+		env.best_chain_containing(peer.client().info().finalized_hash)
+			.await
+			.unwrap()
+			.unwrap()
+			.1,
+		16,
+	);
+
+	// the returned finality target is already 11 blocks from the best block,
+	// therefore there should be no further restriction by the voting rule
+	let hashof10 = client.expect_block_hash_from_id(&BlockId::Number(10)).unwrap();
+	select_chain.set_best_chain(client.expect_header(hashof21).unwrap());
+	select_chain.set_finality_target(client.expect_header(hashof10).unwrap().hash());
+
+	assert_eq!(
+		env.best_chain_containing(peer.client().info().finalized_hash)
+			.await
+			.unwrap()
+			.unwrap()
+			.1,
+		10,
+	);
+
+	// returning a finality target that's higher than the best block is an
+	// inconsistent state that should be handled
+	let hashof42 = client.expect_block_hash_from_id(&BlockId::Number(42)).unwrap();
+	select_chain.set_best_chain(client.expect_header(hashof21).unwrap());
+	select_chain.set_finality_target(client.expect_header(hashof42).unwrap().hash());
+
+	assert_matches!(
+		env.best_chain_containing(peer.client().info().finalized_hash).await,
+		Err(CommandOrError::Error(Error::Safety(_)))
 	);
 }
 
@@ -1535,10 +1654,13 @@ async fn justification_with_equivocation() {
 	// we create a basic chain with 3 blocks (no forks)
 	net.peer(0).push_blocks(3, false);
 
-	let client = net.peer(0).client().clone();
-	let block1 = client.header(&BlockId::Number(1)).ok().flatten().unwrap();
-	let block2 = client.header(&BlockId::Number(2)).ok().flatten().unwrap();
-	let block3 = client.header(&BlockId::Number(3)).ok().flatten().unwrap();
+	let client = net.peer(0).client().as_client().clone();
+	let hashof1 = client.expect_block_hash_from_id(&BlockId::Number(1)).unwrap();
+	let hashof2 = client.expect_block_hash_from_id(&BlockId::Number(2)).unwrap();
+	let hashof3 = client.expect_block_hash_from_id(&BlockId::Number(3)).unwrap();
+	let block1 = client.expect_header(hashof1).unwrap();
+	let block2 = client.expect_header(hashof2).unwrap();
+	let block3 = client.expect_header(hashof3).unwrap();
 
 	let set_id = 0;
 	let justification = {
@@ -1581,7 +1703,7 @@ async fn justification_with_equivocation() {
 			precommits,
 		};
 
-		GrandpaJustification::from_commit(&client.as_client(), round, commit).unwrap()
+		GrandpaJustification::from_commit(&client, round, commit).unwrap()
 	};
 
 	// the justification should include the minimal necessary vote ancestry and
@@ -1757,20 +1879,23 @@ async fn revert_prunes_authority_changes() {
 	// Fork before revert point
 
 	// add more blocks on top of block 23 (until we have 26)
-	let hash = peer.generate_blocks_at(
-		BlockId::Number(23),
-		3,
-		BlockOrigin::File,
-		|builder| {
-			let mut block = builder.build().unwrap().block;
-			block.header.digest_mut().push(DigestItem::Other(vec![1]));
-			block
-		},
-		false,
-		false,
-		true,
-		ForkChoiceStrategy::LongestChain,
-	);
+	let hash = peer
+		.generate_blocks_at(
+			BlockId::Number(23),
+			3,
+			BlockOrigin::File,
+			|builder| {
+				let mut block = builder.build().unwrap().block;
+				block.header.digest_mut().push(DigestItem::Other(vec![1]));
+				block
+			},
+			false,
+			false,
+			true,
+			ForkChoiceStrategy::LongestChain,
+		)
+		.pop()
+		.unwrap();
 	// at block 27 of the fork add an authority transition
 	peer.generate_blocks_at(
 		BlockId::Hash(hash),
@@ -1786,20 +1911,23 @@ async fn revert_prunes_authority_changes() {
 	// Fork after revert point
 
 	// add more block on top of block 25 (until we have 28)
-	let hash = peer.generate_blocks_at(
-		BlockId::Number(25),
-		3,
-		BlockOrigin::File,
-		|builder| {
-			let mut block = builder.build().unwrap().block;
-			block.header.digest_mut().push(DigestItem::Other(vec![2]));
-			block
-		},
-		false,
-		false,
-		true,
-		ForkChoiceStrategy::LongestChain,
-	);
+	let hash = peer
+		.generate_blocks_at(
+			BlockId::Number(25),
+			3,
+			BlockOrigin::File,
+			|builder| {
+				let mut block = builder.build().unwrap().block;
+				block.header.digest_mut().push(DigestItem::Other(vec![2]));
+				block
+			},
+			false,
+			false,
+			true,
+			ForkChoiceStrategy::LongestChain,
+		)
+		.pop()
+		.unwrap();
 	// at block 29 of the fork add an authority transition
 	peer.generate_blocks_at(
 		BlockId::Hash(hash),
