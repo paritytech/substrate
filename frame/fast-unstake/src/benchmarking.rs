@@ -37,7 +37,7 @@ const MAX_BONDING_DURATION: u32 = 16;
 
 type CurrencyOf<T> = <T as Config>::Currency;
 
-fn create_unexposed_nominators<T: Config>() -> Vec<T::AccountId> {
+fn create_unexposed_batch<T: Config>() -> Vec<T::AccountId> {
 	(0..T::BatchSize::get())
 		.map(|i| {
 			let account =
@@ -98,8 +98,10 @@ fn on_idle_full_block<T: Config>() {
 benchmarks! {
 	// on_idle, we don't check anyone, but fully unbond them.
 	on_idle_unstake {
+		let b in 1 .. T::BatchSize::get();
+
 		ErasToCheckPerBlock::<T>::put(1);
-		for who in create_unexposed_nominators::<T>() {
+		for who in create_unexposed_batch::<T>().into_iter().take(b as usize) {
 			assert_ok!(FastUnstake::<T>::register_fast_unstake(
 				RawOrigin::Signed(who.clone()).into(),
 			));
@@ -135,6 +137,7 @@ benchmarks! {
 		// should be enough.
 		let u in 1 .. MAX_BONDING_DURATION.min(T::Staking::bonding_duration());
 		let v in 1 .. MAX_VALIDATORS;
+		let b in 1 .. T::BatchSize::get();
 
 		ErasToCheckPerBlock::<T>::put(u);
 		T::Staking::set_current_era(u);
@@ -142,7 +145,7 @@ benchmarks! {
 		// setup staking with v validators and u eras of data (0..=u)
 		setup_staking::<T>(v, u);
 
-		let stashes = create_unexposed_nominators::<T>().into_iter().map(|s| {
+		let stashes = create_unexposed_batch::<T>().into_iter().take(b as usize).map(|s| {
 			assert_ok!(FastUnstake::<T>::register_fast_unstake(
 				RawOrigin::Signed(s.clone()).into(),
 			));
@@ -168,7 +171,7 @@ benchmarks! {
 
 	register_fast_unstake {
 		ErasToCheckPerBlock::<T>::put(1);
-		let who = create_unexposed_nominators::<T>().get(0).cloned().unwrap();
+		let who = create_unexposed_batch::<T>().get(0).cloned().unwrap();
 		whitelist_account!(who);
 		assert_eq!(Queue::<T>::count(), 0);
 
@@ -180,7 +183,7 @@ benchmarks! {
 
 	deregister {
 		ErasToCheckPerBlock::<T>::put(1);
-		let who = create_unexposed_nominators::<T>().get(0).cloned().unwrap();
+		let who = create_unexposed_batch::<T>().get(0).cloned().unwrap();
 		assert_ok!(FastUnstake::<T>::register_fast_unstake(
 			RawOrigin::Signed(who.clone()).into(),
 		));

@@ -255,6 +255,7 @@ mod on_idle {
 			let remaining_weight = <T as Config>::WeightInfo::on_idle_check(
 				1,
 				pallet_staking::ValidatorCount::<T>::get(),
+				BatchSize::get()
 			);
 			assert_eq!(FastUnstake::on_idle(0, remaining_weight), remaining_weight);
 

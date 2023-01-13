@@ -336,7 +336,7 @@ pub mod pallet {
 			// determine the number of eras to check. This is based on both `ErasToCheckPerBlock`
 			// and `remaining_weight` passed on to us from the runtime executive.
 			let max_weight = |v, u| {
-				<T as Config>::WeightInfo::on_idle_check(u, v)
+				<T as Config>::WeightInfo::on_idle_check(u, v, T::BatchSize::get())
 					.max(<T as Config>::WeightInfo::on_idle_unstake())
 			};
 			while max_weight(validator_count, eras_to_check_per_block).any_gt(remaining_weight) {

@@ -48,8 +48,8 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_fast_unstake.
 pub trait WeightInfo {
-	fn on_idle_unstake() -> Weight;
-	fn on_idle_check(u: u32, v: u32, ) -> Weight;
+	fn on_idle_unstake(b: u32) -> Weight;
+	fn on_idle_check(u: u32, v: u32, b: u32) -> Weight;
 	fn register_fast_unstake() -> Weight;
 	fn deregister() -> Weight;
 	fn control() -> Weight;
@@ -71,7 +71,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Balances Locks (r:128 w:128)
 	// Storage: Staking Ledger (r:0 w:128)
 	// Storage: Staking Payee (r:0 w:128)
-	fn on_idle_unstake() -> Weight {
+	fn on_idle_unstake(_: u32) -> Weight {
 		// Minimum execution time: 4_975_250 nanoseconds.
 		Weight::from_ref_time(5_072_221_000)
 			.saturating_add(T::DbWeight::get().reads(773))
@@ -87,7 +87,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Staking ErasStakers (r:17 w:0)
 	/// The range of component `u` is `[1, 16]`.
 	/// The range of component `v` is `[1, 16]`.
-	fn on_idle_check(u: u32, v: u32, ) -> Weight {
+	fn on_idle_check(u: u32, v: u32, _: u32) -> Weight {
 		// Minimum execution time: 27_532_997 nanoseconds.
 		Weight::from_ref_time(28_116_344_000)
 			// Standard Error: 316_650_939
@@ -153,7 +153,7 @@ impl WeightInfo for () {
 	// Storage: Balances Locks (r:128 w:128)
 	// Storage: Staking Ledger (r:0 w:128)
 	// Storage: Staking Payee (r:0 w:128)
-	fn on_idle_unstake() -> Weight {
+	fn on_idle_unstake(_: u32) -> Weight {
 		// Minimum execution time: 4_975_250 nanoseconds.
 		Weight::from_ref_time(5_072_221_000)
 			.saturating_add(RocksDbWeight::get().reads(773))
@@ -169,7 +169,7 @@ impl WeightInfo for () {
 	// Storage: Staking ErasStakers (r:17 w:0)
 	/// The range of component `u` is `[1, 16]`.
 	/// The range of component `v` is `[1, 16]`.
-	fn on_idle_check(u: u32, v: u32, ) -> Weight {
+	fn on_idle_check(u: u32, v: u32, _: u32) -> Weight {
 		// Minimum execution time: 27_532_997 nanoseconds.
 		Weight::from_ref_time(28_116_344_000)
 			// Standard Error: 316_650_939
