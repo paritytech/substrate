@@ -609,7 +609,7 @@ pub struct Commission<T: Config> {
 	/// Optional configuration around how often commission can be updated, and when the last
 	/// commission update took place.
 	pub change_rate: Option<CommissionChangeRate<T::BlockNumber>>,
-	/// The block throttling should be checked from. This value will be updated on all commission
+	/// The block from where throttling should be checked from. This value will be updated on all commission
 	/// updates and when setting an initial `change_rate`.
 	pub throttle_from: Option<T::BlockNumber>,
 }
