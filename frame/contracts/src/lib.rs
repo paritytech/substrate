@@ -394,10 +394,10 @@ pub mod pallet {
 			//
 			// Finally, the inefficiencies of the freeing-bump allocator
 			// being used in the client for the runtime memory allocations, could lead to possible
-			// memory grow up to `MaxCodeLen*4` for some contracts in extreme cases, wich should be
-			// taken into account as well.
+			// memory allocations for contract code grow up to `x4` times in some extreme cases,
+			// wich gives us total multiplier of `18*4` for `MaxCodeLen`.
 			//
-			// That being said, for every contract executed in runtime, at least `MaxCodeLen*22`
+			// That being said, for every contract executed in runtime, at least `MaxCodeLen*18*4`
 			// memory should be avaiable. Note that maximum allowed heap memory and stack size per
 			// each contract (stack frame) should also be counted.
 			//
@@ -406,7 +406,7 @@ pub mod pallet {
 			//
 			// This gives us the following formula:
 			//
-			// `(MaxCodeLen * 22 + STACK_MAX_SIZE + heap_max_size) * stack_height <
+			// `(MaxCodeLen * 18 * 4 + STACK_MAX_SIZE + heap_max_size) * stack_height <
 			// MAX_RUNTIME_MEM/2`
 			//
 			// Hence the upper limit for the `MaxCodeLen` can be defined as follows:
@@ -415,7 +415,7 @@ pub mod pallet {
 				.saturating_div(stack_height)
 				.saturating_sub(heap_max_size)
 				.saturating_sub(STACK_MAX_SIZE)
-				.saturating_div(22);
+				.saturating_div(18 * 4);
 
 			assert!(
 				T::MaxCodeLen::get() < code_len_limit,
