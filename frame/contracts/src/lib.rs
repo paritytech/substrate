@@ -816,8 +816,6 @@ pub mod pallet {
 		RandomSubjectTooLong,
 		/// The amount of topics passed to `seal_deposit_events` exceeds the limit.
 		TooManyTopics,
-		/// The topics passed to `seal_deposit_events` contains at least one duplicate.
-		DuplicateTopics,
 		/// The chain does not provide a chain extension. Calling the chain extension results
 		/// in this error. Note that this usually  shouldn't happen as deploying such contracts
 		/// is rejected.
