@@ -1786,16 +1786,20 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let msg = Encode::encode(&data);
+			use sp_core::hexdisplay::HexDisplay;
+			log::info!("DDEBUG: msg {:?}", HexDisplay::from(&msg));
+			log::info!("DDEBUG: signature {:?}", &signature);
+			log::info!("DDEBUG: signer {:?}", &signer.clone().into_account());
 			ensure!(
 				signature.verify(&*msg, &signer.clone().into_account()),
 				Error::<T, I>::WrongSignature
 			);
 
 			let signer_account = Self::signer_to_account(signer)?;
-			log::info!("signer_account {:?}", &signer_account);
+			log::info!("DDEBUG: signer_account {:?}", &signer_account);
 
-			let PreSignedMint { collection, item, metadata, deadline, only_account } = data;
-			let metadata = Self::construct_metadata(metadata)?;
+			let PreSignedMint { collection, item, /* metadata, */ deadline, only_account } = data;
+			// let metadata = Self::construct_metadata(metadata)?;
 
 			if let Some(account) = only_account {
 				ensure!(account == origin, Error::<T, I>::WrongOrigin);
@@ -1818,14 +1822,16 @@ pub mod pallet {
 				item_config,
 				|_, _| Ok(()),
 			)?;
-
-			Self::do_set_item_metadata(
-				Some(collection_details.owner),
-				collection,
-				item,
-				metadata,
-				Some(origin),
-			)
+			/*if !metadata.len().is_zero() {
+				Self::do_set_item_metadata(
+					Some(collection_details.owner),
+					collection,
+					item,
+					metadata,
+					Some(origin),
+				)?;
+			}*/
+			Ok(())
 		}
 	}
 }

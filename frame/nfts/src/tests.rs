@@ -2503,19 +2503,50 @@ fn add_remove_item_attributes_approval_should_work() {
 #[test]
 fn pre_signed_mints_should_work() {
 	new_test_ext().execute_with(|| {
-		let user1_pair = sp_core::sr25519::Pair::from_string("//Alice///password", None).unwrap();
+		let user1_pair = sp_core::sr25519::Pair::from_string("//Alice", None).unwrap();
 		let user1_signer = MultiSigner::Sr25519(user1_pair.public());
 		let user1 = Nfts::signer_to_account(user1_signer.clone()).unwrap();
-		let mint_data = PreSignedMint {
+		let mint_data: PreSignedMint<u32, u32, u64, u64> = PreSignedMint {
 			collection: 0,
 			item: 0,
-			metadata: bvec![0],
+			// metadata: vec![0],
 			only_account: None,
-			deadline: 1,
+			deadline: 10000000,
 		};
-		let signature = MultiSignature::Sr25519(user1_pair.sign(&Encode::encode(&mint_data)));
-		dbg!(user1);
+		let message = Encode::encode(&mint_data);
 
+		use sp_core::hexdisplay::HexDisplay;
+		dbg!(HexDisplay::from(&message));
+		// 0000000000000000008096980000000000
+
+		let signature = MultiSignature::Sr25519(user1_pair.sign(&message));
+		// let a = &array_bytes::hex2bytes_unchecked("00000000000000000080969800")[..];
+		// dbg!(a);
+		// let signature = MultiSignature::Sr25519(user1_pair.sign(&a));
+
+		// use sp_runtime::traits::{IdentifyAccount, Verify};
+		// dbg!(signature.verify(&*message, &user1_signer.clone().into_account()));
+
+		// use sp_core::crypto::Ss58Codec;
+		// dbg!(user1_pair.public().to_ss58check());
+		// dbg!(user1);
+		dbg!(&signature);
+		// dbg!(&user1_signer);
+		dbg!(&user1_pair.public());
+
+		/*
+		2023-01-13 14:20:54 DDEBUG: msg 00000000000000000080969800
+		2023-01-13 14:20:54 DDEBUG: signature MultiSignature::Sr25519(9483ca2df9b4ffe1dae4fa1412377ab6bf00e51e85ca5ebb0a9730861712f62d203d026e61090d5570f50c389563c4b1fd0b819e3c0df8179408184259192685)
+		2023-01-13 14:20:54 DDEBUG: signer d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d (5GrwvaEF...)
+
+		2023-01-13 14:39:51 DDEBUG: msg 00000000000000000080969800
+		2023-01-13 14:39:51 DDEBUG: signature MultiSignature::Sr25519(20a4c1caededa2b23a76105bfc3c483d5ca9b2cfb8d6a470084c28c5219ad95624f54250c795134ba81ad9ac8cb2f08cf2f5c1449dfe5a21e74e18c83bad4e8f)
+		2023-01-13 14:39:51 DDEBUG: signer d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d (5GrwvaEF...)
+
+		2023-01-13 16:08:06 DDEBUG: msg 00000000000000000080969800
+		2023-01-13 16:08:06 DDEBUG: signature MultiSignature::Sr25519(9483ca2df9b4ffe1dae4fa1412377ab6bf00e51e85ca5ebb0a9730861712f62d203d026e61090d5570f50c389563c4b1fd0b819e3c0df8179408184259192685)
+		2023-01-13 16:08:06 DDEBUG: signer d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d (5GrwvaEF...)
+		*/
 		let user2 = 2;
 
 		Balances::make_free_balance_be(&user1, 100);

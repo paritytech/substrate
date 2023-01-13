@@ -5902,6 +5902,7 @@ dependencies = [
 name = "pallet-nfts"
 version = "4.0.0-dev"
 dependencies = [
+ "array-bytes",
  "enumflags2",
  "frame-benchmarking",
  "frame-support",
