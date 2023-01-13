@@ -358,7 +358,7 @@
 
 #![cfg(feature = "try-runtime")]
 
-use crate::commands::fast_forward::BlockBuildingInfoProvider;
+use crate::block_building_info::BlockBuildingInfoProvider;
 use parity_scale_codec::Decode;
 use remote_externalities::{
 	Builder, Mode, OfflineConfig, OnlineConfig, RemoteExternalities, SnapshotConfig,
@@ -392,6 +392,7 @@ use sp_state_machine::{CompactProof, OverlayedChanges, StateMachine, TrieBackend
 use sp_version::StateVersion;
 use std::{fmt::Debug, path::PathBuf, str::FromStr};
 
+pub mod block_building_info;
 pub mod commands;
 pub(crate) mod parse;
 pub(crate) const LOG_TARGET: &str = "try-runtime::cli";

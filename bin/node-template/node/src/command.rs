@@ -11,13 +11,7 @@ use sc_service::PartialComponents;
 use sp_keyring::Sr25519Keyring;
 
 #[cfg(feature = "try-runtime")]
-use {
-	sp_consensus_aura::{Slot, SlotDuration, AURA_ENGINE_ID},
-	sp_core::Encode,
-	sp_inherents::InherentData,
-	sp_runtime::{Digest, DigestItem},
-	sp_timestamp::TimestampInherentData,
-};
+use try_runtime_cli::block_building_info::timestamp_with_aura_info;
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> String {
@@ -193,26 +187,7 @@ pub fn run() -> sc_cli::Result<()> {
 				let task_manager =
 					sc_service::TaskManager::new(config.tokio_handle.clone(), registry)
 						.map_err(|e| sc_cli::Error::Service(sc_service::Error::Prometheus(e)))?;
-
-				let info_provider = |_, maybe_prev_info: Option<(InherentData, Digest)>| async {
-					const BLOCKTIME_MILLIS: u64 = 2 * 3_000;
-
-					let timestamp_idp = match maybe_prev_info {
-						Some((inherent_data, _)) => sp_timestamp::InherentDataProvider::new(
-							inherent_data.timestamp_inherent_data().unwrap().unwrap() +
-								BLOCKTIME_MILLIS,
-						),
-						None => sp_timestamp::InherentDataProvider::from_system_time(),
-					};
-
-					let slot = Slot::from_timestamp(
-						*timestamp_idp,
-						SlotDuration::from_millis(BLOCKTIME_MILLIS),
-					);
-					let digest = vec![DigestItem::PreRuntime(AURA_ENGINE_ID, slot.encode())];
-
-					Ok((timestamp_idp, digest))
-				};
+				let info_provider = timestamp_with_aura_info(6000);
 
 				Ok((
 					cmd.run::<Block, ExtendedHostFunctions<

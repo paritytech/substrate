@@ -1,6 +1,6 @@
 use crate::{
-	build_executor, full_extensions, rpc_err_handler, state_machine_call, BlockT, LiveState,
-	SharedParams, State,
+	block_building_info::BlockBuildingInfoProvider, build_executor, full_extensions,
+	rpc_err_handler, state_machine_call, BlockT, LiveState, SharedParams, State,
 };
 use parity_scale_codec::{Decode, Encode};
 use sc_cli::Result;
@@ -11,7 +11,7 @@ use sp_inherents::{InherentData, InherentDataProvider};
 use sp_io::TestExternalities;
 use sp_runtime::{
 	traits::{Header, NumberFor, One},
-	Digest, DigestItem,
+	Digest,
 };
 use std::{fmt::Debug, str::FromStr};
 use substrate_rpc_client::{ws_client, ChainApi};
@@ -56,44 +56,6 @@ impl FastForwardCmd {
 				.as_ref()
 				.expect("Either `--block-uri` must be provided, or state must be `live`"),
 		}
-	}
-}
-
-/// Something that can create inherent data providers and pre-runtime digest.
-///
-/// It is possible for the caller to provide custom arguments to the callee by setting the
-/// `ExtraArgs` generic parameter.
-///
-/// This module already provides some convenience implementation of this trait for closures. So, it
-/// should not be required to implement it directly.
-#[async_trait::async_trait]
-pub trait BlockBuildingInfoProvider<Block: BlockT, ExtraArgs = ()> {
-	type InherentDataProviders: InherentDataProvider;
-
-	async fn get_inherent_providers_and_pre_digest(
-		&self,
-		parent_hash: Block::Hash,
-		extra_args: ExtraArgs,
-	) -> Result<(Self::InherentDataProviders, Vec<DigestItem>)>;
-}
-
-#[async_trait::async_trait]
-impl<F, Block, IDP, ExtraArgs, Fut> BlockBuildingInfoProvider<Block, ExtraArgs> for F
-where
-	Block: BlockT,
-	F: Fn(Block::Hash, ExtraArgs) -> Fut + Sync + Send,
-	Fut: std::future::Future<Output = Result<(IDP, Vec<DigestItem>)>> + Send + 'static,
-	IDP: InherentDataProvider + 'static,
-	ExtraArgs: Send + 'static,
-{
-	type InherentDataProviders = IDP;
-
-	async fn get_inherent_providers_and_pre_digest(
-		&self,
-		parent: Block::Hash,
-		extra_args: ExtraArgs,
-	) -> Result<(Self::InherentDataProviders, Vec<DigestItem>)> {
-		(*self)(parent, extra_args).await
 	}
 }
 

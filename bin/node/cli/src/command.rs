@@ -34,14 +34,8 @@ use std::sync::Arc;
 
 #[cfg(feature = "try-runtime")]
 use {
-	codec::Encode,
 	kitchensink_runtime::constants::time::SLOT_DURATION,
-	node_primitives::Header,
-	sc_consensus_babe::{PreDigest, SecondaryPlainPreDigest},
-	sp_consensus_babe::{Slot, SlotDuration, BABE_ENGINE_ID},
-	sp_inherents::InherentData,
-	sp_runtime::{Digest, DigestItem},
-	sp_timestamp::TimestampInherentData,
+	try_runtime_cli::block_building_info::timestamp_with_babe_info,
 };
 
 impl SubstrateCli for Cli {
@@ -249,37 +243,7 @@ pub fn run() -> Result<()> {
 					sc_service::TaskManager::new(config.tokio_handle.clone(), registry)
 						.map_err(|e| sc_cli::Error::Service(sc_service::Error::Prometheus(e)))?;
 
-				let info_provider = |_, maybe_prev_info: Option<(InherentData, Digest)>| async {
-					let uncles_idp = sp_authorship::InherentDataProvider::<Header>::new(vec![]);
-
-					let timestamp_idp = match maybe_prev_info {
-						Some((inherent_data, _)) => sp_timestamp::InherentDataProvider::new(
-							inherent_data.timestamp_inherent_data().unwrap().unwrap() +
-								SLOT_DURATION,
-						),
-						None => sp_timestamp::InherentDataProvider::from_system_time(),
-					};
-
-					let slot = Slot::from_timestamp(
-						*timestamp_idp,
-						SlotDuration::from_millis(SLOT_DURATION),
-					);
-					let slot_idp = sp_consensus_babe::inherents::InherentDataProvider::new(slot);
-
-					let storage_proof_idp =
-						sp_transaction_storage_proof::InherentDataProvider::new(None);
-
-					let digest = vec![DigestItem::PreRuntime(
-						BABE_ENGINE_ID,
-						PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
-							slot,
-							authority_index: 0,
-						})
-						.encode(),
-					)];
-
-					Ok(((slot_idp, timestamp_idp, uncles_idp, storage_proof_idp), digest))
-				};
+				let info_provider = timestamp_with_babe_info(SLOT_DURATION);
 
 				Ok((
 					cmd.run::<Block, ExtendedHostFunctions<
