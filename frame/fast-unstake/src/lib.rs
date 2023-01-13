@@ -324,9 +324,12 @@ pub mod pallet {
 		/// found out to have no eras to check. At the end of a check cycle, even if they are fully
 		/// checked, we don't finish the process.
 		pub(crate) fn do_on_idle(remaining_weight: Weight) -> Weight {
+			// any weight that is unaccounted for
+			let mut unaccounted_weight = Weight::from_ref_time(0);
+
 			let mut eras_to_check_per_block = ErasToCheckPerBlock::<T>::get();
 			if eras_to_check_per_block.is_zero() {
-				return T::DbWeight::get().reads(1)
+				return T::DbWeight::get().reads(1).saturating_add(unaccounted_weight);
 			}
 
 			// NOTE: here we're assuming that the number of validators has only ever increased,
@@ -349,7 +352,7 @@ pub mod pallet {
 				eras_to_check_per_block.saturating_dec();
 				if eras_to_check_per_block.is_zero() {
 					log!(debug, "early exit because eras_to_check_per_block is zero");
-					return T::DbWeight::get().reads(3)
+					return T::DbWeight::get().reads(3).saturating_add(unaccounted_weight);
 				}
 			}
 
@@ -358,7 +361,7 @@ pub mod pallet {
 				// there is an ongoing election -- we better not do anything. Imagine someone is not
 				// exposed anywhere in the last era, and the snapshot for the election is already
 				// taken. In this time period, we don't want to accidentally unstake them.
-				return T::DbWeight::get().reads(2)
+				return T::DbWeight::get().reads(2).saturating_add(unaccounted_weight);
 			}
 
 			let UnstakeRequest { stashes, mut checked } = match Head::<T>::take().or_else(|| {
@@ -368,6 +371,9 @@ pub mod pallet {
 					.collect::<Vec<_>>()
 					.try_into()
 					.expect("take ensures bound is met; qed");
+				unaccounted_weight.saturating_accrue(
+					T::DbWeight::get().reads_writes(stashes.len() as u64, stashes.len() as u64),
+				);
 				if stashes.is_empty() {
 					None
 				} else {
@@ -459,7 +465,7 @@ pub mod pallet {
 				let size = stashes.len() as u32;
 				stashes.into_iter().for_each(|(stash, deposit)| unstake_stash(stash, deposit));
 				Self::deposit_event(Event::<T>::BatchFinished { size });
-				<T as Config>::WeightInfo::on_idle_unstake(size)
+				<T as Config>::WeightInfo::on_idle_unstake(size).saturating_add(unaccounted_weight)
 			} else {
 				// eras checked so far.
 				let mut eras_checked = BTreeSet::<EraIndex>::new();
@@ -503,7 +509,7 @@ pub mod pallet {
 					eras_checked.len() as u32,
 					validator_count,
 					pre_length as u32,
-				)
+				).saturating_add(unaccounted_weight)
 			}
 		}
 	}

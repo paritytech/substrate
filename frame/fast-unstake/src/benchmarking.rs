@@ -130,7 +130,7 @@ benchmarks! {
 		));
 	}
 
-	// on_idle, when we check some number of eras.
+	// on_idle, when we check some number of eras and when we need to build the queue.
 	on_idle_check {
 		// both of these can be fetched from `T::Staking`, but the values might be unnecessarily
 		// large and make the benchmarks too slow. We know the complexity is linear, a small range
@@ -154,12 +154,15 @@ benchmarks! {
 
 		// no one is queued thus far.
 		assert_eq!(Head::<T>::get(), None);
+
+		on_idle_full_block::<T>();
+		assert!(Head::<T>::get().is_some());
 	}
 	: {
 		on_idle_full_block::<T>();
 	}
 	verify {
-		let checked = (1..=u).rev().collect::<Vec<EraIndex>>();
+		let checked = (0..=u).rev().collect::<Vec<EraIndex>>();
 		let request = Head::<T>::get().unwrap();
 		assert_eq!(checked, request.checked.into_inner());
 		assert!(matches!(
