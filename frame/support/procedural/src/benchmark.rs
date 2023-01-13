@@ -188,7 +188,7 @@ impl BenchmarkDef {
 				},
 				Stmt::Expr(Expr::Block(block)) => { // #[block] case
 					block.attrs.iter().enumerate().find_map(|(k, attr)| {
-						let Some(segment) = attr.path.segments.last() else { return None; };
+						let segment = attr.path.segments.last()?;
 						let _: keywords::block = syn::parse(segment.ident.to_token_stream().into()).ok()?;
 						let mut block = block.clone();
 
