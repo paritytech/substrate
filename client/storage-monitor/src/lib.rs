@@ -16,11 +16,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{config::Configuration, error::Error};
+use clap::Args;
 use futures::StreamExt;
 use nix::{errno::Errno, sys::statvfs::statvfs};
 use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
+use sc_client_db::DatabaseSource;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
+use sp_core::traits::SpawnEssentialNamed;
 use std::{
 	path::{Path, PathBuf},
 	time::{Duration, Instant},
@@ -28,6 +30,22 @@ use std::{
 
 const LOG_TARGET: &str = "storage-monitor";
 const THROTTLE_PERIOD: std::time::Duration = Duration::from_secs(2);
+
+type Error = String;
+
+/// Parameters used to create the storage monitor.
+#[derive(Default, Debug, Clone, Args)]
+pub struct StorageMonitorParams {
+	/// Required available space on database storage. If available space for DB storage drops below
+	/// the given threshold, node will be gracefully terminated. If `0` is given monitoring will be
+	/// disabled.
+	#[arg(long = "db-storage-threshold", value_name = "MB", default_value_t = 1000)]
+	pub threshold: u64,
+
+	/// How often available space is polled.
+	#[arg(long = "db-storage-polling-period", value_name = "SECONDS", default_value_t = 5, value_parser = clap::value_parser!(u32).range(1..))]
+	pub polling_period: u32,
+}
 
 /// Storage monitor service: checks the available space for the filesystem for fiven path.
 pub struct StorageMonitorService {
@@ -45,21 +63,19 @@ pub struct StorageMonitorService {
 
 impl StorageMonitorService {
 	/// Creates new StorageMonitorService for given client config
-	pub fn new_for_config(config: &Configuration) -> Result<Option<Self>, Error> {
-		Ok(match (config.available_storage_threshold, config.database.path()) {
+	pub fn try_spawn(parameters: StorageMonitorParams, database: DatabaseSource, spawner: &impl SpawnEssentialNamed) -> Result<(), Error> {
+		Ok(match (parameters.threshold, database.path()) {
 			(0, _) => {
 				log::info!(
 					target: LOG_TARGET,
 					"StorageMonitorService: threshold 0 given, storage monitoring disabled",
 				);
-				None
 			},
 			(_, None) => {
 				log::warn!(
 					target: LOG_TARGET,
 					"StorageMonitorService: no database path to observe",
 				);
-				None
 			},
 			(threshold, Some(path)) => {
 				let (sink, stream) = tracing_unbounded("mpsc_storage_monitor", 1024);
@@ -70,11 +86,11 @@ impl StorageMonitorService {
 					},
 					Config::default(),
 				)
-				.map_err(|e| Error::Other(format!("Could not create fs watcher {e}")))?;
+				.map_err(|e| format!("Could not create fs watcher {e}"))?;
 
 				watcher
 					.watch(path.as_ref(), RecursiveMode::Recursive)
-					.map_err(|e| Error::Other(format!("Could not start fs watcher {e}")))?;
+					.map_err(|e| format!("Could not start fs watcher {e}"))?;
 
 				log::debug!(
 					target: LOG_TARGET,
@@ -84,20 +100,26 @@ impl StorageMonitorService {
 
 				Self::check_free_space(&path, threshold)?;
 
-				Some(StorageMonitorService {
+				let storage_monitor_service = StorageMonitorService {
 					path: path.to_path_buf(),
 					stream,
 					threshold,
 					recent_check: Instant::now(),
 					_watcher: watcher,
-				})
+				};
+
+				spawner.spawn_essential(
+					"storage-monitor",
+					None,
+					Box::pin(storage_monitor_service.run()),
+				);
 			},
 		})
 	}
 
 	/// Main monitoring loop, intended to be spawned as essential task. Quits if free space drop
 	/// below threshold.
-	pub async fn run(mut self) {
+	async fn run(mut self) {
 		while let Some(watch_event) = self.stream.next().await {
 			match watch_event {
 				Ok(Event { kind: notify::EventKind::Access(_), .. }) => {
@@ -144,7 +166,7 @@ impl StorageMonitorService {
 								threshold,
 							);
 					log::error!(target: LOG_TARGET, "{}", msg);
-					Err(Error::Other(msg))
+					Err(msg)
 				} else {
 					Ok(())
 				}
