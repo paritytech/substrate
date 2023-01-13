@@ -31,7 +31,7 @@ use sp_staking::{EraIndex, StakingInterface};
 use sp_std::prelude::*;
 
 const USER_SEED: u32 = 0;
-const DEFAULT_BACKER_PER_VALIDATOR: u32 = 128;
+const DEFAULT_BACKER_PER_VALIDATOR: u32 = 32;
 const MAX_VALIDATORS: u32 = 16;
 const MAX_BONDING_DURATION: u32 = 16;
 
