@@ -170,7 +170,7 @@ impl BenchmarkDef {
 			match child {
 				Stmt::Semi(Expr::Call(expr_call), _semi) => { // #[extrinsic_call] case
 					(&expr_call.attrs).iter().enumerate().find_map(|(k, attr)| {
-						let Some(segment) = attr.path.segments.last() else { return None; };
+						let segment = attr.path.segments.last()?;
 						let _: keywords::extrinsic_call = syn::parse(segment.ident.to_token_stream().into()).ok()?;
 						let mut expr_call = expr_call.clone();
 
