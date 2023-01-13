@@ -156,9 +156,32 @@ fn check_primary_header<B: BlockT + Sized>(
 ) -> Result<(), Error<B>> {
 	let author = &epoch.authorities[pre_digest.authority_index as usize].0;
 
+	let mut epoch_index = epoch.epoch_index;
+
+	if epoch.start_slot + epoch.duration <= pre_digest.slot {
+		// some epochs must have been skipped as our current slot
+		// fits outside the current epoch. we will figure out
+		// which epoch it belongs to and we will re-use the same
+		// data for that epoch
+		let skipped_epochs = *pre_digest.slot.saturating_sub(epoch.start_slot) / epoch.duration;
+
+		let new_epoch_index = epoch.epoch_index.checked_add(skipped_epochs).expect(
+			"epoch number is u64; it should be strictly smaller than number of slots; \
+				slots relate in some way to wall clock time; \
+				if u64 is not enough we should crash for safety; qed.",
+		);
+
+		eprintln!(
+			"HHH VER Detected skipped epochs. Use epoch-idx: {:?}, instead of {:?}",
+			new_epoch_index, epoch_index
+		);
+
+		epoch_index = new_epoch_index;
+	}
+
 	if AuthorityPair::verify(&signature, pre_hash, author) {
 		let (inout, _) = {
-			let transcript = make_transcript(&epoch.randomness, pre_digest.slot, epoch.epoch_index);
+			let transcript = make_transcript(&epoch.randomness, pre_digest.slot, epoch_index);
 
 			schnorrkel::PublicKey::from_bytes(author.as_slice())
 				.and_then(|p| {

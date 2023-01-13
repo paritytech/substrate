@@ -238,11 +238,32 @@ fn claim_primary_slot(
 	keystore: &SyncCryptoStorePtr,
 	keys: &[(AuthorityId, usize)],
 ) -> Option<(PreDigest, AuthorityId)> {
-	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
+	let Epoch { authorities, randomness, mut epoch_index, .. } = epoch;
+
+	if epoch.start_slot + epoch.duration <= slot {
+		// some epochs must have been skipped as our current slot
+		// fits outside the current epoch. we will figure out
+		// which epoch it belongs to and we will re-use the same
+		// data for that epoch
+		let skipped_epochs = *slot.saturating_sub(epoch.start_slot) / epoch.duration;
+
+		let new_epoch_index = epoch.epoch_index.checked_add(skipped_epochs).expect(
+			"epoch number is u64; it should be strictly smaller than number of slots; \
+				slots relate in some way to wall clock time; \
+				if u64 is not enough we should crash for safety; qed.",
+		);
+
+		eprintln!(
+			"HHH AUTH Detected skipped epochs. Use epoch-idx: {:?}, instead of {:?}",
+			new_epoch_index, epoch_index
+		);
+
+		epoch_index = new_epoch_index;
+	}
 
 	for (authority_id, authority_index) in keys {
-		let transcript = make_transcript(randomness, slot, *epoch_index);
-		let transcript_data = make_transcript_data(randomness, slot, *epoch_index);
+		let transcript = make_transcript(randomness, slot, epoch_index);
+		let transcript_data = make_transcript_data(randomness, slot, epoch_index);
 		let result = SyncCryptoStore::sr25519_vrf_sign(
 			&**keystore,
 			AuthorityId::ID,
