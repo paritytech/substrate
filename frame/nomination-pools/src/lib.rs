@@ -2162,7 +2162,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Returns the points to balance conversion for a specified pool.
 	///
-	/// If the pool ID does not exist, return an error. Used by runtime API.
+	/// If the pool ID does not exist, it returns an error. Used by runtime API.
 	pub fn api_points_to_balance(pool_id: u32) -> Result<BalanceOf<T>, ()> {
 		if let Some(pool) = BondedPool::<T>::get(pool_id) {
 			Ok(pool.points_to_balance(pool.points))
