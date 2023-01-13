@@ -2763,7 +2763,7 @@ pub mod pallet_macros {
 ///
 /// ## General Syntax
 ///
-/// ```
+/// ```ignore
 /// #![cfg(feature = "runtime-benchmarks")]
 ///
 /// use super::{mock_helpers::*, Pallet as MyPallet};
