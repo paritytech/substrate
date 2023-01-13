@@ -9,7 +9,7 @@ impl HostFunctions for Host {
 	fn bw6_761_multi_miller_loop(a: Vec<Vec<u8>>, b: Vec<Vec<u8>>) -> Vec<u8> {
 		sp_io::crypto::bw6_761_multi_miller_loop(a, b)
 	}
-	fn bw6_761_final_exponentiation(f12: &[u8]) -> Vec<u8> {
+	fn bw6_761_final_exponentiation(f12: Vec<u8>) -> Vec<u8> {
 		sp_io::crypto::bw6_761_final_exponentiation(f12)
 	}
 	fn bw6_761_mul_projective_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {

@@ -66,7 +66,7 @@ pub fn multi_miller_loop(a_vec: Vec<Vec<u8>>, b_vec: Vec<Vec<u8>>) -> Vec<u8> {
 }
 
 /// Compute final exponentiation through arkworks
-pub fn final_exponentiation(target: &[u8]) -> Vec<u8> {
+pub fn final_exponentiation(target: Vec<u8>) -> Vec<u8> {
 	let cursor = Cursor::new(target);
 	let target = <Bls12_381 as Pairing>::TargetField::deserialize_with_mode(
 		cursor,

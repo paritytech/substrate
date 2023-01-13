@@ -1127,7 +1127,7 @@ pub trait Crypto {
 	}
 
 	/// Compute a final exponentiation
-	fn bls12_381_final_exponentiation(f12: &[u8]) -> Vec<u8> {
+	fn bls12_381_final_exponentiation(f12: Vec<u8>) -> Vec<u8> {
 		sp_arkworks::bls12_381::final_exponentiation(f12)
 	}
 
@@ -1167,7 +1167,7 @@ pub trait Crypto {
 	}
 
 	/// Compute a final exponentiation
-	fn bls12_377_final_exponentiation(f12: &[u8]) -> Vec<u8> {
+	fn bls12_377_final_exponentiation(f12: Vec<u8>) -> Vec<u8> {
 		sp_arkworks::bls12_377::final_exponentiation(f12)
 	}
 
@@ -1207,7 +1207,7 @@ pub trait Crypto {
 	}
 
 	/// Compute a final exponentiation
-	fn bw6_761_final_exponentiation(f12: &[u8]) -> Vec<u8> {
+	fn bw6_761_final_exponentiation(f12: Vec<u8>) -> Vec<u8> {
 		sp_arkworks::bw6_761::final_exponentiation(f12)
 	}
 

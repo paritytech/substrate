@@ -8,7 +8,7 @@ impl HostFunctions for Host {
 	fn bls12_377_multi_miller_loop(a: Vec<Vec<u8>>, b: Vec<Vec<u8>>) -> Vec<u8> {
 		sp_io::crypto::bls12_377_multi_miller_loop(a, b)
 	}
-	fn bls12_377_final_exponentiation(f12: &[u8]) -> Vec<u8> {
+	fn bls12_377_final_exponentiation(f12: Vec<u8>) -> Vec<u8> {
 		sp_io::crypto::bls12_377_final_exponentiation(f12)
 	}
 	fn bls12_377_msm_g1(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Vec<u8> {
