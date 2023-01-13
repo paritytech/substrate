@@ -372,7 +372,7 @@ pub fn testnet_genesis(
 			min_join_bond: 1 * DOLLARS,
 			..Default::default()
 		},
-		pov_limit: WeightLimitConfig {
+		weight_limit: WeightLimitConfig {
 			compute: Perbill::from_percent(100),
 			storage: Perbill::from_percent(100),
 		},

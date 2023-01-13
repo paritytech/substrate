@@ -41,20 +41,6 @@ use sp_runtime::{traits::Zero, Perbill, Saturating};
 pub use pallet::*;
 pub use weights::WeightInfo;
 
-/// Interface for wasting `ref_time`. The `waste_ref_time` function should be
-/// computation heavy.
-pub trait RefTimeWaster {
-	/// Wastes some `ref_time`. Receives a counter as an argument.
-	fn waste_ref_time(counter: u32);
-}
-
-/// Interface for wasting `proof_size`. The `waste_proof_size` should increase
-/// the size of the PoV block.
-pub trait PovWaster {
-	/// Wastes some `proof_size`. Receives a counter as an argument.
-	fn waste_proof_size(counter: u32) -> Weight;
-}
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -62,12 +48,6 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		type RuntimeEvent: From<Event> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
-
-		/// Type that implements the `RefTimeWaster` trait.
-		type RefTimeWaster: RefTimeWaster;
-
-		/// Type that implements the `PovWaster` trait.
-		type PovWaster: PovWaster;
 
 		/// Weight information for this pallet.
 		type WeightInfo: WeightInfo;
@@ -154,7 +134,7 @@ pub mod pallet {
 				T::WeightInfo::waste_proof_size_some(1)
 					.max(T::WeightInfo::waste_proof_size_none(1)),
 			) {
-				let wasted = T::PovWaster::waste_proof_size(num_proof_size);
+				let wasted = Self::waste_proof_size(num_proof_size);
 				num_proof_size.saturating_inc();
 				if wasted.is_zero() {
 					// Do not get stuck in an infinite loop if no PoV can be consumed.
@@ -169,7 +149,7 @@ pub mod pallet {
 			// Now we waste ref time.
 			let mut num_ref_time = 0;
 			while meter.can_accrue(T::WeightInfo::waste_ref_time(1)) {
-				T::RefTimeWaster::waste_ref_time(num_ref_time);
+				Self::waste_ref_time(num_ref_time);
 				num_ref_time.saturating_inc();
 				meter.defensive_saturating_accrue(T::WeightInfo::waste_ref_time(1));
 			}
@@ -196,7 +176,7 @@ pub mod pallet {
 		}
 
 		/// Set the `Compute` storage value that determines how much of the
-		/// block's weight to use during `on_initialize`.
+		/// block's weight `ref_time` to use during `on_idle`.
 		///
 		/// Only callable by Root.
 		#[pallet::call_index(1)]
@@ -224,7 +204,8 @@ pub mod pallet {
 		}
 	}
 
-	impl<T: Config> PovWaster for Pallet<T> {
+	impl<T: Config> Pallet<T> {
+		/// Wastes some `proof_size`. Receives a counter as an argument.
 		fn waste_proof_size(counter: u32) -> Weight {
 			if TrashData::<T>::get(counter).is_some() {
 				T::WeightInfo::waste_proof_size_some(1)
@@ -232,10 +213,9 @@ pub mod pallet {
 				T::WeightInfo::waste_proof_size_none(1)
 			}
 		}
-	}
 
-	impl<T: Config> RefTimeWaster for Pallet<T> {
-		fn waste_ref_time(counter: u32) {
+		/// Wastes some `ref_time`. Receives a counter as an argument.
+		pub fn waste_ref_time(counter: u32) {
 			let mut hasher = Blake2b512::new();
 			// Blake2 has a very high speed of hashing so we make multiple
 			// hashes with it to waste more `ref_time` at once.

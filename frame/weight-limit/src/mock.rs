@@ -68,8 +68,6 @@ impl frame_system::Config for Test {
 
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type RefTimeWaster = crate::Pallet<Self>;
-	type PovWaster = crate::Pallet<Self>;
 	type WeightInfo = ();
 }
 

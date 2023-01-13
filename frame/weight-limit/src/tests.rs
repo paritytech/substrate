@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Tests for pov-limit pallet.
+//! Tests for weight-limit pallet.
 
 use super::*;
 use mock::{new_test_ext, RuntimeOrigin, System, Test, WeightLimit};

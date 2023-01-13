@@ -31,7 +31,7 @@ benchmarks! {
 	waste_ref_time {
 		let n in 0 .. 1024;
 	}: {
-		T::RefTimeWaster::waste_ref_time(n);
+		WeightLimit::<T>::waste_ref_time(n);
 	}
 
 	waste_proof_size_some {

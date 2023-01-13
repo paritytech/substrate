@@ -364,8 +364,6 @@ impl pallet_scheduler::Config for Runtime {
 
 impl pallet_weight_limit::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type RefTimeWaster = pallet_weight_limit::Pallet<Self>;
-	type PovWaster = pallet_weight_limit::Pallet<Self>;
 	type WeightInfo = pallet_weight_limit::weights::SubstrateWeight<Runtime>;
 }
 
