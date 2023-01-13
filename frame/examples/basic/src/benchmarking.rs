@@ -64,8 +64,7 @@ mod benchmarks {
 
 		// You can use `_` if the name of the Call matches the benchmark name.
 		#[extrinsic_call]
-		// TODO use `_`
-		accumulate_dummy(RawOrigin::Signed(caller), value);
+		_(RawOrigin::Signed(caller), value);
 	}
 
 	/// You can write helper functions in here since its a normal Rust module.
