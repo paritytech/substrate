@@ -117,7 +117,7 @@ benchmarks! {
 				checked,
 				stashes,
 				..
-			}) if checked.len() == 1 && stashes.len() as u32 == T::BatchSize::get()
+			}) if checked.len() == 1 && stashes.len() as u32 == b
 		));
 	}
 	: {
