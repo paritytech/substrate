@@ -537,12 +537,12 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			FromSwarm::DialFailure(e @ DialFailure { peer_id, error, .. }) => {
 				if let Some(peer_id) = peer_id {
 					if let DialError::Transport(errors) = error {
-						if let Some(list) = self.ephemeral_addresses.get_mut(&peer_id) {
+						if let Entry::Occupied(entry) = self.ephemeral_addresses.entry(peer_id) {
 							for (addr, _error) in errors {
-								list.retain(|a| a != addr);
+								entry.get_mut().retain(|a| a != addr);
 							}
-							if list.is_empty() {
-								self.ephemeral_addresses.remove(&peer_id);
+							if entry.get().is_empty() {
+								entry.remove();
 							}
 						}
 					}
