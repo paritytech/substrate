@@ -6,7 +6,7 @@ edition = "2021"
 license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
-description = "FRAME pallet for nick management"
+description = "FRAME pallet for pushing a block to its weight limits"
 readme = "README.md"
 
 [package.metadata.docs.rs]
