@@ -18,7 +18,7 @@
 //! Tests for pallet-fast-unstake.
 
 use super::*;
-use crate::{mock::*, types::*, weights::WeightInfo, Event};
+use crate::{mock::*, types::*, Event};
 use frame_support::{assert_noop, assert_ok, bounded_vec, pallet_prelude::*, traits::Currency};
 use pallet_staking::{CurrentEra, RewardDestination};
 
@@ -1216,16 +1216,23 @@ mod batched {
 #[test]
 fn kusama_estimate() {
 	use crate::WeightInfo;
-	let block_time = frame_support::weights::Weight::from_ref_time(frame_support::weights::constants::WEIGHT_REF_TIME_PER_SECOND * 2).ref_time() as f32;
-	let on_idle = crate::weights::SubstrateWeight::<T>::on_idle_check(1 * 1000, 64).ref_time() as f32;
+	let block_time = frame_support::weights::Weight::from_ref_time(
+		frame_support::weights::constants::WEIGHT_REF_TIME_PER_SECOND * 2,
+	)
+	.ref_time() as f32;
+	let on_idle =
+		crate::weights::SubstrateWeight::<T>::on_idle_check(1 * 1000, 64).ref_time() as f32;
 	dbg!(block_time, on_idle, on_idle / block_time);
 }
-
 
 #[test]
 fn polkadot_estimate() {
 	use crate::WeightInfo;
-	let block_time = frame_support::weights::Weight::from_ref_time(frame_support::weights::constants::WEIGHT_REF_TIME_PER_SECOND * 2).ref_time() as f32;
-	let on_idle = crate::weights::SubstrateWeight::<T>::on_idle_check(1 * 300, 64).ref_time() as f32;
+	let block_time = frame_support::weights::Weight::from_ref_time(
+		frame_support::weights::constants::WEIGHT_REF_TIME_PER_SECOND * 2,
+	)
+	.ref_time() as f32;
+	let on_idle =
+		crate::weights::SubstrateWeight::<T>::on_idle_check(1 * 300, 64).ref_time() as f32;
 	dbg!(block_time, on_idle, on_idle / block_time);
 }
