@@ -126,7 +126,7 @@ benchmarks! {
 	verify {
 		assert!(matches!(
 			fast_unstake_events::<T>().last(),
-			Some(Event::BatchFinished)
+			Some(Event::BatchFinished { size: b })
 		));
 	}
 
