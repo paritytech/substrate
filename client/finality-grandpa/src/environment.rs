@@ -1312,7 +1312,7 @@ where
 		return Ok(())
 	}
 
-	// FAIL-CI: FIXME #1483: clone only when changed
+	// FIXME #1483: clone only when changed
 	let old_authority_set = authority_set.clone();
 
 	let update_res: Result<_, Error> = client.lock_import_and_run(|import_op| {
