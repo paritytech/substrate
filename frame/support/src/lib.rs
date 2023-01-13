@@ -2843,6 +2843,17 @@ pub mod pallet_macros {
 /// where the first argument is the origin. If `#[extrinsic_call]` is attached to an item that
 /// doesn't meet these requirements, a compiler error will be emitted.
 ///
+/// As a short-hand, you may substitute the name of the extrinsic call with `_`, such as the
+/// following:
+///
+/// ```ignore
+/// 	#[extrinsic_call]
+/// _(RawOrigin::Signed(whitelisted_caller()), 0u32.into(), 0);
+/// ```
+///
+/// The underscore will be substituted with the name of the benchmark  (i.e. the name of the
+/// function in the benchmark function definition).
+///
 /// Regardless of whether `#[extrinsic_call]` or `#[block]` is used, this attribute also serves
 /// the purpose of designating the boundary between the setup code portion of the benchmark
 /// (everything before the `#[extrinsic_call]` or `#[block]` attribute) and the verification
