@@ -68,7 +68,7 @@ fn test_g1_subgroup_non_membership_via_endomorphism() {
 		let greatest = rng.gen();
 
 		if let Some(p) = G1Affine::get_point_from_x_unchecked(x, greatest) {
-			if !<ark_ec::short_weierstrass::Projective<sp_ark_bls12_381::g1::Config<Host>> as ark_std::Zero>::is_zero(&p.mul_bigint(Fr::characteristic())) {
+			if !<ark_models::short_weierstrass::Projective<sp_ark_bls12_381::g1::Config<Host>> as ark_std::Zero>::is_zero(&p.mul_bigint(Fr::characteristic())) {
                 assert!(!p.is_in_correct_subgroup_assuming_on_curve());
                 return;
             }

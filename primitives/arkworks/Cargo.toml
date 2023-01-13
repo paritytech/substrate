@@ -21,7 +21,6 @@ ark-bw6-761 = { version = "0.4.0-alpha" }
 ark-ed-on-bls12-381 = { version = "0.4.0-alpha" }
 ark-ed-on-bls12-377 = { version = "0.4.0-alpha" }
 sp-std = { version = "5.0.0", default-features = false, path = "../std" }
-better_any = { version = "0.2.0" }
 
 [features]
 default = ["std"]

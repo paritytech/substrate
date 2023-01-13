@@ -360,44 +360,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ark-r1cs-std"
-version = "0.4.0-alpha.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ccffa53ace7907d7b0e6852f5d1738daaadae44f1e7c75d0fb2aa4d26a0fa7a3"
-dependencies = [
- "ark-ec",
- "ark-ff",
- "ark-relations 0.4.0-alpha.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "ark-std",
- "derivative",
- "num-bigint",
- "num-integer",
- "num-traits",
- "tracing",
-]
-
-[[package]]
-name = "ark-relations"
-version = "0.4.0-alpha.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8fcbb7957519f1fd4de397d22360b236840c3e426f39999e34c63be9dfe7d1b"
-dependencies = [
- "ark-ff",
- "ark-std",
- "tracing",
-]
-
-[[package]]
-name = "ark-relations"
-version = "0.4.0-alpha.1"
-source = "git+https://github.com/arkworks-rs/snark#a14e0ed6c601523b8878bf9d41f68077d75a4d00"
-dependencies = [
- "ark-ff",
- "ark-std",
- "tracing",
-]
-
-[[package]]
 name = "ark-serialize"
 version = "0.4.0-alpha.7"
 source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#667ec3e82e86d168b5a4ba67bd97cacdc963a2f3"
@@ -778,12 +740,6 @@ dependencies = [
  "sp-beefy",
  "sp-runtime",
 ]
-
-[[package]]
-name = "better_any"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1795ebc740ea791ffbe6685e0688ab1effec16c2864e0476db40bfdf0c02cb3d"
 
 [[package]]
 name = "bincode"
@@ -9967,7 +9923,6 @@ dependencies = [
  "ark-ff",
  "ark-serialize",
  "ark-std",
- "better_any",
  "sp-std",
 ]
 
@@ -9976,15 +9931,11 @@ name = "sp-arkworks-test"
 version = "0.4.0-alpha.1"
 dependencies = [
  "ark-algebra-test-templates",
- "ark-bls12-377",
  "ark-ec",
  "ark-ff",
  "ark-models",
- "ark-r1cs-std",
- "ark-relations 0.4.0-alpha.1 (git+https://github.com/arkworks-rs/snark)",
  "ark-serialize",
  "ark-std",
- "frame-support",
  "sp-ark-bls12-377",
  "sp-ark-bls12-381",
  "sp-ark-bw6-761",
