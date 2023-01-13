@@ -329,7 +329,7 @@ pub mod pallet {
 
 			let mut eras_to_check_per_block = ErasToCheckPerBlock::<T>::get();
 			if eras_to_check_per_block.is_zero() {
-				return T::DbWeight::get().reads(1).saturating_add(unaccounted_weight);
+				return T::DbWeight::get().reads(1).saturating_add(unaccounted_weight)
 			}
 
 			// NOTE: here we're assuming that the number of validators has only ever increased,
@@ -343,8 +343,10 @@ pub mod pallet {
 			// determine the number of eras to check. This is based on both `ErasToCheckPerBlock`
 			// and `remaining_weight` passed on to us from the runtime executive.
 			let max_weight = |v, u, b| {
+				// NOTE: this potentially under-counts by up to `BatchSize` reads from the queue.
 				<T as Config>::WeightInfo::on_idle_check(u, v, b)
 					.max(<T as Config>::WeightInfo::on_idle_unstake(b))
+					.saturating_add(T::DbWeight::get().reads(T::BatchSize::get() as u64))
 			};
 			while max_weight(validator_count, eras_to_check_per_block, next_batch_size)
 				.any_gt(remaining_weight)
@@ -352,7 +354,7 @@ pub mod pallet {
 				eras_to_check_per_block.saturating_dec();
 				if eras_to_check_per_block.is_zero() {
 					log!(debug, "early exit because eras_to_check_per_block is zero");
-					return T::DbWeight::get().reads(3).saturating_add(unaccounted_weight);
+					return T::DbWeight::get().reads(3).saturating_add(unaccounted_weight)
 				}
 			}
 
@@ -361,7 +363,7 @@ pub mod pallet {
 				// there is an ongoing election -- we better not do anything. Imagine someone is not
 				// exposed anywhere in the last era, and the snapshot for the election is already
 				// taken. In this time period, we don't want to accidentally unstake them.
-				return T::DbWeight::get().reads(2).saturating_add(unaccounted_weight);
+				return T::DbWeight::get().reads(2).saturating_add(unaccounted_weight)
 			}
 
 			let UnstakeRequest { stashes, mut checked } = match Head::<T>::take().or_else(|| {
@@ -509,7 +511,8 @@ pub mod pallet {
 					eras_checked.len() as u32,
 					validator_count,
 					pre_length as u32,
-				).saturating_add(unaccounted_weight)
+				)
+				.saturating_add(unaccounted_weight)
 			}
 		}
 	}

@@ -139,11 +139,11 @@ benchmarks! {
 		let v in 1 .. MAX_VALIDATORS;
 		let b in 1 .. T::BatchSize::get();
 
-		ErasToCheckPerBlock::<T>::put(u);
-		T::Staking::set_current_era(u);
+		ErasToCheckPerBlock::<T>::put(1);
+		T::Staking::set_current_era(u + 1);
 
 		// setup staking with v validators and u eras of data (0..=u)
-		setup_staking::<T>(v, u);
+		setup_staking::<T>(v, u + 1);
 
 		let stashes = create_unexposed_batch::<T>().into_iter().take(b as usize).map(|s| {
 			assert_ok!(FastUnstake::<T>::register_fast_unstake(
@@ -155,14 +155,18 @@ benchmarks! {
 		// no one is queued thus far.
 		assert_eq!(Head::<T>::get(), None);
 
+		// run for 1 era, this helps us bring
 		on_idle_full_block::<T>();
+		// then set for all the leftover `u` eras.
+		ErasToCheckPerBlock::<T>::put(u);
+
 		assert!(Head::<T>::get().is_some());
 	}
 	: {
 		on_idle_full_block::<T>();
 	}
 	verify {
-		let checked = (0..=u).rev().collect::<Vec<EraIndex>>();
+		let checked = (1..=u+1).rev().collect::<Vec<EraIndex>>();
 		let request = Head::<T>::get().unwrap();
 		assert_eq!(checked, request.checked.into_inner());
 		assert!(matches!(
