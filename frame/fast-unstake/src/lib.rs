@@ -332,7 +332,7 @@ pub mod pallet {
 			// NOTE: here we're assuming that the number of validators has only ever increased,
 			// meaning that the number of exposures to check is either this per era, or less.
 			let validator_count = T::Staking::desired_validator_count();
-			let estimate_batch_size = Head::<T>::get()
+			let next_batch_size = Head::<T>::get()
 				.map_or(Queue::<T>::count().min(T::BatchSize::get()), |head| {
 					head.stashes.len() as u32
 				});
@@ -343,12 +343,12 @@ pub mod pallet {
 				<T as Config>::WeightInfo::on_idle_check(u, v, b)
 					.max(<T as Config>::WeightInfo::on_idle_unstake(b))
 			};
-			while max_weight(validator_count, eras_to_check_per_block, estimate_batch_size)
+			while max_weight(validator_count, eras_to_check_per_block, next_batch_size)
 				.any_gt(remaining_weight)
 			{
 				eras_to_check_per_block.saturating_dec();
 				if eras_to_check_per_block.is_zero() {
-					log!(debug, "early existing because eras_to_check_per_block is zero");
+					log!(debug, "early exit because eras_to_check_per_block is zero");
 					return T::DbWeight::get().reads(3)
 				}
 			}
