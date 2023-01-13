@@ -238,7 +238,7 @@ pub fn benchmarks(attrs: TokenStream, tokens: TokenStream, instance: bool) -> To
 		// but including error anyway to make this future-proof
 		return quote_spanned!(mod_span=> "Module cannot be empty!".to_compile_error()).into()
 	};
-	for stmt in &mut content.1 {
+	for stmt in &mut content {
 		let mut push_stmt = || {
 			expanded_stmts.push(stmt.to_token_stream());
 		};
@@ -294,7 +294,7 @@ pub fn benchmarks(attrs: TokenStream, tokens: TokenStream, instance: bool) -> To
 		true => quote!(T: Config<I>, I: 'static),
 	};
 
-	let krate = match generate_crate_access_2018("frame_benchmarking") {
+	let krate = match generate_crate_access_2018("frame-benchmarking") {
 		Ok(ident) => ident,
 		Err(err) => return err.to_compile_error().into(),
 	};
@@ -585,7 +585,7 @@ fn expand_benchmark(
 	where_clause: TokenStream2,
 ) -> TokenStream2 {
 	// set up variables needed during quoting
-	let krate = match generate_crate_access_2018("frame_benchmarking") {
+	let krate = match generate_crate_access_2018("frame-benchmarking") {
 		Ok(ident) => ident,
 		Err(err) => return err.to_compile_error().into(),
 	};
