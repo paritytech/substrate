@@ -19,6 +19,7 @@ sp-arithmetic = { version = "6.0.0", default-features = false, path = "../../../
 sp-io = { version = "7.0.0", path = "../../../primitives/io", default-features = false }
 sp-state-machine = { version = "0.13.0", optional = true, path = "../../../primitives/state-machine" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../" }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../benchmarking" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-core = { version = "7.0.0", default-features = false, path = "../../../primitives/core" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../../primitives/std" }
@@ -36,6 +37,7 @@ std = [
 	"serde/std",
 	"codec/std",
 	"scale-info/std",
+	"frame-benchmarking/std",
 	"frame-support/std",
 	"frame-system/std",
 	"sp-core/std",
