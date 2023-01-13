@@ -93,19 +93,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// The range of component `u` is `[1, 16]`.
 	/// The range of component `v` is `[1, 16]`.
 	/// The range of component `b` is `[1, 32]`.
-	fn on_idle_check(u: u32, v: u32, b: u32, ) -> Weight {
+	fn on_idle_check(x: u32, b: u32, ) -> Weight {
 		// Minimum execution time: 2_397_640 nanoseconds.
 		Weight::from_ref_time(2_429_325_000)
-			// Standard Error: 56_578_790
-			.saturating_add(Weight::from_ref_time(829_150_656).saturating_mul(u.into()))
-			// Standard Error: 56_578_790
-			.saturating_add(Weight::from_ref_time(670_255_176).saturating_mul(v.into()))
-			// Standard Error: 28_171_558
-			.saturating_add(Weight::from_ref_time(398_637_537).saturating_mul(b.into()))
-			.saturating_add(T::DbWeight::get().reads(23))
-			.saturating_add(T::DbWeight::get().reads((10_u64).saturating_mul(u.into())))
-			.saturating_add(T::DbWeight::get().reads((9_u64).saturating_mul(v.into())))
-			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: FastUnstake ErasToCheckPerBlock (r:1 w:0)
 	// Storage: Staking Ledger (r:1 w:1)
@@ -183,19 +173,9 @@ impl WeightInfo for () {
 	/// The range of component `u` is `[1, 16]`.
 	/// The range of component `v` is `[1, 16]`.
 	/// The range of component `b` is `[1, 32]`.
-	fn on_idle_check(u: u32, v: u32, b: u32, ) -> Weight {
+	fn on_idle_check(x: u32, b: u32, ) -> Weight {
 		// Minimum execution time: 2_397_640 nanoseconds.
 		Weight::from_ref_time(2_429_325_000)
-			// Standard Error: 56_578_790
-			.saturating_add(Weight::from_ref_time(829_150_656).saturating_mul(u.into()))
-			// Standard Error: 56_578_790
-			.saturating_add(Weight::from_ref_time(670_255_176).saturating_mul(v.into()))
-			// Standard Error: 28_171_558
-			.saturating_add(Weight::from_ref_time(398_637_537).saturating_mul(b.into()))
-			.saturating_add(RocksDbWeight::get().reads(23))
-			.saturating_add(RocksDbWeight::get().reads((10_u64).saturating_mul(u.into())))
-			.saturating_add(RocksDbWeight::get().reads((9_u64).saturating_mul(v.into())))
-			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: FastUnstake ErasToCheckPerBlock (r:1 w:0)
 	// Storage: Staking Ledger (r:1 w:1)
