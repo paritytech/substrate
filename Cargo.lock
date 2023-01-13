@@ -4808,6 +4808,7 @@ dependencies = [
  "sp-tracing",
  "sp-transaction-pool",
  "sp-transaction-storage-proof",
+ "storage-monitor",
  "substrate-build-script-utils",
  "substrate-frame-cli",
  "substrate-rpc-client",
@@ -8918,8 +8919,6 @@ dependencies = [
  "futures-timer",
  "jsonrpsee",
  "log",
- "nix 0.26.1",
- "notify",
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "pin-project",
@@ -10520,6 +10519,20 @@ dependencies = [
  "nalgebra",
  "num-traits",
  "rand 0.8.5",
+]
+
+[[package]]
+name = "storage-monitor"
+version = "0.1.0"
+dependencies = [
+ "clap 4.0.32",
+ "futures",
+ "log",
+ "nix 0.26.1",
+ "notify",
+ "sc-client-db",
+ "sc-utils",
+ "sp-core",
 ]
 
 [[package]]

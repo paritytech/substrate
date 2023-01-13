@@ -85,10 +85,17 @@ pub fn run() -> Result<()> {
 
 	match &cli.subcommand {
 		None => {
+			//this part is clumsy PoC, still need some work (maybe pass cli to service::new_full ?)
+			let sm = cli.storage_monitor.clone();
 			let runner = cli.create_runner(&cli.run)?;
 			runner.run_node_until_exit(|config| async move {
+				let db = config.database.clone();
+				let tm  =
 				service::new_full(config, cli.no_hardware_benchmarks)
-					.map_err(sc_cli::Error::Service)
+					.map_err(sc_cli::Error::Service);
+
+				storage_monitor::StorageMonitorService::try_spawn(sm, db, &tm.as_ref().unwrap().spawn_essential_handle())?;
+				tm
 			})
 		},
 		Some(Subcommand::Inspect(cmd)) => {
