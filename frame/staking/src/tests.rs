@@ -5131,6 +5131,9 @@ fn change_of_max_nominations() {
 			assert!(Nominators::<Test>::get(60).is_some());
 			assert_eq!(Staking::electing_voters(None).unwrap().len(), 3 + 1);
 
+			// TODO: This has to be fixed, we can't re-nominate without reporting previous
+			// nominations to the EventHandler.
+
 			// now one of them can revive themselves by re-nominating to a proper value.
 			assert_ok!(Staking::nominate(RuntimeOrigin::signed(71), vec![1]));
 			assert_eq!(
@@ -5140,6 +5143,7 @@ fn change_of_max_nominations() {
 				vec![(70, 1), (60, 1)]
 			);
 
+			// TODO: This part has to be removed, we need to be able to decode old nominations.
 			// or they can be chilled by any account.
 			assert!(Nominators::<Test>::contains_key(101));
 			assert!(Nominators::<Test>::get(101).is_none());
