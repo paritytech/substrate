@@ -207,7 +207,8 @@ pub fn kill(child_info: &ChildInfo, key: &[u8]) {
 /// Get a Vec of bytes from storage.
 pub fn get_raw(child_info: &ChildInfo, key: &[u8]) -> Option<Vec<u8>> {
 	match child_info.child_type() {
-		ChildType::Default => sp_io::default_child_storage::get(child_info.storage_key(), key),
+		ChildType::Default =>
+			sp_io::default_child_storage::get(child_info.storage_key(), key).map(|bytes| bytes.0),
 	}
 }
 
