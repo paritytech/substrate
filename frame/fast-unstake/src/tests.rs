@@ -260,99 +260,106 @@ mod on_idle {
 			assert_eq!(FastUnstake::on_idle(0, remaining_weight), remaining_weight);
 
 			// then
-			// assert_eq!(
-			// 	fast_unstake_events_since_last_call(),
-			// 	vec![Event::BatchChecked { eras: vec![3] }]
-			// );
-			// assert_eq!(
-			// 	Head::<T>::get(),
-			// 	Some(UnstakeRequest {
-			// 		stashes: bounded_vec![(1, Deposit::get())],
-			// 		checked: bounded_vec![3]
-			// 	})
-			// );
+			assert_eq!(
+				fast_unstake_events_since_last_call(),
+				vec![Event::BatchChecked { eras: vec![3] }]
+			);
+			assert_eq!(
+				Head::<T>::get(),
+				Some(UnstakeRequest {
+					stashes: bounded_vec![(1, Deposit::get())],
+					checked: bounded_vec![3]
+				})
+			);
 
-			// // when: another 1 era.
-			// let remaining_weight = <T as Config>::WeightInfo::on_idle_check(
-			// 	1,
-			// 	pallet_staking::ValidatorCount::<T>::get(),
-			// );
-			// assert_eq!(FastUnstake::on_idle(0, remaining_weight), remaining_weight);
+			// when: another 1 era.
+			let remaining_weight = <T as Config>::WeightInfo::on_idle_check(
+				1,
+				pallet_staking::ValidatorCount::<T>::get(),
+				BatchSize::get(),
+			);
+			assert_eq!(FastUnstake::on_idle(0, remaining_weight), remaining_weight);
 
-			// // then:
-			// assert_eq!(
-			// 	fast_unstake_events_since_last_call(),
-			// 	vec![Event::BatchChecked { eras: bounded_vec![2] }]
-			// );
-			// assert_eq!(
-			// 	Head::<T>::get(),
-			// 	Some(UnstakeRequest {
-			// 		stashes: bounded_vec![(1, Deposit::get())],
-			// 		checked: bounded_vec![3, 2]
-			// 	})
-			// );
+			// then:
+			assert_eq!(
+				fast_unstake_events_since_last_call(),
+				vec![Event::BatchChecked { eras: bounded_vec![2] }]
+			);
+			assert_eq!(
+				Head::<T>::get(),
+				Some(UnstakeRequest {
+					stashes: bounded_vec![(1, Deposit::get())],
+					checked: bounded_vec![3, 2]
+				})
+			);
 
-			// // when: then 5 eras, we only need 2 more.
-			// let remaining_weight = <T as Config>::WeightInfo::on_idle_check(
-			// 	5,
-			// 	pallet_staking::ValidatorCount::<T>::get(),
-			// );
-			// assert_eq!(
-			// 	FastUnstake::on_idle(0, remaining_weight),
-			// 	// note the amount of weight consumed: 2 eras worth of weight.
-			// 	<T as Config>::WeightInfo::on_idle_check(
-			// 		2,
-			// 		pallet_staking::ValidatorCount::<T>::get(),
-			// 	)
-			// );
+			// when: then 5 eras, we only need 2 more.
+			let remaining_weight = <T as Config>::WeightInfo::on_idle_check(
+				5,
+				pallet_staking::ValidatorCount::<T>::get(),
+				BatchSize::get(),
+			);
+			assert_eq!(
+				FastUnstake::on_idle(0, remaining_weight),
+				// note the amount of weight consumed: 2 eras worth of weight.
+				<T as Config>::WeightInfo::on_idle_check(
+					2,
+					pallet_staking::ValidatorCount::<T>::get(),
+					BatchSize::get(),
+				)
+			);
 
-			// // then:
-			// assert_eq!(
-			// 	fast_unstake_events_since_last_call(),
-			// 	vec![Event::BatchChecked { eras: vec![1, 0] }]
-			// );
-			// assert_eq!(
-			// 	Head::<T>::get(),
-			// 	Some(UnstakeRequest {
-			// 		stashes: bounded_vec![(1, Deposit::get())],
-			// 		checked: bounded_vec![3, 2, 1, 0]
-			// 	})
-			// );
+			// then:
+			assert_eq!(
+				fast_unstake_events_since_last_call(),
+				vec![Event::BatchChecked { eras: vec![1, 0] }]
+			);
+			assert_eq!(
+				Head::<T>::get(),
+				Some(UnstakeRequest {
+					stashes: bounded_vec![(1, Deposit::get())],
+					checked: bounded_vec![3, 2, 1, 0]
+				})
+			);
 
-			// // when: not enough weight to unstake:
-			// let remaining_weight =
-			// 	<T as Config>::WeightInfo::on_idle_unstake() - Weight::from_ref_time(1);
-			// assert_eq!(FastUnstake::on_idle(0, remaining_weight), Weight::from_ref_time(0));
+			// when: not enough weight to unstake:
+			let remaining_weight = <T as Config>::WeightInfo::on_idle_unstake(BatchSize::get()) -
+				Weight::from_ref_time(1);
+			assert_eq!(FastUnstake::on_idle(0, remaining_weight), Weight::from_ref_time(0));
 
-			// // then nothing happens:
-			// assert_eq!(fast_unstake_events_since_last_call(), vec![]);
-			// assert_eq!(
-			// 	Head::<T>::get(),
-			// 	Some(UnstakeRequest {
-			// 		stashes: bounded_vec![(1, Deposit::get())],
-			// 		checked: bounded_vec![3, 2, 1, 0]
-			// 	})
-			// );
+			// then nothing happens:
+			assert_eq!(fast_unstake_events_since_last_call(), vec![]);
+			assert_eq!(
+				Head::<T>::get(),
+				Some(UnstakeRequest {
+					stashes: bounded_vec![(1, Deposit::get())],
+					checked: bounded_vec![3, 2, 1, 0]
+				})
+			);
 
-			// // when: enough weight to get over at least one iteration: then we are unblocked and
-			// can // unstake.
-			// let remaining_weight = <T as Config>::WeightInfo::on_idle_check(
-			// 	1,
-			// 	pallet_staking::ValidatorCount::<T>::get(),
-			// );
-			// assert_eq!(
-			// 	FastUnstake::on_idle(0, remaining_weight),
-			// 	<T as Config>::WeightInfo::on_idle_unstake()
-			// );
+			// when: enough weight to get over at least one iteration: then we are unblocked and
+			// can unstake.
+			let remaining_weight = <T as Config>::WeightInfo::on_idle_check(
+				1,
+				pallet_staking::ValidatorCount::<T>::get(),
+				BatchSize::get(),
+			);
+			assert_eq!(
+				FastUnstake::on_idle(0, remaining_weight),
+				<T as Config>::WeightInfo::on_idle_unstake(BatchSize::get())
+			);
 
-			// // then we finish the unbonding:
-			// assert_eq!(
-			// 	fast_unstake_events_since_last_call(),
-			// 	vec![Event::Unstaked { stash: 1, result: Ok(()) }, Event::BatchFinished],
-			// );
-			// assert_eq!(Head::<T>::get(), None,);
+			// then we finish the unbonding:
+			assert_eq!(
+				fast_unstake_events_since_last_call(),
+				vec![
+					Event::Unstaked { stash: 1, result: Ok(()) },
+					Event::BatchFinished { size: BatchSize::get() }
+				],
+			);
+			assert_eq!(Head::<T>::get(), None);
 
-			// assert_unstaked(&1);
+			assert_unstaked(&1);
 		});
 	}
 
@@ -1206,4 +1213,23 @@ mod batched {
 			);
 		});
 	}
+}
+
+#[test]
+fn kusama_estimate() {
+	use crate::WeightInfo;
+	let block_time = frame_support::weights::Weight::from_ref_time(frame_support::weights::constants::WEIGHT_REF_TIME_PER_SECOND * 2).ref_time() as f32;
+	let on_idle = crate::weights::SubstrateWeight::<T>::on_idle_check(1, 1000, 1).ref_time() as f32;
+	dbg!(block_time, on_idle, on_idle / block_time);
+	panic!();
+}
+
+
+#[test]
+fn polkadot_estimate() {
+	use crate::WeightInfo;
+	let block_time = frame_support::weights::Weight::from_ref_time(frame_support::weights::constants::WEIGHT_REF_TIME_PER_SECOND * 2).ref_time() as f32;
+	let on_idle = crate::weights::SubstrateWeight::<T>::on_idle_check(1, 300, 1).ref_time() as f32;
+	dbg!(block_time, on_idle, on_idle / block_time);
+	panic!();
 }
