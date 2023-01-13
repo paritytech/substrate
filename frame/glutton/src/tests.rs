@@ -15,10 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Tests for weight-limit pallet.
+//! Tests for the glutton pallet.
 
 use super::*;
-use mock::{new_test_ext, RuntimeOrigin, System, Test, WeightLimit};
+use mock::{new_test_ext, Glutton, RuntimeOrigin, System, Test};
 
 use frame_support::{assert_noop, assert_ok, weights::constants::*};
 
@@ -28,15 +28,15 @@ fn initialize_pallet_works() {
 		assert_eq!(TrashData::<Test>::get(0), None);
 
 		assert_noop!(
-			WeightLimit::initialize_pallet(RuntimeOrigin::signed(1), 3),
+			Glutton::initialize_pallet(RuntimeOrigin::signed(1), 3),
 			DispatchError::BadOrigin
 		);
 		assert_noop!(
-			WeightLimit::initialize_pallet(RuntimeOrigin::none(), 3),
+			Glutton::initialize_pallet(RuntimeOrigin::none(), 3),
 			DispatchError::BadOrigin
 		);
 
-		assert_ok!(WeightLimit::initialize_pallet(RuntimeOrigin::root(), 2));
+		assert_ok!(Glutton::initialize_pallet(RuntimeOrigin::root(), 2));
 
 		assert_eq!(TrashData::<Test>::get(0), Some(0));
 		assert_eq!(TrashData::<Test>::get(1), Some(1));
@@ -49,18 +49,18 @@ fn setting_compute_works() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(Compute::<Test>::get(), Perbill::from_percent(50));
 
-		assert_ok!(WeightLimit::set_compute(RuntimeOrigin::root(), Perbill::from_percent(70)));
+		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), Perbill::from_percent(70)));
 		assert_eq!(Compute::<Test>::get(), Perbill::from_percent(70));
 		System::assert_last_event(
 			Event::ComputationLimitSet { compute: Perbill::from_percent(70) }.into(),
 		);
 
 		assert_noop!(
-			WeightLimit::set_compute(RuntimeOrigin::signed(1), Perbill::from_percent(30)),
+			Glutton::set_compute(RuntimeOrigin::signed(1), Perbill::from_percent(30)),
 			DispatchError::BadOrigin
 		);
 		assert_noop!(
-			WeightLimit::set_compute(RuntimeOrigin::none(), Perbill::from_percent(30)),
+			Glutton::set_compute(RuntimeOrigin::none(), Perbill::from_percent(30)),
 			DispatchError::BadOrigin
 		);
 	});
@@ -71,18 +71,18 @@ fn setting_storage_works() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(Storage::<Test>::get(), Perbill::from_percent(50));
 
-		assert_ok!(WeightLimit::set_storage(RuntimeOrigin::root(), Perbill::from_percent(30)));
+		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), Perbill::from_percent(30)));
 		assert_eq!(Storage::<Test>::get(), Perbill::from_percent(30));
 		System::assert_last_event(
 			Event::StorageLimitSet { storage: Perbill::from_percent(30) }.into(),
 		);
 
 		assert_noop!(
-			WeightLimit::set_storage(RuntimeOrigin::signed(1), Perbill::from_percent(90)),
+			Glutton::set_storage(RuntimeOrigin::signed(1), Perbill::from_percent(90)),
 			DispatchError::BadOrigin
 		);
 		assert_noop!(
-			WeightLimit::set_storage(RuntimeOrigin::none(), Perbill::from_percent(90)),
+			Glutton::set_storage(RuntimeOrigin::none(), Perbill::from_percent(90)),
 			DispatchError::BadOrigin
 		);
 	});
@@ -91,10 +91,10 @@ fn setting_storage_works() {
 #[test]
 fn on_idle_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(WeightLimit::set_compute(RuntimeOrigin::root(), Perbill::from_percent(100)));
-		assert_ok!(WeightLimit::set_storage(RuntimeOrigin::root(), Perbill::from_percent(100)));
+		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), Perbill::from_percent(100)));
+		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), Perbill::from_percent(100)));
 
-		WeightLimit::on_idle(1, Weight::from_ref_time(20_000_000));
+		Glutton::on_idle(1, Weight::from_ref_time(20_000_000));
 	});
 }
 
@@ -102,11 +102,11 @@ fn on_idle_works() {
 #[test]
 fn on_idle_weight_is_close_enough_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(WeightLimit::set_compute(RuntimeOrigin::root(), Perbill::from_percent(100)));
-		assert_ok!(WeightLimit::set_storage(RuntimeOrigin::root(), Perbill::from_percent(100)));
+		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), Perbill::from_percent(100)));
+		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), Perbill::from_percent(100)));
 
 		let should = Weight::from_parts(WEIGHT_REF_TIME_PER_MILLIS * 10, WEIGHT_PROOF_SIZE_PER_MB);
-		let got = WeightLimit::on_idle(1, should);
+		let got = Glutton::on_idle(1, should);
 		assert!(got.all_lte(should), "Consumed too much weight");
 
 		let ratio = Perbill::from_rational(got.proof_size(), should.proof_size());

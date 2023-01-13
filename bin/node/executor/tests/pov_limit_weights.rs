@@ -16,8 +16,8 @@
 // limitations under the License.
 
 use frame_support::{pallet_prelude::Weight, traits::Hooks, weights::constants::*};
-use kitchensink_runtime::{Runtime, System, WeightLimit};
-use pallet_weight_limit::WeightInfo;
+use kitchensink_runtime::{Glutton, Runtime, System};
+use pallet_glutton::WeightInfo;
 use sp_runtime::Perbill;
 
 pub mod common;
@@ -27,10 +27,10 @@ use self::common::*;
 fn expected_weight_same_as_actual() {
 	let mut t = new_test_ext(compact_code_unwrap());
 
-	let actual_weight = <Runtime as pallet_weight_limit::Config>::WeightInfo::on_idle();
+	let actual_weight = <Runtime as pallet_glutton::Config>::WeightInfo::on_idle();
 
 	t.execute_with(|| {
-		let got = WeightLimit::on_idle(
+		let got = Glutton::on_idle(
 			System::block_number(),
 			Weight::from_parts(WEIGHT_REF_TIME_PER_MILLIS * 10, WEIGHT_PROOF_SIZE_PER_MB),
 		);

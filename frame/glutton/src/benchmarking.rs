@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Weight-limit pallet benchmarking.
+//! Glutton pallet benchmarking.
 
 #[cfg(feature = "runtime-benchmarks")]
 use super::*;
@@ -24,14 +24,14 @@ use frame_benchmarking::benchmarks;
 use frame_support::{pallet_prelude::*, weights::constants::*};
 use frame_system::RawOrigin as SystemOrigin;
 
-use crate::Pallet as WeightLimit;
+use crate::Pallet as Glutton;
 use frame_system::Pallet as System;
 
 benchmarks! {
 	waste_ref_time {
 		let n in 0 .. 1024;
 	}: {
-		WeightLimit::<T>::waste_ref_time(n);
+		Glutton::<T>::waste_ref_time(n);
 	}
 
 	waste_proof_size_some {
@@ -52,18 +52,18 @@ benchmarks! {
 	on_idle {
 		// We have to run the migration so that `TrashData` is not emtpy.
 		(0..5000).for_each(|i| TrashData::<T>::insert(i, i));
-		let _ = WeightLimit::<T>::set_compute(SystemOrigin::Root.into(), Perbill::from_percent(100));
-		let _ = WeightLimit::<T>::set_storage(SystemOrigin::Root.into(), Perbill::from_percent(100));
+		let _ = Glutton::<T>::set_compute(SystemOrigin::Root.into(), Perbill::from_percent(100));
+		let _ = Glutton::<T>::set_storage(SystemOrigin::Root.into(), Perbill::from_percent(100));
 	}: {
-		let weight = WeightLimit::<T>::on_idle(System::<T>::block_number(), Weight::from_parts(WEIGHT_REF_TIME_PER_MILLIS * 10, WEIGHT_PROOF_SIZE_PER_MB));
+		let weight = Glutton::<T>::on_idle(System::<T>::block_number(), Weight::from_parts(WEIGHT_REF_TIME_PER_MILLIS * 10, WEIGHT_PROOF_SIZE_PER_MB));
 	}
 
 	empty_on_idle {
-		let _ = WeightLimit::<T>::set_compute(SystemOrigin::Root.into(), Perbill::from_percent(100));
-		let _ = WeightLimit::<T>::set_storage(SystemOrigin::Root.into(), Perbill::from_percent(100));
+		let _ = Glutton::<T>::set_compute(SystemOrigin::Root.into(), Perbill::from_percent(100));
+		let _ = Glutton::<T>::set_storage(SystemOrigin::Root.into(), Perbill::from_percent(100));
 	}: {
-		let weight = WeightLimit::<T>::on_idle(System::<T>::block_number(), T::DbWeight::get().reads(1));
+		let weight = Glutton::<T>::on_idle(System::<T>::block_number(), T::DbWeight::get().reads(1));
 	}
 
-	impl_benchmark_test_suite!(WeightLimit, crate::mock::new_test_ext(), crate::mock::Test);
+	impl_benchmark_test_suite!(Glutton, crate::mock::new_test_ext(), crate::mock::Test);
 }

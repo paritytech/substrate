@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Weight Limit Pallet
+//! # Glutton Pallet
 //!
 //! Pallet that consumes `ref_time` and `proof_size` of a block. Based on the
 //! `Compute` and `Storage` parameters the pallet consumes the adequate amount

@@ -3099,6 +3099,7 @@ dependencies = [
  "pallet-election-provider-support-benchmarking",
  "pallet-elections-phragmen",
  "pallet-fast-unstake",
+ "pallet-glutton",
  "pallet-grandpa",
  "pallet-identity",
  "pallet-im-online",
@@ -3140,7 +3141,6 @@ dependencies = [
  "pallet-uniques",
  "pallet-utility",
  "pallet-vesting",
- "pallet-weight-limit",
  "pallet-whitelist",
  "parity-scale-codec",
  "scale-info",
@@ -4324,13 +4324,13 @@ dependencies = [
  "node-testing",
  "pallet-balances",
  "pallet-contracts",
+ "pallet-glutton",
  "pallet-im-online",
  "pallet-root-testing",
  "pallet-sudo",
  "pallet-timestamp",
  "pallet-transaction-payment",
  "pallet-treasury",
- "pallet-weight-limit",
  "parity-scale-codec",
  "sc-executor",
  "scale-info",
@@ -5231,6 +5231,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-glutton"
+version = "4.0.0-dev"
+dependencies = [
+ "blake2",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log",
+ "pallet-balances",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-grandpa"
 version = "4.0.0-dev"
 dependencies = [
@@ -6115,24 +6133,6 @@ dependencies = [
 name = "pallet-vesting"
 version = "4.0.0-dev"
 dependencies = [
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "log",
- "pallet-balances",
- "parity-scale-codec",
- "scale-info",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
-name = "pallet-weight-limit"
-version = "4.0.0-dev"
-dependencies = [
- "blake2",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
