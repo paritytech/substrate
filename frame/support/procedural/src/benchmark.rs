@@ -289,11 +289,11 @@ pub fn benchmarks(attrs: TokenStream, tokens: TokenStream, instance: bool) -> To
 	}
 
 	// generics
-	let generics = match instance {
+	let type_use_generics = match instance {
 		false => quote!(T),
 		true => quote!(T, I),
 	};
-	let full_generics = match instance {
+	let type_impl_generics = match instance {
 		false => quote!(T: Config),
 		true => quote!(T: Config<I>, I: 'static),
 	};
@@ -336,12 +336,12 @@ pub fn benchmarks(attrs: TokenStream, tokens: TokenStream, instance: bool) -> To
 				*
 			}
 
-			impl<#full_generics> #krate::BenchmarkingSetup<#generics> for SelectedBenchmark where #where_clause {
+			impl<#type_impl_generics> #krate::BenchmarkingSetup<#type_use_generics> for SelectedBenchmark where #where_clause {
 				fn components(&self) -> #krate::Vec<(#krate::BenchmarkParameter, u32, u32)> {
 					match self {
 						#(
 							Self::#benchmark_names => {
-								<#benchmark_names as #krate::BenchmarkingSetup<#generics>>::components(&#benchmark_names)
+								<#benchmark_names as #krate::BenchmarkingSetup<#type_use_generics>>::components(&#benchmark_names)
 							}
 						)
 						*
@@ -360,7 +360,7 @@ pub fn benchmarks(attrs: TokenStream, tokens: TokenStream, instance: bool) -> To
 						#(
 							Self::#benchmark_names => {
 								<#benchmark_names as #krate::BenchmarkingSetup<
-									#generics
+									#type_use_generics
 								>>::instance(&#benchmark_names, components, verify)
 							}
 						)
@@ -369,7 +369,7 @@ pub fn benchmarks(attrs: TokenStream, tokens: TokenStream, instance: bool) -> To
 				}
 			}
 			#[cfg(any(feature = "runtime-benchmarks", test))]
-			impl<#full_generics> #krate::Benchmarking for Pallet<#generics>
+			impl<#type_impl_generics> #krate::Benchmarking for Pallet<#type_use_generics>
 			where T: frame_system::Config, #where_clause
 			{
 				fn benchmarks(
@@ -392,7 +392,7 @@ pub fn benchmarks(attrs: TokenStream, tokens: TokenStream, instance: bool) -> To
 							*,
 							_ => panic!("all benchmarks should be selectable")
 						};
-						let components = <SelectedBenchmark as #krate::BenchmarkingSetup<#generics>>::components(&selected_benchmark);
+						let components = <SelectedBenchmark as #krate::BenchmarkingSetup<#type_use_generics>>::components(&selected_benchmark);
 						#krate::BenchmarkMetadata {
 							name: benchmark.as_bytes().to_vec(),
 							components,
@@ -435,7 +435,7 @@ pub fn benchmarks(attrs: TokenStream, tokens: TokenStream, instance: bool) -> To
 						// Set up the externalities environment for the setup we want to
 						// benchmark.
 						let closure_to_benchmark = <
-							SelectedBenchmark as #krate::BenchmarkingSetup<#generics>
+							SelectedBenchmark as #krate::BenchmarkingSetup<#type_use_generics>
 						>::instance(&selected_benchmark, c, verify)?;
 
 						// Set the block number to at least 1 so events are deposited.
@@ -516,7 +516,7 @@ pub fn benchmarks(attrs: TokenStream, tokens: TokenStream, instance: bool) -> To
 			}
 
 			#[cfg(test)]
-			impl<#full_generics> Pallet<#generics> where T: ::frame_system::Config, #where_clause {
+			impl<#type_impl_generics> Pallet<#type_use_generics> where T: ::frame_system::Config, #where_clause {
 				/// Test a particular benchmark by name.
 				///
 				/// This isn't called `test_benchmark_by_name` just in case some end-user eventually
@@ -606,12 +606,12 @@ fn expand_benchmark(
 	let param_ranges = unrolled.param_ranges;
 	let param_types = unrolled.param_types;
 
-	let generics = match is_instance {
+	let type_use_generics = match is_instance {
 		false => quote!(T),
 		true => quote!(T, I),
 	};
 
-	let full_generics = match is_instance {
+	let type_impl_generics = match is_instance {
 		false => quote!(T: Config),
 		true => quote!(T: Config<I>, I: 'static),
 	};
@@ -664,15 +664,15 @@ fn expand_benchmark(
 			(
 				// (pre_call, post_call):
 				quote! {
-					let __call = Call::<#generics>::#expr_call;
+					let __call = Call::<#type_use_generics>::#expr_call;
 					let __benchmarked_call_encoded = #codec::Encode::encode(&__call);
 				},
 				quote! {
-					let __call_decoded = <Call<#generics> as #codec::Decode>
+					let __call_decoded = <Call<#type_use_generics> as #codec::Decode>
 						::decode(&mut &__benchmarked_call_encoded[..])
 						.expect("call is encoded above, encoding must be correct");
 					let __origin = #origin.into();
-					<Call<#generics> as #traits::UnfilteredDispatchable>::dispatch_bypass_filter(
+					<Call<#type_use_generics> as #traits::UnfilteredDispatchable>::dispatch_bypass_filter(
 						__call_decoded,
 						__origin,
 					)?;
@@ -693,7 +693,7 @@ fn expand_benchmark(
 		struct #name;
 
 		#[allow(unused_variables)]
-		impl<#full_generics> #krate::BenchmarkingSetup<#generics>
+		impl<#type_impl_generics> #krate::BenchmarkingSetup<#type_use_generics>
 		for #name where #where_clause {
 			fn components(&self) -> #krate::Vec<(#krate::BenchmarkParameter, u32, u32)> {
 				#krate::vec! [
@@ -734,7 +734,7 @@ fn expand_benchmark(
 		}
 
 		#[cfg(test)]
-		impl<#full_generics> Pallet<#generics> where T: ::frame_system::Config, #where_clause {
+		impl<#type_impl_generics> Pallet<#type_use_generics> where T: ::frame_system::Config, #where_clause {
 			#[allow(unused)]
 			fn #test_ident() -> Result<(), #krate::BenchmarkError> {
 				let selected_benchmark = SelectedBenchmark::#name;
