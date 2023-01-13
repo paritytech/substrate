@@ -189,7 +189,7 @@ impl BenchmarkDef {
 				Stmt::Expr(Expr::Block(block)) => { // #[block] case
 					block.attrs.iter().enumerate().find_map(|(k, attr)| {
 						let Some(segment) = attr.path.segments.last() else { return None; };
-						let Ok(_) = syn::parse::<keywords::block>(segment.ident.to_token_stream().into()) else { return None; };
+						let _: keywords::block = syn::parse(segment.ident.to_token_stream().into()).ok()?;
 						let mut block = block.clone();
 
 						// consume #[block] tokens
