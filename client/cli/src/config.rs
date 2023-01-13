@@ -191,16 +191,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			.unwrap_or_else(|| Ok((None, KeystoreConfig::InMemory)))
 	}
 
-	/// Get the database available storage space threshold.
-	///
-	/// By default this is retrieved from `DatabaseParams` if it is available.
-	fn database_storage_threshold(&self) -> Result<u64> {
-		Ok(self
-			.database_params()
-			.map(|x| x.database_storage_threshold())
-			.unwrap_or_default())
-	}
-
 	/// Get the database cache size.
 	///
 	/// By default this is retrieved from `DatabaseParams` if it is available. Otherwise its `None`.
@@ -572,7 +562,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			base_path: Some(base_path),
 			informant_output_format: Default::default(),
 			runtime_cache_size,
-			available_storage_threshold: self.database_storage_threshold()?,
 		})
 	}
 

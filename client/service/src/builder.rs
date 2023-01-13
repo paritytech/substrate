@@ -23,7 +23,6 @@ use crate::{
 	error::Error,
 	metrics::MetricsService,
 	start_rpc_servers,
-	storage_monitor::StorageMonitorService,
 	BuildGenesisBlock, GenesisBlockBuilder, RpcHandlers, SpawnTaskHandle, TaskManager,
 	TransactionPoolAdapter,
 };
@@ -535,14 +534,6 @@ where
 		None,
 		metrics_service.run(client.clone(), transaction_pool.clone(), network.clone()),
 	);
-
-	if let Some(storage_monitor_service) = StorageMonitorService::new_for_config(&config)? {
-		task_manager.spawn_essential_handle().spawn(
-			"storage-monitor",
-			None,
-			storage_monitor_service.run(),
-		)
-	}
 
 	let rpc_id_provider = config.rpc_id_provider.take();
 
