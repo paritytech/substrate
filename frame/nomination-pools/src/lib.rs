@@ -644,7 +644,7 @@ impl<T: Config> Commission<T> {
 			return self.throttle_from.map_or_else(
 				|| {
 					defensive!("throttle_from should exist if change_rate is set");
-					false
+					true
 				},
 				|f| {
 					// if `min_delay` is zero (no delay), not throttling.
