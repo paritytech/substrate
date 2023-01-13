@@ -223,9 +223,10 @@ pub mod pallet {
 
 	impl<T: Config> PovWaster for Pallet<T> {
 		fn waste_proof_size(counter: u32) -> Weight {
-			match TrashData::<T>::get(counter) {
-				Some(_) => T::WeightInfo::waste_proof_size_some(1),
-				None => T::WeightInfo::waste_proof_size_none(1),
+			if TrashData::<T>::get(counter).is_some() {
+				T::WeightInfo::waste_proof_size_some(1) 
+			} else {
+				T::WeightInfo::waste_proof_size_none(1)
 			}
 		}
 	}
