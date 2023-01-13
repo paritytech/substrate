@@ -2817,7 +2817,7 @@ pub mod pallet_macros {
 /// [`benchmarking::ParamRange`] is [`benchmarking::Linear`].
 ///
 /// The valid syntax for defining a `Linear` is `Linear<A, B>` where `A`, and `B` are
-/// valid integer literals (that fit in a `u32`), such that `B` > `A`.
+/// valid integer literals (that fit in a `u32`), such that `B` >= `A`.
 ///
 /// Note that the benchmark function definition does not actually expand as a function
 /// definition, but rather is used to automatically create a number of impls and structs
