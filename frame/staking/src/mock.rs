@@ -750,6 +750,7 @@ pub(crate) fn add_slash(who: &AccountId) {
 }
 
 /// Make all validator and nominator request their payment
+// TODO(ank4n) pay out all the paged nominators.
 pub(crate) fn make_all_reward_payment(era: EraIndex) {
 	let validators_with_reward = ErasRewardPoints::<Test>::get(era)
 		.individual
