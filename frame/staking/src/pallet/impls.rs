@@ -25,19 +25,21 @@ use frame_support::{
 	dispatch::WithPostDispatchInfo,
 	pallet_prelude::*,
 	traits::{
-		Currency, CurrencyToVote, Defensive, DefensiveResult, EstimateNextNewSession, Get,
-		Imbalance, Len, LockableCurrency, OnUnbalanced, TryCollect, UnixTime, WithdrawReasons,
+		Currency, CurrencyToVote, Defensive, EstimateNextNewSession, Get, Imbalance, Len,
+		LockableCurrency, OnUnbalanced, TryCollect, UnixTime, WithdrawReasons,
 	},
 	weights::Weight,
 };
 use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use pallet_session::historical;
 use sp_runtime::{
-	generic::Era,
 	traits::{Bounded, Convert, One, SaturatedConversion, Saturating, StaticLookup, Zero},
 	Perbill,
 };
-use sp_staking::{offence::{DisableStrategy, OffenceDetails, OnOffenceHandler}, EraIndex, SessionIndex, Stake, StakingInterface, PageIndex};
+use sp_staking::{
+	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
+	EraIndex, PageIndex, SessionIndex, Stake, StakingInterface,
+};
 use sp_std::prelude::*;
 
 use crate::{
@@ -139,6 +141,7 @@ impl<T: Config> Pallet<T> {
 			Error::<T>::InvalidEraToReward
 				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
 		})?;
+
 		let history_depth = T::HistoryDepth::get();
 		ensure!(
 			era <= current_era && era >= current_era.saturating_sub(history_depth),
@@ -163,20 +166,6 @@ impl<T: Config> Pallet<T> {
 			.claimed_rewards
 			.retain(|&x| x >= current_era.saturating_sub(history_depth));
 		<Ledger<T>>::insert(&controller, &ledger);
-
-		// todo(ank4n): remove
-		// match ledger.claimed_rewards.binary_search(&era) {
-		// 	Ok(_) =>
-		// 		return Err(Error::<T>::AlreadyClaimed
-		// 			.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))),
-		// 	Err(pos) => ledger
-		// 		.claimed_rewards
-		// 		.try_insert(pos, era)
-		// 		// Since we retain era entries in `claimed_rewards` only upto
-		// 		// `HistoryDepth`, following bound is always expected to be
-		// 		// satisfied.
-		// 		.defensive_map_err(|_| Error::<T>::BoundNotMet)?,
-		// }
 
 		if EraInfo::<T>::temp_is_rewards_claimed(era, &ledger, &ledger.stash, page) {
 			return Err(Error::<T>::AlreadyClaimed

@@ -2194,7 +2194,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 		ErasStakers::<Test>::insert(0, 11, &exposure);
 		ErasStakersClipped::<Test>::insert(0, 11, exposure);
 		ErasValidatorReward::<Test>::insert(0, stake);
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 0));
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 0, 0));
 		assert_eq!(Balances::total_balance(&11), stake * 2);
 
 		// Set staker
@@ -3560,19 +3560,19 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 		// Last kept is 1:
 		assert!(current_era - HistoryDepth::get() == 1);
 		assert_noop!(
-			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 0),
+			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 0, 0),
 			// Fail: Era out of history
 			Error::<Test>::InvalidEraToReward.with_weight(err_weight)
 		);
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1));
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 2));
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1, 0));
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 2, 0));
 		assert_noop!(
-			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 2),
+			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 2, 0),
 			// Fail: Double claim
 			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
 		);
 		assert_noop!(
-			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, active_era),
+			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, active_era, 0),
 			// Fail: Era not finished yet
 			Error::<Test>::InvalidEraToReward.with_weight(err_weight)
 		);
@@ -3750,7 +3750,7 @@ fn test_payout_stakers() {
 
 		let pre_payout_total_issuance = Balances::total_issuance();
 		RewardOnUnbalanceWasCalled::set(false);
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1));
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1, 0));
 		assert_eq_error_rate!(
 			Balances::total_issuance(),
 			pre_payout_total_issuance + actual_paid_out,
@@ -3791,7 +3791,7 @@ fn test_payout_stakers() {
 
 			mock::start_active_era(i);
 			RewardOnUnbalanceWasCalled::set(false);
-			assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, i - 1));
+			assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, i - 1, 0));
 			assert_eq_error_rate!(
 				Balances::total_issuance(),
 				pre_payout_total_issuance + actual_paid_out,
@@ -3827,12 +3827,14 @@ fn test_payout_stakers() {
 		assert_ok!(Staking::payout_stakers(
 			RuntimeOrigin::signed(1337),
 			11,
-			expected_start_reward_era
+			expected_start_reward_era,
+			0
 		));
 		assert_ok!(Staking::payout_stakers(
 			RuntimeOrigin::signed(1337),
 			11,
-			expected_last_reward_era
+			expected_last_reward_era,
+			0
 		));
 		assert_eq!(
 			Staking::ledger(&10),
@@ -3846,9 +3848,9 @@ fn test_payout_stakers() {
 		);
 
 		// Out of order claims works.
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 69));
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 23));
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 42));
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 69, 0));
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 23, 0));
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 42, 0));
 		assert_eq!(
 			Staking::ledger(&10),
 			Some(StakingLedger {
@@ -3894,12 +3896,12 @@ fn payout_stakers_handles_basic_errors() {
 
 		// Wrong Era, too big
 		assert_noop!(
-			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 2),
+			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 2, 0),
 			Error::<Test>::InvalidEraToReward.with_weight(err_weight)
 		);
 		// Wrong Staker
 		assert_noop!(
-			Staking::payout_stakers(RuntimeOrigin::signed(1337), 10, 1),
+			Staking::payout_stakers(RuntimeOrigin::signed(1337), 10, 1, 0),
 			Error::<Test>::NotStash.with_weight(err_weight)
 		);
 
@@ -3919,31 +3921,43 @@ fn payout_stakers_handles_basic_errors() {
 		// to payout era starting from expected_start_reward_era=19 through
 		// expected_last_reward_era=98 (80 total eras), but not 18 or 99.
 		assert_noop!(
-			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_start_reward_era - 1),
+			Staking::payout_stakers(
+				RuntimeOrigin::signed(1337),
+				11,
+				expected_start_reward_era - 1,
+				0
+			),
 			Error::<Test>::InvalidEraToReward.with_weight(err_weight)
 		);
 		assert_noop!(
-			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_last_reward_era + 1),
+			Staking::payout_stakers(
+				RuntimeOrigin::signed(1337),
+				11,
+				expected_last_reward_era + 1,
+				0
+			),
 			Error::<Test>::InvalidEraToReward.with_weight(err_weight)
 		);
 		assert_ok!(Staking::payout_stakers(
 			RuntimeOrigin::signed(1337),
 			11,
-			expected_start_reward_era
+			expected_start_reward_era,
+			0
 		));
 		assert_ok!(Staking::payout_stakers(
 			RuntimeOrigin::signed(1337),
 			11,
-			expected_last_reward_era
+			expected_last_reward_era,
+			0
 		));
 
 		// Can't claim again
 		assert_noop!(
-			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_start_reward_era),
+			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_start_reward_era, 0),
 			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
 		);
 		assert_noop!(
-			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_last_reward_era),
+			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_last_reward_era, 0),
 			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
 		);
 	});
@@ -3991,7 +4005,8 @@ fn payout_stakers_handles_weight_refund() {
 		start_active_era(2);
 
 		// Collect payouts when there are no nominators
-		let call = TestCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 1 });
+		let call =
+			TestCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 1, page: 0 });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(RuntimeOrigin::signed(20));
 		assert_ok!(result);
@@ -4004,7 +4019,8 @@ fn payout_stakers_handles_weight_refund() {
 		start_active_era(3);
 
 		// Collect payouts for an era where the validator did not receive any points.
-		let call = TestCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 2 });
+		let call =
+			TestCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 2, page: 0 });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(RuntimeOrigin::signed(20));
 		assert_ok!(result);
@@ -4017,7 +4033,8 @@ fn payout_stakers_handles_weight_refund() {
 		start_active_era(4);
 
 		// Collect payouts when the validator has `half_max_nom_rewarded` nominators.
-		let call = TestCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 3 });
+		let call =
+			TestCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 3, page: 0 });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(RuntimeOrigin::signed(20));
 		assert_ok!(result);
@@ -4040,14 +4057,16 @@ fn payout_stakers_handles_weight_refund() {
 		start_active_era(6);
 
 		// Collect payouts when the validator had `half_max_nom_rewarded` nominators.
-		let call = TestCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 5 });
+		let call =
+			TestCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 5, page: 0 });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(RuntimeOrigin::signed(20));
 		assert_ok!(result);
 		assert_eq!(extract_actual_weight(&result, &info), max_nom_rewarded_weight);
 
 		// Try and collect payouts for an era that has already been collected.
-		let call = TestCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 5 });
+		let call =
+			TestCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 5, page: 0 });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(RuntimeOrigin::signed(20));
 		assert!(result.is_err());
@@ -4193,7 +4212,7 @@ fn payout_creates_controller() {
 		// compute and ensure the reward amount is greater than zero.
 		let _ = current_total_payout_for_duration(reward_time_per_era());
 		mock::start_active_era(2);
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1));
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1, 0));
 
 		// Controller is created
 		assert!(Balances::free_balance(1337) > 0);
@@ -4221,7 +4240,7 @@ fn payout_to_any_account_works() {
 		// compute and ensure the reward amount is greater than zero.
 		let _ = current_total_payout_for_duration(reward_time_per_era());
 		mock::start_active_era(2);
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1));
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1, 0));
 
 		// Payment is successful
 		assert!(Balances::free_balance(42) > 0);
@@ -5515,14 +5534,14 @@ fn pre_bonding_era_cannot_be_claimed() {
 		mock::start_active_era(current_era);
 
 		// claiming reward for last era in which validator was active works
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(4), 3, current_era - 1));
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(4), 3, current_era - 1, 0));
 
 		// consumed weight for all payout_stakers dispatches that fail
 		let err_weight = <Test as Config>::WeightInfo::payout_stakers_alive_staked(0);
 		// cannot claim rewards for an era before bonding occured as it is
 		// already marked as claimed.
 		assert_noop!(
-			Staking::payout_stakers(RuntimeOrigin::signed(4), 3, current_era - 2),
+			Staking::payout_stakers(RuntimeOrigin::signed(4), 3, current_era - 2, 0),
 			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
 		);
 
@@ -5532,7 +5551,7 @@ fn pre_bonding_era_cannot_be_claimed() {
 
 		// make sure stakers still cannot claim rewards that they are not meant to
 		assert_noop!(
-			Staking::payout_stakers(RuntimeOrigin::signed(4), 3, current_era - 2),
+			Staking::payout_stakers(RuntimeOrigin::signed(4), 3, current_era - 2, 0),
 			Error::<Test>::NotController
 		);
 
@@ -5581,7 +5600,7 @@ fn reducing_history_depth_abrupt() {
 		mock::start_active_era(current_era);
 
 		// claiming reward for last era in which validator was active works
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(4), 3, current_era - 1));
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(4), 3, current_era - 1, 0));
 
 		// next era
 		current_era = current_era + 1;
@@ -5592,7 +5611,7 @@ fn reducing_history_depth_abrupt() {
 		HistoryDepth::set(history_depth);
 		// claiming reward does not work anymore
 		assert_noop!(
-			Staking::payout_stakers(RuntimeOrigin::signed(4), 3, current_era - 1),
+			Staking::payout_stakers(RuntimeOrigin::signed(4), 3, current_era - 1, 0),
 			Error::<Test>::NotController
 		);
 

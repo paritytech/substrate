@@ -59,7 +59,6 @@ pub(crate) const SPECULATIVE_NUM_SPANS: u32 = 32;
 #[frame_support::pallet]
 pub mod pallet {
 	use frame_election_provider_support::ElectionDataProvider;
-	use frame_support::metadata::StorageEntryModifier::Default;
 
 	use crate::BenchmarkingConfig;
 
@@ -609,8 +608,8 @@ pub mod pallet {
 	pub(crate) struct EraInfo<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> EraInfo<T> {
 		// TODO(ank4n): doc and clean up in 84 eras
-		// looks at ledger for older non paged rewards, and `ClaimedRewards` for newer paged
-		// rewards.
+		// looks at `T::StakingLedger` for older non paged rewards, and `T::ClaimedRewards` for
+		// newer paged rewards.
 		pub(crate) fn temp_is_rewards_claimed(
 			era: EraIndex,
 			ledger: &StakingLedger<T>,
@@ -633,8 +632,8 @@ pub mod pallet {
 			return match <ErasStakersPaged<T>>::get((era, validator, page)) {
 				Some(paged_exposure) => paged_exposure,
 				// only return clipped exposure if page zero and no paged exposure entry
-				None if page == 0 => <ErasStakersClipped<T>>::get(&era, &ledger.stash),
-				_ => Default::Default(),
+				None if page == 0 => <ErasStakersClipped<T>>::get(&era, validator),
+				_ => Default::default(),
 			}
 		}
 
@@ -662,15 +661,6 @@ pub mod pallet {
 				.for_each(|(page, paged_exposure)| {
 					<ErasStakersPaged<T>>::insert((era, &validator, page as u32), &paged_exposure);
 				});
-
-			// fixme(ank4n): no need to keep storing new clipped exposure
-			let mut exposure_clipped = exposure;
-			let clipped_max_len = T::MaxNominatorRewardedPerValidator::get() as usize;
-			if exposure_clipped.others.len() > clipped_max_len {
-				exposure_clipped.others.sort_by(|a, b| a.value.cmp(&b.value).reverse());
-				exposure_clipped.others.truncate(clipped_max_len);
-			}
-			<ErasStakersClipped<T>>::insert(era, &validator, exposure_clipped);
 		}
 
 		pub(crate) fn set_total_stake(era: EraIndex, total_stake: BalanceOf<T>) {
@@ -1626,8 +1616,7 @@ pub mod pallet {
 		///   NOTE: weights are assuming that payouts are made to alive stash account (Staked).
 		///   Paying even a dead controller is cheaper weight-wise. We don't do any refunds here.
 		/// # </weight>
-		// todo(ank4n): fix weights and breaking change. But leaving it will add to confusion and
-		// missed rewards.
+		// todo(ank4n): fix weights.
 		#[pallet::call_index(18)]
 		#[pallet::weight(T::WeightInfo::payout_stakers_alive_staked(
 			T::MaxNominatorRewardedPerValidator::get()

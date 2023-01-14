@@ -760,7 +760,7 @@ pub(crate) fn make_all_reward_payment(era: EraIndex) {
 	// reward validators
 	for validator_controller in validators_with_reward.iter().filter_map(Staking::bonded) {
 		let ledger = <Ledger<Test>>::get(&validator_controller).unwrap();
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), ledger.stash, era));
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), ledger.stash, era, 0));
 	}
 }
 
