@@ -1971,15 +1971,15 @@ impl_runtime_apis! {
 	}
 
 	impl pallet_nomination_pools_runtime_api::NominationPoolsApi<Block, AccountId, Balance> for Runtime {
-		fn pending_rewards(member_account: AccountId) -> Balance {
-			NominationPools::api_pending_rewards(member_account).unwrap_or_default()
+		fn pending_rewards(who: AccountId) -> Balance {
+			NominationPools::api_pending_rewards(who).unwrap_or_default()
 		}
 
-		fn points_to_balance(pool_id: u32) -> Balance {
+		fn points_to_balance(pool_id: pallet_nomination_pools::PoolId) -> Balance {
 			NominationPools::api_points_to_balance(pool_id)
 		}
 
-		fn balance_to_points(pool_id: u32, new_funds: Balance) -> Balance {
+		fn balance_to_points(pool_id: pallet_nomination_pools::PoolId, new_funds: Balance) -> Balance {
 			NominationPools::api_balance_to_points(pool_id, new_funds)
 		}
 	}
