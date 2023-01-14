@@ -990,7 +990,8 @@ mod tests {
 			assert_ok!(Staking::payout_stakers(
 				RuntimeOrigin::signed(1337),
 				validator_stash,
-				current_era
+				current_era,
+				0
 			));
 			let new_free_balance = Balances::free_balance(&validator_stash);
 
