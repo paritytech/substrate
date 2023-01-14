@@ -18,25 +18,22 @@ use super::*;
 use crate::Config;
 
 use codec::FullCodec;
-use frame_support::{
-	ensure,
-	unsigned::TransactionValidityError, Serialize, Deserialize,
-};
+use frame_support::{ensure, unsigned::TransactionValidityError, Deserialize, Serialize};
+use pallet_transaction_payment::OnChargeTransaction;
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{
-		DispatchInfoOf, MaybeSerializeDeserialize, PostDispatchInfoOf},
+	traits::{DispatchInfoOf, MaybeSerializeDeserialize, PostDispatchInfoOf},
 	transaction_validity::InvalidTransaction,
 };
 use sp_std::{fmt::Debug, marker::PhantomData};
-use pallet_transaction_payment::OnChargeTransaction;
 /// Handle withdrawing, refunding and depositing of transaction fees.
 pub trait OnChargeAssetTransaction<T: Config> {
 	// type Currency: frame_support::traits::tokens::currency::Currency<T::AccountId>;
 	// type OnChargeTransaction: OnChargeTransaction<T>;
 	/// The underlying integer type in which fees are calculated.
-	/// type Balance: <Self::Currency as frame_support::traits::tokens::currency::Currency<T::AccountId>>::Balance;
-	/// The type used to identify the assets used for transaction payment.
+	/// type Balance: <Self::Currency as
+	/// frame_support::traits::tokens::currency::Currency<T::AccountId>>::Balance; The type used to
+	/// identify the assets used for transaction payment.
 	type AssetId: FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default + Eq + TypeInfo;
 	// The type used to store the intermediate values between pre- and post-dispatch.
 	// type LiquidityInfo;
@@ -51,7 +48,10 @@ pub trait OnChargeAssetTransaction<T: Config> {
 		asset_id: Self::AssetId,
 		fee: BalanceOf<T>,
 		tip: BalanceOf<T>,
-	) -> Result<<T::OnChargeTransaction as OnChargeTransaction<T>>::LiquidityInfo, TransactionValidityError>;
+	) -> Result<
+		<T::OnChargeTransaction as OnChargeTransaction<T>>::LiquidityInfo,
+		TransactionValidityError,
+	>;
 
 	/// After the transaction was executed the actual fee can be calculated.
 	/// This function should refund any overpaid fees and optionally deposit
@@ -64,7 +64,7 @@ pub trait OnChargeAssetTransaction<T: Config> {
 		post_info: &PostDispatchInfoOf<T::RuntimeCall>,
 		corrected_fee: BalanceOf<T>,
 		tip: BalanceOf<T>,
-		already_withdrawn: <T::OnChargeTransaction as OnChargeTransaction<T>>::LiquidityInfo,//Self::LiquidityInfo,
+		already_withdrawn: <T::OnChargeTransaction as OnChargeTransaction<T>>::LiquidityInfo, /* Self::LiquidityInfo, */
 	) -> Result<(), TransactionValidityError>;
 }
 
@@ -102,35 +102,10 @@ where
 		AssetBalanceOf<T>,
 		AssetIdOf<T>,
 	>,
-	// C::Balance: FixedPointOperand,
-	// <OnChargeTransactionOf<T> as OnChargeTransaction<T>>::Balance: B, 
-	// C::Balance: <<T as Config>::OnChargeAssetTransaction as OnChargeTransaction<T>>::Balance,
-	// HC: HandleCredit<T::AccountId, T::Fungibles>,
-	// T::Balance: FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default + Eq + TypeInfo,
-	// T::Balance: Currency<<T as frame_system::Config>::AccountId>,
-	AssetIdOf<T>: Default,
-	AssetIdOf<T>: Serialize,
-	AssetIdOf<T>: for <'de> Deserialize<'de>,
-	// OCT: OnChargeTransaction<T>,
-	// <T as pallet::Config>::Balance: frame_support::traits::fungible::Balanced<T::AccountId>,
-	// <T as Config>::Balance: Currency<T::AccountId>,
-	// <T as pallet::Config>::Balance: frame_support::traits::fungibles::Unbalanced<T::AccountId>
-	// <<T as Config>::Balance as Currency<T::AccountId>>::PositiveImbalance: Imbalance<
-	// 	T::Balance,
-	// 	Opposite = <<T as Config>::Balance as Currency<T::AccountId>>::NegativeImbalance,
-	// >,
-	// <<T as Config>::Balance as Currency<T::AccountId>>::NegativeImbalance: Imbalance<
-	// 	T::Balance,
-	// 	Opposite = <<T as Config>::Balance as Currency<T::AccountId>>::PositiveImbalance,
-	// >,
-	// OU: OnUnbalanced<NegativeImbalanceOf<C, T>>,
-	// T::Balance: frame_support::traits::fungibles::Unbalanced<T::AccountId>
+	AssetIdOf<T>: Default + Serialize,
+	AssetIdOf<T>: for<'de> Deserialize<'de>,
 {
-	// type Balance = BalanceOf<T>;
-	// type OnChargeTransaction = OCT;
-	// type Currency = C;
 	type AssetId = AssetIdOf<T>;
-	// type LiquidityInfo = CreditOf<T::AccountId, T::Fungibles>;
 
 	/// Withdraw the predicted fee from the transaction origin.
 	///
@@ -143,10 +118,10 @@ where
 		fee: BalanceOf<T>,
 		_tip: BalanceOf<T>,
 	) -> Result<
-	<T::OnChargeTransaction as OnChargeTransaction<T>>::LiquidityInfo,
-	//Self::LiquidityInfo, 
-	TransactionValidityError>
-	 {
+		<T::OnChargeTransaction as OnChargeTransaction<T>>::LiquidityInfo,
+		//Self::LiquidityInfo,
+		TransactionValidityError,
+	> {
 		// We don't know the precision of the underlying asset. Because the converted fee could be
 		// less than one (e.g. 0.5) but gets rounded down by integer division we introduce a minimum
 		// fee.
@@ -177,18 +152,14 @@ where
 		// 	.map_err(|_| TransactionValidityError::from(InvalidTransaction::Payment))
 
 		// let withdraw_reason = //if tip.is_zero() {
-//			WithdrawReasons::TRANSACTION_PAYMENT
-//		} else {
-			// WithdrawReasons::TRANSACTION_PAYMENT | WithdrawReasons::TIP
+		//			WithdrawReasons::TRANSACTION_PAYMENT
+		//		} else {
+		// WithdrawReasons::TRANSACTION_PAYMENT | WithdrawReasons::TIP
 		//}
 		// ;
 		// TODO: Convert tip too.
-//, ExistenceRequirement::KeepAlive
-		<T::OnChargeTransaction>::withdraw_fee(who,
-			_call,
-			_info,
-			fee,
-			_tip)
+		//, ExistenceRequirement::KeepAlive
+		<T::OnChargeTransaction>::withdraw_fee(who, _call, _info, fee, _tip)
 	}
 
 	/// Hand the fee and the tip over to the `[HandleCredit]` implementation.
@@ -202,17 +173,19 @@ where
 		corrected_fee: BalanceOf<T>,
 		_tip: BalanceOf<T>,
 		paid: <T::OnChargeTransaction as OnChargeTransaction<T>>::LiquidityInfo,
-		
 		//Self::LiquidityInfo,
 	) -> Result<(), TransactionValidityError> {
 		// // let min_converted_fee = if corrected_fee.is_zero() { Zero::zero() } else { One::one()
 		// }; // Convert the corrected fee into the asset used for payment.
 
-		let result = <T::OnChargeTransaction>::correct_and_deposit_fee(who,	_dispatch_info,
+		let result = <T::OnChargeTransaction>::correct_and_deposit_fee(
+			who,
+			_dispatch_info,
 			_post_info,
 			corrected_fee,
 			_tip,
-			paid);
+			paid,
+		);
 
 		//TODO dex the result back if configured to.
 
@@ -231,8 +204,8 @@ where
 		// // panic!("called1 {:?}", converted_fee);
 		// // Calculate how much refund we should return.
 		// let (final_fee, refund) = paid.split(converted_fee);
-		// // Refund to the account that paid the fees. If this fails, the account might have dropped
-		// // below the existential balance. In that case we don't refund anything.
+		// // Refund to the account that paid the fees. If this fails, the account might have
+		// dropped // below the existential balance. In that case we don't refund anything.
 		// // let _ = <T::Fungibles as Balanced<T::AccountId>>::resolve(who, refund);
 		// // Handle the final fee, e.g. by transferring to the block author or burning.
 		// // HC::handle_credit(final_fee);

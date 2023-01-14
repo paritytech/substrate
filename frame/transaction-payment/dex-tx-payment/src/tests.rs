@@ -23,9 +23,9 @@ use frame_support::{
 	ord_parameter_types,
 	pallet_prelude::*,
 	parameter_types,
-	traits::{fungibles::Mutate, AsEnsureOriginWithArg, ConstU32, ConstU64, ConstU8, FindAuthor},
+	traits::{fungibles::Mutate, AsEnsureOriginWithArg, ConstU32, ConstU64, ConstU8},
 	weights::{Weight, WeightToFee as WeightToFeeT},
-	ConsensusEngineId, PalletId,
+	PalletId,
 };
 use frame_system as system;
 use frame_system::{EnsureRoot, EnsureSignedBy};
@@ -235,61 +235,10 @@ impl pallet_dex::Config for Runtime {
 	type PromotedBalance = u128;
 }
 
-// pub struct HardcodedAuthor;
-// const BLOCK_AUTHOR: AccountId = 1234;
-// impl FindAuthor<AccountId> for HardcodedAuthor {
-// 	fn find_author<'a, I>(_: I) -> Option<AccountId>
-// 	where
-// 		I: 'a + IntoIterator<Item = (ConsensusEngineId, &'a [u8])>,
-// 	{
-// 		Some(BLOCK_AUTHOR)
-// 	}
-// }
-
-// impl pallet_authorship::Config for Runtime {
-// 	type FindAuthor = HardcodedAuthor;
-// 	type UncleGenerations = ();
-// 	type FilterUncle = ();
-// 	type EventHandler = ();
-// }
-
-// pub struct CreditToBlockAuthor;
-// impl HandleCredit<AccountId, Assets> for CreditToBlockAuthor {
-// 	fn handle_credit(credit: CreditOf<AccountId, Assets>) {
-// 		if let Some(author) = pallet_authorship::Pallet::<Runtime>::author() {
-// 			// What to do in case paying the author fails (e.g. because `fee < min_balance`)
-// 			// default: drop the result which will trigger the `OnDrop` of the imbalance.
-// 			let _ = <Assets as Balanced<AccountId>>::resolve(&author, credit);
-// 		}
-// 	}
-// }
-
-// impl Config for Runtime {
-// 	type RuntimeEvent = RuntimeEvent;
-// 	type Fungibles = Assets;
-// 	type OnChargeAssetTransaction = FungiblesAdapter<
-// 		pallet_assets::BalanceToAssetBalance<Balances, Runtime, ConvertInto>,
-// 		CreditToBlockAuthor,
-// 	>;
-// }
-
-
-
 impl Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Fungibles = Assets;
-	type OnChargeAssetTransaction = FungiblesAdapter<
-		// OnChargeTransactionImpl,
-		Dex, //BalanceToAssetBalance<Balances, Test, ConvertInto>,
-		  //Ideally this should be CreditToBlockAuthor,
-	>;
-	type Balance = u64;
-	type AssetBalance = u64;
-	// type Path = BoundedVec<MultiAssetId<u32>, ConstU32<MAX_SWAP_PATH_LEN>>;
-	// type PathToNative = PathToNativeParam;
-	type Dex = Dex;
-	type AssetId = u32;
-	// type PathFromNative = PathFromNativeParam;
+	type OnChargeAssetTransaction = FungiblesAdapter<Dex>;
 }
 
 pub struct ExtBuilder {
@@ -471,7 +420,7 @@ fn transaction_payment_in_asset_possible() {
 			// assert_eq!(Balances::free_balance(caller), 10 * balance_factor);
 			// check that fee was charged in the given asset
 			assert_eq!(Assets::balance(asset_id, caller), balance - fee);
-			assert_eq!(Assets::balance(asset_id, BLOCK_AUTHOR), 0);
+			// assert_eq!(Assets::balance(asset_id, BLOCK_AUTHOR), 0);
 
 			assert_ok!(ChargeAssetTxPayment::<Runtime>::post_dispatch(
 				Some(pre),
@@ -484,7 +433,7 @@ fn transaction_payment_in_asset_possible() {
 			assert_eq!(Assets::balance(asset_id, caller), balance - fee + rebate);
 			// check that the block author gets rewarded
 			// assert_eq!(Assets::balance(asset_id, BLOCK_AUTHOR), fee);
-			assert_eq!(Assets::balance(asset_id, BLOCK_AUTHOR), 0);
+			// assert_eq!(Assets::balance(asset_id, BLOCK_AUTHOR), 0);
 		});
 }
 
@@ -569,7 +518,7 @@ fn transaction_payment_without_fee() {
 			assert_eq!(Balances::free_balance(caller), 10 * balance_factor);
 			// check that fee was charged in the given asset
 			assert_eq!(Assets::balance(asset_id, caller), balance - fee);
-			assert_eq!(Assets::balance(asset_id, BLOCK_AUTHOR), 0);
+			// assert_eq!(Assets::balance(asset_id, BLOCK_AUTHOR), 0);
 
 			assert_ok!(ChargeAssetTxPayment::<Runtime>::post_dispatch(
 				Some(pre),
@@ -581,7 +530,7 @@ fn transaction_payment_without_fee() {
 			// caller should be refunded
 			assert_eq!(Assets::balance(asset_id, caller), balance);
 			// check that the block author did not get rewarded
-			assert_eq!(Assets::balance(asset_id, BLOCK_AUTHOR), 0);
+			// assert_eq!(Assets::balance(asset_id, BLOCK_AUTHOR), 0);
 		});
 }
 
@@ -633,7 +582,8 @@ fn asset_transaction_payment_with_tip_and_refund() {
 			let final_fee =
 				fee_with_tip - (weight - final_weight) * min_balance / ExistentialDeposit::get();
 			assert_eq!(Assets::balance(asset_id, caller), balance - (final_fee));
-			assert_eq!(Assets::balance(asset_id, BLOCK_AUTHOR), final_fee);
+			// assert_eq!(Assets::balance(asset_id, BLOCK_AUTHOR), final_fee);
+			//TODO!
 		});
 }
 

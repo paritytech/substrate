@@ -39,28 +39,15 @@ use frame_support::{
 	dispatch::{DispatchInfo, DispatchResult, PostDispatchInfo},
 	traits::{
 		fungibles::TransmuteBetweenNative,
-		tokens::{
-			fungibles::{Balanced, 
-				// CreditOf, 
-				Inspect},
-			// Balance, WithdrawConsequence,
-		},
+		tokens::fungibles::{Balanced, Inspect},
 		IsType,
 	},
-	DefaultNoBound,// Parameter,
+	DefaultNoBound,
 };
 use pallet_transaction_payment::OnChargeTransaction;
 use scale_info::TypeInfo;
-// use sp_core::MaxEncodedLen;
-
-// use frame_support::traits::Currency;
 use sp_runtime::{
-	traits::{
-		// Bounded, 
-		DispatchInfoOf, Dispatchable, 
-		// MaybeSerializeDeserialize, Member,
-		PostDispatchInfoOf, SignedExtension, Zero,
-	},
+	traits::{DispatchInfoOf, Dispatchable, PostDispatchInfoOf, SignedExtension, Zero},
 	transaction_validity::{
 		InvalidTransaction, TransactionValidity, TransactionValidityError, ValidTransaction,
 	},
@@ -80,8 +67,6 @@ pub(crate) type OnChargeTransactionOf<T> =
 // Balance type alias.
 pub(crate) type BalanceOf<T> =
 		<<T as pallet_transaction_payment::Config>::OnChargeTransaction as OnChargeTransaction<T>>::Balance;
-
-//<OnChargeTransactionOf<T> as OnChargeTransaction<T>>::Balance;
 // Liquidity info type alias.
 pub(crate) type LiquidityInfoOf<T> =
 	<OnChargeTransactionOf<T> as OnChargeTransaction<T>>::LiquidityInfo;
@@ -93,20 +78,8 @@ pub(crate) type AssetBalanceOf<T> =
 /// Asset id type alias.
 pub(crate) type AssetIdOf<T> =
 	<<T as Config>::Fungibles as Inspect<<T as frame_system::Config>::AccountId>>::AssetId;
-
-// Type aliases used for interaction with `OnChargeAssetTransaction`.
-// Balance type alias.
-// pub(crate) type ChargeAssetBalanceOf<T> = <OnChargeTransactionOf<T> as OnChargeTransaction<T>>::Balance;
-// 	<<T as Config>::OnChargeAssetTransaction as OnChargeAssetTransaction<T>>::Balance;
-// Asset id type alias.
 pub(crate) type ChargeAssetIdOf<T> =
 	<<T as Config>::OnChargeAssetTransaction as OnChargeAssetTransaction<T>>::AssetId;
-// // Liquidity info type alias.
-// pub(crate) type ChargeAssetLiquidityOf<T> =
-// 	<<T as Config>::OnChargeAssetTransaction as OnChargeAssetTransaction<T>>::LiquidityInfo;
-	
-// pub(crate) type ChargeAssetLiquidityOf<T> =
-// 	<<T as pallet_transaction_payment::Config>::OnChargeTransaction as OnChargeTransaction<T>>::LiquidityInfo;
 
 /// Used to pass the initial payment info from pre- to post-dispatch.
 #[derive(Encode, Decode, DefaultNoBound, TypeInfo)]
@@ -117,7 +90,7 @@ pub enum InitialPayment<T: Config> {
 	/// The initial fee was payed in the native currency.
 	Native(LiquidityInfoOf<T>),
 	/// The initial fee was payed but converted from an asset to native.
-	Asset(LiquidityInfoOf<T>),// CreditOf<T::AccountId, T::Fungibles>),
+	Asset(LiquidityInfoOf<T>),
 }
 
 pub use pallet::*;
@@ -134,28 +107,6 @@ pub mod pallet {
 		type Fungibles: Balanced<Self::AccountId>;
 		/// The actual transaction charging logic that charges the fees.
 		type OnChargeAssetTransaction: OnChargeAssetTransaction<Self>;
-
-		// type Balance: Balance + Bounded;
-
-		// type AssetBalance: <Self::Fungibles as Inspect>::Balance;
-
-		/// A Dex implementation to do the actual conversion
-		type Dex: TransmuteBetweenNative<
-			Self::RuntimeOrigin,
-			Self::AccountId,
-			BalanceOf<Self>,
-			AssetBalanceOf<Self>,
-			AssetIdOf<Self>,
-		>;
-
-		// type AssetId: <Self::Fungibles as Inspect>::AssetId;
-		// type AssetId: Member
-		// 	+ Parameter
-		// 	+ Copy
-		// 	+ MaybeSerializeDeserialize
-		// 	+ MaxEncodedLen
-		// 	+ PartialOrd
-		// 	+ TypeInfo;
 	}
 
 	#[pallet::pallet]
@@ -196,10 +147,6 @@ where
 	BalanceOf<T>: Send + Sync + FixedPointOperand + IsType<BalanceOf<T>>,
 	ChargeAssetIdOf<T>: Send + Sync,
 	// CreditOf<T::AccountId, T::Fungibles>: IsType<ChargeAssetLiquidityOf<T>>,
-
-	
-		// <<<T as Config>::OnChargeAssetTransaction as OnChargeAssetTransaction<T>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance: <<T as Config>::OnChargeTransaction as OnChargeTransaction<T>>::Balance
-
 {
 	/// Utility constructor. Used only in client/factory code.
 	pub fn from(tip: BalanceOf<T>, asset_id: Option<ChargeAssetIdOf<T>>) -> Self {
