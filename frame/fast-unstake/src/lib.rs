@@ -86,10 +86,7 @@ pub mod pallet {
 		traits::{Defensive, ReservableCurrency, StorageVersion},
 	};
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::{
-		traits::{Saturating, Zero},
-		DispatchResult,
-	};
+	use sp_runtime::{traits::Zero, DispatchResult};
 	use sp_staking::{EraIndex, StakingInterface};
 	use sp_std::{collections::btree_set::BTreeSet, prelude::*, vec::Vec};
 	pub use weights::WeightInfo;
@@ -138,6 +135,14 @@ pub mod pallet {
 
 		/// The weight information of this pallet.
 		type WeightInfo: WeightInfo;
+
+		/// Maximum value for `ErasToCheckPerBlock`. This should be as close as possible, but more
+		/// than the actual value, in order to have accurate benchmarks.
+		type MaxErasToCheckPerBlock: Get<u32>;
+
+		/// Use only for benchmarking.
+		#[cfg(feature = "runtime-benchmarks")]
+		type MaxBackersPerValidator: Get<u32>;
 	}
 
 	/// The current "head of the queue" being unstaked.
@@ -288,9 +293,10 @@ pub mod pallet {
 		/// Dispatch origin must be signed by the [`Config::ControlOrigin`].
 		#[pallet::call_index(2)]
 		#[pallet::weight(<T as Config>::WeightInfo::control())]
-		pub fn control(origin: OriginFor<T>, unchecked_eras_to_check: EraIndex) -> DispatchResult {
+		pub fn control(origin: OriginFor<T>, eras_to_check: EraIndex) -> DispatchResult {
 			let _ = T::ControlOrigin::ensure_origin(origin)?;
-			ErasToCheckPerBlock::<T>::put(unchecked_eras_to_check);
+			ensure!(eras_to_check <= T::MaxErasToCheckPerBlock::get(), Error::<T>::CallNotAllowed);
+			ErasToCheckPerBlock::<T>::put(eras_to_check);
 			Ok(())
 		}
 	}
@@ -327,7 +333,7 @@ pub mod pallet {
 			// any weight that is unaccounted for
 			let mut unaccounted_weight = Weight::from_ref_time(0);
 
-			let mut eras_to_check_per_block = ErasToCheckPerBlock::<T>::get();
+			let eras_to_check_per_block = ErasToCheckPerBlock::<T>::get();
 			if eras_to_check_per_block.is_zero() {
 				return T::DbWeight::get().reads(1).saturating_add(unaccounted_weight)
 			}
@@ -335,27 +341,27 @@ pub mod pallet {
 			// NOTE: here we're assuming that the number of validators has only ever increased,
 			// meaning that the number of exposures to check is either this per era, or less.
 			let validator_count = T::Staking::desired_validator_count();
-			let next_batch_size = Head::<T>::get()
-				.map_or(Queue::<T>::count().min(T::BatchSize::get()), |head| {
-					head.stashes.len() as u32
+			let (next_batch_size, reads_from_queue) = Head::<T>::get()
+				.map_or((Queue::<T>::count().min(T::BatchSize::get()), true), |head| {
+					(head.stashes.len() as u32, false)
 				});
 
 			// determine the number of eras to check. This is based on both `ErasToCheckPerBlock`
 			// and `remaining_weight` passed on to us from the runtime executive.
-			let max_weight = |v, u: u32, b| {
+			let max_weight = |v, b| {
 				// NOTE: this potentially under-counts by up to `BatchSize` reads from the queue.
-				<T as Config>::WeightInfo::on_idle_check(u.saturating_mul(v), b)
+				<T as Config>::WeightInfo::on_idle_check(v, b)
 					.max(<T as Config>::WeightInfo::on_idle_unstake(b))
-					.saturating_add(T::DbWeight::get().reads(T::BatchSize::get() as u64))
+					.saturating_add(if reads_from_queue {
+						T::DbWeight::get().reads(next_batch_size.into())
+					} else {
+						Zero::zero()
+					})
 			};
-			while max_weight(validator_count, eras_to_check_per_block, next_batch_size)
-				.any_gt(remaining_weight)
-			{
-				eras_to_check_per_block.saturating_dec();
-				if eras_to_check_per_block.is_zero() {
-					log!(debug, "early exit because eras_to_check_per_block is zero");
-					return T::DbWeight::get().reads(3).saturating_add(unaccounted_weight)
-				}
+
+			if max_weight(validator_count, next_batch_size).any_gt(remaining_weight) {
+				log!(debug, "early exit because eras_to_check_per_block is zero");
+				return T::DbWeight::get().reads(3).saturating_add(unaccounted_weight)
 			}
 
 			if T::Staking::election_ongoing() {
@@ -507,11 +513,8 @@ pub mod pallet {
 					},
 				}
 
-				<T as Config>::WeightInfo::on_idle_check(
-					(eras_checked.len() as u32).saturating_mul(validator_count),
-					pre_length as u32,
-				)
-				.saturating_add(unaccounted_weight)
+				<T as Config>::WeightInfo::on_idle_check(validator_count, pre_length as u32)
+					.saturating_add(unaccounted_weight)
 			}
 		}
 	}

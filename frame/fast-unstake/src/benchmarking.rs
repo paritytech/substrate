@@ -31,9 +31,6 @@ use sp_staking::{EraIndex, StakingInterface};
 use sp_std::prelude::*;
 
 const USER_SEED: u32 = 0;
-const DEFAULT_BACKER_PER_VALIDATOR: u32 = 32;
-const MAX_VALIDATORS: u32 = 16;
-const MAX_BONDING_DURATION: u32 = 16;
 
 type CurrencyOf<T> = <T as Config>::Currency;
 
@@ -77,7 +74,7 @@ fn setup_staking<T: Config>(v: u32, until: EraIndex) {
 		.collect::<Vec<_>>();
 
 	for era in 0..=until {
-		let others = (0..DEFAULT_BACKER_PER_VALIDATOR)
+		let others = (0..T::MaxBackersPerValidator::get())
 			.map(|s| {
 				let who = frame_benchmarking::account::<T::AccountId>("nominator", era, s);
 				let value = ed;
@@ -132,15 +129,14 @@ benchmarks! {
 
 	// on_idle, when we check some number of eras and when we need to build the queue.
 	on_idle_check {
-		let x in (MAX_BONDING_DURATION * 1) .. (MAX_BONDING_DURATION * MAX_VALIDATORS);
+		let v in 1 .. 1000;
 		let b in 1 .. T::BatchSize::get();
 
 		// both of these can be fetched from `T::Staking`, but the values might be unnecessarily
-		// large and make the benchmarks too slow. We know the complexity is linear, a small range
-		// should be enough. Also, we use the multiplied version because this helps the benchmarking
-		// tool establish the fact that we have a total of `uv` reads in total.
-		let u = (x / MAX_BONDING_DURATION).min(T::Staking::bonding_duration());
-		let v = x / u;
+		// large and make the benchmarks too slow. Also, we use the multiplied version because this
+		// helps the benchmarking tool establish the fact that we have a total of `uv` reads in
+		// total. Although, this means that for a lot of the other aspects, we are assuming
+		let u = T::MaxErasToCheckPerBlock::get().min(T::Staking::bonding_duration());
 
 		ErasToCheckPerBlock::<T>::put(u);
 		T::Staking::set_current_era(u);
@@ -205,7 +201,7 @@ benchmarks! {
 	control {
 		let origin = <T as Config>::ControlOrigin::successful_origin();
 	}
-	: _<T::RuntimeOrigin>(origin, 128)
+	: _<T::RuntimeOrigin>(origin, T::MaxErasToCheckPerBlock::get())
 	verify {}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::ExtBuilder::default().build(), crate::mock::Runtime)

@@ -595,7 +595,10 @@ impl pallet_fast_unstake::Config for Runtime {
 	type Deposit = ConstU128<{ DOLLARS }>;
 	type Currency = Balances;
 	type Staking = Staking;
+	type MaxErasToCheckPerBlock = ConstU32<4>;
 	type WeightInfo = ();
+	#[cfg(feature = "runtime-benchmarks")]
+	type MaxBackersPerValidator = MaxNominatorRewardedPerValidator;
 }
 
 parameter_types! {
