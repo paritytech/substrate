@@ -36,7 +36,7 @@ use sp_std::{fmt::Debug, marker::PhantomData};
 
 /// Handle withdrawing, refunding and depositing of transaction fees.
 pub trait OnChargeAssetTransaction<T: Config> {
-	// The underlying integer type in which fees are calculated.
+	/// The underlying integer type in which fees are calculated.
 	type Balance: AtLeast32BitUnsigned
 		+ FullCodec
 		+ Copy
