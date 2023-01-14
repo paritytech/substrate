@@ -22,7 +22,6 @@
 use codec::Codec;
 
 sp_api::decl_runtime_apis! {
-	#[api_version(1)]
 	pub trait StakingApi<Balance>
 		where
 			Balance: Codec,
