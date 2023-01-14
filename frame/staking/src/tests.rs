@@ -4079,7 +4079,7 @@ fn payout_stakers_handles_weight_refund() {
 }
 
 #[test]
-fn bond_during_era_correctly_populates_claimed_rewards() {
+fn bond_during_era_does_not_populate_legacy_claimed_rewards() {
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		// Era = None
 		bond_validator(9, 8, 1000);
@@ -4102,13 +4102,12 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				legacy_claimed_rewards: (0..5).collect::<Vec<_>>().try_into().unwrap(),
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
 
 		// make sure only era upto history depth is stored
 		let current_era = 99;
-		let last_reward_era = 99 - HistoryDepth::get();
 		mock::start_active_era(current_era);
 		bond_validator(13, 12, 1000);
 		assert_eq!(
@@ -4118,10 +4117,7 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				legacy_claimed_rewards: (last_reward_era..current_era)
-					.collect::<Vec<_>>()
-					.try_into()
-					.unwrap(),
+				legacy_claimed_rewards: Default::default(),
 			})
 		);
 	});
