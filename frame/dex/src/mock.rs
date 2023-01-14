@@ -160,6 +160,9 @@ impl Config for Test {
 	type WeightInfo = ();
 	type AllowMultiAssetPools = AllowMultiAssetPools;
 	type MaxSwapPathLength = ConstU32<4>;
+
+	type Balance = u64;
+	type PromotedBalance = u128;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

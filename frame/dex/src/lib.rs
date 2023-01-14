@@ -53,11 +53,16 @@ mod tests;
 mod mock;
 
 use codec::Codec;
+use frame_support::ensure;
+use frame_system::{ensure_signed, pallet_prelude::OriginFor};
 pub use pallet::*;
-use sp_runtime::traits::MaybeDisplay;
+use sp_runtime::{
+	traits::{MaybeDisplay, Zero},
+	DispatchError, FixedPointOperand,
+};
+use sp_std::fmt::Debug;
 pub use types::*;
 pub use weights::WeightInfo;
-
 // TODO: make it configurable
 // TODO: more specific error codes.
 pub const MIN_LIQUIDITY: u64 = 1;
@@ -73,7 +78,7 @@ pub mod pallet {
 		},
 		PalletId,
 	};
-	use frame_system::pallet_prelude::*;
+	// use frame_system::pallet_prelude::*;
 	use sp_runtime::{
 		traits::{AtLeast32BitUnsigned, Hash, IntegerSquareRoot, One, TrailingZeroInput, Zero},
 		Saturating,
@@ -90,8 +95,20 @@ pub mod pallet {
 		/// Units are 10ths of a percent
 		type Fee: Get<u64>;
 
-		type Currency: InspectFungible<Self::AccountId, Balance = Self::AssetBalance>
+		type Currency: InspectFungible<Self::AccountId, Balance = Self::Balance>
 			+ TransferFungible<Self::AccountId>;
+
+		type Balance: Parameter
+			+ Member
+			+ AtLeast32BitUnsigned
+			+ Codec
+			+ Default
+			+ Copy
+			+ MaybeSerializeDeserialize
+			+ Debug
+			+ MaxEncodedLen
+			+ TypeInfo
+			+ FixedPointOperand;
 
 		/// This must be compatible with Currency at the moment.
 		type AssetBalance: AtLeast32BitUnsigned
@@ -103,6 +120,13 @@ pub mod pallet {
 			+ Into<u128>
 			+ TypeInfo
 			+ MaxEncodedLen;
+
+		type PromotedBalance: AtLeast32BitUnsigned
+			+ From<Self::AssetBalance>
+			+ From<Self::Balance>
+			+ TryInto<Self::AssetBalance>
+			+ TryInto<Self::Balance>
+			+ Copy;
 
 		type AssetId: Member
 			+ Parameter
@@ -124,6 +148,7 @@ pub mod pallet {
 			+ TypeInfo
 			+ Incrementable;
 
+		// TODO rename to Fungibles
 		type Assets: Inspect<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>
 			+ Transfer<Self::AccountId>;
 
@@ -326,8 +351,8 @@ pub mod pallet {
 			let amount2: AssetBalanceOf<T>;
 
 			let pool_account = Self::get_pool_account(pool_id);
-			let reserve1 = Self::get_balance(&pool_account, asset1);
-			let reserve2 = Self::get_balance(&pool_account, asset2);
+			let reserve1 = Self::get_balance(&pool_account, asset1)?;
+			let reserve2 = Self::get_balance(&pool_account, asset2)?;
 
 			if reserve1.is_zero() && reserve2.is_zero() {
 				amount1 = amount1_desired;
@@ -419,8 +444,8 @@ pub mod pallet {
 				false, // LP tokens should not be sufficient assets so can't kill account
 			)?;
 
-			let reserve1 = Self::get_balance(&pool_account, asset1);
-			let reserve2 = Self::get_balance(&pool_account, asset2);
+			let reserve1 = Self::get_balance(&pool_account, asset1)?;
+			let reserve2 = Self::get_balance(&pool_account, asset2)?;
 
 			let total_supply = T::PoolAssets::total_issuance(pool.lp_token);
 
@@ -546,13 +571,20 @@ pub mod pallet {
 				amount,
 			});
 			match asset_id {
-				MultiAssetId::Native => T::Currency::transfer(from, to, amount, keep_alive),
+				MultiAssetId::Native => {
+					let amount_promoted: T::PromotedBalance = T::PromotedBalance::from(amount);
+					let amount: T::Balance =
+						amount_promoted.try_into().map_err(|_| Error::<T>::Overflow)?;
+					let result = T::Currency::transfer(from, to, amount, keep_alive)?;
+					let result_promoted: T::PromotedBalance = result.into();
+					result_promoted.try_into().map_err(|_| Error::<T>::Overflow.into())
+				},
 				MultiAssetId::Asset(asset_id) =>
 					T::Assets::transfer(asset_id, from, to, amount, keep_alive),
 			}
 		}
 
-		fn do_swap(
+		pub(crate) fn do_swap(
 			sender: &T::AccountId,
 			amounts: &Vec<AssetBalanceOf<T>>,
 			path: &BoundedVec<MultiAssetId<T::AssetId>, T::MaxSwapPathLength>,
@@ -605,10 +637,17 @@ pub mod pallet {
 		fn get_balance(
 			owner: &T::AccountId,
 			token_id: MultiAssetId<T::AssetId>,
-		) -> T::AssetBalance {
+		) -> Result<T::AssetBalance, Error<T>> {
 			match token_id {
-				MultiAssetId::Native => <<T as Config>::Currency>::balance(owner),
-				MultiAssetId::Asset(token_id) => <<T as Config>::Assets>::balance(token_id, owner),
+				MultiAssetId::Native => {
+					let balance = <<T as Config>::Currency>::balance(owner);
+					let balance_promoted: T::PromotedBalance = balance.into();
+					let asset_balance: T::AssetBalance =
+						balance_promoted.try_into().map_err(|_| Error::<T>::Overflow)?;
+					Ok(asset_balance)
+				},
+				MultiAssetId::Asset(token_id) =>
+					Ok(<<T as Config>::Assets>::balance(token_id, owner)),
 			}
 		}
 
@@ -624,15 +663,15 @@ pub mod pallet {
 			}
 		}
 
-		fn get_reserves(
+		pub(crate) fn get_reserves(
 			asset1: MultiAssetId<T::AssetId>,
 			asset2: MultiAssetId<T::AssetId>,
 		) -> Result<(AssetBalanceOf<T>, AssetBalanceOf<T>), Error<T>> {
 			let pool_id = Self::get_pool_id(asset1, asset2);
 			let pool_account = Self::get_pool_account(pool_id);
 
-			let balance1 = Self::get_balance(&pool_account, asset1);
-			let balance2 = Self::get_balance(&pool_account, asset2);
+			let balance1 = Self::get_balance(&pool_account, asset1)?;
+			let balance2 = Self::get_balance(&pool_account, asset2)?;
 
 			if balance1.is_zero() || balance2.is_zero() {
 				Err(Error::<T>::PoolNotFound)?;
@@ -641,7 +680,7 @@ pub mod pallet {
 			Ok((balance1, balance2))
 		}
 
-		fn get_amounts_in(
+		pub(crate) fn get_amounts_in(
 			amount_out: &AssetBalanceOf<T>,
 			path: &BoundedVec<MultiAssetId<T::AssetId>, T::MaxSwapPathLength>,
 		) -> Result<Vec<AssetBalanceOf<T>>, DispatchError> {
@@ -660,7 +699,7 @@ pub mod pallet {
 			Ok(amounts)
 		}
 
-		fn get_amounts_out(
+		pub(crate) fn get_amounts_out(
 			amount_in: &AssetBalanceOf<T>,
 			path: &BoundedVec<MultiAssetId<T::AssetId>, T::MaxSwapPathLength>,
 		) -> Result<Vec<AssetBalanceOf<T>>, DispatchError> {
@@ -698,8 +737,8 @@ pub mod pallet {
 			let pool_account = Self::get_pool_account(pool_id);
 			let (pool_asset1, _) = pool_id;
 
-			let balance1 = Self::get_balance(&pool_account, asset1);
-			let balance2 = Self::get_balance(&pool_account, asset2);
+			let balance1 = Self::get_balance(&pool_account, asset1).ok()?;
+			let balance2 = Self::get_balance(&pool_account, asset2).ok()?;
 			if !balance1.is_zero() {
 				let (reserve1, reserve2) =
 					if asset1 == pool_asset1 { (balance1, balance2) } else { (balance2, balance1) };
@@ -842,6 +881,106 @@ pub mod pallet {
 	}
 }
 
+impl<T: Config>
+	frame_support::traits::tokens::fungibles::TransmuteBetweenNative<
+		T::RuntimeOrigin,
+		T::AccountId,
+		T::Balance,
+		T::AssetBalance,
+		T::AssetId,
+	> for Pallet<T>
+where
+	<T as pallet::Config>::Currency:
+		frame_support::traits::Currency<<T as frame_system::Config>::AccountId>,
+{
+	// If successful returns the amount out.
+	fn swap_exact_native_for_tokens(
+		origin: T::AccountId,
+		asset_id: T::AssetId,
+		amount_in: T::Balance,
+		amount_out_min: Option<T::AssetBalance>,
+		send_to: T::AccountId,
+		keep_alive: bool,
+	) -> Result<T::AssetBalance, DispatchError> {
+		let path = vec![MultiAssetId::Native, MultiAssetId::Asset(asset_id)].try_into().unwrap();
+
+		let sender = origin; //ensure_signed(origin)?;
+
+		ensure!(amount_in > Zero::zero(), Error::<T>::ZeroAmount);
+		if let Some(amount_out_min) = amount_out_min {
+			ensure!(amount_out_min > Zero::zero(), Error::<T>::ZeroAmount);
+		}
+
+		// let (reserve_in, reserve_out) = Self::get_reserves(MultiAssetId::Native,
+		// MultiAssetId::Asset(asset_id))?;
+
+		let amount_in_promoted = T::PromotedBalance::from(amount_in);
+
+		let amount_in: T::AssetBalance =
+			amount_in_promoted.try_into().map_err(|_| Error::<T>::Overflow)?;
+
+		let amounts_out = Self::get_amounts_out(&amount_in, &path)?;
+
+		let amount_out = *amounts_out.last().unwrap();
+		if let Some(amount_out_min) = amount_out_min {
+			ensure!(amount_out >= amount_out_min, Error::<T>::InsufficientOutputAmount);
+		}
+
+		Self::do_swap(&sender, &amounts_out, &path, &send_to, keep_alive)?;
+
+		Self::deposit_event(Event::SwapExecuted {
+			who: sender,
+			send_to,
+			path,
+			amount_in,
+			amount_out,
+		});
+
+		Ok(amount_out)
+	}
+
+	// If successful returns the amount in.swap_tokens_for_exact_native
+	fn swap_tokens_for_exact_native(
+		origin: T::AccountId, // OriginFor<T>,
+		asset_id: T::AssetId,
+		amount_out: T::Balance,
+		amount_in_max: Option<T::AssetBalance>,
+		send_to: T::AccountId,
+		keep_alive: bool,
+	) -> Result<T::AssetBalance, DispatchError> {
+		let sender = origin; //ensure_signed(origin)?;
+
+		ensure!(amount_out > Zero::zero(), Error::<T>::ZeroAmount);
+		if let Some(amount_in_max) = amount_in_max {
+			ensure!(amount_in_max > Zero::zero(), Error::<T>::ZeroAmount);
+		}
+		let path = vec![MultiAssetId::Asset(asset_id), MultiAssetId::Native].try_into().unwrap();
+
+		let amount_out_promoted: T::PromotedBalance = amount_out.into();
+		let amount_out: T::AssetBalance =
+			amount_out_promoted.try_into().map_err(|_| Error::<T>::Overflow)?;
+
+		let amounts = Self::get_amounts_in(&amount_out, &path)?;
+		let amount_in = *amounts.first().expect("Always has more than one element");
+		if let Some(amount_in_max) = amount_in_max {
+			ensure!(amount_in <= amount_in_max, Error::<T>::ExcessiveInputAmount);
+		}
+
+		Self::do_swap(&sender, &amounts, &path, &send_to, keep_alive)?;
+
+		Self::deposit_event(Event::SwapExecuted {
+			who: sender,
+			send_to,
+			path,
+			amount_in,
+			amount_out,
+		});
+
+		Ok(amount_in)
+	}
+}
+
+//TODO: these u32 and u64 should be type params.
 sp_api::decl_runtime_apis! {
 	pub trait DexApi<Balance> where
 		Balance: Codec + MaybeDisplay,

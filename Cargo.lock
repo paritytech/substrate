@@ -5111,6 +5111,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-dex-tx-payment"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-assets",
+ "pallet-balances",
+ "pallet-dex",
+ "pallet-transaction-payment",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "serde_json",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "sp-storage",
+]
+
+[[package]]
 name = "pallet-election-provider-multi-phase"
 version = "4.0.0-dev"
 dependencies = [

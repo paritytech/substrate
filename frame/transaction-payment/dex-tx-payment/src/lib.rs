@@ -34,30 +34,39 @@
 //! pallet's [`SignedExtension`] ([`ChargeAssetTxPayment`]).
 
 #![cfg_attr(not(feature = "std"), no_std)]
-
-use sp_std::prelude::*;
-
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchInfo, DispatchResult, PostDispatchInfo},
 	traits::{
+		fungibles::TransmuteBetweenNative,
 		tokens::{
-			fungibles::{Balanced, CreditOf, Inspect},
-			WithdrawConsequence,
+			fungibles::{Balanced, 
+				// CreditOf, 
+				Inspect},
+			// Balance, WithdrawConsequence,
 		},
 		IsType,
 	},
-	DefaultNoBound,
+	DefaultNoBound,// Parameter,
 };
 use pallet_transaction_payment::OnChargeTransaction;
 use scale_info::TypeInfo;
+// use sp_core::MaxEncodedLen;
+
+// use frame_support::traits::Currency;
 use sp_runtime::{
-	traits::{DispatchInfoOf, Dispatchable, PostDispatchInfoOf, SignedExtension, Zero},
+	traits::{
+		// Bounded, 
+		DispatchInfoOf, Dispatchable, 
+		// MaybeSerializeDeserialize, Member,
+		PostDispatchInfoOf, SignedExtension, Zero,
+	},
 	transaction_validity::{
 		InvalidTransaction, TransactionValidity, TransactionValidityError, ValidTransaction,
 	},
 	FixedPointOperand,
 };
+use sp_std::prelude::*;
 
 #[cfg(test)]
 mod tests;
@@ -69,7 +78,10 @@ pub use payment::*;
 pub(crate) type OnChargeTransactionOf<T> =
 	<T as pallet_transaction_payment::Config>::OnChargeTransaction;
 // Balance type alias.
-pub(crate) type BalanceOf<T> = <OnChargeTransactionOf<T> as OnChargeTransaction<T>>::Balance;
+pub(crate) type BalanceOf<T> =
+		<<T as pallet_transaction_payment::Config>::OnChargeTransaction as OnChargeTransaction<T>>::Balance;
+
+//<OnChargeTransactionOf<T> as OnChargeTransaction<T>>::Balance;
 // Liquidity info type alias.
 pub(crate) type LiquidityInfoOf<T> =
 	<OnChargeTransactionOf<T> as OnChargeTransaction<T>>::LiquidityInfo;
@@ -84,14 +96,17 @@ pub(crate) type AssetIdOf<T> =
 
 // Type aliases used for interaction with `OnChargeAssetTransaction`.
 // Balance type alias.
-pub(crate) type ChargeAssetBalanceOf<T> =
-	<<T as Config>::OnChargeAssetTransaction as OnChargeAssetTransaction<T>>::Balance;
+// pub(crate) type ChargeAssetBalanceOf<T> = <OnChargeTransactionOf<T> as OnChargeTransaction<T>>::Balance;
+// 	<<T as Config>::OnChargeAssetTransaction as OnChargeAssetTransaction<T>>::Balance;
 // Asset id type alias.
 pub(crate) type ChargeAssetIdOf<T> =
 	<<T as Config>::OnChargeAssetTransaction as OnChargeAssetTransaction<T>>::AssetId;
-// Liquidity info type alias.
-pub(crate) type ChargeAssetLiquidityOf<T> =
-	<<T as Config>::OnChargeAssetTransaction as OnChargeAssetTransaction<T>>::LiquidityInfo;
+// // Liquidity info type alias.
+// pub(crate) type ChargeAssetLiquidityOf<T> =
+// 	<<T as Config>::OnChargeAssetTransaction as OnChargeAssetTransaction<T>>::LiquidityInfo;
+	
+// pub(crate) type ChargeAssetLiquidityOf<T> =
+// 	<<T as pallet_transaction_payment::Config>::OnChargeTransaction as OnChargeTransaction<T>>::LiquidityInfo;
 
 /// Used to pass the initial payment info from pre- to post-dispatch.
 #[derive(Encode, Decode, DefaultNoBound, TypeInfo)]
@@ -101,8 +116,8 @@ pub enum InitialPayment<T: Config> {
 	Nothing,
 	/// The initial fee was payed in the native currency.
 	Native(LiquidityInfoOf<T>),
-	/// The initial fee was payed in an asset.
-	Asset(CreditOf<T::AccountId, T::Fungibles>),
+	/// The initial fee was payed but converted from an asset to native.
+	Asset(LiquidityInfoOf<T>),// CreditOf<T::AccountId, T::Fungibles>),
 }
 
 pub use pallet::*;
@@ -119,6 +134,28 @@ pub mod pallet {
 		type Fungibles: Balanced<Self::AccountId>;
 		/// The actual transaction charging logic that charges the fees.
 		type OnChargeAssetTransaction: OnChargeAssetTransaction<Self>;
+
+		// type Balance: Balance + Bounded;
+
+		// type AssetBalance: <Self::Fungibles as Inspect>::Balance;
+
+		/// A Dex implementation to do the actual conversion
+		type Dex: TransmuteBetweenNative<
+			Self::RuntimeOrigin,
+			Self::AccountId,
+			BalanceOf<Self>,
+			AssetBalanceOf<Self>,
+			AssetIdOf<Self>,
+		>;
+
+		// type AssetId: <Self::Fungibles as Inspect>::AssetId;
+		// type AssetId: Member
+		// 	+ Parameter
+		// 	+ Copy
+		// 	+ MaybeSerializeDeserialize
+		// 	+ MaxEncodedLen
+		// 	+ PartialOrd
+		// 	+ TypeInfo;
 	}
 
 	#[pallet::pallet]
@@ -156,9 +193,13 @@ impl<T: Config> ChargeAssetTxPayment<T>
 where
 	T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 	AssetBalanceOf<T>: Send + Sync + FixedPointOperand,
-	BalanceOf<T>: Send + Sync + FixedPointOperand + IsType<ChargeAssetBalanceOf<T>>,
+	BalanceOf<T>: Send + Sync + FixedPointOperand + IsType<BalanceOf<T>>,
 	ChargeAssetIdOf<T>: Send + Sync,
-	CreditOf<T::AccountId, T::Fungibles>: IsType<ChargeAssetLiquidityOf<T>>,
+	// CreditOf<T::AccountId, T::Fungibles>: IsType<ChargeAssetLiquidityOf<T>>,
+
+	
+		// <<<T as Config>::OnChargeAssetTransaction as OnChargeAssetTransaction<T>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance: <<T as Config>::OnChargeTransaction as OnChargeTransaction<T>>::Balance
+
 {
 	/// Utility constructor. Used only in client/factory code.
 	pub fn from(tip: BalanceOf<T>, asset_id: Option<ChargeAssetIdOf<T>>) -> Self {
@@ -187,7 +228,7 @@ where
 				fee.into(),
 				self.tip.into(),
 			)
-			.map(|i| (fee, InitialPayment::Asset(i.into())))
+			.map(|i| (fee, InitialPayment::Native(i)))
 		} else {
 			<OnChargeTransactionOf<T> as OnChargeTransaction<T>>::withdraw_fee(
 				who, call, info, fee, self.tip,
@@ -213,9 +254,9 @@ impl<T: Config> SignedExtension for ChargeAssetTxPayment<T>
 where
 	T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 	AssetBalanceOf<T>: Send + Sync + FixedPointOperand,
-	BalanceOf<T>: Send + Sync + From<u64> + FixedPointOperand + IsType<ChargeAssetBalanceOf<T>>,
+	BalanceOf<T>: Send + Sync + From<u64> + FixedPointOperand + IsType<BalanceOf<T>>,
 	ChargeAssetIdOf<T>: Send + Sync,
-	CreditOf<T::AccountId, T::Fungibles>: IsType<ChargeAssetLiquidityOf<T>>,
+	// CreditOf<T::AccountId, T::Fungibles>: IsType<ChargeAssetLiquidityOf<T>>,
 {
 	const IDENTIFIER: &'static str = "ChargeAssetTxPayment";
 	type AccountId = T::AccountId;
@@ -286,8 +327,8 @@ where
 						&who,
 						info,
 						post_info,
-						actual_fee.into(),
-						tip.into(),
+						actual_fee,
+						tip,
 						already_withdrawn.into(),
 					)?;
 					Pallet::<T>::deposit_event(Event::<T>::AssetTxFeePaid {

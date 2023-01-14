@@ -158,6 +158,7 @@ members = [
 	"frame/timestamp",
 	"frame/transaction-payment",
 	"frame/transaction-payment/asset-tx-payment",
+	"frame/transaction-payment/dex-tx-payment",
 	"frame/transaction-payment/rpc",
 	"frame/transaction-payment/rpc/runtime-api",
 	"frame/transaction-storage",

@@ -330,3 +330,27 @@ pub trait Destroy<AccountId>: Inspect<AccountId> {
 	/// * `id`: The identifier of the asset to be destroyed. This must identify an existing asset.
 	fn finish_destroy(id: Self::AssetId) -> DispatchResult;
 }
+
+
+/// As in alchemy rather than std::mem::transmute
+pub trait TransmuteBetweenNative<Origin, AccountId, Balance, AssetBalance, AssetId> {
+	// If successful returns the amount out.
+	fn swap_exact_native_for_tokens(
+		origin:AccountId,// Origin,
+		asset_id: AssetId,
+		amount_in: Balance,
+		amount_out_min: Option<AssetBalance>,
+		send_to: AccountId,
+		keep_alive: bool,
+	) -> Result<AssetBalance, DispatchError>;
+  
+	// If successful returns the amount in.
+	fn swap_tokens_for_exact_native(
+		origin: AccountId, //Origin,
+		asset_id: AssetId,
+		amount_out: Balance,
+		amount_in_max: Option<AssetBalance>,
+		send_to: AccountId,
+		keep_alive: bool,
+	) -> Result<AssetBalance, DispatchError>;
+}

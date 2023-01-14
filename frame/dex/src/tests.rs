@@ -94,7 +94,7 @@ fn check_u64() {
 }
 
 #[test]
-fn create_pool_should_work() {
+fn can_create_pool() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
 		let token_1 = MultiAssetId::Native;
@@ -199,7 +199,7 @@ fn different_pools_should_have_different_lp_tokens() {
 }
 
 #[test]
-fn add_liquidity_should_work() {
+fn can_add_liquidity() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
 		let token_1 = MultiAssetId::Native;
@@ -273,7 +273,7 @@ fn add_tiny_liquidity_leads_to_insufficient_liquidity_minted_error() {
 }
 
 #[test]
-fn remove_liquidity_should_work() {
+fn can_remove_liquidity() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
 		let token_1 = MultiAssetId::Native;
@@ -377,7 +377,7 @@ fn can_not_redeem_more_lp_tokens_than_were_minted() {
 }
 
 #[test]
-fn quote_price_should_work() {
+fn can_quote_price() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
 		let token_1 = MultiAssetId::Native;
@@ -406,7 +406,7 @@ fn quote_price_should_work() {
 }
 
 #[test]
-fn swap_should_work_with_native() {
+fn can_swap_with_native() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
 		let token_1 = MultiAssetId::Native;
@@ -454,7 +454,7 @@ fn swap_should_work_with_native() {
 }
 
 #[test]
-fn swap_should_work_with_realistic_values() {
+fn can_swap_with_realistic_values() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
 		let dot = MultiAssetId::Native;
@@ -689,7 +689,7 @@ fn swap_should_not_work_with_if_too_much_slippage() {
 }
 
 #[test]
-fn swap_tokens_for_exact_tokens_should_work() {
+fn can_swap_tokens_for_exact_tokens() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
 		let token_1 = MultiAssetId::Native;
@@ -751,7 +751,7 @@ fn swap_tokens_for_exact_tokens_should_work() {
 }
 
 #[test]
-fn swap_tokens_for_exact_tokens_works_when_user_is_not_liquidity_provider() {
+fn can_swap_tokens_for_exact_tokens_when_not_liquidity_provider() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
 		let user2 = 2;
@@ -1081,7 +1081,7 @@ fn swap_tokens_for_exact_tokens_in_multi_hops() {
 }
 
 #[test]
-fn same_asset_swap_should_fail() {
+fn can_not_swap_same_asset() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
 		let token_1 = MultiAssetId::Asset(1);
