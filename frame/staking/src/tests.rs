@@ -154,7 +154,7 @@ fn basic_setup_works() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			}
 		);
 		// Account 20 controls the stash from account 21, which is 200 * balance_factor units
@@ -165,7 +165,7 @@ fn basic_setup_works() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
 		// Account 1 does not control any stash
@@ -188,7 +188,7 @@ fn basic_setup_works() {
 				total: 500,
 				active: 500,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
 		assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
@@ -441,7 +441,7 @@ fn staking_should_work() {
 				total: 1500,
 				active: 1500,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![0],
+				legacy_claimed_rewards: bounded_vec![0],
 			})
 		);
 		// e.g. it cannot reserve more than 500 that it has free from the total 2000
@@ -1030,7 +1030,7 @@ fn reward_destination_works() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1053,7 +1053,7 @@ fn reward_destination_works() {
 				total: 1000 + total_payout_0,
 				active: 1000 + total_payout_0,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![0],
+				legacy_claimed_rewards: bounded_vec![0],
 			})
 		);
 
@@ -1081,7 +1081,7 @@ fn reward_destination_works() {
 				total: 1000 + total_payout_0,
 				active: 1000 + total_payout_0,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![0, 1],
+				legacy_claimed_rewards: bounded_vec![0, 1],
 			})
 		);
 
@@ -1110,7 +1110,7 @@ fn reward_destination_works() {
 				total: 1000 + total_payout_0,
 				active: 1000 + total_payout_0,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![0, 1, 2],
+				legacy_claimed_rewards: bounded_vec![0, 1, 2],
 			})
 		);
 		// Check that amount in staked account is NOT increased.
@@ -1172,7 +1172,7 @@ fn bond_extra_works() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1189,7 +1189,7 @@ fn bond_extra_works() {
 				total: 1000 + 100,
 				active: 1000 + 100,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1203,7 +1203,7 @@ fn bond_extra_works() {
 				total: 1000000,
 				active: 1000000,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
 	});
@@ -1241,7 +1241,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
 		assert_eq!(
@@ -1259,7 +1259,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				total: 1000 + 100,
 				active: 1000 + 100,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
 		// Exposure is a snapshot! only updated after the next era update.
@@ -1280,7 +1280,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				total: 1000 + 100,
 				active: 1000 + 100,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
 		// Exposure is now updated.
@@ -1298,7 +1298,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				total: 1000 + 100,
 				active: 100,
 				unlocking: bounded_vec![UnlockChunk { value: 1000, era: 2 + 3 }],
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			}),
 		);
 
@@ -1311,7 +1311,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				total: 1000 + 100,
 				active: 100,
 				unlocking: bounded_vec![UnlockChunk { value: 1000, era: 2 + 3 }],
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			}),
 		);
 
@@ -1327,7 +1327,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				total: 1000 + 100,
 				active: 100,
 				unlocking: bounded_vec![UnlockChunk { value: 1000, era: 2 + 3 }],
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			}),
 		);
 
@@ -1343,7 +1343,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				total: 100,
 				active: 100,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			}),
 		);
 	})
@@ -1446,7 +1446,7 @@ fn rebond_works() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1465,7 +1465,7 @@ fn rebond_works() {
 				total: 1000,
 				active: 100,
 				unlocking: bounded_vec![UnlockChunk { value: 900, era: 2 + 3 }],
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1478,7 +1478,7 @@ fn rebond_works() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1491,7 +1491,7 @@ fn rebond_works() {
 				total: 1000,
 				active: 100,
 				unlocking: bounded_vec![UnlockChunk { value: 900, era: 5 }],
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1504,7 +1504,7 @@ fn rebond_works() {
 				total: 1000,
 				active: 600,
 				unlocking: bounded_vec![UnlockChunk { value: 400, era: 5 }],
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1517,7 +1517,7 @@ fn rebond_works() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1532,7 +1532,7 @@ fn rebond_works() {
 				total: 1000,
 				active: 100,
 				unlocking: bounded_vec![UnlockChunk { value: 900, era: 5 }],
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1545,7 +1545,7 @@ fn rebond_works() {
 				total: 1000,
 				active: 600,
 				unlocking: bounded_vec![UnlockChunk { value: 400, era: 5 }],
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
 	})
@@ -1572,7 +1572,7 @@ fn rebond_is_fifo() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1587,7 +1587,7 @@ fn rebond_is_fifo() {
 				total: 1000,
 				active: 600,
 				unlocking: bounded_vec![UnlockChunk { value: 400, era: 2 + 3 }],
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1605,7 +1605,7 @@ fn rebond_is_fifo() {
 					UnlockChunk { value: 400, era: 2 + 3 },
 					UnlockChunk { value: 300, era: 3 + 3 },
 				],
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1624,7 +1624,7 @@ fn rebond_is_fifo() {
 					UnlockChunk { value: 300, era: 3 + 3 },
 					UnlockChunk { value: 200, era: 4 + 3 },
 				],
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1640,7 +1640,7 @@ fn rebond_is_fifo() {
 					UnlockChunk { value: 400, era: 2 + 3 },
 					UnlockChunk { value: 100, era: 3 + 3 },
 				],
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
 	})
@@ -1669,7 +1669,7 @@ fn rebond_emits_right_value_in_event() {
 				total: 1000,
 				active: 100,
 				unlocking: bounded_vec![UnlockChunk { value: 900, era: 1 + 3 }],
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1682,7 +1682,7 @@ fn rebond_emits_right_value_in_event() {
 				total: 1000,
 				active: 200,
 				unlocking: bounded_vec![UnlockChunk { value: 800, era: 1 + 3 }],
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
 		// Event emitted should be correct
@@ -1697,7 +1697,7 @@ fn rebond_emits_right_value_in_event() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
 		// Event emitted should be correct, only 800
@@ -1733,7 +1733,7 @@ fn reward_to_stake_works() {
 					total: 69,
 					active: 69,
 					unlocking: Default::default(),
-					claimed_rewards: bounded_vec![],
+					legacy_claimed_rewards: bounded_vec![],
 				},
 			);
 
@@ -1797,7 +1797,7 @@ fn reap_stash_works() {
 					total: 5,
 					active: 5,
 					unlocking: Default::default(),
-					claimed_rewards: bounded_vec![],
+					legacy_claimed_rewards: bounded_vec![],
 				},
 			);
 
@@ -1932,7 +1932,7 @@ fn bond_with_no_staked_value() {
 					active: 0,
 					total: 5,
 					unlocking: bounded_vec![UnlockChunk { value: 5, era: 3 }],
-					claimed_rewards: bounded_vec![],
+					legacy_claimed_rewards: bounded_vec![],
 				})
 			);
 
@@ -3036,7 +3036,7 @@ fn staker_cannot_bail_deferred_slash() {
 				active: 0,
 				total: 500,
 				stash: 101,
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 				unlocking: bounded_vec![UnlockChunk { era: 4u32, value: 500 }],
 			}
 		);
@@ -3770,7 +3770,7 @@ fn test_payout_stakers() {
 			assert_eq!(Balances::free_balance(&(100 + i)), balance + i as Balance);
 		}
 
-		// We track rewards in `claimed_rewards` vec
+		// We track rewards in `legacy_claimed_rewards` vec
 		assert_eq!(
 			Staking::ledger(&10),
 			Some(StakingLedger {
@@ -3778,7 +3778,7 @@ fn test_payout_stakers() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![1]
+				legacy_claimed_rewards: bounded_vec![1]
 			})
 		);
 
@@ -3809,7 +3809,7 @@ fn test_payout_stakers() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: (1..=14).collect::<Vec<_>>().try_into().unwrap()
+				legacy_claimed_rewards: (1..=14).collect::<Vec<_>>().try_into().unwrap()
 			})
 		);
 
@@ -3844,7 +3844,7 @@ fn test_payout_stakers() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![expected_start_reward_era, expected_last_reward_era]
+				legacy_claimed_rewards: bounded_vec![expected_start_reward_era, expected_last_reward_era]
 			})
 		);
 
@@ -3859,7 +3859,7 @@ fn test_payout_stakers() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![
+				legacy_claimed_rewards: bounded_vec![
 					expected_start_reward_era,
 					23,
 					42,
@@ -4088,7 +4088,7 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
 		mock::start_active_era(5);
@@ -4100,7 +4100,7 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: (0..5).collect::<Vec<_>>().try_into().unwrap(),
+				legacy_claimed_rewards: (0..5).collect::<Vec<_>>().try_into().unwrap(),
 			})
 		);
 
@@ -4116,7 +4116,7 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: (last_reward_era..current_era)
+				legacy_claimed_rewards: (last_reward_era..current_era)
 					.collect::<Vec<_>>()
 					.try_into()
 					.unwrap(),
@@ -4364,7 +4364,7 @@ fn cannot_rebond_to_lower_than_ed() {
 					total: 10 * 1000,
 					active: 10 * 1000,
 					unlocking: Default::default(),
-					claimed_rewards: bounded_vec![],
+					legacy_claimed_rewards: bounded_vec![],
 				}
 			);
 
@@ -4378,7 +4378,7 @@ fn cannot_rebond_to_lower_than_ed() {
 					total: 10 * 1000,
 					active: 0,
 					unlocking: bounded_vec![UnlockChunk { value: 10 * 1000, era: 3 }],
-					claimed_rewards: bounded_vec![],
+					legacy_claimed_rewards: bounded_vec![],
 				}
 			);
 
@@ -4404,7 +4404,7 @@ fn cannot_bond_extra_to_lower_than_ed() {
 					total: 10 * 1000,
 					active: 10 * 1000,
 					unlocking: Default::default(),
-					claimed_rewards: bounded_vec![],
+					legacy_claimed_rewards: bounded_vec![],
 				}
 			);
 
@@ -4418,7 +4418,7 @@ fn cannot_bond_extra_to_lower_than_ed() {
 					total: 10 * 1000,
 					active: 0,
 					unlocking: bounded_vec![UnlockChunk { value: 10 * 1000, era: 3 }],
-					claimed_rewards: bounded_vec![],
+					legacy_claimed_rewards: bounded_vec![],
 				}
 			);
 
@@ -4445,7 +4445,7 @@ fn do_not_die_when_active_is_ed() {
 					total: 1000 * ed,
 					active: 1000 * ed,
 					unlocking: Default::default(),
-					claimed_rewards: bounded_vec![],
+					legacy_claimed_rewards: bounded_vec![],
 				}
 			);
 
@@ -4462,7 +4462,7 @@ fn do_not_die_when_active_is_ed() {
 					total: ed,
 					active: ed,
 					unlocking: Default::default(),
-					claimed_rewards: bounded_vec![],
+					legacy_claimed_rewards: bounded_vec![],
 				}
 			);
 		})
@@ -5262,7 +5262,7 @@ fn proportional_slash_stop_slashing_if_remaining_zero() {
 		active: 20,
 		// we have some chunks, but they are not affected.
 		unlocking: bounded_vec![c(1, 10), c(2, 10)],
-		claimed_rewards: bounded_vec![],
+		legacy_claimed_rewards: bounded_vec![],
 	};
 
 	assert_eq!(BondingDuration::get(), 3);
@@ -5280,7 +5280,7 @@ fn proportional_ledger_slash_works() {
 		total: 10,
 		active: 10,
 		unlocking: bounded_vec![],
-		claimed_rewards: bounded_vec![],
+		legacy_claimed_rewards: bounded_vec![],
 	};
 	assert_eq!(BondingDuration::get(), 3);
 
@@ -5517,7 +5517,7 @@ fn pre_bonding_era_cannot_be_claimed() {
 		// add a new candidate for being a validator. account 3 controlled by 4.
 		assert_ok!(Staking::bond(RuntimeOrigin::signed(3), 4, 1500, RewardDestination::Controller));
 
-		let claimed_rewards: BoundedVec<_, _> =
+		let legacy_claimed_rewards: BoundedVec<_, _> =
 			(start_reward_era..=last_reward_era).collect::<Vec<_>>().try_into().unwrap();
 		assert_eq!(
 			Staking::ledger(&4).unwrap(),
@@ -5526,7 +5526,7 @@ fn pre_bonding_era_cannot_be_claimed() {
 				total: 1500,
 				active: 1500,
 				unlocking: Default::default(),
-				claimed_rewards,
+				legacy_claimed_rewards: legacy_claimed_rewards,
 			}
 		);
 
@@ -5583,7 +5583,7 @@ fn reducing_history_depth_abrupt() {
 
 		// all previous era before the bonding action should be marked as
 		// claimed.
-		let claimed_rewards: BoundedVec<_, _> =
+		let legacy_claimed_rewards: BoundedVec<_, _> =
 			(start_reward_era..=last_reward_era).collect::<Vec<_>>().try_into().unwrap();
 		assert_eq!(
 			Staking::ledger(&4).unwrap(),
@@ -5592,7 +5592,7 @@ fn reducing_history_depth_abrupt() {
 				total: 1500,
 				active: 1500,
 				unlocking: Default::default(),
-				claimed_rewards,
+				legacy_claimed_rewards: legacy_claimed_rewards,
 			}
 		);
 
@@ -5622,7 +5622,7 @@ fn reducing_history_depth_abrupt() {
 		// new staking ledgers created will be bounded by the current history depth
 		let last_reward_era = current_era - 1;
 		let start_reward_era = current_era - history_depth;
-		let claimed_rewards: BoundedVec<_, _> =
+		let legacy_claimed_rewards: BoundedVec<_, _> =
 			(start_reward_era..=last_reward_era).collect::<Vec<_>>().try_into().unwrap();
 		assert_eq!(
 			Staking::ledger(&6).unwrap(),
@@ -5631,7 +5631,7 @@ fn reducing_history_depth_abrupt() {
 				total: 1200,
 				active: 1200,
 				unlocking: Default::default(),
-				claimed_rewards,
+				legacy_claimed_rewards: legacy_claimed_rewards,
 			}
 		);
 

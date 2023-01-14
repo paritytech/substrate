@@ -150,7 +150,7 @@ impl<T: Config> Pallet<T> {
 		);
 
 		// Note: if era has no reward to be claimed, era may be future. better not to update
-		// `ledger.claimed_rewards` in this case.
+		// `ledger.legacy_claimed_rewards` in this case.
 		let era_payout = <ErasValidatorReward<T>>::get(&era).ok_or_else(|| {
 			Error::<T>::InvalidEraToReward
 				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
@@ -163,7 +163,7 @@ impl<T: Config> Pallet<T> {
 
 		// clean up older claimed rewards
 		ledger
-			.claimed_rewards
+			.legacy_claimed_rewards
 			.retain(|&x| x >= current_era.saturating_sub(history_depth));
 		<Ledger<T>>::insert(&controller, &ledger);
 
@@ -1034,7 +1034,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 				active: stake,
 				total: stake,
 				unlocking: Default::default(),
-				claimed_rewards: Default::default(),
+				legacy_claimed_rewards: Default::default(),
 			},
 		);
 
@@ -1052,7 +1052,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 				active: stake,
 				total: stake,
 				unlocking: Default::default(),
-				claimed_rewards: Default::default(),
+				legacy_claimed_rewards: Default::default(),
 			},
 		);
 		Self::do_add_validator(
@@ -1093,7 +1093,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 					active: stake,
 					total: stake,
 					unlocking: Default::default(),
-					claimed_rewards: Default::default(),
+					legacy_claimed_rewards: Default::default(),
 				},
 			);
 			Self::do_add_validator(
@@ -1114,7 +1114,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 					active: stake,
 					total: stake,
 					unlocking: Default::default(),
-					claimed_rewards: Default::default(),
+					legacy_claimed_rewards: Default::default(),
 				},
 			);
 			Self::do_add_nominator(
