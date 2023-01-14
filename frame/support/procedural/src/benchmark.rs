@@ -195,7 +195,9 @@ impl BenchmarkDef {
 						expr_call.attrs.remove(k);
 
 						// extract origin from expr_call
-						let origin = match expr_call.args.first() {
+						let Some(origin) = expr_call.args.cloned().first() else {
+						return Some(Err(Error::new(expr_call.args.span(), "Single-item extrinsic calls must specify their origin as the first argument.")))
+						};
 							Some(arg) => arg.clone(),
 							None => return Some(Err(Error::new(expr_call.args.span(), "Single-item extrinsic calls must specify their origin as the first argument."))),
 						};
