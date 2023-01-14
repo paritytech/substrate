@@ -1253,6 +1253,11 @@ impl<T: Config> schedule::v3::Anon<T::BlockNumber, <T as Config>::RuntimeCall, T
 			.ok_or(DispatchError::Unavailable)
 			.map(|_| when)
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn max_scheduled_per_block() -> u32 {
+		T::MaxScheduledPerBlock::get()
+	}
 }
 
 use schedule::v3::TaskName;

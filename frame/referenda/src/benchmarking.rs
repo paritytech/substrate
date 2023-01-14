@@ -79,9 +79,25 @@ fn fill_queue<T: Config<I>, I: 'static>(
 	spaces: u32,
 	pass_after: u32,
 ) -> Vec<ReferendumIndex> {
+	let track_info = info::<T, I>(index);
+	// the block number when the decision period of the 'index' referendum ends.
+	let first_decision_end = now::<T>() + track_info.prepare_period + track_info.decision_period;
+
+	let maybe_move_to_next_block = |others_count| {
+		// check if scheduler max capacity for the current block is reached.
+		if (others_count + 1) % (T::Scheduler::max_scheduled_per_block() as usize) == 0 {
+			let next_block = now::<T>() + One::one();
+			// decision period of the first referendum must not end
+			// after the block number will be set to the referendum's prepare_period.
+			assert!(next_block + track_info.prepare_period < first_decision_end);
+			frame_system::Pallet::<T>::set_block_number(next_block);
+		}
+	};
+
 	// First, create enough other referendums to fill the track.
 	let mut others = vec![];
-	for _ in 0..info::<T, I>(index).max_deciding {
+	for _ in 0..track_info.max_deciding {
+		maybe_move_to_next_block(others.len());
 		let (_origin, index) = create_referendum::<T, I>();
 		place_deposit::<T, I>(index);
 		others.push(index);
@@ -90,19 +106,39 @@ fn fill_queue<T: Config<I>, I: 'static>(
 	// We will also need enough referenda which are queued and passing, we want `MaxQueued - 1`
 	// in order to force the maximum amount of work to insert ours into the queue.
 	for _ in spaces..T::MaxQueued::get() {
+		maybe_move_to_next_block(others.len());
 		let (_origin, index) = create_referendum::<T, I>();
 		place_deposit::<T, I>(index);
-		make_passing_after::<T, I>(index, Perbill::from_percent(pass_after));
 		others.push(index);
 	}
 
-	// Skip to when they can start being decided.
-	skip_prepare_period::<T, I>(index);
+	// Skip to when all referendums can start being decided.
+	frame_system::Pallet::<T>::set_block_number(now::<T>() + track_info.prepare_period);
+
+	// make queued referendums passing.
+	others
+		.iter()
+		.skip(track_info.max_deciding as usize)
+		.enumerate()
+		.for_each(|(i, &item)| {
+			maybe_move_to_next_block(i);
+			make_passing_after::<T, I>(item, Perbill::from_percent(pass_after));
+		});
+
+	// Move to the next block to not overflow the scheduler agenda.
+	frame_system::Pallet::<T>::set_block_number(now::<T>() + One::one());
 
 	// Manually nudge the other referenda first to ensure that they begin.
-	others.iter().for_each(|&i| nudge::<T, I>(i));
+	others.iter().enumerate().for_each(|(i, &item)| {
+		maybe_move_to_next_block(i);
+		nudge::<T, I>(item);
+	});
 
 	others
+}
+
+fn now<T: frame_system::Config>() -> T::BlockNumber {
+	frame_system::Pallet::<T>::block_number()
 }
 
 fn info<T: Config<I>, I: 'static>(index: ReferendumIndex) -> &'static TrackInfoOf<T, I> {

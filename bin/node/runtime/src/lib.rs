@@ -356,7 +356,7 @@ impl pallet_scheduler::Config for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type MaximumWeight = MaximumSchedulerWeight;
 	type ScheduleOrigin = EnsureRoot<AccountId>;
-	type MaxScheduledPerBlock = ConstU32<512>;
+	type MaxScheduledPerBlock = ConstU32<50>;
 	type WeightInfo = pallet_scheduler::weights::SubstrateWeight<Runtime>;
 	type OriginPrivilegeCmp = EqualPrivilegeOnly;
 	type Preimages = Preimage;
@@ -828,10 +828,10 @@ impl pallet_referenda::TracksInfo<Balance, BlockNumber> for TracksInfo {
 			0u16,
 			pallet_referenda::TrackInfo {
 				name: "root",
-				max_deciding: 1,
+				max_deciding: 50,
 				decision_deposit: 10,
-				prepare_period: 4,
-				decision_period: 4,
+				prepare_period: 10,
+				decision_period: 20,
 				confirm_period: 2,
 				min_enactment_period: 4,
 				min_approval: pallet_referenda::Curve::LinearDecreasing {
