@@ -139,8 +139,7 @@ pub mod pallet {
 		/// Following information is kept for eras in `[current_era -
 		/// HistoryDepth, current_era]`: `ErasStakers`, `ErasStakersClipped`,
 		/// `ErasValidatorPrefs`, `ErasValidatorReward`, `ErasRewardPoints`,
-		/// `ErasTotalStake`, `ErasStartSessionIndex`,
-		/// `StakingLedger.claimed_rewards`.
+		/// `ErasTotalStake`, `ErasStartSessionIndex`, `ClaimedRewards`.
 		///
 		/// Must be more than the number of eras delayed by session.
 		/// I.e. active era must always be in history. I.e. `active_era >
@@ -150,7 +149,7 @@ pub mod pallet {
 		/// this should be set to same value or greater as in storage.
 		///
 		/// Note: `HistoryDepth` is used as the upper bound for the `BoundedVec`
-		/// item `StakingLedger.claimed_rewards`. Setting this value lower than
+		/// item `StakingLedger.legacy_claimed_rewards`. Setting this value lower than
 		/// the existing value can lead to inconsistencies in the
 		/// `StakingLedger` and will need to be handled properly in a migration.
 		/// The test `reducing_history_depth_abrupt` shows this effect.
@@ -616,7 +615,7 @@ pub mod pallet {
 			validator: &T::AccountId,
 			page: PageIndex,
 		) -> bool {
-			ledger.claimed_rewards.binary_search(&era).is_ok() ||
+			ledger.legacy_claimed_rewards.binary_search(&era).is_ok() ||
 				Self::is_rewards_claimed(era, validator, page)
 		}
 
@@ -996,7 +995,7 @@ pub mod pallet {
 				total: value,
 				active: value,
 				unlocking: Default::default(),
-				claimed_rewards: Default::default(),
+				legacy_claimed_rewards: Default::default(),
 			};
 			Self::update_ledger(&controller, &item);
 			Ok(())
