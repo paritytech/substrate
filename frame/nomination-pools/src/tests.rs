@@ -5275,6 +5275,35 @@ mod commission {
 				BondedPool::<Runtime>::get(1).unwrap().commission,
 				Commission { current: None, max: None, change_rate: None, throttle_from: Some(1) }
 			);
+			// set the commission to 0%
+			assert_ok!(Pools::set_commission(
+				RuntimeOrigin::signed(900),
+				1,
+				Some((Perbill::from_percent(0), 900))
+			));
+
+			// test for updating payee only when commission = max commission
+			//
+			// set max commission to 10%
+			assert_ok!(Pools::set_commission_max(
+				RuntimeOrigin::signed(900),
+				1,
+				Perbill::from_percent(10)
+			));
+
+			// set commission to 10%
+			assert_ok!(Pools::set_commission(
+				RuntimeOrigin::signed(900),
+				1,
+				Some((Perbill::from_percent(10), 900))
+			));
+
+			// update payee only and keep current commission
+			assert_ok!(Pools::set_commission(
+				RuntimeOrigin::signed(900),
+				1,
+				Some((Perbill::from_percent(10), 901))
+			));
 
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -5301,6 +5330,22 @@ mod commission {
 					Event::PoolCommissionUpdated {
 						pool_id: 1,
 						current: Some((Perbill::from_percent(0), 900))
+					},
+					Event::PoolCommissionUpdated {
+						pool_id: 1,
+						current: Some((Perbill::from_percent(0), 900))
+					},
+					Event::PoolMaxCommissionUpdated {
+						pool_id: 1,
+						max_commission: Perbill::from_percent(10)
+					},
+					Event::PoolCommissionUpdated {
+						pool_id: 1,
+						current: Some((Perbill::from_percent(10), 900))
+					},
+					Event::PoolCommissionUpdated {
+						pool_id: 1,
+						current: Some((Perbill::from_percent(10), 901))
 					}
 				]
 			);
