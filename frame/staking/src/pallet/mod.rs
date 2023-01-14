@@ -616,7 +616,7 @@ pub mod pallet {
 			validator: &T::AccountId,
 			page: PageIndex,
 		) -> bool {
-			ledger.claimed_rewards.binary_search(&era).is_ok() &&
+			ledger.claimed_rewards.binary_search(&era).is_ok() ||
 				Self::is_rewards_claimed(era, validator, page)
 		}
 

@@ -3534,8 +3534,9 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 		mock::start_active_era(1);
 
 		Pallet::<Test>::reward_by_ids(vec![(11, 1)]);
-		// Change total issuance in order to modify total payout
+		// Increase total token issuance to affect the total payout.
 		let _ = Balances::deposit_creating(&999, 1_000_000_000);
+
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
 		assert!(total_payout_1 != total_payout_0);
@@ -3543,7 +3544,7 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 		mock::start_active_era(2);
 
 		Pallet::<Test>::reward_by_ids(vec![(11, 1)]);
-		// Change total issuance in order to modify total payout
+		// Increase total token issuance to affect the total payout.
 		let _ = Balances::deposit_creating(&999, 1_000_000_000);
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_2 = current_total_payout_for_duration(reward_time_per_era());
