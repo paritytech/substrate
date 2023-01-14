@@ -3844,7 +3844,10 @@ fn test_payout_stakers() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				legacy_claimed_rewards: bounded_vec![expected_start_reward_era, expected_last_reward_era]
+				legacy_claimed_rewards: bounded_vec![
+					expected_start_reward_era,
+					expected_last_reward_era
+				]
 			})
 		);
 
