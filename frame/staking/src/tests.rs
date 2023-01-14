@@ -1053,9 +1053,12 @@ fn reward_destination_works() {
 				total: 1000 + total_payout_0,
 				active: 1000 + total_payout_0,
 				unlocking: Default::default(),
-				legacy_claimed_rewards: bounded_vec![0],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
+
+		// (era 0, page 0) is claimed
+		assert_eq!(Staking::claimed_rewards(0, &11), vec![0]);
 
 		// Change RewardDestination to Stash
 		<Payee<Test>>::insert(&11, RewardDestination::Stash);
@@ -1081,9 +1084,12 @@ fn reward_destination_works() {
 				total: 1000 + total_payout_0,
 				active: 1000 + total_payout_0,
 				unlocking: Default::default(),
-				legacy_claimed_rewards: bounded_vec![0, 1],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
+
+		// (era 1, page 0) is claimed
+		assert_eq!(Staking::claimed_rewards(1, &11), vec![0]);
 
 		// Change RewardDestination to Controller
 		<Payee<Test>>::insert(&11, RewardDestination::Controller);
@@ -1110,9 +1116,13 @@ fn reward_destination_works() {
 				total: 1000 + total_payout_0,
 				active: 1000 + total_payout_0,
 				unlocking: Default::default(),
-				legacy_claimed_rewards: bounded_vec![0, 1, 2],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
+
+		// (era 2, page 0) is claimed
+		assert_eq!(Staking::claimed_rewards(2, &11), vec![0]);
+
 		// Check that amount in staked account is NOT increased.
 		assert_eq!(Balances::free_balance(11), recorded_stash_balance);
 	});

@@ -184,7 +184,6 @@ impl<T: Config> Pallet<T> {
 		// which goes to them and each of their nominators.
 
 		let exposure = EraInfo::<T>::get_validator_exposure(era, &ledger.stash, page);
-		// let exposure = EraInfo::<T>::get_validator_exposure(&era, &ledger.stash, page);
 
 		let era_reward_points = <ErasRewardPoints<T>>::get(&era);
 		let total_reward_points = era_reward_points.total;
