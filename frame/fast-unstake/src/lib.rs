@@ -88,7 +88,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::{traits::Zero, DispatchResult};
 	use sp_staking::{EraIndex, StakingInterface};
-	use sp_std::{collections::btree_set::BTreeSet, prelude::*, vec::Vec};
+	use sp_std::{prelude::*, vec::Vec};
 	pub use weights::WeightInfo;
 
 	#[derive(scale_info::TypeInfo, codec::Encode, codec::Decode, codec::MaxEncodedLen)]
@@ -453,9 +453,9 @@ pub mod pallet {
 			};
 
 			let check_stash = |stash, deposit| {
-				let is_exposed = unchecked_eras_to_check.iter().any(|e| {
-					T::Staking::is_exposed_in_era(&stash, e)
-				});
+				let is_exposed = unchecked_eras_to_check
+					.iter()
+					.any(|e| T::Staking::is_exposed_in_era(&stash, e));
 
 				if is_exposed {
 					T::Currency::slash_reserved(&stash, deposit);
@@ -477,9 +477,7 @@ pub mod pallet {
 				let pre_length = stashes.len();
 				let stashes: BoundedVec<(T::AccountId, BalanceOf<T>), T::BatchSize> = stashes
 					.into_iter()
-					.filter(|(stash, deposit)| {
-						check_stash(stash.clone(), *deposit)
-					})
+					.filter(|(stash, deposit)| check_stash(stash.clone(), *deposit))
 					.collect::<Vec<_>>()
 					.try_into()
 					.expect("filter can only lessen the length; still in bound; qed");
