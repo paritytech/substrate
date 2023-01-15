@@ -736,22 +736,24 @@ impl<AccountId, Balance: Default + HasCompact> Default for Exposure<AccountId, B
 impl<AccountId: Clone, Balance: HasCompact + AtLeast32BitUnsigned + Copy>
 	Exposure<AccountId, Balance>
 {
-	fn in_chunks_of(&self, page_size: usize) -> Vec<Self> {
+	fn as_pages(&self, page_size: usize) -> Vec<ExposurePage<AccountId, Balance>> {
 		let individual_chunks = self.others.chunks(page_size);
-		let mut paged_exposure: Vec<Self> = Vec::with_capacity(individual_chunks.len());
+		let mut paged_exposure: Vec<ExposurePage<AccountId, Balance>> =
+			Vec::with_capacity(individual_chunks.len());
 
 		// own balance that has not been accounted for in the paged exposure
 		let mut own_left = self.own;
 
 		for chunk in individual_chunks {
 			let own = own_left;
-			let mut total = own;
+			let mut page_total = own;
 			for individual in chunk.iter() {
-				total = total.saturating_add(individual.value);
+				page_total = page_total.saturating_add(individual.value);
 			}
 
-			paged_exposure.push(Exposure {
-				total,
+			paged_exposure.push(ExposurePage {
+				total: self.total,
+				page_total,
 				own,
 				others: chunk
 					.iter()
@@ -767,6 +769,40 @@ impl<AccountId: Clone, Balance: HasCompact + AtLeast32BitUnsigned + Copy>
 	}
 }
 
+/// A snapshot of the stake backing a single validator in the system.
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+pub struct ExposurePage<AccountId, Balance: HasCompact> {
+	/// The total balance backing this validator.
+	#[codec(compact)]
+	pub total: Balance,
+	/// The total balance of this chunk/page.
+	#[codec(compact)]
+	pub page_total: Balance,
+	/// The validator's own stash that is exposed.
+	#[codec(compact)]
+	pub own: Balance,
+	/// The portions of nominators stashes that are exposed.
+	pub others: Vec<IndividualExposure<AccountId, Balance>>,
+}
+
+impl<AccountId, Balance: Default + HasCompact> Default for ExposurePage<AccountId, Balance> {
+	fn default() -> Self {
+		Self { total: Default::default(), page_total: Default::default(), own: Default::default(), others: vec![] }
+	}
+}
+
+impl<AccountId: Clone, Balance: HasCompact + AtLeast32BitUnsigned + Copy>
+	From<Exposure<AccountId, Balance>> for ExposurePage<AccountId, Balance>
+{
+	fn from(exposure: Exposure<AccountId, Balance>) -> Self {
+		Self {
+			total: exposure.total,
+			page_total: exposure.total,
+			own: exposure.own,
+			others: exposure.others,
+		}
+	}
+}
 /// A pending slash record. The value of the slash has been computed but not applied yet,
 /// rather deferred for several eras.
 #[derive(Encode, Decode, RuntimeDebug, TypeInfo)]
