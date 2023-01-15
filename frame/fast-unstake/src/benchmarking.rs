@@ -127,15 +127,10 @@ benchmarks! {
 		));
 	}
 
-	// on_idle, when we check some number of eras and when we need to build the queue.
+	// on_idle, when we check some number of eras and the queue is already set.
 	on_idle_check {
 		let v in 1 .. 1000;
 		let b in 1 .. T::BatchSize::get();
-
-		// both of these can be fetched from `T::Staking`, but the values might be unnecessarily
-		// large and make the benchmarks too slow. Also, we use the multiplied version because this
-		// helps the benchmarking tool establish the fact that we have a total of `uv` reads in
-		// total. Although, this means that for a lot of the other aspects, we are assuming
 		let u = T::MaxErasToCheckPerBlock::get().min(T::Staking::bonding_duration());
 
 		ErasToCheckPerBlock::<T>::put(u);
@@ -155,8 +150,6 @@ benchmarks! {
 		assert_eq!(Head::<T>::get(), None);
 
 		Head::<T>::put(UnstakeRequest { stashes: stashes.clone().try_into().unwrap(), checked: Default::default() });
-
-		assert!(Head::<T>::get().is_some());
 	}
 	: {
 		on_idle_full_block::<T>();
