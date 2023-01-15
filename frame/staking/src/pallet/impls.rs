@@ -1691,11 +1691,11 @@ impl<T: Config> Pallet<T> {
 		ensure!(
 			<T as Config>::VoterList::count() ==
 				Nominators::<T>::count() + Validators::<T>::count(),
-			"wrong external count"
+			"wrong external voterlist count"
 		);
 		ensure!(
 			<T as Config>::TargetList::count() == Validators::<T>::count(),
-			"wrong external count"
+			"wrong external targetlist count"
 		);
 		ensure!(
 			ValidatorCount::<T>::get() <=
