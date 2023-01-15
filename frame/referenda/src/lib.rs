@@ -691,6 +691,7 @@ impl<T: Config<I>, I: 'static> Polling<T::Tally> for Pallet<T, I> {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn create_ongoing(class: Self::Class) -> Result<Self::Index, ()> {
+		use sp_runtime::traits::Bounded;
 		let index = ReferendumCount::<T, I>::mutate(|x| {
 			let r = *x;
 			*x += 1;
