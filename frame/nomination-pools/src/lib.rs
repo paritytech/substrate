@@ -2380,7 +2380,6 @@ pub mod pallet {
 		/// Where a `current` of `None` is provided, any current commission will be removed.
 		///
 		/// - If a `None` is supplied to `new_commission`, existing commission will be removed.
-		/// - If a payee is supplied with 0% commission, a `None` value will be set.
 		#[pallet::call_index(14)]
 		#[pallet::weight(T::WeightInfo::set_commission())]
 		pub fn set_commission(
