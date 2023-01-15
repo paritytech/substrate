@@ -74,10 +74,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Staking Payee (r:0 w:1)
 	/// The range of component `b` is `[1, 64]`.
 	fn on_idle_unstake(b: u32, ) -> Weight {
-		// Minimum execution time: 86_711 nanoseconds.
-		Weight::from_ref_time(52_934_351)
-			// Standard Error: 28_528
-			.saturating_add(Weight::from_ref_time(38_013_927).saturating_mul(b.into()))
+		// Minimum execution time: 88_877 nanoseconds.
+		Weight::from_ref_time(56_829_926)
+			// Standard Error: 32_314
+			.saturating_add(Weight::from_ref_time(39_502_752).saturating_mul(b.into()))
 			.saturating_add(T::DbWeight::get().reads(6))
 			.saturating_add(T::DbWeight::get().reads((6_u64).saturating_mul(b.into())))
 			.saturating_add(T::DbWeight::get().writes(1))
@@ -90,15 +90,15 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: ElectionProviderMultiPhase CurrentPhase (r:1 w:0)
 	// Storage: Staking CurrentEra (r:1 w:0)
 	// Storage: Staking ErasStakers (r:2 w:0)
-	/// The range of component `v` is `[1, 256]`.
+	/// The range of component `v` is `[1, 128]`.
 	/// The range of component `b` is `[1, 64]`.
 	fn on_idle_check(v: u32, b: u32, ) -> Weight {
-		// Minimum execution time: 1_588_199 nanoseconds.
-		Weight::from_ref_time(1_594_294_000)
-			// Standard Error: 15_717_876
-			.saturating_add(Weight::from_ref_time(503_001_649).saturating_mul(v.into()))
-			// Standard Error: 62_889_013
-			.saturating_add(Weight::from_ref_time(1_959_544_924).saturating_mul(b.into()))
+		// Minimum execution time: 1_611_345 nanoseconds.
+		Weight::from_ref_time(1_627_057_000)
+			// Standard Error: 15_703_723
+			.saturating_add(Weight::from_ref_time(499_051_551).saturating_mul(v.into()))
+			// Standard Error: 31_411_250
+			.saturating_add(Weight::from_ref_time(971_964_836).saturating_mul(b.into()))
 			.saturating_add(T::DbWeight::get().reads(7))
 			.saturating_add(T::DbWeight::get().reads((1_u64).saturating_mul(v.into())))
 			.saturating_add(T::DbWeight::get().writes(1))
@@ -118,8 +118,8 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Balances Locks (r:1 w:1)
 	// Storage: FastUnstake CounterForQueue (r:1 w:1)
 	fn register_fast_unstake() -> Weight {
-		// Minimum execution time: 119_924 nanoseconds.
-		Weight::from_ref_time(121_046_000)
+		// Minimum execution time: 121_800 nanoseconds.
+		Weight::from_ref_time(122_801_000)
 			.saturating_add(T::DbWeight::get().reads(14))
 			.saturating_add(T::DbWeight::get().writes(9))
 	}
@@ -129,15 +129,15 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: FastUnstake Head (r:1 w:0)
 	// Storage: FastUnstake CounterForQueue (r:1 w:1)
 	fn deregister() -> Weight {
-		// Minimum execution time: 48_534 nanoseconds.
-		Weight::from_ref_time(49_277_000)
+		// Minimum execution time: 48_803 nanoseconds.
+		Weight::from_ref_time(49_615_000)
 			.saturating_add(T::DbWeight::get().reads(5))
 			.saturating_add(T::DbWeight::get().writes(2))
 	}
 	// Storage: FastUnstake ErasToCheckPerBlock (r:0 w:1)
 	fn control() -> Weight {
-		// Minimum execution time: 4_900 nanoseconds.
-		Weight::from_ref_time(5_089_000)
+		// Minimum execution time: 5_074 nanoseconds.
+		Weight::from_ref_time(5_322_000)
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
 }
@@ -160,10 +160,10 @@ impl WeightInfo for () {
 	// Storage: Staking Payee (r:0 w:1)
 	/// The range of component `b` is `[1, 64]`.
 	fn on_idle_unstake(b: u32, ) -> Weight {
-		// Minimum execution time: 86_711 nanoseconds.
-		Weight::from_ref_time(52_934_351)
-			// Standard Error: 28_528
-			.saturating_add(Weight::from_ref_time(38_013_927).saturating_mul(b.into()))
+		// Minimum execution time: 88_877 nanoseconds.
+		Weight::from_ref_time(56_829_926)
+			// Standard Error: 32_314
+			.saturating_add(Weight::from_ref_time(39_502_752).saturating_mul(b.into()))
 			.saturating_add(RocksDbWeight::get().reads(6))
 			.saturating_add(RocksDbWeight::get().reads((6_u64).saturating_mul(b.into())))
 			.saturating_add(RocksDbWeight::get().writes(1))
@@ -176,15 +176,15 @@ impl WeightInfo for () {
 	// Storage: ElectionProviderMultiPhase CurrentPhase (r:1 w:0)
 	// Storage: Staking CurrentEra (r:1 w:0)
 	// Storage: Staking ErasStakers (r:2 w:0)
-	/// The range of component `v` is `[1, 256]`.
+	/// The range of component `v` is `[1, 128]`.
 	/// The range of component `b` is `[1, 64]`.
 	fn on_idle_check(v: u32, b: u32, ) -> Weight {
-		// Minimum execution time: 1_588_199 nanoseconds.
-		Weight::from_ref_time(1_594_294_000)
-			// Standard Error: 15_717_876
-			.saturating_add(Weight::from_ref_time(503_001_649).saturating_mul(v.into()))
-			// Standard Error: 62_889_013
-			.saturating_add(Weight::from_ref_time(1_959_544_924).saturating_mul(b.into()))
+		// Minimum execution time: 1_611_345 nanoseconds.
+		Weight::from_ref_time(1_627_057_000)
+			// Standard Error: 15_703_723
+			.saturating_add(Weight::from_ref_time(499_051_551).saturating_mul(v.into()))
+			// Standard Error: 31_411_250
+			.saturating_add(Weight::from_ref_time(971_964_836).saturating_mul(b.into()))
 			.saturating_add(RocksDbWeight::get().reads(7))
 			.saturating_add(RocksDbWeight::get().reads((1_u64).saturating_mul(v.into())))
 			.saturating_add(RocksDbWeight::get().writes(1))
@@ -204,8 +204,8 @@ impl WeightInfo for () {
 	// Storage: Balances Locks (r:1 w:1)
 	// Storage: FastUnstake CounterForQueue (r:1 w:1)
 	fn register_fast_unstake() -> Weight {
-		// Minimum execution time: 119_924 nanoseconds.
-		Weight::from_ref_time(121_046_000)
+		// Minimum execution time: 121_800 nanoseconds.
+		Weight::from_ref_time(122_801_000)
 			.saturating_add(RocksDbWeight::get().reads(14))
 			.saturating_add(RocksDbWeight::get().writes(9))
 	}
@@ -215,15 +215,15 @@ impl WeightInfo for () {
 	// Storage: FastUnstake Head (r:1 w:0)
 	// Storage: FastUnstake CounterForQueue (r:1 w:1)
 	fn deregister() -> Weight {
-		// Minimum execution time: 48_534 nanoseconds.
-		Weight::from_ref_time(49_277_000)
+		// Minimum execution time: 48_803 nanoseconds.
+		Weight::from_ref_time(49_615_000)
 			.saturating_add(RocksDbWeight::get().reads(5))
 			.saturating_add(RocksDbWeight::get().writes(2))
 	}
 	// Storage: FastUnstake ErasToCheckPerBlock (r:0 w:1)
 	fn control() -> Weight {
-		// Minimum execution time: 4_900 nanoseconds.
-		Weight::from_ref_time(5_089_000)
+		// Minimum execution time: 5_074 nanoseconds.
+		Weight::from_ref_time(5_322_000)
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 }
