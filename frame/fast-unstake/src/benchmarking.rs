@@ -34,8 +34,8 @@ const USER_SEED: u32 = 0;
 
 type CurrencyOf<T> = <T as Config>::Currency;
 
-fn create_unexposed_batch<T: Config>() -> Vec<T::AccountId> {
-	(0..T::BatchSize::get())
+fn create_unexposed_batch<T: Config>(batch_size: u32) -> Vec<T::AccountId> {
+	(0..batch_size)
 		.map(|i| {
 			let account =
 				frame_benchmarking::account::<T::AccountId>("unexposed_nominator", i, USER_SEED);
@@ -98,7 +98,7 @@ benchmarks! {
 		let b in 1 .. T::BatchSize::get();
 
 		ErasToCheckPerBlock::<T>::put(1);
-		for who in create_unexposed_batch::<T>().into_iter().take(b as usize) {
+		for who in create_unexposed_batch::<T>(b).into_iter() {
 			assert_ok!(FastUnstake::<T>::register_fast_unstake(
 				RawOrigin::Signed(who.clone()).into(),
 			));
@@ -129,7 +129,7 @@ benchmarks! {
 
 	// on_idle, when we check some number of eras and the queue is already set.
 	on_idle_check {
-		let v in 1 .. 1000;
+		let v in 1 .. 256;
 		let b in 1 .. T::BatchSize::get();
 		let u = T::MaxErasToCheckPerBlock::get().min(T::Staking::bonding_duration());
 
@@ -139,7 +139,7 @@ benchmarks! {
 		// setup staking with v validators and u eras of data (0..=u+1)
 		setup_staking::<T>(v, u);
 
-		let stashes = create_unexposed_batch::<T>().into_iter().take(b as usize).map(|s| {
+		let stashes = create_unexposed_batch::<T>(b).into_iter().map(|s| {
 			assert_ok!(FastUnstake::<T>::register_fast_unstake(
 				RawOrigin::Signed(s.clone()).into(),
 			));
