@@ -1682,9 +1682,8 @@ impl<T: Config> StakingInterface for Pallet<T> {
 impl<T: Config> Pallet<T> {
 	pub(crate) fn do_try_state(_: BlockNumberFor<T>) -> Result<(), &'static str> {
 		ensure!(
-			T::VoterList::iter()
-				.all(|x| <Nominators<T>>::contains_key(&x) || <Validators<T>>::contains_key(&x)),
-			"VoterList contains non-staker"
+			T::VoterList::count() == <Nominators<T>>::count() + <Validators<T>>::count(),
+			"VoterList not equal to Validators + Nominators"
 		);
 
 		Self::check_nominators()?;
