@@ -57,7 +57,7 @@ pub trait EnsureOrigin<OuterOrigin> {
 	/// ** Should be used for benchmarking only!!! **
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<OuterOrigin, ()> {
-		Ok(Self::successful_origin())
+		unimplemented!();
 	}
 }
 
