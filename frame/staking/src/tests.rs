@@ -2203,7 +2203,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 		// Check reward
 		ErasRewardPoints::<Test>::insert(0, reward);
 		ErasStakers::<Test>::insert(0, 11, &exposure);
-		ErasStakersPaged::<Test>::insert((0, 11, 0,), exposure_page);
+		ErasStakersPaged::<Test>::insert((0, 11, 0), exposure_page);
 		ErasValidatorReward::<Test>::insert(0, stake);
 		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 0, 0));
 		assert_eq!(Balances::total_balance(&11), stake * 2);
@@ -5678,9 +5678,15 @@ fn can_page_exposure() {
 	// 7 pages of nominators.
 	assert_eq!(paged_exposures.len(), (19 / 3) + 1);
 	// first page stake = 500 (own) + 100 + 200 + 300
-	assert!(matches!(paged_exposures[0], ExposurePage { total: 19_500, page_total: 1100, own: 500, .. }));
+	assert!(matches!(
+		paged_exposures[0],
+		ExposurePage { total: 19_500, page_total: 1100, own: 500, .. }
+	));
 	// second page stake = 0 + 400 + 500 + 600
-	assert!(matches!(paged_exposures[1], ExposurePage { total: 19_500, page_total: 1500, own: 0, .. }));
+	assert!(matches!(
+		paged_exposures[1],
+		ExposurePage { total: 19_500, page_total: 1500, own: 0, .. }
+	));
 	// verify total is always the total stake backing a validator for all the pages.
 	assert_eq!(paged_exposures.iter().filter(|a| a.total == 19_500).count(), 7);
 	// verify total stake is same as in the original exposure.
