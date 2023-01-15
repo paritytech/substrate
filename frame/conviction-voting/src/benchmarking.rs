@@ -25,7 +25,7 @@ use frame_support::{
 	dispatch::RawOrigin,
 	traits::{fungible, Currency, Get},
 };
-use sp_runtime::traits::Bounded;
+use sp_runtime::traits::{Bounded, One};
 use sp_std::collections::btree_map::BTreeMap;
 
 use crate::Pallet as ConvictionVoting;
@@ -61,6 +61,12 @@ fn account_vote<T: Config<I>, I: 'static>(b: BalanceOf<T, I>) -> AccountVote<Bal
 	AccountVote::Standard { vote: v, balance: b }
 }
 
+fn move_to_next_block<T: frame_system::Config>() {
+	frame_system::Pallet::<T>::set_block_number(
+		frame_system::Pallet::<T>::block_number() + One::one(),
+	);
+}
+
 benchmarks_instance_pallet! {
 	where_clause {  where T::MaxVotes: core::fmt::Debug }
 
@@ -73,7 +79,11 @@ benchmarks_instance_pallet! {
 		let polls = &all_polls[&class];
 		let r = polls.len() - 1;
 		// We need to create existing votes
-		for i in polls.iter().skip(1) {
+		for (p, i) in polls.iter().skip(1).enumerate()  {
+			if p as u32 % T::Polls::max_access_poll_per_block() == 0 {
+				// move to the next block to not overflow the scheduler agenda.
+				move_to_next_block::<T>();
+			}
 			ConvictionVoting::<T, I>::vote(RawOrigin::Signed(caller.clone()).into(), *i, account_vote)?;
 		}
 		let votes = match VotingFor::<T, I>::get(&caller, &class) {
@@ -100,7 +110,11 @@ benchmarks_instance_pallet! {
 		let polls = &all_polls[&class];
 		let r = polls.len();
 		// We need to create existing votes
-		for i in polls.iter() {
+		for (p, i) in polls.iter().enumerate() {
+			if p as u32 % T::Polls::max_access_poll_per_block() == 0 {
+				// move to the next block to not overflow the scheduler agenda.
+				move_to_next_block::<T>();
+			}
 			ConvictionVoting::<T, I>::vote(RawOrigin::Signed(caller.clone()).into(), *i, old_account_vote)?;
 		}
 		let votes = match VotingFor::<T, I>::get(&caller, &class) {
@@ -128,7 +142,11 @@ benchmarks_instance_pallet! {
 		let polls = &all_polls[&class];
 		let r = polls.len();
 		// We need to create existing votes
-		for i in polls.iter() {
+		for (p, i) in polls.iter().enumerate() {
+			if p as u32 % T::Polls::max_access_poll_per_block() == 0 {
+				// move to the next block to not overflow the scheduler agenda.
+				move_to_next_block::<T>();
+			};
 			ConvictionVoting::<T, I>::vote(RawOrigin::Signed(caller.clone()).into(), *i, old_account_vote)?;
 		}
 		let votes = match VotingFor::<T, I>::get(&caller, &class) {
@@ -157,7 +175,11 @@ benchmarks_instance_pallet! {
 		let polls = &all_polls[&class];
 		let r = polls.len();
 		// We need to create existing votes
-		for i in polls.iter() {
+		for (p, i) in polls.iter().enumerate() {
+			if p as u32 % T::Polls::max_access_poll_per_block() == 0 {
+				// move to the next block to not overflow the scheduler agenda.
+				move_to_next_block::<T>();
+			}
 			ConvictionVoting::<T, I>::vote(RawOrigin::Signed(voter.clone()).into(), *i, old_account_vote)?;
 		}
 		let votes = match VotingFor::<T, I>::get(&caller, &class) {
@@ -191,7 +213,11 @@ benchmarks_instance_pallet! {
 		let delegate_vote = account_vote::<T, I>(delegated_balance);
 
 		// We need to create existing delegations
-		for i in polls.iter().take(r as usize) {
+		for (p, i) in polls.iter().enumerate().take(r as usize) {
+				if p as u32 % T::Polls::max_access_poll_per_block() == 0 {
+					// move to the next block to not overflow the scheduler agenda.
+					move_to_next_block::<T>();
+				}
 			ConvictionVoting::<T, I>::vote(RawOrigin::Signed(voter.clone()).into(), *i, delegate_vote)?;
 		}
 		assert_matches!(
@@ -227,7 +253,11 @@ benchmarks_instance_pallet! {
 		)?;
 
 		// We need to create delegations
-		for i in polls.iter().take(r as usize) {
+		for (p, i) in polls.iter().enumerate().take(r as usize) {
+			if p as u32 % T::Polls::max_access_poll_per_block() == 0 {
+				// move to the next block to not overflow the scheduler agenda.
+				move_to_next_block::<T>();
+			}
 			ConvictionVoting::<T, I>::vote(RawOrigin::Signed(voter.clone()).into(), *i, delegate_vote)?;
 		}
 		assert_matches!(
@@ -252,7 +282,11 @@ benchmarks_instance_pallet! {
 		assert!(all_polls.len() > 0);
 		for (class, polls) in all_polls.iter() {
 			assert!(polls.len() > 0);
-			for i in polls.iter() {
+			for (p, i) in polls.iter().enumerate() {
+				if p as u32 % T::Polls::max_access_poll_per_block() == 0 {
+					// move to the next block to not overflow the scheduler agenda.
+					move_to_next_block::<T>();
+				}
 				ConvictionVoting::<T, I>::vote(RawOrigin::Signed(caller.clone()).into(), *i, normal_account_vote)?;
 			}
 		}

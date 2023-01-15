@@ -70,7 +70,7 @@ use frame_support::{
 	traits::{
 		schedule::{
 			v3::{Anon as ScheduleAnon, Named as ScheduleNamed},
-			DispatchTime,
+			ConfigInfo, DispatchTime,
 		},
 		Currency, LockIdentifier, OnUnbalanced, OriginTrait, PollStatus, Polling, QueryPreimage,
 		ReservableCurrency, StorePreimage, VoteTally,
@@ -79,7 +79,7 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, Dispatchable, One, Saturating, Zero},
+	traits::{AtLeast32BitUnsigned, Bounded, Dispatchable, One, Saturating, Zero},
 	DispatchError, Perbill,
 };
 use sp_std::{fmt::Debug, prelude::*};
@@ -163,7 +163,8 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 		/// The Scheduler.
 		type Scheduler: ScheduleAnon<Self::BlockNumber, CallOf<Self, I>, PalletsOriginOf<Self>>
-			+ ScheduleNamed<Self::BlockNumber, CallOf<Self, I>, PalletsOriginOf<Self>>;
+			+ ScheduleNamed<Self::BlockNumber, CallOf<Self, I>, PalletsOriginOf<Self>>
+			+ ConfigInfo;
 		/// Currency type for this pallet.
 		type Currency: ReservableCurrency<Self::AccountId>;
 		// Origins and unbalances.
@@ -713,7 +714,12 @@ impl<T: Config<I>, I: 'static> Polling<T::Tally> for Pallet<T, I> {
 			in_queue: false,
 			alarm: None,
 		};
-		Self::ensure_alarm_at(&mut status, index, sp_runtime::traits::Bounded::max_value());
+		Self::ensure_alarm_at(
+			&mut status,
+			index,
+			// shift the scheduled for block to not overflow the scheduler agenda.
+			T::BlockNumber::max_value() - T::BlockNumber::from(index),
+		);
 		ReferendumInfoFor::<T, I>::insert(index, ReferendumInfo::Ongoing(status));
 		Ok(index)
 	}
@@ -740,6 +746,12 @@ impl<T: Config<I>, I: 'static> Polling<T::Tally> for Pallet<T, I> {
 			.max_by_key(|(_, info)| info.max_deciding)
 			.expect("Always one class");
 		(r.0, r.1.max_deciding)
+	}
+
+	/// The maximum number of the access poll invocations possible per block.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn max_access_poll_per_block() -> u32 {
+		T::Scheduler::max_scheduled_per_block()
 	}
 }
 

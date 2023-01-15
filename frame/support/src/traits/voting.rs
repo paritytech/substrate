@@ -186,4 +186,8 @@ pub trait Polling<Tally> {
 	fn max_ongoing() -> (Self::Class, u32) {
 		(Self::classes().into_iter().next().expect("Always one class"), u32::max_value())
 	}
+
+	/// The maximum number of the access poll invocations possible per block.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn max_access_poll_per_block() -> u32;
 }

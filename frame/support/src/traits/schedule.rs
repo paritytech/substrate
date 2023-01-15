@@ -426,10 +426,6 @@ pub mod v3 {
 		///
 		/// Will return an `Unavailable` error if the `address` is invalid.
 		fn next_dispatch_time(address: Self::Address) -> Result<BlockNumber, DispatchError>;
-
-		/// Return the maximum number of tasks possible to schedule per block.
-		#[cfg(feature = "runtime-benchmarks")]
-		fn max_scheduled_per_block() -> u32;
 	}
 
 	pub type TaskName = [u8; 32];
@@ -477,3 +473,10 @@ pub mod v3 {
 }
 
 pub use v1::*;
+
+/// A type that aware about a scheduler configuration.
+pub trait ConfigInfo {
+	/// Return the maximum number of tasks possible to schedule per block.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn max_scheduled_per_block() -> u32;
+}
