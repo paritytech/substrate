@@ -189,5 +189,7 @@ pub trait Polling<Tally> {
 
 	/// The maximum number of the access poll invocations possible per block.
 	#[cfg(feature = "runtime-benchmarks")]
-	fn max_access_poll_per_block() -> u32;
+	fn max_access_poll_per_block() -> u32 {
+		u32::max_value()
+	}
 }
