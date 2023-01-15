@@ -129,7 +129,7 @@ benchmarks! {
 
 	// on_idle, when we check some number of eras and the queue is already set.
 	on_idle_check {
-		let v in 1 .. 128;
+		let v in 1 .. 256;
 		let b in 1 .. T::BatchSize::get();
 		let u = T::MaxErasToCheckPerBlock::get().min(T::Staking::bonding_duration());
 
