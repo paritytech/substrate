@@ -3763,7 +3763,8 @@ fn test_payout_stakers() {
 		let pre_payout_total_issuance = Balances::total_issuance();
 		RewardOnUnbalanceWasCalled::set(false);
 		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1, 0));
-		// FIXME(ank4n): this won't work since the exposure page is not sorted anymore.
+		// FIXME(ank4n): this won't work since the exposure page is not sorted anymore. Instead fix
+		// it with multi block reward payout expectation.
 		assert_eq_error_rate!(
 			Balances::total_issuance(),
 			pre_payout_total_issuance + actual_paid_out,

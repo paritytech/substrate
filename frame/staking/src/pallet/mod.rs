@@ -601,14 +601,18 @@ pub mod pallet {
 	#[pallet::getter(fn current_planned_session)]
 	pub type CurrentPlannedSession<T> = StorageValue<_, SessionIndex, ValueQuery>;
 
-	/// Wrapper struct for `ErasStakers`, `ClaimedRewards`, `ErasStakersClipped`,
-	/// `ErasStakersPaged`, `ErasTotalStake`.
+	/// Wrapper struct for Era related information. It is not a pure encapsulation as these storage
+	/// items can be accessed directly but nevertheless recommended to use `EraInfo` for accesing
+	/// the following: (1) `ErasStakers`, (2) `ClaimedRewards`, (3) `ErasStakersClipped`,
+	/// (4) `ErasStakersPaged`, (5) `ErasTotalStake`.
+	// TODO(ank4n): docs, tests and add more methods to `EraInfo` for the supported storage items.
 	pub(crate) struct EraInfo<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> EraInfo<T> {
-		// TODO(ank4n): doc and clean up in 84 eras
-		// looks at `T::StakingLedger` for older non paged rewards, and `T::ClaimedRewards` for
-		// newer paged rewards.
-		pub(crate) fn temp_is_rewards_claimed(
+		/// Temporary function which looks at both (1) `T::StakingLedger` for legacy non-paged
+		/// rewards, and (2) `T::ClaimedRewards` for paged rewards. This can be removed once
+		/// `$HistoryDepth` eras have passed and none of the older non-paged rewards are claimable.
+		// TODO: Cleanup tracking issue: #13034
+		pub(crate) fn is_rewards_claimed_temp(
 			era: EraIndex,
 			ledger: &StakingLedger<T>,
 			validator: &T::AccountId,
@@ -618,6 +622,10 @@ pub mod pallet {
 				Self::is_rewards_claimed(era, validator, page)
 		}
 
+		/// Check if the rewards for the given era and page index have been claimed.
+		///
+		/// This is only used for paged rewards. Once older non-paged rewards are no longer
+		/// relevant, `is_rewards_claimed_temp` can be removed and this function can be made public.
 		fn is_rewards_claimed(era: EraIndex, validator: &T::AccountId, page: PageIndex) -> bool {
 			ClaimedRewards::<T>::get(era, validator).iter().find(|&&p| page == p).is_some()
 		}
@@ -1584,7 +1592,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Pay out all the stakers behind a single validator for a single era.
+		/// Pay out all the stakers behind a single validator for a single era and page.
 		///
 		/// - `validator_stash` is the stash account of the validator. Their nominators, up to
 		///   `T::MaxNominatorRewardedPerValidator`, will also receive their rewards.
@@ -1593,8 +1601,12 @@ pub mod pallet {
 		/// The origin of this call must be _Signed_. Any account can call this function, even if
 		/// it is not one of the stakers.
 		///
+		/// The list of nominators is paged, each page being capped at `T::ExposurePageSize`. For
+		/// rewarding all the nominators, the call needs to be called for each page. If rewards are
+		/// not claimed in `${HistoryDepth}` eras, they are lost.
+		///
 		/// # <weight>
-		/// - Time complexity: at most O(MaxNominatorRewardedPerValidator).
+		/// - Time complexity: at most O(ExposurePageSize).
 		/// - Contains a limited number of reads and writes.
 		/// -----------
 		/// N is the Number of payouts for the validator (including the validator)
