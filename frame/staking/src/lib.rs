@@ -787,7 +787,12 @@ pub struct ExposurePage<AccountId, Balance: HasCompact> {
 
 impl<AccountId, Balance: Default + HasCompact> Default for ExposurePage<AccountId, Balance> {
 	fn default() -> Self {
-		Self { total: Default::default(), page_total: Default::default(), own: Default::default(), others: vec![] }
+		Self {
+			total: Default::default(),
+			page_total: Default::default(),
+			own: Default::default(),
+			others: vec![],
+		}
 	}
 }
 
