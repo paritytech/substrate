@@ -20,7 +20,7 @@
 #![warn(missing_docs)]
 
 use crate::utils::serialize_result;
-use ark_bls12_381::{Bls12_381, G1Affine, G1Projective, G2Affine, G2Projective};
+use ark_bls12_381::{Bls12_381, G1Affine, G1Projective, G2Affine, G2Projective, g1, g2};
 use ark_ec::{
 	models::CurveConfig,
 	pairing::{MillerLoopOutput, Pairing},
@@ -87,7 +87,7 @@ pub fn mul_projective_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	let cursor = Cursor::new(scalar);
 	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
 
-	let result = <ark_bls12_381::g2::Config as SWCurveConfig>::mul_projective(&base, &scalar);
+	let result = <g2::Config as SWCurveConfig>::mul_projective(&base, &scalar);
 
 	serialize_result(result)
 }
@@ -100,7 +100,7 @@ pub fn mul_projective_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	let cursor = Cursor::new(scalar);
 	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
 
-	let result = <ark_bls12_381::g1::Config as SWCurveConfig>::mul_projective(&base, &scalar);
+	let result = <g1::Config as SWCurveConfig>::mul_projective(&base, &scalar);
 
 	serialize_result(result)
 }
@@ -113,7 +113,7 @@ pub fn mul_affine_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	let cursor = Cursor::new(scalar);
 	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
 
-	let result = <ark_bls12_381::g1::Config as SWCurveConfig>::mul_affine(&base, &scalar);
+	let result = <g1::Config as SWCurveConfig>::mul_affine(&base, &scalar);
 
 	serialize_result(result)
 }
@@ -126,7 +126,7 @@ pub fn mul_affine_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	let cursor = Cursor::new(scalar);
 	let scalar = Vec::<u64>::deserialize_with_mode(cursor, Compress::Yes, Validate::No).unwrap();
 
-	let result = <ark_bls12_381::g2::Config as SWCurveConfig>::mul_affine(&base, &scalar);
+	let result = <g2::Config as SWCurveConfig>::mul_affine(&base, &scalar);
 
 	serialize_result(result)
 }
@@ -149,7 +149,7 @@ pub fn msm_g1(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 		.iter()
 		.map(|a| {
 			let cursor = Cursor::new(a);
-			<ark_bls12_381::g1::Config as CurveConfig>::ScalarField::deserialize_with_mode(
+			<g1::Config as CurveConfig>::ScalarField::deserialize_with_mode(
 				cursor,
 				Compress::Yes,
 				Validate::No,
@@ -182,7 +182,7 @@ pub fn msm_g2(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 		.iter()
 		.map(|a| {
 			let cursor = Cursor::new(a);
-			<ark_bls12_381::g2::Config as CurveConfig>::ScalarField::deserialize_with_mode(
+			<g2::Config as CurveConfig>::ScalarField::deserialize_with_mode(
 				cursor,
 				Compress::Yes,
 				Validate::No,
