@@ -28,15 +28,8 @@ use sp_runtime::{
 use sp_std::{fmt::Debug, marker::PhantomData};
 /// Handle withdrawing, refunding and depositing of transaction fees.
 pub trait OnChargeAssetTransaction<T: Config> {
-	// type Currency: frame_support::traits::tokens::currency::Currency<T::AccountId>;
-	// type OnChargeTransaction: OnChargeTransaction<T>;
-	/// The underlying integer type in which fees are calculated.
-	/// type Balance: <Self::Currency as
-	/// frame_support::traits::tokens::currency::Currency<T::AccountId>>::Balance; The type used to
-	/// identify the assets used for transaction payment.
+	/// The type used to identify the assets used for transaction payment.
 	type AssetId: FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default + Eq + TypeInfo;
-	// The type used to store the intermediate values between pre- and post-dispatch.
-	// type LiquidityInfo;
 
 	/// Before the transaction is executed the payment of the transaction fees needs to be secured.
 	///
@@ -93,12 +86,10 @@ pub struct FungiblesAdapter<CON>(PhantomData<CON>);
 impl<T, CON> OnChargeAssetTransaction<T> for FungiblesAdapter<CON>
 where
 	T: Config,
-	// C: Currency<T::AccountId, Balance = B>,
 	CON: TransmuteBetweenNative<
 		T::RuntimeOrigin,
 		T::AccountId,
 		BalanceOf<T>,
-		// ChargeAssetBalanceOf<T>,
 		AssetBalanceOf<T>,
 		AssetIdOf<T>,
 	>,
@@ -119,46 +110,23 @@ where
 		_tip: BalanceOf<T>,
 	) -> Result<
 		<T::OnChargeTransaction as OnChargeTransaction<T>>::LiquidityInfo,
-		//Self::LiquidityInfo,
 		TransactionValidityError,
 	> {
-		// We don't know the precision of the underlying asset. Because the converted fee could be
-		// less than one (e.g. 0.5) but gets rounded down by integer division we introduce a minimum
-		// fee.
-		// let min_converted_fee = if fee.is_zero() { Zero::zero() } else { One::one() };
-
-		let fee_ours: BalanceOf<T> = fee;
-
 		let asset_consumed = CON::swap_tokens_for_exact_native(
 		 	who.clone(), asset_id,
-			 fee_ours,
+			 fee,
 
-			 None
-			//  <<T as Config>::Fungibles as Inspect<<T as frame_system::Config>::AccountId>>::Balance::max_value()
-			 ,
+			 None,
 
 			  who.clone(), true)
 		 	.map_err(|_| TransactionValidityError::from(InvalidTransaction::Payment))?
-		// 	// .max(min_converted_fee)
 		;
 
+		// We don't know the precision of the underlying asset. Because the converted fee could be
+		// less than one (e.g. 0.5) but gets rounded down by integer division we introduce a minimum
+		// fee.
 		ensure!(asset_consumed > Zero::zero(), InvalidTransaction::Payment);
-		// let can_withdraw =
-		// 	<T::Fungibles as Inspect<T::AccountId>>::can_withdraw(asset_id, who, converted_fee);
-		// if can_withdraw != WithdrawConsequence::Success {
-		// 	return Err(InvalidTransaction::Payment.into())
-		// }
-		// <T::Fungibles as Balanced<T::AccountId>>::withdraw(asset_id, who, converted_fee)
-		// 	.map_err(|_| TransactionValidityError::from(InvalidTransaction::Payment))
-
-		// let withdraw_reason = //if tip.is_zero() {
-		//			WithdrawReasons::TRANSACTION_PAYMENT
-		//		} else {
-		// WithdrawReasons::TRANSACTION_PAYMENT | WithdrawReasons::TIP
-		//}
-		// ;
-		// TODO: Convert tip too.
-		//, ExistenceRequirement::KeepAlive
+		
 		<T::OnChargeTransaction>::withdraw_fee(who, _call, _info, fee, _tip)
 	}
 
@@ -173,42 +141,22 @@ where
 		corrected_fee: BalanceOf<T>,
 		_tip: BalanceOf<T>,
 		paid: <T::OnChargeTransaction as OnChargeTransaction<T>>::LiquidityInfo,
-		//Self::LiquidityInfo,
 	) -> Result<(), TransactionValidityError> {
-		// // let min_converted_fee = if corrected_fee.is_zero() { Zero::zero() } else { One::one()
-		// }; // Convert the corrected fee into the asset used for payment.
-
-		let result = <T::OnChargeTransaction>::correct_and_deposit_fee(
+		// Refund to the account that paid the fees. If this fails, the account might have
+		// dropped below the existential balance. In that case we don't refund anything.
+		// 
+		// NOTE: We do not automatically convert the native token back to the asset,
+		// otherwise the fee could go back and forth between the two currencies paying dex
+		// charges each time over the course of several transactions. It's better for the user
+		// that it stays in native and smart wallets can realise there's enough native to not
+		// need to pay the next transaction using an asset.
+		<T::OnChargeTransaction>::correct_and_deposit_fee(
 			who,
 			_dispatch_info,
 			_post_info,
 			corrected_fee,
 			_tip,
 			paid,
-		);
-
-		//TODO dex the result back if configured to.
-
-		result
-		// let converted_fee = CON::swap_exact_native_for_tokens(
-		// 	who.clone(),
-		// 	paid.asset(),
-		// 	corrected_fee,
-		// 	None,
-		// 	who.clone(),
-		// 	true,
-		// )
-		// .map_err(|_| -> TransactionValidityError { InvalidTransaction::Payment.into() })?
-		// /* 	// .max(min_converted_fee) */
-		// ;
-		// // panic!("called1 {:?}", converted_fee);
-		// // Calculate how much refund we should return.
-		// let (final_fee, refund) = paid.split(converted_fee);
-		// // Refund to the account that paid the fees. If this fails, the account might have
-		// dropped // below the existential balance. In that case we don't refund anything.
-		// // let _ = <T::Fungibles as Balanced<T::AccountId>>::resolve(who, refund);
-		// // Handle the final fee, e.g. by transferring to the block author or burning.
-		// // HC::handle_credit(final_fee);
-		// Ok(())
+		)
 	}
 }
