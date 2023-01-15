@@ -1300,7 +1300,9 @@ fn map_err_to_v3_err<T: Config>(err: DispatchError) -> DispatchError {
 	}
 }
 
+/// Implements [schedule::ConfigInfo] trait.
 impl<T: Config> schedule::ConfigInfo for Pallet<T> {
+	/// Return the maximum number of tasks possible to schedule per block.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn max_scheduled_per_block() -> u32 {
 		T::MaxScheduledPerBlock::get()
