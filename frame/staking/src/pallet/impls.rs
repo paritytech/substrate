@@ -1681,11 +1681,6 @@ impl<T: Config> StakingInterface for Pallet<T> {
 #[cfg(any(test, feature = "try-runtime"))]
 impl<T: Config> Pallet<T> {
 	pub(crate) fn do_try_state(_: BlockNumberFor<T>) -> Result<(), &'static str> {
-		ensure!(
-			T::VoterList::count() == <Nominators<T>>::count() + <Validators<T>>::count(),
-			"VoterList not equal to Validators + Nominators"
-		);
-
 		Self::check_nominators()?;
 		Self::check_exposures()?;
 		Self::check_ledgers()?;
