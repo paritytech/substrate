@@ -44,7 +44,7 @@ pub use impls::*;
 
 use crate::{
 	slashing, weights::WeightInfo, AccountIdLookupOf, ActiveEraInfo, BalanceOf, EraPayout,
-	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations, PositiveImbalanceOf,
+	EraRewardPoints, Exposure, ExposurePage, Forcing, NegativeImbalanceOf, Nominations, PositiveImbalanceOf,
 	RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
 	ValidatorPrefs,
 };
@@ -457,7 +457,7 @@ pub mod pallet {
 			NMapKey<Twox64Concat, T::AccountId>,
 			NMapKey<Twox64Concat, PageIndex>,
 		),
-		Exposure<T::AccountId, BalanceOf<T>>,
+		ExposurePage<T::AccountId, BalanceOf<T>>,
 		OptionQuery,
 	>;
 
@@ -626,11 +626,11 @@ pub mod pallet {
 			era: EraIndex,
 			validator: &T::AccountId,
 			page: PageIndex,
-		) -> Exposure<T::AccountId, BalanceOf<T>> {
+		) -> ExposurePage<T::AccountId, BalanceOf<T>> {
 			return match <ErasStakersPaged<T>>::get((era, validator, page)) {
 				Some(paged_exposure) => paged_exposure,
 				// only return clipped exposure if page zero and no paged exposure entry
-				None if page == 0 => <ErasStakersClipped<T>>::get(&era, validator),
+				None if page == 0 => <ErasStakersClipped<T>>::get(&era, validator).into(),
 				_ => Default::default(),
 			}
 		}
@@ -653,7 +653,7 @@ pub mod pallet {
 			<ErasStakers<T>>::insert(era, &validator, &exposure);
 
 			exposure
-				.in_chunks_of(T::ExposurePageSize::get() as usize)
+				.as_pages(T::ExposurePageSize::get() as usize)
 				.iter()
 				.enumerate()
 				.for_each(|(page, paged_exposure)| {

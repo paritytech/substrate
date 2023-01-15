@@ -441,7 +441,7 @@ fn staking_should_work() {
 				total: 1500,
 				active: 1500,
 				unlocking: Default::default(),
-				legacy_claimed_rewards: bounded_vec![0],
+				legacy_claimed_rewards: bounded_vec![],
 			})
 		);
 		// e.g. it cannot reserve more than 500 that it has free from the total 2000
@@ -2194,6 +2194,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 		let _ = Balances::make_free_balance_be(&11, stake);
 
 		let exposure = Exposure::<AccountId, Balance> { total: stake, own: stake, others: vec![] };
+		let exposure_page: ExposurePage<AccountId, Balance> = exposure.clone().into();
 		let reward = EraRewardPoints::<AccountId> {
 			total: 1,
 			individual: vec![(11, 1)].into_iter().collect(),
@@ -2202,7 +2203,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 		// Check reward
 		ErasRewardPoints::<Test>::insert(0, reward);
 		ErasStakers::<Test>::insert(0, 11, &exposure);
-		ErasStakersClipped::<Test>::insert(0, 11, exposure);
+		ErasStakersPaged::<Test>::insert((0, 11, 0,), exposure_page);
 		ErasValidatorReward::<Test>::insert(0, stake);
 		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 0, 0));
 		assert_eq!(Balances::total_balance(&11), stake * 2);
@@ -3762,6 +3763,7 @@ fn test_payout_stakers() {
 		let pre_payout_total_issuance = Balances::total_issuance();
 		RewardOnUnbalanceWasCalled::set(false);
 		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1, 0));
+		// FIXME(ank4n): this won't work since the exposure page is not sorted anymore.
 		assert_eq_error_rate!(
 			Balances::total_issuance(),
 			pre_payout_total_issuance + actual_paid_out,
@@ -5670,16 +5672,19 @@ fn can_page_exposure() {
 		Exposure { total: total_stake, own: own_stake, others };
 
 	// when
-	let paged_exposures: Vec<Exposure<AccountId, Balance>> = exposure.clone().in_chunks_of(3);
+	let paged_exposures: Vec<ExposurePage<AccountId, Balance>> = exposure.clone().as_pages(3);
 
 	// then
+	// 7 pages of nominators.
 	assert_eq!(paged_exposures.len(), (19 / 3) + 1);
 	// first page stake = 500 (own) + 100 + 200 + 300
-	assert!(matches!(paged_exposures[0], Exposure { total: 1100, own: 500, .. }));
+	assert!(matches!(paged_exposures[0], ExposurePage { total: 19_500, page_total: 1100, own: 500, .. }));
 	// second page stake = 0 + 400 + 500 + 600
-	assert!(matches!(paged_exposures[1], Exposure { total: 1500, own: 0, .. }));
+	assert!(matches!(paged_exposures[1], ExposurePage { total: 19_500, page_total: 1500, own: 0, .. }));
+	// verify total is always the total stake backing a validator for all the pages.
+	assert_eq!(paged_exposures.iter().filter(|a| a.total == 19_500).count(), 7);
 	// verify total stake is same as in the original exposure.
-	assert_eq!(paged_exposures.iter().map(|a| a.total).reduce(|a, b| a + b).unwrap(), 19_500);
+	assert_eq!(paged_exposures.iter().map(|a| a.page_total).reduce(|a, b| a + b).unwrap(), 19_500);
 	// verify own stake is same as in the original exposure.
 	assert_eq!(paged_exposures.iter().map(|a| a.own).reduce(|a, b| a + b).unwrap(), 500);
 	// verify number of nominators are same as in the original exposure.
