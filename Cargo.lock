@@ -334,7 +334,7 @@ dependencies = [
 [[package]]
 name = "ark-models"
 version = "0.3.0"
-source = "git+https://github.com/achimcc/ark-substrate#987868a174c3b3e9d12e31b4a466514475bfce55"
+source = "git+https://github.com/achimcc/ark-substrate#75cf5227ebd818e321cdc052ef32350ad3200a7f"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -584,9 +584,9 @@ dependencies = [
 
 [[package]]
 name = "atomic-waker"
-version = "1.0.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "065374052e7df7ee4047b1160cca5e1467a12351a40b3da123c870ba0b8eda2a"
+checksum = "debc29dde2e69f9e47506b525f639ed42300fc014a3e007832592448fa8e4599"
 
 [[package]]
 name = "atty"
@@ -1083,7 +1083,7 @@ name = "chain-spec-builder"
 version = "2.0.0"
 dependencies = [
  "ansi_term",
- "clap 4.1.0",
+ "clap 4.1.1",
  "node-cli",
  "rand 0.8.5",
  "sc-chain-spec",
@@ -1171,9 +1171,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.1.0"
+version = "4.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa91278560fc226a5d9d736cc21e485ff9aad47d26b8ffe1f54cba868b684b9f"
+checksum = "4ec7a4128863c188deefe750ac1d1dfe66c236909f845af04beed823638dc1b2"
 dependencies = [
  "bitflags",
  "clap_derive",
@@ -1190,7 +1190,7 @@ version = "4.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce8955d4e8cd4f28f9a01c93a050194c4d131e73ca02f6636bcddbed867014d7"
 dependencies = [
- "clap 4.1.0",
+ "clap 4.1.1",
 ]
 
 [[package]]
@@ -1238,9 +1238,9 @@ dependencies = [
 
 [[package]]
 name = "concurrent-queue"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd7bef69dc86e3c610e4e7aed41035e2a7ed12e72dd7530f61327a6579a4390b"
+checksum = "c278839b831783b70278b14df4d45e1beb1aad306c07bb796637de9a0e323e8e"
 dependencies = [
  "crossbeam-utils",
 ]
@@ -2370,7 +2370,7 @@ dependencies = [
  "Inflector",
  "array-bytes",
  "chrono",
- "clap 4.1.0",
+ "clap 4.1.1",
  "comfy-table",
  "frame-benchmarking",
  "frame-support",
@@ -2447,7 +2447,7 @@ dependencies = [
 name = "frame-election-solution-type-fuzzer"
 version = "2.0.0-alpha.5"
 dependencies = [
- "clap 4.1.0",
+ "clap 4.1.1",
  "frame-election-provider-solution-type",
  "frame-election-provider-support",
  "frame-support",
@@ -4878,7 +4878,7 @@ name = "node-bench"
 version = "0.9.0-dev"
 dependencies = [
  "array-bytes",
- "clap 4.1.0",
+ "clap 4.1.1",
  "derive_more",
  "fs_extra",
  "futures",
@@ -4915,7 +4915,7 @@ version = "3.0.0-dev"
 dependencies = [
  "array-bytes",
  "assert_cmd",
- "clap 4.1.0",
+ "clap 4.1.1",
  "clap_complete",
  "criterion",
  "frame-benchmarking-cli",
@@ -5035,7 +5035,7 @@ dependencies = [
 name = "node-inspect"
 version = "0.9.0-dev"
 dependencies = [
- "clap 4.1.0",
+ "clap 4.1.1",
  "parity-scale-codec",
  "sc-cli",
  "sc-client-api",
@@ -5094,7 +5094,7 @@ dependencies = [
 name = "node-runtime-generate-bags"
 version = "3.0.0"
 dependencies = [
- "clap 4.1.0",
+ "clap 4.1.1",
  "generate-bags",
  "kitchensink-runtime",
 ]
@@ -5103,7 +5103,7 @@ dependencies = [
 name = "node-template"
 version = "4.0.0-dev"
 dependencies = [
- "clap 4.1.0",
+ "clap 4.1.1",
  "frame-benchmarking",
  "frame-benchmarking-cli",
  "frame-system",
@@ -8147,7 +8147,7 @@ version = "0.10.0-dev"
 dependencies = [
  "array-bytes",
  "chrono",
- "clap 4.1.0",
+ "clap 4.1.1",
  "fdlimit",
  "futures",
  "futures-timer",
@@ -9849,60 +9849,73 @@ dependencies = [
 [[package]]
 name = "sp-ark-bls12-377"
 version = "0.4.0-alpha.1"
-source = "git+https://github.com/achimcc/ark-substrate#987868a174c3b3e9d12e31b4a466514475bfce55"
+source = "git+https://github.com/achimcc/ark-substrate#75cf5227ebd818e321cdc052ef32350ad3200a7f"
 dependencies = [
  "ark-bls12-377",
  "ark-ff",
  "ark-models",
  "ark-serialize",
  "ark-std",
+ "sp-ark-utils",
 ]
 
 [[package]]
 name = "sp-ark-bls12-381"
 version = "0.4.0-alpha"
-source = "git+https://github.com/achimcc/ark-substrate#987868a174c3b3e9d12e31b4a466514475bfce55"
+source = "git+https://github.com/achimcc/ark-substrate#75cf5227ebd818e321cdc052ef32350ad3200a7f"
 dependencies = [
  "ark-bls12-381",
- "ark-ec",
  "ark-ff",
  "ark-models",
  "ark-serialize",
  "ark-std",
+ "sp-ark-utils",
 ]
 
 [[package]]
 name = "sp-ark-bw6-761"
 version = "0.4.0-alpha.1"
-source = "git+https://github.com/achimcc/ark-substrate#987868a174c3b3e9d12e31b4a466514475bfce55"
+source = "git+https://github.com/achimcc/ark-substrate#75cf5227ebd818e321cdc052ef32350ad3200a7f"
 dependencies = [
  "ark-bw6-761",
  "ark-ff",
  "ark-models",
  "ark-serialize",
  "ark-std",
+ "sp-ark-utils",
 ]
 
 [[package]]
 name = "sp-ark-ed-on-bls12-377"
 version = "0.4.0-alpha.1"
-source = "git+https://github.com/achimcc/ark-substrate#987868a174c3b3e9d12e31b4a466514475bfce55"
+source = "git+https://github.com/achimcc/ark-substrate#75cf5227ebd818e321cdc052ef32350ad3200a7f"
 dependencies = [
  "ark-ed-on-bls12-377",
  "ark-ff",
  "ark-models",
  "ark-serialize",
  "ark-std",
+ "sp-ark-utils",
 ]
 
 [[package]]
 name = "sp-ark-ed-on-bls12-381"
 version = "0.4.0-alpha.1"
-source = "git+https://github.com/achimcc/ark-substrate#987868a174c3b3e9d12e31b4a466514475bfce55"
+source = "git+https://github.com/achimcc/ark-substrate#75cf5227ebd818e321cdc052ef32350ad3200a7f"
 dependencies = [
  "ark-ed-on-bls12-381",
  "ark-ff",
  "ark-models",
+ "ark-serialize",
+ "ark-std",
+ "sp-ark-utils",
+]
+
+[[package]]
+name = "sp-ark-utils"
+version = "0.4.0-alpha.1"
+source = "git+https://github.com/achimcc/ark-substrate#75cf5227ebd818e321cdc052ef32350ad3200a7f"
+dependencies = [
  "ark-serialize",
  "ark-std",
 ]
@@ -10325,7 +10338,7 @@ dependencies = [
 name = "sp-npos-elections-fuzzer"
 version = "2.0.0-alpha.5"
 dependencies = [
- "clap 4.1.0",
+ "clap 4.1.1",
  "honggfuzz",
  "parity-scale-codec",
  "rand 0.8.5",
@@ -10814,7 +10827,7 @@ dependencies = [
 name = "subkey"
 version = "2.0.2"
 dependencies = [
- "clap 4.1.0",
+ "clap 4.1.1",
  "sc-cli",
 ]
 
@@ -10842,7 +10855,7 @@ dependencies = [
 name = "substrate-frame-cli"
 version = "4.0.0-dev"
 dependencies = [
- "clap 4.1.0",
+ "clap 4.1.1",
  "frame-support",
  "frame-system",
  "sc-cli",
@@ -11172,9 +11185,9 @@ dependencies = [
 
 [[package]]
 name = "termcolor"
-version = "1.1.3"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bab24d30b911b2376f3a13cc2cd443142f0c81dda04c118693e35b3835757755"
+checksum = "be55cf8942feac5c765c2c993422806843c9a9a45d4d5c407ad6dd2ea95eb9b6"
 dependencies = [
  "winapi-util",
 ]
@@ -11682,7 +11695,7 @@ checksum = "3528ecfd12c466c6f163363caf2d02a71161dd5e1cc6ae7b34207ea2d42d81ed"
 name = "try-runtime-cli"
 version = "0.10.0-dev"
 dependencies = [
- "clap 4.1.0",
+ "clap 4.1.1",
  "frame-remote-externalities",
  "frame-try-runtime",
  "hex",
