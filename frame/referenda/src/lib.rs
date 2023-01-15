@@ -79,7 +79,7 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, Bounded, Dispatchable, One, Saturating, Zero},
+	traits::{AtLeast32BitUnsigned, Dispatchable, One, Saturating, Zero},
 	DispatchError, Perbill,
 };
 use sp_std::{fmt::Debug, prelude::*};
