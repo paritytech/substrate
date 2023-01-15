@@ -452,9 +452,8 @@ pub mod pallet {
 				}
 			};
 
-			let check_stash = |stash, deposit, eras_checked: &mut BTreeSet<EraIndex>| {
+			let check_stash = |stash, deposit| {
 				let is_exposed = unchecked_eras_to_check.iter().any(|e| {
-					eras_checked.insert(*e);
 					T::Staking::is_exposed_in_era(&stash, e)
 				});
 
@@ -475,14 +474,11 @@ pub mod pallet {
 				Self::deposit_event(Event::<T>::BatchFinished { size });
 				<T as Config>::WeightInfo::on_idle_unstake(size).saturating_add(unaccounted_weight)
 			} else {
-				// eras checked so far.
-				let mut eras_checked = BTreeSet::<EraIndex>::new();
-
 				let pre_length = stashes.len();
 				let stashes: BoundedVec<(T::AccountId, BalanceOf<T>), T::BatchSize> = stashes
 					.into_iter()
 					.filter(|(stash, deposit)| {
-						check_stash(stash.clone(), *deposit, &mut eras_checked)
+						check_stash(stash.clone(), *deposit)
 					})
 					.collect::<Vec<_>>()
 					.try_into()
@@ -491,8 +487,8 @@ pub mod pallet {
 
 				log!(
 					debug,
-					"checked {:?} eras, pre stashes: {:?}, post: {:?}",
-					eras_checked.len(),
+					"checked {:?}, pre stashes: {:?}, post: {:?}",
+					unchecked_eras_to_check,
 					pre_length,
 					post_length,
 				);
