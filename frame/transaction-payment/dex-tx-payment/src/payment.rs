@@ -61,32 +61,17 @@ pub trait OnChargeAssetTransaction<T: Config> {
 	) -> Result<(), TransactionValidityError>;
 }
 
-/// Allows specifying what to do with the withdrawn asset fees.
-// pub trait HandleCredit<AccountId, B: Balanced<AccountId>> {
-// 	/// Implement to determine what to do with the withdrawn asset fees.
-// 	/// Default for `CreditOf` from the assets pallet is to burn and
-// 	/// decrease total issuance.
-// 	fn handle_credit(credit: CreditOf<AccountId, B>);
-// }
-
-// /// Default implementation that just drops the credit according to the `OnDrop` in the underlying
-// /// imbalance type.
-// impl<A, B: Balanced<A>> HandleCredit<A, B> for () {
-// 	fn handle_credit(_credit: CreditOf<A, B>) {}
-// }
-
 /// Implements the asset transaction for a balance to asset converter (implementing
-/// [`BalanceConversion`]) and a credit handler (implementing [`HandleCredit`]).
+/// [`SwapForNative`]).
 ///
-/// The credit handler is given the complete fee in terms of the asset used for the transaction.
+/// The converter is given the complete fee in terms of the asset used for the transaction.
 pub struct FungiblesAdapter<CON>(PhantomData<CON>);
 
-/// Default implementation for a runtime instantiating this pallet, a balance to asset converter and
-/// a credit handler.
+/// Default implementation for a runtime instantiating this pallet, an asset to native swapper.
 impl<T, CON> OnChargeAssetTransaction<T> for FungiblesAdapter<CON>
 where
 	T: Config,
-	CON: TransmuteBetweenNative<
+	CON: SwapForNative<
 		T::RuntimeOrigin,
 		T::AccountId,
 		BalanceOf<T>,
@@ -115,7 +100,6 @@ where
 		let asset_consumed = CON::swap_tokens_for_exact_native(
 		 	who.clone(), asset_id,
 			 fee,
-
 			 None,
 
 			  who.clone(), true)
@@ -130,8 +114,7 @@ where
 		<T::OnChargeTransaction>::withdraw_fee(who, _call, _info, fee, _tip)
 	}
 
-	/// Hand the fee and the tip over to the `[HandleCredit]` implementation.
-	/// Since the predicted fee might have been too high, parts of the fee may be refunded.
+	/// Delegate to the OnChargeTransaction functianllity
 	///
 	/// Note: The `corrected_fee` already includes the `tip`.
 	fn correct_and_deposit_fee(

@@ -38,7 +38,7 @@ use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchInfo, DispatchResult, PostDispatchInfo},
 	traits::{
-		fungibles::TransmuteBetweenNative,
+		fungibles::SwapForNative,
 		tokens::fungibles::{Balanced, Inspect},
 		IsType,
 	},

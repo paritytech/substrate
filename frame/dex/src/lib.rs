@@ -882,7 +882,7 @@ pub mod pallet {
 }
 
 impl<T: Config>
-	frame_support::traits::tokens::fungibles::TransmuteBetweenNative<
+	frame_support::traits::tokens::fungibles::SwapForNative<
 		T::RuntimeOrigin,
 		T::AccountId,
 		T::Balance,
@@ -893,52 +893,6 @@ where
 	<T as pallet::Config>::Currency:
 		frame_support::traits::Currency<<T as frame_system::Config>::AccountId>,
 {
-	// If successful returns the amount out.
-	fn swap_exact_native_for_tokens(
-		origin: T::AccountId,
-		asset_id: T::AssetId,
-		amount_in: T::Balance,
-		amount_out_min: Option<T::AssetBalance>,
-		send_to: T::AccountId,
-		keep_alive: bool,
-	) -> Result<T::AssetBalance, DispatchError> {
-		let path = vec![MultiAssetId::Native, MultiAssetId::Asset(asset_id)].try_into().unwrap();
-
-		let sender = origin; //ensure_signed(origin)?;
-
-		ensure!(amount_in > Zero::zero(), Error::<T>::ZeroAmount);
-		if let Some(amount_out_min) = amount_out_min {
-			ensure!(amount_out_min > Zero::zero(), Error::<T>::ZeroAmount);
-		}
-
-		// let (reserve_in, reserve_out) = Self::get_reserves(MultiAssetId::Native,
-		// MultiAssetId::Asset(asset_id))?;
-
-		let amount_in_promoted = T::PromotedBalance::from(amount_in);
-
-		let amount_in: T::AssetBalance =
-			amount_in_promoted.try_into().map_err(|_| Error::<T>::Overflow)?;
-
-		let amounts_out = Self::get_amounts_out(&amount_in, &path)?;
-
-		let amount_out = *amounts_out.last().unwrap();
-		if let Some(amount_out_min) = amount_out_min {
-			ensure!(amount_out >= amount_out_min, Error::<T>::InsufficientOutputAmount);
-		}
-
-		Self::do_swap(&sender, &amounts_out, &path, &send_to, keep_alive)?;
-
-		Self::deposit_event(Event::SwapExecuted {
-			who: sender,
-			send_to,
-			path,
-			amount_in,
-			amount_out,
-		});
-
-		Ok(amount_out)
-	}
-
 	// If successful returns the amount in.swap_tokens_for_exact_native
 	fn swap_tokens_for_exact_native(
 		origin: T::AccountId, // OriginFor<T>,

@@ -332,18 +332,8 @@ pub trait Destroy<AccountId>: Inspect<AccountId> {
 }
 
 
-/// As in alchemy rather than std::mem::transmute
-pub trait TransmuteBetweenNative<Origin, AccountId, Balance, AssetBalance, AssetId> {
-	// If successful returns the amount out.
-	fn swap_exact_native_for_tokens(
-		origin:AccountId,// Origin,
-		asset_id: AssetId,
-		amount_in: Balance,
-		amount_out_min: Option<AssetBalance>,
-		send_to: AccountId,
-		keep_alive: bool,
-	) -> Result<AssetBalance, DispatchError>;
-  
+/// Use an on-chain exchange to convert the asset to the equivilent in native tokens.
+pub trait SwapForNative<Origin, AccountId, Balance, AssetBalance, AssetId> {
 	// If successful returns the amount in.
 	fn swap_tokens_for_exact_native(
 		origin: AccountId, //Origin,
