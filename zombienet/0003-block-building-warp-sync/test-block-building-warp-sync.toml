@@ -3,12 +3,12 @@ enable_tracing = false
 
 [relaychain]
 default_image = "{{ZOMBIENET_INTEGRATION_TEST_IMAGE}}"
-# default_command = "substrate"
-default_command = "/home/miszka/parity/07-fs-monitor/substrate/target/release/substrate"
+default_command = "substrate"
 
 chain = "gen-db"
 chain_spec_path = "zombienet/0003-block-building-warp-sync/chain-spec.json"
 
+  #we need at least 3 nodes for warp sync
   [[relaychain.nodes]]
   name = "alice"
   validator = true
@@ -19,7 +19,6 @@ chain_spec_path = "zombienet/0003-block-building-warp-sync/chain-spec.json"
   validator = true
   db_snapshot="https://storage.googleapis.com/zombienet-db-snaps/substrate/0001-basic-warp-sync/chains-0bb3f0be2ce41b5615b224215bcc8363aa0416a6.tgz"
 
-  #we need at least 3 nodes for warp sync
   [[relaychain.nodes]]
   name = "charlie"
   validator = false
