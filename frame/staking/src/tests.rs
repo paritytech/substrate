@@ -5673,7 +5673,7 @@ fn can_page_exposure() {
 		Exposure { total: total_stake, own: own_stake, others };
 
 	// when
-	let paged_exposures: Vec<ExposurePage<AccountId, Balance>> = exposure.clone().as_pages(3);
+	let paged_exposures: Vec<ExposurePage<AccountId, Balance>> = exposure.clone().into_pages(3);
 
 	// then
 	// 7 pages of nominators.
