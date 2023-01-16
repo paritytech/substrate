@@ -17,7 +17,6 @@
 
 use std::vec;
 
-use beefy_primitives::crypto::AuthorityId;
 use frame_election_provider_support::{onchain, SequentialPhragmen};
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -113,10 +112,10 @@ impl pallet_beefy::Config for Test {
 	type BeefyId = BeefyId;
 	type KeyOwnerProofSystem = Historical;
 	type KeyOwnerProof =
-		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, AuthorityId)>>::Proof;
+		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, BeefyId)>>::Proof;
 	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
 		KeyTypeId,
-		AuthorityId,
+		BeefyId,
 	)>>::IdentificationTuple;
 	type HandleEquivocation =
 		super::EquivocationHandler<u64, Self::KeyOwnerIdentification, Offences, ReportLongevity>;
