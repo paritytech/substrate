@@ -1,7 +1,5 @@
 error: Single-item extrinsic calls must specify their origin as the first argument.
- --> tests/benchmark_ui/missing_origin.rs:5:1
-  |
-5 | #[benchmarks]
-  | ^^^^^^^^^^^^^
-  |
-  = note: this error originates in the attribute macro `benchmarks` (in Nightly builds, run with -Z macro-backtrace for more info)
+  --> tests/benchmark_ui/missing_origin.rs:11:3
+   |
+11 |         #[extrinsic_call]
+   |         ^

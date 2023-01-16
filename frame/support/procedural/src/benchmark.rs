@@ -188,6 +188,7 @@ impl BenchmarkDef {
 					expr_call.attrs.iter().enumerate().find_map(|(k, attr)| {
 						let segment = attr.path.segments.last()?;
 						let _: keywords::extrinsic_call = syn::parse(segment.ident.to_token_stream().into()).ok()?;
+						let span = expr_call.span();
 						let mut expr_call = expr_call.clone();
 
 						// consume #[extrinsic_call] tokens
@@ -195,7 +196,7 @@ impl BenchmarkDef {
 
 						// extract origin from expr_call
 						let Some(origin) = expr_call.args.first().cloned() else {
-							return Some(Err(Error::new(expr_call.args.span(), "Single-item extrinsic calls must specify their origin as the first argument.")))
+							return Some(Err(Error::new(span, "Single-item extrinsic calls must specify their origin as the first argument.")))
 						};
 
 						Some(Ok((i, BenchmarkCallDef::ExtrinsicCall { origin, expr_call, attr_span: attr.span() })))
