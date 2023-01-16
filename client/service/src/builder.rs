@@ -335,10 +335,11 @@ where
 		execution_extensions,
 	)?;
 
-	let (unpin_worker_sender, mut rx) = futures::channel::mpsc::channel::<Block::Hash>(100);
+	let (unpin_worker_sender, mut rx) =
+		tracing_unbounded::<Block::Hash>("unpin-worker-channel", 10_000);
 	let task_backend = backend.clone();
 	spawn_handle.spawn(
-		"pinning-worker",
+		"unpin-worker",
 		None,
 		async move {
 			log::info!(target: "db", "Starting worker task for unpinning.");

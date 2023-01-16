@@ -117,7 +117,7 @@ where
 	block_rules: BlockRules<Block>,
 	config: ClientConfig<Block>,
 	telemetry: Option<TelemetryHandle>,
-	unpin_worker_sender: futures::channel::mpsc::Sender<Block::Hash>,
+	unpin_worker_sender: TracingUnboundedSender<Block::Hash>,
 	_phantom: PhantomData<RA>,
 }
 
@@ -177,7 +177,7 @@ where
 			BlockImportOperation = <in_mem::Backend<Block> as backend::Backend<Block>>::BlockImportOperation,
 		>,
 {
-	let (tx, rx) = futures::channel::mpsc::channel(100);
+	let (tx, _rx) = sc_utils::mpsc::tracing_unbounded("unpin-worker-channel", 10_000);
 	new_with_backend(
 		backend,
 		executor,
@@ -225,7 +225,7 @@ impl<Block: BlockT> Default for ClientConfig<Block> {
 pub fn new_with_backend<B, E, Block, G, RA>(
 	backend: Arc<B>,
 	executor: E,
-	unpin_worker_sender: futures::channel::mpsc::Sender<Block::Hash>,
+	unpin_worker_sender: TracingUnboundedSender<Block::Hash>,
 	genesis_block_builder: G,
 	keystore: Option<SyncCryptoStorePtr>,
 	spawn_handle: Box<dyn SpawnNamed>,
@@ -400,7 +400,7 @@ where
 	pub fn new<G>(
 		backend: Arc<B>,
 		executor: E,
-		unpin_worker_sender: futures::channel::mpsc::Sender<Block::Hash>,
+		unpin_worker_sender: TracingUnboundedSender<Block::Hash>,
 		genesis_block_builder: G,
 		fork_blocks: ForkBlocks<Block>,
 		bad_blocks: BadBlocks<Block>,

@@ -29,6 +29,7 @@ pub use sc_client_api::{
 pub use sc_client_db::{self, Backend, BlocksPruning};
 pub use sc_executor::{self, NativeElseWasmExecutor, WasmExecutionMethod};
 pub use sc_service::{client, RpcHandlers};
+use sc_utils::mpsc::tracing_unbounded;
 pub use sp_consensus;
 pub use sp_keyring::{
 	ed25519::Keyring as Ed25519Keyring, sr25519::Keyring as Sr25519Keyring, AccountKeyring,
@@ -237,7 +238,7 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 		)
 		.expect("Creates genesis block builder");
 
-		let (tx, _rx) = futures::channel::mpsc::channel(100);
+		let (tx, _rx) = tracing_unbounded("unpin-worker", 10_000);
 		let client = client::Client::new(
 			self.backend.clone(),
 			executor,

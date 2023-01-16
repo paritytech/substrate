@@ -565,7 +565,7 @@ mod tests {
 	use finality_grandpa::Precommit;
 	use futures::future::Either;
 	use futures_timer::Delay;
-	use sc_client_api::{BlockImportNotification, UnpinHandle};
+	use sc_client_api::BlockImportNotification;
 	use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 	use sp_consensus::BlockOrigin;
 	use sp_core::crypto::UncheckedFrom;
@@ -593,7 +593,7 @@ mod tests {
 		fn import_header(&self, header: Header) {
 			let hash = header.hash();
 			let number = *header.number();
-			let (tx, rx) = futures::channel::mpsc::channel(100);
+			let (tx, rx) = tracing_unbounded("unpin-worker-channel", 10_000);
 			self.known_blocks.lock().insert(hash, number);
 			self.sender
 				.unbounded_send(BlockImportNotification::<Block>::new(

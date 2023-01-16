@@ -18,7 +18,6 @@
 
 //! A set of APIs supported by the client along with their primitives.
 
-use futures::channel::mpsc::Sender;
 use sp_consensus::BlockOrigin;
 use sp_core::storage::StorageKey;
 use sp_runtime::{
@@ -31,7 +30,7 @@ use std::{collections::HashSet, fmt, sync::Arc};
 use crate::{blockchain::Info, notifications::StorageEventStream, FinalizeSummary, ImportSummary};
 
 use sc_transaction_pool_api::ChainEvent;
-use sc_utils::mpsc::TracingUnboundedReceiver;
+use sc_utils::mpsc::{TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain;
 
 /// Type that implements `futures::Stream` of block import events.
@@ -269,19 +268,22 @@ impl fmt::Display for UsageInfo {
 #[derive(Debug)]
 pub struct UnpinHandle<Block: BlockT> {
 	hash: Block::Hash,
-	unpin_worker_sender: Sender<Block::Hash>,
+	unpin_worker_sender: TracingUnboundedSender<Block::Hash>,
 }
 
 impl<Block: BlockT> UnpinHandle<Block> {
 	/// Create a new UnpinHandle
-	pub fn new(hash: Block::Hash, unpin_worker_sender: Sender<Block::Hash>) -> Self {
+	pub fn new(
+		hash: Block::Hash,
+		unpin_worker_sender: TracingUnboundedSender<Block::Hash>,
+	) -> Self {
 		Self { hash, unpin_worker_sender }
 	}
 }
 
 impl<Block: BlockT> Drop for UnpinHandle<Block> {
 	fn drop(&mut self) {
-		if let Err(err) = self.unpin_worker_sender.try_send(self.hash) {
+		if let Err(err) = self.unpin_worker_sender.unbounded_send(self.hash) {
 			log::error!(target: "db", "Unable to unpin block with hash: {}, error: {:?}", self.hash, err);
 		};
 	}
@@ -313,7 +315,7 @@ impl<Block: BlockT> BlockImportNotification<Block> {
 		header: Block::Header,
 		is_new_best: bool,
 		tree_route: Option<Arc<sp_blockchain::TreeRoute<Block>>>,
-		unpin_worker_sender: Sender<Block::Hash>,
+		unpin_worker_sender: TracingUnboundedSender<Block::Hash>,
 	) -> Self {
 		Self {
 			hash,
@@ -365,7 +367,7 @@ impl<Block: BlockT> FinalityNotification<Block> {
 	/// Create finality notification from finality summary.
 	pub fn from_summary(
 		mut summary: FinalizeSummary<Block>,
-		unpin_worker_sender: Sender<Block::Hash>,
+		unpin_worker_sender: TracingUnboundedSender<Block::Hash>,
 	) -> FinalityNotification<Block> {
 		let hash = summary.finalized.pop().unwrap_or_default();
 		FinalityNotification {
@@ -382,7 +384,7 @@ impl<Block: BlockT> BlockImportNotification<Block> {
 	/// Create finality notification from finality summary.
 	pub fn from_summary(
 		summary: ImportSummary<Block>,
-		unpin_worker_sender: Sender<Block::Hash>,
+		unpin_worker_sender: TracingUnboundedSender<Block::Hash>,
 	) -> BlockImportNotification<Block> {
 		let hash = summary.hash;
 		BlockImportNotification {

@@ -10654,6 +10654,7 @@ dependencies = [
  "sc-executor",
  "sc-offchain",
  "sc-service",
+ "sc-utils",
  "serde",
  "serde_json",
  "sp-blockchain",
