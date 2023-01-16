@@ -361,7 +361,6 @@ mod tests {
 	use super::*;
 	use sc_client_api::in_mem;
 	use sc_executor::{NativeElseWasmExecutor, WasmExecutionMethod};
-	use sc_utils::mpsc::tracing_unbounded;
 	use sp_core::{
 		testing::TaskExecutor,
 		traits::{FetchRuntimeCode, WrappedRuntimeCode},
@@ -400,13 +399,11 @@ mod tests {
 		)
 		.expect("Creates genesis block builder");
 
-		let (unpin_worker_sender, _rx) = tracing_unbounded("unpin-worker", 10_000);
 		// client is used for the convenience of creating and inserting the genesis block.
 		let _client =
 			crate::client::new_with_backend::<_, _, runtime::Block, _, runtime::RuntimeApi>(
 				backend.clone(),
 				executor.clone(),
-				unpin_worker_sender,
 				genesis_block_builder,
 				None,
 				Box::new(TaskExecutor::new()),
@@ -478,13 +475,11 @@ mod tests {
 		)
 		.expect("Creates genesis block builder");
 
-		let (unpin_worker_sender, _rx) = tracing_unbounded("unpin_worker", 10_000);
 		// client is used for the convenience of creating and inserting the genesis block.
 		let client =
 			crate::client::new_with_backend::<_, _, runtime::Block, _, runtime::RuntimeApi>(
 				backend.clone(),
 				executor.clone(),
-				unpin_worker_sender,
 				genesis_block_builder,
 				None,
 				Box::new(TaskExecutor::new()),

@@ -478,18 +478,19 @@ fn cache_header<Hash: std::cmp::Eq + std::hash::Hash, Header>(
 	}
 }
 
-struct PinnedBlockCacheEntry<V> {
+struct PinnedBlockCacheEntry<Block: BlockT> {
 	ref_count: u32,
-	pub value: Option<V>,
+	pub justifications: Option<Option<Justifications>>,
+	pub body: Option<Option<Vec<Block::Extrinsic>>>,
 }
 
-impl<V> Default for PinnedBlockCacheEntry<V> {
+impl<Block: BlockT> Default for PinnedBlockCacheEntry<Block> {
 	fn default() -> Self {
-		Self { ref_count: 0, value: None }
+		Self { ref_count: 0, justifications: None, body: None }
 	}
 }
 
-impl<V> PinnedBlockCacheEntry<V> {
+impl<Block: BlockT> PinnedBlockCacheEntry<Block> {
 	pub fn decrease_ref(&mut self) {
 		self.ref_count = self.ref_count.saturating_sub(1);
 	}
@@ -504,88 +505,68 @@ impl<V> PinnedBlockCacheEntry<V> {
 }
 
 struct PinnedBlockCache<Block: BlockT> {
-	body_cache: RwLock<LruCache<Block::Hash, PinnedBlockCacheEntry<Option<Vec<Block::Extrinsic>>>>>,
-	justification_cache:
-		RwLock<LruCache<Block::Hash, PinnedBlockCacheEntry<Option<Justifications>>>>,
+	cache: RwLock<LruCache<Block::Hash, PinnedBlockCacheEntry<Block>>>,
 }
 
 impl<Block: BlockT> PinnedBlockCache<Block> {
 	pub fn new() -> Self {
-		Self {
-			body_cache: LruCache::new(NonZeroUsize::new(PINNING_CACHE_SIZE).unwrap()).into(),
-			justification_cache: LruCache::new(NonZeroUsize::new(PINNING_CACHE_SIZE).unwrap())
-				.into(),
-		}
+		Self { cache: LruCache::new(NonZeroUsize::new(PINNING_CACHE_SIZE).unwrap()).into() }
 	}
 
 	pub fn bump_ref(&self, hash: Block::Hash) {
-		let mut body_cache = self.body_cache.write();
-		if body_cache.len() == PINNING_CACHE_SIZE {
+		let mut cache = self.cache.write();
+		if cache.len() == PINNING_CACHE_SIZE {
 			log::warn!(target: "db-pinning", "Maximum size of pinning cache reached. Removing items to make space. max_size = {}", PINNING_CACHE_SIZE);
 		}
 
-		let entry = body_cache.get_or_insert_mut(hash, Default::default);
-		entry.increase_ref();
-
-		let mut justification_cache = self.justification_cache.write();
-		let entry = justification_cache.get_or_insert_mut(hash, Default::default);
+		let entry = cache.get_or_insert_mut(hash, Default::default);
 		entry.increase_ref();
 	}
 
 	pub fn clear(&self) {
-		let mut body_cache = self.body_cache.write();
-		body_cache.clear();
-		let mut justification_cache = self.justification_cache.write();
-		justification_cache.clear();
+		let mut cache = self.cache.write();
+		cache.clear();
 	}
 
 	pub fn contains(&self, hash: &Block::Hash) -> bool {
-		let body_cache = self.body_cache.read();
-		body_cache.contains(hash)
+		let cache = self.cache.read();
+		cache.contains(hash)
 	}
 
 	pub fn insert_body(&self, hash: Block::Hash, extrinsics: Option<Vec<Block::Extrinsic>>) {
-		let mut body_cache = self.body_cache.write();
-		let mut entry = body_cache.get_or_insert_mut(hash, Default::default);
-		entry.value = Some(extrinsics);
+		let mut cache = self.cache.write();
+		let mut entry = cache.get_or_insert_mut(hash, Default::default);
+		entry.body = Some(extrinsics);
 	}
 
 	pub fn insert_justifications(&self, hash: Block::Hash, justifications: Option<Justifications>) {
-		let mut justification_cache = self.justification_cache.write();
-		let mut entry = justification_cache.get_or_insert_mut(hash, Default::default);
-		entry.value = Some(justifications);
+		let mut cache = self.cache.write();
+		let mut entry = cache.get_or_insert_mut(hash, Default::default);
+		entry.justifications = Some(justifications);
 	}
 
 	pub fn remove(&self, hash: &Block::Hash) {
-		let mut body_cache = self.body_cache.write();
-		if let Some(entry) = body_cache.peek_mut(hash) {
+		let mut cache = self.cache.write();
+		if let Some(entry) = cache.peek_mut(hash) {
 			entry.decrease_ref();
 			if entry.has_no_references() {
-				body_cache.pop(hash);
-			}
-		}
-
-		let mut justification_cache = self.justification_cache.write();
-		if let Some(entry) = justification_cache.peek_mut(hash) {
-			entry.decrease_ref();
-			if entry.has_no_references() {
-				justification_cache.pop(hash);
+				cache.pop(hash);
 			}
 		}
 	}
 
-	pub fn justification(&self, hash: &Block::Hash) -> Option<Option<Justifications>> {
-		let justification_cache = self.justification_cache.read();
-		if let Some(cache_entry) = justification_cache.peek(hash) {
-			return cache_entry.value.clone()
+	pub fn justifications(&self, hash: &Block::Hash) -> Option<Option<Justifications>> {
+		let cache = self.cache.read();
+		if let Some(cache_entry) = cache.peek(hash) {
+			return cache_entry.justifications.clone()
 		};
 		None
 	}
 
 	pub fn body(&self, hash: &Block::Hash) -> Option<Option<Vec<Block::Extrinsic>>> {
-		let body_cache = self.body_cache.read();
-		if let Some(cache_entry) = body_cache.peek(hash) {
-			return cache_entry.value.clone()
+		let cache = self.cache.read();
+		if let Some(cache_entry) = cache.peek(hash) {
+			return cache_entry.body.clone()
 		};
 		None
 	}
@@ -817,7 +798,7 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 	}
 
 	fn justifications(&self, hash: Block::Hash) -> ClientResult<Option<Justifications>> {
-		if let Some(result) = self.pinned_blocks_cache.justification(&hash) {
+		if let Some(result) = self.pinned_blocks_cache.justifications(&hash) {
 			return Ok(result)
 		}
 
