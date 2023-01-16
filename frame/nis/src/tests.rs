@@ -370,7 +370,6 @@ fn partial_thaw_works() {
 		let prop = Perquintill::from_rational(1_050_000, 21_000_000u64);
 		assert_ok!(Nis::thaw_private(signed(1), 0, Some(prop)));
 
-		//		assert_eq!(NisBalances::free_balance(1), 3_150_000);
 		assert_eq!(
 			Nis::typed_attribute::<_, Perquintill>(&0, b"proportion"),
 			Some(Perquintill::from_rational(3_150_000u64, 21_000_000u64)),
