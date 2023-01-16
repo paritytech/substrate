@@ -845,7 +845,7 @@ pub mod pallet {
 			// Transfer `excess` to the pot if we have now fully compensated for the receipt.
 			T::Currency::transfer(&who, &Self::account_id(), on_hold, AllowDeath)
 				.map_err(|_| Error::<T>::Unfunded)?;
-									 // TODO: ^^^ The above should be done in a single operation `transfer_on_hold`.
+									 // TODO #12951: ^^^ The above should be done in a single operation `transfer_on_hold`.
 
 			// Record that we've moved the amount reserved.
 			let mut summary: SummaryRecordOf<T> = Summary::<T>::get();
