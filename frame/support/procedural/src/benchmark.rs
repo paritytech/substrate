@@ -283,7 +283,7 @@ pub fn benchmarks(
 			expanded_stmts.push(stmt.to_token_stream());
 		};
 		let Item::Fn(mut func) = stmt.clone() else { push_stmt(); continue; };
-		for (i, attr) in (&func.attrs.clone()).iter().enumerate() {
+		for (i, attr) in func.attrs.iter().enumerate() {
 			let Some(seg) = attr.path.segments.last() else { push_stmt(); continue; };
 			let Ok(_) = syn::parse::<keywords::benchmark>(seg.ident.to_token_stream().into()) else { push_stmt(); continue; };
 			let tokens = attr.tokens.to_token_stream().into();
