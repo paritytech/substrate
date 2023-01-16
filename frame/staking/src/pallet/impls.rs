@@ -662,6 +662,8 @@ impl<T: Config> Pallet<T> {
 		<ErasStakersClipped<T>>::remove_prefix(era_index, None);
 		#[allow(deprecated)]
 		<ErasValidatorPrefs<T>>::remove_prefix(era_index, None);
+		#[allow(deprecated)]
+		<ClaimedRewards<T>>::remove_prefix(era_index, None);
 		<ErasValidatorReward<T>>::remove(era_index);
 		<ErasRewardPoints<T>>::remove(era_index);
 		<ErasTotalStake<T>>::remove(era_index);

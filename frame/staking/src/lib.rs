@@ -736,7 +736,7 @@ impl<AccountId, Balance: Default + HasCompact> Default for Exposure<AccountId, B
 impl<AccountId: Clone, Balance: HasCompact + AtLeast32BitUnsigned + Copy>
 	Exposure<AccountId, Balance>
 {
-	fn as_pages(&self, page_size: usize) -> Vec<ExposurePage<AccountId, Balance>> {
+	fn into_pages(&self, page_size: usize) -> Vec<ExposurePage<AccountId, Balance>> {
 		let individual_chunks = self.others.chunks(page_size);
 		let mut paged_exposure: Vec<ExposurePage<AccountId, Balance>> =
 			Vec::with_capacity(individual_chunks.len());

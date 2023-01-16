@@ -661,7 +661,7 @@ pub mod pallet {
 			<ErasStakers<T>>::insert(era, &validator, &exposure);
 
 			exposure
-				.as_pages(T::ExposurePageSize::get() as usize)
+				.into_pages(T::ExposurePageSize::get() as usize)
 				.iter()
 				.enumerate()
 				.for_each(|(page, paged_exposure)| {
