@@ -767,8 +767,6 @@ pub mod pallet {
 		/// - `origin`: Must be Signed and the account must be the owner of the receipt `index` as
 		///   well as any fungible counterpart.
 		/// - `index`: The index of the receipt.
-		/// - `portion`: If `Some`, then only the given portion of the receipt should be thawed. If
-		///   `None`, then all of it should be.
 		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::thaw_communal())]
 		pub fn thaw_communal(
