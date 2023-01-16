@@ -22,18 +22,22 @@ use codec::{Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, Pays},
 	log,
+	pallet_prelude::*,
 	traits::{Get, KeyOwnerProofSystem, OneSessionHandler},
 	weights::Weight,
 	BoundedSlice, BoundedVec, Parameter,
 };
-use frame_system::pallet_prelude::BlockNumberFor;
-
+use frame_system::{
+	ensure_none, ensure_signed,
+	pallet_prelude::{BlockNumberFor, OriginFor},
+};
 use sp_runtime::{
 	generic::DigestItem,
 	traits::{IsMember, Member},
 	KeyTypeId, RuntimeAppPublic,
 };
 use sp_session::{GetSessionNumber, GetValidatorCount};
+use sp_staking::SessionIndex;
 use sp_std::prelude::*;
 
 use beefy_primitives::{
@@ -58,8 +62,6 @@ const LOG_TARGET: &str = "runtime::beefy";
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{pallet_prelude::*, traits::KeyOwnerProofSystem};
-	use frame_system::{ensure_none, ensure_signed, pallet_prelude::OriginFor};
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -130,6 +132,15 @@ pub mod pallet {
 	pub(super) type NextAuthorities<T: Config> =
 		StorageValue<_, BoundedVec<T::BeefyId, T::MaxAuthorities>, ValueQuery>;
 
+	/// A mapping from BEEFY set ID to the index of the *most recent* session for which its
+	/// members were responsible.
+	///
+	/// TWOX-NOTE: `ValidatorSetId` is not under user control.
+	#[pallet::storage]
+	#[pallet::getter(fn session_for_set)]
+	pub(super) type SetIdSession<T: Config> =
+		StorageMap<_, Twox64Concat, beefy_primitives::ValidatorSetId, SessionIndex>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub authorities: Vec<T::BeefyId>,
@@ -145,7 +156,7 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			Pallet::<T>::initialize_authorities(&self.authorities)
+			Pallet::<T>::initialize(&self.authorities)
 				// we panic here as runtime maintainers can simply reconfigure genesis and restart
 				// the chain easily
 				.expect("Authorities vec too big");
@@ -284,7 +295,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn initialize_authorities(authorities: &Vec<T::BeefyId>) -> Result<(), ()> {
+	fn initialize(authorities: &Vec<T::BeefyId>) -> Result<(), ()> {
 		if authorities.is_empty() {
 			return Ok(())
 		}
@@ -314,6 +325,12 @@ impl<T: Config> Pallet<T> {
 				);
 			}
 		}
+
+		// NOTE: initialize first session of first set. this is necessary for
+		// the genesis set and session since we only update the set -> session
+		// mapping whenever a new session starts, i.e. through `on_new_session`.
+		SetIdSession::<T>::insert(0, 0);
+
 		Ok(())
 	}
 
@@ -348,7 +365,13 @@ impl<T: Config> Pallet<T> {
 			return Err(Error::<T>::InvalidEquivocationProof.into())
 		}
 
-		// todo: cross-check session index with equivocation report
+		// check that the session id for the membership proof is within the
+		// bounds of the set id reported in the equivocation.
+		let set_id_session_index =
+			Self::session_for_set(set_id).ok_or(Error::<T>::InvalidEquivocationProof)?;
+		if session_index != set_id_session_index {
+			return Err(Error::<T>::InvalidEquivocationProof.into())
+		}
 
 		// report to the offences module rewarding the sender.
 		T::HandleEquivocation::report_offence(
@@ -372,7 +395,10 @@ impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T> {
 	type Public = T::BeefyId;
 }
 
-impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
+impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T>
+where
+	T: pallet_session::Config,
+{
 	type Key = T::BeefyId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
@@ -382,7 +408,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		let authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
 		// we panic here as runtime maintainers can simply reconfigure genesis and restart the
 		// chain easily
-		Self::initialize_authorities(&authorities).expect("Authorities vec too big");
+		Self::initialize(&authorities).expect("Authorities vec too big");
 	}
 
 	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, queued_validators: I)
@@ -416,6 +442,10 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		// Always issue a change on each `session`, even if validator set hasn't changed.
 		// We want to have at least one BEEFY mandatory block per session.
 		Self::change_authorities(bounded_next_authorities, bounded_next_queued_authorities);
+
+		// Update the mapping for the new set id that corresponds to the latest session (i.e. now).
+		let session_index = <pallet_session::Pallet<T>>::current_index();
+		SetIdSession::<T>::insert(Self::validator_set_id(), &session_index);
 	}
 
 	fn on_disabled(i: u32) {
