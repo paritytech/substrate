@@ -1120,7 +1120,11 @@ pub trait Crypto {
 			.map_err(|_| EcdsaVerifyError::BadSignature)?;
 		Ok(pubkey.serialize())
 	}
+}
 
+/// Interfaces for working with elliptic curves related types from within the runtime.
+#[runtime_interface]
+pub trait EllipticCurves {
 	/// Compute a multi Miller loop on bls12_381
 	fn bls12_381_multi_miller_loop(a: Vec<Vec<u8>>, b: Vec<Vec<u8>>) -> Vec<u8> {
 		sp_arkworks::bls12_381::multi_miller_loop(a, b)

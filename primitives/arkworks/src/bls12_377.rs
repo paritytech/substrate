@@ -20,7 +20,7 @@
 #![warn(missing_docs)]
 
 use crate::utils::serialize_result;
-use ark_bls12_377::{Bls12_377, G1Affine, G1Projective, G2Affine, G2Projective, g1, g2};
+use ark_bls12_377::{g1, g2, Bls12_377, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::{
 	models::CurveConfig,
 	pairing::{MillerLoopOutput, Pairing},
