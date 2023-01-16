@@ -17,31 +17,26 @@ targets = ["x86_64-unknown-linux-gnu"]
 array-bytes = "4.1"
 async-trait = "0.1"
 asynchronous-codec = "0.6"
-bitflags = "1.3.2"
+backtrace = "0.3.67"
 bytes = "1"
-cid = "0.8.4"
 codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive"] }
 either = "1.5.3"
 fnv = "1.0.6"
 futures = "0.3.21"
 futures-timer = "3.0.2"
 ip_network = "0.4.1"
-libp2p = { version = "0.49.0", features = ["async-std", "dns", "identify", "kad", "mdns-async-io", "mplex", "noise", "ping", "tcp", "yamux", "websocket"] }
-linked_hash_set = "0.1.3"
-linked-hash-map = "0.5.4"
+libp2p = { version = "0.50.0", features = ["dns", "identify", "kad", "macros", "mdns", "mplex", "noise", "ping", "tcp",  "tokio", "yamux", "websocket"] }
 log = "0.4.17"
 lru = "0.8.1"
 parking_lot = "0.12.1"
 pin-project = "1.0.12"
-prost = "0.11"
-rand = "0.7.2"
+rand = "0.8.5"
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.85"
 smallvec = "1.8.0"
 thiserror = "1.0"
 unsigned-varint = { version = "0.7.1", features = ["futures", "asynchronous_codec"] }
 zeroize = "1.4.3"
-fork-tree = { version = "3.0.0", path = "../../utils/fork-tree" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../utils/prometheus" }
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
@@ -49,21 +44,21 @@ sc-consensus = { version = "0.10.0-dev", path = "../consensus/common" }
 sc-network-common = { version = "0.10.0-dev", path = "./common" }
 sc-peerset = { version = "4.0.0-dev", path = "../peerset" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
-sp-arithmetic = { version = "5.0.0", path = "../../primitives/arithmetic" }
+sp-arithmetic = { version = "6.0.0", path = "../../primitives/arithmetic" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
-sp-core = { version = "6.0.0", path = "../../primitives/core" }
-sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
+sp-core = { version = "7.0.0", path = "../../primitives/core" }
+sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
 
 [dev-dependencies]
 assert_matches = "1.3"
-async-std = { version = "1.11.0", features = ["attributes"] }
-rand = "0.7.2"
 tempfile = "3.1.0"
+tokio = { version = "1.22.0", features = ["macros"] }
+tokio-util = { version = "0.7.4", features = ["compat"] }
 sc-network-light = { version = "0.10.0-dev", path = "./light" }
 sc-network-sync = { version = "0.10.0-dev", path = "./sync" }
 sp-test-primitives = { version = "2.0.0", path = "../../primitives/test-primitives" }
-sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
+sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 

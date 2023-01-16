@@ -99,24 +99,16 @@ pub struct Limits {
 	/// The maximum number of topics supported by an event.
 	pub event_topics: u32,
 
-	/// Maximum allowed stack height in number of elements.
-	///
-	/// See <https://wiki.parity.io/WebAssembly-StackHeight> to find out
-	/// how the stack frame cost is calculated. Each element can be of one of the
-	/// wasm value types. This means the maximum size per element is 64bit.
-	///
-	/// # Note
-	///
-	/// It is safe to disable (pass `None`) the `stack_height` when the execution engine
-	/// is part of the runtime and hence there can be no indeterminism between different
-	/// client resident execution engines.
-	pub stack_height: Option<u32>,
-
 	/// Maximum number of globals a module is allowed to declare.
 	///
-	/// Globals are not limited through the `stack_height` as locals are. Neither does
-	/// the linear memory limit `memory_pages` applies to them.
+	/// Globals are not limited through the linear memory limit `memory_pages`.
 	pub globals: u32,
+
+	/// Maximum number of locals a function can have.
+	///
+	/// As wasm engine initializes each of the local, we need to limit their number to confine
+	/// execution costs.
+	pub locals: u32,
 
 	/// Maximum numbers of parameters a function can have.
 	///
@@ -212,6 +204,7 @@ pub struct InstructionWeights<T: Config> {
 	pub call: u32,
 	pub call_indirect: u32,
 	pub call_indirect_per_param: u32,
+	pub call_per_local: u32,
 	pub local_get: u32,
 	pub local_set: u32,
 	pub local_tee: u32,
@@ -390,6 +383,9 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight surcharge that is claimed if `seal_instantiate` does a balance transfer.
 	pub instantiate_transfer_surcharge: u64,
 
+	/// Weight per input byte supplied to `seal_instantiate`.
+	pub instantiate_per_input_byte: u64,
+
 	/// Weight per salt byte supplied to `seal_instantiate`.
 	pub instantiate_per_salt_byte: u64,
 
@@ -422,6 +418,15 @@ pub struct HostFnWeights<T: Config> {
 
 	/// Weight of calling `seal_ecdsa_to_eth_address`.
 	pub ecdsa_to_eth_address: u64,
+
+	/// Weight of calling `reentrance_count`.
+	pub reentrance_count: u64,
+
+	/// Weight of calling `account_reentrance_count`.
+	pub account_reentrance_count: u64,
+
+	/// Weight of calling `instantiation_nonce`.
+	pub instantiation_nonce: u64,
 
 	/// The type parameter is used in the default implementation.
 	#[codec(skip)]
@@ -513,9 +518,8 @@ impl Default for Limits {
 	fn default() -> Self {
 		Self {
 			event_topics: 4,
-			// No stack limit required because we use a runtime resident execution engine.
-			stack_height: None,
 			globals: 256,
+			locals: 1024,
 			parameters: 128,
 			memory_pages: 16,
 			// 4k function pointers (This is in count not bytes).
@@ -532,7 +536,7 @@ impl<T: Config> Default for InstructionWeights<T> {
 	fn default() -> Self {
 		let max_pages = Limits::default().memory_pages;
 		Self {
-			version: 3,
+			version: 4,
 			fallback: 0,
 			i64const: cost_instr!(instr_i64const, 1),
 			i64load: cost_instr!(instr_i64load, 2),
@@ -546,6 +550,7 @@ impl<T: Config> Default for InstructionWeights<T> {
 			call: cost_instr!(instr_call, 2),
 			call_indirect: cost_instr!(instr_call_indirect, 3),
 			call_indirect_per_param: cost_instr!(instr_call_indirect_per_param, 1),
+			call_per_local: cost_instr!(instr_call_per_local, 1),
 			local_get: cost_instr!(instr_local_get, 1),
 			local_set: cost_instr!(instr_local_set, 1),
 			local_tee: cost_instr!(instr_local_tee, 2),
@@ -640,12 +645,20 @@ impl<T: Config> Default for HostFnWeights<T> {
 			call_per_cloned_byte: cost_batched_args!(seal_call_per_transfer_clone_kb, 0, 1),
 			instantiate: cost_batched!(seal_instantiate),
 			instantiate_transfer_surcharge: cost_byte_batched_args!(
-				seal_instantiate_per_transfer_salt_kb,
+				seal_instantiate_per_transfer_input_salt_kb,
+				1,
+				0,
+				0
+			),
+			instantiate_per_input_byte: cost_byte_batched_args!(
+				seal_instantiate_per_transfer_input_salt_kb,
+				0,
 				1,
 				0
 			),
 			instantiate_per_salt_byte: cost_byte_batched_args!(
-				seal_instantiate_per_transfer_salt_kb,
+				seal_instantiate_per_transfer_input_salt_kb,
+				0,
 				0,
 				1
 			),
@@ -659,6 +672,9 @@ impl<T: Config> Default for HostFnWeights<T> {
 			hash_blake2_128_per_byte: cost_byte_batched!(seal_hash_blake2_128_per_kb),
 			ecdsa_recover: cost_batched!(seal_ecdsa_recover),
 			ecdsa_to_eth_address: cost_batched!(seal_ecdsa_to_eth_address),
+			reentrance_count: cost_batched!(seal_reentrance_count),
+			account_reentrance_count: cost_batched!(seal_account_reentrance_count),
+			instantiation_nonce: cost_batched!(seal_instantiation_nonce),
 			_phantom: PhantomData,
 		}
 	}
@@ -783,6 +799,10 @@ impl<'a, T: Config> gas_metering::Rules for ScheduleRules<'a, T> {
 		// We benchmarked the memory.grow instruction with the maximum allowed pages.
 		// The cost for growing is therefore already included in the instruction cost.
 		gas_metering::MemoryGrowCost::Free
+	}
+
+	fn call_per_local_cost(&self) -> u32 {
+		self.schedule.instruction_weights.call_per_local
 	}
 }
 

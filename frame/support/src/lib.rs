@@ -621,14 +621,23 @@ pub use frame_support_procedural::DebugNoBound;
 /// # use frame_support::DefaultNoBound;
 /// # use core::default::Default;
 /// trait Config {
-/// 		type C: Default;
+/// 	type C: Default;
 /// }
 ///
 /// // Foo implements [`Default`] because `C` bounds [`Default`].
 /// // Otherwise compilation will fail with an output telling `c` doesn't implement [`Default`].
 /// #[derive(DefaultNoBound)]
 /// struct Foo<T: Config> {
-/// 		c: T::C,
+/// 	c: T::C,
+/// }
+///
+/// // Also works with enums, by specifying the default with #[default]:
+/// #[derive(DefaultNoBound)]
+/// enum Bar<T: Config> {
+/// 	// Bar will implement Default as long as all of the types within Baz also implement default.
+/// 	#[default]
+/// 	Baz(T::C),
+/// 	Quxx,
 /// }
 /// ```
 pub use frame_support_procedural::DefaultNoBound;
@@ -2735,3 +2744,6 @@ pub mod pallet_macros {
 		type_value, unbounded, validate_unsigned, weight, whitelist_storage,
 	};
 }
+
+// Generate a macro that will enable/disable code based on `std` feature being active.
+sp_core::generate_feature_enabled_macro!(std_enabled, feature = "std", $);

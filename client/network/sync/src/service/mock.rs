@@ -16,22 +16,56 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use sc_network_common::service::{NetworkPeers, NetworkSyncForkRequest};
-use sp_runtime::traits::{Block as BlockT, NumberFor};
-
-pub use libp2p::{identity::error::SigningError, kad::record::Key as KademliaKey};
+use futures::channel::oneshot;
 use libp2p::{Multiaddr, PeerId};
-use sc_network_common::{config::MultiaddrWithPeerId, protocol::ProtocolName};
+use sc_consensus::{BlockImportError, BlockImportStatus};
+use sc_network_common::{
+	config::MultiaddrWithPeerId,
+	protocol::ProtocolName,
+	request_responses::{IfDisconnected, RequestFailure},
+	service::{NetworkPeers, NetworkRequest, NetworkSyncForkRequest},
+};
 use sc_peerset::ReputationChange;
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::collections::HashSet;
 
 mockall::mock! {
-	pub ChainSyncInterface<B: BlockT> {}
+	pub ChainSyncInterface<B: BlockT> {
+		pub fn justification_sync_link_request_justification(&self, hash: &B::Hash, number: NumberFor<B>);
+		pub fn justification_sync_link_clear_justification_requests(&self);
+	}
 
 	impl<B: BlockT + 'static> NetworkSyncForkRequest<B::Hash, NumberFor<B>>
 		for ChainSyncInterface<B>
 	{
 		fn set_sync_fork_request(&self, peers: Vec<PeerId>, hash: B::Hash, number: NumberFor<B>);
+	}
+
+	impl<B: BlockT> sc_consensus::Link<B> for ChainSyncInterface<B> {
+		fn blocks_processed(
+			&mut self,
+			imported: usize,
+			count: usize,
+			results: Vec<(Result<BlockImportStatus<NumberFor<B>>, BlockImportError>, B::Hash)>,
+		);
+		fn justification_imported(
+			&mut self,
+			who: PeerId,
+			hash: &B::Hash,
+			number: NumberFor<B>,
+			success: bool,
+		);
+		fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>);
+	}
+}
+
+impl<B: BlockT> sc_consensus::JustificationSyncLink<B> for MockChainSyncInterface<B> {
+	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
+		self.justification_sync_link_request_justification(hash, number);
+	}
+
+	fn clear_justification_requests(&self) {
+		self.justification_sync_link_clear_justification_requests();
 	}
 }
 
@@ -71,5 +105,24 @@ mockall::mock! {
 		) -> Result<(), String>;
 		fn remove_from_peers_set(&self, protocol: ProtocolName, peers: Vec<PeerId>);
 		fn sync_num_connected(&self) -> usize;
+	}
+
+	#[async_trait::async_trait]
+	impl NetworkRequest for Network {
+		async fn request(
+			&self,
+			target: PeerId,
+			protocol: ProtocolName,
+			request: Vec<u8>,
+			connect: IfDisconnected,
+		) -> Result<Vec<u8>, RequestFailure>;
+		fn start_request(
+			&self,
+			target: PeerId,
+			protocol: ProtocolName,
+			request: Vec<u8>,
+			tx: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
+			connect: IfDisconnected,
+		);
 	}
 }

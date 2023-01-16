@@ -59,6 +59,10 @@ impl<T: Config<I>, I: 'static> fungibles::Inspect<<T as SystemConfig>::AccountId
 	) -> WithdrawConsequence<Self::Balance> {
 		Pallet::<T, I>::can_decrease(asset, who, amount, false)
 	}
+
+	fn asset_exists(asset: Self::AssetId) -> bool {
+		Asset::<T, I>::contains_key(asset)
+	}
 }
 
 impl<T: Config<I>, I: 'static> fungibles::InspectMetadata<<T as SystemConfig>::AccountId>
@@ -180,18 +184,20 @@ impl<T: Config<I>, I: 'static> fungibles::Create<T::AccountId> for Pallet<T, I> 
 }
 
 impl<T: Config<I>, I: 'static> fungibles::Destroy<T::AccountId> for Pallet<T, I> {
-	type DestroyWitness = DestroyWitness;
-
-	fn get_destroy_witness(asset: &T::AssetId) -> Option<Self::DestroyWitness> {
-		Asset::<T, I>::get(asset).map(|asset_details| asset_details.destroy_witness())
+	fn start_destroy(id: T::AssetId, maybe_check_owner: Option<T::AccountId>) -> DispatchResult {
+		Self::do_start_destroy(id, maybe_check_owner)
 	}
 
-	fn destroy(
-		id: T::AssetId,
-		witness: Self::DestroyWitness,
-		maybe_check_owner: Option<T::AccountId>,
-	) -> Result<Self::DestroyWitness, DispatchError> {
-		Self::do_destroy(id, witness, maybe_check_owner)
+	fn destroy_accounts(id: T::AssetId, max_items: u32) -> Result<u32, DispatchError> {
+		Self::do_destroy_accounts(id, max_items)
+	}
+
+	fn destroy_approvals(id: T::AssetId, max_items: u32) -> Result<u32, DispatchError> {
+		Self::do_destroy_approvals(id, max_items)
+	}
+
+	fn finish_destroy(id: T::AssetId) -> DispatchResult {
+		Self::do_finish_destroy(id)
 	}
 }
 

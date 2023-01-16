@@ -1,0 +1,12 @@
+error: use of deprecated struct `pallet::warnings::foo`:
+                   Implicit call indices are deprecated in favour of explicit ones.
+                   Please ensure that all calls have the `pallet::call_index` attribute or that the
+                   `dev-mode` of the pallet is enabled. For more info see:
+                   <https://github.com/paritytech/substrate/pull/12891> and
+                   <https://github.com/paritytech/substrate/pull/11381>.
+  --> tests/pallet_ui/call_missing_index.rs:15:10
+   |
+15 |         pub fn foo(_: OriginFor<T>) -> DispatchResult {
+   |                ^^^
+   |
+   = note: `-D deprecated` implied by `-D warnings`

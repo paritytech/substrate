@@ -39,6 +39,7 @@ pub use crate as pallet_alliance;
 use super::*;
 
 type BlockNumber = u64;
+type AccountId = u64;
 
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
@@ -53,7 +54,7 @@ impl frame_system::Config for Test {
 	type BlockNumber = BlockNumber;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type AccountId = u64;
+	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type RuntimeEvent = RuntimeEvent;
@@ -61,7 +62,7 @@ impl frame_system::Config for Test {
 	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = pallet_balances::AccountData<u64>;
+	type AccountData = pallet_balances::AccountData<AccountId>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
@@ -120,8 +121,8 @@ ord_parameter_types! {
 	pub const Four: u64 = 4;
 	pub const Five: u64 = 5;
 }
-type EnsureOneOrRoot = EitherOfDiverse<EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
-type EnsureTwoOrRoot = EitherOfDiverse<EnsureRoot<u64>, EnsureSignedBy<Two, u64>>;
+type EnsureOneOrRoot = EitherOfDiverse<EnsureRoot<AccountId>, EnsureSignedBy<One, AccountId>>;
+type EnsureTwoOrRoot = EitherOfDiverse<EnsureRoot<AccountId>, EnsureSignedBy<Two, AccountId>>;
 
 impl pallet_identity::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
@@ -139,12 +140,12 @@ impl pallet_identity::Config for Test {
 }
 
 pub struct AllianceIdentityVerifier;
-impl IdentityVerifier<u64> for AllianceIdentityVerifier {
-	fn has_identity(who: &u64, fields: u64) -> bool {
+impl IdentityVerifier<AccountId> for AllianceIdentityVerifier {
+	fn has_identity(who: &AccountId, fields: u64) -> bool {
 		Identity::has_identity(who, fields)
 	}
 
-	fn has_good_judgement(who: &u64) -> bool {
+	fn has_good_judgement(who: &AccountId) -> bool {
 		if let Some(judgements) =
 			Identity::identity(who).map(|registration| registration.judgements)
 		{
@@ -156,15 +157,15 @@ impl IdentityVerifier<u64> for AllianceIdentityVerifier {
 		}
 	}
 
-	fn super_account_id(who: &u64) -> Option<u64> {
+	fn super_account_id(who: &AccountId) -> Option<AccountId> {
 		Identity::super_of(who).map(|parent| parent.0)
 	}
 }
 
 pub struct AllianceProposalProvider;
-impl ProposalProvider<u64, H256, RuntimeCall> for AllianceProposalProvider {
+impl ProposalProvider<AccountId, H256, RuntimeCall> for AllianceProposalProvider {
 	fn propose_proposal(
-		who: u64,
+		who: AccountId,
 		threshold: u32,
 		proposal: Box<RuntimeCall>,
 		length_bound: u32,
@@ -173,16 +174,12 @@ impl ProposalProvider<u64, H256, RuntimeCall> for AllianceProposalProvider {
 	}
 
 	fn vote_proposal(
-		who: u64,
+		who: AccountId,
 		proposal: H256,
 		index: ProposalIndex,
 		approve: bool,
 	) -> Result<bool, DispatchError> {
 		AllianceMotion::do_vote(who, proposal, index, approve)
-	}
-
-	fn veto_proposal(proposal_hash: H256) -> u32 {
-		AllianceMotion::do_disapprove_proposal(proposal_hash)
 	}
 
 	fn close_proposal(
@@ -200,8 +197,7 @@ impl ProposalProvider<u64, H256, RuntimeCall> for AllianceProposalProvider {
 }
 
 parameter_types! {
-	pub const MaxFounders: u32 = 10;
-	pub const MaxFellows: u32 = MaxMembers::get() - MaxFounders::get();
+	pub const MaxFellows: u32 = MaxMembers::get();
 	pub const MaxAllies: u32 = 100;
 	pub const AllyDeposit: u64 = 25;
 	pub const RetirementPeriod: BlockNumber = MOTION_DURATION_IN_BLOCKS + 1;
@@ -209,9 +205,9 @@ parameter_types! {
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Proposal = RuntimeCall;
-	type AdminOrigin = EnsureSignedBy<One, u64>;
-	type MembershipManager = EnsureSignedBy<Two, u64>;
-	type AnnouncementOrigin = EnsureSignedBy<Three, u64>;
+	type AdminOrigin = EnsureSignedBy<One, AccountId>;
+	type MembershipManager = EnsureSignedBy<Two, AccountId>;
+	type AnnouncementOrigin = EnsureSignedBy<Three, AccountId>;
 	type Currency = Balances;
 	type Slashed = ();
 	type InitializeMembers = AllianceMotion;
@@ -222,7 +218,6 @@ impl Config for Test {
 	type IdentityVerifier = ();
 	type ProposalProvider = AllianceProposalProvider;
 	type MaxProposals = MaxProposals;
-	type MaxFounders = MaxFounders;
 	type MaxFellows = MaxFellows;
 	type MaxAllies = MaxAllies;
 	type MaxUnscrupulousItems = ConstU32<100>;
@@ -272,7 +267,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 	GenesisBuild::<Test>::assimilate_storage(
 		&pallet_alliance::GenesisConfig {
-			founders: vec![],
 			fellows: vec![],
 			allies: vec![],
 			phantom: Default::default(),
@@ -360,7 +354,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			Error::<Test, ()>::AllianceNotYetInitialized
 		);
 
-		assert_ok!(Alliance::init_members(RuntimeOrigin::root(), vec![1, 2], vec![3], vec![]));
+		assert_ok!(Alliance::init_members(RuntimeOrigin::root(), vec![1, 2, 3], vec![]));
 
 		System::set_block_number(1);
 	});
@@ -384,11 +378,7 @@ pub fn make_remark_proposal(value: u64) -> (RuntimeCall, u32, H256) {
 	make_proposal(RuntimeCall::System(frame_system::Call::remark { remark: value.encode() }))
 }
 
-pub fn make_set_rule_proposal(rule: Cid) -> (RuntimeCall, u32, H256) {
-	make_proposal(RuntimeCall::Alliance(pallet_alliance::Call::set_rule { rule }))
-}
-
-pub fn make_kick_member_proposal(who: u64) -> (RuntimeCall, u32, H256) {
+pub fn make_kick_member_proposal(who: AccountId) -> (RuntimeCall, u32, H256) {
 	make_proposal(RuntimeCall::Alliance(pallet_alliance::Call::kick_member { who }))
 }
 
@@ -396,4 +386,8 @@ pub fn make_proposal(proposal: RuntimeCall) -> (RuntimeCall, u32, H256) {
 	let len: u32 = proposal.using_encoded(|p| p.len() as u32);
 	let hash = BlakeTwo256::hash_of(&proposal);
 	(proposal, len, hash)
+}
+
+pub fn is_fellow(who: &AccountId) -> bool {
+	Alliance::is_member_of(who, MemberRole::Fellow)
 }

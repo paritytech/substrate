@@ -37,7 +37,7 @@
 //   --repeat=100
 
 use sp_core::parameter_types;
-use sp_weights::{constants::WEIGHT_PER_NANOS, Weight};
+use sp_weights::{constants::WEIGHT_REF_TIME_PER_NANOS, Weight};
 
 parameter_types! {
 	/// Time to execute a NO-OP extrinsic, for example `System::remark`.
@@ -53,7 +53,8 @@ parameter_types! {
 	///   99th: 99_202
 	///   95th: 99_163
 	///   75th: 99_030
-	pub const ExtrinsicBaseWeight: Weight = WEIGHT_PER_NANOS.saturating_mul(98_974);
+	pub const ExtrinsicBaseWeight: Weight =
+		Weight::from_ref_time(WEIGHT_REF_TIME_PER_NANOS.saturating_mul(98_974));
 }
 
 #[cfg(test)]
@@ -69,12 +70,12 @@ mod test_weights {
 
 		// At least 10 µs.
 		assert!(
-			w.ref_time() >= 10u64 * constants::WEIGHT_PER_MICROS.ref_time(),
+			w.ref_time() >= 10u64 * constants::WEIGHT_REF_TIME_PER_MICROS,
 			"Weight should be at least 10 µs."
 		);
 		// At most 1 ms.
 		assert!(
-			w.ref_time() <= constants::WEIGHT_PER_MILLIS.ref_time(),
+			w.ref_time() <= constants::WEIGHT_REF_TIME_PER_MILLIS,
 			"Weight should be at most 1 ms."
 		);
 	}
