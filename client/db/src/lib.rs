@@ -519,6 +519,7 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 			log::warn!(target: "db-pinning", "Maximum size of pinning cache reached. Removing items to make space. max_size = {}", PINNING_CACHE_SIZE);
 		}
 
+		log::trace!(target: "db-pin", "Bumping cache refcount. hash = {}, num_entries = {}", hash, cache.len());
 		let entry = cache.get_or_insert_mut(hash, Default::default);
 		entry.increase_ref();
 	}
@@ -534,15 +535,15 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 	}
 
 	pub fn insert_body(&self, hash: Block::Hash, extrinsics: Option<Vec<Block::Extrinsic>>) {
-		log::trace!(target: "db-pin", "Caching body for hash {}", hash);
 		let mut cache = self.cache.write();
+		log::trace!(target: "db-pin", "Caching body. hash = {}, num_entries = {}", hash, cache.len());
 		let mut entry = cache.get_or_insert_mut(hash, Default::default);
 		entry.body = Some(extrinsics);
 	}
 
 	pub fn insert_justifications(&self, hash: Block::Hash, justifications: Option<Justifications>) {
-		log::trace!(target: "db-pin", "Caching justification for hash {}", hash);
 		let mut cache = self.cache.write();
+		log::trace!(target: "db-pin", "Caching justification. hash = {}, num_entries = {}", hash, cache.len());
 		let mut entry = cache.get_or_insert_mut(hash, Default::default);
 		entry.justifications = Some(justifications);
 	}
@@ -552,8 +553,8 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 		if let Some(entry) = cache.peek_mut(hash) {
 			entry.decrease_ref();
 			if entry.has_no_references() {
-				log::trace!(target: "db-pin", "Removing pinned cache entries for hash {}", hash);
 				cache.pop(hash);
+				log::trace!(target: "db-pin", "Removing pinned cache entry. hash = {}, num_entries = {}", hash, cache.len());
 			}
 		}
 	}
@@ -2593,14 +2594,19 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			sp_blockchain::Error::UnknownBlock(format!("State already discarded for {:?}", hash))
 		})?;
 
-		// Only increase reference count for this hash. Value is loaded once we prune.
-		self.blockchain.bump_ref(*hash);
+		if self.blocks_pruning != BlocksPruning::KeepAll {
+			// Only increase reference count for this hash. Value is loaded once we prune.
+			self.blockchain.bump_ref(*hash);
+		}
 		Ok(())
 	}
 
 	fn unpin_block(&self, hash: &<Block as BlockT>::Hash) {
 		self.storage.state_db.unpin(hash);
-		self.blockchain.unpin(hash);
+
+		if self.blocks_pruning != BlocksPruning::KeepAll {
+			self.blockchain.unpin(hash);
+		}
 	}
 }
 
