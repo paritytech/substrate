@@ -844,7 +844,7 @@ pub mod pallet {
 			T::Currency::unreserve_named(&T::ReserveId::get(), &who, on_hold);
 			// Transfer `excess` to the pot if we have now fully compensated for the receipt.
 			T::Currency::transfer(&who, &Self::account_id(), on_hold, AllowDeath)
-				.map_err(|_| Error::<T>::Unfunded)?; //< Requires transactional storage TODO: OK?
+				.map_err(|_| Error::<T>::Unfunded)?;
 									 // TODO: ^^^ The above should be done in a single operation `transfer_on_hold`.
 
 			// Record that we've moved the amount reserved.
