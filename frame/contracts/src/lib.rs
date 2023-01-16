@@ -276,7 +276,7 @@ pub mod pallet {
 		///
 		/// This setting along with [`MaxCodeLen`](#associatedtype.MaxCodeLen) directly affects
 		/// memory usage of your runtime.
-		type CallStack: smallvec::Array<Item = Frame<Self>>;
+		type CallStack: Array<Item = Frame<Self>>;
 
 		/// The maximum number of contracts that can be pending for deletion.
 		///
@@ -402,10 +402,10 @@ pub mod pallet {
 			// Finally, the inefficiencies of the freeing-bump allocator
 			// being used in the client for the runtime memory allocations, could lead to possible
 			// memory allocations for contract code grow up to `x4` times in some extreme cases,
-			// wich gives us total multiplier of `18*4` for `MaxCodeLen`.
+			// which gives us total multiplier of `18*4` for `MaxCodeLen`.
 			//
 			// That being said, for every contract executed in runtime, at least `MaxCodeLen*18*4`
-			// memory should be avaiable. Note that maximum allowed heap memory and stack size per
+			// memory should be available. Note that maximum allowed heap memory and stack size per
 			// each contract (stack frame) should also be counted.
 			//
 			// Finally, we allow 50% of the runtime memory to be utilized by the contracts call
@@ -428,10 +428,24 @@ pub mod pallet {
 				T::MaxCodeLen::get() < code_len_limit,
 				"Given `CallStack` height {:?}, `MaxCodeLen` should be set less than {:?} \
 				 (current value is {:?}), to avoid possible runtime oom issues.",
-				stack_height,
+				max_call_depth,
 				code_len_limit,
 				T::MaxCodeLen::get(),
 			);
+
+			println!(
+				"size of err_msg is {}",
+				"Debug message too big (size={}) for debug buffer (bound={})".bytes().len()
+			);
+
+			// Debug buffer should at least be large enough to accomodate a simple error message
+			const MIN_DEBUG_BUF_SIZE: u32 = 256;
+			assert!(
+				T::MaxDebugBufferLen::get() > MIN_DEBUG_BUF_SIZE,
+				"Debug buffer should have minimum size of {} (current setting is {})",
+				MIN_DEBUG_BUF_SIZE,
+				T::MaxDebugBufferLen::get(),
+			)
 		}
 	}
 
