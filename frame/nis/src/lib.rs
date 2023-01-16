@@ -744,7 +744,7 @@ pub mod pallet {
 					// transfer function to transfer the reserved balance into free balance in
 					// the destination regardless of locks and create it if it doesn't exist.
 					let _ = T::Currency::transfer(&who, &Self::account_id(), on_hold, AllowDeath);
-					summary.receipts_on_hold -= on_hold;
+					summary.receipts_on_hold.saturating_reduce(on_hold);
 				}
 			}
 
