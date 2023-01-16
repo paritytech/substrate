@@ -2203,7 +2203,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 		// Check reward
 		ErasRewardPoints::<Test>::insert(0, reward);
 		ErasStakers::<Test>::insert(0, 11, &exposure);
-		ErasStakersPaged::<Test>::insert((0, 11, 0), exposure_page);
+		ErasStakersPaged::<Test>::insert(0, (11, 0), exposure_page);
 		ErasValidatorReward::<Test>::insert(0, stake);
 		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 0, 0));
 		assert_eq!(Balances::total_balance(&11), stake * 2);
@@ -5696,6 +5696,41 @@ fn can_page_exposure() {
 	assert_eq!(paged_exposures.iter().map(|a| a.own).reduce(|a, b| a + b).unwrap(), 500);
 	// verify number of nominators are same as in the original exposure.
 	assert_eq!(paged_exposures.iter().map(|a| a.others.len()).reduce(|a, b| a + b).unwrap(), 19);
+}
+
+#[test]
+fn should_retain_era_info_only_upto_history_depth() {
+	ExtBuilder::default().build_and_execute(|| {
+		// remove existing exposure
+		Pallet::<Test>::clear_era_information(0);
+		let validator_stash = 10;
+
+		for era in 0..4 {
+			ClaimedRewards::<Test>::insert(era, &validator_stash, vec![0, 1, 2]);
+			for page in 0..3 {
+				ErasStakersPaged::<Test>::insert(
+					era, (&validator_stash, page),
+					ExposurePage { total: 100, page_total: 100, own: 100, others: vec![] },
+				);
+			}
+		}
+
+		for i in 0..4 {
+			// Count of entries remaining in ClaimedRewards = total - cleared_count
+			assert_eq!(ClaimedRewards::<Test>::iter().count(), (4 - i));
+			// 1 claimed_rewards entry for each era
+			assert_eq!(ClaimedRewards::<Test>::iter_prefix(i as EraIndex).count(), 1);
+			// 3 entries (pages) for each era
+			assert_eq!(ErasStakersPaged::<Test>::iter_prefix(i as EraIndex).count(), 3);
+
+			// when clear era info
+			Pallet::<Test>::clear_era_information(i as EraIndex);
+
+			// then all era entries are cleared
+			assert_eq!(ClaimedRewards::<Test>::iter_prefix(i as EraIndex).count(), 0);
+			assert_eq!(ErasStakersPaged::<Test>::iter_prefix(i as EraIndex).count(), 0);
+		}
+	});
 }
 
 mod staking_interface {

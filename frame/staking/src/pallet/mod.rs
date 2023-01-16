@@ -450,18 +450,17 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn eras_stakers_paged)]
 	#[pallet::unbounded]
-	pub type ErasStakersPaged<T: Config> = StorageNMap<
+	pub type ErasStakersPaged<T: Config> = StorageDoubleMap<
 		_,
-		(
-			NMapKey<Twox64Concat, EraIndex>,
-			NMapKey<Twox64Concat, T::AccountId>,
-			NMapKey<Twox64Concat, PageIndex>,
-		),
+		Twox64Concat,
+		EraIndex,
+		Twox64Concat,
+		(T::AccountId, PageIndex),
 		ExposurePage<T::AccountId, BalanceOf<T>>,
 		OptionQuery,
 	>;
 
-	/// History of rewards claimed by validator by era and page.
+	/// History of claimed paged rewards by era and validator.
 	///
 	/// This is keyed by era and validator stash which maps to the set of page indexes which have
 	/// been claimed.
@@ -475,7 +474,6 @@ pub mod pallet {
 		Twox64Concat,
 		EraIndex,
 		Twox64Concat,
-		// Validator stash
 		T::AccountId,
 		Vec<PageIndex>,
 		ValueQuery,
@@ -635,7 +633,7 @@ pub mod pallet {
 			validator: &T::AccountId,
 			page: PageIndex,
 		) -> ExposurePage<T::AccountId, BalanceOf<T>> {
-			return match <ErasStakersPaged<T>>::get((era, validator, page)) {
+			return match <ErasStakersPaged<T>>::get(era, (validator, page)) {
 				Some(paged_exposure) => paged_exposure,
 				// only return clipped exposure if page zero and no paged exposure entry
 				None if page == 0 => <ErasStakersClipped<T>>::get(&era, validator).into(),
@@ -665,7 +663,7 @@ pub mod pallet {
 				.iter()
 				.enumerate()
 				.for_each(|(page, paged_exposure)| {
-					<ErasStakersPaged<T>>::insert((era, &validator, page as u32), &paged_exposure);
+					<ErasStakersPaged<T>>::insert(era, (&validator, page as u32), &paged_exposure);
 				});
 		}
 
