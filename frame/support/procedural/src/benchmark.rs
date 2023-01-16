@@ -275,10 +275,7 @@ pub fn benchmarks(attrs: TokenStream, tokens: TokenStream, instance: bool) -> To
 			func.attrs.remove(i);
 
 			// parse benchmark def
-			let benchmark_def = match BenchmarkDef::from(&func, args.extra, args.skip_meta) {
-				Ok(def) => def,
-				Err(err) => return err.to_compile_error().into(),
-			};
+			let benchmark_def = BenchmarkDef::from(&func, args.extra, args.skip_meta).map_err(syn::parse::Error::to_compile_error)?;
 
 			// expand benchmark
 			let expanded = expand_benchmark(
