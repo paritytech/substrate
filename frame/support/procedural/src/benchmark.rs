@@ -155,13 +155,12 @@ impl BenchmarkDef {
 
 		// parse params such as "x: Linear<0, 1>"
 		for arg in &item_fn.sig.inputs {
-			let span = arg.span();
-			let invalid_param = || {
+			let invalid_param = |span| {
 				return Err(Error::new(span, "Invalid benchmark function param. A valid example would be `x: Linear<5, 10>`.", ))
 			};
 
-			let FnArg::Typed(arg) = arg else { return invalid_param() };
-			let Pat::Ident(ident) = &*arg.pat else { return invalid_param() };
+			let FnArg::Typed(arg) = arg else { return invalid_param(arg.span()) };
+			let Pat::Ident(ident) = &*arg.pat else { return invalid_param(arg.span()) };
 
 			// check param name
 			let var_span = ident.span();
@@ -182,16 +181,16 @@ impl BenchmarkDef {
 
 			// parse type
 			let typ = &*arg.ty;
-			let Type::Path(tpath) = typ else { return invalid_param() };
-			let Some(segment) = tpath.path.segments.last() else { return invalid_param() };
+			let Type::Path(tpath) = typ else { return invalid_param(typ.span()) };
+			let Some(segment) = tpath.path.segments.last() else { return invalid_param(typ.span()) };
 			let args = segment.arguments.to_token_stream().into();
-			let Ok(args) = syn::parse::<RangeArgs>(args) else { return invalid_param() };
-			let Ok(start) = args.start.base10_parse::<u32>() else { return invalid_param() };
-			let Ok(end) = args.end.base10_parse::<u32>() else { return invalid_param() };
+			let Ok(args) = syn::parse::<RangeArgs>(args) else { return invalid_param(typ.span()) };
+			let Ok(start) = args.start.base10_parse::<u32>() else { return invalid_param(args.start.span()) };
+			let Ok(end) = args.end.base10_parse::<u32>() else { return invalid_param(args.end.span()) };
 
 			if end < start {
 				return Err(Error::new(
-					span,
+					args.start.span(),
 					"The start of a `ParamRange` must be less than or equal to the end",
 				))
 			}
