@@ -311,77 +311,77 @@ benchmarks! {
 		);
 	}
 	verify {
-			let bond_amount: u32 = UniqueSaturatedInto::<u32>::unique_saturated_into(bond_amount::<T>());
-			let slash_amount = slash_fraction * bond_amount;
-			let reward_amount = slash_amount.saturating_mul(1 + n) / 2;
-			let reward = reward_amount / r;
-			let slash_report = |id| core::iter::once(
-				<T as StakingConfig>::RuntimeEvent::from(StakingEvent::<T>::SlashReported{ validator: id, fraction: slash_fraction, slash_era: 0})
-			);
-			let slash = |id| core::iter::once(
-				<T as StakingConfig>::RuntimeEvent::from(StakingEvent::<T>::Slashed{ staker: id, amount: BalanceOf::<T>::from(slash_amount) })
-			);
-			let balance_slash = |id| core::iter::once(
-				<T as BalancesConfig>::RuntimeEvent::from(pallet_balances::Event::<T>::Slashed{ who: id, amount: slash_amount.into() })
-			);
-			let chill = |id| core::iter::once(
-				<T as StakingConfig>::RuntimeEvent::from(StakingEvent::<T>::Chilled{ stash: id })
-			);
-			let balance_deposit = |id, amount: u32|
-			<T as BalancesConfig>::RuntimeEvent::from(pallet_balances::Event::<T>::Deposit{ who: id, amount: amount.into() });
-			let mut first = true;
+		let bond_amount: u32 = UniqueSaturatedInto::<u32>::unique_saturated_into(bond_amount::<T>());
+		let slash_amount = slash_fraction * bond_amount;
+		let reward_amount = slash_amount.saturating_mul(1 + n) / 2;
+		let reward = reward_amount / r;
+		let slash_report = |id| core::iter::once(
+			<T as StakingConfig>::RuntimeEvent::from(StakingEvent::<T>::SlashReported{ validator: id, fraction: slash_fraction, slash_era: 0})
+		);
+		let slash = |id| core::iter::once(
+			<T as StakingConfig>::RuntimeEvent::from(StakingEvent::<T>::Slashed{ staker: id, amount: BalanceOf::<T>::from(slash_amount) })
+		);
+		let balance_slash = |id| core::iter::once(
+			<T as BalancesConfig>::RuntimeEvent::from(pallet_balances::Event::<T>::Slashed{ who: id, amount: slash_amount.into() })
+		);
+		let chill = |id| core::iter::once(
+			<T as StakingConfig>::RuntimeEvent::from(StakingEvent::<T>::Chilled{ stash: id })
+		);
+		let balance_deposit = |id, amount: u32|
+		<T as BalancesConfig>::RuntimeEvent::from(pallet_balances::Event::<T>::Deposit{ who: id, amount: amount.into() });
+		let mut first = true;
 
-			// We need to box all events to prevent running into too big allocations in wasm.
-			// The event in FRAME is represented as an enum and the size of the enum depends on the biggest variant.
-			// So, instead of requiring `size_of<Event>() * expected_events` we only need to
-			// allocate `size_of<Box<Event>>() * expected_events`.
-			let slash_events = raw_offenders.into_iter()
-				.flat_map(|offender| {
-					let nom_slashes = offender.nominator_stashes.into_iter().flat_map(|nom| {
-						balance_slash(nom.clone()).map(Into::into).chain(slash(nom).map(Into::into)).map(Box::new)
-					});
-
-					let events = chill(offender.stash.clone()).map(Into::into).map(Box::new)
-						.chain(slash_report(offender.stash.clone()).map(Into::into).map(Box::new))
-						.chain(balance_slash(offender.stash.clone()).map(Into::into).map(Box::new))
-						.chain(slash(offender.stash).map(Into::into).map(Box::new))
-						.chain(nom_slashes)
-						.collect::<Vec<_>>();
-
-					// the first deposit creates endowed events, see `endowed_reward_events`
-					if first {
-						first = false;
-						let reward_events = reporters.iter()
-							.flat_map(|reporter| vec![
-							 Box::new(balance_deposit(reporter.clone(), reward).into()),
-							 Box::new(frame_system::Event::<T>::NewAccount { account: reporter.clone() }.into()),
-							 Box::new(<T as BalancesConfig>::RuntimeEvent::from(
-								 pallet_balances::Event::<T>::Endowed{ account: reporter.clone(), free_balance: reward.into() }
-							 ).into()),
-							])
-							.collect::<Vec<_>>();
-						events.into_iter().chain(reward_events)
-					} else {
-						let reward_events = reporters.iter()
-							.map(|reporter| Box::new(balance_deposit(reporter.clone(), reward).into()))
-							.collect::<Vec<_>>();
-						events.into_iter().chain(reward_events)
-					}
+		// We need to box all events to prevent running into too big allocations in wasm.
+		// The event in FRAME is represented as an enum and the size of the enum depends on the biggest variant.
+		// So, instead of requiring `size_of<Event>() * expected_events` we only need to
+		// allocate `size_of<Box<Event>>() * expected_events`.
+		let slash_events = raw_offenders.into_iter()
+			.flat_map(|offender| {
+				let nom_slashes = offender.nominator_stashes.into_iter().flat_map(|nom| {
+					balance_slash(nom.clone()).map(Into::into).chain(slash(nom).map(Into::into)).map(Box::new)
 				});
 
-			// In case of error it's useful to see the inputs
-			log::info!("Inputs: r: {}, o: {}, n: {}", r, o, n);
-			// make sure that all slashes have been applied
-			check_events::<T, _, _>(
-				sp_std::iter::empty()
-					.chain(slash_events)
-					.chain(sp_std::iter::once(Box::new(<T as OffencesConfig>::RuntimeEvent::from(
-						pallet_offences::Event::Offence{
-							kind: UnresponsivenessOffence::<T>::ID,
-							timeslot: 0_u32.to_le_bytes().to_vec(),
-						}
-					).into())))
-			);
+				let events = chill(offender.stash.clone()).map(Into::into).map(Box::new)
+					.chain(slash_report(offender.stash.clone()).map(Into::into).map(Box::new))
+					.chain(balance_slash(offender.stash.clone()).map(Into::into).map(Box::new))
+					.chain(slash(offender.stash).map(Into::into).map(Box::new))
+					.chain(nom_slashes)
+					.collect::<Vec<_>>();
+
+				// the first deposit creates endowed events, see `endowed_reward_events`
+				if first {
+					first = false;
+					let reward_events = reporters.iter()
+						.flat_map(|reporter| vec![
+						 Box::new(balance_deposit(reporter.clone(), reward).into()),
+						 Box::new(frame_system::Event::<T>::NewAccount { account: reporter.clone() }.into()),
+						 Box::new(<T as BalancesConfig>::RuntimeEvent::from(
+							 pallet_balances::Event::<T>::Endowed{ account: reporter.clone(), free_balance: reward.into() }
+						 ).into()),
+						])
+						.collect::<Vec<_>>();
+					events.into_iter().chain(reward_events)
+				} else {
+					let reward_events = reporters.iter()
+						.map(|reporter| Box::new(balance_deposit(reporter.clone(), reward).into()))
+						.collect::<Vec<_>>();
+					events.into_iter().chain(reward_events)
+				}
+			});
+
+		// In case of error it's useful to see the inputs
+		log::info!("Inputs: r: {}, o: {}, n: {}", r, o, n);
+		// make sure that all slashes have been applied
+		check_events::<T, _, _>(
+			sp_std::iter::empty()
+				.chain(slash_events)
+				.chain(sp_std::iter::once(Box::new(<T as OffencesConfig>::RuntimeEvent::from(
+					pallet_offences::Event::Offence{
+						kind: UnresponsivenessOffence::<T>::ID,
+						timeslot: 0_u32.to_le_bytes().to_vec(),
+					}
+				).into())))
+		);
 	}
 
 	report_offence_grandpa {
