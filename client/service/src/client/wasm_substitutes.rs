@@ -21,7 +21,7 @@
 use sc_client_api::backend;
 use sc_executor::RuntimeVersionOf;
 use sp_blockchain::{HeaderBackend, Result};
-use sp_core::traits::{FetchRuntimeCode, RuntimeCode};
+use sp_core::traits::{FetchRuntimeCode, RuntimeCode, WrappedRuntimeCode};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, NumberFor},
@@ -41,12 +41,13 @@ struct WasmSubstitute<Block: BlockT> {
 	hash: Vec<u8>,
 	/// The block number on which we should start using the substitute.
 	block_number: NumberFor<Block>,
+	version: RuntimeVersion,
 }
 
 impl<Block: BlockT> WasmSubstitute<Block> {
-	fn new(code: Vec<u8>, block_number: NumberFor<Block>) -> Self {
+	fn new(code: Vec<u8>, block_number: NumberFor<Block>, version: RuntimeVersion) -> Self {
 		let hash = make_hash(&code);
-		Self { code, hash, block_number }
+		Self { code, hash, block_number, version }
 	}
 
 	fn runtime_code(&self, heap_pages: Option<u64>) -> RuntimeCode {
@@ -122,9 +123,17 @@ where
 		let substitutes = substitutes
 			.into_iter()
 			.map(|(block_number, code)| {
-				let substitute = WasmSubstitute::new(code, block_number);
-				let version = Self::runtime_version(&executor, &substitute)?;
-				Ok((version.spec_version, substitute))
+				let runtime_code = RuntimeCode {
+					code_fetcher: &WrappedRuntimeCode((&code).into()),
+					heap_pages: None,
+					hash: Vec::new(),
+				};
+				let version = Self::runtime_version(&executor, &runtime_code)?;
+				let spec_version = version.spec_version;
+
+				let substitute = WasmSubstitute::new(code, block_number, version);
+
+				Ok((spec_version, substitute))
 			})
 			.collect::<Result<HashMap<_, _>>>()?;
 
@@ -139,18 +148,16 @@ where
 		spec: u32,
 		pages: Option<u64>,
 		block_id: &BlockId<Block>,
-	) -> Option<RuntimeCode<'_>> {
+	) -> Option<(RuntimeCode<'_>, RuntimeVersion)> {
 		let s = self.substitutes.get(&spec)?;
-		s.matches(block_id, &*self.backend).then(|| s.runtime_code(pages))
+		s.matches(block_id, &*self.backend)
+			.then(|| (s.runtime_code(pages), s.version.clone()))
 	}
 
-	fn runtime_version(
-		executor: &Executor,
-		code: &WasmSubstitute<Block>,
-	) -> Result<RuntimeVersion> {
+	fn runtime_version(executor: &Executor, code: &RuntimeCode) -> Result<RuntimeVersion> {
 		let mut ext = BasicExternalities::default();
 		executor
-			.runtime_version(&mut ext, &code.runtime_code(None))
+			.runtime_version(&mut ext, code)
 			.map_err(|e| WasmSubstituteError::VersionInvalid(e.to_string()).into())
 	}
 }

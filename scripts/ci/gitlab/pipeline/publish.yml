@@ -182,20 +182,6 @@ publish-draft-release:
     - ./scripts/ci/gitlab/publish_draft_release.sh
   allow_failure:                   true
 
-# Ref: https://github.com/paritytech/opstooling/issues/111
-update-node-template:
-  stage:                           publish
-  extends:                         .kubernetes-env
-  rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^polkadot-v[0-9]+\.[0-9]+.*$/ # i.e. polkadot-v1.0.99, polkadot-v2.1rc1
-  script:
-    - git clone --depth=1 --branch="$PIPELINE_SCRIPTS_TAG" https://github.com/paritytech/pipeline-scripts
-    - ./pipeline-scripts/update_substrate_template.sh
-      --repo-name "substrate-node-template"
-      --template-path "bin/node-template"
-      --github-api-token "$GITHUB_TOKEN"
-      --polkadot-branch "$CI_COMMIT_REF_NAME"
-
 .publish-crates-template:
   stage:                           publish
   extends:                         .crates-publishing-template
@@ -214,7 +200,7 @@ update-node-template:
   timeout:                         9h
   # A custom publishing environment is used for us to be able to set up protected secrets
   # specifically for it
-  environment: publish-crates
+  environment:                     publish-crates
   script:
     - rusty-cachier snapshot create
     - git clone
@@ -225,14 +211,15 @@ update-node-template:
     - rusty-cachier cache upload
 
 publish-crates:
-  extends:                         .publish-crates-template
+  extends:
+    - .publish-crates-template
+    - .scheduled-crate-publishing-pipeline
   needs:
     - job:                         publish-crates-locally
       artifacts:                   false
-  rules:
-    - if: $CI_COMMIT_REF_NAME == "master"
 
 publish-crates-manual:
   extends:                         .publish-crates-template
+  rules:                           !reference [.crate-publishing-pipeline, rules]
   when:                            manual
   allow_failure:                   true

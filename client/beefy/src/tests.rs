@@ -430,8 +430,8 @@ pub(crate) fn get_beefy_streams(
 		let beefy_rpc_links = net.peer(index).data.beefy_rpc_links.lock().clone().unwrap();
 		let BeefyRPCLinks { from_voter_justif_stream, from_voter_best_beefy_stream } =
 			beefy_rpc_links;
-		best_block_streams.push(from_voter_best_beefy_stream.subscribe());
-		versioned_finality_proof_streams.push(from_voter_justif_stream.subscribe());
+		best_block_streams.push(from_voter_best_beefy_stream.subscribe(100_000));
+		versioned_finality_proof_streams.push(from_voter_justif_stream.subscribe(100_000));
 	});
 	(best_block_streams, versioned_finality_proof_streams)
 }
@@ -736,7 +736,7 @@ async fn beefy_importing_blocks() {
 	let hashof1 = block.header.hash();
 
 	// Import without justifications.
-	let mut justif_recv = justif_stream.subscribe();
+	let mut justif_recv = justif_stream.subscribe(100_000);
 	assert_eq!(
 		block_import
 			.import_block(params(block.clone(), None), HashMap::new())
@@ -779,7 +779,7 @@ async fn beefy_importing_blocks() {
 	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
 	let block = builder.build().unwrap().block;
 	let hashof2 = block.header.hash();
-	let mut justif_recv = justif_stream.subscribe();
+	let mut justif_recv = justif_stream.subscribe(100_000);
 	assert_eq!(
 		block_import.import_block(params(block, justif), HashMap::new()).await.unwrap(),
 		ImportResult::Imported(ImportedAux {
@@ -823,7 +823,7 @@ async fn beefy_importing_blocks() {
 	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
 	let block = builder.build().unwrap().block;
 	let hashof3 = block.header.hash();
-	let mut justif_recv = justif_stream.subscribe();
+	let mut justif_recv = justif_stream.subscribe(100_000);
 	assert_eq!(
 		block_import.import_block(params(block, justif), HashMap::new()).await.unwrap(),
 		ImportResult::Imported(ImportedAux {
