@@ -241,10 +241,7 @@ variables:
     paths:
       - artifacts/
   variables:
-    CRATESIO_API: https://crates.io/api
     CRATESIO_CRATES_OWNER: parity-crate-owner
-    GH_API: https://api.github.com
-    GH_URL: https://github.com
     REPO: substrate
     REPO_OWNER: paritytech
     SPUB_TMP: artifacts
