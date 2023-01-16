@@ -229,16 +229,6 @@ variables:
     # this job runs only on nightly pipeline with the mentioned variable, against `master` branch
     - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "nightly"
 
-.crate-publishing-pipeline:
-  rules:
-    - if: $CI_COMMIT_REF_NAME != "master"
-      when: never
-
-.scheduled-crate-publishing-pipeline:
-  rules:
-    - !reference [.crate-publishing-pipeline, rules]
-    - if: $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "automatic-crate-publishing"
-
 .crates-publishing-template:
   stage:                           test
   extends:                         .docker-env
@@ -254,6 +244,7 @@ variables:
     CRATESIO_API: https://crates.io/api
     CRATESIO_CRATES_OWNER: parity-crate-owner
     GH_API: https://api.github.com
+    GH_URL: https://github.com
     REPO: substrate
     REPO_OWNER: paritytech
     SPUB_TMP: artifacts
