@@ -884,7 +884,7 @@ pub mod pallet {
 
 			// Transfer the funds from the pot to the owner and reserve
 			T::Currency::transfer(&Self::account_id(), &who, amount, AllowDeath)
-				.map_err(|_| Error::<T>::Unfunded)?; //< Requires transactional storage TODO: OK?
+				.map_err(|_| Error::<T>::Unfunded)?;
 			T::Currency::reserve_named(&T::ReserveId::get(), &who, amount)?;
 																 // TODO: ^^^ The above should be done in a single operation `transfer_and_hold`.
 
