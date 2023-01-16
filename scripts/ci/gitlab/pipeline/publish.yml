@@ -185,6 +185,8 @@ publish-draft-release:
 .publish-crates-template:
   stage:                           publish
   extends:                         .crates-publishing-template
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_REF_NAME == "$CRATES_PUBLISHING_REF" && $PIPELINE == "$CRATES_PUBLISHING_PIPELINE"
   # We don't want multiple jobs racing to publish crates as it's redundant and they might overwrite
   # the releases of one another. Use resource_group to ensure that at most one instance of this job
   # is running at any given time.
@@ -199,8 +201,6 @@ publish-draft-release:
   # A custom publishing environment is used for us to be able to set up protected secrets
   # specifically for it
   environment:                     publish-crates
-  variables:
-    PUBLISH_CRATES_BRANCH:         master
   script:
     - rusty-cachier snapshot create
     - git clone
@@ -212,12 +212,8 @@ publish-draft-release:
 
 publish-crates:
   extends:                         .publish-crates-template
-  rules:
-    - if: $CI_COMMIT_REF_NAME == "$PUBLISH_CRATES_BRANCH" && $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "automatic-crate-publishing"
 
 publish-crates-manual:
   extends:                         .publish-crates-template
-  rules:
-    - if: $CI_COMMIT_REF_NAME == "$PUBLISH_CRATES_BRANCH"
   when:                            manual
   interruptible:                   false

@@ -417,6 +417,7 @@ cargo-check-each-crate:
   parallel: 2
 
 publish-crates-locally:
+  stage:                           test
   extends:
     - .test-refs
     - .crates-publishing-template
