@@ -289,7 +289,7 @@ async fn build_network_future<
 			// The network worker has done something. Nothing special to do, but could be
 			// used in the future to perform actions in response of things that happened on
 			// the network.
-			_ = (&mut network).fuse() => {}
+			_ = network.next_action().fuse() => {}
 		}
 	}
 }
