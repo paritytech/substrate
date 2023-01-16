@@ -25,7 +25,6 @@ use quote::{quote, quote_spanned, ToTokens};
 use syn::{
 	parenthesized,
 	parse::{Nothing, ParseStream},
-	parse_macro_input,
 	punctuated::Punctuated,
 	spanned::Spanned,
 	token::{Colon2, Comma, Gt, Lt, Paren},
@@ -241,12 +240,16 @@ impl BenchmarkDef {
 }
 
 /// Parses and expands a `#[benchmarks]` or `#[instance_benchmarks]` invocation
-pub fn benchmarks(attrs: TokenStream, tokens: TokenStream, instance: bool) -> TokenStream {
-	let module = parse_macro_input!(tokens as ItemMod);
+pub fn benchmarks(
+	attrs: TokenStream,
+	tokens: TokenStream,
+	instance: bool,
+) -> syn::Result<TokenStream> {
+	let module: ItemMod = syn::parse(tokens)?;
 	let mod_span = module.span();
 	let where_clause = match syn::parse::<Nothing>(attrs.clone()) {
 		Ok(_) => quote!(),
-		Err(_) => parse_macro_input!(attrs as WhereClause).predicates.to_token_stream(),
+		Err(_) => syn::parse::<WhereClause>(attrs)?.predicates.to_token_stream(),
 	};
 	let mod_vis = module.vis;
 	let mod_name = module.ident;
@@ -255,11 +258,8 @@ pub fn benchmarks(attrs: TokenStream, tokens: TokenStream, instance: bool) -> To
 	let mut benchmark_names: Vec<Ident> = Vec::new();
 	let mut extra_benchmark_names: Vec<Ident> = Vec::new();
 	let mut skip_meta_benchmark_names: Vec<Ident> = Vec::new();
-	let Some((_brace, mut content)) = module.content else {
-		// this will compile error already because attributes attached to empty modules are unstable
-		// but including error anyway to make this future-proof
-		return quote_spanned!(mod_span=> "Module cannot be empty!".to_compile_error()).into()
-	};
+	let (_brace, mut content) =
+		module.content.ok_or(syn::Error::new(mod_span, "Module cannot be empty!"))?;
 	for stmt in &mut content {
 		let mut push_stmt = || {
 			expanded_stmts.push(stmt.to_token_stream());
@@ -269,13 +269,13 @@ pub fn benchmarks(attrs: TokenStream, tokens: TokenStream, instance: bool) -> To
 			let Some(seg) = attr.path.segments.last() else { push_stmt(); continue; };
 			let Ok(_) = syn::parse::<keywords::benchmark>(seg.ident.to_token_stream().into()) else { push_stmt(); continue; };
 			let tokens = attr.tokens.to_token_stream().into();
-			let args = parse_macro_input!(tokens as BenchmarkAttrs);
+			let args: BenchmarkAttrs = syn::parse(tokens)?;
 
 			// consume #[benchmark] attr
 			func.attrs.remove(i);
 
 			// parse benchmark def
-			let benchmark_def = BenchmarkDef::from(&func, args.extra, args.skip_meta).map_err(syn::parse::Error::to_compile_error)?;
+			let benchmark_def = BenchmarkDef::from(&func, args.extra, args.skip_meta)?;
 
 			// expand benchmark
 			let expanded = expand_benchmark(
@@ -313,10 +313,7 @@ pub fn benchmarks(attrs: TokenStream, tokens: TokenStream, instance: bool) -> To
 		true => quote!(T: Config<I>, I: 'static),
 	};
 
-	let krate = match generate_crate_access_2018("frame-benchmarking") {
-		Ok(ident) => ident,
-		Err(err) => return err.to_compile_error().into(),
-	};
+	let krate = generate_crate_access_2018("frame-benchmarking")?;
 	let support = quote!(#krate::frame_support);
 
 	// benchmark name variables
@@ -555,7 +552,7 @@ pub fn benchmarks(attrs: TokenStream, tokens: TokenStream, instance: bool) -> To
 		}
 		#mod_vis use #mod_name::*;
 	};
-	res.into()
+	Ok(res.into())
 }
 
 /// Prepares a [`Vec<ParamDef>`] to be interpolated by [`quote!`] by creating easily-iterable
