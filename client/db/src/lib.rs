@@ -4252,10 +4252,12 @@ pub(crate) mod tests {
 
 			prev_hash = hash;
 		}
+
 		// Block 1 gets pinned three times
 		backend.pin_block(&blocks[1], 1).unwrap();
 		backend.pin_block(&blocks[1], 1).unwrap();
 
+		// Finalize all blocks. This will trigger pruning.
 		let mut op = backend.begin_operation().unwrap();
 		backend.begin_state_operation(&mut op, blocks[4]).unwrap();
 		for i in 1..5 {
@@ -4265,8 +4267,8 @@ pub(crate) mod tests {
 		backend.commit_operation(op).unwrap();
 
 		let bc = backend.blockchain();
-		// Block 0, 1, 2, 3 are pinned and pruning is delayed,
-		// while block 4 is never delayed for pruning as it is finalized.
+		// Block 0, 1, 2, 3 are pinned, so all values should be cached.
+		// Block 4 is inside the pruning window, its value is in db.
 		assert_eq!(Some(vec![0.into()]), bc.body(blocks[0]).unwrap());
 
 		assert_eq!(Some(vec![1.into()]), bc.body(blocks[1]).unwrap());
@@ -4293,13 +4295,13 @@ pub(crate) mod tests {
 			bc.justifications(blocks[4]).unwrap()
 		);
 
-		// Unpin all blocks.
+		// Unpin all blocks. Values should be removed from cache.
 		for block in &blocks {
 			backend.unpin_block(&block);
 		}
 
 		assert!(bc.body(blocks[0]).unwrap().is_none());
-		// Block 1 was pinned twice, we expect it to be in-memory
+		// Block 1 was pinned twice, we expect it to be still cached
 		assert!(bc.body(blocks[1]).unwrap().is_some());
 		assert!(bc.justifications(blocks[1]).unwrap().is_some());
 		assert!(bc.body(blocks[2]).unwrap().is_none());
@@ -4307,7 +4309,7 @@ pub(crate) mod tests {
 		assert!(bc.body(blocks[3]).unwrap().is_none());
 		assert!(bc.justifications(blocks[3]).unwrap().is_none());
 
-		// After these unpins, block 1 should be removed
+		// After these unpins, block 1 should also be removed
 		backend.unpin_block(&blocks[1]);
 		assert!(bc.body(blocks[1]).unwrap().is_some());
 		assert!(bc.justifications(blocks[1]).unwrap().is_some());
@@ -4352,7 +4354,7 @@ pub(crate) mod tests {
 		assert!(bc.body(blocks[4]).unwrap().is_none());
 		assert!(bc.justifications(blocks[4]).unwrap().is_none());
 
-		// Test that appended justifications are transferred correctly to the in-memory cache.
+		// Append a justification to block 5.
 		backend.append_justification(blocks[5], ([0, 0, 0, 1], vec![42])).unwrap();
 
 		let hash =
