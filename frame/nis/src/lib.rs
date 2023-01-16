@@ -729,13 +729,18 @@ pub mod pallet {
 					//
 					// This will legitimately fail if there is no pot account in existance.
 					// There's nothing we can do about this so we just swallow the error.
-					/*let _ = T::Currency::repatriate_reserved_named(
-						&T::ReserveId::get(),
-						&who,
-						&our_account,
-						excess,
-						BalanceStatus::Free,
-					).defensive();*/
+					// This code is not ideal and could fail in the second phase leaving
+					// the system in an invalid state. It can be fixed properly with the
+					// new API in https://github.com/paritytech/substrate/pull/12951
+					// 
+					// Below is what it should look like then:
+					//	let _ = T::Currency::repatriate_reserved_named(
+					//		&T::ReserveId::get(),
+					//		&who,
+					//		&our_account,
+					//		excess,
+					//		BalanceStatus::Free,
+					//	).defensive();
 					T::Currency::unreserve_named(&T::ReserveId::get(), &who, on_hold);
 					// It could theoretically be locked, so really we should be using a more
 					// forceful variant. But the alternative `repatriate_reserved_named` will
