@@ -67,9 +67,7 @@ pub fn build_transport(
 			// Secure Websocket transport needs unresolved addresses, so we join DNS transport with
 			// yet another instance of Websocket transport.
 			EitherTransport::Left(
-				dns_init
-					.expect("same config to work")
-					.or_transport(websocket::WsConfig::new(dns)),
+				websocket::WsConfig::new(dns).or_transport(dns_init.expect("same config to work")),
 			)
 		} else {
 			let tcp_trans = tcp::tokio::Transport::new(tcp_config.clone());
