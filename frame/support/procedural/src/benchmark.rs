@@ -28,14 +28,15 @@ use syn::{
 	punctuated::Punctuated,
 	spanned::Spanned,
 	token::{Colon2, Comma, Gt, Lt, Paren},
-	Error, Expr, ExprBlock, ExprCall, ExprPath, FnArg, Item, ItemFn, ItemMod, LitInt, Pat, Path,
-	PathArguments, PathSegment, Result, Stmt, Token, Type, WhereClause,
+	Attribute, Error, Expr, ExprBlock, ExprCall, ExprPath, FnArg, Item, ItemFn, ItemMod, LitInt,
+	Pat, Path, PathArguments, PathSegment, Result, Stmt, Token, Type, WhereClause,
 };
 
 mod keywords {
 	use syn::custom_keyword;
 
 	custom_keyword!(benchmark);
+	custom_keyword!(benchmarks);
 	custom_keyword!(block);
 	custom_keyword!(extra);
 	custom_keyword!(extrinsic_call);
@@ -263,6 +264,7 @@ pub fn benchmarks(
 	tokens: TokenStream,
 	instance: bool,
 ) -> syn::Result<TokenStream> {
+	// gather module info
 	let module: ItemMod = syn::parse(tokens)?;
 	let mod_span = module.span();
 	let where_clause = match syn::parse::<Nothing>(attrs.clone()) {
@@ -271,13 +273,24 @@ pub fn benchmarks(
 	};
 	let mod_vis = module.vis;
 	let mod_name = module.ident;
+
+	// consume #[benchmarks] attribute by exclusing it from mod_attrs
+	let mod_attrs: Vec<&Attribute> = module
+		.attrs
+		.iter()
+		.filter(|attr| !syn::parse2::<keywords::benchmarks>(attr.to_token_stream()).is_ok())
+		.collect();
+
 	let mut expanded_stmts: Vec<TokenStream2> = Vec::new();
 	let mut benchmark_defs: Vec<BenchmarkDef> = Vec::new();
 	let mut benchmark_names: Vec<Ident> = Vec::new();
 	let mut extra_benchmark_names: Vec<Ident> = Vec::new();
 	let mut skip_meta_benchmark_names: Vec<Ident> = Vec::new();
+
 	let (_brace, mut content) =
 		module.content.ok_or(syn::Error::new(mod_span, "Module cannot be empty!"))?;
+
+	// process benchmark defs in module content
 	for stmt in &mut content {
 		let mut push_stmt = || {
 			expanded_stmts.push(stmt.to_token_stream());
@@ -363,6 +376,8 @@ pub fn benchmarks(
 
 	// emit final quoted tokens
 	let res = quote! {
+		#(#mod_attrs)
+		*
 		#mod_vis mod #mod_name {
 			#(#expanded_stmts)
 			*
