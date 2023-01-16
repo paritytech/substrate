@@ -382,11 +382,11 @@ pub mod pallet {
 		}
 
 		fn integrity_test() {
-			// Total runtime memory is expected to have 1Gb upper limit
-			const MAX_RUNTIME_MEM: u32 = 1024 * 1024 * 1024;
+			// Total runtime memory is expected to have 128Mb upper limit
+			const MAX_RUNTIME_MEM: u32 = 1024 * 1024 * 128;
 			// Memory limits for a single contract:
 			// Value stack size: 1Mb per contract, default defined in wasmi
-			const STACK_MAX_SIZE: u32 = 1024 * 1024;
+			const MAX_STACK_SIZE: u32 = 1024 * 1024;
 			// Heap limit is normally 16 mempages of 64kb each = 1Mb per contract
 			let max_heap_size = T::Schedule::get().limits.max_memory_size();
 			let max_call_depth = T::CallStack::size() as u32;
@@ -413,7 +413,7 @@ pub mod pallet {
 			//
 			// This gives us the following formula:
 			//
-			// `(MaxCodeLen * 18 * 4 + STACK_MAX_SIZE + heap_max_size) * stack_height <
+			// `(MaxCodeLen * 18 * 4 + MAX_STACK_SIZE + max_heap_size) * max_call_depth <
 			// MAX_RUNTIME_MEM/2`
 			//
 			// Hence the upper limit for the `MaxCodeLen` can be defined as follows:
@@ -421,7 +421,7 @@ pub mod pallet {
 				.saturating_div(2)
 				.saturating_div(max_call_depth)
 				.saturating_sub(max_heap_size)
-				.saturating_sub(STACK_MAX_SIZE)
+				.saturating_sub(MAX_STACK_SIZE)
 				.saturating_div(18 * 4);
 
 			assert!(
@@ -431,11 +431,6 @@ pub mod pallet {
 				max_call_depth,
 				code_len_limit,
 				T::MaxCodeLen::get(),
-			);
-
-			println!(
-				"size of err_msg is {}",
-				"Debug message too big (size={}) for debug buffer (bound={})".bytes().len()
 			);
 
 			// Debug buffer should at least be large enough to accomodate a simple error message
