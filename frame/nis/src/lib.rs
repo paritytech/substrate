@@ -714,7 +714,7 @@ pub mod pallet {
 				T::Currency::unreserve_named(&T::ReserveId::get(), &who, on_hold);
 				let deficit = amount - on_hold;
 				// Try to transfer deficit from pot to receipt owner.
-				summary.receipts_on_hold -= on_hold;
+				summary.receipts_on_hold.saturating_reduce(on_hold);
 				on_hold = Zero::zero();
 				T::Currency::transfer(&our_account, &who, deficit, AllowDeath)
 					.map_err(|_| Error::<T>::Unfunded)?;
