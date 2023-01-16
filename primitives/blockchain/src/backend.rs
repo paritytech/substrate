@@ -21,9 +21,10 @@ use log::warn;
 use parking_lot::RwLock;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Header as HeaderT, NumberFor},
+	traits::{Block as BlockT, Header as HeaderT, NumberFor, Saturating},
 	Justifications,
 };
+use std::collections::btree_set::BTreeSet;
 
 use crate::header_metadata::HeaderMetadata;
 
@@ -32,11 +33,11 @@ use crate::error::{Error, Result};
 /// Blockchain database header backend. Does not perform any validation.
 pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	/// Get block header. Returns `None` if block is not found.
-	fn header(&self, id: BlockId<Block>) -> Result<Option<Block::Header>>;
+	fn header(&self, hash: Block::Hash) -> Result<Option<Block::Header>>;
 	/// Get blockchain info.
 	fn info(&self) -> Info<Block>;
 	/// Get block status.
-	fn status(&self, id: BlockId<Block>) -> Result<BlockStatus>;
+	fn status(&self, hash: Block::Hash) -> Result<BlockStatus>;
 	/// Get block number by hash. Returns `None` if the header is not in the chain.
 	fn number(
 		&self,
@@ -62,9 +63,9 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	}
 
 	/// Get block header. Returns `UnknownBlock` error if block is not found.
-	fn expect_header(&self, id: BlockId<Block>) -> Result<Block::Header> {
-		self.header(id)?
-			.ok_or_else(|| Error::UnknownBlock(format!("Expect header: {}", id)))
+	fn expect_header(&self, hash: Block::Hash) -> Result<Block::Header> {
+		self.header(hash)?
+			.ok_or_else(|| Error::UnknownBlock(format!("Expect header: {}", hash)))
 	}
 
 	/// Convert an arbitrary block ID into a block number. Returns `UnknownBlock` error if block is
@@ -82,6 +83,77 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 			h.ok_or_else(|| Error::UnknownBlock(format!("Expect block hash from id: {}", id)))
 		})
 	}
+}
+
+/// Handles stale forks.
+pub trait ForkBackend<Block: BlockT>:
+	HeaderMetadata<Block> + HeaderBackend<Block> + Send + Sync
+{
+	/// Best effort to get all the header hashes that are part of the provided forks
+	/// starting only from the fork heads.
+	///
+	/// The function tries to reconstruct the route from the fork head to the canonical chain.
+	/// If any of the hashes on the route can't be found in the db, the function won't be able
+	/// to reconstruct the route anymore. In this case it will give up expanding the current fork,
+	/// move on to the next ones and at the end it will return an error that also contains
+	/// the partially expanded forks.
+	fn expand_forks(
+		&self,
+		fork_heads: &[Block::Hash],
+	) -> std::result::Result<BTreeSet<Block::Hash>, (BTreeSet<Block::Hash>, Error)> {
+		let mut missing_blocks = vec![];
+		let mut expanded_forks = BTreeSet::new();
+		for fork_head in fork_heads {
+			let mut route_head = *fork_head;
+			// Insert stale blocks hashes until canonical chain is reached.
+			// If we reach a block that is already part of the `expanded_forks` we can stop
+			// processing the fork.
+			while expanded_forks.insert(route_head) {
+				match self.header_metadata(route_head) {
+					Ok(meta) => {
+						// If the parent is part of the canonical chain or there doesn't exist a
+						// block hash for the parent number (bug?!), we can abort adding blocks.
+						let parent_number = meta.number.saturating_sub(1u32.into());
+						match self.hash(parent_number) {
+							Ok(Some(parent_hash)) =>
+								if parent_hash == meta.parent {
+									break
+								},
+							Ok(None) | Err(_) => {
+								missing_blocks.push(BlockId::<Block>::Number(parent_number));
+								break
+							},
+						}
+
+						route_head = meta.parent;
+					},
+					Err(_e) => {
+						missing_blocks.push(BlockId::<Block>::Hash(route_head));
+						break
+					},
+				}
+			}
+		}
+
+		if !missing_blocks.is_empty() {
+			return Err((
+				expanded_forks,
+				Error::UnknownBlocks(format!(
+					"Missing stale headers {:?} while expanding forks {:?}.",
+					fork_heads, missing_blocks
+				)),
+			))
+		}
+
+		Ok(expanded_forks)
+	}
+}
+
+impl<Block, T> ForkBackend<Block> for T
+where
+	Block: BlockT,
+	T: HeaderMetadata<Block> + HeaderBackend<Block> + Send + Sync,
+{
 }
 
 /// Blockchain database backend. Does not perform any validation.
@@ -129,7 +201,7 @@ pub trait Backend<Block: BlockT>:
 		import_lock: &RwLock<()>,
 	) -> Result<Option<Block::Hash>> {
 		let target_header = {
-			match self.header(BlockId::Hash(target_hash))? {
+			match self.header(target_hash)? {
 				Some(x) => x,
 				// target not in blockchain
 				None => return Ok(None),
@@ -184,7 +256,7 @@ pub trait Backend<Block: BlockT>:
 			if let Some(max_number) = maybe_max_number {
 				loop {
 					let current_header = self
-						.header(BlockId::Hash(current_hash))?
+						.header(current_hash)?
 						.ok_or_else(|| Error::MissingHeader(current_hash.to_string()))?;
 
 					if current_header.number() <= &max_number {
@@ -204,7 +276,7 @@ pub trait Backend<Block: BlockT>:
 				}
 
 				let current_header = self
-					.header(BlockId::Hash(current_hash))?
+					.header(current_hash)?
 					.ok_or_else(|| Error::MissingHeader(current_hash.to_string()))?;
 
 				// stop search in this chain once we go below the target's block number

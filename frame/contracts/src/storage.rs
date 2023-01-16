@@ -31,7 +31,6 @@ use frame_support::{
 	weights::Weight,
 };
 use scale_info::TypeInfo;
-use sp_core::crypto::UncheckedFrom;
 use sp_io::KillStorageResult;
 use sp_runtime::{
 	traits::{Hash, Saturating, Zero},
@@ -135,11 +134,7 @@ impl WriteOutcome {
 
 pub struct Storage<T>(PhantomData<T>);
 
-impl<T> Storage<T>
-where
-	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
+impl<T: Config> Storage<T> {
 	/// Reads a storage kv pair of a contract.
 	///
 	/// The read is performed from the `trie_id` only. The `address` is not necessary. If the
@@ -317,11 +312,10 @@ where
 		Weight::from_ref_time(ref_time_weight)
 	}
 
-	/// Generates a unique trie id by returning  `hash(account_id ++ nonce)`.
+	/// Generates a unique trie id by returning `hash(account_id ++ nonce)`.
 	pub fn generate_trie_id(account_id: &AccountIdOf<T>, nonce: u64) -> TrieId {
-		let buf: Vec<_> = account_id.as_ref().iter().chain(&nonce.to_le_bytes()).cloned().collect();
-		T::Hashing::hash(&buf)
-			.as_ref()
+		let buf = (account_id, nonce).using_encoded(T::Hashing::hash);
+		buf.as_ref()
 			.to_vec()
 			.try_into()
 			.expect("Runtime uses a reasonable hash size. Hence sizeof(T::Hash) <= 128; qed")

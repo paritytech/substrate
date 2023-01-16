@@ -72,6 +72,8 @@ pub use sp_consensus_aura::{
 	AuraApi, ConsensusLog, SlotDuration, AURA_ENGINE_ID,
 };
 
+const LOG_TARGET: &str = "aura";
+
 type AuthorityId<P> = <P as Pair>::Public;
 
 /// Run `AURA` in a compatibility mode.
@@ -216,7 +218,7 @@ where
 	PF::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	SO: SyncOracle + Send + Sync + Clone,
 	L: sc_consensus::JustificationSyncLink<B>,
-	CIDP: CreateInherentDataProviders<B, ()> + Send,
+	CIDP: CreateInherentDataProviders<B, ()> + Send + 'static,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
@@ -530,7 +532,7 @@ where
 }
 
 fn aura_err<B: BlockT>(error: Error<B>) -> Error<B> {
-	debug!(target: "aura", "{}", error);
+	debug!(target: LOG_TARGET, "{}", error);
 	error
 }
 
@@ -580,10 +582,10 @@ pub fn find_pre_digest<B: BlockT, Signature: Codec>(header: &B::Header) -> Resul
 
 	let mut pre_digest: Option<Slot> = None;
 	for log in header.digest().logs() {
-		trace!(target: "aura", "Checking log {:?}", log);
+		trace!(target: LOG_TARGET, "Checking log {:?}", log);
 		match (CompatibleDigestItem::<Signature>::as_aura_pre_digest(log), pre_digest.is_some()) {
 			(Some(_), true) => return Err(aura_err(Error::MultipleHeaders)),
-			(None, _) => trace!(target: "aura", "Ignoring digest not meant for us"),
+			(None, _) => trace!(target: LOG_TARGET, "Ignoring digest not meant for us"),
 			(s, false) => pre_digest = s,
 		}
 	}
@@ -633,7 +635,6 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use futures::executor;
 	use parking_lot::Mutex;
 	use sc_block_builder::BlockBuilderProvider;
 	use sc_client_api::BlockchainEvents;
@@ -769,8 +770,8 @@ mod tests {
 		}
 	}
 
-	#[test]
-	fn authoring_blocks() {
+	#[tokio::test]
+	async fn authoring_blocks() {
 		sp_tracing::try_init_simple();
 		let net = AuraTestNet::new(3);
 
@@ -838,13 +839,14 @@ mod tests {
 			);
 		}
 
-		executor::block_on(future::select(
+		future::select(
 			future::poll_fn(move |cx| {
 				net.lock().poll(cx);
 				Poll::<()>::Pending
 			}),
 			future::select(future::join_all(aura_futures), future::join_all(import_notifications)),
-		));
+		)
+		.await;
 	}
 
 	#[test]
@@ -863,8 +865,8 @@ mod tests {
 		);
 	}
 
-	#[test]
-	fn current_node_authority_should_claim_slot() {
+	#[tokio::test]
+	async fn current_node_authority_should_claim_slot() {
 		let net = AuraTestNet::new(4);
 
 		let mut authorities = vec![
@@ -909,18 +911,18 @@ mod tests {
 			Default::default(),
 			Default::default(),
 		);
-		assert!(executor::block_on(worker.claim_slot(&head, 0.into(), &authorities)).is_none());
-		assert!(executor::block_on(worker.claim_slot(&head, 1.into(), &authorities)).is_none());
-		assert!(executor::block_on(worker.claim_slot(&head, 2.into(), &authorities)).is_none());
-		assert!(executor::block_on(worker.claim_slot(&head, 3.into(), &authorities)).is_some());
-		assert!(executor::block_on(worker.claim_slot(&head, 4.into(), &authorities)).is_none());
-		assert!(executor::block_on(worker.claim_slot(&head, 5.into(), &authorities)).is_none());
-		assert!(executor::block_on(worker.claim_slot(&head, 6.into(), &authorities)).is_none());
-		assert!(executor::block_on(worker.claim_slot(&head, 7.into(), &authorities)).is_some());
+		assert!(worker.claim_slot(&head, 0.into(), &authorities).await.is_none());
+		assert!(worker.claim_slot(&head, 1.into(), &authorities).await.is_none());
+		assert!(worker.claim_slot(&head, 2.into(), &authorities).await.is_none());
+		assert!(worker.claim_slot(&head, 3.into(), &authorities).await.is_some());
+		assert!(worker.claim_slot(&head, 4.into(), &authorities).await.is_none());
+		assert!(worker.claim_slot(&head, 5.into(), &authorities).await.is_none());
+		assert!(worker.claim_slot(&head, 6.into(), &authorities).await.is_none());
+		assert!(worker.claim_slot(&head, 7.into(), &authorities).await.is_some());
 	}
 
-	#[test]
-	fn on_slot_returns_correct_block() {
+	#[tokio::test]
+	async fn on_slot_returns_correct_block() {
 		let net = AuraTestNet::new(4);
 
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
@@ -955,19 +957,21 @@ mod tests {
 			compatibility_mode: Default::default(),
 		};
 
-		let head = client.header(&BlockId::Number(0)).unwrap().unwrap();
+		let head = client.expect_header(client.info().genesis_hash).unwrap();
 
-		let res = executor::block_on(worker.on_slot(SlotInfo {
-			slot: 0.into(),
-			ends_at: Instant::now() + Duration::from_secs(100),
-			inherent_data: InherentData::new(),
-			duration: Duration::from_millis(1000),
-			chain_head: head,
-			block_size_limit: None,
-		}))
-		.unwrap();
+		let res = worker
+			.on_slot(SlotInfo {
+				slot: 0.into(),
+				ends_at: Instant::now() + Duration::from_secs(100),
+				create_inherent_data: Box::new(()),
+				duration: Duration::from_millis(1000),
+				chain_head: head,
+				block_size_limit: None,
+			})
+			.await
+			.unwrap();
 
 		// The returned block should be imported and we should be able to get its header by now.
-		assert!(client.header(&BlockId::Hash(res.block.hash())).unwrap().is_some());
+		assert!(client.header(res.block.hash()).unwrap().is_some());
 	}
 }

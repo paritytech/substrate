@@ -18,7 +18,7 @@
 
 //! This crate provides an implementation of `WasmModule` that is baked by wasmi.
 
-use std::{cell::RefCell, rc::Rc, str, sync::Arc};
+use std::{cell::RefCell, str, sync::Arc};
 
 use log::{debug, error, trace};
 use wasmi::{
@@ -28,26 +28,18 @@ use wasmi::{
 	TableRef,
 };
 
-use codec::{Decode, Encode};
 use sc_allocator::AllocationStats;
 use sc_executor_common::{
 	error::{Error, MessageWithBacktrace, WasmError},
 	runtime_blob::{DataSegmentsSnapshot, RuntimeBlob},
-	sandbox,
-	util::MemoryTransfer,
 	wasm_runtime::{InvokeMethod, WasmInstance, WasmModule},
 };
 use sp_runtime_interface::unpack_ptr_and_len;
-use sp_sandbox::env as sandbox_env;
-use sp_wasm_interface::{
-	Function, FunctionContext, MemoryId, Pointer, Result as WResult, Sandbox, WordSize,
-};
+use sp_wasm_interface::{Function, FunctionContext, Pointer, Result as WResult, WordSize};
 
 struct FunctionExecutor {
-	sandbox_store: Rc<RefCell<sandbox::Store<wasmi::FuncRef>>>,
 	heap: RefCell<sc_allocator::FreeingBumpHeapAllocator>,
 	memory: MemoryRef,
-	table: Option<TableRef>,
 	host_functions: Arc<Vec<&'static dyn Function>>,
 	allow_missing_func_imports: bool,
 	missing_functions: Arc<Vec<String>>,
@@ -58,59 +50,18 @@ impl FunctionExecutor {
 	fn new(
 		m: MemoryRef,
 		heap_base: u32,
-		t: Option<TableRef>,
 		host_functions: Arc<Vec<&'static dyn Function>>,
 		allow_missing_func_imports: bool,
 		missing_functions: Arc<Vec<String>>,
 	) -> Result<Self, Error> {
 		Ok(FunctionExecutor {
-			sandbox_store: Rc::new(RefCell::new(sandbox::Store::new(
-				sandbox::SandboxBackend::Wasmi,
-			))),
 			heap: RefCell::new(sc_allocator::FreeingBumpHeapAllocator::new(heap_base)),
 			memory: m,
-			table: t,
 			host_functions,
 			allow_missing_func_imports,
 			missing_functions,
 			panic_message: None,
 		})
-	}
-}
-
-struct SandboxContext<'a> {
-	executor: &'a mut FunctionExecutor,
-	dispatch_thunk: wasmi::FuncRef,
-}
-
-impl<'a> sandbox::SandboxContext for SandboxContext<'a> {
-	fn invoke(
-		&mut self,
-		invoke_args_ptr: Pointer<u8>,
-		invoke_args_len: WordSize,
-		state: u32,
-		func_idx: sandbox::SupervisorFuncIndex,
-	) -> Result<i64, Error> {
-		let result = wasmi::FuncInstance::invoke(
-			&self.dispatch_thunk,
-			&[
-				RuntimeValue::I32(u32::from(invoke_args_ptr) as i32),
-				RuntimeValue::I32(invoke_args_len as i32),
-				RuntimeValue::I32(state as i32),
-				RuntimeValue::I32(usize::from(func_idx) as i32),
-			],
-			self.executor,
-		);
-
-		match result {
-			Ok(Some(RuntimeValue::I64(val))) => Ok(val),
-			Ok(_) => Err("Supervisor function returned unexpected result!".into()),
-			Err(err) => Err(Error::Sandbox(err.to_string())),
-		}
-	}
-
-	fn supervisor_context(&mut self) -> &mut dyn FunctionContext {
-		self.executor
 	}
 }
 
@@ -135,186 +86,8 @@ impl FunctionContext for FunctionExecutor {
 			.with_direct_access_mut(|mem| heap.deallocate(mem, ptr).map_err(|e| e.to_string()))
 	}
 
-	fn sandbox(&mut self) -> &mut dyn Sandbox {
-		self
-	}
-
 	fn register_panic_error_message(&mut self, message: &str) {
 		self.panic_message = Some(message.to_owned());
-	}
-}
-
-impl Sandbox for FunctionExecutor {
-	fn memory_get(
-		&mut self,
-		memory_id: MemoryId,
-		offset: WordSize,
-		buf_ptr: Pointer<u8>,
-		buf_len: WordSize,
-	) -> WResult<u32> {
-		let sandboxed_memory =
-			self.sandbox_store.borrow().memory(memory_id).map_err(|e| e.to_string())?;
-
-		let len = buf_len as usize;
-
-		let buffer = match sandboxed_memory.read(Pointer::new(offset as u32), len) {
-			Err(_) => return Ok(sandbox_env::ERR_OUT_OF_BOUNDS),
-			Ok(buffer) => buffer,
-		};
-
-		if self.memory.set(buf_ptr.into(), &buffer).is_err() {
-			return Ok(sandbox_env::ERR_OUT_OF_BOUNDS)
-		}
-
-		Ok(sandbox_env::ERR_OK)
-	}
-
-	fn memory_set(
-		&mut self,
-		memory_id: MemoryId,
-		offset: WordSize,
-		val_ptr: Pointer<u8>,
-		val_len: WordSize,
-	) -> WResult<u32> {
-		let sandboxed_memory =
-			self.sandbox_store.borrow().memory(memory_id).map_err(|e| e.to_string())?;
-
-		let len = val_len as usize;
-
-		#[allow(deprecated)]
-		let buffer = match self.memory.get(val_ptr.into(), len) {
-			Err(_) => return Ok(sandbox_env::ERR_OUT_OF_BOUNDS),
-			Ok(buffer) => buffer,
-		};
-
-		if sandboxed_memory.write_from(Pointer::new(offset as u32), &buffer).is_err() {
-			return Ok(sandbox_env::ERR_OUT_OF_BOUNDS)
-		}
-
-		Ok(sandbox_env::ERR_OK)
-	}
-
-	fn memory_teardown(&mut self, memory_id: MemoryId) -> WResult<()> {
-		self.sandbox_store
-			.borrow_mut()
-			.memory_teardown(memory_id)
-			.map_err(|e| e.to_string())
-	}
-
-	fn memory_new(&mut self, initial: u32, maximum: u32) -> WResult<MemoryId> {
-		self.sandbox_store
-			.borrow_mut()
-			.new_memory(initial, maximum)
-			.map_err(|e| e.to_string())
-	}
-
-	fn invoke(
-		&mut self,
-		instance_id: u32,
-		export_name: &str,
-		mut args: &[u8],
-		return_val: Pointer<u8>,
-		return_val_len: WordSize,
-		state: u32,
-	) -> WResult<u32> {
-		trace!(target: "sp-sandbox", "invoke, instance_idx={}", instance_id);
-
-		// Deserialize arguments and convert them into wasmi types.
-		let args = Vec::<sp_wasm_interface::Value>::decode(&mut args)
-			.map_err(|_| "Can't decode serialized arguments for the invocation")?
-			.into_iter()
-			.collect::<Vec<_>>();
-
-		let instance =
-			self.sandbox_store.borrow().instance(instance_id).map_err(|e| e.to_string())?;
-
-		let dispatch_thunk = self
-			.sandbox_store
-			.borrow()
-			.dispatch_thunk(instance_id)
-			.map_err(|e| e.to_string())?;
-
-		match instance.invoke(
-			export_name,
-			&args,
-			state,
-			&mut SandboxContext { dispatch_thunk, executor: self },
-		) {
-			Ok(None) => Ok(sandbox_env::ERR_OK),
-			Ok(Some(val)) => {
-				// Serialize return value and write it back into the memory.
-				sp_wasm_interface::ReturnValue::Value(val).using_encoded(|val| {
-					if val.len() > return_val_len as usize {
-						return Err("Return value buffer is too small".into())
-					}
-					self.write_memory(return_val, val).map_err(|_| "Return value buffer is OOB")?;
-					Ok(sandbox_env::ERR_OK)
-				})
-			},
-			Err(_) => Ok(sandbox_env::ERR_EXECUTION),
-		}
-	}
-
-	fn instance_teardown(&mut self, instance_id: u32) -> WResult<()> {
-		self.sandbox_store
-			.borrow_mut()
-			.instance_teardown(instance_id)
-			.map_err(|e| e.to_string())
-	}
-
-	fn instance_new(
-		&mut self,
-		dispatch_thunk_id: u32,
-		wasm: &[u8],
-		raw_env_def: &[u8],
-		state: u32,
-	) -> WResult<u32> {
-		// Extract a dispatch thunk from instance's table by the specified index.
-		let dispatch_thunk = {
-			let table = self
-				.table
-				.as_ref()
-				.ok_or("Runtime doesn't have a table; sandbox is unavailable")?;
-			table
-				.get(dispatch_thunk_id)
-				.map_err(|_| "dispatch_thunk_idx is out of the table bounds")?
-				.ok_or("dispatch_thunk_idx points on an empty table entry")?
-		};
-
-		let guest_env =
-			match sandbox::GuestEnvironment::decode(&*self.sandbox_store.borrow(), raw_env_def) {
-				Ok(guest_env) => guest_env,
-				Err(_) => return Ok(sandbox_env::ERR_MODULE as u32),
-			};
-
-		let store = self.sandbox_store.clone();
-		let result = store.borrow_mut().instantiate(
-			wasm,
-			guest_env,
-			state,
-			&mut SandboxContext { executor: self, dispatch_thunk: dispatch_thunk.clone() },
-		);
-
-		let instance_idx_or_err_code =
-			match result.map(|i| i.register(&mut store.borrow_mut(), dispatch_thunk)) {
-				Ok(instance_idx) => instance_idx,
-				Err(sandbox::InstantiationError::StartTrapped) => sandbox_env::ERR_EXECUTION,
-				Err(_) => sandbox_env::ERR_MODULE,
-			};
-
-		Ok(instance_idx_or_err_code)
-	}
-
-	fn get_global_val(
-		&self,
-		instance_idx: u32,
-		name: &str,
-	) -> WResult<Option<sp_wasm_interface::Value>> {
-		self.sandbox_store
-			.borrow()
-			.instance(instance_idx)
-			.map(|i| i.get_global_val(name))
-			.map_err(|e| e.to_string())
 	}
 }
 
@@ -502,7 +275,6 @@ fn call_in_wasm_module(
 	let mut function_executor = FunctionExecutor::new(
 		memory.clone(),
 		heap_base,
-		table.clone(),
 		host_functions,
 		allow_missing_func_imports,
 		missing_functions,

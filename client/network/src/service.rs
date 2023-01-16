@@ -38,16 +38,15 @@ use crate::{
 	transport, ChainSyncInterface, ReputationChange,
 };
 
-use codec::Encode;
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{
-	core::{either::EitherError, upgrade, ConnectedPoint, Executor},
+	core::{either::EitherError, upgrade, ConnectedPoint},
 	identify::Info as IdentifyInfo,
 	kad::record::Key as KademliaKey,
 	multiaddr,
 	ping::Failure as PingFailure,
 	swarm::{
-		AddressScore, ConnectionError, ConnectionLimits, DialError, NetworkBehaviour,
+		AddressScore, ConnectionError, ConnectionLimits, DialError, Executor, NetworkBehaviour,
 		PendingConnectionError, Swarm, SwarmBuilder, SwarmEvent,
 	},
 	Multiaddr, PeerId,
@@ -55,7 +54,6 @@ use libp2p::{
 use log::{debug, error, info, trace, warn};
 use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
-use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_network_common::{
 	config::{MultiaddrWithPeerId, TransportConfig},
 	error::Error,
@@ -210,7 +208,7 @@ where
 			&params.network_config.transport,
 		)?;
 
-		let (to_worker, from_service) = tracing_unbounded("mpsc_network_worker");
+		let (to_worker, from_service) = tracing_unbounded("mpsc_network_worker", 100_000);
 
 		if let Some(path) = &params.network_config.net_config_path {
 			fs::create_dir_all(path)?;
@@ -263,11 +261,6 @@ where
 
 		let num_connected = Arc::new(AtomicUsize::new(0));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
-
-		let block_request_protocol_name = params.block_request_protocol_config.name.clone();
-		let state_request_protocol_name = params.state_request_protocol_config.name.clone();
-		let warp_sync_protocol_name =
-			params.warp_sync_protocol_config.as_ref().map(|c| c.name.clone());
 
 		// Build the swarm.
 		let (mut swarm, bandwidth): (Swarm<Behaviour<B, Client>>, _) = {
@@ -366,10 +359,6 @@ where
 					user_agent,
 					local_public,
 					discovery_config,
-					params.block_request_protocol_config,
-					params.state_request_protocol_config,
-					params.warp_sync_protocol_config,
-					params.light_client_request_protocol_config,
 					params.network_config.request_response_protocols,
 					peerset_handle.clone(),
 				);
@@ -381,7 +370,21 @@ where
 				}
 			};
 
-			let mut builder = SwarmBuilder::new(transport, behaviour, local_peer_id)
+			let builder = {
+				struct SpawnImpl<F>(F);
+				impl<F: Fn(Pin<Box<dyn Future<Output = ()> + Send>>)> Executor for SpawnImpl<F> {
+					fn exec(&self, f: Pin<Box<dyn Future<Output = ()> + Send>>) {
+						(self.0)(f)
+					}
+				}
+				SwarmBuilder::with_executor(
+					transport,
+					behaviour,
+					local_peer_id,
+					SpawnImpl(params.executor),
+				)
+			};
+			let builder = builder
 				.connection_limits(
 					ConnectionLimits::default()
 						.with_max_established_per_peer(Some(crate::MAX_CONNECTIONS_PER_PEER as u32))
@@ -393,15 +396,7 @@ where
 				.notify_handler_buffer_size(NonZeroUsize::new(32).expect("32 != 0; qed"))
 				.connection_event_buffer_size(1024)
 				.max_negotiating_inbound_streams(2048);
-			if let Some(spawner) = params.executor {
-				struct SpawnImpl<F>(F);
-				impl<F: Fn(Pin<Box<dyn Future<Output = ()> + Send>>)> Executor for SpawnImpl<F> {
-					fn exec(&self, f: Pin<Box<dyn Future<Output = ()> + Send>>) {
-						(self.0)(f)
-					}
-				}
-				builder = builder.executor(Box::new(SpawnImpl(spawner)));
-			}
+
 			(builder.build(), bandwidth)
 		};
 
@@ -460,15 +455,11 @@ where
 			is_major_syncing,
 			network_service: swarm,
 			service,
-			import_queue: params.import_queue,
 			from_service,
 			event_streams: out_events::OutChannels::new(params.metrics_registry.as_ref())?,
 			peers_notifications_sinks,
 			metrics,
 			boot_node_ids,
-			block_request_protocol_name,
-			state_request_protocol_name,
-			warp_sync_protocol_name,
 			_marker: Default::default(),
 		})
 	}
@@ -761,13 +752,11 @@ impl<B: BlockT, H: ExHashT> sc_consensus::JustificationSyncLink<B> for NetworkSe
 	/// On success, the justification will be passed to the import queue that was part at
 	/// initialization as part of the configuration.
 	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
-		let _ = self
-			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::RequestJustification(*hash, number));
+		let _ = self.chain_sync_service.request_justification(hash, number);
 	}
 
 	fn clear_justification_requests(&self) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::ClearJustificationRequests);
+		let _ = self.chain_sync_service.clear_justification_requests();
 	}
 }
 
@@ -1020,7 +1009,7 @@ where
 	H: ExHashT,
 {
 	fn event_stream(&self, name: &'static str) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
-		let (tx, rx) = out_events::channel(name);
+		let (tx, rx) = out_events::channel(name, 100_000);
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::EventStream(tx));
 		Box::pin(rx)
 	}
@@ -1221,8 +1210,6 @@ impl<'a> NotificationSenderReadyT for NotificationSenderReady<'a> {
 ///
 /// Each entry corresponds to a method of `NetworkService`.
 enum ServiceToWorkerMsg<B: BlockT> {
-	RequestJustification(B::Hash, NumberFor<B>),
-	ClearJustificationRequests,
 	AnnounceBlock(B::Hash, Option<Vec<u8>>),
 	GetValue(KademliaKey),
 	PutValue(KademliaKey, Vec<u8>),
@@ -1274,8 +1261,6 @@ where
 	service: Arc<NetworkService<B, H>>,
 	/// The *actual* network.
 	network_service: Swarm<Behaviour<B, Client>>,
-	/// The import queue that was passed at initialization.
-	import_queue: Box<dyn ImportQueue<B>>,
 	/// Messages from the [`NetworkService`] that must be processed.
 	from_service: TracingUnboundedReceiver<ServiceToWorkerMsg<B>>,
 	/// Senders for events that happen on the network.
@@ -1287,15 +1272,6 @@ where
 	/// For each peer and protocol combination, an object that allows sending notifications to
 	/// that peer. Shared with the [`NetworkService`].
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ProtocolName), NotificationsSink>>>,
-	/// Protocol name used to send out block requests via
-	/// [`crate::request_responses::RequestResponsesBehaviour`].
-	block_request_protocol_name: ProtocolName,
-	/// Protocol name used to send out state requests via
-	/// [`crate::request_responses::RequestResponsesBehaviour`].
-	state_request_protocol_name: ProtocolName,
-	/// Protocol name used to send out warp sync requests via
-	/// [`crate::request_responses::RequestResponsesBehaviour`].
-	warp_sync_protocol_name: Option<ProtocolName>,
 	/// Marker to pin the `H` generic. Serves no purpose except to not break backwards
 	/// compatibility.
 	_marker: PhantomData<H>,
@@ -1311,10 +1287,6 @@ where
 
 	fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context) -> Poll<Self::Output> {
 		let this = &mut *self;
-
-		// Poll the import queue for actions to perform.
-		this.import_queue
-			.poll_actions(cx, &mut NetworkLink { protocol: &mut this.network_service });
 
 		// At the time of writing of this comment, due to a high volume of messages, the network
 		// worker sometimes takes a long time to process the loop below. When that happens, the
@@ -1344,16 +1316,6 @@ where
 					.behaviour_mut()
 					.user_protocol_mut()
 					.announce_block(hash, data),
-				ServiceToWorkerMsg::RequestJustification(hash, number) => this
-					.network_service
-					.behaviour_mut()
-					.user_protocol_mut()
-					.request_justification(&hash, number),
-				ServiceToWorkerMsg::ClearJustificationRequests => this
-					.network_service
-					.behaviour_mut()
-					.user_protocol_mut()
-					.clear_justification_requests(),
 				ServiceToWorkerMsg::GetValue(key) =>
 					this.network_service.behaviour_mut().get_value(key),
 				ServiceToWorkerMsg::PutValue(key, value) =>
@@ -1457,101 +1419,6 @@ where
 
 			match poll_value {
 				Poll::Pending => break,
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::BlockImport(origin, blocks))) => {
-					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.import_queue_blocks_submitted.inc();
-					}
-					this.import_queue.import_blocks(origin, blocks);
-				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::JustificationImport(
-					origin,
-					hash,
-					nb,
-					justifications,
-				))) => {
-					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.import_queue_justifications_submitted.inc();
-					}
-					this.import_queue.import_justifications(origin, hash, nb, justifications);
-				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::BlockRequest {
-					target,
-					request,
-					pending_response,
-				})) => {
-					match this
-						.network_service
-						.behaviour()
-						.user_protocol()
-						.encode_block_request(&request)
-					{
-						Ok(data) => {
-							this.network_service.behaviour_mut().send_request(
-								&target,
-								&this.block_request_protocol_name,
-								data,
-								pending_response,
-								IfDisconnected::ImmediateError,
-							);
-						},
-						Err(err) => {
-							log::warn!(
-								target: "sync",
-								"Failed to encode block request {:?}: {:?}",
-								request, err
-							);
-						},
-					}
-				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::StateRequest {
-					target,
-					request,
-					pending_response,
-				})) => {
-					match this
-						.network_service
-						.behaviour()
-						.user_protocol()
-						.encode_state_request(&request)
-					{
-						Ok(data) => {
-							this.network_service.behaviour_mut().send_request(
-								&target,
-								&this.state_request_protocol_name,
-								data,
-								pending_response,
-								IfDisconnected::ImmediateError,
-							);
-						},
-						Err(err) => {
-							log::warn!(
-								target: "sync",
-								"Failed to encode state request {:?}: {:?}",
-								request, err
-							);
-						},
-					}
-				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::WarpSyncRequest {
-					target,
-					request,
-					pending_response,
-				})) => match &this.warp_sync_protocol_name {
-					Some(name) => this.network_service.behaviour_mut().send_request(
-						&target,
-						&name,
-						request.encode(),
-						pending_response,
-						IfDisconnected::ImmediateError,
-					),
-					None => {
-						log::warn!(
-							target: "sync",
-							"Trying to send warp sync request when no protocol is configured {:?}",
-							request,
-						);
-					},
-				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::InboundRequest {
 					protocol,
 					result,
@@ -2050,51 +1917,6 @@ where
 	H: ExHashT,
 	Client: HeaderBackend<B> + 'static,
 {
-}
-
-// Implementation of `import_queue::Link` trait using the available local variables.
-struct NetworkLink<'a, B, Client>
-where
-	B: BlockT,
-	Client: HeaderBackend<B> + 'static,
-{
-	protocol: &'a mut Swarm<Behaviour<B, Client>>,
-}
-
-impl<'a, B, Client> Link<B> for NetworkLink<'a, B, Client>
-where
-	B: BlockT,
-	Client: HeaderBackend<B> + 'static,
-{
-	fn blocks_processed(
-		&mut self,
-		imported: usize,
-		count: usize,
-		results: Vec<(Result<BlockImportStatus<NumberFor<B>>, BlockImportError>, B::Hash)>,
-	) {
-		self.protocol
-			.behaviour_mut()
-			.user_protocol_mut()
-			.on_blocks_processed(imported, count, results)
-	}
-	fn justification_imported(
-		&mut self,
-		who: PeerId,
-		hash: &B::Hash,
-		number: NumberFor<B>,
-		success: bool,
-	) {
-		self.protocol
-			.behaviour_mut()
-			.user_protocol_mut()
-			.justification_import_result(who, *hash, number, success);
-	}
-	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		self.protocol
-			.behaviour_mut()
-			.user_protocol_mut()
-			.request_justification(hash, number)
-	}
 }
 
 fn ensure_addresses_consistent_with_transport<'a>(

@@ -33,7 +33,7 @@ mod tests;
 
 pub use crate::api::FullChainApi;
 use async_trait::async_trait;
-use enactment_state::EnactmentState;
+use enactment_state::{EnactmentAction, EnactmentState};
 use futures::{
 	channel::oneshot,
 	future::{self, ready},
@@ -132,17 +132,6 @@ impl<T, Block: BlockT> ReadyPoll<T, Block> {
 
 	fn updated_at(&self) -> NumberFor<Block> {
 		self.updated_at
-	}
-}
-
-impl<PoolApi, Block> parity_util_mem::MallocSizeOf for BasicPool<PoolApi, Block>
-where
-	PoolApi: graph::ChainApi<Block = Block>,
-	Block: BlockT,
-{
-	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
-		// other entries insignificant or non-primary references
-		self.pool.size_of(ops)
 	}
 }
 
@@ -567,7 +556,7 @@ async fn prune_known_txs_for_block<Block: BlockT, Api: graph::ChainApi<Block = B
 
 	log::trace!(target: "txpool", "Pruning transactions: {:?}", hashes);
 
-	let header = match api.block_header(&BlockId::Hash(block_hash)) {
+	let header = match api.block_header(block_hash) {
 		Ok(Some(h)) => h,
 		Ok(None) => {
 			log::debug!(target: "txpool", "Could not find header for {:?}.", block_hash);
@@ -743,16 +732,22 @@ where
 					)),
 			}
 		};
+		let block_id_to_number =
+			|hash| self.api.block_id_to_number(&BlockId::Hash(hash)).map_err(|e| format!("{}", e));
 
-		let result = self.enactment_state.lock().update(&event, &compute_tree_route);
+		let result =
+			self.enactment_state
+				.lock()
+				.update(&event, &compute_tree_route, &block_id_to_number);
 
 		match result {
 			Err(msg) => {
 				log::debug!(target: "txpool", "{msg}");
 				self.enactment_state.lock().force_update(&event);
 			},
-			Ok(None) => {},
-			Ok(Some(tree_route)) => {
+			Ok(EnactmentAction::Skip) => return,
+			Ok(EnactmentAction::HandleFinalization) => {},
+			Ok(EnactmentAction::HandleEnactment(tree_route)) => {
 				self.handle_enactment(tree_route).await;
 			},
 		};

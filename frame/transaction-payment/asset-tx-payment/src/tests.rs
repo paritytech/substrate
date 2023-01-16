@@ -16,6 +16,7 @@
 use super::*;
 use crate as pallet_asset_tx_payment;
 
+use codec;
 use frame_support::{
 	assert_ok,
 	dispatch::{DispatchClass, DispatchInfo, PostDispatchInfo},
@@ -152,10 +153,13 @@ impl pallet_transaction_payment::Config for Runtime {
 	type OperationalFeeMultiplier = ConstU8<5>;
 }
 
+type AssetId = u32;
+
 impl pallet_assets::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = Balance;
-	type AssetId = u32;
+	type AssetId = AssetId;
+	type AssetIdParameter = codec::Compact<AssetId>;
 	type Currency = Balances;
 	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<AccountId>>;
 	type ForceOrigin = EnsureRoot<AccountId>;
@@ -167,8 +171,12 @@ impl pallet_assets::Config for Runtime {
 	type StringLimit = ConstU32<20>;
 	type Freezer = ();
 	type Extra = ();
+	type CallbackHandle = ();
 	type WeightInfo = ();
 	type RemoveItemsLimit = ConstU32<1000>;
+	pallet_assets::runtime_benchmarks_enabled! {
+		type BenchmarkHelper = ();
+	}
 }
 
 pub struct HardcodedAuthor;
@@ -341,7 +349,7 @@ fn transaction_payment_in_asset_possible() {
 			let min_balance = 2;
 			assert_ok!(Assets::force_create(
 				RuntimeOrigin::root(),
-				asset_id,
+				asset_id.into(),
 				42,   /* owner */
 				true, /* is_sufficient */
 				min_balance
@@ -351,7 +359,7 @@ fn transaction_payment_in_asset_possible() {
 			let caller = 1;
 			let beneficiary = <Runtime as system::Config>::Lookup::unlookup(caller);
 			let balance = 100;
-			assert_ok!(Assets::mint_into(asset_id, &beneficiary, balance));
+			assert_ok!(Assets::mint_into(asset_id.into(), &beneficiary, balance));
 			assert_eq!(Assets::balance(asset_id, caller), balance);
 			let weight = 5;
 			let len = 10;
@@ -394,7 +402,7 @@ fn transaction_payment_without_fee() {
 			let min_balance = 2;
 			assert_ok!(Assets::force_create(
 				RuntimeOrigin::root(),
-				asset_id,
+				asset_id.into(),
 				42,   /* owner */
 				true, /* is_sufficient */
 				min_balance
@@ -404,7 +412,7 @@ fn transaction_payment_without_fee() {
 			let caller = 1;
 			let beneficiary = <Runtime as system::Config>::Lookup::unlookup(caller);
 			let balance = 100;
-			assert_ok!(Assets::mint_into(asset_id, &beneficiary, balance));
+			assert_ok!(Assets::mint_into(asset_id.into(), &beneficiary, balance));
 			assert_eq!(Assets::balance(asset_id, caller), balance);
 			let weight = 5;
 			let len = 10;
@@ -447,7 +455,7 @@ fn asset_transaction_payment_with_tip_and_refund() {
 			let min_balance = 2;
 			assert_ok!(Assets::force_create(
 				RuntimeOrigin::root(),
-				asset_id,
+				asset_id.into(),
 				42,   /* owner */
 				true, /* is_sufficient */
 				min_balance
@@ -457,7 +465,7 @@ fn asset_transaction_payment_with_tip_and_refund() {
 			let caller = 2;
 			let beneficiary = <Runtime as system::Config>::Lookup::unlookup(caller);
 			let balance = 1000;
-			assert_ok!(Assets::mint_into(asset_id, &beneficiary, balance));
+			assert_ok!(Assets::mint_into(asset_id.into(), &beneficiary, balance));
 			assert_eq!(Assets::balance(asset_id, caller), balance);
 			let weight = 100;
 			let tip = 5;
@@ -499,7 +507,7 @@ fn payment_from_account_with_only_assets() {
 			let min_balance = 2;
 			assert_ok!(Assets::force_create(
 				RuntimeOrigin::root(),
-				asset_id,
+				asset_id.into(),
 				42,   /* owner */
 				true, /* is_sufficient */
 				min_balance
@@ -509,7 +517,7 @@ fn payment_from_account_with_only_assets() {
 			let caller = 333;
 			let beneficiary = <Runtime as system::Config>::Lookup::unlookup(caller);
 			let balance = 100;
-			assert_ok!(Assets::mint_into(asset_id, &beneficiary, balance));
+			assert_ok!(Assets::mint_into(asset_id.into(), &beneficiary, balance));
 			assert_eq!(Assets::balance(asset_id, caller), balance);
 			// assert that native balance is not necessary
 			assert_eq!(Balances::free_balance(caller), 0);
@@ -558,7 +566,7 @@ fn payment_only_with_existing_sufficient_asset() {
 			let min_balance = 2;
 			assert_ok!(Assets::force_create(
 				RuntimeOrigin::root(),
-				asset_id,
+				asset_id.into(),
 				42,    /* owner */
 				false, /* is_sufficient */
 				min_balance
@@ -583,7 +591,7 @@ fn converted_fee_is_never_zero_if_input_fee_is_not() {
 			let min_balance = 1;
 			assert_ok!(Assets::force_create(
 				RuntimeOrigin::root(),
-				asset_id,
+				asset_id.into(),
 				42,   /* owner */
 				true, /* is_sufficient */
 				min_balance
@@ -593,7 +601,7 @@ fn converted_fee_is_never_zero_if_input_fee_is_not() {
 			let caller = 333;
 			let beneficiary = <Runtime as system::Config>::Lookup::unlookup(caller);
 			let balance = 100;
-			assert_ok!(Assets::mint_into(asset_id, &beneficiary, balance));
+			assert_ok!(Assets::mint_into(asset_id.into(), &beneficiary, balance));
 			assert_eq!(Assets::balance(asset_id, caller), balance);
 			let weight = 1;
 			let len = 1;
@@ -648,7 +656,7 @@ fn post_dispatch_fee_is_zero_if_pre_dispatch_fee_is_zero() {
 			let min_balance = 100;
 			assert_ok!(Assets::force_create(
 				RuntimeOrigin::root(),
-				asset_id,
+				asset_id.into(),
 				42,   /* owner */
 				true, /* is_sufficient */
 				min_balance
@@ -658,7 +666,7 @@ fn post_dispatch_fee_is_zero_if_pre_dispatch_fee_is_zero() {
 			let caller = 333;
 			let beneficiary = <Runtime as system::Config>::Lookup::unlookup(caller);
 			let balance = 100;
-			assert_ok!(Assets::mint_into(asset_id, &beneficiary, balance));
+			assert_ok!(Assets::mint_into(asset_id.into(), &beneficiary, balance));
 			assert_eq!(Assets::balance(asset_id, caller), balance);
 			let weight = 1;
 			let len = 1;
@@ -705,7 +713,7 @@ fn post_dispatch_fee_is_zero_if_unsigned_pre_dispatch_fee_is_zero() {
 			let min_balance = 100;
 			assert_ok!(Assets::force_create(
 				RuntimeOrigin::root(),
-				asset_id,
+				asset_id.into(),
 				42,   /* owner */
 				true, /* is_sufficient */
 				min_balance
@@ -715,7 +723,7 @@ fn post_dispatch_fee_is_zero_if_unsigned_pre_dispatch_fee_is_zero() {
 			let caller = 333;
 			let beneficiary = <Runtime as system::Config>::Lookup::unlookup(caller);
 			let balance = 100;
-			assert_ok!(Assets::mint_into(asset_id, &beneficiary, balance));
+			assert_ok!(Assets::mint_into(asset_id.into(), &beneficiary, balance));
 			assert_eq!(Assets::balance(asset_id, caller), balance);
 			let weight = 1;
 			let len = 1;

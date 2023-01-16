@@ -1,0 +1,5 @@
+error: no default declared, make a variant default by placing `#[default]` above it
+ --> tests/derive_no_bound_ui/default_no_attribute.rs:6:6
+  |
+6 | enum Foo<T: Config> {
+  |      ^^^
