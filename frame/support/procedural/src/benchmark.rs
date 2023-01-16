@@ -282,43 +282,50 @@ pub fn benchmarks(
 		let mut push_stmt = || {
 			expanded_stmts.push(stmt.to_token_stream());
 		};
+
+		// parse as a function def first
 		let Item::Fn(mut func) = stmt.clone() else { push_stmt(); continue; };
-		for (i, attr) in func.attrs.iter().enumerate() {
-			let Some(seg) = attr.path.segments.last() else { push_stmt(); continue; };
-			let Ok(_) = syn::parse::<keywords::benchmark>(seg.ident.to_token_stream().into()) else { push_stmt(); continue; };
-			let tokens = attr.tokens.to_token_stream().into();
-			let args: BenchmarkAttrs = syn::parse(tokens)?;
 
-			// consume #[benchmark] attr
-			func.attrs.remove(i);
+		// find #[benchmark] attribute on function def
+		let Some((attr_index, benchmark_attr)) = func.attrs.iter().enumerate().find_map(|(i, attr)| {
+			let Some(seg) = attr.path.segments.last() else { return None };
+			let Ok(_) = syn::parse::<keywords::benchmark>(seg.ident.to_token_stream().into()) else { return None };
+			Some((i, attr))
+		}) else { push_stmt(); continue; };
 
-			// parse benchmark def
-			let benchmark_def = BenchmarkDef::from(&func, args.extra, args.skip_meta)?;
+		// parse any args provided to #[benchmark]
+		let attr_tokens = benchmark_attr.tokens.to_token_stream().into();
+		let benchmark_args: BenchmarkAttrs = syn::parse(attr_tokens)?;
 
-			// expand benchmark
-			let expanded = expand_benchmark(
-				benchmark_def.clone(),
-				&func.sig.ident,
-				instance,
-				where_clause.clone(),
-			);
+		// consume #[benchmark] attribute
+		func.attrs.remove(attr_index);
 
-			// record benchmark name
-			let name = func.sig.ident;
+		// parse benchmark def
+		let benchmark_def =
+			BenchmarkDef::from(&func, benchmark_args.extra, benchmark_args.skip_meta)?;
 
-			// process name vecs
-			benchmark_names.push(name.clone());
-			if benchmark_def.extra {
-				extra_benchmark_names.push(name.clone());
-			}
-			if benchmark_def.skip_meta {
-				skip_meta_benchmark_names.push(name.clone())
-			}
+		// expand benchmark
+		let expanded = expand_benchmark(
+			benchmark_def.clone(),
+			&func.sig.ident,
+			instance,
+			where_clause.clone(),
+		);
 
-			expanded_stmts.push(expanded);
-			benchmark_defs.push(benchmark_def);
-			break
+		// record benchmark name
+		let name = func.sig.ident;
+
+		// process name vecs
+		benchmark_names.push(name.clone());
+		if benchmark_def.extra {
+			extra_benchmark_names.push(name.clone());
 		}
+		if benchmark_def.skip_meta {
+			skip_meta_benchmark_names.push(name.clone())
+		}
+
+		expanded_stmts.push(expanded);
+		benchmark_defs.push(benchmark_def);
 	}
 
 	// generics
