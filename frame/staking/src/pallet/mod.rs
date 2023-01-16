@@ -442,10 +442,10 @@ pub mod pallet {
 
 	/// Paginated exposure of a validator at given era.
 	///
-	/// This is keyed first by the era index to allow bulk deletion, then the stash account and
-	/// finally the page.
+	/// This is keyed first by the era index to allow bulk deletion, then the tuple of stash account
+	/// and page.
 	///
-	/// It is removed after `HISTORY_DEPTH` eras.
+	/// This uses DoubleMap instead of NMap to efficiently clear this after `HISTORY_DEPTH` eras.
 	/// If stakers hasn't been set or has been removed then empty exposure is returned.
 	#[pallet::storage]
 	#[pallet::getter(fn eras_stakers_paged)]
