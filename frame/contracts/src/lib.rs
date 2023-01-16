@@ -388,8 +388,8 @@ pub mod pallet {
 			// Value stack size: 1Mb per contract, default defined in wasmi
 			const STACK_MAX_SIZE: u32 = 1024 * 1024;
 			// Heap limit is normally 16 mempages of 64kb each = 1Mb per contract
-			let heap_max_size = T::Schedule::get().limits.max_memory_size();
-			let stack_height = T::CallStack::size() as u32;
+			let max_heap_size = T::Schedule::get().limits.max_memory_size();
+			let max_call_depth = T::CallStack::size() as u32;
 			// Check that given configured `MaxCodeLen`, runtime heap memory limit can't be broken.
 			//
 			// In worst case, the decoded wasm contract code would be `x16` times larger than the
@@ -419,8 +419,8 @@ pub mod pallet {
 			// Hence the upper limit for the `MaxCodeLen` can be defined as follows:
 			let code_len_limit = MAX_RUNTIME_MEM
 				.saturating_div(2)
-				.saturating_div(stack_height)
-				.saturating_sub(heap_max_size)
+				.saturating_div(max_call_depth)
+				.saturating_sub(max_heap_size)
 				.saturating_sub(STACK_MAX_SIZE)
 				.saturating_div(18 * 4);
 
