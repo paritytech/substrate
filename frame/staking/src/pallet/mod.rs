@@ -205,11 +205,9 @@ pub mod pallet {
 		///
 		/// For each validator only the `$MaxNominatorRewardedPerValidator` biggest stakers can
 		/// claim their reward. This used to limit the i/o cost for the nominator payout.
+		// TODO(ank4n): Refactor into a better name to indicate that this is a per-page limit.
 		#[pallet::constant]
 		type MaxNominatorRewardedPerValidator: Get<u32>;
-
-		#[pallet::constant]
-		type ExposurePageSize: Get<u32>;
 
 		/// The fraction of the validator set that is safe to be offending.
 		/// After the threshold is reached a new era will be forced.
@@ -659,7 +657,7 @@ pub mod pallet {
 			<ErasStakers<T>>::insert(era, &validator, &exposure);
 
 			exposure
-				.into_pages(T::ExposurePageSize::get() as usize)
+				.into_pages(T::MaxNominatorRewardedPerValidator::get() as usize)
 				.iter()
 				.enumerate()
 				.for_each(|(page, paged_exposure)| {
@@ -1599,12 +1597,12 @@ pub mod pallet {
 		/// The origin of this call must be _Signed_. Any account can call this function, even if
 		/// it is not one of the stakers.
 		///
-		/// The list of nominators is paged, each page being capped at `T::ExposurePageSize`. For
+		/// The list of nominators is paged, each page being capped at `T::MaxNominatorRewardedPerValidator`. For
 		/// rewarding all the nominators, the call needs to be called for each page. If rewards are
 		/// not claimed in `${HistoryDepth}` eras, they are lost.
 		///
 		/// # <weight>
-		/// - Time complexity: at most O(ExposurePageSize).
+		/// - Time complexity: at most O(MaxNominatorRewardedPerValidator).
 		/// - Contains a limited number of reads and writes.
 		/// -----------
 		/// N is the Number of payouts for the validator (including the validator)
