@@ -229,18 +229,22 @@ variables:
     # this job runs only on nightly pipeline with the mentioned variable, against `master` branch
     - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "nightly"
 
-.crates-publishing-pipeline:
+.crates-publishing-variables:
   variables:
-    CRATES_PUBLISHING_REF:         master
     CRATES_PUBLISHING_PIPELINE:    automatic-crate-publishing
     CRATESIO_CRATES_OWNER:         parity-crate-owner
     REPO:                          substrate
     REPO_OWNER:                    paritytech
 
+.crates-publishing-pipeline:
+  extends:                         .crates-publishing-variables
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_REF_NAME == "master" && $PIPELINE == "$CRATES_PUBLISHING_PIPELINE"
+
 .crates-publishing-template:
   extends:
     - .docker-env
-    - .crates-publishing-pipeline
+    - .crates-publishing-variables
   # collect artifacts even on failure so that we know how the crates were generated (they'll be
   # generated to the artifacts folder according to SPUB_TMP further down)
   artifacts:
@@ -269,10 +273,10 @@ skip-if-draft:
   allow_failure:                   true
 
 check-crates-publishing-pipeline:
+  stage:                           .pre
   extends:
     - .kubernetes-env
     - .crates-publishing-pipeline
-  stage:                           .pre
   rules:
     - if: $PIPELINE == "$CRATES_PUBLISHING_PIPELINE"
   script:

@@ -184,9 +184,9 @@ publish-draft-release:
 
 .publish-crates-template:
   stage:                           publish
-  extends:                         .crates-publishing-template
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_REF_NAME == "$CRATES_PUBLISHING_REF" && $PIPELINE == "$CRATES_PUBLISHING_PIPELINE"
+  extends:
+    - .crates-publishing-template
+    - .crates-publishing-pipeline
   # We don't want multiple jobs racing to publish crates as it's redundant and they might overwrite
   # the releases of one another. Use resource_group to ensure that at most one instance of this job
   # is running at any given time.
