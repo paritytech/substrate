@@ -855,7 +855,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Make a private receipt communal and create fungible counterparts for its owner.
+		/// Make a communal receipt private and burn fungible counterparts from its owner.
 		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::privatize())]
 		pub fn privatize(
