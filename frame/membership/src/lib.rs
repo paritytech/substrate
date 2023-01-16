@@ -36,6 +36,8 @@ pub mod weights;
 pub use pallet::*;
 pub use weights::WeightInfo;
 
+const LOG_TARGET: &str = "runtime::membership";
+
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
@@ -166,6 +168,7 @@ pub mod pallet {
 		/// Add a member `who` to the set.
 		///
 		/// May only be called from `T::AddOrigin`.
+		#[pallet::call_index(0)]
 		#[pallet::weight(50_000_000)]
 		pub fn add_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			T::AddOrigin::ensure_origin(origin)?;
@@ -188,6 +191,7 @@ pub mod pallet {
 		/// Remove a member `who` from the set.
 		///
 		/// May only be called from `T::RemoveOrigin`.
+		#[pallet::call_index(1)]
 		#[pallet::weight(50_000_000)]
 		pub fn remove_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			T::RemoveOrigin::ensure_origin(origin)?;
@@ -211,6 +215,7 @@ pub mod pallet {
 		/// May only be called from `T::SwapOrigin`.
 		///
 		/// Prime membership is *not* passed from `remove` to `add`, if extant.
+		#[pallet::call_index(2)]
 		#[pallet::weight(50_000_000)]
 		pub fn swap_member(
 			origin: OriginFor<T>,
@@ -244,6 +249,7 @@ pub mod pallet {
 		/// pass `members` pre-sorted.
 		///
 		/// May only be called from `T::ResetOrigin`.
+		#[pallet::call_index(3)]
 		#[pallet::weight(50_000_000)]
 		pub fn reset_members(origin: OriginFor<T>, members: Vec<T::AccountId>) -> DispatchResult {
 			T::ResetOrigin::ensure_origin(origin)?;
@@ -266,6 +272,7 @@ pub mod pallet {
 		/// May only be called from `Signed` origin of a current member.
 		///
 		/// Prime membership is passed from the origin account to `new`, if extant.
+		#[pallet::call_index(4)]
 		#[pallet::weight(50_000_000)]
 		pub fn change_key(origin: OriginFor<T>, new: AccountIdLookupOf<T>) -> DispatchResult {
 			let remove = ensure_signed(origin)?;
@@ -300,6 +307,7 @@ pub mod pallet {
 		/// Set the prime member. Must be a current member.
 		///
 		/// May only be called from `T::PrimeOrigin`.
+		#[pallet::call_index(5)]
 		#[pallet::weight(50_000_000)]
 		pub fn set_prime(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			T::PrimeOrigin::ensure_origin(origin)?;
@@ -313,6 +321,7 @@ pub mod pallet {
 		/// Remove the prime member if it exists.
 		///
 		/// May only be called from `T::PrimeOrigin`.
+		#[pallet::call_index(6)]
 		#[pallet::weight(50_000_000)]
 		pub fn clear_prime(origin: OriginFor<T>) -> DispatchResult {
 			T::PrimeOrigin::ensure_origin(origin)?;
@@ -532,8 +541,6 @@ mod tests {
 	);
 
 	parameter_types! {
-		pub BlockWeights: frame_system::limits::BlockWeights =
-			frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
 		pub static Members: Vec<u64> = vec![];
 		pub static Prime: Option<u64> = None;
 	}

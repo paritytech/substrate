@@ -28,6 +28,10 @@ pub use crate::wasm::{
 	prepare::TryInstantiate,
 	runtime::{CallFlags, Environment, ReturnCode, Runtime, RuntimeCosts},
 };
+
+#[cfg(doc)]
+pub use crate::wasm::runtime::api_doc;
+
 use crate::{
 	exec::{ExecResult, Executable, ExportedFunction, Ext},
 	gas::GasMeter,
@@ -36,7 +40,7 @@ use crate::{
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::dispatch::{DispatchError, DispatchResult};
-use sp_core::{crypto::UncheckedFrom, Get};
+use sp_core::Get;
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
 #[cfg(test)]
@@ -140,14 +144,11 @@ impl ExportedFunction {
 	}
 }
 
-impl<T: Config> PrefabWasmModule<T>
-where
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
+impl<T: Config> PrefabWasmModule<T> {
 	/// Create the module by checking and instrumenting `original_code`.
 	///
 	/// This does **not** store the module. For this one need to either call [`Self::store`]
-	/// or [`<Self as Executable>::execute`].
+	/// or [`<Self as Executable>::execute`][`Executable::execute`].
 	pub fn from_code(
 		original_code: Vec<u8>,
 		schedule: &Schedule<T>,
@@ -167,7 +168,8 @@ where
 
 	/// Store the code without instantiating it.
 	///
-	/// Otherwise the code is stored when [`<Self as Executable>::execute`] is called.
+	/// Otherwise the code is stored when [`<Self as Executable>::execute`][`Executable::execute`]
+	/// is called.
 	pub fn store(self) -> DispatchResult {
 		code_cache::store(self, false)
 	}
@@ -263,10 +265,7 @@ impl<T: Config> OwnerInfo<T> {
 	}
 }
 
-impl<T: Config> Executable<T> for PrefabWasmModule<T>
-where
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
+impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 	fn from_storage(
 		code_hash: CodeHash<T>,
 		schedule: &Schedule<T>,
@@ -476,7 +475,7 @@ mod tests {
 				salt: salt.to_vec(),
 			});
 			Ok((
-				Contracts::<Test>::contract_address(&ALICE, &code_hash, salt),
+				Contracts::<Test>::contract_address(&ALICE, &code_hash, &data, salt),
 				ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() },
 			))
 		}
@@ -625,6 +624,9 @@ mod tests {
 		fn account_reentrance_count(&self, _account_id: &AccountIdOf<Self::T>) -> u32 {
 			12
 		}
+		fn nonce(&mut self) -> u64 {
+			995
+		}
 	}
 
 	fn execute_internal<E: BorrowMut<MockExt>>(
@@ -649,16 +651,16 @@ mod tests {
 	}
 
 	fn execute<E: BorrowMut<MockExt>>(wat: &str, input_data: Vec<u8>, ext: E) -> ExecResult {
-		execute_internal(wat, input_data, ext, false)
+		execute_internal(wat, input_data, ext, true)
 	}
 
 	#[cfg(not(feature = "runtime-benchmarks"))]
-	fn execute_with_unstable<E: BorrowMut<MockExt>>(
+	fn execute_no_unstable<E: BorrowMut<MockExt>>(
 		wat: &str,
 		input_data: Vec<u8>,
 		ext: E,
 	) -> ExecResult {
-		execute_internal(wat, input_data, ext, true)
+		execute_internal(wat, input_data, ext, false)
 	}
 
 	const CODE_TRANSFER: &str = r#"
@@ -1986,6 +1988,52 @@ mod tests {
 		assert!(mock_ext.gas_meter.gas_left().ref_time() > 0);
 	}
 
+	const CODE_DEPOSIT_EVENT_DUPLICATES: &str = r#"
+(module
+	(import "seal0" "seal_deposit_event" (func $seal_deposit_event (param i32 i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func (export "call")
+		(call $seal_deposit_event
+			(i32.const 32) ;; Pointer to the start of topics buffer
+			(i32.const 129) ;; The length of the topics buffer.
+			(i32.const 8) ;; Pointer to the start of the data buffer
+			(i32.const 13) ;; Length of the buffer
+		)
+	)
+	(func (export "deploy"))
+
+	(data (i32.const 8) "\00\01\2A\00\00\00\00\00\00\00\E5\14\00")
+
+	;; Encoded Vec<TopicOf<T>>, the buffer has length of 129 bytes.
+	(data (i32.const 32) "\10"
+"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+"\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02"
+"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+"\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04")
+)
+"#;
+
+	/// Checks that the runtime allows duplicate topics.
+	#[test]
+	fn deposit_event_duplicates_allowed() {
+		let mut mock_ext = MockExt::default();
+		assert_ok!(execute(CODE_DEPOSIT_EVENT_DUPLICATES, vec![], &mut mock_ext,));
+
+		assert_eq!(
+			mock_ext.events,
+			vec![(
+				vec![
+					H256::repeat_byte(0x01),
+					H256::repeat_byte(0x02),
+					H256::repeat_byte(0x01),
+					H256::repeat_byte(0x04)
+				],
+				vec![0x00, 0x01, 0x2a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe5, 0x14, 0x00]
+			)]
+		);
+	}
+
 	const CODE_DEPOSIT_EVENT_MAX_TOPICS: &str = r#"
 (module
 	(import "seal0" "seal_deposit_event" (func $seal_deposit_event (param i32 i32 i32 i32)))
@@ -2020,44 +2068,6 @@ mod tests {
 			execute(CODE_DEPOSIT_EVENT_MAX_TOPICS, vec![], MockExt::default(),),
 			Err(ExecError {
 				error: Error::<Test>::TooManyTopics.into(),
-				origin: ErrorOrigin::Caller,
-			})
-		);
-	}
-
-	const CODE_DEPOSIT_EVENT_DUPLICATES: &str = r#"
-(module
-	(import "seal0" "seal_deposit_event" (func $seal_deposit_event (param i32 i32 i32 i32)))
-	(import "env" "memory" (memory 1 1))
-
-	(func (export "call")
-		(call $seal_deposit_event
-			(i32.const 32) ;; Pointer to the start of topics buffer
-			(i32.const 129) ;; The length of the topics buffer.
-			(i32.const 8) ;; Pointer to the start of the data buffer
-			(i32.const 13) ;; Length of the buffer
-		)
-	)
-	(func (export "deploy"))
-
-	(data (i32.const 8) "\00\01\2A\00\00\00\00\00\00\00\E5\14\00")
-
-	;; Encoded Vec<TopicOf<T>>, the buffer has length of 129 bytes.
-	(data (i32.const 32) "\10"
-"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
-"\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02"
-"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
-"\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04")
-)
-"#;
-
-	/// Checks that the runtime traps if there are duplicates.
-	#[test]
-	fn deposit_event_duplicates() {
-		assert_eq!(
-			execute(CODE_DEPOSIT_EVENT_DUPLICATES, vec![], MockExt::default(),),
-			Err(ExecError {
-				error: Error::<Test>::DuplicateTopics.into(),
 				origin: ErrorOrigin::Caller,
 			})
 		);
@@ -2971,13 +2981,39 @@ mod tests {
 		execute(CODE, vec![], &mut mock_ext).unwrap();
 	}
 
+	#[test]
+	fn instantiation_nonce_works() {
+		const CODE: &str = r#"
+(module
+	(import "seal0" "instantiation_nonce" (func $nonce (result i64)))
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+	(func (export "call")
+		(call $assert
+			(i64.eq (call $nonce) (i64.const 995))
+		)
+	)
+	(func (export "deploy"))
+)
+"#;
+
+		let mut mock_ext = MockExt::default();
+		execute(CODE, vec![], &mut mock_ext).unwrap();
+	}
+
 	/// This test check that an unstable interface cannot be deployed. In case of runtime
 	/// benchmarks we always allow unstable interfaces. This is why this test does not
 	/// work when this feature is enabled.
 	#[cfg(not(feature = "runtime-benchmarks"))]
 	#[test]
 	fn cannot_deploy_unstable() {
-		const CANNT_DEPLOY_UNSTABLE: &str = r#"
+		const CANNOT_DEPLOY_UNSTABLE: &str = r#"
 (module
 	(import "seal0" "reentrance_count" (func $reentrance_count (result i32)))
 	(func (export "call"))
@@ -2985,9 +3021,9 @@ mod tests {
 )
 "#;
 		assert_err!(
-			execute(CANNT_DEPLOY_UNSTABLE, vec![], MockExt::default()),
+			execute_no_unstable(CANNOT_DEPLOY_UNSTABLE, vec![], MockExt::default()),
 			<Error<Test>>::CodeRejected,
 		);
-		assert_ok!(execute_with_unstable(CANNT_DEPLOY_UNSTABLE, vec![], MockExt::default()));
+		assert_ok!(execute(CANNOT_DEPLOY_UNSTABLE, vec![], MockExt::default()));
 	}
 }

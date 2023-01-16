@@ -20,7 +20,7 @@
 //!
 //! This is used instead of `futures_timer::Interval` because it was unreliable.
 
-use super::{InherentDataProviderExt, Slot};
+use super::{InherentDataProviderExt, Slot, LOG_TARGET};
 use sp_consensus::{Error, SelectChain};
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
@@ -146,7 +146,7 @@ where
 				Ok(x) => x,
 				Err(e) => {
 					log::warn!(
-						target: "slots",
+						target: LOG_TARGET,
 						"Unable to author block in slot. No best block header: {}",
 						e,
 					);

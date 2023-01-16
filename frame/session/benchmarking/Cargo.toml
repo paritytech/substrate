@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-rand = { version = "0.7.2", default-features = false }
+rand = { version = "0.8.5", default-features = false, features = ["std_rng"] }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../benchmarking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
