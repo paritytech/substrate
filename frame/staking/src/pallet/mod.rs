@@ -778,6 +778,10 @@ pub mod pallet {
 		CommissionTooLow,
 		/// Some bound is not met.
 		BoundNotMet,
+		/// Nominations are not decodable. This means that `Config::MaxNominations` has been
+		/// decreased without a migration. A nominator is then stuck until it's fixed, because we
+		/// can't forgo the bookkeeping.
+		NotDecodable,
 	}
 
 	#[pallet::hooks]
@@ -1146,8 +1150,18 @@ pub mod pallet {
 			ensure!(ledger.active >= MinNominatorBond::<T>::get(), Error::<T>::InsufficientBond);
 			let stash = &ledger.stash;
 
+			let is_nominator = Nominators::<T>::contains_key(stash);
+
+			// If the nominator is not decodable - throw an error. The only reason for that could be
+			// a decrease of `MaxNominatorsCount`, which should be accompanied by a migration that
+			// fixes those nominations. Otherwise the Staking pallet ends up in an inconsistent
+			// state, because we cannot do proper bookeeping.
+			if is_nominator && Nominators::<T>::get(stash).is_none() {
+				Err(Error::<T>::NotDecodable)?
+			}
+
 			// Only check limits if they are not already a nominator.
-			if !Nominators::<T>::contains_key(stash) {
+			if !is_nominator {
 				// If this error is reached, we need to adjust the `MinNominatorBond` and start
 				// calling `chill_other`. Until then, we explicitly block new nominators to protect
 				// the runtime.
@@ -1716,10 +1730,6 @@ pub mod pallet {
 
 			// In order for one user to chill another user, the following conditions must be met:
 			//
-			// * `controller` belongs to a nominator who has become non-decodable,
-			//
-			// Or
-			//
 			// * A `ChillThreshold` is set which defines how close to the max nominators or
 			//   validators we must reach before users can start chilling one-another.
 			// * A `MaxNominatorCount` and `MaxValidatorCount` which is used to determine how close
@@ -1730,11 +1740,10 @@ pub mod pallet {
 			//
 			// Otherwise, if caller is the same as the controller, this is just like `chill`.
 
-			// TODO: This no longer works, we need nominations to be decodable, because we pass
-			// nominations to EventHandler for processing.
+			// If the validator is not decodable - a migration needs to be executed to fix the
+			// number of nominations. We can't chill nominators without knowing their nominations.
 			if Nominators::<T>::contains_key(&stash) && Nominators::<T>::get(&stash).is_none() {
-				Self::chill_stash(&stash);
-				return Ok(())
+				return Err(Error::<T>::NotDecodable)?
 			}
 
 			if caller != controller {

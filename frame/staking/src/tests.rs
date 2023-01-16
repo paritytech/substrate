@@ -5053,9 +5053,6 @@ fn min_commission_works() {
 }
 
 #[test]
-#[ignore]
-// TODO: We can't chill un-decodable nominators as we need to take into account every validator they
-// were backing.
 fn change_of_max_nominations() {
 	use frame_election_provider_support::ElectionDataProvider;
 	ExtBuilder::default()
@@ -5131,26 +5128,20 @@ fn change_of_max_nominations() {
 			assert!(Nominators::<Test>::get(60).is_some());
 			assert_eq!(Staking::electing_voters(None).unwrap().len(), 3 + 1);
 
-			// TODO: This has to be fixed, we can't re-nominate without reporting previous
-			// nominations to the EventHandler.
-
-			// now one of them can revive themselves by re-nominating to a proper value.
-			assert_ok!(Staking::nominate(RuntimeOrigin::signed(71), vec![1]));
-			assert_eq!(
-				Nominators::<Test>::iter()
-					.map(|(k, n)| (k, n.targets.len()))
-					.collect::<Vec<_>>(),
-				vec![(70, 1), (60, 1)]
+			// Impossible to re-nominate when not decodable.
+			assert_noop!(
+				Staking::nominate(RuntimeOrigin::signed(71), vec![1]),
+				Error::<Test>::NotDecodable
 			);
 
-			// TODO: This part has to be removed, we need to be able to decode old nominations.
-			// or they can be chilled by any account.
 			assert!(Nominators::<Test>::contains_key(101));
 			assert!(Nominators::<Test>::get(101).is_none());
 
-			assert_ok!(Staking::chill_other(RuntimeOrigin::signed(70), 100));
-			assert!(!Nominators::<Test>::contains_key(101));
-			assert!(Nominators::<Test>::get(101).is_none());
+			// Impossible to chill_other when not deodable.
+			assert_noop!(
+				Staking::chill_other(RuntimeOrigin::signed(70), 100),
+				Error::<Test>::NotDecodable
+			);
 		})
 }
 
