@@ -124,24 +124,20 @@ where
 	/// Returns a future that fires when the next slot starts.
 	pub async fn next_slot(&mut self) -> Result<SlotInfo<Block>, Error> {
 		loop {
-			self.inner_delay = match self.inner_delay.take() {
-				None => {
-					// schedule wait.
+			// Wait for slot timeout
+			self.inner_delay
+				.take()
+				.unwrap_or_else(|| {
+					// Schedule first timeout.
 					let wait_dur = time_until_next_slot(self.slot_duration);
-					Some(Delay::new(wait_dur))
-				},
-				Some(d) => Some(d),
-			};
+					Delay::new(wait_dur)
+				})
+				.await;
 
-			if let Some(inner_delay) = self.inner_delay.take() {
-				inner_delay.await;
-			}
-			// timeout has fired.
+			// Schedule delay for next slot.
+			let wait_dur = time_until_next_slot(self.slot_duration);
+			self.inner_delay = Some(Delay::new(wait_dur));
 
-			let ends_in = time_until_next_slot(self.slot_duration);
-
-			// reschedule delay for next slot.
-			self.inner_delay = Some(Delay::new(ends_in));
 			let chain_head = match self.select_chain.best_chain().await {
 				Ok(x) => x,
 				Err(e) => {
@@ -150,20 +146,31 @@ where
 						"Unable to author block in slot. No best block header: {}",
 						e,
 					);
-					// Let's try at the next slot..
-					self.inner_delay.take();
+					// Let's retry at the next slot.
 					continue
 				},
 			};
 
-			let inherent_data_providers = self
+			let inherent_data_providers = match self
 				.create_inherent_data_providers
 				.create_inherent_data_providers(chain_head.hash(), ())
-				.await?;
+				.await
+			{
+				Ok(x) => x,
+				Err(e) => {
+					log::warn!(
+						target: LOG_TARGET,
+						"Unable to author block in slot. Failure creating inherent data provider: {}",
+						e,
+					);
+					// Let's retry at the next slot.
+					continue
+				},
+			};
 
 			let slot = inherent_data_providers.slot();
 
-			// never yield the same slot twice.
+			// Never yield the same slot twice.
 			if slot > self.last_slot {
 				self.last_slot = slot;
 
