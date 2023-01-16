@@ -2744,3 +2744,6 @@ pub mod pallet_macros {
 		type_value, unbounded, validate_unsigned, weight, whitelist_storage,
 	};
 }
+
+// Generate a macro that will enable/disable code based on `std` feature being active.
+sp_core::generate_feature_enabled_macro!(std_enabled, feature = "std", $);

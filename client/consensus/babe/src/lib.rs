@@ -111,7 +111,7 @@ use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_application_crypto::AppKey;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::{
-	Backend as _, Error as ClientError, ForkBackend, HeaderBackend, HeaderMetadata,
+	Backend as _, BlockStatus, Error as ClientError, ForkBackend, HeaderBackend, HeaderMetadata,
 	Result as ClientResult,
 };
 use sp_consensus::{
@@ -1133,11 +1133,17 @@ where
 		let hash = block.header.hash();
 		let parent_hash = *block.header.parent_hash();
 
-		if block.with_state() {
-			// When importing whole state we don't calculate epoch descriptor, but rather
-			// read it from the state after import. We also skip all verifications
-			// because there's no parent state and we trust the sync module to verify
-			// that the state is correct and finalized.
+		let info = self.client.info();
+		let number = *block.header.number();
+
+		if info.block_gap.map_or(false, |(s, e)| s <= number && number <= e) || block.with_state() {
+			// Verification for imported blocks is skipped in two cases:
+			// 1. When importing blocks below the last finalized block during network initial
+			//    synchronization.
+			// 2. When importing whole state we don't calculate epoch descriptor, but rather
+			//    read it from the state after import. We also skip all verifications
+			//    because there's no parent state and we trust the sync module to verify
+			//    that the state is correct and finalized.
 			return Ok((block, Default::default()))
 		}
 
@@ -1399,18 +1405,24 @@ where
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_hash();
 		let number = *block.header.number();
+		let info = self.client.info();
 
-		// early exit if block already in chain, otherwise the check for
-		// epoch changes will error when trying to re-import an epoch change
-		match self.client.status(hash) {
-			Ok(sp_blockchain::BlockStatus::InChain) => {
-				// When re-importing existing block strip away intermediates.
-				let _ = block.remove_intermediate::<BabeIntermediate<Block>>(INTERMEDIATE_KEY);
-				block.fork_choice = Some(ForkChoiceStrategy::Custom(false));
-				return self.inner.import_block(block, new_cache).await.map_err(Into::into)
-			},
-			Ok(sp_blockchain::BlockStatus::Unknown) => {},
-			Err(e) => return Err(ConsensusError::ClientImport(e.to_string())),
+		let block_status = self
+			.client
+			.status(hash)
+			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
+
+		// Skip babe logic if block already in chain or importing blocks during initial sync,
+		// otherwise the check for epoch changes will error because trying to re-import an
+		// epoch change or because of missing epoch data in the tree, respectivelly.
+		if info.block_gap.map_or(false, |(s, e)| s <= number && number <= e) ||
+			block_status == BlockStatus::InChain
+		{
+			// When re-importing existing block strip away intermediates.
+			// In case of initial sync intermediates should not be present...
+			let _ = block.remove_intermediate::<BabeIntermediate<Block>>(INTERMEDIATE_KEY);
+			block.fork_choice = Some(ForkChoiceStrategy::Custom(false));
+			return self.inner.import_block(block, new_cache).await.map_err(Into::into)
 		}
 
 		if block.with_state() {
@@ -1505,8 +1517,6 @@ where
 						babe_err(Error::<Block>::UnexpectedEpochChange).into(),
 					)),
 			}
-
-			let info = self.client.info();
 
 			if let Some(next_epoch_descriptor) = next_epoch_digest {
 				old_epoch_changes = Some((*epoch_changes).clone());
@@ -1701,9 +1711,6 @@ where
 	Client: HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>,
 {
 	let info = client.info();
-	if info.block_gap.is_none() {
-		epoch_changes.clear_gap();
-	}
 
 	let finalized_slot = {
 		let finalized_header = client
