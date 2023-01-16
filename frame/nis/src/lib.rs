@@ -769,8 +769,8 @@ pub mod pallet {
 		/// Reduce or remove an outstanding receipt, placing the according proportion of funds into
 		/// the account of the owner.
 		///
-		/// - `origin`: Must be Signed and the account must be the owner of the receipt `index` as
-		///   well as any fungible counterpart.
+		/// - `origin`: Must be Signed and the account must be the owner of the fungible counterpart
+		///   for receipt `index`.
 		/// - `index`: The index of the receipt.
 		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::thaw_communal())]
