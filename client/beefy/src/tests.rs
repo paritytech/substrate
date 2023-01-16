@@ -37,7 +37,8 @@ use sc_network_test::{
 use sc_utils::notification::NotificationReceiver;
 
 use beefy_primitives::{
-	ecdsa_crypto::{AuthorityId, Signature, self, Pair as ECDSAKeyPair},
+	ecdsa_crypto::{AuthorityId, Public as ECDSAPublic, Signature as ECDSASignature, self, Pair as ECDSAKeyPair},
+        bls_crypto::{Public as BLSPublic, Signature as BLSSignature},
 	mmr::MmrRootProvider,
 	BeefyApi, ConsensusLog, MmrRootHash, ValidatorSet, VersionedFinalityProof, BEEFY_ENGINE_ID,
 	KEY_TYPE as BeefyKeyType,
@@ -405,8 +406,8 @@ fn initialize_beefy<API, AuthId, TSignature, BKS, TKeyPair>(
 where
 	API: ProvideRuntimeApi<Block> + Default + Sync + Send,
     API::Api: BeefyApi<Block, AuthId> + MmrApi<Block, MmrRootHash, NumberFor<Block>>,
-    TSignature: Encode + Decode + Debug + Clone + Sync + Send + Default + 'static,
-    TKeyPair: Debug + Ord + Sync + Send + SimpleKeyPair,
+    TSignature: Encode + Decode + Debug + Clone + Sync + Send +  'static,
+    TKeyPair: Sync + Send + SimpleKeyPair,
     AuthId: Clone + Encode + Decode + Debug + Ord + BeefyAuthIdMaker + std::hash::Hash + Sync + Send + 'static,
     BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
 {
@@ -626,45 +627,54 @@ fn finalize_block_and_wait_for_beefy<AuthId, TSignature, BKS>(
 	}
 }
 
-// #[test]
-// fn beefy_finalizing_blocks() {
-// 	sp_tracing::try_init_simple();
+fn beefy_finalizing_blocks<TKeyPair, AuthId, TSignature, TBeefyKeystore>()
+where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId> + 'static,
+      TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>  + 'static,
+      AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
+      TSignature:  Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq  + 'static,      
+{
+ 	sp_tracing::try_init_simple();
 
-// 	let mut runtime = Runtime::new().unwrap();
-// 	let peers = [Keyring::Alice, Keyring::Bob];
-// 	let validator_set = ValidatorSet::new(make_beefy_ids(&peers), 0).unwrap();
-// 	let session_len = 10;
-// 	let min_block_delta = 4;
+ 	let mut runtime = Runtime::new().unwrap();
+ 	let peers = [Keyring::Alice, Keyring::Bob];
+ 	let validator_set = ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(&peers), 0).unwrap();
+ 	let session_len = 10;
+ 	let min_block_delta = 4;
 
-// 	let mut net = BeefyTestNet::new(2);
+ 	let mut net : BeefyTestNet<AuthId, TSignature, TBeefyKeystore> = BeefyTestNet::new(2);
 
-// 	let api = Arc::new(two_validators::TestApi {});
-// 	let beefy_peers = peers.iter().enumerate().map(|(id, key)| (id, key, api.clone())).collect();
-// 	runtime.spawn(initialize_beefy(&mut net, beefy_peers, min_block_delta));
+	let api = Arc::new(two_validators::TestApi {});
+	let beefy_peers = peers.iter().enumerate().map(|(id, key)| (id, key, api.clone())).collect();
+	runtime.spawn(initialize_beefy::<two_validators::TestApi, AuthId, TSignature, TBeefyKeystore, TKeyPair>(&mut net, beefy_peers, min_block_delta));
 
-// 	// push 42 blocks including `AuthorityChange` digests every 10 blocks.
-// 	net.generate_blocks_and_sync(42, session_len, &validator_set, true);
+	// push 42 blocks including `AuthorityChange` digests every 10 blocks.
+	net.generate_blocks_and_sync(42, session_len, &validator_set, true);
 
-// 	let net = Arc::new(Mutex::new(net));
+	let net = Arc::new(Mutex::new(net));
 
-// 	// Minimum BEEFY block delta is 4.
+	// Minimum BEEFY block delta is 4.
 
-// 	let peers = peers.into_iter().enumerate();
-// 	// finalize block #5 -> BEEFY should finalize #1 (mandatory) and #5 from diff-power-of-two rule.
-// 	finalize_block_and_wait_for_beefy(&net, peers.clone(), &mut runtime, &[5], &[1, 5]);
+	let peers = peers.into_iter().enumerate();
+	// finalize block #5 -> BEEFY should finalize #1 (mandatory) and #5 from diff-power-of-two rule.
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &mut runtime, &[5], &[1, 5]);
 
-// 	// GRANDPA finalize #10 -> BEEFY finalize #10 (mandatory)
-// 	finalize_block_and_wait_for_beefy(&net, peers.clone(), &mut runtime, &[10], &[10]);
+	// GRANDPA finalize #10 -> BEEFY finalize #10 (mandatory)
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &mut runtime, &[10], &[10]);
 
-// 	// GRANDPA finalize #18 -> BEEFY finalize #14, then #18 (diff-power-of-two rule)
-// 	finalize_block_and_wait_for_beefy(&net, peers.clone(), &mut runtime, &[18], &[14, 18]);
+	// GRANDPA finalize #18 -> BEEFY finalize #14, then #18 (diff-power-of-two rule)
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &mut runtime, &[18], &[14, 18]);
 
-// 	// GRANDPA finalize #20 -> BEEFY finalize #20 (mandatory)
-// 	finalize_block_and_wait_for_beefy(&net, peers.clone(), &mut runtime, &[20], &[20]);
+	// GRANDPA finalize #20 -> BEEFY finalize #20 (mandatory)
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &mut runtime, &[20], &[20]);
 
-// 	// GRANDPA finalize #21 -> BEEFY finalize nothing (yet) because min delta is 4
-// 	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[21], &[]);
-// }
+	// GRANDPA finalize #21 -> BEEFY finalize nothing (yet) because min delta is 4
+	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[21], &[]);
+}
+
+#[test]
+fn beefy_finalizing_blocks_using_ecdsa_signature() {
+    beefy_finalizing_blocks::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>();
+}
 
 // #[test]
 // fn lagging_validators() {
