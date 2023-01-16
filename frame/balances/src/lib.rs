@@ -182,7 +182,7 @@ use frame_support::{
 		Get, Imbalance, NamedReservableCurrency, OnUnbalanced,
 		ReservableCurrency, StoredMap,
 	},
-	WeakBoundedVec,
+	WeakBoundedVec, BoundedSlice,
 };
 use frame_system as system;
 pub use impl_currency::{NegativeImbalance, PositiveImbalance};
@@ -795,12 +795,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			let is_new = maybe_account.is_none();
 			let mut account = maybe_account.take().unwrap_or_default();
 			let did_provide = account.free >= T::ExistentialDeposit::get();
-			let did_consume = !is_new && !account.reserved.is_zero();
+			let did_consume = !is_new && (!account.reserved.is_zero() || !account.frozen.is_zero());
 
 			let result = f(&mut account, is_new)?;
 
 			let does_provide = account.free >= T::ExistentialDeposit::get();
-			let does_consume = !account.reserved.is_zero();
+			let does_consume = !account.reserved.is_zero() || !account.frozen.is_zero();
 
 			if !did_provide && does_provide {
 				frame_system::Pallet::<T>::inc_providers(who);
@@ -876,14 +876,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let existed = Locks::<T, I>::contains_key(who);
 		if locks.is_empty() {
 			Locks::<T, I>::remove(who);
-			if existed {
+/*			if existed {
 				// TODO: use Locks::<T, I>::hashed_key
 				// https://github.com/paritytech/substrate/issues/4969
 				system::Pallet::<T>::dec_consumers(who);
-			}
+			}*/
 		} else {
 			Locks::<T, I>::insert(who, bounded_locks);
-			if !existed && system::Pallet::<T>::inc_consumers_without_limit(who).is_err() {
+/*			if !existed && system::Pallet::<T>::inc_consumers_without_limit(who).is_err() {
 				// No providers for the locks. This is impossible under normal circumstances
 				// since the funds that are under the lock will themselves be stored in the
 				// account and therefore will need a reference.
@@ -892,8 +892,30 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					"Warning: Attempt to introduce lock consumer reference, yet no providers. \
 					This is unexpected but should be safe."
 				);
-			}
+			}*/
 		}
+	}
+
+	/// Update the account entry for `who`, given the locks.
+	fn try_update_freezes(
+		who: &T::AccountId,
+		freezes: BoundedSlice<IdAmount<T::FreezeIdentifier, T::Balance>, T::MaxFreezes>,
+	) -> DispatchResult {
+		Self::try_mutate_account(who, |b| {
+			b.frozen = Zero::zero();
+			for l in Locks::<T, I>::get(who).iter() {
+				b.frozen = b.frozen.max(l.amount);
+			}
+			for l in freezes.iter() {
+				b.frozen = b.frozen.max(l.amount);
+			}
+		})?;
+		if freezes.is_empty() {
+			Freezes::<T, I>::remove(who);
+		} else {
+			Freezes::<T, I>::put(who, freezes);
+		}
+		Ok(())
 	}
 
 	/// Move the reserved balance of one account into the balance of another, according to `status`.
