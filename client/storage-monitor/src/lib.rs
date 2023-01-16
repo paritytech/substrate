@@ -17,19 +17,15 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use clap::Args;
-use futures::StreamExt;
 use nix::{errno::Errno, sys::statvfs::statvfs};
-use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 use sc_client_db::DatabaseSource;
-use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sp_core::traits::SpawnEssentialNamed;
 use std::{
 	path::{Path, PathBuf},
-	time::{Duration, Instant},
+	time::Duration,
 };
 
 const LOG_TARGET: &str = "storage-monitor";
-const THROTTLE_PERIOD: std::time::Duration = Duration::from_secs(2);
 
 type Error = String;
 
@@ -51,19 +47,19 @@ pub struct StorageMonitorParams {
 pub struct StorageMonitorService {
 	/// watched path
 	path: PathBuf,
-	/// notify's events receiver
-	stream: TracingUnboundedReceiver<Result<Event, notify::Error>>,
 	/// number of megabytes that shall be free and available on the filesystem for watched path
 	threshold: u64,
-	/// timestamp of the most recent check
-	recent_check: Instant,
-	/// keeps the ref for file system watcher
-	_watcher: RecommendedWatcher,
+	/// storage space polling period (seconds)
+	pub polling_period: u32,
 }
 
 impl StorageMonitorService {
 	/// Creates new StorageMonitorService for given client config
-	pub fn try_spawn(parameters: StorageMonitorParams, database: DatabaseSource, spawner: &impl SpawnEssentialNamed) -> Result<(), Error> {
+	pub fn try_spawn(
+		parameters: StorageMonitorParams,
+		database: DatabaseSource,
+		spawner: &impl SpawnEssentialNamed,
+	) -> Result<(), Error> {
 		Ok(match (parameters.threshold, database.path()) {
 			(0, _) => {
 				log::info!(
@@ -78,20 +74,6 @@ impl StorageMonitorService {
 				);
 			},
 			(threshold, Some(path)) => {
-				let (sink, stream) = tracing_unbounded("mpsc_storage_monitor", 1024);
-
-				let mut watcher = RecommendedWatcher::new(
-					move |res| {
-						sink.unbounded_send(res).unwrap();
-					},
-					Config::default(),
-				)
-				.map_err(|e| format!("Could not create fs watcher {e}"))?;
-
-				watcher
-					.watch(path.as_ref(), RecursiveMode::Recursive)
-					.map_err(|e| format!("Could not start fs watcher {e}"))?;
-
 				log::debug!(
 					target: LOG_TARGET,
 					"Initializing StorageMonitorService for db path: {:?}",
@@ -102,10 +84,8 @@ impl StorageMonitorService {
 
 				let storage_monitor_service = StorageMonitorService {
 					path: path.to_path_buf(),
-					stream,
 					threshold,
-					recent_check: Instant::now(),
-					_watcher: watcher,
+					polling_period: parameters.polling_period,
 				};
 
 				spawner.spawn_essential(
@@ -119,23 +99,12 @@ impl StorageMonitorService {
 
 	/// Main monitoring loop, intended to be spawned as essential task. Quits if free space drop
 	/// below threshold.
-	async fn run(mut self) {
-		while let Some(watch_event) = self.stream.next().await {
-			match watch_event {
-				Ok(Event { kind: notify::EventKind::Access(_), .. }) => {
-					//skip non mutating events
-				},
-				Ok(_) =>
-					if self.recent_check.elapsed() >= THROTTLE_PERIOD {
-						self.recent_check = Instant::now();
-						if Self::check_free_space(&self.path, self.threshold).is_err() {
-							break
-						}
-					},
-				Err(e) => {
-					log::error!(target: LOG_TARGET, "watch error: {:?}", e);
-				},
-			}
+	async fn run(self) {
+		loop {
+			tokio::time::sleep(Duration::from_secs(self.polling_period.into())).await;
+			if Self::check_free_space(&self.path, self.threshold).is_err() {
+				break
+			};
 		}
 	}
 
