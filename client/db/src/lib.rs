@@ -1291,14 +1291,13 @@ impl<Block: BlockT> Backend<Block> {
 		header: &Block::Header,
 		last_finalized: Option<Block::Hash>,
 		justification: Option<Justification>,
-		finalization_displaced: &mut Option<FinalizationOutcome<Block::Hash, NumberFor<Block>>>,
 	) -> ClientResult<MetaUpdate<Block>> {
 		// TODO: ensure best chain contains this block.
 		let number = *header.number();
 		self.ensure_sequential_finalization(header, last_finalized)?;
 		let with_state = sc_client_api::Backend::have_state_at(self, hash, number);
 
-		self.note_finalized(transaction, header, hash, finalization_displaced, with_state)?;
+		self.note_finalized(transaction, header, hash, with_state)?;
 
 		if let Some(justification) = justification {
 			transaction.set_from_vec(
@@ -1362,7 +1361,6 @@ impl<Block: BlockT> Backend<Block> {
 
 	fn try_commit_operation(&self, mut operation: BlockImportOperation<Block>) -> ClientResult<()> {
 		let mut transaction = Transaction::new();
-		let mut finalization_displaced_leaves = None;
 
 		operation.apply_aux(&mut transaction);
 		operation.apply_offchain(&mut transaction);
@@ -1381,7 +1379,6 @@ impl<Block: BlockT> Backend<Block> {
 				&block_header,
 				Some(last_finalized_hash),
 				justification,
-				&mut finalization_displaced_leaves,
 			)?);
 			last_finalized_hash = block_hash;
 			last_finalized_num = *block_header.number();
@@ -1554,13 +1551,7 @@ impl<Block: BlockT> Backend<Block> {
 			if finalized {
 				// TODO: ensure best chain contains this block.
 				self.ensure_sequential_finalization(header, Some(last_finalized_hash))?;
-				self.note_finalized(
-					&mut transaction,
-					header,
-					hash,
-					&mut finalization_displaced_leaves,
-					operation.commit_state,
-				)?;
+				self.note_finalized(&mut transaction, header, hash, operation.commit_state)?;
 			} else {
 				// canonicalize blocks which are old enough, regardless of finality.
 				self.force_delayed_canonicalize(&mut transaction)?
@@ -1692,7 +1683,6 @@ impl<Block: BlockT> Backend<Block> {
 		transaction: &mut Transaction<DbHash>,
 		f_header: &Block::Header,
 		f_hash: Block::Hash,
-		displaced: &mut Option<FinalizationOutcome<Block::Hash, NumberFor<Block>>>,
 		with_state: bool,
 	) -> ClientResult<()> {
 		let f_num = *f_header.number();
@@ -1720,10 +1710,6 @@ impl<Block: BlockT> Backend<Block> {
 
 		let new_displaced = self.blockchain.leaves.write().finalize_height(f_num);
 		self.prune_blocks(transaction, f_num, &new_displaced)?;
-		match displaced {
-			x @ &mut None => *x = Some(new_displaced),
-			&mut Some(ref mut displaced) => displaced.merge(new_displaced),
-		}
 
 		Ok(())
 	}
@@ -2013,7 +1999,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	) -> ClientResult<()> {
 		let mut transaction = Transaction::new();
 		let header = self.blockchain.expect_header(hash)?;
-		let mut displaced = None;
 
 		let m = self.finalize_block_with_transaction(
 			&mut transaction,
@@ -2021,8 +2006,8 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			&header,
 			None,
 			justification,
-			&mut displaced,
 		)?;
+
 		self.storage.db.commit(transaction)?;
 		self.blockchain.update_meta(m);
 		Ok(())

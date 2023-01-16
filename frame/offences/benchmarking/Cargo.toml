@@ -29,6 +29,7 @@ pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../.
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/staking" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../../primitives/std" }
+log = { version = "0.4.17", default-features = false }
 
 [dev-dependencies]
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../../staking/reward-curve" }
@@ -55,6 +56,7 @@ std = [
 	"sp-runtime/std",
 	"sp-staking/std",
 	"sp-std/std",
+	"log/std",
 ]
 
 runtime-benchmarks = [
