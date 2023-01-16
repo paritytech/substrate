@@ -394,7 +394,7 @@ impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type CallFilter = TestFilter;
-	type CallStack = [Frame<Self>; 6];
+	type CallStack = [Frame<Self>; 5];
 	type WeightPrice = Self;
 	type WeightInfo = ();
 	type ChainExtension =

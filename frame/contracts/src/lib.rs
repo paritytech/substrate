@@ -389,7 +389,10 @@ pub mod pallet {
 			const MAX_STACK_SIZE: u32 = 1024 * 1024;
 			// Heap limit is normally 16 mempages of 64kb each = 1Mb per contract
 			let max_heap_size = T::Schedule::get().limits.max_memory_size();
-			let max_call_depth = T::CallStack::size() as u32;
+			// Max call depth is CallStack::size() + 1
+			let max_call_depth = u32::try_from(T::CallStack::size().saturating_add(1))
+				.expect("CallStack size is too big");
+
 			// Check that given configured `MaxCodeLen`, runtime heap memory limit can't be broken.
 			//
 			// In worst case, the decoded wasm contract code would be `x16` times larger than the
