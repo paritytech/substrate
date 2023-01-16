@@ -521,7 +521,7 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 	pub fn bump_ref(&self, hash: Block::Hash) {
 		let mut body_cache = self.body_cache.write();
 		if body_cache.len() == PINNING_CACHE_SIZE {
-			log::warn!(target: "db", "Maximum size of pinning cache reached. Removing items to make space. max_size = {}", PINNING_CACHE_SIZE);
+			log::warn!(target: "db-pinning", "Maximum size of pinning cache reached. Removing items to make space. max_size = {}", PINNING_CACHE_SIZE);
 		}
 
 		let entry = body_cache.get_or_insert_mut(hash, Default::default);

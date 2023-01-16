@@ -22,6 +22,7 @@ use super::{
 	block_rules::{BlockRules, LookupResult as BlockLookupResult},
 	genesis::BuildGenesisBlock,
 };
+use futures::{FutureExt, StreamExt};
 use log::{error, info, trace, warn};
 use parking_lot::{Mutex, RwLock};
 use prometheus_endpoint::Registry;
@@ -177,11 +178,9 @@ where
 			BlockImportOperation = <in_mem::Backend<Block> as backend::Backend<Block>>::BlockImportOperation,
 		>,
 {
-	let (tx, _rx) = sc_utils::mpsc::tracing_unbounded("unpin-worker-channel", 10_000);
 	new_with_backend(
 		backend,
 		executor,
-		tx,
 		genesis_block_builder,
 		keystore,
 		spawn_handle,
@@ -225,7 +224,6 @@ impl<Block: BlockT> Default for ClientConfig<Block> {
 pub fn new_with_backend<B, E, Block, G, RA>(
 	backend: Arc<B>,
 	executor: E,
-	unpin_worker_sender: TracingUnboundedSender<Block::Hash>,
 	genesis_block_builder: G,
 	keystore: Option<SyncCryptoStorePtr>,
 	spawn_handle: Box<dyn SpawnNamed>,
@@ -259,7 +257,7 @@ where
 	Client::new(
 		backend,
 		call_executor,
-		unpin_worker_sender,
+		spawn_handle,
 		genesis_block_builder,
 		Default::default(),
 		Default::default(),
@@ -400,7 +398,7 @@ where
 	pub fn new<G>(
 		backend: Arc<B>,
 		executor: E,
-		unpin_worker_sender: TracingUnboundedSender<Block::Hash>,
+		spawn_handle: Box<dyn SpawnNamed>,
 		genesis_block_builder: G,
 		fork_blocks: ForkBlocks<Block>,
 		bad_blocks: BadBlocks<Block>,
@@ -413,6 +411,7 @@ where
 			Block,
 			BlockImportOperation = <B as backend::Backend<Block>>::BlockImportOperation,
 		>,
+		B: 'static,
 	{
 		let info = backend.blockchain().info();
 		if info.finalized_state.is_none() {
@@ -434,6 +433,22 @@ where
 			backend.commit_operation(op)?;
 		}
 
+		let (unpin_worker_sender, mut rx) =
+			tracing_unbounded::<Block::Hash>("unpin-worker-channel", 10_000);
+		let task_backend = backend.clone();
+		spawn_handle.spawn(
+			"unpin-worker",
+			None,
+			async move {
+				log::info!(target: "db", "Starting worker task for unpinning.");
+				loop {
+					if let Some(message) = rx.next().await {
+						task_backend.unpin_block(&message);
+					}
+				}
+			}
+			.boxed(),
+		);
 		Ok(Client {
 			backend,
 			executor,

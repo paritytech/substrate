@@ -29,7 +29,6 @@ pub use sc_client_api::{
 pub use sc_client_db::{self, Backend, BlocksPruning};
 pub use sc_executor::{self, NativeElseWasmExecutor, WasmExecutionMethod};
 pub use sc_service::{client, RpcHandlers};
-use sc_utils::mpsc::tracing_unbounded;
 pub use sp_consensus;
 pub use sp_keyring::{
 	ed25519::Keyring as Ed25519Keyring, sr25519::Keyring as Sr25519Keyring, AccountKeyring,
@@ -42,7 +41,7 @@ use futures::{future::Future, stream::StreamExt};
 use sc_client_api::BlockchainEvents;
 use sc_service::client::{ClientConfig, LocalCallExecutor};
 use serde::Deserialize;
-use sp_core::storage::ChildInfo;
+use sp_core::{storage::ChildInfo, testing::TaskExecutor};
 use sp_runtime::{codec::Encode, traits::Block as BlockT, OpaqueExtrinsic};
 use std::{
 	collections::{HashMap, HashSet},
@@ -63,7 +62,7 @@ impl GenesisInit for () {
 }
 
 /// A builder for creating a test client instance.
-pub struct TestClientBuilder<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit> {
+pub struct TestClientBuilder<Block: BlockT, ExecutorDispatch, Backend: 'static, G: GenesisInit> {
 	execution_strategies: ExecutionStrategies,
 	genesis_init: G,
 	/// The key is an unprefixed storage key, this only contains
@@ -238,11 +237,12 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 		)
 		.expect("Creates genesis block builder");
 
-		let (tx, _rx) = tracing_unbounded("unpin-worker", 10_000);
+		let spawn_handle = Box::new(TaskExecutor::new());
+
 		let client = client::Client::new(
 			self.backend.clone(),
 			executor,
-			tx,
+			spawn_handle,
 			genesis_block_builder,
 			self.fork_blocks,
 			self.bad_blocks,
