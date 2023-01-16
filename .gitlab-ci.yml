@@ -233,6 +233,9 @@ variables:
   variables:
     CRATES_PUBLISHING_REF:         master
     CRATES_PUBLISHING_PIPELINE:    automatic-crate-publishing
+    CRATESIO_CRATES_OWNER:         parity-crate-owner
+    REPO:                          substrate
+    REPO_OWNER:                    paritytech
 
 .crates-publishing-template:
   extends:
@@ -247,9 +250,6 @@ variables:
     paths:
       - artifacts/
   variables:
-    CRATESIO_CRATES_OWNER:         parity-crate-owner
-    REPO:                          substrate
-    REPO_OWNER:                    paritytech
     SPUB_TMP:                      artifacts
 
 #### stage:                       .pre
