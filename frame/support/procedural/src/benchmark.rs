@@ -162,7 +162,25 @@ impl BenchmarkDef {
 
 			let FnArg::Typed(arg) = arg else { return invalid_param() };
 			let Pat::Ident(ident) = &*arg.pat else { return invalid_param() };
+
+			// check param name
+			let var_span = ident.span();
+			let invalid_param_name = || {
+				return Err(Error::new(
+					var_span,
+					"Benchmark parameter names must consist of a single lowercase letter (a-z) and no other characters.",
+				))
+			};
 			let name = ident.ident.to_token_stream().to_string();
+			if name.len() > 1 {
+				return invalid_param_name()
+			};
+			let Some(name_char) = name.chars().next() else { return invalid_param_name() };
+			if !name_char.is_alphabetic() || !name_char.is_lowercase() {
+				return invalid_param_name()
+			}
+
+			// parse type
 			let typ = &*arg.ty;
 			let Type::Path(tpath) = typ else { return invalid_param() };
 			let Some(segment) = tpath.path.segments.last() else { return invalid_param() };
