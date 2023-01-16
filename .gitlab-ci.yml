@@ -237,7 +237,7 @@ variables:
 .crates-publishing-template:
   extends:
     - .docker-env
-    - .crates-publishing-variables
+    - .crates-publishing-pipeline
   # collect artifacts even on failure so that we know how the crates were generated (they'll be
   # generated to the artifacts folder according to SPUB_TMP further down)
   artifacts:
@@ -271,7 +271,7 @@ skip-if-draft:
 check-crates-publishing-pipeline:
   extends:
     - .kubernetes-env
-    - .crates-publishing-variables
+    - .crates-publishing-pipeline
   stage:                           .pre
   rules:
     - if: $PIPELINE == "$CRATES_PUBLISHING_PIPELINE"
