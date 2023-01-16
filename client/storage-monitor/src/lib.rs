@@ -118,7 +118,7 @@ impl StorageMonitorService {
 	/// If it dropped below, error is returned.
 	/// System errors are silently ignored.
 	fn check_free_space(path: &Path, threshold: u64) -> Result<(), Error> {
-		match StorageMonitorService::free_space(path.as_ref()) {
+		match StorageMonitorService::free_space(path) {
 			Ok(available_space) => {
 				log::trace!(
 					target: LOG_TARGET,
