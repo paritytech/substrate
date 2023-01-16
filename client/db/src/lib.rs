@@ -4252,6 +4252,12 @@ pub(crate) mod tests {
 			prev_hash = hash;
 		}
 
+		let bc = backend.blockchain();
+
+		// Check that we can properly access values when there is reference count
+		// but no value.
+		assert_eq!(Some(vec![1.into()]), bc.body(blocks[1]).unwrap());
+
 		// Block 1 gets pinned three times
 		backend.pin_block(&blocks[1], 1).unwrap();
 		backend.pin_block(&blocks[1], 1).unwrap();
@@ -4265,7 +4271,6 @@ pub(crate) mod tests {
 		}
 		backend.commit_operation(op).unwrap();
 
-		let bc = backend.blockchain();
 		// Block 0, 1, 2, 3 are pinned, so all values should be cached.
 		// Block 4 is inside the pruning window, its value is in db.
 		assert_eq!(Some(vec![0.into()]), bc.body(blocks[0]).unwrap());
