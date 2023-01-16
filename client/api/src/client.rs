@@ -266,12 +266,13 @@ impl fmt::Display for UsageInfo {
 
 /// Sends a message to the pinning-worker once dropped to unpin a block in the backend.
 #[derive(Debug)]
-pub struct UnpinHandle<Block: BlockT> {
-	hash: Block::Hash,
+pub struct UnpinHandleInner<Block: BlockT> {
+	/// Hash of the block pinned by this handle
+	pub hash: Block::Hash,
 	unpin_worker_sender: TracingUnboundedSender<Block::Hash>,
 }
 
-impl<Block: BlockT> UnpinHandle<Block> {
+impl<Block: BlockT> UnpinHandleInner<Block> {
 	/// Create a new UnpinHandle
 	pub fn new(
 		hash: Block::Hash,
@@ -281,11 +282,30 @@ impl<Block: BlockT> UnpinHandle<Block> {
 	}
 }
 
-impl<Block: BlockT> Drop for UnpinHandle<Block> {
+impl<Block: BlockT> Drop for UnpinHandleInner<Block> {
 	fn drop(&mut self) {
 		if let Err(err) = self.unpin_worker_sender.unbounded_send(self.hash) {
 			log::error!(target: "db", "Unable to unpin block with hash: {}, error: {:?}", self.hash, err);
 		};
+	}
+}
+
+/// Keeps a specific block pinned while the handle is alive.
+#[derive(Debug, Clone)]
+pub struct UnpinHandle<Block: BlockT>(Arc<UnpinHandleInner<Block>>);
+
+impl<Block: BlockT> UnpinHandle<Block> {
+	/// Create a new UnpinHandle
+	pub fn new(
+		hash: Block::Hash,
+		unpin_worker_sender: TracingUnboundedSender<Block::Hash>,
+	) -> UnpinHandle<Block> {
+		UnpinHandle(Arc::new(UnpinHandleInner::new(hash, unpin_worker_sender)))
+	}
+
+	/// Hash of the block this handle is unpinning on drop
+	pub fn hash(&self) -> Block::Hash {
+		self.0.hash
 	}
 }
 
@@ -305,10 +325,11 @@ pub struct BlockImportNotification<Block: BlockT> {
 	/// If `None`, there was no re-org while importing.
 	pub tree_route: Option<Arc<sp_blockchain::TreeRoute<Block>>>,
 	/// Handle to unpin the block this notification is for
-	_unpin_handle: Arc<UnpinHandle<Block>>,
+	_unpin_handle: UnpinHandle<Block>,
 }
 
 impl<Block: BlockT> BlockImportNotification<Block> {
+	/// Create new notification
 	pub fn new(
 		hash: Block::Hash,
 		origin: BlockOrigin,
@@ -323,8 +344,15 @@ impl<Block: BlockT> BlockImportNotification<Block> {
 			header,
 			is_new_best,
 			tree_route,
-			_unpin_handle: Arc::new(UnpinHandle::new(hash, unpin_worker_sender)),
+			_unpin_handle: UnpinHandle::new(hash, unpin_worker_sender),
 		}
+	}
+
+	/// Consume this notification and extract the unpin handle.
+	///
+	/// Note: Only use this if you want to keep the block pinned in the backend.
+	pub fn into_unpin_handle(self) -> UnpinHandle<Block> {
+		self._unpin_handle
 	}
 }
 
@@ -342,7 +370,7 @@ pub struct FinalityNotification<Block: BlockT> {
 	/// Stale branches heads.
 	pub stale_heads: Arc<[Block::Hash]>,
 	/// Handle to unpin the block this notification is for
-	_unpin_handle: Arc<UnpinHandle<Block>>,
+	_unpin_handle: UnpinHandle<Block>,
 }
 
 impl<B: BlockT> TryFrom<BlockImportNotification<B>> for ChainEvent<B> {
@@ -375,7 +403,7 @@ impl<Block: BlockT> FinalityNotification<Block> {
 			header: summary.header,
 			tree_route: Arc::from(summary.finalized),
 			stale_heads: Arc::from(summary.stale_heads),
-			_unpin_handle: Arc::new(UnpinHandle { hash, unpin_worker_sender }),
+			_unpin_handle: UnpinHandle::new(hash, unpin_worker_sender),
 		}
 	}
 }
@@ -393,7 +421,7 @@ impl<Block: BlockT> BlockImportNotification<Block> {
 			header: summary.header,
 			is_new_best: summary.is_new_best,
 			tree_route: summary.tree_route.map(Arc::new),
-			_unpin_handle: Arc::new(UnpinHandle { hash, unpin_worker_sender }),
+			_unpin_handle: UnpinHandle::new(hash, unpin_worker_sender),
 		}
 	}
 }

@@ -112,7 +112,7 @@ pub type DbStateBuilder<B> = sp_state_machine::TrieBackendBuilder<
 /// Length of a [`DbHash`].
 const DB_HASH_LEN: usize = 32;
 
-const PINNING_CACHE_SIZE: usize = 256;
+const PINNING_CACHE_SIZE: usize = 1024;
 
 /// Hash type that this backend uses for the database.
 pub type DbHash = sp_core::H256;
@@ -520,6 +520,10 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 
 	pub fn bump_ref(&self, hash: Block::Hash) {
 		let mut body_cache = self.body_cache.write();
+		if body_cache.len() == PINNING_CACHE_SIZE {
+			log::warn!(target: "db", "Maximum size of pinning cache reached. Removing items to make space. max_size = {}", PINNING_CACHE_SIZE);
+		}
+
 		let entry = body_cache.get_or_insert_mut(hash, Default::default);
 		entry.increase_ref();
 
@@ -637,10 +641,14 @@ impl<Block: BlockT> BlockchainDb<Block> {
 		meta.block_gap = gap;
 	}
 
+	/// Empty the cache of pinned items.
 	fn clear_pinning_cache(&self) {
 		self.pinned_blocks_cache.clear();
 	}
 
+	/// Load a justification into the cache of pinned items.
+	/// Reference count of the item will not be increased. Use this
+	/// to load values for items items into the cache which have already been pinned.
 	fn insert_justifications_if_pinned(&self, hash: Block::Hash, justification: Justification) {
 		if !self.pinned_blocks_cache.contains(&hash) {
 			return
@@ -650,6 +658,9 @@ impl<Block: BlockT> BlockchainDb<Block> {
 		self.pinned_blocks_cache.insert_justifications(hash, Some(justifications));
 	}
 
+	/// Load a justification from the db into the cache of pinned items.
+	/// Reference count of the item will not be increased. Use this
+	/// to load values for items items into the cache which have already been pinned.
 	fn insert_persisted_justifications_if_pinned(&self, hash: Block::Hash) -> ClientResult<()> {
 		if !self.pinned_blocks_cache.contains(&hash) {
 			return Ok(())
@@ -659,6 +670,9 @@ impl<Block: BlockT> BlockchainDb<Block> {
 		Ok(())
 	}
 
+	/// Load a block body from the db into the cache of pinned items.
+	/// Reference count of the item will not be increased. Use this
+	/// to load values for items items into the cache which have already been pinned.
 	fn insert_persisted_body_if_pinned(&self, hash: Block::Hash) -> ClientResult<()> {
 		if !self.pinned_blocks_cache.contains(&hash) {
 			return Ok(())
@@ -669,10 +683,12 @@ impl<Block: BlockT> BlockchainDb<Block> {
 		Ok(())
 	}
 
+	/// Bump reference count for pinned item.
 	fn bump_ref(&self, hash: Block::Hash) {
 		self.pinned_blocks_cache.bump_ref(hash);
 	}
 
+	/// Decrease reference count for pinned item and remove if reference count is 0.
 	fn unpin(&self, hash: &Block::Hash) {
 		self.pinned_blocks_cache.remove(hash);
 	}
@@ -733,7 +749,6 @@ impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for Blockcha
 impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<Block> {
 	fn body(&self, hash: Block::Hash) -> ClientResult<Option<Vec<Block::Extrinsic>>> {
 		if let Some(result) = self.pinned_blocks_cache.body(&hash) {
-			log::info!(target: "skunert", "Found block data for {:?} in pinned cache.", hash);
 			return Ok(result)
 		}
 
@@ -803,7 +818,6 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 
 	fn justifications(&self, hash: Block::Hash) -> ClientResult<Option<Justifications>> {
 		if let Some(result) = self.pinned_blocks_cache.justification(&hash) {
-			log::info!(target: "skunert", "Found justification data for {:?} in pinned cache.", hash);
 			return Ok(result)
 		}
 
@@ -1906,8 +1920,12 @@ impl<Block: BlockT> Backend<Block> {
 				if finalized_number >= keep.into() {
 					let number = finalized_number.saturating_sub(keep.into());
 
+					// Before we prune a block, check if it is pinned
 					if let Some(hash) = self.blockchain.hash(number)? {
 						self.blockchain.insert_persisted_body_if_pinned(hash)?;
+
+						// If the block was finalized in this transaction, it will not be in the db
+						// yet.
 						if let Some(justification) = seen_justifications.remove(&hash) {
 							self.blockchain.insert_justifications_if_pinned(hash, justification);
 						} else {
