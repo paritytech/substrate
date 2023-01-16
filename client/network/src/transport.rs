@@ -60,10 +60,17 @@ pub fn build_transport(
 			.or_transport(tcp::tokio::Transport::new(tcp_config.clone()));
 		let dns_init = dns::TokioDnsConfig::system(desktop_trans);
 		EitherTransport::Left(if let Ok(dns) = dns_init {
+			let tcp_trans = tcp::tokio::Transport::new(tcp_config.clone());
+			let desktop_trans = websocket::WsConfig::new(tcp_trans)
+				.or_transport(tcp::tokio::Transport::new(tcp_config.clone()));
+			let dns_init = dns::TokioDnsConfig::system(desktop_trans);
 			// Secure Websocket transport needs unresolved addresses, so we join DNS transport with
 			// yet another instance of Websocket transport.
-			let tcp_trans = tcp::tokio::Transport::new(tcp_config.clone());
-			EitherTransport::Left(dns.or_transport(websocket::WsConfig::new(tcp_trans)))
+			EitherTransport::Left(
+				dns_init
+					.expect("same config to work")
+					.or_transport(websocket::WsConfig::new(dns)),
+			)
 		} else {
 			let tcp_trans = tcp::tokio::Transport::new(tcp_config.clone());
 			let desktop_trans = websocket::WsConfig::new(tcp_trans)
