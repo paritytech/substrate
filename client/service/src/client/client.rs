@@ -335,11 +335,10 @@ where
 
 			self.backend.commit_operation(op)?;
 
-			if let Some(ref notification) = finality_notification {
-				if let Err(err) = self.backend.pin_block(
-					&notification.hash,
-					finality_num.expect("Should work").saturated_into::<u64>(),
-				) {
+			if let (Some(ref notification), Some(number)) = (&finality_notification, finality_num) {
+				if let Err(err) =
+					self.backend.pin_block(&notification.hash, number.saturated_into::<u64>())
+				{
 					error!(
 						"Unable to pin block for finality notification. hash: {}, Error: {}",
 						notification.hash, err
@@ -347,11 +346,10 @@ where
 				};
 			}
 
-			if let Some(ref notification) = import_notification {
-				if let Err(err) = self.backend.pin_block(
-					&notification.hash,
-					import_num.expect("Should work").saturated_into::<u64>(),
-				) {
+			if let (Some(ref notification), Some(number)) = (&import_notification, import_num) {
+				if let Err(err) =
+					self.backend.pin_block(&notification.hash, number.saturated_into::<u64>())
+				{
 					error!(
 						"Unable to pin block for import notification. hash: {}, Error: {}",
 						notification.hash, err

@@ -534,12 +534,14 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 	}
 
 	pub fn insert_body(&self, hash: Block::Hash, extrinsics: Option<Vec<Block::Extrinsic>>) {
+		log::trace!(target: "db-pin", "Caching body for hash {}", hash);
 		let mut cache = self.cache.write();
 		let mut entry = cache.get_or_insert_mut(hash, Default::default);
 		entry.body = Some(extrinsics);
 	}
 
 	pub fn insert_justifications(&self, hash: Block::Hash, justifications: Option<Justifications>) {
+		log::trace!(target: "db-pin", "Caching justification for hash {}", hash);
 		let mut cache = self.cache.write();
 		let mut entry = cache.get_or_insert_mut(hash, Default::default);
 		entry.justifications = Some(justifications);
@@ -550,6 +552,7 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 		if let Some(entry) = cache.peek_mut(hash) {
 			entry.decrease_ref();
 			if entry.has_no_references() {
+				log::trace!(target: "db-pin", "Removing pinned cache entries for hash {}", hash);
 				cache.pop(hash);
 			}
 		}
@@ -2589,6 +2592,8 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		self.storage.state_db.pin(hash, number, hint).map_err(|_| {
 			sp_blockchain::Error::UnknownBlock(format!("State already discarded for {:?}", hash))
 		})?;
+
+		// Only increase reference count for this hash. Value is loaded once we prune.
 		self.blockchain.bump_ref(*hash);
 		Ok(())
 	}
