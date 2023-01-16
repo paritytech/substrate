@@ -231,7 +231,6 @@ variables:
 
 .crates-publishing-variables:
   variables:
-    CRATES_PUBLISHING_PIPELINE:    automatic-crate-publishing
     CRATESIO_CRATES_OWNER:         parity-crate-owner
     REPO:                          substrate
     REPO_OWNER:                    paritytech
@@ -239,7 +238,7 @@ variables:
 .crates-publishing-pipeline:
   extends:                         .crates-publishing-variables
   rules:
-    - if: $CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_REF_NAME == "master" && $PIPELINE == "$CRATES_PUBLISHING_PIPELINE"
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_REF_NAME == "master" && $PIPELINE == "automatic-crate-publishing"
 
 .crates-publishing-template:
   extends:
@@ -277,8 +276,6 @@ check-crates-publishing-pipeline:
   extends:
     - .kubernetes-env
     - .crates-publishing-pipeline
-  rules:
-    - if: $PIPELINE == "$CRATES_PUBLISHING_PIPELINE"
   script:
     - git clone
         --depth 1
