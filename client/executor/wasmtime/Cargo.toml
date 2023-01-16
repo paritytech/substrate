@@ -19,7 +19,7 @@ log = "0.4.17"
 
 # When bumping wasmtime do not forget to also bump rustix
 # to exactly the same version as used by wasmtime!
-wasmtime = { version = "1.0.0", default-features = false, features = [
+wasmtime = { version = "2.0.2", default-features = false, features = [
 	"cache",
 	"cranelift",
 	"jitdump",
