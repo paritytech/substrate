@@ -720,8 +720,8 @@ pub mod pallet {
 					.map_err(|_| Error::<T>::Unfunded)?;
 			} else {
 				T::Currency::unreserve_named(&T::ReserveId::get(), &who, amount);
-				on_hold -= amount;
-				summary.receipts_on_hold -= amount;
+				on_hold.saturating_reduce(amount);
+				summary.receipts_on_hold.saturating_reduce(amount);
 				if dropped && !on_hold.is_zero() {
 					// Reclaim any remainder:
 					// Transfer `excess` to the pot if we have now fully compensated for the
