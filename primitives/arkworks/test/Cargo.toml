@@ -17,7 +17,7 @@ ark-serialize = { version = "0.4.0-alpha", default-features = false }
 ark-models = { git = "https://github.com/paritytech/ark-substrate", default-features = false }
 
 [dev-dependencies]
-sp-io =  { version = "7.0.0", path = "../../io" }
+sp-io =  { version = "7.0.0", default-feature =  false, path = "../../io" }
 ark-ec = { git = "https://github.com/arkworks-rs/algebra", branch = "releases", default-features = false }
 ark-algebra-test-templates = { git = "https://github.com/arkworks-rs/algebra", branch = "releases", default-features = false }
 sp-ark-bls12-377 = { git = "https://github.com/paritytech/ark-substrate", default-features = false }
