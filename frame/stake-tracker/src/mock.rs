@@ -252,7 +252,7 @@ impl ExtBuilder {
 		}
 		.assimilate_storage(&mut storage);
 
-		let mut ext = sp_io::TestExternalities::from(storage);
+		let ext = sp_io::TestExternalities::from(storage);
 
 		ext
 	}

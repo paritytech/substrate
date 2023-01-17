@@ -69,7 +69,7 @@ mod on_nominator_update {
 			assert_eq!(VoterList::count(), 0);
 
 			// usual user, validator, nominator
-			for (idx, id) in [1, 10, 20].iter().enumerate() {
+			for id in [1, 10, 20] {
 				let _ = VoterList::on_insert(*id, 1000);
 				assert_storage_noop!(StakeTracker::on_nominator_update(id, Vec::new()));
 			}
@@ -224,7 +224,7 @@ mod on_unstake {
 
 			// usual user, validator, nominator, not bonded
 			for id in [1, 10, 20, 30] {
-				VoterList::on_insert(id, 100);
+				assert_ok!(VoterList::on_insert(id, 100));
 				assert_storage_noop!(StakeTracker::on_unstake(&id));
 			}
 		});
