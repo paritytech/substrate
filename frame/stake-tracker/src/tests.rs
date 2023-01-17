@@ -1,7 +1,7 @@
 use super::{mock::*, pallet::*};
 use crate as pallet_stake_tracker;
 use frame_election_provider_support::{ReadOnlySortedListProvider, SortedListProvider};
-use frame_support::assert_storage_noop;
+use frame_support::{assert_ok, assert_storage_noop};
 use sp_staking::{OnStakingUpdate, StakingInterface};
 
 type VoterList = <Runtime as pallet_stake_tracker::Config>::VoterList;
@@ -70,8 +70,8 @@ mod on_nominator_update {
 
 			// usual user, validator, nominator
 			for id in [1, 10, 20] {
-				let _ = VoterList::on_insert(*id, 1000);
-				assert_storage_noop!(StakeTracker::on_nominator_update(id, Vec::new()));
+				let _ = VoterList::on_insert(id, 1000);
+				assert_storage_noop!(StakeTracker::on_nominator_update(&id, Vec::new()));
 			}
 		});
 	}
