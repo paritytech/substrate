@@ -427,15 +427,19 @@ where
 
 		let (unpin_worker_sender, mut rx) =
 			tracing_unbounded::<Block::Hash>("unpin-worker-channel", 10_000);
-		let task_backend = backend.clone();
+		let task_backend = Arc::downgrade(&backend);
 		spawn_handle.spawn(
 			"unpin-worker",
 			None,
 			async move {
-				log::info!(target: "db", "Starting worker task for unpinning.");
 				loop {
 					if let Some(message) = rx.next().await {
-						task_backend.unpin_block(&message);
+						if let Some(backend) = task_backend.upgrade() {
+							backend.unpin_block(&message);
+						} else {
+							log::warn!(target: "db", "Terminating unpin-worker, backend reference was dropped.");
+							return
+						}
 					}
 				}
 			}
