@@ -137,7 +137,7 @@ where
 		all_weight.saturating_accrue(extrinsic_weight.without_proof_size(), info.class)
 	} else {
 		all_weight
-			.checked_add(extrinsic_weight.without_proof_size(), info.class)
+			.checked_accrue(extrinsic_weight.without_proof_size(), info.class)
 			.map_err(|_| InvalidTransaction::ExhaustsResources)?;
 	}
 
@@ -147,7 +147,7 @@ where
 		all_weight.saturating_accrue(extrinsic_weight.without_ref_time(), info.class)
 	} else {
 		all_weight
-			.checked_add(extrinsic_weight.without_ref_time(), info.class)
+			.checked_accrue(extrinsic_weight.without_ref_time(), info.class)
 			.map_err(|_| InvalidTransaction::ExhaustsResources)?;
 	}
 
@@ -231,7 +231,7 @@ where
 		let unspent = post_info.calc_unspent(info);
 		if unspent.any_gt(Weight::zero()) {
 			crate::BlockWeight::<T>::mutate(|current_weight| {
-				current_weight.sub(unspent, info.class);
+				current_weight.saturating_reduce(unspent, info.class);
 			})
 		}
 
@@ -270,7 +270,7 @@ mod tests {
 		block_weights()
 			.get(DispatchClass::Normal)
 			.max_total // if the class total limit is unlimited, then the block limit is used.
-			.chromatic_limited_or(block_weights().max_block)
+			.limited_or(block_weights().max_block)
 	}
 
 	fn block_weight_limit() -> Weight {
@@ -330,10 +330,8 @@ mod tests {
 	fn operational_extrinsic_limited_by_operational_space_limit() {
 		new_test_ext().execute_with(|| {
 			let weights = block_weights();
-			let operational_limit = weights
-				.get(DispatchClass::Operational)
-				.max_total
-				.chromatic_limited_or(weights.max_block);
+			let operational_limit =
+				weights.get(DispatchClass::Operational).max_total.limited_or(weights.max_block);
 			let base_weight = weights.get(DispatchClass::Operational).base_extrinsic;
 
 			let weight = operational_limit - base_weight;
