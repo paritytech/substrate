@@ -30,12 +30,12 @@ sp-ark-ed-on-bls12-381 = { git = "https://github.com/paritytech/ark-substrate", 
 default = [ "curve" ]
 std = [
     "ark-ff/std",
-    "ark-std/std"
+    "ark-std/std",
 	"ark-serialize/std",
     "ark-models/std",
 	"sp-io/std",
 	"ark-ec/std",
-    "ark-algebra-test-templates/std"
+    "ark-algebra-test-templates/std",
 	"sp-ark-bls12-377/std",
 	"sp-ark-bls12-381/std",
     "sp-ark-bw6-761/std",
