@@ -252,9 +252,9 @@ impl BlockWeights {
 				weights.max_extrinsic,
 				max_for_class.saturating_sub(base_for_class),
 			);
-			// Max extrinsic should have a value for each component.
+			// Max extrinsic must non be zero in any component.
 			error_assert!(
-				!weights.max_extrinsic.is_nothing(),
+				weights.max_extrinsic.all_gt(&Weight::zero()),
 				&mut error,
 				"[{:?}] {:?} (max_extrinsic) must not be 0. Check base cost and average initialization cost.",
 				class, weights.max_extrinsic,
