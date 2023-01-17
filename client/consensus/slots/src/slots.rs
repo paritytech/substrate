@@ -21,7 +21,7 @@
 //! This is used instead of `futures_timer::Interval` because it was unreliable.
 
 use super::{InherentDataProviderExt, Slot, LOG_TARGET};
-use sp_consensus::{Error, SelectChain};
+use sp_consensus::SelectChain;
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
@@ -122,7 +122,7 @@ where
 	IDP::InherentDataProviders: crate::InherentDataProviderExt,
 {
 	/// Returns a future that fires when the next slot starts.
-	pub async fn next_slot(&mut self) -> Result<SlotInfo<Block>, Error> {
+	pub async fn next_slot(&mut self) -> SlotInfo<Block> {
 		loop {
 			// Wait for slot timeout
 			self.inner_delay
@@ -174,13 +174,13 @@ where
 			if slot > self.last_slot {
 				self.last_slot = slot;
 
-				break Ok(SlotInfo::new(
+				break SlotInfo::new(
 					slot,
 					Box::new(inherent_data_providers),
 					self.slot_duration,
 					chain_head,
 					None,
-				))
+				)
 			}
 		}
 	}
