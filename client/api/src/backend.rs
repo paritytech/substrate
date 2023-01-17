@@ -517,7 +517,7 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// Pin the block to keep bodies, justification and state available after pruning.
 	/// Number of pins are reference counted. Users need to make sure to perform
 	/// one call to `unpin_block` per call to `pin_block`.
-	fn pin_block(&self, hash: &Block::Hash, number: u64) -> sp_blockchain::Result<()>;
+	fn pin_block(&self, hash: &Block::Hash, number: NumberFor<Block>) -> sp_blockchain::Result<()>;
 
 	/// Unpin the block to allow pruning.
 	fn unpin_block(&self, hash: &Block::Hash);

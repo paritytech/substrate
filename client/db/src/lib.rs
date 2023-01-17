@@ -2588,7 +2588,11 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		)
 	}
 
-	fn pin_block(&self, hash: &<Block as BlockT>::Hash, number: u64) -> sp_blockchain::Result<()> {
+	fn pin_block(
+		&self,
+		hash: &<Block as BlockT>::Hash,
+		number: NumberFor<Block>,
+	) -> sp_blockchain::Result<()> {
 		let hint = || {
 			let header_metadata = self.blockchain.header_metadata(*hash);
 			header_metadata
@@ -2599,9 +2603,15 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				})
 				.unwrap_or(false)
 		};
-		self.storage.state_db.pin(hash, number, hint).map_err(|_| {
-			sp_blockchain::Error::UnknownBlock(format!("State already discarded for {:?}", hash))
-		})?;
+		self.storage
+			.state_db
+			.pin(hash, number.saturated_into::<u64>(), hint)
+			.map_err(|_| {
+				sp_blockchain::Error::UnknownBlock(format!(
+					"State already discarded for {:?}",
+					hash
+				))
+			})?;
 
 		if self.blocks_pruning != BlocksPruning::KeepAll {
 			// Only increase reference count for this hash. Value is loaded once we prune.
