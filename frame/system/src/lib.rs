@@ -503,17 +503,33 @@ pub mod pallet {
 	#[pallet::event]
 	pub enum Event<T: Config> {
 		/// An extrinsic completed successfully.
-		ExtrinsicSuccess { dispatch_info: DispatchInfo },
+		ExtrinsicSuccess {
+			dispatch_info: DispatchInfo,
+		},
 		/// An extrinsic failed.
-		ExtrinsicFailed { dispatch_error: DispatchError, dispatch_info: DispatchInfo },
+		ExtrinsicFailed {
+			dispatch_error: DispatchError,
+			dispatch_info: DispatchInfo,
+		},
 		/// `:code` was updated.
 		CodeUpdated,
 		/// A new account was created.
-		NewAccount { account: T::AccountId },
+		NewAccount {
+			account: T::AccountId,
+		},
 		/// An account was reaped.
-		KilledAccount { account: T::AccountId },
+		KilledAccount {
+			account: T::AccountId,
+		},
 		/// On on-chain remark happened.
-		Remarked { sender: T::AccountId, hash: T::Hash },
+		Remarked {
+			sender: T::AccountId,
+			hash: T::Hash,
+		},
+		PovSoftLimitExceeded {
+			limit: u64,
+			consumed: u64,
+		},
 	}
 
 	/// Error for the System pallet
@@ -1338,7 +1354,22 @@ impl<T: Config> Pallet<T> {
 	/// Remove temporary "environment" entries in storage, compute the storage root and return the
 	/// resulting header for this block.
 	pub fn finalize() -> T::Header {
-		log::debug!(
+		// Check the soft weight limit.
+		let consumed = BlockWeight::<T>::get();
+		if consumed.total().proof_size() > 5 * 1024 * 1024 {
+			log::warn!(
+				target: LOG_TARGET,
+				"Block {:?} consumed more than 5MiB of proof size",
+				Self::block_number()
+			);
+			// emit an event
+			Self::deposit_event(Event::PovSoftLimitExceeded {
+				limit: 5 * 1024 * 1024,
+				consumed: consumed.total().proof_size(),
+			});
+		}
+
+		/*log::debug!(
 			target: LOG_TARGET,
 			"[{:?}] {} extrinsics, length: {} (normal {}%, op: {}%, mandatory {}%) / normal weight:\
 			 {} ({}%) op weight {} ({}%) / mandatory weight {} ({}%)",
@@ -1372,7 +1403,7 @@ impl<T: Config> Pallet<T> {
 				Self::block_weight().get(DispatchClass::Mandatory).ref_time(),
 				T::BlockWeights::get().get(DispatchClass::Mandatory).max_total.unwrap_or(Bounded::max_value()).ref_time()
 			).deconstruct(),
-		);
+		);*/
 		ExecutionPhase::<T>::kill();
 		AllExtrinsicsLen::<T>::kill();
 
