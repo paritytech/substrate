@@ -494,7 +494,6 @@ dependencies = [
  "sp-mmr-primitives",
  "sp-runtime",
  "sp-tracing",
- "strum",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tempfile",
@@ -9665,6 +9664,7 @@ dependencies = [
  "sp-mmr-primitives",
  "sp-runtime",
  "sp-std",
+ "strum",
 ]
 
 [[package]]

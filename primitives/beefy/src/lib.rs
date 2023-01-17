@@ -326,6 +326,62 @@ sp_api::decl_runtime_apis! {
 	}
 }
 
+#[cfg(feature = "std")]
+/// Test accounts using [`beefy_primitives::crypto`] types.
+pub mod keyring {
+	use super::*;
+	use sp_core::{ecdsa, keccak_256, Pair};
+
+	/// Set of test accounts using [`beefy_primitives::crypto`] types.
+	#[allow(missing_docs)]
+	#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display, strum::EnumIter)]
+	pub enum Keyring {
+		Alice,
+		Bob,
+		Charlie,
+		Dave,
+		Eve,
+		Ferdie,
+		One,
+		Two,
+	}
+
+	impl Keyring {
+		/// Sign `msg`.
+		pub fn sign(self, msg: &[u8]) -> crypto::Signature {
+			let msg = keccak_256(msg);
+			ecdsa::Pair::from(self).sign_prehashed(&msg).into()
+		}
+
+		/// Return key pair.
+		pub fn pair(self) -> crypto::Pair {
+			ecdsa::Pair::from_string(self.to_seed().as_str(), None).unwrap().into()
+		}
+
+		/// Return public key.
+		pub fn public(self) -> crypto::Public {
+			self.pair().public()
+		}
+
+		/// Return seed string.
+		pub fn to_seed(self) -> String {
+			format!("//{}", self)
+		}
+	}
+
+	impl From<Keyring> for crypto::Pair {
+		fn from(k: Keyring) -> Self {
+			k.pair()
+		}
+	}
+
+	impl From<Keyring> for ecdsa::Pair {
+		fn from(k: Keyring) -> Self {
+			k.pair().into()
+		}
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

@@ -239,9 +239,10 @@ mod tests {
 	use sc_network_test::Block;
 	use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 
-	use crate::keystore::{tests::Keyring, BeefyKeystore};
+	use crate::keystore::BeefyKeystore;
 	use beefy_primitives::{
-		crypto::Signature, known_payloads, Commitment, MmrRootHash, Payload, VoteMessage, KEY_TYPE,
+		crypto::Signature, keyring::Keyring, known_payloads, Commitment, MmrRootHash, Payload,
+		VoteMessage, KEY_TYPE,
 	};
 
 	use super::*;

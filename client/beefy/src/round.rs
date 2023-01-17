@@ -218,12 +218,12 @@ mod tests {
 	use sc_network_test::Block;
 
 	use beefy_primitives::{
-		crypto::Public, known_payloads::MMR_ROOT_ID, Commitment, Equivocation, EquivocationProof,
-		Payload, SignedCommitment, ValidatorSet, VoteMessage,
+		crypto::Public, keyring::Keyring, known_payloads::MMR_ROOT_ID, Commitment, Equivocation,
+		EquivocationProof, Payload, SignedCommitment, ValidatorSet, VoteMessage,
 	};
 
 	use super::{threshold, Block as BlockT, RoundTracker, Rounds};
-	use crate::{keystore::tests::Keyring, round::VoteImportResult};
+	use crate::round::VoteImportResult;
 
 	impl<B> Rounds<B>
 	where

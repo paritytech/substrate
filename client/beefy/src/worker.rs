@@ -1030,14 +1030,15 @@ pub(crate) mod tests {
 	use super::*;
 	use crate::{
 		communication::notification::{BeefyBestBlockStream, BeefyVersionedFinalityProofStream},
-		keystore::tests::Keyring,
 		tests::{
 			create_beefy_keystore, get_beefy_streams, make_beefy_ids, two_validators::TestApi,
 			BeefyPeer, BeefyTestNet,
 		},
 		BeefyRPCLinks, KnownPeers,
 	};
-	use beefy_primitives::{known_payloads, mmr::MmrRootProvider, Payload, SignedCommitment};
+	use beefy_primitives::{
+		keyring::Keyring, known_payloads, mmr::MmrRootProvider, Payload, SignedCommitment,
+	};
 	use futures::{future::poll_fn, task::Poll};
 	use parking_lot::Mutex;
 	use sc_client_api::{Backend as BackendT, HeaderBackend};
