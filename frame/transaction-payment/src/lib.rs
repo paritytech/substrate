@@ -196,8 +196,10 @@ where
 
 		let weights = T::BlockWeights::get();
 		// the computed ratio is only among the normal class.
-		let normal_max_weight =
-			weights.get(DispatchClass::Normal).max_total.unwrap_or(weights.max_block);
+		let normal_max_weight = weights
+			.get(DispatchClass::Normal)
+			.max_total
+			.chromatic_limited_or(weights.max_block);
 		let current_block_weight = <frame_system::Pallet<T>>::block_weight();
 		let normal_block_weight =
 			current_block_weight.get(DispatchClass::Normal).min(normal_max_weight);
@@ -402,10 +404,14 @@ pub mod pallet {
 			);
 
 			let target = T::FeeMultiplierUpdate::target() *
-				T::BlockWeights::get().get(DispatchClass::Normal).max_total.expect(
-					"Setting `max_total` for `Normal` dispatch class is not compatible with \
+				T::BlockWeights::get()
+					.get(DispatchClass::Normal)
+					.max_total
+					.exact_limits()
+					.expect(
+						"Setting `max_total` for `Normal` dispatch class is not compatible with \
 					`transaction-payment` pallet.",
-				);
+					);
 			// add 1 percent;
 			let addition = target / 100;
 			if addition == Weight::zero() {

@@ -433,6 +433,10 @@ impl PerDispatchClass<Weight> {
 
 	/// Add some weight of a specific dispatch class, saturating at the numeric bounds of `Weight`.
 	pub fn add(&mut self, weight: Weight, class: DispatchClass) {
+		self.saturating_accrue(weight, class);
+	}
+
+	pub fn saturating_accrue(&mut self, weight: Weight, class: DispatchClass) {
 		let value = self.get_mut(class);
 		*value = value.saturating_add(weight);
 	}

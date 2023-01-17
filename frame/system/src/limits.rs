@@ -30,7 +30,8 @@ use frame_support::{
 	weights::{constants, Weight},
 };
 use scale_info::TypeInfo;
-use sp_runtime::{traits::Bounded, Perbill, RuntimeDebug};
+use sp_runtime::{Perbill, RuntimeDebug};
+use sp_weights::WeightLimit;
 
 /// Block length limit configuration.
 #[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode, TypeInfo)]
@@ -101,24 +102,25 @@ pub struct WeightsPerClass {
 	pub base_extrinsic: Weight,
 	/// Maximal weight of single extrinsic. Should NOT include `base_extrinsic` cost.
 	///
-	/// `None` indicates that this class of extrinsics doesn't have a limit.
-	pub max_extrinsic: Option<Weight>,
+	/// FAIL-CI fix docs
+	/// `UNLIMITED` indicates that this class of extrinsics doesn't have a limit.
+	pub max_extrinsic: WeightLimit,
 	/// Block maximal total weight for all extrinsics of given class.
 	///
-	/// `None` indicates that weight sum of this class of extrinsics is not
+	/// `UNLIMITED` indicates that weight sum of this class of extrinsics is not
 	/// restricted. Use this value carefully, since it might produce heavily oversized
 	/// blocks.
 	///
 	/// In the worst case, the total weight consumed by the class is going to be:
 	/// `MAX(max_total) + MAX(reserved)`.
-	pub max_total: Option<Weight>,
+	pub max_total: WeightLimit,
 	/// Block reserved allowance for all extrinsics of a particular class.
 	///
 	/// Setting to `None` indicates that extrinsics of that class are allowed
 	/// to go over total block weight (but at most `max_total` for that class).
 	/// Setting to `Some(x)` guarantees that at least `x` weight of particular class
 	/// is processed in every block.
-	pub reserved: Option<Weight>,
+	pub reserved: WeightLimit,
 }
 
 /// Block weight limits & base values configuration.
@@ -222,16 +224,13 @@ impl BlockWeights {
 
 	/// Verifies correctness of this `BlockWeights` object.
 	pub fn validate(self) -> ValidationResult {
-		fn or_max(w: Option<Weight>) -> Weight {
-			w.unwrap_or_else(Weight::max_value)
-		}
 		let mut error = ValidationErrors::default();
 
 		for class in DispatchClass::all() {
 			let weights = self.per_class.get(*class);
-			let max_for_class = or_max(weights.max_total);
+			let max_for_class = weights.max_total.limited_or_max();
 			let base_for_class = weights.base_extrinsic;
-			let reserved = or_max(weights.reserved);
+			let reserved = weights.reserved.limited_or_max();
 			// Make sure that if total is set it's greater than base_block &&
 			// base_for_class
 			error_assert!(
@@ -245,7 +244,7 @@ impl BlockWeights {
 			error_assert!(
 				weights
 					.max_extrinsic
-					.unwrap_or(Weight::zero())
+					.limited_or_min()
 					.all_lte(max_for_class.saturating_sub(base_for_class)),
 				&mut error,
 				"[{:?}] {:?} (max_extrinsic) can't be greater than {:?} (max for class)",
@@ -253,9 +252,9 @@ impl BlockWeights {
 				weights.max_extrinsic,
 				max_for_class.saturating_sub(base_for_class),
 			);
-			// Max extrinsic should not be 0
+			// Max extrinsic should have a value for each component.
 			error_assert!(
-				weights.max_extrinsic.unwrap_or_else(Weight::max_value).all_gt(Weight::zero()),
+				!weights.max_extrinsic.is_nothing(),
 				&mut error,
 				"[{:?}] {:?} (max_extrinsic) must not be 0. Check base cost and average initialization cost.",
 				class, weights.max_extrinsic,
@@ -271,7 +270,7 @@ impl BlockWeights {
 			);
 			// Make sure max block is greater than max_total if it's set.
 			error_assert!(
-				self.max_block.all_gte(weights.max_total.unwrap_or(Weight::zero())),
+				self.max_block.all_gte(weights.max_total.limited_or_min()),
 				&mut error,
 				"[{:?}] {:?} (max block) has to be greater than {:?} (max for class)",
 				class,
@@ -308,7 +307,7 @@ impl BlockWeights {
 				weights.base_extrinsic = Weight::zero();
 			})
 			.for_class(DispatchClass::non_mandatory(), |weights| {
-				weights.max_total = block_weight.into();
+				weights.max_total = WeightLimit::from_weight(block_weight);
 			})
 			.build()
 			.expect("We only specify max_total and leave base values as defaults; qed")
@@ -342,13 +341,16 @@ impl BlockWeights {
 		BlockWeightsBuilder {
 			weights: BlockWeights {
 				base_block: constants::BlockExecutionWeight::get(),
-				max_block: Weight::zero(),
+				max_block: Weight::zero(), // This will be set by `build`.
 				per_class: PerDispatchClass::new(|class| {
-					let initial =
-						if class == DispatchClass::Mandatory { None } else { Some(Weight::zero()) };
+					let initial = if class == DispatchClass::Mandatory {
+						WeightLimit::UNLIMITED
+					} else {
+						WeightLimit::NOTHING
+					};
 					WeightsPerClass {
 						base_extrinsic: constants::ExtrinsicBaseWeight::get(),
-						max_extrinsic: None,
+						max_extrinsic: WeightLimit::UNLIMITED,
 						max_total: initial,
 						reserved: initial,
 					}
@@ -407,20 +409,26 @@ impl BlockWeightsBuilder {
 
 		// compute max block size.
 		for class in DispatchClass::all() {
-			weights.max_block = match weights.per_class.get(*class).max_total {
-				Some(max) => max.max(weights.max_block),
-				_ => weights.max_block,
-			};
+			// FAIL-CI why is this not just maxing to unlimited aka `limited_or_max`?
+			weights.max_block =
+				weights.per_class.get(*class).max_total.limited_or_min().max(weights.max_block);
 		}
 		// compute max size of single extrinsic
 		if let Some(init_weight) = init_cost.map(|rate| rate * weights.max_block) {
 			for class in DispatchClass::all() {
 				let per_class = weights.per_class.get_mut(*class);
-				if per_class.max_extrinsic.is_none() && init_cost.is_some() {
+				// FAIL-CI do this per component?
+				if per_class.max_extrinsic.is_time_unlimited() && init_cost.is_some() {
 					per_class.max_extrinsic = per_class
 						.max_total
-						.map(|x| x.saturating_sub(init_weight))
-						.map(|x| x.saturating_sub(per_class.base_extrinsic));
+						.saturating_sub(init_weight.without_proof_size())
+						.saturating_sub(per_class.base_extrinsic.without_proof_size());
+				}
+				if per_class.max_extrinsic.is_proof_unlimited() && init_cost.is_some() {
+					per_class.max_extrinsic = per_class
+						.max_total
+						.saturating_sub(init_weight.without_ref_time())
+						.saturating_sub(per_class.base_extrinsic.without_ref_time());
 				}
 			}
 		}

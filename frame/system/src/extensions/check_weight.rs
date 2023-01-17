@@ -48,12 +48,10 @@ where
 	fn check_extrinsic_weight(
 		info: &DispatchInfoOf<T::RuntimeCall>,
 	) -> Result<(), TransactionValidityError> {
-		let max = T::BlockWeights::get().get(info.class).max_extrinsic;
-		match max {
-			Some(max) if info.weight.any_gt(max) =>
-				Err(InvalidTransaction::ExhaustsResources.into()),
-			_ => Ok(()),
-		}
+		let limit = T::BlockWeights::get().get(info.class).max_extrinsic;
+		limit
+			.check_within(info.weight)
+			.map_err(|_| InvalidTransaction::ExhaustsResources.into())
 	}
 
 	/// Checks if the current extrinsic can fit into the block with respect to block weight limits.
@@ -134,36 +132,40 @@ where
 	let limit_per_class = maximum_weight.get(info.class);
 
 	// add the weight. If class is unlimited, use saturating add instead of checked one.
-	if limit_per_class.max_total.is_none() && limit_per_class.reserved.is_none() {
-		all_weight.add(extrinsic_weight, info.class)
+	if limit_per_class.max_total.is_time_unlimited() && limit_per_class.reserved.is_time_unlimited()
+	{
+		all_weight.saturating_accrue(extrinsic_weight.without_proof_size(), info.class)
 	} else {
 		all_weight
-			.checked_add(extrinsic_weight, info.class)
+			.checked_add(extrinsic_weight.without_proof_size(), info.class)
+			.map_err(|_| InvalidTransaction::ExhaustsResources)?;
+	}
+
+	if limit_per_class.max_total.is_proof_unlimited() &&
+		limit_per_class.reserved.is_proof_unlimited()
+	{
+		all_weight.saturating_accrue(extrinsic_weight.without_ref_time(), info.class)
+	} else {
+		all_weight
+			.checked_add(extrinsic_weight.without_ref_time(), info.class)
 			.map_err(|_| InvalidTransaction::ExhaustsResources)?;
 	}
 
 	let per_class = *all_weight.get(info.class);
 
 	// Check if we don't exceed per-class allowance
-	match limit_per_class.max_total {
-		Some(max) if per_class.any_gt(max) =>
-			return Err(InvalidTransaction::ExhaustsResources.into()),
-		// There is no `max_total` limit (`None`),
-		// or we are below the limit.
-		_ => {},
-	}
+	limit_per_class
+		.max_total
+		.check_within(per_class)
+		.map_err(|_| InvalidTransaction::ExhaustsResources)?;
 
 	// In cases total block weight is exceeded, we need to fall back
 	// to `reserved` pool if there is any.
 	if all_weight.total().any_gt(maximum_weight.max_block) {
-		match limit_per_class.reserved {
-			// We are over the limit in reserved pool.
-			Some(reserved) if per_class.any_gt(reserved) =>
-				return Err(InvalidTransaction::ExhaustsResources.into()),
-			// There is either no limit in reserved pool (`None`),
-			// or we are below the limit.
-			_ => {},
-		}
+		limit_per_class
+			.reserved
+			.check_within(per_class)
+			.map_err(|_| InvalidTransaction::ExhaustsResources)?;
 	}
 
 	Ok(all_weight)
@@ -258,6 +260,7 @@ mod tests {
 	};
 	use frame_support::{assert_err, assert_ok, dispatch::Pays, weights::Weight};
 	use sp_std::marker::PhantomData;
+	use sp_weights::WeightLimit;
 
 	fn block_weights() -> crate::limits::BlockWeights {
 		<Test as crate::Config>::BlockWeights::get()
@@ -266,8 +269,8 @@ mod tests {
 	fn normal_weight_limit() -> Weight {
 		block_weights()
 			.get(DispatchClass::Normal)
-			.max_total
-			.unwrap_or_else(|| block_weights().max_block)
+			.max_total // if the class total limit is unlimited, then the block limit is used.
+			.chromatic_limited_or(block_weights().max_block)
 	}
 
 	fn block_weight_limit() -> Weight {
@@ -307,8 +310,11 @@ mod tests {
 	fn normal_extrinsic_limited_by_maximum_extrinsic_weight() {
 		new_test_ext().execute_with(|| {
 			let max = DispatchInfo {
-				weight: block_weights().get(DispatchClass::Normal).max_extrinsic.unwrap() +
-					Weight::from_ref_time(1),
+				weight: block_weights()
+					.get(DispatchClass::Normal)
+					.max_extrinsic
+					.exact_limits()
+					.unwrap() + Weight::from_ref_time(1), // FAIL-CI
 				class: DispatchClass::Normal,
 				..Default::default()
 			};
@@ -327,7 +333,7 @@ mod tests {
 			let operational_limit = weights
 				.get(DispatchClass::Operational)
 				.max_total
-				.unwrap_or_else(|| weights.max_block);
+				.chromatic_limited_or(weights.max_block);
 			let base_weight = weights.get(DispatchClass::Operational).base_extrinsic;
 
 			let weight = operational_limit - base_weight;
@@ -668,12 +674,12 @@ mod tests {
 			.base_block(Weight::zero())
 			.for_class(DispatchClass::non_mandatory(), |w| {
 				w.base_extrinsic = Weight::zero();
-				w.max_total = Some(Weight::from_ref_time(20).set_proof_size(u64::MAX));
+				w.max_total = Weight::from_ref_time(20).set_proof_size(20000).into();
 			})
 			.for_class(DispatchClass::Mandatory, |w| {
 				w.base_extrinsic = Weight::zero();
-				w.reserved = Some(Weight::from_ref_time(5).set_proof_size(u64::MAX));
-				w.max_total = None;
+				w.reserved = Weight::from_ref_time(5).set_proof_size(20000).into();
+				w.max_total = WeightLimit::UNLIMITED;
 			})
 			.build_or_panic();
 		let all_weight = crate::ConsumedWeight::new(|class| match class {
@@ -681,7 +687,7 @@ mod tests {
 			DispatchClass::Operational => Weight::from_ref_time(10),
 			DispatchClass::Mandatory => Weight::zero(),
 		});
-		assert_eq!(maximum_weight.max_block, all_weight.total().set_proof_size(u64::MAX));
+		assert_eq!(maximum_weight.max_block, all_weight.total().set_proof_size(20000));
 
 		// fits into reserved
 		let mandatory1 = DispatchInfo {

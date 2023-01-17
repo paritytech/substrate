@@ -28,6 +28,7 @@
 
 extern crate self as sp_weights;
 
+mod limit;
 mod weight_meter;
 mod weight_v2;
 
@@ -43,6 +44,7 @@ use sp_arithmetic::{
 use sp_core::Get;
 use sp_debug_derive::RuntimeDebug;
 
+pub use limit::*;
 pub use weight_meter::*;
 pub use weight_v2::*;
 

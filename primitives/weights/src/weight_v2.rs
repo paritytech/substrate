@@ -29,10 +29,10 @@ use super::*;
 pub struct Weight {
 	#[codec(compact)]
 	/// The weight of computational time used based on some reference hardware.
-	ref_time: u64,
+	pub(crate) ref_time: u64,
 	#[codec(compact)]
 	/// The weight of storage space used by proof of validity.
-	proof_size: u64,
+	pub(crate) proof_size: u64,
 }
 
 impl From<OldWeight> for Weight {
@@ -72,6 +72,14 @@ impl Weight {
 	/// Return a mutable reference to the storage size part of the weight.
 	pub fn proof_size_mut(&mut self) -> &mut u64 {
 		&mut self.proof_size
+	}
+
+	pub fn without_ref_time(&self) -> Self {
+		Self { ref_time: 0, proof_size: self.proof_size }
+	}
+
+	pub fn without_proof_size(&self) -> Self {
+		Self { ref_time: self.ref_time, proof_size: 0 }
 	}
 
 	pub const MAX: Self = Self { ref_time: u64::MAX, proof_size: u64::MAX };
