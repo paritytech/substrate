@@ -125,6 +125,11 @@ impl Weight {
 		Self { ref_time, proof_size }
 	}
 
+	/// Construct [`Weight`] from the same weight for all parts.
+	pub const fn from_all(value: u64) -> Self {
+		Self { ref_time: value, proof_size: value }
+	}
+
 	/// Saturating [`Weight`] addition. Computes `self + rhs`, saturating at the numeric bounds of
 	/// all fields instead of overflowing.
 	pub const fn saturating_add(self, rhs: Self) -> Self {
@@ -173,6 +178,11 @@ impl Weight {
 	/// Increment [`Weight`] by `amount` via saturating addition.
 	pub fn saturating_accrue(&mut self, amount: Self) {
 		*self = self.saturating_add(amount);
+	}
+
+	/// Reduce [`Weight`] by `amount` via saturating subtraction.
+	pub fn saturating_reduce(&mut self, amount: Self) {
+		*self = self.saturating_sub(amount);
 	}
 
 	/// Checked [`Weight`] addition. Computes `self + rhs`, returning `None` if overflow occurred.
@@ -228,6 +238,16 @@ impl Weight {
 			None => return None,
 		};
 		Some(Self { ref_time, proof_size })
+	}
+
+	/// Try to increase `self` by `amount` via checked addition.
+	pub fn checked_accrue(&mut self, amount: Self) -> Option<()> {
+		self.checked_add(&amount).map(|new_self| *self = new_self)
+	}
+
+	/// Try to reduce `self` by `amount` via checked subtraction.
+	pub fn checked_reduce(&mut self, amount: Self) -> Option<()> {
+		self.checked_sub(&amount).map(|new_self| *self = new_self)
 	}
 
 	/// Return a [`Weight`] where all fields are zero.
