@@ -20,15 +20,28 @@ ark-models = { git = "https://github.com/paritytech/ark-substrate", default-feat
 sp-io =  { version = "7.0.0", path = "../../io" }
 ark-ec = { git = "https://github.com/arkworks-rs/algebra", branch = "releases", default-features = false }
 ark-algebra-test-templates = { git = "https://github.com/arkworks-rs/algebra", branch = "releases", default-features = false }
-sp-ark-bls12-377 = { git = "https://github.com/paritytech/ark-substrate" }
-sp-ark-bls12-381 = { git = "https://github.com/paritytech/ark-substrate" }
-sp-ark-bw6-761 = { git = "https://github.com/paritytech/ark-substrate" }
-sp-ark-ed-on-bls12-377 = { git = "https://github.com/paritytech/ark-substrate" }
-sp-ark-ed-on-bls12-381 = { git = "https://github.com/paritytech/ark-substrate" }
+sp-ark-bls12-377 = { git = "https://github.com/paritytech/ark-substrate", default-features = false }
+sp-ark-bls12-381 = { git = "https://github.com/paritytech/ark-substrate", default-features = false }
+sp-ark-bw6-761 = { git = "https://github.com/paritytech/ark-substrate", default-features = false }
+sp-ark-ed-on-bls12-377 = { git = "https://github.com/paritytech/ark-substrate", default-features = false }
+sp-ark-ed-on-bls12-381 = { git = "https://github.com/paritytech/ark-substrate", default-features = false }
 
 [features]
 default = [ "curve" ]
-std = [ "ark-std/std", "ark-ff/std", "ark-models/std" ]
+std = [
+	"ark-serialize/std",
+    "ark-models/std",
+	"ark-ff/std",
+	"ark-ec/std",
+	"sp-ark-bls12-377/std",
+	"sp-ark-bls12-381/std",
+    "sp-ark-bw6-761/std",
+    "sp-ark-ed-on-bls12-377/std",
+    "sp-ark-ed-on-bls12-381/std",
+    "sp-io/std",
+    "ark-ec/std",
+    "ark-algebra-test-templates/std"
+]
 
 curve = [ "scalar_field", "base_field" ]
 scalar_field = []
