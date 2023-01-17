@@ -17,11 +17,18 @@
 
 use std::vec;
 
+use beefy_primitives::{
+	keyring::Keyring as BeefyKeyring, Commitment, Equivocation, Payload, ValidatorSetId,
+	VoteMessage,
+};
+use codec::Encode;
 use frame_election_provider_support::{onchain, SequentialPhragmen};
 use frame_support::{
 	construct_runtime, parameter_types,
 	sp_io::TestExternalities,
-	traits::{ConstU16, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem},
+	traits::{
+		ConstU16, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem, OnFinalize, OnInitialize,
+	},
 	BasicExternalities,
 };
 use pallet_session::historical as pallet_session_historical;
@@ -31,14 +38,17 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	impl_opaque_keys,
 	testing::{Header, TestXt},
-	traits::{BlakeTwo256, ConvertInto, IdentityLookup, OpaqueKeys},
+	traits::{BlakeTwo256, IdentityLookup, OpaqueKeys},
 	Perbill,
 };
 use sp_staking::{EraIndex, SessionIndex};
 
 use crate as pallet_beefy;
 
-pub use beefy_primitives::{crypto::AuthorityId as BeefyId, ConsensusLog, BEEFY_ENGINE_ID};
+pub use beefy_primitives::{
+	crypto::{AuthorityId as BeefyId, AuthoritySignature as BeefySignature},
+	ConsensusLog, EquivocationProof, BEEFY_ENGINE_ID,
+};
 
 impl_opaque_keys! {
 	pub struct MockSessionKeys {
@@ -131,10 +141,10 @@ parameter_types! {
 impl pallet_session::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type ValidatorId = u64;
-	type ValidatorIdOf = ConvertInto;
+	type ValidatorIdOf = pallet_staking::StashOf<Self>;
 	type ShouldEndSession = pallet_session::PeriodicSessions<ConstU64<1>, ConstU64<0>>;
 	type NextSessionRotation = pallet_session::PeriodicSessions<ConstU64<1>, ConstU64<0>>;
-	type SessionManager = MockSessionManager;
+	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Self, Staking>;
 	type SessionHandler = <MockSessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = MockSessionKeys;
 	type WeightInfo = ();
@@ -236,22 +246,6 @@ impl pallet_offences::Config for Test {
 	type OnOffenceHandler = Staking;
 }
 
-pub struct MockSessionManager;
-
-impl pallet_session::SessionManager<u64> for MockSessionManager {
-	fn end_session(_: sp_staking::SessionIndex) {}
-	fn start_session(_: sp_staking::SessionIndex) {}
-	fn new_session(idx: sp_staking::SessionIndex) -> Option<Vec<u64>> {
-		if idx == 0 || idx == 1 {
-			Some(vec![1, 2])
-		} else if idx == 2 {
-			Some(vec![3, 4])
-		} else {
-			None
-		}
-	}
-}
-
 // Note, that we can't use `UintAuthorityId` here. Reason is that the implementation
 // of `to_public_key()` assumes, that a public key is 32 bytes long. This is true for
 // ed25519 and sr25519 but *not* for ecdsa. A compressed ecdsa public key is 33 bytes,
@@ -264,20 +258,27 @@ pub fn mock_beefy_id(id: u8) -> BeefyId {
 	BeefyId::from(pk)
 }
 
-pub fn mock_authorities(vec: Vec<u8>) -> Vec<(u64, BeefyId)> {
-	vec.into_iter().map(|id| ((id as u64), mock_beefy_id(id))).collect()
+pub fn mock_authorities(vec: Vec<u8>) -> Vec<BeefyId> {
+	vec.into_iter().map(|id| mock_beefy_id(id)).collect()
 }
 
 pub fn new_test_ext(ids: Vec<u8>) -> TestExternalities {
 	new_test_ext_raw_authorities(mock_authorities(ids))
 }
 
-pub fn new_test_ext_raw_authorities(authorities: Vec<(u64, BeefyId)>) -> TestExternalities {
+pub fn new_test_ext_raw_authorities(authorities: Vec<BeefyId>) -> TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+
+	let balances: Vec<_> = (0..authorities.len()).map(|i| (i as u64, 10_000_000)).collect();
+
+	pallet_balances::GenesisConfig::<Test> { balances }
+		.assimilate_storage(&mut t)
+		.unwrap();
 
 	let session_keys: Vec<_> = authorities
 		.iter()
-		.map(|id| (id.0 as u64, id.0 as u64, MockSessionKeys { dummy: id.1.clone() }))
+		.enumerate()
+		.map(|(i, k)| (i as u64, i as u64, MockSessionKeys { dummy: k.clone() }))
 		.collect();
 
 	BasicExternalities::execute_with_storage(&mut t, || {
@@ -290,5 +291,83 @@ pub fn new_test_ext_raw_authorities(authorities: Vec<(u64, BeefyId)>) -> TestExt
 		.assimilate_storage(&mut t)
 		.unwrap();
 
+	// controllers are the index + 1000
+	let stakers: Vec<_> = (0..authorities.len())
+		.map(|i| {
+			(i as u64, i as u64 + 1000, 10_000, pallet_staking::StakerStatus::<u64>::Validator)
+		})
+		.collect();
+
+	let staking_config = pallet_staking::GenesisConfig::<Test> {
+		stakers,
+		validator_count: 2,
+		force_era: pallet_staking::Forcing::ForceNew,
+		minimum_validator_count: 0,
+		invulnerables: vec![],
+		..Default::default()
+	};
+
+	staking_config.assimilate_storage(&mut t).unwrap();
+
 	t.into()
+}
+
+pub fn start_session(session_index: SessionIndex) {
+	for i in Session::current_index()..session_index {
+		System::on_finalize(System::block_number());
+		Session::on_finalize(System::block_number());
+		Staking::on_finalize(System::block_number());
+		Beefy::on_finalize(System::block_number());
+
+		let parent_hash = if System::block_number() > 1 {
+			let hdr = System::finalize();
+			hdr.hash()
+		} else {
+			System::parent_hash()
+		};
+
+		System::reset_events();
+		System::initialize(&(i as u64 + 1), &parent_hash, &Default::default());
+		System::set_block_number((i + 1).into());
+		Timestamp::set_timestamp(System::block_number() * 6000);
+
+		System::on_initialize(System::block_number());
+		Session::on_initialize(System::block_number());
+		Staking::on_initialize(System::block_number());
+		Beefy::on_initialize(System::block_number());
+	}
+
+	assert_eq!(Session::current_index(), session_index);
+}
+
+pub fn start_era(era_index: EraIndex) {
+	start_session((era_index * 3).into());
+	assert_eq!(Staking::current_era(), Some(era_index));
+}
+
+pub fn generate_equivocation_proof(
+	validator_set_id: ValidatorSetId,
+	reporter: &BeefyKeyring,
+	vote1: (u64, Payload, &BeefyKeyring),
+	vote2: (u64, Payload, &BeefyKeyring),
+) -> EquivocationProof<u64, BeefyId, BeefySignature> {
+	let block_number = vote1.0;
+
+	let signed_vote = |block_number: u64, payload: Payload, keyring: &BeefyKeyring| {
+		let commitment = Commitment { validator_set_id, block_number, payload };
+		let signature = keyring.sign(&commitment.encode());
+		VoteMessage { commitment, id: keyring.public(), signature }
+	};
+
+	let first = signed_vote(vote1.0, vote1.1, vote1.2);
+	let second = signed_vote(vote2.0, vote2.1, vote2.2);
+	EquivocationProof {
+		set_id: validator_set_id,
+		equivocation: Equivocation {
+			round_number: block_number,
+			id: reporter.public(),
+			first,
+			second,
+		},
+	}
 }

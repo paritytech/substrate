@@ -236,10 +236,17 @@ where
 	let first = &report.equivocation.first;
 	let second = &report.equivocation.second;
 
-	// if votes come from different authorities,
-	// or both votes have the same commitment,
-	// --> the equivocation is invalid.
-	if first.id != second.id || first.commitment == second.commitment {
+	// if votes
+	//   come from different authorities,
+	//   are for different rounds,
+	//   have different validator set ids,
+	//   or both votes have the same commitment,
+	//     --> the equivocation is invalid.
+	if first.id != second.id ||
+		first.commitment.block_number != second.commitment.block_number ||
+		first.commitment.validator_set_id != second.commitment.validator_set_id ||
+		first.commitment.payload == second.commitment.payload
+	{
 		return false
 	}
 
@@ -331,10 +338,12 @@ sp_api::decl_runtime_apis! {
 pub mod keyring {
 	use super::*;
 	use sp_core::{ecdsa, keccak_256, Pair};
+	use std::collections::HashMap;
+	use strum::IntoEnumIterator;
 
 	/// Set of test accounts using [`beefy_primitives::crypto`] types.
 	#[allow(missing_docs)]
-	#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display, strum::EnumIter)]
+	#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumIter)]
 	pub enum Keyring {
 		Alice,
 		Bob,
@@ -349,6 +358,7 @@ pub mod keyring {
 	impl Keyring {
 		/// Sign `msg`.
 		pub fn sign(self, msg: &[u8]) -> crypto::Signature {
+			// todo: use custom signature hashing type
 			let msg = keccak_256(msg);
 			ecdsa::Pair::from(self).sign_prehashed(&msg).into()
 		}
@@ -367,6 +377,18 @@ pub mod keyring {
 		pub fn to_seed(self) -> String {
 			format!("//{}", self)
 		}
+
+		/// Get Keyring from public key.
+		pub fn from_public(who: &crypto::Public) -> Option<Keyring> {
+			Self::iter().find(|&k| &crypto::Public::from(k) == who)
+		}
+	}
+
+	lazy_static::lazy_static! {
+		static ref PRIVATE_KEYS: HashMap<Keyring, crypto::Pair> =
+			Keyring::iter().map(|i| (i, i.pair())).collect();
+		static ref PUBLIC_KEYS: HashMap<Keyring, crypto::Public> =
+			PRIVATE_KEYS.iter().map(|(&name, pair)| (name, pair.public())).collect();
 	}
 
 	impl From<Keyring> for crypto::Pair {
@@ -378,6 +400,12 @@ pub mod keyring {
 	impl From<Keyring> for ecdsa::Pair {
 		fn from(k: Keyring) -> Self {
 			k.pair().into()
+		}
+	}
+
+	impl From<Keyring> for crypto::Public {
+		fn from(k: Keyring) -> Self {
+			(*PUBLIC_KEYS).get(&k).cloned().unwrap()
 		}
 	}
 }

@@ -9653,6 +9653,7 @@ name = "sp-beefy"
 version = "4.0.0-dev"
 dependencies = [
  "array-bytes",
+ "lazy_static",
  "parity-scale-codec",
  "scale-info",
  "serde",

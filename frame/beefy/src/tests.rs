@@ -17,12 +17,18 @@
 
 use std::vec;
 
-use beefy_primitives::ValidatorSet;
+use beefy_primitives::{
+	check_equivocation_proof, keyring::Keyring as BeefyKeyring, known_payloads::MMR_ROOT_ID,
+	Payload, ValidatorSet,
+};
 use codec::Encode;
 
 use sp_runtime::DigestItem;
 
-use frame_support::traits::OnInitialize;
+use frame_support::{
+	assert_ok,
+	traits::{Currency, KeyOwnerProofSystem, OnInitialize},
+};
 
 use crate::mock::*;
 
@@ -37,12 +43,13 @@ pub fn beefy_log(log: ConsensusLog<BeefyId>) -> DigestItem {
 
 #[test]
 fn genesis_session_initializes_authorities() {
-	let want = vec![mock_beefy_id(1), mock_beefy_id(2), mock_beefy_id(3), mock_beefy_id(4)];
+	let authorities = mock_authorities(vec![1, 2, 3, 4]);
+	let want = authorities.clone();
 
-	new_test_ext(vec![1, 2, 3, 4]).execute_with(|| {
+	new_test_ext_raw_authorities(authorities).execute_with(|| {
 		let authorities = Beefy::authorities();
 
-		assert!(authorities.len() == 2);
+		assert_eq!(authorities.len(), 4);
 		assert_eq!(want[0], authorities[0]);
 		assert_eq!(want[1], authorities[1]);
 
@@ -50,7 +57,7 @@ fn genesis_session_initializes_authorities() {
 
 		let next_authorities = Beefy::next_authorities();
 
-		assert!(next_authorities.len() == 2);
+		assert_eq!(next_authorities.len(), 4);
 		assert_eq!(want[0], next_authorities[0]);
 		assert_eq!(want[1], next_authorities[1]);
 	});
@@ -58,6 +65,9 @@ fn genesis_session_initializes_authorities() {
 
 #[test]
 fn session_change_updates_authorities() {
+	let authorities = mock_authorities(vec![1, 2, 3, 4]);
+	let want_validators = authorities.clone();
+
 	new_test_ext(vec![1, 2, 3, 4]).execute_with(|| {
 		assert!(0 == Beefy::validator_set_id());
 
@@ -66,7 +76,7 @@ fn session_change_updates_authorities() {
 		assert!(1 == Beefy::validator_set_id());
 
 		let want = beefy_log(ConsensusLog::AuthoritiesChange(
-			ValidatorSet::new(vec![mock_beefy_id(1), mock_beefy_id(2)], 1).unwrap(),
+			ValidatorSet::new(want_validators, 1).unwrap(),
 		));
 
 		let log = System::digest().logs[0].clone();
@@ -77,7 +87,7 @@ fn session_change_updates_authorities() {
 		assert!(2 == Beefy::validator_set_id());
 
 		let want = beefy_log(ConsensusLog::AuthoritiesChange(
-			ValidatorSet::new(vec![mock_beefy_id(3), mock_beefy_id(4)], 2).unwrap(),
+			ValidatorSet::new(vec![mock_beefy_id(2), mock_beefy_id(4)], 2).unwrap(),
 		));
 
 		let log = System::digest().logs[1].clone();
@@ -92,16 +102,18 @@ fn session_change_updates_next_authorities() {
 	new_test_ext(vec![1, 2, 3, 4]).execute_with(|| {
 		let next_authorities = Beefy::next_authorities();
 
-		assert!(next_authorities.len() == 2);
+		assert_eq!(next_authorities.len(), 4);
 		assert_eq!(want[0], next_authorities[0]);
 		assert_eq!(want[1], next_authorities[1]);
+		assert_eq!(want[2], next_authorities[2]);
+		assert_eq!(want[3], next_authorities[3]);
 
 		init_block(1);
 
 		let next_authorities = Beefy::next_authorities();
 
-		assert!(next_authorities.len() == 2);
-		assert_eq!(want[2], next_authorities[0]);
+		assert_eq!(next_authorities.len(), 2);
+		assert_eq!(want[1], next_authorities[0]);
 		assert_eq!(want[3], next_authorities[1]);
 	});
 }
@@ -126,6 +138,10 @@ fn validator_set_updates_work() {
 	new_test_ext(vec![1, 2, 3, 4]).execute_with(|| {
 		let vs = Beefy::validator_set().unwrap();
 		assert_eq!(vs.id(), 0u64);
+		assert_eq!(want[0], vs.validators()[0]);
+		assert_eq!(want[1], vs.validators()[1]);
+		assert_eq!(want[2], vs.validators()[2]);
+		assert_eq!(want[3], vs.validators()[3]);
 
 		init_block(1);
 
@@ -140,7 +156,111 @@ fn validator_set_updates_work() {
 		let vs = Beefy::validator_set().unwrap();
 
 		assert_eq!(vs.id(), 2u64);
-		assert_eq!(want[2], vs.validators()[0]);
+		assert_eq!(want[1], vs.validators()[0]);
 		assert_eq!(want[3], vs.validators()[1]);
+	});
+}
+
+/// Returns a list with 3 authorities with known keys:
+/// Alice, Bob and Charlie.
+pub fn test_authorities() -> Vec<BeefyId> {
+	let authorities = vec![BeefyKeyring::Alice, BeefyKeyring::Bob, BeefyKeyring::Charlie];
+	authorities.into_iter().map(|id| id.public()).collect()
+}
+
+#[test]
+fn should_sign_and_verify() {
+	use sp_runtime::traits::Keccak256;
+
+	let set_id = 3;
+	let payload1 = Payload::from_single_entry(MMR_ROOT_ID, vec![42]);
+	let payload2 = Payload::from_single_entry(MMR_ROOT_ID, vec![128]);
+
+	// generate an equivocation proof, with two votes in the same round for
+	// same payload signed by the same key
+	let equivocation_proof = generate_equivocation_proof(
+		set_id,
+		&BeefyKeyring::Alice,
+		(1, payload1.clone(), &BeefyKeyring::Bob),
+		(1, payload1.clone(), &BeefyKeyring::Bob),
+	);
+	// expect invalid equivocation proof
+	assert!(!check_equivocation_proof::<_, _, Keccak256>(equivocation_proof));
+
+	// generate an equivocation proof, with two votes in different rounds for
+	// different payloads signed by the same key
+	let equivocation_proof = generate_equivocation_proof(
+		set_id,
+		&BeefyKeyring::Alice,
+		(1, payload1.clone(), &BeefyKeyring::Bob),
+		(2, payload2.clone(), &BeefyKeyring::Bob),
+	);
+	// expect invalid equivocation proof
+	assert!(!check_equivocation_proof::<_, _, Keccak256>(equivocation_proof));
+
+	// generate an equivocation proof, with two votes in the same round for
+	// different payloads signed by the same key
+	let payload2 = Payload::from_single_entry(MMR_ROOT_ID, vec![128]);
+	let equivocation_proof = generate_equivocation_proof(
+		set_id,
+		&BeefyKeyring::Alice,
+		(1, payload1, &BeefyKeyring::Bob),
+		(1, payload2, &BeefyKeyring::Bob),
+	);
+	// expect valid equivocation proof
+	assert!(check_equivocation_proof::<_, _, Keccak256>(equivocation_proof));
+}
+
+#[test]
+fn report_equivocation_current_set_works() {
+	let authorities = test_authorities();
+
+	new_test_ext_raw_authorities(authorities).execute_with(|| {
+		assert_eq!(Staking::current_era(), Some(0));
+		assert_eq!(Session::current_index(), 0);
+
+		start_era(1);
+
+		let validator_set = Beefy::validator_set().unwrap();
+		let authorities = validator_set.validators();
+		let set_id = validator_set.id();
+		let validators = Session::validators();
+
+		// make sure that all validators have the same balance
+		for validator in &validators {
+			assert_eq!(Balances::total_balance(validator), 10_000_000);
+			assert_eq!(Staking::slashable_balance_of(validator), 10_000);
+
+			assert_eq!(
+				Staking::eras_stakers(1, validator),
+				pallet_staking::Exposure { total: 10_000, own: 10_000, others: vec![] },
+			);
+		}
+
+		let equivocation_authority_index = 0;
+		let equivocation_key = &authorities[equivocation_authority_index];
+		let equivocation_keyring = BeefyKeyring::from_public(equivocation_key).unwrap();
+
+		let payload1 = Payload::from_single_entry(MMR_ROOT_ID, vec![42]);
+		let payload2 = Payload::from_single_entry(MMR_ROOT_ID, vec![128]);
+		// generate an equivocation proof, with two votes in the same round for
+		// different payloads signed by the same key
+		let equivocation_proof = generate_equivocation_proof(
+			set_id,
+			&BeefyKeyring::Alice,
+			(1, payload1, &equivocation_keyring),
+			(1, payload2, &equivocation_keyring),
+		);
+
+		// create the key ownership proof
+		let key_owner_proof =
+			Historical::prove((beefy_primitives::KEY_TYPE, &equivocation_key)).unwrap();
+
+		// report the equivocation and the tx should be dispatched successfully
+		assert_ok!(Beefy::report_equivocation_unsigned(
+			RuntimeOrigin::none(),
+			Box::new(equivocation_proof),
+			key_owner_proof,
+		),);
 	});
 }
