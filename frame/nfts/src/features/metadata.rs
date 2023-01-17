@@ -60,14 +60,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					.saturating_add(T::MetadataDepositBase::get());
 			}
 
-			// the previous deposit was taken from the item's owner
-			if old_deposit.account.is_some() && maybe_depositor.is_none() {
-				T::Currency::unreserve(&old_deposit.account.unwrap(), old_deposit.amount);
-				T::Currency::reserve(&collection_details.owner, deposit)?;
+			let depositor = maybe_depositor.clone().unwrap_or(collection_details.owner.clone());
+			let old_depositor = old_deposit.account.unwrap_or(collection_details.owner.clone());
+
+			if depositor != old_depositor {
+				T::Currency::unreserve(&old_depositor, old_deposit.amount);
+				T::Currency::reserve(&depositor, deposit)?;
 			} else if deposit > old_deposit.amount {
-				T::Currency::reserve(&collection_details.owner, deposit - old_deposit.amount)?;
+				T::Currency::reserve(&depositor, deposit - old_deposit.amount)?;
 			} else if deposit < old_deposit.amount {
-				T::Currency::unreserve(&collection_details.owner, old_deposit.amount - deposit);
+				T::Currency::unreserve(&depositor, old_deposit.amount - deposit);
 			}
 
 			if maybe_depositor.is_none() {
