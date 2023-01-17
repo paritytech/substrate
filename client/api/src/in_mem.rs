@@ -789,15 +789,11 @@ where
 		false
 	}
 
-	fn pin_block(
-		&self,
-		_: &<Block as BlockT>::Hash,
-		_: NumberFor<Block>,
-	) -> blockchain::Result<()> {
+	fn pin_block(&self, _: <Block as BlockT>::Hash, _: NumberFor<Block>) -> blockchain::Result<()> {
 		Ok(())
 	}
 
-	fn unpin_block(&self, _: &<Block as BlockT>::Hash) {}
+	fn unpin_block(&self, _: <Block as BlockT>::Hash) {}
 }
 
 impl<Block: BlockT> backend::LocalBackend<Block> for Backend<Block> where Block::Hash: Ord {}

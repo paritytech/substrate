@@ -529,9 +529,9 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 		cache.clear();
 	}
 
-	pub fn contains(&self, hash: &Block::Hash) -> bool {
+	pub fn contains(&self, hash: Block::Hash) -> bool {
 		let cache = self.cache.read();
-		cache.contains(hash)
+		cache.contains(&hash)
 	}
 
 	pub fn insert_body(&self, hash: Block::Hash, extrinsics: Option<Vec<Block::Extrinsic>>) {
@@ -548,12 +548,12 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 		log::trace!(target: "db-pin", "Cached justification. hash = {}, num_entries = {}", hash, cache.len());
 	}
 
-	pub fn remove(&self, hash: &Block::Hash) {
+	pub fn remove(&self, hash: Block::Hash) {
 		let mut cache = self.cache.write();
-		if let Some(entry) = cache.peek_mut(hash) {
+		if let Some(entry) = cache.peek_mut(&hash) {
 			entry.decrease_ref();
 			if entry.has_no_references() {
-				cache.pop(hash);
+				cache.pop(&hash);
 				log::trace!(target: "db-pin", "Removed pinned cache entry. hash = {}, num_entries = {}", hash, cache.len());
 			}
 		}
@@ -635,7 +635,7 @@ impl<Block: BlockT> BlockchainDb<Block> {
 	/// Reference count of the item will not be increased. Use this
 	/// to load values for items into the cache which have already been pinned.
 	fn insert_justifications_if_pinned(&self, hash: Block::Hash, justification: Justification) {
-		if !self.pinned_blocks_cache.contains(&hash) {
+		if !self.pinned_blocks_cache.contains(hash) {
 			return
 		}
 
@@ -647,7 +647,7 @@ impl<Block: BlockT> BlockchainDb<Block> {
 	/// Reference count of the item will not be increased. Use this
 	/// to load values for items into the cache which have already been pinned.
 	fn insert_persisted_justifications_if_pinned(&self, hash: Block::Hash) -> ClientResult<()> {
-		if !self.pinned_blocks_cache.contains(&hash) {
+		if !self.pinned_blocks_cache.contains(hash) {
 			return Ok(())
 		}
 		let justifications = self.justifications(hash)?;
@@ -659,7 +659,7 @@ impl<Block: BlockT> BlockchainDb<Block> {
 	/// Reference count of the item will not be increased. Use this
 	/// to load values for items items into the cache which have already been pinned.
 	fn insert_persisted_body_if_pinned(&self, hash: Block::Hash) -> ClientResult<()> {
-		if !self.pinned_blocks_cache.contains(&hash) {
+		if !self.pinned_blocks_cache.contains(hash) {
 			return Ok(())
 		}
 
@@ -674,7 +674,7 @@ impl<Block: BlockT> BlockchainDb<Block> {
 	}
 
 	/// Decrease reference count for pinned item and remove if reference count is 0.
-	fn unpin(&self, hash: &Block::Hash) {
+	fn unpin(&self, hash: Block::Hash) {
 		self.pinned_blocks_cache.remove(hash);
 	}
 }
@@ -2590,11 +2590,11 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 
 	fn pin_block(
 		&self,
-		hash: &<Block as BlockT>::Hash,
+		hash: <Block as BlockT>::Hash,
 		number: NumberFor<Block>,
 	) -> sp_blockchain::Result<()> {
 		let hint = || {
-			let header_metadata = self.blockchain.header_metadata(*hash);
+			let header_metadata = self.blockchain.header_metadata(hash);
 			header_metadata
 				.map(|hdr| {
 					sc_state_db::NodeDb::get(self.storage.as_ref(), hdr.state_root.as_ref())
@@ -2605,7 +2605,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		};
 		self.storage
 			.state_db
-			.pin(hash, number.saturated_into::<u64>(), hint)
+			.pin(&hash, number.saturated_into::<u64>(), hint)
 			.map_err(|_| {
 				sp_blockchain::Error::UnknownBlock(format!(
 					"State already discarded for {:?}",
@@ -2615,13 +2615,13 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 
 		if self.blocks_pruning != BlocksPruning::KeepAll {
 			// Only increase reference count for this hash. Value is loaded once we prune.
-			self.blockchain.bump_ref(*hash);
+			self.blockchain.bump_ref(hash);
 		}
 		Ok(())
 	}
 
-	fn unpin_block(&self, hash: &<Block as BlockT>::Hash) {
-		self.storage.state_db.unpin(hash);
+	fn unpin_block(&self, hash: <Block as BlockT>::Hash) {
+		self.storage.state_db.unpin(&hash);
 
 		if self.blocks_pruning != BlocksPruning::KeepAll {
 			self.blockchain.unpin(hash);
@@ -4277,7 +4277,7 @@ pub(crate) mod tests {
 			.unwrap();
 			blocks.push(hash);
 			// Avoid block pruning.
-			backend.pin_block(&blocks[i as usize], i).unwrap();
+			backend.pin_block(blocks[i as usize], i).unwrap();
 
 			prev_hash = hash;
 		}
@@ -4289,8 +4289,8 @@ pub(crate) mod tests {
 		assert_eq!(Some(vec![1.into()]), bc.body(blocks[1]).unwrap());
 
 		// Block 1 gets pinned three times
-		backend.pin_block(&blocks[1], 1).unwrap();
-		backend.pin_block(&blocks[1], 1).unwrap();
+		backend.pin_block(blocks[1], 1).unwrap();
+		backend.pin_block(blocks[1], 1).unwrap();
 
 		// Finalize all blocks. This will trigger pruning.
 		let mut op = backend.begin_operation().unwrap();
@@ -4331,7 +4331,7 @@ pub(crate) mod tests {
 
 		// Unpin all blocks. Values should be removed from cache.
 		for block in &blocks {
-			backend.unpin_block(&block);
+			backend.unpin_block(*block);
 		}
 
 		assert!(bc.body(blocks[0]).unwrap().is_none());
@@ -4344,10 +4344,10 @@ pub(crate) mod tests {
 		assert!(bc.justifications(blocks[3]).unwrap().is_none());
 
 		// After these unpins, block 1 should also be removed
-		backend.unpin_block(&blocks[1]);
+		backend.unpin_block(blocks[1]);
 		assert!(bc.body(blocks[1]).unwrap().is_some());
 		assert!(bc.justifications(blocks[1]).unwrap().is_some());
-		backend.unpin_block(&blocks[1]);
+		backend.unpin_block(blocks[1]);
 		assert!(bc.body(blocks[1]).unwrap().is_none());
 		assert!(bc.justifications(blocks[1]).unwrap().is_none());
 
@@ -4365,7 +4365,7 @@ pub(crate) mod tests {
 				.unwrap();
 		blocks.push(hash);
 
-		backend.pin_block(&blocks[4], 4).unwrap();
+		backend.pin_block(blocks[4], 4).unwrap();
 		// Mark block 5 as finalized.
 		let mut op = backend.begin_operation().unwrap();
 		backend.begin_state_operation(&mut op, blocks[5]).unwrap();
@@ -4384,7 +4384,7 @@ pub(crate) mod tests {
 		);
 		assert_eq!(Some(vec![5.into()]), bc.body(blocks[5]).unwrap());
 
-		backend.unpin_block(&blocks[4]);
+		backend.unpin_block(blocks[4]);
 		assert!(bc.body(blocks[4]).unwrap().is_none());
 		assert!(bc.justifications(blocks[4]).unwrap().is_none());
 
@@ -4397,7 +4397,7 @@ pub(crate) mod tests {
 		blocks.push(hash);
 
 		// Pin block 5 so it gets loaded into the cache on prune
-		backend.pin_block(&blocks[5], 5).unwrap();
+		backend.pin_block(blocks[5], 5).unwrap();
 
 		// Finalize block 6 so block 5 gets pruned. Since it is pinned both justifications should be
 		// in memory.
@@ -4434,7 +4434,7 @@ pub(crate) mod tests {
 			blocks.push(hash);
 
 			// Avoid block pruning.
-			backend.pin_block(&blocks[i as usize], i).unwrap();
+			backend.pin_block(blocks[i as usize], i).unwrap();
 
 			prev_hash = hash;
 		}
@@ -4458,7 +4458,7 @@ pub(crate) mod tests {
 		.unwrap();
 
 		// Do not prune the fork hash.
-		backend.pin_block(&fork_hash_3, 3).unwrap();
+		backend.pin_block(fork_hash_3, 3).unwrap();
 
 		let mut op = backend.begin_operation().unwrap();
 		backend.begin_state_operation(&mut op, blocks[4]).unwrap();
@@ -4484,7 +4484,7 @@ pub(crate) mod tests {
 
 		// Unpin all blocks, except the forked one.
 		for block in &blocks {
-			backend.unpin_block(&block);
+			backend.unpin_block(*block);
 		}
 		assert!(bc.body(blocks[0]).unwrap().is_none());
 		assert!(bc.body(blocks[1]).unwrap().is_none());
@@ -4492,7 +4492,7 @@ pub(crate) mod tests {
 		assert!(bc.body(blocks[3]).unwrap().is_none());
 
 		assert!(bc.body(fork_hash_3).unwrap().is_some());
-		backend.unpin_block(&fork_hash_3);
+		backend.unpin_block(fork_hash_3);
 		assert!(bc.body(fork_hash_3).unwrap().is_none());
 	}
 }

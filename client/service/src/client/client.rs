@@ -334,7 +334,7 @@ where
 			self.backend.commit_operation(op)?;
 
 			if let (Some(ref notification), Some(number)) = (&finality_notification, finality_num) {
-				if let Err(err) = self.backend.pin_block(&notification.hash, number) {
+				if let Err(err) = self.backend.pin_block(notification.hash, number) {
 					error!(
 						"Unable to pin block for finality notification. hash: {}, Error: {}",
 						notification.hash, err
@@ -343,7 +343,7 @@ where
 			}
 
 			if let (Some(ref notification), Some(number)) = (&import_notification, import_num) {
-				if let Err(err) = self.backend.pin_block(&notification.hash, number) {
+				if let Err(err) = self.backend.pin_block(notification.hash, number) {
 					error!(
 						"Unable to pin block for import notification. hash: {}, Error: {}",
 						notification.hash, err
@@ -435,7 +435,7 @@ where
 				loop {
 					if let Some(message) = rx.next().await {
 						if let Some(backend) = task_backend.upgrade() {
-							backend.unpin_block(&message);
+							backend.unpin_block(message);
 						} else {
 							log::warn!(target: "db", "Terminating unpin-worker, backend reference was dropped.");
 							return
