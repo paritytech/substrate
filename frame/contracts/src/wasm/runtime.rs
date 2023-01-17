@@ -335,7 +335,7 @@ impl RuntimeCosts {
 				.hash_blake2_128
 				.saturating_add(s.hash_blake2_128_per_byte.saturating_mul(len.into())),
 			EcdsaRecovery => s.ecdsa_recover,
-			ChainExtension(weight) => Weight::from_ref_time(weight),
+			ChainExtension(weight) => weight,
 			CallRuntime(weight) => weight,
 			SetCodeHash => s.set_code_hash,
 			EcdsaToEthAddress => s.ecdsa_to_eth_address,
