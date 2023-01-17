@@ -1455,14 +1455,20 @@ impl<Block: BlockT> Backend<Block> {
 		header: &Block::Header,
 		last_finalized: Option<Block::Hash>,
 		justification: Option<Justification>,
-		seen_justifications: &mut HashMap<Block::Hash, Justification>,
+		current_transaction_justifications: &mut HashMap<Block::Hash, Justification>,
 	) -> ClientResult<MetaUpdate<Block>> {
 		// TODO: ensure best chain contains this block.
 		let number = *header.number();
 		self.ensure_sequential_finalization(header, last_finalized)?;
 		let with_state = sc_client_api::Backend::have_state_at(self, hash, number);
 
-		self.note_finalized(transaction, header, hash, with_state, seen_justifications)?;
+		self.note_finalized(
+			transaction,
+			header,
+			hash,
+			with_state,
+			current_transaction_justifications,
+		)?;
 
 		if let Some(justification) = justification {
 			transaction.set_from_vec(
@@ -1470,7 +1476,7 @@ impl<Block: BlockT> Backend<Block> {
 				&utils::number_and_hash_to_lookup_key(number, hash)?,
 				Justifications::from(justification.clone()).encode(),
 			);
-			seen_justifications.insert(hash, justification);
+			current_transaction_justifications.insert(hash, justification);
 		}
 		Ok(MetaUpdate { hash, number, is_best: false, is_finalized: true, with_state })
 	}
@@ -1537,7 +1543,8 @@ impl<Block: BlockT> Backend<Block> {
 			(meta.best_number, meta.finalized_hash, meta.finalized_number, meta.block_gap)
 		};
 
-		let mut seen_justifications: HashMap<Block::Hash, Justification> = HashMap::new();
+		let mut current_transaction_justifications: HashMap<Block::Hash, Justification> =
+			HashMap::new();
 		for (block_hash, justification) in operation.finalized_blocks {
 			let block_header = self.blockchain.expect_header(block_hash)?;
 			meta_updates.push(self.finalize_block_with_transaction(
@@ -1546,7 +1553,7 @@ impl<Block: BlockT> Backend<Block> {
 				&block_header,
 				Some(last_finalized_hash),
 				justification,
-				&mut seen_justifications,
+				&mut current_transaction_justifications,
 			)?);
 			last_finalized_hash = block_hash;
 			last_finalized_num = *block_header.number();
@@ -1719,13 +1726,13 @@ impl<Block: BlockT> Backend<Block> {
 			if finalized {
 				// TODO: ensure best chain contains this block.
 				self.ensure_sequential_finalization(header, Some(last_finalized_hash))?;
-				let mut seen_justifications = HashMap::new();
+				let mut current_transaction_justifications = HashMap::new();
 				self.note_finalized(
 					&mut transaction,
 					header,
 					hash,
 					operation.commit_state,
-					&mut seen_justifications,
+					&mut current_transaction_justifications,
 				)?;
 			} else {
 				// canonicalize blocks which are old enough, regardless of finality.
@@ -1859,7 +1866,7 @@ impl<Block: BlockT> Backend<Block> {
 		f_header: &Block::Header,
 		f_hash: Block::Hash,
 		with_state: bool,
-		seen_justifications: &mut HashMap<Block::Hash, Justification>,
+		current_transaction_justifications: &mut HashMap<Block::Hash, Justification>,
 	) -> ClientResult<()> {
 		let f_num = *f_header.number();
 
@@ -1885,7 +1892,7 @@ impl<Block: BlockT> Backend<Block> {
 		}
 
 		let new_displaced = self.blockchain.leaves.write().finalize_height(f_num);
-		self.prune_blocks(transaction, f_num, &new_displaced, seen_justifications)?;
+		self.prune_blocks(transaction, f_num, &new_displaced, current_transaction_justifications)?;
 
 		Ok(())
 	}
@@ -1895,7 +1902,7 @@ impl<Block: BlockT> Backend<Block> {
 		transaction: &mut Transaction<DbHash>,
 		finalized_number: NumberFor<Block>,
 		displaced: &FinalizationOutcome<Block::Hash, NumberFor<Block>>,
-		seen_justifications: &mut HashMap<Block::Hash, Justification>,
+		current_transaction_justifications: &mut HashMap<Block::Hash, Justification>,
 	) -> ClientResult<()> {
 		match self.blocks_pruning {
 			BlocksPruning::KeepAll => {},
@@ -1911,7 +1918,9 @@ impl<Block: BlockT> Backend<Block> {
 
 						// If the block was finalized in this transaction, it will not be in the db
 						// yet.
-						if let Some(justification) = seen_justifications.remove(&hash) {
+						if let Some(justification) =
+							current_transaction_justifications.remove(&hash)
+						{
 							self.blockchain.insert_justifications_if_pinned(hash, justification);
 						} else {
 							self.blockchain.insert_persisted_justifications_if_pinned(hash)?;
@@ -2194,14 +2203,14 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		let mut transaction = Transaction::new();
 		let header = self.blockchain.expect_header(hash)?;
 
-		let mut seen_justifications = HashMap::new();
+		let mut current_transaction_justifications = HashMap::new();
 		let m = self.finalize_block_with_transaction(
 			&mut transaction,
 			hash,
 			&header,
 			None,
 			justification,
-			&mut seen_justifications,
+			&mut current_transaction_justifications,
 		)?;
 
 		self.storage.db.commit(transaction)?;
