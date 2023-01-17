@@ -296,7 +296,7 @@ pub fn benchmarks(
 		// find #[benchmark] attribute on function def
 		let Some(benchmark_attr) = func.attrs.iter().find_map(|attr| {
 			let seg = attr.path.segments.last()?;
-			let Ok(_) = syn::parse::<keywords::benchmark>(seg.ident.to_token_stream().into()) else { return None };
+			syn::parse::<keywords::benchmark>(seg.ident.to_token_stream().into()).ok()?;
 			Some(attr.clone())
 		}) else { return None };
 
