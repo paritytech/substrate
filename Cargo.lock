@@ -204,8 +204,8 @@ checksum = "bddcadddf5e9015d310179a59bb28c4d4b9920ad0f11e8e14dbadf654890c9a6"
 
 [[package]]
 name = "ark-algebra-test-templates"
-version = "0.4.0-alpha.7"
-source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#c29a9aaef7e9d234c496f3bb3e1cb5742e6b80a0"
+version = "0.4.0"
+source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#c2f23fbd479e3d47b1ced166c5d545b563e03ad8"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -255,8 +255,8 @@ dependencies = [
 
 [[package]]
 name = "ark-ec"
-version = "0.4.0-alpha.7"
-source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#c29a9aaef7e9d234c496f3bb3e1cb5742e6b80a0"
+version = "0.4.0"
+source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#c2f23fbd479e3d47b1ced166c5d545b563e03ad8"
 dependencies = [
  "ark-ff",
  "ark-poly",
@@ -293,8 +293,8 @@ dependencies = [
 
 [[package]]
 name = "ark-ff"
-version = "0.4.0-alpha.7"
-source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#c29a9aaef7e9d234c496f3bb3e1cb5742e6b80a0"
+version = "0.4.0"
+source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#c2f23fbd479e3d47b1ced166c5d545b563e03ad8"
 dependencies = [
  "ark-ff-asm",
  "ark-ff-macros",
@@ -312,8 +312,8 @@ dependencies = [
 
 [[package]]
 name = "ark-ff-asm"
-version = "0.4.0-alpha.7"
-source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#c29a9aaef7e9d234c496f3bb3e1cb5742e6b80a0"
+version = "0.4.0"
+source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#c2f23fbd479e3d47b1ced166c5d545b563e03ad8"
 dependencies = [
  "quote",
  "syn",
@@ -321,8 +321,8 @@ dependencies = [
 
 [[package]]
 name = "ark-ff-macros"
-version = "0.4.0-alpha.7"
-source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#c29a9aaef7e9d234c496f3bb3e1cb5742e6b80a0"
+version = "0.4.0"
+source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#c2f23fbd479e3d47b1ced166c5d545b563e03ad8"
 dependencies = [
  "num-bigint",
  "num-traits",
@@ -334,7 +334,7 @@ dependencies = [
 [[package]]
 name = "ark-models"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/ark-substrate#dabeb33906128f146f172b0f7598d6e2b306caef"
+source = "git+https://github.com/paritytech/ark-substrate#9078250d1881f4c54025f0d04a74c797d183ba36"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -349,8 +349,8 @@ dependencies = [
 
 [[package]]
 name = "ark-poly"
-version = "0.4.0-alpha.7"
-source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#c29a9aaef7e9d234c496f3bb3e1cb5742e6b80a0"
+version = "0.4.0"
+source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#c2f23fbd479e3d47b1ced166c5d545b563e03ad8"
 dependencies = [
  "ark-ff",
  "ark-serialize",
@@ -378,9 +378,9 @@ dependencies = [
 
 [[package]]
 name = "ark-relations"
-version = "0.4.0-alpha.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8fcbb7957519f1fd4de397d22360b236840c3e426f39999e34c63be9dfe7d1b"
+checksum = "00796b6efc05a3f48225e59cb6a2cda78881e7c390872d5786aaf112f31fb4f0"
 dependencies = [
  "ark-ff",
  "ark-std",
@@ -390,8 +390,8 @@ dependencies = [
 
 [[package]]
 name = "ark-serialize"
-version = "0.4.0-alpha.7"
-source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#c29a9aaef7e9d234c496f3bb3e1cb5742e6b80a0"
+version = "0.4.0"
+source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#c2f23fbd479e3d47b1ced166c5d545b563e03ad8"
 dependencies = [
  "ark-serialize-derive",
  "ark-std",
@@ -401,8 +401,8 @@ dependencies = [
 
 [[package]]
 name = "ark-serialize-derive"
-version = "0.4.0-alpha.7"
-source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#c29a9aaef7e9d234c496f3bb3e1cb5742e6b80a0"
+version = "0.4.0"
+source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#c2f23fbd479e3d47b1ced166c5d545b563e03ad8"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -9878,7 +9878,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bls12-377"
 version = "0.4.0-alpha.1"
-source = "git+https://github.com/paritytech/ark-substrate#dabeb33906128f146f172b0f7598d6e2b306caef"
+source = "git+https://github.com/paritytech/ark-substrate#9078250d1881f4c54025f0d04a74c797d183ba36"
 dependencies = [
  "ark-bls12-377",
  "ark-ff",
@@ -9892,7 +9892,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bls12-381"
 version = "0.4.0-alpha"
-source = "git+https://github.com/paritytech/ark-substrate#dabeb33906128f146f172b0f7598d6e2b306caef"
+source = "git+https://github.com/paritytech/ark-substrate#9078250d1881f4c54025f0d04a74c797d183ba36"
 dependencies = [
  "ark-bls12-381",
  "ark-ff",
@@ -9905,7 +9905,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bw6-761"
 version = "0.4.0-alpha.1"
-source = "git+https://github.com/paritytech/ark-substrate#dabeb33906128f146f172b0f7598d6e2b306caef"
+source = "git+https://github.com/paritytech/ark-substrate#9078250d1881f4c54025f0d04a74c797d183ba36"
 dependencies = [
  "ark-bw6-761",
  "ark-ff",
@@ -9918,11 +9918,12 @@ dependencies = [
 [[package]]
 name = "sp-ark-ed-on-bls12-377"
 version = "0.4.0-alpha.1"
-source = "git+https://github.com/paritytech/ark-substrate#dabeb33906128f146f172b0f7598d6e2b306caef"
+source = "git+https://github.com/paritytech/ark-substrate#9078250d1881f4c54025f0d04a74c797d183ba36"
 dependencies = [
  "ark-ed-on-bls12-377",
  "ark-ff",
  "ark-models",
+ "ark-r1cs-std",
  "ark-serialize",
  "ark-std",
  "sp-ark-utils",
@@ -9931,7 +9932,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-ed-on-bls12-381"
 version = "0.4.0-alpha.1"
-source = "git+https://github.com/paritytech/ark-substrate#dabeb33906128f146f172b0f7598d6e2b306caef"
+source = "git+https://github.com/paritytech/ark-substrate#9078250d1881f4c54025f0d04a74c797d183ba36"
 dependencies = [
  "ark-ed-on-bls12-381",
  "ark-ff",
@@ -9944,7 +9945,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-utils"
 version = "0.4.0-alpha.1"
-source = "git+https://github.com/paritytech/ark-substrate#dabeb33906128f146f172b0f7598d6e2b306caef"
+source = "git+https://github.com/paritytech/ark-substrate#9078250d1881f4c54025f0d04a74c797d183ba36"
 dependencies = [
  "ark-serialize",
  "ark-std",
