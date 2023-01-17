@@ -90,7 +90,7 @@ impl<B: BlockT> SlotInfo<B> {
 pub(crate) struct Slots<Block, SC, IDP> {
 	last_slot: Slot,
 	slot_duration: Duration,
-	inner_delay: Option<Delay>,
+	until_next_slot: Option<Delay>,
 	create_inherent_data_providers: IDP,
 	select_chain: SC,
 	_phantom: std::marker::PhantomData<Block>,
@@ -106,7 +106,7 @@ impl<Block, SC, IDP> Slots<Block, SC, IDP> {
 		Slots {
 			last_slot: 0.into(),
 			slot_duration,
-			inner_delay: None,
+			until_next_slot: None,
 			create_inherent_data_providers,
 			select_chain,
 			_phantom: Default::default(),
@@ -125,7 +125,7 @@ where
 	pub async fn next_slot(&mut self) -> SlotInfo<Block> {
 		loop {
 			// Wait for slot timeout
-			self.inner_delay
+			self.until_next_slot
 				.take()
 				.unwrap_or_else(|| {
 					// Schedule first timeout.
@@ -136,7 +136,7 @@ where
 
 			// Schedule delay for next slot.
 			let wait_dur = time_until_next_slot(self.slot_duration);
-			self.inner_delay = Some(Delay::new(wait_dur));
+			self.until_next_slot = Some(Delay::new(wait_dur));
 
 			let chain_head = match self.select_chain.best_chain().await {
 				Ok(x) => x,
