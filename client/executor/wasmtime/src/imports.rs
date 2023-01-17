@@ -67,7 +67,7 @@ where
 				log::debug!("Missing import: '{}' {:?}", name, func_ty);
 				linker
 					.func_new("env", &name, func_ty.clone(), move |_, _, _| {
-					    Err(anyhow::anyhow!("{error}"))
+					    Err(anyhow::Error::msg(error.clone()))
 					})
 					.expect("adding a missing import stub can only fail when the item already exists, and it is missing here; qed");
 			}
