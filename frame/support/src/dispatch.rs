@@ -3695,3 +3695,195 @@ mod weight_tests {
 		assert_eq!(extract_actual_pays_fee(&Ok((Some(1000), Pays::Yes).into()), &pre), Pays::No);
 	}
 }
+
+#[cfg(test)]
+mod per_dispatch_class_tests {
+	use super::*;
+	use sp_runtime::traits::Zero;
+	use DispatchClass::*;
+
+	// helper trait
+	trait IntoWeight {
+		fn into_weight(self) -> Weight;
+	}
+
+	impl IntoWeight for u64 {
+		fn into_weight(self) -> Weight {
+			Weight::from_all(self)
+		}
+	}
+
+	impl IntoWeight for (u64, u64) {
+		fn into_weight(self) -> Weight {
+			Weight::from_parts(self.0, self.1)
+		}
+	}
+
+	#[test]
+	fn saturating_add_works() {
+		let a = PerDispatchClass {
+			normal: (5, 10).into_weight(),
+			operational: (20, 30).into_weight(),
+			mandatory: Weight::MAX,
+		};
+		assert_eq!(
+			a.clone()
+				.saturating_add((20, 5).into_weight(), Normal)
+				.saturating_add((10, 10).into_weight(), Operational)
+				.saturating_add((u64::MAX, 3).into_weight(), Mandatory),
+			PerDispatchClass {
+				normal: (25, 15).into_weight(),
+				operational: (30, 40).into_weight(),
+				mandatory: Weight::MAX
+			}
+		);
+		let b = a
+			.saturating_add(Weight::MAX, Normal)
+			.saturating_add(Weight::MAX, Operational)
+			.saturating_add(Weight::MAX, Mandatory);
+		assert_eq!(
+			b,
+			PerDispatchClass {
+				normal: Weight::MAX,
+				operational: Weight::MAX,
+				mandatory: Weight::MAX
+			}
+		);
+		assert_eq!(b.total(), Weight::MAX);
+	}
+
+	#[test]
+	fn saturating_accrue_works() {
+		let mut a = PerDispatchClass::default();
+
+		a.saturating_accrue((10, 15).into_weight(), Normal);
+		assert_eq!(a.normal, (10, 15).into_weight());
+		assert_eq!(a.total(), (10, 15).into_weight());
+
+		a.saturating_accrue((20, 25).into_weight(), Operational);
+		assert_eq!(a.operational, (20, 25).into_weight());
+		assert_eq!(a.total(), (30, 40).into_weight());
+
+		a.saturating_accrue((30, 35).into_weight(), Mandatory);
+		assert_eq!(a.mandatory, (30, 35).into_weight());
+		assert_eq!(a.total(), (60, 75).into_weight());
+
+		a.saturating_accrue((u64::MAX, 10).into_weight(), Operational);
+		assert_eq!(a.operational, (u64::MAX, 35).into_weight());
+		assert_eq!(a.total(), (u64::MAX, 85).into_weight());
+
+		a.saturating_accrue((10, u64::MAX).into_weight(), Normal);
+		assert_eq!(a.normal, (20, u64::MAX).into_weight());
+		assert_eq!(a.total(), Weight::MAX);
+	}
+
+	#[test]
+	fn saturating_reduce_works() {
+		let mut a = PerDispatchClass {
+			normal: (10, u64::MAX).into_weight(),
+			mandatory: (u64::MAX, 10).into_weight(),
+			operational: (20, 20).into_weight(),
+		};
+
+		a.saturating_reduce((5, 100).into_weight(), Normal);
+		assert_eq!(a.normal, (5, u64::MAX - 100).into_weight());
+		assert_eq!(a.total(), (u64::MAX, u64::MAX - 70).into_weight());
+
+		a.saturating_reduce((15, 5).into_weight(), Operational);
+		assert_eq!(a.operational, (5, 15).into_weight());
+		assert_eq!(a.total(), (u64::MAX, u64::MAX - 75).into_weight());
+
+		a.saturating_reduce((50, 0).into_weight(), Mandatory);
+		assert_eq!(a.mandatory, (u64::MAX - 50, 10).into_weight());
+		assert_eq!(a.total(), (u64::MAX - 40, u64::MAX - 75).into_weight());
+
+		a.saturating_reduce((u64::MAX, 100).into_weight(), Operational);
+		assert!(a.operational.is_zero());
+		assert_eq!(a.total(), (u64::MAX - 45, u64::MAX - 90).into_weight());
+
+		a.saturating_reduce((5, u64::MAX).into_weight(), Normal);
+		assert!(a.normal.is_zero());
+		assert_eq!(a.total(), (u64::MAX - 50, 10).into_weight());
+	}
+
+	#[test]
+	fn checked_accrue_works() {
+		let mut a = PerDispatchClass::default();
+
+		a.checked_accrue((1, 2).into_weight(), Normal).unwrap();
+		a.checked_accrue((3, 4).into_weight(), Operational).unwrap();
+		a.checked_accrue((5, 6).into_weight(), Mandatory).unwrap();
+		a.checked_accrue((7, 8).into_weight(), Operational).unwrap();
+		a.checked_accrue((9, 0).into_weight(), Normal).unwrap();
+
+		assert_eq!(
+			a,
+			PerDispatchClass {
+				normal: (10, 2).into_weight(),
+				operational: (10, 12).into_weight(),
+				mandatory: (5, 6).into_weight(),
+			}
+		);
+
+		a.checked_accrue((u64::MAX - 10, u64::MAX - 2).into_weight(), Normal).unwrap();
+		a.checked_accrue((0, 0).into_weight(), Normal).unwrap();
+		a.checked_accrue((1, 0).into_weight(), Normal).unwrap_err();
+		a.checked_accrue((0, 1).into_weight(), Normal).unwrap_err();
+
+		assert_eq!(
+			a,
+			PerDispatchClass {
+				normal: Weight::MAX,
+				operational: (10, 12).into_weight(),
+				mandatory: (5, 6).into_weight(),
+			}
+		);
+	}
+
+	#[test]
+	fn checked_accrue_does_not_modify_on_error() {
+		let mut a = PerDispatchClass {
+			normal: 0.into_weight(),
+			operational: Weight::MAX / 2 + 2.into_weight(),
+			mandatory: 10.into_weight(),
+		};
+
+		a.checked_accrue(Weight::MAX / 2, Operational).unwrap_err();
+		a.checked_accrue(Weight::MAX - 9.into_weight(), Mandatory).unwrap_err();
+		a.checked_accrue(Weight::MAX, Normal).unwrap(); // This one works
+
+		assert_eq!(
+			a,
+			PerDispatchClass {
+				normal: Weight::MAX,
+				operational: Weight::MAX / 2 + 2.into_weight(),
+				mandatory: 10.into_weight(),
+			}
+		);
+	}
+
+	#[test]
+	fn total_works() {
+		assert!(PerDispatchClass::default().total().is_zero());
+
+		assert_eq!(
+			PerDispatchClass {
+				normal: 0.into_weight(),
+				operational: (10, 20).into_weight(),
+				mandatory: (20, u64::MAX).into_weight(),
+			}
+			.total(),
+			(30, u64::MAX).into_weight()
+		);
+
+		assert_eq!(
+			PerDispatchClass {
+				normal: (u64::MAX - 10, 10).into_weight(),
+				operational: (3, u64::MAX).into_weight(),
+				mandatory: (4, u64::MAX).into_weight(),
+			}
+			.total(),
+			(u64::MAX - 3, u64::MAX).into_weight()
+		);
+	}
+}
