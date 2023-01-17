@@ -54,21 +54,23 @@ pub fn build_transport(
 ) -> (Boxed<(PeerId, StreamMuxerBox)>, Arc<BandwidthSinks>) {
 	// Build the base layer of the transport.
 	let transport = if !memory_only {
+		// Main transport: DNS(TCP + WS)
 		let tcp_config = tcp::Config::new().nodelay(true);
 		let tcp_trans = tcp::tokio::Transport::new(tcp_config.clone());
 		let desktop_trans = websocket::WsConfig::new(tcp_trans)
 			.or_transport(tcp::tokio::Transport::new(tcp_config.clone()));
 		let dns_init = dns::TokioDnsConfig::system(desktop_trans);
+
 		EitherTransport::Left(if let Ok(dns) = dns_init {
-			let tcp_trans = tcp::tokio::Transport::new(tcp_config.clone());
-			let desktop_trans = websocket::WsConfig::new(tcp_trans)
-				.or_transport(tcp::tokio::Transport::new(tcp_config.clone()));
-			let dns_init = dns::TokioDnsConfig::system(desktop_trans);
-			// Secure Websocket transport needs unresolved addresses, so we join DNS transport with
-			// yet another instance of Websocket transport.
-			EitherTransport::Left(
-				websocket::WsConfig::new(dns).or_transport(dns_init.expect("same config to work")),
-			)
+			// WSS transport
+			//
+			// Main transport can't be used for `/wss` addresses because WSS transport needs
+			// unresolved addresses (BUT WSS transport itself needs an instance of DNS transport to
+			// resolve and dial addresses).
+			let tcp_trans = tcp::tokio::Transport::new(tcp_config);
+			let dns_only_tcp = dns::TokioDnsConfig::system(tcp_trans)
+				.expect("same system_conf & resolver to work");
+			EitherTransport::Left(websocket::WsConfig::new(dns_only_tcp).or_transport(dns))
 		} else {
 			let tcp_trans = tcp::tokio::Transport::new(tcp_config.clone());
 			let desktop_trans = websocket::WsConfig::new(tcp_trans)
