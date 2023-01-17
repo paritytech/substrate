@@ -19,12 +19,10 @@ sp-io = { version = "7.0.0", default-features = false, path = "../../../primitiv
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../../primitives/std" }
 
-# optional dependencies for cargo features
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
 pallet-transaction-payment = { version = "4.0.0-dev", default-features = false, path = ".." }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../benchmarking", optional = true }
-pallet-assets = { default-features = false, optional = true, path = "../../assets" }
 
 # Other dependencies
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
@@ -39,7 +37,6 @@ sp-storage = { version = "7.0.0", default-features = false, path = "../../../pri
 pallet-assets = { version = "4.0.0-dev", path = "../../assets" }
 pallet-authorship = { version = "4.0.0-dev", path = "../../authorship" }
 pallet-balances = { version = "4.0.0-dev", path = "../../balances" }
-
 
 [features]
 default = ["std"]
@@ -60,6 +57,5 @@ runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
-	"pallet-assets/runtime-benchmarks",
 ]
 try-runtime = ["frame-support/try-runtime"]

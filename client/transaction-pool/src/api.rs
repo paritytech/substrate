@@ -190,9 +190,9 @@ where
 
 	fn block_header(
 		&self,
-		at: &BlockId<Self::Block>,
+		hash: <Self::Block as BlockT>::Hash,
 	) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error> {
-		self.client.header(*at).map_err(Into::into)
+		self.client.header(hash).map_err(Into::into)
 	}
 
 	fn tree_route(

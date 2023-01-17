@@ -375,7 +375,7 @@ mod tests {
 			client.clone(),
 		));
 		let network = Arc::new(TestNetwork());
-		let header = client.header(&BlockId::number(0)).unwrap().unwrap();
+		let header = client.header(client.chain_info().genesis_hash).unwrap().unwrap();
 
 		// when
 		let offchain = OffchainWorkers::new(client);
