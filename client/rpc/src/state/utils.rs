@@ -94,6 +94,8 @@ where
 
 	let result = if let Some(timeout) = timeout {
 		tokio::select! {
+			// Shouldn't really matter, but make sure the task is polled before the timeout,
+			// in case the task finishes after the timeout and the timeout is really short.
 			biased;
 
 			task_result = task => task_result,
