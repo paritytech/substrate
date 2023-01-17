@@ -519,9 +519,9 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 			log::warn!(target: "db-pinning", "Maximum size of pinning cache reached. Removing items to make space. max_size = {}", PINNING_CACHE_SIZE);
 		}
 
-		log::trace!(target: "db-pin", "Bumping cache refcount. hash = {}, num_entries = {}", hash, cache.len());
 		let entry = cache.get_or_insert_mut(hash, Default::default);
 		entry.increase_ref();
+		log::trace!(target: "db-pin", "Bumped cache refcount. hash = {}, num_entries = {}", hash, cache.len());
 	}
 
 	pub fn clear(&self) {
@@ -536,16 +536,16 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 
 	pub fn insert_body(&self, hash: Block::Hash, extrinsics: Option<Vec<Block::Extrinsic>>) {
 		let mut cache = self.cache.write();
-		log::trace!(target: "db-pin", "Caching body. hash = {}, num_entries = {}", hash, cache.len());
 		let mut entry = cache.get_or_insert_mut(hash, Default::default);
 		entry.body = Some(extrinsics);
+		log::trace!(target: "db-pin", "Cached body. hash = {}, num_entries = {}", hash, cache.len());
 	}
 
 	pub fn insert_justifications(&self, hash: Block::Hash, justifications: Option<Justifications>) {
 		let mut cache = self.cache.write();
-		log::trace!(target: "db-pin", "Caching justification. hash = {}, num_entries = {}", hash, cache.len());
 		let mut entry = cache.get_or_insert_mut(hash, Default::default);
 		entry.justifications = Some(justifications);
+		log::trace!(target: "db-pin", "Cached justification. hash = {}, num_entries = {}", hash, cache.len());
 	}
 
 	pub fn remove(&self, hash: &Block::Hash) {
@@ -554,7 +554,7 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 			entry.decrease_ref();
 			if entry.has_no_references() {
 				cache.pop(hash);
-				log::trace!(target: "db-pin", "Removing pinned cache entry. hash = {}, num_entries = {}", hash, cache.len());
+				log::trace!(target: "db-pin", "Removed pinned cache entry. hash = {}, num_entries = {}", hash, cache.len());
 			}
 		}
 	}

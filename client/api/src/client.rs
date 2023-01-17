@@ -291,6 +291,8 @@ impl<Block: BlockT> Drop for UnpinHandleInner<Block> {
 }
 
 /// Keeps a specific block pinned while the handle is alive.
+/// Once the last handle instance for a given block is dropped, the
+/// block is unpinned in the backend.
 #[derive(Debug, Clone)]
 pub struct UnpinHandle<Block: BlockT>(Arc<UnpinHandleInner<Block>>);
 
@@ -405,6 +407,13 @@ impl<Block: BlockT> FinalityNotification<Block> {
 			stale_heads: Arc::from(summary.stale_heads),
 			_unpin_handle: UnpinHandle::new(hash, unpin_worker_sender),
 		}
+	}
+
+	/// Consume this notification and extract the unpin handle.
+	///
+	/// Note: Only use this if you want to keep the block pinned in the backend.
+	pub fn into_unpin_handle(self) -> UnpinHandle<Block> {
+		self._unpin_handle
 	}
 }
 
