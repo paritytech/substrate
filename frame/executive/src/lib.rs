@@ -1125,7 +1125,8 @@ mod tests {
 		// on_initialize weight + base block execution weight
 		let block_weights = <Runtime as frame_system::Config>::BlockWeights::get();
 		let base_block_weight = Weight::from_ref_time(175) + block_weights.base_block;
-		let limit = block_weights.get(DispatchClass::Normal).max_total.unwrap() - base_block_weight;
+		let limit = block_weights.get(DispatchClass::Normal).max_total.exact_limits().unwrap() -
+			base_block_weight;
 		let num_to_exhaust_block = limit.ref_time() / (encoded_len + 5);
 		t.execute_with(|| {
 			Executive::initialize_block(&Header::new(
