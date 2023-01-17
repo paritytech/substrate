@@ -215,6 +215,9 @@ pub mod pallet {
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
+
+		/// Origin allowed to set collective members
+		type SetMembersOrigin:  EnsureOrigin<<Self as frame_system::Config>::RuntimeOrigin>;
 	}
 
 	#[pallet::genesis_config]
@@ -389,7 +392,7 @@ pub mod pallet {
 			prime: Option<T::AccountId>,
 			old_count: MemberCount,
 		) -> DispatchResultWithPostInfo {
-			ensure_root(origin)?;
+			T::SetMembersOrigin::ensure_origin(origin)?;
 			if new_members.len() > T::MaxMembers::get() as usize {
 				log::error!(
 					target: LOG_TARGET,
