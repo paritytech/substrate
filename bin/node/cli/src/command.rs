@@ -85,7 +85,6 @@ pub fn run() -> Result<()> {
 
 	match &cli.subcommand {
 		None => {
-			//this part is clumsy PoC, still need some work (maybe pass cli to service::new_full ?)
 			let runner = cli.create_runner(&cli.run)?;
 			runner.run_node_until_exit(|config| async move {
 				service::new_full(config, cli).map_err(sc_cli::Error::Service)
