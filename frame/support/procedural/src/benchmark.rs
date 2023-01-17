@@ -278,7 +278,7 @@ pub fn benchmarks(
 	let mod_attrs: Vec<&Attribute> = module
 		.attrs
 		.iter()
-		.filter(|attr| !syn::parse2::<keywords::benchmarks>(attr.to_token_stream()).is_ok())
+		.filter(|attr| syn::parse2::<keywords::benchmarks>(attr.to_token_stream()).is_err())
 		.collect();
 
 	let mut benchmark_names: Vec<Ident> = Vec::new();
