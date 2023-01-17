@@ -277,97 +277,76 @@ impl RuntimeCosts {
 	{
 		use self::RuntimeCosts::*;
 		let weight = match *self {
-			MeteringBlock(amount) => Weight::from_ref_time(s.gas.saturating_add(amount)),
-			CopyFromContract(len) =>
-				Weight::from_ref_time(s.return_per_byte.saturating_mul(len.into())),
-			CopyToContract(len) =>
-				Weight::from_ref_time(s.input_per_byte.saturating_mul(len.into())),
-			Caller => Weight::from_ref_time(s.caller),
-			IsContract => Weight::from_ref_time(s.is_contract),
-			CodeHash => Weight::from_ref_time(s.code_hash),
-			OwnCodeHash => Weight::from_ref_time(s.own_code_hash),
-			CallerIsOrigin => Weight::from_ref_time(s.caller_is_origin),
-			Address => Weight::from_ref_time(s.address),
-			GasLeft => Weight::from_ref_time(s.gas_left),
-			Balance => Weight::from_ref_time(s.balance),
-			ValueTransferred => Weight::from_ref_time(s.value_transferred),
-			MinimumBalance => Weight::from_ref_time(s.minimum_balance),
-			BlockNumber => Weight::from_ref_time(s.block_number),
-			Now => Weight::from_ref_time(s.now),
-			WeightToFee => Weight::from_ref_time(s.weight_to_fee),
-			InputBase => Weight::from_ref_time(s.input),
-			Return(len) => Weight::from_ref_time(
-				s.r#return.saturating_add(s.return_per_byte.saturating_mul(len.into())),
-			),
-			Terminate => Weight::from_ref_time(s.terminate),
-			Random => Weight::from_ref_time(s.random),
-			DepositEvent { num_topic, len } => Weight::from_ref_time(
-				s.deposit_event
-					.saturating_add(s.deposit_event_per_topic.saturating_mul(num_topic.into()))
-					.saturating_add(s.deposit_event_per_byte.saturating_mul(len.into())),
-			),
-			DebugMessage => Weight::from_ref_time(s.debug_message),
-			SetStorage { new_bytes, old_bytes } => Weight::from_ref_time(
-				s.set_storage
-					.saturating_add(s.set_storage_per_new_byte.saturating_mul(new_bytes.into()))
-					.saturating_add(s.set_storage_per_old_byte.saturating_mul(old_bytes.into())),
-			)
-			.set_proof_size(old_bytes.into()),
-			ClearStorage(len) => Weight::from_ref_time(
-				s.clear_storage
-					.saturating_add(s.clear_storage_per_byte.saturating_mul(len.into())),
-			)
-			.set_proof_size(len.into()),
-			ContainsStorage(len) => Weight::from_ref_time(
-				s.contains_storage
-					.saturating_add(s.contains_storage_per_byte.saturating_mul(len.into())),
-			)
-			.set_proof_size(len.into()),
-			GetStorage(len) => Weight::from_ref_time(
+			MeteringBlock(amount) => s.gas.saturating_add(Weight::from_ref_time(amount)),
+			CopyFromContract(len) => s.return_per_byte.saturating_mul(len.into()),
+			CopyToContract(len) => s.input_per_byte.saturating_mul(len.into()),
+			Caller => s.caller,
+			IsContract => s.is_contract,
+			CodeHash => s.code_hash,
+			OwnCodeHash => s.own_code_hash,
+			CallerIsOrigin => s.caller_is_origin,
+			Address => s.address,
+			GasLeft => s.gas_left,
+			Balance => s.balance,
+			ValueTransferred => s.value_transferred,
+			MinimumBalance => s.minimum_balance,
+			BlockNumber => s.block_number,
+			Now => s.now,
+			WeightToFee => s.weight_to_fee,
+			InputBase => s.input,
+			Return(len) => s.r#return.saturating_add(s.return_per_byte.saturating_mul(len.into())),
+			Terminate => s.terminate,
+			Random => s.random,
+			DepositEvent { num_topic, len } => s
+				.deposit_event
+				.saturating_add(s.deposit_event_per_topic.saturating_mul(num_topic.into()))
+				.saturating_add(s.deposit_event_per_byte.saturating_mul(len.into())),
+			DebugMessage => s.debug_message,
+			SetStorage { new_bytes, old_bytes } => s
+				.set_storage
+				.saturating_add(s.set_storage_per_new_byte.saturating_mul(new_bytes.into()))
+				.saturating_add(s.set_storage_per_old_byte.saturating_mul(old_bytes.into())),
+			ClearStorage(len) => s
+				.clear_storage
+				.saturating_add(s.clear_storage_per_byte.saturating_mul(len.into())),
+			ContainsStorage(len) => s
+				.contains_storage
+				.saturating_add(s.contains_storage_per_byte.saturating_mul(len.into())),
+			GetStorage(len) =>
 				s.get_storage.saturating_add(s.get_storage_per_byte.saturating_mul(len.into())),
-			)
-			.set_proof_size(len.into()),
-			TakeStorage(len) => Weight::from_ref_time(
-				s.take_storage
-					.saturating_add(s.take_storage_per_byte.saturating_mul(len.into())),
-			)
-			.set_proof_size(len.into()),
-			Transfer => Weight::from_ref_time(s.transfer),
-			CallBase => Weight::from_ref_time(s.call),
-			DelegateCallBase => Weight::from_ref_time(s.delegate_call),
-			CallSurchargeTransfer => Weight::from_ref_time(s.call_transfer_surcharge),
-			CallInputCloned(len) =>
-				Weight::from_ref_time(s.call_per_cloned_byte.saturating_mul(len.into())),
-			InstantiateBase { input_data_len, salt_len } => Weight::from_ref_time(
-				s.instantiate
-					.saturating_add(s.return_per_byte.saturating_mul(input_data_len.into()))
-					.saturating_add(s.instantiate_per_salt_byte.saturating_mul(salt_len.into())),
-			),
-			InstantiateSurchargeTransfer => Weight::from_ref_time(s.instantiate_transfer_surcharge),
-			HashSha256(len) => Weight::from_ref_time(
-				s.hash_sha2_256
-					.saturating_add(s.hash_sha2_256_per_byte.saturating_mul(len.into())),
-			),
-			HashKeccak256(len) => Weight::from_ref_time(
-				s.hash_keccak_256
-					.saturating_add(s.hash_keccak_256_per_byte.saturating_mul(len.into())),
-			),
-			HashBlake256(len) => Weight::from_ref_time(
-				s.hash_blake2_256
-					.saturating_add(s.hash_blake2_256_per_byte.saturating_mul(len.into())),
-			),
-			HashBlake128(len) => Weight::from_ref_time(
-				s.hash_blake2_128
-					.saturating_add(s.hash_blake2_128_per_byte.saturating_mul(len.into())),
-			),
-			EcdsaRecovery => Weight::from_ref_time(s.ecdsa_recover),
+			TakeStorage(len) => s
+				.take_storage
+				.saturating_add(s.take_storage_per_byte.saturating_mul(len.into())),
+			Transfer => s.transfer,
+			CallBase => s.call,
+			DelegateCallBase => s.delegate_call,
+			CallSurchargeTransfer => s.call_transfer_surcharge,
+			CallInputCloned(len) => s.call_per_cloned_byte.saturating_mul(len.into()),
+			InstantiateBase { input_data_len, salt_len } => s
+				.instantiate
+				.saturating_add(s.instantiate_per_input_byte.saturating_mul(input_data_len.into()))
+				.saturating_add(s.instantiate_per_salt_byte.saturating_mul(salt_len.into())),
+			InstantiateSurchargeTransfer => s.instantiate_transfer_surcharge,
+			HashSha256(len) => s
+				.hash_sha2_256
+				.saturating_add(s.hash_sha2_256_per_byte.saturating_mul(len.into())),
+			HashKeccak256(len) => s
+				.hash_keccak_256
+				.saturating_add(s.hash_keccak_256_per_byte.saturating_mul(len.into())),
+			HashBlake256(len) => s
+				.hash_blake2_256
+				.saturating_add(s.hash_blake2_256_per_byte.saturating_mul(len.into())),
+			HashBlake128(len) => s
+				.hash_blake2_128
+				.saturating_add(s.hash_blake2_128_per_byte.saturating_mul(len.into())),
+			EcdsaRecovery => s.ecdsa_recover,
 			ChainExtension(amount) => Weight::from_ref_time(amount),
 			CallRuntime(weight) => weight,
-			SetCodeHash => Weight::from_ref_time(s.set_code_hash),
-			EcdsaToEthAddress => Weight::from_ref_time(s.ecdsa_to_eth_address),
-			ReentrantCount => Weight::from_ref_time(s.reentrance_count),
-			AccountEntranceCount => Weight::from_ref_time(s.account_reentrance_count),
-			InstantationNonce => Weight::from_ref_time(s.instantiation_nonce),
+			SetCodeHash => s.set_code_hash,
+			EcdsaToEthAddress => s.ecdsa_to_eth_address,
+			ReentrantCount => s.reentrance_count,
+			AccountEntranceCount => s.account_reentrance_count,
+			InstantationNonce => s.instantiation_nonce,
 		};
 		RuntimeToken {
 			#[cfg(test)]
