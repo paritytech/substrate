@@ -732,7 +732,7 @@ pub mod pallet {
 					// This code is not ideal and could fail in the second phase leaving
 					// the system in an invalid state. It can be fixed properly with the
 					// new API in https://github.com/paritytech/substrate/pull/12951
-					// 
+					//
 					// Below is what it should look like then:
 					//	let _ = T::Currency::repatriate_reserved_named(
 					//		&T::ReserveId::get(),
@@ -845,7 +845,7 @@ pub mod pallet {
 			// Transfer `excess` to the pot if we have now fully compensated for the receipt.
 			T::Currency::transfer(&who, &Self::account_id(), on_hold, AllowDeath)
 				.map_err(|_| Error::<T>::Unfunded)?;
-									 // TODO #12951: ^^^ The above should be done in a single operation `transfer_on_hold`.
+			// TODO #12951: ^^^ The above should be done in a single operation `transfer_on_hold`.
 
 			// Record that we've moved the amount reserved.
 			let mut summary: SummaryRecordOf<T> = Summary::<T>::get();
@@ -891,7 +891,7 @@ pub mod pallet {
 			T::Currency::transfer(&Self::account_id(), &who, amount, AllowDeath)
 				.map_err(|_| Error::<T>::Unfunded)?;
 			T::Currency::reserve_named(&T::ReserveId::get(), &who, amount)?;
-																 // TODO: ^^^ The above should be done in a single operation `transfer_and_hold`.
+			// TODO: ^^^ The above should be done in a single operation `transfer_and_hold`.
 
 			// Record that we've moved the amount reserved.
 			summary.receipts_on_hold.saturating_accrue(amount);
