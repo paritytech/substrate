@@ -138,17 +138,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ahash"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf6ccdb167abbf410dcb915cabd428929d7f6a04980b54a11f26a39f1c7f7107"
-dependencies = [
- "cfg-if",
- "once_cell",
- "version_check",
-]
-
-[[package]]
 name = "aho-corasick"
 version = "0.7.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1847,7 +1836,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c24f403d068ad0b359e577a77f92392118be3f3c927538f2bb544a5ecd828c6"
 dependencies = [
  "curve25519-dalek 3.2.0",
- "hashbrown 0.12.3",
+ "hashbrown",
  "hex",
  "rand_core 0.6.4",
  "sha2 0.9.9",
@@ -2817,16 +2806,7 @@ version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
 dependencies = [
- "ahash 0.7.6",
-]
-
-[[package]]
-name = "hashbrown"
-version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33ff8ae62cd3a9102e5637afc8452c55acf3844001bd5374e0b0bd7b6616c038"
-dependencies = [
- "ahash 0.8.2",
+ "ahash",
 ]
 
 [[package]]
@@ -3142,7 +3122,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1885e79c1fc4b10f0e172c475f458b7f7b93061064d98c3293e98c5ba0c8b399"
 dependencies = [
  "autocfg",
- "hashbrown 0.12.3",
+ "hashbrown",
  "serde",
 ]
 
@@ -3716,7 +3696,7 @@ dependencies = [
  "libp2p-core",
  "libp2p-swarm",
  "log",
- "lru 0.8.1",
+ "lru",
  "prost",
  "prost-build",
  "prost-codec",
@@ -4192,16 +4172,7 @@ version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6e8aaa3f231bb4bd57b84b2d5dc3ae7f350265df8aa96492e0bc394a1571909"
 dependencies = [
- "hashbrown 0.12.3",
-]
-
-[[package]]
-name = "lru"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71e7d46de488603ffdd5f30afbc64fbba2378214a2c3a2fb83abf3d33126df17"
-dependencies = [
- "hashbrown 0.13.1",
+ "hashbrown",
 ]
 
 [[package]]
@@ -4339,7 +4310,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e0c7cba9ce19ac7ffd2053ac9f49843bbd3f4318feedfd74e85c19d5fb0ba66"
 dependencies = [
  "hash-db",
- "hashbrown 0.12.3",
+ "hashbrown",
 ]
 
 [[package]]
@@ -5114,7 +5085,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "21158b2c33aa6d4561f1c0a6ea283ca92bc54802a93b263e910746d679a7eb53"
 dependencies = [
  "crc32fast",
- "hashbrown 0.12.3",
+ "hashbrown",
  "indexmap",
  "memchr",
 ]
@@ -8013,7 +7984,7 @@ dependencies = [
  "kvdb-rocksdb",
  "linked-hash-map",
  "log",
- "lru 0.9.0",
+ "lru",
  "parity-db",
  "parity-scale-codec",
  "parking_lot 0.12.1",
@@ -8283,7 +8254,7 @@ dependencies = [
  "array-bytes",
  "criterion",
  "env_logger",
- "lru 0.8.1",
+ "lru",
  "num_cpus",
  "parity-scale-codec",
  "parking_lot 0.12.1",
@@ -8364,7 +8335,7 @@ dependencies = [
 name = "sc-finality-grandpa"
 version = "0.10.0-dev"
 dependencies = [
- "ahash 0.7.6",
+ "ahash",
  "array-bytes",
  "assert_matches",
  "async-trait",
@@ -8476,7 +8447,7 @@ dependencies = [
  "ip_network",
  "libp2p",
  "log",
- "lru 0.8.1",
+ "lru",
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "pin-project",
@@ -8564,12 +8535,12 @@ dependencies = [
 name = "sc-network-gossip"
 version = "0.10.0-dev"
 dependencies = [
- "ahash 0.7.6",
+ "ahash",
  "futures",
  "futures-timer",
  "libp2p",
  "log",
- "lru 0.8.1",
+ "lru",
  "quickcheck",
  "sc-network-common",
  "sc-peerset",
@@ -8610,7 +8581,7 @@ dependencies = [
  "futures",
  "libp2p",
  "log",
- "lru 0.8.1",
+ "lru",
  "mockall",
  "parity-scale-codec",
  "prost",
@@ -9708,7 +9679,7 @@ version = "4.0.0-dev"
 dependencies = [
  "futures",
  "log",
- "lru 0.8.1",
+ "lru",
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "sp-api",
@@ -10305,13 +10276,13 @@ dependencies = [
 name = "sp-trie"
 version = "7.0.0"
 dependencies = [
- "ahash 0.7.6",
+ "ahash",
  "array-bytes",
  "criterion",
  "hash-db",
- "hashbrown 0.12.3",
+ "hashbrown",
  "lazy_static",
- "lru 0.8.1",
+ "lru",
  "memory-db",
  "nohash-hasher",
  "parity-scale-codec",
@@ -11309,7 +11280,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "004e1e8f92535694b4cb1444dc5a8073ecf0815e3357f729638b9f8fc4062908"
 dependencies = [
  "hash-db",
- "hashbrown 0.12.3",
+ "hashbrown",
  "log",
  "rustc-hex",
  "smallvec",
