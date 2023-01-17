@@ -28,9 +28,11 @@ std = [
 	"ark-serialize/std",
 	"ark-ff/std",
 	"ark-ec/std",
+	"ark-std/std",
 	"ark-bls12-377/std",
 	"ark-bls12-381/std",
 	"ark-bw6-761/std",
 	"ark-ed-on-bls12-381/std",
 	"ark-ed-on-bls12-377/std",
+	"sp-std/std"
 ]
