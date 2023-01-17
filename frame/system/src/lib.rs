@@ -165,7 +165,8 @@ impl<T: Config> SetCode<T> for () {
 	}
 }
 
-/// Soft limit for the PoV weight of a block. Above this limit a warning will be printed and an [`Event::PovLimitExceeded`] will be emitted.
+/// Soft limit for the PoV weight of a block. Above this limit a warning will be printed and an
+/// [`Event::PovLimitExceeded`] will be emitted.
 pub const SOFT_POV_LIMIT_BYTES: u64 = 5 * 1024 * 1024;
 
 /// Numeric limits over the ability to add a consumer ref using `inc_consumers`.
