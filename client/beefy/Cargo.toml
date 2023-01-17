@@ -51,3 +51,4 @@ sp-finality-grandpa = { version = "4.0.0-dev", path = "../../primitives/finality
 sp-keyring = { version = "6.0.0", path = "../../primitives/keyring" }
 sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
+smart-default = "0.6.0"

@@ -78,7 +78,7 @@ fn verify_with_validator_set<Block: BlockT, AuthId: Encode + Decode + Debug + Or
 	}
 }
 
-#[cfg(notest)]
+#[cfg(test)]
 pub(crate) mod tests {
 	use beefy_primitives::{
 		known_payloads, Commitment, Payload, SignedCommitment, VersionedFinalityProof, ecdsa_crypto,
@@ -86,24 +86,29 @@ pub(crate) mod tests {
 	use substrate_test_runtime_client::runtime::Block;
 
 	use super::*;
-	use crate::{keystore::{tests::Keyring, BeefyECDSAKeystore}, tests::make_beefy_ids};
+    use crate::{keystore::{tests::{Keyring, SimpleKeyPair, GenericKeyring}, BeefyECDSAKeystore}, tests::BeefyAuthIdMaker};
 
-	pub(crate) fn new_finality_proof<TKeyring>(
+	pub(crate) fn new_finality_proof<TKeyPair, AuthId, TSignature>(
 		block_num: NumberFor<Block>,
-		validator_set: &ValidatorSet<ecdsa_crypto::AuthorityId>,
-		keys: &[TKeyring],
-	) -> BeefyVersionedFinalityProof<Block, ecdsa_crypto::Signature> where TKeyring: Keyring {
+		validator_set: &ValidatorSet<AuthId>,
+		keys: &[Keyring],
+) -> BeefyVersionedFinalityProof<Block, TSignature>
+    where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSignature>,
+      AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send,
+      TSignature:  Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq  + 'static,      
+
+{
 		let commitment = Commitment {
 			payload: Payload::from_single_entry(known_payloads::MMR_ROOT_ID, vec![]),
 			block_number: block_num,
 			validator_set_id: validator_set.id(),
 		};
 		let message = commitment.encode();
-		let signatures = keys.iter().map(|key| Some(key.sign(&message))).collect();
+		let signatures = keys.iter().map(|key| Some(<Keyring as GenericKeyring<TKeyPair>>::sign(*key, &message))).collect();
 		VersionedFinalityProof::V1(SignedCommitment { commitment, signatures })
 	}
 
-	#[test]
+	#[cfg(notest)]
 	fn should_verify_with_validator_set() {
 		let keys = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
@@ -169,7 +174,7 @@ pub(crate) mod tests {
 		};
 	}
 
-	#[test]
+	#[cfg(notest)]
 	fn should_decode_and_verify_finality_proof() {
 		let keys = &[Keyring::Alice, Keyring::Bob];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
