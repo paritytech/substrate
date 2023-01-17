@@ -253,7 +253,7 @@ pub enum RuntimeCosts {
 	/// Weight of calling `seal_ecdsa_recover`.
 	EcdsaRecovery,
 	/// Weight charged by a chain extension through `seal_call_chain_extension`.
-	ChainExtension(u64),
+	ChainExtension(Weight),
 	/// Weight charged for calling into the runtime.
 	CallRuntime(Weight),
 	/// Weight of calling `seal_set_code_hash`
