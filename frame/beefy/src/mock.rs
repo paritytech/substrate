@@ -347,7 +347,7 @@ pub fn start_era(era_index: EraIndex) {
 
 pub fn generate_equivocation_proof(
 	validator_set_id: ValidatorSetId,
-	reporter: &BeefyKeyring,
+	reporter_public: BeefyId,
 	vote1: (u64, Payload, &BeefyKeyring),
 	vote2: (u64, Payload, &BeefyKeyring),
 ) -> EquivocationProof<u64, BeefyId, BeefySignature> {
@@ -365,7 +365,7 @@ pub fn generate_equivocation_proof(
 		set_id: validator_set_id,
 		equivocation: Equivocation {
 			round_number: block_number,
-			id: reporter.public(),
+			id: reporter_public,
 			first,
 			second,
 		},

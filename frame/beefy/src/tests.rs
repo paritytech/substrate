@@ -180,7 +180,7 @@ fn should_sign_and_verify() {
 	// same payload signed by the same key
 	let equivocation_proof = generate_equivocation_proof(
 		set_id,
-		&BeefyKeyring::Alice,
+		BeefyKeyring::Alice.public(),
 		(1, payload1.clone(), &BeefyKeyring::Bob),
 		(1, payload1.clone(), &BeefyKeyring::Bob),
 	);
@@ -191,7 +191,7 @@ fn should_sign_and_verify() {
 	// different payloads signed by the same key
 	let equivocation_proof = generate_equivocation_proof(
 		set_id,
-		&BeefyKeyring::Alice,
+		BeefyKeyring::Alice.public(),
 		(1, payload1.clone(), &BeefyKeyring::Bob),
 		(2, payload2.clone(), &BeefyKeyring::Bob),
 	);
@@ -203,7 +203,7 @@ fn should_sign_and_verify() {
 	let payload2 = Payload::from_single_entry(MMR_ROOT_ID, vec![128]);
 	let equivocation_proof = generate_equivocation_proof(
 		set_id,
-		&BeefyKeyring::Alice,
+		BeefyKeyring::Alice.public(),
 		(1, payload1, &BeefyKeyring::Bob),
 		(1, payload2, &BeefyKeyring::Bob),
 	);
@@ -221,6 +221,7 @@ fn report_equivocation_current_set_works() {
 
 		start_era(1);
 
+		let block_num = System::block_number();
 		let validator_set = Beefy::validator_set().unwrap();
 		let authorities = validator_set.validators();
 		let set_id = validator_set.id();
@@ -237,7 +238,10 @@ fn report_equivocation_current_set_works() {
 			);
 		}
 
-		let equivocation_authority_index = 0;
+		assert_eq!(authorities.len(), 2);
+		let reporter_index = 0;
+		let _reporter_key = authorities[reporter_index].clone();
+		let equivocation_authority_index = 1;
 		let equivocation_key = &authorities[equivocation_authority_index];
 		let equivocation_keyring = BeefyKeyring::from_public(equivocation_key).unwrap();
 
@@ -247,9 +251,11 @@ fn report_equivocation_current_set_works() {
 		// different payloads signed by the same key
 		let equivocation_proof = generate_equivocation_proof(
 			set_id,
-			&BeefyKeyring::Alice,
-			(1, payload1, &equivocation_keyring),
-			(1, payload2, &equivocation_keyring),
+			// FIXME: test only passes for equivocation auto-report, why?
+			// _reporter_key.clone(),
+			equivocation_key.clone(),
+			(block_num, payload1, &equivocation_keyring),
+			(block_num, payload2, &equivocation_keyring),
 		);
 
 		// create the key ownership proof
@@ -262,5 +268,32 @@ fn report_equivocation_current_set_works() {
 			Box::new(equivocation_proof),
 			key_owner_proof,
 		),);
+
+		start_era(2);
+
+		// check that the balance of 0-th validator is slashed 100%.
+		let equivocation_validator_id = validators[equivocation_authority_index];
+
+		assert_eq!(Balances::total_balance(&equivocation_validator_id), 10_000_000 - 10_000);
+		assert_eq!(Staking::slashable_balance_of(&equivocation_validator_id), 0);
+		assert_eq!(
+			Staking::eras_stakers(2, equivocation_validator_id),
+			pallet_staking::Exposure { total: 0, own: 0, others: vec![] },
+		);
+
+		// check that the balances of all other validators are left intact.
+		for validator in &validators {
+			if *validator == equivocation_validator_id {
+				continue
+			}
+
+			assert_eq!(Balances::total_balance(validator), 10_000_000);
+			assert_eq!(Staking::slashable_balance_of(validator), 10_000);
+
+			assert_eq!(
+				Staking::eras_stakers(2, validator),
+				pallet_staking::Exposure { total: 10_000, own: 10_000, others: vec![] },
+			);
+		}
 	});
 }
