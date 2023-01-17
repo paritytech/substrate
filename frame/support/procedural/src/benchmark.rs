@@ -326,8 +326,7 @@ pub fn benchmarks(
 		}
 
 		// expand benchmark
-		let expanded =
-			expand_benchmark(benchmark_def.clone(), name, instance, where_clause.clone());
+		let expanded = expand_benchmark(benchmark_def, name, instance, where_clause.clone());
 
 		// replace original function def with expanded code
 		*stmt = Item::Verbatim(expanded);
