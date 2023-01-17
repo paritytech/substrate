@@ -633,7 +633,7 @@ impl<Block: BlockT> BlockchainDb<Block> {
 
 	/// Load a justification into the cache of pinned items.
 	/// Reference count of the item will not be increased. Use this
-	/// to load values for items items into the cache which have already been pinned.
+	/// to load values for items into the cache which have already been pinned.
 	fn insert_justifications_if_pinned(&self, hash: Block::Hash, justification: Justification) {
 		if !self.pinned_blocks_cache.contains(&hash) {
 			return
@@ -645,7 +645,7 @@ impl<Block: BlockT> BlockchainDb<Block> {
 
 	/// Load a justification from the db into the cache of pinned items.
 	/// Reference count of the item will not be increased. Use this
-	/// to load values for items items into the cache which have already been pinned.
+	/// to load values for items into the cache which have already been pinned.
 	fn insert_persisted_justifications_if_pinned(&self, hash: Block::Hash) -> ClientResult<()> {
 		if !self.pinned_blocks_cache.contains(&hash) {
 			return Ok(())
