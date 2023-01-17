@@ -23,7 +23,7 @@ pub(crate) mod mock;
 mod tests;
 
 use frame_election_provider_support::{SortedListProvider, VoteWeight};
-use frame_support::traits::{Currency, CurrencyToVote, Defensive};
+use frame_support::traits::{Currency, CurrencyToVote};
 pub use pallet::*;
 
 use sp_staking::{OnStakingUpdate, Stake, StakingInterface};
