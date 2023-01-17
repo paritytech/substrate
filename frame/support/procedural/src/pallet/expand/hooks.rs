@@ -63,7 +63,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			<T as #frame_system::Config>::PalletInfo
 			as
 			#frame_support::traits::PalletInfo
-		>::name::<Self>().expect("Every active pallet has a name in the runtime; qed");
+		>::name::<Self>().expect("No name found for the pallet! This usually means that the pallet wasn't added to `construct_runtime!`.");
 		#frame_support::log::debug!(
 			target: #frame_support::LOG_TARGET,
 			"🩺 try-state pallet {:?}",
@@ -191,16 +191,19 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 		}
 
-		impl<#type_impl_gen>
-			#frame_support::traits::IntegrityTest
+		// Integrity tests are only required for when `std` is enabled.
+		#frame_support::std_enabled! {
+			impl<#type_impl_gen>
+				#frame_support::traits::IntegrityTest
 			for #pallet_ident<#type_use_gen> #where_clause
-		{
-			fn integrity_test() {
-				<
-					Self as #frame_support::traits::Hooks<
+			{
+				fn integrity_test() {
+					<
+						Self as #frame_support::traits::Hooks<
 						<T as #frame_system::Config>::BlockNumber
-					>
-				>::integrity_test()
+						>
+						>::integrity_test()
+				}
 			}
 		}
 
