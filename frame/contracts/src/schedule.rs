@@ -515,8 +515,8 @@ macro_rules! cost_byte_batched {
 }
 
 macro_rules! to_weight {
-	($ref_time:expr $(, $proof_time:expr )?) => {
-		Weight::from_ref_time($ref_time)$(.set_proof_size($proof_time))?
+	($ref_time:expr $(, $proof_size:expr )?) => {
+		Weight::from_ref_time($ref_time)$(.set_proof_size($proof_size))?
 	};
 }
 

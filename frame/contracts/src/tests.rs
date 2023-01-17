@@ -2837,9 +2837,7 @@ fn gas_estimation_call_runtime() {
 		let call = RuntimeCall::Contracts(crate::Call::call {
 			dest: addr_callee,
 			value: 0,
-			gas_limit: GAS_LIMIT
-				.set_ref_time(GAS_LIMIT.ref_time() / 3)
-				.set_proof_size(GAS_LIMIT.proof_size() / 3),
+			gas_limit: GAS_LIMIT / 3,
 			storage_deposit_limit: None,
 			data: vec![],
 		});
