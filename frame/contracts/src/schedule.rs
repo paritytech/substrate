@@ -514,6 +514,12 @@ macro_rules! cost_byte_batched {
 	};
 }
 
+macro_rules! to_weight {
+	($ref_time:expr $(, $proof_time:expr )?) => {
+		Weight::from_ref_time($ref_time)$(.set_proof_size($proof_time))?
+	};
+}
+
 impl Default for Limits {
 	fn default() -> Self {
 		Self {
@@ -610,122 +616,101 @@ impl<T: Config> Default for HostFnWeights<T> {
 	/// `proof_size` as being equal to the size of storage read.
 	fn default() -> Self {
 		Self {
-			caller: Weight::from_ref_time(cost_batched!(seal_caller)),
-			is_contract: Weight::from_ref_time(cost_batched!(seal_is_contract)),
-			code_hash: Weight::from_ref_time(cost_batched!(seal_code_hash)),
-			own_code_hash: Weight::from_ref_time(cost_batched!(seal_own_code_hash)),
-			caller_is_origin: Weight::from_ref_time(cost_batched!(seal_caller_is_origin)),
-			address: Weight::from_ref_time(cost_batched!(seal_address)),
-			gas_left: Weight::from_ref_time(cost_batched!(seal_gas_left)),
-			balance: Weight::from_ref_time(cost_batched!(seal_balance)),
-			value_transferred: Weight::from_ref_time(cost_batched!(seal_value_transferred)),
-			minimum_balance: Weight::from_ref_time(cost_batched!(seal_minimum_balance)),
-			block_number: Weight::from_ref_time(cost_batched!(seal_block_number)),
-			now: Weight::from_ref_time(cost_batched!(seal_now)),
-			weight_to_fee: Weight::from_ref_time(cost_batched!(seal_weight_to_fee)),
-			gas: Weight::from_ref_time(cost_batched!(seal_gas)),
-			input: Weight::from_ref_time(cost_batched!(seal_input)),
-			input_per_byte: Weight::from_ref_time(cost_byte_batched!(seal_input_per_kb)),
-			r#return: Weight::from_ref_time(cost!(seal_return)),
-			return_per_byte: Weight::from_ref_time(cost_byte!(seal_return_per_kb)),
-			terminate: Weight::from_ref_time(cost!(seal_terminate)),
-			random: Weight::from_ref_time(cost_batched!(seal_random)),
-			deposit_event: Weight::from_ref_time(cost_batched!(seal_deposit_event)),
-			deposit_event_per_topic: Weight::from_ref_time(cost_batched_args!(
+			caller: to_weight!(cost_batched!(seal_caller)),
+			is_contract: to_weight!(cost_batched!(seal_is_contract)),
+			code_hash: to_weight!(cost_batched!(seal_code_hash)),
+			own_code_hash: to_weight!(cost_batched!(seal_own_code_hash)),
+			caller_is_origin: to_weight!(cost_batched!(seal_caller_is_origin)),
+			address: to_weight!(cost_batched!(seal_address)),
+			gas_left: to_weight!(cost_batched!(seal_gas_left)),
+			balance: to_weight!(cost_batched!(seal_balance)),
+			value_transferred: to_weight!(cost_batched!(seal_value_transferred)),
+			minimum_balance: to_weight!(cost_batched!(seal_minimum_balance)),
+			block_number: to_weight!(cost_batched!(seal_block_number)),
+			now: to_weight!(cost_batched!(seal_now)),
+			weight_to_fee: to_weight!(cost_batched!(seal_weight_to_fee)),
+			gas: to_weight!(cost_batched!(seal_gas)),
+			input: to_weight!(cost_batched!(seal_input)),
+			input_per_byte: to_weight!(cost_byte_batched!(seal_input_per_kb)),
+			r#return: to_weight!(cost!(seal_return)),
+			return_per_byte: to_weight!(cost_byte!(seal_return_per_kb)),
+			terminate: to_weight!(cost!(seal_terminate)),
+			random: to_weight!(cost_batched!(seal_random)),
+			deposit_event: to_weight!(cost_batched!(seal_deposit_event)),
+			deposit_event_per_topic: to_weight!(cost_batched_args!(
 				seal_deposit_event_per_topic_and_kb,
 				1,
 				0
 			)),
-			deposit_event_per_byte: Weight::from_ref_time(cost_byte_batched_args!(
+			deposit_event_per_byte: to_weight!(cost_byte_batched_args!(
 				seal_deposit_event_per_topic_and_kb,
 				0,
 				1
 			)),
-			debug_message: Weight::from_ref_time(cost_batched!(seal_debug_message)),
-			set_storage: Weight::from_ref_time(cost_batched!(seal_set_storage)),
-			set_code_hash: Weight::from_ref_time(cost_batched!(seal_set_code_hash)),
-			set_storage_per_new_byte: Weight::from_ref_time(cost_byte_batched!(
-				seal_set_storage_per_new_kb
-			)),
-			set_storage_per_old_byte: Weight::from_ref_time(cost_byte_batched!(
-				seal_set_storage_per_old_kb
-			))
-			.set_proof_size(1u64),
-			clear_storage: Weight::from_ref_time(cost_batched!(seal_clear_storage)),
-			clear_storage_per_byte: Weight::from_ref_time(cost_byte_batched!(
-				seal_clear_storage_per_kb
-			))
-			.set_proof_size(1u64),
-			contains_storage: Weight::from_ref_time(cost_batched!(seal_contains_storage)),
-			contains_storage_per_byte: Weight::from_ref_time(cost_byte_batched!(
-				seal_contains_storage_per_kb
-			))
-			.set_proof_size(1u64),
-			get_storage: Weight::from_ref_time(cost_batched!(seal_get_storage)),
-			get_storage_per_byte: Weight::from_ref_time(cost_byte_batched!(
-				seal_get_storage_per_kb
-			))
-			.set_proof_size(1u64),
-			take_storage: Weight::from_ref_time(cost_batched!(seal_take_storage)),
-			take_storage_per_byte: Weight::from_ref_time(cost_byte_batched!(
-				seal_take_storage_per_kb
-			))
-			.set_proof_size(1u64),
-			transfer: Weight::from_ref_time(cost_batched!(seal_transfer)),
-			call: Weight::from_ref_time(cost_batched!(seal_call)),
-			delegate_call: Weight::from_ref_time(cost_batched!(seal_delegate_call)),
-			call_transfer_surcharge: Weight::from_ref_time(cost_batched_args!(
+			debug_message: to_weight!(cost_batched!(seal_debug_message)),
+			set_storage: to_weight!(cost_batched!(seal_set_storage)),
+			set_code_hash: to_weight!(cost_batched!(seal_set_code_hash)),
+			set_storage_per_new_byte: to_weight!(cost_byte_batched!(seal_set_storage_per_new_kb)),
+			set_storage_per_old_byte: to_weight!(
+				cost_byte_batched!(seal_set_storage_per_old_kb),
+				1u64
+			),
+			clear_storage: to_weight!(cost_batched!(seal_clear_storage)),
+			clear_storage_per_byte: to_weight!(cost_byte_batched!(seal_clear_storage_per_kb), 1u64),
+			contains_storage: to_weight!(cost_batched!(seal_contains_storage)),
+			contains_storage_per_byte: to_weight!(
+				cost_byte_batched!(seal_contains_storage_per_kb),
+				1u64
+			),
+			get_storage: to_weight!(cost_batched!(seal_get_storage)),
+			get_storage_per_byte: to_weight!(cost_byte_batched!(seal_get_storage_per_kb), 1u64),
+			take_storage: to_weight!(cost_batched!(seal_take_storage)),
+			take_storage_per_byte: to_weight!(cost_byte_batched!(seal_take_storage_per_kb), 1u64),
+			transfer: to_weight!(cost_batched!(seal_transfer)),
+			call: to_weight!(cost_batched!(seal_call)),
+			delegate_call: to_weight!(cost_batched!(seal_delegate_call)),
+			call_transfer_surcharge: to_weight!(cost_batched_args!(
 				seal_call_per_transfer_clone_kb,
 				1,
 				0
 			)),
-			call_per_cloned_byte: Weight::from_ref_time(cost_batched_args!(
+			call_per_cloned_byte: to_weight!(cost_batched_args!(
 				seal_call_per_transfer_clone_kb,
 				0,
 				1
 			)),
-			instantiate: Weight::from_ref_time(cost_batched!(seal_instantiate)),
-			instantiate_transfer_surcharge: Weight::from_ref_time(cost_byte_batched_args!(
+			instantiate: to_weight!(cost_batched!(seal_instantiate)),
+			instantiate_transfer_surcharge: to_weight!(cost_byte_batched_args!(
 				seal_instantiate_per_transfer_input_salt_kb,
 				1,
 				0,
 				0
 			)),
-			instantiate_per_input_byte: Weight::from_ref_time(cost_byte_batched_args!(
+			instantiate_per_input_byte: to_weight!(cost_byte_batched_args!(
 				seal_instantiate_per_transfer_input_salt_kb,
 				0,
 				1,
 				0
 			)),
-			instantiate_per_salt_byte: Weight::from_ref_time(cost_byte_batched_args!(
+			instantiate_per_salt_byte: to_weight!(cost_byte_batched_args!(
 				seal_instantiate_per_transfer_input_salt_kb,
 				0,
 				0,
 				1
 			)),
-			hash_sha2_256: Weight::from_ref_time(cost_batched!(seal_hash_sha2_256)),
-			hash_sha2_256_per_byte: Weight::from_ref_time(cost_byte_batched!(
-				seal_hash_sha2_256_per_kb
-			)),
-			hash_keccak_256: Weight::from_ref_time(cost_batched!(seal_hash_keccak_256)),
-			hash_keccak_256_per_byte: Weight::from_ref_time(cost_byte_batched!(
-				seal_hash_keccak_256_per_kb
-			)),
-			hash_blake2_256: Weight::from_ref_time(cost_batched!(seal_hash_blake2_256)),
-			hash_blake2_256_per_byte: Weight::from_ref_time(cost_byte_batched!(
-				seal_hash_blake2_256_per_kb
-			)),
-			hash_blake2_128: Weight::from_ref_time(cost_batched!(seal_hash_blake2_128)),
-			hash_blake2_128_per_byte: Weight::from_ref_time(cost_byte_batched!(
-				seal_hash_blake2_128_per_kb
-			)),
-			ecdsa_recover: Weight::from_ref_time(cost_batched!(seal_ecdsa_recover)),
-			ecdsa_to_eth_address: Weight::from_ref_time(cost_batched!(seal_ecdsa_to_eth_address)),
-			reentrance_count: Weight::from_ref_time(cost_batched!(seal_reentrance_count)),
-			account_reentrance_count: Weight::from_ref_time(cost_batched!(
-				seal_account_reentrance_count
-			)),
-			instantiation_nonce: Weight::from_ref_time(cost_batched!(seal_instantiation_nonce)),
+			hash_sha2_256: to_weight!(cost_batched!(seal_hash_sha2_256)),
+			hash_sha2_256_per_byte: to_weight!(cost_byte_batched!(seal_hash_sha2_256_per_kb)),
+			hash_keccak_256: to_weight!(cost_batched!(seal_hash_keccak_256)),
+			hash_keccak_256_per_byte: to_weight!(cost_byte_batched!(seal_hash_keccak_256_per_kb)),
+			hash_blake2_256: to_weight!(cost_batched!(seal_hash_blake2_256)),
+			hash_blake2_256_per_byte: to_weight!(cost_byte_batched!(seal_hash_blake2_256_per_kb)),
+			hash_blake2_128: to_weight!(cost_batched!(seal_hash_blake2_128)),
+			hash_blake2_128_per_byte: to_weight!(cost_byte_batched!(seal_hash_blake2_128_per_kb)),
+			ecdsa_recover: to_weight!(cost_batched!(seal_ecdsa_recover)),
+			ecdsa_to_eth_address: to_weight!(cost_batched!(seal_ecdsa_to_eth_address)),
+			reentrance_count: to_weight!(cost_batched!(seal_reentrance_count)),
+			account_reentrance_count: to_weight!(cost_batched!(seal_account_reentrance_count)),
+			instantiation_nonce: to_weight!(cost_batched!(seal_instantiation_nonce)),
 			_phantom: PhantomData,
 		}
 	}
