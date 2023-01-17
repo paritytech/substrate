@@ -201,38 +201,38 @@ impl BenchmarkDef {
 
 		// #[extrinsic_call] / #[block] handling
 		let call_defs = item_fn.block.stmts.iter().enumerate().filter_map(|(i, child)| {
-			match child {
-				Stmt::Semi(Expr::Call(expr_call), _semi) => { // #[extrinsic_call] case
-					expr_call.attrs.iter().enumerate().find_map(|(k, attr)| {
-						let segment = attr.path.segments.last()?;
-						let _: keywords::extrinsic_call = syn::parse(segment.ident.to_token_stream().into()).ok()?;
-						let span = expr_call.span();
-						let mut expr_call = expr_call.clone();
+			if let Stmt::Semi(Expr::Call(expr_call), _semi) = child {
+				// #[extrinsic_call] case
+				expr_call.attrs.iter().enumerate().find_map(|(k, attr)| {
+					let segment = attr.path.segments.last()?;
+					let _: keywords::extrinsic_call = syn::parse(segment.ident.to_token_stream().into()).ok()?;
+					let span = expr_call.span();
+					let mut expr_call = expr_call.clone();
 
-						// consume #[extrinsic_call] tokens
-						expr_call.attrs.remove(k);
+					// consume #[extrinsic_call] tokens
+					expr_call.attrs.remove(k);
 
-						// extract origin from expr_call
-						let Some(origin) = expr_call.args.first().cloned() else {
-							return Some(Err(Error::new(span, "Single-item extrinsic calls must specify their origin as the first argument.")))
-						};
+					// extract origin from expr_call
+					let Some(origin) = expr_call.args.first().cloned() else {
+						return Some(Err(Error::new(span, "Single-item extrinsic calls must specify their origin as the first argument.")))
+					};
 
-						Some(Ok((i, BenchmarkCallDef::ExtrinsicCall { origin, expr_call, attr_span: attr.span() })))
-					})
-				},
-				Stmt::Expr(Expr::Block(block)) => { // #[block] case
-					block.attrs.iter().enumerate().find_map(|(k, attr)| {
-						let segment = attr.path.segments.last()?;
-						let _: keywords::block = syn::parse(segment.ident.to_token_stream().into()).ok()?;
-						let mut block = block.clone();
+					Some(Ok((i, BenchmarkCallDef::ExtrinsicCall { origin, expr_call, attr_span: attr.span() })))
+				})
+			} else if let Stmt::Expr(Expr::Block(block)) = child {
+				// #[block] case
+				block.attrs.iter().enumerate().find_map(|(k, attr)| {
+					let segment = attr.path.segments.last()?;
+					let _: keywords::block = syn::parse(segment.ident.to_token_stream().into()).ok()?;
+					let mut block = block.clone();
 
-						// consume #[block] tokens
-						block.attrs.remove(k);
+					// consume #[block] tokens
+					block.attrs.remove(k);
 
-						Some(Ok((i, BenchmarkCallDef::Block { block, attr_span: attr.span() })))
-					})
-				},
-				_ => None
+					Some(Ok((i, BenchmarkCallDef::Block { block, attr_span: attr.span() })))
+				})
+			} else {
+				None
 			}
 		}).collect::<Result<Vec<_>>>()?;
 		let (i, call_def) = match &call_defs[..] {
