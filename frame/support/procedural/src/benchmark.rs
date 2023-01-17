@@ -313,14 +313,6 @@ pub fn benchmarks(
 		let benchmark_def =
 			BenchmarkDef::from(&func, benchmark_args.extra, benchmark_args.skip_meta)?;
 
-		// expand benchmark
-		let expanded = expand_benchmark(
-			benchmark_def.clone(),
-			&func.sig.ident,
-			instance,
-			where_clause.clone(),
-		);
-
 		// record benchmark name
 		let name = &func.sig.ident;
 		benchmark_names.push(name.clone());
@@ -332,6 +324,10 @@ pub fn benchmarks(
 		if benchmark_def.skip_meta {
 			skip_meta_benchmark_names.push(name.clone())
 		}
+
+		// expand benchmark
+		let expanded =
+			expand_benchmark(benchmark_def.clone(), name, instance, where_clause.clone());
 
 		// replace original function def with expanded code
 		*stmt = Item::Verbatim(expanded);
