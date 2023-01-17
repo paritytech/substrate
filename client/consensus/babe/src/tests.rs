@@ -28,6 +28,7 @@ use rand_chacha::{
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sc_client_api::{backend::TransactionFor, BlockchainEvents, Finalizer};
 use sc_consensus::{BoxBlockImport, BoxJustificationImport};
+use sc_consensus_epochs::{EpochIdentifier, EpochIdentifierPosition};
 use sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging;
 use sc_network_test::{Block as TestBlock, *};
 use sp_application_crypto::key_types::BABE;
@@ -668,17 +669,17 @@ async fn propose_and_import_blocks<Transaction: Send + 'static>(
 	client: &PeersFullClient,
 	proposer_factory: &mut DummyFactory,
 	block_import: &mut BoxBlockImport<TestBlock, Transaction>,
-	parent_id: BlockId<TestBlock>,
+	parent_hash: Hash,
 	n: usize,
 ) -> Vec<Hash> {
 	let mut hashes = Vec::with_capacity(n);
-	let mut parent_header = client.header(&parent_id).unwrap().unwrap();
+	let mut parent_header = client.header(parent_hash).unwrap().unwrap();
 
 	for _ in 0..n {
 		let block_hash =
 			propose_and_import_block(&parent_header, None, proposer_factory, block_import).await;
 		hashes.push(block_hash);
-		parent_header = client.header(&BlockId::Hash(block_hash)).unwrap().unwrap();
+		parent_header = client.header(block_hash).unwrap().unwrap();
 	}
 
 	hashes
@@ -701,7 +702,7 @@ async fn importing_block_one_sets_genesis_epoch() {
 
 	let mut block_import = data.block_import.lock().take().expect("import set up during init");
 
-	let genesis_header = client.header(&BlockId::Number(0)).unwrap().unwrap();
+	let genesis_header = client.header(client.chain_info().genesis_hash).unwrap().unwrap();
 
 	let block_hash = propose_and_import_block(
 		&genesis_header,
@@ -759,34 +760,19 @@ async fn revert_prunes_epoch_changes_and_removes_weights() {
 		&client,
 		&mut proposer_factory,
 		&mut block_import,
-		BlockId::Number(0),
+		client.chain_info().genesis_hash,
 		21,
 	)
 	.await;
-	let fork1 = propose_and_import_blocks(
-		&client,
-		&mut proposer_factory,
-		&mut block_import,
-		BlockId::Hash(canon[0]),
-		10,
-	)
-	.await;
-	let fork2 = propose_and_import_blocks(
-		&client,
-		&mut proposer_factory,
-		&mut block_import,
-		BlockId::Hash(canon[7]),
-		10,
-	)
-	.await;
-	let fork3 = propose_and_import_blocks(
-		&client,
-		&mut proposer_factory,
-		&mut block_import,
-		BlockId::Hash(canon[11]),
-		8,
-	)
-	.await;
+	let fork1 =
+		propose_and_import_blocks(&client, &mut proposer_factory, &mut block_import, canon[0], 10)
+			.await;
+	let fork2 =
+		propose_and_import_blocks(&client, &mut proposer_factory, &mut block_import, canon[7], 10)
+			.await;
+	let fork3 =
+		propose_and_import_blocks(&client, &mut proposer_factory, &mut block_import, canon[11], 8)
+			.await;
 
 	// We should be tracking a total of 9 epochs in the fork tree
 	assert_eq!(epoch_changes.shared_data().tree().iter().count(), 8);
@@ -850,7 +836,7 @@ async fn revert_not_allowed_for_finalized() {
 		&client,
 		&mut proposer_factory,
 		&mut block_import,
-		BlockId::Number(0),
+		client.chain_info().genesis_hash,
 		3,
 	)
 	.await;
@@ -903,36 +889,21 @@ async fn importing_epoch_change_block_prunes_tree() {
 		&client,
 		&mut proposer_factory,
 		&mut block_import,
-		BlockId::Number(0),
+		client.chain_info().genesis_hash,
 		30,
 	)
 	.await;
 
 	// Create the forks
-	let fork_1 = propose_and_import_blocks(
-		&client,
-		&mut proposer_factory,
-		&mut block_import,
-		BlockId::Hash(canon[0]),
-		10,
-	)
-	.await;
-	let fork_2 = propose_and_import_blocks(
-		&client,
-		&mut proposer_factory,
-		&mut block_import,
-		BlockId::Hash(canon[12]),
-		15,
-	)
-	.await;
-	let fork_3 = propose_and_import_blocks(
-		&client,
-		&mut proposer_factory,
-		&mut block_import,
-		BlockId::Hash(canon[18]),
-		10,
-	)
-	.await;
+	let fork_1 =
+		propose_and_import_blocks(&client, &mut proposer_factory, &mut block_import, canon[0], 10)
+			.await;
+	let fork_2 =
+		propose_and_import_blocks(&client, &mut proposer_factory, &mut block_import, canon[12], 15)
+			.await;
+	let fork_3 =
+		propose_and_import_blocks(&client, &mut proposer_factory, &mut block_import, canon[18], 10)
+			.await;
 
 	// We should be tracking a total of 9 epochs in the fork tree
 	assert_eq!(epoch_changes.shared_data().tree().iter().count(), 9);
@@ -947,7 +918,7 @@ async fn importing_epoch_change_block_prunes_tree() {
 		&client,
 		&mut proposer_factory,
 		&mut block_import,
-		BlockId::Hash(client.chain_info().best_hash),
+		client.chain_info().best_hash,
 		7,
 	)
 	.await;
@@ -967,7 +938,7 @@ async fn importing_epoch_change_block_prunes_tree() {
 		&client,
 		&mut proposer_factory,
 		&mut block_import,
-		BlockId::Hash(client.chain_info().best_hash),
+		client.chain_info().best_hash,
 		8,
 	)
 	.await;
@@ -1001,7 +972,7 @@ async fn verify_slots_are_strictly_increasing() {
 		mutator: Arc::new(|_, _| ()),
 	};
 
-	let genesis_header = client.header(&BlockId::Number(0)).unwrap().unwrap();
+	let genesis_header = client.header(client.chain_info().genesis_hash).unwrap().unwrap();
 
 	// we should have no issue importing this block
 	let b1 = propose_and_import_block(
@@ -1012,7 +983,7 @@ async fn verify_slots_are_strictly_increasing() {
 	)
 	.await;
 
-	let b1 = client.header(&BlockId::Hash(b1)).unwrap().unwrap();
+	let b1 = client.header(b1).unwrap().unwrap();
 
 	// we should fail to import this block since the slot number didn't increase.
 	// we will panic due to the `PanickingBlockImport` defined above.
@@ -1091,7 +1062,7 @@ async fn obsolete_blocks_aux_data_cleanup() {
 		&client,
 		&mut proposer_factory,
 		&mut block_import,
-		BlockId::Number(0),
+		client.chain_info().genesis_hash,
 		4,
 	)
 	.await;
@@ -1099,7 +1070,7 @@ async fn obsolete_blocks_aux_data_cleanup() {
 		&client,
 		&mut proposer_factory,
 		&mut block_import,
-		BlockId::Number(0),
+		client.chain_info().genesis_hash,
 		2,
 	)
 	.await;
@@ -1107,7 +1078,7 @@ async fn obsolete_blocks_aux_data_cleanup() {
 		&client,
 		&mut proposer_factory,
 		&mut block_import,
-		BlockId::Number(3),
+		fork1_hashes[2],
 		2,
 	)
 	.await;
@@ -1138,4 +1109,264 @@ async fn obsolete_blocks_aux_data_cleanup() {
 	assert!(aux_data_check(&fork1_hashes[3..], true));
 	// Present C4, C5
 	assert!(aux_data_check(&fork3_hashes, true));
+}
+
+#[tokio::test]
+async fn allows_skipping_epochs() {
+	let mut net = BabeTestNet::new(1);
+
+	let peer = net.peer(0);
+	let data = peer.data.as_ref().expect("babe link set up during initialization");
+
+	let client = peer.client().as_client();
+	let mut block_import = data.block_import.lock().take().expect("import set up during init");
+
+	let mut proposer_factory = DummyFactory {
+		client: client.clone(),
+		config: data.link.config.clone(),
+		epoch_changes: data.link.epoch_changes.clone(),
+		mutator: Arc::new(|_, _| ()),
+	};
+
+	let epoch_changes = data.link.epoch_changes.clone();
+	let epoch_length = data.link.config.epoch_length;
+
+	// we create all of the blocks in epoch 0 as well as a block in epoch 1
+	let blocks = propose_and_import_blocks(
+		&client,
+		&mut proposer_factory,
+		&mut block_import,
+		client.chain_info().genesis_hash,
+		epoch_length as usize + 1,
+	)
+	.await;
+
+	// the first block in epoch 0 (#1) announces both epoch 0 and 1 (this is a
+	// special genesis epoch)
+	let epoch0 = epoch_changes
+		.shared_data()
+		.epoch(&EpochIdentifier {
+			position: EpochIdentifierPosition::Genesis0,
+			hash: blocks[0],
+			number: 1,
+		})
+		.unwrap()
+		.clone();
+
+	assert_eq!(epoch0.epoch_index, 0);
+	assert_eq!(epoch0.start_slot, Slot::from(1));
+
+	let epoch1 = epoch_changes
+		.shared_data()
+		.epoch(&EpochIdentifier {
+			position: EpochIdentifierPosition::Genesis1,
+			hash: blocks[0],
+			number: 1,
+		})
+		.unwrap()
+		.clone();
+
+	assert_eq!(epoch1.epoch_index, 1);
+	assert_eq!(epoch1.start_slot, Slot::from(epoch_length + 1));
+
+	// the first block in epoch 1 (#7) announces epoch 2. we will be skipping
+	// this epoch and therefore re-using its data for epoch 3
+	let epoch2 = epoch_changes
+		.shared_data()
+		.epoch(&EpochIdentifier {
+			position: EpochIdentifierPosition::Regular,
+			hash: blocks[epoch_length as usize],
+			number: epoch_length + 1,
+		})
+		.unwrap()
+		.clone();
+
+	assert_eq!(epoch2.epoch_index, 2);
+	assert_eq!(epoch2.start_slot, Slot::from(epoch_length * 2 + 1));
+
+	// we now author a block that belongs to epoch 3, thereby skipping epoch 2
+	let last_block = client.expect_header(*blocks.last().unwrap()).unwrap();
+	let block = propose_and_import_block(
+		&last_block,
+		Some((epoch_length * 3 + 1).into()),
+		&mut proposer_factory,
+		&mut block_import,
+	)
+	.await;
+
+	// and the first block in epoch 3 (#8) announces epoch 4
+	let epoch4 = epoch_changes
+		.shared_data()
+		.epoch(&EpochIdentifier {
+			position: EpochIdentifierPosition::Regular,
+			hash: block,
+			number: epoch_length + 2,
+		})
+		.unwrap()
+		.clone();
+
+	assert_eq!(epoch4.epoch_index, 4);
+	assert_eq!(epoch4.start_slot, Slot::from(epoch_length * 4 + 1));
+
+	// if we try to get the epoch data for a slot in epoch 3
+	let epoch3 = epoch_changes
+		.shared_data()
+		.epoch_data_for_child_of(
+			descendent_query(&*client),
+			&block,
+			epoch_length + 2,
+			(epoch_length * 3 + 2).into(),
+			|slot| Epoch::genesis(&data.link.config, slot),
+		)
+		.unwrap()
+		.unwrap();
+
+	// we get back the data for epoch 2
+	assert_eq!(epoch3, epoch2);
+
+	// but if we try to get the epoch data for a slot in epoch 4
+	let epoch4_ = epoch_changes
+		.shared_data()
+		.epoch_data_for_child_of(
+			descendent_query(&*client),
+			&block,
+			epoch_length + 2,
+			(epoch_length * 4 + 1).into(),
+			|slot| Epoch::genesis(&data.link.config, slot),
+		)
+		.unwrap()
+		.unwrap();
+
+	// we get epoch 4 as expected
+	assert_eq!(epoch4, epoch4_);
+}
+
+#[tokio::test]
+async fn allows_skipping_epochs_on_some_forks() {
+	let mut net = BabeTestNet::new(1);
+
+	let peer = net.peer(0);
+	let data = peer.data.as_ref().expect("babe link set up during initialization");
+
+	let client = peer.client().as_client();
+	let mut block_import = data.block_import.lock().take().expect("import set up during init");
+
+	let mut proposer_factory = DummyFactory {
+		client: client.clone(),
+		config: data.link.config.clone(),
+		epoch_changes: data.link.epoch_changes.clone(),
+		mutator: Arc::new(|_, _| ()),
+	};
+
+	let epoch_changes = data.link.epoch_changes.clone();
+	let epoch_length = data.link.config.epoch_length;
+
+	// we create all of the blocks in epoch 0 as well as two blocks in epoch 1
+	let blocks = propose_and_import_blocks(
+		&client,
+		&mut proposer_factory,
+		&mut block_import,
+		client.chain_info().genesis_hash,
+		epoch_length as usize + 1,
+	)
+	.await;
+
+	// we now author a block that belongs to epoch 2, built on top of the last
+	// authored block in epoch 1.
+	let last_block = client.expect_header(*blocks.last().unwrap()).unwrap();
+
+	let epoch2_block = propose_and_import_block(
+		&last_block,
+		Some((epoch_length * 2 + 1).into()),
+		&mut proposer_factory,
+		&mut block_import,
+	)
+	.await;
+
+	// if we try to get the epoch data for a slot in epoch 2, we get the data that
+	// was previously announced when epoch 1 started
+	let epoch2 = epoch_changes
+		.shared_data()
+		.epoch_data_for_child_of(
+			descendent_query(&*client),
+			&epoch2_block,
+			epoch_length + 2,
+			(epoch_length * 2 + 2).into(),
+			|slot| Epoch::genesis(&data.link.config, slot),
+		)
+		.unwrap()
+		.unwrap();
+
+	// we now author a block that belongs to epoch 3, built on top of the last
+	// authored block in epoch 1. authoring this block means we're skipping epoch 2
+	// entirely on this fork
+	let epoch3_block = propose_and_import_block(
+		&last_block,
+		Some((epoch_length * 3 + 1).into()),
+		&mut proposer_factory,
+		&mut block_import,
+	)
+	.await;
+
+	// if we try to get the epoch data for a slot in epoch 3
+	let epoch3_ = epoch_changes
+		.shared_data()
+		.epoch_data_for_child_of(
+			descendent_query(&*client),
+			&epoch3_block,
+			epoch_length + 2,
+			(epoch_length * 3 + 2).into(),
+			|slot| Epoch::genesis(&data.link.config, slot),
+		)
+		.unwrap()
+		.unwrap();
+
+	// we get back the data for epoch 2
+	assert_eq!(epoch3_, epoch2);
+
+	// if we try to get the epoch data for a slot in epoch 4 in the fork
+	// where we skipped epoch 2, we should get the epoch data for epoch 4
+	// that was announced at the beginning of epoch 3
+	let epoch_data = epoch_changes
+		.shared_data()
+		.epoch_data_for_child_of(
+			descendent_query(&*client),
+			&epoch3_block,
+			epoch_length + 2,
+			(epoch_length * 4 + 1).into(),
+			|slot| Epoch::genesis(&data.link.config, slot),
+		)
+		.unwrap()
+		.unwrap();
+
+	assert!(epoch_data != epoch3_);
+
+	// if we try to get the epoch data for a slot in epoch 4 in the fork
+	// where we didn't skip epoch 2, we should get back the data for epoch 3,
+	// that was announced when epoch 2 started in that fork
+	let epoch_data = epoch_changes
+		.shared_data()
+		.epoch_data_for_child_of(
+			descendent_query(&*client),
+			&epoch2_block,
+			epoch_length + 2,
+			(epoch_length * 4 + 1).into(),
+			|slot| Epoch::genesis(&data.link.config, slot),
+		)
+		.unwrap()
+		.unwrap();
+
+	assert!(epoch_data != epoch3_);
+
+	let epoch3 = epoch_changes
+		.shared_data()
+		.epoch(&EpochIdentifier {
+			position: EpochIdentifierPosition::Regular,
+			hash: epoch2_block,
+			number: epoch_length + 2,
+		})
+		.unwrap()
+		.clone();
+
+	assert_eq!(epoch_data, epoch3);
 }
