@@ -15,8 +15,8 @@ ark-serialize = { version = "0.4.0-alpha", default-features = false }
 ark-ff = { version = "0.4.0-alpha", default-features = false }
 ark-ec = { version = "0.4.0-alpha", default-features = false }
 ark-std = { version = "0.4.0-alpha", default-features = false }
-ark-bls12-381 = { version = "0.4.0-alpha", features = ["curve"], default-features = false }
 ark-bls12-377 = { version = "0.4.0-alpha", features = ["curve"], default-features = false }
+ark-bls12-381 = { version = "0.4.0-alpha", features = ["curve"], default-features = false }
 ark-bw6-761 = { version = "0.4.0-alpha", default-features = false }
 ark-ed-on-bls12-381 = { version = "0.4.0-alpha", default-features = false }
 ark-ed-on-bls12-377 = { version = "0.4.0-alpha", default-features = false }
@@ -25,13 +25,13 @@ sp-std = { version = "5.0.0", default-features = false, path = "../std" }
 [features]
 default = ["std"]
 std = [
-	"sp-std/std",
 	"ark-serialize/std",
-	"ark-ff/std",
+	"ark-ff/std"
 	"ark-ec/std",
 	"ark-bls12-377/std",
 	"ark-bls12-381/std",
 	"ark-bw6-761/std",
 	"ark-ed-on-bls12-381/std",
 	"ark-ed-on-bls12-377/std",
+	"sp-std/std",
 ]
