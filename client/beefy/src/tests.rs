@@ -979,117 +979,147 @@ fn beefy_importing_blocks_with_ecdsa_n_bls_signature() {
     beefy_importing_blocks::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>();
 }
 
-// #[test]
-// fn voter_initialization() {
-// 	sp_tracing::try_init_simple();
-// 	// Regression test for voter initialization where finality notifications were dropped
-// 	// after waiting for BEEFY pallet availability.
+fn voter_initialization<TKeyPair, AuthId, TSignature, TBeefyKeystore>()
+where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSignature> + 'static,
+      TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>  + 'static,
+      AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
+      TSignature:  Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq  + 'static,
+{
+	sp_tracing::try_init_simple();
+	// Regression test for voter initialization where finality notifications were dropped
+	// after waiting for BEEFY pallet availability.
 
-// 	let mut runtime = Runtime::new().unwrap();
-// 	let peers = [Keyring::Alice, Keyring::Bob];
-// 	let validator_set = ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(&peers), 0).unwrap();
-// 	let session_len = 5;
-// 	// Should vote on all mandatory blocks no matter the `min_block_delta`.
-// 	let min_block_delta = 10;
+	let mut runtime = Runtime::new().unwrap();
+	let peers = [Keyring::Alice, Keyring::Bob];
+	let validator_set = ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(&peers), 0).unwrap();
+	let session_len = 5;
+	// Should vote on all mandatory blocks no matter the `min_block_delta`.
+	let min_block_delta = 10;
 
-// 	let mut net : BeefyTestNet<AuthId, TSignature, TBeefyKeystore> = BeefyTestNet::new(2);
-// 	let api = Arc::new(two_validators::TestApi {});
-// 	let beefy_peers = peers.iter().enumerate().map(|(id, key)| (id, key, api.clone())).collect();
-// 	runtime.spawn(initialize_beefy::<two_validators::TestApi, AuthId, TSignature, TBeefyKeystore, TKeyPair>(&mut net, beefy_peers, min_block_delta));
+	let mut net : BeefyTestNet<AuthId, TSignature, TBeefyKeystore> = BeefyTestNet::new(2);
+	let api = Arc::new(two_validators::TestApi {});
+	let beefy_peers = peers.iter().enumerate().map(|(id, key)| (id, key, api.clone())).collect();
+	runtime.spawn(initialize_beefy::<two_validators::TestApi, AuthId, TSignature, TBeefyKeystore, TKeyPair>(&mut net, beefy_peers, min_block_delta));
 
-// 	// push 26 blocks
-// 	net.generate_blocks_and_sync(26, session_len, &validator_set, false);
-// 	let net = Arc::new(Mutex::new(net));
+	// push 26 blocks
+	net.generate_blocks_and_sync(26, session_len, &validator_set, false);
+	let net = Arc::new(Mutex::new(net));
 
-// 	// Finalize multiple blocks at once to get a burst of finality notifications right from start.
-// 	// Need to finalize at least one block in each session, choose randomly.
-// 	// Expect voters to pick up all of them and BEEFY-finalize the mandatory blocks of each session.
-// 	finalize_block_and_wait_for_beefy(
-// 		&net,
-// 		peers.into_iter().enumerate(),
-// 		&mut runtime,
-// 		&[1, 6, 10, 17, 24, 26],
-// 		&[1, 5, 10, 15, 20, 25],
-// 	);
-// }
+	// Finalize multiple blocks at once to get a burst of finality notifications right from start.
+	// Need to finalize at least one block in each session, choose randomly.
+	// Expect voters to pick up all of them and BEEFY-finalize the mandatory blocks of each session.
+	finalize_block_and_wait_for_beefy(
+		&net,
+		peers.into_iter().enumerate(),
+		&mut runtime,
+		&[1, 6, 10, 17, 24, 26],
+		&[1, 5, 10, 15, 20, 25],
+	);
+}
 
-// #[test]
-// fn on_demand_beefy_justification_sync() {
-// 	sp_tracing::try_init_simple();
+#[test]
+fn voter_initialization_with_ecdsa_crypto() {
+    voter_initialization::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>();
+}
 
-// 	let mut runtime = Runtime::new().unwrap();
-// 	let all_peers =
-// 		[Keyring::Alice, Keyring::Bob, Keyring::Charlie, Keyring::Dave];
-// 	let validator_set = ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(&all_peers), 0).unwrap();
-// 	let session_len = 5;
-// 	let min_block_delta = 5;
+#[test]
+fn voter_initialization_with_ecdsa_n_bls_crypto() {
+    voter_initialization::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>();
+}
 
-// 	let mut net : BeefyTestNet<AuthId, TSignature, TBeefyKeystore> = BeefyTestNet::new(4);
+fn on_demand_beefy_justification_sync<TKeyPair, AuthId, TSignature, TBeefyKeystore>()
+where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId, Signature = TSignature> + 'static,
+      TBeefyKeystore: BeefyKeystore<AuthId, TSignature, Public = AuthId>  + 'static,
+      AuthId: Clone + Encode + Decode + Debug + Ord + Sync + Send + BeefyAuthIdMaker + std::hash::Hash + 'static,
+      TSignature:  Encode + Decode + Debug + Clone + Sync + Send + std::cmp::PartialEq  + 'static,
 
-// 	// Alice, Bob, Charlie start first and make progress through voting.
-// 	let api = Arc::new(four_validators::TestApi {});
-// 	let fast_peers = [Keyring::Alice, Keyring::Bob, Keyring::Charlie];
-// 	let voting_peers =
-// 		fast_peers.iter().enumerate().map(|(id, key)| (id, key, api.clone())).collect();
-// 	runtime.spawn(initialize_beefy::<two_validators::TestApi, AuthId, TSignature, TBeefyKeystore, TKeyPair>(&mut net, voting_peers, min_block_delta));
+{
+	sp_tracing::try_init_simple();
 
-// 	// Dave will start late and have to catch up using on-demand justification requests (since
-// 	// in this test there is no block import queue to automatically import justifications).
-// 	let dave = vec![(3, &Keyring::Dave, api)];
-// 	// Instantiate but don't run Dave, yet.
-// 	let dave_task = initialize_beefy::<two_validators::TestApi, AuthId, TSignature, TBeefyKeystore, TKeyPair>(&mut net, dave, min_block_delta);
-// 	let dave_index = 3;
+	let mut runtime = Runtime::new().unwrap();
+	let all_peers =
+		[Keyring::Alice, Keyring::Bob, Keyring::Charlie, Keyring::Dave];
+	let validator_set = ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(&all_peers), 0).unwrap();
+	let session_len = 5;
+	let min_block_delta = 5;
 
-// 	// push 30 blocks
-// 	net.generate_blocks_and_sync(30, session_len, &validator_set, false);
+	let mut net : BeefyTestNet<AuthId, TSignature, TBeefyKeystore> = BeefyTestNet::new(4);
 
-// 	let fast_peers = fast_peers.into_iter().enumerate();
-// 	let net = Arc::new(Mutex::new(net));
-// 	// With 3 active voters and one inactive, consensus should happen and blocks BEEFY-finalized.
-// 	// Need to finalize at least one block in each session, choose randomly.
-// 	finalize_block_and_wait_for_beefy(
-// 		&net,
-// 		fast_peers.clone(),
-// 		&mut runtime,
-// 		&[1, 6, 10, 17, 24],
-// 		&[1, 5, 10, 15, 20],
-// 	);
+	// Alice, Bob, Charlie start first and make progress through voting.
+	let api = Arc::new(four_validators::TestApi {});
+	let fast_peers = [Keyring::Alice, Keyring::Bob, Keyring::Charlie];
+	let voting_peers =
+		fast_peers.iter().enumerate().map(|(id, key)| (id, key, api.clone())).collect();
+	runtime.spawn(initialize_beefy::<four_validators::TestApi, AuthId, TSignature, TBeefyKeystore, TKeyPair>(&mut net, voting_peers, min_block_delta));
 
-// 	// Spawn Dave, he's now way behind voting and can only catch up through on-demand justif sync.
-// 	runtime.spawn(dave_task);
-// 	// give Dave a chance to spawn and init.
-// 	run_for(Duration::from_millis(400), &net, &mut runtime);
+	// Dave will start late and have to catch up using on-demand justification requests (since
+	// in this test there is no block import queue to automatically import justifications).
+	let dave = vec![(3, &Keyring::Dave, api)];
+	// Instantiate but don't run Dave, yet.
+	let dave_task = initialize_beefy::<four_validators::TestApi, AuthId, TSignature, TBeefyKeystore, TKeyPair>(&mut net, dave, min_block_delta);
+	let dave_index = 3;
 
-// 	let (dave_best_blocks, _) =
-// 		get_beefy_streams(&mut net.lock(), [(dave_index, Keyring::Dave)].into_iter());
-// 	net.lock()
-// 		.peer(dave_index)
-// 		.client()
-// 		.as_client()
-// 		.finalize_block(BlockId::number(1), None)
-// 		.unwrap();
-// 	// Give Dave task some cpu cycles to process the finality notification,
-// 	run_for(Duration::from_millis(100), &net, &mut runtime);
-// 	// freshly spun up Dave now needs to listen for gossip to figure out the state of his peers.
+	// push 30 blocks
+	net.generate_blocks_and_sync(30, session_len, &validator_set, false);
 
-// 	// Have the other peers do some gossip so Dave finds out about their progress.
-// 	finalize_block_and_wait_for_beefy(&net, fast_peers, &mut runtime, &[25], &[25]);
+	let fast_peers = fast_peers.into_iter().enumerate();
+	let net = Arc::new(Mutex::new(net));
+	// With 3 active voters and one inactive, consensus should happen and blocks BEEFY-finalized.
+	// Need to finalize at least one block in each session, choose randomly.
+	finalize_block_and_wait_for_beefy(
+		&net,
+		fast_peers.clone(),
+		&mut runtime,
+		&[1, 6, 10, 17, 24],
+		&[1, 5, 10, 15, 20],
+	);
 
-// 	// Now verify Dave successfully finalized #1 (through on-demand justification request).
-// 	wait_for_best_beefy_blocks(dave_best_blocks, &net, &mut runtime, &[1]);
+	// Spawn Dave, he's now way behind voting and can only catch up through on-demand justif sync.
+	runtime.spawn(dave_task);
+	// give Dave a chance to spawn and init.
+	run_for(Duration::from_millis(400), &net, &mut runtime);
 
-// 	// Give Dave all tasks some cpu cycles to burn through their events queues,
-// 	run_for(Duration::from_millis(100), &net, &mut runtime);
-// 	// then verify Dave catches up through on-demand justification requests.
-// 	finalize_block_and_wait_for_beefy(
-// 		&net,
-// 		[(dave_index, Keyring::Dave)].into_iter(),
-// 		&mut runtime,
-// 		&[6, 10, 17, 24, 26],
-// 		&[5, 10, 15, 20, 25],
-// 	);
+	let (dave_best_blocks, _) =
+		get_beefy_streams(&mut net.lock(), [(dave_index, Keyring::Dave)].into_iter());
+	net.lock()
+		.peer(dave_index)
+		.client()
+		.as_client()
+		.finalize_block(BlockId::number(1), None)
+		.unwrap();
+	// Give Dave task some cpu cycles to process the finality notification,
+	run_for(Duration::from_millis(100), &net, &mut runtime);
+	// freshly spun up Dave now needs to listen for gossip to figure out the state of his peers.
 
-// 	let all_peers = all_peers.into_iter().enumerate();
-// 	// Now that Dave has caught up, sanity check voting works for all of them.
-// 	finalize_block_and_wait_for_beefy(&net, all_peers, &mut runtime, &[30], &[30]);
-// }
+	// Have the other peers do some gossip so Dave finds out about their progress.
+	finalize_block_and_wait_for_beefy(&net, fast_peers, &mut runtime, &[25], &[25]);
+
+	// Now verify Dave successfully finalized #1 (through on-demand justification request).
+	wait_for_best_beefy_blocks(dave_best_blocks, &net, &mut runtime, &[1]);
+
+	// Give Dave all tasks some cpu cycles to burn through their events queues,
+	run_for(Duration::from_millis(100), &net, &mut runtime);
+	// then verify Dave catches up through on-demand justification requests.
+	finalize_block_and_wait_for_beefy(
+		&net,
+		[(dave_index, Keyring::Dave)].into_iter(),
+		&mut runtime,
+		&[6, 10, 17, 24, 26],
+		&[5, 10, 15, 20, 25],
+	);
+
+	let all_peers = all_peers.into_iter().enumerate();
+	// Now that Dave has caught up, sanity check voting works for all of them.
+	finalize_block_and_wait_for_beefy(&net, all_peers, &mut runtime, &[30], &[30]);
+}
+
+
+#[test]
+fn on_demand_beefy_justification_sync_with_ecdsa_signature() {
+    on_demand_beefy_justification_sync::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>();
+}
+
+#[test]
+fn on_demand_beefy_justification_sync_with_ecdsa_n_bls_signature() {
+    on_demand_beefy_justification_sync::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>();
+}
