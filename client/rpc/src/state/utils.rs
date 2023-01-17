@@ -26,35 +26,35 @@ use std::{
 
 /// An error signifying that a task has been cancelled due to a timeout.
 #[derive(Debug)]
-pub struct Cancelled;
+pub struct Timeout;
 
-impl std::error::Error for Cancelled {}
-impl std::fmt::Display for Cancelled {
+impl std::error::Error for Timeout {}
+impl std::fmt::Display for Timeout {
 	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
 		fmt.write_str("task has been running too long")
 	}
 }
 
-/// A handle which can be used to check whether the task has been cancelled.
+/// A handle which can be used to check whether the task has been cancelled due to a timeout.
 #[repr(transparent)]
-pub struct IsCancelled(Arc<AtomicBool>);
+pub struct IsTimedOut(Arc<AtomicBool>);
 
-impl IsCancelled {
+impl IsTimedOut {
 	#[must_use]
-	pub fn check_if_cancelled(&self) -> std::result::Result<(), Cancelled> {
+	pub fn check_if_timed_out(&self) -> std::result::Result<(), Timeout> {
 		if self.0.load(Ordering::Relaxed) {
-			Err(Cancelled)
+			Err(Timeout)
 		} else {
 			Ok(())
 		}
 	}
 }
 
-/// An error for a task which either panicked, or has been cancelled.
+/// An error for a task which either panicked, or has been cancelled due to a timeout.
 #[derive(Debug)]
 pub enum SpawnWithTimeoutError {
 	JoinError(tokio::task::JoinError),
-	Cancelled,
+	Timeout,
 }
 
 impl std::error::Error for SpawnWithTimeoutError {}
@@ -62,7 +62,7 @@ impl std::fmt::Display for SpawnWithTimeoutError {
 	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
 		match self {
 			SpawnWithTimeoutError::JoinError(error) => error.fmt(fmt),
-			SpawnWithTimeoutError::Cancelled => Cancelled.fmt(fmt),
+			SpawnWithTimeoutError::Timeout => Timeout.fmt(fmt),
 		}
 	}
 }
@@ -76,28 +76,28 @@ impl Drop for CancelOnDrop {
 
 /// Spawns a new blocking task with a given `timeout`.
 ///
-/// The `callback` should continuously call [`IsCancelled::check_if_cancelled`],
+/// The `callback` should continuously call [`IsTimedOut::check_if_timed_out`],
 /// which will return an error once the task runs for longer than `timeout`.
 ///
 /// If `timeout` is `None` then this works just as a regular `spawn_blocking`.
 pub async fn spawn_blocking_with_timeout<R>(
 	timeout: Option<Duration>,
-	callback: impl FnOnce(IsCancelled) -> std::result::Result<R, Cancelled> + Send + 'static,
+	callback: impl FnOnce(IsTimedOut) -> std::result::Result<R, Timeout> + Send + 'static,
 ) -> Result<R, SpawnWithTimeoutError>
 where
 	R: Send + 'static,
 {
-	let is_cancelled_arc = Arc::new(AtomicBool::new(false));
-	let is_cancelled = IsCancelled(is_cancelled_arc.clone());
-	let _cancel_on_drop = CancelOnDrop(is_cancelled_arc);
-	let task = tokio::task::spawn_blocking(move || callback(is_cancelled));
+	let is_timed_out_arc = Arc::new(AtomicBool::new(false));
+	let is_timed_out = IsTimedOut(is_timed_out_arc.clone());
+	let _cancel_on_drop = CancelOnDrop(is_timed_out_arc);
+	let task = tokio::task::spawn_blocking(move || callback(is_timed_out));
 
 	let result = if let Some(timeout) = timeout {
 		tokio::select! {
 			biased;
 
 			task_result = task => task_result,
-			_ = tokio::time::sleep(timeout) => Ok(Err(Cancelled))
+			_ = tokio::time::sleep(timeout) => Ok(Err(Timeout))
 		}
 	} else {
 		task.await
@@ -105,7 +105,7 @@ where
 
 	match result {
 		Ok(Ok(result)) => Ok(result),
-		Ok(Err(Cancelled)) => Err(SpawnWithTimeoutError::Cancelled),
+		Ok(Err(Timeout)) => Err(SpawnWithTimeoutError::Timeout),
 		Err(error) => Err(SpawnWithTimeoutError::JoinError(error)),
 	}
 }
@@ -113,18 +113,18 @@ where
 #[tokio::test]
 async fn spawn_blocking_with_timeout_works() {
 	let task: Result<(), SpawnWithTimeoutError> =
-		spawn_blocking_with_timeout(Some(Duration::from_millis(100)), |is_cancelled| {
+		spawn_blocking_with_timeout(Some(Duration::from_millis(100)), |is_timed_out| {
 			std::thread::sleep(Duration::from_millis(200));
-			is_cancelled.check_if_cancelled()?;
+			is_timed_out.check_if_timed_out()?;
 			unreachable!();
 		})
 		.await;
 
-	assert_matches::assert_matches!(task, Err(SpawnWithTimeoutError::Cancelled));
+	assert_matches::assert_matches!(task, Err(SpawnWithTimeoutError::Timeout));
 
-	let task = spawn_blocking_with_timeout(Some(Duration::from_millis(100)), |is_cancelled| {
+	let task = spawn_blocking_with_timeout(Some(Duration::from_millis(100)), |is_timed_out| {
 		std::thread::sleep(Duration::from_millis(20));
-		is_cancelled.check_if_cancelled()?;
+		is_timed_out.check_if_timed_out()?;
 		Ok(())
 	})
 	.await;

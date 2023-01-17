@@ -275,7 +275,7 @@ where
 			DenyUnsafe::No => None,
 		};
 
-		super::utils::spawn_blocking_with_timeout(timeout, move |is_cancelled| {
+		super::utils::spawn_blocking_with_timeout(timeout, move |is_timed_out| {
 			// Does the key point to a concrete entry in the database?
 			match client.storage(block, &key) {
 				Ok(Some(d)) => return Ok(Ok(Some(d.0.len() as u64))),
@@ -294,7 +294,7 @@ where
 				let value = client.storage(block, &storage_key).ok().flatten().unwrap_or_default();
 				sum += value.0.len() as u64;
 
-				is_cancelled.check_if_cancelled()?;
+				is_timed_out.check_if_timed_out()?;
 			}
 
 			if sum > 0 {
