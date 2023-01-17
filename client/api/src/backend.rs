@@ -313,30 +313,18 @@ pub struct KeyIterator<State, Block> {
 
 impl<State, Block> KeyIterator<State, Block> {
 	/// create a KeyIterator instance
-	pub fn new(state: State, prefix: Option<&StorageKey>, current_key: Vec<u8>) -> Self {
-		Self {
-			state,
-			child_storage: None,
-			prefix: prefix.map(|prefix| prefix.clone()),
-			current_key,
-			_phantom: PhantomData,
-		}
+	pub fn new(state: State, prefix: Option<StorageKey>, current_key: Vec<u8>) -> Self {
+		Self { state, child_storage: None, prefix, current_key, _phantom: PhantomData }
 	}
 
 	/// Create a `KeyIterator` instance for a child storage.
 	pub fn new_child(
 		state: State,
 		child_info: ChildInfo,
-		prefix: Option<&StorageKey>,
+		prefix: Option<StorageKey>,
 		current_key: Vec<u8>,
 	) -> Self {
-		Self {
-			state,
-			child_storage: Some(child_info),
-			prefix: prefix.map(|prefix| prefix.clone()),
-			current_key,
-			_phantom: PhantomData,
-		}
+		Self { state, child_storage: Some(child_info), prefix, current_key, _phantom: PhantomData }
 	}
 }
 

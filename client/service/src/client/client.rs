@@ -1440,7 +1440,7 @@ where
 	) -> sp_blockchain::Result<KeyIterator<B::State, Block>> {
 		let state = self.state_at(hash)?;
 		let start_key = start_key.or(prefix).map(|key| key.0.clone()).unwrap_or_else(Vec::new);
-		Ok(KeyIterator::new(state, prefix, start_key))
+		Ok(KeyIterator::new(state, prefix.cloned(), start_key))
 	}
 
 	fn child_storage_keys_iter(
@@ -1452,7 +1452,7 @@ where
 	) -> sp_blockchain::Result<KeyIterator<B::State, Block>> {
 		let state = self.state_at(hash)?;
 		let start_key = start_key.or(prefix).map(|key| key.0.clone()).unwrap_or_else(Vec::new);
-		Ok(KeyIterator::new_child(state, child_info, prefix, start_key))
+		Ok(KeyIterator::new_child(state, child_info, prefix.cloned(), start_key))
 	}
 
 	fn storage(
