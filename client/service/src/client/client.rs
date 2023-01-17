@@ -300,14 +300,12 @@ where
 
 			let ClientImportOperation { mut op, notify_imported, notify_finalized } = op;
 
-			let finality_num =
-				notify_finalized.as_ref().map(|summary| summary.header.number().clone());
+			let finality_num = notify_finalized.as_ref().map(|summary| *summary.header.number());
 			let finality_notification = notify_finalized.map(|summary| {
 				FinalityNotification::from_summary(summary, self.unpin_worker_sender.clone())
 			});
 
-			let import_num =
-				notify_imported.as_ref().map(|summary| summary.header.number().clone());
+			let import_num = notify_imported.as_ref().map(|summary| *summary.header.number());
 			let (import_notification, storage_changes) = match notify_imported {
 				Some(mut summary) => {
 					let storage_changes = summary.storage_changes.take();
