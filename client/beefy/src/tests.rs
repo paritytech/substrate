@@ -38,7 +38,7 @@ use sc_utils::notification::NotificationReceiver;
 
 use beefy_primitives::{
 	ecdsa_crypto::{AuthorityId, Public as ECDSAPublic, Signature as ECDSASignature, self, Pair as ECDSAKeyPair},
-        bls_crypto::{Public as BLSPublic, Signature as BLSSignature},
+        bls_crypto::{Public as BLSPublic, Signature as BLSSignature, self},
 	mmr::MmrRootProvider,
 	BeefyApi, ConsensusLog, MmrRootHash, ValidatorSet, VersionedFinalityProof, BEEFY_ENGINE_ID,
 	KEY_TYPE as BeefyKeyType,
@@ -67,7 +67,7 @@ use crate::{
 	},
 	gossip_protocol_name,
 	justification::*,
-	keystore::tests::{Keyring, GenericKeyring, SimpleKeyPair},
+	keystore::tests::{Keyring, GenericKeyring, SimpleKeyPair, ECDSAnBLSPair},
 	BeefyRPCLinks, BeefyVoterLinks,
 	keystore::{BeefyECDSAKeystore, BeefyBLSnECDSAKeystore},
 };
@@ -119,7 +119,9 @@ impl<TSignature> Default for PeerData<TSignature> where
 {
     fn default() -> Self {
         Self {
-	    ..Default::default()
+	    beefy_rpc_links: Mutex::new(None),
+	    beefy_voter_links: Mutex::new(None),
+	    beefy_justif_req_handler: Mutex::new(None),
         }
     }
 }
@@ -236,8 +238,9 @@ impl<AuthId, TSignature, TBeefyKeystore> TestNetFactory for BeefyTestNet<AuthId,
 		);
 		let peer_data = PeerData::<TSignature> {
 			beefy_rpc_links: Mutex::new(Some(rpc_links)),
-			beefy_voter_links: Mutex::new(Some(voter_links)),
-			..Default::default()
+		    beefy_voter_links: Mutex::new(Some(voter_links)),
+		    beefy_justif_req_handler: Mutex::new(None),
+			//..Default::default()
 		};
 		(BlockImportAdapter::new(block_import), None, peer_data)
 	}
@@ -341,24 +344,22 @@ macro_rules! create_test_api {
 }
 
 create_test_api!(two_validators,  mmr_root: GOOD_MMR_ROOT, Keyring::Alice, Keyring::Bob);
-// create_test_api!(
-//     four_validators,
-//     ECDSAKeyPair,
-// 	mmr_root: GOOD_MMR_ROOT,
-// 	Keyring::Alice,
-// 	Keyring::Bob,
-// 	Keyring::Charlie,
-// 	Keyring::Dave
-// );
-// create_test_api!(
-//     bad_four_validators,
-//     ECDSAKeyPair,
-// 	mmr_root: BAD_MMR_ROOT,
-// 	Keyring::Alice,
-// 	Keyring::Bob,
-// 	Keyring::Charlie,
-// 	Keyring::Dave
-// );
+create_test_api!(
+    four_validators,
+	mmr_root: GOOD_MMR_ROOT,
+	Keyring::Alice,
+	Keyring::Bob,
+	Keyring::Charlie,
+	Keyring::Dave
+);
+create_test_api!(
+    bad_four_validators,
+    mmr_root: BAD_MMR_ROOT,
+    Keyring::Alice,
+    Keyring::Bob,
+    Keyring::Charlie,
+    Keyring::Dave
+);
 
 fn add_mmr_digest(header: &mut Header, mmr_hash: MmrRootHash) {
 	header.digest_mut().push(DigestItem::Consensus(
@@ -385,6 +386,14 @@ impl BeefyAuthIdMaker for ecdsa_crypto::AuthorityId
 {
      fn make_beefy_ids(keys: &[Keyring]) -> Vec<Self> {
 	 keys.iter().map(|&key| <Keyring as GenericKeyring<ecdsa_crypto::Pair>>::public(key).into()).collect()
+	     
+    }
+}
+
+impl BeefyAuthIdMaker for (ecdsa_crypto::AuthorityId, bls_crypto::AuthorityId)
+{
+     fn make_beefy_ids(keys: &[Keyring]) -> Vec<Self> {
+	 keys.iter().map(|&key| <Keyring as GenericKeyring<ECDSAnBLSPair>>::public(key).into()).collect()
 	     
     }
 }
@@ -674,6 +683,11 @@ where TKeyPair : SimpleKeyPair + SimpleKeyPair<Public = AuthId> + 'static,
 #[test]
 fn beefy_finalizing_blocks_using_ecdsa_signature() {
     beefy_finalizing_blocks::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>();
+}
+
+#[test]
+fn beefy_finalizing_blocks_using_ecdsa_n_bls_signature() {
+    beefy_finalizing_blocks::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>();
 }
 
 // #[test]

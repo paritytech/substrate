@@ -475,7 +475,7 @@ pub mod tests {
 
     /// Auxiliray tairt for ECDSAnBLS
     #[derive(Clone)]
-    struct ECDSAnBLSPair (pub ecdsa_crypto::Pair, pub bls_crypto::Pair);
+    pub(crate) struct ECDSAnBLSPair (pub ecdsa_crypto::Pair, pub bls_crypto::Pair);
 
     /// implementing ECDSAnBLSPair as a simple key pair to be used in the test key ring
     impl SimpleKeyPair for ECDSAnBLSPair
