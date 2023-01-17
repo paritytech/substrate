@@ -423,37 +423,35 @@ impl<T: Clone> PerDispatchClass<T> {
 
 impl PerDispatchClass<Weight> {
 	/// Returns the total weight consumed by all extrinsics in the block.
+	///
+	/// Saturates on overflow.
 	pub fn total(&self) -> Weight {
 		let mut sum = Weight::zero();
 		for class in DispatchClass::all() {
-			sum = sum.saturating_add(*self.get(*class));
+			sum.saturating_accrue(*self.get(*class));
 		}
 		sum
 	}
 
-	/// Add some weight of a specific dispatch class, saturating at the numeric bounds of `Weight`.
-	pub fn add(&mut self, weight: Weight, class: DispatchClass) {
+	/// Add some weight to the given class. Saturates at the numeric bounds.
+	pub fn saturating_add(mut self, weight: Weight, class: DispatchClass) -> Self {
 		self.saturating_accrue(weight, class);
+		self
 	}
 
+	/// Increase the weight of the given class. Saturates at the numeric bounds.
 	pub fn saturating_accrue(&mut self, weight: Weight, class: DispatchClass) {
-		let value = self.get_mut(class);
-		*value = value.saturating_add(weight);
+		self.get_mut(class).saturating_accrue(weight);
 	}
 
-	/// Try to add some weight of a specific dispatch class, returning Err(()) if overflow would
-	/// occur.
-	pub fn checked_add(&mut self, weight: Weight, class: DispatchClass) -> Result<(), ()> {
-		let value = self.get_mut(class);
-		*value = value.checked_add(&weight).ok_or(())?;
-		Ok(())
+	/// Try to increase the weight of the given class. Saturates at the numeric bounds.
+	pub fn checked_accrue(&mut self, weight: Weight, class: DispatchClass) -> Result<(), ()> {
+		self.get_mut(class).checked_accrue(weight).ok_or(())
 	}
 
-	/// Subtract some weight of a specific dispatch class, saturating at the numeric bounds of
-	/// `Weight`.
-	pub fn sub(&mut self, weight: Weight, class: DispatchClass) {
-		let value = self.get_mut(class);
-		*value = value.saturating_sub(weight);
+	/// Reduce the weight of the given class. Saturates at the numeric bounds.
+	pub fn saturating_reduce(&mut self, weight: Weight, class: DispatchClass) {
+		self.get_mut(class).saturating_reduce(weight);
 	}
 }
 
