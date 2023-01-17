@@ -21,7 +21,7 @@
 use crate::{wasm::Determinism, weights::WeightInfo, Config};
 
 use codec::{Decode, Encode};
-use frame_support::{DefaultNoBound, weights::Weight, };
+use frame_support::{weights::Weight, DefaultNoBound};
 use pallet_contracts_proc_macro::{ScheduleDebug, WeightDebug};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
@@ -169,7 +169,7 @@ impl Limits {
 ///    that use them as supporting instructions. Supporting means mainly pushing arguments
 ///    and dropping return values in order to maintain a valid module.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Clone, Encode, Decode, PartialEq, Eq, WeightDebug, TypeInfo)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, ScheduleDebug, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 pub struct InstructionWeights<T: Config> {
 	/// Version of the instruction weights.
@@ -385,9 +385,6 @@ pub struct HostFnWeights<T: Config> {
 
 	/// Weight per input byte supplied to `seal_instantiate`.
 	pub instantiate_per_input_byte: Weight,
-
-	/// Weight per input byte supplied to `seal_instantiate`.
-	pub instantiate_per_input_byte: u64,
 
 	/// Weight per salt byte supplied to `seal_instantiate`.
 	pub instantiate_per_salt_byte: Weight,
@@ -692,7 +689,7 @@ impl<T: Config> Default for HostFnWeights<T> {
 				seal_instantiate_per_transfer_input_salt_kb,
 				1,
 				0,
-				0,
+				0
 			)),
 			instantiate_per_input_byte: Weight::from_ref_time(cost_byte_batched_args!(
 				seal_instantiate_per_transfer_input_salt_kb,

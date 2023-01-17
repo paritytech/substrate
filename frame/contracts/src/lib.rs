@@ -1218,8 +1218,8 @@ impl<T: Config> Pallet<T> {
 
 	/// Convert gas_limit from 1D Weight to a 2D Weight.
 	///
-	/// Used by backwards compatible extrinsics. We cannot just set the proof_size weight limit to zero
-	/// or an old `Call` will just fail with OutOfGas.
+	/// Used by backwards compatible extrinsics. We cannot just set the proof_size weight limit to
+	/// zero or an old `Call` will just fail with OutOfGas.
 	fn compat_weight_limit(gas_limit: OldWeight) -> Weight {
 		Weight::from(gas_limit).set_proof_size(u64::from(T::MaxCodeLen::get()) * 2)
 	}
