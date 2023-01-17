@@ -165,6 +165,9 @@ impl<T: Config> SetCode<T> for () {
 	}
 }
 
+/// Soft limit for the PoV weight of a block. Above this limit a warning will be printed and an [`Event::PovLimitExceeded`] will be emitted.
+pub const SOFT_POV_LIMIT_BYTES: u64 = 5 * 1024 * 1024;
+
 /// Numeric limits over the ability to add a consumer ref using `inc_consumers`.
 pub trait ConsumerLimits {
 	/// The number of consumers over which `inc_consumers` will cease to work.
@@ -503,33 +506,22 @@ pub mod pallet {
 	#[pallet::event]
 	pub enum Event<T: Config> {
 		/// An extrinsic completed successfully.
-		ExtrinsicSuccess {
-			dispatch_info: DispatchInfo,
-		},
+		ExtrinsicSuccess { dispatch_info: DispatchInfo },
 		/// An extrinsic failed.
-		ExtrinsicFailed {
-			dispatch_error: DispatchError,
-			dispatch_info: DispatchInfo,
-		},
+		ExtrinsicFailed { dispatch_error: DispatchError, dispatch_info: DispatchInfo },
 		/// `:code` was updated.
 		CodeUpdated,
 		/// A new account was created.
-		NewAccount {
-			account: T::AccountId,
-		},
+		NewAccount { account: T::AccountId },
 		/// An account was reaped.
-		KilledAccount {
-			account: T::AccountId,
-		},
+		KilledAccount { account: T::AccountId },
 		/// On on-chain remark happened.
-		Remarked {
-			sender: T::AccountId,
-			hash: T::Hash,
-		},
-		PovSoftLimitExceeded {
-			limit: u64,
-			consumed: u64,
-		},
+		Remarked { sender: T::AccountId, hash: T::Hash },
+		/// This block exceeded its soft PoV limit.
+		///
+		/// - `limit` is the soft PoV limit.
+		/// - `consumed` is the PoV consumed by the block, which is always greater than `limit`.
+		PovLimitExceeded { limit: u64, consumed: u64 },
 	}
 
 	/// Error for the System pallet
@@ -1333,7 +1325,7 @@ impl<T: Config> Pallet<T> {
 	/// Another potential use-case could be for the `on_initialize` and `on_finalize` hooks.
 	pub fn register_extra_weight_unchecked(weight: Weight, class: DispatchClass) {
 		BlockWeight::<T>::mutate(|current_weight| {
-			current_weight.add(weight, class);
+			current_weight.saturating_accrue(weight, class);
 		});
 	}
 
@@ -1354,22 +1346,25 @@ impl<T: Config> Pallet<T> {
 	/// Remove temporary "environment" entries in storage, compute the storage root and return the
 	/// resulting header for this block.
 	pub fn finalize() -> T::Header {
-		// Check the soft weight limit.
-		let consumed = BlockWeight::<T>::get();
-		if consumed.total().proof_size() > 5 * 1024 * 1024 {
+		// Check the soft PoV weight limit.
+		let consumed = BlockWeight::<T>::get().total().proof_size();
+		if consumed > SOFT_POV_LIMIT_BYTES {
+			let percent = (consumed as f32 * 100.0) / (SOFT_POV_LIMIT_BYTES as f32) - 100.0;
 			log::warn!(
 				target: LOG_TARGET,
-				"Block {:?} consumed more than 5MiB of proof size",
-				Self::block_number()
+				"Block {:?} exceeded the PoV limit by {:.2}%. Consumed: {} > limit: {} bytes",
+				Self::block_number(),
+				percent,
+				consumed,
+				SOFT_POV_LIMIT_BYTES,
 			);
-			// emit an event
 			Self::deposit_event(Event::PovSoftLimitExceeded {
-				limit: 5 * 1024 * 1024,
-				consumed: consumed.total().proof_size(),
+				limit: SOFT_POV_LIMIT_BYTES,
+				consumed,
 			});
 		}
 
-		/*log::debug!(
+		log::debug!(
 			target: LOG_TARGET,
 			"[{:?}] {} extrinsics, length: {} (normal {}%, op: {}%, mandatory {}%) / normal weight:\
 			 {} ({}%) op weight {} ({}%) / mandatory weight {} ({}%)",
@@ -1391,19 +1386,19 @@ impl<T: Config> Pallet<T> {
 			Self::block_weight().get(DispatchClass::Normal),
 			sp_runtime::Percent::from_rational(
 				Self::block_weight().get(DispatchClass::Normal).ref_time(),
-				T::BlockWeights::get().get(DispatchClass::Normal).max_total.unwrap_or(Bounded::max_value()).ref_time()
+				T::BlockWeights::get().get(DispatchClass::Normal).max_total.limited_or(Bounded::max_value()).ref_time()
 			).deconstruct(),
 			Self::block_weight().get(DispatchClass::Operational),
 			sp_runtime::Percent::from_rational(
 				Self::block_weight().get(DispatchClass::Operational).ref_time(),
-				T::BlockWeights::get().get(DispatchClass::Operational).max_total.unwrap_or(Bounded::max_value()).ref_time()
+				T::BlockWeights::get().get(DispatchClass::Operational).max_total.limited_or(Bounded::max_value()).ref_time()
 			).deconstruct(),
 			Self::block_weight().get(DispatchClass::Mandatory),
 			sp_runtime::Percent::from_rational(
 				Self::block_weight().get(DispatchClass::Mandatory).ref_time(),
-				T::BlockWeights::get().get(DispatchClass::Mandatory).max_total.unwrap_or(Bounded::max_value()).ref_time()
+				T::BlockWeights::get().get(DispatchClass::Mandatory).max_total.limited_or(Bounded::max_value()).ref_time()
 			).deconstruct(),
-		);*/
+		);
 		ExecutionPhase::<T>::kill();
 		AllExtrinsicsLen::<T>::kill();
 
