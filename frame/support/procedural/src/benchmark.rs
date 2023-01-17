@@ -281,8 +281,6 @@ pub fn benchmarks(
 		.filter(|attr| !syn::parse2::<keywords::benchmarks>(attr.to_token_stream()).is_ok())
 		.collect();
 
-	let mut expanded_stmts: Vec<TokenStream2> = Vec::new();
-	let mut benchmark_defs: Vec<BenchmarkDef> = Vec::new();
 	let mut benchmark_names: Vec<Ident> = Vec::new();
 	let mut extra_benchmark_names: Vec<Ident> = Vec::new();
 	let mut skip_meta_benchmark_names: Vec<Ident> = Vec::new();
@@ -290,28 +288,26 @@ pub fn benchmarks(
 	let (_brace, mut content) =
 		module.content.ok_or(syn::Error::new(mod_span, "Module cannot be empty!"))?;
 
-	// process benchmark defs in module content
-	for stmt in &mut content {
-		let mut push_stmt = || {
-			expanded_stmts.push(stmt.to_token_stream());
-		};
-
+	// find all function defs marked with #[benchmark]
+	let benchmark_fn_metas = content.iter_mut().filter_map(|stmt| {
 		// parse as a function def first
-		let Item::Fn(mut func) = stmt.clone() else { push_stmt(); continue; };
+		let Item::Fn(func) = stmt else { return None };
 
 		// find #[benchmark] attribute on function def
-		let Some((attr_index, benchmark_attr)) = func.attrs.iter().enumerate().find_map(|(i, attr)| {
+		let Some(benchmark_attr) = func.attrs.iter().find_map(|attr| {
 			let Some(seg) = attr.path.segments.last() else { return None };
 			let Ok(_) = syn::parse::<keywords::benchmark>(seg.ident.to_token_stream().into()) else { return None };
-			Some((i, attr))
-		}) else { push_stmt(); continue; };
+			Some(attr.clone())
+		}) else { return None };
 
+		Some((benchmark_attr.clone(), func.clone(), stmt))
+	});
+
+	// parse individual benchmark defs and args
+	for (benchmark_attr, func, stmt) in benchmark_fn_metas {
 		// parse any args provided to #[benchmark]
 		let attr_tokens = benchmark_attr.tokens.to_token_stream().into();
 		let benchmark_args: BenchmarkAttrs = syn::parse(attr_tokens)?;
-
-		// consume #[benchmark] attribute
-		func.attrs.remove(attr_index);
 
 		// parse benchmark def
 		let benchmark_def =
@@ -326,10 +322,10 @@ pub fn benchmarks(
 		);
 
 		// record benchmark name
-		let name = func.sig.ident;
-
-		// process name vecs
+		let name = &func.sig.ident;
 		benchmark_names.push(name.clone());
+
+		// record name sets
 		if benchmark_def.extra {
 			extra_benchmark_names.push(name.clone());
 		}
@@ -337,8 +333,8 @@ pub fn benchmarks(
 			skip_meta_benchmark_names.push(name.clone())
 		}
 
-		expanded_stmts.push(expanded);
-		benchmark_defs.push(benchmark_def);
+		// replace original function def with expanded code
+		*stmt = Item::Verbatim(expanded);
 	}
 
 	// generics
@@ -379,7 +375,7 @@ pub fn benchmarks(
 		#(#mod_attrs)
 		*
 		#mod_vis mod #mod_name {
-			#(#expanded_stmts)
+			#(#content)
 			*
 
 			#[allow(non_camel_case_types)]
