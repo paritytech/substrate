@@ -92,17 +92,16 @@ where
 	let _cancel_on_drop = CancelOnDrop(is_cancelled_arc);
 	let task = tokio::task::spawn_blocking(move || callback(is_cancelled));
 
-	let result;
-	if let Some(timeout) = timeout {
-		result = tokio::select! {
+	let result = if let Some(timeout) = timeout {
+		tokio::select! {
 			biased;
 
 			task_result = task => task_result,
 			_ = tokio::time::sleep(timeout) => Ok(Err(Cancelled))
-		};
+		}
 	} else {
-		result = task.await;
-	}
+		task.await
+	};
 
 	match result {
 		Ok(Ok(result)) => Ok(result),
