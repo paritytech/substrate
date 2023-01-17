@@ -110,24 +110,29 @@ where
 	}
 }
 
-#[tokio::test]
-async fn spawn_blocking_with_timeout_works() {
-	let task: Result<(), SpawnWithTimeoutError> =
-		spawn_blocking_with_timeout(Some(Duration::from_millis(100)), |is_timed_out| {
-			std::thread::sleep(Duration::from_millis(200));
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[tokio::test]
+	async fn spawn_blocking_with_timeout_works() {
+		let task: Result<(), SpawnWithTimeoutError> =
+			spawn_blocking_with_timeout(Some(Duration::from_millis(100)), |is_timed_out| {
+				std::thread::sleep(Duration::from_millis(200));
+				is_timed_out.check_if_timed_out()?;
+				unreachable!();
+			})
+			.await;
+
+		assert_matches::assert_matches!(task, Err(SpawnWithTimeoutError::Timeout));
+
+		let task = spawn_blocking_with_timeout(Some(Duration::from_millis(100)), |is_timed_out| {
+			std::thread::sleep(Duration::from_millis(20));
 			is_timed_out.check_if_timed_out()?;
-			unreachable!();
+			Ok(())
 		})
 		.await;
 
-	assert_matches::assert_matches!(task, Err(SpawnWithTimeoutError::Timeout));
-
-	let task = spawn_blocking_with_timeout(Some(Duration::from_millis(100)), |is_timed_out| {
-		std::thread::sleep(Duration::from_millis(20));
-		is_timed_out.check_if_timed_out()?;
-		Ok(())
-	})
-	.await;
-
-	assert_matches::assert_matches!(task, Ok(()));
+		assert_matches::assert_matches!(task, Ok(()));
+	}
 }
