@@ -2085,15 +2085,6 @@ pub mod env {
 		data_ptr: u32,
 		data_len: u32,
 	) -> Result<(), TrapReason> {
-		fn has_duplicates<T: Ord>(items: &mut Vec<T>) -> bool {
-			items.sort();
-			// Find any two consecutive equal elements.
-			items.windows(2).any(|w| match &w {
-				&[a, b] => a == b,
-				_ => false,
-			})
-		}
-
 		let num_topic = topics_len
 			.checked_div(sp_std::mem::size_of::<TopicOf<E::T>>() as u32)
 			.ok_or("Zero sized topics are not allowed")?;
@@ -2102,7 +2093,7 @@ pub mod env {
 			return Err(Error::<E::T>::ValueTooLarge.into())
 		}
 
-		let mut topics: Vec<TopicOf<<E as Ext>::T>> = match topics_len {
+		let topics: Vec<TopicOf<<E as Ext>::T>> = match topics_len {
 			0 => Vec::new(),
 			_ => ctx.read_sandbox_memory_as_unbounded(memory, topics_ptr, topics_len)?,
 		};
@@ -2110,13 +2101,6 @@ pub mod env {
 		// If there are more than `event_topics`, then trap.
 		if topics.len() > ctx.ext.schedule().limits.event_topics as usize {
 			return Err(Error::<E::T>::TooManyTopics.into())
-		}
-
-		// Check for duplicate topics. If there are any, then trap.
-		// Complexity O(n * log(n)) and no additional allocations.
-		// This also sorts the topics.
-		if has_duplicates(&mut topics) {
-			return Err(Error::<E::T>::DuplicateTopics.into())
 		}
 
 		let event_data = ctx.read_sandbox_memory(memory, data_ptr, data_len)?;
