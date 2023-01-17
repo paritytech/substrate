@@ -21,7 +21,7 @@
 
 use super::*;
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
-use frame_support::traits::{Currency, EnsureOrigin, Get};
+use frame_support::traits::{nonfungible::Inspect, Currency, EnsureOrigin, Get};
 use frame_system::RawOrigin;
 use sp_arithmetic::Perquintill;
 use sp_runtime::{
@@ -106,6 +106,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, bid);
 		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), bid, 1)?;
 		Nis::<T>::process_queues(Perquintill::one(), 1, 1, &mut WeightCounter::unlimited());
+		Nis::<T>::communify(RawOrigin::Signed(caller.clone()).into(), 0)?;
 		let original = T::Currency::free_balance(&Nis::<T>::account_id());
 		T::Currency::make_free_balance_be(&Nis::<T>::account_id(), BalanceOf::<T>::min_value());
 	}: _<T::RuntimeOrigin>(origin)
@@ -116,7 +117,7 @@ benchmarks! {
 		assert!(missing <= Perquintill::one() / 100_000);
 	}
 
-	thaw {
+	thaw_private {
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, T::MinBid::get() * BalanceOf::<T>::from(3u32));
 		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
@@ -126,6 +127,42 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller.clone()), 0, None)
 	verify {
 		assert!(Receipts::<T>::get(0).is_none());
+	}
+
+	thaw_communal {
+		let caller: T::AccountId = whitelisted_caller();
+		T::Currency::make_free_balance_be(&caller, T::MinBid::get() * BalanceOf::<T>::from(3u32));
+		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
+		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
+		Nis::<T>::process_queues(Perquintill::one(), 1, 2, &mut WeightCounter::unlimited());
+		Receipts::<T>::mutate(0, |m_g| if let Some(ref mut g) = m_g { g.expiry = Zero::zero() });
+		Nis::<T>::communify(RawOrigin::Signed(caller.clone()).into(), 0)?;
+	}: _(RawOrigin::Signed(caller.clone()), 0)
+	verify {
+		assert!(Receipts::<T>::get(0).is_none());
+	}
+
+	privatize {
+		let caller: T::AccountId = whitelisted_caller();
+		T::Currency::make_free_balance_be(&caller, T::MinBid::get() * BalanceOf::<T>::from(3u32));
+		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
+		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
+		Nis::<T>::process_queues(Perquintill::one(), 1, 2, &mut WeightCounter::unlimited());
+		Nis::<T>::communify(RawOrigin::Signed(caller.clone()).into(), 0)?;
+	}: _(RawOrigin::Signed(caller.clone()), 0)
+	verify {
+		assert_eq!(Nis::<T>::owner(&0), Some(caller));
+	}
+
+	communify {
+		let caller: T::AccountId = whitelisted_caller();
+		T::Currency::make_free_balance_be(&caller, T::MinBid::get() * BalanceOf::<T>::from(3u32));
+		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
+		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
+		Nis::<T>::process_queues(Perquintill::one(), 1, 2, &mut WeightCounter::unlimited());
+	}: _(RawOrigin::Signed(caller.clone()), 0)
+	verify {
+		assert_eq!(Nis::<T>::owner(&0), None);
 	}
 
 	process_queues {

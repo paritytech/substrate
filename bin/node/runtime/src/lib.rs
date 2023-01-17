@@ -567,7 +567,7 @@ impl pallet_staking::Config for Runtime {
 	type BondingDuration = BondingDuration;
 	type SlashDeferDuration = SlashDeferDuration;
 	/// A super-majority of the council can cancel the slash.
-	type SlashCancelOrigin = EitherOfDiverse<
+	type AdminOrigin = EitherOfDiverse<
 		EnsureRoot<AccountId>,
 		pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 3, 4>,
 	>;
@@ -1181,7 +1181,6 @@ impl pallet_tips::Config for Runtime {
 parameter_types! {
 	pub const DepositPerItem: Balance = deposit(1, 0);
 	pub const DepositPerByte: Balance = deposit(0, 1);
-	pub const MaxValueSize: u32 = 16 * 1024;
 	pub const DeletionQueueDepth: u32 = 128;
 	// The lazy deletion runs inside on_initialize.
 	pub DeletionWeightLimit: Weight = RuntimeBlockWeights::get()
@@ -1500,6 +1499,7 @@ parameter_types! {
 	pub const ThawThrottle: (Perquintill, BlockNumber) = (Perquintill::from_percent(25), 5);
 	pub Target: Perquintill = Perquintill::zero();
 	pub const NisPalletId: PalletId = PalletId(*b"py/nis  ");
+	pub const NisReserveId: [u8; 8] = *b"py/nis  ";
 }
 
 impl pallet_nis::Config for Runtime {
@@ -1523,6 +1523,7 @@ impl pallet_nis::Config for Runtime {
 	type IntakePeriod = IntakePeriod;
 	type MaxIntakeWeight = MaxIntakeWeight;
 	type ThawThrottle = ThawThrottle;
+	type ReserveId = NisReserveId;
 }
 
 parameter_types! {
@@ -2197,7 +2198,7 @@ impl_runtime_apis! {
 
 	#[cfg(feature = "try-runtime")]
 	impl frame_try_runtime::TryRuntime<Block> for Runtime {
-		fn on_runtime_upgrade(checks: bool) -> (Weight, Weight) {
+		fn on_runtime_upgrade(checks: frame_try_runtime::UpgradeCheckSelect) -> (Weight, Weight) {
 			// NOTE: intentional unwrap: we don't want to propagate the error backwards, and want to
 			// have a backtrace here. If any of the pre/post migration checks fail, we shall stop
 			// right here and right now.

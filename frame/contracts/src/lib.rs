@@ -134,6 +134,9 @@ pub use crate::{
 	wasm::Determinism,
 };
 
+#[cfg(doc)]
+pub use crate::wasm::api_doc;
+
 type CodeHash<T> = <T as frame_system::Config>::Hash;
 type TrieId = BoundedVec<u8, ConstU32<128>>;
 type BalanceOf<T> =
@@ -813,8 +816,6 @@ pub mod pallet {
 		RandomSubjectTooLong,
 		/// The amount of topics passed to `seal_deposit_events` exceeds the limit.
 		TooManyTopics,
-		/// The topics passed to `seal_deposit_events` contains at least one duplicate.
-		DuplicateTopics,
 		/// The chain does not provide a chain extension. Calling the chain extension results
 		/// in this error. Note that this usually  shouldn't happen as deploying such contracts
 		/// is rejected.
@@ -857,9 +858,6 @@ pub mod pallet {
 		CodeRejected,
 		/// An indetermistic code was used in a context where this is not permitted.
 		Indeterministic,
-		/// The debug buffer size used during contract execution exceeded the limit determined by
-		/// the `MaxDebugBufferLen` pallet config parameter.
-		DebugBufferExhausted,
 	}
 
 	/// A mapping from an original code hash to the original code, untouched by instrumentation.

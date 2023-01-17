@@ -922,6 +922,13 @@ benchmarks! {
 		);
 	}
 
+	set_min_commission {
+		let min_commission = Perbill::max_value();
+	}: _(RawOrigin::Root, min_commission)
+	verify {
+		assert_eq!(MinCommission::<T>::get(), Perbill::from_percent(100));
+	}
+
 	impl_benchmark_test_suite!(
 		Staking,
 		crate::mock::ExtBuilder::default().has_stakers(true),

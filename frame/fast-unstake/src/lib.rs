@@ -147,6 +147,8 @@ pub mod pallet {
 	/// The map of all accounts wishing to be unstaked.
 	///
 	/// Keeps track of `AccountId` wishing to unstake and it's corresponding deposit.
+	///
+	/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
 	#[pallet::storage]
 	pub type Queue<T: Config> = CountedStorageMap<_, Twox64Concat, T::AccountId, BalanceOf<T>>;
 

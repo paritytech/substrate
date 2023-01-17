@@ -19,7 +19,7 @@ sp-runtime = { version = "7.0.0", default-features = false, path = "../../../pri
 sp-std = { version = "5.0.0", default-features = false, path = "../../../primitives/std" }
 
 [build-dependencies]
-substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder" }
+substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder", optional = true }
 
 [features]
 default = ["std"]
@@ -28,4 +28,5 @@ std = [
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"substrate-wasm-builder",
 ]
