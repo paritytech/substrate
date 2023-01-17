@@ -85,6 +85,46 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	pub(crate) fn do_mint_pre_signed(
+		mint_to: T::AccountId,
+		mint_data: PreSignedMintOf<T, I>,
+		signer: T::AccountId,
+	) -> DispatchResult {
+		let PreSignedMint { collection, item, metadata, deadline, only_account } = mint_data;
+		let metadata = Self::construct_metadata(metadata)?;
+
+		if let Some(account) = only_account {
+			ensure!(account == mint_to, Error::<T, I>::WrongOrigin);
+		}
+
+		let now = frame_system::Pallet::<T>::block_number();
+		ensure!(deadline >= now, Error::<T, I>::DeadlineExpired);
+
+		let collection_details =
+			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
+		ensure!(collection_details.owner == signer, Error::<T, I>::NoPermission);
+
+		let item_config = ItemConfig { settings: Self::get_default_item_settings(&collection)? };
+		Self::do_mint(
+			collection,
+			item,
+			Some(mint_to.clone()),
+			mint_to.clone(),
+			item_config,
+			|_, _| Ok(()),
+		)?;
+		if !metadata.len().is_zero() {
+			Self::do_set_item_metadata(
+				Some(collection_details.owner),
+				collection,
+				item,
+				metadata,
+				Some(mint_to),
+			)?;
+		}
+		Ok(())
+	}
+
 	pub fn do_burn(
 		collection: T::CollectionId,
 		item: T::ItemId,

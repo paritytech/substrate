@@ -85,6 +85,7 @@ pub trait WeightInfo {
 	fn create_swap() -> Weight;
 	fn cancel_swap() -> Weight;
 	fn claim_swap() -> Weight;
+	fn mint_pre_signed() -> Weight;
 }
 
 /// Weights for pallet_nfts using the Substrate node and recommended hardware.
@@ -467,6 +468,12 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(8))
 			.saturating_add(T::DbWeight::get().writes(11))
 	}
+	fn mint_pre_signed() -> Weight {
+		// Minimum execution time: 101_076 nanoseconds.
+		Weight::from_ref_time(101_863_000)
+			.saturating_add(T::DbWeight::get().reads(8))
+			.saturating_add(T::DbWeight::get().writes(11))
+	}
 }
 
 // For backwards compatibility and tests
@@ -843,6 +850,12 @@ impl WeightInfo for () {
 	// Storage: Nfts Account (r:0 w:4)
 	// Storage: Nfts ItemPriceOf (r:0 w:2)
 	fn claim_swap() -> Weight {
+		// Minimum execution time: 101_076 nanoseconds.
+		Weight::from_ref_time(101_863_000)
+			.saturating_add(RocksDbWeight::get().reads(8))
+			.saturating_add(RocksDbWeight::get().writes(11))
+	}
+	fn mint_pre_signed() -> Weight {
 		// Minimum execution time: 101_076 nanoseconds.
 		Weight::from_ref_time(101_863_000)
 			.saturating_add(RocksDbWeight::get().reads(8))

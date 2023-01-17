@@ -31,6 +31,7 @@ use frame_support::{
 	BoundedVec,
 };
 use frame_system::RawOrigin as SystemOrigin;
+use sp_core::Pair;
 use sp_runtime::traits::{Bounded, One};
 use sp_std::prelude::*;
 
@@ -712,6 +713,41 @@ benchmarks_instance_pallet! {
 			price: Some(price_with_direction),
 			deadline: duration.saturating_add(One::one()),
 		}.into());
+	}
+
+	mint_pre_signed {
+		let caller_pair = sp_core::sr25519::Pair::from_string("//Alice", None).unwrap();
+		let caller_signer = MultiSigner::Sr25519(caller_pair.public());
+		let caller = Nfts::<T, I>::signer_to_account(caller_signer.clone()).unwrap();
+		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
+		let caller_lookup = T::Lookup::unlookup(caller.clone());
+
+		let collection = T::Helper::collection(0);
+		let item = T::Helper::item(0);
+		assert_ok!(Nfts::<T, I>::force_create(
+			SystemOrigin::Root.into(),
+			caller_lookup.clone(),
+			default_collection_config::<T, I>()
+		));
+
+		let metadata = vec![0u8; T::StringLimit::get() as usize];
+		let mint_data = PreSignedMint {
+			collection,
+			item,
+			metadata: metadata.clone(),
+			only_account: None,
+			deadline: One::one(),
+		};
+		let message = Encode::encode(&mint_data);
+		let signature = MultiSignature::Sr25519(caller_pair.sign(&message));
+
+		let target: T::AccountId = account("target", 0, SEED);
+		T::Currency::make_free_balance_be(&target, DepositBalanceOf::<T, I>::max_value());
+		frame_system::Pallet::<T>::set_block_number(One::one());
+	}: _(SystemOrigin::Signed(target.clone()), mint_data, signature, caller_signer)
+	verify {
+		let metadata: BoundedVec<_, _> = metadata.try_into().unwrap();
+		assert_last_event::<T, I>(Event::ItemMetadataSet { collection, item, data: metadata }.into());
 	}
 
 	impl_benchmark_test_suite!(Nfts, crate::mock::new_test_ext(), crate::mock::Test);

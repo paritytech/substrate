@@ -2503,72 +2503,118 @@ fn add_remove_item_attributes_approval_should_work() {
 #[test]
 fn pre_signed_mints_should_work() {
 	new_test_ext().execute_with(|| {
-		let user1_pair = sp_core::sr25519::Pair::from_string("//Alice", None).unwrap();
-		let user1_signer = MultiSigner::Sr25519(user1_pair.public());
-		let user1 = Nfts::signer_to_account(user1_signer.clone()).unwrap();
-		let mint_data: PreSignedMint<u32, u32, u64, u64> = PreSignedMint {
+		let user_1_pair = sp_core::sr25519::Pair::from_string("//Alice", None).unwrap();
+		let user_1_signer = MultiSigner::Sr25519(user_1_pair.public());
+		let user_1 = Nfts::signer_to_account(user_1_signer.clone()).unwrap();
+		let mint_data = PreSignedMint {
 			collection: 0,
 			item: 0,
-			// metadata: vec![0],
+			metadata: vec![00, 01],
 			only_account: None,
 			deadline: 10000000,
 		};
 		let message = Encode::encode(&mint_data);
+		let signature = MultiSignature::Sr25519(user_1_pair.sign(&message));
+		let user_2 = 2;
+		let user_3 = 3;
 
-		use sp_core::hexdisplay::HexDisplay;
-		dbg!(HexDisplay::from(&message));
-		// 0000000000000000008096980000000000
-
-		let signature = MultiSignature::Sr25519(user1_pair.sign(&message));
-		// let a = &array_bytes::hex2bytes_unchecked("00000000000000000080969800")[..];
-		// dbg!(a);
-		// let signature = MultiSignature::Sr25519(user1_pair.sign(&a));
-
-		// use sp_runtime::traits::{IdentifyAccount, Verify};
-		// dbg!(signature.verify(&*message, &user1_signer.clone().into_account()));
-
-		// use sp_core::crypto::Ss58Codec;
-		// dbg!(user1_pair.public().to_ss58check());
-		// dbg!(user1);
-		dbg!(&signature);
-		// dbg!(&user1_signer);
-		dbg!(&user1_pair.public());
-
-		/*
-		2023-01-13 14:20:54 DDEBUG: msg 00000000000000000080969800
-		2023-01-13 14:20:54 DDEBUG: signature MultiSignature::Sr25519(9483ca2df9b4ffe1dae4fa1412377ab6bf00e51e85ca5ebb0a9730861712f62d203d026e61090d5570f50c389563c4b1fd0b819e3c0df8179408184259192685)
-		2023-01-13 14:20:54 DDEBUG: signer d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d (5GrwvaEF...)
-
-		2023-01-13 14:39:51 DDEBUG: msg 00000000000000000080969800
-		2023-01-13 14:39:51 DDEBUG: signature MultiSignature::Sr25519(20a4c1caededa2b23a76105bfc3c483d5ca9b2cfb8d6a470084c28c5219ad95624f54250c795134ba81ad9ac8cb2f08cf2f5c1449dfe5a21e74e18c83bad4e8f)
-		2023-01-13 14:39:51 DDEBUG: signer d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d (5GrwvaEF...)
-
-		2023-01-13 16:08:06 DDEBUG: msg 00000000000000000080969800
-		2023-01-13 16:08:06 DDEBUG: signature MultiSignature::Sr25519(9483ca2df9b4ffe1dae4fa1412377ab6bf00e51e85ca5ebb0a9730861712f62d203d026e61090d5570f50c389563c4b1fd0b819e3c0df8179408184259192685)
-		2023-01-13 16:08:06 DDEBUG: signer d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d (5GrwvaEF...)
-		*/
-		let user2 = 2;
-
-		Balances::make_free_balance_be(&user1, 100);
-		Balances::make_free_balance_be(&user2, 100);
+		Balances::make_free_balance_be(&user_1, 100);
+		Balances::make_free_balance_be(&user_2, 100);
 		assert_ok!(Nfts::create(
-			RuntimeOrigin::signed(user1),
-			user1,
-			collection_config_with_all_settings_enabled()
+			RuntimeOrigin::signed(user_1),
+			user_1,
+			collection_config_with_all_settings_enabled(),
 		));
+
 		assert_ok!(Nfts::mint_pre_signed(
-			RuntimeOrigin::signed(user2),
-			mint_data,
-			signature,
-			user1_signer
+			RuntimeOrigin::signed(user_2),
+			mint_data.clone(),
+			signature.clone(),
+			user_1_signer.clone(),
 		));
-		assert_eq!(items(), vec![(user2, 0, 0)]);
-		// validate metadata (ok and not ok)
-		// validate balances
-		// validate signature
-		// validate deadline
-		// validate balance on burn
-		// validate collection owner
-		// validate wrong collection's and item's ids
+		assert_eq!(items(), vec![(user_2, 0, 0)]);
+		let metadata = ItemMetadataOf::<Test>::get(0, 0).unwrap();
+		assert_eq!(metadata.deposit, ItemMetadataDeposit { account: Some(user_2), amount: 3 });
+		assert_eq!(metadata.data, vec![00, 01]);
+
+		assert_eq!(Balances::free_balance(&user_1), 100 - 2); // 2 - collection deposit
+		assert_eq!(Balances::free_balance(&user_2), 100 - 1 - 3); // 1 - item deposit, 3 - metadata
+
+		assert_noop!(
+			Nfts::mint_pre_signed(
+				RuntimeOrigin::signed(user_2),
+				mint_data,
+				signature.clone(),
+				user_1_signer.clone(),
+			),
+			Error::<Test>::AlreadyExists
+		);
+
+		assert_ok!(Nfts::burn(RuntimeOrigin::signed(user_2), 0, 0, Some(user_2)));
+		assert_eq!(Balances::free_balance(&user_2), 100);
+
+		// check errors
+		let mint_data = PreSignedMint {
+			collection: 0,
+			item: 0,
+			metadata: vec![],
+			only_account: Some(2),
+			deadline: 10000000,
+		};
+
+		assert_noop!(
+			Nfts::mint_pre_signed(
+				RuntimeOrigin::signed(user_2),
+				mint_data.clone(),
+				signature.clone(),
+				user_1_signer.clone(),
+			),
+			Error::<Test>::WrongSignature
+		);
+
+		let message = Encode::encode(&mint_data);
+		let signature = MultiSignature::Sr25519(user_1_pair.sign(&message));
+
+		assert_noop!(
+			Nfts::mint_pre_signed(
+				RuntimeOrigin::signed(user_3),
+				mint_data.clone(),
+				signature.clone(),
+				user_1_signer.clone(),
+			),
+			Error::<Test>::WrongOrigin
+		);
+
+		System::set_block_number(10000001);
+		assert_noop!(
+			Nfts::mint_pre_signed(
+				RuntimeOrigin::signed(user_2),
+				mint_data,
+				signature,
+				user_1_signer.clone(),
+			),
+			Error::<Test>::DeadlineExpired
+		);
+		System::set_block_number(1);
+
+		let mint_data = PreSignedMint {
+			collection: 1,
+			item: 0,
+			metadata: vec![],
+			only_account: Some(2),
+			deadline: 10000000,
+		};
+		let message = Encode::encode(&mint_data);
+		let signature = MultiSignature::Sr25519(user_1_pair.sign(&message));
+
+		assert_noop!(
+			Nfts::mint_pre_signed(
+				RuntimeOrigin::signed(user_2),
+				mint_data,
+				signature,
+				user_1_signer.clone(),
+			),
+			Error::<Test>::UnknownCollection
+		);
 	})
 }
