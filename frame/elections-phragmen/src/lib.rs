@@ -195,6 +195,13 @@ pub mod pallet {
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
+	// local lock id.
+	// `#[pallet::composite]`
+	enum LockId {
+		CouncilVoting,
+		OtherReason,
+	}
+
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -204,15 +211,14 @@ pub mod pallet {
 		type PalletId: Get<LockIdentifier>;
 
 		/// This will come from the outer runtime, and it will be the amalgamated lock ids.
-		type RuntimeLockIds: From<crate::pallet::LockIds>;
+		type RuntimeLockIds: From<crate::pallet::LockId>;
 
 		/// The currency that people are electing with.
 		type Currency: LockableCurrency<
-			Self::AccountId,
-			Moment = Self::BlockNumber,
-			LockId = Self::RuntimeLockId
-		>
-			+ ReservableCurrency<Self::AccountId>;
+				Self::AccountId,
+				Moment = Self::BlockNumber,
+				LockId = Self::RuntimeLockIds,
+			> + ReservableCurrency<Self::AccountId>;
 
 		/// What to do when the members change.
 		type ChangeMembers: ChangeMembers<Self::AccountId>;
@@ -367,13 +373,6 @@ pub mod pallet {
 					debug_assert!(_remainder.is_zero());
 				},
 			};
-
-			// local lock id.
-			#[pallet::composite]
-			enum LockId {
-				CouncilVoting,
-				OtherReason,
-			}
 
 			let id: T::RuntimeLockIds = LockId::CouncilVoting.into();
 
