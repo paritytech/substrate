@@ -134,9 +134,6 @@ pub struct Limits {
 	/// The maximum length of a subject in bytes used for PRNG generation.
 	pub subject_len: u32,
 
-	/// The maximum nesting level of the call stack.
-	pub call_depth: u32,
-
 	/// The maximum size of a storage value and event payload in bytes.
 	pub payload_len: u32,
 }
@@ -532,7 +529,6 @@ impl Default for Limits {
 			table_size: 4096,
 			br_table_size: 256,
 			subject_len: 32,
-			call_depth: 32,
 			payload_len: 16 * 1024,
 		}
 	}

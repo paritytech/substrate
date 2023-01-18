@@ -123,6 +123,7 @@ use pallet_contracts_primitives::{
 	StorageDeposit,
 };
 use scale_info::TypeInfo;
+use smallvec::Array;
 use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup, TrailingZeroInput};
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
@@ -272,7 +273,10 @@ pub mod pallet {
 		/// The allowed depth is `CallStack::size() + 1`.
 		/// Therefore a size of `0` means that a contract cannot use call or instantiate.
 		/// In other words only the origin called "root contract" is allowed to execute then.
-		type CallStack: smallvec::Array<Item = Frame<Self>>;
+		///
+		/// This setting along with [`MaxCodeLen`](#associatedtype.MaxCodeLen) directly affects
+		/// memory usage of your runtime.
+		type CallStack: Array<Item = Frame<Self>>;
 
 		/// The maximum number of contracts that can be pending for deletion.
 		///
@@ -323,6 +327,10 @@ pub mod pallet {
 		/// The maximum length of a contract code in bytes. This limit applies to the instrumented
 		/// version of the code. Therefore `instantiate_with_code` can fail even when supplying
 		/// a wasm binary below this maximum size.
+		///
+		/// The value should be chosen carefully taking into the account the overall memory limit
+		/// your runtime has, as well as the [maximum allowed callstack
+		/// depth](#associatedtype.CallStack). Look into the `integrity_test()` for some insights.
 		#[pallet::constant]
 		type MaxCodeLen: Get<u32>;
 
@@ -371,6 +379,71 @@ pub mod pallet {
 			} else {
 				T::WeightInfo::on_process_deletion_queue_batch()
 			}
+		}
+
+		fn integrity_test() {
+			// Total runtime memory is expected to have 128Mb upper limit
+			const MAX_RUNTIME_MEM: u32 = 1024 * 1024 * 128;
+			// Memory limits for a single contract:
+			// Value stack size: 1Mb per contract, default defined in wasmi
+			const MAX_STACK_SIZE: u32 = 1024 * 1024;
+			// Heap limit is normally 16 mempages of 64kb each = 1Mb per contract
+			let max_heap_size = T::Schedule::get().limits.max_memory_size();
+			// Max call depth is CallStack::size() + 1
+			let max_call_depth = u32::try_from(T::CallStack::size().saturating_add(1))
+				.expect("CallStack size is too big");
+
+			// Check that given configured `MaxCodeLen`, runtime heap memory limit can't be broken.
+			//
+			// In worst case, the decoded wasm contract code would be `x16` times larger than the
+			// encoded one. This is because even a single-byte wasm instruction has 16-byte size in
+			// wasmi. This gives us `MaxCodeLen*16` safety margin.
+			//
+			// Next, the pallet keeps both the original and instrumented wasm blobs for each
+			// contract, hence we add up `MaxCodeLen*2` more to the safety margin.
+			//
+			// Finally, the inefficiencies of the freeing-bump allocator
+			// being used in the client for the runtime memory allocations, could lead to possible
+			// memory allocations for contract code grow up to `x4` times in some extreme cases,
+			// which gives us total multiplier of `18*4` for `MaxCodeLen`.
+			//
+			// That being said, for every contract executed in runtime, at least `MaxCodeLen*18*4`
+			// memory should be available. Note that maximum allowed heap memory and stack size per
+			// each contract (stack frame) should also be counted.
+			//
+			// Finally, we allow 50% of the runtime memory to be utilized by the contracts call
+			// stack, keeping the rest for other facilities, such as PoV, etc.
+			//
+			// This gives us the following formula:
+			//
+			// `(MaxCodeLen * 18 * 4 + MAX_STACK_SIZE + max_heap_size) * max_call_depth <
+			// MAX_RUNTIME_MEM/2`
+			//
+			// Hence the upper limit for the `MaxCodeLen` can be defined as follows:
+			let code_len_limit = MAX_RUNTIME_MEM
+				.saturating_div(2)
+				.saturating_div(max_call_depth)
+				.saturating_sub(max_heap_size)
+				.saturating_sub(MAX_STACK_SIZE)
+				.saturating_div(18 * 4);
+
+			assert!(
+				T::MaxCodeLen::get() < code_len_limit,
+				"Given `CallStack` height {:?}, `MaxCodeLen` should be set less than {:?} \
+				 (current value is {:?}), to avoid possible runtime oom issues.",
+				max_call_depth,
+				code_len_limit,
+				T::MaxCodeLen::get(),
+			);
+
+			// Debug buffer should at least be large enough to accomodate a simple error message
+			const MIN_DEBUG_BUF_SIZE: u32 = 256;
+			assert!(
+				T::MaxDebugBufferLen::get() > MIN_DEBUG_BUF_SIZE,
+				"Debug buffer should have minimum size of {} (current setting is {})",
+				MIN_DEBUG_BUF_SIZE,
+				T::MaxDebugBufferLen::get(),
+			)
 		}
 	}
 
