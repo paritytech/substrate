@@ -122,6 +122,10 @@ impl WeightLimit {
 		self.ref_time.is_none()
 	}
 
+	pub fn is_any_zero(&self) -> bool {
+		self.ref_time == Some(0) || self.proof_size == Some(0)
+	}
+
 	/// Whether the proof is unlimited.
 	pub const fn is_proof_unlimited(&self) -> bool {
 		self.proof_size.is_none()
@@ -199,6 +203,23 @@ impl WeightLimit {
 			self.proof_size.map_or(false, |limit| limit < weight.proof_size)
 	}
 
+	/// Compare `self` with `other` and return `true` if all limits of `self` are greater-or-equal.
+	pub fn all_above_or_equal(&self, other: &Self) -> bool {
+		self.ref_time.map_or(true, |limit| limit >= other.ref_time.unwrap_or(u64::MAX)) &&
+			self.proof_size
+				.map_or(true, |limit| limit >= other.proof_size.unwrap_or(u64::MAX))
+	}
+
+	pub fn all_less_or_equal(&self, other: &Self) -> bool {
+		self.ref_time.map_or_else(
+			|| other.ref_time.is_none(),
+			|limit| other.ref_time.map_or(true, |other_limit| limit <= other_limit),
+		) && self.proof_size.map_or_else(
+			|| other.proof_size.is_none(),
+			|limit| other.proof_size.map_or(true, |other_limit| limit <= other_limit),
+		)
+	}
+
 	/// Uses the exact value for each *limited* component and `w` for each unlimited one.
 	///
 	/// # Example
@@ -268,6 +289,27 @@ impl WeightLimit {
 	/// Check that `weight` is within the limits of `self`.
 	pub fn check_contains(&self, weight: Weight) -> Result<(), ()> {
 		self.contains(weight).then(|| ()).ok_or(())
+	}
+
+	pub fn map_proof_limit<F>(self, f: F) -> Self
+	where
+		F: FnOnce(Option<u64>) -> Option<u64>,
+	{
+		Self { ref_time: self.ref_time, proof_size: f(self.proof_size) }
+	}
+
+	pub fn map_time_limit<F>(self, f: F) -> Self
+	where
+		F: FnOnce(Option<u64>) -> Option<u64>,
+	{
+		Self { ref_time: f(self.ref_time), proof_size: self.proof_size }
+	}
+
+	pub fn map_limits<F>(self, f: F) -> Self
+	where
+		F: Fn(Option<u64>) -> Option<u64>,
+	{
+		Self { ref_time: f(self.ref_time), proof_size: f(self.proof_size) }
 	}
 }
 
@@ -612,6 +654,18 @@ mod tests {
 		assert!(L::from_proof_limit(10).check_contains(Weight::from_parts(200, 1)).is_ok());
 		assert!(L::from_proof_limit(10).check_contains(Weight::from_parts(u64::MAX, 10)).is_ok());
 		assert!(!L::from_proof_limit(10).check_contains(Weight::from_parts(0, 11)).is_ok());
+	}
+
+	#[test]
+	fn all_less_or_equal_works() {
+		assert!(L::UNLIMITED.all_less_or_equal(&L::UNLIMITED));
+		assert!(L::NOTHING.all_less_or_equal(&L::UNLIMITED));
+
+		let l = L::from_some_limits(10, 5);
+		let m = L::from_some_limits(5, 10);
+		assert!(l.all_less_or_equal(&l));
+		assert!(!l.all_less_or_equal(&m));
+		assert!(!m.all_less_or_equal(&l));
 	}
 
 	/// Some known-good weight pairs.
