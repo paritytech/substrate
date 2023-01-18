@@ -1353,13 +1353,13 @@ impl<T: Config> Pallet<T> {
 			let percent = (consumed as f32 * 100.0) / (SOFT_POV_LIMIT_BYTES as f32) - 100.0;
 			log::warn!(
 				target: LOG_TARGET,
-				"Block {:?} exceeded the PoV limit by {:.2}%. Consumed: {} > limit: {} bytes",
+				"Block {:?} exceeded the PoV limit by {:.2}%; {:.2} > {:.2} MiB",
 				Self::block_number(),
 				percent,
-				consumed,
-				SOFT_POV_LIMIT_BYTES,
+				consumed as f32 / (1024 * 1024) as f32,
+				SOFT_POV_LIMIT_BYTES as f32 / (1024 * 1024) as f32,
 			);
-			Self::deposit_event(Event::PovSoftLimitExceeded {
+			Self::deposit_event(Event::PovLimitExceeded {
 				limit: SOFT_POV_LIMIT_BYTES,
 				consumed,
 			});
