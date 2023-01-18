@@ -34,6 +34,7 @@ pub mod bench;
 
 mod children;
 mod parity_db;
+mod pinned_blocks_cache;
 mod record_stats_state;
 mod stats;
 #[cfg(any(feature = "rocksdb", test))]
@@ -42,17 +43,16 @@ mod utils;
 
 use linked_hash_map::LinkedHashMap;
 use log::{debug, trace, warn};
-use lru::LruCache;
 use parking_lot::{Mutex, RwLock};
 use std::{
 	collections::{HashMap, HashSet},
 	io,
-	num::NonZeroUsize,
 	path::{Path, PathBuf},
 	sync::Arc,
 };
 
 use crate::{
+	pinned_blocks_cache::PinnedBlocksCache,
 	record_stats_state::RecordStatsState,
 	stats::StateUsageStats,
 	utils::{meta_keys, read_db, read_meta, DatabaseType, Meta},
@@ -112,8 +112,6 @@ pub type DbStateBuilder<B> = sp_state_machine::TrieBackendBuilder<
 
 /// Length of a [`DbHash`].
 const DB_HASH_LEN: usize = 32;
-
-const PINNING_CACHE_SIZE: usize = 1024;
 
 /// Hash type that this backend uses for the database.
 pub type DbHash = sp_core::H256;
@@ -479,119 +477,6 @@ fn cache_header<Hash: std::cmp::Eq + std::hash::Hash, Header>(
 	}
 }
 
-struct PinnedBlockCacheEntry<Block: BlockT> {
-	ref_count: u32,
-	pub justifications: Option<Option<Justifications>>,
-	pub body: Option<Option<Vec<Block::Extrinsic>>>,
-}
-
-impl<Block: BlockT> Default for PinnedBlockCacheEntry<Block> {
-	fn default() -> Self {
-		Self { ref_count: 0, justifications: None, body: None }
-	}
-}
-
-impl<Block: BlockT> PinnedBlockCacheEntry<Block> {
-	pub fn decrease_ref(&mut self) {
-		self.ref_count = self.ref_count.saturating_sub(1);
-	}
-
-	pub fn increase_ref(&mut self) {
-		self.ref_count = self.ref_count.saturating_add(1);
-	}
-
-	pub fn has_no_references(&self) -> bool {
-		self.ref_count == 0
-	}
-}
-
-struct PinnedBlockCache<Block: BlockT> {
-	cache: LruCache<Block::Hash, PinnedBlockCacheEntry<Block>>,
-}
-
-impl<Block: BlockT> PinnedBlockCache<Block> {
-	pub fn new() -> Self {
-		Self {
-			cache: LruCache::new(
-				NonZeroUsize::new(PINNING_CACHE_SIZE).expect("Capacity is larger than 0; qed"),
-			)
-			.into(),
-		}
-	}
-
-	pub fn bump_ref(&mut self, hash: Block::Hash) {
-		if self.cache.len() == PINNING_CACHE_SIZE {
-			log::warn!(target: LOG_TARGET, "Maximum size of pinning cache reached. Removing items to make space. max_size = {}", PINNING_CACHE_SIZE);
-		}
-
-		let entry = self.cache.get_or_insert_mut(hash, Default::default);
-		entry.increase_ref();
-		log::trace!(
-			target: LOG_TARGET,
-			"Bumped cache refcount. hash = {}, num_entries = {}",
-			hash,
-			self.cache.len()
-		);
-	}
-
-	pub fn clear(&mut self) {
-		self.cache.clear();
-	}
-
-	pub fn contains(&self, hash: Block::Hash) -> bool {
-		self.cache.contains(&hash)
-	}
-
-	pub fn insert_body(&mut self, hash: Block::Hash, extrinsics: Option<Vec<Block::Extrinsic>>) {
-		let mut entry = self.cache.get_or_insert_mut(hash, Default::default);
-		entry.body = Some(extrinsics);
-		log::trace!(
-			target: LOG_TARGET,
-			"Cached body. hash = {}, num_entries = {}",
-			hash,
-			self.cache.len()
-		);
-	}
-
-	pub fn insert_justifications(
-		&mut self,
-		hash: Block::Hash,
-		justifications: Option<Justifications>,
-	) {
-		let mut entry = self.cache.get_or_insert_mut(hash, Default::default);
-		entry.justifications = Some(justifications);
-		log::trace!(
-			target: LOG_TARGET,
-			"Cached justification. hash = {}, num_entries = {}",
-			hash,
-			self.cache.len()
-		);
-	}
-
-	pub fn remove(&mut self, hash: Block::Hash) {
-		if let Some(entry) = self.cache.peek_mut(&hash) {
-			entry.decrease_ref();
-			if entry.has_no_references() {
-				self.cache.pop(&hash);
-				log::trace!(
-					target: LOG_TARGET,
-					"Removed pinned cache entry. hash = {}, num_entries = {}",
-					hash,
-					self.cache.len()
-				);
-			}
-		}
-	}
-
-	pub fn justifications(&self, hash: &Block::Hash) -> Option<Option<Justifications>> {
-		self.cache.peek(hash).and_then(|entry| entry.justifications.clone())
-	}
-
-	pub fn body(&self, hash: &Block::Hash) -> Option<Option<Vec<Block::Extrinsic>>> {
-		self.cache.peek(hash).and_then(|entry| entry.body.clone())
-	}
-}
-
 /// Block database
 pub struct BlockchainDb<Block: BlockT> {
 	db: Arc<dyn Database<DbHash>>,
@@ -599,7 +484,7 @@ pub struct BlockchainDb<Block: BlockT> {
 	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
 	header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
 	header_cache: Mutex<LinkedHashMap<Block::Hash, Option<Block::Header>>>,
-	pinned_blocks_cache: Arc<RwLock<PinnedBlockCache<Block>>>,
+	pinned_blocks_cache: Arc<RwLock<PinnedBlocksCache<Block>>>,
 }
 
 impl<Block: BlockT> BlockchainDb<Block> {
@@ -612,7 +497,7 @@ impl<Block: BlockT> BlockchainDb<Block> {
 			meta: Arc::new(RwLock::new(meta)),
 			header_metadata_cache: Arc::new(HeaderMetadataCache::default()),
 			header_cache: Default::default(),
-			pinned_blocks_cache: Arc::new(RwLock::new(PinnedBlockCache::new())),
+			pinned_blocks_cache: Arc::new(RwLock::new(PinnedBlocksCache::new())),
 		})
 	}
 
