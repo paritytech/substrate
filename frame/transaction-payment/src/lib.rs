@@ -405,11 +405,9 @@ pub mod pallet {
 				T::BlockWeights::get()
 					.get(DispatchClass::Normal)
 					.max_total
+					.with_proof_limit(frame_system::SOFT_POV_LIMIT_BYTES) // FAIL-CI double check
 					.exact_limits()
-					.expect(
-						"Setting `max_total` for `Normal` dispatch class is not compatible with \
-					`transaction-payment` pallet.",
-					);
+					.expect("Transaction-payment needs exact weight limit; qed");
 			// add 1 percent;
 			let addition = target / 100;
 			if addition == Weight::zero() {
