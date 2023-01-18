@@ -59,7 +59,7 @@ pub(crate) const SPECULATIVE_NUM_SPANS: u32 = 32;
 pub mod pallet {
 	use frame_election_provider_support::ElectionDataProvider;
 
-	use crate::BenchmarkingConfig;
+	use crate::{BenchmarkingConfig, ExposureOverview};
 
 	use super::*;
 
@@ -414,6 +414,20 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
+	// TODO(ank4n)
+	#[pallet::storage]
+	#[pallet::getter(fn eras_stakers_overview)]
+	#[pallet::unbounded]
+	pub type ErasStakersOverview<T: Config> = StorageDoubleMap<
+		_,
+		Twox64Concat,
+		EraIndex,
+		Twox64Concat,
+		T::AccountId,
+		ExposureOverview<BalanceOf<T>>,
+		ValueQuery,
+	>;
+
 	/// Clipped Exposure of validator at era.
 	///
 	/// This is similar to [`ErasStakers`] but number of nominators exposed is reduced to the
@@ -630,11 +644,15 @@ pub mod pallet {
 			era: EraIndex,
 			validator: &T::AccountId,
 			page: PageIndex,
-		) -> ExposurePage<T::AccountId, BalanceOf<T>> {
+		) -> Exposure<T::AccountId, BalanceOf<T>> {
 			return match <ErasStakersPaged<T>>::get(era, (validator, page)) {
-				Some(paged_exposure) => paged_exposure,
 				// only return clipped exposure if page zero and no paged exposure entry
-				None if page == 0 => <ErasStakersClipped<T>>::get(&era, validator).into(),
+				None if page == 0 => <ErasStakersClipped<T>>::get(&era, validator),
+				Some(page) => {
+					// TODO(ank4n): more due diligence on the correctness of this.
+					let overview = <ErasStakersOverview<T>>::get(&era, validator);
+					Exposure { total: overview.total, own: overview.own, others: page.others }
+				},
 				_ => Default::default(),
 			}
 		}
@@ -656,13 +674,13 @@ pub mod pallet {
 		) {
 			<ErasStakers<T>>::insert(era, &validator, &exposure);
 
-			exposure
-				.into_pages(T::MaxNominatorRewardedPerValidator::get() as usize)
-				.iter()
-				.enumerate()
-				.for_each(|(page, paged_exposure)| {
-					<ErasStakersPaged<T>>::insert(era, (&validator, page as u32), &paged_exposure);
-				});
+			let (exposure_overview, exposure_pages) =
+				exposure.as_pages(T::MaxNominatorRewardedPerValidator::get());
+
+			<ErasStakersOverview<T>>::insert(era, &validator, &exposure_overview);
+			exposure_pages.iter().enumerate().for_each(|(page, paged_exposure)| {
+				<ErasStakersPaged<T>>::insert(era, (&validator, page as u32), &paged_exposure);
+			});
 		}
 
 		pub(crate) fn set_total_stake(era: EraIndex, total_stake: BalanceOf<T>) {
@@ -1597,9 +1615,10 @@ pub mod pallet {
 		/// The origin of this call must be _Signed_. Any account can call this function, even if
 		/// it is not one of the stakers.
 		///
-		/// The list of nominators is paged, each page being capped at `T::MaxNominatorRewardedPerValidator`. For
-		/// rewarding all the nominators, the call needs to be called for each page. If rewards are
-		/// not claimed in `${HistoryDepth}` eras, they are lost.
+		/// The list of nominators is paged, each page being capped at
+		/// `T::MaxNominatorRewardedPerValidator`. For rewarding all the nominators, the call needs
+		/// to be called for each page. If rewards are not claimed in `${HistoryDepth}` eras, they
+		/// are lost.
 		///
 		/// # <weight>
 		/// - Time complexity: at most O(MaxNominatorRewardedPerValidator).

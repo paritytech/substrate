@@ -2194,7 +2194,8 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 		let _ = Balances::make_free_balance_be(&11, stake);
 
 		let exposure = Exposure::<AccountId, Balance> { total: stake, own: stake, others: vec![] };
-		let exposure_page: ExposurePage<AccountId, Balance> = exposure.clone().into();
+		let (exposure_overview, _) =
+			exposure.clone().as_pages(MaxNominatorRewardedPerValidator::get());
 		let reward = EraRewardPoints::<AccountId> {
 			total: 1,
 			individual: vec![(11, 1)].into_iter().collect(),
@@ -2203,7 +2204,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 		// Check reward
 		ErasRewardPoints::<Test>::insert(0, reward);
 		ErasStakers::<Test>::insert(0, 11, &exposure);
-		ErasStakersPaged::<Test>::insert(0, (11, 0), exposure_page);
+		ErasStakersOverview::<Test>::insert(0, 11, exposure_overview);
 		ErasValidatorReward::<Test>::insert(0, stake);
 		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 0, 0));
 		assert_eq!(Balances::total_balance(&11), stake * 2);
@@ -3691,7 +3692,7 @@ fn six_session_delay() {
 #[test]
 fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward() {
 	ExtBuilder::default().build_and_execute(|| {
-		for i in 0..=<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get() {
+		for i in 0..=MaxNominatorRewardedPerValidator::get() {
 			let stash = 10_000 + i as AccountId;
 			let controller = 20_000 + i as AccountId;
 			let balance = 10_000 + i as Balance;
@@ -3714,7 +3715,7 @@ fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward(
 		mock::make_all_reward_payment(1);
 
 		// Assert only nominators from 1 to Max are rewarded
-		for i in 0..=<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get() {
+		for i in 0..=MaxNominatorRewardedPerValidator::get() {
 			let stash = 10_000 + i as AccountId;
 			let balance = 10_000 + i as Balance;
 			if stash == 10_000 {
@@ -3985,8 +3986,7 @@ fn payout_stakers_handles_weight_refund() {
 	// Note: this test relies on the assumption that `payout_stakers_alive_staked` is solely used by
 	// `payout_stakers` to calculate the weight of each payout op.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
-		let max_nom_rewarded =
-			<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get();
+		let max_nom_rewarded = MaxNominatorRewardedPerValidator::get();
 		// Make sure the configured value is meaningful for our use.
 		assert!(max_nom_rewarded >= 4);
 		let half_max_nom_rewarded = max_nom_rewarded / 2;
@@ -5673,29 +5673,31 @@ fn can_page_exposure() {
 		Exposure { total: total_stake, own: own_stake, others };
 
 	// when
-	let paged_exposures: Vec<ExposurePage<AccountId, Balance>> = exposure.clone().into_pages(3);
+	let (exposure_overview, exposure_page): (
+		ExposureOverview<Balance>,
+		Vec<ExposurePage<AccountId, Balance>>,
+	) = exposure.clone().as_pages(3);
 
 	// then
 	// 7 pages of nominators.
-	assert_eq!(paged_exposures.len(), (19 / 3) + 1);
-	// first page stake = 500 (own) + 100 + 200 + 300
-	assert!(matches!(
-		paged_exposures[0],
-		ExposurePage { total: 19_500, page_total: 1100, own: 500, .. }
-	));
+	assert_eq!(exposure_page.len(), 7);
+	assert_eq!(exposure_overview.page_count, 7);
+	// first page stake = 100 + 200 + 300
+	assert!(matches!(exposure_page[0], ExposurePage { page_total: 600, .. }));
 	// second page stake = 0 + 400 + 500 + 600
-	assert!(matches!(
-		paged_exposures[1],
-		ExposurePage { total: 19_500, page_total: 1500, own: 0, .. }
-	));
-	// verify total is always the total stake backing a validator for all the pages.
-	assert_eq!(paged_exposures.iter().filter(|a| a.total == 19_500).count(), 7);
+	assert!(matches!(exposure_page[1], ExposurePage { page_total: 1500, .. }));
+	// verify overview has the total
+	assert_eq!(exposure_overview.total, 19_500);
 	// verify total stake is same as in the original exposure.
-	assert_eq!(paged_exposures.iter().map(|a| a.page_total).reduce(|a, b| a + b).unwrap(), 19_500);
-	// verify own stake is same as in the original exposure.
-	assert_eq!(paged_exposures.iter().map(|a| a.own).reduce(|a, b| a + b).unwrap(), 500);
+	assert_eq!(
+		exposure_page.iter().map(|a| a.page_total).reduce(|a, b| a + b).unwrap(),
+		19_500 - exposure_overview.own
+	);
+	// verify own stake is correct
+	assert_eq!(exposure_overview.own, 500);
 	// verify number of nominators are same as in the original exposure.
-	assert_eq!(paged_exposures.iter().map(|a| a.others.len()).reduce(|a, b| a + b).unwrap(), 19);
+	assert_eq!(exposure_page.iter().map(|a| a.others.len()).reduce(|a, b| a + b).unwrap(), 19);
+	assert_eq!(exposure_overview.nominator_count, 19);
 }
 
 #[test]
@@ -5709,8 +5711,9 @@ fn should_retain_era_info_only_upto_history_depth() {
 			ClaimedRewards::<Test>::insert(era, &validator_stash, vec![0, 1, 2]);
 			for page in 0..3 {
 				ErasStakersPaged::<Test>::insert(
-					era, (&validator_stash, page),
-					ExposurePage { total: 100, page_total: 100, own: 100, others: vec![] },
+					era,
+					(&validator_stash, page),
+					ExposurePage { page_total: 100, others: vec![] },
 				);
 			}
 		}

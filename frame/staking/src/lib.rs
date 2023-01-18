@@ -313,7 +313,7 @@ use sp_runtime::{
 };
 use sp_staking::{
 	offence::{Offence, OffenceError, ReportOffence},
-	EraIndex, SessionIndex,
+	EraIndex, PageIndex, SessionIndex,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 pub use weights::WeightInfo;
@@ -736,63 +736,54 @@ impl<AccountId, Balance: Default + HasCompact> Default for Exposure<AccountId, B
 impl<AccountId: Clone, Balance: HasCompact + AtLeast32BitUnsigned + Copy>
 	Exposure<AccountId, Balance>
 {
-	fn into_pages(&self, page_size: usize) -> Vec<ExposurePage<AccountId, Balance>> {
-		let individual_chunks = self.others.chunks(page_size);
-		let mut paged_exposure: Vec<ExposurePage<AccountId, Balance>> =
+	fn as_pages(
+		&self,
+		page_size: u32,
+	) -> (ExposureOverview<Balance>, Vec<ExposurePage<AccountId, Balance>>) {
+		let individual_chunks = self.others.chunks(page_size as usize);
+		let mut exposure_pages: Vec<ExposurePage<AccountId, Balance>> =
 			Vec::with_capacity(individual_chunks.len());
 
-		// own balance that has not been accounted for in the paged exposure
-		let mut own_left = self.own;
-
 		for chunk in individual_chunks {
-			let own = own_left;
-			let mut page_total = own;
+			let mut page_total: Balance = Zero::zero();
 			for individual in chunk.iter() {
 				page_total = page_total.saturating_add(individual.value);
 			}
 
-			paged_exposure.push(ExposurePage {
-				total: self.total,
+			exposure_pages.push(ExposurePage {
 				page_total,
-				own,
 				others: chunk
 					.iter()
 					.map(|c| IndividualExposure { who: c.who.clone(), value: c.value })
 					.collect(),
 			});
-
-			// subtract own that has been accounted
-			own_left = own_left.saturating_sub(own);
 		}
 
-		paged_exposure
+		(
+			ExposureOverview {
+				total: self.total,
+				own: self.own,
+				nominator_count: self.others.len() as u32,
+				page_count: exposure_pages.len() as PageIndex,
+			},
+			exposure_pages,
+		)
 	}
 }
 
 /// A snapshot of the stake backing a single validator in the system.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct ExposurePage<AccountId, Balance: HasCompact> {
-	/// The total balance backing this validator.
-	#[codec(compact)]
-	pub total: Balance,
 	/// The total balance of this chunk/page.
 	#[codec(compact)]
 	pub page_total: Balance,
-	/// The validator's own stash that is exposed.
-	#[codec(compact)]
-	pub own: Balance,
 	/// The portions of nominators stashes that are exposed.
 	pub others: Vec<IndividualExposure<AccountId, Balance>>,
 }
 
 impl<AccountId, Balance: Default + HasCompact> Default for ExposurePage<AccountId, Balance> {
 	fn default() -> Self {
-		Self {
-			total: Default::default(),
-			page_total: Default::default(),
-			own: Default::default(),
-			others: vec![],
-		}
+		Self { page_total: Default::default(), others: vec![] }
 	}
 }
 
@@ -800,14 +791,31 @@ impl<AccountId: Clone, Balance: HasCompact + AtLeast32BitUnsigned + Copy>
 	From<Exposure<AccountId, Balance>> for ExposurePage<AccountId, Balance>
 {
 	fn from(exposure: Exposure<AccountId, Balance>) -> Self {
-		Self {
-			total: exposure.total,
-			page_total: exposure.total,
-			own: exposure.own,
-			others: exposure.others,
-		}
+		Self { page_total: exposure.total, others: exposure.others }
 	}
 }
+
+/// A snapshot of the stake backing a single validator in the system.
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+pub struct ExposureOverview<Balance: HasCompact> {
+	/// The total balance backing this validator.
+	#[codec(compact)]
+	pub total: Balance,
+	/// The validator's own stash that is exposed.
+	#[codec(compact)]
+	pub own: Balance,
+	/// Number of nominators backing this validator.
+	pub nominator_count: u32,
+	/// Number of pages of backers.
+	pub page_count: PageIndex,
+}
+
+impl<Balance: Default + HasCompact> Default for ExposureOverview<Balance> {
+	fn default() -> Self {
+		Self { total: Default::default(), own: Default::default(), nominator_count: Default::default(), page_count: Default::default() }
+	}
+}
+
 /// A pending slash record. The value of the slash has been computed but not applied yet,
 /// rather deferred for several eras.
 #[derive(Encode, Decode, RuntimeDebug, TypeInfo)]
