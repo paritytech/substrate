@@ -126,6 +126,10 @@ impl WeightLimit {
 		self.ref_time == Some(0) || self.proof_size == Some(0)
 	}
 
+	pub fn is_all_zero(&self) -> bool {
+		self.ref_time == Some(0) || self.proof_size == Some(0)
+	}
+
 	/// Whether the proof is unlimited.
 	pub const fn is_proof_unlimited(&self) -> bool {
 		self.proof_size.is_none()
