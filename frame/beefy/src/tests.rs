@@ -26,11 +26,12 @@ use codec::Encode;
 use sp_runtime::DigestItem;
 
 use frame_support::{
-	assert_ok,
+	assert_err, assert_ok,
+	dispatch::{GetDispatchInfo, Pays},
 	traits::{Currency, KeyOwnerProofSystem, OnInitialize},
 };
 
-use crate::mock::*;
+use crate::{mock::*, Call, Config, Error, Weight, WeightInfo};
 
 fn init_block(block: u64) {
 	System::set_block_number(block);
@@ -386,4 +387,395 @@ fn report_equivocation_old_set_works() {
 			);
 		}
 	});
+}
+
+#[test]
+fn report_equivocation_invalid_set_id() {
+	let authorities = test_authorities();
+
+	new_test_ext_raw_authorities(authorities).execute_with(|| {
+		start_era(1);
+
+		let block_num = System::block_number();
+		let validator_set = Beefy::validator_set().unwrap();
+		let authorities = validator_set.validators();
+		let set_id = validator_set.id();
+
+		let equivocation_authority_index = 0;
+		let equivocation_key = &authorities[equivocation_authority_index];
+		let equivocation_keyring = BeefyKeyring::from_public(equivocation_key).unwrap();
+
+		let key_owner_proof =
+			Historical::prove((beefy_primitives::KEY_TYPE, &equivocation_key)).unwrap();
+
+		let payload1 = Payload::from_single_entry(MMR_ROOT_ID, vec![42]);
+		let payload2 = Payload::from_single_entry(MMR_ROOT_ID, vec![128]);
+		// generate an equivocation for a future set
+		let equivocation_proof = generate_equivocation_proof(
+			set_id + 1,
+			equivocation_key.clone(),
+			(block_num, payload1, &equivocation_keyring),
+			(block_num, payload2, &equivocation_keyring),
+		);
+
+		// the call for reporting the equivocation should error
+		assert_err!(
+			Beefy::report_equivocation_unsigned(
+				RuntimeOrigin::none(),
+				Box::new(equivocation_proof),
+				key_owner_proof,
+			),
+			Error::<Test>::InvalidEquivocationProof,
+		);
+	});
+}
+
+#[test]
+fn report_equivocation_invalid_session() {
+	let authorities = test_authorities();
+
+	new_test_ext_raw_authorities(authorities).execute_with(|| {
+		start_era(1);
+
+		let block_num = System::block_number();
+		let validator_set = Beefy::validator_set().unwrap();
+		let authorities = validator_set.validators();
+
+		let equivocation_authority_index = 0;
+		let equivocation_key = &authorities[equivocation_authority_index];
+		let equivocation_keyring = BeefyKeyring::from_public(equivocation_key).unwrap();
+
+		// generate a key ownership proof at current era set id
+		let key_owner_proof =
+			Historical::prove((beefy_primitives::KEY_TYPE, &equivocation_key)).unwrap();
+
+		start_era(2);
+
+		let set_id = Beefy::validator_set().unwrap().id();
+
+		let payload1 = Payload::from_single_entry(MMR_ROOT_ID, vec![42]);
+		let payload2 = Payload::from_single_entry(MMR_ROOT_ID, vec![128]);
+		// generate an equivocation proof at following era set id = 2
+		let equivocation_proof = generate_equivocation_proof(
+			set_id,
+			equivocation_key.clone(),
+			(block_num, payload1, &equivocation_keyring),
+			(block_num, payload2, &equivocation_keyring),
+		);
+
+		// report an equivocation for the current set using an key ownership
+		// proof from the previous set, the session should be invalid.
+		assert_err!(
+			Beefy::report_equivocation_unsigned(
+				RuntimeOrigin::none(),
+				Box::new(equivocation_proof),
+				key_owner_proof,
+			),
+			Error::<Test>::InvalidEquivocationProof,
+		);
+	});
+}
+
+#[test]
+fn report_equivocation_invalid_key_owner_proof() {
+	let authorities = test_authorities();
+
+	new_test_ext_raw_authorities(authorities).execute_with(|| {
+		start_era(1);
+
+		let block_num = System::block_number();
+		let validator_set = Beefy::validator_set().unwrap();
+		let authorities = validator_set.validators();
+		let set_id = validator_set.id();
+
+		let invalid_owner_authority_index = 1;
+		let invalid_owner_key = &authorities[invalid_owner_authority_index];
+
+		// generate a key ownership proof for the authority at index 1
+		let invalid_key_owner_proof =
+			Historical::prove((beefy_primitives::KEY_TYPE, &invalid_owner_key)).unwrap();
+
+		let equivocation_authority_index = 0;
+		let equivocation_key = &authorities[equivocation_authority_index];
+		let equivocation_keyring = BeefyKeyring::from_public(equivocation_key).unwrap();
+
+		let payload1 = Payload::from_single_entry(MMR_ROOT_ID, vec![42]);
+		let payload2 = Payload::from_single_entry(MMR_ROOT_ID, vec![128]);
+		// generate an equivocation proof for the authority at index 0
+		let equivocation_proof = generate_equivocation_proof(
+			set_id + 1,
+			equivocation_key.clone(),
+			(block_num, payload1, &equivocation_keyring),
+			(block_num, payload2, &equivocation_keyring),
+		);
+
+		// we need to start a new era otherwise the key ownership proof won't be
+		// checked since the authorities are part of the current session
+		start_era(2);
+
+		// report an equivocation for the current set using a key ownership
+		// proof for a different key than the one in the equivocation proof.
+		assert_err!(
+			Beefy::report_equivocation_unsigned(
+				RuntimeOrigin::none(),
+				Box::new(equivocation_proof),
+				invalid_key_owner_proof,
+			),
+			Error::<Test>::InvalidKeyOwnershipProof,
+		);
+	});
+}
+
+#[test]
+fn report_equivocation_invalid_equivocation_proof() {
+	let authorities = test_authorities();
+
+	new_test_ext_raw_authorities(authorities).execute_with(|| {
+		start_era(1);
+
+		let block_num = System::block_number();
+		let validator_set = Beefy::validator_set().unwrap();
+		let authorities = validator_set.validators();
+		let set_id = validator_set.id();
+
+		let equivocation_authority_index = 0;
+		let equivocation_key = &authorities[equivocation_authority_index];
+		let equivocation_keyring = BeefyKeyring::from_public(equivocation_key).unwrap();
+
+		// generate a key ownership proof at set id in era 1
+		let key_owner_proof =
+			Historical::prove((beefy_primitives::KEY_TYPE, &equivocation_key)).unwrap();
+
+		let assert_invalid_equivocation_proof = |equivocation_proof| {
+			assert_err!(
+				Beefy::report_equivocation_unsigned(
+					RuntimeOrigin::none(),
+					Box::new(equivocation_proof),
+					key_owner_proof.clone(),
+				),
+				Error::<Test>::InvalidEquivocationProof,
+			);
+		};
+
+		start_era(2);
+
+		let payload1 = Payload::from_single_entry(MMR_ROOT_ID, vec![42]);
+		let payload2 = Payload::from_single_entry(MMR_ROOT_ID, vec![128]);
+
+		// both votes target the same block number and payload,
+		// there is no equivocation.
+		assert_invalid_equivocation_proof(generate_equivocation_proof(
+			set_id,
+			equivocation_key.clone(),
+			(block_num, payload1.clone(), &equivocation_keyring),
+			(block_num, payload1.clone(), &equivocation_keyring),
+		));
+
+		// votes targetting different rounds, there is no equivocation.
+		assert_invalid_equivocation_proof(generate_equivocation_proof(
+			set_id,
+			equivocation_key.clone(),
+			(block_num, payload1.clone(), &equivocation_keyring),
+			(block_num + 1, payload2.clone(), &equivocation_keyring),
+		));
+
+		// votes signed with different authority keys
+		assert_invalid_equivocation_proof(generate_equivocation_proof(
+			set_id,
+			equivocation_key.clone(),
+			(block_num, payload1.clone(), &equivocation_keyring),
+			(block_num, payload1.clone(), &BeefyKeyring::Charlie),
+		));
+
+		// votes signed with a key that isn't part of the authority set
+		assert_invalid_equivocation_proof(generate_equivocation_proof(
+			set_id,
+			equivocation_key.clone(),
+			(block_num, payload1.clone(), &equivocation_keyring),
+			(block_num, payload1.clone(), &BeefyKeyring::Dave),
+		));
+	});
+}
+
+#[test]
+fn report_equivocation_validate_unsigned_prevents_duplicates() {
+	use sp_runtime::transaction_validity::{
+		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
+		ValidTransaction,
+	};
+
+	let authorities = test_authorities();
+
+	new_test_ext_raw_authorities(authorities).execute_with(|| {
+		start_era(1);
+
+		let block_num = System::block_number();
+		let validator_set = Beefy::validator_set().unwrap();
+		let authorities = validator_set.validators();
+		let set_id = validator_set.id();
+
+		// generate and report an equivocation for the validator at index 0
+		let equivocation_authority_index = 0;
+		let equivocation_key = &authorities[equivocation_authority_index];
+		let equivocation_keyring = BeefyKeyring::from_public(equivocation_key).unwrap();
+
+		let payload1 = Payload::from_single_entry(MMR_ROOT_ID, vec![42]);
+		let payload2 = Payload::from_single_entry(MMR_ROOT_ID, vec![128]);
+		let equivocation_proof = generate_equivocation_proof(
+			set_id,
+			equivocation_key.clone(),
+			(block_num, payload1, &equivocation_keyring),
+			(block_num, payload2, &equivocation_keyring),
+		);
+
+		let key_owner_proof =
+			Historical::prove((beefy_primitives::KEY_TYPE, &equivocation_key)).unwrap();
+
+		let call = Call::report_equivocation_unsigned {
+			equivocation_proof: Box::new(equivocation_proof.clone()),
+			key_owner_proof: key_owner_proof.clone(),
+		};
+
+		// only local/inblock reports are allowed
+		assert_eq!(
+			<Beefy as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+				TransactionSource::External,
+				&call,
+			),
+			InvalidTransaction::Call.into(),
+		);
+
+		// the transaction is valid when passed as local
+		let tx_tag = (equivocation_key, set_id, 3u64);
+
+		assert_eq!(
+			<Beefy as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+				TransactionSource::Local,
+				&call,
+			),
+			TransactionValidity::Ok(ValidTransaction {
+				priority: TransactionPriority::max_value(),
+				requires: vec![],
+				provides: vec![("BeefyEquivocation", tx_tag).encode()],
+				longevity: ReportLongevity::get(),
+				propagate: false,
+			})
+		);
+
+		// the pre dispatch checks should also pass
+		assert_ok!(<Beefy as sp_runtime::traits::ValidateUnsigned>::pre_dispatch(&call));
+
+		// we submit the report
+		Beefy::report_equivocation_unsigned(
+			RuntimeOrigin::none(),
+			Box::new(equivocation_proof),
+			key_owner_proof,
+		)
+		.unwrap();
+
+		// the report should now be considered stale and the transaction is invalid
+		// the check for staleness should be done on both `validate_unsigned` and on `pre_dispatch`
+		assert_err!(
+			<Beefy as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+				TransactionSource::Local,
+				&call,
+			),
+			InvalidTransaction::Stale,
+		);
+
+		assert_err!(
+			<Beefy as sp_runtime::traits::ValidateUnsigned>::pre_dispatch(&call),
+			InvalidTransaction::Stale,
+		);
+	});
+}
+
+#[test]
+fn report_equivocation_has_valid_weight() {
+	// the weight depends on the size of the validator set,
+	// but there's a lower bound of 100 validators.
+	assert!((1..=100)
+		.map(<Test as Config>::WeightInfo::report_equivocation)
+		.collect::<Vec<_>>()
+		.windows(2)
+		.all(|w| w[0] == w[1]));
+
+	// after 100 validators the weight should keep increasing
+	// with every extra validator.
+	assert!((100..=1000)
+		.map(<Test as Config>::WeightInfo::report_equivocation)
+		.collect::<Vec<_>>()
+		.windows(2)
+		.all(|w| w[0].ref_time() < w[1].ref_time()));
+}
+
+#[test]
+fn valid_equivocation_reports_dont_pay_fees() {
+	let authorities = test_authorities();
+
+	new_test_ext_raw_authorities(authorities).execute_with(|| {
+		start_era(1);
+
+		let block_num = System::block_number();
+		let validator_set = Beefy::validator_set().unwrap();
+		let authorities = validator_set.validators();
+		let set_id = validator_set.id();
+
+		let equivocation_authority_index = 0;
+		let equivocation_key = &authorities[equivocation_authority_index];
+		let equivocation_keyring = BeefyKeyring::from_public(equivocation_key).unwrap();
+
+		// generate equivocation proof
+		let payload1 = Payload::from_single_entry(MMR_ROOT_ID, vec![42]);
+		let payload2 = Payload::from_single_entry(MMR_ROOT_ID, vec![128]);
+		let equivocation_proof = generate_equivocation_proof(
+			set_id,
+			equivocation_key.clone(),
+			(block_num, payload1, &equivocation_keyring),
+			(block_num, payload2, &equivocation_keyring),
+		);
+
+		// create the key ownership proof.
+		let key_owner_proof =
+			Historical::prove((beefy_primitives::KEY_TYPE, &equivocation_key)).unwrap();
+
+		// check the dispatch info for the call.
+		let info = Call::<Test>::report_equivocation_unsigned {
+			equivocation_proof: Box::new(equivocation_proof.clone()),
+			key_owner_proof: key_owner_proof.clone(),
+		}
+		.get_dispatch_info();
+
+		// it should have non-zero weight and the fee has to be paid.
+		assert!(info.weight.any_gt(Weight::zero()));
+		assert_eq!(info.pays_fee, Pays::Yes);
+
+		// report the equivocation.
+		let post_info = Beefy::report_equivocation_unsigned(
+			RuntimeOrigin::none(),
+			Box::new(equivocation_proof.clone()),
+			key_owner_proof.clone(),
+		)
+		.unwrap();
+
+		// the original weight should be kept, but given that the report
+		// is valid the fee is waived.
+		assert!(post_info.actual_weight.is_none());
+		assert_eq!(post_info.pays_fee, Pays::No);
+
+		// report the equivocation again which is invalid now since it is
+		// duplicate.
+		let post_info = Beefy::report_equivocation_unsigned(
+			RuntimeOrigin::none(),
+			Box::new(equivocation_proof),
+			key_owner_proof,
+		)
+		.err()
+		.unwrap()
+		.post_info;
+
+		// the fee is not waived and the original weight is kept.
+		assert!(post_info.actual_weight.is_none());
+		assert_eq!(post_info.pays_fee, Pays::Yes);
+	})
 }
