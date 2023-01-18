@@ -11,20 +11,20 @@ license = "MIT/Apache-2.0"
 edition = "2021"
 
 [dependencies]
-ark-ff = { version="0.4.0-alpha", default-features = false }
+ark-ff = { version="0.4.0", default-features = false }
 ark-std = { version = "0.4.0", default-features = false }
 ark-serialize = { version = "0.4.0", default-features = false }
 ark-models = { version = "0.4.0", default-features = false }
 
 [dev-dependencies]
-sp-io =  { version = "7.0.0", default-features =  false, path = "../../io" }
+sp-io =  { version = "7.0.0", path = "../../io", default-features =  false }
 ark-ec = { version = "0.4.0", default-features = false }
 ark-algebra-test-templates = { version = "0.4.0", default-features = false }
-sp-ark-bls12-377 = { version = "0.4.0", default-features = false }
-sp-ark-bls12-381 = { version = "0.4.0", default-features = false }
-sp-ark-bw6-761 = { version = "0.4.0", default-features = false }
-sp-ark-ed-on-bls12-377 = { version = "0.4.0", default-features = false }
-sp-ark-ed-on-bls12-381 = { version = "0.4.0", default-features = false }
+sp-ark-bls12-377 = { version = "0.4.0", git = "https://github.com/paritytech/ark-substrate", features = [ "curve" ], default-features = false }
+sp-ark-bls12-381 = { version = "0.4.0", git = "https://github.com/paritytech/ark-substrate", features = [ "curve" ], default-features = false }
+sp-ark-bw6-761 = { version = "0.4.0",git = "https://github.com/paritytech/ark-substrate",  default-features = false }
+sp-ark-ed-on-bls12-377 = { version = "0.4.0", git = "https://github.com/paritytech/ark-substrate", default-features = false }
+sp-ark-ed-on-bls12-381 = { version = "0.4.0", git = "https://github.com/paritytech/ark-substrate", default-features = false }
 
 [features]
 default = [ "curve" ]
