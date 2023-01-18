@@ -53,7 +53,7 @@ std = [
 	"secp256k1",
 	"sp-runtime-interface/std",
 	"sp-tracing/std",
-	"sp-arkworks",
+	"sp-arkworks/std",
 	"tracing/std",
 	"tracing-core/std",
 	"log",
