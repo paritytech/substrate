@@ -334,14 +334,14 @@ sp_api::decl_runtime_apis! {
 }
 
 #[cfg(feature = "std")]
-/// Test accounts using [`beefy_primitives::crypto`] types.
+/// Test accounts using [`crate::crypto`] types.
 pub mod keyring {
 	use super::*;
 	use sp_core::{ecdsa, keccak_256, Pair};
 	use std::collections::HashMap;
 	use strum::IntoEnumIterator;
 
-	/// Set of test accounts using [`beefy_primitives::crypto`] types.
+	/// Set of test accounts using [`crate::crypto`] types.
 	#[allow(missing_docs)]
 	#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumIter)]
 	pub enum Keyring {
