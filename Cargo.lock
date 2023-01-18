@@ -205,7 +205,8 @@ checksum = "bddcadddf5e9015d310179a59bb28c4d4b9920ad0f11e8e14dbadf654890c9a6"
 [[package]]
 name = "ark-algebra-test-templates"
 version = "0.4.0"
-source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#c2f23fbd479e3d47b1ced166c5d545b563e03ad8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "390ae58ca5e3ed40d8c1eb9c939931258562c1c331a0ea10d76091f450c50b43"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -223,8 +224,9 @@ dependencies = [
 
 [[package]]
 name = "ark-bls12-377"
-version = "0.4.0-alpha.1"
-source = "git+https://github.com/arkworks-rs/curves#69a9c3513bfe94ebd03efaa0ac49d63ea4afbc3a"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb00293ba84f51ce3bd026bd0de55899c4e68f0a39a5728cebae3a73ffdc0a4f"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -233,8 +235,9 @@ dependencies = [
 
 [[package]]
 name = "ark-bls12-381"
-version = "0.4.0-alpha.1"
-source = "git+https://github.com/arkworks-rs/curves#69a9c3513bfe94ebd03efaa0ac49d63ea4afbc3a"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c775f0d12169cba7aae4caeb547bb6a50781c7449a8aa53793827c9ec4abf488"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -244,8 +247,9 @@ dependencies = [
 
 [[package]]
 name = "ark-bw6-761"
-version = "0.4.0-alpha.1"
-source = "git+https://github.com/arkworks-rs/curves#69a9c3513bfe94ebd03efaa0ac49d63ea4afbc3a"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e0605daf0cc5aa2034b78d008aaf159f56901d92a52ee4f6ecdfdac4f426700"
 dependencies = [
  "ark-bls12-377",
  "ark-ec",
@@ -256,7 +260,8 @@ dependencies = [
 [[package]]
 name = "ark-ec"
 version = "0.4.0"
-source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#c2f23fbd479e3d47b1ced166c5d545b563e03ad8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52d7f0c52aff14f216200a9eee06a9990fee2e51fc9599e226df448ad3232886"
 dependencies = [
  "ark-ff",
  "ark-poly",
@@ -271,8 +276,9 @@ dependencies = [
 
 [[package]]
 name = "ark-ed-on-bls12-377"
-version = "0.4.0-alpha.1"
-source = "git+https://github.com/arkworks-rs/curves#69a9c3513bfe94ebd03efaa0ac49d63ea4afbc3a"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b10d901b9ac4b38f9c32beacedfadcdd64e46f8d7f8e88c1ae1060022cf6f6c6"
 dependencies = [
  "ark-bls12-377",
  "ark-ec",
@@ -282,8 +288,9 @@ dependencies = [
 
 [[package]]
 name = "ark-ed-on-bls12-381"
-version = "0.4.0-alpha.1"
-source = "git+https://github.com/arkworks-rs/curves#69a9c3513bfe94ebd03efaa0ac49d63ea4afbc3a"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba6d678bb98a7e4f825bd4e332e93ac4f5a114ce2e3340dee4d7dc1c7ab5b323"
 dependencies = [
  "ark-bls12-381",
  "ark-ec",
@@ -294,7 +301,8 @@ dependencies = [
 [[package]]
 name = "ark-ff"
 version = "0.4.0"
-source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#c2f23fbd479e3d47b1ced166c5d545b563e03ad8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51ee31d8869a353433524dbd5a8f51f95cdafe7c66d458956ec13aa737198562"
 dependencies = [
  "ark-ff-asm",
  "ark-ff-macros",
@@ -313,7 +321,8 @@ dependencies = [
 [[package]]
 name = "ark-ff-asm"
 version = "0.4.0"
-source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#c2f23fbd479e3d47b1ced166c5d545b563e03ad8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3fc8f7ec7fdcc20f3f110783c043d80479b42f500003cf92b71ca90f34a2ba0e"
 dependencies = [
  "quote",
  "syn",
@@ -322,7 +331,8 @@ dependencies = [
 [[package]]
 name = "ark-ff-macros"
 version = "0.4.0"
-source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#c2f23fbd479e3d47b1ced166c5d545b563e03ad8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15aa320e38052d644e569740bad208e5f9f5fafedcc9e6b1557f723be1b7ff8d"
 dependencies = [
  "num-bigint",
  "num-traits",
@@ -333,8 +343,8 @@ dependencies = [
 
 [[package]]
 name = "ark-models"
-version = "0.3.0"
-source = "git+https://github.com/paritytech/ark-substrate#89d8c16c856996e4d0015992c6949409775de5ff"
+version = "0.4.0"
+source = "git+https://github.com/paritytech/ark-substrate#9c27874805a6cc8d0a15201e61ccaf5ad16772f1"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -350,7 +360,8 @@ dependencies = [
 [[package]]
 name = "ark-poly"
 version = "0.4.0"
-source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#c2f23fbd479e3d47b1ced166c5d545b563e03ad8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88d2e8741caf33ab3063f1fc65617716ffb18cba8e872998aa2eef0d4e4b56d1"
 dependencies = [
  "ark-ff",
  "ark-serialize",
@@ -391,7 +402,8 @@ dependencies = [
 [[package]]
 name = "ark-serialize"
 version = "0.4.0"
-source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#c2f23fbd479e3d47b1ced166c5d545b563e03ad8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58ea39d00a8a4c832e6f6520e58ccec7bf909c4845863512e9b8656fd47df355"
 dependencies = [
  "ark-serialize-derive",
  "ark-std",
@@ -402,7 +414,8 @@ dependencies = [
 [[package]]
 name = "ark-serialize-derive"
 version = "0.4.0"
-source = "git+https://github.com/arkworks-rs/algebra/?branch=releases#c2f23fbd479e3d47b1ced166c5d545b563e03ad8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "101333772a4020c883890811500d5ecc704c545a90140629af5c3b9f00d78953"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -956,9 +969,9 @@ dependencies = [
 
 [[package]]
 name = "bumpalo"
-version = "3.11.1"
+version = "3.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "572f695136211188308f16ad2ca5c851a712c464060ae6974944458eb83880ba"
+checksum = "0d261e256854913907f67ed06efbc3338dfe6179796deefc1ff763fc1aee5535"
 
 [[package]]
 name = "byte-slice-cast"
@@ -9877,8 +9890,8 @@ dependencies = [
 
 [[package]]
 name = "sp-ark-bls12-377"
-version = "0.4.0-alpha.1"
-source = "git+https://github.com/paritytech/ark-substrate#89d8c16c856996e4d0015992c6949409775de5ff"
+version = "0.4.0"
+source = "git+https://github.com/paritytech/ark-substrate#9c27874805a6cc8d0a15201e61ccaf5ad16772f1"
 dependencies = [
  "ark-bls12-377",
  "ark-ff",
@@ -9891,8 +9904,8 @@ dependencies = [
 
 [[package]]
 name = "sp-ark-bls12-381"
-version = "0.4.0-alpha"
-source = "git+https://github.com/paritytech/ark-substrate#89d8c16c856996e4d0015992c6949409775de5ff"
+version = "0.4.0"
+source = "git+https://github.com/paritytech/ark-substrate#9c27874805a6cc8d0a15201e61ccaf5ad16772f1"
 dependencies = [
  "ark-bls12-381",
  "ark-ff",
@@ -9904,8 +9917,8 @@ dependencies = [
 
 [[package]]
 name = "sp-ark-bw6-761"
-version = "0.4.0-alpha.1"
-source = "git+https://github.com/paritytech/ark-substrate#89d8c16c856996e4d0015992c6949409775de5ff"
+version = "0.4.0"
+source = "git+https://github.com/paritytech/ark-substrate#9c27874805a6cc8d0a15201e61ccaf5ad16772f1"
 dependencies = [
  "ark-bw6-761",
  "ark-ff",
@@ -9917,8 +9930,8 @@ dependencies = [
 
 [[package]]
 name = "sp-ark-ed-on-bls12-377"
-version = "0.4.0-alpha.1"
-source = "git+https://github.com/paritytech/ark-substrate#89d8c16c856996e4d0015992c6949409775de5ff"
+version = "0.4.0"
+source = "git+https://github.com/paritytech/ark-substrate#9c27874805a6cc8d0a15201e61ccaf5ad16772f1"
 dependencies = [
  "ark-ed-on-bls12-377",
  "ark-ff",
@@ -9931,8 +9944,8 @@ dependencies = [
 
 [[package]]
 name = "sp-ark-ed-on-bls12-381"
-version = "0.4.0-alpha.1"
-source = "git+https://github.com/paritytech/ark-substrate#89d8c16c856996e4d0015992c6949409775de5ff"
+version = "0.4.0"
+source = "git+https://github.com/paritytech/ark-substrate#9c27874805a6cc8d0a15201e61ccaf5ad16772f1"
 dependencies = [
  "ark-ed-on-bls12-381",
  "ark-ff",
@@ -9945,8 +9958,8 @@ dependencies = [
 
 [[package]]
 name = "sp-ark-utils"
-version = "0.4.0-alpha.1"
-source = "git+https://github.com/paritytech/ark-substrate#89d8c16c856996e4d0015992c6949409775de5ff"
+version = "0.4.0"
+source = "git+https://github.com/paritytech/ark-substrate#9c27874805a6cc8d0a15201e61ccaf5ad16772f1"
 dependencies = [
  "ark-serialize",
  "ark-std",
@@ -9954,7 +9967,7 @@ dependencies = [
 
 [[package]]
 name = "sp-arkworks"
-version = "0.0.1"
+version = "0.4.0"
 dependencies = [
  "ark-bls12-377",
  "ark-bls12-381",
@@ -9970,7 +9983,7 @@ dependencies = [
 
 [[package]]
 name = "sp-arkworks-test"
-version = "0.4.0-alpha.1"
+version = "0.4.0"
 dependencies = [
  "ark-algebra-test-templates",
  "ark-ec",
@@ -11387,9 +11400,9 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.24.1"
+version = "1.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d9f76183f91ecfb55e1d7d5602bd1d979e38a3a522fe900241cf195624d67ae"
+checksum = "597a12a59981d9e3c38d216785b0c37399f6e415e8d0712047620f189371b0bb"
 dependencies = [
  "autocfg",
  "bytes",
@@ -12067,9 +12080,9 @@ checksum = "1c38c045535d93ec4f0b4defec448e4291638ee608530863b1e2ba115d4fff7f"
 
 [[package]]
 name = "wasm-encoder"
-version = "0.20.0"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05632e0a66a6ed8cca593c24223aabd6262f256c3693ad9822c315285f010614"
+checksum = "29ab2fe77b325731603297debb4573e002d06ae0aa1f4dc108585c81961e0609"
 dependencies = [
  "leb128",
 ]
@@ -12400,9 +12413,9 @@ dependencies = [
 
 [[package]]
 name = "wast"
-version = "50.0.0"
+version = "51.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2cbb59d4ac799842791fe7e806fa5dbbf6b5554d538e51cc8e176db6ff0ae34"
+checksum = "a1f621e6e9af96438d3e05f0699da5b1dae59f2df964a2982166aa9b03c5b599"
 dependencies = [
  "leb128",
  "memchr",
@@ -12412,9 +12425,9 @@ dependencies = [
 
 [[package]]
 name = "wat"
-version = "1.0.52"
+version = "1.0.53"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "584aaf7a1ecf4d383bbe1a25eeab0cbb8ff96acc6796707ff65cde48f4632f15"
+checksum = "5dd18c1168d7e8743d9b4f713c0203924f5dcc4a3983eb5e584de9614f9fccde"
 dependencies = [
  "wast",
 ]

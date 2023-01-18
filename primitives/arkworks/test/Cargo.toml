@@ -1,9 +1,9 @@
 [package]
 name = "sp-arkworks-test"
-version = "0.4.0-alpha.1"
-authors = [ "arkworks contributors" ]
+version = "0.4.0"
+authors = ["Parity Technologies <admin@parity.io>", "Achim Schneider <achim@parity.io>", "arkworks contributors" ]
 repository = "https://github.com/paritytech/substrate/"
-description = "The BLS12-377 pairing-friendly elliptic curve, optimized for Substrate"
+description = "Tests for arkwokrs pairing-friendly elliptic curves, optimized for Substrate"
 keywords = ["cryptography", "finite-fields", "elliptic-curves" ]
 categories = ["cryptography"]
 include = ["Cargo.toml", "src", "README.md", "LICENSE-APACHE", "LICENSE-MIT"]
@@ -12,19 +12,19 @@ edition = "2021"
 
 [dependencies]
 ark-ff = { version="0.4.0-alpha", default-features = false }
-ark-std = { version = "0.4.0-alpha", default-features = false }
-ark-serialize = { version = "0.4.0-alpha", default-features = false }
-ark-models = { git = "https://github.com/paritytech/ark-substrate", default-features = false }
+ark-std = { version = "0.4.0", default-features = false }
+ark-serialize = { version = "0.4.0", default-features = false }
+ark-models = { version = "0.4.0", default-features = false }
 
 [dev-dependencies]
 sp-io =  { version = "7.0.0", default-features =  false, path = "../../io" }
-ark-ec = { git = "https://github.com/arkworks-rs/algebra", branch = "releases", default-features = false }
-ark-algebra-test-templates = { git = "https://github.com/arkworks-rs/algebra", branch = "releases", default-features = false }
-sp-ark-bls12-377 = { git = "https://github.com/paritytech/ark-substrate", default-features = false }
-sp-ark-bls12-381 = { git = "https://github.com/paritytech/ark-substrate", default-features = false }
-sp-ark-bw6-761 = { git = "https://github.com/paritytech/ark-substrate", default-features = false }
-sp-ark-ed-on-bls12-377 = { git = "https://github.com/paritytech/ark-substrate", default-features = false }
-sp-ark-ed-on-bls12-381 = { git = "https://github.com/paritytech/ark-substrate", default-features = false }
+ark-ec = { version = "0.4.0", default-features = false }
+ark-algebra-test-templates = { version = "0.4.0", default-features = false }
+sp-ark-bls12-377 = { version = "0.4.0", default-features = false }
+sp-ark-bls12-381 = { version = "0.4.0", default-features = false }
+sp-ark-bw6-761 = { version = "0.4.0", default-features = false }
+sp-ark-ed-on-bls12-377 = { version = "0.4.0", default-features = false }
+sp-ark-ed-on-bls12-381 = { version = "0.4.0", default-features = false }
 
 [features]
 default = [ "curve" ]
