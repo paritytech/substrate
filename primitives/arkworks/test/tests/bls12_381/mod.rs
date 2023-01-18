@@ -1,6 +1,6 @@
 use ark_algebra_test_templates::*;
 use ark_ff::{fields::Field, UniformRand, Zero};
-use ark_models::{AffineRepr, CurveGroup, Group};
+use sp_ark_models::{AffineRepr, CurveGroup, Group};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use ark_std::{rand::Rng, test_rng, vec, vec::Vec, One};
 
@@ -68,7 +68,7 @@ fn test_g1_subgroup_non_membership_via_endomorphism() {
 		let greatest = rng.gen();
 
 		if let Some(p) = G1Affine::get_point_from_x_unchecked(x, greatest) {
-			if !<ark_models::short_weierstrass::Projective<sp_ark_bls12_381::g1::Config<Host>> as ark_std::Zero>::is_zero(&p.mul_bigint(Fr::characteristic())) {
+			if !<sp_ark_models::short_weierstrass::Projective<sp_ark_bls12_381::g1::Config<Host>> as ark_std::Zero>::is_zero(&p.mul_bigint(Fr::characteristic())) {
                 assert!(!p.is_in_correct_subgroup_assuming_on_curve());
                 return;
             }
@@ -91,7 +91,7 @@ fn test_g2_subgroup_non_membership_via_endomorphism() {
 		let greatest = rng.gen();
 
 		if let Some(p) = G2Affine::get_point_from_x_unchecked(x, greatest) {
-			if !<ark_models::short_weierstrass::Projective<sp_ark_bls12_381::g2::Config::<Host>> as ark_std::Zero>::is_zero(&p.mul_bigint(Fr::characteristic())) {
+			if !<sp_ark_models::short_weierstrass::Projective<sp_ark_bls12_381::g2::Config::<Host>> as ark_std::Zero>::is_zero(&p.mul_bigint(Fr::characteristic())) {
                 assert!(!p.is_in_correct_subgroup_assuming_on_curve());
                 return;
             }

@@ -325,7 +325,7 @@ lto = "fat"
 codegen-units = 1
 
 [patch.crates-io]
-ark-models = { git = "https://github.com/paritytech/ark-substrate" }
+sp-ark-models = { git = "https://github.com/paritytech/ark-substrate" }
 sp-ark-bls12-377 = { git = "https://github.com/paritytech/ark-substrate" }
 sp-ark-bls12-381 = { git = "https://github.com/paritytech/ark-substrate" }
 sp-ark-bw6-761 = { git = "https://github.com/paritytech/ark-substrate" }

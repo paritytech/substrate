@@ -14,7 +14,7 @@ edition = "2021"
 ark-ff = { version="0.4.0", default-features = false }
 ark-std = { version = "0.4.0", default-features = false }
 ark-serialize = { version = "0.4.0", default-features = false }
-ark-models = { version = "0.4.0", default-features = false }
+sp-ark-models = { version = "0.4.0", default-features = false }
 
 [dev-dependencies]
 sp-io =  { version = "7.0.0", path = "../../io", default-features =  false }
@@ -32,7 +32,7 @@ std = [
     "ark-ff/std",
     "ark-std/std",
 	"ark-serialize/std",
-    "ark-models/std",
+    "sp-ark-models/std",
 	"sp-io/std",
 	"ark-ec/std",
     "ark-algebra-test-templates/std",
