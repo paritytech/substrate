@@ -134,7 +134,7 @@ mod multiplier_tests {
 		BlockWeights::get()
 			.get(DispatchClass::Normal)
 			.max_total
-			.unwrap_or_else(|| BlockWeights::get().max_block)
+			.limited_or(BlockWeights::get().max_block)
 	}
 
 	fn min_multiplier() -> Multiplier {
@@ -284,7 +284,7 @@ mod multiplier_tests {
 		// `cargo test congested_chain_simulation -- --nocapture` to get some insight.
 
 		// almost full. The entire quota of normal transactions is taken.
-		let block_weight = BlockWeights::get().get(DispatchClass::Normal).max_total.unwrap() -
+		let block_weight = BlockWeights::get().get(DispatchClass::Normal).max_total.exact_limits().unwrap() -
 			Weight::from_ref_time(100);
 
 		// Default substrate weight.
