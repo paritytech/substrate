@@ -993,7 +993,7 @@ pub(crate) mod tests {
 	use crate::{
 	    keystore,
 	    communication::notification::{BeefyBestBlockStream, BeefyVersionedFinalityProofStream},
-	    keystore::tests::{Keyring, SimpleKeyPair},
+	    keystore::{ BeefyECDSAKeystore, BeefyBLSnECDSAKeystore, tests::{Keyring, GenericKeyring, SimpleKeyPair, ECDSAnBLSPair}},
 		tests::{
 			create_beefy_keystore, get_beefy_streams, BeefyAuthIdMaker, two_validators::TestApi,
 			BeefyPeer, BeefyTestNet,
@@ -1001,7 +1001,7 @@ pub(crate) mod tests {
 		BeefyRPCLinks,
 	};
 
-	use beefy_primitives::{known_payloads, mmr::MmrRootProvider, ecdsa_crypto, bls_crypto};
+    use beefy_primitives::{known_payloads, mmr::MmrRootProvider, ecdsa_crypto::{self, Public as ECDSAPublic, Signature as ECDSASignature, Pair as ECDSAKeyPair}, bls_crypto::{self, Public as BLSPublic, Signature as BLSSignature}};
 	use futures::{executor::block_on, future::poll_fn, task::Poll};
 	use sc_client_api::{Backend as BackendT, HeaderBackend};
 	use sc_network::NetworkService;
@@ -1330,16 +1330,17 @@ pub(crate) mod tests {
 		let expected_err = Err(Error::Keystore("no Keystore".into()));
 		assert_eq!(worker.verify_validator_set(&1, &validator_set), expected_err);
 	}
- 	
-	#[cfg(notest)]
-	fn test_keystore_vs_validator_set_ecdsa() {
-		keystore_vs_validator_set::<ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature, keystore::BeefyECDSAKeystore>();
-	}
 
-	#[cfg(notest)]
-	fn test_keystore_vs_validator_set_ecdsa_and_bls() {
-		keystore_vs_validator_set::<(ecdsa_crypto::AuthorityId, bls_crypto::AuthorityId), (ecdsa_crypto::Signature,bls_crypto::Signature), keystore::BeefyBLSnECDSAKeystore>();
+    #[test]
+    fn keystore_vs_validator_set_with_ecdsa_keys() {
+	    keystore_vs_validator_set::<ecdsa_crypto::Pair, ECDSAPublic, ECDSASignature, BeefyECDSAKeystore>();
 	}
+    
+    #[test]
+    fn keystore_vs_validator_set_with_ecdsa_n_bls_keys() {
+	keystore_vs_validator_set::<ECDSAnBLSPair, (ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature), BeefyBLSnECDSAKeystore>();
+    }
+
 
 	#[cfg(notest)]
 	fn should_finalize_correctly() {
