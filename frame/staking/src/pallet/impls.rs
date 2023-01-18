@@ -1684,7 +1684,25 @@ impl<T: Config> Pallet<T> {
 		Self::check_nominators()?;
 		Self::check_exposures()?;
 		Self::check_ledgers()?;
+		Self::check_voters()?;
 		Self::check_count()
+	}
+
+	fn check_voters() -> Result<(), &'static str> {
+		// build sorted list
+		let mut voter_list = T::VoterList::iter().collect::<Vec<_>>();
+		voter_list.sort();
+		let mut nominators = Nominators::<T>::iter_keys().collect::<Vec<_>>();
+		nominators.sort();
+		let mut validators = Validators::<T>::iter_keys().collect::<Vec<_>>();
+		validators.sort();
+
+		ensure!(
+			voter_list.iter()
+				.all(|x| nominators.binary_search(&x).or_else(|_| validators.binary_search(&x)).is_ok()),
+				"VoterList contains non-staker"
+		);
+		Ok(())
 	}
 
 	fn check_count() -> Result<(), &'static str> {
