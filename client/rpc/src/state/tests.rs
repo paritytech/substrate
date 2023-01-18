@@ -70,9 +70,12 @@ async fn should_return_storage() {
 		client.storage_hash(key.clone(), Some(genesis_hash).into()).map(|x| x.is_some()),
 		Ok(true)
 	);
-	assert_eq!(client.storage_size(key.clone(), None).unwrap().unwrap() as usize, VALUE.len(),);
 	assert_eq!(
-		client.storage_size(StorageKey(b":map".to_vec()), None).unwrap().unwrap() as usize,
+		client.storage_size(key.clone(), None).await.unwrap().unwrap() as usize,
+		VALUE.len(),
+	);
+	assert_eq!(
+		client.storage_size(StorageKey(b":map".to_vec()), None).await.unwrap().unwrap() as usize,
 		2 + 3,
 	);
 	assert_eq!(
