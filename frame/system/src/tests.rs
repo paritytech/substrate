@@ -635,6 +635,32 @@ fn events_not_emitted_during_genesis() {
 	});
 }
 
+/// Consuming more than `SOFT_POV_LIMIT_BYTES` should result in a `PovLimitExceeded` event.
+#[test]
+fn event_emitted_when_over_pov_limit() {
+	new_test_ext().execute_with(|| {
+		for i in 0..10 {
+			let consumed = SOFT_POV_LIMIT_BYTES + i - 5;
+
+			System::reset_events();
+			System::initialize(&1, &[0u8; 32].into(), &Default::default());
+			System::note_finished_extrinsics();
+			// Set the consumed PoV weight.
+			System::set_block_consumed_resources(Weight::from_parts(u64::MAX, consumed), 1);
+			System::note_finished_extrinsics();
+			System::finalize();
+
+			if consumed > SOFT_POV_LIMIT_BYTES {
+				System::assert_has_event(
+					Event::PovLimitExceeded { limit: SOFT_POV_LIMIT_BYTES, consumed }.into(),
+				);
+			} else {
+				assert!(System::events().is_empty(), "No events");
+			}
+		}
+	});
+}
+
 #[test]
 fn extrinsics_root_is_calculated_correctly() {
 	new_test_ext().execute_with(|| {
