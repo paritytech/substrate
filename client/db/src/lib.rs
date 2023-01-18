@@ -511,7 +511,12 @@ struct PinnedBlockCache<Block: BlockT> {
 
 impl<Block: BlockT> PinnedBlockCache<Block> {
 	pub fn new() -> Self {
-		Self { cache: LruCache::new(NonZeroUsize::new(PINNING_CACHE_SIZE).unwrap()).into() }
+		Self {
+			cache: LruCache::new(
+				NonZeroUsize::new(PINNING_CACHE_SIZE).expect("Capacity is larger than 0; qed"),
+			)
+			.into(),
+		}
 	}
 
 	pub fn bump_ref(&mut self, hash: Block::Hash) {
@@ -579,17 +584,11 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 	}
 
 	pub fn justifications(&self, hash: &Block::Hash) -> Option<Option<Justifications>> {
-		if let Some(cache_entry) = self.cache.peek(hash) {
-			return cache_entry.justifications.clone()
-		};
-		None
+		self.cache.peek(hash).and_then(|entry| entry.justifications.clone())
 	}
 
 	pub fn body(&self, hash: &Block::Hash) -> Option<Option<Vec<Block::Extrinsic>>> {
-		if let Some(cache_entry) = self.cache.peek(hash) {
-			return cache_entry.body.clone()
-		};
-		None
+		self.cache.peek(hash).and_then(|entry| entry.body.clone())
 	}
 }
 

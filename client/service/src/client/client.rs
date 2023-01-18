@@ -430,19 +430,19 @@ where
 			"unpin-worker",
 			None,
 			async move {
-				loop {
-					if let Some(message) = rx.next().await {
-						if let Some(backend) = task_backend.upgrade() {
-							backend.unpin_block(message);
-						} else {
-							log::warn!(target: "db", "Terminating unpin-worker, backend reference was dropped.");
-							return
-						}
+				while let Some(message) = rx.next().await {
+					if let Some(backend) = task_backend.upgrade() {
+						backend.unpin_block(message);
+					} else {
+						log::warn!("Terminating unpin-worker, backend reference was dropped.");
+						return
 					}
 				}
+				log::warn!("Terminating unpin-worker, stream terminated.")
 			}
 			.boxed(),
 		);
+
 		Ok(Client {
 			backend,
 			executor,
