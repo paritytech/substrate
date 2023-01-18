@@ -273,7 +273,7 @@ pub struct UnpinHandleInner<Block: BlockT> {
 }
 
 impl<Block: BlockT> UnpinHandleInner<Block> {
-	/// Create a new UnpinHandle
+	/// Create a new [`UnpinHandleInner`]
 	pub fn new(
 		hash: Block::Hash,
 		unpin_worker_sender: TracingUnboundedSender<Block::Hash>,
@@ -292,12 +292,12 @@ impl<Block: BlockT> Drop for UnpinHandleInner<Block> {
 
 /// Keeps a specific block pinned while the handle is alive.
 /// Once the last handle instance for a given block is dropped, the
-/// block is unpinned in the backend.
+/// block is unpinned in the [`Backend`](crate::backend::Backend::unpin_block).
 #[derive(Debug, Clone)]
 pub struct UnpinHandle<Block: BlockT>(Arc<UnpinHandleInner<Block>>);
 
 impl<Block: BlockT> UnpinHandle<Block> {
-	/// Create a new UnpinHandle
+	/// Create a new [`UnpinHandle`]
 	pub fn new(
 		hash: Block::Hash,
 		unpin_worker_sender: TracingUnboundedSender<Block::Hash>,
