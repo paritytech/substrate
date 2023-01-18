@@ -789,7 +789,7 @@ where
 		false
 	}
 
-	fn pin_block(&self, _: <Block as BlockT>::Hash, _: NumberFor<Block>) -> blockchain::Result<()> {
+	fn pin_block(&self, _: <Block as BlockT>::Hash) -> blockchain::Result<()> {
 		Ok(())
 	}
 

@@ -98,6 +98,7 @@ pub use sp_database::Database;
 pub use bench::BenchmarkingState;
 
 const CACHE_HEADERS: usize = 8;
+const LOG_TARGET: &str = "db-pin";
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
 pub type DbState<B> =
@@ -516,12 +517,17 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 	pub fn bump_ref(&self, hash: Block::Hash) {
 		let mut cache = self.cache.write();
 		if cache.len() == PINNING_CACHE_SIZE {
-			log::warn!(target: "db-pinning", "Maximum size of pinning cache reached. Removing items to make space. max_size = {}", PINNING_CACHE_SIZE);
+			log::warn!(target: LOG_TARGET, "Maximum size of pinning cache reached. Removing items to make space. max_size = {}", PINNING_CACHE_SIZE);
 		}
 
 		let entry = cache.get_or_insert_mut(hash, Default::default);
 		entry.increase_ref();
-		log::trace!(target: "db-pin", "Bumped cache refcount. hash = {}, num_entries = {}", hash, cache.len());
+		log::trace!(
+			target: LOG_TARGET,
+			"Bumped cache refcount. hash = {}, num_entries = {}",
+			hash,
+			cache.len()
+		);
 	}
 
 	pub fn clear(&self) {
@@ -538,14 +544,24 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 		let mut cache = self.cache.write();
 		let mut entry = cache.get_or_insert_mut(hash, Default::default);
 		entry.body = Some(extrinsics);
-		log::trace!(target: "db-pin", "Cached body. hash = {}, num_entries = {}", hash, cache.len());
+		log::trace!(
+			target: LOG_TARGET,
+			"Cached body. hash = {}, num_entries = {}",
+			hash,
+			cache.len()
+		);
 	}
 
 	pub fn insert_justifications(&self, hash: Block::Hash, justifications: Option<Justifications>) {
 		let mut cache = self.cache.write();
 		let mut entry = cache.get_or_insert_mut(hash, Default::default);
 		entry.justifications = Some(justifications);
-		log::trace!(target: "db-pin", "Cached justification. hash = {}, num_entries = {}", hash, cache.len());
+		log::trace!(
+			target: LOG_TARGET,
+			"Cached justification. hash = {}, num_entries = {}",
+			hash,
+			cache.len()
+		);
 	}
 
 	pub fn remove(&self, hash: Block::Hash) {
@@ -554,7 +570,12 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 			entry.decrease_ref();
 			if entry.has_no_references() {
 				cache.pop(&hash);
-				log::trace!(target: "db-pin", "Removed pinned cache entry. hash = {}, num_entries = {}", hash, cache.len());
+				log::trace!(
+					target: LOG_TARGET,
+					"Removed pinned cache entry. hash = {}, num_entries = {}",
+					hash,
+					cache.len()
+				);
 			}
 		}
 	}
@@ -2588,11 +2609,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		)
 	}
 
-	fn pin_block(
-		&self,
-		hash: <Block as BlockT>::Hash,
-		number: NumberFor<Block>,
-	) -> sp_blockchain::Result<()> {
+	fn pin_block(&self, hash: <Block as BlockT>::Hash) -> sp_blockchain::Result<()> {
 		let hint = || {
 			let header_metadata = self.blockchain.header_metadata(hash);
 			header_metadata
@@ -2603,15 +2620,22 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				})
 				.unwrap_or(false)
 		};
-		self.storage
-			.state_db
-			.pin(&hash, number.saturated_into::<u64>(), hint)
-			.map_err(|_| {
-				sp_blockchain::Error::UnknownBlock(format!(
-					"State already discarded for {:?}",
-					hash
-				))
-			})?;
+
+		if let Some(number) = self.blockchain.number(hash)? {
+			self.storage.state_db.pin(&hash, number.saturated_into::<u64>(), hint).map_err(
+				|_| {
+					sp_blockchain::Error::UnknownBlock(format!(
+						"State already discarded for {:?}",
+						hash
+					))
+				},
+			)?;
+		} else {
+			return Err(ClientError::UnknownBlock(format!(
+				"Can not pin block with hash {}. Block not found.",
+				hash
+			)))
+		}
 
 		if self.blocks_pruning != BlocksPruning::KeepAll {
 			// Only increase reference count for this hash. Value is loaded once we prune.
@@ -4277,7 +4301,7 @@ pub(crate) mod tests {
 			.unwrap();
 			blocks.push(hash);
 			// Avoid block pruning.
-			backend.pin_block(blocks[i as usize], i).unwrap();
+			backend.pin_block(blocks[i as usize]).unwrap();
 
 			prev_hash = hash;
 		}
@@ -4289,8 +4313,8 @@ pub(crate) mod tests {
 		assert_eq!(Some(vec![1.into()]), bc.body(blocks[1]).unwrap());
 
 		// Block 1 gets pinned three times
-		backend.pin_block(blocks[1], 1).unwrap();
-		backend.pin_block(blocks[1], 1).unwrap();
+		backend.pin_block(blocks[1]).unwrap();
+		backend.pin_block(blocks[1]).unwrap();
 
 		// Finalize all blocks. This will trigger pruning.
 		let mut op = backend.begin_operation().unwrap();
@@ -4365,7 +4389,7 @@ pub(crate) mod tests {
 				.unwrap();
 		blocks.push(hash);
 
-		backend.pin_block(blocks[4], 4).unwrap();
+		backend.pin_block(blocks[4]).unwrap();
 		// Mark block 5 as finalized.
 		let mut op = backend.begin_operation().unwrap();
 		backend.begin_state_operation(&mut op, blocks[5]).unwrap();
@@ -4397,7 +4421,7 @@ pub(crate) mod tests {
 		blocks.push(hash);
 
 		// Pin block 5 so it gets loaded into the cache on prune
-		backend.pin_block(blocks[5], 5).unwrap();
+		backend.pin_block(blocks[5]).unwrap();
 
 		// Finalize block 6 so block 5 gets pruned. Since it is pinned both justifications should be
 		// in memory.
@@ -4434,7 +4458,7 @@ pub(crate) mod tests {
 			blocks.push(hash);
 
 			// Avoid block pruning.
-			backend.pin_block(blocks[i as usize], i).unwrap();
+			backend.pin_block(blocks[i as usize]).unwrap();
 
 			prev_hash = hash;
 		}
@@ -4458,7 +4482,7 @@ pub(crate) mod tests {
 		.unwrap();
 
 		// Do not prune the fork hash.
-		backend.pin_block(fork_hash_3, 3).unwrap();
+		backend.pin_block(fork_hash_3).unwrap();
 
 		let mut op = backend.begin_operation().unwrap();
 		backend.begin_state_operation(&mut op, blocks[4]).unwrap();

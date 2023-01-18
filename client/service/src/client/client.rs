@@ -300,12 +300,10 @@ where
 
 			let ClientImportOperation { mut op, notify_imported, notify_finalized } = op;
 
-			let finality_num = notify_finalized.as_ref().map(|summary| *summary.header.number());
 			let finality_notification = notify_finalized.map(|summary| {
 				FinalityNotification::from_summary(summary, self.unpin_worker_sender.clone())
 			});
 
-			let import_num = notify_imported.as_ref().map(|summary| *summary.header.number());
 			let (import_notification, storage_changes) = match notify_imported {
 				Some(mut summary) => {
 					let storage_changes = summary.storage_changes.take();
@@ -333,8 +331,8 @@ where
 
 			self.backend.commit_operation(op)?;
 
-			if let (Some(ref notification), Some(number)) = (&finality_notification, finality_num) {
-				if let Err(err) = self.backend.pin_block(notification.hash, number) {
+			if let Some(ref notification) = finality_notification {
+				if let Err(err) = self.backend.pin_block(notification.hash) {
 					error!(
 						"Unable to pin block for finality notification. hash: {}, Error: {}",
 						notification.hash, err
@@ -342,8 +340,8 @@ where
 				};
 			}
 
-			if let (Some(ref notification), Some(number)) = (&import_notification, import_num) {
-				if let Err(err) = self.backend.pin_block(notification.hash, number) {
+			if let Some(ref notification) = import_notification {
+				if let Err(err) = self.backend.pin_block(notification.hash) {
 					error!(
 						"Unable to pin block for import notification. hash: {}, Error: {}",
 						notification.hash, err

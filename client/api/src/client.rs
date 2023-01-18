@@ -327,7 +327,7 @@ pub struct BlockImportNotification<Block: BlockT> {
 	/// If `None`, there was no re-org while importing.
 	pub tree_route: Option<Arc<sp_blockchain::TreeRoute<Block>>>,
 	/// Handle to unpin the block this notification is for
-	_unpin_handle: UnpinHandle<Block>,
+	unpin_handle: UnpinHandle<Block>,
 }
 
 impl<Block: BlockT> BlockImportNotification<Block> {
@@ -346,7 +346,7 @@ impl<Block: BlockT> BlockImportNotification<Block> {
 			header,
 			is_new_best,
 			tree_route,
-			_unpin_handle: UnpinHandle::new(hash, unpin_worker_sender),
+			unpin_handle: UnpinHandle::new(hash, unpin_worker_sender),
 		}
 	}
 
@@ -354,7 +354,7 @@ impl<Block: BlockT> BlockImportNotification<Block> {
 	///
 	/// Note: Only use this if you want to keep the block pinned in the backend.
 	pub fn into_unpin_handle(self) -> UnpinHandle<Block> {
-		self._unpin_handle
+		self.unpin_handle
 	}
 }
 
@@ -372,7 +372,7 @@ pub struct FinalityNotification<Block: BlockT> {
 	/// Stale branches heads.
 	pub stale_heads: Arc<[Block::Hash]>,
 	/// Handle to unpin the block this notification is for
-	_unpin_handle: UnpinHandle<Block>,
+	unpin_handle: UnpinHandle<Block>,
 }
 
 impl<B: BlockT> TryFrom<BlockImportNotification<B>> for ChainEvent<B> {
@@ -405,7 +405,7 @@ impl<Block: BlockT> FinalityNotification<Block> {
 			header: summary.header,
 			tree_route: Arc::from(summary.finalized),
 			stale_heads: Arc::from(summary.stale_heads),
-			_unpin_handle: UnpinHandle::new(hash, unpin_worker_sender),
+			unpin_handle: UnpinHandle::new(hash, unpin_worker_sender),
 		}
 	}
 
@@ -413,7 +413,7 @@ impl<Block: BlockT> FinalityNotification<Block> {
 	///
 	/// Note: Only use this if you want to keep the block pinned in the backend.
 	pub fn into_unpin_handle(self) -> UnpinHandle<Block> {
-		self._unpin_handle
+		self.unpin_handle
 	}
 }
 
@@ -430,7 +430,7 @@ impl<Block: BlockT> BlockImportNotification<Block> {
 			header: summary.header,
 			is_new_best: summary.is_new_best,
 			tree_route: summary.tree_route.map(Arc::new),
-			_unpin_handle: UnpinHandle::new(hash, unpin_worker_sender),
+			unpin_handle: UnpinHandle::new(hash, unpin_worker_sender),
 		}
 	}
 }
