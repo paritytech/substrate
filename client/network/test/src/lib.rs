@@ -22,18 +22,11 @@ mod block_import;
 #[cfg(test)]
 mod sync;
 
-use std::{
-	collections::HashMap,
-	marker::PhantomData,
-	pin::Pin,
-	sync::Arc,
-	task::{Context as FutureContext, Poll},
-	time::Duration,
-};
+use std::{collections::HashMap, marker::PhantomData, pin::Pin, sync::Arc, time::Duration};
 
 use futures::{future::BoxFuture, prelude::*};
 use libp2p::{build_multiaddr, PeerId};
-use log::trace;
+use log::{error, trace};
 use parking_lot::Mutex;
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sc_client_api::{
@@ -84,7 +77,7 @@ pub use substrate_test_runtime_client::{
 	runtime::{Block, Extrinsic, Hash, Transfer},
 	TestClient, TestClientBuilder, TestClientBuilderExt,
 };
-use tokio::time::timeout;
+use tokio::{task::JoinSet, time::timeout};
 
 type AuthorityId = sp_consensus_babe::AuthorityId;
 
@@ -731,7 +724,7 @@ where
 {
 	type Verifier: 'static + Verifier<Block>;
 	type BlockImport: BlockImport<Block, Error = ConsensusError> + Clone + Send + Sync + 'static;
-	type PeerData: Default;
+	type PeerData: Default + Send;
 
 	/// This one needs to be implemented!
 	fn make_verifier(&self, client: PeersClient, peer_data: &Self::PeerData) -> Self::Verifier;
@@ -743,6 +736,9 @@ where
 		&mut self,
 		closure: F,
 	);
+	async fn mut_peers_async<F>(&mut self, async_closure: F)
+	where
+		F: FnOnce(&mut Vec<Peer<Self::PeerData, Self::BlockImport>>) -> BoxFuture<'_, ()> + Send;
 
 	/// Get custom block import handle for fresh client, along with peer data.
 	fn make_block_import(
@@ -976,114 +972,106 @@ where
 		tokio::spawn(f);
 	}
 
-	/// Polls the testnet until all nodes are in sync.
-	///
-	/// Must be executed in a task context.
-	fn poll_until_sync(&mut self, cx: &mut FutureContext) -> Poll<()> {
-		self.poll(cx);
+	/// Runs the testnet until all nodes are in sync.
+	async fn run_until_sync_indefinitely(&mut self) {
+		'outer: loop {
+			self.next_action().await;
 
-		// Return `NotReady` if there's a mismatch in the highest block number.
-		let mut highest = None;
-		for peer in self.peers().iter() {
-			if peer.is_major_syncing() || peer.network.num_queued_blocks() != 0 {
-				return Poll::Pending
+			// Continue advancing if there's a mismatch in the highest block number.
+			let mut highest = None;
+			for peer in self.peers().iter() {
+				if peer.is_major_syncing() || peer.network.num_queued_blocks() != 0 {
+					continue 'outer
+				}
+				if peer.network.num_sync_requests() != 0 {
+					continue 'outer
+				}
+				match (highest, peer.client.info().best_hash) {
+					(None, b) => highest = Some(b),
+					(Some(ref a), ref b) if a == b => {},
+					(Some(_), _) => continue 'outer,
+				}
 			}
-			if peer.network.num_sync_requests() != 0 {
-				return Poll::Pending
-			}
-			match (highest, peer.client.info().best_hash) {
-				(None, b) => highest = Some(b),
-				(Some(ref a), ref b) if a == b => {},
-				(Some(_), _) => return Poll::Pending,
-			}
+			break
 		}
-		Poll::Ready(())
 	}
 
-	/// Polls the testnet until theres' no activiy of any kind.
-	///
-	/// Must be executed in a task context.
-	fn poll_until_idle(&mut self, cx: &mut FutureContext) -> Poll<()> {
-		self.poll(cx);
+	/// Runs the testnet until theres' no activiy of any kind.
+	async fn run_until_idle(&mut self) {
+		'outer: loop {
+			self.next_action().await;
 
-		for peer in self.peers().iter() {
-			if peer.is_major_syncing() || peer.network.num_queued_blocks() != 0 {
-				return Poll::Pending
+			for peer in self.peers().iter() {
+				if peer.is_major_syncing() || peer.network.num_queued_blocks() != 0 {
+					continue 'outer
+				}
+				if peer.network.num_sync_requests() != 0 {
+					continue 'outer
+				}
 			}
-			if peer.network.num_sync_requests() != 0 {
-				return Poll::Pending
-			}
+
+			break
 		}
-
-		Poll::Ready(())
 	}
 
-	/// Polls the testnet until all peers are connected to each other.
-	///
-	/// Must be executed in a task context.
-	fn poll_until_connected(&mut self, cx: &mut FutureContext) -> Poll<()> {
-		self.poll(cx);
+	/// Runs the testnet until all peers are connected to each other.
+	async fn run_until_connected(&mut self) {
+		loop {
+			self.next_action().await;
 
-		let num_peers = self.peers().len();
-		if self.peers().iter().all(|p| p.num_peers() == num_peers - 1) {
-			return Poll::Ready(())
+			let num_peers = self.peers().len();
+			if self.peers().iter().all(|p| p.num_peers() == num_peers - 1) {
+				break
+			}
 		}
-
-		Poll::Pending
 	}
 
-	/// Run the network until we are sync'ed.
+	/// Run the testnet until we are sync'ed (with a timeout).
 	///
-	/// Calls `poll_until_sync` repeatedly.
+	/// Calls `run_until_sync_indefinitely` with a timeout.
 	/// (If we've not synced within 10 mins then panic rather than hang.)
 	async fn run_until_sync(&mut self) {
-		timeout(
-			Duration::from_secs(10 * 60),
-			futures::future::poll_fn::<(), _>(|cx| self.poll_until_sync(cx)),
-		)
-		.await
-		.expect("sync didn't happen within 10 mins");
+		timeout(Duration::from_secs(10 * 60), self.run_until_sync_indefinitely())
+			.await
+			.expect("sync didn't happen within 10 mins");
 	}
 
-	/// Run the network until there are no pending packets.
-	///
-	/// Calls `poll_until_idle` repeatedly with the runtime passed as parameter.
-	async fn run_until_idle(&mut self) {
-		futures::future::poll_fn::<(), _>(|cx| self.poll_until_idle(cx)).await;
-	}
+	/// Advances the testnet. Processes all the pending actions.
+	async fn next_action(&mut self) {
+		self.mut_peers_async(|peers| {
+			Box::pin(async move {
+				tokio_scoped::scope(|scope| {
+					for (i, peer) in peers.iter_mut().enumerate() {
+						scope.spawn({
+							async move {
+								trace!(target: "sync", "-- Next action {}: {}", i, peer.id());
 
-	/// Run the network until all peers are connected to each other.
-	///
-	/// Calls `poll_until_connected` repeatedly with the runtime passed as parameter.
-	async fn run_until_connected(&mut self) {
-		futures::future::poll_fn::<(), _>(|cx| self.poll_until_connected(cx)).await;
-	}
+								timeout(Duration::from_secs(1), peer.network.next_action()).await;
+								//peer.network.next_action().await;
+								trace!(target: "sync", "-- Next action complete {}: {}", i, peer.id());
 
-	/// Polls the testnet. Processes all the pending actions.
-	fn poll(&mut self, cx: &mut FutureContext) {
-		self.mut_peers(|peers| {
-			for (i, peer) in peers.iter_mut().enumerate() {
-				trace!(target: "sync", "-- Polling {}: {}", i, peer.id());
-				if let Poll::Ready(()) = peer.network.poll_unpin(cx) {
-					panic!("NetworkWorker has terminated unexpectedly.")
-				}
-				trace!(target: "sync", "-- Polling complete {}: {}", i, peer.id());
+								// Get next element from `imported_blocks_stream` if it's available.
+								while let Some(Some(notification)) =
+									peer.imported_blocks_stream.next().now_or_never()
+								{
+									peer.network.service().announce_block(notification.hash, None);
+								}
 
-				// We poll `imported_blocks_stream`.
-				while let Poll::Ready(Some(notification)) =
-					peer.imported_blocks_stream.as_mut().poll_next(cx)
-				{
-					peer.network.service().announce_block(notification.hash, None);
-				}
-
-				// We poll `finality_notification_stream`.
-				while let Poll::Ready(Some(notification)) =
-					peer.finality_notification_stream.as_mut().poll_next(cx)
-				{
-					peer.network.on_block_finalized(notification.hash, notification.header);
-				}
-			}
-		});
+								// Get next element from `finality_notification_stream` if it's
+								// available.
+								while let Some(Some(notification)) =
+									peer.finality_notification_stream.next().now_or_never()
+								{
+									peer.network
+										.on_block_finalized(notification.hash, notification.header);
+								}
+							}
+						});
+					}
+				})
+			})
+		})
+		.await;
 	}
 }
 
@@ -1092,6 +1080,7 @@ pub struct TestNet {
 	peers: Vec<Peer<(), PeersClient>>,
 }
 
+#[async_trait::async_trait]
 impl TestNetFactory for TestNet {
 	type Verifier = PassThroughVerifier;
 	type PeerData = ();
@@ -1123,6 +1112,13 @@ impl TestNetFactory for TestNet {
 	fn mut_peers<F: FnOnce(&mut Vec<Peer<(), Self::BlockImport>>)>(&mut self, closure: F) {
 		closure(&mut self.peers);
 	}
+
+	async fn mut_peers_async<F>(&mut self, closure: F)
+	where
+		F: FnOnce(&mut Vec<Peer<(), Self::BlockImport>>) -> BoxFuture<'_, ()> + Send,
+	{
+		closure(&mut self.peers).await
+	}
 }
 
 pub struct ForceFinalized(PeersClient);
@@ -1150,6 +1146,7 @@ impl JustificationImport<Block> for ForceFinalized {
 #[derive(Default)]
 pub struct JustificationTestNet(TestNet);
 
+#[async_trait::async_trait]
 impl TestNetFactory for JustificationTestNet {
 	type Verifier = PassThroughVerifier;
 	type PeerData = ();
@@ -1172,6 +1169,13 @@ impl TestNetFactory for JustificationTestNet {
 		closure: F,
 	) {
 		self.0.mut_peers(closure)
+	}
+
+	async fn mut_peers_async<F>(&mut self, closure: F)
+	where
+		F: FnOnce(&mut Vec<Peer<(), Self::BlockImport>>) -> BoxFuture<'_, ()> + Send,
+	{
+		self.0.mut_peers_async(closure).await
 	}
 
 	fn make_block_import(
