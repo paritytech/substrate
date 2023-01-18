@@ -417,7 +417,6 @@ impl BlockWeightsBuilder {
 		if let Some(init_weight) = init_cost.map(|rate| rate * weights.max_block) {
 			for class in DispatchClass::all() {
 				let per_class = weights.per_class.get_mut(*class);
-				// FAIL-CI do this per component?
 				if per_class.max_extrinsic.is_time_unlimited() && init_cost.is_some() {
 					per_class.max_extrinsic = per_class
 						.max_total

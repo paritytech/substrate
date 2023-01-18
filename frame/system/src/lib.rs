@@ -1359,10 +1359,7 @@ impl<T: Config> Pallet<T> {
 				consumed as f32 / (1024 * 1024) as f32,
 				SOFT_POV_LIMIT_BYTES as f32 / (1024 * 1024) as f32,
 			);
-			Self::deposit_event(Event::PovLimitExceeded {
-				limit: SOFT_POV_LIMIT_BYTES,
-				consumed,
-			});
+			Self::deposit_event(Event::PovLimitExceeded { limit: SOFT_POV_LIMIT_BYTES, consumed });
 		}
 
 		log::debug!(

@@ -284,8 +284,9 @@ mod multiplier_tests {
 		// `cargo test congested_chain_simulation -- --nocapture` to get some insight.
 
 		// almost full. The entire quota of normal transactions is taken.
-		let block_weight = BlockWeights::get().get(DispatchClass::Normal).max_total.exact_limits().unwrap() -
-			Weight::from_ref_time(100);
+		let block_weight =
+			BlockWeights::get().get(DispatchClass::Normal).max_total.exact_limits().unwrap() -
+				Weight::from_ref_time(100);
 
 		// Default substrate weight.
 		let tx_weight = frame_support::weights::constants::ExtrinsicBaseWeight::get();

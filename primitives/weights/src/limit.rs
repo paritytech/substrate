@@ -24,7 +24,7 @@ use sp_debug_derive::RuntimeDebug;
 ///
 /// The properties of this limit type are:
 /// - *chromatic*: both components can be limited independently.
-/// - *inclusive*: since the maximum value [`is_within`] the limit.
+/// - *inclusive*: since the maximum value [`Self::is_within`] the limit.
 /// - *optional*: can be set to `None`, in which case it is *unlimited*.
 /// - *upper*: semantically it is an upper limit, not a lower.
 #[derive(Encode, Decode, Copy, Clone, RuntimeDebug, TypeInfo)]
