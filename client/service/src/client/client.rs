@@ -1432,27 +1432,27 @@ where
 		Ok(keys)
 	}
 
-	fn storage_keys_iter<'a>(
+	fn storage_keys_iter(
 		&self,
 		hash: <Block as BlockT>::Hash,
-		prefix: Option<&'a StorageKey>,
+		prefix: Option<&StorageKey>,
 		start_key: Option<&StorageKey>,
-	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>> {
+	) -> sp_blockchain::Result<KeyIterator<B::State, Block>> {
 		let state = self.state_at(hash)?;
 		let start_key = start_key.or(prefix).map(|key| key.0.clone()).unwrap_or_else(Vec::new);
-		Ok(KeyIterator::new(state, prefix, start_key))
+		Ok(KeyIterator::new(state, prefix.cloned(), start_key))
 	}
 
-	fn child_storage_keys_iter<'a>(
+	fn child_storage_keys_iter(
 		&self,
 		hash: <Block as BlockT>::Hash,
 		child_info: ChildInfo,
-		prefix: Option<&'a StorageKey>,
+		prefix: Option<&StorageKey>,
 		start_key: Option<&StorageKey>,
-	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>> {
+	) -> sp_blockchain::Result<KeyIterator<B::State, Block>> {
 		let state = self.state_at(hash)?;
 		let start_key = start_key.or(prefix).map(|key| key.0.clone()).unwrap_or_else(Vec::new);
-		Ok(KeyIterator::new_child(state, child_info, prefix, start_key))
+		Ok(KeyIterator::new_child(state, child_info, prefix.cloned(), start_key))
 	}
 
 	fn storage(
