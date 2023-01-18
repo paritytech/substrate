@@ -50,7 +50,7 @@ where
 	) -> Result<(), TransactionValidityError> {
 		let limit = T::BlockWeights::get().get(info.class).max_extrinsic;
 		limit
-			.check_within(info.weight)
+			.check_contains(info.weight)
 			.map_err(|_| InvalidTransaction::ExhaustsResources.into())
 	}
 
@@ -156,7 +156,7 @@ where
 	// Check if we don't exceed per-class allowance
 	limit_per_class
 		.max_total
-		.check_within(per_class)
+		.check_contains(per_class)
 		.map_err(|_| InvalidTransaction::ExhaustsResources)?;
 
 	// In cases total block weight is exceeded, we need to fall back
@@ -164,7 +164,7 @@ where
 	if all_weight.total().any_gt(maximum_weight.max_block) {
 		limit_per_class
 			.reserved
-			.check_within(per_class)
+			.check_contains(per_class)
 			.map_err(|_| InvalidTransaction::ExhaustsResources)?;
 	}
 
