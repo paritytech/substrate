@@ -506,7 +506,7 @@ impl<Block: BlockT> PinnedBlockCacheEntry<Block> {
 }
 
 struct PinnedBlockCache<Block: BlockT> {
-	cache: RwLock<LruCache<Block::Hash, PinnedBlockCacheEntry<Block>>>,
+	cache: LruCache<Block::Hash, PinnedBlockCacheEntry<Block>>,
 }
 
 impl<Block: BlockT> PinnedBlockCache<Block> {
@@ -514,83 +514,79 @@ impl<Block: BlockT> PinnedBlockCache<Block> {
 		Self { cache: LruCache::new(NonZeroUsize::new(PINNING_CACHE_SIZE).unwrap()).into() }
 	}
 
-	pub fn bump_ref(&self, hash: Block::Hash) {
-		let mut cache = self.cache.write();
-		if cache.len() == PINNING_CACHE_SIZE {
+	pub fn bump_ref(&mut self, hash: Block::Hash) {
+		if self.cache.len() == PINNING_CACHE_SIZE {
 			log::warn!(target: LOG_TARGET, "Maximum size of pinning cache reached. Removing items to make space. max_size = {}", PINNING_CACHE_SIZE);
 		}
 
-		let entry = cache.get_or_insert_mut(hash, Default::default);
+		let entry = self.cache.get_or_insert_mut(hash, Default::default);
 		entry.increase_ref();
 		log::trace!(
 			target: LOG_TARGET,
 			"Bumped cache refcount. hash = {}, num_entries = {}",
 			hash,
-			cache.len()
+			self.cache.len()
 		);
 	}
 
-	pub fn clear(&self) {
-		let mut cache = self.cache.write();
-		cache.clear();
+	pub fn clear(&mut self) {
+		self.cache.clear();
 	}
 
 	pub fn contains(&self, hash: Block::Hash) -> bool {
-		let cache = self.cache.read();
-		cache.contains(&hash)
+		self.cache.contains(&hash)
 	}
 
-	pub fn insert_body(&self, hash: Block::Hash, extrinsics: Option<Vec<Block::Extrinsic>>) {
-		let mut cache = self.cache.write();
-		let mut entry = cache.get_or_insert_mut(hash, Default::default);
+	pub fn insert_body(&mut self, hash: Block::Hash, extrinsics: Option<Vec<Block::Extrinsic>>) {
+		let mut entry = self.cache.get_or_insert_mut(hash, Default::default);
 		entry.body = Some(extrinsics);
 		log::trace!(
 			target: LOG_TARGET,
 			"Cached body. hash = {}, num_entries = {}",
 			hash,
-			cache.len()
+			self.cache.len()
 		);
 	}
 
-	pub fn insert_justifications(&self, hash: Block::Hash, justifications: Option<Justifications>) {
-		let mut cache = self.cache.write();
-		let mut entry = cache.get_or_insert_mut(hash, Default::default);
+	pub fn insert_justifications(
+		&mut self,
+		hash: Block::Hash,
+		justifications: Option<Justifications>,
+	) {
+		let mut entry = self.cache.get_or_insert_mut(hash, Default::default);
 		entry.justifications = Some(justifications);
 		log::trace!(
 			target: LOG_TARGET,
 			"Cached justification. hash = {}, num_entries = {}",
 			hash,
-			cache.len()
+			self.cache.len()
 		);
 	}
 
-	pub fn remove(&self, hash: Block::Hash) {
-		let mut cache = self.cache.write();
-		if let Some(entry) = cache.peek_mut(&hash) {
+	pub fn remove(&mut self, hash: Block::Hash) {
+		if let Some(entry) = self.cache.peek_mut(&hash) {
 			entry.decrease_ref();
 			if entry.has_no_references() {
-				cache.pop(&hash);
+				self.cache.pop(&hash);
 				log::trace!(
 					target: LOG_TARGET,
 					"Removed pinned cache entry. hash = {}, num_entries = {}",
 					hash,
-					cache.len()
+					self.cache.len()
 				);
 			}
 		}
 	}
 
 	pub fn justifications(&self, hash: &Block::Hash) -> Option<Option<Justifications>> {
-		let cache = self.cache.read();
-		if let Some(cache_entry) = cache.peek(hash) {
+		if let Some(cache_entry) = self.cache.peek(hash) {
 			return cache_entry.justifications.clone()
 		};
 		None
 	}
 
 	pub fn body(&self, hash: &Block::Hash) -> Option<Option<Vec<Block::Extrinsic>>> {
-		let cache = self.cache.read();
-		if let Some(cache_entry) = cache.peek(hash) {
+		if let Some(cache_entry) = self.cache.peek(hash) {
 			return cache_entry.body.clone()
 		};
 		None
@@ -604,7 +600,7 @@ pub struct BlockchainDb<Block: BlockT> {
 	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
 	header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
 	header_cache: Mutex<LinkedHashMap<Block::Hash, Option<Block::Header>>>,
-	pinned_blocks_cache: Arc<PinnedBlockCache<Block>>,
+	pinned_blocks_cache: Arc<RwLock<PinnedBlockCache<Block>>>,
 }
 
 impl<Block: BlockT> BlockchainDb<Block> {
@@ -617,7 +613,7 @@ impl<Block: BlockT> BlockchainDb<Block> {
 			meta: Arc::new(RwLock::new(meta)),
 			header_metadata_cache: Arc::new(HeaderMetadataCache::default()),
 			header_cache: Default::default(),
-			pinned_blocks_cache: Arc::new(PinnedBlockCache::new()),
+			pinned_blocks_cache: Arc::new(RwLock::new(PinnedBlockCache::new())),
 		})
 	}
 
@@ -649,30 +645,34 @@ impl<Block: BlockT> BlockchainDb<Block> {
 
 	/// Empty the cache of pinned items.
 	fn clear_pinning_cache(&self) {
-		self.pinned_blocks_cache.clear();
+		let mut cache = self.pinned_blocks_cache.write();
+		cache.clear();
 	}
 
 	/// Load a justification into the cache of pinned items.
 	/// Reference count of the item will not be increased. Use this
 	/// to load values for items into the cache which have already been pinned.
 	fn insert_justifications_if_pinned(&self, hash: Block::Hash, justification: Justification) {
-		if !self.pinned_blocks_cache.contains(hash) {
+		let mut cache = self.pinned_blocks_cache.write();
+		if !cache.contains(hash) {
 			return
 		}
 
 		let justifications = Justifications::from(justification);
-		self.pinned_blocks_cache.insert_justifications(hash, Some(justifications));
+		cache.insert_justifications(hash, Some(justifications));
 	}
 
 	/// Load a justification from the db into the cache of pinned items.
 	/// Reference count of the item will not be increased. Use this
 	/// to load values for items into the cache which have already been pinned.
 	fn insert_persisted_justifications_if_pinned(&self, hash: Block::Hash) -> ClientResult<()> {
-		if !self.pinned_blocks_cache.contains(hash) {
+		let mut cache = self.pinned_blocks_cache.write();
+		if !cache.contains(hash) {
 			return Ok(())
 		}
-		let justifications = self.justifications(hash)?;
-		self.pinned_blocks_cache.insert_justifications(hash, justifications);
+
+		let justifications = self.justifications_uncached(hash)?;
+		cache.insert_justifications(hash, justifications);
 		Ok(())
 	}
 
@@ -680,84 +680,46 @@ impl<Block: BlockT> BlockchainDb<Block> {
 	/// Reference count of the item will not be increased. Use this
 	/// to load values for items items into the cache which have already been pinned.
 	fn insert_persisted_body_if_pinned(&self, hash: Block::Hash) -> ClientResult<()> {
-		if !self.pinned_blocks_cache.contains(hash) {
+		let mut cache = self.pinned_blocks_cache.write();
+		if !cache.contains(hash) {
 			return Ok(())
 		}
 
-		let body = self.body(hash)?;
-		self.pinned_blocks_cache.insert_body(hash, body);
+		let body = self.body_uncached(hash)?;
+		cache.insert_body(hash, body);
 		Ok(())
 	}
 
 	/// Bump reference count for pinned item.
 	fn bump_ref(&self, hash: Block::Hash) {
-		self.pinned_blocks_cache.bump_ref(hash);
+		self.pinned_blocks_cache.write().bump_ref(hash);
 	}
 
 	/// Decrease reference count for pinned item and remove if reference count is 0.
 	fn unpin(&self, hash: Block::Hash) {
-		self.pinned_blocks_cache.remove(hash);
+		self.pinned_blocks_cache.write().remove(hash);
 	}
-}
 
-impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for BlockchainDb<Block> {
-	fn header(&self, hash: Block::Hash) -> ClientResult<Option<Block::Header>> {
-		let mut cache = self.header_cache.lock();
-		if let Some(result) = cache.get_refresh(&hash) {
-			return Ok(result.clone())
-		}
-		let header = utils::read_header(
+	fn justifications_uncached(&self, hash: Block::Hash) -> ClientResult<Option<Justifications>> {
+		match read_db(
 			&*self.db,
 			columns::KEY_LOOKUP,
-			columns::HEADER,
+			columns::JUSTIFICATIONS,
 			BlockId::<Block>::Hash(hash),
-		)?;
-		cache_header(&mut cache, hash, header.clone());
-		Ok(header)
-	}
-
-	fn info(&self) -> sc_client_api::blockchain::Info<Block> {
-		let meta = self.meta.read();
-		sc_client_api::blockchain::Info {
-			best_hash: meta.best_hash,
-			best_number: meta.best_number,
-			genesis_hash: meta.genesis_hash,
-			finalized_hash: meta.finalized_hash,
-			finalized_number: meta.finalized_number,
-			finalized_state: meta.finalized_state,
-			number_leaves: self.leaves.read().count(),
-			block_gap: meta.block_gap,
+		)? {
+			Some(justifications) => match Decode::decode(&mut &justifications[..]) {
+				Ok(justifications) => Ok(Some(justifications)),
+				Err(err) =>
+					return Err(sp_blockchain::Error::Backend(format!(
+						"Error decoding justifications: {}",
+						err
+					))),
+			},
+			None => Ok(None),
 		}
 	}
 
-	fn status(&self, hash: Block::Hash) -> ClientResult<sc_client_api::blockchain::BlockStatus> {
-		match self.header(hash)?.is_some() {
-			true => Ok(sc_client_api::blockchain::BlockStatus::InChain),
-			false => Ok(sc_client_api::blockchain::BlockStatus::Unknown),
-		}
-	}
-
-	fn number(&self, hash: Block::Hash) -> ClientResult<Option<NumberFor<Block>>> {
-		Ok(self.header_metadata(hash).ok().map(|header_metadata| header_metadata.number))
-	}
-
-	fn hash(&self, number: NumberFor<Block>) -> ClientResult<Option<Block::Hash>> {
-		Ok(utils::read_header::<Block>(
-			&*self.db,
-			columns::KEY_LOOKUP,
-			columns::HEADER,
-			BlockId::Number(number),
-		)?
-		.map(|header| header.hash()))
-	}
-}
-
-impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<Block> {
-	fn body(&self, hash: Block::Hash) -> ClientResult<Option<Vec<Block::Extrinsic>>> {
-		if let Some(result) = self.pinned_blocks_cache.body(&hash) {
-			return Ok(result)
-		}
-
+	fn body_uncached(&self, hash: Block::Hash) -> ClientResult<Option<Vec<Block::Extrinsic>>> {
 		if let Some(body) =
 			read_db(&*self.db, columns::KEY_LOOKUP, columns::BODY, BlockId::Hash::<Block>(hash))?
 		{
@@ -821,28 +783,77 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 		}
 		Ok(None)
 	}
+}
 
-	fn justifications(&self, hash: Block::Hash) -> ClientResult<Option<Justifications>> {
-		if let Some(result) = self.pinned_blocks_cache.justifications(&hash) {
+impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for BlockchainDb<Block> {
+	fn header(&self, hash: Block::Hash) -> ClientResult<Option<Block::Header>> {
+		let mut cache = self.header_cache.lock();
+		if let Some(result) = cache.get_refresh(&hash) {
+			return Ok(result.clone())
+		}
+		let header = utils::read_header(
+			&*self.db,
+			columns::KEY_LOOKUP,
+			columns::HEADER,
+			BlockId::<Block>::Hash(hash),
+		)?;
+		cache_header(&mut cache, hash, header.clone());
+		Ok(header)
+	}
+
+	fn info(&self) -> sc_client_api::blockchain::Info<Block> {
+		let meta = self.meta.read();
+		sc_client_api::blockchain::Info {
+			best_hash: meta.best_hash,
+			best_number: meta.best_number,
+			genesis_hash: meta.genesis_hash,
+			finalized_hash: meta.finalized_hash,
+			finalized_number: meta.finalized_number,
+			finalized_state: meta.finalized_state,
+			number_leaves: self.leaves.read().count(),
+			block_gap: meta.block_gap,
+		}
+	}
+
+	fn status(&self, hash: Block::Hash) -> ClientResult<sc_client_api::blockchain::BlockStatus> {
+		match self.header(hash)?.is_some() {
+			true => Ok(sc_client_api::blockchain::BlockStatus::InChain),
+			false => Ok(sc_client_api::blockchain::BlockStatus::Unknown),
+		}
+	}
+
+	fn number(&self, hash: Block::Hash) -> ClientResult<Option<NumberFor<Block>>> {
+		Ok(self.header_metadata(hash).ok().map(|header_metadata| header_metadata.number))
+	}
+
+	fn hash(&self, number: NumberFor<Block>) -> ClientResult<Option<Block::Hash>> {
+		Ok(utils::read_header::<Block>(
+			&*self.db,
+			columns::KEY_LOOKUP,
+			columns::HEADER,
+			BlockId::Number(number),
+		)?
+		.map(|header| header.hash()))
+	}
+}
+
+impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<Block> {
+	fn body(&self, hash: Block::Hash) -> ClientResult<Option<Vec<Block::Extrinsic>>> {
+		let cache = self.pinned_blocks_cache.read();
+		if let Some(result) = cache.body(&hash) {
 			return Ok(result)
 		}
 
-		match read_db(
-			&*self.db,
-			columns::KEY_LOOKUP,
-			columns::JUSTIFICATIONS,
-			BlockId::<Block>::Hash(hash),
-		)? {
-			Some(justifications) => match Decode::decode(&mut &justifications[..]) {
-				Ok(justifications) => Ok(Some(justifications)),
-				Err(err) =>
-					return Err(sp_blockchain::Error::Backend(format!(
-						"Error decoding justifications: {}",
-						err
-					))),
-			},
-			None => Ok(None),
+		self.body_uncached(hash)
+	}
+
+	fn justifications(&self, hash: Block::Hash) -> ClientResult<Option<Justifications>> {
+		let cache = self.pinned_blocks_cache.read();
+		if let Some(result) = cache.justifications(&hash) {
+			return Ok(result)
 		}
+
+		self.justifications_uncached(hash)
 	}
 
 	fn last_finalized(&self) -> ClientResult<Block::Hash> {
