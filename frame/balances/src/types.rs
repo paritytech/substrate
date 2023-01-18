@@ -17,15 +17,15 @@
 
 //! Types used in the pallet.
 
+use crate::{Config, Event, NegativeImbalance, Pallet};
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::ops::BitOr;
 use frame_support::{
-	traits::{LockIdentifier, WithdrawReasons, Imbalance, OnUnbalanced},
+	traits::{Imbalance, LockIdentifier, OnUnbalanced, WithdrawReasons},
 	RuntimeDebug,
 };
 use scale_info::TypeInfo;
 use sp_runtime::Saturating;
-use crate::{Config, NegativeImbalance, Pallet, Event};
 
 /// Simplified reasons for withdrawing balance.
 #[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, MaxEncodedLen, TypeInfo)]

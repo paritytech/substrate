@@ -156,8 +156,8 @@
 #[macro_use]
 mod tests;
 mod benchmarking;
-mod impl_fungible;
 mod impl_currency;
+mod impl_fungible;
 pub mod migration;
 mod tests_composite;
 mod tests_local;
@@ -178,11 +178,10 @@ use frame_support::{
 			KeepAlive::{CanKill, Keep},
 			WithdrawConsequence,
 		},
-		Currency, Defensive, ExistenceRequirement,
-		Get, Imbalance, NamedReservableCurrency, OnUnbalanced,
-		ReservableCurrency, StoredMap,
+		Currency, Defensive, ExistenceRequirement, Get, Imbalance, NamedReservableCurrency,
+		OnUnbalanced, ReservableCurrency, StoredMap,
 	},
-	WeakBoundedVec, BoundedSlice,
+	BoundedSlice, WeakBoundedVec,
 };
 use frame_system as system;
 pub use impl_currency::{NegativeImbalance, PositiveImbalance};
@@ -195,7 +194,7 @@ use sp_runtime::{
 	ArithmeticError, DispatchError, FixedPointOperand, RuntimeDebug,
 };
 use sp_std::{cmp, fmt::Debug, mem, prelude::*, result};
-pub use types::{AccountData, BalanceLock, IdAmount, Reasons, ReserveData, DustCleaner};
+pub use types::{AccountData, BalanceLock, DustCleaner, IdAmount, Reasons, ReserveData};
 pub use weights::WeightInfo;
 
 pub use pallet::*;
@@ -320,24 +319,26 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T, I = ()> {
-		/// Vesting balance too high to send value
+		/// Vesting balance too high to send value.
 		VestingBalance,
-		/// Account liquidity restrictions prevent withdrawal
+		/// Account liquidity restrictions prevent withdrawal.
 		LiquidityRestrictions,
 		/// Balance too low to send value.
 		InsufficientBalance,
-		/// Value too low to create account due to existential deposit
+		/// Value too low to create account due to existential deposit.
 		ExistentialDeposit,
-		/// Transfer/payment would kill account
+		/// Transfer/payment would kill account.
 		KeepAlive,
-		/// A vesting schedule already exists for this account
+		/// A vesting schedule already exists for this account.
 		ExistingVestingSchedule,
-		/// Beneficiary account must pre-exist
+		/// Beneficiary account must pre-exist.
 		DeadAccount,
-		/// Number of named reserves exceed MaxReserves
+		/// Number of named reserves exceed `MaxReserves`.
 		TooManyReserves,
-		/// Number of named reserves exceed MaxHolds
+		/// Number of holds exceed `MaxHolds`.
 		TooManyHolds,
+		/// Number of freezes exceed `MaxFreezes`.
+		TooManyFreezes,
 	}
 
 	/// The total units issued in the system.
@@ -675,7 +676,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			return
 		}
 		a.flags.set_new_logic();
-		if !a.reserved.is_zero() {
+		if !a.reserved.is_zero() || !a.frozen.is_zero() {
 			if !system::Pallet::<T>::can_inc_consumer(who) {
 				// Gah!! We have a non-zero reserve balance but no provider refs :(
 				// This shouldn't practically happen, but we need a failsafe anyway: let's give
@@ -793,6 +794,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		who: &T::AccountId,
 		f: impl FnOnce(&mut AccountData<T::Balance>, bool) -> Result<R, E>,
 	) -> Result<(R, DustCleaner<T, I>), E> {
+		Self::ensure_upgraded(who);
 		let result = T::AccountStore::try_mutate_exists(who, |maybe_account| {
 			let is_new = maybe_account.is_none();
 			let mut account = maybe_account.take().unwrap_or_default();
@@ -863,6 +865,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			);
 		}
 		let freezes = Freezes::<T, I>::get(who);
+		// TODO: Revisit this assumption. We no manipulate consumer/provider refs.
 		// No way this can fail since we do not alter the existential balances.
 		let res = Self::mutate_account(who, |b| {
 			b.frozen = Zero::zero();
@@ -878,14 +881,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let existed = Locks::<T, I>::contains_key(who);
 		if locks.is_empty() {
 			Locks::<T, I>::remove(who);
-/*			if existed {
+			if existed {
 				// TODO: use Locks::<T, I>::hashed_key
 				// https://github.com/paritytech/substrate/issues/4969
 				system::Pallet::<T>::dec_consumers(who);
-			}*/
+			}
 		} else {
 			Locks::<T, I>::insert(who, bounded_locks);
-/*			if !existed && system::Pallet::<T>::inc_consumers_without_limit(who).is_err() {
+			if !existed && system::Pallet::<T>::inc_consumers_without_limit(who).is_err() {
 				// No providers for the locks. This is impossible under normal circumstances
 				// since the funds that are under the lock will themselves be stored in the
 				// account and therefore will need a reference.
@@ -894,16 +897,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					"Warning: Attempt to introduce lock consumer reference, yet no providers. \
 					This is unexpected but should be safe."
 				);
-			}*/
+			}
 		}
 	}
 
 	/// Update the account entry for `who`, given the locks.
-	fn try_update_freezes(
+	fn update_freezes(
 		who: &T::AccountId,
 		freezes: BoundedSlice<IdAmount<T::FreezeIdentifier, T::Balance>, T::MaxFreezes>,
 	) -> DispatchResult {
-		Self::try_mutate_account(who, |b| {
+		Self::mutate_account(who, |b| {
 			b.frozen = Zero::zero();
 			for l in Locks::<T, I>::get(who).iter() {
 				b.frozen = b.frozen.max(l.amount);
@@ -915,7 +918,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if freezes.is_empty() {
 			Freezes::<T, I>::remove(who);
 		} else {
-			Freezes::<T, I>::put(who, freezes);
+			Freezes::<T, I>::insert(who, freezes);
 		}
 		Ok(())
 	}

@@ -22,9 +22,7 @@ use frame_support::{
 	ensure,
 	pallet_prelude::DispatchResult,
 	traits::{
-		tokens::{
-			fungible, BalanceStatus as Status,
-		},
+		tokens::{fungible, BalanceStatus as Status},
 		Currency, DefensiveSaturating, ExistenceRequirement,
 		ExistenceRequirement::AllowDeath,
 		Get, Imbalance, LockIdentifier, LockableCurrency, NamedReservableCurrency,

@@ -261,7 +261,8 @@ impl<T: Config<I>, I: 'static> fungible::InspectFreeze<T::AccountId> for Pallet<
 	type Id = T::FreezeIdentifier;
 
 	fn balance_frozen(id: &Self::Id, who: &T::AccountId) -> Self::Balance {
-		Self::account(who).frozen
+		let locks = Freezes::<T, I>::get(who);
+		locks.into_iter().find(|l| &l.id == id).map_or(Zero::zero(), |l| l.amount)
 	}
 
 	fn can_freeze(id: &Self::Id, who: &T::AccountId) -> bool {
@@ -271,57 +272,40 @@ impl<T: Config<I>, I: 'static> fungible::InspectFreeze<T::AccountId> for Pallet<
 }
 
 impl<T: Config<I>, I: 'static> fungible::MutateFreeze<T::AccountId> for Pallet<T, I> {
-	/// Prevent actions which would reduce the balance of the account of `who` below the given
-	/// `amount` and identify this restriction though the given `id`. Unlike `extend_freeze`, any
-	/// outstanding freeze in place for `who` under the `id` are dropped.
-	///
-	/// If `amount` is zero, the freeze *item* will exist after this operation, and so the account
-	/// will require and retain a consumer reference, though it will be entirely redundant. To
-	/// remove the freeze item (and possibly drop the consumer reference), use `thaw`.
-	///
-	/// Note that `amount` can be greater than the total balance, if desired.
-	fn set_freeze(
-		id: &Self::Id,
-		who: &T::AccountId,
-		amount: Self::Balance,
-	) -> Result<(), DispatchError> {
-		let mut item = Some(IdAmount { id, amount });
-		let mut locks = Freezes::<T, I>::get(who)
-			.into_iter()
-			.filter_map(|l| if l.id == id { new_lock.take() } else { Some(l) })
-			.collect::<Vec<_>>();
-		if let Some(lock) = new_lock {
-			locks.push(lock)
+	fn set_freeze(id: &Self::Id, who: &T::AccountId, amount: Self::Balance) -> DispatchResult {
+		if amount.is_zero() {
+			return Self::thaw(id, who)
 		}
-		Self::try_update_freezes(who, &locks[..])
+		let mut locks = Freezes::<T, I>::get(who);
+		if let Some(i) = locks.iter_mut().find(|x| &x.id == id) {
+			i.amount = amount;
+		} else {
+			locks
+				.try_push(IdAmount { id: id.clone(), amount })
+				.map_err(|_| Error::<T, I>::TooManyFreezes)?;
+		}
+		Self::update_freezes(who, locks.as_bounded_slice())
 	}
 
-	/// Prevent the balance of the account of `who` from being reduced below the given `amount` and
-	/// identify this restriction though the given `id`. Unlike `set_freeze`, this does not
-	/// counteract any pre-existing freezes in place for `who` under the `id`. Also unlike
-	/// `set_freeze`, in the case that `amount` is zero, this is no-op and never fails.
-	///
-	/// Note that more funds can be locked than the total balance, if desired.
-	fn extend_freeze(
-		id: &Self::Id,
-		who: &T::AccountId,
-		amount: Self::Balance,
-	) -> Result<(), DispatchError> {
+	fn extend_freeze(id: &Self::Id, who: &T::AccountId, amount: Self::Balance) -> DispatchResult {
 		if amount.is_zero() {
 			return Ok(())
 		}
-		let mut f = Freezes::<T, I>::get(who);
-		if let Some(i) = f.iter_mut().find(|x| &x.id == id) {
+		let mut locks = Freezes::<T, I>::get(who);
+		if let Some(i) = locks.iter_mut().find(|x| &x.id == id) {
 			i.amount = i.amount.max(amount);
 		} else {
-			f.
+			locks
+				.try_push(IdAmount { id: id.clone(), amount })
+				.map_err(|_| Error::<T, I>::TooManyFreezes)?;
 		}
-		todo!()
+		Self::update_freezes(who, locks.as_bounded_slice())
 	}
 
-	/// Remove an existing lock.
-	fn thaw(id: &Self::Id, who: &T::AccountId) {
-		todo!()
+	fn thaw(id: &Self::Id, who: &T::AccountId) -> DispatchResult {
+		let mut locks = Freezes::<T, I>::get(who);
+		locks.retain(|l| &l.id != id);
+		Self::update_freezes(who, locks.as_bounded_slice())
 	}
 }
 

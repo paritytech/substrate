@@ -28,7 +28,7 @@ macro_rules! decl_tests {
 		use frame_support::{
 			assert_noop, assert_storage_noop, assert_ok, assert_err,
 			traits::{
-				fungible::{InspectHold, MutateHold},
+				fungible::{InspectHold, MutateHold, InspectFreeze, MutateFreeze},
 				LockableCurrency, LockIdentifier, WithdrawReasons,
 				Currency, ReservableCurrency, ExistenceRequirement::AllowDeath,
 				tokens::KeepAlive::CanKill,
@@ -1000,7 +1000,7 @@ macro_rules! decl_tests {
 				.existential_deposit(100)
 				.build()
 				.execute_with(|| {
-					assert_ok!(Balances::set_balance(RuntimeOrigin	::root(), 1, 1_000));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 1_000));
 					assert_ok!(Balances::reserve(&1, 900));
 					// Slashed completed in full
 					assert_eq!(Balances::slash_reserved(&1, 800), (NegativeImbalance::new(800), 0));
@@ -1560,6 +1560,93 @@ macro_rules! decl_tests {
 					<Balances as fungible::Unbalanced<_>>::increase_balance(&1337, u64::MAX, true),
 					Ok(u64::MAX - 1)
 				);
+			});
+		}
+
+		#[test]
+		fn freezing_and_locking_should_work() {
+			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
+				assert_ok!(Balances::set_freeze(&OtherTestId::Foo, &1, 4));
+				Balances::set_lock(ID_1, &1, 5, WithdrawReasons::all());
+				assert_eq!(System::consumers(&1), 2);
+				assert_eq!(Balances::account(&1).frozen, 5);
+				assert_ok!(Balances::set_freeze(&OtherTestId::Foo, &1, 6));
+				assert_eq!(Balances::account(&1).frozen, 6);
+				assert_ok!(Balances::set_freeze(&OtherTestId::Foo, &1, 4));
+				assert_eq!(Balances::account(&1).frozen, 5);
+				Balances::set_lock(ID_1, &1, 3, WithdrawReasons::all());
+				assert_eq!(Balances::account(&1).frozen, 4);
+				Balances::set_lock(ID_1, &1, 5, WithdrawReasons::all());
+				assert_eq!(Balances::account(&1).frozen, 5);
+				Balances::remove_lock(ID_1, &1);
+				assert_eq!(Balances::account(&1).frozen, 4);
+				assert_eq!(System::consumers(&1), 1);
+			});
+		}
+
+		#[test]
+		fn partial_freezing_should_work() {
+			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
+				assert_ok!(Balances::set_freeze(&OtherTestId::Foo, &1, 5));
+				assert_eq!(System::consumers(&1), 1);
+				assert_ok!(<Balances as fungible::Mutate<_>>::transfer(&1, &2, 5, CanKill));
+				assert_noop!(<Balances as fungible::Mutate<_>>::transfer(&1, &2, 1, CanKill), TokenError::Frozen);
+			});
+		}
+
+		#[test]
+		fn thaw_should_work() {
+			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
+				assert_ok!(Balances::set_freeze(&OtherTestId::Foo, &1, u64::MAX));
+				assert_ok!(Balances::thaw(&OtherTestId::Foo, &1));
+				assert_eq!(System::consumers(&1), 0);
+				assert_eq!(Balances::balance_frozen(&OtherTestId::Foo, &1), 0);
+				assert_eq!(Balances::account(&1).frozen, 0);
+				assert_ok!(<Balances as fungible::Mutate<_>>::transfer(&1, &2, 10, CanKill));
+			});
+		}
+
+		#[test]
+		fn set_freeze_zero_should_work() {
+			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
+				assert_ok!(Balances::set_freeze(&OtherTestId::Foo, &1, u64::MAX));
+				assert_ok!(Balances::set_freeze(&OtherTestId::Foo, &1, 0));
+				assert_eq!(System::consumers(&1), 0);
+				assert_eq!(Balances::balance_frozen(&OtherTestId::Foo, &1), 0);
+				assert_eq!(Balances::account(&1).frozen, 0);
+				assert_ok!(<Balances as fungible::Mutate<_>>::transfer(&1, &2, 10, CanKill));
+			});
+		}
+
+		#[test]
+		fn set_freeze_should_work() {
+			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
+				assert_ok!(Balances::set_freeze(&OtherTestId::Foo, &1, u64::MAX));
+				assert_ok!(Balances::set_freeze(&OtherTestId::Foo, &1, 5));
+				assert_ok!(<Balances as fungible::Mutate<_>>::transfer(&1, &2, 5, CanKill));
+				assert_noop!(<Balances as fungible::Mutate<_>>::transfer(&1, &2, 1, CanKill), TokenError::Frozen);
+			});
+		}
+
+		#[test]
+		fn extend_freeze_should_work() {
+			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
+				assert_ok!(Balances::set_freeze(&OtherTestId::Foo, &1, 5));
+				assert_ok!(Balances::extend_freeze(&OtherTestId::Foo, &1, 10));
+				assert_eq!(Balances::account(&1).frozen, 10);
+				assert_eq!(Balances::balance_frozen(&OtherTestId::Foo, &1), 10);
+				assert_noop!(<Balances as fungible::Mutate<_>>::transfer(&1, &2, 1, CanKill), TokenError::Frozen);
+			});
+		}
+
+		#[test]
+		fn double_freezing_should_work() {
+			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
+				assert_ok!(Balances::set_freeze(&OtherTestId::Foo, &1, 5));
+				assert_ok!(Balances::set_freeze(&OtherTestId::Bar, &1, 5));
+				assert_eq!(System::consumers(&1), 1);
+				assert_ok!(<Balances as fungible::Mutate<_>>::transfer(&1, &2, 5, CanKill));
+				assert_noop!(<Balances as fungible::Mutate<_>>::transfer(&1, &2, 1, CanKill), TokenError::Frozen);
 			});
 		}
 	}

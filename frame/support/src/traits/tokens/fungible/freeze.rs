@@ -45,31 +45,23 @@ pub trait InspectFreeze<AccountId>: Inspect<AccountId> {
 /// Trait for introducing, altering and removing locks to freeze an account's funds so they never
 /// go below a set minimum.
 pub trait MutateFreeze<AccountId>: InspectFreeze<AccountId> {
-	/// Prevent the balance of the account of `who` from being reduced below the given `amount` and
-	/// identify this restriction though the given `id`. Unlike `extend_freeze`, any outstanding
-	/// freezes in place for `who` under the `id` are dropped.
+	/// Prevent actions which would reduce the balance of the account of `who` below the given
+	/// `amount` and identify this restriction though the given `id`. Unlike `extend_freeze`, any
+	/// outstanding freeze in place for `who` under the `id` are dropped.
 	///
-	/// Note that more funds can be locked than the total balance, if desired.
-	fn set_freeze(
-		id: &Self::Id,
-		who: &AccountId,
-		amount: Self::Balance,
-	) -> Result<(), DispatchError> {
-		Self::thaw(id, who);
-		Self::extend_freeze(id, who, amount)
-	}
+	/// If `amount` is zero, it is equivalent to using `thaw`.
+	///
+	/// Note that `amount` can be greater than the total balance, if desired.
+	fn set_freeze(id: &Self::Id, who: &AccountId, amount: Self::Balance) -> DispatchResult;
 
 	/// Prevent the balance of the account of `who` from being reduced below the given `amount` and
 	/// identify this restriction though the given `id`. Unlike `set_freeze`, this does not
-	/// counteract any pre-existing freezes in place for `who` under the `id`.
+	/// counteract any pre-existing freezes in place for `who` under the `id`. Also unlike
+	/// `set_freeze`, in the case that `amount` is zero, this is no-op and never fails.
 	///
 	/// Note that more funds can be locked than the total balance, if desired.
-	fn extend_freeze(
-		id: &Self::Id,
-		who: &AccountId,
-		amount: Self::Balance,
-	) -> Result<(), DispatchError>;
+	fn extend_freeze(id: &Self::Id, who: &AccountId, amount: Self::Balance) -> DispatchResult;
 
 	/// Remove an existing lock.
-	fn thaw(id: &Self::Id, who: &AccountId);
+	fn thaw(id: &Self::Id, who: &AccountId) -> DispatchResult;
 }
