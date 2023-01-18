@@ -18,13 +18,21 @@
 
 //! Substrate transaction pool implementation.
 
+use num_traits::CheckedSub;
 use sc_transaction_pool_api::ChainEvent;
 use sp_blockchain::TreeRoute;
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::{Block as BlockT, NumberFor};
+
+/// The threshold since the last update where we will skip any maintenance for blocks.
+///
+/// This includes tracking re-orgs and sending out certain notifications. In general this shouldn't
+/// happen and may only happen when the node is doing a full sync.
+const SKIP_MAINTENANCE_THRESHOLD: u16 = 20;
 
 /// Helper struct for keeping track of the current state of processed new best
 /// block and finalized events. The main purpose of keeping track of this state
-/// is to figure out if a transaction pool enactment is needed or not.
+/// is to figure out which phases (enactment / finalization) of transaction pool
+/// maintenance are needed.
 ///
 /// Given the following chain:
 ///
@@ -54,6 +62,17 @@ where
 	recent_finalized_block: Block::Hash,
 }
 
+/// Enactment action that should be performed after processing the `ChainEvent`
+#[derive(Debug)]
+pub enum EnactmentAction<Block: BlockT> {
+	/// Both phases of maintenance shall be skipped
+	Skip,
+	/// Both phases of maintenance shall be performed
+	HandleEnactment(TreeRoute<Block>),
+	/// Enactment phase of maintenance shall be skipped
+	HandleFinalization,
+}
+
 impl<Block> EnactmentState<Block>
 where
 	Block: BlockT,
@@ -71,23 +90,38 @@ where
 	/// Updates the state according to the given `ChainEvent`, returning
 	/// `Some(tree_route)` with a tree route including the blocks that need to
 	/// be enacted/retracted. If no enactment is needed then `None` is returned.
-	pub fn update<F>(
+	pub fn update<TreeRouteF, BlockNumberF>(
 		&mut self,
 		event: &ChainEvent<Block>,
-		tree_route: &F,
-	) -> Result<Option<TreeRoute<Block>>, String>
+		tree_route: &TreeRouteF,
+		hash_to_number: &BlockNumberF,
+	) -> Result<EnactmentAction<Block>, String>
 	where
-		F: Fn(Block::Hash, Block::Hash) -> Result<TreeRoute<Block>, String>,
+		TreeRouteF: Fn(Block::Hash, Block::Hash) -> Result<TreeRoute<Block>, String>,
+		BlockNumberF: Fn(Block::Hash) -> Result<Option<NumberFor<Block>>, String>,
 	{
-		let (new_hash, finalized) = match event {
-			ChainEvent::NewBestBlock { hash, .. } => (*hash, false),
-			ChainEvent::Finalized { hash, .. } => (*hash, true),
+		let (new_hash, current_hash, finalized) = match event {
+			ChainEvent::NewBestBlock { hash, .. } => (*hash, self.recent_best_block, false),
+			ChainEvent::Finalized { hash, .. } => (*hash, self.recent_finalized_block, true),
 		};
+
+		// do not proceed with txpool maintain if block distance is to high
+		let skip_maintenance = match (hash_to_number(new_hash), hash_to_number(current_hash)) {
+			(Ok(Some(new)), Ok(Some(current))) =>
+				new.checked_sub(&current) > Some(SKIP_MAINTENANCE_THRESHOLD.into()),
+			_ => true,
+		};
+
+		if skip_maintenance {
+			log::debug!(target: "txpool", "skip maintain: tree_route would be too long");
+			self.force_update(event);
+			return Ok(EnactmentAction::Skip)
+		}
 
 		// block was already finalized
 		if self.recent_finalized_block == new_hash {
 			log::debug!(target: "txpool", "handle_enactment: block already finalized");
-			return Ok(None)
+			return Ok(EnactmentAction::Skip)
 		}
 
 		// compute actual tree route from best_block to notified block, and use
@@ -109,7 +143,7 @@ where
 				"Recently finalized block {} would be retracted by ChainEvent {}, skipping",
 				self.recent_finalized_block, new_hash
 			);
-			return Ok(None)
+			return Ok(EnactmentAction::Skip)
 		}
 
 		if finalized {
@@ -124,7 +158,7 @@ where
 					target: "txpool",
 					"handle_enactment: no newly enacted blocks since recent best block"
 				);
-				return Ok(None)
+				return Ok(EnactmentAction::HandleFinalization)
 			}
 
 			// otherwise enacted finalized block becomes best block...
@@ -132,7 +166,7 @@ where
 
 		self.recent_best_block = new_hash;
 
-		Ok(Some(tree_route))
+		Ok(EnactmentAction::HandleEnactment(tree_route))
 	}
 
 	/// Forces update of the state according to the given `ChainEvent`. Intended to be used as a
@@ -148,9 +182,10 @@ where
 
 #[cfg(test)]
 mod enactment_state_tests {
-	use super::EnactmentState;
+	use super::{EnactmentAction, EnactmentState};
 	use sc_transaction_pool_api::ChainEvent;
 	use sp_blockchain::{HashAndNumber, TreeRoute};
+	use sp_runtime::traits::NumberFor;
 	use std::sync::Arc;
 	use substrate_test_runtime_client::runtime::{Block, Hash};
 
@@ -170,6 +205,9 @@ mod enactment_state_tests {
 	fn e1() -> HashAndNumber<Block> {
 		HashAndNumber { number: 5, hash: Hash::from([0xE1; 32]) }
 	}
+	fn x1() -> HashAndNumber<Block> {
+		HashAndNumber { number: 22, hash: Hash::from([0x1E; 32]) }
+	}
 	fn b2() -> HashAndNumber<Block> {
 		HashAndNumber { number: 2, hash: Hash::from([0xB2; 32]) }
 	}
@@ -182,11 +220,22 @@ mod enactment_state_tests {
 	fn e2() -> HashAndNumber<Block> {
 		HashAndNumber { number: 5, hash: Hash::from([0xE2; 32]) }
 	}
+	fn x2() -> HashAndNumber<Block> {
+		HashAndNumber { number: 22, hash: Hash::from([0x2E; 32]) }
+	}
+
+	fn test_chain() -> Vec<HashAndNumber<Block>> {
+		vec![x1(), e1(), d1(), c1(), b1(), a(), b2(), c2(), d2(), e2(), x2()]
+	}
+
+	fn block_hash_to_block_number(hash: Hash) -> Result<Option<NumberFor<Block>>, String> {
+		Ok(test_chain().iter().find(|x| x.hash == hash).map(|x| x.number))
+	}
 
 	/// mock tree_route computing function for simple two-forks chain
 	fn tree_route(from: Hash, to: Hash) -> Result<TreeRoute<Block>, String> {
-		let chain = vec![e1(), d1(), c1(), b1(), a(), b2(), c2(), d2(), e2()];
-		let pivot = 4_usize;
+		let chain = test_chain();
+		let pivot = chain.iter().position(|x| x.number == a().number).unwrap();
 
 		let from = chain
 			.iter()
@@ -197,13 +246,13 @@ mod enactment_state_tests {
 			.position(|bn| bn.hash == to)
 			.ok_or("existing block should be given")?;
 
-		//    B1-C1-D1-E1
+		//    B1-C1-D1-E1-..-X1
 		//   /
 		//  A
 		//   \
-		//    B2-C2-D2-E2
+		//    B2-C2-D2-E2-..-X2
 		//
-		//  [E1 D1 C1 B1 A B2 C2 D2 E2]
+		//  [X1 E1 D1 C1 B1 A B2 C2 D2 E2 X2]
 
 		let vec: Vec<HashAndNumber<Block>> = if from < to {
 			chain.into_iter().skip(from).take(to - from + 1).collect()
@@ -373,13 +422,20 @@ mod enactment_state_tests {
 			let expected = TreeRoute::new(vec![a()], 0);
 			assert_treeroute_eq(result, expected);
 		}
+
+		#[test]
+		fn tree_route_mock_test_17() {
+			let result = tree_route(x2().hash, b1().hash);
+			let expected = TreeRoute::new(vec![x2(), e2(), d2(), c2(), b2(), a(), b1()], 5);
+			assert_treeroute_eq(result, expected);
+		}
 	}
 
 	fn trigger_new_best_block(
 		state: &mut EnactmentState<Block>,
 		from: HashAndNumber<Block>,
 		acted_on: HashAndNumber<Block>,
-	) -> bool {
+	) -> EnactmentAction<Block> {
 		let (from, acted_on) = (from.hash, acted_on.hash);
 
 		let event_tree_route = tree_route(from, acted_on).expect("Tree route exists");
@@ -391,16 +447,16 @@ mod enactment_state_tests {
 					tree_route: Some(Arc::new(event_tree_route)),
 				},
 				&tree_route,
+				&block_hash_to_block_number,
 			)
 			.unwrap()
-			.is_some()
 	}
 
 	fn trigger_finalized(
 		state: &mut EnactmentState<Block>,
 		from: HashAndNumber<Block>,
 		acted_on: HashAndNumber<Block>,
-	) -> bool {
+	) -> EnactmentAction<Block> {
 		let (from, acted_on) = (from.hash, acted_on.hash);
 
 		let v = tree_route(from, acted_on)
@@ -411,9 +467,12 @@ mod enactment_state_tests {
 			.collect::<Vec<_>>();
 
 		state
-			.update(&ChainEvent::Finalized { hash: acted_on, tree_route: v.into() }, &tree_route)
+			.update(
+				&ChainEvent::Finalized { hash: acted_on, tree_route: v.into() },
+				&tree_route,
+				&block_hash_to_block_number,
+			)
 			.unwrap()
-			.is_some()
 	}
 
 	fn assert_es_eq(
@@ -437,51 +496,51 @@ mod enactment_state_tests {
 		//   B2-C2-D2-E2
 
 		let result = trigger_new_best_block(&mut es, a(), d1());
-		assert!(result);
+		assert!(matches!(result, EnactmentAction::HandleEnactment { .. }));
 		assert_es_eq(&es, d1(), a());
 
 		let result = trigger_new_best_block(&mut es, d1(), e1());
-		assert!(result);
+		assert!(matches!(result, EnactmentAction::HandleEnactment { .. }));
 		assert_es_eq(&es, e1(), a());
 
 		let result = trigger_finalized(&mut es, a(), d2());
-		assert!(result);
+		assert!(matches!(result, EnactmentAction::HandleEnactment { .. }));
 		assert_es_eq(&es, d2(), d2());
 
 		let result = trigger_new_best_block(&mut es, d2(), e1());
-		assert_eq!(result, false);
+		assert!(matches!(result, EnactmentAction::Skip));
 		assert_es_eq(&es, d2(), d2());
 
 		let result = trigger_finalized(&mut es, a(), b2());
-		assert_eq!(result, false);
+		assert!(matches!(result, EnactmentAction::Skip));
 		assert_es_eq(&es, d2(), d2());
 
 		let result = trigger_finalized(&mut es, a(), b1());
-		assert_eq!(result, false);
+		assert!(matches!(result, EnactmentAction::Skip));
 		assert_es_eq(&es, d2(), d2());
 
 		let result = trigger_new_best_block(&mut es, a(), d2());
-		assert_eq!(result, false);
+		assert!(matches!(result, EnactmentAction::Skip));
 		assert_es_eq(&es, d2(), d2());
 
 		let result = trigger_finalized(&mut es, a(), d2());
-		assert_eq!(result, false);
+		assert!(matches!(result, EnactmentAction::Skip));
 		assert_es_eq(&es, d2(), d2());
 
 		let result = trigger_new_best_block(&mut es, a(), c2());
-		assert_eq!(result, false);
+		assert!(matches!(result, EnactmentAction::Skip));
 		assert_es_eq(&es, d2(), d2());
 
 		let result = trigger_new_best_block(&mut es, a(), c1());
-		assert_eq!(result, false);
+		assert!(matches!(result, EnactmentAction::Skip));
 		assert_es_eq(&es, d2(), d2());
 
 		let result = trigger_new_best_block(&mut es, d2(), e2());
-		assert!(result);
+		assert!(matches!(result, EnactmentAction::HandleEnactment { .. }));
 		assert_es_eq(&es, e2(), d2());
 
 		let result = trigger_finalized(&mut es, d2(), e2());
-		assert_eq!(result, false);
+		assert!(matches!(result, EnactmentAction::HandleFinalization));
 		assert_es_eq(&es, e2(), e2());
 	}
 
@@ -493,27 +552,27 @@ mod enactment_state_tests {
 		// A-B1-C1-D1-E1
 
 		let result = trigger_new_best_block(&mut es, a(), b1());
-		assert!(result);
+		assert!(matches!(result, EnactmentAction::HandleEnactment { .. }));
 		assert_es_eq(&es, b1(), a());
 
 		let result = trigger_new_best_block(&mut es, b1(), c1());
-		assert!(result);
+		assert!(matches!(result, EnactmentAction::HandleEnactment { .. }));
 		assert_es_eq(&es, c1(), a());
 
 		let result = trigger_new_best_block(&mut es, c1(), d1());
-		assert!(result);
+		assert!(matches!(result, EnactmentAction::HandleEnactment { .. }));
 		assert_es_eq(&es, d1(), a());
 
 		let result = trigger_new_best_block(&mut es, d1(), e1());
-		assert!(result);
+		assert!(matches!(result, EnactmentAction::HandleEnactment { .. }));
 		assert_es_eq(&es, e1(), a());
 
 		let result = trigger_finalized(&mut es, a(), c1());
-		assert_eq!(result, false);
+		assert!(matches!(result, EnactmentAction::HandleFinalization));
 		assert_es_eq(&es, e1(), c1());
 
 		let result = trigger_finalized(&mut es, c1(), e1());
-		assert_eq!(result, false);
+		assert!(matches!(result, EnactmentAction::HandleFinalization));
 		assert_es_eq(&es, e1(), e1());
 	}
 
@@ -525,11 +584,11 @@ mod enactment_state_tests {
 		// A-B1-C1-D1-E1
 
 		let result = trigger_new_best_block(&mut es, a(), e1());
-		assert!(result);
+		assert!(matches!(result, EnactmentAction::HandleEnactment { .. }));
 		assert_es_eq(&es, e1(), a());
 
 		let result = trigger_finalized(&mut es, a(), b1());
-		assert_eq!(result, false);
+		assert!(matches!(result, EnactmentAction::HandleFinalization));
 		assert_es_eq(&es, e1(), b1());
 	}
 
@@ -541,11 +600,11 @@ mod enactment_state_tests {
 		// A-B1-C1-D1-E1
 
 		let result = trigger_finalized(&mut es, a(), e1());
-		assert!(result);
+		assert!(matches!(result, EnactmentAction::HandleEnactment { .. }));
 		assert_es_eq(&es, e1(), e1());
 
 		let result = trigger_finalized(&mut es, e1(), b1());
-		assert_eq!(result, false);
+		assert!(matches!(result, EnactmentAction::Skip));
 		assert_es_eq(&es, e1(), e1());
 	}
 
@@ -561,11 +620,11 @@ mod enactment_state_tests {
 		//   B2-C2-D2-E2
 
 		let result = trigger_finalized(&mut es, a(), e1());
-		assert!(result);
+		assert!(matches!(result, EnactmentAction::HandleEnactment { .. }));
 		assert_es_eq(&es, e1(), e1());
 
 		let result = trigger_finalized(&mut es, e1(), e2());
-		assert_eq!(result, false);
+		assert!(matches!(result, EnactmentAction::Skip));
 		assert_es_eq(&es, e1(), e1());
 	}
 
@@ -577,19 +636,19 @@ mod enactment_state_tests {
 		// A-B1-C1-D1-E1
 
 		let result = trigger_new_best_block(&mut es, a(), b1());
-		assert!(result);
+		assert!(matches!(result, EnactmentAction::HandleEnactment { .. }));
 		assert_es_eq(&es, b1(), a());
 
 		let result = trigger_finalized(&mut es, a(), d1());
-		assert!(result);
+		assert!(matches!(result, EnactmentAction::HandleEnactment { .. }));
 		assert_es_eq(&es, d1(), d1());
 
 		let result = trigger_new_best_block(&mut es, a(), e1());
-		assert!(result);
+		assert!(matches!(result, EnactmentAction::HandleEnactment { .. }));
 		assert_es_eq(&es, e1(), d1());
 
 		let result = trigger_new_best_block(&mut es, a(), c1());
-		assert_eq!(result, false);
+		assert!(matches!(result, EnactmentAction::Skip));
 		assert_es_eq(&es, e1(), d1());
 	}
 
@@ -609,5 +668,27 @@ mod enactment_state_tests {
 
 		es.force_update(&ChainEvent::Finalized { hash: b1().hash, tree_route: Arc::from([]) });
 		assert_es_eq(&es, a(), b1());
+	}
+
+	#[test]
+	fn test_enactment_skip_long_enacted_path() {
+		sp_tracing::try_init_simple();
+		let mut es = EnactmentState::new(a().hash, a().hash);
+
+		// A-B1-C1-..-X1
+		let result = trigger_new_best_block(&mut es, a(), x1());
+		assert!(matches!(result, EnactmentAction::Skip));
+		assert_es_eq(&es, x1(), a());
+	}
+
+	#[test]
+	fn test_enactment_proceed_with_enacted_path_at_threshold() {
+		sp_tracing::try_init_simple();
+		let mut es = EnactmentState::new(b1().hash, b1().hash);
+
+		// A-B1-C1-..-X1
+		let result = trigger_new_best_block(&mut es, b1(), x1());
+		assert!(matches!(result, EnactmentAction::HandleEnactment { .. }));
+		assert_es_eq(&es, x1(), b1());
 	}
 }
