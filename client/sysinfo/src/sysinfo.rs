@@ -660,7 +660,7 @@ fn ensure_requirements(hwbench: HwBench, requirements: Requirements) {
 		}
 	}
 	if failed != 0 {
-		log::warn!("Your hardware performance score was less than expected for role 'Authority'. See https://wiki.polkadot.network/docs/maintain-guides-how-to-validate-polkadot#reference-hardware");
+		log::warn!("⚠️ ⚠️ ⚠️ Your hardware performance score was less than expected for role 'Authority'. See https://wiki.polkadot.network/docs/maintain-guides-how-to-validate-polkadot#reference-hardware");
 	}
 }
 
