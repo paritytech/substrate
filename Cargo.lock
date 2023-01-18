@@ -342,22 +342,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ark-models"
-version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#1d5bbe98674fd3993c83e770205441b98fe074d0"
-dependencies = [
- "ark-ec",
- "ark-ff",
- "ark-serialize",
- "ark-std",
- "derivative",
- "getrandom 0.2.8",
- "itertools",
- "num-traits",
- "zeroize",
-]
-
-[[package]]
 name = "ark-poly"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9893,75 +9877,91 @@ dependencies = [
 [[package]]
 name = "sp-ark-bls12-377"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#1d5bbe98674fd3993c83e770205441b98fe074d0"
+source = "git+https://github.com/paritytech/ark-substrate#074f774d6b038badb22b43495a8740f65639219e"
 dependencies = [
  "ark-bls12-377",
  "ark-ff",
- "ark-models",
  "ark-r1cs-std",
  "ark-serialize",
  "ark-std",
+ "sp-ark-models",
  "sp-ark-utils",
 ]
 
 [[package]]
 name = "sp-ark-bls12-381"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#1d5bbe98674fd3993c83e770205441b98fe074d0"
+source = "git+https://github.com/paritytech/ark-substrate#074f774d6b038badb22b43495a8740f65639219e"
 dependencies = [
  "ark-bls12-381",
  "ark-ff",
- "ark-models",
  "ark-serialize",
  "ark-std",
+ "sp-ark-models",
  "sp-ark-utils",
 ]
 
 [[package]]
 name = "sp-ark-bw6-761"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#1d5bbe98674fd3993c83e770205441b98fe074d0"
+source = "git+https://github.com/paritytech/ark-substrate#074f774d6b038badb22b43495a8740f65639219e"
 dependencies = [
  "ark-bw6-761",
  "ark-ff",
- "ark-models",
  "ark-serialize",
  "ark-std",
+ "sp-ark-models",
  "sp-ark-utils",
 ]
 
 [[package]]
 name = "sp-ark-ed-on-bls12-377"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#1d5bbe98674fd3993c83e770205441b98fe074d0"
+source = "git+https://github.com/paritytech/ark-substrate#074f774d6b038badb22b43495a8740f65639219e"
 dependencies = [
  "ark-ed-on-bls12-377",
  "ark-ff",
- "ark-models",
  "ark-r1cs-std",
  "ark-serialize",
  "ark-std",
+ "sp-ark-models",
  "sp-ark-utils",
 ]
 
 [[package]]
 name = "sp-ark-ed-on-bls12-381"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#1d5bbe98674fd3993c83e770205441b98fe074d0"
+source = "git+https://github.com/paritytech/ark-substrate#074f774d6b038badb22b43495a8740f65639219e"
 dependencies = [
  "ark-ed-on-bls12-381",
  "ark-ff",
- "ark-models",
  "ark-r1cs-std",
  "ark-serialize",
  "ark-std",
+ "sp-ark-models",
  "sp-ark-utils",
+]
+
+[[package]]
+name = "sp-ark-models"
+version = "0.4.0"
+source = "git+https://github.com/paritytech/ark-substrate#074f774d6b038badb22b43495a8740f65639219e"
+dependencies = [
+ "ark-ec",
+ "ark-ff",
+ "ark-serialize",
+ "ark-std",
+ "derivative",
+ "getrandom 0.2.8",
+ "itertools",
+ "num-traits",
+ "zeroize",
 ]
 
 [[package]]
 name = "sp-ark-utils"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#1d5bbe98674fd3993c83e770205441b98fe074d0"
+source = "git+https://github.com/paritytech/ark-substrate#074f774d6b038badb22b43495a8740f65639219e"
 dependencies = [
  "ark-serialize",
  "ark-std",
@@ -9990,7 +9990,6 @@ dependencies = [
  "ark-algebra-test-templates",
  "ark-ec",
  "ark-ff",
- "ark-models",
  "ark-serialize",
  "ark-std",
  "sp-ark-bls12-377",
@@ -9998,6 +9997,7 @@ dependencies = [
  "sp-ark-bw6-761",
  "sp-ark-ed-on-bls12-377",
  "sp-ark-ed-on-bls12-381",
+ "sp-ark-models",
  "sp-io",
 ]
 
