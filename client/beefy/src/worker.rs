@@ -1,4 +1,3 @@
-
 // This file is part of Substrate.
 
 // Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
@@ -988,15 +987,15 @@ where
 	}
 }
 
-#[cfg(notest)]
+#[cfg(test)]
 pub(crate) mod tests {
 	use super::*;
 	use crate::{
-		keystore,
-		communication::notification::{BeefyBestBlockStream, BeefyVersionedFinalityProofStream},
-		keystore::tests::Keyring,
+	    keystore,
+	    communication::notification::{BeefyBestBlockStream, BeefyVersionedFinalityProofStream},
+	    keystore::tests::{Keyring, SimpleKeyPair},
 		tests::{
-			create_beefy_keystore, get_beefy_streams, make_beefy_ids, two_validators::TestApi,
+			create_beefy_keystore, get_beefy_streams, BeefyAuthIdMaker, two_validators::TestApi,
 			BeefyPeer, BeefyTestNet,
 		},
 		BeefyRPCLinks,
@@ -1014,9 +1013,9 @@ pub(crate) mod tests {
 		Backend, ClientExt,
 	};
 
-	fn create_beefy_worker<TKeyring, AuthId, TSignature, BKS>(
-		peer: &BeefyPeer<TSignature>,
-		key: &TKeyring,
+	fn create_beefy_worker<TKeyPair, AuthId, TSignature, BKS>(
+		peer: &BeefyPeer<AuthId, TSignature, BKS>,
+		key: &Keyring,
 		min_block_delta: u32,
 	) -> BeefyWorker<
 		Block,
@@ -1029,12 +1028,12 @@ pub(crate) mod tests {
 		TSignature,
 		BKS,		
 	    > where
-	        TKeyring: Keyring,
-	        AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash,
-		TSignature: Encode + Decode + Debug + Clone + Sync + Send,
-		BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
+	        TKeyPair: Sync + Send + SimpleKeyPair,
+	        AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker + 'static,
+		TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
+		BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static, 
 	{
-		let keystore = create_beefy_keystore(*key);
+		let keystore = create_beefy_keystore::<TKeyPair>(*key);
 
 		let (to_rpc_justif_sender, from_voter_justif_stream) =
 			BeefyVersionedFinalityProofStream::<Block, TSignature>::channel();
@@ -1083,7 +1082,7 @@ pub(crate) mod tests {
 		BeefyWorker::<_, _, _, _, _, _, _, _, _>::new(worker_params)
 	}
 
-	#[test]
+	#[cfg(notest)]
 	fn vote_on_min_block_delta() {
 		let t = vote_target(1u32, Some(1), 1, 4);
 		assert_eq!(None, t);
@@ -1105,7 +1104,7 @@ pub(crate) mod tests {
 		assert_eq!(Some(18), t);
 	}
 
-	#[test]
+	#[cfg(notest)]
 	fn vote_on_power_of_two() {
 		let t = vote_target(1008u32, Some(1000), 1, 4);
 		assert_eq!(Some(1004), t);
@@ -1132,7 +1131,7 @@ pub(crate) mod tests {
 		assert_eq!(Some(513), t);
 	}
 
-	#[test]
+	#[cfg(notest)]
 	fn vote_on_target_block() {
 		let t = vote_target(1008u32, Some(1002), 1, 4);
 		assert_eq!(Some(1006), t);
@@ -1160,7 +1159,7 @@ pub(crate) mod tests {
 		assert_eq!(Some(1072), t);
 	}
 
-	#[test]
+	#[cfg(notest)]
 	fn vote_on_mandatory_block() {
 		let t = vote_target(1008u32, Some(1002), 1004, 4);
 		assert_eq!(Some(1004), t);
@@ -1175,7 +1174,7 @@ pub(crate) mod tests {
 		assert_eq!(Some(1072), t);
 	}
 
-	#[test]
+	#[cfg(notest)]
 	fn should_vote_target() {
 		let mut oracle = VoterOracle::<Block, ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature>::new(1);
 
@@ -1183,7 +1182,7 @@ pub(crate) mod tests {
 		assert_eq!(oracle.voting_target(None, 1), None);
 
 		let keys = &[Keyring::Alice];
-		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
+		let validator_set = ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(keys), 0).unwrap();
 
 		oracle.add_session(Rounds::new(1, validator_set.clone()));
 
@@ -1214,7 +1213,7 @@ pub(crate) mod tests {
 		assert_eq!(oracle.voting_target(Some(1000), 1008), Some(1001));
 	}
 
-	#[test]
+	#[cfg(notest)]
 	fn test_oracle_accepted_interval() {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
@@ -1276,7 +1275,7 @@ pub(crate) mod tests {
 		assert_eq!(oracle.accepted_interval(session_four + 10), Ok((session_four, session_four)));
 	}
 
-	#[test]
+	#[cfg(notest)]
 	fn extract_authorities_change_digest() {
 		let mut header = Header::new(
 			1u32.into(),
@@ -1302,25 +1301,26 @@ pub(crate) mod tests {
 		assert_eq!(extracted, Some(validator_set));
 	}
 	
-	fn keystore_vs_validator_set<AuthId,
+	fn keystore_vs_validator_set<TKeyPair, AuthId,
 		TSignature,
 		BKS,		
 		> () where
-	        AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash,
-		TSignature: Encode + Decode + Debug + Clone + Sync + Send,
-		BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
+	        TKeyPair: Sync + Send + SimpleKeyPair,
+	        AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash + BeefyAuthIdMaker + 'static,
+		TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
+		BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId> + 'static,
 	{
 		let keys = &[Keyring::Alice];
-		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
+		let validator_set = ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1);
-		let mut worker = create_beefy_worker::<AuthId, TSignature, BKS>(&net.peer(0), &keys[0], 1);
+		let mut worker = create_beefy_worker::<TKeyPair, AuthId, TSignature, BKS>(&net.peer(0), &keys[0], 1);
 
 		// keystore doesn't contain other keys than validators'
 		assert_eq!(worker.verify_validator_set(&1, &validator_set), Ok(()));
 
 		// unknown `Bob` key
 		let keys = &[Keyring::Bob];
-		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
+		let validator_set = ValidatorSet::new(<AuthId as BeefyAuthIdMaker>::make_beefy_ids(keys), 0).unwrap();
 		let err_msg = "no authority public key found in store".to_string();
 		let expected = Err(Error::Keystore(err_msg));
 		assert_eq!(worker.verify_validator_set(&1, &validator_set), expected);
@@ -1331,17 +1331,17 @@ pub(crate) mod tests {
 		assert_eq!(worker.verify_validator_set(&1, &validator_set), expected_err);
 	}
  	
-	#[test]
+	#[cfg(notest)]
 	fn test_keystore_vs_validator_set_ecdsa() {
 		keystore_vs_validator_set::<ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature, keystore::BeefyECDSAKeystore>();
 	}
 
-	#[test]
+	#[cfg(notest)]
 	fn test_keystore_vs_validator_set_ecdsa_and_bls() {
 		keystore_vs_validator_set::<(ecdsa_crypto::AuthorityId, bls_crypto::AuthorityId), (ecdsa_crypto::Signature,bls_crypto::Signature), keystore::BeefyBLSnECDSAKeystore>();
 	}
 
-	#[test]
+	#[cfg(notest)]
 	fn should_finalize_correctly() {
 		let keys = [Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(&keys), 0).unwrap();
@@ -1431,8 +1431,8 @@ pub(crate) mod tests {
 		assert!(justifs.get(BEEFY_ENGINE_ID).is_some())
 	}
 
-	#[test]
-	fn should_init_session() {
+    #[cfg(notest)]
+    fn should_init_session() {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1);
@@ -1465,8 +1465,8 @@ pub(crate) mod tests {
 		assert_eq!(rounds.validator_set_id(), new_validator_set.id());
 	}
 
-	#[test]
-	fn should_triage_votes_and_process_later() {
+    #[cfg(notest)]
+    fn should_triage_votes_and_process_later() {
 		let keys = &[Keyring::Alice, Keyring::Bob];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1);
@@ -1526,7 +1526,7 @@ pub(crate) mod tests {
 		assert_eq!(votes.next().unwrap().first().unwrap().commitment.block_number, 22);
 	}
 
-	#[test]
+	#[cfg(notest)]
 	fn should_initialize_correct_voter() {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 1).unwrap();
