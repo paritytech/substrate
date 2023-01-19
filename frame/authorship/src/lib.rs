@@ -434,7 +434,6 @@ mod tests {
 	use super::*;
 	use crate as pallet_authorship;
 	use frame_support::{
-		parameter_types,
 		traits::{ConstU32, ConstU64, OnFinalize, OnInitialize},
 		ConsensusEngineId,
 	};
@@ -458,11 +457,6 @@ mod tests {
 			Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
 		}
 	);
-
-	parameter_types! {
-		pub BlockWeights: frame_system::limits::BlockWeights =
-			frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
-	}
 
 	impl frame_system::Config for Test {
 		type BaseCallFilter = frame_support::traits::Everything;

@@ -113,7 +113,7 @@ pallet-vesting = { version = "4.0.0-dev", default-features = false, path = "../.
 pallet-whitelist = { version = "4.0.0-dev", default-features = false, path = "../../../frame/whitelist" }
 
 [build-dependencies]
-substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder" }
+substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder", optional = true }
 
 [features]
 default = ["std"]
@@ -205,6 +205,7 @@ std = [
 	"sp-io/std",
 	"pallet-child-bounties/std",
 	"pallet-alliance/std",
+	"substrate-wasm-builder",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",

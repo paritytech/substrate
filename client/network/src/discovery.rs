@@ -716,6 +716,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 									}
 								}
 
+								// Will be removed below when we receive
+								// `FinishedWithNoAdditionalRecord`.
 								self.records_to_publish.insert(id, r.record.clone());
 
 								DiscoveryOut::ValueFound(
@@ -726,13 +728,14 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 							Ok(GetRecordOk::FinishedWithNoAdditionalRecord {
 								cache_candidates,
 							}) => {
-								if cache_candidates.is_empty() {
-									continue
-								}
-
-								// Put the record to the `cache_candidates` that are nearest to the
-								// record key from our point of view of the network.
+								// We always need to remove the record to not leak any data!
 								if let Some(record) = self.records_to_publish.remove(&id) {
+									if cache_candidates.is_empty() {
+										continue
+									}
+
+									// Put the record to the `cache_candidates` that are nearest to
+									// the record key from our point of view of the network.
 									if let Some(kad) = self.kademlia.as_mut() {
 										kad.put_record_to(
 											record,

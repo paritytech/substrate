@@ -60,6 +60,8 @@ pub use pallet::*;
 pub use types::*;
 pub use weights::WeightInfo;
 
+const LOG_TARGET: &str = "runtime::uniques";
+
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
