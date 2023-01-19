@@ -50,22 +50,19 @@ impl<Block: BlockT> PinnedBlockCacheEntry<Block> {
 
 /// A limiter for a map which is limited by the number of elements.
 #[derive(Copy, Clone, Debug)]
-struct LoggingByLength {
+struct LoggingByLengthLimiter {
 	max_length: u32,
 }
 
 /// Limiter that limits the cache by length and logs removed items.
-impl LoggingByLength {
+impl LoggingByLengthLimiter {
 	/// Creates a new length limiter with a given `max_length`.
-	///
-	/// If you don't need to strictly cap the number of elements and just want to limit
-	/// the memory usage then prefer using [`ByMemoryUsage`].
-	pub const fn new(max_length: u32) -> LoggingByLength {
-		LoggingByLength { max_length }
+	pub const fn new(max_length: u32) -> LoggingByLengthLimiter {
+		LoggingByLengthLimiter { max_length }
 	}
 }
 
-impl<Block: BlockT> Limiter<Block::Hash, PinnedBlockCacheEntry<Block>> for LoggingByLength {
+impl<Block: BlockT> Limiter<Block::Hash, PinnedBlockCacheEntry<Block>> for LoggingByLengthLimiter {
 	type KeyToInsert<'a> = Block::Hash;
 	type LinkType = u32;
 
@@ -98,6 +95,10 @@ impl<Block: BlockT> Limiter<Block::Hash, PinnedBlockCacheEntry<Block>> for Loggi
 	}
 
 	fn on_removed(&mut self, key: &mut Block::Hash, value: &mut PinnedBlockCacheEntry<Block>) {
+		// If reference count was larger than 0 on removal,
+		// the item was removed due to capacity limitations.
+		// Since the cache should be large enough for pinned items,
+		// we want to know about these evictions.
 		if value.ref_count > 0 {
 			log::warn!(
 				target: LOG_TARGET,
@@ -120,15 +121,18 @@ impl<Block: BlockT> Limiter<Block::Hash, PinnedBlockCacheEntry<Block>> for Loggi
 	}
 }
 
+/// Reference counted cache for pinned block bodies and justifications.
 pub struct PinnedBlocksCache<Block: BlockT> {
-	cache: LruMap<Block::Hash, PinnedBlockCacheEntry<Block>, LoggingByLength>,
+	cache: LruMap<Block::Hash, PinnedBlockCacheEntry<Block>, LoggingByLengthLimiter>,
 }
 
 impl<Block: BlockT> PinnedBlocksCache<Block> {
 	pub fn new() -> Self {
-		Self { cache: LruMap::new(LoggingByLength::new(PINNING_CACHE_SIZE)) }
+		Self { cache: LruMap::new(LoggingByLengthLimiter::new(PINNING_CACHE_SIZE)) }
 	}
 
+	/// Increase reference count of an item.
+	/// Create an entry with empty value in the cache if necessary.
 	pub fn bump_ref(&mut self, hash: Block::Hash) {
 		match self.cache.get_or_insert(hash, Default::default) {
 			Some(entry) => {
@@ -145,16 +149,19 @@ impl<Block: BlockT> PinnedBlocksCache<Block> {
 		};
 	}
 
+	/// Clear the cache
 	pub fn clear(&mut self) {
 		self.cache.clear();
 	}
 
+	/// Check if item is contained in the cache
 	pub fn contains(&self, hash: Block::Hash) -> bool {
 		self.cache.peek(&hash).is_some()
 	}
 
+	/// Attach body to an existing cache item
 	pub fn insert_body(&mut self, hash: Block::Hash, extrinsics: Option<Vec<Block::Extrinsic>>) {
-		match self.cache.get_or_insert(hash, Default::default) {
+		match self.cache.peek_mut(&hash) {
 			Some(mut entry) => {
 				entry.body = Some(extrinsics);
 				log::trace!(
@@ -164,16 +171,21 @@ impl<Block: BlockT> PinnedBlocksCache<Block> {
 					self.cache.len()
 				);
 			},
-			None => log::warn!(target: LOG_TARGET, "Unable to insert body. hash = {}", hash),
+			None => log::warn!(
+				target: LOG_TARGET,
+				"Unable to insert body for uncached item. hash = {}",
+				hash
+			),
 		}
 	}
 
+	/// Attach justification to an existing cache item
 	pub fn insert_justifications(
 		&mut self,
 		hash: Block::Hash,
 		justifications: Option<Justifications>,
 	) {
-		match self.cache.get_or_insert(hash, Default::default) {
+		match self.cache.peek_mut(&hash) {
 			Some(mut entry) => {
 				entry.justifications = Some(justifications);
 				log::trace!(
@@ -183,11 +195,15 @@ impl<Block: BlockT> PinnedBlocksCache<Block> {
 					self.cache.len()
 				);
 			},
-			None =>
-				log::warn!(target: LOG_TARGET, "Unable to insert justification. hash = {}", hash),
+			None => log::warn!(
+				target: LOG_TARGET,
+				"Unable to insert justifications for uncached item. hash = {}",
+				hash
+			),
 		}
 	}
 
+	/// Remove item from cache
 	pub fn remove(&mut self, hash: Block::Hash) {
 		if let Some(entry) = self.cache.peek_mut(&hash) {
 			entry.decrease_ref();
@@ -197,10 +213,12 @@ impl<Block: BlockT> PinnedBlocksCache<Block> {
 		}
 	}
 
+	/// Get justifications for cached block
 	pub fn justifications(&self, hash: &Block::Hash) -> Option<Option<Justifications>> {
 		self.cache.peek(hash).and_then(|entry| entry.justifications.clone())
 	}
 
+	/// Get body for cached block
 	pub fn body(&self, hash: &Block::Hash) -> Option<Option<Vec<Block::Extrinsic>>> {
 		self.cache.peek(hash).and_then(|entry| entry.body.clone())
 	}
