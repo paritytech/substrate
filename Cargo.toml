@@ -245,7 +245,7 @@ members = [
 	"utils/frame/rpc/client",
 	"utils/prometheus",
 	"utils/wasm-builder",
-	"utils/merkle-tree",
+	"utils/binary-merkle-tree",
 ]
 
 # The list of dependencies below (which can be both direct and indirect dependencies) are crates
