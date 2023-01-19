@@ -452,26 +452,19 @@ impl BlockWeightsBuilder {
 		if let Some(init_weight) = init_cost.map(|rate| rate * weights.max_block) {
 			for class in DispatchClass::all() {
 				let per_class = weights.per_class.get_mut(*class);
-				// FAIL-CI cleanup
-				if per_class.max_extrinsic.is_time_unlimited() && init_cost.is_some() {
-					per_class.max_extrinsic = per_class
-						.max_total
-						.saturating_sub(init_weight.without_proof_size())
-						.saturating_sub(per_class.base_extrinsic.without_proof_size());
-				}
-				if per_class.max_extrinsic.is_proof_unlimited() &&
-					init_cost.is_some() && (per_class.max_extrinsic.is_time_unlimited() &&
-					init_cost.is_some())
-				{
+				let before = per_class.max_extrinsic;
+				if per_class.max_extrinsic.is_any_unlimited() {
+					per_class.max_extrinsic = per_class.max_total;
+
+					per_class.max_extrinsic.saturating_reduce(init_weight.without_proof_size());
+					per_class
+						.max_extrinsic
+						.saturating_reduce(per_class.base_extrinsic.without_proof_size());
+
 					per_class.max_extrinsic.saturating_reduce(init_weight.without_ref_time());
 					per_class
 						.max_extrinsic
 						.saturating_reduce(per_class.base_extrinsic.without_ref_time());
-				} else if per_class.max_extrinsic.is_proof_unlimited() && init_cost.is_some() {
-					per_class.max_extrinsic.saturating_reduce(init_weight.without_ref_time());
-					per_class
-						.max_extrinsic
-						.saturating_sub(per_class.base_extrinsic.without_ref_time());
 				}
 			}
 		}
