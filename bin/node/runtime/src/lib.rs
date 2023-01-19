@@ -178,6 +178,9 @@ const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
 /// We allow for 2 seconds of compute with a 6 second average block time, with maximum proof size.
 const MAXIMUM_BLOCK_WEIGHT: WeightLimit =
 	WeightLimit::from_time_limit(2 * WEIGHT_REF_TIME_PER_SECOND);
+/// The target Proof size that we aim for. This is not a hard limit and is currently only used to
+/// print a warning and emit an event on overflow.
+pub const BLOCK_POV_TARGET: u64 = 5 * 1024 * 1024;
 
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 2400;
@@ -198,6 +201,7 @@ parameter_types! {
 			// are included even if block reached `MAXIMUM_BLOCK_WEIGHT`.
 			weights.reserved = MAXIMUM_BLOCK_WEIGHT - NORMAL_DISPATCH_RATIO * MAXIMUM_BLOCK_WEIGHT;
 		})
+		.pov_soft_limit(BLOCK_POV_TARGET)
 		.avg_block_initialization(AVERAGE_ON_INITIALIZE_RATIO)
 		.build_or_panic();
 }

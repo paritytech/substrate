@@ -281,6 +281,19 @@ impl WeightLimit {
 		self.proof_size = self.proof_size.map(|s| s.saturating_sub(weight.proof_size));
 	}
 
+	pub const fn div(self, n: u64) -> Self {
+		// Note: not using `map` since it is not `const`.
+		let ref_time = match self.ref_time {
+			Some(limit) => Some(limit / n),
+			None => None,
+		};
+		let proof_size = match self.proof_size {
+			Some(limit) => Some(limit / n),
+			None => None,
+		};
+		Self { ref_time, proof_size }
+	}
+
 	/// Returns the exact weight limits for each component.
 	///
 	/// The exact limit is the larges possible weight that is still *within* the limit. Returns
