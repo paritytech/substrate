@@ -440,9 +440,15 @@ impl BlockWeightsBuilder {
 
 		// compute max block size.
 		for class in DispatchClass::all() {
-			// FAIL-CI why is this min
+			// This is kind of a hack, but since the mandatory needs to happen *anyway*, we can
+			// exclude it from the regular `max_block`. The reason is that you normally want
+			// `unlimited` mandatory, which will always lead to a `max_block` of `(u64::MAX,
+			// u64::MAX)` as well.
+			if class == &DispatchClass::Mandatory {
+				continue
+			}
 			weights.max_block =
-				weights.max_block.max(weights.per_class.get(*class).max_total.limited_or_min());
+				weights.max_block.max(weights.per_class.get(*class).max_total.limited_or_max());
 		}
 		// compute max size of single extrinsic
 		if let Some(init_weight) = init_cost.map(|rate| rate * weights.max_block) {
