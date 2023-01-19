@@ -20,6 +20,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
+use types::ExtraFlags;
 
 use frame_benchmarking::{account, benchmarks_instance_pallet, whitelisted_caller};
 use frame_system::RawOrigin;
@@ -101,10 +102,9 @@ benchmarks_instance_pallet! {
 		let existential_deposit = T::ExistentialDeposit::get();
 		let balance_amount = existential_deposit.saturating_mul(ED_MULTIPLIER.into());
 		let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&user, balance_amount);
-	}: set_balance(RawOrigin::Root, user_lookup, balance_amount, balance_amount)
+	}: set_balance(RawOrigin::Root, user_lookup, balance_amount)
 	verify {
 		assert_eq!(Balances::<T, I>::free_balance(&user), balance_amount);
-		assert_eq!(Balances::<T, I>::reserved_balance(&user), balance_amount);
 	}
 
 	// Benchmark `set_balance` coming from ROOT account. This always kills an account.
@@ -116,7 +116,7 @@ benchmarks_instance_pallet! {
 		let existential_deposit = T::ExistentialDeposit::get();
 		let balance_amount = existential_deposit.saturating_mul(ED_MULTIPLIER.into());
 		let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&user, balance_amount);
-	}: set_balance(RawOrigin::Root, user_lookup, Zero::zero(), Zero::zero())
+	}: set_balance(RawOrigin::Root, user_lookup, Zero::zero())
 	verify {
 		assert!(Balances::<T, I>::free_balance(&user).is_zero());
 	}
@@ -199,19 +199,57 @@ benchmarks_instance_pallet! {
 		let user_lookup = T::Lookup::unlookup(user.clone());
 
 		// Give some multiple of the existential deposit
-		let existential_deposit = T::ExistentialDeposit::get();
-		let balance = existential_deposit.saturating_mul(ED_MULTIPLIER.into());
+		let ed = T::ExistentialDeposit::get();
+		let balance = ed + ed;
 		let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&user, balance);
 
 		// Reserve the balance
-		<Balances<T, I> as ReservableCurrency<_>>::reserve(&user, balance)?;
-		assert_eq!(Balances::<T, I>::reserved_balance(&user), balance);
-		assert!(Balances::<T, I>::free_balance(&user).is_zero());
+		<Balances<T, I> as ReservableCurrency<_>>::reserve(&user, ed)?;
+		assert_eq!(Balances::<T, I>::reserved_balance(&user), ed);
+		assert_eq!(Balances::<T, I>::free_balance(&user), ed);
 
 	}: _(RawOrigin::Root, user_lookup, balance)
 	verify {
 		assert!(Balances::<T, I>::reserved_balance(&user).is_zero());
-		assert_eq!(Balances::<T, I>::free_balance(&user), balance);
+		assert_eq!(Balances::<T, I>::free_balance(&user), ed + ed);
+	}
+
+	upgrade_accounts {
+		let caller: T::AccountId = whitelisted_caller();
+
+		let u in 1 .. 1_000;
+
+		let who = (0 .. u).into_iter()
+			.map(|i| -> T::AccountId {
+				let user = account("old_user", i, SEED);
+				let account = AccountData {
+					free: T::ExistentialDeposit::get(),
+					reserved: T::ExistentialDeposit::get(),
+					frozen: Zero::zero(),
+					flags: ExtraFlags::old_logic(),
+				};
+				frame_system::Pallet::<T>::inc_providers(&user);
+				assert!(T::AccountStore::try_mutate_exists(&user, |a| -> DispatchResult {
+					*a = Some(account);
+					Ok(())
+				}).is_ok());
+				assert!(!Balances::<T, I>::account(&user).flags.is_new_logic());
+				assert_eq!(frame_system::Pallet::<T>::providers(&user), 1);
+				assert_eq!(frame_system::Pallet::<T>::consumers(&user), 0);
+				dbg!(&user);
+				user
+			})
+			.collect();
+		dbg!(&who);
+	}: _(RawOrigin::Signed(caller.clone()), who)
+	verify {
+		println!("Done");
+		for i in 0 .. u {
+			let user: T::AccountId = account("old_user", i, SEED);
+			assert!(Balances::<T, I>::account(&user).flags.is_new_logic());
+			assert_eq!(frame_system::Pallet::<T>::providers(&user), 1);
+			assert_eq!(frame_system::Pallet::<T>::consumers(&user), 1);
+		}
 	}
 
 	impl_benchmark_test_suite!(

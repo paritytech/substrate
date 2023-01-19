@@ -681,6 +681,9 @@ pub mod pallet {
 			who: Vec<T::AccountId>,
 		) -> DispatchResultWithPostInfo {
 			ensure_signed(origin)?;
+			if who.is_empty() {
+				return Ok(Pays::Yes.into())
+			}
 			let mut upgrade_count = 0;
 			for i in &who {
 				let upgraded = Self::ensure_upgraded(i);
@@ -688,7 +691,7 @@ pub mod pallet {
 					upgrade_count.saturating_inc();
 				}
 			}
-			if upgrade_count >= who.len() * 95 / 100 {
+			if upgrade_count >= (who.len() + 1) * 95 / 100 - 1 {
 				Ok(Pays::No.into())
 			} else {
 				Ok(Pays::Yes.into())
@@ -702,7 +705,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// Returns `true` if the account did get upgraded, `false` if it didn't need upgrading.
 	pub fn ensure_upgraded(who: &T::AccountId) -> bool {
-		let mut a = Self::account(who);
+		let mut a = T::AccountStore::get(who);
 		if a.flags.is_new_logic() {
 			return false
 		}
@@ -718,7 +721,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			let _ = system::Pallet::<T>::inc_consumers(who).defensive();
 		}
 		// Should never fail - we're only setting a bit.
-		let _ = Self::mutate_account(who, |account| *account = a);
+		let _ = T::AccountStore::try_mutate_exists(who, |account| -> DispatchResult {
+			*account = Some(a);
+			Ok(())
+		});
 		return true
 	}
 

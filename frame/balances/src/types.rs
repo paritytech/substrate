@@ -121,6 +121,9 @@ impl Default for ExtraFlags {
 	}
 }
 impl ExtraFlags {
+	pub fn old_logic() -> Self {
+		Self(0)
+	}
 	pub fn set_new_logic(&mut self) {
 		self.0 = self.0 | IS_NEW_LOGIC
 	}
