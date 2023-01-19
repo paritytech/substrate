@@ -617,8 +617,7 @@ parameter_types! {
 	pub MinerMaxWeight: Weight = RuntimeBlockWeights::get()
 		.get(DispatchClass::Normal)
 		.max_extrinsic
-		.exact_limits()
-		.expect("Normal extrinsics have a weight limit configured; qed")
+		.limited_or_max()
 		.saturating_sub(BlockExecutionWeight::get());
 	// Solution can occupy 90% of normal block size
 	pub MinerMaxLength: u32 = Perbill::from_rational(9u32, 10) *
