@@ -195,7 +195,7 @@ impl<T: Config<I>, I: 'static> fungible::InspectHold<T::AccountId> for Pallet<T,
 			Self::Balance::zero()
 		} else {
 			// The freeze lock applies to the total balance, so we can discount the free balance
-			// from the amount which the total reserved balance must provide to satusfy it.
+			// from the amount which the total reserved balance must provide to satisfy it.
 			a.frozen.saturating_sub(a.free)
 		};
 		a.reserved.saturating_sub(unavailable)

@@ -221,7 +221,7 @@ impl<AccountId, U: Unbalanced<AccountId>> Balanced<AccountId> for U {
 		best_effort: bool,
 		keep_alive: KeepAlive,
 	) -> Result<Credit<AccountId, Self>, DispatchError> {
-		let decrease = U::decrease_balance(who, amount, best_effort, keep_alive)?;
+		let decrease = U::decrease_balance(who, amount, best_effort, keep_alive, false)?;
 		Ok(credit(decrease))
 	}
 }

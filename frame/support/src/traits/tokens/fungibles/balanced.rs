@@ -198,8 +198,9 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		mut amount: Self::Balance,
 		best_effort: bool,
 		keep_alive: KeepAlive,
+		force: bool,
 	) -> Result<Self::Balance, DispatchError> {
-		let free = Self::reducible_balance(asset, who, keep_alive, false);
+		let free = Self::reducible_balance(asset, who, keep_alive, force);
 		if best_effort {
 			amount = amount.min(free);
 		}
@@ -410,7 +411,7 @@ impl<AccountId, U: Unbalanced<AccountId>> Balanced<AccountId> for U {
 		best_effort: bool,
 		keep_alive: KeepAlive,
 	) -> Result<Credit<AccountId, Self>, DispatchError> {
-		let decrease = U::decrease_balance(asset, who, amount, best_effort, keep_alive)?;
+		let decrease = U::decrease_balance(asset, who, amount, best_effort, keep_alive, false)?;
 		Ok(credit(asset, decrease))
 	}
 }

@@ -106,6 +106,7 @@ impl<
 		amount: Self::Balance,
 		best_effort: bool,
 		keep_alive: KeepAlive,
+		force: bool,
 	) -> Result<Self::Balance, DispatchError> {
 		<F as fungibles::Unbalanced<AccountId>>::decrease_balance(
 			A::get(),
@@ -113,6 +114,7 @@ impl<
 			amount,
 			best_effort,
 			keep_alive,
+			force,
 		)
 	}
 	fn increase_balance(

@@ -123,7 +123,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		let actual = Self::reducible_balance(who, KeepAlive::CanKill, force).min(amount);
 		ensure!(actual == amount || best_effort, TokenError::FundsUnavailable);
 		Self::total_issuance().checked_sub(&actual).ok_or(ArithmeticError::Overflow)?;
-		let actual = Self::decrease_balance(who, actual, true, KeepAlive::CanKill)?;
+		let actual = Self::decrease_balance(who, actual, true, KeepAlive::CanKill, force)?;
 		Self::set_total_issuance(Self::total_issuance().saturating_sub(actual));
 		Self::done_burn_from(who, actual);
 		Ok(actual)
@@ -143,7 +143,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		let actual = Self::reducible_balance(who, KeepAlive::CanKill, false).min(amount);
 		ensure!(actual == amount, TokenError::FundsUnavailable);
 		Self::total_issuance().checked_sub(&actual).ok_or(ArithmeticError::Overflow)?;
-		let actual = Self::decrease_balance(who, actual, true, KeepAlive::CanKill)?;
+		let actual = Self::decrease_balance(who, actual, true, KeepAlive::CanKill, false)?;
 		Self::set_total_issuance(Self::total_issuance().saturating_sub(actual));
 		Self::done_shelve(who, actual);
 		Ok(actual)
@@ -177,7 +177,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		let _extra =
 			Self::can_withdraw(source, amount).into_result(keep_alive != KeepAlive::CanKill)?;
 		Self::can_deposit(dest, amount, false).into_result()?;
-		Self::decrease_balance(source, amount, true, keep_alive)?;
+		Self::decrease_balance(source, amount, true, keep_alive, false)?;
 		// This should never fail as we checked `can_deposit` earlier. But we do a best-effort
 		// anyway.
 		let _ = Self::increase_balance(dest, amount, true);

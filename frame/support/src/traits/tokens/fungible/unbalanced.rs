@@ -63,9 +63,10 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		mut amount: Self::Balance,
 		best_effort: bool,
 		keep_alive: KeepAlive,
+		force: bool,
 	) -> Result<Self::Balance, DispatchError> {
 		let old_balance = Self::balance(who);
-		let free = Self::reducible_balance(who, keep_alive, false);
+		let free = Self::reducible_balance(who, keep_alive, force);
 		if best_effort {
 			amount = amount.min(free);
 		}

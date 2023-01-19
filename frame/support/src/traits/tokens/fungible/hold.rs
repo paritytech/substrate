@@ -52,14 +52,18 @@ pub trait InspectHold<AccountId>: Inspect<AccountId> {
 	/// therefore ensure the account is already in the appropriate state prior to calling it.
 	fn hold_available(reason: &Self::Reason, who: &AccountId) -> bool;
 
-	/// Check to see if some `amount` of funds of `who` may be placed on hold for the given
+	/// Check to see if some `amount` of funds of `who` may be placed on hold with the given
 	/// `reason`. Reasons why this may not be true:
 	///
 	/// - The implementor supports only a limited number of concurrernt holds on an account which is
 	///   the possible values of `reason`;
-	/// - The main balance of the account is less than `amount`;
-	/// - Removing `amount` from the main balance would kill the account and remove the only
+	/// - The total balance of the account is less than `amount`;
+	/// - Removing `amount` from the total balance would kill the account and remove the only
 	///   provider reference.
+	///
+	/// Note: we pass `true` as the third argument to `reducible_balance` since we assume that if
+	/// needed the balance can slashed. If we are using a simple non-forcing reserve-transfer, then
+	/// we really ought to check that we are not reducing the funds below the freeze-limit (if any).
 	///
 	/// NOTE: This does not take into account changes which could be made to the account of `who`
 	/// (such as removing a provider reference) after this call is made. Any usage of this should
@@ -71,7 +75,7 @@ pub trait InspectHold<AccountId>: Inspect<AccountId> {
 	) -> DispatchResult {
 		ensure!(Self::hold_available(reason, who), TokenError::CannotCreateHold);
 		ensure!(
-			amount <= Self::reducible_balance(who, KeepAlive::NoKill, false),
+			amount <= Self::reducible_balance(who, KeepAlive::NoKill, true),
 			TokenError::FundsUnavailable
 		);
 		Ok(())
@@ -181,7 +185,7 @@ impl<AccountId, U: Unbalanced<AccountId> + UnbalancedHold<AccountId> + InspectHo
 
 		Self::ensure_can_hold(reason, who, amount)?;
 		// Should be infallible now, but we proceed softly anyway.
-		Self::decrease_balance(who, amount, true, KeepAlive::NoKill)?;
+		Self::decrease_balance(who, amount, false, KeepAlive::NoKill, true)?;
 		Self::increase_balance_on_hold(reason, who, amount, true)?;
 		Ok(())
 	}
