@@ -86,6 +86,12 @@ pub enum InvalidTransaction {
 	MandatoryDispatch,
 	/// The sending address is disabled or known to be invalid.
 	BadSigner,
+	/// The swap prevalidation has failed
+	SwapPrevalidation,
+	/// Fee lock processing has failed either due to not enough funds to reserve or an unexpected error
+	ProcessFeeLock,
+	/// Unlock fee has failed either due to no fee locks or fee lock cant be unlocked yet or an unexpected error
+	UnlockFee
 }
 
 impl InvalidTransaction {
@@ -121,6 +127,9 @@ impl From<InvalidTransaction> for &'static str {
 				"Transaction dispatch is mandatory; transactions may not have mandatory dispatches.",
 			InvalidTransaction::Custom(_) => "InvalidTransaction custom error",
 			InvalidTransaction::BadSigner => "Invalid signing address",
+			InvalidTransaction::SwapPrevalidation => "The swap prevalidation has failed",
+			InvalidTransaction::ProcessFeeLock => "Fee lock processing has failed either due to not enough funds to reserve or an unexpected error",
+			InvalidTransaction::UnlockFee => "Unlock fee has failed either due to no fee locks or fee lock cant be unlocked yet or an unexpected error",
 		}
 	}
 }
