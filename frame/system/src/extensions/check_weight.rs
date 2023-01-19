@@ -672,11 +672,11 @@ mod tests {
 			.base_block(Weight::zero())
 			.for_class(DispatchClass::non_mandatory(), |w| {
 				w.base_extrinsic = Weight::zero();
-				w.max_total = Weight::from_ref_time(20).set_proof_size(20000).into();
+				w.max_total = Weight::from_parts(20, u64::MAX).into();
 			})
 			.for_class(DispatchClass::Mandatory, |w| {
 				w.base_extrinsic = Weight::zero();
-				w.reserved = Weight::from_ref_time(5).set_proof_size(20000).into();
+				w.reserved = Weight::from_parts(5, u64::MAX).into();
 				w.max_total = WeightLimit::UNLIMITED;
 			})
 			.build_or_panic();
@@ -685,7 +685,7 @@ mod tests {
 			DispatchClass::Operational => Weight::from_ref_time(10),
 			DispatchClass::Mandatory => Weight::zero(),
 		});
-		assert_eq!(maximum_weight.max_block, all_weight.total().set_proof_size(20000));
+		assert_eq!(maximum_weight.max_block, all_weight.total().set_proof_size(u64::MAX));
 
 		// fits into reserved
 		let mandatory1 = DispatchInfo {

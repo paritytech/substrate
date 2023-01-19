@@ -255,9 +255,6 @@ impl BlockWeights {
 					.max_extrinsic
 					.limited_or(Weight::zero())
 					.all_lte(max_for_class.saturating_sub(base_for_class).limited_or_max()),
-				/*weights // FAIL-CI why does this not work?
-				.max_extrinsic
-				.all_less_or_equal(&max_for_class.saturating_sub(base_for_class)),*/
 				&mut error,
 				"[{:?}] {:?} (max_extrinsic) can't be greater than {:?} (max for class)",
 				class,
