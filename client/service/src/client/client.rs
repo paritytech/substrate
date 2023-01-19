@@ -434,11 +434,11 @@ where
 					if let Some(backend) = task_backend.upgrade() {
 						backend.unpin_block(message);
 					} else {
-						log::warn!("Terminating unpin-worker, backend reference was dropped.");
+						log::debug!("Terminating unpin-worker, backend reference was dropped.");
 						return
 					}
 				}
-				log::warn!("Terminating unpin-worker, stream terminated.")
+				log::debug!("Terminating unpin-worker, stream terminated.")
 			}
 			.boxed(),
 		);

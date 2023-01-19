@@ -529,8 +529,7 @@ impl<Block: BlockT> BlockchainDb<Block> {
 
 	/// Empty the cache of pinned items.
 	fn clear_pinning_cache(&self) {
-		let mut cache = self.pinned_blocks_cache.write();
-		cache.clear();
+		self.pinned_blocks_cache.write().clear();
 	}
 
 	/// Load a justification into the cache of pinned items.
@@ -2520,14 +2519,14 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			self.storage.state_db.pin(&hash, number.saturated_into::<u64>(), hint).map_err(
 				|_| {
 					sp_blockchain::Error::UnknownBlock(format!(
-						"State already discarded for {:?}",
+						"State already discarded for `{:?}`",
 						hash
 					))
 				},
 			)?;
 		} else {
 			return Err(ClientError::UnknownBlock(format!(
-				"Can not pin block with hash {}. Block not found.",
+				"Can not pin block with hash `{:?}`. Block not found.",
 				hash
 			)))
 		}

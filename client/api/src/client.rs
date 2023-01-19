@@ -268,7 +268,7 @@ impl fmt::Display for UsageInfo {
 #[derive(Debug)]
 pub struct UnpinHandleInner<Block: BlockT> {
 	/// Hash of the block pinned by this handle
-	pub hash: Block::Hash,
+	hash: Block::Hash,
 	unpin_worker_sender: TracingUnboundedSender<Block::Hash>,
 }
 
@@ -285,7 +285,7 @@ impl<Block: BlockT> UnpinHandleInner<Block> {
 impl<Block: BlockT> Drop for UnpinHandleInner<Block> {
 	fn drop(&mut self) {
 		if let Err(err) = self.unpin_worker_sender.unbounded_send(self.hash) {
-			log::error!(target: "db", "Unable to unpin block with hash: {}, error: {:?}", self.hash, err);
+			log::debug!(target: "db", "Unable to unpin block with hash: {}, error: {:?}", self.hash, err);
 		};
 	}
 }
