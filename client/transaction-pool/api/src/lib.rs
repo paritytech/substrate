@@ -30,7 +30,6 @@ use sp_runtime::{
 };
 use std::{collections::HashMap, hash::Hash, pin::Pin, sync::Arc};
 
-#[allow(missing_docs)]
 const LOG_TARGET: &str = "txpool";
 
 pub use sp_runtime::transaction_validity::{
