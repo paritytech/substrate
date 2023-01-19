@@ -98,7 +98,6 @@ pub use sp_database::Database;
 pub use bench::BenchmarkingState;
 
 const CACHE_HEADERS: usize = 8;
-const LOG_TARGET: &str = "db-pin";
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
 pub type DbState<B> =
@@ -575,12 +574,12 @@ impl<Block: BlockT> BlockchainDb<Block> {
 
 	/// Bump reference count for pinned item.
 	fn bump_ref(&self, hash: Block::Hash) {
-		self.pinned_blocks_cache.write().bump_ref(hash);
+		self.pinned_blocks_cache.write().pin(hash);
 	}
 
 	/// Decrease reference count for pinned item and remove if reference count is 0.
 	fn unpin(&self, hash: Block::Hash) {
-		self.pinned_blocks_cache.write().remove(hash);
+		self.pinned_blocks_cache.write().unpin(hash);
 	}
 
 	fn justifications_uncached(&self, hash: Block::Hash) -> ClientResult<Option<Justifications>> {
@@ -724,7 +723,7 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 	fn body(&self, hash: Block::Hash) -> ClientResult<Option<Vec<Block::Extrinsic>>> {
 		let cache = self.pinned_blocks_cache.read();
 		if let Some(result) = cache.body(&hash) {
-			return Ok(result)
+			return Ok(result.clone())
 		}
 
 		self.body_uncached(hash)
@@ -733,7 +732,7 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 	fn justifications(&self, hash: Block::Hash) -> ClientResult<Option<Justifications>> {
 		let cache = self.pinned_blocks_cache.read();
 		if let Some(result) = cache.justifications(&hash) {
-			return Ok(result)
+			return Ok(result.clone())
 		}
 
 		self.justifications_uncached(hash)
@@ -4256,6 +4255,8 @@ pub(crate) mod tests {
 		// Block 1 was pinned twice, we expect it to be still cached
 		assert!(bc.body(blocks[1]).unwrap().is_some());
 		assert!(bc.justifications(blocks[1]).unwrap().is_some());
+		// Headers should also be available while pinned
+		assert!(bc.header(blocks[1]).ok().flatten().is_some());
 		assert!(bc.body(blocks[2]).unwrap().is_none());
 		assert!(bc.justifications(blocks[2]).unwrap().is_none());
 		assert!(bc.body(blocks[3]).unwrap().is_none());
@@ -4301,6 +4302,7 @@ pub(crate) mod tests {
 			bc.justifications(blocks[4]).unwrap()
 		);
 		assert_eq!(Some(vec![5.into()]), bc.body(blocks[5]).unwrap());
+		assert!(bc.header(blocks[5]).ok().flatten().is_some());
 
 		backend.unpin_block(blocks[4]);
 		assert!(bc.body(blocks[4]).unwrap().is_none());
@@ -4325,6 +4327,7 @@ pub(crate) mod tests {
 		backend.commit_operation(op).unwrap();
 
 		assert_eq!(Some(vec![5.into()]), bc.body(blocks[5]).unwrap());
+		assert!(bc.header(blocks[5]).ok().flatten().is_some());
 		let mut expected = Justifications::from(build_justification(5));
 		expected.append(([0, 0, 0, 1], vec![42]));
 		assert_eq!(Some(expected), bc.justifications(blocks[5]).unwrap());

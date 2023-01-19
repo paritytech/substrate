@@ -331,6 +331,9 @@ where
 
 			self.backend.commit_operation(op)?;
 
+			// We need to pin the block in the backend once
+			// for each notification. Once all notifications are
+			// dropped, the block will be unpinned automatically.
 			if let Some(ref notification) = finality_notification {
 				if let Err(err) = self.backend.pin_block(notification.hash) {
 					error!(

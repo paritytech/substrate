@@ -16,15 +16,21 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::LOG_TARGET;
 use schnellru::{Limiter, LruMap};
 use sp_runtime::{traits::Block as BlockT, Justifications};
 
-const PINNING_CACHE_SIZE: u32 = 1024;
+const LOG_TARGET: &str = "db::pin";
+const PINNING_CACHE_SIZE: usize = 1024;
 
+/// Entry for pinned blocks cache.
 struct PinnedBlockCacheEntry<Block: BlockT> {
+	/// How many times this item has been pinned
 	ref_count: u32,
+
+	/// Cached justifications for this block
 	pub justifications: Option<Option<Justifications>>,
+
+	/// Cached body for this block
 	pub body: Option<Option<Vec<Block::Extrinsic>>>,
 }
 
@@ -51,23 +57,22 @@ impl<Block: BlockT> PinnedBlockCacheEntry<Block> {
 /// A limiter for a map which is limited by the number of elements.
 #[derive(Copy, Clone, Debug)]
 struct LoggingByLengthLimiter {
-	max_length: u32,
+	max_length: usize,
 }
 
-/// Limiter that limits the cache by length and logs removed items.
 impl LoggingByLengthLimiter {
 	/// Creates a new length limiter with a given `max_length`.
-	pub const fn new(max_length: u32) -> LoggingByLengthLimiter {
+	pub const fn new(max_length: usize) -> LoggingByLengthLimiter {
 		LoggingByLengthLimiter { max_length }
 	}
 }
 
 impl<Block: BlockT> Limiter<Block::Hash, PinnedBlockCacheEntry<Block>> for LoggingByLengthLimiter {
 	type KeyToInsert<'a> = Block::Hash;
-	type LinkType = u32;
+	type LinkType = usize;
 
 	fn is_over_the_limit(&self, length: usize) -> bool {
-		length > self.max_length as usize
+		length > self.max_length
 	}
 
 	fn on_insert(
@@ -133,7 +138,7 @@ impl<Block: BlockT> PinnedBlocksCache<Block> {
 
 	/// Increase reference count of an item.
 	/// Create an entry with empty value in the cache if necessary.
-	pub fn bump_ref(&mut self, hash: Block::Hash) {
+	pub fn pin(&mut self, hash: Block::Hash) {
 		match self.cache.get_or_insert(hash, Default::default) {
 			Some(entry) => {
 				entry.increase_ref();
@@ -203,8 +208,9 @@ impl<Block: BlockT> PinnedBlocksCache<Block> {
 		}
 	}
 
-	/// Remove item from cache
-	pub fn remove(&mut self, hash: Block::Hash) {
+	/// Decreases reference count of an item.
+	/// If the count hits 0, the item is removed.
+	pub fn unpin(&mut self, hash: Block::Hash) {
 		if let Some(entry) = self.cache.peek_mut(&hash) {
 			entry.decrease_ref();
 			if entry.has_no_references() {
@@ -214,12 +220,12 @@ impl<Block: BlockT> PinnedBlocksCache<Block> {
 	}
 
 	/// Get justifications for cached block
-	pub fn justifications(&self, hash: &Block::Hash) -> Option<Option<Justifications>> {
-		self.cache.peek(hash).and_then(|entry| entry.justifications.clone())
+	pub fn justifications(&self, hash: &Block::Hash) -> Option<&Option<Justifications>> {
+		self.cache.peek(hash).and_then(|entry| entry.justifications.as_ref())
 	}
 
 	/// Get body for cached block
-	pub fn body(&self, hash: &Block::Hash) -> Option<Option<Vec<Block::Extrinsic>>> {
-		self.cache.peek(hash).and_then(|entry| entry.body.clone())
+	pub fn body(&self, hash: &Block::Hash) -> Option<&Option<Vec<Block::Extrinsic>>> {
+		self.cache.peek(hash).and_then(|entry| entry.body.as_ref())
 	}
 }
