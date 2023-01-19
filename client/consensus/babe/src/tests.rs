@@ -546,7 +546,7 @@ fn sig_is_not_pre_digest() {
 
 #[test]
 fn claim_epoch_slots() {
-	// We don't requrie the full claim information, thus as a shorter alias we're
+	// We don't require the full claim information, thus as a shorter alias we're
 	// going to use a simple integer value. Generally not verbose enough, but good enough
 	// to be used within the narrow scope of a single test.
 	// 0 -> None (i.e. unable to claim the slot),
