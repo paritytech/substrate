@@ -67,6 +67,8 @@ use prometheus_endpoint::Registry as PrometheusRegistry;
 
 use sp_blockchain::{HashAndNumber, TreeRoute};
 
+pub(crate) const LOG_TARGET: &str = "txpool";
+
 type BoxedReadyIterator<Hash, Data> =
 	Box<dyn ReadyTransactions<Item = Arc<graph::base_pool::Transaction<Hash, Data>>> + Send>;
 
@@ -116,7 +118,7 @@ impl<T, Block: BlockT> ReadyPoll<T, Block> {
 		while idx < self.pollers.len() {
 			if self.pollers[idx].0 <= number {
 				let poller_sender = self.pollers.swap_remove(idx);
-				log::debug!(target: "txpool", "Sending ready signal at block {}", number);
+				log::debug!(target: LOG_TARGET, "Sending ready signal at block {}", number);
 				let _ = poller_sender.1.send(iterator_factory());
 			} else {
 				idx += 1;
@@ -336,7 +338,7 @@ where
 		}
 
 		if self.ready_poll.lock().updated_at() >= at {
-			log::trace!(target: "txpool", "Transaction pool already processed block  #{}", at);
+			log::trace!(target: LOG_TARGET, "Transaction pool already processed block  #{}", at);
 			let iterator: ReadyIteratorFor<PoolApi> = Box::new(self.pool.validated_pool().ready());
 			return async move { iterator }.boxed()
 		}
@@ -554,16 +556,16 @@ async fn prune_known_txs_for_block<Block: BlockT, Api: graph::ChainApi<Block = B
 
 	let hashes = extrinsics.iter().map(|tx| pool.hash_of(tx)).collect::<Vec<_>>();
 
-	log::trace!(target: "txpool", "Pruning transactions: {:?}", hashes);
+	log::trace!(target: LOG_TARGET, "Pruning transactions: {:?}", hashes);
 
 	let header = match api.block_header(block_hash) {
 		Ok(Some(h)) => h,
 		Ok(None) => {
-			log::debug!(target: "txpool", "Could not find header for {:?}.", block_hash);
+			log::debug!(target: LOG_TARGET, "Could not find header for {:?}.", block_hash);
 			return hashes
 		},
 		Err(e) => {
-			log::debug!(target: "txpool", "Error retrieving header for {:?}: {}", block_hash, e);
+			log::debug!(target: LOG_TARGET, "Error retrieving header for {:?}: {}", block_hash, e);
 			return hashes
 		},
 	};
@@ -587,7 +589,7 @@ where
 	/// (that have already been enacted) and resubmits transactions that were
 	/// retracted.
 	async fn handle_enactment(&self, tree_route: TreeRoute<Block>) {
-		log::trace!(target: "txpool", "handle_enactment tree_route: {tree_route:?}");
+		log::trace!(target: LOG_TARGET, "handle_enactment tree_route: {tree_route:?}");
 		let pool = self.pool.clone();
 		let api = self.api.clone();
 
@@ -595,7 +597,7 @@ where
 			Some(HashAndNumber { hash, number }) => (hash, number),
 			None => {
 				log::warn!(
-					target: "txpool",
+					target: LOG_TARGET,
 					"Skipping ChainEvent - no last block in tree route {:?}",
 					tree_route,
 				);
@@ -666,7 +668,7 @@ where
 
 					if !contains {
 						log::debug!(
-							target: "txpool",
+							target: LOG_TARGET,
 							"[{:?}]: Resubmitting from retracted block {:?}",
 							tx_hash,
 							hash,
@@ -691,7 +693,7 @@ where
 				.await
 			{
 				log::debug!(
-					target: "txpool",
+					target: LOG_TARGET,
 					"[{:?}] Error re-submitting transactions: {}",
 					hash,
 					e,
@@ -742,7 +744,7 @@ where
 
 		match result {
 			Err(msg) => {
-				log::debug!(target: "txpool", "{msg}");
+				log::debug!(target: LOG_TARGET, "{msg}");
 				self.enactment_state.lock().force_update(&event);
 			},
 			Ok(EnactmentAction::Skip) => return,
@@ -754,7 +756,7 @@ where
 
 		if let ChainEvent::Finalized { hash, tree_route } = event {
 			log::trace!(
-				target: "txpool",
+				target: LOG_TARGET,
 				"on-finalized enacted: {tree_route:?}, previously finalized: \
 				{prev_finalized_block:?}",
 			);
@@ -762,7 +764,7 @@ where
 			for hash in tree_route.iter().chain(std::iter::once(&hash)) {
 				if let Err(e) = self.pool.validated_pool().on_block_finalized(*hash).await {
 					log::warn!(
-						target: "txpool",
+						target: LOG_TARGET,
 						"Error occurred while attempting to notify watchers about finalization {}: {}",
 						hash, e
 					)

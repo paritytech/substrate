@@ -30,6 +30,9 @@ use sp_runtime::{
 };
 use std::{collections::HashMap, hash::Hash, pin::Pin, sync::Arc};
 
+#[allow(missing_docs)]
+const LOG_TARGET: &str = "txpool";
+
 pub use sp_runtime::transaction_validity::{
 	TransactionLongevity, TransactionPriority, TransactionSource, TransactionTag,
 };
@@ -353,7 +356,7 @@ impl<TPool: LocalTransactionPool> OffchainSubmitTransaction<TPool::Block> for TP
 		extrinsic: <TPool::Block as BlockT>::Extrinsic,
 	) -> Result<(), ()> {
 		log::debug!(
-			target: "txpool",
+			target: LOG_TARGET,
 			"(offchain call) Submitting a transaction to the pool: {:?}",
 			extrinsic
 		);
@@ -362,7 +365,7 @@ impl<TPool: LocalTransactionPool> OffchainSubmitTransaction<TPool::Block> for TP
 
 		result.map(|_| ()).map_err(|e| {
 			log::warn!(
-				target: "txpool",
+				target: LOG_TARGET,
 				"(offchain call) Error submitting a transaction to the pool: {}",
 				e
 			)
