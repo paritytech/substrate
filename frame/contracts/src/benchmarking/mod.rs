@@ -877,12 +877,11 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
-	// Benchmark calling blank debug_message host function with zero input data.
+	// Benchmark debug_message call with zero input data.
 	// Whereas this function is used in RPC mode only, it still should be secured
-	// versus an excessive use.
+	// against an excessive use.
 	seal_debug_message {
 		let r in 0 .. API_BENCHMARK_BATCHES;
-		let max_bytes = code::max_pages::<T>() * 64 * 1024;
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory { min_pages: 1, max_pages: 1 }),
 			imported_functions: vec![ImportedFunction {
@@ -898,6 +897,60 @@ benchmarks! {
 				Instruction::Drop,
 			])),
 			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+	}: {
+		<Contracts<T>>::bare_call(
+			instance.caller,
+			instance.account_id,
+			0u32.into(),
+			Weight::MAX,
+			None,
+			vec![],
+			true,
+			Determinism::Deterministic,
+		)
+		.result?;
+	}
+
+	seal_debug_message_per_kb {
+		// Vary size of input in kilobytes up to maximum allowed contract memory.
+		let i in 0 .. (T::Schedule::get().limits.memory_pages * 64);
+		// All ASCII codes + an invalid utf-8 code: 128
+		let codes = (0..129).collect::<Vec<_>>();
+		// Largest debug message we can benchmark for is limited by maximum allowed
+		// contract memory which is defined by T::Schedule::get().limits.memory_pages,
+		// which to the moment is 1 Mb.
+		// We can't however initialize every byte of it, as it would bloat wasm module size which is
+		// limited by T::MaxCodeLen::get(), being far less than 1Mb.
+		//
+		// So we import maximum allowed memory to the module, in which only the beginning will be initialized by
+		// some data which represents following use cases: ASCII printable and control codes, as well an invalid utf-8 byte.
+		// All unitialized memory will get 0-bytes which is decoded to utf-8 NUL control code.
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory {
+				min_pages: T::Schedule::get().limits.memory_pages,
+				max_pages: T::Schedule::get().limits.memory_pages,
+			}),
+			imported_functions: vec![ImportedFunction {
+				module: "seal0",
+				name: "seal_debug_message",
+				params: vec![ValueType::I32, ValueType::I32],
+				return_type: Some(ValueType::I32),
+			 }],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value: codes,
+				},
+			],
+			call_body: Some(body::repeated(API_BENCHMARK_BATCH_SIZE, &[
+				Instruction::I32Const(0), // value_ptr
+				Instruction::I32Const((i * 1024) as i32), // value_len increments by i Kb
+				Instruction::Call(0),
+				Instruction::Drop,
+			])),
+			..Default::default()
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
 	}: {
@@ -1001,7 +1054,8 @@ benchmarks! {
 			])),
 			.. Default::default()
 		});
-		let instance = Contract::<T>::new(code, vec![])?;
+		println!("n= {}, seal_set_storage_per_kb code size: {}", n, code.code.len());
+	let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		for key in keys {
 			Storage::<T>::write(
