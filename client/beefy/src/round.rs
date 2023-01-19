@@ -75,7 +75,7 @@ pub enum VoteImportResult<B: Block> {
 #[derive(Debug, Decode, Encode, PartialEq)]
 pub(crate) struct Rounds<B: Block> {
 	rounds: BTreeMap<Commitment<NumberFor<B>>, RoundTracker>,
-	equivocations: BTreeMap<(Public, NumberFor<B>), VoteMessage<NumberFor<B>, Public, Signature>>,
+	previous_votes: BTreeMap<(Public, NumberFor<B>), VoteMessage<NumberFor<B>, Public, Signature>>,
 	session_start: NumberFor<B>,
 	validator_set: ValidatorSet<Public>,
 	mandatory_done: bool,
@@ -89,7 +89,7 @@ where
 	pub(crate) fn new(session_start: NumberFor<B>, validator_set: ValidatorSet<Public>) -> Self {
 		Rounds {
 			rounds: BTreeMap::new(),
-			equivocations: BTreeMap::new(),
+			previous_votes: BTreeMap::new(),
 			session_start,
 			validator_set,
 			mandatory_done: false,
@@ -108,7 +108,14 @@ where
 		mandatory_done: bool,
 		best_done: Option<NumberFor<B>>,
 	) -> Self {
-		Rounds { rounds, equivocations, session_start, validator_set, mandatory_done, best_done }
+		Rounds {
+			rounds,
+			previous_votes: equivocations,
+			session_start,
+			validator_set,
+			mandatory_done,
+			best_done,
+		}
 	}
 
 	pub(crate) fn validator_set(&self) -> &ValidatorSet<Public> {
@@ -156,21 +163,21 @@ where
 			return VoteImportResult::Invalid
 		}
 
-		if let Some(existing_vote) = self.equivocations.get(&equivocation_key) {
+		if let Some(previous_vote) = self.previous_votes.get(&equivocation_key) {
 			// is the same public key voting for a different payload?
-			if existing_vote.commitment.payload != vote.commitment.payload {
+			if previous_vote.commitment.payload != vote.commitment.payload {
 				debug!(
 					target: "beefy", "🥩 detected equivocated vote: 1st: {:?}, 2nd: {:?}",
-					existing_vote, vote
+					previous_vote, vote
 				);
 				return VoteImportResult::Equivocation(EquivocationProof {
-					first: existing_vote.clone(),
+					first: previous_vote.clone(),
 					second: vote,
 				})
 			}
 		} else {
 			// this is the first vote sent by `id` for `num`, all good
-			self.equivocations.insert(equivocation_key, vote.clone());
+			self.previous_votes.insert(equivocation_key, vote.clone());
 		}
 
 		// add valid vote
@@ -201,7 +208,7 @@ where
 	pub(crate) fn conclude(&mut self, round_num: NumberFor<B>) {
 		// Remove this and older (now stale) rounds.
 		self.rounds.retain(|commitment, _| commitment.block_number > round_num);
-		self.equivocations.retain(|&(_, number), _| number > round_num);
+		self.previous_votes.retain(|&(_, number), _| number > round_num);
 		self.mandatory_done = self.mandatory_done || round_num == self.session_start;
 		self.best_done = self.best_done.max(Some(round_num));
 		debug!(target: "beefy", "🥩 Concluded round #{}", round_num);
@@ -466,7 +473,7 @@ mod tests {
 
 		// conclude round 3
 		rounds.conclude(3);
-		assert!(rounds.equivocations.is_empty());
+		assert!(rounds.previous_votes.is_empty());
 	}
 
 	#[test]

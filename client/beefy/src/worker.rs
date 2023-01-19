@@ -931,23 +931,10 @@ where
 		}
 
 		let number = *proof.round_number();
-		let hash = self
-			.backend
-			.blockchain()
-			.expect_block_hash_from_id(&BlockId::Number(number))
-			.map_err(|err| {
-				let err_msg = format!(
-					"Couldn't get hash for block #{:?} (error: {:?}), skipping equivocation..",
-					number, err
-				);
-				error!(target: "beefy", "🥩 {}", err_msg);
-				Error::Backend(err_msg)
-			})?;
-
 		let runtime_api = self.runtime.runtime_api();
 		// generate key ownership proof at that block
 		let key_owner_proof = match runtime_api
-			.generate_key_ownership_proof(&BlockId::Hash(hash), validator_set_id, offender_id)
+			.generate_key_ownership_proof(&BlockId::Number(number), validator_set_id, offender_id)
 			.map_err(Error::RuntimeApi)?
 		{
 			Some(proof) => proof,
