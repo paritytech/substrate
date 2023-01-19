@@ -410,7 +410,8 @@ impl BlockWeightsBuilder {
 		self
 	}
 
-	/// Set a soft pov limit. This is the max PoV size that you would *expect* without hard limiting it.
+	/// Set a soft pov limit. This is the max PoV size that you would *expect* without hard limiting
+	/// it.
 	///
 	/// Setting this to something higher than `max_block` will error.
 	pub fn pov_soft_limit(mut self, pov_soft_limit: u64) -> Self {
