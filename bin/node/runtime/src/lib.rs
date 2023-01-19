@@ -41,7 +41,7 @@ use frame_support::{
 		constants::{
 			BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_REF_TIME_PER_SECOND,
 		},
-		ConstantMultiplier, IdentityFee, Weight,
+		ConstantMultiplier, IdentityFee, Weight, WeightLimit,
 	},
 	PalletId, RuntimeDebug,
 };
@@ -176,8 +176,8 @@ const AVERAGE_ON_INITIALIZE_RATIO: Perbill = Perbill::from_percent(10);
 /// by  Operational  extrinsics.
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
 /// We allow for 2 seconds of compute with a 6 second average block time, with maximum proof size.
-const MAXIMUM_BLOCK_WEIGHT: Weight =
-	Weight::from_parts(WEIGHT_REF_TIME_PER_SECOND.saturating_mul(2), u64::MAX);
+const MAXIMUM_BLOCK_WEIGHT: WeightLimit =
+	WeightLimit::from_time_limit(2 * WEIGHT_REF_TIME_PER_SECOND);
 
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 2400;
@@ -190,15 +190,13 @@ parameter_types! {
 			weights.base_extrinsic = ExtrinsicBaseWeight::get();
 		})
 		.for_class(DispatchClass::Normal, |weights| {
-			weights.max_total = (NORMAL_DISPATCH_RATIO * MAXIMUM_BLOCK_WEIGHT).into();
+			weights.max_total = NORMAL_DISPATCH_RATIO * MAXIMUM_BLOCK_WEIGHT;
 		})
 		.for_class(DispatchClass::Operational, |weights| {
-			weights.max_total = (MAXIMUM_BLOCK_WEIGHT).into();
+			weights.max_total = MAXIMUM_BLOCK_WEIGHT;
 			// Operational transactions have some extra reserved space, so that they
 			// are included even if block reached `MAXIMUM_BLOCK_WEIGHT`.
-			weights.reserved = (
-				MAXIMUM_BLOCK_WEIGHT - NORMAL_DISPATCH_RATIO * MAXIMUM_BLOCK_WEIGHT
-			).into();
+			weights.reserved = MAXIMUM_BLOCK_WEIGHT - NORMAL_DISPATCH_RATIO * MAXIMUM_BLOCK_WEIGHT;
 		})
 		.avg_block_initialization(AVERAGE_ON_INITIALIZE_RATIO)
 		.build_or_panic();
@@ -1497,7 +1495,7 @@ parameter_types! {
 	pub const MinBid: Balance = 100 * DOLLARS;
 	pub const MinReceipt: Perquintill = Perquintill::from_percent(1);
 	pub const IntakePeriod: BlockNumber = 10;
-	pub MaxIntakeWeight: Weight = MAXIMUM_BLOCK_WEIGHT / 10;
+	pub MaxIntakeWeight: Weight = (MAXIMUM_BLOCK_WEIGHT / 10).limited_or_max();
 	pub const ThawThrottle: (Perquintill, BlockNumber) = (Perquintill::from_percent(25), 5);
 	pub Target: Perquintill = Perquintill::zero();
 	pub const NisPalletId: PalletId = PalletId(*b"py/nis  ");

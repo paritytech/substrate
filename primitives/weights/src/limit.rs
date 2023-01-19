@@ -17,6 +17,7 @@
 
 use crate::Weight;
 use codec::{Decode, Encode};
+use core::ops::{Add, Div, Mul, Sub};
 use scale_info::TypeInfo;
 use sp_debug_derive::RuntimeDebug;
 
@@ -241,24 +242,30 @@ impl WeightLimit {
 	/// let weight = Weight::from_parts(100, u64::MAX);
 	/// assert_eq!(weight, limit.limited_or(Weight::MAX));
 	/// ```
-	pub fn limited_or(self, w: Weight) -> Weight {
-		Weight {
-			ref_time: self.ref_time.unwrap_or(w.ref_time),
-			proof_size: self.proof_size.unwrap_or(w.proof_size),
-		}
+	pub const fn limited_or(self, w: Weight) -> Weight {
+		// NOTE: not using `unwrap_or` since it is not `const`.
+		let time_limit = match self.ref_time {
+			Some(limit) => limit,
+			None => w.ref_time,
+		};
+		let proof_size_limit = match self.proof_size {
+			Some(limit) => limit,
+			None => w.proof_size,
+		};
+		Weight::from_parts(time_limit, proof_size_limit)
 	}
 
 	/// Uses the exact value for each *limited* component and `u64::MAX` for each unlimited one.
 	///
 	/// Equivalent to `limited_or(Weight::MAX)`.
-	pub fn limited_or_max(self) -> Weight {
+	pub const fn limited_or_max(self) -> Weight {
 		self.limited_or(Weight::MAX)
 	}
 
 	/// Uses the exact value for each *limited* component and `0` for each unlimited one.
 	///
 	/// Equivalent to `limited_or(Weight::zero())`.
-	pub fn limited_or_min(self) -> Weight {
+	pub const fn limited_or_min(self) -> Weight {
 		self.limited_or(Weight::zero())
 	}
 
@@ -314,6 +321,14 @@ impl WeightLimit {
 		F: Fn(Option<u64>) -> Option<u64>,
 	{
 		Self { ref_time: f(self.ref_time), proof_size: f(self.proof_size) }
+	}
+
+	/// Only map exact values - `unlimited` stays untouched.
+	pub fn map_exact_limits<F>(self, f: F) -> Self
+	where
+		F: Fn(u64) -> u64,
+	{
+		Self { ref_time: self.ref_time.map(&f), proof_size: self.proof_size.map(&f) }
 	}
 }
 
@@ -683,5 +698,60 @@ mod tests {
 			.iter()
 			.flat_map(|x| weights.iter().map(|y| (*x, *y)))
 			.collect::<Vec<_>>()
+	}
+}
+
+macro_rules! impl_weight_limit_mul {
+	($($t:ty),* $(,)?) => {
+		$(
+			impl Mul<WeightLimit> for $t {
+				type Output = WeightLimit;
+				fn mul(self, b: WeightLimit) -> WeightLimit {
+					WeightLimit {
+						ref_time: b.ref_time.map(|x| self * x),
+						proof_size: b.proof_size.map(|x| self * x),
+					}
+				}
+			}
+		)*
+	}
+}
+
+impl_weight_limit_mul!(
+	sp_arithmetic::Percent,
+	sp_arithmetic::PerU16,
+	sp_arithmetic::Permill,
+	sp_arithmetic::Perbill,
+	sp_arithmetic::Perquintill,
+);
+
+impl Add for WeightLimit {
+	type Output = Self;
+	fn add(self, rhs: Self) -> Self {
+		Self {
+			ref_time: self.ref_time.and_then(|x| rhs.ref_time.map(|y| x + y)),
+			proof_size: self.proof_size.and_then(|x| rhs.proof_size.map(|y| x + y)),
+		}
+	}
+}
+
+impl Sub for WeightLimit {
+	type Output = Self;
+	fn sub(self, rhs: Self) -> Self {
+		Self {
+			ref_time: self.ref_time.and_then(|x| rhs.ref_time.map(|y| x - y)),
+			proof_size: self.proof_size.and_then(|x| rhs.proof_size.map(|y| x - y)),
+		}
+	}
+}
+
+impl<T> Div<T> for WeightLimit
+where
+	u64: Div<T, Output = u64>,
+	T: Copy,
+{
+	type Output = Self;
+	fn div(self, b: T) -> Self {
+		self.map_exact_limits(|x| x / b)
 	}
 }
