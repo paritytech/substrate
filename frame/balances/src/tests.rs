@@ -1566,8 +1566,6 @@ macro_rules! decl_tests {
 		#[test]
 		fn freezing_and_holds_should_overlap() {
 			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
-				assert_eq!(Balances::account(&1).free, 10);
-				assert_eq!(Balances::total_balance(&1), 10);
 				assert_ok!(Balances::set_freeze(&OtherTestId::Foo, &1, 10));
 				assert_ok!(Balances::hold(&OtherTestId::Foo, &1, 9));
 				assert_eq!(Balances::total_balance(&1), 10);
@@ -1577,10 +1575,32 @@ macro_rules! decl_tests {
 				assert_eq!(Balances::account(&1).frozen, 10);
 				assert_eq!(Balances::account(&1).reserved, 9);
 				assert_eq!(Balances::total_balance_on_hold(&1), 9);
+			});
+		}
+
+		#[test]
+		fn frozen_hold_balance_cannot_be_moved_without_force() {
+			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
+				assert_ok!(Balances::set_freeze(&OtherTestId::Foo, &1, 10));
+				assert_ok!(Balances::hold(&OtherTestId::Foo, &1, 9));
 				assert_eq!(Balances::reducible_total_balance_on_hold(&1, true), 9);
 				assert_eq!(Balances::reducible_total_balance_on_hold(&1, false), 0);
-				assert_noop!(Balances::transfer_on_hold(&OtherTestId::Foo, &1, &2, 1, false, false, false), TokenError::Frozen);
+				let e = TokenError::Frozen;
+				assert_noop!(Balances::transfer_on_hold(&OtherTestId::Foo, &1, &2, 1, false, false, false), e);
 				assert_ok!(Balances::transfer_on_hold(&OtherTestId::Foo, &1, &2, 1, false, false, true));
+			});
+		}
+
+		#[test]
+		fn frozen_hold_balance_best_effort_transfer_works() {
+			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
+				assert_ok!(Balances::set_freeze(&OtherTestId::Foo, &1, 5));
+				assert_ok!(Balances::hold(&OtherTestId::Foo, &1, 9));
+				assert_eq!(Balances::reducible_total_balance_on_hold(&1, true), 9);
+				assert_eq!(Balances::reducible_total_balance_on_hold(&1, false), 5);
+				assert_ok!(Balances::transfer_on_hold(&OtherTestId::Foo, &1, &2, 10, true, false, false));
+				assert_eq!(Balances::total_balance(&1), 5);
+				assert_eq!(Balances::total_balance(&2), 25);
 			});
 		}
 
