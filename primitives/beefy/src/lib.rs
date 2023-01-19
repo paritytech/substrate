@@ -183,28 +183,30 @@ pub struct VoteMessage<Number, Id, Signature> {
 	pub signature: Signature,
 }
 
-/// An equivocation (double-vote) in a given round.
-#[derive(Clone, Debug, Encode, Decode, PartialEq, TypeInfo)]
-pub struct Equivocation<Number, Id, Signature> {
-	/// The round number equivocated in
-	pub round_number: Number,
-	/// Node authority id
-	pub id: Id,
-	/// The first vote in the equivocation
-	pub first: VoteMessage<Number, Id, Signature>,
-	/// The second vote in the equivocation
-	pub second: VoteMessage<Number, Id, Signature>,
-}
-
 /// Proof of voter misbehavior on a given set id. Misbehavior/equivocation in
 /// BEEFY happens when a voter votes on the same round/block for different payloads.
 /// Proving is achieved by collecting the signed commitments of conflicting votes.
 #[derive(Clone, Debug, Decode, Encode, PartialEq, TypeInfo)]
 pub struct EquivocationProof<Number, Id, Signature> {
-	/// BEEFY validator set id active during this equivocation.
-	pub set_id: ValidatorSetId,
-	/// Equivocation details including the conflicting votes.
-	pub equivocation: Equivocation<Number, Id, Signature>,
+	/// The first vote in the equivocation.
+	pub first: VoteMessage<Number, Id, Signature>,
+	/// The second vote in the equivocation.
+	pub second: VoteMessage<Number, Id, Signature>,
+}
+
+impl<Number, Id, Signature> EquivocationProof<Number, Id, Signature> {
+	/// Returns the authority id of the equivocator.
+	pub fn offender_id(&self) -> &Id {
+		&self.first.id
+	}
+	/// Returns the round number at which the equivocation occurred.
+	pub fn round_number(&self) -> &Number {
+		&self.first.commitment.block_number
+	}
+	/// Returns the set id at which the equivocation occurred.
+	pub fn set_id(&self) -> ValidatorSetId {
+		self.first.commitment.validator_set_id
+	}
 }
 
 /// Check a commitment signature by encoding the commitment and
@@ -226,15 +228,15 @@ where
 /// Verifies the equivocation proof by making sure that both votes target
 /// different blocks and that its signatures are valid.
 pub fn check_equivocation_proof<Number, Id, MsgHash>(
-	report: EquivocationProof<Number, Id, <Id as RuntimeAppPublic>::Signature>,
+	report: &EquivocationProof<Number, Id, <Id as RuntimeAppPublic>::Signature>,
 ) -> bool
 where
 	Id: BeefyAuthorityId<MsgHash> + PartialEq,
 	Number: Clone + Encode + PartialEq,
 	MsgHash: Hash,
 {
-	let first = &report.equivocation.first;
-	let second = &report.equivocation.second;
+	let first = &report.first;
+	let second = &report.second;
 
 	// if votes
 	//   come from different authorities,

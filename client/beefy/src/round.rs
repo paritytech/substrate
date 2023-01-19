@@ -18,8 +18,7 @@
 
 use beefy_primitives::{
 	crypto::{AuthorityId, Public, Signature},
-	Commitment, Equivocation, EquivocationProof, SignedCommitment, ValidatorSet, ValidatorSetId,
-	VoteMessage,
+	Commitment, EquivocationProof, SignedCommitment, ValidatorSet, ValidatorSetId, VoteMessage,
 };
 use codec::{Decode, Encode};
 use log::debug;
@@ -164,14 +163,10 @@ where
 					target: "beefy", "🥩 detected equivocated vote: 1st: {:?}, 2nd: {:?}",
 					existing_vote, vote
 				);
-				let equivocation = Equivocation {
-					round_number: equivocation_key.1,
-					id: equivocation_key.0,
+				return VoteImportResult::Equivocation(EquivocationProof {
 					first: existing_vote.clone(),
 					second: vote,
-				};
-				let set_id = self.validator_set_id();
-				return VoteImportResult::Equivocation(EquivocationProof { set_id, equivocation })
+				})
 			}
 		} else {
 			// this is the first vote sent by `id` for `num`, all good
@@ -218,7 +213,7 @@ mod tests {
 	use sc_network_test::Block;
 
 	use beefy_primitives::{
-		crypto::Public, keyring::Keyring, known_payloads::MMR_ROOT_ID, Commitment, Equivocation,
+		crypto::Public, keyring::Keyring, known_payloads::MMR_ROOT_ID, Commitment,
 		EquivocationProof, Payload, SignedCommitment, ValidatorSet, VoteMessage,
 	};
 
@@ -501,13 +496,8 @@ mod tests {
 		alice_vote2.commitment = commitment2;
 
 		let expected_result = VoteImportResult::Equivocation(EquivocationProof {
-			set_id: validator_set_id,
-			equivocation: Equivocation {
-				id: Keyring::Alice.public(),
-				round_number: 1,
-				first: alice_vote1.clone(),
-				second: alice_vote2.clone(),
-			},
+			first: alice_vote1.clone(),
+			second: alice_vote2.clone(),
 		});
 
 		// vote on one payload - ok

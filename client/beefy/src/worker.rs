@@ -23,13 +23,14 @@ use crate::{
 	},
 	error::Error,
 	justification::BeefyVersionedFinalityProof,
-	keystore::BeefyKeystore,
+	keystore::{BeefyKeystore, BeefySignatureHasher},
 	metric_inc, metric_set,
 	metrics::Metrics,
 	round::{Rounds, VoteImportResult},
 	BeefyVoterLinks,
 };
 use beefy_primitives::{
+	check_equivocation_proof,
 	crypto::{AuthorityId, Signature},
 	BeefyApi, Commitment, ConsensusLog, EquivocationProof, PayloadProvider, ValidatorSet,
 	VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
@@ -914,18 +915,22 @@ where
 		let rounds =
 			self.persisted_state.voting_oracle.active_rounds().ok_or(Error::UninitSession)?;
 		let (validators, validator_set_id) = (rounds.validators(), rounds.validator_set_id());
+		let offender_id = proof.offender_id().clone();
 
-		if proof.set_id != validator_set_id {
-			debug!(target: "beefy", "🥩 Skip equivocation report for old set id: {:?}", proof.set_id);
+		if proof.set_id() != validator_set_id {
+			debug!(target: "beefy", "🥩 Skip equivocation report for old set id: {:?}", proof.set_id());
+			return Ok(())
+		} else if !check_equivocation_proof::<_, _, BeefySignatureHasher>(&proof) {
+			debug!(target: "beefy", "🥩 Skip report for bad equivocation {:?}", proof);
 			return Ok(())
 		} else if let Some(local_id) = self.key_store.authority_id(validators) {
-			if proof.equivocation.id == local_id {
+			if offender_id == local_id {
 				debug!(target: "beefy", "🥩 Skip equivocation report for own equivocation");
 				return Ok(())
 			}
 		}
 
-		let number = proof.equivocation.round_number;
+		let number = *proof.round_number();
 		let hash = self
 			.backend
 			.blockchain()
@@ -942,11 +947,7 @@ where
 		let runtime_api = self.runtime.runtime_api();
 		// generate key ownership proof at that block
 		let key_owner_proof = match runtime_api
-			.generate_key_ownership_proof(
-				&BlockId::Hash(hash),
-				validator_set_id,
-				proof.equivocation.id.clone(),
-			)
+			.generate_key_ownership_proof(&BlockId::Hash(hash), validator_set_id, offender_id)
 			.map_err(Error::RuntimeApi)?
 		{
 			Some(proof) => proof,

@@ -19,7 +19,6 @@
 use sp_application_crypto::RuntimeAppPublic;
 use sp_core::keccak_256;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
-use sp_runtime::traits::Keccak256;
 
 use log::warn;
 
@@ -29,6 +28,9 @@ use beefy_primitives::{
 };
 
 use crate::error;
+
+/// Hasher used for BEEFY signatures.
+pub(crate) type BeefySignatureHasher = sp_runtime::traits::Keccak256;
 
 /// A BEEFY specific keystore implemented as a `Newtype`. This is basically a
 /// wrapper around [`sp_keystore::SyncCryptoStore`] and allows to customize
@@ -99,7 +101,7 @@ impl BeefyKeystore {
 	///
 	/// Return `true` if the signature is authentic, `false` otherwise.
 	pub fn verify(public: &Public, sig: &Signature, message: &[u8]) -> bool {
-		BeefyAuthorityId::<Keccak256>::verify(public, sig, message)
+		BeefyAuthorityId::<BeefySignatureHasher>::verify(public, sig, message)
 	}
 }
 

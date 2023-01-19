@@ -239,9 +239,9 @@ impl<T: Config> Pallet<T> {
 				.priority(TransactionPriority::MAX)
 				// Only one equivocation report for the same offender at the same slot.
 				.and_provides((
-					equivocation_proof.equivocation.id.clone(),
-					equivocation_proof.set_id,
-					equivocation_proof.equivocation.round_number,
+					equivocation_proof.offender_id().clone(),
+					equivocation_proof.set_id(),
+					*equivocation_proof.round_number(),
 				))
 				.longevity(longevity)
 				// We don't propagate this. This can never be included on a remote node.
@@ -269,8 +269,9 @@ fn is_known_offence<T: Config>(
 	>,
 	key_owner_proof: &T::KeyOwnerProof,
 ) -> Result<(), TransactionValidityError> {
-	// check the membership proof to extract the offender's id
-	let key = (beefy_primitives::KEY_TYPE, equivocation_proof.equivocation.id.clone());
+	// check the membership proof to extract the offender's id,
+	// equivocation validity will be fully checked during the call.
+	let key = (beefy_primitives::KEY_TYPE, equivocation_proof.offender_id().clone());
 
 	let offender = T::KeyOwnerProofSystem::check_proof(key, key_owner_proof.clone())
 		.ok_or(InvalidTransaction::BadProof)?;
@@ -278,8 +279,8 @@ fn is_known_offence<T: Config>(
 	// check if the offence has already been reported,
 	// and if so then we can discard the report.
 	let time_slot = <T::HandleEquivocation as HandleEquivocation<T>>::Offence::new_time_slot(
-		equivocation_proof.set_id,
-		equivocation_proof.equivocation.round_number,
+		equivocation_proof.set_id(),
+		*equivocation_proof.round_number(),
 	);
 
 	let is_known_offence = T::HandleEquivocation::is_known_offence(&[offender], &time_slot);

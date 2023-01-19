@@ -347,9 +347,9 @@ impl<T: Config> Pallet<T> {
 		// associated session) and round. We also need to know the validator
 		// set count at the time of the offence since it is required to calculate
 		// the slash amount.
-		let set_id = equivocation_proof.set_id;
-		let round = equivocation_proof.equivocation.round_number;
-		let offender_id = equivocation_proof.equivocation.id.clone();
+		let set_id = equivocation_proof.set_id();
+		let round = *equivocation_proof.round_number();
+		let offender_id = equivocation_proof.offender_id().clone();
 		let session_index = key_owner_proof.session();
 		let validator_count = key_owner_proof.validator_count();
 
@@ -361,7 +361,7 @@ impl<T: Config> Pallet<T> {
 		.ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
 
 		// validate equivocation proof (check votes are different and signatures are valid).
-		if !beefy_primitives::check_equivocation_proof(equivocation_proof) {
+		if !beefy_primitives::check_equivocation_proof(&equivocation_proof) {
 			return Err(Error::<T>::InvalidEquivocationProof.into())
 		}
 

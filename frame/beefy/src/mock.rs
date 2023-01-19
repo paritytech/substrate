@@ -18,8 +18,7 @@
 use std::vec;
 
 use beefy_primitives::{
-	keyring::Keyring as BeefyKeyring, Commitment, Equivocation, Payload, ValidatorSetId,
-	VoteMessage,
+	keyring::Keyring as BeefyKeyring, Commitment, Payload, ValidatorSetId, VoteMessage,
 };
 use codec::Encode;
 use frame_election_provider_support::{onchain, SequentialPhragmen};
@@ -346,28 +345,18 @@ pub fn start_era(era_index: EraIndex) {
 }
 
 pub fn generate_equivocation_proof(
-	validator_set_id: ValidatorSetId,
-	reporter_public: BeefyId,
-	vote1: (u64, Payload, &BeefyKeyring),
-	vote2: (u64, Payload, &BeefyKeyring),
+	vote1: (u64, Payload, ValidatorSetId, &BeefyKeyring),
+	vote2: (u64, Payload, ValidatorSetId, &BeefyKeyring),
 ) -> EquivocationProof<u64, BeefyId, BeefySignature> {
-	let block_number = vote1.0;
-
-	let signed_vote = |block_number: u64, payload: Payload, keyring: &BeefyKeyring| {
+	let signed_vote = |block_number: u64,
+	                   payload: Payload,
+	                   validator_set_id: ValidatorSetId,
+	                   keyring: &BeefyKeyring| {
 		let commitment = Commitment { validator_set_id, block_number, payload };
 		let signature = keyring.sign(&commitment.encode());
 		VoteMessage { commitment, id: keyring.public(), signature }
 	};
-
-	let first = signed_vote(vote1.0, vote1.1, vote1.2);
-	let second = signed_vote(vote2.0, vote2.1, vote2.2);
-	EquivocationProof {
-		set_id: validator_set_id,
-		equivocation: Equivocation {
-			round_number: block_number,
-			id: reporter_public,
-			first,
-			second,
-		},
-	}
+	let first = signed_vote(vote1.0, vote1.1, vote1.2, vote1.3);
+	let second = signed_vote(vote2.0, vote2.1, vote2.2, vote2.3);
+	EquivocationProof { first, second }
 }
