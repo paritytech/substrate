@@ -33,7 +33,7 @@ mod tests;
 
 pub use crate::api::FullChainApi;
 use async_trait::async_trait;
-use enactment_state::EnactmentState;
+use enactment_state::{EnactmentAction, EnactmentState};
 use futures::{
 	channel::oneshot,
 	future::{self, ready},
@@ -732,16 +732,22 @@ where
 					)),
 			}
 		};
+		let block_id_to_number =
+			|hash| self.api.block_id_to_number(&BlockId::Hash(hash)).map_err(|e| format!("{}", e));
 
-		let result = self.enactment_state.lock().update(&event, &compute_tree_route);
+		let result =
+			self.enactment_state
+				.lock()
+				.update(&event, &compute_tree_route, &block_id_to_number);
 
 		match result {
 			Err(msg) => {
 				log::debug!(target: "txpool", "{msg}");
 				self.enactment_state.lock().force_update(&event);
 			},
-			Ok(None) => {},
-			Ok(Some(tree_route)) => {
+			Ok(EnactmentAction::Skip) => return,
+			Ok(EnactmentAction::HandleFinalization) => {},
+			Ok(EnactmentAction::HandleEnactment(tree_route)) => {
 				self.handle_enactment(tree_route).await;
 			},
 		};

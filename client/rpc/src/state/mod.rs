@@ -19,6 +19,7 @@
 //! Substrate state API.
 
 mod state_full;
+mod utils;
 
 #[cfg(test)]
 mod tests;
@@ -28,7 +29,7 @@ use std::sync::Arc;
 use crate::SubscriptionTaskExecutor;
 
 use jsonrpsee::{
-	core::{server::rpc_module::SubscriptionSink, Error as JsonRpseeError, RpcResult},
+	core::{async_trait, server::rpc_module::SubscriptionSink, Error as JsonRpseeError, RpcResult},
 	types::SubscriptionResult,
 };
 
@@ -53,6 +54,7 @@ use sp_blockchain::{HeaderBackend, HeaderMetadata};
 const STORAGE_KEYS_PAGED_MAX_COUNT: u32 = 1000;
 
 /// State backend API.
+#[async_trait]
 pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 where
 	Block: BlockT + 'static,
@@ -107,10 +109,11 @@ where
 	///
 	/// If data is available at `key`, it is returned. Else, the sum of values who's key has `key`
 	/// prefix is returned, i.e. all the storage (double) maps that have this prefix.
-	fn storage_size(
+	async fn storage_size(
 		&self,
 		block: Option<Block::Hash>,
 		key: StorageKey,
+		deny_unsafe: DenyUnsafe,
 	) -> Result<Option<u64>, Error>;
 
 	/// Returns the runtime metadata as an opaque blob.
@@ -202,6 +205,7 @@ pub struct State<Block, Client> {
 	deny_unsafe: DenyUnsafe,
 }
 
+#[async_trait]
 impl<Block, Client> StateApiServer<Block::Hash> for State<Block, Client>
 where
 	Block: BlockT + 'static,
@@ -262,8 +266,15 @@ where
 		self.backend.storage_hash(block, key).map_err(Into::into)
 	}
 
-	fn storage_size(&self, key: StorageKey, block: Option<Block::Hash>) -> RpcResult<Option<u64>> {
-		self.backend.storage_size(block, key).map_err(Into::into)
+	async fn storage_size(
+		&self,
+		key: StorageKey,
+		block: Option<Block::Hash>,
+	) -> RpcResult<Option<u64>> {
+		self.backend
+			.storage_size(block, key, self.deny_unsafe)
+			.await
+			.map_err(Into::into)
 	}
 
 	fn metadata(&self, block: Option<Block::Hash>) -> RpcResult<Bytes> {
