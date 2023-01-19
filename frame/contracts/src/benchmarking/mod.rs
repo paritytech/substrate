@@ -877,9 +877,9 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
-	// The size of the supplied message does not influence the weight because as it is never
-	// processed during on-chain execution: It is only ever read during debugging which happens
-	// when the contract is called as RPC where weights do not matter.
+	// Benchmark calling blank debug_message host function with zero input data.
+	// Whereas this function is used in RPC mode only, it still should be secured
+	// versus an excessive use.
 	seal_debug_message {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let max_bytes = code::max_pages::<T>() * 64 * 1024;
@@ -893,15 +893,26 @@ benchmarks! {
 			}],
 			call_body: Some(body::repeated(r * API_BENCHMARK_BATCH_SIZE, &[
 				Instruction::I32Const(0), // value_ptr
-				Instruction::I32Const(max_bytes as i32), // value_len
+				Instruction::I32Const(0), // value_len
 				Instruction::Call(0),
 				Instruction::Drop,
 			])),
 			.. Default::default()
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
-		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+	}: {
+		<Contracts<T>>::bare_call(
+			instance.caller,
+			instance.account_id,
+			0u32.into(),
+			Weight::MAX,
+			None,
+			vec![],
+			true,
+			Determinism::Deterministic,
+		)
+		.result?;
+	}
 
 	// Only the overhead of calling the function itself with minimal arguments.
 	// The contract is a bit more complex because it needs to use different keys in order
