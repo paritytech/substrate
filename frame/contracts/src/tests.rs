@@ -416,7 +416,7 @@ pub const BOB: AccountId32 = AccountId32::new([2u8; 32]);
 pub const CHARLIE: AccountId32 = AccountId32::new([3u8; 32]);
 pub const DJANGO: AccountId32 = AccountId32::new([4u8; 32]);
 
-pub const GAS_LIMIT: Weight = Weight::from_ref_time(100_000_000_000).set_proof_size(256 * 1024);
+pub const GAS_LIMIT: Weight = Weight::from_parts(100_000_000_000, 512 * 1024);
 
 pub struct ExtBuilder {
 	existential_deposit: u64,
@@ -2837,7 +2837,7 @@ fn gas_estimation_call_runtime() {
 		let call = RuntimeCall::Contracts(crate::Call::call {
 			dest: addr_callee,
 			value: 0,
-			gas_limit: GAS_LIMIT.set_ref_time(GAS_LIMIT.ref_time() / 3),
+			gas_limit: GAS_LIMIT / 3,
 			storage_deposit_limit: None,
 			data: vec![],
 		});
