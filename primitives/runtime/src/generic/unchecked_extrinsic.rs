@@ -295,15 +295,7 @@ where
 		}
 		self.function.encode_to(&mut tmp);
 
-		let compact_len = codec::Compact::<u32>(tmp.len() as u32);
-
-		// Allocate the output buffer with the correct length
-		let mut output = Vec::with_capacity(compact_len.size_hint() + tmp.len());
-
-		compact_len.encode_to(&mut output);
-		output.extend(tmp);
-
-		output
+		tmp.encode()
 	}
 }
 
