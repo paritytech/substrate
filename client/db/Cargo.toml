@@ -26,6 +26,7 @@ parity-db = "0.4.2"
 parking_lot = "0.12.1"
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sc-state-db = { version = "0.10.0-dev", path = "../state-db" }
+schnellru = "0.2.1"
 sp-arithmetic = { version = "6.0.0", path = "../../primitives/arithmetic" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-core = { version = "7.0.0", path = "../../primitives/core" }

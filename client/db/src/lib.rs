@@ -34,6 +34,7 @@ pub mod bench;
 
 mod children;
 mod parity_db;
+mod pinned_blocks_cache;
 mod record_stats_state;
 mod stats;
 #[cfg(any(feature = "rocksdb", test))]
@@ -51,6 +52,7 @@ use std::{
 };
 
 use crate::{
+	pinned_blocks_cache::PinnedBlocksCache,
 	record_stats_state::RecordStatsState,
 	stats::StateUsageStats,
 	utils::{meta_keys, read_db, read_meta, DatabaseType, Meta},
@@ -481,6 +483,7 @@ pub struct BlockchainDb<Block: BlockT> {
 	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
 	header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
 	header_cache: Mutex<LinkedHashMap<Block::Hash, Option<Block::Header>>>,
+	pinned_blocks_cache: Arc<RwLock<PinnedBlocksCache<Block>>>,
 }
 
 impl<Block: BlockT> BlockchainDb<Block> {
@@ -493,6 +496,7 @@ impl<Block: BlockT> BlockchainDb<Block> {
 			meta: Arc::new(RwLock::new(meta)),
 			header_metadata_cache: Arc::new(HeaderMetadataCache::default()),
 			header_cache: Default::default(),
+			pinned_blocks_cache: Arc::new(RwLock::new(PinnedBlocksCache::new())),
 		})
 	}
 
@@ -521,62 +525,83 @@ impl<Block: BlockT> BlockchainDb<Block> {
 		let mut meta = self.meta.write();
 		meta.block_gap = gap;
 	}
-}
 
-impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for BlockchainDb<Block> {
-	fn header(&self, hash: Block::Hash) -> ClientResult<Option<Block::Header>> {
-		let mut cache = self.header_cache.lock();
-		if let Some(result) = cache.get_refresh(&hash) {
-			return Ok(result.clone())
+	/// Empty the cache of pinned items.
+	fn clear_pinning_cache(&self) {
+		self.pinned_blocks_cache.write().clear();
+	}
+
+	/// Load a justification into the cache of pinned items.
+	/// Reference count of the item will not be increased. Use this
+	/// to load values for items into the cache which have already been pinned.
+	fn insert_justifications_if_pinned(&self, hash: Block::Hash, justification: Justification) {
+		let mut cache = self.pinned_blocks_cache.write();
+		if !cache.contains(hash) {
+			return
 		}
-		let header = utils::read_header(
+
+		let justifications = Justifications::from(justification);
+		cache.insert_justifications(hash, Some(justifications));
+	}
+
+	/// Load a justification from the db into the cache of pinned items.
+	/// Reference count of the item will not be increased. Use this
+	/// to load values for items into the cache which have already been pinned.
+	fn insert_persisted_justifications_if_pinned(&self, hash: Block::Hash) -> ClientResult<()> {
+		let mut cache = self.pinned_blocks_cache.write();
+		if !cache.contains(hash) {
+			return Ok(())
+		}
+
+		let justifications = self.justifications_uncached(hash)?;
+		cache.insert_justifications(hash, justifications);
+		Ok(())
+	}
+
+	/// Load a block body from the db into the cache of pinned items.
+	/// Reference count of the item will not be increased. Use this
+	/// to load values for items items into the cache which have already been pinned.
+	fn insert_persisted_body_if_pinned(&self, hash: Block::Hash) -> ClientResult<()> {
+		let mut cache = self.pinned_blocks_cache.write();
+		if !cache.contains(hash) {
+			return Ok(())
+		}
+
+		let body = self.body_uncached(hash)?;
+		cache.insert_body(hash, body);
+		Ok(())
+	}
+
+	/// Bump reference count for pinned item.
+	fn bump_ref(&self, hash: Block::Hash) {
+		self.pinned_blocks_cache.write().pin(hash);
+	}
+
+	/// Decrease reference count for pinned item and remove if reference count is 0.
+	fn unpin(&self, hash: Block::Hash) {
+		self.pinned_blocks_cache.write().unpin(hash);
+	}
+
+	fn justifications_uncached(&self, hash: Block::Hash) -> ClientResult<Option<Justifications>> {
+		match read_db(
 			&*self.db,
 			columns::KEY_LOOKUP,
-			columns::HEADER,
+			columns::JUSTIFICATIONS,
 			BlockId::<Block>::Hash(hash),
-		)?;
-		cache_header(&mut cache, hash, header.clone());
-		Ok(header)
-	}
-
-	fn info(&self) -> sc_client_api::blockchain::Info<Block> {
-		let meta = self.meta.read();
-		sc_client_api::blockchain::Info {
-			best_hash: meta.best_hash,
-			best_number: meta.best_number,
-			genesis_hash: meta.genesis_hash,
-			finalized_hash: meta.finalized_hash,
-			finalized_number: meta.finalized_number,
-			finalized_state: meta.finalized_state,
-			number_leaves: self.leaves.read().count(),
-			block_gap: meta.block_gap,
+		)? {
+			Some(justifications) => match Decode::decode(&mut &justifications[..]) {
+				Ok(justifications) => Ok(Some(justifications)),
+				Err(err) =>
+					return Err(sp_blockchain::Error::Backend(format!(
+						"Error decoding justifications: {}",
+						err
+					))),
+			},
+			None => Ok(None),
 		}
 	}
 
-	fn status(&self, hash: Block::Hash) -> ClientResult<sc_client_api::blockchain::BlockStatus> {
-		match self.header(hash)?.is_some() {
-			true => Ok(sc_client_api::blockchain::BlockStatus::InChain),
-			false => Ok(sc_client_api::blockchain::BlockStatus::Unknown),
-		}
-	}
-
-	fn number(&self, hash: Block::Hash) -> ClientResult<Option<NumberFor<Block>>> {
-		Ok(self.header_metadata(hash).ok().map(|header_metadata| header_metadata.number))
-	}
-
-	fn hash(&self, number: NumberFor<Block>) -> ClientResult<Option<Block::Hash>> {
-		Ok(utils::read_header::<Block>(
-			&*self.db,
-			columns::KEY_LOOKUP,
-			columns::HEADER,
-			BlockId::Number(number),
-		)?
-		.map(|header| header.hash()))
-	}
-}
-
-impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<Block> {
-	fn body(&self, hash: Block::Hash) -> ClientResult<Option<Vec<Block::Extrinsic>>> {
+	fn body_uncached(&self, hash: Block::Hash) -> ClientResult<Option<Vec<Block::Extrinsic>>> {
 		if let Some(body) =
 			read_db(&*self.db, columns::KEY_LOOKUP, columns::BODY, BlockId::Hash::<Block>(hash))?
 		{
@@ -640,24 +665,77 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 		}
 		Ok(None)
 	}
+}
 
-	fn justifications(&self, hash: Block::Hash) -> ClientResult<Option<Justifications>> {
-		match read_db(
+impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for BlockchainDb<Block> {
+	fn header(&self, hash: Block::Hash) -> ClientResult<Option<Block::Header>> {
+		let mut cache = self.header_cache.lock();
+		if let Some(result) = cache.get_refresh(&hash) {
+			return Ok(result.clone())
+		}
+		let header = utils::read_header(
 			&*self.db,
 			columns::KEY_LOOKUP,
-			columns::JUSTIFICATIONS,
+			columns::HEADER,
 			BlockId::<Block>::Hash(hash),
-		)? {
-			Some(justifications) => match Decode::decode(&mut &justifications[..]) {
-				Ok(justifications) => Ok(Some(justifications)),
-				Err(err) =>
-					return Err(sp_blockchain::Error::Backend(format!(
-						"Error decoding justifications: {}",
-						err
-					))),
-			},
-			None => Ok(None),
+		)?;
+		cache_header(&mut cache, hash, header.clone());
+		Ok(header)
+	}
+
+	fn info(&self) -> sc_client_api::blockchain::Info<Block> {
+		let meta = self.meta.read();
+		sc_client_api::blockchain::Info {
+			best_hash: meta.best_hash,
+			best_number: meta.best_number,
+			genesis_hash: meta.genesis_hash,
+			finalized_hash: meta.finalized_hash,
+			finalized_number: meta.finalized_number,
+			finalized_state: meta.finalized_state,
+			number_leaves: self.leaves.read().count(),
+			block_gap: meta.block_gap,
 		}
+	}
+
+	fn status(&self, hash: Block::Hash) -> ClientResult<sc_client_api::blockchain::BlockStatus> {
+		match self.header(hash)?.is_some() {
+			true => Ok(sc_client_api::blockchain::BlockStatus::InChain),
+			false => Ok(sc_client_api::blockchain::BlockStatus::Unknown),
+		}
+	}
+
+	fn number(&self, hash: Block::Hash) -> ClientResult<Option<NumberFor<Block>>> {
+		Ok(self.header_metadata(hash).ok().map(|header_metadata| header_metadata.number))
+	}
+
+	fn hash(&self, number: NumberFor<Block>) -> ClientResult<Option<Block::Hash>> {
+		Ok(utils::read_header::<Block>(
+			&*self.db,
+			columns::KEY_LOOKUP,
+			columns::HEADER,
+			BlockId::Number(number),
+		)?
+		.map(|header| header.hash()))
+	}
+}
+
+impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<Block> {
+	fn body(&self, hash: Block::Hash) -> ClientResult<Option<Vec<Block::Extrinsic>>> {
+		let cache = self.pinned_blocks_cache.read();
+		if let Some(result) = cache.body(&hash) {
+			return Ok(result.clone())
+		}
+
+		self.body_uncached(hash)
+	}
+
+	fn justifications(&self, hash: Block::Hash) -> ClientResult<Option<Justifications>> {
+		let cache = self.pinned_blocks_cache.read();
+		if let Some(result) = cache.justifications(&hash) {
+			return Ok(result.clone())
+		}
+
+		self.justifications_uncached(hash)
 	}
 
 	fn last_finalized(&self) -> ClientResult<Block::Hash> {
@@ -1291,20 +1369,28 @@ impl<Block: BlockT> Backend<Block> {
 		header: &Block::Header,
 		last_finalized: Option<Block::Hash>,
 		justification: Option<Justification>,
+		current_transaction_justifications: &mut HashMap<Block::Hash, Justification>,
 	) -> ClientResult<MetaUpdate<Block>> {
 		// TODO: ensure best chain contains this block.
 		let number = *header.number();
 		self.ensure_sequential_finalization(header, last_finalized)?;
 		let with_state = sc_client_api::Backend::have_state_at(self, hash, number);
 
-		self.note_finalized(transaction, header, hash, with_state)?;
+		self.note_finalized(
+			transaction,
+			header,
+			hash,
+			with_state,
+			current_transaction_justifications,
+		)?;
 
 		if let Some(justification) = justification {
 			transaction.set_from_vec(
 				columns::JUSTIFICATIONS,
 				&utils::number_and_hash_to_lookup_key(number, hash)?,
-				Justifications::from(justification).encode(),
+				Justifications::from(justification.clone()).encode(),
 			);
+			current_transaction_justifications.insert(hash, justification);
 		}
 		Ok(MetaUpdate { hash, number, is_best: false, is_finalized: true, with_state })
 	}
@@ -1371,6 +1457,8 @@ impl<Block: BlockT> Backend<Block> {
 			(meta.best_number, meta.finalized_hash, meta.finalized_number, meta.block_gap)
 		};
 
+		let mut current_transaction_justifications: HashMap<Block::Hash, Justification> =
+			HashMap::new();
 		for (block_hash, justification) in operation.finalized_blocks {
 			let block_header = self.blockchain.expect_header(block_hash)?;
 			meta_updates.push(self.finalize_block_with_transaction(
@@ -1379,6 +1467,7 @@ impl<Block: BlockT> Backend<Block> {
 				&block_header,
 				Some(last_finalized_hash),
 				justification,
+				&mut current_transaction_justifications,
 			)?);
 			last_finalized_hash = block_hash;
 			last_finalized_num = *block_header.number();
@@ -1551,7 +1640,14 @@ impl<Block: BlockT> Backend<Block> {
 			if finalized {
 				// TODO: ensure best chain contains this block.
 				self.ensure_sequential_finalization(header, Some(last_finalized_hash))?;
-				self.note_finalized(&mut transaction, header, hash, operation.commit_state)?;
+				let mut current_transaction_justifications = HashMap::new();
+				self.note_finalized(
+					&mut transaction,
+					header,
+					hash,
+					operation.commit_state,
+					&mut current_transaction_justifications,
+				)?;
 			} else {
 				// canonicalize blocks which are old enough, regardless of finality.
 				self.force_delayed_canonicalize(&mut transaction)?
@@ -1684,6 +1780,7 @@ impl<Block: BlockT> Backend<Block> {
 		f_header: &Block::Header,
 		f_hash: Block::Hash,
 		with_state: bool,
+		current_transaction_justifications: &mut HashMap<Block::Hash, Justification>,
 	) -> ClientResult<()> {
 		let f_num = *f_header.number();
 
@@ -1709,7 +1806,7 @@ impl<Block: BlockT> Backend<Block> {
 		}
 
 		let new_displaced = self.blockchain.leaves.write().finalize_height(f_num);
-		self.prune_blocks(transaction, f_num, &new_displaced)?;
+		self.prune_blocks(transaction, f_num, &new_displaced, current_transaction_justifications)?;
 
 		Ok(())
 	}
@@ -1717,22 +1814,39 @@ impl<Block: BlockT> Backend<Block> {
 	fn prune_blocks(
 		&self,
 		transaction: &mut Transaction<DbHash>,
-		finalized: NumberFor<Block>,
+		finalized_number: NumberFor<Block>,
 		displaced: &FinalizationOutcome<Block::Hash, NumberFor<Block>>,
+		current_transaction_justifications: &mut HashMap<Block::Hash, Justification>,
 	) -> ClientResult<()> {
 		match self.blocks_pruning {
 			BlocksPruning::KeepAll => {},
 			BlocksPruning::Some(blocks_pruning) => {
 				// Always keep the last finalized block
 				let keep = std::cmp::max(blocks_pruning, 1);
-				if finalized >= keep.into() {
-					let number = finalized.saturating_sub(keep.into());
+				if finalized_number >= keep.into() {
+					let number = finalized_number.saturating_sub(keep.into());
+
+					// Before we prune a block, check if it is pinned
+					if let Some(hash) = self.blockchain.hash(number)? {
+						self.blockchain.insert_persisted_body_if_pinned(hash)?;
+
+						// If the block was finalized in this transaction, it will not be in the db
+						// yet.
+						if let Some(justification) =
+							current_transaction_justifications.remove(&hash)
+						{
+							self.blockchain.insert_justifications_if_pinned(hash, justification);
+						} else {
+							self.blockchain.insert_persisted_justifications_if_pinned(hash)?;
+						}
+					};
+
 					self.prune_block(transaction, BlockId::<Block>::number(number))?;
 				}
-				self.prune_displaced_branches(transaction, finalized, displaced)?;
+				self.prune_displaced_branches(transaction, finalized_number, displaced)?;
 			},
 			BlocksPruning::KeepFinalized => {
-				self.prune_displaced_branches(transaction, finalized, displaced)?;
+				self.prune_displaced_branches(transaction, finalized_number, displaced)?;
 			},
 		}
 		Ok(())
@@ -1755,6 +1869,8 @@ impl<Block: BlockT> Backend<Block> {
 			while self.blockchain.hash(number)? != Some(hash) {
 				match self.blockchain.header(hash)? {
 					Some(header) => {
+						self.blockchain.insert_persisted_body_if_pinned(hash)?;
+
 						self.prune_block(transaction, BlockId::<Block>::hash(hash))?;
 						number = header.number().saturating_sub(One::one());
 						hash = *header.parent_hash();
@@ -1985,6 +2101,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				.state_db
 				.reset(state_meta_db)
 				.map_err(sp_blockchain::Error::from_state_db)?;
+			self.blockchain.clear_pinning_cache();
 			Err(e)
 		} else {
 			self.storage.state_db.sync();
@@ -2000,12 +2117,14 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		let mut transaction = Transaction::new();
 		let header = self.blockchain.expect_header(hash)?;
 
+		let mut current_transaction_justifications = HashMap::new();
 		let m = self.finalize_block_with_transaction(
 			&mut transaction,
 			hash,
 			&header,
 			None,
 			justification,
+			&mut current_transaction_justifications,
 		)?;
 
 		self.storage.db.commit(transaction)?;
@@ -2381,6 +2500,49 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			self.storage.state_db.pruning_mode(),
 			PruningMode::ArchiveAll | PruningMode::ArchiveCanonical
 		)
+	}
+
+	fn pin_block(&self, hash: <Block as BlockT>::Hash) -> sp_blockchain::Result<()> {
+		let hint = || {
+			let header_metadata = self.blockchain.header_metadata(hash);
+			header_metadata
+				.map(|hdr| {
+					sc_state_db::NodeDb::get(self.storage.as_ref(), hdr.state_root.as_ref())
+						.unwrap_or(None)
+						.is_some()
+				})
+				.unwrap_or(false)
+		};
+
+		if let Some(number) = self.blockchain.number(hash)? {
+			self.storage.state_db.pin(&hash, number.saturated_into::<u64>(), hint).map_err(
+				|_| {
+					sp_blockchain::Error::UnknownBlock(format!(
+						"State already discarded for `{:?}`",
+						hash
+					))
+				},
+			)?;
+		} else {
+			return Err(ClientError::UnknownBlock(format!(
+				"Can not pin block with hash `{:?}`. Block not found.",
+				hash
+			)))
+		}
+
+		if self.blocks_pruning != BlocksPruning::KeepAll {
+			// Only increase reference count for this hash. Value is loaded once we prune.
+			self.blockchain.bump_ref(hash);
+		}
+		Ok(())
+	}
+
+	fn unpin_block(&self, hash: <Block as BlockT>::Hash) {
+		self.storage.state_db.unpin(&hash);
+
+		if self.blocks_pruning != BlocksPruning::KeepAll {
+			self.blockchain.unpin(hash);
+		}
 	}
 }
 
@@ -4008,5 +4170,250 @@ pub(crate) mod tests {
 			assert_eq!(block3, backend.blockchain().hash(3).unwrap().unwrap());
 			assert_eq!(block4, backend.blockchain().hash(4).unwrap().unwrap());
 		}
+	}
+
+	#[test]
+	fn test_pinned_blocks_on_finalize() {
+		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::Some(1), 10);
+		let mut blocks = Vec::new();
+		let mut prev_hash = Default::default();
+
+		let build_justification = |i: u64| ([0, 0, 0, 0], vec![i.try_into().unwrap()]);
+		// Block tree:
+		//   0 -> 1 -> 2 -> 3 -> 4
+		for i in 0..5 {
+			let hash = insert_block(
+				&backend,
+				i,
+				prev_hash,
+				None,
+				Default::default(),
+				vec![i.into()],
+				None,
+			)
+			.unwrap();
+			blocks.push(hash);
+			// Avoid block pruning.
+			backend.pin_block(blocks[i as usize]).unwrap();
+
+			prev_hash = hash;
+		}
+
+		let bc = backend.blockchain();
+
+		// Check that we can properly access values when there is reference count
+		// but no value.
+		assert_eq!(Some(vec![1.into()]), bc.body(blocks[1]).unwrap());
+
+		// Block 1 gets pinned three times
+		backend.pin_block(blocks[1]).unwrap();
+		backend.pin_block(blocks[1]).unwrap();
+
+		// Finalize all blocks. This will trigger pruning.
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, blocks[4]).unwrap();
+		for i in 1..5 {
+			op.mark_finalized(blocks[i], Some(build_justification(i.try_into().unwrap())))
+				.unwrap();
+		}
+		backend.commit_operation(op).unwrap();
+
+		// Block 0, 1, 2, 3 are pinned, so all values should be cached.
+		// Block 4 is inside the pruning window, its value is in db.
+		assert_eq!(Some(vec![0.into()]), bc.body(blocks[0]).unwrap());
+
+		assert_eq!(Some(vec![1.into()]), bc.body(blocks[1]).unwrap());
+		assert_eq!(
+			Some(Justifications::from(build_justification(1))),
+			bc.justifications(blocks[1]).unwrap()
+		);
+
+		assert_eq!(Some(vec![2.into()]), bc.body(blocks[2]).unwrap());
+		assert_eq!(
+			Some(Justifications::from(build_justification(2))),
+			bc.justifications(blocks[2]).unwrap()
+		);
+
+		assert_eq!(Some(vec![3.into()]), bc.body(blocks[3]).unwrap());
+		assert_eq!(
+			Some(Justifications::from(build_justification(3))),
+			bc.justifications(blocks[3]).unwrap()
+		);
+
+		assert_eq!(Some(vec![4.into()]), bc.body(blocks[4]).unwrap());
+		assert_eq!(
+			Some(Justifications::from(build_justification(4))),
+			bc.justifications(blocks[4]).unwrap()
+		);
+
+		// Unpin all blocks. Values should be removed from cache.
+		for block in &blocks {
+			backend.unpin_block(*block);
+		}
+
+		assert!(bc.body(blocks[0]).unwrap().is_none());
+		// Block 1 was pinned twice, we expect it to be still cached
+		assert!(bc.body(blocks[1]).unwrap().is_some());
+		assert!(bc.justifications(blocks[1]).unwrap().is_some());
+		// Headers should also be available while pinned
+		assert!(bc.header(blocks[1]).ok().flatten().is_some());
+		assert!(bc.body(blocks[2]).unwrap().is_none());
+		assert!(bc.justifications(blocks[2]).unwrap().is_none());
+		assert!(bc.body(blocks[3]).unwrap().is_none());
+		assert!(bc.justifications(blocks[3]).unwrap().is_none());
+
+		// After these unpins, block 1 should also be removed
+		backend.unpin_block(blocks[1]);
+		assert!(bc.body(blocks[1]).unwrap().is_some());
+		assert!(bc.justifications(blocks[1]).unwrap().is_some());
+		backend.unpin_block(blocks[1]);
+		assert!(bc.body(blocks[1]).unwrap().is_none());
+		assert!(bc.justifications(blocks[1]).unwrap().is_none());
+
+		// Block 4 is inside the pruning window and still kept
+		assert_eq!(Some(vec![4.into()]), bc.body(blocks[4]).unwrap());
+		assert_eq!(
+			Some(Justifications::from(build_justification(4))),
+			bc.justifications(blocks[4]).unwrap()
+		);
+
+		// Block tree:
+		//   0 -> 1 -> 2 -> 3 -> 4 -> 5
+		let hash =
+			insert_block(&backend, 5, prev_hash, None, Default::default(), vec![5.into()], None)
+				.unwrap();
+		blocks.push(hash);
+
+		backend.pin_block(blocks[4]).unwrap();
+		// Mark block 5 as finalized.
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, blocks[5]).unwrap();
+		op.mark_finalized(blocks[5], Some(build_justification(5))).unwrap();
+		backend.commit_operation(op).unwrap();
+
+		assert!(bc.body(blocks[0]).unwrap().is_none());
+		assert!(bc.body(blocks[1]).unwrap().is_none());
+		assert!(bc.body(blocks[2]).unwrap().is_none());
+		assert!(bc.body(blocks[3]).unwrap().is_none());
+
+		assert_eq!(Some(vec![4.into()]), bc.body(blocks[4]).unwrap());
+		assert_eq!(
+			Some(Justifications::from(build_justification(4))),
+			bc.justifications(blocks[4]).unwrap()
+		);
+		assert_eq!(Some(vec![5.into()]), bc.body(blocks[5]).unwrap());
+		assert!(bc.header(blocks[5]).ok().flatten().is_some());
+
+		backend.unpin_block(blocks[4]);
+		assert!(bc.body(blocks[4]).unwrap().is_none());
+		assert!(bc.justifications(blocks[4]).unwrap().is_none());
+
+		// Append a justification to block 5.
+		backend.append_justification(blocks[5], ([0, 0, 0, 1], vec![42])).unwrap();
+
+		let hash =
+			insert_block(&backend, 6, blocks[5], None, Default::default(), vec![6.into()], None)
+				.unwrap();
+		blocks.push(hash);
+
+		// Pin block 5 so it gets loaded into the cache on prune
+		backend.pin_block(blocks[5]).unwrap();
+
+		// Finalize block 6 so block 5 gets pruned. Since it is pinned both justifications should be
+		// in memory.
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, blocks[6]).unwrap();
+		op.mark_finalized(blocks[6], None).unwrap();
+		backend.commit_operation(op).unwrap();
+
+		assert_eq!(Some(vec![5.into()]), bc.body(blocks[5]).unwrap());
+		assert!(bc.header(blocks[5]).ok().flatten().is_some());
+		let mut expected = Justifications::from(build_justification(5));
+		expected.append(([0, 0, 0, 1], vec![42]));
+		assert_eq!(Some(expected), bc.justifications(blocks[5]).unwrap());
+	}
+
+	#[test]
+	fn test_pinned_blocks_on_finalize_with_fork() {
+		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::Some(1), 10);
+		let mut blocks = Vec::new();
+		let mut prev_hash = Default::default();
+
+		// Block tree:
+		//   0 -> 1 -> 2 -> 3 -> 4
+		for i in 0..5 {
+			let hash = insert_block(
+				&backend,
+				i,
+				prev_hash,
+				None,
+				Default::default(),
+				vec![i.into()],
+				None,
+			)
+			.unwrap();
+			blocks.push(hash);
+
+			// Avoid block pruning.
+			backend.pin_block(blocks[i as usize]).unwrap();
+
+			prev_hash = hash;
+		}
+
+		// Insert a fork at the second block.
+		// Block tree:
+		//   0 -> 1 -> 2 -> 3 -> 4
+		//        \ -> 2 -> 3
+		let fork_hash_root =
+			insert_block(&backend, 2, blocks[1], None, H256::random(), vec![2.into()], None)
+				.unwrap();
+		let fork_hash_3 = insert_block(
+			&backend,
+			3,
+			fork_hash_root,
+			None,
+			H256::random(),
+			vec![3.into(), 11.into()],
+			None,
+		)
+		.unwrap();
+
+		// Do not prune the fork hash.
+		backend.pin_block(fork_hash_3).unwrap();
+
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, blocks[4]).unwrap();
+		op.mark_head(blocks[4]).unwrap();
+		backend.commit_operation(op).unwrap();
+
+		for i in 1..5 {
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, blocks[4]).unwrap();
+			op.mark_finalized(blocks[i], None).unwrap();
+			backend.commit_operation(op).unwrap();
+		}
+
+		let bc = backend.blockchain();
+		assert_eq!(Some(vec![0.into()]), bc.body(blocks[0]).unwrap());
+		assert_eq!(Some(vec![1.into()]), bc.body(blocks[1]).unwrap());
+		assert_eq!(Some(vec![2.into()]), bc.body(blocks[2]).unwrap());
+		assert_eq!(Some(vec![3.into()]), bc.body(blocks[3]).unwrap());
+		assert_eq!(Some(vec![4.into()]), bc.body(blocks[4]).unwrap());
+		// Check the fork hashes.
+		assert_eq!(None, bc.body(fork_hash_root).unwrap());
+		assert_eq!(Some(vec![3.into(), 11.into()]), bc.body(fork_hash_3).unwrap());
+
+		// Unpin all blocks, except the forked one.
+		for block in &blocks {
+			backend.unpin_block(*block);
+		}
+		assert!(bc.body(blocks[0]).unwrap().is_none());
+		assert!(bc.body(blocks[1]).unwrap().is_none());
+		assert!(bc.body(blocks[2]).unwrap().is_none());
+		assert!(bc.body(blocks[3]).unwrap().is_none());
+
+		assert!(bc.body(fork_hash_3).unwrap().is_some());
+		backend.unpin_block(fork_hash_3);
+		assert!(bc.body(fork_hash_3).unwrap().is_none());
 	}
 }
