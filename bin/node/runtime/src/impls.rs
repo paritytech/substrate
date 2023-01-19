@@ -443,12 +443,14 @@ mod multiplier_tests {
 
 		// Some values that are all above the target and will cause an increase.
 		let t = target();
-		vec![t + Weight::from_ref_time(100), t * 2, t * 4].into_iter().for_each(|i| {
-			run_with_system_weight(i, || {
-				let fm = runtime_multiplier_update(max_fm);
-				// won't grow. The convert saturates everything.
-				assert_eq!(fm, max_fm);
-			})
-		});
+		vec![t + Weight::from_ref_time(100), t.saturating_mul(2), t.saturating_mul(4), Weight::MAX]
+			.into_iter()
+			.for_each(|i| {
+				run_with_system_weight(i, || {
+					let fm = runtime_multiplier_update(max_fm);
+					// won't grow. The convert saturates everything.
+					assert_eq!(fm, max_fm);
+				})
+			});
 	}
 }
