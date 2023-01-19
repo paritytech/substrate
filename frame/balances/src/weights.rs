@@ -54,6 +54,7 @@ pub trait WeightInfo {
 	fn force_transfer() -> Weight;
 	fn transfer_all() -> Weight;
 	fn force_unreserve() -> Weight;
+	fn upgrade_accounts(c: u32) -> Weight;
 }
 
 /// Weights for pallet_balances using the Substrate node and recommended hardware.
@@ -108,6 +109,13 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1 as u64))
 			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
+	// Storage: System Account (r:1 w:1)
+	fn upgrade_accounts(_c: u32) -> Weight {
+		// Minimum execution time: 23_741 nanoseconds.
+		Weight::from_ref_time(24_073_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(1 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
+	}
 }
 
 // For backwards compatibility and tests
@@ -156,6 +164,13 @@ impl WeightInfo for () {
 	}
 	// Storage: System Account (r:1 w:1)
 	fn force_unreserve() -> Weight {
+		// Minimum execution time: 23_741 nanoseconds.
+		Weight::from_ref_time(24_073_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(1 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
+	}
+	// Storage: System Account (r:1 w:1)
+	fn upgrade_accounts(_c: u32) -> Weight {
 		// Minimum execution time: 23_741 nanoseconds.
 		Weight::from_ref_time(24_073_000 as u64)
 			.saturating_add(RocksDbWeight::get().reads(1 as u64))

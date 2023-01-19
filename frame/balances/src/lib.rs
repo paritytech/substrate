@@ -665,15 +665,46 @@ pub mod pallet {
 			let _leftover = <Self as ReservableCurrency<_>>::unreserve(&who, amount);
 			Ok(())
 		}
+
+		/// Upgrade a specified account.
+		///
+		/// - `origin`: Must be `Signed`.
+		/// - `who`: The account to be upgraded.
+		///
+		/// This will waive the transaction fee if at least all but 10% of the accounts needed to
+		/// be upgraded. (We let some not have to be upgraded just in order to allow for the
+		/// possibililty of churn).
+		#[pallet::call_index(6)]
+		#[pallet::weight(T::WeightInfo::upgrade_accounts(who.len() as u32))]
+		pub fn upgrade_accounts(
+			origin: OriginFor<T>,
+			who: Vec<T::AccountId>,
+		) -> DispatchResultWithPostInfo {
+			ensure_signed(origin)?;
+			let mut upgrade_count = 0;
+			for i in &who {
+				let upgraded = Self::ensure_upgraded(i);
+				if upgraded {
+					upgrade_count.saturating_inc();
+				}
+			}
+			if upgrade_count >= who.len() * 95 / 100 {
+				Ok(Pays::No.into())
+			} else {
+				Ok(Pays::Yes.into())
+			}
+		}
 	}
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Ensure the account `who` is using the new logic.
-	pub fn ensure_upgraded(who: &T::AccountId) {
+	///
+	/// Returns `true` if the account did get upgraded, `false` if it didn't need upgrading.
+	pub fn ensure_upgraded(who: &T::AccountId) -> bool {
 		let mut a = Self::account(who);
 		if a.flags.is_new_logic() {
-			return
+			return false
 		}
 		a.flags.set_new_logic();
 		if !a.reserved.is_zero() || !a.frozen.is_zero() {
@@ -688,6 +719,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 		// Should never fail - we're only setting a bit.
 		let _ = Self::mutate_account(who, |account| *account = a);
+		return true
 	}
 
 	/// Get the free balance of an account.
