@@ -30,7 +30,7 @@ use sp_runtime::{
 };
 use std::{collections::HashMap, hash::Hash, pin::Pin, sync::Arc};
 
-const LOG_TARGET: &str = "txpool";
+const LOG_TARGET: &str = "txpool::api";
 
 pub use sp_runtime::transaction_validity::{
 	TransactionLongevity, TransactionPriority, TransactionSource, TransactionTag,
