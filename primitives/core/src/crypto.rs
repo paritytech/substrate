@@ -84,20 +84,27 @@ impl<S, T: UncheckedFrom<S>> UncheckedInto<T> for S {
 }
 
 /// An error with the interpretation of a secret.
+#[cfg_attr(feature = "std", derive(thiserror::Error))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg(feature = "full_crypto")]
 pub enum SecretStringError {
 	/// The overall format was invalid (e.g. the seed phrase contained symbols).
+	#[cfg_attr(feature = "std", error("Invalid format"))]
 	InvalidFormat,
 	/// The seed phrase provided is not a valid BIP39 phrase.
+	#[cfg_attr(feature = "std", error("Invalid phrase"))]
 	InvalidPhrase,
 	/// The supplied password was invalid.
+	#[cfg_attr(feature = "std", error("Invalid password"))]
 	InvalidPassword,
 	/// The seed is invalid (bad content).
+	#[cfg_attr(feature = "std", error("Invalid seed"))]
 	InvalidSeed,
 	/// The seed has an invalid length.
+	#[cfg_attr(feature = "std", error("Invalid seed length"))]
 	InvalidSeedLength,
 	/// The derivation path was invalid (e.g. contains soft junctions when they are not supported).
+	#[cfg_attr(feature = "std", error("Invalid path"))]
 	InvalidPath,
 }
 

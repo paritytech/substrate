@@ -18,17 +18,20 @@
 
 //! State API backend for full nodes.
 
-use std::{collections::HashMap, marker::PhantomData, sync::Arc};
+use std::{collections::HashMap, marker::PhantomData, sync::Arc, time::Duration};
 
 use super::{
 	client_err,
 	error::{Error, Result},
 	ChildStateBackend, StateBackend,
 };
-use crate::SubscriptionTaskExecutor;
+use crate::{DenyUnsafe, SubscriptionTaskExecutor};
 
 use futures::{future, stream, FutureExt, StreamExt};
-use jsonrpsee::{core::Error as JsonRpseeError, SubscriptionSink};
+use jsonrpsee::{
+	core::{async_trait, Error as JsonRpseeError},
+	SubscriptionSink,
+};
 use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, ProofProvider,
 	StorageProvider,
@@ -47,6 +50,9 @@ use sp_core::{
 };
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_version::RuntimeVersion;
+
+/// The maximum time allowed for an RPC call when running without unsafe RPC enabled.
+const MAXIMUM_SAFE_RPC_CALL_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Ranges to query in state_queryStorage.
 struct QueryStorageRange<Block: BlockT> {
@@ -166,6 +172,7 @@ where
 	}
 }
 
+#[async_trait]
 impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Client>
 where
 	Block: BlockT + 'static,
@@ -251,33 +258,53 @@ where
 			.map_err(client_err)
 	}
 
-	fn storage_size(
+	async fn storage_size(
 		&self,
 		block: Option<Block::Hash>,
 		key: StorageKey,
+		deny_unsafe: DenyUnsafe,
 	) -> std::result::Result<Option<u64>, Error> {
 		let block = match self.block_or_best(block) {
 			Ok(b) => b,
 			Err(e) => return Err(client_err(e)),
 		};
 
-		match self.client.storage(block, &key) {
-			Ok(Some(d)) => return Ok(Some(d.0.len() as u64)),
-			Err(e) => return Err(client_err(e)),
-			Ok(None) => {},
-		}
+		let client = self.client.clone();
+		let timeout = match deny_unsafe {
+			DenyUnsafe::Yes => Some(MAXIMUM_SAFE_RPC_CALL_TIMEOUT),
+			DenyUnsafe::No => None,
+		};
 
-		self.client
-			.storage_pairs(block, &key)
-			.map(|kv| {
-				let item_sum = kv.iter().map(|(_, v)| v.0.len() as u64).sum::<u64>();
-				if item_sum > 0 {
-					Some(item_sum)
-				} else {
-					None
-				}
-			})
-			.map_err(client_err)
+		super::utils::spawn_blocking_with_timeout(timeout, move |is_timed_out| {
+			// Does the key point to a concrete entry in the database?
+			match client.storage(block, &key) {
+				Ok(Some(d)) => return Ok(Ok(Some(d.0.len() as u64))),
+				Err(e) => return Ok(Err(client_err(e))),
+				Ok(None) => {},
+			}
+
+			// The key doesn't point to anything, so it's probably a prefix.
+			let iter = match client.storage_keys_iter(block, Some(&key), None).map_err(client_err) {
+				Ok(iter) => iter,
+				Err(e) => return Ok(Err(e)),
+			};
+
+			let mut sum = 0;
+			for storage_key in iter {
+				let value = client.storage(block, &storage_key).ok().flatten().unwrap_or_default();
+				sum += value.0.len() as u64;
+
+				is_timed_out.check_if_timed_out()?;
+			}
+
+			if sum > 0 {
+				Ok(Ok(Some(sum)))
+			} else {
+				Ok(Ok(None))
+			}
+		})
+		.await
+		.map_err(|error| Error::Client(Box::new(error)))?
 	}
 
 	fn storage_hash(

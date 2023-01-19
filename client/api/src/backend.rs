@@ -303,17 +303,17 @@ pub trait AuxStore {
 }
 
 /// An `Iterator` that iterates keys in a given block under a prefix.
-pub struct KeyIterator<'a, State, Block> {
+pub struct KeyIterator<State, Block> {
 	state: State,
 	child_storage: Option<ChildInfo>,
-	prefix: Option<&'a StorageKey>,
+	prefix: Option<StorageKey>,
 	current_key: Vec<u8>,
 	_phantom: PhantomData<Block>,
 }
 
-impl<'a, State, Block> KeyIterator<'a, State, Block> {
+impl<State, Block> KeyIterator<State, Block> {
 	/// create a KeyIterator instance
-	pub fn new(state: State, prefix: Option<&'a StorageKey>, current_key: Vec<u8>) -> Self {
+	pub fn new(state: State, prefix: Option<StorageKey>, current_key: Vec<u8>) -> Self {
 		Self { state, child_storage: None, prefix, current_key, _phantom: PhantomData }
 	}
 
@@ -321,14 +321,14 @@ impl<'a, State, Block> KeyIterator<'a, State, Block> {
 	pub fn new_child(
 		state: State,
 		child_info: ChildInfo,
-		prefix: Option<&'a StorageKey>,
+		prefix: Option<StorageKey>,
 		current_key: Vec<u8>,
 	) -> Self {
 		Self { state, child_storage: Some(child_info), prefix, current_key, _phantom: PhantomData }
 	}
 }
 
-impl<'a, State, Block> Iterator for KeyIterator<'a, State, Block>
+impl<State, Block> Iterator for KeyIterator<State, Block>
 where
 	Block: BlockT,
 	State: StateBackend<HashFor<Block>>,
@@ -344,7 +344,7 @@ where
 		.ok()
 		.flatten()?;
 		// this terminates the iterator the first time it fails.
-		if let Some(prefix) = self.prefix {
+		if let Some(ref prefix) = self.prefix {
 			if !next_key.starts_with(&prefix.0[..]) {
 				return None
 			}
@@ -387,12 +387,12 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 
 	/// Given a block's `Hash` and a key prefix, return a `KeyIterator` iterates matching storage
 	/// keys in that block.
-	fn storage_keys_iter<'a>(
+	fn storage_keys_iter(
 		&self,
 		hash: Block::Hash,
-		prefix: Option<&'a StorageKey>,
+		prefix: Option<&StorageKey>,
 		start_key: Option<&StorageKey>,
-	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>>;
+	) -> sp_blockchain::Result<KeyIterator<B::State, Block>>;
 
 	/// Given a block's `Hash`, a key and a child storage key, return the value under the key in
 	/// that block.
@@ -414,13 +414,13 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 
 	/// Given a block's `Hash` and a key `prefix` and a child storage key,
 	/// return a `KeyIterator` that iterates matching storage keys in that block.
-	fn child_storage_keys_iter<'a>(
+	fn child_storage_keys_iter(
 		&self,
 		hash: Block::Hash,
 		child_info: ChildInfo,
-		prefix: Option<&'a StorageKey>,
+		prefix: Option<&StorageKey>,
 		start_key: Option<&StorageKey>,
-	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>>;
+	) -> sp_blockchain::Result<KeyIterator<B::State, Block>>;
 
 	/// Given a block's `Hash`, a key and a child storage key, return the hash under the key in that
 	/// block.

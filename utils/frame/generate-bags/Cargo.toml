@@ -17,5 +17,5 @@ pallet-staking = { version = "4.0.0-dev", path = "../../../frame/staking" }
 
 # third party
 chrono = { version = "0.4.19" }
-git2 = { version = "0.14.2", default-features = false }
+git2 = { version = "0.16.0", default-features = false }
 num-format = "0.4.3"

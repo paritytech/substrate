@@ -17,6 +17,7 @@
 
 //! Migrations to version [`3.0.0`], as denoted by the changelog.
 
+use super::super::LOG_TARGET;
 use crate::{Config, Pallet};
 use codec::{Decode, Encode, FullCodec};
 use frame_support::{
@@ -88,7 +89,7 @@ pub fn apply<V: V2ToV3, T: Config>(
 ) -> Weight {
 	let storage_version = StorageVersion::get::<Pallet<T>>();
 	log::info!(
-		target: "runtime::elections-phragmen",
+		target: LOG_TARGET,
 		"Running migration for elections-phragmen with storage version {:?}",
 		storage_version,
 	);
@@ -104,7 +105,7 @@ pub fn apply<V: V2ToV3, T: Config>(
 		Weight::MAX
 	} else {
 		log::warn!(
-			target: "runtime::elections-phragmen",
+			target: LOG_TARGET,
 			"Attempted to apply migration to V3 but failed because storage version is {:?}",
 			storage_version,
 		);
@@ -118,22 +119,14 @@ pub fn migrate_voters_to_recorded_deposit<V: V2ToV3, T: Config>(old_deposit: V::
 		Some(Voter { votes, stake, deposit: old_deposit })
 	});
 
-	log::info!(
-		target: "runtime::elections-phragmen",
-		"migrated {} voter accounts.",
-		<Voting<V, T>>::iter().count(),
-	);
+	log::info!(target: LOG_TARGET, "migrated {} voter accounts.", <Voting<V, T>>::iter().count());
 }
 
 /// Migrate all candidates to recorded deposit.
 pub fn migrate_candidates_to_recorded_deposit<V: V2ToV3, T: Config>(old_deposit: V::Balance) {
 	let _ = <Candidates<V, T>>::translate::<Vec<V::AccountId>, _>(|maybe_old_candidates| {
 		maybe_old_candidates.map(|old_candidates| {
-			log::info!(
-				target: "runtime::elections-phragmen",
-				"migrated {} candidate accounts.",
-				old_candidates.len(),
-			);
+			log::info!(target: LOG_TARGET, "migrated {} candidate accounts.", old_candidates.len());
 			old_candidates.into_iter().map(|c| (c, old_deposit)).collect::<Vec<_>>()
 		})
 	});
@@ -143,11 +136,7 @@ pub fn migrate_candidates_to_recorded_deposit<V: V2ToV3, T: Config>(old_deposit:
 pub fn migrate_members_to_recorded_deposit<V: V2ToV3, T: Config>(old_deposit: V::Balance) {
 	let _ = <Members<V, T>>::translate::<Vec<(V::AccountId, V::Balance)>, _>(|maybe_old_members| {
 		maybe_old_members.map(|old_members| {
-			log::info!(
-				target: "runtime::elections-phragmen",
-				"migrated {} member accounts.",
-				old_members.len(),
-			);
+			log::info!(target: LOG_TARGET, "migrated {} member accounts.", old_members.len());
 			old_members
 				.into_iter()
 				.map(|(who, stake)| SeatHolder { who, stake, deposit: old_deposit })
@@ -162,7 +151,7 @@ pub fn migrate_runners_up_to_recorded_deposit<V: V2ToV3, T: Config>(old_deposit:
 		|maybe_old_runners_up| {
 			maybe_old_runners_up.map(|old_runners_up| {
 				log::info!(
-					target: "runtime::elections-phragmen",
+					target: LOG_TARGET,
 					"migrated {} runner-up accounts.",
 					old_runners_up.len(),
 				);

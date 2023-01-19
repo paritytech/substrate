@@ -2928,7 +2928,7 @@ benchmarks! {
 	// configured `Schedule` during benchmark development.
 	// It can be outputed using the following command:
 	// cargo run --manifest-path=bin/node/cli/Cargo.toml --release \
-	//     --features runtime-benchmarks -- benchmark --extra --dev --execution=native \
+	//     --features runtime-benchmarks -- benchmark pallet --extra --dev --execution=native \
 	//     -p pallet_contracts -e print_schedule --no-median-slopes --no-min-squares
 	#[extra]
 	print_schedule {
