@@ -40,19 +40,8 @@ pub trait EnsureOrigin<OuterOrigin> {
 	/// Perform the origin check.
 	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin>;
 
-	/// Returns an outer origin capable of passing `try_origin` check.
-	///
-	/// NOTE: This should generally *NOT* be reimplemented. Instead implement
-	/// `try_successful_origin`.
-	///
-	/// ** Should be used for benchmarking only!!! **
-	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> OuterOrigin {
-		Self::try_successful_origin().expect("No origin exists which can satisfy the guard")
-	}
-
-	/// Attept to get an outer origin capable of passing `try_origin` check. May return `Err` if it
-	/// is impossible. Default implementation just uses `successful_origin()`.
+	/// Attempt to get an outer origin capable of passing `try_origin` check. May return `Err` if it
+	/// is impossible. Default implementation returns `Err`.
 	///
 	/// ** Should be used for benchmarking only!!! **
 	#[cfg(feature = "runtime-benchmarks")]
