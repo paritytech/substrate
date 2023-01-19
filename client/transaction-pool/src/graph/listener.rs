@@ -139,7 +139,7 @@ impl<H: hash::Hash + traits::Member + Serialize, C: ChainApi> Listener<H, C> {
 					target: LOG_TARGET,
 					"[{:?}] Sent finalization event (block {:?})",
 					hash,
-					block_hash
+					block_hash,
 				);
 				self.fire(&hash, |watcher| watcher.finalized(block_hash, tx_index))
 			}

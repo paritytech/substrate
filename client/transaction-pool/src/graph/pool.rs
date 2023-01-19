@@ -291,7 +291,7 @@ impl<B: ChainApi> Pool<B> {
 					} else {
 						log::trace!(
 							target: LOG_TARGET,
-							"txpool is empty, skipping validation for block {at:?}"
+							"txpool is empty, skipping validation for block {at:?}",
 						);
 					}
 				},

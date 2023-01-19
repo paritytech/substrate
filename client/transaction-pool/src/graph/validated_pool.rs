@@ -635,7 +635,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 		log::trace!(
 			target: LOG_TARGET,
 			"Attempting to notify watchers of finalization for {}",
-			block_hash
+			block_hash,
 		);
 		self.listener.write().finalized(block_hash);
 		Ok(())

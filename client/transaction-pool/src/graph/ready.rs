@@ -546,7 +546,8 @@ impl<Hash: hash::Hash + Member, Ex> Iterator for BestIterator<Hash, Ex> {
 			if self.invalid.contains(hash) {
 				debug!(
 					target: LOG_TARGET,
-					"[{:?}] Skipping invalid child transaction while iterating.", hash
+					"[{:?}] Skipping invalid child transaction while iterating.",
+					hash,
 				);
 				continue
 			}

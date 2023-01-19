@@ -493,7 +493,9 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 				Err(e) => {
 					warn!(
 						target: LOG_TARGET,
-						"[{:?}] Failed to promote during pruning: {:?}", hash, e
+						"[{:?}] Failed to promote during pruning: {:?}",
+						hash,
+						e,
 					);
 					failed.push(hash)
 				},

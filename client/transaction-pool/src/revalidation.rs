@@ -89,7 +89,7 @@ async fn batch_revalidate<Api: ChainApi>(
 					target: LOG_TARGET,
 					"[{:?}]: Revalidation: invalid {:?}",
 					ext_hash,
-					err
+					err,
 				);
 				invalid_hashes.push(ext_hash);
 			},
@@ -100,7 +100,7 @@ async fn batch_revalidate<Api: ChainApi>(
 					target: LOG_TARGET,
 					"[{:?}]: Unknown during revalidation: {:?}",
 					ext_hash,
-					err
+					err,
 				);
 			},
 			Ok(Ok(validity)) => {

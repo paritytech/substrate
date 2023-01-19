@@ -186,7 +186,7 @@ where
 			target: LOG_TARGET,
 			"forced update: {:?}, {:?}",
 			self.recent_best_block,
-			self.recent_finalized_block
+			self.recent_finalized_block,
 		);
 	}
 }
