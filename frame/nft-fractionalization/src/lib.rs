@@ -15,6 +15,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! * NFT Fractionalization pallet
+//! 
+//! This pallet provides the basic functionality that should allow users 
+//! to leverage partial ownership, transfers, and sales, of illiquid assets, 
+//! whether real life assets represented by their digital twins, or NFTs,
+//! or original NFTs. 
+//! 
+//! The functionality allows a user to lock an NFT they own, create a new 
+//! fungible asset, and mint a set amount of tokens (`fractions`). 
+//!
+//! It also allows the user to burn 100% of the asset and to unlock the NFT
+//! into their account. 
+//! 
+//! ### Functions 
+//! 
+//! The functions implement the trait `LockableNonfungible`.
+//!
+//! * `fractionalize`: lock the NFT, create and mint new asset.
+//! * `unify`: return 100% of the asset, unlock the NFT.
+
+
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -130,6 +151,7 @@ pub mod pallet {
 	}
 
 	/// Stores the information about the fractionalized NFTs.
+	/// Keeps track of the corresponding asset ID and amount minted.
 	#[pallet::storage]
 	#[pallet::getter(fn nft_to_asset)]
 	pub type NftToAsset<T: Config> = StorageMap<
@@ -172,6 +194,19 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// Lock the NFT and mint a new fungible asset.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		/// The origin must be the owner of the NFT they are trying to lock. 
+		///
+		/// - `nft_collection_id`: The ID used to identify the collection of the NFT.
+		/// Is used within the context of `pallet_nfts`.
+		/// - `nft_id`: The ID used to identify the NFT within the given collection. 
+		/// Is used within the context of `pallet_nfts`.
+		/// - `asset_id`: The ID of the new asset. 
+		/// Is used within the context of `pallet_assets`.
+		/// - `beneficiary`: The account that will receive the newly created asset. 
+		/// - `fractions`: The amount to be minted of the newly created asset. 
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::fractionalize())]
 		pub fn fractionalize(
@@ -212,6 +247,17 @@ pub mod pallet {
 		}
 
 		/// Burn the whole amount of the asset and return back the locked NFT.
+		/// 
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// - `nft_collection_id`: The ID used to identify the collection of the NFT.
+		/// Is used within the context of `pallet_nfts`.
+		/// - `nft_id`: The ID used to identify the NFT within the given collection. 
+		/// Is used within the context of `pallet_nfts`.
+		/// - `asset_id`: The ID of the asset being returned and destroyed. Must match
+		/// the original ID of the created asset, corresponding to the NFT.
+		/// Is used within the context of `pallet_assets`.
+		/// - `beneficiary`: The account that will receive the unified NFT. 
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::unify())]
 		pub fn unify(
