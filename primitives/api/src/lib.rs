@@ -519,7 +519,7 @@ pub enum ApiError {
 	StateBackendIsNotTrie,
 	#[error(transparent)]
 	Application(#[from] Box<dyn std::error::Error + Send + Sync>),
-	#[error("Api called for an unknownBlock: {0}")]
+	#[error("Api called for an unknown Block: {0}")]
 	UnknownBlock(String),
 }
 
