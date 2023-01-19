@@ -25,6 +25,7 @@
 //! `DispatchClass`. This module contains configuration object for both resources,
 //! which should be passed to `frame_system` configuration when runtime is being set up.
 
+use crate::limits::constants::WEIGHT_PROOF_SIZE_PER_MB;
 use frame_support::{
 	dispatch::{DispatchClass, OneOrMany, PerDispatchClass},
 	weights::{constants, Weight},
@@ -97,6 +98,7 @@ const DEFAULT_NORMAL_RATIO: Perbill = Perbill::from_percent(75);
 
 /// `DispatchClass`-specific weight configuration.
 #[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode, TypeInfo)]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq))]
 pub struct WeightsPerClass {
 	/// Base weight of single extrinsic of given class.
 	pub base_extrinsic: Weight,
@@ -198,6 +200,7 @@ pub struct WeightsPerClass {
 /// As a consequence of `reserved` space, total consumed block weight might exceed `max_block`
 /// value, so this parameter should rather be thought of as "target block weight" than a hard limit.
 #[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode, TypeInfo)]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq))]
 pub struct BlockWeights {
 	/// Base weight of block execution.
 	///
@@ -207,6 +210,8 @@ pub struct BlockWeights {
 	///
 	/// This is not set manually but calculated by the builder.
 	pub max_block: Weight,
+	// none means unlimited.
+	pub pov_soft_limit: Option<u64>,
 	/// Weight limits for extrinsics of given dispatch class.
 	pub per_class: PerDispatchClass<WeightsPerClass>,
 }
@@ -214,7 +219,7 @@ pub struct BlockWeights {
 impl Default for BlockWeights {
 	fn default() -> Self {
 		Self::with_sensible_defaults(
-			Weight::from_parts(constants::WEIGHT_REF_TIME_PER_SECOND, u64::MAX),
+			Weight::from_parts(constants::WEIGHT_REF_TIME_PER_SECOND, 5 * WEIGHT_PROOF_SIZE_PER_MB),
 			DEFAULT_NORMAL_RATIO,
 		)
 	}
@@ -296,6 +301,14 @@ impl BlockWeights {
 				base_for_class + self.base_block,
 			);
 		}
+		// If there is a soft PoV limit, it must not exceed `max_block`.
+		error_assert!(
+			self.pov_soft_limit.map_or(true, |l| l <= self.max_block.proof_size()),
+			&mut error,
+			"PoV soft limit {:?} must be smaller than max block size {:?}",
+			self.pov_soft_limit,
+			self.max_block.proof_size(),
+		);
 
 		if error.has_errors {
 			Err(error)
@@ -364,6 +377,7 @@ impl BlockWeights {
 						reserved: initial,
 					}
 				}),
+				pov_soft_limit: None,
 			},
 			init_cost: None,
 		}
@@ -393,6 +407,14 @@ impl BlockWeightsBuilder {
 	/// but the cost of calling `on_initialize` always prevents them from being included.
 	pub fn avg_block_initialization(mut self, init_cost: Perbill) -> Self {
 		self.init_cost = Some(init_cost);
+		self
+	}
+
+	/// Set a soft pov limit. This is the max PoV size that you would *expect* without hard limiting it.
+	///
+	/// Setting this to something higher than `max_block` will error.
+	pub fn pov_soft_limit(mut self, pov_soft_limit: u64) -> Self {
+		self.weights.pov_soft_limit = Some(pov_soft_limit);
 		self
 	}
 
@@ -509,6 +531,6 @@ mod tests {
 			.avg_block_initialization(AVERAGE_ON_INITIALIZE_RATIO)
 			.build_or_panic();
 
-		assert_eq!(weights.max_block, Weight::from_parts(2000000000000, 0));
+		assert_eq!(weights.max_block, Weight::from_parts(2000000000000, u64::MAX));
 	}
 }

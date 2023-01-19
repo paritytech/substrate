@@ -165,10 +165,6 @@ impl<T: Config> SetCode<T> for () {
 	}
 }
 
-/// Soft limit for the PoV weight of a block. Above this limit a warning will be printed and an
-/// [`Event::PovLimitExceeded`] will be emitted.
-pub const SOFT_POV_LIMIT_BYTES: u64 = 5 * 1024 * 1024;
-
 /// Numeric limits over the ability to add a consumer ref using `inc_consumers`.
 pub trait ConsumerLimits {
 	/// The number of consumers over which `inc_consumers` will cease to work.
@@ -1348,18 +1344,21 @@ impl<T: Config> Pallet<T> {
 	/// resulting header for this block.
 	pub fn finalize() -> T::Header {
 		// Check the soft PoV weight limit.
+		let limits = T::BlockWeights::get();
+		let limit = limits.pov_soft_limit.unwrap_or(limits.max_block.proof_size());
 		let consumed = BlockWeight::<T>::get().total().proof_size();
-		if consumed > SOFT_POV_LIMIT_BYTES {
-			let percent = (consumed as f32 * 100.0) / (SOFT_POV_LIMIT_BYTES as f32) - 100.0;
+
+		if consumed > limit {
+			let percent = (consumed as f32 * 100.0) / (limit as f32) - 100.0;
 			log::warn!(
 				target: LOG_TARGET,
 				"Block {:?} exceeded the PoV limit by {:.2}%; {:.2} > {:.2} MiB",
 				Self::block_number(),
 				percent,
 				consumed as f32 / (1024 * 1024) as f32,
-				SOFT_POV_LIMIT_BYTES as f32 / (1024 * 1024) as f32,
+				limit as f32 / (1024 * 1024) as f32,
 			);
-			Self::deposit_event(Event::PovLimitExceeded { limit: SOFT_POV_LIMIT_BYTES, consumed });
+			Self::deposit_event(Event::PovLimitExceeded { limit, consumed });
 		}
 
 		log::debug!(

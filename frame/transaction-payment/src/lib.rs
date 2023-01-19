@@ -401,13 +401,10 @@ pub mod pallet {
 					.unwrap(),
 			);
 
+			// Could be that there is no `max_total` for class `Normal` since it can be unlimited.
+			// We therefore fall back to `u64::MAX`.
 			let target = T::FeeMultiplierUpdate::target() *
-				T::BlockWeights::get()
-					.get(DispatchClass::Normal)
-					.max_total
-					.with_proof_limit(frame_system::SOFT_POV_LIMIT_BYTES) // FAIL-CI double check
-					.exact_limits()
-					.expect("Transaction-payment needs exact weight limit; qed");
+				T::BlockWeights::get().get(DispatchClass::Normal).max_total.limited_or_max();
 			// add 1 percent;
 			let addition = target / 100;
 			if addition == Weight::zero() {

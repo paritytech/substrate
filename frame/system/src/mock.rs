@@ -74,6 +74,7 @@ parameter_types! {
 			).into();
 		})
 		.avg_block_initialization(Perbill::from_percent(0))
+		.pov_soft_limit(5 * 1024 * 1024)
 		.build_or_panic();
 	pub RuntimeBlockLength: limits::BlockLength =
 		limits::BlockLength::max_with_normal_ratio(1024, NORMAL_DISPATCH_RATIO);
