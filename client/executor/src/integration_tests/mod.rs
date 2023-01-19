@@ -20,7 +20,7 @@
 mod linux;
 
 use codec::{Decode, Encode};
-use sc_executor_common::{error::Error, runtime_blob::RuntimeBlob, wasm_runtime::WasmModule};
+use sc_executor_common::{error::{Error, WasmError}, runtime_blob::RuntimeBlob, wasm_runtime::WasmModule};
 use sc_runtime_test::wasm_binary_unwrap;
 use sp_core::{
 	blake2_128, blake2_256, ed25519, map,
@@ -33,6 +33,7 @@ use sp_runtime::traits::BlakeTwo256;
 use sp_state_machine::TestExternalities as CoreTestExternalities;
 use sp_trie::{LayoutV1 as Layout, TrieConfiguration};
 use std::sync::Arc;
+use assert_matches::assert_matches;
 use tracing_subscriber::layer::SubscriberExt;
 
 use crate::WasmExecutionMethod;
@@ -780,4 +781,38 @@ fn return_value(wasm_method: WasmExecutionMethod) {
 		call_in_wasm("test_return_value", &[], wasm_method, &mut ext).unwrap(),
 		(1234u64).encode()
 	);
+}
+
+test_wasm_execution!(return_huge_len);
+fn return_huge_len(wasm_method: WasmExecutionMethod) {
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+
+	match call_in_wasm("test_return_huge_len", &[], wasm_method, &mut ext).unwrap_err() {
+		Error::Runtime => {
+			assert_matches!(wasm_method, WasmExecutionMethod::Interpreted);
+		}
+		Error::RuntimeConstruction(WasmError::Other(error)) => {
+			assert_matches!(wasm_method, WasmExecutionMethod::Compiled{..});
+			assert_eq!(error, "output exceeds bounds of wasm memory");
+		},
+		error => panic!("unexpected error: {:?}", error),
+	}
+}
+
+test_wasm_execution!(return_overflow);
+fn return_overflow(wasm_method: WasmExecutionMethod) {
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+
+	match call_in_wasm("test_return_overflow", &[], wasm_method, &mut ext).unwrap_err() {
+		Error::Runtime => {
+			assert_matches!(wasm_method, WasmExecutionMethod::Interpreted);
+		}
+		Error::RuntimeConstruction(WasmError::Other(error)) => {
+			assert_matches!(wasm_method, WasmExecutionMethod::Compiled{..});
+			assert_eq!(error, "output exceeds bounds of wasm memory");
+		},
+		error => panic!("unexpected error: {:?}", error),
+	}
 }

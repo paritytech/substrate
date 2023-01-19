@@ -30,6 +30,8 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Hash},
 };
 
+use sp_runtime_interface::pack_ptr_and_len;
+
 extern "C" {
 	#[allow(dead_code)]
 	fn missing_external();
@@ -336,4 +338,16 @@ sp_core::wasm_export_functions! {
 		// Mainly a test that the macro is working when we have a return statement here.
 		return 1234;
 	}
+}
+
+// Returns a huge len. It should result in an error, and not an allocation.
+#[no_mangle]
+pub extern "C" fn test_return_huge_len(_params: *const u8, _len: usize) -> u64 {
+	pack_ptr_and_len(0, u32::MAX)
+}
+
+// Returns an output that overflows the u32 range. It should result in an error.
+#[no_mangle]
+pub extern "C" fn test_return_overflow(_params: *const u8, _len: usize) -> u64 {
+	pack_ptr_and_len(u32::MAX, 1)
 }
