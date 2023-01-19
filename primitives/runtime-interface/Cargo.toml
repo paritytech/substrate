@@ -20,7 +20,7 @@ sp-std = { version = "5.0.0", default-features = false, path = "../std" }
 sp-tracing = { version = "6.0.0", default-features = false, path = "../tracing" }
 sp-runtime-interface-proc-macro = { version = "6.0.0", path = "proc-macro" }
 sp-externalities = { version = "0.13.0", default-features = false, path = "../externalities" }
-codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["bytes"] }
+codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["bytes"] }
 static_assertions = "1.0.0"
 primitive-types = { version = "0.12.0", default-features = false }
 sp-storage = { version = "7.0.0", default-features = false, path = "../storage" }
