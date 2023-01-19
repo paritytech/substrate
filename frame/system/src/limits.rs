@@ -104,8 +104,8 @@ pub struct WeightsPerClass {
 	pub base_extrinsic: Weight,
 	/// Maximal weight of single extrinsic. Should NOT include `base_extrinsic` cost.
 	///
-	/// FAIL-CI fix docs
-	/// `UNLIMITED` indicates that this class of extrinsics doesn't have a limit.
+	/// `UNLIMITED` indicates that this class of extrinsics doesn't have a limit. This will be
+	/// calculated by the builder if not specified.
 	pub max_extrinsic: WeightLimit,
 	/// Block maximal total weight for all extrinsics of given class.
 	///
@@ -118,7 +118,7 @@ pub struct WeightsPerClass {
 	pub max_total: WeightLimit,
 	/// Block reserved allowance for all extrinsics of a particular class.
 	///
-	/// Setting to `None` indicates that extrinsics of that class are allowed
+	/// Setting to `UNLIMITED` indicates that extrinsics of that class are allowed
 	/// to go over total block weight (but at most `max_total` for that class).
 	/// Setting to `Some(x)` guarantees that at least `x` weight of particular class
 	/// is processed in every block.
@@ -289,8 +289,7 @@ impl BlockWeights {
 			);
 			// Make sure we can fit at least one extrinsic.
 			error_assert!(
-				// FAIL-CI intended logic change
-				self.max_block.all_gte(base_for_class + self.base_block),
+				self.max_block.all_gt(base_for_class + self.base_block),
 				&mut error,
 				"[{:?}] {:?} (max block) must fit at least one extrinsic {:?} (base weight)",
 				class,
@@ -452,7 +451,7 @@ impl BlockWeightsBuilder {
 		if let Some(init_weight) = init_cost.map(|rate| rate * weights.max_block) {
 			for class in DispatchClass::all() {
 				let per_class = weights.per_class.get_mut(*class);
-				let before = per_class.max_extrinsic;
+
 				if per_class.max_extrinsic.is_any_unlimited() {
 					per_class.max_extrinsic = per_class.max_total;
 

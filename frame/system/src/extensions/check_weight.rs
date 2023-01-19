@@ -314,7 +314,7 @@ mod tests {
 					.get(DispatchClass::Normal)
 					.max_extrinsic
 					.exact_limits()
-					.unwrap() + Weight::from_ref_time(1), // FAIL-CI
+					.unwrap() + Weight::from_ref_time(1),
 				class: DispatchClass::Normal,
 				..Default::default()
 			};
