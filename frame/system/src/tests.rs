@@ -678,14 +678,11 @@ fn ensure_signed_stuff_works() {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	{
-		use frame_benchmarking::BenchmarkError;
-		let successful_origin: RuntimeOrigin =
-			EnsureSigned::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+		let successful_origin: RuntimeOrigin = EnsureSigned::try_successful_origin().unwrap();
 		assert_ok!(EnsureSigned::try_origin(successful_origin));
 
 		let successful_origin: RuntimeOrigin =
-			EnsureSignedBy::<Members, _>::try_successful_origin()
-				.map_err(|_| BenchmarkError::Weightless)?;
+			EnsureSignedBy::<Members, _>::try_successful_origin().unwrap();
 		assert_ok!(EnsureSignedBy::<Members, _>::try_origin(successful_origin));
 	}
 }
