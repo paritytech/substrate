@@ -213,8 +213,8 @@ pub enum RuntimeCosts {
 	Random,
 	/// Weight of calling `seal_deposit_event` with the given number of topics and event size.
 	DepositEvent { num_topic: u32, len: u32 },
-	/// Weight of calling `seal_debug_message`.
-	DebugMessage,
+	/// Weight of calling `seal_debug_message` per byte of passed message.
+	DebugMessage(u32),
 	/// Weight of calling `seal_set_storage` for the given storage item sizes.
 	SetStorage { old_bytes: u32, new_bytes: u32 },
 	/// Weight of calling `seal_clear_storage` per cleared byte.
@@ -293,7 +293,9 @@ impl RuntimeCosts {
 				.deposit_event
 				.saturating_add(s.deposit_event_per_topic.saturating_mul(num_topic.into()))
 				.saturating_add(s.deposit_event_per_byte.saturating_mul(len.into())),
-			DebugMessage => s.debug_message,
+			DebugMessage(len) => s
+				.debug_message
+				.saturating_add(s.deposit_event_per_byte.saturating_mul(len.into())),
 			SetStorage { new_bytes, old_bytes } => s
 				.set_storage
 				.saturating_add(s.set_storage_per_new_byte.saturating_mul(new_bytes.into()))
@@ -2039,7 +2041,7 @@ pub mod env {
 		_delta_ptr: u32,
 		_delta_count: u32,
 	) -> Result<(), TrapReason> {
-		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
+		ctx.charge_gas(RuntimeCosts::DebugMessage(0))?;
 		Ok(())
 	}
 
@@ -2060,7 +2062,7 @@ pub mod env {
 		_delta_ptr: u32,
 		_delta_count: u32,
 	) -> Result<(), TrapReason> {
-		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
+		ctx.charge_gas(RuntimeCosts::DebugMessage(0))?;
 		Ok(())
 	}
 
@@ -2120,7 +2122,7 @@ pub mod env {
 		_value_ptr: u32,
 		_value_len: u32,
 	) -> Result<(), TrapReason> {
-		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
+		ctx.charge_gas(RuntimeCosts::DebugMessage(0))?;
 		Ok(())
 	}
 
@@ -2133,7 +2135,7 @@ pub mod env {
 	#[version(1)]
 	#[prefixed_alias]
 	fn set_rent_allowance(ctx: _, _memory: _, _value_ptr: u32) -> Result<(), TrapReason> {
-		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
+		ctx.charge_gas(RuntimeCosts::DebugMessage(0))?;
 		Ok(())
 	}
 
@@ -2364,7 +2366,7 @@ pub mod env {
 		str_ptr: u32,
 		str_len: u32,
 	) -> Result<ReturnCode, TrapReason> {
-		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
+		ctx.charge_gas(RuntimeCosts::DebugMessage(str_len))?;
 		if ctx.ext.append_debug_buffer("") {
 			let data = ctx.read_sandbox_memory(memory, str_ptr, str_len)?;
 			if let Some(msg) = core::str::from_utf8(&data).ok() {

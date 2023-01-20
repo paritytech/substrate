@@ -82,6 +82,7 @@ pub trait WeightInfo {
 	fn seal_deposit_event(r: u32, ) -> Weight;
 	fn seal_deposit_event_per_topic_and_kb(t: u32, n: u32, ) -> Weight;
 	fn seal_debug_message(r: u32, ) -> Weight;
+	fn seal_debug_message_per_kb(n: u32, ) -> Weight;
 	fn seal_set_storage(r: u32, ) -> Weight;
 	fn seal_set_storage_per_new_kb(n: u32, ) -> Weight;
 	fn seal_set_storage_per_old_kb(n: u32, ) -> Weight;
@@ -642,6 +643,17 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(6))
 			.saturating_add(T::DbWeight::get().writes(3))
 	}
+
+	// brand new (stubbed until automated bencmark run)
+	fn seal_debug_message_per_kb(n: u32, ) -> Weight {
+		// Minimum execution time: 157_706 nanoseconds.
+		Weight::from_ref_time(161_895_583)
+			// Standard Error: 14_952
+			.saturating_add(Weight::from_ref_time(12_990_237).saturating_mul(n.into()))
+			.saturating_add(T::DbWeight::get().reads(6))
+			.saturating_add(T::DbWeight::get().writes(3))
+	}
+
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `r` is `[0, 10]`.
 	fn seal_set_storage(r: u32, ) -> Weight {
@@ -1916,6 +1928,16 @@ impl WeightInfo for () {
 		Weight::from_ref_time(161_895_583)
 			// Standard Error: 14_952
 			.saturating_add(Weight::from_ref_time(12_990_237).saturating_mul(r.into()))
+			.saturating_add(RocksDbWeight::get().reads(6))
+			.saturating_add(RocksDbWeight::get().writes(3))
+	}
+	// brand new (stubbed until automated bencmark run)
+	fn seal_debug_message_per_kb(n: u32, ) -> Weight {
+		// Minimum execution time: 157_706 nanoseconds.
+		// Minimum execution time: 157_706 nanoseconds.
+		Weight::from_ref_time(161_895_583)
+			// Standard Error: 14_952
+			.saturating_add(Weight::from_ref_time(12_990_237).saturating_mul(n.into()))
 			.saturating_add(RocksDbWeight::get().reads(6))
 			.saturating_add(RocksDbWeight::get().writes(3))
 	}

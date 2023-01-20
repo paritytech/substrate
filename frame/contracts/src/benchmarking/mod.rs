@@ -925,8 +925,8 @@ benchmarks! {
 		// limited by T::MaxCodeLen::get(), being far less than 1Mb.
 		//
 		// So we import maximum allowed memory to the module, in which only the beginning will be initialized by
-		// some data which represents following use cases: ASCII printable and control codes, as well an invalid utf-8 byte.
-		// All unitialized memory will get 0-bytes which is decoded to utf-8 NUL control code.
+		// some data which represents following use cases: ASCII printable and control codes, and an invalid utf-8 byte.
+		// All unitialized memory bytes will get 0 value which is decoded to utf-8 NUL control code.
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory {
 				min_pages: T::Schedule::get().limits.memory_pages,
@@ -1054,8 +1054,7 @@ benchmarks! {
 			])),
 			.. Default::default()
 		});
-		println!("n= {}, seal_set_storage_per_kb code size: {}", n, code.code.len());
-	let instance = Contract::<T>::new(code, vec![])?;
+		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		for key in keys {
 			Storage::<T>::write(
