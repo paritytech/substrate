@@ -8,6 +8,7 @@ homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "FRAME pallet for WASM contracts"
 readme = "README.md"
+include = ["src/**/*", "README.md", "CHANGELOG.md"]
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
