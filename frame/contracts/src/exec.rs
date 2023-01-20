@@ -1336,31 +1336,16 @@ where
 
 	fn append_debug_buffer(&mut self, msg: &str) -> bool {
 		if let Some(buffer) = &mut self.debug_message {
-			let err_msg = scale_info::prelude::format!(
-				"Debug message too big (size={}) for debug buffer (bound={})",
-				msg.len(),
-				DebugBufferVec::<T>::bound(),
-			);
-
-			let mut msg = if msg.len() > DebugBufferVec::<T>::bound() {
-				err_msg.bytes()
-			} else {
-				msg.bytes()
-			};
-
-			let num_drain = {
-				let capacity = DebugBufferVec::<T>::bound().checked_sub(buffer.len()).expect(
-					"
-					`buffer` is of type `DebugBufferVec`,
-					`DebugBufferVec` is a `BoundedVec`,
-					`BoundedVec::len()` <= `BoundedVec::bound()`;
-					qed
-				",
-				);
-				msg.len().saturating_sub(capacity).min(buffer.len())
-			};
-			buffer.drain(0..num_drain);
-			buffer.try_extend(&mut msg).ok();
+			buffer
+				.try_extend(&mut msg.bytes())
+				.map_err(|_| {
+					log::debug!(
+						target: "runtime::contracts",
+						"Debug buffer (of {} bytes) exhausted!",
+						DebugBufferVec::<T>::bound(),
+					)
+				})
+				.ok();
 			true
 		} else {
 			false
@@ -2603,9 +2588,11 @@ mod tests {
 			exec_success()
 		});
 
-		// Pre-fill the buffer up to its limit
-		let mut debug_buffer =
-			DebugBufferVec::<Test>::try_from(vec![0u8; DebugBufferVec::<Test>::bound()]).unwrap();
+		// Pre-fill the buffer almost up to its limit, leaving not enough space to the message
+		let debug_buf_before =
+			DebugBufferVec::<Test>::try_from(vec![0u8; DebugBufferVec::<Test>::bound() - 5])
+				.unwrap();
+		let mut debug_buf_after = debug_buf_before.clone();
 
 		ExtBuilder::default().build().execute_with(|| {
 			let schedule: Schedule<Test> = <Test as Config>::Schedule::get();
@@ -2622,15 +2609,11 @@ mod tests {
 				&schedule,
 				0,
 				vec![],
-				Some(&mut debug_buffer),
+				Some(&mut debug_buf_after),
 				Determinism::Deterministic,
 			)
 			.unwrap();
-			assert_eq!(
-				&String::from_utf8(debug_buffer[DebugBufferVec::<Test>::bound() - 17..].to_vec())
-					.unwrap(),
-				"overflowing bytes"
-			);
+			assert_eq!(debug_buf_before, debug_buf_after);
 		});
 	}
 

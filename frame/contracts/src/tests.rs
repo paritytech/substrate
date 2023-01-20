@@ -2714,7 +2714,7 @@ fn debug_message_invalid_utf8() {
 			true,
 			Determinism::Deterministic,
 		);
-		assert_err!(result.result, <Error<Test>>::DebugMessageInvalidUTF8);
+		assert_ok!(result.result);
 	});
 }
 
