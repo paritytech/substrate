@@ -42,7 +42,7 @@ use std::{
 		Arc,
 	},
 };
-use wasmtime::{Engine, Memory, StoreLimits, Table, AsContext};
+use wasmtime::{AsContext, Engine, Memory, StoreLimits, Table};
 
 pub(crate) struct StoreData {
 	/// The limits we apply to the store. We need to store it here to return a reference to this
@@ -802,7 +802,7 @@ fn extract_output_data(
 	//
 	// Get the size of the WASM memory in bytes.
 	let memory_size = ctx.as_context().data().memory().data_size(ctx);
-	if let None = checked_range(output_ptr as usize, output_len as usize, memory_size) {
+	if checked_range(output_ptr as usize, output_len as usize, memory_size).is_none() {
 		return Err(WasmError::Other("output exceeds bounds of wasm memory".into()))?
 	}
 	let mut output = vec![0; output_len as usize];

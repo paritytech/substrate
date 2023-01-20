@@ -29,7 +29,7 @@ use sp_runtime::{
 	print,
 	traits::{BlakeTwo256, Hash},
 };
-
+#[cfg(not(feature = "std"))]
 use sp_runtime_interface::pack_ptr_and_len;
 
 extern "C" {
@@ -39,6 +39,10 @@ extern "C" {
 	#[allow(dead_code)]
 	fn yet_another_missing_external();
 }
+
+#[cfg(not(feature = "std"))]
+/// The size of a WASM page in bytes.
+const WASM_PAGE_SIZE: usize = 65536;
 
 #[cfg(not(feature = "std"))]
 /// Mutable static variables should be always observed to have
@@ -94,7 +98,7 @@ sp_core::wasm_export_functions! {
 		let heap_ptr = heap_base as usize;
 
 		// Find the next wasm page boundary.
-		let heap_ptr = round_up_to(heap_ptr, 65536);
+		let heap_ptr = round_up_to(heap_ptr, WASM_PAGE_SIZE);
 
 		// Make it an actual pointer
 		let heap_ptr = heap_ptr as *mut u8;
@@ -342,12 +346,35 @@ sp_core::wasm_export_functions! {
 
 // Returns a huge len. It should result in an error, and not an allocation.
 #[no_mangle]
+#[cfg(not(feature = "std"))]
 pub extern "C" fn test_return_huge_len(_params: *const u8, _len: usize) -> u64 {
 	pack_ptr_and_len(0, u32::MAX)
 }
 
+// Returns an offset right at the edge of the wasm memory boundary. With length 0, it should
+// succeed.
+#[no_mangle]
+#[cfg(not(feature = "std"))]
+pub extern "C" fn test_return_max_memory_offset(_params: *const u8, _len: usize) -> u64 {
+	// This should use `core::arch::wasm` instead of `core::arch::wasm32`,
+	// but `core::arch::wasm` depends on `#![feature(simd_wasm64)]` on current nightly.
+	// See https://github.com/Craig-Macomber/lol_alloc/issues/1
+	pack_ptr_and_len((core::arch::wasm32::memory_size(0) * WASM_PAGE_SIZE) as u32, 0)
+}
+
+// Returns an offset right at the edge of the wasm memory boundary. With length 1, it should fail.
+#[no_mangle]
+#[cfg(not(feature = "std"))]
+pub extern "C" fn test_return_max_memory_offset_plus_one(_params: *const u8, _len: usize) -> u64 {
+	// This should use `core::arch::wasm` instead of `core::arch::wasm32`,
+	// but `core::arch::wasm` depends on `#![feature(simd_wasm64)]` on current nightly.
+	// See https://github.com/Craig-Macomber/lol_alloc/issues/1
+	pack_ptr_and_len((core::arch::wasm32::memory_size(0) * WASM_PAGE_SIZE) as u32, 1)
+}
+
 // Returns an output that overflows the u32 range. It should result in an error.
 #[no_mangle]
+#[cfg(not(feature = "std"))]
 pub extern "C" fn test_return_overflow(_params: *const u8, _len: usize) -> u64 {
 	pack_ptr_and_len(u32::MAX, 1)
 }
