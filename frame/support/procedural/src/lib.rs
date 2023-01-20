@@ -526,7 +526,7 @@ pub fn benchmark(_attrs: TokenStream, _tokens: TokenStream) -> TokenStream {
 pub fn extrinsic_call(_attrs: TokenStream, _tokens: TokenStream) -> TokenStream {
 	quote!(compile_error!(
 		"`#[extrinsic_call]` must be in a benchmark function definition labeled with `#[benchmark]`."
-	))
+	);)
 	.into()
 }
 
