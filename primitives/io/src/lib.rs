@@ -1851,6 +1851,7 @@ pub type SubstrateHostFunctions = (
 	wasm_tracing::HostFunctions,
 	offchain::HostFunctions,
 	crypto::HostFunctions,
+	elliptic_curves::HostFunctions,
 	hashing::HostFunctions,
 	allocator::HostFunctions,
 	panic_handler::HostFunctions,
