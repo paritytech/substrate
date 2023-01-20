@@ -68,7 +68,7 @@ construct_runtime!(
 		Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Beefy: pallet_beefy::{Pallet, Call, Config<T>, Storage},
+		Beefy: pallet_beefy::{Pallet, Call, Config<T>, Storage, ValidateUnsigned},
 		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 		Offences: pallet_offences::{Pallet, Storage, Event},
