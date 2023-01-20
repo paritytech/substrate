@@ -22,8 +22,13 @@ pub(crate) mod mock;
 #[cfg(test)]
 mod tests;
 
-use frame_election_provider_support::{SortedListProvider, VoteWeight};
-use frame_support::traits::{Currency, CurrencyToVote};
+use frame_election_provider_support::{
+	ReadOnlySortedListProvider, ScoreProvider, SortedListProvider, VoteWeight,
+};
+use frame_support::{
+	sp_runtime::Saturating,
+	traits::{Currency, CurrencyToVote},
+};
 pub use pallet::*;
 
 use sp_staking::{OnStakingUpdate, Stake, StakingInterface};
@@ -57,7 +62,21 @@ pub mod pallet {
 		type Staking: StakingInterface<AccountId = Self::AccountId>;
 
 		type VoterList: SortedListProvider<Self::AccountId, Score = VoteWeight>;
+
+		type TargetList: SortedListProvider<Self::AccountId, Score = BalanceOf<Self>>;
 	}
+
+	/// The map from validator stash key to their total approval stake. Not that this map is kept up
+	/// to date even if a validator chilled or turned into nominator. Entries from this map are only
+	/// ever removed if the stash is reaped.
+	///
+	/// NOTE: This is currently a [`CountedStorageMap`] for debugging purposes. We might actually
+	/// want to revisit this once this pallet starts populating the actual [`Config::TargetList`]
+	/// used by [`Config::Staking`].
+	#[pallet::storage]
+	#[pallet::getter(fn approval_stake)]
+	pub type ApprovalStake<T: Config> =
+		CountedStorageMap<_, Twox64Concat, T::AccountId, BalanceOf<T>, OptionQuery>;
 }
 
 impl<T: Config> Pallet<T> {
@@ -74,45 +93,130 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
-	fn on_stake_update(who: &T::AccountId, _: Option<Stake<T::AccountId, BalanceOf<T>>>) {
+	fn on_stake_update(who: &T::AccountId, prev_stake: Option<Stake<T::AccountId, BalanceOf<T>>>) {
+		// This should never fail.
 		let current_stake = T::Staking::stake(who).unwrap();
+		let prev_active = prev_stake.map(|s| s.active).unwrap_or_default();
 		let current_active = current_stake.active;
 
+		let update_approval_stake = |who: &T::AccountId| {
+			let mut approval_stake = Self::approval_stake(who).unwrap_or_default();
+
+			use sp_std::cmp::Ordering;
+			match current_active.cmp(&prev_active) {
+				Ordering::Greater => {
+					approval_stake = approval_stake.saturating_add(current_active - prev_active);
+				},
+				Ordering::Less => {
+					approval_stake = approval_stake.saturating_sub(prev_active - current_active);
+				},
+				Ordering::Equal => return,
+			};
+			let _ = T::TargetList::on_update(who, approval_stake);
+			ApprovalStake::<T>::set(who, Some(approval_stake));
+		};
+
 		// if this is a nominator
-		if let Some(_) = T::Staking::nominations(&current_stake.stash) {
+		if let Some(targets) = T::Staking::nominations(&current_stake.stash) {
+			// update the target list.
+			for target in targets {
+				update_approval_stake(&target);
+			}
+
 			let _ = T::VoterList::on_update(&current_stake.stash, Self::to_vote(current_active));
 		}
 
 		if T::Staking::is_validator(&current_stake.stash) {
+			update_approval_stake(&current_stake.stash);
 			let _ = T::VoterList::on_update(&current_stake.stash, Self::to_vote(current_active));
 		}
 	}
 
-	fn on_nominator_update(who: &T::AccountId, _prev_nominations: Vec<T::AccountId>) {
+	fn on_nominator_update(who: &T::AccountId, prev_nominations: Vec<T::AccountId>) {
+		let nominations = T::Staking::nominations(who).unwrap_or_default();
+		let new = nominations.iter().filter(|n| !prev_nominations.contains(&n));
+		let obsolete = prev_nominations.iter().filter(|n| !nominations.contains(&n));
+
+		let update_approval_stake = |nomination: &T::AccountId, new_stake: BalanceOf<T>| {
+			ApprovalStake::<T>::set(&nomination, Some(new_stake));
+
+			if T::TargetList::contains(&nomination) {
+				let _ = T::TargetList::on_update(&nomination, new_stake);
+			}
+		};
+
+		for nomination in new {
+			// Create a new entry if it does not exist
+			let new_stake = Self::approval_stake(&nomination)
+				.unwrap_or_default()
+				.saturating_add(Self::slashable_balance_of(who));
+
+			update_approval_stake(&nomination, new_stake);
+		}
+
+		for nomination in obsolete {
+			if let Some(new_stake) = Self::approval_stake(&nomination) {
+				let new_stake = new_stake.saturating_sub(Self::slashable_balance_of(who));
+				update_approval_stake(&nomination, new_stake);
+			}
+		}
+
 		// NOTE: We ignore the result here, because this method can be called when the nominator is
 		// already in the list, just changing their nominations.
 		let _ =
 			T::VoterList::on_insert(who.clone(), Self::to_vote(Self::slashable_balance_of(who)));
 	}
 
-	/// This should only be called if that stash isn't already a validator. Note, that if we want to
-	/// properly track ApprovalStake here - we need to make sure we subtract the validator stash
-	/// balance when they chill?
-	///	Why? Because we don't remove ApprovalStake when a validator chills and we need to make sure
-	/// their self-stake is up-to-date and not applied twice.
+	// NOTE: This should only be called if that stash isn't already a validator. Because we don't
+	// remove ApprovalStake when a validator chills and we need to make sure their self-stake is
+	// up-to-date and not applied twice.
 	fn on_validator_add(who: &T::AccountId) {
 		let self_stake = Self::slashable_balance_of(who);
+		let new_stake = Self::approval_stake(who).unwrap_or_default().saturating_add(self_stake);
+
 		// maybe update sorted list.
 		let _ = T::VoterList::on_insert(who.clone(), Self::to_vote(self_stake));
+
+		// TODO: Make sure this always works. Among other things we need to make sure that when the
+		// migration is run we only have active validators in TargetList and not the chilled ones.
+		let _ = T::TargetList::on_insert(who.clone(), new_stake);
+		ApprovalStake::<T>::set(who, Some(new_stake));
 	}
 
 	fn on_validator_remove(who: &T::AccountId) {
+		let _ = T::TargetList::on_remove(who);
 		let _ = T::VoterList::on_remove(who);
+
+		// This will panic if the validator is not in the map, but this should never happen!
+		let _ = ApprovalStake::<T>::mutate(who, |x: &mut Option<BalanceOf<T>>| {
+			*x = x.map(|b| b.saturating_sub(Self::slashable_balance_of(who)))
+		});
 	}
 
-	fn on_nominator_remove(who: &T::AccountId, _nominations: Vec<T::AccountId>) {
+	fn on_nominator_remove(who: &T::AccountId, nominations: Vec<T::AccountId>) {
+		let score = Self::slashable_balance_of(who);
 		let _ = T::VoterList::on_remove(who);
+		for validator in nominations {
+			let _ = ApprovalStake::<T>::mutate(&validator, |x: &mut Option<BalanceOf<T>>| {
+				*x = x.map(|b| b.saturating_sub(score))
+			});
+		}
 	}
 
-	fn on_unstake(_who: &T::AccountId) {}
+	fn on_unstake(who: &T::AccountId) {
+		ApprovalStake::<T>::remove(who);
+	}
+}
+
+impl<T: Config> ScoreProvider<T::AccountId> for Pallet<T> {
+	type Score = BalanceOf<T>;
+
+	fn score(who: &T::AccountId) -> Self::Score {
+		Self::approval_stake(who).unwrap_or_default()
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_score_of(who: &T::AccountId, score: Self::Score) {
+		ApprovalStake::<T>::set(who, score);
+	}
 }
