@@ -40,18 +40,17 @@
 //! - `Balanced`: One-sided mutator functions for balances on hold, which return imbalance objects
 //!   which guaranete eventual book-keeping.
 
-mod balanced;
 mod freeze;
 mod hold;
 mod imbalance;
 mod item_of;
 mod regular;
-mod unbalanced;
 
-pub use balanced::{Balanced, BalancedHold, DecreaseIssuance, IncreaseIssuance};
-pub use freeze::{InspectFreeze, MutateFreeze};
-pub use hold::{InspectHold, MutateHold};
+pub use freeze::{Inspect as InspectFreeze, Mutate as MutateFreeze};
+pub use hold::{
+	Balanced as BalancedHold, Inspect as InspectHold, Mutate as MutateHold,
+	Unbalanced as UnbalancedHold,
+};
 pub use imbalance::{CreditOf, DebtOf, HandleImbalanceDrop, Imbalance};
 pub use item_of::ItemOf;
-pub use regular::{Inspect, Mutate};
-pub use unbalanced::{Unbalanced, UnbalancedHold};
+pub use regular::{Balanced, DecreaseIssuance, IncreaseIssuance, Inspect, Mutate, Unbalanced};

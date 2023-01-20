@@ -20,6 +20,7 @@
 #![cfg(test)]
 
 use crate::{self as pallet_balances, decl_tests, Config, Pallet};
+use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::DispatchInfo,
 	parameter_types,

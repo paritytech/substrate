@@ -166,7 +166,7 @@ mod tests_reentrancy;
 mod types;
 pub mod weights;
 
-use codec::{Codec, Decode, Encode, MaxEncodedLen};
+use codec::{Codec, MaxEncodedLen};
 #[cfg(feature = "std")]
 use frame_support::traits::GenesisBuild;
 use frame_support::{
@@ -178,8 +178,7 @@ use frame_support::{
 			KeepAlive::{CanKill, Keep},
 			WithdrawConsequence,
 		},
-		Currency, Defensive, ExistenceRequirement, Get, Imbalance, NamedReservableCurrency,
-		OnUnbalanced, ReservableCurrency, StoredMap,
+		Currency, Defensive, Get, OnUnbalanced, ReservableCurrency, StoredMap,
 	},
 	BoundedSlice, WeakBoundedVec,
 };

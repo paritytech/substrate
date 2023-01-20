@@ -33,6 +33,12 @@ pub enum KeepAlive {
 	Keep,
 }
 
+impl From<KeepAlive> for bool {
+	fn from(k: KeepAlive) -> bool {
+		matches!(k, KeepAlive::CanKill)
+	}
+}
+
 /// One of a number of consequences of withdrawing a fungible from an account.
 #[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
 pub enum WithdrawConsequence<Balance> {

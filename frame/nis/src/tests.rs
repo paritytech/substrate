@@ -456,8 +456,8 @@ fn communify_works() {
 		assert_eq!(NisBalances::free_balance(&2), 100_000);
 
 		// Communal thawing with the correct index is not possible now.
-		assert_noop!(Nis::thaw_communal(signed(1), 0), TokenError::NoFunds);
-		assert_noop!(Nis::thaw_communal(signed(2), 0), TokenError::NoFunds);
+		assert_noop!(Nis::thaw_communal(signed(1), 0), TokenError::FundsUnavailable);
+		assert_noop!(Nis::thaw_communal(signed(2), 0), TokenError::FundsUnavailable);
 
 		// Transfer the rest to 2...
 		assert_ok!(NisBalances::transfer(signed(1), 2, 2_000_000));
@@ -488,7 +488,7 @@ fn privatize_works() {
 
 		// Transfer the fungibles to #2
 		assert_ok!(NisBalances::transfer(signed(1), 2, 2_100_000));
-		assert_noop!(Nis::privatize(signed(1), 0), TokenError::NoFunds);
+		assert_noop!(Nis::privatize(signed(1), 0), TokenError::FundsUnavailable);
 
 		// Privatize
 		assert_ok!(Nis::privatize(signed(2), 0));
@@ -558,7 +558,7 @@ fn communal_thaw_when_issuance_higher_works() {
 		// Transfer counterparts away...
 		assert_ok!(NisBalances::transfer(signed(1), 2, 250_000));
 		// ...and it's not thawable.
-		assert_noop!(Nis::thaw_communal(signed(1), 0), TokenError::NoFunds);
+		assert_noop!(Nis::thaw_communal(signed(1), 0), TokenError::FundsUnavailable);
 
 		// Transfer counterparts back...
 		assert_ok!(NisBalances::transfer(signed(2), 1, 250_000));

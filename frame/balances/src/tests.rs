@@ -30,8 +30,9 @@ macro_rules! decl_tests {
 			traits::{
 				fungible::{InspectHold, MutateHold, InspectFreeze, MutateFreeze},
 				LockableCurrency, LockIdentifier, WithdrawReasons,
-				Currency, ReservableCurrency, ExistenceRequirement::AllowDeath,
-				tokens::KeepAlive::CanKill,
+				Currency, ReservableCurrency, NamedReservableCurrency,
+				ExistenceRequirement::{self, AllowDeath},
+				tokens::{KeepAlive::CanKill, Imbalance as ImbalanceT},
 			}
 		};
 		use pallet_transaction_payment::{ChargeTransactionPayment, Multiplier};

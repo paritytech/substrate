@@ -955,7 +955,7 @@ pub mod pallet {
 			if !shortfall.is_zero() {
 				let _ =
 					T::Currency::reserve_named(&T::ReserveId::get(), &owner, on_hold - shortfall);
-				return Err(TokenError::NoFunds.into())
+				return Err(TokenError::FundsUnavailable.into())
 			}
 			if let Err(e) = T::Currency::transfer(&owner, destination, on_hold, AllowDeath) {
 				let _ = T::Currency::reserve_named(&T::ReserveId::get(), &owner, on_hold);

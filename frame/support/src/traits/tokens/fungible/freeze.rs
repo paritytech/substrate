@@ -20,14 +20,12 @@
 use scale_info::TypeInfo;
 use sp_runtime::DispatchResult;
 
-use super::*;
-
 /// Trait for inspecting a fungible asset which can be frozen. Freezing is essentially setting a
 /// minimum balance bellow which the total balance (inclusive of any funds placed on hold) may not
 /// be normally allowed to drop. Generally, freezers will provide an "update" function such that
 /// if the total balance does drop below the limit, then the freezer can update their housekeeping
 /// accordingly.
-pub trait InspectFreeze<AccountId>: Inspect<AccountId> {
+pub trait Inspect<AccountId>: super::Inspect<AccountId> {
 	/// An identifier for a freeze.
 	type Id: codec::Encode + TypeInfo + 'static;
 
@@ -47,7 +45,7 @@ pub trait InspectFreeze<AccountId>: Inspect<AccountId> {
 
 /// Trait for introducing, altering and removing locks to freeze an account's funds so they never
 /// go below a set minimum.
-pub trait MutateFreeze<AccountId>: InspectFreeze<AccountId> {
+pub trait Mutate<AccountId>: Inspect<AccountId> {
 	/// Prevent actions which would reduce the balance of the account of `who` below the given
 	/// `amount` and identify this restriction though the given `id`. Unlike `extend_freeze`, any
 	/// outstanding freeze in place for `who` under the `id` are dropped.

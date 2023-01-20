@@ -22,12 +22,16 @@ use crate::{
 	traits::tokens::{DepositConsequence::Success, KeepAlive},
 };
 use scale_info::TypeInfo;
+use sp_arithmetic::{
+	traits::{CheckedAdd, CheckedSub, Zero},
+	ArithmeticError,
+};
 use sp_runtime::{DispatchError, DispatchResult, Saturating, TokenError};
 
 use super::*;
 
 /// Trait for inspecting a fungible asset whose accounts support partitioning and slashing.
-pub trait InspectHold<AccountId>: Inspect<AccountId> {
+pub trait Inspect<AccountId>: super::Inspect<AccountId> {
 	/// An identifier for a hold. Used for disambiguating different holds so that
 	/// they can be individually replaced or removed and funds from one hold don't accidentally
 	/// become unreserved or slashed for another.
@@ -101,9 +105,84 @@ pub trait InspectHold<AccountId>: Inspect<AccountId> {
 	}
 }
 
+/// A fungible, holdable token class where the balance on hold can be set arbitrarily.
+///
+/// **WARNING**
+/// Do not use this directly unless you want trouble, since it allows you to alter account balances
+/// without keeping the issuance up to date. It has no safeguards against accidentally creating
+/// token imbalances in your system leading to accidental imflation or deflation. It's really just
+/// for the underlying datatype to implement so the user gets the much safer `Balanced` trait to
+/// use.
+pub trait Unbalanced<AccountId>: Inspect<AccountId> {
+	/// Forcefully set the balance on hold of `who` to `amount`. This is independent of any other
+	/// balances on hold or the main ("free") balance.
+	///
+	/// If this call executes successfully, you can `assert_eq!(Self::balance_on_hold(), amount);`.
+	///
+	/// This function does its best to force the balance change through, but will not break system
+	/// invariants such as any Existential Deposits needed or overflows/underflows.
+	/// If this cannot be done for some reason (e.g. because the account doesn't exist) then an
+	/// `Err` is returned.
+	// Implmentation note: This should increment the consumer refs if it moves total on hold from
+	// zero to non-zero and decrement in the opposite direction.
+	//
+	// Since this was not done in the previous logic, this will need either a migration or a
+	// state item which tracks whether the account is on the old logic or new.
+	fn set_balance_on_hold(
+		reason: &Self::Reason,
+		who: &AccountId,
+		amount: Self::Balance,
+	) -> DispatchResult;
+
+	/// Reduce the balance on hold of `who` by `amount`.
+	///
+	/// If `best_effort` is `false` and it cannot be reduced by that amount for
+	/// some reason, return `Err` and don't reduce it at all. If `best_effort` is `true`, then
+	/// reduce the balance of `who` by the most that is possible, up to `amount`.
+	///
+	/// In either case, if `Ok` is returned then the inner is the amount by which is was reduced.
+	fn decrease_balance_on_hold(
+		reason: &Self::Reason,
+		who: &AccountId,
+		mut amount: Self::Balance,
+		best_effort: bool,
+	) -> Result<Self::Balance, DispatchError> {
+		let old_balance = Self::balance_on_hold(reason, who);
+		if best_effort {
+			amount = amount.min(old_balance);
+		}
+		let new_balance = old_balance.checked_sub(&amount).ok_or(TokenError::FundsUnavailable)?;
+		Self::set_balance_on_hold(reason, who, new_balance)?;
+		Ok(amount)
+	}
+
+	/// Increase the balance on hold of `who` by `amount`.
+	///
+	/// If it cannot be increased by that amount for some reason, return `Err` and don't increase
+	/// it at all. If Ok, return the imbalance.
+	fn increase_balance_on_hold(
+		reason: &Self::Reason,
+		who: &AccountId,
+		amount: Self::Balance,
+		best_effort: bool,
+	) -> Result<Self::Balance, DispatchError> {
+		let old_balance = Self::balance_on_hold(reason, who);
+		let new_balance = if best_effort {
+			old_balance.saturating_add(amount)
+		} else {
+			old_balance.checked_add(&amount).ok_or(ArithmeticError::Overflow)?
+		};
+		let amount = new_balance.saturating_sub(old_balance);
+		if !amount.is_zero() {
+			Self::set_balance_on_hold(reason, who, new_balance)?;
+		}
+		Ok(amount)
+	}
+}
+
 /// Trait for mutating a fungible asset which can be placed on hold.
-pub trait MutateHold<AccountId>:
-	InspectHold<AccountId> + Unbalanced<AccountId> + UnbalancedHold<AccountId>
+pub trait Mutate<AccountId>:
+	Inspect<AccountId> + super::Unbalanced<AccountId> + Unbalanced<AccountId>
 {
 	/// Hold some funds in an account. If a hold for `reason` is already in place, then this
 	/// will increase it.
@@ -237,4 +316,28 @@ pub trait MutateHold<AccountId>:
 		_amount: Self::Balance,
 	) {
 	}
+}
+
+/// Trait for slashing a fungible asset which can be place on hold.
+pub trait Balanced<AccountId>: super::Balanced<AccountId> + Unbalanced<AccountId> {
+	/// Reduce the balance of some funds on hold in an account.
+	///
+	/// The resulting imbalance is the first item of the tuple returned.
+	///
+	/// As much funds that are on hold up to `amount` will be deducted as possible. If this is less
+	/// than `amount`, then a non-zero second item will be returned.
+	fn slash(
+		reason: &Self::Reason,
+		who: &AccountId,
+		amount: Self::Balance,
+	) -> (CreditOf<AccountId, Self>, Self::Balance) {
+		let decrease =
+			Self::decrease_balance_on_hold(reason, who, amount, true).unwrap_or(Default::default());
+		let credit =
+			Imbalance::<Self::Balance, Self::OnDropCredit, Self::OnDropDebt>::new(decrease);
+		Self::done_slash(reason, who, decrease);
+		(credit, amount.saturating_sub(decrease))
+	}
+
+	fn done_slash(_reason: &Self::Reason, _who: &AccountId, _amount: Self::Balance) {}
 }

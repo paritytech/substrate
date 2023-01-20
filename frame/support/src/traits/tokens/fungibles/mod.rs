@@ -18,22 +18,21 @@
 //! The traits for sets of fungible tokens and any associated types.
 
 pub mod approvals;
-pub mod enumerable;
-pub use enumerable::InspectEnumerable;
-pub mod lifetime;
+mod enumerable;
+pub mod freeze;
+pub mod hold;
+mod imbalance;
+mod lifetime;
 pub mod metadata;
+mod regular;
 pub mod roles;
 
-mod balanced;
-mod freeze;
-mod hold;
-mod imbalance;
-mod regular;
-mod unbalanced;
-
-pub use balanced::{Balanced, BalancedHold, DecreaseIssuance, IncreaseIssuance};
-pub use freeze::{InspectFreeze, MutateFreeze};
-pub use hold::{InspectHold, MutateHold};
+pub use enumerable::Inspect as InspectEnumerable;
+pub use freeze::{Inspect as InspectFreeze, Mutate as MutateFreeze};
+pub use hold::{
+	Balanced as BalancedHold, Inspect as InspectHold, Mutate as MutateHold,
+	Unbalanced as UnbalancedHold,
+};
 pub use imbalance::{CreditOf, DebtOf, HandleImbalanceDrop, Imbalance};
-pub use regular::{Inspect, Mutate};
-pub use unbalanced::{Unbalanced, UnbalancedHold};
+pub use lifetime::{Create, Destroy};
+pub use regular::{Balanced, DecreaseIssuance, IncreaseIssuance, Inspect, Mutate, Unbalanced};

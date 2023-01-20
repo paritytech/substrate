@@ -18,7 +18,7 @@
 //! The imbalance type and its associates, which handles keeps everything adding up properly with
 //! unbalanced operations.
 
-use super::{super::Imbalance as ImbalanceT, balanced::Balanced, *};
+use super::{super::Imbalance as ImbalanceT, Balanced, *};
 use crate::traits::{
 	misc::{SameOrOther, TryDrop},
 	tokens::Balance,

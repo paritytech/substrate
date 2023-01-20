@@ -17,6 +17,8 @@
 
 //! Implementations for fungibles trait.
 
+use frame_support::traits::tokens::KeepAlive;
+
 use super::*;
 
 impl<T: Config<I>, I: 'static> fungibles::Inspect<<T as SystemConfig>::AccountId> for Pallet<T, I> {
@@ -35,12 +37,17 @@ impl<T: Config<I>, I: 'static> fungibles::Inspect<<T as SystemConfig>::AccountId
 		Pallet::<T, I>::balance(asset, who)
 	}
 
+	fn total_balance(asset: Self::AssetId, who: &<T as SystemConfig>::AccountId) -> Self::Balance {
+		Pallet::<T, I>::balance(asset, who)
+	}
+
 	fn reducible_balance(
 		asset: Self::AssetId,
 		who: &<T as SystemConfig>::AccountId,
-		keep_alive: bool,
+		keep_alive: KeepAlive,
+		_force: bool,
 	) -> Self::Balance {
-		Pallet::<T, I>::reducible_balance(asset, who, keep_alive).unwrap_or(Zero::zero())
+		Pallet::<T, I>::reducible_balance(asset, who, keep_alive.into()).unwrap_or(Zero::zero())
 	}
 
 	fn can_deposit(
@@ -65,47 +72,12 @@ impl<T: Config<I>, I: 'static> fungibles::Inspect<<T as SystemConfig>::AccountId
 	}
 }
 
-impl<T: Config<I>, I: 'static> fungibles::Mutate<<T as SystemConfig>::AccountId> for Pallet<T, I> {
-	fn mint_into(
-		asset: Self::AssetId,
-		who: &<T as SystemConfig>::AccountId,
-		amount: Self::Balance,
-	) -> DispatchResult {
-		Self::do_mint(asset, who, amount, None)
-	}
-
-	fn burn_from(
-		asset: Self::AssetId,
-		who: &<T as SystemConfig>::AccountId,
-		amount: Self::Balance,
-		best_effort: bool,
-		_force: bool,
-	) -> Result<Self::Balance, DispatchError> {
-		let f = DebitFlags { keep_alive: false, best_effort };
-		Self::do_burn(asset, who, amount, None, f)
-	}
-
-	fn slash(
-		asset: Self::AssetId,
-		who: &<T as SystemConfig>::AccountId,
-		amount: Self::Balance,
-	) -> Result<Self::Balance, DispatchError> {
-		let f = DebitFlags { keep_alive: false, best_effort: true };
-		Self::do_burn(asset, who, amount, None, f)
-	}
-}
-
-impl<T: Config<I>, I: 'static> fungibles::Transfer<T::AccountId> for Pallet<T, I> {
-	fn transfer(
-		asset: Self::AssetId,
-		source: &T::AccountId,
-		dest: &T::AccountId,
-		amount: T::Balance,
-		keep_alive: bool,
-	) -> Result<T::Balance, DispatchError> {
-		let f = TransferFlags { keep_alive, best_effort: false, burn_dust: false };
-		Self::do_transfer(asset, source, dest, amount, None, f)
-	}
+impl<T: Config<I>, I: 'static> fungibles::Mutate<<T as SystemConfig>::AccountId> for Pallet<T, I> {}
+impl<T: Config<I>, I: 'static> fungibles::Balanced<<T as SystemConfig>::AccountId>
+	for Pallet<T, I>
+{
+	type OnDropCredit = fungibles::DecreaseIssuance<T::AccountId, Self>;
+	type OnDropDebt = fungibles::IncreaseIssuance<T::AccountId, Self>;
 }
 
 impl<T: Config<I>, I: 'static> fungibles::Unbalanced<T::AccountId> for Pallet<T, I> {
@@ -123,36 +95,28 @@ impl<T: Config<I>, I: 'static> fungibles::Unbalanced<T::AccountId> for Pallet<T,
 		asset: T::AssetId,
 		who: &T::AccountId,
 		amount: Self::Balance,
+		best_effort: bool,
+		keep_alive: KeepAlive,
+		_force: bool,
 	) -> Result<Self::Balance, DispatchError> {
-		let f = DebitFlags { keep_alive: false, best_effort: false };
+		let keep_alive = match keep_alive {
+			KeepAlive::CanKill => false,
+			_ => true,
+		};
+		let f = DebitFlags { keep_alive, best_effort };
 		Self::decrease_balance(asset, who, amount, f, |_, _| Ok(()))
-	}
-	fn decrease_balance_at_most(
-		asset: T::AssetId,
-		who: &T::AccountId,
-		amount: Self::Balance,
-	) -> Self::Balance {
-		let f = DebitFlags { keep_alive: false, best_effort: true };
-		Self::decrease_balance(asset, who, amount, f, |_, _| Ok(())).unwrap_or(Zero::zero())
 	}
 	fn increase_balance(
 		asset: T::AssetId,
 		who: &T::AccountId,
 		amount: Self::Balance,
+		_best_effort: bool,
 	) -> Result<Self::Balance, DispatchError> {
 		Self::increase_balance(asset, who, amount, |_| Ok(()))?;
 		Ok(amount)
 	}
-	fn increase_balance_at_most(
-		asset: T::AssetId,
-		who: &T::AccountId,
-		amount: Self::Balance,
-	) -> Self::Balance {
-		match Self::increase_balance(asset, who, amount, |_| Ok(())) {
-			Ok(()) => amount,
-			Err(_) => Zero::zero(),
-		}
-	}
+
+	// TODO: #13196 implement deactivate/reactivate once we have inactive balance tracking.
 }
 
 impl<T: Config<I>, I: 'static> fungibles::Create<T::AccountId> for Pallet<T, I> {

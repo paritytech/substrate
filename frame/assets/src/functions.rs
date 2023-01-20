@@ -76,7 +76,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			d.sufficients += 1;
 			ExistenceReason::Sufficient
 		} else {
-			frame_system::Pallet::<T>::inc_consumers(who).map_err(|_| Error::<T, I>::NoProvider)?;
+			frame_system::Pallet::<T>::inc_consumers(who)
+				.map_err(|_| Error::<T, I>::UnavailableConsumer)?;
+			ensure!(
+				frame_system::Pallet::<T>::can_inc_consumer(who),
+				Error::<T, I>::UnavailableConsumer
+			);
 			ExistenceReason::Consumer
 		};
 		d.accounts = accounts;
@@ -165,7 +170,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 		let account = match Account::<T, I>::get(id, who) {
 			Some(a) => a,
-			None => return NoFunds,
+			None => return BalanceLow,
 		};
 		if account.is_frozen {
 			return Frozen
@@ -193,7 +198,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Success
 			}
 		} else {
-			NoFunds
+			BalanceLow
 		}
 	}
 
@@ -254,7 +259,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(f.best_effort || actual >= amount, Error::<T, I>::BalanceLow);
 
 		let conseq = Self::can_decrease(id, target, actual, f.keep_alive);
-		let actual = match conseq.into_result() {
+		let actual = match conseq.into_result(f.keep_alive) {
 			Ok(dust) => actual.saturating_add(dust), //< guaranteed by reducible_balance
 			Err(e) => {
 				debug_assert!(false, "passed from reducible_balance; qed");
