@@ -259,19 +259,6 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 		let who = IndexToId::<T, I>::get(MIN_RANK, 0).ok_or(())?;
 		Ok(frame_system::RawOrigin::Signed(who).into())
 	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> T::RuntimeOrigin {
-		match Self::try_successful_origin() {
-			Ok(o) => o,
-			Err(()) => {
-				let who: T::AccountId = frame_benchmarking::whitelisted_caller();
-				crate::Pallet::<T, I>::do_add_member_to_rank(who.clone(), MIN_RANK)
-					.expect("failed to add ranked member");
-				frame_system::RawOrigin::Signed(who).into()
-			},
-		}
-	}
 }
 
 /// Guard to ensure that the given origin is a member of the collective. The account ID of the
@@ -295,19 +282,6 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 		let who = IndexToId::<T, I>::get(MIN_RANK, 0).ok_or(())?;
 		Ok(frame_system::RawOrigin::Signed(who).into())
 	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> T::RuntimeOrigin {
-		match Self::try_successful_origin() {
-			Ok(o) => o,
-			Err(()) => {
-				let who: T::AccountId = frame_benchmarking::whitelisted_caller();
-				crate::Pallet::<T, I>::do_add_member_to_rank(who.clone(), MIN_RANK)
-					.expect("failed to add ranked member");
-				frame_system::RawOrigin::Signed(who).into()
-			},
-		}
-	}
 }
 
 /// Guard to ensure that the given origin is a member of the collective. The pair of both the
@@ -330,19 +304,6 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 	fn try_successful_origin() -> Result<T::RuntimeOrigin, ()> {
 		let who = IndexToId::<T, I>::get(MIN_RANK, 0).ok_or(())?;
 		Ok(frame_system::RawOrigin::Signed(who).into())
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> T::RuntimeOrigin {
-		match Self::try_successful_origin() {
-			Ok(o) => o,
-			Err(()) => {
-				let who: T::AccountId = frame_benchmarking::whitelisted_caller();
-				crate::Pallet::<T, I>::do_add_member_to_rank(who.clone(), MIN_RANK)
-					.expect("failed to add ranked member");
-				frame_system::RawOrigin::Signed(who).into()
-			},
-		}
 	}
 }
 
