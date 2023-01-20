@@ -165,7 +165,7 @@ pub trait EnsureOriginWithArg<OuterOrigin, Argument> {
 	///
 	/// ** Should be used for benchmarking only!!! **
 	#[cfg(feature = "runtime-benchmarks")]
-	fn try_successful_origin(a: &Argument) -> Result<OuterOrigin, ()> {
+	fn try_successful_origin(_a: &Argument) -> Result<OuterOrigin, ()> {
 		unimplemented!()
 	}
 }
