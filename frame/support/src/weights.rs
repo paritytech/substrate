@@ -16,10 +16,6 @@
 // limitations under the License.
 
 //! Re-exports `sp-weights` public API, and contains benchmarked weight constants specific to FRAME.
-//!
-//! The Polkadot reference hardware can be found at:
-//! <https://wiki.polkadot.network/docs/maintain-guides-how-to-validate-polkadot#reference-hardware>
-
 
 mod block_weights;
 mod extrinsic_weights;
