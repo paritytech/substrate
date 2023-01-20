@@ -49,9 +49,10 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		let old = Self::total_issuance(asset);
 		let new = old.saturating_sub(amount);
 		Self::set_total_issuance(asset, new);
+		let delta = old - new;
+		Self::done_rescind(asset, delta);
 		Imbalance::<Self::AssetId, Self::Balance, Self::OnDropDebt, Self::OnDropCredit>::new(
-			asset,
-			old - new,
+			asset, delta,
 		)
 	}
 
@@ -65,9 +66,10 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		let old = Self::total_issuance(asset);
 		let new = old.saturating_add(amount);
 		Self::set_total_issuance(asset, new);
+		let delta = new - old;
+		Self::done_issue(asset, delta);
 		Imbalance::<Self::AssetId, Self::Balance, Self::OnDropCredit, Self::OnDropDebt>::new(
-			asset,
-			new - old,
+			asset, delta,
 		)
 	}
 
@@ -98,6 +100,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		best_effort: bool,
 	) -> Result<DebtOf<AccountId, Self>, DispatchError> {
 		let increase = Self::increase_balance(asset, who, value, best_effort)?;
+		Self::done_deposit(asset, who, increase);
 		Ok(Imbalance::<Self::AssetId, Self::Balance, Self::OnDropDebt, Self::OnDropCredit>::new(
 			asset, increase,
 		))
@@ -124,6 +127,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		keep_alive: KeepAlive,
 	) -> Result<CreditOf<AccountId, Self>, DispatchError> {
 		let decrease = Self::decrease_balance(asset, who, value, best_effort, keep_alive, false)?;
+		Self::done_withdraw(asset, who, decrease);
 		Ok(Imbalance::<Self::AssetId, Self::Balance, Self::OnDropCredit, Self::OnDropDebt>::new(
 			asset, decrease,
 		))
@@ -180,6 +184,11 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 			},
 		}
 	}
+
+	fn done_rescind(_asset: Self::AssetId, _amount: Self::Balance) {}
+	fn done_issue(_asset: Self::AssetId, _amount: Self::Balance) {}
+	fn done_deposit(_asset: Self::AssetId, _who: &AccountId, _amount: Self::Balance) {}
+	fn done_withdraw(_asset: Self::AssetId, _who: &AccountId, _amount: Self::Balance) {}
 }
 
 /// Trait for slashing a fungible asset which can be place on hold.
@@ -202,7 +211,16 @@ pub trait BalancedHold<AccountId>: Balanced<AccountId> + UnbalancedHold<AccountI
 			Imbalance::<Self::AssetId, Self::Balance, Self::OnDropCredit, Self::OnDropDebt>::new(
 				asset, decrease,
 			);
+		Self::done_slash(asset, reason, who, decrease);
 		(credit, amount.saturating_sub(decrease))
+	}
+
+	fn done_slash(
+		_asset: Self::AssetId,
+		_reason: &Self::Reason,
+		_who: &AccountId,
+		_amount: Self::Balance,
+	) {
 	}
 }
 

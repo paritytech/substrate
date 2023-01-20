@@ -49,7 +49,9 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		let old = Self::total_issuance();
 		let new = old.saturating_sub(amount);
 		Self::set_total_issuance(new);
-		Imbalance::<Self::Balance, Self::OnDropDebt, Self::OnDropCredit>::new(old - new)
+		let delta = old - new;
+		Self::done_rescind(delta);
+		Imbalance::<Self::Balance, Self::OnDropDebt, Self::OnDropCredit>::new(delta)
 	}
 
 	/// Increase the total issuance by `amount` and return the according imbalance. The imbalance
@@ -62,7 +64,9 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		let old = Self::total_issuance();
 		let new = old.saturating_add(amount);
 		Self::set_total_issuance(new);
-		Imbalance::<Self::Balance, Self::OnDropCredit, Self::OnDropDebt>::new(new - old)
+		let delta = new - old;
+		Self::done_issue(delta);
+		Imbalance::<Self::Balance, Self::OnDropCredit, Self::OnDropDebt>::new(delta)
 	}
 
 	/// Produce a pair of imbalances that cancel each other out exactly.
@@ -88,6 +92,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		best_effort: bool,
 	) -> Result<DebtOf<AccountId, Self>, DispatchError> {
 		let increase = Self::increase_balance(who, value, best_effort)?;
+		Self::done_deposit(who, increase);
 		Ok(Imbalance::<Self::Balance, Self::OnDropDebt, Self::OnDropCredit>::new(increase))
 	}
 
@@ -111,6 +116,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		keep_alive: KeepAlive,
 	) -> Result<CreditOf<AccountId, Self>, DispatchError> {
 		let decrease = Self::decrease_balance(who, value, best_effort, keep_alive, false)?;
+		Self::done_withdraw(who, decrease);
 		Ok(Imbalance::<Self::Balance, Self::OnDropCredit, Self::OnDropDebt>::new(decrease))
 	}
 
@@ -147,6 +153,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 			Err(_) => return Err(debt),
 			Ok(d) => d,
 		};
+
 		match credit.offset(debt) {
 			SameOrOther::None => Ok(CreditOf::<AccountId, Self>::zero()),
 			SameOrOther::Same(dust) => Ok(dust),
@@ -156,6 +163,11 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 			},
 		}
 	}
+
+	fn done_rescind(_amount: Self::Balance) {}
+	fn done_issue(_amount: Self::Balance) {}
+	fn done_deposit(_who: &AccountId, _amount: Self::Balance) {}
+	fn done_withdraw(_who: &AccountId, _amount: Self::Balance) {}
 }
 
 /// Trait for slashing a fungible asset which can be place on hold.
@@ -175,8 +187,11 @@ pub trait BalancedHold<AccountId>: Balanced<AccountId> + UnbalancedHold<AccountI
 			Self::decrease_balance_on_hold(reason, who, amount, true).unwrap_or(Default::default());
 		let credit =
 			Imbalance::<Self::Balance, Self::OnDropCredit, Self::OnDropDebt>::new(decrease);
+		Self::done_slash(reason, who, decrease);
 		(credit, amount.saturating_sub(decrease))
 	}
+
+	fn done_slash(_reason: &Self::Reason, _who: &AccountId, _amount: Self::Balance) {}
 }
 
 /// Simple handler for an imbalance drop which increases the total issuance of the system by the
