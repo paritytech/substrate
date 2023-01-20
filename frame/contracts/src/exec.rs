@@ -1336,7 +1336,18 @@ where
 
 	fn append_debug_buffer(&mut self, msg: &str) -> bool {
 		if let Some(buffer) = &mut self.debug_message {
-			let mut msg = msg.bytes();
+			let err_msg = scale_info::prelude::format!(
+				"Debug message too big (size={}) for debug buffer (bound={})",
+				msg.len(),
+				DebugBufferVec::<T>::bound(),
+			);
+
+			let mut msg = if msg.len() > DebugBufferVec::<T>::bound() {
+				err_msg.bytes()
+			} else {
+				msg.bytes()
+			};
+
 			let num_drain = {
 				let capacity = DebugBufferVec::<T>::bound().checked_sub(buffer.len()).expect(
 					"
@@ -1349,16 +1360,7 @@ where
 				msg.len().saturating_sub(capacity).min(buffer.len())
 			};
 			buffer.drain(0..num_drain);
-			buffer
-				.try_extend(&mut msg)
-				.map_err(|_| {
-					log::debug!(
-						target: "runtime::contracts",
-						"Debug message to big (size={}) for debug buffer (bound={})",
-						msg.len(), DebugBufferVec::<T>::bound(),
-					);
-				})
-				.ok();
+			buffer.try_extend(&mut msg).ok();
 			true
 		} else {
 			false

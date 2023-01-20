@@ -57,7 +57,7 @@ sc-chain-spec = { version = "4.0.0-dev", path = "../chain-spec" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../db" }
-codec = { package = "parity-scale-codec", version = "3.0.0" }
+codec = { package = "parity-scale-codec", version = "3.2.2" }
 sc-executor = { version = "0.10.0-dev", path = "../executor" }
 sc-transaction-pool = { version = "4.0.0-dev", path = "../transaction-pool" }
 sp-transaction-pool = { version = "4.0.0-dev", path = "../../primitives/transaction-pool" }

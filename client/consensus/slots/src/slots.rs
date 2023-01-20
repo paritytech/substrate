@@ -21,7 +21,7 @@
 //! This is used instead of `futures_timer::Interval` because it was unreliable.
 
 use super::{InherentDataProviderExt, Slot, LOG_TARGET};
-use sp_consensus::{Error, SelectChain};
+use sp_consensus::SelectChain;
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
@@ -90,7 +90,7 @@ impl<B: BlockT> SlotInfo<B> {
 pub(crate) struct Slots<Block, SC, IDP> {
 	last_slot: Slot,
 	slot_duration: Duration,
-	inner_delay: Option<Delay>,
+	until_next_slot: Option<Delay>,
 	create_inherent_data_providers: IDP,
 	select_chain: SC,
 	_phantom: std::marker::PhantomData<Block>,
@@ -106,7 +106,7 @@ impl<Block, SC, IDP> Slots<Block, SC, IDP> {
 		Slots {
 			last_slot: 0.into(),
 			slot_duration,
-			inner_delay: None,
+			until_next_slot: None,
 			create_inherent_data_providers,
 			select_chain,
 			_phantom: Default::default(),
@@ -122,26 +122,22 @@ where
 	IDP::InherentDataProviders: crate::InherentDataProviderExt,
 {
 	/// Returns a future that fires when the next slot starts.
-	pub async fn next_slot(&mut self) -> Result<SlotInfo<Block>, Error> {
+	pub async fn next_slot(&mut self) -> SlotInfo<Block> {
 		loop {
-			self.inner_delay = match self.inner_delay.take() {
-				None => {
-					// schedule wait.
+			// Wait for slot timeout
+			self.until_next_slot
+				.take()
+				.unwrap_or_else(|| {
+					// Schedule first timeout.
 					let wait_dur = time_until_next_slot(self.slot_duration);
-					Some(Delay::new(wait_dur))
-				},
-				Some(d) => Some(d),
-			};
+					Delay::new(wait_dur)
+				})
+				.await;
 
-			if let Some(inner_delay) = self.inner_delay.take() {
-				inner_delay.await;
-			}
-			// timeout has fired.
+			// Schedule delay for next slot.
+			let wait_dur = time_until_next_slot(self.slot_duration);
+			self.until_next_slot = Some(Delay::new(wait_dur));
 
-			let ends_in = time_until_next_slot(self.slot_duration);
-
-			// reschedule delay for next slot.
-			self.inner_delay = Some(Delay::new(ends_in));
 			let chain_head = match self.select_chain.best_chain().await {
 				Ok(x) => x,
 				Err(e) => {
@@ -150,30 +146,41 @@ where
 						"Unable to author block in slot. No best block header: {}",
 						e,
 					);
-					// Let's try at the next slot..
-					self.inner_delay.take();
+					// Let's retry at the next slot.
 					continue
 				},
 			};
 
-			let inherent_data_providers = self
+			let inherent_data_providers = match self
 				.create_inherent_data_providers
 				.create_inherent_data_providers(chain_head.hash(), ())
-				.await?;
+				.await
+			{
+				Ok(x) => x,
+				Err(e) => {
+					log::warn!(
+						target: LOG_TARGET,
+						"Unable to author block in slot. Failure creating inherent data provider: {}",
+						e,
+					);
+					// Let's retry at the next slot.
+					continue
+				},
+			};
 
 			let slot = inherent_data_providers.slot();
 
-			// never yield the same slot twice.
+			// Never yield the same slot twice.
 			if slot > self.last_slot {
 				self.last_slot = slot;
 
-				break Ok(SlotInfo::new(
+				break SlotInfo::new(
 					slot,
 					Box::new(inherent_data_providers),
 					self.slot_duration,
 					chain_head,
 					None,
-				))
+				)
 			}
 		}
 	}
