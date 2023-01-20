@@ -8270,6 +8270,7 @@ name = "sc-executor"
 version = "0.10.0-dev"
 dependencies = [
  "array-bytes",
+ "assert_matches",
  "criterion",
  "env_logger",
  "lru",
@@ -8842,6 +8843,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
+ "sp-runtime-interface",
  "sp-std",
  "substrate-wasm-builder",
 ]
