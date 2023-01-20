@@ -496,9 +496,12 @@ mod tests {
 
 	#[test]
 	fn from_parts_works() {
-		assert_eq!(Weight::from_parts(0, 0), Weight { ref_time: 0, proof_size: 0});
-		assert_eq!(Weight::from_parts(5, 5), Weight { ref_time: 5, proof_size: 5});
-		assert_eq!(Weight::from_parts(u64::MAX, u64::MAX), Weight { ref_time: u64::MAX, proof_size: u64::MAX});
+		assert_eq!(Weight::from_parts(0, 0), Weight { ref_time: 0, proof_size: 0 });
+		assert_eq!(Weight::from_parts(5, 5), Weight { ref_time: 5, proof_size: 5 });
+		assert_eq!(
+			Weight::from_parts(u64::MAX, u64::MAX),
+			Weight { ref_time: u64::MAX, proof_size: u64::MAX }
+		);
 	}
 
 	#[test]
@@ -543,7 +546,9 @@ mod tests {
 		assert!(weight.checked_accrue(Weight::from_parts(u64::MAX, 0)).is_none());
 		assert!(weight.checked_accrue(Weight::from_parts(0, u64::MAX)).is_none());
 		assert_eq!(weight, Weight::from_parts(12, 22));
-		assert!(weight.checked_accrue(Weight::from_parts(u64::MAX - 12, u64::MAX - 22)).is_some());
+		assert!(weight
+			.checked_accrue(Weight::from_parts(u64::MAX - 12, u64::MAX - 22))
+			.is_some());
 		assert_eq!(weight, Weight::MAX);
 		assert!(weight.checked_accrue(Weight::from_parts(1, 0)).is_none());
 		assert!(weight.checked_accrue(Weight::from_parts(0, 1)).is_none());
