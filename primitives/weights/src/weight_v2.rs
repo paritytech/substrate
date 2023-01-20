@@ -495,26 +495,72 @@ mod tests {
 	}
 
 	#[test]
-	fn from_u64_works() {
-		let w: Weight = 0_u64.into();
-		assert_eq!(w, Weight::from_parts(0, 0));
-		
-		let w: Weight = 123_u64.into();
-		assert_eq!(w, Weight::from_parts(123, 123));
+	fn from_parts_works() {
+		assert_eq!(Weight::from_parts(0, 0), Weight { ref_time: 0, proof_size: 0});
+		assert_eq!(Weight::from_parts(5, 5), Weight { ref_time: 5, proof_size: 5});
+		assert_eq!(Weight::from_parts(u64::MAX, u64::MAX), Weight { ref_time: u64::MAX, proof_size: u64::MAX});
+	}
 
-		let w: Weight = u64::MAX.into();
-		assert_eq!(w, Weight::from_parts(u64::MAX, u64::MAX));
+	#[test]
+	fn from_all_works() {
+		assert_eq!(Weight::from_all(0), Weight::from_parts(0, 0));
+		assert_eq!(Weight::from_all(5), Weight::from_parts(5, 5));
+		assert_eq!(Weight::from_all(u64::MAX), Weight::from_parts(u64::MAX, u64::MAX));
+	}
+
+	#[test]
+	fn from_u64_works() {
+		assert_eq!(Weight::from_all(0), 0_u64.into());
+		assert_eq!(Weight::from_all(123), 123_u64.into());
+		assert_eq!(Weight::from_all(u64::MAX), u64::MAX.into());
 	}
 
 	#[test]
 	fn from_u64_pair_works() {
-		let w: Weight = (0, 1).into();
-		assert_eq!(w, Weight::from_parts(0, 1));
-		
-		let w: Weight = (123, 321).into();
-		assert_eq!(w, Weight::from_parts(123, 321));
+		assert_eq!(Weight::from_parts(0, 1), (0, 1).into());
+		assert_eq!(Weight::from_parts(123, 321), (123u64, 321u64).into());
+		assert_eq!(Weight::from_parts(u64::MAX, 0), (u64::MAX, 0).into());
+	}
 
-		let w: Weight = (u64::MAX, 0).into();
-		assert_eq!(w, Weight::from_parts(u64::MAX, 0));
+	#[test]
+	fn saturating_reduce_works() {
+		let mut weight = Weight::from_parts(10, 20);
+		weight.saturating_reduce(Weight::from_all(5));
+		assert_eq!(weight, Weight::from_parts(5, 15));
+		weight.saturating_reduce(Weight::from_all(5));
+		assert_eq!(weight, Weight::from_parts(0, 10));
+		weight.saturating_reduce(Weight::from_all(11));
+		assert!(weight.is_zero());
+		weight.saturating_reduce(Weight::from_all(u64::MAX));
+		assert!(weight.is_zero());
+	}
+
+	#[test]
+	fn checked_accrue_works() {
+		let mut weight = Weight::from_parts(10, 20);
+		assert!(weight.checked_accrue(Weight::from_all(2)).is_some());
+		assert_eq!(weight, Weight::from_parts(12, 22));
+		assert!(weight.checked_accrue(Weight::from_parts(u64::MAX, 0)).is_none());
+		assert!(weight.checked_accrue(Weight::from_parts(0, u64::MAX)).is_none());
+		assert_eq!(weight, Weight::from_parts(12, 22));
+		assert!(weight.checked_accrue(Weight::from_parts(u64::MAX - 12, u64::MAX - 22)).is_some());
+		assert_eq!(weight, Weight::MAX);
+		assert!(weight.checked_accrue(Weight::from_parts(1, 0)).is_none());
+		assert!(weight.checked_accrue(Weight::from_parts(0, 1)).is_none());
+		assert_eq!(weight, Weight::MAX);
+	}
+
+	#[test]
+	fn checked_reduce_works() {
+		let mut weight = Weight::from_parts(10, 20);
+		assert!(weight.checked_reduce(Weight::from_all(2)).is_some());
+		assert_eq!(weight, Weight::from_parts(8, 18));
+		assert!(weight.checked_reduce(Weight::from_parts(9, 0)).is_none());
+		assert!(weight.checked_reduce(Weight::from_parts(0, 19)).is_none());
+		assert_eq!(weight, Weight::from_parts(8, 18));
+		assert!(weight.checked_reduce(Weight::from_parts(8, 0)).is_some());
+		assert_eq!(weight, Weight::from_parts(0, 18));
+		assert!(weight.checked_reduce(Weight::from_parts(0, 18)).is_some());
+		assert!(weight.is_zero());
 	}
 }
