@@ -18,12 +18,11 @@
 //! The imbalance type and its associates, which handles keeps everything adding up properly with
 //! unbalanced operations.
 
-use super::{
-	balanced::Balanced,
-	fungibles::{AssetId, Balance},
-	*,
+use super::*;
+use crate::traits::{
+	misc::{SameOrOther, TryDrop},
+	tokens::{AssetId, Balance},
 };
-use crate::traits::misc::{SameOrOther, TryDrop};
 use sp_runtime::{traits::Zero, RuntimeDebug};
 use sp_std::marker::PhantomData;
 

@@ -21,7 +21,9 @@ use sp_core::Get;
 use sp_runtime::{DispatchError, DispatchResult};
 
 use super::*;
-use crate::traits::tokens::{fungibles, DepositConsequence, KeepAlive, WithdrawConsequence};
+use crate::traits::tokens::{
+	fungibles, DepositConsequence, Imbalance as ImbalanceT, KeepAlive, WithdrawConsequence,
+};
 
 /// Convert a `fungibles` trait implementation into a `fungible` trait implementation by identifying
 /// a single item.
@@ -90,6 +92,24 @@ impl<
 	}
 	fn can_hold(reason: &Self::Reason, who: &AccountId, amount: Self::Balance) -> bool {
 		<F as fungibles::InspectHold<AccountId>>::can_hold(A::get(), reason, who, amount)
+	}
+}
+
+impl<
+		F: fungibles::InspectFreeze<AccountId>,
+		A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,
+		AccountId,
+	> InspectFreeze<AccountId> for ItemOf<F, A, AccountId>
+{
+	type Id = F::Id;
+	fn balance_frozen(id: &Self::Id, who: &AccountId) -> Self::Balance {
+		<F as fungibles::InspectFreeze<AccountId>>::balance_frozen(A::get(), id, who)
+	}
+	fn balance_freezable(who: &AccountId) -> Self::Balance {
+		<F as fungibles::InspectFreeze<AccountId>>::balance_freezable(A::get(), who)
+	}
+	fn can_freeze(id: &Self::Id, who: &AccountId) -> bool {
+		<F as fungibles::InspectFreeze<AccountId>>::can_freeze(A::get(), id, who)
 	}
 }
 
@@ -184,20 +204,90 @@ impl<
 }
 
 impl<
-		F: fungibles::InspectFreeze<AccountId>,
+		F: fungibles::Mutate<AccountId>,
 		A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,
 		AccountId,
-	> InspectFreeze<AccountId> for ItemOf<F, A, AccountId>
+	> Mutate<AccountId> for ItemOf<F, A, AccountId>
 {
-	type Id = F::Id;
-	fn balance_frozen(id: &Self::Id, who: &AccountId) -> Self::Balance {
-		<F as fungibles::InspectFreeze<AccountId>>::balance_frozen(A::get(), id, who)
+	fn mint_into(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
+		<F as fungibles::Mutate<AccountId>>::mint_into(A::get(), who, amount)
 	}
-	fn balance_freezable(who: &AccountId) -> Self::Balance {
-		<F as fungibles::InspectFreeze<AccountId>>::balance_freezable(A::get(), who)
+	fn burn_from(
+		who: &AccountId,
+		amount: Self::Balance,
+		best_effort: bool,
+		force: bool,
+	) -> Result<Self::Balance, DispatchError> {
+		<F as fungibles::Mutate<AccountId>>::burn_from(A::get(), who, amount, best_effort, force)
 	}
-	fn can_freeze(id: &Self::Id, who: &AccountId) -> bool {
-		<F as fungibles::InspectFreeze<AccountId>>::can_freeze(A::get(), id, who)
+	fn shelve(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
+		<F as fungibles::Mutate<AccountId>>::shelve(A::get(), who, amount)
+	}
+	fn restore(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
+		<F as fungibles::Mutate<AccountId>>::restore(A::get(), who, amount)
+	}
+	fn transfer(
+		source: &AccountId,
+		dest: &AccountId,
+		amount: Self::Balance,
+		keep_alive: KeepAlive,
+	) -> Result<Self::Balance, DispatchError> {
+		<F as fungibles::Mutate<AccountId>>::transfer(A::get(), source, dest, amount, keep_alive)
+	}
+}
+
+impl<
+		F: fungibles::MutateHold<AccountId>,
+		A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,
+		AccountId,
+	> MutateHold<AccountId> for ItemOf<F, A, AccountId>
+{
+	fn hold(reason: &Self::Reason, who: &AccountId, amount: Self::Balance) -> DispatchResult {
+		<F as fungibles::MutateHold<AccountId>>::hold(A::get(), reason, who, amount)
+	}
+	fn release(
+		reason: &Self::Reason,
+		who: &AccountId,
+		amount: Self::Balance,
+		best_effort: bool,
+	) -> Result<Self::Balance, DispatchError> {
+		<F as fungibles::MutateHold<AccountId>>::release(A::get(), reason, who, amount, best_effort)
+	}
+	fn burn_held(
+		reason: &Self::Reason,
+		who: &AccountId,
+		amount: Self::Balance,
+		best_effort: bool,
+		force: bool,
+	) -> Result<Self::Balance, DispatchError> {
+		<F as fungibles::MutateHold<AccountId>>::burn_held(
+			A::get(),
+			reason,
+			who,
+			amount,
+			best_effort,
+			force,
+		)
+	}
+	fn transfer_on_hold(
+		reason: &Self::Reason,
+		source: &AccountId,
+		dest: &AccountId,
+		amount: Self::Balance,
+		best_effort: bool,
+		on_hold: bool,
+		force: bool,
+	) -> Result<Self::Balance, DispatchError> {
+		<F as fungibles::MutateHold<AccountId>>::transfer_on_hold(
+			A::get(),
+			reason,
+			source,
+			dest,
+			amount,
+			best_effort,
+			on_hold,
+			force,
+		)
 	}
 }
 
@@ -210,12 +300,113 @@ impl<
 	fn set_freeze(id: &Self::Id, who: &AccountId, amount: Self::Balance) -> DispatchResult {
 		<F as fungibles::MutateFreeze<AccountId>>::set_freeze(A::get(), id, who, amount)
 	}
-
 	fn extend_freeze(id: &Self::Id, who: &AccountId, amount: Self::Balance) -> DispatchResult {
 		<F as fungibles::MutateFreeze<AccountId>>::extend_freeze(A::get(), id, who, amount)
 	}
-
 	fn thaw(id: &Self::Id, who: &AccountId) -> DispatchResult {
 		<F as fungibles::MutateFreeze<AccountId>>::thaw(A::get(), id, who)
 	}
 }
+
+pub struct ConvertImbalanceDropHandler<AccountId, Balance, AssetIdType, AssetId, Handler>(
+	sp_std::marker::PhantomData<(AccountId, Balance, AssetIdType, AssetId, Handler)>,
+);
+
+impl<
+		AccountId,
+		Balance,
+		AssetIdType,
+		AssetId: Get<AssetIdType>,
+		Handler: crate::traits::tokens::fungibles::HandleImbalanceDrop<AssetIdType, Balance>,
+	> HandleImbalanceDrop<Balance>
+	for ConvertImbalanceDropHandler<AccountId, Balance, AssetIdType, AssetId, Handler>
+{
+	fn handle(amount: Balance) {
+		Handler::handle(AssetId::get(), amount)
+	}
+}
+
+impl<
+		F: fungibles::Inspect<AccountId>
+			+ fungibles::Unbalanced<AccountId>
+			+ fungibles::Balanced<AccountId>,
+		A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,
+		AccountId,
+	> Balanced<AccountId> for ItemOf<F, A, AccountId>
+{
+	type OnDropDebt =
+		ConvertImbalanceDropHandler<AccountId, Self::Balance, F::AssetId, A, F::OnDropDebt>;
+	type OnDropCredit =
+		ConvertImbalanceDropHandler<AccountId, Self::Balance, F::AssetId, A, F::OnDropCredit>;
+	fn deposit(
+		who: &AccountId,
+		value: Self::Balance,
+		best_effort: bool,
+	) -> Result<DebtOf<AccountId, Self>, DispatchError> {
+		<F as fungibles::Balanced<AccountId>>::deposit(A::get(), who, value, best_effort)
+			.map(|debt| Imbalance::new(debt.peek()))
+	}
+	fn issue(amount: Self::Balance) -> CreditOf<AccountId, Self> {
+		Imbalance::new(<F as fungibles::Balanced<AccountId>>::issue(A::get(), amount).peek())
+	}
+	fn pair(amount: Self::Balance) -> (DebtOf<AccountId, Self>, CreditOf<AccountId, Self>) {
+		let (a, b) = <F as fungibles::Balanced<AccountId>>::pair(A::get(), amount);
+		(Imbalance::new(a.peek()), Imbalance::new(b.peek()))
+	}
+	fn rescind(amount: Self::Balance) -> DebtOf<AccountId, Self> {
+		Imbalance::new(<F as fungibles::Balanced<AccountId>>::rescind(A::get(), amount).peek())
+	}
+	fn resolve(
+		who: &AccountId,
+		credit: CreditOf<AccountId, Self>,
+	) -> Result<(), CreditOf<AccountId, Self>> {
+		let credit = fungibles::Imbalance::new(A::get(), credit.peek());
+		<F as fungibles::Balanced<AccountId>>::resolve(who, credit)
+			.map_err(|credit| Imbalance::new(credit.peek()))
+	}
+	fn settle(
+		who: &AccountId,
+		debt: DebtOf<AccountId, Self>,
+		keep_alive: KeepAlive,
+	) -> Result<CreditOf<AccountId, Self>, DebtOf<AccountId, Self>> {
+		let debt = fungibles::Imbalance::new(A::get(), debt.peek());
+		<F as fungibles::Balanced<AccountId>>::settle(who, debt, keep_alive)
+			.map(|credit| Imbalance::new(credit.peek()))
+			.map_err(|debt| Imbalance::new(debt.peek()))
+	}
+	fn withdraw(
+		who: &AccountId,
+		value: Self::Balance,
+		best_effort: bool,
+		keep_alive: KeepAlive,
+	) -> Result<CreditOf<AccountId, Self>, DispatchError> {
+		<F as fungibles::Balanced<AccountId>>::withdraw(
+			A::get(),
+			who,
+			value,
+			best_effort,
+			keep_alive,
+		)
+		.map(|credit| Imbalance::new(credit.peek()))
+	}
+}
+
+impl<
+		F: fungibles::BalancedHold<AccountId>,
+		A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,
+		AccountId,
+	> BalancedHold<AccountId> for ItemOf<F, A, AccountId>
+{
+	fn slash(
+		reason: &Self::Reason,
+		who: &AccountId,
+		amount: Self::Balance,
+	) -> (CreditOf<AccountId, Self>, Self::Balance) {
+		let (credit, amount) =
+			<F as fungibles::BalancedHold<AccountId>>::slash(A::get(), reason, who, amount);
+		(Imbalance::new(credit.peek()), amount)
+	}
+}
+
+#[test]
+fn test() {}

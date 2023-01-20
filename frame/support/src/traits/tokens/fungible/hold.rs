@@ -102,70 +102,11 @@ pub trait InspectHold<AccountId>: Inspect<AccountId> {
 }
 
 /// Trait for mutating a fungible asset which can be placed on hold.
-pub trait MutateHold<AccountId>: InspectHold<AccountId> {
+pub trait MutateHold<AccountId>:
+	InspectHold<AccountId> + Unbalanced<AccountId> + UnbalancedHold<AccountId>
+{
 	/// Hold some funds in an account. If a hold for `reason` is already in place, then this
 	/// will increase it.
-	fn hold(reason: &Self::Reason, who: &AccountId, amount: Self::Balance) -> DispatchResult;
-
-	/// Release up to `amount` held funds in an account.
-	///
-	/// The actual amount released is returned with `Ok`.
-	///
-	/// If `best_effort` is `true`, then the amount actually unreserved and returned as the inner
-	/// value of `Ok` may be smaller than the `amount` passed.
-	fn release(
-		reason: &Self::Reason,
-		who: &AccountId,
-		amount: Self::Balance,
-		best_effort: bool,
-	) -> Result<Self::Balance, DispatchError>;
-
-	/// Attempt to decrease the balance of `who` which is held for the given `reason` by `amount`.
-	///
-	/// If `best_effort` is true, then as much as possible is reduced, up to `amount`, and the
-	/// amount of tokens reduced is returned. Otherwise, if the total amount can be reduced, then it
-	/// is and the amount returned, and if not, then nothing changes and `Err` is returned.
-	///
-	/// If `force` is true, then locks/freezes will be ignored. This should only be used when
-	/// conducting slashing or other activity which materially disadvantages the account holder
-	/// since it could provide a means of circumventing freezes.
-	fn burn_held(
-		reason: &Self::Reason,
-		who: &AccountId,
-		amount: Self::Balance,
-		best_effort: bool,
-		force: bool,
-	) -> Result<Self::Balance, DispatchError>;
-
-	/// Transfer held funds into a destination account.
-	///
-	/// If `on_hold` is `true`, then the destination account must already exist and the assets
-	/// transferred will still be on hold in the destination account. If not, then the destination
-	/// account need not already exist, but must be creatable.
-	///
-	/// If `best_effort` is `true`, then an amount less than `amount` may be transferred without
-	/// error.
-	///
-	/// If `force` is `true`, then other fund-locking mechanisms may be disregarded. It should be
-	/// left as `false` in most circumstances, but when you want the same power as a `slash`, it
-	/// may be `true`.
-	///
-	/// The actual amount transferred is returned, or `Err` in the case of error and nothing is
-	/// changed.
-	fn transfer_on_hold(
-		reason: &Self::Reason,
-		source: &AccountId,
-		dest: &AccountId,
-		amount: Self::Balance,
-		best_effort: bool,
-		on_hold: bool,
-		force: bool,
-	) -> Result<Self::Balance, DispatchError>;
-}
-
-impl<AccountId, U: Unbalanced<AccountId> + UnbalancedHold<AccountId> + InspectHold<AccountId>>
-	MutateHold<AccountId> for U
-{
 	fn hold(reason: &Self::Reason, who: &AccountId, amount: Self::Balance) -> DispatchResult {
 		// NOTE: This doesn't change the total balance of the account so there's no need to
 		// check liquidity.
@@ -177,6 +118,12 @@ impl<AccountId, U: Unbalanced<AccountId> + UnbalancedHold<AccountId> + InspectHo
 		Ok(())
 	}
 
+	/// Release up to `amount` held funds in an account.
+	///
+	/// The actual amount released is returned with `Ok`.
+	///
+	/// If `best_effort` is `true`, then the amount actually unreserved and returned as the inner
+	/// value of `Ok` may be smaller than the `amount` passed.
 	fn release(
 		reason: &Self::Reason,
 		who: &AccountId,
@@ -197,6 +144,15 @@ impl<AccountId, U: Unbalanced<AccountId> + UnbalancedHold<AccountId> + InspectHo
 		Self::increase_balance(who, amount, true)
 	}
 
+	/// Attempt to decrease the balance of `who` which is held for the given `reason` by `amount`.
+	///
+	/// If `best_effort` is true, then as much as possible is reduced, up to `amount`, and the
+	/// amount of tokens reduced is returned. Otherwise, if the total amount can be reduced, then it
+	/// is and the amount returned, and if not, then nothing changes and `Err` is returned.
+	///
+	/// If `force` is true, then locks/freezes will be ignored. This should only be used when
+	/// conducting slashing or other activity which materially disadvantages the account holder
+	/// since it could provide a means of circumventing freezes.
 	fn burn_held(
 		reason: &Self::Reason,
 		who: &AccountId,
@@ -216,6 +172,21 @@ impl<AccountId, U: Unbalanced<AccountId> + UnbalancedHold<AccountId> + InspectHo
 		Ok(amount)
 	}
 
+	/// Transfer held funds into a destination account.
+	///
+	/// If `on_hold` is `true`, then the destination account must already exist and the assets
+	/// transferred will still be on hold in the destination account. If not, then the destination
+	/// account need not already exist, but must be creatable.
+	///
+	/// If `best_effort` is `true`, then an amount less than `amount` may be transferred without
+	/// error.
+	///
+	/// If `force` is `true`, then other fund-locking mechanisms may be disregarded. It should be
+	/// left as `false` in most circumstances, but when you want the same power as a `slash`, it
+	/// may be `true`.
+	///
+	/// The actual amount transferred is returned, or `Err` in the case of error and nothing is
+	/// changed.
 	fn transfer_on_hold(
 		reason: &Self::Reason,
 		source: &AccountId,
