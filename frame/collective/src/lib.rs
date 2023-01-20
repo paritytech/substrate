@@ -352,7 +352,7 @@ pub mod pallet {
 		/// - `old_count`: The upper bound for the previous number of members in storage. Used for
 		///   weight estimation.
 		///
-		/// Requires root origin.
+		/// The dispatch of this call must be `SetMembersOrigin`.
 		///
 		/// NOTE: Does not enforce the expected `MaxMembers` limit on the amount of members, but
 		///       the weight estimations rely on it to estimate dispatchable weight.
