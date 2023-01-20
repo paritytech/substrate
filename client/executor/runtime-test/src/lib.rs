@@ -356,9 +356,6 @@ pub extern "C" fn test_return_huge_len(_params: *const u8, _len: usize) -> u64 {
 #[no_mangle]
 #[cfg(not(feature = "std"))]
 pub extern "C" fn test_return_max_memory_offset(_params: *const u8, _len: usize) -> u64 {
-	// This should use `core::arch::wasm` instead of `core::arch::wasm32`,
-	// but `core::arch::wasm` depends on `#![feature(simd_wasm64)]` on current nightly.
-	// See https://github.com/Craig-Macomber/lol_alloc/issues/1
 	pack_ptr_and_len((core::arch::wasm32::memory_size(0) * WASM_PAGE_SIZE) as u32, 0)
 }
 
@@ -366,9 +363,6 @@ pub extern "C" fn test_return_max_memory_offset(_params: *const u8, _len: usize)
 #[no_mangle]
 #[cfg(not(feature = "std"))]
 pub extern "C" fn test_return_max_memory_offset_plus_one(_params: *const u8, _len: usize) -> u64 {
-	// This should use `core::arch::wasm` instead of `core::arch::wasm32`,
-	// but `core::arch::wasm` depends on `#![feature(simd_wasm64)]` on current nightly.
-	// See https://github.com/Craig-Macomber/lol_alloc/issues/1
 	pack_ptr_and_len((core::arch::wasm32::memory_size(0) * WASM_PAGE_SIZE) as u32, 1)
 }
 
