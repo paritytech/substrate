@@ -580,6 +580,10 @@ pub(crate) fn process_storage_results(
 				},
 				None => None,
 			};
+			let is_all_ignored = pov_modes.get(&("ALL".to_string(), "ALL".to_string())) == Some(&PovEstimationMode::Ignored);
+			if is_all_ignored && override_pov_mode != Some(&PovEstimationMode::Ignored) {
+				panic!("The syntax currently does not allow to exclude single keys from a top-level `Ignored` pov-mode.");
+			}
 
 			let pov_overhead = single_read_pov_overhead(
 				key_info.and_then(|i| i.max_values),
@@ -587,6 +591,21 @@ pub(crate) fn process_storage_results(
 			);
 
 			let used_pov_mode = match (override_pov_mode, max_size, default_pov_mode) {
+				// All is ignored by default and no override:
+				(None, _, PovEstimationMode::Ignored)  => {
+					prefix_result.proof_size = 0;
+					PovEstimationMode::Ignored
+				},
+				// Some is ignored by override, maybe all:
+				(Some(PovEstimationMode::Ignored), _, _) => {
+					// If this is applied to All keys, then we also remove the base weight and just set all to zero.
+					if is_all_ignored {
+						prefix_result.proof_size = 0;
+					} else {
+						// Otherwise we just don't *increase* `proof_size` for this key.
+					}
+					PovEstimationMode::Ignored
+				},
 				(Some(PovEstimationMode::Measured), _, _)|
 				(None, _, PovEstimationMode::Measured) |
 				// Use best effort in this case since failing would be really annoying.

@@ -61,6 +61,8 @@ pub enum PovEstimationMode {
 	MaxEncodedLen,
 	/// Measure the accessed value size in the pallet benchmarking and add some trie overhead.
 	Measured,
+	/// Do not estimate the PoV size for this storage item or benchmark.
+	Ignored,
 }
 
 impl FromStr for PovEstimationMode {
@@ -70,7 +72,8 @@ impl FromStr for PovEstimationMode {
 		match s {
 			"MaxEncodedLen" => Ok(Self::MaxEncodedLen),
 			"Measured" => Ok(Self::Measured),
-			_ => Err("Invalid PoV estimation mode. Must be one of: MaxEncodedLen, Measured"),
+			"Ignored" => Ok(Self::Ignored),
+			_ => unreachable!("The benchmark! macro should have prevented this"),
 		}
 	}
 }
