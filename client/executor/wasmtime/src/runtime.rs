@@ -803,7 +803,7 @@ fn extract_output_data(
 	// Get the size of the WASM memory in bytes.
 	let memory_size = ctx.as_context().data().memory().data_size(ctx);
 	if checked_range(output_ptr as usize, output_len as usize, memory_size).is_none() {
-		return Err(WasmError::Other("output exceeds bounds of wasm memory".into()))?
+		Err(WasmError::Other("output exceeds bounds of wasm memory".into()))?
 	}
 	let mut output = vec![0; output_len as usize];
 
