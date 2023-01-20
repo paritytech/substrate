@@ -115,6 +115,7 @@ pub trait MutateHold<AccountId>:
 		// Should be infallible now, but we proceed softly anyway.
 		Self::decrease_balance(who, amount, false, KeepAlive::NoKill, true)?;
 		Self::increase_balance_on_hold(reason, who, amount, true)?;
+		Self::done_hold(reason, who, amount);
 		Ok(())
 	}
 
@@ -141,7 +142,9 @@ pub trait MutateHold<AccountId>:
 		let amount = Self::decrease_balance_on_hold(reason, who, amount, best_effort)?;
 		// Increase the main balance by what we took. We always do a best-effort here because we
 		// already checked that we can deposit before.
-		Self::increase_balance(who, amount, true)
+		let actual = Self::increase_balance(who, amount, true)?;
+		Self::done_release(reason, who, actual);
+		Ok(actual)
 	}
 
 	/// Attempt to decrease the balance of `who` which is held for the given `reason` by `amount`.
@@ -169,6 +172,7 @@ pub trait MutateHold<AccountId>:
 		}
 		let amount = Self::decrease_balance_on_hold(reason, who, amount, best_effort)?;
 		Self::set_total_issuance(Self::total_issuance().saturating_sub(amount));
+		Self::done_burn_held(reason, who, amount);
 		Ok(amount)
 	}
 
@@ -214,10 +218,23 @@ pub trait MutateHold<AccountId>:
 		}
 
 		let amount = Self::decrease_balance_on_hold(reason, source, amount, best_effort)?;
-		if on_hold {
-			Self::increase_balance_on_hold(reason, dest, amount, best_effort)
+		let actual = if on_hold {
+			Self::increase_balance_on_hold(reason, dest, amount, best_effort)?
 		} else {
-			Self::increase_balance(dest, amount, best_effort)
-		}
+			Self::increase_balance(dest, amount, best_effort)?
+		};
+		Self::done_transfer_on_hold(reason, source, dest, actual);
+		Ok(actual)
+	}
+
+	fn done_hold(_reason: &Self::Reason, _who: &AccountId, _amount: Self::Balance) {}
+	fn done_release(_reason: &Self::Reason, _who: &AccountId, _amount: Self::Balance) {}
+	fn done_burn_held(_reason: &Self::Reason, _who: &AccountId, _amount: Self::Balance) {}
+	fn done_transfer_on_hold(
+		_reason: &Self::Reason,
+		_source: &AccountId,
+		_dest: &AccountId,
+		_amount: Self::Balance,
+	) {
 	}
 }
