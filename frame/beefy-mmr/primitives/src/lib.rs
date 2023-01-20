@@ -359,6 +359,13 @@ sp_api::decl_runtime_apis! {
 		/// Return the next/queued BEEFY authority set proof.
 		fn next_authority_set_proof() -> BeefyNextAuthoritySet<H>;
 	}
+
+	/// Do do something.
+	pub trait UnimplementedRuntimeAPI
+	{
+		/// Do something.
+		fn undo() -> u8;
+	}
 }
 
 #[cfg(test)]

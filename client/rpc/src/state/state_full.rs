@@ -295,7 +295,10 @@ where
 			self.client
 				.runtime_api()
 				.metadata(&BlockId::Hash(block))
-				.map(Into::into)
+				.map(|(rt, md)| {
+					println!("RUNTIME {:?}", rt);
+					md.into()
+				})
 				.map_err(|e| Error::Client(Box::new(e)))
 		})
 	}

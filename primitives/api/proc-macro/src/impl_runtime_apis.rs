@@ -362,9 +362,7 @@ fn extend_with_runtime_decl_path(mut trait_: Path) -> Path {
 }
 
 fn extend_with_api_version(mut trait_: Path, version: Option<u64>) -> Path {
-	let version = if let Some(v) = version {
-		v
-	} else {
+	let Some(version) = version else {
 		// nothing to do
 		return trait_
 	};
@@ -379,6 +377,102 @@ fn extend_with_api_version(mut trait_: Path, version: Option<u64>) -> Path {
 	trait_
 }
 
+/// Generate the runtime metadata for the implemented runtime APIs.
+fn generate_runtime_api_metadata(impls: &[ItemImpl]) -> Result<TokenStream> {
+	let mut result = Vec::new();
+
+	let mut runtime_name = Default::default();
+
+	for impl_ in impls {
+		let runtime = impl_.self_ty.clone();
+		runtime_name = Some(runtime);
+
+		let trait_api_ver = extract_api_version(&impl_.attrs, impl_.span())?;
+		let trait_ = extract_impl_trait(&impl_, RequireQualifiedTraitPath::Yes)?.clone();
+		let trait_ = extend_with_api_version(trait_, trait_api_ver);
+
+		let trait_name = &trait_
+			.segments
+			.last()
+			.as_ref()
+			.expect("Trait path should always contain at least one item; qed")
+			.ident;
+
+		println!("Trait name: {}", trait_name);
+		let g = impl_.generics.clone();
+		let g = quote!( #g );
+		println!("   Generics: {}", g);
+
+		for impl_item in &impl_.items {
+			// Keep only methods.
+			let ImplItem::Method(method) = impl_item else {
+				continue;
+			};
+
+			let signature = &method.sig;
+			let method_name = format!("{}{}", trait_name, signature.ident.clone());
+
+			println!("  Signature: {}", signature.ident);
+			let g = signature.inputs.clone();
+
+			let mut arguments = Vec::new();
+
+			for input in &signature.inputs {
+				let g = input.clone();
+				let g = quote!( #g );
+				println!("  Input: {}", g);
+
+				use syn::FnArg;
+				match input {
+					FnArg::Receiver(_) => {
+						panic!("FnArg::Receiver unsupported for runtime API decl")
+					},
+					FnArg::Typed(typed) => {
+						// This is just an argument name.
+						// TODO: Ensure we panic otherwise.
+						let pat = &typed.pat;
+
+						// Get the argument type.
+						// TODO: For now we ignore references, mutability and lifetimes.
+						let ty = &typed.ty;
+
+						arguments.push((pat.clone(), ty.clone()));
+					},
+				};
+			}
+
+			let g = quote!( #g );
+			println!("  Inputs: {}", g);
+			let g = signature.output.clone();
+			let g = quote!( #g );
+			println!("  Outputs: {}", g);
+
+			result.push((method_name, arguments));
+		}
+	}
+
+	let names = result.iter().map(|(name, _)| name);
+	// NOTE: keep the names for now.
+	// let args = result.iter().map(|(_, arg)| arg);
+
+	let runtime = runtime_name.unwrap();
+
+	let res = quote!(
+		impl #runtime {
+			fn runtime_metadata() -> Vec<String> {
+				vec![
+					# ( #names.into(), ) *
+					// #( (#names,  #( (#args, )* ), )*
+				]
+			}
+		}
+	);
+
+	println!("res: \n\n\n{}", res);
+
+	Ok(res)
+}
+
 /// Generates the implementations of the apis for the runtime.
 fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let mut impls_prepared = Vec::new();
@@ -388,13 +482,25 @@ fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 	for impl_ in impls.iter() {
 		let trait_api_ver = extract_api_version(&impl_.attrs, impl_.span())?;
 
+		println!("Trait API ver {:?}", trait_api_ver);
+
 		let mut impl_ = impl_.clone();
+
+		let impl_c = impl_.clone();
+		let q = quote!( #impl_c );
+		println!("Original trait {}", q);
+
 		let trait_ = extract_impl_trait(&impl_, RequireQualifiedTraitPath::Yes)?.clone();
 		let trait_ = extend_with_runtime_decl_path(trait_);
 		let trait_ = extend_with_api_version(trait_, trait_api_ver);
 
 		impl_.trait_.as_mut().unwrap().1 = trait_;
 		impl_.attrs = filter_cfg_attrs(&impl_.attrs);
+
+		let impl_c = impl_.clone();
+		let q = quote!( #impl_c );
+		println!("Modified trait {}\n", q);
+
 		impls_prepared.push(impl_);
 	}
 
@@ -629,6 +735,9 @@ pub fn impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::Tok
 fn impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
 	let dispatch_impl = generate_dispatch_function(api_impls)?;
 	let api_impls_for_runtime = generate_api_impl_for_runtime(api_impls)?;
+
+	let runtime_metadata = generate_runtime_api_metadata(api_impls)?;
+
 	let base_runtime_api = generate_runtime_api_base_structures()?;
 	let hidden_includes = generate_hidden_includes(HIDDEN_INCLUDES_ID);
 	let runtime_api_versions = generate_runtime_api_versions(api_impls)?;
@@ -641,6 +750,8 @@ fn impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
 		#base_runtime_api
 
 		#api_impls_for_runtime
+
+		#runtime_metadata
 
 		#api_impls_for_runtime_api
 

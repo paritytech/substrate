@@ -737,7 +737,8 @@ cfg_if! {
 			}
 
 			impl sp_api::Metadata<Block> for Runtime {
-				fn metadata() -> OpaqueMetadata {
+
+				fn metadata() -> (Vec<String>, OpaqueMetadata) {
 					unimplemented!()
 				}
 			}
@@ -1011,7 +1012,7 @@ cfg_if! {
 			}
 
 			impl sp_api::Metadata<Block> for Runtime {
-				fn metadata() -> OpaqueMetadata {
+				fn metadata() -> (Vec<String>, OpaqueMetadata) {
 					unimplemented!()
 				}
 			}
