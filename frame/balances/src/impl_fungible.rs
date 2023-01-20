@@ -309,6 +309,13 @@ impl<T: Config<I>, I: 'static> fungible::MutateFreeze<T::AccountId> for Pallet<T
 	}
 }
 
+impl<T: Config<I>, I: 'static> fungible::Balanced<T::AccountId> for Pallet<T, I> {
+	type OnDropCredit = fungible::DecreaseIssuance<T::AccountId, Self>;
+	type OnDropDebt = fungible::IncreaseIssuance<T::AccountId, Self>;
+}
+
+impl<T: Config<I>, I: 'static> fungible::BalancedHold<T::AccountId> for Pallet<T, I> {}
+
 /*
 (_reason: &Self::Reason, who: &T::AccountId, amount: Self::Balance) -> DispatchResult {
 	if amount.is_zero() {

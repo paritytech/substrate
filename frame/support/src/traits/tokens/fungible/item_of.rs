@@ -178,3 +178,40 @@ impl<
 		)
 	}
 }
+
+impl<
+		F: fungibles::InspectFreeze<AccountId>,
+		A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,
+		AccountId,
+	> InspectFreeze<AccountId> for ItemOf<F, A, AccountId>
+{
+	type Id = F::Id;
+	fn balance_frozen(id: &Self::Id, who: &AccountId) -> Self::Balance {
+		<F as fungibles::InspectFreeze<AccountId>>::balance_frozen(A::get(), id, who)
+	}
+	fn balance_freezable(who: &AccountId) -> Self::Balance {
+		<F as fungibles::InspectFreeze<AccountId>>::balance_freezable(A::get(), who)
+	}
+	fn can_freeze(id: &Self::Id, who: &AccountId) -> bool {
+		<F as fungibles::InspectFreeze<AccountId>>::can_freeze(A::get(), id, who)
+	}
+}
+
+impl<
+		F: fungibles::MutateFreeze<AccountId>,
+		A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,
+		AccountId,
+	> MutateFreeze<AccountId> for ItemOf<F, A, AccountId>
+{
+	fn set_freeze(id: &Self::Id, who: &AccountId, amount: Self::Balance) -> DispatchResult {
+		<F as fungibles::MutateFreeze<AccountId>>::set_freeze(A::get(), id, who, amount)
+	}
+
+	fn extend_freeze(id: &Self::Id, who: &AccountId, amount: Self::Balance) -> DispatchResult {
+		<F as fungibles::MutateFreeze<AccountId>>::extend_freeze(A::get(), id, who, amount)
+	}
+
+	fn thaw(id: &Self::Id, who: &AccountId) -> DispatchResult {
+		<F as fungibles::MutateFreeze<AccountId>>::thaw(A::get(), id, who)
+	}
+}

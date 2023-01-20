@@ -34,7 +34,9 @@ pub mod metadata;
 pub use balanced::{Balanced, Unbalanced, UnbalancedHold};
 mod imbalance;
 pub use imbalance::{CreditOf, DebtOf, HandleImbalanceDrop, Imbalance};
+mod freeze;
 pub mod roles;
+pub use freeze::{InspectFreeze, MutateFreeze};
 
 /// Trait for providing balance-inspection access to a set of named fungible assets.
 pub trait Inspect<AccountId> {

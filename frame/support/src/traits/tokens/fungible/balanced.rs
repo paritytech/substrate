@@ -29,7 +29,7 @@ use sp_std::marker::PhantomData;
 /// total supply is maintained automatically.
 ///
 /// This is auto-implemented when a token class has `Unbalanced` implemented.
-pub trait Balanced<AccountId>: Inspect<AccountId> {
+pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	/// The type for managing what happens when an instance of `Debt` is dropped without being used.
 	type OnDropDebt: HandleImbalanceDrop<Self::Balance>;
 	/// The type for managing what happens when an instance of `Credit` is dropped without being
@@ -41,7 +41,12 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 	///
 	/// This is infallible, but doesn't guarantee that the entire `amount` is burnt, for example
 	/// in the case of underflow.
-	fn rescind(amount: Self::Balance) -> DebtOf<AccountId, Self>;
+	fn rescind(amount: Self::Balance) -> DebtOf<AccountId, Self> {
+		let old = Self::total_issuance();
+		let new = old.saturating_sub(amount);
+		Self::set_total_issuance(new);
+		Imbalance::<Self::Balance, Self::OnDropDebt, Self::OnDropCredit>::new(old - new)
+	}
 
 	/// Increase the total issuance by `amount` and return the according imbalance. The imbalance
 	/// will typically be used to increase an account by the same amount with e.g.
@@ -49,7 +54,12 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 	///
 	/// This is infallible, but doesn't guarantee that the entire `amount` is issued, for example
 	/// in the case of overflow.
-	fn issue(amount: Self::Balance) -> CreditOf<AccountId, Self>;
+	fn issue(amount: Self::Balance) -> CreditOf<AccountId, Self> {
+		let old = Self::total_issuance();
+		let new = old.saturating_add(amount);
+		Self::set_total_issuance(new);
+		Imbalance::<Self::Balance, Self::OnDropCredit, Self::OnDropDebt>::new(new - old)
+	}
 
 	/// Produce a pair of imbalances that cancel each other out exactly.
 	///
@@ -72,7 +82,10 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 		who: &AccountId,
 		value: Self::Balance,
 		best_effort: bool,
-	) -> Result<DebtOf<AccountId, Self>, DispatchError>;
+	) -> Result<DebtOf<AccountId, Self>, DispatchError> {
+		let increase = Self::increase_balance(who, value, best_effort)?;
+		Ok(Imbalance::<Self::Balance, Self::OnDropDebt, Self::OnDropCredit>::new(increase))
+	}
 
 	/// Removes `value` balance from `who` account if possible.
 	///
@@ -92,7 +105,10 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 		value: Self::Balance,
 		best_effort: bool,
 		keep_alive: KeepAlive,
-	) -> Result<CreditOf<AccountId, Self>, DispatchError>;
+	) -> Result<CreditOf<AccountId, Self>, DispatchError> {
+		let decrease = Self::decrease_balance(who, value, best_effort, keep_alive, false)?;
+		Ok(Imbalance::<Self::Balance, Self::OnDropCredit, Self::OnDropDebt>::new(decrease))
+	}
 
 	/// The balance of `who` is increased in order to counter `credit`. If the whole of `credit`
 	/// cannot be countered, then nothing is changed and the original `credit` is returned in an
@@ -138,6 +154,27 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 	}
 }
 
+/// Trait for slashing a fungible asset which can be place on hold.
+pub trait BalancedHold<AccountId>: Balanced<AccountId> + UnbalancedHold<AccountId> {
+	/// Reduce the balance of some funds on hold in an account.
+	///
+	/// The resulting imbalance is the first item of the tuple returned.
+	///
+	/// As much funds that are on hold up to `amount` will be deducted as possible. If this is less
+	/// than `amount`, then a non-zero second item will be returned.
+	fn slash(
+		reason: &Self::Reason,
+		who: &AccountId,
+		amount: Self::Balance,
+	) -> (CreditOf<AccountId, Self>, Self::Balance) {
+		let decrease =
+			Self::decrease_balance_on_hold(reason, who, amount, true).unwrap_or(Default::default());
+		let credit =
+			Imbalance::<Self::Balance, Self::OnDropCredit, Self::OnDropDebt>::new(decrease);
+		(credit, amount.saturating_sub(decrease))
+	}
+}
+
 /// Simple handler for an imbalance drop which increases the total issuance of the system by the
 /// imbalance amount. Used for leftover debt.
 pub struct IncreaseIssuance<AccountId, U>(PhantomData<(AccountId, U)>);
@@ -157,71 +194,5 @@ impl<AccountId, U: Unbalanced<AccountId>> HandleImbalanceDrop<U::Balance>
 {
 	fn handle(amount: U::Balance) {
 		U::set_total_issuance(U::total_issuance().saturating_sub(amount))
-	}
-}
-
-/// An imbalance type which uses `DecreaseIssuance` to deal with anything `Drop`ed.
-///
-/// Basically means that funds in someone's account have been removed and not yet placed anywhere
-/// else. If it gets dropped, then those funds will be assumed to be "burned" and the total supply
-/// will be accordingly decreased to ensure it equals the sum of the balances of all accounts.
-type Credit<AccountId, U> = Imbalance<
-	<U as Inspect<AccountId>>::Balance,
-	DecreaseIssuance<AccountId, U>,
-	IncreaseIssuance<AccountId, U>,
->;
-
-/// An imbalance type which uses `IncreaseIssuance` to deal with anything `Drop`ed.
-///
-/// Basically means that there are funds in someone's account whose origin is as yet unaccounted
-/// for. If it gets dropped, then those funds will be assumed to be "minted" and the total supply
-/// will be accordingly increased to ensure it equals the sum of the balances of all accounts.
-type Debt<AccountId, U> = Imbalance<
-	<U as Inspect<AccountId>>::Balance,
-	IncreaseIssuance<AccountId, U>,
-	DecreaseIssuance<AccountId, U>,
->;
-
-/// Create some `Credit` item. Only for internal use.
-fn credit<AccountId, U: Unbalanced<AccountId>>(amount: U::Balance) -> Credit<AccountId, U> {
-	Imbalance::new(amount)
-}
-
-/// Create some `Debt` item. Only for internal use.
-fn debt<AccountId, U: Unbalanced<AccountId>>(amount: U::Balance) -> Debt<AccountId, U> {
-	Imbalance::new(amount)
-}
-
-impl<AccountId, U: Unbalanced<AccountId>> Balanced<AccountId> for U {
-	type OnDropCredit = DecreaseIssuance<AccountId, U>;
-	type OnDropDebt = IncreaseIssuance<AccountId, U>;
-	fn rescind(amount: Self::Balance) -> Debt<AccountId, Self> {
-		let old = U::total_issuance();
-		let new = old.saturating_sub(amount);
-		U::set_total_issuance(new);
-		debt(old - new)
-	}
-	fn issue(amount: Self::Balance) -> Credit<AccountId, Self> {
-		let old = U::total_issuance();
-		let new = old.saturating_add(amount);
-		U::set_total_issuance(new);
-		credit(new - old)
-	}
-	fn deposit(
-		who: &AccountId,
-		amount: Self::Balance,
-		best_effort: bool,
-	) -> Result<Debt<AccountId, Self>, DispatchError> {
-		let increase = U::increase_balance(who, amount, best_effort)?;
-		Ok(debt(increase))
-	}
-	fn withdraw(
-		who: &AccountId,
-		amount: Self::Balance,
-		best_effort: bool,
-		keep_alive: KeepAlive,
-	) -> Result<Credit<AccountId, Self>, DispatchError> {
-		let decrease = U::decrease_balance(who, amount, best_effort, keep_alive, false)?;
-		Ok(credit(decrease))
 	}
 }

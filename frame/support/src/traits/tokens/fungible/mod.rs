@@ -16,6 +16,29 @@
 // limitations under the License.
 
 //! The traits for dealing with a single fungible token class and any associated types.
+//!
+//! ### User-implememted traits
+//! - `Inspect`: Regular balance inspector functions.
+//! - `Unbalanced`: Low-level balance mutating functions. Does not guarantee proper book-keeping and
+//!   so should not be called into directly from application code. Other traits depend on this and
+//!   provide default implementations based on it.
+//! - `UnbalancedHold`: Low-level balance mutating functions for balances placed on hold. Does not
+//!   guarantee proper book-keeping and so should not be called into directly from application code.
+//!   Other traits depend on this and provide default implementations based on it.
+//! - `Mutate`: Regular balance mutator functions. Pre-implemented using `Unbalanced`, though the
+//!   `done_*` functions should likely be reimplemented in case you want to do something following
+//!   the operation such as emit events.
+//! - `InspectHold`: Inspector functions for balances on hold.
+//! - `MutateHold`: Mutator functions for balances on hold. Mostly pre-implemented using
+//!   `UnbalancedHold`.
+//! - `InspectFreeze`: Inspector functions for frozen balance.
+//! - `MutateFreeze`: Mutator functions for frozen balance.
+//! - `Balanced`: One-sided mutator functions for regular balances, which return imbalance objects
+//!   which guaranete eventual book-keeping. May be useful for some sophisticated operations where
+//!   funds must be removed from an account before it is known precisely what should be done with
+//!   them.
+//! - `Balanced`: One-sided mutator functions for balances on hold, which return imbalance objects
+//!   which guaranete eventual book-keeping.
 
 use super::{
 	misc::{Balance, DepositConsequence, KeepAlive, WithdrawConsequence},
@@ -37,9 +60,9 @@ mod imbalance;
 mod item_of;
 mod unbalanced;
 
-pub use balanced::Balanced;
+pub use balanced::{Balanced, BalancedHold, DecreaseIssuance, IncreaseIssuance};
 pub use freeze::{InspectFreeze, MutateFreeze};
-pub use hold::{BalancedHold, InspectHold, MutateHold};
+pub use hold::{InspectHold, MutateHold};
 pub use imbalance::{CreditOf, DebtOf, HandleImbalanceDrop, Imbalance};
 pub use item_of::ItemOf;
 pub use unbalanced::{Unbalanced, UnbalancedHold};
