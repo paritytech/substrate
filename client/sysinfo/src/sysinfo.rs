@@ -21,10 +21,10 @@ use crate::{ExecutionLimit, HwBench};
 use sc_telemetry::SysInfo;
 use sp_core::{sr25519, Pair};
 use sp_io::crypto::sr25519_verify;
-use sp_std::{fmt, prelude::*};
+use sp_std::{fmt, fmt::Formatter, prelude::*};
 
 use rand::{seq::SliceRandom, Rng, RngCore};
-use serde::Serializer;
+use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 use std::{
 	fs::File,
 	io::{Seek, SeekFrom, Write},
@@ -32,6 +32,43 @@ use std::{
 	path::{Path, PathBuf},
 	time::{Duration, Instant},
 };
+
+/// A single hardware metric.
+#[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq)]
+pub enum Metric {
+	/// SR25519 signature verification.
+	Sr25519Verify,
+	/// Blake2-256 hashing algorithm.
+	Blake2256,
+	/// Copying data in RAM.
+	MemCopy,
+	/// Disk sequential write.
+	DiskSeqWrite,
+	/// Disk random write.
+	DiskRndWrite,
+}
+
+impl Metric {
+	/// The category of the metric.
+	pub fn category(&self) -> &'static str {
+		match self {
+			Self::Sr25519Verify | Self::Blake2256 => "CPU",
+			Self::MemCopy => "Memory",
+			Self::DiskSeqWrite | Self::DiskRndWrite => "Disk",
+		}
+	}
+
+	/// The name of the metric. It is always prefixed by the [`self.category()`].
+	pub fn name(&self) -> &'static str {
+		match self {
+			Self::Sr25519Verify => "SR25519-Verify",
+			Self::Blake2256 => "BLAKE2-256",
+			Self::MemCopy => "Copy",
+			Self::DiskSeqWrite => "Seq Write",
+			Self::DiskRndWrite => "Rnd Write",
+		}
+	}
+}
 
 /// The unit in which the [`Throughput`] (bytes per second) is denoted.
 pub enum Unit {
@@ -135,6 +172,54 @@ where
 		return serializer.serialize_some(&(throughput.as_mibs() as u64))
 	}
 	serializer.serialize_none()
+}
+
+/// Serializes throughput into MiBs and represents it as `f64`.
+fn serialize_throughput_as_f64<S>(throughput: &Throughput, serializer: S) -> Result<S::Ok, S::Error>
+where
+	S: Serializer,
+{
+	serializer.serialize_f64(throughput.as_mibs())
+}
+
+struct ThroughputVisitor;
+impl<'de> Visitor<'de> for ThroughputVisitor {
+	type Value = Throughput;
+
+	fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+		formatter.write_str("A value that is a f64.")
+	}
+
+	fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E>
+	where
+		E: serde::de::Error,
+	{
+		Ok(Throughput::from_mibs(value))
+	}
+}
+
+fn deserialize_throughput<'de, D>(deserializer: D) -> Result<Throughput, D::Error>
+where
+	D: Deserializer<'de>,
+{
+	Ok(deserializer.deserialize_f64(ThroughputVisitor))?
+}
+
+/// Multiple requirements for the hardware.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct Requirements(pub Vec<Requirement>);
+
+/// A single requirement for the hardware.
+#[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq)]
+pub struct Requirement {
+	/// The metric to measure.
+	pub metric: Metric,
+	/// The minimal throughput that needs to be archived for this requirement.
+	#[serde(
+		serialize_with = "serialize_throughput_as_f64",
+		deserialize_with = "deserialize_throughput"
+	)]
+	pub minimum: Throughput,
 }
 
 #[inline(always)]
@@ -503,8 +588,14 @@ pub fn benchmark_sr25519_verify(limit: ExecutionLimit) -> Throughput {
 
 /// Benchmarks the hardware and returns the results of those benchmarks.
 ///
-/// Optionally accepts a path to a `scratch_directory` to use to benchmark the disk.
-pub fn gather_hwbench(scratch_directory: Option<&Path>) -> HwBench {
+/// Optionally accepts a path to a `scratch_directory` to use to benchmark the
+/// disk. Also accepts the `requirements` for the hardware benchmark and a
+/// boolean to specify if the node is an authority.
+pub fn gather_hwbench(
+	scratch_directory: Option<&Path>,
+	requirements: Requirements,
+	is_authority: bool,
+) -> HwBench {
 	#[allow(unused_mut)]
 	let mut hwbench = HwBench {
 		cpu_hashrate_score: benchmark_cpu(DEFAULT_CPU_EXECUTION_LIMIT),
@@ -534,7 +625,43 @@ pub fn gather_hwbench(scratch_directory: Option<&Path>) -> HwBench {
 			};
 	}
 
+	if is_authority {
+		ensure_requirements(hwbench.clone(), requirements);
+	}
+
 	hwbench
+}
+
+fn ensure_requirements(hwbench: HwBench, requirements: Requirements) {
+	let mut failed = 0;
+	for requirement in requirements.0.iter() {
+		match requirement.metric {
+			Metric::Blake2256 =>
+				if requirement.minimum > hwbench.cpu_hashrate_score {
+					failed += 1;
+				},
+			Metric::MemCopy =>
+				if requirement.minimum > hwbench.memory_memcpy_score {
+					failed += 1;
+				},
+			Metric::DiskSeqWrite =>
+				if let Some(score) = hwbench.disk_sequential_write_score {
+					if requirement.minimum > score {
+						failed += 1;
+					}
+				},
+			Metric::DiskRndWrite =>
+				if let Some(score) = hwbench.disk_random_write_score {
+					if requirement.minimum > score {
+						failed += 1;
+					}
+				},
+			Metric::Sr25519Verify => {},
+		}
+	}
+	if failed != 0 {
+		log::warn!("⚠️  Your hardware performance score was less than expected for role 'Authority'. See https://wiki.polkadot.network/docs/maintain-guides-how-to-validate-polkadot#reference-hardware");
+	}
 }
 
 #[cfg(test)]

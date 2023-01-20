@@ -25,7 +25,7 @@ use log::warn;
 
 use beefy_primitives::{
 	crypto::{Public, Signature},
-	BeefyVerify, KEY_TYPE,
+	BeefyAuthorityId, KEY_TYPE,
 };
 
 use crate::error;
@@ -99,7 +99,7 @@ impl BeefyKeystore {
 	///
 	/// Return `true` if the signature is authentic, `false` otherwise.
 	pub fn verify(public: &Public, sig: &Signature, message: &[u8]) -> bool {
-		BeefyVerify::<Keccak256>::verify(sig, message, public)
+		BeefyAuthorityId::<Keccak256>::verify(public, sig, message)
 	}
 }
 
