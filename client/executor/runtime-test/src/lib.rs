@@ -362,7 +362,12 @@ mod output_validity {
 	#[no_mangle]
 	#[cfg(not(feature = "std"))]
 	pub extern "C" fn test_return_max_memory_offset(_params: *const u8, _len: usize) -> u64 {
-		pack_ptr_and_len((core::arch::wasm32::memory_size(0) * WASM_PAGE_SIZE) as u32 - 1, 1)
+		let output_ptr = (core::arch::wasm32::memory_size(0) * WASM_PAGE_SIZE) as u32 - 1;
+		let ptr = output_ptr as *mut u8;
+		unsafe {
+			ptr.write(u8::MAX);
+		}
+		pack_ptr_and_len(output_ptr, 1)
 	}
 
 	// Returns an offset right after the edge of the wasm memory boundary. It should fail.
