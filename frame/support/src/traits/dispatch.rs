@@ -41,7 +41,7 @@ pub trait EnsureOrigin<OuterOrigin> {
 	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin>;
 
 	/// Attempt to get an outer origin capable of passing `try_origin` check. May return `Err` if it
-	/// is impossible. Default implementation returns `Err`.
+	/// is impossible.
 	///
 	/// ** Should be used for benchmarking only!!! **
 	#[cfg(feature = "runtime-benchmarks")]
@@ -160,24 +160,13 @@ pub trait EnsureOriginWithArg<OuterOrigin, Argument> {
 	/// Perform the origin check, returning the origin value if unsuccessful. This allows chaining.
 	fn try_origin(o: OuterOrigin, a: &Argument) -> Result<Self::Success, OuterOrigin>;
 
-	/// Returns an outer origin capable of passing `try_origin` check.
-	///
-	/// NOTE: This should generally *NOT* be reimplemented. Instead implement
-	/// `try_successful_origin`.
+	/// Attempt to get an outer origin capable of passing `try_origin` check. May return `Err` if it
+	/// is impossible.
 	///
 	/// ** Should be used for benchmarking only!!! **
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin(a: &Argument) -> OuterOrigin {
-		Self::try_successful_origin(a).expect("No origin exists which can satisfy the guard")
-	}
-
-	/// Attept to get an outer origin capable of passing `try_origin` check. May return `Err` if it
-	/// is impossible. Default implementation just uses `successful_origin()`.
-	///
-	/// ** Should be used for benchmarking only!!! **
-	#[cfg(feature = "runtime-benchmarks")]
-	fn try_successful_origin(a: &Argument) -> Result<OuterOrigin, ()> {
-		Ok(Self::successful_origin(a))
+	fn try_successful_origin() -> Result<OuterOrigin, ()> {
+		unimplemented!()
 	}
 }
 
