@@ -140,6 +140,7 @@ members = [
 	"frame/society",
 	"frame/staking",
 	"frame/stake-tracker",
+	"frame/stake-tracker/initializer",
 	"frame/staking/reward-curve",
 	"frame/staking/reward-fn",
 	"frame/state-trie-migration",
