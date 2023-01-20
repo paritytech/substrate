@@ -1896,8 +1896,8 @@ impl_runtime_apis! {
 
 	impl sp_api::Metadata<Block> for Runtime {
 		fn metadata() -> (Vec<String>, OpaqueMetadata) {
-			let md = Runtime::runtime_metadata();
-			(md, OpaqueMetadata::new(Runtime::metadata().into()))
+			let _md = Runtime::runtime_metadata();
+			(vec![], OpaqueMetadata::new(Runtime::metadata(vec![]).into()))
 		}
 	}
 

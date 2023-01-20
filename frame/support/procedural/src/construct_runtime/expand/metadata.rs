@@ -74,7 +74,7 @@ pub fn expand_runtime_metadata(
 
 	quote! {
 		impl #runtime {
-			pub fn metadata() -> #scrate::metadata::RuntimeMetadataPrefixed {
+			pub fn metadata(runtime_metadata: Vec<#scrate::metadata::TraitMetadata> ) -> #scrate::metadata::RuntimeMetadataPrefixed {
 				#scrate::metadata::RuntimeMetadataLastVersion::new(
 					#scrate::sp_std::vec![ #(#pallets),* ],
 					#scrate::metadata::ExtrinsicMetadata {
@@ -93,7 +93,8 @@ pub fn expand_runtime_metadata(
 								})
 								.collect(),
 					},
-					#scrate::scale_info::meta_type::<#runtime>()
+					#scrate::scale_info::meta_type::<#runtime>(),
+					runtime_metadata
 				).into()
 			}
 		}
