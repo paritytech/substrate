@@ -701,9 +701,7 @@ pub mod pallet {
 			let balance1 = Self::get_balance(&pool_account, asset1);
 			let balance2 = Self::get_balance(&pool_account, asset2);
 			if !balance1.is_zero() {
-				let (reserve1, reserve2) =
-					if asset1 == pool_asset1 { (balance1, balance2) } else { (balance2, balance1) };
-				Self::quote(&amount, &reserve1, &reserve2).ok()
+				Self::quote(&amount, &balance1, &balance2).ok()
 			} else {
 				None
 			}
