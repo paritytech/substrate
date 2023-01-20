@@ -117,6 +117,11 @@ impl Weight {
 		Self { ref_time, proof_size }
 	}
 
+	/// Construct [`Weight`] from the same weight for all parts.
+	pub const fn from_all(value: u64) -> Self {
+		Self { ref_time: value, proof_size: value }
+	}
+
 	/// Saturating [`Weight`] addition. Computes `self + rhs`, saturating at the numeric bounds of
 	/// all fields instead of overflowing.
 	pub const fn saturating_add(self, rhs: Self) -> Self {
@@ -165,6 +170,11 @@ impl Weight {
 	/// Increment [`Weight`] by `amount` via saturating addition.
 	pub fn saturating_accrue(&mut self, amount: Self) {
 		*self = self.saturating_add(amount);
+	}
+
+	/// Reduce [`Weight`] by `amount` via saturating subtraction.
+	pub fn saturating_reduce(&mut self, amount: Self) {
+		*self = self.saturating_sub(amount);
 	}
 
 	/// Checked [`Weight`] addition. Computes `self + rhs`, returning `None` if overflow occurred.
@@ -220,6 +230,16 @@ impl Weight {
 			None => return None,
 		};
 		Some(Self { ref_time, proof_size })
+	}
+
+	/// Try to increase `self` by `amount` via checked addition.
+	pub fn checked_accrue(&mut self, amount: Self) -> Option<()> {
+		self.checked_add(&amount).map(|new_self| *self = new_self)
+	}
+
+	/// Try to reduce `self` by `amount` via checked subtraction.
+	pub fn checked_reduce(&mut self, amount: Self) -> Option<()> {
+		self.checked_sub(&amount).map(|new_self| *self = new_self)
 	}
 
 	/// Return a [`Weight`] where all fields are zero.
@@ -352,6 +372,20 @@ where
 	}
 }
 
+#[cfg(any(test, feature = "std", feature = "runtime-benchmarks"))]
+impl From<u64> for Weight {
+	fn from(value: u64) -> Self {
+		Self::from_parts(value, value)
+	}
+}
+
+#[cfg(any(test, feature = "std", feature = "runtime-benchmarks"))]
+impl From<(u64, u64)> for Weight {
+	fn from(value: (u64, u64)) -> Self {
+		Self::from_parts(value.0, value.1)
+	}
+}
+
 macro_rules! weight_mul_per_impl {
 	($($t:ty),* $(,)?) => {
 		$(
@@ -458,5 +492,29 @@ mod tests {
 		assert!(!Weight::from_parts(1, 0).is_zero());
 		assert!(!Weight::from_parts(0, 1).is_zero());
 		assert!(!Weight::MAX.is_zero());
+	}
+
+	#[test]
+	fn from_u64_works() {
+		let w: Weight = 0_u64.into();
+		assert_eq!(w, Weight::from_parts(0, 0));
+		
+		let w: Weight = 123_u64.into();
+		assert_eq!(w, Weight::from_parts(123, 123));
+
+		let w: Weight = u64::MAX.into();
+		assert_eq!(w, Weight::from_parts(u64::MAX, u64::MAX));
+	}
+
+	#[test]
+	fn from_u64_pair_works() {
+		let w: Weight = (0, 1).into();
+		assert_eq!(w, Weight::from_parts(0, 1));
+		
+		let w: Weight = (123, 321).into();
+		assert_eq!(w, Weight::from_parts(123, 321));
+
+		let w: Weight = (u64::MAX, 0).into();
+		assert_eq!(w, Weight::from_parts(u64::MAX, 0));
 	}
 }
