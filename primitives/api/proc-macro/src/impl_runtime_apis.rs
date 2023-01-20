@@ -383,6 +383,76 @@ fn generate_runtime_api_metadata(impls: &[ItemImpl]) -> Result<TokenStream> {
 
 	let mut runtime_name = Default::default();
 
+	// TODO: depend on frame-support for now, because sp-api does not expose scale-info and
+	// frame-metadata yet   	`generate_crate_access(HIDDEN_INCLUDES_ID)` is deduced to sp-api from
+	// `CARGO_PGK_NAME`
+	let crate_ = quote!(frame_support);
+
+	struct TraitMetadata {
+		pub name: String,
+		pub version: Option<u64>,
+		pub methods: Vec<MethodMetadata>,
+	}
+
+	impl TraitMetadata {
+		pub fn to_quote(&self, crate_: TokenStream) -> TokenStream {
+			let name = &self.name;
+			let version = match self.version {
+				Some(v) => quote!( Some(#v) ),
+				None => quote!(None),
+			};
+
+			let methods: Vec<TokenStream> =
+				self.methods.iter().map(|m| m.to_quote(crate_.clone())).collect();
+
+			quote!(
+				#crate_::metadata::TraitMetadata {
+					name: #name,
+					version: #version,
+					methods: vec![ #( #methods, )* ],
+					docs: vec![],
+				}
+			)
+		}
+	}
+
+	struct MethodMetadata {
+		pub name: String,
+		pub inputs: Vec<(String, TokenStream)>,
+		pub output: TokenStream,
+	}
+
+	impl MethodMetadata {
+		pub fn to_quote(&self, crate_: TokenStream) -> TokenStream {
+			let name = &self.name;
+
+			let inputs: Vec<_> = self
+				.inputs
+				.iter()
+				.map(|(name, ty)| {
+					quote!(
+						#crate_::metadata::ParamMetadata {
+							name: #name,
+							ty: #crate_::scale_info::meta_type::<#ty>(),
+						}
+					)
+				})
+				.collect();
+
+			let output = &self.output;
+
+			// TODO: we shall format the output here too.
+			quote!(
+				#crate_::metadata::MethodMetadata {
+					name: #name,
+					inputs: vec![ #( #inputs, )* ],
+					output: #output,
+					docs: vec![],
+				}
+			)
+		}
+	}
+
 	for impl_ in impls {
 		let runtime = impl_.self_ty.clone();
 		runtime_name = Some(runtime);
@@ -403,6 +473,8 @@ fn generate_runtime_api_metadata(impls: &[ItemImpl]) -> Result<TokenStream> {
 		let g = quote!( #g );
 		println!("   Generics: {}", g);
 
+		let mut methods = Vec::new();
+
 		for impl_item in &impl_.items {
 			// Keep only methods.
 			let ImplItem::Method(method) = impl_item else {
@@ -410,7 +482,7 @@ fn generate_runtime_api_metadata(impls: &[ItemImpl]) -> Result<TokenStream> {
 			};
 
 			let signature = &method.sig;
-			let method_name = format!("{}{}", trait_name, signature.ident.clone());
+			let method_name = format!("{}", signature.ident.clone());
 
 			println!("  Signature: {}", signature.ident);
 			let g = signature.inputs.clone();
@@ -431,41 +503,68 @@ fn generate_runtime_api_metadata(impls: &[ItemImpl]) -> Result<TokenStream> {
 						// This is just an argument name.
 						// TODO: Ensure we panic otherwise.
 						let pat = &typed.pat;
+						let name = format!("{}", quote!(#pat));
 
 						// Get the argument type.
 						// TODO: For now we ignore references, mutability and lifetimes.
 						let ty = &typed.ty;
+						// let ty = quote!( )
 
-						arguments.push((pat.clone(), ty.clone()));
+						// match *ty.clone() {
+						// 	syn::Type::Reference(ty_ref) => {
+						// 		println!("!!! TYPE REFERENCE {}", quote!( #ty_ref ));
+						// 	},
+						// 	_ => (),
+						// };
+
+						arguments.push((name, quote!(#ty)));
 					},
 				};
 			}
 
 			let g = quote!( #g );
 			println!("  Inputs: {}", g);
-			let g = signature.output.clone();
-			let g = quote!( #g );
-			println!("  Outputs: {}", g);
+			let return_ty = signature.output.clone();
+			let return_ty = match return_ty {
+				syn::ReturnType::Default => quote!(  #crate_::scale_info::meta_type::<()>()),
+				syn::ReturnType::Type(_, ty) => quote!( #crate_::scale_info::meta_type::<#ty>()),
+			};
+			println!("  Outputs: {}", return_ty);
 
-			result.push((method_name, arguments));
+			methods.push(MethodMetadata {
+				name: method_name,
+				inputs: arguments,
+				output: return_ty,
+			});
+			// result.push((method_name, arguments));
 		}
+
+		let trait_name = format!("{}", trait_name);
+		result.push(TraitMetadata { name: trait_name, version: trait_api_ver, methods });
 	}
 
-	let names = result.iter().map(|(name, _)| name);
+	// let names = result.iter().map(|(name, _)| name);
 	// NOTE: keep the names for now.
 	// let args = result.iter().map(|(_, arg)| arg);
 
 	let runtime = runtime_name.unwrap();
 
+	// TODO: use first 2 APIs because not all types support scale_info::TypeInfo
+	let mut traits = result.iter().map(|t| t.to_quote(crate_.clone())).take(2).skip(1);
+	let value = traits.next().unwrap();
 	let res = quote!(
+
 		impl #runtime {
-			fn runtime_metadata() -> Vec<String> {
+			fn runtime_metadata() -> Vec<#crate_::metadata::TraitMetadata> {
 				vec![
-					# ( #names.into(), ) *
+					#value
+					// # ( #traits, ) *
+					// #traits
 					// #( (#names,  #( (#args, )* ), )*
 				]
 			}
 		}
+
 	);
 
 	println!("res: \n\n\n{}", res);

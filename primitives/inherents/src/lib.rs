@@ -164,6 +164,7 @@
 
 use codec::{Decode, Encode};
 
+use scale_info::TypeInfo;
 use sp_std::{
 	collections::btree_map::{BTreeMap, Entry, IntoIter},
 	vec::Vec,
@@ -204,7 +205,7 @@ pub enum Error {
 pub type InherentIdentifier = [u8; 8];
 
 /// Inherent data to include in a block.
-#[derive(Clone, Default, Encode, Decode)]
+#[derive(Clone, Default, Encode, Decode, TypeInfo)]
 pub struct InherentData {
 	/// All inherent data encoded with parity-scale-codec and an identifier.
 	data: BTreeMap<InherentIdentifier, Vec<u8>>,
