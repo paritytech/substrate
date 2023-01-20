@@ -652,7 +652,7 @@ impl Requirements {
 				Metric::Sr25519Verify => {},
 			}
 		}
-		return true
+		true
 	}
 }
 
