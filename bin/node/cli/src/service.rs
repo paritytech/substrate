@@ -21,6 +21,7 @@
 //! Service implementation. Specialized wrapper over substrate service.
 
 use codec::Encode;
+use frame_benchmarking_cli::SUBSTRATE_REFERENCE_HARDWARE;
 use frame_system_rpc_runtime_api::AccountNonceApi;
 use futures::prelude::*;
 use kitchensink_runtime::RuntimeApi;
@@ -320,7 +321,11 @@ pub fn new_full_base(
 	let hwbench = if !disable_hardware_benchmarks {
 		config.database.path().map(|database_path| {
 			let _ = std::fs::create_dir_all(&database_path);
-			sc_sysinfo::gather_hwbench(Some(database_path))
+			sc_sysinfo::gather_hwbench(
+				Some(database_path),
+				SUBSTRATE_REFERENCE_HARDWARE.clone(),
+				config.role.is_authority(),
+			)
 		})
 	} else {
 		None
