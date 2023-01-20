@@ -579,7 +579,6 @@ impl pallet_staking::Config for Runtime {
 	type ElectionProvider = ElectionProviderMultiPhase;
 	type GenesisElectionProvider = onchain::OnChainExecution<OnChainSeqPhragmen>;
 	type VoterList = <Runtime as pallet_stake_tracker::Config>::VoterList;
-	// This a placeholder, to be introduced in the next PR as an instance of bags-list
 	type TargetList = pallet_staking::UseValidatorsMap<Self>;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type HistoryDepth = HistoryDepth;
@@ -593,6 +592,7 @@ impl pallet_stake_tracker::Config for Runtime {
 	type Currency = Balances;
 	type Staking = Staking;
 	type VoterList = VoterList;
+	type TargetList = TargetList;
 }
 
 impl pallet_fast_unstake::Config for Runtime {
@@ -768,6 +768,19 @@ impl pallet_bags_list::Config<VoterBagsListInstance> for Runtime {
 	type ScoreProvider = Staking;
 	type BagThresholds = BagThresholds;
 	type Score = VoteWeight;
+	type WeightInfo = pallet_bags_list::weights::SubstrateWeight<Runtime>;
+}
+
+parameter_types! {
+	pub const BagThresholdsBalances: &'static [Balance] = &voter_bags::THRESHOLDS_BALANCES;
+}
+
+type TargetBagsListInstance = pallet_bags_list::Instance2;
+impl pallet_bags_list::Config<TargetBagsListInstance> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type ScoreProvider = StakeTracker;
+	type BagThresholds = BagThresholdsBalances;
+	type Score = Balance;
 	type WeightInfo = pallet_bags_list::weights::SubstrateWeight<Runtime>;
 }
 
@@ -1753,6 +1766,7 @@ construct_runtime!(
 		Nfts: pallet_nfts,
 		TransactionStorage: pallet_transaction_storage,
 		VoterList: pallet_bags_list::<Instance1>,
+		TargetList: pallet_bags_list::<Instance2>,
 		StateTrieMigration: pallet_state_trie_migration,
 		ChildBounties: pallet_child_bounties,
 		Referenda: pallet_referenda,
