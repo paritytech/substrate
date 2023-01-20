@@ -1690,5 +1690,34 @@ macro_rules! decl_tests {
 				assert_noop!(<Balances as fungible::Mutate<_>>::transfer(&1, &2, 1, CanKill), TokenError::Frozen);
 			});
 		}
+
+		#[test]
+		fn upgrade_accounts_should_work() {
+			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
+				System::inc_providers(&7);
+				assert_ok!(<Test as Config>::AccountStore::try_mutate_exists(&7, |a| -> DispatchResult {
+					*a = Some(AccountData {
+						free: 5,
+						reserved: 5,
+						frozen: Zero::zero(),
+						flags: crate::types::ExtraFlags::old_logic(),
+					});
+					Ok(())
+				}));
+				assert!(!Balances::account(&7).flags.is_new_logic());
+				assert_eq!(System::providers(&7), 1);
+				assert_eq!(System::consumers(&7), 0);
+				assert_ok!(Balances::upgrade_accounts(Some(1).into(), vec![7]));
+				assert!(Balances::account(&7).flags.is_new_logic());
+				assert_eq!(System::providers(&7), 1);
+				assert_eq!(System::consumers(&7), 1);
+
+				Balances::unreserve(&7, 5);
+				assert_ok!(<Balances as fungible::Mutate<_>>::transfer(&7, &1, 10, CanKill));
+				assert_eq!(Balances::total_balance(&7), 0);
+				assert_eq!(System::providers(&7), 0);
+				assert_eq!(System::consumers(&7), 0);
+			});
+		}
 	}
 }

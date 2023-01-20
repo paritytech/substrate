@@ -236,7 +236,6 @@ benchmarks_instance_pallet! {
 				assert!(!Balances::<T, I>::account(&user).flags.is_new_logic());
 				assert_eq!(frame_system::Pallet::<T>::providers(&user), 1);
 				assert_eq!(frame_system::Pallet::<T>::consumers(&user), 0);
-				dbg!(&user);
 				user
 			})
 			.collect();
