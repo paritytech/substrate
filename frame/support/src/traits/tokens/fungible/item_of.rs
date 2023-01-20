@@ -17,7 +17,11 @@
 
 //! Adapter to use `fungibles::*` implementations as `fungible::*`.
 
+use sp_core::Get;
+use sp_runtime::{DispatchError, DispatchResult};
+
 use super::*;
+use crate::traits::tokens::{fungibles, DepositConsequence, KeepAlive, WithdrawConsequence};
 
 /// Convert a `fungibles` trait implementation into a `fungible` trait implementation by identifying
 /// a single item.

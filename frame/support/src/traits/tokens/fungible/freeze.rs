@@ -17,6 +17,9 @@
 
 //! The traits for putting freezes within a single fungible token class.
 
+use scale_info::TypeInfo;
+use sp_runtime::DispatchResult;
+
 use super::*;
 
 /// Trait for inspecting a fungible asset which can be frozen. Freezing is essentially setting a

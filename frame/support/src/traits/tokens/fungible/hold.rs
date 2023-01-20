@@ -17,9 +17,12 @@
 
 //! The traits for putting holds within a single fungible token class.
 
-use crate::ensure;
-use sp_runtime::TokenError;
-use DepositConsequence::Success;
+use crate::{
+	ensure,
+	traits::tokens::{DepositConsequence::Success, KeepAlive},
+};
+use scale_info::TypeInfo;
+use sp_runtime::{DispatchError, DispatchResult, Saturating, TokenError};
 
 use super::*;
 

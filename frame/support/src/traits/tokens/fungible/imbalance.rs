@@ -18,8 +18,11 @@
 //! The imbalance type and its associates, which handles keeps everything adding up properly with
 //! unbalanced operations.
 
-use super::{super::Imbalance as ImbalanceT, balanced::Balanced, misc::Balance, *};
-use crate::traits::misc::{SameOrOther, TryDrop};
+use super::{super::Imbalance as ImbalanceT, balanced::Balanced, *};
+use crate::traits::{
+	misc::{SameOrOther, TryDrop},
+	tokens::Balance,
+};
 use sp_runtime::{traits::Zero, RuntimeDebug};
 use sp_std::marker::PhantomData;
 

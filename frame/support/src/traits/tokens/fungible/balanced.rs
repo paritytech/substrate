@@ -21,8 +21,12 @@
 use super::{super::Imbalance as ImbalanceT, *};
 use crate::{
 	dispatch::DispatchError,
-	traits::misc::{SameOrOther, TryDrop},
+	traits::{
+		misc::{SameOrOther, TryDrop},
+		tokens::KeepAlive,
+	},
 };
+use sp_runtime::Saturating;
 use sp_std::marker::PhantomData;
 
 /// A fungible token class where any creation and deletion of tokens is semi-explicit and where the

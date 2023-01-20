@@ -19,7 +19,7 @@
 
 use crate::traits::tokens::misc::KeepAlive;
 use sp_arithmetic::traits::{CheckedAdd, CheckedSub, Zero};
-use sp_runtime::{ArithmeticError, TokenError};
+use sp_runtime::{ArithmeticError, DispatchError, DispatchResult, Saturating, TokenError};
 
 use super::*;
 
