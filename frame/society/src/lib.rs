@@ -831,6 +831,7 @@ pub mod pallet {
 		///
 		/// Key: B (len of bids), C (len of candidates), M (len of members), X (balance reserve)
 		/// Total Complexity: O(M + B + C + logM + logB + X)
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::bid())]
 		pub fn bid(origin: OriginFor<T>, value: BalanceOf<T, I>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -862,6 +863,7 @@ pub mod pallet {
 		///
 		/// Key: B (len of bids), X (balance unreserve)
 		/// Total Complexity: O(B + X)
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::unbid())]
 		pub fn unbid(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -894,6 +896,7 @@ pub mod pallet {
 		///
 		/// Key: B (len of bids), C (len of candidates), M (len of members)
 		/// Total Complexity: O(M + B + C + logM + logB + X)
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::vouch())]
 		pub fn vouch(
 			origin: OriginFor<T>,
@@ -943,6 +946,7 @@ pub mod pallet {
 		///
 		/// Key: B (len of bids)
 		/// Total Complexity: O(B)
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::unvouch())]
 		pub fn unvouch(origin: OriginFor<T>) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
@@ -971,6 +975,7 @@ pub mod pallet {
 		///
 		/// Key: C (len of candidates), M (len of members)
 		/// Total Complexity: O(M + logM + C)
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::vote())]
 		pub fn vote(
 			origin: OriginFor<T>,
@@ -1006,6 +1011,7 @@ pub mod pallet {
 		/// Key: M (len of members)
 		/// Total Complexity: O(M + logM)
 		/// # </weight>
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::defender_vote())]
 		pub fn defender_vote(origin: OriginFor<T>, approve: bool) -> DispatchResultWithPostInfo {
 			let voter = ensure_signed(origin)?;
@@ -1038,6 +1044,7 @@ pub mod pallet {
 		///
 		/// Key: M (len of members), P (number of payouts for a particular member)
 		/// Total Complexity: O(M + logM + P + X)
+		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::payout())]
 		pub fn payout(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -1061,6 +1068,7 @@ pub mod pallet {
 
 		/// Repay the payment previously given to the member with the signed origin, remove any
 		/// pending payments, and elevate them from rank 0 to rank 1.
+		#[pallet::call_index(7)]
 		#[pallet::weight(T::WeightInfo::waive_repay())]
 		pub fn waive_repay(origin: OriginFor<T>, amount: BalanceOf<T, I>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -1097,6 +1105,7 @@ pub mod pallet {
 		/// - `rules` - The rules of this society concerning membership.
 		///
 		/// Complexity: O(1)
+		#[pallet::call_index(8)]
 		#[pallet::weight(T::WeightInfo::found_society())]
 		pub fn found_society(
 			origin: OriginFor<T>,
@@ -1129,6 +1138,7 @@ pub mod pallet {
 		/// member.
 		///
 		/// Total Complexity: O(1)
+		#[pallet::call_index(9)]
 		#[pallet::weight(T::WeightInfo::dissolve())]
 		pub fn dissolve(origin: OriginFor<T>) -> DispatchResult {
 			let founder = ensure_signed(origin)?;
@@ -1176,6 +1186,7 @@ pub mod pallet {
 		///
 		/// Key: B (len of bids), M (len of members)
 		/// Total Complexity: O(M + logM + B)
+		#[pallet::call_index(10)]
 		#[pallet::weight(T::WeightInfo::judge_suspended_member())]
 		pub fn judge_suspended_member(
 			origin: OriginFor<T>,
@@ -1219,6 +1230,7 @@ pub mod pallet {
 		/// - `candidate_deposit`: The deposit required to make a bid for membership of the group.
 		///
 		/// Total Complexity: O(1)
+		#[pallet::call_index(11)]
 		#[pallet::weight(T::WeightInfo::set_parameters())]
 		pub fn set_parameters(
 			origin: OriginFor<T>,
@@ -1240,6 +1252,7 @@ pub mod pallet {
 
 		/// Punish the skeptic with a strike if they did not vote on a candidate. Callable by the
 		/// candidate.
+		#[pallet::call_index(12)]
 		#[pallet::weight(T::WeightInfo::punish_skeptic())]
 		pub fn punish_skeptic(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let candidate = ensure_signed(origin)?;
@@ -1254,6 +1267,7 @@ pub mod pallet {
 
 		/// Transform an approved candidate into a member. Callable only by the
 		/// the candidate, and only after the period for voting has ended.
+		#[pallet::call_index(13)]
 		#[pallet::weight(T::WeightInfo::claim_membership())]
 		pub fn claim_membership(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let candidate = ensure_signed(origin)?;
@@ -1268,6 +1282,7 @@ pub mod pallet {
 		/// Transform an approved candidate into a member. Callable only by the Signed origin of the
 		/// Founder, only after the period for voting has ended and only when the candidate is not
 		/// clearly rejected.
+		#[pallet::call_index(14)]
 		#[pallet::weight(T::WeightInfo::bestow_membership())]
 		pub fn bestow_membership(
 			origin: OriginFor<T>,
@@ -1290,6 +1305,7 @@ pub mod pallet {
 		/// have a clear approval.
 		///
 		/// Any bid deposit is lost and voucher is banned.
+		#[pallet::call_index(15)]
 		#[pallet::weight(T::WeightInfo::kick_candidate())]
 		pub fn kick_candidate(
 			origin: OriginFor<T>,
@@ -1312,6 +1328,7 @@ pub mod pallet {
 		/// Remove the candidate's application from the society. Callable only by the candidate.
 		///
 		/// Any bid deposit is lost and voucher is banned.
+		#[pallet::call_index(16)]
 		#[pallet::weight(T::WeightInfo::resign_candidacy())]
 		pub fn resign_candidacy(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let candidate = ensure_signed(origin)?;
@@ -1330,6 +1347,7 @@ pub mod pallet {
 		/// a candidate with more rejections than approvals.
 		///
 		/// The bid deposit is lost and the voucher is banned.
+		#[pallet::call_index(17)]
 		#[pallet::weight(T::WeightInfo::drop_candidate())]
 		pub fn drop_candidate(
 			origin: OriginFor<T>,
@@ -1348,6 +1366,7 @@ pub mod pallet {
 		/// Remove up to `max` stale votes for the given `candidate`.
 		///
 		/// May be called by any Signed origin, but only after the candidate's candidacy is ended.
+		#[pallet::call_index(18)]
 		#[pallet::weight(T::WeightInfo::cleanup_candidacy())]
 		pub fn cleanup_candidacy(
 			origin: OriginFor<T>,

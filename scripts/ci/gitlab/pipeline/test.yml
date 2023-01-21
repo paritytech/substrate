@@ -1,6 +1,27 @@
 # This file is part of .gitlab-ci.yml
 # Here are all jobs that are executed during "test" stage
 
+
+# It's more like a check and it belongs to the previous stage, but we want to run this job with real tests in parallel
+find-fail-ci-phrase:
+  stage:                           test
+  variables:
+    CI_IMAGE:                      "paritytech/tools:latest"
+    ASSERT_REGEX:                  "FAIL-CI"
+    GIT_DEPTH:                     1
+  extends:
+    - .kubernetes-env
+  script:
+    - set +e
+    - rg --line-number --hidden --type rust --glob '!{.git,target}' "$ASSERT_REGEX" .; exit_status=$?
+    - if [ $exit_status -eq 0 ]; then
+        echo "$ASSERT_REGEX was found, exiting with 1";
+        exit 1;
+      else
+        echo "No $ASSERT_REGEX was found, exiting with 0";
+        exit 0;
+      fi
+
 cargo-deny:
   stage:                           test
   extends:
@@ -65,6 +86,7 @@ cargo-check-benches:
   before_script:
     # perform rusty-cachier operations before any further modifications to the git repo to make cargo feel cheated not so much
     - !reference [.rust-info-script, script]
+    - !reference [.job-switcher, before_script]
     - !reference [.rusty-cachier, before_script]
     - !reference [.pipeline-stopper-vars, script]
     # merges in the master branch on PRs
@@ -394,6 +416,24 @@ cargo-check-each-crate:
     - if [ "$CI_NODE_INDEX" == 1 ]; then rusty-cachier cache upload; fi
   parallel: 2
 
+publish-crates-locally:
+  stage:                           test
+  extends:
+    - .test-refs
+    - .crates-publishing-template
+  # When lots of crates are taken into account (for example on master where all crates are tested)
+  # the job might take a long time, as evidenced by:
+  # https://gitlab.parity.io/parity/mirrors/substrate/-/jobs/2269364
+  timeout:                         4h
+  script:
+    - rusty-cachier snapshot create
+    - git clone
+        --depth 1
+        --branch "$RELENG_SCRIPTS_BRANCH"
+        https://github.com/paritytech/releng-scripts.git
+    - CRATESIO_TARGET_INSTANCE=local ./releng-scripts/publish-crates
+    - rusty-cachier cache upload
+
 cargo-check-each-crate-macos:
   stage: test
   extends:
@@ -401,6 +441,7 @@ cargo-check-each-crate-macos:
     - .collect-artifacts
     - .pipeline-stopper-artifacts
   before_script:
+    - !reference [.job-switcher, before_script]
     - !reference [.rust-info-script, script]
     - !reference [.pipeline-stopper-vars, script]
   variables:

@@ -19,6 +19,5 @@ futures-timer = "3.0.1"
 log = "0.4.17"
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sc-network-common = { version = "0.10.0-dev", path = "../network/common" }
-sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
