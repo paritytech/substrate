@@ -657,10 +657,14 @@ pub mod pallet {
 			}
 		}
 
-		// return atleast one page of exposure to be backward compatible to `EraStakersClipped` exposures.
+		/// Returns the number of pages of exposure a validator has for the given era.
+		///
+		/// This will always return at minimum one count of exposure to be backward compatible to
+		/// non-paged reward payouts.
 		pub(crate) fn get_page_count(era: EraIndex, validator: &T::AccountId) -> PageIndex {
 			<ErasStakersOverview<T>>::get(&era, validator).page_count.max(1)
 		}
+
 		pub(crate) fn set_rewards_as_claimed(
 			era: EraIndex,
 			validator: &T::AccountId,
@@ -883,6 +887,8 @@ pub mod pallet {
 		NotSortedAndUnique,
 		/// Rewards for this era have already been claimed for this validator.
 		AlreadyClaimed,
+		/// No nominators exist on this page.
+		InvalidPage,
 		/// Incorrect previous history depth input provided.
 		IncorrectHistoryDepth,
 		/// Incorrect number of slashing spans provided.
@@ -1619,10 +1625,10 @@ pub mod pallet {
 		/// The origin of this call must be _Signed_. Any account can call this function, even if
 		/// it is not one of the stakers.
 		///
-		/// The list of nominators is paged, each page being capped at
-		/// `T::MaxNominatorRewardedPerValidator`. For rewarding all the nominators, the call needs
-		/// to be called for each page. If rewards are not claimed in `${HistoryDepth}` eras, they
-		/// are lost.
+		/// The list of nominators is paged, with each page being capped at
+		/// `T::MaxNominatorRewardedPerValidator`. If a validator has multiple pages of nominators,
+		/// the call needs to be made for each page such that all nominators receive the reward. If
+		/// rewards are not claimed in `${HistoryDepth}` eras, they are lost.
 		///
 		/// # <weight>
 		/// - Time complexity: at most O(MaxNominatorRewardedPerValidator).
@@ -1636,7 +1642,6 @@ pub mod pallet {
 		///   NOTE: weights are assuming that payouts are made to alive stash account (Staked).
 		///   Paying even a dead controller is cheaper weight-wise. We don't do any refunds here.
 		/// # </weight>
-		// todo(ank4n): fix weights.
 		#[pallet::call_index(18)]
 		#[pallet::weight(T::WeightInfo::payout_stakers_alive_staked(
 			T::MaxNominatorRewardedPerValidator::get()
