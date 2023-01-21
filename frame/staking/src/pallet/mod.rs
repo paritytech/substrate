@@ -414,7 +414,17 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	// TODO(ank4n)
+	/// Summary of validator exposure at a given era.
+	///
+	/// This contains the total stake in support of the validator and their own stake. In addition,
+	/// it can also be used to get the number of nominators backing this validator and the number of
+	/// exposure pages they are divided into. The page count is useful to determine the number of
+	/// pages of rewards that needs to be claimed.
+	///
+	/// This is keyed first by the era index to allow bulk deletion and then the stash account.
+	///
+	/// Is it removed after `HISTORY_DEPTH` eras.
+	/// If stakers hasn't been set or has been removed then empty overview is returned.
 	#[pallet::storage]
 	#[pallet::getter(fn eras_stakers_overview)]
 	#[pallet::unbounded]
@@ -640,6 +650,10 @@ pub mod pallet {
 			ClaimedRewards::<T>::get(era, validator).iter().find(|&&p| page == p).is_some()
 		}
 
+		/// Get exposure info for a validator at a given era and page.
+		///
+		/// This builds a paged exposure from `ExposureOverview` and `ExposurePage` of the
+		/// validator. For older non-paged exposure, it returns the clipped exposure directly.
 		pub(crate) fn get_validator_exposure(
 			era: EraIndex,
 			validator: &T::AccountId,
@@ -665,6 +679,7 @@ pub mod pallet {
 			<ErasStakersOverview<T>>::get(&era, validator).page_count.max(1)
 		}
 
+		/// Creates an entry to track validator reward has been claimed for a given era and page.
 		pub(crate) fn set_rewards_as_claimed(
 			era: EraIndex,
 			validator: &T::AccountId,
@@ -675,6 +690,7 @@ pub mod pallet {
 			})
 		}
 
+		/// Store exposure for elected validators at start of an era.
 		pub(crate) fn set_validator_exposure(
 			era: EraIndex,
 			validator: &T::AccountId,
@@ -691,6 +707,7 @@ pub mod pallet {
 			});
 		}
 
+		/// Store total exposure for all the elected validators in the era.
 		pub(crate) fn set_total_stake(era: EraIndex, total_stake: BalanceOf<T>) {
 			<ErasTotalStake<T>>::insert(era, total_stake);
 		}
