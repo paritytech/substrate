@@ -402,6 +402,9 @@ fn quote_price_should_work() {
 		));
 
 		assert_eq!(Dex::quote_price(None, Some(2), 3000), Some(60));
+
+		// Check inverse:
+		assert_eq!(Dex::quote_price(Some(2), None, 60), Some(3000));
 	});
 }
 
