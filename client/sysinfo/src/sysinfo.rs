@@ -591,11 +591,7 @@ pub fn benchmark_sr25519_verify(limit: ExecutionLimit) -> Throughput {
 /// Optionally accepts a path to a `scratch_directory` to use to benchmark the
 /// disk. Also accepts the `requirements` for the hardware benchmark and a
 /// boolean to specify if the node is an authority.
-pub fn gather_hwbench(
-	scratch_directory: Option<&Path>,
-	requirements: Requirements,
-	is_authority: bool,
-) -> HwBench {
+pub fn gather_hwbench(scratch_directory: Option<&Path>) -> HwBench {
 	#[allow(unused_mut)]
 	let mut hwbench = HwBench {
 		cpu_hashrate_score: benchmark_cpu(DEFAULT_CPU_EXECUTION_LIMIT),
@@ -625,42 +621,38 @@ pub fn gather_hwbench(
 			};
 	}
 
-	if is_authority {
-		ensure_requirements(hwbench.clone(), requirements);
-	}
-
 	hwbench
 }
 
-fn ensure_requirements(hwbench: HwBench, requirements: Requirements) {
-	let mut failed = 0;
-	for requirement in requirements.0.iter() {
-		match requirement.metric {
-			Metric::Blake2256 =>
-				if requirement.minimum > hwbench.cpu_hashrate_score {
-					failed += 1;
-				},
-			Metric::MemCopy =>
-				if requirement.minimum > hwbench.memory_memcpy_score {
-					failed += 1;
-				},
-			Metric::DiskSeqWrite =>
-				if let Some(score) = hwbench.disk_sequential_write_score {
-					if requirement.minimum > score {
-						failed += 1;
-					}
-				},
-			Metric::DiskRndWrite =>
-				if let Some(score) = hwbench.disk_random_write_score {
-					if requirement.minimum > score {
-						failed += 1;
-					}
-				},
-			Metric::Sr25519Verify => {},
+impl Requirements {
+	/// Whether the hardware requirements are met by the provided benchmark results.
+	pub fn check_hardware(&self, hwbench: &HwBench) -> bool {
+		for requirement in self.0.iter() {
+			match requirement.metric {
+				Metric::Blake2256 =>
+					if requirement.minimum > hwbench.cpu_hashrate_score {
+						return false
+					},
+				Metric::MemCopy =>
+					if requirement.minimum > hwbench.memory_memcpy_score {
+						return false
+					},
+				Metric::DiskSeqWrite =>
+					if let Some(score) = hwbench.disk_sequential_write_score {
+						if requirement.minimum > score {
+							return false
+						}
+					},
+				Metric::DiskRndWrite =>
+					if let Some(score) = hwbench.disk_random_write_score {
+						if requirement.minimum > score {
+							return false
+						}
+					},
+				Metric::Sr25519Verify => {},
+			}
 		}
-	}
-	if failed != 0 {
-		log::warn!("⚠️  Your hardware performance score was less than expected for role 'Authority'. See https://wiki.polkadot.network/docs/maintain-guides-how-to-validate-polkadot#reference-hardware");
+		true
 	}
 }
 
