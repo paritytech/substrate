@@ -2963,9 +2963,9 @@ checksum = "dec7af912d60cdbd3677c1af9352ebae6fb8394d165568a2234df0fa00f87793"
 
 [[package]]
 name = "git2"
-version = "0.16.0"
+version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be36bc9e0546df253c0cc41fd0af34f5e92845ad8509462ec76672fac6997f5b"
+checksum = "ccf7f68c2995f392c49fffb4f95ae2c873297830eb25c6bc4c114ce8f4562acc"
 dependencies = [
  "bitflags",
  "libc",
@@ -3837,9 +3837,9 @@ checksum = "201de327520df007757c1f0adce6e827fe8562fbc28bfd9c15571c66ca1f5f79"
 
 [[package]]
 name = "libgit2-sys"
-version = "0.14.1+1.5.0"
+version = "0.14.2+1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a07fb2692bc3593bda59de45a502bb3071659f2c515e28c71e728306b038e17"
+checksum = "7f3d95f6b51075fe9810a7ae22c7095f12b98005ab364d8544797a825ce946a4"
 dependencies = [
  "cc",
  "libc",
@@ -9892,7 +9892,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bls12-377"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#b62bd30d3a7d73376cd798ad280828457eea26d3"
+source = "git+https://github.com/paritytech/ark-substrate#437ae44ed856ae5a26c0d1dd98952168dfde38ed"
 dependencies = [
  "ark-bls12-377",
  "ark-ff",
@@ -9906,7 +9906,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bls12-381"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#b62bd30d3a7d73376cd798ad280828457eea26d3"
+source = "git+https://github.com/paritytech/ark-substrate#437ae44ed856ae5a26c0d1dd98952168dfde38ed"
 dependencies = [
  "ark-bls12-381",
  "ark-ff",
@@ -9919,7 +9919,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bw6-761"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#b62bd30d3a7d73376cd798ad280828457eea26d3"
+source = "git+https://github.com/paritytech/ark-substrate#437ae44ed856ae5a26c0d1dd98952168dfde38ed"
 dependencies = [
  "ark-bw6-761",
  "ark-ff",
@@ -9932,7 +9932,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-ed-on-bls12-377"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#b62bd30d3a7d73376cd798ad280828457eea26d3"
+source = "git+https://github.com/paritytech/ark-substrate#437ae44ed856ae5a26c0d1dd98952168dfde38ed"
 dependencies = [
  "ark-ed-on-bls12-377",
  "ark-ff",
@@ -9946,7 +9946,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-ed-on-bls12-381"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#b62bd30d3a7d73376cd798ad280828457eea26d3"
+source = "git+https://github.com/paritytech/ark-substrate#437ae44ed856ae5a26c0d1dd98952168dfde38ed"
 dependencies = [
  "ark-ed-on-bls12-381",
  "ark-ff",
@@ -9960,7 +9960,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-models"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#b62bd30d3a7d73376cd798ad280828457eea26d3"
+source = "git+https://github.com/paritytech/ark-substrate#437ae44ed856ae5a26c0d1dd98952168dfde38ed"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -9976,7 +9976,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-utils"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#b62bd30d3a7d73376cd798ad280828457eea26d3"
+source = "git+https://github.com/paritytech/ark-substrate#437ae44ed856ae5a26c0d1dd98952168dfde38ed"
 dependencies = [
  "ark-serialize",
  "ark-std",
@@ -11863,9 +11863,9 @@ dependencies = [
 
 [[package]]
 name = "unicode-bidi"
-version = "0.3.9"
+version = "0.3.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0046be40136ef78dc325e0edefccf84ccddacd0afcc1ca54103fa3c61bbdab1d"
+checksum = "d54675592c1dbefd78cbd98db9bacd89886e1ca50692a0692baefffdeb92dd58"
 
 [[package]]
 name = "unicode-ident"
@@ -12097,9 +12097,9 @@ checksum = "1c38c045535d93ec4f0b4defec448e4291638ee608530863b1e2ba115d4fff7f"
 
 [[package]]
 name = "wasm-encoder"
-version = "0.21.0"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29ab2fe77b325731603297debb4573e002d06ae0aa1f4dc108585c81961e0609"
+checksum = "ef126be0e14bdf355ac1a8b41afc89195289e5c7179f80118e3abddb472f0810"
 dependencies = [
  "leb128",
 ]
@@ -12430,9 +12430,9 @@ dependencies = [
 
 [[package]]
 name = "wast"
-version = "51.0.0"
+version = "52.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1f621e6e9af96438d3e05f0699da5b1dae59f2df964a2982166aa9b03c5b599"
+checksum = "829fb867c8e82d21557a2c6c5b3ed8e8f7cdd534ea782b9ecf68bede5607fe4b"
 dependencies = [
  "leb128",
  "memchr",
@@ -12442,9 +12442,9 @@ dependencies = [
 
 [[package]]
 name = "wat"
-version = "1.0.53"
+version = "1.0.55"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5dd18c1168d7e8743d9b4f713c0203924f5dcc4a3983eb5e584de9614f9fccde"
+checksum = "3493e7c82d8e9a75e69ecbfe6f324ca1c4e2ae89f67ccbb22f92282e2e27bb23"
 dependencies = [
  "wast",
 ]
