@@ -68,7 +68,7 @@ pub use weights::WeightInfo;
 
 // TODO: make it configurable
 // TODO: more specific error codes.
-pub const MIN_LIQUIDITY: u64 = 1;
+pub const MIN_LIQUIDITY: u32 = 1;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -95,7 +95,7 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Units are 10ths of a percent
-		type Fee: Get<u64>;
+		type Fee: Get<u32>;
 
 		type Currency: InspectFungible<Self::AccountId, Balance = Self::Balance>
 			+ TransferFungible<Self::AccountId>;
@@ -103,22 +103,13 @@ pub mod pallet {
 		type Balance: Balance;
 
 		/// This must be compatible with Currency at the moment.
-		type AssetBalance: AtLeast32BitUnsigned
-			+ codec::FullCodec
-			+ Copy
-			+ MaybeSerializeDeserialize
-			+ sp_std::fmt::Debug
-			+ From<u64>
-			+ TypeInfo
-			+ MaxEncodedLen;
+		type AssetBalance: Balance + From<u64>;
 
 		type PromotedBalance: AtLeast32BitUnsigned
-			+ From<u64>
 			+ From<Self::AssetBalance>
 			+ From<Self::Balance>
 			+ TryInto<Self::AssetBalance>
-			+ TryInto<Self::Balance>
-			+ Copy;
+			+ TryInto<Self::Balance>;
 
 		type AssetId: AssetId + From<u32> + PartialOrd;
 
@@ -823,14 +814,14 @@ pub mod pallet {
 			}
 
 			let amount_in_with_fee = amount_in
-				.checked_mul(&(T::PromotedBalance::from(1000u64) - (T::Fee::get().into())))
+				.checked_mul(&(T::PromotedBalance::from(1000u32) - (T::Fee::get().into())))
 				.ok_or(Error::<T>::Overflow)?;
 
 			let numerator =
 				amount_in_with_fee.checked_mul(&reserve_out).ok_or(Error::<T>::Overflow)?;
 
 			let denominator = reserve_in
-				.checked_mul(&1000u64.into())
+				.checked_mul(&1000u32.into())
 				.ok_or(Error::<T>::Overflow)?
 				.checked_add(&amount_in_with_fee)
 				.ok_or(Error::<T>::Overflow)?;
@@ -860,13 +851,13 @@ pub mod pallet {
 			let numerator = reserve_in
 				.checked_mul(&amount_out)
 				.ok_or(Error::<T>::Overflow)?
-				.checked_mul(&1000u64.into())
+				.checked_mul(&1000u32.into())
 				.ok_or(Error::<T>::Overflow)?;
 
 			let denominator = reserve_out
 				.checked_sub(&amount_out)
 				.ok_or(Error::<T>::Overflow)?
-				.checked_mul(&(T::PromotedBalance::from(1000u64) - T::Fee::get().into()))
+				.checked_mul(&(T::PromotedBalance::from(1000u32) - T::Fee::get().into()))
 				.ok_or(Error::<T>::Overflow)?;
 
 			let result = numerator
