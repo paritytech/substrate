@@ -3181,11 +3181,7 @@ mod withdraw_unbonded {
 				);
 				assert_eq!(
 					balances_events_since_last_call(),
-					vec![BEvent::BalanceSet {
-						who: default_bonded_account(),
-						free: 300,
-						reserved: 0
-					}]
+					vec![BEvent::BalanceSet { who: default_bonded_account(), free: 300 }]
 				);
 
 				// When
@@ -3299,11 +3295,7 @@ mod withdraw_unbonded {
 				);
 				assert_eq!(
 					balances_events_since_last_call(),
-					vec![BEvent::BalanceSet {
-						who: default_bonded_account(),
-						free: 300,
-						reserved: 0
-					},]
+					vec![BEvent::BalanceSet { who: default_bonded_account(), free: 300 },]
 				);
 
 				CurrentEra::set(StakingMock::bonding_duration());

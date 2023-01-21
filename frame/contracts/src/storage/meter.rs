@@ -23,7 +23,7 @@ use frame_support::{
 	dispatch::DispatchError,
 	ensure,
 	traits::{
-		tokens::{BalanceStatus, WithdrawConsequence},
+		tokens::{BalanceStatus, KeepAlive, WithdrawConsequence},
 		Currency, ExistenceRequirement, Get, ReservableCurrency,
 	},
 	DefaultNoBound, RuntimeDebugNoBound,
@@ -443,7 +443,8 @@ impl<T: Config> Ext<T> for ReservingExt {
 		limit: Option<BalanceOf<T>>,
 		min_leftover: BalanceOf<T>,
 	) -> Result<BalanceOf<T>, DispatchError> {
-		let max = T::Currency::reducible_balance(origin, true).saturating_sub(min_leftover);
+		let max = T::Currency::reducible_balance(origin, KeepAlive::NoKill, false)
+			.saturating_sub(min_leftover);
 		let limit = limit.unwrap_or(max);
 		ensure!(
 			limit <= max &&

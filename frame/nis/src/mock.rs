@@ -86,6 +86,10 @@ impl pallet_balances::Config<Instance1> for Test {
 	type MaxLocks = ();
 	type MaxReserves = ConstU32<1>;
 	type ReserveIdentifier = [u8; 8];
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type HoldIdentifier = ();
+	type MaxHolds = ();
 }
 
 impl pallet_balances::Config<Instance2> for Test {
@@ -95,7 +99,6 @@ impl pallet_balances::Config<Instance2> for Test {
 	type ExistentialDeposit = frame_support::traits::ConstU128<1>;
 	type AccountStore = StorageMapShim<
 		pallet_balances::Account<Test, Instance2>,
-		frame_system::Provider<Test>,
 		u64,
 		pallet_balances::AccountData<u128>,
 	>;
@@ -103,6 +106,10 @@ impl pallet_balances::Config<Instance2> for Test {
 	type MaxLocks = ();
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type HoldIdentifier = ();
+	type MaxHolds = ();
 }
 
 parameter_types! {

@@ -76,8 +76,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_support::{
-	traits::{fungible::{Inspect as FungibleInspect, Mutate as FungibleMutate, self}, tokens::KeepAlive},
+use frame_support::traits::{
+	fungible::{self, Inspect as FungibleInspect, Mutate as FungibleMutate},
+	tokens::KeepAlive,
 };
 pub use pallet::*;
 use sp_arithmetic::{traits::Unsigned, RationalArg};
@@ -133,22 +134,17 @@ impl<T> FungibleInspect<T> for NoCounterpart<T> {
 	fn reducible_balance(_: &T, _: KeepAlive, _: bool) -> u32 {
 		0
 	}
-	fn can_deposit(
-		_: &T,
-		_: u32,
-		_: bool,
-	) -> frame_support::traits::tokens::DepositConsequence {
+	fn can_deposit(_: &T, _: u32, _: bool) -> frame_support::traits::tokens::DepositConsequence {
 		frame_support::traits::tokens::DepositConsequence::Success
 	}
-	fn can_withdraw(
-		_: &T,
-		_: u32,
-	) -> frame_support::traits::tokens::WithdrawConsequence<u32> {
+	fn can_withdraw(_: &T, _: u32) -> frame_support::traits::tokens::WithdrawConsequence<u32> {
 		frame_support::traits::tokens::WithdrawConsequence::Success
 	}
 }
 impl<T> fungible::Unbalanced<T> for NoCounterpart<T> {
-	fn set_balance(_: &T, _: Self::Balance) -> sp_runtime::DispatchResult { Ok(()) }
+	fn set_balance(_: &T, _: Self::Balance) -> sp_runtime::DispatchResult {
+		Ok(())
+	}
 	fn set_total_issuance(_: Self::Balance) {}
 }
 impl<T> FungibleMutate<T> for NoCounterpart<T> {}
@@ -885,7 +881,12 @@ pub mod pallet {
 			let amount = max_amount.min(T::Currency::free_balance(&our_account));
 
 			// Burn fungible counterparts.
-			T::Counterpart::burn_from(&who, T::CounterpartAmount::convert(receipt.proportion), false, false)?;
+			T::Counterpart::burn_from(
+				&who,
+				T::CounterpartAmount::convert(receipt.proportion),
+				false,
+				false,
+			)?;
 
 			// Transfer the funds from the pot to the owner and reserve
 			T::Currency::transfer(&Self::account_id(), &who, amount, AllowDeath)

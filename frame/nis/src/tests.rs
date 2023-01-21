@@ -420,8 +420,8 @@ fn thaw_respects_transfers() {
 		// ...and thawing is possible.
 		assert_ok!(Nis::thaw_private(signed(2), 0, None));
 
-		assert_eq!(Balances::total_balance(&2), 140);
-		assert_eq!(Balances::total_balance(&1), 60);
+		assert_eq!(<Balances as Currency<_>>::total_balance(&2), 140);
+		assert_eq!(<Balances as Currency<_>>::total_balance(&1), 60);
 	});
 }
 
@@ -469,8 +469,8 @@ fn communify_works() {
 		assert_eq!(NisBalances::free_balance(&1), 0);
 		assert_eq!(NisBalances::free_balance(&2), 0);
 		assert_eq!(pot(), 0);
-		assert_eq!(Balances::total_balance(&1), 60);
-		assert_eq!(Balances::total_balance(&2), 140);
+		assert_eq!(<Balances as Currency<_>>::total_balance(&1), 60);
+		assert_eq!(<Balances as Currency<_>>::total_balance(&2), 140);
 
 		assert_noop!(Nis::thaw_communal(signed(2), 0), Error::<Test>::UnknownReceipt);
 	});
