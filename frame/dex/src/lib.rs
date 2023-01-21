@@ -609,9 +609,8 @@ pub mod pallet {
 			token_id: MultiAssetId<T::AssetId>,
 		) -> Result<T::AssetBalance, Error<T>> {
 			match token_id {
-				MultiAssetId::Native => {
-					Self::native_to_asset(<<T as Config>::Currency>::balance(owner))
-				},
+				MultiAssetId::Native =>
+					Self::native_to_asset(<<T as Config>::Currency>::balance(owner)),
 				MultiAssetId::Asset(token_id) =>
 					Ok(<<T as Config>::Assets>::balance(token_id, owner)),
 			}
