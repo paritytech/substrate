@@ -31,7 +31,7 @@ use frame_support::{
 	BoundedVec,
 };
 use frame_system::RawOrigin as SystemOrigin;
-use sp_core::Pair;
+use sp_io::crypto::{sr25519_generate, sr25519_sign};
 use sp_runtime::traits::{Bounded, One};
 use sp_std::prelude::*;
 
@@ -716,8 +716,8 @@ benchmarks_instance_pallet! {
 	}
 
 	mint_pre_signed {
-		let caller_pair = sp_core::sr25519::Pair::from_string("//Alice", None).unwrap();
-		let caller_signer = MultiSigner::Sr25519(caller_pair.public());
+		let caller_public = sr25519_generate(0.into(), None);
+		let caller_signer = MultiSigner::Sr25519(caller_public);
 		let caller = Nfts::<T, I>::signer_to_account(caller_signer.clone()).unwrap();
 		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
@@ -739,7 +739,7 @@ benchmarks_instance_pallet! {
 			deadline: One::one(),
 		};
 		let message = Encode::encode(&mint_data);
-		let signature = MultiSignature::Sr25519(caller_pair.sign(&message));
+		let signature = MultiSignature::Sr25519(sr25519_sign(0.into(), &caller_public, &message).unwrap());
 
 		let target: T::AccountId = account("target", 0, SEED);
 		T::Currency::make_free_balance_be(&target, DepositBalanceOf::<T, I>::max_value());
