@@ -622,7 +622,7 @@ pub mod pallet {
 	pub type CurrentPlannedSession<T> = StorageValue<_, SessionIndex, ValueQuery>;
 
 	/// Wrapper struct for Era related information. It is not a pure encapsulation as these storage
-	/// items can be accessed directly but nevertheless recommended to use `EraInfo` for accesing
+	/// items can be accessed directly but nevertheless recommended to use `EraInfo` for accessing
 	/// the following: (1) `ErasStakers`, (2) `ClaimedRewards`, (3) `ErasStakersClipped`,
 	/// (4) `ErasStakersPaged`, (5) `ErasTotalStake`.
 	// TODO(ank4n): docs, tests and add more methods to `EraInfo` for the supported storage items.

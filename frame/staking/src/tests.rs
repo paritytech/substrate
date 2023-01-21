@@ -3690,9 +3690,12 @@ fn six_session_delay() {
 }
 
 #[test]
-fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward() {
+fn test_nominators_are_rewarded_for_all_exposure_page() {
 	ExtBuilder::default().build_and_execute(|| {
-		for i in 0..=MaxNominatorRewardedPerValidator::get() {
+		// 3 pages of exposure
+		let nominator_count = 2 * MaxNominatorRewardedPerValidator::get() + 1;
+
+		for i in 0..nominator_count {
 			let stash = 10_000 + i as AccountId;
 			let controller = 20_000 + i as AccountId;
 			let balance = 10_000 + i as Balance;
@@ -3714,15 +3717,21 @@ fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward(
 		mock::start_active_era(2);
 		mock::make_all_reward_payment(1);
 
-		// Assert only nominators from 1 to Max are rewarded
-		for i in 0..=MaxNominatorRewardedPerValidator::get() {
-			let stash = 10_000 + i as AccountId;
-			let balance = 10_000 + i as Balance;
-			if stash == 10_000 {
-				assert!(Balances::free_balance(&stash) == balance);
-			} else {
-				assert!(Balances::free_balance(&stash) > balance);
-			}
+		assert_eq!(EraInfo::<Test>::get_page_count(1, &11), 3);
+
+		// Assert all nominators are rewarded according to their stake
+		for i in 0..nominator_count {
+			// balance of the nominator after the reward payout.
+			let current_balance = Balances::free_balance(&((10000 + i) as AccountId));
+			// balance of the nominator in the previous iteration.
+			let previous_balance = Balances::free_balance(&((10000 + i - 1) as AccountId));
+			// balance before the reward.
+			let original_balance = 10_000 + i as Balance;
+
+			assert!(current_balance > original_balance);
+			// since the stake of the nominator is increasing for each iteration, the final balance
+			// after the reward should also be higher than the previous iteration.
+			assert!(current_balance > previous_balance);
 		}
 	});
 }
