@@ -812,7 +812,12 @@ pub struct ExposureOverview<Balance: HasCompact> {
 
 impl<Balance: Default + HasCompact> Default for ExposureOverview<Balance> {
 	fn default() -> Self {
-		Self { total: Default::default(), own: Default::default(), nominator_count: Default::default(), page_count: Default::default() }
+		Self {
+			total: Default::default(),
+			own: Default::default(),
+			nominator_count: Default::default(),
+			page_count: Default::default(),
+		}
 	}
 }
 
