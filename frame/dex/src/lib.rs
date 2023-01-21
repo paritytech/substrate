@@ -538,16 +538,20 @@ pub mod pallet {
 			});
 			match asset_id {
 				MultiAssetId::Native => {
-					let amount_promoted: T::PromotedBalance = T::PromotedBalance::from(amount);
-					let amount: T::Balance =
-						amount_promoted.try_into().map_err(|_| Error::<T>::Overflow)?;
-					let result = T::Currency::transfer(from, to, amount, keep_alive)?;
-					let result_promoted: T::PromotedBalance = result.into();
-					result_promoted.try_into().map_err(|_| Error::<T>::Overflow.into())
+					let amount = Self::asset_to_native(amount)?;
+					Ok(Self::native_to_asset(T::Currency::transfer(from, to, amount, keep_alive)?)?)
 				},
 				MultiAssetId::Asset(asset_id) =>
 					T::Assets::transfer(asset_id, from, to, amount, keep_alive),
 			}
+		}
+
+		pub(crate) fn native_to_asset(amount: T::Balance) -> Result<T::AssetBalance, Error<T>> {
+			T::PromotedBalance::from(amount).try_into().map_err(|_| Error::<T>::Overflow)
+		}
+
+		pub(crate) fn asset_to_native(amount: T::AssetBalance) -> Result<T::Balance, Error<T>> {
+			T::PromotedBalance::from(amount).try_into().map_err(|_| Error::<T>::Overflow)
 		}
 
 		pub(crate) fn do_swap(
@@ -606,11 +610,7 @@ pub mod pallet {
 		) -> Result<T::AssetBalance, Error<T>> {
 			match token_id {
 				MultiAssetId::Native => {
-					let balance = <<T as Config>::Currency>::balance(owner);
-					let balance_promoted: T::PromotedBalance = balance.into();
-					let asset_balance: T::AssetBalance =
-						balance_promoted.try_into().map_err(|_| Error::<T>::Overflow)?;
-					Ok(asset_balance)
+					Self::native_to_asset(<<T as Config>::Currency>::balance(owner))
 				},
 				MultiAssetId::Asset(token_id) =>
 					Ok(<<T as Config>::Assets>::balance(token_id, owner)),
@@ -702,7 +702,6 @@ pub mod pallet {
 			let amount = amount.into();
 			let pool_id = Self::get_pool_id(asset1, asset2);
 			let pool_account = Self::get_pool_account(pool_id);
-			// let (pool_asset1, _) = pool_id;
 
 			let balance1 = Self::get_balance(&pool_account, asset1).ok()?;
 			let balance2 = Self::get_balance(&pool_account, asset2).ok()?;
@@ -736,7 +735,6 @@ pub mod pallet {
 			let amount = amount.into();
 			let pool_id = Self::get_pool_id(asset1, asset2);
 			let pool_account = Self::get_pool_account(pool_id);
-			// let (pool_asset1, _) = pool_id;
 
 			let balance1 = Self::get_balance(&pool_account, asset1).ok()?;
 			let balance2 = Self::get_balance(&pool_account, asset2).ok()?;
@@ -888,26 +886,22 @@ where
 	<T as pallet::Config>::Currency:
 		frame_support::traits::Currency<<T as frame_system::Config>::AccountId>,
 {
-	// If successful returns the amount in.swap_tokens_for_exact_native
+	// If successful returns the amount in.
 	fn swap_tokens_for_exact_native(
-		origin: T::AccountId, // OriginFor<T>,
+		sender: T::AccountId,
 		asset_id: T::AssetId,
 		amount_out: T::Balance,
 		amount_in_max: Option<T::AssetBalance>,
 		send_to: T::AccountId,
 		keep_alive: bool,
 	) -> Result<T::AssetBalance, DispatchError> {
-		let sender = origin; //ensure_signed(origin)?;
-
 		ensure!(amount_out > Zero::zero(), Error::<T>::ZeroAmount);
 		if let Some(amount_in_max) = amount_in_max {
 			ensure!(amount_in_max > Zero::zero(), Error::<T>::ZeroAmount);
 		}
 		let path = vec![MultiAssetId::Asset(asset_id), MultiAssetId::Native].try_into().unwrap();
 
-		let amount_out_promoted: T::PromotedBalance = amount_out.into();
-		let amount_out: T::AssetBalance =
-			amount_out_promoted.try_into().map_err(|_| Error::<T>::Overflow)?;
+		let amount_out = Self::native_to_asset(amount_out)?;
 
 		let amounts = Self::get_amounts_in(&amount_out, &path)?;
 		let amount_in = *amounts.first().expect("Always has more than one element");
