@@ -53,17 +53,19 @@ mod tests;
 mod mock;
 
 use codec::Codec;
-use frame_support::ensure;
+use frame_support::{
+	ensure,
+	traits::tokens::{AssetId, Balance},
+};
 use frame_system::{ensure_signed, pallet_prelude::OriginFor};
-use frame_support::traits::tokens::AssetId;
-use frame_support::traits::tokens::Balance;
 pub use pallet::*;
 use sp_runtime::{
-	traits::{MaybeDisplay, Zero},
+	traits::{CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, MaybeDisplay, Zero},
 	DispatchError,
 };
 pub use types::*;
 pub use weights::WeightInfo;
+
 // TODO: make it configurable
 // TODO: more specific error codes.
 pub const MIN_LIQUIDITY: u64 = 1;
@@ -107,11 +109,11 @@ pub mod pallet {
 			+ MaybeSerializeDeserialize
 			+ sp_std::fmt::Debug
 			+ From<u64>
-			+ Into<u128>
 			+ TypeInfo
 			+ MaxEncodedLen;
 
 		type PromotedBalance: AtLeast32BitUnsigned
+			+ From<u64>
 			+ From<Self::AssetBalance>
 			+ From<Self::Balance>
 			+ TryInto<Self::AssetBalance>
@@ -220,8 +222,6 @@ pub mod pallet {
 		PoolNotFound,
 		/// An overflow happened.
 		Overflow,
-		/// This balance type can't be converted into u128.
-		UnsupportedBalanceType,
 		/// Insufficient amount provided for the first token in the pair.
 		InsufficientAmountParam1,
 		/// Insufficient amount provided for the second token in the pair.
@@ -716,7 +716,6 @@ pub mod pallet {
 			let balance1 = Self::get_balance(&pool_account, asset1).ok()?;
 			let balance2 = Self::get_balance(&pool_account, asset2).ok()?;
 			if !balance1.is_zero() {
-				
 				if include_fee {
 					Self::get_amount_out(&amount, &balance1, &balance2).ok()
 				} else {
@@ -726,7 +725,6 @@ pub mod pallet {
 				None
 			}
 		}
-
 
 		/// Used by the RPC service to provide current prices.
 		pub fn quote_price_tokens_for_exact_tokens(
@@ -776,16 +774,14 @@ pub mod pallet {
 			amount1: &AssetBalanceOf<T>,
 			amount2: &AssetBalanceOf<T>,
 		) -> Result<AssetBalanceOf<T>, Error<T>> {
-			let amount1 =
-				u128::try_from(*amount1).map_err(|_| Error::<T>::UnsupportedBalanceType)?;
-			let amount2 =
-				u128::try_from(*amount2).map_err(|_| Error::<T>::UnsupportedBalanceType)?;
+			let amount1 = T::PromotedBalance::from(*amount1);
+			let amount2 = T::PromotedBalance::from(*amount2);
 
 			let result = amount1
-				.checked_mul(amount2)
+				.checked_mul(&amount2)
 				.ok_or(Error::<T>::Overflow)?
 				.integer_sqrt()
-				.checked_sub(MIN_LIQUIDITY.into())
+				.checked_sub(&MIN_LIQUIDITY.into())
 				.ok_or(Error::<T>::Overflow)?;
 
 			result.try_into().map_err(|_| Error::<T>::Overflow)
@@ -796,14 +792,14 @@ pub mod pallet {
 			b: &AssetBalanceOf<T>,
 			c: &AssetBalanceOf<T>,
 		) -> Result<AssetBalanceOf<T>, Error<T>> {
-			let a = u128::try_from(*a).map_err(|_| Error::<T>::UnsupportedBalanceType)?;
-			let b = u128::try_from(*b).map_err(|_| Error::<T>::UnsupportedBalanceType)?;
-			let c = u128::try_from(*c).map_err(|_| Error::<T>::UnsupportedBalanceType)?;
+			let a = T::PromotedBalance::from(*a);
+			let b = T::PromotedBalance::from(*b);
+			let c = T::PromotedBalance::from(*c);
 
 			let result = a
-				.checked_mul(b)
+				.checked_mul(&b)
 				.ok_or(Error::<T>::Overflow)?
-				.checked_div(c)
+				.checked_div(&c)
 				.ok_or(Error::<T>::Overflow)?;
 
 			result.try_into().map_err(|_| Error::<T>::Overflow)
@@ -818,31 +814,28 @@ pub mod pallet {
 			reserve_in: &AssetBalanceOf<T>,
 			reserve_out: &AssetBalanceOf<T>,
 		) -> Result<AssetBalanceOf<T>, Error<T>> {
-			let amount_in =
-				u128::try_from(*amount_in).map_err(|_| Error::<T>::UnsupportedBalanceType)?;
-			let reserve_in =
-				u128::try_from(*reserve_in).map_err(|_| Error::<T>::UnsupportedBalanceType)?;
-			let reserve_out =
-				u128::try_from(*reserve_out).map_err(|_| Error::<T>::UnsupportedBalanceType)?;
+			let amount_in = T::PromotedBalance::from(*amount_in);
+			let reserve_in = T::PromotedBalance::from(*reserve_in);
+			let reserve_out = T::PromotedBalance::from(*reserve_out);
 
 			if reserve_in.is_zero() || reserve_out.is_zero() {
 				return Err(Error::<T>::ZeroLiquidity.into())
 			}
 
 			let amount_in_with_fee = amount_in
-				.checked_mul(1000u128 - (T::Fee::get() as u128))
+				.checked_mul(&(T::PromotedBalance::from(1000u64) - (T::Fee::get().into())))
 				.ok_or(Error::<T>::Overflow)?;
 
 			let numerator =
-				amount_in_with_fee.checked_mul(reserve_out).ok_or(Error::<T>::Overflow)?;
+				amount_in_with_fee.checked_mul(&reserve_out).ok_or(Error::<T>::Overflow)?;
 
 			let denominator = reserve_in
-				.checked_mul(1000u128)
+				.checked_mul(&1000u64.into())
 				.ok_or(Error::<T>::Overflow)?
-				.checked_add(amount_in_with_fee)
+				.checked_add(&amount_in_with_fee)
 				.ok_or(Error::<T>::Overflow)?;
 
-			let result = numerator.checked_div(denominator).ok_or(Error::<T>::Overflow)?;
+			let result = numerator.checked_div(&denominator).ok_or(Error::<T>::Overflow)?;
 
 			result.try_into().map_err(|_| Error::<T>::Overflow)
 		}
@@ -856,33 +849,30 @@ pub mod pallet {
 			reserve_in: &AssetBalanceOf<T>,
 			reserve_out: &AssetBalanceOf<T>,
 		) -> Result<AssetBalanceOf<T>, Error<T>> {
-			let amount_out =
-				u128::try_from(*amount_out).map_err(|_| Error::<T>::UnsupportedBalanceType)?;
-			let reserve_in =
-				u128::try_from(*reserve_in).map_err(|_| Error::<T>::UnsupportedBalanceType)?;
-			let reserve_out =
-				u128::try_from(*reserve_out).map_err(|_| Error::<T>::UnsupportedBalanceType)?;
+			let amount_out = T::PromotedBalance::from(*amount_out);
+			let reserve_in = T::PromotedBalance::from(*reserve_in);
+			let reserve_out = T::PromotedBalance::from(*reserve_out);
 
 			if reserve_in.is_zero() || reserve_out.is_zero() {
 				return Err(Error::<T>::ZeroLiquidity.into())
 			}
 
 			let numerator = reserve_in
-				.checked_mul(amount_out)
+				.checked_mul(&amount_out)
 				.ok_or(Error::<T>::Overflow)?
-				.checked_mul(1000u128)
+				.checked_mul(&1000u64.into())
 				.ok_or(Error::<T>::Overflow)?;
 
 			let denominator = reserve_out
-				.checked_sub(amount_out)
+				.checked_sub(&amount_out)
 				.ok_or(Error::<T>::Overflow)?
-				.checked_mul(1000u128 - T::Fee::get() as u128)
+				.checked_mul(&(T::PromotedBalance::from(1000u64) - T::Fee::get().into()))
 				.ok_or(Error::<T>::Overflow)?;
 
 			let result = numerator
-				.checked_div(denominator)
+				.checked_div(&denominator)
 				.ok_or(Error::<T>::Overflow)?
-				.checked_add(One::one())
+				.checked_add(&One::one())
 				.ok_or(Error::<T>::Overflow)?;
 
 			result.try_into().map_err(|_| Error::<T>::Overflow)

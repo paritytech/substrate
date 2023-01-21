@@ -507,7 +507,7 @@ fn can_swap_with_realistic_values() {
 		}));
 	});
 }
- 
+
 #[test]
 fn add_liquidity_causes_below_existential_deposit_but_keep_alive_set() {
 	new_test_ext().execute_with(|| {
