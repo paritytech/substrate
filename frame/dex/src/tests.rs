@@ -401,7 +401,12 @@ fn can_quote_price() {
 			false
 		));
 
-		assert_eq!(Dex::quote_price(None, Some(2), 3000), Some(60));
+		assert_eq!(Dex::quote_price_exact_tokens_for_tokens(None, Some(2), 3000, false), Some(60));
+		// Check it still gives same price:
+		assert_eq!(Dex::quote_price_exact_tokens_for_tokens(None, Some(2), 3000, false), Some(60));
+
+		// Check inverse:
+		assert_eq!(Dex::quote_price_exact_tokens_for_tokens(Some(2), None, 60, false), Some(3000));
 	});
 }
 
@@ -502,7 +507,7 @@ fn can_swap_with_realistic_values() {
 		}));
 	});
 }
-
+ 
 #[test]
 fn add_liquidity_causes_below_existential_deposit_but_keep_alive_set() {
 	new_test_ext().execute_with(|| {

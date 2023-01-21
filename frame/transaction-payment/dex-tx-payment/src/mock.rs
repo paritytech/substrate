@@ -22,7 +22,7 @@ use frame_support::{
 	ord_parameter_types,
 	pallet_prelude::*,
 	parameter_types,
-	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64, ConstU8},
+	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64, ConstU8, Imbalance, OnUnbalanced},
 	weights::{Weight, WeightToFee as WeightToFeeT},
 	PalletId,
 };
@@ -141,7 +141,7 @@ impl WeightToFeeT for TransactionByteFee {
 			.saturating_mul(TRANSACTION_BYTE_FEE.with(|v| *v.borrow()))
 	}
 }
-type OnChargeTransactionImpl = CurrencyAdapter<Balances, ()>;
+type OnChargeTransactionImpl = CurrencyAdapter<Balances, DealWithFees>;
 
 impl pallet_transaction_payment::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
@@ -229,8 +229,27 @@ impl pallet_dex::Config for Runtime {
 	type PromotedBalance = u128;
 }
 
+parameter_types! {
+	pub(crate) static TipUnbalancedAmount: u64 = 0;
+	pub(crate) static FeeUnbalancedAmount: u64 = 0;
+}
+
+pub struct DealWithFees;
+impl OnUnbalanced<pallet_balances::NegativeImbalance<Runtime>> for DealWithFees {
+	fn on_unbalanceds<B>(
+		mut fees_then_tips: impl Iterator<Item = pallet_balances::NegativeImbalance<Runtime>>,
+	) {
+		if let Some(fees) = fees_then_tips.next() {
+			FeeUnbalancedAmount::mutate(|a| *a += fees.peek());
+			if let Some(tips) = fees_then_tips.next() {
+				TipUnbalancedAmount::mutate(|a| *a += tips.peek());
+			}
+		}
+	}
+}
+
 impl Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Fungibles = Assets;
-	type OnChargeAssetTransaction = FungiblesAdapter<Dex>;
+	type OnChargeAssetTransactionBySwap = FungiblesAdapter<Dex>;
 }

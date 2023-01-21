@@ -718,10 +718,11 @@ pub mod pallet {
 		}
 
 		/// Used by the RPC service to provide current prices.
-		pub fn quote_price(
+		pub fn quote_price_exact_tokens_for_tokens(
 			asset1: Option<u32>,
 			asset2: Option<u32>,
 			amount: u64,
+			include_fee: bool,
 		) -> Option<AssetBalanceOf<T>> {
 			let into_multi = |asset| {
 				if let Some(asset) = asset {
@@ -735,14 +736,59 @@ pub mod pallet {
 			let amount = amount.into();
 			let pool_id = Self::get_pool_id(asset1, asset2);
 			let pool_account = Self::get_pool_account(pool_id);
-			let (pool_asset1, _) = pool_id;
+			// let (pool_asset1, _) = pool_id;
 
 			let balance1 = Self::get_balance(&pool_account, asset1).ok()?;
 			let balance2 = Self::get_balance(&pool_account, asset2).ok()?;
 			if !balance1.is_zero() {
-				let (reserve1, reserve2) =
-					if asset1 == pool_asset1 { (balance1, balance2) } else { (balance2, balance1) };
-				Self::quote(&amount, &reserve1, &reserve2).ok()
+				let (reserve1, reserve2) = (balance1, balance2);
+							
+				if include_fee {
+					//let amount: u128 = amount.into()
+//						.checked_mul(1000u128 - (T::Fee::get() as u128))?;
+					Self::get_amount_out(&amount, &reserve1, &reserve2).ok()
+				} else {
+					Self::quote(&amount, &reserve1, &reserve2).ok()
+				}
+			} else {
+				None
+			}
+		}
+
+
+		/// Used by the RPC service to provide current prices.
+		pub fn quote_price_tokens_for_exact_tokens(
+			asset1: Option<u32>,
+			asset2: Option<u32>,
+			amount: u64,
+			include_fee: bool,
+		) -> Option<AssetBalanceOf<T>> {
+			let into_multi = |asset| {
+				if let Some(asset) = asset {
+					MultiAssetId::Asset(T::AssetId::from(asset))
+				} else {
+					MultiAssetId::Native
+				}
+			};
+			let asset1 = into_multi(asset1);
+			let asset2 = into_multi(asset2);
+			let amount = amount.into();
+			let pool_id = Self::get_pool_id(asset1, asset2);
+			let pool_account = Self::get_pool_account(pool_id);
+			// let (pool_asset1, _) = pool_id;
+
+			let balance1 = Self::get_balance(&pool_account, asset1).ok()?;
+			let balance2 = Self::get_balance(&pool_account, asset2).ok()?;
+			if !balance1.is_zero() {
+				let (reserve1, reserve2) = (balance1, balance2);
+							
+				if include_fee {
+					//let amount: u128 = amount.into()
+//						.checked_mul(1000u128 - (T::Fee::get() as u128))?;
+					Self::get_amount_in(&amount, &reserve1, &reserve2).ok()
+				} else {
+					Self::quote(&amount, &reserve1, &reserve2).ok()
+				}
 			} else {
 				None
 			}

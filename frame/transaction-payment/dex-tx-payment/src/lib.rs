@@ -22,16 +22,16 @@
 
 //! It does this by extending transactions to include an optional `AssetId` that specifies the asset
 //! to be used for payment (defaulting to the native token on `None`). It expects an
-//! [`OnChargeAssetTransaction`] implementation analogously to [`pallet-transaction-payment`]. The
-//! included [`FungiblesAdapter`] (implementing [`OnChargeAssetTransaction`]) determines the fee
-//! amount by converting the fee calculated by [`pallet-transaction-payment`] into the desired
-//! asset.
+//! [`OnChargeAssetTransactionBySwap`] implementation analogously to [`pallet-transaction-payment`].
+//! The included [`FungiblesAdapter`] (implementing [`OnChargeAssetTransactionBySwap`]) determines
+//! the fee amount by converting the fee calculated by [`pallet-transaction-payment`] into the
+//! desired asset.
 //!
 //! ## Integration
 
 //! This pallet wraps FRAME's transaction payment pallet and functions as a replacement. This means
 //! you should include both pallets in your `construct_runtime` macro, but only include this
-//! pallet's [`SignedExtension`] ([`ChargeAssetTxPayment`]).
+//! pallet's [`SignedExtension`] ([`ChargeAssetTxPaymentBySwap`]).
 
 #![cfg_attr(not(feature = "std"), no_std)]
 use codec::{Decode, Encode};
@@ -81,7 +81,7 @@ pub(crate) type AssetBalanceOf<T> =
 pub(crate) type AssetIdOf<T> =
 	<<T as Config>::Fungibles as Inspect<<T as frame_system::Config>::AccountId>>::AssetId;
 pub(crate) type ChargeAssetIdOf<T> =
-	<<T as Config>::OnChargeAssetTransaction as OnChargeAssetTransaction<T>>::AssetId;
+	<<T as Config>::OnChargeAssetTransactionBySwap as OnChargeAssetTransactionBySwap<T>>::AssetId;
 
 /// Used to pass the initial payment info from pre- to post-dispatch.
 #[derive(Encode, Decode, DefaultNoBound, TypeInfo)]
@@ -108,7 +108,7 @@ pub mod pallet {
 		/// The fungibles instance used to pay for transactions in assets.
 		type Fungibles: Balanced<Self::AccountId>;
 		/// The actual transaction charging logic that charges the fees.
-		type OnChargeAssetTransaction: OnChargeAssetTransaction<Self>;
+		type OnChargeAssetTransactionBySwap: OnChargeAssetTransactionBySwap<Self>;
 	}
 
 	#[pallet::pallet]
@@ -136,13 +136,13 @@ pub mod pallet {
 /// An asset id of `None` falls back to the underlying transaction payment via the native currency.
 #[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 #[scale_info(skip_type_params(T))]
-pub struct ChargeAssetTxPayment<T: Config> {
+pub struct ChargeAssetTxPaymentBySwap<T: Config> {
 	#[codec(compact)]
 	tip: BalanceOf<T>,
 	asset_id: Option<ChargeAssetIdOf<T>>,
 }
 
-impl<T: Config> ChargeAssetTxPayment<T>
+impl<T: Config> ChargeAssetTxPaymentBySwap<T>
 where
 	T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 	AssetBalanceOf<T>: Send + Sync + FixedPointOperand,
@@ -155,7 +155,7 @@ where
 		Self { tip, asset_id }
 	}
 
-	/// Fee withdrawal logic that dispatches to either `OnChargeAssetTransaction` or
+	/// Fee withdrawal logic that dispatches to either `OnChargeAssetTransactionBySwap` or
 	/// `OnChargeTransaction`.
 	fn withdraw_fee(
 		&self,
@@ -169,7 +169,7 @@ where
 		if fee.is_zero() {
 			Ok((fee, InitialPayment::Nothing))
 		} else if let Some(asset_id) = self.asset_id {
-			T::OnChargeAssetTransaction::withdraw_fee(
+			T::OnChargeAssetTransactionBySwap::withdraw_fee(
 				who,
 				call,
 				info,
@@ -188,10 +188,10 @@ where
 	}
 }
 
-impl<T: Config> sp_std::fmt::Debug for ChargeAssetTxPayment<T> {
+impl<T: Config> sp_std::fmt::Debug for ChargeAssetTxPaymentBySwap<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "ChargeAssetTxPayment<{:?}, {:?}>", self.tip, self.asset_id.encode())
+		write!(f, "ChargeAssetTxPaymentBySwap<{:?}, {:?}>", self.tip, self.asset_id.encode())
 	}
 	#[cfg(not(feature = "std"))]
 	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
@@ -199,7 +199,7 @@ impl<T: Config> sp_std::fmt::Debug for ChargeAssetTxPayment<T> {
 	}
 }
 
-impl<T: Config> SignedExtension for ChargeAssetTxPayment<T>
+impl<T: Config> SignedExtension for ChargeAssetTxPaymentBySwap<T>
 where
 	T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 	AssetBalanceOf<T>: Send + Sync + FixedPointOperand,
@@ -207,7 +207,7 @@ where
 	ChargeAssetIdOf<T>: Send + Sync,
 	// CreditOf<T::AccountId, T::Fungibles>: IsType<ChargeAssetLiquidityOf<T>>,
 {
-	const IDENTIFIER: &'static str = "ChargeAssetTxPayment";
+	const IDENTIFIER: &'static str = "ChargeAssetTxPaymentBySwap";
 	type AccountId = T::AccountId;
 	type Call = T::RuntimeCall;
 	type AdditionalSigned = ();
@@ -272,7 +272,7 @@ where
 					let actual_fee = pallet_transaction_payment::Pallet::<T>::compute_actual_fee(
 						len as u32, info, post_info, tip,
 					);
-					T::OnChargeAssetTransaction::correct_and_deposit_fee(
+					T::OnChargeAssetTransactionBySwap::correct_and_deposit_fee(
 						&who,
 						info,
 						post_info,
