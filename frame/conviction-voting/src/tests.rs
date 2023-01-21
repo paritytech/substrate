@@ -27,6 +27,7 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	PerU16,
 };
 
 use super::*;
@@ -105,8 +106,10 @@ parameter_types! {
 	pub static Polls: BTreeMap<u8, TestPollState> = vec![
 		(1, Completed(1, true)),
 		(2, Completed(2, false)),
-		(3, Ongoing(Tally::from_parts(0, 0, 0), 0)),
+		(3, Ongoing(Capped::from_parts(0, 0, 0), 0)),
 	].into_iter().collect();
+
+	pub const TestMaxSlippage: PerU16 = PerU16::from_percent(1);
 }
 
 pub struct TestPolls;
@@ -162,7 +165,7 @@ impl Polling<TallyOf<Test>> for TestPolls {
 	fn create_ongoing(class: Self::Class) -> Result<Self::Index, ()> {
 		let mut polls = Polls::get();
 		let i = polls.keys().rev().next().map_or(0, |x| x + 1);
-		polls.insert(i, Ongoing(Tally::new(0), class));
+		polls.insert(i, Ongoing(Capped::new(0), class));
 		Polls::set(polls);
 		Ok(i)
 	}
@@ -189,6 +192,7 @@ impl Config for Test {
 	type WeightInfo = ();
 	type MaxTurnout = frame_support::traits::TotalIssuanceOf<Balances, Self::AccountId>;
 	type Polls = TestPolls;
+	type MaxVoteSlippage = TestMaxSlippage;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -265,7 +269,7 @@ fn completed_poll_should_panic() {
 #[test]
 fn basic_stuff() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(tally(3), Tally::from_parts(0, 0, 0));
+		assert_eq!(tally(3), Capped::from_parts(0, 0, 0));
 	});
 }
 
@@ -273,25 +277,25 @@ fn basic_stuff() {
 fn basic_voting_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, aye(2, 5)));
-		assert_eq!(tally(3), Tally::from_parts(10, 0, 2));
+		assert_eq!(tally(3), Capped::from_parts(10, 0, 2));
 		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, nay(2, 5)));
-		assert_eq!(tally(3), Tally::from_parts(0, 10, 0));
+		assert_eq!(tally(3), Capped::from_parts(0, 10, 0));
 		assert_eq!(Balances::usable_balance(1), 8);
 
 		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, aye(5, 1)));
-		assert_eq!(tally(3), Tally::from_parts(5, 0, 5));
+		assert_eq!(tally(3), Capped::from_parts(5, 0, 5));
 		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, nay(5, 1)));
-		assert_eq!(tally(3), Tally::from_parts(0, 5, 0));
+		assert_eq!(tally(3), Capped::from_parts(0, 5, 0));
 		assert_eq!(Balances::usable_balance(1), 5);
 
 		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, aye(10, 0)));
-		assert_eq!(tally(3), Tally::from_parts(1, 0, 10));
+		assert_eq!(tally(3), Capped::from_parts(1, 0, 10));
 		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, nay(10, 0)));
-		assert_eq!(tally(3), Tally::from_parts(0, 1, 0));
+		assert_eq!(tally(3), Capped::from_parts(0, 1, 0));
 		assert_eq!(Balances::usable_balance(1), 0);
 
 		assert_ok!(Voting::remove_vote(RuntimeOrigin::signed(1), None, 3));
-		assert_eq!(tally(3), Tally::from_parts(0, 0, 0));
+		assert_eq!(tally(3), Capped::from_parts(0, 0, 0));
 
 		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), class(3), 1));
 		assert_eq!(Balances::usable_balance(1), 10);
@@ -302,13 +306,13 @@ fn basic_voting_works() {
 fn split_voting_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, split(10, 0)));
-		assert_eq!(tally(3), Tally::from_parts(1, 0, 10));
+		assert_eq!(tally(3), Capped::from_parts(1, 0, 10));
 		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, split(5, 5)));
-		assert_eq!(tally(3), Tally::from_parts(0, 0, 5));
+		assert_eq!(tally(3), Capped::from_parts(0, 0, 5));
 		assert_eq!(Balances::usable_balance(1), 0);
 
 		assert_ok!(Voting::remove_vote(RuntimeOrigin::signed(1), None, 3));
-		assert_eq!(tally(3), Tally::from_parts(0, 0, 0));
+		assert_eq!(tally(3), Capped::from_parts(0, 0, 0));
 
 		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), class(3), 1));
 		assert_eq!(Balances::usable_balance(1), 10);
@@ -319,19 +323,19 @@ fn split_voting_works() {
 fn abstain_voting_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, split_abstain(0, 0, 10)));
-		assert_eq!(tally(3), Tally::from_parts(0, 0, 10));
+		assert_eq!(tally(3), Capped::from_parts(0, 0, 10));
 		assert_ok!(Voting::vote(RuntimeOrigin::signed(2), 3, split_abstain(0, 0, 20)));
-		assert_eq!(tally(3), Tally::from_parts(0, 0, 30));
+		assert_eq!(tally(3), Capped::from_parts(0, 0, 30));
 		assert_ok!(Voting::vote(RuntimeOrigin::signed(2), 3, split_abstain(10, 0, 10)));
-		assert_eq!(tally(3), Tally::from_parts(1, 0, 30));
+		assert_eq!(tally(3), Capped::from_parts(1, 0, 30));
 		assert_eq!(Balances::usable_balance(1), 0);
 		assert_eq!(Balances::usable_balance(2), 0);
 
 		assert_ok!(Voting::remove_vote(RuntimeOrigin::signed(1), None, 3));
-		assert_eq!(tally(3), Tally::from_parts(1, 0, 20));
+		assert_eq!(tally(3), Capped::from_parts(1, 0, 20));
 
 		assert_ok!(Voting::remove_vote(RuntimeOrigin::signed(2), None, 3));
-		assert_eq!(tally(3), Tally::from_parts(0, 0, 0));
+		assert_eq!(tally(3), Capped::from_parts(0, 0, 0));
 
 		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), class(3), 1));
 		assert_eq!(Balances::usable_balance(1), 10);
@@ -345,25 +349,25 @@ fn abstain_voting_works() {
 fn voting_balance_gets_locked() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, aye(2, 5)));
-		assert_eq!(tally(3), Tally::from_parts(10, 0, 2));
+		assert_eq!(tally(3), Capped::from_parts(10, 0, 2));
 		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, nay(2, 5)));
-		assert_eq!(tally(3), Tally::from_parts(0, 10, 0));
+		assert_eq!(tally(3), Capped::from_parts(0, 10, 0));
 		assert_eq!(Balances::usable_balance(1), 8);
 
 		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, aye(5, 1)));
-		assert_eq!(tally(3), Tally::from_parts(5, 0, 5));
+		assert_eq!(tally(3), Capped::from_parts(5, 0, 5));
 		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, nay(5, 1)));
-		assert_eq!(tally(3), Tally::from_parts(0, 5, 0));
+		assert_eq!(tally(3), Capped::from_parts(0, 5, 0));
 		assert_eq!(Balances::usable_balance(1), 5);
 
 		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, aye(10, 0)));
-		assert_eq!(tally(3), Tally::from_parts(1, 0, 10));
+		assert_eq!(tally(3), Capped::from_parts(1, 0, 10));
 		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, nay(10, 0)));
-		assert_eq!(tally(3), Tally::from_parts(0, 1, 0));
+		assert_eq!(tally(3), Capped::from_parts(0, 1, 0));
 		assert_eq!(Balances::usable_balance(1), 0);
 
 		assert_ok!(Voting::remove_vote(RuntimeOrigin::signed(1), None, 3));
-		assert_eq!(tally(3), Tally::from_parts(0, 0, 0));
+		assert_eq!(tally(3), Capped::from_parts(0, 0, 0));
 
 		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), class(3), 1));
 		assert_eq!(Balances::usable_balance(1), 10);
@@ -423,10 +427,10 @@ fn classwise_delegation_works() {
 	new_test_ext().execute_with(|| {
 		Polls::set(
 			vec![
-				(0, Ongoing(Tally::new(0), 0)),
-				(1, Ongoing(Tally::new(0), 1)),
-				(2, Ongoing(Tally::new(0), 2)),
-				(3, Ongoing(Tally::new(0), 2)),
+				(0, Ongoing(Capped::new(0), 0)),
+				(1, Ongoing(Capped::new(0), 1)),
+				(2, Ongoing(Capped::new(0), 2)),
+				(3, Ongoing(Capped::new(0), 2)),
 			]
 			.into_iter()
 			.collect(),
@@ -450,10 +454,10 @@ fn classwise_delegation_works() {
 		assert_eq!(
 			Polls::get(),
 			vec![
-				(0, Ongoing(Tally::from_parts(6, 2, 15), 0)),
-				(1, Ongoing(Tally::from_parts(6, 2, 15), 1)),
-				(2, Ongoing(Tally::from_parts(6, 2, 15), 2)),
-				(3, Ongoing(Tally::from_parts(0, 0, 0), 2)),
+				(0, Ongoing(Capped::from_parts(6, 2, 15), 0)),
+				(1, Ongoing(Capped::from_parts(6, 2, 15), 1)),
+				(2, Ongoing(Capped::from_parts(6, 2, 15), 2)),
+				(3, Ongoing(Capped::from_parts(0, 0, 0), 2)),
 			]
 			.into_iter()
 			.collect()
@@ -464,10 +468,10 @@ fn classwise_delegation_works() {
 		assert_eq!(
 			Polls::get(),
 			vec![
-				(0, Ongoing(Tally::from_parts(6, 2, 15), 0)),
-				(1, Ongoing(Tally::from_parts(6, 2, 15), 1)),
-				(2, Ongoing(Tally::from_parts(6, 2, 15), 2)),
-				(3, Ongoing(Tally::from_parts(0, 6, 0), 2)),
+				(0, Ongoing(Capped::from_parts(6, 2, 15), 0)),
+				(1, Ongoing(Capped::from_parts(6, 2, 15), 1)),
+				(2, Ongoing(Capped::from_parts(6, 2, 15), 2)),
+				(3, Ongoing(Capped::from_parts(0, 6, 0), 2)),
 			]
 			.into_iter()
 			.collect()
@@ -479,10 +483,10 @@ fn classwise_delegation_works() {
 		assert_eq!(
 			Polls::get(),
 			vec![
-				(0, Ongoing(Tally::from_parts(6, 2, 15), 0)),
-				(1, Ongoing(Tally::from_parts(6, 2, 15), 1)),
-				(2, Ongoing(Tally::from_parts(1, 7, 10), 2)),
-				(3, Ongoing(Tally::from_parts(0, 1, 0), 2)),
+				(0, Ongoing(Capped::from_parts(6, 2, 15), 0)),
+				(1, Ongoing(Capped::from_parts(6, 2, 15), 1)),
+				(2, Ongoing(Capped::from_parts(1, 7, 10), 2)),
+				(3, Ongoing(Capped::from_parts(0, 1, 0), 2)),
 			]
 			.into_iter()
 			.collect()
@@ -498,10 +502,10 @@ fn classwise_delegation_works() {
 		assert_eq!(
 			Polls::get(),
 			vec![
-				(0, Ongoing(Tally::from_parts(4, 2, 13), 0)),
-				(1, Ongoing(Tally::from_parts(4, 2, 13), 1)),
-				(2, Ongoing(Tally::from_parts(4, 2, 13), 2)),
-				(3, Ongoing(Tally::from_parts(0, 4, 0), 2)),
+				(0, Ongoing(Capped::from_parts(4, 2, 13), 0)),
+				(1, Ongoing(Capped::from_parts(4, 2, 13), 1)),
+				(2, Ongoing(Capped::from_parts(4, 2, 13), 2)),
+				(3, Ongoing(Capped::from_parts(0, 4, 0), 2)),
 			]
 			.into_iter()
 			.collect()
@@ -530,10 +534,10 @@ fn classwise_delegation_works() {
 		assert_eq!(
 			Polls::get(),
 			vec![
-				(0, Ongoing(Tally::from_parts(7, 2, 16), 0)),
-				(1, Ongoing(Tally::from_parts(8, 2, 17), 1)),
-				(2, Ongoing(Tally::from_parts(9, 2, 18), 2)),
-				(3, Ongoing(Tally::from_parts(0, 9, 0), 2)),
+				(0, Ongoing(Capped::from_parts(7, 2, 16), 0)),
+				(1, Ongoing(Capped::from_parts(8, 2, 17), 1)),
+				(2, Ongoing(Capped::from_parts(9, 2, 18), 2)),
+				(3, Ongoing(Capped::from_parts(0, 9, 0), 2)),
 			]
 			.into_iter()
 			.collect()
@@ -544,7 +548,7 @@ fn classwise_delegation_works() {
 #[test]
 fn redelegation_after_vote_ending_should_keep_lock() {
 	new_test_ext().execute_with(|| {
-		Polls::set(vec![(0, Ongoing(Tally::new(0), 0))].into_iter().collect());
+		Polls::set(vec![(0, Ongoing(Capped::new(0), 0))].into_iter().collect());
 		assert_ok!(Voting::delegate(RuntimeOrigin::signed(1), 0, 2, Conviction::Locked1x, 5));
 		assert_ok!(Voting::vote(RuntimeOrigin::signed(2), 0, aye(10, 1)));
 		Polls::set(vec![(0, Completed(1, true))].into_iter().collect());
@@ -562,9 +566,9 @@ fn lock_amalgamation_valid_with_multiple_removed_votes() {
 	new_test_ext().execute_with(|| {
 		Polls::set(
 			vec![
-				(0, Ongoing(Tally::new(0), 0)),
-				(1, Ongoing(Tally::new(0), 0)),
-				(2, Ongoing(Tally::new(0), 0)),
+				(0, Ongoing(Capped::new(0), 0)),
+				(1, Ongoing(Capped::new(0), 0)),
+				(2, Ongoing(Capped::new(0), 0)),
 			]
 			.into_iter()
 			.collect(),
@@ -634,7 +638,7 @@ fn lock_amalgamation_valid_with_multiple_delegations() {
 #[test]
 fn lock_amalgamation_valid_with_move_roundtrip_to_delegation() {
 	new_test_ext().execute_with(|| {
-		Polls::set(vec![(0, Ongoing(Tally::new(0), 0))].into_iter().collect());
+		Polls::set(vec![(0, Ongoing(Capped::new(0), 0))].into_iter().collect());
 		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 0, aye(5, 1)));
 		Polls::set(vec![(0, Completed(1, true))].into_iter().collect());
 		assert_ok!(Voting::remove_vote(RuntimeOrigin::signed(1), Some(0), 0));
@@ -646,7 +650,7 @@ fn lock_amalgamation_valid_with_move_roundtrip_to_delegation() {
 		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
 		assert_eq!(Balances::usable_balance(1), 0);
 
-		Polls::set(vec![(1, Ongoing(Tally::new(0), 0))].into_iter().collect());
+		Polls::set(vec![(1, Ongoing(Capped::new(0), 0))].into_iter().collect());
 		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 1, aye(5, 2)));
 		Polls::set(vec![(1, Completed(1, true))].into_iter().collect());
 		assert_ok!(Voting::remove_vote(RuntimeOrigin::signed(1), Some(0), 1));
@@ -674,7 +678,7 @@ fn lock_amalgamation_valid_with_move_roundtrip_to_casting() {
 		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
 		assert_eq!(Balances::usable_balance(1), 5);
 
-		Polls::set(vec![(0, Ongoing(Tally::new(0), 0))].into_iter().collect());
+		Polls::set(vec![(0, Ongoing(Capped::new(0), 0))].into_iter().collect());
 		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 0, aye(10, 1)));
 		Polls::set(vec![(0, Completed(1, true))].into_iter().collect());
 		assert_ok!(Voting::remove_vote(RuntimeOrigin::signed(1), Some(0), 0));
@@ -735,9 +739,9 @@ fn lock_aggregation_over_different_classes_with_casting_works() {
 	new_test_ext().execute_with(|| {
 		Polls::set(
 			vec![
-				(0, Ongoing(Tally::new(0), 0)),
-				(1, Ongoing(Tally::new(0), 1)),
-				(2, Ongoing(Tally::new(0), 2)),
+				(0, Ongoing(Capped::new(0), 0)),
+				(1, Ongoing(Capped::new(0), 1)),
+				(2, Ongoing(Capped::new(0), 2)),
 			]
 			.into_iter()
 			.collect(),
@@ -803,10 +807,10 @@ fn errors_with_vote_work() {
 		assert_ok!(Voting::undelegate(RuntimeOrigin::signed(1), 0));
 		Polls::set(
 			vec![
-				(0, Ongoing(Tally::new(0), 0)),
-				(1, Ongoing(Tally::new(0), 0)),
-				(2, Ongoing(Tally::new(0), 0)),
-				(3, Ongoing(Tally::new(0), 0)),
+				(0, Ongoing(Capped::new(0), 0)),
+				(1, Ongoing(Capped::new(0), 0)),
+				(2, Ongoing(Capped::new(0), 0)),
+				(3, Ongoing(Capped::new(0), 0)),
 			]
 			.into_iter()
 			.collect(),
@@ -879,5 +883,22 @@ fn errors_with_remove_vote_work() {
 			Voting::remove_vote(RuntimeOrigin::signed(1), None, 3),
 			Error::<Test>::ClassNeeded
 		);
+	});
+}
+
+#[test]
+fn vote_cap_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, split(10, 0)));
+		assert_eq!(tally(3), Capped::from_parts(1, 0, 10));
+		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, split(5, 5)));
+		assert_eq!(tally(3), Capped::from_parts(0, 0, 5));
+		assert_eq!(Balances::usable_balance(1), 0);
+
+		assert_ok!(Voting::remove_vote(RuntimeOrigin::signed(1), None, 3));
+		assert_eq!(tally(3), Capped::from_parts(0, 0, 0));
+
+		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), class(3), 1));
+		assert_eq!(Balances::usable_balance(1), 10);
 	});
 }

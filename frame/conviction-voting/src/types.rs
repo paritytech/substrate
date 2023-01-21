@@ -262,3 +262,80 @@ pub enum UnvoteScope {
 	/// Permitted to do only the changes that do not need the owner's permission.
 	OnlyExpired,
 }
+
+/// A Vote tally that caps votes when they would move the approval over a specified threshold
+#[derive(
+	CloneNoBound,
+	PartialEqNoBound,
+	EqNoBound,
+	RuntimeDebugNoBound,
+	TypeInfo,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+)]
+pub struct Capped<T: Clone + Debug + PartialEq, Cap>(T, PhantomData<Cap>);
+
+impl<
+		Votes: Clone + Default + PartialEq + Eq + Debug + Copy + AtLeast32BitUnsigned + TypeInfo + Codec,
+		Class,
+		T: VoteTally<Votes, Class> + Clone + Debug + PartialEq,
+		Cap,
+	> VoteTally<Votes, Class> for Capped<T, Cap>
+{
+	fn new(class: Class) -> Self {
+		Capped(T::new(class), PhantomData)
+	}
+
+	fn ayes(&self, class: Class) -> Votes {
+		T::ayes(&self.0, class)
+	}
+
+	fn support(&self, class: Class) -> Perbill {
+		T::support(&self.0, class)
+	}
+
+	fn approval(&self, class: Class) -> Perbill {
+		T::approval(&self.0, class)
+	}
+}
+
+impl<
+		Votes: Clone + Default + PartialEq + Eq + Debug + Copy + AtLeast32BitUnsigned + TypeInfo + Codec,
+		Total: Get<Votes>,
+		Cap: Get<sp_runtime::PerU16>,
+	> Capped<Tally<Votes, Total>, Cap>
+{
+	/// Create a new tally.
+	pub fn from_vote(vote: Vote, balance: Votes) -> Self {
+		Capped(Tally::from_vote(vote, balance), PhantomData)
+	}
+
+	pub fn from_parts(
+		ayes_with_conviction: Votes,
+		nays_with_conviction: Votes,
+		ayes: Votes,
+	) -> Self {
+		Capped(Tally::from_parts(ayes_with_conviction, nays_with_conviction, ayes), PhantomData)
+	}
+
+	/// Add an account's vote into the tally.
+	pub fn add(&mut self, vote: AccountVote<Votes>) -> Option<()> {
+		self.0.add(vote)
+	}
+
+	/// Remove an account's vote from the tally.
+	pub fn remove(&mut self, vote: AccountVote<Votes>) -> Option<()> {
+		self.0.remove(vote)
+	}
+
+	/// Increment some amount of votes.
+	pub fn increase(&mut self, approve: bool, delegations: Delegations<Votes>) {
+		self.0.increase(approve, delegations)
+	}
+
+	/// Decrement some amount of votes.
+	pub fn reduce(&mut self, approve: bool, delegations: Delegations<Votes>) {
+		self.0.reduce(approve, delegations)
+	}
+}

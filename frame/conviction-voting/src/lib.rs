@@ -49,7 +49,7 @@ pub mod weights;
 pub use self::{
 	conviction::Conviction,
 	pallet::*,
-	types::{Delegations, Tally, UnvoteScope},
+	types::{Capped, Delegations, Tally, UnvoteScope},
 	vote::{AccountVote, Casting, Delegating, Vote, Voting},
 	weights::WeightInfo,
 };
@@ -78,7 +78,8 @@ type DelegatingOf<T, I = ()> = Delegating<
 	<T as frame_system::Config>::AccountId,
 	<T as frame_system::Config>::BlockNumber,
 >;
-pub type TallyOf<T, I = ()> = Tally<BalanceOf<T, I>, <T as Config<I>>::MaxTurnout>;
+pub type TallyOf<T, I = ()> =
+	Capped<Tally<BalanceOf<T, I>, <T as Config<I>>::MaxTurnout>, <T as Config<I>>::MaxVoteSlippage>;
 pub type VotesOf<T, I = ()> = BalanceOf<T, I>;
 type PollIndexOf<T, I = ()> = <<T as Config<I>>::Polls as Polling<TallyOf<T, I>>>::Index;
 #[cfg(feature = "runtime-benchmarks")]
@@ -132,6 +133,12 @@ pub mod pallet {
 		/// those successful voters are locked into the consequences that their votes entail.
 		#[pallet::constant]
 		type VoteLockingPeriod: Get<Self::BlockNumber>;
+
+		/// The maximum variation a vote can introduce on the current support.
+		///
+		///  have over the current support before is capped to
+		#[pallet::constant]
+		type MaxVoteSlippage: Get<sp_runtime::PerU16>;
 	}
 
 	/// All voting for a particular voter in a particular voting class. We store the balance for the
