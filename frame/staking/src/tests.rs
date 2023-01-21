@@ -3737,7 +3737,7 @@ fn test_nominators_are_rewarded_for_all_exposure_page() {
 }
 
 #[test]
-fn test_payout_stakers() {
+fn test_multi_page_payout_stakers() {
 	// Test that payout_stakers work in general, including that only the top
 	// `T::MaxNominatorRewardedPerValidator` nominators are rewarded.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
@@ -3755,45 +3755,65 @@ fn test_payout_stakers() {
 			let bond_amount = balance + i as Balance;
 			bond_nominator(1000 + i, 100 + i, bond_amount, vec![11]);
 			total_exposure += bond_amount;
-			if i >= 36 {
-				payout_exposure += bond_amount;
-			};
+			// with multi page reward payout, payout exposure is same as total exposure.
+			payout_exposure += bond_amount;
 		}
+
 		let payout_exposure_part = Perbill::from_rational(payout_exposure, total_exposure);
 
 		mock::start_active_era(1);
 		Staking::reward_by_ids(vec![(11, 1)]);
 
+		// Since `MaxNominatorRewardedPerValidator = 64`, there are two pages of validator exposure.
+		assert_eq!(EraInfo::<Test>::get_page_count(1, &11), 2);
+
 		// compute and ensure the reward amount is greater than zero.
 		let payout = current_total_payout_for_duration(reward_time_per_era());
 		let actual_paid_out = payout_exposure_part * payout;
-
+		println!("Actual paid out {:?}", actual_paid_out);
 		mock::start_active_era(2);
+
+		// verify the exposures are calculated correctly.
+		let actual_exposure_0 = EraInfo::<Test>::get_validator_exposure(1, &11, 0);
+		assert_eq!(actual_exposure_0.total, total_exposure);
+		assert_eq!(actual_exposure_0.own, 1000);
+		assert_eq!(actual_exposure_0.others.len(), 64);
+		let actual_exposure_1 = EraInfo::<Test>::get_validator_exposure(1, &11, 1);
+		assert_eq!(actual_exposure_1.total, total_exposure);
+		// own stake is only included once in the first page
+		assert_eq!(actual_exposure_1.own, 0);
+		assert_eq!(actual_exposure_1.others.len(), 100 - 64);
 
 		let pre_payout_total_issuance = Balances::total_issuance();
 		RewardOnUnbalanceWasCalled::set(false);
+
+		// Payout rewards for first exposure page
 		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1, 0));
-		// FIXME(ank4n): this won't work since the exposure page is not sorted anymore. Instead fix
-		// it with multi block reward payout expectation.
+
+		// verify rewards have been paid out but still some left
+		assert!(Balances::total_issuance() > pre_payout_total_issuance);
+		assert!(Balances::total_issuance() < pre_payout_total_issuance + actual_paid_out);
+
+		// Payout the second and last page of nominators
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1, 1));
+
+		// verify all rewards have been paid out
 		assert_eq_error_rate!(
 			Balances::total_issuance(),
 			pre_payout_total_issuance + actual_paid_out,
-			1
+			2
 		);
 		assert!(RewardOnUnbalanceWasCalled::get());
 
-		// Top 64 nominators of validator 11 automatically paid out, including the validator
+		// verify all nominators of validator 11 are paid out, including the validator
 		// Validator payout goes to controller.
 		assert!(Balances::free_balance(&10) > balance);
-		for i in 36..100 {
+		for i in 0..100 {
 			assert!(Balances::free_balance(&(100 + i)) > balance + i as Balance);
 		}
-		// The bottom 36 do not
-		for i in 0..36 {
-			assert_eq!(Balances::free_balance(&(100 + i)), balance + i as Balance);
-		}
 
-		// We track rewards in `legacy_claimed_rewards` vec
+		// verify we no longer track rewards in `legacy_claimed_rewards` vec
+		let ledger = Staking::ledger(&10);
 		assert_eq!(
 			Staking::ledger(&10),
 			Some(StakingLedger {
@@ -3801,9 +3821,17 @@ fn test_payout_stakers() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				legacy_claimed_rewards: bounded_vec![1]
+				legacy_claimed_rewards: bounded_vec![]
 			})
 		);
+
+		// verify rewards are tracked to prevent double claims
+		for page in 0..EraInfo::<Test>::get_page_count(1, &11) {
+			assert_eq!(
+				EraInfo::<Test>::is_rewards_claimed_temp(1, ledger.as_ref().unwrap(), &11, page),
+				true
+			);
+		}
 
 		for i in 3..16 {
 			Staking::reward_by_ids(vec![(11, 1)]);
@@ -3815,31 +3843,34 @@ fn test_payout_stakers() {
 
 			mock::start_active_era(i);
 			RewardOnUnbalanceWasCalled::set(false);
-			assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, i - 1, 0));
+			mock::make_all_reward_payment(i - 1);
 			assert_eq_error_rate!(
 				Balances::total_issuance(),
 				pre_payout_total_issuance + actual_paid_out,
-				1
+				2
 			);
 			assert!(RewardOnUnbalanceWasCalled::get());
+
+			// verify we track rewards for each era and page
+			for page in 0..EraInfo::<Test>::get_page_count(i - 1, &11) {
+				assert_eq!(
+					EraInfo::<Test>::is_rewards_claimed_temp(
+						i - 1,
+						Staking::ledger(&10).as_ref().unwrap(),
+						&11,
+						page
+					),
+					true
+				);
+			}
 		}
 
-		// We track rewards in `claimed_rewards` vec
-		assert_eq!(
-			Staking::ledger(&10),
-			Some(StakingLedger {
-				stash: 11,
-				total: 1000,
-				active: 1000,
-				unlocking: Default::default(),
-				legacy_claimed_rewards: (1..=14).collect::<Vec<_>>().try_into().unwrap()
-			})
-		);
+		assert_eq!(Staking::claimed_rewards(14, &11), vec![0, 1]);
 
 		let last_era = 99;
 		let history_depth = HistoryDepth::get();
-		let expected_last_reward_era = last_era - 1;
-		let expected_start_reward_era = last_era - history_depth;
+		let last_reward_era = last_era - 1;
+		let first_claimable_reward_era = last_era - history_depth;
 		for i in 16..=last_era {
 			Staking::reward_by_ids(vec![(11, 1)]);
 			// compute and ensure the reward amount is greater than zero.
@@ -3847,53 +3878,34 @@ fn test_payout_stakers() {
 			mock::start_active_era(i);
 		}
 
-		// We clean it up as history passes
-		assert_ok!(Staking::payout_stakers(
-			RuntimeOrigin::signed(1337),
-			11,
-			expected_start_reward_era,
-			0
-		));
-		assert_ok!(Staking::payout_stakers(
-			RuntimeOrigin::signed(1337),
-			11,
-			expected_last_reward_era,
-			0
-		));
-		assert_eq!(
-			Staking::ledger(&10),
-			Some(StakingLedger {
-				stash: 11,
-				total: 1000,
-				active: 1000,
-				unlocking: Default::default(),
-				legacy_claimed_rewards: bounded_vec![
-					expected_start_reward_era,
-					expected_last_reward_era
-				]
-			})
-		);
+		// verify we clean up history as we go
+		for era in 0..15 {
+			assert_eq!(Staking::claimed_rewards(era, &11), Vec::<PageIndex>::new());
+		}
+
+		// verify only page 0 is marked as claimed
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, first_claimable_reward_era, 0));
+		assert_eq!(Staking::claimed_rewards(first_claimable_reward_era, &11), vec![0]);
+
+		// verify page 0 and 1 are marked as claimed
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, first_claimable_reward_era, 1));
+		assert_eq!(Staking::claimed_rewards(first_claimable_reward_era, &11), vec![0, 1]);
+
+		// verify only page 0 is marked as claimed
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, last_reward_era, 0));
+		assert_eq!(Staking::claimed_rewards(last_reward_era, &11), vec![0]);
+
+		// verify page 0 and 1 are marked as claimed
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, last_reward_era, 1));
+		assert_eq!(Staking::claimed_rewards(last_reward_era, &11), vec![0, 1]);
 
 		// Out of order claims works.
 		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 69, 0));
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 23, 0));
+		assert_eq!(Staking::claimed_rewards(69, &11), vec![0]);
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 23, 1));
+		assert_eq!(Staking::claimed_rewards(23, &11), vec![1]);
 		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 42, 0));
-		assert_eq!(
-			Staking::ledger(&10),
-			Some(StakingLedger {
-				stash: 11,
-				total: 1000,
-				active: 1000,
-				unlocking: Default::default(),
-				legacy_claimed_rewards: bounded_vec![
-					expected_start_reward_era,
-					23,
-					42,
-					69,
-					expected_last_reward_era
-				]
-			})
-		);
+		assert_eq!(Staking::claimed_rewards(42, &11), vec![0]);
 	});
 }
 
