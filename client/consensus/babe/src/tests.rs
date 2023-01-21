@@ -610,7 +610,7 @@ fn claim_vrf_check() {
 
 	let epoch = Epoch {
 		start_slot: 0.into(),
-		authorities: vec![(public.clone().into(), 1)],
+		authorities: vec![(public.into(), 1)],
 		randomness: [0; 32],
 		epoch_index: 1,
 		duration: 10,
@@ -624,32 +624,32 @@ fn claim_vrf_check() {
 
 	// We expect a Primary claim for slot 0
 
-	let claim = match claim_slot(0.into(), &epoch, &keystore).unwrap().0 {
+	let pre_digest = match claim_slot(0.into(), &epoch, &keystore).unwrap().0 {
 		PreDigest::Primary(d) => d,
-		claim => panic!("Unexpected claim variant {:?}", claim),
+		v => panic!("Unexpected pre-digest variant {:?}", v),
 	};
 	let transcript = make_transcript_data(&epoch.randomness.clone(), 0.into(), epoch.epoch_index);
 	let sign = SyncCryptoStore::sr25519_vrf_sign(&*keystore, AuthorityId::ID, &public, transcript)
 		.unwrap()
 		.unwrap();
-	assert_eq!(claim.vrf_output, VRFOutput(sign.output));
+	assert_eq!(pre_digest.vrf_output, VRFOutput(sign.output));
 
 	// We expect a SecondaryVRF claim for slot 1
-	let claim = match claim_slot(1.into(), &epoch, &keystore).unwrap().0 {
+	let pre_digest = match claim_slot(1.into(), &epoch, &keystore).unwrap().0 {
 		PreDigest::SecondaryVRF(d) => d,
-		claim => panic!("Unexpected claim variant {:?}", claim),
+		v => panic!("Unexpected pre-digest variant {:?}", v),
 	};
 	let transcript = make_transcript_data(&epoch.randomness.clone(), 1.into(), epoch.epoch_index);
 	let sign = SyncCryptoStore::sr25519_vrf_sign(&*keystore, AuthorityId::ID, &public, transcript)
 		.unwrap()
 		.unwrap();
-	assert_eq!(claim.vrf_output, VRFOutput(sign.output));
+	assert_eq!(pre_digest.vrf_output, VRFOutput(sign.output));
 
 	// Check that correct epoch index has been used if epochs are skipped (primary VRF)
 	let slot = Slot::from(103);
 	let claim = match claim_slot(slot, &epoch, &keystore).unwrap().0 {
 		PreDigest::Primary(d) => d,
-		claim => panic!("Unexpected claim variant {:?}", claim),
+		v => panic!("Unexpected claim variant {:?}", v),
 	};
 	let fixed_epoch = epoch.clone_for_slot(slot);
 	let transcript = make_transcript_data(&epoch.randomness.clone(), slot, fixed_epoch.epoch_index);
@@ -661,9 +661,9 @@ fn claim_vrf_check() {
 
 	// Check that correct epoch index has been used if epochs are skipped (secondary VRF)
 	let slot = Slot::from(100);
-	let claim = match claim_slot(slot, &epoch, &keystore).unwrap().0 {
+	let pre_digest = match claim_slot(slot, &epoch, &keystore).unwrap().0 {
 		PreDigest::SecondaryVRF(d) => d,
-		claim => panic!("Unexpected claim variant {:?}", claim),
+		v => panic!("Unexpected claim variant {:?}", v),
 	};
 	let fixed_epoch = epoch.clone_for_slot(slot);
 	let transcript = make_transcript_data(&epoch.randomness.clone(), slot, fixed_epoch.epoch_index);
@@ -671,6 +671,8 @@ fn claim_vrf_check() {
 		.unwrap()
 		.unwrap();
 	assert_eq!(fixed_epoch.epoch_index, 11);
+	assert_eq!(pre_digest.vrf_output, VRFOutput(sign.output));
+}
 	assert_eq!(claim.vrf_output, VRFOutput(sign.output));
 }
 
