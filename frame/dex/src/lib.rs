@@ -741,14 +741,11 @@ pub mod pallet {
 			let balance1 = Self::get_balance(&pool_account, asset1).ok()?;
 			let balance2 = Self::get_balance(&pool_account, asset2).ok()?;
 			if !balance1.is_zero() {
-				let (reserve1, reserve2) = (balance1, balance2);
-							
+				
 				if include_fee {
-					//let amount: u128 = amount.into()
-//						.checked_mul(1000u128 - (T::Fee::get() as u128))?;
-					Self::get_amount_out(&amount, &reserve1, &reserve2).ok()
+					Self::get_amount_out(&amount, &balance1, &balance2).ok()
 				} else {
-					Self::quote(&amount, &reserve1, &reserve2).ok()
+					Self::quote(&amount, &balance1, &balance2).ok()
 				}
 			} else {
 				None
@@ -780,14 +777,10 @@ pub mod pallet {
 			let balance1 = Self::get_balance(&pool_account, asset1).ok()?;
 			let balance2 = Self::get_balance(&pool_account, asset2).ok()?;
 			if !balance1.is_zero() {
-				let (reserve1, reserve2) = (balance1, balance2);
-							
 				if include_fee {
-					//let amount: u128 = amount.into()
-//						.checked_mul(1000u128 - (T::Fee::get() as u128))?;
-					Self::get_amount_in(&amount, &reserve1, &reserve2).ok()
+					Self::get_amount_in(&amount, &balance1, &balance2).ok()
 				} else {
-					Self::quote(&amount, &reserve1, &reserve2).ok()
+					Self::quote(&amount, &balance1, &balance2).ok()
 				}
 			} else {
 				None

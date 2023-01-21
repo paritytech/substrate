@@ -359,8 +359,8 @@ impl<Block: BlockT> HeaderBackend<Block> for Blockchain<Block> {
 		}
 	}
 
-	fn status(&self, id: BlockId<Block>) -> sp_blockchain::Result<BlockStatus> {
-		match self.id(id).map_or(false, |hash| self.storage.read().blocks.contains_key(&hash)) {
+	fn status(&self, hash: Block::Hash) -> sp_blockchain::Result<BlockStatus> {
+		match self.storage.read().blocks.contains_key(&hash) {
 			true => Ok(BlockStatus::InChain),
 			false => Ok(BlockStatus::Unknown),
 		}

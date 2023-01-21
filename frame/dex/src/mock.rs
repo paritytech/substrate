@@ -110,6 +110,7 @@ impl pallet_assets::Config<Instance1> for Test {
 	type Freezer = ();
 	type Extra = ();
 	type WeightInfo = ();
+	type CallbackHandle = ();
 	pallet_assets::runtime_benchmarks_enabled! {
 		type BenchmarkHelper = ();
 	}
@@ -133,6 +134,7 @@ impl pallet_assets::Config<Instance2> for Test {
 	type Freezer = ();
 	type Extra = ();
 	type WeightInfo = ();
+	type CallbackHandle = ();
 	pallet_assets::runtime_benchmarks_enabled! {
 		type BenchmarkHelper = ();
 	}

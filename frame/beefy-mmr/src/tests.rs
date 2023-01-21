@@ -70,7 +70,7 @@ fn should_contain_mmr_digest() {
 					ValidatorSet::new(vec![mock_beefy_id(1), mock_beefy_id(2)], 1).unwrap()
 				)),
 				beefy_log(ConsensusLog::MmrRoot(array_bytes::hex_n_into_unchecked(
-					"95803defe6ea9f41e7ec6afa497064f21bfded027d8812efacbdf984e630cbdc"
+					"200e73880940ac0b66735ffb560fa0a3989292463d262deac6ad61e78a3e46a4"
 				)))
 			]
 		);
@@ -85,13 +85,13 @@ fn should_contain_mmr_digest() {
 					ValidatorSet::new(vec![mock_beefy_id(1), mock_beefy_id(2)], 1).unwrap()
 				)),
 				beefy_log(ConsensusLog::MmrRoot(array_bytes::hex_n_into_unchecked(
-					"95803defe6ea9f41e7ec6afa497064f21bfded027d8812efacbdf984e630cbdc"
+					"200e73880940ac0b66735ffb560fa0a3989292463d262deac6ad61e78a3e46a4"
 				))),
 				beefy_log(ConsensusLog::AuthoritiesChange(
 					ValidatorSet::new(vec![mock_beefy_id(3), mock_beefy_id(4)], 2).unwrap()
 				)),
 				beefy_log(ConsensusLog::MmrRoot(array_bytes::hex_n_into_unchecked(
-					"a73271a0974f1e67d6e9b8dd58e506177a2e556519a330796721e98279a753e2"
+					"ba37d8d5d195ac8caec391da35472f9ecf1116ff1642409148b62e08896d3884"
 				))),
 			]
 		);
@@ -124,7 +124,7 @@ fn should_contain_valid_leaf_data() {
 				)
 			},
 			leaf_extra: array_bytes::hex2bytes_unchecked(
-				"55b8e9e1cc9f0db7776fac0ca66318ef8acfb8ec26db11e373120583e07ee648"
+				"5572d58c82bddf323f4fc7aecab8a8f0ad6ed2f06ab2bfb8ade36a77a45fcc68"
 			)
 		}
 	);
@@ -149,7 +149,7 @@ fn should_contain_valid_leaf_data() {
 				)
 			},
 			leaf_extra: array_bytes::hex2bytes_unchecked(
-				"55b8e9e1cc9f0db7776fac0ca66318ef8acfb8ec26db11e373120583e07ee648"
+				"5572d58c82bddf323f4fc7aecab8a8f0ad6ed2f06ab2bfb8ade36a77a45fcc68"
 			)
 		}
 	);

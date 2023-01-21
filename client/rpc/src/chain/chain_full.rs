@@ -29,10 +29,7 @@ use futures::{
 use jsonrpsee::SubscriptionSink;
 use sc_client_api::{BlockBackend, BlockchainEvents};
 use sp_blockchain::HeaderBackend;
-use sp_runtime::{
-	generic::{BlockId, SignedBlock},
-	traits::Block as BlockT,
-};
+use sp_runtime::{generic::SignedBlock, traits::Block as BlockT};
 
 /// Blockchain API backend for full nodes. Reads all the data from local database.
 pub struct FullChain<Block: BlockT, Client> {
@@ -66,7 +63,7 @@ where
 	}
 
 	fn block(&self, hash: Option<Block::Hash>) -> Result<Option<SignedBlock<Block>>, Error> {
-		self.client.block(&BlockId::Hash(self.unwrap_or_best(hash))).map_err(client_err)
+		self.client.block(self.unwrap_or_best(hash)).map_err(client_err)
 	}
 
 	fn subscribe_all_heads(&self, sink: SubscriptionSink) {
