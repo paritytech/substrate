@@ -149,7 +149,10 @@ impl<T: Config> Pallet<T> {
 				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
 		);
 
-		ensure!(page < EraInfo::<T>::get_page_count(era, &validator_stash), Error::<T>::InvalidPage);
+		ensure!(
+			page < EraInfo::<T>::get_page_count(era, &validator_stash),
+			Error::<T>::InvalidPage
+		);
 
 		// Note: if era has no reward to be claimed, era may be future. better not to update
 		// `ledger.legacy_claimed_rewards` in this case.

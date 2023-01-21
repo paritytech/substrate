@@ -622,15 +622,16 @@ pub mod pallet {
 	pub type CurrentPlannedSession<T> = StorageValue<_, SessionIndex, ValueQuery>;
 
 	/// Wrapper struct for Era related information. It is not a pure encapsulation as these storage
-	/// items can be accessed directly but nevertheless recommended to use `EraInfo` for accessing
-	/// the following: (1) `ErasStakers`, (2) `ClaimedRewards`, (3) `ErasStakersClipped`,
+	/// items can be accessed directly but nevertheless, its recommended to use `EraInfo` for
+	/// accessing the following: (1) `ErasStakers`, (2) `ClaimedRewards`, (3) `ErasStakersClipped`,
 	/// (4) `ErasStakersPaged`, (5) `ErasTotalStake`.
-	// TODO(ank4n): docs, tests and add more methods to `EraInfo` for the supported storage items.
+	// TODO(Ank4n): add all era related storage items in this struct
 	pub(crate) struct EraInfo<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> EraInfo<T> {
-		/// Temporary function which looks at both (1) `T::StakingLedger` for legacy non-paged
-		/// rewards, and (2) `T::ClaimedRewards` for paged rewards. This can be removed once
-		/// `$HistoryDepth` eras have passed and none of the older non-paged rewards are claimable.
+		/// Temporary function which looks at both (1) passed param `T::StakingLedger` for legacy
+		/// non-paged rewards, and (2) `T::ClaimedRewards` for paged rewards. This function can be
+		/// removed once `$HistoryDepth` eras have passed and none of the older non-paged rewards
+		/// are relevant/claimable.
 		// TODO: Cleanup tracking issue: #13034
 		pub(crate) fn is_rewards_claimed_temp(
 			era: EraIndex,
