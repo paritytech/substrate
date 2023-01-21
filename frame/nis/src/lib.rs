@@ -77,8 +77,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::{
-	dispatch::{DispatchError, DispatchResult},
-	traits::fungible::{Inspect as FungibleInspect, Mutate as FungibleMutate},
+	traits::{fungible::{Inspect as FungibleInspect, Mutate as FungibleMutate, self}, tokens::KeepAlive},
 };
 pub use pallet::*;
 use sp_arithmetic::{traits::Unsigned, RationalArg};
@@ -125,39 +124,34 @@ impl<T> FungibleInspect<T> for NoCounterpart<T> {
 	fn minimum_balance() -> u32 {
 		0
 	}
-	fn balance(_who: &T) -> u32 {
+	fn balance(_: &T) -> u32 {
 		0
 	}
-	fn balance_reducible(_who: &T, _keep_alive: bool) -> u32 {
+	fn total_balance(_: &T) -> u32 {
+		0
+	}
+	fn reducible_balance(_: &T, _: KeepAlive, _: bool) -> u32 {
 		0
 	}
 	fn can_deposit(
-		_who: &T,
-		_amount: u32,
-		_mint: bool,
+		_: &T,
+		_: u32,
+		_: bool,
 	) -> frame_support::traits::tokens::DepositConsequence {
 		frame_support::traits::tokens::DepositConsequence::Success
 	}
 	fn can_withdraw(
-		_who: &T,
-		_amount: u32,
+		_: &T,
+		_: u32,
 	) -> frame_support::traits::tokens::WithdrawConsequence<u32> {
 		frame_support::traits::tokens::WithdrawConsequence::Success
 	}
 }
-impl<T> FungibleMutate<T> for NoCounterpart<T> {
-	fn mint_into(_who: &T, _amount: u32) -> DispatchResult {
-		Ok(())
-	}
-	fn burn_from(
-		_who: &T,
-		_amount: u32,
-		_best_effort: bool,
-		_force: bool,
-	) -> Result<u32, DispatchError> {
-		Ok(0)
-	}
+impl<T> fungible::Unbalanced<T> for NoCounterpart<T> {
+	fn set_balance(_: &T, _: Self::Balance) -> sp_runtime::DispatchResult { Ok(()) }
+	fn set_total_issuance(_: Self::Balance) {}
 }
+impl<T> FungibleMutate<T> for NoCounterpart<T> {}
 impl<T> Convert<Perquintill, u32> for NoCounterpart<T> {
 	fn convert(_: Perquintill) -> u32 {
 		0
@@ -803,7 +797,8 @@ pub mod pallet {
 			summary.thawed.saturating_accrue(receipt.proportion);
 			ensure!(summary.thawed <= throttle, Error::<T>::Throttled);
 
-			T::Counterpart::burn_from(&who, T::CounterpartAmount::convert(receipt.proportion))?;
+			let cp_amount = T::CounterpartAmount::convert(receipt.proportion);
+			T::Counterpart::burn_from(&who, cp_amount, false, false)?;
 
 			// Multiply the proportion it is by the total issued.
 			let our_account = Self::account_id();
@@ -890,7 +885,7 @@ pub mod pallet {
 			let amount = max_amount.min(T::Currency::free_balance(&our_account));
 
 			// Burn fungible counterparts.
-			T::Counterpart::burn_from(&who, T::CounterpartAmount::convert(receipt.proportion))?;
+			T::Counterpart::burn_from(&who, T::CounterpartAmount::convert(receipt.proportion), false, false)?;
 
 			// Transfer the funds from the pot to the owner and reserve
 			T::Currency::transfer(&Self::account_id(), &who, amount, AllowDeath)

@@ -21,7 +21,7 @@ use codec::FullCodec;
 use frame_support::{
 	traits::{
 		fungibles::{Balanced, CreditOf, Inspect},
-		tokens::{Balance, BalanceConversion},
+		tokens::{Balance, BalanceConversion, KeepAlive},
 	},
 	unsigned::TransactionValidityError,
 };
@@ -124,7 +124,7 @@ where
 		if !matches!(can_withdraw, WithdrawConsequence::Success) {
 			return Err(InvalidTransaction::Payment.into())
 		}
-		<T::Fungibles as Balanced<T::AccountId>>::withdraw(asset_id, who, converted_fee)
+		<T::Fungibles as Balanced<T::AccountId>>::withdraw(asset_id, who, converted_fee, false, KeepAlive::NoKill)
 			.map_err(|_| TransactionValidityError::from(InvalidTransaction::Payment))
 	}
 
