@@ -23,7 +23,7 @@ ark-ed-on-bls12-377 = { version = "0.4.0", default-features = false }
 sp-std = { version = "5.0.0", path = "../std", default-features = false }
 
 [features]
-default = [ ]
+default = [ "std" ]
 std = [
 	"ark-serialize/std",
 	"ark-ff/std",
