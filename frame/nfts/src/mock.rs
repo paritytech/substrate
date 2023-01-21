@@ -90,7 +90,9 @@ impl pallet_balances::Config for Test {
 parameter_types! {
 	pub storage Features: PalletFeatures = PalletFeatures::all_enabled();
 }
+
 pub type Signature = MultiSignature;
+
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type CollectionId = u32;
