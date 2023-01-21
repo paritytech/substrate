@@ -662,10 +662,11 @@ pub mod pallet {
 			return match <ErasStakersPaged<T>>::get(era, (validator, page)) {
 				// only return clipped exposure if page zero and no paged exposure entry
 				None if page == 0 => <ErasStakersClipped<T>>::get(&era, validator),
-				Some(page) => {
-					// TODO(ank4n): more due diligence on the correctness of this.
+				Some(exposure_page) => {
 					let overview = <ErasStakersOverview<T>>::get(&era, validator);
-					Exposure { total: overview.total, own: overview.own, others: page.others }
+					// own stake is included only once in the first page.
+					let own = if page == 0 { overview.own } else { Zero::zero() };
+					Exposure { total: overview.total, own, others: exposure_page.others }
 				},
 				_ => Default::default(),
 			}
