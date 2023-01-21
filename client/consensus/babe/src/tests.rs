@@ -673,8 +673,6 @@ fn claim_vrf_check() {
 	assert_eq!(fixed_epoch.epoch_index, 11);
 	assert_eq!(pre_digest.vrf_output, VRFOutput(sign.output));
 }
-	assert_eq!(claim.vrf_output, VRFOutput(sign.output));
-}
 
 // Propose and import a new BABE block on top of the given parent.
 async fn propose_and_import_block<Transaction: Send + 'static>(
