@@ -172,6 +172,7 @@ impl pallet_assets::Config for Runtime {
 	type Extra = ();
 	type WeightInfo = ();
 	type RemoveItemsLimit = ConstU32<1000>;
+	type CallbackHandle = ();
 	pallet_assets::runtime_benchmarks_enabled! {
 		type BenchmarkHelper = ();
 	}
@@ -195,6 +196,7 @@ impl pallet_assets::Config<Instance2> for Runtime {
 	type Freezer = ();
 	type Extra = ();
 	type WeightInfo = ();
+	type CallbackHandle = ();
 	pallet_assets::runtime_benchmarks_enabled! {
 		type BenchmarkHelper = ();
 	}

@@ -55,12 +55,13 @@ mod mock;
 use codec::Codec;
 use frame_support::ensure;
 use frame_system::{ensure_signed, pallet_prelude::OriginFor};
+use frame_support::traits::tokens::AssetId;
+use frame_support::traits::tokens::Balance;
 pub use pallet::*;
 use sp_runtime::{
 	traits::{MaybeDisplay, Zero},
-	DispatchError, FixedPointOperand,
+	DispatchError,
 };
-use sp_std::fmt::Debug;
 pub use types::*;
 pub use weights::WeightInfo;
 // TODO: make it configurable
@@ -78,7 +79,6 @@ pub mod pallet {
 		},
 		PalletId,
 	};
-	// use frame_system::pallet_prelude::*;
 	use sp_runtime::{
 		traits::{AtLeast32BitUnsigned, Hash, IntegerSquareRoot, One, TrailingZeroInput, Zero},
 		Saturating,
@@ -98,17 +98,7 @@ pub mod pallet {
 		type Currency: InspectFungible<Self::AccountId, Balance = Self::Balance>
 			+ TransferFungible<Self::AccountId>;
 
-		type Balance: Parameter
-			+ Member
-			+ AtLeast32BitUnsigned
-			+ Codec
-			+ Default
-			+ Copy
-			+ MaybeSerializeDeserialize
-			+ Debug
-			+ MaxEncodedLen
-			+ TypeInfo
-			+ FixedPointOperand;
+		type Balance: Balance;
 
 		/// This must be compatible with Currency at the moment.
 		type AssetBalance: AtLeast32BitUnsigned
@@ -128,25 +118,10 @@ pub mod pallet {
 			+ TryInto<Self::Balance>
 			+ Copy;
 
-		type AssetId: Member
-			+ Parameter
-			+ Copy
-			+ From<u32>
-			+ MaybeSerializeDeserialize
-			+ MaxEncodedLen
-			+ PartialOrd
-			+ TypeInfo;
+		type AssetId: AssetId + From<u32> + PartialOrd;
 
 		// Asset id to address the lp tokens by.
-		type PoolAssetId: Member
-			+ Parameter
-			+ Copy
-			+ From<u32>
-			+ MaybeSerializeDeserialize
-			+ MaxEncodedLen
-			+ PartialOrd
-			+ TypeInfo
-			+ Incrementable;
+		type PoolAssetId: AssetId + From<u32> + PartialOrd + Incrementable;
 
 		// TODO rename to Fungibles
 		type Assets: Inspect<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>
