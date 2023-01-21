@@ -657,6 +657,10 @@ pub mod pallet {
 			}
 		}
 
+		// return atleast one page of exposure to be backward compatible to `EraStakersClipped` exposures.
+		pub(crate) fn get_page_count(era: EraIndex, validator: &T::AccountId) -> PageIndex {
+			<ErasStakersOverview<T>>::get(&era, validator).page_count.max(1)
+		}
 		pub(crate) fn set_rewards_as_claimed(
 			era: EraIndex,
 			validator: &T::AccountId,
