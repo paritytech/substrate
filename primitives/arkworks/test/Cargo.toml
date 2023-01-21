@@ -27,7 +27,7 @@ sp-ark-ed-on-bls12-377 = { version = "0.4.0", git = "https://github.com/parityte
 sp-ark-ed-on-bls12-381 = { version = "0.4.0", git = "https://github.com/paritytech/ark-substrate", default-features = false }
 
 [features]
-default = [ "curve" ]
+default = [ ]
 std = [
     "ark-ff/std",
     "ark-std/std",
