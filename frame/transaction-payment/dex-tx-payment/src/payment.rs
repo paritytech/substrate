@@ -109,7 +109,7 @@ where
 		<T::OnChargeTransaction>::withdraw_fee(who, _call, _info, fee, _tip)
 	}
 
-	/// Delegate to the OnChargeTransaction functianllity
+	/// Delegate to the OnChargeTransaction functionality.
 	///
 	/// Note: The `corrected_fee` already includes the `tip`.
 	fn correct_and_deposit_fee(
