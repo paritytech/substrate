@@ -5921,11 +5921,11 @@ fn test_validator_exposure_is_backward_compatible_with_non_paged_rewards_payout(
 		let mut clipped_exposure = expected_individual_exposures.clone();
 		clipped_exposure.sort_by(|a, b| b.who.cmp(&a.who));
 		clipped_exposure.truncate(10);
-		<ErasStakersClipped<Test>>::insert(1, 11, Exposure {
-			total: total_exposure,
-			own: 1000,
-			others: clipped_exposure.clone(),
-		});
+		<ErasStakersClipped<Test>>::insert(
+			1,
+			11,
+			Exposure { total: total_exposure, own: 1000, others: clipped_exposure.clone() },
+		);
 
 		// verify `EraInfo` returns exposure from clipped storage
 		assert!(matches!(
@@ -5937,18 +5937,18 @@ fn test_validator_exposure_is_backward_compatible_with_non_paged_rewards_payout(
 			} if others == clipped_exposure && own == 1000));
 
 		// for pages other than 0, clipped storage returns empty exposure
-		assert_eq!(
-			EraInfo::<Test>::get_validator_exposure(1, &11, 1),
-			Default::default()
-		);
+		assert_eq!(EraInfo::<Test>::get_validator_exposure(1, &11, 1), Default::default());
 		// page size is 1 for clipped storage
 		assert_eq!(EraInfo::<Test>::get_page_count(1, &11), 1);
 
 		// payout for page 0 works
 		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 0, 0));
 		// payout for page 1 fails
-		assert_noop!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 0, 1),
-			Error::<Test>::InvalidPage.with_weight(<Test as Config>::WeightInfo::payout_stakers_alive_staked(0)));
+		assert_noop!(
+			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 0, 1),
+			Error::<Test>::InvalidPage
+				.with_weight(<Test as Config>::WeightInfo::payout_stakers_alive_staked(0))
+		);
 	});
 }
 
