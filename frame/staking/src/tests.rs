@@ -25,6 +25,7 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{Currency, Get, ReservableCurrency},
 };
+
 use mock::*;
 use pallet_balances::Error as BalancesError;
 use sp_runtime::{
@@ -3884,11 +3885,21 @@ fn test_multi_page_payout_stakers() {
 		}
 
 		// verify only page 0 is marked as claimed
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, first_claimable_reward_era, 0));
+		assert_ok!(Staking::payout_stakers(
+			RuntimeOrigin::signed(1337),
+			11,
+			first_claimable_reward_era,
+			0
+		));
 		assert_eq!(Staking::claimed_rewards(first_claimable_reward_era, &11), vec![0]);
 
 		// verify page 0 and 1 are marked as claimed
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, first_claimable_reward_era, 1));
+		assert_ok!(Staking::payout_stakers(
+			RuntimeOrigin::signed(1337),
+			11,
+			first_claimable_reward_era,
+			1
+		));
 		assert_eq!(Staking::claimed_rewards(first_claimable_reward_era, &11), vec![0, 1]);
 
 		// verify only page 0 is marked as claimed
@@ -5754,6 +5765,190 @@ fn should_retain_era_info_only_upto_history_depth() {
 			assert_eq!(ClaimedRewards::<Test>::iter_prefix(i as EraIndex).count(), 0);
 			assert_eq!(ErasStakersPaged::<Test>::iter_prefix(i as EraIndex).count(), 0);
 		}
+	});
+}
+
+#[test]
+fn test_legacy_claimed_rewards_is_checked_at_reward_payout() {
+	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
+		// Create a validator:
+		bond_validator(11, 10, 1000);
+
+		// reward validator for next 2 eras
+		mock::start_active_era(1);
+		Pallet::<Test>::reward_by_ids(vec![(11, 1)]);
+		mock::start_active_era(2);
+		Pallet::<Test>::reward_by_ids(vec![(11, 1)]);
+		mock::start_active_era(3);
+
+		//verify rewards are not claimed
+		assert_eq!(
+			EraInfo::<Test>::is_rewards_claimed_temp(
+				1,
+				Staking::ledger(10).as_ref().unwrap(),
+				&11,
+				0
+			),
+			false
+		);
+		assert_eq!(
+			EraInfo::<Test>::is_rewards_claimed_temp(
+				2,
+				Staking::ledger(10).as_ref().unwrap(),
+				&11,
+				0
+			),
+			false
+		);
+
+		// assume reward claim for era 1 was stored in legacy storage
+		Ledger::<Test>::insert(
+			10,
+			StakingLedger {
+				stash: 11,
+				total: 1000,
+				active: 1000,
+				unlocking: Default::default(),
+				legacy_claimed_rewards: bounded_vec![1],
+			},
+		);
+
+		// verify rewards for era 1 cannot be claimed
+		assert_noop!(
+			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1, 0),
+			Error::<Test>::AlreadyClaimed
+				.with_weight(<Test as Config>::WeightInfo::payout_stakers_alive_staked(0)),
+		);
+		assert_eq!(
+			EraInfo::<Test>::is_rewards_claimed_temp(
+				1,
+				Staking::ledger(10).as_ref().unwrap(),
+				&11,
+				0
+			),
+			true
+		);
+
+		// verify rewards for era 2 can be claimed
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 2, 0));
+		assert_eq!(
+			EraInfo::<Test>::is_rewards_claimed_temp(
+				2,
+				Staking::ledger(10).as_ref().unwrap(),
+				&11,
+				0
+			),
+			true
+		);
+		// but the new claimed rewards for era 2 is not stored in legacy storage
+		assert_eq!(
+			Ledger::<Test>::get(10).unwrap(),
+			StakingLedger {
+				stash: 11,
+				total: 1000,
+				active: 1000,
+				unlocking: Default::default(),
+				legacy_claimed_rewards: bounded_vec![1],
+			},
+		);
+		// instead it is kept in `ClaimedRewards`
+		assert_eq!(ClaimedRewards::<Test>::get(2, 11), vec![0]);
+	});
+}
+
+#[test]
+fn test_validator_exposure_is_backward_compatible_with_non_paged_rewards_payout() {
+	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
+		// case 1: exposure exist in clipped.
+		// set page cap to 10
+		MaxNominatorRewardedPerValidator::set(10);
+		bond_validator(11, 10, 1000);
+		let mut expected_individual_exposures: Vec<IndividualExposure<AccountId, Balance>> = vec![];
+		let mut total_exposure: Balance = 0;
+		// 1st exposure page
+		for i in 0..10 {
+			let who = 1000 + i;
+			let value = 1000 + i as Balance;
+			bond_nominator(who, 100 + i, value, vec![11]);
+			expected_individual_exposures.push(IndividualExposure { who, value });
+			total_exposure += value;
+		}
+
+		for i in 10..15 {
+			let who = 1000 + i;
+			let value = 1000 + i as Balance;
+			bond_nominator(who, 100 + i, value, vec![11]);
+			expected_individual_exposures.push(IndividualExposure { who, value });
+			total_exposure += value;
+		}
+
+		mock::start_active_era(1);
+		// reward validator for current era
+		Pallet::<Test>::reward_by_ids(vec![(11, 1)]);
+
+		// start new era
+		mock::start_active_era(2);
+		// verify exposure for era 1 is stored in paged storage, that each exposure is stored in
+		// one and only one page, and no exposure is repeated.
+		let actual_exposure_page_0 = ErasStakersPaged::<Test>::get(1, (11, 0)).unwrap();
+		let actual_exposure_page_1 = ErasStakersPaged::<Test>::get(1, (11, 1)).unwrap();
+		expected_individual_exposures.iter().for_each(|exposure| {
+			assert!(
+				actual_exposure_page_0.others.contains(exposure) ||
+					actual_exposure_page_1.others.contains(exposure)
+			);
+		});
+		assert_eq!(
+			expected_individual_exposures.len(),
+			actual_exposure_page_0.others.len() + actual_exposure_page_1.others.len()
+		);
+		// verify `EraInfo` returns page from paged storage
+		assert_eq!(
+			EraInfo::<Test>::get_validator_exposure(1, &11, 0).others,
+			actual_exposure_page_0.others
+		);
+		assert_eq!(
+			EraInfo::<Test>::get_validator_exposure(1, &11, 1).others,
+			actual_exposure_page_1.others
+		);
+		assert_eq!(EraInfo::<Test>::get_page_count(1, &11), 2);
+
+		// case 2: exposure exist in clipped storage.
+		// delete paged storage and add exposure to clipped storage
+		<ErasStakersPaged<Test>>::remove(1, (11, 0));
+		<ErasStakersPaged<Test>>::remove(1, (11, 1));
+		<ErasStakersOverview<Test>>::remove(1, 11);
+		let mut clipped_exposure = expected_individual_exposures.clone();
+		clipped_exposure.sort_by(|a, b| b.who.cmp(&a.who));
+		clipped_exposure.truncate(10);
+		<ErasStakersClipped<Test>>::insert(1, 11, Exposure {
+			total: total_exposure,
+			own: 1000,
+			others: clipped_exposure.clone(),
+		});
+
+		// verify `EraInfo` returns exposure from clipped storage
+		assert!(matches!(
+			EraInfo::<Test>::get_validator_exposure(1, &11, 0),
+			Exposure {
+				own,
+				others,
+				..
+			} if others == clipped_exposure && own == 1000));
+
+		// for pages other than 0, clipped storage returns empty exposure
+		assert_eq!(
+			EraInfo::<Test>::get_validator_exposure(1, &11, 1),
+			Default::default()
+		);
+		// page size is 1 for clipped storage
+		assert_eq!(EraInfo::<Test>::get_page_count(1, &11), 1);
+
+		// payout for page 0 works
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 0, 0));
+		// payout for page 1 fails
+		assert_noop!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 0, 1),
+			Error::<Test>::InvalidPage.with_weight(<Test as Config>::WeightInfo::payout_stakers_alive_staked(0)));
 	});
 }
 

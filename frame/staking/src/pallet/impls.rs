@@ -151,7 +151,7 @@ impl<T: Config> Pallet<T> {
 
 		ensure!(
 			page < EraInfo::<T>::get_page_count(era, &validator_stash),
-			Error::<T>::InvalidPage
+			Error::<T>::InvalidPage.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
 		);
 
 		// Note: if era has no reward to be claimed, era may be future. better not to update
