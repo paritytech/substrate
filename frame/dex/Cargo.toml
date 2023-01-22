@@ -14,36 +14,36 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"]  }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 scale-info = { version = "2.0.0", default-features = false, features = ["derive"] }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 
 [dev-dependencies]
+pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+pallet-assets = { version = "4.0.0-dev", path = "../assets" }
 sp-std = { version = "5.0.0", path = "../../primitives/std" }
 sp-core = { version = "7.0.0", path = "../../primitives/core" }
 sp-io = { version = "7.0.0", path = "../../primitives/io" }
 sp-keystore = { version = "0.13.0", path = "../../primitives/keystore" }
-pallet-balances = { version = "4.0.0-dev", path = "../balances" }
-pallet-assets = { version = "4.0.0-dev", path = "../assets" }
 
 [features]
 default = ["std"]
 std = [
 	"codec/std",
+	"frame-benchmarking?/std",
+	"frame-support/std",
+	"frame-system/std",
 	"scale-info/std",
 	"sp-std/std",
 	"sp-runtime/std",
-	"frame-support/std",
-	"frame-system/std",
-	"frame-benchmarking?/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
-	"sp-runtime/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
 ]
 try-runtime = ["frame-support/try-runtime"]

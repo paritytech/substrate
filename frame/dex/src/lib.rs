@@ -110,7 +110,7 @@ pub mod pallet {
 			+ TryInto<Self::AssetBalance>
 			+ TryInto<Self::Balance>;
 
-		type AssetId: AssetId 9+ PartialOrd;
+		type AssetId: AssetId + PartialOrd;
 
 		// Asset id to address the lp tokens by.
 		type PoolAssetId: AssetId + PartialOrd + Incrementable;

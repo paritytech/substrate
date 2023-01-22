@@ -57,7 +57,7 @@ pub trait OnChargeAssetTransactionBySwap<T: Config> {
 		post_info: &PostDispatchInfoOf<T::RuntimeCall>,
 		corrected_fee: BalanceOf<T>,
 		tip: BalanceOf<T>,
-		already_withdrawn: <T::OnChargeTransaction as OnChargeTransaction<T>>::LiquidityInfo, /* Self::LiquidityInfo, */
+		already_withdrawn: <T::OnChargeTransaction as OnChargeTransaction<T>>::LiquidityInfo,
 	) -> Result<(), TransactionValidityError>;
 }
 

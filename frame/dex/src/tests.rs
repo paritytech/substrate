@@ -403,6 +403,7 @@ fn can_quote_price() {
 
 		assert_eq!(Dex::quote_price_exact_tokens_for_tokens(None, Some(2), 3000, false), Some(60));
 		// Check it still gives same price:
+		// (if the above accidentally exchanged then it would not give same quote as before) 
 		assert_eq!(Dex::quote_price_exact_tokens_for_tokens(None, Some(2), 3000, false), Some(60));
 
 		// Check inverse:

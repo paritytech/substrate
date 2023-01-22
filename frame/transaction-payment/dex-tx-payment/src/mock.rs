@@ -50,7 +50,6 @@ frame_support::construct_runtime!(
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		TransactionPayment: pallet_transaction_payment::{Pallet, Storage, Event<T>},
 		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>},
-		// Authorship: pallet_authorship::{Pallet, Call, Storage},
 		PoolAssets: pallet_assets::<Instance2>,
 		Dex: pallet_dex,
 		DexAssetTxPayment: pallet_dex_tx_payment,
