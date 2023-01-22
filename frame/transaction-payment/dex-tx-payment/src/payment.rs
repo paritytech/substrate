@@ -28,7 +28,7 @@ use sp_runtime::{
 use sp_std::{fmt::Debug, marker::PhantomData};
 /// Handle withdrawing, refunding and depositing of transaction fees.
 pub trait OnChargeAssetTransactionBySwap<T: Config> {
-	/// The type used to identify the assets used for transaction payment.
+	/// The type used to identify the assets used for transaction payments.
 	type AssetId: FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default + Eq + TypeInfo;
 
 	/// Before the transaction is executed the payment of the transaction fees needs to be secured.
