@@ -83,10 +83,7 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 	/// Extract RuntimeVersion of given block
 	///
 	/// No changes are made.
-	fn runtime_version(
-		&self,
-		at_hash: B::Hash,
-	) -> Result<RuntimeVersion, sp_blockchain::Error>;
+	fn runtime_version(&self, at_hash: B::Hash) -> Result<RuntimeVersion, sp_blockchain::Error>;
 
 	/// Prove the execution of the given `method`.
 	///

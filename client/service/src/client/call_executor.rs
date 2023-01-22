@@ -115,10 +115,7 @@ where
 	}
 
 	/// Returns the on chain runtime version.
-	fn on_chain_runtime_version(
-		&self,
-		hash: Block::Hash,
-	) -> sp_blockchain::Result<RuntimeVersion> {
+	fn on_chain_runtime_version(&self, hash: Block::Hash) -> sp_blockchain::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
 
 		let state = self.backend.state_at(hash)?;
@@ -274,10 +271,7 @@ where
 		.map_err(Into::into)
 	}
 
-	fn runtime_version(
-		&self,
-		at_hash: Block::Hash,
-	) -> sp_blockchain::Result<RuntimeVersion> {
+	fn runtime_version(&self, at_hash: Block::Hash) -> sp_blockchain::Result<RuntimeVersion> {
 		let state = self.backend.state_at(at_hash)?;
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
 
@@ -341,10 +335,7 @@ where
 	E: CodeExecutor + RuntimeVersionOf + Clone + 'static,
 	Block: BlockT,
 {
-	fn runtime_version(
-		&self,
-		at: Block::Hash,
-	) -> Result<sp_version::RuntimeVersion, String> {
+	fn runtime_version(&self, at: Block::Hash) -> Result<sp_version::RuntimeVersion, String> {
 		CallExecutor::runtime_version(self, at).map_err(|e| e.to_string())
 	}
 }
