@@ -117,7 +117,7 @@ where
 	/// Returns the on chain runtime version.
 	fn on_chain_runtime_version(
 		&self,
-		hash: <Block as BlockT>::Hash,
+		hash: Block::Hash,
 	) -> sp_blockchain::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
 
@@ -165,7 +165,7 @@ where
 
 	fn call(
 		&self,
-		at_hash: <Block as BlockT>::Hash,
+		at_hash: Block::Hash,
 		method: &str,
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
@@ -205,7 +205,7 @@ where
 
 	fn contextual_call(
 		&self,
-		at_hash: <Block as BlockT>::Hash,
+		at_hash: Block::Hash,
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
@@ -276,7 +276,7 @@ where
 
 	fn runtime_version(
 		&self,
-		at_hash: <Block as BlockT>::Hash,
+		at_hash: Block::Hash,
 	) -> sp_blockchain::Result<RuntimeVersion> {
 		let state = self.backend.state_at(at_hash)?;
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
@@ -288,7 +288,7 @@ where
 
 	fn prove_execution(
 		&self,
-		at_hash: <Block as BlockT>::Hash,
+		at_hash: Block::Hash,
 		method: &str,
 		call_data: &[u8],
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
@@ -343,7 +343,7 @@ where
 {
 	fn runtime_version(
 		&self,
-		at: <Block as BlockT>::Hash,
+		at: Block::Hash,
 	) -> Result<sp_version::RuntimeVersion, String> {
 		CallExecutor::runtime_version(self, at).map_err(|e| e.to_string())
 	}

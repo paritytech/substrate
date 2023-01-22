@@ -54,7 +54,7 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 	/// No changes are made.
 	fn call(
 		&self,
-		at_hash: <B as BlockT>::Hash,
+		at_hash: B::Hash,
 		method: &str,
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
@@ -67,7 +67,7 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 	/// of the execution context.
 	fn contextual_call(
 		&self,
-		at_hash: <B as BlockT>::Hash,
+		at_hash: B::Hash,
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
@@ -85,7 +85,7 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 	/// No changes are made.
 	fn runtime_version(
 		&self,
-		at_hash: <B as BlockT>::Hash,
+		at_hash: B::Hash,
 	) -> Result<RuntimeVersion, sp_blockchain::Error>;
 
 	/// Prove the execution of the given `method`.
@@ -93,7 +93,7 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 	/// No changes are made.
 	fn prove_execution(
 		&self,
-		at_hash: <B as BlockT>::Hash,
+		at_hash: B::Hash,
 		method: &str,
 		call_data: &[u8],
 	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error>;
