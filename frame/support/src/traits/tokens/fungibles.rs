@@ -331,7 +331,7 @@ pub trait Destroy<AccountId>: Inspect<AccountId> {
 	fn finish_destroy(id: Self::AssetId) -> DispatchResult;
 }
 
-/// Use an on-chain exchange to convert the asset to the equivilent in native tokens.
+/// Use an on-chain exchange to convert the asset to the equivalent in native tokens.
 pub trait SwapForNative<Origin, AccountId, Balance, AssetBalance, AssetId> {
 	// If successful returns the amount in.
 	fn swap_tokens_for_exact_native(
