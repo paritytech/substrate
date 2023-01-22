@@ -17,6 +17,8 @@
 //!
 //! This pallet allows runtimes that include it to pay for transactions in assets other than the
 //! main token of the chain.
+//! This pallet uses a swap mechanism to convert the fee's quantity of assets to the native token.
+//! Any fee refund will stay in the native currency.
 //!
 //! ## Overview
 
