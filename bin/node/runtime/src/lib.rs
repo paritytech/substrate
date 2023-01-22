@@ -1193,10 +1193,7 @@ parameter_types! {
 
 impl pallet_contracts::Config for Runtime {
 	type Time = Timestamp;
-	/// Do not use `UnsafeDeprecatedRandomness` for new deployments of this pallet. Please
-	/// read the [documentation](pallet_contracts::Config::Randomness) before configuring.
-	type Randomness =
-		pallet_contracts::randomness::UnsafeDeprecatedRandomness<Self, RandomnessCollectiveFlip>;
+	type Randomness = RandomnessCollectiveFlip;
 	type Currency = Balances;
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
